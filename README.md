@@ -166,7 +166,7 @@ Out of the box, Flynn will come with schedulers for different purposes that can 
 * **Build scheduler** -- Re-implements the Docker Build process as an example of multi-step task orchestration
 
 #### Service discovery
-Service discovery is another concept that's often not specifically implemented in most small to medium systems, usually due to a heavily host-oriented design. As a result, classic configuration management (Chef, Puppet) is often the used.
+Service discovery is another concept that's often not specifically implemented in most small to medium systems, usually due to a heavily host-oriented design. As a result, classic configuration management (Chef, Puppet) is often used.
 
 At it's core, service discovery is just name resolution with realtime presence, sort of like an IM buddy list. It allows services to find and connect to each other automatically, and be notified when new instances are available to connect to and when existing ones go offline.
 
