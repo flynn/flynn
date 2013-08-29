@@ -32,7 +32,7 @@ func main() {
 	client := discover.NewClient()
 	if host != "" {
 		client.RegisterWithHost(name, host, port, nil)
-	    cleanup = func() {	client.UnregisterWithHost(name, host, port) }
+		cleanup = func() {	client.UnregisterWithHost(name, host, port) }
 	} else {
 		client.Register(name, port, nil)
 		cleanup = func() {	client.Unregister(name, port) }
