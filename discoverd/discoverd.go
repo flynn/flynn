@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/progrium/go-discover/discover"
 	"fmt"
+	"github.com/progrium/go-discover/discover"
 )
 
 func main() {

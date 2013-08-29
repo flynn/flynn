@@ -1,14 +1,14 @@
 package main
 
 import (
-	"github.com/progrium/go-discover/discover"
-	"fmt"
 	"flag"
-	"time"
-	"strings"
+	"fmt"
+	"github.com/progrium/go-discover/discover"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -16,7 +16,7 @@ func main() {
 	name := flag.Arg(0)
 	port := flag.Arg(1)
 	host := flag.Arg(2)
-	
+
 	exit := make(chan os.Signal, 1)
 	signal.Notify(exit, os.Interrupt)
 	signal.Notify(exit, syscall.SIGTERM)
@@ -28,17 +28,17 @@ func main() {
 		}
 		os.Exit(0)
 	}()
-	
+
 	client := discover.NewClient()
 	if host != "" {
 		client.RegisterWithHost(name, host, port, nil)
-		cleanup = func() {	client.UnregisterWithHost(name, host, port) }
+		cleanup = func() { client.UnregisterWithHost(name, host, port) }
 	} else {
 		client.Register(name, port, nil)
-		cleanup = func() {	client.Unregister(name, port) }
+		cleanup = func() { client.Unregister(name, port) }
 	}
 	fmt.Printf("Registered %s on port %s.\n", name, port)
-	
+
 	set := client.Services(name)
 	for {
 		fmt.Printf("%s\n", strings.Join(set.OnlineAddrs(), ", "))

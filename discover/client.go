@@ -1,27 +1,27 @@
 package discover
 
 import (
+	"errors"
 	"github.com/flynn/rpcplus"
 	"log"
-	"errors"
 	"net"
 	"strings"
 	"time"
 )
 
 type Service struct {
-	Name	string
-	Host	string
-	Port	string
-	Addr	string
-	Attrs	map[string]string
-	Online	bool
+	Name   string
+	Host   string
+	Port   string
+	Addr   string
+	Attrs  map[string]string
+	Online bool
 }
 
 type ServiceSet struct {
-	services	map[string]*Service
-	filters		map[string]string
-	listeners	map[chan *ServiceUpdate]struct{}
+	services  map[string]*Service
+	filters   map[string]string
+	listeners map[chan *ServiceUpdate]struct{}
 }
 
 func (s *ServiceSet) Bind(updates chan *ServiceUpdate) {
@@ -99,8 +99,8 @@ func (s *ServiceSet) Unsubscribe() {
 }
 
 type DiscoverClient struct {
-	client		*rpcplus.Client
-	heartbeats	map[string]bool
+	client     *rpcplus.Client
+	heartbeats map[string]bool
 }
 
 func NewClient() *DiscoverClient {
@@ -130,8 +130,8 @@ func (c *DiscoverClient) Services(name string) *ServiceSet {
 		Name: name,
 	}, updates)
 	set := &ServiceSet{
-		services: 	map[string]*Service{},
-		filters:	map[string]string{},
+		services: map[string]*Service{},
+		filters:  map[string]string{},
 	}
 	set.Bind(updates)
 	return set
@@ -143,8 +143,8 @@ func (c *DiscoverClient) Register(name string, port string, attributes map[strin
 
 func (c *DiscoverClient) RegisterWithHost(name string, host string, port string, attributes map[string]string) error {
 	args := &Args{
-		Name: name,
-		Addr: net.JoinHostPort(host, port),
+		Name:  name,
+		Addr:  net.JoinHostPort(host, port),
 		Attrs: attributes,
 	}
 	var success bool

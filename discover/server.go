@@ -3,27 +3,27 @@ package discover
 import (
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/rpcplus"
-	"net"
 	"log"
+	"net"
 	"net/http"
 )
 
 const (
-	HeartbeatIntervalSecs	= 5
-	MissedHearbeatTTL 	= 5
+	HeartbeatIntervalSecs = 5
+	MissedHearbeatTTL     = 5
 )
 
 type ServiceUpdate struct {
-	Name	string
-	Addr	string
-	Online	bool
-	Attrs	map[string]string
+	Name   string
+	Addr   string
+	Online bool
+	Attrs  map[string]string
 }
 
 type Args struct {
-	Name	string
-	Addr	string
-	Attrs	map[string]string
+	Name  string
+	Addr  string
+	Attrs map[string]string
 }
 
 type DiscoveryBackend interface {
@@ -34,7 +34,7 @@ type DiscoveryBackend interface {
 }
 
 type DiscoverAgent struct {
-	Backend	DiscoveryBackend
+	Backend DiscoveryBackend
 	Address string
 }
 
@@ -95,4 +95,3 @@ func (s *DiscoverAgent) Heartbeat(args *Args, success *bool) error {
 	}
 	return nil
 }
-
