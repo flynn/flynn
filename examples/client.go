@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/progrium/go-discover/discover"
 	"fmt"
 	"github.com/flynn/rpcplus"
+	"github.com/progrium/go-discover/discover"
 	"log"
 )
 
@@ -23,7 +23,7 @@ func main() {
 		log.Fatal("register error:", err)
 	}
 	fmt.Printf("register success\n")
-	
+
 	updates := make(chan *discover.ServiceUpdate, 10)
 	client.StreamGo("DiscoverAgent.Subscribe", &discover.Args{
 		Name: "test_subscribe",
