@@ -3,7 +3,6 @@ package discover
 import (
 	"testing"
 	"github.com/coreos/go-etcd/etcd"
-	"discover"
 	"runtime"
 	"fmt"
 	"strings"
@@ -19,7 +18,7 @@ func deleteService(client *etcd.Client, service string, addr string) {
 
 func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
 	client := etcd.NewClient()
-	backend := discover.EtcdBackend{Client: client}
+	backend := EtcdBackend{Client: client}
 	
 	deleteService(client, "test_register", "127.0.0.1")
 	
@@ -39,7 +38,7 @@ func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
 
 func TestEtcdBackend_Subscribe(t *testing.T) {
 	client := etcd.NewClient()
-	backend := discover.EtcdBackend{Client: client}
+	backend := EtcdBackend{Client: client}
 	
 	backend.Register("test_subscribe", "10.0.0.1", map[string]string{})
 	defer backend.Unregister("test_subscribe", "10.0.0.1")

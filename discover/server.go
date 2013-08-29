@@ -33,37 +33,40 @@ type DiscoveryBackend interface {
 	Heartbeat(string, string) error
 }
 
-type Server struct {
+type DiscoverAgent struct {
 	Backend	DiscoveryBackend
 	Address string
 }
 
-func NewServer() *Server {
-	return &Server{
+func NewServer() *DiscoverAgent {
+	return &DiscoverAgent{
 		Backend: &EtcdBackend{Client: etcd.NewClient()},
 		Address: ":1111",
 	}
 }
 
-func (s *Server) ServeForever() {
-	rpcplus.Register(s)
+func ServeForever(server *DiscoverAgent) {
+	rpcplus.Register(server)
 	rpcplus.HandleHTTP()
-	l, e := net.Listen("tcp", s.Address)
+	l, e := net.Listen("tcp", server.Address)
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
 	http.Serve(l, nil)
 }
 
-func (s *Server) Subscribe(args *Args, sendUpdate func(reply ServiceUpdate) error) error {
-	err := sendUpdate(ServiceUpdate{})
-	if err != nil {
-		return err
+func (s *DiscoverAgent) Subscribe(args *Args, sendUpdate func(reply interface{}) error) error {
+	updates, _ := s.Backend.Subscribe(args.Name)
+	for update := range updates {
+		err := sendUpdate(update)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (s *Server) Register(args *Args, success *bool) error {
+func (s *DiscoverAgent) Register(args *Args, success *bool) error {
 	err := s.Backend.Register(args.Name, args.Addr, map[string]string{}) // TODO: attrs!
 	if err != nil {
 		*success = false
@@ -73,7 +76,7 @@ func (s *Server) Register(args *Args, success *bool) error {
 	return nil
 }
 
-func (s *Server) Unregister(args *Args, success *bool) error {
+func (s *DiscoverAgent) Unregister(args *Args, success *bool) error {
 	err := s.Backend.Unregister(args.Name, args.Addr)
 	if err != nil {
 		*success = false
@@ -83,7 +86,7 @@ func (s *Server) Unregister(args *Args, success *bool) error {
 	return nil
 }
 
-func (s *Server) Heartbeat(args *Args, success *bool) error {
+func (s *DiscoverAgent) Heartbeat(args *Args, success *bool) error {
 	err := s.Backend.Heartbeat(args.Name, args.Addr)
 	if err != nil {
 		*success = false
