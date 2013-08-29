@@ -22,12 +22,12 @@ func main() {
 	signal.Notify(exit, syscall.SIGTERM)
 	var cleanup func()
 	go func() {
-        <-exit
+		<-exit
 		if cleanup != nil {
 			cleanup()
 		}
-        os.Exit(0)
-    }()
+		os.Exit(0)
+	}()
 	
 	client := discover.NewClient()
 	if host != "" {
