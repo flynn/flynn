@@ -2,14 +2,17 @@ package discover
 
 import (
 	"errors"
-	"github.com/flynn/rpcplus"
-	"log"
 	"net"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/flynn/rpcplus"
 )
 
+// TODO Populate the id's after understanding the backends mechanism.
 type Service struct {
+	Id     int
 	Name   string
 	Host   string
 	Port   string
@@ -18,10 +21,14 @@ type Service struct {
 	Online bool
 }
 
+// TODO Use mutex appropriately and add a test for it.
 type ServiceSet struct {
 	services  map[string]*Service
-	filters   map[string]string
+	filters   map[string]string // Whats a filter?
 	listeners map[chan *ServiceUpdate]struct{}
+	serMutex sync.RWMutex
+	filMutex sync.RWMutex
+	lisMutex sync.RWMutex
 }
 
 func (s *ServiceSet) Bind(updates chan *ServiceUpdate) {
@@ -50,7 +57,7 @@ func (s *ServiceSet) Bind(updates chan *ServiceUpdate) {
 }
 
 func (s *ServiceSet) Online() []*Service {
-	list := []*Service{}
+	list := make([]*Service, 0, len(s.services))
 	for _, service := range s.services {
 		if service.Online {
 			list = append(list, service)
@@ -60,7 +67,7 @@ func (s *ServiceSet) Online() []*Service {
 }
 
 func (s *ServiceSet) Offline() []*Service {
-	list := []*Service{}
+	list := make([]*Service, 0, len(s.services))
 	for _, service := range s.services {
 		if !service.Online {
 			list = append(list, service)
@@ -70,7 +77,7 @@ func (s *ServiceSet) Offline() []*Service {
 }
 
 func (s *ServiceSet) OnlineAddrs() []string {
-	list := []string{}
+	list := make([]string, 0, len(s.services))
 	for _, service := range s.Online() {
 		list = append(list, service.Addr)
 	}
@@ -78,7 +85,7 @@ func (s *ServiceSet) OnlineAddrs() []string {
 }
 
 func (s *ServiceSet) OfflineAddrs() []string {
-	list := []string{}
+	list := make([]string, 0, len(s.services))
 	for _, service := range s.Offline() {
 		list = append(list, service.Addr)
 	}
@@ -103,12 +110,12 @@ type DiscoverClient struct {
 	heartbeats map[string]bool
 }
 
-func NewClient() *DiscoverClient {
+func NewClient() (*DiscoverClient, error) {
 	client, err := rpcplus.DialHTTP("tcp", "127.0.0.1:1111") // TODO: default, not hardcoded
-	if err != nil {
-		log.Fatal("dialing:", err)
-	}
-	return &DiscoverClient{client: client, heartbeats: map[string]bool{}}
+	return &DiscoverClient{
+		client : client,
+		heartbeats : make(map[string]bool),
+	}, err
 }
 
 func pickMostPublicIp() string {
@@ -137,11 +144,11 @@ func (c *DiscoverClient) Services(name string) *ServiceSet {
 	return set
 }
 
-func (c *DiscoverClient) Register(name string, port string, attributes map[string]string) error {
+func (c *DiscoverClient) Register(name, port string, attributes map[string]string) error {
 	return c.RegisterWithHost(name, pickMostPublicIp(), port, attributes)
 }
 
-func (c *DiscoverClient) RegisterWithHost(name string, host string, port string, attributes map[string]string) error {
+func (c *DiscoverClient) RegisterWithHost(name, host, port string, attributes map[string]string) error {
 	args := &Args{
 		Name:  name,
 		Addr:  net.JoinHostPort(host, port),
@@ -152,30 +159,30 @@ func (c *DiscoverClient) RegisterWithHost(name string, host string, port string,
 	if err != nil {
 		return err
 	}
-	if success {
+	if !success {
+		return errors.New("discover : register failed")
+	} else {
 		c.heartbeats[args.Addr] = true
-		go func(name string, addr string) {
+		go func() {
 			time.Sleep(HeartbeatIntervalSecs * time.Second)
 			var heartbeated bool
-			for c.heartbeats[addr] {
+			for c.heartbeats[args.Addr] {
 				c.client.Call("DiscoverAgent.Heartbeat", &Args{
 					Name: name,
-					Addr: addr,
+					Addr: args.Addr,
 				}, &heartbeated)
 				time.Sleep(HeartbeatIntervalSecs * time.Second) // TODO: add jitter
 			}
-		}(name, args.Addr)
+		}()
 		return nil
-	} else {
-		return errors.New("register failed")
 	}
 }
 
-func (c *DiscoverClient) Unregister(name string, port string) error {
+func (c *DiscoverClient) Unregister(name, port string) error {
 	return c.UnregisterWithHost(name, pickMostPublicIp(), port)
 }
 
-func (c *DiscoverClient) UnregisterWithHost(name string, host string, port string) error {
+func (c *DiscoverClient) UnregisterWithHost(name, host, port string) error {
 	args := &Args{
 		Name: name,
 		Addr: net.JoinHostPort(host, port),
@@ -185,10 +192,10 @@ func (c *DiscoverClient) UnregisterWithHost(name string, host string, port strin
 	if err != nil {
 		return err
 	}
-	if success {
+	if !success {
+		return errors.New("discover : unregister failed")
+	} else {
 		delete(c.heartbeats, args.Addr)
 		return nil
-	} else {
-		return errors.New("unregister failed")
 	}
 }

@@ -2,9 +2,10 @@ package discover
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/coreos/etcd/store"
 	"github.com/coreos/go-etcd/etcd"
-	"strings"
 )
 
 type EtcdBackend struct {
@@ -33,23 +34,20 @@ func (b *EtcdBackend) Subscribe(name string) (ch chan *ServiceUpdate, err error)
 
 func (b *EtcdBackend) responseToUpdate(resp *store.Response) *ServiceUpdate {
 	serviceName := strings.SplitN(resp.Key, "/", 4)[2]
-	switch {
-	case ("SET" == resp.Action && resp.NewKey) || "GET" == resp.Action:
+	if ("SET" == resp.Action && resp.NewKey) || "GET" == resp.Action {
 		return &ServiceUpdate{
 			Name:   serviceName,
 			Addr:   resp.Value,
 			Online: true,
-			Attrs:  map[string]string{},
 		}
-	case "DELETE" == resp.Action:
+	} else if ("DELETE" == resp.Action) {
 		return &ServiceUpdate{
 			Name:   serviceName,
 			Addr:   resp.PrevValue,
-			Online: false,
-			Attrs:  map[string]string{},
 		}
+	} else {
+		return nil
 	}
-	return nil
 }
 
 func (b *EtcdBackend) getCurrentState(name string) ([]*store.Response, error) {
@@ -67,7 +65,7 @@ func (b *EtcdBackend) Register(name string, addr string, attrs map[string]string
 	if err != nil {
 		return err
 	}
-	return nil
+	return err
 }
 
 func (b *EtcdBackend) Unregister(name string, addr string) error {
@@ -75,7 +73,7 @@ func (b *EtcdBackend) Unregister(name string, addr string) error {
 	if err != nil {
 		return err
 	}
-	return nil
+	return err
 }
 
 func (b *EtcdBackend) Heartbeat(name string, addr string) error {

@@ -1,11 +1,11 @@
 package discover
 
 import (
-	"github.com/coreos/go-etcd/etcd"
-	"github.com/flynn/rpcplus"
-	"log"
 	"net"
 	"net/http"
+
+	"github.com/coreos/go-etcd/etcd"
+	"github.com/flynn/rpcplus"
 )
 
 const (
@@ -26,6 +26,7 @@ type Args struct {
 	Attrs map[string]string
 }
 
+//TODO Name the arguments in the interface
 type DiscoveryBackend interface {
 	Subscribe(string) (chan *ServiceUpdate, error)
 	Register(string, string, map[string]string) error
@@ -45,14 +46,16 @@ func NewServer() *DiscoverAgent {
 	}
 }
 
-func ServeForever(server *DiscoverAgent) {
+func ListenAndServe(server *DiscoverAgent) error{
 	rpcplus.Register(server)
+	// TODO Use vanila version of accept.
 	rpcplus.HandleHTTP()
 	l, e := net.Listen("tcp", server.Address)
 	if e != nil {
-		log.Fatal("listen error:", e)
+		return e
 	}
 	http.Serve(l, nil)
+	return nil
 }
 
 func (s *DiscoverAgent) Subscribe(args *Args, sendUpdate func(reply interface{}) error) error {
@@ -66,32 +69,14 @@ func (s *DiscoverAgent) Subscribe(args *Args, sendUpdate func(reply interface{})
 	return nil
 }
 
-func (s *DiscoverAgent) Register(args *Args, success *bool) error {
-	err := s.Backend.Register(args.Name, args.Addr, map[string]string{}) // TODO: attrs!
-	if err != nil {
-		*success = false
-	} else {
-		*success = true
-	}
-	return nil
+func (s *DiscoverAgent) Register(args *Args, ret *struct{}) error {
+	return s.Backend.Register(args.Name, args.Addr, nil) // TODO: attrs!
 }
 
-func (s *DiscoverAgent) Unregister(args *Args, success *bool) error {
-	err := s.Backend.Unregister(args.Name, args.Addr)
-	if err != nil {
-		*success = false
-	} else {
-		*success = true
-	}
-	return nil
+func (s *DiscoverAgent) Unregister(args *Args, ret *struct{}) error {
+	return s.Backend.Unregister(args.Name, args.Addr)
 }
 
-func (s *DiscoverAgent) Heartbeat(args *Args, success *bool) error {
-	err := s.Backend.Heartbeat(args.Name, args.Addr)
-	if err != nil {
-		*success = false
-	} else {
-		*success = true
-	}
-	return nil
+func (s *DiscoverAgent) Heartbeat(args *Args, ret *struct{}) error {
+	return s.Backend.Heartbeat(args.Name, args.Addr)
 }
