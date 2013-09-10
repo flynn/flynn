@@ -18,7 +18,7 @@ func (s *Scheduler) Schedule(req *types.ScheduleReq, res *types.ScheduleRes) err
 	*res = types.ScheduleRes{}
 	for host, jobs := range req.HostJobs {
 		for _, job := range jobs {
-			if !s.state.Add(host, job) {
+			if !s.state.AddJob(host, job) {
 				if req.Incremental {
 					res.RemainingJobs = append(res.RemainingJobs, job)
 				} else {

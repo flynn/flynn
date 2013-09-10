@@ -12,30 +12,43 @@ type State struct {
 	// Lock to serialize writes
 	mtx  sync.Mutex
 	curr *map[string]types.Host
-	next map[string]types.Host
+	next *map[string]types.Host
 
+	deleted      map[string]struct{}
 	nextModified bool
+}
+
+func NewState() *State {
+	curr := make(map[string]types.Host)
+	return &State{curr: &curr}
 }
 
 func (s *State) Begin() {
 	s.mtx.Lock()
+	next := make(map[string]types.Host, len(*s.curr))
+	s.next = &next
 	s.nextModified = false
-	s.next = make(map[string]types.Host, len(*s.curr))
+	s.deleted = make(map[string]struct{})
 }
 
 func (s *State) Commit() map[string]types.Host {
 	defer s.mtx.Unlock()
 	if !s.nextModified {
+		s.next = nil
 		return *s.curr
 	}
 	// copy hosts that were not modified to next
+	next := *s.next
 	for k, v := range *s.curr {
-		if _, ok := s.next[k]; !ok {
-			s.next[k] = v
+		if _, deleted := s.deleted[k]; !deleted {
+			if _, ok := next[k]; !ok {
+				next[k] = v
+			}
 		}
 	}
 	// replace curr with next
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&s.curr)), unsafe.Pointer(&s.next))
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&s.curr)), unsafe.Pointer(s.next))
+	s.next = nil
 	return *s.curr
 }
 
@@ -49,18 +62,51 @@ func (s *State) Get() map[string]types.Host {
 	return *(*map[string]types.Host)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.curr))))
 }
 
-func (s *State) Add(hostID string, job *types.Job) bool {
-	host, ok := s.next[hostID]
-	if !ok {
-		host, ok = (*s.curr)[hostID]
-	}
+func (s *State) AddJob(hostID string, job *types.Job) bool {
+	host, ok := s.host(hostID)
 	if !ok {
 		return false
 	}
 	if !host.Add(job) {
 		return false
 	}
-	s.next[hostID] = host
+	(*s.next)[hostID] = host
 	s.nextModified = true
 	return true
+}
+
+func (s *State) host(id string) (host types.Host, ok bool) {
+	host, ok = (*s.next)[id]
+	if !ok {
+		host, ok = (*s.curr)[id]
+	}
+	return
+}
+
+func (s *State) RemoveJobs(hostID string, jobIDs ...string) {
+	host, ok := s.host(hostID)
+	if !ok {
+		return
+	}
+	jobs := make([]*types.Job, 0, len(host.Jobs))
+outer:
+	for _, job := range host.Jobs {
+		for _, id := range jobIDs {
+			if job.ID == id {
+				continue outer
+			}
+		}
+		jobs = append(jobs, job)
+	}
+	host.Jobs = jobs
+	(*s.next)[hostID] = host
+}
+
+func (s *State) AddHost(host *types.Host) {
+	(*s.next)[host.ID] = *host
+}
+
+func (s *State) RemoveHost(id string) {
+	delete(*s.next, id)
+	s.deleted[id] = struct{}{}
 }
