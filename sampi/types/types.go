@@ -15,6 +15,11 @@ type Job struct {
 	Resources map[string]int
 }
 
+type ResourceValue struct {
+	Value      int
+	Overcommit bool
+}
+
 type Host struct {
 	ID string
 
@@ -126,7 +131,7 @@ func (r *Rule) Match(h map[string]string) bool {
 	}
 }
 
-type ResourceValue struct {
-	Value      int
-	Overcommit bool
+type JobList struct {
+	Host string
+	IDs  []string
 }

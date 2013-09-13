@@ -93,6 +93,12 @@ outer:
 	for _, job := range host.Jobs {
 		for _, id := range jobIDs {
 			if job.ID == id {
+				for k, v := range job.Resources {
+					if r, ok := host.Resources[k]; ok {
+						r.Value += v
+						host.Resources[k] = r
+					}
+				}
 				continue outer
 			}
 		}

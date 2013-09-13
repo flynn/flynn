@@ -32,3 +32,19 @@ func (s *Scheduler) Schedule(req *types.ScheduleReq, res *types.ScheduleRes) err
 	res.State = s.state.Commit()
 	return nil
 }
+
+func (s *Scheduler) RegisterHost(host *types.Host, id *string) error {
+	s.state.Begin()
+	// TODO: generate host ID
+	s.state.AddHost(host)
+	s.state.Commit()
+	return nil
+}
+
+func (s *Scheduler) RemoveJobs(jobs *types.JobList, res *struct{}) error {
+	*res = struct{}{}
+	s.state.Begin()
+	s.state.RemoveJobs(jobs.Host, jobs.IDs...)
+	s.state.Commit()
+	return nil
+}
