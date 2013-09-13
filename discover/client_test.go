@@ -34,11 +34,8 @@ func TestClient(t* testing.T) {
 	if(len(online) < 2) {
 		t.Fatal("Registed clients not online")
 	}
-	// Kill The server
+	//TODO  Kill The server
 }
 
-// Add Services to client
-// Get the added services from server. 
-// Check if we are getting callbacks for updates. 
 
 
