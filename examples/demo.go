@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/progrium/go-discover/discover"
+	"github.com/georgethomas111/go-discover/discover"
 	"os"
 	"os/signal"
 	"strings"
@@ -29,7 +29,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	client := discover.NewClient()
+	client, _ := discover.NewClient()
 	if host != "" {
 		client.RegisterWithHost(name, host, port, nil)
 		cleanup = func() { client.UnregisterWithHost(name, host, port) }
@@ -37,7 +37,7 @@ func main() {
 		client.Register(name, port, nil)
 		cleanup = func() { client.Unregister(name, port) }
 	}
-	fmt.Printf("Registered %s on port %s.\n", name, port)
+	fmt.Println("Registered %s on port %s.\n", name, port)
 
 	set := client.Services(name)
 	for {
