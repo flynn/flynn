@@ -14,7 +14,10 @@ type EtcdBackend struct {
 
 func (b *EtcdBackend) Subscribe(name string) (ch chan *ServiceUpdate, err error) {
 	ch = make(chan *ServiceUpdate, 10)
-	responses, _ := b.getCurrentState(name)
+	responses, err := b.getCurrentState(name)
+	if err != nil {
+		return
+	}
 	for _, response := range responses {
 		update := b.responseToUpdate(response)
 		if update != nil {
@@ -33,7 +36,12 @@ func (b *EtcdBackend) Subscribe(name string) (ch chan *ServiceUpdate, err error)
 }
 
 func (b *EtcdBackend) responseToUpdate(resp *store.Response) *ServiceUpdate {
-	serviceName := strings.SplitN(resp.Key, "/", 4)[2]
+	respList := strings.SplitN(resp.Key, "/", 4)
+	if len(respList) < 3 {
+		return nil
+	}
+
+	serviceName := respList[2]
 	if ("SET" == resp.Action && resp.NewKey) || "GET" == resp.Action {
 		return &ServiceUpdate{
 			Name:   serviceName,

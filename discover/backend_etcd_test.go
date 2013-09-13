@@ -2,10 +2,11 @@ package discover
 
 import (
 	"fmt"
-	"github.com/coreos/go-etcd/etcd"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/coreos/go-etcd/etcd"
 )
 
 func touchService(client *etcd.Client, service string, addr string) {
@@ -17,18 +18,34 @@ func deleteService(client *etcd.Client, service string, addr string) {
 }
 
 func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
+
+	// TODO Create server here itself and connect to it.
 	client := etcd.NewClient()
 	backend := EtcdBackend{Client: client}
+	serviceName := "test_register"
+	serviceAddr := "127.0.0.1"
 
-	deleteService(client, "test_register", "127.0.0.1")
+	deleteService(client, serviceName, serviceAddr)
+	t.Log("Testing Register")
+	backend.Register(serviceName, serviceAddr, make(map[string]string))
 
-	backend.Register("test_register", "127.0.0.1", map[string]string{})
-
-	_, err := client.Get("/services/test_register/127.0.0.1")
+	getUrl := "/services/" + serviceName + "/" + serviceAddr
+	results, err := client.Get(getUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	// Adding the case where the result is checked.
+	if len(results) < 1 {
+		t.Fatal("Flynn Error: No Response From Server")
+	} else {
+		// Check if the files the returned values are the same.
+		if(results[0].Key != getUrl) || (results[0].Value != serviceAddr) {
+			t.Fatal("Returned value not equal to sent one")
+		}
+	}
+
+	t.Log("Testing Unregister of etcd backend")
 	backend.Unregister("test_register", "127.0.0.1")
 	_, err = client.Get("/services/test_register/127.0.0.1")
 	if err == nil {

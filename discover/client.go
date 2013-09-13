@@ -35,18 +35,24 @@ func (s *ServiceSet) Bind(updates chan *ServiceUpdate) {
 	go func() {
 		for update := range updates {
 			// TODO: apply filters
+			s.serMutex.Lock()
 			_, exists := s.services[update.Addr]
+			s.serMutex.Unlock()
 			if !exists {
 				host, port, _ := net.SplitHostPort(update.Addr)
+				s.serMutex.Lock()
 				s.services[update.Addr] = &Service{
 					Name: update.Name,
 					Addr: update.Addr,
 					Host: host,
 					Port: port,
 				}
+				s.serMutex.Unlock()
 			}
+			s.serMutex.Lock()
 			s.services[update.Addr].Online = update.Online
 			s.services[update.Addr].Attrs = update.Attrs
+			s.serMutex.Unlock()
 			if s.listeners != nil {
 				for ch := range s.listeners {
 					ch <- update
@@ -118,6 +124,7 @@ func NewClient() (*DiscoverClient, error) {
 	}, err
 }
 
+
 func pickMostPublicIp() string {
 	// TODO: prefer non 10.0.0.0, 172.16.0.0, and 192.168.0.0
 	addrs, _ := net.InterfaceAddrs()
@@ -137,8 +144,8 @@ func (c *DiscoverClient) Services(name string) *ServiceSet {
 		Name: name,
 	}, updates)
 	set := &ServiceSet{
-		services: map[string]*Service{},
-		filters:  map[string]string{},
+		services: make(map[string]*Service),
+		filters:  make(map[string]string),
 	}
 	set.Bind(updates)
 	return set
@@ -154,18 +161,15 @@ func (c *DiscoverClient) RegisterWithHost(name, host, port string, attributes ma
 		Addr:  net.JoinHostPort(host, port),
 		Attrs: attributes,
 	}
-	var success bool
-	err := c.client.Call("DiscoverAgent.Register", args, &success)
+	var ret struct{}
+	err := c.client.Call("DiscoverAgent.Register", args, &ret)
 	if err != nil {
-		return err
-	}
-	if !success {
-		return errors.New("discover : register failed")
+		return errors.New("discover : register failed " + err.Error())
 	} else {
 		c.heartbeats[args.Addr] = true
 		go func() {
 			time.Sleep(HeartbeatIntervalSecs * time.Second)
-			var heartbeated bool
+			var heartbeated struct{}
 			for c.heartbeats[args.Addr] {
 				c.client.Call("DiscoverAgent.Heartbeat", &Args{
 					Name: name,
@@ -187,13 +191,10 @@ func (c *DiscoverClient) UnregisterWithHost(name, host, port string) error {
 		Name: name,
 		Addr: net.JoinHostPort(host, port),
 	}
-	var success bool // ignore success for now. nearly useless return value
+	var success struct{} // ignore success for now. nearly useless return value
 	err := c.client.Call("DiscoverAgent.Unregister", args, &success)
 	if err != nil {
-		return err
-	}
-	if !success {
-		return errors.New("discover : unregister failed")
+		return errors.New("discover : unregister failed" + err.Error())
 	} else {
 		delete(c.heartbeats, args.Addr)
 		return nil

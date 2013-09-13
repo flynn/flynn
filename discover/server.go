@@ -47,26 +47,25 @@ func NewServer() *DiscoverAgent {
 }
 
 func ListenAndServe(server *DiscoverAgent) error{
-	rpcplus.Register(server)
-	// TODO Use vanila version of accept.
-	rpcplus.HandleHTTP()
-	l, e := net.Listen("tcp", server.Address)
-	if e != nil {
-		return e
+	err := rpcplus.Register(server)
+	if err != nil {
+		return err
 	}
+	rpcplus.HandleHTTP()
+	l, err := net.Listen("tcp", server.Address) 
 	http.Serve(l, nil)
-	return nil
+	return err
 }
 
 func (s *DiscoverAgent) Subscribe(args *Args, sendUpdate func(reply interface{}) error) error {
-	updates, _ := s.Backend.Subscribe(args.Name)
+	updates, err := s.Backend.Subscribe(args.Name)
 	for update := range updates {
-		err := sendUpdate(update)
+		err = sendUpdate(update)
 		if err != nil {
 			return err
 		}
 	}
-	return nil
+	return err
 }
 
 func (s *DiscoverAgent) Register(args *Args, ret *struct{}) error {
