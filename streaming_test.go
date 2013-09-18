@@ -17,8 +17,7 @@ type StreamingArgs struct {
 	A     int
 	Count int
 	// next two values have to be between 0 and Count-2 to trigger anything
-	ErrorAt   int // will trigger an error at the given spot,
-	BadTypeAt int // will send the wrong type in sendReply
+	ErrorAt int // will trigger an error at the given spot,
 }
 
 type StreamingReply struct {
@@ -28,19 +27,10 @@ type StreamingReply struct {
 
 type StreamingArith int
 
-func (t *StreamingArith) Thrive(args StreamingArgs, sendReply func(reply interface{}) error) error {
-
+func (t *StreamingArith) Thrive(args StreamingArgs, sendReply func(reply *StreamingReply) error) error {
 	for i := 0; i < args.Count; i++ {
 		if i == args.ErrorAt {
 			return errors.New("Triggered error in middle")
-		}
-		if i == args.BadTypeAt {
-			// send args instead of response
-			sr := new(StreamingArgs)
-			err := sendReply(sr)
-			if err != nil {
-				return err
-			}
 		}
 		// log.Println("  Sending sample", i)
 		sr := &StreamingReply{C: args.A, Index: i}
@@ -80,8 +70,7 @@ func makeLink(t *testing.T) (client *Client) {
 // this is a specific function so we can call it to check the link
 // is still active and well
 func callOnceAndCheck(t *testing.T, client *Client) {
-
-	args := &StreamingArgs{3, 5, -1, -1}
+	args := &StreamingArgs{3, 5, -1}
 	rowChan := make(chan *StreamingReply, 10)
 	c := client.StreamGo("StreamingArith.Thrive", args, rowChan)
 
@@ -105,11 +94,10 @@ func callOnceAndCheck(t *testing.T, client *Client) {
 }
 
 func TestStreamingRpc(t *testing.T) {
-
 	client := makeLink(t)
 
 	// Nonexistent method
-	args := &StreamingArgs{7, 10, -1, -1}
+	args := &StreamingArgs{7, 10, -1}
 	reply := new(StreamingReply)
 	err := client.Call("StreamingArith.BadOperation", args, reply)
 	// expect an error
@@ -123,7 +111,7 @@ func TestStreamingRpc(t *testing.T) {
 	callOnceAndCheck(t, client)
 
 	// call that may block forever (but won't!)
-	args = &StreamingArgs{3, 100, -1, -1} // 100 is greater than the next 10
+	args = &StreamingArgs{3, 100, -1} // 100 is greater than the next 10
 	rowChan := make(chan *StreamingReply, 10)
 	client.StreamGo("StreamingArith.Thrive", args, rowChan)
 	// read one guy, sleep a bit to make sure everything went
@@ -148,11 +136,10 @@ func TestStreamingRpc(t *testing.T) {
 }
 
 func TestInterruptedCallByServer(t *testing.T) {
-
 	// make our client
 	client := makeLink(t)
 
-	args := &StreamingArgs{3, 100, 30, -1} // 30 elements back, then error
+	args := &StreamingArgs{3, 100, 30} // 30 elements back, then error
 	rowChan := make(chan *StreamingReply, 10)
 	c := client.StreamGo("StreamingArith.Thrive", args, rowChan)
 
@@ -175,7 +162,7 @@ func TestInterruptedCallByServer(t *testing.T) {
 	callOnceAndCheck(t, client)
 
 	// then check a call that doesn't send anything, but errors out first
-	args = &StreamingArgs{3, 100, 0, -1}
+	args = &StreamingArgs{3, 100, 0}
 	rowChan = make(chan *StreamingReply, 10)
 	c = client.StreamGo("StreamingArith.Thrive", args, rowChan)
 	_, ok := <-rowChan
@@ -183,34 +170,6 @@ func TestInterruptedCallByServer(t *testing.T) {
 		t.Fatal("expected closed channel")
 	}
 	if c.Error.Error() != "Triggered error in middle" {
-		t.Fatal("received wrong error message:", c.Error)
-	}
-
-	// make sure the wire is still in good shape
-	callOnceAndCheck(t, client)
-}
-
-func TestBadTypeByServer(t *testing.T) {
-
-	// make our client
-	client := makeLink(t)
-
-	args := &StreamingArgs{3, 100, -1, 30} // 30 elements back, then bad
-	rowChan := make(chan *StreamingReply, 10)
-	c := client.StreamGo("StreamingArith.Thrive", args, rowChan)
-
-	// check we get the error at the 30th call exactly
-	count := 0
-	for row := range rowChan {
-		if row.Index != count {
-			t.Fatal("unexpected value:", row.Index)
-		}
-		count += 1
-	}
-	if count != 30 {
-		t.Fatal("received error before the right time:", count)
-	}
-	if c.Error.Error() != "rpc: passing wrong type to sendReply" {
 		t.Fatal("received wrong error message:", c.Error)
 	}
 

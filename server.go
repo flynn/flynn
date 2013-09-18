@@ -288,10 +288,6 @@ func prepareMethod(method reflect.Method) *methodType {
 			log.Println("method", mname, "sendReply has wrong number of ins:", replyType.NumIn())
 			return nil
 		}
-		if replyType.In(0).Kind() != reflect.Interface {
-			log.Println("method", mname, "sendReply parameter type not an interface:", replyType.In(0))
-			return nil
-		}
 		if replyType.NumOut() != 1 {
 			log.Println("method", mname, "sendReply has wrong number of outs:", replyType.NumOut())
 			return nil
@@ -399,6 +395,8 @@ func (m *methodType) NumCalls() (n uint) {
 	return n
 }
 
+var nilRes = []reflect.Value{reflect.Zero(typeOfError)}
+
 func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, req *Request, argv, replyv reflect.Value, codec ServerCodec, context interface{}) {
 	mtype.Lock()
 	mtype.numCalls++
@@ -430,42 +428,28 @@ func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, r
 	// keep track of the type, to make sure we return
 	// the same one consistently
 	var lastError error
-	var firstType reflect.Type
-
-	sendReply := func(oneReply interface{}) error {
-
+	var lastErrRes []reflect.Value
+	sendReply := func(args []reflect.Value) []reflect.Value {
 		// we already triggered an error, we're done
 		if lastError != nil {
-			return lastError
+			return lastErrRes
 		}
 
-		// check the oneReply has the right type using reflection
-		typ := reflect.TypeOf(oneReply)
-		if firstType == nil {
-			firstType = typ
-		} else {
-			if firstType != typ {
-				log.Println("passing wrong type to sendReply",
-					firstType, "!=", typ)
-				lastError = errors.New("rpc: passing wrong type to sendReply")
-				return lastError
-			}
-		}
-
-		lastError = server.sendResponse(sending, req, oneReply, codec, "", false)
+		lastError = server.sendResponse(sending, req, args[0].Interface(), codec, "", false)
 		if lastError != nil {
-			return lastError
+			lastErrRes = []reflect.Value{reflect.ValueOf(lastError)}
+			return lastErrRes
 		}
 
 		// we manage to send, we're good
-		return nil
+		return nilRes
 	}
 
 	// Invoke the method, providing a new value for the reply.
 	if mtype.TakesContext() {
-		returnValues = function.Call([]reflect.Value{s.rcvr, mtype.prepareContext(context), argv, reflect.ValueOf(sendReply)})
+		returnValues = function.Call([]reflect.Value{s.rcvr, mtype.prepareContext(context), argv, reflect.MakeFunc(mtype.ReplyType, sendReply)})
 	} else {
-		returnValues = function.Call([]reflect.Value{s.rcvr, argv, reflect.ValueOf(sendReply)})
+		returnValues = function.Call([]reflect.Value{s.rcvr, argv, reflect.MakeFunc(mtype.ReplyType, sendReply)})
 	}
 	errInter := returnValues[0].Interface()
 	errmsg := ""
