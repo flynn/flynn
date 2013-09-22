@@ -9,10 +9,11 @@ import (
 )
 
 type State struct {
-	// Lock to serialize writes
-	mtx  sync.Mutex
+	sync.Mutex
 	curr *map[string]types.Host
 	next *map[string]types.Host
+
+	streams map[string]chan<- *types.Job
 
 	deleted      map[string]struct{}
 	nextModified bool
@@ -20,11 +21,11 @@ type State struct {
 
 func NewState() *State {
 	curr := make(map[string]types.Host)
-	return &State{curr: &curr}
+	return &State{curr: &curr, streams: make(map[string]chan<- *types.Job)}
 }
 
 func (s *State) Begin() {
-	s.mtx.Lock()
+	s.Lock()
 	next := make(map[string]types.Host, len(*s.curr))
 	s.next = &next
 	s.nextModified = false
@@ -32,7 +33,7 @@ func (s *State) Begin() {
 }
 
 func (s *State) Commit() map[string]types.Host {
-	defer s.mtx.Unlock()
+	defer s.Unlock()
 	if !s.nextModified {
 		s.next = nil
 		return *s.curr
@@ -53,7 +54,7 @@ func (s *State) Commit() map[string]types.Host {
 }
 
 func (s *State) Rollback() map[string]types.Host {
-	defer s.mtx.Unlock()
+	defer s.Unlock()
 	s.next = nil
 	return *s.curr
 }
@@ -73,6 +74,12 @@ func (s *State) AddJob(hostID string, job *types.Job) bool {
 	(*s.next)[hostID] = host
 	s.nextModified = true
 	return true
+}
+
+func (s *State) SendJob(host string, job *types.Job) {
+	if ch, ok := s.streams[host]; ok {
+		ch <- job
+	}
 }
 
 func (s *State) host(id string) (host types.Host, ok bool) {
@@ -106,13 +113,17 @@ outer:
 	}
 	host.Jobs = jobs
 	(*s.next)[hostID] = host
+	s.nextModified = true
 }
 
-func (s *State) AddHost(host *types.Host) {
+func (s *State) AddHost(host *types.Host, ch chan<- *types.Job) {
 	(*s.next)[host.ID] = *host
+	s.streams[host.ID] = ch
+	s.nextModified = true
 }
 
 func (s *State) RemoveHost(id string) {
 	delete(*s.next, id)
 	s.deleted[id] = struct{}{}
+	delete(s.streams, id)
 }

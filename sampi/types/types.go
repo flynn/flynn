@@ -2,6 +2,8 @@ package types
 
 import (
 	"strconv"
+
+	"github.com/dotcloud/docker"
 )
 
 type Job struct {
@@ -13,6 +15,8 @@ type Job struct {
 	Attributes map[string]string
 	// Resource requirements (decremented from host resources)
 	Resources map[string]int
+
+	Config *docker.Config
 }
 
 type ResourceValue struct {
@@ -129,9 +133,4 @@ func (r *Rule) Match(h map[string]string) bool {
 		// invalid op
 		return false
 	}
-}
-
-type JobList struct {
-	Host string
-	IDs  []string
 }
