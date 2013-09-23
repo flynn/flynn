@@ -437,7 +437,7 @@ func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, r
 
 		lastError = server.sendResponse(sending, req, args[0].Interface(), codec, "", false)
 		if lastError != nil {
-			lastErrRes = []reflect.Value{reflect.ValueOf(lastError)}
+			lastErrRes = []reflect.Value{reflect.ValueOf(&lastError).Elem()}
 			return lastErrRes
 		}
 
