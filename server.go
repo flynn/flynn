@@ -555,32 +555,6 @@ func (mtype methodType) prepareContext(context interface{}) reflect.Value {
 	return reflect.Zero(mtype.ContextType)
 }
 
-// ServeRequest is like ServeCodec but synchronously serves a single request.
-// It does not close the codec upon completion.
-func (server *Server) ServeRequest(codec ServerCodec) error {
-	return server.ServeRequestWithContext(codec, nil)
-}
-
-// ServeRequestWithContext is like ServeRequest but makes it possible
-// to pass a connection context to the RPC methods.
-func (server *Server) ServeRequestWithContext(codec ServerCodec, context interface{}) error {
-	sending := new(sync.Mutex)
-	service, mtype, req, argv, replyv, keepReading, err := server.readRequest(codec)
-	if err != nil {
-		if !keepReading {
-			return err
-		}
-		// send a response if we actually managed to read a header.
-		if req != nil {
-			server.sendResponse(sending, req, invalidRequest, codec, err.Error(), true)
-			server.freeRequest(req)
-		}
-		return err
-	}
-	service.call(server, sending, mtype, req, argv, replyv, codec, context)
-	return nil
-}
-
 func (server *Server) getRequest() *Request {
 	server.reqLock.Lock()
 	req := server.freeReq
@@ -753,19 +727,6 @@ func ServeCodec(codec ServerCodec) {
 // connection context to the RPC methods.
 func ServeCodecWithContext(codec ServerCodec, context interface{}) {
 	DefaultServer.ServeCodecWithContext(codec, context)
-}
-
-// ServeRequest is like ServeCodec but synchronously serves a single request.
-// It does not close the codec upon completion.
-func ServeRequest(codec ServerCodec) error {
-	return ServeRequestWithContext(codec, nil)
-
-}
-
-// ServeRequestWithContext is like ServeRequest but it allows to pass
-// a connection context to the RPC methods.
-func ServeRequestWithContext(codec ServerCodec, context interface{}) error {
-	return DefaultServer.ServeRequestWithContext(codec, context)
 }
 
 // Accept accepts connections on the listener and serves requests
