@@ -3,7 +3,7 @@ package types
 import (
 	"strconv"
 
-	"github.com/dotcloud/docker"
+	"github.com/titanous/go-dockerclient"
 )
 
 type Job struct {

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"io"
+
 	"github.com/flynn/rpcplus"
 	"github.com/flynn/sampi/types"
 )
@@ -49,29 +51,36 @@ func (s *Scheduler) Schedule(req *types.ScheduleReq, res *types.ScheduleRes) err
 
 // Host Service methods
 
-func (s *Scheduler) RegisterHost(hostID *string, host *types.Host, send func(*types.Job) error) error {
+func (s *Scheduler) RegisterHost(hostID *string, host *types.Host, stream rpcplus.Stream) error {
 	s.state.Begin()
 	// TODO: error if host.ID is duplicate or empty
 	jobs := make(chan *types.Job)
 	s.state.AddHost(host, jobs)
 	s.state.Commit()
 
-	var stopping bool
-	for job := range jobs {
-		if err := send(job); err != nil {
-			if !stopping {
-				stopping = true
-				// This needs to be done asynchronously so that we don't deadlock
-				go func() {
-					s.state.Begin()
-					s.state.RemoveHost(host.ID)
-					s.state.Commit()
-					close(jobs)
-				}()
+	var err error
+outer:
+	for {
+		select {
+		case job := <-jobs:
+			// make sure we don't deadlock if there is an error while we're sending
+			select {
+			case stream.Send <- job:
+			case err = <-stream.Error:
+				break outer
 			}
+		case err = <-stream.Error:
+			break outer
 		}
 	}
-	return nil
+
+	s.state.Begin()
+	s.state.RemoveHost(host.ID)
+	s.state.Commit()
+	if err == io.EOF {
+		err = nil
+	}
+	return err
 }
 
 func (s *Scheduler) RemoveJobs(hostID *string, jobIDs []string, res *struct{}) error {

@@ -126,4 +126,5 @@ func (s *State) RemoveHost(id string) {
 	delete(*s.next, id)
 	s.deleted[id] = struct{}{}
 	delete(s.streams, id)
+	s.nextModified = true
 }
