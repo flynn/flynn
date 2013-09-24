@@ -27,17 +27,13 @@ type StreamingReply struct {
 
 type StreamingArith int
 
-func (t *StreamingArith) Thrive(args StreamingArgs, sendReply func(reply *StreamingReply) error) error {
+func (t *StreamingArith) Thrive(args StreamingArgs, stream Stream) error {
 	for i := 0; i < args.Count; i++ {
 		if i == args.ErrorAt {
 			return errors.New("Triggered error in middle")
 		}
 		// log.Println("  Sending sample", i)
-		sr := &StreamingReply{C: args.A, Index: i}
-		err := sendReply(sr)
-		if err != nil {
-			return err
-		}
+		stream.Send <- &StreamingReply{C: args.A, Index: i}
 	}
 
 	return nil

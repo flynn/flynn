@@ -15,13 +15,13 @@
 
 		- the method is exported.
 		- the method has two arguments, both exported (or builtin) types.
-		- the method's second argument is either a pointer, or a function pointer.
+		- the method's second argument is either a pointer, or a rpcplus.Stream.
 		- the method has return type error.
 
 	In effect, the method must look schematically like one of these two:
 
 		func (t *T) MethodName(argType T1, replyType *T2) error
-		func (t *T) MethodName(argType T1, sendReply func(interface{}) error) error
+		func (t *T) MethodName(argType T1, stream rpcplus.Stream) error
 
 	where T, T1 and T2 can be marshaled by encoding/gob.
 	These requirements apply even if a different codec is used.
@@ -244,6 +244,13 @@ func (server *Server) RegisterName(name string, rcvr interface{}) error {
 	return server.register(rcvr, name, true)
 }
 
+type Stream struct {
+	Send  chan<- interface{}
+	Error <-chan error
+}
+
+var typeOfStream = reflect.TypeOf(Stream{})
+
 // prepareMethod returns a methodType for the provided method or nil
 // in case if the method was unsuitable.
 func prepareMethod(method reflect.Method) *methodType {
@@ -281,22 +288,9 @@ func prepareMethod(method reflect.Method) *methodType {
 
 	// the second argument will tell us if it's a streaming call
 	// or a regular call
-	if replyType.Kind() == reflect.Func {
+	if replyType == typeOfStream {
 		// this is a streaming call
 		stream = true
-		if replyType.NumIn() != 1 {
-			log.Println("method", mname, "sendReply has wrong number of ins:", replyType.NumIn())
-			return nil
-		}
-		if replyType.NumOut() != 1 {
-			log.Println("method", mname, "sendReply has wrong number of outs:", replyType.NumOut())
-			return nil
-		}
-		if returnType := replyType.Out(0); returnType != typeOfError {
-			log.Println("method", mname, "sendReply returns", returnType.String(), "not error")
-			return nil
-		}
-
 	} else if replyType.Kind() != reflect.Ptr {
 		log.Println("method", mname, "reply type not a pointer:", replyType)
 		return nil
@@ -397,7 +391,7 @@ func (m *methodType) NumCalls() (n uint) {
 
 var nilRes = []reflect.Value{reflect.Zero(typeOfError)}
 
-func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, req *Request, argv, replyv reflect.Value, codec ServerCodec, context interface{}) {
+func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, req *Request, argv, replyv reflect.Value, codec ServerCodec, context interface{}, eof <-chan struct{}) {
 	mtype.Lock()
 	mtype.numCalls++
 	mtype.Unlock()
@@ -424,41 +418,48 @@ func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, r
 		return
 	}
 
-	// declare a local error to see if we errored out already
-	// keep track of the type, to make sure we return
-	// the same one consistently
-	var lastError error
-	var lastErrRes []reflect.Value
-	sendReply := func(args []reflect.Value) []reflect.Value {
-		// we already triggered an error, we're done
-		if lastError != nil {
-			return lastErrRes
-		}
+	sendChan := make(chan interface{})
+	errChan := make(chan error)
+	stream := reflect.ValueOf(Stream{sendChan, errChan})
+	funcDone := make(chan struct{})
+	sendDone := make(chan struct{})
 
-		lastError = server.sendResponse(sending, req, args[0].Interface(), codec, "", false)
-		if lastError != nil {
-			lastErrRes = []reflect.Value{reflect.ValueOf(&lastError).Elem()}
-			return lastErrRes
+	var streamErr error
+	go func() {
+		defer close(sendDone)
+		for {
+			select {
+			case data := <-sendChan:
+				streamErr = server.sendResponse(sending, req, data, codec, "", false)
+				if streamErr != nil {
+					errChan <- streamErr
+					return
+				}
+			case <-funcDone:
+				return
+			case <-eof:
+				errChan <- io.EOF
+				return
+			}
 		}
-
-		// we manage to send, we're good
-		return nilRes
-	}
+	}()
 
 	// Invoke the method, providing a new value for the reply.
 	if mtype.TakesContext() {
-		returnValues = function.Call([]reflect.Value{s.rcvr, mtype.prepareContext(context), argv, reflect.MakeFunc(mtype.ReplyType, sendReply)})
+		returnValues = function.Call([]reflect.Value{s.rcvr, mtype.prepareContext(context), argv, stream})
 	} else {
-		returnValues = function.Call([]reflect.Value{s.rcvr, argv, reflect.MakeFunc(mtype.ReplyType, sendReply)})
+		returnValues = function.Call([]reflect.Value{s.rcvr, argv, stream})
 	}
+	close(funcDone)
+	<-sendDone
+
 	errInter := returnValues[0].Interface()
 	errmsg := ""
 	if errInter != nil {
 		// the function returned an error, we use that
 		errmsg = errInter.(error).Error()
-	} else if lastError != nil {
-		// we had an error inside sendReply, we use that
-		errmsg = lastError.Error()
+	} else if streamErr != nil {
+		errmsg = streamErr.Error()
 	} else {
 		// no error, we send the special EOS error
 		errmsg = lastStreamResponseError
@@ -527,6 +528,7 @@ func (server *Server) ServeCodec(codec ServerCodec) {
 // to pass a connection context to the RPC methods.
 func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface{}) {
 	sending := new(sync.Mutex)
+	eof := make(chan struct{})
 	for {
 		service, mtype, req, argv, replyv, keepReading, err := server.readRequest(codec)
 		if err != nil {
@@ -543,8 +545,9 @@ func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface
 			}
 			continue
 		}
-		go service.call(server, sending, mtype, req, argv, replyv, codec, context)
+		go service.call(server, sending, mtype, req, argv, replyv, codec, context, eof)
 	}
+	close(eof)
 	codec.Close()
 }
 
