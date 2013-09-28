@@ -38,11 +38,14 @@ func main() {
 	log.Print("Host registered")
 	for job := range jobs {
 		log.Printf("%#v", job.Config)
-		err := client.PullImage(docker.PullImageOptions{Repository: job.Config.Image}, os.Stdout)
-		if err != nil {
-			log.Fatal(err)
-		}
 		container, err := client.CreateContainer(job.Config)
+		if err == docker.ErrNoSuchImage {
+			err = client.PullImage(docker.PullImageOptions{Repository: job.Config.Image}, os.Stdout)
+			if err != nil {
+				log.Fatal(err)
+			}
+			container, err = client.CreateContainer(job.Config)
+		}
 		if err != nil {
 			log.Fatal(err)
 		}

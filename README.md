@@ -8,7 +8,6 @@ framework](https://github.com/flynn/sampi).
 ## TODO
 
 - Track resources
-- Intelligently pull images
 - RPC interface for schedulers
 - Remove jobs from Sampi after they complete
 - Recover from crashes
