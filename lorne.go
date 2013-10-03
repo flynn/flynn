@@ -8,10 +8,13 @@ import (
 	"log"
 	"os"
 
+	"github.com/flynn/lorne/types"
 	"github.com/flynn/rpcplus"
 	"github.com/flynn/sampi/types"
 	"github.com/titanous/go-dockerclient"
 )
+
+var state = NewState()
 
 func main() {
 	scheduler, err := rpcplus.DialHTTP("tcp", "localhost:1112")
@@ -26,18 +29,19 @@ func main() {
 	}
 
 	// register host data
-	host := types.Host{
+	host := sampi.Host{
 		ID:        randomID(),
-		Resources: map[string]types.ResourceValue{"memory": types.ResourceValue{Value: 1024}},
+		Resources: map[string]sampi.ResourceValue{"memory": sampi.ResourceValue{Value: 1024}},
 	}
 
 	// TODO: track job state
 
-	jobs := make(chan *types.Job)
+	jobs := make(chan *sampi.Job)
 	scheduler.StreamGo("Scheduler.RegisterHost", host, jobs)
 	log.Print("Host registered")
 	for job := range jobs {
 		log.Printf("%#v", job.Config)
+		state.AddJob(job)
 		container, err := client.CreateContainer(job.Config)
 		if err == docker.ErrNoSuchImage {
 			err = client.PullImage(docker.PullImageOptions{Repository: job.Config.Image}, os.Stdout)
@@ -52,6 +56,7 @@ func main() {
 		if err := client.StartContainer(container.ID); err != nil {
 			log.Fatal(err)
 		}
+		state.SetJobStatus(job.ID, lorne.StatusRunning)
 	}
 }
 
