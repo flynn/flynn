@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/progrium/go-discover/discover"
+	"github.com/flynn/go-discover/discover"
 )
 
 func main() {
