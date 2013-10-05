@@ -59,25 +59,25 @@ func (s *ServiceSet) Bind(updates chan *ServiceUpdate) {
 
 func (s *ServiceSet) Online() []*Service {
 	s.serMutex.Lock()
+	defer s.serMutex.Unlock()
 	list := make([]*Service, 0, len(s.services))
 	for _, service := range s.services {
 		if service.Online {
 			list = append(list, service)
 		}
 	}
-	s.serMutex.Unlock()
 	return list
 }
 
 func (s *ServiceSet) Offline() []*Service {
 	s.serMutex.Lock()
+	defer s.serMutex.Unlock()
 	list := make([]*Service, 0, len(s.services))
 	for _, service := range s.services {
 		if !service.Online {
 			list = append(list, service)
 		}
 	}
-	s.serMutex.Unlock()
 	return list
 }
 
@@ -104,8 +104,8 @@ func (s *ServiceSet) Filter(attrs map[string]string) {
 // Still not sure about this API, but it's a start
 func (s *ServiceSet) Subscribe(ch chan *ServiceUpdate) {
 	s.lisMutex.Lock()
+	defer s.lisMutex.Unlock()
 	s.listeners[ch] = struct{}{}
-	s.lisMutex.Unlock()
 }
 
 func (s *ServiceSet) Unsubscribe(ch chan *ServiceUpdate) {
