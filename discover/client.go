@@ -140,7 +140,7 @@ func pickMostPublicIp() string {
 }
 
 func (c *DiscoverClient) Services(name string) *ServiceSet {
-	updates := make(chan *ServiceUpdate, 10)
+	updates := make(chan *ServiceUpdate)
 	c.client.StreamGo("DiscoverAgent.Subscribe", &Args{
 		Name: name,
 	}, updates)
