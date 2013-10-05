@@ -10,9 +10,8 @@ import (
 	"github.com/flynn/rpcplus"
 )
 
-// TODO Populate the id's after understanding the backends mechanism.
 type Service struct {
-	Id     int
+	Index  int // not used yet
 	Name   string
 	Host   string
 	Port   string
@@ -21,14 +20,13 @@ type Service struct {
 	Online bool
 }
 
-// TODO Use mutex appropriately and add a test for it.
 type ServiceSet struct {
 	services  map[string]*Service
-	filters   map[string]string // Whats a filter?
+	filters   map[string]string
 	listeners map[chan *ServiceUpdate]struct{}
-	serMutex sync.RWMutex
-	filMutex sync.RWMutex
-	lisMutex sync.RWMutex
+	serMutex  sync.RWMutex
+	filMutex  sync.RWMutex
+	lisMutex  sync.RWMutex
 }
 
 func (s *ServiceSet) Bind(updates chan *ServiceUpdate) {
@@ -36,49 +34,50 @@ func (s *ServiceSet) Bind(updates chan *ServiceUpdate) {
 		for update := range updates {
 			// TODO: apply filters
 			s.serMutex.Lock()
-			_, exists := s.services[update.Addr]
-			s.serMutex.Unlock()
-			if !exists {
+			if _, exists := s.services[update.Addr]; !exists {
 				host, port, _ := net.SplitHostPort(update.Addr)
-				s.serMutex.Lock()
 				s.services[update.Addr] = &Service{
 					Name: update.Name,
 					Addr: update.Addr,
 					Host: host,
 					Port: port,
 				}
-				s.serMutex.Unlock()
 			}
-			s.serMutex.Lock()
 			s.services[update.Addr].Online = update.Online
 			s.services[update.Addr].Attrs = update.Attrs
 			s.serMutex.Unlock()
 			if s.listeners != nil {
+				s.lisMutex.Lock()
 				for ch := range s.listeners {
 					ch <- update
 				}
+				s.lisMutex.Unlock()
 			}
 		}
 	}()
 }
 
 func (s *ServiceSet) Online() []*Service {
+	s.serMutex.Lock()
 	list := make([]*Service, 0, len(s.services))
 	for _, service := range s.services {
 		if service.Online {
 			list = append(list, service)
 		}
 	}
+	s.serMutex.Unlock()
 	return list
 }
 
 func (s *ServiceSet) Offline() []*Service {
+	s.serMutex.Lock()
 	list := make([]*Service, 0, len(s.services))
 	for _, service := range s.services {
 		if !service.Online {
 			list = append(list, service)
 		}
 	}
+	s.serMutex.Unlock()
 	return list
 }
 
@@ -103,27 +102,29 @@ func (s *ServiceSet) Filter(attrs map[string]string) {
 }
 
 // Still not sure about this API, but it's a start
-func (s *ServiceSet) Listen(ch chan *ServiceUpdate) {
+func (s *ServiceSet) Subscribe(ch chan *ServiceUpdate) {
+	s.lisMutex.Lock()
 	s.listeners[ch] = struct{}{}
+	s.lisMutex.Unlock()
 }
 
-func (s *ServiceSet) Unsubscribe() {
-	// noop for now. TODO: close update stream
+func (s *ServiceSet) Unsubscribe(ch chan *ServiceUpdate) {
+	// TODO: close update stream
 }
 
 type DiscoverClient struct {
 	client     *rpcplus.Client
 	heartbeats map[string]bool
+	hbMutex    sync.RWMutex
 }
 
 func NewClient() (*DiscoverClient, error) {
 	client, err := rpcplus.DialHTTP("tcp", "127.0.0.1:1111") // TODO: default, not hardcoded
 	return &DiscoverClient{
-		client : client,
-		heartbeats : make(map[string]bool),
+		client:     client,
+		heartbeats: make(map[string]bool),
 	}, err
 }
-
 
 func pickMostPublicIp() string {
 	// TODO: prefer non 10.0.0.0, 172.16.0.0, and 192.168.0.0
@@ -144,8 +145,9 @@ func (c *DiscoverClient) Services(name string) *ServiceSet {
 		Name: name,
 	}, updates)
 	set := &ServiceSet{
-		services: make(map[string]*Service),
-		filters:  make(map[string]string),
+		services:  make(map[string]*Service),
+		filters:   make(map[string]string),
+		listeners: make(map[chan *ServiceUpdate]struct{}),
 	}
 	set.Bind(updates)
 	return set
@@ -164,22 +166,25 @@ func (c *DiscoverClient) RegisterWithHost(name, host, port string, attributes ma
 	var ret struct{}
 	err := c.client.Call("DiscoverAgent.Register", args, &ret)
 	if err != nil {
-		return errors.New("discover : register failed " + err.Error())
-	} else {
-		c.heartbeats[args.Addr] = true
-		go func() {
-			time.Sleep(HeartbeatIntervalSecs * time.Second)
-			var heartbeated struct{}
-			for c.heartbeats[args.Addr] {
-				c.client.Call("DiscoverAgent.Heartbeat", &Args{
-					Name: name,
-					Addr: args.Addr,
-				}, &heartbeated)
-				time.Sleep(HeartbeatIntervalSecs * time.Second) // TODO: add jitter
-			}
-		}()
-		return nil
+		return errors.New("discover: register failed: " + err.Error())
 	}
+	c.hbMutex.Lock()
+	c.heartbeats[args.Addr] = true
+	c.hbMutex.Unlock()
+	go func() {
+		time.Sleep(HeartbeatIntervalSecs * time.Second)
+		var heartbeated struct{}
+		c.hbMutex.Lock()
+		for c.heartbeats[args.Addr] {
+			c.client.Call("DiscoverAgent.Heartbeat", &Args{
+				Name: name,
+				Addr: args.Addr,
+			}, &heartbeated)
+			time.Sleep(HeartbeatIntervalSecs * time.Second) // TODO: add jitter
+		}
+		c.hbMutex.Unlock()
+	}()
+	return nil
 }
 
 func (c *DiscoverClient) Unregister(name, port string) error {
@@ -191,12 +196,13 @@ func (c *DiscoverClient) UnregisterWithHost(name, host, port string) error {
 		Name: name,
 		Addr: net.JoinHostPort(host, port),
 	}
-	var success struct{} // ignore success for now. nearly useless return value
-	err := c.client.Call("DiscoverAgent.Unregister", args, &success)
+	var resp struct{}
+	err := c.client.Call("DiscoverAgent.Unregister", args, &resp)
 	if err != nil {
-		return errors.New("discover : unregister failed" + err.Error())
-	} else {
-		delete(c.heartbeats, args.Addr)
-		return nil
+		return errors.New("discover: unregister failed: " + err.Error())
 	}
+	c.hbMutex.Lock()
+	delete(c.heartbeats, args.Addr)
+	c.hbMutex.Unlock()
+	return nil
 }

@@ -1,25 +1,24 @@
 package main
 
 import (
-	"flag"
 	"fmt"
-	"github.com/georgethomas111/go-discover/discover"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/progrium/go-discover/discover"
 )
 
 func main() {
 	flag.Parse()
-	name := flag.Arg(0)
-	port := flag.Arg(1)
-	host := flag.Arg(2)
+	name := os.Args[0]
+	port := os.Args[1]
+	host := os.Args[2]
 
 	exit := make(chan os.Signal, 1)
-	signal.Notify(exit, os.Interrupt)
-	signal.Notify(exit, syscall.SIGTERM)
+	signal.Notify(exit, os.Interrupt, syscall.SIGTERM)
 	var cleanup func()
 	go func() {
 		<-exit
@@ -41,7 +40,7 @@ func main() {
 
 	set := client.Services(name)
 	for {
-		fmt.Printf("%s\n", strings.Join(set.OnlineAddrs(), ", "))
+		fmt.Println(strings.Join(set.OnlineAddrs(), ", "))
 		time.Sleep(1 * time.Second)
 	}
 }

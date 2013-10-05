@@ -8,5 +8,5 @@ import (
 func main() {
 	server := discover.NewServer()
 	fmt.Printf("Starting server on %s...\n", server.Address)
-	discover.ServeForever(server)
+	discover.ListenAndServe(server)
 }

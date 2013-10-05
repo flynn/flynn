@@ -28,10 +28,10 @@ type Args struct {
 
 //TODO Name the arguments in the interface
 type DiscoveryBackend interface {
-	Subscribe(string) (chan *ServiceUpdate, error)
-	Register(string, string, map[string]string) error
-	Unregister(string, string) error
-	Heartbeat(string, string) error
+	Subscribe(name string) (chan *ServiceUpdate, error)
+	Register(name string, addr string, attrs map[string]string) error
+	Unregister(name string, addr string) error
+	Heartbeat(name string, addr string) error
 }
 
 type DiscoverAgent struct {
@@ -46,13 +46,13 @@ func NewServer() *DiscoverAgent {
 	}
 }
 
-func ListenAndServe(server *DiscoverAgent) error{
+func ListenAndServe(server *DiscoverAgent) error {
 	err := rpcplus.Register(server)
 	if err != nil {
 		return err
 	}
 	rpcplus.HandleHTTP()
-	l, err := net.Listen("tcp", server.Address) 
+	l, err := net.Listen("tcp", server.Address)
 	http.Serve(l, nil)
 	return err
 }

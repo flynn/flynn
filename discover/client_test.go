@@ -1,41 +1,37 @@
 package discover
 
 import (
+	"runtime"
 	"testing"
-	"time"
 )
 
-func startServer() {
+func runServer() {
 	server := NewServer()
 	ListenAndServe(server)
 }
 
-func TestClient(t* testing.T) {
-	t.Log("Testing Register")
-	go startServer()
-	time.Sleep(time.Second)
-	// Giving time for the server to get online.
+func TestClient(t *testing.T) {
+	go runServer()
+	runtime.Gosched()
 	client, err := NewClient()
 	if err != nil {
 		t.Fatal(err)
 	}
-	serverName := "trialServer"
-	serverPort := "1234"
-	// Test Registering
-	err = client.Register(serverName, serverPort, make(map[string]string))
+	serviceName := "testService"
+	err = client.Register(serviceName, "1111", nil)
 	if err != nil {
-		t.Fatal("Registering client failed" + err.Error())
+		t.Fatal("Registering service failed", err.Error())
 	}
-
-	err = client.Register(serverName, "1222", make(map[string]string))
-	serSet := client.Services(serverName)
-	time.Sleep(1 * time.Second)
-	online := serSet.Online()
-	if(len(online) < 2) {
-		t.Fatal("Registed clients not online")
+	err = client.Register(serviceName, "2222", nil)
+	if err != nil {
+		t.Fatal("Registering service failed", err.Error())
 	}
-	//TODO  Kill The server
+	set := client.Services(serviceName)
+	ch := make(chan *ServiceUpdate)
+	set.Subscribe(ch)
+	<-ch
+	<-ch
+	if len(set.Online()) < 2 {
+		t.Fatal("Registered services not online")
+	}
 }
-
-
-

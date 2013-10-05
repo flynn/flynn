@@ -27,7 +27,7 @@ func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
 
 	deleteService(client, serviceName, serviceAddr)
 	t.Log("Testing Register")
-	backend.Register(serviceName, serviceAddr, make(map[string]string))
+	backend.Register(serviceName, serviceAddr, nil)
 
 	getUrl := "/services/" + serviceName + "/" + serviceAddr
 	results, err := client.Get(getUrl)
@@ -40,7 +40,7 @@ func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
 		t.Fatal("Flynn Error: No Response From Server")
 	} else {
 		// Check if the files the returned values are the same.
-		if(results[0].Key != getUrl) || (results[0].Value != serviceAddr) {
+		if (results[0].Key != getUrl) || (results[0].Value != serviceAddr) {
 			t.Fatal("Returned value not equal to sent one")
 		}
 	}
@@ -54,30 +54,34 @@ func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
 }
 
 func TestEtcdBackend_Subscribe(t *testing.T) {
+
 	client := etcd.NewClient()
 	backend := EtcdBackend{Client: client}
 
-	backend.Register("test_subscribe", "10.0.0.1", map[string]string{})
+	backend.Register("test_subscribe", "10.0.0.1", nil)
 	defer backend.Unregister("test_subscribe", "10.0.0.1")
-	backend.Register("test_subscribe", "10.0.0.2", map[string]string{})
+	backend.Register("test_subscribe", "10.0.0.2", nil)
 	defer backend.Unregister("test_subscribe", "10.0.0.2")
 
 	updates, _ := backend.Subscribe("test_subscribe")
 	runtime.Gosched()
 
-	backend.Register("test_subscribe", "10.0.0.3", map[string]string{})
+	backend.Register("test_subscribe", "10.0.0.3", nil)
 	defer backend.Unregister("test_subscribe", "10.0.0.3")
-	backend.Register("test_subscribe", "10.0.0.4", map[string]string{})
+	backend.Register("test_subscribe", "10.0.0.4", nil)
 	defer backend.Unregister("test_subscribe", "10.0.0.4")
 
 	for i := 0; i < 4; i++ {
-		addr := (<-updates).Addr
-		if !strings.Contains("10.0.0.1 10.0.0.2 10.0.0.3 10.0.0.4", addr) {
-			t.Fatal("Service update of unexected addr: ", addr)
+		update := <-updates
+		if update.Online != true {
+			t.Fatal("Unexpected offline service update: ", update, i)
+		}
+		if !strings.Contains("10.0.0.1 10.0.0.2 10.0.0.3 10.0.0.4", update.Addr) {
+			t.Fatal("Service update of unexected addr: ", update, i)
 		}
 	}
 
-	backend.Register("test_subscribe", "10.0.0.5", map[string]string{})
+	backend.Register("test_subscribe", "10.0.0.5", nil)
 	backend.Unregister("test_subscribe", "10.0.0.5")
 
 	<-updates           // .5 comes online
