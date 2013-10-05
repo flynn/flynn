@@ -13,14 +13,14 @@ type Scheduler struct {
 
 // Scheduler Methods
 
-func (s *Scheduler) State(arg struct{}, ret *map[string]types.Host) error {
+func (s *Scheduler) State(arg struct{}, ret *map[string]sampi.Host) error {
 	*ret = s.state.Get()
 	return nil
 }
 
-func (s *Scheduler) Schedule(req *types.ScheduleReq, res *types.ScheduleRes) error {
+func (s *Scheduler) Schedule(req *sampi.ScheduleReq, res *sampi.ScheduleRes) error {
 	s.state.Begin()
-	*res = types.ScheduleRes{}
+	*res = sampi.ScheduleRes{}
 	for host, jobs := range req.HostJobs {
 		for _, job := range jobs {
 			if s.state.AddJob(host, job) {
@@ -51,10 +51,10 @@ func (s *Scheduler) Schedule(req *types.ScheduleReq, res *types.ScheduleRes) err
 
 // Host Service methods
 
-func (s *Scheduler) RegisterHost(hostID *string, host *types.Host, stream rpcplus.Stream) error {
+func (s *Scheduler) RegisterHost(hostID *string, host *sampi.Host, stream rpcplus.Stream) error {
 	s.state.Begin()
 	// TODO: error if host.ID is duplicate or empty
-	jobs := make(chan *types.Job)
+	jobs := make(chan *sampi.Job)
 	s.state.AddHost(host, jobs)
 	s.state.Commit()
 

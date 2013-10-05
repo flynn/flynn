@@ -19,7 +19,7 @@ func TestStateCommit(t *testing.T) {
 
 func addHost(id string, state *State) bool {
 	state.Begin()
-	state.AddHost(&types.Host{ID: id}, nil)
+	state.AddHost(&sampi.Host{ID: id}, nil)
 	res := state.Commit()
 	_, ok := res[id]
 	return ok
@@ -28,7 +28,7 @@ func addHost(id string, state *State) bool {
 func TestStateRace(t *testing.T) {
 	state := NewState()
 	state.Begin()
-	state.AddHost(&types.Host{ID: "foo"}, nil)
+	state.AddHost(&sampi.Host{ID: "foo"}, nil)
 	data := state.Commit()
 
 	go addHost("1", state)

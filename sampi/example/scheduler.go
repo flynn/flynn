@@ -14,7 +14,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var state map[string]types.Host
+	var state map[string]sampi.Host
 	if err := scheduler.Call("Scheduler.State", struct{}{}, &state); err != nil {
 		log.Fatal(err)
 	}
@@ -29,10 +29,10 @@ func main() {
 		log.Fatal("no hosts")
 	}
 
-	var schedRes types.ScheduleRes
-	schedReq := &types.ScheduleReq{
+	var schedRes sampi.ScheduleRes
+	schedReq := &sampi.ScheduleReq{
 		Incremental: true,
-		HostJobs:    map[string][]*types.Job{firstHost: {{ID: "test", Config: &docker.Config{Image: "crosbymichael/redis"}}}},
+		HostJobs:    map[string][]*sampi.Job{firstHost: {{ID: "test", Config: &docker.Config{Image: "crosbymichael/redis"}}}},
 	}
 	if err := scheduler.Call("Scheduler.Schedule", schedReq, &schedRes); err != nil {
 		log.Fatal(err)
