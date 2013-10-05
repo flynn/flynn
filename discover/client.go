@@ -174,7 +174,6 @@ func (c *DiscoverClient) RegisterWithHost(name, host, port string, attributes ma
 	go func() {
 		time.Sleep(HeartbeatIntervalSecs * time.Second)
 		var heartbeated struct{}
-		c.hbMutex.Lock()
 		for c.heartbeats[args.Addr] {
 			c.client.Call("DiscoverAgent.Heartbeat", &Args{
 				Name: name,
@@ -182,7 +181,6 @@ func (c *DiscoverClient) RegisterWithHost(name, host, port string, attributes ma
 			}, &heartbeated)
 			time.Sleep(HeartbeatIntervalSecs * time.Second) // TODO: add jitter
 		}
-		c.hbMutex.Unlock()
 	}()
 	return nil
 }
