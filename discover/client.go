@@ -24,9 +24,9 @@ type ServiceSet struct {
 	services  map[string]*Service
 	filters   map[string]string
 	listeners map[chan *ServiceUpdate]struct{}
-	serMutex  sync.RWMutex
-	filMutex  sync.RWMutex
-	lisMutex  sync.RWMutex
+	serMutex  sync.Mutex
+	filMutex  sync.Mutex
+	lisMutex  sync.Mutex
 }
 
 func (s *ServiceSet) Bind(updates chan *ServiceUpdate) {
@@ -115,7 +115,7 @@ func (s *ServiceSet) Unsubscribe(ch chan *ServiceUpdate) {
 type DiscoverClient struct {
 	client     *rpcplus.Client
 	heartbeats map[string]bool
-	hbMutex    sync.RWMutex
+	hbMutex    sync.Mutex
 }
 
 func NewClient() (*DiscoverClient, error) {
