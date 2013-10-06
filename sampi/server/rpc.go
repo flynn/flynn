@@ -52,6 +52,7 @@ func (s *Scheduler) Schedule(req *sampi.ScheduleReq, res *sampi.ScheduleRes) err
 // Host Service methods
 
 func (s *Scheduler) RegisterHost(hostID *string, host *sampi.Host, stream rpcplus.Stream) error {
+	*hostID = host.ID
 	s.state.Begin()
 	// TODO: error if host.ID is duplicate or empty
 	jobs := make(chan *sampi.Job)
