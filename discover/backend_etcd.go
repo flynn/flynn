@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -9,8 +10,20 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 )
 
+const (
+	KeyPrefix = "/discover"
+)
+
 type EtcdBackend struct {
 	Client *etcd.Client
+}
+
+func servicePath(name, addr string) string {
+	if addr != "" {
+		return fmt.Sprintf("%s/services/%s/%s", KeyPrefix, name, addr)
+	} else {
+		return fmt.Sprintf("%s/services/%s", KeyPrefix, name)
+	}
 }
 
 func (b *EtcdBackend) Subscribe(name string) (UpdateStream, error) {
@@ -46,22 +59,31 @@ func (s *etcdStream) Chan() chan *ServiceUpdate { return s.ch }
 func (s *etcdStream) Close() { s.stopOnce.Do(func() { close(s.stop) }) }
 
 func (b *EtcdBackend) responseToUpdate(resp *store.Response) *ServiceUpdate {
-	respList := strings.SplitN(resp.Key, "/", 4)
-	if len(respList) < 3 {
+	// expected key structure: /PREFIX/services/NAME/ADDR
+	splitKey := strings.SplitN(resp.Key, "/", 5)
+	if len(splitKey) < 5 {
 		return nil
 	}
-
-	serviceName := respList[2]
-	if ("SET" == resp.Action && resp.NewKey) || "GET" == resp.Action {
+	serviceName := splitKey[3]
+	serviceAddr := splitKey[4]
+	if "GET" == resp.Action || ("SET" == resp.Action && (resp.NewKey || resp.Value != resp.PrevValue)) {
+		// GET is because getCurrentState returns responses of Action GET.
+		// some SETs are heartbeats, so we ignore SETs where value didn't change.
+		var serviceAttrs map[string]string
+		err := json.Unmarshal([]byte(resp.Value), &serviceAttrs)
+		if err != nil {
+			return nil
+		}
 		return &ServiceUpdate{
 			Name:   serviceName,
-			Addr:   resp.Value,
+			Addr:   serviceAddr,
 			Online: true,
+			Attrs:  serviceAttrs,
 		}
 	} else if "DELETE" == resp.Action {
 		return &ServiceUpdate{
 			Name: serviceName,
-			Addr: resp.PrevValue,
+			Addr: serviceAddr,
 		}
 	} else {
 		return nil
@@ -69,27 +91,35 @@ func (b *EtcdBackend) responseToUpdate(resp *store.Response) *ServiceUpdate {
 }
 
 func (b *EtcdBackend) getCurrentState(name string) ([]*store.Response, error) {
-	return b.Client.Get(fmt.Sprintf("/services/%s", name))
+	return b.Client.Get(servicePath(name, ""))
 }
 
 func (b *EtcdBackend) getStateChanges(name string, stop chan bool) chan *store.Response {
 	watch := make(chan *store.Response)
-	go b.Client.Watch(fmt.Sprintf("/services/%s", name), 0, watch, stop)
+	go b.Client.Watch(servicePath(name, ""), 0, watch, stop)
 	return watch
 }
 
-func (b *EtcdBackend) Register(name string, addr string, attrs map[string]string) error {
-	_, err := b.Client.Set(fmt.Sprintf("/services/%s/%s", name, addr), addr, HeartbeatIntervalSecs+MissedHearbeatTTL)
-	return err
+func (b *EtcdBackend) Register(name, addr string, attrs map[string]string) error {
+	attrsJson, err1 := json.Marshal(attrs)
+	if err1 != nil {
+		return err1
+	}
+	_, err2 := b.Client.Set(servicePath(name, addr), string(attrsJson), HeartbeatIntervalSecs+MissedHearbeatTTL)
+	return err2
 }
 
-func (b *EtcdBackend) Unregister(name string, addr string) error {
-	_, err := b.Client.Delete(fmt.Sprintf("/services/%s/%s", name, addr))
-	return err
+func (b *EtcdBackend) Heartbeat(name, addr string) error {
+	resp, err1 := b.Client.Get(servicePath(name, addr))
+	if err1 != nil {
+		return err1
+	}
+	// ignore test failure, it doesn't need a heartbeat if it was just set.
+	_, _, err2 := b.Client.TestAndSet(servicePath(name, addr), resp[0].Value, resp[0].Value, HeartbeatIntervalSecs+MissedHearbeatTTL)
+	return err2
 }
 
-func (b *EtcdBackend) Heartbeat(name string, addr string) error {
-	// Heartbeat currently just calls Register because eventually Register will also update attributes
-	// where Heartbeat will not
-	return b.Register(name, addr, map[string]string{})
+func (b *EtcdBackend) Unregister(name, addr string) error {
+	_, err := b.Client.Delete(servicePath(name, addr))
+	return err
 }

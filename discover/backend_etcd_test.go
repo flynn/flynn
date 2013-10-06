@@ -9,13 +9,13 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 )
 
-func touchService(client *etcd.Client, service string, addr string) {
-	client.Set(fmt.Sprintf("/services/%s/%s", service, addr), addr, 0)
-}
-
 func deleteService(client *etcd.Client, service string, addr string) {
 	client.Delete(fmt.Sprintf("/services/%s/%s", service, addr))
 }
+
+const (
+	NoAttrService = "null"
+)
 
 func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
 
@@ -26,28 +26,26 @@ func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
 	serviceAddr := "127.0.0.1"
 
 	deleteService(client, serviceName, serviceAddr)
-	t.Log("Testing Register")
 	backend.Register(serviceName, serviceAddr, nil)
 
-	getUrl := "/services/" + serviceName + "/" + serviceAddr
-	results, err := client.Get(getUrl)
+	servicePath := KeyPrefix + "/services/" + serviceName + "/" + serviceAddr
+	results, err := client.Get(servicePath)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Adding the case where the result is checked.
 	if len(results) < 1 {
-		t.Fatal("Flynn Error: No Response From Server")
+		t.Fatal("Error: No Response From Server")
 	} else {
 		// Check if the files the returned values are the same.
-		if (results[0].Key != getUrl) || (results[0].Value != serviceAddr) {
+		if (results[0].Key != servicePath) || (results[0].Value != NoAttrService) {
 			t.Fatal("Returned value not equal to sent one")
 		}
 	}
 
-	t.Log("Testing Unregister of etcd backend")
-	backend.Unregister("test_register", "127.0.0.1")
-	_, err = client.Get("/services/test_register/127.0.0.1")
+	backend.Unregister(serviceName, serviceAddr)
+	_, err = client.Get(servicePath)
 	if err == nil {
 		t.Fatal("Value not deleted after unregister")
 	}
