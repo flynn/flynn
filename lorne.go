@@ -31,6 +31,7 @@ func main() {
 
 	go streamEvents(Docker)
 	go syncScheduler(scheduler)
+	go attachServer()
 
 	host := sampi.Host{
 		ID:        randomID(),

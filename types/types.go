@@ -21,6 +21,21 @@ type Job struct {
 	ExitCode    int
 }
 
+type AttachReq struct {
+	JobID string
+	Flags AttachFlag
+}
+
+type AttachFlag uint8
+
+const (
+	AttachFlagStdout AttachFlag = 1 << iota
+	AttachFlagStderr
+	AttachFlagStdin
+	AttachFlagLogs
+	AttachFlagStream
+)
+
 type JobStatus uint8
 
 const (
