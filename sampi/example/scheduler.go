@@ -1,8 +1,14 @@
 package main
 
 import (
+	"encoding/gob"
+	"io"
 	"log"
+	"net"
+	"os"
+	"time"
 
+	"github.com/flynn/lorne/types"
 	"github.com/flynn/rpcplus"
 	"github.com/flynn/sampi/types"
 	"github.com/titanous/go-dockerclient"
@@ -38,4 +44,21 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Print("scheduled container")
+
+	// tail logs
+	time.Sleep(1 * time.Second)
+	conn, err := net.Dial("tcp", "localhost:1120")
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = gob.NewEncoder(conn).Encode(&lorne.AttachReq{
+		JobID: "test",
+		Flags: lorne.AttachFlagStdout | lorne.AttachFlagStderr | lorne.AttachFlagLogs | lorne.AttachFlagStream,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	if _, err := io.Copy(os.Stdout, conn); err != nil {
+		log.Fatal(err)
+	}
 }
