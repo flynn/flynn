@@ -193,17 +193,18 @@ const lastStreamResponseError = "EOS"
 
 // Server represents an RPC Server.
 type Server struct {
-	mu         sync.Mutex // protects the serviceMap
-	serviceMap map[string]*service
-	reqLock    sync.Mutex // protects freeReq
-	freeReq    *Request
-	respLock   sync.Mutex // protects freeResp
-	freeResp   *Response
+	mu          sync.Mutex // protects the serviceMap
+	serviceMap  map[string]*service
+	reqLock     sync.Mutex // protects freeReq
+	freeReq     *Request
+	respLock    sync.Mutex // protects freeResp
+	freeResp    *Response
+	contextType reflect.Type
 }
 
 // NewServer returns a new Server.
 func NewServer() *Server {
-	return &Server{serviceMap: make(map[string]*service)}
+	return &Server{serviceMap: make(map[string]*service), contextType: reflect.TypeOf("")}
 }
 
 // DefaultServer is the default instance of *Server.
@@ -242,6 +243,10 @@ func (server *Server) Register(rcvr interface{}) error {
 // instead of the receiver's concrete type.
 func (server *Server) RegisterName(name string, rcvr interface{}) error {
 	return server.register(rcvr, name, true)
+}
+
+func (server *Server) SetContextType(typ reflect.Type) {
+	server.contextType = typ
 }
 
 type Stream struct {
@@ -345,6 +350,10 @@ func (server *Server) register(rcvr interface{}, name string, useName bool) erro
 	for m := 0; m < s.typ.NumMethod(); m++ {
 		method := s.typ.Method(m)
 		if mt := prepareMethod(method); mt != nil {
+			if mt.ContextType != nil && mt.ContextType != reflect.PtrTo(server.contextType) {
+				log.Println("method", method.Name, "has wrong context type:", mt.ContextType, "want", reflect.PtrTo(server.contextType))
+				continue
+			}
 			s.method[method.Name] = mt
 		}
 	}
@@ -391,7 +400,7 @@ func (m *methodType) NumCalls() (n uint) {
 
 var nilRes = []reflect.Value{reflect.Zero(typeOfError)}
 
-func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, req *Request, argv, replyv reflect.Value, codec ServerCodec, context interface{}, eof <-chan struct{}) {
+func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, req *Request, argv, replyv reflect.Value, codec ServerCodec, context reflect.Value, eof <-chan struct{}) {
 	mtype.Lock()
 	mtype.numCalls++
 	mtype.Unlock()
@@ -402,7 +411,7 @@ func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, r
 
 		// Invoke the method, providing a new value for the reply.
 		if mtype.TakesContext() {
-			returnValues = function.Call([]reflect.Value{s.rcvr, mtype.prepareContext(context), argv, replyv})
+			returnValues = function.Call([]reflect.Value{s.rcvr, context, argv, replyv})
 		} else {
 			returnValues = function.Call([]reflect.Value{s.rcvr, argv, replyv})
 		}
@@ -446,7 +455,7 @@ func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, r
 
 	// Invoke the method, providing a new value for the reply.
 	if mtype.TakesContext() {
-		returnValues = function.Call([]reflect.Value{s.rcvr, mtype.prepareContext(context), argv, stream})
+		returnValues = function.Call([]reflect.Value{s.rcvr, context, argv, stream})
 	} else {
 		returnValues = function.Call([]reflect.Value{s.rcvr, argv, stream})
 	}
@@ -529,6 +538,12 @@ func (server *Server) ServeCodec(codec ServerCodec) {
 func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface{}) {
 	sending := new(sync.Mutex)
 	eof := make(chan struct{})
+	var contextVal reflect.Value
+	if context != nil {
+		contextVal = reflect.ValueOf(context)
+	} else {
+		contextVal = reflect.New(server.contextType)
+	}
 	for {
 		service, mtype, req, argv, replyv, keepReading, err := server.readRequest(codec)
 		if err != nil {
@@ -545,17 +560,10 @@ func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface
 			}
 			continue
 		}
-		go service.call(server, sending, mtype, req, argv, replyv, codec, context, eof)
+		go service.call(server, sending, mtype, req, argv, replyv, codec, contextVal, eof)
 	}
 	close(eof)
 	codec.Close()
-}
-
-func (mtype methodType) prepareContext(context interface{}) reflect.Value {
-	if contextv := reflect.ValueOf(context); contextv.IsValid() {
-		return contextv
-	}
-	return reflect.Zero(mtype.ContextType)
 }
 
 func (server *Server) getRequest() *Request {

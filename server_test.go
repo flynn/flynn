@@ -74,7 +74,7 @@ func (t *Arith) Error(args *Args, reply *Reply) error {
 	panic("ERROR")
 }
 
-func (t *Arith) TakesContext(context interface{}, args string, reply *string) error {
+func (t *Arith) TakesContext(context *string, args string, reply *string) error {
 	return nil
 }
 
