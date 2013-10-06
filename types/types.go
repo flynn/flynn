@@ -15,10 +15,11 @@ type JobSignal struct {
 type Job struct {
 	Job *sampi.Job
 
-	Status    JobStatus
-	StartedAt time.Time
-	EndedAt   time.Time
-	// TODO: exit code?
+	ContainerID string
+	Status      JobStatus
+	StartedAt   time.Time
+	EndedAt     time.Time
+	ExitCode    int
 }
 
 type JobStatus uint8

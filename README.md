@@ -9,9 +9,9 @@ framework](https://github.com/flynn/sampi).
 
 - Track resources
 - RPC interface for schedulers
-- Remove jobs from Sampi after they complete
 - Recover from crashes
 - Use service discovery to find/follow scheduler
 - Add containers to service discovery
 - PTY rendezvous
 - Log shipping
+- Write tests
