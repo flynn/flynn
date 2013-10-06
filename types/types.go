@@ -1,15 +1,14 @@
 package lorne
 
 import (
-	"syscall"
 	"time"
 
 	"github.com/flynn/sampi/types"
 )
 
-type JobSignal struct {
-	JobID  string
-	Signal syscall.Signal
+type Event struct {
+	Event string
+	JobID string
 }
 
 type Job struct {

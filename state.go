@@ -14,8 +14,8 @@ type State struct {
 	jobs map[string]*lorne.Job
 	mtx  sync.RWMutex
 
-	containers map[string]*lorne.Job              // docker container ID -> job
-	listeners  map[string]map[chan Event]struct{} // job id -> listener list (ID "all" gets all events)
+	containers map[string]*lorne.Job                    // docker container ID -> job
+	listeners  map[string]map[chan lorne.Event]struct{} // job id -> listener list (ID "all" gets all events)
 	listenMtx  sync.RWMutex
 }
 
@@ -23,7 +23,7 @@ func NewState() *State {
 	return &State{
 		jobs:       make(map[string]*lorne.Job),
 		containers: make(map[string]*lorne.Job),
-		listeners:  make(map[string]map[chan Event]struct{}),
+		listeners:  make(map[string]map[chan lorne.Event]struct{}),
 	}
 }
 
@@ -37,7 +37,11 @@ func (s *State) AddJob(job *sampi.Job) {
 func (s *State) GetJob(id string) lorne.Job {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
-	return *s.jobs[id]
+	job := s.jobs[id]
+	if job == nil {
+		return lorne.Job{}
+	}
+	return *job
 }
 
 func (s *State) Get() map[string]lorne.Job {
@@ -91,16 +95,16 @@ func (s *State) SetStatusDone(containerID string, exitCode int) {
 	s.sendEvent(job.Job.ID, "stop")
 }
 
-func (s *State) AddListener(jobID string, ch chan Event) {
+func (s *State) AddListener(jobID string, ch chan lorne.Event) {
 	s.listenMtx.Lock()
 	if _, ok := s.listeners[jobID]; !ok {
-		s.listeners[jobID] = make(map[chan Event]struct{})
+		s.listeners[jobID] = make(map[chan lorne.Event]struct{})
 	}
 	s.listeners[jobID][ch] = struct{}{}
 	s.listenMtx.Unlock()
 }
 
-func (s *State) RemoveListener(jobID string, ch chan Event) {
+func (s *State) RemoveListener(jobID string, ch chan lorne.Event) {
 	s.listenMtx.Lock()
 	delete(s.listeners[jobID], ch)
 	s.listenMtx.Unlock()
@@ -109,16 +113,11 @@ func (s *State) RemoveListener(jobID string, ch chan Event) {
 func (s *State) sendEvent(jobID string, event string) {
 	s.listenMtx.RLock()
 	defer s.listenMtx.RUnlock()
-	e := Event{JobID: jobID, Event: event}
+	e := lorne.Event{JobID: jobID, Event: event}
 	for ch := range s.listeners["all"] {
 		ch <- e
 	}
 	for ch := range s.listeners[jobID] {
 		ch <- e
 	}
-}
-
-type Event struct {
-	Event string
-	JobID string
 }

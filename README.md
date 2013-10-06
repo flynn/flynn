@@ -8,7 +8,6 @@ framework](https://github.com/flynn/sampi).
 ## TODO
 
 - Track resources
-- RPC interface for schedulers
 - Recover from crashes
 - Use service discovery to find/follow scheduler
 - Add containers to service discovery

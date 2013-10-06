@@ -8,12 +8,14 @@ import (
 	"log"
 	"os"
 
+	"github.com/flynn/lorne/types"
 	"github.com/flynn/rpcplus"
 	"github.com/flynn/sampi/types"
 	"github.com/titanous/go-dockerclient"
 )
 
 var state = NewState()
+var Docker *docker.Client
 
 func main() {
 	scheduler, err := rpcplus.DialHTTP("tcp", "localhost:1112")
@@ -22,12 +24,12 @@ func main() {
 	}
 	log.Print("Connected to scheduler")
 
-	client, err := docker.NewClient("http://localhost:4243")
+	Docker, err = docker.NewClient("http://localhost:4243")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	go streamEvents(client)
+	go streamEvents(Docker)
 	go syncScheduler(scheduler)
 
 	host := sampi.Host{
@@ -41,19 +43,19 @@ func main() {
 	for job := range jobs {
 		log.Printf("%#v", job.Config)
 		state.AddJob(job)
-		container, err := client.CreateContainer(job.Config)
+		container, err := Docker.CreateContainer(job.Config)
 		if err == docker.ErrNoSuchImage {
-			err = client.PullImage(docker.PullImageOptions{Repository: job.Config.Image}, os.Stdout)
+			err = Docker.PullImage(docker.PullImageOptions{Repository: job.Config.Image}, os.Stdout)
 			if err != nil {
 				log.Fatal(err)
 			}
-			container, err = client.CreateContainer(job.Config)
+			container, err = Docker.CreateContainer(job.Config)
 		}
 		if err != nil {
 			log.Fatal(err)
 		}
 		state.SetContainerID(job.ID, container.ID)
-		if err := client.StartContainer(container.ID); err != nil {
+		if err := Docker.StartContainer(container.ID); err != nil {
 			log.Fatal(err)
 		}
 		state.SetStatusRunning(job.ID)
@@ -61,7 +63,7 @@ func main() {
 }
 
 func syncScheduler(client *rpcplus.Client) {
-	events := make(chan Event)
+	events := make(chan lorne.Event)
 	state.AddListener("all", events)
 	for event := range events {
 		if event.Event != "stop" {
