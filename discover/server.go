@@ -26,9 +26,13 @@ type Args struct {
 	Attrs map[string]string
 }
 
-//TODO Name the arguments in the interface
+type UpdateStream interface {
+	Chan() chan *ServiceUpdate
+	Close()
+}
+
 type DiscoveryBackend interface {
-	Subscribe(name string) (chan *ServiceUpdate, error)
+	Subscribe(name string) (UpdateStream, error)
 	Register(name string, addr string, attrs map[string]string) error
 	Unregister(name string, addr string) error
 	Heartbeat(name string, addr string) error
@@ -57,15 +61,20 @@ func ListenAndServe(server *DiscoverAgent) error {
 	return err
 }
 
-func (s *DiscoverAgent) Subscribe(args *Args, sendUpdate func(reply interface{}) error) error {
+func (s *DiscoverAgent) Subscribe(args *Args, stream rpcplus.Stream) error {
 	updates, err := s.Backend.Subscribe(args.Name)
-	for update := range updates {
-		err = sendUpdate(update)
-		if err != nil {
-			return err
+	if err != nil {
+		return err
+	}
+	for update := range updates.Chan() {
+		select {
+		case stream.Send <- update:
+		case <-stream.Error:
+			updates.Close()
+			return nil
 		}
 	}
-	return err
+	return nil
 }
 
 func (s *DiscoverAgent) Register(args *Args, ret *struct{}) error {

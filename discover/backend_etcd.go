@@ -3,6 +3,7 @@ package discover
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/coreos/etcd/store"
 	"github.com/coreos/go-etcd/etcd"
@@ -12,29 +13,37 @@ type EtcdBackend struct {
 	Client *etcd.Client
 }
 
-func (b *EtcdBackend) Subscribe(name string) (ch chan *ServiceUpdate, err error) {
-	ch = make(chan *ServiceUpdate)
-	watch := b.getStateChanges(name)
+func (b *EtcdBackend) Subscribe(name string) (UpdateStream, error) {
+	stream := &etcdStream{ch: make(chan *ServiceUpdate), stop: make(chan bool)}
+	watch := b.getStateChanges(name, stream.stop)
 	responses, err := b.getCurrentState(name)
 	if err != nil {
-		return
+		return nil, err
 	}
 	go func() {
-		for _, response := range responses {
-			update := b.responseToUpdate(response)
-			if update != nil {
-				ch <- update
+		for _, u := range responses {
+			if update := b.responseToUpdate(u); update != nil {
+				stream.ch <- update
 			}
 		}
-		for {
-			update := b.responseToUpdate(<-watch)
-			if update != nil {
-				ch <- update
+		for u := range watch {
+			if update := b.responseToUpdate(u); update != nil {
+				stream.ch <- update
 			}
 		}
 	}()
-	return
+	return stream, nil
 }
+
+type etcdStream struct {
+	ch       chan *ServiceUpdate
+	stop     chan bool
+	stopOnce sync.Once
+}
+
+func (s *etcdStream) Chan() chan *ServiceUpdate { return s.ch }
+
+func (s *etcdStream) Close() { s.stopOnce.Do(func() { close(s.stop) }) }
 
 func (b *EtcdBackend) responseToUpdate(resp *store.Response) *ServiceUpdate {
 	respList := strings.SplitN(resp.Key, "/", 4)
@@ -63,9 +72,9 @@ func (b *EtcdBackend) getCurrentState(name string) ([]*store.Response, error) {
 	return b.Client.Get(fmt.Sprintf("/services/%s", name))
 }
 
-func (b *EtcdBackend) getStateChanges(name string) chan *store.Response {
+func (b *EtcdBackend) getStateChanges(name string, stop chan bool) chan *store.Response {
 	watch := make(chan *store.Response)
-	go b.Client.Watch(fmt.Sprintf("/services/%s", name), 0, watch, nil)
+	go b.Client.Watch(fmt.Sprintf("/services/%s", name), 0, watch, stop)
 	return watch
 }
 
