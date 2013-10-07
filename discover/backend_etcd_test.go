@@ -72,7 +72,7 @@ func TestEtcdBackend_Subscribe(t *testing.T) {
 	defer backend.Unregister("test_subscribe", "10.0.0.4")
 
 	for i := 0; i < 4; i++ {
-		update := <-updates
+		update := <-updates.Chan()
 		if update.Online != true {
 			t.Fatal("Unexpected offline service update: ", update, i)
 		}
@@ -84,8 +84,8 @@ func TestEtcdBackend_Subscribe(t *testing.T) {
 	backend.Register("test_subscribe", "10.0.0.5", nil)
 	backend.Unregister("test_subscribe", "10.0.0.5")
 
-	<-updates           // .5 comes online
-	update := <-updates // .5 goes offline
+	<-updates.Chan()           // .5 comes online
+	update := <-updates.Chan() // .5 goes offline
 	if update.Addr != "10.0.0.5" {
 		t.Fatal("Unexpected addr: ", update)
 	}
