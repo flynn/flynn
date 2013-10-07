@@ -7,7 +7,9 @@ import (
 	"io"
 	"log"
 	"os"
+	"time"
 
+	"github.com/flynn/go-discover/discover"
 	"github.com/flynn/lorne/types"
 	"github.com/flynn/rpcplus"
 	"github.com/flynn/sampi/types"
@@ -18,7 +20,29 @@ var state = NewState()
 var Docker *docker.Client
 
 func main() {
-	scheduler, err := rpcplus.DialHTTP("tcp", "localhost:1112")
+	go attachServer()
+	go rpcServer()
+
+	id := randomID()
+	disc, err := discover.NewClient()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := disc.Register("flynn-lorne-rpc."+id, "1113", nil); err != nil {
+		log.Fatal(err)
+	}
+	if err := disc.Register("flynn-lorne-attach."+id, "1114", nil); err != nil {
+		log.Fatal(err)
+	}
+
+	services := disc.Services("flynn-sampi")
+	time.Sleep(100 * time.Millisecond) // HAX: remove this when Online is blocking
+	schedulers := services.Online()
+	if len(schedulers) == 0 {
+		log.Fatal("No sampi instances found")
+	}
+
+	scheduler, err := rpcplus.DialHTTP("tcp", schedulers[0].Addr)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -31,10 +55,9 @@ func main() {
 
 	go streamEvents(Docker)
 	go syncScheduler(scheduler)
-	go attachServer()
 
 	host := sampi.Host{
-		ID:        randomID(),
+		ID:        id,
 		Resources: map[string]sampi.ResourceValue{"memory": sampi.ResourceValue{Value: 1024}},
 	}
 

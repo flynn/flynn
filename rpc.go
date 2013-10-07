@@ -2,10 +2,17 @@ package main
 
 import (
 	"errors"
+	"net/http"
 
 	"github.com/flynn/lorne/types"
 	"github.com/flynn/rpcplus"
 )
+
+func rpcServer() {
+	rpcplus.Register(&Host{})
+	rpcplus.HandleHTTP()
+	http.ListenAndServe(":1113", nil)
+}
 
 type Host struct{}
 
