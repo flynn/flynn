@@ -29,9 +29,18 @@ type ServiceSet struct {
 	lisMutex  sync.Mutex
 }
 
-func (s *ServiceSet) Bind(updates chan *ServiceUpdate) {
+func (s *ServiceSet) bind(updates chan *ServiceUpdate) chan bool {
+	// current is an event when enough service updates have been
+	// received to bring us to "current" state (when subscribed)
+	current := make(chan bool)
 	go func() {
+		isCurrent := false
 		for update := range updates {
+			if update.Addr == "" && update.Name == "" && !isCurrent {
+				current <- true
+				isCurrent = true
+				continue
+			}
 			// TODO: apply filters
 			s.serMutex.Lock()
 			if _, exists := s.services[update.Addr]; !exists {
@@ -55,6 +64,7 @@ func (s *ServiceSet) Bind(updates chan *ServiceUpdate) {
 			}
 		}
 	}()
+	return current
 }
 
 func (s *ServiceSet) Online() []*Service {
@@ -149,7 +159,7 @@ func (c *DiscoverClient) Services(name string) *ServiceSet {
 		filters:   make(map[string]string),
 		listeners: make(map[chan *ServiceUpdate]struct{}),
 	}
-	set.Bind(updates)
+	<-set.bind(updates)
 	return set
 }
 

@@ -39,6 +39,7 @@ func (b *EtcdBackend) Subscribe(name string) (UpdateStream, error) {
 				stream.ch <- update
 			}
 		}
+		stream.ch <- &ServiceUpdate{}
 		for u := range watch {
 			if update := b.responseToUpdate(u); update != nil {
 				stream.ch <- update

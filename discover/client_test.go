@@ -27,10 +27,6 @@ func TestClient(t *testing.T) {
 		t.Fatal("Registering service failed", err.Error())
 	}
 	set := client.Services(serviceName)
-	ch := make(chan *ServiceUpdate)
-	set.Subscribe(ch)
-	<-ch
-	<-ch
 	if len(set.Online()) < 2 {
 		t.Fatal("Registered services not online")
 	}
