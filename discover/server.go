@@ -78,7 +78,7 @@ func (s *DiscoverAgent) Subscribe(args *Args, stream rpcplus.Stream) error {
 }
 
 func (s *DiscoverAgent) Register(args *Args, ret *struct{}) error {
-	return s.Backend.Register(args.Name, args.Addr, nil) // TODO: attrs!
+	return s.Backend.Register(args.Name, args.Addr, args.Attrs)
 }
 
 func (s *DiscoverAgent) Unregister(args *Args, ret *struct{}) error {

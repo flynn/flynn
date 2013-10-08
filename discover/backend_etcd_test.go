@@ -18,8 +18,6 @@ const (
 )
 
 func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
-
-	// TODO Create server here itself and connect to it.
 	client := etcd.NewClient()
 	backend := EtcdBackend{Client: client}
 	serviceName := "test_register"
@@ -51,8 +49,30 @@ func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
 	}
 }
 
-func TestEtcdBackend_Subscribe(t *testing.T) {
+func TestEtcdBackend_Attributes(t *testing.T) {
+	client := etcd.NewClient()
+	backend := EtcdBackend{Client: client}
+	serviceName := "test_attributes"
+	serviceAddr := "127.0.0.1"
+	serviceAttrs := map[string]string{
+		"foo": "bar",
+		"baz": "qux",
+	}
 
+	deleteService(client, serviceName, serviceAddr)
+	backend.Register(serviceName, serviceAddr, serviceAttrs)
+	defer backend.Unregister(serviceName, serviceAddr)
+
+	updates, _ := backend.Subscribe(serviceName)
+	runtime.Gosched()
+
+	update := <-updates.Chan()
+	if update.Attrs["foo"] != "bar" || update.Attrs["baz"] != "qux" {
+		t.Fatal("Attributes received are not attributes registered")
+	}
+}
+
+func TestEtcdBackend_Subscribe(t *testing.T) {
 	client := etcd.NewClient()
 	backend := EtcdBackend{Client: client}
 

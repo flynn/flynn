@@ -41,7 +41,9 @@ func (s *ServiceSet) bind(updates chan *ServiceUpdate) chan bool {
 				isCurrent = true
 				continue
 			}
-			// TODO: apply filters
+			if s.filters != nil && !s.matchFilters(update.Attrs) {
+				continue
+			}
 			s.serMutex.Lock()
 			if _, exists := s.services[update.Addr]; !exists {
 				host, port, _ := net.SplitHostPort(update.Addr)
@@ -65,6 +67,17 @@ func (s *ServiceSet) bind(updates chan *ServiceUpdate) chan bool {
 		}
 	}()
 	return current
+}
+
+func (s *ServiceSet) matchFilters(attrs map[string]string) bool {
+	s.filMutex.Lock()
+	defer s.filMutex.Unlock()
+	for key, value := range s.filters {
+		if attrs[key] != value {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *ServiceSet) Online() []*Service {
@@ -107,11 +120,35 @@ func (s *ServiceSet) OfflineAddrs() []string {
 	return list
 }
 
-func (s *ServiceSet) Filter(attrs map[string]string) {
-	s.filters = attrs
+func (s *ServiceSet) Select(attrs map[string]string) []*Service {
+	s.serMutex.Lock()
+	defer s.serMutex.Unlock()
+	list := make([]*Service, 0, len(s.services))
+outter:
+	for _, service := range s.services {
+		for key, value := range attrs {
+			if service.Attrs[key] != value {
+				continue outter
+			}
+		}
+		list = append(list, service)
+	}
+	return list
 }
 
-// Still not sure about this API, but it's a start
+func (s *ServiceSet) Filter(attrs map[string]string) {
+	s.filMutex.Lock()
+	s.filters = attrs
+	s.filMutex.Unlock()
+	s.serMutex.Lock()
+	defer s.serMutex.Unlock()
+	for key, service := range s.services {
+		if !s.matchFilters(service.Attrs) {
+			delete(s.services, key)
+		}
+	}
+}
+
 func (s *ServiceSet) Subscribe(ch chan *ServiceUpdate) {
 	s.lisMutex.Lock()
 	defer s.lisMutex.Unlock()
@@ -119,6 +156,12 @@ func (s *ServiceSet) Subscribe(ch chan *ServiceUpdate) {
 }
 
 func (s *ServiceSet) Unsubscribe(ch chan *ServiceUpdate) {
+	s.lisMutex.Lock()
+	defer s.lisMutex.Unlock()
+	delete(s.listeners, ch)
+}
+
+func (s *ServiceSet) Close() {
 	// TODO: close update stream
 }
 
