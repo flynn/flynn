@@ -17,15 +17,15 @@ There are three pieces to the Discover system:
  * Discover agent, discoverd
  * Backend store (etcd, Zookeeper, etc)
 
-The intended configuration is to have your backend store cluster somewhere on your network, the Discover agent running on all your hosts, and any applications using Discover to use a client library. The only library is in Go, but it was designed to be available in other languages and soon will be. 
+The intended configuration is to have your backend store cluster somewhere on your network, the Discover agent running on all your hosts, and any applications using Discover to use a client library. The only library is in Go, but it was designed to be available in other languages and eventually will be. 
 
 ## Client API Basics
 
-Registering service "cache" on port 9876 with an attribute of `id=cache1`:
+Registering service "cache" already listening on port 9876 with an attribute of `id=cache1`:
 
 ```client.Register("cache", 9876, map[string]string{"id": "cache1"})```
 
-This service will now be available for discovery until the active heartbeats (done behind the scenes) stop for some reason, or you unregister with:
+This service will now be discoverable until the active heartbeats (done behind the scenes) stop for some reason, or you unregister with:
 
 ```client.Unregister("cache", 9876)```
 
