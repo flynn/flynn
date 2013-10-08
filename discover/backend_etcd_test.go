@@ -9,52 +9,68 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 )
 
-func touchService(client *etcd.Client, service string, addr string) {
-	client.Set(fmt.Sprintf("/services/%s/%s", service, addr), addr, 0)
-}
-
 func deleteService(client *etcd.Client, service string, addr string) {
 	client.Delete(fmt.Sprintf("/services/%s/%s", service, addr))
 }
 
-func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
+const NoAttrService = "null"
 
-	// TODO Create server here itself and connect to it.
+func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
 	client := etcd.NewClient()
 	backend := EtcdBackend{Client: client}
 	serviceName := "test_register"
 	serviceAddr := "127.0.0.1"
 
 	deleteService(client, serviceName, serviceAddr)
-	t.Log("Testing Register")
 	backend.Register(serviceName, serviceAddr, nil)
 
-	getUrl := "/services/" + serviceName + "/" + serviceAddr
-	results, err := client.Get(getUrl)
+	servicePath := KeyPrefix + "/services/" + serviceName + "/" + serviceAddr
+	results, err := client.Get(servicePath)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Adding the case where the result is checked.
 	if len(results) < 1 {
-		t.Fatal("Flynn Error: No Response From Server")
+		t.Fatal("Error: No Response From Server")
 	} else {
 		// Check if the files the returned values are the same.
-		if (results[0].Key != getUrl) || (results[0].Value != serviceAddr) {
+		if (results[0].Key != servicePath) || (results[0].Value != NoAttrService) {
 			t.Fatal("Returned value not equal to sent one")
 		}
 	}
 
-	t.Log("Testing Unregister of etcd backend")
-	backend.Unregister("test_register", "127.0.0.1")
-	_, err = client.Get("/services/test_register/127.0.0.1")
+	backend.Unregister(serviceName, serviceAddr)
+	_, err = client.Get(servicePath)
 	if err == nil {
 		t.Fatal("Value not deleted after unregister")
 	}
 }
 
-func TestEtcdBackend_Subscribe(t *testing.T) {
+func TestEtcdBackend_Attributes(t *testing.T) {
+	client := etcd.NewClient()
+	backend := EtcdBackend{Client: client}
+	serviceName := "test_attributes"
+	serviceAddr := "127.0.0.1"
+	serviceAttrs := map[string]string{
+		"foo": "bar",
+		"baz": "qux",
+	}
 
+	deleteService(client, serviceName, serviceAddr)
+	backend.Register(serviceName, serviceAddr, serviceAttrs)
+	defer backend.Unregister(serviceName, serviceAddr)
+
+	updates, _ := backend.Subscribe(serviceName)
+	runtime.Gosched()
+
+	update := <-updates.Chan()
+	if update.Attrs["foo"] != "bar" || update.Attrs["baz"] != "qux" {
+		t.Fatal("Attributes received are not attributes registered")
+	}
+}
+
+func TestEtcdBackend_Subscribe(t *testing.T) {
 	client := etcd.NewClient()
 	backend := EtcdBackend{Client: client}
 
@@ -71,8 +87,11 @@ func TestEtcdBackend_Subscribe(t *testing.T) {
 	backend.Register("test_subscribe", "10.0.0.4", nil)
 	defer backend.Unregister("test_subscribe", "10.0.0.4")
 
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 5; i++ {
 		update := <-updates.Chan()
+		if update.Addr == "" && update.Name == "" {
+			continue // skip the update that signals "up to current" event
+		}
 		if update.Online != true {
 			t.Fatal("Unexpected offline service update: ", update, i)
 		}
