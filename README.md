@@ -7,19 +7,17 @@ also be implemented in other languages.
 ## Overview
 
 Discover lets your services find each other in a constantly changing environment. With Discover you can:
-
  * Register a service as online, optionally with user-defined attributes
  * Locate online instances of a service
  * Read attributes of a service or filter services by attributes
  * Get notified when instances of a service change
 
- There are three pieces to the Discover system:
-
+There are three pieces to the Discover system:
  * Client library and API
  * Discover agent, discoverd
  * Backend store (etcd, Zookeeper, etc)
 
- The intended configuration is to have your backend store cluster somewhere on your network, the Discover agent running on all your hosts, and any applications using Discover to use a client library. The only library is in Go, but it was designed to be available in other languages and soon will be. 
+The intended configuration is to have your backend store cluster somewhere on your network, the Discover agent running on all your hosts, and any applications using Discover to use a client library. The only library is in Go, but it was designed to be available in other languages and soon will be. 
 
 ## Client API Basics
 
@@ -35,15 +33,18 @@ To change attributes, you just re-register. Now to discover other services, say 
 
 ```queues := client.Services("queue")```
 
-`Services()` returns an object called a `ServiceSet`, which is a dynamic list of available services.
+Services() returns an object called a `ServiceSet`, which is a dynamic list of available services.
 
-```for service := range queues.Online() {
+```
+for service := range queues.Online() {
 	// connect to service.Addr
-}```
+}
+```
 
 At any point you can see which services are online with `.Online()` or check if a service is now offline by looking in `.Offline()`. You can also get notified when services in your `ServiceSet` are updated:
 
-```updates := make(chan *ServiceUpdates, 10)
+```
+updates := make(chan *ServiceUpdates, 10)
 queues.Subscribe(updates)
 ```
 
@@ -57,12 +58,14 @@ Receiving on the `updates` channel will wait until a new update comes about a se
 
 A new backing store can be implemented for `discoverd` in Go by implemeting the `DiscoveryBackend` interface:
 
-```type DiscoveryBackend interface {
+```
+type DiscoveryBackend interface {
 	Subscribe(name string) (UpdateStream, error)
 	Register(name string, addr string, attrs map[string]string) error
 	Unregister(name string, addr string) error
 	Heartbeat(name string, addr string) error
-}```
+}
+```
 
 ## Writing More Client Libraries
 
