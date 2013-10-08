@@ -29,15 +29,15 @@ type ServiceSet struct {
 	lisMutex  sync.Mutex
 }
 
-func (s *ServiceSet) bind(updates chan *ServiceUpdate) chan bool {
+func (s *ServiceSet) bind(updates chan *ServiceUpdate) chan struct{} {
 	// current is an event when enough service updates have been
 	// received to bring us to "current" state (when subscribed)
-	current := make(chan bool)
+	current := make(chan struct{})
 	go func() {
 		isCurrent := false
 		for update := range updates {
 			if update.Addr == "" && update.Name == "" && !isCurrent {
-				current <- true
+				close(current)
 				isCurrent = true
 				continue
 			}
@@ -124,11 +124,11 @@ func (s *ServiceSet) Select(attrs map[string]string) []*Service {
 	s.serMutex.Lock()
 	defer s.serMutex.Unlock()
 	list := make([]*Service, 0, len(s.services))
-outter:
+outer:
 	for _, service := range s.services {
 		for key, value := range attrs {
 			if service.Attrs[key] != value {
-				continue outter
+				continue outer
 			}
 		}
 		list = append(list, service)

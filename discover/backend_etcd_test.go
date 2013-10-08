@@ -13,9 +13,7 @@ func deleteService(client *etcd.Client, service string, addr string) {
 	client.Delete(fmt.Sprintf("/services/%s/%s", service, addr))
 }
 
-const (
-	NoAttrService = "null"
-)
+const NoAttrService = "null"
 
 func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
 	client := etcd.NewClient()

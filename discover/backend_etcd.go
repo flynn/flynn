@@ -2,7 +2,6 @@ package discover
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -10,20 +9,17 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 )
 
-const (
-	KeyPrefix = "/discover"
-)
+const KeyPrefix = "/discover"
 
 type EtcdBackend struct {
 	Client *etcd.Client
 }
 
 func servicePath(name, addr string) string {
-	if addr != "" {
-		return fmt.Sprintf("%s/services/%s/%s", KeyPrefix, name, addr)
-	} else {
-		return fmt.Sprintf("%s/services/%s", KeyPrefix, name)
+	if addr == "" {
+		return KeyPrefix + "/services/" + name
 	}
+	return KeyPrefix + "/services/" + name + "/" + addr
 }
 
 func (b *EtcdBackend) Subscribe(name string) (UpdateStream, error) {
@@ -102,12 +98,12 @@ func (b *EtcdBackend) getStateChanges(name string, stop chan bool) chan *store.R
 }
 
 func (b *EtcdBackend) Register(name, addr string, attrs map[string]string) error {
-	attrsJson, err1 := json.Marshal(attrs)
-	if err1 != nil {
-		return err1
+	attrsJson, err := json.Marshal(attrs)
+	if err != nil {
+		return err
 	}
-	_, err2 := b.Client.Set(servicePath(name, addr), string(attrsJson), HeartbeatIntervalSecs+MissedHearbeatTTL)
-	return err2
+	_, err = b.Client.Set(servicePath(name, addr), string(attrsJson), HeartbeatIntervalSecs+MissedHearbeatTTL)
+	return err
 }
 
 func (b *EtcdBackend) Heartbeat(name, addr string) error {
