@@ -30,9 +30,9 @@ This runs slugbuilder, then waits for it to finish, then copies out the slug art
 
 Of course, now you don't have the ID of the container to run `docker cp` with, but you could look it up with `docker ps -a`, or you could run as before and attach afterwards. Lots of options. However, this mode is great for one final reason: you can upload via HTTP PUT if you provide a URL.
 
-	$ git archive master | docker run -i -a stdin -a stdout -a stderr flynn/slugbuilder file http://fileserver/path/for/myslug.tgz
+	$ git archive master | docker run -i -a stdin flynn/slugbuilder file http://fileserver/path/for/myslug.tgz
 
-Attaching to STDOUT and STDERR is optional, but this lets you see the build output as it runs. 
+And as before, you can also attach to STDOUT and STDERR to see the build output as it runs. 
 
 ## Buildpacks
 
