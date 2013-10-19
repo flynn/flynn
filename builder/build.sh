@@ -18,6 +18,8 @@ mkdir -p $cache_root
 mkdir -p $buildpack_root
 mkdir -p $build_root/.profile.d
 
+mkdir /app # Some buildpacks need this
+
 function mode_redirect() {
 	if [[ "$mode" == "stream" ]]; then
 		cat - 1>&2
