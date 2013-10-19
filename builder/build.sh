@@ -45,6 +45,9 @@ function ensure_indent() {
   done 
 }
 
+## Completely unnecessary hack that's necessary right now
+echo -e '#!/bin/sh\nexit' > $buildpack_root/heroku-buildpack-python/vendor/bpwatch/bpwatch
+
 ## Load source from STDIN
 
 cat | tar -xC $build_root
