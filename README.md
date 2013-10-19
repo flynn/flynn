@@ -10,13 +10,15 @@ First, you need Docker. You can either pull the image from the public index:
 Or you can build from this source:
 
 	$ cd slugbuilder
-	$ docker build -t flynn/slugbuilder .
+	$ make
 
 Now there are two modes to run slugbuilder that change how you get out the slug artifact (a gzipped tarball). Both require you to pipe a tar of the source into STDIN. Here is the simplest way to use slugbuilder, assuming you're sitting in a git repo you want to build:
 
 	$ git archive master | docker run -i -a stdin -a stdout flynn/slugbuilder stream > myslug.tgz
 
-This is stream mode, where it will stream the slug out to STDOUT. All build output is sent to STDERR, which you can view if you attach to it by adding `-a stderr`. The second mode is file mode, which you can use two ways:
+This is stream mode, where it will stream the slug out to STDOUT. All build output is sent to STDERR, which you can view if you attach to it by adding `-a stderr`. (*This is currently a lie unless you're using Docker 0.7rc4 -- it will always send STDERR to STDOUT*)
+
+The second mode is file mode, which you can use two ways:
 
 	$ id=$(git archive master | docker run -i -a stdin flynn/slugbuilder file)
 	$ docker wait $id
