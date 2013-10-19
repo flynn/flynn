@@ -3,7 +3,7 @@ A tool using [Docker](http://docker.io) and [Buildpacks](https://devcenter.herok
 
 ## Using Slug Builder
 
-First, you need Docker. You can either pull the image from the public index:
+First, you need Docker. Then you can either pull the image from the public index:
 
 	$ docker pull flynn/slugbuilder
 
