@@ -1,27 +1,26 @@
 #!/bin/bash
 set -eo pipefail
 
-mode="$1"
-put_url="$2"
+if [[ "$1" == "-" ]]; then
+	slug_file="$1"
+else
+	slug_file=/tmp/slug.tgz
+	if [[ "$1" ]]; then
+		put_url="$1"
+	fi
+fi
 
 build_root=/tmp/source
 cache_root=/tmp/cache
 buildpack_root=/tmp/buildpacks
 
-if [[ "$mode" == "stream" ]]; then
-	slug_file="-"
-else
-	slug_file=/tmp/slug.tgz
-fi
-
 mkdir -p $cache_root
 mkdir -p $buildpack_root
 mkdir -p $build_root/.profile.d
-
 mkdir /app # Some buildpacks need this
 
-function mode_redirect() {
-	if [[ "$mode" == "stream" ]]; then
+function output_redirect() {
+	if [[ "$slug_file" == "-" ]]; then
 		cat - 1>&2
 	else
 		cat -
@@ -29,19 +28,19 @@ function mode_redirect() {
 }
 
 function echo_title() {
-  echo $'\e[1G----->' $* | mode_redirect
+  echo $'\e[1G----->' $* | output_redirect
 }
 
 function echo_normal() {
-  echo $'\e[1G      ' $* | mode_redirect
+  echo $'\e[1G      ' $* | output_redirect
 }
 
 function ensure_indent() {
   while read line; do
     if [[ "$line" == --* ]]; then
-      echo $'\e[1G'$line | mode_redirect
+      echo $'\e[1G'$line | output_redirect
     else
-      echo $'\e[1G      ' "$line" | mode_redirect
+      echo $'\e[1G      ' "$line" | output_redirect
     fi
 
   done 
@@ -105,8 +104,8 @@ else
 	tar --exclude='.git' -C $build_root -czf $slug_file . | cat
 fi
   
-if [[ "$mode" == "file" ]]; then
-	slug_size=$(du -Sh /tmp/slug.tgz | cut -d' ' -f1)
+if [[ "$slug_file" != "-" ]]; then
+	slug_size=$(du -Sh /tmp/slug.tgz | cut -f1)
 	echo_title "Compiled slug size is $slug_size"
 
 	if [[ $put_url ]]; then
