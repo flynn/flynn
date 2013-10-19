@@ -40,14 +40,14 @@ Lastly, you can also have it PUT the slug somewhere via HTTP if you give it a UR
 
 To speed up slug building, it's best to mount a volume specific to your app at `/tmp/cache`. For example, if you wanted to keep the cache for this app on your host at `/tmp/app-cache`, you'd mount a read-write volume by running docker with this added `-v /tmp/app-cache:/tmp/cache:rw` option:
 
-	docker run -v /tmp/app-cache:/tmp/cache:rw -i -a stdin -a stdout -a stderr flynn/slugbuilder file
+	docker run -v /tmp/app-cache:/tmp/cache:rw -i -a stdin -a stdout flynn/slugbuilder
 
 
 ## Buildpacks
 
 As you can see, slugbuilder supports a number of official and third-party Heroku buildpacks. You can change the buildpacks.txt file and rebuild the container to create a version that supports more/less buildpacks than we do here. You can also bind mount your own directory of buildpacks if you'd like:
 
-	docker run -v /my/buildpacks:/tmp/buildpacks:ro -i -a stdin -a stdout -a stderr flynn/slugbuilder file
+	docker run -v /my/buildpacks:/tmp/buildpacks:ro -i -a stdin -a stdout flynn/slugbuilder
 
 ## Base Environment
 
