@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -eo pipefail
 
 mode="$1"
 put_url="$2"
@@ -77,7 +77,7 @@ fi
 
 ## Buildpack compile
 
-($selected_buildpack/bin/compile "$build_root" "$cache_root") | ensure_indent
+$selected_buildpack/bin/compile "$build_root" "$cache_root" | ensure_indent
 
 $selected_buildpack/bin/release "$build_root" "$cache_root" > $build_root/.release
 
