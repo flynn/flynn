@@ -8,7 +8,7 @@ build_root=/tmp/source
 cache_root=/tmp/cache
 buildpack_root=/tmp/buildpacks
 
-if [[ "$mode" == "stream"]]; then
+if [[ "$mode" == "stream" ]]; then
 	slug_file="-"
 else
 	slug_file=/tmp/slug.tgz
