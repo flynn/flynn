@@ -17,7 +17,6 @@ buildpack_root=/tmp/buildpacks
 mkdir -p $cache_root
 mkdir -p $buildpack_root
 mkdir -p $build_root/.profile.d
-mkdir /app # Some buildpacks need this
 
 function output_redirect() {
 	if [[ "$slug_file" == "-" ]]; then
@@ -46,12 +45,14 @@ function ensure_indent() {
   done 
 }
 
-## Completely unnecessary hack that's necessary right now
-echo -e '#!/bin/sh\nexit' > $buildpack_root/heroku-buildpack-python/vendor/bpwatch/bpwatch
-
 ## Load source from STDIN
 
 cat | tar -xC $build_root
+
+## Buildpack fixes
+
+export REQUEST_ID=$(openssl rand -base64 32)
+mkdir /app
 
 ## Buildpack detection
 
