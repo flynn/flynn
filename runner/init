@@ -1,0 +1,42 @@
+#!/bin/bash
+set -eo pipefail
+
+## Load slug from STDIN or URL
+
+export HOME=/app
+mkdir -p $HOME
+
+if [[ $SLUG_URL ]]; then
+	curl -s "$SLUG_URL" | tar -xC $HOME
+	unset SLUG_URL
+else
+	cat | tar -xC $HOME
+fi
+cd $HOME
+
+## Load profile.d and release config
+
+mkdir -p .profile.d
+if [[ -f .release ]]; then
+	ruby -e "require 'yaml';(YAML.load_file('.release')['config_vars'] || {}).each{|k,v| puts \"#{k}=#{v}\"}" > .profile.d/config_vars
+fi
+for file in .profile.d/*; do 
+	source $file
+done
+hash -r
+
+## Inject "start" command to run processes defined in Procfile
+
+case "$1" in
+	start)
+		if [[ -f Procfile ]]; then
+			exec $(ruby -e "require 'yaml';puts YAML.load_file('Procfile')['$2']")
+		else
+    		exec $(ruby -e "require 'yaml';puts (YAML.load_file('.release')['default_process_types'] || {})['$2']")
+		fi
+		;;
+
+	*)
+		exec "$@"
+		;;
+esac
