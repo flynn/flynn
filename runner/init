@@ -7,10 +7,10 @@ export HOME=/app
 mkdir -p $HOME
 
 if [[ $SLUG_URL ]]; then
-	curl -s "$SLUG_URL" | tar -xC $HOME
+	curl -s "$SLUG_URL" | tar -xzC $HOME
 	unset SLUG_URL
 else
-	cat | tar -xC $HOME
+	cat | tar -xzC $HOME
 fi
 cd $HOME
 

@@ -16,17 +16,24 @@ Or you can build from this source:
 	$ cd slugrunner
 	$ make
 
-When you run the container, it always expects an app slug to be passed via stdin or by giving it a URL using the SLUG_URL environment variable. Let's run Bash interactively with an app slug:
+When you run the container, it always expects an app slug to be passed via stdin or by giving it a URL using the SLUG_URL environment variable. Lets run a Rake task that our app uses, attaching to stdout:
 
-	$ cat myslug.tgz | docker -i -t flynn/slugrunner /bin/bash
+	$ cat myslug.tgz | docker run -i -a stdin -a stdout flynn/slugrunner rake mytask
 
-Or we could run a Rake task if our app uses Rake, attaching to stdout and this time using a slug at a URL:
+We can also load slugs using the SLUG_URL environment variable. This is currently the only way to run interactively, for example running Bash:
 
-	$ docker -e SLUG_URL=http://example.com/slug.tgz -a stdout flynn/slugrunner rake mytask
+	$ docker run -e SLUG_URL=http://example.com/slug.tgz -i -t flynn/slugrunner /bin/bash
 
-Commands are run in the application environment, with any default environment variables and scripts sourced from .profile.d of the application. Everything is run from the application root.
+Commands are run in the application environment, in the root directory of the application, with any default environment variables, and scripts sourced from .profile.d of the application.
 
 Lastly there is a `start` command that will run any of the process types defined in the Procfile of the app, or of the default process types defined by the buildpack that built the app. For example, here we can start the `web` process:
 
-	$ cat myslug.tgz | docker -i -a stdin -a stdout flynn/slugrunner start web
+	$ cat myslug.tgz | docker run -i -a stdin -a stdout -a stderr flynn/slugrunner start web
 
+## Base Environment
+
+The Docker image here is based on [cedarish](https://github.com/progrium/cedarish), an image that emulates the Heroku Cedar stack environment. App slugs should include everything they need to run, but if something is missing it should be added upstream to cedarish.
+
+## License
+
+BSD
