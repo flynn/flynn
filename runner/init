@@ -30,13 +30,13 @@ hash -r
 case "$1" in
 	start)
 		if [[ -f Procfile ]]; then
-			exec $(ruby -e "require 'yaml';puts YAML.load_file('Procfile')['$2']")
+			ruby -e "require 'yaml';puts YAML.load_file('Procfile')['$2']" | bash
 		else
-    		exec $(ruby -e "require 'yaml';puts (YAML.load_file('.release')['default_process_types'] || {})['$2']")
+    		ruby -e "require 'yaml';puts (YAML.load_file('.release')['default_process_types'] || {})['$2']" | bash
 		fi
 		;;
 
 	*)
-		exec "$@"
+		"$@"
 		;;
 esac
