@@ -37,6 +37,6 @@ case "$1" in
 		;;
 
 	*)
-		"$@"
+		echo "$@" | bash
 		;;
 esac
