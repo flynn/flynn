@@ -20,7 +20,7 @@ import (
 
 const PrereceiveHook = `#!/bin/sh
 set -eo pipefail; while read oldrev newrev refname; do
-[[ $refname = "refs/heads/master" ]] && git archive $newrev | {{RECEIVER}} "$RECEIVE_USER" "$RECEIVE_REPO" "$RECEIVE_KEYNAME" "$RECEIVE_FINGERPRINT"
+[[ $refname = "refs/heads/master" ]] && git archive $newrev | {{RECEIVER}} "$RECEIVE_USER" "$RECEIVE_REPO" "$RECEIVE_KEYNAME" "$RECEIVE_FINGERPRINT" | sed -$([[ $(uname) == "Darwin" ]] && echo l || echo u) "s/^/"$'\e[1G'"/"
 done
 `
 
@@ -29,22 +29,24 @@ var repoPath *string = flag.String("r", "/tmp/repos", "path to repo cache")
 var keyPath *string = flag.String("k", "/tmp/keys", "path to named keys")
 
 var receiver string
+var privateKey string
 var keyNames = make(map[string]string)
 
 func init() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage:  %v [options] <receiver>\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage:  %v [options] <privatekey> <receiver>\n\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 }
 
 func main() {
 	flag.Parse()
-	receiver = flag.Arg(0)
-	if receiver == "" {
+	if len(os.Args) < 2 {
 		flag.Usage()
 		return
 	}
+	privateKey = flag.Arg(0)
+	receiver = flag.Arg(1)
 
 	// An SSH server is represented by a ServerConfig, which holds
 	// certificate details and handles authentication of ServerConns.
@@ -79,7 +81,7 @@ func main() {
 		},
 	}
 
-	pemBytes, err := ioutil.ReadFile("id_rsa")
+	pemBytes, err := ioutil.ReadFile(privateKey)
 	if err != nil {
 		log.Fatal("Failed to load private key:", err)
 	}

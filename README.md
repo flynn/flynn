@@ -7,7 +7,7 @@ This is a more advanced, standalone version of [gitreceive](https://github.com/p
 ## Using gitreceive
 
 ```
-Usage:  ./gitreceived [options] <receiver>
+Usage:  ./gitreceived [options] <privatekey> <receiver>
 
   -k="/tmp/keys": path to named keys
   -p="22": port to listen on
