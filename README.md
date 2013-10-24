@@ -27,6 +27,7 @@ The receiver argument is a path to an executable that will handle the push. It w
 
 ## Todo
 
+* Proper handling of errors, and some kind of testing
 * Runtime config (keys, acls, etc) stored in etcd for clustering
 * ACLs (assign keyname access to URL patterns)
 * Action routes (multiple receivers based on URL pushed to)
