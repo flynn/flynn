@@ -2,5 +2,5 @@
 build:
 	cd gitreceived && go build
 
-install:
+install: build
 	cp gitreceived/gitreceived /usr/local/bin
