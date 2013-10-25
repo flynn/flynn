@@ -15,6 +15,10 @@ slugbuilder:
 slugrunner:
 	docker pull flynn/slugrunner
 
+gitreceive:
+	git clone https://github.com/flynn/gitreceive-next.git
+	cd gitreceive-next && make install
+
 shelf:
 	git clone https://github.com/flynn/shelf.git
 	cd shelf && make install
