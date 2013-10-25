@@ -32,6 +32,10 @@ The receiver argument is a path to an executable that will handle the push. It w
 * ACLs (assign keyname access to URL patterns)
 * Action routes (multiple receivers based on URL pushed to)
 
+## The Future
+
+This project is mostly just an SSH frontend -- the git specific code is pretty minimal. It would not be hard to re-implement [sshcommand](https://github.com/progrium/sshcommand) with this codebase. So it seems likely at some point this code could be generalized into a simple SSH frontend (`simplessh`) that would backend to shell scripts or other network services. Anything specific to git would be encapsulated into a module. Modules could also allow builtin backend service discovery, and more. Then `simplessh` would become a sort of Nginx for SSH.
+
 ## License
  
  BSD
