@@ -18,7 +18,7 @@ import (
 	"github.com/flynn/go-shlex"
 )
 
-const PrereceiveHook = `#!/bin/sh
+const PrereceiveHook = `#!/bin/bash
 set -eo pipefail; while read oldrev newrev refname; do
 [[ $refname = "refs/heads/master" ]] && git archive $newrev | {{RECEIVER}} "$RECEIVE_USER" "$RECEIVE_REPO" "$RECEIVE_KEYNAME" "$RECEIVE_FINGERPRINT" | sed -$([[ $(uname) == "Darwin" ]] && echo l || echo u) "s/^/"$'\e[1G'"/"
 done
