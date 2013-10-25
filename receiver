@@ -1,11 +1,10 @@
 #!/bin/bash
-HOSTNAME=localhost
 ROOT=/var/lib/demo/apps
-SHELF_HOST=localhost:8888
-
-mkdir -p $ROOT
+SHELF_HOST=$HOSTNAME:8888
 
 APP="$2"
+
+mkdir -p $ROOT/$APP
 
 echo "-----> Building $APP ..."
 cat | docker run -i -a stdin -a stdout flynn/slugbuilder http://$SHELF_HOST/slugs/$APP.tgz
