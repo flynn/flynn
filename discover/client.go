@@ -165,15 +165,15 @@ func (s *ServiceSet) Close() {
 	// TODO: close update stream
 }
 
-type DiscoverClient struct {
+type Client struct {
 	client     *rpcplus.Client
 	heartbeats map[string]bool
 	hbMutex    sync.Mutex
 }
 
-func NewClient() (*DiscoverClient, error) {
+func NewClient() (*Client, error) {
 	client, err := rpcplus.DialHTTP("tcp", "127.0.0.1:1111") // TODO: default, not hardcoded
-	return &DiscoverClient{
+	return &Client{
 		client:     client,
 		heartbeats: make(map[string]bool),
 	}, err
@@ -192,7 +192,7 @@ func pickMostPublicIp() string {
 	return ip
 }
 
-func (c *DiscoverClient) Services(name string) *ServiceSet {
+func (c *Client) Services(name string) *ServiceSet {
 	updates := make(chan *ServiceUpdate)
 	c.client.StreamGo("DiscoverAgent.Subscribe", &Args{
 		Name: name,
@@ -206,11 +206,11 @@ func (c *DiscoverClient) Services(name string) *ServiceSet {
 	return set
 }
 
-func (c *DiscoverClient) Register(name, port string, attributes map[string]string) error {
+func (c *Client) Register(name, port string, attributes map[string]string) error {
 	return c.RegisterWithHost(name, pickMostPublicIp(), port, attributes)
 }
 
-func (c *DiscoverClient) RegisterWithHost(name, host, port string, attributes map[string]string) error {
+func (c *Client) RegisterWithHost(name, host, port string, attributes map[string]string) error {
 	args := &Args{
 		Name:  name,
 		Addr:  net.JoinHostPort(host, port),
@@ -237,11 +237,11 @@ func (c *DiscoverClient) RegisterWithHost(name, host, port string, attributes ma
 	return nil
 }
 
-func (c *DiscoverClient) Unregister(name, port string) error {
+func (c *Client) Unregister(name, port string) error {
 	return c.UnregisterWithHost(name, pickMostPublicIp(), port)
 }
 
-func (c *DiscoverClient) UnregisterWithHost(name, host, port string) error {
+func (c *Client) UnregisterWithHost(name, host, port string) error {
 	args := &Args{
 		Name: name,
 		Addr: net.JoinHostPort(host, port),

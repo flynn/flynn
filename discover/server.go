@@ -38,19 +38,19 @@ type DiscoveryBackend interface {
 	Heartbeat(name string, addr string) error
 }
 
-type DiscoverAgent struct {
+type Agent struct {
 	Backend DiscoveryBackend
 	Address string
 }
 
-func NewServer() *DiscoverAgent {
-	return &DiscoverAgent{
+func NewServer() *Agent {
+	return &Agent{
 		Backend: &EtcdBackend{Client: etcd.NewClient()},
 		Address: ":1111",
 	}
 }
 
-func ListenAndServe(server *DiscoverAgent) error {
+func ListenAndServe(server *Agent) error {
 	err := rpcplus.Register(server)
 	if err != nil {
 		return err
@@ -61,7 +61,7 @@ func ListenAndServe(server *DiscoverAgent) error {
 	return err
 }
 
-func (s *DiscoverAgent) Subscribe(args *Args, stream rpcplus.Stream) error {
+func (s *Agent) Subscribe(args *Args, stream rpcplus.Stream) error {
 	updates, err := s.Backend.Subscribe(args.Name)
 	if err != nil {
 		return err
@@ -77,14 +77,14 @@ func (s *DiscoverAgent) Subscribe(args *Args, stream rpcplus.Stream) error {
 	return nil
 }
 
-func (s *DiscoverAgent) Register(args *Args, ret *struct{}) error {
+func (s *Agent) Register(args *Args, ret *struct{}) error {
 	return s.Backend.Register(args.Name, args.Addr, args.Attrs)
 }
 
-func (s *DiscoverAgent) Unregister(args *Args, ret *struct{}) error {
+func (s *Agent) Unregister(args *Args, ret *struct{}) error {
 	return s.Backend.Unregister(args.Name, args.Addr)
 }
 
-func (s *DiscoverAgent) Heartbeat(args *Args, ret *struct{}) error {
+func (s *Agent) Heartbeat(args *Args, ret *struct{}) error {
 	return s.Backend.Heartbeat(args.Name, args.Addr)
 }
