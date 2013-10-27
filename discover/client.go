@@ -194,7 +194,7 @@ func pickMostPublicIp() string {
 
 func (c *Client) Services(name string) *ServiceSet {
 	updates := make(chan *ServiceUpdate)
-	c.client.StreamGo("DiscoverAgent.Subscribe", &Args{
+	c.client.StreamGo("Agent.Subscribe", &Args{
 		Name: name,
 	}, updates)
 	set := &ServiceSet{
@@ -217,7 +217,7 @@ func (c *Client) RegisterWithHost(name, host, port string, attributes map[string
 		Attrs: attributes,
 	}
 	var ret struct{}
-	err := c.client.Call("DiscoverAgent.Register", args, &ret)
+	err := c.client.Call("Agent.Register", args, &ret)
 	if err != nil {
 		return errors.New("discover: register failed: " + err.Error())
 	}
@@ -228,7 +228,7 @@ func (c *Client) RegisterWithHost(name, host, port string, attributes map[string
 		var heartbeated struct{}
 		for c.heartbeats[args.Addr] {
 			time.Sleep(HeartbeatIntervalSecs * time.Second) // TODO: add jitter
-			c.client.Call("DiscoverAgent.Heartbeat", &Args{
+			c.client.Call("Agent.Heartbeat", &Args{
 				Name: name,
 				Addr: args.Addr,
 			}, &heartbeated)
@@ -247,7 +247,7 @@ func (c *Client) UnregisterWithHost(name, host, port string) error {
 		Addr: net.JoinHostPort(host, port),
 	}
 	var resp struct{}
-	err := c.client.Call("DiscoverAgent.Unregister", args, &resp)
+	err := c.client.Call("Agent.Unregister", args, &resp)
 	if err != nil {
 		return errors.New("discover: unregister failed: " + err.Error())
 	}
