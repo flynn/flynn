@@ -6,7 +6,7 @@ import (
 )
 
 type clientCmd struct {
-	client *discover.DiscoverClient
+	client *discover.Client
 }
 
 func (cmd *clientCmd) InitClient() {
