@@ -16,7 +16,7 @@ func deleteService(client *etcd.Client, service string, addr string) {
 const NoAttrService = "null"
 
 func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
-	client := etcd.NewClient()
+	client := etcd.NewClient(nil)
 	backend := EtcdBackend{Client: client}
 	serviceName := "test_register"
 	serviceAddr := "127.0.0.1"
@@ -48,7 +48,7 @@ func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
 }
 
 func TestEtcdBackend_Attributes(t *testing.T) {
-	client := etcd.NewClient()
+	client := etcd.NewClient(nil)
 	backend := EtcdBackend{Client: client}
 	serviceName := "test_attributes"
 	serviceAddr := "127.0.0.1"
@@ -71,7 +71,7 @@ func TestEtcdBackend_Attributes(t *testing.T) {
 }
 
 func TestEtcdBackend_Subscribe(t *testing.T) {
-	client := etcd.NewClient()
+	client := etcd.NewClient(nil)
 	backend := EtcdBackend{Client: client}
 
 	backend.Register("test_subscribe", "10.0.0.1", nil)

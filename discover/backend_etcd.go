@@ -5,7 +5,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/coreos/etcd/store"
 	"github.com/coreos/go-etcd/etcd"
 )
 
@@ -55,7 +54,7 @@ func (s *etcdStream) Chan() chan *ServiceUpdate { return s.ch }
 
 func (s *etcdStream) Close() { s.stopOnce.Do(func() { close(s.stop) }) }
 
-func (b *EtcdBackend) responseToUpdate(resp *store.Response) *ServiceUpdate {
+func (b *EtcdBackend) responseToUpdate(resp *etcd.Response) *ServiceUpdate {
 	// expected key structure: /PREFIX/services/NAME/ADDR
 	splitKey := strings.SplitN(resp.Key, "/", 5)
 	if len(splitKey) < 5 {
@@ -87,12 +86,12 @@ func (b *EtcdBackend) responseToUpdate(resp *store.Response) *ServiceUpdate {
 	}
 }
 
-func (b *EtcdBackend) getCurrentState(name string) ([]*store.Response, error) {
+func (b *EtcdBackend) getCurrentState(name string) ([]*etcd.Response, error) {
 	return b.Client.Get(servicePath(name, ""))
 }
 
-func (b *EtcdBackend) getStateChanges(name string, stop chan bool) chan *store.Response {
-	watch := make(chan *store.Response)
+func (b *EtcdBackend) getStateChanges(name string, stop chan bool) chan *etcd.Response {
+	watch := make(chan *etcd.Response)
 	go b.Client.Watch(servicePath(name, ""), 0, watch, stop)
 	return watch
 }

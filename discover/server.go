@@ -44,7 +44,7 @@ type Agent struct {
 
 func NewServer() *Agent {
 	return &Agent{
-		Backend: &EtcdBackend{Client: etcd.NewClient()},
+		Backend: &EtcdBackend{Client: etcd.NewClient(nil)},
 		Address: ":1111",
 	}
 }
