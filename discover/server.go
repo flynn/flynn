@@ -1,7 +1,6 @@
 package discover
 
 import (
-	"net"
 	"net/http"
 
 	"github.com/coreos/go-etcd/etcd"
@@ -45,20 +44,18 @@ type Agent struct {
 
 func NewServer() *Agent {
 	return &Agent{
-		Backend: &EtcdBackend{Client: etcd.NewClient()},
+		Backend: &EtcdBackend{Client: etcd.NewClient(nil)},
 		Address: ":1111",
 	}
 }
 
 func ListenAndServe(server *Agent) error {
+	rpcplus.HandleHTTP()
 	err := rpcplus.Register(server)
 	if err != nil {
 		return err
 	}
-	rpcplus.HandleHTTP()
-	l, err := net.Listen("tcp", server.Address)
-	http.Serve(l, nil)
-	return err
+	return http.ListenAndServe(server.Address, nil)
 }
 
 func (s *Agent) Subscribe(args *Args, stream rpcplus.Stream) error {
