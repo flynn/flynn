@@ -1,15 +1,21 @@
-package server
+package main
 
 import (
 	"crypto/tls"
+	"errors"
+	"io"
+	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/go-discover/discover"
 )
 
@@ -21,24 +27,60 @@ type HTTPFrontend struct {
 	mtx      sync.RWMutex
 	domains  map[string]*httpServer
 	services map[string]*httpServer
+
+	etcdPrefix string
+
+	etcd     *etcd.Client
+	discover *discover.Client
 }
 
-func (s *HTTPFrontend) AddDomain(domain string, service string) {
+func NewHTTPFrontend(addr string) (*HTTPFrontend, error) {
+	f := &HTTPFrontend{
+		Addr:       addr,
+		etcd:       etcd.NewClient(nil),
+		etcdPrefix: "/strowger/http/",
+		domains:    make(map[string]*httpServer),
+		services:   make(map[string]*httpServer),
+	}
+	var err error
+	f.discover, err = discover.NewClient()
+	return f, err
+}
+
+func (s *HTTPFrontend) AddHTTPDomain(domain string, service string, certs [][]byte, key []byte) error {
+	return s.addDomain(domain, service, true)
+}
+
+func (s *HTTPFrontend) addDomain(domain string, service string, persist bool) error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
 	server := s.services[service]
 	if server == nil {
-		// TODO: connect to service discovery
-		server = &httpServer{name: service}
-		s.services[service] = server
+		server = &httpServer{name: service, services: s.discover.Services(service)}
 	}
+	if persist {
+		_, ok, err := s.etcd.TestAndSet(s.etcdPrefix+domain+"/service", "", service, 0)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return errors.New("domain already exists in etcd")
+		}
+	}
+	// TODO: set cert/key data if provided
+
 	server.refs++
 	s.domains[domain] = server
-	// TODO: persist
+	s.services[service] = server
+	// TODO: TLS config
+
+	log.Println("Add service", service, "to domain", domain)
+
+	return nil
 }
 
-func (s *HTTPFrontend) RemoveDomain(domain string) {
+func (s *HTTPFrontend) RemoveHTTPDomain(domain string) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	server := s.domains[domain]
@@ -52,6 +94,44 @@ func (s *HTTPFrontend) RemoveDomain(domain string) {
 		delete(s.services, server.name)
 	}
 	// TODO: persist
+}
+
+func (s *HTTPFrontend) syncDatabase() {
+	data, err := s.etcd.Get(s.etcdPrefix)
+	if e, ok := err.(etcd.EtcdError); ok && e.ErrorCode == 100 {
+		// key not found, ignore
+		err = nil
+	}
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	for _, res := range data {
+		if !res.Dir {
+			continue
+		}
+		domain := path.Base(res.Key)
+		serviceRes, err := s.etcd.Get(res.Key + "/service")
+		if err != nil {
+			log.Fatal(err)
+		}
+		if len(serviceRes) != 1 {
+			continue
+		}
+		service := serviceRes[0].Value
+		if err := s.addDomain(domain, service, false); err != nil {
+			log.Fatal(err)
+		}
+	}
+	var since uint64
+
+	stream := make(chan *etcd.Response)
+	stop := make(chan bool)
+	s.etcd.Watch(s.etcdPrefix, since, stream, stop)
+	// TODO: store stop
+	for res := range stream {
+		log.Printf("%#v", res)
+	}
 }
 
 func (s *HTTPFrontend) serve() {
@@ -99,10 +179,12 @@ func (s *HTTPFrontend) handle(conn net.Conn) {
 
 	s.mtx.RLock()
 	// TODO: handle wildcard domains
-	backend := s.domains[req.Header.Get("Host")]
+	backend := s.domains[req.Host]
 	s.mtx.RUnlock()
+	log.Println(req, backend)
 	if backend == nil {
 		// TODO: return 404
+		return
 	}
 	_, tls := conn.(*tls.Conn)
 	backend.handle(req, sc, tls)
@@ -115,13 +197,14 @@ type httpServer struct {
 }
 
 func (s *httpServer) getBackend() *httputil.ClientConn {
-	for _, addr := range s.services.OnlineAddrs() {
+	for _, addr := range shuffle(s.services.OnlineAddrs()) {
 		// TODO: set connection timeout
 		backend, err := net.Dial("tcp", addr)
 		if err != nil {
 			// TODO: log error
 			// TODO: limit number of backends tried
 			// TODO: temporarily quarantine failing backends
+			log.Println("backend error", err)
 			continue
 		}
 		return httputil.NewClientConn(backend, nil)
@@ -135,6 +218,7 @@ func (s *httpServer) handle(req *http.Request, sc *httputil.ServerConn, tls bool
 	backend := s.getBackend()
 	if backend == nil {
 		// TODO: Return 503
+		log.Println("no backend found")
 		return
 	}
 	defer backend.Close()
@@ -167,17 +251,23 @@ func (s *httpServer) handle(req *http.Request, sc *httputil.ServerConn, tls bool
 		}
 		// TODO: Set X-Forwarded-Port
 
+		if err := backend.Write(req); err != nil {
+			log.Println("server write err:", err)
+			return
+		}
 		res, err := backend.Read(req)
 		if res != nil {
 			if err := sc.Write(req, res); err != nil {
-				if err != httputil.ErrPersistEOF {
+				if err != io.EOF && err != httputil.ErrPersistEOF {
+					log.Println("client write err:", err)
 					// TODO: log error
 				}
 				return
 			}
 		}
 		if err != nil {
-			if err != httputil.ErrPersistEOF {
+			if err != io.EOF && err != httputil.ErrPersistEOF {
+				log.Println("server read err:", err)
 				// TODO: log error
 				// TODO: Return 502
 			}
@@ -202,11 +292,23 @@ func (s *httpServer) handle(req *http.Request, sc *httputil.ServerConn, tls bool
 		// TODO: http pipelining
 		req, err = sc.Read()
 		if err != nil {
-			if err != httputil.ErrPersistEOF {
-				// TODO: log error
+			if err != io.EOF && err != httputil.ErrPersistEOF {
+				log.Println("client read err:", err)
 			}
 			return
 		}
 		req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
 	}
+}
+
+func shuffle(s []string) []string {
+	for i := len(s) - 1; i > 0; i-- {
+		j := rand.Intn(i + 1)
+		s[i], s[j] = s[j], s[i]
+	}
+	return s
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
 }

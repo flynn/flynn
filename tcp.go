@@ -1,4 +1,4 @@
-package server
+package main
 
 import (
 	"io"
@@ -12,7 +12,16 @@ type TCPFrontend struct {
 	FirstPort int
 	LastPort  int
 
+	nextPort  int
 	allocated map[int]tcpServer
+}
+
+func (s *TCPFrontend) AddTCPService(service string) {
+
+}
+
+func (s *TCPFrontend) RemoveTCPService(service string) {
+
 }
 
 type tcpServer struct {
