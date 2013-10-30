@@ -55,6 +55,13 @@ func (s *HTTPFrontend) addDomain(domain string, service string, persist bool) er
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
+	if server, ok := s.domains[domain]; ok {
+		if server.name != service {
+			return errors.New("domain exists with different service")
+		}
+		return nil
+	}
+
 	server := s.services[service]
 	if server == nil {
 		server = &httpServer{name: service, services: s.discover.Services(service)}
@@ -124,14 +131,24 @@ func (s *HTTPFrontend) syncDatabase() {
 		}
 	}
 	var since uint64
+	if len(data) > 0 {
+		since = data[len(data)-1].Index
+	}
 
 	stream := make(chan *etcd.Response)
 	stop := make(chan bool)
-	s.etcd.Watch(s.etcdPrefix, since, stream, stop)
 	// TODO: store stop
+	go s.etcd.Watch(s.etcdPrefix, since, stream, stop)
 	for res := range stream {
-		log.Printf("%#v", res)
+		if !res.Dir && res.NewKey && path.Base(res.Key) == "service" {
+			domain := path.Base(path.Dir(res.Key))
+			if err := s.addDomain(domain, res.Value, false); err != nil {
+				// TODO: log error
+			}
+		}
+		// TODO: handle delete
 	}
+	log.Println("done watching etcd")
 }
 
 func (s *HTTPFrontend) serve() {

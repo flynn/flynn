@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/flynn/rpcplus"
 	"github.com/flynn/strowger/types"
@@ -13,7 +14,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = client.Call("Router.AddFrontend", &strowger.Config{Service: "example-server", HTTPDomain: "example.com"}, &struct{}{})
+	err = client.Call("Router.AddFrontend", &strowger.Config{Service: "example-server", HTTPDomain: os.Args[1]}, &struct{}{})
 	if err != nil {
 		log.Fatal(err)
 	}

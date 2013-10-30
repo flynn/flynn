@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
 
@@ -8,7 +9,7 @@ import (
 )
 
 type Server struct {
-	HTTPFrontend
+	*HTTPFrontend
 }
 
 func (s *Server) ListenAndServe(quit <-chan struct{}) {
@@ -21,14 +22,17 @@ func (s *Server) ListenAndServe(quit <-chan struct{}) {
 }
 
 func main() {
+	rpcAddr := flag.String("rpcaddr", ":1115", "rpc listen address")
+	httpAddr := flag.String("httpaddr", ":8080", "http frontend listen address")
+	flag.Parse()
 	var s Server
-	f, err := NewHTTPFrontend(":8080")
+	f, err := NewHTTPFrontend(*httpAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
-	s.HTTPFrontend = *f
+	s.HTTPFrontend = f
 	rpcplus.Register(&Router{s})
 	rpcplus.HandleHTTP()
-	go http.ListenAndServe(":1115", nil)
+	go http.ListenAndServe(*rpcAddr, nil)
 	s.ListenAndServe(nil)
 }
