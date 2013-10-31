@@ -17,7 +17,7 @@ Vagrant.configure("2") do |config|
     echo "deb http://get.docker.io/ubuntu docker main" > /etc/apt/sources.list.d/docker.list
     apt-get update
     apt-get install -y linux-image-generic-lts-raring linux-headers-generic-lts-raring lxc-docker
-    sed -i -E 's|    /usr/bin/docker -d|    /usr/bin/docker -d -H 0.0.0.0|' /etc/init/docker.conf
+    sed -i -E 's|	/usr/bin/docker -d|	/usr/bin/docker -d -H 0.0.0.0|' /etc/init/docker.conf
     reboot
   SCRIPT
 end
