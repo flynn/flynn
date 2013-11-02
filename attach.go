@@ -44,7 +44,7 @@ func attachHandler(conn net.Conn) {
 		<-attachWait
 		job = state.GetJob(req.JobID)
 	}
-	if job.Job.Config.Tty {
+	if job.Job.Config.Tty && req.Flags&lorne.AttachFlagStdin != 0 {
 		resize := func() { Docker.ResizeContainerTTY(job.ContainerID, req.Height, req.Width) }
 		if job.Status == lorne.StatusRunning {
 			resize()
