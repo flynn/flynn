@@ -10,7 +10,7 @@ import (
 )
 
 func attachServer() {
-	l, err := net.Listen("tcp", ":1120")
+	l, err := net.Listen("tcp", ":1114")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -33,11 +33,42 @@ func attachHandler(conn net.Conn) {
 	}
 
 	log.Println("attaching job", req.JobID)
-	job := state.GetJob(req.JobID)
-	if job.Job == nil || job.Status != lorne.StatusRunning {
-		return
+	attachWait := make(chan struct{})
+	job := state.AddAttacher(req.JobID, attachWait)
+	if job == nil {
+		defer state.RemoveAttacher(req.JobID, attachWait)
+		if _, err := conn.Write([]byte{lorne.AttachWaiting}); err != nil {
+			return
+		}
+		// TODO: add timeout
+		<-attachWait
+		job = state.GetJob(req.JobID)
+	}
+	if job.Job.Config.Tty {
+		resize := func() { Docker.ResizeContainerTTY(job.ContainerID, req.Height, req.Width) }
+		if job.Status == lorne.StatusRunning {
+			resize()
+		} else {
+			go func() {
+				ch := make(chan lorne.Event)
+				state.AddListener(req.JobID, ch)
+				// TODO: there is a race here if we add the listener after the container has started
+				defer state.RemoveListener(req.JobID, ch)
+				for event := range ch {
+					if event.Event == "start" {
+						resize()
+						return
+					}
+					if event.Event == "stop" {
+						return
+					}
+				}
+			}()
+		}
 	}
 
+	success := make(chan struct{})
+	failed := make(chan struct{})
 	opts := docker.AttachToContainerOptions{
 		Container:    job.ContainerID,
 		InputStream:  conn,
@@ -47,9 +78,22 @@ func attachHandler(conn net.Conn) {
 		Stderr:       req.Flags&lorne.AttachFlagStderr != 0,
 		Logs:         req.Flags&lorne.AttachFlagLogs != 0,
 		Stream:       req.Flags&lorne.AttachFlagStream != 0,
+		Success:      success,
 	}
+	go func() {
+		select {
+		case <-success:
+			conn.Write([]byte{lorne.AttachSuccess})
+			close(success)
+		case <-failed:
+		}
+		close(attachWait)
+	}()
 	if err := Docker.AttachToContainer(opts); err != nil {
+		close(failed)
+		conn.Write(append([]byte{lorne.AttachError}, err.Error()...))
 		log.Println("attach error:", err)
 		return
 	}
+	log.Println("attach done")
 }

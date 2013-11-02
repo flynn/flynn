@@ -22,8 +22,10 @@ type Job struct {
 }
 
 type AttachReq struct {
-	JobID string
-	Flags AttachFlag
+	JobID  string
+	Flags  AttachFlag
+	Height int
+	Width  int
 }
 
 type AttachFlag uint8
@@ -43,4 +45,10 @@ const (
 	StatusRunning
 	StatusDone
 	StatusCrashed
+)
+
+const (
+	AttachSuccess byte = iota
+	AttachWaiting
+	AttachError
 )

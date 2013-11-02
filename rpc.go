@@ -24,7 +24,10 @@ func (h *Host) JobList(arg struct{}, res *map[string]lorne.Job) error {
 }
 
 func (h *Host) GetJob(id string, res *lorne.Job) error {
-	*res = state.GetJob(id)
+	job := state.GetJob(id)
+	if job != nil {
+		*res = *job
+	}
 	return nil
 }
 

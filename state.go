@@ -17,6 +17,7 @@ type State struct {
 	containers map[string]*lorne.Job                    // docker container ID -> job
 	listeners  map[string]map[chan lorne.Event]struct{} // job id -> listener list (ID "all" gets all events)
 	listenMtx  sync.RWMutex
+	attachers  map[string]chan struct{}
 }
 
 func NewState() *State {
@@ -24,6 +25,7 @@ func NewState() *State {
 		jobs:       make(map[string]*lorne.Job),
 		containers: make(map[string]*lorne.Job),
 		listeners:  make(map[string]map[chan lorne.Event]struct{}),
+		attachers:  make(map[string]chan struct{}),
 	}
 }
 
@@ -34,14 +36,15 @@ func (s *State) AddJob(job *sampi.Job) {
 	s.sendEvent(job.ID, "create")
 }
 
-func (s *State) GetJob(id string) lorne.Job {
+func (s *State) GetJob(id string) *lorne.Job {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	job := s.jobs[id]
 	if job == nil {
-		return lorne.Job{}
+		return nil
 	}
-	return *job
+	jobCopy := *job
+	return &jobCopy
 }
 
 func (s *State) Get() map[string]lorne.Job {
@@ -95,6 +98,37 @@ func (s *State) SetStatusDone(containerID string, exitCode int) {
 	s.sendEvent(job.Job.ID, "stop")
 }
 
+func (s *State) AddAttacher(jobID string, ch chan struct{}) *lorne.Job {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	if job, ok := s.jobs[jobID]; ok {
+		jobCopy := *job
+		return &jobCopy
+	}
+	s.attachers[jobID] = ch
+	// TODO: error if attach already waiting
+	return nil
+}
+
+func (s *State) RemoveAttacher(jobID string, ch chan struct{}) {
+	s.mtx.Lock()
+	delete(s.attachers, jobID)
+	s.mtx.Unlock()
+}
+
+func (s *State) WaitAttach(jobID string) {
+	s.mtx.Lock()
+	ch, ok := s.attachers[jobID]
+	s.mtx.Unlock()
+	if !ok {
+		return
+	}
+	// signal attach
+	ch <- struct{}{}
+	// wait for attach
+	<-ch
+}
+
 func (s *State) AddListener(jobID string, ch chan lorne.Event) {
 	s.listenMtx.Lock()
 	if _, ok := s.listeners[jobID]; !ok {
@@ -107,6 +141,9 @@ func (s *State) AddListener(jobID string, ch chan lorne.Event) {
 func (s *State) RemoveListener(jobID string, ch chan lorne.Event) {
 	s.listenMtx.Lock()
 	delete(s.listeners[jobID], ch)
+	if len(s.listeners[jobID]) == 0 {
+		delete(s.listeners, jobID)
+	}
 	s.listenMtx.Unlock()
 }
 

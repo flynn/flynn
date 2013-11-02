@@ -79,7 +79,8 @@ func main() {
 			log.Fatal(err)
 		}
 		state.SetContainerID(job.ID, container.ID)
-		if err := Docker.StartContainer(container.ID); err != nil {
+		state.WaitAttach(job.ID)
+		if err := Docker.StartContainer(container.ID, nil); err != nil {
 			log.Fatal(err)
 		}
 		state.SetStatusRunning(job.ID)
