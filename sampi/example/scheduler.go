@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 
 	"github.com/dotcloud/docker/term"
 	"github.com/flynn/go-discover/discover"
@@ -65,8 +66,6 @@ func main() {
 		log.Fatal(err)
 	}
 	switch attachState[0] {
-	case lorne.AttachWaiting:
-		log.Print("attach waiting")
 	case lorne.AttachError:
 		log.Fatal("attach error")
 	}
@@ -75,13 +74,18 @@ func main() {
 		Incremental: true,
 		HostJobs: map[string][]*sampi.Job{firstHost: {{ID: id, Config: &docker.Config{
 			Image:        "titanous/redis",
-			Cmd:          []string{"/redis/src/redis-cli", "-h", "10.0.2.15"},
+			Cmd:          []string{"/bin/bash", "-i"},
 			Tty:          true,
 			AttachStdin:  true,
 			AttachStdout: true,
 			AttachStderr: true,
 			OpenStdin:    true,
 			StdinOnce:    true,
+			Env: []string{
+				"COLUMNS=" + strconv.Itoa(int(ws.Width)),
+				"LINES=" + strconv.Itoa(int(ws.Height)),
+				"TERM=" + os.Getenv("TERM"),
+			},
 		}}}},
 	}
 	if _, err := scheduler.Schedule(schedReq); err != nil {
