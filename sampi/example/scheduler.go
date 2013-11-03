@@ -9,12 +9,11 @@ import (
 	"log"
 	"net"
 	"os"
-	"time"
 
 	"github.com/dotcloud/docker/term"
 	"github.com/flynn/go-discover/discover"
 	"github.com/flynn/lorne/types"
-	"github.com/flynn/rpcplus"
+	"github.com/flynn/sampi/client"
 	"github.com/flynn/sampi/types"
 	"github.com/titanous/go-dockerclient"
 )
@@ -24,20 +23,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	services := disc.Services("flynn-sampi")
-	time.Sleep(100 * time.Millisecond) // HAX: remove this when Online is blocking
-	schedulers := services.OnlineAddrs()
-	if len(schedulers) == 0 {
-		log.Fatal("No sampi instances found")
-	}
 
-	scheduler, err := rpcplus.DialHTTP("tcp", schedulers[0])
+	scheduler, err := client.New()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	var state map[string]sampi.Host
-	if err := scheduler.Call("Scheduler.State", struct{}{}, &state); err != nil {
+	state, err := scheduler.State()
+	if err != nil {
 		log.Fatal(err)
 	}
 
@@ -52,7 +45,7 @@ func main() {
 
 	id := randomID()
 
-	services = disc.Services("flynn-lorne-attach." + firstHost)
+	services := disc.Services("flynn-lorne-attach." + firstHost)
 	conn, err := net.Dial("tcp", services.OnlineAddrs()[0])
 	if err != nil {
 		log.Fatal(err)
@@ -78,7 +71,6 @@ func main() {
 		log.Fatal("attach error")
 	}
 
-	var schedRes sampi.ScheduleRes
 	schedReq := &sampi.ScheduleReq{
 		Incremental: true,
 		HostJobs: map[string][]*sampi.Job{firstHost: {{ID: id, Config: &docker.Config{
@@ -92,7 +84,7 @@ func main() {
 			StdinOnce:    true,
 		}}}},
 	}
-	if err := scheduler.Call("Scheduler.Schedule", schedReq, &schedRes); err != nil {
+	if _, err := scheduler.Schedule(schedReq); err != nil {
 		log.Fatal(err)
 	}
 
