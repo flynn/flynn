@@ -4,6 +4,7 @@ import (
 	"encoding/gob"
 	"log"
 	"net"
+	"sync"
 
 	"github.com/flynn/lorne/types"
 	"github.com/titanous/go-dockerclient"
@@ -49,14 +50,26 @@ func attachHandler(conn net.Conn) {
 		if job.Status == lorne.StatusRunning {
 			resize()
 		} else {
+			var once sync.Once
 			go func() {
 				ch := make(chan lorne.Event)
 				state.AddListener(req.JobID, ch)
-				// TODO: there is a race here if we add the listener after the container has started
+				go func() {
+					// There is a race that can result in the listener being
+					// added after the container has started, so check the
+					// status *after* subscribing.
+					// This can deadlock if we try to get a state lock while an
+					// event is being sent on the listen channel, so we do it
+					// in the goroutine and wrap in a sync.Once.
+					j := state.GetJob(req.JobID)
+					if j.Status == lorne.StatusRunning {
+						once.Do(resize)
+					}
+				}()
 				defer state.RemoveListener(req.JobID, ch)
 				for event := range ch {
 					if event.Event == "start" {
-						resize()
+						once.Do(resize)
 						return
 					}
 					if event.Event == "stop" {
