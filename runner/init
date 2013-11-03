@@ -30,13 +30,26 @@ hash -r
 case "$1" in
 	start)
 		if [[ -f Procfile ]]; then
-			ruby -e "require 'yaml';puts YAML.load_file('Procfile')['$2']" | bash
+			command="$(ruby -e "require 'yaml';puts YAML.load_file('Procfile')['$2']")"
 		else
-    		ruby -e "require 'yaml';puts (YAML.load_file('.release')['default_process_types'] || {})['$2']" | bash
+    		command="$(ruby -e "require 'yaml';puts (YAML.load_file('.release')['default_process_types'] || {})['$2']")"
 		fi
 		;;
 
 	*)
-		echo "$@" | bash
+		command="$@"
 		;;
 esac
+
+## Use sdutil to register with service discovery
+
+if [[ $SD_NAME && $PORT ]]; then
+	runner="sdutil exec $SD_NAME:$PORT bash -c"
+	unset SD_NAME
+else
+	runner="bash -c"
+fi
+
+## Run!
+
+$runner "$command"

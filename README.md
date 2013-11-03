@@ -30,6 +30,10 @@ Lastly there is a `start` command that will run any of the process types defined
 
 	$ cat myslug.tgz | docker run -i -a stdin -a stdout -a stderr flynn/slugrunner start web
 
+## Service Discovery
+
+The runner can also register with [go-discover](https://github.com/flynn/go-discover) based service discovery using [sdutil](https://github.com/flynn/sdutil). If `$SD_NAME` and `$PORT` environment variables are set, the command is run with `sdutil exec $SD_NAME:$PORT`. `$SD_NAME` is unset before the command is run, but `$PORT` is left set since it is often used without service discovery. 
+
 ## Base Environment
 
 The Docker image here is based on [cedarish](https://github.com/progrium/cedarish), an image that emulates the Heroku Cedar stack environment. App slugs should include everything they need to run, but if something is missing it should be added upstream to cedarish.
