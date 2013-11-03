@@ -19,6 +19,15 @@ gitreceive:
 	git clone https://github.com/flynn/gitreceive-next.git
 	cd gitreceive-next && make install
 
+discoverd:
+	git clone https://github.com/flynn/go-discover.git
+	cd go-discover/discoverd && make install
+
+etcd:
+	wget https://github.com/coreos/etcd/releases/download/v0.2.0-rc0/etcd-v0.2.0-rc0-Linux-x86_64.tar.gz
+	tar -zxvf etcd-v0.2.0-rc0-Linux-x86_64.tar.gz
+	cp etcd-v0.2.0-rc0-Linux-x86_64/etcd /usr/local/bin
+
 shelf:
 	git clone https://github.com/flynn/shelf.git
 	cd shelf && make install
