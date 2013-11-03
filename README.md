@@ -54,6 +54,21 @@ Receiving on the `updates` channel will wait until a new update comes about a se
 
 ## Starting `discoverd`
 
+First it needs to be compiled:
+
+```
+	$ cd discoverd
+	$ go build
+```
+
+Now you have a binary you can run. Once you build, you can also run along with etcd for development purposes using Foreman which uses the included Procfile:
+
+```
+	$ foreman start
+```
+
+This will run both etcd and discoverd. 
+
 ## Writing New Backends
 
 A new backing store can be implemented for `discoverd` in Go by implemeting the `DiscoveryBackend` interface:

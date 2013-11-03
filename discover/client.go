@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"os"
 
 	"github.com/flynn/rpcplus"
 )
@@ -172,7 +173,11 @@ type Client struct {
 }
 
 func NewClient() (*Client, error) {
-	client, err := rpcplus.DialHTTP("tcp", "127.0.0.1:1111") // TODO: default, not hardcoded
+	addr := os.Getenv("DISCOVERD")
+	if addr == "" {
+		addr = "127.0.0.1:1111"
+	}
+	client, err := rpcplus.DialHTTP("tcp", addr)
 	return &Client{
 		client:     client,
 		heartbeats: make(map[string]bool),

@@ -1,0 +1,2 @@
+etcd: etcd -d /tmp -v
+discoverd: discoverd/discoverd
