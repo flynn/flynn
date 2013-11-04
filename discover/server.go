@@ -61,6 +61,7 @@ func ListenAndServe(server *Agent) error {
 func (s *Agent) Subscribe(args *Args, stream rpcplus.Stream) error {
 	updates, err := s.Backend.Subscribe(args.Name)
 	if err != nil {
+		stream.Send <- &ServiceUpdate{} // be sure to unblock client
 		return err
 	}
 	for update := range updates.Chan() {

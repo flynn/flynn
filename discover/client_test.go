@@ -5,15 +5,15 @@ import (
 	"testing"
 )
 
-func runServer() {
-	server := NewServer()
-	ListenAndServe(server)
+func init() {
+	go func() {
+		ListenAndServe(NewServer(":1112"))
+	}()
+	runtime.Gosched()
 }
 
 func TestClient(t *testing.T) {
-	go runServer()
-	runtime.Gosched()
-	client, err := NewClient()
+	client, err := NewClientUsingAddress(":1112")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,4 +81,16 @@ func TestClient(t *testing.T) {
 		t.Fatal("Select not returning proper services")
 	}
 
+}
+
+func TestNoServices(t *testing.T) {
+	client, err := NewClientUsingAddress(":1112")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	set := client.Services("none")
+	if len(set.Online()) != 0 {
+		t.Fatal("There should be no services")
+	}
 }

@@ -177,6 +177,10 @@ func NewClient() (*Client, error) {
 	if addr == "" {
 		addr = "127.0.0.1:1111"
 	}
+	return NewClientUsingAddress(addr)
+}
+
+func NewClientUsingAddress(addr string) (*Client, error) {
 	client, err := rpcplus.DialHTTP("tcp", addr)
 	return &Client{
 		client:     client,
