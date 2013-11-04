@@ -82,7 +82,7 @@ func shell(cmdline string) string {
 	if err != nil {
 		panic(err)
 	}
-	return strings.Trim(string(out), " ")
+	return strings.Trim(string(out), " \n")
 }
 
 
