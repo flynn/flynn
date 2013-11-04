@@ -15,6 +15,9 @@ type Job struct {
 	Attributes map[string]string
 	// Resource requirements (decremented from host resources)
 	Resources map[string]int
+	// Number of TCP ports required by the job (current max: 1)
+	// TODO: move to Attrs/Resources?
+	TCPPorts int
 
 	Config *docker.Config
 }
