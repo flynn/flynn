@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/flynn/go-discover/discover"
@@ -22,6 +23,7 @@ var Docker *docker.Client
 func main() {
 	go attachServer()
 	go rpcServer()
+	go allocatePorts()
 
 	id := randomID()
 	disc, err := discover.NewClient()
@@ -66,6 +68,11 @@ func main() {
 	log.Print("Host registered")
 	for job := range jobs {
 		log.Printf("%#v", job.Config)
+		if job.TCPPorts > 0 {
+			port := strconv.Itoa(<-portAllocator)
+			job.Config.Env = append(job.Config.Env, "PORT="+port)
+			job.Config.PortSpecs = []string{port + ":" + port}
+		}
 		state.AddJob(job)
 		container, err := Docker.CreateContainer(job.Config)
 		if err == docker.ErrNoSuchImage {
@@ -132,4 +139,17 @@ func randomID() string {
 	}
 	base64.URLEncoding.Encode(enc, b)
 	return string(bytes.TrimRight(enc, "="))
+}
+
+var portAllocator = make(chan int)
+
+// TODO: fix this, horribly broken
+const startPort = 55000
+const endPort = 65535
+
+func allocatePorts() {
+	for i := startPort; i < endPort; i++ {
+		portAllocator <- i
+	}
+	// TODO: handle wrap-around
 }
