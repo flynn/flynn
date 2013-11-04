@@ -13,7 +13,11 @@ func New() (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	addrs := disc.Services("flynn-sampi").OnlineAddrs()
+	services, err := disc.Services("flynn-sampi")
+	if err != nil {
+		return nil, err
+	}
+	addrs := services.OnlineAddrs()
 	if len(addrs) == 0 {
 		return nil, errors.New("sampi: no servers found")
 	}
