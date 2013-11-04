@@ -44,7 +44,12 @@ esac
 ## Use sdutil to register with service discovery
 
 if [[ $SD_NAME && $PORT ]]; then
-	runner="sdutil exec $SD_NAME:$PORT bash -c"
+	if [[ $SD_HOST ]]; then
+		runner="sdutil exec -h $SD_HOST $SD_NAME:$PORT bash -c"
+		unset SD_HOST
+	else
+		runner="sdutil exec $SD_NAME:$PORT bash -c"
+	fi
 	unset SD_NAME
 else
 	runner="bash -c"
