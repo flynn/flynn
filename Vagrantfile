@@ -9,7 +9,7 @@ Vagrant.configure("2") do |config|
     # install Go
     wget -O /tmp/golang.deb https://cupcake-ops.s3.amazonaws.com/go_1.1.2-godeb1_amd64.deb
     dpkg -i /tmp/golang.deb
-    sudo -u vagrant sh -c "echo 'GOPATH=/home/vagrant/go' >> /home/vagrant/.bashrc"
+    sudo -u vagrant sh -c "echo 'export GOPATH=/home/vagrant/go' >> /home/vagrant/.bashrc"
     sudo -u vagrant mkdir /home/vagrant/go
 
     # install Docker
