@@ -64,7 +64,11 @@ func (s *HTTPFrontend) addDomain(domain string, service string, persist bool) er
 
 	server := s.services[service]
 	if server == nil {
-		server = &httpServer{name: service, services: s.discover.Services(service)}
+		services, err := s.discover.Services(service)
+		if err != nil {
+			return err
+		}
+		server = &httpServer{name: service, services: services}
 	}
 	if persist {
 		_, ok, err := s.etcd.TestAndSet(s.etcdPrefix+domain+"/service", "", service, 0)
