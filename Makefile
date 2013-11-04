@@ -1,4 +1,6 @@
 
+# Setup
+
 setup: key 
 	mkdir -p /var/lib/demo/storage
 	mkdir -p /var/lib/demo/apps
@@ -6,8 +8,7 @@ setup: key
 key:
 	ssh-keygen -t rsa -N "" -f id_rsa
 
-foreman:
-	gem install foreman
+# Projects
 
 slugbuilder:
 	docker pull flynn/slugbuilder
@@ -23,14 +24,25 @@ discoverd:
 	git clone https://github.com/flynn/go-discover.git
 	cd go-discover/discoverd && make install
 
+shelf:
+	git clone https://github.com/flynn/shelf.git
+	cd shelf && make install
+
+## Vendor
+
+packages: docker go etcd
+	apt-get install -y ruby1.9.1 rubygems
+	gem install foreman --no-rdoc --no-ri
+
 etcd:
 	wget https://github.com/coreos/etcd/releases/download/v0.2.0-rc0/etcd-v0.2.0-rc0-Linux-x86_64.tar.gz
 	tar -zxvf etcd-v0.2.0-rc0-Linux-x86_64.tar.gz
 	cp etcd-v0.2.0-rc0-Linux-x86_64/etcd /usr/local/bin
 
-shelf:
-	git clone https://github.com/flynn/shelf.git
-	cd shelf && make install
+go:
+	wget http://j.mp/godeb
+	tar -zxvf ./godeb
+	./godeb install 1.1.2
 
 docker: aufs
 	egrep -i "^docker" /etc/group || groupadd docker
