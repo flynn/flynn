@@ -1,4 +1,3 @@
-# docker run -expose 5000 -e PORT=5000 -e DISCOVERD=172.17.42.1:1111 -e SD_NAME=web -e SD_HOST=162.243.44.111 -e SLUG_URL=http://s3.amazonaws.com/progrium-flynn/python-sample.tgz -d flynn/slugrunner start web
 
 # Setup
 
@@ -10,6 +9,9 @@ key:
 	ssh-keygen -t rsa -N "" -f id_rsa
 
 # Projects
+
+flynn-receive:
+	go build -o flynn-receive
 
 slugbuilder:
 	docker pull flynn/slugbuilder
