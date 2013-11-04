@@ -6,6 +6,7 @@ import (
 
 type check struct {
 	clientCmd
+	silent *bool
 }
 
 func (cmd *check) Name() string {
@@ -13,8 +14,9 @@ func (cmd *check) Name() string {
 }
 
 func (cmd *check) DefineFlags(fs *flag.FlagSet) {
+	cmd.silent = fs.Bool("s", false, "silent mode")
 }
 
 func (cmd *check) Run(fs *flag.FlagSet) {
-	cmd.InitClient()
+	cmd.InitClient(*cmd.silent)
 }

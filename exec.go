@@ -23,7 +23,7 @@ func (cmd *execCmd) DefineFlags(fs *flag.FlagSet) {
 }
 
 func (cmd *execCmd) Run(fs *flag.FlagSet) {
-	cmd.InitClient()
+	cmd.InitClient(false)
 	cmd.exitStatus = 0
 
 	mapping := strings.SplitN(fs.Arg(0), ":", 2)
