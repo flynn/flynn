@@ -33,11 +33,12 @@ func main() {
 	fmt.Printf("-----> Building %s on %s ...\n", app, hostname)
 
 	cmd := exec.Command("docker", "run", "-i", "-a=stdin", "-a=stdout", "flynn/slugbuilder", "http://"+shelfHost+"/"+app+".tgz")
-	errCh := attachCmd(cmd, os.Stdout, os.Stderr, os.Stdin)
+	errCh, startCh := attachCmd(cmd, os.Stdout, os.Stderr, os.Stdin)
 	err = cmd.Start()
 	if err != nil {
 		panic(err)
 	}
+	close(startCh)
 	exitCh := exitStatusCh(cmd)
 	if err = <-errCh; err != nil {
 		panic(err)
@@ -86,8 +87,9 @@ func shell(cmdline string) string {
 }
 
 
-func attachCmd(cmd *exec.Cmd, stdout, stderr io.Writer, stdin io.Reader) chan error {
+func attachCmd(cmd *exec.Cmd, stdout, stderr io.Writer, stdin io.Reader) (chan error, chan interface{}) {
 	errCh := make(chan error)
+	startCh := make(chan interface{})
 
 	stdinIn, err := cmd.StdinPipe()
 	if err != nil {
@@ -103,19 +105,22 @@ func attachCmd(cmd *exec.Cmd, stdout, stderr io.Writer, stdin io.Reader) chan er
 	}
 
 	go func() {
-		_, e := io.Copy(stdinIn, stdin)
-		errCh <- e
-	}()
-	go func() {
-		_, e := io.Copy(stdout, stdoutOut)
-		errCh <- e
-	}()
-	go func() {
-		_, e := io.Copy(stderr, stderrOut)
-		errCh <- e
+		<-startCh
+		go func() {
+			_, e := io.Copy(stdinIn, stdin)
+			errCh <- e
+		}()
+		go func() {
+			_, e := io.Copy(stdout, stdoutOut)
+			errCh <- e
+		}()
+		go func() {
+			_, e := io.Copy(stderr, stderrOut)
+			errCh <- e
+		}()
 	}()
 
-	return errCh
+	return errCh, startCh
 }
 
 func exitStatusCh(cmd *exec.Cmd) chan uint {
