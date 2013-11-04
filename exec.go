@@ -20,6 +20,7 @@ func (cmd *execCmd) Name() string {
 }
 
 func (cmd *execCmd) DefineFlags(fs *flag.FlagSet) {
+	cmd.SetRegisterFlags(fs)
 }
 
 func (cmd *execCmd) Run(fs *flag.FlagSet) {

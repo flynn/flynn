@@ -14,6 +14,7 @@ type register struct {
 	clientCmd
 	exitStatus   int
 	exitSignalCh chan os.Signal
+	host *string
 }
 
 func (cmd *register) Name() string {
@@ -21,6 +22,11 @@ func (cmd *register) Name() string {
 }
 
 func (cmd *register) DefineFlags(fs *flag.FlagSet) {
+	cmd.SetRegisterFlags(fs)
+}
+
+func (cmd *register) SetRegisterFlags(fs *flag.FlagSet) {
+	cmd.host = fs.String("h", "", "Specify a particular host for the service")
 }
 
 func (cmd *register) RegisterWithExitHook(name, port string, verbose bool) {
@@ -31,11 +37,19 @@ func (cmd *register) RegisterWithExitHook(name, port string, verbose bool) {
 		if verbose {
 			log.Println("Unregistering service...")
 		}
-		cmd.client.Unregister(name, port)
+		if *cmd.host == "" {
+			cmd.client.Unregister(name, port)
+		} else {
+			cmd.client.UnregisterWithHost(name, *cmd.host, port)
+		}
 		os.Exit(cmd.exitStatus)
 	}()
 
-	cmd.client.Register(name, port, nil)
+	if *cmd.host == "" {
+		cmd.client.Register(name, port, nil)
+	} else {
+		cmd.client.RegisterWithHost(name, *cmd.host, port, nil)
+	}
 }
 
 func (cmd *register) Run(fs *flag.FlagSet) {
