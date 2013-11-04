@@ -201,7 +201,7 @@ func pickMostPublicIp() string {
 	return ip
 }
 
-func (c *Client) Services(name string) *ServiceSet {
+func (c *Client) Services(name string) (*ServiceSet, error) {
 	updates := make(chan *ServiceUpdate)
 	c.client.StreamGo("Agent.Subscribe", &Args{
 		Name: name,
@@ -212,7 +212,7 @@ func (c *Client) Services(name string) *ServiceSet {
 		listeners: make(map[chan *ServiceUpdate]struct{}),
 	}
 	<-set.bind(updates)
-	return set
+	return set, nil
 }
 
 func (c *Client) Register(name, port string, attributes map[string]string) error {

@@ -27,7 +27,7 @@ func TestClient(t *testing.T) {
 	if err != nil {
 		t.Fatal("Registering service failed", err.Error())
 	}
-	set := client.Services(serviceName)
+	set, _ := client.Services(serviceName)
 	if len(set.Online()) < 2 {
 		t.Fatal("Registered services not online")
 	}
@@ -89,7 +89,7 @@ func TestNoServices(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	set := client.Services("none")
+	set, _ := client.Services("none")
 	if len(set.Online()) != 0 {
 		t.Fatal("There should be no services")
 	}

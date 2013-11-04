@@ -2,6 +2,7 @@ package discover
 
 import (
 	"net/http"
+	"log"
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/rpcplus"
@@ -61,6 +62,7 @@ func ListenAndServe(server *Agent) error {
 func (s *Agent) Subscribe(args *Args, stream rpcplus.Stream) error {
 	updates, err := s.Backend.Subscribe(args.Name)
 	if err != nil {
+		log.Println("Subscribe: ", err)
 		stream.Send <- &ServiceUpdate{} // be sure to unblock client
 		return err
 	}
@@ -76,13 +78,25 @@ func (s *Agent) Subscribe(args *Args, stream rpcplus.Stream) error {
 }
 
 func (s *Agent) Register(args *Args, ret *struct{}) error {
-	return s.Backend.Register(args.Name, args.Addr, args.Attrs)
+	err := s.Backend.Register(args.Name, args.Addr, args.Attrs)
+	if err != nil {
+		log.Println("Register: ", err)
+	}
+	return err
 }
 
 func (s *Agent) Unregister(args *Args, ret *struct{}) error {
-	return s.Backend.Unregister(args.Name, args.Addr)
+	err := s.Backend.Unregister(args.Name, args.Addr)
+	if err != nil {
+		log.Println("Unregister: ", err)
+	}
+	return err
 }
 
 func (s *Agent) Heartbeat(args *Args, ret *struct{}) error {
-	return s.Backend.Heartbeat(args.Name, args.Addr)
+	err := s.Backend.Heartbeat(args.Name, args.Addr)
+	if err != nil {
+		log.Println("Heartbeat: ", err)
+	}
+	return err
 }
