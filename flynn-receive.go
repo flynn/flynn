@@ -27,12 +27,12 @@ func main() {
 	}
 	shelfHost := addrs[0]
 
-	app := os.Args[1]
+	app := os.Args[2]
 	os.MkdirAll(root + "/" + app, 0755)
 
-	fmt.Printf("-----> Building %s with flynn-receive ...\n", app)
+	fmt.Printf("-----> Building %s on %s ...\n", app, hostname)
 
-	cmd := exec.Command("bash", "-c", "docker run -i -a stdin -a stdout flynn/slugbuilder http://"+shelfHost+"/"+app+".tgz")
+	cmd := exec.Command("docker", "run", "-i", "-a=stdin", "-a=stdout", "flynn/slugbuilder", "http://"+shelfHost+"/"+app+".tgz")
 	errCh := attachCmd(cmd, os.Stdout, os.Stderr, os.Stdin)
 	err = cmd.Start()
 	if err != nil {
