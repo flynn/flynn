@@ -46,7 +46,10 @@ func main() {
 
 	id := randomID()
 
-	services := disc.Services("flynn-lorne-attach." + firstHost)
+	services, err := disc.Services("flynn-lorne-attach." + firstHost)
+	if err != nil {
+		log.Fatal(err)
+	}
 	conn, err := net.Dial("tcp", services.OnlineAddrs()[0])
 	if err != nil {
 		log.Fatal(err)
