@@ -16,7 +16,7 @@ func rpcServer() {
 
 type Host struct{}
 
-const stopTimeout = 10
+const stopTimeout = 1
 
 func (h *Host) JobList(arg struct{}, res *map[string]lorne.Job) error {
 	*res = state.Get()
@@ -33,7 +33,7 @@ func (h *Host) GetJob(id string, res *lorne.Job) error {
 
 func (h *Host) StopJob(id string, res *struct{}) error {
 	job := state.GetJob(id)
-	if job.Job == nil {
+	if job == nil {
 		return errors.New("lorne: unknown job")
 	}
 	if job.Status != lorne.StatusRunning {
