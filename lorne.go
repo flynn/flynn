@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"time"
 
 	"github.com/flynn/go-discover/discover"
 	"github.com/flynn/lorne/types"
@@ -37,8 +36,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	services := disc.Services("flynn-sampi")
-	time.Sleep(100 * time.Millisecond) // HAX: remove this when Online is blocking
+	services, err := disc.Services("flynn-sampi")
+	if err != nil {
+		log.Fatal(err)
+	}
 	schedulers := services.Online()
 	if len(schedulers) == 0 {
 		log.Fatal("No sampi instances found")
