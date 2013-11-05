@@ -107,16 +107,13 @@ func shell(cmdline string) string {
 }
 
 func stopIfExists(jobid string) {
-	job, err := host.GetJob(jobid)
+	_, err := host.GetJob(jobid)
 	if err != nil {
+		return
+	}
+	if err := host.StopJob(jobid); err != nil {
 		log.Fatal(err)
 	}
-	if job != nil {
-		if err := host.StopJob(jobid); err != nil {
-			log.Fatal(err)
-		}
-	}
-
 }
 
 func scheduleWithTcpPort(jobid string, config docker.Config) {
