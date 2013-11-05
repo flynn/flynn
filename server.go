@@ -20,8 +20,8 @@ import (
 	"github.com/flynn/lorne/types"
 	sampic "github.com/flynn/sampi/client"
 	"github.com/flynn/sampi/types"
-	"github.com/rcrowley/go-tigertonic"
 	"github.com/titanous/go-dockerclient"
+	"github.com/titanous/go-tigertonic"
 )
 
 func main() {
