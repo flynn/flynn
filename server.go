@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/flynn/go-discover/discover"
+	lornec "github.com/flynn/lorne/client"
 	"github.com/flynn/lorne/types"
 	sampic "github.com/flynn/sampi/client"
 	"github.com/flynn/sampi/types"
@@ -35,7 +36,7 @@ func main() {
 	}
 
 	mux := tigertonic.NewTrieServeMux()
-	mux.Handle("POST", "/apps/{app_id}/formations/{formation_id}", tigertonic.Marshaled(changeFormation))
+	mux.Handle("POST", "/apps/{app_id}/formation/{formation_id}", tigertonic.Marshaled(changeFormation))
 	mux.Handle("GET", "/apps/{app_id}/jobs", tigertonic.Marshaled(getJobs))
 	mux.HandleFunc("GET", "/apps/{app_id}/jobs/{job_id}/logs", getJobLog)
 	mux.HandleFunc("POST", "/apps/{app_id}/jobs", runJob)
@@ -77,7 +78,7 @@ type Formation struct {
 	Type     string `json:"type"`
 }
 
-// POST /apps/{app_id}/formations/{formation_id}
+// POST /apps/{app_id}/formation/{formation_id}
 func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Header, *Formation, error) {
 	state, err := scheduler.State()
 	if err != nil {
@@ -86,7 +87,8 @@ func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Heade
 	}
 
 	q := u.Query()
-	prefix := q.Get("app_id") + "-" + q.Get("formation_id") + "."
+	req.Type = q.Get("formation_id")
+	prefix := q.Get("app_id") + "-" + req.Type + "."
 	var jobs []*sampi.Job
 	for _, host := range state {
 		for _, job := range host.Jobs {
@@ -104,10 +106,11 @@ func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Heade
 		req.Quantity = 0
 	}
 	diff := req.Quantity - len(jobs)
+	log.Printf("have %d %s, diff %d", len(jobs), req.Type, diff)
 	if diff > 0 {
 		config := &docker.Config{
-			Image:        "titanous/redis",
-			Cmd:          []string{"/bin/cat"},
+			Image:        "ubuntu",
+			Cmd:          []string{"bash", "-c", "while true; do sleep 1; date; done;"},
 			AttachStdout: true,
 			AttachStderr: true,
 		}
@@ -132,9 +135,14 @@ func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Heade
 		}
 	} else if diff < 0 {
 		for _, job := range jobs[:-diff] {
-			_ = job
-			// connect to host service
-			// stop job
+			host, err := lornec.New(job.Attributes["host_id"])
+			if err != nil {
+				log.Println("error connecting to", job.Attributes["host_id"], err)
+				continue
+			}
+			if err := host.StopJob(job.ID); err != nil {
+				log.Println("error stopping", job.ID, "on", job.Attributes["host_id"], err)
+			}
 		}
 	}
 
