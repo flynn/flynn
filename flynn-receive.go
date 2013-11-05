@@ -8,8 +8,18 @@ import (
 	"strings"
 	"syscall"
 	"fmt"
+	"bytes"
+    "crypto/rand"
+    "encoding/base64"
+    "encoding/gob"
+    "log"
+    "net"
 
 	"github.com/flynn/go-discover/discover"	
+    "github.com/flynn/lorne/types"
+    "github.com/flynn/sampi/client"
+    "github.com/flynn/sampi/types"
+    "github.com/titanous/go-dockerclient"
 )
 
 func main() {
@@ -32,19 +42,18 @@ func main() {
 
 	fmt.Printf("-----> Building %s on %s ...\n", app, hostname)
 
-	cmd := exec.Command("docker", "run", "-i", "-a=stdin", "-a=stdout", "flynn/slugbuilder", "http://"+shelfHost+"/"+app+".tgz")
-	errCh := attachCmd(cmd, os.Stdout, os.Stderr, os.Stdin)
-	err = cmd.Start()
-	if err != nil {
-		panic(err)
-	}
-	exitCh := exitStatusCh(cmd)
-	if err = <-errCh; err != nil {
-		panic(err)
-	}
-	<-exitCh
+	scheduleAndAttach(docker.Config{
+        Image:        "flynn/slugbuilder",
+        Cmd:          []string{"http://"+shelfHost+"/"+app+".tgz",},
+        Tty:          false,
+        AttachStdin:  true,
+        AttachStdout: true,
+        AttachStderr: true,
+        OpenStdin:    true,
+        StdinOnce:    true,
+	})
 
-	fmt.Printf("-----> Deploying %s ...\n", app)
+	/*fmt.Printf("-----> Deploying %s ...\n", app)
 	if _, err := os.Stat(root + "/" + app + "/CONTAINER"); err == nil {
     	oldid := readFile(root + "/" + app + "/CONTAINER")
     	shell("docker kill " + oldid)
@@ -57,7 +66,7 @@ func main() {
 	writeFile(root + "/" + app + "/URL", "http://"+hostname+":"+port)
 
 	fmt.Printf("=====> Application deployed:\n")
-	fmt.Printf("       %s\n", readFile(root + "/" + app + "/URL"))
+	fmt.Printf("       %s\n", readFile(root + "/" + app + "/URL"))*/
 	fmt.Println("")
 
 }
@@ -102,7 +111,6 @@ func attachCmd(cmd *exec.Cmd, stdout, stderr io.Writer, stdin io.Reader) chan er
 		panic(err)
 	}
 
-
 	go func() {
 		_, e := io.Copy(stdinIn, stdin)
 		errCh <- e
@@ -138,4 +146,84 @@ func exitStatusCh(cmd *exec.Cmd) chan uint {
 		exitCh <- uint(0)
 	}()
 	return exitCh
+}
+
+func scheduleAndAttach(config docker.Config) {
+        disc, err := discover.NewClient()
+        if err != nil {
+                log.Fatal(err)
+        }
+
+        scheduler, err := client.New()
+        if err != nil {
+                log.Fatal(err)
+        }
+
+        state, err := scheduler.State()
+        if err != nil {
+                log.Fatal(err)
+        }
+
+        var firstHost string
+        for k := range state {
+                firstHost = k
+                break
+        }
+        if firstHost == "" {
+                log.Fatal("no hosts")
+        }
+
+        id := randomID()
+
+        services, err := disc.Services("flynn-lorne-attach." + firstHost)
+        if err != nil {
+                log.Fatal(err)
+        }
+        conn, err := net.Dial("tcp", services.OnlineAddrs()[0])
+        if err != nil {
+                log.Fatal(err)
+        }
+        err = gob.NewEncoder(conn).Encode(&lorne.AttachReq{
+                JobID:  id,
+                Flags:  lorne.AttachFlagStdout | lorne.AttachFlagStderr | lorne.AttachFlagStdin | lorne.AttachFlagStream,
+        })
+        if err != nil {
+                log.Fatal(err)
+        }
+        attachState := make([]byte, 1)
+        if _, err := conn.Read(attachState); err != nil {
+                log.Fatal(err)
+        }
+        switch attachState[0] {
+        case lorne.AttachError:
+                log.Fatal("attach error")
+        }
+
+        schedReq := &sampi.ScheduleReq{
+                Incremental: true,
+                HostJobs: map[string][]*sampi.Job{firstHost: {{ID: id, Config: &config}}},
+        }
+        if _, err := scheduler.Schedule(schedReq); err != nil {
+                log.Fatal(err)
+        }
+
+        if _, err := conn.Read(attachState); err != nil {
+                log.Fatal(err)
+        }
+
+        go io.Copy(conn, os.Stdin)
+        if _, err := io.Copy(os.Stdout, conn); err != nil {
+                log.Fatal(err)
+        }
+}
+
+func randomID() string {
+        b := make([]byte, 16)
+        enc := make([]byte, 24)
+        _, err := io.ReadFull(rand.Reader, b)
+        if err != nil {
+                panic(err) // This shouldn't ever happen, right?
+        }
+        base64.URLEncoding.Encode(enc, b)
+        return string(bytes.TrimRight(enc, "="))
 }
