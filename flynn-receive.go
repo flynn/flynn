@@ -210,10 +210,14 @@ func scheduleAndAttach(config docker.Config) {
 		log.Fatal(err)
 	}
 
-	go io.Copy(conn, os.Stdin)
+	go func() {
+		io.Copy(conn, os.Stdin)
+		conn.(*net.TCPConn).CloseWrite()
+	}()
 	if _, err := io.Copy(os.Stdout, conn); err != nil {
 		log.Fatal(err)
 	}
+	conn.Close()
 }
 
 func randomID() string {
