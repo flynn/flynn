@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/gob"
 	"fmt"
+	"bufio"
 	"io"
 	"io/ioutil"
 	"log"
@@ -214,9 +215,13 @@ func scheduleAndAttach(config docker.Config) {
 		io.Copy(conn, os.Stdin)
 		conn.(*net.TCPConn).CloseWrite()
 	}()
-	if _, err := io.Copy(os.Stdout, conn); err != nil {
-		log.Fatal(err)
+	scanner := bufio.NewScanner(conn)
+	for scanner.Scan() {
+		fmt.Fprintln(os.Stdout, scanner.Text()[8:])
 	}
+	/*if _, err := io.Copy(os.Stdout, conn); err != nil {
+		log.Fatal(err)
+	}*/
 	conn.Close()
 }
 
