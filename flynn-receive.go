@@ -39,7 +39,7 @@ func init() {
 		log.Fatal(err)
 	}
 
-	hostid := findHost()
+	hostid = findHost()
 	host, err = lc.New(hostid)
 	if err != nil {
 		log.Fatal(err)
@@ -154,9 +154,8 @@ func findHost() string {
 }
 
 func scheduleAndAttach(jobid string, config docker.Config) {
-	firstHost := hostid
 
-	services, err := sd.Services("flynn-lorne-attach." + firstHost)
+	services, err := sd.Services("flynn-lorne-attach." + hostid)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -182,7 +181,7 @@ func scheduleAndAttach(jobid string, config docker.Config) {
 
 	schedReq := &sampi.ScheduleReq{
 		Incremental: true,
-		HostJobs:    map[string][]*sampi.Job{firstHost: {{ID: jobid, Config: &config}}},
+		HostJobs:    map[string][]*sampi.Job{hostid: {{ID: jobid, Config: &config}}},
 	}
 	if _, err := sched.Schedule(schedReq); err != nil {
 		log.Fatal(err)
