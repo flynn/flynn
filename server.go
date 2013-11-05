@@ -143,10 +143,47 @@ func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Heade
 
 // GET /apps/{app_id}/jobs/{job_id}/logs
 func getJobLog(w http.ResponseWriter, req *http.Request) {
-	// get scheduler state
-	// find job host
-	// connect to host
-	// fetch logs from specified job
+	state, err := scheduler.State()
+	if err != nil {
+		w.WriteHeader(500)
+		log.Println(err)
+		return
+	}
+
+	q := req.URL.Query()
+	jobID := q.Get("job_id")
+	if prefix := q.Get("app_id") + "-"; !strings.HasPrefix(jobID, prefix) {
+		jobID = prefix + jobID
+	}
+	var job *sampi.Job
+	var host sampi.Host
+outer:
+	for _, host = range state {
+		for _, job = range host.Jobs {
+			if job.ID == jobID {
+				break outer
+			}
+		}
+		job = nil
+	}
+	if job == nil {
+		w.WriteHeader(404)
+		return
+	}
+
+	attachReq := &lorne.AttachReq{
+		JobID: job.ID,
+		Flags: lorne.AttachFlagStdout | lorne.AttachFlagStderr | lorne.AttachFlagLogs,
+	}
+	err, errChan := lorneAttach(host.ID, attachReq, w, nil)
+	if err != nil {
+		w.WriteHeader(500)
+		log.Println("attach error", err)
+		return
+	}
+	if err := <-errChan; err != nil {
+		log.Println("attach failed", err)
+	}
 }
 
 type NewJob struct {
@@ -220,8 +257,8 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 		attachReq := &lorne.AttachReq{
 			JobID:  job.ID,
 			Flags:  lorne.AttachFlagStdout | lorne.AttachFlagStderr | lorne.AttachFlagStdin | lorne.AttachFlagStream,
-			Height: 0,
-			Width:  0,
+			Height: jobReq.Lines,
+			Width:  jobReq.Columns,
 		}
 		err, errChan = lorneAttach(hostID, attachReq, outW, inR)
 		if err != nil {
