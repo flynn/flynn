@@ -112,7 +112,7 @@ func stopIfExists(jobid string) {
 		return
 	}
 	if err := host.StopJob(jobid); err != nil {
-		log.Fatal(err)
+		return
 	}
 }
 
