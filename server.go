@@ -36,13 +36,12 @@ func main() {
 
 	mux := tigertonic.NewTrieServeMux()
 	mux.Handle("POST", "/apps/{app_id}/formations/{formation_id}", tigertonic.Marshaled(changeFormation))
+	mux.Handle("GET", "/apps/{app_id}/jobs", tigertonic.Marshaled(getJobs))
 	mux.HandleFunc("GET", "/apps/{app_id}/jobs/{job_id}/logs", getJobLog)
 	mux.HandleFunc("POST", "/apps/{app_id}/jobs", runJob)
-	logger = tigertonic.Logged(mux, nil)
-	http.ListenAndServe("127.0.0.1:1200", logger)
+	http.ListenAndServe("127.0.0.1:1200", tigertonic.Logged(mux, nil))
 }
 
-var logger *tigertonic.Logger
 var scheduler *sampic.Client
 var disc *discover.Client
 
@@ -52,7 +51,7 @@ type Job struct {
 }
 
 // GET /apps/{app_id}/jobs
-func getJobList(u *url.URL, h http.Header) (int, http.Header, []Job, error) {
+func getJobs(u *url.URL, h http.Header) (int, http.Header, []Job, error) {
 	state, err := scheduler.State()
 	if err != nil {
 		return 500, nil, nil, err
@@ -82,6 +81,7 @@ type Formation struct {
 func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Header, *Formation, error) {
 	state, err := scheduler.State()
 	if err != nil {
+		log.Println("scheduler state error", err)
 		return 500, nil, nil, err
 	}
 
@@ -127,6 +127,7 @@ func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Heade
 
 		res, err := scheduler.Schedule(schedReq)
 		if err != nil || !res.Success {
+			log.Println("schedule error", err)
 			return 500, nil, nil, err
 		}
 	} else if diff < 0 {
@@ -162,14 +163,14 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 	var jobReq NewJob
 	if err := json.NewDecoder(req.Body).Decode(&jobReq); err != nil {
 		w.WriteHeader(500)
-		logger.Println(err)
+		log.Println(err)
 		return
 	}
 
 	state, err := scheduler.State()
 	if err != nil {
 		w.WriteHeader(500)
-		logger.Println(err)
+		log.Println(err)
 		return
 	}
 	// pick a random host
@@ -179,7 +180,7 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 	}
 	if hostID == "" {
 		w.WriteHeader(500)
-		logger.Println("no hosts found")
+		log.Println("no hosts found")
 		return
 	}
 
@@ -225,7 +226,7 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 		err, errChan = lorneAttach(hostID, attachReq, outW, inR)
 		if err != nil {
 			w.WriteHeader(500)
-			logger.Println("attach failed", err)
+			log.Println("attach failed", err)
 			return
 		}
 	}
@@ -233,7 +234,7 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 	res, err := scheduler.Schedule(&sampi.ScheduleReq{HostJobs: map[string][]*sampi.Job{hostID: {job}}})
 	if err != nil || !res.Success {
 		w.WriteHeader(500)
-		logger.Println("schedule failed", err)
+		log.Println("schedule failed", err)
 		return
 	}
 
