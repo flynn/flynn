@@ -62,7 +62,10 @@ func (c *Command) ShortExtra() string {
 }
 
 // Running `flynn help` will list commands in this order.
-var commands = []*Command{cmdRun}
+var commands = []*Command{
+	cmdRun,
+	cmdPs,
+}
 
 var (
 	flagApp  string

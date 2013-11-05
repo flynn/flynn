@@ -47,7 +47,7 @@ func Delete(path string) error {
 // perform the request. The request's Accept header field will be
 // set to:
 //
-//   Accept: application/vnd.flynn+json; version=1
+//   Accept: application/json
 //
 // The type of body determines how to encode the request:
 //
@@ -78,7 +78,7 @@ func NewRequest(method, path string, body interface{}) (*http.Request, error) {
 	if ctype != "" {
 		req.Header.Set("Content-Type", ctype)
 	}
-	req.Header.Set("Accept", "application/vnd.flynn+json; version=1")
+	req.Header.Set("Accept", "application/json")
 	for _, h := range strings.Split(os.Getenv("FLYNN_HEADER"), "\n") {
 		if i := strings.Index(h, ":"); i >= 0 {
 			req.Header.Set(

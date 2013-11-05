@@ -21,8 +21,8 @@ var (
 var cmdRun = &Command{
 	Run:   runRun,
 	Usage: "run command [arguments]",
-	Short: "run a process",
-	Long:  `Run a process on Flynn`,
+	Short: "run a job",
+	Long:  `Run a job on Flynn`,
 }
 
 func init() {
