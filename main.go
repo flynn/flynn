@@ -65,6 +65,7 @@ func (c *Command) ShortExtra() string {
 var commands = []*Command{
 	cmdRun,
 	cmdPs,
+	cmdLogs,
 }
 
 var (
