@@ -135,7 +135,7 @@ func getPort(jobid string) string {
 		log.Fatal(err)
 	}
 	for portspec := range job.Job.Config.ExposedPorts {
-		return strings.Split(portspec, "/", 1)[0]
+		return strings.Split(portspec, "/")[0]
 	}
 }
 
