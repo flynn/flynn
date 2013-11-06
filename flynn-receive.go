@@ -92,8 +92,8 @@ func main() {
 		},
 	})
 
-	fmt.Printf("=====> Application deployed!\n")
-	//fmt.Printf("       %s\n", getUrl(jobid))
+	fmt.Printf("=====> Application deployed:\n")
+	fmt.Printf("       http://%s:%s\n", hostname, getPort(jobid))
 	fmt.Println("")
 
 }
@@ -127,11 +127,12 @@ func scheduleWithTcpPort(jobid string, config docker.Config) {
 	}
 }
 
-/*func getUrl(jobid string) string {
+func getPort(jobid string) string {
 	if job, err := host.GetJob(jobid); err != nil {
 		log.Fatal(err)
 	}
-}*/
+	return job.Job.Config.PortSpecs[0]
+}
 
 func findHost() string {
 	state, err := sched.State()
