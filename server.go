@@ -78,6 +78,15 @@ type Formation struct {
 	Type     string `json:"type"`
 }
 
+func shelfURL() string {
+	set, _ := disc.Services("shelf")
+	addrs := set.OnlineAddrs()
+	if len(addrs) < 1 {
+		panic("Shelf is not discoverable")
+	}
+	return addrs[0]
+}
+
 // POST /apps/{app_id}/formation/{formation_id}
 func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Header, *Formation, error) {
 	state, err := scheduler.State()
@@ -109,10 +118,11 @@ func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Heade
 	log.Printf("have %d %s, diff %d", len(jobs), req.Type, diff)
 	if diff > 0 {
 		config := &docker.Config{
-			Image:        "ubuntu",
-			Cmd:          []string{"bash", "-c", "while true; do sleep 1; date; done;"},
+			Image:        "flynn/slugrunner",
+			Cmd:          []string{"start", req.Type},
 			AttachStdout: true,
 			AttachStderr: true,
+			Env:          []string{"SLUG_URL=http://" + shelfURL() + "/" + q.Get("app_id") + ".tgz"},
 		}
 		schedReq := &sampi.ScheduleReq{
 			HostJobs: make(map[string][]*sampi.Job),
