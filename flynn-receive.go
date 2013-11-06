@@ -137,6 +137,7 @@ func getPort(jobid string) string {
 	for portspec := range job.Job.Config.ExposedPorts {
 		return strings.Split(portspec, "/")[0]
 	}
+	return ""
 }
 
 func findHost() string {
