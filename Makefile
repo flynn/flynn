@@ -10,6 +10,14 @@ key:
 
 # Projects
 
+sampi:
+	git clone https://github.com/flynn/sampi
+	cd sampi/sampid && go get || true && go build
+
+lorne:
+	git clone https://github.com/flynn/lorne
+	cd lorne && go get || true && go build
+
 flynn-receive:
 	go build -o flynn-receive
 
