@@ -80,7 +80,7 @@ func main() {
 	stopIfExists(jobid)
 	scheduleWithTcpPort(jobid, docker.Config{
 		Image:        "flynn/slugrunner",
-		Cmd:          []string{"start web"},
+		Cmd:          []string{"start", "web"},
 		Tty:          false,
 		AttachStdin:  false,
 		AttachStdout: false,
