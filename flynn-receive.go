@@ -128,7 +128,8 @@ func scheduleWithTcpPort(jobid string, config docker.Config) {
 }
 
 func getPort(jobid string) string {
-	if job, err := host.GetJob(jobid); err != nil {
+	job, err := host.GetJob(jobid)
+	if err != nil {
 		log.Fatal(err)
 	}
 	return job.Job.Config.PortSpecs[0]
