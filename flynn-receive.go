@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"time"
 	"os"
 	
 	"github.com/flynn/go-discover/discover"
@@ -92,6 +93,7 @@ func main() {
 		},
 	})
 
+	time.Sleep(1 * time.Second)
 	fmt.Printf("=====> Application deployed:\n")
 	fmt.Printf("       http://%s:%s\n", hostname, getPort(jobid))
 	fmt.Println("")
@@ -132,7 +134,9 @@ func getPort(jobid string) string {
 	if err != nil {
 		log.Fatal(err)
 	}
-	return job.Job.Config.PortSpecs[0]
+	for portspec := range job.Job.Config.ExposedPorts {
+		return strings.Split(portspec, "/", 1)[0]
+	}
 }
 
 func findHost() string {
