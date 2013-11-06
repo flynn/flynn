@@ -69,10 +69,14 @@ func main() {
 	log.Print("Host registered")
 	for job := range jobs {
 		log.Printf("%#v", job.Config)
+		var hostConfig *docker.HostConfig
 		if job.TCPPorts > 0 {
 			port := strconv.Itoa(<-portAllocator)
 			job.Config.Env = append(job.Config.Env, "PORT="+port)
-			job.Config.PortSpecs = []string{port + ":" + port}
+			job.Config.ExposedPorts = map[string]struct{}{port + "/tcp": struct{}{}}
+			hostConfig = &docker.HostConfig{
+				PortBindings: map[string][]docker.PortBinding{port + "/tcp": {{HostPort: port}}},
+			}
 		}
 		state.AddJob(job)
 		container, err := Docker.CreateContainer(job.Config)
@@ -88,7 +92,7 @@ func main() {
 		}
 		state.SetContainerID(job.ID, container.ID)
 		state.WaitAttach(job.ID)
-		if err := Docker.StartContainer(container.ID, nil); err != nil {
+		if err := Docker.StartContainer(container.ID, hostConfig); err != nil {
 			log.Fatal(err)
 		}
 		state.SetStatusRunning(job.ID)
