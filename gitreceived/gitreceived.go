@@ -163,6 +163,9 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 			if err != nil {
 				panic(err)
 			}
+			if strings.HasPrefix(cmdargs[1], "/") {
+				cmdargs[1] = cmdargs[1][1:]
+			}
 			ensureCacheRepo(cmdargs[1])
 			var keyname, fingerprint string
 			if *noAuth {
