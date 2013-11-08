@@ -27,7 +27,7 @@ done
 var port *string = flag.String("p", "22", "port to listen on")
 var repoPath *string = flag.String("r", "/tmp/repos", "path to repo cache")
 var keyPath *string = flag.String("k", "/tmp/keys", "path to named keys")
-var noAuth *bool = flag.Boolean("n", false, "no client authentication")
+var noAuth *bool = flag.Bool("n", false, "no client authentication")
 
 var receiver string
 var privateKey string
