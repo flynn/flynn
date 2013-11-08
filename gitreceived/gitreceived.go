@@ -27,6 +27,7 @@ done
 var port *string = flag.String("p", "22", "port to listen on")
 var repoPath *string = flag.String("r", "/tmp/repos", "path to repo cache")
 var keyPath *string = flag.String("k", "/tmp/keys", "path to named keys")
+var noAuth *bool = flag.Boolean("n", false, "no client authentication")
 
 var receiver string
 var privateKey string
@@ -48,37 +49,42 @@ func main() {
 	privateKey = flag.Arg(0)
 	receiver = flag.Arg(1)
 
-	// An SSH server is represented by a ServerConfig, which holds
-	// certificate details and handles authentication of ServerConns.
-	config := &ssh.ServerConfig{
-		PublicKeyCallback: func(conn *ssh.ServerConn, user, algo string, pubkey []byte) bool {
-			clientkey, _, ok := ssh.ParsePublicKey(pubkey)
-			if !ok {
-				return false
-			}
-			os.MkdirAll(*keyPath, 0755)
-			files, err := ioutil.ReadDir(*keyPath)
-			if err != nil {
-				panic(err)
-			}
-			for _, file := range files {
-				if !file.IsDir() {
-					data, err := ioutil.ReadFile(*keyPath + "/" + file.Name())
-					if err != nil {
-						panic(err)
-					}
-					filekey, _, _, _, ok := ssh.ParseAuthorizedKey(data)
-					if !ok {
-						continue
-					}
-					if bytes.Equal(clientkey.Marshal(), filekey.Marshal()) {
-						keyNames[publicKeyFingerprint(clientkey)] = file.Name()
-						return true
+	var config *ssh.ServerConfig
+	if *noAuth {
+		config = &ssh.ServerConfig{
+			NoClientAuth: true,
+		}
+	} else {
+		config = &ssh.ServerConfig{
+			PublicKeyCallback: func(conn *ssh.ServerConn, user, algo string, pubkey []byte) bool {
+				clientkey, _, ok := ssh.ParsePublicKey(pubkey)
+				if !ok {
+					return false
+				}
+				os.MkdirAll(*keyPath, 0755)
+				files, err := ioutil.ReadDir(*keyPath)
+				if err != nil {
+					panic(err)
+				}
+				for _, file := range files {
+					if !file.IsDir() {
+						data, err := ioutil.ReadFile(*keyPath + "/" + file.Name())
+						if err != nil {
+							panic(err)
+						}
+						filekey, _, _, _, ok := ssh.ParseAuthorizedKey(data)
+						if !ok {
+							continue
+						}
+						if bytes.Equal(clientkey.Marshal(), filekey.Marshal()) {
+							keyNames[publicKeyFingerprint(clientkey)] = file.Name()
+							return true
+						}
 					}
 				}
-			}
-			return false
-		},
+				return false
+			},
+		}
 	}
 
 	pemBytes, err := ioutil.ReadFile(privateKey)
@@ -158,13 +164,21 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 				panic(err)
 			}
 			ensureCacheRepo(cmdargs[1])
+			var keyname, fingerprint string
+			if *noAuth {
+				fingerprint = ""
+				keyname = ""
+			} else {
+				fingerprint = publicKeyFingerprint(conn.PublicKey)
+				keyname = keyNames[fingerprint]
+			}
 			cmd := exec.Command(cmdargs[0], cmdargs[1:]...)
 			cmd.Dir = *repoPath
 			cmd.Env = []string{
 				"RECEIVE_USER=" + conn.User,
 				"RECEIVE_REPO=" + cmdargs[1],
-				"RECEIVE_KEYNAME=" + keyNames[publicKeyFingerprint(conn.PublicKey)],
-				"RECEIVE_FINGERPRINT=" + publicKeyFingerprint(conn.PublicKey),
+				"RECEIVE_KEYNAME=" + keyname,
+				"RECEIVE_FINGERPRINT=" + fingerprint,
 			}
 			errCh := attachCmd(cmd, ch, ch.Stderr(), ch)
 			err = cmd.Start()
