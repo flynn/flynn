@@ -130,7 +130,7 @@ func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Heade
 	outer:
 		for {
 			for host := range state {
-				schedReq.HostJobs[host] = append(schedReq.HostJobs[host], &sampi.Job{ID: prefix + randomID(), Config: config})
+				schedReq.HostJobs[host] = append(schedReq.HostJobs[host], &sampi.Job{ID: prefix + randomID(), TCPPorts: 1, Config: config})
 				diff--
 				if diff == 0 {
 					break outer
