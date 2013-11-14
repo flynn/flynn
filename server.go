@@ -264,13 +264,13 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 	job := &sampi.Job{
 		ID: q.Get("app_id") + "-run." + randomID(),
 		Config: &docker.Config{
-			Image:        "ubuntu",
+			Image:        "flynn/slugrunner",
 			Cmd:          jobReq.Cmd,
 			AttachStdin:  true,
 			AttachStdout: true,
 			AttachStderr: true,
 			StdinOnce:    true,
-			Env:          env,
+			Env:          append(env, "SLUG_URL=http://"+shelfURL()+"/"+q.Get("app_id")+".tgz"),
 		},
 	}
 	if jobReq.TTY {
