@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/base64"
+	"flag"
 	"io"
 	"log"
 	"os"
@@ -20,6 +21,9 @@ var state = NewState()
 var Docker *docker.Client
 
 func main() {
+	externalAddr := flag.String("external", "", "external IP of host")
+	flag.Parse()
+
 	go attachServer()
 	go rpcServer()
 	go allocatePorts()
@@ -77,6 +81,9 @@ func main() {
 			hostConfig = &docker.HostConfig{
 				PortBindings: map[string][]docker.PortBinding{port + "/tcp": {{HostPort: port}}},
 			}
+		}
+		if *externalAddr != "" {
+			job.Config.Env = append(job.Config.Env, "EXTERNAL_IP="+*externalAddr, "SD_HOST="+*externalAddr, "DISCOVERD="+*externalAddr+":1111")
 		}
 		state.AddJob(job)
 		container, err := Docker.CreateContainer(job.Config)
