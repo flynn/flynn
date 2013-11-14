@@ -3,7 +3,7 @@ DOCKER=docker -H 127.0.0.1
 run: all
 	bin/forego start
 
-all: bin/sampid bin/lorne bin/flynn-receive bin/gitreceived bin/discoverd bin/sdutil bin/shelf bin/flynn bin/flynn-cli bin/strowger bin/forego slugbuilder slugrunner storage id_rsa /tmp/keys/vagrant
+all: bin/sampid bin/lorne bin/flynn-receive bin/gitreceived bin/discoverd bin/sdutil bin/shelf bin/flynn bin/flynn-cli bin/strowger bin/forego slugbuilder slugrunner storage id_rsa /tmp/keys/vagrant nodejs-example
 
 # Setup
 
@@ -103,8 +103,6 @@ bin/godeb:
 	sudo bin/godeb install 1.1.2
 
 /usr/bin/docker: /usr/bin/curl
-	sudo addgroup docker || true
-	sudo adduser ${USER} docker || true
 	curl https://get.docker.io/gpg | sudo apt-key add -
 	sudo bash -c "echo deb http://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list"
 	sudo apt-get update
