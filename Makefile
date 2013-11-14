@@ -3,7 +3,7 @@ DOCKER=docker -H 127.0.0.1
 run: all
 	bin/forego start
 
-all: bin/sampid bin/lorne bin/flynn-receive bin/gitreceived bin/discoverd bin/sdutil bin/shelf bin/flynn bin/flynn-cli bin/strowger bin/forego slugbuilder slugrunner storage id_rsa /tmp/keys/vagrant nodejs-example
+all: bin/sampid bin/lorne bin/flynn-receive bin/gitreceived bin/discoverd bin/sdutil bin/shelf bin/flynn bin/strowger bin/forego slugbuilder slugrunner storage id_rsa /tmp/keys/vagrant nodejs-example
 
 # Setup
 
@@ -59,10 +59,10 @@ bin/shelf: /usr/bin/go
 bin/flynn-api: /usr/bin/go bin/discoverd
 	go get -v github.com/flynn/flynn-api
 
-bin/flynn: bin/flynn-api
+bin/flynn: bin/flynn-cli
 	ln -fs `pwd`/bin/flynn-cli bin/flynn
 
-bin/flynn-cli: /usr/bin/go
+bin/flynn-cli: /usr/bin/go bin/flynn-api
 	go get -v github.com/flynn/flynn-cli
 
 bin/strowger: /usr/bin/go bin/discoverd
