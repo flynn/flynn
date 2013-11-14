@@ -67,6 +67,7 @@ var commands = []*Command{
 	cmdPs,
 	cmdLogs,
 	cmdScale,
+	cmdDomain,
 }
 
 var (
@@ -141,11 +142,11 @@ func appFromGitRemote(remote string) (string, error) {
 
 	out := strings.Trim(string(b), "\r\n ")
 
-	if !strings.HasPrefix(out, gitURLPre) || !strings.HasSuffix(out, gitURLSuf) {
+	if !strings.HasPrefix(out, gitURLPre) {
 		return "", fmt.Errorf("could not find app name in " + remote + " git remote")
 	}
 
-	return out[len(gitURLPre) : len(out)-len(gitURLSuf)], nil
+	return out[len(gitURLPre):], nil
 }
 
 func isNotFound(err error) bool {

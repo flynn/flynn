@@ -12,12 +12,11 @@ var _ = fmt.Print
 var _ = os.Stdout
 
 const (
-	gitURLPre = "git@flynn:"
-	gitURLSuf = ".git"
+	gitURLPre = "vagrant@flynn:"
 )
 
 func gitURL(app string) string {
-	return gitURLPre + app + gitURLSuf
+	return gitURLPre + app
 }
 
 func gitRemotes(url string) (names []string) {
