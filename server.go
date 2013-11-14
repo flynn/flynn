@@ -140,6 +140,9 @@ func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Heade
 			AttachStderr: true,
 			Env:          []string{"SLUG_URL=http://" + shelfURL() + "/" + q.Get("app_id") + ".tgz"},
 		}
+		if req.Type == "web" {
+			config.Env = append(config.Env, "SD_NAME="+q.Get("app_id"))
+		}
 		schedReq := &sampi.ScheduleReq{
 			HostJobs: make(map[string][]*sampi.Job),
 		}
