@@ -31,10 +31,6 @@ nodejs-example:
 
 # Projects
 
-src/github.com/coreos/go-etcd: /usr/bin/go
-	go get -v github.com/coreos/go-etcd/etcd
-	cd src/github.com/coreos/go-etcd && git checkout 7ea284fa
-
 bin/sampid: /usr/bin/go bin/discoverd
 	go get -v github.com/flynn/sampi/sampid
 
@@ -75,6 +71,11 @@ slugrunner: /usr/bin/docker
 	@${DOCKER} images | grep flynn/slugrunner > /dev/null || ${DOCKER} pull flynn/slugrunner
 
 # Vendor
+
+src/github.com/coreos/go-etcd: /usr/bin/go
+	go get -v github.com/coreos/go-etcd/etcd
+	cd src/github.com/coreos/go-etcd && git checkout 7ea284fa
+	rm -rf pkg/linux_amd64/github.com/coreos/go-etcd/etcd.a
 
 bin/forego: /usr/bin/go
 	go get -v github.com/ddollar/forego
