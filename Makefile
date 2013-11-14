@@ -31,28 +31,32 @@ nodejs-example:
 
 # Projects
 
-bin/sampid: /usr/bin/go
+src/github.com/coreos/go-etcd: /usr/bin/go
+	go get -v github.com/coreos/go-etcd/etcd
+	cd src/github.com/coreos/go-etcd && git checkout 7ea284fa
+
+bin/sampid: /usr/bin/go bin/discoverd
 	go get -v github.com/flynn/sampi/sampid
 
-bin/lorne: /usr/bin/go
+bin/lorne: /usr/bin/go bin/discoverd
 	go get -v github.com/flynn/lorne
 
-bin/flynn-receive: /usr/bin/go flynn-receive.go
+bin/flynn-receive: /usr/bin/go flynn-receive.go bin/discoverd
 	go build -o bin/flynn-receive
 
 bin/gitreceived: /usr/bin/go
 	go get -v github.com/flynn/gitreceive-next/gitreceived
 
-bin/discoverd: /usr/bin/go bin/etcd
+bin/discoverd: /usr/bin/go bin/etcd src/github.com/coreos/go-etcd
 	go get -v github.com/flynn/go-discover/discoverd
 
-bin/sdutil: /usr/bin/go
+bin/sdutil: /usr/bin/go bin/discoverd
 	go get -v github.com/flynn/sdutil
 
 bin/shelf: /usr/bin/go
 	go get -v github.com/flynn/shelf
 
-bin/flynn-api: /usr/bin/go
+bin/flynn-api: /usr/bin/go bin/discoverd
 	go get -v github.com/flynn/flynn-api
 
 bin/flynn: bin/flynn-api
@@ -61,7 +65,7 @@ bin/flynn: bin/flynn-api
 bin/flynn-cli: /usr/bin/go
 	go get -v github.com/flynn/flynn-cli
 
-bin/strowger: /usr/bin/go
+bin/strowger: /usr/bin/go bin/discoverd
 	go get -v github.com/flynn/strowger
 
 slugbuilder: /usr/bin/docker
