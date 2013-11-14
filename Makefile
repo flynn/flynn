@@ -108,5 +108,6 @@ bin/godeb:
 	sudo sed -i -E 's|	/usr/bin/docker -d|	/usr/bin/docker -d -H 127.0.0.1|' /etc/init/docker.conf
 	sudo stop docker
 	sudo start docker
+	sleep 2 # wait for docker to boot
 
 .PHONY: all slugrunner slugbuilder
