@@ -4,7 +4,9 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"strings"
 
+	"github.com/flynn/go-discover/discover"
 	"github.com/flynn/rpcplus"
 )
 
@@ -13,7 +15,6 @@ type Server struct {
 }
 
 func (s *Server) ListenAndServe(quit <-chan struct{}) {
-	// TODO: join service discovery
 	go s.HTTPFrontend.serve()
 	go s.HTTPFrontend.syncDatabase()
 	<-quit
@@ -34,5 +35,19 @@ func main() {
 	rpcplus.Register(&Router{s})
 	rpcplus.HandleHTTP()
 	go http.ListenAndServe(*rpcAddr, nil)
+
+	d, err := discover.NewClient()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if hostPort := strings.SplitN(*rpcAddr, ":", 2); hostPort[0] != "" {
+		err = d.RegisterWithHost("flynn-strowger-rpc", hostPort[0], hostPort[1], nil)
+	} else {
+		err = d.Register("flynn-strowger-rpc", hostPort[1], nil)
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	s.ListenAndServe(nil)
 }
