@@ -4,9 +4,7 @@ This repo contains a Vagrantfile/Makefile combo that set up all of the Flynn
 components and dependencies in a working dev/test configuration.
 
 The only requirement is that you have [VirtualBox](https://www.virtualbox.org/)
-and [Vagrant](http://www.vagrantup.com/) installed. If you are using
-VirtualBox >= 4.2 you will probably need to update the Guest Additions with
-[vagrant-vbguest](https://github.com/dotless-de/vagrant-vbguest).
+and [Vagrant](http://www.vagrantup.com/) installed.
 
 **Note:** Flynn is alpha-quality software, so things are probably broken.
 
@@ -15,6 +13,17 @@ VirtualBox >= 4.2 you will probably need to update the Guest Additions with
 After checking out this repo, boot up the VM in Vagrant:
 
 ```text
+vagrant up
+```
+
+If you are using VirtualBox > 4.2.0 you will probably need to update the Guest
+Additions with [vagrant-vbguest](https://github.com/dotless-de/vagrant-vbguest):
+
+```
+vagrant up
+vagrant plugin install vagrant-vbguest
+vagrant vbguest
+vagrant halt
 vagrant up
 ```
 
