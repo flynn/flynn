@@ -8,6 +8,10 @@ and [Vagrant](http://www.vagrantup.com/) installed.
 
 **Note:** Flynn is alpha-quality software, so things are probably broken.
 
+### Demo video
+
+[![Flynn Demo](https://s3.amazonaws.com/flynn-media/flynn_demo_2013-11-14.png)](https://s3.amazonaws.com/flynn-media/flynn_demo_2013-11-14.mp4)
+
 ### Setup
 
 After checking out this repo, boot up the VM in Vagrant:
