@@ -69,10 +69,10 @@ bin/strowger: /usr/bin/go bin/discoverd
 	go get -v github.com/flynn/strowger
 
 slugbuilder: /usr/bin/docker
-	${DOCKER} images | grep flynn/slugbuilder > /dev/null || ${DOCKER} pull flynn/slugbuilder
+	@${DOCKER} images | grep flynn/slugbuilder > /dev/null || ${DOCKER} pull flynn/slugbuilder
 
 slugrunner: /usr/bin/docker
-	${DOCKER} images | grep flynn/slugrunner > /dev/null || ${DOCKER} pull flynn/slugrunner
+	@${DOCKER} images | grep flynn/slugrunner > /dev/null || ${DOCKER} pull flynn/slugrunner
 
 # Vendor
 
