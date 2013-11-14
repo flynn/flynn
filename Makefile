@@ -94,7 +94,7 @@ bin/etcd:
 	cp etcd-v0.1.2-Linux-x86_64/etcd bin
 
 bin/godeb:
-	wget -O godeb.tar.gz http://j.mp/godeb
+	wget -O godeb.tar.gz https://godeb.s3.amazonaws.com/godeb-amd64.tar.gz
 	tar -zxvf godeb.tar.gz
 	mkdir -p bin
 	mv godeb bin/godeb
