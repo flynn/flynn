@@ -1,27 +1,26 @@
 package main
 
 import (
-	"os/exec"
-	"strings"
+	"bufio"
 	"encoding/gob"
 	"fmt"
-	"bufio"
 	"io"
 	"log"
 	"net"
-	"time"
 	"os"
-	
+	"os/exec"
+	"strings"
+	"time"
+
 	"github.com/flynn/go-discover/discover"
-	"github.com/flynn/lorne/types"
-	"github.com/titanous/go-dockerclient"
-	"github.com/flynn/sampi/types"
-	sc "github.com/flynn/sampi/client"
 	lc "github.com/flynn/lorne/client"
+	"github.com/flynn/lorne/types"
+	sc "github.com/flynn/sampi/client"
+	"github.com/flynn/sampi/types"
+	"github.com/titanous/go-dockerclient"
 )
 
-// WARNING: assumes one host at the moment (firstHost will always be the same)
-
+// WARNING: assumes one host at the moment
 
 var sd *discover.Client
 var sched *sc.Client
@@ -49,7 +48,6 @@ func init() {
 
 func main() {
 	root := "/var/lib/demo/apps"
-	hostname := shell("curl -s icanhazip.com")
 
 	set, _ := sd.Services("shelf")
 	addrs := set.OnlineAddrs()
@@ -61,9 +59,9 @@ func main() {
 	app := os.Args[2]
 	os.MkdirAll(root+"/"+app, 0755)
 
-	fmt.Printf("-----> Building %s on %s ...\n", app, hostname)
+	fmt.Printf("-----> Building %s...\n", app)
 
-	scheduleAndAttach(app + ".build", docker.Config{
+	scheduleAndAttach(app+"-build.1", docker.Config{
 		Image:        "flynn/slugbuilder",
 		Cmd:          []string{"http://" + shelfHost + "/" + app + ".tgz"},
 		Tty:          false,
@@ -75,8 +73,8 @@ func main() {
 	})
 
 	fmt.Printf("-----> Deploying %s ...\n", app)
-	
-	jobid := app + ".web"
+
+	jobid := app + "-web.1"
 
 	stopIfExists(jobid)
 	scheduleWithTcpPort(jobid, docker.Config{
@@ -90,22 +88,23 @@ func main() {
 		StdinOnce:    false,
 		Env: []string{
 			"SLUG_URL=http://" + shelfHost + "/" + app + ".tgz",
+			"SD_NAME=" + app,
 		},
 	})
 
 	time.Sleep(1 * time.Second)
 	fmt.Printf("=====> Application deployed:\n")
-	fmt.Printf("       http://%s:%s\n", hostname, getPort(jobid))
+	fmt.Printf("       http://10.0.2.15:%s\n", getPort(jobid))
 	fmt.Println("")
 
 }
 
 func shell(cmdline string) string {
-        out, err := exec.Command("bash", "-c", cmdline).Output()
-        if err != nil {
-                panic(err)
-        }
-        return strings.Trim(string(out), " \n")
+	out, err := exec.Command("bash", "-c", cmdline).Output()
+	if err != nil {
+		panic(err)
+	}
+	return strings.Trim(string(out), " \n")
 }
 
 func stopIfExists(jobid string) {
@@ -119,7 +118,6 @@ func stopIfExists(jobid string) {
 }
 
 func scheduleWithTcpPort(jobid string, config docker.Config) {
-
 	schedReq := &sampi.ScheduleReq{
 		Incremental: true,
 		HostJobs:    map[string][]*sampi.Job{hostid: {{ID: jobid, Config: &config, TCPPorts: 1}}},
@@ -158,7 +156,6 @@ func findHost() string {
 }
 
 func scheduleAndAttach(jobid string, config docker.Config) {
-
 	services, err := sd.Services("flynn-lorne-attach." + hostid)
 	if err != nil {
 		log.Fatal(err)

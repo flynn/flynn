@@ -1,71 +1,112 @@
+DOCKER=docker -H 127.0.0.1
+
+run: all
+	bin/forego start
+
+all: bin/sampid bin/lorne bin/flynn-receive bin/gitreceived bin/discoverd bin/sdutil bin/shelf bin/flynn bin/flynn-cli bin/strowger bin/forego slugbuilder slugrunner storage id_rsa /tmp/keys/vagrant
 
 # Setup
 
-setup: key 
-	mkdir -p /var/lib/demo/storage
-	mkdir -p /var/lib/demo/apps
+storage:
+	mkdir -p storage
 
-key:
+id_rsa:
 	ssh-keygen -t rsa -N "" -f id_rsa
+
+/home/vagrant/.ssh/id_rsa:
+	ssh-keygen -t rsa -f /home/vagrant/.ssh/id_rsa -N ""
+
+/home/vagrant/.ssh/config:
+	echo "Host flynn\n    Hostname localhost\n    Port 2022" > ~/.ssh/config
+
+/tmp/keys:
+	mkdir -p /tmp/keys
+
+/tmp/keys/vagrant: /home/vagrant/.ssh/id_rsa /home/vagrant/.ssh/config /tmp/keys
+	cp /home/vagrant/.ssh/id_rsa.pub /tmp/keys/vagrant
+
+nodejs-example:
+	git clone https://github.com/titanous/nodejs-example
+	cd nodejs-example && git remote add flynn vagrant@flynn:example
 
 # Projects
 
-sampi:
-	git clone https://github.com/flynn/sampi
-	cd sampi/sampid && go get || true && go build
+bin/sampid: /usr/bin/go
+	go get -v github.com/flynn/sampi/sampid
 
-lorne:
-	git clone https://github.com/flynn/lorne
-	cd lorne && go get || true && go build
+bin/lorne: /usr/bin/go
+	go get -v github.com/flynn/lorne
 
-flynn-receive:
-	go build -o flynn-receive
+bin/flynn-receive: /usr/bin/go flynn-receive.go
+	go build -o bin/flynn-receive
 
-slugbuilder:
-	docker pull flynn/slugbuilder
+bin/gitreceived: /usr/bin/go
+	go get -v github.com/flynn/gitreceive-next/gitreceived
 
-slugrunner:
-	docker pull flynn/slugrunner
+bin/discoverd: /usr/bin/go bin/etcd
+	go get -v github.com/flynn/go-discover/discoverd
 
-gitreceive:
-	git clone https://github.com/flynn/gitreceive-next.git
-	cd gitreceive-next && make install
+bin/sdutil: /usr/bin/go
+	go get -v github.com/flynn/sdutil
 
-discoverd:
-	git clone https://github.com/flynn/go-discover.git
-	cd go-discover/discoverd && make install
+bin/shelf: /usr/bin/go
+	go get -v github.com/flynn/shelf
 
-sdutil:
-	wget http://progrium-sdutil.s3.amazonaws.com/sdutil_0.1.0_amd64.deb
-	dpkg -i sdutil_0.1.0_amd64.deb
+bin/flynn-api: /usr/bin/go
+	go get -v github.com/flynn/flynn-api
 
-shelf:
-	git clone https://github.com/flynn/shelf.git
-	cd shelf && make install
+bin/flynn: bin/flynn-api
+	ln -fs `pwd`/bin/flynn-cli bin/flynn
 
-## Vendor
+bin/flynn-cli: /usr/bin/go
+	go get -v github.com/flynn/flynn-cli
 
-packages: docker go etcd
-	apt-get install -y ruby1.9.1 rubygems mercurial
-	gem install foreman --no-rdoc --no-ri
+bin/strowger: /usr/bin/go
+	go get -v github.com/flynn/strowger
 
-etcd:
+slugbuilder: /usr/bin/docker
+	${DOCKER} images | grep flynn/slugbuilder > /dev/null || ${DOCKER} pull flynn/slugbuilder
+
+slugrunner: /usr/bin/docker
+	${DOCKER} images | grep flynn/slugrunner > /dev/null || ${DOCKER} pull flynn/slugrunner
+
+# Vendor
+
+bin/forego: /usr/bin/go
+	go get -v github.com/ddollar/forego
+
+/usr/bin/hg:
+	sudo apt-get install -y mercurial
+
+/usr/bin/git:
+	sudo apt-get install -y git
+
+/usr/bin/curl:
+	sudo apt-get install -y curl
+
+bin/etcd:
 	wget https://github.com/coreos/etcd/releases/download/v0.1.2/etcd-v0.1.2-Linux-x86_64.tar.gz
 	tar -zxvf etcd-v0.1.2-Linux-x86_64.tar.gz
-	cp etcd-v0.1.2-Linux-x86_64/etcd /usr/local/bin
+	cp etcd-v0.1.2-Linux-x86_64/etcd bin
 
-go:
-	wget http://j.mp/godeb
-	tar -zxvf ./godeb
-	./godeb install 1.1.2
+bin/godeb:
+	wget -O godeb.tar.gz http://j.mp/godeb
+	tar -zxvf godeb.tar.gz
+	mkdir -p bin
+	mv godeb bin/godeb
 
-docker: aufs
-	egrep -i "^docker" /etc/group || groupadd docker
-	curl https://get.docker.io/gpg | apt-key add -
-	echo deb http://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list
-	apt-get update
-	apt-get install -y lxc-docker 
-	sleep 2 # give docker a moment i guess
+/usr/bin/go: bin/godeb /usr/bin/hg /usr/bin/git
+	sudo bin/godeb install 1.1.2
 
-aufs:
-	lsmod | grep aufs || modprobe aufs || apt-get install -y linux-image-extra-`uname -r`
+/usr/bin/docker: /usr/bin/curl
+	sudo addgroup docker || true
+	sudo adduser ${USER} docker || true
+	curl https://get.docker.io/gpg | sudo apt-key add -
+	sudo bash -c "echo deb http://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list"
+	sudo apt-get update
+	sudo apt-get install -y lxc-docker
+	sudo sed -i -E 's|	/usr/bin/docker -d|	/usr/bin/docker -d -H 127.0.0.1|' /etc/init/docker.conf
+	sudo stop docker
+	sudo start docker
+
+.PHONY: all slugrunner slugbuilder

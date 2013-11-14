@@ -1,1 +1,7 @@
-flynn-receive
+*
+!Vagrantfile
+!Procfile
+!Makefile
+!.gitignore
+!flynn-receive.go
+!receiver
