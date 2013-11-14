@@ -20,6 +20,8 @@ import (
 	"github.com/flynn/lorne/types"
 	sampic "github.com/flynn/sampi/client"
 	"github.com/flynn/sampi/types"
+	strowgerc "github.com/flynn/strowger/client"
+	"github.com/flynn/strowger/types"
 	"github.com/titanous/go-dockerclient"
 	"github.com/titanous/go-tigertonic"
 )
@@ -34,8 +36,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	router, err = strowgerc.New()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	mux := tigertonic.NewTrieServeMux()
+	mux.Handle("PUT", "/apps/{app_id}/domains/{domain}", tigertonic.Marshaled(addDomain))
 	mux.Handle("POST", "/apps/{app_id}/formation/{formation_id}", tigertonic.Marshaled(changeFormation))
 	mux.Handle("GET", "/apps/{app_id}/jobs", tigertonic.Marshaled(getJobs))
 	mux.HandleFunc("GET", "/apps/{app_id}/jobs/{job_id}/logs", getJobLog)
@@ -45,10 +52,19 @@ func main() {
 
 var scheduler *sampic.Client
 var disc *discover.Client
+var router *strowgerc.Client
 
 type Job struct {
 	ID   string `json:"id"`
 	Type string `json:"type"`
+}
+
+func addDomain(u *url.URL, h http.Header, data *struct{}) (int, http.Header, struct{}, error) {
+	q := u.Query()
+	if err := router.AddFrontend(&strowger.Config{Service: q.Get("app_id"), HTTPDomain: q.Get("domain")}); err != nil {
+		return 500, nil, struct{}{}, err
+	}
+	return 200, nil, struct{}{}, nil
 }
 
 // GET /apps/{app_id}/jobs
