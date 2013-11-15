@@ -18,6 +18,7 @@ After checking out this repo, boot up the VM in Vagrant:
 
 ```text
 vagrant up
+vagrant reload # required to reboot after installing new kernel
 ```
 
 If you are using VirtualBox > 4.2.0 you will probably need to update the Guest
