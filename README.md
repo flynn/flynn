@@ -28,8 +28,7 @@ Additions with [vagrant-vbguest](https://github.com/dotless-de/vagrant-vbguest):
 vagrant up
 vagrant plugin install vagrant-vbguest
 vagrant vbguest
-vagrant halt
-vagrant up
+vagrant reload
 ```
 
 After the VM provisioning has finished, log in to it and run `make` to install
