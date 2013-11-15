@@ -4,8 +4,7 @@ This repo contains a Vagrantfile/Makefile combo that set up all of the Flynn
 components and dependencies in a working dev/test configuration.
 
 The only requirement is that you have [VirtualBox](https://www.virtualbox.org/)
-and [Vagrant](http://www.vagrantup.com/) installed. We use Phusion's [Docker-friendly Vagrant box](http://blog.phusion.nl/2013/11/08/docker-friendly-vagrant-boxes/)
-as Vagrant base box, tested on VirtualBox 4.2.18.
+and [Vagrant](http://www.vagrantup.com/) installed.
 
 **Note:** Flynn is alpha-quality software, so things are probably broken.
 
