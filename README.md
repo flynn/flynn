@@ -9,8 +9,4 @@ framework](https://github.com/flynn/sampi).
 
 - Track resources
 - Recover from crashes
-- Use service discovery to find/follow scheduler
-- Add containers to service discovery
-- PTY rendezvous
-- Log shipping
 - Write tests
