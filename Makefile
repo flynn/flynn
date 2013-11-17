@@ -80,15 +80,6 @@ src/github.com/coreos/go-etcd: /usr/bin/go
 bin/forego: /usr/bin/go
 	go get -v github.com/ddollar/forego
 
-/usr/bin/hg:
-	sudo apt-get install -y mercurial
-
-/usr/bin/git:
-	sudo apt-get install -y git
-
-/usr/bin/curl:
-	sudo apt-get install -y curl
-
 bin/etcd:
 	wget https://github.com/coreos/etcd/releases/download/v0.1.2/etcd-v0.1.2-Linux-x86_64.tar.gz
 	tar -zxvf etcd-v0.1.2-Linux-x86_64.tar.gz
@@ -100,12 +91,10 @@ bin/godeb:
 	mkdir -p bin
 	mv godeb bin/godeb
 
-/usr/bin/go: bin/godeb /usr/bin/hg /usr/bin/git
+/usr/bin/go: bin/godeb
 	sudo bin/godeb install 1.1.2
 
-/usr/bin/docker: /usr/bin/curl
-	curl https://get.docker.io/gpg | sudo apt-key add -
-	sudo bash -c "echo deb http://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list"
+/usr/bin/docker:
 	sudo apt-get update
 	sudo apt-get install -y lxc-docker
 	sudo sed -i -E 's|	/usr/bin/docker -d|	/usr/bin/docker -d -H 127.0.0.1|' /etc/init/docker.conf

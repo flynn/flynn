@@ -5,9 +5,8 @@
 VAGRANTFILE_API_VERSION = "2"
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
-  # Phusion's Docker-friendly Vagrant box: http://blog.phusion.nl/2013/11/08/docker-friendly-vagrant-boxes/
-  config.vm.box = "phusion_precise64"
-  config.vm.box_url = "https://oss-binaries.phusionpassenger.com/vagrant/boxes/ubuntu-12.04.3-amd64-vbox.box"
+  config.vm.box = "flynn-precise64"
+  config.vm.box_url = "https://s3.amazonaws.com/flynn/flynn-virtualbox-ubuntu_12.04.3-amd64.box"
   config.vm.synced_folder "./", "/vagrant"
 
   config.vm.provision :shell, inline: <<-SCRIPT
