@@ -23,14 +23,12 @@ type Job struct {
 }
 
 type ResourceValue struct {
-	Value      int
-	Overcommit bool
+	Value      int  `json:"value"`
+	Overcommit bool `json:"overcommit"`
 }
 
 type Host struct {
 	ID string
-
-	// TODO: host properties/attributes?
 
 	// Currently running jobs
 	Jobs []*Job
@@ -38,6 +36,8 @@ type Host struct {
 	Rules []Rule
 	// Currently available resources
 	Resources map[string]ResourceValue
+	// Host attributes
+	Attributes map[string]string
 }
 
 func (h *Host) Compatible(job *Job) bool {
