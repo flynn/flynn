@@ -159,7 +159,7 @@ type methodType struct {
 	numCalls    uint
 }
 
-func (m methodType) TakesContext() bool {
+func (m *methodType) TakesContext() bool {
 	return m.ContextType != nil
 }
 
