@@ -22,21 +22,22 @@ var Docker *docker.Client
 
 func main() {
 	externalAddr := flag.String("external", "", "external IP of host")
+	configFile := flag.String("config", "", "configuration file")
+	hostID := flag.String("id", randomID(), "host id")
 	flag.Parse()
 
 	go attachServer()
 	go rpcServer()
 	go allocatePorts()
 
-	id := randomID()
 	disc, err := discover.NewClient()
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := disc.Register("flynn-lorne-rpc."+id, "1113", nil); err != nil {
+	if err := disc.Register("flynn-lorne-rpc."+*hostID, "1113", nil); err != nil {
 		log.Fatal(err)
 	}
-	if err := disc.Register("flynn-lorne-attach."+id, "1114", nil); err != nil {
+	if err := disc.Register("flynn-lorne-attach."+*hostID, "1114", nil); err != nil {
 		log.Fatal(err)
 	}
 
@@ -63,10 +64,19 @@ func main() {
 	go streamEvents(Docker)
 	go syncScheduler(scheduler)
 
-	host := sampi.Host{
-		ID:        id,
-		Resources: map[string]sampi.ResourceValue{"memory": sampi.ResourceValue{Value: 1024}},
+	var host *sampi.Host
+	if *configFile != "" {
+		host, err = parseConfig(*configFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		host = &sampi.Host{Resources: make(map[string]sampi.ResourceValue)}
 	}
+	if _, ok := host.Resources["memory"]; !ok {
+		host.Resources["memory"] = sampi.ResourceValue{Value: 1024}
+	}
+	host.ID = *hostID
 
 	jobs := make(chan *sampi.Job)
 	scheduler.StreamGo("Scheduler.RegisterHost", host, jobs)
