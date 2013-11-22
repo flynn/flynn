@@ -94,12 +94,12 @@ bin/godeb:
 /usr/bin/go: bin/godeb
 	sudo bin/godeb install 1.1.2
 
-/usr/bin/docker:
+/etc/default/docker:
+	sudo bash -c "echo 'DOCKER_OPTS=\"-H 127.0.0.1\"' > /etc/default/docker"
+
+/usr/bin/docker: /etc/default/docker
 	sudo apt-get update
 	sudo apt-get install -y lxc-docker
-	sudo sed -i -E 's|	/usr/bin/docker -d|	/usr/bin/docker -d -H 127.0.0.1|' /etc/init/docker.conf
-	sudo stop docker
-	sudo start docker
 	sleep 2 # wait for docker to boot
 
 .PHONY: all slugrunner slugbuilder
