@@ -5,13 +5,14 @@
 package jsonrpc
 
 import (
-	"code.google.com/p/vitess/go/rpcplus"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"testing"
+
+	"github.com/flynn/rpcplus"
 )
 
 type Args struct {
@@ -46,15 +47,10 @@ func (t *Arith) Error(args *Args, reply *Reply) error {
 	panic("ERROR")
 }
 
-func (t *Arith) Thrive(args *Args, sendReply func(reply interface{}) error) error {
+func (t *Arith) Thrive(args *Args, stream rpcplus.Stream) error {
 	for i := 0; i < args.A; i++ {
-		r := &Reply{C: i}
-		err := sendReply(r)
-		if err != nil {
-			return err
-		}
+		stream.Send <- &Reply{C: i}
 	}
-
 	return nil
 }
 
