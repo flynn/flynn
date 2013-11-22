@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 )
 
 var port = flag.String("p", "8888", "Port to listen on")
@@ -51,6 +52,7 @@ func main() {
 			}
 			log.Println("GET", r.RequestURI)
 		case "PUT":
+			os.MkdirAll(path.Dir(filepath), 0755)
 			file, err := os.Create(filepath)
 			if err != nil {
 				errorResponse(w, err)
