@@ -1,11 +1,12 @@
 package discover
 
 import (
-	"net/http"
 	"log"
+	"net/http"
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/rpcplus"
+	rpc "github.com/flynn/rpcplus/comborpc"
 )
 
 const (
@@ -51,9 +52,8 @@ func NewServer(addr string) *Agent {
 }
 
 func ListenAndServe(server *Agent) error {
-	rpcplus.HandleHTTP()
-	err := rpcplus.Register(server)
-	if err != nil {
+	rpc.HandleHTTP()
+	if err := rpc.Register(server); err != nil {
 		return err
 	}
 	return http.ListenAndServe(server.Address, nil)
