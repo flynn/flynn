@@ -21,6 +21,7 @@ func init() {
 func errorResponse(w http.ResponseWriter, e error) {
 	w.WriteHeader(http.StatusInternalServerError)
 	w.Write([]byte(e.Error()))
+	log.Println("error:", e.Error())
 }
 
 func main() {
@@ -48,6 +49,7 @@ func main() {
 				errorResponse(w, err)
 				return
 			}
+			log.Println("GET", r.RequestURI)
 		case "PUT":
 			file, err := os.Create(filepath)
 			if err != nil {
@@ -60,16 +62,18 @@ func main() {
 				errorResponse(w, err)
 				return
 			}
+			log.Println("PUT", r.RequestURI)
 		case "DELETE":
 			err := os.RemoveAll(filepath)
 			if err != nil {
 				errorResponse(w, err)
 				return
 			}
+			log.Println("DELETE", r.RequestURI)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	})
-
+	log.Println("Shelf serving files on " + *port + " from " + storagepath)
 	log.Fatal(http.ListenAndServe(":"+*port, nil))
 }
