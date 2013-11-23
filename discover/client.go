@@ -3,10 +3,10 @@ package discover
 import (
 	"errors"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
-	"os"
 
 	"github.com/flynn/rpcplus"
 )
@@ -168,7 +168,7 @@ func (s *ServiceSet) Close() {
 
 type Client struct {
 	client     *rpcplus.Client
-	heartbeats map[string]bool
+	heartbeats map[string]chan struct{}
 	hbMutex    sync.Mutex
 }
 
@@ -184,7 +184,7 @@ func NewClientUsingAddress(addr string) (*Client, error) {
 	client, err := rpcplus.DialHTTP("tcp", addr)
 	return &Client{
 		client:     client,
-		heartbeats: make(map[string]bool),
+		heartbeats: make(map[string]chan struct{}),
 	}, err
 }
 
@@ -230,17 +230,24 @@ func (c *Client) RegisterWithHost(name, host, port string, attributes map[string
 	if err != nil {
 		return errors.New("discover: register failed: " + err.Error())
 	}
+	done := make(chan struct{})
 	c.hbMutex.Lock()
-	c.heartbeats[args.Addr] = true
+	c.heartbeats[args.Addr] = done
 	c.hbMutex.Unlock()
 	go func() {
-		var heartbeated struct{}
-		for c.heartbeats[args.Addr] {
-			time.Sleep(HeartbeatIntervalSecs * time.Second) // TODO: add jitter
-			c.client.Call("Agent.Heartbeat", &Args{
-				Name: name,
-				Addr: args.Addr,
-			}, &heartbeated)
+		ticker := time.NewTicker(HeartbeatIntervalSecs * time.Second) // TODO: add jitter
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				// TODO: log error here
+				c.client.Call("Agent.Heartbeat", &Args{
+					Name: name,
+					Addr: args.Addr,
+				}, &struct{}{})
+			case <-done:
+				return
+			}
 		}
 	}()
 	return nil
@@ -255,13 +262,13 @@ func (c *Client) UnregisterWithHost(name, host, port string) error {
 		Name: name,
 		Addr: net.JoinHostPort(host, port),
 	}
-	var resp struct{}
-	err := c.client.Call("Agent.Unregister", args, &resp)
+	c.hbMutex.Lock()
+	close(c.heartbeats[args.Addr])
+	delete(c.heartbeats, args.Addr)
+	c.hbMutex.Unlock()
+	err := c.client.Call("Agent.Unregister", args, &struct{}{})
 	if err != nil {
 		return errors.New("discover: unregister failed: " + err.Error())
 	}
-	c.hbMutex.Lock()
-	delete(c.heartbeats, args.Addr)
-	c.hbMutex.Unlock()
 	return nil
 }
