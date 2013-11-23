@@ -87,7 +87,7 @@ func (s *ServiceSet) Online() []*Service {
 	list := make([]*Service, 0, len(s.services))
 	for _, service := range s.services {
 		if service.Online {
-			list = append(list, service)
+			list = append(list, copyService(service))
 		}
 	}
 	return list
@@ -99,10 +99,19 @@ func (s *ServiceSet) Offline() []*Service {
 	list := make([]*Service, 0, len(s.services))
 	for _, service := range s.services {
 		if !service.Online {
-			list = append(list, service)
+			list = append(list, copyService(service))
 		}
 	}
 	return list
+}
+
+func copyService(service *Service) *Service {
+	s := *service
+	s.Attrs = make(map[string]string, len(service.Attrs))
+	for k, v := range service.Attrs {
+		s.Attrs[k] = v
+	}
+	return &s
 }
 
 func (s *ServiceSet) OnlineAddrs() []string {
