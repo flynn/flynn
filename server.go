@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/flynn/go-discover/discover"
-	"github.com/flynn/rpcplus"
+	rpc "github.com/flynn/rpcplus/comborpc"
 )
 
 type Server struct {
@@ -32,8 +32,8 @@ func main() {
 		log.Fatal(err)
 	}
 	s.HTTPFrontend = f
-	rpcplus.Register(&Router{s})
-	rpcplus.HandleHTTP()
+	rpc.Register(&Router{s})
+	rpc.HandleHTTP()
 	go http.ListenAndServe(*rpcAddr, nil)
 
 	d, err := discover.NewClient()
