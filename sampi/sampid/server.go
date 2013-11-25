@@ -8,14 +8,14 @@ import (
 	"strings"
 
 	"github.com/flynn/go-discover/discover"
-	"github.com/flynn/rpcplus"
+	rpc "github.com/flynn/rpcplus/comborpc"
 )
 
 var listenAddr = flag.String("listen", ":1112", "listen address")
 
 func main() {
 	flag.Parse()
-	rpcplus.HandleHTTP()
+	rpc.HandleHTTP()
 	l, err := net.Listen("tcp", *listenAddr)
 	if err != nil {
 		log.Fatal(err)
