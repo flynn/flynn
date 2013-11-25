@@ -6,11 +6,12 @@ import (
 
 	"github.com/flynn/lorne/types"
 	"github.com/flynn/rpcplus"
+	rpc "github.com/flynn/rpcplus/comborpc"
 )
 
 func rpcServer() {
-	rpcplus.Register(&Host{})
-	rpcplus.HandleHTTP()
+	rpc.Register(&Host{})
+	rpc.HandleHTTP()
 	http.ListenAndServe(":1113", nil)
 }
 
