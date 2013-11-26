@@ -22,6 +22,12 @@ Shelf is packaged as a Docker container appliance. You can just run it with dock
 
 	$ docker run flynn/shelf
 
+### Using Volumes
+
+### Using Linking
+
+### Using Service Discovery
+
 ## License
 
 BSD
