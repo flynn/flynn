@@ -11,10 +11,11 @@ import (
 )
 
 var port = flag.String("p", "8888", "Port to listen on")
+var storage = flag.String("s", "/var/lib/shelf", "Path to store files")
 
 func init() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage:	%v -p <port> <storage-path>\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage:	%v -p <port> -s <storage-path>\n\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 }
@@ -28,12 +29,14 @@ func errorResponse(w http.ResponseWriter, e error) {
 func main() {
 	flag.Parse()
 
-	if flag.NArg() < 1 {
-		flag.Usage()
-		os.Exit(64)
+	var storagepath string
+	if flag.NArg() == 1 {
+		// deprecated: passing storage path as argument
+		storagepath = flag.Arg(0)
+	} else {
+		storagepath = *storage
 	}
-
-	storagepath := flag.Arg(0)
+	os.MkdirAll(storagepath, 0755)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		filepath := storagepath + r.RequestURI
