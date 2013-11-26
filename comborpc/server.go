@@ -29,18 +29,13 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var serve func(conn io.ReadWriteCloser)
 	accept, _, _ := mime.ParseMediaType(req.Header.Get("Accept"))
 	switch accept {
-	case "application/vnd.flynn.rpc-hijack+gob":
-		serve = server.s.ServeConn
 	case "application/vnd.flynn.rpc-hijack+json":
 		serve = func(conn io.ReadWriteCloser) {
 			codec := jsonrpc.NewServerCodec(conn)
 			server.s.ServeCodec(codec)
 		}
 	default:
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(406)
-		w.Write([]byte("Accept header must be application/vnd.flynn.rpc-hijack+gob or application/vnd.flynn.rpc-hijack+json\n"))
-		return
+		serve = server.s.ServeConn
 	}
 
 	conn, _, err := w.(http.Hijacker).Hijack()
