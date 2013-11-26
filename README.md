@@ -11,9 +11,16 @@ There are no directory indexes. Parent directories are automatically created. Ri
 
 ## Usage
 
-	Usage:	shelf -p <port> <storage-path>
+	Usage:	shelf -p <port> -s <storage-path>
 
 	  -p="8888": Port to listen on
+	  -s="/var/lib/shelf": Path to store files
+
+## Appliance
+
+Shelf is packaged as a Docker container appliance. You can just run it with docker right off the index:
+
+	$ docker run flynn/shelf
 
 ## License
 
