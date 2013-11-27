@@ -2,7 +2,7 @@ package discover
 
 import (
 	"encoding/json"
-	"fmt"
+	//"fmt"
 	"strings"
 	"sync"
 
@@ -37,7 +37,7 @@ func (b *EtcdBackend) Subscribe(name string) (UpdateStream, error) {
 		}
 		stream.ch <- &ServiceUpdate{}
 		for u := range watch {
-			if update := b.responseToUpdate(u, &etcd.KeyValuePair{}); update != nil {
+			if update := b.responseToUpdate(u, nil); update != nil {
 				stream.ch <- update
 			}
 		}
@@ -56,7 +56,6 @@ func (s *etcdStream) Chan() chan *ServiceUpdate { return s.ch }
 func (s *etcdStream) Close() { s.stopOnce.Do(func() { close(s.stop) }) }
 
 func (b *EtcdBackend) responseToUpdate(resp *etcd.Response, kvp *etcd.KeyValuePair) *ServiceUpdate {
-	fmt.Println(resp)
 	var key, value string
 	if kvp != nil {
 		key = kvp.Key
@@ -72,7 +71,7 @@ func (b *EtcdBackend) responseToUpdate(resp *etcd.Response, kvp *etcd.KeyValuePa
 	}
 	serviceName := splitKey[3]
 	serviceAddr := splitKey[4]
-	if "get" == resp.Action || ("set" == resp.Action && (resp.NewKey || resp.Value != resp.PrevValue)) {
+	if "get" == resp.Action || ("set" == resp.Action && resp.Value != resp.PrevValue) {
 		// GET is because getCurrentState returns responses of Action GET.
 		// some SETs are heartbeats, so we ignore SETs where value didn't change.
 		var serviceAttrs map[string]string

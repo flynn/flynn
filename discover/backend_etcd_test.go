@@ -84,7 +84,6 @@ func TestEtcdBackend_Subscribe(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		update := <-updates.Chan()
-		fmt.Println("update", update)
 		if update.Addr == "" && update.Name == "" {
 			continue // skip the update that signals "up to current" event
 		}
