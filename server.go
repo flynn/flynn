@@ -400,20 +400,34 @@ func (m *methodType) NumCalls() (n uint) {
 
 var nilRes = []reflect.Value{reflect.Zero(typeOfError)}
 
-func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, req *Request, argv, replyv reflect.Value, codec ServerCodec, context reflect.Value, eof <-chan struct{}) {
-	mtype.Lock()
-	mtype.numCalls++
-	mtype.Unlock()
-	function := mtype.method.Func
+type call struct {
+	server  *Server
+	sending *sync.Mutex
+	mtype   *methodType
+	req     *Request
+	argv    reflect.Value
+	replyv  reflect.Value
+	codec   ServerCodec
+	context reflect.Value
+	eof     <-chan struct{}
+	stop    <-chan struct{}
+	done    chan<- struct{}
+}
+
+func (s *service) call(c call) {
+	c.mtype.Lock()
+	c.mtype.numCalls++
+	c.mtype.Unlock()
+	function := c.mtype.method.Func
 	var returnValues []reflect.Value
 
-	if !mtype.stream {
+	if !c.mtype.stream {
 
 		// Invoke the method, providing a new value for the reply.
-		if mtype.TakesContext() {
-			returnValues = function.Call([]reflect.Value{s.rcvr, context, argv, replyv})
+		if c.mtype.TakesContext() {
+			returnValues = function.Call([]reflect.Value{s.rcvr, c.context, c.argv, c.replyv})
 		} else {
-			returnValues = function.Call([]reflect.Value{s.rcvr, argv, replyv})
+			returnValues = function.Call([]reflect.Value{s.rcvr, c.argv, c.replyv})
 		}
 
 		// The return value for the method is an error.
@@ -422,8 +436,8 @@ func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, r
 		if errInter != nil {
 			errmsg = errInter.(error).Error()
 		}
-		server.sendResponse(sending, req, replyv.Interface(), codec, errmsg, true)
-		server.freeRequest(req)
+		c.server.sendResponse(c.sending, c.req, c.replyv.Interface(), c.codec, errmsg, true)
+		c.server.freeRequest(c.req)
 		return
 	}
 
@@ -439,14 +453,17 @@ func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, r
 		for {
 			select {
 			case data := <-sendChan:
-				streamErr = server.sendResponse(sending, req, data, codec, "", false)
+				streamErr = c.server.sendResponse(c.sending, c.req, data, c.codec, "", false)
 				if streamErr != nil {
 					errChan <- streamErr
 					return
 				}
 			case <-funcDone:
 				return
-			case <-eof:
+			case <-c.eof:
+				errChan <- io.EOF
+				return
+			case <-c.stop:
 				errChan <- io.EOF
 				return
 			}
@@ -454,10 +471,10 @@ func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, r
 	}()
 
 	// Invoke the method, providing a new value for the reply.
-	if mtype.TakesContext() {
-		returnValues = function.Call([]reflect.Value{s.rcvr, context, argv, stream})
+	if c.mtype.TakesContext() {
+		returnValues = function.Call([]reflect.Value{s.rcvr, c.context, c.argv, stream})
 	} else {
-		returnValues = function.Call([]reflect.Value{s.rcvr, argv, stream})
+		returnValues = function.Call([]reflect.Value{s.rcvr, c.argv, stream})
 	}
 	close(funcDone)
 	<-sendDone
@@ -477,8 +494,9 @@ func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, r
 	// this is the last packet, we don't do anything with
 	// the error here (well sendStreamResponse will log it
 	// already)
-	server.sendResponse(sending, req, nil, codec, errmsg, true)
-	server.freeRequest(req)
+	c.server.sendResponse(c.sending, c.req, nil, c.codec, errmsg, true)
+	c.server.freeRequest(c.req)
+	close(c.done)
 }
 
 type gobServerCodec struct {
@@ -538,6 +556,10 @@ func (server *Server) ServeCodec(codec ServerCodec) {
 func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface{}) {
 	sending := new(sync.Mutex)
 	eof := make(chan struct{})
+
+	stopChans := make(map[uint64]chan struct{})
+	var stopChansMtx sync.Mutex
+
 	var contextVal reflect.Value
 	if context != nil {
 		contextVal = reflect.ValueOf(context)
@@ -547,6 +569,19 @@ func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface
 	for {
 		service, mtype, req, argv, replyv, keepReading, err := server.readRequest(codec)
 		if err != nil {
+			if err == errCloseStream {
+				go func() {
+					stopChansMtx.Lock()
+					stop, ok := stopChans[req.Seq]
+					delete(stopChans, req.Seq)
+					stopChansMtx.Unlock()
+					if !ok {
+						return
+					}
+					close(stop)
+				}()
+				continue
+			}
 			if err != io.EOF {
 				log.Println("rpc:", err)
 			}
@@ -560,7 +595,32 @@ func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface
 			}
 			continue
 		}
-		go service.call(server, sending, mtype, req, argv, replyv, codec, contextVal, eof)
+
+		done := make(chan struct{})
+		stop := make(chan struct{})
+		stopChansMtx.Lock()
+		stopChans[req.Seq] = stop
+		stopChansMtx.Unlock()
+
+		go service.call(call{
+			server:  server,
+			sending: sending,
+			mtype:   mtype,
+			req:     req,
+			argv:    argv,
+			replyv:  replyv,
+			codec:   codec,
+			context: contextVal,
+			eof:     eof,
+			done:    done,
+			stop:    stop,
+		})
+		go func() {
+			<-done
+			stopChansMtx.Lock()
+			delete(stopChans, req.Seq)
+			stopChansMtx.Unlock()
+		}()
 	}
 	close(eof)
 	codec.Close()
@@ -639,6 +699,8 @@ func (server *Server) readRequest(codec ServerCodec) (service *service, mtype *m
 	return
 }
 
+var errCloseStream = errors.New("rpc: close stream")
+
 func (server *Server) readRequestHeader(codec ServerCodec) (service *service, mtype *methodType, req *Request, keepReading bool, err error) {
 	// Grab the request header.
 	req = server.getRequest()
@@ -655,6 +717,11 @@ func (server *Server) readRequestHeader(codec ServerCodec) (service *service, mt
 	// We read the header successfully.  If we see an error now,
 	// we can still recover and move on to the next request.
 	keepReading = true
+
+	if req.ServiceMethod == "CloseStream" {
+		err = errCloseStream
+		return
+	}
 
 	serviceMethod := strings.Split(req.ServiceMethod, ".")
 	if len(serviceMethod) != 2 {

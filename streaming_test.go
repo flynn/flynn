@@ -33,7 +33,11 @@ func (t *StreamingArith) Thrive(args StreamingArgs, stream Stream) error {
 			return errors.New("Triggered error in middle")
 		}
 		// log.Println("  Sending sample", i)
-		stream.Send <- &StreamingReply{C: args.A, Index: i}
+		select {
+		case stream.Send <- &StreamingReply{C: args.A, Index: i}:
+		case <-stream.Error:
+			return nil
+		}
 	}
 
 	return nil
@@ -167,6 +171,24 @@ func TestInterruptedCallByServer(t *testing.T) {
 	}
 	if c.Error.Error() != "Triggered error in middle" {
 		t.Fatal("received wrong error message:", c.Error)
+	}
+
+	// make sure the wire is still in good shape
+	callOnceAndCheck(t, client)
+}
+
+func TestInterruptedCallByClient(t *testing.T) {
+	client := makeLink(t)
+	args := &StreamingArgs{3, 100000, -1}
+	rowChan := make(chan *StreamingReply, 10)
+	c := client.StreamGo("StreamingArith.Thrive", args, rowChan)
+	go c.CloseStream()
+	count := 0
+	for _ = range rowChan {
+		count++
+	}
+	if count == 100000 {
+		t.Fatal("expected stream to be stopped by client")
 	}
 
 	// make sure the wire is still in good shape

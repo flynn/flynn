@@ -34,7 +34,31 @@ type Call struct {
 	Error         error       // After completion, the error status.
 	Done          chan *Call  // Strobes when call is complete (nil for streaming RPCs)
 	Stream        bool        // True for a streaming RPC call, false otherwise
-	Subseq        uint64      // The next expected subseq in the packets
+
+	seq    uint64
+	sent   chan struct{}
+	client *Client
+}
+
+// CloseStream closes the associated stream
+func (c *Call) CloseStream() error {
+	if !c.Stream {
+		return errors.New("rpc: cannot close non-stream request")
+	}
+	<-c.sent
+	c.client.sending.Lock()
+	defer c.client.sending.Unlock()
+
+	c.client.mutex.Lock()
+	if c.client.shutdown {
+		c.client.mutex.Unlock()
+		return ErrShutdown
+	}
+	c.client.mutex.Unlock()
+
+	c.client.request.ServiceMethod = "CloseStream"
+	c.client.request.Seq = c.seq
+	return c.client.codec.WriteRequest(&c.client.request, struct{}{})
 }
 
 // Client represents an RPC Client.
@@ -89,6 +113,10 @@ func (client *Client) send(call *Call) {
 	client.request.Seq = seq
 	client.request.ServiceMethod = call.ServiceMethod
 	err := client.codec.WriteRequest(&client.request, call.Args)
+	if call.Stream {
+		call.seq = seq
+		close(call.sent)
+	}
 	if err != nil {
 		client.mutex.Lock()
 		call = client.pending[seq]
@@ -352,7 +380,8 @@ func (client *Client) StreamGo(serviceMethod string, args interface{}, replyStre
 	call.Args = args
 	call.Reply = replyStream
 	call.Stream = true
-	call.Subseq = 0
+	call.sent = make(chan struct{})
+	call.client = client
 	client.send(call)
 	return call
 }
