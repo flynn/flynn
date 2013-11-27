@@ -2,7 +2,6 @@ package discover
 
 import (
 	"encoding/json"
-	//"fmt"
 	"strings"
 	"sync"
 
