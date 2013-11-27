@@ -24,19 +24,19 @@ func servicePath(name, addr string) string {
 func (b *EtcdBackend) Subscribe(name string) (UpdateStream, error) {
 	stream := &etcdStream{ch: make(chan *ServiceUpdate), stop: make(chan bool)}
 	watch := b.getStateChanges(name, stream.stop)
-	responses, err := b.getCurrentState(name)
+	response, err := b.getCurrentState(name)
 	if err != nil {
 		return nil, err
 	}
 	go func() {
-		for _, u := range responses {
-			if update := b.responseToUpdate(u); update != nil {
+		for _, u := range response.Kvs {
+			if update := b.responseToUpdate(response, &u); update != nil {
 				stream.ch <- update
 			}
 		}
 		stream.ch <- &ServiceUpdate{}
 		for u := range watch {
-			if update := b.responseToUpdate(u); update != nil {
+			if update := b.responseToUpdate(u, nil); update != nil {
 				stream.ch <- update
 			}
 		}
@@ -54,19 +54,27 @@ func (s *etcdStream) Chan() chan *ServiceUpdate { return s.ch }
 
 func (s *etcdStream) Close() { s.stopOnce.Do(func() { close(s.stop) }) }
 
-func (b *EtcdBackend) responseToUpdate(resp *etcd.Response) *ServiceUpdate {
+func (b *EtcdBackend) responseToUpdate(resp *etcd.Response, kvp *etcd.KeyValuePair) *ServiceUpdate {
+	var key, value string
+	if kvp != nil {
+		key = kvp.Key
+		value = kvp.Value
+	} else {
+		key = resp.Key
+		value = resp.Value
+	}
 	// expected key structure: /PREFIX/services/NAME/ADDR
-	splitKey := strings.SplitN(resp.Key, "/", 5)
+	splitKey := strings.SplitN(key, "/", 5)
 	if len(splitKey) < 5 {
 		return nil
 	}
 	serviceName := splitKey[3]
 	serviceAddr := splitKey[4]
-	if "GET" == resp.Action || ("SET" == resp.Action && (resp.NewKey || resp.Value != resp.PrevValue)) {
+	if "get" == resp.Action || ("set" == resp.Action && resp.Value != resp.PrevValue) {
 		// GET is because getCurrentState returns responses of Action GET.
 		// some SETs are heartbeats, so we ignore SETs where value didn't change.
 		var serviceAttrs map[string]string
-		err := json.Unmarshal([]byte(resp.Value), &serviceAttrs)
+		err := json.Unmarshal([]byte(value), &serviceAttrs)
 		if err != nil {
 			return nil
 		}
@@ -76,7 +84,7 @@ func (b *EtcdBackend) responseToUpdate(resp *etcd.Response) *ServiceUpdate {
 			Online: true,
 			Attrs:  serviceAttrs,
 		}
-	} else if "DELETE" == resp.Action {
+	} else if "delete" == resp.Action {
 		return &ServiceUpdate{
 			Name: serviceName,
 			Addr: serviceAddr,
@@ -86,13 +94,13 @@ func (b *EtcdBackend) responseToUpdate(resp *etcd.Response) *ServiceUpdate {
 	}
 }
 
-func (b *EtcdBackend) getCurrentState(name string) ([]*etcd.Response, error) {
-	return b.Client.Get(servicePath(name, ""))
+func (b *EtcdBackend) getCurrentState(name string) (*etcd.Response, error) {
+	return b.Client.GetAll(servicePath(name, ""), false)
 }
 
 func (b *EtcdBackend) getStateChanges(name string, stop chan bool) chan *etcd.Response {
 	watch := make(chan *etcd.Response)
-	go b.Client.Watch(servicePath(name, ""), 0, watch, stop)
+	go b.Client.WatchAll(servicePath(name, ""), 0, watch, stop)
 	return watch
 }
 
@@ -106,13 +114,13 @@ func (b *EtcdBackend) Register(name, addr string, attrs map[string]string) error
 }
 
 func (b *EtcdBackend) Heartbeat(name, addr string) error {
-	resp, err1 := b.Client.Get(servicePath(name, addr))
-	if err1 != nil {
-		return err1
+	resp, err := b.Client.Get(servicePath(name, addr), false)
+	if err != nil {
+		return err
 	}
 	// ignore test failure, it doesn't need a heartbeat if it was just set.
-	_, _, err2 := b.Client.TestAndSet(servicePath(name, addr), resp[0].Value, resp[0].Value, HeartbeatIntervalSecs+MissedHearbeatTTL)
-	return err2
+	_, err = b.Client.CompareAndSwap(servicePath(name, addr), resp.Value, HeartbeatIntervalSecs+MissedHearbeatTTL, resp.Value, resp.ModifiedIndex)
+	return err
 }
 
 func (b *EtcdBackend) Unregister(name, addr string) error {

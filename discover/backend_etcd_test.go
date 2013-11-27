@@ -25,23 +25,18 @@ func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
 	backend.Register(serviceName, serviceAddr, nil)
 
 	servicePath := KeyPrefix + "/services/" + serviceName + "/" + serviceAddr
-	results, err := client.Get(servicePath)
+	response, err := client.Get(servicePath, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Adding the case where the result is checked.
-	if len(results) < 1 {
-		t.Fatal("Error: No Response From Server")
-	} else {
-		// Check if the files the returned values are the same.
-		if (results[0].Key != servicePath) || (results[0].Value != NoAttrService) {
-			t.Fatal("Returned value not equal to sent one")
-		}
+	// Check if the files the returned values are the same.
+	if (response.Key != servicePath) || (response.Value != NoAttrService) {
+		t.Fatal("Returned value not equal to sent one")
 	}
 
 	backend.Unregister(serviceName, serviceAddr)
-	_, err = client.Get(servicePath)
+	_, err = client.Get(servicePath, false)
 	if err == nil {
 		t.Fatal("Value not deleted after unregister")
 	}
