@@ -43,7 +43,7 @@ bin/flynn-receive: /usr/bin/go flynn-receive.go bin/discoverd
 bin/gitreceived: /usr/bin/go
 	go get -v github.com/flynn/gitreceive-next/gitreceived
 
-bin/discoverd: /usr/bin/go bin/etcd src/github.com/coreos/go-etcd
+bin/discoverd: /usr/bin/go bin/etcd
 	go get -v github.com/flynn/go-discover/discoverd
 
 bin/sdutil: /usr/bin/go bin/discoverd
@@ -72,18 +72,13 @@ slugrunner: /usr/bin/docker
 
 # Vendor
 
-src/github.com/coreos/go-etcd: /usr/bin/go
-	go get -v github.com/coreos/go-etcd/etcd
-	cd src/github.com/coreos/go-etcd && git checkout 7ea284fa
-	rm -rf pkg/linux_amd64/github.com/coreos/go-etcd/etcd.a
-
 bin/forego: /usr/bin/go
 	go get -v github.com/ddollar/forego
 
 bin/etcd:
-	wget https://github.com/coreos/etcd/releases/download/v0.1.2/etcd-v0.1.2-Linux-x86_64.tar.gz
-	tar -zxvf etcd-v0.1.2-Linux-x86_64.tar.gz
-	cp etcd-v0.1.2-Linux-x86_64/etcd bin
+	wget https://github.com/coreos/etcd/releases/download/v0.2.0-rc1/etcd-v0.2.0-rc1-Linux-x86_64.tar.gz
+	tar -zxvf etcd-v0.2.0-rc1-Linux-x86_64.tar.gz
+	cp etcd-v0.2.0-rc1-Linux-x86_64/etcd bin
 
 bin/godeb:
 	wget -O godeb.tar.gz https://godeb.s3.amazonaws.com/godeb-amd64.tar.gz
