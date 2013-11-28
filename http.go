@@ -71,12 +71,8 @@ func (s *HTTPFrontend) addDomain(domain string, service string, persist bool) er
 		server = &httpServer{name: service, services: services}
 	}
 	if persist {
-		_, ok, err := s.etcd.TestAndSet(s.etcdPrefix+domain+"/service", "", service, 0)
-		if err != nil {
+		if _, err := s.etcd.Create(s.etcdPrefix+domain+"/service", service, 0); err != nil {
 			return err
-		}
-		if !ok {
-			return errors.New("domain already exists in etcd")
 		}
 	}
 	// TODO: set cert/key data if provided
@@ -108,35 +104,34 @@ func (s *HTTPFrontend) RemoveHTTPDomain(domain string) {
 }
 
 func (s *HTTPFrontend) syncDatabase() {
-	data, err := s.etcd.Get(s.etcdPrefix)
+	data, err := s.etcd.GetAll(s.etcdPrefix, false)
 	if e, ok := err.(etcd.EtcdError); ok && e.ErrorCode == 100 {
 		// key not found, ignore
-		err = nil
+		goto watch
 	}
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
-	for _, res := range data {
+	for _, res := range data.Kvs {
 		if !res.Dir {
 			continue
 		}
 		domain := path.Base(res.Key)
-		serviceRes, err := s.etcd.Get(res.Key + "/service")
+		serviceRes, err := s.etcd.Get(res.Key+"/service", false)
 		if err != nil {
 			log.Fatal(err)
 		}
-		if len(serviceRes) != 1 {
-			continue
-		}
-		service := serviceRes[0].Value
+		service := serviceRes.Value
 		if err := s.addDomain(domain, service, false); err != nil {
 			log.Fatal(err)
 		}
 	}
+
+watch:
 	var since uint64
-	if len(data) > 0 {
-		since = data[len(data)-1].Index
+	if data != nil {
+		since = data.ModifiedIndex
 	}
 
 	stream := make(chan *etcd.Response)
