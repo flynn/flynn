@@ -27,8 +27,8 @@ func TestClient(t *testing.T) {
 	if err != nil {
 		t.Fatal("Registering service failed", err.Error())
 	}
-	set, _ := client.Services(serviceName)
-	if len(set.Online()) < 2 {
+	set, _ := client.QueryServices(serviceName)
+	if len(set.Services()) < 2 {
 		t.Fatal("Registered services not online")
 	}
 
@@ -36,10 +36,10 @@ func TestClient(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unregistering service failed", err.Error())
 	}
-	if len(set.Online()) != 1 {
+	if len(set.Services()) != 1 {
 		t.Fatal("Only 1 registered service should be left")
 	}
-	if set.Online()[0].Attrs["foo"] != "bar" {
+	if set.Services()[0].Attrs["foo"] != "bar" {
 		t.Fatal("Attribute not set on service as 'bar'")
 	}
 
@@ -47,7 +47,7 @@ func TestClient(t *testing.T) {
 	if err != nil {
 		t.Fatal("Re-registering service failed", err.Error())
 	}
-	if set.Online()[0].Attrs["foo"] != "baz" {
+	if set.Services()[0].Attrs["foo"] != "baz" {
 		t.Fatal("Attribute not set on re-registered service as 'baz'")
 	}
 
@@ -57,7 +57,7 @@ func TestClient(t *testing.T) {
 	}
 
 	set.Filter(map[string]string{"foo": "qux"})
-	if len(set.Online()) > 1 {
+	if len(set.Services()) > 1 {
 		t.Fatal("Filter not limiting online services in set")
 	}
 
@@ -65,7 +65,7 @@ func TestClient(t *testing.T) {
 	if err != nil {
 		t.Fatal("Registering service failed", err.Error())
 	}
-	if len(set.Online()) < 2 {
+	if len(set.Services()) < 2 {
 		t.Fatal("Filter not letting new matching services in set")
 	}
 
@@ -73,7 +73,7 @@ func TestClient(t *testing.T) {
 	if err != nil {
 		t.Fatal("Registering service failed", err.Error())
 	}
-	if len(set.Online()) > 2 {
+	if len(set.Services()) > 2 {
 		t.Fatal("Filter not limiting new unmatching services from set")
 	}
 
@@ -89,8 +89,12 @@ func TestNoServices(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	set, _ := client.Services("none")
-	if len(set.Online()) != 0 {
+	set, _ := client.QueryServices("nonexistent")
+	if len(set.Services()) != 0 {
 		t.Fatal("There should be no services")
 	}
+}
+
+func TestWatchesNotCalledForOfflineUpdatesToNonexistingServices(t *testing.T) {
+
 }

@@ -84,7 +84,7 @@ func (b *EtcdBackend) responseToUpdate(resp *etcd.Response, kvp *etcd.KeyValuePa
 			Online: true,
 			Attrs:  serviceAttrs,
 		}
-	} else if "delete" == resp.Action {
+	} else if "delete" == resp.Action || "expire" == resp.Action {
 		return &ServiceUpdate{
 			Name: serviceName,
 			Addr: serviceAddr,

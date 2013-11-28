@@ -69,8 +69,12 @@ func TestEtcdBackend_Subscribe(t *testing.T) {
 	client := etcd.NewClient(nil)
 	backend := EtcdBackend{Client: client}
 
-	backend.Register("test_subscribe", "10.0.0.1", nil)
+	err := backend.Register("test_subscribe", "10.0.0.1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer backend.Unregister("test_subscribe", "10.0.0.1")
+
 	backend.Register("test_subscribe", "10.0.0.2", nil)
 	defer backend.Unregister("test_subscribe", "10.0.0.2")
 
@@ -79,6 +83,7 @@ func TestEtcdBackend_Subscribe(t *testing.T) {
 
 	backend.Register("test_subscribe", "10.0.0.3", nil)
 	defer backend.Unregister("test_subscribe", "10.0.0.3")
+
 	backend.Register("test_subscribe", "10.0.0.4", nil)
 	defer backend.Unregister("test_subscribe", "10.0.0.4")
 
