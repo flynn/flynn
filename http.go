@@ -104,6 +104,7 @@ func (s *HTTPFrontend) RemoveHTTPDomain(domain string) {
 }
 
 func (s *HTTPFrontend) syncDatabase() {
+	var since uint64
 	data, err := s.etcd.GetAll(s.etcdPrefix, false)
 	if e, ok := err.(etcd.EtcdError); ok && e.ErrorCode == 100 {
 		// key not found, ignore
@@ -113,6 +114,7 @@ func (s *HTTPFrontend) syncDatabase() {
 		log.Fatal(err)
 		return
 	}
+	since = data.ModifiedIndex
 	for _, res := range data.Kvs {
 		if !res.Dir {
 			continue
@@ -129,11 +131,6 @@ func (s *HTTPFrontend) syncDatabase() {
 	}
 
 watch:
-	var since uint64
-	if data != nil {
-		since = data.ModifiedIndex
-	}
-
 	stream := make(chan *etcd.Response)
 	stop := make(chan bool)
 	// TODO: store stop
