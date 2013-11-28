@@ -1,19 +1,48 @@
 package discover
 
 import (
-	"runtime"
+	"os/exec"
 	"testing"
+	"time"
 )
 
-func init() {
+func runDiscoverdServer() func() {
+	killCh := make(chan struct{})
+	doneCh := make(chan struct{})
 	go func() {
-		ListenAndServe(NewServer(":1112"))
+		cmd := exec.Command("discoverd")
+		if err := cmd.Start(); err != nil {
+			panic(err)
+		}
+		cmdDone := make(chan error)
+		go func() {
+			cmdDone <- cmd.Wait()
+		}()
+		select {
+		case <-killCh:
+			if err := cmd.Process.Kill(); err != nil {
+				panic(err)
+			}
+			<-cmdDone
+		case err := <-cmdDone:
+			panic(err)
+		}
+		doneCh <- struct{}{}
 	}()
-	runtime.Gosched()
+	time.Sleep(200 * time.Millisecond)
+	return func() {
+		close(killCh)
+		<-doneCh
+	}
 }
 
 func TestClient(t *testing.T) {
-	client, err := NewClientUsingAddress(":1112")
+	killEtcd := runEtcdServer()
+	defer killEtcd()
+	killDiscoverd := runDiscoverdServer()
+	defer killDiscoverd()
+
+	client, err := NewClient()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +113,12 @@ func TestClient(t *testing.T) {
 }
 
 func TestNoServices(t *testing.T) {
-	client, err := NewClientUsingAddress(":1112")
+	killEtcd := runEtcdServer()
+	defer killEtcd()
+	killDiscoverd := runDiscoverdServer()
+	defer killDiscoverd()
+
+	client, err := NewClient()
 	if err != nil {
 		t.Fatal(err)
 	}
