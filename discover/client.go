@@ -87,7 +87,6 @@ func (s *ServiceSet) bind(updates chan *ServiceUpdate) chan struct{} {
 				}
 			}
 			s.serMutex.Unlock()
-
 			s.updateWatches(update)
 		}
 		s.closeWatches()
