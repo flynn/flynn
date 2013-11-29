@@ -2,11 +2,9 @@ package main
 
 import (
 	"bufio"
-	"encoding/gob"
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"os"
 	"os/exec"
 	"strings"
@@ -156,28 +154,16 @@ func findHost() string {
 }
 
 func scheduleAndAttach(jobid string, config docker.Config) {
-	services, err := sd.Services("flynn-lorne-attach." + hostid)
+	client, err := lc.New(hostid)
 	if err != nil {
 		log.Fatal(err)
 	}
-	conn, err := net.Dial("tcp", services.OnlineAddrs()[0])
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = gob.NewEncoder(conn).Encode(&lorne.AttachReq{
+	conn, attachWait, err := client.Attach(&lorne.AttachReq{
 		JobID: jobid,
 		Flags: lorne.AttachFlagStdout | lorne.AttachFlagStderr | lorne.AttachFlagStdin | lorne.AttachFlagStream,
-	})
+	}, true)
 	if err != nil {
 		log.Fatal(err)
-	}
-	attachState := make([]byte, 1)
-	if _, err := conn.Read(attachState); err != nil {
-		log.Fatal(err)
-	}
-	switch attachState[0] {
-	case lorne.AttachError:
-		log.Fatal("attach error")
 	}
 
 	schedReq := &sampi.ScheduleReq{
@@ -188,13 +174,13 @@ func scheduleAndAttach(jobid string, config docker.Config) {
 		log.Fatal(err)
 	}
 
-	if _, err := conn.Read(attachState); err != nil {
+	if err := attachWait(); err != nil {
 		log.Fatal(err)
 	}
 
 	go func() {
 		io.Copy(conn, os.Stdin)
-		conn.(*net.TCPConn).CloseWrite()
+		conn.CloseWrite()
 	}()
 	scanner := bufio.NewScanner(conn)
 	for scanner.Scan() {
