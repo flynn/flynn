@@ -10,7 +10,7 @@ import (
 )
 
 func deleteService(client *etcd.Client, service string, addr string) {
-	client.Delete(fmt.Sprintf("/services/%s/%s", service, addr))
+	client.Delete(fmt.Sprintf("/services/%s/%s", service, addr), true)
 }
 
 const NoAttrService = "null"
@@ -25,7 +25,7 @@ func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
 	backend.Register(serviceName, serviceAddr, nil)
 
 	servicePath := KeyPrefix + "/services/" + serviceName + "/" + serviceAddr
-	response, err := client.Get(servicePath, false)
+	response, err := client.Get(servicePath, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
 	}
 
 	backend.Unregister(serviceName, serviceAddr)
-	_, err = client.Get(servicePath, false)
+	_, err = client.Get(servicePath, false, false)
 	if err == nil {
 		t.Fatal("Value not deleted after unregister")
 	}
