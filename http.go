@@ -105,7 +105,7 @@ func (s *HTTPFrontend) RemoveHTTPDomain(domain string) {
 
 func (s *HTTPFrontend) syncDatabase() {
 	var since uint64
-	data, err := s.etcd.GetAll(s.etcdPrefix, false)
+	data, err := s.etcd.Get(s.etcdPrefix, false, true)
 	if e, ok := err.(etcd.EtcdError); ok && e.ErrorCode == 100 {
 		// key not found, ignore
 		goto watch
@@ -120,7 +120,7 @@ func (s *HTTPFrontend) syncDatabase() {
 			continue
 		}
 		domain := path.Base(res.Key)
-		serviceRes, err := s.etcd.Get(res.Key+"/service", false)
+		serviceRes, err := s.etcd.Get(res.Key+"/service", false, false)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -134,7 +134,7 @@ watch:
 	stream := make(chan *etcd.Response)
 	stop := make(chan bool)
 	// TODO: store stop
-	go s.etcd.Watch(s.etcdPrefix, since, stream, stop)
+	go s.etcd.Watch(s.etcdPrefix, since, false, stream, stop)
 	for res := range stream {
 		if !res.Dir && res.NewKey && path.Base(res.Key) == "service" {
 			domain := path.Base(path.Dir(res.Key))
