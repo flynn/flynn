@@ -95,12 +95,12 @@ func (b *EtcdBackend) responseToUpdate(resp *etcd.Response, kvp *etcd.KeyValuePa
 }
 
 func (b *EtcdBackend) getCurrentState(name string) (*etcd.Response, error) {
-	return b.Client.GetAll(servicePath(name, ""), false)
+	return b.Client.Get(servicePath(name, ""), false, true)
 }
 
 func (b *EtcdBackend) getStateChanges(name string, stop chan bool) chan *etcd.Response {
 	watch := make(chan *etcd.Response)
-	go b.Client.WatchAll(servicePath(name, ""), 0, watch, stop)
+	go b.Client.Watch(servicePath(name, ""), 0, true, watch, stop)
 	return watch
 }
 
@@ -114,7 +114,7 @@ func (b *EtcdBackend) Register(name, addr string, attrs map[string]string) error
 }
 
 func (b *EtcdBackend) Heartbeat(name, addr string) error {
-	resp, err := b.Client.Get(servicePath(name, addr), false)
+	resp, err := b.Client.Get(servicePath(name, addr), false, false)
 	if err != nil {
 		return err
 	}
@@ -124,6 +124,6 @@ func (b *EtcdBackend) Heartbeat(name, addr string) error {
 }
 
 func (b *EtcdBackend) Unregister(name, addr string) error {
-	_, err := b.Client.Delete(servicePath(name, addr))
+	_, err := b.Client.Delete(servicePath(name, addr), false)
 	return err
 }
