@@ -4,13 +4,9 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/gob"
 	"encoding/json"
-	"errors"
 	"io"
-	"io/ioutil"
 	"log"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -212,15 +208,21 @@ outer:
 		JobID: job.ID,
 		Flags: lorne.AttachFlagStdout | lorne.AttachFlagStderr | lorne.AttachFlagLogs,
 	}
-	err, errChan := lorneAttach(host.ID, attachReq, w, nil)
+
+	client, err := lornec.New(host.ID)
 	if err != nil {
 		w.WriteHeader(500)
-		log.Println("attach error", err)
+		log.Println("lorne connect failed", err)
 		return
 	}
-	if err := <-errChan; err != nil {
+	attachConn, _, err := client.Attach(attachReq, false)
+	if err != nil {
+		w.WriteHeader(500)
 		log.Println("attach failed", err)
+		return
 	}
+	defer attachConn.Close()
+	io.Copy(w, attachConn)
 }
 
 type NewJob struct {
@@ -285,11 +287,8 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 		job.Config.OpenStdin = true
 	}
 
-	outR, outW := io.Pipe()
-	inR, inW := io.Pipe()
-	defer outR.Close()
-	defer inW.Close()
-	var errChan <-chan error
+	var attachConn lornec.ReadWriteCloser
+	var attachWait func() error
 	if jobReq.Attach {
 		attachReq := &lorne.AttachReq{
 			JobID:  job.ID,
@@ -297,12 +296,19 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 			Height: jobReq.Lines,
 			Width:  jobReq.Columns,
 		}
-		err, errChan = lorneAttach(hostID, attachReq, outW, inR)
+		client, err := lornec.New(hostID)
+		if err != nil {
+			w.WriteHeader(500)
+			log.Println("lorne connect failed", err)
+			return
+		}
+		attachConn, attachWait, err = client.Attach(attachReq, true)
 		if err != nil {
 			w.WriteHeader(500)
 			log.Println("attach failed", err)
 			return
 		}
+		defer attachConn.Close()
 	}
 
 	res, err := scheduler.Schedule(&sampi.ScheduleReq{HostJobs: map[string][]*sampi.Job{hostID: {job}}})
@@ -313,105 +319,34 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if jobReq.Attach {
+		if err := attachWait(); err != nil {
+			w.WriteHeader(500)
+			log.Println("attach wait failed", err)
+			return
+		}
 		w.Header().Set("Content-Type", "application/vnd.flynn.hijack")
 		w.Header().Set("Content-Length", "0")
 		w.WriteHeader(200)
-		conn, bufrw, err := w.(http.Hijacker).Hijack()
+		conn, _, err := w.(http.Hijacker).Hijack()
 		if err != nil {
 			return
 		}
-		bufrw.Flush()
-		go func() {
-			buf := make([]byte, bufrw.Reader.Buffered())
-			bufrw.Read(buf)
-			inW.Write(buf)
-			io.Copy(inW, conn)
-			inW.Close()
-		}()
-		go io.Copy(conn, outR)
-		<-errChan
-		conn.Close()
+		defer conn.Close()
+
+		done := make(chan struct{})
+		copy := func(to lornec.ReadWriteCloser, from io.Reader) {
+			io.Copy(to, from)
+			to.CloseWrite()
+			done <- struct{}{}
+		}
+		go copy(conn.(lornec.ReadWriteCloser), attachConn)
+		go copy(attachConn, conn)
+		<-done
+		<-done
+
 		return
 	}
 	w.WriteHeader(200)
-}
-
-func lorneAttach(host string, req *lorne.AttachReq, out io.Writer, in io.Reader) (error, <-chan error) {
-	services, err := disc.Services("flynn-lorne-attach." + host)
-	if err != nil {
-		return err, nil
-	}
-	addrs := services.OnlineAddrs()
-	if len(addrs) == 0 {
-		return err, nil
-	}
-	conn, err := net.Dial("tcp", addrs[0])
-	if err != nil {
-		return err, nil
-	}
-	err = gob.NewEncoder(conn).Encode(req)
-	if err != nil {
-		conn.Close()
-		return err, nil
-	}
-
-	errChan := make(chan error)
-
-	attach := func() {
-		defer conn.Close()
-		inErr := make(chan error, 1)
-		if in != nil {
-			go func() {
-				io.Copy(conn, in)
-			}()
-		} else {
-			close(inErr)
-		}
-		_, outErr := io.Copy(out, conn)
-		if outErr != nil {
-			errChan <- outErr
-			return
-		}
-		errChan <- <-inErr
-	}
-
-	attachState := make([]byte, 1)
-	if _, err := conn.Read(attachState); err != nil {
-		conn.Close()
-		return err, nil
-	}
-	switch attachState[0] {
-	case lorne.AttachError:
-		errBytes, err := ioutil.ReadAll(conn)
-		conn.Close()
-		if err != nil {
-			return err, nil
-		}
-		return errors.New(string(errBytes)), nil
-	case lorne.AttachWaiting:
-		go func() {
-			if _, err := conn.Read(attachState); err != nil {
-				conn.Close()
-				errChan <- err
-				return
-			}
-			if attachState[0] == lorne.AttachError {
-				errBytes, err := ioutil.ReadAll(conn)
-				conn.Close()
-				if err != nil {
-					errChan <- err
-					return
-				}
-				errChan <- errors.New(string(errBytes))
-				return
-			}
-			attach()
-		}()
-		return nil, errChan
-	default:
-		go attach()
-		return nil, errChan
-	}
 }
 
 func randomID() string {
