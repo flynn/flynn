@@ -9,9 +9,10 @@ import (
 	rpc "github.com/flynn/rpcplus/comborpc"
 )
 
-func rpcServer() {
+func server() {
 	rpc.Register(&Host{})
 	rpc.HandleHTTP()
+	http.HandleFunc("/attach", attachHandler)
 	http.ListenAndServe(":1113", nil)
 }
 

@@ -1,37 +1,32 @@
 package main
 
 import (
-	"encoding/gob"
+	"encoding/json"
+	"io"
 	"log"
-	"net"
+	"net/http"
 	"sync"
 
 	"github.com/flynn/lorne/types"
 	"github.com/titanous/go-dockerclient"
 )
 
-func attachServer() {
-	l, err := net.Listen("tcp", ":1114")
-	if err != nil {
-		log.Fatal(err)
-	}
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			log.Println("attach accept error:", err)
-		}
-		go attachHandler(conn)
-	}
-}
-
-func attachHandler(conn net.Conn) {
-	defer conn.Close()
-
-	var req lorne.AttachReq
-	if err := gob.NewDecoder(conn).Decode(&req); err != nil {
-		log.Println("gob decode error:", err)
+func attachHandler(w http.ResponseWriter, req *http.Request) {
+	var attachReq lorne.AttachReq
+	if err := json.NewDecoder(req.Body).Decode(&attachReq); err != nil {
+		http.Error(w, "invalid JSON", 400)
 		return
 	}
+	conn, _, err := w.(http.Hijacker).Hijack()
+	if err != nil {
+		return
+	}
+	conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Type: application/vnd.flynn.attach-hijack\r\n\r\n"))
+	attach(&attachReq, conn)
+}
+
+func attach(req *lorne.AttachReq, conn io.ReadWriteCloser) {
+	defer conn.Close()
 
 	log.Println("attaching job", req.JobID)
 	attachWait := make(chan struct{})

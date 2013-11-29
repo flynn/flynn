@@ -26,18 +26,14 @@ func main() {
 	hostID := flag.String("id", randomID(), "host id")
 	flag.Parse()
 
-	go attachServer()
-	go rpcServer()
+	go server()
 	go allocatePorts()
 
 	disc, err := discover.NewClient()
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := disc.Register("flynn-lorne-rpc."+*hostID, "1113", nil); err != nil {
-		log.Fatal(err)
-	}
-	if err := disc.Register("flynn-lorne-attach."+*hostID, "1114", nil); err != nil {
+	if err := disc.Register("flynn-lorne."+*hostID, "1113", nil); err != nil {
 		log.Fatal(err)
 	}
 
