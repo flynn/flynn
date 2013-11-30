@@ -40,3 +40,11 @@ func (c *Client) Schedule(req *sampi.ScheduleReq) (*sampi.ScheduleRes, error) {
 	err := c.c.Call("Scheduler.Schedule", req, &res)
 	return &res, err
 }
+
+func (c *Client) RegisterHost(host *sampi.Host, stream chan *sampi.Job) *error {
+	return &c.c.StreamGo("Scheduler.RegisterHost", host, stream).Error
+}
+
+func (c *Client) RemoveJobs(jobIDs []string) error {
+	return c.c.Call("Scheduler.RemoveJobs", jobIDs, &struct{}{})
+}
