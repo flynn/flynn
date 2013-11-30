@@ -84,8 +84,10 @@ func main() {
 			port := strconv.Itoa(<-portAllocator)
 			job.Config.Env = append(job.Config.Env, "PORT="+port)
 			job.Config.ExposedPorts = map[string]struct{}{port + "/tcp": struct{}{}}
+			job.Config.Name = "flynn-" + job.ID
 			hostConfig = &docker.HostConfig{
-				PortBindings: map[string][]docker.PortBinding{port + "/tcp": {{HostPort: port}}},
+				PortBindings:    map[string][]docker.PortBinding{port + "/tcp": {{HostPort: port}}},
+				PublishAllPorts: true,
 			}
 		}
 		if *externalAddr != "" {
