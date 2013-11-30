@@ -12,7 +12,7 @@ import (
 
 	"github.com/flynn/go-discover/discover"
 	"github.com/flynn/lorne/types"
-	"github.com/flynn/rpcplus"
+	sampic "github.com/flynn/sampi/client"
 	"github.com/flynn/sampi/types"
 	"github.com/titanous/go-dockerclient"
 )
@@ -37,16 +37,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	services, err := disc.Services("flynn-sampi")
-	if err != nil {
-		log.Fatal(err)
-	}
-	schedulers := services.Online()
-	if len(schedulers) == 0 {
-		log.Fatal("No sampi instances found")
-	}
-
-	scheduler, err := rpcplus.DialHTTP("tcp", schedulers[0].Addr)
+	scheduler, err := sampic.New()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -75,7 +66,7 @@ func main() {
 	host.ID = *hostID
 
 	jobs := make(chan *sampi.Job)
-	scheduler.StreamGo("Scheduler.RegisterHost", host, jobs)
+	scheduler.RegisterHost(host, jobs)
 	log.Print("Host registered")
 	for job := range jobs {
 		log.Printf("%#v", job.Config)
@@ -114,7 +105,7 @@ func main() {
 	}
 }
 
-func syncScheduler(client *rpcplus.Client) {
+func syncScheduler(scheduler *sampic.Client) {
 	events := make(chan lorne.Event)
 	state.AddListener("all", events)
 	for event := range events {
@@ -122,7 +113,7 @@ func syncScheduler(client *rpcplus.Client) {
 			continue
 		}
 		log.Println("remove job", event.JobID)
-		if err := client.Call("Scheduler.RemoveJobs", []string{event.JobID}, &struct{}{}); err != nil {
+		if err := scheduler.RemoveJobs([]string{event.JobID}); err != nil {
 			log.Println("remove job", event.JobID, "error:", err)
 			// TODO: try to reconnect?
 		}
