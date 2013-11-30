@@ -68,6 +68,10 @@ func main() {
 	jobs := make(chan *sampi.Job)
 	scheduler.RegisterHost(host, jobs)
 	log.Print("Host registered")
+	processJobs(jobs, *externalAddr)
+}
+
+func processJobs(jobs chan *sampi.Job, externalAddr string) {
 	for job := range jobs {
 		log.Printf("%#v", job.Config)
 		var hostConfig *docker.HostConfig
@@ -81,8 +85,8 @@ func main() {
 				PublishAllPorts: true,
 			}
 		}
-		if *externalAddr != "" {
-			job.Config.Env = append(job.Config.Env, "EXTERNAL_IP="+*externalAddr, "SD_HOST="+*externalAddr, "DISCOVERD="+*externalAddr+":1111")
+		if externalAddr != "" {
+			job.Config.Env = append(job.Config.Env, "EXTERNAL_IP="+externalAddr, "SD_HOST="+externalAddr, "DISCOVERD="+externalAddr+":1111")
 		}
 		state.AddJob(job)
 		container, err := Docker.CreateContainer(job.Config)
