@@ -95,6 +95,7 @@ bin/godeb:
 /usr/bin/docker: /etc/default/docker
 	sudo apt-get update
 	sudo apt-get install -y lxc-docker
+	sudo touch /usr/bin/docker
 	sleep 2 # wait for docker to boot
 
 .PHONY: all slugrunner slugbuilder
