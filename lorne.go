@@ -14,6 +14,7 @@ import (
 	"github.com/flynn/lorne/types"
 	sampic "github.com/flynn/sampi/client"
 	"github.com/flynn/sampi/types"
+	"github.com/technoweenie/grohl"
 	"github.com/titanous/go-dockerclient"
 )
 
@@ -25,6 +26,9 @@ func main() {
 	configFile := flag.String("config", "", "configuration file")
 	hostID := flag.String("id", randomID(), "host id")
 	flag.Parse()
+	grohl.AddContext("app", "lorne")
+	grohl.Log(grohl.Data{"at": "start"})
+	g := grohl.NewContext(grohl.Data{"fn": "main"})
 
 	go server()
 	go allocatePorts()
@@ -41,7 +45,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Print("Connected to scheduler")
+	g.Log(grohl.Data{"at": "sampi_connected"})
 
 	Docker, err = docker.NewClient("http://localhost:4243")
 	if err != nil {
@@ -67,13 +71,14 @@ func main() {
 
 	jobs := make(chan *sampi.Job)
 	scheduler.RegisterHost(host, jobs)
-	log.Print("Host registered")
+	g.Log(grohl.Data{"at": "host_registered"})
 	processJobs(jobs, *externalAddr)
 }
 
 func processJobs(jobs chan *sampi.Job, externalAddr string) {
 	for job := range jobs {
-		log.Printf("%#v", job.Config)
+		g := grohl.NewContext(grohl.Data{"fn": "process_job", "job.id": job.ID})
+		g.Log(grohl.Data{"at": "start", "job.image": job.Config.Image, "job.cmd": job.Config.Cmd, "job.entrypoint": job.Config.Entrypoint})
 		var hostConfig *docker.HostConfig
 		if job.TCPPorts > 0 {
 			port := strconv.Itoa(<-portAllocator)
@@ -89,23 +94,30 @@ func processJobs(jobs chan *sampi.Job, externalAddr string) {
 			job.Config.Env = append(job.Config.Env, "EXTERNAL_IP="+externalAddr, "SD_HOST="+externalAddr, "DISCOVERD="+externalAddr+":1111")
 		}
 		state.AddJob(job)
+		g.Log(grohl.Data{"at": "create_container"})
 		container, err := Docker.CreateContainer(job.Config)
 		if err == docker.ErrNoSuchImage {
+			g.Log(grohl.Data{"at": "pull_image"})
 			err = Docker.PullImage(docker.PullImageOptions{Repository: job.Config.Image}, os.Stdout)
 			if err != nil {
-				log.Fatal(err)
+				g.Log(grohl.Data{"at": "pull_image", "status": "error", "err": err})
+				continue
 			}
 			container, err = Docker.CreateContainer(job.Config)
 		}
 		if err != nil {
-			log.Fatal(err)
+			g.Log(grohl.Data{"at": "create_container", "status": "error", "err": err})
+			continue
 		}
 		state.SetContainerID(job.ID, container.ID)
 		state.WaitAttach(job.ID)
+		g.Log(grohl.Data{"at": "start_container"})
 		if err := Docker.StartContainer(container.ID, hostConfig); err != nil {
-			log.Fatal(err)
+			g.Log(grohl.Data{"at": "start_container", "status": "error", "err": err})
+			continue
 		}
 		state.SetStatusRunning(job.ID)
+		g.Log(grohl.Data{"at": "finish"})
 	}
 }
 
@@ -116,9 +128,9 @@ func syncScheduler(scheduler *sampic.Client) {
 		if event.Event != "stop" {
 			continue
 		}
-		log.Println("remove job", event.JobID)
+		grohl.Log(grohl.Data{"fn": "scheduler_event", "at": "remove_job", "job.id": event.JobID})
 		if err := scheduler.RemoveJobs([]string{event.JobID}); err != nil {
-			log.Println("remove job", event.JobID, "error:", err)
+			grohl.Log(grohl.Data{"fn": "scheduler_event", "at": "remove_job", "status": "error", "err": err, "job.id": event.JobID})
 			// TODO: try to reconnect?
 		}
 	}
@@ -130,7 +142,6 @@ func streamEvents(client *docker.Client) {
 		log.Fatal(err)
 	}
 	for event := range stream.Events {
-		log.Printf("%#v", event)
 		if event.Status != "die" {
 			continue
 		}
@@ -142,7 +153,6 @@ func streamEvents(client *docker.Client) {
 		}
 		state.SetStatusDone(event.ID, container.State.ExitCode)
 	}
-	log.Println("events done", stream.Error)
 }
 
 func randomID() string {

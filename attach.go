@@ -3,11 +3,11 @@ package main
 import (
 	"encoding/json"
 	"io"
-	"log"
 	"net/http"
 	"sync"
 
 	"github.com/flynn/lorne/types"
+	"github.com/technoweenie/grohl"
 	"github.com/titanous/go-dockerclient"
 )
 
@@ -28,7 +28,8 @@ func attachHandler(w http.ResponseWriter, req *http.Request) {
 func attach(req *lorne.AttachReq, conn io.ReadWriteCloser) {
 	defer conn.Close()
 
-	log.Println("attaching job", req.JobID)
+	g := grohl.NewContext(grohl.Data{"fn": "attach", "job.id": req.JobID})
+	g.Log(grohl.Data{"at": "start"})
 	attachWait := make(chan struct{})
 	job := state.AddAttacher(req.JobID, attachWait)
 	if job == nil {
@@ -100,8 +101,7 @@ func attach(req *lorne.AttachReq, conn io.ReadWriteCloser) {
 	if err := Docker.AttachToContainer(opts); err != nil {
 		close(failed)
 		conn.Write(append([]byte{lorne.AttachError}, err.Error()...))
-		log.Println("attach error:", err)
 		return
 	}
-	log.Println("attach done")
+	g.Log(grohl.Data{"at": "finish"})
 }
