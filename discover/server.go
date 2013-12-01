@@ -4,7 +4,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/coreos/go-etcd/etcd"
+	"github.com/flynn/go-etcd/etcd"
 	"github.com/flynn/rpcplus"
 	rpc "github.com/flynn/rpcplus/comborpc"
 )

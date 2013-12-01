@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/coreos/go-etcd/etcd"
+	"github.com/flynn/go-etcd/etcd"
 )
 
 func deleteService(client *etcd.Client, service string, addr string) {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/coreos/go-etcd/etcd"
+	"github.com/flynn/go-etcd/etcd"
 )
 
 const KeyPrefix = "/discover"
