@@ -87,7 +87,7 @@ bin/godeb:
 	mv godeb bin/godeb
 
 /usr/bin/go: bin/godeb
-	sudo bin/godeb install 1.1.2
+	sudo bin/godeb install 1.2
 
 /etc/default/docker:
 	sudo bash -c "echo 'DOCKER_OPTS=\"-H 127.0.0.1\"' > /etc/default/docker"
