@@ -11,7 +11,12 @@ import (
 	"github.com/titanous/go-dockerclient"
 )
 
-func attachHandler(w http.ResponseWriter, req *http.Request) {
+type attachHandler struct {
+	state  *State
+	docker dockerAttachClient
+}
+
+func (h *attachHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var attachReq lorne.AttachReq
 	if err := json.NewDecoder(req.Body).Decode(&attachReq); err != nil {
 		http.Error(w, "invalid JSON", 400)
@@ -22,34 +27,39 @@ func attachHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Type: application/vnd.flynn.attach-hijack\r\n\r\n"))
-	attach(&attachReq, conn)
+	h.attach(&attachReq, conn)
 }
 
-func attach(req *lorne.AttachReq, conn io.ReadWriteCloser) {
+type dockerAttachClient interface {
+	ResizeContainerTTY(string, int, int) error
+	AttachToContainer(docker.AttachToContainerOptions) error
+}
+
+func (h *attachHandler) attach(req *lorne.AttachReq, conn io.ReadWriteCloser) {
 	defer conn.Close()
 
 	g := grohl.NewContext(grohl.Data{"fn": "attach", "job.id": req.JobID})
 	g.Log(grohl.Data{"at": "start"})
 	attachWait := make(chan struct{})
-	job := state.AddAttacher(req.JobID, attachWait)
+	job := h.state.AddAttacher(req.JobID, attachWait)
 	if job == nil {
-		defer state.RemoveAttacher(req.JobID, attachWait)
+		defer h.state.RemoveAttacher(req.JobID, attachWait)
 		if _, err := conn.Write([]byte{lorne.AttachWaiting}); err != nil {
 			return
 		}
 		// TODO: add timeout
 		<-attachWait
-		job = state.GetJob(req.JobID)
+		job = h.state.GetJob(req.JobID)
 	}
 	if job.Job.Config.Tty && req.Flags&lorne.AttachFlagStdin != 0 {
-		resize := func() { Docker.ResizeContainerTTY(job.ContainerID, req.Height, req.Width) }
+		resize := func() { h.docker.ResizeContainerTTY(job.ContainerID, req.Height, req.Width) }
 		if job.Status == lorne.StatusRunning {
 			resize()
 		} else {
 			var once sync.Once
 			go func() {
 				ch := make(chan lorne.Event)
-				state.AddListener(req.JobID, ch)
+				h.state.AddListener(req.JobID, ch)
 				go func() {
 					// There is a race that can result in the listener being
 					// added after the container has started, so check the
@@ -57,12 +67,12 @@ func attach(req *lorne.AttachReq, conn io.ReadWriteCloser) {
 					// This can deadlock if we try to get a state lock while an
 					// event is being sent on the listen channel, so we do it
 					// in the goroutine and wrap in a sync.Once.
-					j := state.GetJob(req.JobID)
+					j := h.state.GetJob(req.JobID)
 					if j.Status == lorne.StatusRunning {
 						once.Do(resize)
 					}
 				}()
-				defer state.RemoveListener(req.JobID, ch)
+				defer h.state.RemoveListener(req.JobID, ch)
 				for event := range ch {
 					if event.Event == "start" {
 						once.Do(resize)
@@ -98,7 +108,7 @@ func attach(req *lorne.AttachReq, conn io.ReadWriteCloser) {
 		}
 		close(attachWait)
 	}()
-	if err := Docker.AttachToContainer(opts); err != nil {
+	if err := h.docker.AttachToContainer(opts); err != nil {
 		close(failed)
 		conn.Write(append([]byte{lorne.AttachError}, err.Error()...))
 		return

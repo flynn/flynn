@@ -18,9 +18,6 @@ import (
 	"github.com/titanous/go-dockerclient"
 )
 
-var state = NewState()
-var Docker *docker.Client
-
 func main() {
 	externalAddr := flag.String("external", "", "external IP of host")
 	configFile := flag.String("config", "", "configuration file")
@@ -30,7 +27,6 @@ func main() {
 	grohl.Log(grohl.Data{"at": "start"})
 	g := grohl.NewContext(grohl.Data{"fn": "main"})
 
-	go server()
 	go allocatePorts()
 
 	disc, err := discover.NewClient()
@@ -47,13 +43,16 @@ func main() {
 	}
 	g.Log(grohl.Data{"at": "sampi_connected"})
 
-	Docker, err = docker.NewClient("http://localhost:4243")
+	dockerc, err := docker.NewClient("http://localhost:4243")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	go streamEvents(Docker)
-	go syncScheduler(scheduler)
+	state := NewState()
+
+	go serveHTTP(&Host{state: state, docker: dockerc}, &attachHandler{state: state, docker: dockerc})
+	go streamEvents(dockerc, state)
+	go syncScheduler(scheduler, state)
 
 	var host *sampi.Host
 	if *configFile != "" {
@@ -72,10 +71,16 @@ func main() {
 	jobs := make(chan *sampi.Job)
 	scheduler.RegisterHost(host, jobs)
 	g.Log(grohl.Data{"at": "host_registered"})
-	processJobs(jobs, *externalAddr)
+	processJobs(jobs, *externalAddr, dockerc, state)
 }
 
-func processJobs(jobs chan *sampi.Job, externalAddr string) {
+type dockerProcessingClient interface {
+	CreateContainer(*docker.Config) (*docker.Container, error)
+	PullImage(docker.PullImageOptions, io.Writer) error
+	StartContainer(string, *docker.HostConfig) error
+}
+
+func processJobs(jobs chan *sampi.Job, externalAddr string, dockerc dockerProcessingClient, state *State) {
 	for job := range jobs {
 		g := grohl.NewContext(grohl.Data{"fn": "process_job", "job.id": job.ID})
 		g.Log(grohl.Data{"at": "start", "job.image": job.Config.Image, "job.cmd": job.Config.Cmd, "job.entrypoint": job.Config.Entrypoint})
@@ -95,15 +100,15 @@ func processJobs(jobs chan *sampi.Job, externalAddr string) {
 		}
 		state.AddJob(job)
 		g.Log(grohl.Data{"at": "create_container"})
-		container, err := Docker.CreateContainer(job.Config)
+		container, err := dockerc.CreateContainer(job.Config)
 		if err == docker.ErrNoSuchImage {
 			g.Log(grohl.Data{"at": "pull_image"})
-			err = Docker.PullImage(docker.PullImageOptions{Repository: job.Config.Image}, os.Stdout)
+			err = dockerc.PullImage(docker.PullImageOptions{Repository: job.Config.Image}, os.Stdout)
 			if err != nil {
 				g.Log(grohl.Data{"at": "pull_image", "status": "error", "err": err})
 				continue
 			}
-			container, err = Docker.CreateContainer(job.Config)
+			container, err = dockerc.CreateContainer(job.Config)
 		}
 		if err != nil {
 			g.Log(grohl.Data{"at": "create_container", "status": "error", "err": err})
@@ -112,7 +117,7 @@ func processJobs(jobs chan *sampi.Job, externalAddr string) {
 		state.SetContainerID(job.ID, container.ID)
 		state.WaitAttach(job.ID)
 		g.Log(grohl.Data{"at": "start_container"})
-		if err := Docker.StartContainer(container.ID, hostConfig); err != nil {
+		if err := dockerc.StartContainer(container.ID, hostConfig); err != nil {
 			g.Log(grohl.Data{"at": "start_container", "status": "error", "err": err})
 			continue
 		}
@@ -121,7 +126,11 @@ func processJobs(jobs chan *sampi.Job, externalAddr string) {
 	}
 }
 
-func syncScheduler(scheduler *sampic.Client) {
+type sampiSyncClient interface {
+	RemoveJobs([]string) error
+}
+
+func syncScheduler(scheduler sampiSyncClient, state *State) {
 	events := make(chan lorne.Event)
 	state.AddListener("all", events)
 	for event := range events {
@@ -136,7 +145,12 @@ func syncScheduler(scheduler *sampic.Client) {
 	}
 }
 
-func streamEvents(client *docker.Client) {
+type dockerStreamClient interface {
+	Events() (*docker.EventStream, error)
+	InspectContainer(string) (*docker.Container, error)
+}
+
+func streamEvents(client dockerStreamClient, state *State) {
 	stream, err := client.Events()
 	if err != nil {
 		log.Fatal(err)
