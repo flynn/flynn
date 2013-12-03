@@ -7,8 +7,15 @@ import (
 
 	"github.com/flynn/lorne/types"
 	"github.com/flynn/sampi/types"
+	"github.com/technoweenie/grohl"
 	"github.com/titanous/go-dockerclient"
 )
+
+type nullLogger struct{}
+
+func (nullLogger) Log(grohl.Data) error { return nil }
+
+func init() { grohl.SetLogger(nullLogger{}) }
 
 type dockerClient struct {
 	created *docker.Config
