@@ -48,12 +48,13 @@ func main() {
 				return
 			}
 			defer file.Close()
-			_, err = io.Copy(w, file)
+			fi, err := file.Stat()
 			if err != nil {
 				errorResponse(w, err)
 				return
 			}
 			log.Println("GET", r.RequestURI)
+			http.ServeContent(w, r, filepath, fi.ModTime(), file)
 		case "PUT":
 			os.MkdirAll(path.Dir(filepath), 0755)
 			file, err := os.Create(filepath)
