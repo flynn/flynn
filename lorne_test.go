@@ -18,12 +18,19 @@ func (nullLogger) Log(grohl.Data) error { return nil }
 func init() { grohl.SetLogger(nullLogger{}) }
 
 type dockerClient struct {
-	created  *docker.Config
-	started  bool
-	hostConf *docker.HostConfig
+	createErr error
+	created   *docker.Config
+	pulled    string
+	started   bool
+	hostConf  *docker.HostConfig
 }
 
 func (c *dockerClient) CreateContainer(config *docker.Config) (*docker.Container, error) {
+	if c.createErr != nil {
+		err := c.createErr
+		c.createErr = nil
+		return nil, err
+	}
 	c.created = config
 	return &docker.Container{ID: "asdf"}, nil
 }
@@ -38,18 +45,26 @@ func (c *dockerClient) StartContainer(id string, config *docker.HostConfig) erro
 }
 
 func (c *dockerClient) PullImage(opts docker.PullImageOptions, w io.Writer) error {
+	c.pulled = opts.Repository
 	return nil
 }
 
-func testProcessWith(job *sampi.Job, t *testing.T) (*State, *dockerClient) {
+func testProcess(job *sampi.Job, t *testing.T) (*State, *dockerClient) {
+	client := &dockerClient{}
+	return testProcessWithOpts(job, "", client, t), client
+}
+
+func testProcessWithOpts(job *sampi.Job, extAddr string, client *dockerClient, t *testing.T) *State {
 	jobs := make(chan *sampi.Job)
 	done := make(chan struct{})
 	ports := make(chan int)
-	client := &dockerClient{}
 	state := NewState()
+	if client == nil {
+		client = &dockerClient{}
+	}
 	go allocatePorts(ports, 500, 501)
 	go func() {
-		processJobs(jobs, "", client, state, ports)
+		processJobs(jobs, extAddr, client, state, ports)
 		close(done)
 	}()
 	jobs <- job
@@ -70,16 +85,16 @@ func testProcessWith(job *sampi.Job, t *testing.T) (*State, *dockerClient) {
 		t.Error("incorrect state")
 	}
 
-	return state, client
+	return state
 }
 
 func TestProcessJob(t *testing.T) {
-	testProcessWith(&sampi.Job{ID: "a", Config: &docker.Config{}}, t)
+	testProcess(&sampi.Job{ID: "a", Config: &docker.Config{}}, t)
 }
 
 func TestProcessJobWithPort(t *testing.T) {
 	job := &sampi.Job{TCPPorts: 1, ID: "a", Config: &docker.Config{}}
-	_, client := testProcessWith(job, t)
+	_, client := testProcess(job, t)
 
 	if len(job.Config.Env) == 0 || job.Config.Env[len(job.Config.Env)-1] != "PORT=500" {
 		t.Error("port env not set")
@@ -89,5 +104,36 @@ func TestProcessJobWithPort(t *testing.T) {
 	}
 	if b := client.hostConf.PortBindings["500/tcp"]; len(b) == 0 || b[0].HostPort != "500" {
 		t.Error("port binding not set")
+	}
+}
+
+func TestProcessWithExtAddr(t *testing.T) {
+	job := &sampi.Job{ID: "a", Config: &docker.Config{}}
+	testProcessWithOpts(job, "10.10.10.1", nil, t)
+
+	if !sliceHasString(job.Config.Env, "EXTERNAL_IP=10.10.10.1") {
+		t.Error("EXTERNAL_IP not set")
+	}
+	if !sliceHasString(job.Config.Env, "DISCOVERD=10.10.10.1:1111") {
+		t.Error("DISCOVERD not set")
+	}
+}
+
+func sliceHasString(slice []string, str string) bool {
+	for _, s := range slice {
+		if s == str {
+			return true
+		}
+	}
+	return false
+}
+
+func TestProcessWithPull(t *testing.T) {
+	job := &sampi.Job{ID: "a", Config: &docker.Config{Image: "test/foo"}}
+	client := &dockerClient{createErr: docker.ErrNoSuchImage}
+	testProcessWithOpts(job, "", client, t)
+
+	if client.pulled != "test/foo" {
+		t.Error("image not pulled")
 	}
 }
