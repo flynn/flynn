@@ -55,21 +55,10 @@ func testProcess(job *sampi.Job, t *testing.T) (*State, *dockerClient) {
 }
 
 func testProcessWithOpts(job *sampi.Job, extAddr string, client *dockerClient, t *testing.T) *State {
-	jobs := make(chan *sampi.Job)
-	done := make(chan struct{})
-	ports := make(chan int)
-	state := NewState()
 	if client == nil {
 		client = &dockerClient{}
 	}
-	go allocatePorts(ports, 500, 501)
-	go func() {
-		processJobs(jobs, extAddr, client, state, ports)
-		close(done)
-	}()
-	jobs <- job
-	close(jobs)
-	<-done
+	state := processWithOpts(job, extAddr, client)
 
 	if client.created != job.Config {
 		t.Error("job not created")
@@ -85,6 +74,22 @@ func testProcessWithOpts(job *sampi.Job, extAddr string, client *dockerClient, t
 		t.Error("incorrect state")
 	}
 
+	return state
+}
+
+func processWithOpts(job *sampi.Job, extAddr string, client *dockerClient) *State {
+	jobs := make(chan *sampi.Job)
+	done := make(chan struct{})
+	ports := make(chan int)
+	state := NewState()
+	go allocatePorts(ports, 500, 501)
+	go func() {
+		processJobs(jobs, extAddr, client, state, ports)
+		close(done)
+	}()
+	jobs <- job
+	close(jobs)
+	<-done
 	return state
 }
 
