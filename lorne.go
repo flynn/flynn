@@ -27,8 +27,6 @@ func main() {
 	grohl.Log(grohl.Data{"at": "start"})
 	g := grohl.NewContext(grohl.Data{"fn": "main"})
 
-	go allocatePorts()
-
 	disc, err := discover.NewClient()
 	if err != nil {
 		log.Fatal(err)
@@ -49,7 +47,9 @@ func main() {
 	}
 
 	state := NewState()
+	ports := make(chan int)
 
+	go allocatePorts(ports, 55000, 65535)
 	go serveHTTP(&Host{state: state, docker: dockerc}, &attachHandler{state: state, docker: dockerc})
 	go streamEvents(dockerc, state)
 	go syncScheduler(scheduler, state)
@@ -71,7 +71,7 @@ func main() {
 	jobs := make(chan *sampi.Job)
 	scheduler.RegisterHost(host, jobs)
 	g.Log(grohl.Data{"at": "host_registered"})
-	processJobs(jobs, *externalAddr, dockerc, state)
+	processJobs(jobs, *externalAddr, dockerc, state, ports)
 }
 
 type dockerProcessingClient interface {
@@ -80,13 +80,14 @@ type dockerProcessingClient interface {
 	StartContainer(string, *docker.HostConfig) error
 }
 
-func processJobs(jobs chan *sampi.Job, externalAddr string, dockerc dockerProcessingClient, state *State) {
+func processJobs(jobs chan *sampi.Job, externalAddr string, dockerc dockerProcessingClient, state *State, ports <-chan int) {
 	for job := range jobs {
 		g := grohl.NewContext(grohl.Data{"fn": "process_job", "job.id": job.ID})
 		g.Log(grohl.Data{"at": "start", "job.image": job.Config.Image, "job.cmd": job.Config.Cmd, "job.entrypoint": job.Config.Entrypoint})
+
 		var hostConfig *docker.HostConfig
 		if job.TCPPorts > 0 {
-			port := strconv.Itoa(<-portAllocator)
+			port := strconv.Itoa(<-ports)
 			job.Config.Env = append(job.Config.Env, "PORT="+port)
 			job.Config.ExposedPorts = map[string]struct{}{port + "/tcp": struct{}{}}
 			hostConfig = &docker.HostConfig{
@@ -180,15 +181,11 @@ func randomID() string {
 	return string(bytes.TrimRight(enc, "="))
 }
 
-var portAllocator = make(chan int)
-
 // TODO: fix this, horribly broken
-const startPort = 55000
-const endPort = 65535
 
-func allocatePorts() {
+func allocatePorts(ports chan<- int, startPort, endPort int) {
 	for i := startPort; i < endPort; i++ {
-		portAllocator <- i
+		ports <- i
 	}
 	// TODO: handle wrap-around
 }
