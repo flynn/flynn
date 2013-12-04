@@ -39,7 +39,7 @@ func (c *dockerClient) PullImage(opts docker.PullImageOptions, w io.Writer) erro
 	return nil
 }
 
-func TestProcessJobs(t *testing.T) {
+func testProcessWith(job *sampi.Job, t *testing.T) (*State, *dockerClient) {
 	jobs := make(chan *sampi.Job)
 	done := make(chan struct{})
 	client := &dockerClient{}
@@ -48,7 +48,6 @@ func TestProcessJobs(t *testing.T) {
 		processJobs(jobs, "", client, state)
 		close(done)
 	}()
-	job := &sampi.Job{ID: "a", Config: &docker.Config{}}
 	jobs <- job
 	close(jobs)
 	<-done
@@ -63,4 +62,10 @@ func TestProcessJobs(t *testing.T) {
 	if sjob == nil || sjob.StartedAt.IsZero() || sjob.Status != lorne.StatusRunning || sjob.ContainerID != "asdf" {
 		t.Error("incorrect state")
 	}
+
+	return state, client
+}
+
+func TestProcessJob(t *testing.T) {
+	testProcessWith(&sampi.Job{ID: "a", Config: &docker.Config{}}, t)
 }
