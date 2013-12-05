@@ -59,7 +59,7 @@ func main() {
 
 	var host *sampi.Host
 	if *configFile != "" {
-		host, err = parseConfig(*configFile)
+		host, err = openConfig(*configFile)
 		if err != nil {
 			log.Fatal(err)
 		}

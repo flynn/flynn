@@ -3,19 +3,24 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/flynn/sampi/types"
 )
 
-func parseConfig(file string) (*sampi.Host, error) {
+func openConfig(file string) (*sampi.Host, error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
+	return parseConfig(f)
+}
+
+func parseConfig(r io.Reader) (*sampi.Host, error) {
 	var conf Config
-	if err := json.NewDecoder(f).Decode(&conf); err != nil {
+	if err := json.NewDecoder(r).Decode(&conf); err != nil {
 		return nil, err
 	}
 	return conf.hostConfig()
