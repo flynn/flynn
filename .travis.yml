@@ -1,0 +1,11 @@
+language: go
+go:
+  - 1.2
+  - tip
+
+before_install:
+  - go install -race std
+
+script:
+  - go test -race ./...
+  - go test -cover ./...
