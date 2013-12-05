@@ -5,6 +5,7 @@ go:
 
 before_install:
   - go install -race std
+  - go get code.google.com/p/go.tools/cmd/cover
 
 script:
   - go test -race ./...
