@@ -184,3 +184,34 @@ func TestProcessWithStartFailure(t *testing.T) {
 	client := &dockerClient{startErr: err}
 	testProcessWithError(job, client, err, t)
 }
+
+type schedulerSyncClient struct {
+	removeErr error
+	removed   []string
+}
+
+func (s *schedulerSyncClient) RemoveJobs(jobs []string) error {
+	if s.removeErr != nil {
+		return s.removeErr
+	}
+	s.removed = append(s.removed, jobs...)
+	return nil
+}
+
+func TestSyncScheduler(t *testing.T) {
+	events := make(chan lorne.Event)
+	client := &schedulerSyncClient{}
+	done := make(chan struct{})
+	go func() {
+		syncScheduler(client, events)
+		close(done)
+	}()
+
+	events <- lorne.Event{Event: "stop", JobID: "a"}
+	close(events)
+	<-done
+
+	if len(client.removed) != 1 && client.removed[0] != "a" {
+		t.Error("job not removed")
+	}
+}

@@ -52,7 +52,10 @@ func main() {
 	go allocatePorts(ports, 55000, 65535)
 	go serveHTTP(&Host{state: state, docker: dockerc}, &attachHandler{state: state, docker: dockerc})
 	go streamEvents(dockerc, state)
-	go syncScheduler(scheduler, state)
+
+	events := make(chan lorne.Event)
+	state.AddListener("all", events)
+	go syncScheduler(scheduler, events)
 
 	var host *sampi.Host
 	if *configFile != "" {
@@ -134,9 +137,7 @@ type sampiSyncClient interface {
 	RemoveJobs([]string) error
 }
 
-func syncScheduler(scheduler sampiSyncClient, state *State) {
-	events := make(chan lorne.Event)
-	state.AddListener("all", events)
+func syncScheduler(scheduler sampiSyncClient, events <-chan lorne.Event) {
 	for event := range events {
 		if event.Event != "stop" {
 			continue
