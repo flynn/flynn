@@ -1,12 +1,14 @@
 #!/bin/bash
 set -eo pipefail
 
-## Load slug from STDIN or URL
+## Load slug from Bind Mount, URL or STDIN
 
 export HOME=/app
 mkdir -p $HOME
 
-if [[ $SLUG_URL ]]; then
+if [[ $(ls -A $HOME) ]]; then
+        true
+elif [[ $SLUG_URL ]]; then
 	curl -s "$SLUG_URL" | tar -xzC $HOME
 	unset SLUG_URL
 else
