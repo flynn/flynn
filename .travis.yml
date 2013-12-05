@@ -10,3 +10,10 @@ before_install:
 script:
   - go test -race ./...
   - go test -cover ./...
+
+notifications:
+  irc:
+    channels:
+      - "chat.freenode.net#flynn"
+    use_notice: true
+    skip_join: true
