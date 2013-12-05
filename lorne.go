@@ -107,12 +107,14 @@ func processJobs(jobs chan *sampi.Job, externalAddr string, dockerc dockerProces
 			err = dockerc.PullImage(docker.PullImageOptions{Repository: job.Config.Image}, os.Stdout)
 			if err != nil {
 				g.Log(grohl.Data{"at": "pull_image", "status": "error", "err": err})
+				state.SetStatusFailed(job.ID, err)
 				continue
 			}
 			container, err = dockerc.CreateContainer(job.Config)
 		}
 		if err != nil {
 			g.Log(grohl.Data{"at": "create_container", "status": "error", "err": err})
+			state.SetStatusFailed(job.ID, err)
 			continue
 		}
 		state.SetContainerID(job.ID, container.ID)
@@ -120,6 +122,7 @@ func processJobs(jobs chan *sampi.Job, externalAddr string, dockerc dockerProces
 		g.Log(grohl.Data{"at": "start_container"})
 		if err := dockerc.StartContainer(container.ID, hostConfig); err != nil {
 			g.Log(grohl.Data{"at": "start_container", "status": "error", "err": err})
+			state.SetStatusFailed(job.ID, err)
 			continue
 		}
 		state.SetStatusRunning(job.ID)

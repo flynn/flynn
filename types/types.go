@@ -19,6 +19,7 @@ type Job struct {
 	StartedAt   time.Time
 	EndedAt     time.Time
 	ExitCode    int
+	Error       error
 }
 
 type AttachReq struct {
@@ -40,11 +41,22 @@ const (
 
 type JobStatus uint8
 
+func (s JobStatus) String() string {
+	return map[JobStatus]string{
+		StatusStarting: "starting",
+		StatusRunning:  "running",
+		StatusDone:     "done",
+		StatusCrashed:  "crashed",
+		StatusFailed:   "failed",
+	}[s]
+}
+
 const (
 	StatusStarting JobStatus = iota
 	StatusRunning
 	StatusDone
 	StatusCrashed
+	StatusFailed
 )
 
 const (

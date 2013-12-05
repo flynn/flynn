@@ -19,6 +19,8 @@ func init() { grohl.SetLogger(nullLogger{}) }
 
 type dockerClient struct {
 	createErr error
+	startErr  error
+	pullErr   error
 	created   *docker.Config
 	pulled    string
 	started   bool
@@ -39,12 +41,18 @@ func (c *dockerClient) StartContainer(id string, config *docker.HostConfig) erro
 	if id != "asdf" {
 		return errors.New("Invalid ID")
 	}
+	if c.startErr != nil {
+		return c.startErr
+	}
 	c.started = true
 	c.hostConf = config
 	return nil
 }
 
 func (c *dockerClient) PullImage(opts docker.PullImageOptions, w io.Writer) error {
+	if c.pullErr != nil {
+		return c.pullErr
+	}
 	c.pulled = opts.Repository
 	return nil
 }
@@ -74,6 +82,19 @@ func testProcessWithOpts(job *sampi.Job, extAddr string, client *dockerClient, t
 		t.Error("incorrect state")
 	}
 
+	return state
+}
+
+func testProcessWithError(job *sampi.Job, client *dockerClient, err error, t *testing.T) *State {
+	state := processWithOpts(job, "", client)
+
+	sjob := state.GetJob(job.ID)
+	if sjob.Status != lorne.StatusFailed {
+		t.Errorf("expected status failed, got %s", sjob.Status)
+	}
+	if sjob.Error != err {
+		t.Error("error not saved")
+	}
 	return state
 }
 
@@ -141,4 +162,25 @@ func TestProcessWithPull(t *testing.T) {
 	if client.pulled != "test/foo" {
 		t.Error("image not pulled")
 	}
+}
+
+func TestProcessWithCreateFailure(t *testing.T) {
+	job := &sampi.Job{ID: "a", Config: &docker.Config{}}
+	err := errors.New("undefined failure")
+	client := &dockerClient{createErr: err}
+	testProcessWithError(job, client, err, t)
+}
+
+func TestProcessWithPullFailure(t *testing.T) {
+	job := &sampi.Job{ID: "a", Config: &docker.Config{}}
+	err := errors.New("undefined failure")
+	client := &dockerClient{createErr: docker.ErrNoSuchImage, pullErr: err}
+	testProcessWithError(job, client, err, t)
+}
+
+func TestProcessWithStartFailure(t *testing.T) {
+	job := &sampi.Job{ID: "a", Config: &docker.Config{}}
+	err := errors.New("undefined failure")
+	client := &dockerClient{startErr: err}
+	testProcessWithError(job, client, err, t)
 }

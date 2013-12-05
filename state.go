@@ -83,7 +83,7 @@ func (s *State) SetStatusDone(containerID string, exitCode int) {
 	s.mtx.Lock()
 
 	job, ok := s.containers[containerID]
-	if !ok || job.Status == lorne.StatusDone || job.Status == lorne.StatusCrashed {
+	if !ok || job.Status == lorne.StatusDone || job.Status == lorne.StatusCrashed || job.Status == lorne.StatusFailed {
 		s.mtx.Unlock()
 		return
 	}
@@ -96,6 +96,21 @@ func (s *State) SetStatusDone(containerID string, exitCode int) {
 	}
 	s.mtx.Unlock()
 	s.sendEvent(job.Job.ID, "stop")
+}
+
+func (s *State) SetStatusFailed(jobID string, err error) {
+	s.mtx.Lock()
+
+	job, ok := s.jobs[jobID]
+	if !ok || job.Status == lorne.StatusDone || job.Status == lorne.StatusCrashed || job.Status == lorne.StatusFailed {
+		s.mtx.Unlock()
+		return
+	}
+	job.Status = lorne.StatusFailed
+	job.EndedAt = time.Now().UTC()
+	job.Error = err
+	s.mtx.Unlock()
+	s.sendEvent(job.Job.ID, "error")
 }
 
 func (s *State) AddAttacher(jobID string, ch chan struct{}) *lorne.Job {
