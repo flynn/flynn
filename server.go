@@ -12,13 +12,13 @@ import (
 	"strings"
 
 	"github.com/flynn/go-discover/discover"
+	"github.com/flynn/go-dockerclient"
 	lornec "github.com/flynn/lorne/client"
 	"github.com/flynn/lorne/types"
 	sampic "github.com/flynn/sampi/client"
 	"github.com/flynn/sampi/types"
 	strowgerc "github.com/flynn/strowger/client"
 	"github.com/flynn/strowger/types"
-	"github.com/titanous/go-dockerclient"
 	"github.com/titanous/go-tigertonic"
 )
 
