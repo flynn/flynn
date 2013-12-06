@@ -215,3 +215,44 @@ func TestSyncScheduler(t *testing.T) {
 		t.Error("job not removed")
 	}
 }
+
+type streamClient struct {
+	events chan *docker.Event
+}
+
+func (s *streamClient) Events() (*docker.EventStream, error) {
+	return &docker.EventStream{Events: s.events}, nil
+}
+
+func (s *streamClient) InspectContainer(id string) (*docker.Container, error) {
+	if id != "1" {
+		return nil, errors.New("incorrect id")
+	}
+	return &docker.Container{State: docker.State{ExitCode: 1}}, nil
+}
+
+func TestStreamEvents(t *testing.T) {
+	events := make(chan *docker.Event)
+	state := NewState()
+	state.AddJob(&sampi.Job{ID: "a"})
+	state.SetContainerID("a", "1")
+	state.SetStatusRunning("a")
+
+	done := make(chan struct{})
+	go func() {
+		streamEvents(&streamClient{events}, state)
+		close(done)
+	}()
+
+	events <- &docker.Event{Status: "die", ID: "1"}
+	close(events)
+	<-done
+
+	job := state.GetJob("a")
+	if job.Status != lorne.StatusCrashed {
+		t.Error("incorrect status")
+	}
+	if job.ExitCode != 1 {
+		t.Error("incorrect exit code")
+	}
+}
