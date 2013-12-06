@@ -3,7 +3,7 @@ package sampi
 import (
 	"strconv"
 
-	"github.com/titanous/go-dockerclient"
+	"github.com/flynn/go-dockerclient"
 )
 
 type Job struct {

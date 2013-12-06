@@ -13,10 +13,10 @@ import (
 
 	"github.com/dotcloud/docker/term"
 	"github.com/flynn/go-discover/discover"
+	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/lorne/types"
 	"github.com/flynn/sampi/client"
 	"github.com/flynn/sampi/types"
-	"github.com/titanous/go-dockerclient"
 )
 
 func main() {
