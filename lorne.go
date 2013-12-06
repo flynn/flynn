@@ -1,9 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"crypto/rand"
-	"encoding/base64"
 	"flag"
 	"io"
 	"log"
@@ -21,7 +18,7 @@ import (
 func main() {
 	externalAddr := flag.String("external", "", "external IP of host")
 	configFile := flag.String("config", "", "configuration file")
-	hostID := flag.String("id", randomID(), "host id")
+	hostID := flag.String("id", "host1", "host id")
 	flag.Parse()
 	grohl.AddContext("app", "lorne")
 	grohl.Log(grohl.Data{"at": "start"})
@@ -172,17 +169,6 @@ func streamEvents(client dockerStreamClient, state *State) {
 		}
 		state.SetStatusDone(event.ID, container.State.ExitCode)
 	}
-}
-
-func randomID() string {
-	b := make([]byte, 16)
-	enc := make([]byte, 24)
-	_, err := io.ReadFull(rand.Reader, b)
-	if err != nil {
-		panic(err) // This shouldn't ever happen, right?
-	}
-	base64.URLEncoding.Encode(enc, b)
-	return string(bytes.TrimRight(enc, "="))
 }
 
 // TODO: fix this, horribly broken
