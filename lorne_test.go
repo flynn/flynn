@@ -5,10 +5,10 @@ import (
 	"io"
 	"testing"
 
+	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/lorne/types"
 	"github.com/flynn/sampi/types"
 	"github.com/technoweenie/grohl"
-	"github.com/titanous/go-dockerclient"
 )
 
 type nullLogger struct{}

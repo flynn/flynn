@@ -8,11 +8,11 @@ import (
 	"strconv"
 
 	"github.com/flynn/go-discover/discover"
+	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/lorne/types"
 	sampic "github.com/flynn/sampi/client"
 	"github.com/flynn/sampi/types"
 	"github.com/technoweenie/grohl"
-	"github.com/titanous/go-dockerclient"
 )
 
 func main() {
