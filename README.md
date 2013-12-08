@@ -7,6 +7,8 @@ framework](https://github.com/flynn/sampi).
 
 ## TODO
 
-- Track resources
-- Recover from crashes
-- Write tests
+- Recover from crashes/restarts
+- Increase test coverate
+- Documentation
+- Robust port allocation
+- Support for job state (Docker volumes)
