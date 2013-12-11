@@ -15,7 +15,7 @@ import (
 	"github.com/flynn/lorne/types"
 	sc "github.com/flynn/sampi/client"
 	"github.com/flynn/sampi/types"
-	"github.com/titanous/go-dockerclient"
+	"github.com/flynn/go-dockerclient"
 )
 
 // WARNING: assumes one host at the moment
