@@ -11,12 +11,12 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/dotcloud/docker/term"
 	"github.com/flynn/go-discover/discover"
 	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/lorne/types"
 	"github.com/flynn/sampi/client"
 	"github.com/flynn/sampi/types"
+	"github.com/heroku/hk/term"
 )
 
 func main() {
@@ -54,12 +54,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	ws, _ := term.GetWinsize(os.Stdin.Fd())
+	th, _ := term.Lines()
+	tw, _ := term.Cols()
 	err = gob.NewEncoder(conn).Encode(&lorne.AttachReq{
 		JobID:  id,
 		Flags:  lorne.AttachFlagStdout | lorne.AttachFlagStderr | lorne.AttachFlagStdin | lorne.AttachFlagStream,
-		Height: int(ws.Height),
-		Width:  int(ws.Width),
+		Height: th,
+		Width:  tw,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -85,8 +86,8 @@ func main() {
 			OpenStdin:    true,
 			StdinOnce:    true,
 			Env: []string{
-				"COLUMNS=" + strconv.Itoa(int(ws.Width)),
-				"LINES=" + strconv.Itoa(int(ws.Height)),
+				"COLUMNS=" + strconv.Itoa(tw),
+				"LINES=" + strconv.Itoa(th),
 				"TERM=" + os.Getenv("TERM"),
 			},
 		}}}},
@@ -99,7 +100,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	oldState, err := term.SetRawTerminal(os.Stdin.Fd())
+	term.MakeRaw(os.Stdin)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -107,7 +108,7 @@ func main() {
 	if _, err := io.Copy(os.Stdout, conn); err != nil {
 		log.Fatal(err)
 	}
-	term.RestoreTerminal(os.Stdin.Fd(), oldState)
+	term.Restore(os.Stdin)
 }
 
 func randomID() string {
