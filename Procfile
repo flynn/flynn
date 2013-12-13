@@ -5,4 +5,4 @@ shelf: sleep 1 && bin/sdutil exec -h 10.0.2.15 shelf:8888 bin/shelf -p 8888 /vag
 sampi: sleep 1 && bin/sampid
 strowger: sleep 1 && bin/strowger
 lorne: sleep 2 && bin/lorne -external 10.0.2.15
-api: sleep 2 && bin/flynn-api
+controller: sleep 2 && bin/flynn-controller

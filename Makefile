@@ -52,13 +52,13 @@ bin/sdutil: /usr/bin/go bin/discoverd
 bin/shelf: /usr/bin/go
 	go get -v github.com/flynn/shelf
 
-bin/flynn-api: /usr/bin/go bin/discoverd
-	go get -v github.com/flynn/flynn-api
+bin/flynn-controller: /usr/bin/go bin/discoverd
+	go get -v github.com/flynn/flynn-controller
 
 bin/flynn: bin/flynn-cli
 	ln -fs `pwd`/bin/flynn-cli bin/flynn
 
-bin/flynn-cli: /usr/bin/go bin/flynn-api
+bin/flynn-cli: /usr/bin/go bin/flynn-controller
 	go get -v github.com/flynn/flynn-cli
 
 bin/strowger: /usr/bin/go bin/discoverd
