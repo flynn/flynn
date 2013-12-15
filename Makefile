@@ -37,8 +37,8 @@ bin/sampid: /usr/bin/go bin/discoverd
 bin/lorne: /usr/bin/go bin/discoverd
 	go get -v github.com/flynn/lorne
 
-bin/flynn-receive: /usr/bin/go flynn-receive.go bin/discoverd
-	go build -o bin/flynn-receive
+bin/flynn-receive: /usr/bin/go bin/discoverd
+	go get -v github.com/flynn/flynn-receive
 
 bin/gitreceived: /usr/bin/go
 	go get -v github.com/flynn/gitreceive-next/gitreceived
