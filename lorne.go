@@ -71,23 +71,33 @@ func main() {
 	jobs := make(chan *sampi.Job)
 	scheduler.RegisterHost(host, jobs)
 	g.Log(grohl.Data{"at": "host_registered"})
-	processJobs(jobs, *externalAddr, dockerc, state, ports)
+	(&jobProcessor{
+		externalAddr: *externalAddr,
+		docker:       dockerc,
+		state:        state,
+		ports:        ports,
+	}).process(jobs)
 }
 
-type dockerProcessingClient interface {
-	CreateContainer(*docker.Config) (*docker.Container, error)
-	PullImage(docker.PullImageOptions, io.Writer) error
-	StartContainer(string, *docker.HostConfig) error
+type jobProcessor struct {
+	externalAddr string
+	docker       interface {
+		CreateContainer(*docker.Config) (*docker.Container, error)
+		PullImage(docker.PullImageOptions, io.Writer) error
+		StartContainer(string, *docker.HostConfig) error
+	}
+	state *State
+	ports <-chan int
 }
 
-func processJobs(jobs chan *sampi.Job, externalAddr string, dockerc dockerProcessingClient, state *State, ports <-chan int) {
+func (p *jobProcessor) process(jobs chan *sampi.Job) {
 	for job := range jobs {
 		g := grohl.NewContext(grohl.Data{"fn": "process_job", "job.id": job.ID})
 		g.Log(grohl.Data{"at": "start", "job.image": job.Config.Image, "job.cmd": job.Config.Cmd, "job.entrypoint": job.Config.Entrypoint})
 
 		var hostConfig *docker.HostConfig
 		if job.TCPPorts > 0 {
-			port := strconv.Itoa(<-ports)
+			port := strconv.Itoa(<-p.ports)
 			job.Config.Env = append(job.Config.Env, "PORT="+port)
 			job.Config.ExposedPorts = map[string]struct{}{port + "/tcp": struct{}{}}
 			hostConfig = &docker.HostConfig{
@@ -96,36 +106,36 @@ func processJobs(jobs chan *sampi.Job, externalAddr string, dockerc dockerProces
 			}
 		}
 		job.Config.Name = "flynn-" + job.ID
-		if externalAddr != "" {
-			job.Config.Env = append(job.Config.Env, "EXTERNAL_IP="+externalAddr, "SD_HOST="+externalAddr, "DISCOVERD="+externalAddr+":1111")
+		if p.externalAddr != "" {
+			job.Config.Env = append(job.Config.Env, "EXTERNAL_IP="+p.externalAddr, "SD_HOST="+p.externalAddr, "DISCOVERD="+p.externalAddr+":1111")
 		}
-		state.AddJob(job)
+		p.state.AddJob(job)
 		g.Log(grohl.Data{"at": "create_container"})
-		container, err := dockerc.CreateContainer(job.Config)
+		container, err := p.docker.CreateContainer(job.Config)
 		if err == docker.ErrNoSuchImage {
 			g.Log(grohl.Data{"at": "pull_image"})
-			err = dockerc.PullImage(docker.PullImageOptions{Repository: job.Config.Image}, os.Stdout)
+			err = p.docker.PullImage(docker.PullImageOptions{Repository: job.Config.Image}, os.Stdout)
 			if err != nil {
 				g.Log(grohl.Data{"at": "pull_image", "status": "error", "err": err})
-				state.SetStatusFailed(job.ID, err)
+				p.state.SetStatusFailed(job.ID, err)
 				continue
 			}
-			container, err = dockerc.CreateContainer(job.Config)
+			container, err = p.docker.CreateContainer(job.Config)
 		}
 		if err != nil {
 			g.Log(grohl.Data{"at": "create_container", "status": "error", "err": err})
-			state.SetStatusFailed(job.ID, err)
+			p.state.SetStatusFailed(job.ID, err)
 			continue
 		}
-		state.SetContainerID(job.ID, container.ID)
-		state.WaitAttach(job.ID)
+		p.state.SetContainerID(job.ID, container.ID)
+		p.state.WaitAttach(job.ID)
 		g.Log(grohl.Data{"at": "start_container"})
-		if err := dockerc.StartContainer(container.ID, hostConfig); err != nil {
+		if err := p.docker.StartContainer(container.ID, hostConfig); err != nil {
 			g.Log(grohl.Data{"at": "start_container", "status": "error", "err": err})
-			state.SetStatusFailed(job.ID, err)
+			p.state.SetStatusFailed(job.ID, err)
 			continue
 		}
-		state.SetStatusRunning(job.ID)
+		p.state.SetStatusRunning(job.ID)
 		g.Log(grohl.Data{"at": "finish"})
 	}
 }

@@ -105,7 +105,12 @@ func processWithOpts(job *sampi.Job, extAddr string, client *dockerClient) *Stat
 	state := NewState()
 	go allocatePorts(ports, 500, 501)
 	go func() {
-		processJobs(jobs, extAddr, client, state, ports)
+		(&jobProcessor{
+			externalAddr: extAddr,
+			docker:       client,
+			state:        state,
+			ports:        ports,
+		}).process(jobs)
 		close(done)
 	}()
 	jobs <- job
