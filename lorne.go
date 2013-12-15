@@ -76,7 +76,7 @@ func main() {
 		docker:       dockerc,
 		state:        state,
 		ports:        ports,
-	}).process(jobs)
+	}).Process(jobs)
 }
 
 type jobProcessor struct {
@@ -90,54 +90,58 @@ type jobProcessor struct {
 	ports <-chan int
 }
 
-func (p *jobProcessor) process(jobs chan *sampi.Job) {
+func (p *jobProcessor) Process(jobs chan *sampi.Job) {
 	for job := range jobs {
-		g := grohl.NewContext(grohl.Data{"fn": "process_job", "job.id": job.ID})
-		g.Log(grohl.Data{"at": "start", "job.image": job.Config.Image, "job.cmd": job.Config.Cmd, "job.entrypoint": job.Config.Entrypoint})
-
-		var hostConfig *docker.HostConfig
-		if job.TCPPorts > 0 {
-			port := strconv.Itoa(<-p.ports)
-			job.Config.Env = append(job.Config.Env, "PORT="+port)
-			job.Config.ExposedPorts = map[string]struct{}{port + "/tcp": struct{}{}}
-			hostConfig = &docker.HostConfig{
-				PortBindings:    map[string][]docker.PortBinding{port + "/tcp": {{HostPort: port}}},
-				PublishAllPorts: true,
-			}
-		}
-		job.Config.Name = "flynn-" + job.ID
-		if p.externalAddr != "" {
-			job.Config.Env = append(job.Config.Env, "EXTERNAL_IP="+p.externalAddr, "SD_HOST="+p.externalAddr, "DISCOVERD="+p.externalAddr+":1111")
-		}
-		p.state.AddJob(job)
-		g.Log(grohl.Data{"at": "create_container"})
-		container, err := p.docker.CreateContainer(job.Config)
-		if err == docker.ErrNoSuchImage {
-			g.Log(grohl.Data{"at": "pull_image"})
-			err = p.docker.PullImage(docker.PullImageOptions{Repository: job.Config.Image}, os.Stdout)
-			if err != nil {
-				g.Log(grohl.Data{"at": "pull_image", "status": "error", "err": err})
-				p.state.SetStatusFailed(job.ID, err)
-				continue
-			}
-			container, err = p.docker.CreateContainer(job.Config)
-		}
-		if err != nil {
-			g.Log(grohl.Data{"at": "create_container", "status": "error", "err": err})
-			p.state.SetStatusFailed(job.ID, err)
-			continue
-		}
-		p.state.SetContainerID(job.ID, container.ID)
-		p.state.WaitAttach(job.ID)
-		g.Log(grohl.Data{"at": "start_container"})
-		if err := p.docker.StartContainer(container.ID, hostConfig); err != nil {
-			g.Log(grohl.Data{"at": "start_container", "status": "error", "err": err})
-			p.state.SetStatusFailed(job.ID, err)
-			continue
-		}
-		p.state.SetStatusRunning(job.ID)
-		g.Log(grohl.Data{"at": "finish"})
+		p.processJob(job)
 	}
+}
+
+func (p *jobProcessor) processJob(job *sampi.Job) {
+	g := grohl.NewContext(grohl.Data{"fn": "process_job", "job.id": job.ID})
+	g.Log(grohl.Data{"at": "start", "job.image": job.Config.Image, "job.cmd": job.Config.Cmd, "job.entrypoint": job.Config.Entrypoint})
+
+	var hostConfig *docker.HostConfig
+	if job.TCPPorts > 0 {
+		port := strconv.Itoa(<-p.ports)
+		job.Config.Env = append(job.Config.Env, "PORT="+port)
+		job.Config.ExposedPorts = map[string]struct{}{port + "/tcp": struct{}{}}
+		hostConfig = &docker.HostConfig{
+			PortBindings:    map[string][]docker.PortBinding{port + "/tcp": {{HostPort: port}}},
+			PublishAllPorts: true,
+		}
+	}
+	job.Config.Name = "flynn-" + job.ID
+	if p.externalAddr != "" {
+		job.Config.Env = append(job.Config.Env, "EXTERNAL_IP="+p.externalAddr, "SD_HOST="+p.externalAddr, "DISCOVERD="+p.externalAddr+":1111")
+	}
+	p.state.AddJob(job)
+	g.Log(grohl.Data{"at": "create_container"})
+	container, err := p.docker.CreateContainer(job.Config)
+	if err == docker.ErrNoSuchImage {
+		g.Log(grohl.Data{"at": "pull_image"})
+		err = p.docker.PullImage(docker.PullImageOptions{Repository: job.Config.Image}, os.Stdout)
+		if err != nil {
+			g.Log(grohl.Data{"at": "pull_image", "status": "error", "err": err})
+			p.state.SetStatusFailed(job.ID, err)
+			return
+		}
+		container, err = p.docker.CreateContainer(job.Config)
+	}
+	if err != nil {
+		g.Log(grohl.Data{"at": "create_container", "status": "error", "err": err})
+		p.state.SetStatusFailed(job.ID, err)
+		return
+	}
+	p.state.SetContainerID(job.ID, container.ID)
+	p.state.WaitAttach(job.ID)
+	g.Log(grohl.Data{"at": "start_container"})
+	if err := p.docker.StartContainer(container.ID, hostConfig); err != nil {
+		g.Log(grohl.Data{"at": "start_container", "status": "error", "err": err})
+		p.state.SetStatusFailed(job.ID, err)
+		return
+	}
+	p.state.SetStatusRunning(job.ID)
+	g.Log(grohl.Data{"at": "finish"})
 }
 
 type sampiSyncClient interface {

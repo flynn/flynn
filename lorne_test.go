@@ -99,23 +99,15 @@ func testProcessWithError(job *sampi.Job, client *dockerClient, err error, t *te
 }
 
 func processWithOpts(job *sampi.Job, extAddr string, client *dockerClient) *State {
-	jobs := make(chan *sampi.Job)
-	done := make(chan struct{})
 	ports := make(chan int)
 	state := NewState()
 	go allocatePorts(ports, 500, 501)
-	go func() {
-		(&jobProcessor{
-			externalAddr: extAddr,
-			docker:       client,
-			state:        state,
-			ports:        ports,
-		}).process(jobs)
-		close(done)
-	}()
-	jobs <- job
-	close(jobs)
-	<-done
+	(&jobProcessor{
+		externalAddr: extAddr,
+		docker:       client,
+		state:        state,
+		ports:        ports,
+	}).processJob(job)
 	return state
 }
 
