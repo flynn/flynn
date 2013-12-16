@@ -1,9 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"io"
 	"log"
@@ -145,7 +142,7 @@ func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Heade
 	outer:
 		for {
 			for host := range state {
-				schedReq.HostJobs[host] = append(schedReq.HostJobs[host], &sampi.Job{ID: prefix + randomID(), TCPPorts: 1, Config: config})
+				schedReq.HostJobs[host] = append(schedReq.HostJobs[host], &sampi.Job{ID: sampic.RandomJobID(prefix), TCPPorts: 1, Config: config})
 				diff--
 				if diff == 0 {
 					break outer
@@ -267,7 +264,7 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 
 	q := req.URL.Query()
 	job := &sampi.Job{
-		ID: q.Get("app_id") + "-run." + randomID(),
+		ID: sampic.RandomJobID(q.Get("app_id") + "-run."),
 		Config: &docker.Config{
 			Image:        "flynn/slugrunner",
 			Cmd:          jobReq.Cmd,
@@ -347,15 +344,4 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	w.WriteHeader(200)
-}
-
-func randomID() string {
-	b := make([]byte, 16)
-	enc := make([]byte, 24)
-	_, err := io.ReadFull(rand.Reader, b)
-	if err != nil {
-		panic(err) // This shouldn't ever happen, right?
-	}
-	base64.URLEncoding.Encode(enc, b)
-	return string(bytes.TrimRight(enc, "="))
 }
