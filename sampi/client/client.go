@@ -1,7 +1,11 @@
 package client
 
 import (
+	"bytes"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
+	"io"
 
 	"github.com/flynn/go-discover/discover"
 	"github.com/flynn/rpcplus"
@@ -47,4 +51,17 @@ func (c *Client) RegisterHost(host *sampi.Host, stream chan *sampi.Job) *error {
 
 func (c *Client) RemoveJobs(jobIDs []string) error {
 	return c.c.Call("Scheduler.RemoveJobs", jobIDs, &struct{}{})
+}
+
+func RandomJobID(prefix string) string { return prefix + randomID() }
+
+func randomID() string {
+	b := make([]byte, 16)
+	enc := make([]byte, 24)
+	_, err := io.ReadFull(rand.Reader, b)
+	if err != nil {
+		panic(err) // This shouldn't ever happen, right?
+	}
+	base64.URLEncoding.Encode(enc, b)
+	return string(bytes.TrimRight(enc, "="))
 }
