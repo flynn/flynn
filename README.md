@@ -1,6 +1,6 @@
 # Flynn Dev Environment
 
-This repo contains a Vagrantfile/Makefile combo that set up all of the Flynn
+This repo contains a Vagrantfile/Makefile combo that sets up all of the Flynn
 components and dependencies in a working dev/test configuration.
 
 The only requirement is that you have [VirtualBox](https://www.virtualbox.org/)
