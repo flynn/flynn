@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/flynn/go-discover/discover"
+	"github.com/flynn/go-dockerclient"
 	lc "github.com/flynn/lorne/client"
 	"github.com/flynn/lorne/types"
 	sc "github.com/flynn/sampi/client"
 	"github.com/flynn/sampi/types"
-	"github.com/flynn/go-dockerclient"
 )
 
 // WARNING: assumes one host at the moment
@@ -59,7 +59,7 @@ func main() {
 
 	fmt.Printf("-----> Building %s...\n", app)
 
-	scheduleAndAttach(app+"-build.1", docker.Config{
+	scheduleAndAttach(sc.RandomJobID(app+"-build."), docker.Config{
 		Image:        "flynn/slugbuilder",
 		Cmd:          []string{"http://" + shelfHost + "/" + app + ".tgz"},
 		Tty:          false,
@@ -72,7 +72,7 @@ func main() {
 
 	fmt.Printf("-----> Deploying %s ...\n", app)
 
-	jobid := app + "-web.1"
+	jobid := sc.RandomJobID(app + "-web.")
 
 	stopIfExists(jobid)
 	scheduleWithTcpPort(jobid, docker.Config{
