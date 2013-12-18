@@ -110,7 +110,6 @@ func (p *jobProcessor) processJob(job *sampi.Job) {
 			PublishAllPorts: true,
 		}
 	}
-	job.Config.Name = "flynn-" + job.ID
 	if p.externalAddr != "" {
 		job.Config.Env = append(job.Config.Env, "EXTERNAL_IP="+p.externalAddr, "SD_HOST="+p.externalAddr, "DISCOVERD="+p.externalAddr+":1111")
 	}

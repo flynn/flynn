@@ -71,9 +71,6 @@ func testProcessWithOpts(job *sampi.Job, extAddr string, client *dockerClient, t
 	if client.created != job.Config {
 		t.Error("job not created")
 	}
-	if job.Config.Name != "flynn-a" {
-		t.Error("job name not set")
-	}
 	if !client.started {
 		t.Error("job not started")
 	}
