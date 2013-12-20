@@ -24,6 +24,24 @@ func main() {
 	grohl.Log(grohl.Data{"at": "start"})
 	g := grohl.NewContext(grohl.Data{"fn": "main"})
 
+	dockerc, err := docker.NewClient("http://localhost:4243")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	state := NewState()
+	ports := make(chan int)
+
+	go allocatePorts(ports, 55000, 65535)
+	go serveHTTP(&Host{state: state, docker: dockerc}, &attachHandler{state: state, docker: dockerc})
+	go streamEvents(dockerc, state)
+
+	processor := &jobProcessor{
+		externalAddr: *externalAddr,
+		docker:       dockerc,
+		state:        state,
+	}
+
 	disc, err := discover.NewClient()
 	if err != nil {
 		log.Fatal(err)
@@ -37,18 +55,6 @@ func main() {
 		log.Fatal(err)
 	}
 	g.Log(grohl.Data{"at": "sampi_connected"})
-
-	dockerc, err := docker.NewClient("http://localhost:4243")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	state := NewState()
-	ports := make(chan int)
-
-	go allocatePorts(ports, 55000, 65535)
-	go serveHTTP(&Host{state: state, docker: dockerc}, &attachHandler{state: state, docker: dockerc})
-	go streamEvents(dockerc, state)
 
 	events := make(chan lorne.Event)
 	state.AddListener("all", events)
@@ -71,12 +77,7 @@ func main() {
 	jobs := make(chan *sampi.Job)
 	scheduler.RegisterHost(host, jobs)
 	g.Log(grohl.Data{"at": "host_registered"})
-	(&jobProcessor{
-		externalAddr: *externalAddr,
-		docker:       dockerc,
-		state:        state,
-		ports:        ports,
-	}).Process(jobs)
+	processor.Process(ports, jobs)
 }
 
 type jobProcessor struct {
@@ -87,22 +88,21 @@ type jobProcessor struct {
 		StartContainer(string, *docker.HostConfig) error
 	}
 	state *State
-	ports <-chan int
 }
 
-func (p *jobProcessor) Process(jobs chan *sampi.Job) {
+func (p *jobProcessor) Process(ports <-chan int, jobs chan *sampi.Job) {
 	for job := range jobs {
-		p.processJob(job)
+		p.processJob(ports, job)
 	}
 }
 
-func (p *jobProcessor) processJob(job *sampi.Job) {
+func (p *jobProcessor) processJob(ports <-chan int, job *sampi.Job) (*docker.Container, error) {
 	g := grohl.NewContext(grohl.Data{"fn": "process_job", "job.id": job.ID})
 	g.Log(grohl.Data{"at": "start", "job.image": job.Config.Image, "job.cmd": job.Config.Cmd, "job.entrypoint": job.Config.Entrypoint})
 
 	var hostConfig *docker.HostConfig
 	if job.TCPPorts > 0 {
-		port := strconv.Itoa(<-p.ports)
+		port := strconv.Itoa(<-ports)
 		job.Config.Env = append(job.Config.Env, "PORT="+port)
 		job.Config.ExposedPorts = map[string]struct{}{port + "/tcp": struct{}{}}
 		hostConfig = &docker.HostConfig{
@@ -122,14 +122,14 @@ func (p *jobProcessor) processJob(job *sampi.Job) {
 		if err != nil {
 			g.Log(grohl.Data{"at": "pull_image", "status": "error", "err": err})
 			p.state.SetStatusFailed(job.ID, err)
-			return
+			return nil, err
 		}
 		container, err = p.docker.CreateContainer(job.Config)
 	}
 	if err != nil {
 		g.Log(grohl.Data{"at": "create_container", "status": "error", "err": err})
 		p.state.SetStatusFailed(job.ID, err)
-		return
+		return nil, err
 	}
 	p.state.SetContainerID(job.ID, container.ID)
 	p.state.WaitAttach(job.ID)
@@ -137,10 +137,11 @@ func (p *jobProcessor) processJob(job *sampi.Job) {
 	if err := p.docker.StartContainer(container.ID, hostConfig); err != nil {
 		g.Log(grohl.Data{"at": "start_container", "status": "error", "err": err})
 		p.state.SetStatusFailed(job.ID, err)
-		return
+		return nil, err
 	}
 	p.state.SetStatusRunning(job.ID)
 	g.Log(grohl.Data{"at": "finish"})
+	return container, nil
 }
 
 type sampiSyncClient interface {

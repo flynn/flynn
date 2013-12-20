@@ -103,8 +103,7 @@ func processWithOpts(job *sampi.Job, extAddr string, client *dockerClient) *Stat
 		externalAddr: extAddr,
 		docker:       client,
 		state:        state,
-		ports:        ports,
-	}).processJob(job)
+	}).processJob(ports, job)
 	return state
 }
 
