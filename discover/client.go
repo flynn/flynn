@@ -90,7 +90,7 @@ func (s *ServiceSet) bind(updates chan *ServiceUpdate) chan struct{} {
 
 			s.updateWatches(update)
 		}
-		//s.closeWatches()
+		s.closeWatches()
 	}()
 	return current
 }
