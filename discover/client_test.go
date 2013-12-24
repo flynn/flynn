@@ -48,6 +48,8 @@ func TestClient(t *testing.T) {
 	}
 	serviceName := "testService"
 
+	// Test Register and ServiceSet with attributes
+
 	err = client.Register(serviceName, "1111", map[string]string{"foo": "bar"})
 	if err != nil {
 		t.Fatal("Registering service failed", err.Error())
@@ -56,7 +58,7 @@ func TestClient(t *testing.T) {
 	if err != nil {
 		t.Fatal("Registering service failed", err.Error())
 	}
-	set, _ := client.QueryServices(serviceName)
+	set, _ := client.ServiceSet(serviceName)
 	if len(set.Services()) < 2 {
 		t.Fatal("Registered services not online")
 	}
@@ -72,6 +74,8 @@ func TestClient(t *testing.T) {
 		t.Fatal("Attribute not set on service as 'bar'")
 	}
 
+	// Test Re-register
+
 	err = client.Register(serviceName, "1111", map[string]string{"foo": "baz"})
 	if err != nil {
 		t.Fatal("Re-registering service failed", err.Error())
@@ -84,6 +88,8 @@ func TestClient(t *testing.T) {
 	if err != nil {
 		t.Fatal("Registering service failed", err.Error())
 	}
+
+	// Test Filter
 
 	set.Filter(map[string]string{"foo": "qux"})
 	if len(set.Services()) > 1 {
@@ -106,8 +112,46 @@ func TestClient(t *testing.T) {
 		t.Fatal("Filter not limiting new unmatching services from set")
 	}
 
+	// Test Select
+
 	if len(set.Select(map[string]string{"id": "3"})) != 1 {
 		t.Fatal("Select not returning proper services")
+	}
+
+	// Test Close
+
+	err = set.Close()
+	if err != nil {
+		t.Fatal("Unable to close:", err)
+	}
+
+	// Test client.Services
+
+	services, err := client.Services(serviceName)
+	if err != nil {
+		t.Fatal("Unable to get services:", err)
+	}
+	if len(services) != 4 {
+		t.Fatal("Not all registered services were returned:", services)
+	}
+
+	// Test Watch with bringCurrent
+
+	set, _ = client.ServiceSet(serviceName)
+	updates := make(chan *ServiceUpdate)
+	set.Watch(updates, true)
+	err = client.Register(serviceName, "5555", nil)
+	if err != nil {
+		t.Fatal("Registering service failed", err)
+	}
+	for i := 0; i < 5; i++ {
+		update := <-updates
+		if update.Online != true {
+			t.Fatal("Service update of unexected status: ", update, i)
+		}
+		if update.Name != serviceName {
+			t.Fatal("Service update of unexected name: ", update, i)
+		}
 	}
 
 }
@@ -123,7 +167,7 @@ func TestNoServices(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	set, _ := client.QueryServices("nonexistent")
+	set, _ := client.ServiceSet("nonexistent")
 	if len(set.Services()) != 0 {
 		t.Fatal("There should be no services")
 	}

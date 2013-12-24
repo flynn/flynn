@@ -25,7 +25,7 @@ type Service struct {
 type ServiceSet struct {
 	services   map[string]*Service
 	filters    map[string]string
-	watches    []func(*ServiceUpdate)
+	watches    map[chan *ServiceUpdate]struct{}
 	serMutex   sync.Mutex
 	filMutex   sync.Mutex
 	watchMutex sync.Mutex
@@ -45,7 +45,7 @@ func makeServiceSet(call *rpcplus.Call) *ServiceSet {
 	return &ServiceSet{
 		services: make(map[string]*Service),
 		filters:  make(map[string]string),
-		watches:  make([]func(*ServiceUpdate), 0),
+		watches:  make(map[chan *ServiceUpdate]struct{}),
 		call:     call,
 	}
 }
@@ -88,20 +88,27 @@ func (s *ServiceSet) bind(updates chan *ServiceUpdate) chan struct{} {
 			}
 			s.serMutex.Unlock()
 
-			s.fireWatches(update)
+			s.updateWatches(update)
 		}
-		s.fireWatches(nil)
+		//s.closeWatches()
 	}()
 	return current
 }
 
-func (s *ServiceSet) fireWatches(update *ServiceUpdate) {
+func (s *ServiceSet) updateWatches(update *ServiceUpdate) {
 	s.watchMutex.Lock()
 	defer s.watchMutex.Unlock()
-	for _, fn := range s.watches {
-		fn(update)
+	for ch := range s.watches {
+		ch <- update
 	}
-	s.watches = make([]func(*ServiceUpdate), 0)
+}
+
+func (s *ServiceSet) closeWatches() {
+	s.watchMutex.Lock()
+	defer s.watchMutex.Unlock()
+	for ch := range s.watches {
+		close(ch)
+	}
 }
 
 func (s *ServiceSet) matchFilters(attrs map[string]string) bool {
@@ -172,17 +179,36 @@ func (s *ServiceSet) Filter(attrs map[string]string) {
 	}
 }
 
-func (s *ServiceSet) Watch(fn func(*ServiceUpdate)) {
+func (s *ServiceSet) Watch(ch chan *ServiceUpdate, bringCurrent bool) {
 	s.watchMutex.Lock()
 	defer s.watchMutex.Unlock()
-	s.watches = append(s.watches, fn)
+	s.watches[ch] = struct{}{}
+	if bringCurrent {
+		go func() {
+			s.serMutex.Lock()
+			defer s.serMutex.Unlock()
+			for _, service := range s.services {
+				ch <- &ServiceUpdate{
+					Name:   service.Name,
+					Addr:   service.Addr,
+					Online: true,
+					Attrs:  service.Attrs,
+				}
+			}
+		}()
+	}
+}
+
+func (s *ServiceSet) Unwatch(ch chan *ServiceUpdate) {
+	s.watchMutex.Lock()
+	defer s.watchMutex.Unlock()
+	delete(s.watches, ch)
 }
 
 func (s *ServiceSet) Wait() (*ServiceUpdate, error) {
 	updateCh := make(chan *ServiceUpdate, 1)
-	s.Watch(func(u *ServiceUpdate) {
-		updateCh <- u
-	})
+	s.Watch(updateCh, true)
+	defer s.Unwatch(updateCh)
 	timeout := make(chan struct{})
 	go func() {
 		time.Sleep(time.Duration(WaitTimeoutSecs) * time.Second)
@@ -239,12 +265,7 @@ func pickMostPublicIp() string {
 	return ip
 }
 
-// deprecated
-func (c *Client) Services(name string) (*ServiceSet, error) {
-	return c.QueryServices(name)
-}
-
-func (c *Client) QueryServices(name string) (*ServiceSet, error) {
+func (c *Client) ServiceSet(name string) (*ServiceSet, error) {
 	updates := make(chan *ServiceUpdate)
 	call := c.client.StreamGo("Agent.Subscribe", &Args{
 		Name: name,
@@ -254,8 +275,8 @@ func (c *Client) QueryServices(name string) (*ServiceSet, error) {
 	return set, nil
 }
 
-func (c *Client) GetServices(name string) ([]*Service, error) {
-	set, err := c.QueryServices(name)
+func (c *Client) Services(name string) ([]*Service, error) {
+	set, err := c.ServiceSet(name)
 	if err != nil {
 		return nil, err
 	}
@@ -265,6 +286,7 @@ func (c *Client) GetServices(name string) ([]*Service, error) {
 			return nil, err
 		}
 	}
+	set.Close()
 	return set.Services(), nil
 
 }
