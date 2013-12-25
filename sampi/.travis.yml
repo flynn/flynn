@@ -6,10 +6,12 @@ go:
 before_install:
   - go install -race std
   - go get code.google.com/p/go.tools/cmd/cover
+  - go get github.com/kr/godep
+  - export PATH=$HOME/gopath/bin:$PATH
 
 script:
-  - go test -race ./...
-  - go test -cover ./...
+  - godep go test -race ./...
+  - godep go test -cover ./...
 
 notifications:
   irc:
