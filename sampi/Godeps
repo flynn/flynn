@@ -1,0 +1,52 @@
+{
+	"ImportPath": "github.com/flynn/sampi",
+	"GoVersion": "go1.2",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "bitbucket.org/kardianos/osext",
+			"Comment": "null-9",
+			"Rev": "364fb577de68fb646c4cb39cc0e09c887ee16376"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-log/log",
+			"Rev": "840af6b63e623201384b2f20a8e7d3f2dcfef063"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-systemd/journal",
+			"Rev": "d38c05b3831b1f09cb592a726822e04ba76543b5"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-discover/discover",
+			"Rev": "39dfc9f2dd2e016bb58e4ee148a8ba95a02eccce"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-dockerclient",
+			"Rev": "1970d77a6a8ab2e45efc6785c6cbf1a39e8fc109"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-etcd/etcd",
+			"Comment": "v0.2.0-rc1-31-g383cae1",
+			"Rev": "383cae1d8765b2028bcc7b7724f3fcefadb55484"
+		},
+		{
+			"ImportPath": "github.com/flynn/lorne/types",
+			"Rev": "065937a5caf2ffff2916496b21f348039ab3024c"
+		},
+		{
+			"ImportPath": "github.com/flynn/rpcplus",
+			"Rev": "13a8b54dd08599a239453a02e35dc40db030b5bf"
+		},
+		{
+			"ImportPath": "github.com/heroku/hk/term",
+			"Comment": "v20131031.3",
+			"Rev": "63cb5cef895cba42c042119a2aac752cd678daaa"
+		},
+		{
+			"ImportPath": "github.com/technoweenie/grohl",
+			"Rev": "89cacb4e55c94ec65b94806f6888120e22896b52"
+		}
+	]
+}
