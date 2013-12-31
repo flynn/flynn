@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flynn/go-etcd/etcd"
+	"github.com/coreos/go-etcd/etcd"
 )
 
 func runEtcdServer() func() {
@@ -69,7 +69,7 @@ func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
 	}
 
 	// Check if the files the returned values are the same.
-	if (response.Key != servicePath) || (response.Value != NoAttrService) {
+	if (response.Node.Key != servicePath) || (response.Node.Value != NoAttrService) {
 		t.Fatal("Returned value not equal to sent one")
 	}
 

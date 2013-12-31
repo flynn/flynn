@@ -4,7 +4,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/flynn/go-etcd/etcd"
+	"github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/rpcplus"
 	rpc "github.com/flynn/rpcplus/comborpc"
 )
@@ -15,10 +15,11 @@ const (
 )
 
 type ServiceUpdate struct {
-	Name   string
-	Addr   string
-	Online bool
-	Attrs  map[string]string
+	Name    string
+	Addr    string
+	Online  bool
+	Attrs   map[string]string
+	Created uint
 }
 
 type Args struct {

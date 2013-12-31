@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/flynn/go-etcd/etcd"
+	"github.com/coreos/go-etcd/etcd"
 )
 
 const KeyPrefix = "/discover"
@@ -29,14 +29,14 @@ func (b *EtcdBackend) Subscribe(name string) (UpdateStream, error) {
 		return nil, err
 	}
 	go func() {
-		for _, u := range response.Kvs {
-			if update := b.responseToUpdate(response, &u); update != nil {
+		for _, n := range response.Node.Nodes {
+			if update := b.responseToUpdate(response, &n); update != nil {
 				stream.ch <- update
 			}
 		}
 		stream.ch <- &ServiceUpdate{}
-		for u := range watch {
-			if update := b.responseToUpdate(u, nil); update != nil {
+		for resp := range watch {
+			if update := b.responseToUpdate(resp, resp.Node); update != nil {
 				stream.ch <- update
 			}
 		}
@@ -54,35 +54,30 @@ func (s *etcdStream) Chan() chan *ServiceUpdate { return s.ch }
 
 func (s *etcdStream) Close() { s.stopOnce.Do(func() { close(s.stop) }) }
 
-func (b *EtcdBackend) responseToUpdate(resp *etcd.Response, kvp *etcd.KeyValuePair) *ServiceUpdate {
-	var key, value string
-	if kvp != nil {
-		key = kvp.Key
-		value = kvp.Value
-	} else {
-		key = resp.Key
-		value = resp.Value
-	}
+func (b *EtcdBackend) responseToUpdate(resp *etcd.Response, node *etcd.Node) *ServiceUpdate {
 	// expected key structure: /PREFIX/services/NAME/ADDR
-	splitKey := strings.SplitN(key, "/", 5)
+	splitKey := strings.SplitN(node.Key, "/", 5)
 	if len(splitKey) < 5 {
 		return nil
 	}
 	serviceName := splitKey[3]
 	serviceAddr := splitKey[4]
-	if "get" == resp.Action || ("set" == resp.Action && resp.Value != resp.PrevValue) {
+	//if "get" == resp.Action || ("set" == resp.Action && node.Value != node.PrevValue) {
+	// TODO: the above is broken right now. until then what happens if we don't ignore heartbeats?
+	if "get" == resp.Action || "set" == resp.Action {
 		// GET is because getCurrentState returns responses of Action GET.
 		// some SETs are heartbeats, so we ignore SETs where value didn't change.
 		var serviceAttrs map[string]string
-		err := json.Unmarshal([]byte(value), &serviceAttrs)
+		err := json.Unmarshal([]byte(node.Value), &serviceAttrs)
 		if err != nil {
 			return nil
 		}
 		return &ServiceUpdate{
-			Name:   serviceName,
-			Addr:   serviceAddr,
-			Online: true,
-			Attrs:  serviceAttrs,
+			Name:    serviceName,
+			Addr:    serviceAddr,
+			Online:  true,
+			Attrs:   serviceAttrs,
+			Created: uint(node.CreatedIndex),
 		}
 	} else if "delete" == resp.Action || "expire" == resp.Action {
 		return &ServiceUpdate{
@@ -119,7 +114,7 @@ func (b *EtcdBackend) Heartbeat(name, addr string) error {
 		return err
 	}
 	// ignore test failure, it doesn't need a heartbeat if it was just set.
-	_, err = b.Client.CompareAndSwap(servicePath(name, addr), resp.Value, HeartbeatIntervalSecs+MissedHearbeatTTL, resp.Value, resp.ModifiedIndex)
+	_, err = b.Client.CompareAndSwap(servicePath(name, addr), resp.Node.Value, HeartbeatIntervalSecs+MissedHearbeatTTL, resp.Node.Value, resp.Node.ModifiedIndex)
 	return err
 }
 

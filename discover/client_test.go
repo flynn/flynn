@@ -178,6 +178,46 @@ func TestNoServices(t *testing.T) {
 	}
 }
 
-func TestWatchesNotCalledForOfflineUpdatesToNonexistingServices(t *testing.T) {
+func TestServiceAge(t *testing.T) {
+	killEtcd := runEtcdServer()
+	defer killEtcd()
+	killDiscoverd := runDiscoverdServer()
+	defer killDiscoverd()
+
+	client, err := NewClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	serviceName := "ageService"
+
+	err = client.Register(serviceName, "1111", nil)
+	if err != nil {
+		t.Fatal("Registering service failed", err.Error())
+	}
+	services, _ := client.Services(serviceName)
+	if len(services) < 1 {
+		t.Fatal("Registered service not online")
+	}
+	if services[0].Created < 1 {
+		t.Fatal("Service has no age")
+	}
+
+	err = client.Register(serviceName, "2222", nil)
+	if err != nil {
+		t.Fatal("Registering service failed", err.Error())
+	}
+	services, _ = client.Services(serviceName)
+	if len(services) < 2 {
+		t.Fatal("Registered services not online")
+	}
+	if services[0].Port == "1111" {
+		if services[0].Created >= services[1].Created {
+			t.Fatal("Older service does not have smaller Created value")
+		}
+	} else {
+		if services[1].Created >= services[0].Created {
+			t.Fatal("Older service does not have smaller Created value")
+		}
+	}
 
 }

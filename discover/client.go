@@ -14,7 +14,7 @@ import (
 var WaitTimeoutSecs = 10
 
 type Service struct {
-	Created int
+	Created uint
 	Name    string
 	Host    string
 	Port    string
@@ -71,10 +71,11 @@ func (s *ServiceSet) bind(updates chan *ServiceUpdate) chan struct{} {
 				if _, exists := s.services[update.Addr]; !exists {
 					host, port, _ := net.SplitHostPort(update.Addr)
 					s.services[update.Addr] = &Service{
-						Name: update.Name,
-						Addr: update.Addr,
-						Host: host,
-						Port: port,
+						Name:    update.Name,
+						Addr:    update.Addr,
+						Host:    host,
+						Port:    port,
+						Created: update.Created,
 					}
 				}
 				s.services[update.Addr].Attrs = update.Attrs
