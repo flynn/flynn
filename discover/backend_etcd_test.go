@@ -13,10 +13,6 @@ import (
 	"github.com/flynn/go-etcd/etcd"
 )
 
-<<<<<<< HEAD
-func deleteService(client *etcd.Client, service string, addr string) {
-	client.Delete(fmt.Sprintf("/services/%s/%s", service, addr), true)
-=======
 func runEtcdServer() func() {
 	killCh := make(chan struct{})
 	doneCh := make(chan struct{})
@@ -50,7 +46,6 @@ func runEtcdServer() func() {
 		close(killCh)
 		<-doneCh
 	}
->>>>>>> running etcd and discoverd for each test, making sure they have their own data-dir to avoid conflicting state across tests
 }
 
 const NoAttrService = "null"
