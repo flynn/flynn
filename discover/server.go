@@ -44,9 +44,9 @@ type Agent struct {
 	Address string
 }
 
-func NewServer(addr string) *Agent {
+func NewServer(addr string, etcdAddrs []string) *Agent {
 	return &Agent{
-		Backend: &EtcdBackend{Client: etcd.NewClient(nil)},
+		Backend: &EtcdBackend{Client: etcd.NewClient(etcdAddrs)},
 		Address: addr,
 	}
 }
