@@ -1,0 +1,21 @@
+{
+  "etcd": {
+    "args": [
+      "-d={{ .Volume \"/data\" }}",
+      "-c={{ .ExternalIP }}:{{ .TCPPort 0 }}",
+      "-cl=0.0.0.0",
+      "-s={{ .ExternalIP }}:{{ .TCPPort 1 }}",
+      "-sl=0.0.0.0",
+      "{{ if .Env.ETCD_PEERS }}-C={{ .Env.ETCD_PEERS }}{{ end }}"
+    ]
+  },
+  "discoverd": {
+    "args": ["-bind=:{{ .TCPPort 0 }}", "-etcd=http://{{ .Services.etcd.InternalIP }}:{{ index .Services.etcd.TCPPorts 0 }}"]
+  },
+  "sampi": {
+    "args": ["-listen=:{{ .TCPPort 0 }}"],
+    "env": {
+        "DISCOVERD": "{{ .Services.discoverd.InternalIP }}:{{ index .Services.discoverd.TCPPorts 0 }}"
+    }
+  }
+}

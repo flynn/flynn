@@ -2,10 +2,12 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-dockerclient"
@@ -18,6 +20,7 @@ import (
 func main() {
 	externalAddr := flag.String("external", "", "external IP of host")
 	configFile := flag.String("config", "", "configuration file")
+	manifestFile := flag.String("manifest", "", "manifest file")
 	hostID := flag.String("id", "host1", "host id")
 	flag.Parse()
 	grohl.AddContext("app", "lorne")
@@ -40,11 +43,48 @@ func main() {
 		externalAddr: *externalAddr,
 		docker:       dockerc,
 		state:        state,
+		discoverd:    os.Getenv("DISCOVERD"),
 	}
 
-	disc, err := discoverd.NewClient()
-	if err != nil {
-		log.Fatal(err)
+	runner := &manifestRunner{
+		env:        parseEnviron(),
+		externalIP: *externalAddr,
+		ports:      ports,
+		processor:  processor,
+		docker:     dockerc,
+	}
+
+	var disc *discoverd.Client
+	if *manifestFile != "" {
+		f, err := os.Open(*manifestFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		services, err := runner.runManifest(f)
+		if err != nil {
+			log.Fatal(err)
+		}
+		f.Close()
+
+		if d, ok := services["discoverd"]; ok {
+			processor.discoverd = fmt.Sprintf("%s:%d", d.InternalIP, d.TCPPorts[0])
+			disc, err = discoverd.NewClientUsingAddress(processor.discoverd)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	}
+
+	if processor.discoverd == "" && *externalAddr == "" {
+		processor.discoverd = *externalAddr + ":1111"
+	}
+	// HACK: use env as global for discoverd connection in sampic
+	os.Setenv("DISCOVERD", processor.discoverd)
+	if disc == nil {
+		disc, err = discoverd.NewClientUsingAddress(processor.discoverd)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	if err := disc.Register("flynn-lorne."+*hostID, "1113", nil); err != nil {
 		log.Fatal(err)
@@ -82,6 +122,7 @@ func main() {
 
 type jobProcessor struct {
 	externalAddr string
+	discoverd    string
 	docker       interface {
 		CreateContainer(*docker.Config) (*docker.Container, error)
 		PullImage(docker.PullImageOptions, io.Writer) error
@@ -111,7 +152,7 @@ func (p *jobProcessor) processJob(ports <-chan int, job *sampi.Job) (*docker.Con
 		}
 	}
 	if p.externalAddr != "" {
-		job.Config.Env = append(job.Config.Env, "EXTERNAL_IP="+p.externalAddr, "SD_HOST="+p.externalAddr, "DISCOVERD="+p.externalAddr+":1111")
+		job.Config.Env = appendUnique(job.Config.Env, "EXTERNAL_IP="+p.externalAddr, "SD_HOST="+p.externalAddr, "DISCOVERD="+p.discoverd)
 	}
 	p.state.AddJob(job)
 	g.Log(grohl.Data{"at": "create_container"})
@@ -142,6 +183,19 @@ func (p *jobProcessor) processJob(ports <-chan int, job *sampi.Job) (*docker.Con
 	p.state.SetStatusRunning(job.ID)
 	g.Log(grohl.Data{"at": "finish"})
 	return container, nil
+}
+
+func appendUnique(s []string, vars ...string) []string {
+outer:
+	for _, v := range vars {
+		for _, existing := range s {
+			if strings.HasPrefix(existing, strings.SplitN(v, "=", 2)[0]+"=") {
+				continue outer
+			}
+		}
+		s = append(s, v)
+	}
+	return s
 }
 
 type sampiSyncClient interface {
