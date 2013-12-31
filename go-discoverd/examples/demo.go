@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/flynn/go-discover/discover"
+	"github.com/flynn/go-discoverd/discoverd"
 )
 
 func main() {
@@ -30,7 +30,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	client, err := discover.NewClient()
+	client, err := discoverd.NewClient()
 	if err != nil {
 		log.Fatal("Error making client: ", err.Error())
 	}

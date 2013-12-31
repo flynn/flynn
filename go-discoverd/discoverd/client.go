@@ -1,4 +1,4 @@
-package discover
+package discoverd
 
 import (
 	"errors"
@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flynn/discoverd/agent"
 	"github.com/flynn/rpcplus"
 )
 
@@ -26,7 +27,7 @@ type Service struct {
 type ServiceSet struct {
 	services   map[string]*Service
 	filters    map[string]string
-	watches    map[chan *ServiceUpdate]struct{}
+	watches    map[chan *agent.ServiceUpdate]struct{}
 	serMutex   sync.Mutex
 	filMutex   sync.Mutex
 	watchMutex sync.Mutex
@@ -46,12 +47,12 @@ func makeServiceSet(call *rpcplus.Call) *ServiceSet {
 	return &ServiceSet{
 		services: make(map[string]*Service),
 		filters:  make(map[string]string),
-		watches:  make(map[chan *ServiceUpdate]struct{}),
+		watches:  make(map[chan *agent.ServiceUpdate]struct{}),
 		call:     call,
 	}
 }
 
-func (s *ServiceSet) bind(updates chan *ServiceUpdate) chan struct{} {
+func (s *ServiceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
 	// current is an event when enough service updates have been
 	// received to bring us to "current" state (when subscribed)
 	current := make(chan struct{})
@@ -96,7 +97,7 @@ func (s *ServiceSet) bind(updates chan *ServiceUpdate) chan struct{} {
 	return current
 }
 
-func (s *ServiceSet) updateWatches(update *ServiceUpdate) {
+func (s *ServiceSet) updateWatches(update *agent.ServiceUpdate) {
 	s.watchMutex.Lock()
 	defer s.watchMutex.Unlock()
 	for ch := range s.watches {
@@ -195,7 +196,7 @@ func (s *ServiceSet) Filter(attrs map[string]string) {
 	}
 }
 
-func (s *ServiceSet) Watch(ch chan *ServiceUpdate, bringCurrent bool) {
+func (s *ServiceSet) Watch(ch chan *agent.ServiceUpdate, bringCurrent bool) {
 	s.watchMutex.Lock()
 	defer s.watchMutex.Unlock()
 	s.watches[ch] = struct{}{}
@@ -204,25 +205,26 @@ func (s *ServiceSet) Watch(ch chan *ServiceUpdate, bringCurrent bool) {
 			s.serMutex.Lock()
 			defer s.serMutex.Unlock()
 			for _, service := range s.services {
-				ch <- &ServiceUpdate{
-					Name:   service.Name,
-					Addr:   service.Addr,
-					Online: true,
-					Attrs:  service.Attrs,
+				ch <- &agent.ServiceUpdate{
+					Name:    service.Name,
+					Addr:    service.Addr,
+					Online:  true,
+					Attrs:   service.Attrs,
+					Created: service.Created,
 				}
 			}
 		}()
 	}
 }
 
-func (s *ServiceSet) Unwatch(ch chan *ServiceUpdate) {
+func (s *ServiceSet) Unwatch(ch chan *agent.ServiceUpdate) {
 	s.watchMutex.Lock()
 	defer s.watchMutex.Unlock()
 	delete(s.watches, ch)
 }
 
-func (s *ServiceSet) Wait() (*ServiceUpdate, error) {
-	updateCh := make(chan *ServiceUpdate, 1024) // buffer because of Watch bringCurrent race bug
+func (s *ServiceSet) Wait() (*agent.ServiceUpdate, error) {
+	updateCh := make(chan *agent.ServiceUpdate, 1024) // buffer because of Watch bringCurrent race bug
 	s.Watch(updateCh, true)
 	defer s.Unwatch(updateCh)
 	select {
@@ -273,8 +275,8 @@ func pickMostPublicIp() string {
 }
 
 func (c *Client) ServiceSet(name string) (*ServiceSet, error) {
-	updates := make(chan *ServiceUpdate)
-	call := c.client.StreamGo("Agent.Subscribe", &Args{
+	updates := make(chan *agent.ServiceUpdate)
+	call := c.client.StreamGo("Agent.Subscribe", &agent.Args{
 		Name: name,
 	}, updates)
 	set := makeServiceSet(call)
@@ -301,7 +303,7 @@ func (c *Client) Register(name, port string, attributes map[string]string) error
 }
 
 func (c *Client) RegisterWithHost(name, host, port string, attributes map[string]string) error {
-	args := &Args{
+	args := &agent.Args{
 		Name:  name,
 		Addr:  net.JoinHostPort(host, port),
 		Attrs: attributes,
@@ -316,13 +318,13 @@ func (c *Client) RegisterWithHost(name, host, port string, attributes map[string
 	c.heartbeats[args.Addr] = done
 	c.hbMutex.Unlock()
 	go func() {
-		ticker := time.NewTicker(HeartbeatIntervalSecs * time.Second) // TODO: add jitter
+		ticker := time.NewTicker(agent.HeartbeatIntervalSecs * time.Second) // TODO: add jitter
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				// TODO: log error here
-				c.client.Call("Agent.Heartbeat", &Args{
+				c.client.Call("Agent.Heartbeat", &agent.Args{
 					Name: name,
 					Addr: args.Addr,
 				}, &struct{}{})
@@ -339,7 +341,7 @@ func (c *Client) Unregister(name, port string) error {
 }
 
 func (c *Client) UnregisterWithHost(name, host, port string) error {
-	args := &Args{
+	args := &agent.Args{
 		Name: name,
 		Addr: net.JoinHostPort(host, port),
 	}

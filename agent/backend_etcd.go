@@ -1,4 +1,4 @@
-package discover
+package agent
 
 import (
 	"encoding/json"

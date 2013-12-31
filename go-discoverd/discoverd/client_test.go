@@ -1,9 +1,11 @@
-package discover
+package discoverd
 
 import (
 	"os/exec"
 	"testing"
 	"time"
+
+	"github.com/flynn/discoverd/agent"
 )
 
 func runDiscoverdServer() func() {
@@ -138,14 +140,14 @@ func TestClient(t *testing.T) {
 	// Test Watch with bringCurrent
 
 	set, _ = client.ServiceSet(serviceName)
-	updates := make(chan *ServiceUpdate)
+	updates := make(chan *agent.ServiceUpdate)
 	set.Watch(updates, true)
 	err = client.Register(serviceName, "5555", nil)
 	if err != nil {
 		t.Fatal("Registering service failed", err)
 	}
 	for i := 0; i < 5; i++ {
-		var update *ServiceUpdate
+		var update *agent.ServiceUpdate
 		select {
 		case update = <-updates:
 		case <-time.After(3 * time.Second):
