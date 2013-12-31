@@ -205,7 +205,7 @@ func (s *ServiceSet) Unwatch(ch chan *ServiceUpdate) {
 }
 
 func (s *ServiceSet) Wait() (*ServiceUpdate, error) {
-	updateCh := make(chan *ServiceUpdate, 1)
+	updateCh := make(chan *ServiceUpdate, 1024) // buffer because of Watch bringCurrent race bug
 	s.Watch(updateCh, true)
 	defer s.Unwatch(updateCh)
 	select {

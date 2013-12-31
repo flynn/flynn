@@ -145,7 +145,12 @@ func TestClient(t *testing.T) {
 		t.Fatal("Registering service failed", err)
 	}
 	for i := 0; i < 5; i++ {
-		update := <-updates
+		var update *ServiceUpdate
+		select {
+		case update = <-updates:
+		case <-time.After(3 * time.Second):
+			t.Fatal("Timeout exceeded")
+		}
 		if update.Online != true {
 			t.Fatal("Service update of unexected status: ", update, i)
 		}
