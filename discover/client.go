@@ -208,15 +208,10 @@ func (s *ServiceSet) Wait() (*ServiceUpdate, error) {
 	updateCh := make(chan *ServiceUpdate, 1)
 	s.Watch(updateCh, true)
 	defer s.Unwatch(updateCh)
-	timeout := make(chan struct{})
-	go func() {
-		time.Sleep(time.Duration(WaitTimeoutSecs) * time.Second)
-		timeout <- struct{}{}
-	}()
 	select {
 	case update := <-updateCh:
 		return update, nil
-	case <-timeout:
+	case <-time.After(time.Duration(WaitTimeoutSecs) * time.Second):
 		return nil, errors.New("discover: wait timeout exceeded")
 	}
 }
