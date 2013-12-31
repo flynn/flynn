@@ -270,11 +270,9 @@ func (c *Client) Services(name string) ([]*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(set.Services()) == 0 {
-		_, err = set.Wait()
-		if err != nil {
-			return nil, err
-		}
+	_, err = set.Wait()
+	if err != nil {
+		return nil, err
 	}
 	set.Close()
 	return set.Services(), nil
