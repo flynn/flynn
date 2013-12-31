@@ -1,0 +1,30 @@
+{
+	"ImportPath": "github.com/flynn/go-discover",
+	"GoVersion": "go1.2",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "bitbucket.org/kardianos/osext",
+			"Comment": "null-9",
+			"Rev": "364fb577de68fb646c4cb39cc0e09c887ee16376"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-etcd/etcd",
+			"Rev": "f0d5e98e38e4d3b100bdc32c25a69141e1a6ac45"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-log/log",
+			"Rev": "840af6b63e623201384b2f20a8e7d3f2dcfef063"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-systemd/journal",
+			"Rev": "d38c05b3831b1f09cb592a726822e04ba76543b5"
+		},
+		{
+			"ImportPath": "github.com/flynn/rpcplus",
+			"Rev": "13a8b54dd08599a239453a02e35dc40db030b5bf"
+		}
+	]
+}
