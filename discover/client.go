@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -120,6 +121,21 @@ func (s *ServiceSet) matchFilters(attrs map[string]string) bool {
 		}
 	}
 	return true
+}
+
+type serviceByAge []*Service
+
+func (a serviceByAge) Len() int           { return len(a) }
+func (a serviceByAge) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a serviceByAge) Less(i, j int) bool { return a[i].Created < a[j].Created }
+
+func (s *ServiceSet) Leader() *Service {
+	services := s.Services()
+	if len(services) > 0 {
+		sort.Sort(serviceByAge(services))
+		return services[0]
+	}
+	return nil
 }
 
 // deprecated

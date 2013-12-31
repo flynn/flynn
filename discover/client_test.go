@@ -178,7 +178,7 @@ func TestNoServices(t *testing.T) {
 	}
 }
 
-func TestServiceAge(t *testing.T) {
+func TestServiceAgeAndLeader(t *testing.T) {
 	killEtcd := runEtcdServer()
 	defer killEtcd()
 	killDiscoverd := runDiscoverdServer()
@@ -218,6 +218,18 @@ func TestServiceAge(t *testing.T) {
 		if services[1].Created >= services[0].Created {
 			t.Fatal("Older service does not have smaller Created value")
 		}
+	}
+
+	err = client.Register(serviceName, "3333", nil)
+	if err != nil {
+		t.Fatal("Registering service failed", err.Error())
+	}
+	set, _ := client.ServiceSet(serviceName)
+	if len(set.Services()) < 3 {
+		t.Fatal("Registered services not online")
+	}
+	if set.Leader().Port != "1111" {
+		t.Fatal("Incorrect leader")
 	}
 
 }
