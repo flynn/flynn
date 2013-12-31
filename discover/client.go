@@ -217,11 +217,7 @@ func (s *ServiceSet) Wait() (*ServiceUpdate, error) {
 }
 
 func (s *ServiceSet) Close() error {
-	err := s.call.CloseStream()
-	if err != nil {
-		return err
-	}
-	return nil
+	return s.call.CloseStream()
 }
 
 type Client struct {
