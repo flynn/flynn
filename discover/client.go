@@ -11,23 +11,43 @@ import (
 	"github.com/flynn/rpcplus"
 )
 
+var WaitTimeoutSecs = 10
+
 type Service struct {
-	Index  int // not used yet
-	Name   string
-	Host   string
-	Port   string
-	Addr   string
-	Attrs  map[string]string
-	Online bool
+	Created int
+	Name    string
+	Host    string
+	Port    string
+	Addr    string
+	Attrs   map[string]string
 }
 
 type ServiceSet struct {
-	services  map[string]*Service
-	filters   map[string]string
-	listeners map[chan *ServiceUpdate]struct{}
-	serMutex  sync.Mutex
-	filMutex  sync.Mutex
-	lisMutex  sync.Mutex
+	services   map[string]*Service
+	filters    map[string]string
+	watches    map[chan *ServiceUpdate]struct{}
+	serMutex   sync.Mutex
+	filMutex   sync.Mutex
+	watchMutex sync.Mutex
+	call       *rpcplus.Call
+}
+
+func copyService(service *Service) *Service {
+	s := *service
+	s.Attrs = make(map[string]string, len(service.Attrs))
+	for k, v := range service.Attrs {
+		s.Attrs[k] = v
+	}
+	return &s
+}
+
+func makeServiceSet(call *rpcplus.Call) *ServiceSet {
+	return &ServiceSet{
+		services: make(map[string]*Service),
+		filters:  make(map[string]string),
+		watches:  make(map[chan *ServiceUpdate]struct{}),
+		call:     call,
+	}
 }
 
 func (s *ServiceSet) bind(updates chan *ServiceUpdate) chan struct{} {
@@ -45,29 +65,49 @@ func (s *ServiceSet) bind(updates chan *ServiceUpdate) chan struct{} {
 			if s.filters != nil && !s.matchFilters(update.Attrs) {
 				continue
 			}
+
 			s.serMutex.Lock()
-			if _, exists := s.services[update.Addr]; !exists {
-				host, port, _ := net.SplitHostPort(update.Addr)
-				s.services[update.Addr] = &Service{
-					Name: update.Name,
-					Addr: update.Addr,
-					Host: host,
-					Port: port,
+			if update.Online {
+				if _, exists := s.services[update.Addr]; !exists {
+					host, port, _ := net.SplitHostPort(update.Addr)
+					s.services[update.Addr] = &Service{
+						Name: update.Name,
+						Addr: update.Addr,
+						Host: host,
+						Port: port,
+					}
+				}
+				s.services[update.Addr].Attrs = update.Attrs
+			} else {
+				if _, exists := s.services[update.Addr]; exists {
+					delete(s.services, update.Addr)
+				} else {
+					s.serMutex.Unlock()
+					continue
 				}
 			}
-			s.services[update.Addr].Online = update.Online
-			s.services[update.Addr].Attrs = update.Attrs
 			s.serMutex.Unlock()
-			if s.listeners != nil {
-				s.lisMutex.Lock()
-				for ch := range s.listeners {
-					ch <- update
-				}
-				s.lisMutex.Unlock()
-			}
+			s.updateWatches(update)
 		}
+		s.closeWatches()
 	}()
 	return current
+}
+
+func (s *ServiceSet) updateWatches(update *ServiceUpdate) {
+	s.watchMutex.Lock()
+	defer s.watchMutex.Unlock()
+	for ch := range s.watches {
+		ch <- update
+	}
+}
+
+func (s *ServiceSet) closeWatches() {
+	s.watchMutex.Lock()
+	defer s.watchMutex.Unlock()
+	for ch := range s.watches {
+		close(ch)
+	}
 }
 
 func (s *ServiceSet) matchFilters(attrs map[string]string) bool {
@@ -81,50 +121,29 @@ func (s *ServiceSet) matchFilters(attrs map[string]string) bool {
 	return true
 }
 
+// deprecated
 func (s *ServiceSet) Online() []*Service {
+	return s.Services()
+}
+
+func (s *ServiceSet) Services() []*Service {
 	s.serMutex.Lock()
 	defer s.serMutex.Unlock()
 	list := make([]*Service, 0, len(s.services))
 	for _, service := range s.services {
-		if service.Online {
-			list = append(list, copyService(service))
-		}
+		list = append(list, copyService(service))
 	}
 	return list
 }
 
-func (s *ServiceSet) Offline() []*Service {
-	s.serMutex.Lock()
-	defer s.serMutex.Unlock()
-	list := make([]*Service, 0, len(s.services))
-	for _, service := range s.services {
-		if !service.Online {
-			list = append(list, copyService(service))
-		}
-	}
-	return list
-}
-
-func copyService(service *Service) *Service {
-	s := *service
-	s.Attrs = make(map[string]string, len(service.Attrs))
-	for k, v := range service.Attrs {
-		s.Attrs[k] = v
-	}
-	return &s
-}
-
+// deprecated
 func (s *ServiceSet) OnlineAddrs() []string {
-	list := make([]string, 0, len(s.services))
-	for _, service := range s.Online() {
-		list = append(list, service.Addr)
-	}
-	return list
+	return s.Addrs()
 }
 
-func (s *ServiceSet) OfflineAddrs() []string {
+func (s *ServiceSet) Addrs() []string {
 	list := make([]string, 0, len(s.services))
-	for _, service := range s.Offline() {
+	for _, service := range s.Services() {
 		list = append(list, service.Addr)
 	}
 	return list
@@ -159,20 +178,46 @@ func (s *ServiceSet) Filter(attrs map[string]string) {
 	}
 }
 
-func (s *ServiceSet) Subscribe(ch chan *ServiceUpdate) {
-	s.lisMutex.Lock()
-	defer s.lisMutex.Unlock()
-	s.listeners[ch] = struct{}{}
+func (s *ServiceSet) Watch(ch chan *ServiceUpdate, bringCurrent bool) {
+	s.watchMutex.Lock()
+	defer s.watchMutex.Unlock()
+	s.watches[ch] = struct{}{}
+	if bringCurrent {
+		go func() {
+			s.serMutex.Lock()
+			defer s.serMutex.Unlock()
+			for _, service := range s.services {
+				ch <- &ServiceUpdate{
+					Name:   service.Name,
+					Addr:   service.Addr,
+					Online: true,
+					Attrs:  service.Attrs,
+				}
+			}
+		}()
+	}
 }
 
-func (s *ServiceSet) Unsubscribe(ch chan *ServiceUpdate) {
-	s.lisMutex.Lock()
-	defer s.lisMutex.Unlock()
-	delete(s.listeners, ch)
+func (s *ServiceSet) Unwatch(ch chan *ServiceUpdate) {
+	s.watchMutex.Lock()
+	defer s.watchMutex.Unlock()
+	delete(s.watches, ch)
 }
 
-func (s *ServiceSet) Close() {
-	// TODO: close update stream
+func (s *ServiceSet) Wait() (*ServiceUpdate, error) {
+	updateCh := make(chan *ServiceUpdate, 1024) // buffer because of Watch bringCurrent race bug
+	s.Watch(updateCh, true)
+	defer s.Unwatch(updateCh)
+	select {
+	case update := <-updateCh:
+		return update, nil
+	case <-time.After(time.Duration(WaitTimeoutSecs) * time.Second):
+		return nil, errors.New("discover: wait timeout exceeded")
+	}
+}
+
+func (s *ServiceSet) Close() error {
+	return s.call.CloseStream()
 }
 
 type Client struct {
@@ -210,18 +255,28 @@ func pickMostPublicIp() string {
 	return ip
 }
 
-func (c *Client) Services(name string) (*ServiceSet, error) {
+func (c *Client) ServiceSet(name string) (*ServiceSet, error) {
 	updates := make(chan *ServiceUpdate)
-	c.client.StreamGo("Agent.Subscribe", &Args{
+	call := c.client.StreamGo("Agent.Subscribe", &Args{
 		Name: name,
 	}, updates)
-	set := &ServiceSet{
-		services:  make(map[string]*Service),
-		filters:   make(map[string]string),
-		listeners: make(map[chan *ServiceUpdate]struct{}),
-	}
+	set := makeServiceSet(call)
 	<-set.bind(updates)
 	return set, nil
+}
+
+func (c *Client) Services(name string) ([]*Service, error) {
+	set, err := c.ServiceSet(name)
+	if err != nil {
+		return nil, err
+	}
+	_, err = set.Wait()
+	if err != nil {
+		return nil, err
+	}
+	set.Close()
+	return set.Services(), nil
+
 }
 
 func (c *Client) Register(name, port string, attributes map[string]string) error {

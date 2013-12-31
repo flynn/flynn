@@ -62,10 +62,11 @@ func ListenAndServe(server *Agent) error {
 func (s *Agent) Subscribe(args *Args, stream rpcplus.Stream) error {
 	updates, err := s.Backend.Subscribe(args.Name)
 	if err != nil {
-		log.Println("Subscribe: ", err)
+		log.Println("Subscribe: error:", err)
 		stream.Send <- &ServiceUpdate{} // be sure to unblock client
 		return err
 	}
+	log.Println("Subscribe:", args.Name)
 	for update := range updates.Chan() {
 		select {
 		case stream.Send <- update:
@@ -80,23 +81,26 @@ func (s *Agent) Subscribe(args *Args, stream rpcplus.Stream) error {
 func (s *Agent) Register(args *Args, ret *struct{}) error {
 	err := s.Backend.Register(args.Name, args.Addr, args.Attrs)
 	if err != nil {
-		log.Println("Register: ", err)
+		log.Println("Register: error:", err)
 	}
+	log.Println("Register:", args.Name, args.Addr, args.Attrs)
 	return err
 }
 
 func (s *Agent) Unregister(args *Args, ret *struct{}) error {
 	err := s.Backend.Unregister(args.Name, args.Addr)
 	if err != nil {
-		log.Println("Unregister: ", err)
+		log.Println("Unregister: error:", err)
 	}
+	log.Println("Unregister:", args.Name, args.Addr)
 	return err
 }
 
 func (s *Agent) Heartbeat(args *Args, ret *struct{}) error {
 	err := s.Backend.Heartbeat(args.Name, args.Addr)
 	if err != nil {
-		log.Println("Heartbeat: ", err)
+		log.Println("Heartbeat: error:", err)
 	}
+	log.Println("Heartbeat:", args.Name, args.Addr)
 	return err
 }

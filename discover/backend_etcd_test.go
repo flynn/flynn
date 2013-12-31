@@ -1,27 +1,65 @@
 package discover
 
 import (
-	"fmt"
+	"math/rand"
+	"os"
+	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/flynn/go-etcd/etcd"
 )
 
-func deleteService(client *etcd.Client, service string, addr string) {
-	client.Delete(fmt.Sprintf("/services/%s/%s", service, addr), true)
+func runEtcdServer() func() {
+	killCh := make(chan struct{})
+	doneCh := make(chan struct{})
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	name := "etcd-test." + strconv.Itoa(r.Int())
+	dataDir := "/tmp/" + name
+	go func() {
+		cmd := exec.Command("etcd", "-name", name, "-data-dir", dataDir)
+		if err := cmd.Start(); err != nil {
+			panic(err)
+		}
+		cmdDone := make(chan error)
+		go func() {
+			cmdDone <- cmd.Wait()
+		}()
+		select {
+		case <-killCh:
+			if err := cmd.Process.Kill(); err != nil {
+				panic(err)
+			}
+			<-cmdDone
+		case err := <-cmdDone:
+			panic(err)
+		}
+		if err := os.RemoveAll(dataDir); err != nil {
+			panic(err)
+		}
+		doneCh <- struct{}{}
+	}()
+	return func() {
+		close(killCh)
+		<-doneCh
+	}
 }
 
 const NoAttrService = "null"
 
 func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
+	killServer := runEtcdServer()
+	defer killServer()
+
 	client := etcd.NewClient(nil)
 	backend := EtcdBackend{Client: client}
 	serviceName := "test_register"
 	serviceAddr := "127.0.0.1"
 
-	deleteService(client, serviceName, serviceAddr)
+	client.Delete(KeyPrefix+"/services/"+serviceName+"/"+serviceAddr, true)
 	backend.Register(serviceName, serviceAddr, nil)
 
 	servicePath := KeyPrefix + "/services/" + serviceName + "/" + serviceAddr
@@ -43,6 +81,9 @@ func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
 }
 
 func TestEtcdBackend_Attributes(t *testing.T) {
+	killServer := runEtcdServer()
+	defer killServer()
+
 	client := etcd.NewClient(nil)
 	backend := EtcdBackend{Client: client}
 	serviceName := "test_attributes"
@@ -52,7 +93,7 @@ func TestEtcdBackend_Attributes(t *testing.T) {
 		"baz": "qux",
 	}
 
-	deleteService(client, serviceName, serviceAddr)
+	client.Delete(KeyPrefix+"/services/"+serviceName+"/"+serviceAddr, true)
 	backend.Register(serviceName, serviceAddr, serviceAttrs)
 	defer backend.Unregister(serviceName, serviceAddr)
 
@@ -66,11 +107,18 @@ func TestEtcdBackend_Attributes(t *testing.T) {
 }
 
 func TestEtcdBackend_Subscribe(t *testing.T) {
+	killServer := runEtcdServer()
+	defer killServer()
+
 	client := etcd.NewClient(nil)
 	backend := EtcdBackend{Client: client}
 
-	backend.Register("test_subscribe", "10.0.0.1", nil)
+	err := backend.Register("test_subscribe", "10.0.0.1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer backend.Unregister("test_subscribe", "10.0.0.1")
+
 	backend.Register("test_subscribe", "10.0.0.2", nil)
 	defer backend.Unregister("test_subscribe", "10.0.0.2")
 
@@ -79,6 +127,7 @@ func TestEtcdBackend_Subscribe(t *testing.T) {
 
 	backend.Register("test_subscribe", "10.0.0.3", nil)
 	defer backend.Unregister("test_subscribe", "10.0.0.3")
+
 	backend.Register("test_subscribe", "10.0.0.4", nil)
 	defer backend.Unregister("test_subscribe", "10.0.0.4")
 
