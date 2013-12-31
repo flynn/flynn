@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -14,7 +15,7 @@ import (
 var WaitTimeoutSecs = 10
 
 type Service struct {
-	Created int
+	Created uint
 	Name    string
 	Host    string
 	Port    string
@@ -71,10 +72,11 @@ func (s *ServiceSet) bind(updates chan *ServiceUpdate) chan struct{} {
 				if _, exists := s.services[update.Addr]; !exists {
 					host, port, _ := net.SplitHostPort(update.Addr)
 					s.services[update.Addr] = &Service{
-						Name: update.Name,
-						Addr: update.Addr,
-						Host: host,
-						Port: port,
+						Name:    update.Name,
+						Addr:    update.Addr,
+						Host:    host,
+						Port:    port,
+						Created: update.Created,
 					}
 				}
 				s.services[update.Addr].Attrs = update.Attrs
@@ -119,6 +121,21 @@ func (s *ServiceSet) matchFilters(attrs map[string]string) bool {
 		}
 	}
 	return true
+}
+
+type serviceByAge []*Service
+
+func (a serviceByAge) Len() int           { return len(a) }
+func (a serviceByAge) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a serviceByAge) Less(i, j int) bool { return a[i].Created < a[j].Created }
+
+func (s *ServiceSet) Leader() *Service {
+	services := s.Services()
+	if len(services) > 0 {
+		sort.Sort(serviceByAge(services))
+		return services[0]
+	}
+	return nil
 }
 
 // deprecated
