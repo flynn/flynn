@@ -11,7 +11,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/flynn/go-discover/discover"
+	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/lorne/types"
 	"github.com/flynn/sampi/client"
@@ -20,7 +20,7 @@ import (
 )
 
 func main() {
-	disc, err := discover.NewClient()
+	disc, err := discoverd.NewClient()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	conn, err := net.Dial("tcp", services.OnlineAddrs()[0])
+	conn, err := net.Dial("tcp", services[0].Addr)
 	if err != nil {
 		log.Fatal(err)
 	}
