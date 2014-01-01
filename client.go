@@ -1,17 +1,17 @@
 package main
 
 import (
-	"github.com/flynn/go-discover/discover"
+	"github.com/flynn/go-discoverd/discoverd"
 	"log"
 	"os"
 )
 
 type clientCmd struct {
-	client *discover.Client
+	client *discoverd.Client
 }
 
 func (cmd *clientCmd) InitClient(silent bool) {
-	client, err := discover.NewClient()
+	client, err := discoverd.NewClient()
 	if err != nil {
 		if silent {
 			os.Exit(1)

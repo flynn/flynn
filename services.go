@@ -21,18 +21,17 @@ func (cmd *services) DefineFlags(fs *flag.FlagSet) {
 
 func (cmd *services) Run(fs *flag.FlagSet) {
 	cmd.InitClient(false)
-	set, err := cmd.client.Services(fs.Arg(0))
+	services, err := cmd.client.Services(fs.Arg(0))
 	if err != nil {
 		log.Fatal(err)
 	}
 	if *cmd.onlyOne {
-		addrs := set.OnlineAddrs()
-		if len(addrs) > 0 {
-			fmt.Println(addrs[0])
+		if len(services) > 0 {
+			fmt.Println(services[0])
 		}
 		return
 	}
-	for _, addr := range set.OnlineAddrs() {
-		fmt.Println(addr)
+	for _, service := range services {
+		fmt.Println(service.Addr)
 	}
 }
