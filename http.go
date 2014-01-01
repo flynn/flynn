@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flynn/go-discover/discover"
-	"github.com/flynn/go-etcd/etcd"
+	"github.com/coreos/go-etcd/etcd"
+	"github.com/flynn/go-discoverd"
 )
 
 type HTTPFrontend struct {
@@ -30,8 +30,8 @@ type HTTPFrontend struct {
 
 	etcdPrefix string
 
-	etcd     *etcd.Client
-	discover *discover.Client
+	etcd      *etcd.Client
+	discoverd *discoverd.Client
 }
 
 func NewHTTPFrontend(addr string) (*HTTPFrontend, error) {
@@ -43,7 +43,7 @@ func NewHTTPFrontend(addr string) (*HTTPFrontend, error) {
 		services:   make(map[string]*httpServer),
 	}
 	var err error
-	f.discover, err = discover.NewClient()
+	f.discoverd, err = discoverd.NewClient()
 	return f, err
 }
 
@@ -64,7 +64,7 @@ func (s *HTTPFrontend) addDomain(domain string, service string, persist bool) er
 
 	server := s.services[service]
 	if server == nil {
-		services, err := s.discover.Services(service)
+		services, err := s.discoverd.ServiceSet(service)
 		if err != nil {
 			return err
 		}
@@ -114,18 +114,17 @@ func (s *HTTPFrontend) syncDatabase() {
 		log.Fatal(err)
 		return
 	}
-	since = data.ModifiedIndex
-	for _, res := range data.Kvs {
-		if !res.Dir {
+	since = data.EtcdIndex
+	for _, node := range data.Node.Nodes {
+		if !node.Dir {
 			continue
 		}
-		domain := path.Base(res.Key)
-		serviceRes, err := s.etcd.Get(res.Key+"/service", false, false)
+		domain := path.Base(node.Key)
+		serviceRes, err := s.etcd.Get(node.Key+"/service", false, false)
 		if err != nil {
 			log.Fatal(err)
 		}
-		service := serviceRes.Value
-		if err := s.addDomain(domain, service, false); err != nil {
+		if err := s.addDomain(domain, serviceRes.Node.Value, false); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -136,14 +135,20 @@ watch:
 	// TODO: store stop
 	go s.etcd.Watch(s.etcdPrefix, since, false, stream, stop)
 	for res := range stream {
-		if !res.Dir && res.NewKey && path.Base(res.Key) == "service" {
-			domain := path.Base(path.Dir(res.Key))
-			if err := s.addDomain(domain, res.Value, false); err != nil {
+		if res.Node.Dir || path.Base(res.Node.Key) == "service" {
+			continue
+		}
+		domain := path.Base(path.Dir(res.Node.Key))
+		s.mtx.Lock()
+		_, exists := s.domains[domain]
+		s.mtx.Unlock()
+		if !exists {
+			if err := s.addDomain(domain, res.Node.Value, false); err != nil {
 				// TODO: log error
 			}
 		}
-		// TODO: handle delete
 	}
+	// TODO: handle delete
 	log.Println("done watching etcd")
 }
 
@@ -205,7 +210,7 @@ func (s *HTTPFrontend) handle(conn net.Conn) {
 
 type httpServer struct {
 	name     string
-	services *discover.ServiceSet
+	services *discoverd.ServiceSet
 	refs     int
 }
 

@@ -4,7 +4,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/flynn/go-discover/discover"
+	"github.com/flynn/go-discoverd"
 )
 
 type TCPFrontend struct {
@@ -26,7 +26,7 @@ func (s *TCPFrontend) RemoveTCPService(service string) {
 
 type tcpServer struct {
 	addr     string
-	services *discover.ServiceSet
+	services *discoverd.ServiceSet
 }
 
 func (b *tcpServer) serve() {

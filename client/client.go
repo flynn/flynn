@@ -3,13 +3,13 @@ package client
 import (
 	"errors"
 
-	"github.com/flynn/go-discover/discover"
+	"github.com/flynn/go-discoverd"
 	"github.com/flynn/rpcplus"
 	"github.com/flynn/strowger/types"
 )
 
 func New() (*Client, error) {
-	disc, err := discover.NewClient()
+	disc, err := discoverd.NewClient()
 	if err != nil {
 		return nil, err
 	}
@@ -17,11 +17,10 @@ func New() (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	addrs := services.OnlineAddrs()
-	if len(addrs) == 0 {
+	if len(services) == 0 {
 		return nil, errors.New("strowger: no servers found")
 	}
-	c, err := rpcplus.DialHTTP("tcp", addrs[0])
+	c, err := rpcplus.DialHTTP("tcp", services[0].Addr)
 	return &Client{c}, err
 }
 

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/flynn/go-discover/discover"
+	"github.com/flynn/go-discoverd"
 	rpc "github.com/flynn/rpcplus/comborpc"
 )
 
@@ -36,7 +36,7 @@ func main() {
 	rpc.HandleHTTP()
 	go http.ListenAndServe(*rpcAddr, nil)
 
-	d, err := discover.NewClient()
+	d, err := discoverd.NewClient()
 	if err != nil {
 		log.Fatal(err)
 	}

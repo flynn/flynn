@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/flynn/go-discover/discover"
+	"github.com/flynn/go-discoverd"
 )
 
 func main() {
-	d, err := discover.NewClient()
+	d, err := discoverd.NewClient()
 	if err != nil {
 		log.Fatal(err)
 	}
