@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/flynn/go-discoverd/discoverd"
+	"github.com/flynn/go-discoverd"
 	"log"
 	"os"
 )
