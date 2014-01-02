@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 
-	"github.com/flynn/go-discover/discover"
+	"github.com/flynn/go-discoverd"
 	"github.com/flynn/lorne/types"
 	"github.com/flynn/rpcplus"
 )
@@ -20,15 +20,15 @@ import (
 var ErrNoServers = errors.New("lorne: no servers found")
 
 func New(id string) (*Client, error) {
-	disc, err := discover.NewClient()
+	disc, err := discoverd.NewClient()
 	if err != nil {
 		return nil, err
 	}
-	services, err := disc.Services("flynn-lorne." + id)
+	services, err := disc.ServiceSet("flynn-lorne." + id)
 	if err != nil {
 		return nil, err
 	}
-	addrs := services.OnlineAddrs()
+	addrs := services.Addrs()
 	if len(addrs) == 0 {
 		return nil, ErrNoServers
 	}
@@ -39,7 +39,7 @@ func New(id string) (*Client, error) {
 type Client struct {
 	c *rpcplus.Client
 
-	service *discover.ServiceSet
+	service *discoverd.ServiceSet
 }
 
 func (c *Client) JobList() (map[string]lorne.Job, error) {

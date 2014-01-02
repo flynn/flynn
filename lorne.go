@@ -7,7 +7,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/flynn/go-discover/discover"
+	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/lorne/types"
 	sampic "github.com/flynn/sampi/client"
@@ -42,7 +42,7 @@ func main() {
 		state:        state,
 	}
 
-	disc, err := discover.NewClient()
+	disc, err := discoverd.NewClient()
 	if err != nil {
 		log.Fatal(err)
 	}
