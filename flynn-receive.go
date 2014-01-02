@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/go-discover/discover"
+	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-dockerclient"
 	lc "github.com/flynn/lorne/client"
 	"github.com/flynn/lorne/types"
@@ -20,14 +20,14 @@ import (
 
 // WARNING: assumes one host at the moment
 
-var sd *discover.Client
+var sd *discoverd.Client
 var sched *sc.Client
 var host *lc.Client
 var hostid string
 
 func init() {
 	var err error
-	sd, err = discover.NewClient()
+	sd, err = discoverd.NewClient()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -47,12 +47,11 @@ func init() {
 func main() {
 	root := "/var/lib/demo/apps"
 
-	set, _ := sd.Services("shelf")
-	addrs := set.OnlineAddrs()
-	if len(addrs) < 1 {
+	services, _ := sd.Services("shelf")
+	if len(services) < 1 {
 		panic("Shelf is not discoverable")
 	}
-	shelfHost := addrs[0]
+	shelfHost := services[0].Addr
 
 	app := os.Args[2]
 	os.MkdirAll(root+"/"+app, 0755)
