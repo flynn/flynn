@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/flynn/go-discover/discover"
+	"github.com/flynn/go-discoverd"
 	rpc "github.com/flynn/rpcplus/comborpc"
 	"github.com/technoweenie/grohl"
 )
@@ -25,7 +25,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	d, err := discover.NewClient()
+	d, err := discoverd.NewClient()
 	if err != nil {
 		g.Log(grohl.Data{"at": "discover_connect", "status": "error", "err": err})
 		os.Exit(1)

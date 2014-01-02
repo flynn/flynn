@@ -11,6 +11,11 @@
 			"Rev": "364fb577de68fb646c4cb39cc0e09c887ee16376"
 		},
 		{
+			"ImportPath": "github.com/coreos/go-etcd/etcd",
+			"Comment": "v0.2.0-rc1-50-gf0d5e98",
+			"Rev": "f0d5e98e38e4d3b100bdc32c25a69141e1a6ac45"
+		},
+		{
 			"ImportPath": "github.com/coreos/go-log/log",
 			"Rev": "840af6b63e623201384b2f20a8e7d3f2dcfef063"
 		},
@@ -19,17 +24,16 @@
 			"Rev": "d38c05b3831b1f09cb592a726822e04ba76543b5"
 		},
 		{
-			"ImportPath": "github.com/flynn/go-discover/discover",
-			"Rev": "39dfc9f2dd2e016bb58e4ee148a8ba95a02eccce"
+			"ImportPath": "github.com/flynn/discoverd/agent",
+			"Rev": "bcaf71894decb47db42b8af77c02f12aec7bf873"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-discoverd",
+			"Rev": "0706ba2f66a1c4352f1bcc1bb2e73bf4e2c1fb48"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-dockerclient",
 			"Rev": "1970d77a6a8ab2e45efc6785c6cbf1a39e8fc109"
-		},
-		{
-			"ImportPath": "github.com/flynn/go-etcd/etcd",
-			"Comment": "v0.2.0-rc1-31-g383cae1",
-			"Rev": "383cae1d8765b2028bcc7b7724f3fcefadb55484"
 		},
 		{
 			"ImportPath": "github.com/flynn/lorne/types",
