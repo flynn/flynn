@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/flynn/go-discover/discover"
+	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-dockerclient"
 	lornec "github.com/flynn/lorne/client"
 	"github.com/flynn/lorne/types"
@@ -25,7 +25,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	disc, err = discover.NewClient()
+	disc, err = discoverd.NewClient()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func main() {
 }
 
 var scheduler *sampic.Client
-var disc *discover.Client
+var disc *discoverd.Client
 var router *strowgerc.Client
 
 type Job struct {
@@ -88,12 +88,11 @@ type Formation struct {
 }
 
 func shelfURL() string {
-	set, _ := disc.Services("shelf")
-	addrs := set.OnlineAddrs()
-	if len(addrs) < 1 {
+	services, _ := disc.Services("shelf")
+	if len(services) < 1 {
 		panic("Shelf is not discoverable")
 	}
-	return addrs[0]
+	return services[0].Addr
 }
 
 // POST /apps/{app_id}/formation/{formation_id}
