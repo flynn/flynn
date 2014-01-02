@@ -1,12 +1,13 @@
 {
   "etcd": {
     "args": [
-      "-d={{ .Volume \"/data\" }}",
-      "-c={{ .ExternalIP }}:{{ .TCPPort 0 }}",
-      "-cl=0.0.0.0",
-      "-s={{ .ExternalIP }}:{{ .TCPPort 1 }}",
-      "-sl=0.0.0.0",
-      "{{ if .Env.ETCD_PEERS }}-C={{ .Env.ETCD_PEERS }}{{ end }}"
+      "-data-dir={{ .Volume \"/data\" }}",
+      "-addr={{ .ExternalIP }}:{{ .TCPPort 0 }}",
+      "-addr=0.0.0.0:{{ .TCPPort 0 }}",
+      "-peer-addr={{ .ExternalIP }}:{{ .TCPPort 1 }}",
+      "-peer-bind-addr=0.0.0.0:{{ .TCPPort 1 }}",
+      "-name={{ .Env.HOSTNAME }}",
+      "{{ if .Env.ETCD_PEERS }}-peers={{ .Env.ETCD_PEERS }}{{ end }}"
     ]
   },
   "discoverd": {
