@@ -27,7 +27,7 @@ func main() {
 	grohl.Log(grohl.Data{"at": "start"})
 	g := grohl.NewContext(grohl.Data{"fn": "main"})
 
-	dockerc, err := docker.NewClient("http://localhost:4243")
+	dockerc, err := docker.NewClient("unix:///var/run/docker.sock")
 	if err != nil {
 		log.Fatal(err)
 	}
