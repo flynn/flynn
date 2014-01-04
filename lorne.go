@@ -86,12 +86,7 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	if *externalAddr != "" {
-		err = disc.RegisterWithHost("flynn-lorne."+*hostID, *externalAddr, "1113", nil)
-	} else {
-		err = disc.Register("flynn-lorne."+*hostID, "1113", nil)
-	}
-	if err != nil {
+	if err = disc.Register("flynn-lorne."+*hostID, *externalAddr+":1113"); err != nil {
 		log.Fatal(err)
 	}
 
