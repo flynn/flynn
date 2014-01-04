@@ -1,5 +1,3 @@
-DOCKER=docker -H 127.0.0.1
-
 run: all
 	bin/forego start
 
@@ -65,10 +63,10 @@ bin/strowger: /usr/bin/go bin/discoverd
 	go get -v github.com/flynn/strowger
 
 slugbuilder: /usr/bin/docker
-	@${DOCKER} images | grep flynn/slugbuilder > /dev/null || ${DOCKER} pull flynn/slugbuilder
+	@docker images | grep flynn/slugbuilder > /dev/null || docker pull flynn/slugbuilder
 
 slugrunner: /usr/bin/docker
-	@${DOCKER} images | grep flynn/slugrunner > /dev/null || ${DOCKER} pull flynn/slugrunner
+	@docker images | grep flynn/slugrunner > /dev/null || docker pull flynn/slugrunner
 
 # Vendor
 
@@ -89,10 +87,7 @@ bin/godeb:
 /usr/bin/go: bin/godeb
 	sudo bin/godeb install 1.2
 
-/etc/default/docker:
-	sudo bash -c "echo 'DOCKER_OPTS=\"-H 127.0.0.1\"' > /etc/default/docker"
-
-/usr/bin/docker: /etc/default/docker
+/usr/bin/docker:
 	sudo apt-get update
 	sudo apt-get install -y lxc-docker
 	sudo touch /usr/bin/docker
