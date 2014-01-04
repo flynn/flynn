@@ -12,8 +12,6 @@ import (
 	"github.com/flynn/rpcplus"
 )
 
-var WaitTimeoutSecs = 10
-
 type Service struct {
 	Created uint
 	Name    string
@@ -26,7 +24,7 @@ type Service struct {
 type ServiceSet struct {
 	services   map[string]*Service
 	filters    map[string]string
-	watches    map[chan *agent.ServiceUpdate]struct{}
+	watches    map[chan *agent.ServiceUpdate]bool
 	serMutex   sync.Mutex
 	filMutex   sync.Mutex
 	watchMutex sync.Mutex
@@ -46,7 +44,7 @@ func makeServiceSet(call *rpcplus.Call) *ServiceSet {
 	return &ServiceSet{
 		services: make(map[string]*Service),
 		filters:  make(map[string]string),
-		watches:  make(map[chan *agent.ServiceUpdate]struct{}),
+		watches:  make(map[chan *agent.ServiceUpdate]bool),
 		call:     call,
 	}
 }
@@ -99,8 +97,11 @@ func (s *ServiceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
 func (s *ServiceSet) updateWatches(update *agent.ServiceUpdate) {
 	s.watchMutex.Lock()
 	defer s.watchMutex.Unlock()
-	for ch := range s.watches {
+	for ch, once := range s.watches {
 		ch <- update
+		if once {
+			delete(s.watches, ch)
+		}
 	}
 }
 
@@ -185,10 +186,10 @@ func (s *ServiceSet) Filter(attrs map[string]string) {
 	}
 }
 
-func (s *ServiceSet) Watch(ch chan *agent.ServiceUpdate, bringCurrent bool) {
+func (s *ServiceSet) Watch(ch chan *agent.ServiceUpdate, bringCurrent bool, fireOnce bool) {
 	s.watchMutex.Lock()
 	defer s.watchMutex.Unlock()
-	s.watches[ch] = struct{}{}
+	s.watches[ch] = fireOnce
 	if bringCurrent {
 		go func() {
 			s.serMutex.Lock()
@@ -212,16 +213,10 @@ func (s *ServiceSet) Unwatch(ch chan *agent.ServiceUpdate) {
 	delete(s.watches, ch)
 }
 
-func (s *ServiceSet) Wait() (*agent.ServiceUpdate, error) {
+func (s *ServiceSet) Wait() chan *agent.ServiceUpdate {
 	updateCh := make(chan *agent.ServiceUpdate, 1024) // buffer because of Watch bringCurrent race bug
-	s.Watch(updateCh, true)
-	defer s.Unwatch(updateCh)
-	select {
-	case update := <-updateCh:
-		return update, nil
-	case <-time.After(time.Duration(WaitTimeoutSecs) * time.Second):
-		return nil, errors.New("discover: wait timeout exceeded")
-	}
+	s.Watch(updateCh, true, true)
+	return updateCh
 }
 
 func (s *ServiceSet) Close() error {
@@ -260,18 +255,18 @@ func (c *Client) ServiceSet(name string) (*ServiceSet, error) {
 	return set, nil
 }
 
-func (c *Client) Services(name string) ([]*Service, error) {
+func (c *Client) Services(name string, timeout int) ([]*Service, error) {
 	set, err := c.ServiceSet(name)
 	if err != nil {
 		return nil, err
 	}
-	_, err = set.Wait()
-	if err != nil {
-		return nil, err
+	defer set.Close()
+	select {
+	case <-set.Wait():
+		return set.Services(), nil
+	case <-time.After(time.Duration(timeout) * time.Second):
+		return nil, errors.New("discover: wait timeout exceeded")
 	}
-	set.Close()
-	return set.Services(), nil
-
 }
 
 func (c *Client) Register(name, addr string) error {

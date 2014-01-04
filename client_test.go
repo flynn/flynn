@@ -167,7 +167,7 @@ func TestClient(t *testing.T) {
 
 	// Test client.Services
 
-	services, err := client.Services(serviceName)
+	services, err := client.Services(serviceName, 1)
 	if err != nil {
 		t.Fatal("Unable to get services:", err)
 	}
@@ -179,7 +179,7 @@ func TestClient(t *testing.T) {
 
 	set, _ = client.ServiceSet(serviceName)
 	updates := make(chan *agent.ServiceUpdate)
-	set.Watch(updates, true)
+	set.Watch(updates, true, false)
 	err = client.Register(serviceName, ":5555")
 	if err != nil {
 		t.Fatal("Registering service failed", err)
@@ -234,7 +234,7 @@ func TestServiceAgeAndLeader(t *testing.T) {
 	if err != nil {
 		t.Fatal("Registering service failed", err.Error())
 	}
-	services, _ := client.Services(serviceName)
+	services, _ := client.Services(serviceName, 1)
 	if len(services) < 1 {
 		t.Fatal("Registered service not online")
 	}
@@ -246,7 +246,7 @@ func TestServiceAgeAndLeader(t *testing.T) {
 	if err != nil {
 		t.Fatal("Registering service failed", err.Error())
 	}
-	services, _ = client.Services(serviceName)
+	services, _ = client.Services(serviceName, 1)
 	if len(services) < 2 {
 		t.Fatal("Registered services not online")
 	}
