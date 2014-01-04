@@ -69,7 +69,7 @@ func (c *Client) Attach(req *lorne.AttachReq, wait bool) (ReadWriteCloser, func(
 	if err != nil {
 		return nil, nil, err
 	}
-	addrs := c.service.OnlineAddrs()
+	addrs := c.service.Addrs()
 	if len(addrs) == 0 {
 		return nil, nil, ErrNoServers
 	}
