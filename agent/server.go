@@ -62,7 +62,7 @@ func ListenAndServe(server *Agent) error {
 }
 
 func expandAddr(addr string) string {
-	if addr[0] == 58 {
+	if addr[0] == ':' {
 		return os.Getenv("EXTERNAL_IP") + addr
 	}
 	return addr
