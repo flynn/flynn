@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/flynn/go-discoverd"
 	rpc "github.com/flynn/rpcplus/comborpc"
@@ -30,12 +29,7 @@ func main() {
 		g.Log(grohl.Data{"at": "discover_connect", "status": "error", "err": err})
 		os.Exit(1)
 	}
-	if hostPort := strings.SplitN(*listenAddr, ":", 2); hostPort[0] != "" {
-		err = d.RegisterWithHost("flynn-sampi", hostPort[0], hostPort[1], nil)
-	} else {
-		err = d.Register("flynn-sampi", hostPort[1], nil)
-	}
-	if err != nil {
+	if err = d.Register("flynn-sampi", *listenAddr); err != nil {
 		g.Log(grohl.Data{"at": "discover_registration", "status": "error", "err": err})
 		os.Exit(1)
 	}

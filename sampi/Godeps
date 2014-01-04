@@ -29,15 +29,15 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-discoverd",
-			"Rev": "0706ba2f66a1c4352f1bcc1bb2e73bf4e2c1fb48"
+			"Rev": "d9b0b69a2ce31c717c0fd172f3abc1b34977baf5"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-dockerclient",
-			"Rev": "1970d77a6a8ab2e45efc6785c6cbf1a39e8fc109"
+			"Rev": "7299ec5cb7c35fda101c46a24edb648795f7e074"
 		},
 		{
 			"ImportPath": "github.com/flynn/lorne/types",
-			"Rev": "065937a5caf2ffff2916496b21f348039ab3024c"
+			"Rev": "2bcf55e3277d9d96f6670b70ce1b74402f2ec74f"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
