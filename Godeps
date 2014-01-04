@@ -30,7 +30,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-dockerclient",
-			"Rev": "9415f43ddb02e9a9eec5835105248d72dbd94094"
+			"Rev": "7299ec5cb7c35fda101c46a24edb648795f7e074"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
