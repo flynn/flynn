@@ -46,7 +46,7 @@ func (b *tcpServer) serve() {
 
 func (s *tcpServer) getBackend() net.Conn {
 	// TODO: randomize backend list
-	for _, addr := range s.services.OnlineAddrs() {
+	for _, addr := range s.services.Addrs() {
 		// TODO: set connection timeout
 		conn, err := net.Dial("tcp", addr)
 		if err != nil {

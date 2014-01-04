@@ -215,7 +215,7 @@ type httpServer struct {
 }
 
 func (s *httpServer) getBackend() *httputil.ClientConn {
-	for _, addr := range shuffle(s.services.OnlineAddrs()) {
+	for _, addr := range shuffle(s.services.Addrs()) {
 		// TODO: set connection timeout
 		backend, err := net.Dial("tcp", addr)
 		if err != nil {
