@@ -3,6 +3,7 @@ package agent
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/rpcplus"
@@ -60,6 +61,13 @@ func ListenAndServe(server *Agent) error {
 	return http.ListenAndServe(server.Address, nil)
 }
 
+func expandAddr(addr string) string {
+	if addr[0] == 58 {
+		return os.Getenv("EXTERNAL_IP") + addr
+	}
+	return addr
+}
+
 func (s *Agent) Subscribe(args *Args, stream rpcplus.Stream) error {
 	updates, err := s.Backend.Subscribe(args.Name)
 	if err != nil {
@@ -79,29 +87,35 @@ func (s *Agent) Subscribe(args *Args, stream rpcplus.Stream) error {
 	return nil
 }
 
-func (s *Agent) Register(args *Args, ret *struct{}) error {
-	err := s.Backend.Register(args.Name, args.Addr, args.Attrs)
+func (s *Agent) Register(args *Args, ret *struct{}) (string, error) {
+	addr := expandAddr(args.Addr)
+	err := s.Backend.Register(args.Name, addr, args.Attrs)
 	if err != nil {
 		log.Println("Register: error:", err)
+		return nil, err
 	}
-	log.Println("Register:", args.Name, args.Addr, args.Attrs)
-	return err
+	log.Println("Register:", args.Name, addr, args.Attrs)
+	return addr, err
 }
 
 func (s *Agent) Unregister(args *Args, ret *struct{}) error {
-	err := s.Backend.Unregister(args.Name, args.Addr)
+	addr := expandAddr(args.Addr)
+	err := s.Backend.Unregister(args.Name, addr)
 	if err != nil {
 		log.Println("Unregister: error:", err)
+		return err
 	}
-	log.Println("Unregister:", args.Name, args.Addr)
-	return err
+	log.Println("Unregister:", args.Name, addr)
+	return nil
 }
 
 func (s *Agent) Heartbeat(args *Args, ret *struct{}) error {
-	err := s.Backend.Heartbeat(args.Name, args.Addr)
+	addr := expandAddr(args.Addr)
+	err := s.Backend.Heartbeat(args.Name, addr)
 	if err != nil {
 		log.Println("Heartbeat: error:", err)
+		return err
 	}
-	log.Println("Heartbeat:", args.Name, args.Addr)
-	return err
+	log.Println("Heartbeat:", args.Name, addr)
+	return nil
 }
