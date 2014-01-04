@@ -87,15 +87,16 @@ func (s *Agent) Subscribe(args *Args, stream rpcplus.Stream) error {
 	return nil
 }
 
-func (s *Agent) Register(args *Args, ret *struct{}) (string, error) {
+func (s *Agent) Register(args *Args, ret *string) error {
 	addr := expandAddr(args.Addr)
 	err := s.Backend.Register(args.Name, addr, args.Attrs)
 	if err != nil {
 		log.Println("Register: error:", err)
-		return nil, err
+		return err
 	}
+	ret = &addr
 	log.Println("Register:", args.Name, addr, args.Attrs)
-	return addr, err
+	return nil
 }
 
 func (s *Agent) Unregister(args *Args, ret *struct{}) error {
