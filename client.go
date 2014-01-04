@@ -5,7 +5,6 @@ import (
 	"net"
 	"os"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -139,11 +138,6 @@ func (s *ServiceSet) Leader() *Service {
 	return nil
 }
 
-// deprecated
-func (s *ServiceSet) Online() []*Service {
-	return s.Services()
-}
-
 func (s *ServiceSet) Services() []*Service {
 	s.serMutex.Lock()
 	defer s.serMutex.Unlock()
@@ -152,11 +146,6 @@ func (s *ServiceSet) Services() []*Service {
 		list = append(list, copyService(service))
 	}
 	return list
-}
-
-// deprecated
-func (s *ServiceSet) OnlineAddrs() []string {
-	return s.Addrs()
 }
 
 func (s *ServiceSet) Addrs() []string {
@@ -261,19 +250,6 @@ func NewClientUsingAddress(addr string) (*Client, error) {
 	}, err
 }
 
-func pickMostPublicIp() string {
-	// TODO: prefer non 10.0.0.0, 172.16.0.0, and 192.168.0.0
-	addrs, _ := net.InterfaceAddrs()
-	var ip string
-	for _, addr := range addrs {
-		ip = strings.SplitN(addr.String(), "/", 2)[0]
-		if !strings.Contains(ip, "::") && ip != "127.0.0.1" {
-			return ip
-		}
-	}
-	return ip
-}
-
 func (c *Client) ServiceSet(name string) (*ServiceSet, error) {
 	updates := make(chan *agent.ServiceUpdate)
 	call := c.client.StreamGo("Agent.Subscribe", &agent.Args{
@@ -298,17 +274,17 @@ func (c *Client) Services(name string) ([]*Service, error) {
 
 }
 
-func (c *Client) Register(name, port string, attributes map[string]string) error {
-	return c.RegisterWithHost(name, pickMostPublicIp(), port, attributes)
+func (c *Client) Register(name, addr string) error {
+	return c.RegisterWithAttributes(name, addr, nil)
 }
 
-func (c *Client) RegisterWithHost(name, host, port string, attributes map[string]string) error {
+func (c *Client) RegisterWithAttributes(name, addr string, attributes map[string]string) error {
 	args := &agent.Args{
 		Name:  name,
-		Addr:  net.JoinHostPort(host, port),
+		Addr:  addr,
 		Attrs: attributes,
 	}
-	var ret struct{}
+	var ret string
 	err := c.client.Call("Agent.Register", args, &ret)
 	if err != nil {
 		return errors.New("discover: register failed: " + err.Error())
@@ -336,14 +312,10 @@ func (c *Client) RegisterWithHost(name, host, port string, attributes map[string
 	return nil
 }
 
-func (c *Client) Unregister(name, port string) error {
-	return c.UnregisterWithHost(name, pickMostPublicIp(), port)
-}
-
-func (c *Client) UnregisterWithHost(name, host, port string) error {
+func (c *Client) Unregister(name, addr string) error {
 	args := &agent.Args{
 		Name: name,
-		Addr: net.JoinHostPort(host, port),
+		Addr: addr,
 	}
 	c.hbMutex.Lock()
 	close(c.heartbeats[args.Addr])

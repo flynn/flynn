@@ -90,11 +90,11 @@ func TestClient(t *testing.T) {
 
 	// Test Register and ServiceSet with attributes
 
-	err = client.Register(serviceName, "1111", map[string]string{"foo": "bar"})
+	err = client.RegisterWithAttributes(serviceName, ":1111", map[string]string{"foo": "bar"})
 	if err != nil {
 		t.Fatal("Registering service failed", err.Error())
 	}
-	err = client.Register(serviceName, "2222", nil)
+	err = client.Register(serviceName, ":2222")
 	if err != nil {
 		t.Fatal("Registering service failed", err.Error())
 	}
@@ -103,7 +103,7 @@ func TestClient(t *testing.T) {
 		t.Fatal("Registered services not online")
 	}
 
-	err = client.Unregister(serviceName, "2222")
+	err = client.Unregister(serviceName, ":2222")
 	if err != nil {
 		t.Fatal("Unregistering service failed", err.Error())
 	}
@@ -116,7 +116,7 @@ func TestClient(t *testing.T) {
 
 	// Test Re-register
 
-	err = client.Register(serviceName, "1111", map[string]string{"foo": "baz"})
+	err = client.RegisterWithAttributes(serviceName, ":1111", map[string]string{"foo": "baz"})
 	if err != nil {
 		t.Fatal("Re-registering service failed", err.Error())
 	}
@@ -124,7 +124,7 @@ func TestClient(t *testing.T) {
 		t.Fatal("Attribute not set on re-registered service as 'baz'")
 	}
 
-	err = client.Register(serviceName, "2222", map[string]string{"foo": "qux", "id": "2"})
+	err = client.RegisterWithAttributes(serviceName, ":2222", map[string]string{"foo": "qux", "id": "2"})
 	if err != nil {
 		t.Fatal("Registering service failed", err.Error())
 	}
@@ -136,7 +136,7 @@ func TestClient(t *testing.T) {
 		t.Fatal("Filter not limiting online services in set")
 	}
 
-	err = client.Register(serviceName, "3333", map[string]string{"foo": "qux", "id": "3"})
+	err = client.RegisterWithAttributes(serviceName, ":3333", map[string]string{"foo": "qux", "id": "3"})
 	if err != nil {
 		t.Fatal("Registering service failed", err.Error())
 	}
@@ -144,7 +144,7 @@ func TestClient(t *testing.T) {
 		t.Fatal("Filter not letting new matching services in set")
 	}
 
-	err = client.Register(serviceName, "4444", map[string]string{"foo": "baz"})
+	err = client.RegisterWithAttributes(serviceName, ":4444", map[string]string{"foo": "baz"})
 	if err != nil {
 		t.Fatal("Registering service failed", err.Error())
 	}
@@ -180,7 +180,7 @@ func TestClient(t *testing.T) {
 	set, _ = client.ServiceSet(serviceName)
 	updates := make(chan *agent.ServiceUpdate)
 	set.Watch(updates, true)
-	err = client.Register(serviceName, "5555", nil)
+	err = client.Register(serviceName, ":5555")
 	if err != nil {
 		t.Fatal("Registering service failed", err)
 	}
@@ -230,7 +230,7 @@ func TestServiceAgeAndLeader(t *testing.T) {
 	}
 	serviceName := "ageService"
 
-	err = client.Register(serviceName, "1111", nil)
+	err = client.Register(serviceName, ":1111")
 	if err != nil {
 		t.Fatal("Registering service failed", err.Error())
 	}
@@ -242,7 +242,7 @@ func TestServiceAgeAndLeader(t *testing.T) {
 		t.Fatal("Service has no age")
 	}
 
-	err = client.Register(serviceName, "2222", nil)
+	err = client.Register(serviceName, ":2222")
 	if err != nil {
 		t.Fatal("Registering service failed", err.Error())
 	}
@@ -260,7 +260,7 @@ func TestServiceAgeAndLeader(t *testing.T) {
 		}
 	}
 
-	err = client.Register(serviceName, "3333", nil)
+	err = client.Register(serviceName, ":3333")
 	if err != nil {
 		t.Fatal("Registering service failed", err.Error())
 	}
