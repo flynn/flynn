@@ -55,6 +55,10 @@ Unregister announces a service of a given `Name` at address `Addr` as offline. `
 		Addr string
 	}
 
+#### Output
+
+None
+
 ### Agent.Heartbeat
 
 Heartbeat will update a service of given `Name` and `Addr` as still online. It must be called regularly or a service will timeout after 10 seconds.
@@ -65,3 +69,7 @@ Heartbeat will update a service of given `Name` and `Addr` as still online. It m
 		Name string
 		Addr string
 	}
+
+#### Output
+
+None
