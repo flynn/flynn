@@ -1,6 +1,8 @@
 package discoverd
 
 import (
+	"bufio"
+	"log"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -51,8 +53,17 @@ func runDiscoverdServer() func() {
 	doneCh := make(chan struct{})
 	go func() {
 		cmd := exec.Command("discoverd")
+		stderr, _ := cmd.StderrPipe()
 		if err := cmd.Start(); err != nil {
 			panic(err)
+		}
+		if os.Getenv("DEBUG") != "" {
+			go func() {
+				scanner := bufio.NewScanner(stderr)
+				for scanner.Scan() {
+					log.Println("discoverd:", scanner.Text())
+				}
+			}()
 		}
 		cmdDone := make(chan error)
 		go func() {
@@ -76,115 +87,156 @@ func runDiscoverdServer() func() {
 	}
 }
 
-func TestClient(t *testing.T) {
+func setup(t *testing.T) (*Client, func()) {
 	killEtcd := runEtcdServer()
-	defer killEtcd()
 	killDiscoverd := runDiscoverdServer()
-	defer killDiscoverd()
-
 	client, err := NewClient()
 	if err != nil {
 		t.Fatal(err)
 	}
-	serviceName := "testService"
-
-	// Test Register and ServiceSet with attributes
-
-	err = client.RegisterWithAttributes(serviceName, ":1111", map[string]string{"foo": "bar"})
-	if err != nil {
-		t.Fatal("Registering service failed", err.Error())
+	return client, func() {
+		killDiscoverd()
+		killEtcd()
 	}
-	err = client.Register(serviceName, ":2222")
+}
+
+func assert(err error, t *testing.T) error {
 	if err != nil {
-		t.Fatal("Registering service failed", err.Error())
+		t.Fatal("Unexpected error:", err.Error())
 	}
-	set, _ := client.ServiceSet(serviceName)
+	return err
+}
+
+func TestBasicRegisterAndServiceSet(t *testing.T) {
+	client, cleanup := setup(t)
+	defer cleanup()
+
+	serviceName := "basicTest"
+
+	assert(client.RegisterWithAttributes(serviceName, ":1111", map[string]string{"foo": "bar"}), t)
+	assert(client.Register(serviceName, ":2222"), t)
+
+	set, err := client.ServiceSet(serviceName)
+	assert(err, t)
+
 	if len(set.Services()) < 2 {
 		t.Fatal("Registered services not online")
 	}
 
-	err = client.Unregister(serviceName, ":2222")
-	if err != nil {
-		t.Fatal("Unregistering service failed", err.Error())
-	}
+	assert(client.Unregister(serviceName, ":2222"), t)
 	if len(set.Services()) != 1 {
 		t.Fatal("Only 1 registered service should be left")
 	}
+
 	if set.Services()[0].Attrs["foo"] != "bar" {
 		t.Fatal("Attribute not set on service as 'bar'")
 	}
 
-	// Test Re-register
+	assert(set.Close(), t)
+}
 
-	err = client.RegisterWithAttributes(serviceName, ":1111", map[string]string{"foo": "baz"})
-	if err != nil {
-		t.Fatal("Re-registering service failed", err.Error())
-	}
+func TestNewAttributes(t *testing.T) {
+	client, cleanup := setup(t)
+	defer cleanup()
+
+	serviceName := "attributeTest"
+
+	set, err := client.ServiceSet(serviceName)
+	assert(err, t)
+
+	assert(client.RegisterWithAttributes(serviceName, ":1111", map[string]string{"foo": "bar"}), t)
+	assert(client.RegisterWithAttributes(serviceName, ":1111", map[string]string{"foo": "baz"}), t)
+
+	<-set.Wait()
 	if set.Services()[0].Attrs["foo"] != "baz" {
 		t.Fatal("Attribute not set on re-registered service as 'baz'")
 	}
 
-	err = client.RegisterWithAttributes(serviceName, ":2222", map[string]string{"foo": "qux", "id": "2"})
-	if err != nil {
-		t.Fatal("Registering service failed", err.Error())
-	}
+	assert(set.Close(), t)
+}
 
-	// Test Filter
+func TestFiltering(t *testing.T) {
+	client, cleanup := setup(t)
+	defer cleanup()
+
+	serviceName := "filterTest"
+
+	set, err := client.ServiceSet(serviceName)
+	assert(err, t)
+
+	assert(client.Register(serviceName, ":1111"), t)
+	assert(client.RegisterWithAttributes(serviceName, ":2222", map[string]string{"foo": "qux", "id": "2"}), t)
 
 	set.Filter(map[string]string{"foo": "qux"})
 	if len(set.Services()) > 1 {
 		t.Fatal("Filter not limiting online services in set")
 	}
 
-	err = client.RegisterWithAttributes(serviceName, ":3333", map[string]string{"foo": "qux", "id": "3"})
-	if err != nil {
-		t.Fatal("Registering service failed", err.Error())
-	}
+	assert(client.RegisterWithAttributes(serviceName, ":3333", map[string]string{"foo": "qux", "id": "3"}), t)
 	if len(set.Services()) < 2 {
 		t.Fatal("Filter not letting new matching services in set")
 	}
 
-	err = client.RegisterWithAttributes(serviceName, ":4444", map[string]string{"foo": "baz"})
-	if err != nil {
-		t.Fatal("Registering service failed", err.Error())
-	}
+	assert(client.RegisterWithAttributes(serviceName, ":4444", map[string]string{"foo": "baz"}), t)
 	if len(set.Services()) > 2 {
 		t.Fatal("Filter not limiting new unmatching services from set")
 	}
 
-	// Test Select
+	assert(set.Close(), t)
+}
+
+func TestSelecting(t *testing.T) {
+	client, cleanup := setup(t)
+	defer cleanup()
+
+	serviceName := "selectTest"
+
+	set, err := client.ServiceSet(serviceName)
+	assert(err, t)
+
+	assert(client.Register(serviceName, ":1111"), t)
+	assert(client.RegisterWithAttributes(serviceName, ":2222", map[string]string{"foo": "qux", "id": "2"}), t)
+	assert(client.RegisterWithAttributes(serviceName, ":3333", map[string]string{"foo": "qux", "id": "3"}), t)
 
 	if len(set.Select(map[string]string{"id": "3"})) != 1 {
 		t.Fatal("Select not returning proper services")
 	}
 
-	// Test Close
+	assert(set.Close(), t)
+}
 
-	err = set.Close()
-	if err != nil {
-		t.Fatal("Unable to close:", err)
-	}
+func TestServices(t *testing.T) {
+	client, cleanup := setup(t)
+	defer cleanup()
 
-	// Test client.Services
+	serviceName := "servicesTest"
+
+	assert(client.Register(serviceName, ":1111"), t)
+	assert(client.Register(serviceName, ":2222"), t)
 
 	services, err := client.Services(serviceName, 1)
-	if err != nil {
-		t.Fatal("Unable to get services:", err)
-	}
-	if len(services) != 4 {
+	assert(err, t)
+	if len(services) != 2 {
 		t.Fatal("Not all registered services were returned:", services)
 	}
+}
 
-	// Test Watch with bringCurrent
+func TestWatch(t *testing.T) {
+	client, cleanup := setup(t)
+	defer cleanup()
 
-	set, _ = client.ServiceSet(serviceName)
+	serviceName := "watchTest"
+
+	assert(client.Register(serviceName, ":1111"), t)
+	assert(client.Register(serviceName, ":2222"), t)
+
+	set, err := client.ServiceSet(serviceName)
+	assert(err, t)
+
 	updates := make(chan *agent.ServiceUpdate)
 	set.Watch(updates, true, false)
-	err = client.Register(serviceName, ":5555")
-	if err != nil {
-		t.Fatal("Registering service failed", err)
-	}
-	for i := 0; i < 5; i++ {
+	assert(client.Register(serviceName, ":3333"), t)
+	for i := 0; i < 3; i++ {
 		var update *agent.ServiceUpdate
 		select {
 		case update = <-updates:
@@ -199,42 +251,32 @@ func TestClient(t *testing.T) {
 		}
 	}
 
+	assert(set.Close(), t)
 }
 
 func TestNoServices(t *testing.T) {
-	killEtcd := runEtcdServer()
-	defer killEtcd()
-	killDiscoverd := runDiscoverdServer()
-	defer killDiscoverd()
+	client, cleanup := setup(t)
+	defer cleanup()
 
-	client, err := NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
+	set, err := client.ServiceSet("nonexistent")
+	assert(err, t)
 
-	set, _ := client.ServiceSet("nonexistent")
 	if len(set.Services()) != 0 {
 		t.Fatal("There should be no services")
 	}
+
+	assert(set.Close(), t)
 }
 
 func TestServiceAgeAndLeader(t *testing.T) {
-	killEtcd := runEtcdServer()
-	defer killEtcd()
-	killDiscoverd := runDiscoverdServer()
-	defer killDiscoverd()
+	client, cleanup := setup(t)
+	defer cleanup()
 
-	client, err := NewClient()
-	if err != nil {
-		t.Fatal(err)
-	}
-	serviceName := "ageService"
+	serviceName := "leaderTest"
 
-	err = client.Register(serviceName, ":1111")
-	if err != nil {
-		t.Fatal("Registering service failed", err.Error())
-	}
-	services, _ := client.Services(serviceName, 1)
+	assert(client.Register(serviceName, ":1111"), t)
+	services, err := client.Services(serviceName, 1)
+	assert(err, t)
 	if len(services) < 1 {
 		t.Fatal("Registered service not online")
 	}
@@ -242,11 +284,9 @@ func TestServiceAgeAndLeader(t *testing.T) {
 		t.Fatal("Service has no age")
 	}
 
-	err = client.Register(serviceName, ":2222")
-	if err != nil {
-		t.Fatal("Registering service failed", err.Error())
-	}
-	services, _ = client.Services(serviceName, 1)
+	assert(client.Register(serviceName, ":2222"), t)
+	services, err = client.Services(serviceName, 1)
+	assert(err, t)
 	if len(services) < 2 {
 		t.Fatal("Registered services not online")
 	}
@@ -260,11 +300,9 @@ func TestServiceAgeAndLeader(t *testing.T) {
 		}
 	}
 
-	err = client.Register(serviceName, ":3333")
-	if err != nil {
-		t.Fatal("Registering service failed", err.Error())
-	}
-	set, _ := client.ServiceSet(serviceName)
+	assert(client.Register(serviceName, ":3333"), t)
+	set, err := client.ServiceSet(serviceName)
+	assert(err, t)
 	if len(set.Services()) < 3 {
 		t.Fatal("Registered services not online")
 	}
@@ -272,4 +310,5 @@ func TestServiceAgeAndLeader(t *testing.T) {
 		t.Fatal("Incorrect leader")
 	}
 
+	assert(set.Close(), t)
 }

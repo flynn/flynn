@@ -22,13 +22,12 @@ type Service struct {
 }
 
 type ServiceSet struct {
-	services   map[string]*Service
-	filters    map[string]string
-	watches    map[chan *agent.ServiceUpdate]bool
-	serMutex   sync.Mutex
-	filMutex   sync.Mutex
-	watchMutex sync.Mutex
-	call       *rpcplus.Call
+	sync.Mutex
+	services map[string]*Service
+	filters  map[string]string
+	watches  map[chan *agent.ServiceUpdate]bool
+	ignores  map[string]struct{}
+	call     *rpcplus.Call
 }
 
 func copyService(service *Service) *Service {
@@ -45,6 +44,7 @@ func makeServiceSet(call *rpcplus.Call) *ServiceSet {
 		services: make(map[string]*Service),
 		filters:  make(map[string]string),
 		watches:  make(map[chan *agent.ServiceUpdate]bool),
+		ignores:  make(map[string]struct{}),
 		call:     call,
 	}
 }
@@ -61,12 +61,12 @@ func (s *ServiceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
 				isCurrent = true
 				continue
 			}
+			s.Lock()
 			if s.filters != nil && !s.matchFilters(update.Attrs) {
+				s.Unlock()
 				continue
 			}
-
-			s.serMutex.Lock()
-			if update.Online {
+			if _, ignore := s.ignores[update.Addr]; !ignore && update.Online {
 				if _, exists := s.services[update.Addr]; !exists {
 					host, port, _ := net.SplitHostPort(update.Addr)
 					s.services[update.Addr] = &Service{
@@ -82,11 +82,11 @@ func (s *ServiceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
 				if _, exists := s.services[update.Addr]; exists {
 					delete(s.services, update.Addr)
 				} else {
-					s.serMutex.Unlock()
+					s.Unlock()
 					continue
 				}
 			}
-			s.serMutex.Unlock()
+			s.Unlock()
 			s.updateWatches(update)
 		}
 		s.closeWatches()
@@ -95,8 +95,8 @@ func (s *ServiceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
 }
 
 func (s *ServiceSet) updateWatches(update *agent.ServiceUpdate) {
-	s.watchMutex.Lock()
-	defer s.watchMutex.Unlock()
+	s.Lock()
+	defer s.Unlock()
 	for ch, once := range s.watches {
 		ch <- update
 		if once {
@@ -106,16 +106,14 @@ func (s *ServiceSet) updateWatches(update *agent.ServiceUpdate) {
 }
 
 func (s *ServiceSet) closeWatches() {
-	s.watchMutex.Lock()
-	defer s.watchMutex.Unlock()
+	s.Lock()
+	defer s.Unlock()
 	for ch := range s.watches {
 		close(ch)
 	}
 }
 
 func (s *ServiceSet) matchFilters(attrs map[string]string) bool {
-	s.filMutex.Lock()
-	defer s.filMutex.Unlock()
 	for key, value := range s.filters {
 		if attrs[key] != value {
 			return false
@@ -140,8 +138,8 @@ func (s *ServiceSet) Leader() *Service {
 }
 
 func (s *ServiceSet) Services() []*Service {
-	s.serMutex.Lock()
-	defer s.serMutex.Unlock()
+	s.Lock()
+	defer s.Unlock()
 	list := make([]*Service, 0, len(s.services))
 	for _, service := range s.services {
 		list = append(list, copyService(service))
@@ -158,8 +156,8 @@ func (s *ServiceSet) Addrs() []string {
 }
 
 func (s *ServiceSet) Select(attrs map[string]string) []*Service {
-	s.serMutex.Lock()
-	defer s.serMutex.Unlock()
+	s.Lock()
+	defer s.Unlock()
 	list := make([]*Service, 0, len(s.services))
 outer:
 	for _, service := range s.services {
@@ -174,11 +172,9 @@ outer:
 }
 
 func (s *ServiceSet) Filter(attrs map[string]string) {
-	s.filMutex.Lock()
+	s.Lock()
+	defer s.Unlock()
 	s.filters = attrs
-	s.filMutex.Unlock()
-	s.serMutex.Lock()
-	defer s.serMutex.Unlock()
 	for key, service := range s.services {
 		if !s.matchFilters(service.Attrs) {
 			delete(s.services, key)
@@ -186,14 +182,25 @@ func (s *ServiceSet) Filter(attrs map[string]string) {
 	}
 }
 
+func (s *ServiceSet) Ignore(addr string) {
+	s.Lock()
+	defer s.Unlock()
+	s.ignores[addr] = struct{}{}
+	for key, service := range s.services {
+		if service.Addr == addr {
+			delete(s.services, key)
+		}
+	}
+}
+
 func (s *ServiceSet) Watch(ch chan *agent.ServiceUpdate, bringCurrent bool, fireOnce bool) {
-	s.watchMutex.Lock()
-	defer s.watchMutex.Unlock()
+	s.Lock()
 	s.watches[ch] = fireOnce
+	s.Unlock()
 	if bringCurrent {
 		go func() {
-			s.serMutex.Lock()
-			defer s.serMutex.Unlock()
+			s.Lock()
+			defer s.Unlock()
 			for _, service := range s.services {
 				ch <- &agent.ServiceUpdate{
 					Name:    service.Name,
@@ -208,8 +215,8 @@ func (s *ServiceSet) Watch(ch chan *agent.ServiceUpdate, bringCurrent bool, fire
 }
 
 func (s *ServiceSet) Unwatch(ch chan *agent.ServiceUpdate) {
-	s.watchMutex.Lock()
-	defer s.watchMutex.Unlock()
+	s.Lock()
+	defer s.Unlock()
 	delete(s.watches, ch)
 }
 
@@ -224,9 +231,10 @@ func (s *ServiceSet) Close() error {
 }
 
 type Client struct {
-	client     *rpcplus.Client
-	heartbeats map[string]chan struct{}
-	hbMutex    sync.Mutex
+	sync.Mutex
+	client        *rpcplus.Client
+	heartbeats    map[string]chan struct{}
+	expandedAddrs map[string]string
 }
 
 func NewClient() (*Client, error) {
@@ -240,8 +248,9 @@ func NewClient() (*Client, error) {
 func NewClientUsingAddress(addr string) (*Client, error) {
 	client, err := rpcplus.DialHTTP("tcp", addr)
 	return &Client{
-		client:     client,
-		heartbeats: make(map[string]chan struct{}),
+		client:        client,
+		heartbeats:    make(map[string]chan struct{}),
+		expandedAddrs: make(map[string]string),
 	}, err
 }
 
@@ -273,6 +282,20 @@ func (c *Client) Register(name, addr string) error {
 	return c.RegisterWithAttributes(name, addr, nil)
 }
 
+func (c *Client) RegisterWithSet(name, addr string, attributes map[string]string) (*ServiceSet, error) {
+	err := c.RegisterWithAttributes(name, addr, attributes)
+	if err != nil {
+		return nil, err
+	}
+	set, err := c.ServiceSet(name)
+	if err != nil {
+		c.Unregister(name, addr)
+		return nil, err
+	}
+	set.Ignore(c.expandedAddrs[addr])
+	return set, nil
+}
+
 func (c *Client) RegisterWithAttributes(name, addr string, attributes map[string]string) error {
 	args := &agent.Args{
 		Name:  name,
@@ -285,9 +308,10 @@ func (c *Client) RegisterWithAttributes(name, addr string, attributes map[string
 		return errors.New("discover: register failed: " + err.Error())
 	}
 	done := make(chan struct{})
-	c.hbMutex.Lock()
+	c.Lock()
 	c.heartbeats[args.Addr] = done
-	c.hbMutex.Unlock()
+	c.expandedAddrs[args.Addr] = ret
+	c.Unlock()
 	go func() {
 		ticker := time.NewTicker(agent.HeartbeatIntervalSecs * time.Second) // TODO: add jitter
 		defer ticker.Stop()
@@ -312,10 +336,10 @@ func (c *Client) Unregister(name, addr string) error {
 		Name: name,
 		Addr: addr,
 	}
-	c.hbMutex.Lock()
+	c.Lock()
 	close(c.heartbeats[args.Addr])
 	delete(c.heartbeats, args.Addr)
-	c.hbMutex.Unlock()
+	c.Unlock()
 	err := c.client.Call("Agent.Unregister", args, &struct{}{})
 	if err != nil {
 		return errors.New("discover: unregister failed: " + err.Error())
