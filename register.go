@@ -14,7 +14,7 @@ type register struct {
 	clientCmd
 	exitStatus   int
 	exitSignalCh chan os.Signal
-	host *string
+	host         *string
 }
 
 func (cmd *register) Name() string {
@@ -37,19 +37,10 @@ func (cmd *register) RegisterWithExitHook(name, port string, verbose bool) {
 		if verbose {
 			log.Println("Unregistering service...")
 		}
-		if *cmd.host == "" {
-			cmd.client.Unregister(name, port)
-		} else {
-			cmd.client.UnregisterWithHost(name, *cmd.host, port)
-		}
+		cmd.client.Unregister(name, *cmd.host+":"+port)
 		os.Exit(cmd.exitStatus)
 	}()
-
-	if *cmd.host == "" {
-		cmd.client.Register(name, port, nil)
-	} else {
-		cmd.client.RegisterWithHost(name, *cmd.host, port, nil)
-	}
+	cmd.client.Register(name, *cmd.host+":"+port)
 }
 
 func (cmd *register) Run(fs *flag.FlagSet) {
