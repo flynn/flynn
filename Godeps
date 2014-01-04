@@ -30,7 +30,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-dockerclient",
-			"Rev": "33bd9543abef07932cf2f91e686bc5feeba5f33f"
+			"Rev": "9415f43ddb02e9a9eec5835105248d72dbd94094"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
@@ -38,11 +38,11 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/sampi/client",
-			"Rev": "85f2e3efb748f450d52fef17ce8f254680b59ea0"
+			"Rev": "9b3d4e8829ae4c9a797780d10f36e0f2c374dcc9"
 		},
 		{
 			"ImportPath": "github.com/flynn/sampi/types",
-			"Rev": "85f2e3efb748f450d52fef17ce8f254680b59ea0"
+			"Rev": "9b3d4e8829ae4c9a797780d10f36e0f2c374dcc9"
 		},
 		{
 			"ImportPath": "github.com/technoweenie/grohl",
