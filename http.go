@@ -64,7 +64,7 @@ func (s *HTTPFrontend) addDomain(domain string, service string, persist bool) er
 
 	server := s.services[service]
 	if server == nil {
-		services, err := s.discoverd.ServiceSet(service)
+		services, err := s.discoverd.NewServiceSet(service)
 		if err != nil {
 			return err
 		}
