@@ -75,7 +75,7 @@ func main() {
 		}
 	}
 
-	if processor.discoverd == "" && *externalAddr == "" {
+	if processor.discoverd == "" && *externalAddr != "" {
 		processor.discoverd = *externalAddr + ":1111"
 	}
 	// HACK: use env as global for discoverd connection in sampic
