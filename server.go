@@ -4,7 +4,6 @@ import (
 	"flag"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/flynn/go-discoverd"
 	rpc "github.com/flynn/rpcplus/comborpc"
@@ -40,12 +39,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if hostPort := strings.SplitN(*rpcAddr, ":", 2); hostPort[0] != "" {
-		err = d.RegisterWithHost("flynn-strowger-rpc", hostPort[0], hostPort[1], nil)
-	} else {
-		err = d.Register("flynn-strowger-rpc", hostPort[1], nil)
-	}
-	if err != nil {
+	if err = d.Register("flynn-strowger-rpc", *rpcAddr); err != nil {
 		log.Fatal(err)
 	}
 
