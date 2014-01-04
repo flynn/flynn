@@ -24,14 +24,13 @@ func servicePath(name, addr string) string {
 func (b *EtcdBackend) Subscribe(name string) (UpdateStream, error) {
 	stream := &etcdStream{ch: make(chan *ServiceUpdate), stop: make(chan bool)}
 	watch := b.getStateChanges(name, stream.stop)
-	response, err := b.getCurrentState(name)
-	if err != nil {
-		return nil, err
-	}
+	response, _ := b.getCurrentState(name)
 	go func() {
-		for _, n := range response.Node.Nodes {
-			if update := b.responseToUpdate(response, &n); update != nil {
-				stream.ch <- update
+		if response != nil {
+			for _, n := range response.Node.Nodes {
+				if update := b.responseToUpdate(response, &n); update != nil {
+					stream.ch <- update
+				}
 			}
 		}
 		stream.ch <- &ServiceUpdate{}
