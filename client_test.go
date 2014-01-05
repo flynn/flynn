@@ -268,6 +268,33 @@ func TestNoServices(t *testing.T) {
 	assert(set.Close(), t)
 }
 
+func TestRegisterWithSet(t *testing.T) {
+	client, cleanup := setup(t)
+	defer cleanup()
+
+	serviceName := "registerWithSetTest"
+
+	assert(client.Register(serviceName, ":1111"), t)
+
+	set, err := client.RegisterWithSet(serviceName, ":2222", nil)
+	assert(err, t)
+
+	if len(set.Services()) != 1 {
+		t.Fatal("There should only be one other service")
+	}
+	if set.Services()[0].Addr != ":1111" {
+		t.Fatal("Set contains the wrong service")
+	}
+
+	assert(set.Close(), t)
+
+	services, err := client.Services(serviceName, 1)
+	assert(err, t)
+	if len(services) != 2 {
+		t.Fatal("Not all registered services were returned:", services)
+	}
+}
+
 func TestServiceAgeAndLeader(t *testing.T) {
 	client, cleanup := setup(t)
 	defer cleanup()
