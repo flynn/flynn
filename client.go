@@ -27,6 +27,7 @@ type ServiceSet struct {
 	filters  map[string]string
 	watches  map[chan *agent.ServiceUpdate]bool
 	ignores  map[string]struct{}
+	leaders  chan *Service
 	call     *rpcplus.Call
 }
 
@@ -122,20 +123,35 @@ func (s *ServiceSet) matchFilters(attrs map[string]string) bool {
 	return true
 }
 
+func (s *ServiceSet) Leader() chan *Service {
+	if s.leaders != nil {
+		return s.leaders
+	}
+	s.leaders = make(chan *Service)
+	updates := make(chan *agent.ServiceUpdate)
+	s.Watch(updates, false, false)
+	go func() {
+		leader := s.Services()[0]
+		s.leaders <- leader
+		for {
+			update := <-updates
+			if update == nil {
+				return
+			}
+			if !update.Online && update.Addr == leader.Addr {
+				leader = s.Services()[0]
+				s.leaders <- leader
+			}
+		}
+	}()
+	return s.leaders
+}
+
 type serviceByAge []*Service
 
 func (a serviceByAge) Len() int           { return len(a) }
 func (a serviceByAge) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a serviceByAge) Less(i, j int) bool { return a[i].Created < a[j].Created }
-
-func (s *ServiceSet) Leader() *Service {
-	services := s.Services()
-	if len(services) > 0 {
-		sort.Sort(serviceByAge(services))
-		return services[0]
-	}
-	return nil
-}
 
 func (s *ServiceSet) Services() []*Service {
 	s.Lock()
@@ -143,6 +159,9 @@ func (s *ServiceSet) Services() []*Service {
 	list := make([]*Service, 0, len(s.services))
 	for _, service := range s.services {
 		list = append(list, copyService(service))
+	}
+	if len(list) > 0 {
+		sort.Sort(serviceByAge(list))
 	}
 	return list
 }

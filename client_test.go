@@ -295,45 +295,68 @@ func TestRegisterWithSet(t *testing.T) {
 	}
 }
 
-func TestServiceAgeAndLeader(t *testing.T) {
+func TestServiceAge(t *testing.T) {
 	client, cleanup := setup(t)
 	defer cleanup()
 
-	serviceName := "leaderTest"
+	serviceName := "ageTest"
+
+	checkOldest := func(addr string) {
+		services, err := client.Services(serviceName, 1)
+		assert(err, t)
+		if services[0].Addr != addr {
+			t.Fatal("Oldest service is not first in Services() slice")
+		}
+	}
 
 	assert(client.Register(serviceName, ":1111"), t)
-	services, err := client.Services(serviceName, 1)
+	checkOldest(":1111")
+	assert(client.Register(serviceName, ":2222"), t)
+	checkOldest(":1111")
+	assert(client.Register(serviceName, ":3333"), t)
+	checkOldest(":1111")
+	assert(client.Register(serviceName, ":4444"), t)
+	checkOldest(":1111")
+	assert(client.Unregister(serviceName, ":1111"), t)
+	checkOldest(":2222")
+
+}
+
+func TestLeaderChannel(t *testing.T) {
+	client, cleanup := setup(t)
+	defer cleanup()
+
+	serviceName := "leadersTest"
+
+	assert(client.Register(serviceName, ":1111"), t)
+
+	set, err := client.ServiceSet(serviceName)
 	assert(err, t)
-	if len(services) < 1 {
-		t.Fatal("Registered service not online")
-	}
-	if services[0].Created < 1 {
-		t.Fatal("Service has no age")
-	}
+
+	var leader *Service
+
+	go func() {
+		for {
+			leader = <-set.Leader()
+		}
+	}()
 
 	assert(client.Register(serviceName, ":2222"), t)
-	services, err = client.Services(serviceName, 1)
-	assert(err, t)
-	if len(services) < 2 {
-		t.Fatal("Registered services not online")
-	}
-	if services[0].Port == "1111" {
-		if services[0].Created >= services[1].Created {
-			t.Fatal("Older service does not have smaller Created value")
-		}
-	} else {
-		if services[1].Created >= services[0].Created {
-			t.Fatal("Older service does not have smaller Created value")
-		}
+
+	if leader.Addr != ":1111" {
+		t.Fatal("Incorrect leader")
 	}
 
 	assert(client.Register(serviceName, ":3333"), t)
-	set, err := client.ServiceSet(serviceName)
-	assert(err, t)
-	if len(set.Services()) < 3 {
-		t.Fatal("Registered services not online")
+	assert(client.Unregister(serviceName, ":1111"), t)
+
+	if leader.Addr != ":2222" {
+		t.Fatal("Incorrect leader")
 	}
-	if set.Leader().Port != "1111" {
+
+	assert(client.Unregister(serviceName, ":2222"), t)
+
+	if leader.Addr != ":3333" {
 		t.Fatal("Incorrect leader")
 	}
 
