@@ -351,7 +351,7 @@ func TestLeaderChannel(t *testing.T) {
 	assert(client.Unregister(serviceName, ":1111"), t)
 
 	if leader.Addr != ":2222" {
-		t.Fatal("Incorrect leader")
+		t.Fatal("Incorrect leader", leader)
 	}
 
 	assert(client.Unregister(serviceName, ":2222"), t)
@@ -361,4 +361,61 @@ func TestLeaderChannel(t *testing.T) {
 	}
 
 	assert(set.Close(), t)
+}
+
+func TestRegisterWithSetLeaderSelf(t *testing.T) {
+	client, cleanup := setup(t)
+	defer cleanup()
+
+	serviceName := "registerWithSetLeaderSelfTest"
+
+	assert(client.Register(serviceName, ":1111"), t)
+
+	set, err := client.RegisterWithSet(serviceName, ":2222", nil)
+	assert(err, t)
+
+	var leader *Service
+
+	go func() {
+		for {
+			leader = <-set.Leader()
+		}
+	}()
+
+	assert(client.Register(serviceName, ":3333"), t)
+
+	if leader.Addr != ":1111" {
+		t.Fatal("Incorrect leader")
+	}
+
+	assert(client.Unregister(serviceName, ":1111"), t)
+
+	if leader.Addr != set.SelfAddr {
+		t.Fatal("Incorrect leader", leader)
+	}
+
+	assert(set.Close(), t)
+
+}
+
+func TestRegisterAndStandby(t *testing.T) {
+	client, cleanup := setup(t)
+	defer cleanup()
+
+	serviceName := "registerAndStandbyTest"
+
+	assert(client.Register(serviceName, ":1111"), t)
+
+	standbyCh, err := client.RegisterAndStandby(serviceName, ":2222", nil)
+	assert(err, t)
+
+	assert(client.Register(serviceName, ":3333"), t)
+	assert(client.Unregister(serviceName, ":3333"), t)
+	assert(client.Unregister(serviceName, ":1111"), t)
+
+	leader := <-standbyCh
+	if leader.Addr != ":2222" {
+		t.Fatal("Incorrect leader", leader)
+	}
+
 }

@@ -26,9 +26,10 @@ type ServiceSet struct {
 	services map[string]*Service
 	filters  map[string]string
 	watches  map[chan *agent.ServiceUpdate]bool
-	ignores  map[string]struct{}
 	leaders  chan *Service
 	call     *rpcplus.Call
+	self     *Service
+	SelfAddr string
 }
 
 func copyService(service *Service) *Service {
@@ -45,7 +46,6 @@ func makeServiceSet(call *rpcplus.Call) *ServiceSet {
 		services: make(map[string]*Service),
 		filters:  make(map[string]string),
 		watches:  make(map[chan *agent.ServiceUpdate]bool),
-		ignores:  make(map[string]struct{}),
 		call:     call,
 	}
 }
@@ -67,7 +67,7 @@ func (s *ServiceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
 				s.Unlock()
 				continue
 			}
-			if _, ignore := s.ignores[update.Addr]; !ignore && update.Online {
+			if s.SelfAddr != update.Addr && update.Online {
 				if _, exists := s.services[update.Addr]; !exists {
 					host, port, _ := net.SplitHostPort(update.Addr)
 					s.services[update.Addr] = &Service{
@@ -84,6 +84,9 @@ func (s *ServiceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
 					delete(s.services, update.Addr)
 				} else {
 					s.Unlock()
+					if s.SelfAddr == update.Addr {
+						s.updateWatches(update)
+					}
 					continue
 				}
 			}
@@ -139,8 +142,17 @@ func (s *ServiceSet) Leader() chan *Service {
 				return
 			}
 			if !update.Online && update.Addr == leader.Addr {
-				leader = s.Services()[0]
-				s.leaders <- leader
+				if len(s.Services()) == 0 && s.self != nil {
+					s.leaders <- s.self
+				} else {
+					leader = s.Services()[0]
+					if s.self != nil && leader.Created > s.self.Created {
+						// self is real leader
+						s.leaders <- s.self
+					} else {
+						s.leaders <- leader
+					}
+				}
 			}
 		}
 	}()
@@ -196,17 +208,6 @@ func (s *ServiceSet) Filter(attrs map[string]string) {
 	s.filters = attrs
 	for key, service := range s.services {
 		if !s.matchFilters(service.Attrs) {
-			delete(s.services, key)
-		}
-	}
-}
-
-func (s *ServiceSet) Ignore(addr string) {
-	s.Lock()
-	defer s.Unlock()
-	s.ignores[addr] = struct{}{}
-	for key, service := range s.services {
-		if service.Addr == addr {
 			delete(s.services, key)
 		}
 	}
@@ -311,8 +312,38 @@ func (c *Client) RegisterWithSet(name, addr string, attributes map[string]string
 		c.Unregister(name, addr)
 		return nil, err
 	}
-	set.Ignore(c.expandedAddrs[addr])
+	set.SelfAddr = c.expandedAddrs[addr]
+	_, exists := set.services[set.SelfAddr]
+	if !exists {
+		update := <-set.Wait()
+		for update.Addr != set.SelfAddr {
+			update = <-set.Wait()
+		}
+	}
+	set.Lock()
+	set.self = set.services[set.SelfAddr]
+	delete(set.services, set.SelfAddr)
+	set.Unlock()
 	return set, nil
+}
+
+func (c *Client) RegisterAndStandby(name, addr string, attributes map[string]string) (chan *Service, error) {
+	set, err := c.RegisterWithSet(name, addr, attributes)
+	if err != nil {
+		return nil, err
+	}
+	standbyCh := make(chan *Service)
+	go func() {
+		for {
+			leader := <-set.Leader()
+			if leader.Addr == set.SelfAddr {
+				set.Close()
+				standbyCh <- leader
+				return
+			}
+		}
+	}()
+	return standbyCh, err
 }
 
 func (c *Client) RegisterWithAttributes(name, addr string, attributes map[string]string) error {
