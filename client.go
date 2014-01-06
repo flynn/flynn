@@ -101,7 +101,7 @@ func (s *ServiceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
 
 func (s *ServiceSet) updateWatches(update *agent.ServiceUpdate) {
 	s.l.Lock()
-	watches := make(map[chan *agent.ServiceUpdate]bool)
+	watches := make(map[chan *agent.ServiceUpdate]bool, len(s.watches))
 	for k, v := range s.watches {
 		watches[k] = v
 	}
@@ -113,14 +113,16 @@ func (s *ServiceSet) updateWatches(update *agent.ServiceUpdate) {
 		}
 		if once {
 			close(ch)
+			s.l.Lock()
 			delete(s.watches, ch)
+			s.l.Unlock()
 		}
 	}
 }
 
 func (s *ServiceSet) closeWatches() {
 	s.l.Lock()
-	watches := make(map[chan *agent.ServiceUpdate]bool)
+	watches := make(map[chan *agent.ServiceUpdate]bool, len(s.watches))
 	for k, v := range s.watches {
 		watches[k] = v
 	}

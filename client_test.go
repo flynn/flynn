@@ -332,31 +332,31 @@ func TestLeaderChannel(t *testing.T) {
 	set, err := client.NewServiceSet(serviceName)
 	assert(err, t)
 
-	var leader *Service
+	leader := make(chan *Service, 3)
 
 	go func() {
 		leaders := set.Leaders()
 		for {
-			leader = <-leaders
+			leader <- <-leaders
 		}
 	}()
 
 	assert(client.Register(serviceName, ":2222"), t)
 
-	if leader.Addr != ":1111" {
+	if (<-leader).Addr != ":1111" {
 		t.Fatal("Incorrect leader")
 	}
 
 	assert(client.Register(serviceName, ":3333"), t)
 	assert(client.Unregister(serviceName, ":1111"), t)
 
-	if leader.Addr != ":2222" {
+	if (<-leader).Addr != ":2222" {
 		t.Fatal("Incorrect leader", leader)
 	}
 
 	assert(client.Unregister(serviceName, ":2222"), t)
 
-	if leader.Addr != ":3333" {
+	if (<-leader).Addr != ":3333" {
 		t.Fatal("Incorrect leader")
 	}
 
@@ -374,24 +374,24 @@ func TestRegisterWithSetLeaderSelf(t *testing.T) {
 	set, err := client.RegisterWithSet(serviceName, ":2222", nil)
 	assert(err, t)
 
-	var leader *Service
+	leader := make(chan *Service, 2)
 
 	go func() {
 		leaders := set.Leaders()
 		for {
-			leader = <-leaders
+			leader <- <-leaders
 		}
 	}()
 
 	assert(client.Register(serviceName, ":3333"), t)
 
-	if leader.Addr != ":1111" {
+	if (<-leader).Addr != ":1111" {
 		t.Fatal("Incorrect leader")
 	}
 
 	assert(client.Unregister(serviceName, ":1111"), t)
 
-	if leader.Addr != set.SelfAddr {
+	if (<-leader).Addr != set.SelfAddr {
 		t.Fatal("Incorrect leader", leader)
 	}
 
