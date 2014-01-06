@@ -248,6 +248,7 @@ type Client struct {
 	client        *rpcplus.Client
 	heartbeats    map[string]chan struct{}
 	expandedAddrs map[string]string
+	names         map[string]string
 }
 
 func NewClient() (*Client, error) {
@@ -264,6 +265,7 @@ func NewClientUsingAddress(addr string) (*Client, error) {
 		client:        client,
 		heartbeats:    make(map[string]chan struct{}),
 		expandedAddrs: make(map[string]string),
+		names:         make(map[string]string),
 	}, err
 }
 
@@ -355,6 +357,7 @@ func (c *Client) RegisterWithAttributes(name, addr string, attributes map[string
 	c.l.Lock()
 	c.heartbeats[args.Addr] = done
 	c.expandedAddrs[args.Addr] = ret
+	c.names[args.Addr] = name
 	c.l.Unlock()
 	go func() {
 		ticker := time.NewTicker(agent.HeartbeatIntervalSecs * time.Second) // TODO: add jitter
@@ -387,6 +390,24 @@ func (c *Client) Unregister(name, addr string) error {
 	err := c.client.Call("Agent.Unregister", args, &struct{}{})
 	if err != nil {
 		return errors.New("discover: unregister failed: " + err.Error())
+	}
+	return nil
+}
+
+func (c *Client) UnregisterAll() error {
+	c.l.Lock()
+	addrs := make([]string, 0, len(c.heartbeats))
+	names := make([]string, 0, len(c.heartbeats))
+	for addr, _ := range c.heartbeats {
+		addrs = append(addrs, addr)
+		names = append(names, c.names[addr])
+	}
+	c.l.Unlock()
+	for i := range addrs {
+		err := c.Unregister(names[i], addrs[i])
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

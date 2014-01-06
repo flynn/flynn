@@ -420,3 +420,32 @@ func TestRegisterAndStandby(t *testing.T) {
 	}
 
 }
+
+func TestUnregisterAll(t *testing.T) {
+	client, cleanup := setup(t)
+	defer cleanup()
+
+	serviceName := "unregisterAllTest"
+
+	assert(client.Register(serviceName, ":1111"), t)
+	assert(client.Register(serviceName, ":2222"), t)
+	assert(client.Register(serviceName, ":3333"), t)
+
+	services, err := client.Services(serviceName, 1)
+	assert(err, t)
+	if len(services) != 3 {
+		t.Fatal("Wrong number of services")
+	}
+
+	assert(client.UnregisterAll(), t)
+
+	set, err := client.ServiceSet("nonexistent")
+	assert(err, t)
+
+	if len(set.Services()) != 0 {
+		t.Fatal("There should be no services")
+	}
+
+	assert(set.Close(), t)
+
+}
