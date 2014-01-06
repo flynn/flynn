@@ -116,7 +116,7 @@ func TestBasicRegisterAndServiceSet(t *testing.T) {
 	assert(client.RegisterWithAttributes(serviceName, ":1111", map[string]string{"foo": "bar"}), t)
 	assert(client.Register(serviceName, ":2222"), t)
 
-	set, err := client.ServiceSet(serviceName)
+	set, err := client.NewServiceSet(serviceName)
 	assert(err, t)
 
 	if len(set.Services()) < 2 {
@@ -141,7 +141,7 @@ func TestNewAttributes(t *testing.T) {
 
 	serviceName := "attributeTest"
 
-	set, err := client.ServiceSet(serviceName)
+	set, err := client.NewServiceSet(serviceName)
 	assert(err, t)
 
 	assert(client.RegisterWithAttributes(serviceName, ":1111", map[string]string{"foo": "bar"}), t)
@@ -161,7 +161,7 @@ func TestFiltering(t *testing.T) {
 
 	serviceName := "filterTest"
 
-	set, err := client.ServiceSet(serviceName)
+	set, err := client.NewServiceSet(serviceName)
 	assert(err, t)
 
 	assert(client.Register(serviceName, ":1111"), t)
@@ -191,7 +191,7 @@ func TestSelecting(t *testing.T) {
 
 	serviceName := "selectTest"
 
-	set, err := client.ServiceSet(serviceName)
+	set, err := client.NewServiceSet(serviceName)
 	assert(err, t)
 
 	assert(client.Register(serviceName, ":1111"), t)
@@ -230,7 +230,7 @@ func TestWatch(t *testing.T) {
 	assert(client.Register(serviceName, ":1111"), t)
 	assert(client.Register(serviceName, ":2222"), t)
 
-	set, err := client.ServiceSet(serviceName)
+	set, err := client.NewServiceSet(serviceName)
 	assert(err, t)
 
 	updates := set.Watch(true, false)
@@ -257,7 +257,7 @@ func TestNoServices(t *testing.T) {
 	client, cleanup := setup(t)
 	defer cleanup()
 
-	set, err := client.ServiceSet("nonexistent")
+	set, err := client.NewServiceSet("nonexistent")
 	assert(err, t)
 
 	if len(set.Services()) != 0 {
@@ -329,7 +329,7 @@ func TestLeaderChannel(t *testing.T) {
 
 	assert(client.Register(serviceName, ":1111"), t)
 
-	set, err := client.ServiceSet(serviceName)
+	set, err := client.NewServiceSet(serviceName)
 	assert(err, t)
 
 	var leader *Service
@@ -439,7 +439,36 @@ func TestUnregisterAll(t *testing.T) {
 
 	assert(client.UnregisterAll(), t)
 
-	set, err := client.ServiceSet("nonexistent")
+	set, err := client.NewServiceSet(serviceName)
+	assert(err, t)
+
+	if len(set.Services()) != 0 {
+		t.Fatal("There should be no services")
+	}
+
+	assert(set.Close(), t)
+
+}
+
+func TestDefaulClient(t *testing.T) {
+	_, cleanup := setup(t)
+	defer cleanup()
+
+	serviceName := "defaultClientTest"
+
+	assert(Register(serviceName, ":1111"), t)
+	assert(Register(serviceName, ":2222"), t)
+	assert(Register(serviceName, ":3333"), t)
+
+	services, err := Services(serviceName, 1)
+	assert(err, t)
+	if len(services) != 3 {
+		t.Fatal("Wrong number of services")
+	}
+
+	assert(UnregisterAll(), t)
+
+	set, err := NewServiceSet(serviceName)
 	assert(err, t)
 
 	if len(set.Services()) != 0 {

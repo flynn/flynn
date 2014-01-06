@@ -101,10 +101,18 @@ func (s *ServiceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
 
 func (s *ServiceSet) updateWatches(update *agent.ServiceUpdate) {
 	s.l.Lock()
-	defer s.l.Unlock()
-	for ch, once := range s.watches {
-		ch <- update
+	watches := make(map[chan *agent.ServiceUpdate]bool)
+	for k, v := range s.watches {
+		watches[k] = v
+	}
+	s.l.Unlock()
+	for ch, once := range watches {
+		select {
+		case ch <- update:
+		case <-time.After(time.Millisecond):
+		}
 		if once {
+			close(ch)
 			delete(s.watches, ch)
 		}
 	}
@@ -112,8 +120,12 @@ func (s *ServiceSet) updateWatches(update *agent.ServiceUpdate) {
 
 func (s *ServiceSet) closeWatches() {
 	s.l.Lock()
-	defer s.l.Unlock()
-	for ch := range s.watches {
+	watches := make(map[chan *agent.ServiceUpdate]bool)
+	for k, v := range s.watches {
+		watches[k] = v
+	}
+	s.l.Unlock()
+	for ch := range watches {
 		close(ch)
 	}
 }
@@ -236,6 +248,7 @@ func (s *ServiceSet) Watch(bringCurrent bool, fireOnce bool) chan *agent.Service
 func (s *ServiceSet) Unwatch(ch chan *agent.ServiceUpdate) {
 	s.l.Lock()
 	defer s.l.Unlock()
+	close(ch)
 	delete(s.watches, ch)
 }
 
@@ -269,7 +282,7 @@ func NewClientUsingAddress(addr string) (*Client, error) {
 	}, err
 }
 
-func (c *Client) ServiceSet(name string) (*ServiceSet, error) {
+func (c *Client) NewServiceSet(name string) (*ServiceSet, error) {
 	updates := make(chan *agent.ServiceUpdate)
 	call := c.client.StreamGo("Agent.Subscribe", &agent.Args{
 		Name: name,
@@ -279,8 +292,8 @@ func (c *Client) ServiceSet(name string) (*ServiceSet, error) {
 	return set, nil
 }
 
-func (c *Client) Services(name string, timeoutSec time.Duration) ([]*Service, error) {
-	set, err := c.ServiceSet(name)
+func (c *Client) Services(name string, timeout time.Duration) ([]*Service, error) {
+	set, err := c.NewServiceSet(name)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +301,7 @@ func (c *Client) Services(name string, timeoutSec time.Duration) ([]*Service, er
 	select {
 	case <-set.Watch(true, true):
 		return set.Services(), nil
-	case <-time.After(timeoutSec * time.Second):
+	case <-time.After(timeout):
 		return nil, errors.New("discover: timeout exceeded")
 	}
 }
@@ -302,13 +315,15 @@ func (c *Client) RegisterWithSet(name, addr string, attributes map[string]string
 	if err != nil {
 		return nil, err
 	}
-	set, err := c.ServiceSet(name)
+	set, err := c.NewServiceSet(name)
 	if err != nil {
 		c.Unregister(name, addr)
 		return nil, err
 	}
 	set.l.Lock()
+	c.l.Lock()
 	set.SelfAddr = c.expandedAddrs[addr]
+	c.l.Unlock()
 	set.l.Unlock()
 	updates := set.Watch(true, false)
 	for update := range updates {
@@ -410,4 +425,78 @@ func (c *Client) UnregisterAll() error {
 		}
 	}
 	return nil
+}
+
+var defaultClient *Client
+
+func Connect(addr string) (err error) {
+	if addr == "" {
+		defaultClient, err = NewClient()
+		return
+	}
+	defaultClient, err = NewClientUsingAddress(addr)
+	return
+}
+
+func ensureDefaultConnected() error {
+	if defaultClient == nil {
+		return Connect("")
+	}
+	return nil
+}
+
+func NewServiceSet(name string) (*ServiceSet, error) {
+	if err := ensureDefaultConnected(); err != nil {
+		return nil, err
+	}
+	return defaultClient.NewServiceSet(name)
+}
+
+func Services(name string, timeout time.Duration) ([]*Service, error) {
+	if err := ensureDefaultConnected(); err != nil {
+		return nil, err
+	}
+	return defaultClient.Services(name, timeout)
+}
+
+func Register(name, addr string) error {
+	if err := ensureDefaultConnected(); err != nil {
+		return err
+	}
+	return defaultClient.Register(name, addr)
+}
+
+func RegisterWithSet(name, addr string, attributes map[string]string) (*ServiceSet, error) {
+	if err := ensureDefaultConnected(); err != nil {
+		return nil, err
+	}
+	return defaultClient.RegisterWithSet(name, addr, attributes)
+}
+
+func RegisterAndStandby(name, addr string, attributes map[string]string) (chan *Service, error) {
+	if err := ensureDefaultConnected(); err != nil {
+		return nil, err
+	}
+	return defaultClient.RegisterAndStandby(name, addr, attributes)
+}
+
+func RegisterWithAttributes(name, addr string, attributes map[string]string) error {
+	if err := ensureDefaultConnected(); err != nil {
+		return err
+	}
+	return defaultClient.RegisterWithAttributes(name, addr, attributes)
+}
+
+func Unregister(name, addr string) error {
+	if err := ensureDefaultConnected(); err != nil {
+		return err
+	}
+	return defaultClient.Unregister(name, addr)
+}
+
+func UnregisterAll() error {
+	if err := ensureDefaultConnected(); err != nil {
+		return err
+	}
+	return defaultClient.UnregisterAll()
 }
