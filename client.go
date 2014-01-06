@@ -1,3 +1,6 @@
+// Client library for discoverd that gives you service discovery and registration, as well as basic
+// leader election coordination. It provides a high-level API around the lower-level service API of
+// the discoverd service.
 package discoverd
 
 import (
@@ -12,6 +15,8 @@ import (
 	"github.com/flynn/rpcplus"
 )
 
+// This is how we model a service. It's simply a named address with optional attributes.
+// It also has a field to determine age, which is used for leader election.
 type Service struct {
 	Created uint
 	Name    string
@@ -21,6 +26,9 @@ type Service struct {
 	Attrs   map[string]string
 }
 
+// A ServiceSet is long-running query of services, giving you a real-time representation of a
+// service cluster. Using the same ServiceSet across services/processes gives you a consistent
+// collection of services that leader election can be coordinated with.
 type ServiceSet struct {
 	l        sync.Mutex
 	services map[string]*Service
@@ -141,6 +149,9 @@ func (s *ServiceSet) matchFilters(attrs map[string]string) bool {
 	return true
 }
 
+// Leader returns the current leader for a ServiceSet. It's calculated by choosing the oldest
+// service in the set. This "lockless" approach means for any consistent set (same service, same
+// filters) there is always an agreed upon leader.
 func (s *ServiceSet) Leader() *Service {
 	services := s.Services()
 	if len(services) > 0 {
@@ -155,6 +166,10 @@ func (s *ServiceSet) Leader() *Service {
 	return nil
 }
 
+// Leaders returns a channel that will first produce the current leader service, then any following
+// leader service as the leader of the set changes. Every call to Leaders produces a new watch on
+// the set, and once you get a channel from Leaders, you *must* always be receiving until the
+// ServiceSet is closed.
 func (s *ServiceSet) Leaders() chan *Service {
 	leaders := make(chan *Service)
 	updates := s.Watch(false, false)
@@ -177,6 +192,10 @@ func (a serviceByAge) Len() int           { return len(a) }
 func (a serviceByAge) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a serviceByAge) Less(i, j int) bool { return a[i].Created < a[j].Created }
 
+// Services returns an array of Service objects in the set, sorted by age. This means that most
+// of the time, the first element is the leader. However, in cases where the ServiceSet was
+// created by RegisterWithSet, the registered service will not be included in this list, so you
+// should rely on Leader/Leaders to get the leader.
 func (s *ServiceSet) Services() []*Service {
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -190,6 +209,7 @@ func (s *ServiceSet) Services() []*Service {
 	return list
 }
 
+// Addrs returns an array of strings representing the addresses of the services.
 func (s *ServiceSet) Addrs() []string {
 	list := make([]string, 0, len(s.services))
 	for _, service := range s.Services() {
@@ -198,6 +218,8 @@ func (s *ServiceSet) Addrs() []string {
 	return list
 }
 
+// Select will return an array of services with matching attributes to the provided map argument.
+// Unlike the Services method, Select is not ordered.
 func (s *ServiceSet) Select(attrs map[string]string) []*Service {
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -214,6 +236,9 @@ outer:
 	return list
 }
 
+// Filter will set the filter map for a ServiceSet. A filter will limit services that show up in
+// the set to only the ones with matching attributes. Any services in the set that don't match
+// when Filter is called will be removed from the ServiceSet.
 func (s *ServiceSet) Filter(attrs map[string]string) {
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -225,6 +250,14 @@ func (s *ServiceSet) Filter(attrs map[string]string) {
 	}
 }
 
+// Watch gives you a channel of updates that are made to the ServiceSet. Once you create a watch,
+// you must always be receiving on it until the ServiceSet is closed or you call Unwatch with the
+// channel.
+//
+// The bringCurrent argument will produce a channel that will have buffered in it updates
+// representing the current services in the set. Otherwise, the channel returned will be
+// unbuffered. The fireOnce argument allows you to produce a watch that will only be used once
+// and then immediately removed from watches.
 func (s *ServiceSet) Watch(bringCurrent bool, fireOnce bool) chan *agent.ServiceUpdate {
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -247,6 +280,7 @@ func (s *ServiceSet) Watch(bringCurrent bool, fireOnce bool) chan *agent.Service
 	return updates
 }
 
+// Unwatch removes a channel from the watch list of the ServiceSet. It will also close the channel.
 func (s *ServiceSet) Unwatch(ch chan *agent.ServiceUpdate) {
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -254,10 +288,13 @@ func (s *ServiceSet) Unwatch(ch chan *agent.ServiceUpdate) {
 	delete(s.watches, ch)
 }
 
+// Close will stop a ServiceSet from being updated.
 func (s *ServiceSet) Close() error {
 	return s.call.CloseStream()
 }
 
+// A Client maintains the RPC client connection and any active registered services, making sure
+// they receive their heartbeat calls.
 type Client struct {
 	l             sync.Mutex
 	client        *rpcplus.Client
@@ -266,6 +303,8 @@ type Client struct {
 	names         map[string]string
 }
 
+// By default, NewClient will produce a client that will connect to the default address for
+// discoverd, which is 127.0.0.1:1111, or whatever the value of the environment variable DISCOVERD.
 func NewClient() (*Client, error) {
 	addr := os.Getenv("DISCOVERD")
 	if addr == "" {
@@ -284,6 +323,7 @@ func NewClientUsingAddress(addr string) (*Client, error) {
 	}, err
 }
 
+// NewServiceSet will produce a ServiceSet for a given service name.
 func (c *Client) NewServiceSet(name string) (*ServiceSet, error) {
 	updates := make(chan *agent.ServiceUpdate)
 	call := c.client.StreamGo("Agent.Subscribe", &agent.Args{
@@ -294,6 +334,9 @@ func (c *Client) NewServiceSet(name string) (*ServiceSet, error) {
 	return set, nil
 }
 
+// Services returns an array of Service objects of a given name. It provides a much easier way to
+// get at a snapshot of services than using ServiceSet. It will also block until at least one
+// service is available, or until the timeout specified is exceeded.
 func (c *Client) Services(name string, timeout time.Duration) ([]*Service, error) {
 	set, err := c.NewServiceSet(name)
 	if err != nil {
@@ -308,10 +351,19 @@ func (c *Client) Services(name string, timeout time.Duration) ([]*Service, error
 	}
 }
 
+// Register will announce a service as available and online at the address specified. If you only
+// specify a port as the address, discoverd may expand it to a full host and port based on the
+// external IP of the discoverd agent.
 func (c *Client) Register(name, addr string) error {
 	return c.RegisterWithAttributes(name, addr, nil)
 }
 
+// RegisterWithSet combines service registration with NewServiceSet for the same service, but will
+// not include the registered service in the ServiceSet. If you have a cluster of services that all
+// connect to a leader, this is especially useful as you don't have to worry about not connecting
+// to yourself. When using Leader or Leaders with RegisterWithSet, you may still get a Service
+// representing the service registered, in case this service does become leader. In that case, you
+// can use the SelfAddr property of ServiceSet to compare to the Service returned by Leader.
 func (c *Client) RegisterWithSet(name, addr string, attributes map[string]string) (*ServiceSet, error) {
 	err := c.RegisterWithAttributes(name, addr, attributes)
 	if err != nil {
@@ -341,6 +393,10 @@ func (c *Client) RegisterWithSet(name, addr string, attributes map[string]string
 	return set, nil
 }
 
+// RegisterAndStandby will register a service and returns a channel that will only be fired
+// when this service is or becomes leader. This can be used to implement a standby mode, where your
+// service doesn't actually start serving until it becomes a leader. You can also use this for more
+// standard leader election upgrades by placing the receive for this channel in a goroutine.
 func (c *Client) RegisterAndStandby(name, addr string, attributes map[string]string) (chan *Service, error) {
 	set, err := c.RegisterWithSet(name, addr, attributes)
 	if err != nil {
@@ -359,6 +415,8 @@ func (c *Client) RegisterAndStandby(name, addr string, attributes map[string]str
 	return standbyCh, nil
 }
 
+// RegisterWithAttributes registers a service to be discovered, setting the attribtues specified, however,
+// attributes are optional so the value can be nil. If you need to change attributes, you just reregister.
 func (c *Client) RegisterWithAttributes(name, addr string, attributes map[string]string) error {
 	args := &agent.Args{
 		Name:  name,
@@ -395,6 +453,8 @@ func (c *Client) RegisterWithAttributes(name, addr string, attributes map[string
 	return nil
 }
 
+// Unregister will explicitly unregister a service and as such it will stop any heartbeats
+// being sent from this client.
 func (c *Client) Unregister(name, addr string) error {
 	args := &agent.Args{
 		Name: name,
@@ -411,6 +471,7 @@ func (c *Client) Unregister(name, addr string) error {
 	return nil
 }
 
+// UnregisterAll will call Unregister on all services that have been registered with this client.
 func (c *Client) UnregisterAll() error {
 	c.l.Lock()
 	addrs := make([]string, 0, len(c.heartbeats))
@@ -429,9 +490,15 @@ func (c *Client) UnregisterAll() error {
 	return nil
 }
 
-var defaultClient *Client
+// The DefaultClient is used for all the top-level functions. You don't have to create it, but
+// you can change the address it uses by calling Connect.
+var DefaultClient *Client
 var defaultEnsureLock = &sync.Mutex{}
 
+// Normally you don't have to call Connect because it's called implicitly by the top-level
+// functions. However, you can call connect if you need to connect to a specific address other
+// than the default or value in the DISCOVERD env var. Calling Connect will replace any existing
+// client value for DefaultClient, so be sure to call it early if you intend to use it.
 func Connect(addr string) (err error) {
 	if addr == "" {
 		defaultClient, err = NewClient()
@@ -450,6 +517,7 @@ func ensureDefaultConnected() error {
 	return nil
 }
 
+// NewServiceSet will produce a ServiceSet for a given service name.
 func NewServiceSet(name string) (*ServiceSet, error) {
 	if err := ensureDefaultConnected(); err != nil {
 		return nil, err
@@ -457,6 +525,9 @@ func NewServiceSet(name string) (*ServiceSet, error) {
 	return defaultClient.NewServiceSet(name)
 }
 
+// Services returns an array of Service objects of a given name. It provides a much easier way to
+// get at a snapshot of services than using ServiceSet. It will also block until at least one
+// service is available, or until the timeout specified is exceeded.
 func Services(name string, timeout time.Duration) ([]*Service, error) {
 	if err := ensureDefaultConnected(); err != nil {
 		return nil, err
@@ -464,6 +535,9 @@ func Services(name string, timeout time.Duration) ([]*Service, error) {
 	return defaultClient.Services(name, timeout)
 }
 
+// Register will announce a service as available and online at the address specified. If you only
+// specify a port as the address, discoverd may expand it to a full host and port based on the
+// external IP of the discoverd agent.
 func Register(name, addr string) error {
 	if err := ensureDefaultConnected(); err != nil {
 		return err
@@ -471,6 +545,12 @@ func Register(name, addr string) error {
 	return defaultClient.Register(name, addr)
 }
 
+// RegisterWithSet combines service registration with NewServiceSet for the same service, but will
+// not include the registered service in the ServiceSet. If you have a cluster of services that all
+// connect to a leader, this is especially useful as you don't have to worry about not connecting
+// to yourself. When using Leader or Leaders with RegisterWithSet, you may still get a Service
+// representing the service registered, in case this service does become leader. In that case, you
+// can use the SelfAddr property of ServiceSet to compare to the Service returned by Leader.
 func RegisterWithSet(name, addr string, attributes map[string]string) (*ServiceSet, error) {
 	if err := ensureDefaultConnected(); err != nil {
 		return nil, err
@@ -478,6 +558,10 @@ func RegisterWithSet(name, addr string, attributes map[string]string) (*ServiceS
 	return defaultClient.RegisterWithSet(name, addr, attributes)
 }
 
+// RegisterAndStandby will register a service and returns a channel that will only be fired
+// when this service is or becomes leader. This can be used to implement a standby mode, where your
+// service doesn't actually start serving until it becomes a leader. You can also use this for more
+// standard leader election upgrades by placing the receive for this channel in a goroutine.
 func RegisterAndStandby(name, addr string, attributes map[string]string) (chan *Service, error) {
 	if err := ensureDefaultConnected(); err != nil {
 		return nil, err
@@ -485,6 +569,8 @@ func RegisterAndStandby(name, addr string, attributes map[string]string) (chan *
 	return defaultClient.RegisterAndStandby(name, addr, attributes)
 }
 
+// RegisterWithAttributes registers a service to be discovered, setting the attribtues specified, however,
+// attributes are optional so the value can be nil. If you need to change attributes, you just reregister.
 func RegisterWithAttributes(name, addr string, attributes map[string]string) error {
 	if err := ensureDefaultConnected(); err != nil {
 		return err
@@ -492,6 +578,8 @@ func RegisterWithAttributes(name, addr string, attributes map[string]string) err
 	return defaultClient.RegisterWithAttributes(name, addr, attributes)
 }
 
+// Unregister will explicitly unregister a service and as such it will stop any heartbeats
+// being sent from this client.
 func Unregister(name, addr string) error {
 	if err := ensureDefaultConnected(); err != nil {
 		return err
@@ -499,6 +587,7 @@ func Unregister(name, addr string) error {
 	return defaultClient.Unregister(name, addr)
 }
 
+// UnregisterAll will call Unregister on all services that have been registered with this client.
 func UnregisterAll() error {
 	if err := ensureDefaultConnected(); err != nil {
 		return err
