@@ -9,11 +9,7 @@ import (
 )
 
 func New() (*Client, error) {
-	disc, err := discoverd.NewClient()
-	if err != nil {
-		return nil, err
-	}
-	services, err := disc.Services("flynn-strowger-rpc")
+	services, err := discoverd.Services("flynn-strowger-rpc", discoverd.DefaultTimeout)
 	if err != nil {
 		return nil, err
 	}
