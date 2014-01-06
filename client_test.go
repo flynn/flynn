@@ -147,7 +147,7 @@ func TestNewAttributes(t *testing.T) {
 	assert(client.RegisterWithAttributes(serviceName, ":1111", map[string]string{"foo": "bar"}), t)
 	assert(client.RegisterWithAttributes(serviceName, ":1111", map[string]string{"foo": "baz"}), t)
 
-	<-set.Wait()
+	<-set.Watch(true, true)
 	if set.Services()[0].Attrs["foo"] != "baz" {
 		t.Fatal("Attribute not set on re-registered service as 'baz'")
 	}
@@ -233,8 +233,7 @@ func TestWatch(t *testing.T) {
 	set, err := client.ServiceSet(serviceName)
 	assert(err, t)
 
-	updates := make(chan *agent.ServiceUpdate)
-	set.Watch(updates, true, false)
+	updates := set.Watch(true, false)
 	assert(client.Register(serviceName, ":3333"), t)
 	for i := 0; i < 3; i++ {
 		var update *agent.ServiceUpdate

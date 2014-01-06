@@ -143,8 +143,7 @@ func (s *ServiceSet) Leader() *Service {
 
 func (s *ServiceSet) Leaders() chan *Service {
 	leaders := make(chan *Service)
-	updates := make(chan *agent.ServiceUpdate)
-	s.Watch(updates, false, false)
+	updates := s.Watch(false, false)
 	go func() {
 		leader := s.Leader()
 		leaders <- leader
@@ -212,37 +211,32 @@ func (s *ServiceSet) Filter(attrs map[string]string) {
 	}
 }
 
-func (s *ServiceSet) Watch(ch chan *agent.ServiceUpdate, bringCurrent bool, fireOnce bool) {
+func (s *ServiceSet) Watch(bringCurrent bool, fireOnce bool) chan *agent.ServiceUpdate {
 	s.l.Lock()
-	s.watches[ch] = fireOnce
-	s.l.Unlock()
+	defer s.l.Unlock()
+	var updates chan *agent.ServiceUpdate
 	if bringCurrent {
-		go func() {
-			s.l.Lock()
-			defer s.l.Unlock()
-			for _, service := range s.services {
-				ch <- &agent.ServiceUpdate{
-					Name:    service.Name,
-					Addr:    service.Addr,
-					Online:  true,
-					Attrs:   service.Attrs,
-					Created: service.Created,
-				}
+		updates = make(chan *agent.ServiceUpdate, len(s.services))
+		for _, service := range s.services {
+			updates <- &agent.ServiceUpdate{
+				Name:    service.Name,
+				Addr:    service.Addr,
+				Online:  true,
+				Attrs:   service.Attrs,
+				Created: service.Created,
 			}
-		}()
+		}
+	} else {
+		updates = make(chan *agent.ServiceUpdate)
 	}
+	s.watches[updates] = fireOnce
+	return updates
 }
 
 func (s *ServiceSet) Unwatch(ch chan *agent.ServiceUpdate) {
 	s.l.Lock()
 	defer s.l.Unlock()
 	delete(s.watches, ch)
-}
-
-func (s *ServiceSet) Wait() chan *agent.ServiceUpdate {
-	updateCh := make(chan *agent.ServiceUpdate, 1024) // buffer because of Watch bringCurrent race bug
-	s.Watch(updateCh, true, true)
-	return updateCh
 }
 
 func (s *ServiceSet) Close() error {
@@ -283,17 +277,17 @@ func (c *Client) ServiceSet(name string) (*ServiceSet, error) {
 	return set, nil
 }
 
-func (c *Client) Services(name string, timeout time.Duration) ([]*Service, error) {
+func (c *Client) Services(name string, timeoutSec time.Duration) ([]*Service, error) {
 	set, err := c.ServiceSet(name)
 	if err != nil {
 		return nil, err
 	}
 	defer set.Close()
 	select {
-	case <-set.Wait():
+	case <-set.Watch(true, true):
 		return set.Services(), nil
-	case <-time.After(time.Duration(timeout) * time.Second):
-		return nil, errors.New("discover: wait timeout exceeded")
+	case <-time.After(timeoutSec * time.Second):
+		return nil, errors.New("discover: timeout exceeded")
 	}
 }
 
@@ -314,8 +308,7 @@ func (c *Client) RegisterWithSet(name, addr string, attributes map[string]string
 	set.l.Lock()
 	set.SelfAddr = c.expandedAddrs[addr]
 	set.l.Unlock()
-	updates := make(chan *agent.ServiceUpdate)
-	set.Watch(updates, true, false)
+	updates := set.Watch(true, false)
 	for update := range updates {
 		if update.Addr == set.SelfAddr {
 			set.Unwatch(updates)
