@@ -20,18 +20,12 @@ import (
 
 // WARNING: assumes one host at the moment
 
-var sd *discoverd.Client
 var sched *sc.Client
 var host *lc.Client
 var hostid string
 
 func init() {
 	var err error
-	sd, err = discoverd.NewClient()
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	sched, err = sc.New()
 	if err != nil {
 		log.Fatal(err)
@@ -47,7 +41,7 @@ func init() {
 func main() {
 	root := "/var/lib/demo/apps"
 
-	services, _ := sd.Services("shelf")
+	services, _ := discoverd.Services("shelf", discoverd.DefaultTimeout)
 	if len(services) < 1 {
 		panic("Shelf is not discoverable")
 	}
