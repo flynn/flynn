@@ -12,6 +12,8 @@ import (
 	"github.com/flynn/rpcplus"
 )
 
+const DefaultTimeout = time.Second
+
 type Service struct {
 	Created uint
 	Name    string
