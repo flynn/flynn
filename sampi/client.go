@@ -13,11 +13,7 @@ import (
 )
 
 func New() (*Client, error) {
-	disc, err := discoverd.NewClient()
-	if err != nil {
-		return nil, err
-	}
-	services, err := disc.Services("flynn-sampi")
+	services, err := discoverd.Services("flynn-sampi", discoverd.DefaultTimeout)
 	if err != nil {
 		return nil, err
 	}
