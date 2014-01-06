@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+
+	"github.com/flynn/go-discoverd"
 )
 
 type services struct {
@@ -21,7 +23,7 @@ func (cmd *services) DefineFlags(fs *flag.FlagSet) {
 
 func (cmd *services) Run(fs *flag.FlagSet) {
 	cmd.InitClient(false)
-	services, err := cmd.client.Services(fs.Arg(0))
+	services, err := cmd.client.Services(fs.Arg(0), discoverd.DefaultTimeout)
 	if err != nil {
 		log.Fatal(err)
 	}
