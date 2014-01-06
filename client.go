@@ -15,6 +15,9 @@ import (
 	"github.com/flynn/rpcplus"
 )
 
+// This is a reasonable default value to be used for the timeout in the Services method.
+const DefaultTimeout = time.Second
+
 // This is how we model a service. It's simply a named address with optional attributes.
 // It also has a field to determine age, which is used for leader election.
 type Service struct {
