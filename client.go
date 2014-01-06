@@ -126,7 +126,21 @@ func (s *ServiceSet) matchFilters(attrs map[string]string) bool {
 	return true
 }
 
-func (s *ServiceSet) Leader() chan *Service {
+func (s *ServiceSet) Leader() *Service {
+	services := s.Services()
+	if len(services) > 0 {
+		if s.self != nil && services[0].Created > s.self.Created {
+			return s.self
+		}
+		return services[0]
+	}
+	if s.self != nil {
+		return s.self
+	}
+	return nil
+}
+
+func (s *ServiceSet) Leaders() chan *Service {
 	if s.leaders != nil {
 		return s.leaders
 	}
@@ -134,24 +148,12 @@ func (s *ServiceSet) Leader() chan *Service {
 	updates := make(chan *agent.ServiceUpdate)
 	s.Watch(updates, false, false)
 	go func() {
-		leader := s.Services()[0]
+		leader := s.Leader()
 		s.leaders <- leader
 		for update := range updates {
-			if update == nil {
-				return
-			}
 			if !update.Online && update.Addr == leader.Addr {
-				if len(s.Services()) == 0 && s.self != nil {
-					s.leaders <- s.self
-				} else {
-					leader = s.Services()[0]
-					if s.self != nil && leader.Created > s.self.Created {
-						// self is real leader
-						s.leaders <- s.self
-					} else {
-						s.leaders <- leader
-					}
-				}
+				leader = s.Leader()
+				s.leaders <- leader
 			}
 		}
 	}()
@@ -333,7 +335,7 @@ func (c *Client) RegisterAndStandby(name, addr string, attributes map[string]str
 	}
 	standbyCh := make(chan *Service)
 	go func() {
-		for leader := range set.Leader() {
+		for leader := range set.Leaders() {
 			if leader.Addr == set.SelfAddr {
 				set.Close()
 				standbyCh <- leader
