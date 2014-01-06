@@ -26,7 +26,6 @@ type ServiceSet struct {
 	services map[string]*Service
 	filters  map[string]string
 	watches  map[chan *agent.ServiceUpdate]bool
-	leaders  chan *Service
 	call     *rpcplus.Call
 	self     *Service
 	SelfAddr string
@@ -83,9 +82,11 @@ func (s *ServiceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
 				if _, exists := s.services[update.Addr]; exists {
 					delete(s.services, update.Addr)
 				} else {
-					s.l.Unlock()
 					if s.SelfAddr == update.Addr {
+						s.l.Unlock()
 						s.updateWatches(update)
+					} else {
+						s.l.Unlock()
 					}
 					continue
 				}
@@ -141,23 +142,20 @@ func (s *ServiceSet) Leader() *Service {
 }
 
 func (s *ServiceSet) Leaders() chan *Service {
-	if s.leaders != nil {
-		return s.leaders
-	}
-	s.leaders = make(chan *Service)
+	leaders := make(chan *Service)
 	updates := make(chan *agent.ServiceUpdate)
 	s.Watch(updates, false, false)
 	go func() {
 		leader := s.Leader()
-		s.leaders <- leader
+		leaders <- leader
 		for update := range updates {
 			if !update.Online && update.Addr == leader.Addr {
 				leader = s.Leader()
-				s.leaders <- leader
+				leaders <- leader
 			}
 		}
 	}()
-	return s.leaders
+	return leaders
 }
 
 type serviceByAge []*Service
@@ -313,12 +311,15 @@ func (c *Client) RegisterWithSet(name, addr string, attributes map[string]string
 		c.Unregister(name, addr)
 		return nil, err
 	}
+	set.l.Lock()
 	set.SelfAddr = c.expandedAddrs[addr]
-	_, exists := set.services[set.SelfAddr]
-	if !exists {
-		update := <-set.Wait()
-		for update.Addr != set.SelfAddr {
-			update = <-set.Wait()
+	set.l.Unlock()
+	updates := make(chan *agent.ServiceUpdate)
+	set.Watch(updates, true, false)
+	for update := range updates {
+		if update.Addr == set.SelfAddr {
+			set.Unwatch(updates)
+			break
 		}
 	}
 	set.l.Lock()

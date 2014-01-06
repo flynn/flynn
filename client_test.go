@@ -336,8 +336,9 @@ func TestLeaderChannel(t *testing.T) {
 	var leader *Service
 
 	go func() {
+		leaders := set.Leaders()
 		for {
-			leader = <-set.Leaders()
+			leader = <-leaders
 		}
 	}()
 
@@ -377,8 +378,9 @@ func TestRegisterWithSetLeaderSelf(t *testing.T) {
 	var leader *Service
 
 	go func() {
+		leaders := set.Leaders()
 		for {
-			leader = <-set.Leaders()
+			leader = <-leaders
 		}
 	}()
 
