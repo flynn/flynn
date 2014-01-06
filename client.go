@@ -136,8 +136,7 @@ func (s *ServiceSet) Leader() chan *Service {
 	go func() {
 		leader := s.Services()[0]
 		s.leaders <- leader
-		for {
-			update := <-updates
+		for update := range updates {
 			if update == nil {
 				return
 			}
@@ -284,7 +283,7 @@ func (c *Client) ServiceSet(name string) (*ServiceSet, error) {
 	return set, nil
 }
 
-func (c *Client) Services(name string, timeout int) ([]*Service, error) {
+func (c *Client) Services(name string, timeout time.Duration) ([]*Service, error) {
 	set, err := c.ServiceSet(name)
 	if err != nil {
 		return nil, err
@@ -334,8 +333,7 @@ func (c *Client) RegisterAndStandby(name, addr string, attributes map[string]str
 	}
 	standbyCh := make(chan *Service)
 	go func() {
-		for {
-			leader := <-set.Leader()
+		for leader := range set.Leader() {
 			if leader.Addr == set.SelfAddr {
 				set.Close()
 				standbyCh <- leader
@@ -343,7 +341,7 @@ func (c *Client) RegisterAndStandby(name, addr string, attributes map[string]str
 			}
 		}
 	}()
-	return standbyCh, err
+	return standbyCh, nil
 }
 
 func (c *Client) RegisterWithAttributes(name, addr string, attributes map[string]string) error {
