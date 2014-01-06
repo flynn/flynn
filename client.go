@@ -504,17 +504,17 @@ var defaultEnsureLock = &sync.Mutex{}
 // client value for DefaultClient, so be sure to call it early if you intend to use it.
 func Connect(addr string) (err error) {
 	if addr == "" {
-		defaultClient, err = NewClient()
+		DefaultClient, err = NewClient()
 		return
 	}
-	defaultClient, err = NewClientUsingAddress(addr)
+	DefaultClient, err = NewClientUsingAddress(addr)
 	return
 }
 
 func ensureDefaultConnected() error {
 	defaultEnsureLock.Lock()
 	defer defaultEnsureLock.Unlock()
-	if defaultClient == nil {
+	if DefaultClient == nil {
 		return Connect("")
 	}
 	return nil
@@ -525,7 +525,7 @@ func NewServiceSet(name string) (*ServiceSet, error) {
 	if err := ensureDefaultConnected(); err != nil {
 		return nil, err
 	}
-	return defaultClient.NewServiceSet(name)
+	return DefaultClient.NewServiceSet(name)
 }
 
 // Services returns an array of Service objects of a given name. It provides a much easier way to
@@ -535,7 +535,7 @@ func Services(name string, timeout time.Duration) ([]*Service, error) {
 	if err := ensureDefaultConnected(); err != nil {
 		return nil, err
 	}
-	return defaultClient.Services(name, timeout)
+	return DefaultClient.Services(name, timeout)
 }
 
 // Register will announce a service as available and online at the address specified. If you only
@@ -545,7 +545,7 @@ func Register(name, addr string) error {
 	if err := ensureDefaultConnected(); err != nil {
 		return err
 	}
-	return defaultClient.Register(name, addr)
+	return DefaultClient.Register(name, addr)
 }
 
 // RegisterWithSet combines service registration with NewServiceSet for the same service, but will
@@ -558,7 +558,7 @@ func RegisterWithSet(name, addr string, attributes map[string]string) (*ServiceS
 	if err := ensureDefaultConnected(); err != nil {
 		return nil, err
 	}
-	return defaultClient.RegisterWithSet(name, addr, attributes)
+	return DefaultClient.RegisterWithSet(name, addr, attributes)
 }
 
 // RegisterAndStandby will register a service and returns a channel that will only be fired
@@ -569,7 +569,7 @@ func RegisterAndStandby(name, addr string, attributes map[string]string) (chan *
 	if err := ensureDefaultConnected(); err != nil {
 		return nil, err
 	}
-	return defaultClient.RegisterAndStandby(name, addr, attributes)
+	return DefaultClient.RegisterAndStandby(name, addr, attributes)
 }
 
 // RegisterWithAttributes registers a service to be discovered, setting the attribtues specified, however,
@@ -578,7 +578,7 @@ func RegisterWithAttributes(name, addr string, attributes map[string]string) err
 	if err := ensureDefaultConnected(); err != nil {
 		return err
 	}
-	return defaultClient.RegisterWithAttributes(name, addr, attributes)
+	return DefaultClient.RegisterWithAttributes(name, addr, attributes)
 }
 
 // Unregister will explicitly unregister a service and as such it will stop any heartbeats
@@ -587,7 +587,7 @@ func Unregister(name, addr string) error {
 	if err := ensureDefaultConnected(); err != nil {
 		return err
 	}
-	return defaultClient.Unregister(name, addr)
+	return DefaultClient.Unregister(name, addr)
 }
 
 // UnregisterAll will call Unregister on all services that have been registered with this client.
@@ -595,5 +595,5 @@ func UnregisterAll() error {
 	if err := ensureDefaultConnected(); err != nil {
 		return err
 	}
-	return defaultClient.UnregisterAll()
+	return DefaultClient.UnregisterAll()
 }
