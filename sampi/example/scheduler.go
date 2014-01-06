@@ -20,11 +20,6 @@ import (
 )
 
 func main() {
-	disc, err := discoverd.NewClient()
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	scheduler, err := client.New()
 	if err != nil {
 		log.Fatal(err)
@@ -46,7 +41,7 @@ func main() {
 
 	id := randomID()
 
-	services, err := disc.Services("flynn-lorne-attach." + firstHost)
+	services, err := discoverd.Services("flynn-lorne-attach."+firstHost, discoverd.DefaultTimeout)
 	if err != nil {
 		log.Fatal(err)
 	}
