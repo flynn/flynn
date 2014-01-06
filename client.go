@@ -430,6 +430,7 @@ func (c *Client) UnregisterAll() error {
 }
 
 var defaultClient *Client
+var defaultEnsureLock = &sync.Mutex{}
 
 func Connect(addr string) (err error) {
 	if addr == "" {
@@ -441,6 +442,8 @@ func Connect(addr string) (err error) {
 }
 
 func ensureDefaultConnected() error {
+	defaultEnsureLock.Lock()
+	defer defaultEnsureLock.Unlock()
 	if defaultClient == nil {
 		return Connect("")
 	}
