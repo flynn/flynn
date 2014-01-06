@@ -25,10 +25,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	disc, err = discoverd.NewClient()
-	if err != nil {
-		log.Fatal(err)
-	}
 	router, err = strowgerc.New()
 	if err != nil {
 		log.Fatal(err)
@@ -44,7 +40,6 @@ func main() {
 }
 
 var scheduler *sampic.Client
-var disc *discoverd.Client
 var router *strowgerc.Client
 
 type Job struct {
@@ -88,7 +83,7 @@ type Formation struct {
 }
 
 func shelfURL() string {
-	services, _ := disc.Services("shelf")
+	services, _ := discoverd.Services("shelf", discoverd.DefaultTimeout)
 	if len(services) < 1 {
 		panic("Shelf is not discoverable")
 	}
