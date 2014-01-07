@@ -13,13 +13,73 @@ import (
 	"github.com/flynn/discoverd/agent"
 )
 
-func ExampleRegisterAndStandby() {
+func ExampleRegisterAndStandby_standby() {
 	standbyCh, err := RegisterAndStandby("sampi", ":9099", nil)
 	if err != nil {
 		panic(err)
 	}
 	<-standbyCh
-	// listenAndServe()
+	// run server
+}
+
+func ExampleRegisterAndStandby_upgrade() {
+	standbyCh, err := RegisterAndStandby("sampi", ":9099", nil)
+	if err != nil {
+		panic(err)
+	}
+	go func() {
+		<-standbyCh
+		// upgrade to leader
+	}()
+	// run server
+}
+
+func ExampleServiceSet_Leaders_client() {
+	set, err := NewServiceSet("sampi")
+	if err != nil {
+		panic(err)
+	}
+	leaders := set.Leaders()
+	go func() {
+		for newLeader := range leaders {
+			println(newLeader)
+			// update connection to connect to newLeader.Addr
+		}
+	}()
+}
+
+func ExampleServiceSet_Watch_updatePool() {
+	set, err := NewServiceSet("app")
+	if err != nil {
+		panic(err)
+	}
+	go func() {
+		for update := range set.Watch(true, false) {
+			if update.Online {
+				// add update.Addr to connection pool
+			} else {
+				// remove update.Addr from connection pool
+			}
+		}
+	}()
+}
+
+func ExampleRegisterWithSet_upgradeDowngrade() {
+	set, _ := RegisterWithSet("cluster", ":9099", nil)
+	go func() {
+		leaders := set.Leaders()
+		currentLeader := false
+		for leader := range leaders {
+			if leader.Addr == set.SelfAddr {
+				currentLeader = true
+				// upgrade to leader
+			} else if currentLeader == true {
+				currentLeader = false
+				// downgrade from leader
+			}
+		}
+	}()
+	// run server
 }
 
 func runEtcdServer() func() {
