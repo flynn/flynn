@@ -13,6 +13,15 @@ import (
 	"github.com/flynn/discoverd/agent"
 )
 
+func ExampleRegisterAndStandby() {
+	standbyCh, err := RegisterAndStandby("sampi", ":9099", nil)
+	if err != nil {
+		panic(err)
+	}
+	<-standbyCh
+	// listenAndServe()
+}
+
 func runEtcdServer() func() {
 	killCh := make(chan struct{})
 	doneCh := make(chan struct{})
