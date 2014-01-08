@@ -7,8 +7,9 @@ import (
 	"sync"
 
 	"github.com/flynn/go-dockerclient"
-	"github.com/flynn/lorne/types"
 	"github.com/technoweenie/grohl"
+
+	"./types"
 )
 
 type attachHandler struct {
