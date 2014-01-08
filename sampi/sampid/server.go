@@ -24,15 +24,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	d, err := discoverd.NewClient()
+	leader, err := discoverd.RegisterAndStandby("flynn-sampi", *listenAddr, nil)
 	if err != nil {
-		g.Log(grohl.Data{"at": "discover_connect", "status": "error", "err": err})
-		os.Exit(1)
-	}
-	if err = d.Register("flynn-sampi", *listenAddr); err != nil {
 		g.Log(grohl.Data{"at": "discover_registration", "status": "error", "err": err})
 		os.Exit(1)
 	}
 
+	select {
+	case <-leader:
+	default:
+		g.Log(grohl.Data{"at": "standby"})
+		<-leader
+	}
+	g.Log(grohl.Data{"at": "listening"})
 	http.Serve(l, nil)
 }
