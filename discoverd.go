@@ -5,7 +5,7 @@ import (
 	"log"
 	"strings"
 
-	"./agent"
+	"github.com/flynn/discoverd/agent"
 )
 
 var addr = flag.String("bind", ":1111", "address to bind on")
