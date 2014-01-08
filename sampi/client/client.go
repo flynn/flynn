@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"io"
+	"time"
 
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/rpcplus"
@@ -13,14 +14,16 @@ import (
 )
 
 func New() (*Client, error) {
-	services, err := discoverd.Services("flynn-sampi", discoverd.DefaultTimeout)
+	services, err := discoverd.NewServiceSet("flynn-sampi")
 	if err != nil {
 		return nil, err
 	}
-	if len(services) == 0 {
+	select {
+	case <-services.Watch(true, true):
+	case <-time.After(time.Second):
 		return nil, errors.New("sampi: no servers found")
 	}
-	c, err := rpcplus.DialHTTP("tcp", services[0].Addr)
+	c, err := rpcplus.DialHTTP("tcp", services.Leader().Addr)
 	return &Client{c}, err
 }
 
