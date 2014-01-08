@@ -20,7 +20,8 @@ import (
 var ErrNoServers = errors.New("lorne: no servers found")
 
 func New(id string) (*Client, error) {
-	services, err := discoverd.NewServiceSet("flynn-lorne." + id)
+	services, err := discoverd.NewServiceSet("flynn-lorne")
+	services.Filter(map[string]string{"id": id})
 	if err != nil {
 		return nil, err
 	}
