@@ -1,15 +1,12 @@
-build:
-ifdef LOCAL
-	make build/discoverd
-else
-	mkdir -p build && tar -cf - . | docker run -i -a stdin -a stdout -e=GOPATH=/tmp/go progrium/makebuilder makebuild go/src/github.com/flynn/discoverd | tar -xC build
-endif
 
-build/discoverd:
-	godep go build -o build/discoverd ./discoverd
+build:
+	mkdir -p build
+	godep go build -o build/discoverd
 
 container: build
 	docker build -t flynn/discoverd .
 
 clean:
-	rm -rf build tmp discoverd
+	rm -rf build
+
+.PHONY: build
