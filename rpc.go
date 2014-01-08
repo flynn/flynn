@@ -4,10 +4,9 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/flynn/lorne/types"
 	"github.com/flynn/rpcplus"
 	rpc "github.com/flynn/rpcplus/comborpc"
-
-	"./types"
 )
 
 func serveHTTP(host *Host, attach *attachHandler) {

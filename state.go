@@ -4,9 +4,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flynn/lorne/types"
 	"github.com/flynn/sampi/types"
-
-	"./types"
 )
 
 // TODO: prune old jobs?
