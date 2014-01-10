@@ -18,6 +18,7 @@ func New() (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer services.Close()
 	select {
 	case <-services.Watch(true, true):
 	case <-time.After(time.Second):
