@@ -98,7 +98,7 @@ func testProcessWithError(job *sampi.Job, client *dockerClient, err error, t *te
 func processWithOpts(job *sampi.Job, extAddr string, client *dockerClient) *State {
 	ports := make(chan int)
 	state := NewState()
-	go allocatePorts(ports, 500, 501)
+	go allocatePorts(ports, 500, 505)
 	(&jobProcessor{
 		externalAddr: extAddr,
 		docker:       client,
@@ -112,18 +112,30 @@ func TestProcessJob(t *testing.T) {
 	testProcess(&sampi.Job{ID: "a", Config: &docker.Config{}}, t)
 }
 
-func TestProcessJobWithPort(t *testing.T) {
-	job := &sampi.Job{TCPPorts: 1, ID: "a", Config: &docker.Config{}}
+func TestProcessJobWithPorts(t *testing.T) {
+	job := &sampi.Job{TCPPorts: 2, ID: "a", Config: &docker.Config{}}
 	_, client := testProcess(job, t)
 
-	if len(job.Config.Env) == 0 || job.Config.Env[len(job.Config.Env)-1] != "PORT=500" {
-		t.Error("port env not set")
+	if len(job.Config.Env) == 0 || !sliceHasString(job.Config.Env, "PORT=500") {
+		t.Fatal("PORT env not set")
+	}
+	if !sliceHasString(job.Config.Env, "PORT_0=500") {
+		t.Error("PORT_0 env not set")
+	}
+	if !sliceHasString(job.Config.Env, "PORT_1=501") {
+		t.Error("PORT_1 env not set")
 	}
 	if _, ok := job.Config.ExposedPorts["500/tcp"]; !ok {
-		t.Error("exposed port not set")
+		t.Error("exposed port 500 not set")
+	}
+	if _, ok := job.Config.ExposedPorts["501/tcp"]; !ok {
+		t.Error("exposed port 501 not set")
 	}
 	if b := client.hostConf.PortBindings["500/tcp"]; len(b) == 0 || b[0].HostPort != "500" {
-		t.Error("port binding not set")
+		t.Error("port 500 binding not set")
+	}
+	if b := client.hostConf.PortBindings["501/tcp"]; len(b) == 0 || b[0].HostPort != "501" {
+		t.Error("port 501 binding not set")
 	}
 }
 
