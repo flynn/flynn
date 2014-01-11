@@ -3,7 +3,7 @@
     "args": [
       "-data-dir={{ .Volume \"/data\" }}",
       "-addr={{ .ExternalIP }}:{{ .TCPPort 0 }}",
-      "-addr=0.0.0.0:{{ .TCPPort 0 }}",
+      "-bind-addr=0.0.0.0:{{ .TCPPort 0 }}",
       "-peer-addr={{ .ExternalIP }}:{{ .TCPPort 1 }}",
       "-peer-bind-addr=0.0.0.0:{{ .TCPPort 1 }}",
       "-name={{ .Env.HOSTNAME }}",
