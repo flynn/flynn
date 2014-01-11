@@ -93,7 +93,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 	serviceData := make(map[string]*ManifestData, len(services))
 	for name, service := range services {
 		data := &ManifestData{
-			Env:        make(map[string]string, len(service.Env)),
+			Env:        parseEnviron(),
 			Services:   serviceData,
 			ExternalIP: m.externalIP,
 			ports:      m.ports,
@@ -120,11 +120,12 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 			}
 		}
 		for k, v := range service.Env {
-			data.Env[k], err = interp(v)
+			service.Env[k], err = interp(v)
 			if err != nil {
 				return nil, err
 			}
 		}
+		data.Env = service.Env
 
 		// Always include at least one port
 		if len(data.TCPPorts) == 0 {
