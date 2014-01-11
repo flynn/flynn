@@ -142,14 +142,23 @@ func (p *jobProcessor) processJob(ports <-chan int, job *sampi.Job) (*docker.Con
 	g.Log(grohl.Data{"at": "start", "job.image": job.Config.Image, "job.cmd": job.Config.Cmd, "job.entrypoint": job.Config.Entrypoint})
 
 	var hostConfig *docker.HostConfig
-	if job.TCPPorts > 0 {
+	for i := 0; i < job.TCPPorts; i++ {
 		port := strconv.Itoa(<-ports)
-		job.Config.Env = append(job.Config.Env, "PORT="+port)
-		job.Config.ExposedPorts = map[string]struct{}{port + "/tcp": struct{}{}}
-		hostConfig = &docker.HostConfig{
-			PortBindings:    map[string][]docker.PortBinding{port + "/tcp": {{HostPort: port}}},
-			PublishAllPorts: true,
+		if i == 0 {
+			job.Config.Env = append(job.Config.Env, "PORT="+port)
 		}
+		job.Config.Env = append(job.Config.Env, fmt.Sprintf("PORT_%d=%s", i, port))
+		if job.Config.ExposedPorts == nil {
+			job.Config.ExposedPorts = make(map[string]struct{}, job.TCPPorts)
+		}
+		job.Config.ExposedPorts[port+"/tcp"] = struct{}{}
+		if hostConfig == nil {
+			hostConfig = &docker.HostConfig{
+				PortBindings:    make(map[string][]docker.PortBinding, job.TCPPorts),
+				PublishAllPorts: true,
+			}
+		}
+		hostConfig.PortBindings[port+"/tcp"] = []docker.PortBinding{{HostPort: port}}
 	}
 	if p.externalAddr != "" {
 		job.Config.Env = appendUnique(job.Config.Env, "EXTERNAL_IP="+p.externalAddr, "SD_HOST="+p.externalAddr, "DISCOVERD="+p.discoverd)
