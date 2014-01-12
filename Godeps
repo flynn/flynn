@@ -1,0 +1,72 @@
+{
+	"ImportPath": "github.com/flynn/flynn-controller",
+	"GoVersion": "go1.2",
+	"Deps": [
+		{
+			"ImportPath": "bitbucket.org/kardianos/osext",
+			"Comment": "null-9",
+			"Rev": "364fb577de68fb646c4cb39cc0e09c887ee16376"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-etcd/etcd",
+			"Comment": "v0.2.0-rc1-50-gf0d5e98",
+			"Rev": "f0d5e98e38e4d3b100bdc32c25a69141e1a6ac45"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-log/log",
+			"Rev": "840af6b63e623201384b2f20a8e7d3f2dcfef063"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-systemd/journal",
+			"Rev": "d38c05b3831b1f09cb592a726822e04ba76543b5"
+		},
+		{
+			"ImportPath": "github.com/flynn/discoverd/agent",
+			"Rev": "ae428c1f571f8ed1bc5562b30031d148312121d2"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-discoverd",
+			"Rev": "44d034a497edc1d9a1dce660d317a133df69c9b3"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-dockerclient",
+			"Rev": "7299ec5cb7c35fda101c46a24edb648795f7e074"
+		},
+		{
+			"ImportPath": "github.com/flynn/lorne/client",
+			"Rev": "dc4e1d96922620dd5039d0d3722b68ae3ffe4840"
+		},
+		{
+			"ImportPath": "github.com/flynn/lorne/types",
+			"Rev": "dc4e1d96922620dd5039d0d3722b68ae3ffe4840"
+		},
+		{
+			"ImportPath": "github.com/flynn/rpcplus",
+			"Rev": "13a8b54dd08599a239453a02e35dc40db030b5bf"
+		},
+		{
+			"ImportPath": "github.com/flynn/sampi/client",
+			"Rev": "86f8a99ae88f8a516d705587bd0ba19e5a71b0b2"
+		},
+		{
+			"ImportPath": "github.com/flynn/sampi/types",
+			"Rev": "86f8a99ae88f8a516d705587bd0ba19e5a71b0b2"
+		},
+		{
+			"ImportPath": "github.com/flynn/strowger/client",
+			"Rev": "a5a34cb164c49819024b43aaf214439624d99190"
+		},
+		{
+			"ImportPath": "github.com/flynn/strowger/types",
+			"Rev": "a5a34cb164c49819024b43aaf214439624d99190"
+		},
+		{
+			"ImportPath": "github.com/rcrowley/go-metrics",
+			"Rev": "a4a3178f7546312fb0a6a75aa54a3988d98a7a79"
+		},
+		{
+			"ImportPath": "github.com/titanous/go-tigertonic",
+			"Rev": "1c4fc87f7b87f6ae47754fdb8e48783f608be8b9"
+		}
+	]
+}
