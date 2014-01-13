@@ -51,13 +51,15 @@ func (s *HTTPFrontend) AddHTTPDomain(domain string, service string, certs [][]by
 	return s.addDomain(domain, service, true)
 }
 
+var ErrDomainExists = errors.New("strowger: domain exists with different service")
+
 func (s *HTTPFrontend) addDomain(domain string, service string, persist bool) error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
 	if server, ok := s.domains[domain]; ok {
 		if server.name != service {
-			return errors.New("domain exists with different service")
+			return ErrDomainExists
 		}
 		return nil
 	}
