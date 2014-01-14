@@ -30,8 +30,14 @@ type HTTPFrontend struct {
 
 	etcdPrefix string
 
-	etcd      *etcd.Client
+	etcd      httpFrontendEtcdClient
 	discoverd *discoverd.Client
+}
+
+type httpFrontendEtcdClient interface {
+	Create(key string, value string, ttl uint64) (*etcd.Response, error)
+	Get(key string, sort, recursive bool) (*etcd.Response, error)
+	Watch(prefix string, waitIndex uint64, recursive bool, receiver chan *etcd.Response, stop chan bool) (*etcd.Response, error)
 }
 
 func NewHTTPFrontend(addr string) (*HTTPFrontend, error) {
