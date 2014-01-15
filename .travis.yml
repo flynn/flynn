@@ -1,0 +1,28 @@
+language: go
+go:
+  - 1.2
+  - tip
+
+before_install:
+  - go install -race std
+  - go get code.google.com/p/go.tools/cmd/cover
+  - go get github.com/kr/godep
+  - wget https://github.com/coreos/etcd/releases/download/v0.2.0/etcd-v0.2.0-Linux-x86_64.tar.gz
+  - tar xvzf etcd-v0.2.0-Linux-x86_64.tar.gz
+  - mv etcd-v0.2.0-Linux-x86_64/etcd $HOME/gopath/bin
+  - export PATH=$HOME/gopath/bin:$PATH
+
+script:
+  - godep go test -race ./...
+  - godep go test -cover ./...
+
+notifications:
+  irc:
+    channels:
+      - "chat.freenode.net#flynn"
+    use_notice: true
+    skip_join: true
+    on_success: change
+    on_failure: always
+    template:
+      - "%{repository}/%{branch} - %{commit}: %{message} %{build_url}"
