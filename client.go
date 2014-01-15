@@ -29,17 +29,66 @@ type Service struct {
 	Attrs   map[string]string
 }
 
-// A ServiceSet is long-running query of services, giving you a real-time representation of a
-// service cluster. Using the same ServiceSet across services/processes gives you a consistent
-// collection of services that leader election can be coordinated with.
-type ServiceSet struct {
+type serviceSet struct {
 	l        sync.Mutex
 	services map[string]*Service
 	filters  map[string]string
 	watches  map[chan *agent.ServiceUpdate]bool
 	call     *rpcplus.Call
 	self     *Service
-	SelfAddr string
+	selfAddr string
+}
+
+// A ServiceSet is long-running query of services, giving you a real-time representation of a
+// service cluster. Using the same ServiceSet across services/processes gives you a consistent
+// collection of services that leader election can be coordinated with.
+type ServiceSet interface {
+	SelfAddr() string
+
+	// Leader returns the current leader for a ServiceSet. It's calculated by choosing the oldest
+	// service in the set. This "lockless" approach means for any consistent set (same service, same
+	// filters) there is always an agreed upon leader.
+	Leader() *Service
+
+	// Leaders returns a channel that will first produce the current leader service, then any following
+	// leader service as the leader of the set changes. Every call to Leaders produces a new watch on
+	// the set, and once you get a channel from Leaders, you *must* always be receiving until the
+	// ServiceSet is closed.
+	Leaders() chan *Service
+
+	// Services returns an array of Service objects in the set, sorted by age. This means that most
+	// of the time, the first element is the leader. However, in cases where the ServiceSet was
+	// created by RegisterWithSet, the registered service will not be included in this list, so you
+	// should rely on Leader/Leaders to get the leader.
+	Services() []*Service
+
+	// Addrs returns an array of strings representing the addresses of the services.
+	Addrs() []string
+
+	// Select will return an array of services with matching attributes to the provided map argument.
+	// Unlike the Services method, Select is not ordered.
+	Select(attrs map[string]string) []*Service
+
+	// Filter will set the filter map for a ServiceSet. A filter will limit services that show up in
+	// the set to only the ones with matching attributes. Any services in the set that don't match
+	// when Filter is called will be removed from the ServiceSet.
+	Filter(attrs map[string]string)
+
+	// Watch gives you a channel of updates that are made to the ServiceSet. Once you create a watch,
+	// you must always be receiving on it until the ServiceSet is closed or you call Unwatch with the
+	// channel.
+	//
+	// The bringCurrent argument will produce a channel that will have buffered in it updates
+	// representing the current services in the set. Otherwise, the channel returned will be
+	// unbuffered. The fireOnce argument allows you to produce a watch that will only be used once
+	// and then immediately removed from watches.
+	Watch(bringCurrent bool, fireOnce bool) chan *agent.ServiceUpdate
+
+	// Unwatch removes a channel from the watch list of the ServiceSet. It will also close the channel.
+	Unwatch(chan *agent.ServiceUpdate)
+
+	// Close will stop a ServiceSet from being updated.
+	Close() error
 }
 
 func copyService(service *Service) *Service {
@@ -51,8 +100,8 @@ func copyService(service *Service) *Service {
 	return &s
 }
 
-func makeServiceSet(call *rpcplus.Call) *ServiceSet {
-	return &ServiceSet{
+func makeServiceSet(call *rpcplus.Call) *serviceSet {
+	return &serviceSet{
 		services: make(map[string]*Service),
 		filters:  make(map[string]string),
 		watches:  make(map[chan *agent.ServiceUpdate]bool),
@@ -60,7 +109,11 @@ func makeServiceSet(call *rpcplus.Call) *ServiceSet {
 	}
 }
 
-func (s *ServiceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
+func (s *serviceSet) SelfAddr() string {
+	return s.selfAddr
+}
+
+func (s *serviceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
 	// current is an event when enough service updates have been
 	// received to bring us to "current" state (when subscribed)
 	current := make(chan struct{})
@@ -77,7 +130,7 @@ func (s *ServiceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
 				s.l.Unlock()
 				continue
 			}
-			if s.SelfAddr != update.Addr && update.Online {
+			if s.selfAddr != update.Addr && update.Online {
 				if _, exists := s.services[update.Addr]; !exists {
 					host, port, _ := net.SplitHostPort(update.Addr)
 					s.services[update.Addr] = &Service{
@@ -93,7 +146,7 @@ func (s *ServiceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
 				if _, exists := s.services[update.Addr]; exists {
 					delete(s.services, update.Addr)
 				} else {
-					if s.SelfAddr == update.Addr {
+					if s.selfAddr == update.Addr {
 						s.l.Unlock()
 						s.updateWatches(update)
 					} else {
@@ -110,7 +163,7 @@ func (s *ServiceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
 	return current
 }
 
-func (s *ServiceSet) updateWatches(update *agent.ServiceUpdate) {
+func (s *serviceSet) updateWatches(update *agent.ServiceUpdate) {
 	s.l.Lock()
 	watches := make(map[chan *agent.ServiceUpdate]bool, len(s.watches))
 	for k, v := range s.watches {
@@ -131,7 +184,7 @@ func (s *ServiceSet) updateWatches(update *agent.ServiceUpdate) {
 	}
 }
 
-func (s *ServiceSet) closeWatches() {
+func (s *serviceSet) closeWatches() {
 	s.l.Lock()
 	watches := make(map[chan *agent.ServiceUpdate]bool, len(s.watches))
 	for k, v := range s.watches {
@@ -143,7 +196,7 @@ func (s *ServiceSet) closeWatches() {
 	}
 }
 
-func (s *ServiceSet) matchFilters(attrs map[string]string) bool {
+func (s *serviceSet) matchFilters(attrs map[string]string) bool {
 	for key, value := range s.filters {
 		if attrs[key] != value {
 			return false
@@ -152,10 +205,7 @@ func (s *ServiceSet) matchFilters(attrs map[string]string) bool {
 	return true
 }
 
-// Leader returns the current leader for a ServiceSet. It's calculated by choosing the oldest
-// service in the set. This "lockless" approach means for any consistent set (same service, same
-// filters) there is always an agreed upon leader.
-func (s *ServiceSet) Leader() *Service {
+func (s *serviceSet) Leader() *Service {
 	services := s.Services()
 	if len(services) > 0 {
 		if s.self != nil && services[0].Created > s.self.Created {
@@ -169,11 +219,7 @@ func (s *ServiceSet) Leader() *Service {
 	return nil
 }
 
-// Leaders returns a channel that will first produce the current leader service, then any following
-// leader service as the leader of the set changes. Every call to Leaders produces a new watch on
-// the set, and once you get a channel from Leaders, you *must* always be receiving until the
-// ServiceSet is closed.
-func (s *ServiceSet) Leaders() chan *Service {
+func (s *serviceSet) Leaders() chan *Service {
 	leaders := make(chan *Service)
 	updates := s.Watch(false, false)
 	go func() {
@@ -195,11 +241,7 @@ func (a serviceByAge) Len() int           { return len(a) }
 func (a serviceByAge) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a serviceByAge) Less(i, j int) bool { return a[i].Created < a[j].Created }
 
-// Services returns an array of Service objects in the set, sorted by age. This means that most
-// of the time, the first element is the leader. However, in cases where the ServiceSet was
-// created by RegisterWithSet, the registered service will not be included in this list, so you
-// should rely on Leader/Leaders to get the leader.
-func (s *ServiceSet) Services() []*Service {
+func (s *serviceSet) Services() []*Service {
 	s.l.Lock()
 	defer s.l.Unlock()
 	list := make([]*Service, 0, len(s.services))
@@ -212,8 +254,7 @@ func (s *ServiceSet) Services() []*Service {
 	return list
 }
 
-// Addrs returns an array of strings representing the addresses of the services.
-func (s *ServiceSet) Addrs() []string {
+func (s *serviceSet) Addrs() []string {
 	list := make([]string, 0, len(s.services))
 	for _, service := range s.Services() {
 		list = append(list, service.Addr)
@@ -221,9 +262,7 @@ func (s *ServiceSet) Addrs() []string {
 	return list
 }
 
-// Select will return an array of services with matching attributes to the provided map argument.
-// Unlike the Services method, Select is not ordered.
-func (s *ServiceSet) Select(attrs map[string]string) []*Service {
+func (s *serviceSet) Select(attrs map[string]string) []*Service {
 	s.l.Lock()
 	defer s.l.Unlock()
 	list := make([]*Service, 0, len(s.services))
@@ -239,10 +278,7 @@ outer:
 	return list
 }
 
-// Filter will set the filter map for a ServiceSet. A filter will limit services that show up in
-// the set to only the ones with matching attributes. Any services in the set that don't match
-// when Filter is called will be removed from the ServiceSet.
-func (s *ServiceSet) Filter(attrs map[string]string) {
+func (s *serviceSet) Filter(attrs map[string]string) {
 	s.l.Lock()
 	defer s.l.Unlock()
 	s.filters = attrs
@@ -253,15 +289,7 @@ func (s *ServiceSet) Filter(attrs map[string]string) {
 	}
 }
 
-// Watch gives you a channel of updates that are made to the ServiceSet. Once you create a watch,
-// you must always be receiving on it until the ServiceSet is closed or you call Unwatch with the
-// channel.
-//
-// The bringCurrent argument will produce a channel that will have buffered in it updates
-// representing the current services in the set. Otherwise, the channel returned will be
-// unbuffered. The fireOnce argument allows you to produce a watch that will only be used once
-// and then immediately removed from watches.
-func (s *ServiceSet) Watch(bringCurrent bool, fireOnce bool) chan *agent.ServiceUpdate {
+func (s *serviceSet) Watch(bringCurrent bool, fireOnce bool) chan *agent.ServiceUpdate {
 	s.l.Lock()
 	defer s.l.Unlock()
 	var updates chan *agent.ServiceUpdate
@@ -283,16 +311,14 @@ func (s *ServiceSet) Watch(bringCurrent bool, fireOnce bool) chan *agent.Service
 	return updates
 }
 
-// Unwatch removes a channel from the watch list of the ServiceSet. It will also close the channel.
-func (s *ServiceSet) Unwatch(ch chan *agent.ServiceUpdate) {
+func (s *serviceSet) Unwatch(ch chan *agent.ServiceUpdate) {
 	s.l.Lock()
 	defer s.l.Unlock()
 	close(ch)
 	delete(s.watches, ch)
 }
 
-// Close will stop a ServiceSet from being updated.
-func (s *ServiceSet) Close() error {
+func (s *serviceSet) Close() error {
 	return s.call.CloseStream()
 }
 
@@ -326,8 +352,7 @@ func NewClientUsingAddress(addr string) (*Client, error) {
 	}, err
 }
 
-// NewServiceSet will produce a ServiceSet for a given service name.
-func (c *Client) NewServiceSet(name string) (*ServiceSet, error) {
+func (c *Client) newServiceSet(name string) (*serviceSet, error) {
 	updates := make(chan *agent.ServiceUpdate)
 	call := c.client.StreamGo("Agent.Subscribe", &agent.Args{
 		Name: name,
@@ -335,6 +360,11 @@ func (c *Client) NewServiceSet(name string) (*ServiceSet, error) {
 	set := makeServiceSet(call)
 	<-set.bind(updates)
 	return set, nil
+}
+
+// NewServiceSet will produce a ServiceSet for a given service name.
+func (c *Client) NewServiceSet(name string) (ServiceSet, error) {
+	return c.newServiceSet(name)
 }
 
 // Services returns an array of Service objects of a given name. It provides a much easier way to
@@ -367,31 +397,31 @@ func (c *Client) Register(name, addr string) error {
 // to yourself. When using Leader or Leaders with RegisterWithSet, you may still get a Service
 // representing the service registered, in case this service does become leader. In that case, you
 // can use the SelfAddr property of ServiceSet to compare to the Service returned by Leader.
-func (c *Client) RegisterWithSet(name, addr string, attributes map[string]string) (*ServiceSet, error) {
+func (c *Client) RegisterWithSet(name, addr string, attributes map[string]string) (ServiceSet, error) {
 	err := c.RegisterWithAttributes(name, addr, attributes)
 	if err != nil {
 		return nil, err
 	}
-	set, err := c.NewServiceSet(name)
+	set, err := c.newServiceSet(name)
 	if err != nil {
 		c.Unregister(name, addr)
 		return nil, err
 	}
 	set.l.Lock()
 	c.l.Lock()
-	set.SelfAddr = c.expandedAddrs[addr]
+	set.selfAddr = c.expandedAddrs[addr]
 	c.l.Unlock()
 	set.l.Unlock()
 	updates := set.Watch(true, false)
 	for update := range updates {
-		if update.Addr == set.SelfAddr {
+		if update.Addr == set.selfAddr {
 			set.Unwatch(updates)
 			break
 		}
 	}
 	set.l.Lock()
-	set.self = set.services[set.SelfAddr]
-	delete(set.services, set.SelfAddr)
+	set.self = set.services[set.selfAddr]
+	delete(set.services, set.selfAddr)
 	set.l.Unlock()
 	return set, nil
 }
@@ -408,7 +438,7 @@ func (c *Client) RegisterAndStandby(name, addr string, attributes map[string]str
 	standbyCh := make(chan *Service)
 	go func() {
 		for leader := range set.Leaders() {
-			if leader.Addr == set.SelfAddr {
+			if leader.Addr == set.SelfAddr() {
 				set.Close()
 				standbyCh <- leader
 				return
@@ -521,7 +551,7 @@ func ensureDefaultConnected() error {
 }
 
 // NewServiceSet will produce a ServiceSet for a given service name.
-func NewServiceSet(name string) (*ServiceSet, error) {
+func NewServiceSet(name string) (ServiceSet, error) {
 	if err := ensureDefaultConnected(); err != nil {
 		return nil, err
 	}
@@ -554,7 +584,7 @@ func Register(name, addr string) error {
 // to yourself. When using Leader or Leaders with RegisterWithSet, you may still get a Service
 // representing the service registered, in case this service does become leader. In that case, you
 // can use the SelfAddr property of ServiceSet to compare to the Service returned by Leader.
-func RegisterWithSet(name, addr string, attributes map[string]string) (*ServiceSet, error) {
+func RegisterWithSet(name, addr string, attributes map[string]string) (ServiceSet, error) {
 	if err := ensureDefaultConnected(); err != nil {
 		return nil, err
 	}

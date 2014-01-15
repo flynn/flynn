@@ -70,7 +70,7 @@ func ExampleRegisterWithSet_upgradeDowngrade() {
 		leaders := set.Leaders()
 		currentLeader := false
 		for leader := range leaders {
-			if leader.Addr == set.SelfAddr {
+			if leader.Addr == set.SelfAddr() {
 				currentLeader = true
 				// upgrade to leader
 			} else if currentLeader == true {
@@ -460,7 +460,7 @@ func TestRegisterWithSetLeaderSelf(t *testing.T) {
 
 	assert(client.Unregister(serviceName, ":1111"), t)
 
-	if (<-leader).Addr != set.SelfAddr {
+	if (<-leader).Addr != set.SelfAddr() {
 		t.Fatal("Incorrect leader", leader)
 	}
 
