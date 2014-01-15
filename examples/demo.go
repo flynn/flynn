@@ -35,7 +35,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	set, err := client.ServiceSet(name)
+	set, err := client.NewServiceSet(name)
 	if err != nil {
 		log.Fatal("Error getting ServiceSet:", err)
 	}
