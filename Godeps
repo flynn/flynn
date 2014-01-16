@@ -22,11 +22,11 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/discoverd/agent",
-			"Rev": "ae428c1f571f8ed1bc5562b30031d148312121d2"
+			"Rev": "425340264324dbc2896dc79d7193f308714c9c93"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-discoverd",
-			"Rev": "44d034a497edc1d9a1dce660d317a133df69c9b3"
+			"Rev": "ef1f9aa3961b0f4d98294c611e7c775fde9e40ba"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-dockerclient",
