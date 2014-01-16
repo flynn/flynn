@@ -26,7 +26,7 @@ func (s *TCPFrontend) RemoveTCPService(service string) {
 
 type tcpServer struct {
 	addr     string
-	services *discoverd.ServiceSet
+	services discoverd.ServiceSet
 }
 
 func (b *tcpServer) serve() {

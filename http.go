@@ -218,7 +218,7 @@ func (s *HTTPFrontend) handle(conn net.Conn) {
 
 type httpServer struct {
 	name     string
-	services *discoverd.ServiceSet
+	services discoverd.ServiceSet
 	refs     int
 }
 
