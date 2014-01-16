@@ -114,7 +114,7 @@ func (s *HTTPFrontend) RemoveHTTPDomain(domain string) {
 func (s *HTTPFrontend) syncDatabase() {
 	var since uint64
 	data, err := s.etcd.Get(s.etcdPrefix, false, true)
-	if e, ok := err.(etcd.EtcdError); ok && e.ErrorCode == 100 {
+	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
 		// key not found, ignore
 		goto watch
 	}

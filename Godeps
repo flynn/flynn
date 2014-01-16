@@ -9,8 +9,8 @@
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
-			"Comment": "v0.2.0-rc1-50-gf0d5e98",
-			"Rev": "f0d5e98e38e4d3b100bdc32c25a69141e1a6ac45"
+			"Comment": "v0.2.0-rc1-66-g35c98e8",
+			"Rev": "35c98e8c885757fab1824daa77cc0e24bf30e76b"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-log/log",
