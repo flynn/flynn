@@ -36,7 +36,7 @@ func New(id string) (*Client, error) {
 type Client struct {
 	c *rpcplus.Client
 
-	service *discoverd.ServiceSet
+	service discoverd.ServiceSet
 }
 
 func (c *Client) JobList() (map[string]lorne.Job, error) {
