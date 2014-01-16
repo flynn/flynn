@@ -86,6 +86,7 @@ bin/godeb:
 
 /usr/bin/go: bin/godeb
 	sudo bin/godeb install 1.2
+	sudo touch /usr/bin/go
 
 /usr/bin/docker:
 	sudo apt-get update
