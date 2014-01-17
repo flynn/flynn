@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/go-discoverd"
 	rpc "github.com/flynn/rpcplus/comborpc"
 )
@@ -25,20 +26,18 @@ func main() {
 	rpcAddr := flag.String("rpcaddr", ":1115", "rpc listen address")
 	httpAddr := flag.String("httpaddr", ":8080", "http frontend listen address")
 	flag.Parse()
-	var s Server
-	f, err := NewHTTPFrontend(*httpAddr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	s.HTTPFrontend = f
-	rpc.Register(&Router{s})
-	rpc.HandleHTTP()
-	go http.ListenAndServe(*rpcAddr, nil)
 
 	d, err := discoverd.NewClient()
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	var s Server
+	s.HTTPFrontend = NewHTTPFrontend(*httpAddr, etcd.NewClient(nil), d)
+	rpc.Register(&Router{s})
+	rpc.HandleHTTP()
+	go http.ListenAndServe(*rpcAddr, nil)
+
 	if err = d.Register("flynn-strowger-rpc", *rpcAddr); err != nil {
 		log.Fatal(err)
 	}

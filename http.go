@@ -30,27 +30,29 @@ type HTTPFrontend struct {
 
 	etcdPrefix string
 
-	etcd      httpFrontendEtcdClient
-	discoverd *discoverd.Client
+	etcd      EtcdClient
+	discoverd DiscoverdClient
 }
 
-type httpFrontendEtcdClient interface {
+type EtcdClient interface {
 	Create(key string, value string, ttl uint64) (*etcd.Response, error)
 	Get(key string, sort, recursive bool) (*etcd.Response, error)
 	Watch(prefix string, waitIndex uint64, recursive bool, receiver chan *etcd.Response, stop chan bool) (*etcd.Response, error)
 }
 
-func NewHTTPFrontend(addr string) (*HTTPFrontend, error) {
-	f := &HTTPFrontend{
+type DiscoverdClient interface {
+	NewServiceSet(string) (discoverd.ServiceSet, error)
+}
+
+func NewHTTPFrontend(addr string, etcdc EtcdClient, discoverdc DiscoverdClient) *HTTPFrontend {
+	return &HTTPFrontend{
 		Addr:       addr,
-		etcd:       etcd.NewClient(nil),
+		etcd:       etcdc,
 		etcdPrefix: "/strowger/http/",
+		discoverd:  discoverdc,
 		domains:    make(map[string]*httpServer),
 		services:   make(map[string]*httpServer),
 	}
-	var err error
-	f.discoverd, err = discoverd.NewClient()
-	return f, err
 }
 
 func (s *HTTPFrontend) AddHTTPDomain(domain string, service string, certs [][]byte, key []byte) error {
