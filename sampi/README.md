@@ -10,8 +10,6 @@ Omega](http://eurosys2013.tudos.org/wp-content/uploads/2013/paper/Schwarzkopf.pd
 
 ## TODO
 
-- Use [service discovery](https://github.com/flynn/go-discover) for leader
-  election and standby mode
 - Use discovery heartbeat from lorne to signal downtime
 - Introspection tool
 - Standardize container config (remove Docker-specific structures)
