@@ -20,6 +20,17 @@ type Attempt struct {
 	count    int
 }
 
+func (s Strategy) Run(f func() error) error {
+	var err error
+	for a := s.Start(); a.Next(); {
+		err = f()
+		if err == nil {
+			break
+		}
+	}
+	return err
+}
+
 // Start begins a new sequence of attempts for the given strategy.
 func (s Strategy) Start() *Attempt {
 	now := time.Now()

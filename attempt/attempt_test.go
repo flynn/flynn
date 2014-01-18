@@ -1,6 +1,7 @@
 package attempt_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -64,4 +65,23 @@ func (S) TestAttemptNextHasNext(c *C) {
 	c.Assert(a.Next(), Equals, true)
 	c.Assert(a.HasNext(), Equals, false)
 	c.Assert(a.Next(), Equals, false)
+}
+
+func (S) TestAttemptRun(c *C) {
+	runs := 0
+	err := errors.New("error")
+	res := attempt.Strategy{}.Run(func() error {
+		runs++
+		return err
+	})
+	c.Assert(res, Equals, err)
+	c.Assert(runs, Equals, 1)
+
+	runs = 0
+	res = attempt.Strategy{}.Run(func() error {
+		runs++
+		return nil
+	})
+	c.Assert(res, IsNil)
+	c.Assert(runs, Equals, 1)
 }
