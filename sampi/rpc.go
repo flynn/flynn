@@ -1,4 +1,4 @@
-package main
+package sampi
 
 import (
 	"io"
@@ -89,8 +89,4 @@ func (s *Scheduler) RemoveJobs(hostID *string, jobIDs []string, res *struct{}) e
 	s.state.RemoveJobs(*hostID, jobIDs...)
 	s.state.Commit()
 	return nil
-}
-
-func init() {
-	rpcplus.Register(&Scheduler{*NewState()})
 }
