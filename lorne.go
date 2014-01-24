@@ -9,11 +9,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-dockerclient"
-	"github.com/flynn/lorne/types"
 	sampic "github.com/flynn/sampi/client"
-	"github.com/flynn/sampi/types"
 	"github.com/technoweenie/grohl"
 )
 
@@ -96,26 +95,26 @@ func main() {
 	}
 	g.Log(grohl.Data{"at": "sampi_connected"})
 
-	events := make(chan lorne.Event)
+	events := make(chan host.Event)
 	state.AddListener("all", events)
 	go syncScheduler(scheduler, events)
 
-	var host *sampi.Host
+	var h *host.Host
 	if *configFile != "" {
-		host, err = openConfig(*configFile)
+		h, err = openConfig(*configFile)
 		if err != nil {
 			log.Fatal(err)
 		}
 	} else {
-		host = &sampi.Host{Resources: make(map[string]sampi.ResourceValue)}
+		h = &host.Host{Resources: make(map[string]host.ResourceValue)}
 	}
-	if _, ok := host.Resources["memory"]; !ok {
-		host.Resources["memory"] = sampi.ResourceValue{Value: 1024}
+	if _, ok := h.Resources["memory"]; !ok {
+		h.Resources["memory"] = host.ResourceValue{Value: 1024}
 	}
-	host.ID = *hostID
+	h.ID = *hostID
 
-	jobs := make(chan *sampi.Job)
-	scheduler.RegisterHost(host, jobs)
+	jobs := make(chan *host.Job)
+	scheduler.RegisterHost(h, jobs)
 	g.Log(grohl.Data{"at": "host_registered"})
 	processor.Process(ports, jobs)
 }
@@ -131,13 +130,13 @@ type jobProcessor struct {
 	state *State
 }
 
-func (p *jobProcessor) Process(ports <-chan int, jobs chan *sampi.Job) {
+func (p *jobProcessor) Process(ports <-chan int, jobs chan *host.Job) {
 	for job := range jobs {
 		p.processJob(ports, job)
 	}
 }
 
-func (p *jobProcessor) processJob(ports <-chan int, job *sampi.Job) (*docker.Container, error) {
+func (p *jobProcessor) processJob(ports <-chan int, job *host.Job) (*docker.Container, error) {
 	g := grohl.NewContext(grohl.Data{"fn": "process_job", "job.id": job.ID})
 	g.Log(grohl.Data{"at": "start", "job.image": job.Config.Image, "job.cmd": job.Config.Cmd, "job.entrypoint": job.Config.Entrypoint})
 
@@ -211,7 +210,7 @@ type sampiSyncClient interface {
 	RemoveJobs([]string) error
 }
 
-func syncScheduler(scheduler sampiSyncClient, events <-chan lorne.Event) {
+func syncScheduler(scheduler sampiSyncClient, events <-chan host.Event) {
 	for event := range events {
 		if event.Event != "stop" {
 			continue

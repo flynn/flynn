@@ -5,9 +5,8 @@ import (
 	"io"
 	"testing"
 
+	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-dockerclient"
-	"github.com/flynn/lorne/types"
-	"github.com/flynn/sampi/types"
 	"github.com/technoweenie/grohl"
 )
 
@@ -57,12 +56,12 @@ func (c *dockerClient) PullImage(opts docker.PullImageOptions, w io.Writer) erro
 	return nil
 }
 
-func testProcess(job *sampi.Job, t *testing.T) (*State, *dockerClient) {
+func testProcess(job *host.Job, t *testing.T) (*State, *dockerClient) {
 	client := &dockerClient{}
 	return testProcessWithOpts(job, "", client, t), client
 }
 
-func testProcessWithOpts(job *sampi.Job, extAddr string, client *dockerClient, t *testing.T) *State {
+func testProcessWithOpts(job *host.Job, extAddr string, client *dockerClient, t *testing.T) *State {
 	if client == nil {
 		client = &dockerClient{}
 	}
@@ -75,18 +74,18 @@ func testProcessWithOpts(job *sampi.Job, extAddr string, client *dockerClient, t
 		t.Error("job not started")
 	}
 	sjob := state.GetJob("a")
-	if sjob == nil || sjob.StartedAt.IsZero() || sjob.Status != lorne.StatusRunning || sjob.ContainerID != "asdf" {
+	if sjob == nil || sjob.StartedAt.IsZero() || sjob.Status != host.StatusRunning || sjob.ContainerID != "asdf" {
 		t.Error("incorrect state")
 	}
 
 	return state
 }
 
-func testProcessWithError(job *sampi.Job, client *dockerClient, err error, t *testing.T) *State {
+func testProcessWithError(job *host.Job, client *dockerClient, err error, t *testing.T) *State {
 	state := processWithOpts(job, "", client)
 
 	sjob := state.GetJob(job.ID)
-	if sjob.Status != lorne.StatusFailed {
+	if sjob.Status != host.StatusFailed {
 		t.Errorf("expected status failed, got %s", sjob.Status)
 	}
 	if sjob.Error != err {
@@ -95,7 +94,7 @@ func testProcessWithError(job *sampi.Job, client *dockerClient, err error, t *te
 	return state
 }
 
-func processWithOpts(job *sampi.Job, extAddr string, client *dockerClient) *State {
+func processWithOpts(job *host.Job, extAddr string, client *dockerClient) *State {
 	ports := make(chan int)
 	state := NewState()
 	go allocatePorts(ports, 500, 505)
@@ -109,11 +108,11 @@ func processWithOpts(job *sampi.Job, extAddr string, client *dockerClient) *Stat
 }
 
 func TestProcessJob(t *testing.T) {
-	testProcess(&sampi.Job{ID: "a", Config: &docker.Config{}}, t)
+	testProcess(&host.Job{ID: "a", Config: &docker.Config{}}, t)
 }
 
 func TestProcessJobWithPorts(t *testing.T) {
-	job := &sampi.Job{TCPPorts: 2, ID: "a", Config: &docker.Config{}}
+	job := &host.Job{TCPPorts: 2, ID: "a", Config: &docker.Config{}}
 	_, client := testProcess(job, t)
 
 	if len(job.Config.Env) == 0 || !sliceHasString(job.Config.Env, "PORT=500") {
@@ -140,7 +139,7 @@ func TestProcessJobWithPorts(t *testing.T) {
 }
 
 func TestProcessWithExtAddr(t *testing.T) {
-	job := &sampi.Job{ID: "a", Config: &docker.Config{}}
+	job := &host.Job{ID: "a", Config: &docker.Config{}}
 	testProcessWithOpts(job, "10.10.10.1", nil, t)
 
 	if !sliceHasString(job.Config.Env, "EXTERNAL_IP=10.10.10.1") {
@@ -161,7 +160,7 @@ func sliceHasString(slice []string, str string) bool {
 }
 
 func TestProcessWithPull(t *testing.T) {
-	job := &sampi.Job{ID: "a", Config: &docker.Config{Image: "test/foo"}}
+	job := &host.Job{ID: "a", Config: &docker.Config{Image: "test/foo"}}
 	client := &dockerClient{createErr: docker.ErrNoSuchImage}
 	testProcessWithOpts(job, "", client, t)
 
@@ -171,21 +170,21 @@ func TestProcessWithPull(t *testing.T) {
 }
 
 func TestProcessWithCreateFailure(t *testing.T) {
-	job := &sampi.Job{ID: "a", Config: &docker.Config{}}
+	job := &host.Job{ID: "a", Config: &docker.Config{}}
 	err := errors.New("undefined failure")
 	client := &dockerClient{createErr: err}
 	testProcessWithError(job, client, err, t)
 }
 
 func TestProcessWithPullFailure(t *testing.T) {
-	job := &sampi.Job{ID: "a", Config: &docker.Config{}}
+	job := &host.Job{ID: "a", Config: &docker.Config{}}
 	err := errors.New("undefined failure")
 	client := &dockerClient{createErr: docker.ErrNoSuchImage, pullErr: err}
 	testProcessWithError(job, client, err, t)
 }
 
 func TestProcessWithStartFailure(t *testing.T) {
-	job := &sampi.Job{ID: "a", Config: &docker.Config{}}
+	job := &host.Job{ID: "a", Config: &docker.Config{}}
 	err := errors.New("undefined failure")
 	client := &dockerClient{startErr: err}
 	testProcessWithError(job, client, err, t)
@@ -205,7 +204,7 @@ func (s *schedulerSyncClient) RemoveJobs(jobs []string) error {
 }
 
 func TestSyncScheduler(t *testing.T) {
-	events := make(chan lorne.Event)
+	events := make(chan host.Event)
 	client := &schedulerSyncClient{}
 	done := make(chan struct{})
 	go func() {
@@ -213,7 +212,7 @@ func TestSyncScheduler(t *testing.T) {
 		close(done)
 	}()
 
-	events <- lorne.Event{Event: "stop", JobID: "a"}
+	events <- host.Event{Event: "stop", JobID: "a"}
 	close(events)
 	<-done
 
@@ -240,7 +239,7 @@ func (s *streamClient) InspectContainer(id string) (*docker.Container, error) {
 func TestStreamEvents(t *testing.T) {
 	events := make(chan *docker.Event)
 	state := NewState()
-	state.AddJob(&sampi.Job{ID: "a"})
+	state.AddJob(&host.Job{ID: "a"})
 	state.SetContainerID("a", "1")
 	state.SetStatusRunning("a")
 
@@ -255,7 +254,7 @@ func TestStreamEvents(t *testing.T) {
 	<-done
 
 	job := state.GetJob("a")
-	if job.Status != lorne.StatusCrashed {
+	if job.Status != host.StatusCrashed {
 		t.Error("incorrect status")
 	}
 	if job.ExitCode != 1 {

@@ -3,8 +3,8 @@ package sampi
 import (
 	"io"
 
+	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/rpcplus"
-	"github.com/flynn/sampi/types"
 )
 
 type Scheduler struct {
@@ -13,14 +13,14 @@ type Scheduler struct {
 
 // Scheduler Methods
 
-func (s *Scheduler) State(arg struct{}, ret *map[string]sampi.Host) error {
+func (s *Scheduler) State(arg struct{}, ret *map[string]host.Host) error {
 	*ret = s.state.Get()
 	return nil
 }
 
-func (s *Scheduler) Schedule(req *sampi.ScheduleReq, res *sampi.ScheduleRes) error {
+func (s *Scheduler) Schedule(req *host.ScheduleReq, res *host.ScheduleRes) error {
 	s.state.Begin()
-	*res = sampi.ScheduleRes{}
+	*res = host.ScheduleRes{}
 	for host, jobs := range req.HostJobs {
 		for _, job := range jobs {
 			if s.state.AddJob(host, job) {
@@ -51,12 +51,12 @@ func (s *Scheduler) Schedule(req *sampi.ScheduleReq, res *sampi.ScheduleRes) err
 
 // Host Service methods
 
-func (s *Scheduler) RegisterHost(hostID *string, host *sampi.Host, stream rpcplus.Stream) error {
-	*hostID = host.ID
+func (s *Scheduler) RegisterHost(hostID *string, h *host.Host, stream rpcplus.Stream) error {
+	*hostID = h.ID
 	s.state.Begin()
 	// TODO: error if host.ID is duplicate or empty
-	jobs := make(chan *sampi.Job)
-	s.state.AddHost(host, jobs)
+	jobs := make(chan *host.Job)
+	s.state.AddHost(h, jobs)
 	s.state.Commit()
 
 	var err error
@@ -76,7 +76,7 @@ outer:
 	}
 
 	s.state.Begin()
-	s.state.RemoveHost(host.ID)
+	s.state.RemoveHost(h.ID)
 	s.state.Commit()
 	if err == io.EOF {
 		err = nil

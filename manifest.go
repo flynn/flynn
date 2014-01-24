@@ -9,9 +9,9 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-dockerclient"
 	sampic "github.com/flynn/sampi/client"
-	"github.com/flynn/sampi/types"
 )
 
 func parseEnviron() map[string]string {
@@ -64,7 +64,7 @@ type manifestRunner struct {
 	externalIP string
 	ports      <-chan int
 	processor  interface {
-		processJob(<-chan int, *sampi.Job) (*docker.Container, error)
+		processJob(<-chan int, *host.Job) (*docker.Container, error)
 	}
 	docker interface {
 		InspectContainer(string) (*docker.Container, error)
@@ -143,7 +143,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 			ports <- p
 		}
 
-		job := &sampi.Job{
+		job := &host.Job{
 			ID:       sampic.RandomJobID("flynn-" + name),
 			TCPPorts: len(data.TCPPorts),
 			Config: &docker.Config{

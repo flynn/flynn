@@ -6,10 +6,10 @@ import (
 	"io"
 	"os"
 
-	"github.com/flynn/sampi/types"
+	"github.com/flynn/flynn-host/types"
 )
 
-func openConfig(file string) (*sampi.Host, error) {
+func openConfig(file string) (*host.Host, error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return nil, err
@@ -18,7 +18,7 @@ func openConfig(file string) (*sampi.Host, error) {
 	return parseConfig(f)
 }
 
-func parseConfig(r io.Reader) (*sampi.Host, error) {
+func parseConfig(r io.Reader) (*host.Host, error) {
 	var conf Config
 	if err := json.NewDecoder(r).Decode(&conf); err != nil {
 		return nil, err
@@ -27,35 +27,35 @@ func parseConfig(r io.Reader) (*sampi.Host, error) {
 }
 
 type Config struct {
-	Resources  map[string]sampi.ResourceValue `json:"resources"`
-	Attributes map[string]string              `json:"attributes"`
-	Rules      []Rule                         `json:"rules"`
+	Resources  map[string]host.ResourceValue `json:"resources"`
+	Attributes map[string]string             `json:"attributes"`
+	Rules      []Rule                        `json:"rules"`
 }
 
-func (c *Config) hostConfig() (*sampi.Host, error) {
-	host := &sampi.Host{Resources: c.Resources, Attributes: c.Attributes}
-	host.Rules = make([]sampi.Rule, len(c.Rules))
+func (c *Config) hostConfig() (*host.Host, error) {
+	h := &host.Host{Resources: c.Resources, Attributes: c.Attributes}
+	h.Rules = make([]host.Rule, len(c.Rules))
 	for i, r := range c.Rules {
-		rule := sampi.Rule{Key: r.Key, Value: r.Value}
+		rule := host.Rule{Key: r.Key, Value: r.Value}
 		switch r.Op {
 		case "==":
-			rule.Op = sampi.OpEq
+			rule.Op = host.OpEq
 		case "!=":
-			rule.Op = sampi.OpNotEq
+			rule.Op = host.OpNotEq
 		case ">":
-			rule.Op = sampi.OpGt
+			rule.Op = host.OpGt
 		case ">=":
-			rule.Op = sampi.OpGtEq
+			rule.Op = host.OpGtEq
 		case "<":
-			rule.Op = sampi.OpLt
+			rule.Op = host.OpLt
 		case "<=":
-			rule.Op = sampi.OpLtEq
+			rule.Op = host.OpLtEq
 		default:
 			return nil, fmt.Errorf("lorne: invalid rule op: %s", r.Op)
 		}
-		host.Rules[i] = rule
+		h.Rules[i] = rule
 	}
-	return host, nil
+	return h, nil
 }
 
 type Rule struct {

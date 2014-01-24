@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/flynn/sampi/types"
+	"github.com/flynn/flynn-host/types"
 )
 
 func TestConfig(t *testing.T) {
@@ -31,16 +31,16 @@ func TestConfig(t *testing.T) {
 		t.Error(err)
 	}
 
-	expected := &sampi.Host{
-		Resources:  map[string]sampi.ResourceValue{"0": {Value: 10, Overcommit: true}, "1": {Value: 20}},
+	expected := &host.Host{
+		Resources:  map[string]host.ResourceValue{"0": {Value: 10, Overcommit: true}, "1": {Value: 20}},
 		Attributes: map[string]string{"foo": "bar"},
-		Rules: []sampi.Rule{
-			{Key: "0", Op: sampi.OpEq, Value: "10"},
-			{Key: "1", Op: sampi.OpNotEq, Value: "20"},
-			{Key: "2", Op: sampi.OpGt, Value: "30"},
-			{Key: "3", Op: sampi.OpGtEq, Value: "40"},
-			{Key: "4", Op: sampi.OpLt, Value: "50"},
-			{Key: "5", Op: sampi.OpLtEq, Value: "60"},
+		Rules: []host.Rule{
+			{Key: "0", Op: host.OpEq, Value: "10"},
+			{Key: "1", Op: host.OpNotEq, Value: "20"},
+			{Key: "2", Op: host.OpGt, Value: "30"},
+			{Key: "3", Op: host.OpGtEq, Value: "40"},
+			{Key: "4", Op: host.OpLt, Value: "50"},
+			{Key: "5", Op: host.OpLtEq, Value: "60"},
 		},
 	}
 

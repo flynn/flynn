@@ -4,39 +4,38 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flynn/lorne/types"
-	"github.com/flynn/sampi/types"
+	"github.com/flynn/flynn-host/types"
 )
 
 // TODO: prune old jobs?
 
 type State struct {
-	jobs map[string]*lorne.Job
+	jobs map[string]*host.ActiveJob
 	mtx  sync.RWMutex
 
-	containers map[string]*lorne.Job                    // docker container ID -> job
-	listeners  map[string]map[chan lorne.Event]struct{} // job id -> listener list (ID "all" gets all events)
+	containers map[string]*host.ActiveJob              // docker container ID -> job
+	listeners  map[string]map[chan host.Event]struct{} // job id -> listener list (ID "all" gets all events)
 	listenMtx  sync.RWMutex
 	attachers  map[string]chan struct{}
 }
 
 func NewState() *State {
 	return &State{
-		jobs:       make(map[string]*lorne.Job),
-		containers: make(map[string]*lorne.Job),
-		listeners:  make(map[string]map[chan lorne.Event]struct{}),
+		jobs:       make(map[string]*host.ActiveJob),
+		containers: make(map[string]*host.ActiveJob),
+		listeners:  make(map[string]map[chan host.Event]struct{}),
 		attachers:  make(map[string]chan struct{}),
 	}
 }
 
-func (s *State) AddJob(job *sampi.Job) {
+func (s *State) AddJob(job *host.Job) {
 	s.mtx.Lock()
-	s.jobs[job.ID] = &lorne.Job{Job: job}
+	s.jobs[job.ID] = &host.ActiveJob{Job: job}
 	s.mtx.Unlock()
 	s.sendEvent(job.ID, "create")
 }
 
-func (s *State) GetJob(id string) *lorne.Job {
+func (s *State) GetJob(id string) *host.ActiveJob {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	job := s.jobs[id]
@@ -47,10 +46,10 @@ func (s *State) GetJob(id string) *lorne.Job {
 	return &jobCopy
 }
 
-func (s *State) Get() map[string]lorne.Job {
+func (s *State) Get() map[string]host.ActiveJob {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
-	res := make(map[string]lorne.Job, len(s.jobs))
+	res := make(map[string]host.ActiveJob, len(s.jobs))
 	for k, v := range s.jobs {
 		res[k] = *v
 	}
@@ -74,7 +73,7 @@ func (s *State) SetStatusRunning(jobID string) {
 	}
 
 	job.StartedAt = time.Now().UTC()
-	job.Status = lorne.StatusRunning
+	job.Status = host.StatusRunning
 	s.mtx.Unlock()
 	s.sendEvent(jobID, "start")
 }
@@ -83,16 +82,16 @@ func (s *State) SetStatusDone(containerID string, exitCode int) {
 	s.mtx.Lock()
 
 	job, ok := s.containers[containerID]
-	if !ok || job.Status == lorne.StatusDone || job.Status == lorne.StatusCrashed || job.Status == lorne.StatusFailed {
+	if !ok || job.Status == host.StatusDone || job.Status == host.StatusCrashed || job.Status == host.StatusFailed {
 		s.mtx.Unlock()
 		return
 	}
 	job.EndedAt = time.Now().UTC()
 	job.ExitCode = exitCode
 	if exitCode == 0 {
-		job.Status = lorne.StatusDone
+		job.Status = host.StatusDone
 	} else {
-		job.Status = lorne.StatusCrashed
+		job.Status = host.StatusCrashed
 	}
 	s.mtx.Unlock()
 	s.sendEvent(job.Job.ID, "stop")
@@ -102,18 +101,18 @@ func (s *State) SetStatusFailed(jobID string, err error) {
 	s.mtx.Lock()
 
 	job, ok := s.jobs[jobID]
-	if !ok || job.Status == lorne.StatusDone || job.Status == lorne.StatusCrashed || job.Status == lorne.StatusFailed {
+	if !ok || job.Status == host.StatusDone || job.Status == host.StatusCrashed || job.Status == host.StatusFailed {
 		s.mtx.Unlock()
 		return
 	}
-	job.Status = lorne.StatusFailed
+	job.Status = host.StatusFailed
 	job.EndedAt = time.Now().UTC()
 	job.Error = err
 	s.mtx.Unlock()
 	s.sendEvent(job.Job.ID, "error")
 }
 
-func (s *State) AddAttacher(jobID string, ch chan struct{}) *lorne.Job {
+func (s *State) AddAttacher(jobID string, ch chan struct{}) *host.ActiveJob {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	if job, ok := s.jobs[jobID]; ok {
@@ -144,16 +143,16 @@ func (s *State) WaitAttach(jobID string) {
 	<-ch
 }
 
-func (s *State) AddListener(jobID string, ch chan lorne.Event) {
+func (s *State) AddListener(jobID string, ch chan host.Event) {
 	s.listenMtx.Lock()
 	if _, ok := s.listeners[jobID]; !ok {
-		s.listeners[jobID] = make(map[chan lorne.Event]struct{})
+		s.listeners[jobID] = make(map[chan host.Event]struct{})
 	}
 	s.listeners[jobID][ch] = struct{}{}
 	s.listenMtx.Unlock()
 }
 
-func (s *State) RemoveListener(jobID string, ch chan lorne.Event) {
+func (s *State) RemoveListener(jobID string, ch chan host.Event) {
 	s.listenMtx.Lock()
 	delete(s.listeners[jobID], ch)
 	if len(s.listeners[jobID]) == 0 {
@@ -165,7 +164,7 @@ func (s *State) RemoveListener(jobID string, ch chan lorne.Event) {
 func (s *State) sendEvent(jobID string, event string) {
 	s.listenMtx.RLock()
 	defer s.listenMtx.RUnlock()
-	e := lorne.Event{JobID: jobID, Event: event}
+	e := host.Event{JobID: jobID, Event: event}
 	for ch := range s.listeners["all"] {
 		ch <- e
 	}

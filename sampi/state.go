@@ -5,34 +5,34 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/flynn/sampi/types"
+	"github.com/flynn/flynn-host/types"
 )
 
 type State struct {
 	sync.Mutex
-	curr *map[string]sampi.Host
-	next *map[string]sampi.Host
+	curr *map[string]host.Host
+	next *map[string]host.Host
 
-	streams map[string]chan<- *sampi.Job
+	streams map[string]chan<- *host.Job
 
 	deleted      map[string]struct{}
 	nextModified bool
 }
 
 func NewState() *State {
-	curr := make(map[string]sampi.Host)
-	return &State{curr: &curr, streams: make(map[string]chan<- *sampi.Job)}
+	curr := make(map[string]host.Host)
+	return &State{curr: &curr, streams: make(map[string]chan<- *host.Job)}
 }
 
 func (s *State) Begin() {
 	s.Lock()
-	next := make(map[string]sampi.Host, len(*s.curr))
+	next := make(map[string]host.Host, len(*s.curr))
 	s.next = &next
 	s.nextModified = false
 	s.deleted = make(map[string]struct{})
 }
 
-func (s *State) Commit() map[string]sampi.Host {
+func (s *State) Commit() map[string]host.Host {
 	defer s.Unlock()
 	if !s.nextModified {
 		s.next = nil
@@ -53,17 +53,17 @@ func (s *State) Commit() map[string]sampi.Host {
 	return *s.curr
 }
 
-func (s *State) Rollback() map[string]sampi.Host {
+func (s *State) Rollback() map[string]host.Host {
 	defer s.Unlock()
 	s.next = nil
 	return *s.curr
 }
 
-func (s *State) Get() map[string]sampi.Host {
-	return *(*map[string]sampi.Host)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.curr))))
+func (s *State) Get() map[string]host.Host {
+	return *(*map[string]host.Host)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.curr))))
 }
 
-func (s *State) AddJob(hostID string, job *sampi.Job) bool {
+func (s *State) AddJob(hostID string, job *host.Job) bool {
 	host, ok := s.host(hostID)
 	if !ok {
 		return false
@@ -76,34 +76,34 @@ func (s *State) AddJob(hostID string, job *sampi.Job) bool {
 	return true
 }
 
-func (s *State) SendJob(host string, job *sampi.Job) {
+func (s *State) SendJob(host string, job *host.Job) {
 	if ch, ok := s.streams[host]; ok {
 		ch <- job
 	}
 }
 
-func (s *State) host(id string) (host sampi.Host, ok bool) {
-	host, ok = (*s.next)[id]
+func (s *State) host(id string) (h host.Host, ok bool) {
+	h, ok = (*s.next)[id]
 	if !ok {
-		host, ok = (*s.curr)[id]
+		h, ok = (*s.curr)[id]
 	}
 	return
 }
 
 func (s *State) RemoveJobs(hostID string, jobIDs ...string) {
-	host, ok := s.host(hostID)
+	h, ok := s.host(hostID)
 	if !ok {
 		return
 	}
-	jobs := make([]*sampi.Job, 0, len(host.Jobs))
+	jobs := make([]*host.Job, 0, len(h.Jobs))
 outer:
-	for _, job := range host.Jobs {
+	for _, job := range h.Jobs {
 		for _, id := range jobIDs {
 			if job.ID == id {
 				for k, v := range job.Resources {
-					if r, ok := host.Resources[k]; ok {
+					if r, ok := h.Resources[k]; ok {
 						r.Value += v
-						host.Resources[k] = r
+						h.Resources[k] = r
 					}
 				}
 				continue outer
@@ -111,12 +111,12 @@ outer:
 		}
 		jobs = append(jobs, job)
 	}
-	host.Jobs = jobs
-	(*s.next)[hostID] = host
+	h.Jobs = jobs
+	(*s.next)[hostID] = h
 	s.nextModified = true
 }
 
-func (s *State) AddHost(host *sampi.Host, ch chan<- *sampi.Job) {
+func (s *State) AddHost(host *host.Host, ch chan<- *host.Job) {
 	(*s.next)[host.ID] = *host
 	s.streams[host.ID] = ch
 	s.nextModified = true
