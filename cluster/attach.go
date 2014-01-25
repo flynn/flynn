@@ -1,4 +1,4 @@
-package client
+package cluster
 
 import (
 	"bufio"
@@ -12,52 +12,22 @@ import (
 	"net/http"
 	"net/http/httputil"
 
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/lorne/types"
-	"github.com/flynn/rpcplus"
+	"github.com/flynn/flynn-host/types"
 )
 
-var ErrNoServers = errors.New("lorne: no servers found")
-
-func New(id string) (*Client, error) {
-	services, err := discoverd.NewServiceSet("flynn-lorne")
-	services.Filter(map[string]string{"id": id})
-	if err != nil {
-		return nil, err
-	}
-	addrs := services.Addrs()
-	if len(addrs) == 0 {
-		return nil, ErrNoServers
-	}
-	c, err := rpcplus.DialHTTP("tcp", addrs[0])
-	return &Client{c, services}, err
+type ReadWriteCloser interface {
+	io.ReadWriteCloser
+	CloseWrite() error
 }
 
-type Client struct {
-	c *rpcplus.Client
-
-	service discoverd.ServiceSet
+type writeCloser interface {
+	io.WriteCloser
+	CloseWrite() error
 }
 
-func (c *Client) JobList() (map[string]lorne.Job, error) {
-	var jobs map[string]lorne.Job
-	err := c.c.Call("Host.JobList", struct{}{}, &jobs)
-	return jobs, err
-}
+var ErrWouldWait = errors.New("cluster: attach would wait")
 
-func (c *Client) GetJob(id string) (*lorne.Job, error) {
-	var res lorne.Job
-	err := c.c.Call("Host.GetJob", id, &res)
-	return &res, err
-}
-
-func (c *Client) StopJob(id string) error {
-	return c.c.Call("Host.StopJob", id, &struct{}{})
-}
-
-var ErrWouldWait = errors.New("lorne: attach would wait")
-
-func (c *Client) Attach(req *lorne.AttachReq, wait bool) (ReadWriteCloser, func() error, error) {
+func (c *Host) Attach(req *host.AttachReq, wait bool) (ReadWriteCloser, func() error, error) {
 	data, err := json.Marshal(req)
 	if err != nil {
 		return nil, nil, err
@@ -80,7 +50,7 @@ func (c *Client) Attach(req *lorne.AttachReq, wait bool) (ReadWriteCloser, func(
 		return nil, nil, err
 	}
 	if res.StatusCode != 200 {
-		return nil, nil, fmt.Errorf("lorne: unexpected status %d", res.StatusCode)
+		return nil, nil, fmt.Errorf("cluster: unexpected status %d", res.StatusCode)
 	}
 	var rwc io.ReadWriteCloser
 	var buf *bufio.Reader
@@ -103,9 +73,9 @@ func (c *Client) Attach(req *lorne.AttachReq, wait bool) (ReadWriteCloser, func(
 
 	handleState := func() error {
 		switch attachState[0] {
-		case lorne.AttachSuccess:
+		case host.AttachSuccess:
 			return nil
-		case lorne.AttachError:
+		case host.AttachError:
 			errBytes, err := ioutil.ReadAll(rwc)
 			rwc.Close()
 			if err != nil {
@@ -114,11 +84,11 @@ func (c *Client) Attach(req *lorne.AttachReq, wait bool) (ReadWriteCloser, func(
 			return errors.New(string(errBytes))
 		default:
 			rwc.Close()
-			return fmt.Errorf("lorne: unknown attach state: %d", attachState)
+			return fmt.Errorf("cluster: unknown attach state: %d", attachState)
 		}
 	}
 
-	if attachState[0] == lorne.AttachWaiting {
+	if attachState[0] == host.AttachWaiting {
 		if !wait {
 			rwc.Close()
 			return nil, nil, ErrWouldWait
@@ -133,14 +103,4 @@ func (c *Client) Attach(req *lorne.AttachReq, wait bool) (ReadWriteCloser, func(
 	}
 
 	return rwc.(ReadWriteCloser), nil, handleState()
-}
-
-type ReadWriteCloser interface {
-	io.ReadWriteCloser
-	CloseWrite() error
-}
-
-type writeCloser interface {
-	io.WriteCloser
-	CloseWrite() error
 }
