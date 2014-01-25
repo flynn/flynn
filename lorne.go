@@ -10,9 +10,11 @@ import (
 	"strings"
 
 	"github.com/flynn/flynn-host/client"
+	"github.com/flynn/flynn-host/sampi"
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-dockerclient"
+	rpc "github.com/flynn/rpcplus/comborpc"
 	"github.com/technoweenie/grohl"
 )
 
@@ -85,9 +87,14 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	if err = disc.RegisterWithAttributes("flynn-lorne", *externalAddr+":1113", map[string]string{"id": *hostID}); err != nil {
+	sampiStandby, err := disc.RegisterAndStandby("flynn-lorne", *externalAddr+":1113", map[string]string{"id": *hostID})
+	if err != nil {
 		log.Fatal(err)
 	}
+	go func() {
+		<-sampiStandby
+		rpc.Register(sampi.NewCluster(sampi.NewState()))
+	}()
 
 	cluster, err := client.New()
 	if err != nil {

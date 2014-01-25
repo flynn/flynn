@@ -8,7 +8,11 @@ import (
 )
 
 type Cluster struct {
-	state State
+	state *State
+}
+
+func NewCluster(state *State) *Cluster {
+	return &Cluster{state}
 }
 
 // Scheduler Methods
