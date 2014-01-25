@@ -76,14 +76,14 @@ func (h *Host) Add(job *Job) bool {
 	return true
 }
 
-type ScheduleReq struct {
+type AddJobsReq struct {
 	// If true, commit all jobs that fit; if false, reject entire request if a single job doesn't fit
 	Incremental bool
 	// map of host id -> new jobs
 	HostJobs map[string][]*Job
 }
 
-type ScheduleRes struct {
+type AddJobsRes struct {
 	// The state of the cluster after the operation
 	State map[string]Host
 	// If the request was incremental, the jobs that were not scheduled
