@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/flynn/flynn-host/client"
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-dockerclient"
-	sampic "github.com/flynn/sampi/client"
 	"github.com/technoweenie/grohl"
 )
 
@@ -89,7 +89,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	scheduler, err := sampic.New()
+	cluster, err := client.New()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func main() {
 
 	events := make(chan host.Event)
 	state.AddListener("all", events)
-	go syncScheduler(scheduler, events)
+	go syncScheduler(cluster, events)
 
 	var h *host.Host
 	if *configFile != "" {
@@ -114,7 +114,7 @@ func main() {
 	h.ID = *hostID
 
 	jobs := make(chan *host.Job)
-	scheduler.RegisterHost(h, jobs)
+	cluster.ConnectHost(h, jobs)
 	g.Log(grohl.Data{"at": "host_registered"})
 	processor.Process(ports, jobs)
 }
