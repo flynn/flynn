@@ -1,7 +1,7 @@
 FROM flynn/busybox
 MAINTAINER Jonathan Rudenberg <jonathan@titanous.com>
 
-ADD ./build/lorne /bin/lorne
-ADD ./manifest.json /etc/lorne.json
+ADD ./build/flynn-host /bin/flynn-host
+ADD ./manifest.json /etc/flynn-host.json
 
-ENTRYPOINT ["/bin/lorne", "-manifest", "/etc/lorne.json"]
+ENTRYPOINT ["/bin/flynn-host", "-manifest", "/etc/flynn-host.json"]

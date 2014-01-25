@@ -1,15 +1,15 @@
 build:
 ifdef LOCAL
-	make build/lorne
+	make build/flynn-host
 else
-	mkdir -p build && tar -cf - . | docker run -i -a stdin -a stdout -e=GOPATH=/tmp/go titanous/makebuilder makebuild go/src/github.com/flynn/lorne | tar -xC build
+	mkdir -p build && tar -cf - . | docker run -i -a stdin -a stdout -e=GOPATH=/tmp/go titanous/makebuilder makebuild go/src/github.com/flynn/flynn-host | tar -xC build
 endif
 
-build/lorne:
-	godep go build -o build/lorne
+build/flynn-host:
+	godep go build -o build/flynn-host
 
 container: build
-	docker build -t flynn/lorne .
+	docker build -t flynn/host .
 
 clean:
 	rm -rf build
