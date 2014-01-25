@@ -7,20 +7,20 @@ import (
 	"github.com/flynn/rpcplus"
 )
 
-type Scheduler struct {
+type Cluster struct {
 	state State
 }
 
 // Scheduler Methods
 
-func (s *Scheduler) State(arg struct{}, ret *map[string]host.Host) error {
+func (s *Cluster) ListHosts(arg struct{}, ret *map[string]host.Host) error {
 	*ret = s.state.Get()
 	return nil
 }
 
-func (s *Scheduler) Schedule(req *host.ScheduleReq, res *host.ScheduleRes) error {
+func (s *Cluster) AddJobs(req *host.AddJobsReq, res *host.AddJobsRes) error {
 	s.state.Begin()
-	*res = host.ScheduleRes{}
+	*res = host.AddJobsRes{}
 	for host, jobs := range req.HostJobs {
 		for _, job := range jobs {
 			if s.state.AddJob(host, job) {
@@ -51,7 +51,7 @@ func (s *Scheduler) Schedule(req *host.ScheduleReq, res *host.ScheduleRes) error
 
 // Host Service methods
 
-func (s *Scheduler) RegisterHost(hostID *string, h *host.Host, stream rpcplus.Stream) error {
+func (s *Cluster) ConnectHost(hostID *string, h *host.Host, stream rpcplus.Stream) error {
 	*hostID = h.ID
 	s.state.Begin()
 	// TODO: error if host.ID is duplicate or empty
@@ -84,7 +84,7 @@ outer:
 	return err
 }
 
-func (s *Scheduler) RemoveJobs(hostID *string, jobIDs []string, res *struct{}) error {
+func (s *Cluster) RemoveJobs(hostID *string, jobIDs []string, res *struct{}) error {
 	s.state.Begin()
 	s.state.RemoveJobs(*hostID, jobIDs...)
 	s.state.Commit()

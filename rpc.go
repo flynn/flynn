@@ -27,7 +27,7 @@ type Host struct {
 
 const stopTimeout = 1
 
-func (h *Host) JobList(arg struct{}, res *map[string]host.ActiveJob) error {
+func (h *Host) ListJobs(arg struct{}, res *map[string]host.ActiveJob) error {
 	*res = h.state.Get()
 	return nil
 }
@@ -51,7 +51,7 @@ func (h *Host) StopJob(id string, res *struct{}) error {
 	return h.docker.StopContainer(job.ContainerID, stopTimeout)
 }
 
-func (h *Host) Stream(id string, stream rpcplus.Stream) error {
+func (h *Host) StreamEvents(id string, stream rpcplus.Stream) error {
 	ch := make(chan host.Event)
 	h.state.AddListener(id, ch)
 	defer func() {
