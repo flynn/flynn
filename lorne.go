@@ -87,7 +87,7 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	sampiStandby, err := disc.RegisterAndStandby("flynn-lorne", *externalAddr+":1113", map[string]string{"id": *hostID})
+	sampiStandby, err := disc.RegisterAndStandby("flynn-host", *externalAddr+":1113", map[string]string{"id": *hostID})
 	if err != nil {
 		log.Fatal(err)
 	}
