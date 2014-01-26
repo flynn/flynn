@@ -10,29 +10,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-dockerclient"
-	lc "github.com/flynn/lorne/client"
-	"github.com/flynn/lorne/types"
-	sc "github.com/flynn/sampi/client"
-	"github.com/flynn/sampi/types"
+	"github.com/flynn/go-flynn/cluster"
 )
 
-// WARNING: assumes one host at the moment
-
-var sched *sc.Client
-var host *lc.Client
-var hostid string
+var clusterc *cluster.Client
 
 func init() {
 	var err error
-	sched, err = sc.New()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	hostid = findHost()
-	host, err = lc.New(hostid)
+	clusterc, err = cluster.NewClient()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -52,7 +40,7 @@ func main() {
 
 	fmt.Printf("-----> Building %s...\n", app)
 
-	scheduleAndAttach(sc.RandomJobID(app+"-build."), docker.Config{
+	scheduleAndAttach(cluster.RandomJobID(app+"-build."), docker.Config{
 		Image:        "flynn/slugbuilder",
 		Cmd:          []string{"http://" + shelfHost + "/" + app + ".tgz"},
 		Tty:          false,
@@ -65,10 +53,9 @@ func main() {
 
 	fmt.Printf("-----> Deploying %s ...\n", app)
 
-	jobid := sc.RandomJobID(app + "-web.")
+	jobid := cluster.RandomJobID(app + "-web.")
 
-	stopIfExists(jobid)
-	scheduleWithTcpPort(jobid, docker.Config{
+	hostid := scheduleWithTcpPort(jobid, docker.Config{
 		Image:        "flynn/slugrunner",
 		Cmd:          []string{"start", "web"},
 		Tty:          false,
@@ -85,7 +72,7 @@ func main() {
 
 	time.Sleep(1 * time.Second)
 	fmt.Printf("=====> Application deployed:\n")
-	fmt.Printf("       http://10.0.2.15:%s\n", getPort(jobid))
+	fmt.Printf("       http://10.0.2.15:%s\n", getPort(hostid, jobid))
 	fmt.Println("")
 
 }
@@ -98,28 +85,24 @@ func shell(cmdline string) string {
 	return strings.Trim(string(out), " \n")
 }
 
-func stopIfExists(jobid string) {
-	_, err := host.GetJob(jobid)
-	if err != nil {
-		return
-	}
-	if err := host.StopJob(jobid); err != nil {
-		return
-	}
-}
-
-func scheduleWithTcpPort(jobid string, config docker.Config) {
-	schedReq := &sampi.ScheduleReq{
+func scheduleWithTcpPort(jobid string, config docker.Config) (hostid string) {
+	hostid = randomHost()
+	addReq := &host.AddJobsReq{
 		Incremental: true,
-		HostJobs:    map[string][]*sampi.Job{hostid: {{ID: jobid, Config: &config, TCPPorts: 1}}},
+		HostJobs:    map[string][]*host.Job{hostid: {{ID: jobid, Config: &config, TCPPorts: 1}}},
 	}
-	if _, err := sched.Schedule(schedReq); err != nil {
+	if _, err := clusterc.AddJobs(addReq); err != nil {
 		log.Fatal(err)
 	}
+	return
 }
 
-func getPort(jobid string) string {
-	job, err := host.GetJob(jobid)
+func getPort(hostid string, jobid string) string {
+	client, err := clusterc.ConnectHost(hostid)
+	if err != nil {
+		log.Fatal(err)
+	}
+	job, err := client.GetJob(jobid)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -129,41 +112,41 @@ func getPort(jobid string) string {
 	return ""
 }
 
-func findHost() string {
-	state, err := sched.State()
+func randomHost() (hostid string) {
+	hosts, err := clusterc.ListHosts()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	var firstHost string
-	for k := range state {
-		firstHost = k
+	for hostid = range hosts {
 		break
 	}
-	if firstHost == "" {
-		log.Fatal("no hosts")
+	if hostid == "" {
+		log.Fatal("no hosts found")
 	}
-	return firstHost
+	return
 }
 
 func scheduleAndAttach(jobid string, config docker.Config) {
-	client, err := lc.New(hostid)
+	hostid := randomHost()
+
+	client, err := clusterc.ConnectHost(hostid)
 	if err != nil {
 		log.Fatal(err)
 	}
-	conn, attachWait, err := client.Attach(&lorne.AttachReq{
+	conn, attachWait, err := client.Attach(&host.AttachReq{
 		JobID: jobid,
-		Flags: lorne.AttachFlagStdout | lorne.AttachFlagStderr | lorne.AttachFlagStdin | lorne.AttachFlagStream,
+		Flags: host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagStdin | host.AttachFlagStream,
 	}, true)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	schedReq := &sampi.ScheduleReq{
+	addReq := &host.AddJobsReq{
 		Incremental: true,
-		HostJobs:    map[string][]*sampi.Job{hostid: {{ID: jobid, Config: &config}}},
+		HostJobs:    map[string][]*host.Job{hostid: {{ID: jobid, Config: &config}}},
 	}
-	if _, err := sched.Schedule(schedReq); err != nil {
+	if _, err := clusterc.AddJobs(addReq); err != nil {
 		log.Fatal(err)
 	}
 
