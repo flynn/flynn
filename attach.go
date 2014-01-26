@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-dockerclient"
-	"github.com/flynn/lorne/types"
 	"github.com/technoweenie/grohl"
 )
 
@@ -17,7 +17,7 @@ type attachHandler struct {
 }
 
 func (h *attachHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	var attachReq lorne.AttachReq
+	var attachReq host.AttachReq
 	if err := json.NewDecoder(req.Body).Decode(&attachReq); err != nil {
 		http.Error(w, "invalid JSON", 400)
 		return
@@ -35,7 +35,7 @@ type dockerAttachClient interface {
 	AttachToContainer(docker.AttachToContainerOptions) error
 }
 
-func (h *attachHandler) attach(req *lorne.AttachReq, conn io.ReadWriteCloser) {
+func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 	defer conn.Close()
 
 	g := grohl.NewContext(grohl.Data{"fn": "attach", "job.id": req.JobID})
@@ -44,21 +44,21 @@ func (h *attachHandler) attach(req *lorne.AttachReq, conn io.ReadWriteCloser) {
 	job := h.state.AddAttacher(req.JobID, attachWait)
 	if job == nil {
 		defer h.state.RemoveAttacher(req.JobID, attachWait)
-		if _, err := conn.Write([]byte{lorne.AttachWaiting}); err != nil {
+		if _, err := conn.Write([]byte{host.AttachWaiting}); err != nil {
 			return
 		}
 		// TODO: add timeout
 		<-attachWait
 		job = h.state.GetJob(req.JobID)
 	}
-	if job.Job.Config.Tty && req.Flags&lorne.AttachFlagStdin != 0 {
+	if job.Job.Config.Tty && req.Flags&host.AttachFlagStdin != 0 {
 		resize := func() { h.docker.ResizeContainerTTY(job.ContainerID, req.Height, req.Width) }
-		if job.Status == lorne.StatusRunning {
+		if job.Status == host.StatusRunning {
 			resize()
 		} else {
 			var once sync.Once
 			go func() {
-				ch := make(chan lorne.Event)
+				ch := make(chan host.Event)
 				h.state.AddListener(req.JobID, ch)
 				go func() {
 					// There is a race that can result in the listener being
@@ -68,7 +68,7 @@ func (h *attachHandler) attach(req *lorne.AttachReq, conn io.ReadWriteCloser) {
 					// event is being sent on the listen channel, so we do it
 					// in the goroutine and wrap in a sync.Once.
 					j := h.state.GetJob(req.JobID)
-					if j.Status == lorne.StatusRunning {
+					if j.Status == host.StatusRunning {
 						once.Do(resize)
 					}
 				}()
@@ -92,17 +92,17 @@ func (h *attachHandler) attach(req *lorne.AttachReq, conn io.ReadWriteCloser) {
 		Container:    job.ContainerID,
 		InputStream:  conn,
 		OutputStream: conn,
-		Stdin:        req.Flags&lorne.AttachFlagStdin != 0,
-		Stdout:       req.Flags&lorne.AttachFlagStdout != 0,
-		Stderr:       req.Flags&lorne.AttachFlagStderr != 0,
-		Logs:         req.Flags&lorne.AttachFlagLogs != 0,
-		Stream:       req.Flags&lorne.AttachFlagStream != 0,
+		Stdin:        req.Flags&host.AttachFlagStdin != 0,
+		Stdout:       req.Flags&host.AttachFlagStdout != 0,
+		Stderr:       req.Flags&host.AttachFlagStderr != 0,
+		Logs:         req.Flags&host.AttachFlagLogs != 0,
+		Stream:       req.Flags&host.AttachFlagStream != 0,
 		Success:      success,
 	}
 	go func() {
 		select {
 		case <-success:
-			conn.Write([]byte{lorne.AttachSuccess})
+			conn.Write([]byte{host.AttachSuccess})
 			close(success)
 		case <-failed:
 		}
@@ -110,7 +110,7 @@ func (h *attachHandler) attach(req *lorne.AttachReq, conn io.ReadWriteCloser) {
 	}()
 	if err := h.docker.AttachToContainer(opts); err != nil {
 		close(failed)
-		conn.Write(append([]byte{lorne.AttachError}, err.Error()...))
+		conn.Write(append([]byte{host.AttachError}, err.Error()...))
 		return
 	}
 	g.Log(grohl.Data{"at": "finish"})
