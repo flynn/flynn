@@ -1,5 +1,5 @@
 {
-	"ImportPath": "github.com/flynn/lorne",
+	"ImportPath": "github.com/flynn/flynn-host",
 	"GoVersion": "go1.2",
 	"Deps": [
 		{
@@ -9,8 +9,8 @@
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
-			"Comment": "v0.2.0-rc1-50-gf0d5e98",
-			"Rev": "f0d5e98e38e4d3b100bdc32c25a69141e1a6ac45"
+			"Comment": "v0.2.0-rc1-66-g35c98e8",
+			"Rev": "35c98e8c885757fab1824daa77cc0e24bf30e76b"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-log/log",
@@ -31,6 +31,10 @@
 		{
 			"ImportPath": "github.com/flynn/go-dockerclient",
 			"Rev": "7299ec5cb7c35fda101c46a24edb648795f7e074"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-flynn/cluster",
+			"Rev": "154df0f0d75358c51a063846d8dab30bd2e43b76"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
