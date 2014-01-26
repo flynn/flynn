@@ -1,7 +1,7 @@
 run: all
 	bin/forego start
 
-all: bin/sampid bin/lorne bin/flynn-receive bin/gitreceived bin/discoverd bin/sdutil bin/shelf bin/flynn bin/strowger bin/forego slugbuilder slugrunner storage id_rsa /tmp/keys/vagrant nodejs-example
+all: bin/flynn-host bin/flynn-receive bin/gitreceived bin/discoverd bin/sdutil bin/shelf bin/flynn bin/strowger bin/forego slugbuilder slugrunner storage id_rsa /tmp/keys/vagrant nodejs-example
 
 # Setup
 
@@ -29,11 +29,8 @@ nodejs-example:
 
 # Projects
 
-bin/sampid: /usr/bin/go bin/discoverd
-	go get -v github.com/flynn/sampi/sampid
-
-bin/lorne: /usr/bin/go bin/discoverd
-	go get -v github.com/flynn/lorne
+bin/flynn-host: /usr/bin/go bin/discoverd
+	go get -v github.com/flynn/flynn-host
 
 bin/flynn-receive: /usr/bin/go bin/discoverd
 	go get -v github.com/flynn/flynn-receive
