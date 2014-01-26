@@ -13,12 +13,16 @@ var ErrNoServers = errors.New("cluster: no servers found")
 
 func NewClient() (*Client, error) {
 	services, err := discoverd.NewServiceSet("flynn-host")
+	if err != nil {
+		return nil, err
+	}
 	client := &Client{service: services}
-	go client.followLeader()
-	return client, err
+	firstErr := make(chan error)
+	go client.followLeader(firstErr)
+	return client, <-firstErr
 }
 
-func (c *Client) followLeader() {
+func (c *Client) followLeader(firstErr chan<- error) {
 	for update := range c.service.Leaders() {
 		c.mtx.Lock()
 		if closer, ok := c.c.(interface {
@@ -29,6 +33,10 @@ func (c *Client) followLeader() {
 		c.c, c.err = rpcplus.DialHTTP("tcp", update.Addr)
 		// TODO: use attempt package to retry here
 		c.mtx.Unlock()
+		if firstErr != nil {
+			firstErr <- c.err
+			firstErr = nil
+		}
 	}
 	// TODO: reconnect to discoverd here
 }
