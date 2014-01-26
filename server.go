@@ -8,12 +8,10 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-dockerclient"
-	lornec "github.com/flynn/lorne/client"
-	"github.com/flynn/lorne/types"
-	sampic "github.com/flynn/sampi/client"
-	"github.com/flynn/sampi/types"
+	"github.com/flynn/go-flynn/cluster"
 	strowgerc "github.com/flynn/strowger/client"
 	"github.com/flynn/strowger/types"
 	"github.com/titanous/go-tigertonic"
@@ -21,7 +19,7 @@ import (
 
 func main() {
 	var err error
-	scheduler, err = sampic.New()
+	clusterc, err = cluster.NewClient()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -39,7 +37,7 @@ func main() {
 	http.ListenAndServe("127.0.0.1:1200", tigertonic.Logged(mux, nil))
 }
 
-var scheduler *sampic.Client
+var clusterc *cluster.Client
 var router *strowgerc.Client
 
 type Job struct {
@@ -57,7 +55,7 @@ func addDomain(u *url.URL, h http.Header, data *struct{}) (int, http.Header, str
 
 // GET /apps/{app_id}/jobs
 func getJobs(u *url.URL, h http.Header) (int, http.Header, []Job, error) {
-	state, err := scheduler.State()
+	hosts, err := clusterc.ListHosts()
 	if err != nil {
 		return 500, nil, nil, err
 	}
@@ -65,7 +63,7 @@ func getJobs(u *url.URL, h http.Header) (int, http.Header, []Job, error) {
 	q := u.Query()
 	prefix := q.Get("app_id") + "-"
 	jobs := make([]Job, 0)
-	for _, host := range state {
+	for _, host := range hosts {
 		for _, job := range host.Jobs {
 			if strings.HasPrefix(job.ID, prefix) {
 				typ := strings.Split(job.ID[len(prefix):], ".")[0]
@@ -92,7 +90,7 @@ func shelfURL() string {
 
 // POST /apps/{app_id}/formation/{formation_id}
 func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Header, *Formation, error) {
-	state, err := scheduler.State()
+	hosts, err := clusterc.ListHosts()
 	if err != nil {
 		log.Println("scheduler state error", err)
 		return 500, nil, nil, err
@@ -101,14 +99,14 @@ func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Heade
 	q := u.Query()
 	req.Type = q.Get("formation_id")
 	prefix := q.Get("app_id") + "-" + req.Type + "."
-	var jobs []*sampi.Job
-	for _, host := range state {
-		for _, job := range host.Jobs {
+	var jobs []*host.Job
+	for _, h := range hosts {
+		for _, job := range h.Jobs {
 			if strings.HasPrefix(job.ID, prefix) {
 				if job.Attributes == nil {
 					job.Attributes = make(map[string]string)
 				}
-				job.Attributes["host_id"] = host.ID
+				job.Attributes["host_id"] = h.ID
 				jobs = append(jobs, job)
 			}
 		}
@@ -130,13 +128,13 @@ func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Heade
 		if req.Type == "web" {
 			config.Env = append(config.Env, "SD_NAME="+q.Get("app_id"))
 		}
-		schedReq := &sampi.ScheduleReq{
-			HostJobs: make(map[string][]*sampi.Job),
+		addReq := &host.AddJobsReq{
+			HostJobs: make(map[string][]*host.Job),
 		}
 	outer:
 		for {
-			for host := range state {
-				schedReq.HostJobs[host] = append(schedReq.HostJobs[host], &sampi.Job{ID: sampic.RandomJobID(prefix), TCPPorts: 1, Config: config})
+			for h := range hosts {
+				addReq.HostJobs[h] = append(addReq.HostJobs[h], &host.Job{ID: cluster.RandomJobID(prefix), TCPPorts: 1, Config: config})
 				diff--
 				if diff == 0 {
 					break outer
@@ -144,14 +142,14 @@ func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Heade
 			}
 		}
 
-		res, err := scheduler.Schedule(schedReq)
+		res, err := clusterc.AddJobs(addReq)
 		if err != nil || !res.Success {
 			log.Println("schedule error", err)
 			return 500, nil, nil, err
 		}
 	} else if diff < 0 {
 		for _, job := range jobs[:-diff] {
-			host, err := lornec.New(job.Attributes["host_id"])
+			host, err := clusterc.ConnectHost(job.Attributes["host_id"])
 			if err != nil {
 				log.Println("error connecting to", job.Attributes["host_id"], err)
 				continue
@@ -167,7 +165,7 @@ func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Heade
 
 // GET /apps/{app_id}/jobs/{job_id}/logs
 func getJobLog(w http.ResponseWriter, req *http.Request) {
-	state, err := scheduler.State()
+	hosts, err := clusterc.ListHosts()
 	if err != nil {
 		w.WriteHeader(500)
 		log.Println(err)
@@ -179,11 +177,11 @@ func getJobLog(w http.ResponseWriter, req *http.Request) {
 	if prefix := q.Get("app_id") + "-"; !strings.HasPrefix(jobID, prefix) {
 		jobID = prefix + jobID
 	}
-	var job *sampi.Job
-	var host sampi.Host
+	var job *host.Job
+	var h host.Host
 outer:
-	for _, host = range state {
-		for _, job = range host.Jobs {
+	for _, h = range hosts {
+		for _, job = range h.Jobs {
 			if job.ID == jobID {
 				break outer
 			}
@@ -195,12 +193,12 @@ outer:
 		return
 	}
 
-	attachReq := &lorne.AttachReq{
+	attachReq := &host.AttachReq{
 		JobID: job.ID,
-		Flags: lorne.AttachFlagStdout | lorne.AttachFlagStderr | lorne.AttachFlagLogs,
+		Flags: host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagLogs,
 	}
 
-	client, err := lornec.New(host.ID)
+	client, err := clusterc.ConnectHost(h.ID)
 	if err != nil {
 		w.WriteHeader(500)
 		log.Println("lorne connect failed", err)
@@ -234,7 +232,7 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	state, err := scheduler.State()
+	hosts, err := clusterc.ListHosts()
 	if err != nil {
 		w.WriteHeader(500)
 		log.Println(err)
@@ -242,7 +240,7 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 	}
 	// pick a random host
 	var hostID string
-	for hostID = range state {
+	for hostID = range hosts {
 		break
 	}
 	if hostID == "" {
@@ -257,8 +255,8 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 	}
 
 	q := req.URL.Query()
-	job := &sampi.Job{
-		ID: sampic.RandomJobID(q.Get("app_id") + "-run."),
+	job := &host.Job{
+		ID: cluster.RandomJobID(q.Get("app_id") + "-run."),
 		Config: &docker.Config{
 			Image:        "flynn/slugrunner",
 			Cmd:          jobReq.Cmd,
@@ -278,16 +276,16 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 		job.Config.OpenStdin = true
 	}
 
-	var attachConn lornec.ReadWriteCloser
+	var attachConn cluster.ReadWriteCloser
 	var attachWait func() error
 	if jobReq.Attach {
-		attachReq := &lorne.AttachReq{
+		attachReq := &host.AttachReq{
 			JobID:  job.ID,
-			Flags:  lorne.AttachFlagStdout | lorne.AttachFlagStderr | lorne.AttachFlagStdin | lorne.AttachFlagStream,
+			Flags:  host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagStdin | host.AttachFlagStream,
 			Height: jobReq.Lines,
 			Width:  jobReq.Columns,
 		}
-		client, err := lornec.New(hostID)
+		client, err := clusterc.ConnectHost(hostID)
 		if err != nil {
 			w.WriteHeader(500)
 			log.Println("lorne connect failed", err)
@@ -302,7 +300,7 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 		defer attachConn.Close()
 	}
 
-	res, err := scheduler.Schedule(&sampi.ScheduleReq{HostJobs: map[string][]*sampi.Job{hostID: {job}}})
+	res, err := clusterc.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{hostID: {job}}})
 	if err != nil || !res.Success {
 		w.WriteHeader(500)
 		log.Println("schedule failed", err)
@@ -325,12 +323,12 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 		defer conn.Close()
 
 		done := make(chan struct{})
-		copy := func(to lornec.ReadWriteCloser, from io.Reader) {
+		copy := func(to cluster.ReadWriteCloser, from io.Reader) {
 			io.Copy(to, from)
 			to.CloseWrite()
 			done <- struct{}{}
 		}
-		go copy(conn.(lornec.ReadWriteCloser), attachConn)
+		go copy(conn.(cluster.ReadWriteCloser), attachConn)
 		go copy(attachConn, conn)
 		<-done
 		<-done
