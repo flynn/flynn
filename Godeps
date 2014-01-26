@@ -1,6 +1,9 @@
 {
 	"ImportPath": "github.com/flynn/flynn-host",
 	"GoVersion": "go1.2",
+	"Packages": [
+		"./..."
+	],
 	"Deps": [
 		{
 			"ImportPath": "bitbucket.org/kardianos/osext",
@@ -39,14 +42,6 @@
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
 			"Rev": "13a8b54dd08599a239453a02e35dc40db030b5bf"
-		},
-		{
-			"ImportPath": "github.com/flynn/sampi/client",
-			"Rev": "86f8a99ae88f8a516d705587bd0ba19e5a71b0b2"
-		},
-		{
-			"ImportPath": "github.com/flynn/sampi/types",
-			"Rev": "86f8a99ae88f8a516d705587bd0ba19e5a71b0b2"
 		},
 		{
 			"ImportPath": "github.com/technoweenie/grohl",

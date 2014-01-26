@@ -11,7 +11,7 @@ import (
 
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-dockerclient"
-	sampic "github.com/flynn/sampi/client"
+	"github.com/flynn/go-flynn/cluster"
 )
 
 func parseEnviron() map[string]string {
@@ -144,7 +144,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 		}
 
 		job := &host.Job{
-			ID:       sampic.RandomJobID("flynn-" + name),
+			ID:       cluster.RandomJobID("flynn-" + name),
 			TCPPorts: len(data.TCPPorts),
 			Config: &docker.Config{
 				Image:        image,
