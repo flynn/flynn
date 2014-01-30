@@ -25,19 +25,23 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/discoverd/agent",
-			"Rev": "425340264324dbc2896dc79d7193f308714c9c93"
+			"Rev": "1739676fd5fb5e70689a10e2b03a803620e82374"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-discoverd",
-			"Rev": "ef1f9aa3961b0f4d98294c611e7c775fde9e40ba"
+			"Rev": "14416136439e304c6ceb047d0a750bc63cb89a81"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-dockerclient",
 			"Rev": "7299ec5cb7c35fda101c46a24edb648795f7e074"
 		},
 		{
+			"ImportPath": "github.com/flynn/go-flynn/attempt",
+			"Rev": "6b0b7b5c78d63bafa3c5e377d7788f4974d7128f"
+		},
+		{
 			"ImportPath": "github.com/flynn/go-flynn/cluster",
-			"Rev": "154df0f0d75358c51a063846d8dab30bd2e43b76"
+			"Rev": "6b0b7b5c78d63bafa3c5e377d7788f4974d7128f"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
