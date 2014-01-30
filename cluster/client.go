@@ -3,13 +3,21 @@ package cluster
 import (
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-discoverd"
+	"github.com/flynn/go-flynn/attempt"
 	"github.com/flynn/rpcplus"
 )
 
 var ErrNoServers = errors.New("cluster: no servers found")
+
+var Attempts = attempt.Strategy{
+	Min:   5,
+	Total: 5 * time.Second,
+	Delay: 200 * time.Millisecond,
+}
 
 func NewClient() (*Client, error) {
 	services, err := discoverd.NewServiceSet("flynn-host")
@@ -30,8 +38,10 @@ func (c *Client) followLeader(firstErr chan<- error) {
 		}); ok {
 			closer.Close()
 		}
-		c.c, c.err = rpcplus.DialHTTP("tcp", update.Addr)
-		// TODO: use attempt package to retry here
+		c.err = Attempts.Run(func() (err error) {
+			c.c, err = rpcplus.DialHTTP("tcp", update.Addr)
+			return
+		})
 		c.mtx.Unlock()
 		if firstErr != nil {
 			firstErr <- c.err
