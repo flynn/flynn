@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -338,6 +339,8 @@ func NewClient() (*Client, error) {
 	addr := os.Getenv("DISCOVERD")
 	if addr == "" {
 		addr = "127.0.0.1:1111"
+	} else {
+		addr = strings.TrimPrefix(addr, "tcp://")
 	}
 	return NewClientUsingAddress(addr)
 }
