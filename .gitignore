@@ -1,3 +1,4 @@
+.subrepo
 .vagrant
 flynn-host
 *.test
