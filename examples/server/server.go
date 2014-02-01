@@ -13,7 +13,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := d.Register("example-server", os.Args[1], nil); err != nil {
+	if err := d.Register("example-server", os.Args[1]); err != nil {
 		log.Fatal(err)
 	}
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
