@@ -18,6 +18,7 @@ type Server struct {
 
 func (s *Server) ListenAndServe(quit <-chan struct{}) {
 	go s.HTTPFrontend.serve()
+	go s.HTTPFrontend.serveTLS()
 	go s.HTTPFrontend.syncDatabase()
 	<-quit
 	// TODO: unregister from service discovery
@@ -27,6 +28,7 @@ func (s *Server) ListenAndServe(quit <-chan struct{}) {
 func main() {
 	rpcAddr := flag.String("rpcaddr", ":1115", "rpc listen address")
 	httpAddr := flag.String("httpaddr", ":8080", "http frontend listen address")
+	httpsAddr := flag.String("httpsaddr", ":4433", "https frontend listen address")
 	flag.Parse()
 
 	// Will use DISCOVERD environment variable
@@ -42,7 +44,7 @@ func main() {
 	}
 
 	var s Server
-	s.HTTPFrontend = NewHTTPFrontend(*httpAddr, etcd.NewClient(etcdAddr), d)
+	s.HTTPFrontend = NewHTTPFrontend(*httpAddr, *httpsAddr, etcd.NewClient(etcdAddr), d)
 	rpc.Register(&Router{s})
 	rpc.HandleHTTP()
 	go http.ListenAndServe(*rpcAddr, nil)
