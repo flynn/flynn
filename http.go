@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
 	"errors"
 	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net"
@@ -194,6 +196,18 @@ func (s *HTTPFrontend) serveTLS() {
 	}
 }
 
+func fail(sc *httputil.ServerConn, req *http.Request, code int, msg string) {
+	resp := &http.Response{
+		StatusCode:    code,
+		ProtoMajor:    1,
+		ProtoMinor:    0,
+		Request:       req,
+		Body:          ioutil.NopCloser(bytes.NewBufferString(msg)),
+		ContentLength: int64(len(msg)),
+	}
+	sc.Write(req, resp)
+}
+
 func (s *HTTPFrontend) handle(conn net.Conn) {
 	defer conn.Close()
 	sc := httputil.NewServerConn(conn, nil)
@@ -211,7 +225,7 @@ func (s *HTTPFrontend) handle(conn net.Conn) {
 	s.mtx.RUnlock()
 	log.Println(req, backend)
 	if backend == nil {
-		// TODO: return 404
+		fail(sc, req, 404, "Not Found")
 		return
 	}
 	_, tls := conn.(*tls.Conn)
@@ -245,8 +259,8 @@ func (s *httpServer) handle(req *http.Request, sc *httputil.ServerConn, tls bool
 	req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
 	backend := s.getBackend()
 	if backend == nil {
-		// TODO: Return 503
 		log.Println("no backend found")
+		fail(sc, req, 503, "Service Unavailable")
 		return
 	}
 	defer backend.Close()
@@ -254,7 +268,8 @@ func (s *httpServer) handle(req *http.Request, sc *httputil.ServerConn, tls bool
 	for {
 		if req.Method != "GET" && req.Method != "POST" && req.Method != "HEAD" &&
 			req.Method != "OPTIONS" && req.Method != "PUT" && req.Method != "DELETE" && req.Method != "TRACE" {
-			// TODO: return 405
+			fail(sc, req, 405, "Method not allowed")
+			return
 		}
 
 		req.Proto = "HTTP/1.1"
@@ -297,7 +312,7 @@ func (s *httpServer) handle(req *http.Request, sc *httputil.ServerConn, tls bool
 			if err != io.EOF && err != httputil.ErrPersistEOF {
 				log.Println("server read err:", err)
 				// TODO: log error
-				// TODO: Return 502
+				fail(sc, req, 502, "Bad Gateway")
 			}
 			return
 		}
