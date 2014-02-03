@@ -1,0 +1,66 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	. "launchpad.net/gocheck"
+)
+
+// Hook gocheck up to the "go test" runner
+func Test(t *testing.T) { TestingT(t) }
+
+type S struct {
+	srv *httptest.Server
+}
+
+var _ = Suite(&S{})
+
+func (s *S) SetUpSuite(c *C) {
+	s.srv = httptest.NewServer(appHandler())
+}
+
+func (s *S) Post(path string, data interface{}) (*http.Response, error) {
+	buf, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	return http.Post(s.srv.URL+path, "application/json", bytes.NewBuffer(buf))
+}
+
+func (s *S) Get(path string, data interface{}) (*http.Response, error) {
+	res, err := http.Get(s.srv.URL + path)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		// TODO: error here
+		return res, nil
+	}
+	return res, json.NewDecoder(res.Body).Decode(data)
+}
+
+func (s *S) TestCreateApp(c *C) {
+	res, err := s.Post("/apps", &App{Name: "foo"})
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	app := &App{}
+	err = json.NewDecoder(res.Body).Decode(app)
+	res.Body.Close()
+	c.Assert(err, IsNil)
+	c.Assert(app.Name, Equals, "foo")
+	c.Assert(app.ID, Not(Equals), "")
+
+	gotApp := &App{}
+	res, err = s.Get("/apps/"+app.ID, gotApp)
+	c.Assert(err, IsNil)
+	c.Assert(gotApp, DeepEquals, app)
+
+	res, err = s.Get("/apps/fail"+app.ID, gotApp)
+	c.Assert(res.StatusCode, Equals, 404)
+}
