@@ -64,3 +64,26 @@ func (s *S) TestCreateApp(c *C) {
 	res, err = s.Get("/apps/fail"+app.ID, gotApp)
 	c.Assert(res.StatusCode, Equals, 404)
 }
+
+func (s *S) TestCreateArtifact(c *C) {
+	in := &Artifact{Type: "docker-image", URL: "docker://flynn/host?id=adsf"}
+	res, err := s.Post("/artifacts", in)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	out := &Artifact{}
+	err = json.NewDecoder(res.Body).Decode(out)
+	res.Body.Close()
+	c.Assert(err, IsNil)
+	c.Assert(out.Type, Equals, in.Type)
+	c.Assert(out.URL, Equals, in.URL)
+	c.Assert(out.ID, Not(Equals), "")
+
+	gotArtifact := &Artifact{}
+	res, err = s.Get("/artifacts/"+out.ID, gotArtifact)
+	c.Assert(err, IsNil)
+	c.Assert(gotArtifact, DeepEquals, out)
+
+	res, err = s.Get("/artifacts/fail"+out.ID, gotArtifact)
+	c.Assert(res.StatusCode, Equals, 404)
+}

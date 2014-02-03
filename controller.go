@@ -23,17 +23,21 @@ func appHandler() http.Handler {
 	m.Use(martini.Recovery())
 	m.Use(render.Renderer())
 	m.Map(NewAppRepo())
+	m.Map(NewArtifactRepo())
 	m.Action(r.Handle)
 
 	r.Post("/apps", binding.Bind(App{}), createApp)
 	r.Get("/apps/:app_id", getAppMiddleware, getApp)
+
+	r.Post("/artifacts", binding.Bind(Artifact{}), createArtifact)
+	r.Get("/artifacts/:artifact_id", getArtifactMiddleware, getArtifact)
 
 	return m
 }
 
 // POST /apps
 func createApp(app App, repo *AppRepo, r render.Render) {
-	if err := repo.Create(&app); err != nil {
+	if err := repo.Add(&app); err != nil {
 		// TODO: handle error
 	}
 	r.JSON(200, &app)
@@ -53,11 +57,26 @@ func getApp(app *App, r render.Render) {
 	r.JSON(200, app)
 }
 
-func createArtifact() {
-	// validate
-	// assign id
-	// save to etcd
-	// return
+// POST /artifacts
+func createArtifact(artifact Artifact, repo *ArtifactRepo, r render.Render) {
+	if err := repo.Add(&artifact); err != nil {
+		// TODO: handle error
+	}
+	r.JSON(200, &artifact)
+}
+
+func getArtifactMiddleware(c martini.Context, repo *ArtifactRepo, params martini.Params, w http.ResponseWriter) {
+	artifact := repo.Get(params["artifact_id"])
+	if artifact == nil {
+		w.WriteHeader(404)
+		return
+	}
+	c.Map(artifact)
+}
+
+// GET /artifacts/:artifact_id
+func getArtifact(artifact *Artifact, r render.Render) {
+	r.JSON(200, artifact)
 }
 
 func createRelease() {
