@@ -29,7 +29,7 @@ func (cmd *services) Run(fs *flag.FlagSet) {
 	}
 	if *cmd.onlyOne {
 		if len(services) > 0 {
-			fmt.Println(services[0])
+			fmt.Println(services[0].Addr)
 		}
 		return
 	}
