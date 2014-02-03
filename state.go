@@ -68,8 +68,8 @@ func (s *State) SetStatusRunning(jobID string) {
 
 	job, ok := s.jobs[jobID]
 	if !ok {
-		return
 		s.mtx.Unlock()
+		return
 	}
 
 	job.StartedAt = time.Now().UTC()
