@@ -43,7 +43,7 @@ func (m *ManifestData) TCPPort(id int) (int, error) {
 	if id < len(m.TCPPorts) {
 		return m.TCPPorts[id], nil
 	} else if id > len(m.TCPPorts) {
-		return 0, fmt.Errorf("lorne: invalid TCPPort(%d), expecting id <= %d", len(m.TCPPorts))
+		return 0, fmt.Errorf("lorne: invalid TCPPort(%d), expecting id <= %d", id, len(m.TCPPorts))
 	}
 
 	port := <-m.ports
