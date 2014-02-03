@@ -36,10 +36,10 @@ By making a contribution to this project, I certify that:
     this project or the open source license(s) involved.
 ```
 
-To accept the DCO, simply add this line to each commit message with your name, email address, and GitHub username:
+To accept the DCO, simply add this line to each commit message with your name, email address (`git commit -s` will do this for you):
 
 ```text
-Signed-off-by: John Doe <john@example.com> (github: john_doe)
+Signed-off-by: John Doe <john@example.com>
 ```
 
 For legal reasons, no anonymous or pseudonymous contributions are accepted ([contact us](mailto:contact@flynn.io) if this is an issue).
