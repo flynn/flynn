@@ -1,21 +1,23 @@
 package cluster
 
 import (
-	"bytes"
 	"crypto/rand"
-	"encoding/base64"
+	"encoding/hex"
 	"io"
 )
 
 func RandomJobID(prefix string) string { return prefix + randomID() }
 
+// generate a UUIDv4
 func randomID() string {
-	b := make([]byte, 16)
-	enc := make([]byte, 24)
-	_, err := io.ReadFull(rand.Reader, b)
+	id := make([]byte, 16)
+	_, err := io.ReadFull(rand.Reader, id)
 	if err != nil {
 		panic(err) // This shouldn't ever happen, right?
 	}
-	base64.URLEncoding.Encode(enc, b)
-	return string(bytes.TrimRight(enc, "="))
+	id[6] &= 0x0F // clear version
+	id[6] |= 0x40 // set version to 4 (random uuid)
+	id[8] &= 0x3F // clear variant
+	id[8] |= 0x80 // set to IETF variant
+	return hex.EncodeToString(id)
 }
