@@ -33,7 +33,7 @@ func (r *AppRepo) Create(app *App) error {
 	if app.Name == "" {
 		return errors.New("controller: app name must not be blank")
 	}
-	app.ID = randomID()
+	app.ID = uuid()
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 
