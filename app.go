@@ -28,7 +28,8 @@ func NewAppRepo() *AppRepo {
 // - set id
 // - check name doesn't exist
 // - persist
-func (r *AppRepo) Add(app *App) error {
+func (r *AppRepo) Add(data interface{}) error {
+	app := data.(*App)
 	// TODO: actually validate
 	if app.Name == "" {
 		return errors.New("controller: app name must not be blank")
@@ -48,13 +49,15 @@ func (r *AppRepo) Add(app *App) error {
 	return nil
 }
 
-func (r *AppRepo) Get(id string) *App {
+var ErrNotFound = errors.New("controller: resource not found")
+
+func (r *AppRepo) Get(id string) (interface{}, error) {
 	r.mtx.RLock()
 	defer r.mtx.RUnlock()
 	app := r.appIDs[id]
 	if app == nil {
-		return nil
+		return nil, ErrNotFound
 	}
 	appCopy := *app
-	return &appCopy
+	return &appCopy, nil
 }

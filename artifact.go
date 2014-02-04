@@ -24,7 +24,8 @@ func NewArtifactRepo() *ArtifactRepo {
 // - validate
 // - set id
 // - persist
-func (r *ArtifactRepo) Add(artifact *Artifact) error {
+func (r *ArtifactRepo) Add(data interface{}) error {
+	artifact := data.(*Artifact)
 	// TODO: actually validate
 	artifact.ID = uuid()
 	r.mtx.Lock()
@@ -36,8 +37,12 @@ func (r *ArtifactRepo) Add(artifact *Artifact) error {
 	return nil
 }
 
-func (r *ArtifactRepo) Get(id string) *Artifact {
+func (r *ArtifactRepo) Get(id string) (interface{}, error) {
 	r.mtx.RLock()
 	defer r.mtx.RUnlock()
-	return r.artifactIDs[id]
+	artifact, ok := r.artifactIDs[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	return artifact, nil
 }

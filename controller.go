@@ -35,6 +35,11 @@ func appHandler() http.Handler {
 	return m
 }
 
+type Repository interface {
+	Add(interface{}) error
+	Get(string) (interface{}, error)
+}
+
 // POST /apps
 func createApp(app App, repo *AppRepo, r render.Render) {
 	if err := repo.Add(&app); err != nil {
@@ -44,10 +49,13 @@ func createApp(app App, repo *AppRepo, r render.Render) {
 }
 
 func getAppMiddleware(c martini.Context, repo *AppRepo, params martini.Params, w http.ResponseWriter) {
-	app := repo.Get(params["app_id"])
-	if app == nil {
-		w.WriteHeader(404)
-		return
+	app, err := repo.Get(params["app_id"])
+	if err != nil {
+		if err == ErrNotFound {
+			w.WriteHeader(404)
+			return
+		}
+		// TODO: 500/log error
 	}
 	c.Map(app)
 }
@@ -66,10 +74,13 @@ func createArtifact(artifact Artifact, repo *ArtifactRepo, r render.Render) {
 }
 
 func getArtifactMiddleware(c martini.Context, repo *ArtifactRepo, params martini.Params, w http.ResponseWriter) {
-	artifact := repo.Get(params["artifact_id"])
-	if artifact == nil {
-		w.WriteHeader(404)
-		return
+	artifact, err := repo.Get(params["artifact_id"])
+	if err != nil {
+		if err == ErrNotFound {
+			w.WriteHeader(404)
+			return
+		}
+		// TODO: 500/log error
 	}
 	c.Map(artifact)
 }
