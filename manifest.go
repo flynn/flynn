@@ -144,7 +144,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 		}
 
 		job := &host.Job{
-			ID:       cluster.RandomJobID("flynn-" + name),
+			ID:       cluster.RandomJobID("flynn-" + name + "-"),
 			TCPPorts: len(data.TCPPorts),
 			Config: &docker.Config{
 				Image:        image,
