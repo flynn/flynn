@@ -65,8 +65,7 @@ func (s *S) TestCreateApp(c *C) {
 	c.Assert(res.StatusCode, Equals, 404)
 }
 
-func (s *S) TestCreateArtifact(c *C) {
-	in := &Artifact{Type: "docker-image", URL: "docker://flynn/host?id=adsf"}
+func (s *S) createTestArtifact(c *C, in *Artifact) *Artifact {
 	res, err := s.Post("/artifacts", in)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
@@ -75,15 +74,45 @@ func (s *S) TestCreateArtifact(c *C) {
 	err = json.NewDecoder(res.Body).Decode(out)
 	res.Body.Close()
 	c.Assert(err, IsNil)
+
+	return out
+}
+
+func (s *S) TestCreateArtifact(c *C) {
+	in := &Artifact{Type: "docker-image", URL: "docker://flynn/host?id=adsf"}
+	out := s.createTestArtifact(c, in)
+
 	c.Assert(out.Type, Equals, in.Type)
 	c.Assert(out.URL, Equals, in.URL)
 	c.Assert(out.ID, Not(Equals), "")
 
 	gotArtifact := &Artifact{}
-	res, err = s.Get("/artifacts/"+out.ID, gotArtifact)
+	res, err := s.Get("/artifacts/"+out.ID, gotArtifact)
 	c.Assert(err, IsNil)
 	c.Assert(gotArtifact, DeepEquals, out)
 
 	res, err = s.Get("/artifacts/fail"+out.ID, gotArtifact)
+	c.Assert(res.StatusCode, Equals, 404)
+}
+
+func (s *S) TestCreateRelease(c *C) {
+	artifactID := s.createTestArtifact(c, &Artifact{}).ID
+	in := &Release{ArtifactID: artifactID}
+	res, err := s.Post("/releases", in)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	out := &Release{}
+	err = json.NewDecoder(res.Body).Decode(out)
+	res.Body.Close()
+	c.Assert(err, IsNil)
+	c.Assert(out.ArtifactID, Equals, in.ArtifactID)
+
+	gotRelease := &Release{}
+	res, err = s.Get("/releases/"+out.ID, gotRelease)
+	c.Assert(err, IsNil)
+	c.Assert(gotRelease, DeepEquals, out)
+
+	res, err = s.Get("/releases/fail"+out.ID, gotRelease)
 	c.Assert(res.StatusCode, Equals, 404)
 }

@@ -10,8 +10,8 @@ import (
 )
 
 type Repository interface {
-	Add(interface{}) error
-	Get(string) (interface{}, error)
+	Add(thing interface{}) error
+	Get(id string) (interface{}, error)
 }
 
 func crud(resource string, example interface{}, repo Repository, r martini.Router) {

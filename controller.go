@@ -8,8 +8,6 @@ import (
 )
 
 func main() {
-	// create artifact
-	// create release
 	// create formation
 	// update formation
 	// delete formation
@@ -25,20 +23,16 @@ func appHandler() http.Handler {
 
 	appRepo := NewAppRepo()
 	artifactRepo := NewArtifactRepo()
+	releaseRepo := NewReleaseRepo(artifactRepo)
 	m.Map(appRepo)
 	m.Map(artifactRepo)
+	m.Map(releaseRepo)
 
 	crud("apps", App{}, appRepo, r)
 	crud("artifacts", Artifact{}, artifactRepo, r)
+	crud("releases", Release{}, releaseRepo, r)
 
 	return m
-}
-
-func createRelease() {
-	// validate
-	// assign id
-	// save to etcd
-	// return
 }
 
 func createFormation() {
