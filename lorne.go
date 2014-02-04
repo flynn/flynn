@@ -22,7 +22,7 @@ func main() {
 	externalAddr := flag.String("external", "", "external IP of host")
 	configFile := flag.String("config", "", "configuration file")
 	manifestFile := flag.String("manifest", "", "manifest file")
-	hostID := flag.String("id", "host1", "host id")
+	hostID := flag.String("id", os.Getenv("HOSTNAME"), "host id")
 	flag.Parse()
 	grohl.AddContext("app", "lorne")
 	grohl.Log(grohl.Data{"at": "start"})
