@@ -1,4 +1,4 @@
-FROM busybox
+FROM flynn/busybox
 MAINTAINER Jeff Lindsay <progrium@gmail.com>
 
 ADD ./build/shelf /bin/shelf
