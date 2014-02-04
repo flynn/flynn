@@ -4,6 +4,8 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/go-discoverd"
@@ -27,13 +29,20 @@ func main() {
 	httpAddr := flag.String("httpaddr", ":8080", "http frontend listen address")
 	flag.Parse()
 
+	// Will use DISCOVERD environment variable
 	d, err := discoverd.NewClient()
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Read etcd address from ETCD
+	etcdAddr := strings.Split(os.Getenv("ETCD"), ",")
+	if len(etcdAddr) == 1 && etcdAddr[0] == "" {
+		etcdAddr = nil
+	}
+
 	var s Server
-	s.HTTPFrontend = NewHTTPFrontend(*httpAddr, etcd.NewClient(nil), d)
+	s.HTTPFrontend = NewHTTPFrontend(*httpAddr, etcd.NewClient(etcdAddr), d)
 	rpc.Register(&Router{s})
 	rpc.HandleHTTP()
 	go http.ListenAndServe(*rpcAddr, nil)
