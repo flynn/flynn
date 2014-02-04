@@ -116,6 +116,11 @@ outer:
 	s.nextModified = true
 }
 
+func (s *State) HostExists(id string) bool {
+	_, exists := (*s.next)[id]
+	return exists
+}
+
 func (s *State) AddHost(host *host.Host, ch chan<- *host.Job) {
 	(*s.next)[host.ID] = *host
 	s.streams[host.ID] = ch

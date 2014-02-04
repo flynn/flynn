@@ -1,6 +1,7 @@
 package sampi
 
 import (
+	"errors"
 	"io"
 
 	"github.com/flynn/flynn-host/types"
@@ -57,8 +58,17 @@ func (s *Cluster) AddJobs(req *host.AddJobsReq, res *host.AddJobsRes) error {
 
 func (s *Cluster) ConnectHost(hostID *string, h *host.Host, stream rpcplus.Stream) error {
 	*hostID = h.ID
+	if *hostID == "" {
+		return errors.New("sampi: host id must not be blank")
+	}
+
 	s.state.Begin()
-	// TODO: error if host.ID is duplicate or empty
+
+	if s.state.HostExists(*hostID) {
+		s.state.Rollback()
+		return errors.New("sampi: host exists")
+	}
+
 	jobs := make(chan *host.Job)
 	s.state.AddHost(h, jobs)
 	s.state.Commit()
