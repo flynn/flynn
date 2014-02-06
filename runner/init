@@ -53,6 +53,9 @@ if [[ $SD_NAME && $PORT ]]; then
 		runner="sdutil exec $SD_NAME:$PORT bash -c"
 	fi
 	unset SD_NAME
+elif [[ $SD_ARGS ]]; then
+	runner="sdutil $SD_ARGS bash -c"
+	unset SD_ARGS
 else
 	runner="bash -c"
 fi
