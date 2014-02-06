@@ -31,6 +31,8 @@ func (cmd *execCmd) Run(fs *flag.FlagSet) {
 	name := mapping[0]
 	port := mapping[1]
 
+	cmd.ValidateFlags()
+
 	args := fs.Args()
 	if len(args) < 2 {
 		fmt.Println("no command to exec")
