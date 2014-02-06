@@ -62,7 +62,7 @@ func (cmd *register) ValidateFlags() {
 	}
 }
 
-func (cmd *register) RegisterWithExitHook(name, port string, verbose bool) {
+func (cmd *register) RegisterWithExitHook(services map[string]string, verbose bool) {
 	cmd.exitSignalCh = make(chan os.Signal, 1)
 	signal.Notify(cmd.exitSignalCh, os.Interrupt, syscall.SIGTERM)
 	go func() {
@@ -70,10 +70,14 @@ func (cmd *register) RegisterWithExitHook(name, port string, verbose bool) {
 		if verbose {
 			log.Println("Unregistering service...")
 		}
-		cmd.client.Unregister(name, *cmd.host+":"+port)
+		for name, port := range services {
+			cmd.client.Unregister(name, *cmd.host+":"+port)
+		}
 		os.Exit(cmd.exitStatus)
 	}()
-	cmd.client.Register(name, *cmd.host+":"+port)
+	for name, port := range services {
+		cmd.client.Register(name, *cmd.host+":"+port)
+	}
 }
 
 func (cmd *register) Run(fs *flag.FlagSet) {
@@ -84,7 +88,7 @@ func (cmd *register) Run(fs *flag.FlagSet) {
 	name := mapping[0]
 	port := mapping[1]
 
-	cmd.RegisterWithExitHook(name, port, true)
+	cmd.RegisterWithExitHook(map[string]string{name: port}, true)
 
 	log.Printf("Registered service '%s' on port %s.", name, port)
 	for {

@@ -11,8 +11,26 @@ import (
 	"time"
 )
 
+// A flag.Value that is a map of service registrations
+type regSlice map[string]string
+
+func (s *regSlice) String() string {
+	return "name:port"
+}
+
+func (s *regSlice) Set(value string) error {
+	colonIdx := strings.LastIndex(value, ":")
+	if colonIdx == -1 {
+		fmt.Println("specify services in name:port format:", value)
+		os.Exit(1)
+	}
+	(*s)[value[0:colonIdx]] = value[colonIdx+1:]
+	return nil
+}
+
 type execCmd struct {
 	register
+	services *regSlice
 }
 
 func (cmd *execCmd) Name() string {
@@ -21,33 +39,28 @@ func (cmd *execCmd) Name() string {
 
 func (cmd *execCmd) DefineFlags(fs *flag.FlagSet) {
 	cmd.SetRegisterFlags(fs)
+	t := make(regSlice)
+	cmd.services = &t
+	fs.Var(cmd.services, "s", "services to register")
 }
 
 func (cmd *execCmd) Run(fs *flag.FlagSet) {
 	cmd.InitClient(false)
 	cmd.exitStatus = 0
 
-	colonIdx := strings.LastIndex(fs.Arg(0), ":")
-	if colonIdx == -1 {
-		fmt.Println("specify services in name:port format:", fs.Arg(0))
-		os.Exit(1)
-	}
-	name := fs.Arg(0)[0:colonIdx]
-	port := fs.Arg(0)[colonIdx+1:]
-
 	cmd.ValidateFlags()
 
 	args := fs.Args()
-	if len(args) < 2 {
+	if len(args) < 1 {
 		fmt.Println("no command to exec")
 		os.Exit(1)
 		return
 	}
 	var c *exec.Cmd
 	if len(args) > 2 {
-		c = exec.Command(args[1], args[2:]...)
+		c = exec.Command(args[0], args[1:]...)
 	} else {
-		c = exec.Command(args[1])
+		c = exec.Command(args[0])
 	}
 	errCh := attachCmd(c, os.Stdout, os.Stderr, os.Stdin)
 	err := c.Start()
@@ -55,7 +68,7 @@ func (cmd *execCmd) Run(fs *flag.FlagSet) {
 		panic(err)
 	}
 
-	cmd.RegisterWithExitHook(name, port, false)
+	cmd.RegisterWithExitHook(map[string]string(*cmd.services), false)
 
 	exitCh := exitStatusCh(c)
 	if err = <-errCh; err != nil {
