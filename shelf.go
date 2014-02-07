@@ -21,7 +21,11 @@ func init() {
 }
 
 func errorResponse(w http.ResponseWriter, e error) {
-	w.WriteHeader(http.StatusInternalServerError)
+	code := http.StatusInternalServerError
+	if os.IsNotExist(e) {
+		code = http.StatusNotFound
+	}
+	w.WriteHeader(code)
 	w.Write([]byte(e.Error()))
 	log.Println("error:", e.Error())
 }
@@ -41,7 +45,7 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		filepath := storagepath + r.RequestURI
 		switch r.Method {
-		case "GET":
+		case "HEAD", "GET":
 			file, err := os.Open(filepath)
 			if err != nil {
 				errorResponse(w, err)
