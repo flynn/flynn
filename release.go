@@ -6,20 +6,20 @@ import (
 )
 
 type Release struct {
-	ID          string                 `json:"id"`
-	ArtifactID  string                 `json:"artifact"`
-	Environment map[string]string      `json:"environment"`
-	Processes   map[string]ProcessType `json:"processes"`
+	ID          string                 `json:"id,omitempty"`
+	ArtifactID  string                 `json:"artifact,omitempty"`
+	Environment map[string]string      `json:"environment,omitempty"`
+	Processes   map[string]ProcessType `json:"processes,omitempty"`
 }
 
 type ProcessType struct {
-	Cmd   []string     `json:"cmd"`
-	Ports ProcessPorts `json:"ports"`
+	Cmd   []string     `json:"cmd,omitempty"`
+	Ports ProcessPorts `json:"ports,omitempty"`
 }
 
 type ProcessPorts struct {
-	TCP int `json:"tcp"`
-	UDP int `json:"udp"`
+	TCP int `json:"tcp,omitempty"`
+	UDP int `json:"udp,omitempty"`
 }
 
 type ReleaseRepo struct {

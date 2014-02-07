@@ -1,16 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/codegangsta/martini"
+	"github.com/codegangsta/martini-contrib/binding"
 	"github.com/codegangsta/martini-contrib/render"
 )
 
 func main() {
-	// create formation
-	// update formation
-	// delete formation
 }
 
 func appHandler() http.Handler {
@@ -24,36 +23,50 @@ func appHandler() http.Handler {
 	appRepo := NewAppRepo()
 	artifactRepo := NewArtifactRepo()
 	releaseRepo := NewReleaseRepo(artifactRepo)
+	formationRepo := NewFormationRepo()
 	m.Map(appRepo)
 	m.Map(artifactRepo)
 	m.Map(releaseRepo)
+	m.Map(formationRepo)
 
-	crud("apps", App{}, appRepo, r)
+	getAppMiddleware := crud("apps", App{}, appRepo, r)
+	getReleaseMiddleware := crud("releases", Release{}, releaseRepo, r)
 	crud("artifacts", Artifact{}, artifactRepo, r)
-	crud("releases", Release{}, releaseRepo, r)
+
+	r.Put("/apps/:apps_id/formations/:releases_id", func() { fmt.Println("BOOM") }, getAppMiddleware, getReleaseMiddleware, binding.Bind(Formation{}), putFormation)
+	r.Get("/apps/:apps_id/formations/:releases_id", getFormationMiddleware, getFormation)
 
 	return m
 }
 
-func createFormation() {
-	// lookup app
-	// lookup release
-	// validate
-	// assign id
-	// save to etcd
-	// return
+func putFormation(formation Formation, app *App, release *Release, repo *FormationRepo, r render.Render) {
+	formation.AppID = app.ID
+	formation.ReleaseID = release.ID
+	err := repo.Add(&formation)
+	if err != nil {
+		// TODO: 500/log error
+	}
+	r.JSON(200, &formation)
 }
 
-func updateFormation() {
-	// lookup formation
-	// lookup release
-	// validate
-	// save to etcd
-	// return
+func getFormationMiddleware(c martini.Context, params martini.Params, repo *FormationRepo, w http.ResponseWriter) {
+	formation, err := repo.Get(params["apps_id"], params["releases_id"])
+	if err != nil {
+		if err == ErrNotFound {
+			w.WriteHeader(404)
+			return
+		}
+		// TODO: 500/log error
+		return
+	}
+	c.Map(formation)
+}
+
+func getFormation(formation *Formation, r render.Render) {
+	r.JSON(200, formation)
 }
 
 func deleteFormation() {
-	// save to etcd
 }
 
 /*

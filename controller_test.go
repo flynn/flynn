@@ -23,12 +23,25 @@ func (s *S) SetUpSuite(c *C) {
 	s.srv = httptest.NewServer(appHandler())
 }
 
-func (s *S) Post(path string, data interface{}) (*http.Response, error) {
+func (s *S) send(method, path string, data interface{}) (*http.Response, error) {
 	buf, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
-	return http.Post(s.srv.URL+path, "application/json", bytes.NewBuffer(buf))
+	req, err := http.NewRequest(method, s.srv.URL+path, bytes.NewBuffer(buf))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return http.DefaultClient.Do(req)
+}
+
+func (s *S) Post(path string, data interface{}) (*http.Response, error) {
+	return s.send("POST", path, data)
+}
+
+func (s *S) Put(path string, data interface{}) (*http.Response, error) {
+	return s.send("PUT", path, data)
 }
 
 func (s *S) Get(path string, data interface{}) (*http.Response, error) {
@@ -44,20 +57,26 @@ func (s *S) Get(path string, data interface{}) (*http.Response, error) {
 	return res, json.NewDecoder(res.Body).Decode(data)
 }
 
-func (s *S) TestCreateApp(c *C) {
-	res, err := s.Post("/apps", &App{Name: "foo"})
+func (s *S) createTestApp(c *C, in *App) *App {
+	res, err := s.Post("/apps", in)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 
-	app := &App{}
-	err = json.NewDecoder(res.Body).Decode(app)
+	out := &App{}
+	err = json.NewDecoder(res.Body).Decode(out)
 	res.Body.Close()
 	c.Assert(err, IsNil)
+
+	return out
+}
+
+func (s *S) TestCreateApp(c *C) {
+	app := s.createTestApp(c, &App{Name: "foo"})
 	c.Assert(app.Name, Equals, "foo")
 	c.Assert(app.ID, Not(Equals), "")
 
 	gotApp := &App{}
-	res, err = s.Get("/apps/"+app.ID, gotApp)
+	res, err := s.Get("/apps/"+app.ID, gotApp)
 	c.Assert(err, IsNil)
 	c.Assert(gotApp, DeepEquals, app)
 
@@ -95,9 +114,9 @@ func (s *S) TestCreateArtifact(c *C) {
 	c.Assert(res.StatusCode, Equals, 404)
 }
 
-func (s *S) TestCreateRelease(c *C) {
+func (s *S) createTestRelease(c *C, in *Release) *Release {
 	artifactID := s.createTestArtifact(c, &Artifact{}).ID
-	in := &Release{ArtifactID: artifactID}
+	in.ArtifactID = artifactID
 	res, err := s.Post("/releases", in)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
@@ -106,13 +125,42 @@ func (s *S) TestCreateRelease(c *C) {
 	err = json.NewDecoder(res.Body).Decode(out)
 	res.Body.Close()
 	c.Assert(err, IsNil)
+
+	return out
+}
+
+func (s *S) TestCreateRelease(c *C) {
+	in := &Release{}
+	out := s.createTestRelease(c, in)
 	c.Assert(out.ArtifactID, Equals, in.ArtifactID)
 
 	gotRelease := &Release{}
-	res, err = s.Get("/releases/"+out.ID, gotRelease)
+	res, err := s.Get("/releases/"+out.ID, gotRelease)
 	c.Assert(err, IsNil)
 	c.Assert(gotRelease, DeepEquals, out)
 
 	res, err = s.Get("/releases/fail"+out.ID, gotRelease)
 	c.Assert(res.StatusCode, Equals, 404)
+}
+
+func (s *S) TestCreateFormation(c *C) {
+	release := s.createTestRelease(c, &Release{})
+	app := s.createTestApp(c, &App{Name: "asdf1"})
+
+	path := "/apps/" + app.ID + "/formations/" + release.ID
+	in := &Formation{}
+	res, err := s.Put(path, in)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	out := &Formation{}
+	err = json.NewDecoder(res.Body).Decode(out)
+	res.Body.Close()
+	c.Assert(err, IsNil)
+	c.Assert(out.AppID, Equals, app.ID)
+	c.Assert(out.ReleaseID, Equals, release.ID)
+
+	gotFormation := &Formation{}
+	res, err = s.Get(path, gotFormation)
+	c.Assert(err, IsNil)
+	c.Assert(gotFormation, DeepEquals, out)
 }

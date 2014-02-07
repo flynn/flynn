@@ -14,8 +14,9 @@ type Repository interface {
 	Get(id string) (interface{}, error)
 }
 
-func crud(resource string, example interface{}, repo Repository, r martini.Router) {
+func crud(resource string, example interface{}, repo Repository, r martini.Router) interface{} {
 	resourceType := reflect.TypeOf(example)
+	resourcePtr := reflect.PtrTo(resourceType)
 
 	r.Post("/"+resource, func(req *http.Request, r render.Render) {
 		thing := reflect.New(resourceType).Interface()
@@ -34,8 +35,8 @@ func crud(resource string, example interface{}, repo Repository, r martini.Route
 		r.JSON(200, thing)
 	})
 
-	r.Get("/"+resource+"/:id", func(params martini.Params, r render.Render, w http.ResponseWriter) {
-		thing, err := repo.Get(params["id"])
+	lookup := func(c martini.Context, params martini.Params, req *http.Request, w http.ResponseWriter) {
+		thing, err := repo.Get(params[resource+"_id"])
 		if err != nil {
 			if err == ErrNotFound {
 				w.WriteHeader(404)
@@ -43,6 +44,12 @@ func crud(resource string, example interface{}, repo Repository, r martini.Route
 			}
 			// TODO: 500/log error
 		}
-		r.JSON(200, thing)
+		c.Map(thing)
+	}
+
+	r.Get("/"+resource+"/:"+resource+"_id", lookup, func(c martini.Context, r render.Render, w http.ResponseWriter) {
+		r.JSON(200, c.Get(resourcePtr).Interface())
 	})
+
+	return lookup
 }

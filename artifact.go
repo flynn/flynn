@@ -5,10 +5,10 @@ import (
 )
 
 type Artifact struct {
-	ID     string `json:"id"`
-	Type   string `json:"type"`
-	BaseID string `json:"base"`
-	URL    string `json:"url"`
+	ID     string `json:"id,omitempty"`
+	Type   string `json:"type,omitempty"`
+	BaseID string `json:"base,omitempty"`
+	URL    string `json:"url,omitempty"`
 }
 
 type ArtifactRepo struct {

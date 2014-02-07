@@ -6,8 +6,8 @@ import (
 )
 
 type App struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
 type AppRepo struct {
@@ -58,6 +58,5 @@ func (r *AppRepo) Get(id string) (interface{}, error) {
 	if app == nil {
 		return nil, ErrNotFound
 	}
-	appCopy := *app
-	return &appCopy, nil
+	return app, nil
 }
