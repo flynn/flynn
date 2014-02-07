@@ -41,7 +41,7 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		filepath := storagepath + r.RequestURI
 		switch r.Method {
-		case "GET":
+		case "HEAD", "GET":
 			file, err := os.Open(filepath)
 			if err != nil {
 				errorResponse(w, err)
