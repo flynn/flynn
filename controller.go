@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/codegangsta/martini"
 	"github.com/codegangsta/martini-contrib/binding"
 	"github.com/codegangsta/martini-contrib/render"
+	"github.com/flynn/rpcplus"
 )
 
 func main() {
@@ -23,7 +23,7 @@ func appHandler() http.Handler {
 	appRepo := NewAppRepo()
 	artifactRepo := NewArtifactRepo()
 	releaseRepo := NewReleaseRepo(artifactRepo)
-	formationRepo := NewFormationRepo()
+	formationRepo := NewFormationRepo(appRepo, releaseRepo)
 	m.Map(appRepo)
 	m.Map(artifactRepo)
 	m.Map(releaseRepo)
@@ -33,11 +33,21 @@ func appHandler() http.Handler {
 	getReleaseMiddleware := crud("releases", Release{}, releaseRepo, r)
 	crud("artifacts", Artifact{}, artifactRepo, r)
 
-	r.Put("/apps/:apps_id/formations/:releases_id", func() { fmt.Println("BOOM") }, getAppMiddleware, getReleaseMiddleware, binding.Bind(Formation{}), putFormation)
+	r.Put("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getReleaseMiddleware, binding.Bind(Formation{}), putFormation)
 	r.Get("/apps/:apps_id/formations/:releases_id", getFormationMiddleware, getFormation)
 	r.Delete("/apps/:apps_id/formations/:releases_id", getFormationMiddleware, deleteFormation)
 
-	return m
+	return rpcMuxHandler(m, rpcHandler(formationRepo))
+}
+
+func rpcMuxHandler(main http.Handler, rpch http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == rpcplus.DefaultRPCPath {
+			rpch.ServeHTTP(w, r)
+		} else {
+			main.ServeHTTP(w, r)
+		}
+	})
 }
 
 func putFormation(formation Formation, app *App, release *Release, repo *FormationRepo, r render.Render) {
