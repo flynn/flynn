@@ -35,6 +35,7 @@ func appHandler() http.Handler {
 
 	r.Put("/apps/:apps_id/formations/:releases_id", func() { fmt.Println("BOOM") }, getAppMiddleware, getReleaseMiddleware, binding.Bind(Formation{}), putFormation)
 	r.Get("/apps/:apps_id/formations/:releases_id", getFormationMiddleware, getFormation)
+	r.Delete("/apps/:apps_id/formations/:releases_id", getFormationMiddleware, deleteFormation)
 
 	return m
 }
@@ -66,7 +67,13 @@ func getFormation(formation *Formation, r render.Render) {
 	r.JSON(200, formation)
 }
 
-func deleteFormation() {
+func deleteFormation(formation *Formation, repo *FormationRepo, w http.ResponseWriter) {
+	err := repo.Remove(formation.AppID, formation.ReleaseID)
+	if err != nil {
+		// TODO: 500/log error
+		return
+	}
+	w.WriteHeader(200)
 }
 
 /*

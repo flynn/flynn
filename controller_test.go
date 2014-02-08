@@ -57,6 +57,14 @@ func (s *S) Get(path string, data interface{}) (*http.Response, error) {
 	return res, json.NewDecoder(res.Body).Decode(data)
 }
 
+func (s *S) Delete(path string) (*http.Response, error) {
+	req, err := http.NewRequest("DELETE", s.srv.URL+path, nil)
+	if err != nil {
+		return nil, err
+	}
+	return http.DefaultClient.Do(req)
+}
+
 func (s *S) createTestApp(c *C, in *App) *App {
 	res, err := s.Post("/apps", in)
 	c.Assert(err, IsNil)
@@ -147,20 +155,52 @@ func (s *S) TestCreateFormation(c *C) {
 	release := s.createTestRelease(c, &Release{})
 	app := s.createTestApp(c, &App{Name: "asdf1"})
 
-	path := "/apps/" + app.ID + "/formations/" + release.ID
-	in := &Formation{}
-	res, err := s.Put(path, in)
-	c.Assert(err, IsNil)
-	c.Assert(res.StatusCode, Equals, 200)
-	out := &Formation{}
-	err = json.NewDecoder(res.Body).Decode(out)
-	res.Body.Close()
-	c.Assert(err, IsNil)
+	in := &Formation{ReleaseID: release.ID, AppID: app.ID}
+	out := s.createTestFormation(c, in)
 	c.Assert(out.AppID, Equals, app.ID)
 	c.Assert(out.ReleaseID, Equals, release.ID)
 
 	gotFormation := &Formation{}
-	res, err = s.Get(path, gotFormation)
+	path := formationPath(app.ID, release.ID)
+	res, err := s.Get(path, gotFormation)
 	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(gotFormation, DeepEquals, out)
+
+	res, err = s.Get(path+"fail", gotFormation)
+	c.Assert(res.StatusCode, Equals, 404)
+}
+
+func (s *S) createTestFormation(c *C, formation *Formation) *Formation {
+	path := formationPath(formation.AppID, formation.ReleaseID)
+	formation.AppID = ""
+	formation.ReleaseID = ""
+	res, err := s.Put(path, formation)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	out := &Formation{}
+	err = json.NewDecoder(res.Body).Decode(out)
+	res.Body.Close()
+	c.Assert(err, IsNil)
+
+	return out
+}
+
+func formationPath(appID, releaseID string) string {
+	return "/apps/" + appID + "/formations/" + releaseID
+}
+
+func (s *S) TestDeleteFormation(c *C) {
+	release := s.createTestRelease(c, &Release{})
+	app := s.createTestApp(c, &App{Name: "asdf2"})
+
+	out := s.createTestFormation(c, &Formation{ReleaseID: release.ID, AppID: app.ID})
+	path := formationPath(app.ID, release.ID)
+	res, err := s.Delete(path)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	res, err = s.Get(path, out)
+	c.Assert(res.StatusCode, Equals, 404)
 }

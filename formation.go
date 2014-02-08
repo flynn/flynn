@@ -46,3 +46,10 @@ func (r *FormationRepo) Get(appID, releaseID string) (*Formation, error) {
 	}
 	return formation, nil
 }
+
+func (r *FormationRepo) Remove(appID, releaseID string) error {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	delete(r.appFormations, formationKey{appID, releaseID})
+	return nil
+}
