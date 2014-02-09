@@ -512,7 +512,7 @@ func (c *Client) UnregisterAll() error {
 	c.l.Lock()
 	addrs := make([]string, 0, len(c.heartbeats))
 	names := make([]string, 0, len(c.heartbeats))
-	for addr, _ := range c.heartbeats {
+	for addr := range c.heartbeats {
 		addrs = append(addrs, addr)
 		names = append(names, c.names[addr])
 	}
