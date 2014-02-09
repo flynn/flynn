@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 
+	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/rpcplus"
 	rpc "github.com/flynn/rpcplus/comborpc"
 )
@@ -17,7 +18,7 @@ type ControllerRPC struct {
 }
 
 func (s *ControllerRPC) StreamFormations(arg struct{}, stream rpcplus.Stream) error {
-	ch := make(chan *ExpandedFormation)
+	ch := make(chan *ct.ExpandedFormation)
 	s.formations.Subscribe(ch)
 	defer func() {
 		go func() {

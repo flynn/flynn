@@ -2,14 +2,21 @@ package main
 
 import (
 	"net/http"
+	"os"
 
 	"github.com/codegangsta/martini"
 	"github.com/codegangsta/martini-contrib/binding"
 	"github.com/codegangsta/martini-contrib/render"
+	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/rpcplus"
 )
 
 func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3000"
+	}
+	http.ListenAndServe(":"+port, appHandler())
 }
 
 func appHandler() http.Handler {
@@ -29,11 +36,11 @@ func appHandler() http.Handler {
 	m.Map(releaseRepo)
 	m.Map(formationRepo)
 
-	getAppMiddleware := crud("apps", App{}, appRepo, r)
-	getReleaseMiddleware := crud("releases", Release{}, releaseRepo, r)
-	crud("artifacts", Artifact{}, artifactRepo, r)
+	getAppMiddleware := crud("apps", ct.App{}, appRepo, r)
+	getReleaseMiddleware := crud("releases", ct.Release{}, releaseRepo, r)
+	crud("artifacts", ct.Artifact{}, artifactRepo, r)
 
-	r.Put("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getReleaseMiddleware, binding.Bind(Formation{}), putFormation)
+	r.Put("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getReleaseMiddleware, binding.Bind(ct.Formation{}), putFormation)
 	r.Get("/apps/:apps_id/formations/:releases_id", getFormationMiddleware, getFormation)
 	r.Delete("/apps/:apps_id/formations/:releases_id", getFormationMiddleware, deleteFormation)
 
@@ -50,7 +57,7 @@ func rpcMuxHandler(main http.Handler, rpch http.Handler) http.Handler {
 	})
 }
 
-func putFormation(formation Formation, app *App, release *Release, repo *FormationRepo, r render.Render) {
+func putFormation(formation ct.Formation, app *ct.App, release *ct.Release, repo *FormationRepo, r render.Render) {
 	formation.AppID = app.ID
 	formation.ReleaseID = release.ID
 	err := repo.Add(&formation)
@@ -73,11 +80,11 @@ func getFormationMiddleware(c martini.Context, params martini.Params, repo *Form
 	c.Map(formation)
 }
 
-func getFormation(formation *Formation, r render.Render) {
+func getFormation(formation *ct.Formation, r render.Render) {
 	r.JSON(200, formation)
 }
 
-func deleteFormation(formation *Formation, repo *FormationRepo, w http.ResponseWriter) {
+func deleteFormation(formation *ct.Formation, repo *FormationRepo, w http.ResponseWriter) {
 	err := repo.Remove(formation.AppID, formation.ReleaseID)
 	if err != nil {
 		// TODO: 500/log error

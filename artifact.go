@@ -2,30 +2,25 @@ package main
 
 import (
 	"sync"
+
+	ct "github.com/flynn/flynn-controller/types"
 )
 
-type Artifact struct {
-	ID     string `json:"id,omitempty"`
-	Type   string `json:"type,omitempty"`
-	BaseID string `json:"base,omitempty"`
-	URL    string `json:"url,omitempty"`
-}
-
 type ArtifactRepo struct {
-	artifactIDs map[string]*Artifact
-	artifacts   []*Artifact
+	artifactIDs map[string]*ct.Artifact
+	artifacts   []*ct.Artifact
 	mtx         sync.RWMutex
 }
 
 func NewArtifactRepo() *ArtifactRepo {
-	return &ArtifactRepo{artifactIDs: make(map[string]*Artifact)}
+	return &ArtifactRepo{artifactIDs: make(map[string]*ct.Artifact)}
 }
 
 // - validate
 // - set id
 // - persist
 func (r *ArtifactRepo) Add(data interface{}) error {
-	artifact := data.(*Artifact)
+	artifact := data.(*ct.Artifact)
 	// TODO: actually validate
 	artifact.ID = uuid()
 	r.mtx.Lock()

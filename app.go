@@ -3,24 +3,21 @@ package main
 import (
 	"errors"
 	"sync"
+
+	ct "github.com/flynn/flynn-controller/types"
 )
 
-type App struct {
-	ID   string `json:"id,omitempty"`
-	Name string `json:"name,omitempty"`
-}
-
 type AppRepo struct {
-	appNames map[string]*App
-	appIDs   map[string]*App
-	apps     []*App
+	appNames map[string]*ct.App
+	appIDs   map[string]*ct.App
+	apps     []*ct.App
 	mtx      sync.RWMutex
 }
 
 func NewAppRepo() *AppRepo {
 	return &AppRepo{
-		appNames: make(map[string]*App),
-		appIDs:   make(map[string]*App),
+		appNames: make(map[string]*ct.App),
+		appIDs:   make(map[string]*ct.App),
 	}
 }
 
@@ -29,7 +26,7 @@ func NewAppRepo() *AppRepo {
 // - check name doesn't exist
 // - persist
 func (r *AppRepo) Add(data interface{}) error {
-	app := data.(*App)
+	app := data.(*ct.App)
 	// TODO: actually validate
 	if app.Name == "" {
 		return errors.New("controller: app name must not be blank")

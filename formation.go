@@ -2,39 +2,29 @@ package main
 
 import (
 	"sync"
+
+	ct "github.com/flynn/flynn-controller/types"
 )
-
-type Formation struct {
-	AppID     string         `json:"app,omitempty"`
-	ReleaseID string         `json:"release,omitempty"`
-	Processes map[string]int `json:"processes,omitempty"`
-}
-
-type ExpandedFormation struct {
-	App       *App
-	Release   *Release
-	Processes map[string]int
-}
 
 type formationKey struct {
 	AppID, ReleaseID string
 }
 
 type FormationRepo struct {
-	appFormations map[formationKey]*Formation
-	formations    []*Formation
+	appFormations map[formationKey]*ct.Formation
+	formations    []*ct.Formation
 	apps          *AppRepo
 	releases      *ReleaseRepo
 	mtx           sync.RWMutex
 
-	subscriptions map[chan<- *ExpandedFormation]struct{}
+	subscriptions map[chan<- *ct.ExpandedFormation]struct{}
 	subMtx        sync.RWMutex
 }
 
 func NewFormationRepo(appRepo *AppRepo, releaseRepo *ReleaseRepo) *FormationRepo {
 	return &FormationRepo{
-		appFormations: make(map[formationKey]*Formation),
-		subscriptions: make(map[chan<- *ExpandedFormation]struct{}),
+		appFormations: make(map[formationKey]*ct.Formation),
+		subscriptions: make(map[chan<- *ct.ExpandedFormation]struct{}),
 		apps:          appRepo,
 		releases:      releaseRepo,
 	}
@@ -42,7 +32,7 @@ func NewFormationRepo(appRepo *AppRepo, releaseRepo *ReleaseRepo) *FormationRepo
 
 // - validate
 // - persist
-func (r *FormationRepo) Add(formation *Formation) error {
+func (r *FormationRepo) Add(formation *ct.Formation) error {
 	// TODO: validate process types
 
 	r.mtx.Lock()
@@ -53,7 +43,7 @@ func (r *FormationRepo) Add(formation *Formation) error {
 	return nil
 }
 
-func (r *FormationRepo) Get(appID, releaseID string) (*Formation, error) {
+func (r *FormationRepo) Get(appID, releaseID string) (*ct.Formation, error) {
 	r.mtx.RLock()
 	defer r.mtx.RUnlock()
 
@@ -68,11 +58,11 @@ func (r *FormationRepo) Remove(appID, releaseID string) error {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 	delete(r.appFormations, formationKey{appID, releaseID})
-	go r.publish(&Formation{AppID: appID, ReleaseID: releaseID})
+	go r.publish(&ct.Formation{AppID: appID, ReleaseID: releaseID})
 	return nil
 }
 
-func (r *FormationRepo) publish(formation *Formation) {
+func (r *FormationRepo) publish(formation *ct.Formation) {
 	app, err := r.apps.Get(formation.AppID)
 	if err != nil {
 		// TODO: log error
@@ -84,9 +74,9 @@ func (r *FormationRepo) publish(formation *Formation) {
 		return
 	}
 
-	f := &ExpandedFormation{
-		App:       app.(*App),
-		Release:   release.(*Release),
+	f := &ct.ExpandedFormation{
+		App:       app.(*ct.App),
+		Release:   release.(*ct.Release),
 		Processes: formation.Processes,
 	}
 
@@ -98,13 +88,13 @@ func (r *FormationRepo) publish(formation *Formation) {
 	}
 }
 
-func (r *FormationRepo) Subscribe(ch chan<- *ExpandedFormation) {
+func (r *FormationRepo) Subscribe(ch chan<- *ct.ExpandedFormation) {
 	r.subMtx.Lock()
 	r.subscriptions[ch] = struct{}{}
 	r.subMtx.Unlock()
 }
 
-func (r *FormationRepo) Unsubscribe(ch chan<- *ExpandedFormation) {
+func (r *FormationRepo) Unsubscribe(ch chan<- *ct.ExpandedFormation) {
 	r.subMtx.Lock()
 	delete(r.subscriptions, ch)
 	r.subMtx.Unlock()
