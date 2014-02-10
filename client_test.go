@@ -122,6 +122,7 @@ func runDiscoverdServer() func() {
 	doneCh := make(chan struct{})
 	go func() {
 		cmd := exec.Command("discoverd")
+		cmd.Env = append(os.Environ(), "EXTERNAL_IP=127.0.0.1")
 		stderr, _ := cmd.StderrPipe()
 		if err := cmd.Start(); err != nil {
 			panic(err)
@@ -350,7 +351,7 @@ func TestRegisterWithSet(t *testing.T) {
 	if len(set.Services()) != 1 {
 		t.Fatal("There should only be one other service")
 	}
-	if set.Services()[0].Addr != ":1111" {
+	if set.Services()[0].Addr != "127.0.0.1:1111" {
 		t.Fatal("Set contains the wrong service")
 	}
 
@@ -372,7 +373,7 @@ func TestServiceAge(t *testing.T) {
 	checkOldest := func(addr string) {
 		services, err := client.Services(serviceName, 1)
 		assert(err, t)
-		if services[0].Addr != addr {
+		if services[0].Addr != "127.0.0.1"+addr {
 			t.Fatal("Oldest service is not first in Services() slice")
 		}
 	}
@@ -412,20 +413,20 @@ func TestLeaderChannel(t *testing.T) {
 
 	assert(client.Register(serviceName, ":2222"), t)
 
-	if (<-leader).Addr != ":1111" {
+	if (<-leader).Addr != "127.0.0.1:1111" {
 		t.Fatal("Incorrect leader")
 	}
 
 	assert(client.Register(serviceName, ":3333"), t)
 	assert(client.Unregister(serviceName, ":1111"), t)
 
-	if (<-leader).Addr != ":2222" {
+	if (<-leader).Addr != "127.0.0.1:2222" {
 		t.Fatal("Incorrect leader", leader)
 	}
 
 	assert(client.Unregister(serviceName, ":2222"), t)
 
-	if (<-leader).Addr != ":3333" {
+	if (<-leader).Addr != "127.0.0.1:3333" {
 		t.Fatal("Incorrect leader")
 	}
 
@@ -454,7 +455,7 @@ func TestRegisterWithSetLeaderSelf(t *testing.T) {
 
 	assert(client.Register(serviceName, ":3333"), t)
 
-	if (<-leader).Addr != ":1111" {
+	if (<-leader).Addr != "127.0.0.1:1111" {
 		t.Fatal("Incorrect leader")
 	}
 
@@ -484,7 +485,7 @@ func TestRegisterAndStandby(t *testing.T) {
 	assert(client.Unregister(serviceName, ":1111"), t)
 
 	leader := <-standbyCh
-	if leader.Addr != ":2222" {
+	if leader.Addr != "127.0.0.1:2222" {
 		t.Fatal("Incorrect leader", leader)
 	}
 
