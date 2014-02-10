@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -61,9 +62,11 @@ func ListenAndServe(server *Agent) error {
 	return http.ListenAndServe(server.Address, nil)
 }
 
+var externalIP = os.Getenv("EXTERNAL_IP")
+
 func expandAddr(addr string) string {
 	if addr[0] == ':' {
-		return os.Getenv("EXTERNAL_IP") + addr
+		return externalIP + addr
 	}
 	return addr
 }
@@ -88,7 +91,14 @@ func (s *Agent) Subscribe(args *Args, stream rpcplus.Stream) error {
 }
 
 func (s *Agent) Register(args *Args, ret *string) error {
+	if len(args.Addr) == 0 {
+		return errors.New("discoverd: Addr must be set")
+	}
 	addr := expandAddr(args.Addr)
+	if addr[0] == ':' {
+		return errors.New("discoverd: Addr must have address or EXTERNAL_IP must be set")
+	}
+
 	err := s.Backend.Register(args.Name, addr, args.Attrs)
 	if err != nil {
 		log.Println("Register: error:", err)
