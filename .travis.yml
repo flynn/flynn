@@ -19,5 +19,7 @@ notifications:
       - "chat.freenode.net#flynn"
     use_notice: true
     skip_join: true
+    on_success: change
+    on_failure: always
     template:
       - "%{repository}/%{branch} - %{commit}: %{message} %{build_url}"
