@@ -489,6 +489,9 @@ func (c *Client) RegisterWithAttributes(name, addr string, attributes map[string
 	return nil
 }
 
+// ErrUnknownRegistration is returned by Unregister when no registration is found.
+var ErrUnknownRegistration = errors.New("discover: unknown registration")
+
 // Unregister will explicitly unregister a service and as such it will stop any heartbeats
 // being sent from this client.
 func (c *Client) Unregister(name, addr string) error {
@@ -497,7 +500,12 @@ func (c *Client) Unregister(name, addr string) error {
 		Addr: addr,
 	}
 	c.l.Lock()
-	close(c.heartbeats[args.Addr])
+	ch, ok := c.heartbeats[args.Addr]
+	if !ok {
+		c.l.Unlock()
+		return ErrUnknownRegistration
+	}
+	close(ch)
 	delete(c.heartbeats, args.Addr)
 	c.l.Unlock()
 	err := c.client.Call("Agent.Unregister", args, &struct{}{})
