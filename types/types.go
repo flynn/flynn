@@ -92,7 +92,7 @@ type AddJobsRes struct {
 	Success bool
 }
 
-type RuleOperator int
+type RuleOperator uint8
 
 const (
 	OpEq RuleOperator = iota
