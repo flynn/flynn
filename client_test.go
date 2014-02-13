@@ -411,14 +411,18 @@ func TestLeaderChannel(t *testing.T) {
 		}
 	}()
 
-	assert(client.Register(serviceName, ":2222"), t)
-
 	if (<-leader).Addr != "127.0.0.1:1111" {
 		t.Fatal("Incorrect leader")
 	}
 
-	assert(client.Register(serviceName, ":3333"), t)
 	assert(client.Unregister(serviceName, ":1111"), t)
+
+	if (<-leader) != nil {
+		t.Fatal("Incorrect leader")
+	}
+
+	assert(client.Register(serviceName, ":2222"), t)
+	assert(client.Register(serviceName, ":3333"), t)
 
 	if (<-leader).Addr != "127.0.0.1:2222" {
 		t.Fatal("Incorrect leader", leader)
