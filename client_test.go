@@ -127,16 +127,14 @@ func runDiscoverdServer() func() {
 		if err := cmd.Start(); err != nil {
 			panic(err)
 		}
-		if os.Getenv("DEBUG") != "" {
-			go func() {
+		cmdDone := make(chan error)
+		go func() {
+			if os.Getenv("DEBUG") != "" {
 				scanner := bufio.NewScanner(stderr)
 				for scanner.Scan() {
 					log.Println("discoverd:", scanner.Text())
 				}
-			}()
-		}
-		cmdDone := make(chan error)
-		go func() {
+			}
 			cmdDone <- cmd.Wait()
 		}()
 		select {
