@@ -227,7 +227,7 @@ func (s *serviceSet) Leaders() chan *Service {
 		leader := s.Leader()
 		leaders <- leader
 		for update := range updates {
-			if !update.Online && update.Addr == leader.Addr {
+			if (!update.Online && update.Addr == leader.Addr) || (update.Online && leader == nil) {
 				leader = s.Leader()
 				leaders <- leader
 			}
