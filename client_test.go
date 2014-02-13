@@ -218,8 +218,8 @@ func TestNewAttributes(t *testing.T) {
 	assert(client.RegisterWithAttributes(serviceName, ":1111", map[string]string{"foo": "baz"}), t)
 
 	<-set.Watch(true, true)
-	if set.Services()[0].Attrs["foo"] != "baz" {
-		t.Fatal("Attribute not set on re-registered service as 'baz'")
+	if s := set.Services()[0]; s.Attrs["foo"] != "baz" {
+		t.Fatal(`Expected attribute set on re-registered service to be "baz", not %q`, s.Attrs["foo"])
 	}
 
 	assert(set.Close(), t)
@@ -268,8 +268,8 @@ func TestSelecting(t *testing.T) {
 	assert(client.RegisterWithAttributes(serviceName, ":2222", map[string]string{"foo": "qux", "id": "2"}), t)
 	assert(client.RegisterWithAttributes(serviceName, ":3333", map[string]string{"foo": "qux", "id": "3"}), t)
 
-	if len(set.Select(map[string]string{"id": "3"})) != 1 {
-		t.Fatal("Select not returning proper services")
+	if s := set.Select(map[string]string{"id": "3"}); len(s) != 1 {
+		t.Fatal("Expected one service, got: %#v", s)
 	}
 
 	assert(set.Close(), t)
