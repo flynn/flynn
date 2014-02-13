@@ -21,6 +21,9 @@ before_install:
 
 install: true
 
+env:
+  - DEBUG=1
+
 script:
   - godep go test -race
   - godep go test -cover
