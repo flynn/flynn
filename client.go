@@ -54,7 +54,7 @@ type ServiceSet interface {
 	// Leaders returns a channel that will first produce the current leader service, then any following
 	// leader service as the leader of the set changes. Every call to Leaders produces a new watch on
 	// the set, and once you get a channel from Leaders, you *must* always be receiving until the
-	// ServiceSet is closed.
+	// ServiceSet is closed. A nil value will be sent if there are no members of the set.
 	Leaders() chan *Service
 
 	// Services returns an array of Service objects in the set, sorted by age. This means that most
