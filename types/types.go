@@ -3,6 +3,7 @@ package types
 type ExpandedFormation struct {
 	App       *App
 	Release   *Release
+	Artifact  *Artifact
 	Processes map[string]int
 }
 

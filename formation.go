@@ -15,18 +15,20 @@ type FormationRepo struct {
 	formations    []*ct.Formation
 	apps          *AppRepo
 	releases      *ReleaseRepo
+	artifacts     *ArtifactRepo
 	mtx           sync.RWMutex
 
 	subscriptions map[chan<- *ct.ExpandedFormation]struct{}
 	subMtx        sync.RWMutex
 }
 
-func NewFormationRepo(appRepo *AppRepo, releaseRepo *ReleaseRepo) *FormationRepo {
+func NewFormationRepo(appRepo *AppRepo, releaseRepo *ReleaseRepo, artifactRepo *ArtifactRepo) *FormationRepo {
 	return &FormationRepo{
 		appFormations: make(map[formationKey]*ct.Formation),
 		subscriptions: make(map[chan<- *ct.ExpandedFormation]struct{}),
 		apps:          appRepo,
 		releases:      releaseRepo,
+		artifacts:     artifactRepo,
 	}
 }
 
@@ -73,10 +75,16 @@ func (r *FormationRepo) publish(formation *ct.Formation) {
 		// TODO: log error
 		return
 	}
+	artifact, err := r.artifacts.Get(release.(*ct.Release).ArtifactID)
+	if err != nil {
+		// TODO: log error
+		return
+	}
 
 	f := &ct.ExpandedFormation{
 		App:       app.(*ct.App),
 		Release:   release.(*ct.Release),
+		Artifact:  artifact.(*ct.Artifact),
 		Processes: formation.Processes,
 	}
 

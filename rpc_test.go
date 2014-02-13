@@ -26,6 +26,7 @@ func (s *S) TestFormationStreaming(c *C) {
 	c.Assert(out.Release, DeepEquals, release)
 	c.Assert(out.App, DeepEquals, app)
 	c.Assert(out.Processes, DeepEquals, formation.Processes)
+	c.Assert(out.Artifact, DeepEquals, &ct.Artifact{ID: release.ArtifactID})
 
 	s.Delete(formationPath(app.ID, release.ID))
 

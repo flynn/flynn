@@ -30,7 +30,7 @@ func appHandler() http.Handler {
 	appRepo := NewAppRepo()
 	artifactRepo := NewArtifactRepo()
 	releaseRepo := NewReleaseRepo(artifactRepo)
-	formationRepo := NewFormationRepo(appRepo, releaseRepo)
+	formationRepo := NewFormationRepo(appRepo, releaseRepo, artifactRepo)
 	m.Map(appRepo)
 	m.Map(artifactRepo)
 	m.Map(releaseRepo)
