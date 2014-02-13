@@ -1,6 +1,7 @@
 package main
 
 import (
+	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/rpcplus"
 	. "launchpad.net/gocheck"
 )
@@ -8,13 +9,13 @@ import (
 func (s *S) TestFormationStreaming(c *C) {
 	client, err := rpcplus.DialHTTP("tcp", s.srv.URL[7:])
 	c.Assert(err, IsNil)
-	ch := make(chan *ExpandedFormation)
+	ch := make(chan *ct.ExpandedFormation)
 
 	client.StreamGo("Controller.StreamFormations", struct{}{}, ch)
 
-	release := s.createTestRelease(c, &Release{})
-	app := s.createTestApp(c, &App{Name: "streamtest"})
-	formation := s.createTestFormation(c, &Formation{
+	release := s.createTestRelease(c, &ct.Release{})
+	app := s.createTestApp(c, &ct.App{Name: "streamtest"})
+	formation := s.createTestFormation(c, &ct.Formation{
 		ReleaseID: release.ID,
 		AppID:     app.ID,
 		Processes: map[string]int{"foo": 1},

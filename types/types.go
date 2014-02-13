@@ -32,7 +32,7 @@ type Artifact struct {
 	ID     string `json:"id,omitempty"`
 	Type   string `json:"type,omitempty"`
 	BaseID string `json:"base,omitempty"`
-	URL    string `json:"url,omitempty"`
+	URI    string `json:"uri,omitempty"`
 }
 
 type Formation struct {

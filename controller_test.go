@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	ct "github.com/flynn/flynn-controller/types"
 	. "launchpad.net/gocheck"
 )
 
@@ -65,12 +66,12 @@ func (s *S) Delete(path string) (*http.Response, error) {
 	return http.DefaultClient.Do(req)
 }
 
-func (s *S) createTestApp(c *C, in *App) *App {
+func (s *S) createTestApp(c *C, in *ct.App) *ct.App {
 	res, err := s.Post("/apps", in)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 
-	out := &App{}
+	out := &ct.App{}
 	err = json.NewDecoder(res.Body).Decode(out)
 	res.Body.Close()
 	c.Assert(err, IsNil)
@@ -79,11 +80,11 @@ func (s *S) createTestApp(c *C, in *App) *App {
 }
 
 func (s *S) TestCreateApp(c *C) {
-	app := s.createTestApp(c, &App{Name: "foo"})
+	app := s.createTestApp(c, &ct.App{Name: "foo"})
 	c.Assert(app.Name, Equals, "foo")
 	c.Assert(app.ID, Not(Equals), "")
 
-	gotApp := &App{}
+	gotApp := &ct.App{}
 	res, err := s.Get("/apps/"+app.ID, gotApp)
 	c.Assert(err, IsNil)
 	c.Assert(gotApp, DeepEquals, app)
@@ -92,12 +93,12 @@ func (s *S) TestCreateApp(c *C) {
 	c.Assert(res.StatusCode, Equals, 404)
 }
 
-func (s *S) createTestArtifact(c *C, in *Artifact) *Artifact {
+func (s *S) createTestArtifact(c *C, in *ct.Artifact) *ct.Artifact {
 	res, err := s.Post("/artifacts", in)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 
-	out := &Artifact{}
+	out := &ct.Artifact{}
 	err = json.NewDecoder(res.Body).Decode(out)
 	res.Body.Close()
 	c.Assert(err, IsNil)
@@ -106,14 +107,14 @@ func (s *S) createTestArtifact(c *C, in *Artifact) *Artifact {
 }
 
 func (s *S) TestCreateArtifact(c *C) {
-	in := &Artifact{Type: "docker-image", URL: "docker://flynn/host?id=adsf"}
+	in := &ct.Artifact{Type: "docker-image", URI: "docker://flynn/host?id=adsf"}
 	out := s.createTestArtifact(c, in)
 
 	c.Assert(out.Type, Equals, in.Type)
-	c.Assert(out.URL, Equals, in.URL)
+	c.Assert(out.URI, Equals, in.URI)
 	c.Assert(out.ID, Not(Equals), "")
 
-	gotArtifact := &Artifact{}
+	gotArtifact := &ct.Artifact{}
 	res, err := s.Get("/artifacts/"+out.ID, gotArtifact)
 	c.Assert(err, IsNil)
 	c.Assert(gotArtifact, DeepEquals, out)
@@ -122,14 +123,14 @@ func (s *S) TestCreateArtifact(c *C) {
 	c.Assert(res.StatusCode, Equals, 404)
 }
 
-func (s *S) createTestRelease(c *C, in *Release) *Release {
-	artifactID := s.createTestArtifact(c, &Artifact{}).ID
+func (s *S) createTestRelease(c *C, in *ct.Release) *ct.Release {
+	artifactID := s.createTestArtifact(c, &ct.Artifact{}).ID
 	in.ArtifactID = artifactID
 	res, err := s.Post("/releases", in)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 
-	out := &Release{}
+	out := &ct.Release{}
 	err = json.NewDecoder(res.Body).Decode(out)
 	res.Body.Close()
 	c.Assert(err, IsNil)
@@ -138,11 +139,11 @@ func (s *S) createTestRelease(c *C, in *Release) *Release {
 }
 
 func (s *S) TestCreateRelease(c *C) {
-	in := &Release{}
+	in := &ct.Release{}
 	out := s.createTestRelease(c, in)
 	c.Assert(out.ArtifactID, Equals, in.ArtifactID)
 
-	gotRelease := &Release{}
+	gotRelease := &ct.Release{}
 	res, err := s.Get("/releases/"+out.ID, gotRelease)
 	c.Assert(err, IsNil)
 	c.Assert(gotRelease, DeepEquals, out)
@@ -152,15 +153,15 @@ func (s *S) TestCreateRelease(c *C) {
 }
 
 func (s *S) TestCreateFormation(c *C) {
-	release := s.createTestRelease(c, &Release{})
-	app := s.createTestApp(c, &App{Name: "asdf1"})
+	release := s.createTestRelease(c, &ct.Release{})
+	app := s.createTestApp(c, &ct.App{Name: "asdf1"})
 
-	in := &Formation{ReleaseID: release.ID, AppID: app.ID}
+	in := &ct.Formation{ReleaseID: release.ID, AppID: app.ID}
 	out := s.createTestFormation(c, in)
 	c.Assert(out.AppID, Equals, app.ID)
 	c.Assert(out.ReleaseID, Equals, release.ID)
 
-	gotFormation := &Formation{}
+	gotFormation := &ct.Formation{}
 	path := formationPath(app.ID, release.ID)
 	res, err := s.Get(path, gotFormation)
 	c.Assert(err, IsNil)
@@ -171,7 +172,7 @@ func (s *S) TestCreateFormation(c *C) {
 	c.Assert(res.StatusCode, Equals, 404)
 }
 
-func (s *S) createTestFormation(c *C, formation *Formation) *Formation {
+func (s *S) createTestFormation(c *C, formation *ct.Formation) *ct.Formation {
 	path := formationPath(formation.AppID, formation.ReleaseID)
 	formation.AppID = ""
 	formation.ReleaseID = ""
@@ -179,7 +180,7 @@ func (s *S) createTestFormation(c *C, formation *Formation) *Formation {
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 
-	out := &Formation{}
+	out := &ct.Formation{}
 	err = json.NewDecoder(res.Body).Decode(out)
 	res.Body.Close()
 	c.Assert(err, IsNil)
@@ -192,10 +193,10 @@ func formationPath(appID, releaseID string) string {
 }
 
 func (s *S) TestDeleteFormation(c *C) {
-	release := s.createTestRelease(c, &Release{})
-	app := s.createTestApp(c, &App{Name: "asdf2"})
+	release := s.createTestRelease(c, &ct.Release{})
+	app := s.createTestApp(c, &ct.App{Name: "asdf2"})
 
-	out := s.createTestFormation(c, &Formation{ReleaseID: release.ID, AppID: app.ID})
+	out := s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
 	path := formationPath(app.ID, release.ID)
 	res, err := s.Delete(path)
 	c.Assert(err, IsNil)
