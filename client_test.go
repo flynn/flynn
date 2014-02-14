@@ -2,11 +2,13 @@ package discoverd
 
 import (
 	"bufio"
+	"io"
 	"log"
 	"math/rand"
 	"os"
 	"os/exec"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -90,11 +92,16 @@ func runEtcdServer() func() {
 	dataDir := "/tmp/" + name
 	go func() {
 		cmd := exec.Command("etcd", "-name", name, "-data-dir", dataDir)
+		stdout, _ := cmd.StdoutPipe()
+		stderr, _ := cmd.StderrPipe()
 		if err := cmd.Start(); err != nil {
 			panic(err)
 		}
 		cmdDone := make(chan error)
 		go func() {
+			if os.Getenv("DEBUG") != "" {
+				logOutput("etcd", stdout, stderr)
+			}
 			cmdDone <- cmd.Wait()
 		}()
 		select {
@@ -117,6 +124,21 @@ func runEtcdServer() func() {
 	}
 }
 
+func logOutput(name string, rs ...io.Reader) {
+	var wg sync.WaitGroup
+	wg.Add(len(rs))
+	for _, r := range rs {
+		go func(r io.Reader) {
+			scanner := bufio.NewScanner(r)
+			for scanner.Scan() {
+				log.Println(name+":", scanner.Text())
+			}
+			wg.Done()
+		}(r)
+	}
+	wg.Wait()
+}
+
 func runDiscoverdServer() func() {
 	killCh := make(chan struct{})
 	doneCh := make(chan struct{})
@@ -124,16 +146,14 @@ func runDiscoverdServer() func() {
 		cmd := exec.Command("discoverd")
 		cmd.Env = append(os.Environ(), "EXTERNAL_IP=127.0.0.1")
 		stderr, _ := cmd.StderrPipe()
+		stdout, _ := cmd.StdoutPipe()
 		if err := cmd.Start(); err != nil {
 			panic(err)
 		}
 		cmdDone := make(chan error)
 		go func() {
 			if os.Getenv("DEBUG") != "" {
-				scanner := bufio.NewScanner(stderr)
-				for scanner.Scan() {
-					log.Println("discoverd:", scanner.Text())
-				}
+				logOutput("discoverd", stderr, stdout)
 			}
 			cmdDone <- cmd.Wait()
 		}()
