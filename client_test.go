@@ -212,14 +212,21 @@ func TestNewAttributes(t *testing.T) {
 	set, err := client.NewServiceSet(serviceName)
 	assert(err, t)
 
+	done := make(chan struct{})
+	watch := set.Watch(false, false)
+	go func() {
+		defer close(done)
+		<-watch
+		<-watch
+		if s := set.Services()[0]; s.Attrs["foo"] != "baz" {
+			t.Fatalf(`Expected attribute set on re-registered service to be "baz", not %q`, s.Attrs["foo"])
+		}
+	}()
+
 	assert(client.RegisterWithAttributes(serviceName, ":1111", map[string]string{"foo": "bar"}), t)
 	assert(client.RegisterWithAttributes(serviceName, ":1111", map[string]string{"foo": "baz"}), t)
 
-	<-set.Watch(true, true)
-	if s := set.Services()[0]; s.Attrs["foo"] != "baz" {
-		t.Fatal(`Expected attribute set on re-registered service to be "baz", not %q`, s.Attrs["foo"])
-	}
-
+	<-done
 	assert(set.Close(), t)
 }
 
@@ -262,14 +269,23 @@ func TestSelecting(t *testing.T) {
 	set, err := client.NewServiceSet(serviceName)
 	assert(err, t)
 
+	done := make(chan struct{})
+	watch := set.Watch(false, false)
+	go func() {
+		defer close(done)
+		<-watch
+		<-watch
+		<-watch
+		if s := set.Select(map[string]string{"id": "3"}); len(s) != 1 {
+			t.Fatalf("Expected one service, got: %#v", s)
+		}
+	}()
+
 	assert(client.Register(serviceName, ":1111"), t)
 	assert(client.RegisterWithAttributes(serviceName, ":2222", map[string]string{"foo": "qux", "id": "2"}), t)
 	assert(client.RegisterWithAttributes(serviceName, ":3333", map[string]string{"foo": "qux", "id": "3"}), t)
 
-	if s := set.Select(map[string]string{"id": "3"}); len(s) != 1 {
-		t.Fatal("Expected one service, got: %#v", s)
-	}
-
+	<-done
 	assert(set.Close(), t)
 }
 
