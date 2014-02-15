@@ -129,3 +129,7 @@ func (c *Host) GetJob(id string) (*host.ActiveJob, error) {
 func (c *Host) StopJob(id string) error {
 	return c.c.Call("Host.StopJob", id, &struct{}{})
 }
+
+func (c *Host) StreamEvents(id string, ch chan<- host.Event) *error {
+	return &c.c.StreamGo("Host.StreamEvents", id, ch).Error
+}
