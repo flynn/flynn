@@ -57,7 +57,7 @@ Web developers are increasingly familiar with job queues, which can be considere
 
 A scheduling system is often more of a framework to write schedulers. This the model of Apache Mesos and Google Omega. The framework is responsible for providing a consistent way to intelligently place tasks based on cluster resources and whatever other policies are required for that type of task. Hence, it makes sense to write your own schedulers so you can apply organization specific policies, such as those required to maintain your SLA.
 
-Flynn investigated two similar but subtly different scheduling systems: Apache Mesos and Google Omega. While Mesos provided a better understanding of scheduling as a framework, it seemed that Omega showed that you can achieve scheduling in a simpler way using existing infrastructure, at least at our target scale. So for simplicity, we are writing our own [scheduling framework](https://github.com/flynn/sampi) using the other components in our system that is loosely based on the concepts of Omega.
+Flynn investigated two similar but subtly different scheduling systems: Apache Mesos and Google Omega. While Mesos provided a better understanding of scheduling as a framework, it seemed that Omega showed that you can achieve scheduling in a simpler way using existing infrastructure, at least at our target scale. So for simplicity, we are writing our own [scheduling framework](https://github.com/flynn/flynn-host/tree/master/sampi) using the other components in our system that is loosely based on the concepts of Omega.
 
 Out of the box, Flynn will come with schedulers for different purposes that can modified or replaced as needed. These schedulers are:
 
