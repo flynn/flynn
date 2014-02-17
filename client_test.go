@@ -84,7 +84,7 @@ func ExampleRegisterWithSet_upgradeDowngrade() {
 	// run server
 }
 
-func runEtcdServer() func() {
+func runEtcdServer(t *testing.T) func() {
 	killCh := make(chan struct{})
 	doneCh := make(chan struct{})
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -95,7 +95,8 @@ func runEtcdServer() func() {
 		stdout, _ := cmd.StdoutPipe()
 		stderr, _ := cmd.StderrPipe()
 		if err := cmd.Start(); err != nil {
-			panic(err)
+			t.Fatal("etcd start failed:", err)
+			return
 		}
 		cmdDone := make(chan error)
 		go func() {
@@ -107,14 +108,17 @@ func runEtcdServer() func() {
 		select {
 		case <-killCh:
 			if err := cmd.Process.Kill(); err != nil {
-				panic(err)
+				t.Fatal("failed to kill etcd:", err)
+				return
 			}
 			<-cmdDone
 		case err := <-cmdDone:
-			panic(err)
+			t.Fatal("etcd failed:", err)
+			return
 		}
 		if err := os.RemoveAll(dataDir); err != nil {
-			panic(err)
+			t.Fatal("etcd cleanup failed:", err)
+			return
 		}
 		doneCh <- struct{}{}
 	}()
@@ -139,7 +143,7 @@ func logOutput(name string, rs ...io.Reader) {
 	wg.Wait()
 }
 
-func runDiscoverdServer() func() {
+func runDiscoverdServer(t *testing.T) func() {
 	killCh := make(chan struct{})
 	doneCh := make(chan struct{})
 	go func() {
@@ -148,7 +152,8 @@ func runDiscoverdServer() func() {
 		stderr, _ := cmd.StderrPipe()
 		stdout, _ := cmd.StdoutPipe()
 		if err := cmd.Start(); err != nil {
-			panic(err)
+			t.Fatal("discoverd start failed:", err)
+			return
 		}
 		cmdDone := make(chan error)
 		go func() {
@@ -160,11 +165,13 @@ func runDiscoverdServer() func() {
 		select {
 		case <-killCh:
 			if err := cmd.Process.Kill(); err != nil {
-				panic(err)
+				t.Fatal("failed to kill discoverd:", err)
+				return
 			}
 			<-cmdDone
 		case err := <-cmdDone:
-			panic(err)
+			t.Fatal("discoverd failed:", err)
+			return
 		}
 		doneCh <- struct{}{}
 	}()
@@ -176,8 +183,8 @@ func runDiscoverdServer() func() {
 }
 
 func setup(t *testing.T) (*Client, func()) {
-	killEtcd := runEtcdServer()
-	killDiscoverd := runDiscoverdServer()
+	killEtcd := runEtcdServer(t)
+	killDiscoverd := runDiscoverdServer(t)
 	client, err := NewClient()
 	if err != nil {
 		t.Fatal(err)
