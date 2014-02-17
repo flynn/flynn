@@ -351,7 +351,7 @@ func TestWatch(t *testing.T) {
 		select {
 		case update = <-updates:
 		case <-time.After(3 * time.Second):
-			t.Fatal("Timeout exceeded")
+			t.Fatal("Timeout exceeded", i)
 		}
 		if update.Online != true {
 			t.Fatal("Service update of unexected status: ", update, i)
