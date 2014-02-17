@@ -202,6 +202,21 @@ func assert(err error, t *testing.T) error {
 	return err
 }
 
+func waitUpdates(t *testing.T, set ServiceSet, bringCurrent bool, n int) func() {
+	updates := set.Watch(bringCurrent, false)
+	return func() {
+		defer set.Unwatch(updates)
+		for i := 0; i < n; i++ {
+			select {
+			case u := <-updates:
+				t.Logf("update %d: %#v", i, u)
+			case <-time.After(3 * time.Second):
+				t.Fatalf("Update wait %d timed out", i)
+			}
+		}
+	}
+}
+
 func TestBasicRegisterAndServiceSet(t *testing.T) {
 	client, cleanup := setup(t)
 	defer cleanup()
@@ -214,15 +229,18 @@ func TestBasicRegisterAndServiceSet(t *testing.T) {
 	set, err := client.NewServiceSet(serviceName)
 	assert(err, t)
 
+	waitUpdates(t, set, true, 2)()
 	if len(set.Services()) < 2 {
 		t.Fatal("Registered services not online")
 	}
 
+	wait := waitUpdates(t, set, false, 1)
 	assert(client.Unregister(serviceName, ":2222"), t)
+	wait()
+
 	if len(set.Services()) != 1 {
 		t.Fatal("Only 1 registered service should be left")
 	}
-
 	if set.Services()[0].Attrs["foo"] != "bar" {
 		t.Fatal("Attribute not set on service as 'bar'")
 	}
@@ -239,21 +257,16 @@ func TestNewAttributes(t *testing.T) {
 	set, err := client.NewServiceSet(serviceName)
 	assert(err, t)
 
-	done := make(chan struct{})
-	watch := set.Watch(false, false)
-	go func() {
-		defer close(done)
-		<-watch
-		<-watch
-		if s := set.Services()[0]; s.Attrs["foo"] != "baz" {
-			t.Fatalf(`Expected attribute set on re-registered service to be "baz", not %q`, s.Attrs["foo"])
-		}
-	}()
-
 	assert(client.RegisterWithAttributes(serviceName, ":1111", map[string]string{"foo": "bar"}), t)
+	waitUpdates(t, set, true, 1)()
+	wait := waitUpdates(t, set, false, 1)
 	assert(client.RegisterWithAttributes(serviceName, ":1111", map[string]string{"foo": "baz"}), t)
+	wait()
 
-	<-done
+	if s := set.Services()[0]; s.Attrs["foo"] != "baz" {
+		t.Fatalf(`Expected attribute set on re-registered service to be "baz", not %q`, s.Attrs["foo"])
+	}
+
 	assert(set.Close(), t)
 }
 
@@ -296,23 +309,15 @@ func TestSelecting(t *testing.T) {
 	set, err := client.NewServiceSet(serviceName)
 	assert(err, t)
 
-	done := make(chan struct{})
-	watch := set.Watch(false, false)
-	go func() {
-		defer close(done)
-		<-watch
-		<-watch
-		<-watch
-		if s := set.Select(map[string]string{"id": "3"}); len(s) != 1 {
-			t.Fatalf("Expected one service, got: %#v", s)
-		}
-	}()
-
 	assert(client.Register(serviceName, ":1111"), t)
 	assert(client.RegisterWithAttributes(serviceName, ":2222", map[string]string{"foo": "qux", "id": "2"}), t)
 	assert(client.RegisterWithAttributes(serviceName, ":3333", map[string]string{"foo": "qux", "id": "3"}), t)
 
-	<-done
+	waitUpdates(t, set, true, 3)()
+	if s := set.Select(map[string]string{"id": "3"}); len(s) != 1 {
+		t.Fatalf("Expected one service, got: %#v", s)
+	}
+
 	assert(set.Close(), t)
 }
 
