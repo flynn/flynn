@@ -313,6 +313,11 @@ func (s *serviceSet) Watch(bringCurrent bool, fireOnce bool) chan *agent.Service
 }
 
 func (s *serviceSet) Unwatch(ch chan *agent.ServiceUpdate) {
+	go func() {
+		// drain channel to prevent deadlock
+		for _ = range ch {
+		}
+	}()
 	s.l.Lock()
 	defer s.l.Unlock()
 	close(ch)
