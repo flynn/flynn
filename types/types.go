@@ -41,3 +41,9 @@ type Formation struct {
 	ReleaseID string         `json:"release,omitempty"`
 	Processes map[string]int `json:"processes,omitempty"`
 }
+
+type Key struct {
+	ID      string `json:"fingerprint,omitempty"`
+	Comment string `json:"comment,omitempty"`
+	Key     string `json:"key,omitempty"`
+}

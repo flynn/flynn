@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	ct "github.com/flynn/flynn-controller/types"
@@ -203,5 +204,31 @@ func (s *S) TestDeleteFormation(c *C) {
 	c.Assert(res.StatusCode, Equals, 200)
 
 	res, err = s.Get(path, out)
+	c.Assert(res.StatusCode, Equals, 404)
+}
+
+func (s *S) TestCreateKey(c *C) {
+	in := &ct.Key{Key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC5r1JfsAYIFi86KBa7C5nqKo+BLMJk29+5GsjelgBnCmn4J/QxOrVtovNcntoRLUCRwoHEMHzs3Tc6+PdswIxpX1l3YC78kgdJe6LVb962xUgP6xuxauBNRO7tnh9aPGyLbjl9j7qZAcn2/ansG1GBVoX1GSB58iBsVDH18DdVzlGwrR4OeNLmRQj8kuJEuKOoKEkW55CektcXjV08K3QSQID7aRNHgDpGGgp6XDi0GhIMsuDUGHAdPGZnqYZlxuUFaCW2hK6i1UkwnQCCEv/9IUFl2/aqVep2iX/ynrIaIsNKm16o0ooZ1gCHJEuUKRPUXhZUXqkRXqqHd3a4CUhH jonathan@titanous.com"}
+	res, err := s.Post("/keys", in)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	out := &ct.Key{}
+	err = json.NewDecoder(res.Body).Decode(out)
+	res.Body.Close()
+	c.Assert(err, IsNil)
+
+	c.Assert(out.ID, Equals, "7ab054ff4a2009fadc67e1f8b380dbee")
+	c.Assert(out.Key, Equals, in.Key[:strings.LastIndex(in.Key, " ")])
+	c.Assert(out.Comment, Equals, "jonathan@titanous.com")
+
+	gotKey := &ct.Key{}
+	path := "/keys/" + out.ID
+	res, err = s.Get(path, gotKey)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(gotKey, DeepEquals, out)
+
+	res, err = s.Get(path+"fail", gotKey)
 	c.Assert(res.StatusCode, Equals, 404)
 }

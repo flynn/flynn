@@ -27,6 +27,7 @@ func appHandler() http.Handler {
 	m.Use(render.Renderer())
 	m.Action(r.Handle)
 
+	keyRepo := NewKeyRepo()
 	appRepo := NewAppRepo()
 	artifactRepo := NewArtifactRepo()
 	releaseRepo := NewReleaseRepo(artifactRepo)
@@ -39,6 +40,7 @@ func appHandler() http.Handler {
 	getAppMiddleware := crud("apps", ct.App{}, appRepo, r)
 	getReleaseMiddleware := crud("releases", ct.Release{}, releaseRepo, r)
 	crud("artifacts", ct.Artifact{}, artifactRepo, r)
+	crud("keys", ct.Key{}, keyRepo, r)
 
 	r.Put("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getReleaseMiddleware, binding.Bind(ct.Formation{}), putFormation)
 	r.Get("/apps/:apps_id/formations/:releases_id", getFormationMiddleware, getFormation)
