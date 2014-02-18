@@ -75,6 +75,22 @@ func (r *KeyRepo) Get(id string) (interface{}, error) {
 	return key, nil
 }
 
+func (r *KeyRepo) Remove(id string) error {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	delete(r.keyIDs, id)
+
+	var i int
+	for j, k := range r.keys {
+		if k.ID == id {
+			i = j
+			break
+		}
+	}
+	r.keys = append(r.keys[:i], r.keys[i+1:]...)
+	return nil
+}
+
 func (r *KeyRepo) List() (interface{}, error) {
 	r.mtx.RLock()
 	defer r.mtx.RUnlock()

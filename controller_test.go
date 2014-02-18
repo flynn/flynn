@@ -239,6 +239,18 @@ func (s *S) TestCreateKey(c *C) {
 	c.Assert(res.StatusCode, Equals, 404)
 }
 
+func (s *S) TestDeleteKey(c *C) {
+	key := s.createTestKey(c, &ct.Key{Key: "ssh-rsa AABB"})
+
+	path := "/keys/" + key.ID
+	res, err := s.Delete(path)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	res, err = s.Get(path, key)
+	c.Assert(res.StatusCode, Equals, 404)
+}
+
 func (s *S) TestAppList(c *C) {
 	s.createTestApp(c, &ct.App{Name: "listTest"})
 
@@ -273,6 +285,15 @@ func (s *S) TestKeyList(c *C) {
 
 	c.Assert(len(list) > 0, Equals, true)
 	c.Assert(list[0].ID, Not(Equals), "")
+
+	for _, k := range list {
+		s.Delete("/keys/" + k.ID)
+	}
+
+	res, err = s.Get("/keys", &list)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(list, HasLen, 0)
 }
 
 func (s *S) TestArtifactList(c *C) {

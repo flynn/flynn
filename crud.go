@@ -14,12 +14,16 @@ type Repository interface {
 	Get(id string) (interface{}, error)
 	List() (interface{}, error)
 }
+type Remover interface {
+	Remove(string) error
+}
 
 func crud(resource string, example interface{}, repo Repository, r martini.Router) interface{} {
 	resourceType := reflect.TypeOf(example)
 	resourcePtr := reflect.PtrTo(resourceType)
+	prefix := "/" + resource
 
-	r.Post("/"+resource, func(req *http.Request, r render.Render) {
+	r.Post(prefix, func(req *http.Request, r render.Render) {
 		thing := reflect.New(resourceType).Interface()
 		err := json.NewDecoder(req.Body).Decode(thing)
 		if err != nil {
@@ -48,17 +52,26 @@ func crud(resource string, example interface{}, repo Repository, r martini.Route
 		c.Map(thing)
 	}
 
-	r.Get("/"+resource+"/:"+resource+"_id", lookup, func(c martini.Context, r render.Render, w http.ResponseWriter) {
+	r.Get(prefix+"/:"+resource+"_id", lookup, func(c martini.Context, r render.Render) {
 		r.JSON(200, c.Get(resourcePtr).Interface())
 	})
 
-	r.Get("/"+resource, func(r render.Render) {
+	r.Get(prefix, func(r render.Render) {
 		list, err := repo.List()
 		if err != nil {
 			// TODO: 500/log error
 		}
 		r.JSON(200, list)
 	})
+
+	if remover, ok := repo.(Remover); ok {
+		r.Delete(prefix+"/:"+resource+"_id", lookup, func(c martini.Context, params martini.Params) {
+			err := remover.Remove(params[resource+"_id"])
+			if err != nil {
+				// TODO: 500/log error
+			}
+		})
+	}
 
 	return lookup
 }
