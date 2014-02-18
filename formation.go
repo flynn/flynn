@@ -12,7 +12,7 @@ type formationKey struct {
 
 type FormationRepo struct {
 	appFormations map[formationKey]*ct.Formation
-	formations    []*ct.Formation
+	formations    map[string][]*ct.Formation
 	apps          *AppRepo
 	releases      *ReleaseRepo
 	artifacts     *ArtifactRepo
@@ -25,6 +25,7 @@ type FormationRepo struct {
 func NewFormationRepo(appRepo *AppRepo, releaseRepo *ReleaseRepo, artifactRepo *ArtifactRepo) *FormationRepo {
 	return &FormationRepo{
 		appFormations: make(map[formationKey]*ct.Formation),
+		formations:    make(map[string][]*ct.Formation),
 		subscriptions: make(map[chan<- *ct.ExpandedFormation]struct{}),
 		apps:          appRepo,
 		releases:      releaseRepo,
@@ -40,7 +41,7 @@ func (r *FormationRepo) Add(formation *ct.Formation) error {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 	r.appFormations[formationKey{formation.AppID, formation.ReleaseID}] = formation
-	r.formations = append(r.formations, formation)
+	r.formations[formation.AppID] = append(r.formations[formation.AppID], formation)
 	go r.publish(formation)
 	return nil
 }
@@ -56,10 +57,27 @@ func (r *FormationRepo) Get(appID, releaseID string) (*ct.Formation, error) {
 	return formation, nil
 }
 
+func (r *FormationRepo) List(appID string) ([]*ct.Formation, error) {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+	return r.formations[appID], nil
+}
+
 func (r *FormationRepo) Remove(appID, releaseID string) error {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 	delete(r.appFormations, formationKey{appID, releaseID})
+
+	list := r.formations[appID]
+	var i int
+	for j, f := range list {
+		if f.ReleaseID == releaseID {
+			i = j
+			break
+		}
+	}
+	r.formations[appID] = append(list[:i], list[i+1:]...)
+
 	go r.publish(&ct.Formation{AppID: appID, ReleaseID: releaseID})
 	return nil
 }

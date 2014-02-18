@@ -45,6 +45,7 @@ func appHandler() http.Handler {
 	r.Put("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getReleaseMiddleware, binding.Bind(ct.Formation{}), putFormation)
 	r.Get("/apps/:apps_id/formations/:releases_id", getFormationMiddleware, getFormation)
 	r.Delete("/apps/:apps_id/formations/:releases_id", getFormationMiddleware, deleteFormation)
+	r.Get("/apps/:apps_id/formations", getAppMiddleware, listFormations)
 
 	return rpcMuxHandler(m, rpcHandler(formationRepo))
 }
@@ -93,6 +94,15 @@ func deleteFormation(formation *ct.Formation, repo *FormationRepo, w http.Respon
 		return
 	}
 	w.WriteHeader(200)
+}
+
+func listFormations(app *ct.App, repo *FormationRepo, r render.Render) {
+	list, err := repo.List(app.ID)
+	if err != nil {
+		// TODO: 500/log error
+		return
+	}
+	r.JSON(200, list)
 }
 
 /*

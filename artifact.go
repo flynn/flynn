@@ -41,3 +41,9 @@ func (r *ArtifactRepo) Get(id string) (interface{}, error) {
 	}
 	return artifact, nil
 }
+
+func (r *ArtifactRepo) List() (interface{}, error) {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+	return r.artifacts, nil
+}

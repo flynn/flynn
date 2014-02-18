@@ -74,3 +74,9 @@ func (r *KeyRepo) Get(id string) (interface{}, error) {
 	}
 	return key, nil
 }
+
+func (r *KeyRepo) List() (interface{}, error) {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+	return r.keys, nil
+}

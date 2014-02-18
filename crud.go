@@ -12,6 +12,7 @@ import (
 type Repository interface {
 	Add(thing interface{}) error
 	Get(id string) (interface{}, error)
+	List() (interface{}, error)
 }
 
 func crud(resource string, example interface{}, repo Repository, r martini.Router) interface{} {
@@ -49,6 +50,14 @@ func crud(resource string, example interface{}, repo Repository, r martini.Route
 
 	r.Get("/"+resource+"/:"+resource+"_id", lookup, func(c martini.Context, r render.Render, w http.ResponseWriter) {
 		r.JSON(200, c.Get(resourcePtr).Interface())
+	})
+
+	r.Get("/"+resource, func(r render.Render) {
+		list, err := repo.List()
+		if err != nil {
+			// TODO: 500/log error
+		}
+		r.JSON(200, list)
 	})
 
 	return lookup

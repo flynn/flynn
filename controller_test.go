@@ -139,6 +139,19 @@ func (s *S) createTestRelease(c *C, in *ct.Release) *ct.Release {
 	return out
 }
 
+func (s *S) createTestKey(c *C, in *ct.Key) *ct.Key {
+	res, err := s.Post("/keys", in)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	out := &ct.Key{}
+	err = json.NewDecoder(res.Body).Decode(out)
+	res.Body.Close()
+	c.Assert(err, IsNil)
+
+	return out
+}
+
 func (s *S) TestCreateRelease(c *C) {
 	in := &ct.Release{}
 	out := s.createTestRelease(c, in)
@@ -209,14 +222,7 @@ func (s *S) TestDeleteFormation(c *C) {
 
 func (s *S) TestCreateKey(c *C) {
 	in := &ct.Key{Key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC5r1JfsAYIFi86KBa7C5nqKo+BLMJk29+5GsjelgBnCmn4J/QxOrVtovNcntoRLUCRwoHEMHzs3Tc6+PdswIxpX1l3YC78kgdJe6LVb962xUgP6xuxauBNRO7tnh9aPGyLbjl9j7qZAcn2/ansG1GBVoX1GSB58iBsVDH18DdVzlGwrR4OeNLmRQj8kuJEuKOoKEkW55CektcXjV08K3QSQID7aRNHgDpGGgp6XDi0GhIMsuDUGHAdPGZnqYZlxuUFaCW2hK6i1UkwnQCCEv/9IUFl2/aqVep2iX/ynrIaIsNKm16o0ooZ1gCHJEuUKRPUXhZUXqkRXqqHd3a4CUhH jonathan@titanous.com"}
-	res, err := s.Post("/keys", in)
-	c.Assert(err, IsNil)
-	c.Assert(res.StatusCode, Equals, 200)
-
-	out := &ct.Key{}
-	err = json.NewDecoder(res.Body).Decode(out)
-	res.Body.Close()
-	c.Assert(err, IsNil)
+	out := s.createTestKey(c, in)
 
 	c.Assert(out.ID, Equals, "7ab054ff4a2009fadc67e1f8b380dbee")
 	c.Assert(out.Key, Equals, in.Key[:strings.LastIndex(in.Key, " ")])
@@ -224,11 +230,83 @@ func (s *S) TestCreateKey(c *C) {
 
 	gotKey := &ct.Key{}
 	path := "/keys/" + out.ID
-	res, err = s.Get(path, gotKey)
+	res, err := s.Get(path, gotKey)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(gotKey, DeepEquals, out)
 
 	res, err = s.Get(path+"fail", gotKey)
 	c.Assert(res.StatusCode, Equals, 404)
+}
+
+func (s *S) TestAppList(c *C) {
+	s.createTestApp(c, &ct.App{Name: "listTest"})
+
+	var list []ct.App
+	res, err := s.Get("/apps", &list)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	c.Assert(len(list) > 0, Equals, true)
+	c.Assert(list[0].ID, Not(Equals), "")
+}
+
+func (s *S) TestReleaseList(c *C) {
+	s.createTestRelease(c, &ct.Release{})
+
+	var list []ct.Release
+	res, err := s.Get("/releases", &list)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	c.Assert(len(list) > 0, Equals, true)
+	c.Assert(list[0].ID, Not(Equals), "")
+}
+
+func (s *S) TestKeyList(c *C) {
+	s.createTestKey(c, &ct.Key{Key: "ssh-rsa AAAA"})
+
+	var list []ct.Key
+	res, err := s.Get("/keys", &list)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	c.Assert(len(list) > 0, Equals, true)
+	c.Assert(list[0].ID, Not(Equals), "")
+}
+
+func (s *S) TestArtifactList(c *C) {
+	s.createTestArtifact(c, &ct.Artifact{})
+
+	var list []ct.Artifact
+	res, err := s.Get("/artifacts", &list)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	c.Assert(len(list) > 0, Equals, true)
+	c.Assert(list[0].ID, Not(Equals), "")
+}
+
+func (s *S) TestFormationList(c *C) {
+	release := s.createTestRelease(c, &ct.Release{})
+	app := s.createTestApp(c, &ct.App{Name: "formationList"})
+	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
+
+	var list []ct.Formation
+	path := "/apps/" + app.ID + "/formations"
+	res, err := s.Get(path, &list)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	c.Assert(len(list) > 0, Equals, true)
+	c.Assert(list[0].ReleaseID, Not(Equals), "")
+
+	for _, f := range list {
+		s.Delete(formationPath(f.AppID, f.ReleaseID))
+	}
+
+	res, err = s.Get(path, &list)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(list, HasLen, 0)
 }

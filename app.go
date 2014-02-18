@@ -57,3 +57,9 @@ func (r *AppRepo) Get(id string) (interface{}, error) {
 	}
 	return app, nil
 }
+
+func (r *AppRepo) List() (interface{}, error) {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+	return r.apps, nil
+}

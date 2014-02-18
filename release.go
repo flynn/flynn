@@ -52,3 +52,9 @@ func (r *ReleaseRepo) Get(id string) (interface{}, error) {
 	}
 	return release, nil
 }
+
+func (r *ReleaseRepo) List() (interface{}, error) {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+	return r.releases, nil
+}
