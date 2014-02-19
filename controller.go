@@ -5,10 +5,10 @@ import (
 	"os"
 
 	"github.com/codegangsta/martini"
-	"github.com/codegangsta/martini-contrib/binding"
-	"github.com/codegangsta/martini-contrib/render"
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/rpcplus"
+	"github.com/martini-contrib/binding"
+	"github.com/martini-contrib/render"
 )
 
 func main() {

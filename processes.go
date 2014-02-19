@@ -4,10 +4,10 @@ import (
 	"strings"
 
 	"github.com/codegangsta/martini"
-	"github.com/codegangsta/martini-contrib/render"
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-flynn/cluster"
+	"github.com/martini-contrib/render"
 )
 
 type clusterClient interface {
