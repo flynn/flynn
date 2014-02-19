@@ -42,16 +42,24 @@ func processList(app *ct.App, cc clusterClient, r render.Render) {
 	r.JSON(200, processes)
 }
 
-func killProcess(app *ct.App, params martini.Params, cl clusterClient) {
+func parseProcessID(params martini.Params) (string, string) {
 	id := strings.SplitN(params["proc_id"], ":", 2)
-	if len(id) != 2 {
+	if len(id) != 2 || id[0] == "" || id[1] == "" {
+		return "", ""
+	}
+	return id[0], id[1]
+}
+
+func killProcess(app *ct.App, params martini.Params, cl clusterClient) {
+	hostID, jobID := parseProcessID(params)
+	if hostID == "" {
 		// TODO: error
 	}
-	client, err := cl.ConnectHost(id[0])
+	client, err := cl.ConnectHost(hostID)
 	if err != nil {
 		// TODO: 500/log error
 	}
-	if err := client.StopJob(id[1]); err != nil {
+	if err := client.StopJob(jobID); err != nil {
 		// TODO: 500/log error
 	}
 }
