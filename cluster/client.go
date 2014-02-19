@@ -12,8 +12,11 @@ import (
 	"github.com/flynn/rpcplus"
 )
 
+// ErrNoServers is returned if no host servers are found
 var ErrNoServers = errors.New("cluster: no servers found")
 
+// Attempts is the attempt strategy that is used to connect to the leader.
+// It must not be modified after the first call to NewClient.
 var Attempts = attempt.Strategy{
 	Min:   5,
 	Total: 5 * time.Second,
