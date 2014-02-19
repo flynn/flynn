@@ -27,7 +27,7 @@ type writeCloser interface {
 
 var ErrWouldWait = errors.New("cluster: attach would wait")
 
-func (c *Host) Attach(req *host.AttachReq, wait bool) (ReadWriteCloser, func() error, error) {
+func (c *hostClient) Attach(req *host.AttachReq, wait bool) (ReadWriteCloser, func() error, error) {
 	data, err := json.Marshal(req)
 	if err != nil {
 		return nil, nil, err

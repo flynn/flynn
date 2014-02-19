@@ -89,14 +89,14 @@ func (c *Client) AddJobs(req *host.AddJobsReq) (*host.AddJobsRes, error) {
 	return &res, err
 }
 
-func (c *Client) ConnectHost(id string) (*Host, error) {
+func (c *Client) ConnectHost(id string) (Host, error) {
 	// TODO: reuse connection if leader id == id
 	services := c.service.Select(map[string]string{"id": id})
 	if len(services) == 0 {
 		return nil, ErrNoServers
 	}
 	rc, err := rpcplus.DialHTTP("tcp", services[0].Addr)
-	return &Host{service: c.service, c: rc}, err
+	return &hostClient{service: c.service, c: rc}, err
 }
 
 func (c *Client) RPCClient() (RPCClient, error) {
@@ -105,34 +105,8 @@ func (c *Client) RPCClient() (RPCClient, error) {
 	return c.c, c.err
 }
 
-type Host struct {
-	service discoverd.ServiceSet
-
-	c RPCClient
-}
-
 type RPCClient interface {
 	Call(serviceMethod string, args interface{}, reply interface{}) error
 	Go(serviceMethod string, args interface{}, reply interface{}, done chan *rpcplus.Call) *rpcplus.Call
 	StreamGo(serviceMethod string, args interface{}, replyStream interface{}) *rpcplus.Call
-}
-
-func (c *Host) ListJobs() (map[string]host.ActiveJob, error) {
-	var jobs map[string]host.ActiveJob
-	err := c.c.Call("Host.ListJobs", struct{}{}, &jobs)
-	return jobs, err
-}
-
-func (c *Host) GetJob(id string) (*host.ActiveJob, error) {
-	var res host.ActiveJob
-	err := c.c.Call("Host.GetJob", id, &res)
-	return &res, err
-}
-
-func (c *Host) StopJob(id string) error {
-	return c.c.Call("Host.StopJob", id, &struct{}{})
-}
-
-func (c *Host) StreamEvents(id string, ch chan<- host.Event) *error {
-	return &c.c.StreamGo("Host.StreamEvents", id, ch).Error
 }
