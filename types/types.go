@@ -47,3 +47,10 @@ type Key struct {
 	Comment string `json:"comment,omitempty"`
 	Key     string `json:"key,omitempty"`
 }
+
+type Process struct {
+	ID        string   `json:"id,omitempty"`
+	Type      string   `json:"type,omitempty"`
+	ReleaseID string   `json:"release,omitempty"`
+	Cmd       []string `json:"cmd,omitempty"`
+}

@@ -16,10 +16,10 @@ func main() {
 	if port == "" {
 		port = "3000"
 	}
-	http.ListenAndServe(":"+port, appHandler())
+	http.ListenAndServe(":"+port, appHandler(nil))
 }
 
-func appHandler() http.Handler {
+func appHandler(cc clusterClient) http.Handler {
 	r := martini.NewRouter()
 	m := martini.New()
 	m.Use(martini.Logger())
@@ -36,6 +36,7 @@ func appHandler() http.Handler {
 	m.Map(artifactRepo)
 	m.Map(releaseRepo)
 	m.Map(formationRepo)
+	m.MapTo(cc, (*clusterClient)(nil))
 
 	getAppMiddleware := crud("apps", ct.App{}, appRepo, r)
 	getReleaseMiddleware := crud("releases", ct.Release{}, releaseRepo, r)
@@ -46,6 +47,8 @@ func appHandler() http.Handler {
 	r.Get("/apps/:apps_id/formations/:releases_id", getFormationMiddleware, getFormation)
 	r.Delete("/apps/:apps_id/formations/:releases_id", getFormationMiddleware, deleteFormation)
 	r.Get("/apps/:apps_id/formations", getAppMiddleware, listFormations)
+
+	r.Get("/apps/:apps_id/processes", getAppMiddleware, processList)
 
 	return rpcMuxHandler(m, rpcHandler(formationRepo))
 }

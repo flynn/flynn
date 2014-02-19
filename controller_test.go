@@ -16,13 +16,15 @@ import (
 func Test(t *testing.T) { TestingT(t) }
 
 type S struct {
+	cc  *fakeCluster
 	srv *httptest.Server
 }
 
 var _ = Suite(&S{})
 
 func (s *S) SetUpSuite(c *C) {
-	s.srv = httptest.NewServer(appHandler())
+	s.cc = newFakeCluster()
+	s.srv = httptest.NewServer(appHandler(s.cc))
 }
 
 func (s *S) send(method, path string, data interface{}) (*http.Response, error) {
