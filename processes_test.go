@@ -56,3 +56,39 @@ func (s *S) TestProcessList(c *C) {
 	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(actual, DeepEquals, expected)
 }
+
+func newFakeHostClient() *fakeHostClient {
+	return &fakeHostClient{stopped: make(map[string]bool)}
+}
+
+type fakeHostClient struct {
+	stopped map[string]bool
+}
+
+func (c *fakeHostClient) ListJobs() (map[string]host.ActiveJob, error)        { return nil, nil }
+func (c *fakeHostClient) GetJob(id string) (*host.ActiveJob, error)           { return nil, nil }
+func (c *fakeHostClient) StreamEvents(id string, ch chan<- host.Event) *error { return nil }
+func (c *fakeHostClient) Attach(req *host.AttachReq, wait bool) (cluster.ReadWriteCloser, func() error, error) {
+	return nil, nil, nil
+}
+
+func (c *fakeHostClient) StopJob(id string) error {
+	c.stopped[id] = true
+	return nil
+}
+
+func (c *fakeHostClient) IsStopped(id string) bool {
+	return c.stopped[id]
+}
+
+func (s *S) TestKillProcess(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "killproc"})
+	hc := newFakeHostClient()
+	hostID, jobID := uuid(), uuid()
+	s.cc.setHostClient(hostID, hc)
+
+	res, err := s.Delete("/apps/" + app.ID + "/processes/" + hostID + ":" + jobID)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(hc.IsStopped(jobID), Equals, true)
+}

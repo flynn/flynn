@@ -1,6 +1,9 @@
 package main
 
 import (
+	"strings"
+
+	"github.com/codegangsta/martini"
 	"github.com/codegangsta/martini-contrib/render"
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/flynn-host/types"
@@ -37,4 +40,18 @@ func processList(app *ct.App, cc clusterClient, r render.Render) {
 	}
 
 	r.JSON(200, processes)
+}
+
+func killProcess(app *ct.App, params martini.Params, cl clusterClient) {
+	id := strings.SplitN(params["proc_id"], ":", 2)
+	if len(id) != 2 {
+		// TODO: error
+	}
+	client, err := cl.ConnectHost(id[0])
+	if err != nil {
+		// TODO: 500/log error
+	}
+	if err := client.StopJob(id[1]); err != nil {
+		// TODO: 500/log error
+	}
 }
