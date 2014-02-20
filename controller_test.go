@@ -333,3 +333,44 @@ func (s *S) TestFormationList(c *C) {
 	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(list, HasLen, 0)
 }
+
+func (s *S) setAppRelease(c *C, appID, id string) *ct.Release {
+	res, err := s.Put("/apps/"+appID+"/release", &ct.Release{ID: id})
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	out := &ct.Release{}
+	err = json.NewDecoder(res.Body).Decode(out)
+	res.Body.Close()
+	c.Assert(err, IsNil)
+	return out
+}
+
+func (s *S) TestSetAppRelease(c *C) {
+	release := s.createTestRelease(c, &ct.Release{})
+	app := s.createTestApp(c, &ct.App{Name: "setRelease"})
+
+	out := s.setAppRelease(c, app.ID, release.ID)
+	c.Assert(out, DeepEquals, release)
+
+	gotRelease := &ct.Release{}
+	res, err := s.Get("/apps/"+app.ID+"/release", gotRelease)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(gotRelease, DeepEquals, release)
+
+	var formations []ct.Formation
+	formationsPath := "/apps/" + app.ID + "/formations"
+	res, err = s.Get(formationsPath, &formations)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(formations, HasLen, 0)
+
+	s.createTestFormation(c, &ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 1}})
+	newRelease := s.createTestRelease(c, &ct.Release{})
+	s.setAppRelease(c, app.ID, newRelease.ID)
+	res, err = s.Get(formationsPath, &formations)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(formations, HasLen, 1)
+	c.Assert(formations[0].ReleaseID, Equals, newRelease.ID)
+}

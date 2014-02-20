@@ -52,6 +52,9 @@ func appHandler(cc clusterClient) http.Handler {
 	r.Delete("/apps/:apps_id/jobs/:job_id", getAppMiddleware, connectHostMiddleware, killJob)
 	r.Get("/apps/:apps_id/jobs/:job_id/log", getAppMiddleware, connectHostMiddleware, jobLog)
 
+	r.Put("/apps/:apps_id/release", getAppMiddleware, binding.Bind(releaseID{}), setAppRelease)
+	r.Get("/apps/:apps_id/release", getAppMiddleware, getAppRelease)
+
 	return rpcMuxHandler(m, rpcHandler(formationRepo))
 }
 
@@ -110,11 +113,47 @@ func listFormations(app *ct.App, repo *FormationRepo, r render.Render) {
 	r.JSON(200, list)
 }
 
-/*
-created
-starting
-up
-stopping
-down
-(bounce)?
-*/
+type releaseID struct {
+	ID string `json:"id"`
+}
+
+func setAppRelease(app *ct.App, rid releaseID, apps *AppRepo, releases *ReleaseRepo, formations *FormationRepo, r render.Render) {
+	rel, err := releases.Get(rid.ID)
+	if err != nil {
+		// TODO: 500/log error
+	}
+	release := rel.(*ct.Release)
+	apps.SetRelease(app.ID, release)
+
+	// TODO: use transaction/lock
+	fs, err := formations.List(app.ID)
+	if err != nil {
+		// TODO: 500/log error
+	}
+	if len(fs) == 1 {
+		if err := formations.Add(&ct.Formation{
+			AppID:     app.ID,
+			ReleaseID: release.ID,
+			Processes: fs[0].Processes,
+		}); err != nil {
+			// TODO: 500/log error
+		}
+		if err := formations.Remove(app.ID, fs[0].ReleaseID); err != nil {
+			// TODO: 500/log error
+		}
+	}
+
+	r.JSON(200, release)
+}
+
+func getAppRelease(app *ct.App, apps *AppRepo, r render.Render, w http.ResponseWriter) {
+	release, err := apps.GetRelease(app.ID)
+	if err != nil {
+		if err == ErrNotFound {
+			w.WriteHeader(404)
+			return
+		}
+		// TODO: 500/log error
+	}
+	r.JSON(200, release)
+}

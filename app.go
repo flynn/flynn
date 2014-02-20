@@ -10,6 +10,7 @@ import (
 type AppRepo struct {
 	appNames map[string]*ct.App
 	appIDs   map[string]*ct.App
+	releases map[string]*ct.Release
 	apps     []*ct.App
 	mtx      sync.RWMutex
 }
@@ -18,6 +19,7 @@ func NewAppRepo() *AppRepo {
 	return &AppRepo{
 		appNames: make(map[string]*ct.App),
 		appIDs:   make(map[string]*ct.App),
+		releases: make(map[string]*ct.Release),
 	}
 }
 
@@ -62,4 +64,21 @@ func (r *AppRepo) List() (interface{}, error) {
 	r.mtx.RLock()
 	defer r.mtx.RUnlock()
 	return r.apps, nil
+}
+
+func (r *AppRepo) SetRelease(id string, release *ct.Release) error {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	r.releases[id] = release
+	return nil
+}
+
+func (r *AppRepo) GetRelease(id string) (*ct.Release, error) {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+	release := r.releases[id]
+	if release == nil {
+		return nil, ErrNotFound
+	}
+	return release, nil
 }
