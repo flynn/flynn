@@ -1,6 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"io"
+	"net/http"
+	"strings"
+
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-dockerclient"
@@ -22,7 +27,11 @@ func (c *fakeCluster) ListHosts() (map[string]host.Host, error) {
 }
 
 func (c *fakeCluster) ConnectHost(id string) (cluster.Host, error) {
-	return c.hostClients[id], nil
+	client, ok := c.hostClients[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	return client, nil
 }
 
 func (c *fakeCluster) setHosts(h map[string]host.Host) {
@@ -58,11 +67,15 @@ func (s *S) TestProcessList(c *C) {
 }
 
 func newFakeHostClient() *fakeHostClient {
-	return &fakeHostClient{stopped: make(map[string]bool)}
+	return &fakeHostClient{
+		stopped: make(map[string]bool),
+		attach:  make(map[string]cluster.ReadWriteCloser),
+	}
 }
 
 type fakeHostClient struct {
 	stopped map[string]bool
+	attach  map[string]cluster.ReadWriteCloser
 }
 
 func (c *fakeHostClient) ListJobs() (map[string]host.ActiveJob, error)        { return nil, nil }
@@ -70,7 +83,7 @@ func (c *fakeHostClient) GetJob(id string) (*host.ActiveJob, error)           { 
 func (c *fakeHostClient) StreamEvents(id string, ch chan<- host.Event) *error { return nil }
 func (c *fakeHostClient) Close() error                                        { return nil }
 func (c *fakeHostClient) Attach(req *host.AttachReq, wait bool) (cluster.ReadWriteCloser, func() error, error) {
-	return nil, nil, nil
+	return c.attach[req.JobID], nil, nil
 }
 
 func (c *fakeHostClient) StopJob(id string) error {
@@ -78,8 +91,26 @@ func (c *fakeHostClient) StopJob(id string) error {
 	return nil
 }
 
-func (c *fakeHostClient) IsStopped(id string) bool {
+func (c *fakeHostClient) isStopped(id string) bool {
 	return c.stopped[id]
+}
+
+func (c *fakeHostClient) setAttach(id string, a cluster.ReadWriteCloser) {
+	c.attach[id] = a
+}
+
+func newFakeLog(r io.Reader) *fakeLog {
+	return &fakeLog{r}
+}
+
+type fakeLog struct {
+	io.Reader
+}
+
+func (l *fakeLog) Close() error      { return nil }
+func (l *fakeLog) CloseWrite() error { return nil }
+func (l *fakeLog) Write([]byte) (int, error) {
+	return 0, io.ErrUnexpectedEOF
 }
 
 func (s *S) TestKillProcess(c *C) {
@@ -91,5 +122,22 @@ func (s *S) TestKillProcess(c *C) {
 	res, err := s.Delete("/apps/" + app.ID + "/processes/" + hostID + ":" + jobID)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
-	c.Assert(hc.IsStopped(jobID), Equals, true)
+	c.Assert(hc.isStopped(jobID), Equals, true)
+}
+
+func (s *S) TestProcessLogs(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "proclogs"})
+	hc := newFakeHostClient()
+	hostID, jobID := uuid(), uuid()
+	hc.setAttach(jobID, newFakeLog(strings.NewReader("foo")))
+	s.cc.setHostClient(hostID, hc)
+
+	res, err := http.Get(s.srv.URL + "/apps/" + app.ID + "/processes/" + hostID + ":" + jobID + "/logs")
+	c.Assert(err, IsNil)
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(res.Body)
+	res.Body.Close()
+	c.Assert(err, IsNil)
+
+	c.Assert(buf.String(), Equals, "foo")
 }

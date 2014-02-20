@@ -1,6 +1,8 @@
 package main
 
 import (
+	"io"
+	"net/http"
 	"strings"
 
 	"github.com/codegangsta/martini"
@@ -40,6 +42,23 @@ func processList(app *ct.App, cc clusterClient, r render.Render) {
 	}
 
 	r.JSON(200, processes)
+}
+
+func processLogs(app *ct.App, params martini.Params, cluster cluster.Host, w http.ResponseWriter) {
+	attachReq := &host.AttachReq{
+		JobID: params["job_id"],
+		Flags: host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagStdin | host.AttachFlagLogs,
+	}
+	if _, ok := params["tail"]; ok {
+		attachReq.Flags |= host.AttachFlagStream
+	}
+	stream, _, err := cluster.Attach(attachReq, false)
+	if err != nil {
+		// TODO: 500/log error
+		// TODO: handle AttachWouldWait
+	}
+	defer stream.Close()
+	io.Copy(w, stream)
 }
 
 func parseProcessID(params martini.Params) (string, string) {
