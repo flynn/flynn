@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -127,7 +128,9 @@ func randomHost() (hostid string) {
 	return
 }
 
-func scheduleAndAttach(jobid string, config docker.Config) {
+var typesPattern = regexp.MustCompile(`types.* -> (.+)$`)
+
+func scheduleAndAttach(jobid string, config docker.Config) (types []string) {
 	hostid := randomHost()
 
 	client, err := clusterc.ConnectHost(hostid)
@@ -159,8 +162,17 @@ func scheduleAndAttach(jobid string, config docker.Config) {
 		conn.CloseWrite()
 	}()
 	scanner := bufio.NewScanner(conn)
+
 	for scanner.Scan() {
-		fmt.Fprintln(os.Stdout, scanner.Text()[8:])
+		text := scanner.Text()[8:]
+		fmt.Fprintln(os.Stdout, text)
+		if types == nil {
+			if match := typesPattern.FindStringSubmatch(text); match != nil {
+				types = strings.Split(match[1], ", ")
+			}
+		}
 	}
 	conn.Close()
+
+	return types
 }
