@@ -6,10 +6,8 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/exec"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-discoverd"
@@ -28,8 +26,6 @@ func init() {
 }
 
 func main() {
-	root := "/var/lib/demo/apps"
-
 	services, _ := discoverd.Services("shelf", discoverd.DefaultTimeout)
 	if len(services) < 1 {
 		panic("Shelf is not discoverable")
@@ -37,7 +33,6 @@ func main() {
 	shelfHost := services[0].Addr
 
 	app := os.Args[2]
-	os.MkdirAll(root+"/"+app, 0755)
 
 	fmt.Printf("-----> Building %s...\n", app)
 
@@ -56,7 +51,7 @@ func main() {
 
 	jobid := cluster.RandomJobID(app + "-web.")
 
-	hostid := scheduleWithTcpPort(jobid, docker.Config{
+	scheduleWithTcpPort(jobid, docker.Config{
 		Image:        "flynn/slugrunner",
 		Cmd:          []string{"start", "web"},
 		Tty:          false,
@@ -71,19 +66,7 @@ func main() {
 		},
 	})
 
-	time.Sleep(1 * time.Second)
-	fmt.Printf("=====> Application deployed:\n")
-	fmt.Printf("       http://10.0.2.15:%s\n", getPort(hostid, jobid))
-	fmt.Println("")
-
-}
-
-func shell(cmdline string) string {
-	out, err := exec.Command("bash", "-c", cmdline).Output()
-	if err != nil {
-		panic(err)
-	}
-	return strings.Trim(string(out), " \n")
+	fmt.Println("=====> Application deployed")
 }
 
 func scheduleWithTcpPort(jobid string, config docker.Config) (hostid string) {
@@ -96,21 +79,6 @@ func scheduleWithTcpPort(jobid string, config docker.Config) (hostid string) {
 		log.Fatal(err)
 	}
 	return
-}
-
-func getPort(hostid string, jobid string) string {
-	client, err := clusterc.ConnectHost(hostid)
-	if err != nil {
-		log.Fatal(err)
-	}
-	job, err := client.GetJob(jobid)
-	if err != nil {
-		log.Fatal(err)
-	}
-	for portspec := range job.Job.Config.ExposedPorts {
-		return strings.Split(portspec, "/")[0]
-	}
-	return ""
 }
 
 func randomHost() (hostid string) {
