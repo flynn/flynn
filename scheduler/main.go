@@ -50,7 +50,7 @@ type context struct {
 type clusterClient interface {
 	ListHosts() (map[string]host.Host, error)
 	AddJobs(req *host.AddJobsReq) (*host.AddJobsRes, error)
-	ConnectHost(id string) (*cluster.Host, error)
+	ConnectHost(id string) (cluster.Host, error)
 }
 
 type formationStreamer interface {
@@ -101,11 +101,11 @@ func (c *context) watchHost(id string) {
 }
 
 func newHostClients() *hostClients {
-	return &hostClients{hosts: make(map[string]*cluster.Host)}
+	return &hostClients{hosts: make(map[string]cluster.Host)}
 }
 
 type hostClients struct {
-	hosts map[string]*cluster.Host
+	hosts map[string]cluster.Host
 	mtx   sync.RWMutex
 }
 
@@ -119,7 +119,7 @@ func (h *hostClients) Add(id string) bool {
 	return true
 }
 
-func (h *hostClients) Set(id string, client *cluster.Host) {
+func (h *hostClients) Set(id string, client cluster.Host) {
 	h.mtx.Lock()
 	h.hosts[id] = client
 	h.mtx.Unlock()
@@ -131,7 +131,7 @@ func (h *hostClients) Remove(id string) {
 	h.mtx.Unlock()
 }
 
-func (h *hostClients) Get(id string) *cluster.Host {
+func (h *hostClients) Get(id string) cluster.Host {
 	h.mtx.RLock()
 	defer h.mtx.RUnlock()
 	return h.hosts[id]
