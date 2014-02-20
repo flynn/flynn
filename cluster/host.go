@@ -11,6 +11,7 @@ type Host interface {
 	StopJob(id string) error
 	StreamEvents(id string, ch chan<- host.Event) *error
 	Attach(req *host.AttachReq, wait bool) (ReadWriteCloser, func() error, error)
+	Close() error
 }
 
 type hostClient struct {
@@ -37,4 +38,8 @@ func (c *hostClient) StopJob(id string) error {
 
 func (c *hostClient) StreamEvents(id string, ch chan<- host.Event) *error {
 	return &c.c.StreamGo("Host.StreamEvents", id, ch).Error
+}
+
+func (c *hostClient) Close() error {
+	return c.c.Close()
 }

@@ -109,4 +109,5 @@ type RPCClient interface {
 	Call(serviceMethod string, args interface{}, reply interface{}) error
 	Go(serviceMethod string, args interface{}, reply interface{}, done chan *rpcplus.Call) *rpcplus.Call
 	StreamGo(serviceMethod string, args interface{}, replyStream interface{}) *rpcplus.Call
+	Close() error
 }
