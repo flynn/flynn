@@ -50,16 +50,25 @@ func parseProcessID(params martini.Params) (string, string) {
 	return id[0], id[1]
 }
 
-func killProcess(app *ct.App, params martini.Params, cl clusterClient) {
+func connectHostMiddleware(c martini.Context, params martini.Params, cl clusterClient) {
 	hostID, jobID := parseProcessID(params)
 	if hostID == "" {
 		// TODO: error
 	}
+	params["job_id"] = jobID
+
 	client, err := cl.ConnectHost(hostID)
 	if err != nil {
 		// TODO: 500/log error
 	}
-	if err := client.StopJob(jobID); err != nil {
+	c.MapTo(client, (*cluster.Host)(nil))
+
+	c.Next()
+	client.Close()
+}
+
+func killProcess(app *ct.App, params martini.Params, client cluster.Host) {
+	if err := client.StopJob(params["job_id"]); err != nil {
 		// TODO: 500/log error
 	}
 }
