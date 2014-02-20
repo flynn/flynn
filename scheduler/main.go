@@ -370,7 +370,7 @@ func (f *Formation) jobConfig(name string) (*host.Job, error) {
 		},
 		Config: &docker.Config{
 			Cmd:   t.Cmd,
-			Env:   formatEnv(f.Release.Environment),
+			Env:   formatEnv(f.Release.Env, t.Env),
 			Image: image,
 		},
 	}, nil
@@ -392,7 +392,13 @@ func dockerImage(uri string) (string, error) {
 	return u.Host + suffix, nil
 }
 
-func formatEnv(env map[string]string) []string {
+func formatEnv(envs ...map[string]string) []string {
+	env := make(map[string]string)
+	for _, e := range envs {
+		for k, v := range e {
+			env[k] = v
+		}
+	}
 	res := make([]string, 0, len(env))
 	for k, v := range env {
 		res = append(res, k+"="+v)

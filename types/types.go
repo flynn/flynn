@@ -13,15 +13,16 @@ type App struct {
 }
 
 type Release struct {
-	ID          string                 `json:"id,omitempty"`
-	ArtifactID  string                 `json:"artifact,omitempty"`
-	Environment map[string]string      `json:"environment,omitempty"`
-	Processes   map[string]ProcessType `json:"processes,omitempty"`
+	ID         string                 `json:"id,omitempty"`
+	ArtifactID string                 `json:"artifact,omitempty"`
+	Env        map[string]string      `json:"env,omitempty"`
+	Processes  map[string]ProcessType `json:"processes,omitempty"`
 }
 
 type ProcessType struct {
-	Cmd   []string     `json:"cmd,omitempty"`
-	Ports ProcessPorts `json:"ports,omitempty"`
+	Cmd   []string          `json:"cmd,omitempty"`
+	Env   map[string]string `json:"env,omitempty"`
+	Ports ProcessPorts      `json:"ports,omitempty"`
 }
 
 type ProcessPorts struct {
