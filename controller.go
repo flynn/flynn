@@ -48,9 +48,9 @@ func appHandler(cc clusterClient) http.Handler {
 	r.Delete("/apps/:apps_id/formations/:releases_id", getFormationMiddleware, deleteFormation)
 	r.Get("/apps/:apps_id/formations", getAppMiddleware, listFormations)
 
-	r.Get("/apps/:apps_id/processes", getAppMiddleware, processList)
-	r.Delete("/apps/:apps_id/processes/:proc_id", getAppMiddleware, connectHostMiddleware, killProcess)
-	r.Get("/apps/:apps_id/processes/:proc_id/logs", getAppMiddleware, connectHostMiddleware, processLogs)
+	r.Get("/apps/:apps_id/jobs", getAppMiddleware, jobList)
+	r.Delete("/apps/:apps_id/jobs/:job_id", getAppMiddleware, connectHostMiddleware, killJob)
+	r.Get("/apps/:apps_id/jobs/:job_id/logs", getAppMiddleware, connectHostMiddleware, jobLogs)
 
 	return rpcMuxHandler(m, rpcHandler(formationRepo))
 }

@@ -48,7 +48,7 @@ type Key struct {
 	Key     string `json:"key,omitempty"`
 }
 
-type Process struct {
+type Job struct {
 	ID        string   `json:"id,omitempty"`
 	Type      string   `json:"type,omitempty"`
 	ReleaseID string   `json:"release,omitempty"`

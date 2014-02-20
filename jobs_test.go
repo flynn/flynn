@@ -42,8 +42,8 @@ func (c *fakeCluster) setHostClient(id string, h cluster.Host) {
 	c.hostClients[id] = h
 }
 
-func (s *S) TestProcessList(c *C) {
-	app := s.createTestApp(c, &ct.App{Name: "processList"})
+func (s *S) TestJobList(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "jobList"})
 	s.cc.setHosts(map[string]host.Host{"host0": {
 		ID: "host0",
 		Jobs: []*host.Job{
@@ -54,13 +54,13 @@ func (s *S) TestProcessList(c *C) {
 		},
 	}})
 
-	expected := []ct.Process{
+	expected := []ct.Job{
 		{ID: "host0:job0", Type: "web", ReleaseID: "release0"},
 		{ID: "host0:job1", Cmd: []string{"bash"}},
 	}
 
-	var actual []ct.Process
-	res, err := s.Get("/apps/"+app.ID+"/processes", &actual)
+	var actual []ct.Job
+	res, err := s.Get("/apps/"+app.ID+"/jobs", &actual)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(actual, DeepEquals, expected)
@@ -113,26 +113,26 @@ func (l *fakeLog) Write([]byte) (int, error) {
 	return 0, io.ErrUnexpectedEOF
 }
 
-func (s *S) TestKillProcess(c *C) {
-	app := s.createTestApp(c, &ct.App{Name: "killproc"})
+func (s *S) TestKillJob(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "killjob"})
 	hc := newFakeHostClient()
 	hostID, jobID := uuid(), uuid()
 	s.cc.setHostClient(hostID, hc)
 
-	res, err := s.Delete("/apps/" + app.ID + "/processes/" + hostID + ":" + jobID)
+	res, err := s.Delete("/apps/" + app.ID + "/jobs/" + hostID + ":" + jobID)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(hc.isStopped(jobID), Equals, true)
 }
 
-func (s *S) TestProcessLogs(c *C) {
-	app := s.createTestApp(c, &ct.App{Name: "proclogs"})
+func (s *S) TestJobLogs(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "joblogs"})
 	hc := newFakeHostClient()
 	hostID, jobID := uuid(), uuid()
 	hc.setAttach(jobID, newFakeLog(strings.NewReader("foo")))
 	s.cc.setHostClient(hostID, hc)
 
-	res, err := http.Get(s.srv.URL + "/apps/" + app.ID + "/processes/" + hostID + ":" + jobID + "/logs")
+	res, err := http.Get(s.srv.URL + "/apps/" + app.ID + "/jobs/" + hostID + ":" + jobID + "/logs")
 	c.Assert(err, IsNil)
 	var buf bytes.Buffer
 	_, err = buf.ReadFrom(res.Body)

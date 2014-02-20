@@ -17,34 +17,34 @@ type clusterClient interface {
 	ConnectHost(string) (cluster.Host, error)
 }
 
-func processList(app *ct.App, cc clusterClient, r render.Render) {
+func jobList(app *ct.App, cc clusterClient, r render.Render) {
 	hosts, err := cc.ListHosts()
 	if err != nil {
 		// TODO: 500/handle error
 	}
-	var processes []ct.Process
+	var jobs []ct.Job
 	for _, h := range hosts {
-		for _, job := range h.Jobs {
-			if job.Attributes["flynn-controller.app"] != app.ID {
+		for _, j := range h.Jobs {
+			if j.Attributes["flynn-controller.app"] != app.ID {
 				continue
 			}
 
-			proc := ct.Process{
-				ID:        h.ID + ":" + job.ID,
-				Type:      job.Attributes["flynn-controller.type"],
-				ReleaseID: job.Attributes["flynn-controller.release"],
+			job := ct.Job{
+				ID:        h.ID + ":" + j.ID,
+				Type:      j.Attributes["flynn-controller.type"],
+				ReleaseID: j.Attributes["flynn-controller.release"],
 			}
-			if proc.Type == "" {
-				proc.Cmd = job.Config.Cmd
+			if job.Type == "" {
+				job.Cmd = j.Config.Cmd
 			}
-			processes = append(processes, proc)
+			jobs = append(jobs, job)
 		}
 	}
 
-	r.JSON(200, processes)
+	r.JSON(200, jobs)
 }
 
-func processLogs(app *ct.App, params martini.Params, cluster cluster.Host, w http.ResponseWriter) {
+func jobLogs(app *ct.App, params martini.Params, cluster cluster.Host, w http.ResponseWriter) {
 	attachReq := &host.AttachReq{
 		JobID: params["job_id"],
 		Flags: host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagStdin | host.AttachFlagLogs,
@@ -61,8 +61,8 @@ func processLogs(app *ct.App, params martini.Params, cluster cluster.Host, w htt
 	io.Copy(w, stream)
 }
 
-func parseProcessID(params martini.Params) (string, string) {
-	id := strings.SplitN(params["proc_id"], ":", 2)
+func parseJobID(params martini.Params) (string, string) {
+	id := strings.SplitN(params["job_id"], ":", 2)
 	if len(id) != 2 || id[0] == "" || id[1] == "" {
 		return "", ""
 	}
@@ -70,7 +70,7 @@ func parseProcessID(params martini.Params) (string, string) {
 }
 
 func connectHostMiddleware(c martini.Context, params martini.Params, cl clusterClient) {
-	hostID, jobID := parseProcessID(params)
+	hostID, jobID := parseJobID(params)
 	if hostID == "" {
 		// TODO: error
 	}
@@ -86,7 +86,7 @@ func connectHostMiddleware(c martini.Context, params martini.Params, cl clusterC
 	client.Close()
 }
 
-func killProcess(app *ct.App, params martini.Params, client cluster.Host) {
+func killJob(app *ct.App, params martini.Params, client cluster.Host) {
 	if err := client.StopJob(params["job_id"]); err != nil {
 		// TODO: 500/log error
 	}
