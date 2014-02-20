@@ -50,7 +50,7 @@ func appHandler(cc clusterClient) http.Handler {
 
 	r.Get("/apps/:apps_id/jobs", getAppMiddleware, jobList)
 	r.Delete("/apps/:apps_id/jobs/:job_id", getAppMiddleware, connectHostMiddleware, killJob)
-	r.Get("/apps/:apps_id/jobs/:job_id/logs", getAppMiddleware, connectHostMiddleware, jobLogs)
+	r.Get("/apps/:apps_id/jobs/:job_id/log", getAppMiddleware, connectHostMiddleware, jobLog)
 
 	return rpcMuxHandler(m, rpcHandler(formationRepo))
 }

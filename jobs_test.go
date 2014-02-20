@@ -125,14 +125,14 @@ func (s *S) TestKillJob(c *C) {
 	c.Assert(hc.isStopped(jobID), Equals, true)
 }
 
-func (s *S) TestJobLogs(c *C) {
-	app := s.createTestApp(c, &ct.App{Name: "joblogs"})
+func (s *S) TestJobLog(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "joblog"})
 	hc := newFakeHostClient()
 	hostID, jobID := uuid(), uuid()
 	hc.setAttach(jobID, newFakeLog(strings.NewReader("foo")))
 	s.cc.setHostClient(hostID, hc)
 
-	res, err := http.Get(s.srv.URL + "/apps/" + app.ID + "/jobs/" + hostID + ":" + jobID + "/logs")
+	res, err := http.Get(s.srv.URL + "/apps/" + app.ID + "/jobs/" + hostID + ":" + jobID + "/log")
 	c.Assert(err, IsNil)
 	var buf bytes.Buffer
 	_, err = buf.ReadFrom(res.Body)

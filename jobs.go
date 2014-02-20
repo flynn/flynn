@@ -44,7 +44,7 @@ func jobList(app *ct.App, cc clusterClient, r render.Render) {
 	r.JSON(200, jobs)
 }
 
-func jobLogs(app *ct.App, params martini.Params, cluster cluster.Host, w http.ResponseWriter) {
+func jobLog(app *ct.App, params martini.Params, cluster cluster.Host, w http.ResponseWriter) {
 	attachReq := &host.AttachReq{
 		JobID: params["job_id"],
 		Flags: host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagStdin | host.AttachFlagLogs,
