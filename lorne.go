@@ -121,9 +121,10 @@ func main() {
 	h.ID = *hostID
 
 	jobs := make(chan *host.Job)
-	cluster.ConnectHost(h, jobs)
+	hostErr := cluster.ConnectHost(h, jobs)
 	g.Log(grohl.Data{"at": "host_registered"})
 	processor.Process(ports, jobs)
+	log.Fatal(*hostErr)
 }
 
 type jobProcessor struct {
