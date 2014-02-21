@@ -9,7 +9,7 @@ type Host interface {
 	ListJobs() (map[string]host.ActiveJob, error)
 	GetJob(id string) (*host.ActiveJob, error)
 	StopJob(id string) error
-	StreamEvents(id string, ch chan<- host.Event) *error
+	StreamEvents(id string, ch chan<- *host.Event) *error
 	Attach(req *host.AttachReq, wait bool) (ReadWriteCloser, func() error, error)
 	Close() error
 }
@@ -36,7 +36,7 @@ func (c *hostClient) StopJob(id string) error {
 	return c.c.Call("Host.StopJob", id, &struct{}{})
 }
 
-func (c *hostClient) StreamEvents(id string, ch chan<- host.Event) *error {
+func (c *hostClient) StreamEvents(id string, ch chan<- *host.Event) *error {
 	return &c.c.StreamGo("Host.StreamEvents", id, ch).Error
 }
 
