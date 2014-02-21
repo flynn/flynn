@@ -19,10 +19,11 @@ import (
 )
 
 func main() {
+	hostname, _ := os.Hostname()
 	externalAddr := flag.String("external", "", "external IP of host")
 	configFile := flag.String("config", "", "configuration file")
 	manifestFile := flag.String("manifest", "", "manifest file")
-	hostID := flag.String("id", os.Getenv("HOST"), "host id")
+	hostID := flag.String("id", hostname, "host id")
 	flag.Parse()
 	grohl.AddContext("app", "lorne")
 	grohl.Log(grohl.Data{"at": "start"})
