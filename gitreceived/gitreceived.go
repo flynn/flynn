@@ -51,40 +51,9 @@ func main() {
 
 	var config *ssh.ServerConfig
 	if *noAuth {
-		config = &ssh.ServerConfig{
-			NoClientAuth: true,
-		}
+		config = &ssh.ServerConfig{NoClientAuth: true}
 	} else {
-		config = &ssh.ServerConfig{
-			PublicKeyCallback: func(conn *ssh.ServerConn, user, algo string, pubkey []byte) bool {
-				clientkey, _, ok := ssh.ParsePublicKey(pubkey)
-				if !ok {
-					return false
-				}
-				os.MkdirAll(*keyPath, 0755)
-				files, err := ioutil.ReadDir(*keyPath)
-				if err != nil {
-					panic(err)
-				}
-				for _, file := range files {
-					if !file.IsDir() {
-						data, err := ioutil.ReadFile(*keyPath + "/" + file.Name())
-						if err != nil {
-							panic(err)
-						}
-						filekey, _, _, _, ok := ssh.ParseAuthorizedKey(data)
-						if !ok {
-							continue
-						}
-						if bytes.Equal(clientkey.Marshal(), filekey.Marshal()) {
-							keyNames[publicKeyFingerprint(clientkey)] = file.Name()
-							return true
-						}
-					}
-				}
-				return false
-			},
-		}
+		config = &ssh.ServerConfig{PublicKeyCallback: keyCallback}
 	}
 
 	pemBytes, err := ioutil.ReadFile(privateKey)
@@ -112,6 +81,35 @@ func main() {
 		}
 		go handleConnection(conn)
 	}
+}
+
+func keyCallback(conn *ssh.ServerConn, user, algo string, pubkey []byte) bool {
+	clientkey, _, ok := ssh.ParsePublicKey(pubkey)
+	if !ok {
+		return false
+	}
+	os.MkdirAll(*keyPath, 0755)
+	files, err := ioutil.ReadDir(*keyPath)
+	if err != nil {
+		panic(err)
+	}
+	for _, file := range files {
+		if !file.IsDir() {
+			data, err := ioutil.ReadFile(*keyPath + "/" + file.Name())
+			if err != nil {
+				panic(err)
+			}
+			filekey, _, _, _, ok := ssh.ParseAuthorizedKey(data)
+			if !ok {
+				continue
+			}
+			if bytes.Equal(clientkey.Marshal(), filekey.Marshal()) {
+				keyNames[publicKeyFingerprint(clientkey)] = file.Name()
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func handleConnection(conn *ssh.ServerConn) {
