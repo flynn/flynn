@@ -22,7 +22,7 @@ Flynn.Views.EmailField = React.createClass({
 		});
 	},
 
-	performValidation: function (value, callbacks) {
+	performValidation: function (value, showError, callbacks) {
 		if (this.props.validationRegex.test(value)) {
 			this.setState({
 				valid: true,
@@ -31,7 +31,7 @@ Flynn.Views.EmailField = React.createClass({
 			if (callbacks) {
 				callbacks.success();
 			}
-		} else {
+		} else if (showError) {
 			this.setState({
 				valid: false,
 				msg: "Please provide a valid email address."

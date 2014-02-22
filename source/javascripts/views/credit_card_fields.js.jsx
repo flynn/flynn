@@ -50,7 +50,7 @@ Flynn.Views.CreditCardFields = React.createClass({
 		});
 
 		if (this.state.ccYear) {
-			this.performCardExpiryValidation();
+			this.performCardExpiryValidation(true);
 		}
 	},
 
@@ -73,7 +73,7 @@ Flynn.Views.CreditCardFields = React.createClass({
 		});
 	},
 
-	performCardNumberValidation: function (value, callbacks) {
+	performCardNumberValidation: function (value, showError, callbacks) {
 		Flynn.withStripe(function (Stripe) {
 			if (Stripe.card.validateCardNumber(value)) {
 				this.setState({
@@ -83,7 +83,7 @@ Flynn.Views.CreditCardFields = React.createClass({
 				if (callbacks) {
 					callbacks.success();
 				}
-			} else {
+			} else if (showError) {
 				this.setState({
 					ccNumberValid: false,
 					ccNumberMsg: "Please enter a valid card number."
@@ -95,7 +95,7 @@ Flynn.Views.CreditCardFields = React.createClass({
 		}.bind(this));
 	},
 
-	performCardExpiryValidation: function () {
+	performCardExpiryValidation: function (showError) {
 		Flynn.withStripe(function (Stripe) {
 			if (Stripe.card.validateExpiry(this.state.ccMonth, this.state.ccYear)) {
 				this.setState({
@@ -107,7 +107,7 @@ Flynn.Views.CreditCardFields = React.createClass({
 						msg: null
 					});
 				}
-			} else {
+			} else if (showError) {
 				this.setState({
 					ccMonthValid: false,
 					ccYearValid: false,
@@ -117,7 +117,7 @@ Flynn.Views.CreditCardFields = React.createClass({
 		}.bind(this));
 	},
 
-	performCardMonthValidation: function (value, callbacks) {
+	performCardMonthValidation: function (value, showError, callbacks) {
 		if (this.props.validationMonthRegex.test(value) && Number(value) > 0 && Number(value) <= 12) {
 			if (this.state.ccYearValid !== false && this.state.ccCVCValid !== false) {
 				this.setState({
@@ -132,7 +132,7 @@ Flynn.Views.CreditCardFields = React.createClass({
 			if (callbacks) {
 				callbacks.success();
 			}
-		} else {
+		} else if (showError) {
 			this.setState({
 				msg: this.props.expCVCInvalidMsg,
 				ccMonthValid: false
@@ -143,7 +143,7 @@ Flynn.Views.CreditCardFields = React.createClass({
 		}
 	},
 
-	performCardYearValidation: function (value, callbacks) {
+	performCardYearValidation: function (value, showError, callbacks) {
 		if (value.length === 2) {
 			value = "20"+ value;
 		}
@@ -162,7 +162,7 @@ Flynn.Views.CreditCardFields = React.createClass({
 			if (callbacks) {
 				callbacks.success();
 			}
-		} else {
+		} else if (showError) {
 			this.setState({
 				msg: this.props.expCVCInvalidMsg,
 				ccYearValid: false
@@ -173,7 +173,7 @@ Flynn.Views.CreditCardFields = React.createClass({
 		}
 	},
 
-	performCardCVCValidation: function (value, callbacks) {
+	performCardCVCValidation: function (value, showError, callbacks) {
 		Flynn.withStripe(function (Stripe) {
 			if (Stripe.card.validateCVC(value)) {
 				if (this.state.ccMonthValid !== false && this.state.ccYearValid !== false) {
@@ -189,7 +189,7 @@ Flynn.Views.CreditCardFields = React.createClass({
 				if (callbacks) {
 					callbacks.success();
 				}
-			} else {
+			} else if (showError) {
 				this.setState({
 					msg: this.props.expCVCInvalidMsg,
 					ccCVCValid: false
