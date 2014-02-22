@@ -84,7 +84,7 @@ Flynn.Views.SponsorForm = React.createClass({
 
 	isSubmitDisabled: function () {
 		if (this.state.submitting) {
-			return false;
+			return true;
 		}
 
 		var firstStepValid = (
