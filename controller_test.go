@@ -92,6 +92,10 @@ func (s *S) TestCreateApp(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(gotApp, DeepEquals, app)
 
+	res, err = s.Get("/apps/"+app.Name, gotApp)
+	c.Assert(err, IsNil)
+	c.Assert(gotApp, DeepEquals, app)
+
 	res, err = s.Get("/apps/fail"+app.ID, gotApp)
 	c.Assert(res.StatusCode, Equals, 404)
 }
@@ -354,6 +358,11 @@ func (s *S) TestSetAppRelease(c *C) {
 
 	gotRelease := &ct.Release{}
 	res, err := s.Get("/apps/"+app.ID+"/release", gotRelease)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(gotRelease, DeepEquals, release)
+
+	res, err = s.Get("/apps/"+app.Name+"/release", gotRelease)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(gotRelease, DeepEquals, release)

@@ -55,7 +55,10 @@ func (r *AppRepo) Get(id string) (interface{}, error) {
 	defer r.mtx.RUnlock()
 	app := r.appIDs[id]
 	if app == nil {
-		return nil, ErrNotFound
+		app = r.appNames[id]
+		if app == nil {
+			return nil, ErrNotFound
+		}
 	}
 	return app, nil
 }
