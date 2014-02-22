@@ -224,3 +224,21 @@ li[class*="icn-"] {
     }
   }
 }
+
+#footer {
+  a {
+    text-decoration: none;
+  }
+
+  .cupcake-logo {
+    display: block;
+    position: relative;
+    margin-top: 0.5em;
+
+    .icn-cupcake:before {
+      font-size: 2em;
+      line-height: 2em;
+      color: $almostWhiteColor;
+    }
+  }
+}
