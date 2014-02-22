@@ -1,0 +1,73 @@
+---
+title: Flynn - The product that ops provides to developers
+layout: base
+---
+
+<div class="container-outer fill">
+  &nbsp;
+  <div class="container-inner centered-text" id="intro">
+    <h1>The product that ops provides to developers</h1>
+    <p><strong>Flynn</strong> simplifies deploying and maintaining applications. Instead of using complex
+      configuration management systems, Flynn allows self-serve management of containerized
+      deployments, making life easier for ops and developers. </p>
+    <a href="/about" class="btn">Learn More</a> <a href="#sponsor" class="btn fill" data-sponsor="">Sponsor</a>
+  </div>
+  &nbsp;
+</div>
+
+<div id="product-photo">
+  <div class="container-outer fill">
+    &nbsp;
+    <div class="container-inner">
+      <%= image_tag "flynn-thumb.png" %>
+    </div>
+    &nbsp;
+  </div>
+</div>
+
+<div class="container-outer">
+  <div class="container-inner">
+    <div class="content">
+      <div class="centered-text">
+        <p> Flynn simplifies deploying and maintaining applications. Instead of using complex configuration management systems, Flynn allows self-serve management of containerized deployments, making life easier for ops and developers.</p>
+
+        <p>Flynn provides a set of “PaaS Lego” including an API that orchestrates the management of containerized services across a cluster. For easy out-of-the-box deployment Flynn includes Heroku-style “git push” deployment and management tools that utilize buildpacks. Flynn was inspired by PaaSes like Heroku but is designed to run more than traditional 12 factor apps by embracing the problem of state.</p>
+      </div>
+      <br/><br/>
+
+      <ul class="list-unstyled flynn">
+        <li class="icn-list">
+          <h2 class="h4">Easy deployment</h2>
+          <p>Just git push. It's like having a private Heroku. Self-serve access for developers makes deploying internal services and one-off projects completely painless.</p>
+        </li>
+
+        <li class="icn-money">
+          <h2 class="h4">Save money</h2>
+          <p>Use fewer servers and free ops to solve important problems. Deploy many lighweight services to a single node.</p>
+        </li>
+
+        <li class="icn-plus-square">
+          <h2 class="h4">Simple and composable</h2>
+          <p>Unlike existing open source PaaS products, Flynn focuses on providing a set of modular components that can be replaced and reused.</p>
+        </li>
+
+        <li class="icn-branch">
+          <h2 class="h4">Painless scaling</h2>
+          <p>Just add more nodes. Everything is containerized; Flynn takes care of distributing work across the cluster.</p>
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<br /> <br /> <br /> <br />
+
+<div class="container-outer">
+  <div class="container-inner">
+    <div class="content">
+      <div class="centered-text">
+        <%= partial :featured_logos %>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,34 @@
+<div id="overlay">
+  <div id="overlay-content">
+    <form accept-charset="UTF-8" action="https://sponsor-flynn.herokuapp.com" method="POST">
+      <input type='hidden' name='token' />
+      <input type='hidden' name='type' />
+
+      <header>
+        <h3>Sponsor Flynn</h3>
+      </header>
+      <section>
+        <h5>Monthly contribution</h5>
+        <p><label><input type='radio' name='amount' value='50000'  data-amount-type='monthly'/>&nbsp;$500</label></p>
+        <p><label><input type='radio' name='amount' value='100000' data-amount-type='monthly' />&nbsp;$1,000</label></p>
+        <p><label><input type='radio' name='amount' value='250000' data-amount-type='monthly' />&nbsp;$2,500</label></p>
+        <p><label><input type='radio' name='amount' value='500000' data-amount-type='monthly' />&nbsp;$5,000</label></p>
+        <p><label><input type='radio' name='amount' value='1000000' data-amount-type='monthly' />&nbsp;$10,000</label></p>
+        <p><label><input type='radio' name='amount' value='0' data-amount-field='monthly' data-amount-type='monthly' /></label>&nbsp;$<input type='text' size='3' name='monthly' /> USD per month</p>
+        <h5>One time contribution</h5>
+        <p><label><input type='radio' name='amount' value='0' data-amount-field='custom-amount' /></label>&nbsp;$<input type='text' size='3' name='custom-amount' /> USD</p>
+
+        <p id='overlay-help'>Please enter your email address</p>
+        <p>
+          <label>Email:&nbsp;<input type='text' name='email' placeholder='you@example.com' /></label>
+        </p>
+        <p>&nbsp;</p>
+
+        <div class='clearfix'>
+          <a href='#' data-action='submit' class="blue_button reserve-button disabled">Contribute now</a>
+          <a href="mailto:contact@flynn.io?subject=We'd%20like%20to%20sponsor%20Flynn" data-action='contact' class="blue_button reserve-button">Contact us</a>
+        </div>
+      </section>
+    </form>
+  </div>
+ </div>

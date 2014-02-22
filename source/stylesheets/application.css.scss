@@ -1,0 +1,225 @@
+@import "pygments";
+@import "variables";
+@import "fly";
+@import "cupcake-icons";
+@import "form";
+
+// TODO: .brand should use Proxima Nova Regular font
+
+#intro {
+  > p {
+    line-height: 2em;
+    max-width: 718px;
+    margin: 0 auto;
+    margin-bottom: 2em;
+  }
+  padding-bottom: 4em;
+}
+
+#product-photo {
+  text-align: center;
+  img {
+    margin-bottom: -220px;
+    width: 660px;
+    max-width: 90%;
+  }
+  padding-bottom: 220px;
+  margin-bottom: 2em;
+}
+
+@media #{$smallBreakPoint} {
+  #product-photo {
+    display: none;
+  }
+}
+
+li[class*="icn-"] {
+  position: relative;
+  margin-left: 0px;
+  padding-left: 2.4em;
+  &:before {
+    position: absolute;
+    left: 0px;
+    font-size: 1.5em;
+  }
+}
+
+.flynn {
+  li[class*="icn-"]:before {
+    color: $greenColor;
+  }
+}
+
+#footer {
+  margin-bottom: 4em;
+
+  hr {
+    width: 65%;
+    margin-bottom: 6em;
+  }
+}
+
+.logos {
+  padding: 20px 0;
+  background: #f3f3f3;
+
+  .logos-wrapper {
+    @include clearfix();
+    width: 90%;
+    margin: 0 auto;
+  }
+
+  li {
+    display: inline-block;
+    margin: 0 16px;
+
+    a {
+      display: block;
+      height: 80px;
+      opacity: 0.4;
+      margin: 4px 6px;
+
+      &:hover {
+        opacity: 1;
+      }
+
+      img {
+        height: 80px;
+      }
+    }
+  }
+}
+
+@media #{$smallBreakPoint} {
+  .logos {
+    li a img {
+      height: 60%;
+    }
+  }
+}
+
+.post {
+  margin-top: 4em;
+}
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background-color: transparentize($blackColor, 0.2);
+  overflow: auto;
+}
+
+  .overlay-top {
+    position: relative;
+    width: 27em;
+    margin: 4% auto;
+  }
+
+  .overlay-content {
+    position: relative;
+    width: 27em;
+    margin: 0 auto;
+    background-color: $lightColor;
+    border-radius: 2px;
+
+    > form {
+      padding: 2em;
+      padding-top: 1px;
+    }
+  }
+
+    .overlay-close {
+      position: absolute;
+      top: 0;
+      right: 0;
+      cursor: pointer;
+      z-index: 2000;
+      background-color: darken($lightColor, 6%);
+      padding: 0.5em;
+      font-size: 1.2em;
+      border-top-right-radius: 2px;
+      border-bottom-left-radius: 2px;
+    }
+
+  @media #{$smallBreakPoint} {
+    .overlay-top {
+      margin: 0;
+      width: 100%;
+    }
+    .overlay-content {
+      margin: 0;
+      width: 100%;
+    }
+  }
+
+.hidden {
+  display: none;
+}
+
+.sponsor-back-btn {
+  margin-right: 1em;
+}
+
+.alert {
+  padding: 0.25em 0.75em;
+  border: 0.1em solid darken($lightColor, 6%);
+  border-radius: 0.25em;
+  font-weight: 400;
+  margin-top: 1em;
+
+  &.error {
+    color: darken($redColor, 6%);
+    border-color: lighten($redColor, 30%);
+    background-color: lighten($redColor, 40%);
+  }
+
+  &.info {
+    color: darken($blueColor, 6%);
+    border-color: lighten($blueColor, 30%);
+    background-color: lighten($blueColor, 40%);
+  }
+
+  &.success {
+    color: darken($greenColor, 6%);
+    border-color: lighten($greenColor, 30%);
+    background-color: lighten($greenColor, 40%);
+  }
+}
+
+.list-block {
+  list-style: none;
+  padding: 0;
+  > li {
+    display: inline-block;
+    margin-right: 0.5em;
+    &:last-of-type {
+      margin-right: 0;
+    }
+
+    color: $grayColor;
+    font-weight: 600;
+    font-size: 2em;
+
+    border: 2px solid darken($lightColor, 20%);
+    width: 150px;
+    background-color: darken($lightColor, 6%);
+
+    &:hover {
+      background-color: darken($lightColor, 12%);
+    }
+
+    > a {
+      display: block;
+      padding: 2em 0px;
+      color: inherit;
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: none;
+      }
+    }
+  }
+}
