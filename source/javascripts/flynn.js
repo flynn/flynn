@@ -76,7 +76,15 @@
 			document.body.appendChild(container);
 
 			this.sponsorForm = React.renderComponent(
-				this.Views.SponsorForm({}),
+				this.Views.SponsorForm({
+					onShow: function () {
+						window.location.hash = "sponsor";
+					},
+
+					onHide: function () {
+						window.location.hash = "";
+					}
+				}),
 				container
 			);
 
