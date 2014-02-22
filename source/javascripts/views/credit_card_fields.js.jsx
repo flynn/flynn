@@ -19,8 +19,8 @@ Flynn.Views.CreditCardFields = React.createClass({
 
 	getDefaultProps: function () {
 		return {
-			validationMonthRegex: /^\d{2}$/,
-			validationYearRegex: /^\d{4}$/,
+			validationMonthRegex: /^\d{1,2}$/,
+			validationYearRegex: /^(\d{2})|(\d{4})$/,
 			expCVCInvalidMsg: "Please enter a valid expiry and CVC."
 		};
 	},
@@ -144,6 +144,10 @@ Flynn.Views.CreditCardFields = React.createClass({
 	},
 
 	performCardYearValidation: function (value, callbacks) {
+		if (value.length === 2) {
+			value = "20"+ value;
+		}
+
 		if (this.props.validationYearRegex.test(value) && Number(value) >= (new Date()).getFullYear()) {
 			if (this.state.ccMonthValid !== false && this.state.ccCVCValid !== false) {
 				this.setState({
