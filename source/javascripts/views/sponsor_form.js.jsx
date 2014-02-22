@@ -50,7 +50,8 @@ Flynn.Views.SponsorForm = React.createClass({
 					number: this.state.values.ccNumber,
 					exp_month: this.state.values.ccMonth,
 					exp_year: this.state.values.ccYear,
-					cvc: this.state.values.ccCVC
+					cvc: this.state.values.ccCVC,
+					name: this.state.values.name
 				}, function (status, res) {
 					if (res.error) {
 						this.setState({
@@ -171,7 +172,6 @@ Flynn.Views.SponsorForm = React.createClass({
 							<InputGroup>
 								<NameField
 									label="Name"
-									name="name"
 									handleValuesUpdated={this.handleValuesUpdated}
 								/>
 							</InputGroup>
