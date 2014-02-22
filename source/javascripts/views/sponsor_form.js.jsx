@@ -31,8 +31,8 @@ Flynn.Views.SponsorForm = React.createClass({
 		});
 	},
 
-	focusEmailInput: function () {
-		this.refs.email.getDOMNode().focus();
+	focusSubmitBtn: function () {
+		this.refs.submit.getDOMNode().focus();
 	},
 
 	handleSubmit: function (e) {
@@ -81,14 +81,14 @@ Flynn.Views.SponsorForm = React.createClass({
 
 	isSubmitDisabled: function () {
 		var firstStepValid = (
-			this.state.values.amount && this.state.values.contributionType && this.state.values.email && this.state.values.name
+			this.state.values.amount && this.state.values.contributionType
 		);
 
 		if (this.state.firstStep) {
 			return !firstStepValid;
 		} else {
 			return !firstStepValid || !(
-				this.state.values.ccNumber && this.state.values.ccMonth && this.state.values.ccYear && this.state.values.ccCVC
+				this.state.values.ccNumber && this.state.values.ccMonth && this.state.values.ccYear && this.state.values.ccCVC && this.state.values.email && this.state.values.name
 			);
 		}
 	},
@@ -135,9 +135,20 @@ Flynn.Views.SponsorForm = React.createClass({
 						<SponsorAmountFields
 							handleValuesUpdated={this.handleValuesUpdated}
 							suggestedMonthlyAmounts={this.props.suggestedMonthlyAmounts}
-							focusNextInput={this.focusEmailInput}
+							focusNextInput={this.focusSubmitBtn}
 						/>
 
+						<button
+							type="submit"
+							ref="submit"
+							className="btn btn-primary"
+							disabled={this.isSubmitDisabled()}>Contribute now</button>
+						<a
+							href="mailto:contact@flynn.io?subject=We'd%20like%20to%20sponsor%20Flynn"
+							className="btn btn-primary">Contact us</a>
+					</div>
+
+					<div className={this.state.firstStep ? "hidden" : ""}>
 						<section>
 							<InputGroup>
 								<EmailField
@@ -161,16 +172,6 @@ Flynn.Views.SponsorForm = React.createClass({
 							</InputGroup>
 						</section>
 
-						<button
-							type="submit"
-							className="btn btn-primary"
-							disabled={this.isSubmitDisabled()}>Contribute now</button>
-						<a
-							href="mailto:contact@flynn.io?subject=We'd%20like%20to%20sponsor%20Flynn"
-							className="btn btn-primary">Contact us</a>
-					</div>
-
-					<div className={this.state.firstStep ? "hidden" : ""}>
 						<CreditCardFields
 							initialValues={{}}
 							handleValuesUpdated={this.handleValuesUpdated}
