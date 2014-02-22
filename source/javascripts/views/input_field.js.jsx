@@ -12,7 +12,7 @@ Flynn.Views.InputField = React.createClass({
 
 	componentDidMount: function () {
 		if (this.props.initialValue) {
-			this.performValidation(this.props.initialValue);
+			this.performValidation(this.props.initialValue, false);
 		}
 	},
 
@@ -28,15 +28,15 @@ Flynn.Views.InputField = React.createClass({
 	handleChange: function (e) {
 		this.props.handleValueUpdated(null);
 		clearTimeout(this.__handleChangeValidationTimeout);
-		this.__handleChangeValidationTimeout = setTimeout(this.__handleChangeValidation, 1000);
+		this.__handleChangeValidationTimeout = setTimeout(this.__handleChangeValidation, 60);
 	},
 
-	__handleChangeValidation: function () {
+	__handleChangeValidation: function (showError) {
 		clearTimeout(this.__handleChangeValidationTimeout);
 
 		var value = this.refs.input.getDOMNode().value;
 
-		this.performValidation(value, {
+		this.performValidation(value, showError || false, {
 			success: function () {
 				this.props.handleValueUpdated(value);
 			}.bind(this),
@@ -47,10 +47,10 @@ Flynn.Views.InputField = React.createClass({
 	},
 
 	handleBlur: function (e) {
-		this.__handleChangeValidation();
+		this.__handleChangeValidation(true);
 	},
 
-	performValidation: function (value, callbacks) {
+	performValidation: function (value, showError, callbacks) {
 		if (value === "") {
 			this.setState({
 				msg: null,
@@ -59,7 +59,7 @@ Flynn.Views.InputField = React.createClass({
 			return;
 		}
 
-		this.props.performValidation(value, callbacks);
+		this.props.performValidation(value, showError, callbacks);
 	},
 
 	// called from the outside world
