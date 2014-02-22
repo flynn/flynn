@@ -43,6 +43,8 @@ Flynn.Views.SponsorForm = React.createClass({
 				firstStep: false
 			});
 		} else {
+			this.setState({ submitting: true });
+
 			Flynn.withStripe(function (Stripe) {
 				Stripe.card.createToken({
 					number: this.state.values.ccNumber,
@@ -52,6 +54,7 @@ Flynn.Views.SponsorForm = React.createClass({
 				}, function (status, res) {
 					if (res.error) {
 						this.setState({
+							submitting: false,
 							alert: {
 								type: 'error',
 								text: res.error.message
@@ -80,6 +83,10 @@ Flynn.Views.SponsorForm = React.createClass({
 	},
 
 	isSubmitDisabled: function () {
+		if (this.state.submitting) {
+			return false;
+		}
+
 		var firstStepValid = (
 			(this.state.values.amount !== null) && this.state.values.contributionType
 		);
