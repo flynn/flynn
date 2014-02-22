@@ -190,7 +190,7 @@ Flynn.Views.SponsorAmountFields = React.createClass({
 								onFocus={this.selectCustomOnetimeAmount}
 								onChange={this.handleCustomOnetimeAmountChange}
 								value={customOnetimeAmount}
-							/> USD per month
+							/> USD
 						</label>
 					</InputGroup>
 				</section>
