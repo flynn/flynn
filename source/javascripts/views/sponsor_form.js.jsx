@@ -155,7 +155,6 @@ Flynn.Views.SponsorForm = React.createClass({
 									label="Email"
 									name="email"
 									ref="email"
-									placeholder="you@example.com"
 									handleValuesUpdated={this.handleValuesUpdated}
 								/>
 							</InputGroup>
@@ -166,7 +165,6 @@ Flynn.Views.SponsorForm = React.createClass({
 								<NameField
 									label="Name"
 									name="name"
-									placeholder="You"
 									handleValuesUpdated={this.handleValuesUpdated}
 								/>
 							</InputGroup>

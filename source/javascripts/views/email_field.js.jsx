@@ -49,8 +49,8 @@ Flynn.Views.EmailField = React.createClass({
 			<InputField
 				type="text"
 				name={this.props.name}
-				label="Email"
-				placeholder="name@example.com"
+				label={this.props.label}
+				placeholder={this.props.placeholder}
 				valid={this.state.valid}
 				msg={this.state.msg}
 				performValidation={this.performValidation}
