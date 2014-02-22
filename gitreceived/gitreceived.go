@@ -166,11 +166,17 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 			cmdline := string(req.Payload[4:])
 			cmdargs, err := shlex.Split(cmdline)
 			if err != nil || len(cmdargs) != 2 {
-				ch.Write([]byte("Invalid arguments."))
+				ch.Stderr().Write([]byte("Invalid arguments."))
 				return
 			}
-			if strings.HasPrefix(cmdargs[1], "/") {
-				cmdargs[1] = cmdargs[1][1:]
+			if cmdargs[0] != "git-receive-pack" {
+				ch.Stderr().Write([]byte("Only `git push` is supported."))
+				return
+			}
+			cmdargs[1] = strings.TrimSuffix(strings.TrimPrefix(cmdargs[1], "/"), ".git")
+			if strings.Contains(cmdargs[1], "/") {
+				ch.Stderr().Write([]byte("Invalid repo."))
+				return
 			}
 			if err := ensureCacheRepo(cmdargs[1]); err != nil {
 				fail("ensureCacheRepo", err)
