@@ -178,7 +178,7 @@ Flynn.Views.SponsorForm = React.createClass({
 						<button
 							type="submit"
 							className="btn btn-primary"
-							disabled={this.isSubmitDisabled()}>Contribute {Flynn.formatDollarAmount(this.state.values.amount)}</button>
+							disabled={this.isSubmitDisabled()}>Contribute {Flynn.formatDollarAmount(this.state.values.amount)}{this.state.values.contributionType === 'monthly' ? " Monthly" : ""}</button>
 						<a
 							href="mailto:contact@flynn.io?subject=We'd%20like%20to%20sponsor%20Flynn"
 							className="btn btn-primary">Contact us</a>
