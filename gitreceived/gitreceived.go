@@ -238,7 +238,7 @@ func exitStatusCh(cmd *exec.Cmd) chan uint {
 		err := cmd.Wait()
 		if err != nil {
 			if exiterr, ok := err.(*exec.ExitError); ok {
-				// There is no plattform independent way to retrieve
+				// There is no platform independent way to retrieve
 				// the exit code, but the following will work on Unix
 				if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
 					exitCh <- uint(status.ExitStatus())
