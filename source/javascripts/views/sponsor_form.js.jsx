@@ -10,7 +10,8 @@ Flynn.Views.SponsorForm = React.createClass({
 			submitting: false,
 			values: {},
 			firstStep: true,
-			alert: null
+			alert: null,
+			emailShouldFocus: false
 		};
 	},
 
@@ -26,7 +27,8 @@ Flynn.Views.SponsorForm = React.createClass({
 	},
 
 	componentDidUpdate: function () {
-		if ( !this.state.firstStep ) {
+		if (this.state.emailShouldFocus) {
+			this.setState({ emailShouldFocus: false });
 			this.focusEmailInput();
 		}
 	},
@@ -50,7 +52,8 @@ Flynn.Views.SponsorForm = React.createClass({
 
 		if (this.state.firstStep) {
 			this.setState({
-				firstStep: false
+				firstStep: false,
+				emailShouldFocus: true
 			});
 		} else {
 			this.setState({ submitting: true });
