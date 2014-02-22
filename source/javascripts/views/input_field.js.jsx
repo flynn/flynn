@@ -56,7 +56,6 @@ Flynn.Views.InputField = React.createClass({
 				msg: null,
 				valid: null
 			});
-			return;
 		}
 
 		this.props.performValidation(value, showError, callbacks);
