@@ -21,7 +21,7 @@ import (
 
 const PrereceiveHook = `#!/bin/bash
 set -eo pipefail; while read oldrev newrev refname; do
-[[ $refname = "refs/heads/master" ]] && git archive $newrev | {{RECEIVER}} "$RECEIVE_USER" "$RECEIVE_REPO" "$RECEIVE_KEYNAME" "$RECEIVE_FINGERPRINT" | sed -$([[ $(uname) == "Darwin" ]] && echo l || echo u) "s/^/"$'\e[1G'"/"
+[[ $refname = "refs/heads/master" ]] && git archive $newrev | {{RECEIVER}} "$RECEIVE_REPO" "$newrev" | sed -$([[ $(uname) == "Darwin" ]] && echo l || echo u) "s/^/"$'\e[1G'"/"
 done
 `
 

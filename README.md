@@ -18,12 +18,10 @@ The named key path is a path that contains public keys as files using filename a
 
 The receiver argument is a path to an executable that will handle the push. It will get a tar stream of the repo via stdin and the following arguments:
 
-	receiver-script USER REPO KEYNAME FINGERPRINT
+	receiver-script REPO COMMIT
 
-* USER is the virtual "system" user pushed to. This can be anything git, etc that was used in the push
-* REPO is the repo name that was pushed to. It can also be anything and may include slashes (ie progrium/repo)
-* KEYNAME is the name of the key used to authentication. This is often used for the name of the user
-* FINGERPRINT is a standard public key fingerprint of the key used which can be used to do further auth
+* REPO is the name of the repo that was pushed to. It will not contain slashes.
+* COMMIT is the SHA of the commit that was pushed to master.
 
 ## Todo
 
