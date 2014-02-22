@@ -7,8 +7,8 @@ Flynn.Views.SponsorAmountFields = React.createClass({
 		return {
 			valid: null,
 
-			customMonthlyAmount: 0,
-			customOnetimeAmount: 0
+			customMonthlyAmount: null,
+			customOnetimeAmount: null
 		};
 	},
 
@@ -24,7 +24,10 @@ Flynn.Views.SponsorAmountFields = React.createClass({
 
 	handleCustomMonthlyAmountChange: function () {
 		var dollarAmount = this.refs.customMonthlyAmountInput.getDOMNode().value;
-		var cents = (parseInt(dollarAmount) * 100) || 0;
+		var cents = (parseInt(dollarAmount) * 100);
+		if (isNaN(cents)) {
+			cents = null;
+		}
 
 		this.setState({
 			customMonthlyAmount: cents,
@@ -53,7 +56,10 @@ Flynn.Views.SponsorAmountFields = React.createClass({
 
 	handleCustomOnetimeAmountChange: function () {
 		var dollarAmount = this.refs.customOnetimeAmountInput.getDOMNode().value;
-		var cents = (parseInt(dollarAmount) * 100) || 0;
+		var cents = (parseInt(dollarAmount) * 100);
+		if (isNaN(cents)) {
+			cents = null;
+		}
 
 		this.setState({
 			customOnetimeAmount: cents,
@@ -121,6 +127,16 @@ Flynn.Views.SponsorAmountFields = React.createClass({
 			);
 		}.bind(this));
 
+		var customMonthlyAmount = "";
+		if (this.state.customMonthlyAmount !== null) {
+			customMonthlyAmount = this.state.customMonthlyAmount / 100;
+		}
+
+		var customOnetimeAmount = "";
+		if (this.state.customOnetimeAmount !== null) {
+			customOnetimeAmount = this.state.customOnetimeAmount / 100;
+		}
+
 		return (
 			<div>
 				<section>
@@ -145,7 +161,7 @@ Flynn.Views.SponsorAmountFields = React.createClass({
 								ref="customMonthlyAmountInput"
 								onFocus={this.selectCustomMonthlyAmount}
 								onChange={this.handleCustomMonthlyAmountChange}
-								value={(this.state.customMonthlyAmount / 100) || ''}
+								value={customMonthlyAmount}
 								onKeyDown={this.handleCustomMonthlyAmountKeyDown}
 							/> USD per month
 						</label>
@@ -173,7 +189,7 @@ Flynn.Views.SponsorAmountFields = React.createClass({
 								ref="customOnetimeAmountInput"
 								onFocus={this.selectCustomOnetimeAmount}
 								onChange={this.handleCustomOnetimeAmountChange}
-								value={(this.state.customOnetimeAmount / 100) || ''}
+								value={customOnetimeAmount}
 							/> USD per month
 						</label>
 					</InputGroup>
