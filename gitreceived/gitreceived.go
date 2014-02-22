@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/flynn/go-crypto-ssh"
@@ -252,7 +253,12 @@ func exitStatusCh(cmd *exec.Cmd) chan uint {
 	return exitCh
 }
 
+var cacheMtx sync.Mutex
+
 func ensureCacheRepo(path string) {
+	cacheMtx.Lock()
+	defer cacheMtx.Unlock()
+
 	cachePath := *repoPath + "/" + path
 	if _, err := os.Stat(cachePath); os.IsNotExist(err) {
 		os.MkdirAll(cachePath, 0755)
