@@ -78,10 +78,10 @@ type fakeHostClient struct {
 	attach  map[string]cluster.ReadWriteCloser
 }
 
-func (c *fakeHostClient) ListJobs() (map[string]host.ActiveJob, error)        { return nil, nil }
-func (c *fakeHostClient) GetJob(id string) (*host.ActiveJob, error)           { return nil, nil }
-func (c *fakeHostClient) StreamEvents(id string, ch chan<- host.Event) *error { return nil }
-func (c *fakeHostClient) Close() error                                        { return nil }
+func (c *fakeHostClient) ListJobs() (map[string]host.ActiveJob, error)                 { return nil, nil }
+func (c *fakeHostClient) GetJob(id string) (*host.ActiveJob, error)                    { return nil, nil }
+func (c *fakeHostClient) StreamEvents(id string, ch chan<- *host.Event) cluster.Stream { return nil }
+func (c *fakeHostClient) Close() error                                                 { return nil }
 func (c *fakeHostClient) Attach(req *host.AttachReq, wait bool) (cluster.ReadWriteCloser, func() error, error) {
 	return c.attach[req.JobID], nil, nil
 }
