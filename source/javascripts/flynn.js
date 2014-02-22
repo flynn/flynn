@@ -79,6 +79,22 @@
 				this.Views.SponsorForm({}),
 				container
 			);
+
+			this.__checkHashFragment();
+			window.addEventListener('popstate', this.__handleChangeLocationState, false);
+			window.addEventListener('pushstate', this.__handleChangeLocationState, false);
+		},
+
+		__handleChangeLocationState: function (e) {
+			Flynn.__checkHashFragment();
+		},
+
+		__checkHashFragment: function () {
+			if (window.location.hash === "#sponsor") {
+				this.sponsorForm.show();
+			} else {
+				this.sponsorForm.hide();
+			}
 		},
 
 		__initSponsorBtns: function () {
