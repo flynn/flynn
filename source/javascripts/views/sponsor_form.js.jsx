@@ -140,7 +140,7 @@ Flynn.Views.SponsorForm = React.createClass({
 		}
 
 		return (
-			<Modal ref="modal">
+			<Modal ref="modal" onShow={this.props.onShow} onHide={this.props.onHide}>
 				<form
 					accept-charset="UTF-8"
 					action="https://sponsor-flynn.herokuapp.com"

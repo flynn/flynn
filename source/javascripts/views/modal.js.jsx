@@ -38,9 +38,16 @@ Flynn.Views.Modal = React.createClass({
 
 	// called from the outside world
 	toggleVisibility: function () {
+		var visible = !this.state.visible;
 		this.setState({
-			visible: !this.state.visible
+			visible: visible
 		});
+
+		if (visible) {
+			this.props.onShow();
+		} else {
+			this.props.onHide();
+		}
 	},
 
 	// called from the outside world
