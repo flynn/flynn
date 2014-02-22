@@ -92,13 +92,15 @@ func keyCallback(conn *ssh.ServerConn, user, algo string, pubkey []byte) bool {
 	os.MkdirAll(*keyPath, 0755)
 	files, err := ioutil.ReadDir(*keyPath)
 	if err != nil {
-		panic(err)
+		log.Println("keydir read failed:", err)
+		return false
 	}
 	for _, file := range files {
 		if !file.IsDir() {
 			data, err := ioutil.ReadFile(*keyPath + "/" + file.Name())
 			if err != nil {
-				panic(err)
+				log.Println("key read failed:", err)
+				return false
 			}
 			filekey, _, _, _, ok := ssh.ParseAuthorizedKey(data)
 			if !ok {
@@ -138,11 +140,11 @@ func handleConnection(conn *ssh.ServerConn) {
 }
 
 func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
-	err := ch.Accept()
-	if err != nil {
-		panic(err)
-	}
 	defer ch.Close()
+	if err := ch.Accept(); err != nil {
+		log.Println("ch.Accept failed:", err)
+		return
+	}
 	for {
 		req, err := ch.ReadRequest()
 		if err == io.EOF {
@@ -154,18 +156,26 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 		}
 		switch req.Request {
 		case "exec":
+			fail := func(at string, err error) {
+				log.Printf("%s failed: %s", at, err)
+				ch.Stderr().Write([]byte("Internal error."))
+			}
 			if req.WantReply {
 				ch.AckRequest(true)
 			}
 			cmdline := string(req.Payload[4:])
 			cmdargs, err := shlex.Split(cmdline)
-			if err != nil {
-				panic(err)
+			if err != nil || len(cmdargs) != 2 {
+				ch.Write([]byte("Invalid arguments."))
+				return
 			}
 			if strings.HasPrefix(cmdargs[1], "/") {
 				cmdargs[1] = cmdargs[1][1:]
 			}
-			ensureCacheRepo(cmdargs[1])
+			if err := ensureCacheRepo(cmdargs[1]); err != nil {
+				fail("ensureCacheRepo", err)
+				return
+			}
 			var keyname, fingerprint string
 			if *noAuth {
 				fingerprint = ""
@@ -184,16 +194,18 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 			}
 			done, err := attachCmd(cmd, ch, ch.Stderr(), ch)
 			if err != nil {
-				panic(err)
+				fail("attachCmd", err)
+				return
 			}
-			err = cmd.Start()
-			if err != nil {
-				panic(err)
+			if err := cmd.Start(); err != nil {
+				fail("cmd.Start", err)
+				return
 			}
 			done.Wait()
 			status, err := exitStatus(cmd)
 			if err != nil {
-				panic(err)
+				fail("exitStatus", err)
+				return
 			}
 			ch.Exit(uint(status))
 		case "env":
@@ -254,7 +266,7 @@ func exitStatus(cmd *exec.Cmd) (int, error) {
 
 var cacheMtx sync.Mutex
 
-func ensureCacheRepo(path string) {
+func ensureCacheRepo(path string) error {
 	cacheMtx.Lock()
 	defer cacheMtx.Unlock()
 
@@ -265,17 +277,18 @@ func ensureCacheRepo(path string) {
 		cmd.Dir = cachePath
 		err = cmd.Run()
 		if err != nil {
-			panic(err)
+			return err
 		}
 	}
 	receiver, err := filepath.Abs(receiver)
 	if err != nil {
-		panic(err)
+		return err
 	}
-	ioutil.WriteFile(
+	return ioutil.WriteFile(
 		cachePath+"/hooks/pre-receive",
 		[]byte(strings.Replace(PrereceiveHook, "{{RECEIVER}}", receiver, 1)),
-		0755)
+		0755,
+	)
 }
 
 func publicKeyFingerprint(key ssh.PublicKey) string {
