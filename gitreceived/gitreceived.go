@@ -72,11 +72,11 @@ func main() {
 		// SSH connections just house multiplexed connections
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Println("failed to accept incoming connection")
+			log.Println("failed to accept incoming connection:", err)
 			continue
 		}
 		if err := conn.Handshake(); err != nil {
-			log.Println("failed to handshake")
+			log.Println("failed to handshake:", err)
 			continue
 		}
 		go handleConnection(conn)
@@ -125,7 +125,7 @@ func handleConnection(conn *ssh.ServerConn) {
 			return
 		}
 		if err != nil {
-			log.Println("hanndleConnection Accept:", err)
+			log.Println("handleConnection Accept:", err)
 			break
 		}
 		if ch.ChannelType() != "session" {
