@@ -25,6 +25,12 @@ Flynn.Views.SponsorForm = React.createClass({
 		};
 	},
 
+	componentDidUpdate: function () {
+		if ( !this.state.firstStep ) {
+			this.focusEmailInput();
+		}
+	},
+
 	handleValuesUpdated: function (values) {
 		this.setState({
 			values: Marbles.Utils.extend({}, this.state.values, values)
@@ -33,6 +39,10 @@ Flynn.Views.SponsorForm = React.createClass({
 
 	focusSubmitBtn: function () {
 		this.refs.submit.getDOMNode().focus();
+	},
+
+	focusEmailInput: function () {
+		this.refs.email.getDOMNode().focus();
 	},
 
 	handleSubmit: function (e) {
