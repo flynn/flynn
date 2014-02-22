@@ -1,10 +1,10 @@
-# gitreceive-next (alpha)
+# gitreceived
 
 An SSH server made specifically for accepting git pushes that will trigger a receiver script to handle the push however you like. It supports key based authentication and soon authorization (ACLs). 
 
-This is a more advanced, standalone version of [gitreceive](https://github.com/progrium/gitreceive). This project will eventually be renamed to `gitreceive` and the old project will be renamed to `gitreceive-classic`. 
+This is a more advanced, standalone version of [gitreceive](https://github.com/progrium/gitreceive).
 
-## Using gitreceive
+## Using gitreceived
 
 ```
 Usage:  ./gitreceived [options] <privatekey> <receiver>
