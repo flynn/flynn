@@ -195,6 +195,7 @@ li[class*="icn-"] {
   > li {
     display: inline-block;
     margin-right: 0.5em;
+    line-height: 1em;
     &:last-of-type {
       margin-right: 0;
     }
@@ -213,7 +214,7 @@ li[class*="icn-"] {
 
     > a {
       display: block;
-      padding: 2em 0px;
+      padding: 1.845em 0px;
       color: inherit;
       text-decoration: none;
 
