@@ -96,6 +96,16 @@ Flynn.Views.SponsorForm = React.createClass({
 		this.refs.modal.toggleVisibility();
 	},
 
+	// called from the outside world
+	show: function () {
+		this.refs.modal.show();
+	},
+
+	// called from the outside world
+	hide: function () {
+		this.refs.modal.hide();
+	},
+
 	isSubmitDisabled: function () {
 		if (this.state.submitting) {
 			return true;

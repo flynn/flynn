@@ -43,6 +43,16 @@ Flynn.Views.Modal = React.createClass({
 		});
 	},
 
+	// called from the outside world
+	show: function () {
+		this.setState({ visible: true });
+	},
+
+	// called from the outside world
+	hide: function () {
+		this.setState({ visible: false });
+	},
+
 	render: function () {
 		return (
 			<div
