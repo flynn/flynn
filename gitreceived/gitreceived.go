@@ -174,7 +174,7 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 				fingerprint = publicKeyFingerprint(conn.PublicKey)
 				keyname = keyNames[fingerprint]
 			}
-			cmd := exec.Command(cmdargs[0], cmdargs[1:]...)
+			cmd := exec.Command("git-shell", "-c", cmdargs[0]+" '"+cmdargs[1]+"'")
 			cmd.Dir = *repoPath
 			cmd.Env = []string{
 				"RECEIVE_USER=" + conn.User,
