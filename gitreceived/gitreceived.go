@@ -158,7 +158,7 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 		case "exec":
 			fail := func(at string, err error) {
 				log.Printf("%s failed: %s", at, err)
-				ch.Stderr().Write([]byte("Internal error."))
+				ch.Stderr().Write([]byte("Internal error.\n"))
 			}
 			if req.WantReply {
 				ch.AckRequest(true)
@@ -166,11 +166,11 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 			cmdline := string(req.Payload[4:])
 			cmdargs, err := shlex.Split(cmdline)
 			if err != nil || len(cmdargs) != 2 {
-				ch.Stderr().Write([]byte("Invalid arguments."))
+				ch.Stderr().Write([]byte("Invalid arguments.\n"))
 				return
 			}
 			if cmdargs[0] != "git-receive-pack" {
-				ch.Stderr().Write([]byte("Only `git push` is supported."))
+				ch.Stderr().Write([]byte("Only `git push` is supported.\n"))
 				return
 			}
 			cmdargs[1] = strings.TrimSuffix(strings.TrimPrefix(cmdargs[1], "/"), ".git")
