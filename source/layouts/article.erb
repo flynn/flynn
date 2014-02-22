@@ -1,0 +1,18 @@
+<% wrap_layout(:layout) do %>
+  <div class="content narrow">
+    <article class="post">
+      <header>
+        <% if date = current_page.data[:date] %>
+          <time datetime="<%= date.to_s %>"><%= Date.parse(date.to_s).strftime('%b %e, %Y') %></time>
+        <% end %>
+        <h1><%= current_page.data[:title] %></h1>
+      </header>
+
+      <%= yield %>
+    </article>
+
+    <br /><br />
+
+    <%= partial :mailing_list %>
+  </div>
+<% end %>
