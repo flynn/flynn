@@ -3,7 +3,7 @@ title: Docs - Flynn
 layout: docs
 ---
 
-# Flynn Project Guidebook
+# Flynn Project Docs
 
 ## What is Flynn?
 
@@ -11,15 +11,15 @@ Flynn has been marketed as an open source Heroku-like Platform as a Service (Paa
 
 Flynn is two things:
 
-1) a "distribution" of components that out-of-the-box gives companies a reasonable starting point for an internal "platform" for running their applications and services,
+1. a "distribution" of components that out-of-the-box gives companies a reasonable starting point for an internal "platform" for running their applications and services,
 
-2) the banner for a collection of independent projects that together make up a toolkit or loose framework for building distributed systems.
+2. the banner for a collection of independent projects that together make up a toolkit or loose framework for building distributed systems.
 
 Flynn is both a whole and many parts, depending on what is most useful for you. The common goal is to democratize years of experience and best practices in building distributed systems. It is the software layer between operators and developers that makes both their lives easier.
 
-## How to use this Guidebook
+## How to use this document
 
-This guidebook is intended to be read primarily for developers and contributors of the project, however it should provide just as much insight for users of Flynn. Since Flynn is designed to be understandable and "hackable" by its users, and as much as possible built with itself, we treat users (both operators and developers) and contributors as equal citizens.
+This document is intended to be read primarily for developers and contributors of the project, however it should provide just as much insight for users of Flynn. Since Flynn is designed to be understandable and "hackable" by its users, and as much as possible built with itself, we treat users (both operators and developers) and contributors as equal citizens.
 
 ## Design Philosophy
 
@@ -53,23 +53,19 @@ Specifically we're talking about the world of web APIs. To most the "web" means 
 
 We also believe that HTTP is a sort of [universal protocol](http://timothyfitz.com/2009/02/12/why-http/). It's well understood, widely deployed, and very expressive. This is why HTTP is our default choice in protocol unless there is a specific reason not to use it.
 
-TODO: little more
-
 #### Distributed Services
 
 As the knowledge of building complex, scalable, and highly available web applications has reached more developers, many of the concepts of distributed systems have been rediscovered. Along with many ideas traditionally found in "Enterprise Architectures" such as messaging systems and service oriented architectures. In fact, most modern web architectures are service oriented architectures.
 
 By distributed services, we mean the body of knowledge behind distributed, service oriented systems that are behind most large organizations these days, such as Google and Twitter. While the world of web focuses on the simpler external web ecosystem, our concept of distributed services focuses on the complex demands behind an individual service in that ecosystem.
 
-TODO: more
-
 ### Simple Components
 
 Given the best practices and ideas from these three worlds, our design philosophy then centers around one general theme of simple components. Besides the obvious, this manifests in two desired properties:
 
-1) **Hackability** -- This generally means the system is easy to get into, understand, and change. It's not meant to work the single way the designers intended, it's meant to be able to work however you want it to, ideally with less effort than more.
+1. **Hackability** -- This generally means the system is easy to get into, understand, and change. It's not meant to work the single way the designers intended, it's meant to be able to work however you want it to, ideally with less effort than more.
 
-2) **One Audience** -- As mentioned earlier in this book, we try to make all knowledge, documentation, and source behind the project accessible to a single audience as opposed to separate user and developer or developer and operator audiences. This forces everything to be simple and well documented.
+2. **One Audience** -- As mentioned earlier in this document, we try to make all knowledge, documentation, and source behind the project accessible to a single audience as opposed to separate user and developer or developer and operator audiences. This forces everything to be simple and well documented.
 
 There has been a lot of thought already put into the idea of both simplicity in software. Our favorite works come from the Unix philosophy as mentioned before. Within this domain, it's easy to find great models for simplicity. For example, "worse is better", which suffers from a name that is too clever, but is basically a manifesto for simplicity over perfection.
 
@@ -93,8 +89,6 @@ These rules have a common theme, and for our purposes results in the heart of ou
 
 Design philosophy is high level. We also have specific guidelines or policies that can ease decision-making by providing pre-determined decisions that are already aligned with our philosophy. Although we are pragmatic about applying these, we do tend to naturally come back to them anyway. Nevertheless, they are still only guidelines.
 
-TODO: the guidelines
-
 ## Project Guidelines
 
 Any healthy open source project has a community around it and those active in contributing to the project form an ad-hoc organization. Unless it's a standards body or an Apache project, the organization is often fairly lightweight. But with time comes culture and with growth comes structure. Both of which are hard to change. As Pieter Hintjens of ZeroMQ once put it, "Any structure defends itself."
@@ -102,7 +96,3 @@ Any healthy open source project has a community around it and those active in co
 That said, most of our guidelines around organizing projects (since Flynn is actually many projects) are about remaining simple and lightweight, but also include best practices in cultivating cultures that seem to avoid some of the traps that emerge in some open source projects.
 
 See more at [Contributing](/docs/contributing)
-
-## [Architecture](/docs/architecture)
-
-## [Roadmap](/docs/roadmap)
