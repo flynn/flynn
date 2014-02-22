@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/flynn/flynn-controller/client"
+	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-dockerclient"
@@ -26,20 +28,21 @@ func init() {
 }
 
 func main() {
+	var client *controller.Client
 	services, _ := discoverd.Services("shelf", discoverd.DefaultTimeout)
 	if len(services) < 1 {
 		panic("Shelf is not discoverable")
 	}
 	shelfHost := services[0].Addr
 
-	app := os.Args[2]
+	app := os.Args[1]
+	commit := os.Args[2]
 
 	fmt.Printf("-----> Building %s...\n", app)
 
-	scheduleAndAttach(cluster.RandomJobID(app+"-build."), docker.Config{
+	types := scheduleAndAttach(cluster.RandomJobID(app+"-build."), docker.Config{
 		Image:        "flynn/slugbuilder",
-		Cmd:          []string{"http://" + shelfHost + "/" + app + ".tgz"},
-		Tty:          false,
+		Cmd:          []string{"http://" + shelfHost + "/" + commit + ".tgz"},
 		AttachStdin:  true,
 		AttachStdout: true,
 		AttachStderr: true,
@@ -47,38 +50,48 @@ func main() {
 		StdinOnce:    true,
 	})
 
-	fmt.Printf("-----> Deploying %s ...\n", app)
-
-	jobid := cluster.RandomJobID(app + "-web.")
-
-	scheduleWithTcpPort(jobid, docker.Config{
-		Image:        "flynn/slugrunner",
-		Cmd:          []string{"start", "web"},
-		Tty:          false,
-		AttachStdin:  false,
-		AttachStdout: false,
-		AttachStderr: false,
-		OpenStdin:    false,
-		StdinOnce:    false,
-		Env: []string{
-			"SLUG_URL=http://" + shelfHost + "/" + app + ".tgz",
-			"SD_NAME=" + app,
-		},
-	})
-
-	fmt.Println("=====> Application deployed")
-}
-
-func scheduleWithTcpPort(jobid string, config docker.Config) (hostid string) {
-	hostid = randomHost()
-	addReq := &host.AddJobsReq{
-		Incremental: true,
-		HostJobs:    map[string][]*host.Job{hostid: {{ID: jobid, Config: &config, TCPPorts: 1}}},
-	}
-	if _, err := clusterc.AddJobs(addReq); err != nil {
+	prevRelease, err := client.GetAppRelease(app)
+	if err == controller.ErrNotFound {
+		prevRelease = &ct.Release{}
+	} else if err != nil {
 		log.Fatal(err)
 	}
-	return
+	artifact := &ct.Artifact{URI: "docker://flynn/slugrunner"}
+	if err := client.CreateArtifact(artifact); err != nil {
+		log.Fatal(err)
+	}
+
+	release := &ct.Release{
+		ArtifactID: artifact.ID,
+		Env:        prevRelease.Env,
+	}
+	procs := make(map[string]ct.ProcessType)
+	for _, t := range types {
+		proc := prevRelease.Processes[t]
+		proc.Cmd = []string{"start", t}
+		if t == "web" {
+			proc.Ports.TCP = 1
+			if proc.Env == nil {
+				proc.Env = make(map[string]string)
+			}
+			proc.Env["SD_NAME"] = app + "-web"
+		}
+		procs[t] = proc
+	}
+	release.Processes = procs
+	if release.Env == nil {
+		release.Env = make(map[string]string)
+	}
+	release.Env["SLUG_URL"] = "http://" + shelfHost + "/" + commit + ".tgz"
+
+	if err := client.CreateRelease(release); err != nil {
+		log.Fatal(err)
+	}
+	if err := client.SetAppRelease(app, release.ID); err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("=====> Application deployed")
 }
 
 func randomHost() (hostid string) {
