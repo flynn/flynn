@@ -182,16 +182,20 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 				"RECEIVE_KEYNAME=" + keyname,
 				"RECEIVE_FINGERPRINT=" + fingerprint,
 			}
-			errCh := attachCmd(cmd, ch, ch.Stderr(), ch)
+			done, err := attachCmd(cmd, ch, ch.Stderr(), ch)
+			if err != nil {
+				panic(err)
+			}
 			err = cmd.Start()
 			if err != nil {
 				panic(err)
 			}
-			exitCh := exitStatusCh(cmd)
-			if err = <-errCh; err != nil {
+			done.Wait()
+			status, err := exitStatus(cmd)
+			if err != nil {
 				panic(err)
 			}
-			ch.Exit(<-exitCh)
+			ch.Exit(uint(status))
 		case "env":
 			if req.WantReply {
 				ch.AckRequest(true)
@@ -200,57 +204,52 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 	}
 }
 
-func attachCmd(cmd *exec.Cmd, stdout, stderr io.Writer, stdin io.Reader) chan error {
-	errCh := make(chan error)
+func attachCmd(cmd *exec.Cmd, stdout, stderr io.Writer, stdin io.Reader) (*sync.WaitGroup, error) {
+	var wg sync.WaitGroup
+	wg.Add(2)
 
 	stdinIn, err := cmd.StdinPipe()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	stdoutOut, err := cmd.StdoutPipe()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	stderrOut, err := cmd.StderrPipe()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	go func() {
-		_, e := io.Copy(stdinIn, stdin)
-		errCh <- e
+		io.Copy(stdinIn, stdin)
+		stdinIn.Close()
 	}()
 	go func() {
-		_, e := io.Copy(stdout, stdoutOut)
-		errCh <- e
+		io.Copy(stdout, stdoutOut)
+		wg.Done()
 	}()
 	go func() {
-		_, e := io.Copy(stderr, stderrOut)
-		errCh <- e
+		io.Copy(stderr, stderrOut)
+		wg.Done()
 	}()
 
-	return errCh
+	return &wg, nil
 }
 
-func exitStatusCh(cmd *exec.Cmd) chan uint {
-	exitCh := make(chan uint)
-	go func() {
-		err := cmd.Wait()
-		if err != nil {
-			if exiterr, ok := err.(*exec.ExitError); ok {
-				// There is no platform independent way to retrieve
-				// the exit code, but the following will work on Unix
-				if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
-					exitCh <- uint(status.ExitStatus())
-				}
-			} else {
-				panic(err)
+func exitStatus(cmd *exec.Cmd) (int, error) {
+	err := cmd.Wait()
+	if err != nil {
+		if exiterr, ok := err.(*exec.ExitError); ok {
+			// There is no platform independent way to retrieve
+			// the exit code, but the following will work on Unix
+			if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+				return status.ExitStatus(), nil
 			}
-			return
 		}
-		exitCh <- uint(0)
-	}()
-	return exitCh
+		return 0, err
+	}
+	return 0, nil
 }
 
 var cacheMtx sync.Mutex
