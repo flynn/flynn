@@ -388,7 +388,7 @@ func dockerImage(uri string) (string, error) {
 	if tag := u.Query().Get("tag"); tag != "" {
 		suffix = ":" + tag
 	}
-	return u.Host + suffix, nil
+	return u.Host + u.Path + suffix, nil
 }
 
 func formatEnv(envs ...map[string]string) []string {
