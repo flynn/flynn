@@ -5,7 +5,7 @@ layout: docs
 
 # Trademark Guidelines
 
-Apollic Software, LLC (“Cupcake”) trademarks, service marks and logos (“our Marks”) are valuable assets that Cupcake needs to protect. Docker has posted these Trademark Usage Guidelines (“Guidelines”) to assist you in properly using our Marks. The strength of our Marks depends, in part, upon consistent and appropriate use. We ask that you properly use and credit our Marks in accordance with these Guidelines. We reserve the right to change these Guidelines at anytime and solely at our discretion.
+Apollic Software, LLC (“Cupcake”) trademarks, service marks and logos (“our Marks”) are valuable assets that Cupcake needs to protect. Cupcake has posted these Trademark Usage Guidelines (“Guidelines”) to assist you in properly using our Marks. The strength of our Marks depends, in part, upon consistent and appropriate use. We ask that you properly use and credit our Marks in accordance with these Guidelines. We reserve the right to change these Guidelines at anytime and solely at our discretion.
 
 ## The Marks
 
