@@ -130,7 +130,7 @@ func setAppRelease(app *ct.App, rid releaseID, apps *AppRepo, releases *ReleaseR
 	if err != nil {
 		// TODO: 500/log error
 	}
-	if len(fs) == 1 {
+	if len(fs) == 1 && fs[0].ReleaseID != release.ID {
 		if err := formations.Add(&ct.Formation{
 			AppID:     app.ID,
 			ReleaseID: release.ID,
