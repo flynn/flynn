@@ -61,8 +61,13 @@ func (c *context) watchFormations(fs formationStreamer) {
 	ch, _ := fs.StreamFormations()
 
 	for ef := range ch {
-		f := NewFormation(c, ef)
-		c.formations.Add(f)
+		f := c.formations.Get(ef.App.ID, ef.Release.ID)
+		if f != nil {
+			f.SetProcesses(ef.Processes)
+		} else {
+			f = NewFormation(c, ef)
+			c.formations.Add(f)
+		}
 		go f.Rectify()
 	}
 
@@ -250,6 +255,12 @@ type Formation struct {
 
 func (f *Formation) key() formationKey {
 	return formationKey{f.App.ID, f.Release.ID}
+}
+
+func (f *Formation) SetProcesses(p map[string]int) {
+	f.mtx.Lock()
+	f.Processes = p
+	f.mtx.Unlock()
 }
 
 func (f *Formation) Rectify() {
