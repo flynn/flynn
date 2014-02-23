@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -173,24 +174,34 @@ func (s *S) TestCreateRelease(c *C) {
 }
 
 func (s *S) TestCreateFormation(c *C) {
-	release := s.createTestRelease(c, &ct.Release{})
-	app := s.createTestApp(c, &ct.App{Name: "asdf1"})
+	for i, useName := range []bool{false, true} {
+		release := s.createTestRelease(c, &ct.Release{})
+		app := s.createTestApp(c, &ct.App{Name: fmt.Sprintf("createFormation%d", i)})
 
-	in := &ct.Formation{ReleaseID: release.ID, AppID: app.ID, Processes: map[string]int{"web": 1}}
-	out := s.createTestFormation(c, in)
-	c.Assert(out.AppID, Equals, app.ID)
-	c.Assert(out.ReleaseID, Equals, release.ID)
-	c.Assert(out.Processes["web"], Equals, 1)
+		in := &ct.Formation{ReleaseID: release.ID, AppID: app.ID, Processes: map[string]int{"web": 1}}
+		if useName {
+			in.AppID = app.Name
+		}
+		out := s.createTestFormation(c, in)
+		c.Assert(out.AppID, Equals, app.ID)
+		c.Assert(out.ReleaseID, Equals, release.ID)
+		c.Assert(out.Processes["web"], Equals, 1)
 
-	gotFormation := &ct.Formation{}
-	path := formationPath(app.ID, release.ID)
-	res, err := s.Get(path, gotFormation)
-	c.Assert(err, IsNil)
-	c.Assert(res.StatusCode, Equals, 200)
-	c.Assert(gotFormation, DeepEquals, out)
+		gotFormation := &ct.Formation{}
+		var path string
+		if useName {
+			path = formationPath(app.Name, release.ID)
+		} else {
+			path = formationPath(app.ID, release.ID)
+		}
+		res, err := s.Get(path, gotFormation)
+		c.Assert(err, IsNil)
+		c.Assert(res.StatusCode, Equals, 200)
+		c.Assert(gotFormation, DeepEquals, out)
 
-	res, err = s.Get(path+"fail", gotFormation)
-	c.Assert(res.StatusCode, Equals, 404)
+		res, err = s.Get(path+"fail", gotFormation)
+		c.Assert(res.StatusCode, Equals, 404)
+	}
 }
 
 func (s *S) createTestFormation(c *C, formation *ct.Formation) *ct.Formation {
@@ -214,17 +225,24 @@ func formationPath(appID, releaseID string) string {
 }
 
 func (s *S) TestDeleteFormation(c *C) {
-	release := s.createTestRelease(c, &ct.Release{})
-	app := s.createTestApp(c, &ct.App{Name: "asdf2"})
+	for i, useName := range []bool{false, true} {
+		release := s.createTestRelease(c, &ct.Release{})
+		app := s.createTestApp(c, &ct.App{Name: fmt.Sprintf("deleteFormation%d", i)})
 
-	out := s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
-	path := formationPath(app.ID, release.ID)
-	res, err := s.Delete(path)
-	c.Assert(err, IsNil)
-	c.Assert(res.StatusCode, Equals, 200)
+		out := s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
+		var path string
+		if useName {
+			path = formationPath(app.Name, release.ID)
+		} else {
+			path = formationPath(app.ID, release.ID)
+		}
+		res, err := s.Delete(path)
+		c.Assert(err, IsNil)
+		c.Assert(res.StatusCode, Equals, 200)
 
-	res, err = s.Get(path, out)
-	c.Assert(res.StatusCode, Equals, 404)
+		res, err = s.Get(path, out)
+		c.Assert(res.StatusCode, Equals, 404)
+	}
 }
 
 func (s *S) TestCreateKey(c *C) {

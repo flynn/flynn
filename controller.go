@@ -44,8 +44,8 @@ func appHandler(cc clusterClient) http.Handler {
 	crud("keys", ct.Key{}, keyRepo, r)
 
 	r.Put("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getReleaseMiddleware, binding.Bind(ct.Formation{}), putFormation)
-	r.Get("/apps/:apps_id/formations/:releases_id", getFormationMiddleware, getFormation)
-	r.Delete("/apps/:apps_id/formations/:releases_id", getFormationMiddleware, deleteFormation)
+	r.Get("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getFormationMiddleware, getFormation)
+	r.Delete("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getFormationMiddleware, deleteFormation)
 	r.Get("/apps/:apps_id/formations", getAppMiddleware, listFormations)
 
 	r.Get("/apps/:apps_id/jobs", getAppMiddleware, jobList)
@@ -78,8 +78,8 @@ func putFormation(formation ct.Formation, app *ct.App, release *ct.Release, repo
 	r.JSON(200, &formation)
 }
 
-func getFormationMiddleware(c martini.Context, params martini.Params, repo *FormationRepo, w http.ResponseWriter) {
-	formation, err := repo.Get(params["apps_id"], params["releases_id"])
+func getFormationMiddleware(c martini.Context, app *ct.App, params martini.Params, repo *FormationRepo, w http.ResponseWriter) {
+	formation, err := repo.Get(app.ID, params["releases_id"])
 	if err != nil {
 		if err == ErrNotFound {
 			w.WriteHeader(404)
