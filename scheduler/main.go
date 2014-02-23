@@ -27,7 +27,7 @@ func main() {
 	c := newContext(cl)
 	// TODO: initial load of data
 	// TODO: periodic full cluster sync for anti-entropy
-	go c.watchFormations(cc)
+	c.watchFormations(cc)
 }
 
 func newContext(cl clusterClient) *context {
