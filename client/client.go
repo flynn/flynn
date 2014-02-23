@@ -74,7 +74,7 @@ func (c *Client) get(path string, out interface{}) error {
 	return json.NewDecoder(res.Body).Decode(out)
 }
 
-func (c *Client) StreamFormations() (chan<- *ct.ExpandedFormation, *error) {
+func (c *Client) StreamFormations() (<-chan *ct.ExpandedFormation, *error) {
 	// TODO: handle TLS
 	client, err := rpcplus.DialHTTP("tcp", c.addr)
 	if err != nil {

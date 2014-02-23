@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	controller, err := client.New(os.Args[1])
+	cc, err := controller.New(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func main() {
 	c := newContext(cl)
 	// TODO: initial load of data
 	// TODO: periodic full cluster sync for anti-entropy
-	go c.watchFormations(controller)
+	go c.watchFormations(cc)
 }
 
 func newContext(cl clusterClient) *context {
@@ -54,12 +54,11 @@ type clusterClient interface {
 }
 
 type formationStreamer interface {
-	StreamFormations(chan<- *ct.ExpandedFormation) *error
+	StreamFormations() (<-chan *ct.ExpandedFormation, *error)
 }
 
 func (c *context) watchFormations(fs formationStreamer) {
-	ch := make(chan *ct.ExpandedFormation)
-	fs.StreamFormations(ch)
+	ch, _ := fs.StreamFormations()
 
 	for ef := range ch {
 		f := NewFormation(c, ef)
@@ -83,7 +82,7 @@ func (c *context) watchHost(id string) {
 	}
 	c.hosts.Set(id, h)
 
-	ch := make(chan host.Event)
+	ch := make(chan *host.Event)
 	h.StreamEvents("all", ch)
 	for event := range ch {
 		if event.Event != "error" && event.Event != "stop" {
