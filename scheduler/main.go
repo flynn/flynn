@@ -13,9 +13,13 @@ import (
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/go-flynn/cluster"
+	"github.com/technoweenie/grohl"
 )
 
 func main() {
+	grohl.AddContext("app", "controller-scheduler")
+	grohl.Log(grohl.Data{"at": "start"})
+
 	cc, err := controller.New(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
@@ -58,13 +62,17 @@ type formationStreamer interface {
 }
 
 func (c *context) watchFormations(fs formationStreamer) {
+	g := grohl.NewContext(grohl.Data{"fn": "watchFormations"})
+
 	ch, _ := fs.StreamFormations()
 
 	for ef := range ch {
 		f := c.formations.Get(ef.App.ID, ef.Release.ID)
 		if f != nil {
+			g.Log(grohl.Data{"app_id": ef.App.ID, "release_id": ef.Release.ID, "at": "update"})
 			f.SetProcesses(ef.Processes)
 		} else {
+			g.Log(grohl.Data{"app_id": ef.App.ID, "release_id": ef.Release.ID, "at": "new"})
 			f = NewFormation(c, ef)
 			c.formations.Add(f)
 		}
@@ -81,11 +89,15 @@ func (c *context) watchHost(id string) {
 	}
 	defer c.hosts.Remove(id)
 
+	g := grohl.NewContext(grohl.Data{"fn": "watchHost", "host_id": id})
+
 	h, err := c.ConnectHost(id)
 	if err != nil {
 		// TODO: log/handle error
 	}
 	c.hosts.Set(id, h)
+
+	g.Log(grohl.Data{"at": "start"})
 
 	ch := make(chan *host.Event)
 	h.StreamEvents("all", ch)
@@ -97,6 +109,7 @@ func (c *context) watchHost(id string) {
 		if job == nil {
 			continue
 		}
+		g.Log(grohl.Data{"at": "remove", "job_id": event.JobID, "event": event.Event})
 
 		c.jobs.Remove(id, event.JobID)
 		go job.Formation.RemoveJob(job.Type, id, event.JobID)
@@ -278,9 +291,12 @@ func (f *Formation) RemoveJob(typ, hostID, jobID string) {
 }
 
 func (f *Formation) rectify() {
+	g := grohl.NewContext(grohl.Data{"fn": "rectify", "app_id": f.App.ID, "release_id": f.Release.ID})
+
 	// update job counts
 	for t, expected := range f.Processes {
 		diff := expected - len(f.jobs[t])
+		g.Log(grohl.Data{"at": "update", "type": t, "expected": expected, "actual": len(f.jobs[t]), "diff": diff})
 		if diff > 0 {
 			f.add(diff, t)
 		} else if diff < 0 {
@@ -291,12 +307,15 @@ func (f *Formation) rectify() {
 	// remove process types
 	for t, jobs := range f.jobs {
 		if _, exists := f.Processes[t]; !exists {
+			g.Log(grohl.Data{"at": "cleanup", "type": t, "count": len(jobs)})
 			f.remove(len(jobs), t)
 		}
 	}
 }
 
 func (f *Formation) add(n int, name string) {
+	g := grohl.NewContext(grohl.Data{"fn": "add", "app_id": f.App.ID, "release_id": f.Release.ID})
+
 	config, err := f.jobConfig(name)
 	if err != nil {
 		// TODO: log/handle error
@@ -328,6 +347,8 @@ func (f *Formation) add(n int, name string) {
 		h := hosts[sh[0].ID]
 		go f.c.watchHost(h.ID)
 
+		g.Log(grohl.Data{"host_id": h.ID, "job_id": config.ID})
+
 		job := f.jobs.Add(name, h.ID, config.ID)
 		job.Formation = f
 		f.c.jobs.Add(h.ID, config.ID, job)
@@ -350,8 +371,11 @@ func (f *Formation) jobType(job *host.Job) string {
 }
 
 func (f *Formation) remove(n int, name string) {
+	g := grohl.NewContext(grohl.Data{"fn": "remove", "app_id": f.App.ID, "release_id": f.Release.ID})
+
 	i := 0
 	for k := range f.jobs[name] {
+		g.Log(grohl.Data{"host_id": k.hostID, "job_id": k.jobID})
 		// TODO: robust host handling
 		if err := f.c.hosts.Get(k.hostID).StopJob(k.jobID); err != nil {
 			// TODO: log/handle error
