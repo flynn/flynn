@@ -176,10 +176,11 @@ func (s *S) TestCreateFormation(c *C) {
 	release := s.createTestRelease(c, &ct.Release{})
 	app := s.createTestApp(c, &ct.App{Name: "asdf1"})
 
-	in := &ct.Formation{ReleaseID: release.ID, AppID: app.ID}
+	in := &ct.Formation{ReleaseID: release.ID, AppID: app.ID, Processes: map[string]int{"web": 1}}
 	out := s.createTestFormation(c, in)
 	c.Assert(out.AppID, Equals, app.ID)
 	c.Assert(out.ReleaseID, Equals, release.ID)
+	c.Assert(out.Processes["web"], Equals, 1)
 
 	gotFormation := &ct.Formation{}
 	path := formationPath(app.ID, release.ID)
