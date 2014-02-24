@@ -321,6 +321,7 @@ func (f *Formation) add(n int, name string) {
 		// TODO: log/handle error
 	}
 	for i := 0; i < n; i++ {
+		config.ID = cluster.RandomJobID("")
 		hosts, err := f.c.ListHosts()
 		if err != nil {
 			// TODO: log/handle error
@@ -395,7 +396,6 @@ func (f *Formation) jobConfig(name string) (*host.Job, error) {
 		return nil, err
 	}
 	return &host.Job{
-		ID:       cluster.RandomJobID(""),
 		TCPPorts: t.Ports.TCP,
 		Attributes: map[string]string{
 			"flynn-controller.app":     f.App.ID,
