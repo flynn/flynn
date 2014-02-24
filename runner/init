@@ -19,7 +19,7 @@ cd $HOME
 ## Load profile.d and release config
 
 mkdir -p .profile.d
-if [[ -f .release ]]; then
+if [[ -s .release ]]; then
 	ruby -e "require 'yaml';(YAML.load_file('.release')['config_vars'] || {}).each{|k,v| puts \"#{k}='#{v}'\"}" > .profile.d/config_vars
 fi
 for file in .profile.d/*; do 
