@@ -7,9 +7,9 @@ before_install:
   - go install -race std
   - go get code.google.com/p/go.tools/cmd/cover
   - go get github.com/kr/godep
-  - wget https://github.com/coreos/etcd/releases/download/v0.2.0/etcd-v0.2.0-Linux-x86_64.tar.gz
-  - tar xvzf etcd-v0.2.0-Linux-x86_64.tar.gz
-  - mv etcd-v0.2.0-Linux-x86_64/etcd $HOME/gopath/bin
+  - wget https://github.com/coreos/etcd/releases/download/v0.3.0/etcd-v0.3.0-linux-amd64.tar.gz
+  - tar xvzf etcd-v0.3.0-linux-amd64.tar.gz
+  - mv etcd-v0.3.0-linux-amd64/etcd $HOME/gopath/bin
   - export PATH=$HOME/gopath/bin:$PATH
 
 script:
