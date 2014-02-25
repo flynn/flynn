@@ -26,3 +26,7 @@ notifications:
     on_failure: always
     template:
       - "%{repository}/%{branch} - %{commit}: %{message} %{build_url}"
+
+matrix:
+  allow_failures:
+    - go: tip
