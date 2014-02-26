@@ -9,7 +9,7 @@ All contributions are made via pull request. Note that **all patches from all co
 
 At least one review from a maintainer is required for all patches (even patches from other maintainers). If only one maintainer is listed in the MAINTAINERS file, then review is not required for patches from the sole maintainer (however it is encouraged).
 
-## Developer's Certificate of Origin
+## Developer’s Certificate of Origin
 
 All contributions must include acceptance of the DCO:
 
