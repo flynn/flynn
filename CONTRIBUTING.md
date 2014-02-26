@@ -1,1 +1,1 @@
-[See flynn-guide](https://github.com/flynn/flynn-guide/blob/master/CONTRIBUTING.md).
+See the [Flynn contributing guide](https://flynn.io/docs/contributing)
