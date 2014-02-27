@@ -99,7 +99,7 @@ func attachCmd(cmd *exec.Cmd, stdout, stderr io.Writer, stdin io.Reader) chan er
 }
 
 func exitStatusCh(cmd *exec.Cmd) chan uint {
-	exitCh := make(chan uint)
+	exitCh := make(chan uint, 1)
 	go func() {
 		err := cmd.Wait()
 		if err != nil {

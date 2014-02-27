@@ -5,5 +5,7 @@ func main() {
 		new(check),
 		new(register),
 		new(services),
-		new(execCmd))
+		new(execCmd),
+		new(expose),
+	)
 }
