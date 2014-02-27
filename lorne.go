@@ -120,6 +120,7 @@ func main() {
 		h.Resources["memory"] = host.ResourceValue{Value: 1024}
 	}
 	h.ID = *hostID
+	h.Jobs = state.ClusterJobs()
 
 	jobs := make(chan *host.Job)
 	hostErr := cluster.ConnectHost(h, jobs)

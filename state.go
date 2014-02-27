@@ -56,6 +56,17 @@ func (s *State) Get() map[string]host.ActiveJob {
 	return res
 }
 
+func (s *State) ClusterJobs() []*host.Job {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+
+	res := make([]*host.Job, 0, len(s.jobs))
+	for _, j := range s.jobs {
+		res = append(res, j.Job)
+	}
+	return res
+}
+
 func (s *State) SetContainerID(jobID, containerID string) {
 	s.mtx.Lock()
 	s.jobs[jobID].ContainerID = containerID
