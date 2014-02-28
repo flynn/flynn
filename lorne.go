@@ -150,7 +150,6 @@ func (p *jobProcessor) processJob(ports <-chan int, job *host.Job) (*docker.Cont
 	g := grohl.NewContext(grohl.Data{"fn": "process_job", "job.id": job.ID})
 	g.Log(grohl.Data{"at": "start", "job.image": job.Config.Image, "job.cmd": job.Config.Cmd, "job.entrypoint": job.Config.Entrypoint})
 
-	var hostConfig *docker.HostConfig
 	for i := 0; i < job.TCPPorts; i++ {
 		port := strconv.Itoa(<-ports)
 		if i == 0 {
@@ -161,13 +160,13 @@ func (p *jobProcessor) processJob(ports <-chan int, job *host.Job) (*docker.Cont
 			job.Config.ExposedPorts = make(map[string]struct{}, job.TCPPorts)
 		}
 		job.Config.ExposedPorts[port+"/tcp"] = struct{}{}
-		if hostConfig == nil {
-			hostConfig = &docker.HostConfig{
+		if job.HostConfig == nil {
+			job.HostConfig = &docker.HostConfig{
 				PortBindings:    make(map[string][]docker.PortBinding, job.TCPPorts),
 				PublishAllPorts: true,
 			}
 		}
-		hostConfig.PortBindings[port+"/tcp"] = []docker.PortBinding{{HostPort: port}}
+		job.HostConfig.PortBindings[port+"/tcp"] = []docker.PortBinding{{HostPort: port}}
 	}
 	if p.externalAddr != "" {
 		job.Config.Env = appendUnique(job.Config.Env, "EXTERNAL_IP="+p.externalAddr, "SD_HOST="+p.externalAddr, "DISCOVERD="+p.discoverd)
@@ -193,7 +192,7 @@ func (p *jobProcessor) processJob(ports <-chan int, job *host.Job) (*docker.Cont
 	p.state.SetContainerID(job.ID, container.ID)
 	p.state.WaitAttach(job.ID)
 	g.Log(grohl.Data{"at": "start_container"})
-	if err := p.docker.StartContainer(container.ID, hostConfig); err != nil {
+	if err := p.docker.StartContainer(container.ID, job.HostConfig); err != nil {
 		g.Log(grohl.Data{"at": "start_container", "status": "error", "err": err})
 		p.state.SetStatusFailed(job.ID, err)
 		return nil, err
