@@ -8,15 +8,24 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/flynn/flynn-host/client"
 	"github.com/flynn/flynn-host/sampi"
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-dockerclient"
+	"github.com/flynn/go-flynn/attempt"
 	rpc "github.com/flynn/rpcplus/comborpc"
 	"github.com/technoweenie/grohl"
 )
+
+// Attempts is the attempt strategy that is used to connect to discoverd.
+var Attempts = attempt.Strategy{
+	Min:   5,
+	Total: 5 * time.Second,
+	Delay: 200 * time.Millisecond,
+}
 
 func main() {
 	hostname, _ := os.Hostname()
@@ -70,7 +79,11 @@ func main() {
 
 		if d, ok := services["discoverd"]; ok {
 			processor.discoverd = fmt.Sprintf("%s:%d", d.InternalIP, d.TCPPorts[0])
-			disc, err = discoverd.NewClientUsingAddress(processor.discoverd)
+			var disc *discoverd.Client
+			err = Attempts.Run(func() (err error) {
+				disc, err = discoverd.NewClientUsingAddress(processor.discoverd)
+				return
+			})
 			if err != nil {
 				log.Fatal(err)
 			}
