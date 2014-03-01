@@ -190,6 +190,7 @@ func setup(t *testing.T) (*Client, func()) {
 		t.Fatal(err)
 	}
 	return client, func() {
+		client.UnregisterAll()
 		killDiscoverd()
 		killEtcd()
 	}
