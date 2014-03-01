@@ -20,7 +20,8 @@ type Job struct {
 	// TODO: move to Attrs/Resources?
 	TCPPorts int
 
-	Config *docker.Config
+	Config     *docker.Config
+	HostConfig *docker.HostConfig
 }
 
 type ResourceValue struct {

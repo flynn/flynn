@@ -111,7 +111,7 @@ func TestProcessJob(t *testing.T) {
 	testProcess(&host.Job{ID: "a", Config: &docker.Config{}}, t)
 }
 
-func TestProcessJobWithPorts(t *testing.T) {
+func TestProcessJobWithImplicitPorts(t *testing.T) {
 	job := &host.Job{TCPPorts: 2, ID: "a", Config: &docker.Config{}}
 	_, client := testProcess(job, t)
 
@@ -135,6 +135,24 @@ func TestProcessJobWithPorts(t *testing.T) {
 	}
 	if b := client.hostConf.PortBindings["501/tcp"]; len(b) == 0 || b[0].HostPort != "501" {
 		t.Error("port 501 binding not set")
+	}
+}
+
+func TestProcessJobWithExplicitPorts(t *testing.T) {
+	hostConfig := &docker.HostConfig{
+		PortBindings: make(map[string][]docker.PortBinding, 2),
+	}
+	hostConfig.PortBindings["80/tcp"] = []docker.PortBinding{{HostPort: "8080"}}
+	hostConfig.PortBindings["443/tcp"] = []docker.PortBinding{{HostPort: "8081"}}
+
+	job := &host.Job{ID: "a", Config: &docker.Config{}, HostConfig: hostConfig}
+	_, client := testProcess(job, t)
+
+	if b := client.hostConf.PortBindings["80/tcp"]; len(b) == 0 || b[0].HostPort != "8080" {
+		t.Error("port 8080 binding not set")
+	}
+	if b := client.hostConf.PortBindings["443/tcp"]; len(b) == 0 || b[0].HostPort != "8081" {
+		t.Error("port 8081 binding not set")
 	}
 }
 

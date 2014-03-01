@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -72,8 +73,9 @@ type manifestRunner struct {
 }
 
 type manifestService struct {
-	Args []string          `json:"args"`
-	Env  map[string]string `json:"env"`
+	Args     []string          `json:"args"`
+	Env      map[string]string `json:"env"`
+	TCPPorts []string          `json:"tcp_ports"`
 }
 
 func dockerEnv(m map[string]string) []string {
@@ -98,6 +100,16 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 			ExternalIP: m.externalIP,
 			ports:      m.ports,
 		}
+
+		// Add explicit tcp ports to data.TCPPorts
+		for _, port := range service.TCPPorts {
+			port, err := strconv.Atoi(port)
+			if err != nil {
+				return nil, err
+			}
+			data.TCPPorts = append(data.TCPPorts, port)
+		}
+
 		var buf bytes.Buffer
 
 		interp := func(s string) (string, error) {
