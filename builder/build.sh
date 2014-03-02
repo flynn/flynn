@@ -110,9 +110,9 @@ fi
 ## Produce slug
 
 if [[ -f "$build_root/.slugignore" ]]; then
-	tar --exclude='.git' -X "$build_root/.slugignore" -C $build_root -czf $slug_file . | cat
+	tar --exclude='.git' --use-compress-program=pigz -X "$build_root/.slugignore" -C $build_root -czf $slug_file . | cat
 else
-	tar --exclude='.git' -C $build_root -czf $slug_file . | cat
+	tar --exclude='.git' --use-compress-program=pigz -C $build_root -czf $slug_file . | cat
 fi
   
 if [[ "$slug_file" != "-" ]]; then
