@@ -2,7 +2,6 @@ package cluster
 
 import (
 	"errors"
-	"io"
 	"sync"
 	"time"
 
@@ -37,8 +36,8 @@ func NewClient() (*Client, error) {
 func (c *Client) followLeader(firstErr chan<- error) {
 	for update := range c.service.Leaders() {
 		c.mtx.Lock()
-		if closer, ok := c.c.(io.Closer); ok {
-			closer.Close()
+		if c.c != nil {
+			c.c.Close()
 		}
 		c.err = Attempts.Run(func() (err error) {
 			c.c, err = rpcplus.DialHTTP("tcp", update.Addr)
