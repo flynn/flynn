@@ -6,6 +6,14 @@
 
 // TODO: .brand should use Proxima Nova Regular font
 
+#coming-soon-banner {
+  background-color: $almostBlackColor;
+  color: $dirtyWhiteColor;
+  text-align: center;
+  padding: 1em;
+  line-height: 1.5em;
+}
+
 #intro {
   > p {
     line-height: 2em;
