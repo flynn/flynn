@@ -27,12 +27,32 @@ var Attempts = attempt.Strategy{
 	Delay: 200 * time.Millisecond,
 }
 
+// A command line flag to accumulate multiple key-value pairs into Attributes,
+// e.g. flynn-host -attribute foo=bar -attribute bar=foo
+type AttributeFlag map[string]string
+
+func (a AttributeFlag) Set(val string) error {
+	kv := strings.SplitN(val, "=", 2)
+	a[kv[0]] = kv[1]
+	return nil
+}
+
+func (a AttributeFlag) String() string {
+	res := make([]string, 0, len(a))
+	for k, v := range a {
+		res = append(res, k+"="+v)
+	}
+	return strings.Join(res, ", ")
+}
+
 func main() {
 	hostname, _ := os.Hostname()
 	externalAddr := flag.String("external", "", "external IP of host")
 	configFile := flag.String("config", "", "configuration file")
 	manifestFile := flag.String("manifest", "", "manifest file")
 	hostID := flag.String("id", hostname, "host id")
+	attributes := make(AttributeFlag)
+	flag.Var(&attributes, "attribute", "key=value pair to add as an attribute")
 	flag.Parse()
 	grohl.AddContext("app", "lorne")
 	grohl.Log(grohl.Data{"at": "start"})
@@ -134,6 +154,14 @@ func main() {
 	}
 	h.ID = *hostID
 	h.Jobs = state.ClusterJobs()
+
+	if h.Attributes == nil {
+		h.Attributes = make(map[string]string)
+	}
+
+	for k, v := range attributes {
+		h.Attributes[k] = v
+	}
 
 	jobs := make(chan *host.Job)
 	hostErr := cluster.ConnectHost(h, jobs)
