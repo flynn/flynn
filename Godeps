@@ -12,7 +12,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
-			"Rev": "13a8b54dd08599a239453a02e35dc40db030b5bf"
+			"Rev": "68355e62cadb10d431f81b507ee30805b99022cd"
 		}
 	]
 }
