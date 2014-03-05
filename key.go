@@ -2,23 +2,21 @@ package main
 
 import (
 	"crypto/md5"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"strings"
-	"sync"
 
 	ct "github.com/flynn/flynn-controller/types"
 )
 
 type KeyRepo struct {
-	keyIDs map[string]*ct.Key
-	keys   []*ct.Key
-	mtx    sync.RWMutex
+	db *DB
 }
 
-func NewKeyRepo() *KeyRepo {
-	return &KeyRepo{keyIDs: make(map[string]*ct.Key)}
+func NewKeyRepo(db *DB) *KeyRepo {
+	return &KeyRepo{db}
 }
 
 func (r *KeyRepo) Add(data interface{}) error {
@@ -43,17 +41,7 @@ func (r *KeyRepo) Add(data interface{}) error {
 		key.Comment = splitKey[2]
 	}
 
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
-
-	if _, exists := r.keyIDs[key.ID]; exists {
-		return errors.New("controller: key already exists")
-	}
-
-	r.keyIDs[key.ID] = key
-	r.keys = append(r.keys, key)
-
-	return nil
+	return r.db.QueryRow("INSERT INTO keys (key_id, key, comment) VALUES ($1, $2, $3) RETURNING created_at", key.ID, key.Key, key.Comment).Scan(&key.CreatedAt)
 }
 
 func fingerprintKey(key string) (string, error) {
@@ -65,34 +53,36 @@ func fingerprintKey(key string) (string, error) {
 	return hex.EncodeToString(digest[:]), nil
 }
 
-func (r *KeyRepo) Get(id string) (interface{}, error) {
-	r.mtx.RLock()
-	defer r.mtx.RUnlock()
-	key := r.keyIDs[id]
-	if key == nil {
-		return nil, ErrNotFound
+func scanKey(s Scanner) (*ct.Key, error) {
+	key := &ct.Key{}
+	err := s.Scan(&key.ID, &key.Key, &key.Comment, &key.CreatedAt)
+	if err == sql.ErrNoRows {
+		err = ErrNotFound
 	}
-	return key, nil
+	return key, err
+}
+
+func (r *KeyRepo) Get(id string) (interface{}, error) {
+	row := r.db.QueryRow("SELECT key_id, key, comment, created_at FROM keys WHERE key_id = $1 AND deleted_at IS NULL", id)
+	return scanKey(row)
 }
 
 func (r *KeyRepo) Remove(id string) error {
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
-	delete(r.keyIDs, id)
-
-	var i int
-	for j, k := range r.keys {
-		if k.ID == id {
-			i = j
-			break
-		}
-	}
-	r.keys = append(r.keys[:i], r.keys[i+1:]...)
-	return nil
+	return r.db.Exec("UPDATE keys SET deleted_at = current_timestamp WHERE key_id = $1", id)
 }
 
 func (r *KeyRepo) List() (interface{}, error) {
-	r.mtx.RLock()
-	defer r.mtx.RUnlock()
-	return r.keys, nil
+	rows, err := r.db.Query("SELECT key_id, key, comment, created_at FROM keys WHERE deleted_at IS NULL ORDER BY created_at DESC")
+	if err != nil {
+		return nil, err
+	}
+	var keys []*ct.Key
+	for rows.Next() {
+		key, err := scanKey(rows)
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, key)
+	}
+	return keys, rows.Err()
 }

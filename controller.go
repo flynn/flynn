@@ -1,12 +1,15 @@
 package main
 
 import (
+	"database/sql"
+	"log"
 	"net/http"
 	"os"
 
 	"github.com/codegangsta/martini"
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/rpcplus"
+	_ "github.com/lib/pq"
 	"github.com/martini-contrib/binding"
 	"github.com/martini-contrib/render"
 )
@@ -27,11 +30,17 @@ func appHandler(cc clusterClient) http.Handler {
 	m.Use(render.Renderer())
 	m.Action(r.Handle)
 
-	keyRepo := NewKeyRepo()
-	appRepo := NewAppRepo()
-	artifactRepo := NewArtifactRepo()
-	releaseRepo := NewReleaseRepo(artifactRepo)
-	formationRepo := NewFormationRepo(appRepo, releaseRepo, artifactRepo)
+	db, err := sql.Open("postgres", "dbname=flynn-controller sslmode=disable")
+	if err != nil {
+		log.Fatal(err)
+	}
+	d := NewDB(db)
+
+	keyRepo := NewKeyRepo(d)
+	appRepo := NewAppRepo(d)
+	artifactRepo := NewArtifactRepo(d)
+	releaseRepo := NewReleaseRepo(d)
+	formationRepo := NewFormationRepo(d, appRepo, releaseRepo, artifactRepo)
 	m.Map(appRepo)
 	m.Map(artifactRepo)
 	m.Map(releaseRepo)
@@ -73,7 +82,9 @@ func putFormation(formation ct.Formation, app *ct.App, release *ct.Release, repo
 	formation.ReleaseID = release.ID
 	err := repo.Add(&formation)
 	if err != nil {
-		// TODO: 500/log error
+		log.Println(err)
+		r.JSON(500, struct{}{})
+		return
 	}
 	r.JSON(200, &formation)
 }
@@ -85,7 +96,8 @@ func getFormationMiddleware(c martini.Context, app *ct.App, params martini.Param
 			w.WriteHeader(404)
 			return
 		}
-		// TODO: 500/log error
+		log.Println(err)
+		w.WriteHeader(500)
 		return
 	}
 	c.Map(formation)
@@ -98,7 +110,8 @@ func getFormation(formation *ct.Formation, r render.Render) {
 func deleteFormation(formation *ct.Formation, repo *FormationRepo, w http.ResponseWriter) {
 	err := repo.Remove(formation.AppID, formation.ReleaseID)
 	if err != nil {
-		// TODO: 500/log error
+		log.Println(err)
+		w.WriteHeader(500)
 		return
 	}
 	w.WriteHeader(200)
@@ -107,7 +120,8 @@ func deleteFormation(formation *ct.Formation, repo *FormationRepo, w http.Respon
 func listFormations(app *ct.App, repo *FormationRepo, r render.Render) {
 	list, err := repo.List(app.ID)
 	if err != nil {
-		// TODO: 500/log error
+		log.Println(err)
+		r.JSON(500, struct{}{})
 		return
 	}
 	r.JSON(200, list)
@@ -120,15 +134,19 @@ type releaseID struct {
 func setAppRelease(app *ct.App, rid releaseID, apps *AppRepo, releases *ReleaseRepo, formations *FormationRepo, r render.Render) {
 	rel, err := releases.Get(rid.ID)
 	if err != nil {
-		// TODO: 500/log error
+		log.Println(err)
+		r.JSON(500, struct{}{})
+		return
 	}
 	release := rel.(*ct.Release)
-	apps.SetRelease(app.ID, release)
+	apps.SetRelease(app.ID, release.ID)
 
 	// TODO: use transaction/lock
 	fs, err := formations.List(app.ID)
 	if err != nil {
-		// TODO: 500/log error
+		log.Println(err)
+		r.JSON(500, struct{}{})
+		return
 	}
 	if len(fs) == 1 && fs[0].ReleaseID != release.ID {
 		if err := formations.Add(&ct.Formation{
@@ -136,10 +154,14 @@ func setAppRelease(app *ct.App, rid releaseID, apps *AppRepo, releases *ReleaseR
 			ReleaseID: release.ID,
 			Processes: fs[0].Processes,
 		}); err != nil {
-			// TODO: 500/log error
+			log.Println(err)
+			r.JSON(500, struct{}{})
+			return
 		}
 		if err := formations.Remove(app.ID, fs[0].ReleaseID); err != nil {
-			// TODO: 500/log error
+			log.Println(err)
+			r.JSON(500, struct{}{})
+			return
 		}
 	}
 
@@ -153,7 +175,9 @@ func getAppRelease(app *ct.App, apps *AppRepo, r render.Render, w http.ResponseW
 			w.WriteHeader(404)
 			return
 		}
-		// TODO: 500/log error
+		log.Println(err)
+		w.WriteHeader(500)
+		return
 	}
 	r.JSON(200, release)
 }

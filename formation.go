@@ -1,9 +1,13 @@
 package main
 
 import (
+	"database/sql"
+	"strconv"
 	"sync"
 
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/lib/pq"
+	"github.com/lib/pq/hstore"
 )
 
 type formationKey struct {
@@ -11,21 +15,18 @@ type formationKey struct {
 }
 
 type FormationRepo struct {
-	appFormations map[formationKey]*ct.Formation
-	formations    map[string][]*ct.Formation
-	apps          *AppRepo
-	releases      *ReleaseRepo
-	artifacts     *ArtifactRepo
-	mtx           sync.RWMutex
+	db        *DB
+	apps      *AppRepo
+	releases  *ReleaseRepo
+	artifacts *ArtifactRepo
 
 	subscriptions map[chan<- *ct.ExpandedFormation]struct{}
 	subMtx        sync.RWMutex
 }
 
-func NewFormationRepo(appRepo *AppRepo, releaseRepo *ReleaseRepo, artifactRepo *ArtifactRepo) *FormationRepo {
+func NewFormationRepo(db *DB, appRepo *AppRepo, releaseRepo *ReleaseRepo, artifactRepo *ArtifactRepo) *FormationRepo {
 	return &FormationRepo{
-		appFormations: make(map[formationKey]*ct.Formation),
-		formations:    make(map[string][]*ct.Formation),
+		db:            db,
 		subscriptions: make(map[chan<- *ct.ExpandedFormation]struct{}),
 		apps:          appRepo,
 		releases:      releaseRepo,
@@ -33,51 +34,78 @@ func NewFormationRepo(appRepo *AppRepo, releaseRepo *ReleaseRepo, artifactRepo *
 	}
 }
 
-// - validate
-// - persist
-func (r *FormationRepo) Add(formation *ct.Formation) error {
-	// TODO: validate process types
+func procsHstore(m map[string]int) hstore.Hstore {
+	res := hstore.Hstore{Map: make(map[string]sql.NullString, len(m))}
+	for k, v := range m {
+		res.Map[k] = sql.NullString{String: strconv.Itoa(v), Valid: true}
+	}
+	return res
+}
 
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
-	r.appFormations[formationKey{formation.AppID, formation.ReleaseID}] = formation
-	r.formations[formation.AppID] = append(r.formations[formation.AppID], formation)
-	go r.publish(formation)
+func (r *FormationRepo) Add(f *ct.Formation) error {
+	// TODO: actually validate
+	procs := procsHstore(f.Processes)
+	err := r.db.QueryRow("INSERT INTO formations (app_id, release_id, processes) VALUES ($1, $2, $3) RETURNING created_at, updated_at",
+		f.AppID, f.ReleaseID, procs).Scan(&f.CreatedAt, &f.UpdatedAt)
+	if e, ok := err.(*pq.Error); ok && e.Code == "23505" /* unique_violation */ {
+		err = r.db.QueryRow("UPDATE formations SET processes = $3, updated_at = current_timestamp, deleted_at = nil WHERE app_id = $1 AND release_id = $2 RETURNING created_at, updated_at",
+			f.AppID, f.ReleaseID, procs).Scan(&f.CreatedAt, &f.UpdatedAt)
+	}
+	if err != nil {
+		return err
+	}
+	go r.publish(f)
 	return nil
 }
 
-func (r *FormationRepo) Get(appID, releaseID string) (*ct.Formation, error) {
-	r.mtx.RLock()
-	defer r.mtx.RUnlock()
-
-	formation := r.appFormations[formationKey{appID, releaseID}]
-	if formation == nil {
-		return nil, ErrNotFound
+func scanFormation(s Scanner) (*ct.Formation, error) {
+	f := &ct.Formation{}
+	var procs hstore.Hstore
+	err := s.Scan(&f.AppID, &f.ReleaseID, &procs, &f.CreatedAt, &f.UpdatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			err = ErrNotFound
+		}
+		return nil, err
 	}
-	return formation, nil
+	f.Processes = make(map[string]int, len(procs.Map))
+	for k, v := range procs.Map {
+		n, _ := strconv.Atoi(v.String)
+		if n > 0 {
+			f.Processes[k] = n
+		}
+	}
+	f.AppID = cleanUUID(f.AppID)
+	f.ReleaseID = cleanUUID(f.ReleaseID)
+	return f, nil
+}
+
+func (r *FormationRepo) Get(appID, releaseID string) (*ct.Formation, error) {
+	row := r.db.QueryRow("SELECT app_id, release_id, processes, created_at, updated_at FROM formations WHERE app_id = $1 AND release_id = $2 AND deleted_at IS NULL", appID, releaseID)
+	return scanFormation(row)
 }
 
 func (r *FormationRepo) List(appID string) ([]*ct.Formation, error) {
-	r.mtx.RLock()
-	defer r.mtx.RUnlock()
-	return r.formations[appID], nil
+	rows, err := r.db.Query("SELECT app_id, release_id, processes, created_at, updated_at FROM formations WHERE app_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC", appID)
+	if err != nil {
+		return nil, err
+	}
+	var formations []*ct.Formation
+	for rows.Next() {
+		formation, err := scanFormation(rows)
+		if err != nil {
+			return nil, err
+		}
+		formations = append(formations, formation)
+	}
+	return formations, nil
 }
 
 func (r *FormationRepo) Remove(appID, releaseID string) error {
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
-	delete(r.appFormations, formationKey{appID, releaseID})
-
-	list := r.formations[appID]
-	var i int
-	for j, f := range list {
-		if f.ReleaseID == releaseID {
-			i = j
-			break
-		}
+	err := r.db.Exec("UPDATE formations SET deleted_at = current_timestamp WHERE app_id = $1 AND release_id = $2", appID, releaseID)
+	if err != nil {
+		return err
 	}
-	r.formations[appID] = append(list[:i], list[i+1:]...)
-
 	go r.publish(&ct.Formation{AppID: appID, ReleaseID: releaseID})
 	return nil
 }

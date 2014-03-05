@@ -1,5 +1,9 @@
 package types
 
+import (
+	"time"
+)
+
 type ExpandedFormation struct {
 	App       *App
 	Release   *Release
@@ -8,8 +12,10 @@ type ExpandedFormation struct {
 }
 
 type App struct {
-	ID   string `json:"id,omitempty"`
-	Name string `json:"name,omitempty"`
+	ID        string     `json:"id,omitempty"`
+	Name      string     `json:"name,omitempty"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
 type Release struct {
@@ -17,6 +23,7 @@ type Release struct {
 	ArtifactID string                 `json:"artifact,omitempty"`
 	Env        map[string]string      `json:"env,omitempty"`
 	Processes  map[string]ProcessType `json:"processes,omitempty"`
+	CreatedAt  *time.Time             `json:"created_at,omitempty"`
 }
 
 type ProcessType struct {
@@ -31,22 +38,25 @@ type ProcessPorts struct {
 }
 
 type Artifact struct {
-	ID     string `json:"id,omitempty"`
-	Type   string `json:"type,omitempty"`
-	BaseID string `json:"base,omitempty"`
-	URI    string `json:"uri,omitempty"`
+	ID        string     `json:"id,omitempty"`
+	Type      string     `json:"type,omitempty"`
+	URI       string     `json:"uri,omitempty"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
 }
 
 type Formation struct {
 	AppID     string         `json:"app,omitempty"`
 	ReleaseID string         `json:"release,omitempty"`
 	Processes map[string]int `json:"processes,omitempty"`
+	CreatedAt *time.Time     `json:"created_at,omitempty"`
+	UpdatedAt *time.Time     `json:"updated_at,omitempty"`
 }
 
 type Key struct {
-	ID      string `json:"fingerprint,omitempty"`
-	Comment string `json:"comment,omitempty"`
-	Key     string `json:"key,omitempty"`
+	ID        string     `json:"fingerprint,omitempty"`
+	Key       string     `json:"key,omitempty"`
+	Comment   string     `json:"comment,omitempty"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
 }
 
 type Job struct {

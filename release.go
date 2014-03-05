@@ -1,60 +1,72 @@
 package main
 
 import (
-	"errors"
-	"sync"
+	"database/sql"
+	"encoding/json"
 
 	ct "github.com/flynn/flynn-controller/types"
 )
 
 type ReleaseRepo struct {
-	artifacts  *ArtifactRepo
-	releaseIDs map[string]*ct.Release
-	releases   []*ct.Release
-	mtx        sync.RWMutex
+	db *DB
 }
 
-func NewReleaseRepo(artifactRepo *ArtifactRepo) *ReleaseRepo {
-	return &ReleaseRepo{
-		artifacts:  artifactRepo,
-		releaseIDs: make(map[string]*ct.Release),
+func NewReleaseRepo(db *DB) *ReleaseRepo {
+	return &ReleaseRepo{db}
+}
+
+func scanRelease(s Scanner) (*ct.Release, error) {
+	release := &ct.Release{}
+	var data []byte
+	err := s.Scan(&release.ID, &release.ArtifactID, &data, &release.CreatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			err = ErrNotFound
+		}
+		return nil, err
 	}
+	release.ID = cleanUUID(release.ID)
+	release.ArtifactID = cleanUUID(release.ArtifactID)
+	err = json.Unmarshal(data, release)
+	return release, err
 }
 
-// - validate
-// - set id
-// - persist
 func (r *ReleaseRepo) Add(data interface{}) error {
 	release := data.(*ct.Release)
-	_, err := r.artifacts.Get(release.ArtifactID)
+	releaseCopy := *release
+
+	releaseCopy.ID = ""
+	releaseCopy.ArtifactID = ""
+	releaseCopy.CreatedAt = nil
+	data, err := json.Marshal(&releaseCopy)
 	if err != nil {
-		if err == ErrNotFound {
-			return errors.New("controller: unknown artifact")
-		}
 		return err
 	}
-	release.ID = uuid()
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
 
-	r.releaseIDs[release.ID] = release
-	r.releases = append(r.releases, release)
-
-	return nil
+	err = r.db.QueryRow("INSERT INTO releases (artifact_id, data) VALUES ($1, $2) RETURNING release_id, created_at",
+		release.ArtifactID, data).Scan(&release.ID, &release.CreatedAt)
+	release.ID = cleanUUID(release.ID)
+	release.ArtifactID = cleanUUID(release.ArtifactID)
+	return err
 }
 
 func (r *ReleaseRepo) Get(id string) (interface{}, error) {
-	r.mtx.RLock()
-	defer r.mtx.RUnlock()
-	release, ok := r.releaseIDs[id]
-	if !ok {
-		return nil, ErrNotFound
-	}
-	return release, nil
+	row := r.db.QueryRow("SELECT release_id, artifact_id, data, created_at FROM releases WHERE release_id = $1 AND deleted_at IS NULL", id)
+	return scanRelease(row)
 }
 
 func (r *ReleaseRepo) List() (interface{}, error) {
-	r.mtx.RLock()
-	defer r.mtx.RUnlock()
-	return r.releases, nil
+	rows, err := r.db.Query("SELECT release_id, artifact_id, data, created_at FROM releases WHERE deleted_at IS NULL ORDER BY created_at DESC")
+	if err != nil {
+		return nil, err
+	}
+	var releases []*ct.Release
+	for rows.Next() {
+		release, err := scanRelease(rows)
+		if err != nil {
+			return nil, err
+		}
+		releases = append(releases, release)
+	}
+	return releases, rows.Err()
 }

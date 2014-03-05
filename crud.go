@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"reflect"
 
@@ -33,8 +34,8 @@ func crud(resource string, example interface{}, repo Repository, r martini.Route
 
 		err = repo.Add(thing)
 		if err != nil {
-			// 500
-			// log error
+			log.Println(err)
+			r.JSON(500, struct{}{})
 			return
 		}
 		r.JSON(200, thing)
@@ -47,7 +48,9 @@ func crud(resource string, example interface{}, repo Repository, r martini.Route
 				w.WriteHeader(404)
 				return
 			}
-			// TODO: 500/log error
+			log.Println(err)
+			w.WriteHeader(500)
+			return
 		}
 		c.Map(thing)
 	}
@@ -59,16 +62,20 @@ func crud(resource string, example interface{}, repo Repository, r martini.Route
 	r.Get(prefix, func(r render.Render) {
 		list, err := repo.List()
 		if err != nil {
-			// TODO: 500/log error
+			log.Println(err)
+			r.JSON(500, struct{}{})
+			return
 		}
 		r.JSON(200, list)
 	})
 
 	if remover, ok := repo.(Remover); ok {
-		r.Delete(prefix+"/:"+resource+"_id", lookup, func(c martini.Context, params martini.Params) {
+		r.Delete(prefix+"/:"+resource+"_id", lookup, func(c martini.Context, params martini.Params, w http.ResponseWriter) {
 			err := remover.Remove(params[resource+"_id"])
 			if err != nil {
-				// TODO: 500/log error
+				log.Println(err)
+				w.WriteHeader(500)
+				return
 			}
 		})
 	}

@@ -176,7 +176,7 @@ func (s *S) TestCreateRelease(c *C) {
 func (s *S) TestCreateFormation(c *C) {
 	for i, useName := range []bool{false, true} {
 		release := s.createTestRelease(c, &ct.Release{})
-		app := s.createTestApp(c, &ct.App{Name: fmt.Sprintf("createFormation%d", i)})
+		app := s.createTestApp(c, &ct.App{Name: fmt.Sprintf("create-formation-%d", i)})
 
 		in := &ct.Formation{ReleaseID: release.ID, AppID: app.ID, Processes: map[string]int{"web": 1}}
 		if useName {
@@ -200,7 +200,7 @@ func (s *S) TestCreateFormation(c *C) {
 		c.Assert(gotFormation, DeepEquals, out)
 
 		res, err = s.Get(path+"fail", gotFormation)
-		c.Assert(res.StatusCode, Equals, 404)
+		c.Assert(res.StatusCode, Equals, 404, Commentf("path:%s formation:", path+"fail"))
 	}
 }
 
@@ -227,7 +227,7 @@ func formationPath(appID, releaseID string) string {
 func (s *S) TestDeleteFormation(c *C) {
 	for i, useName := range []bool{false, true} {
 		release := s.createTestRelease(c, &ct.Release{})
-		app := s.createTestApp(c, &ct.App{Name: fmt.Sprintf("deleteFormation%d", i)})
+		app := s.createTestApp(c, &ct.App{Name: fmt.Sprintf("delete-formation-%d", i)})
 
 		out := s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
 		var path string
@@ -277,7 +277,7 @@ func (s *S) TestDeleteKey(c *C) {
 }
 
 func (s *S) TestAppList(c *C) {
-	s.createTestApp(c, &ct.App{Name: "listTest"})
+	s.createTestApp(c, &ct.App{Name: "list-test"})
 
 	var list []ct.App
 	res, err := s.Get("/apps", &list)
@@ -335,7 +335,7 @@ func (s *S) TestArtifactList(c *C) {
 
 func (s *S) TestFormationList(c *C) {
 	release := s.createTestRelease(c, &ct.Release{})
-	app := s.createTestApp(c, &ct.App{Name: "formationList"})
+	app := s.createTestApp(c, &ct.App{Name: "formation-list"})
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
 
 	var list []ct.Formation
@@ -370,7 +370,7 @@ func (s *S) setAppRelease(c *C, appID, id string) *ct.Release {
 
 func (s *S) TestSetAppRelease(c *C) {
 	release := s.createTestRelease(c, &ct.Release{})
-	app := s.createTestApp(c, &ct.App{Name: "setRelease"})
+	app := s.createTestApp(c, &ct.App{Name: "set-release"})
 
 	out := s.setAppRelease(c, app.ID, release.ID)
 	c.Assert(out, DeepEquals, release)

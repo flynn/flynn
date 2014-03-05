@@ -43,7 +43,7 @@ func (c *fakeCluster) setHostClient(id string, h cluster.Host) {
 }
 
 func (s *S) TestJobList(c *C) {
-	app := s.createTestApp(c, &ct.App{Name: "jobList"})
+	app := s.createTestApp(c, &ct.App{Name: "job-list"})
 	s.cc.setHosts(map[string]host.Host{"host0": {
 		ID: "host0",
 		Jobs: []*host.Job{

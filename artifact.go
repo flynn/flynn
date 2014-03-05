@@ -1,49 +1,68 @@
 package main
 
 import (
-	"sync"
+	"database/sql"
+	"time"
 
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/lib/pq"
 )
 
 type ArtifactRepo struct {
-	artifactIDs map[string]*ct.Artifact
-	artifacts   []*ct.Artifact
-	mtx         sync.RWMutex
+	db *DB
 }
 
-func NewArtifactRepo() *ArtifactRepo {
-	return &ArtifactRepo{artifactIDs: make(map[string]*ct.Artifact)}
+func NewArtifactRepo(db *DB) *ArtifactRepo {
+	return &ArtifactRepo{db}
 }
 
-// - validate
-// - set id
-// - persist
 func (r *ArtifactRepo) Add(data interface{}) error {
-	artifact := data.(*ct.Artifact)
+	a := data.(*ct.Artifact)
 	// TODO: actually validate
-	artifact.ID = uuid()
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
+	// TODO: use a transaction here
+	err := r.db.QueryRow("INSERT INTO artifacts (type, uri) VALUES ($1, $2) RETURNING artifact_id, created_at", a.Type, a.URI).Scan(&a.ID, &a.CreatedAt)
+	if e, ok := err.(*pq.Error); ok && e.Code == "23505" /* unique_violation */ {
+		var deleted *time.Time
+		err = r.db.QueryRow("SELECT artifact_id, created_at, deleted_at FROM artifacts WHERE type = $1 AND uri = $2",
+			a.Type, a.URI).Scan(&a.ID, &a.CreatedAt, &deleted)
+		if err != nil {
+			return err
+		}
+		if deleted != nil {
+			err = r.db.Exec("UPDATE artifacts SET deleted_at = NULL WHERE artifact_id = $1", a.ID)
+		}
+	}
+	a.ID = cleanUUID(a.ID)
+	return err
+}
 
-	r.artifactIDs[artifact.ID] = artifact
-	r.artifacts = append(r.artifacts, artifact)
-
-	return nil
+func scanArtifact(s Scanner) (*ct.Artifact, error) {
+	artifact := &ct.Artifact{}
+	err := s.Scan(&artifact.ID, &artifact.Type, &artifact.URI, &artifact.CreatedAt)
+	if err == sql.ErrNoRows {
+		err = ErrNotFound
+	}
+	artifact.ID = cleanUUID(artifact.ID)
+	return artifact, err
 }
 
 func (r *ArtifactRepo) Get(id string) (interface{}, error) {
-	r.mtx.RLock()
-	defer r.mtx.RUnlock()
-	artifact, ok := r.artifactIDs[id]
-	if !ok {
-		return nil, ErrNotFound
-	}
-	return artifact, nil
+	row := r.db.QueryRow("SELECT artifact_id, type, uri, created_at FROM artifacts WHERE artifact_id = $1 AND deleted_at IS NULL", id)
+	return scanArtifact(row)
 }
 
 func (r *ArtifactRepo) List() (interface{}, error) {
-	r.mtx.RLock()
-	defer r.mtx.RUnlock()
-	return r.artifacts, nil
+	rows, err := r.db.Query("SELECT artifact_id, type, uri, created_at FROM artifacts WHERE deleted_at IS NULL ORDER BY created_at DESC")
+	if err != nil {
+		return nil, err
+	}
+	var artifacts []*ct.Artifact
+	for rows.Next() {
+		artifact, err := scanArtifact(rows)
+		if err != nil {
+			return nil, err
+		}
+		artifacts = append(artifacts, artifact)
+	}
+	return artifacts, nil
 }

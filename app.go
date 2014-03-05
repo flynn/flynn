@@ -1,87 +1,83 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
-	"sync"
+	"regexp"
 
 	ct "github.com/flynn/flynn-controller/types"
 )
 
 type AppRepo struct {
-	appNames map[string]*ct.App
-	appIDs   map[string]*ct.App
-	releases map[string]*ct.Release
-	apps     []*ct.App
-	mtx      sync.RWMutex
+	db *DB
 }
 
-func NewAppRepo() *AppRepo {
-	return &AppRepo{
-		appNames: make(map[string]*ct.App),
-		appIDs:   make(map[string]*ct.App),
-		releases: make(map[string]*ct.Release),
-	}
+func NewAppRepo(db *DB) *AppRepo {
+	return &AppRepo{db}
 }
 
-// - validate
-// - set id
-// - check name doesn't exist
-// - persist
+var appNamePattern = regexp.MustCompile(`^[a-z\d]+(-[a-z\d]+)*$`)
+
 func (r *AppRepo) Add(data interface{}) error {
 	app := data.(*ct.App)
 	// TODO: actually validate
 	if app.Name == "" {
 		return errors.New("controller: app name must not be blank")
 	}
-	app.ID = uuid()
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
-
-	if _, exists := r.appNames[app.Name]; exists {
-		return errors.New("controller: app name is already in use")
+	if len(app.Name) > 30 || !appNamePattern.MatchString(app.Name) {
+		return errors.New("controller: invalid app name")
 	}
-
-	r.appNames[app.Name] = app
-	r.appIDs[app.ID] = app
-	r.apps = append(r.apps, app)
-
-	return nil
+	err := r.db.QueryRow("INSERT INTO apps (name) VALUES ($1) RETURNING app_id, created_at, updated_at", app.Name).Scan(&app.ID, &app.CreatedAt, &app.UpdatedAt)
+	app.ID = cleanUUID(app.ID)
+	return err
 }
 
 var ErrNotFound = errors.New("controller: resource not found")
 
-func (r *AppRepo) Get(id string) (interface{}, error) {
-	r.mtx.RLock()
-	defer r.mtx.RUnlock()
-	app := r.appIDs[id]
-	if app == nil {
-		app = r.appNames[id]
-		if app == nil {
-			return nil, ErrNotFound
-		}
+func scanApp(s Scanner) (*ct.App, error) {
+	app := &ct.App{}
+	err := s.Scan(&app.ID, &app.Name, &app.CreatedAt, &app.UpdatedAt)
+	if err == sql.ErrNoRows {
+		err = ErrNotFound
 	}
-	return app, nil
+	app.ID = cleanUUID(app.ID)
+	return app, err
+}
+
+var idPattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
+
+func (r *AppRepo) Get(id string) (interface{}, error) {
+	var rows Scanner
+	query := "SELECT app_id, name, created_at, updated_at FROM apps WHERE deleted_at IS NULL AND "
+	if idPattern.MatchString(id) {
+		rows = r.db.QueryRow(query+"(app_id = $1 OR name = $2)", id, id)
+	} else {
+		rows = r.db.QueryRow(query+"name = $1", id)
+	}
+	return scanApp(rows)
 }
 
 func (r *AppRepo) List() (interface{}, error) {
-	r.mtx.RLock()
-	defer r.mtx.RUnlock()
-	return r.apps, nil
+	rows, err := r.db.Query("SELECT app_id, name, created_at, updated_at FROM apps WHERE deleted_at IS NULL ORDER BY created_at DESC")
+	if err != nil {
+		return nil, err
+	}
+	var apps []*ct.App
+	for rows.Next() {
+		app, err := scanApp(rows)
+		if err != nil {
+			return nil, err
+		}
+		apps = append(apps, app)
+	}
+	return apps, rows.Err()
 }
 
-func (r *AppRepo) SetRelease(id string, release *ct.Release) error {
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
-	r.releases[id] = release
-	return nil
+func (r *AppRepo) SetRelease(appID string, releaseID string) error {
+	return r.db.Exec("UPDATE apps SET release_id = $2, updated_at = current_timestamp WHERE app_id = $1", appID, releaseID)
 }
 
 func (r *AppRepo) GetRelease(id string) (*ct.Release, error) {
-	r.mtx.RLock()
-	defer r.mtx.RUnlock()
-	release := r.releases[id]
-	if release == nil {
-		return nil, ErrNotFound
-	}
-	return release, nil
+	row := r.db.QueryRow("SELECT r.release_id, r.artifact_id, r.data, r.created_at FROM apps a JOIN releases r USING (release_id) WHERE a.app_id = $1", id)
+	return scanRelease(row)
 }
