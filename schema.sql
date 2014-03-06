@@ -5,9 +5,9 @@ CREATE TABLE artifacts (
     artifact_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     type text NOT NULL,
     uri text NOT NULL,
-	created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
     deleted_at timestamp with time zone,
-	UNIQUE (type, uri)
+    UNIQUE (type, uri)
 );
 
 CREATE TABLE releases (
@@ -36,6 +36,17 @@ CREATE TABLE formations (
     deleted_at timestamp with time zone,
     PRIMARY KEY (app_id, release_id)
 );
+
+CREATE OR REPLACE FUNCTION notify_formation() RETURNS TRIGGER AS $$
+    BEGIN
+        PERFORM pg_notify('formations', NEW.app_id || ':' || NEW.release_id);
+        RETURN NULL;
+    END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER notify_formation
+    AFTER INSERT OR UPDATE ON formations
+    FOR EACH ROW EXECUTE PROCEDURE notify_formation();
 
 CREATE TABLE keys (
     key_id text PRIMARY KEY,
