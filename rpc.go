@@ -19,7 +19,9 @@ type ControllerRPC struct {
 
 func (s *ControllerRPC) StreamFormations(arg struct{}, stream rpcplus.Stream) error {
 	ch := make(chan *ct.ExpandedFormation)
-	s.formations.Subscribe(ch)
+	if err := s.formations.Subscribe(ch); err != nil {
+		return err
+	}
 	defer func() {
 		go func() {
 			// drain to prevent deadlock while removing the listener
@@ -29,6 +31,14 @@ func (s *ControllerRPC) StreamFormations(arg struct{}, stream rpcplus.Stream) er
 		s.formations.Unsubscribe(ch)
 		close(ch)
 	}()
+
+	// send sentinel
+	select {
+	case stream.Send <- &ct.ExpandedFormation{}:
+	case <-stream.Error:
+		return nil
+	}
+
 	for {
 		select {
 		case f := <-ch:

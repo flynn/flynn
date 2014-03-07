@@ -44,7 +44,7 @@ func scanApp(s Scanner) (*ct.App, error) {
 	return app, err
 }
 
-var idPattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
+var idPattern = regexp.MustCompile(`^[a-f0-9]{8}-?([a-f0-9]{4}-?){3}[a-f0-9]{12}$`)
 
 func (r *AppRepo) Get(id string) (interface{}, error) {
 	var rows Scanner

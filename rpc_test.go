@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/rpcplus"
 	. "launchpad.net/gocheck"
@@ -13,6 +15,12 @@ func (s *S) TestFormationStreaming(c *C) {
 
 	client.StreamGo("Controller.StreamFormations", struct{}{}, ch)
 
+	select {
+	case <-ch:
+	case <-time.After(time.Second):
+		c.Fatal("timed out waiting for sentinel")
+	}
+
 	release := s.createTestRelease(c, &ct.Release{})
 	app := s.createTestApp(c, &ct.App{Name: "streamtest"})
 	formation := s.createTestFormation(c, &ct.Formation{
@@ -21,8 +29,12 @@ func (s *S) TestFormationStreaming(c *C) {
 		Processes: map[string]int{"foo": 1},
 	})
 
-	// create event
-	out := <-ch
+	var out *ct.ExpandedFormation
+	select {
+	case out = <-ch:
+	case <-time.After(time.Second):
+		c.Fatal("timed out waiting for create")
+	}
 	c.Assert(out.Release, DeepEquals, release)
 	c.Assert(out.App, DeepEquals, app)
 	c.Assert(out.Processes, DeepEquals, formation.Processes)
@@ -31,8 +43,11 @@ func (s *S) TestFormationStreaming(c *C) {
 
 	s.Delete(formationPath(app.ID, release.ID))
 
-	// delete event
-	out = <-ch
+	select {
+	case out = <-ch:
+	case <-time.After(time.Second):
+		c.Fatal("timed out waiting for delete")
+	}
 	c.Assert(out.Release, DeepEquals, release)
 	c.Assert(out.App, DeepEquals, app)
 	c.Assert(out.Processes, IsNil)

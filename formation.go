@@ -2,8 +2,11 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"strconv"
+	"strings"
 	"sync"
+	"time"
 
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/lib/pq"
@@ -21,16 +24,18 @@ type FormationRepo struct {
 	artifacts *ArtifactRepo
 
 	subscriptions map[chan<- *ct.ExpandedFormation]struct{}
+	stopListener  chan struct{}
 	subMtx        sync.RWMutex
 }
 
 func NewFormationRepo(db *DB, appRepo *AppRepo, releaseRepo *ReleaseRepo, artifactRepo *ArtifactRepo) *FormationRepo {
 	return &FormationRepo{
 		db:            db,
-		subscriptions: make(map[chan<- *ct.ExpandedFormation]struct{}),
 		apps:          appRepo,
 		releases:      releaseRepo,
 		artifacts:     artifactRepo,
+		subscriptions: make(map[chan<- *ct.ExpandedFormation]struct{}),
+		stopListener:  make(chan struct{}),
 	}
 }
 
@@ -40,6 +45,7 @@ func procsHstore(m map[string]int) hstore.Hstore {
 		res.Map[k] = sql.NullString{String: strconv.Itoa(v), Valid: true}
 	}
 	return res
+
 }
 
 func (r *FormationRepo) Add(f *ct.Formation) error {
@@ -54,7 +60,6 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 	if err != nil {
 		return err
 	}
-	go r.publish(f)
 	return nil
 }
 
@@ -106,11 +111,18 @@ func (r *FormationRepo) Remove(appID, releaseID string) error {
 	if err != nil {
 		return err
 	}
-	go r.publish(&ct.Formation{AppID: appID, ReleaseID: releaseID})
 	return nil
 }
 
-func (r *FormationRepo) publish(formation *ct.Formation) {
+func (r *FormationRepo) publish(appID, releaseID string) {
+	formation, err := r.Get(appID, releaseID)
+	if err == ErrNotFound {
+		// formation delete event
+		formation = &ct.Formation{AppID: appID, ReleaseID: releaseID}
+	} else if err != nil {
+		// TODO: log error
+		return
+	}
 	app, err := r.apps.Get(formation.AppID)
 	if err != nil {
 		// TODO: log error
@@ -142,14 +154,56 @@ func (r *FormationRepo) publish(formation *ct.Formation) {
 	}
 }
 
-func (r *FormationRepo) Subscribe(ch chan<- *ct.ExpandedFormation) {
+func (r *FormationRepo) startListener() error {
+	// TODO: get connection string from somewhere
+	listenerEvent := func(ev pq.ListenerEventType, err error) {
+		if err != nil {
+			fmt.Println("LISTENER error:", err)
+		}
+		// TODO: handle errors
+	}
+	listener := pq.NewListener("dbname=flynn-controller sslmode=disable", 10*time.Second, time.Minute, listenerEvent)
+	if err := listener.Listen("formations"); err != nil {
+		return err
+	}
+	go func() {
+		for {
+			select {
+			case n := <-listener.Notify:
+				ids := strings.SplitN(n.Extra, ":", 2)
+				go r.publish(ids[0], ids[1])
+			case <-r.stopListener:
+				listener.Close()
+				return
+			}
+		}
+	}()
+	return nil
+}
+
+func (r *FormationRepo) Subscribe(ch chan<- *ct.ExpandedFormation) error {
+	var startListener bool
 	r.subMtx.Lock()
+	if len(r.subscriptions) == 0 {
+		startListener = true
+	}
 	r.subscriptions[ch] = struct{}{}
 	r.subMtx.Unlock()
+	if startListener {
+		if err := r.startListener(); err != nil {
+			return err
+		}
+	}
+	// send all existing formations since (ts - 1 minute)
+
+	return nil
 }
 
 func (r *FormationRepo) Unsubscribe(ch chan<- *ct.ExpandedFormation) {
 	r.subMtx.Lock()
+	defer r.subMtx.Unlock()
 	delete(r.subscriptions, ch)
-	r.subMtx.Unlock()
+	if len(r.subscriptions) == 0 {
+		r.stopListener <- struct{}{}
+	}
 }
