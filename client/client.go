@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/rpcplus"
@@ -74,14 +75,17 @@ func (c *Client) get(path string, out interface{}) error {
 	return json.NewDecoder(res.Body).Decode(out)
 }
 
-func (c *Client) StreamFormations() (<-chan *ct.ExpandedFormation, *error) {
+func (c *Client) StreamFormations(since *time.Time) (<-chan *ct.ExpandedFormation, *error) {
+	if since == nil {
+		*since = time.Unix(0, 0)
+	}
 	// TODO: handle TLS
 	client, err := rpcplus.DialHTTP("tcp", c.addr)
 	if err != nil {
 		return nil, &err
 	}
 	ch := make(chan *ct.ExpandedFormation)
-	return ch, &client.StreamGo("Controller.StreamFormations", struct{}{}, ch).Error
+	return ch, &client.StreamGo("Controller.StreamFormations", since, ch).Error
 }
 
 func (c *Client) CreateArtifact(artifact *ct.Artifact) error {

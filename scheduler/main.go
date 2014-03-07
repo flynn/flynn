@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/flynn/flynn-controller/client"
 	ct "github.com/flynn/flynn-controller/types"
@@ -58,15 +59,19 @@ type clusterClient interface {
 }
 
 type formationStreamer interface {
-	StreamFormations() (<-chan *ct.ExpandedFormation, *error)
+	StreamFormations(*time.Time) (<-chan *ct.ExpandedFormation, *error)
 }
 
 func (c *context) watchFormations(fs formationStreamer) {
 	g := grohl.NewContext(grohl.Data{"fn": "watchFormations"})
 
-	ch, _ := fs.StreamFormations()
+	ch, _ := fs.StreamFormations(nil)
 
 	for ef := range ch {
+		if ef.App == nil {
+			// sentinel
+			continue
+		}
 		f := c.formations.Get(ef.App.ID, ef.Release.ID)
 		if f != nil {
 			g.Log(grohl.Data{"app.id": ef.App.ID, "release.id": ef.Release.ID, "at": "update"})
