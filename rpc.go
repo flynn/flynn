@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"time"
 
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/rpcplus"
@@ -17,9 +18,26 @@ type ControllerRPC struct {
 	formations *FormationRepo
 }
 
-func (s *ControllerRPC) StreamFormations(arg struct{}, stream rpcplus.Stream) error {
+func (s *ControllerRPC) StreamFormations(since time.Time, stream rpcplus.Stream) error {
 	ch := make(chan *ct.ExpandedFormation)
-	if err := s.formations.Subscribe(ch); err != nil {
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case f := <-ch:
+				select {
+				case stream.Send <- f:
+				case <-stream.Error:
+					break
+				}
+			case <-stream.Error:
+				break
+			}
+		}
+		close(done)
+	}()
+
+	if err := s.formations.Subscribe(ch, since); err != nil {
 		return err
 	}
 	defer func() {
@@ -32,23 +50,6 @@ func (s *ControllerRPC) StreamFormations(arg struct{}, stream rpcplus.Stream) er
 		close(ch)
 	}()
 
-	// send sentinel
-	select {
-	case stream.Send <- &ct.ExpandedFormation{}:
-	case <-stream.Error:
-		return nil
-	}
-
-	for {
-		select {
-		case f := <-ch:
-			select {
-			case stream.Send <- f:
-			case <-stream.Error:
-				return nil
-			}
-		case <-stream.Error:
-			return nil
-		}
-	}
+	<-done
+	return nil
 }

@@ -108,7 +108,7 @@ func (r *FormationRepo) List(appID string) ([]*ct.Formation, error) {
 }
 
 func (r *FormationRepo) Remove(appID, releaseID string) error {
-	err := r.db.Exec("UPDATE formations SET deleted_at = current_timestamp WHERE app_id = $1 AND release_id = $2", appID, releaseID)
+	err := r.db.Exec("UPDATE formations SET deleted_at = current_timestamp, updated_at = current_timestamp, processes = NULL WHERE app_id = $1 AND release_id = $2", appID, releaseID)
 	if err != nil {
 		return err
 	}
@@ -124,35 +124,40 @@ func (r *FormationRepo) publish(appID, releaseID string) {
 		// TODO: log error
 		return
 	}
-	app, err := r.apps.Get(formation.AppID)
-	if err != nil {
-		// TODO: log error
-		return
-	}
-	release, err := r.releases.Get(formation.ReleaseID)
-	if err != nil {
-		// TODO: log error
-		return
-	}
-	artifact, err := r.artifacts.Get(release.(*ct.Release).ArtifactID)
-	if err != nil {
-		// TODO: log error
-		return
-	}
 
-	f := &ct.ExpandedFormation{
-		App:       app.(*ct.App),
-		Release:   release.(*ct.Release),
-		Artifact:  artifact.(*ct.Artifact),
-		Processes: formation.Processes,
+	f, err := r.expandFormation(formation)
+	if err != nil {
+		// TODO: log error
+		return
 	}
-
 	r.subMtx.RLock()
 	defer r.subMtx.RUnlock()
 
 	for ch := range r.subscriptions {
 		ch <- f
 	}
+}
+
+func (r *FormationRepo) expandFormation(formation *ct.Formation) (*ct.ExpandedFormation, error) {
+	app, err := r.apps.Get(formation.AppID)
+	if err != nil {
+		return nil, err
+	}
+	release, err := r.releases.Get(formation.ReleaseID)
+	if err != nil {
+		return nil, err
+	}
+	artifact, err := r.artifacts.Get(release.(*ct.Release).ArtifactID)
+	if err != nil {
+		return nil, err
+	}
+	f := &ct.ExpandedFormation{
+		App:       app.(*ct.App),
+		Release:   release.(*ct.Release),
+		Artifact:  artifact.(*ct.Artifact),
+		Processes: formation.Processes,
+	}
+	return f, nil
 }
 
 func (r *FormationRepo) startListener() error {
@@ -182,7 +187,7 @@ func (r *FormationRepo) startListener() error {
 	return nil
 }
 
-func (r *FormationRepo) Subscribe(ch chan<- *ct.ExpandedFormation) error {
+func (r *FormationRepo) Subscribe(ch chan<- *ct.ExpandedFormation, since time.Time) error {
 	var startListener bool
 	r.subMtx.Lock()
 	if len(r.subscriptions) == 0 {
@@ -195,9 +200,29 @@ func (r *FormationRepo) Subscribe(ch chan<- *ct.ExpandedFormation) error {
 			return err
 		}
 	}
-	// send all existing formations since (ts - 1 minute)
+	return r.sendUpdatedSince(ch, since)
+}
 
-	return nil
+func (r *FormationRepo) sendUpdatedSince(ch chan<- *ct.ExpandedFormation, since time.Time) error {
+	rows, err := r.db.Query("SELECT app_id, release_id, processes, created_at, updated_at FROM formations WHERE updated_at >= $1 ORDER BY updated_at DESC", since)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		formation, err := scanFormation(rows)
+		if err != nil {
+			rows.Close()
+			return err
+		}
+		ef, err := r.expandFormation(formation)
+		if err != nil {
+			rows.Close()
+			return err
+		}
+		ch <- ef
+	}
+	ch <- &ct.ExpandedFormation{} // sentinel
+	return rows.Err()
 }
 
 func (r *FormationRepo) Unsubscribe(ch chan<- *ct.ExpandedFormation) {

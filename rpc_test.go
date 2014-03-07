@@ -9,20 +9,30 @@ import (
 )
 
 func (s *S) TestFormationStreaming(c *C) {
+	before := time.Now()
+	release := s.createTestRelease(c, &ct.Release{})
+	app := s.createTestApp(c, &ct.App{Name: "streamtest-existing"})
+	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
+
 	client, err := rpcplus.DialHTTP("tcp", s.srv.URL[7:])
 	c.Assert(err, IsNil)
 	ch := make(chan *ct.ExpandedFormation)
 
-	client.StreamGo("Controller.StreamFormations", struct{}{}, ch)
+	client.StreamGo("Controller.StreamFormations", before, ch)
 
-	select {
-	case <-ch:
-	case <-time.After(time.Second):
-		c.Fatal("timed out waiting for sentinel")
+	var existingFound bool
+	for f := range ch {
+		if f.App == nil {
+			break
+		}
+		if f.Release.ID == release.ID {
+			existingFound = true
+		}
 	}
+	c.Assert(existingFound, Equals, true)
 
-	release := s.createTestRelease(c, &ct.Release{})
-	app := s.createTestApp(c, &ct.App{Name: "streamtest"})
+	release = s.createTestRelease(c, &ct.Release{})
+	app = s.createTestApp(c, &ct.App{Name: "streamtest"})
 	formation := s.createTestFormation(c, &ct.Formation{
 		ReleaseID: release.ID,
 		AppID:     app.ID,
