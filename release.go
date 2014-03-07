@@ -64,6 +64,7 @@ func (r *ReleaseRepo) List() (interface{}, error) {
 	for rows.Next() {
 		release, err := scanRelease(rows)
 		if err != nil {
+			rows.Close()
 			return nil, err
 		}
 		releases = append(releases, release)

@@ -99,6 +99,7 @@ func (r *FormationRepo) List(appID string) ([]*ct.Formation, error) {
 	for rows.Next() {
 		formation, err := scanFormation(rows)
 		if err != nil {
+			rows.Close()
 			return nil, err
 		}
 		formations = append(formations, formation)

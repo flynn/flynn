@@ -60,6 +60,7 @@ func (r *ArtifactRepo) List() (interface{}, error) {
 	for rows.Next() {
 		artifact, err := scanArtifact(rows)
 		if err != nil {
+			rows.Close()
 			return nil, err
 		}
 		artifacts = append(artifacts, artifact)

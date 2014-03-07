@@ -66,6 +66,7 @@ func (r *AppRepo) List() (interface{}, error) {
 	for rows.Next() {
 		app, err := scanApp(rows)
 		if err != nil {
+			rows.Close()
 			return nil, err
 		}
 		apps = append(apps, app)

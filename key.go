@@ -80,6 +80,7 @@ func (r *KeyRepo) List() (interface{}, error) {
 	for rows.Next() {
 		key, err := scanKey(rows)
 		if err != nil {
+			rows.Close()
 			return nil, err
 		}
 		keys = append(keys, key)
