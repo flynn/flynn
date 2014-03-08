@@ -132,8 +132,9 @@ func (s *S) TestCreateArtifact(c *C) {
 }
 
 func (s *S) createTestRelease(c *C, in *ct.Release) *ct.Release {
-	artifactID := s.createTestArtifact(c, &ct.Artifact{}).ID
-	in.ArtifactID = artifactID
+	if in.ArtifactID == "" {
+		in.ArtifactID = s.createTestArtifact(c, &ct.Artifact{}).ID
+	}
 	res, err := s.Post("/releases", in)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)

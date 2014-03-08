@@ -57,6 +57,7 @@ func appHandler(cc clusterClient) http.Handler {
 	r.Delete("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getFormationMiddleware, deleteFormation)
 	r.Get("/apps/:apps_id/formations", getAppMiddleware, listFormations)
 
+	r.Post("/apps/:apps_id/jobs", getAppMiddleware, binding.Bind(ct.NewJob{}), runJob)
 	r.Get("/apps/:apps_id/jobs", getAppMiddleware, jobList)
 	r.Delete("/apps/:apps_id/jobs/:job_id", getAppMiddleware, connectHostMiddleware, killJob)
 	r.Get("/apps/:apps_id/jobs/:job_id/log", getAppMiddleware, connectHostMiddleware, jobLog)

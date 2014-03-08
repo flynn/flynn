@@ -65,3 +65,12 @@ type Job struct {
 	ReleaseID string   `json:"release,omitempty"`
 	Cmd       []string `json:"cmd,omitempty"`
 }
+
+type NewJob struct {
+	ReleaseID string            `json:"release"`
+	Cmd       []string          `json:"cmd"`
+	Env       map[string]string `json:"env"`
+	TTY       bool              `json:"tty"`
+	Columns   int               `json:"tty_columns"`
+	Lines     int               `json:"tty_lines"`
+}

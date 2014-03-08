@@ -1,9 +1,7 @@
 package main
 
 import (
-	"errors"
 	"log"
-	"net/url"
 	"os"
 	"sort"
 	"sync"
@@ -11,6 +9,7 @@ import (
 
 	"github.com/flynn/flynn-controller/client"
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/go-flynn/cluster"
@@ -59,6 +58,7 @@ type clusterClient interface {
 }
 
 type formationStreamer interface {
+	// get release
 	StreamFormations(*time.Time) (<-chan *ct.ExpandedFormation, *error)
 }
 
@@ -396,7 +396,7 @@ func (f *Formation) remove(n int, name string) {
 
 func (f *Formation) jobConfig(name string) (*host.Job, error) {
 	t := f.Release.Processes[name]
-	image, err := dockerImage(f.Artifact.URI)
+	image, err := utils.DockerImage(f.Artifact.URI)
 	if err != nil {
 		return nil, err
 	}
@@ -409,40 +409,10 @@ func (f *Formation) jobConfig(name string) (*host.Job, error) {
 		},
 		Config: &docker.Config{
 			Cmd:   t.Cmd,
-			Env:   formatEnv(f.Release.Env, t.Env),
+			Env:   utils.FormatEnv(f.Release.Env, t.Env),
 			Image: image,
 		},
 	}, nil
-}
-
-func dockerImage(uri string) (string, error) {
-	// TODO: ID refs (see https://github.com/dotcloud/docker/issues/4106)
-	u, err := url.Parse(uri)
-	if err != nil {
-		return "", err
-	}
-	if u.Scheme != "docker" {
-		return "", errors.New("scheduler: only docker artifact URIs are currently supported")
-	}
-	var suffix string
-	if tag := u.Query().Get("tag"); tag != "" {
-		suffix = ":" + tag
-	}
-	return u.Host + u.Path + suffix, nil
-}
-
-func formatEnv(envs ...map[string]string) []string {
-	env := make(map[string]string)
-	for _, e := range envs {
-		for k, v := range e {
-			env[k] = v
-		}
-	}
-	res := make([]string, 0, len(env))
-	for k, v := range env {
-		res = append(res, k+"="+v)
-	}
-	return res
 }
 
 type sortHost struct {
