@@ -67,7 +67,7 @@ Given the best practices and ideas from these three worlds, our design philosoph
 
 2. **One Audience** -- As mentioned earlier in this document, we try to make all knowledge, documentation, and source behind the project accessible to a single audience as opposed to separate user and developer or developer and operator audiences. This forces everything to be simple and well documented.
 
-There has been a lot of thought already put into the idea of both simplicity in software. Our favorite works come from the Unix philosophy as mentioned before. Within this domain, it's easy to find great models for simplicity. For example, "worse is better", which suffers from a name that is too clever, but is basically a manifesto for simplicity over perfection.
+There has been a lot of thought already put into the idea of simplicity in software. Our favorite works come from the Unix philosophy as mentioned before. Within this domain, it's easy to find great models for simplicity. For example, "worse is better", which suffers from a name that is too clever, but is basically a manifesto for simplicity over perfection.
 
 Another example is the philosophy behind Go, most of which comes from Rob Pike, who has a long history with Unix and makes arguments like "Less is exponentially more". However, it's useful for us to get specific, and so we turn to Eric Raymond's [17 Unix Rules](https://en.wikipedia.org/wiki/Unix_philosophy#Eric_Raymond.E2.80.99s_17_Unix_Rules). We're pragmatic idealists, though, so rules are a bit harsh. We consider them guidelines. Here are six of our favorite, which as you'll see have had a huge impact on the design of Flynn.
 
