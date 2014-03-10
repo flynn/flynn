@@ -27,3 +27,7 @@ type Client struct {
 func (c *Client) AddFrontend(config *strowger.Config) error {
 	return c.c.Call("Router.AddFrontend", config, &struct{}{})
 }
+
+func (c *Client) Close() error {
+	return c.c.Close()
+}
