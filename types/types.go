@@ -67,10 +67,16 @@ type Job struct {
 }
 
 type NewJob struct {
-	ReleaseID string            `json:"release"`
-	Cmd       []string          `json:"cmd"`
-	Env       map[string]string `json:"env"`
-	TTY       bool              `json:"tty"`
-	Columns   int               `json:"tty_columns"`
-	Lines     int               `json:"tty_lines"`
+	ReleaseID string            `json:"release,omitempty"`
+	Cmd       []string          `json:"cmd,omitempty"`
+	Env       map[string]string `json:"env,omitempty"`
+	TTY       bool              `json:"tty,omitempty"`
+	Columns   int               `json:"tty_columns,omitempty"`
+	Lines     int               `json:"tty_lines,omitempty"`
+}
+
+type Frontend struct {
+	Type       string `json:"type,omitempty"`
+	HTTPDomain string `json:"http_domain,omitempty"`
+	Service    string `json:"service,omitempty"`
 }
