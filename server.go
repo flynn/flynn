@@ -38,7 +38,7 @@ func main() {
 }
 
 var clusterc *cluster.Client
-var router *strowgerc.Client
+var router strowgerc.Client
 
 type Job struct {
 	ID   string `json:"id"`
