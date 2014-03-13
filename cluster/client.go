@@ -35,6 +35,13 @@ func NewClient() (*Client, error) {
 
 func (c *Client) followLeader(firstErr chan<- error) {
 	for update := range c.service.Leaders() {
+		if update == nil {
+			if firstErr != nil {
+				firstErr <- ErrNoServers
+				firstErr = nil
+			}
+			continue
+		}
 		c.mtx.Lock()
 		if c.c != nil {
 			c.c.Close()
