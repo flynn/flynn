@@ -19,6 +19,7 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/go-discoverd"
+	"github.com/inconshreveable/go-vhost"
 )
 
 type HTTPFrontend struct {
@@ -27,7 +28,7 @@ type HTTPFrontend struct {
 	TLSConfig *tls.Config
 
 	mtx      sync.RWMutex
-	domains  map[string]*httpServer
+	domains  map[string]*domain
 	services map[string]*httpServer
 
 	etcdPrefix string
@@ -46,28 +47,29 @@ type DiscoverdClient interface {
 	NewServiceSet(string) (discoverd.ServiceSet, error)
 }
 
-func NewHTTPFrontend(addr string, etcdc EtcdClient, discoverdc DiscoverdClient) *HTTPFrontend {
+func NewHTTPFrontend(addr, tlsAddr string, etcdc EtcdClient, discoverdc DiscoverdClient) *HTTPFrontend {
 	return &HTTPFrontend{
 		Addr:       addr,
+		TLSAddr:    tlsAddr,
 		etcd:       etcdc,
 		etcdPrefix: "/strowger/http/",
 		discoverd:  discoverdc,
-		domains:    make(map[string]*httpServer),
+		domains:    make(map[string]*domain),
 		services:   make(map[string]*httpServer),
 	}
 }
 
-func (s *HTTPFrontend) AddHTTPDomain(domain string, service string, certs [][]byte, key []byte) error {
-	return s.addDomain(domain, service, true)
+func (s *HTTPFrontend) AddHTTPDomain(domain string, service string, cert []byte, key []byte) error {
+	return s.addDomain(domain, service, cert, key, true)
 }
 
 var ErrDomainExists = errors.New("strowger: domain exists with different service")
 
-func (s *HTTPFrontend) addDomain(domain string, service string, persist bool) error {
+func (s *HTTPFrontend) addDomain(name string, service string, cert []byte, key []byte, persist bool) error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	if server, ok := s.domains[domain]; ok {
+	if server, ok := s.domains[name]; ok {
 		if server.name != service {
 			return ErrDomainExists
 		}
@@ -82,19 +84,34 @@ func (s *HTTPFrontend) addDomain(domain string, service string, persist bool) er
 		}
 		server = &httpServer{name: service, services: services}
 	}
+
+	var keypair *tls.Certificate
+	if cert != nil && key != nil {
+		created, err := tls.X509KeyPair(cert, key)
+		if err != nil {
+			return err
+		}
+		keypair = &created
+	}
+	domainCfg := &domain{name: name, server: server, keypair: keypair}
+
 	if persist {
-		if _, err := s.etcd.Create(s.etcdPrefix+domain+"/service", service, 0); err != nil {
+		if _, err := s.etcd.Create(s.etcdPrefix+name+"/service", service, 0); err != nil {
+			return err
+		}
+		if _, err := s.etcd.Create(s.etcdPrefix+name+"/tls/key", string(key), 0); err != nil {
+			return err
+		}
+		if _, err := s.etcd.Create(s.etcdPrefix+name+"/tls/cert", string(cert), 0); err != nil {
 			return err
 		}
 	}
-	// TODO: set cert/key data if provided
 
 	server.refs++
-	s.domains[domain] = server
+	s.domains[name] = domainCfg
 	s.services[service] = server
-	// TODO: TLS config
 
-	log.Println("Add service", service, "to domain", domain)
+	log.Println("Add service", service, "to domain", name)
 
 	return nil
 }
@@ -102,7 +119,7 @@ func (s *HTTPFrontend) addDomain(domain string, service string, persist bool) er
 func (s *HTTPFrontend) RemoveHTTPDomain(domain string) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	server := s.domains[domain]
+	server := s.domains[domain].server
 	if server == nil {
 		return
 	}
@@ -113,6 +130,24 @@ func (s *HTTPFrontend) RemoveHTTPDomain(domain string) {
 		delete(s.services, server.name)
 	}
 	// TODO: persist
+}
+
+// Given a recursive node structure from etcd, find particular
+// values. "name" may contain slashes ("foo/bar")
+func etcdFindChild(node *etcd.Node, name string) *etcd.Node {
+	parts := strings.Split(name, "/")
+outer:
+	for _, part := range parts {
+		for _, childNode := range node.Nodes {
+			if path.Base(childNode.Key) == part {
+				node = &childNode
+				continue outer
+			}
+		}
+		return nil
+	}
+
+	return node
 }
 
 func (s *HTTPFrontend) syncDatabase() {
@@ -132,11 +167,29 @@ func (s *HTTPFrontend) syncDatabase() {
 			continue
 		}
 		domain := path.Base(node.Key)
-		serviceRes, err := s.etcd.Get(node.Key+"/service", false, false)
+
+		// Recursively get the whole service structure
+		serviceRes, err := s.etcd.Get(node.Key, false, true)
 		if err != nil {
 			log.Fatal(err)
 		}
-		if err := s.addDomain(domain, serviceRes.Node.Value, false); err != nil {
+
+		// Find the individual (service name, ssl info)
+		serviceNode := etcdFindChild(serviceRes.Node, "service")
+		if serviceNode == nil {
+			continue
+		}
+		var cert, key []byte
+		certNode := etcdFindChild(serviceRes.Node, "tls/cert")
+		if certNode != nil && certNode.Value != "" {
+			cert = []byte(certNode.Value)
+		}
+		keyNode := etcdFindChild(serviceRes.Node, "tls/key")
+		if keyNode != nil && keyNode.Value != "" {
+			key = []byte(keyNode.Value)
+		}
+
+		if err := s.addDomain(domain, serviceNode.Value, cert, key, false); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -147,6 +200,7 @@ watch:
 	// TODO: store stop
 	go s.etcd.Watch(s.etcdPrefix, since, false, stream, stop)
 	for res := range stream {
+		// XXX support changes to cert/key
 		if res.Node.Dir || path.Base(res.Node.Key) == "service" {
 			continue
 		}
@@ -155,7 +209,7 @@ watch:
 		_, exists := s.domains[domain]
 		s.mtx.Unlock()
 		if !exists {
-			if err := s.addDomain(domain, res.Node.Value, false); err != nil {
+			if err := s.addDomain(domain, res.Node.Value, nil, nil, false); err != nil {
 				// TODO: log error
 			}
 		}
@@ -176,7 +230,7 @@ func (s *HTTPFrontend) serve() {
 			// TODO: log error
 			break
 		}
-		go s.handle(conn)
+		go s.handle(conn, false)
 	}
 }
 
@@ -192,8 +246,18 @@ func (s *HTTPFrontend) serveTLS() {
 			// TODO: log error
 			break
 		}
-		go s.handle(conn)
+		go s.handle(conn, true)
 	}
+}
+
+func (s *HTTPFrontend) findBackendForHost(host string) *domain {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	// TODO: handle wildcard domains
+	log.Println(s.domains, host)
+	backend := s.domains[host]
+	log.Println("Backend match:", backend)
+	return backend
 }
 
 func fail(sc *httputil.ServerConn, req *http.Request, code int, msg string) {
@@ -208,8 +272,40 @@ func fail(sc *httputil.ServerConn, req *http.Request, code int, msg string) {
 	sc.Write(req, resp)
 }
 
-func (s *HTTPFrontend) handle(conn net.Conn) {
+func (s *HTTPFrontend) handle(conn net.Conn, isTLS bool) {
 	defer conn.Close()
+
+	var backend *domain
+
+	// For TLS, use the SNI hello to determine the domain.
+	// At this stage, if we don't find a match, we simply
+	// close the connection down.
+	if isTLS {
+		// Parse out host via SNI first
+		vhostConn, err := vhost.TLS(conn)
+		if err != nil {
+			log.Println("Failed to decode TLS connection", err)
+			return
+		}
+		host := vhostConn.Host()
+		log.Println("SNI host is:", host)
+
+		// Find a backend for the key
+		backend = s.findBackendForHost(host)
+		if backend == nil {
+			return
+		}
+		if backend.keypair == nil {
+			log.Println("Canot serve TLS, no certificate defined for this domain")
+			return
+		}
+
+		// Init a TLS decryptor
+		tlscfg := &tls.Config{Certificates: []tls.Certificate{*backend.keypair}}
+		conn = tls.Server(vhostConn, tlscfg)
+	}
+
+	// Decode the first request from the connection
 	sc := httputil.NewServerConn(conn, nil)
 	req, err := sc.Read()
 	if err != nil {
@@ -219,19 +315,29 @@ func (s *HTTPFrontend) handle(conn net.Conn) {
 		return
 	}
 
-	s.mtx.RLock()
-	// TODO: handle wildcard domains
-	backend := s.domains[req.Host]
-	s.mtx.RUnlock()
-	log.Println(req, backend)
+	// If we do not have a backend yet (unencrypted connection),
+	// look at the host header to find one or 404 out.
 	if backend == nil {
-		fail(sc, req, 404, "Not Found")
-		return
+		backend = s.findBackendForHost(req.Host)
+		log.Println(req, backend)
+		if backend == nil {
+			fail(sc, req, 404, "Not Found")
+			return
+		}
 	}
-	_, tls := conn.(*tls.Conn)
-	backend.handle(req, sc, tls)
+
+	backend.server.handle(req, sc, isTLS)
 }
 
+// A domain served by a frontend, associated TLS certs,
+// and link to backend service set.
+type domain struct {
+	name    string
+	keypair *tls.Certificate
+	server  *httpServer
+}
+
+// A service definition: name, and set of backends.
 type httpServer struct {
 	name     string
 	services discoverd.ServiceSet
