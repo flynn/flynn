@@ -605,3 +605,17 @@ func TestDefaultClient(t *testing.T) {
 	assert(set.Close(), t)
 
 }
+
+func TestHeartbeat(t *testing.T) {
+	client, cleanup := setup(t)
+	defer cleanup()
+
+	serviceName := "heartbeatTest"
+	assert(client.Register(serviceName, ":1111"), t)
+	time.Sleep(12 * time.Second) // wait for one heartbeat
+	services, err := client.Services(serviceName, 1)
+	assert(err, t)
+	if len(services) != 1 {
+		t.Fatal("Missing services")
+	}
+}

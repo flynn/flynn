@@ -5,6 +5,7 @@ package discoverd
 
 import (
 	"errors"
+	"log"
 	"net"
 	"os"
 	"sort"
@@ -481,11 +482,11 @@ func (c *Client) RegisterWithAttributes(name, addr string, attributes map[string
 		for {
 			select {
 			case <-ticker.C:
-				// TODO: log error here
-				c.client.Call("Agent.Heartbeat", &agent.Args{
-					Name: name,
-					Addr: args.Addr,
-				}, &struct{}{})
+				// heartbeat
+				err := c.client.Call("Agent.Register", args, &ret)
+				if err != nil {
+					log.Printf("discover: heartbeat %s (%s) failed: %s", name, addr, err)
+				}
 			case <-done:
 				return
 			}
