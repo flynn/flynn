@@ -80,6 +80,9 @@ func main() {
 		log.Fatal("Failed to parse private key:", err)
 	}
 
+	if p := os.Getenv("PORT"); p != "" && *port == "22" {
+		*port = p
+	}
 	listener, err := ssh.Listen("tcp", "0.0.0.0:"+*port, config)
 	if err != nil {
 		log.Fatal("failed to listen for connection")
