@@ -19,18 +19,19 @@ import (
 	"github.com/flynn/go-shlex"
 )
 
-const PrereceiveHook = `#!/bin/bash
+const PrereceiveHookTmpl = `#!/bin/bash
 set -eo pipefail; while read oldrev newrev refname; do
 [[ $refname = "refs/heads/master" ]] && git archive $newrev | {{RECEIVER}} "$RECEIVE_REPO" "$newrev" | sed -$([[ $(uname) == "Darwin" ]] && echo l || echo u) "s/^/"$'\e[1G'"/"
 done
 `
+
+var prereceiveHook []byte
 
 var port *string = flag.String("p", "22", "port to listen on")
 var repoPath *string = flag.String("r", "/tmp/repos", "path to repo cache")
 var keyPath *string = flag.String("k", "/tmp/keys", "path to named keys")
 var noAuth *bool = flag.Bool("n", false, "no client authentication")
 
-var receiver string
 var privateKey string
 var keyNames = make(map[string]string)
 
@@ -48,7 +49,12 @@ func main() {
 		return
 	}
 	privateKey = flag.Arg(0)
-	receiver = flag.Arg(1)
+
+	receiver, err := filepath.Abs(flag.Arg(1))
+	if err != nil {
+		log.Fatalln("Invalid receiver path:", err)
+	}
+	prereceiveHook = []byte(strings.Replace(PrereceiveHookTmpl, "{{RECEIVER}}", receiver, 1))
 
 	var config *ssh.ServerConfig
 	if *noAuth {
@@ -286,15 +292,7 @@ func ensureCacheRepo(path string) error {
 			return err
 		}
 	}
-	receiver, err := filepath.Abs(receiver)
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(
-		cachePath+"/hooks/pre-receive",
-		[]byte(strings.Replace(PrereceiveHook, "{{RECEIVER}}", receiver, 1)),
-		0755,
-	)
+	return ioutil.WriteFile(cachePath+"/hooks/pre-receive", prereceiveHook, 0755)
 }
 
 func publicKeyFingerprint(key ssh.PublicKey) string {
