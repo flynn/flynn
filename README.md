@@ -1,39 +1,38 @@
 # gitreceived
 
-An SSH server made specifically for accepting git pushes that will trigger a receiver script to handle the push however you like. It supports key based authentication and soon authorization (ACLs). 
+An SSH server made specifically for accepting git pushes that will trigger an auth script and then a receiver script to handle the push.
 
 This is a more advanced, standalone version of [gitreceive](https://github.com/progrium/gitreceive).
 
 ## Using gitreceived
 
 ```
-Usage:  ./gitreceived [options] <privatekey> <receiver>
+Usage:  ./gitreceived [options] <privatekey> <authchecker> <receiver>
 
-  -k="/tmp/keys": path to named keys
+  -n=false: disable client authentication
   -p="22": port to listen on
   -r="/tmp/repos": path to repo cache
 ```
 
-The named key path is a path that contains public keys as files using filename as the name of the key. This is generally the user/owner of the key. 
+`privatekey` is the path to the server's private key (unencrypted).
 
-The receiver argument is a path to an executable that will handle the push. It will get a tar stream of the repo via stdin and the following arguments:
+`authchecker` is a path to an executable that will check if the push is authorized, and exit with status 0 if it is. It will be called with the following arguments:
 
-	receiver-script REPO COMMIT
+    authchecker $USER $PATH $KEY
 
-* REPO is the name of the repo that was pushed to. It will not contain slashes.
-* COMMIT is the SHA of the commit that was pushed to master.
+* `$USER` is the username that was provided to the server.
+* `$PATH` is the path of the repo that was pushed to. It will not contain slashes.
+* `$KEY` is the public key that was provided to the server.
 
-## Todo
+The `receiver` is a path to an executable that will handle the push. It will get a tar stream of the repo via stdin and the following arguments:
 
-* Proper handling of errors, and some kind of testing
-* Runtime config (keys, acls, etc) stored in etcd for clustering
-* ACLs (assign keyname access to URL patterns)
-* Action routes (multiple receivers based on URL pushed to)
+    receiver $PATH $COMMIT
 
-## The Future
+* `$PATH` is the path of the repo that was pushed to. It will not contain slashes.
+* `$COMMIT` is the SHA of the commit that was pushed to master.
 
-This project is mostly just an SSH frontend -- the git specific code is pretty minimal. It would not be hard to re-implement [sshcommand](https://github.com/progrium/sshcommand) with this codebase. So it seems likely at some point this code could be generalized into a simple SSH frontend (`simplessh`) that would backend to shell scripts or other network services. Anything specific to git would be encapsulated into a module. Modules could also allow builtin backend service discovery, and more. Then `simplessh` would become a sort of Nginx for SSH.
+## TODO
 
-## License
- 
- BSD
+* Write tests.
+* Allow authchecker to return JSON including receiver environment.
+* Support RPC as an option for authchecker.

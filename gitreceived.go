@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -29,15 +30,14 @@ var prereceiveHook []byte
 
 var port *string = flag.String("p", "22", "port to listen on")
 var repoPath *string = flag.String("r", "/tmp/repos", "path to repo cache")
-var keyPath *string = flag.String("k", "/tmp/keys", "path to named keys")
-var noAuth *bool = flag.Bool("n", false, "no client authentication")
+var noAuth *bool = flag.Bool("n", false, "disable client authentication")
 
+var authChecker string
 var privateKey string
-var keyNames = make(map[string]string)
 
 func init() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage:  %v [options] <privatekey> <receiver>\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage:  %v [options] <privatekey> <authchecker> <receiver>\n\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 }
@@ -49,8 +49,9 @@ func main() {
 		return
 	}
 	privateKey = flag.Arg(0)
+	authChecker = flag.Arg(1)
 
-	receiver, err := filepath.Abs(flag.Arg(1))
+	receiver, err := filepath.Abs(flag.Arg(2))
 	if err != nil {
 		log.Fatalln("Invalid receiver path:", err)
 	}
@@ -60,7 +61,7 @@ func main() {
 	if *noAuth {
 		config = &ssh.ServerConfig{NoClientAuth: true}
 	} else {
-		config = &ssh.ServerConfig{PublicKeyCallback: keyCallback}
+		config = &ssh.ServerConfig{PublicKeyCallback: func(*ssh.ServerConn, string, string, []byte) bool { return true }}
 	}
 
 	pemBytes, err := ioutil.ReadFile(privateKey)
@@ -88,37 +89,6 @@ func main() {
 		}
 		go handleConnection(conn)
 	}
-}
-
-func keyCallback(conn *ssh.ServerConn, user, algo string, pubkey []byte) bool {
-	clientkey, _, ok := ssh.ParsePublicKey(pubkey)
-	if !ok {
-		return false
-	}
-	os.MkdirAll(*keyPath, 0755)
-	files, err := ioutil.ReadDir(*keyPath)
-	if err != nil {
-		log.Println("keydir read failed:", err)
-		return false
-	}
-	for _, file := range files {
-		if !file.IsDir() {
-			data, err := ioutil.ReadFile(*keyPath + "/" + file.Name())
-			if err != nil {
-				log.Println("key read failed:", err)
-				return false
-			}
-			filekey, _, _, _, ok := ssh.ParseAuthorizedKey(data)
-			if !ok {
-				continue
-			}
-			if bytes.Equal(clientkey.Marshal(), filekey.Marshal()) {
-				keyNames[publicKeyFingerprint(clientkey)] = file.Name()
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func handleConnection(conn *ssh.ServerConn) {
@@ -181,27 +151,34 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 			}
 			cmdargs[1] = strings.TrimSuffix(strings.TrimPrefix(cmdargs[1], "/"), ".git")
 			if strings.Contains(cmdargs[1], "/") {
-				ch.Stderr().Write([]byte("Invalid repo."))
+				ch.Stderr().Write([]byte("Invalid repo.\n"))
 				return
 			}
+
+			if !*noAuth {
+				if err := checkAuth(conn.User, cmdargs[1], conn.PublicKey); err != nil {
+					if err == ErrUnauthorized {
+						ch.Stderr().Write([]byte("Unauthorized.\n"))
+					} else {
+						fail("checkAuth", err)
+					}
+					return
+				}
+			}
+
 			if err := ensureCacheRepo(cmdargs[1]); err != nil {
 				fail("ensureCacheRepo", err)
 				return
 			}
-			var keyname, fingerprint string
-			if *noAuth {
-				fingerprint = ""
-				keyname = ""
-			} else {
+			var fingerprint string
+			if conn.PublicKey != nil {
 				fingerprint = publicKeyFingerprint(conn.PublicKey)
-				keyname = keyNames[fingerprint]
 			}
 			cmd := exec.Command("git-shell", "-c", cmdargs[0]+" '"+cmdargs[1]+"'")
 			cmd.Dir = *repoPath
 			cmd.Env = []string{
 				"RECEIVE_USER=" + conn.User,
 				"RECEIVE_REPO=" + cmdargs[1],
-				"RECEIVE_KEYNAME=" + keyname,
 				"RECEIVE_FINGERPRINT=" + fingerprint,
 			}
 			done, err := attachCmd(cmd, ch, ch.Stderr(), ch)
@@ -214,7 +191,7 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 				return
 			}
 			done.Wait()
-			status, err := exitStatus(cmd)
+			status, err := exitStatus(cmd.Wait())
 			if err != nil {
 				fail("exitStatus", err)
 				return
@@ -226,6 +203,20 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 			}
 		}
 	}
+}
+
+var ErrUnauthorized = errors.New("gitreceive: user is unauthorized")
+
+func checkAuth(user, repo string, key ssh.PublicKey) error {
+	keyData := string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(key)))
+	status, err := exitStatus(exec.Command(authChecker, user, repo, keyData).Run())
+	if err != nil {
+		return err
+	}
+	if status == 0 {
+		return nil
+	}
+	return ErrUnauthorized
 }
 
 func attachCmd(cmd *exec.Cmd, stdout, stderr io.Writer, stdin io.Reader) (*sync.WaitGroup, error) {
@@ -261,8 +252,7 @@ func attachCmd(cmd *exec.Cmd, stdout, stderr io.Writer, stdin io.Reader) (*sync.
 	return &wg, nil
 }
 
-func exitStatus(cmd *exec.Cmd) (int, error) {
-	err := cmd.Wait()
+func exitStatus(err error) (int, error) {
 	if err != nil {
 		if exiterr, ok := err.(*exec.ExitError); ok {
 			// There is no platform independent way to retrieve
@@ -271,7 +261,7 @@ func exitStatus(cmd *exec.Cmd) (int, error) {
 				return status.ExitStatus(), nil
 			}
 		}
-		return 0, err
+		return -1, err
 	}
 	return 0, nil
 }
