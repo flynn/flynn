@@ -39,7 +39,6 @@ type DiscoveryBackend interface {
 	Subscribe(name string) (UpdateStream, error)
 	Register(name string, addr string, attrs map[string]string) error
 	Unregister(name string, addr string) error
-	Heartbeat(name string, addr string) error
 }
 
 type Agent struct {
@@ -117,16 +116,5 @@ func (s *Agent) Unregister(args *Args, ret *struct{}) error {
 		return err
 	}
 	log.Println("Unregister:", args.Name, addr)
-	return nil
-}
-
-func (s *Agent) Heartbeat(args *Args, ret *struct{}) error {
-	addr := expandAddr(args.Addr)
-	err := s.Backend.Heartbeat(args.Name, addr)
-	if err != nil {
-		log.Println("Heartbeat: error:", err)
-		return err
-	}
-	log.Println("Heartbeat:", args.Name, addr)
 	return nil
 }

@@ -105,16 +105,6 @@ func (b *EtcdBackend) Register(name, addr string, attrs map[string]string) error
 	return err
 }
 
-func (b *EtcdBackend) Heartbeat(name, addr string) error {
-	resp, err := b.Client.Get(servicePath(name, addr), false, false)
-	if err != nil {
-		return err
-	}
-	// ignore test failure, it doesn't need a heartbeat if it was just set.
-	_, err = b.Client.CompareAndSwap(servicePath(name, addr), resp.Node.Value, HeartbeatIntervalSecs+MissedHearbeatTTL, resp.Node.Value, resp.Node.ModifiedIndex)
-	return err
-}
-
 func (b *EtcdBackend) Unregister(name, addr string) error {
 	_, err := b.Client.Delete(servicePath(name, addr), false)
 	return err
