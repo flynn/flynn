@@ -32,7 +32,7 @@ var port *string = flag.String("p", "22", "port to listen on")
 var repoPath *string = flag.String("r", "/tmp/repos", "path to repo cache")
 var noAuth *bool = flag.Bool("n", false, "disable client authentication")
 
-var authChecker string
+var authChecker []string
 var privateKey string
 
 func init() {
@@ -48,14 +48,22 @@ func main() {
 		flag.Usage()
 		return
 	}
+	var err error
 	privateKey = flag.Arg(0)
-	authChecker = flag.Arg(1)
+	authChecker, err = shlex.Split(flag.Arg(1))
+	if err != nil {
+		log.Fatalln("Unable to parse authchecker command:", err)
+	}
 
-	receiver, err := filepath.Abs(flag.Arg(2))
+	receiver, err := shlex.Split(flag.Arg(2))
+	if err != nil {
+		log.Fatalln("Unable to parse receiver command:", err)
+	}
+	receiver[0], err = filepath.Abs(receiver[0])
 	if err != nil {
 		log.Fatalln("Invalid receiver path:", err)
 	}
-	prereceiveHook = []byte(strings.Replace(PrereceiveHookTmpl, "{{RECEIVER}}", receiver, 1))
+	prereceiveHook = []byte(strings.Replace(PrereceiveHookTmpl, "{{RECEIVER}}", strings.Join(receiver, " "), 1))
 
 	var config *ssh.ServerConfig
 	if *noAuth {
@@ -209,7 +217,7 @@ var ErrUnauthorized = errors.New("gitreceive: user is unauthorized")
 
 func checkAuth(user, repo string, key ssh.PublicKey) error {
 	keyData := string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(key)))
-	status, err := exitStatus(exec.Command(authChecker, user, repo, keyData).Run())
+	status, err := exitStatus(exec.Command(authChecker[0], append(authChecker[1:], user, repo, keyData)...).Run())
 	if err != nil {
 		return err
 	}
