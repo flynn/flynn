@@ -577,7 +577,7 @@ func TestUnregisterAll(t *testing.T) {
 
 }
 
-func TestDefaulClient(t *testing.T) {
+func TestDefaultClient(t *testing.T) {
 	_, cleanup := setup(t)
 	defer cleanup()
 
