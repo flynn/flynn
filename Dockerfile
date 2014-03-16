@@ -1,5 +1,5 @@
 FROM flynn/busybox
-MAINTAINER Jeff Lindsay <progrium@gmail.com>
+MAINTAINER Jonathan Rudenberg <jonathan@titanous.com>
 
 ADD ./build/shelf /bin/shelf
 ADD ./build/sdutil /bin/sdutil
