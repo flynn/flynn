@@ -471,6 +471,11 @@ func (c *Client) RegisterWithAttributes(name, addr string, attributes map[string
 	}
 	done := make(chan struct{})
 	c.l.Lock()
+	if _, exists := c.heartbeats[args.Addr]; exists {
+		// this is a re-registration, we're already heartbeating
+		c.l.Unlock()
+		return nil
+	}
 	c.heartbeats[args.Addr] = done
 	c.expandedAddrs[args.Addr] = ret
 	c.names[args.Addr] = name

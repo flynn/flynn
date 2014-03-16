@@ -13,8 +13,7 @@ before_install:
   - cd $HOME/gopath/src/github.com/flynn
   - git clone https://github.com/flynn/discoverd
   - cd discoverd
-  - godep go build
-  - mv discoverd $HOME/gopath/bin
+  - godep go install
   - cd ../go-discoverd
   - rm -rf /tmp/godep ../discoverd
 
