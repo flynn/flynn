@@ -116,7 +116,7 @@ else
 fi
   
 if [[ "$slug_file" != "-" ]]; then
-	slug_size=$(du -Sh /tmp/slug.tgz | cut -f1)
+	slug_size=$(du -Sh "$slug_file" | cut -f1)
 	echo_title "Compiled slug size is $slug_size"
 
 	if [[ $put_url ]]; then
