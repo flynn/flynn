@@ -9,7 +9,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/discoverd/agent",
-			"Rev": "7046fc1f8774cf88bdb6d61253a4fe8ee2063662"
+			"Rev": "ad9ff1eac3ce43be582828e7611497f164b53426"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
