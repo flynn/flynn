@@ -5,6 +5,20 @@ layout: docs
 
 # Contribution Guide
 
+We welcome and encourage community contributions to Flynn. 
+
+Since the project is still unstable, there are specific priorities for development. Pull requests that do not address these priorities will not be accepted until Flynn is production ready.
+
+Please familiarize yourself with the Contribution Guidelines and Project Roadmap before contributing.
+
+There are many ways to help Flynn besides contributing code:
+
+ - Fix bugs or file issues
+ - Improve the [documentation](https://github.com/flynn/flynn.io) including this website
+ - [Contribute](https://flynn.io/#sponsor) financially to support core development
+
+## Contributing Code 
+
 All contributions are made via pull request. Note that **all patches from all contributors get reviewed**. After a pull request is made other contributors will offer feedback, and if the patch passes review a maintainer will accept it with a comment. When pull requests fail testing, authors are expected to update their pull requests to address the failures until the tests pass and the pull request merges successfully.
 
 At least one review from a maintainer is required for all patches (even patches from other maintainers). If only one maintainer is listed in the MAINTAINERS file, then review is not required for patches from the sole maintainer (however it is encouraged).
