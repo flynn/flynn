@@ -9,13 +9,16 @@ rescue LoadError
 end
 
 helpers do
-  def active_nav_class(*paths)
+  def active_nav_class(path, opts={})
     current = current_path.sub(/\.html\Z/, '').sub(/\/index\Z/, '')
-    paths.any? { |path|
-      path = full_path(path).sub(/\A\//, '').sub(/\.html\Z/, '').sub(/\/index\Z/, '')
-      r = Regexp.new("\\A#{Regexp.escape(path)}")
-      r.match(current)
-    } ? "active" : ""
+    path = full_path(path).sub(/\A\//, '').sub(/\.html\Z/, '').sub(/\/index\Z/, '')
+
+    if opts[:not] && opts[:not].match(current)
+      return ""
+    end
+
+    r = Regexp.new("\\A#{Regexp.escape(path)}")
+    r.match(current) ? "active" : ""
   end
 
   def nav_link_with_active(text, target, attributes = {})
