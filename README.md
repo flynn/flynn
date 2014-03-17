@@ -1,5 +1,6 @@
 # Shelf
-A simple, fast HTTP file service
+
+A simple, fast HTTP file service.
 
 Shelf provides a simple HTTP interface for reading, writing, and deleting files. It's like a simpler S3. All operations fall under these three HTTP verbs:
 
@@ -11,23 +12,9 @@ There are no directory indexes. Parent directories are automatically created. Ri
 
 ## Usage
 
-	Usage:	shelf -p <port> -s <storage-path>
+``` 
+Usage: shelf -p <port> -s <storage-path>
 
-	  -p="8888": Port to listen on
-	  -s="/var/lib/shelf": Path to store files
-
-## Appliance
-
-Shelf is packaged as a Docker container appliance. You can just run it with docker right off the index:
-
-	$ docker run flynn/shelf
-
-### Using Volumes
-
-### Using Linking
-
-### Using Service Discovery
-
-## License
-
-BSD
+  -p="8888": Port to listen on
+  -s="/var/lib/shelf": Path to store files
+```
