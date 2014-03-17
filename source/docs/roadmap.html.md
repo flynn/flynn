@@ -7,7 +7,11 @@ layout: docs
   
 Flynn is currently unstable and not suitable for production environments.
 
-Until Flynn is production-ready our focus is on test coverage, stability, and security. 
+Until Flynn is production-ready our focus is on test coverage, stability, and security.
+
+## What's going to change
+
+Many Flynn components are currently prototypes and are expected to change substantially in the coming months. These include Flynn's RPC system, container management, and all APIs. Users are cautioned against investing resources into integration with these features before long term stability can be assured.
 
 ## Short term goals
 
