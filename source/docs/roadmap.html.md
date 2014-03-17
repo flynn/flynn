@@ -7,7 +7,7 @@ layout: docs
 
 Flynn is currently unstable and not suitable for production environments.
 
-Our focus is on test coverage, stability, and security to make Flynn production-ready as soon as possible.
+Our focus is on test coverage, stability, and security so Flynn will be production-ready as soon as possible.
 
 ## What's going to change
 
