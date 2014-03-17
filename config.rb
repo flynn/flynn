@@ -10,10 +10,11 @@ end
 
 helpers do
   def active_nav_class(*paths)
-    current = current_path.sub(/\.html\Z/, '')
+    current = current_path.sub(/\.html\Z/, '').sub(/\/index\Z/, '')
     paths.any? { |path|
-      path = full_path(path).sub(/\A\//, '').sub(/\.html\Z/, '')
-      path.split('/').first == current.split('/').first
+      path = full_path(path).sub(/\A\//, '').sub(/\.html\Z/, '').sub(/\/index\Z/, '')
+      r = Regexp.new("\\A#{Regexp.escape(path)}")
+      r.match(current)
     } ? "active" : ""
   end
 
