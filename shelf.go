@@ -1,13 +1,15 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
-	"path"
+	"strconv"
+	"time"
 )
 
 var port = flag.String("p", "8888", "Port to listen on")
@@ -20,70 +22,72 @@ func init() {
 	}
 }
 
-func errorResponse(w http.ResponseWriter, e error) {
-	code := http.StatusInternalServerError
-	if os.IsNotExist(e) {
-		code = http.StatusNotFound
+func errorResponse(w http.ResponseWriter, err error) {
+	if err == ErrNotFound {
+		http.Error(w, "NotFound", 404)
+		return
 	}
-	w.WriteHeader(code)
-	w.Write([]byte(e.Error()))
-	log.Println("error:", e.Error())
+	log.Println("error:", err)
+	http.Error(w, "Internal Server Error", 500)
+}
+
+type File interface {
+	io.ReadSeeker
+	io.Closer
+	Size() int64
+	ModTime() time.Time
+	Type() string
+	ETag() string
+}
+
+type Filesystem interface {
+	Open(name string) (File, error)
+	Put(name string, r io.Reader, size int64, typ string) error
+	Delete(name string) error
+}
+
+var ErrNotFound = errors.New("file not found")
+
+func handler(fs Filesystem) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case "HEAD", "GET":
+			file, err := fs.Open(req.URL.Path)
+			if err != nil {
+				errorResponse(w, err)
+				return
+			}
+			defer file.Close()
+			log.Println("GET", req.RequestURI)
+			http.ServeContent(w, req, req.URL.Path, file.ModTime(), file)
+		case "PUT":
+			size, err := strconv.ParseInt(req.Header.Get("Content-Length"), 10, 64)
+			if err != nil {
+				http.Error(w, "Missing or malformed Content-Length", 400)
+				return
+			}
+			err = fs.Put(req.URL.Path, req.Body, size, req.Header.Get("Content-Type"))
+			if err != nil {
+				errorResponse(w, err)
+				return
+			}
+			log.Println("PUT", req.RequestURI)
+		case "DELETE":
+			err := fs.Delete(req.URL.Path)
+			if err != nil {
+				errorResponse(w, err)
+				return
+			}
+			log.Println("DELETE", req.RequestURI)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})
 }
 
 func main() {
 	flag.Parse()
 
-	var storagepath string
-	if flag.NArg() == 1 {
-		// deprecated: passing storage path as argument
-		storagepath = flag.Arg(0)
-	} else {
-		storagepath = *storage
-	}
-	os.MkdirAll(storagepath, 0755)
-
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		filepath := storagepath + r.RequestURI
-		switch r.Method {
-		case "HEAD", "GET":
-			file, err := os.Open(filepath)
-			if err != nil {
-				errorResponse(w, err)
-				return
-			}
-			defer file.Close()
-			fi, err := file.Stat()
-			if err != nil {
-				errorResponse(w, err)
-				return
-			}
-			log.Println("GET", r.RequestURI)
-			http.ServeContent(w, r, filepath, fi.ModTime(), file)
-		case "PUT":
-			os.MkdirAll(path.Dir(filepath), 0755)
-			file, err := os.Create(filepath)
-			if err != nil {
-				errorResponse(w, err)
-				return
-			}
-			defer file.Close()
-			_, err = io.Copy(file, r.Body)
-			if err != nil {
-				errorResponse(w, err)
-				return
-			}
-			log.Println("PUT", r.RequestURI)
-		case "DELETE":
-			err := os.RemoveAll(filepath)
-			if err != nil {
-				errorResponse(w, err)
-				return
-			}
-			log.Println("DELETE", r.RequestURI)
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-	})
-	log.Println("Shelf serving files on " + *port + " from " + storagepath)
-	log.Fatal(http.ListenAndServe(":"+*port, nil))
+	log.Println("Shelf serving files on " + *port + " from " + *storage)
+	log.Fatal(http.ListenAndServe(":"+*port, handler(NewOSFilesystem(*storage))))
 }
