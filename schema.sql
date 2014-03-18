@@ -1,6 +1,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "hstore";
 
+DROP TABLE IF EXISTS artifacts CASCADE;
 CREATE TABLE artifacts (
     artifact_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     type text NOT NULL,
@@ -10,6 +11,7 @@ CREATE TABLE artifacts (
     UNIQUE (type, uri)
 );
 
+DROP TABLE IF EXISTS releases CASCADE;
 CREATE TABLE releases (
     release_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     artifact_id uuid NOT NULL REFERENCES artifacts (artifact_id),
@@ -18,6 +20,7 @@ CREATE TABLE releases (
     deleted_at timestamp with time zone
 );
 
+DROP TABLE IF EXISTS apps CASCADE;
 CREATE TABLE apps (
     app_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     name text UNIQUE NOT NULL,
@@ -27,6 +30,7 @@ CREATE TABLE apps (
     deleted_at timestamp with time zone
 );
 
+DROP TABLE IF EXISTS formations;
 CREATE TABLE formations (
     app_id uuid NOT NULL REFERENCES apps (app_id),
     release_id uuid NOT NULL REFERENCES releases (release_id),
@@ -44,10 +48,12 @@ CREATE OR REPLACE FUNCTION notify_formation() RETURNS TRIGGER AS $$
     END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS notify_formation ON formations;
 CREATE TRIGGER notify_formation
     AFTER INSERT OR UPDATE ON formations
     FOR EACH ROW EXECUTE PROCEDURE notify_formation();
 
+DROP TABLE IF EXISTS keys;
 CREATE TABLE keys (
     key_id text PRIMARY KEY,
     key text NOT NULL,
@@ -56,6 +62,7 @@ CREATE TABLE keys (
     deleted_at timestamp with time zone
 );
 
+DROP TABLE IF EXISTS app_logs;
 CREATE TABLE app_logs (
     app_id uuid NOT NULL REFERENCES apps (app_id),
     log_id bigint NOT NULL,
@@ -66,6 +73,7 @@ CREATE TABLE app_logs (
     PRIMARY KEY (app_id, log_id)
 );
 
+DROP TABLE IF EXISTS app_log_ids;
 CREATE TABLE app_log_ids (
     app_id uuid PRIMARY KEY REFERENCES apps (app_id),
     log_id bigint NOT NULL

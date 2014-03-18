@@ -9,7 +9,6 @@ import (
 	"github.com/codegangsta/martini"
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/rpcplus"
-	_ "github.com/lib/pq"
 	"github.com/martini-contrib/binding"
 	"github.com/martini-contrib/render"
 )
@@ -19,10 +18,10 @@ func main() {
 	if port == "" {
 		port = "3000"
 	}
-	http.ListenAndServe(":"+port, appHandler(nil))
+	http.ListenAndServe(":"+port, appHandler(nil, nil))
 }
 
-func appHandler(cc clusterClient) http.Handler {
+func appHandler(db *sql.DB, cc clusterClient) http.Handler {
 	r := martini.NewRouter()
 	m := martini.New()
 	m.Use(martini.Logger())
@@ -30,10 +29,6 @@ func appHandler(cc clusterClient) http.Handler {
 	m.Use(render.Renderer())
 	m.Action(r.Handle)
 
-	db, err := sql.Open("postgres", "dbname=flynn-controller sslmode=disable")
-	if err != nil {
-		log.Fatal(err)
-	}
 	d := NewDB(db)
 
 	keyRepo := NewKeyRepo(d)

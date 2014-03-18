@@ -2,14 +2,18 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
 	ct "github.com/flynn/flynn-controller/types"
+	_ "github.com/lib/pq"
 	. "launchpad.net/gocheck"
 )
 
@@ -24,8 +28,28 @@ type S struct {
 var _ = Suite(&S{})
 
 func (s *S) SetUpSuite(c *C) {
+	if os.Getenv("PGDATABASE") == "" {
+		os.Setenv("PGDATABASE", "controllertest")
+	}
+	if os.Getenv("PGSSLMODE") == "" {
+		os.Setenv("PGSSLMODE", "disable")
+	}
+
+	db, err := sql.Open("postgres", "")
+	if err != nil {
+		c.Fatal(err)
+	}
+	schema, err := ioutil.ReadFile("schema.sql")
+	if err != nil {
+		c.Fatal(err)
+	}
+	_, err = db.Exec(string(schema))
+	if err != nil {
+		c.Fatal(err)
+	}
+
 	s.cc = newFakeCluster()
-	s.srv = httptest.NewServer(appHandler(s.cc))
+	s.srv = httptest.NewServer(appHandler(db, s.cc))
 }
 
 func (s *S) send(method, path string, data interface{}) (*http.Response, error) {
