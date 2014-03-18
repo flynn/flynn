@@ -40,24 +40,32 @@ func main() {
 
 	var username, password string
 	var follower *follower
-	var leader *exec.Cmd
+	var leaderProc *exec.Cmd
 	var done <-chan struct{}
-	for l := range set.Leaders() {
-		if l.Attrs["username"] != "" && l.Attrs["password"] != "" {
-			username, password = l.Attrs["username"], l.Attrs["password"]
+	var leader *discoverd.Service
+
+	if l := set.Leader(); l.Addr == set.SelfAddr() {
+		leaderProc, done = startLeader()
+		goto wait
+	}
+
+	for u := range set.Watch(true, false) {
+		l := set.Leader()
+		if u.Online && u.Addr == l.Addr && u.Attrs["username"] != "" && u.Attrs["password"] != "" {
+			username, password = u.Attrs["username"], u.Attrs["password"]
 		}
-		if l.Addr == set.SelfAddr() {
-			if follower == nil {
-				leader, done = startLeader()
-			} else {
-				leader, done = promoteToLeader(follower, username, password)
-			}
+		if leader != nil && l.Addr == leader.Addr {
+			continue
+		}
+		leader = l
+		if leader.Addr == set.SelfAddr() {
+			leaderProc, done = promoteToLeader(follower, username, password)
 			goto wait
 		} else {
 			if follower == nil {
-				follower = startFollower(l, set)
+				follower = startFollower(leader, set)
 			} else {
-				follower = switchLeader(l, set, follower)
+				follower = switchLeader(leader, set, follower)
 			}
 		}
 	}
@@ -66,7 +74,7 @@ func main() {
 wait:
 	set.Close()
 	<-done
-	procExit(leader)
+	procExit(leaderProc)
 }
 
 func startLeader() (*exec.Cmd, <-chan struct{}) {
@@ -291,7 +299,7 @@ func waitForLeaderUp(leader *discoverd.Service, set discoverd.ServiceSet) *disco
 	watch := set.Watch(true, false)
 	defer set.Unwatch(watch)
 	for update := range watch {
-		if update.Addr == set.Leader().Addr && update.Attrs["up"] == "true" {
+		if update.Addr == set.Leader().Addr && update.Attrs["up"] == "true" && update.Attrs["username"] != "" && update.Attrs["password"] != "" {
 			return updateToService(update)
 		}
 	}
