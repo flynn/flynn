@@ -1,0 +1,14 @@
+{
+	"ImportPath": "github.com/flynn/shelf",
+	"GoVersion": "go1.2",
+	"Deps": [
+		{
+			"ImportPath": "github.com/titanous/go-sql",
+			"Rev": "5eaa3754e31b1999838f0eb92975bcd7ec231408"
+		},
+		{
+			"ImportPath": "github.com/titanous/pq",
+			"Rev": "5ad8711f24e07a3229c88ede77e331f99e1c5903"
+		}
+	]
+}

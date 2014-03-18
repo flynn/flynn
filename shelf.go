@@ -42,7 +42,7 @@ type File interface {
 
 type Filesystem interface {
 	Open(name string) (File, error)
-	Put(name string, r io.Reader, size int64, typ string) error
+	Put(name string, r io.Reader, typ string) error
 	Delete(name string) error
 }
 
@@ -59,14 +59,12 @@ func handler(fs Filesystem) http.Handler {
 			}
 			defer file.Close()
 			log.Println("GET", req.RequestURI)
+			w.Header().Set("Content-Length", strconv.FormatInt(file.Size(), 10))
+			w.Header().Set("Content-Type", file.Type())
+			w.Header().Set("Etag", file.ETag())
 			http.ServeContent(w, req, req.URL.Path, file.ModTime(), file)
 		case "PUT":
-			size, err := strconv.ParseInt(req.Header.Get("Content-Length"), 10, 64)
-			if err != nil {
-				http.Error(w, "Missing or malformed Content-Length", 400)
-				return
-			}
-			err = fs.Put(req.URL.Path, req.Body, size, req.Header.Get("Content-Type"))
+			err := fs.Put(req.URL.Path, req.Body, req.Header.Get("Content-Type"))
 			if err != nil {
 				errorResponse(w, err)
 				return

@@ -3,14 +3,22 @@ go:
   - 1.2
   - tip
 
+addons:
+  postgresql: "9.3"
+
 before_install:
   - go install -race std
   - go get code.google.com/p/go.tools/cmd/cover
+  - go get github.com/kr/godep
   - export PATH=$HOME/gopath/bin:$PATH
 
+before_script:
+ - psql -c 'create database shelftest;' -U postgres
+ - export PGUSER=postgres
+
 script:
-  - go test -race ./...
-  - go test -cover ./...
+  - godep go test -race ./...
+  - godep go test -cover ./...
 
 notifications:
   irc:

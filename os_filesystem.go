@@ -37,7 +37,7 @@ func (s *OSFilesystem) Open(name string) (File, error) {
 	return &osFile{File: f, FileInfo: fi}, nil
 }
 
-func (s *OSFilesystem) Put(name string, r io.Reader, size int64, typ string) error {
+func (s *OSFilesystem) Put(name string, r io.Reader, typ string) error {
 	path := s.path(name)
 	os.MkdirAll(filepath.Dir(path), 0755)
 	f, err := os.Create(path)

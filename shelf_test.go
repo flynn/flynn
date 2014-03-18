@@ -8,6 +8,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/titanous/go-sql"
+	_ "github.com/titanous/pq"
 )
 
 func TestOSFilesystem(t *testing.T) {
@@ -17,6 +20,39 @@ func TestOSFilesystem(t *testing.T) {
 	}
 	testFilesystem(NewOSFilesystem(dir), false, t)
 	os.RemoveAll(dir)
+}
+
+func TestPostgresFilesystem(t *testing.T) {
+	dbname := os.Getenv("PGDATABASE")
+	sslmode := os.Getenv("PGSSLMODE")
+	if dbname == "" {
+		os.Setenv("PGDATABASE", "shelftest")
+	}
+	if sslmode == "" {
+		os.Setenv("PGSSLMODE", "disable")
+	}
+
+	db, err := sql.Open("postgres", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("DROP TABLE IF EXISTS files")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	schema, err := ioutil.ReadFile("schema.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(string(schema))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testFilesystem(NewPostgresFilesystem(db), true, t)
 }
 
 func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {
@@ -48,6 +84,7 @@ func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	req.Header.Set("Content-Type", "text/plain")
 	res, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -84,12 +121,36 @@ func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {
 	if cl := res.Header.Get("Content-Length"); cl != "6" {
 		t.Errorf(`Expected Content-Length to be "6", got %q`, cl)
 	}
+	if testMeta {
+		if ct := res.Header.Get("Content-Type"); ct != "text/plain" {
+			t.Errorf(`Expected Content-Type to be "text/plain", got %q`, ct)
+		}
+
+		etag := res.Header.Get("Etag")
+		if etag == "" {
+			t.Error("Expected ETag to be set")
+		}
+		req, err := http.NewRequest("GET", path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("If-None-Match", etag)
+		res, err = http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusNotModified {
+			t.Errorf("Expected ETag GET status to be 304, got %d", res.StatusCode)
+		}
+	}
 
 	newData := "foobaz2"
 	req, err = http.NewRequest("PUT", path, strings.NewReader(newData))
 	if err != nil {
 		log.Fatal(err)
 	}
+	req.Header.Set("Content-Type", "application/text")
 	res, err = http.DefaultClient.Do(req)
 	if err != nil {
 		log.Fatal(err)
@@ -125,6 +186,11 @@ func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {
 	}
 	if cl := res.Header.Get("Content-Length"); cl != "7" {
 		t.Errorf(`Expected Content-Length to be "7", got %q`, cl)
+	}
+	if testMeta {
+		if ct := res.Header.Get("Content-Type"); ct != "application/text" {
+			t.Errorf(`Expected Content-Type to be "application/text", got %q`, ct)
+		}
 	}
 
 	req, err = http.NewRequest("DELETE", path, nil)
