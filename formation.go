@@ -53,7 +53,7 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 	procs := procsHstore(f.Processes)
 	err := r.db.QueryRow("INSERT INTO formations (app_id, release_id, processes) VALUES ($1, $2, $3) RETURNING created_at, updated_at",
 		f.AppID, f.ReleaseID, procs).Scan(&f.CreatedAt, &f.UpdatedAt)
-	if e, ok := err.(*pq.Error); ok && e.Code == "23505" /* unique_violation */ {
+	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" {
 		err = r.db.QueryRow("UPDATE formations SET processes = $3, updated_at = current_timestamp, deleted_at = nil WHERE app_id = $1 AND release_id = $2 RETURNING created_at, updated_at",
 			f.AppID, f.ReleaseID, procs).Scan(&f.CreatedAt, &f.UpdatedAt)
 	}

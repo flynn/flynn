@@ -89,7 +89,7 @@ type rowErrFixer struct {
 
 func (f rowErrFixer) Scan(args ...interface{}) error {
 	err := f.s.Scan(args...)
-	if e, ok := err.(*pq.Error); ok && e.Code == "22P02" && e.File == "uuid.c" && e.Routine == "string_to_uuid" {
+	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "invalid_text_representation" && e.File == "uuid.c" && e.Routine == "string_to_uuid" {
 		// invalid input syntax for uuid
 		err = sql.ErrNoRows
 	}

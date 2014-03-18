@@ -21,7 +21,7 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 	// TODO: actually validate
 	// TODO: use a transaction here
 	err := r.db.QueryRow("INSERT INTO artifacts (type, uri) VALUES ($1, $2) RETURNING artifact_id, created_at", a.Type, a.URI).Scan(&a.ID, &a.CreatedAt)
-	if e, ok := err.(*pq.Error); ok && e.Code == "23505" /* unique_violation */ {
+	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" {
 		var deleted *time.Time
 		err = r.db.QueryRow("SELECT artifact_id, created_at, deleted_at FROM artifacts WHERE type = $1 AND uri = $2",
 			a.Type, a.URI).Scan(&a.ID, &a.CreatedAt, &deleted)
