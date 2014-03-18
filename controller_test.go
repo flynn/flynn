@@ -14,7 +14,7 @@ import (
 
 	ct "github.com/flynn/flynn-controller/types"
 	_ "github.com/lib/pq"
-	. "launchpad.net/gocheck"
+	. "github.com/titanous/gocheck"
 )
 
 // Hook gocheck up to the "go test" runner

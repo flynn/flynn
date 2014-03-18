@@ -18,7 +18,7 @@ import (
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/go-flynn/cluster"
-	. "launchpad.net/gocheck"
+	. "github.com/titanous/gocheck"
 )
 
 func newFakeCluster() *fakeCluster {

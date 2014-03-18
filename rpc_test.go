@@ -5,7 +5,7 @@ import (
 
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/rpcplus"
-	. "launchpad.net/gocheck"
+	. "github.com/titanous/gocheck"
 )
 
 func (s *S) TestFormationStreaming(c *C) {
