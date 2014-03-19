@@ -6,9 +6,9 @@ import (
 	"io"
 	"time"
 
-	"github.com/titanous/go-sql"
-	"github.com/titanous/pq"
-	"github.com/titanous/pq/oid"
+	"github.com/flynn/go-sql"
+	"github.com/flynn/pq"
+	"github.com/flynn/pq/oid"
 )
 
 func NewPostgresFilesystem(db *sql.DB) Filesystem {

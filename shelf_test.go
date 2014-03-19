@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/titanous/go-sql"
-	_ "github.com/titanous/pq"
+	"github.com/flynn/go-sql"
+	_ "github.com/flynn/pq"
 )
 
 func TestOSFilesystem(t *testing.T) {

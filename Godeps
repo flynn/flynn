@@ -3,12 +3,12 @@
 	"GoVersion": "go1.2",
 	"Deps": [
 		{
-			"ImportPath": "github.com/titanous/go-sql",
-			"Rev": "5eaa3754e31b1999838f0eb92975bcd7ec231408"
+			"ImportPath": "github.com/flynn/go-sql",
+			"Rev": "f2272fcc41821d3313c69dc032a9c5dd004005c6"
 		},
 		{
-			"ImportPath": "github.com/titanous/pq",
-			"Rev": "5ad8711f24e07a3229c88ede77e331f99e1c5903"
+			"ImportPath": "github.com/flynn/pq",
+			"Rev": "2448887c085a78d64bf4e6956e7614de5554bbef"
 		}
 	]
 }
