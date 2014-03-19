@@ -47,10 +47,10 @@ esac
 
 if [[ $SD_NAME && $PORT ]]; then
 	if [[ $SD_HOST ]]; then
-		runner="sdutil exec -h $SD_HOST $SD_NAME:$PORT bash -c"
+		runner="sdutil exec -h $SD_HOST -s $SD_NAME:$PORT bash -c"
 		unset SD_HOST
 	else
-		runner="sdutil exec $SD_NAME:$PORT bash -c"
+		runner="sdutil exec -s $SD_NAME:$PORT bash -c"
 	fi
 	unset SD_NAME
 elif [[ $SD_ARGS ]]; then
