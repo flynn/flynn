@@ -27,7 +27,7 @@ func (test *TestSet) Select(attrs map[string]string) []*discoverd.Service { retu
 
 func (test *TestSet) Filter(attrs map[string]string) {}
 
-func (test *TestSet) Watch(bringCurrent bool, fireOnce bool) chan *agent.ServiceUpdate { return nil }
+func (test *TestSet) Watch(bringCurrent bool) chan *agent.ServiceUpdate { return nil }
 
 func (test *TestSet) Unwatch(chan *agent.ServiceUpdate) {}
 
