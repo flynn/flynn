@@ -287,19 +287,19 @@ func TestFiltering(t *testing.T) {
 	assert(client.RegisterWithAttributes(serviceName, ":2222", map[string]string{"foo": "qux", "id": "2"}), t)
 
 	set.Filter(map[string]string{"foo": "qux"})
-	waitUpdates(t, watchSet, true, 2)
+	waitUpdates(t, watchSet, true, 2)()
 	if len(set.Services()) > 1 {
 		t.Fatal("Filter not limiting online services in set")
 	}
 
 	assert(client.RegisterWithAttributes(serviceName, ":3333", map[string]string{"foo": "qux", "id": "3"}), t)
-	waitUpdates(t, watchSet, true, 3)
+	waitUpdates(t, watchSet, true, 3)()
 	if s := set.Services(); len(s) < 2 {
 		t.Fatalf("Filter not letting new matching services in set: %#v", s[0])
 	}
 
 	assert(client.RegisterWithAttributes(serviceName, ":4444", map[string]string{"foo": "baz"}), t)
-	waitUpdates(t, watchSet, true, 4)
+	waitUpdates(t, watchSet, true, 4)()
 	if len(set.Services()) > 2 {
 		t.Fatal("Filter not limiting new unmatching services from set")
 	}
