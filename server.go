@@ -382,10 +382,7 @@ func (server *Server) sendResponse(sending *sync.Mutex, req *Request, reply inte
 	}
 	resp.Seq = req.Seq
 	sending.Lock()
-	err = codec.WriteResponse(resp, reply, last)
-	if err != nil {
-		log.Println("rpc: writing response:", err)
-	}
+	codec.WriteResponse(resp, reply, last)
 	sending.Unlock()
 	server.freeResponse(resp)
 	return err
@@ -581,9 +578,6 @@ func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface
 					close(stop)
 				}()
 				continue
-			}
-			if err != io.EOF {
-				log.Println("rpc:", err)
 			}
 			if !keepReading {
 				break
