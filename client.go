@@ -35,7 +35,7 @@ type serviceSet struct {
 	l        sync.Mutex
 	services map[string]*Service
 	filters  map[string]string
-	watches  map[chan *agent.ServiceUpdate]bool
+	watches  map[chan *agent.ServiceUpdate]struct{}
 	call     *rpcplus.Call
 	self     *Service
 	selfAddr string
@@ -82,9 +82,8 @@ type ServiceSet interface {
 	//
 	// The bringCurrent argument will produce a channel that will have buffered in it updates
 	// representing the current services in the set. Otherwise, the channel returned will be
-	// unbuffered. The fireOnce argument allows you to produce a watch that will only be used once
-	// and then immediately removed from watches.
-	Watch(bringCurrent bool, fireOnce bool) chan *agent.ServiceUpdate
+	// unbuffered.
+	Watch(bringCurrent bool) chan *agent.ServiceUpdate
 
 	// Unwatch removes a channel from the watch list of the ServiceSet. It will also close the channel.
 	Unwatch(chan *agent.ServiceUpdate)
@@ -106,7 +105,7 @@ func makeServiceSet(call *rpcplus.Call) *serviceSet {
 	return &serviceSet{
 		services: make(map[string]*Service),
 		filters:  make(map[string]string),
-		watches:  make(map[chan *agent.ServiceUpdate]bool),
+		watches:  make(map[chan *agent.ServiceUpdate]struct{}),
 		call:     call,
 	}
 }
@@ -132,6 +131,8 @@ func (s *serviceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
 				s.l.Unlock()
 				continue
 			}
+			// add a new service if the address is unrecognized
+			// and the address is online
 			if s.selfAddr != update.Addr && update.Online {
 				if _, exists := s.services[update.Addr]; !exists {
 					host, port, _ := net.SplitHostPort(update.Addr)
@@ -167,28 +168,21 @@ func (s *serviceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
 
 func (s *serviceSet) updateWatches(update *agent.ServiceUpdate) {
 	s.l.Lock()
-	watches := make(map[chan *agent.ServiceUpdate]bool, len(s.watches))
+	watches := make(map[chan *agent.ServiceUpdate]struct{}, len(s.watches))
 	for k, v := range s.watches {
 		watches[k] = v
 	}
 	s.l.Unlock()
-	for ch, once := range watches {
-		select {
-		case ch <- update:
-		case <-time.After(time.Millisecond):
-		}
-		if once {
-			close(ch)
-			s.l.Lock()
-			delete(s.watches, ch)
-			s.l.Unlock()
-		}
+	for ch, _ := range watches {
+		// TODO: figure out better head blocking for
+		// slow watchers.
+		ch <- update
 	}
 }
 
 func (s *serviceSet) closeWatches() {
 	s.l.Lock()
-	watches := make(map[chan *agent.ServiceUpdate]bool, len(s.watches))
+	watches := make(map[chan *agent.ServiceUpdate]struct{}, len(s.watches))
 	for k, v := range s.watches {
 		watches[k] = v
 	}
@@ -223,7 +217,7 @@ func (s *serviceSet) Leader() *Service {
 
 func (s *serviceSet) Leaders() chan *Service {
 	leaders := make(chan *Service)
-	updates := s.Watch(false, false)
+	updates := s.Watch(false)
 	go func() {
 		leader := s.Leader()
 		leaders <- leader
@@ -291,7 +285,7 @@ func (s *serviceSet) Filter(attrs map[string]string) {
 	}
 }
 
-func (s *serviceSet) Watch(bringCurrent bool, fireOnce bool) chan *agent.ServiceUpdate {
+func (s *serviceSet) Watch(bringCurrent bool) chan *agent.ServiceUpdate {
 	s.l.Lock()
 	defer s.l.Unlock()
 	var updates chan *agent.ServiceUpdate
@@ -309,7 +303,7 @@ func (s *serviceSet) Watch(bringCurrent bool, fireOnce bool) chan *agent.Service
 	} else {
 		updates = make(chan *agent.ServiceUpdate)
 	}
-	s.watches[updates] = fireOnce
+	s.watches[updates] = struct{}{}
 	return updates
 }
 
@@ -385,8 +379,10 @@ func (c *Client) Services(name string, timeout time.Duration) ([]*Service, error
 		return nil, err
 	}
 	defer set.Close()
+	watch := set.Watch(true)
+	defer set.Unwatch(watch)
 	select {
-	case <-set.Watch(true, true):
+	case <-watch:
 		return set.Services(), nil
 	case <-time.After(timeout):
 		return nil, errors.New("discover: timeout exceeded")
@@ -421,7 +417,7 @@ func (c *Client) RegisterWithSet(name, addr string, attributes map[string]string
 	set.selfAddr = c.expandedAddrs[addr]
 	c.l.Unlock()
 	set.l.Unlock()
-	updates := set.Watch(true, false)
+	updates := set.Watch(true)
 	for update := range updates {
 		if update.Addr == set.selfAddr {
 			set.Unwatch(updates)

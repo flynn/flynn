@@ -56,7 +56,7 @@ func ExampleServiceSet_Watch_updatePool() {
 		panic(err)
 	}
 	go func() {
-		for update := range set.Watch(true, false) {
+		for update := range set.Watch(true) {
 			if update.Online {
 				// add update.Addr to connection pool
 			} else {
@@ -204,7 +204,7 @@ func assert(err error, t *testing.T) error {
 }
 
 func waitUpdates(t *testing.T, set ServiceSet, bringCurrent bool, n int) func() {
-	updates := set.Watch(bringCurrent, false)
+	updates := set.Watch(bringCurrent)
 	return func() {
 		defer set.Unwatch(updates)
 		for i := 0; i < n; i++ {
@@ -357,7 +357,7 @@ func TestWatch(t *testing.T) {
 	set, err := client.NewServiceSet(serviceName)
 	assert(err, t)
 
-	updates := set.Watch(true, false)
+	updates := set.Watch(true)
 	assert(client.Register(serviceName, ":3333"), t)
 	for i := 0; i < 3; i++ {
 		var update *agent.ServiceUpdate
