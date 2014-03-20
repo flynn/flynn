@@ -13,7 +13,7 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 )
 
-func runEtcdServer() func() {
+func runEtcdServer(t *testing.T) (*etcd.Client, func()) {
 	killCh := make(chan struct{})
 	doneCh := make(chan struct{})
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -28,6 +28,7 @@ func runEtcdServer() func() {
 		go func() {
 			cmdDone <- cmd.Wait()
 		}()
+
 		select {
 		case <-killCh:
 			if err := cmd.Process.Kill(); err != nil {
@@ -42,7 +43,15 @@ func runEtcdServer() func() {
 		}
 		doneCh <- struct{}{}
 	}()
-	return func() {
+	client := etcd.NewClient(nil)
+	err := Attempts.Run(func() (err error) {
+		_, err = client.Get("/", false, false)
+		return
+	})
+	if err != nil {
+		t.Fatalf("Failed to connect to etcd: %q", err)
+	}
+	return client, func() {
 		close(killCh)
 		<-doneCh
 	}
@@ -51,10 +60,9 @@ func runEtcdServer() func() {
 const NoAttrService = "null"
 
 func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
-	killServer := runEtcdServer()
-	defer killServer()
+	client, done := runEtcdServer(t)
+	defer done()
 
-	client := etcd.NewClient(nil)
 	backend := EtcdBackend{Client: client}
 	serviceName := "test_register"
 	serviceAddr := "127.0.0.1"
@@ -81,10 +89,9 @@ func TestEtcdBackend_RegisterAndUnregister(t *testing.T) {
 }
 
 func TestEtcdBackend_Attributes(t *testing.T) {
-	killServer := runEtcdServer()
-	defer killServer()
+	client, done := runEtcdServer(t)
+	defer done()
 
-	client := etcd.NewClient(nil)
 	backend := EtcdBackend{Client: client}
 	serviceName := "test_attributes"
 	serviceAddr := "127.0.0.1"
@@ -107,10 +114,9 @@ func TestEtcdBackend_Attributes(t *testing.T) {
 }
 
 func TestEtcdBackend_Subscribe(t *testing.T) {
-	killServer := runEtcdServer()
-	defer killServer()
+	client, done := runEtcdServer(t)
+	defer done()
 
-	client := etcd.NewClient(nil)
 	backend := EtcdBackend{Client: client}
 
 	err := backend.Register("test_subscribe", "10.0.0.1", nil)
