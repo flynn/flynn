@@ -1,14 +1,15 @@
 {
 	"ImportPath": "github.com/flynn/discoverd",
 	"GoVersion": "go1.2",
-	"Packages": [
-		"./..."
-	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
-			"Comment": "v0.2.0-rc1-75-g5c0151c",
-			"Rev": "5c0151c64399ff9a8087c2e29ae96145ede7cfc2"
+			"Comment": "v0.2.0-rc1-96-g1e26d8e",
+			"Rev": "1e26d8ee84cf9b1000d2af8acfb45b2521f49be5"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-flynn/attempt",
+			"Rev": "8dac788a7d0425faf11071cbab7090b61a210f3b"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
