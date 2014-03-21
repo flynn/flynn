@@ -191,6 +191,7 @@ func setup(t *testing.T) (*Client, func()) {
 	}
 	return client, func() {
 		client.UnregisterAll()
+		client.Close()
 		killDiscoverd()
 		killEtcd()
 	}
@@ -604,7 +605,8 @@ func TestDefaultClient(t *testing.T) {
 	}
 
 	assert(set.Close(), t)
-
+	DefaultClient.Close()
+	DefaultClient = nil
 }
 
 func TestHeartbeat(t *testing.T) {

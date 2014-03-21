@@ -541,6 +541,15 @@ func (c *Client) UnregisterAll() error {
 	return nil
 }
 
+func (c *Client) Close() error {
+	c.l.Lock()
+	defer c.l.Unlock()
+	for _, ch := range c.heartbeats {
+		close(ch)
+	}
+	return c.client.Close()
+}
+
 // The DefaultClient is used for all the top-level functions. You don't have to create it, but
 // you can change the address it uses by calling Connect.
 var DefaultClient *Client
