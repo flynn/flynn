@@ -10,8 +10,6 @@ import (
 type Job struct {
 	ID string
 
-	// The ID of the container to run
-	Container string
 	// Job attributes (all host rules must match successfully)
 	Attributes map[string]string
 	// Resource requirements (decremented from host resources)
