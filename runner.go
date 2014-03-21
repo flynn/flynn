@@ -49,7 +49,7 @@ func main() {
 		goto wait
 	}
 
-	for u := range set.Watch(true, false) {
+	for u := range set.Watch(true) {
 		l := set.Leader()
 		if u.Online && u.Addr == l.Addr && u.Attrs["username"] != "" && u.Attrs["password"] != "" {
 			username, password = u.Attrs["username"], u.Attrs["password"]
@@ -296,7 +296,7 @@ func waitForLeaderUp(leader *discoverd.Service, set discoverd.ServiceSet) *disco
 		return leader
 	}
 	log.Println("Waiting for leader to come up...")
-	watch := set.Watch(true, false)
+	watch := set.Watch(true)
 	defer set.Unwatch(watch)
 	for update := range watch {
 		if update.Addr == set.Leader().Addr && update.Attrs["up"] == "true" && update.Attrs["username"] != "" && update.Attrs["password"] != "" {
