@@ -12,7 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/discoverd/agent"
+	"github.com/flynn/go-flynn/attempt"
 )
 
 func ExampleRegisterAndStandby_standby() {
@@ -84,11 +86,16 @@ func ExampleRegisterWithSet_upgradeDowngrade() {
 	// run server
 }
 
+var Attempts = attempt.Strategy{
+	Min:   5,
+	Total: 5 * time.Second,
+	Delay: 200 * time.Millisecond,
+}
+
 func runEtcdServer(t *testing.T) func() {
 	killCh := make(chan struct{})
 	doneCh := make(chan struct{})
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	name := "etcd-test." + strconv.Itoa(r.Int())
+	name := "etcd-test." + strconv.Itoa(rand.Int())
 	dataDir := "/tmp/" + name
 	go func() {
 		cmd := exec.Command("etcd", "-name", name, "-data-dir", dataDir)
@@ -122,6 +129,17 @@ func runEtcdServer(t *testing.T) func() {
 		}
 		doneCh <- struct{}{}
 	}()
+
+	// wait for etcd to come up
+	client := etcd.NewClient(nil)
+	err := Attempts.Run(func() (err error) {
+		_, err = client.Get("/", false, false)
+		return
+	})
+	if err != nil {
+		t.Fatalf("Failed to connect to etcd: %q", err)
+	}
+
 	return func() {
 		close(killCh)
 		<-doneCh
@@ -175,7 +193,7 @@ func runDiscoverdServer(t *testing.T) func() {
 		}
 		doneCh <- struct{}{}
 	}()
-	time.Sleep(200 * time.Millisecond)
+
 	return func() {
 		close(killCh)
 		<-doneCh
@@ -185,10 +203,16 @@ func runDiscoverdServer(t *testing.T) func() {
 func setup(t *testing.T) (*Client, func()) {
 	killEtcd := runEtcdServer(t)
 	killDiscoverd := runDiscoverdServer(t)
-	client, err := NewClient()
+
+	var client *Client
+	err := Attempts.Run(func() (err error) {
+		client, err = NewClient()
+		return
+	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to connect to discoverd: %q", err)
 	}
+
 	return client, func() {
 		client.UnregisterAll()
 		client.Close()
