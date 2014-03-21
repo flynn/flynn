@@ -3,6 +3,7 @@ package discoverd
 import (
 	"bufio"
 	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -96,7 +97,10 @@ func runEtcdServer(t *testing.T) func() {
 	killCh := make(chan struct{})
 	doneCh := make(chan struct{})
 	name := "etcd-test." + strconv.Itoa(rand.Int())
-	dataDir := "/tmp/" + name
+	dataDir, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatal("tempdir failed:", err)
+	}
 	go func() {
 		cmd := exec.Command("etcd", "-name", name, "-data-dir", dataDir)
 		stdout, _ := cmd.StdoutPipe()
@@ -132,7 +136,7 @@ func runEtcdServer(t *testing.T) func() {
 
 	// wait for etcd to come up
 	client := etcd.NewClient(nil)
-	err := Attempts.Run(func() (err error) {
+	err = Attempts.Run(func() (err error) {
 		_, err = client.Get("/", false, false)
 		return
 	})
