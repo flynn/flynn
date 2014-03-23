@@ -75,7 +75,7 @@ To make a pull request, you will need a Github account; if you're unclear on thi
 1. Run `gofmt -s` (if the project is written in Go).
 1. Accept the Developer's Certificate of Origin on all commits (see above).
 
-Pull requests will be treated as "review requests", and we will give feedback we expect to see corrected on and substance before pulling.
+Pull requests will be treated as "review requests", and maintainers will give feedback on the style and substance of the patch.
 
 Normally, all pull requests must include tests that test your change. Occasionally, a change will be very difficult to test for. In those cases, please include a note in your commit message explaining why.
 
