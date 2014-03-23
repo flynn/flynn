@@ -1,5 +1,7 @@
 # Discoverd
 
+[![Build Status](https://travis-ci.org/flynn/discoverd.svg?branch=master)](https://travis-ci.org/flynn/discoverd)
+
 A simple but powerful service discovery system written in Go. It's currently backed by etcd, but can be
 extended to use ZooKeeper or other distributed consistent stores. 
 
