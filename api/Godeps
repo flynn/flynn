@@ -26,11 +26,11 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/attempt",
-			"Rev": "f6fecded2ecc057125037c9531267ca978a5667b"
+			"Rev": "05d20356c50466c66646952a103d1de6a9f8d2ec"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/postgres",
-			"Rev": "f6fecded2ecc057125037c9531267ca978a5667b"
+			"Rev": "05d20356c50466c66646952a103d1de6a9f8d2ec"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-sql",
