@@ -401,6 +401,11 @@ func writeConfig(dataDir string) {
 	if err != nil {
 		log.Fatalln("Error creating pg_hba.conf", err)
 	}
+
+	err = writeCert(os.Getenv("EXTERNAL_IP"), dataDir)
+	if err != nil {
+		log.Fatalln("Error writing ssl info", err)
+	}
 }
 
 func copyFile(src, dest string) error {
@@ -425,9 +430,10 @@ func startPostgres(dataDir string) (*exec.Cmd, error) {
 	log.Println("Starting postgres...")
 	cmd := exec.Command(
 		filepath.Join(*pgbin, "postgres"),
-		"-D", dataDir,
-		"-p", os.Getenv("PORT"),
-		"-h", "*",
+		"-D", dataDir, // Set datadir
+		"-p", os.Getenv("PORT"), // Set port to $PORT
+		"-h", "*", // Listen on all interfaces
+		"-l", // Enable SSL
 	)
 	log.Println("exec", strings.Join(cmd.Args, " "))
 	cmd.Stdout = os.Stdout
