@@ -63,18 +63,3 @@ Unregister announces a service of a given `Name` at address `Addr` as offline. `
 #### Output
 
 None
-
-### Agent.Heartbeat
-
-Heartbeat will update a service of given `Name` and `Addr` as still online. It must be called regularly or a service will timeout after 10 seconds. `Addr` is formatted as `<ip>:<port>` or just `:<port>`. If only a port is given as the address, discoverd will use the external IP it was configured with.
-
-#### Input
-
-	type Args struct {
-		Name string
-		Addr string
-	}
-
-#### Output
-
-None

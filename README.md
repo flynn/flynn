@@ -48,14 +48,9 @@ type DiscoveryBackend interface {
 	Subscribe(name string) (UpdateStream, error)
 	Register(name string, addr string, attrs map[string]string) error
 	Unregister(name string, addr string) error
-	Heartbeat(name string, addr string) error
 }
 ```
 
 ## Writing More Client Libraries
 
 Read the [API docs](https://github.com/flynn/discoverd/blob/master/docs/API.md) to learn how to create a new client library. However, a lot is going on in the [Go client library](https://github.com/flynn/go-discoverd), so that's probably worth reading.
-
-## License
-
-Discover is under the BSD license. See [LICENSE](https://github.com/flynn/go-discover/blob/master/LICENSE) for details.
