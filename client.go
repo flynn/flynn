@@ -251,6 +251,9 @@ func (s *serviceSet) Services() []*Service {
 }
 
 func (s *serviceSet) Addrs() []string {
+	s.l.Lock()
+	defer s.l.Unlock()
+
 	list := make([]string, 0, len(s.services))
 	for _, service := range s.Services() {
 		list = append(list, service.Addr)
