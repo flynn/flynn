@@ -1,4 +1,4 @@
-package discoverd
+package discoverd_test
 
 import (
 	"bufio"
@@ -15,11 +15,12 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/discoverd/agent"
+	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-flynn/attempt"
 )
 
 func ExampleRegisterAndStandby_standby() {
-	standbyCh, err := RegisterAndStandby("sampi", ":9099", nil)
+	standbyCh, err := discoverd.RegisterAndStandby("sampi", ":9099", nil)
 	if err != nil {
 		panic(err)
 	}
@@ -28,7 +29,7 @@ func ExampleRegisterAndStandby_standby() {
 }
 
 func ExampleRegisterAndStandby_upgrade() {
-	standbyCh, err := RegisterAndStandby("sampi", ":9099", nil)
+	standbyCh, err := discoverd.RegisterAndStandby("sampi", ":9099", nil)
 	if err != nil {
 		panic(err)
 	}
@@ -40,7 +41,7 @@ func ExampleRegisterAndStandby_upgrade() {
 }
 
 func ExampleServiceSet_Leaders_client() {
-	set, err := NewServiceSet("sampi")
+	set, err := discoverd.NewServiceSet("sampi")
 	if err != nil {
 		panic(err)
 	}
@@ -54,7 +55,7 @@ func ExampleServiceSet_Leaders_client() {
 }
 
 func ExampleServiceSet_Watch_updatePool() {
-	set, err := NewServiceSet("app")
+	set, err := discoverd.NewServiceSet("app")
 	if err != nil {
 		panic(err)
 	}
@@ -70,7 +71,7 @@ func ExampleServiceSet_Watch_updatePool() {
 }
 
 func ExampleRegisterWithSet_upgradeDowngrade() {
-	set, _ := RegisterWithSet("cluster", ":9099", nil)
+	set, _ := discoverd.RegisterWithSet("cluster", ":9099", nil)
 	go func() {
 		leaders := set.Leaders()
 		currentLeader := false
@@ -204,13 +205,13 @@ func runDiscoverdServer(t *testing.T) func() {
 	}
 }
 
-func setup(t *testing.T) (*Client, func()) {
+func setup(t *testing.T) (*discoverd.Client, func()) {
 	killEtcd := runEtcdServer(t)
 	killDiscoverd := runDiscoverdServer(t)
 
-	var client *Client
+	var client *discoverd.Client
 	err := Attempts.Run(func() (err error) {
-		client, err = NewClient()
+		client, err = discoverd.NewClient()
 		return
 	})
 	if err != nil {
@@ -232,7 +233,7 @@ func assert(err error, t *testing.T) error {
 	return err
 }
 
-func waitUpdates(t *testing.T, set ServiceSet, bringCurrent bool, n int) func() {
+func waitUpdates(t *testing.T, set discoverd.ServiceSet, bringCurrent bool, n int) func() {
 	updates := set.Watch(bringCurrent)
 	return func() {
 		defer set.Unwatch(updates)
@@ -485,7 +486,7 @@ func TestLeaderChannel(t *testing.T) {
 	set, err := client.NewServiceSet(serviceName)
 	assert(err, t)
 
-	leader := make(chan *Service, 3)
+	leader := make(chan *discoverd.Service, 3)
 
 	go func() {
 		leaders := set.Leaders()
@@ -531,7 +532,7 @@ func TestRegisterWithSetLeaderSelf(t *testing.T) {
 	set, err := client.RegisterWithSet(serviceName, ":2222", nil)
 	assert(err, t)
 
-	leader := make(chan *Service, 2)
+	leader := make(chan *discoverd.Service, 2)
 
 	go func() {
 		leaders := set.Leaders()
@@ -613,19 +614,19 @@ func TestDefaultClient(t *testing.T) {
 
 	serviceName := "defaultClientTest"
 
-	assert(Register(serviceName, ":1111"), t)
-	assert(Register(serviceName, ":2222"), t)
-	assert(Register(serviceName, ":3333"), t)
+	assert(discoverd.Register(serviceName, ":1111"), t)
+	assert(discoverd.Register(serviceName, ":2222"), t)
+	assert(discoverd.Register(serviceName, ":3333"), t)
 
-	services, err := Services(serviceName, 1)
+	services, err := discoverd.Services(serviceName, 1)
 	assert(err, t)
 	if len(services) != 3 {
 		t.Fatal("Wrong number of services")
 	}
 
-	assert(UnregisterAll(), t)
+	assert(discoverd.UnregisterAll(), t)
 
-	set, err := NewServiceSet(serviceName)
+	set, err := discoverd.NewServiceSet(serviceName)
 	assert(err, t)
 
 	if len(set.Services()) != 0 {
@@ -633,8 +634,8 @@ func TestDefaultClient(t *testing.T) {
 	}
 
 	assert(set.Close(), t)
-	DefaultClient.Close()
-	DefaultClient = nil
+	discoverd.DefaultClient.Close()
+	discoverd.DefaultClient = nil
 }
 
 func TestHeartbeat(t *testing.T) {
