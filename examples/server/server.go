@@ -19,5 +19,5 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte("Listening on " + os.Args[1]))
 	})
-	http.ListenAndServe(os.Args[1], nil)
+	log.Fatal(http.ListenAndServe(":"+os.Args[1], nil))
 }
