@@ -555,13 +555,19 @@ func (c *Client) Close() error {
 // The DefaultClient is used for all the top-level functions. You don't have to create it, but
 // you can change the address it uses by calling Connect.
 var DefaultClient *Client
-var defaultEnsureLock = &sync.Mutex{}
+var defaultMtx sync.Mutex
 
 // Normally you don't have to call Connect because it's called implicitly by the top-level
 // functions. However, you can call connect if you need to connect to a specific address other
 // than the default or value in the DISCOVERD env var. Calling Connect will replace any existing
 // client value for DefaultClient, so be sure to call it early if you intend to use it.
-func Connect(addr string) (err error) {
+func Connect(addr string) error {
+	defaultMtx.Lock()
+	defer defaultMtx.Unlock()
+	return connectLocked(addr)
+}
+
+func connectLocked(addr string) (err error) {
 	if addr == "" {
 		DefaultClient, err = NewClient()
 		return
@@ -571,10 +577,10 @@ func Connect(addr string) (err error) {
 }
 
 func ensureDefaultConnected() error {
-	defaultEnsureLock.Lock()
-	defer defaultEnsureLock.Unlock()
+	defaultMtx.Lock()
+	defer defaultMtx.Unlock()
 	if DefaultClient == nil {
-		return Connect("")
+		return connectLocked("")
 	}
 	return nil
 }
