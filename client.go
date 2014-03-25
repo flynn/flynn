@@ -552,15 +552,13 @@ func (c *Client) Close() error {
 	return c.client.Close()
 }
 
-// The DefaultClient is used for all the top-level functions. You don't have to create it, but
-// you can change the address it uses by calling Connect.
+// DefaultClient is used by all of the top-level functions. Connect must be
+// called before using it directly.
 var DefaultClient *Client
 var defaultMtx sync.Mutex
 
-// Normally you don't have to call Connect because it's called implicitly by the top-level
-// functions. However, you can call connect if you need to connect to a specific address other
-// than the default or value in the DISCOVERD env var. Calling Connect will replace any existing
-// client value for DefaultClient, so be sure to call it early if you intend to use it.
+// Connect explicitly initializes DefaultClient. If addr is empty, the default
+// address is used. If DefaultClient has already been created it is a no-op.
 func Connect(addr string) error {
 	defaultMtx.Lock()
 	defer defaultMtx.Unlock()
@@ -568,6 +566,9 @@ func Connect(addr string) error {
 }
 
 func connectLocked(addr string) (err error) {
+	if DefaultClient != nil {
+		return nil
+	}
 	if addr == "" {
 		DefaultClient, err = NewClient()
 		return
@@ -579,10 +580,7 @@ func connectLocked(addr string) (err error) {
 func ensureDefaultConnected() error {
 	defaultMtx.Lock()
 	defer defaultMtx.Unlock()
-	if DefaultClient == nil {
-		return connectLocked("")
-	}
-	return nil
+	return connectLocked("")
 }
 
 // NewServiceSet will produce a ServiceSet for a given service name.
