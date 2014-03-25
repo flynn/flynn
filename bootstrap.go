@@ -4,9 +4,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+
+	"github.com/flynn/go-flynn/cluster"
 )
 
-type State struct{}
+type State struct {
+	StepData map[string]interface{}
+
+	cc *cluster.Client
+}
+
+func (s *State) ClusterClient() (*cluster.Client, error) {
+	if s.cc == nil {
+		cc, err := cluster.NewClient()
+		if err != nil {
+			return nil, err
+		}
+		s.cc = cc
+		return cc, nil
+	}
+	return s.cc, nil
+}
 
 type Action interface {
 	Run(*State) error
@@ -35,7 +53,7 @@ func Run(manifest []byte) error {
 		return err
 	}
 
-	var state *State
+	state := &State{StepData: make(map[string]interface{})}
 	actions := make([]Action, 0, len(steps))
 	cleanup := func(err error) error {
 		errors := make([]error, 0, len(steps))
