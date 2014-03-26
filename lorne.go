@@ -200,6 +200,8 @@ func (p *jobProcessor) processJob(ports <-chan int, job *host.Job) (*docker.Cont
 		if job.Config.ExposedPorts == nil {
 			job.Config.ExposedPorts = make(map[string]struct{}, job.TCPPorts)
 		}
+		job.Config.AttachStdout = true
+		job.Config.AttachStderr = true
 		job.Config.ExposedPorts[port+"/tcp"] = struct{}{}
 		if job.HostConfig == nil {
 			job.HostConfig = &docker.HostConfig{
