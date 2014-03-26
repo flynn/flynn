@@ -118,7 +118,8 @@ func (s *State) SetStatusFailed(jobID string, err error) {
 	}
 	job.Status = host.StatusFailed
 	job.EndedAt = time.Now().UTC()
-	job.Error = err
+	errStr := err.Error()
+	job.Error = &errStr
 	s.mtx.Unlock()
 	s.sendEvent(job.Job.ID, "error")
 }

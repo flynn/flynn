@@ -151,7 +151,7 @@ type ActiveJob struct {
 	StartedAt   time.Time
 	EndedAt     time.Time
 	ExitCode    int
-	Error       error
+	Error       *string
 }
 
 type AttachReq struct {
