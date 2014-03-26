@@ -88,7 +88,7 @@ func testProcessWithError(job *host.Job, client *dockerClient, err error, t *tes
 	if sjob.Status != host.StatusFailed {
 		t.Errorf("expected status failed, got %s", sjob.Status)
 	}
-	if sjob.Error != err {
+	if *sjob.Error != err.Error() {
 		t.Error("error not saved")
 	}
 	return state
