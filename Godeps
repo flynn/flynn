@@ -1,9 +1,6 @@
 {
 	"ImportPath": "github.com/flynn/flynn-bootstrap",
 	"GoVersion": "go1.2",
-	"Packages": [
-		"./..."
-	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
@@ -12,15 +9,11 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/discoverd/agent",
-			"Rev": "8d1edac22b29532a72b873a61268781c12af04ab"
-		},
-		{
-			"ImportPath": "github.com/flynn/flynn-bootstrap",
-			"Rev": "a6fd9f0ff8a3db21862fb4b910b3288aafe68265"
+			"Rev": "2570d344c25b3565f2853698a092b41c75877b1d"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-host/types",
-			"Rev": "aed5de2c8c1f1579397c683387b0b57a7cc2c52b"
+			"Rev": "8ae60af9de613636902d2b18f2ba8c492134e1e4"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-discoverd",
