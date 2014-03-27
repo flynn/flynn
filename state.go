@@ -74,7 +74,7 @@ func (s *State) SetContainerID(jobID, containerID string) {
 	s.mtx.Unlock()
 }
 
-func (s *State) SetStatusRunning(jobID string) {
+func (s *State) SetStatusRunning(jobID string, volumes map[string]string) {
 	s.mtx.Lock()
 
 	job, ok := s.jobs[jobID]
@@ -83,6 +83,7 @@ func (s *State) SetStatusRunning(jobID string) {
 		return
 	}
 
+	job.Volumes = volumes
 	job.StartedAt = time.Now().UTC()
 	job.Status = host.StatusRunning
 	s.mtx.Unlock()

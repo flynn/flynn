@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/flynn/flynn-host/types"
@@ -46,6 +47,14 @@ func (c *dockerClient) StartContainer(id string, config *docker.HostConfig) erro
 	c.started = true
 	c.hostConf = config
 	return nil
+}
+
+func (c *dockerClient) InspectContainer(id string) (*docker.Container, error) {
+	container := &docker.Container{Volumes: make(map[string]string)}
+	for v := range c.created.Volumes {
+		container.Volumes[v] = "/var/lib/docker/vfs/dir/" + strings.Replace(v, "/", "-", -1)
+	}
+	return container, nil
 }
 
 func (c *dockerClient) PullImage(opts docker.PullImageOptions, w io.Writer) error {
@@ -168,6 +177,20 @@ func TestProcessWithExtAddr(t *testing.T) {
 	}
 }
 
+func TestProcessWithVolume(t *testing.T) {
+	job := &host.Job{
+		ID: "a",
+		Config: &docker.Config{
+			Volumes: map[string]struct{}{"/data": {}},
+		},
+	}
+	state, _ := testProcess(job, t)
+	j := state.GetJob("a")
+	if j.Volumes["/data"] == "" {
+		t.Error("Volume missing from state")
+	}
+}
+
 func sliceHasString(slice []string, str string) bool {
 	for _, s := range slice {
 		if s == str {
@@ -259,7 +282,7 @@ func TestStreamEvents(t *testing.T) {
 	state := NewState()
 	state.AddJob(&host.Job{ID: "a"})
 	state.SetContainerID("a", "1")
-	state.SetStatusRunning("a")
+	state.SetStatusRunning("a", nil)
 
 	done := make(chan struct{})
 	go func() {

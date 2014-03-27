@@ -177,6 +177,7 @@ type jobProcessor struct {
 		CreateContainer(*docker.Config) (*docker.Container, error)
 		PullImage(docker.PullImageOptions, io.Writer) error
 		StartContainer(string, *docker.HostConfig) error
+		InspectContainer(string) (*docker.Container, error)
 	}
 	state *State
 }
@@ -240,7 +241,13 @@ func (p *jobProcessor) processJob(ports <-chan int, job *host.Job) (*docker.Cont
 		p.state.SetStatusFailed(job.ID, err)
 		return nil, err
 	}
-	p.state.SetStatusRunning(job.ID)
+	container, err = p.docker.InspectContainer(container.ID)
+	if err != nil {
+		g.Log(grohl.Data{"at": "inspect_container", "status": "error", "err": err})
+		p.state.SetStatusFailed(job.ID, err)
+		return nil, err
+	}
+	p.state.SetStatusRunning(job.ID, container.Volumes)
 	g.Log(grohl.Data{"at": "finish"})
 	return container, nil
 }

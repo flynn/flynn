@@ -147,6 +147,7 @@ type ActiveJob struct {
 	Job *Job
 
 	ContainerID string
+	Volumes     map[string]string
 	Status      JobStatus
 	StartedAt   time.Time
 	EndedAt     time.Time
