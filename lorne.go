@@ -51,6 +51,7 @@ func main() {
 	configFile := flag.String("config", "", "configuration file")
 	manifestFile := flag.String("manifest", "", "manifest file")
 	hostID := flag.String("id", hostname, "host id")
+	force := flag.Bool("force", false, "kill all containers booted by flynn-host before starting")
 	attributes := make(AttributeFlag)
 	flag.Var(&attributes, "attribute", "key=value pair to add as an attribute")
 	flag.Parse()
@@ -61,6 +62,12 @@ func main() {
 	dockerc, err := docker.NewClient("unix:///var/run/docker.sock")
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if *force {
+		if err := killExistingContainers(dockerc); err != nil {
+			os.Exit(1)
+		}
 	}
 
 	state := NewState()
@@ -182,6 +189,30 @@ type jobProcessor struct {
 	state *State
 }
 
+func killExistingContainers(dc *docker.Client) error {
+	g := grohl.NewContext(grohl.Data{"fn": "kill_existing"})
+	g.Log(grohl.Data{"at": "start"})
+	containers, err := dc.ListContainers(docker.ListContainersOptions{})
+	if err != nil {
+		g.Log(grohl.Data{"at": "list", "status": "error", "err": err})
+		return err
+	}
+outer:
+	for _, c := range containers {
+		for _, name := range c.Names {
+			if strings.HasPrefix(name, "/flynn-") {
+				g.Log(grohl.Data{"at": "kill", "container.id": c.ID, "container.name": name})
+				if err := dc.KillContainer(c.ID); err != nil {
+					g.Log(grohl.Data{"at": "kill", "container.id": c.ID, "container.name": name, "status": "error", "err": err})
+				}
+				continue outer
+			}
+		}
+	}
+	g.Log(grohl.Data{"at": "finish"})
+	return nil
+}
+
 func (p *jobProcessor) Process(ports <-chan int, jobs chan *host.Job) {
 	for job := range jobs {
 		p.processJob(ports, job)
@@ -211,6 +242,11 @@ func (p *jobProcessor) processJob(ports <-chan int, job *host.Job) (*docker.Cont
 			}
 		}
 		job.HostConfig.PortBindings[port+"/tcp"] = []docker.PortBinding{{HostPort: port}}
+		if strings.HasPrefix(job.ID, "flynn-") {
+			job.Config.Name = job.ID
+		} else {
+			job.Config.Name = "flynn-" + job.ID
+		}
 	}
 	if p.externalAddr != "" {
 		job.Config.Env = appendUnique(job.Config.Env, "EXTERNAL_IP="+p.externalAddr, "SD_HOST="+p.externalAddr, "DISCOVERD="+p.discoverd)
