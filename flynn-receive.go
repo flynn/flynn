@@ -88,8 +88,7 @@ func shell(cmdline string) string {
 func scheduleWithTcpPort(jobid string, config docker.Config) (hostid string) {
 	hostid = randomHost()
 	addReq := &host.AddJobsReq{
-		Incremental: true,
-		HostJobs:    map[string][]*host.Job{hostid: {{ID: jobid, Config: &config, TCPPorts: 1}}},
+		HostJobs: map[string][]*host.Job{hostid: {{ID: jobid, Config: &config, TCPPorts: 1}}},
 	}
 	if _, err := clusterc.AddJobs(addReq); err != nil {
 		log.Fatal(err)
@@ -143,8 +142,7 @@ func scheduleAndAttach(jobid string, config docker.Config) {
 	}
 
 	addReq := &host.AddJobsReq{
-		Incremental: true,
-		HostJobs:    map[string][]*host.Job{hostid: {{ID: jobid, Config: &config}}},
+		HostJobs: map[string][]*host.Job{hostid: {{ID: jobid, Config: &config}}},
 	}
 	if _, err := clusterc.AddJobs(addReq); err != nil {
 		log.Fatal(err)
