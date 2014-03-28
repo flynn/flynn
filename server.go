@@ -142,8 +142,8 @@ func changeFormation(u *url.URL, h http.Header, req *Formation) (int, http.Heade
 			}
 		}
 
-		res, err := clusterc.AddJobs(addReq)
-		if err != nil || !res.Success {
+		_, err = clusterc.AddJobs(addReq)
+		if err != nil {
 			log.Println("schedule error", err)
 			return 500, nil, nil, err
 		}
@@ -300,8 +300,8 @@ func runJob(w http.ResponseWriter, req *http.Request) {
 		defer attachConn.Close()
 	}
 
-	res, err := clusterc.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{hostID: {job}}})
-	if err != nil || !res.Success {
+	_, err = clusterc.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{hostID: {job}}})
+	if err != nil {
 		w.WriteHeader(500)
 		log.Println("schedule failed", err)
 		return
