@@ -1,6 +1,7 @@
 package sampi
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -63,17 +64,20 @@ func (s *State) Get() map[string]host.Host {
 	return *(*map[string]host.Host)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.curr))))
 }
 
-func (s *State) AddJob(hostID string, job *host.Job) bool {
-	host, ok := s.host(hostID)
+func (s *State) AddJobs(hostID string, jobs []*host.Job) error {
+	h, ok := s.host(hostID)
 	if !ok {
-		return false
+		return fmt.Errorf("sampi: Unknown host %s", hostID)
 	}
-	if !host.Add(job) {
-		return false
-	}
-	(*s.next)[hostID] = host
+
+	newJobs := make([]*host.Job, len(h.Jobs), len(h.Jobs)+len(jobs))
+	copy(newJobs, h.Jobs)
+	newJobs = append(newJobs, jobs...)
+	h.Jobs = newJobs
+
+	(*s.next)[hostID] = h
 	s.nextModified = true
-	return true
+	return nil
 }
 
 func (s *State) SendJob(host string, job *host.Job) {
@@ -100,12 +104,6 @@ outer:
 	for _, job := range h.Jobs {
 		for _, id := range jobIDs {
 			if job.ID == id {
-				for k, v := range job.Resources {
-					if r, ok := h.Resources[k]; ok {
-						r.Value += v
-						h.Resources[k] = r
-					}
-				}
 				continue outer
 			}
 		}

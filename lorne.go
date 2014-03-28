@@ -147,17 +147,12 @@ func main() {
 	state.AddListener("all", events)
 	go syncScheduler(cluster, events)
 
-	var h *host.Host
+	h := &host.Host{}
 	if *configFile != "" {
 		h, err = openConfig(*configFile)
 		if err != nil {
 			log.Fatal(err)
 		}
-	} else {
-		h = &host.Host{Resources: make(map[string]host.ResourceValue)}
-	}
-	if _, ok := h.Resources["memory"]; !ok {
-		h.Resources["memory"] = host.ResourceValue{Value: 1024}
 	}
 	h.ID = *hostID
 	h.Jobs = state.ClusterJobs()

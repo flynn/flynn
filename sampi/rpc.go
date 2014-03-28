@@ -27,30 +27,19 @@ func (s *Cluster) AddJobs(req *host.AddJobsReq, res *host.AddJobsRes) error {
 	s.state.Begin()
 	*res = host.AddJobsRes{}
 	for host, jobs := range req.HostJobs {
-		for _, job := range jobs {
-			if s.state.AddJob(host, job) {
-				if req.Incremental {
-					s.state.SendJob(host, job)
-				}
-			} else {
-				if req.Incremental {
-					res.RemainingJobs = append(res.RemainingJobs, job)
-				} else {
-					res.State = s.state.Rollback()
-					return nil
-				}
-			}
+		if err := s.state.AddJobs(host, jobs); err != nil {
+			s.state.Rollback()
+			return err
 		}
 	}
-	if !req.Incremental {
-		for host, jobs := range req.HostJobs {
-			for _, job := range jobs {
-				s.state.SendJob(host, job)
-			}
-		}
-	}
-	res.Success = true
 	res.State = s.state.Commit()
+
+	for host, jobs := range req.HostJobs {
+		for _, job := range jobs {
+			s.state.SendJob(host, job)
+		}
+	}
+
 	return nil
 }
 

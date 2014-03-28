@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 
@@ -27,39 +26,10 @@ func parseConfig(r io.Reader) (*host.Host, error) {
 }
 
 type Config struct {
-	Resources  map[string]host.ResourceValue `json:"resources"`
-	Attributes map[string]string             `json:"attributes"`
-	Rules      []Rule                        `json:"rules"`
+	Attributes map[string]string `json:"attributes"`
 }
 
 func (c *Config) hostConfig() (*host.Host, error) {
-	h := &host.Host{Resources: c.Resources, Attributes: c.Attributes}
-	h.Rules = make([]host.Rule, len(c.Rules))
-	for i, r := range c.Rules {
-		rule := host.Rule{Key: r.Key, Value: r.Value}
-		switch r.Op {
-		case "==":
-			rule.Op = host.OpEq
-		case "!=":
-			rule.Op = host.OpNotEq
-		case ">":
-			rule.Op = host.OpGt
-		case ">=":
-			rule.Op = host.OpGtEq
-		case "<":
-			rule.Op = host.OpLt
-		case "<=":
-			rule.Op = host.OpLtEq
-		default:
-			return nil, fmt.Errorf("lorne: invalid rule op: %s", r.Op)
-		}
-		h.Rules[i] = rule
-	}
+	h := &host.Host{Attributes: c.Attributes}
 	return h, nil
-}
-
-type Rule struct {
-	Key   string `json:"key"`
-	Op    string `json:"op"`
-	Value string `json:"value"`
 }
