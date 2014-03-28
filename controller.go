@@ -1,13 +1,13 @@
 package main
 
 import (
-	"database/sql"
 	"log"
 	"net/http"
 	"os"
 
 	"github.com/codegangsta/martini"
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/go-sql"
 	"github.com/flynn/rpcplus"
 	"github.com/martini-contrib/binding"
 	"github.com/martini-contrib/render"

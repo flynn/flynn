@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"strconv"
 	"strings"
@@ -9,8 +8,9 @@ import (
 	"time"
 
 	ct "github.com/flynn/flynn-controller/types"
-	"github.com/lib/pq"
-	"github.com/lib/pq/hstore"
+	"github.com/flynn/go-sql"
+	"github.com/flynn/pq"
+	"github.com/flynn/pq/hstore"
 )
 
 type formationKey struct {

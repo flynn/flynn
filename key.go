@@ -2,13 +2,13 @@ package main
 
 import (
 	"crypto/md5"
-	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"strings"
 
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/go-sql"
 )
 
 type KeyRepo struct {

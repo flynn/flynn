@@ -1,37 +1,43 @@
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "hstore";
+package main
 
-DROP TABLE IF EXISTS artifacts CASCADE;
-CREATE TABLE artifacts (
+import (
+	"github.com/flynn/go-flynn/migrate"
+	"github.com/flynn/go-sql"
+)
+
+func migrateDB(db *sql.DB) error {
+	m := migrate.NewMigrations()
+	m.Add(1,
+		`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`,
+		`CREATE EXTENSION IF NOT EXISTS "hstore"`,
+
+		`CREATE TABLE artifacts (
     artifact_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     type text NOT NULL,
     uri text NOT NULL,
     created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
     deleted_at timestamp with time zone,
     UNIQUE (type, uri)
-);
+)`,
 
-DROP TABLE IF EXISTS releases CASCADE;
-CREATE TABLE releases (
+		`CREATE TABLE releases (
     release_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     artifact_id uuid NOT NULL REFERENCES artifacts (artifact_id),
     data text NOT NULL,
     created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
     deleted_at timestamp with time zone
-);
+)`,
 
-DROP TABLE IF EXISTS apps CASCADE;
-CREATE TABLE apps (
+		`CREATE TABLE apps (
     app_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     name text UNIQUE NOT NULL,
     release_id uuid REFERENCES releases (release_id),
     created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
     updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
     deleted_at timestamp with time zone
-);
+)`,
 
-DROP TABLE IF EXISTS formations;
-CREATE TABLE formations (
+		`CREATE TABLE formations (
     app_id uuid NOT NULL REFERENCES apps (app_id),
     release_id uuid NOT NULL REFERENCES releases (release_id),
     processes hstore,
@@ -39,31 +45,28 @@ CREATE TABLE formations (
     updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
     deleted_at timestamp with time zone,
     PRIMARY KEY (app_id, release_id)
-);
+)`,
 
-CREATE OR REPLACE FUNCTION notify_formation() RETURNS TRIGGER AS $$
+		`CREATE FUNCTION notify_formation() RETURNS TRIGGER AS $$
     BEGIN
         PERFORM pg_notify('formations', NEW.app_id || ':' || NEW.release_id);
         RETURN NULL;
     END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql`,
 
-DROP TRIGGER IF EXISTS notify_formation ON formations;
-CREATE TRIGGER notify_formation
+		`CREATE TRIGGER notify_formation
     AFTER INSERT OR UPDATE ON formations
-    FOR EACH ROW EXECUTE PROCEDURE notify_formation();
+    FOR EACH ROW EXECUTE PROCEDURE notify_formation()`,
 
-DROP TABLE IF EXISTS keys;
-CREATE TABLE keys (
+		`CREATE TABLE keys (
     key_id text PRIMARY KEY,
     key text NOT NULL,
     comment text,
     created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
     deleted_at timestamp with time zone
-);
+)`,
 
-DROP TABLE IF EXISTS app_logs;
-CREATE TABLE app_logs (
+		`CREATE TABLE app_logs (
     app_id uuid NOT NULL REFERENCES apps (app_id),
     log_id bigint NOT NULL,
     event text NOT NULL,
@@ -71,15 +74,14 @@ CREATE TABLE app_logs (
     data text NOT NULL,
     created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
     PRIMARY KEY (app_id, log_id)
-);
+)`,
 
-DROP TABLE IF EXISTS app_log_ids;
-CREATE TABLE app_log_ids (
+		`CREATE TABLE app_log_ids (
     app_id uuid PRIMARY KEY REFERENCES apps (app_id),
     log_id bigint NOT NULL
-);
+)`,
 
-CREATE OR REPLACE FUNCTION next_log_id(uuid) RETURNS bigint AS $$
+		`CREATE FUNCTION next_log_id(uuid) RETURNS bigint AS $$
 DECLARE
     in_app_id ALIAS FOR $1;
     next_log_id bigint;
@@ -98,4 +100,7 @@ BEGIN
     UPDATE app_log_ids SET log_id = log_id+1 WHERE app_id = in_app_id;
     RETURN next_log_id;
 END
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql`,
+	)
+	return m.Migrate(db)
+}

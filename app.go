@@ -1,11 +1,11 @@
 package main
 
 import (
-	"database/sql"
 	"errors"
 	"regexp"
 
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/go-sql"
 )
 
 type AppRepo struct {

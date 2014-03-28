@@ -1,11 +1,11 @@
 package main
 
 import (
-	"database/sql"
 	"time"
 
 	ct "github.com/flynn/flynn-controller/types"
-	"github.com/lib/pq"
+	"github.com/flynn/go-sql"
+	"github.com/flynn/pq"
 )
 
 type ArtifactRepo struct {

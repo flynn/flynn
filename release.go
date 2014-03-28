@@ -1,10 +1,10 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/go-sql"
 )
 
 type ReleaseRepo struct {

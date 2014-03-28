@@ -2,18 +2,18 @@ package main
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/flynn/go-sql"
+
 	ct "github.com/flynn/flynn-controller/types"
-	_ "github.com/lib/pq"
+	_ "github.com/flynn/pq"
 	. "github.com/titanous/gocheck"
 )
 
@@ -28,23 +28,33 @@ type S struct {
 var _ = Suite(&S{})
 
 func (s *S) SetUpSuite(c *C) {
-	if os.Getenv("PGDATABASE") == "" {
-		os.Setenv("PGDATABASE", "controllertest")
+	dbname := "controllertest"
+	if os.Getenv("PGDATABASE") != "" {
+		dbname = os.Getenv("PGDATABASE")
+	} else {
+		os.Setenv("PGDATABASE", dbname)
 	}
 	if os.Getenv("PGSSLMODE") == "" {
 		os.Setenv("PGSSLMODE", "disable")
 	}
 
-	db, err := sql.Open("postgres", "")
+	db, err := sql.Open("postgres", "dbname=postgres")
 	if err != nil {
 		c.Fatal(err)
 	}
-	schema, err := ioutil.ReadFile("schema.sql")
+	if _, err := db.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbname)); err != nil {
+		c.Fatal(err)
+	}
+	if _, err := db.Exec(fmt.Sprintf("CREATE DATABASE %s", dbname)); err != nil {
+		c.Fatal(err)
+	}
+	db.Close()
+
+	db, err = sql.Open("postgres", fmt.Sprintf("dbname=%s", dbname))
 	if err != nil {
 		c.Fatal(err)
 	}
-	_, err = db.Exec(string(schema))
-	if err != nil {
+	if err = migrateDB(db); err != nil {
 		c.Fatal(err)
 	}
 

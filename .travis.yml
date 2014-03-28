@@ -13,7 +13,6 @@ before_install:
   - export PATH=$HOME/gopath/bin:$PATH
 
 before_script:
- - psql -c 'create database controllertest;' -U postgres
  - export PGUSER=postgres
 
 script:

@@ -1,11 +1,11 @@
 package main
 
 import (
-	"database/sql"
 	"strings"
 	"sync"
 
-	"github.com/lib/pq"
+	"github.com/flynn/go-sql"
+	"github.com/flynn/pq"
 )
 
 type DB struct {
