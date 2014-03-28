@@ -30,6 +30,7 @@ type ProcessType struct {
 	Cmd   []string          `json:"cmd,omitempty"`
 	Env   map[string]string `json:"env,omitempty"`
 	Ports ProcessPorts      `json:"ports,omitempty"`
+	Data  bool              `json:"data,omitempty"`
 }
 
 type ProcessPorts struct {
