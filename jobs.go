@@ -187,8 +187,8 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 		defer attachConn.Close()
 	}
 
-	res, err := cl.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{hostID: {job}}})
-	if err != nil || !res.Success {
+	_, err = cl.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{hostID: {job}}})
+	if err != nil {
 		log.Println("schedule failed", err)
 		w.WriteHeader(500)
 		return

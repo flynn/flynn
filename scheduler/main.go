@@ -359,8 +359,8 @@ func (f *Formation) add(n int, name string) {
 		job.Formation = f
 		f.c.jobs.Add(h.ID, config.ID, job)
 
-		res, err := f.c.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{h.ID: {config}}})
-		if err != nil || !res.Success {
+		_, err = f.c.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{h.ID: {config}}})
+		if err != nil {
 			f.jobs.Remove(name, h.ID, config.ID)
 			f.c.jobs.Remove(h.ID, config.ID)
 			// TODO: log/handle error

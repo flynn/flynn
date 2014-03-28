@@ -25,7 +25,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-host/types",
-			"Rev": "99ec02cf695fa00d6e368c9707bed76e8ae911d4"
+			"Rev": "4310e8a3c34bc027ca1bc27c1aa8ff1edc7b578b"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-discoverd",
@@ -61,11 +61,11 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/strowger/client",
-			"Rev": "fcc4c744219c1a81b09c4a1ffb962f17f44d0ebc"
+			"Rev": "39ce88579bde9275072fa8fbaeab745569391cbd"
 		},
 		{
 			"ImportPath": "github.com/flynn/strowger/types",
-			"Rev": "fcc4c744219c1a81b09c4a1ffb962f17f44d0ebc"
+			"Rev": "39ce88579bde9275072fa8fbaeab745569391cbd"
 		},
 		{
 			"ImportPath": "github.com/martini-contrib/binding",

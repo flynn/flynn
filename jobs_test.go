@@ -51,7 +51,7 @@ func (c *fakeCluster) AddJobs(req *host.AddJobsReq) (*host.AddJobsRes, error) {
 		host.Jobs = append(host.Jobs, jobs...)
 		c.hosts[hostID] = host
 	}
-	return &host.AddJobsRes{Success: true, State: c.hosts}, nil
+	return &host.AddJobsRes{State: c.hosts}, nil
 }
 
 func (c *fakeCluster) setHosts(h map[string]host.Host) {
