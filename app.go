@@ -47,14 +47,14 @@ func scanApp(s Scanner) (*ct.App, error) {
 var idPattern = regexp.MustCompile(`^[a-f0-9]{8}-?([a-f0-9]{4}-?){3}[a-f0-9]{12}$`)
 
 func (r *AppRepo) Get(id string) (interface{}, error) {
-	var rows Scanner
+	var row Scanner
 	query := "SELECT app_id, name, created_at, updated_at FROM apps WHERE deleted_at IS NULL AND "
 	if idPattern.MatchString(id) {
-		rows = r.db.QueryRow(query+"(app_id = $1 OR name = $2)", id, id)
+		row = r.db.QueryRow(query+"(app_id = $1 OR name = $2) LIMIT 1", id, id)
 	} else {
-		rows = r.db.QueryRow(query+"name = $1", id)
+		row = r.db.QueryRow(query+"name = $1", id)
 	}
-	return scanApp(rows)
+	return scanApp(row)
 }
 
 func (r *AppRepo) List() (interface{}, error) {
