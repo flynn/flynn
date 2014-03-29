@@ -31,6 +31,7 @@ func appHandler(db *sql.DB, cc clusterClient) http.Handler {
 
 	d := NewDB(db)
 
+	providerRepo := NewProviderRepo(d)
 	keyRepo := NewKeyRepo(d)
 	appRepo := NewAppRepo(d)
 	artifactRepo := NewArtifactRepo(d)
@@ -46,6 +47,7 @@ func appHandler(db *sql.DB, cc clusterClient) http.Handler {
 	getReleaseMiddleware := crud("releases", ct.Release{}, releaseRepo, r)
 	crud("artifacts", ct.Artifact{}, artifactRepo, r)
 	crud("keys", ct.Key{}, keyRepo, r)
+	crud("providers", ct.Provider{}, providerRepo, r)
 
 	r.Put("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getReleaseMiddleware, binding.Bind(ct.Formation{}), putFormation)
 	r.Get("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getFormationMiddleware, getFormation)

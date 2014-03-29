@@ -90,8 +90,7 @@ func (s *S) Get(path string, data interface{}) (*http.Response, error) {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		// TODO: error here
-		return res, nil
+		return res, fmt.Errorf("Unexpected status code %d", res.StatusCode)
 	}
 	return res, json.NewDecoder(res.Body).Decode(data)
 }
@@ -436,4 +435,46 @@ func (s *S) TestSetAppRelease(c *C) {
 	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(formations, HasLen, 1)
 	c.Assert(formations[0].ReleaseID, Equals, newRelease.ID)
+}
+
+func (s *S) createTestProvider(c *C, provider *ct.Provider) *ct.Provider {
+	res, err := s.Post("/providers", provider)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	out := &ct.Provider{}
+	err = json.NewDecoder(res.Body).Decode(out)
+	res.Body.Close()
+	c.Assert(err, IsNil)
+	return out
+}
+
+func (s *S) TestCreateProvider(c *C) {
+	provider := s.createTestProvider(c, &ct.Provider{URL: "https://example.com", Name: "foo"})
+	c.Assert(provider.Name, Equals, "foo")
+	c.Assert(provider.URL, Equals, "https://example.com")
+	c.Assert(provider.ID, Not(Equals), "")
+
+	gotProvider := &ct.Provider{}
+	res, err := s.Get("/providers/"+provider.ID, gotProvider)
+	c.Assert(err, IsNil)
+	c.Assert(gotProvider, DeepEquals, provider)
+
+	res, err = s.Get("/providers/"+provider.Name, gotProvider)
+	c.Assert(err, IsNil)
+	c.Assert(gotProvider, DeepEquals, provider)
+
+	res, err = s.Get("/apps/fail"+provider.ID, gotProvider)
+	c.Assert(res.StatusCode, Equals, 404)
+}
+
+func (s *S) TestProviderList(c *C) {
+	s.createTestProvider(c, &ct.Provider{URL: "https://example.org", Name: "list-test"})
+
+	var list []ct.Provider
+	res, err := s.Get("/providers", &list)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	c.Assert(len(list) > 0, Equals, true)
+	c.Assert(list[0].ID, Not(Equals), "")
 }

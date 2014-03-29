@@ -81,3 +81,11 @@ type Frontend struct {
 	HTTPDomain string `json:"http_domain,omitempty"`
 	Service    string `json:"service,omitempty"`
 }
+
+type Provider struct {
+	ID        string     `json:"id,omitempty"`
+	URL       string     `json:"url,omitempty"`
+	Name      string     `json:"name,omitempty"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}

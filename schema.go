@@ -101,6 +101,15 @@ BEGIN
     RETURN next_log_id;
 END
 $$ LANGUAGE plpgsql`,
+
+		`CREATE TABLE providers (
+    provider_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name text NOT NULL UNIQUE,
+    url text NOT NULL UNIQUE,
+    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    deleted_at timestamp with time zone
+)`,
 	)
 	return m.Migrate(db)
 }
