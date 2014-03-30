@@ -56,8 +56,8 @@ func appHandler(db *sql.DB, cc clusterClient) http.Handler {
 
 	r.Post("/apps/:apps_id/jobs", getAppMiddleware, binding.Bind(ct.NewJob{}), runJob)
 	r.Get("/apps/:apps_id/jobs", getAppMiddleware, jobList)
-	r.Delete("/apps/:apps_id/jobs/:job_id", getAppMiddleware, connectHostMiddleware, killJob)
-	r.Get("/apps/:apps_id/jobs/:job_id/log", getAppMiddleware, connectHostMiddleware, jobLog)
+	r.Delete("/apps/:apps_id/jobs/:jobs_id", getAppMiddleware, connectHostMiddleware, killJob)
+	r.Get("/apps/:apps_id/jobs/:jobs_id/log", getAppMiddleware, connectHostMiddleware, jobLog)
 
 	r.Put("/apps/:apps_id/release", getAppMiddleware, binding.Bind(releaseID{}), setAppRelease)
 	r.Get("/apps/:apps_id/release", getAppMiddleware, getAppRelease)

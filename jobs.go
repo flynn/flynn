@@ -50,7 +50,7 @@ func jobList(app *ct.App, cc clusterClient, r render.Render) {
 
 func jobLog(app *ct.App, params martini.Params, cluster cluster.Host, w http.ResponseWriter) {
 	attachReq := &host.AttachReq{
-		JobID: params["job_id"],
+		JobID: params["jobs_id"],
 		Flags: host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagLogs,
 	}
 	if _, ok := params["tail"]; ok {
@@ -66,7 +66,7 @@ func jobLog(app *ct.App, params martini.Params, cluster cluster.Host, w http.Res
 }
 
 func parseJobID(params martini.Params) (string, string) {
-	id := strings.SplitN(params["job_id"], ":", 2)
+	id := strings.SplitN(params["jobs_id"], ":", 2)
 	if len(id) != 2 || id[0] == "" || id[1] == "" {
 		return "", ""
 	}
@@ -78,7 +78,7 @@ func connectHostMiddleware(c martini.Context, params martini.Params, cl clusterC
 	if hostID == "" {
 		// TODO: error
 	}
-	params["job_id"] = jobID
+	params["jobs_id"] = jobID
 
 	client, err := cl.ConnectHost(hostID)
 	if err != nil {
@@ -91,7 +91,7 @@ func connectHostMiddleware(c martini.Context, params martini.Params, cl clusterC
 }
 
 func killJob(app *ct.App, params martini.Params, client cluster.Host) {
-	if err := client.StopJob(params["job_id"]); err != nil {
+	if err := client.StopJob(params["jobs_id"]); err != nil {
 		// TODO: 500/log error
 	}
 
