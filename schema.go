@@ -110,6 +110,25 @@ $$ LANGUAGE plpgsql`,
     updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
     deleted_at timestamp with time zone
 )`,
+
+		`CREATE TABLE resources (
+    resource_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    provider_id uuid NOT NULL REFERENCES providers (provider_id),
+    external_id text NOT NULL,
+    env hstore,
+    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    deleted_at timestamp with time zone,
+    UNIQUE (provider_id, external_id)
+)`,
+
+		`CREATE TABLE app_resources (
+    app_id uuid NOT NULL REFERENCES apps (app_id),
+    resource_id uuid NOT NULL REFERENCES resources (resource_id),
+    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    deleted_at timestamp with time zone,
+    PRIMARY KEY (app_id, resource_id)
+)`,
+		`CREATE INDEX ON app_resources (resource_id)`,
 	)
 	return m.Migrate(db)
 }

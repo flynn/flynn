@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -88,4 +89,18 @@ type Provider struct {
 	Name      string     `json:"name,omitempty"`
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}
+
+type Resource struct {
+	ID         string            `json:"id,omitempty"`
+	ProviderID string            `json:"provider_id,omitempty"`
+	ExternalID string            `json:"external_id,omitempty"`
+	Env        map[string]string `json:"env,omitempty"`
+	Apps       []string          `json:"apps,omitempty"`
+	CreatedAt  *time.Time        `json:"created_at,omitempty"`
+}
+
+type ResourceReq struct {
+	Apps   []string         `json:"apps,omitempty"`
+	Config *json.RawMessage `json:"config"`
 }

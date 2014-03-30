@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/codegangsta/martini"
 	"github.com/flynn/go-sql"
 
 	ct "github.com/flynn/flynn-controller/types"
@@ -23,6 +24,7 @@ func Test(t *testing.T) { TestingT(t) }
 type S struct {
 	cc  *fakeCluster
 	srv *httptest.Server
+	m   *martini.Martini
 }
 
 var _ = Suite(&S{})
@@ -59,7 +61,9 @@ func (s *S) SetUpSuite(c *C) {
 	}
 
 	s.cc = newFakeCluster()
-	s.srv = httptest.NewServer(appHandler(db, s.cc))
+	handler, m := appHandler(db, s.cc)
+	s.m = m
+	s.srv = httptest.NewServer(handler)
 }
 
 func (s *S) send(method, path string, data interface{}) (*http.Response, error) {

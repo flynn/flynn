@@ -7,6 +7,7 @@ import (
 
 	"github.com/codegangsta/martini"
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/go-flynn/resource"
 	"github.com/flynn/go-sql"
 	"github.com/flynn/rpcplus"
 	"github.com/martini-contrib/binding"
@@ -18,10 +19,11 @@ func main() {
 	if port == "" {
 		port = "3000"
 	}
-	http.ListenAndServe(":"+port, appHandler(nil, nil))
+	handler, _ := appHandler(nil, nil)
+	http.ListenAndServe(":"+port, handler)
 }
 
-func appHandler(db *sql.DB, cc clusterClient) http.Handler {
+func appHandler(db *sql.DB, cc clusterClient) (http.Handler, *martini.Martini) {
 	r := martini.NewRouter()
 	m := martini.New()
 	m.Use(martini.Logger())
@@ -33,10 +35,12 @@ func appHandler(db *sql.DB, cc clusterClient) http.Handler {
 
 	providerRepo := NewProviderRepo(d)
 	keyRepo := NewKeyRepo(d)
+	resourceRepo := NewResourceRepo(d)
 	appRepo := NewAppRepo(d)
 	artifactRepo := NewArtifactRepo(d)
 	releaseRepo := NewReleaseRepo(d)
 	formationRepo := NewFormationRepo(d, appRepo, releaseRepo, artifactRepo)
+	m.Map(resourceRepo)
 	m.Map(appRepo)
 	m.Map(artifactRepo)
 	m.Map(releaseRepo)
@@ -45,9 +49,9 @@ func appHandler(db *sql.DB, cc clusterClient) http.Handler {
 
 	getAppMiddleware := crud("apps", ct.App{}, appRepo, r)
 	getReleaseMiddleware := crud("releases", ct.Release{}, releaseRepo, r)
+	getProviderMiddleware := crud("providers", ct.Provider{}, providerRepo, r)
 	crud("artifacts", ct.Artifact{}, artifactRepo, r)
 	crud("keys", ct.Key{}, keyRepo, r)
-	crud("providers", ct.Provider{}, providerRepo, r)
 
 	r.Put("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getReleaseMiddleware, binding.Bind(ct.Formation{}), putFormation)
 	r.Get("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getFormationMiddleware, getFormation)
@@ -62,7 +66,12 @@ func appHandler(db *sql.DB, cc clusterClient) http.Handler {
 	r.Put("/apps/:apps_id/release", getAppMiddleware, binding.Bind(releaseID{}), setAppRelease)
 	r.Get("/apps/:apps_id/release", getAppMiddleware, getAppRelease)
 
-	return rpcMuxHandler(m, rpcHandler(formationRepo))
+	r.Post("/providers/:providers_id/resources", getProviderMiddleware, binding.Bind(ct.ResourceReq{}), resourceServerMiddleware, provisionResource)
+	r.Get("/providers/:providers_id/resources", getProviderMiddleware, getProviderResources)
+	r.Get("/providers/:providers_id/resources/:resources_id", getProviderMiddleware, getResourceMiddleware, getResource)
+	r.Get("/apps/:apps_id/resources", getAppMiddleware, getAppResources)
+
+	return rpcMuxHandler(m, rpcHandler(formationRepo)), m
 }
 
 func rpcMuxHandler(main http.Handler, rpch http.Handler) http.Handler {
@@ -178,4 +187,83 @@ func getAppRelease(app *ct.App, apps *AppRepo, r render.Render, w http.ResponseW
 		return
 	}
 	r.JSON(200, release)
+}
+
+func resourceServerMiddleware(c martini.Context, p *ct.Provider, dc resource.DiscoverdClient, w http.ResponseWriter) {
+	server, err := resource.NewServerWithDiscoverd(p.URL, dc)
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(500)
+		return
+	}
+	c.Map(server)
+	c.Next()
+	server.Close()
+}
+
+func provisionResource(rs *resource.Server, p *ct.Provider, req ct.ResourceReq, repo *ResourceRepo, r render.Render) {
+	var config []byte
+	if req.Config != nil {
+		config = *req.Config
+	} else {
+		config = []byte(`{}`)
+	}
+	data, err := rs.Provision(config)
+	if err != nil {
+		log.Println(err)
+		r.JSON(500, struct{}{})
+		return
+	}
+
+	res := &ct.Resource{
+		ProviderID: p.ID,
+		ExternalID: data.ID,
+		Env:        data.Env,
+		Apps:       req.Apps,
+	}
+	if err := repo.Add(res); err != nil {
+		// TODO: attempt to "rollback" provisioning
+		log.Println(err)
+		r.JSON(500, struct{}{})
+		return
+	}
+	r.JSON(200, res)
+}
+
+func getResourceMiddleware(c martini.Context, params martini.Params, repo *ResourceRepo, w http.ResponseWriter) {
+	resource, err := repo.Get(params["resources_id"])
+	if err != nil {
+		if err == ErrNotFound {
+			w.WriteHeader(404)
+			return
+		}
+		log.Println(err)
+		w.WriteHeader(500)
+		return
+	}
+	c.Map(resource)
+}
+
+func getResource(resource *ct.Resource, r render.Render) {
+	r.JSON(200, resource)
+}
+
+func getProviderResources(p *ct.Provider, repo *ResourceRepo, r render.Render) {
+	res, err := repo.ProviderList(p.ID)
+	if err != nil {
+		log.Println(err)
+		r.JSON(500, struct{}{})
+		return
+	}
+	r.JSON(200, res)
+}
+
+func getAppResources(app *ct.App, repo *ResourceRepo, r render.Render) {
+	res, err := repo.AppList(app.ID)
+	if err != nil {
+		log.Println(err)
+		r.JSON(500, struct{}{})
+		return
+	}
+	r.JSON(200, res)
 }
