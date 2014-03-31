@@ -319,6 +319,7 @@ func (s *S) TestAddHTTPDomain(c *C) {
 
 	fe, err := s.newHTTPFrontend()
 	c.Assert(err, IsNil)
+	defer fe.Close()
 
 	err = fe.AddHTTPDomain("example.com", "test", nil, nil)
 	c.Assert(err, IsNil)
