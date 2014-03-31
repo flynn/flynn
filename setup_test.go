@@ -293,7 +293,7 @@ func httpTestHandler(id string) http.Handler {
 	})
 }
 
-func (s *S) newHTTPFrontend(etcd *fakeEtcd) (*HTTPFrontend, *fakeDiscoverd, error) {
+func newHTTPFrontend(etcd *fakeEtcd) (*HTTPFrontend, *fakeDiscoverd, error) {
 	discoverd := newFakeDiscoverd()
 	if etcd == nil {
 		etcd = newFakeEtcd()

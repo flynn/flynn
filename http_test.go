@@ -14,7 +14,7 @@ func (s *S) TestAddHTTPDomain(c *C) {
 	defer srv1.Close()
 	defer srv2.Close()
 
-	fe, discoverd, err := s.newHTTPFrontend(nil)
+	fe, discoverd, err := newHTTPFrontend(nil)
 	c.Assert(err, IsNil)
 	defer fe.Close()
 
@@ -62,12 +62,16 @@ func assertGet(c *C, addr, path, host, expected string) {
 
 func (s *S) TestInitialSync(c *C) {
 	etcd := newFakeEtcd()
-	etcd.Create("/strowger/http/example.com/service", "test", 0)
+	fe, _, err := newHTTPFrontend(etcd)
+	c.Assert(err, IsNil)
+	err = fe.AddHTTPDomain("example.com", "test", nil, nil)
+	c.Assert(err, IsNil)
+	fe.Close()
 
 	srv := httptest.NewServer(httpTestHandler("1"))
 	defer srv.Close()
 
-	fe, discoverd, err := s.newHTTPFrontend(etcd)
+	fe, discoverd, err := newHTTPFrontend(etcd)
 	c.Assert(err, IsNil)
 	defer fe.Close()
 
