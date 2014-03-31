@@ -283,17 +283,9 @@ func (s *fakeServiceSet) Close() error { return nil }
 // Hook gocheck up to the "go test" runner
 func Test(t *testing.T) { TestingT(t) }
 
-type S struct {
-	etcd      *fakeEtcd
-	discoverd *fakeDiscoverd
-}
+type S struct{}
 
 var _ = Suite(&S{})
-
-func (s *S) SetUpSuite(c *C) {
-	s.etcd = newFakeEtcd()
-	s.discoverd = newFakeDiscoverd()
-}
 
 func httpTestHandler(id string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -301,7 +293,11 @@ func httpTestHandler(id string) http.Handler {
 	})
 }
 
-func (s *S) newHTTPFrontend() (*HTTPFrontend, error) {
-	fe := NewHTTPFrontend("127.0.0.1:0", "127.0.0.1:0", s.etcd, s.discoverd)
-	return fe, fe.Start()
+func (s *S) newHTTPFrontend(etcd *fakeEtcd) (*HTTPFrontend, *fakeDiscoverd, error) {
+	discoverd := newFakeDiscoverd()
+	if etcd == nil {
+		etcd = newFakeEtcd()
+	}
+	fe := NewHTTPFrontend("127.0.0.1:0", "127.0.0.1:0", etcd, discoverd)
+	return fe, discoverd, fe.Start()
 }

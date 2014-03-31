@@ -266,7 +266,6 @@ func etcdFindChild(node *etcd.Node, name string) *etcd.Node {
 outer:
 	for _, part := range parts {
 		for _, childNode := range node.Nodes {
-			fmt.Println(part, parts, childNode)
 			if path.Base(childNode.Key) == part {
 				node = childNode
 				continue outer
