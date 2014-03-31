@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/go-discoverd"
+	"github.com/flynn/go-etcd/etcd"
 	rpc "github.com/flynn/rpcplus/comborpc"
 )
 
@@ -17,9 +17,7 @@ type Server struct {
 }
 
 func (s *Server) ListenAndServe(quit <-chan struct{}) {
-	go s.HTTPFrontend.serve()
-	go s.HTTPFrontend.serveTLS()
-	go s.HTTPFrontend.syncDatabase()
+	s.HTTPFrontend.Start()
 	<-quit
 	// TODO: unregister from service discovery
 	// TODO: stop frontends gracefully

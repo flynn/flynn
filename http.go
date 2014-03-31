@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/go-discoverd"
+	"github.com/flynn/go-etcd/etcd"
 	"github.com/inconshreveable/go-vhost"
 )
 
@@ -36,6 +36,11 @@ type HTTPFrontend struct {
 
 	etcd      EtcdClient
 	discoverd DiscoverdClient
+
+	listener    net.Listener
+	tlsListener net.Listener
+	stopSync    chan bool
+	closed      bool
 }
 
 type EtcdClient interface {
@@ -58,10 +63,58 @@ func NewHTTPFrontend(addr, tlsAddr string, etcdc EtcdClient, discoverdc Discover
 		discoverd:  discoverdc,
 		domains:    make(map[string]*domain),
 		services:   make(map[string]*httpServer),
+		stopSync:   make(chan bool),
 	}
 }
 
+func (s *HTTPFrontend) Close() error {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	for _, server := range s.services {
+		server.services.Close()
+	}
+	s.listener.Close()
+	s.tlsListener.Close()
+	close(s.stopSync)
+	s.closed = true
+	return nil
+}
+
+func (s *HTTPFrontend) Start() error {
+	started := make(chan error)
+
+	go s.syncDatabase(started)
+	if err := <-started; err != nil {
+		return err
+	}
+
+	go s.serve(started)
+	if err := <-started; err != nil {
+		close(s.stopSync)
+		return err
+	}
+	s.Addr = s.listener.Addr().String()
+
+	go s.serveTLS(started)
+	if err := <-started; err != nil {
+		close(s.stopSync)
+		s.listener.Close()
+		return err
+	}
+	s.TLSAddr = s.tlsListener.Addr().String()
+
+	return nil
+}
+
+var ErrClosed = errors.New("strowger: frontend has been closed")
+
 func (s *HTTPFrontend) AddHTTPDomain(domain string, service string, cert []byte, key []byte) error {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	if s.closed {
+		return ErrClosed
+	}
+
 	var err error
 	if _, err = s.etcd.Create(s.etcdPrefix+domain+"/service", service, 0); err != nil {
 		goto error
@@ -83,6 +136,12 @@ error:
 }
 
 func (s *HTTPFrontend) RemoveHTTPDomain(domain string) error {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	if s.closed {
+		return ErrClosed
+	}
+
 	if _, err := s.etcd.Delete(s.etcdPrefix+domain, true); err != nil {
 		if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
 			return ErrNoSuchDomain
@@ -139,7 +198,7 @@ func (s *HTTPFrontend) setDomainService(d *domain, service string) error {
 		if d.server.refs <= 0 {
 			err := d.server.services.Close()
 			if err != nil {
-				log.Println("Error closing the discoverd connetion for ", d.server.name, err)
+				log.Println("Error closing the discoverd connection for ", d.server.name, err)
 			}
 			delete(s.services, d.server.name)
 		}
@@ -147,7 +206,7 @@ func (s *HTTPFrontend) setDomainService(d *domain, service string) error {
 
 	var server *httpServer
 	if service != "" {
-		server := s.services[service]
+		server = s.services[service]
 		if server == nil {
 			services, err := s.discoverd.NewServiceSet(service)
 			if err != nil {
@@ -207,8 +266,9 @@ func etcdFindChild(node *etcd.Node, name string) *etcd.Node {
 outer:
 	for _, part := range parts {
 		for _, childNode := range node.Nodes {
+			fmt.Println(part, parts, childNode)
 			if path.Base(childNode.Key) == part {
-				node = &childNode
+				node = childNode
 				continue outer
 			}
 		}
@@ -218,7 +278,7 @@ outer:
 	return node
 }
 
-func (s *HTTPFrontend) syncDatabase() {
+func (s *HTTPFrontend) syncDatabase(started chan<- error) {
 	var since uint64
 	data, err := s.etcd.Get(s.etcdPrefix, false, true)
 	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
@@ -226,7 +286,7 @@ func (s *HTTPFrontend) syncDatabase() {
 		goto watch
 	}
 	if err != nil {
-		log.Fatal(err)
+		started <- err
 		return
 	}
 	since = data.EtcdIndex
@@ -238,43 +298,45 @@ func (s *HTTPFrontend) syncDatabase() {
 
 		d, err := s.addDomain(domain)
 		if err != nil {
-			log.Fatal(err)
+			started <- err
+			return
 		}
 
 		// Find the individual (service name, ssl info)
-		serviceNode := etcdFindChild(&node, "service")
+		serviceNode := etcdFindChild(node, "service")
 		if serviceNode != nil {
 			err = s.setDomainService(d, serviceNode.Value)
 			if err != nil {
-				log.Fatal(err)
+				started <- err
+				return
 			}
 		}
 
 		var cert, key []byte
-		certNode := etcdFindChild(&node, "tls/cert")
+		certNode := etcdFindChild(node, "tls/cert")
 		if certNode != nil && certNode.Value != "" {
 			cert = []byte(certNode.Value)
 		}
-		keyNode := etcdFindChild(&node, "tls/key")
+		keyNode := etcdFindChild(node, "tls/key")
 		if keyNode != nil && keyNode.Value != "" {
 			key = []byte(keyNode.Value)
 		}
 		err = s.setDomainTLSConfig(d, cert, key)
 		if err != nil {
-			log.Fatal(err)
+			started <- err
+			return
 		}
 	}
 
 watch:
+	started <- nil
 	stream := make(chan *etcd.Response)
-	stop := make(chan bool)
-	// TODO: store stop
-	go s.etcd.Watch(s.etcdPrefix, since, true, stream, stop)
+	go s.etcd.Watch(s.etcdPrefix, since, true, stream, s.stopSync)
 	for res := range stream {
 		keyRelToBase := res.Node.Key[len(s.etcdPrefix):]
 		parts := strings.SplitN(keyRelToBase, "/", 2)
 		domain := parts[0]
-		key := ""
+		var key string
 		if len(parts) == 2 {
 			key = parts[1]
 		}
@@ -284,38 +346,37 @@ watch:
 			// Directory for a domain was removed
 			err = s.removeDomain(domain)
 		} else {
-			var value *string
+			value := res.Node.Value
 			if res.Action == "delete" {
-				value = nil
-			} else {
-				value = &res.Node.Value
+				value = ""
 			}
 
 			d, _ := s.addDomain(domain)
-			if key == "service" {
-				err = s.setDomainService(d, *value)
-			} else if key == "tls/key" {
-				err = s.setDomainTLSConfig(d, nil, []byte(*value))
-			} else if key == "tls/cert" {
-				err = s.setDomainTLSConfig(d, []byte(*value), nil)
+			switch key {
+			case "service":
+				err = s.setDomainService(d, value)
+			case "tls/key":
+				err = s.setDomainTLSConfig(d, nil, []byte(value))
+			case "tls/cert":
+				err = s.setDomainTLSConfig(d, []byte(value), nil)
 			}
 		}
 
 		if err != nil {
 			panic(fmt.Sprintf("Error while processing update from etcd: %s", err))
 		}
-
 	}
 }
 
-func (s *HTTPFrontend) serve() {
-	l, err := net.Listen("tcp", s.Addr)
+func (s *HTTPFrontend) serve(started chan<- error) {
+	var err error
+	s.listener, err = net.Listen("tcp", s.Addr)
+	started <- err
 	if err != nil {
-		// TODO: log error
 		return
 	}
 	for {
-		conn, err := l.Accept()
+		conn, err := s.listener.Accept()
 		if err != nil {
 			// TODO: log error
 			break
@@ -324,14 +385,15 @@ func (s *HTTPFrontend) serve() {
 	}
 }
 
-func (s *HTTPFrontend) serveTLS() {
-	l, err := net.Listen("tcp", s.TLSAddr)
+func (s *HTTPFrontend) serveTLS(started chan<- error) {
+	var err error
+	s.tlsListener, err = net.Listen("tcp", s.TLSAddr)
+	started <- err
 	if err != nil {
-		// TODO: log error
 		return
 	}
 	for {
-		conn, err := l.Accept()
+		conn, err := s.tlsListener.Accept()
 		if err != nil {
 			// TODO: log error
 			break
