@@ -15,7 +15,7 @@ import (
 	"github.com/flynn/discoverd/agent"
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-etcd/etcd"
-	. "launchpad.net/gocheck"
+	. "github.com/titanous/gocheck"
 )
 
 func newFakeEtcd() *fakeEtcd {
