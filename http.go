@@ -195,7 +195,7 @@ func (s *HTTPListener) addDomain(name string) (*route, error) {
 	r := &route{domain: name}
 	s.domains[name] = r
 	log.Println("Adding domain", r.domain)
-	s.sendEvent(&strowger.Event{Event: "add", Domain: r.domain})
+	go s.sendEvent(&strowger.Event{Event: "add", Domain: r.domain})
 	return r, nil
 }
 
@@ -217,7 +217,7 @@ func (s *HTTPListener) removeDomain(name string) error {
 	defer s.mtx.Unlock()
 	delete(s.domains, name)
 	log.Println("Removing domain", name)
-	s.sendEvent(&strowger.Event{Event: "remove", Domain: name})
+	go s.sendEvent(&strowger.Event{Event: "remove", Domain: name})
 	return nil
 }
 
@@ -253,7 +253,7 @@ func (s *HTTPListener) setDomainService(r *route, serviceName string) error {
 
 	r.service = service
 	log.Println("Setting service of domain", r.domain, "to", service)
-	s.sendEvent(&strowger.Event{Event: "update", Domain: r.domain})
+	go s.sendEvent(&strowger.Event{Event: "update", Domain: r.domain})
 	return nil
 }
 
@@ -289,7 +289,7 @@ func (s *HTTPListener) setDomainTLSConfig(r *route, cert []byte, key []byte) err
 			log.Println("Removing SSL config of domain", r.domain)
 		}
 	}
-	s.sendEvent(&strowger.Event{Event: "update", Domain: r.domain})
+	go s.sendEvent(&strowger.Event{Event: "update", Domain: r.domain})
 	return nil
 }
 
