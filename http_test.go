@@ -14,17 +14,17 @@ func (s *S) TestAddHTTPDomain(c *C) {
 	defer srv1.Close()
 	defer srv2.Close()
 
-	fe, discoverd, err := newHTTPFrontend(nil)
+	l, discoverd, err := newHTTPListener(nil)
 	c.Assert(err, IsNil)
-	defer fe.Close()
+	defer l.Close()
 
 	discoverd.Register("test", srv1.Listener.Addr().String())
 	defer discoverd.UnregisterAll()
 
-	err = fe.AddHTTPDomain("example.com", "test", nil, nil)
+	err = l.AddHTTPDomain("example.com", "test", nil, nil)
 	c.Assert(err, IsNil)
 
-	assertGet(c, fe.Addr, "/", "example.com", "1")
+	assertGet(c, l.Addr, "/", "example.com", "1")
 
 	discoverd.Unregister("test", srv1.Listener.Addr().String())
 	discoverd.Register("test", srv2.Listener.Addr().String())
@@ -32,13 +32,13 @@ func (s *S) TestAddHTTPDomain(c *C) {
 	// Close the connection we just used to trigger a new backend choice
 	http.DefaultTransport.(*http.Transport).CloseIdleConnections()
 
-	assertGet(c, fe.Addr, "/", "example.com", "2")
+	assertGet(c, l.Addr, "/", "example.com", "2")
 
-	err = fe.RemoveHTTPDomain("example.com")
+	err = l.RemoveHTTPDomain("example.com")
 	c.Assert(err, IsNil)
 	http.DefaultTransport.(*http.Transport).CloseIdleConnections()
 
-	res, err := http.DefaultClient.Do(newReq(fe.Addr, "/", "example.com"))
+	res, err := http.DefaultClient.Do(newReq(l.Addr, "/", "example.com"))
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 404)
 	res.Body.Close()
@@ -62,21 +62,21 @@ func assertGet(c *C, addr, path, host, expected string) {
 
 func (s *S) TestInitialSync(c *C) {
 	etcd := newFakeEtcd()
-	fe, _, err := newHTTPFrontend(etcd)
+	l, _, err := newHTTPListener(etcd)
 	c.Assert(err, IsNil)
-	err = fe.AddHTTPDomain("example.com", "test", nil, nil)
+	err = l.AddHTTPDomain("example.com", "test", nil, nil)
 	c.Assert(err, IsNil)
-	fe.Close()
+	l.Close()
 
 	srv := httptest.NewServer(httpTestHandler("1"))
 	defer srv.Close()
 
-	fe, discoverd, err := newHTTPFrontend(etcd)
+	l, discoverd, err := newHTTPListener(etcd)
 	c.Assert(err, IsNil)
-	defer fe.Close()
+	defer l.Close()
 
 	discoverd.Register("test", srv.Listener.Addr().String())
 	defer discoverd.UnregisterAll()
 
-	assertGet(c, fe.Addr, "/", "example.com", "1")
+	assertGet(c, l.Addr, "/", "example.com", "1")
 }

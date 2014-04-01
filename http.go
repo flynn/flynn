@@ -23,14 +23,14 @@ import (
 	"github.com/inconshreveable/go-vhost"
 )
 
-type HTTPFrontend struct {
+type HTTPListener struct {
 	Addr      string
 	TLSAddr   string
 	TLSConfig *tls.Config
 
 	mtx      sync.RWMutex
-	domains  map[string]*domain
-	services map[string]*httpServer
+	domains  map[string]*route
+	services map[string]*httpService
 
 	etcdPrefix string
 
@@ -54,24 +54,24 @@ type DiscoverdClient interface {
 	NewServiceSet(string) (discoverd.ServiceSet, error)
 }
 
-func NewHTTPFrontend(addr, tlsAddr string, etcdc EtcdClient, discoverdc DiscoverdClient) *HTTPFrontend {
-	return &HTTPFrontend{
+func NewHTTPListener(addr, tlsAddr string, etcdc EtcdClient, discoverdc DiscoverdClient) *HTTPListener {
+	return &HTTPListener{
 		Addr:       addr,
 		TLSAddr:    tlsAddr,
 		etcd:       etcdc,
 		etcdPrefix: "/strowger/http/",
 		discoverd:  discoverdc,
-		domains:    make(map[string]*domain),
-		services:   make(map[string]*httpServer),
+		domains:    make(map[string]*route),
+		services:   make(map[string]*httpService),
 		stopSync:   make(chan bool),
 	}
 }
 
-func (s *HTTPFrontend) Close() error {
+func (s *HTTPListener) Close() error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	for _, server := range s.services {
-		server.services.Close()
+	for _, service := range s.services {
+		service.ss.Close()
 	}
 	s.listener.Close()
 	s.tlsListener.Close()
@@ -80,7 +80,7 @@ func (s *HTTPFrontend) Close() error {
 	return nil
 }
 
-func (s *HTTPFrontend) Start() error {
+func (s *HTTPListener) Start() error {
 	started := make(chan error)
 
 	go s.syncDatabase(started)
@@ -106,9 +106,9 @@ func (s *HTTPFrontend) Start() error {
 	return nil
 }
 
-var ErrClosed = errors.New("strowger: frontend has been closed")
+var ErrClosed = errors.New("strowger: listener has been closed")
 
-func (s *HTTPFrontend) AddHTTPDomain(domain string, service string, cert []byte, key []byte) error {
+func (s *HTTPListener) AddHTTPDomain(domain string, service string, cert []byte, key []byte) error {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	if s.closed {
@@ -135,7 +135,7 @@ error:
 	return err
 }
 
-func (s *HTTPFrontend) RemoveHTTPDomain(domain string) error {
+func (s *HTTPListener) RemoveHTTPDomain(domain string) error {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	if s.closed {
@@ -154,7 +154,7 @@ func (s *HTTPFrontend) RemoveHTTPDomain(domain string) error {
 var ErrDomainExists = errors.New("strowger: domain exists")
 var ErrNoSuchDomain = errors.New("strowger: domain does not exist")
 
-func (s *HTTPFrontend) addDomain(name string) (*domain, error) {
+func (s *HTTPListener) addDomain(name string) (*route, error) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -162,13 +162,13 @@ func (s *HTTPFrontend) addDomain(name string) (*domain, error) {
 		return d, ErrDomainExists
 	}
 
-	domainCfg := &domain{name: name}
-	s.domains[name] = domainCfg
-	log.Println("Adding domain", domainCfg.name)
-	return domainCfg, nil
+	r := &route{domain: name}
+	s.domains[name] = r
+	log.Println("Adding domain", r.domain)
+	return r, nil
 }
 
-func (s *HTTPFrontend) removeDomain(name string) error {
+func (s *HTTPListener) removeDomain(name string) error {
 	s.mtx.Lock()
 	d, ok := s.domains[name]
 	if !ok {
@@ -189,57 +189,57 @@ func (s *HTTPFrontend) removeDomain(name string) error {
 	return nil
 }
 
-func (s *HTTPFrontend) setDomainService(d *domain, service string) error {
+func (s *HTTPListener) setDomainService(r *route, serviceName string) error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	if d.server != nil {
-		d.server.refs--
-		if d.server.refs <= 0 {
-			err := d.server.services.Close()
+	if r.service != nil {
+		r.service.refs--
+		if r.service.refs <= 0 {
+			err := r.service.ss.Close()
 			if err != nil {
-				log.Println("Error closing the discoverd connection for ", d.server.name, err)
+				log.Println("Error closing the discoverd connection for ", r.service.name, err)
 			}
-			delete(s.services, d.server.name)
+			delete(s.services, r.service.name)
 		}
 	}
 
-	var server *httpServer
-	if service != "" {
-		server = s.services[service]
-		if server == nil {
-			services, err := s.discoverd.NewServiceSet(service)
+	var service *httpService
+	if serviceName != "" {
+		service = s.services[serviceName]
+		if service == nil {
+			ss, err := s.discoverd.NewServiceSet(serviceName)
 			if err != nil {
 				return err
 			}
-			server = &httpServer{name: service, services: services}
+			service = &httpService{name: serviceName, ss: ss}
 		}
 
-		server.refs++
-		s.services[service] = server
+		service.refs++
+		s.services[serviceName] = service
 	}
 
-	d.server = server
-	log.Println("Setting service of domain", d.name, "to", service)
+	r.service = service
+	log.Println("Setting service of domain", r.domain, "to", service)
 	return nil
 }
 
 // Set either of or both cert and key. The TLS config is complete when both have
 // been provided. Pass nil to indicate the value should not change. Pass an empty
 // byte array to clear the value.
-func (s *HTTPFrontend) setDomainTLSConfig(d *domain, cert []byte, key []byte) error {
+func (s *HTTPListener) setDomainTLSConfig(r *route, cert []byte, key []byte) error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
 	if cert != nil {
-		d.cert = cert
+		r.cert = cert
 	}
 	if key != nil {
-		d.key = key
+		r.key = key
 	}
 
 	// Once both key and cert have been set, parse and validate
-	if len(d.cert) > 0 && len(d.key) > 0 {
+	if len(r.cert) > 0 && len(r.key) > 0 {
 		var keypair *tls.Certificate
 		if cert != nil && key != nil {
 			created, err := tls.X509KeyPair(cert, key)
@@ -248,12 +248,12 @@ func (s *HTTPFrontend) setDomainTLSConfig(d *domain, cert []byte, key []byte) er
 			}
 			keypair = &created
 		}
-		d.keypair = keypair
-		log.Println("Setting SSL config of domain", d.name)
+		r.keypair = keypair
+		log.Println("Setting SSL config of domain", r.domain)
 	} else {
-		if d.keypair != nil {
-			d.keypair = nil
-			log.Println("Removing SSL config of domain", d.name)
+		if r.keypair != nil {
+			r.keypair = nil
+			log.Println("Removing SSL config of domain", r.domain)
 		}
 	}
 	return nil
@@ -277,7 +277,7 @@ outer:
 	return node
 }
 
-func (s *HTTPFrontend) syncDatabase(started chan<- error) {
+func (s *HTTPListener) syncDatabase(started chan<- error) {
 	var since uint64
 	data, err := s.etcd.Get(s.etcdPrefix, false, true)
 	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
@@ -367,7 +367,7 @@ watch:
 	}
 }
 
-func (s *HTTPFrontend) serve(started chan<- error) {
+func (s *HTTPListener) serve(started chan<- error) {
 	var err error
 	s.listener, err = net.Listen("tcp", s.Addr)
 	started <- err
@@ -384,7 +384,7 @@ func (s *HTTPFrontend) serve(started chan<- error) {
 	}
 }
 
-func (s *HTTPFrontend) serveTLS(started chan<- error) {
+func (s *HTTPListener) serveTLS(started chan<- error) {
 	var err error
 	s.tlsListener, err = net.Listen("tcp", s.TLSAddr)
 	started <- err
@@ -401,7 +401,7 @@ func (s *HTTPFrontend) serveTLS(started chan<- error) {
 	}
 }
 
-func (s *HTTPFrontend) findBackendForHost(host string) *domain {
+func (s *HTTPListener) findRouteForHost(host string) *route {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	// TODO: handle wildcard domains
@@ -423,10 +423,10 @@ func fail(sc *httputil.ServerConn, req *http.Request, code int, msg string) {
 	sc.Write(req, resp)
 }
 
-func (s *HTTPFrontend) handle(conn net.Conn, isTLS bool) {
+func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 	defer conn.Close()
 
-	var backend *domain
+	var r *route
 
 	// For TLS, use the SNI hello to determine the domain.
 	// At this stage, if we don't find a match, we simply
@@ -442,17 +442,17 @@ func (s *HTTPFrontend) handle(conn net.Conn, isTLS bool) {
 		log.Println("SNI host is:", host)
 
 		// Find a backend for the key
-		backend = s.findBackendForHost(host)
-		if backend == nil {
+		r = s.findRouteForHost(host)
+		if r == nil {
 			return
 		}
-		if backend.keypair == nil {
+		if r.keypair == nil {
 			log.Println("Cannot serve TLS, no certificate defined for this domain")
 			return
 		}
 
 		// Init a TLS decryptor
-		tlscfg := &tls.Config{Certificates: []tls.Certificate{*backend.keypair}}
+		tlscfg := &tls.Config{Certificates: []tls.Certificate{*r.keypair}}
 		conn = tls.Server(vhostConn, tlscfg)
 	}
 
@@ -468,29 +468,29 @@ func (s *HTTPFrontend) handle(conn net.Conn, isTLS bool) {
 
 	// If we do not have a backend yet (unencrypted connection),
 	// look at the host header to find one or 404 out.
-	if backend == nil {
-		backend = s.findBackendForHost(req.Host)
-		log.Println(req, backend)
-		if backend == nil {
+	if r == nil {
+		r = s.findRouteForHost(req.Host)
+		log.Println(req, r)
+		if r == nil {
 			fail(sc, req, 404, "Not Found")
 			return
 		}
 	}
 
-	if backend.server == nil {
-		log.Println("Matching frontend is not configured yet")
+	if r.service == nil {
+		log.Println("Matching service is not configured yet")
 		fail(sc, req, 404, "Not Found")
 		return
 	}
 
-	backend.server.handle(req, sc, isTLS)
+	r.service.handle(req, sc, isTLS)
 }
 
-// A domain served by a frontend, associated TLS certs,
+// A domain served by a listener, associated TLS certs,
 // and link to backend service set.
-type domain struct {
-	name   string
-	server *httpServer
+type route struct {
+	domain  string
+	service *httpService
 	// Keypair created from cert/byte when both are available
 	cert    []byte
 	key     []byte
@@ -498,14 +498,14 @@ type domain struct {
 }
 
 // A service definition: name, and set of backends.
-type httpServer struct {
-	name     string
-	services discoverd.ServiceSet
-	refs     int
+type httpService struct {
+	name string
+	ss   discoverd.ServiceSet
+	refs int
 }
 
-func (s *httpServer) getBackend() *httputil.ClientConn {
-	for _, addr := range shuffle(s.services.Addrs()) {
+func (s *httpService) getBackend() *httputil.ClientConn {
+	for _, addr := range shuffle(s.ss.Addrs()) {
 		// TODO: set connection timeout
 		backend, err := net.Dial("tcp", addr)
 		if err != nil {
@@ -521,7 +521,7 @@ func (s *httpServer) getBackend() *httputil.ClientConn {
 	return nil
 }
 
-func (s *httpServer) handle(req *http.Request, sc *httputil.ServerConn, tls bool) {
+func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls bool) {
 	req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
 	backend := s.getBackend()
 	if backend == nil {

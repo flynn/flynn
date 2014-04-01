@@ -21,7 +21,7 @@ func New() (Client, error) {
 }
 
 type Client interface {
-	AddFrontend(config *strowger.Config) error
+	AddRoute(config *strowger.Config) error
 	Close() error
 }
 
@@ -29,8 +29,8 @@ type client struct {
 	c *rpcplus.Client
 }
 
-func (c *client) AddFrontend(config *strowger.Config) error {
-	return c.c.Call("Router.AddFrontend", config, &struct{}{})
+func (c *client) AddRoute(config *strowger.Config) error {
+	return c.c.Call("Router.AddRoute", config, &struct{}{})
 }
 
 func (c *client) Close() error {

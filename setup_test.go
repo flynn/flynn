@@ -293,11 +293,11 @@ func httpTestHandler(id string) http.Handler {
 	})
 }
 
-func newHTTPFrontend(etcd *fakeEtcd) (*HTTPFrontend, *fakeDiscoverd, error) {
+func newHTTPListener(etcd *fakeEtcd) (*HTTPListener, *fakeDiscoverd, error) {
 	discoverd := newFakeDiscoverd()
 	if etcd == nil {
 		etcd = newFakeEtcd()
 	}
-	fe := NewHTTPFrontend("127.0.0.1:0", "127.0.0.1:0", etcd, discoverd)
-	return fe, discoverd, fe.Start()
+	l := NewHTTPListener("127.0.0.1:0", "127.0.0.1:0", etcd, discoverd)
+	return l, discoverd, l.Start()
 }

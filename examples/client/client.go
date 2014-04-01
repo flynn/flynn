@@ -8,10 +8,10 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/flynn/rpcplus"
 	"github.com/flynn/strowger/types"
-	"strings"
 )
 
 func main() {
@@ -50,13 +50,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	frontendConfig := &strowger.Config{
+	conf := &strowger.Config{
 		Service:    serviceName,
 		HTTPDomain: domain,
 		HTTPSCert:  tlsCert,
 		HTTPSKey:   tlsKey,
 	}
-	err = client.Call("Router.AddFrontend", frontendConfig, &struct{}{})
+	err = client.Call("Router.AddRoute", conf, &struct{}{})
 	if err != nil {
 		log.Fatal(err)
 	}
