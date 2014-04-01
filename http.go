@@ -252,7 +252,7 @@ func (s *HTTPListener) setDomainService(r *route, serviceName string) error {
 	}
 
 	r.service = service
-	log.Println("Setting service of domain", r.domain, "to", service)
+	log.Println("Setting service of domain", r.domain, "to", serviceName)
 	go s.sendEvent(&strowger.Event{Event: "update", Domain: r.domain})
 	return nil
 }
@@ -273,15 +273,13 @@ func (s *HTTPListener) setDomainTLSConfig(r *route, cert []byte, key []byte) err
 
 	// Once both key and cert have been set, parse and validate
 	if len(r.cert) > 0 && len(r.key) > 0 {
-		var keypair *tls.Certificate
-		if cert != nil && key != nil {
-			created, err := tls.X509KeyPair(cert, key)
-			if err != nil {
-				return err
-			}
-			keypair = &created
+		kp, err := tls.X509KeyPair(r.cert, r.key)
+		if err != nil {
+			return err
 		}
-		r.keypair = keypair
+		r.keypair = &kp
+		r.cert = nil
+		r.key = nil
 		log.Println("Setting SSL config of domain", r.domain)
 	} else {
 		if r.keypair != nil {
@@ -439,9 +437,8 @@ func (s *HTTPListener) findRouteForHost(host string) *route {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	// TODO: handle wildcard domains
-	log.Println(s.domains, host)
 	backend := s.domains[host]
-	log.Println("Backend match:", backend)
+	log.Printf("Backend match: %#v\n", backend)
 	return backend
 }
 
@@ -504,7 +501,6 @@ func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 	// look at the host header to find one or 404 out.
 	if r == nil {
 		r = s.findRouteForHost(req.Host)
-		log.Println(req, r)
 		if r == nil {
 			fail(sc, req, 404, "Not Found")
 			return

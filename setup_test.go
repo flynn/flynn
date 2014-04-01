@@ -47,7 +47,7 @@ type watchConfig struct {
 
 func (e *fakeEtcd) watcher() {
 	for r := range e.ch {
-		go func() {
+		go func(r *etcd.Response) {
 			e.watchesMtx.RLock()
 			defer e.watchesMtx.RUnlock()
 			for ch, conf := range e.watches {
@@ -63,7 +63,7 @@ func (e *fakeEtcd) watcher() {
 					}
 				}
 			}
-		}()
+		}(r)
 	}
 }
 
@@ -304,24 +304,30 @@ func newHTTPListener(etcd *fakeEtcd) (*HTTPListener, *fakeDiscoverd, error) {
 
 const waitTimeout = time.Second
 
-func waitForEvent(c *C, l *HTTPListener, event string, domain string) {
+func waitForEvent(c *C, l *HTTPListener, event string, domain string, n int) func() {
 	ch := make(chan *strowger.Event)
 	l.Watch(ch)
-	defer l.Unwatch(ch)
-	start := time.Now()
-	for {
-		timeout := waitTimeout - time.Now().Sub(start)
-		if timeout <= 0 {
-			break
-		}
-		select {
-		case e := <-ch:
-			if e.Event == event && e.Domain == domain {
-				return
+	return func() {
+		defer l.Unwatch(ch)
+		start := time.Now()
+		var i int
+		for {
+			timeout := waitTimeout - time.Now().Sub(start)
+			if timeout <= 0 {
+				break
 			}
-		case <-time.After(timeout):
-			break
+			select {
+			case e := <-ch:
+				if e.Event == event && e.Domain == domain {
+					i++
+					if i == n {
+						return
+					}
+				}
+			case <-time.After(timeout):
+				break
+			}
 		}
+		c.Errorf("timeout exceeded waiting for %s %s", event, domain)
 	}
-	c.Errorf("timeout exceeded waiting for %s %s", event, domain)
 }

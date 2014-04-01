@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -21,39 +23,43 @@ func (s *S) TestAddHTTPDomain(c *C) {
 	discoverd.Register("test", srv1.Listener.Addr().String())
 	defer discoverd.UnregisterAll()
 
-	err = l.AddHTTPDomain("example.com", "test", nil, nil)
+	wait := waitForEvent(c, l, "update", "example.com", 3)
+	err = l.AddHTTPDomain("example.com", "test", localhostCert, localhostKey)
 	c.Assert(err, IsNil)
-	waitForEvent(c, l, "add", "example.com")
+	wait()
 
-	assertGet(c, l.Addr, "/", "example.com", "1")
+	assertGet(c, "http://"+l.Addr, "example.com", "1")
+	assertGet(c, "https://"+l.TLSAddr, "example.com", "1")
 
 	discoverd.Unregister("test", srv1.Listener.Addr().String())
 	discoverd.Register("test", srv2.Listener.Addr().String())
 
 	// Close the connection we just used to trigger a new backend choice
-	http.DefaultTransport.(*http.Transport).CloseIdleConnections()
+	httpClient.Transport.(*http.Transport).CloseIdleConnections()
 
-	assertGet(c, l.Addr, "/", "example.com", "2")
+	assertGet(c, "http://"+l.Addr, "example.com", "2")
+	assertGet(c, "https://"+l.TLSAddr, "example.com", "2")
 
+	wait = waitForEvent(c, l, "remove", "example.com", 1)
 	err = l.RemoveHTTPDomain("example.com")
 	c.Assert(err, IsNil)
-	waitForEvent(c, l, "remove", "example.com")
-	http.DefaultTransport.(*http.Transport).CloseIdleConnections()
+	wait()
+	httpClient.Transport.(*http.Transport).CloseIdleConnections()
 
-	res, err := http.DefaultClient.Do(newReq(l.Addr, "/", "example.com"))
+	res, err := httpClient.Do(newReq("http://"+l.Addr, "example.com"))
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 404)
 	res.Body.Close()
 }
 
-func newReq(addr, path, host string) *http.Request {
-	req, _ := http.NewRequest("GET", "http://"+addr+path, nil)
+func newReq(url, host string) *http.Request {
+	req, _ := http.NewRequest("GET", url, nil)
 	req.Host = host
 	return req
 }
 
-func assertGet(c *C, addr, path, host, expected string) {
-	res, err := http.DefaultClient.Do(newReq(addr, path, host))
+func assertGet(c *C, url, host, expected string) {
+	res, err := httpClient.Do(newReq(url, host))
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 	data, err := ioutil.ReadAll(res.Body)
@@ -66,7 +72,7 @@ func (s *S) TestInitialSync(c *C) {
 	etcd := newFakeEtcd()
 	l, _, err := newHTTPListener(etcd)
 	c.Assert(err, IsNil)
-	err = l.AddHTTPDomain("example.com", "test", nil, nil)
+	err = l.AddHTTPDomain("example.com", "test", localhostCert, localhostKey)
 	c.Assert(err, IsNil)
 	l.Close()
 
@@ -80,5 +86,46 @@ func (s *S) TestInitialSync(c *C) {
 	discoverd.Register("test", srv.Listener.Addr().String())
 	defer discoverd.UnregisterAll()
 
-	assertGet(c, l.Addr, "/", "example.com", "1")
+	assertGet(c, "http://"+l.Addr, "example.com", "1")
+	assertGet(c, "https://"+l.TLSAddr, "example.com", "1")
+}
+
+var httpClient = &http.Client{
+	Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{ServerName: "example.com"},
+	},
+}
+
+// borrowed from net/http/httptest/server.go
+// localhostCert is a PEM-encoded TLS cert with SAN IPs
+// "127.0.0.1" and "[::1]", expiring at the last second of 2049 (the end
+// of ASN.1 time).
+// generated from src/pkg/crypto/tls:
+// go run generate_cert.go  --rsa-bits 512 --host 127.0.0.1,::1,example.com --ca --start-date "Jan 1 00:00:00 1970" --duration=1000000h
+var localhostCert = []byte(`-----BEGIN CERTIFICATE-----
+MIIBdzCCASOgAwIBAgIBADALBgkqhkiG9w0BAQUwEjEQMA4GA1UEChMHQWNtZSBD
+bzAeFw03MDAxMDEwMDAwMDBaFw00OTEyMzEyMzU5NTlaMBIxEDAOBgNVBAoTB0Fj
+bWUgQ28wWjALBgkqhkiG9w0BAQEDSwAwSAJBAN55NcYKZeInyTuhcCwFMhDHCmwa
+IUSdtXdcbItRB/yfXGBhiex00IaLXQnSU+QZPRZWYqeTEbFSgihqi1PUDy8CAwEA
+AaNoMGYwDgYDVR0PAQH/BAQDAgCkMBMGA1UdJQQMMAoGCCsGAQUFBwMBMA8GA1Ud
+EwEB/wQFMAMBAf8wLgYDVR0RBCcwJYILZXhhbXBsZS5jb22HBH8AAAGHEAAAAAAA
+AAAAAAAAAAAAAAEwCwYJKoZIhvcNAQEFA0EAAoQn/ytgqpiLcZu9XKbCJsJcvkgk
+Se6AbGXgSlq+ZCEVo0qIwSgeBqmsJxUu7NCSOwVJLYNEBO2DtIxoYVk+MA==
+-----END CERTIFICATE-----`)
+
+// localhostKey is the private key for localhostCert.
+var localhostKey = []byte(`-----BEGIN RSA PRIVATE KEY-----
+MIIBPAIBAAJBAN55NcYKZeInyTuhcCwFMhDHCmwaIUSdtXdcbItRB/yfXGBhiex0
+0IaLXQnSU+QZPRZWYqeTEbFSgihqi1PUDy8CAwEAAQJBAQdUx66rfh8sYsgfdcvV
+NoafYpnEcB5s4m/vSVe6SU7dCK6eYec9f9wpT353ljhDUHq3EbmE4foNzJngh35d
+AekCIQDhRQG5Li0Wj8TM4obOnnXUXf1jRv0UkzE9AHWLG5q3AwIhAPzSjpYUDjVW
+MCUXgckTpKCuGwbJk7424Nb8bLzf3kllAiA5mUBgjfr/WtFSJdWcPQ4Zt9KTMNKD
+EUO0ukpTwEIl6wIhAMbGqZK3zAAFdq8DD2jPx+UJXnh0rnOkZBzDtJ6/iN69AiEA
+1Aq8MJgTaYsDQWyU/hDq5YkDJc9e9DSCvUIzqxQWMQE=
+-----END RSA PRIVATE KEY-----`)
+
+func init() {
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(localhostCert)
+	httpClient.Transport.(*http.Transport).TLSClientConfig.RootCAs = pool
 }
