@@ -58,3 +58,7 @@ func HandleHTTP() {
 func Register(rcvr interface{}) error {
 	return rpcplus.Register(rcvr)
 }
+
+func RegisterName(name string, rcvr interface{}) error {
+	return rpcplus.RegisterName(name, rcvr)
+}
