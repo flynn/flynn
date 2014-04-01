@@ -20,6 +20,7 @@ import (
 
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-etcd/etcd"
+	"github.com/flynn/strowger/types"
 	"github.com/inconshreveable/go-vhost"
 )
 
@@ -41,6 +42,9 @@ type HTTPListener struct {
 	tlsListener net.Listener
 	stopSync    chan bool
 	closed      bool
+
+	watchersMtx sync.RWMutex
+	watchers    map[chan *strowger.Event]struct{}
 }
 
 type EtcdClient interface {
@@ -64,6 +68,7 @@ func NewHTTPListener(addr, tlsAddr string, etcdc EtcdClient, discoverdc Discover
 		domains:    make(map[string]*route),
 		services:   make(map[string]*httpService),
 		stopSync:   make(chan bool),
+		watchers:   make(map[chan *strowger.Event]struct{}),
 	}
 }
 
@@ -104,6 +109,31 @@ func (s *HTTPListener) Start() error {
 	s.TLSAddr = s.tlsListener.Addr().String()
 
 	return nil
+}
+
+func (s *HTTPListener) Watch(ch chan *strowger.Event) {
+	s.watchersMtx.Lock()
+	s.watchers[ch] = struct{}{}
+	s.watchersMtx.Unlock()
+}
+
+func (s *HTTPListener) Unwatch(ch chan *strowger.Event) {
+	go func() {
+		// drain channel so that we don't deadlock
+		for _ = range ch {
+		}
+	}()
+	s.watchersMtx.Lock()
+	delete(s.watchers, ch)
+	s.watchersMtx.Unlock()
+}
+
+func (s *HTTPListener) sendEvent(e *strowger.Event) {
+	s.watchersMtx.RLock()
+	defer s.watchersMtx.RUnlock()
+	for ch := range s.watchers {
+		ch <- e
+	}
 }
 
 var ErrClosed = errors.New("strowger: listener has been closed")
@@ -165,6 +195,7 @@ func (s *HTTPListener) addDomain(name string) (*route, error) {
 	r := &route{domain: name}
 	s.domains[name] = r
 	log.Println("Adding domain", r.domain)
+	s.sendEvent(&strowger.Event{Event: "add", Domain: r.domain})
 	return r, nil
 }
 
@@ -186,6 +217,7 @@ func (s *HTTPListener) removeDomain(name string) error {
 	defer s.mtx.Unlock()
 	delete(s.domains, name)
 	log.Println("Removing domain", name)
+	s.sendEvent(&strowger.Event{Event: "remove", Domain: name})
 	return nil
 }
 
@@ -221,6 +253,7 @@ func (s *HTTPListener) setDomainService(r *route, serviceName string) error {
 
 	r.service = service
 	log.Println("Setting service of domain", r.domain, "to", service)
+	s.sendEvent(&strowger.Event{Event: "update", Domain: r.domain})
 	return nil
 }
 
@@ -256,6 +289,7 @@ func (s *HTTPListener) setDomainTLSConfig(r *route, cert []byte, key []byte) err
 			log.Println("Removing SSL config of domain", r.domain)
 		}
 	}
+	s.sendEvent(&strowger.Event{Event: "update", Domain: r.domain})
 	return nil
 }
 

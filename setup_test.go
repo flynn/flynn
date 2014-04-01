@@ -2,17 +2,18 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"net/http"
 	"path"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/flynn/discoverd/agent"
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-etcd/etcd"
+	"github.com/flynn/strowger/types"
 	. "github.com/titanous/gocheck"
 )
 
@@ -88,7 +89,6 @@ func (e *fakeEtcd) Watch(prefix string, waitIndex uint64, recursive bool, receiv
 	}
 	e.watchesMtx.Lock()
 	e.watches[receiver] = watchConfig{prefix: prefix, recursive: recursive, stop: stop}
-	fmt.Printf("%#v\n", e.watches[receiver])
 	e.watchesMtx.Unlock()
 	return &etcd.Response{Action: "watch"}, nil
 }
@@ -300,4 +300,28 @@ func newHTTPListener(etcd *fakeEtcd) (*HTTPListener, *fakeDiscoverd, error) {
 	}
 	l := NewHTTPListener("127.0.0.1:0", "127.0.0.1:0", etcd, discoverd)
 	return l, discoverd, l.Start()
+}
+
+const waitTimeout = time.Second
+
+func waitForEvent(c *C, l *HTTPListener, event string, domain string) {
+	ch := make(chan *strowger.Event)
+	l.Watch(ch)
+	defer l.Unwatch(ch)
+	start := time.Now()
+	for {
+		timeout := waitTimeout - time.Now().Sub(start)
+		if timeout <= 0 {
+			break
+		}
+		select {
+		case e := <-ch:
+			if e.Event == event && e.Domain == domain {
+				return
+			}
+		case <-time.After(timeout):
+			break
+		}
+	}
+	c.Errorf("timeout exceeded waiting for %s %s", event, domain)
 }

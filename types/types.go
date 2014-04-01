@@ -16,3 +16,8 @@ type Config struct {
 	HTTPSCert  []byte // DER encoded certificate
 	HTTPSKey   []byte // DER encoded private key
 }
+
+type Event struct {
+	Event  string
+	Domain string
+}

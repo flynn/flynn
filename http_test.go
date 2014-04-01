@@ -23,6 +23,7 @@ func (s *S) TestAddHTTPDomain(c *C) {
 
 	err = l.AddHTTPDomain("example.com", "test", nil, nil)
 	c.Assert(err, IsNil)
+	waitForEvent(c, l, "add", "example.com")
 
 	assertGet(c, l.Addr, "/", "example.com", "1")
 
@@ -36,6 +37,7 @@ func (s *S) TestAddHTTPDomain(c *C) {
 
 	err = l.RemoveHTTPDomain("example.com")
 	c.Assert(err, IsNil)
+	waitForEvent(c, l, "remove", "example.com")
 	http.DefaultTransport.(*http.Transport).CloseIdleConnections()
 
 	res, err := http.DefaultClient.Do(newReq(l.Addr, "/", "example.com"))
