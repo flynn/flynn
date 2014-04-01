@@ -26,7 +26,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
-			"Rev": "7ce4d7e5143b55e7376b16bde2cfab5814d5fabe"
+			"Rev": "287ba5f190485b5529bdd1db2d9383df5feb67ee"
 		},
 		{
 			"ImportPath": "github.com/inconshreveable/go-vhost",
