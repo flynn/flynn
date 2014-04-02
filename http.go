@@ -124,7 +124,7 @@ func (s *HTTPListener) sendEvent(e *strowger.Event) {
 
 var ErrClosed = errors.New("strowger: listener has been closed")
 
-func (s *HTTPListener) AddHTTPDomain(domain string, service string, cert, key string) error {
+func (s *HTTPListener) AddRoute(domain string, service string, cert, key string) error {
 	s.mtx.RLock()
 	if s.closed {
 		s.mtx.RUnlock()
@@ -140,7 +140,7 @@ func (s *HTTPListener) AddHTTPDomain(domain string, service string, cert, key st
 	})
 }
 
-func (s *HTTPListener) RemoveHTTPDomain(domain string) error {
+func (s *HTTPListener) RemoveRoute(domain string) error {
 	s.mtx.RLock()
 	if s.closed {
 		s.mtx.RUnlock()

@@ -107,7 +107,7 @@ func (s *S) TestAddHTTPDomain(c *C) {
 	defer discoverd.UnregisterAll()
 
 	wait := waitForEvent(c, l, "add", "example.com")
-	err = l.AddHTTPDomain("example.com", "test", string(localhostCert), string(localhostKey))
+	err = l.AddRoute("example.com", "test", string(localhostCert), string(localhostKey))
 	c.Assert(err, IsNil)
 	wait()
 
@@ -124,7 +124,7 @@ func (s *S) TestAddHTTPDomain(c *C) {
 	assertGet(c, "https://"+l.TLSAddr, "example.com", "2")
 
 	wait = waitForEvent(c, l, "remove", "example.com")
-	err = l.RemoveHTTPDomain("example.com")
+	err = l.RemoveRoute("example.com")
 	c.Assert(err, IsNil)
 	wait()
 	httpClient.Transport.(*http.Transport).CloseIdleConnections()
@@ -155,7 +155,7 @@ func (s *S) TestInitialSync(c *C) {
 	etcd := newFakeEtcd()
 	l, _, err := newHTTPListener(etcd)
 	c.Assert(err, IsNil)
-	err = l.AddHTTPDomain("example.com", "test", string(localhostCert), string(localhostKey))
+	err = l.AddRoute("example.com", "test", string(localhostCert), string(localhostKey))
 	c.Assert(err, IsNil)
 	l.Close()
 

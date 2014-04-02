@@ -13,7 +13,7 @@ type RPCHandler struct {
 func (h *RPCHandler) AddRoute(config *strowger.Config, res *struct{}) error {
 	switch config.Type {
 	case strowger.FrontendHTTP:
-		if err := h.r.AddHTTPDomain(config.HTTPDomain, config.Service, config.HTTPSCert, config.HTTPSKey); err != nil {
+		if err := h.r.HTTPListener.AddRoute(config.HTTPDomain, config.Service, config.HTTPSCert, config.HTTPSKey); err != nil {
 			return err
 		}
 	default:
