@@ -23,6 +23,8 @@ import (
 )
 
 type HTTPListener struct {
+	Watcher
+
 	Addr      string
 	TLSAddr   string
 	TLSConfig *tls.Config
@@ -33,13 +35,11 @@ type HTTPListener struct {
 
 	discoverd DiscoverdClient
 	ds        DataStore
+	wm        *WatchManager
 
 	listener    net.Listener
 	tlsListener net.Listener
 	closed      bool
-
-	watchersMtx sync.RWMutex
-	watchers    map[chan *strowger.Event]struct{}
 }
 
 type DiscoverdClient interface {
@@ -47,15 +47,17 @@ type DiscoverdClient interface {
 }
 
 func NewHTTPListener(addr, tlsAddr string, ds DataStore, discoverdc DiscoverdClient) *HTTPListener {
-	return &HTTPListener{
+	l := &HTTPListener{
 		Addr:      addr,
 		TLSAddr:   tlsAddr,
 		ds:        ds,
 		discoverd: discoverdc,
 		domains:   make(map[string]*httpRoute),
 		services:  make(map[string]*httpService),
-		watchers:  make(map[chan *strowger.Event]struct{}),
+		wm:        NewWatchManager(),
 	}
+	l.Watcher = l.wm
+	return l
 }
 
 func (s *HTTPListener) Close() error {
@@ -97,40 +99,14 @@ func (s *HTTPListener) Start() error {
 	return nil
 }
 
-func (s *HTTPListener) Watch(ch chan *strowger.Event) {
-	s.watchersMtx.Lock()
-	s.watchers[ch] = struct{}{}
-	s.watchersMtx.Unlock()
-}
-
-func (s *HTTPListener) Unwatch(ch chan *strowger.Event) {
-	go func() {
-		// drain channel so that we don't deadlock
-		for _ = range ch {
-		}
-	}()
-	s.watchersMtx.Lock()
-	delete(s.watchers, ch)
-	s.watchersMtx.Unlock()
-}
-
-func (s *HTTPListener) sendEvent(e *strowger.Event) {
-	s.watchersMtx.RLock()
-	defer s.watchersMtx.RUnlock()
-	for ch := range s.watchers {
-		ch <- e
-	}
-}
-
 var ErrClosed = errors.New("strowger: listener has been closed")
 
 func (s *HTTPListener) AddRoute(domain string, service string, cert, key string) error {
 	s.mtx.RLock()
+	defer s.mtx.RUnlock()
 	if s.closed {
-		s.mtx.RUnlock()
 		return ErrClosed
 	}
-	s.mtx.RUnlock()
 
 	return s.ds.Add(domain, &httpRoute{
 		Domain:  domain,
@@ -142,17 +118,13 @@ func (s *HTTPListener) AddRoute(domain string, service string, cert, key string)
 
 func (s *HTTPListener) RemoveRoute(domain string) error {
 	s.mtx.RLock()
+	defer s.mtx.RUnlock()
 	if s.closed {
-		s.mtx.RUnlock()
 		return ErrClosed
 	}
-	s.mtx.RUnlock()
 
 	return s.ds.Remove(domain)
 }
-
-var ErrDomainExists = errors.New("strowger: domain exists")
-var ErrNoSuchDomain = errors.New("strowger: domain does not exist")
 
 type httpSyncHandler struct {
 	l *HTTPListener
@@ -177,7 +149,7 @@ func (h *httpSyncHandler) Add(data []byte) error {
 	h.l.mtx.Lock()
 	defer h.l.mtx.Unlock()
 	if _, ok := h.l.domains[r.Domain]; ok {
-		return ErrDomainExists
+		return ErrExists
 	}
 
 	service := h.l.services[r.Service]
@@ -194,7 +166,7 @@ func (h *httpSyncHandler) Add(data []byte) error {
 	h.l.domains[r.Domain] = r
 
 	log.Println("Adding domain", r.Domain)
-	go h.l.sendEvent(&strowger.Event{Event: "add", Domain: r.Domain})
+	go h.l.wm.Send(&strowger.Event{Event: "add", ID: r.Domain})
 	return nil
 }
 
@@ -203,7 +175,7 @@ func (h *httpSyncHandler) Remove(name string) error {
 	defer h.l.mtx.Unlock()
 	r, ok := h.l.domains[name]
 	if !ok {
-		return ErrNoSuchDomain
+		return ErrNotFound
 	}
 
 	r.service.refs--
@@ -214,7 +186,7 @@ func (h *httpSyncHandler) Remove(name string) error {
 
 	delete(h.l.domains, name)
 	log.Println("Removing domain", name)
-	go h.l.sendEvent(&strowger.Event{Event: "remove", Domain: name})
+	go h.l.wm.Send(&strowger.Event{Event: "remove", ID: name})
 	return nil
 }
 

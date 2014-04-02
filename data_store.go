@@ -47,7 +47,7 @@ func (s *etcdDataStore) Add(id string, v interface{}) error {
 	}
 	_, err = s.etcd.Create(s.prefix+id, string(data), 0)
 	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 105 {
-		err = ErrDomainExists
+		err = ErrExists
 	}
 	return err
 }

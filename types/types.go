@@ -18,6 +18,7 @@ type Config struct {
 }
 
 type Event struct {
-	Event  string
-	Domain string
+	Event string
+	ID    string
+	Error error
 }

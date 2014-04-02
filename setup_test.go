@@ -7,10 +7,12 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/flynn/discoverd/agent"
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-etcd/etcd"
+	"github.com/flynn/strowger/types"
 	. "github.com/titanous/gocheck"
 )
 
@@ -283,3 +285,30 @@ func Test(t *testing.T) { TestingT(t) }
 type S struct{}
 
 var _ = Suite(&S{})
+
+const waitTimeout = time.Second
+
+func waitForEvent(c *C, w Watcher, event string, id string) func() *strowger.Event {
+	ch := make(chan *strowger.Event)
+	w.Watch(ch)
+	return func() *strowger.Event {
+		defer w.Unwatch(ch)
+		start := time.Now()
+		for {
+			timeout := waitTimeout - time.Now().Sub(start)
+			if timeout <= 0 {
+				break
+			}
+			select {
+			case e := <-ch:
+				if e.Event == event && e.ID == id {
+					return e
+				}
+			case <-time.After(timeout):
+				break
+			}
+		}
+		c.Errorf("timeout exceeded waiting for %s %s", event, id)
+		return nil
+	}
+}

@@ -6,9 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"time"
 
-	"github.com/flynn/strowger/types"
 	. "github.com/titanous/gocheck"
 )
 
@@ -65,32 +63,6 @@ func newHTTPListener(etcd *fakeEtcd) (*HTTPListener, *fakeDiscoverd, error) {
 	}
 	l := NewHTTPListener("127.0.0.1:0", "127.0.0.1:0", NewEtcdDataStore(etcd, "/strowger/http/"), discoverd)
 	return l, discoverd, l.Start()
-}
-
-const waitTimeout = time.Second
-
-func waitForEvent(c *C, l *HTTPListener, event string, domain string) func() {
-	ch := make(chan *strowger.Event)
-	l.Watch(ch)
-	return func() {
-		defer l.Unwatch(ch)
-		start := time.Now()
-		for {
-			timeout := waitTimeout - time.Now().Sub(start)
-			if timeout <= 0 {
-				break
-			}
-			select {
-			case e := <-ch:
-				if e.Event == event && e.Domain == domain {
-					return
-				}
-			case <-time.After(timeout):
-				break
-			}
-		}
-		c.Errorf("timeout exceeded waiting for %s %s", event, domain)
-	}
 }
 
 func (s *S) TestAddHTTPDomain(c *C) {
