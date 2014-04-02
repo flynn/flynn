@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -13,7 +12,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
-	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,21 +36,14 @@ type HTTPListener struct {
 
 	etcd      EtcdClient
 	discoverd DiscoverdClient
+	sync      Synchronizer
 
 	listener    net.Listener
 	tlsListener net.Listener
-	stopSync    chan bool
 	closed      bool
 
 	watchersMtx sync.RWMutex
 	watchers    map[chan *strowger.Event]struct{}
-}
-
-type EtcdClient interface {
-	Create(key string, value string, ttl uint64) (*etcd.Response, error)
-	Get(key string, sort, recursive bool) (*etcd.Response, error)
-	Delete(key string, recursive bool) (*etcd.Response, error)
-	Watch(prefix string, waitIndex uint64, recursive bool, receiver chan *etcd.Response, stop chan bool) (*etcd.Response, error)
 }
 
 type DiscoverdClient interface {
@@ -68,7 +59,6 @@ func NewHTTPListener(addr, tlsAddr string, etcdc EtcdClient, discoverdc Discover
 		discoverd:  discoverdc,
 		domains:    make(map[string]*httpRoute),
 		services:   make(map[string]*httpService),
-		stopSync:   make(chan bool),
 		watchers:   make(map[chan *strowger.Event]struct{}),
 	}
 }
@@ -81,7 +71,7 @@ func (s *HTTPListener) Close() error {
 	}
 	s.listener.Close()
 	s.tlsListener.Close()
-	close(s.stopSync)
+	s.sync.Stop()
 	s.closed = true
 	return nil
 }
@@ -89,21 +79,22 @@ func (s *HTTPListener) Close() error {
 func (s *HTTPListener) Start() error {
 	started := make(chan error)
 
-	go s.syncDatabase(started)
+	s.sync = NewEtcdSynchronizer(s.etcd, s.etcdPrefix, &httpSyncHandler{l: s})
+	go s.sync.Sync(started)
 	if err := <-started; err != nil {
 		return err
 	}
 
 	go s.serve(started)
 	if err := <-started; err != nil {
-		close(s.stopSync)
+		s.sync.Stop()
 		return err
 	}
 	s.Addr = s.listener.Addr().String()
 
 	go s.serveTLS(started)
 	if err := <-started; err != nil {
-		close(s.stopSync)
+		s.sync.Stop()
 		s.listener.Close()
 		return err
 	}
@@ -179,9 +170,13 @@ func (s *HTTPListener) RemoveHTTPDomain(domain string) error {
 var ErrDomainExists = errors.New("strowger: domain exists")
 var ErrNoSuchDomain = errors.New("strowger: domain does not exist")
 
-func (s *HTTPListener) addRoute(domain, data string) error {
+type httpSyncHandler struct {
+	l *HTTPListener
+}
+
+func (h *httpSyncHandler) Add(data []byte) error {
 	r := &httpRoute{}
-	if err := json.Unmarshal([]byte(data), r); err != nil {
+	if err := json.Unmarshal(data, r); err != nil {
 		return err
 	}
 
@@ -195,34 +190,34 @@ func (s *HTTPListener) addRoute(domain, data string) error {
 		r.TLSKey = ""
 	}
 
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	if _, ok := s.domains[domain]; ok {
+	h.l.mtx.Lock()
+	defer h.l.mtx.Unlock()
+	if _, ok := h.l.domains[r.Domain]; ok {
 		return ErrDomainExists
 	}
 
-	service := s.services[r.Service]
+	service := h.l.services[r.Service]
 	if service == nil {
-		ss, err := s.discoverd.NewServiceSet(r.Service)
+		ss, err := h.l.discoverd.NewServiceSet(r.Service)
 		if err != nil {
 			return err
 		}
 		service = &httpService{name: r.Service, ss: ss}
-		s.services[r.Service] = service
+		h.l.services[r.Service] = service
 	}
 	service.refs++
 	r.service = service
-	s.domains[domain] = r
+	h.l.domains[r.Domain] = r
 
 	log.Println("Adding domain", r.Domain)
-	go s.sendEvent(&strowger.Event{Event: "add", Domain: r.Domain})
+	go h.l.sendEvent(&strowger.Event{Event: "add", Domain: r.Domain})
 	return nil
 }
 
-func (s *HTTPListener) removeRoute(name string) error {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	r, ok := s.domains[name]
+func (h *httpSyncHandler) Remove(name string) error {
+	h.l.mtx.Lock()
+	defer h.l.mtx.Unlock()
+	r, ok := h.l.domains[name]
 	if !ok {
 		return ErrNoSuchDomain
 	}
@@ -230,51 +225,13 @@ func (s *HTTPListener) removeRoute(name string) error {
 	r.service.refs--
 	if r.service.refs <= 0 {
 		r.service.ss.Close()
-		delete(s.services, r.service.name)
+		delete(h.l.services, r.service.name)
 	}
 
-	delete(s.domains, name)
+	delete(h.l.domains, name)
 	log.Println("Removing domain", name)
-	go s.sendEvent(&strowger.Event{Event: "remove", Domain: name})
+	go h.l.sendEvent(&strowger.Event{Event: "remove", Domain: name})
 	return nil
-}
-
-func (s *HTTPListener) syncDatabase(started chan<- error) {
-	var since uint64
-	data, err := s.etcd.Get(s.etcdPrefix, false, true)
-	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
-		// key not found, ignore
-		goto watch
-	}
-	if err != nil {
-		started <- err
-		return
-	}
-	since = data.EtcdIndex
-	for _, node := range data.Node.Nodes {
-		err := s.addRoute(path.Base(node.Key), node.Value)
-		if err != nil {
-			started <- err
-			return
-		}
-	}
-
-watch:
-	started <- nil
-	stream := make(chan *etcd.Response)
-	go s.etcd.Watch(s.etcdPrefix, since, true, stream, s.stopSync)
-	for res := range stream {
-		domain := path.Base(res.Node.Key)
-		var err error
-		if res.Action == "delete" {
-			err = s.removeRoute(domain)
-		} else {
-			err = s.addRoute(domain, res.Node.Value)
-		}
-		if err != nil {
-			panic(fmt.Sprintf("Error while processing update from etcd: %s", err))
-		}
-	}
 }
 
 func (s *HTTPListener) serve(started chan<- error) {
