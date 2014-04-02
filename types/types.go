@@ -13,8 +13,8 @@ type Config struct {
 
 	// HTTP
 	HTTPDomain string
-	HTTPSCert  []byte // DER encoded certificate
-	HTTPSKey   []byte // DER encoded private key
+	HTTPSCert  string // PEM encoded certificate
+	HTTPSKey   string // PEM encoded private key
 }
 
 type Event struct {

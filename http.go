@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -30,7 +31,7 @@ type HTTPListener struct {
 	TLSConfig *tls.Config
 
 	mtx      sync.RWMutex
-	domains  map[string]*route
+	domains  map[string]*httpRoute
 	services map[string]*httpService
 
 	etcdPrefix string
@@ -65,7 +66,7 @@ func NewHTTPListener(addr, tlsAddr string, etcdc EtcdClient, discoverdc Discover
 		etcd:       etcdc,
 		etcdPrefix: "/strowger/http/",
 		discoverd:  discoverdc,
-		domains:    make(map[string]*route),
+		domains:    make(map[string]*httpRoute),
 		services:   make(map[string]*httpService),
 		stopSync:   make(chan bool),
 		watchers:   make(map[chan *strowger.Event]struct{}),
@@ -138,29 +139,23 @@ func (s *HTTPListener) sendEvent(e *strowger.Event) {
 
 var ErrClosed = errors.New("strowger: listener has been closed")
 
-func (s *HTTPListener) AddHTTPDomain(domain string, service string, cert []byte, key []byte) error {
+func (s *HTTPListener) AddHTTPDomain(domain string, service string, cert, key string) error {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	if s.closed {
 		return ErrClosed
 	}
 
-	var err error
-	if _, err = s.etcd.Create(s.etcdPrefix+domain+"/service", service, 0); err != nil {
-		goto error
-	}
-	if len(key) > 0 && len(cert) > 0 {
-		if _, err = s.etcd.Create(s.etcdPrefix+domain+"/tls/key", string(key), 0); err != nil {
-			goto error
-		}
-		if _, err = s.etcd.Create(s.etcdPrefix+domain+"/tls/cert", string(cert), 0); err != nil {
-			goto error
-		}
-	}
-	return nil
-error:
+	data, _ := json.Marshal(&httpRoute{
+		Domain:  domain,
+		Service: service,
+		TLSCert: cert,
+		TLSKey:  key,
+	})
+
+	_, err := s.etcd.Create(s.etcdPrefix+domain, string(data), 0)
 	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 105 {
-		return ErrDomainExists
+		err = ErrDomainExists
 	}
 	return err
 }
@@ -184,129 +179,64 @@ func (s *HTTPListener) RemoveHTTPDomain(domain string) error {
 var ErrDomainExists = errors.New("strowger: domain exists")
 var ErrNoSuchDomain = errors.New("strowger: domain does not exist")
 
-func (s *HTTPListener) addDomain(name string) (*route, error) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
-	if d, ok := s.domains[name]; ok {
-		return d, ErrDomainExists
-	}
-
-	r := &route{domain: name}
-	s.domains[name] = r
-	log.Println("Adding domain", r.domain)
-	go s.sendEvent(&strowger.Event{Event: "add", Domain: r.domain})
-	return r, nil
-}
-
-func (s *HTTPListener) removeDomain(name string) error {
-	s.mtx.Lock()
-	d, ok := s.domains[name]
-	if !ok {
-		s.mtx.Unlock()
-		return ErrNoSuchDomain
-	}
-	s.mtx.Unlock()
-
-	err := s.setDomainService(d, "")
-	if err != nil {
+func (s *HTTPListener) addRoute(domain, data string) error {
+	r := &httpRoute{}
+	if err := json.Unmarshal([]byte(data), r); err != nil {
 		return err
 	}
 
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	delete(s.domains, name)
-	log.Println("Removing domain", name)
-	go s.sendEvent(&strowger.Event{Event: "remove", Domain: name})
-	return nil
-}
-
-func (s *HTTPListener) setDomainService(r *route, serviceName string) error {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
-	if r.service != nil {
-		r.service.refs--
-		if r.service.refs <= 0 {
-			err := r.service.ss.Close()
-			if err != nil {
-				log.Println("Error closing the discoverd connection for ", r.service.name, err)
-			}
-			delete(s.services, r.service.name)
-		}
-	}
-
-	var service *httpService
-	if serviceName != "" {
-		service = s.services[serviceName]
-		if service == nil {
-			ss, err := s.discoverd.NewServiceSet(serviceName)
-			if err != nil {
-				return err
-			}
-			service = &httpService{name: serviceName, ss: ss}
-		}
-
-		service.refs++
-		s.services[serviceName] = service
-	}
-
-	r.service = service
-	log.Println("Setting service of domain", r.domain, "to", serviceName)
-	go s.sendEvent(&strowger.Event{Event: "update", Domain: r.domain})
-	return nil
-}
-
-// Set either of or both cert and key. The TLS config is complete when both have
-// been provided. Pass nil to indicate the value should not change. Pass an empty
-// byte array to clear the value.
-func (s *HTTPListener) setDomainTLSConfig(r *route, cert []byte, key []byte) error {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
-	if cert != nil {
-		r.cert = cert
-	}
-	if key != nil {
-		r.key = key
-	}
-
-	// Once both key and cert have been set, parse and validate
-	if len(r.cert) > 0 && len(r.key) > 0 {
-		kp, err := tls.X509KeyPair(r.cert, r.key)
+	if r.TLSCert != "" && r.TLSKey != "" {
+		kp, err := tls.X509KeyPair([]byte(r.TLSCert), []byte(r.TLSKey))
 		if err != nil {
 			return err
 		}
 		r.keypair = &kp
-		r.cert = nil
-		r.key = nil
-		log.Println("Setting SSL config of domain", r.domain)
-	} else {
-		if r.keypair != nil {
-			r.keypair = nil
-			log.Println("Removing SSL config of domain", r.domain)
-		}
+		r.TLSCert = ""
+		r.TLSKey = ""
 	}
-	go s.sendEvent(&strowger.Event{Event: "update", Domain: r.domain})
+
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	if _, ok := s.domains[domain]; ok {
+		return ErrDomainExists
+	}
+
+	service := s.services[r.Service]
+	if service == nil {
+		ss, err := s.discoverd.NewServiceSet(r.Service)
+		if err != nil {
+			return err
+		}
+		service = &httpService{name: r.Service, ss: ss}
+		s.services[r.Service] = service
+	}
+	service.refs++
+	r.service = service
+	s.domains[domain] = r
+
+	log.Println("Adding domain", r.Domain)
+	go s.sendEvent(&strowger.Event{Event: "add", Domain: r.Domain})
 	return nil
 }
 
-// Given a recursive node structure from etcd, find particular
-// values. "name" may contain slashes ("foo/bar")
-func etcdFindChild(node *etcd.Node, name string) *etcd.Node {
-	parts := strings.Split(name, "/")
-outer:
-	for _, part := range parts {
-		for _, childNode := range node.Nodes {
-			if path.Base(childNode.Key) == part {
-				node = childNode
-				continue outer
-			}
-		}
-		return nil
+func (s *HTTPListener) removeRoute(name string) error {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	r, ok := s.domains[name]
+	if !ok {
+		return ErrNoSuchDomain
 	}
 
-	return node
+	r.service.refs--
+	if r.service.refs <= 0 {
+		r.service.ss.Close()
+		delete(s.services, r.service.name)
+	}
+
+	delete(s.domains, name)
+	log.Println("Removing domain", name)
+	go s.sendEvent(&strowger.Event{Event: "remove", Domain: name})
+	return nil
 }
 
 func (s *HTTPListener) syncDatabase(started chan<- error) {
@@ -322,37 +252,7 @@ func (s *HTTPListener) syncDatabase(started chan<- error) {
 	}
 	since = data.EtcdIndex
 	for _, node := range data.Node.Nodes {
-		if !node.Dir {
-			continue
-		}
-		domain := path.Base(node.Key)
-
-		d, err := s.addDomain(domain)
-		if err != nil {
-			started <- err
-			return
-		}
-
-		// Find the individual (service name, ssl info)
-		serviceNode := etcdFindChild(node, "service")
-		if serviceNode != nil {
-			err = s.setDomainService(d, serviceNode.Value)
-			if err != nil {
-				started <- err
-				return
-			}
-		}
-
-		var cert, key []byte
-		certNode := etcdFindChild(node, "tls/cert")
-		if certNode != nil && certNode.Value != "" {
-			cert = []byte(certNode.Value)
-		}
-		keyNode := etcdFindChild(node, "tls/key")
-		if keyNode != nil && keyNode.Value != "" {
-			key = []byte(keyNode.Value)
-		}
-		err = s.setDomainTLSConfig(d, cert, key)
+		err := s.addRoute(path.Base(node.Key), node.Value)
 		if err != nil {
 			started <- err
 			return
@@ -364,35 +264,13 @@ watch:
 	stream := make(chan *etcd.Response)
 	go s.etcd.Watch(s.etcdPrefix, since, true, stream, s.stopSync)
 	for res := range stream {
-		keyRelToBase := res.Node.Key[len(s.etcdPrefix):]
-		parts := strings.SplitN(keyRelToBase, "/", 2)
-		domain := parts[0]
-		var key string
-		if len(parts) == 2 {
-			key = parts[1]
-		}
-
+		domain := path.Base(res.Node.Key)
 		var err error
-		if res.Action == "delete" && res.Node.Dir && key == "" {
-			// Directory for a domain was removed
-			err = s.removeDomain(domain)
+		if res.Action == "delete" {
+			err = s.removeRoute(domain)
 		} else {
-			value := res.Node.Value
-			if res.Action == "delete" {
-				value = ""
-			}
-
-			d, _ := s.addDomain(domain)
-			switch key {
-			case "service":
-				err = s.setDomainService(d, value)
-			case "tls/key":
-				err = s.setDomainTLSConfig(d, nil, []byte(value))
-			case "tls/cert":
-				err = s.setDomainTLSConfig(d, []byte(value), nil)
-			}
+			err = s.addRoute(domain, res.Node.Value)
 		}
-
 		if err != nil {
 			panic(fmt.Sprintf("Error while processing update from etcd: %s", err))
 		}
@@ -433,7 +311,7 @@ func (s *HTTPListener) serveTLS(started chan<- error) {
 	}
 }
 
-func (s *HTTPListener) findRouteForHost(host string) *route {
+func (s *HTTPListener) findRouteForHost(host string) *httpRoute {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	// TODO: handle wildcard domains
@@ -457,7 +335,7 @@ func fail(sc *httputil.ServerConn, req *http.Request, code int, msg string) {
 func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 	defer conn.Close()
 
-	var r *route
+	var r *httpRoute
 
 	// For TLS, use the SNI hello to determine the domain.
 	// At this stage, if we don't find a match, we simply
@@ -507,24 +385,19 @@ func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 		}
 	}
 
-	if r.service == nil {
-		log.Println("Matching service is not configured yet")
-		fail(sc, req, 404, "Not Found")
-		return
-	}
-
 	r.service.handle(req, sc, isTLS)
 }
 
 // A domain served by a listener, associated TLS certs,
 // and link to backend service set.
-type route struct {
-	domain  string
-	service *httpService
-	// Keypair created from cert/byte when both are available
-	cert    []byte
-	key     []byte
+type httpRoute struct {
+	Domain  string
+	Service string
+	TLSCert string
+	TLSKey  string
+
 	keypair *tls.Certificate
+	service *httpService
 }
 
 // A service definition: name, and set of backends.

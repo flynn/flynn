@@ -3,17 +3,14 @@ package main
 import (
 	"errors"
 	"net"
-	"net/http"
 	"path"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/flynn/discoverd/agent"
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-etcd/etcd"
-	"github.com/flynn/strowger/types"
 	. "github.com/titanous/gocheck"
 )
 
@@ -286,48 +283,3 @@ func Test(t *testing.T) { TestingT(t) }
 type S struct{}
 
 var _ = Suite(&S{})
-
-func httpTestHandler(id string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		w.Write([]byte(id))
-	})
-}
-
-func newHTTPListener(etcd *fakeEtcd) (*HTTPListener, *fakeDiscoverd, error) {
-	discoverd := newFakeDiscoverd()
-	if etcd == nil {
-		etcd = newFakeEtcd()
-	}
-	l := NewHTTPListener("127.0.0.1:0", "127.0.0.1:0", etcd, discoverd)
-	return l, discoverd, l.Start()
-}
-
-const waitTimeout = time.Second
-
-func waitForEvent(c *C, l *HTTPListener, event string, domain string, n int) func() {
-	ch := make(chan *strowger.Event)
-	l.Watch(ch)
-	return func() {
-		defer l.Unwatch(ch)
-		start := time.Now()
-		var i int
-		for {
-			timeout := waitTimeout - time.Now().Sub(start)
-			if timeout <= 0 {
-				break
-			}
-			select {
-			case e := <-ch:
-				if e.Event == event && e.Domain == domain {
-					i++
-					if i == n {
-						return
-					}
-				}
-			case <-time.After(timeout):
-				break
-			}
-		}
-		c.Errorf("timeout exceeded waiting for %s %s", event, domain)
-	}
-}
