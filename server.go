@@ -47,7 +47,7 @@ type Job struct {
 
 func addDomain(u *url.URL, h http.Header, data *struct{}) (int, http.Header, struct{}, error) {
 	q := u.Query()
-	if err := router.AddFrontend(&strowger.Config{Service: q.Get("app_id"), HTTPDomain: q.Get("domain")}); err != nil {
+	if err := router.AddRoute(&strowger.Config{Service: q.Get("app_id"), HTTPDomain: q.Get("domain")}); err != nil {
 		return 500, nil, struct{}{}, err
 	}
 	return 200, nil, struct{}{}, nil
