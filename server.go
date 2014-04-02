@@ -46,7 +46,8 @@ func main() {
 	}
 
 	var r Router
-	r.HTTPListener = NewHTTPListener(*httpAddr, *httpsAddr, etcd.NewClient(etcdAddr), d)
+	r.HTTPListener = NewHTTPListener(*httpAddr, *httpsAddr,
+		NewEtcdDataStore(etcd.NewClient(etcdAddr), "/strowger/http/"), d)
 	rpc.RegisterName("Router", &RPCHandler{r})
 	rpc.HandleHTTP()
 	go http.ListenAndServe(*rpcAddr, nil)

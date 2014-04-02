@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-etcd/etcd"
 	"github.com/flynn/strowger/types"
 	"github.com/inconshreveable/go-vhost"
 )
@@ -32,11 +31,8 @@ type HTTPListener struct {
 	domains  map[string]*httpRoute
 	services map[string]*httpService
 
-	etcdPrefix string
-
-	etcd      EtcdClient
 	discoverd DiscoverdClient
-	sync      Synchronizer
+	ds        DataStore
 
 	listener    net.Listener
 	tlsListener net.Listener
@@ -50,16 +46,15 @@ type DiscoverdClient interface {
 	NewServiceSet(string) (discoverd.ServiceSet, error)
 }
 
-func NewHTTPListener(addr, tlsAddr string, etcdc EtcdClient, discoverdc DiscoverdClient) *HTTPListener {
+func NewHTTPListener(addr, tlsAddr string, ds DataStore, discoverdc DiscoverdClient) *HTTPListener {
 	return &HTTPListener{
-		Addr:       addr,
-		TLSAddr:    tlsAddr,
-		etcd:       etcdc,
-		etcdPrefix: "/strowger/http/",
-		discoverd:  discoverdc,
-		domains:    make(map[string]*httpRoute),
-		services:   make(map[string]*httpService),
-		watchers:   make(map[chan *strowger.Event]struct{}),
+		Addr:      addr,
+		TLSAddr:   tlsAddr,
+		ds:        ds,
+		discoverd: discoverdc,
+		domains:   make(map[string]*httpRoute),
+		services:  make(map[string]*httpService),
+		watchers:  make(map[chan *strowger.Event]struct{}),
 	}
 }
 
@@ -71,7 +66,7 @@ func (s *HTTPListener) Close() error {
 	}
 	s.listener.Close()
 	s.tlsListener.Close()
-	s.sync.Stop()
+	s.ds.StopSync()
 	s.closed = true
 	return nil
 }
@@ -79,22 +74,21 @@ func (s *HTTPListener) Close() error {
 func (s *HTTPListener) Start() error {
 	started := make(chan error)
 
-	s.sync = NewEtcdSynchronizer(s.etcd, s.etcdPrefix, &httpSyncHandler{l: s})
-	go s.sync.Sync(started)
+	go s.ds.Sync(&httpSyncHandler{l: s}, started)
 	if err := <-started; err != nil {
 		return err
 	}
 
 	go s.serve(started)
 	if err := <-started; err != nil {
-		s.sync.Stop()
+		s.ds.StopSync()
 		return err
 	}
 	s.Addr = s.listener.Addr().String()
 
 	go s.serveTLS(started)
 	if err := <-started; err != nil {
-		s.sync.Stop()
+		s.ds.StopSync()
 		s.listener.Close()
 		return err
 	}
@@ -132,39 +126,29 @@ var ErrClosed = errors.New("strowger: listener has been closed")
 
 func (s *HTTPListener) AddHTTPDomain(domain string, service string, cert, key string) error {
 	s.mtx.RLock()
-	defer s.mtx.RUnlock()
 	if s.closed {
+		s.mtx.RUnlock()
 		return ErrClosed
 	}
+	s.mtx.RUnlock()
 
-	data, _ := json.Marshal(&httpRoute{
+	return s.ds.Add(domain, &httpRoute{
 		Domain:  domain,
 		Service: service,
 		TLSCert: cert,
 		TLSKey:  key,
 	})
-
-	_, err := s.etcd.Create(s.etcdPrefix+domain, string(data), 0)
-	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 105 {
-		err = ErrDomainExists
-	}
-	return err
 }
 
 func (s *HTTPListener) RemoveHTTPDomain(domain string) error {
 	s.mtx.RLock()
-	defer s.mtx.RUnlock()
 	if s.closed {
+		s.mtx.RUnlock()
 		return ErrClosed
 	}
+	s.mtx.RUnlock()
 
-	if _, err := s.etcd.Delete(s.etcdPrefix+domain, true); err != nil {
-		if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
-			return ErrNoSuchDomain
-		}
-		return err
-	}
-	return nil
+	return s.ds.Remove(domain)
 }
 
 var ErrDomainExists = errors.New("strowger: domain exists")

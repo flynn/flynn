@@ -63,7 +63,7 @@ func newHTTPListener(etcd *fakeEtcd) (*HTTPListener, *fakeDiscoverd, error) {
 	if etcd == nil {
 		etcd = newFakeEtcd()
 	}
-	l := NewHTTPListener("127.0.0.1:0", "127.0.0.1:0", etcd, discoverd)
+	l := NewHTTPListener("127.0.0.1:0", "127.0.0.1:0", NewEtcdDataStore(etcd, "/strowger/http/"), discoverd)
 	return l, discoverd, l.Start()
 }
 
