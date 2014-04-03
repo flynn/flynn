@@ -13,7 +13,6 @@ import (
 	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/go-flynn/cluster"
 	strowgerc "github.com/flynn/strowger/client"
-	"github.com/flynn/strowger/types"
 	"github.com/titanous/go-tigertonic"
 )
 
@@ -29,7 +28,6 @@ func main() {
 	}
 
 	mux := tigertonic.NewTrieServeMux()
-	mux.Handle("PUT", "/apps/{app_id}/domains/{domain}", tigertonic.Marshaled(addDomain))
 	mux.Handle("POST", "/apps/{app_id}/formation/{formation_id}", tigertonic.Marshaled(changeFormation))
 	mux.Handle("GET", "/apps/{app_id}/jobs", tigertonic.Marshaled(getJobs))
 	mux.HandleFunc("GET", "/apps/{app_id}/jobs/{job_id}/logs", getJobLog)
@@ -43,14 +41,6 @@ var router strowgerc.Client
 type Job struct {
 	ID   string `json:"id"`
 	Type string `json:"type"`
-}
-
-func addDomain(u *url.URL, h http.Header, data *struct{}) (int, http.Header, struct{}, error) {
-	q := u.Query()
-	if err := router.AddRoute(&strowger.Config{Service: q.Get("app_id"), HTTPDomain: q.Get("domain")}); err != nil {
-		return 500, nil, struct{}{}, err
-	}
-	return 200, nil, struct{}{}, nil
 }
 
 // GET /apps/{app_id}/jobs
