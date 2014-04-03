@@ -1,20 +1,11 @@
 package strowger
 
-type FrontendType uint8
-
-const (
-	FrontendHTTP FrontendType = iota
-	FrontendTCP
-)
-
-type Config struct {
+type HTTPRoute struct {
 	Service string
-	Type    FrontendType
+	Domain  string
 
-	// HTTP
-	HTTPDomain string
-	HTTPSCert  string // PEM encoded certificate
-	HTTPSKey   string // PEM encoded private key
+	TLSCert string
+	TLSKey  string
 }
 
 type Event struct {

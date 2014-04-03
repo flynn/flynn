@@ -50,13 +50,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	conf := &strowger.Config{
-		Service:    serviceName,
-		HTTPDomain: domain,
-		HTTPSCert:  tlsCert,
-		HTTPSKey:   tlsKey,
+	conf := &strowger.HTTPRoute{
+		Service: serviceName,
+		Domain:  domain,
+		TLSCert: string(tlsCert),
+		TLSKey:  string(tlsKey),
 	}
-	err = client.Call("Router.AddRoute", conf, &struct{}{})
+	err = client.Call("Router.AddHTTPRoute", conf, &struct{}{})
 	if err != nil {
 		log.Fatal(err)
 	}

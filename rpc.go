@@ -1,8 +1,6 @@
 package main
 
 import (
-	"errors"
-
 	"github.com/flynn/strowger/types"
 )
 
@@ -10,20 +8,12 @@ type RPCHandler struct {
 	r Router
 }
 
-func (h *RPCHandler) AddRoute(config *strowger.Config, res *struct{}) error {
-	switch config.Type {
-	case strowger.FrontendHTTP:
-		if err := h.r.HTTPListener.AddRoute(config.HTTPDomain, config.Service, config.HTTPSCert, config.HTTPSKey); err != nil {
-			return err
-		}
-	default:
-		return errors.New("unsupported route type")
-	}
-	return nil
+func (h *RPCHandler) AddHTTPRoute(r *strowger.HTTPRoute, res *struct{}) error {
+	return h.r.HTTPListener.AddRoute(r)
 }
 
-func (h *RPCHandler) RemoveRoute(config *strowger.Config, res *struct{}) error {
-	return nil
+func (h *RPCHandler) RemoveHTTPRoute(domain string, res *struct{}) error {
+	return h.r.HTTPListener.RemoveRoute(domain)
 }
 
 // TODO: change tls certificate

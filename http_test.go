@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
+	"github.com/flynn/strowger/types"
 	. "github.com/titanous/gocheck"
 )
 
@@ -65,7 +66,7 @@ func newHTTPListener(etcd *fakeEtcd) (*HTTPListener, *fakeDiscoverd, error) {
 	return l, discoverd, l.Start()
 }
 
-func (s *S) TestAddHTTPDomain(c *C) {
+func (s *S) TestAddHTTPRoute(c *C) {
 	srv1 := httptest.NewServer(httpTestHandler("1"))
 	srv2 := httptest.NewServer(httpTestHandler("2"))
 	defer srv1.Close()
@@ -79,7 +80,7 @@ func (s *S) TestAddHTTPDomain(c *C) {
 	defer discoverd.UnregisterAll()
 
 	wait := waitForEvent(c, l, "add", "example.com")
-	err = l.AddRoute("example.com", "test", string(localhostCert), string(localhostKey))
+	err = l.AddRoute(&strowger.HTTPRoute{Domain: "example.com", Service: "test", TLSCert: string(localhostCert), TLSKey: string(localhostKey)})
 	c.Assert(err, IsNil)
 	wait()
 
@@ -123,11 +124,11 @@ func assertGet(c *C, url, host, expected string) {
 	c.Assert(string(data), Equals, expected)
 }
 
-func (s *S) TestInitialSync(c *C) {
+func (s *S) TestHTTPInitialSync(c *C) {
 	etcd := newFakeEtcd()
 	l, _, err := newHTTPListener(etcd)
 	c.Assert(err, IsNil)
-	err = l.AddRoute("example.com", "test", string(localhostCert), string(localhostKey))
+	err = l.AddRoute(&strowger.HTTPRoute{Domain: "example.com", Service: "test", TLSCert: string(localhostCert), TLSKey: string(localhostKey)})
 	c.Assert(err, IsNil)
 	l.Close()
 

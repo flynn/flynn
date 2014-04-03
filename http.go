@@ -101,18 +101,18 @@ func (s *HTTPListener) Start() error {
 
 var ErrClosed = errors.New("strowger: listener has been closed")
 
-func (s *HTTPListener) AddRoute(domain string, service string, cert, key string) error {
+func (s *HTTPListener) AddRoute(r *strowger.HTTPRoute) error {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	if s.closed {
 		return ErrClosed
 	}
 
-	return s.ds.Add(domain, &httpRoute{
-		Domain:  domain,
-		Service: service,
-		TLSCert: cert,
-		TLSKey:  key,
+	return s.ds.Add(r.Domain, &httpRoute{
+		Domain:  r.Domain,
+		Service: r.Service,
+		TLSCert: r.TLSCert,
+		TLSKey:  r.TLSKey,
 	})
 }
 
