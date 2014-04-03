@@ -8,6 +8,11 @@ type HTTPRoute struct {
 	TLSKey  string
 }
 
+type TCPRoute struct {
+	Port    int
+	Service string
+}
+
 type Event struct {
 	Event string
 	ID    string

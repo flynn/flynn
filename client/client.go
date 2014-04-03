@@ -22,6 +22,7 @@ func New() (Client, error) {
 
 type Client interface {
 	AddHTTPRoute(*strowger.HTTPRoute) error
+	AddTCPRoute(*strowger.TCPRoute) error
 	Close() error
 }
 
@@ -31,6 +32,10 @@ type client struct {
 
 func (c *client) AddHTTPRoute(r *strowger.HTTPRoute) error {
 	return c.c.Call("Router.AddHTTPRoute", r, &struct{}{})
+}
+
+func (c *client) AddTCPRoute(r *strowger.TCPRoute) error {
+	return c.c.Call("Router.AddTCPRoute", r, &struct{}{})
 }
 
 func (c *client) Close() error {

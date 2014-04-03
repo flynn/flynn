@@ -97,7 +97,7 @@ watch:
 			err = h.Add([]byte(res.Node.Value))
 		}
 		if err != nil {
-			panic(fmt.Sprintf("Error while processing update from etcd: %s", err))
+			panic(fmt.Sprintf("Error while processing update from etcd: %s, %#v", err, res.Node))
 		}
 	}
 }
