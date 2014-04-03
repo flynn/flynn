@@ -128,8 +128,10 @@ func (s *S) TestHTTPInitialSync(c *C) {
 	etcd := newFakeEtcd()
 	l, _, err := newHTTPListener(etcd)
 	c.Assert(err, IsNil)
+	wait := waitForEvent(c, l, "add", "example.com")
 	err = l.AddRoute(&strowger.HTTPRoute{Domain: "example.com", Service: "test", TLSCert: string(localhostCert), TLSKey: string(localhostKey)})
 	c.Assert(err, IsNil)
+	wait()
 	l.Close()
 
 	srv := httptest.NewServer(httpTestHandler("1"))

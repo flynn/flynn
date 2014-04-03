@@ -148,6 +148,9 @@ func (h *httpSyncHandler) Add(data []byte) error {
 
 	h.l.mtx.Lock()
 	defer h.l.mtx.Unlock()
+	if h.l.closed {
+		return ErrClosed
+	}
 	if _, ok := h.l.domains[r.Domain]; ok {
 		return ErrExists
 	}
