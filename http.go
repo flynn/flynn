@@ -168,7 +168,6 @@ func (h *httpSyncHandler) Add(data []byte) error {
 	r.service = service
 	h.l.domains[r.Domain] = r
 
-	log.Println("Adding domain", r.Domain)
 	go h.l.wm.Send(&strowger.Event{Event: "add", ID: r.Domain})
 	return nil
 }
@@ -188,7 +187,6 @@ func (h *httpSyncHandler) Remove(name string) error {
 	}
 
 	delete(h.l.domains, name)
-	log.Println("Removing domain", name)
 	go h.l.wm.Send(&strowger.Event{Event: "remove", ID: name})
 	return nil
 }
@@ -232,7 +230,6 @@ func (s *HTTPListener) findRouteForHost(host string) *httpRoute {
 	defer s.mtx.RUnlock()
 	// TODO: handle wildcard domains
 	backend := s.domains[host]
-	log.Printf("Backend match: %#v\n", backend)
 	return backend
 }
 
@@ -264,7 +261,6 @@ func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 			return
 		}
 		host := vhostConn.Host()
-		log.Println("SNI host is:", host)
 
 		// Find a backend for the key
 		r = s.findRouteForHost(host)
