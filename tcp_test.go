@@ -44,12 +44,14 @@ func (s *TCPTestServer) Serve() {
 
 func (s *TCPTestServer) Close() error { return s.l.Close() }
 
+const firstTCPPort, lastTCPPort = 10000, 10009
+
 func newTCPListener(etcd *fakeEtcd) (*TCPListener, *fakeDiscoverd, error) {
 	discoverd := newFakeDiscoverd()
 	if etcd == nil {
 		etcd = newFakeEtcd()
 	}
-	l := NewTCPListener("127.0.0.1", NewEtcdDataStore(etcd, "/strowger/tcp/"), discoverd)
+	l := NewTCPListener("127.0.0.1", firstTCPPort, lastTCPPort, NewEtcdDataStore(etcd, "/strowger/tcp/"), discoverd)
 	return l, discoverd, l.Start()
 }
 
@@ -122,4 +124,37 @@ func (s *S) TestInitialTCPSync(c *C) {
 	defer discoverd.UnregisterAll()
 
 	assertTCPConn(c, addr, "1")
+}
+
+func (s *S) TestTCPPortAllocation(c *C) {
+	l, discoverd, err := newTCPListener(nil)
+	c.Assert(err, IsNil)
+	defer l.Close()
+	for i := 0; i < 2; i++ {
+		ports := make([]string, 0, 10)
+		for j := 0; j < 10; j++ {
+			route := &strowger.TCPRoute{Service: "test"}
+			wait := waitForEvent(c, l, "add", "")
+			err := l.AddRoute(route)
+			c.Assert(err, IsNil)
+			c.Assert(route.Port >= firstTCPPort && route.Port <= lastTCPPort, Equals, true)
+			wait()
+
+			port := strconv.Itoa(route.Port)
+			ports = append(ports, port)
+			srv := NewTCPTestServer(port)
+			defer srv.Close()
+			discoverd.Register("test", srv.Addr)
+
+			assertTCPConn(c, "127.0.0.1:"+port, port)
+			discoverd.UnregisterAll()
+		}
+		err = l.AddRoute(&strowger.TCPRoute{Service: "test"})
+		c.Assert(err, Equals, ErrNoPorts)
+		for _, port := range ports {
+			wait := waitForEvent(c, l, "remove", port)
+			l.RemoveRoute(port)
+			wait()
+		}
+	}
 }

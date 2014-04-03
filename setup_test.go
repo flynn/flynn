@@ -301,7 +301,7 @@ func waitForEvent(c *C, w Watcher, event string, id string) func() *strowger.Eve
 			}
 			select {
 			case e := <-ch:
-				if e.Event == event && e.ID == id {
+				if e.Event == event && (id == "" || e.ID == id) {
 					return e
 				}
 			case <-time.After(timeout):

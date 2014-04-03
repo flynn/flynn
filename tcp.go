@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -12,13 +14,16 @@ import (
 	"github.com/flynn/strowger/types"
 )
 
-func NewTCPListener(ip string, ds DataStore, dc DiscoverdClient) *TCPListener {
+func NewTCPListener(ip string, startPort, endPort int, ds DataStore, dc DiscoverdClient) *TCPListener {
 	l := &TCPListener{
 		IP:        ip,
 		ds:        ds,
 		wm:        NewWatchManager(),
 		discoverd: dc,
 		services:  make(map[int]*tcpService),
+		listeners: make(map[int]net.Listener),
+		startPort: startPort,
+		endPort:   endPort,
 	}
 	l.Watcher = l.wm
 	return l
@@ -33,19 +38,38 @@ type TCPListener struct {
 	ds        DataStore
 	wm        *WatchManager
 
+	startPort int
+	endPort   int
+	listeners map[int]net.Listener
+
 	mtx      sync.RWMutex
-	nextPort int
 	services map[int]*tcpService
 	closed   bool
 }
 
-func (l *TCPListener) AddRoute(route *strowger.TCPRoute) error {
+func (l *TCPListener) AddRoute(r *strowger.TCPRoute) error {
 	l.mtx.RLock()
 	defer l.mtx.RUnlock()
 	if l.closed {
 		return ErrClosed
 	}
-	return l.ds.Add(strconv.Itoa(route.Port), route)
+	if r.Port == 0 {
+		return l.addWithAllocatedPort(r)
+	}
+	return l.ds.Add(strconv.Itoa(r.Port), r)
+}
+
+var ErrNoPorts = errors.New("strowger: no ports available")
+
+func (l *TCPListener) addWithAllocatedPort(r *strowger.TCPRoute) error {
+	l.mtx.RLock()
+	defer l.mtx.RUnlock()
+	for r.Port = range l.listeners {
+		if err := l.ds.Add(strconv.Itoa(r.Port), r); err == nil {
+			return nil
+		}
+	}
+	return ErrNoPorts
 }
 
 func (l *TCPListener) RemoveRoute(port string) error {
@@ -59,6 +83,16 @@ func (l *TCPListener) RemoveRoute(port string) error {
 
 func (l *TCPListener) Start() error {
 	started := make(chan error)
+
+	for i := l.startPort; i <= l.endPort; i++ {
+		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", l.IP, i))
+		if err != nil {
+			l.Close()
+			return err
+		}
+		l.listeners[i] = listener
+	}
+
 	go l.ds.Sync(&tcpSyncHandler{l: l}, started)
 	return <-started
 }
@@ -69,6 +103,9 @@ func (l *TCPListener) Close() error {
 	l.ds.StopSync()
 	for _, s := range l.services {
 		s.Close()
+	}
+	for _, listener := range l.listeners {
+		listener.Close()
 	}
 	l.closed = true
 	return nil
@@ -93,17 +130,29 @@ func (h *tcpSyncHandler) Add(data []byte) error {
 		return ErrExists
 	}
 
-	s := &tcpService{addr: h.l.IP + ":" + strconv.Itoa(r.Port)}
+	s := &tcpService{
+		addr:   h.l.IP + ":" + strconv.Itoa(r.Port),
+		port:   r.Port,
+		parent: h.l,
+	}
 	var err error
 	s.ss, err = h.l.discoverd.NewServiceSet(r.Service)
 	if err != nil {
 		return err
 	}
 
+	if listener, ok := h.l.listeners[r.Port]; ok {
+		s.l = listener
+		delete(h.l.listeners, r.Port)
+	}
+
 	started := make(chan error)
 	go s.Serve(started)
 	if err := <-started; err != nil {
 		s.ss.Close()
+		if s.l != nil {
+			h.l.listeners[r.Port] = s.l
+		}
 		return err
 	}
 	h.l.services[r.Port] = s
@@ -130,20 +179,28 @@ func (h *tcpSyncHandler) Remove(id string) error {
 }
 
 type tcpService struct {
-	addr string
-	l    net.Listener
-	ss   discoverd.ServiceSet
+	parent *TCPListener
+	addr   string
+	port   int
+	l      net.Listener
+	ss     discoverd.ServiceSet
 }
 
 func (s *tcpService) Close() {
-	s.l.Close()
+	if s.port >= s.parent.startPort && s.port <= s.parent.endPort {
+		s.parent.listeners[s.port] = s.l
+	} else {
+		s.l.Close()
+	}
 	s.ss.Close()
 }
 
 func (s *tcpService) Serve(started chan<- error) {
 	var err error
 	// TODO: close the listener while there are no backends available
-	s.l, err = net.Listen("tcp", s.addr)
+	if s.l == nil {
+		s.l, err = net.Listen("tcp", s.addr)
+	}
 	started <- err
 	if err != nil {
 		return
