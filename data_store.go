@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
+	"log"
 	"path"
 
 	"github.com/flynn/go-etcd/etcd"
@@ -97,7 +97,7 @@ watch:
 			err = h.Add([]byte(res.Node.Value))
 		}
 		if err != nil {
-			panic(fmt.Sprintf("Error while processing update from etcd: %s, %#v", err, res.Node))
+			log.Printf("Error while processing update from etcd: %s, %#v", err, res.Node)
 		}
 	}
 }

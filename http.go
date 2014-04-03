@@ -149,7 +149,7 @@ func (h *httpSyncHandler) Add(data []byte) error {
 	h.l.mtx.Lock()
 	defer h.l.mtx.Unlock()
 	if h.l.closed {
-		return ErrClosed
+		return nil
 	}
 	if _, ok := h.l.domains[r.Domain]; ok {
 		return ErrExists
@@ -175,6 +175,9 @@ func (h *httpSyncHandler) Add(data []byte) error {
 func (h *httpSyncHandler) Remove(name string) error {
 	h.l.mtx.Lock()
 	defer h.l.mtx.Unlock()
+	if h.l.closed {
+		return nil
+	}
 	r, ok := h.l.domains[name]
 	if !ok {
 		return ErrNotFound

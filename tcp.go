@@ -87,7 +87,7 @@ func (h *tcpSyncHandler) Add(data []byte) error {
 	h.l.mtx.Lock()
 	defer h.l.mtx.Unlock()
 	if h.l.closed {
-		return ErrClosed
+		return nil
 	}
 	if _, ok := h.l.services[r.Port]; ok {
 		return ErrExists
@@ -114,6 +114,9 @@ func (h *tcpSyncHandler) Add(data []byte) error {
 func (h *tcpSyncHandler) Remove(id string) error {
 	h.l.mtx.Lock()
 	defer h.l.mtx.Unlock()
+	if h.l.closed {
+		return nil
+	}
 
 	port, _ := strconv.Atoi(id)
 	service, ok := h.l.services[port]
