@@ -1,19 +1,17 @@
 package main
 
 import (
-	"bytes"
 	"io"
 	"io/ioutil"
 	"net"
 	"strconv"
-	"strings"
 
 	"github.com/flynn/strowger/types"
 	. "github.com/titanous/gocheck"
 )
 
-func NewTCPTestServer(r io.Reader, w io.Writer) *TCPTestServer {
-	s := &TCPTestServer{w: w, r: r}
+func NewTCPTestServer(prefix string) *TCPTestServer {
+	s := &TCPTestServer{prefix: prefix}
 	var err error
 	s.l, err = net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -25,10 +23,9 @@ func NewTCPTestServer(r io.Reader, w io.Writer) *TCPTestServer {
 }
 
 type TCPTestServer struct {
-	Addr string
-	w    io.Writer
-	r    io.Reader
-	l    net.Listener
+	Addr   string
+	prefix string
+	l      net.Listener
 }
 
 func (s *TCPTestServer) Serve() {
@@ -38,14 +35,9 @@ func (s *TCPTestServer) Serve() {
 			return
 		}
 		go func() {
-			defer conn.Close()
-			done := make(chan struct{})
-			go func() {
-				io.Copy(conn, s.r)
-				close(done)
-			}()
-			io.Copy(s.w, conn)
-			<-done
+			conn.Write([]byte(s.prefix))
+			io.Copy(conn, conn)
+			conn.Close()
 		}()
 	}
 }
@@ -61,7 +53,7 @@ func newTCPListener(etcd *fakeEtcd) (*TCPListener, *fakeDiscoverd, error) {
 	return l, discoverd, l.Start()
 }
 
-func assertTCPConn(c *C, addr, expected string, rcvd *bytes.Buffer) {
+func assertTCPConn(c *C, addr, prefix string) {
 	conn, err := net.Dial("tcp", addr)
 	c.Assert(err, IsNil)
 	conn.Write([]byte("asdf"))
@@ -70,16 +62,13 @@ func assertTCPConn(c *C, addr, expected string, rcvd *bytes.Buffer) {
 	conn.Close()
 
 	c.Assert(err, IsNil)
-	c.Assert(string(res), Equals, expected)
-	c.Assert(rcvd.String(), Equals, "asdf")
-	rcvd.Reset()
+	c.Assert(string(res), Equals, prefix+"asdf")
 }
 
 func (s *S) TestAddTCPRoute(c *C) {
 	const addr, port, portInt = "127.0.0.1:45000", "45000", 45000
-	buf := &bytes.Buffer{}
-	srv1 := NewTCPTestServer(strings.NewReader("1"), buf)
-	srv2 := NewTCPTestServer(strings.NewReader("2"), buf)
+	srv1 := NewTCPTestServer("1")
+	srv2 := NewTCPTestServer("2")
 	defer srv1.Close()
 	defer srv2.Close()
 
@@ -95,12 +84,12 @@ func (s *S) TestAddTCPRoute(c *C) {
 	c.Assert(err, IsNil)
 	wait()
 
-	assertTCPConn(c, addr, "1", buf)
+	assertTCPConn(c, addr, "1")
 
 	discoverd.Unregister("test", srv1.Addr)
 	discoverd.Register("test", srv2.Addr)
 
-	assertTCPConn(c, addr, "2", buf)
+	assertTCPConn(c, addr, "2")
 
 	wait = waitForEvent(c, l, "remove", port)
 	err = l.RemoveRoute(port)
@@ -122,8 +111,7 @@ func (s *S) TestInitialTCPSync(c *C) {
 	wait()
 	l.Close()
 
-	buf := &bytes.Buffer{}
-	srv := NewTCPTestServer(strings.NewReader("1"), buf)
+	srv := NewTCPTestServer("1")
 	defer srv.Close()
 
 	l, discoverd, err := newTCPListener(etcd)
@@ -133,5 +121,5 @@ func (s *S) TestInitialTCPSync(c *C) {
 	discoverd.Register("test", srv.Addr)
 	defer discoverd.UnregisterAll()
 
-	assertTCPConn(c, addr, "1", buf)
+	assertTCPConn(c, addr, "1")
 }
