@@ -62,7 +62,7 @@ func listenerFor(router *Router, typ string) Listener {
 }
 
 func formatRoute(r *strowger.Route) *strowger.Route {
-	r.ID = fmt.Sprintf("/routes/%s/%s", r.Type, r.ID)
+	r.ID = fmt.Sprintf("%s/%s", r.Type, r.ID)
 	switch r.Type {
 	case "http":
 		httpRoute := r.HTTPRoute()

@@ -111,12 +111,12 @@ func (c *client) CreateRoute(r *strowger.Route) error {
 }
 
 func (c *client) DeleteRoute(id string) error {
-	return c.delete(id)
+	return c.delete("/routes/" + id)
 }
 
 func (c *client) GetRoute(id string) (*strowger.Route, error) {
 	res := &strowger.Route{}
-	err := c.get(id, res)
+	err := c.get("/routes/"+id, res)
 	return res, err
 }
 
