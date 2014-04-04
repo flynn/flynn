@@ -66,8 +66,8 @@ func (s *S) SetUpSuite(c *C) {
 	s.srv = httptest.NewServer(handler)
 }
 
-func (s *S) send(method, path string, data interface{}) (*http.Response, error) {
-	buf, err := json.Marshal(data)
+func (s *S) send(method, path string, in, out interface{}) (*http.Response, error) {
+	buf, err := json.Marshal(in)
 	if err != nil {
 		return nil, err
 	}
@@ -76,15 +76,23 @@ func (s *S) send(method, path string, data interface{}) (*http.Response, error) 
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	return http.DefaultClient.Do(req)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if out != nil && res.StatusCode == 200 {
+		defer res.Body.Close()
+		return res, json.NewDecoder(res.Body).Decode(out)
+	}
+	return res, nil
 }
 
-func (s *S) Post(path string, data interface{}) (*http.Response, error) {
-	return s.send("POST", path, data)
+func (s *S) Post(path string, in, out interface{}) (*http.Response, error) {
+	return s.send("POST", path, in, out)
 }
 
-func (s *S) Put(path string, data interface{}) (*http.Response, error) {
-	return s.send("PUT", path, data)
+func (s *S) Put(path string, in, out interface{}) (*http.Response, error) {
+	return s.send("PUT", path, in, out)
 }
 
 func (s *S) Get(path string, data interface{}) (*http.Response, error) {
@@ -108,15 +116,10 @@ func (s *S) Delete(path string) (*http.Response, error) {
 }
 
 func (s *S) createTestApp(c *C, in *ct.App) *ct.App {
-	res, err := s.Post("/apps", in)
+	out := &ct.App{}
+	res, err := s.Post("/apps", in, out)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
-
-	out := &ct.App{}
-	err = json.NewDecoder(res.Body).Decode(out)
-	res.Body.Close()
-	c.Assert(err, IsNil)
-
 	return out
 }
 
@@ -139,15 +142,10 @@ func (s *S) TestCreateApp(c *C) {
 }
 
 func (s *S) createTestArtifact(c *C, in *ct.Artifact) *ct.Artifact {
-	res, err := s.Post("/artifacts", in)
+	out := &ct.Artifact{}
+	res, err := s.Post("/artifacts", in, out)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
-
-	out := &ct.Artifact{}
-	err = json.NewDecoder(res.Body).Decode(out)
-	res.Body.Close()
-	c.Assert(err, IsNil)
-
 	return out
 }
 
@@ -172,28 +170,18 @@ func (s *S) createTestRelease(c *C, in *ct.Release) *ct.Release {
 	if in.ArtifactID == "" {
 		in.ArtifactID = s.createTestArtifact(c, &ct.Artifact{}).ID
 	}
-	res, err := s.Post("/releases", in)
+	out := &ct.Release{}
+	res, err := s.Post("/releases", in, out)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
-
-	out := &ct.Release{}
-	err = json.NewDecoder(res.Body).Decode(out)
-	res.Body.Close()
-	c.Assert(err, IsNil)
-
 	return out
 }
 
 func (s *S) createTestKey(c *C, in *ct.Key) *ct.Key {
-	res, err := s.Post("/keys", in)
+	out := &ct.Key{}
+	res, err := s.Post("/keys", in, out)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
-
-	out := &ct.Key{}
-	err = json.NewDecoder(res.Body).Decode(out)
-	res.Body.Close()
-	c.Assert(err, IsNil)
-
 	return out
 }
 
@@ -246,15 +234,10 @@ func (s *S) createTestFormation(c *C, formation *ct.Formation) *ct.Formation {
 	path := formationPath(formation.AppID, formation.ReleaseID)
 	formation.AppID = ""
 	formation.ReleaseID = ""
-	res, err := s.Put(path, formation)
+	out := &ct.Formation{}
+	res, err := s.Put(path, formation, out)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
-
-	out := &ct.Formation{}
-	err = json.NewDecoder(res.Body).Decode(out)
-	res.Body.Close()
-	c.Assert(err, IsNil)
-
 	return out
 }
 
@@ -396,13 +379,10 @@ func (s *S) TestFormationList(c *C) {
 }
 
 func (s *S) setAppRelease(c *C, appID, id string) *ct.Release {
-	res, err := s.Put("/apps/"+appID+"/release", &ct.Release{ID: id})
+	out := &ct.Release{}
+	res, err := s.Put("/apps/"+appID+"/release", &ct.Release{ID: id}, out)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
-	out := &ct.Release{}
-	err = json.NewDecoder(res.Body).Decode(out)
-	res.Body.Close()
-	c.Assert(err, IsNil)
 	return out
 }
 
@@ -442,13 +422,10 @@ func (s *S) TestSetAppRelease(c *C) {
 }
 
 func (s *S) createTestProvider(c *C, provider *ct.Provider) *ct.Provider {
-	res, err := s.Post("/providers", provider)
+	out := &ct.Provider{}
+	res, err := s.Post("/providers", provider, out)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
-	out := &ct.Provider{}
-	err = json.NewDecoder(res.Body).Decode(out)
-	res.Body.Close()
-	c.Assert(err, IsNil)
 	return out
 }
 

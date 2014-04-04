@@ -72,14 +72,10 @@ func (s *S) provisionTestResource(c *C, name string, apps []string) (*ct.Resourc
 
 	p := s.createTestProvider(c, &ct.Provider{URL: fmt.Sprintf("discoverd+http://%s/things", name), Name: name})
 	conf := json.RawMessage(data)
-	res, err := s.Post("/providers/"+p.ID+"/resources", &ct.ResourceReq{Config: &conf, Apps: apps})
+	out := &ct.Resource{}
+	res, err := s.Post("/providers/"+p.ID+"/resources", &ct.ResourceReq{Config: &conf, Apps: apps}, out)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
-
-	out := &ct.Resource{}
-	err = json.NewDecoder(res.Body).Decode(out)
-	res.Body.Close()
-	c.Assert(err, IsNil)
 	return out, p
 }
 
