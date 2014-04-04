@@ -13,7 +13,7 @@ func TestHTTPClient(t *testing.T) {
 	client, cleanup := setup(t)
 	defer cleanup()
 
-	hc := dialer.HTTPClient(client)
+	hc := dialer.NewHTTPClient(client)
 	_, err := hc.Get("http://httpclient/")
 	if ue, ok := err.(*url.Error); !ok || ue.Err != balancer.ErrNoServices {
 		t.Error("Expected err to be ErrNoServices, got", ue.Err)

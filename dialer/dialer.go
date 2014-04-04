@@ -10,17 +10,22 @@ import (
 	"github.com/flynn/go-discoverd/balancer"
 )
 
-// HTTPClient returns a HTTP client configured to use discoverd to lookup hostnames.
-func HTTPClient(c *discoverd.Client) *http.Client {
-	return &http.Client{Transport: &http.Transport{Dial: Dialer(c, nil)}}
+// NewHTTPClient returns a HTTP client configured to use discoverd to lookup hostnames.
+func NewHTTPClient(c *discoverd.Client) *http.Client {
+	return &http.Client{Transport: &http.Transport{Dial: New(c, nil).Dial}}
 }
 
 type DialFunc func(network, addr string) (net.Conn, error)
 
-// Dialer returns a DialFunc that uses discoverd to lookup hostnames. If f is
+// New returns a Dialer that uses discoverd to lookup hostnames. If f is
 // provided, it used to Dial after looking up an address.
-func Dialer(c *discoverd.Client, f DialFunc) DialFunc {
-	return newDialer(c, f).Dial
+func New(c *discoverd.Client, f DialFunc) Dialer {
+	return newDialer(c, f)
+}
+
+type Dialer interface {
+	Dial(network, addr string) (net.Conn, error)
+	Close() error
 }
 
 func newDialer(c *discoverd.Client, f DialFunc) *dialer {
@@ -56,6 +61,16 @@ func (d *dialer) Dial(network, addr string) (net.Conn, error) {
 	}
 
 	return d.dial(network, server.Addr)
+}
+
+func (d *dialer) Close() error {
+	d.mtx.Lock()
+	defer d.mtx.Unlock()
+	for k, v := range d.sets {
+		v.ServiceSet.Close()
+		delete(d.sets, k)
+	}
+	return nil
 }
 
 func (d *dialer) getSet(name string) (*set, error) {
