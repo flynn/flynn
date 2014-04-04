@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-discoverd/balancer"
 	"github.com/flynn/go-discoverd/dialer"
 )
@@ -22,6 +23,10 @@ func TestHTTPClient(t *testing.T) {
 	s := httptest.NewServer(nil)
 	defer s.Close()
 	client.Register("httpclient", s.URL[7:])
+
+	set, _ := discoverd.NewServiceSet("httpclient")
+	waitUpdates(t, set, true, 1)()
+	set.Close()
 
 	_, err = hc.Get("http://httpclient/")
 	if err != nil {
