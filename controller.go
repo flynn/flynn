@@ -9,6 +9,8 @@ import (
 	"github.com/flynn/go-flynn/resource"
 	"github.com/flynn/go-sql"
 	"github.com/flynn/rpcplus"
+	strowgerc "github.com/flynn/strowger/client"
+	"github.com/flynn/strowger/types"
 	"github.com/go-martini/martini"
 	"github.com/martini-contrib/binding"
 	"github.com/martini-contrib/render"
@@ -19,11 +21,11 @@ func main() {
 	if port == "" {
 		port = "3000"
 	}
-	handler, _ := appHandler(nil, nil)
+	handler, _ := appHandler(nil, nil, nil)
 	http.ListenAndServe(":"+port, handler)
 }
 
-func appHandler(db *sql.DB, cc clusterClient) (http.Handler, *martini.Martini) {
+func appHandler(db *sql.DB, cc clusterClient, sc strowgerc.Client) (http.Handler, *martini.Martini) {
 	r := martini.NewRouter()
 	m := martini.New()
 	m.Use(martini.Logger())
@@ -46,6 +48,7 @@ func appHandler(db *sql.DB, cc clusterClient) (http.Handler, *martini.Martini) {
 	m.Map(releaseRepo)
 	m.Map(formationRepo)
 	m.MapTo(cc, (*clusterClient)(nil))
+	m.MapTo(sc, (*strowgerc.Client)(nil))
 
 	getAppMiddleware := crud("apps", ct.App{}, appRepo, r)
 	getReleaseMiddleware := crud("releases", ct.Release{}, releaseRepo, r)
@@ -70,6 +73,11 @@ func appHandler(db *sql.DB, cc clusterClient) (http.Handler, *martini.Martini) {
 	r.Get("/providers/:providers_id/resources", getProviderMiddleware, getProviderResources)
 	r.Get("/providers/:providers_id/resources/:resources_id", getProviderMiddleware, getResourceMiddleware, getResource)
 	r.Get("/apps/:apps_id/resources", getAppMiddleware, getAppResources)
+
+	r.Post("/apps/:apps_id/routes", getAppMiddleware, binding.Bind(strowger.Route{}), createRoute)
+	r.Get("/apps/:apps_id/routes", getAppMiddleware, getRouteList)
+	r.Get("/apps/:apps_id/routes/:routes_type/:routes_id", getAppMiddleware, getRouteMiddleware, getRoute)
+	r.Delete("/apps/:apps_id/routes/:routes_type/:routes_id", getAppMiddleware, getRouteMiddleware, deleteRoute)
 
 	return rpcMuxHandler(m, rpcHandler(formationRepo)), m
 }

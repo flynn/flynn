@@ -61,7 +61,7 @@ func (s *S) SetUpSuite(c *C) {
 	}
 
 	s.cc = newFakeCluster()
-	handler, m := appHandler(db, s.cc)
+	handler, m := appHandler(db, s.cc, newFakeRouter())
 	s.m = m
 	s.srv = httptest.NewServer(handler)
 }
