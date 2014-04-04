@@ -6,12 +6,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/codegangsta/martini"
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/go-flynn/cluster"
+	"github.com/go-martini/martini"
 	"github.com/martini-contrib/render"
 )
 

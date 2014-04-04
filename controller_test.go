@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/codegangsta/martini"
 	"github.com/flynn/go-sql"
+	"github.com/go-martini/martini"
 
 	ct "github.com/flynn/flynn-controller/types"
 	_ "github.com/flynn/pq"

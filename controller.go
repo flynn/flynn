@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/codegangsta/martini"
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/go-flynn/resource"
 	"github.com/flynn/go-sql"
 	"github.com/flynn/rpcplus"
+	"github.com/go-martini/martini"
 	"github.com/martini-contrib/binding"
 	"github.com/martini-contrib/render"
 )
