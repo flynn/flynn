@@ -1,18 +1,13 @@
 {
 	"ImportPath": "github.com/flynn/strowger",
-	"GoVersion": "go1.2",
+	"GoVersion": "devel +3188f9e48f0f Fri Apr 04 16:46:23 2014 +0200",
 	"Packages": [
 		"./..."
 	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/codegangsta/inject",
-			"Rev": "346a984957aa24276ebc5e7b16b3ac6a50fe8138"
-		},
-		{
-			"ImportPath": "github.com/codegangsta/martini",
-			"Comment": "v0.1-79-gec4ae4a",
-			"Rev": "ec4ae4a9fa9e404c1a7ca3b3419d6b75649aaee7"
+			"Rev": "9aea7a2fa5b79ef7fc00f63a575e72df33b4e886"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
@@ -41,16 +36,21 @@
 			"Rev": "7ce4d7e5143b55e7376b16bde2cfab5814d5fabe"
 		},
 		{
+			"ImportPath": "github.com/go-martini/martini",
+			"Comment": "v0.1-149-g7cea1b3",
+			"Rev": "7cea1b34e29976de64195b7cca1f668cad9abc8d"
+		},
+		{
 			"ImportPath": "github.com/inconshreveable/go-vhost",
 			"Rev": "abc5f6a77596abba0c71c07cfe22b6ccfd0a7d2d"
 		},
 		{
 			"ImportPath": "github.com/martini-contrib/binding",
-			"Rev": "eebf0bfeee6b301001cb12c193bce692b359dd62"
+			"Rev": "868aa3c906a9671878bf49eb1579bd14324456b9"
 		},
 		{
 			"ImportPath": "github.com/martini-contrib/render",
-			"Rev": "68eb61a5313c3eff5625a16f6eee8f29b4835ff7"
+			"Rev": "7b617783357fec5b5a6d4ecac82e747e4a14d1b5"
 		},
 		{
 			"ImportPath": "github.com/titanous/gocheck",

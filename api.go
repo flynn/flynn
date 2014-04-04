@@ -8,8 +8,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/codegangsta/martini"
 	"github.com/flynn/strowger/types"
+	"github.com/go-martini/martini"
 	"github.com/martini-contrib/binding"
 	"github.com/martini-contrib/render"
 )
