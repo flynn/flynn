@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 
@@ -39,11 +40,15 @@ func (s *Router) ListenAndServe(quit <-chan struct{}) error {
 func main() {
 	httpAddr := flag.String("httpaddr", ":8080", "http listen address")
 	httpsAddr := flag.String("httpsaddr", ":4433", "https listen address")
+	apiAddr := flag.String("apiaddr", ":5000", "api listen address")
 	flag.Parse()
 
 	// Will use DISCOVERD environment variable
 	d, err := discoverd.NewClient()
 	if err != nil {
+		log.Fatal(err)
+	}
+	if err := d.Register("strowger-api", *apiAddr); err != nil {
 		log.Fatal(err)
 	}
 
@@ -54,8 +59,8 @@ func main() {
 	}
 
 	var r Router
-	r.HTTP = NewHTTPListener(*httpAddr, *httpsAddr,
-		NewEtcdDataStore(etcd.NewClient(etcdAddr), "/strowger/http/"), d)
+	r.HTTP = NewHTTPListener(*httpAddr, *httpsAddr, NewEtcdDataStore(etcd.NewClient(etcdAddr), "/strowger/http/"), d)
 
-	r.ListenAndServe(nil)
+	go func() { log.Fatal(r.ListenAndServe(nil)) }()
+	log.Fatal(http.ListenAndServe(*apiAddr, apiHandler(&r)))
 }

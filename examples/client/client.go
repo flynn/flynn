@@ -10,12 +10,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/flynn/rpcplus"
+	"github.com/flynn/strowger/client"
 	"github.com/flynn/strowger/types"
 )
 
 func main() {
-	rpcAddr := flag.String("rpc", "localhost:1115", "strowger RPC address to connect to")
 	certPath := flag.String("cert", "", "path to DER encoded certificate for SSL, - for stdin")
 	keyPath := flag.String("key", "", "path to DER encoded private key for SSL, - for stdin")
 	flag.Parse()
@@ -45,7 +44,7 @@ func main() {
 		return
 	}
 
-	client, err := rpcplus.DialHTTP("tcp", *rpcAddr)
+	client, err := client.New()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -56,8 +55,7 @@ func main() {
 		TLSCert: string(tlsCert),
 		TLSKey:  string(tlsKey),
 	}
-	err = client.Call("Router.AddHTTPRoute", conf, &struct{}{})
-	if err != nil {
+	if err := client.CreateRoute(conf.ToRoute()); err != nil {
 		log.Fatal(err)
 	}
 }
