@@ -1,12 +1,9 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"net/http"
 	"net/http/httptest"
 
+	"github.com/flynn/strowger/client"
 	"github.com/flynn/strowger/types"
 	. "github.com/titanous/gocheck"
 )
@@ -19,13 +16,19 @@ func newTestAPIServer() *testAPIServer {
 		HTTP: httpListener,
 		TCP:  tcpListener,
 	}
-	return &testAPIServer{
+	ts := &testAPIServer{
 		Server:    httptest.NewServer(apiHandler(r)),
 		listeners: []Listener{r.HTTP, r.TCP},
 	}
+
+	discoverd := newFakeDiscoverd()
+	discoverd.Register("strowger-api", ts.Listener.Addr().String())
+	ts.Client = client.NewWithDiscoverd("", discoverd)
+	return ts
 }
 
 type testAPIServer struct {
+	client.Client
 	*httptest.Server
 	listeners []Listener
 }
@@ -35,49 +38,8 @@ func (s *testAPIServer) Close() error {
 	for _, l := range s.listeners {
 		l.Close()
 	}
+	s.Client.Close()
 	return nil
-}
-
-func (s *testAPIServer) Get(path string, v interface{}) (*http.Response, error) {
-	res, err := http.Get(s.URL + path)
-	if err != nil {
-		return nil, err
-	}
-	if v != nil {
-		defer res.Body.Close()
-		if res.StatusCode != http.StatusOK {
-			return res, fmt.Errorf("Unexpected status code %d", res.StatusCode)
-		}
-		return res, json.NewDecoder(res.Body).Decode(v)
-	}
-	return res, nil
-}
-
-func (s *testAPIServer) Post(path string, in, out interface{}) (*http.Response, error) {
-	buf, err := json.Marshal(in)
-	if err != nil {
-		return nil, err
-	}
-	res, err := http.Post(s.URL+path, "application/json", bytes.NewBuffer(buf))
-	if err != nil {
-		return nil, err
-	}
-	if out != nil {
-		if res.StatusCode != 200 {
-			return res, fmt.Errorf("Unexpected status code %d", res.StatusCode)
-		}
-		defer res.Body.Close()
-		return res, json.NewDecoder(res.Body).Decode(out)
-	}
-	return res, nil
-}
-
-func (s *testAPIServer) Delete(path string) (*http.Response, error) {
-	req, err := http.NewRequest("DELETE", s.URL+path, nil)
-	if err != nil {
-		return nil, err
-	}
-	return http.DefaultClient.Do(req)
 }
 
 func (s *S) TestAPIAddTCPRoute(c *C) {
@@ -85,19 +47,17 @@ func (s *S) TestAPIAddTCPRoute(c *C) {
 	defer srv.Close()
 
 	r := (&strowger.TCPRoute{Service: "test"}).ToRoute()
-	route := &strowger.Route{}
-	_, err := srv.Post("/routes", r, route)
+	err := srv.CreateRoute(r)
 	c.Assert(err, IsNil)
 
-	tcpRoute := route.TCPRoute()
+	tcpRoute := r.TCPRoute()
 	c.Assert(tcpRoute.ID, Not(Equals), "")
 	c.Assert(tcpRoute.CreatedAt, Not(IsNil))
 	c.Assert(tcpRoute.UpdatedAt, Not(IsNil))
 	c.Assert(tcpRoute.Service, Equals, "test")
 	c.Assert(tcpRoute.Port, Not(Equals), 0)
 
-	route = &strowger.Route{}
-	_, err = srv.Get(tcpRoute.ID, route)
+	route, err := srv.GetRoute(tcpRoute.ID)
 	c.Assert(err, IsNil)
 
 	getTCPRoute := route.TCPRoute()
@@ -107,12 +67,10 @@ func (s *S) TestAPIAddTCPRoute(c *C) {
 	c.Assert(getTCPRoute.Service, Equals, "test")
 	c.Assert(getTCPRoute.Port, Equals, tcpRoute.Port)
 
-	_, err = srv.Delete(route.ID)
+	err = srv.DeleteRoute(route.ID)
 	c.Assert(err, IsNil)
-	res, err := srv.Get(route.ID, nil)
-	c.Assert(err, IsNil)
-	res.Body.Close()
-	c.Assert(res.StatusCode, Equals, 404)
+	_, err = srv.GetRoute(route.ID)
+	c.Assert(err, Equals, client.ErrNotFound)
 }
 
 func (s *S) TestAPIAddHTTPRoute(c *C) {
@@ -120,19 +78,17 @@ func (s *S) TestAPIAddHTTPRoute(c *C) {
 	defer srv.Close()
 
 	r := (&strowger.HTTPRoute{Domain: "example.com", Service: "test"}).ToRoute()
-	route := &strowger.Route{}
-	_, err := srv.Post("/routes", r, route)
+	err := srv.CreateRoute(r)
 	c.Assert(err, IsNil)
 
-	httpRoute := route.HTTPRoute()
+	httpRoute := r.HTTPRoute()
 	c.Assert(httpRoute.ID, Not(Equals), "")
 	c.Assert(httpRoute.CreatedAt, Not(IsNil))
 	c.Assert(httpRoute.UpdatedAt, Not(IsNil))
 	c.Assert(httpRoute.Service, Equals, "test")
 	c.Assert(httpRoute.Domain, Equals, "example.com")
 
-	route = &strowger.Route{}
-	_, err = srv.Get(httpRoute.ID, route)
+	route, err := srv.GetRoute(httpRoute.ID)
 	c.Assert(err, IsNil)
 
 	getHTTPRoute := route.HTTPRoute()
@@ -142,12 +98,10 @@ func (s *S) TestAPIAddHTTPRoute(c *C) {
 	c.Assert(getHTTPRoute.Service, Equals, "test")
 	c.Assert(getHTTPRoute.Domain, Equals, "example.com")
 
-	_, err = srv.Delete(route.ID)
+	err = srv.DeleteRoute(route.ID)
 	c.Assert(err, IsNil)
-	res, err := srv.Get(route.ID, nil)
-	c.Assert(err, IsNil)
-	res.Body.Close()
-	c.Assert(res.StatusCode, Equals, 404)
+	_, err = srv.GetRoute(route.ID)
+	c.Assert(err, Equals, client.ErrNotFound)
 }
 
 func (s *S) TestAPIListRoutes(c *C) {
@@ -159,17 +113,16 @@ func (s *S) TestAPIListRoutes(c *C) {
 	r2 := (&strowger.TCPRoute{Service: "test"}).ToRoute()
 	r3 := (&strowger.TCPRoute{Service: "test", Route: &strowger.Route{ParentRef: "foo"}}).ToRoute()
 
-	_, err := srv.Post("/routes", r0, r0)
+	err := srv.CreateRoute(r0)
 	c.Assert(err, IsNil)
-	_, err = srv.Post("/routes", r1, r1)
+	err = srv.CreateRoute(r1)
 	c.Assert(err, IsNil)
-	_, err = srv.Post("/routes", r2, r2)
+	err = srv.CreateRoute(r2)
 	c.Assert(err, IsNil)
-	_, err = srv.Post("/routes", r3, r3)
+	err = srv.CreateRoute(r3)
 	c.Assert(err, IsNil)
 
-	var routes []*strowger.Route
-	_, err = srv.Get("/routes", &routes)
+	routes, err := srv.ListRoutes("")
 	c.Assert(err, IsNil)
 	c.Assert(routes, HasLen, 4)
 	c.Assert(routes[3].ID, Equals, r0.ID)
@@ -177,7 +130,7 @@ func (s *S) TestAPIListRoutes(c *C) {
 	c.Assert(routes[1].ID, Equals, r2.ID)
 	c.Assert(routes[0].ID, Equals, r3.ID)
 
-	_, err = srv.Get("/routes?parent_ref=foo", &routes)
+	routes, err = srv.ListRoutes("foo")
 	c.Assert(err, IsNil)
 	c.Assert(routes, HasLen, 2)
 	c.Assert(routes[1].ID, Equals, r1.ID)

@@ -1,43 +1,137 @@
 package client
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
 
 	"github.com/flynn/go-discoverd"
-	"github.com/flynn/rpcplus"
+	"github.com/flynn/go-discoverd/dialer"
 	"github.com/flynn/strowger/types"
 )
 
 func New() (Client, error) {
-	services, err := discoverd.Services("flynn-strowger-rpc", discoverd.DefaultTimeout)
-	if err != nil {
+	if err := discoverd.Connect(""); err != nil {
 		return nil, err
 	}
-	if len(services) == 0 {
-		return nil, errors.New("strowger: no servers found")
+	return NewWithDiscoverd("", discoverd.DefaultClient), nil
+}
+
+func NewWithDiscoverd(name string, dc dialer.DiscoverdClient) Client {
+	if name == "" {
+		name = "strowger"
 	}
-	c, err := rpcplus.DialHTTP("tcp", services[0].Addr)
-	return &client{c}, err
+	c := &client{
+		dialer: dialer.New(dc, nil),
+		url:    fmt.Sprintf("http://%s-api", name),
+	}
+	c.http = &http.Client{Transport: &http.Transport{Dial: c.dialer.Dial}}
+	return c
 }
 
 type Client interface {
-	AddHTTPRoute(*strowger.HTTPRoute) error
-	AddTCPRoute(*strowger.TCPRoute) error
+	CreateRoute(*strowger.Route) error
+	DeleteRoute(id string) error
+	GetRoute(id string) (*strowger.Route, error)
+	ListRoutes(parentRef string) ([]*strowger.Route, error)
 	Close() error
 }
 
+var ErrNotFound = errors.New("strowger: route not found")
+
+type HTTPError struct {
+	Response *http.Response
+}
+
+func (e HTTPError) Error() string {
+	return fmt.Sprintf("strowger: expected http status 200, got %d", e.Response.StatusCode)
+}
+
 type client struct {
-	c *rpcplus.Client
+	url    string
+	dialer dialer.Dialer
+	http   *http.Client
 }
 
-func (c *client) AddHTTPRoute(r *strowger.HTTPRoute) error {
-	return c.c.Call("Router.AddHTTPRoute", r, &struct{}{})
+func (c *client) get(path string, v interface{}) error {
+	res, err := c.http.Get(c.url + path)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode == 404 {
+		return ErrNotFound
+	}
+	if res.StatusCode != 200 {
+		return HTTPError{res}
+	}
+	return json.NewDecoder(res.Body).Decode(v)
 }
 
-func (c *client) AddTCPRoute(r *strowger.TCPRoute) error {
-	return c.c.Call("Router.AddTCPRoute", r, &struct{}{})
+func (c *client) post(path string, v interface{}) error {
+	buf, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	res, err := c.http.Post(c.url+path, "application/json", bytes.NewBuffer(buf))
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return HTTPError{res}
+	}
+	return json.NewDecoder(res.Body).Decode(v)
+}
+
+func (c *client) delete(path string) error {
+	req, err := http.NewRequest("DELETE", c.url+path, nil)
+	if err != nil {
+		return err
+	}
+	res, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	res.Body.Close()
+	if res.StatusCode == 404 {
+		return ErrNotFound
+	}
+	if res.StatusCode != 200 {
+		return HTTPError{res}
+	}
+	return nil
+}
+
+func (c *client) CreateRoute(r *strowger.Route) error {
+	return c.post("/routes", r)
+}
+
+func (c *client) DeleteRoute(id string) error {
+	return c.delete(id)
+}
+
+func (c *client) GetRoute(id string) (*strowger.Route, error) {
+	res := &strowger.Route{}
+	err := c.get(id, res)
+	return res, err
+}
+
+func (c *client) ListRoutes(parentRef string) ([]*strowger.Route, error) {
+	path := "/routes"
+	if parentRef != "" {
+		q := make(url.Values)
+		q.Set("parent_ref", parentRef)
+		path += "?" + q.Encode()
+	}
+	var res []*strowger.Route
+	err := c.get(path, &res)
+	return res, err
 }
 
 func (c *client) Close() error {
-	return c.c.Close()
+	return c.dialer.Close()
 }
