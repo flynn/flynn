@@ -2,8 +2,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
 	"crypto/tls"
-	"encoding/json"
+	"encoding/hex"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -24,6 +25,7 @@ import (
 
 type HTTPListener struct {
 	Watcher
+	DataStoreReader
 
 	Addr      string
 	TLSAddr   string
@@ -31,6 +33,7 @@ type HTTPListener struct {
 
 	mtx      sync.RWMutex
 	domains  map[string]*httpRoute
+	routes   map[string]*httpRoute
 	services map[string]*httpService
 
 	discoverd DiscoverdClient
@@ -52,11 +55,13 @@ func NewHTTPListener(addr, tlsAddr string, ds DataStore, discoverdc DiscoverdCli
 		TLSAddr:   tlsAddr,
 		ds:        ds,
 		discoverd: discoverdc,
+		routes:    make(map[string]*httpRoute),
 		domains:   make(map[string]*httpRoute),
 		services:  make(map[string]*httpService),
 		wm:        NewWatchManager(),
 	}
 	l.Watcher = l.wm
+	l.DataStoreReader = l.ds
 	return l
 }
 
@@ -101,39 +106,41 @@ func (s *HTTPListener) Start() error {
 
 var ErrClosed = errors.New("strowger: listener has been closed")
 
-func (s *HTTPListener) AddRoute(r *strowger.HTTPRoute) error {
+func (s *HTTPListener) AddRoute(r *strowger.Route) error {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	if s.closed {
 		return ErrClosed
 	}
-
-	return s.ds.Add(r.Domain, &httpRoute{
-		Domain:  r.Domain,
-		Service: r.Service,
-		TLSCert: r.TLSCert,
-		TLSKey:  r.TLSKey,
-	})
+	r.ID = md5sum(r.HTTPRoute().Domain)
+	return s.ds.Add(r)
 }
 
-func (s *HTTPListener) RemoveRoute(domain string) error {
+func md5sum(data string) string {
+	digest := md5.Sum([]byte(data))
+	return hex.EncodeToString(digest[:])
+}
+
+func (s *HTTPListener) RemoveRoute(id string) error {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	if s.closed {
 		return ErrClosed
 	}
-
-	return s.ds.Remove(domain)
+	return s.ds.Remove(id)
 }
 
 type httpSyncHandler struct {
 	l *HTTPListener
 }
 
-func (h *httpSyncHandler) Add(data []byte) error {
-	r := &httpRoute{}
-	if err := json.Unmarshal(data, r); err != nil {
-		return err
+func (h *httpSyncHandler) Add(data *strowger.Route) error {
+	route := data.HTTPRoute()
+	r := &httpRoute{
+		Domain:  route.Domain,
+		Service: route.Service,
+		TLSCert: route.TLSCert,
+		TLSKey:  route.TLSKey,
 	}
 
 	if r.TLSCert != "" && r.TLSKey != "" {
@@ -151,7 +158,7 @@ func (h *httpSyncHandler) Add(data []byte) error {
 	if h.l.closed {
 		return nil
 	}
-	if _, ok := h.l.domains[r.Domain]; ok {
+	if _, ok := h.l.routes[data.ID]; ok {
 		return ErrExists
 	}
 
@@ -166,19 +173,20 @@ func (h *httpSyncHandler) Add(data []byte) error {
 	}
 	service.refs++
 	r.service = service
+	h.l.routes[data.ID] = r
 	h.l.domains[r.Domain] = r
 
 	go h.l.wm.Send(&strowger.Event{Event: "add", ID: r.Domain})
 	return nil
 }
 
-func (h *httpSyncHandler) Remove(name string) error {
+func (h *httpSyncHandler) Remove(id string) error {
 	h.l.mtx.Lock()
 	defer h.l.mtx.Unlock()
 	if h.l.closed {
 		return nil
 	}
-	r, ok := h.l.domains[name]
+	r, ok := h.l.routes[id]
 	if !ok {
 		return ErrNotFound
 	}
@@ -189,8 +197,9 @@ func (h *httpSyncHandler) Remove(name string) error {
 		delete(h.l.services, r.service.name)
 	}
 
-	delete(h.l.domains, name)
-	go h.l.wm.Send(&strowger.Event{Event: "remove", ID: name})
+	delete(h.l.routes, id)
+	delete(h.l.domains, r.Domain)
+	go h.l.wm.Send(&strowger.Event{Event: "remove", ID: id})
 	return nil
 }
 

@@ -79,10 +79,7 @@ func (s *S) TestAddHTTPRoute(c *C) {
 	discoverd.Register("test", srv1.Listener.Addr().String())
 	defer discoverd.UnregisterAll()
 
-	wait := waitForEvent(c, l, "add", "example.com")
-	err = l.AddRoute(&strowger.HTTPRoute{Domain: "example.com", Service: "test", TLSCert: string(localhostCert), TLSKey: string(localhostKey)})
-	c.Assert(err, IsNil)
-	wait()
+	r := addHTTPRoute(c, l)
 
 	assertGet(c, "http://"+l.Addr, "example.com", "1")
 	assertGet(c, "https://"+l.TLSAddr, "example.com", "1")
@@ -96,8 +93,8 @@ func (s *S) TestAddHTTPRoute(c *C) {
 	assertGet(c, "http://"+l.Addr, "example.com", "2")
 	assertGet(c, "https://"+l.TLSAddr, "example.com", "2")
 
-	wait = waitForEvent(c, l, "remove", "example.com")
-	err = l.RemoveRoute("example.com")
+	wait := waitForEvent(c, l, "remove", r.ID)
+	err = l.RemoveRoute(r.ID)
 	c.Assert(err, IsNil)
 	wait()
 	httpClient.Transport.(*http.Transport).CloseIdleConnections()
@@ -124,14 +121,25 @@ func assertGet(c *C, url, host, expected string) {
 	c.Assert(string(data), Equals, expected)
 }
 
+func addHTTPRoute(c *C, l *HTTPListener) *strowger.Route {
+	wait := waitForEvent(c, l, "add", "")
+	r := (&strowger.HTTPRoute{
+		Domain:  "example.com",
+		Service: "test",
+		TLSCert: string(localhostCert),
+		TLSKey:  string(localhostKey),
+	}).ToRoute()
+	err := l.AddRoute(r)
+	c.Assert(err, IsNil)
+	wait()
+	return r
+}
+
 func (s *S) TestHTTPInitialSync(c *C) {
 	etcd := newFakeEtcd()
 	l, _, err := newHTTPListener(etcd)
+	addHTTPRoute(c, l)
 	c.Assert(err, IsNil)
-	wait := waitForEvent(c, l, "add", "example.com")
-	err = l.AddRoute(&strowger.HTTPRoute{Domain: "example.com", Service: "test", TLSCert: string(localhostCert), TLSKey: string(localhostKey)})
-	c.Assert(err, IsNil)
-	wait()
 	l.Close()
 
 	srv := httptest.NewServer(httpTestHandler("1"))

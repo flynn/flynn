@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,21 +15,24 @@ import (
 
 func NewTCPListener(ip string, startPort, endPort int, ds DataStore, dc DiscoverdClient) *TCPListener {
 	l := &TCPListener{
-		IP:        ip,
-		ds:        ds,
-		wm:        NewWatchManager(),
-		discoverd: dc,
-		services:  make(map[int]*tcpService),
-		listeners: make(map[int]net.Listener),
-		startPort: startPort,
-		endPort:   endPort,
+		IP:         ip,
+		ds:         ds,
+		wm:         NewWatchManager(),
+		discoverd:  dc,
+		services:   make(map[int]*tcpService),
+		serviceIDs: make(map[string]*tcpService),
+		listeners:  make(map[int]net.Listener),
+		startPort:  startPort,
+		endPort:    endPort,
 	}
 	l.Watcher = l.wm
+	l.DataStoreReader = l.ds
 	return l
 }
 
 type TCPListener struct {
 	Watcher
+	DataStoreReader
 
 	IP string
 
@@ -42,43 +44,50 @@ type TCPListener struct {
 	endPort   int
 	listeners map[int]net.Listener
 
-	mtx      sync.RWMutex
-	services map[int]*tcpService
-	closed   bool
+	mtx        sync.RWMutex
+	services   map[int]*tcpService
+	serviceIDs map[string]*tcpService
+	closed     bool
 }
 
-func (l *TCPListener) AddRoute(r *strowger.TCPRoute) error {
+func (l *TCPListener) AddRoute(route *strowger.Route) error {
+	r := route.TCPRoute()
 	l.mtx.RLock()
 	defer l.mtx.RUnlock()
 	if l.closed {
 		return ErrClosed
 	}
 	if r.Port == 0 {
-		return l.addWithAllocatedPort(r)
+		return l.addWithAllocatedPort(route)
 	}
-	return l.ds.Add(strconv.Itoa(r.Port), r)
+	route.ID = md5sum(strconv.Itoa(r.Port))
+	return l.ds.Add(route)
 }
 
 var ErrNoPorts = errors.New("strowger: no ports available")
 
-func (l *TCPListener) addWithAllocatedPort(r *strowger.TCPRoute) error {
+func (l *TCPListener) addWithAllocatedPort(route *strowger.Route) error {
+	r := route.TCPRoute()
 	l.mtx.RLock()
 	defer l.mtx.RUnlock()
 	for r.Port = range l.listeners {
-		if err := l.ds.Add(strconv.Itoa(r.Port), r); err == nil {
+		r.Route.ID = md5sum(strconv.Itoa(r.Port))
+		tempRoute := r.ToRoute()
+		if err := l.ds.Add(tempRoute); err == nil {
+			*route = *tempRoute
 			return nil
 		}
 	}
 	return ErrNoPorts
 }
 
-func (l *TCPListener) RemoveRoute(port string) error {
+func (l *TCPListener) RemoveRoute(id string) error {
 	l.mtx.RLock()
 	defer l.mtx.RUnlock()
 	if l.closed {
 		return ErrClosed
 	}
-	return l.ds.Remove(port)
+	return l.ds.Remove(id)
 }
 
 func (l *TCPListener) Start() error {
@@ -115,11 +124,8 @@ type tcpSyncHandler struct {
 	l *TCPListener
 }
 
-func (h *tcpSyncHandler) Add(data []byte) error {
-	r := &strowger.TCPRoute{}
-	if err := json.Unmarshal(data, r); err != nil {
-		return err
-	}
+func (h *tcpSyncHandler) Add(data *strowger.Route) error {
+	r := data.TCPRoute()
 
 	h.l.mtx.Lock()
 	defer h.l.mtx.Unlock()
@@ -156,7 +162,8 @@ func (h *tcpSyncHandler) Add(data []byte) error {
 		return err
 	}
 	h.l.services[r.Port] = s
-	go h.l.wm.Send(&strowger.Event{Event: "add", ID: strconv.Itoa(r.Port)})
+	h.l.serviceIDs[data.ID] = s
+	go h.l.wm.Send(&strowger.Event{Event: "add", ID: data.ID})
 	return nil
 }
 
@@ -167,13 +174,13 @@ func (h *tcpSyncHandler) Remove(id string) error {
 		return nil
 	}
 
-	port, _ := strconv.Atoi(id)
-	service, ok := h.l.services[port]
+	service, ok := h.l.serviceIDs[id]
 	if !ok {
 		return ErrNotFound
 	}
 	service.Close()
-	delete(h.l.services, port)
+	delete(h.l.services, service.port)
+	delete(h.l.serviceIDs, id)
 	go h.l.wm.Send(&strowger.Event{Event: "remove", ID: id})
 	return nil
 }

@@ -81,10 +81,7 @@ func (s *S) TestAddTCPRoute(c *C) {
 	discoverd.Register("test", srv1.Addr)
 	defer discoverd.UnregisterAll()
 
-	wait := waitForEvent(c, l, "add", port)
-	err = l.AddRoute(&strowger.TCPRoute{Port: portInt, Service: "test"})
-	c.Assert(err, IsNil)
-	wait()
+	r := addTCPRoute(c, l, portInt)
 
 	assertTCPConn(c, addr, "1")
 
@@ -93,8 +90,8 @@ func (s *S) TestAddTCPRoute(c *C) {
 
 	assertTCPConn(c, addr, "2")
 
-	wait = waitForEvent(c, l, "remove", port)
-	err = l.RemoveRoute(port)
+	wait := waitForEvent(c, l, "remove", r.Route.ID)
+	err = l.RemoveRoute(r.Route.ID)
 	c.Assert(err, IsNil)
 	wait()
 
@@ -102,15 +99,24 @@ func (s *S) TestAddTCPRoute(c *C) {
 	c.Assert(err, Not(IsNil))
 }
 
+func addTCPRoute(c *C, l *TCPListener, port int) *strowger.TCPRoute {
+	wait := waitForEvent(c, l, "add", "")
+	r := (&strowger.TCPRoute{
+		Service: "test",
+		Port:    port,
+	}).ToRoute()
+	err := l.AddRoute(r)
+	c.Assert(err, IsNil)
+	wait()
+	return r.TCPRoute()
+}
+
 func (s *S) TestInitialTCPSync(c *C) {
 	const addr, port = "127.0.0.1:45000", 45000
 	etcd := newFakeEtcd()
 	l, _, err := newTCPListener(etcd)
 	c.Assert(err, IsNil)
-	wait := waitForEvent(c, l, "add", strconv.Itoa(port))
-	err = l.AddRoute(&strowger.TCPRoute{Service: "test", Port: port})
-	c.Assert(err, IsNil)
-	wait()
+	addTCPRoute(c, l, port)
 	l.Close()
 
 	srv := NewTCPTestServer("1")
@@ -133,15 +139,11 @@ func (s *S) TestTCPPortAllocation(c *C) {
 	for i := 0; i < 2; i++ {
 		ports := make([]string, 0, 10)
 		for j := 0; j < 10; j++ {
-			route := &strowger.TCPRoute{Service: "test"}
-			wait := waitForEvent(c, l, "add", "")
-			err := l.AddRoute(route)
-			c.Assert(err, IsNil)
+			route := addTCPRoute(c, l, 0)
 			c.Assert(route.Port >= firstTCPPort && route.Port <= lastTCPPort, Equals, true)
-			wait()
 
 			port := strconv.Itoa(route.Port)
-			ports = append(ports, port)
+			ports = append(ports, route.ID)
 			srv := NewTCPTestServer(port)
 			defer srv.Close()
 			discoverd.Register("test", srv.Addr)
@@ -149,7 +151,8 @@ func (s *S) TestTCPPortAllocation(c *C) {
 			assertTCPConn(c, "127.0.0.1:"+port, port)
 			discoverd.UnregisterAll()
 		}
-		err = l.AddRoute(&strowger.TCPRoute{Service: "test"})
+		r := (&strowger.TCPRoute{Service: "test"}).ToRoute()
+		err := l.AddRoute(r)
 		c.Assert(err, Equals, ErrNoPorts)
 		for _, port := range ports {
 			wait := waitForEvent(c, l, "remove", port)
