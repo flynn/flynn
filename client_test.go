@@ -261,7 +261,7 @@ func TestBasicRegisterAndServiceSet(t *testing.T) {
 	assert(err, t)
 
 	waitUpdates(t, set, true, 2)()
-	if len(set.Services()) < 2 {
+	if len(set.Services()) < 2 || len(set.Addrs()) < 2 {
 		t.Fatal("Registered services not online")
 	}
 
@@ -269,7 +269,7 @@ func TestBasicRegisterAndServiceSet(t *testing.T) {
 	assert(client.Unregister(serviceName, ":2222"), t)
 	wait()
 
-	if len(set.Services()) != 1 {
+	if len(set.Services()) != 1 || len(set.Addrs()) != 1 {
 		t.Fatal("Only 1 registered service should be left")
 	}
 	if set.Services()[0].Attrs["foo"] != "bar" {
