@@ -11,7 +11,7 @@ import (
 )
 
 // NewHTTPClient returns a HTTP client configured to use discoverd to lookup hostnames.
-func NewHTTPClient(c *discoverd.Client) *http.Client {
+func NewHTTPClient(c DiscoverdClient) *http.Client {
 	return &http.Client{Transport: &http.Transport{Dial: New(c, nil).Dial}}
 }
 
@@ -19,8 +19,12 @@ type DialFunc func(network, addr string) (net.Conn, error)
 
 // New returns a Dialer that uses discoverd to lookup hostnames. If f is
 // provided, it used to Dial after looking up an address.
-func New(c *discoverd.Client, f DialFunc) Dialer {
+func New(c DiscoverdClient, f DialFunc) Dialer {
 	return newDialer(c, f)
+}
+
+type DiscoverdClient interface {
+	NewServiceSet(name string) (discoverd.ServiceSet, error)
 }
 
 type Dialer interface {
@@ -28,7 +32,7 @@ type Dialer interface {
 	Close() error
 }
 
-func newDialer(c *discoverd.Client, f DialFunc) *dialer {
+func newDialer(c DiscoverdClient, f DialFunc) *dialer {
 	d := &dialer{c: c, sets: make(map[string]*set), dial: f}
 	if d.dial == nil {
 		d.dial = net.Dial
@@ -37,7 +41,7 @@ func newDialer(c *discoverd.Client, f DialFunc) *dialer {
 }
 
 type dialer struct {
-	c    *discoverd.Client
+	c    DiscoverdClient
 	dial DialFunc
 	sets map[string]*set
 	mtx  sync.RWMutex
