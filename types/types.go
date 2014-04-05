@@ -6,10 +6,10 @@ import (
 )
 
 type ExpandedFormation struct {
-	App       *App
-	Release   *Release
-	Artifact  *Artifact
-	Processes map[string]int
+	App       *App           `json:"app,omitempty"`
+	Release   *Release       `json:"release,omitempty"`
+	Artifact  *Artifact      `json:"artifact,omitempty"`
+	Processes map[string]int `json:"processes,omitempty"`
 }
 
 type App struct {

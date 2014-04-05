@@ -3,6 +3,10 @@ package utils
 import (
 	"errors"
 	"net/url"
+
+	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/flynn-host/types"
+	"github.com/flynn/go-dockerclient"
 )
 
 func FormatEnv(envs ...map[string]string) []string {
@@ -33,4 +37,30 @@ func DockerImage(uri string) (string, error) {
 		suffix = ":" + tag
 	}
 	return u.Host + u.Path + suffix, nil
+}
+
+func JobConfig(f *ct.ExpandedFormation, name string) (*host.Job, error) {
+	t := f.Release.Processes[name]
+	image, err := DockerImage(f.Artifact.URI)
+	if err != nil {
+		return nil, err
+	}
+	return &host.Job{
+		TCPPorts: t.Ports.TCP,
+		Attributes: map[string]string{
+			"flynn-controller.app":     f.App.ID,
+			"flynn-controller.release": f.Release.ID,
+			"flynn-controller.type":    name,
+		},
+		Config: &docker.Config{
+			Cmd: t.Cmd,
+			Env: FormatEnv(f.Release.Env, t.Env,
+				map[string]string{
+					"FLYNN_APP_ID":     f.App.ID,
+					"FLYNN_RELEASE_ID": f.Release.ID,
+				},
+			),
+			Image: image,
+		},
+	}, nil
 }

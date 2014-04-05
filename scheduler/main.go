@@ -11,7 +11,6 @@ import (
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/flynn-host/types"
-	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/go-flynn/cluster"
 	"github.com/technoweenie/grohl"
 )
@@ -395,29 +394,11 @@ func (f *Formation) remove(n int, name string) {
 }
 
 func (f *Formation) jobConfig(name string) (*host.Job, error) {
-	t := f.Release.Processes[name]
-	image, err := utils.DockerImage(f.Artifact.URI)
-	if err != nil {
-		return nil, err
-	}
-	return &host.Job{
-		TCPPorts: t.Ports.TCP,
-		Attributes: map[string]string{
-			"flynn-controller.app":     f.App.ID,
-			"flynn-controller.release": f.Release.ID,
-			"flynn-controller.type":    name,
-		},
-		Config: &docker.Config{
-			Cmd: t.Cmd,
-			Env: utils.FormatEnv(f.Release.Env, t.Env,
-				map[string]string{
-					"FLYNN_APP_ID":     f.App.ID,
-					"FLYNN_RELEASE_ID": f.Release.ID,
-				},
-			),
-			Image: image,
-		},
-	}, nil
+	return utils.JobConfig(&ct.ExpandedFormation{
+		App:      f.App,
+		Release:  f.Release,
+		Artifact: f.Artifact,
+	}, name)
 }
 
 type sortHost struct {
