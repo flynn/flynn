@@ -124,9 +124,10 @@ func (s *S) createTestApp(c *C, in *ct.App) *ct.App {
 }
 
 func (s *S) TestCreateApp(c *C) {
-	app := s.createTestApp(c, &ct.App{Name: "foo"})
+	app := s.createTestApp(c, &ct.App{Name: "foo", Protected: true})
 	c.Assert(app.Name, Equals, "foo")
 	c.Assert(app.ID, Not(Equals), "")
+	c.Assert(app.Protected, Equals, true)
 
 	gotApp := &ct.App{}
 	res, err := s.Get("/apps/"+app.ID, gotApp)
@@ -139,6 +140,45 @@ func (s *S) TestCreateApp(c *C) {
 
 	res, err = s.Get("/apps/fail"+app.ID, gotApp)
 	c.Assert(res.StatusCode, Equals, 404)
+}
+
+func (s *S) TestUpdateApp(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "update-app"})
+	c.Assert(app.Protected, Equals, false)
+
+	gotApp := &ct.App{}
+	res, err := s.Post("/apps/"+app.Name, map[string]bool{"protected": true}, gotApp)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(gotApp.Protected, Equals, true)
+
+	res, err = s.Post("/apps/"+app.ID, map[string]bool{"protected": false}, gotApp)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(gotApp.Protected, Equals, false)
+}
+
+func (s *S) TestProtectedApp(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "protected-app", Protected: true})
+	release := s.createTestRelease(c, &ct.Release{
+		Processes: map[string]ct.ProcessType{"web": {}, "worker": {}},
+	})
+
+	path := formationPath(app.ID, release.ID)
+	for _, t := range []struct {
+		procs  map[string]int
+		status int
+	}{
+		{nil, 400},
+		{map[string]int{"web": 1}, 400},
+		{map[string]int{"worker": 1, "web": 0}, 400},
+		{map[string]int{"worker": 1, "web": 1}, 200},
+	} {
+		res, err := s.Put(path, &ct.Formation{Processes: t.procs}, nil)
+		c.Assert(err, IsNil)
+		res.Body.Close()
+		c.Assert(res.StatusCode, Equals, t.status)
+	}
 }
 
 func (s *S) createTestArtifact(c *C, in *ct.Artifact) *ct.Artifact {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 
 	ct "github.com/flynn/flynn-controller/types"
@@ -27,7 +28,7 @@ func (r *AppRepo) Add(data interface{}) error {
 	if len(app.Name) > 30 || !appNamePattern.MatchString(app.Name) {
 		return errors.New("controller: invalid app name")
 	}
-	err := r.db.QueryRow("INSERT INTO apps (name) VALUES ($1) RETURNING app_id, created_at, updated_at", app.Name).Scan(&app.ID, &app.CreatedAt, &app.UpdatedAt)
+	err := r.db.QueryRow("INSERT INTO apps (name, protected) VALUES ($1, $2) RETURNING app_id, created_at, updated_at", app.Name, app.Protected).Scan(&app.ID, &app.CreatedAt, &app.UpdatedAt)
 	app.ID = cleanUUID(app.ID)
 	return err
 }
@@ -36,7 +37,7 @@ var ErrNotFound = errors.New("controller: resource not found")
 
 func scanApp(s Scanner) (*ct.App, error) {
 	app := &ct.App{}
-	err := s.Scan(&app.ID, &app.Name, &app.CreatedAt, &app.UpdatedAt)
+	err := s.Scan(&app.ID, &app.Name, &app.Protected, &app.CreatedAt, &app.UpdatedAt)
 	if err == sql.ErrNoRows {
 		err = ErrNotFound
 	}
@@ -46,19 +47,63 @@ func scanApp(s Scanner) (*ct.App, error) {
 
 var idPattern = regexp.MustCompile(`^[a-f0-9]{8}-?([a-f0-9]{4}-?){3}[a-f0-9]{12}$`)
 
-func (r *AppRepo) Get(id string) (interface{}, error) {
+type rowQueryer interface {
+	QueryRow(query string, args ...interface{}) Scanner
+}
+
+func selectApp(db rowQueryer, id string, update bool) (*ct.App, error) {
 	var row Scanner
-	query := "SELECT app_id, name, created_at, updated_at FROM apps WHERE deleted_at IS NULL AND "
+	query := "SELECT app_id, name, protected, created_at, updated_at FROM apps WHERE deleted_at IS NULL AND "
+	var suffix string
+	if update {
+		suffix = " FOR UPDATE"
+	}
 	if idPattern.MatchString(id) {
-		row = r.db.QueryRow(query+"(app_id = $1 OR name = $2) LIMIT 1", id, id)
+		row = db.QueryRow(query+"(app_id = $1 OR name = $2) LIMIT 1"+suffix, id, id)
 	} else {
-		row = r.db.QueryRow(query+"name = $1", id)
+		row = db.QueryRow(query+"name = $1"+suffix, id)
 	}
 	return scanApp(row)
 }
 
+func (r *AppRepo) Get(id string) (interface{}, error) {
+	return selectApp(r.db, id, false)
+}
+
+func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	app, err := selectApp(tx, id, true)
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	for k, v := range data {
+		switch k {
+		case "protected":
+			protected, ok := v.(bool)
+			if !ok {
+				tx.Rollback()
+				return nil, fmt.Errorf("controller: expected bool, got %T", v)
+			}
+			if app.Protected != protected {
+				if _, err := tx.Exec("UPDATE apps SET protected = $2 WHERE app_id = $1", app.ID, protected); err != nil {
+					tx.Rollback()
+					return nil, err
+				}
+				app.Protected = protected
+			}
+		}
+	}
+
+	return app, tx.Commit()
+}
+
 func (r *AppRepo) List() (interface{}, error) {
-	rows, err := r.db.Query("SELECT app_id, name, created_at, updated_at FROM apps WHERE deleted_at IS NULL ORDER BY created_at DESC")
+	rows, err := r.db.Query("SELECT app_id, name, protected, created_at, updated_at FROM apps WHERE deleted_at IS NULL ORDER BY created_at DESC")
 	if err != nil {
 		return nil, err
 	}

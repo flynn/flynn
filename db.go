@@ -75,6 +75,17 @@ func (db *DB) QueryRow(query string, args ...interface{}) Scanner {
 	return rowErrFixer{stmt.QueryRow(args...)}
 }
 
+func (db *DB) Begin() (*dbTx, error) {
+	tx, err := db.DB.Begin()
+	return &dbTx{tx}, err
+}
+
+type dbTx struct{ *sql.Tx }
+
+func (tx *dbTx) QueryRow(query string, args ...interface{}) Scanner {
+	return rowErrFixer{tx.Tx.QueryRow(query, args...)}
+}
+
 type errRow struct {
 	err error
 }

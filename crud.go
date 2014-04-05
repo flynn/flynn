@@ -15,8 +15,13 @@ type Repository interface {
 	Get(id string) (interface{}, error)
 	List() (interface{}, error)
 }
+
 type Remover interface {
 	Remove(string) error
+}
+
+type Updater interface {
+	Update(string, map[string]interface{}) (interface{}, error)
 }
 
 func crud(resource string, example interface{}, repo Repository, r martini.Router) interface{} {
@@ -55,7 +60,8 @@ func crud(resource string, example interface{}, repo Repository, r martini.Route
 		c.Map(thing)
 	}
 
-	r.Get(prefix+"/:"+resource+"_id", lookup, func(c martini.Context, r render.Render) {
+	singletonPath := prefix + "/:" + resource + "_id"
+	r.Get(singletonPath, lookup, func(c martini.Context, r render.Render) {
 		r.JSON(200, c.Get(resourcePtr).Interface())
 	})
 
@@ -70,13 +76,29 @@ func crud(resource string, example interface{}, repo Repository, r martini.Route
 	})
 
 	if remover, ok := repo.(Remover); ok {
-		r.Delete(prefix+"/:"+resource+"_id", lookup, func(c martini.Context, params martini.Params, w http.ResponseWriter) {
-			err := remover.Remove(params[resource+"_id"])
-			if err != nil {
+		r.Delete(singletonPath, lookup, func(params martini.Params, w http.ResponseWriter) {
+			if err := remover.Remove(params[resource+"_id"]); err != nil {
 				log.Println(err)
 				w.WriteHeader(500)
 				return
 			}
+		})
+	}
+
+	if updater, ok := repo.(Updater); ok {
+		r.Post(singletonPath, func(params martini.Params, req *http.Request, r render.Render) {
+			var data map[string]interface{}
+			if err := json.NewDecoder(req.Body).Decode(&data); err != nil {
+				r.JSON(400, struct{}{})
+				return
+			}
+			app, err := updater.Update(params[resource+"_id"], data)
+			if err != nil {
+				log.Println(err)
+				r.JSON(500, struct{}{})
+				return
+			}
+			r.JSON(200, app)
 		})
 	}
 

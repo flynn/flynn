@@ -96,6 +96,14 @@ func putFormation(formation ct.Formation, app *ct.App, release *ct.Release, repo
 	formation.AppID = app.ID
 	formation.ReleaseID = release.ID
 	err := repo.Add(&formation)
+	if app.Protected {
+		for typ := range release.Processes {
+			if formation.Processes[typ] == 0 {
+				r.JSON(400, struct{}{})
+				return
+			}
+		}
+	}
 	if err != nil {
 		log.Println(err)
 		r.JSON(500, struct{}{})

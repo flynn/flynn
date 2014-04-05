@@ -32,6 +32,7 @@ func migrateDB(db *sql.DB) error {
     app_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     name text UNIQUE NOT NULL,
     release_id uuid REFERENCES releases (release_id),
+    protected bool NOT NULL DEFAULT false,
     created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
     updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
     deleted_at timestamp with time zone
