@@ -408,8 +408,13 @@ func (f *Formation) jobConfig(name string) (*host.Job, error) {
 			"flynn-controller.type":    name,
 		},
 		Config: &docker.Config{
-			Cmd:   t.Cmd,
-			Env:   utils.FormatEnv(f.Release.Env, t.Env),
+			Cmd: t.Cmd,
+			Env: utils.FormatEnv(f.Release.Env, t.Env,
+				map[string]string{
+					"FLYNN_APP_ID":     f.App.ID,
+					"FLYNN_RELEASE_ID": f.Release.ID,
+				},
+			),
 			Image: image,
 		},
 	}, nil
