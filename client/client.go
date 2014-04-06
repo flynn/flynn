@@ -100,7 +100,7 @@ func (c *Client) CreateApp(app *ct.App) error {
 	return c.post("/apps", app, app)
 }
 
-func (c *Client) CreateProvider(provider *ct.App) error {
+func (c *Client) CreateProvider(provider *ct.Provider) error {
 	return c.post("/providers", provider, provider)
 }
 
