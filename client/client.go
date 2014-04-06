@@ -113,7 +113,7 @@ func (c *Client) PutResource(resource *ct.Resource) error {
 
 func (c *Client) PutFormation(formation *ct.Formation) error {
 	if formation.AppID == "" || formation.ReleaseID == "" {
-		return errors.New("controller missing app id and/or release id")
+		return errors.New("controller: missing app id and/or release id")
 	}
 	return c.put(fmt.Sprintf("/apps/%s/formations/%s", formation.AppID, formation.ReleaseID), formation, formation)
 }
