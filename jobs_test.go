@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/go-flynn/cluster"
@@ -148,7 +149,7 @@ func (l *fakeLog) Write([]byte) (int, error) {
 func (s *S) TestKillJob(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "killjob"})
 	hc := newFakeHostClient()
-	hostID, jobID := uuid(), uuid()
+	hostID, jobID := utils.UUID(), utils.UUID()
 	s.cc.setHostClient(hostID, hc)
 
 	res, err := s.Delete("/apps/" + app.ID + "/jobs/" + hostID + ":" + jobID)
@@ -160,7 +161,7 @@ func (s *S) TestKillJob(c *C) {
 func (s *S) TestJobLog(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "joblog"})
 	hc := newFakeHostClient()
-	hostID, jobID := uuid(), uuid()
+	hostID, jobID := utils.UUID(), utils.UUID()
 	hc.setAttach(jobID, newFakeLog(strings.NewReader("foo")))
 	s.cc.setHostClient(hostID, hc)
 
@@ -186,7 +187,7 @@ func (s *S) TestRunJobAttached(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "run-attached"})
 	hc := newFakeHostClient()
 
-	hostID := uuid()
+	hostID := utils.UUID()
 	done := make(chan struct{})
 	var jobID string
 	hc.setAttachFunc("*", func(req *host.AttachReq, wait bool) (cluster.ReadWriteCloser, func() error, error) {
