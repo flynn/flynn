@@ -11,6 +11,7 @@ import (
 
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/rpcplus"
+	"github.com/flynn/strowger/types"
 )
 
 func New(uri string) (*Client, error) {
@@ -128,10 +129,14 @@ func (c *Client) PutFormation(formation *ct.Formation) error {
 }
 
 func (c *Client) SetAppRelease(appID, releaseID string) error {
-	return c.put("/apps/"+appID+"/release", &ct.Release{ID: releaseID}, nil)
+	return c.put(fmt.Sprintf("/apps/%s/release", appID), &ct.Release{ID: releaseID}, nil)
 }
 
 func (c *Client) GetAppRelease(appID string) (*ct.Release, error) {
 	release := &ct.Release{}
-	return release, c.get("/apps/"+appID+"/release", release)
+	return release, c.get(fmt.Sprintf("/apps/%s/release", appID), release)
+}
+
+func (c *Client) CreateRoute(appID string, route *strowger.Route) error {
+	return c.post(fmt.Sprintf("/apps/%s/routes", appID), route, route)
 }
