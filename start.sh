@@ -1,7 +1,5 @@
 #!/bin/bash
 
-echo "Input: $1"
-
 case $1 in
   postgres)
     chown -R postgres:postgres /data
