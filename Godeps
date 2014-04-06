@@ -1,0 +1,27 @@
+{
+	"ImportPath": "github.com/flynn/sdutil",
+	"GoVersion": "go1.2",
+	"Deps": [
+		{
+			"ImportPath": "github.com/coreos/go-etcd/etcd",
+			"Comment": "v0.2.0-rc1-96-g1e26d8e",
+			"Rev": "1e26d8ee84cf9b1000d2af8acfb45b2521f49be5"
+		},
+		{
+			"ImportPath": "github.com/flynn/discoverd/agent",
+			"Rev": "2570d344c25b3565f2853698a092b41c75877b1d"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-discoverd",
+			"Rev": "c236937e9dd13e2e85314a9ab8cdadff52452601"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-flynn/attempt",
+			"Rev": "918654e0db14151f4bb8e853f82fabd3b568a9aa"
+		},
+		{
+			"ImportPath": "github.com/flynn/rpcplus",
+			"Rev": "287ba5f190485b5529bdd1db2d9383df5feb67ee"
+		}
+	]
+}
