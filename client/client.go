@@ -96,6 +96,28 @@ func (c *Client) CreateRelease(release *ct.Release) error {
 	return c.post("/releases", release, release)
 }
 
+func (c *Client) CreateApp(app *ct.App) error {
+	return c.post("/apps", app, app)
+}
+
+func (c *Client) CreateProvider(provider *ct.App) error {
+	return c.post("/providers", provider, provider)
+}
+
+func (c *Client) PutResource(resource *ct.Resource) error {
+	if resource.ID == "" || resource.ProviderID == "" {
+		return errors.New("controller: missing id and/or provider id")
+	}
+	return c.put(fmt.Sprintf("/providers/%s/resources/%s", resource.ProviderID, resource.ID), resource, resource)
+}
+
+func (c *Client) PutFormation(formation *ct.Formation) error {
+	if formation.AppID == "" || formation.ReleaseID == "" {
+		return errors.New("controller missing app id and/or release id")
+	}
+	return c.put(fmt.Sprintf("/apps/%s/formations/%s", formation.AppID, formation.ReleaseID), formation, formation)
+}
+
 func (c *Client) SetAppRelease(appID, releaseID string) error {
 	return c.put("/apps/"+appID+"/release", &ct.Release{ID: releaseID}, nil)
 }
