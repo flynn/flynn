@@ -4,6 +4,7 @@ import (
 	"time"
 
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/go-sql"
 	"github.com/flynn/pq"
 )
@@ -20,7 +21,11 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 	a := data.(*ct.Artifact)
 	// TODO: actually validate
 	// TODO: use a transaction here
-	err := r.db.QueryRow("INSERT INTO artifacts (type, uri) VALUES ($1, $2) RETURNING artifact_id, created_at", a.Type, a.URI).Scan(&a.ID, &a.CreatedAt)
+	if a.ID == "" {
+		a.ID = utils.UUID()
+	}
+	err := r.db.QueryRow("INSERT INTO artifacts (artifact_id, type, uri) VALUES ($1, $2, $3) RETURNING created_at",
+		a.ID, a.Type, a.URI).Scan(&a.CreatedAt)
 	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" {
 		var deleted *time.Time
 		err = r.db.QueryRow("SELECT artifact_id, created_at, deleted_at FROM artifacts WHERE type = $1 AND uri = $2",

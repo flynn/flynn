@@ -6,6 +6,7 @@ import (
 	"regexp"
 
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/go-sql"
 )
 
@@ -28,7 +29,10 @@ func (r *AppRepo) Add(data interface{}) error {
 	if len(app.Name) > 30 || !appNamePattern.MatchString(app.Name) {
 		return errors.New("controller: invalid app name")
 	}
-	err := r.db.QueryRow("INSERT INTO apps (name, protected) VALUES ($1, $2) RETURNING app_id, created_at, updated_at", app.Name, app.Protected).Scan(&app.ID, &app.CreatedAt, &app.UpdatedAt)
+	if app.ID == "" {
+		app.ID = utils.UUID()
+	}
+	err := r.db.QueryRow("INSERT INTO apps (app_id, name, protected) VALUES ($1, $2, $3) RETURNING created_at, updated_at", app.ID, app.Name, app.Protected).Scan(&app.CreatedAt, &app.UpdatedAt)
 	app.ID = cleanUUID(app.ID)
 	return err
 }

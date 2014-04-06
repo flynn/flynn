@@ -14,6 +14,7 @@ import (
 	"github.com/go-martini/martini"
 
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/flynn-controller/utils"
 	_ "github.com/flynn/pq"
 	. "github.com/titanous/gocheck"
 )
@@ -124,22 +125,28 @@ func (s *S) createTestApp(c *C, in *ct.App) *ct.App {
 }
 
 func (s *S) TestCreateApp(c *C) {
-	app := s.createTestApp(c, &ct.App{Name: "foo", Protected: true})
-	c.Assert(app.Name, Equals, "foo")
-	c.Assert(app.ID, Not(Equals), "")
-	c.Assert(app.Protected, Equals, true)
+	for i, id := range []string{"", utils.UUID()} {
+		name := fmt.Sprintf("create-app-%d", i)
+		app := s.createTestApp(c, &ct.App{ID: id, Name: name, Protected: true})
+		c.Assert(app.Name, Equals, name)
+		c.Assert(app.ID, Not(Equals), "")
+		if id != "" {
+			c.Assert(app.ID, Equals, id)
+		}
+		c.Assert(app.Protected, Equals, true)
 
-	gotApp := &ct.App{}
-	res, err := s.Get("/apps/"+app.ID, gotApp)
-	c.Assert(err, IsNil)
-	c.Assert(gotApp, DeepEquals, app)
+		gotApp := &ct.App{}
+		res, err := s.Get("/apps/"+app.ID, gotApp)
+		c.Assert(err, IsNil)
+		c.Assert(gotApp, DeepEquals, app)
 
-	res, err = s.Get("/apps/"+app.Name, gotApp)
-	c.Assert(err, IsNil)
-	c.Assert(gotApp, DeepEquals, app)
+		res, err = s.Get("/apps/"+app.Name, gotApp)
+		c.Assert(err, IsNil)
+		c.Assert(gotApp, DeepEquals, app)
 
-	res, err = s.Get("/apps/fail"+app.ID, gotApp)
-	c.Assert(res.StatusCode, Equals, 404)
+		res, err = s.Get("/apps/fail"+app.ID, gotApp)
+		c.Assert(res.StatusCode, Equals, 404)
+	}
 }
 
 func (s *S) TestUpdateApp(c *C) {
@@ -190,20 +197,29 @@ func (s *S) createTestArtifact(c *C, in *ct.Artifact) *ct.Artifact {
 }
 
 func (s *S) TestCreateArtifact(c *C) {
-	in := &ct.Artifact{Type: "docker-image", URI: "docker://flynn/host?id=adsf"}
-	out := s.createTestArtifact(c, in)
+	for i, id := range []string{"", utils.UUID()} {
+		in := &ct.Artifact{
+			ID:   id,
+			Type: "docker-image",
+			URI:  fmt.Sprintf("docker://flynn/host?id=adsf%d", i),
+		}
+		out := s.createTestArtifact(c, in)
 
-	c.Assert(out.Type, Equals, in.Type)
-	c.Assert(out.URI, Equals, in.URI)
-	c.Assert(out.ID, Not(Equals), "")
+		c.Assert(out.Type, Equals, in.Type)
+		c.Assert(out.URI, Equals, in.URI)
+		c.Assert(out.ID, Not(Equals), "")
+		if id != "" {
+			c.Assert(out.ID, Equals, id)
+		}
 
-	gotArtifact := &ct.Artifact{}
-	res, err := s.Get("/artifacts/"+out.ID, gotArtifact)
-	c.Assert(err, IsNil)
-	c.Assert(gotArtifact, DeepEquals, out)
+		gotArtifact := &ct.Artifact{}
+		res, err := s.Get("/artifacts/"+out.ID, gotArtifact)
+		c.Assert(err, IsNil)
+		c.Assert(gotArtifact, DeepEquals, out)
 
-	res, err = s.Get("/artifacts/fail"+out.ID, gotArtifact)
-	c.Assert(res.StatusCode, Equals, 404)
+		res, err = s.Get("/artifacts/fail"+out.ID, gotArtifact)
+		c.Assert(res.StatusCode, Equals, 404)
+	}
 }
 
 func (s *S) createTestRelease(c *C, in *ct.Release) *ct.Release {
@@ -226,17 +242,22 @@ func (s *S) createTestKey(c *C, in *ct.Key) *ct.Key {
 }
 
 func (s *S) TestCreateRelease(c *C) {
-	in := &ct.Release{}
-	out := s.createTestRelease(c, in)
-	c.Assert(out.ArtifactID, Equals, in.ArtifactID)
+	for _, id := range []string{"", utils.UUID()} {
+		in := &ct.Release{ID: id}
+		out := s.createTestRelease(c, in)
+		c.Assert(out.ArtifactID, Equals, in.ArtifactID)
+		if id != "" {
+			c.Assert(out.ID, Equals, id)
+		}
 
-	gotRelease := &ct.Release{}
-	res, err := s.Get("/releases/"+out.ID, gotRelease)
-	c.Assert(err, IsNil)
-	c.Assert(gotRelease, DeepEquals, out)
+		gotRelease := &ct.Release{}
+		res, err := s.Get("/releases/"+out.ID, gotRelease)
+		c.Assert(err, IsNil)
+		c.Assert(gotRelease, DeepEquals, out)
 
-	res, err = s.Get("/releases/fail"+out.ID, gotRelease)
-	c.Assert(res.StatusCode, Equals, 404)
+		res, err = s.Get("/releases/fail"+out.ID, gotRelease)
+		c.Assert(res.StatusCode, Equals, 404)
+	}
 }
 
 func (s *S) TestCreateFormation(c *C) {

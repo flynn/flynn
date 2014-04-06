@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/go-sql"
 )
 
@@ -42,9 +43,12 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 	if err != nil {
 		return err
 	}
+	if release.ID == "" {
+		release.ID = utils.UUID()
+	}
 
-	err = r.db.QueryRow("INSERT INTO releases (artifact_id, data) VALUES ($1, $2) RETURNING release_id, created_at",
-		release.ArtifactID, data).Scan(&release.ID, &release.CreatedAt)
+	err = r.db.QueryRow("INSERT INTO releases (release_id, artifact_id, data) VALUES ($1, $2, $3) RETURNING created_at",
+		release.ID, release.ArtifactID, data).Scan(&release.CreatedAt)
 	release.ID = cleanUUID(release.ID)
 	release.ArtifactID = cleanUUID(release.ArtifactID)
 	return err
