@@ -30,6 +30,17 @@ At least one review from a maintainer is required for all patches (even patches 
 All contributions must include acceptance of the DCO:
 
 ```text
+Developer Certificate of Origin
+Version 1.1
+
+Copyright (C) 2004, 2006 The Linux Foundation and its contributors.
+660 York Street, Suite 102,
+San Francisco, CA 94110 USA
+
+Everyone is permitted to copy and distribute verbatim copies of this
+license document, but changing it is not allowed.
+
+
 Developer's Certificate of Origin 1.1
 
 By making a contribution to this project, I certify that:
