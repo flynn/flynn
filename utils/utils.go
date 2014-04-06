@@ -3,6 +3,7 @@ package utils
 import (
 	"errors"
 	"net/url"
+	"strings"
 
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/flynn-host/types"
@@ -32,11 +33,14 @@ func DockerImage(uri string) (string, error) {
 	if u.Scheme != "docker" {
 		return "", errors.New("utils: only docker artifact URIs are currently supported")
 	}
-	var suffix string
 	if tag := u.Query().Get("tag"); tag != "" {
-		suffix = ":" + tag
+		u.Path += ":" + tag
 	}
-	return u.Host + u.Path + suffix, nil
+	if u.Host == "" {
+		// docker:///foo/bar results in u.Host == ""
+		u.Path = strings.TrimPrefix(u.Path, "/")
+	}
+	return u.Host + u.Path, nil
 }
 
 func JobConfig(f *ct.ExpandedFormation, name string) (*host.Job, error) {
