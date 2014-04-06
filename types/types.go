@@ -102,6 +102,7 @@ type Resource struct {
 }
 
 type ResourceReq struct {
-	Apps   []string         `json:"apps,omitempty"`
-	Config *json.RawMessage `json:"config"`
+	ProviderID string           `json:"-"`
+	Apps       []string         `json:"apps,omitempty"`
+	Config     *json.RawMessage `json:"config"`
 }

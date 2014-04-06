@@ -104,6 +104,15 @@ func (c *Client) CreateProvider(provider *ct.Provider) error {
 	return c.post("/providers", provider, provider)
 }
 
+func (c *Client) ProvisionResource(req *ct.ResourceReq) (*ct.Resource, error) {
+	if req.ProviderID == "" {
+		return nil, errors.New("controller: missing provider id")
+	}
+	res := &ct.Resource{}
+	err := c.post(fmt.Sprintf("/providers/%s/resources", req.ProviderID), req, res)
+	return res, err
+}
+
 func (c *Client) PutResource(resource *ct.Resource) error {
 	if resource.ID == "" || resource.ProviderID == "" {
 		return errors.New("controller: missing id and/or provider id")
