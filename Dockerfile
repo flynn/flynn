@@ -19,6 +19,7 @@ RUN echo "#!/bin/sh\nexit 101" > /usr/sbin/policy-rc.d; chmod +x /usr/sbin/polic
 ADD postgresql.conf /etc/postgresql/9.3/main/postgresql.conf
 ADD pg_hba.conf /etc/postgresql/9.3/main/pg_hba.conf
 ADD bin/flynn-postgres /bin/flynn-postgres
+ADD bin/flynn-postgres-api /bin/flynn-postgres-api
 ADD start.sh /bin/start-flynn-postgres
 
-CMD /bin/start-flynn-postgres
+ENTRYPOINT ["/bin/start-flynn-postgres"]
