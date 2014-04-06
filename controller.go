@@ -72,6 +72,7 @@ func appHandler(db *sql.DB, cc clusterClient, sc strowgerc.Client) (http.Handler
 	r.Post("/providers/:providers_id/resources", getProviderMiddleware, binding.Bind(ct.ResourceReq{}), resourceServerMiddleware, provisionResource)
 	r.Get("/providers/:providers_id/resources", getProviderMiddleware, getProviderResources)
 	r.Get("/providers/:providers_id/resources/:resources_id", getProviderMiddleware, getResourceMiddleware, getResource)
+	r.Put("/providers/:providers_id/resources/:resources_id", getProviderMiddleware, binding.Bind(ct.Resource{}), putResource)
 	r.Get("/apps/:apps_id/resources", getAppMiddleware, getAppResources)
 
 	r.Post("/apps/:apps_id/routes", getAppMiddleware, binding.Bind(strowger.Route{}), createRoute)
@@ -215,6 +216,17 @@ func resourceServerMiddleware(c martini.Context, p *ct.Provider, dc resource.Dis
 	c.Map(server)
 	c.Next()
 	server.Close()
+}
+
+func putResource(p *ct.Provider, params martini.Params, resource ct.Resource, repo *ResourceRepo, r render.Render) {
+	resource.ID = params["resources_id"]
+	resource.ProviderID = p.ID
+	if err := repo.Add(&resource); err != nil {
+		log.Println(err)
+		r.JSON(500, struct{}{})
+		return
+	}
+	r.JSON(200, &resource)
 }
 
 func provisionResource(rs *resource.Server, p *ct.Provider, req ct.ResourceReq, repo *ResourceRepo, r render.Render) {

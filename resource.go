@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/go-sql"
 	"github.com/flynn/pq/hstore"
 )
@@ -17,14 +18,17 @@ func NewResourceRepo(db *DB) *ResourceRepo {
 }
 
 func (rr *ResourceRepo) Add(r *ct.Resource) error {
+	if r.ID == "" {
+		r.ID = utils.UUID()
+	}
 	tx, err := rr.db.Begin()
 	if err != nil {
 		return err
 	}
-	err = tx.QueryRow(`INSERT INTO resources (provider_id, external_id, env)
-					   VALUES ($1, $2, $3)
-					   RETURNING resource_id, created_at`,
-		r.ProviderID, r.ExternalID, envHstore(r.Env)).Scan(&r.ID, &r.CreatedAt)
+	err = tx.QueryRow(`INSERT INTO resources (resource_id, provider_id, external_id, env)
+					   VALUES ($1, $2, $3, $4)
+					   RETURNING created_at`,
+		r.ID, r.ProviderID, r.ExternalID, envHstore(r.Env)).Scan(&r.CreatedAt)
 	if err != nil {
 		tx.Rollback()
 		return err

@@ -10,6 +10,7 @@ import (
 
 	"github.com/flynn/discoverd/agent"
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-flynn/resource"
 	. "github.com/titanous/gocheck"
@@ -99,6 +100,33 @@ func (s *S) TestProvisionResource(c *C) {
 
 	res, err = s.Get(path+"fail", gotResource)
 	c.Assert(res.StatusCode, Equals, 404)
+}
+
+func (s *S) TestPutResource(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "put-resource"})
+	provider := s.createTestProvider(c, &ct.Provider{URL: "https://example.ca", Name: "put-resource"})
+
+	resource := &ct.Resource{
+		ExternalID: "/foo/bar",
+		Env:        map[string]string{"FOO": "BAR"},
+		Apps:       []string{app.ID},
+	}
+	id := utils.UUID()
+	path := fmt.Sprintf("/providers/%s/resources/%s", provider.ID, id)
+	created := &ct.Resource{}
+	_, err := s.Put(path, resource, created)
+	c.Assert(err, IsNil)
+
+	c.Assert(created.ID, Equals, id)
+	c.Assert(created.ProviderID, Equals, provider.ID)
+	c.Assert(created.Env, DeepEquals, resource.Env)
+	c.Assert(created.Apps, DeepEquals, resource.Apps)
+	c.Assert(created.CreatedAt, Not(IsNil))
+
+	gotResource := &ct.Resource{}
+	_, err = s.Get(path, gotResource)
+	c.Assert(err, IsNil)
+	c.Assert(gotResource, DeepEquals, created)
 }
 
 func (s *S) TestResourceLists(c *C) {
