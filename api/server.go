@@ -39,12 +39,19 @@ func main() {
 	m.Map(db)
 
 	r.Post("/databases", createDatabase)
+	r.Get("/ping", ping)
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3000"
 	}
-	http.ListenAndServe(":"+port, m)
+	addr := ":" + port
+
+	if err := discoverd.Register(serviceName+"-api", addr); err != nil {
+		log.Fatal(err)
+	}
+
+	log.Fatal(http.ListenAndServe(addr, m))
 }
 
 func randomID() string {
@@ -105,4 +112,13 @@ func createDatabase(db *postgres.DB, r render.Render) {
 			"PGDATABASE": database,
 		},
 	})
+}
+
+func ping(db *postgres.DB, w http.ResponseWriter) {
+	if _, err := db.Exec("SELECT 1"); err != nil {
+		log.Println(err)
+		w.WriteHeader(500)
+		return
+	}
+	w.WriteHeader(200)
 }
