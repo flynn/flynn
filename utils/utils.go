@@ -49,7 +49,7 @@ func JobConfig(f *ct.ExpandedFormation, name string) (*host.Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &host.Job{
+	job := &host.Job{
 		TCPPorts: t.Ports.TCP,
 		Attributes: map[string]string{
 			"flynn-controller.app":     f.App.ID,
@@ -66,5 +66,9 @@ func JobConfig(f *ct.ExpandedFormation, name string) (*host.Job, error) {
 			),
 			Image: image,
 		},
-	}, nil
+	}
+	if t.Data {
+		job.Config.Volumes = map[string]struct{}{"/data": {}}
+	}
+	return job, nil
 }
