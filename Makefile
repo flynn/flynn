@@ -7,3 +7,7 @@ bin/flynn-postgres: Godeps *.go
 
 bin/flynn-postgres-api: api/Godeps api/*.go
 	cd api && godep go build -o ../bin/flynn-postgres-api
+
+.PHONY: clean
+clean:
+	rm -rf bin
