@@ -6,6 +6,9 @@ import (
 	"os"
 
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/go-discoverd"
+	"github.com/flynn/go-flynn/cluster"
+	"github.com/flynn/go-flynn/postgres"
 	"github.com/flynn/go-flynn/resource"
 	"github.com/flynn/go-sql"
 	"github.com/flynn/rpcplus"
@@ -21,8 +24,29 @@ func main() {
 	if port == "" {
 		port = "3000"
 	}
-	handler, _ := appHandler(nil, nil, nil)
-	http.ListenAndServe(":"+port, handler)
+	addr := ":" + port
+
+	db, err := postgres.Open("", "")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	cc, err := cluster.NewClient()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	sc, err := strowgerc.New()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err := discoverd.Register("flynn-controller", addr); err != nil {
+		log.Fatal(err)
+	}
+
+	handler, _ := appHandler(db.DB, cc, sc)
+	log.Fatal(http.ListenAndServe(addr, handler))
 }
 
 func appHandler(db *sql.DB, cc clusterClient, sc strowgerc.Client) (http.Handler, *martini.Martini) {
