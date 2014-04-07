@@ -10,6 +10,8 @@ import (
 	"time"
 
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/go-discoverd"
+	"github.com/flynn/go-discoverd/dialer"
 	"github.com/flynn/rpcplus"
 	"github.com/flynn/strowger/types"
 )
@@ -19,12 +21,27 @@ func New(uri string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{url: uri, addr: u.Host}, nil
+	c := &Client{
+		url:  uri,
+		addr: u.Host,
+		http: http.DefaultClient,
+	}
+	if u.Scheme == "discoverd+http" {
+		if err := discoverd.Connect(""); err != nil {
+			return nil, err
+		}
+		c.http = dialer.NewHTTPClient(discoverd.DefaultClient)
+		u.Scheme = "http"
+		c.url = u.String()
+		// TODO: fix StreamFormations to use this
+	}
+	return c, nil
 }
 
 type Client struct {
 	url  string
 	addr string
+	http *http.Client
 }
 
 var ErrNotFound = errors.New("controller: not found")
@@ -39,7 +56,7 @@ func (c *Client) send(method, path string, in, out interface{}) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	res, err := http.DefaultClient.Do(req)
+	res, err := c.http.Do(req)
 	if err != nil {
 		return err
 	}
@@ -62,7 +79,7 @@ func (c *Client) post(path string, in, out interface{}) error {
 }
 
 func (c *Client) get(path string, out interface{}) error {
-	res, err := http.Get(c.url + path)
+	res, err := c.http.Get(c.url + path)
 	if err != nil {
 		return err
 	}
