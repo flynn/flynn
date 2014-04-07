@@ -3,6 +3,7 @@ package postgres
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-sql"
@@ -10,6 +11,9 @@ import (
 )
 
 func Open(service, dsn string) (*DB, error) {
+	if service == "" {
+		service = os.Getenv("PGSERVICE")
+	}
 	set, err := discoverd.NewServiceSet(service)
 	if err != nil {
 		return nil, err
