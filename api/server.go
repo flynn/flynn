@@ -106,10 +106,10 @@ func createDatabase(db *postgres.DB, r render.Render) {
 	r.JSON(200, &resource{
 		ID: fmt.Sprintf("/databases/%s:%s", username, database),
 		Env: map[string]string{
-			"PGSERVICE":  serviceName,
-			"PGUSER":     username,
-			"PGPASSWORD": password,
-			"PGDATABASE": database,
+			"FLYNN_POSTGRES": serviceName,
+			"PGUSER":         username,
+			"PGPASSWORD":     password,
+			"PGDATABASE":     database,
 		},
 	})
 }
