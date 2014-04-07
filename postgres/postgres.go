@@ -12,7 +12,7 @@ import (
 
 func Open(service, dsn string) (*DB, error) {
 	if service == "" {
-		service = os.Getenv("PGSERVICE")
+		service = os.Getenv("FLYNN_POSTGRES")
 	}
 	set, err := discoverd.NewServiceSet(service)
 	if err != nil {
