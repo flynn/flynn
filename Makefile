@@ -1,17 +1,10 @@
-build:
-ifdef LOCAL
-	make build/flynn-controller
-else
-	mkdir -p build && tar -cf - . | docker run -i -a stdin -a stdout -e=GOPATH=/tmp/go titanous/makebuilder makebuild go/src/github.com/flynn/flynn-controller | tar -xC build
-endif
+build/container: build/flynn-controller
+	docker build -t flynn/controller .
+	touch build/container
 
 build/flynn-controller:
 	godep go build -o build/flynn-controller
 
-container: build
-	docker build -t flynn/controller .
-
+.PHONY: clean
 clean:
 	rm -rf build
-
-.PHONY: build
