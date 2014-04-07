@@ -13,7 +13,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/discoverd/agent",
-			"Rev": "2570d344c25b3565f2853698a092b41c75877b1d"
+			"Rev": "2953ead94516f04ec2b48b3e9a0e68746bf5c0d7"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-discoverd",
@@ -21,11 +21,11 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/attempt",
-			"Rev": "5d8a85c6678780173ab412f30a7a1f11b52a790d"
+			"Rev": "4a28fbfbeea0860433ec15a61354125fc831af75"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/postgres",
-			"Rev": "5d8a85c6678780173ab412f30a7a1f11b52a790d"
+			"Rev": "4a28fbfbeea0860433ec15a61354125fc831af75"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-sql",
