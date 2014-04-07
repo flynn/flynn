@@ -61,7 +61,7 @@ func (b *EtcdBackend) responseToUpdate(resp *etcd.Response, node *etcd.Node) *Se
 	}
 	serviceName := splitKey[3]
 	serviceAddr := splitKey[4]
-	if "get" == resp.Action || "set" == resp.Action && (resp.PrevNode == nil || node.Value != resp.PrevNode.Value) {
+	if "get" == resp.Action || ("set" == resp.Action || "update" == resp.Action) && (resp.PrevNode == nil || node.Value != resp.PrevNode.Value) {
 		// GET is because getCurrentState returns responses of Action GET.
 		// some SETs are heartbeats, so we ignore SETs where value didn't change.
 		var serviceAttrs map[string]string
