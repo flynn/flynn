@@ -31,6 +31,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if err := migrateDB(db.DB); err != nil {
+		log.Fatal(err)
+	}
+
 	cc, err := cluster.NewClient()
 	if err != nil {
 		log.Fatal(err)
