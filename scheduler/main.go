@@ -19,7 +19,7 @@ func main() {
 	grohl.AddContext("app", "controller-scheduler")
 	grohl.Log(grohl.Data{"at": "start"})
 
-	cc, err := controller.New(os.Args[1])
+	cc, err := controller.NewClient(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
 	}

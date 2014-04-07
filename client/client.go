@@ -16,7 +16,7 @@ import (
 	"github.com/flynn/strowger/types"
 )
 
-func New(uri string) (*Client, error) {
+func NewClient(uri string) (*Client, error) {
 	u, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
