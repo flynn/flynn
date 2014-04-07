@@ -97,11 +97,21 @@ func (b *EtcdBackend) getStateChanges(name string, stop chan bool) chan *etcd.Re
 }
 
 func (b *EtcdBackend) Register(name, addr string, attrs map[string]string) error {
-	attrsJson, err := json.Marshal(attrs)
+	attrsJSON, err := json.Marshal(attrs)
 	if err != nil {
 		return err
 	}
-	_, err = b.Client.Set(servicePath(name, addr), string(attrsJson), HeartbeatIntervalSecs+MissedHearbeatTTL)
+	attrsString := string(attrsJSON)
+	path := servicePath(name, addr)
+	ttl := uint64(HeartbeatIntervalSecs + MissedHearbeatTTL)
+
+	_, err = b.Client.Update(path, attrsString, ttl)
+	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
+		// This is a workaround for etcd issue #407: https://github.com/coreos/etcd/issues/407
+		// If we just do a Set and don't try to Update first, createdIndex will get incremented
+		// on each heartbeat, breaking leader election.
+		_, err = b.Client.Set(path, attrsString, ttl)
+	}
 	return err
 }
 
