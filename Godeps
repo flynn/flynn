@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/flynn/flynn-bootstrap",
-	"GoVersion": "go1.2",
+	"GoVersion": "go1.2.1",
 	"Deps": [
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
@@ -9,15 +9,27 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/discoverd/agent",
-			"Rev": "2570d344c25b3565f2853698a092b41c75877b1d"
+			"Rev": "2953ead94516f04ec2b48b3e9a0e68746bf5c0d7"
+		},
+		{
+			"ImportPath": "github.com/flynn/flynn-controller/client",
+			"Rev": "43da630a631560e4777195b7d9973182d5d95aa5"
+		},
+		{
+			"ImportPath": "github.com/flynn/flynn-controller/types",
+			"Rev": "43da630a631560e4777195b7d9973182d5d95aa5"
+		},
+		{
+			"ImportPath": "github.com/flynn/flynn-controller/utils",
+			"Rev": "43da630a631560e4777195b7d9973182d5d95aa5"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-host/types",
-			"Rev": "8ae60af9de613636902d2b18f2ba8c492134e1e4"
+			"Rev": "4310e8a3c34bc027ca1bc27c1aa8ff1edc7b578b"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-discoverd",
-			"Rev": "ace183ffd0a5deef718bef5d33613d28843530a6"
+			"Rev": "c236937e9dd13e2e85314a9ab8cdadff52452601"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-dockerclient",
@@ -25,19 +37,23 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/attempt",
-			"Rev": "f2a8311134ed282ac06fa3bd0e66f860fdbb952a"
+			"Rev": "c95262db7474ac09ce1ccbc7a6c81d9a3aef670b"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/cluster",
-			"Rev": "f2a8311134ed282ac06fa3bd0e66f860fdbb952a"
+			"Rev": "c95262db7474ac09ce1ccbc7a6c81d9a3aef670b"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/resource",
-			"Rev": "f2a8311134ed282ac06fa3bd0e66f860fdbb952a"
+			"Rev": "c95262db7474ac09ce1ccbc7a6c81d9a3aef670b"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
-			"Rev": "7ce4d7e5143b55e7376b16bde2cfab5814d5fabe"
+			"Rev": "0f5f55ccd60369cfc32008d9c955e6b19cdb15e6"
+		},
+		{
+			"ImportPath": "github.com/flynn/strowger/types",
+			"Rev": "efd61a99cb2ebfbcace14a482b16eece342a0cb4"
 		}
 	]
 }

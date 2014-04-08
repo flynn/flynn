@@ -5,19 +5,12 @@ import (
 
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-flynn/cluster"
-	"github.com/flynn/go-flynn/resource"
 )
 
 type RunJobAction struct {
-	ID        string     `json:"id"`
-	Job       *host.Job  `json:"job"`
-	HostTags  []string   `json:"host_tags"`
-	Resources []Resource `json:"resources"`
-}
-
-type Resource struct {
-	Service string `json:"service"`
-	Path    string `json:"path"`
+	ID       string    `json:"id"`
+	Job      *host.Job `json:"job"`
+	HostTags []string  `json:"host_tags,omitempty"`
 }
 
 func init() {
@@ -25,58 +18,42 @@ func init() {
 }
 
 type RunJobState struct {
-	Resources []*resource.Resource
-	HostID    string
-	JobID     string
+	*Job
 }
 
-func (a *RunJobAction) Run(s *State) error {
-	js := &RunJobState{
-		Resources: make([]*resource.Resource, len(a.Resources)),
-	}
+func (a *RunJobAction) Run(s *State) (err error) {
+	js := &RunJobState{}
 	s.StepData[a.ID] = js
 
-	for i, r := range a.Resources {
-		server, err := resource.NewServer(r.Service, r.Path)
-		if err != nil {
-			return err
-		}
-		res, err := server.Provision()
-		server.Close()
-		if err != nil {
-			return err
-		}
-		js.Resources[i] = res
-		for k, v := range res.Env {
-			a.Job.Config.Env = append(a.Job.Config.Env, k+"="+v)
-		}
-	}
+	js.Job, err = startJob(s, a.HostTags, a.Job)
+	return
+}
 
+func startJob(s *State, hostTags []string, job *host.Job) (*Job, error) {
 	cc, err := s.ClusterClient()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	h, err := randomHost(cc)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// TODO: filter by tags
 
-	a.Job.ID = cluster.RandomJobID("")
-	js.HostID = h.ID
-	js.JobID = a.Job.ID
+	job.ID = cluster.RandomJobID("")
+	data := &Job{HostID: h.ID, JobID: job.ID}
 
 	hc, err := cc.ConnectHost(h.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer hc.Close()
 
 	jobStatus := make(chan error)
+	events := make(chan *host.Event)
+	stream := hc.StreamEvents(data.JobID, events)
 	go func() {
-		events := make(chan *host.Event)
-		stream := hc.StreamEvents(js.JobID, events)
 		defer stream.Close()
 		for e := range events {
 			switch e.Event {
@@ -84,7 +61,7 @@ func (a *RunJobAction) Run(s *State) error {
 				jobStatus <- nil
 				return
 			case "error":
-				job, err := hc.GetJob(js.JobID)
+				job, err := hc.GetJob(data.JobID)
 				if err != nil {
 					jobStatus <- err
 					return
@@ -101,12 +78,12 @@ func (a *RunJobAction) Run(s *State) error {
 		jobStatus <- fmt.Errorf("bootstrap: host job stream disconnected unexpectedly: %q", stream.Err())
 	}()
 
-	_, err = cc.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{h.ID: {a.Job}}})
+	_, err = cc.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{h.ID: {job}}})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return <-jobStatus
+	return data, <-jobStatus
 }
 
 func randomHost(cc *cluster.Client) (*host.Host, error) {
@@ -141,8 +118,6 @@ func (a *RunJobAction) Cleanup(s *State) error {
 			return err
 		}
 	}
-
-	// TODO: delete provisioned resources the API exists
 
 	return nil
 }

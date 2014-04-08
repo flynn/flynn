@@ -3,27 +3,42 @@ package bootstrap
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"reflect"
 
+	"github.com/flynn/flynn-controller/client"
+	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/go-flynn/cluster"
 )
 
 type State struct {
-	StepData map[string]interface{}
+	StepData  map[string]interface{}
+	Providers map[string]*ct.Provider
 
-	cc *cluster.Client
+	clusterc    *cluster.Client
+	controllerc *controller.Client
 }
 
 func (s *State) ClusterClient() (*cluster.Client, error) {
-	if s.cc == nil {
+	if s.clusterc == nil {
 		cc, err := cluster.NewClient()
 		if err != nil {
 			return nil, err
 		}
-		s.cc = cc
-		return cc, nil
+		s.clusterc = cc
 	}
-	return s.cc, nil
+	return s.clusterc, nil
+}
+
+func (s *State) ControllerClient() (*controller.Client, error) {
+	if s.controllerc == nil {
+		cc, err := controller.NewClient("discoverd+http://flynn-controller")
+		if err != nil {
+			return nil, err
+		}
+		s.controllerc = cc
+	}
+	return s.controllerc, nil
 }
 
 type Action interface {
@@ -53,7 +68,10 @@ func Run(manifest []byte) error {
 		return err
 	}
 
-	state := &State{StepData: make(map[string]interface{})}
+	state := &State{
+		StepData:  make(map[string]interface{}),
+		Providers: make(map[string]*ct.Provider),
+	}
 	actions := make([]Action, 0, len(steps))
 	cleanup := func(err error) error {
 		errors := make([]error, 0, len(steps))
@@ -83,6 +101,7 @@ func Run(manifest []byte) error {
 		if err := json.Unmarshal(s, action); err != nil {
 			return cleanup(err)
 		}
+		log.Printf("%s %s", a.Action, a.ID)
 		if err := action.Run(state); err != nil {
 			return cleanup(err)
 		}

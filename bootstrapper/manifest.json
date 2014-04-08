@@ -1,0 +1,119 @@
+[
+  {
+    "id": "postgres",
+    "action": "run-app",
+    "release": {
+      "processes": {
+        "postgres": {
+          "ports": { "tcp": 1 },
+          "data": true,
+          "cmd": ["postgres"]
+        },
+        "web": {
+          "ports": { "tcp": 1 },
+          "cmd": ["api"]
+        }
+      }
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "docker:///flynn/postgres"
+    },
+    "processes": {
+      "postgres": 2,
+      "web": 2
+    },
+    "host_tags": ["postgres"]
+  },
+  {
+    "id": "postgres-wait",
+    "action": "wait",
+    "url": "discoverd+http://pg-api/ping"
+  },
+  {
+    "id": "controller",
+    "action": "run-app",
+    "release": {
+      "processes": {
+        "web": {
+          "ports": { "tcp": 1 },
+          "cmd": ["controller"]
+        },
+        "scheduler": {
+          "ports": { "tcp": 1 },
+          "cmd": ["scheduler"]
+        }
+      }
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "docker:///flynn/controller"
+    },
+    "processes": {
+      "web": 2
+    },
+    "resources": [{"name":"postgres", "url":"discoverd+http://pg-api/databases"}]
+  },
+  {
+    "id": "controller-wait",
+    "action": "wait",
+    "url": "discoverd+http://flynn-controller/apps"
+  },
+  {
+    "id": "controller-inception",
+    "action": "add-app",
+    "from_step": "controller",
+    "app": {
+      "name": "controller"
+    }
+  },
+  {
+    "id": "postgres-app",
+    "action": "add-app",
+    "from_step": "postgres",
+    "app": {
+      "name": "postgres",
+      "protected": true
+    }
+  },
+  {
+    "id": "scheduler-scale",
+    "action": "scale-app",
+    "app_step": "controller-inception",
+    "processes": {
+      "scheduler": 1,
+      "web": 2
+    }
+  },
+  {
+    "id": "scheduler",
+    "action": "run-app",
+    "app_step": "controller-inception",
+    "processes": {
+      "scheduler": 1
+    }
+  },
+  {
+    "id": "shelf",
+    "action": "deploy-app",
+    "app": {
+      "name": "shelf",
+      "protected": true
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "docker:///flynn/shelf"
+    },
+    "release": {
+      "processes": {
+        "web": {
+          "ports": { "tcp": 1 }
+        }
+      }
+    },
+    "processes": {
+      "web": 2
+    },
+    "resources": [{"name":"postgres", "url":"discoverd+http://pg-api/databases"}]
+  }
+]
