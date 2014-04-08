@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -30,7 +31,7 @@ func main() {
 	c := newContext(cl)
 
 	grohl.Log(grohl.Data{"at": "leaderwait"})
-	leaderWait, err := discoverd.RegisterAndStandby("flynn-controller-scheduler", ":0", nil)
+	leaderWait, err := discoverd.RegisterAndStandby("flynn-controller-scheduler", ":"+os.Getenv("PORT"), nil)
 	if err != nil {
 		log.Fatal(err)
 	}
