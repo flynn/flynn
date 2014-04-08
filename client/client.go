@@ -30,10 +30,10 @@ func NewClient(uri string) (*Client, error) {
 		if err := discoverd.Connect(""); err != nil {
 			return nil, err
 		}
-		c.http = dialer.NewHTTPClient(discoverd.DefaultClient)
+		c.dialer = dialer.New(discoverd.DefaultClient, nil)
+		c.http = &http.Client{Transport: &http.Transport{Dial: c.dialer.Dial}}
 		u.Scheme = "http"
 		c.url = u.String()
-		// TODO: fix StreamFormations to use this
 	}
 	return c, nil
 }
@@ -42,6 +42,12 @@ type Client struct {
 	url  string
 	addr string
 	http *http.Client
+
+	dialer dialer.Dialer
+}
+
+func (c *Client) Close() error {
+	return c.dialer.Close()
 }
 
 var ErrNotFound = errors.New("controller: not found")
@@ -106,7 +112,11 @@ func (c *Client) StreamFormations(since *time.Time) (<-chan *ct.ExpandedFormatio
 		*since = time.Unix(0, 0)
 	}
 	// TODO: handle TLS
-	client, err := rpcplus.DialHTTP("tcp", c.addr)
+	var dial rpcplus.DialFunc
+	if c.dialer != nil {
+		dial = c.dialer.Dial
+	}
+	client, err := rpcplus.DialHTTPPath("tcp", c.addr, rpcplus.DefaultRPCPath, dial)
 	if err != nil {
 		return nil, &err
 	}

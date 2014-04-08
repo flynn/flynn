@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/flynn/flynn-controller",
-	"GoVersion": "go1.2",
+	"GoVersion": "go1.2.1",
 	"Packages": [
 		"./..."
 	],
@@ -60,7 +60,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
-			"Rev": "287ba5f190485b5529bdd1db2d9383df5feb67ee"
+			"Rev": "0f5f55ccd60369cfc32008d9c955e6b19cdb15e6"
 		},
 		{
 			"ImportPath": "github.com/flynn/strowger/client",
