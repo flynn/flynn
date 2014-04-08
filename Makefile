@@ -1,17 +1,10 @@
-build:
-ifdef LOCAL
-	make build/strowger
-else
-	mkdir -p build && tar -cf - . | docker run -i -a stdin -a stdout -e=GOPATH=/tmp/go titanous/makebuilder makebuild go/src/github.com/flynn/strowger | tar -xC build
-endif
+build/container: build/strowger Dockerfile
+	docker build -t flynn/strowger .
+	touch build/container
 
-build/strowger:
+build/strowger: *.go types/*.go
 	godep go build -o build/strowger
 
-container: build
-	docker build -t flynn/strowger .
-
+.PHONY: clean
 clean:
 	rm -rf build
-
-.PHONY: build
