@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-sql"
@@ -18,7 +19,7 @@ func Open(service, dsn string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	db := &DB{set: set, dsn: dsn}
+	db := &DB{set: set, dsnSuffix: dsn}
 	firstErr := make(chan error)
 	go db.followLeader(firstErr)
 	return db, <-firstErr
@@ -28,6 +29,10 @@ type DB struct {
 	*sql.DB
 
 	set discoverd.ServiceSet
+
+	dsnSuffix string
+
+	mtx sync.RWMutex
 	dsn string
 }
 
@@ -46,7 +51,12 @@ func (db *DB) followLeader(firstErr chan<- error) {
 		if !update.Online || update.Addr != leader.Addr {
 			continue
 		}
-		dsn := fmt.Sprintf("host=%s port=%s %s", leader.Host, leader.Port, db.dsn)
+
+		dsn := fmt.Sprintf("host=%s port=%s %s", leader.Host, leader.Port, db.dsnSuffix)
+		db.mtx.Lock()
+		db.dsn = dsn
+		db.mtx.Unlock()
+
 		if db.DB == nil {
 			var err error
 			db.DB, err = sql.Open("postgres", dsn)
@@ -59,6 +69,12 @@ func (db *DB) followLeader(firstErr chan<- error) {
 		}
 	}
 	// TODO: reconnect to discoverd here
+}
+
+func (db *DB) DSN() string {
+	db.mtx.RLock()
+	defer db.mtx.RUnlock()
+	return db.dsn
 }
 
 func (db *DB) Close() error {
