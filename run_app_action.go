@@ -44,6 +44,7 @@ func (a *RunAppAction) Run(s *State) error {
 		if err != nil {
 			return err
 		}
+		a.App = data.App
 		procs := a.Processes
 		a.ExpandedFormation = data.ExpandedFormation
 		a.Processes = procs
@@ -55,15 +56,21 @@ func (a *RunAppAction) Run(s *State) error {
 	}
 	s.StepData[a.ID] = as
 
-	a.App = &ct.App{ID: utils.UUID()}
+	if a.App == nil || a.App.ID == "" {
+		a.App = &ct.App{ID: utils.UUID()}
+	}
 	if a.Artifact == nil {
 		return errors.New("bootstrap: artifact must be set")
 	}
-	a.Artifact.ID = utils.UUID()
+	if a.Artifact.ID == "" {
+		a.Artifact.ID = utils.UUID()
+	}
 	if a.Release == nil {
 		return errors.New("bootstrap: release must be set")
 	}
-	a.Release.ID = utils.UUID()
+	if a.Release.ID == "" {
+		a.Release.ID = utils.UUID()
+	}
 	a.Release.ArtifactID = a.Artifact.ID
 	if a.Release.Env == nil {
 		a.Release.Env = make(map[string]string)
