@@ -10,6 +10,7 @@ import (
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/flynn-host/types"
+	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-flynn/cluster"
 	"github.com/technoweenie/grohl"
 )
@@ -27,7 +28,15 @@ func main() {
 		log.Fatal(err)
 	}
 	c := newContext(cl)
-	// TODO: initial load of data
+
+	grohl.Log(grohl.Data{"at": "leaderwait"})
+	leaderWait, err := discoverd.RegisterAndStandby("flynn-controller-scheduler", ":0", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	<-leaderWait
+	grohl.Log(grohl.Data{"at": "leader"})
+
 	// TODO: periodic full cluster sync for anti-entropy
 	c.watchFormations(cc)
 }
