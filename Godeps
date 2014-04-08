@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/flynn/flynn-controller",
-	"GoVersion": "go1.2",
+	"GoVersion": "devel +519230b4d06a Sun Apr 06 10:30:02 2014 -0400",
 	"Packages": [
 		"./..."
 	],
