@@ -259,7 +259,7 @@ func testHTTPRPC(t *testing.T, path string) {
 	if path == "" {
 		client, err = DialHTTP("tcp", httpServerAddr)
 	} else {
-		client, err = DialHTTPPath("tcp", httpServerAddr, path)
+		client, err = DialHTTPPath("tcp", httpServerAddr, path, nil)
 	}
 	if err != nil {
 		t.Fatal("dialing", err)

@@ -288,14 +288,19 @@ func (c *gobClientCodec) Close() error {
 // DialHTTP connects to an HTTP RPC server at the specified network address
 // listening on the default HTTP RPC path.
 func DialHTTP(network, address string) (*Client, error) {
-	return DialHTTPPath(network, address, DefaultRPCPath)
+	return DialHTTPPath(network, address, DefaultRPCPath, nil)
 }
+
+type DialFunc func(network, address string) (net.Conn, error)
 
 // DialHTTPPath connects to an HTTP RPC server
 // at the specified network address and path.
-func DialHTTPPath(network, address, path string) (*Client, error) {
+func DialHTTPPath(network, address, path string, dial DialFunc) (*Client, error) {
+	if dial == nil {
+		dial = net.Dial
+	}
 	var err error
-	conn, err := net.Dial(network, address)
+	conn, err := dial(network, address)
 	if err != nil {
 		return nil, err
 	}
