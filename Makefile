@@ -1,4 +1,4 @@
-build/container: build/flynn-controller build/flynn-scheduler Dockerfile
+build/container: build/flynn-controller build/flynn-scheduler Dockerfile start.sh
 	docker build -t flynn/controller .
 	touch build/container
 
