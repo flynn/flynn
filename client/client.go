@@ -109,7 +109,8 @@ func (c *Client) get(path string, out interface{}) error {
 
 func (c *Client) StreamFormations(since *time.Time) (<-chan *ct.ExpandedFormation, *error) {
 	if since == nil {
-		*since = time.Unix(0, 0)
+		s := time.Unix(0, 0)
+		since = &s
 	}
 	// TODO: handle TLS
 	var dial rpcplus.DialFunc
