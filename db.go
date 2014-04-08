@@ -20,6 +20,7 @@ func NewDB(db dbWrapper) *DB {
 	return &DB{
 		stmts: make(map[string]*sql.Stmt),
 		DB:    db.Database(),
+		db:    db,
 	}
 }
 
