@@ -28,7 +28,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	c := newContext(cl)
+	c := newContext(cc, cl)
 
 	grohl.Log(grohl.Data{"at": "leaderwait"})
 	leaderWait, err := discoverd.RegisterAndStandby("flynn-controller-scheduler", ":"+os.Getenv("PORT"), nil)
@@ -39,19 +39,21 @@ func main() {
 	grohl.Log(grohl.Data{"at": "leader"})
 
 	// TODO: periodic full cluster sync for anti-entropy
-	c.watchFormations(cc)
+	c.watchFormations()
 }
 
-func newContext(cl clusterClient) *context {
+func newContext(cc controllerClient, cl clusterClient) *context {
 	return &context{
-		clusterClient: cl,
-		formations:    NewFormations(),
-		hosts:         newHostClients(),
-		jobs:          newJobMap(),
+		controllerClient: cc,
+		clusterClient:    cl,
+		formations:       NewFormations(),
+		hosts:            newHostClients(),
+		jobs:             newJobMap(),
 	}
 }
 
 type context struct {
+	controllerClient
 	clusterClient
 	formations *Formations
 
@@ -65,14 +67,96 @@ type clusterClient interface {
 	ConnectHost(id string) (cluster.Host, error)
 }
 
-type formationStreamer interface {
-	StreamFormations(*time.Time) (<-chan *ct.ExpandedFormation, *error)
+type controllerClient interface {
+	GetRelease(releaseID string) (*ct.Release, error)
+	GetArtifact(artifactID string) (*ct.Artifact, error)
+	GetFormation(appID, releaseID string) (*ct.Formation, error)
+	StreamFormations(since *time.Time) (<-chan *ct.ExpandedFormation, *error)
 }
 
-func (c *context) watchFormations(fs formationStreamer) {
+func (c *context) syncCluster() {
+	g := grohl.NewContext(grohl.Data{"fn": "syncCluster"})
+
+	artifacts := make(map[string]*ct.Artifact)
+	releases := make(map[string]*ct.Release)
+	rectify := make(map[*Formation]struct{})
+
+	hosts, err := c.ListHosts()
+	if err != nil {
+		// TODO: log/handle error
+	}
+
+	for _, h := range hosts {
+		for _, job := range h.Jobs {
+			appID := job.Attributes["flynn-controller.app"]
+			releaseID := job.Attributes["flynn-controller.release"]
+			jobType := job.Attributes["flynn-controller.type"]
+			gg := g.New(grohl.Data{"host.id": h.ID, "job.id": job.ID, "app.id": appID, "release.id": releaseID, "type": jobType})
+
+			if appID == "" || releaseID == "" || jobType == "" {
+				continue
+			}
+			if job := c.jobs.Get(h.ID, job.ID); job != nil {
+				continue
+			}
+
+			f := c.formations.Get(appID, releaseID)
+			if f == nil {
+				release := releases[releaseID]
+				if release == nil {
+					release, err = c.GetRelease(releaseID)
+					if err != nil {
+						gg.Log(grohl.Data{"at": "getRelease", "status": "error", "err": err})
+						continue
+					}
+					releases[release.ID] = release
+				}
+
+				artifact := artifacts[release.ArtifactID]
+				if artifact == nil {
+					artifact, err = c.GetArtifact(release.ArtifactID)
+					if err != nil {
+						gg.Log(grohl.Data{"at": "getArtifact", "status": "error", "err": err})
+						continue
+					}
+					artifacts[artifact.ID] = artifact
+				}
+
+				formation, err := c.GetFormation(appID, releaseID)
+				if err != nil {
+					gg.Log(grohl.Data{"at": "getFormation", "status": "error", "err": err})
+					continue
+				}
+
+				f = NewFormation(c, &ct.ExpandedFormation{
+					App:       &ct.App{ID: appID},
+					Release:   release,
+					Artifact:  artifact,
+					Processes: formation.Processes,
+				})
+				gg.Log(grohl.Data{"at": "addFormation"})
+				f = c.formations.Add(f)
+			}
+
+			gg.Log(grohl.Data{"at": "addJob"})
+			j := f.jobs.Add(jobType, h.ID, job.ID)
+			j.Formation = f
+			c.jobs.Add(h.ID, job.ID, j)
+			rectify[f] = struct{}{}
+		}
+	}
+
+	for f := range rectify {
+		go f.rectify()
+	}
+}
+
+func (c *context) watchFormations() {
 	g := grohl.NewContext(grohl.Data{"fn": "watchFormations"})
 
-	ch, _ := fs.StreamFormations(nil)
+	ch, _ := c.StreamFormations(nil)
+
+	c.syncCluster()
 
 	for ef := range ch {
 		if ef.App == nil {
@@ -216,10 +300,14 @@ func (fs *Formations) Get(appID, releaseID string) *Formation {
 	return fs.formations[formationKey{appID, releaseID}]
 }
 
-func (fs *Formations) Add(f *Formation) {
+func (fs *Formations) Add(f *Formation) *Formation {
 	fs.mtx.Lock()
+	defer fs.mtx.Unlock()
+	if existing, ok := fs.formations[f.key()]; ok {
+		return existing
+	}
 	fs.formations[f.key()] = f
-	fs.mtx.Unlock()
+	return f
 }
 
 func (fs *Formations) Delete(f *Formation) {
@@ -230,7 +318,7 @@ func (fs *Formations) Delete(f *Formation) {
 
 func NewFormation(c *context, ef *ct.ExpandedFormation) *Formation {
 	return &Formation{
-		App:       ef.App,
+		AppID:     ef.App.ID,
 		Release:   ef.Release,
 		Artifact:  ef.Artifact,
 		Processes: ef.Processes,
@@ -269,7 +357,7 @@ func (m jobTypeMap) Get(typ, host, id string) *Job {
 
 type Formation struct {
 	mtx       sync.Mutex
-	App       *ct.App
+	AppID     string
 	Release   *ct.Release
 	Artifact  *ct.Artifact
 	Processes map[string]int
@@ -279,7 +367,7 @@ type Formation struct {
 }
 
 func (f *Formation) key() formationKey {
-	return formationKey{f.App.ID, f.Release.ID}
+	return formationKey{f.AppID, f.Release.ID}
 }
 
 func (f *Formation) SetProcesses(p map[string]int) {
@@ -303,7 +391,7 @@ func (f *Formation) RemoveJob(typ, hostID, jobID string) {
 }
 
 func (f *Formation) rectify() {
-	g := grohl.NewContext(grohl.Data{"fn": "rectify", "app.id": f.App.ID, "release.id": f.Release.ID})
+	g := grohl.NewContext(grohl.Data{"fn": "rectify", "app.id": f.AppID, "release.id": f.Release.ID})
 
 	// update job counts
 	for t, expected := range f.Processes {
@@ -326,7 +414,7 @@ func (f *Formation) rectify() {
 }
 
 func (f *Formation) add(n int, name string) {
-	g := grohl.NewContext(grohl.Data{"fn": "add", "app.id": f.App.ID, "release.id": f.Release.ID})
+	g := grohl.NewContext(grohl.Data{"fn": "add", "app.id": f.AppID, "release.id": f.Release.ID})
 
 	config, err := f.jobConfig(name)
 	if err != nil {
@@ -376,7 +464,7 @@ func (f *Formation) add(n int, name string) {
 }
 
 func (f *Formation) jobType(job *host.Job) string {
-	if job.Attributes["flynn-controller.app"] != f.App.ID ||
+	if job.Attributes["flynn-controller.app"] != f.AppID ||
 		job.Attributes["flynn-controller.release"] != f.Release.ID {
 		return ""
 	}
@@ -384,7 +472,7 @@ func (f *Formation) jobType(job *host.Job) string {
 }
 
 func (f *Formation) remove(n int, name string) {
-	g := grohl.NewContext(grohl.Data{"fn": "remove", "app.id": f.App.ID, "release.id": f.Release.ID})
+	g := grohl.NewContext(grohl.Data{"fn": "remove", "app.id": f.AppID, "release.id": f.Release.ID})
 
 	i := 0
 	for k := range f.jobs[name] {
@@ -403,7 +491,7 @@ func (f *Formation) remove(n int, name string) {
 
 func (f *Formation) jobConfig(name string) (*host.Job, error) {
 	return utils.JobConfig(&ct.ExpandedFormation{
-		App:      f.App,
+		App:      &ct.App{ID: f.AppID},
 		Release:  f.Release,
 		Artifact: f.Artifact,
 	}, name)

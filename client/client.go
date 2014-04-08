@@ -176,3 +176,18 @@ func (c *Client) GetAppRelease(appID string) (*ct.Release, error) {
 func (c *Client) CreateRoute(appID string, route *strowger.Route) error {
 	return c.post(fmt.Sprintf("/apps/%s/routes", appID), route, route)
 }
+
+func (c *Client) GetFormation(appID, releaseID string) (*ct.Formation, error) {
+	formation := &ct.Formation{}
+	return formation, c.get(fmt.Sprintf("/apps/%s/formations/%s", appID, releaseID), formation)
+}
+
+func (c *Client) GetRelease(releaseID string) (*ct.Release, error) {
+	release := &ct.Release{}
+	return release, c.get(fmt.Sprintf("/releases/%s", releaseID), release)
+}
+
+func (c *Client) GetArtifact(artifactID string) (*ct.Artifact, error) {
+	artifact := &ct.Artifact{}
+	return artifact, c.get(fmt.Sprintf("/artifacts/%s", artifactID), artifact)
+}
