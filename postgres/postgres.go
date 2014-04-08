@@ -77,6 +77,10 @@ func (db *DB) DSN() string {
 	return db.dsn
 }
 
+func (db *DB) Database() *sql.DB {
+	return db.DB
+}
+
 func (db *DB) Close() error {
 	db.set.Close()
 	return db.DB.Close()
