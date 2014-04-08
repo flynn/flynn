@@ -56,7 +56,6 @@ type clusterClient interface {
 }
 
 type formationStreamer interface {
-	// get release
 	StreamFormations(*time.Time) (<-chan *ct.ExpandedFormation, *error)
 }
 

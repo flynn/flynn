@@ -12,13 +12,19 @@ type DB struct {
 	stmts map[string]*sql.Stmt
 	mtx   sync.RWMutex
 	*sql.DB
+
+	db dbWrapper
 }
 
-func NewDB(db *sql.DB) *DB {
+func NewDB(db dbWrapper) *DB {
 	return &DB{
 		stmts: make(map[string]*sql.Stmt),
-		DB:    db,
+		DB:    db.Database(),
 	}
+}
+
+func (db *DB) DSN() string {
+	return db.db.DSN()
 }
 
 func (db *DB) prepare(query string) (*sql.Stmt, error) {

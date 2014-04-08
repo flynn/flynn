@@ -49,11 +49,24 @@ func main() {
 		log.Fatal(err)
 	}
 
-	handler, _ := appHandler(db.DB, cc, sc, discoverd.DefaultClient)
+	handler, _ := appHandler(handlerConfig{db: db, cc: cc, sc: sc, dc: discoverd.DefaultClient})
 	log.Fatal(http.ListenAndServe(addr, handler))
 }
 
-func appHandler(db *sql.DB, cc clusterClient, sc strowgerc.Client, dc *discoverd.Client) (http.Handler, *martini.Martini) {
+type dbWrapper interface {
+	Database() *sql.DB
+	DSN() string
+	Close() error
+}
+
+type handlerConfig struct {
+	db dbWrapper
+	cc clusterClient
+	sc strowgerc.Client
+	dc *discoverd.Client
+}
+
+func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	r := martini.NewRouter()
 	m := martini.New()
 	m.Use(martini.Logger())
@@ -61,7 +74,7 @@ func appHandler(db *sql.DB, cc clusterClient, sc strowgerc.Client, dc *discoverd
 	m.Use(render.Renderer())
 	m.Action(r.Handle)
 
-	d := NewDB(db)
+	d := NewDB(c.db)
 
 	providerRepo := NewProviderRepo(d)
 	keyRepo := NewKeyRepo(d)
@@ -75,10 +88,10 @@ func appHandler(db *sql.DB, cc clusterClient, sc strowgerc.Client, dc *discoverd
 	m.Map(artifactRepo)
 	m.Map(releaseRepo)
 	m.Map(formationRepo)
-	m.Map(dc)
-	m.MapTo(cc, (*clusterClient)(nil))
-	m.MapTo(sc, (*strowgerc.Client)(nil))
-	m.MapTo(dc, (*resource.DiscoverdClient)(nil))
+	m.Map(c.dc)
+	m.MapTo(c.cc, (*clusterClient)(nil))
+	m.MapTo(c.sc, (*strowgerc.Client)(nil))
+	m.MapTo(c.dc, (*resource.DiscoverdClient)(nil))
 
 	getAppMiddleware := crud("apps", ct.App{}, appRepo, r)
 	getReleaseMiddleware := crud("releases", ct.Release{}, releaseRepo, r)

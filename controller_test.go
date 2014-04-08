@@ -53,19 +53,29 @@ func (s *S) SetUpSuite(c *C) {
 	}
 	db.Close()
 
-	db, err = sql.Open("postgres", fmt.Sprintf("dbname=%s", dbname))
+	dsn := fmt.Sprintf("dbname=%s", dbname)
+	db, err = sql.Open("postgres", dsn)
 	if err != nil {
 		c.Fatal(err)
 	}
 	if err = migrateDB(db); err != nil {
 		c.Fatal(err)
 	}
+	dbw := testDBWrapper{DB: db, dsn: dsn}
 
 	s.cc = newFakeCluster()
-	handler, m := appHandler(db, s.cc, newFakeRouter(), nil)
+	handler, m := appHandler(handlerConfig{db: dbw, cc: s.cc, sc: newFakeRouter()})
 	s.m = m
 	s.srv = httptest.NewServer(handler)
 }
+
+type testDBWrapper struct {
+	*sql.DB
+	dsn string
+}
+
+func (w testDBWrapper) DSN() string       { return w.dsn }
+func (w testDBWrapper) Database() *sql.DB { return w.DB }
 
 func (s *S) send(method, path string, in, out interface{}) (*http.Response, error) {
 	buf, err := json.Marshal(in)
