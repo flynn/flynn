@@ -168,7 +168,7 @@ func (r *FormationRepo) startListener() error {
 		}
 		// TODO: handle errors
 	}
-	listener := pq.NewListener("", 10*time.Second, time.Minute, listenerEvent)
+	listener := pq.NewListener(r.db.DSN(), 10*time.Second, time.Minute, listenerEvent)
 	if err := listener.Listen("formations"); err != nil {
 		return err
 	}
