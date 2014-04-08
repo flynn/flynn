@@ -1,7 +1,28 @@
 {
 	"ImportPath": "github.com/flynn/shelf",
-	"GoVersion": "go1.2",
+	"GoVersion": "go1.2.1",
 	"Deps": [
+		{
+			"ImportPath": "github.com/coreos/go-etcd/etcd",
+			"Comment": "v0.2.0-rc1-96-g1e26d8e",
+			"Rev": "1e26d8ee84cf9b1000d2af8acfb45b2521f49be5"
+		},
+		{
+			"ImportPath": "github.com/flynn/discoverd/agent",
+			"Rev": "2953ead94516f04ec2b48b3e9a0e68746bf5c0d7"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-discoverd",
+			"Rev": "c236937e9dd13e2e85314a9ab8cdadff52452601"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-flynn/attempt",
+			"Rev": "15928edb8a14fd0c117ebf49f01a625935218e1d"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-flynn/postgres",
+			"Rev": "15928edb8a14fd0c117ebf49f01a625935218e1d"
+		},
 		{
 			"ImportPath": "github.com/flynn/go-sql",
 			"Rev": "f2272fcc41821d3313c69dc032a9c5dd004005c6"
@@ -9,6 +30,10 @@
 		{
 			"ImportPath": "github.com/flynn/pq",
 			"Rev": "2448887c085a78d64bf4e6956e7614de5554bbef"
+		},
+		{
+			"ImportPath": "github.com/flynn/rpcplus",
+			"Rev": "287ba5f190485b5529bdd1db2d9383df5feb67ee"
 		}
 	]
 }
