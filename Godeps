@@ -32,23 +32,23 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/attempt",
-			"Rev": "4a28fbfbeea0860433ec15a61354125fc831af75"
+			"Rev": "15928edb8a14fd0c117ebf49f01a625935218e1d"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/cluster",
-			"Rev": "4a28fbfbeea0860433ec15a61354125fc831af75"
+			"Rev": "15928edb8a14fd0c117ebf49f01a625935218e1d"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/migrate",
-			"Rev": "4a28fbfbeea0860433ec15a61354125fc831af75"
+			"Rev": "15928edb8a14fd0c117ebf49f01a625935218e1d"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/postgres",
-			"Rev": "4a28fbfbeea0860433ec15a61354125fc831af75"
+			"Rev": "15928edb8a14fd0c117ebf49f01a625935218e1d"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/resource",
-			"Rev": "4a28fbfbeea0860433ec15a61354125fc831af75"
+			"Rev": "15928edb8a14fd0c117ebf49f01a625935218e1d"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-sql",
