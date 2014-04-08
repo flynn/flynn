@@ -62,7 +62,11 @@ func (c *Client) send(method, path string, in, out interface{}) error {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
-		return fmt.Errorf("controller: unexpected status %d", res.StatusCode)
+		return &url.Error{
+			Op:  req.Method,
+			URL: req.URL.String(),
+			Err: fmt.Errorf("controller: unexpected status %d", res.StatusCode),
+		}
 	}
 	if out != nil {
 		return json.NewDecoder(res.Body).Decode(out)
@@ -88,7 +92,11 @@ func (c *Client) get(path string, out interface{}) error {
 		if res.StatusCode == 404 {
 			return ErrNotFound
 		}
-		return fmt.Errorf("controller: unexpected status %d", res.StatusCode)
+		return &url.Error{
+			Op:  "GET",
+			URL: c.url + path,
+			Err: fmt.Errorf("controller: unexpected status %d", res.StatusCode),
+		}
 	}
 	return json.NewDecoder(res.Body).Decode(out)
 }
