@@ -22,9 +22,7 @@ func (m Migrations) Migrate(db *sql.DB) error {
 	var initialized bool
 	for _, migration := range m {
 		if !initialized {
-			if _, err := db.Exec("CREATE TABLE IF NOT EXISTS schema_migrations (id bigint PRIMARY KEY)"); err != nil {
-				return err
-			}
+			db.Exec("CREATE TABLE IF NOT EXISTS schema_migrations (id bigint PRIMARY KEY)")
 			initialized = true
 		}
 
