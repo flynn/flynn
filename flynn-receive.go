@@ -23,20 +23,31 @@ func init() {
 	var err error
 	clusterc, err = cluster.NewClient()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln("Error connecting to cluster leader:", err)
 	}
 }
 
 func main() {
-	var client *controller.Client
-	services, _ := discoverd.Services("shelf", discoverd.DefaultTimeout)
-	if len(services) < 1 {
-		panic("Shelf is not discoverable")
+	client, err := controller.NewClient("")
+	if err != nil {
+		log.Fatalln("Unable to connect to controller:", err)
+	}
+	// TODO: use discoverd http dialer here?
+	services, err := discoverd.Services("shelf", discoverd.DefaultTimeout)
+	if err != nil || len(services) < 1 {
+		log.Fatalf("Unable to discover shelf %q", err)
 	}
 	shelfHost := services[0].Addr
 
 	app := os.Args[1]
 	commit := os.Args[2]
+
+	_, err = client.GetApp(app)
+	if err == controller.ErrNotFound {
+		log.Fatalf("Unknown app %q", app)
+	} else if err != nil {
+		log.Fatalln("Error retrieving app:", err)
+	}
 
 	fmt.Printf("-----> Building %s...\n", app)
 
@@ -50,15 +61,17 @@ func main() {
 		StdinOnce:    true,
 	})
 
+	fmt.Printf("-----> Creating release...\n", app)
+
 	prevRelease, err := client.GetAppRelease(app)
 	if err == controller.ErrNotFound {
 		prevRelease = &ct.Release{}
 	} else if err != nil {
-		log.Fatal(err)
+		log.Fatalln("Error creating getting current app release:", err)
 	}
 	artifact := &ct.Artifact{URI: "docker://flynn/slugrunner"}
 	if err := client.CreateArtifact(artifact); err != nil {
-		log.Fatal(err)
+		log.Fatalln("Error creating artifact:", err)
 	}
 
 	release := &ct.Release{
@@ -85,10 +98,10 @@ func main() {
 	release.Env["SLUG_URL"] = "http://" + shelfHost + "/" + commit + ".tgz"
 
 	if err := client.CreateRelease(release); err != nil {
-		log.Fatal(err)
+		log.Fatalln("Error creating release:", err)
 	}
 	if err := client.SetAppRelease(app, release.ID); err != nil {
-		log.Fatal(err)
+		log.Fatalln("Error setting app release:", err)
 	}
 
 	fmt.Println("=====> Application deployed")
@@ -97,14 +110,14 @@ func main() {
 func randomHost() (hostid string) {
 	hosts, err := clusterc.ListHosts()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln("Error listing cluster hosts:", err)
 	}
 
 	for hostid = range hosts {
 		break
 	}
 	if hostid == "" {
-		log.Fatal("no hosts found")
+		log.Fatal("No hosts found")
 	}
 	return
 }
@@ -116,25 +129,25 @@ func scheduleAndAttach(jobid string, config docker.Config) (types []string) {
 
 	client, err := clusterc.ConnectHost(hostid)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Error connecting to host %s: %s", hostid, err)
 	}
 	conn, attachWait, err := client.Attach(&host.AttachReq{
 		JobID: jobid,
 		Flags: host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagStdin | host.AttachFlagStream,
 	}, true)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln("Error attaching:", err)
 	}
 
 	addReq := &host.AddJobsReq{
 		HostJobs: map[string][]*host.Job{hostid: {{ID: jobid, Config: &config}}},
 	}
 	if _, err := clusterc.AddJobs(addReq); err != nil {
-		log.Fatal(err)
+		log.Fatalln("Error adding job:", err)
 	}
 
 	if err := attachWait(); err != nil {
-		log.Fatal(err)
+		log.Fatalln("Error waiting for attach:", err)
 	}
 
 	go func() {

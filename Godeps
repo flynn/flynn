@@ -9,15 +9,15 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/discoverd/agent",
-			"Rev": "2953ead94516f04ec2b48b3e9a0e68746bf5c0d7"
+			"Rev": "36c7a911bc4299ea4921a908d9a0609c5bffaeaf"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/client",
-			"Rev": "08bfd27c079ce6fe537d49a08f958fb9be9d1766"
+			"Rev": "1fc91a9529092e2a05841be8c43c8a2cce4d6350"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/types",
-			"Rev": "08bfd27c079ce6fe537d49a08f958fb9be9d1766"
+			"Rev": "1fc91a9529092e2a05841be8c43c8a2cce4d6350"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-host/types",
@@ -45,7 +45,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/strowger/types",
-			"Rev": "d1e8b72e57a05619e9694443a255017a32439924"
+			"Rev": "d6c3dace39ee34f22e22d04926bb24cf85892399"
 		}
 	]
 }
