@@ -13,11 +13,11 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/client",
-			"Rev": "1fc91a9529092e2a05841be8c43c8a2cce4d6350"
+			"Rev": "08a3ec0a4d6c8d21a63a16b792eeaa2760574398"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/types",
-			"Rev": "1fc91a9529092e2a05841be8c43c8a2cce4d6350"
+			"Rev": "08a3ec0a4d6c8d21a63a16b792eeaa2760574398"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-host/types",
