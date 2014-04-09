@@ -1,5 +1,7 @@
 # Flynn Dev Environment
 
+**Note: This repo is broken while we finish bootstrapping Flynn services in containers**
+
 This repo contains a Vagrantfile/Makefile combo that sets up all of the Flynn
 components and dependencies in a working dev/test configuration.
 
