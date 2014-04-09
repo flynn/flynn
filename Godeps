@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/flynn/flynn-host",
-	"GoVersion": "go1.2",
+	"GoVersion": "go1.2.1",
 	"Packages": [
 		"./..."
 	],
@@ -12,11 +12,11 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/discoverd/agent",
-			"Rev": "8d1edac22b29532a72b873a61268781c12af04ab"
+			"Rev": "2953ead94516f04ec2b48b3e9a0e68746bf5c0d7"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-discoverd",
-			"Rev": "ace183ffd0a5deef718bef5d33613d28843530a6"
+			"Rev": "c236937e9dd13e2e85314a9ab8cdadff52452601"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-dockerclient",
@@ -24,15 +24,15 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/attempt",
-			"Rev": "05d20356c50466c66646952a103d1de6a9f8d2ec"
+			"Rev": "c95262db7474ac09ce1ccbc7a6c81d9a3aef670b"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/cluster",
-			"Rev": "05d20356c50466c66646952a103d1de6a9f8d2ec"
+			"Rev": "c95262db7474ac09ce1ccbc7a6c81d9a3aef670b"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
-			"Rev": "7ce4d7e5143b55e7376b16bde2cfab5814d5fabe"
+			"Rev": "0f5f55ccd60369cfc32008d9c955e6b19cdb15e6"
 		},
 		{
 			"ImportPath": "github.com/technoweenie/grohl",
