@@ -70,5 +70,17 @@ func JobConfig(f *ct.ExpandedFormation, name string) (*host.Job, error) {
 	if t.Data {
 		job.Config.Volumes = map[string]struct{}{"/data": {}}
 	}
+	if p := t.Env["FLYNN_HOST_PORTS"]; p != "" {
+		ports := strings.Split(p, ",")
+		job.HostConfig = &docker.HostConfig{
+			PortBindings:    make(map[string][]docker.PortBinding, len(ports)),
+			PublishAllPorts: true,
+		}
+		job.Config.ExposedPorts = make(map[string]struct{}, len(ports))
+		for _, port := range ports {
+			job.Config.ExposedPorts[port+"/tcp"] = struct{}{}
+			job.HostConfig.PortBindings[port+"/tcp"] = []docker.PortBinding{{HostPort: port}}
+		}
+	}
 	return job, nil
 }
