@@ -1,0 +1,14 @@
+{
+	"ImportPath": "github.com/flynn/gitreceived",
+	"GoVersion": "go1.2.1",
+	"Deps": [
+		{
+			"ImportPath": "github.com/flynn/go-crypto-ssh",
+			"Rev": "6285d0011986aed6889d9730c30e7d1f7bfd772e"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-shlex",
+			"Rev": "2db50307d7b0b3b9384329e57bad7effe89f518d"
+		}
+	]
+}
