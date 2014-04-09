@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -23,36 +24,39 @@ func TestOSFilesystem(t *testing.T) {
 }
 
 func TestPostgresFilesystem(t *testing.T) {
-	dbname := os.Getenv("PGDATABASE")
-	sslmode := os.Getenv("PGSSLMODE")
-	if dbname == "" {
-		os.Setenv("PGDATABASE", "shelftest")
+	dbname := "shelftest"
+	if os.Getenv("PGDATABASE") != "" {
+		dbname = os.Getenv("PGDATABASE")
+	} else {
+		os.Setenv("PGDATABASE", dbname)
 	}
-	if sslmode == "" {
+	if os.Getenv("PGSSLMODE") == "" {
 		os.Setenv("PGSSLMODE", "disable")
 	}
 
-	db, err := sql.Open("postgres", "")
+	db, err := sql.Open("postgres", "dbname=postgres")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbname)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(fmt.Sprintf("CREATE DATABASE %s", dbname)); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	db, err = sql.Open("postgres", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
 
-	_, err = db.Exec("DROP TABLE IF EXISTS files")
+	fs, err := NewPostgresFilesystem(db)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	schema, err := ioutil.ReadFile("schema.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = db.Exec(string(schema))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	testFilesystem(NewPostgresFilesystem(db), true, t)
+	testFilesystem(fs, true, t)
 }
 
 func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {

@@ -6,13 +6,34 @@ import (
 	"io"
 	"time"
 
+	"github.com/flynn/go-flynn/migrate"
 	"github.com/flynn/go-sql"
 	"github.com/flynn/pq"
 	"github.com/flynn/pq/oid"
 )
 
-func NewPostgresFilesystem(db *sql.DB) Filesystem {
-	return &PostgresFilesystem{db: db}
+func NewPostgresFilesystem(db *sql.DB) (Filesystem, error) {
+	m := migrate.NewMigrations()
+	m.Add(1,
+		`CREATE TABLE files (
+	file_id oid PRIMARY KEY DEFAULT lo_create(0),
+	name text UNIQUE NOT NULL,
+	size bigint,
+	type text,
+	digest text,
+	created_at timestamp with time zone NOT NULL DEFAULT current_timestamp
+);`,
+		`CREATE FUNCTION delete_file() RETURNS TRIGGER AS $$
+    BEGIN
+        PERFORM lo_unlink(OLD.file_id);
+        RETURN NULL;
+    END;
+$$ LANGUAGE plpgsql;`,
+		`CREATE TRIGGER delete_file
+    AFTER DELETE ON files
+    FOR EACH ROW EXECUTE PROCEDURE delete_file();`,
+	)
+	return &PostgresFilesystem{db: db}, m.Migrate(db)
 }
 
 type PostgresFilesystem struct {

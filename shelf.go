@@ -88,5 +88,9 @@ func main() {
 	if err := discoverd.Register("shelf", addr); err != nil {
 		log.Fatal(err)
 	}
-	log.Fatal(http.ListenAndServe(addr, handler(NewPostgresFilesystem(db.DB))))
+	fs, err := NewPostgresFilesystem(db.DB)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Fatal(http.ListenAndServe(addr, handler(fs)))
 }
