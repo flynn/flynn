@@ -93,13 +93,15 @@ func (l *TCPListener) RemoveRoute(id string) error {
 func (l *TCPListener) Start() error {
 	started := make(chan error)
 
-	for i := l.startPort; i <= l.endPort; i++ {
-		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", l.IP, i))
-		if err != nil {
-			l.Close()
-			return err
+	if l.startPort != 0 && l.endPort != 0 {
+		for i := l.startPort; i <= l.endPort; i++ {
+			listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", l.IP, i))
+			if err != nil {
+				l.Close()
+				return err
+			}
+			l.listeners[i] = listener
 		}
-		l.listeners[i] = listener
 	}
 
 	go l.ds.Sync(&tcpSyncHandler{l: l}, started)
