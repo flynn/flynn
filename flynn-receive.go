@@ -127,8 +127,7 @@ func scheduleAndAttach(jobid string, config docker.Config) (types []string) {
 	}
 
 	addReq := &host.AddJobsReq{
-		Incremental: true,
-		HostJobs:    map[string][]*host.Job{hostid: {{ID: jobid, Config: &config}}},
+		HostJobs: map[string][]*host.Job{hostid: {{ID: jobid, Config: &config}}},
 	}
 	if _, err := clusterc.AddJobs(addReq); err != nil {
 		log.Fatal(err)
