@@ -187,11 +187,11 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 			}
 			cmd := exec.Command("git-shell", "-c", cmdargs[0]+" '"+cmdargs[1]+"'")
 			cmd.Dir = *repoPath
-			cmd.Env = []string{
-				"RECEIVE_USER=" + conn.User,
-				"RECEIVE_REPO=" + cmdargs[1],
-				"RECEIVE_FINGERPRINT=" + fingerprint,
-			}
+			cmd.Env = append(os.Environ(),
+				"RECEIVE_USER="+conn.User,
+				"RECEIVE_REPO="+cmdargs[1],
+				"RECEIVE_FINGERPRINT="+fingerprint,
+			)
 			done, err := attachCmd(cmd, ch, ch.Stderr(), ch)
 			if err != nil {
 				fail("attachCmd", err)
