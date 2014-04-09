@@ -93,7 +93,7 @@ func main() {
 		docker:     dockerc,
 	}
 
-	var discoverdConnected bool
+	var disc *discoverd.Client
 	if *manifestFile != "" {
 		f, err := os.Open(*manifestFile)
 		if err != nil {
@@ -107,26 +107,29 @@ func main() {
 
 		if d, ok := services["discoverd"]; ok {
 			processor.discoverd = fmt.Sprintf("%s:%d", d.InternalIP, d.TCPPorts[0])
+			var disc *discoverd.Client
 			err = Attempts.Run(func() (err error) {
-				err = discoverd.Connect(processor.discoverd)
+				disc, err = discoverd.NewClientUsingAddress(processor.discoverd)
 				return
 			})
 			if err != nil {
 				log.Fatal(err)
 			}
-			discoverdConnected = true
 		}
 	}
 
 	if processor.discoverd == "" && *externalAddr != "" {
 		processor.discoverd = *externalAddr + ":1111"
 	}
-	if !discoverdConnected {
-		if err = discoverd.Connect(processor.discoverd); err != nil {
+	// HACK: use env as global for discoverd connection in sampic
+	os.Setenv("DISCOVERD", processor.discoverd)
+	if disc == nil {
+		disc, err = discoverd.NewClientUsingAddress(processor.discoverd)
+		if err != nil {
 			log.Fatal(err)
 		}
 	}
-	sampiStandby, err := discoverd.RegisterAndStandby("flynn-host", *externalAddr+":1113", map[string]string{"id": *hostID})
+	sampiStandby, err := disc.RegisterAndStandby("flynn-host", *externalAddr+":1113", map[string]string{"id": *hostID})
 	if err != nil {
 		log.Fatal(err)
 	}
