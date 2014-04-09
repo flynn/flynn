@@ -8,7 +8,8 @@
       "-peer-bind-addr=0.0.0.0:{{ .TCPPort 1 }}",
       "-name={{ .Env.HOSTNAME }}",
       "{{ if .Env.ETCD_PEERS }}-peers={{ .Env.ETCD_PEERS }}{{ end }}"
-    ]
+    ],
+    "tcp_ports": ["4001", "7001"]
   },
   "discoverd": {
     "args": ["-bind=:{{ .TCPPort 0 }}", "-etcd=http://{{ .Services.etcd.InternalIP }}:{{ index .Services.etcd.TCPPorts 0 }}"],
