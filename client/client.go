@@ -194,3 +194,8 @@ func (c *Client) GetArtifact(artifactID string) (*ct.Artifact, error) {
 	artifact := &ct.Artifact{}
 	return artifact, c.get(fmt.Sprintf("/artifacts/%s", artifactID), artifact)
 }
+
+func (c *Client) GetApp(appID string) (*ct.App, error) {
+	app := &ct.App{}
+	return app, c.get(fmt.Sprintf("/apps/%s", appID), app)
+}
