@@ -17,6 +17,9 @@ import (
 )
 
 func NewClient(uri string) (*Client, error) {
+	if uri == "" {
+		uri = "discoverd+http://flynn-controller"
+	}
 	u, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
