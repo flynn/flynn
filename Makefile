@@ -1,15 +1,10 @@
-build:
-ifdef DOCKER
-	mkdir -p build && tar -cf - . | docker run -i -a stdin -a stdout -e=GOPATH=/tmp/go titanous/makebuilder makebuild go/src/github.com/flynn/flynn-host | tar -xC build
-else
-	mkdir -p build
-	godep go build -o build/flynn-host
-endif
-
-container: build
+build/container: build/flynn-host Dockerfile manifest.json
 	docker build -t flynn/host .
+	touch build/container
 
+build/flynn-host: Godeps *.go sampi/*.go types/*.go
+	godep go build -o build/flynn-host
+
+.PHONY: clean
 clean:
 	rm -rf build
-
-.PHONY: build
