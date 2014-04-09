@@ -1,0 +1,51 @@
+{
+	"ImportPath": "github.com/flynn/flynn-receive",
+	"GoVersion": "go1.2.1",
+	"Deps": [
+		{
+			"ImportPath": "github.com/coreos/go-etcd/etcd",
+			"Comment": "v0.2.0-rc1-96-g1e26d8e",
+			"Rev": "1e26d8ee84cf9b1000d2af8acfb45b2521f49be5"
+		},
+		{
+			"ImportPath": "github.com/flynn/discoverd/agent",
+			"Rev": "36c7a911bc4299ea4921a908d9a0609c5bffaeaf"
+		},
+		{
+			"ImportPath": "github.com/flynn/flynn-controller/client",
+			"Rev": "1fc91a9529092e2a05841be8c43c8a2cce4d6350"
+		},
+		{
+			"ImportPath": "github.com/flynn/flynn-controller/types",
+			"Rev": "1fc91a9529092e2a05841be8c43c8a2cce4d6350"
+		},
+		{
+			"ImportPath": "github.com/flynn/flynn-host/types",
+			"Rev": "65a40ed012c1403676ceef395f84e91d40b6b0d2"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-discoverd",
+			"Rev": "c236937e9dd13e2e85314a9ab8cdadff52452601"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-dockerclient",
+			"Rev": "7299ec5cb7c35fda101c46a24edb648795f7e074"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-flynn/attempt",
+			"Rev": "c95262db7474ac09ce1ccbc7a6c81d9a3aef670b"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-flynn/cluster",
+			"Rev": "c95262db7474ac09ce1ccbc7a6c81d9a3aef670b"
+		},
+		{
+			"ImportPath": "github.com/flynn/rpcplus",
+			"Rev": "0f5f55ccd60369cfc32008d9c955e6b19cdb15e6"
+		},
+		{
+			"ImportPath": "github.com/flynn/strowger/types",
+			"Rev": "d6c3dace39ee34f22e22d04926bb24cf85892399"
+		}
+	]
+}
