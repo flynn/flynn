@@ -115,5 +115,68 @@
       "web": 2
     },
     "resources": [{"name":"postgres", "url":"discoverd+http://pg-api/databases"}]
+  },
+  {
+    "id": "strowger",
+    "action": "deploy-app",
+    "app": {
+      "name": "strowger",
+      "protected": true
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "docker:///flynn/strowger"
+    },
+    "release": {
+      "processes": {
+        "app": {
+          "ports": { "tcp": 1 },
+          "cmd": ["-httpaddr", ":80", "-httpsaddr", ":443"],
+          "env": { "FLYNN_HOST_PORTS": "80,443,22" }
+        }
+      }
+    },
+    "processes": {
+      "app": 1
+    }
+  },
+  {
+    "id": "gitreceive",
+    "action": "deploy-app",
+    "app": {
+      "name": "gitreceive",
+      "protected": true
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "docker:///flynn/gitreceive"
+    },
+    "release": {
+      "processes": {
+        "app": {
+          "ports": { "tcp": 1 },
+          "env": { "SSH_PRIVATE_KEY": "-----BEGIN RSA PRIVATE KEY-----\nMIIEpgIBAAKCAQEAvaZScE2it9AOc3FHc6+0HtjuVPCalaJaYUIvIrpD8Fd2ajo0\nzDNbehoHSgCrWd26K8u3hlr7FbmpPm6Cz1poF8coYg6Kwn793oh2ny6f6zR+zlcb\nZIkdcp9V8mZn8uYA7z7JJH7uioUjt7FcLWKFuxgOgpDaabsQcA8D2lb6B2DC5xcN\njXeR98r+rZSzb6py5hYmu52b3FoSw5hpPkdyy00RfmKgz6N/XkHOktrn4Tc0x5sj\nK0hrLmMfkCk4XP4kuJJxoWRSN47H8g3Y+iBqh/M+vxVkzcYI1IMBIsRLFN7ywwBh\nSwG3jMbzeLAEuIazsjzuDU3w/9Owc8pSmMuPlwIDAQABAoIBAQCx8cEgRngK6Fjm\n0L8uOQpUd08Iu8kP5YnP//2iJAtjE220NnEbuIR4iLuWIBKm+3iXZ0oH8o3s0IuQ\nXLi4Pie1R9UITIS+AdHKX1iN+31pf5QLn4fASTcsOXy3OIcITe9KjCrG56KCrnHZ\nBb1riCnaZrQWpjuJQVAnFK+Uyk9HY1CvS49M7ZXNZhIICn8H4KvQpp1TRMvzH78Q\nMX5E7E4EmCNiTBt5VF/HrK53nsu1Scvf/gfmA4mcSoLbSqxdD+xKbguzt0AxJT3r\nLvPDxAkOOWdnVv0Zu8nbaoO5G98jjQttZPu81fI/bneHraag06hexFvK+Lb1tAl/\nFO75xK4hAoGBAOqaZPp92j+3JcJ7k2dHGtVZbyGGCyPfYo0TGgmd7tOCXMN7O6GM\nqvxbHUN4hEaKm8OuHyLMxBx4jqJHxV67ohfN+UMbluHLZ2yB1QkHvAWkHmYWH79O\nDjTCs2FKs+nwe1jbWBSiMVkSdzIrzBPcgbvzgKTOAOOutZcaKs+I0LgFAoGBAM7y\nVnU1j+NRO2CKAv/6zQxM2KdH6hkJF1pTjaZ9WTFbh9feaztjWA9CkgqxkmHohwVZ\nlr71LMy81xt9ydk7U/wndCu7/oxH1BkkiEhiMshc73NK7d4uZl2fhdtpbQzMnNLc\n+z2/cBIvxYsFS8sZBmDUUG7zlGIznQc8WrpwCIfrAoGBAMFAF0gkHYD4u/j9VInx\nj5AJULrbsReGrqapAnzDhPTj4MgCHjfQKRUhdPScNNHq4a6KIwnGhREy2cOhvVpw\n03AqclauRlaO+A3w0OzUWzSGYagUN2idwqQBckQFhjiBqQmj/WVZya6mwFsqqrv9\nmzyYs/KN4zuqMdlba8Jy4AOFAoGBAMMj1M71UNcDNEBWI3oJnuyoUet7bo1o+zJb\nc0i5Di/ypWey/d6kUNci6N9YjjXws9Ehp3otaq8sqpHrzTggL5OoCG1s+hyBZsjG\noBPRNR2mNMy8rQxDKJfD4s8A3KmjD4XuhqK1MBKWJWpv9gZvdIo96hKVcSggj0PR\nb6Q6HHE9AoGBAMooh8W3dpcLCcHHpT2oekK9KQIJ287jBP4oc/HZnfwhAGKrwBmT\nsM1JQNuLCDeNbbX8xT0DjglxmXTIgDO4cRR6EBGmVGIBksjobg2dBoDd2Pjt/o9R\n8o/Cfdeu6+UWKwRk4Qu33A6koU8LC8Jfk7FZgFEyxu80XF5PNdFNoAdD\n-----END RSA PRIVATE KEY-----" }
+        }
+      }
+    },
+    "processes": {
+      "app": 1
+    }
+  },
+  {
+    "id": "strowger-wait",
+    "action": "wait",
+    "url": "discoverd+http://strowger-api/",
+    "status": 404
+  },
+  {
+    "id": "gitreceive-route",
+    "action": "add-route",
+    "app_step": "gitreceive",
+    "type": "tcp",
+    "config": {
+      "service": "gitreceive",
+      "port": 22
+    }
   }
 ]

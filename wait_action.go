@@ -12,7 +12,8 @@ import (
 )
 
 type WaitAction struct {
-	URL string `json:"url"`
+	URL    string `json:"url"`
+	Status int    `json:"status"`
 }
 
 func init() {
@@ -22,6 +23,10 @@ func init() {
 func (a *WaitAction) Run(s *State) error {
 	const waitMax = time.Minute
 	const waitInterval = 500 * time.Millisecond
+
+	if a.Status == 0 {
+		a.Status = 200
+	}
 
 	u, err := url.Parse(a.URL)
 	if err != nil {
@@ -47,7 +52,7 @@ func (a *WaitAction) Run(s *State) error {
 			goto fail
 		}
 		res.Body.Close()
-		if res.StatusCode == 200 {
+		if res.StatusCode == a.Status {
 			return nil
 		}
 		result = strconv.Itoa(res.StatusCode)
