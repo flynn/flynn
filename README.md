@@ -1,4 +1,4 @@
-# Shelf
+# Shelf [![Build Status](https://travis-ci.org/flynn/shelf.svg?branch=master)](https://travis-ci.org/flynn/shelf)
 
 A simple, fast HTTP file service.
 
