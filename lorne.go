@@ -16,6 +16,7 @@ import (
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/go-flynn/attempt"
+	"github.com/flynn/rpcplus"
 	rpc "github.com/flynn/rpcplus/comborpc"
 	"github.com/technoweenie/grohl"
 )
@@ -129,14 +130,30 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	go func() {
-		<-sampiStandby
-		rpc.Register(sampi.NewCluster(sampi.NewState()))
-	}()
 
-	cluster, err := client.New()
-	if err != nil {
-		log.Fatal(err)
+	// Check if we are the leader so that we can use the cluster functions directly
+	var sampiCluster *sampi.Cluster
+	select {
+	case <-sampiStandby:
+		g.Log(grohl.Data{"at": "sampi_leader"})
+		sampiCluster = sampi.NewCluster(sampi.NewState())
+		rpc.Register(sampiCluster)
+	case <-time.After(5 * time.Millisecond):
+		go func() {
+			<-sampiStandby
+			g.Log(grohl.Data{"at": "sampi_leader"})
+			rpc.Register(sampi.NewCluster(sampi.NewState()))
+		}()
+	}
+
+	var cluster sampiClient
+	if sampiCluster != nil {
+		cluster = &localSampiClient{Cluster: sampiCluster, host: *hostID}
+	} else {
+		cluster, err = client.New()
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	g.Log(grohl.Data{"at": "sampi_connected"})
 
@@ -293,6 +310,37 @@ outer:
 		s = append(s, v)
 	}
 	return s
+}
+
+type localSampiClient struct {
+	*sampi.Cluster
+	host string
+}
+
+func (s *localSampiClient) RemoveJobs(jobs []string) error {
+	return s.Cluster.RemoveJobs(&s.host, jobs, nil)
+}
+
+func (s *localSampiClient) ConnectHost(h *host.Host, jobs chan *host.Job) *error {
+	ch := make(chan interface{})
+	stream := rpcplus.Stream{Send: ch}
+	var err error
+	go func() {
+		err = s.Cluster.ConnectHost(&s.host, h, stream)
+		close(ch)
+	}()
+	go func() {
+		for job := range ch {
+			jobs <- job.(*host.Job)
+		}
+		close(jobs)
+	}()
+	return &err
+}
+
+type sampiClient interface {
+	ConnectHost(*host.Host, chan *host.Job) *error
+	RemoveJobs([]string) error
 }
 
 type sampiSyncClient interface {
