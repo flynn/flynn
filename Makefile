@@ -1,17 +1,13 @@
-build:
-ifdef LOCAL
-	make build/flynn-controller
-else
-	mkdir -p build && tar -cf - . | docker run -i -a stdin -a stdout -e=GOPATH=/tmp/go titanous/makebuilder makebuild go/src/github.com/flynn/flynn-controller | tar -xC build
-endif
+build/container: build/flynn-controller build/flynn-scheduler Dockerfile start.sh
+	docker build -t flynn/controller .
+	touch build/container
 
-build/flynn-controller:
+build/flynn-controller: Godeps *.go types/*.go utils/*.go
 	godep go build -o build/flynn-controller
 
-container: build
-	docker build -t flynn/controller .
+build/flynn-scheduler: Godeps scheduler/*.go client/*.go types/*.go utils/*.go
+	godep go build -o build/flynn-scheduler ./scheduler
 
+.PHONY: clean
 clean:
 	rm -rf build
-
-.PHONY: build
