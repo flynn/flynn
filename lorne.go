@@ -218,34 +218,36 @@ func (p *jobProcessor) processJob(ports <-chan int, job *host.Job) (*docker.Cont
 	g := grohl.NewContext(grohl.Data{"fn": "process_job", "job.id": job.ID})
 	g.Log(grohl.Data{"at": "start", "job.image": job.Config.Image, "job.cmd": job.Config.Cmd, "job.entrypoint": job.Config.Entrypoint})
 
+	if job.HostConfig == nil {
+		job.HostConfig = &docker.HostConfig{
+			PortBindings:    make(map[string][]docker.PortBinding, job.TCPPorts),
+			PublishAllPorts: true,
+		}
+	}
+	if job.Config.ExposedPorts == nil {
+		job.Config.ExposedPorts = make(map[string]struct{}, job.TCPPorts)
+	}
 	for i := 0; i < job.TCPPorts; i++ {
 		port := strconv.Itoa(<-ports)
 		if i == 0 {
 			job.Config.Env = append(job.Config.Env, "PORT="+port)
 		}
 		job.Config.Env = append(job.Config.Env, fmt.Sprintf("PORT_%d=%s", i, port))
-		if job.Config.ExposedPorts == nil {
-			job.Config.ExposedPorts = make(map[string]struct{}, job.TCPPorts)
-		}
-		job.Config.AttachStdout = true
-		job.Config.AttachStderr = true
 		job.Config.ExposedPorts[port+"/tcp"] = struct{}{}
-		if job.HostConfig == nil {
-			job.HostConfig = &docker.HostConfig{
-				PortBindings:    make(map[string][]docker.PortBinding, job.TCPPorts),
-				PublishAllPorts: true,
-			}
-		}
 		job.HostConfig.PortBindings[port+"/tcp"] = []docker.PortBinding{{HostPort: port}}
-		if strings.HasPrefix(job.ID, "flynn-") {
-			job.Config.Name = job.ID
-		} else {
-			job.Config.Name = "flynn-" + job.ID
-		}
+	}
+
+	job.Config.AttachStdout = true
+	job.Config.AttachStderr = true
+	if strings.HasPrefix(job.ID, "flynn-") {
+		job.Config.Name = job.ID
+	} else {
+		job.Config.Name = "flynn-" + job.ID
 	}
 	if p.externalAddr != "" {
 		job.Config.Env = appendUnique(job.Config.Env, "EXTERNAL_IP="+p.externalAddr, "SD_HOST="+p.externalAddr, "DISCOVERD="+p.discoverd)
 	}
+
 	p.state.AddJob(job)
 	g.Log(grohl.Data{"at": "create_container"})
 	container, err := p.docker.CreateContainer(job.Config)
