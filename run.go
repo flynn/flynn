@@ -1,57 +1,61 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
+	"errors"
 	"io"
 	"log"
-	"net"
-	"net/http"
-	"net/http/httputil"
 	"os"
 	"strconv"
 
+	"github.com/flynn/flynn-controller/client"
+	ct "github.com/flynn/flynn-controller/types"
 	"github.com/heroku/hk/term"
 )
 
 var (
-	detachedRun bool
+	runDetached bool
+	runRelease  string
 )
 
 var cmdRun = &Command{
 	Run:   runRun,
-	Usage: "run command [arguments]",
+	Usage: "run [-d] [-r <release>] <command> [<argument>...]",
 	Short: "run a job",
-	Long:  `Run a job on Flynn`,
+	Long:  `Run a job`,
 }
 
 func init() {
-	cmdRun.Flag.BoolVar(&detachedRun, "d", false, "detached")
+	cmdRun.Flag.BoolVarP(&runDetached, "detached", "d", false, "run job without connecting io streams")
+	cmdRun.Flag.StringVarP(&runRelease, "release", "r", "", "id of release to run (defaults to current app release)")
 }
 
-type newJob struct {
-	Cmd     []string          `json:"cmd"`
-	Env     map[string]string `json:"env"`
-	Attach  bool              `json:"attach"`
-	TTY     bool              `json:"tty"`
-	Columns int               `json:"tty_columns"`
-	Lines   int               `json:"tty_lines"`
-}
-
-func runRun(cmd *Command, args []string) {
-	req := &newJob{
-		Cmd:    args,
-		TTY:    term.IsTerminal(os.Stdin) && term.IsTerminal(os.Stdout) && !detachedRun,
-		Attach: !detachedRun,
+func runRun(cmd *Command, args []string, client *controller.Client) error {
+	if len(args) == 0 {
+		cmd.printUsage(true)
+	}
+	if runRelease == "" {
+		release, err := client.GetAppRelease(mustApp())
+		if err == controller.ErrNotFound {
+			return errors.New("No app release, specify a release with -release")
+		}
+		if err != nil {
+			return err
+		}
+		runRelease = release.ID
+	}
+	req := &ct.NewJob{
+		Cmd:       args,
+		TTY:       term.IsTerminal(os.Stdin) && term.IsTerminal(os.Stdout) && !runDetached,
+		ReleaseID: runRelease,
 	}
 	if req.TTY {
 		cols, err := term.Cols()
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 		lines, err := term.Lines()
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 		req.Columns = cols
 		req.Lines = lines
@@ -61,54 +65,40 @@ func runRun(cmd *Command, args []string) {
 			"TERM":    os.Getenv("TERM"),
 		}
 	}
-	path := "/apps/" + mustApp() + "/jobs"
-	if detachedRun {
-		must(Post(nil, path, req))
-		return
+
+	if runDetached {
+		job, err := client.RunJobDetached(mustApp(), req)
+		if err != nil {
+			return err
+		}
+		log.Println(job.ID)
+		return nil
 	}
 
-	data, err := json.Marshal(req)
+	rwc, err := client.RunJobAttached(mustApp(), req)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	httpReq, err := http.NewRequest("POST", path, bytes.NewBuffer(data))
-	if err != nil {
-		log.Fatal(err)
-	}
-	c, err := net.Dial("tcp", apiURL[7:])
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer c.Close()
-	clientconn := httputil.NewClientConn(c, nil)
-	res, err := clientconn.Do(httpReq)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if res.StatusCode != 200 {
-		log.Fatalf("Expected 200, got %d", res.StatusCode)
-	}
-	conn, bufr := clientconn.Hijack()
+	defer rwc.Close()
 
 	if req.TTY {
 		if err := term.MakeRaw(os.Stdin); err != nil {
-			log.Fatal(err)
+			return err
 		}
 		defer term.Restore(os.Stdin)
 	}
 
 	errc := make(chan error)
 	go func() {
-		buf := make([]byte, bufr.Buffered())
-		bufr.Read(buf)
-		os.Stdout.Write(buf)
-		_, err := io.Copy(os.Stdout, conn)
+		_, err := io.Copy(os.Stdout, rwc)
 		errc <- err
 	}()
-	if _, err := io.Copy(conn, os.Stdin); err != nil {
-		log.Fatal(err)
+	if _, err := io.Copy(rwc, os.Stdin); err != nil {
+		return err
 	}
+	rwc.CloseWrite()
 	if err := <-errc; err != nil {
-		log.Fatal(err)
+		return err
 	}
+	return nil
 }

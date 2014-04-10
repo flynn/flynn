@@ -1,37 +1,39 @@
 package main
 
 import (
-	"bufio"
-	"flag"
+	"errors"
 	"fmt"
-	"io"
 	"log"
 	"os"
-	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
-	"syscall"
-)
 
-var (
-	apiURL = "http://localhost:1200"
-	stdin  = bufio.NewReader(os.Stdin)
+	"github.com/BurntSushi/toml"
+	"github.com/bgentry/pflag"
+	"github.com/flynn/flynn-controller/client"
 )
 
 type Command struct {
 	// args does not include the command name
-	Run  func(cmd *Command, args []string)
-	Flag flag.FlagSet
+	Run  func(cmd *Command, args []string, client *controller.Client) error
+	Flag pflag.FlagSet
 
 	Usage string // first word is the command name
-	Short string // `hk help` output
-	Long  string // `hk help cmd` output
+	Short string // `flynn help` output
+	Long  string // `flynn help cmd` output
+
+	NoClient bool
 }
 
-func (c *Command) printUsage() {
+func (c *Command) printUsage(errExit bool) {
 	if c.Runnable() {
-		fmt.Printf("Usage: flynn %s\n\n", c.Usage)
+		fmt.Printf("Usage: %s %s\n\n", os.Args[0], c.Usage)
 	}
 	fmt.Println(strings.Trim(c.Long, "\n"))
+	if errExit {
+		os.Exit(2)
+	}
 }
 
 func (c *Command) Name() string {
@@ -47,38 +49,24 @@ func (c *Command) Runnable() bool {
 	return c.Run != nil
 }
 
-const extra = " (extra)"
-
-func (c *Command) List() bool {
-	return c.Short != "" && !strings.HasSuffix(c.Short, extra)
-}
-
-func (c *Command) ListAsExtra() bool {
-	return c.Short != "" && strings.HasSuffix(c.Short, extra)
-}
-
-func (c *Command) ShortExtra() string {
-	return c.Short[:len(c.Short)-len(extra)]
-}
-
 // Running `flynn help` will list commands in this order.
 var commands = []*Command{
 	cmdRun,
 	cmdPs,
-	cmdLogs,
+	cmdLog,
 	cmdScale,
-	cmdDomain,
+	cmdCreate,
+	cmdServerAdd,
+	cmdRouteAddHTTP,
 }
 
 var (
-	flagApp  string
-	flagLong bool
+	flagServer = os.Getenv("FLYNN_SERVER")
+	flagApp    string
+	flagLong   bool
 )
 
 func main() {
-	if s := os.Getenv("FLYNN_API_URL"); s != "" {
-		apiURL = strings.TrimRight(s, "/")
-	}
 	log.SetFlags(0)
 
 	args := os.Args[1:]
@@ -87,8 +75,13 @@ func main() {
 		flagApp = args[1]
 		args = args[2:]
 
-		if gitRemoteApp, err := appFromGitRemote(flagApp); err == nil {
-			flagApp = gitRemoteApp
+		if err := readConfig(); err != nil {
+			log.Fatal(err)
+		}
+
+		if ra, err := appFromGitRemote(flagApp); err == nil {
+			serverConf = ra.Server
+			flagApp = ra.Name
 		}
 	}
 
@@ -99,12 +92,26 @@ func main() {
 	for _, cmd := range commands {
 		if cmd.Name() == args[0] && cmd.Run != nil {
 			cmd.Flag.Usage = func() {
-				cmd.printUsage()
+				cmd.printUsage(false)
 			}
 			if err := cmd.Flag.Parse(args[1:]); err != nil {
 				os.Exit(2)
 			}
-			cmd.Run(cmd, cmd.Flag.Args())
+
+			var client *controller.Client
+			if !cmd.NoClient {
+				server, err := server()
+				if err != nil {
+					log.Fatal(err)
+				}
+				client, err = controller.NewClient(server.URL)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+			if err := cmd.Run(cmd, cmd.Flag.Args(), client); err != nil {
+				log.Fatal(err)
+			}
 			return
 		}
 	}
@@ -113,49 +120,95 @@ func main() {
 	usage()
 }
 
+type Config struct {
+	Servers []*ServerConfig `toml:"server"`
+}
+
+type ServerConfig struct {
+	Name    string `json:"name"`
+	GitHost string `json:"git_host"`
+	URL     string `json:"url"`
+	Key     string `json:"key"`
+	TLSPin  string `json:"tls_pin"`
+}
+
+var config *Config
+var serverConf *ServerConfig
+
+func configPath() string {
+	p := os.Getenv("FLYNNRC")
+	if p == "" {
+		p = filepath.Join(homedir(), ".flynnrc")
+	}
+	return p
+}
+
+func readConfig() error {
+	if config != nil {
+		return nil
+	}
+	conf := &Config{}
+	_, err := toml.DecodeFile(configPath(), conf)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	config = conf
+	return nil
+}
+
+func homedir() string {
+	if runtime.GOOS == "windows" {
+		return os.Getenv("%APPDATA%")
+	}
+	return os.Getenv("HOME")
+}
+
+var ErrNoServers = errors.New("no servers configured")
+
+func server() (*ServerConfig, error) {
+	if serverConf != nil {
+		return serverConf, nil
+	}
+	if err := readConfig(); err != nil {
+		return nil, err
+	}
+	if len(config.Servers) == 0 {
+		return nil, ErrNoServers
+	}
+	if flagServer == "" {
+		serverConf = config.Servers[0]
+		return serverConf, nil
+	}
+	for _, s := range config.Servers {
+		if s.Name == flagServer {
+			serverConf = s
+			return s, nil
+		}
+	}
+	return nil, fmt.Errorf("unknown server %q", flagServer)
+}
+
+var appName string
+
 func app() (string, error) {
 	if flagApp != "" {
 		return flagApp, nil
 	}
-
 	if app := os.Getenv("FLYNN_APP"); app != "" {
+		flagApp = app
 		return app, nil
 	}
-
-	gitRemoteApp, err := appFromGitRemote("flynn")
-	if err != nil {
+	if err := readConfig(); err != nil {
 		return "", err
 	}
 
-	return gitRemoteApp, nil
-}
-
-func appFromGitRemote(remote string) (string, error) {
-	b, err := exec.Command("git", "config", "remote."+remote+".url").Output()
+	ra, err := appFromGitRemote(remoteFromGitConfig())
 	if err != nil {
-		if isNotFound(err) {
-			wdir, _ := os.Getwd()
-			return "", fmt.Errorf("could not find git remote "+remote+" in %s", wdir)
-		}
 		return "", err
 	}
-
-	out := strings.Trim(string(b), "\r\n ")
-
-	if !strings.HasPrefix(out, gitURLPre) {
-		return "", fmt.Errorf("could not find app name in " + remote + " git remote")
-	}
-
-	return out[len(gitURLPre):], nil
-}
-
-func isNotFound(err error) bool {
-	if ee, ok := err.(*exec.ExitError); ok {
-		if ws, ok := ee.ProcessState.Sys().(syscall.WaitStatus); ok {
-			return ws.ExitStatus() == 1
-		}
-	}
-	return false
+	serverConf = ra.Server
+	flagApp = ra.Name
+	return ra.Name, nil
 }
 
 func mustApp() string {
@@ -164,21 +217,4 @@ func mustApp() string {
 		log.Fatal(err)
 	}
 	return name
-}
-
-func must(err error) {
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func listRec(w io.Writer, a ...interface{}) {
-	for i, x := range a {
-		fmt.Fprint(w, x)
-		if i+1 < len(a) {
-			w.Write([]byte{'\t'})
-		} else {
-			w.Write([]byte{'\n'})
-		}
-	}
 }

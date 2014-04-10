@@ -2,8 +2,12 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"sort"
-	"strings"
+	"text/tabwriter"
+
+	"github.com/flynn/flynn-controller/client"
+	ct "github.com/flynn/flynn-controller/types"
 )
 
 var cmdPs = &Command{
@@ -13,24 +17,29 @@ var cmdPs = &Command{
 	Long:  `Lists jobs.`,
 }
 
-type Job struct {
-	ID   string `json:"id"`
-	Type string `json:"type"`
-}
-
-func runPs(cmd *Command, names []string) {
-	var jobs []Job
-	app := mustApp()
-	must(Get(&jobs, "/apps/"+app+"/jobs"))
-
-	if len(jobs) == 0 {
-		return
+func runPs(cmd *Command, args []string, client *controller.Client) error {
+	jobs, err := client.GetJobList(mustApp())
+	if err != nil {
+		return err
 	}
 
-	ids := make([]string, len(jobs))
-	for i, job := range jobs {
-		ids[i] = job.ID[len(app)+1:]
+	sort.Sort(jobsByType(jobs))
+	w := tabwriter.NewWriter(os.Stdout, 0, 8, 0, '\t', 0)
+
+	fmt.Fprintln(w, "ID\tTYPE")
+	for _, j := range jobs {
+		if j.Type == "" {
+			j.Type = "run"
+		}
+		fmt.Fprintf(w, "%s\t%s\n", j.ID, j.Type)
 	}
-	sort.Strings(ids)
-	fmt.Println(strings.Join(ids, "\n"))
+	w.Flush()
+
+	return nil
 }
+
+type jobsByType []*ct.Job
+
+func (p jobsByType) Len() int           { return len(p) }
+func (p jobsByType) Less(i, j int) bool { return p[i].Type < p[i].Type }
+func (p jobsByType) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
