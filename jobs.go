@@ -24,7 +24,9 @@ type clusterClient interface {
 func jobList(app *ct.App, cc clusterClient, r render.Render) {
 	hosts, err := cc.ListHosts()
 	if err != nil {
-		// TODO: 500/handle error
+		log.Println(err)
+		r.JSON(500, struct{}{})
+		return
 	}
 	var jobs []ct.Job
 	for _, h := range hosts {
@@ -58,8 +60,10 @@ func jobLog(app *ct.App, params martini.Params, cluster cluster.Host, w http.Res
 	}
 	stream, _, err := cluster.Attach(attachReq, false)
 	if err != nil {
-		// TODO: 500/log error
 		// TODO: handle AttachWouldWait
+		log.Println(err)
+		w.WriteHeader(500)
+		return
 	}
 	defer stream.Close()
 	io.Copy(w, stream)
@@ -73,16 +77,20 @@ func parseJobID(params martini.Params) (string, string) {
 	return id[0], id[1]
 }
 
-func connectHostMiddleware(c martini.Context, params martini.Params, cl clusterClient) {
+func connectHostMiddleware(c martini.Context, params martini.Params, cl clusterClient, w http.ResponseWriter) {
 	hostID, jobID := parseJobID(params)
 	if hostID == "" {
-		// TODO: error
+		log.Printf("Unable to parse hostID from %q", params["jobs_id"])
+		w.WriteHeader(404)
+		return
 	}
 	params["jobs_id"] = jobID
 
 	client, err := cl.ConnectHost(hostID)
 	if err != nil {
-		// TODO: 500/log error
+		log.Println(err)
+		w.WriteHeader(500)
+		return
 	}
 	c.MapTo(client, (*cluster.Host)(nil))
 
@@ -90,11 +98,12 @@ func connectHostMiddleware(c martini.Context, params martini.Params, cl clusterC
 	client.Close()
 }
 
-func killJob(app *ct.App, params martini.Params, client cluster.Host) {
+func killJob(app *ct.App, params martini.Params, client cluster.Host, w http.ResponseWriter) {
 	if err := client.StopJob(params["jobs_id"]); err != nil {
-		// TODO: 500/log error
+		log.Println(err)
+		w.WriteHeader(500)
+		return
 	}
-
 }
 
 func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *ArtifactRepo, cl clusterClient, req *http.Request, w http.ResponseWriter, r render.Render) {
