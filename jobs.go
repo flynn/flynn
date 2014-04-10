@@ -97,23 +97,23 @@ func killJob(app *ct.App, params martini.Params, client cluster.Host) {
 
 }
 
-func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *ArtifactRepo, cl clusterClient, req *http.Request, w http.ResponseWriter) {
-	r, err := releases.Get(newJob.ReleaseID)
+func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *ArtifactRepo, cl clusterClient, req *http.Request, w http.ResponseWriter, r render.Render) {
+	data, err := releases.Get(newJob.ReleaseID)
 	if err != nil {
 		// TODO: 400 on ErrNotFound
 		log.Println("error getting release", err)
 		w.WriteHeader(500)
 		return
 	}
-	release := r.(*ct.Release)
-	a, err := artifacts.Get(release.ArtifactID)
+	release := data.(*ct.Release)
+	data, err = artifacts.Get(release.ArtifactID)
 	if err != nil {
 		// TODO: 400 on ErrNotFound
 		log.Println("error getting artifact", err)
 		w.WriteHeader(500)
 		return
 	}
-	artifact := a.(*ct.Artifact)
+	artifact := data.(*ct.Artifact)
 	image, err := utils.DockerImage(artifact.URI)
 	if err != nil {
 		log.Println("error parsing artifact uri", err)
@@ -223,5 +223,11 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 		<-done
 
 		return
+	} else {
+		r.JSON(200, &ct.Job{
+			ID:        job.ID,
+			ReleaseID: newJob.ReleaseID,
+			Cmd:       newJob.Cmd,
+		})
 	}
 }

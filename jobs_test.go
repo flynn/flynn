@@ -1,16 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
-	"net/http/httputil"
 	"sort"
 	"strings"
 
@@ -183,6 +180,48 @@ type fakeAttachStream struct {
 func (l *fakeAttachStream) CloseWrite() error { return l.WriteCloser.Close() }
 func (l *fakeAttachStream) Close() error      { return l.CloseWrite() }
 
+func (s *S) TestRunJobDetached(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "run-detached"})
+
+	hostID := utils.UUID()
+	s.cc.setHosts(map[string]host.Host{hostID: host.Host{}})
+
+	artifact := s.createTestArtifact(c, &ct.Artifact{Type: "docker", URI: "docker://foo/bar"})
+	release := s.createTestRelease(c, &ct.Release{
+		ArtifactID: artifact.ID,
+		Env:        map[string]string{"RELEASE": "true", "FOO": "bar"},
+	})
+
+	cmd := []string{"foo", "bar"}
+	req := &ct.NewJob{
+		ReleaseID: release.ID,
+		Cmd:       cmd,
+		Env:       map[string]string{"JOB": "true", "FOO": "baz"},
+	}
+	res := &ct.Job{}
+	_, err := s.Post(fmt.Sprintf("/apps/%s/jobs", app.ID), req, res)
+	c.Assert(err, IsNil)
+	c.Assert(res.ID, Not(Equals), "")
+	c.Assert(res.ReleaseID, Equals, release.ID)
+	c.Assert(res.Type, Equals, "")
+	c.Assert(res.Cmd, DeepEquals, cmd)
+
+	job := s.cc.hosts[hostID].Jobs[0]
+	c.Assert(job.ID, Equals, res.ID)
+	c.Assert(job.Attributes, DeepEquals, map[string]string{
+		"flynn-controller.app":     app.ID,
+		"flynn-controller.release": release.ID,
+	})
+	c.Assert(job.Config.Cmd, DeepEquals, []string{"foo", "bar"})
+	sort.Strings(job.Config.Env)
+	c.Assert(job.Config.Env, DeepEquals, []string{"FOO=baz", "JOB=true", "RELEASE=true"})
+	c.Assert(job.Config.AttachStdout, Equals, true)
+	c.Assert(job.Config.AttachStderr, Equals, true)
+	c.Assert(job.Config.AttachStdin, Equals, false)
+	c.Assert(job.Config.StdinOnce, Equals, false)
+	c.Assert(job.Config.OpenStdin, Equals, false)
+}
+
 func (s *S) TestRunJobAttached(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "run-attached"})
 	hc := newFakeHostClient()
@@ -231,7 +270,7 @@ func (s *S) TestRunJobAttached(c *C) {
 	c.Assert(err, IsNil)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/vnd.flynn.attach")
-	_, rwc, err := hijackReq(req)
+	_, rwc, err := utils.HijackRequest(req, nil)
 	c.Assert(err, IsNil)
 
 	_, err = rwc.Write([]byte("test in"))
@@ -256,37 +295,4 @@ func (s *S) TestRunJobAttached(c *C) {
 	c.Assert(job.Config.AttachStdin, Equals, true)
 	c.Assert(job.Config.StdinOnce, Equals, true)
 	c.Assert(job.Config.OpenStdin, Equals, true)
-}
-
-type writeCloser interface {
-	io.WriteCloser
-	CloseWrite() error
-}
-
-func hijackReq(req *http.Request) (*http.Response, cluster.ReadWriteCloser, error) {
-	conn, err := net.Dial("tcp", req.URL.Host)
-	if err != nil {
-		return nil, nil, err
-	}
-	clientconn := httputil.NewClientConn(conn, nil)
-	res, err := clientconn.Do(req)
-	if err != nil && err != httputil.ErrPersistEOF {
-		return nil, nil, err
-	}
-	if res.StatusCode != 200 {
-		return res, nil, fmt.Errorf("cluster: unexpected status %d", res.StatusCode)
-	}
-	var rwc io.ReadWriteCloser
-	var buf *bufio.Reader
-	rwc, buf = clientconn.Hijack()
-	if buf.Buffered() > 0 {
-		rwc = struct {
-			io.Reader
-			writeCloser
-		}{
-			io.MultiReader(io.LimitReader(buf, int64(buf.Buffered())), rwc),
-			rwc.(writeCloser),
-		}
-	}
-	return res, rwc.(cluster.ReadWriteCloser), nil
 }
