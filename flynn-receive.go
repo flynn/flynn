@@ -61,7 +61,7 @@ func main() {
 		StdinOnce:    true,
 	})
 
-	fmt.Printf("-----> Creating release...\n", app)
+	fmt.Printf("-----> Creating release...\n")
 
 	prevRelease, err := client.GetAppRelease(app)
 	if err == controller.ErrNotFound {
