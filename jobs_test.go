@@ -73,8 +73,8 @@ func (s *S) TestJobList(c *C) {
 	}})
 
 	expected := []ct.Job{
-		{ID: "host0:job0", Type: "web", ReleaseID: "release0"},
-		{ID: "host0:job1", Cmd: []string{"bash"}},
+		{ID: "host0-job0", Type: "web", ReleaseID: "release0"},
+		{ID: "host0-job1", Cmd: []string{"bash"}},
 	}
 
 	var actual []ct.Job
@@ -149,7 +149,7 @@ func (s *S) TestKillJob(c *C) {
 	hostID, jobID := utils.UUID(), utils.UUID()
 	s.cc.setHostClient(hostID, hc)
 
-	res, err := s.Delete("/apps/" + app.ID + "/jobs/" + hostID + ":" + jobID)
+	res, err := s.Delete("/apps/" + app.ID + "/jobs/" + hostID + "-" + jobID)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(hc.isStopped(jobID), Equals, true)
@@ -162,7 +162,7 @@ func (s *S) TestJobLog(c *C) {
 	hc.setAttach(jobID, newFakeLog(strings.NewReader("foo")))
 	s.cc.setHostClient(hostID, hc)
 
-	res, err := http.Get(s.srv.URL + "/apps/" + app.ID + "/jobs/" + hostID + ":" + jobID + "/log")
+	res, err := http.Get(s.srv.URL + "/apps/" + app.ID + "/jobs/" + hostID + "-" + jobID + "/log")
 	c.Assert(err, IsNil)
 	var buf bytes.Buffer
 	_, err = buf.ReadFrom(res.Body)
@@ -207,7 +207,7 @@ func (s *S) TestRunJobDetached(c *C) {
 	c.Assert(res.Cmd, DeepEquals, cmd)
 
 	job := s.cc.hosts[hostID].Jobs[0]
-	c.Assert(job.ID, Equals, res.ID)
+	c.Assert(res.ID, Equals, hostID+"-"+job.ID)
 	c.Assert(job.Attributes, DeepEquals, map[string]string{
 		"flynn-controller.app":     app.ID,
 		"flynn-controller.release": release.ID,

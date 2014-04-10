@@ -36,7 +36,7 @@ func jobList(app *ct.App, cc clusterClient, r render.Render) {
 			}
 
 			job := ct.Job{
-				ID:        h.ID + ":" + j.ID,
+				ID:        h.ID + "-" + j.ID,
 				Type:      j.Attributes["flynn-controller.type"],
 				ReleaseID: j.Attributes["flynn-controller.release"],
 			}
@@ -70,7 +70,7 @@ func jobLog(app *ct.App, params martini.Params, cluster cluster.Host, w http.Res
 }
 
 func parseJobID(params martini.Params) (string, string) {
-	id := strings.SplitN(params["jobs_id"], ":", 2)
+	id := strings.SplitN(params["jobs_id"], "-", 2)
 	if len(id) != 2 || id[0] == "" || id[1] == "" {
 		return "", ""
 	}
@@ -234,7 +234,7 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 		return
 	} else {
 		r.JSON(200, &ct.Job{
-			ID:        job.ID,
+			ID:        hostID + "-" + job.ID,
 			ReleaseID: newJob.ReleaseID,
 			Cmd:       newJob.Cmd,
 		})
