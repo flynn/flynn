@@ -88,6 +88,10 @@ func (c *Client) rawReq(method, path string, contentType string, in, out interfa
 	if err != nil {
 		return nil, err
 	}
+	if res.StatusCode == 404 {
+		res.Body.Close()
+		return res, ErrNotFound
+	}
 	if res.StatusCode != 200 {
 		res.Body.Close()
 		return res, &url.Error{
