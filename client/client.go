@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
 
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-discoverd/dialer"
 	"github.com/flynn/rpcplus"
@@ -55,32 +57,55 @@ func (c *Client) Close() error {
 
 var ErrNotFound = errors.New("controller: not found")
 
-func (c *Client) send(method, path string, in, out interface{}) error {
-	data, err := json.Marshal(in)
-	if err != nil {
-		return err
+func toJSON(v interface{}) (io.Reader, error) {
+	data, err := json.Marshal(v)
+	return bytes.NewBuffer(data), err
+}
+
+func (c *Client) rawReq(method, path string, contentType string, in, out interface{}) (*http.Response, error) {
+	var payload io.Reader
+	switch v := in.(type) {
+	case io.Reader:
+		payload = v
+	case nil:
+	default:
+		var err error
+		payload, err = toJSON(in)
+		if err != nil {
+			return nil, err
+		}
 	}
-	req, err := http.NewRequest(method, c.url+path, bytes.NewBuffer(data))
+
+	req, err := http.NewRequest(method, c.url+path, payload)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	if contentType == "" {
+		contentType = "application/json"
+	}
+	req.Header.Set("Content-Type", contentType)
 	res, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer res.Body.Close()
 	if res.StatusCode != 200 {
-		return &url.Error{
+		res.Body.Close()
+		return res, &url.Error{
 			Op:  req.Method,
 			URL: req.URL.String(),
 			Err: fmt.Errorf("controller: unexpected status %d", res.StatusCode),
 		}
 	}
 	if out != nil {
-		return json.NewDecoder(res.Body).Decode(out)
+		defer res.Body.Close()
+		return res, json.NewDecoder(res.Body).Decode(out)
 	}
-	return nil
+	return res, nil
+}
+
+func (c *Client) send(method, path string, in, out interface{}) error {
+	_, err := c.rawReq(method, path, "", in, out)
+	return err
 }
 
 func (c *Client) put(path string, in, out interface{}) error {
@@ -92,22 +117,8 @@ func (c *Client) post(path string, in, out interface{}) error {
 }
 
 func (c *Client) get(path string, out interface{}) error {
-	res, err := c.http.Get(c.url + path)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		if res.StatusCode == 404 {
-			return ErrNotFound
-		}
-		return &url.Error{
-			Op:  "GET",
-			URL: c.url + path,
-			Err: fmt.Errorf("controller: unexpected status %d", res.StatusCode),
-		}
-	}
-	return json.NewDecoder(res.Body).Decode(out)
+	_, err := c.rawReq("GET", path, "", nil, out)
+	return err
 }
 
 func (c *Client) StreamFormations(since *time.Time) (<-chan *ct.ExpandedFormation, *error) {
@@ -198,4 +209,42 @@ func (c *Client) GetArtifact(artifactID string) (*ct.Artifact, error) {
 func (c *Client) GetApp(appID string) (*ct.App, error) {
 	app := &ct.App{}
 	return app, c.get(fmt.Sprintf("/apps/%s", appID), app)
+}
+
+func (c *Client) GetJobLog(appID, jobID string) (io.ReadCloser, error) {
+	res, err := c.rawReq("GET", fmt.Sprintf("/apps/%s/jobs/%s/log", appID, jobID), "", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return res.Body, nil
+}
+
+func (c *Client) RunJobAttached(appID string, job *ct.NewJob) (utils.ReadWriteCloser, error) {
+	data, err := toJSON(job)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/apps/%s/jobs", c.url, appID), data)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/vnd.flynn.attach")
+	var dial dialer.DialFunc
+	if c.dialer != nil {
+		dial = c.dialer.Dial
+	}
+	res, rwc, err := utils.HijackRequest(req, dial)
+	if err != nil {
+		res.Body.Close()
+		return nil, err
+	}
+	return rwc, nil
+}
+
+func (c *Client) RunJobDetached(appID string, req *ct.NewJob) (*ct.Job, error) {
+	job := &ct.Job{}
+	return job, c.post(fmt.Sprintf("/apps/%s/jobs", appID), req, job)
+}
+
+func (c *Client) GetJobList(appID string) ([]*ct.Job, error) {
+	var jobs []*ct.Job
+	return jobs, c.get(fmt.Sprintf("/apps/%s/jobs", appID), &jobs)
 }
