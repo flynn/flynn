@@ -9,6 +9,7 @@ import (
 
 	"github.com/flynn/flynn-controller/client"
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/go-flynn/demultiplex"
 	"github.com/heroku/hk/term"
 )
 
@@ -90,7 +91,21 @@ func runRun(cmd *Command, args []string, client *controller.Client) error {
 
 	errc := make(chan error)
 	go func() {
-		_, err := io.Copy(os.Stdout, rwc)
+		var stdout io.Reader = rwc
+		var done chan struct{}
+		if !req.TTY {
+			var stderr io.Reader
+			stdout, stderr = demultiplex.Streams(rwc)
+			done = make(chan struct{})
+			go func() {
+				io.Copy(os.Stderr, stderr)
+				close(done)
+			}()
+		}
+		_, err := io.Copy(os.Stdout, stdout)
+		if done != nil {
+			<-done
+		}
 		errc <- err
 	}()
 	if _, err := io.Copy(rwc, os.Stdin); err != nil {
