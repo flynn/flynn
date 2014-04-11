@@ -77,3 +77,22 @@ func Clean(r io.Reader) io.Reader {
 	}()
 	return pr
 }
+
+func Copy(stdout, stderr io.Writer, r io.Reader) error {
+	read := frameReader(r)
+	for {
+		t, data, err := read()
+		var ew error
+		if stderr != nil && t == frameTypeStderr {
+			_, ew = stderr.Write(data)
+		} else {
+			_, ew = stdout.Write(data)
+		}
+		if ew != nil {
+			return ew
+		}
+		if err != nil {
+			return err
+		}
+	}
+}
