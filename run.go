@@ -91,22 +91,11 @@ func runRun(cmd *Command, args []string, client *controller.Client) error {
 
 	errc := make(chan error)
 	go func() {
-		var stdout io.Reader = rwc
-		var done chan struct{}
+		var stderr io.Writer
 		if !req.TTY {
-			var stderr io.Reader
-			stdout, stderr = demultiplex.Streams(rwc)
-			done = make(chan struct{})
-			go func() {
-				io.Copy(os.Stderr, stderr)
-				close(done)
-			}()
+			stderr = os.Stderr
 		}
-		_, err := io.Copy(os.Stdout, stdout)
-		if done != nil {
-			<-done
-		}
-		errc <- err
+		errc <- demultiplex.Copy(os.Stdout, stderr, rwc)
 	}()
 	if _, err := io.Copy(rwc, os.Stdin); err != nil {
 		return err

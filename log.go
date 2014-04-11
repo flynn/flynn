@@ -30,23 +30,11 @@ func runLog(cmd *Command, args []string, client *controller.Client) error {
 	if err != nil {
 		return err
 	}
-	var stdout io.Reader
-	var done chan struct{}
+	var stderr io.Writer
 	if logSplitOut {
-		var stderr io.Reader
-		stdout, stderr = demultiplex.Streams(rc)
-		done = make(chan struct{})
-		go func() {
-			io.Copy(os.Stderr, stderr)
-			close(done)
-		}()
-	} else {
-		stdout = demultiplex.Clean(rc)
+		stderr = os.Stderr
 	}
-	io.Copy(os.Stdout, stdout)
-	if done != nil {
-		<-done
-	}
+	demultiplex.Copy(os.Stdout, stderr, rc)
 	rc.Close()
 	return nil
 }
