@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"net"
+
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/rpcplus"
@@ -18,7 +20,16 @@ type Host interface {
 type hostClient struct {
 	service discoverd.ServiceSet
 
-	c RPCClient
+	dial rpcplus.DialFunc
+	c    RPCClient
+}
+
+func newHostClient(ss discoverd.ServiceSet, client RPCClient, dial rpcplus.DialFunc) Host {
+	c := &hostClient{service: ss, dial: dial, c: client}
+	if dial == nil {
+		c.dial = net.Dial
+	}
+	return c
 }
 
 func (c *hostClient) ListJobs() (map[string]host.ActiveJob, error) {

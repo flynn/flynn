@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/http/httputil"
 
@@ -40,7 +39,7 @@ func (c *hostClient) Attach(req *host.AttachReq, wait bool) (ReadWriteCloser, fu
 	if len(addrs) == 0 {
 		return nil, nil, ErrNoServers
 	}
-	conn, err := net.Dial("tcp", addrs[0])
+	conn, err := c.dial("tcp", addrs[0])
 	if err != nil {
 		return nil, nil, err
 	}

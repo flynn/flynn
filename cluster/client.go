@@ -23,11 +23,18 @@ var Attempts = attempt.Strategy{
 }
 
 func NewClient() (*Client, error) {
-	services, err := discoverd.NewServiceSet("flynn-host")
+	return NewClientWithDial(nil, nil)
+}
+
+func NewClientWithDial(dial rpcplus.DialFunc, services func(name string) (discoverd.ServiceSet, error)) (*Client, error) {
+	if services == nil {
+		services = discoverd.NewServiceSet
+	}
+	ss, err := services("flynn-host")
 	if err != nil {
 		return nil, err
 	}
-	client := &Client{service: services}
+	client := &Client{dial: dial, service: ss}
 	firstErr := make(chan error)
 	go client.followLeader(firstErr)
 	return client, <-firstErr
@@ -47,7 +54,7 @@ func (c *Client) followLeader(firstErr chan<- error) {
 			c.c.Close()
 		}
 		c.err = Attempts.Run(func() (err error) {
-			c.c, err = rpcplus.DialHTTP("tcp", update.Addr)
+			c.c, err = rpcplus.DialHTTPPath("tcp", update.Addr, rpcplus.DefaultRPCPath, c.dial)
 			return
 		})
 		c.mtx.Unlock()
@@ -62,9 +69,10 @@ func (c *Client) followLeader(firstErr chan<- error) {
 type Client struct {
 	service discoverd.ServiceSet
 
-	c   RPCClient
-	mtx sync.RWMutex
-	err error
+	dial rpcplus.DialFunc
+	c    RPCClient
+	mtx  sync.RWMutex
+	err  error
 }
 
 func (c *Client) ListHosts() (map[string]host.Host, error) {
@@ -101,8 +109,8 @@ func (c *Client) ConnectHost(id string) (Host, error) {
 	if len(services) == 0 {
 		return nil, ErrNoServers
 	}
-	rc, err := rpcplus.DialHTTP("tcp", services[0].Addr)
-	return &hostClient{service: c.service, c: rc}, err
+	rc, err := rpcplus.DialHTTPPath("tcp", services[0].Addr, rpcplus.DefaultRPCPath, c.dial)
+	return newHostClient(c.service, rc, c.dial), err
 }
 
 func (c *Client) RPCClient() (RPCClient, error) {
