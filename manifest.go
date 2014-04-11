@@ -124,13 +124,18 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 			return buf.String(), nil
 		}
 
-		var err error
-		for i, arg := range service.Args {
-			service.Args[i], err = interp(arg)
+		args := make([]string, 0, len(service.Args))
+		for _, arg := range service.Args {
+			arg, err := interp(arg)
 			if err != nil {
 				return nil, err
 			}
+			if strings.TrimSpace(arg) == "" {
+				continue
+			}
+			args = append(args, arg)
 		}
+		var err error
 		for k, v := range service.Env {
 			service.Env[k], err = interp(v)
 			if err != nil {
@@ -160,7 +165,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 			TCPPorts: len(data.TCPPorts),
 			Config: &docker.Config{
 				Image:        image,
-				Cmd:          service.Args,
+				Cmd:          args,
 				AttachStdout: true,
 				AttachStderr: true,
 				Env:          dockerEnv(data.Env),
