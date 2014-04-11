@@ -53,6 +53,7 @@ func (c *Client) followLeader(firstErr chan<- error) {
 		if c.c != nil {
 			c.c.Close()
 		}
+		c.leaderID = update.Attrs["id"]
 		c.err = Attempts.Run(func() (err error) {
 			c.c, err = rpcplus.DialHTTPPath("tcp", update.Addr, rpcplus.DefaultRPCPath, c.dial)
 			return
@@ -67,7 +68,8 @@ func (c *Client) followLeader(firstErr chan<- error) {
 }
 
 type Client struct {
-	service discoverd.ServiceSet
+	service  discoverd.ServiceSet
+	leaderID string
 
 	dial rpcplus.DialFunc
 	c    RPCClient
@@ -78,6 +80,12 @@ type Client struct {
 func (c *Client) Close() error {
 	c.service.Close()
 	return c.c.Close()
+}
+
+func (c *Client) LeaderID() string {
+	c.mtx.RLock()
+	defer c.mtx.RUnlock()
+	return c.leaderID
 }
 
 func (c *Client) ListHosts() (map[string]host.Host, error) {
