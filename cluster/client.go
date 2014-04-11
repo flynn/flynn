@@ -75,6 +75,11 @@ type Client struct {
 	err  error
 }
 
+func (c *Client) Close() error {
+	c.service.Close()
+	return c.c.Close()
+}
+
 func (c *Client) ListHosts() (map[string]host.Host, error) {
 	c.mtx.RLock()
 	if err := c.err; err != nil {
