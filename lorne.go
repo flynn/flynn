@@ -109,7 +109,7 @@ func main() {
 			processor.discoverd = fmt.Sprintf("%s:%d", d.InternalIP, d.TCPPorts[0])
 			var disc *discoverd.Client
 			err = Attempts.Run(func() (err error) {
-				disc, err = discoverd.NewClientUsingAddress(processor.discoverd)
+				disc, err = discoverd.NewClientWithAddr(processor.discoverd)
 				return
 			})
 			if err != nil {
@@ -124,7 +124,7 @@ func main() {
 	// HACK: use env as global for discoverd connection in sampic
 	os.Setenv("DISCOVERD", processor.discoverd)
 	if disc == nil {
-		disc, err = discoverd.NewClientUsingAddress(processor.discoverd)
+		disc, err = discoverd.NewClientWithAddr(processor.discoverd)
 		if err != nil {
 			log.Fatal(err)
 		}
