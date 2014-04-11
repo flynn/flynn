@@ -5,6 +5,7 @@ package discoverd
 
 import (
 	"errors"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -333,6 +334,15 @@ type Client struct {
 	names         map[string]string
 }
 
+func newClient(c *rpcplus.Client) *Client {
+	return &Client{
+		client:        c,
+		heartbeats:    make(map[string]chan struct{}),
+		expandedAddrs: make(map[string]string),
+		names:         make(map[string]string),
+	}
+}
+
 // By default, NewClient will produce a client that will connect to the default address for
 // discoverd, which is 127.0.0.1:1111, or whatever the value of the environment variable DISCOVERD.
 func NewClient() (*Client, error) {
@@ -342,17 +352,17 @@ func NewClient() (*Client, error) {
 	} else {
 		addr = strings.TrimPrefix(addr, "tcp://")
 	}
-	return NewClientUsingAddress(addr)
+	return NewClientWithAddr(addr)
 }
 
-func NewClientUsingAddress(addr string) (*Client, error) {
-	client, err := rpcplus.DialHTTP("tcp", addr)
-	return &Client{
-		client:        client,
-		heartbeats:    make(map[string]chan struct{}),
-		expandedAddrs: make(map[string]string),
-		names:         make(map[string]string),
-	}, err
+func NewClientWithAddr(addr string) (*Client, error) {
+	c, err := rpcplus.DialHTTP("tcp", addr)
+	return newClient(c), err
+}
+
+func NewClientWithConn(conn io.ReadWriteCloser) (*Client, error) {
+	c, err := rpcplus.NewHTTPClient(conn, rpcplus.DefaultRPCPath)
+	return newClient(c), err
 }
 
 func (c *Client) newServiceSet(name string) (*serviceSet, error) {
@@ -570,7 +580,7 @@ func connectLocked(addr string) (err error) {
 		DefaultClient, err = NewClient()
 		return
 	}
-	DefaultClient, err = NewClientUsingAddress(addr)
+	DefaultClient, err = NewClientWithAddr(addr)
 	return
 }
 
