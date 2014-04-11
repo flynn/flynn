@@ -45,7 +45,8 @@ func (c *Client) followLeader(firstErr chan<- error) {
 		if update == nil {
 			if firstErr != nil {
 				firstErr <- ErrNoServers
-				firstErr = nil
+				c.Close()
+				return
 			}
 			continue
 		}
@@ -61,6 +62,10 @@ func (c *Client) followLeader(firstErr chan<- error) {
 		c.mtx.Unlock()
 		if firstErr != nil {
 			firstErr <- c.err
+			if c.err != nil {
+				c.Close()
+				return
+			}
 			firstErr = nil
 		}
 	}
@@ -78,8 +83,12 @@ type Client struct {
 }
 
 func (c *Client) Close() error {
-	c.service.Close()
-	return c.c.Close()
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+	if c.c != nil {
+		c.c.Close()
+	}
+	return c.service.Close()
 }
 
 func (c *Client) LeaderID() string {
