@@ -12,10 +12,6 @@
 			"Rev": "36c7a911bc4299ea4921a908d9a0609c5bffaeaf"
 		},
 		{
-			"ImportPath": "github.com/flynn/go-discoverd",
-			"Rev": "73892526c95423ea0aa14099050671028d802de8"
-		},
-		{
 			"ImportPath": "github.com/flynn/go-flynn/attempt",
 			"Rev": "c95262db7474ac09ce1ccbc7a6c81d9a3aef670b"
 		},
