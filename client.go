@@ -5,7 +5,6 @@ package discoverd
 
 import (
 	"errors"
-	"io"
 	"log"
 	"net"
 	"os"
@@ -360,9 +359,8 @@ func NewClientWithAddr(addr string) (*Client, error) {
 	return newClient(c), err
 }
 
-func NewClientWithConn(conn io.ReadWriteCloser) (*Client, error) {
-	c, err := rpcplus.NewHTTPClient(conn, rpcplus.DefaultRPCPath)
-	return newClient(c), err
+func NewClientWithRPCClient(c *rpcplus.Client) *Client {
+	return newClient(c)
 }
 
 func (c *Client) newServiceSet(name string) (*serviceSet, error) {
