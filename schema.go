@@ -15,8 +15,8 @@ func migrateDB(db *sql.DB) error {
     artifact_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     type text NOT NULL,
     uri text NOT NULL,
-    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
-    deleted_at timestamp with time zone,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    deleted_at timestamptz,
     UNIQUE (type, uri)
 )`,
 
@@ -24,8 +24,8 @@ func migrateDB(db *sql.DB) error {
     release_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     artifact_id uuid NOT NULL REFERENCES artifacts (artifact_id),
     data text NOT NULL,
-    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
-    deleted_at timestamp with time zone
+    created_at timestamptz NOT NULL DEFAULT now(),
+    deleted_at timestamptz
 )`,
 
 		`CREATE TABLE apps (
@@ -33,18 +33,18 @@ func migrateDB(db *sql.DB) error {
     name text UNIQUE NOT NULL,
     release_id uuid REFERENCES releases (release_id),
     protected bool NOT NULL DEFAULT false,
-    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
-    updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
-    deleted_at timestamp with time zone
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    deleted_at timestamptz
 )`,
 
 		`CREATE TABLE formations (
     app_id uuid NOT NULL REFERENCES apps (app_id),
     release_id uuid NOT NULL REFERENCES releases (release_id),
     processes hstore,
-    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
-    updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
-    deleted_at timestamp with time zone,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    deleted_at timestamptz,
     PRIMARY KEY (app_id, release_id)
 )`,
 
@@ -63,8 +63,8 @@ $$ LANGUAGE plpgsql`,
     key_id text PRIMARY KEY,
     key text NOT NULL,
     comment text,
-    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
-    deleted_at timestamp with time zone
+    created_at timestamptz NOT NULL DEFAULT now(),
+    deleted_at timestamptz
 )`,
 
 		`CREATE TABLE app_logs (
@@ -73,7 +73,7 @@ $$ LANGUAGE plpgsql`,
     event text NOT NULL,
     subject_id uuid,
     data text NOT NULL,
-    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
+    created_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (app_id, log_id)
 )`,
 
@@ -107,9 +107,9 @@ $$ LANGUAGE plpgsql`,
     provider_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     name text NOT NULL UNIQUE,
     url text NOT NULL UNIQUE,
-    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
-    updated_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
-    deleted_at timestamp with time zone
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    deleted_at timestamptz
 )`,
 
 		`CREATE TABLE resources (
@@ -117,16 +117,16 @@ $$ LANGUAGE plpgsql`,
     provider_id uuid NOT NULL REFERENCES providers (provider_id),
     external_id text NOT NULL,
     env hstore,
-    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
-    deleted_at timestamp with time zone,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    deleted_at timestamptz,
     UNIQUE (provider_id, external_id)
 )`,
 
 		`CREATE TABLE app_resources (
     app_id uuid NOT NULL REFERENCES apps (app_id),
     resource_id uuid NOT NULL REFERENCES resources (resource_id),
-    created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
-    deleted_at timestamp with time zone,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    deleted_at timestamptz,
     PRIMARY KEY (app_id, resource_id)
 )`,
 		`CREATE INDEX ON app_resources (resource_id)`,

@@ -124,7 +124,7 @@ func (r *AppRepo) List() (interface{}, error) {
 }
 
 func (r *AppRepo) SetRelease(appID string, releaseID string) error {
-	return r.db.Exec("UPDATE apps SET release_id = $2, updated_at = current_timestamp WHERE app_id = $1", appID, releaseID)
+	return r.db.Exec("UPDATE apps SET release_id = $2, updated_at = now() WHERE app_id = $1", appID, releaseID)
 }
 
 func (r *AppRepo) GetRelease(id string) (*ct.Release, error) {

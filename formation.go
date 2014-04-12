@@ -54,7 +54,7 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 	err := r.db.QueryRow("INSERT INTO formations (app_id, release_id, processes) VALUES ($1, $2, $3) RETURNING created_at, updated_at",
 		f.AppID, f.ReleaseID, procs).Scan(&f.CreatedAt, &f.UpdatedAt)
 	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" {
-		err = r.db.QueryRow("UPDATE formations SET processes = $3, updated_at = current_timestamp, deleted_at = NULL WHERE app_id = $1 AND release_id = $2 RETURNING created_at, updated_at",
+		err = r.db.QueryRow("UPDATE formations SET processes = $3, updated_at = now(), deleted_at = NULL WHERE app_id = $1 AND release_id = $2 RETURNING created_at, updated_at",
 			f.AppID, f.ReleaseID, procs).Scan(&f.CreatedAt, &f.UpdatedAt)
 	}
 	if err != nil {
@@ -108,7 +108,7 @@ func (r *FormationRepo) List(appID string) ([]*ct.Formation, error) {
 }
 
 func (r *FormationRepo) Remove(appID, releaseID string) error {
-	err := r.db.Exec("UPDATE formations SET deleted_at = current_timestamp, updated_at = current_timestamp, processes = NULL WHERE app_id = $1 AND release_id = $2", appID, releaseID)
+	err := r.db.Exec("UPDATE formations SET deleted_at = now(), updated_at = current_timestamp, processes = NULL WHERE app_id = $1 AND release_id = $2", appID, releaseID)
 	if err != nil {
 		return err
 	}

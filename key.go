@@ -68,7 +68,7 @@ func (r *KeyRepo) Get(id string) (interface{}, error) {
 }
 
 func (r *KeyRepo) Remove(id string) error {
-	return r.db.Exec("UPDATE keys SET deleted_at = current_timestamp WHERE key_id = $1", id)
+	return r.db.Exec("UPDATE keys SET deleted_at = now() WHERE key_id = $1", id)
 }
 
 func (r *KeyRepo) List() (interface{}, error) {
