@@ -2,13 +2,15 @@ package main
 
 import (
 	"bytes"
-	"crypto/md5"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,7 +18,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/flynn/go-crypto-ssh"
+	"code.google.com/p/go.crypto/ssh"
 	"github.com/flynn/go-shlex"
 )
 
@@ -28,16 +30,17 @@ done
 
 var prereceiveHook []byte
 
-var port *string = flag.String("p", "22", "port to listen on")
-var repoPath *string = flag.String("r", "/tmp/repos", "path to repo cache")
-var noAuth *bool = flag.Bool("n", false, "disable client authentication")
+var port = flag.String("p", "22", "port to listen on")
+var repoPath = flag.String("r", "/tmp/repos", "path to repo cache")
+var noAuth = flag.Bool("n", false, "disable client authentication")
+var keys = flag.String("k", "", "pem file containing private keys (read from SSH_PRIVATE_KEYS by default)")
 
 var authChecker []string
 var privateKey string
 
 func init() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage:  %v [options] <privatekey> <authchecker> <receiver>\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage:  %v [options] <authchecker> <receiver>\n\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 }
@@ -69,86 +72,125 @@ func main() {
 	if *noAuth {
 		config = &ssh.ServerConfig{NoClientAuth: true}
 	} else {
-		config = &ssh.ServerConfig{PublicKeyCallback: func(*ssh.ServerConn, string, string, []byte) bool { return true }}
+		config = &ssh.ServerConfig{
+			PublicKeyCallback: func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
+				return &ssh.Permissions{
+					CriticalOptions: map[string]string{
+						"public-key": string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(key))),
+					},
+				}, nil
+			},
+		}
 	}
 
-	pemBytes, err := ioutil.ReadFile(privateKey)
-	if err != nil {
-		log.Fatal("Failed to load private key:", err)
-	}
-	if err = config.SetRSAPrivateKey(pemBytes); err != nil {
-		log.Fatal("Failed to parse private key:", err)
+	if keyEnv := os.Getenv("SSH_PRIVATE_KEYS"); keyEnv != "" {
+		if err := parseKeys(config, []byte(keyEnv)); err != nil {
+			log.Fatalln("Failed to load private keys:", err)
+		}
+	} else {
+		pemBytes, err := ioutil.ReadFile(*keys)
+		if err != nil {
+			log.Fatalln("Failed to load private keys:", err)
+		}
+		if err := parseKeys(config, pemBytes); err != nil {
+			log.Fatalln("Failed to parse private keys:", err)
+		}
 	}
 
 	if p := os.Getenv("PORT"); p != "" && *port == "22" {
 		*port = p
 	}
-	listener, err := ssh.Listen("tcp", "0.0.0.0:"+*port, config)
+	listener, err := net.Listen("tcp", ":"+*port)
 	if err != nil {
-		log.Fatal("failed to listen for connection")
+		log.Fatalln("Failed to listen for connections:", err)
 	}
 	for {
 		// SSH connections just house multiplexed connections
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Println("failed to accept incoming connection:", err)
+			log.Println("Failed to accept incoming connection:", err)
 			continue
 		}
-		if err := conn.Handshake(); err != nil {
-			log.Println("failed to handshake:", err)
-			continue
-		}
-		go handleConnection(conn)
+		go handleConn(conn, config)
 	}
 }
 
-func handleConnection(conn *ssh.ServerConn) {
-	defer conn.Close()
+func parseKeys(conf *ssh.ServerConfig, pemData []byte) error {
+	var found bool
 	for {
-		// Accept reads from the connection, demultiplexes packets
-		// to their corresponding channels and returns when a new
-		// channel request is seen. Some goroutine must always be
-		// calling Accept; otherwise no messages will be forwarded
-		// to the channels.
-		ch, err := conn.Accept()
-		if err == io.EOF {
-			return
+		var block *pem.Block
+		block, pemData = pem.Decode(pemData)
+		if block == nil {
+			if !found {
+				return errors.New("no private keys found")
+			}
+			return nil
 		}
-		if err != nil {
-			log.Println("handleConnection Accept:", err)
-			break
+		if err := addKey(conf, block); err != nil {
+			return err
 		}
-		if ch.ChannelType() != "session" {
-			ch.Reject(ssh.UnknownChannelType, "unknown channel type")
-			break
-		}
-		go handleChannel(conn, ch)
+		found = true
 	}
 }
 
-func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
-	defer ch.Close()
-	if err := ch.Accept(); err != nil {
-		log.Println("ch.Accept failed:", err)
+func addKey(conf *ssh.ServerConfig, block *pem.Block) (err error) {
+	var key interface{}
+	switch block.Type {
+	case "RSA PRIVATE KEY":
+		key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+	case "EC PRIVATE KEY":
+		key, err = x509.ParseECPrivateKey(block.Bytes)
+	case "DSA PRIVATE KEY":
+		key, err = ssh.ParseDSAPrivateKey(block.Bytes)
+	default:
+		return fmt.Errorf("unsupported key type %q", block.Type)
+	}
+	if err != nil {
+		return err
+	}
+	signer, err := ssh.NewSignerFromKey(key)
+	if err != nil {
+		return err
+	}
+	conf.AddHostKey(signer)
+	return nil
+}
+
+func handleConn(conn net.Conn, conf *ssh.ServerConfig) {
+	defer conn.Close()
+	sshConn, chans, reqs, err := ssh.NewServerConn(conn, conf)
+	if err != nil {
+		log.Println("Failed to handshake:", err)
 		return
 	}
-	for {
-		req, err := ch.ReadRequest()
-		if err == io.EOF {
-			return
-		}
-		if err != nil {
-			log.Println("handleChannel read request err:", err)
+
+	go ssh.DiscardRequests(reqs)
+
+	for ch := range chans {
+		if ch.ChannelType() != "session" {
+			ch.Reject(ssh.UnknownChannelType, "unknown channel type")
 			continue
 		}
-		switch req.Request {
+		go handleChannel(sshConn, ch)
+	}
+}
+
+func handleChannel(conn *ssh.ServerConn, newChan ssh.NewChannel) {
+	ch, reqs, err := newChan.Accept()
+	if err != nil {
+		log.Println("newChan.Accept failed:", err)
+		return
+	}
+	defer ch.Close()
+	for req := range reqs {
+		switch req.Type {
 		case "exec":
 			fail := func(at string, err error) {
 				log.Printf("%s failed: %s", at, err)
 				ch.Stderr().Write([]byte("Internal error.\n"))
 			}
 			if req.WantReply {
-				ch.AckRequest(true)
+				req.Reply(true, nil)
 			}
 			cmdline := string(req.Payload[4:])
 			cmdargs, err := shlex.Split(cmdline)
@@ -167,7 +209,7 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 			}
 
 			if !*noAuth {
-				if err := checkAuth(conn.User, cmdargs[1], conn.PublicKey); err != nil {
+				if err := checkAuth(conn, cmdargs[1]); err != nil {
 					if err == ErrUnauthorized {
 						ch.Stderr().Write([]byte("Unauthorized.\n"))
 					} else {
@@ -181,16 +223,11 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 				fail("ensureCacheRepo", err)
 				return
 			}
-			var fingerprint string
-			if conn.PublicKey != nil {
-				fingerprint = publicKeyFingerprint(conn.PublicKey)
-			}
 			cmd := exec.Command("git-shell", "-c", cmdargs[0]+" '"+cmdargs[1]+"'")
 			cmd.Dir = *repoPath
 			cmd.Env = append(os.Environ(),
-				"RECEIVE_USER="+conn.User,
+				"RECEIVE_USER="+conn.User(),
 				"RECEIVE_REPO="+cmdargs[1],
-				"RECEIVE_FINGERPRINT="+fingerprint,
 			)
 			done, err := attachCmd(cmd, ch, ch.Stderr(), ch)
 			if err != nil {
@@ -207,10 +244,13 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 				fail("exitStatus", err)
 				return
 			}
-			ch.Exit(uint(status))
+			if _, err := ch.SendRequest("exit-status", false, ssh.Marshal(&status)); err != nil {
+				fail("sendExit", err)
+			}
+			return
 		case "env":
 			if req.WantReply {
-				ch.AckRequest(true)
+				req.Reply(true, nil)
 			}
 		}
 	}
@@ -218,13 +258,13 @@ func handleChannel(conn *ssh.ServerConn, ch ssh.Channel) {
 
 var ErrUnauthorized = errors.New("gitreceive: user is unauthorized")
 
-func checkAuth(user, repo string, key ssh.PublicKey) error {
-	keyData := string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(key)))
-	status, err := exitStatus(exec.Command(authChecker[0], append(authChecker[1:], user, repo, keyData)...).Run())
+func checkAuth(conn *ssh.ServerConn, repo string) error {
+	status, err := exitStatus(exec.Command(authChecker[0],
+		append(authChecker[1:], conn.User(), repo, conn.Permissions.CriticalOptions["public-key"])...).Run())
 	if err != nil {
 		return err
 	}
-	if status == 0 {
+	if status.Status == 0 {
 		return nil
 	}
 	return ErrUnauthorized
@@ -263,18 +303,22 @@ func attachCmd(cmd *exec.Cmd, stdout, stderr io.Writer, stdin io.Reader) (*sync.
 	return &wg, nil
 }
 
-func exitStatus(err error) (int, error) {
+type exitStatusMsg struct {
+	Status uint32
+}
+
+func exitStatus(err error) (exitStatusMsg, error) {
 	if err != nil {
 		if exiterr, ok := err.(*exec.ExitError); ok {
 			// There is no platform independent way to retrieve
 			// the exit code, but the following will work on Unix
 			if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
-				return status.ExitStatus(), nil
+				return exitStatusMsg{uint32(status.ExitStatus())}, nil
 			}
 		}
-		return -1, err
+		return exitStatusMsg{0}, err
 	}
-	return 0, nil
+	return exitStatusMsg{0}, nil
 }
 
 var cacheMtx sync.Mutex
@@ -294,14 +338,4 @@ func ensureCacheRepo(path string) error {
 		}
 	}
 	return ioutil.WriteFile(cachePath+"/hooks/pre-receive", prereceiveHook, 0755)
-}
-
-func publicKeyFingerprint(key ssh.PublicKey) string {
-	var values []string
-	h := md5.New()
-	h.Write(ssh.MarshalPublicKey(key))
-	for _, value := range h.Sum(nil) {
-		values = append(values, fmt.Sprintf("%x", value))
-	}
-	return strings.Join(values, ":")
 }
