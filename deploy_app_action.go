@@ -1,6 +1,12 @@
 package bootstrap
 
-import ct "github.com/flynn/flynn-controller/types"
+import (
+	"bytes"
+	"log"
+	"text/template"
+
+	ct "github.com/flynn/flynn-controller/types"
+)
 
 type DeployAppAction struct {
 	ID string `json:"id"`
@@ -12,6 +18,34 @@ type DeployAppAction struct {
 
 func init() {
 	Register("deploy-app", &DeployAppAction{})
+}
+
+func interpolate(s *State, arg string) string {
+	t, err := template.New("arg").Parse(arg)
+	if err != nil {
+		log.Printf("Ignoring error parsing %q as template: %s", arg, err)
+		return arg
+	}
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, s); err != nil {
+		log.Printf("Ignoring error executing %q as template: %s", arg, err)
+		return arg
+	}
+	return buf.String()
+}
+
+func interpolateRelease(s *State, r *ct.Release) {
+	for k, v := range r.Env {
+		r.Env[k] = interpolate(s, v)
+	}
+	for _, proc := range r.Processes {
+		for k, v := range proc.Env {
+			proc.Env[k] = interpolate(s, v)
+		}
+		for i, v := range proc.Cmd {
+			proc.Cmd[i] = interpolate(s, v)
+		}
+	}
 }
 
 func (a *DeployAppAction) Run(s *State) error {
@@ -34,6 +68,7 @@ func (a *DeployAppAction) Run(s *State) error {
 	if a.Release.Env == nil {
 		a.Release.Env = make(map[string]string)
 	}
+	interpolateRelease(s, a.Release)
 	for _, p := range a.Resources {
 		if provider, ok := s.Providers[p.Name]; ok {
 			p = provider

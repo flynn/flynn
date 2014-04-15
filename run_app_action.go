@@ -75,6 +75,7 @@ func (a *RunAppAction) Run(s *State) error {
 	if a.Release.Env == nil {
 		a.Release.Env = make(map[string]string)
 	}
+	interpolateRelease(s, a.Release)
 
 	for _, p := range a.Resources {
 		server, err := resource.NewServer(p.URL)

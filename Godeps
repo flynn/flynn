@@ -13,23 +13,27 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/client",
-			"Rev": "08a3ec0a4d6c8d21a63a16b792eeaa2760574398"
+			"Rev": "13f8bec8d5a433cd00c0e692f84b8463103d01c5"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/types",
-			"Rev": "08a3ec0a4d6c8d21a63a16b792eeaa2760574398"
+			"Rev": "13f8bec8d5a433cd00c0e692f84b8463103d01c5"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/utils",
-			"Rev": "08a3ec0a4d6c8d21a63a16b792eeaa2760574398"
+			"Rev": "13f8bec8d5a433cd00c0e692f84b8463103d01c5"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-host/types",
-			"Rev": "65a40ed012c1403676ceef395f84e91d40b6b0d2"
+			"Rev": "1a44974033870d0f2c06f876980b113fdba82e20"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-crypto-ssh",
+			"Rev": "7cd731376a4eb3982056b009e5ac55e063c87264"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-discoverd",
-			"Rev": "c236937e9dd13e2e85314a9ab8cdadff52452601"
+			"Rev": "bfe51214ec045135950f9c43b699e76851e14b2e"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-dockerclient",
@@ -37,19 +41,19 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/attempt",
-			"Rev": "c95262db7474ac09ce1ccbc7a6c81d9a3aef670b"
+			"Rev": "8f65979fc69e2b957a47c72888b26b4844fa47aa"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/cluster",
-			"Rev": "c95262db7474ac09ce1ccbc7a6c81d9a3aef670b"
+			"Rev": "8f65979fc69e2b957a47c72888b26b4844fa47aa"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/resource",
-			"Rev": "c95262db7474ac09ce1ccbc7a6c81d9a3aef670b"
+			"Rev": "8f65979fc69e2b957a47c72888b26b4844fa47aa"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
-			"Rev": "0f5f55ccd60369cfc32008d9c955e6b19cdb15e6"
+			"Rev": "51dc85b57711bd07c8856a09c8173d7deeca6857"
 		},
 		{
 			"ImportPath": "github.com/flynn/strowger/types",
