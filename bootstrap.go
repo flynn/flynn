@@ -43,6 +43,9 @@ func (s *State) ControllerClient() (*controller.Client, error) {
 
 type Action interface {
 	Run(*State) error
+}
+
+type CleanAction interface {
 	Cleanup(*State) error
 }
 
@@ -76,9 +79,11 @@ func Run(manifest []byte) error {
 	cleanup := func(err error) error {
 		errors := make([]error, 0, len(steps))
 		for i := len(actions) - 1; i >= 0; i-- {
-			err := actions[i].Cleanup(state)
-			if err != nil {
-				errors = append(errors, err)
+			if ca, ok := actions[i].(CleanAction); ok {
+				err := ca.Cleanup(state)
+				if err != nil {
+					errors = append(errors, err)
+				}
 			}
 		}
 		if len(errors) > 0 {

@@ -48,5 +48,3 @@ func getAppStep(s *State, step string) (*AppState, error) {
 	}
 	return data, nil
 }
-
-func (a *AddRouteAction) Cleanup(s *State) error { return nil }

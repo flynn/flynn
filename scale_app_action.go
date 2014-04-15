@@ -29,5 +29,3 @@ func (a *ScaleAppAction) Run(s *State) error {
 
 	return client.PutFormation(a.Formation)
 }
-
-func (a *ScaleAppAction) Cleanup(s *State) error { return nil }

@@ -64,5 +64,3 @@ func (a *WaitAction) Run(s *State) error {
 		time.Sleep(waitInterval)
 	}
 }
-
-func (a *WaitAction) Cleanup(s *State) error { return nil }

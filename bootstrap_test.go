@@ -13,10 +13,6 @@ func (t *TestAction) Run(state *State) error {
 	return nil
 }
 
-func (t *TestAction) Cleanup(state *State) error {
-	return nil
-}
-
 func init() {
 	Register("test-action", &TestAction{})
 }
