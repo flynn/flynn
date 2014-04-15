@@ -18,7 +18,7 @@ import (
 	"sync"
 	"syscall"
 
-	"code.google.com/p/go.crypto/ssh"
+	"github.com/flynn/go-crypto-ssh"
 	"github.com/flynn/go-shlex"
 )
 
@@ -40,7 +40,7 @@ var privateKey string
 
 func init() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage:  %v [options] <authchecker> <receiver>\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %v [options] <authchecker> <receiver>\n\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 }
@@ -260,7 +260,7 @@ var ErrUnauthorized = errors.New("gitreceive: user is unauthorized")
 
 func checkAuth(conn *ssh.ServerConn, repo string) error {
 	status, err := exitStatus(exec.Command(authChecker[0],
-		append(authChecker[1:], conn.User(), repo, conn.Permissions.CriticalOptions["public-key"])...).Run())
+		append(authChecker[1:], conn.User(), repo, string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(conn.Conn.PublicKey()))))...).Run())
 	if err != nil {
 		return err
 	}
