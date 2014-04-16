@@ -1,13 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"crypto/md5"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"strings"
 
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/go-crypto-ssh"
 	"github.com/flynn/go-sql"
 )
 
@@ -21,36 +21,26 @@ func NewKeyRepo(db *DB) *KeyRepo {
 
 func (r *KeyRepo) Add(data interface{}) error {
 	key := data.(*ct.Key)
-	// TODO: validate key type
+
 	if key.Key == "" {
 		return errors.New("controller: key must not be blank")
 	}
 
-	splitKey := strings.SplitN(key.Key, " ", 3)
-	if len(splitKey) < 2 {
-		return errors.New("controller: key is missing data")
-	}
-	fingerprint, err := fingerprintKey(splitKey[1])
+	pubKey, comment, _, _, err := ssh.ParseAuthorizedKey([]byte(key.Key))
 	if err != nil {
-		return errors.New("controller: error decoding key data")
+		return err
 	}
 
-	key.ID = fingerprint
-	key.Key = splitKey[0] + " " + splitKey[1]
-	if len(splitKey) > 2 {
-		key.Comment = splitKey[2]
-	}
+	key.ID = fingerprintKey(pubKey.Marshal())
+	key.Key = string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(pubKey)))
+	key.Comment = comment
 
 	return r.db.QueryRow("INSERT INTO keys (key_id, key, comment) VALUES ($1, $2, $3) RETURNING created_at", key.ID, key.Key, key.Comment).Scan(&key.CreatedAt)
 }
 
-func fingerprintKey(key string) (string, error) {
-	data, err := base64.StdEncoding.DecodeString(key)
-	if err != nil {
-		return "", err
-	}
-	digest := md5.Sum(data)
-	return hex.EncodeToString(digest[:]), nil
+func fingerprintKey(key []byte) string {
+	digest := md5.Sum(key)
+	return hex.EncodeToString(digest[:])
 }
 
 func scanKey(s Scanner) (*ct.Key, error) {

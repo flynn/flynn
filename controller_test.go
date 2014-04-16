@@ -357,7 +357,7 @@ func (s *S) TestCreateKey(c *C) {
 }
 
 func (s *S) TestDeleteKey(c *C) {
-	key := s.createTestKey(c, &ct.Key{Key: "ssh-rsa AABB"})
+	key := s.createTestKey(c, &ct.Key{Key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDJv/RsyRxiSAh7cU236LOCZ3vD9PO87Fi32QbojQxuGDotmk65fN6WUuL7DQjzUnWkFRu4w/svmb+9MuYK0L2b4Kc1rKXBYaytzWqGtv2VaAFObth40AlNr0V26hcTcBNQQPa23Z8LwQNgELn2b/o2CK+Pie1UbE5lHg8R+pm03cI7fYPB0jA6LIS+IVKHslVhjzxtN49xm9W0DiCxouHZEl+Fd5asgtg10HN7CV5l2+ZFyrPAkxkQrzWpkUMgfvU+xFamyczzBKMT0fTYo+TUM3w3w3njJvqXdHjo3anrUF65rSFxfeNkXoe/NQDdvWu+XBfEypWv25hlQv91JI0N"})
 
 	path := "/keys/" + key.ID
 	res, err := s.Delete(path)
@@ -393,7 +393,7 @@ func (s *S) TestReleaseList(c *C) {
 }
 
 func (s *S) TestKeyList(c *C) {
-	s.createTestKey(c, &ct.Key{Key: "ssh-rsa AAAA"})
+	s.createTestKey(c, &ct.Key{Key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCqE9AJti/17eigkIhA7+6TF9rdTVxjPv80UxIT6ELaNPHegqib5m94Wab4UoZAGtBPLKJs9o8LRO3H29X5q5eXCU5mwx4qQhcMEYkILWj0Y1T39Xi2RI3jiWcTsphAAYmy+uT2Nt740OK1FaQxfdzYx4cjsjtb8L82e35BkJE2TdjXWkeHxZWDZxMlZXme56jTNsqB2OuC0gfbAbrjSCkolvK1RJbBZSSBgKQrYXiyYjjLfcw2O0ZAKPBeS8ckVf6PO8s/+azZzJZ0Kl7YGHYEX3xRi6sJS0gsI4Y6+sddT1zT5kh0Bg3C8cKnZ1NiVXLH0pPKz68PhjWhwpOVUehD"})
 
 	var list []ct.Key
 	res, err := s.Get("/keys", &list)
