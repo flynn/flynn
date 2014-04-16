@@ -50,7 +50,7 @@ func main() {
 	hostname, _ := os.Hostname()
 	externalAddr := flag.String("external", "", "external IP of host")
 	configFile := flag.String("config", "", "configuration file")
-	manifestFile := flag.String("manifest", "", "manifest file")
+	manifestFile := flag.String("manifest", "/etc/flynn-host.json", "manifest file")
 	hostID := flag.String("id", hostname, "host id")
 	force := flag.Bool("force", false, "kill all containers booted by flynn-host before starting")
 	attributes := make(AttributeFlag)
