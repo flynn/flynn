@@ -73,11 +73,12 @@ type manifestRunner struct {
 }
 
 type manifestService struct {
-	ID       string            `json:"id"`
-	Image    string            `json:"image"`
-	Args     []string          `json:"args"`
-	Env      map[string]string `json:"env"`
-	TCPPorts []string          `json:"tcp_ports"`
+	ID         string            `json:"id"`
+	Image      string            `json:"image"`
+	Entrypoint []string          `json:"entrypoint"`
+	Args       []string          `json:"args"`
+	Env        map[string]string `json:"env"`
+	TCPPorts   []string          `json:"tcp_ports"`
 }
 
 func dockerEnv(m map[string]string) []string {
@@ -166,6 +167,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 			TCPPorts: len(data.TCPPorts),
 			Config: &docker.Config{
 				Image:        service.Image,
+				Entrypoint:   service.Entrypoint,
 				Cmd:          args,
 				AttachStdout: true,
 				AttachStderr: true,
