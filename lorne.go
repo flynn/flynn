@@ -95,15 +95,24 @@ func main() {
 
 	var disc *discoverd.Client
 	if *manifestFile != "" {
-		f, err := os.Open(*manifestFile)
+		var r io.Reader
+		var f *os.File
+		if *manifestFile == "-" {
+			r = os.Stdin
+		} else {
+			f, err = os.Open(*manifestFile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			r = f
+		}
+		services, err := runner.runManifest(r)
 		if err != nil {
 			log.Fatal(err)
 		}
-		services, err := runner.runManifest(f)
-		if err != nil {
-			log.Fatal(err)
+		if f != nil {
+			f.Close()
 		}
-		f.Close()
 
 		if d, ok := services["discoverd"]; ok {
 			processor.discoverd = fmt.Sprintf("%s:%d", d.InternalIP, d.TCPPorts[0])
