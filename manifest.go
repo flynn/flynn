@@ -73,6 +73,8 @@ type manifestRunner struct {
 }
 
 type manifestService struct {
+	ID       string            `json:"id"`
+	Image    string            `json:"image"`
 	Args     []string          `json:"args"`
 	Env      map[string]string `json:"env"`
 	TCPPorts []string          `json:"tcp_ports"`
@@ -87,13 +89,13 @@ func dockerEnv(m map[string]string) []string {
 }
 
 func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, error) {
-	services := make(map[string]manifestService)
+	var services []manifestService
 	if err := json.NewDecoder(r).Decode(&services); err != nil {
 		return nil, err
 	}
 
 	serviceData := make(map[string]*ManifestData, len(services))
-	for name, service := range services {
+	for _, service := range services {
 		data := &ManifestData{
 			Env:        parseEnviron(),
 			Services:   serviceData,
@@ -149,9 +151,8 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 			data.TCPPorts = append(data.TCPPorts, <-m.ports)
 		}
 
-		image := name
-		if !strings.Contains(image, "/") {
-			image = "flynn/" + name
+		if service.Image == "" {
+			service.Image = "flynn/" + service.ID
 		}
 
 		// Preload ports channel with the pre-allocated ports for this job
@@ -161,10 +162,10 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 		}
 
 		job := &host.Job{
-			ID:       cluster.RandomJobID("flynn-" + name + "-"),
+			ID:       cluster.RandomJobID("flynn-" + service.ID + "-"),
 			TCPPorts: len(data.TCPPorts),
 			Config: &docker.Config{
-				Image:        image,
+				Image:        service.Image,
 				Cmd:          args,
 				AttachStdout: true,
 				AttachStderr: true,
@@ -184,7 +185,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 
 		data.InternalIP = container.NetworkSettings.IPAddress
 		data.readonly = true
-		serviceData[name] = data
+		serviceData[service.ID] = data
 	}
 
 	return serviceData, nil
