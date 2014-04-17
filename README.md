@@ -18,6 +18,9 @@ Flynn is in active development and **currently unsuitable for production** use.
 
 Users are encouraged to experiment with Flynn but should assume there are stability, security, and performance weaknesses throughout the project. This warning will be removed when Flynn is ready for production use.
 
+## Getting Started
+
+
 ## Components
 
 ### Layer 0
@@ -78,4 +81,4 @@ There are many ways to help Flynn besides contributing code:
  - Improve the [documentation](https://github.com/flynn/flynn.io) including this website
  - [Contribute](https://flynn.io/#sponsor) financially to support core development
 
-Flynn is a trademark of Apollic Software, LLC.
+Flynn is a [trademark](https://flynn.io/docs/trademark-guidelines) of Apollic Software, LLC.
