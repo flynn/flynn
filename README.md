@@ -6,7 +6,7 @@ Unlike most PaaS's Flynn can run stateful services as well as [12 factor](http:/
 
 Flynn components are divided into two _layers_. 
 
-**Layer 0** is a low-level resource framework inspired by the [Google Omega](http://eurosys2013.tudos.org/wp-content/uploads/2013/paper/Schwarzkopf.pdf) paper. 
+**Layer 0** is a low-level resource framework inspired by the [Google Omega](http://eurosys2013.tudos.org/wp-content/uploads/2013/paper/Schwarzkopf.pdf) paper. Layer 0 also includes service discovery
 
 **Layer 1** is a set of higher level components that makes it easy to deploy and maintain applications and databases.
 
@@ -28,7 +28,7 @@ Users are encouraged to experiment with Flynn but should assume there are stabil
 
 ### Layer 1
 
-#### [flynn-controler](https://github.com/flynn/flynn-controller)
+#### [flynn-controller](https://github.com/flynn/flynn-controller)
 
 #### [flynn-bootstrap](https://github.com/flynn/flynn-bootstrap)
 
@@ -62,7 +62,7 @@ Users are encouraged to experiment with Flynn but should assume there are stabil
 
 #### [go-flynn](https://github.com/flynn/go-flynn)
 
-#### [rcpplus](https://github.com/flynn/rcpplus)
+#### [rpcplus](https://github.com/flynn/rpcplus)
 
 ## Contributing
 
@@ -77,3 +77,5 @@ There are many ways to help Flynn besides contributing code:
  - Fix bugs or file issues
  - Improve the [documentation](https://github.com/flynn/flynn.io) including this website
  - [Contribute](https://flynn.io/#sponsor) financially to support core development
+
+Flynn is a trademark of Apollic Software, LLC.
