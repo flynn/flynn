@@ -393,6 +393,12 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls boo
 		}
 		res, err := backend.Read(req)
 		if res != nil {
+			// This is a workaround for
+			// https://code.google.com/p/go/issues/detail?id=5381
+			// (fixed in Go tip, remove when Go 1.3 has been released)
+			if res.ContentLength == 0 && res.TransferEncoding == nil {
+				res.TransferEncoding = []string{"identity"}
+			}
 			if err := sc.Write(req, res); err != nil {
 				if err != io.EOF && err != httputil.ErrPersistEOF {
 					log.Println("client write err:", err)

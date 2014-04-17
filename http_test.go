@@ -66,6 +66,22 @@ func newHTTPListener(etcd *fakeEtcd) (*HTTPListener, *fakeDiscoverd, error) {
 	return l, discoverd, l.Start()
 }
 
+// https://code.google.com/p/go/issues/detail?id=5381
+func (s *S) TestIssue5381(c *C) {
+	srv := httptest.NewServer(httpTestHandler(""))
+	defer srv.Close()
+
+	l, discoverd, err := newHTTPListener(nil)
+	c.Assert(err, IsNil)
+	defer l.Close()
+
+	discoverd.Register("test", srv.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	addHTTPRoute(c, l)
+	assertGet(c, "http://"+l.Addr, "example.com", "")
+}
+
 func (s *S) TestAddHTTPRoute(c *C) {
 	srv1 := httptest.NewServer(httpTestHandler("1"))
 	srv2 := httptest.NewServer(httpTestHandler("2"))
