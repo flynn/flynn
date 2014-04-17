@@ -99,6 +99,10 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	crud("artifacts", ct.Artifact{}, artifactRepo, r)
 	crud("keys", ct.Key{}, keyRepo, r)
 
+	r.Get("/ping", func(w http.ResponseWriter) {
+		w.WriteHeader(200)
+	})
+
 	r.Put("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getReleaseMiddleware, binding.Bind(ct.Formation{}), putFormation)
 	r.Get("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getFormationMiddleware, getFormation)
 	r.Delete("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getFormationMiddleware, deleteFormation)
