@@ -2,7 +2,7 @@
 
 [Flynn](https://flynn.io) is a next generation open source Platform as a Service (PaaS).
 
-Flynn is modular so users can easily modify, upgrade, and replace components.
+Unlike most PaaS's Flynn can run stateful services as well as [12 factor](http://12factor.net/) apps. This includes built-in database appliances (just Postgres to start). Flynn is modular so users can easily modify, upgrade, and replace components.
 
 Flynn components are divided into two _layers_. 
 
@@ -10,13 +10,13 @@ Flynn components are divided into two _layers_.
 
 **Layer 1** is a set of higher level components that makes it easy to deploy and maintain applications and databases.
 
-Unlike most PaaS's Flynn can run stateful services as well as [12 factor](http://12factor.net/) apps. This includes built-in database appliances (just Postgres to start).
-
 You can learn more about the project at the [Flynn website](https://flynn.io).
 
 ### Status
 
-Flynn is in active development and **currently unsuitable for production** use. Users are encouraged to experiment with Flynn but should assume there are stability, security, and performance weaknesses throughout the project. This warning will be removed when Flynn is ready for production use.
+Flynn is in active development and **currently unsuitable for production** use. 
+
+Users are encouraged to experiment with Flynn but should assume there are stability, security, and performance weaknesses throughout the project. This warning will be removed when Flynn is ready for production use.
 
 ## Components
 
