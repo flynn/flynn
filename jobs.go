@@ -58,7 +58,7 @@ func jobLog(req *http.Request, app *ct.App, params martini.Params, cluster clust
 		JobID: params["jobs_id"],
 		Flags: host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagLogs,
 	}
-	if _, ok := params["tail"]; ok {
+	if tail := req.FormValue("tail"); tail != "" {
 		attachReq.Flags |= host.AttachFlagStream
 	}
 	stream, _, err := cluster.Attach(attachReq, false)
@@ -73,6 +73,7 @@ func jobLog(req *http.Request, app *ct.App, params martini.Params, cluster clust
 		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 		ssew := NewSSELogWriter(w)
 		demultiplex.Copy(ssew.Stream("stdout"), ssew.Stream("stderr"), stream)
+		w.Write([]byte("event: end\ndata: {}\n\n"))
 	} else {
 		io.Copy(w, stream)
 	}
