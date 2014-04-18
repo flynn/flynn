@@ -23,6 +23,10 @@ func runPs(cmd *Command, args []string, client *controller.Client) error {
 		return err
 	}
 
+	if len(jobs) == 0 {
+		return nil
+	}
+
 	sort.Sort(jobsByType(jobs))
 	w := tabwriter.NewWriter(os.Stdout, 0, 8, 0, '\t', 0)
 
