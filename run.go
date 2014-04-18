@@ -89,20 +89,15 @@ func runRun(cmd *Command, args []string, client *controller.Client) error {
 		defer term.Restore(os.Stdin)
 	}
 
-	errc := make(chan error)
 	go func() {
-		var stderr io.Writer
-		if !req.TTY {
-			stderr = os.Stderr
-		}
-		errc <- demultiplex.Copy(os.Stdout, stderr, rwc)
+		io.Copy(rwc, os.Stdin)
+		rwc.CloseWrite()
 	}()
-	if _, err := io.Copy(rwc, os.Stdin); err != nil {
-		return err
+	if req.TTY {
+		_, err = io.Copy(os.Stdout, rwc)
+	} else {
+		err = demultiplex.Copy(os.Stdout, os.Stderr, rwc)
 	}
-	rwc.CloseWrite()
-	if err := <-errc; err != nil {
-		return err
-	}
-	return nil
+	// TODO: get exit code and use it
+	return err
 }
