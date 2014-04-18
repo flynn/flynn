@@ -27,49 +27,49 @@ Please **report bugs** as issues on the appropriate repository. If you have a ge
 
 ### Layer 0
 
-#### [flynn-host](https://github.com/flynn/flynn-host)
+**[flynn-host](https://github.com/flynn/flynn-host)** The Flynn host service
 
-#### [discoverd](https://github.com/flynn/discoverd)
+**[discoverd](https://github.com/flynn/discoverd)** The Flynn service discovery system
 
 ### Layer 1
 
-#### [flynn-controller](https://github.com/flynn/flynn-controller)
+**[flynn-controller](https://github.com/flynn/flynn-controller)**
 
-#### [flynn-bootstrap](https://github.com/flynn/flynn-bootstrap)
+**[flynn-bootstrap](https://github.com/flynn/flynn-bootstrap)**
 
-#### [gitreceived](https://github.com/flynn/gitreceived)
+**[gitreceived](https://github.com/flynn/gitreceived)**
 
-#### [flynn-cli](https://github.com/flynn/flynn-cli)
+**[flynn-cli](https://github.com/flynn/flynn-cli)**
 
-#### [flynn-receive](https://github.com/flynn/flynn-receive)
+**[flynn-receive](https://github.com/flynn/flynn-receive)**
 
-#### [slugbuilder](https://github.com/flynn/slugbuilder)
+**[slugbuilder](https://github.com/flynn/slugbuilder)**
 
-#### [slugrunner](https://github.com/flynn/slugrunner)
+**[slugrunner](https://github.com/flynn/slugrunner)**
 
-#### [flynn-dev](https://github.com/flynn/flynn-dev)
+**[flynn-dev](https://github.com/flynn/flynn-dev)**
 
-#### [strowger](https://github.com/flynn/strowger)
+**[strowger](https://github.com/flynn/strowger)**
 
-#### [shelf](https://github.com/flynn/shelf)
+**[shelf](https://github.com/flynn/shelf)**
 
-#### [stdutil](https://github.com/flynn/stdutil)
+**[stdutil](https://github.com/flynn/stdutil)**
 
-#### [flynn-postgres](https://github.com/flynn/flynn-postgres)
+**[flynn-postgres](https://github.com/flynn/flynn-postgres)**
 
-#### [grid-cli](https://github.com/flynn/grid-cli)
+**[grid-cli](https://github.com/flynn/grid-cli)**
 
-#### [taffy](https://github.com/flynn/taffy)
+**[taffy](https://github.com/flynn/taffy)**
 
 ### Libraries
 
-#### [go-sql](https://github.com/flynn/gosql)
+**[go-sql](https://github.com/flynn/gosql)**
 
-#### [go-crypto-ssh](https://github.com/flynn/go-crypto-ssh)
+**[go-crypto-ssh](https://github.com/flynn/go-crypto-ssh)**
 
-#### [go-flynn](https://github.com/flynn/go-flynn)
+**[go-flynn](https://github.com/flynn/go-flynn)**
 
-#### [rpcplus](https://github.com/flynn/rpcplus)
+**[rpcplus](https://github.com/flynn/rpcplus)**
 
 ## Contributing
 
