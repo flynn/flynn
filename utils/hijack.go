@@ -33,7 +33,7 @@ func HijackRequest(req *http.Request, dial func(string, string) (net.Conn, error
 	if err != nil && err != httputil.ErrPersistEOF {
 		return nil, nil, err
 	}
-	if res.StatusCode != 200 {
+	if res.StatusCode != http.StatusSwitchingProtocols {
 		return res, nil, &url.Error{
 			Op:  req.Method,
 			URL: req.URL.String(),

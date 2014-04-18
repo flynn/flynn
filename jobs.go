@@ -211,7 +211,7 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 		}
 		w.Header().Set("Content-Type", "application/vnd.flynn.attach")
 		w.Header().Set("Content-Length", "0")
-		w.WriteHeader(200)
+		w.WriteHeader(http.StatusSwitchingProtocols)
 		conn, _, err := w.(http.Hijacker).Hijack()
 		if err != nil {
 			panic(err)
