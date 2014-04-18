@@ -92,6 +92,9 @@ func Copy(stdout, stderr io.Writer, r io.Reader) error {
 			return ew
 		}
 		if err != nil {
+			if err == io.EOF {
+				err = nil
+			}
 			return err
 		}
 	}
