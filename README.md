@@ -33,33 +33,33 @@ Please **report bugs** as issues on the appropriate repository. If you have a ge
 
 ### Layer 1
 
-**[flynn-controller](https://github.com/flynn/flynn-controller)**
+**[flynn-controller](https://github.com/flynn/flynn-controller)** The Flynn Controller for the management of applications running on Flynn via an HTTP API
 
-**[flynn-bootstrap](https://github.com/flynn/flynn-bootstrap)**
+**[flynn-bootstrap](https://github.com/flynn/flynn-bootstrap)** Bootstraps Flynn Layer 1
 
-**[gitreceived](https://github.com/flynn/gitreceived)**
+**[gitreceived](https://github.com/flynn/gitreceived)** An SSH server made specifically for accepting git pushes that will trigger an auth script and then a receiver script to handle the push. (This is a more advanced, standalone version of [gitreceive](https://github.com/progrium/gitreceive).)
 
-**[flynn-cli](https://github.com/flynn/flynn-cli)**
+**[flynn-cli](https://github.com/flynn/flynn-cli)** Command-line Flynn HTTP API client
 
-**[flynn-receive](https://github.com/flynn/flynn-receive)**
+**[flynn-receive](https://github.com/flynn/flynn-receive)** Flynn's git deployer
 
-**[slugbuilder](https://github.com/flynn/slugbuilder)**
+**[slugbuilder](https://github.com/flynn/slugbuilder)** A tool using [Docker](http://docker.io) and [Buildpacks](https://devcenter.heroku.com/articles/buildpacks) to produce a Heroku-like [slug](https://devcenter.heroku.com/articles/slug-compiler) given some application source.
 
-**[slugrunner](https://github.com/flynn/slugrunner)**
+**[slugrunner](https://github.com/flynn/slugrunner)** A [Docker](http://docker.io) container that runs Heroku-like [slugs](https://devcenter.heroku.com/articles/slug-compiler) produced by [slugbuilder](https://github.com/flynn/slugbuilder).
 
-**[flynn-dev](https://github.com/flynn/flynn-dev)**
+**[flynn-dev](https://github.com/flynn/flynn-dev)** Flynn development environment in a VM
 
-**[strowger](https://github.com/flynn/strowger)**
+**[strowger](https://github.com/flynn/strowger)** Flynn TCP/HTTP router
 
-**[shelf](https://github.com/flynn/shelf)**
+**[shelf](https://github.com/flynn/shelf)** A simple, fast HTTP file service
 
-**[stdutil](https://github.com/flynn/stdutil)**
+**[sdutil](https://github.com/flynn/sdutil)** Service discovery utility for systems based on go-discover
 
-**[flynn-postgres](https://github.com/flynn/flynn-postgres)**
+**[flynn-postgres](https://github.com/flynn/flynn-postgres)** Flynn [PostgreSQL](http://www.postgresql.org/) database appliance
 
 **[grid-cli](https://github.com/flynn/grid-cli)**
 
-**[taffy](https://github.com/flynn/taffy)**
+**[taffy](https://github.com/flynn/taffy)** Taffy pulls repos and deploys them to Flynn
 
 ### Libraries
 
