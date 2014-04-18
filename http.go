@@ -424,9 +424,11 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls boo
 			done := make(chan struct{})
 			go func() {
 				serverR.WriteTo(clientW)
+				clientW.(writeCloser).CloseWrite()
 				close(done)
 			}()
 			clientR.WriteTo(serverW)
+			serverW.(writeCloser).CloseWrite()
 			<-done
 			return
 		}
@@ -441,6 +443,10 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls boo
 		}
 		req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
 	}
+}
+
+type writeCloser interface {
+	CloseWrite() error
 }
 
 func shuffle(s []string) []string {
