@@ -59,6 +59,8 @@ Please **report bugs** as issues on the appropriate repository. If you have a ge
 
 #### [grid-cli](https://github.com/flynn/grid-cli)
 
+#### [taffy](https://github.com/flynn/taffy)
+
 ### Libraries
 
 #### [go-sql](https://github.com/flynn/gosql)
