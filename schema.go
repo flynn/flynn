@@ -33,6 +33,7 @@ func migrateDB(db *sql.DB) error {
     name text UNIQUE NOT NULL,
     release_id uuid REFERENCES releases (release_id),
     protected bool NOT NULL DEFAULT false,
+	meta hstore,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     deleted_at timestamptz

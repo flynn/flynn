@@ -137,13 +137,14 @@ func (s *S) createTestApp(c *C, in *ct.App) *ct.App {
 func (s *S) TestCreateApp(c *C) {
 	for i, id := range []string{"", utils.UUID()} {
 		name := fmt.Sprintf("create-app-%d", i)
-		app := s.createTestApp(c, &ct.App{ID: id, Name: name, Protected: true})
+		app := s.createTestApp(c, &ct.App{ID: id, Name: name, Protected: true, Meta: map[string]string{"foo": "bar"}})
 		c.Assert(app.Name, Equals, name)
 		c.Assert(app.ID, Not(Equals), "")
 		if id != "" {
 			c.Assert(app.ID, Equals, id)
 		}
 		c.Assert(app.Protected, Equals, true)
+		c.Assert(app.Meta["foo"], Equals, "bar")
 
 		gotApp := &ct.App{}
 		res, err := s.Get("/apps/"+app.ID, gotApp)

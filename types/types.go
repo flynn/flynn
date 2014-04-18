@@ -13,11 +13,12 @@ type ExpandedFormation struct {
 }
 
 type App struct {
-	ID        string     `json:"id,omitempty"`
-	Name      string     `json:"name,omitempty"`
-	Protected bool       `json:"protected, omitempty"`
-	CreatedAt *time.Time `json:"created_at,omitempty"`
-	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	ID        string            `json:"id,omitempty"`
+	Name      string            `json:"name,omitempty"`
+	Protected bool              `json:"protected"`
+	Meta      map[string]string `json:"meta,omitempty"`
+	CreatedAt *time.Time        `json:"created_at,omitempty"`
+	UpdatedAt *time.Time        `json:"updated_at,omitempty"`
 }
 
 type Release struct {

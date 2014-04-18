@@ -8,6 +8,7 @@ import (
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/go-sql"
+	"github.com/flynn/pq/hstore"
 )
 
 type AppRepo struct {
@@ -32,7 +33,14 @@ func (r *AppRepo) Add(data interface{}) error {
 	if app.ID == "" {
 		app.ID = utils.UUID()
 	}
-	err := r.db.QueryRow("INSERT INTO apps (app_id, name, protected) VALUES ($1, $2, $3) RETURNING created_at, updated_at", app.ID, app.Name, app.Protected).Scan(&app.CreatedAt, &app.UpdatedAt)
+	var meta hstore.Hstore
+	if len(app.Meta) > 0 {
+		meta.Map = make(map[string]sql.NullString, len(app.Meta))
+		for k, v := range app.Meta {
+			meta.Map[k] = sql.NullString{String: v, Valid: true}
+		}
+	}
+	err := r.db.QueryRow("INSERT INTO apps (app_id, name, protected, meta) VALUES ($1, $2, $3, $4) RETURNING created_at, updated_at", app.ID, app.Name, app.Protected, meta).Scan(&app.CreatedAt, &app.UpdatedAt)
 	app.ID = cleanUUID(app.ID)
 	return err
 }
@@ -41,9 +49,16 @@ var ErrNotFound = errors.New("controller: resource not found")
 
 func scanApp(s Scanner) (*ct.App, error) {
 	app := &ct.App{}
-	err := s.Scan(&app.ID, &app.Name, &app.Protected, &app.CreatedAt, &app.UpdatedAt)
+	var meta hstore.Hstore
+	err := s.Scan(&app.ID, &app.Name, &app.Protected, &meta, &app.CreatedAt, &app.UpdatedAt)
 	if err == sql.ErrNoRows {
 		err = ErrNotFound
+	}
+	if len(meta.Map) > 0 {
+		app.Meta = make(map[string]string, len(meta.Map))
+		for k, v := range meta.Map {
+			app.Meta[k] = v.String
+		}
 	}
 	app.ID = cleanUUID(app.ID)
 	return app, err
@@ -57,7 +72,7 @@ type rowQueryer interface {
 
 func selectApp(db rowQueryer, id string, update bool) (*ct.App, error) {
 	var row Scanner
-	query := "SELECT app_id, name, protected, created_at, updated_at FROM apps WHERE deleted_at IS NULL AND "
+	query := "SELECT app_id, name, protected, meta, created_at, updated_at FROM apps WHERE deleted_at IS NULL AND "
 	var suffix string
 	if update {
 		suffix = " FOR UPDATE"
@@ -107,7 +122,7 @@ func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, e
 }
 
 func (r *AppRepo) List() (interface{}, error) {
-	rows, err := r.db.Query("SELECT app_id, name, protected, created_at, updated_at FROM apps WHERE deleted_at IS NULL ORDER BY created_at DESC")
+	rows, err := r.db.Query("SELECT app_id, name, protected, meta, created_at, updated_at FROM apps WHERE deleted_at IS NULL ORDER BY created_at DESC")
 	if err != nil {
 		return nil, err
 	}
