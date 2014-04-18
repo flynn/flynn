@@ -43,9 +43,9 @@ Please **report bugs** as issues on the appropriate repository. If you have a ge
 
 **[flynn-receive](https://github.com/flynn/flynn-receive)** Flynn's git deployer
 
-**[slugbuilder](https://github.com/flynn/slugbuilder)** A tool using [Docker](http://docker.io) and [Buildpacks](https://devcenter.heroku.com/articles/buildpacks) to produce a Heroku-like [slug](https://devcenter.heroku.com/articles/slug-compiler) given some application source.
+**[slugbuilder](https://github.com/flynn/slugbuilder)** A tool using Docker and [Buildpacks](https://devcenter.heroku.com/articles/buildpacks) to produce a Heroku-like [slug](https://devcenter.heroku.com/articles/slug-compiler) given some application source.
 
-**[slugrunner](https://github.com/flynn/slugrunner)** A [Docker](http://docker.io) container that runs Heroku-like [slugs](https://devcenter.heroku.com/articles/slug-compiler) produced by [slugbuilder](https://github.com/flynn/slugbuilder).
+**[slugrunner](https://github.com/flynn/slugrunner)** A Docker container that runs Heroku-like [slugs](https://devcenter.heroku.com/articles/slug-compiler) produced by [slugbuilder](https://github.com/flynn/slugbuilder).
 
 **[flynn-dev](https://github.com/flynn/flynn-dev)** Flynn development environment in a VM
 
