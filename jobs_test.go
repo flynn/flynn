@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -170,6 +171,31 @@ func (s *S) TestJobLog(c *C) {
 	c.Assert(err, IsNil)
 
 	c.Assert(buf.String(), Equals, "foo")
+}
+
+func (s *S) TestJobLogSSE(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "joblog-sse"})
+	hc := newFakeHostClient()
+	hostID, jobID := utils.UUID(), utils.UUID()
+	logData, err := base64.StdEncoding.DecodeString("AQAAAAAAABNMaXN0ZW5pbmcgb24gNTUwMDcKAQAAAAAAAA1oZWxsbyBzdGRvdXQKAgAAAAAAAA1oZWxsbyBzdGRlcnIK")
+	c.Assert(err, IsNil)
+	hc.setAttach(jobID, newFakeLog(bytes.NewReader(logData)))
+	s.cc.setHostClient(hostID, hc)
+
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log", s.srv.URL, app.ID, hostID, jobID), nil)
+	c.Assert(err, IsNil)
+	req.Header.Set("Accept", "text/event-stream")
+	res, err := http.DefaultClient.Do(req)
+	c.Assert(err, IsNil)
+
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(res.Body)
+	res.Body.Close()
+	c.Assert(err, IsNil)
+
+	expected := "data: {\"stream\":\"stdout\",\"data\":\"Listening on 55007\\n\"}\n\ndata: {\"stream\":\"stdout\",\"data\":\"hello stdout\\n\"}\n\ndata: {\"stream\":\"stderr\",\"data\":\"hello stderr\\n\"}\n\ndata: {\"stream\":\"stdout\",\"data\":\"\"}\n\n"
+
+	c.Assert(buf.String(), Equals, expected)
 }
 
 type fakeAttachStream struct {

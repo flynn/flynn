@@ -1,16 +1,19 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/go-flynn/cluster"
+	"github.com/flynn/go-flynn/demultiplex"
 	"github.com/go-martini/martini"
 	"github.com/martini-contrib/render"
 )
@@ -50,7 +53,7 @@ func jobList(app *ct.App, cc clusterClient, r render.Render) {
 	r.JSON(200, jobs)
 }
 
-func jobLog(app *ct.App, params martini.Params, cluster cluster.Host, w http.ResponseWriter) {
+func jobLog(req *http.Request, app *ct.App, params martini.Params, cluster cluster.Host, w http.ResponseWriter) {
 	attachReq := &host.AttachReq{
 		JobID: params["jobs_id"],
 		Flags: host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagLogs,
@@ -66,7 +69,55 @@ func jobLog(app *ct.App, params martini.Params, cluster cluster.Host, w http.Res
 		return
 	}
 	defer stream.Close()
-	io.Copy(w, stream)
+	if strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
+		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+		ssew := NewSSELogWriter(w)
+		demultiplex.Copy(ssew.Stream("stdout"), ssew.Stream("stderr"), stream)
+	} else {
+		io.Copy(w, stream)
+	}
+}
+
+type SSELogWriter interface {
+	Stream(string) io.Writer
+}
+
+func NewSSELogWriter(w io.Writer) SSELogWriter {
+	return &sseLogWriter{Writer: w, Encoder: json.NewEncoder(w)}
+}
+
+type sseLogWriter struct {
+	io.Writer
+	*json.Encoder
+	sync.Mutex
+}
+
+func (w *sseLogWriter) Stream(s string) io.Writer {
+	return &sseLogStreamWriter{w: w, s: s}
+}
+
+type sseLogStreamWriter struct {
+	w *sseLogWriter
+	s string
+}
+
+type sseLogChunk struct {
+	Stream string `json:"stream"`
+	Data   string `json:"data"`
+}
+
+func (w *sseLogStreamWriter) Write(p []byte) (int, error) {
+	w.w.Lock()
+	defer w.w.Unlock()
+
+	if _, err := w.w.Write([]byte("data: ")); err != nil {
+		return 0, err
+	}
+	if err := w.w.Encode(&sseLogChunk{Stream: w.s, Data: string(p)}); err != nil {
+		return 0, err
+	}
+	_, err := w.w.Write([]byte("\n"))
+	return len(p), err
 }
 
 func parseJobID(params martini.Params) (string, string) {
@@ -217,8 +268,6 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 			panic(err)
 		}
 		defer conn.Close()
-
-		// TODO: demux stdout/stderr if non-tty
 
 		done := make(chan struct{}, 2)
 		cp := func(to cluster.ReadWriteCloser, from io.Reader) {
