@@ -73,7 +73,8 @@ func jobLog(req *http.Request, app *ct.App, params martini.Params, cluster clust
 		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 		ssew := NewSSELogWriter(w)
 		demultiplex.Copy(ssew.Stream("stdout"), ssew.Stream("stderr"), stream)
-		w.Write([]byte("event: end\ndata: {}\n\n"))
+		// TODO: include exit code here if tailing
+		w.Write([]byte("event: eof\ndata: {}\n\n"))
 	} else {
 		io.Copy(w, stream)
 	}

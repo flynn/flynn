@@ -193,7 +193,7 @@ func (s *S) TestJobLogSSE(c *C) {
 	res.Body.Close()
 	c.Assert(err, IsNil)
 
-	expected := "data: {\"stream\":\"stdout\",\"data\":\"Listening on 55007\\n\"}\n\ndata: {\"stream\":\"stdout\",\"data\":\"hello stdout\\n\"}\n\ndata: {\"stream\":\"stderr\",\"data\":\"hello stderr\\n\"}\n\nevent: end\ndata: {}\n\n"
+	expected := "data: {\"stream\":\"stdout\",\"data\":\"Listening on 55007\\n\"}\n\ndata: {\"stream\":\"stdout\",\"data\":\"hello stdout\\n\"}\n\ndata: {\"stream\":\"stderr\",\"data\":\"hello stderr\\n\"}\n\nevent: eof\ndata: {}\n\n"
 
 	c.Assert(buf.String(), Equals, expected)
 }
