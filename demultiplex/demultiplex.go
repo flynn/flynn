@@ -83,13 +83,15 @@ func Copy(stdout, stderr io.Writer, r io.Reader) error {
 	for {
 		t, data, err := read()
 		var ew error
-		if stderr != nil && t == frameTypeStderr {
-			_, ew = stderr.Write(data)
-		} else {
-			_, ew = stdout.Write(data)
-		}
-		if ew != nil {
-			return ew
+		if len(data) > 0 {
+			if stderr != nil && t == frameTypeStderr {
+				_, ew = stderr.Write(data)
+			} else {
+				_, ew = stdout.Write(data)
+			}
+			if ew != nil {
+				return ew
+			}
 		}
 		if err != nil {
 			if err == io.EOF {
