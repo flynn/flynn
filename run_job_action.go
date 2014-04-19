@@ -44,7 +44,7 @@ func startJob(s *State, hostTags []string, job *host.Job) (*Job, error) {
 	job.ID = cluster.RandomJobID("")
 	data := &Job{HostID: h.ID, JobID: job.ID}
 
-	hc, err := cc.ConnectHost(h.ID)
+	hc, err := cc.DialHost(h.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func (a *RunJobAction) Cleanup(s *State) error {
 		if err != nil {
 			return err
 		}
-		h, err := cc.ConnectHost(data.HostID)
+		h, err := cc.DialHost(data.HostID)
 		if err != nil {
 			return err
 		}

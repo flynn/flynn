@@ -128,7 +128,7 @@ func (a *RunAppAction) Cleanup(s *State) error {
 		return err
 	}
 	for _, job := range data.Jobs {
-		h, err := cc.ConnectHost(job.HostID)
+		h, err := cc.DialHost(job.HostID)
 		if err != nil {
 			continue
 		}
