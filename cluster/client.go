@@ -125,7 +125,7 @@ func (c *Client) AddJobs(req *host.AddJobsReq) (*host.AddJobsRes, error) {
 	return &res, err
 }
 
-func (c *Client) ConnectHost(id string) (Host, error) {
+func (c *Client) DialHost(id string) (Host, error) {
 	// TODO: reuse connection if leader id == id
 	services := c.service.Select(map[string]string{"id": id})
 	if len(services) == 0 {
