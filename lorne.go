@@ -183,12 +183,16 @@ func main() {
 	h.ID = *hostID
 
 	for {
+		newLeader := cluster.NewLeaderSignal()
+
 		h.Jobs = state.ClusterJobs()
 		jobs := make(chan *host.Job)
 		hostErr := cluster.RegisterHost(h, jobs)
 		g.Log(grohl.Data{"at": "host_registered"})
 		processor.Process(ports, jobs)
 		g.Log(grohl.Data{"at": "sampi_disconnected", "err": *hostErr})
+
+		<-newLeader
 	}
 }
 

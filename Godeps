@@ -21,11 +21,11 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/attempt",
-			"Rev": "d326accd00f58342023bf8ba457f6ae8bd614f55"
+			"Rev": "5bc71bdf4686567fc60f50bbe952f6c8da80bc8e"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/cluster",
-			"Rev": "d326accd00f58342023bf8ba457f6ae8bd614f55"
+			"Rev": "5bc71bdf4686567fc60f50bbe952f6c8da80bc8e"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
