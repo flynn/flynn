@@ -45,7 +45,7 @@ func newClient(services ServiceSetFunc) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{service: ss}, nil
+	return &Client{service: ss, leaderChange: make(chan struct{})}, nil
 }
 
 type LocalClient interface {
@@ -76,6 +76,8 @@ type Client struct {
 
 	selfID string
 	self   LocalClient
+
+	leaderChange chan struct{}
 }
 
 func (c *Client) start() error {
@@ -106,6 +108,10 @@ func (c *Client) followLeader(firstErr chan<- error) {
 				return
 			})
 		}
+		if c.err == nil {
+			close(c.leaderChange)
+			c.leaderChange = make(chan struct{})
+		}
 		c.mtx.Unlock()
 		if firstErr != nil {
 			firstErr <- c.err
@@ -126,6 +132,15 @@ func (c *Client) local() LocalClient {
 		return c.self
 	}
 	return nil
+}
+
+// NewLeaderSignal returns a channel that strobes exactly once when a new leader
+// connection has been established successfully. It is an error to attempt to
+// receive more than one value from the channel.
+func (c *Client) NewLeaderSignal() <-chan struct{} {
+	c.mtx.RLock()
+	defer c.mtx.RUnlock()
+	return c.leaderChange
 }
 
 func (c *Client) Close() error {
