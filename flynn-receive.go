@@ -127,7 +127,7 @@ var typesPattern = regexp.MustCompile(`types.* -> (.+)$`)
 func scheduleAndAttach(jobid string, config docker.Config) (types []string) {
 	hostid := randomHost()
 
-	client, err := clusterc.ConnectHost(hostid)
+	client, err := clusterc.DialHost(hostid)
 	if err != nil {
 		log.Fatalf("Error connecting to host %s: %s", hostid, err)
 	}
