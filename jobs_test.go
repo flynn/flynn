@@ -33,7 +33,7 @@ func (c *fakeCluster) ListHosts() (map[string]host.Host, error) {
 	return c.hosts, nil
 }
 
-func (c *fakeCluster) ConnectHost(id string) (cluster.Host, error) {
+func (c *fakeCluster) DialHost(id string) (cluster.Host, error) {
 	client, ok := c.hostClients[id]
 	if !ok {
 		return nil, ErrNotFound

@@ -20,7 +20,7 @@ import (
 
 type clusterClient interface {
 	ListHosts() (map[string]host.Host, error)
-	ConnectHost(string) (cluster.Host, error)
+	DialHost(string) (cluster.Host, error)
 	AddJobs(*host.AddJobsReq) (*host.AddJobsRes, error)
 }
 
@@ -139,7 +139,7 @@ func connectHostMiddleware(c martini.Context, params martini.Params, cl clusterC
 	}
 	params["jobs_id"] = jobID
 
-	client, err := cl.ConnectHost(hostID)
+	client, err := cl.DialHost(hostID)
 	if err != nil {
 		log.Println(err)
 		w.WriteHeader(500)
@@ -233,7 +233,7 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 			Height: newJob.Lines,
 			Width:  newJob.Columns,
 		}
-		client, err := cl.ConnectHost(hostID)
+		client, err := cl.DialHost(hostID)
 		if err != nil {
 			w.WriteHeader(500)
 			log.Println("lorne connect failed", err)

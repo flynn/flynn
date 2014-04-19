@@ -64,7 +64,7 @@ type context struct {
 type clusterClient interface {
 	ListHosts() (map[string]host.Host, error)
 	AddJobs(req *host.AddJobsReq) (*host.AddJobsRes, error)
-	ConnectHost(id string) (cluster.Host, error)
+	DialHost(id string) (cluster.Host, error)
 }
 
 type controllerClient interface {
@@ -187,7 +187,7 @@ func (c *context) watchHost(id string) {
 
 	g := grohl.NewContext(grohl.Data{"fn": "watchHost", "host.id": id})
 
-	h, err := c.ConnectHost(id)
+	h, err := c.DialHost(id)
 	if err != nil {
 		// TODO: log/handle error
 	}
