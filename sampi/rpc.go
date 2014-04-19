@@ -45,7 +45,7 @@ func (s *Cluster) AddJobs(req *host.AddJobsReq, res *host.AddJobsRes) error {
 
 // Host Service methods
 
-func (s *Cluster) ConnectHost(hostID *string, h *host.Host, stream rpcplus.Stream) error {
+func (s *Cluster) RegisterHost(hostID *string, h *host.Host, stream rpcplus.Stream) error {
 	*hostID = h.ID
 	if *hostID == "" {
 		return errors.New("sampi: host id must not be blank")

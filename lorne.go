@@ -10,13 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn-host/client"
 	"github.com/flynn/flynn-host/sampi"
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/go-flynn/attempt"
-	"github.com/flynn/rpcplus"
+	"github.com/flynn/go-flynn/cluster"
 	rpc "github.com/flynn/rpcplus/comborpc"
 	"github.com/technoweenie/grohl"
 )
@@ -157,16 +156,11 @@ func main() {
 			rpc.Register(sampi.NewCluster(sampi.NewState()))
 		}()
 	}
-
-	var cluster sampiClient
-	if sampiCluster != nil {
-		cluster = &localSampiClient{Cluster: sampiCluster, host: *hostID}
-	} else {
-		cluster, err = client.New()
-		if err != nil {
-			log.Fatal(err)
-		}
+	cluster, err := cluster.NewClientWithSelf(*hostID, NewLocalClient(*hostID, sampiCluster))
+	if err != nil {
+		log.Fatal(err)
 	}
+
 	g.Log(grohl.Data{"at": "sampi_connected"})
 
 	events := make(chan host.Event)
@@ -180,22 +174,22 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	h.ID = *hostID
-	h.Jobs = state.ClusterJobs()
-
 	if h.Attributes == nil {
 		h.Attributes = make(map[string]string)
 	}
-
 	for k, v := range attributes {
 		h.Attributes[k] = v
 	}
+	h.ID = *hostID
 
-	jobs := make(chan *host.Job)
-	hostErr := cluster.ConnectHost(h, jobs)
-	g.Log(grohl.Data{"at": "host_registered"})
-	processor.Process(ports, jobs)
-	log.Fatal(*hostErr)
+	for {
+		h.Jobs = state.ClusterJobs()
+		jobs := make(chan *host.Job)
+		hostErr := cluster.RegisterHost(h, jobs)
+		g.Log(grohl.Data{"at": "host_registered"})
+		processor.Process(ports, jobs)
+		g.Log(grohl.Data{"at": "sampi_disconnected", "err": *hostErr})
+	}
 }
 
 type jobProcessor struct {
@@ -324,32 +318,6 @@ outer:
 	return s
 }
 
-type localSampiClient struct {
-	*sampi.Cluster
-	host string
-}
-
-func (s *localSampiClient) RemoveJobs(jobs []string) error {
-	return s.Cluster.RemoveJobs(&s.host, jobs, nil)
-}
-
-func (s *localSampiClient) ConnectHost(h *host.Host, jobs chan *host.Job) *error {
-	ch := make(chan interface{})
-	stream := rpcplus.Stream{Send: ch}
-	var err error
-	go func() {
-		err = s.Cluster.ConnectHost(&s.host, h, stream)
-		close(ch)
-	}()
-	go func() {
-		for job := range ch {
-			jobs <- job.(*host.Job)
-		}
-		close(jobs)
-	}()
-	return &err
-}
-
 type sampiClient interface {
 	ConnectHost(*host.Host, chan *host.Job) *error
 	RemoveJobs([]string) error
@@ -367,7 +335,6 @@ func syncScheduler(scheduler sampiSyncClient, events <-chan host.Event) {
 		grohl.Log(grohl.Data{"fn": "scheduler_event", "at": "remove_job", "job.id": event.JobID})
 		if err := scheduler.RemoveJobs([]string{event.JobID}); err != nil {
 			grohl.Log(grohl.Data{"fn": "scheduler_event", "at": "remove_job", "status": "error", "err": err, "job.id": event.JobID})
-			// TODO: try to reconnect?
 		}
 	}
 }
