@@ -143,17 +143,16 @@ func main() {
 	}
 
 	// Check if we are the leader so that we can use the cluster functions directly
-	var sampiCluster *sampi.Cluster
+	sampiCluster := sampi.NewCluster(sampi.NewState())
 	select {
 	case <-sampiStandby:
 		g.Log(grohl.Data{"at": "sampi_leader"})
-		sampiCluster = sampi.NewCluster(sampi.NewState())
 		rpc.Register(sampiCluster)
 	case <-time.After(5 * time.Millisecond):
 		go func() {
 			<-sampiStandby
 			g.Log(grohl.Data{"at": "sampi_leader"})
-			rpc.Register(sampi.NewCluster(sampi.NewState()))
+			rpc.Register(sampiCluster)
 		}()
 	}
 	cluster, err := cluster.NewClientWithSelf(*hostID, NewLocalClient(*hostID, sampiCluster))
