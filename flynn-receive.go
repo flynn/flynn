@@ -28,7 +28,7 @@ func init() {
 }
 
 func main() {
-	client, err := controller.NewClient("")
+	client, err := controller.NewClient("", os.Getenv("CONTROLLER_AUTH_KEY"))
 	if err != nil {
 		log.Fatalln("Unable to connect to controller:", err)
 	}
