@@ -17,6 +17,8 @@ type State struct {
 
 	clusterc    *cluster.Client
 	controllerc *controller.Client
+
+	controllerKey string
 }
 
 func (s *State) ClusterClient() (*cluster.Client, error) {
@@ -32,13 +34,17 @@ func (s *State) ClusterClient() (*cluster.Client, error) {
 
 func (s *State) ControllerClient() (*controller.Client, error) {
 	if s.controllerc == nil {
-		cc, err := controller.NewClient("discoverd+http://flynn-controller")
+		cc, err := controller.NewClient("discoverd+http://flynn-controller", s.controllerKey)
 		if err != nil {
 			return nil, err
 		}
 		s.controllerc = cc
 	}
 	return s.controllerc, nil
+}
+
+func (s *State) SetControllerKey(key string) {
+	s.controllerKey = key
 }
 
 type Action interface {
@@ -65,6 +71,14 @@ type StepInfo struct {
 }
 
 func Run(manifest []byte, ch chan<- *StepInfo) (err error) {
+	var a StepAction
+	defer close(ch)
+	defer func() {
+		if err != nil {
+			ch <- &StepInfo{StepAction: a, State: "error", Error: err.Error(), Timestamp: time.Now().UTC()}
+		}
+	}()
+
 	steps := make([]json.RawMessage, 0)
 	if err := json.Unmarshal(manifest, &steps); err != nil {
 		return err
@@ -74,15 +88,6 @@ func Run(manifest []byte, ch chan<- *StepInfo) (err error) {
 		StepData:  make(map[string]interface{}),
 		Providers: make(map[string]*ct.Provider),
 	}
-
-	var a StepAction
-
-	defer close(ch)
-	defer func() {
-		if err != nil {
-			ch <- &StepInfo{StepAction: a, State: "error", Error: err.Error(), Timestamp: time.Now().UTC()}
-		}
-	}()
 
 	for _, s := range steps {
 		if err := json.Unmarshal(s, &a); err != nil {

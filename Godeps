@@ -13,15 +13,15 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/client",
-			"Rev": "071d22a262cb8c7cf24fd12ffdb5351df36d814f"
+			"Rev": "299115082e0d25ae31e2f7ee00bb3b07e31e5db9"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/types",
-			"Rev": "071d22a262cb8c7cf24fd12ffdb5351df36d814f"
+			"Rev": "299115082e0d25ae31e2f7ee00bb3b07e31e5db9"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/utils",
-			"Rev": "071d22a262cb8c7cf24fd12ffdb5351df36d814f"
+			"Rev": "299115082e0d25ae31e2f7ee00bb3b07e31e5db9"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-host/types",
@@ -41,19 +41,23 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/attempt",
-			"Rev": "5bc71bdf4686567fc60f50bbe952f6c8da80bc8e"
+			"Rev": "775d010f4f7ff91b144418ad74c6f6e285d50f49"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/cluster",
-			"Rev": "5bc71bdf4686567fc60f50bbe952f6c8da80bc8e"
+			"Rev": "775d010f4f7ff91b144418ad74c6f6e285d50f49"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-flynn/pinned",
+			"Rev": "775d010f4f7ff91b144418ad74c6f6e285d50f49"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/resource",
-			"Rev": "5bc71bdf4686567fc60f50bbe952f6c8da80bc8e"
+			"Rev": "775d010f4f7ff91b144418ad74c6f6e285d50f49"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
-			"Rev": "51dc85b57711bd07c8856a09c8173d7deeca6857"
+			"Rev": "05df3d30b6e55f5b440c1a78e2f83cb822bc0d76"
 		},
 		{
 			"ImportPath": "github.com/flynn/strowger/types",

@@ -26,6 +26,11 @@
     "host_tags": ["postgres"]
   },
   {
+    "id": "controller-key",
+    "action": "gen-random",
+    "controller_key": true
+  },
+  {
     "id": "postgres-wait",
     "action": "wait",
     "url": "discoverd+http://pg-api/ping"
@@ -34,6 +39,7 @@
     "id": "controller",
     "action": "run-app",
     "release": {
+      "env": { "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}" },
       "processes": {
         "web": {
           "ports": { "tcp": 1 },
@@ -57,7 +63,8 @@
   {
     "id": "controller-wait",
     "action": "wait",
-    "url": "discoverd+http://flynn-controller/apps"
+    "url": "discoverd+http://flynn-controller",
+    "status": 401
   },
   {
     "id": "controller-inception",
@@ -169,8 +176,8 @@
   },
   {
     "id": "controller-cert",
-	"action": "gen-tls-cert",
-	"hosts": ["localhost", "127.0.0.1"]
+    "action": "gen-tls-cert",
+    "hosts": ["localhost", "127.0.0.1"]
   },
   {
     "id": "strowger-wait",
@@ -192,7 +199,7 @@
     "id": "controller-route",
     "action": "add-route",
     "app_step": "controller-inception",
-	"cert_step": "controller-cert",
+    "cert_step": "controller-cert",
     "type": "http",
     "config": {
       "service": "flynn-controller",
