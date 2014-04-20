@@ -166,7 +166,10 @@
       "processes": {
         "app": {
           "ports": { "tcp": 1 },
-          "env": { "SSH_PRIVATE_KEYS": "{{ (index .StepData \"gitreceive-key\").PrivateKeys }}" }
+          "env": {
+            "SSH_PRIVATE_KEYS": "{{ (index .StepData \"gitreceive-key\").PrivateKeys }}",
+            "CONTROLLER_AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}"
+          }
         }
       }
     },
