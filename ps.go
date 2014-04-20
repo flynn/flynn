@@ -18,7 +18,7 @@ var cmdPs = &Command{
 }
 
 func runPs(cmd *Command, args []string, client *controller.Client) error {
-	jobs, err := client.GetJobList(mustApp())
+	jobs, err := client.JobList(mustApp())
 	if err != nil {
 		return err
 	}

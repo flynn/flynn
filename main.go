@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -59,6 +60,9 @@ var commands = []*Command{
 	cmdCreate,
 	cmdServerAdd,
 	cmdRouteAddHTTP,
+	cmdKeys,
+	cmdKeyAdd,
+	cmdKeyRemove,
 }
 
 var (
@@ -226,4 +230,15 @@ func mustApp() string {
 		log.Fatal(err)
 	}
 	return name
+}
+
+func listRec(w io.Writer, a ...interface{}) {
+	for i, x := range a {
+		fmt.Fprint(w, x)
+		if i+1 < len(a) {
+			w.Write([]byte{'\t'})
+		} else {
+			w.Write([]byte{'\n'})
+		}
+	}
 }
