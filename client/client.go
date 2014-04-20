@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	ct "github.com/flynn/flynn-controller/types"
@@ -156,6 +157,14 @@ func (c *Client) get(path string, out interface{}) error {
 	return err
 }
 
+func (c *Client) delete(path string) error {
+	res, err := c.rawReq("DELETE", path, "", nil, nil)
+	if err == nil {
+		res.Body.Close()
+	}
+	return err
+}
+
 func (c *Client) StreamFormations(since *time.Time) (<-chan *ct.ExpandedFormation, *error) {
 	if since == nil {
 		s := time.Unix(0, 0)
@@ -295,4 +304,13 @@ func (c *Client) JobList(appID string) ([]*ct.Job, error) {
 func (c *Client) KeyList() ([]*ct.Key, error) {
 	var keys []*ct.Key
 	return keys, c.get("/keys", &keys)
+}
+
+func (c *Client) CreateKey(pubKey string) (*ct.Key, error) {
+	key := &ct.Key{}
+	return key, c.post("/keys", &ct.Key{Key: pubKey}, key)
+}
+
+func (c *Client) DeleteKey(id string) error {
+	return c.delete("/keys/" + strings.Replace(id, ":", "", -1))
 }
