@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
@@ -104,7 +105,15 @@ func main() {
 				if err != nil {
 					log.Fatal(err)
 				}
-				client, err = controller.NewClient(server.URL)
+				if server.TLSPin != "" {
+					pin, err := base64.StdEncoding.DecodeString(server.TLSPin)
+					if err != nil {
+						log.Fatalln("error decoding tls pin:", err)
+					}
+					client, err = controller.NewClientWithPin(server.URL, server.Key, pin)
+				} else {
+					client, err = controller.NewClient(server.URL, server.Key)
+				}
 				if err != nil {
 					log.Fatal(err)
 				}
