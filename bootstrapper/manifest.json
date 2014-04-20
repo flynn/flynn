@@ -207,19 +207,5 @@
       "service": "flynn-controller",
       "domain": "localhost"
     }
-  },
-  {
-    "id": "taffy",
-    "action": "deploy-app",
-    "app": {
-      "name": "taffy",
-      "protected": true
-    },
-    "artifact": {
-      "type": "docker",
-      "uri": "docker:///flynn/taffy"
-    },
-    "release": {},
-    "processes": {}
   }
 ]
