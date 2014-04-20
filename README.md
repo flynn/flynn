@@ -4,16 +4,21 @@ This is the Flynn Controller. It is inspired by the [Heroku Platform
 API](https://devcenter.heroku.com/articles/platform-api-reference) and enables
 management of applications running on Flynn via an HTTP API.
 
+The controller depends on PostgreSQL and is typically booted by
+[flynn-bootstrap](https://github.com/flynn/flynn-bootstrap).
 
-## Flynn 
+The API is in a state of flux and is undocumented.
+[flynn-cli](https://github.com/flynn/flynn-cli) is one of the API consumers.
 
-[Flynn](https://flynn.io) is a modular, open source Platform as a Service (PaaS). 
+## Flynn
+
+[Flynn](https://flynn.io) is a modular, open source Platform as a Service (PaaS).
 
 If you're new to Flynn, start [here](https://github.com/flynn/flynn).
 
 ### Status
 
-Flynn is in active development and **currently unsuitable for production** use. 
+Flynn is in active development and **currently unsuitable for production** use.
 
 Users are encouraged to experiment with Flynn but should assume there are stability, security, and performance weaknesses throughout the project. This warning will be removed when Flynn is ready for production use.
 
