@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -304,7 +305,7 @@ func DialHTTPPath(network, address, path string, dial DialFunc) (*Client, error)
 	if err != nil {
 		return nil, err
 	}
-	client, err := NewHTTPClient(conn, path)
+	client, err := NewHTTPClient(conn, path, nil)
 	if err != nil {
 		conn.Close()
 		return nil, &net.OpError{
@@ -317,8 +318,15 @@ func DialHTTPPath(network, address, path string, dial DialFunc) (*Client, error)
 	return client, nil
 }
 
-func NewHTTPClient(conn io.ReadWriteCloser, path string) (*Client, error) {
-	io.WriteString(conn, "CONNECT "+path+" HTTP/1.0\r\nAccept: application/vnd.flynn.rpc-hijack+gob\r\n\r\n")
+func NewHTTPClient(conn io.ReadWriteCloser, path string, header http.Header) (*Client, error) {
+	if header == nil {
+		header = make(http.Header)
+	}
+	header.Set("Accept", "application/vnd.flynn.rpc-hijack+gob")
+
+	fmt.Fprintf(conn, "CONNECT %s HTTP/1.0\r\n", path)
+	header.Write(conn)
+	conn.Write([]byte("\r\n"))
 
 	// Require successful HTTP response
 	// before switching to RPC protocol.
