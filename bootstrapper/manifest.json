@@ -38,7 +38,7 @@
     "id": "controller",
     "action": "run-app",
     "release": {
-      "env": { "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}" },
+      "env": { "AUTH_KEY": "{{ (index .StepData `controller-key`).Data }}" },
       "processes": {
         "web": {
           "ports": { "tcp": 1 },
@@ -166,8 +166,8 @@
         "app": {
           "ports": { "tcp": 1 },
           "env": {
-            "SSH_PRIVATE_KEYS": "{{ (index .StepData \"gitreceive-key\").PrivateKeys }}",
-            "CONTROLLER_AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}"
+            "SSH_PRIVATE_KEYS": "{{ (index .StepData `gitreceive-key`).PrivateKeys }}",
+            "CONTROLLER_AUTH_KEY": "{{ (index .StepData `controller-key`).Data }}"
           }
         }
       }
@@ -207,5 +207,10 @@
       "service": "flynn-controller",
       "domain": "localhost"
     }
+  },
+  {
+    "id": "log-complete",
+	"action": "log",
+	"output": "Flynn bootstrapping complete. Add the server with `flynn server-add -g localhost:2222 -p {{ (index .StepData `controller-cert`).Pin }} default https://localhost:8081 {{ (index .StepData `controller-key`).Data }}"
   }
 ]
