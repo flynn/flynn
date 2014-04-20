@@ -1,4 +1,4 @@
-build/container: build/flynn-bootstrap Dockerfile
+build/container: build/flynn-bootstrap Dockerfile bootstrapper/manifest.json
 	docker build -t flynn/bootstrap .
 	touch build/container
 
