@@ -64,7 +64,7 @@ func (s *S) SetUpSuite(c *C) {
 	dbw := testDBWrapper{DB: db, dsn: dsn}
 
 	s.cc = newFakeCluster()
-	handler, m := appHandler(handlerConfig{db: dbw, cc: s.cc, sc: newFakeRouter()})
+	handler, m := appHandler(handlerConfig{db: dbw, cc: s.cc, sc: newFakeRouter(), key: "test"})
 	s.m = m
 	s.srv = httptest.NewServer(handler)
 }
@@ -77,6 +77,8 @@ type testDBWrapper struct {
 func (w testDBWrapper) DSN() string       { return w.dsn }
 func (w testDBWrapper) Database() *sql.DB { return w.DB }
 
+var authKey = "test"
+
 func (s *S) send(method, path string, in, out interface{}) (*http.Response, error) {
 	buf, err := json.Marshal(in)
 	if err != nil {
@@ -87,6 +89,7 @@ func (s *S) send(method, path string, in, out interface{}) (*http.Response, erro
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth("", authKey)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -107,10 +110,12 @@ func (s *S) Put(path string, in, out interface{}) (*http.Response, error) {
 }
 
 func (s *S) Get(path string, data interface{}) (*http.Response, error) {
-	res, err := http.Get(s.srv.URL + path)
+	req, err := http.NewRequest("GET", s.srv.URL+path, nil)
 	if err != nil {
 		return nil, err
 	}
+	req.SetBasicAuth("", authKey)
+	res, err := http.DefaultClient.Do(req)
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		return res, fmt.Errorf("Unexpected status code %d", res.StatusCode)
@@ -123,7 +128,23 @@ func (s *S) Delete(path string) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
+	req.SetBasicAuth("", authKey)
 	return http.DefaultClient.Do(req)
+}
+
+func (s *S) TestBadAuth(c *C) {
+	res, err := http.Get(s.srv.URL + "/apps")
+	c.Assert(err, IsNil)
+	res.Body.Close()
+	c.Assert(res.StatusCode, Equals, 401)
+
+	req, err := http.NewRequest("GET", s.srv.URL+"/apps", nil)
+	c.Assert(err, IsNil)
+	req.SetBasicAuth("", authKey+"wrong")
+	res, err = http.DefaultClient.Do(req)
+	c.Assert(err, IsNil)
+	res.Body.Close()
+	c.Assert(res.StatusCode, Equals, 401)
 }
 
 func (s *S) createTestApp(c *C, in *ct.App) *ct.App {

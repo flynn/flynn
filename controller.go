@@ -1,9 +1,14 @@
 package main
 
 import (
+	"crypto/subtle"
+	"encoding/base64"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/go-discoverd"
@@ -49,7 +54,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	handler, _ := appHandler(handlerConfig{db: db, cc: cc, sc: sc, dc: discoverd.DefaultClient})
+	handler, _ := appHandler(handlerConfig{db: db, cc: cc, sc: sc, dc: discoverd.DefaultClient, key: os.Getenv("AUTH_KEY")})
 	log.Fatal(http.ListenAndServe(addr, handler))
 }
 
@@ -60,10 +65,11 @@ type dbWrapper interface {
 }
 
 type handlerConfig struct {
-	db dbWrapper
-	cc clusterClient
-	sc strowgerc.Client
-	dc *discoverd.Client
+	db  dbWrapper
+	cc  clusterClient
+	sc  strowgerc.Client
+	dc  *discoverd.Client
+	key string
 }
 
 func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
@@ -72,6 +78,7 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	m.Use(martini.Logger())
 	m.Use(martini.Recovery())
 	m.Use(render.Renderer())
+	m.Use(requireAuth(c.key))
 	m.Action(r.Handle)
 
 	d := NewDB(c.db)
@@ -128,6 +135,15 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	r.Delete("/apps/:apps_id/routes/:routes_type/:routes_id", getAppMiddleware, getRouteMiddleware, deleteRoute)
 
 	return rpcMuxHandler(m, rpcHandler(formationRepo)), m
+}
+
+func requireAuth(authKey string) interface{} {
+	return func(req *http.Request, w http.ResponseWriter) {
+		_, password, _ := parseBasicAuth(req.Header)
+		if len(password) != len(authKey) || subtle.ConstantTimeCompare([]byte(password), []byte(authKey)) != 1 {
+			w.WriteHeader(401)
+		}
+	}
 }
 
 func rpcMuxHandler(main http.Handler, rpch http.Handler) http.Handler {
@@ -341,4 +357,27 @@ func getAppResources(app *ct.App, repo *ResourceRepo, r render.Render) {
 		return
 	}
 	r.JSON(200, res)
+}
+
+func parseBasicAuth(h http.Header) (username, password string, err error) {
+	s := strings.SplitN(h.Get("Authorization"), " ", 2)
+
+	if len(s) != 2 {
+		return "", "", errors.New("failed to parse authentication string ")
+	}
+	if s[0] != "Basic" {
+		return "", "", fmt.Errorf("authorization scheme is %v, not Basic ", s[0])
+	}
+
+	c, err := base64.StdEncoding.DecodeString(s[1])
+	if err != nil {
+		return "", "", errors.New("failed to parse base64 basic credenti als")
+	}
+
+	s = strings.SplitN(string(c), ":", 2)
+	if len(s) != 2 {
+		return "", "", errors.New("failed to parse basic credentials")
+	}
+
+	return s[0], s[1], nil
 }

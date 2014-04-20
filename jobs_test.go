@@ -163,7 +163,10 @@ func (s *S) TestJobLog(c *C) {
 	hc.setAttach(jobID, newFakeLog(strings.NewReader("foo")))
 	s.cc.setHostClient(hostID, hc)
 
-	res, err := http.Get(s.srv.URL + "/apps/" + app.ID + "/jobs/" + hostID + "-" + jobID + "/log")
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log", s.srv.URL, app.ID, hostID, jobID), nil)
+	c.Assert(err, IsNil)
+	req.SetBasicAuth("", authKey)
+	res, err := http.DefaultClient.Do(req)
 	c.Assert(err, IsNil)
 	var buf bytes.Buffer
 	_, err = buf.ReadFrom(res.Body)
@@ -184,6 +187,7 @@ func (s *S) TestJobLogSSE(c *C) {
 
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log", s.srv.URL, app.ID, hostID, jobID), nil)
 	c.Assert(err, IsNil)
+	req.SetBasicAuth("", authKey)
 	req.Header.Set("Accept", "text/event-stream")
 	res, err := http.DefaultClient.Do(req)
 	c.Assert(err, IsNil)
@@ -294,6 +298,7 @@ func (s *S) TestRunJobAttached(c *C) {
 	})
 	req, err := http.NewRequest("POST", s.srv.URL+"/apps/"+app.ID+"/jobs", bytes.NewBuffer(data))
 	c.Assert(err, IsNil)
+	req.SetBasicAuth("", authKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/vnd.flynn.attach")
 	_, rwc, err := utils.HijackRequest(req, nil)
