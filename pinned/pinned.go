@@ -24,8 +24,8 @@ type Config struct {
 
 var ErrPinFailure = errors.New("pinned: the peer leaf certificate did not match the provided pin")
 
-// Dial establishes a TLS connection to addr and checks the peer certificate
-// chain against the configured pins. The underlying type of the returned
+// Dial establishes a TLS connection to addr and checks the peer leaf
+// certificate against the configured pin. The underlying type of the returned
 // net.Conn is guaranteed to be *tls.Conn.
 func (c *Config) Dial(network, addr string) (net.Conn, error) {
 	var conf tls.Config
