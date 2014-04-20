@@ -60,7 +60,7 @@ type StepInfo struct {
 	StepAction
 	StepData  interface{} `json:"data,omitempty"`
 	State     string      `json:"state"`
-	Error     error       `json:"error,omitempty"`
+	Error     string      `json:"error,omitempty"`
 	Timestamp time.Time   `json:"ts"`
 }
 
@@ -80,7 +80,7 @@ func Run(manifest []byte, ch chan<- *StepInfo) (err error) {
 	defer close(ch)
 	defer func() {
 		if err != nil {
-			ch <- &StepInfo{StepAction: a, State: "error", Error: err, Timestamp: time.Now().UTC()}
+			ch <- &StepInfo{StepAction: a, State: "error", Error: err.Error(), Timestamp: time.Now().UTC()}
 		}
 	}()
 
