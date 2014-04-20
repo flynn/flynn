@@ -93,13 +93,25 @@ func (a *RunAppAction) Run(s *State) error {
 		}
 	}
 
+	cc, err := s.ClusterClient()
+	if err != nil {
+		return err
+	}
+	hosts, err := cc.ListHosts()
+	if err != nil {
+		return err
+	}
+	hostIDs := make([]string, 0, len(hosts))
+	for id := range hosts {
+		hostIDs = append(hostIDs, id)
+	}
 	for typ, count := range a.Processes {
 		for i := 0; i < count; i++ {
 			config, err := utils.JobConfig(a.ExpandedFormation, typ)
 			if err != nil {
 				return err
 			}
-			job, err := startJob(s, config)
+			job, err := startJob(s, hostIDs[i%len(hosts)], config)
 			if err != nil {
 				return err
 			}

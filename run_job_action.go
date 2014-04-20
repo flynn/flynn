@@ -24,26 +24,28 @@ func (a *RunJobAction) Run(s *State) (err error) {
 	js := &RunJobState{}
 	s.StepData[a.ID] = js
 
-	js.Job, err = startJob(s, a.Job)
+	js.Job, err = startJob(s, "", a.Job)
 	return
 }
 
-func startJob(s *State, job *host.Job) (*Job, error) {
+func startJob(s *State, hostID string, job *host.Job) (*Job, error) {
 	cc, err := s.ClusterClient()
 	if err != nil {
 		return nil, err
 	}
-	h, err := randomHost(cc)
-	if err != nil {
-		return nil, err
+	if hostID == "" {
+		hostID, err = randomHost(cc)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// TODO: filter by tags
 
 	job.ID = cluster.RandomJobID("")
-	data := &Job{HostID: h.ID, JobID: job.ID}
+	data := &Job{HostID: hostID, JobID: job.ID}
 
-	hc, err := cc.DialHost(h.ID)
+	hc, err := cc.DialHost(hostID)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +79,7 @@ func startJob(s *State, job *host.Job) (*Job, error) {
 		jobStatus <- fmt.Errorf("bootstrap: host job stream disconnected unexpectedly: %q", stream.Err())
 	}()
 
-	_, err = cc.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{h.ID: {job}}})
+	_, err = cc.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{hostID: {job}}})
 	if err != nil {
 		return nil, err
 	}
@@ -85,14 +87,14 @@ func startJob(s *State, job *host.Job) (*Job, error) {
 	return data, <-jobStatus
 }
 
-func randomHost(cc *cluster.Client) (*host.Host, error) {
+func randomHost(cc *cluster.Client) (string, error) {
 	hosts, err := cc.ListHosts()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	for _, host := range hosts {
-		return &host, nil
+		return host.ID, nil
 	}
-	return nil, cluster.ErrNoServers
+	return "", cluster.ErrNoServers
 }
