@@ -57,19 +57,17 @@ Please **report bugs** as issues on the appropriate repository. If you have a ge
 
 **[flynn-postgres](https://github.com/flynn/flynn-postgres)** Flynn [PostgreSQL](http://www.postgresql.org/) database appliance
 
-**[grid-cli](https://github.com/flynn/grid-cli)**
-
 **[taffy](https://github.com/flynn/taffy)** Taffy pulls repos and deploys them to Flynn
+
 
 ### Libraries
 
-**[go-sql](https://github.com/flynn/gosql)**
-
-**[go-crypto-ssh](https://github.com/flynn/go-crypto-ssh)**
-
 **[go-flynn](https://github.com/flynn/go-flynn)**
 
+**[go-discoverd](https://github.com/flynn/go-discoverd)**
+
 **[rpcplus](https://github.com/flynn/rpcplus)**
+
 
 ## Contributing
 
