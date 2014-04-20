@@ -97,27 +97,3 @@ func randomHost(cc *cluster.Client) (*host.Host, error) {
 	}
 	return nil, cluster.ErrNoServers
 }
-
-func (a *RunJobAction) Cleanup(s *State) error {
-	data, ok := s.StepData[a.ID].(*RunJobState)
-	if !ok {
-		return nil
-	}
-
-	if data.HostID != "" && data.JobID != "" {
-		cc, err := s.ClusterClient()
-		if err != nil {
-			return err
-		}
-		h, err := cc.DialHost(data.HostID)
-		if err != nil {
-			return err
-		}
-		defer h.Close()
-		if err := h.StopJob(data.JobID); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}

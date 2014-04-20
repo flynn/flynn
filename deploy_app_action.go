@@ -117,8 +117,3 @@ func (a *DeployAppAction) Run(s *State) error {
 
 	return nil
 }
-
-func (a *DeployAppAction) Cleanup(s *State) error {
-	// TODO
-	return nil
-}

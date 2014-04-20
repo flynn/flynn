@@ -20,8 +20,8 @@ func init() {
 
 type AppState struct {
 	*ct.ExpandedFormation
-	Formation *ct.Formation
-	Resources []*ct.Resource
+	Formation *ct.Formation  `json:"formation"`
+	Resources []*ct.Resource `json:"resources"`
 }
 
 func (a *AddAppAction) Run(s *State) error {

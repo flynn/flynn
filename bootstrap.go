@@ -3,8 +3,8 @@ package bootstrap
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"reflect"
+	"time"
 
 	"github.com/flynn/flynn-controller/client"
 	ct "github.com/flynn/flynn-controller/types"
@@ -45,27 +45,26 @@ type Action interface {
 	Run(*State) error
 }
 
-type CleanAction interface {
-	Cleanup(*State) error
-}
-
 var registeredActions = make(map[string]reflect.Type)
 
 func Register(name string, action Action) {
 	registeredActions[name] = reflect.Indirect(reflect.ValueOf(action)).Type()
 }
 
-type stepAction struct {
+type StepAction struct {
 	ID     string `json:"id"`
 	Action string `json:"action"`
 }
 
-type CleanupError struct {
-	error
-	CleanupErrors []error
+type StepInfo struct {
+	StepAction
+	StepData  interface{} `json:"data,omitempty"`
+	State     string      `json:"state"`
+	Error     error       `json:"error,omitempty"`
+	Timestamp time.Time   `json:"ts"`
 }
 
-func Run(manifest []byte) error {
+func Run(manifest []byte, ch chan<- *StepInfo) (err error) {
 	steps := make([]json.RawMessage, 0)
 	if err := json.Unmarshal(manifest, &steps); err != nil {
 		return err
@@ -75,41 +74,41 @@ func Run(manifest []byte) error {
 		StepData:  make(map[string]interface{}),
 		Providers: make(map[string]*ct.Provider),
 	}
-	actions := make([]Action, 0, len(steps))
-	cleanup := func(err error) error {
-		errors := make([]error, 0, len(steps))
-		for i := len(actions) - 1; i >= 0; i-- {
-			if ca, ok := actions[i].(CleanAction); ok {
-				err := ca.Cleanup(state)
-				if err != nil {
-					errors = append(errors, err)
-				}
-			}
+
+	var a StepAction
+
+	defer close(ch)
+	defer func() {
+		if err != nil {
+			ch <- &StepInfo{StepAction: a, State: "error", Error: err, Timestamp: time.Now().UTC()}
 		}
-		if len(errors) > 0 {
-			return CleanupError{err, errors}
-		}
-		return err
-	}
+	}()
 
 	for _, s := range steps {
-		var a stepAction
 		if err := json.Unmarshal(s, &a); err != nil {
-			return cleanup(err)
+			return err
 		}
 		actionType, ok := registeredActions[a.Action]
 		if !ok {
-			return cleanup(fmt.Errorf("bootstrap: unknown action %q", a.Action))
+			return fmt.Errorf("bootstrap: unknown action %q", a.Action)
 		}
 		action := reflect.New(actionType).Interface().(Action)
 
 		if err := json.Unmarshal(s, action); err != nil {
-			return cleanup(err)
+			return err
 		}
-		log.Printf("%s %s", a.Action, a.ID)
+
+		ch <- &StepInfo{StepAction: a, State: "start", Timestamp: time.Now().UTC()}
+
 		if err := action.Run(state); err != nil {
-			return cleanup(err)
+			return err
 		}
+
+		si := &StepInfo{StepAction: a, State: "done", Timestamp: time.Now().UTC()}
+		if data, ok := state.StepData[a.ID]; ok {
+			si.StepData = data
+		}
+		ch <- si
 	}
 
 	return nil

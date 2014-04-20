@@ -25,7 +25,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-host/types",
-			"Rev": "9302ce9e3f45d0f2958d84e7120f7cd2c7357d9a"
+			"Rev": "aa072a4db1972783518e21760146411b1b4dcde9"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-crypto-ssh",
@@ -41,15 +41,15 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/attempt",
-			"Rev": "736461794a14eaf64648ab30eb276dd32beec1db"
+			"Rev": "5bc71bdf4686567fc60f50bbe952f6c8da80bc8e"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/cluster",
-			"Rev": "736461794a14eaf64648ab30eb276dd32beec1db"
+			"Rev": "5bc71bdf4686567fc60f50bbe952f6c8da80bc8e"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/resource",
-			"Rev": "736461794a14eaf64648ab30eb276dd32beec1db"
+			"Rev": "5bc71bdf4686567fc60f50bbe952f6c8da80bc8e"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",

@@ -17,10 +17,10 @@ type GenSSHKeyAction struct {
 }
 
 type SSHKey struct {
-	PrivateKeys string
+	PrivateKeys string `json:"-"`
 
-	RSAPublic   string
-	ECDSAPublic string
+	RSAPublic   string `json:"rsa_public"`
+	ECDSAPublic string `json:"ecdsa_public"`
 }
 
 func init() {

@@ -28,14 +28,14 @@ func init() {
 
 type RunAppState struct {
 	*ct.ExpandedFormation
-	Providers []*ct.Provider
-	Resources []*resource.Resource
-	Jobs      []Job
+	Providers []*ct.Provider       `json:"providers"`
+	Resources []*resource.Resource `json:"resources"`
+	Jobs      []Job                `json:"jobs"`
 }
 
 type Job struct {
-	HostID string
-	JobID  string
+	HostID string `json:"host_id"`
+	JobID  string `json:"job_id"`
 }
 
 func (a *RunAppAction) Run(s *State) error {
@@ -108,34 +108,5 @@ func (a *RunAppAction) Run(s *State) error {
 		}
 	}
 
-	return nil
-}
-
-func (a *RunAppAction) Cleanup(s *State) error {
-	data, ok := s.StepData[a.ID].(*RunAppState)
-	if !ok {
-		return nil
-	}
-
-	// TODO: delete provisioned resources
-
-	if len(data.Jobs) == 0 {
-		return nil
-	}
-
-	cc, err := s.ClusterClient()
-	if err != nil {
-		return err
-	}
-	for _, job := range data.Jobs {
-		h, err := cc.DialHost(job.HostID)
-		if err != nil {
-			continue
-		}
-		defer h.Close()
-		if err := h.StopJob(job.JobID); err != nil {
-			continue
-		}
-	}
 	return nil
 }

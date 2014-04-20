@@ -20,8 +20,8 @@
       "uri": "docker:///flynn/postgres"
     },
     "processes": {
-      "postgres": 2,
-      "web": 2
+      "postgres": 1,
+      "web": 1
     },
     "host_tags": ["postgres"]
   },
@@ -50,7 +50,7 @@
       "uri": "docker:///flynn/controller"
     },
     "processes": {
-      "web": 2
+      "web": 1
     },
     "resources": [{"name":"postgres", "url":"discoverd+http://pg-api/databases"}]
   },
@@ -82,7 +82,7 @@
     "app_step": "controller-inception",
     "processes": {
       "scheduler": 1,
-      "web": 2
+      "web": 1
     }
   },
   {
@@ -112,7 +112,7 @@
       }
     },
     "processes": {
-      "web": 2
+      "web": 1
     },
     "resources": [{"name":"postgres", "url":"discoverd+http://pg-api/databases"}]
   },
@@ -168,6 +168,11 @@
     }
   },
   {
+    "id": "controller-cert",
+	"action": "gen-tls-cert",
+	"hosts": ["localhost", "127.0.0.1"]
+  },
+  {
     "id": "strowger-wait",
     "action": "wait",
     "url": "discoverd+http://strowger-api/",
@@ -182,5 +187,30 @@
       "service": "gitreceive",
       "port": 22
     }
+  },
+  {
+    "id": "controller-route",
+    "action": "add-route",
+    "app_step": "controller-inception",
+	"cert_step": "controller-cert",
+    "type": "http",
+    "config": {
+      "service": "flynn-controller",
+      "domain": "localhost"
+    }
+  },
+  {
+    "id": "taffy",
+    "action": "deploy-app",
+    "app": {
+      "name": "taffy",
+      "protected": true
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "docker:///flynn/taffy"
+    },
+    "release": {},
+    "processes": {}
   }
 ]

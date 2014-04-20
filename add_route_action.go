@@ -20,8 +20,8 @@ func init() {
 }
 
 type AddRouteState struct {
-	App   *ct.App
-	Route *strowger.Route
+	App   *ct.App         `json:"app"`
+	Route *strowger.Route `json:"route"`
 }
 
 func (a *AddRouteAction) Run(s *State) error {
