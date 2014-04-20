@@ -1,6 +1,9 @@
 {
 	"ImportPath": "github.com/flynn/flynn-receive",
 	"GoVersion": "go1.2.1",
+	"Packages": [
+		"./..."
+	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
@@ -13,15 +16,15 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/client",
-			"Rev": "299115082e0d25ae31e2f7ee00bb3b07e31e5db9"
+			"Rev": "fb4c638fb328b9501a6a2b2148700c21b8d9e983"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/types",
-			"Rev": "299115082e0d25ae31e2f7ee00bb3b07e31e5db9"
+			"Rev": "fb4c638fb328b9501a6a2b2148700c21b8d9e983"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/utils",
-			"Rev": "299115082e0d25ae31e2f7ee00bb3b07e31e5db9"
+			"Rev": "fb4c638fb328b9501a6a2b2148700c21b8d9e983"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-host/types",

@@ -1,9 +1,12 @@
-build/container: build/flynn-receive build/gitreceived build/sdutil Dockerfile start.sh
+build/container: build/flynn-receive build/flynn-key-check build/gitreceived build/sdutil Dockerfile start.sh
 	docker build -t flynn/gitreceive .
 	touch build/container
 
 build/flynn-receive: *.go
 	godep go build -o build/flynn-receive
+
+build/flynn-key-check: key-check/*.go
+	godep go build -o build/flynn-key-check ./key-check
 
 build/gitreceived:
 	mkdir -p tmp
