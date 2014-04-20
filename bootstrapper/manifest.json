@@ -22,8 +22,7 @@
     "processes": {
       "postgres": 1,
       "web": 1
-    },
-    "host_tags": ["postgres"]
+    }
   },
   {
     "id": "controller-key",

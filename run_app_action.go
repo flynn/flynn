@@ -14,7 +14,6 @@ type RunAppAction struct {
 	ID        string         `json:"id"`
 	AppStep   string         `json:"app_step"`
 	Resources []*ct.Provider `json:"resources,omitempty"`
-	HostTags  []string       `json:"host_tags,omitempty"`
 }
 
 type Provider struct {
@@ -100,7 +99,7 @@ func (a *RunAppAction) Run(s *State) error {
 			if err != nil {
 				return err
 			}
-			job, err := startJob(s, a.HostTags, config)
+			job, err := startJob(s, config)
 			if err != nil {
 				return err
 			}

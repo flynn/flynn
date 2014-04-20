@@ -8,9 +8,8 @@ import (
 )
 
 type RunJobAction struct {
-	ID       string    `json:"id"`
-	Job      *host.Job `json:"job"`
-	HostTags []string  `json:"host_tags,omitempty"`
+	ID  string    `json:"id"`
+	Job *host.Job `json:"job"`
 }
 
 func init() {
@@ -25,11 +24,11 @@ func (a *RunJobAction) Run(s *State) (err error) {
 	js := &RunJobState{}
 	s.StepData[a.ID] = js
 
-	js.Job, err = startJob(s, a.HostTags, a.Job)
+	js.Job, err = startJob(s, a.Job)
 	return
 }
 
-func startJob(s *State, hostTags []string, job *host.Job) (*Job, error) {
+func startJob(s *State, job *host.Job) (*Job, error) {
 	cc, err := s.ClusterClient()
 	if err != nil {
 		return nil, err
