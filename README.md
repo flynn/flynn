@@ -5,7 +5,7 @@ typically used to boot Flynn layer 1 services on a new layer 0 cluster.
 
 ## Usage
 
-There is an [example manifest](bootstrapper/manifest) that boots a default
+There is an [example manifest](bootstrapper/manifest.json) that boots a default
 configuration of Flynn layer 1. To run the manifest, you need the `bootstrapper`
 binary and a running Flynn cluster.
 
