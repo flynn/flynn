@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -52,6 +53,10 @@ func textLogger(si *bootstrap.StepInfo) {
 	switch si.State {
 	case "start":
 		log.Printf("%s %s", si.Action, si.ID)
+	case "done":
+		if s, ok := si.StepData.(fmt.Stringer); ok {
+			log.Printf("%s %s %s", si.Action, si.ID, s)
+		}
 	case "error":
 		log.Printf("%s %s error: %s", si.Action, si.ID, si.Error)
 	}

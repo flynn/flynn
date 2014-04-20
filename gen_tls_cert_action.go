@@ -8,9 +8,12 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"net"
 	"time"
@@ -27,18 +30,23 @@ func init() {
 
 type TLSCert struct {
 	Cert string `json:"cert"`
+	Pin  string `json:"pin"`
 
 	PrivateKey string `json:"-"`
+}
+
+func (c *TLSCert) String() string {
+	return fmt.Sprintf("pin: %s", c.Pin)
 }
 
 func (a *GenTLSCertAction) Run(s *State) (err error) {
 	data := &TLSCert{}
 	s.StepData[a.ID] = data
-	data.Cert, data.PrivateKey, err = a.generateCert()
+	data.Cert, data.PrivateKey, data.Pin, err = a.generateCert()
 	return
 }
 
-func (a *GenTLSCertAction) generateCert() (cert, privKey string, err error) {
+func (a *GenTLSCertAction) generateCert() (cert, privKey, pin string, err error) {
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return
@@ -69,6 +77,10 @@ func (a *GenTLSCertAction) generateCert() (cert, privKey string, err error) {
 	if err != nil {
 		return
 	}
+
+	h := sha256.New()
+	h.Write(derBytes)
+	pin = base64.StdEncoding.EncodeToString(h.Sum(nil))
 
 	var buf bytes.Buffer
 	pem.Encode(&buf, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
