@@ -15,7 +15,7 @@ type Config struct {
 	// sha256.New.
 	Hash func() hash.Hash
 
-	// Pin defines the expected certificate digest of the peer's leaf certificate.
+	// Pin defines the expected digest of the peer's leaf certificate.
 	Pin []byte
 
 	// Config is used as the base TLS configuration, if set.
