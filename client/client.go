@@ -2,10 +2,12 @@ package controller
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -14,11 +16,12 @@ import (
 	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-discoverd/dialer"
+	"github.com/flynn/go-flynn/pinned"
 	"github.com/flynn/rpcplus"
 	"github.com/flynn/strowger/types"
 )
 
-func NewClient(uri string) (*Client, error) {
+func NewClient(uri, key string) (*Client, error) {
 	if uri == "" {
 		uri = "discoverd+http://flynn-controller"
 	}
@@ -30,29 +33,56 @@ func NewClient(uri string) (*Client, error) {
 		url:  uri,
 		addr: u.Host,
 		http: http.DefaultClient,
+		key:  key,
 	}
 	if u.Scheme == "discoverd+http" {
 		if err := discoverd.Connect(""); err != nil {
 			return nil, err
 		}
-		c.dialer = dialer.New(discoverd.DefaultClient, nil)
-		c.http = &http.Client{Transport: &http.Transport{Dial: c.dialer.Dial}}
+		dialer := dialer.New(discoverd.DefaultClient, nil)
+		c.dial = dialer.Dial
+		c.dialClose = dialer
+		c.http = &http.Client{Transport: &http.Transport{Dial: c.dial}}
 		u.Scheme = "http"
 		c.url = u.String()
 	}
 	return c, nil
 }
 
+func NewClientWithPin(uri, key string, pin []byte) (*Client, error) {
+	u, err := url.Parse(uri)
+	if err != nil {
+		return nil, err
+	}
+	c := &Client{
+		dial: (&pinned.Config{Pin: pin}).Dial,
+		key:  key,
+	}
+	if _, port, _ := net.SplitHostPort(u.Host); port == "" {
+		u.Host += ":443"
+	}
+	c.addr = u.Host
+	u.Scheme = "http"
+	c.url = u.String()
+	c.http = &http.Client{Transport: &http.Transport{Dial: c.dial}}
+	return c, nil
+}
+
 type Client struct {
 	url  string
+	key  string
 	addr string
 	http *http.Client
 
-	dialer dialer.Dialer
+	dial      rpcplus.DialFunc
+	dialClose io.Closer
 }
 
 func (c *Client) Close() error {
-	return c.dialer.Close()
+	if c.dialClose != nil {
+		c.dialClose.Close()
+	}
+	return nil
 }
 
 var ErrNotFound = errors.New("controller: not found")
@@ -84,6 +114,7 @@ func (c *Client) rawReq(method, path string, contentType string, in, out interfa
 		contentType = "application/json"
 	}
 	req.Header.Set("Content-Type", contentType)
+	req.SetBasicAuth("", c.key)
 	res, err := c.http.Do(req)
 	if err != nil {
 		return nil, err
@@ -130,16 +161,23 @@ func (c *Client) StreamFormations(since *time.Time) (<-chan *ct.ExpandedFormatio
 		s := time.Unix(0, 0)
 		since = &s
 	}
-	// TODO: handle TLS
-	var dial rpcplus.DialFunc
-	if c.dialer != nil {
-		dial = c.dialer.Dial
-	}
-	client, err := rpcplus.DialHTTPPath("tcp", c.addr, rpcplus.DefaultRPCPath, dial)
-	if err != nil {
-		return nil, &err
+	dial := c.dial
+	if dial == nil {
+		dial = net.Dial
 	}
 	ch := make(chan *ct.ExpandedFormation)
+	conn, err := dial("tcp", c.addr)
+	if err != nil {
+		close(ch)
+		return ch, &err
+	}
+	header := make(http.Header)
+	header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(":"+c.key)))
+	client, err := rpcplus.NewHTTPClient(conn, rpcplus.DefaultRPCPath, header)
+	if err != nil {
+		close(ch)
+		return ch, &err
+	}
 	return ch, &client.StreamGo("Controller.StreamFormations", since, ch).Error
 }
 
@@ -231,9 +269,10 @@ func (c *Client) RunJobAttached(appID string, job *ct.NewJob) (utils.ReadWriteCl
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/apps/%s/jobs", c.url, appID), data)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/vnd.flynn.attach")
-	var dial dialer.DialFunc
-	if c.dialer != nil {
-		dial = c.dialer.Dial
+	req.SetBasicAuth("", c.key)
+	var dial rpcplus.DialFunc
+	if c.dial != nil {
+		dial = c.dial
 	}
 	res, rwc, err := utils.HijackRequest(req, dial)
 	if err != nil {

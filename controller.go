@@ -78,7 +78,6 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	m.Use(martini.Logger())
 	m.Use(martini.Recovery())
 	m.Use(render.Renderer())
-	m.Use(requireAuth(c.key))
 	m.Action(r.Handle)
 
 	d := NewDB(c.db)
@@ -134,20 +133,16 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	r.Get("/apps/:apps_id/routes/:routes_type/:routes_id", getAppMiddleware, getRouteMiddleware, getRoute)
 	r.Delete("/apps/:apps_id/routes/:routes_type/:routes_id", getAppMiddleware, getRouteMiddleware, deleteRoute)
 
-	return rpcMuxHandler(m, rpcHandler(formationRepo)), m
+	return rpcMuxHandler(m, rpcHandler(formationRepo), c.key), m
 }
 
-func requireAuth(authKey string) interface{} {
-	return func(req *http.Request, w http.ResponseWriter) {
-		_, password, _ := parseBasicAuth(req.Header)
+func rpcMuxHandler(main http.Handler, rpch http.Handler, authKey string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, password, _ := parseBasicAuth(r.Header)
 		if len(password) != len(authKey) || subtle.ConstantTimeCompare([]byte(password), []byte(authKey)) != 1 {
 			w.WriteHeader(401)
+			return
 		}
-	}
-}
-
-func rpcMuxHandler(main http.Handler, rpch http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == rpcplus.DefaultRPCPath {
 			rpch.ServeHTTP(w, r)
 		} else {

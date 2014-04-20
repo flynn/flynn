@@ -3,8 +3,8 @@ package main
 import (
 	"time"
 
+	"github.com/flynn/flynn-controller/client"
 	ct "github.com/flynn/flynn-controller/types"
-	"github.com/flynn/rpcplus"
 	. "github.com/titanous/gocheck"
 )
 
@@ -14,11 +14,10 @@ func (s *S) TestFormationStreaming(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "streamtest-existing"})
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
 
-	client, err := rpcplus.DialHTTP("tcp", s.srv.URL[7:])
+	client, err := controller.NewClient(s.srv.URL, authKey)
 	c.Assert(err, IsNil)
-	ch := make(chan *ct.ExpandedFormation)
 
-	client.StreamGo("Controller.StreamFormations", before, ch)
+	ch, streamErr := client.StreamFormations(&before)
 
 	var existingFound bool
 	for f := range ch {
@@ -30,6 +29,7 @@ func (s *S) TestFormationStreaming(c *C) {
 		}
 	}
 	c.Assert(existingFound, Equals, true)
+	c.Assert(*streamErr, IsNil)
 
 	release = s.createTestRelease(c, &ct.Release{})
 	app = s.createTestApp(c, &ct.App{Name: "streamtest"})

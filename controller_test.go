@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/flynn/go-sql"
+	"github.com/flynn/rpcplus"
 	"github.com/go-martini/martini"
 
 	ct "github.com/flynn/flynn-controller/types"
@@ -145,6 +146,9 @@ func (s *S) TestBadAuth(c *C) {
 	c.Assert(err, IsNil)
 	res.Body.Close()
 	c.Assert(res.StatusCode, Equals, 401)
+
+	_, err = rpcplus.DialHTTP("tcp", s.srv.Listener.Addr().String())
+	c.Assert(err, Not(IsNil))
 }
 
 func (s *S) createTestApp(c *C, in *ct.App) *ct.App {
