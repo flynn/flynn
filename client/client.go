@@ -287,7 +287,7 @@ func (c *Client) RunJobDetached(appID string, req *ct.NewJob) (*ct.Job, error) {
 	return job, c.post(fmt.Sprintf("/apps/%s/jobs", appID), req, job)
 }
 
-func (c *Client) GetJobList(appID string) ([]*ct.Job, error) {
+func (c *Client) JobList(appID string) ([]*ct.Job, error) {
 	var jobs []*ct.Job
 	return jobs, c.get(fmt.Sprintf("/apps/%s/jobs", appID), &jobs)
 }
