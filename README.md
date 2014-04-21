@@ -1,7 +1,34 @@
-flynn-cli
-=========
+# flynn-cli
 
-Command-line Flynn HTTP API client
+flynn-cli is the command-line client for
+[flynn-controller](https://github.com/flynn/flynn-controller). It provides
+access to many functions related to deploying and managing applications.
+
+## Installation
+
+Pre-built binaries are available for Mac OS X, Linux, and BSD. Once installed,
+these binaries will automatically update themselves when new releases are
+available.
+
+To install a pre-built binary release, run the following one-liner:
+
+```shell
+L=/usr/local/bin/flynn && curl -sL -A "`uname -sp`" https://flynn-cli.herokuapp.com/flynn.gz | zcat >$L && chmod +x $L
+```
+
+The URL https://flynn-cli.herokuapp.com/flynn.gz will attempt to detect your OS
+and CPU architecture based on the User-Agent, then redirect you to the latest
+release for your platform.
+
+## Usage
+
+The basic usage of flynn-cli is:
+
+```text
+Usage: flynn [-a app] <command> [options] [arguments]
+```
+
+For a list of commands and usage instructions, run `flynn help`.
 
 ## Flynn 
 
