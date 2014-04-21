@@ -22,7 +22,9 @@ Please **report bugs** as issues on the appropriate repository. If you have a ge
 
 ## Getting Started
 
-We built a [tool](https://flynn.cupcake.io) for launching Flynn clusters on your Amazon Web Services account [here](https://flynn.cupcake.io). You can also download a [demo environment](https://github.com/flynn/flynn-demo) for your local machine or learn about the components below.
+We built a [tool](https://flynn.cupcake.io) for launching Flynn clusters on your Amazon Web Services account [here](https://flynn.cupcake.io). 
+
+You can also download a [demo environment](https://github.com/flynn/flynn-demo) for your local machine or learn about the components below.
 
 ## Components
 
