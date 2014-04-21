@@ -9,7 +9,7 @@ and [Vagrant](http://www.vagrantup.com/) installed.
 
 ### Setup
 
-After checking out this repo, boot up the VM in Vagrant:
+Check out this repo, and boot up the VM using Vagrant:
 
 ```text
 git clone https://github.com/flynn/flynn-dev
