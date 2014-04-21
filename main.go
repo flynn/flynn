@@ -53,16 +53,17 @@ func (c *Command) Runnable() bool {
 
 // Running `flynn help` will list commands in this order.
 var commands = []*Command{
-	cmdRun,
+	cmdServerAdd,
+	cmdCreate,
 	cmdPs,
 	cmdLog,
 	cmdScale,
-	cmdCreate,
-	cmdServerAdd,
+	cmdRun,
 	cmdRouteAddHTTP,
 	cmdKeys,
 	cmdKeyAdd,
 	cmdKeyRemove,
+	cmdVersion,
 }
 
 var (
