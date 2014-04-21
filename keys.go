@@ -105,21 +105,22 @@ func findKeys(sshPubKeyPath string) ([]byte, error) {
 		return sshReadPubKey(sshPubKeyPath)
 	}
 
-	out, err := exec.Command("ssh-add", "-L").Output()
-	if err != nil {
-		return nil, err
-	}
-	if len(out) != 0 {
-		print(string(out))
+	sshAgent := exec.Command("ssh-add", "-L")
+	sshAgent.Stderr = ioutil.Discard
+	out, err := sshAgent.Output()
+	if err == nil && len(out) != 0 {
 		return out, nil
 	}
 
-	key, err := sshReadPubKey(filepath.Join(homedir(), ".ssh", "id_rsa.pub"))
-	switch err {
-	case syscall.ENOENT:
-		return nil, errors.New("No SSH keys found")
-	case nil:
-		return key, nil
+	var key []byte
+	for _, f := range []string{"id_rsa.pub", "id_dsa.pub"} {
+		key, err = sshReadPubKey(filepath.Join(homedir(), ".ssh", f))
+		if err == nil {
+			return key, nil
+		}
+	}
+	if err == syscall.ENOENT {
+		err = errors.New("No SSH keys found")
 	}
 	return nil, err
 }
