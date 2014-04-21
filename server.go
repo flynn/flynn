@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net"
 	"net/url"
 	"os"
@@ -55,5 +56,11 @@ func runServerAdd(cmd *Command, args []string, client *controller.Client) error 
 		return err
 	}
 	defer f.Close()
-	return toml.NewEncoder(f).Encode(config)
+
+	if err := toml.NewEncoder(f).Encode(config); err != nil {
+		return err
+	}
+
+	log.Printf("Server %s added.", s.Name)
+	return nil
 }
