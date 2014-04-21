@@ -65,14 +65,17 @@ across the running processes.
 
 ```text
 $ flynn ps
-ID						TYPE
-e4cffae4ce2b-8cb1212f582f498eaed467fede768d6f	web
+ID                                             TYPE
+e4cffae4ce2b-8cb1212f582f498eaed467fede768d6f  web
+e4cffae4ce2b-da9c86b1e9e743f2acd5793b151dcf99  web
+e4cffae4ce2b-1b17dd7be8e44ca1a76259a7bca244e1  web
 ```
 
 To get the log from a process, use `flynn log`:
 
 ```text
 $ flynn log e4cffae4ce2b-8cb1212f582f498eaed467fede768d6f
+Listening on 55007
 ```
 
 #### Run
