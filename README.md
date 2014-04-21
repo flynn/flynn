@@ -1,7 +1,7 @@
 # Flynn Demo Environment
 
-This repo contains a Vagrantfile combo that sets up all of the Flynn
-components and dependencies in a working configuration.
+This repo contains a Vagrantfile that boots up Flynn layer 0 and then bootstraps
+Flynn layer 1.
 
 The only requirement is that you have [VirtualBox](https://www.virtualbox.org/)
 and [Vagrant](http://www.vagrantup.com/) installed.
