@@ -105,10 +105,6 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	crud("artifacts", ct.Artifact{}, artifactRepo, r)
 	crud("keys", ct.Key{}, keyRepo, r)
 
-	r.Get("/ping", func(w http.ResponseWriter) {
-		w.WriteHeader(200)
-	})
-
 	r.Put("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getReleaseMiddleware, binding.Bind(ct.Formation{}), putFormation)
 	r.Get("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getFormationMiddleware, getFormation)
 	r.Delete("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getFormationMiddleware, deleteFormation)
@@ -138,6 +134,10 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 
 func rpcMuxHandler(main http.Handler, rpch http.Handler, authKey string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/ping" {
+			w.WriteHeader(200)
+			return
+		}
 		_, password, _ := parseBasicAuth(r.Header)
 		if len(password) != len(authKey) || subtle.ConstantTimeCompare([]byte(password), []byte(authKey)) != 1 {
 			w.WriteHeader(401)
