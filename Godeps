@@ -1,0 +1,72 @@
+{
+	"ImportPath": "github.com/flynn/flynn-cli",
+	"GoVersion": "go1.2.1",
+	"Deps": [
+		{
+			"ImportPath": "github.com/BurntSushi/toml",
+			"Rev": "f87ce853111478914f0bcffa34d43a93643e6eda"
+		},
+		{
+			"ImportPath": "github.com/bgentry/pflag",
+			"Rev": "b008717215c7236e20ca2faaf805e54ba6c1d208"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-etcd/etcd",
+			"Comment": "v0.2.0-rc1-96-g1e26d8e",
+			"Rev": "1e26d8ee84cf9b1000d2af8acfb45b2521f49be5"
+		},
+		{
+			"ImportPath": "github.com/flynn/discoverd/agent",
+			"Rev": "36c7a911bc4299ea4921a908d9a0609c5bffaeaf"
+		},
+		{
+			"ImportPath": "github.com/flynn/flynn-controller/client",
+			"Rev": "a1d3d0cda21eca727ca30c39b29637c3b3b9420b"
+		},
+		{
+			"ImportPath": "github.com/flynn/flynn-controller/types",
+			"Rev": "a1d3d0cda21eca727ca30c39b29637c3b3b9420b"
+		},
+		{
+			"ImportPath": "github.com/flynn/flynn-controller/utils",
+			"Rev": "a1d3d0cda21eca727ca30c39b29637c3b3b9420b"
+		},
+		{
+			"ImportPath": "github.com/flynn/flynn-host/types",
+			"Rev": "34ded0a0f9bf0d66da24b019f1ed09a46d8d0859"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-discoverd",
+			"Rev": "ef8e9c70ed6335e8db5a66addfa96226f35e2bd3"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-dockerclient",
+			"Rev": "7299ec5cb7c35fda101c46a24edb648795f7e074"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-flynn/attempt",
+			"Rev": "27df35dc1320998c5c5097d688f7101fc6c5386e"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-flynn/demultiplex",
+			"Rev": "27df35dc1320998c5c5097d688f7101fc6c5386e"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-flynn/pinned",
+			"Rev": "27df35dc1320998c5c5097d688f7101fc6c5386e"
+		},
+		{
+			"ImportPath": "github.com/flynn/rpcplus",
+			"Rev": "05df3d30b6e55f5b440c1a78e2f83cb822bc0d76"
+		},
+		{
+			"ImportPath": "github.com/flynn/strowger/types",
+			"Rev": "8f81ac826c87597fe94cee8edb89fdd0b2570022"
+		},
+		{
+			"ImportPath": "github.com/heroku/hk/term",
+			"Comment": "v20140407.1-2-g788166e",
+			"Rev": "788166ea4e74dae8b21ecec4bfce23b57c4f5adf"
+		}
+	]
+}
