@@ -17,10 +17,9 @@ cd flynn-dev
 vagrant up
 ```
 
-After the VM provisioning has finished, a log line will be emitted that contains
-the configuration details used to access Flynn via the command line tool.
-Install [flynn-cli](https://github.com/flynn/flynn-cli), and run the
-`server-add` command from the output.
+The final log line contains configuration details used to access Flynn via the
+command line tool. Install [flynn-cli](https://github.com/flynn/flynn-cli), and
+paste the `flynn server-add` command into your terminal.
 
 ### Usage
 
@@ -42,7 +41,8 @@ git push flynn master
 
 #### Scale
 
-To test out the router and scaling, turn up the web processes and add a route:
+To access the application, add some web processes using the `scale`
+command and a route with `route-add-http`:
 
 ```text
 flynn scale web=3
@@ -50,22 +50,29 @@ flynn scale web=3
 flynn route-add-http localhost:8080
 ```
 
-The application will now be accessible via the router:
+Visit the application [in your browser](http://localhost:8080) or with curl:
 
 ```text
 curl localhost:8080
 ```
 
-Repeated requests to the router should show that the requests are load balanced
+Repeated requests via curl should show that the requests are load balanced
 across the running processes.
 
 #### Logs
 
-`flynn ps` will show the running processes. To get the logs from a process, use
-`flynn logs`:
+`flynn ps` will show the running processes:
 
 ```text
-flynn logs e4cffae4ce2b-8cb1212f582f498eaed467fede768d6f
+$ flynn ps
+ID						TYPE
+e4cffae4ce2b-8cb1212f582f498eaed467fede768d6f	web
+```
+
+To get the log from a process, use `flynn log`:
+
+```text
+$ flynn log e4cffae4ce2b-8cb1212f582f498eaed467fede768d6f
 ```
 
 #### Run
