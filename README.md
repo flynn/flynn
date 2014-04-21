@@ -12,7 +12,7 @@ available.
 
 To install a pre-built binary release, run the following one-liner:
 
-```shell
+```bash
 L=/usr/local/bin/flynn && curl -sL -A "`uname -sp`" https://flynn-cli.herokuapp.com/flynn.gz | zcat >$L && chmod +x $L
 ```
 
