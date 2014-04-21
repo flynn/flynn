@@ -26,7 +26,7 @@ var ErrPinFailure = errors.New("pinned: the peer leaf certificate did not match 
 
 // Dial establishes a TLS connection to addr and checks the peer leaf
 // certificate against the configured pin. The underlying type of the returned
-// net.Conn is guaranteed to be *tls.Conn.
+// net.Conn is a Conn.
 func (c *Config) Dial(network, addr string) (net.Conn, error) {
 	var conf tls.Config
 	if c.Config != nil {
@@ -34,15 +34,24 @@ func (c *Config) Dial(network, addr string) (net.Conn, error) {
 	}
 	conf.InsecureSkipVerify = true
 
-	conn, err := tls.Dial(network, addr, &conf)
+	cn, err := net.Dial(network, addr)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := conn.Handshake(); err != nil {
+	conn := Conn{
+		Conn: tls.Client(cn, &conf),
+		Wire: cn,
+	}
+
+	host, _, _ := net.SplitHostPort(addr)
+	conf.ServerName = host
+
+	if err = conn.Handshake(); err != nil {
 		conn.Close()
 		return nil, err
 	}
+	return conn, nil
 
 	state := conn.ConnectionState()
 	hashFunc := c.Hash
@@ -56,4 +65,18 @@ func (c *Config) Dial(network, addr string) (net.Conn, error) {
 		return nil, ErrPinFailure
 	}
 	return conn, nil
+}
+
+type Conn struct {
+	*tls.Conn
+	Wire net.Conn
+}
+
+func (c Conn) CloseWrite() error {
+	if cw, ok := c.Wire.(interface {
+		CloseWrite() error
+	}); ok {
+		return cw.CloseWrite()
+	}
+	return errors.New("pinned: underlying connection does not support CloseWrite")
 }
