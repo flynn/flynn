@@ -79,7 +79,7 @@ func main() {
 
 	// Run the update command as early as possible to avoid the possibility of
 	// installations being stranded without updates due to errors in other code
-	if args[0] == cmdUpdate.Name() {
+	if len(args) > 0 && args[0] == cmdUpdate.Name() {
 		cmdUpdate.Run(cmdUpdate, args, nil)
 		return
 	} else if updater != nil {
