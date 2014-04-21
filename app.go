@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"os/exec"
 
 	"github.com/flynn/flynn-controller/client"
@@ -30,6 +30,6 @@ func runCreate(cmd *Command, args []string, client *controller.Client) error {
 	}
 
 	exec.Command("git", "remote", "add", "flynn", gitURLPre(serverConf.GitHost)+app.Name+gitURLSuf).Run()
-	fmt.Println(app.Name)
+	log.Printf("Created %s", app.Name)
 	return nil
 }
