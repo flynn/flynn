@@ -16,10 +16,6 @@ To install a pre-built binary release, run the following one-liner:
 L=/usr/local/bin/flynn && curl -sL -A "`uname -sp`" https://flynn-cli.herokuapp.com/flynn.gz | zcat >$L && chmod +x $L
 ```
 
-The URL https://flynn-cli.herokuapp.com/flynn.gz will attempt to detect your OS
-and CPU architecture based on the User-Agent, then redirect you to the latest
-release for your platform.
-
 ## Usage
 
 The basic usage of flynn-cli is:
