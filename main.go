@@ -229,6 +229,9 @@ func app() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if ra == nil {
+		return "", errors.New("no app found, run from a repo with a flynn remote or specify one with -a")
+	}
 	serverConf = ra.Server
 	flagApp = ra.Name
 	return ra.Name, nil
