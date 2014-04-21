@@ -210,7 +210,7 @@
   },
   {
     "id": "log-complete",
-	"action": "log",
-	"output": "Flynn bootstrapping complete. Add the server with `flynn server-add -g localhost:2222 -p {{ (index .StepData `controller-cert`).Pin }} default https://localhost:8081 {{ (index .StepData `controller-key`).Data }}"
+    "action": "log",
+    "output": "Flynn bootstrapping complete. Install flynn-cli and paste the line below into a new terminal window:\n\nflynn server-add -g localhost:2222 -p {{ (index .StepData `controller-cert`).Pin }} default https://localhost:8081 {{ (index .StepData `controller-key`).Data }}"
   }
 ]
