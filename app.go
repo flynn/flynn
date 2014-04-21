@@ -3,20 +3,26 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log"
 	"regexp"
 
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/go-sql"
 	"github.com/flynn/pq/hstore"
+	strowgerc "github.com/flynn/strowger/client"
+	"github.com/flynn/strowger/types"
 )
 
 type AppRepo struct {
+	router        strowgerc.Client
+	defaultDomain string
+
 	db *DB
 }
 
-func NewAppRepo(db *DB) *AppRepo {
-	return &AppRepo{db}
+func NewAppRepo(db *DB, defaultDomain string, router strowgerc.Client) *AppRepo {
+	return &AppRepo{db: db, defaultDomain: defaultDomain, router: router}
 }
 
 var appNamePattern = regexp.MustCompile(`^[a-z\d]+(-[a-z\d]+)*$`)
@@ -42,6 +48,16 @@ func (r *AppRepo) Add(data interface{}) error {
 	}
 	err := r.db.QueryRow("INSERT INTO apps (app_id, name, protected, meta) VALUES ($1, $2, $3, $4) RETURNING created_at, updated_at", app.ID, app.Name, app.Protected, meta).Scan(&app.CreatedAt, &app.UpdatedAt)
 	app.ID = cleanUUID(app.ID)
+	if !app.Protected && r.defaultDomain != "" {
+		route := (&strowger.HTTPRoute{
+			Domain:  fmt.Sprintf("%s.%s", app.Name, r.defaultDomain),
+			Service: app.Name + "-web",
+		}).ToRoute()
+		route.ParentRef = routeParentRef(app)
+		if err := r.router.CreateRoute(route); err != nil {
+			log.Printf("Error creating default route for %s: %s", app.Name, err)
+		}
+	}
 	return err
 }
 

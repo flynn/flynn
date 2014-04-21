@@ -85,7 +85,7 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	providerRepo := NewProviderRepo(d)
 	keyRepo := NewKeyRepo(d)
 	resourceRepo := NewResourceRepo(d)
-	appRepo := NewAppRepo(d)
+	appRepo := NewAppRepo(d, os.Getenv("DEFAULT_ROUTE_DOMAIN"), c.sc)
 	artifactRepo := NewArtifactRepo(d)
 	releaseRepo := NewReleaseRepo(d)
 	formationRepo := NewFormationRepo(d, appRepo, releaseRepo, artifactRepo)
