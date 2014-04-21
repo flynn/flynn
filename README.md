@@ -1,18 +1,11 @@
-# Flynn Dev Environment
+# Flynn Demo Environment
 
-**Note: This repo is broken while we finish bootstrapping Flynn services in containers**
-
-This repo contains a Vagrantfile/Makefile combo that sets up all of the Flynn
-components and dependencies in a working dev/test configuration.
+This repo contains a Vagrantfile combo that sets up all of the Flynn
+components and dependencies in a working configuration.
 
 The only requirement is that you have [VirtualBox](https://www.virtualbox.org/)
 and [Vagrant](http://www.vagrantup.com/) installed.
 
-**Note:** Flynn is alpha-quality software, so things are probably broken.
-
-### Demo video
-
-[![Flynn Demo](https://s3.amazonaws.com/flynn-media/flynn_demo_2013-11-14.png)](https://s3.amazonaws.com/flynn-media/flynn_demo_2013-11-14.mp4)
 
 ### Setup
 
@@ -22,51 +15,43 @@ After checking out this repo, boot up the VM in Vagrant:
 vagrant up
 ```
 
-After the VM provisioning has finished, log in to it and run `make` to install
-the dependencies and boot up the Flynn services:
-
-```text
-vagrant ssh
-
-make
-```
+After the VM provisioning has finished, a log line will be emitted that contains
+the configuration details used to access Flynn via the command line tool.
+Install [flynn-cli](https://github.com/flynn/flynn-cli), and run the
+`server-add` command from the output.
 
 ### Usage
 
-With the Flynn processes running, open another terminal and deploy the example
-application:
+With the Flynn running and the `flynn` tool installed, the first thing you'll
+want to do is add your SSH key so that you can deploy applications:
 
 ```text
-vagrant ssh
+flynn key-add
+```
 
+After adding your ssh key, you can deploy a new application:
+
+```text
+git clone https://github.com/flynn/nodejs-example
 cd nodejs-example
-
+flynn create example
 git push flynn master
 ```
 
-If the deploy is successful, the example application should have one instance
-running which will be running a HTTP server:
-
-```text
-curl http://10.0.2.15:55000
-```
-
-The `flynn` command line tool is used to manipulate the application.
-
 #### Scale
 
-To test out the router and scaling, turn up the web processes and add a domain:
+To test out the router and scaling, turn up the web processes and add a route:
 
 ```text
 flynn scale web=3
 
-flynn domain example.com
+flynn route-add-http localhost:8080
 ```
 
 The application will now be accessible via the router:
 
 ```text
-curl -H "Host: example.com" localhost:8080
+curl localhost:8080
 ```
 
 Repeated requests to the router should show that the requests are load balanced
@@ -78,7 +63,7 @@ across the running processes.
 `flynn logs`:
 
 ```text
-flynn logs web.1
+flynn logs e4cffae4ce2b-8cb1212f582f498eaed467fede768d6f
 ```
 
 #### Run
@@ -89,15 +74,15 @@ An interactive one-off process may be spawned in a container:
 flynn run bash
 ```
 
-## Flynn 
+## Flynn
 
-[Flynn](https://flynn.io) is a modular, open source Platform as a Service (PaaS). 
+[Flynn](https://flynn.io) is a modular, open source Platform as a Service (PaaS).
 
 If you're new to Flynn, start [here](https://github.com/flynn/flynn).
 
 ### Status
 
-Flynn is in active development and **currently unsuitable for production** use. 
+Flynn is in active development and **currently unsuitable for production** use.
 
 Users are encouraged to experiment with Flynn but should assume there are stability, security, and performance weaknesses throughout the project. This warning will be removed when Flynn is ready for production use.
 
