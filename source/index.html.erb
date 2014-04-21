@@ -34,10 +34,17 @@ layout: base
   <div class="container-inner">
     <div class="content">
       <div class="centered-text">
-        <p> Flynn simplifies deploying and maintaining applications. Instead of using complex configuration management systems, Flynn allows self-serve management of containerized deployments, making life easier for ops and developers.</p>
+<p>Flynn is a next generation open source Platform as a Service built on a resource layer. Flynn is designed to simplify ops so developers can focus on their real jobs.</p>
 
-        <p>Flynn provides a set of “PaaS Lego” including an API that orchestrates the management of containerized services across a cluster. For easy out-of-the-box deployment Flynn includes Heroku-style “git push” deployment and management tools that utilize buildpacks. Flynn was inspired by PaaSes like Heroku but is designed to run more than traditional 12 factor apps by embracing the problem of state.</p>
-      </div>
+<p>Flynn is designed to be able to run anything. Unlike most PaaSs Flynn can run stateful services as well as <a href="http://12factor.net/">12 factor</a> apps. This includes databases like Postgres, Redis, and MongoDB. Flynn is modular so users can easily modify, upgrade, and replace components.</p>
+
+<p>Flynn components are divided into two layers.</p>
+
+<p><b>Layer 0</b> is a low-level resource framework inspired by the <a href="http://eurosys2013.tudos.org/wp-content/uploads/2013/paper/Schwarzkopf.pdf">Google Omega</a> paper. Layer 0 also includes service discovery.</p>
+
+<p><b>Layer 1</b> is a set of higher level components that makes it easy to deploy and maintain applications and databases.</p>
+
+<p>Learn more about Flynn's <a href="https://flynn.io/docs/architecture">architecture</a></p>
       <br/><br/>
 
       <ul class="list-unstyled flynn">
