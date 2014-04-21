@@ -10,9 +10,10 @@ import (
 )
 
 var cmdHelp = &Command{
-	Run:   runHelp,
-	Usage: "help [topic]",
-	Long:  `Help shows usage for a command or other topic.`,
+	Run:      runHelp,
+	NoClient: true,
+	Usage:    "help [topic]",
+	Long:     `Help shows usage for a command or other topic.`,
 }
 
 func runHelp(cmd *Command, args []string, client *controller.Client) error {
@@ -33,6 +34,19 @@ func runHelp(cmd *Command, args []string, client *controller.Client) error {
 
 	fmt.Fprintf(os.Stderr, "Unknown help topic: %q. Run 'hk help'.\n", args[0])
 	os.Exit(2)
+	return nil
+}
+
+var cmdVersion = &Command{
+	Run:      runVersion,
+	NoClient: true,
+	Usage:    "version",
+	Short:    "show flynn version",
+	Long:     `Version shows the flynn client version string.`,
+}
+
+func runVersion(cmd *Command, args []string, client *controller.Client) error {
+	fmt.Println(Version)
 	return nil
 }
 
