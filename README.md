@@ -25,20 +25,24 @@ release for your platform.
 The basic usage of flynn-cli is:
 
 ```text
-Usage: flynn [-a app] <command> [options] [arguments]
+flynn [-a app] <command> [options] [arguments]
 ```
 
 For a list of commands and usage instructions, run `flynn help`.
 
-## Flynn 
+## Credits
 
-[Flynn](https://flynn.io) is a modular, open source Platform as a Service (PaaS). 
+flynn-cli is a fork of Heroku's [hk](https://github.com/heroku/hk).
+
+## Flynn
+
+[Flynn](https://flynn.io) is a modular, open source Platform as a Service (PaaS).
 
 If you're new to Flynn, start [here](https://github.com/flynn/flynn).
 
 ### Status
 
-Flynn is in active development and **currently unsuitable for production** use. 
+Flynn is in active development and **currently unsuitable for production** use.
 
 Users are encouraged to experiment with Flynn but should assume there are stability, security, and performance weaknesses throughout the project. This warning will be removed when Flynn is ready for production use.
 
