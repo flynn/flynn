@@ -46,8 +46,11 @@ func runServerAdd(cmd *Command, args []string, client *controller.Client) error 
 		if err != nil {
 			return err
 		}
-		host, _, _ := net.SplitHostPort(u.Host)
-		s.GitHost = host
+		if host, _, err := net.SplitHostPort(u.Host); err == nil {
+			s.GitHost = host
+		} else {
+			s.GitHost = u.Host
+		}
 	}
 	config.Servers = append(config.Servers, s)
 
