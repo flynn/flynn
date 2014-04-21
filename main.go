@@ -76,6 +76,15 @@ func main() {
 
 	args := os.Args[1:]
 
+	// Run the update command as early as possible to avoid the possibility of
+	// installations being stranded without updates due to errors in other code
+	if args[0] == cmdUpdate.Name() {
+		cmdUpdate.Run(cmdUpdate, args, nil)
+		return
+	} else if updater != nil {
+		defer updater.backgroundRun() // doesn't run if os.Exit is called
+	}
+
 	if len(args) >= 2 && "-a" == args[0] {
 		flagApp = args[1]
 		args = args[2:]
