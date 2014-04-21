@@ -1,0 +1,21 @@
+language: go
+go:
+  - 1.2
+  - tip
+
+before_install:
+  - go install -race std
+  - go get code.google.com/p/go.tools/cmd/cover
+
+script:
+  - go test -race ./...
+  - go test -cover ./...
+
+notifications:
+  irc:
+    channels:
+      - "chat.freenode.net#flynn"
+    use_notice: true
+    skip_join: true
+    template:
+      - "%{repository}/%{branch} - %{commit}: %{message} %{build_url}"
