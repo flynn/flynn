@@ -105,9 +105,7 @@ func findKeys(sshPubKeyPath string) ([]byte, error) {
 		return sshReadPubKey(sshPubKeyPath)
 	}
 
-	sshAgent := exec.Command("ssh-add", "-L")
-	sshAgent.Stderr = ioutil.Discard
-	out, err := sshAgent.Output()
+	out, err := exec.Command("ssh-add", "-L").Output()
 	if err == nil && len(out) != 0 {
 		return out, nil
 	}
