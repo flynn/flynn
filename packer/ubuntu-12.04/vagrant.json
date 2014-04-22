@@ -1,0 +1,93 @@
+{
+  "builders": [
+    {
+      "boot_command": [
+        "<esc><esc><enter><wait>",
+        "/install/vmlinuz noapic preseed/url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.cfg ",
+        "debian-installer=en_US auto locale=en_US kbd-chooser/method=us ",
+        "hostname=flynn ",
+        "fb=false debconf/frontend=noninteractive ",
+        "keyboard-configuration/modelcode=SKIP keyboard-configuration/layout=USA keyboard-configuration/variant=USA console-setup/ask_detect=false ",
+        "initrd=/install/initrd.gz -- <enter>"
+      ],
+      "boot_wait": "5s",
+      "http_directory": "http",
+      "iso_checksum": "3aeb42816253355394897ae80d99a9ba56217c0e98e05294b51f0f5b13bceb54",
+      "iso_checksum_type": "sha256",
+      "iso_url": "http://releases.ubuntu.com/12.04/ubuntu-12.04.4-server-amd64.iso",
+      "shutdown_command": "echo 'vagrant' | sudo -S shutdown -P now",
+      "ssh_password": "vagrant",
+      "ssh_username": "vagrant",
+      "ssh_wait_timeout": "20m",
+      "tools_upload_flavor": "linux",
+      "type": "vmware-iso"
+    },
+    {
+      "boot_command": [
+        "<esc><esc><enter><wait>",
+        "/install/vmlinuz noapic preseed/url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.cfg ",
+        "debian-installer=en_US auto locale=en_US kbd-chooser/method=us ",
+        "hostname=flynn ",
+        "fb=false debconf/frontend=noninteractive ",
+        "keyboard-configuration/modelcode=SKIP keyboard-configuration/layout=USA keyboard-configuration/variant=USA console-setup/ask_detect=false ",
+        "initrd=/install/initrd.gz -- <enter>"
+      ],
+      "boot_wait": "5s",
+      "guest_additions_path": "VBoxGuestAdditions_{{.Version}}.iso",
+      "guest_os_type": "Ubuntu_64",
+      "http_directory": "http",
+      "iso_checksum": "3aeb42816253355394897ae80d99a9ba56217c0e98e05294b51f0f5b13bceb54",
+      "iso_checksum_type": "sha256",
+      "iso_url": "http://releases.ubuntu.com/12.04/ubuntu-12.04.4-server-amd64.iso",
+      "shutdown_command": "echo 'vagrant' | sudo -S shutdown -P now",
+      "ssh_password": "vagrant",
+      "ssh_username": "vagrant",
+      "ssh_wait_timeout": "20m",
+      "type": "virtualbox-iso",
+      "virtualbox_version_file": ".vbox_version"
+    }
+  ],
+  "provisioners": [
+    {
+      "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'",
+      "scripts": [
+        "scripts/vagrant.sh",
+        "scripts/upgrade.sh"
+      ],
+      "type": "shell"
+    },
+    {
+      "override": {
+        "virtualbox-iso": {
+          "execute_command": "/bin/true"
+        },
+        "vmware-iso": {
+          "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'"
+        }
+      },
+      "script": "scripts/fusion.sh",
+      "type": "shell"
+    },
+    {
+      "override": {
+        "virtualbox-iso": {
+          "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'"
+        },
+        "vmware-iso": {
+          "execute_command": "/bin/true"
+        }
+      },
+      "script": "scripts/virtualbox.sh",
+      "type": "shell"
+    },
+    {
+      "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'",
+      "scripts": [
+        "scripts/docker.sh",
+        "scripts/vm_cleanup.sh"
+      ],
+      "type": "shell"
+    }
+  ]
+}
+
