@@ -67,14 +67,14 @@ func (c *dockerClient) PullImage(opts docker.PullImageOptions, w io.Writer) erro
 
 func testProcess(job *host.Job, t *testing.T) (*State, *dockerClient) {
 	client := &dockerClient{}
-	return testProcessWithOpts(job, "", client, t), client
+	return testProcessWithOpts(job, "", "", client, t), client
 }
 
-func testProcessWithOpts(job *host.Job, extAddr string, client *dockerClient, t *testing.T) *State {
+func testProcessWithOpts(job *host.Job, extAddr, bindAddr string, client *dockerClient, t *testing.T) *State {
 	if client == nil {
 		client = &dockerClient{}
 	}
-	state := processWithOpts(job, extAddr, client)
+	state := processWithOpts(job, extAddr, bindAddr, client)
 
 	if client.created != job.Config {
 		t.Error("job not created")
@@ -91,7 +91,7 @@ func testProcessWithOpts(job *host.Job, extAddr string, client *dockerClient, t 
 }
 
 func testProcessWithError(job *host.Job, client *dockerClient, err error, t *testing.T) *State {
-	state := processWithOpts(job, "", client)
+	state := processWithOpts(job, "", "", client)
 
 	sjob := state.GetJob(job.ID)
 	if sjob.Status != host.StatusFailed {
@@ -103,12 +103,13 @@ func testProcessWithError(job *host.Job, client *dockerClient, err error, t *tes
 	return state
 }
 
-func processWithOpts(job *host.Job, extAddr string, client *dockerClient) *State {
+func processWithOpts(job *host.Job, extAddr, bindAddr string, client *dockerClient) *State {
 	ports := make(chan int)
 	state := NewState()
 	go allocatePorts(ports, 500, 505)
 	(&jobProcessor{
 		externalAddr: extAddr,
+		bindAddr:     bindAddr,
 		docker:       client,
 		state:        state,
 		discoverd:    extAddr + ":1111",
@@ -147,6 +148,20 @@ func TestProcessJobWithImplicitPorts(t *testing.T) {
 	}
 }
 
+func TestProcessWithImplicitPortsAndIP(t *testing.T) {
+	job := &host.Job{ID: "a", TCPPorts: 2, Config: &docker.Config{}}
+	client := &dockerClient{}
+	testProcessWithOpts(job, "10.10.10.1", "127.0.42.1", client, t)
+
+	b := client.hostConf.PortBindings["500/tcp"]
+	if b[0].HostIp != "127.0.42.1" {
+		t.Error("host ip not 127.0.42.1")
+	}
+	if len(b) == 0 || b[0].HostPort != "500" {
+		t.Error("port 8080 binding not set")
+	}
+}
+
 func TestProcessJobWithExplicitPorts(t *testing.T) {
 	hostConfig := &docker.HostConfig{
 		PortBindings: make(map[string][]docker.PortBinding, 2),
@@ -167,7 +182,7 @@ func TestProcessJobWithExplicitPorts(t *testing.T) {
 
 func TestProcessWithExtAddr(t *testing.T) {
 	job := &host.Job{ID: "a", Config: &docker.Config{}}
-	testProcessWithOpts(job, "10.10.10.1", nil, t)
+	testProcessWithOpts(job, "10.10.10.1", "", nil, t)
 
 	if !sliceHasString(job.Config.Env, "EXTERNAL_IP=10.10.10.1") {
 		t.Error("EXTERNAL_IP not set")
@@ -203,7 +218,7 @@ func sliceHasString(slice []string, str string) bool {
 func TestProcessWithPull(t *testing.T) {
 	job := &host.Job{ID: "a", Config: &docker.Config{Image: "test/foo"}}
 	client := &dockerClient{createErr: docker.ErrNoSuchImage}
-	testProcessWithOpts(job, "", client, t)
+	testProcessWithOpts(job, "", "", client, t)
 
 	if client.pulled != "test/foo" {
 		t.Error("image not pulled")
