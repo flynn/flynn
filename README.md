@@ -13,7 +13,7 @@ Check out this repo, and boot up the VM using Vagrant:
 
 ```text
 git clone https://github.com/flynn/flynn-demo
-cd flynn-dev
+cd flynn-demo
 vagrant up
 ```
 
