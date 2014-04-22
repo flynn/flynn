@@ -3,6 +3,11 @@
 	"GoVersion": "go1.2.1",
 	"Deps": [
 		{
+			"ImportPath": "bitbucket.org/kardianos/osext",
+			"Comment": "null-9",
+			"Rev": "364fb577de68fb646c4cb39cc0e09c887ee16376"
+		},
+		{
 			"ImportPath": "github.com/BurntSushi/toml",
 			"Rev": "f87ce853111478914f0bcffa34d43a93643e6eda"
 		},
@@ -21,15 +26,15 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/client",
-			"Rev": "a1d3d0cda21eca727ca30c39b29637c3b3b9420b"
+			"Rev": "aba447ba5175edee61b389dd4e82bcc76d2f6f84"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/types",
-			"Rev": "a1d3d0cda21eca727ca30c39b29637c3b3b9420b"
+			"Rev": "aba447ba5175edee61b389dd4e82bcc76d2f6f84"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/utils",
-			"Rev": "a1d3d0cda21eca727ca30c39b29637c3b3b9420b"
+			"Rev": "aba447ba5175edee61b389dd4e82bcc76d2f6f84"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-host/types",
@@ -67,6 +72,14 @@
 			"ImportPath": "github.com/heroku/hk/term",
 			"Comment": "v20140407.1-2-g788166e",
 			"Rev": "788166ea4e74dae8b21ecec4bfce23b57c4f5adf"
+		},
+		{
+			"ImportPath": "github.com/inconshreveable/go-update",
+			"Rev": "3f0466666779bd2143f368a207b0641f0ed536e8"
+		},
+		{
+			"ImportPath": "github.com/kr/binarydist",
+			"Rev": "9955b0ab8708602d411341e55fffd7e0700f86bd"
 		}
 	]
 }
