@@ -60,8 +60,6 @@ Usage: flynn [-a app] [command] [options] [arguments]
 Commands:
 {{range .Commands}}{{if .Runnable}}
     {{.Name | printf "%-8s"}}  {{.Short}}{{end}}{{end}}
-{{range .Plugins}}
-    {{.Name | printf "%-8s"}}  {{.Short}} (plugin){{end}}
 
 Run 'flynn help [command]' for details.`[1:]))
 
