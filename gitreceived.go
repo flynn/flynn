@@ -49,7 +49,7 @@ func main() {
 	flag.Parse()
 	if flag.NArg() < 2 {
 		flag.Usage()
-		return
+		os.Exit(64)
 	}
 	var err error
 	privateKey = flag.Arg(0)
