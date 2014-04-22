@@ -12,7 +12,7 @@ and [Vagrant](http://www.vagrantup.com/) installed.
 Check out this repo, and boot up the VM using Vagrant:
 
 ```text
-git clone https://github.com/flynn/flynn-dev
+git clone https://github.com/flynn/flynn-demo
 cd flynn-dev
 vagrant up
 ```
