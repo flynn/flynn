@@ -10,10 +10,13 @@ import (
 )
 
 var cmdHelp = &Command{
-	Run:      runHelp,
 	NoClient: true,
 	Usage:    "help [topic]",
 	Long:     `Help shows usage for a command or other topic.`,
+}
+
+func init() {
+	cmdHelp.Run = runHelp // break init loop
 }
 
 func runHelp(cmd *Command, args []string, client *controller.Client) error {

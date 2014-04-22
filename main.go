@@ -64,6 +64,7 @@ var commands = []*Command{
 	cmdKeyAdd,
 	cmdKeyRemove,
 	cmdVersion,
+	cmdHelp,
 }
 
 var (
