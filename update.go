@@ -96,7 +96,7 @@ func (u *Updater) backgroundRun() {
 			return
 		}
 		// TODO(bgentry): logger isn't on Windows. Replace w/ proper error reports.
-		l := exec.Command("logger", "-thk")
+		l := exec.Command("logger", "-tflynn")
 		c := exec.Command(self, "update")
 		if w, err := l.StdinPipe(); err == nil && l.Start() == nil {
 			c.Stdout = w

@@ -156,7 +156,7 @@ Command key-remove removes an ssh public key from the Flynn controller.
 
 Examples:
 
-    $ hk key-remove 5e:67:40:b6:79:db:56:47:cd:3a:a7:65:ab:ed:12:34
+    $ flynn key-remove 5e:67:40:b6:79:db:56:47:cd:3a:a7:65:ab:ed:12:34
     Key 5e:67:40:b6:79:db… removed.
 `,
 }
