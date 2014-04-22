@@ -59,16 +59,26 @@ Usage: flynn [-a app] [command] [options] [arguments]
 
 Commands:
 {{range .Commands}}{{if .Runnable}}{{if .List}}
-    {{.Name | printf "%-8s"}}  {{.Short}}{{end}}{{end}}{{end}}
+    {{.Name | printf (print "%-" $.MaxCommandWidth "s")}}  {{.Short}}{{end}}{{end}}{{end}}
 
 Run 'flynn help [command]' for details.`[1:]))
 
 func printUsage() {
-	usageTemplate.Execute(os.Stdout, struct {
-		Commands []*Command
+	data := &struct {
+		Commands        []*Command
+		MaxCommandWidth int
 	}{
 		commands,
-	})
+		0,
+	}
+
+	for _, cmd := range commands {
+		if len(cmd.Name()) > data.MaxCommandWidth {
+			data.MaxCommandWidth = len(cmd.Name())
+		}
+	}
+
+	usageTemplate.Execute(os.Stdout, data)
 }
 
 func usage() {
