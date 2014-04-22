@@ -6,12 +6,11 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"syscall"
 
 	"github.com/flynn/flynn-controller/client"
 	ct "github.com/flynn/flynn-controller/types"
-	"github.com/flynn/go-crypto-ssh/terminal"
 	"github.com/flynn/go-flynn/demultiplex"
+	"github.com/heroku/hk/term"
 )
 
 var (
@@ -47,19 +46,23 @@ func runRun(cmd *Command, args []string, client *controller.Client) error {
 	}
 	req := &ct.NewJob{
 		Cmd:       args,
-		TTY:       !runDetached && terminal.IsTerminal(syscall.Stdin) && terminal.IsTerminal(syscall.Stdout),
+		TTY:       term.IsTerminal(os.Stdin) && term.IsTerminal(os.Stdout) && !runDetached,
 		ReleaseID: runRelease,
 	}
 	if req.TTY {
-		width, height, err := terminal.GetSize(syscall.Stdout)
+		cols, err := term.Cols()
 		if err != nil {
 			return err
 		}
-		req.Columns = width
-		req.Lines = height
+		lines, err := term.Lines()
+		if err != nil {
+			return err
+		}
+		req.Columns = cols
+		req.Lines = lines
 		req.Env = map[string]string{
-			"COLUMNS": strconv.Itoa(width),
-			"LINES":   strconv.Itoa(height),
+			"COLUMNS": strconv.Itoa(cols),
+			"LINES":   strconv.Itoa(lines),
 			"TERM":    os.Getenv("TERM"),
 		}
 	}
@@ -80,11 +83,10 @@ func runRun(cmd *Command, args []string, client *controller.Client) error {
 	defer rwc.Close()
 
 	if req.TTY {
-		state, err := terminal.MakeRaw(syscall.Stdin)
-		if err != nil {
+		if err := term.MakeRaw(os.Stdin); err != nil {
 			return err
 		}
-		defer terminal.Restore(syscall.Stdin, state)
+		defer term.Restore(os.Stdin)
 	}
 
 	go func() {
