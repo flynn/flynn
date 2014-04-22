@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"net/url"
@@ -52,6 +53,19 @@ func runServerAdd(cmd *Command, args []string, client *controller.Client) error 
 			s.GitHost = u.Host
 		}
 	}
+
+	for _, existing := range config.Servers {
+		if existing.Name == s.Name {
+			return fmt.Errorf("Server %q already exists in ~/.flynnrc", s.Name)
+		}
+		if existing.URL == s.URL {
+			return fmt.Errorf("A server with the URL %q already exists in ~/.flynnrc", s.URL)
+		}
+		if existing.GitHost == s.GitHost {
+			return fmt.Errorf("A server with the git host %q already exists in ~/.flynnrc", s.GitHost)
+		}
+	}
+
 	config.Servers = append(config.Servers, s)
 
 	f, err := os.Create(configPath())
@@ -64,6 +78,6 @@ func runServerAdd(cmd *Command, args []string, client *controller.Client) error 
 		return err
 	}
 
-	log.Printf("Server %s added.", s.Name)
+	log.Printf("Server %q added.", s.Name)
 	return nil
 }
