@@ -47,7 +47,7 @@ func init() {
 
 func main() {
 	flag.Parse()
-	if len(os.Args) < 2 {
+	if flag.NArg() < 2 {
 		flag.Usage()
 		return
 	}
