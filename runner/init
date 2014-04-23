@@ -7,7 +7,7 @@ export HOME=/app
 mkdir -p $HOME
 
 if [[ $(ls -A $HOME) ]]; then
-        true
+	true
 elif [[ $SLUG_URL ]]; then
 	curl -s "$SLUG_URL" | tar -xzC $HOME
 	unset SLUG_URL
@@ -18,11 +18,12 @@ cd $HOME
 
 ## Load profile.d and release config
 
+shopt -s nullglob
 mkdir -p .profile.d
 if [[ -s .release ]]; then
 	ruby -e "require 'yaml';(YAML.load_file('.release')['config_vars'] || {}).each{|k,v| puts \"#{k}='#{v}'\"}" > .profile.d/config_vars
 fi
-for file in .profile.d/*; do 
+for file in .profile.d/*; do
 	source $file
 done
 hash -r
@@ -34,7 +35,7 @@ case "$1" in
 		if [[ -f Procfile ]]; then
 			command="$(ruby -e "require 'yaml';puts YAML.load_file('Procfile')['$2']")"
 		else
-    		command="$(ruby -e "require 'yaml';puts (YAML.load_file('.release')['default_process_types'] || {})['$2']")"
+			command="$(ruby -e "require 'yaml';puts (YAML.load_file('.release')['default_process_types'] || {})['$2']")"
 		fi
 		;;
 
