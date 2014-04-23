@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"syscall"
-	"text/tabwriter"
 
 	"github.com/flynn/flynn-controller/client"
 )
@@ -38,14 +37,11 @@ func runKeys(cmd *Command, args []string, client *controller.Client) error {
 		return err
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 1, 2, 2, ' ', 0)
+	w := tabWriter()
 	defer w.Flush()
 
-	for i := range keys {
-		listRec(w,
-			formatKeyID(keys[i].ID),
-			keys[i].Comment,
-		)
+	for _, k := range keys {
+		listRec(w, formatKeyID(k.ID), k.Comment)
 	}
 	return nil
 }

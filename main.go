@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/BurntSushi/toml"
 	"github.com/bgentry/pflag"
@@ -248,6 +249,10 @@ func mustApp() string {
 		log.Fatal(err)
 	}
 	return name
+}
+
+func tabWriter() *tabwriter.Writer {
+	return tabwriter.NewWriter(os.Stdout, 1, 2, 2, ' ', 0)
 }
 
 func listRec(w io.Writer, a ...interface{}) {

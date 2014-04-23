@@ -1,10 +1,7 @@
 package main
 
 import (
-	"fmt"
-	"os"
 	"sort"
-	"text/tabwriter"
 
 	"github.com/flynn/flynn-controller/client"
 	ct "github.com/flynn/flynn-controller/types"
@@ -22,22 +19,21 @@ func runPs(cmd *Command, args []string, client *controller.Client) error {
 	if err != nil {
 		return err
 	}
-
 	if len(jobs) == 0 {
 		return nil
 	}
-
 	sort.Sort(jobsByType(jobs))
-	w := tabwriter.NewWriter(os.Stdout, 0, 8, 0, '\t', 0)
 
-	fmt.Fprintln(w, "ID\tTYPE")
+	w := tabWriter()
+	defer w.Flush()
+
+	listRec(w, "ID", "TYPE")
 	for _, j := range jobs {
 		if j.Type == "" {
 			j.Type = "run"
 		}
-		fmt.Fprintf(w, "%s\t%s\n", j.ID, j.Type)
+		listRec(w, j.ID, j.Type)
 	}
-	w.Flush()
 
 	return nil
 }
