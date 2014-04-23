@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"text/tabwriter"
 	"text/template"
 
 	"github.com/flynn/flynn-controller/client"
@@ -26,6 +27,11 @@ func runHelp(cmd *Command, args []string, client *controller.Client) error {
 	}
 	if len(args) != 1 {
 		return errors.New("too many arguments")
+	}
+
+	if args[0] == "commands" {
+		printAllUsage()
+		return nil
 	}
 
 	for _, cmd := range commands {
@@ -77,6 +83,17 @@ func printUsage() {
 	}
 
 	usageTemplate.Execute(os.Stdout, data)
+}
+
+func printAllUsage() {
+	w := tabwriter.NewWriter(os.Stdout, 1, 2, 2, ' ', 0)
+	defer w.Flush()
+
+	for _, cmd := range commands {
+		if cmd.Runnable() {
+			fmt.Fprintf(w, "flynn %s\t%s\n", cmd.Usage, cmd.Short)
+		}
+	}
 }
 
 func usage() {
