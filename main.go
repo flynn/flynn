@@ -65,6 +65,7 @@ var commands = []*Command{
 	cmdScale,
 	cmdRun,
 	cmdRouteAddHTTP,
+	cmdProviders,
 	cmdKeys,
 	cmdKeyAdd,
 	cmdKeyRemove,
