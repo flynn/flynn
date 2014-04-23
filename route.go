@@ -10,7 +10,7 @@ import (
 var cmdRouteAddHTTP = &Command{
 	Run:   runRouteAddHTTP,
 	Usage: "route-add-http [-s <service>] <domain>",
-	Short: "Add a HTTP route",
+	Short: "add a HTTP route",
 	Long:  `Add a HTTP route to an app"`,
 }
 
