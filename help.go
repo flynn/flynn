@@ -68,10 +68,7 @@ func printUsage() {
 	data := &struct {
 		Commands        []*Command
 		MaxCommandWidth int
-	}{
-		commands,
-		0,
-	}
+	}{Commands: commands}
 
 	for _, cmd := range commands {
 		if len(cmd.Name()) > data.MaxCommandWidth {
