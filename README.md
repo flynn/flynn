@@ -26,6 +26,13 @@ flynn [-a app] <command> [options] [arguments]
 
 For a list of commands and usage instructions, run `flynn help`.
 
+## Development
+
+flynn-cli requires Go 1.2 or newer and uses
+[Godep](https://github.com/tools/godep) to manage dependencies. Run `godep go
+build` to get a `flynn-cli` binary.
+
+
 ## Credits
 
 flynn-cli is a fork of Heroku's [hk](https://github.com/heroku/hk).
