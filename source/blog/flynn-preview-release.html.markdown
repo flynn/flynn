@@ -1,6 +1,6 @@
 ---
 title: Flynn Preview Release and Meetup
-date: March 21, 2014
+date: April 21, 2014
 ---
 
 Today we're excited to announce the first preview release of Flynn!
