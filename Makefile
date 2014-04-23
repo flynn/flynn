@@ -2,10 +2,10 @@ build/container: build/flynn-receive build/flynn-key-check build/gitreceived bui
 	docker build -t flynn/gitreceive .
 	touch build/container
 
-build/flynn-receive: *.go
+build/flynn-receive: Godeps *.go
 	godep go build -o build/flynn-receive
 
-build/flynn-key-check: key-check/*.go
+build/flynn-key-check: Godeps key-check/*.go
 	godep go build -o build/flynn-key-check ./key-check
 
 build/gitreceived:
