@@ -55,7 +55,8 @@ func main() {
 	fmt.Printf("-----> Building %s...\n", app)
 
 	var output bytes.Buffer
-	cmd := exec.Command("flynn/slugbuilder", fmt.Sprintf("http://%s/%s/tgz", shelfHost, commit))
+	slugURL := fmt.Sprintf("http://%s/%s.tgz", shelfHost, commit)
+	cmd := exec.Command("flynn/slugbuilder", slugURL)
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -103,7 +104,7 @@ func main() {
 	if release.Env == nil {
 		release.Env = make(map[string]string)
 	}
-	release.Env["SLUG_URL"] = "http://" + shelfHost + "/" + commit + ".tgz"
+	release.Env["SLUG_URL"] = slugURL
 
 	if err := client.CreateRelease(release); err != nil {
 		log.Fatalln("Error creating release:", err)
