@@ -28,7 +28,7 @@ func init() {
 	}
 }
 
-var typesPattern = regexp.MustCompile(`types.* -> (.+)$`)
+var typesPattern = regexp.MustCompile("types.* -> (.+)\n")
 
 func main() {
 	client, err := controller.NewClient("", os.Getenv("CONTROLLER_AUTH_KEY"))
