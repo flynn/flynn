@@ -19,6 +19,8 @@ import (
 var clusterc *cluster.Client
 
 func init() {
+	log.SetFlags(0)
+
 	var err error
 	clusterc, err = cluster.NewClient()
 	if err != nil {
