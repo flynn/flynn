@@ -61,7 +61,8 @@ Commands:
 {{range .Commands}}{{if .Runnable}}{{if .List}}
     {{.Name | printf (print "%-" $.MaxCommandWidth "s")}}  {{.Short}}{{end}}{{end}}{{end}}
 
-Run 'flynn help [command]' for details.`[1:]))
+Run 'flynn help [command]' for details.
+`[1:]))
 
 func printUsage() {
 	data := &struct {
