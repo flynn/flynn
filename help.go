@@ -10,10 +10,13 @@ import (
 )
 
 var cmdHelp = &Command{
-	Run:      runHelp,
 	NoClient: true,
 	Usage:    "help [topic]",
 	Long:     `Help shows usage for a command or other topic.`,
+}
+
+func init() {
+	cmdHelp.Run = runHelp // break init loop
 }
 
 func runHelp(cmd *Command, args []string, client *controller.Client) error {
@@ -55,19 +58,27 @@ Usage: flynn [-a app] [command] [options] [arguments]
 
 
 Commands:
-{{range .Commands}}{{if .Runnable}}
-    {{.Name | printf "%-8s"}}  {{.Short}}{{end}}{{end}}
-{{range .Plugins}}
-    {{.Name | printf "%-8s"}}  {{.Short}} (plugin){{end}}
+{{range .Commands}}{{if .Runnable}}{{if .List}}
+    {{.Name | printf (print "%-" $.MaxCommandWidth "s")}}  {{.Short}}{{end}}{{end}}{{end}}
 
 Run 'flynn help [command]' for details.`[1:]))
 
 func printUsage() {
-	usageTemplate.Execute(os.Stdout, struct {
-		Commands []*Command
+	data := &struct {
+		Commands        []*Command
+		MaxCommandWidth int
 	}{
 		commands,
-	})
+		0,
+	}
+
+	for _, cmd := range commands {
+		if len(cmd.Name()) > data.MaxCommandWidth {
+			data.MaxCommandWidth = len(cmd.Name())
+		}
+	}
+
+	usageTemplate.Execute(os.Stdout, data)
 }
 
 func usage() {

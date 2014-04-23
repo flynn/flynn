@@ -51,6 +51,10 @@ func (c *Command) Runnable() bool {
 	return c.Run != nil
 }
 
+func (c *Command) List() bool {
+	return c.Short != ""
+}
+
 // Running `flynn help` will list commands in this order.
 var commands = []*Command{
 	cmdServerAdd,
@@ -64,6 +68,7 @@ var commands = []*Command{
 	cmdKeyAdd,
 	cmdKeyRemove,
 	cmdVersion,
+	cmdHelp,
 }
 
 var (
