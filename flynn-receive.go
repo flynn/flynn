@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -11,10 +11,9 @@ import (
 
 	"github.com/flynn/flynn-controller/client"
 	ct "github.com/flynn/flynn-controller/types"
-	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/go-flynn/cluster"
+	"github.com/flynn/go-flynn/exec"
 )
 
 var clusterc *cluster.Client
@@ -26,6 +25,8 @@ func init() {
 		log.Fatalln("Error connecting to cluster leader:", err)
 	}
 }
+
+var typesPattern = regexp.MustCompile(`types.* -> (.+)$`)
 
 func main() {
 	client, err := controller.NewClient("", os.Getenv("CONTROLLER_AUTH_KEY"))
@@ -51,15 +52,20 @@ func main() {
 
 	fmt.Printf("-----> Building %s...\n", app)
 
-	types := scheduleAndAttach(cluster.RandomJobID(app+"-build."), docker.Config{
-		Image:        "flynn/slugbuilder",
-		Cmd:          []string{"http://" + shelfHost + "/" + commit + ".tgz"},
-		AttachStdin:  true,
-		AttachStdout: true,
-		AttachStderr: true,
-		OpenStdin:    true,
-		StdinOnce:    true,
-	})
+	var output bytes.Buffer
+	cmd := exec.Command("flynn/slugbuilder", fmt.Sprintf("http://%s/%s/tgz", shelfHost, commit))
+	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	if err := cmd.Run(); err != nil {
+		log.Fatalln("Build failed:", err)
+	}
+
+	var types []string
+	if match := typesPattern.FindSubmatch(output.Bytes()); match != nil {
+		types = strings.Split(string(match[1]), ", ")
+	}
 
 	fmt.Printf("-----> Creating release...\n")
 
@@ -105,67 +111,4 @@ func main() {
 	}
 
 	fmt.Println("=====> Application deployed")
-}
-
-func randomHost() (hostid string) {
-	hosts, err := clusterc.ListHosts()
-	if err != nil {
-		log.Fatalln("Error listing cluster hosts:", err)
-	}
-
-	for hostid = range hosts {
-		break
-	}
-	if hostid == "" {
-		log.Fatal("No hosts found")
-	}
-	return
-}
-
-var typesPattern = regexp.MustCompile(`types.* -> (.+)$`)
-
-func scheduleAndAttach(jobid string, config docker.Config) (types []string) {
-	hostid := randomHost()
-
-	client, err := clusterc.DialHost(hostid)
-	if err != nil {
-		log.Fatalf("Error connecting to host %s: %s", hostid, err)
-	}
-	conn, attachWait, err := client.Attach(&host.AttachReq{
-		JobID: jobid,
-		Flags: host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagStdin | host.AttachFlagStream,
-	}, true)
-	if err != nil {
-		log.Fatalln("Error attaching:", err)
-	}
-
-	addReq := &host.AddJobsReq{
-		HostJobs: map[string][]*host.Job{hostid: {{ID: jobid, Config: &config}}},
-	}
-	if _, err := clusterc.AddJobs(addReq); err != nil {
-		log.Fatalln("Error adding job:", err)
-	}
-
-	if err := attachWait(); err != nil {
-		log.Fatalln("Error waiting for attach:", err)
-	}
-
-	go func() {
-		io.Copy(conn, os.Stdin)
-		conn.CloseWrite()
-	}()
-	scanner := bufio.NewScanner(conn)
-
-	for scanner.Scan() {
-		text := scanner.Text()[8:]
-		fmt.Fprintln(os.Stdout, text)
-		if types == nil {
-			if match := typesPattern.FindStringSubmatch(text); match != nil {
-				types = strings.Split(match[1], ", ")
-			}
-		}
-	}
-	conn.Close()
-
-	return types
 }
