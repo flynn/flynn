@@ -83,14 +83,13 @@ func (s *S) provisionTestResource(c *C, name string, apps []string) (*ct.Resourc
 func (s *S) TestProvisionResource(c *C) {
 	app1 := s.createTestApp(c, &ct.App{Name: "provision-resource1"})
 	app2 := s.createTestApp(c, &ct.App{Name: "provision-resource2"})
-	apps := []string{app1.ID, app2.ID}
 
-	resource, provider := s.provisionTestResource(c, "provision-resource", apps)
+	resource, provider := s.provisionTestResource(c, "provision-resource", []string{app1.ID, app2.Name})
 	c.Assert(resource.Env["foo"], Equals, "baz")
 	c.Assert(resource.ProviderID, Equals, provider.ID)
 	c.Assert(resource.ExternalID, Equals, "/things/provision-resource")
 	c.Assert(resource.ID, Not(Equals), "")
-	c.Assert(resource.Apps, DeepEquals, apps)
+	c.Assert(resource.Apps, DeepEquals, []string{app1.ID, app2.ID})
 
 	gotResource := &ct.Resource{}
 	path := fmt.Sprintf("/providers/%s/resources/%s", provider.ID, resource.ID)

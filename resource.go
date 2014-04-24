@@ -33,11 +33,23 @@ func (rr *ResourceRepo) Add(r *ct.Resource) error {
 		tx.Rollback()
 		return err
 	}
-	for _, appID := range r.Apps {
-		if _, err := tx.Exec("INSERT INTO app_resources (app_id, resource_id) VALUES ($1, $2)", appID, r.ID); err != nil {
+	for i, appID := range r.Apps {
+		var filterSQL string
+		var args []interface{}
+		if idPattern.MatchString(appID) {
+			filterSQL = "app_id = $1 OR name = $2), $3)"
+			args = []interface{}{appID, appID, r.ID}
+		} else {
+			filterSQL = "name = $1), $2)"
+			args = []interface{}{appID, r.ID}
+		}
+		err = tx.QueryRow("INSERT INTO app_resources (app_id, resource_id) VALUES ((SELECT app_id FROM apps WHERE "+
+			filterSQL+" RETURNING app_id", args...).Scan(&r.Apps[i])
+		if err != nil {
 			tx.Rollback()
 			return err
 		}
+		r.Apps[i] = cleanUUID(r.Apps[i])
 	}
 	r.ID = cleanUUID(r.ID)
 	return tx.Commit()
