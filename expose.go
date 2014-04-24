@@ -158,17 +158,12 @@ func startCommand(args []string, env map[string]string) (*exec.Cmd, chan uint) {
 		envitem := fmt.Sprintf("%s=%s", key, value)
 		c.Env = append(c.Env, envitem)
 	}
+	attachCmd(c)
 
-	errCh := attachCmd(c, os.Stdout, os.Stderr, os.Stdin)
 	err := c.Start()
 	if err != nil {
 		panic(err)
 	}
 
-	go func() {
-		if err = <-errCh; err != nil {
-			panic(err)
-		}
-	}()
 	return c, exitStatusCh(c)
 }

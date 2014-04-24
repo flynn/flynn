@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -62,7 +61,7 @@ func (cmd *execCmd) Run(fs *flag.FlagSet) {
 	} else {
 		c = exec.Command(args[0])
 	}
-	errCh := attachCmd(c, os.Stdout, os.Stderr, os.Stdin)
+	attachCmd(c)
 	err := c.Start()
 	if err != nil {
 		panic(err)
@@ -71,44 +70,15 @@ func (cmd *execCmd) Run(fs *flag.FlagSet) {
 	cmd.RegisterWithExitHook(map[string]string(*cmd.services), false)
 
 	exitCh := exitStatusCh(c)
-	if err = <-errCh; err != nil {
-		panic(err)
-	}
 	cmd.exitStatus = int(<-exitCh)
 	close(cmd.exitSignalCh)
 	time.Sleep(time.Second)
 }
 
-func attachCmd(cmd *exec.Cmd, stdout, stderr io.Writer, stdin io.Reader) chan error {
-	errCh := make(chan error)
-
-	stdinIn, err := cmd.StdinPipe()
-	if err != nil {
-		panic(err)
-	}
-	stdoutOut, err := cmd.StdoutPipe()
-	if err != nil {
-		panic(err)
-	}
-	stderrOut, err := cmd.StderrPipe()
-	if err != nil {
-		panic(err)
-	}
-
-	go func() {
-		_, e := io.Copy(stdinIn, stdin)
-		errCh <- e
-	}()
-	go func() {
-		_, e := io.Copy(stdout, stdoutOut)
-		errCh <- e
-	}()
-	go func() {
-		_, e := io.Copy(stderr, stderrOut)
-		errCh <- e
-	}()
-
-	return errCh
+func attachCmd(cmd *exec.Cmd) {
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
 }
 
 func exitStatusCh(cmd *exec.Cmd) chan uint {
