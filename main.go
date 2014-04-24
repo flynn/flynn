@@ -70,6 +70,7 @@ var commands = []*Command{
 	cmdEnvUnset,
 	cmdRouteAddHTTP,
 	cmdProviders,
+	cmdResourceAdd,
 	cmdKeys,
 	cmdKeyAdd,
 	cmdKeyRemove,
