@@ -314,3 +314,8 @@ func (c *Client) CreateKey(pubKey string) (*ct.Key, error) {
 func (c *Client) DeleteKey(id string) error {
 	return c.delete("/keys/" + strings.Replace(id, ":", "", -1))
 }
+
+func (c *Client) ProviderList() ([]*ct.Provider, error) {
+	var providers []*ct.Provider
+	return providers, c.get("/providers", &providers)
+}
