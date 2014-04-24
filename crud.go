@@ -72,10 +72,6 @@ func crud(resource string, example interface{}, repo Repository, r martini.Route
 			r.JSON(500, struct{}{})
 			return
 		}
-		// render an empty JSON array (rather than null) if list is nil
-		if list == nil {
-			list = []struct{}{}
-		}
 		r.JSON(200, list)
 	})
 

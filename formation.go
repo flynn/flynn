@@ -95,7 +95,7 @@ func (r *FormationRepo) List(appID string) ([]*ct.Formation, error) {
 	if err != nil {
 		return nil, err
 	}
-	var formations []*ct.Formation
+	formations := []*ct.Formation{}
 	for rows.Next() {
 		formation, err := scanFormation(rows)
 		if err != nil {

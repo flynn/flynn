@@ -61,7 +61,7 @@ func (r *ArtifactRepo) List() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	var artifacts []*ct.Artifact
+	artifacts := []*ct.Artifact{}
 	for rows.Next() {
 		artifact, err := scanArtifact(rows)
 		if err != nil {
