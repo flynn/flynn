@@ -72,7 +72,6 @@ func (cmd *expose) requireDependencies(services *depSlice) (chan dependencyState
 			for leader := range set.Leaders() {
 				l.Lock()
 				if leader != nil {
-					fmt.Println("new leader for service:", leader.Addr)
 					deps[targetVar] = leader.Addr
 					if len(deps) == len(*services) {
 						// All services are available, make a copy to
@@ -84,7 +83,6 @@ func (cmd *expose) requireDependencies(services *depSlice) (chan dependencyState
 						status <- depState
 					}
 				} else if deps[targetVar] != "" {
-					fmt.Println("debug: current leader went offline:", deps[targetVar])
 					delete(deps, targetVar)
 					status <- dependencyState{deps: nil}
 				}
@@ -106,7 +104,6 @@ func (cmd *expose) Run(fs *flag.FlagSet) {
 		return
 	}
 
-	fmt.Println("Discovering services..")
 	serviceVarsUpdate, err := cmd.requireDependencies(cmd.dependencies)
 	if err != nil {
 		fmt.Println(err)
@@ -119,32 +116,26 @@ func (cmd *expose) Run(fs *flag.FlagSet) {
 	for {
 		select {
 		case state := <-serviceVarsUpdate:
-			fmt.Println("debug: state received", state)
 
 			if state.deps == nil && exitCh != nil {
-				fmt.Println("Lost a required service, shutting down...")
 				proc.Process.Signal(syscall.SIGTERM)
 				select {
 				case <-exitCh:
 					break
 				case <-time.After(5 * time.Second):
-					fmt.Println("Waiting for shutdown timed out, killing process")
 					if err := proc.Process.Kill(); err != nil {
 						panic("failed to kill")
 					}
 					<-exitCh
 				}
-				fmt.Println("Process ended, waiting for dependencies...")
 				proc = nil
 				exitCh = nil
 
 			} else if state.deps != nil && exitCh == nil {
-				fmt.Println("All services available, starting...")
 				proc, exitCh = startCommand(args, state.deps)
 			}
 
 		case exitStatus := <-exitCh:
-			fmt.Println("debug: program exit code received")
 			os.Exit(int(exitStatus))
 		}
 	}
