@@ -126,7 +126,7 @@ var cmdEnvGet = &Command{
 }
 
 func init() {
-	cmdEnvGet.Flag.StringVarP(&envProc, "process-type", "t", "", "unset env var for process type")
+	cmdEnvGet.Flag.StringVarP(&envProc, "process-type", "t", "", "get env var for process type")
 }
 
 func runEnvGet(cmd *Command, args []string, client *controller.Client) error {
