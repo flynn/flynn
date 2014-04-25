@@ -61,12 +61,14 @@ $$ LANGUAGE plpgsql`,
     FOR EACH ROW EXECUTE PROCEDURE notify_formation()`,
 
 		`CREATE TABLE keys (
-    key_id text PRIMARY KEY,
+    key_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    fingerprint text NOT NULL,
     key text NOT NULL,
     comment text,
     created_at timestamptz NOT NULL DEFAULT now(),
     deleted_at timestamptz
 )`,
+		`CREATE UNIQUE INDEX ON keys (fingerprint) WHERE deleted_at IS NULL`,
 
 		`CREATE TABLE app_logs (
     app_id uuid NOT NULL REFERENCES apps (app_id),

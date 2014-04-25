@@ -394,6 +394,32 @@ func (s *S) TestDeleteKey(c *C) {
 	c.Assert(res.StatusCode, Equals, 404)
 }
 
+func (s *S) TestRecreateKey(c *C) {
+	key := &ct.Key{Key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC3I4gHed4RioRMoJTFdVYp9S6QhHUtMe2cdQAmaN5lVuAaEe9GmJ/wtD4pd7sCpw9daCVOD/WWKCDunrwiEwMNzZKPFQPRfrGAgpCdweD+mk62n/DuaeKJFcfB4C/iLqUrYQ9q0QNnokchI4Ts/CaWoesJOQsbtxDwxcaOlYA/Yq/nY/RA3aK0ZfZqngrOjNRuvhnNFeCF94w2CwwX9ley+PtL0LSWOK2F9D/VEAoRMY89av6WQEoho3vLH7PIOP4OKdla7ezxP9nU14MN4PSv2yUS15mZ14SkA3EF+xmO0QXYUcUi4v5UxkBpoRYNAh32KMMD70pXPRCmWvZ5pRrH lewis@lmars.net"}
+
+	originalKey := s.createTestKey(c, key)
+	c.Assert(originalKey.ID, Equals, "0c0432006c63fc965ef6946fb67ab559")
+	c.Assert(originalKey.Key, Equals, key.Key[:strings.LastIndex(key.Key, " ")])
+	c.Assert(originalKey.Comment, Equals, "lewis@lmars.net")
+
+	// Post a duplicate
+	res, err := s.Post("/keys", key, &ct.Key{})
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 500) // TODO: This should probably be a 4xx error
+
+	// Delete the original
+	path := "/keys/" + originalKey.ID
+	res, err = s.Delete(path)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	// Create the same key
+	newKey := s.createTestKey(c, key)
+	c.Assert(newKey.ID, Equals, "0c0432006c63fc965ef6946fb67ab559")
+	c.Assert(newKey.Key, Equals, key.Key[:strings.LastIndex(key.Key, " ")])
+	c.Assert(newKey.Comment, Equals, "lewis@lmars.net")
+}
+
 func (s *S) TestAppList(c *C) {
 	s.createTestApp(c, &ct.App{Name: "list-test"})
 
