@@ -66,7 +66,7 @@ func (r *KeyRepo) List() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	var keys []*ct.Key
+	keys := []*ct.Key{}
 	for rows.Next() {
 		key, err := scanKey(rows)
 		if err != nil {

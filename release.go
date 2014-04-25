@@ -64,7 +64,7 @@ func (r *ReleaseRepo) List() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	var releases []*ct.Release
+	releases := []*ct.Release{}
 	for rows.Next() {
 		release, err := scanRelease(rows)
 		if err != nil {

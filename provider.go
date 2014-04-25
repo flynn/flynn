@@ -55,7 +55,7 @@ func (r *ProviderRepo) List() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	var providers []*ct.Provider
+	providers := []*ct.Provider{}
 	for rows.Next() {
 		provider, err := scanProvider(rows)
 		if err != nil {

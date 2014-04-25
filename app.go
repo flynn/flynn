@@ -142,7 +142,7 @@ func (r *AppRepo) List() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	var apps []*ct.App
+	apps := []*ct.App{}
 	for rows.Next() {
 		app, err := scanApp(rows)
 		if err != nil {
