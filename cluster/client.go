@@ -116,6 +116,7 @@ func (c *Client) followLeader(firstErr chan<- error) {
 		if firstErr != nil {
 			firstErr <- c.err
 			if c.err != nil {
+				c.c = nil
 				c.Close()
 				return
 			}
