@@ -247,6 +247,10 @@ func (c *Client) CreateRoute(appID string, route *strowger.Route) error {
 	return c.post(fmt.Sprintf("/apps/%s/routes", appID), route, route)
 }
 
+func (c *Client) DeleteRoute(appID string, routeID string) error {
+	return c.delete(fmt.Sprintf("/apps/%s/routes/%s", appID, routeID))
+}
+
 func (c *Client) GetFormation(appID, releaseID string) (*ct.Formation, error) {
 	formation := &ct.Formation{}
 	return formation, c.get(fmt.Sprintf("/apps/%s/formations/%s", appID, releaseID), formation)
