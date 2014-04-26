@@ -77,3 +77,23 @@ func runRoutes(cmd *Command, args []string, client *controller.Client) error {
 	}
 	return nil
 }
+
+var cmdRouteRemove = &Command{
+	Run:   runRouteRemove,
+	Usage: "route-remove <id>",
+	Short: "remove a route",
+	Long:  "Command route-remove removes a route from the Flynn controller.",
+}
+
+func runRouteRemove(cmd *Command, args []string, client *controller.Client) error {
+	if len(args) != 1 {
+		cmd.printUsage(true)
+	}
+	routeID := args[0]
+
+	if err := client.DeleteRoute(mustApp(), routeID); err != nil {
+		return err
+	}
+	fmt.Printf("Route %s removed.\n", routeID)
+	return nil
+}
