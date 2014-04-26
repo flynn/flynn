@@ -72,15 +72,7 @@ func main() {
 	if *noAuth {
 		config = &ssh.ServerConfig{NoClientAuth: true}
 	} else {
-		config = &ssh.ServerConfig{
-			PublicKeyCallback: func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-				return &ssh.Permissions{
-					CriticalOptions: map[string]string{
-						"public-key": string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(key))),
-					},
-				}, nil
-			},
-		}
+		config = &ssh.ServerConfig{PublicKeyCallback: checkAuth}
 	}
 
 	if keyEnv := os.Getenv("SSH_PRIVATE_KEYS"); keyEnv != "" {
@@ -208,17 +200,6 @@ func handleChannel(conn *ssh.ServerConn, newChan ssh.NewChannel) {
 				return
 			}
 
-			if !*noAuth {
-				if err := checkAuth(conn, cmdargs[1]); err != nil {
-					if err == ErrUnauthorized {
-						ch.Stderr().Write([]byte("Unauthorized.\n"))
-					} else {
-						fail("checkAuth", err)
-					}
-					return
-				}
-			}
-
 			if err := ensureCacheRepo(cmdargs[1]); err != nil {
 				fail("ensureCacheRepo", err)
 				return
@@ -258,16 +239,16 @@ func handleChannel(conn *ssh.ServerConn, newChan ssh.NewChannel) {
 
 var ErrUnauthorized = errors.New("gitreceive: user is unauthorized")
 
-func checkAuth(conn *ssh.ServerConn, repo string) error {
+func checkAuth(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 	status, err := exitStatus(exec.Command(authChecker[0],
-		append(authChecker[1:], conn.User(), repo, string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(conn.Conn.PublicKey()))))...).Run())
+		append(authChecker[1:], conn.User(), string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(key))))...).Run())
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if status.Status == 0 {
-		return nil
+		return nil, nil
 	}
-	return ErrUnauthorized
+	return nil, ErrUnauthorized
 }
 
 func attachCmd(cmd *exec.Cmd, stdout, stderr io.Writer, stdin io.Reader) (*sync.WaitGroup, error) {

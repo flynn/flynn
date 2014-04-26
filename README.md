@@ -16,12 +16,11 @@ Usage:  ./gitreceived [options] <privatekey> <authchecker> <receiver>
 
 `privatekey` is the path to the server's private key (unencrypted).
 
-`authchecker` is a path to an executable that will check if the push is authorized, and exit with status 0 if it is. It will be called with the following arguments:
+`authchecker` is a path to an executable that will check if the key is authorized, and exit with status 0 if it is. It will be called with the following arguments:
 
-    authchecker $USER $PATH $KEY
+    authchecker $USER $KEY
 
 * `$USER` is the username that was provided to the server.
-* `$PATH` is the path of the repo that was pushed to. It will not contain slashes.
 * `$KEY` is the public key that was provided to the server.
 
 The `receiver` is a path to an executable that will handle the push. It will get a tar stream of the repo via stdin and the following arguments:
