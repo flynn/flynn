@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"io"
 	"log"
 	"net/http"
@@ -12,6 +13,8 @@ import (
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/go-flynn/postgres"
 )
+
+var storageDir = flag.String("s", "", "Path to store files, instead of Postgres")
 
 func errorResponse(w http.ResponseWriter, err error) {
 	if err == ErrNotFound {
@@ -75,22 +78,36 @@ func handler(fs Filesystem) http.Handler {
 }
 
 func main() {
+	flag.Parse()
+
 	addr := os.Getenv("PORT")
 	if addr == "" {
 		addr = "3001"
 	}
 	addr = ":" + addr
 
-	db, err := postgres.Open("", "")
-	if err != nil {
-		log.Fatal(err)
+	var fs Filesystem
+	var storageDesc string
+
+	if *storageDir != "" {
+		fs = NewOSFilesystem(*storageDir)
+		storageDesc = *storageDir
+	} else {
+		db, err := postgres.Open("", "")
+		if err != nil {
+			log.Fatal(err)
+		}
+		fs, err = NewPostgresFilesystem(db.DB)
+		if err != nil {
+			log.Fatal(err)
+		}
+		storageDesc = "Postgres"
 	}
+
 	if err := discoverd.Register("shelf", addr); err != nil {
 		log.Fatal(err)
 	}
-	fs, err := NewPostgresFilesystem(db.DB)
-	if err != nil {
-		log.Fatal(err)
-	}
+
+	log.Println("Shelf serving files on " + addr + " from " + storageDesc)
 	log.Fatal(http.ListenAndServe(addr, handler(fs)))
 }
