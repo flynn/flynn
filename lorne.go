@@ -48,6 +48,7 @@ func (a AttributeFlag) String() string {
 func main() {
 	hostname, _ := os.Hostname()
 	externalAddr := flag.String("external", "", "external IP of host")
+	bindAddr := flag.String("bind", "", "bind containers to this IP")
 	configFile := flag.String("config", "", "configuration file")
 	manifestFile := flag.String("manifest", "/etc/flynn-host.json", "manifest file")
 	hostID := flag.String("id", hostname, "host id")
@@ -79,6 +80,7 @@ func main() {
 
 	processor := &jobProcessor{
 		externalAddr: *externalAddr,
+		bindAddr:     *bindAddr,
 		docker:       dockerc,
 		state:        state,
 		discoverd:    os.Getenv("DISCOVERD"),
@@ -197,6 +199,7 @@ func main() {
 
 type jobProcessor struct {
 	externalAddr string
+	bindAddr     string
 	discoverd    string
 	docker       interface {
 		CreateContainer(*docker.Config) (*docker.Container, error)
@@ -243,8 +246,7 @@ func (p *jobProcessor) processJob(ports <-chan int, job *host.Job) (*docker.Cont
 
 	if job.HostConfig == nil {
 		job.HostConfig = &docker.HostConfig{
-			PortBindings:    make(map[string][]docker.PortBinding, job.TCPPorts),
-			PublishAllPorts: true,
+			PortBindings: make(map[string][]docker.PortBinding, job.TCPPorts),
 		}
 	}
 	if job.Config.ExposedPorts == nil {
@@ -257,7 +259,7 @@ func (p *jobProcessor) processJob(ports <-chan int, job *host.Job) (*docker.Cont
 		}
 		job.Config.Env = append(job.Config.Env, fmt.Sprintf("PORT_%d=%s", i, port))
 		job.Config.ExposedPorts[port+"/tcp"] = struct{}{}
-		job.HostConfig.PortBindings[port+"/tcp"] = []docker.PortBinding{{HostPort: port}}
+		job.HostConfig.PortBindings[port+"/tcp"] = []docker.PortBinding{{HostPort: port, HostIp: p.bindAddr}}
 	}
 
 	job.Config.AttachStdout = true
