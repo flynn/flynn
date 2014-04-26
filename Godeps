@@ -3,8 +3,9 @@
 	"GoVersion": "go1.2.1",
 	"Deps": [
 		{
-			"ImportPath": "github.com/flynn/go-crypto-ssh",
-			"Rev": "7cd731376a4eb3982056b009e5ac55e063c87264"
+			"ImportPath": "code.google.com/p/go.crypto/ssh",
+			"Comment": "null-200",
+			"Rev": "5478be1963aafa9025e9bf0837aff6013eb92e5b"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-shlex",

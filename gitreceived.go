@@ -18,7 +18,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/flynn/go-crypto-ssh"
+	"code.google.com/p/go.crypto/ssh"
 	"github.com/flynn/go-shlex"
 )
 
