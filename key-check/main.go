@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	key := os.Args[3]
+	key := os.Args[2]
 
 	client, err := controller.NewClient("", os.Getenv("CONTROLLER_AUTH_KEY"))
 	if err != nil {
