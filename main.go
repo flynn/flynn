@@ -68,6 +68,7 @@ var commands = []*Command{
 	cmdEnvSet,
 	cmdEnvGet,
 	cmdEnvUnset,
+	cmdRoutes,
 	cmdRouteAddHTTP,
 	cmdProviders,
 	cmdResourceAdd,
