@@ -27,7 +27,8 @@
   {
     "id": "controller-key",
     "action": "gen-random",
-    "controller_key": true
+    "controller_key": true,
+    "data": "{{ getenv `CONTROLLER_KEY` }}"
   },
   {
     "id": "postgres-wait",

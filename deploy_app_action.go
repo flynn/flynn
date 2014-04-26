@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"bytes"
 	"log"
+	"os"
 	"text/template"
 
 	ct "github.com/flynn/flynn-controller/types"
@@ -21,7 +22,7 @@ func init() {
 }
 
 func interpolate(s *State, arg string) string {
-	t, err := template.New("arg").Parse(arg)
+	t, err := template.New("arg").Funcs(template.FuncMap{"getenv": os.Getenv}).Parse(arg)
 	if err != nil {
 		log.Printf("Ignoring error parsing %q as template: %s", arg, err)
 		return arg
