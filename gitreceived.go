@@ -40,7 +40,7 @@ var privateKey string
 
 func init() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %v [options] <authchecker> <receiver>\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %v [options] <privatekey> <authchecker> <receiver>\n\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 }
