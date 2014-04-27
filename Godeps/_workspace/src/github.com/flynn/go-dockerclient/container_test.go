@@ -550,11 +550,10 @@ func TestAttachToContainer(t *testing.T) {
 	}))
 	defer server.Close()
 	client, _ := NewClient(server.URL)
-	var stdout, stderr bytes.Buffer
+	var stdout bytes.Buffer
 	opts := AttachToContainerOptions{
 		Container:    "a123456",
 		OutputStream: &stdout,
-		ErrorStream:  &stderr,
 		InputStream:  file,
 		Stdin:        true,
 		Stdout:       true,

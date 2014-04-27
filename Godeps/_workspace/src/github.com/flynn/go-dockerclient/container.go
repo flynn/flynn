@@ -224,7 +224,6 @@ type AttachToContainerOptions struct {
 	Container    string
 	InputStream  io.Reader
 	OutputStream io.Writer
-	ErrorStream  io.Writer
 
 	// Get container logs, sending it to OutputStream.
 	Logs bool
@@ -255,16 +254,14 @@ func (c *Client) AttachToContainer(opts AttachToContainerOptions) error {
 		return &NoSuchContainer{ID: container}
 	}
 	stdout := opts.OutputStream
-	stderr := opts.ErrorStream
 	stdin := opts.InputStream
 	success := opts.Success
 	opts.Container = ""
 	opts.InputStream = nil
 	opts.OutputStream = nil
-	opts.ErrorStream = nil
 	opts.Success = nil
 	path := "/containers/" + container + "/attach?" + queryString(opts)
-	return c.hijack("POST", path, success, stdin, stderr, stdout)
+	return c.hijack("POST", path, success, stdin, stdout)
 }
 
 func (c *Client) ResizeContainerTTY(id string, height, width int) error {

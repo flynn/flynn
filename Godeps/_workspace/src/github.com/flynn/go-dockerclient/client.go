@@ -173,7 +173,7 @@ func (c *Client) stream(method, path string, in io.Reader, out io.Writer) error 
 	return nil
 }
 
-func (c *Client) hijack(method, path string, success chan struct{}, in io.Reader, errStream io.Writer, out io.Writer) error {
+func (c *Client) hijack(method, path string, success chan struct{}, in io.Reader, out io.Writer) error {
 	req, err := http.NewRequest(method, c.getURL(path), nil)
 	if err != nil {
 		return err
@@ -197,25 +197,28 @@ func (c *Client) hijack(method, path string, success chan struct{}, in io.Reader
 		<-success
 	}
 	rwc, br := clientconn.Hijack()
-	errStdout := make(chan error, 1)
+	errs := make(chan error, 2)
 	go func() {
 		_, err := io.Copy(out, br)
-		errStdout <- err
+		errs <- err
 	}()
 	go func() {
+		var err error
 		if in != nil {
-			io.Copy(rwc, in)
+			_, err = io.Copy(rwc, in)
 		}
-		if err := rwc.(interface {
+		rwc.(interface {
 			CloseWrite() error
-		}).CloseWrite(); err != nil && errStream != nil {
-			fmt.Fprintf(errStream, "Couldn't send EOF: %s\n", err)
-		}
+		}).CloseWrite()
+		errs <- err
 	}()
-	if err := <-errStdout; err != nil {
-		return err
+	var connErr error
+	for i := 0; i < cap(errs); i++ {
+		if err := <-errs; connErr == nil {
+			connErr = err
+		}
 	}
-	return nil
+	return connErr
 }
 
 const version = "1.6"
