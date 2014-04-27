@@ -76,6 +76,7 @@ var commands = []*Command{
 	cmdKeys,
 	cmdKeyAdd,
 	cmdKeyRemove,
+	cmdReleaseAddDocker,
 	cmdVersion,
 	cmdHelp,
 }
