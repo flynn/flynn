@@ -17,19 +17,19 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-dockerclient",
-			"Rev": "7299ec5cb7c35fda101c46a24edb648795f7e074"
+			"Rev": "dce56306bc0414a0be6affb661f512cc735a72cb"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/attempt",
-			"Rev": "5bc71bdf4686567fc60f50bbe952f6c8da80bc8e"
+			"Rev": "3743ca1e0e1cff877b906dd56983f57699b2cc7d"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/cluster",
-			"Rev": "5bc71bdf4686567fc60f50bbe952f6c8da80bc8e"
+			"Rev": "3743ca1e0e1cff877b906dd56983f57699b2cc7d"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
-			"Rev": "51dc85b57711bd07c8856a09c8173d7deeca6857"
+			"Rev": "05df3d30b6e55f5b440c1a78e2f83cb822bc0d76"
 		},
 		{
 			"ImportPath": "github.com/technoweenie/grohl",
