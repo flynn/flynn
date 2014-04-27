@@ -33,8 +33,8 @@ flynn key-add
 After adding your ssh key, you can deploy a new application:
 
 ```text
-git clone https://github.com/flynn/nodejs-example
-cd nodejs-example
+git clone https://github.com/flynn/nodejs-flynn-example
+cd nodejs-flynn-example
 flynn create example
 git push flynn master
 ```
