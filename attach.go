@@ -109,8 +109,13 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 		close(attachWait)
 	}()
 	if err := h.docker.AttachToContainer(opts); err != nil {
-		close(failed)
-		conn.Write(append([]byte{host.AttachError}, err.Error()...))
+		select {
+		case <-success:
+		default:
+			close(failed)
+			conn.Write(append([]byte{host.AttachError}, err.Error()...))
+		}
+		g.Log(grohl.Data{"at": "docker", "status": "error", "err": err})
 		return
 	}
 	g.Log(grohl.Data{"at": "finish"})
