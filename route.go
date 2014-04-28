@@ -1,7 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"encoding/pem"
+	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"strconv"
 
 	"github.com/flynn/flynn-controller/client"
@@ -10,24 +15,61 @@ import (
 
 var cmdRouteAddHTTP = &Command{
 	Run:   runRouteAddHTTP,
-	Usage: "route-add-http [-s <service>] <domain>",
+	Usage: "route-add-http [-s <service>] [-c <tls-cert>] [-k <tls-key>] <domain>",
 	Short: "add a HTTP route",
-	Long:  `Add a HTTP route to an app"`,
+	Long:  `Add a HTTP route to an app`,
 }
 
 var routeHTTPService string
+var tlsCertPath string
+var tlsKeyPath string
 
 func init() {
 	cmdRouteAddHTTP.Flag.StringVarP(&routeHTTPService, "service", "s", "", "service name to route domain to (defaults to APPNAME-web)")
+	cmdRouteAddHTTP.Flag.StringVarP(&tlsCertPath, "tls-cert", "c", "", "path to PEM encoded certificate for TLS, - for stdin")
+	cmdRouteAddHTTP.Flag.StringVarP(&tlsKeyPath, "tls-key", "k", "", "path to PEM encoded private key for TLS, - for stdin")
 }
 
 func runRouteAddHTTP(cmd *Command, args []string, client *controller.Client) error {
+	var tlsCert []byte
+	var tlsKey []byte
+
 	if len(args) != 1 {
 		cmd.printUsage(true)
 	}
-	hr := &strowger.HTTPRoute{Domain: args[0], Service: routeHTTPService}
-	if hr.Service == "" {
-		hr.Service = mustApp() + "-web"
+
+	if routeHTTPService == "" {
+		routeHTTPService = mustApp() + "-web"
+	}
+
+	if tlsCertPath != "" && tlsKeyPath != "" {
+		var stdin []byte
+		var err error
+
+		if tlsCertPath == "-" || tlsKeyPath == "-" {
+			stdin, err = ioutil.ReadAll(os.Stdin)
+			if err != nil {
+				return fmt.Errorf("Failed to read from stdin: %s", err)
+			}
+		}
+
+		tlsCert, err = readPEM("CERTIFICATE", tlsCertPath, stdin)
+		if err != nil {
+			return errors.New("Failed to read TLS Cert")
+		}
+		tlsKey, err = readPEM("PRIVATE KEY", tlsKeyPath, stdin)
+		if err != nil {
+			return errors.New("Failed to read TLS Key")
+		}
+	} else if tlsCertPath != "" || tlsKeyPath != "" {
+		return errors.New("Both the TLS certificate AND private key need to be specified")
+	}
+
+	hr := &strowger.HTTPRoute{
+		Service: routeHTTPService,
+		Domain:  args[0],
+		TLSCert: string(tlsCert),
+		TLSKey:  string(tlsKey),
 	}
 	route := hr.ToRoute()
 	if err := client.CreateRoute(mustApp(), route); err != nil {
@@ -35,6 +77,27 @@ func runRouteAddHTTP(cmd *Command, args []string, client *controller.Client) err
 	}
 	fmt.Println(route.ID)
 	return nil
+}
+
+func readPEM(typ string, path string, stdin []byte) ([]byte, error) {
+	if path == "-" {
+		var buf bytes.Buffer
+		var block *pem.Block
+		for {
+			block, stdin = pem.Decode(stdin)
+			if block == nil {
+				break
+			}
+			if block.Type == typ {
+				pem.Encode(&buf, block)
+			}
+		}
+		if buf.Len() > 0 {
+			return buf.Bytes(), nil
+		}
+		return nil, errors.New("No PEM blocks found in stdin")
+	}
+	return ioutil.ReadFile(path)
 }
 
 var cmdRoutes = &Command{
