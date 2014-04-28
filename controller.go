@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -72,12 +73,38 @@ type handlerConfig struct {
 	key string
 }
 
+type ResponseHelper interface {
+	Error(error)
+	JSON(int, interface{})
+}
+
+type responseHelper struct {
+	render.Render
+}
+
+func (r *responseHelper) Error(err error) {
+	switch err.(type) {
+	case ValidationError:
+		r.JSON(400, err)
+	case *json.SyntaxError, *json.UnmarshalTypeError:
+		r.JSON(400, ValidationError{Message: "The provided JSON input is invalid"})
+	default:
+		log.Println(err)
+		r.JSON(500, struct{}{})
+	}
+}
+
+func responseHelperHandler(c martini.Context, r render.Render) {
+	c.MapTo(&responseHelper{r}, (*ResponseHelper)(nil))
+}
+
 func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	r := martini.NewRouter()
 	m := martini.New()
 	m.Use(martini.Logger())
 	m.Use(martini.Recovery())
 	m.Use(render.Renderer())
+	m.Use(responseHelperHandler)
 	m.Action(r.Handle)
 
 	d := NewDB(c.db)
