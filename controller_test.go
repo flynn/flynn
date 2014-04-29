@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -102,6 +103,15 @@ func (s *S) send(method, path string, in, out interface{}) (*http.Response, erro
 	return res, nil
 }
 
+func (s *S) body(res *http.Response) (string, error) {
+	defer res.Body.Close()
+	buf, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(buf), nil
+}
+
 func (s *S) Post(path string, in, out interface{}) (*http.Response, error) {
 	return s.send("POST", path, in, out)
 }
@@ -160,6 +170,14 @@ func (s *S) createTestApp(c *C, in *ct.App) *ct.App {
 }
 
 func (s *S) TestCreateApp(c *C) {
+	// app with no name returns 400
+	res, err := s.Post("/apps", &ct.App{}, &ct.App{})
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 400)
+	body, err := s.body(res)
+	c.Assert(err, IsNil)
+	c.Assert(body, Equals, `{"field":"name","message":"must not be blank"}`)
+
 	for i, id := range []string{"", utils.UUID()} {
 		name := fmt.Sprintf("create-app-%d", i)
 		app := s.createTestApp(c, &ct.App{ID: id, Name: name, Protected: true, Meta: map[string]string{"foo": "bar"}})

@@ -29,18 +29,17 @@ func crud(resource string, example interface{}, repo Repository, r martini.Route
 	resourcePtr := reflect.PtrTo(resourceType)
 	prefix := "/" + resource
 
-	r.Post(prefix, func(req *http.Request, r render.Render) {
+	r.Post(prefix, func(req *http.Request, r ResponseHelper) {
 		thing := reflect.New(resourceType).Interface()
 		err := json.NewDecoder(req.Body).Decode(thing)
 		if err != nil {
-			// 400?
+			r.Error(err)
 			return
 		}
 
 		err = repo.Add(thing)
 		if err != nil {
-			log.Println(err)
-			r.JSON(500, struct{}{})
+			r.Error(err)
 			return
 		}
 		r.JSON(200, thing)
