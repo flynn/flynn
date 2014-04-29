@@ -84,10 +84,10 @@ type responseHelper struct {
 
 func (r *responseHelper) Error(err error) {
 	switch err.(type) {
-	case ValidationError:
+	case ct.ValidationError:
 		r.JSON(400, err)
 	case *json.SyntaxError, *json.UnmarshalTypeError:
-		r.JSON(400, ValidationError{Message: "The provided JSON input is invalid"})
+		r.JSON(400, ct.ValidationError{Message: "The provided JSON input is invalid"})
 	default:
 		log.Println(err)
 		r.JSON(500, struct{}{})
