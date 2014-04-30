@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -15,7 +17,6 @@ import (
 	"github.com/flynn/go-flynn/cluster"
 	"github.com/flynn/go-flynn/demultiplex"
 	"github.com/go-martini/martini"
-	"github.com/martini-contrib/render"
 )
 
 type clusterClient interface {
@@ -24,11 +25,10 @@ type clusterClient interface {
 	AddJobs(*host.AddJobsReq) (*host.AddJobsRes, error)
 }
 
-func jobList(app *ct.App, cc clusterClient, r render.Render) {
+func jobList(app *ct.App, cc clusterClient, r ResponseHelper) {
 	hosts, err := cc.ListHosts()
 	if err != nil {
-		log.Println(err)
-		r.JSON(500, struct{}{})
+		r.Error(err)
 		return
 	}
 	var jobs []ct.Job
@@ -53,7 +53,7 @@ func jobList(app *ct.App, cc clusterClient, r render.Render) {
 	r.JSON(200, jobs)
 }
 
-func jobLog(req *http.Request, app *ct.App, params martini.Params, cluster cluster.Host, w http.ResponseWriter) {
+func jobLog(req *http.Request, app *ct.App, params martini.Params, cluster cluster.Host, w http.ResponseWriter, r ResponseHelper) {
 	attachReq := &host.AttachReq{
 		JobID: params["jobs_id"],
 		Flags: host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagLogs,
@@ -64,8 +64,7 @@ func jobLog(req *http.Request, app *ct.App, params martini.Params, cluster clust
 	stream, _, err := cluster.Attach(attachReq, false)
 	if err != nil {
 		// TODO: handle AttachWouldWait
-		log.Println(err)
-		w.WriteHeader(500)
+		r.Error(err)
 		return
 	}
 	defer stream.Close()
@@ -130,19 +129,18 @@ func parseJobID(params martini.Params) (string, string) {
 	return id[0], id[1]
 }
 
-func connectHostMiddleware(c martini.Context, params martini.Params, cl clusterClient, w http.ResponseWriter) {
+func connectHostMiddleware(c martini.Context, params martini.Params, cl clusterClient, r ResponseHelper) {
 	hostID, jobID := parseJobID(params)
 	if hostID == "" {
 		log.Printf("Unable to parse hostID from %q", params["jobs_id"])
-		w.WriteHeader(404)
+		r.Error(ErrNotFound)
 		return
 	}
 	params["jobs_id"] = jobID
 
 	client, err := cl.DialHost(hostID)
 	if err != nil {
-		log.Println(err)
-		w.WriteHeader(500)
+		r.Error(err)
 		return
 	}
 	c.MapTo(client, (*cluster.Host)(nil))
@@ -151,35 +149,33 @@ func connectHostMiddleware(c martini.Context, params martini.Params, cl clusterC
 	client.Close()
 }
 
-func killJob(app *ct.App, params martini.Params, client cluster.Host, w http.ResponseWriter) {
+func killJob(app *ct.App, params martini.Params, client cluster.Host, r ResponseHelper) {
 	if err := client.StopJob(params["jobs_id"]); err != nil {
-		log.Println(err)
-		w.WriteHeader(500)
+		r.Error(err)
 		return
 	}
 }
 
-func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *ArtifactRepo, cl clusterClient, req *http.Request, w http.ResponseWriter, r render.Render) {
+func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *ArtifactRepo, cl clusterClient, req *http.Request, w http.ResponseWriter, r ResponseHelper) {
 	data, err := releases.Get(newJob.ReleaseID)
 	if err != nil {
-		// TODO: 400 on ErrNotFound
-		log.Println("error getting release", err)
-		w.WriteHeader(500)
+		r.Error(err)
 		return
 	}
 	release := data.(*ct.Release)
 	data, err = artifacts.Get(release.ArtifactID)
 	if err != nil {
-		// TODO: 400 on ErrNotFound
-		log.Println("error getting artifact", err)
-		w.WriteHeader(500)
+		r.Error(err)
 		return
 	}
 	artifact := data.(*ct.Artifact)
 	image, err := utils.DockerImage(artifact.URI)
 	if err != nil {
 		log.Println("error parsing artifact uri", err)
-		w.WriteHeader(400)
+		r.Error(ct.ValidationError{
+			Field:   "artifact.uri",
+			Message: "is invalid",
+		})
 		return
 	}
 	attach := strings.Contains(req.Header.Get("Accept"), "application/vnd.flynn.attach")
@@ -209,8 +205,7 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 
 	hosts, err := cl.ListHosts()
 	if err != nil {
-		log.Println(err)
-		w.WriteHeader(500)
+		r.Error(err)
 		return
 	}
 	// pick a random host
@@ -219,8 +214,7 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 		break
 	}
 	if hostID == "" {
-		log.Println("no hosts found")
-		w.WriteHeader(500)
+		r.Error(errors.New("no hosts found"))
 		return
 	}
 
@@ -235,15 +229,13 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 		}
 		client, err := cl.DialHost(hostID)
 		if err != nil {
-			w.WriteHeader(500)
-			log.Println("lorne connect failed", err)
+			r.Error(fmt.Errorf("lorne connect failed: %s", err.Error()))
 			return
 		}
 		defer client.Close()
 		attachConn, attachWait, err = client.Attach(attachReq, true)
 		if err != nil {
-			w.WriteHeader(500)
-			log.Println("attach failed", err)
+			r.Error(fmt.Errorf("attach failed: %s", err.Error()))
 			return
 		}
 		defer attachConn.Close()
@@ -251,15 +243,13 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 
 	_, err = cl.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{hostID: {job}}})
 	if err != nil {
-		log.Println("schedule failed", err)
-		w.WriteHeader(500)
+		r.Error(fmt.Errorf("schedule failed: %s", err.Error()))
 		return
 	}
 
 	if attach {
 		if err := attachWait(); err != nil {
-			log.Println("attach wait failed", err)
-			w.WriteHeader(500)
+			r.Error(fmt.Errorf("attach wait failed: %s", err.Error()))
 			return
 		}
 		w.Header().Set("Content-Type", "application/vnd.flynn.attach")

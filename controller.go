@@ -25,6 +25,8 @@ import (
 	"github.com/martini-contrib/render"
 )
 
+var ErrNotFound = errors.New("controller: resource not found")
+
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -76,9 +78,11 @@ type handlerConfig struct {
 type ResponseHelper interface {
 	Error(error)
 	JSON(int, interface{})
+	WriteHeader(int)
 }
 
 type responseHelper struct {
+	http.ResponseWriter
 	render.Render
 }
 
@@ -89,13 +93,17 @@ func (r *responseHelper) Error(err error) {
 	case *json.SyntaxError, *json.UnmarshalTypeError:
 		r.JSON(400, ct.ValidationError{Message: "The provided JSON input is invalid"})
 	default:
+		if err == ErrNotFound {
+			r.WriteHeader(404)
+			return
+		}
 		log.Println(err)
 		r.JSON(500, struct{}{})
 	}
 }
 
-func responseHelperHandler(c martini.Context, r render.Render) {
-	c.MapTo(&responseHelper{r}, (*ResponseHelper)(nil))
+func responseHelperHandler(c martini.Context, w http.ResponseWriter, r render.Render) {
+	c.MapTo(&responseHelper{w, r}, (*ResponseHelper)(nil))
 }
 
 func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
@@ -178,7 +186,7 @@ func rpcMuxHandler(main http.Handler, rpch http.Handler, authKey string) http.Ha
 	})
 }
 
-func putFormation(formation ct.Formation, app *ct.App, release *ct.Release, repo *FormationRepo, r render.Render) {
+func putFormation(formation ct.Formation, app *ct.App, release *ct.Release, repo *FormationRepo, r ResponseHelper) {
 	formation.AppID = app.ID
 	formation.ReleaseID = release.ID
 	err := repo.Add(&formation)
@@ -191,46 +199,38 @@ func putFormation(formation ct.Formation, app *ct.App, release *ct.Release, repo
 		}
 	}
 	if err != nil {
-		log.Println(err)
-		r.JSON(500, struct{}{})
+		r.Error(err)
 		return
 	}
 	r.JSON(200, &formation)
 }
 
-func getFormationMiddleware(c martini.Context, app *ct.App, params martini.Params, repo *FormationRepo, w http.ResponseWriter) {
+func getFormationMiddleware(c martini.Context, app *ct.App, params martini.Params, repo *FormationRepo, r ResponseHelper) {
 	formation, err := repo.Get(app.ID, params["releases_id"])
 	if err != nil {
-		if err == ErrNotFound {
-			w.WriteHeader(404)
-			return
-		}
-		log.Println(err)
-		w.WriteHeader(500)
+		r.Error(err)
 		return
 	}
 	c.Map(formation)
 }
 
-func getFormation(formation *ct.Formation, r render.Render) {
+func getFormation(formation *ct.Formation, r ResponseHelper) {
 	r.JSON(200, formation)
 }
 
-func deleteFormation(formation *ct.Formation, repo *FormationRepo, w http.ResponseWriter) {
+func deleteFormation(formation *ct.Formation, repo *FormationRepo, r ResponseHelper) {
 	err := repo.Remove(formation.AppID, formation.ReleaseID)
 	if err != nil {
-		log.Println(err)
-		w.WriteHeader(500)
+		r.Error(err)
 		return
 	}
-	w.WriteHeader(200)
+	r.WriteHeader(200)
 }
 
-func listFormations(app *ct.App, repo *FormationRepo, r render.Render) {
+func listFormations(app *ct.App, repo *FormationRepo, r ResponseHelper) {
 	list, err := repo.List(app.ID)
 	if err != nil {
-		log.Println(err)
-		r.JSON(500, struct{}{})
+		r.Error(err)
 		return
 	}
 	r.JSON(200, list)
@@ -240,11 +240,15 @@ type releaseID struct {
 	ID string `json:"id"`
 }
 
-func setAppRelease(app *ct.App, rid releaseID, apps *AppRepo, releases *ReleaseRepo, formations *FormationRepo, r render.Render) {
+func setAppRelease(app *ct.App, rid releaseID, apps *AppRepo, releases *ReleaseRepo, formations *FormationRepo, r ResponseHelper) {
 	rel, err := releases.Get(rid.ID)
 	if err != nil {
-		log.Println(err)
-		r.JSON(500, struct{}{})
+		if err == ErrNotFound {
+			err = ct.ValidationError{
+				Message: fmt.Sprintf("could not find release with ID %s", rid.ID),
+			}
+		}
+		r.Error(err)
 		return
 	}
 	release := rel.(*ct.Release)
@@ -253,8 +257,7 @@ func setAppRelease(app *ct.App, rid releaseID, apps *AppRepo, releases *ReleaseR
 	// TODO: use transaction/lock
 	fs, err := formations.List(app.ID)
 	if err != nil {
-		log.Println(err)
-		r.JSON(500, struct{}{})
+		r.Error(err)
 		return
 	}
 	if len(fs) == 1 && fs[0].ReleaseID != release.ID {
@@ -263,13 +266,11 @@ func setAppRelease(app *ct.App, rid releaseID, apps *AppRepo, releases *ReleaseR
 			ReleaseID: release.ID,
 			Processes: fs[0].Processes,
 		}); err != nil {
-			log.Println(err)
-			r.JSON(500, struct{}{})
+			r.Error(err)
 			return
 		}
 		if err := formations.Remove(app.ID, fs[0].ReleaseID); err != nil {
-			log.Println(err)
-			r.JSON(500, struct{}{})
+			r.Error(err)
 			return
 		}
 	}
@@ -277,25 +278,19 @@ func setAppRelease(app *ct.App, rid releaseID, apps *AppRepo, releases *ReleaseR
 	r.JSON(200, release)
 }
 
-func getAppRelease(app *ct.App, apps *AppRepo, r render.Render, w http.ResponseWriter) {
+func getAppRelease(app *ct.App, apps *AppRepo, r ResponseHelper) {
 	release, err := apps.GetRelease(app.ID)
 	if err != nil {
-		if err == ErrNotFound {
-			w.WriteHeader(404)
-			return
-		}
-		log.Println(err)
-		w.WriteHeader(500)
+		r.Error(err)
 		return
 	}
 	r.JSON(200, release)
 }
 
-func resourceServerMiddleware(c martini.Context, p *ct.Provider, dc resource.DiscoverdClient, w http.ResponseWriter) {
+func resourceServerMiddleware(c martini.Context, p *ct.Provider, dc resource.DiscoverdClient, r ResponseHelper) {
 	server, err := resource.NewServerWithDiscoverd(p.URL, dc)
 	if err != nil {
-		log.Println(err)
-		w.WriteHeader(500)
+		r.Error(err)
 		return
 	}
 	c.Map(server)
@@ -303,18 +298,17 @@ func resourceServerMiddleware(c martini.Context, p *ct.Provider, dc resource.Dis
 	server.Close()
 }
 
-func putResource(p *ct.Provider, params martini.Params, resource ct.Resource, repo *ResourceRepo, r render.Render) {
+func putResource(p *ct.Provider, params martini.Params, resource ct.Resource, repo *ResourceRepo, r ResponseHelper) {
 	resource.ID = params["resources_id"]
 	resource.ProviderID = p.ID
 	if err := repo.Add(&resource); err != nil {
-		log.Println(err)
-		r.JSON(500, struct{}{})
+		r.Error(err)
 		return
 	}
 	r.JSON(200, &resource)
 }
 
-func provisionResource(rs *resource.Server, p *ct.Provider, req ct.ResourceReq, repo *ResourceRepo, r render.Render) {
+func provisionResource(rs *resource.Server, p *ct.Provider, req ct.ResourceReq, repo *ResourceRepo, r ResponseHelper) {
 	var config []byte
 	if req.Config != nil {
 		config = *req.Config
@@ -323,8 +317,7 @@ func provisionResource(rs *resource.Server, p *ct.Provider, req ct.ResourceReq, 
 	}
 	data, err := rs.Provision(config)
 	if err != nil {
-		log.Println(err)
-		r.JSON(500, struct{}{})
+		r.Error(err)
 		return
 	}
 
@@ -336,46 +329,38 @@ func provisionResource(rs *resource.Server, p *ct.Provider, req ct.ResourceReq, 
 	}
 	if err := repo.Add(res); err != nil {
 		// TODO: attempt to "rollback" provisioning
-		log.Println(err)
-		r.JSON(500, struct{}{})
+		r.Error(err)
 		return
 	}
 	r.JSON(200, res)
 }
 
-func getResourceMiddleware(c martini.Context, params martini.Params, repo *ResourceRepo, w http.ResponseWriter) {
+func getResourceMiddleware(c martini.Context, params martini.Params, repo *ResourceRepo, r ResponseHelper) {
 	resource, err := repo.Get(params["resources_id"])
 	if err != nil {
-		if err == ErrNotFound {
-			w.WriteHeader(404)
-			return
-		}
-		log.Println(err)
-		w.WriteHeader(500)
+		r.Error(err)
 		return
 	}
 	c.Map(resource)
 }
 
-func getResource(resource *ct.Resource, r render.Render) {
+func getResource(resource *ct.Resource, r ResponseHelper) {
 	r.JSON(200, resource)
 }
 
-func getProviderResources(p *ct.Provider, repo *ResourceRepo, r render.Render) {
+func getProviderResources(p *ct.Provider, repo *ResourceRepo, r ResponseHelper) {
 	res, err := repo.ProviderList(p.ID)
 	if err != nil {
-		log.Println(err)
-		r.JSON(500, struct{}{})
+		r.Error(err)
 		return
 	}
 	r.JSON(200, res)
 }
 
-func getAppResources(app *ct.App, repo *ResourceRepo, r render.Render) {
+func getAppResources(app *ct.App, repo *ResourceRepo, r ResponseHelper) {
 	res, err := repo.AppList(app.ID)
 	if err != nil {
-		log.Println(err)
-		r.JSON(500, struct{}{})
+		r.Error(err)
 		return
 	}
 	r.JSON(200, res)
