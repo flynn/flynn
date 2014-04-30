@@ -124,6 +124,14 @@ func (c *Client) rawReq(method, path string, contentType string, in, out interfa
 		res.Body.Close()
 		return res, ErrNotFound
 	}
+	if res.StatusCode == 400 {
+		var body ct.ValidationError
+		defer res.Body.Close()
+		if err = json.NewDecoder(res.Body).Decode(&body); err != nil {
+			return res, err
+		}
+		return res, body
+	}
 	if res.StatusCode != 200 {
 		res.Body.Close()
 		return res, &url.Error{
