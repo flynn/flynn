@@ -1,6 +1,6 @@
 GIT
   remote: git://github.com/cupcake/cupcake-icons.git
-  revision: 573e2bdc6e909747de4ee757b82a25566acac14a
+  revision: ed51db3aaf27fed932d5ae562feadd06975b1349
   branch: master
   specs:
     cupcake-icons (0.0.1)
