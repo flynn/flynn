@@ -8,7 +8,7 @@ RUN echo "#!/bin/sh\nexit 101" > /usr/sbin/policy-rc.d; chmod +x /usr/sbin/polic
     apt-get -qy --fix-missing --force-yes install language-pack-en &&\
     update-locale LANG=en_US.UTF-8 LANGUAGE=en_US.UTF-8 LC_ALL=en_US.UTF-8 &&\
     dpkg-reconfigure locales &&\
-    apt-get -y install curl &&\
+    apt-get -y install curl sudo &&\
     curl -s https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - &&\
     sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ precise-pgdg main" >> /etc/apt/sources.list.d/postgresql.list' &&\
     apt-get update &&\
