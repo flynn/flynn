@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/discoverd/agent"
 	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-etcd/etcd"
 	"github.com/flynn/strowger/types"
 	. "github.com/titanous/gocheck"
 )

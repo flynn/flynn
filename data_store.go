@@ -6,7 +6,7 @@ import (
 	"log"
 	"path"
 
-	"github.com/flynn/go-etcd/etcd"
+	"github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/strowger/types"
 )
 
