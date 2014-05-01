@@ -28,7 +28,7 @@ func (b *EtcdBackend) Subscribe(name string) (UpdateStream, error) {
 	go func() {
 		if response != nil {
 			for _, n := range response.Node.Nodes {
-				if update := b.responseToUpdate(response, &n); update != nil {
+				if update := b.responseToUpdate(response, n); update != nil {
 					stream.ch <- update
 				}
 			}
