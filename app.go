@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"regexp"
@@ -59,8 +58,6 @@ func (r *AppRepo) Add(data interface{}) error {
 	}
 	return err
 }
-
-var ErrNotFound = errors.New("controller: resource not found")
 
 func scanApp(s Scanner) (*ct.App, error) {
 	app := &ct.App{}
