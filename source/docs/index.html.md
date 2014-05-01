@@ -7,8 +7,6 @@ layout: docs
 
 ## What is Flynn?
 
-Flynn has been marketed as an open source Heroku-like Platform as a Service (PaaS), however the real answer is more subtle.
-
 Flynn is two things:
 
 1. a "distribution" of components that out-of-the-box gives companies a reasonable starting point for an internal "platform" for running their applications and services,
@@ -21,7 +19,7 @@ Unlike most PaaS's Flynn can run stateful services as well as [12 factor](http:/
 
 Flynn components are divided into two _layers_.
 
-**Layer 0** is a low-level resource framework inspired by the [Google Omega](http://eurosys2013.tudos.org/wp-content/uploads/2013/paper/Schwarzkopf.pdf) paper. Layer 0 also includes service discovery
+**Layer 0** is a low-level resource framework inspired by the [Google Omega](http://eurosys2013.tudos.org/wp-content/uploads/2013/paper/Schwarzkopf.pdf) paper. Layer 0 also includes service discovery.
 
 **Layer 1** is a set of higher level components that makes it easy to deploy and maintain applications and databases.
 
