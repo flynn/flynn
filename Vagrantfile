@@ -6,15 +6,13 @@ VAGRANTFILE_API_VERSION = "2"
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.box = "flynn-base"
-  config.vm.box_url = "https://github.com/flynn/flynn-demo/releases/download/v0.1.0/flynn-base_virtualbox.box"
-  config.vm.box_download_checksum = "18584b5c733bb11aa8b312b5365e6d85fe24352d56ce874b874fe51724b21c28"
+  config.vm.box_url = "https://github.com/flynn/flynn-demo/releases/download/v0.2.0/flynn-base_virtualbox.box"
+  config.vm.box_download_checksum = "3e23b8123c99815221e8a1e9c5c91a6b19ef16b5d84d795f83d6efa0cd06ef19"
   config.vm.box_download_checksum_type = "sha256"
 
   config.vm.network "forwarded_port", guest: 80, host: 8080
   config.vm.network "forwarded_port", guest: 443, host: 8081
   config.vm.network "forwarded_port", guest: 2222, host: 2201
-  config.ssh.port = 2201
-  config.ssh.guest_port = 2222
 
   config.vm.synced_folder ".", "/vagrant", disabled: true
 

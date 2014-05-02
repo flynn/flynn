@@ -12,9 +12,9 @@
       ],
       "boot_wait": "5s",
       "http_directory": "http",
-      "iso_checksum": "3aeb42816253355394897ae80d99a9ba56217c0e98e05294b51f0f5b13bceb54",
+      "iso_checksum": "ababb88a492e08759fddcf4f05e5ccc58ec9d47fa37550d63931d0a5fa4f7388",
       "iso_checksum_type": "sha256",
-      "iso_url": "http://releases.ubuntu.com/12.04/ubuntu-12.04.4-server-amd64.iso",
+      "iso_url": "http://releases.ubuntu.com/14.04/ubuntu-14.04-server-amd64.iso",
       "shutdown_command": "echo 'vagrant' | sudo -S shutdown -P now",
       "ssh_password": "vagrant",
       "ssh_username": "vagrant",
@@ -36,9 +36,9 @@
       "guest_additions_path": "VBoxGuestAdditions_{{.Version}}.iso",
       "guest_os_type": "Ubuntu_64",
       "http_directory": "http",
-      "iso_checksum": "3aeb42816253355394897ae80d99a9ba56217c0e98e05294b51f0f5b13bceb54",
+      "iso_checksum": "ababb88a492e08759fddcf4f05e5ccc58ec9d47fa37550d63931d0a5fa4f7388",
       "iso_checksum_type": "sha256",
-      "iso_url": "http://releases.ubuntu.com/12.04/ubuntu-12.04.4-server-amd64.iso",
+      "iso_url": "http://releases.ubuntu.com/14.04/ubuntu-14.04-server-amd64.iso",
       "shutdown_command": "echo 'vagrant' | sudo -S shutdown -P now",
       "ssh_password": "vagrant",
       "ssh_username": "vagrant",
@@ -88,6 +88,6 @@
       ],
       "type": "shell"
     }
-  ]
+  ],
+  "post-processors": [{ "type": "vagrant" }]
 }
-

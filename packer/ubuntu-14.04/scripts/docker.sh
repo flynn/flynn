@@ -18,5 +18,3 @@ apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 36A1D7869245C8
 
 # Add the Docker repository to your apt sources list.
 echo deb https://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list
-
-sed -i 's/^Port 22$/Port 2222/' /etc/ssh/sshd_config
