@@ -139,7 +139,7 @@
         "app": {
           "ports": { "tcp": 1 },
           "cmd": ["-httpaddr", ":80", "-httpsaddr", ":443"],
-          "env": { "FLYNN_HOST_PORTS": "80,443,22" }
+          "env": { "FLYNN_HOST_PORTS": "80,443,2222" }
         }
       }
     },
@@ -195,7 +195,7 @@
     "type": "tcp",
     "config": {
       "service": "gitreceive",
-      "port": 22
+      "port": 2222
     }
   },
   {
@@ -212,6 +212,6 @@
   {
     "id": "log-complete",
     "action": "log",
-    "output": "Flynn bootstrapping complete. Install flynn-cli and paste the line below into a new terminal window:\n\nflynn server-add -g localhost:2222 -p {{ (index .StepData `controller-cert`).Pin }} default https://localhost:8081 {{ (index .StepData `controller-key`).Data }}"
+    "output": "Flynn bootstrapping complete. Install flynn-cli and paste the line below into a new terminal window:\n\nflynn server-add -g localhost:2201 -p {{ (index .StepData `controller-cert`).Pin }} default https://localhost:8081 {{ (index .StepData `controller-key`).Data }}"
   }
 ]
