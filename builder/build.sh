@@ -71,7 +71,7 @@ if [[ -n "$BUILDPACK_URL" ]]; then
 
 	buildpack="$buildpack_root/custom"
 	rm -fr "$buildpack"
-	git clone --depth=1 "$BUILDPACK_URL" "$buildpack"
+	git clone --quiet --depth=1 "$BUILDPACK_URL" "$buildpack"
 	selected_buildpack="$buildpack"
 	buildpack_name=$($buildpack/bin/detect "$build_root") && selected_buildpack=$buildpack
 else
