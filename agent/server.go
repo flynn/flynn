@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/flynn/rpcplus"
 	"github.com/flynn/go-flynn/attempt"
+	"github.com/flynn/rpcplus"
 	rpc "github.com/flynn/rpcplus/comborpc"
 )
 
