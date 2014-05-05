@@ -7,6 +7,9 @@ build/container: build/discoverd
 build/discoverd: Godeps *.go agent/*.go
 	godep go build -o build/discoverd
 
-.PHONY: clean
+test:
+	godep go test ./...
+
+.PHONY: clean test
 clean:
 	rm -rf build
