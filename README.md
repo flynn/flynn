@@ -24,14 +24,24 @@ The intended configuration is to have your backend store cluster somewhere on yo
 
 ## Development
 
-First it needs to be compiled:
+Install [Godep](https://github.com/tools/godep).
+Clone this repo into `$GOPATH/src/github.com/flynn/discoverd`.
+Compile `discoverd`:
+
 
 ```
-	$ cd discoverd
-	$ go build
+	$ make build/discoverd
 ```
 
-## Flynn 
+To run the tests you'll need `etcd` installed in your PATH.
+Follow the [directions](https://github.com/coreos/etcd) for building and installing `etcd`.
+Once you have `etcd` installed, you can run the tests:
+
+```
+	$ make test
+```
+
+## Flynn
 
 [Flynn](https://flynn.io) is a modular, open source Platform as a Service (PaaS). 
 
