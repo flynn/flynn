@@ -7,9 +7,16 @@ build/container: build/discoverd
 build/discoverd: Godeps *.go agent/*.go
 	godep go build -o build/discoverd
 
+lint:
+	go get github.com/golang/lint
+	golint *.go **/*.go
+
+fmt:
+	gofmt -w -s .
+
 test:
 	godep go test ./...
 
-.PHONY: clean test
+.PHONY: clean test lint fmt
 clean:
 	rm -rf build

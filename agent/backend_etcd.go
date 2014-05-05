@@ -8,8 +8,10 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 )
 
+// KeyPrefix is used to create the full service path.
 const KeyPrefix = "/discover"
 
+// EtcdBackend for service discovery.
 type EtcdBackend struct {
 	Client *etcd.Client
 }
@@ -21,6 +23,7 @@ func servicePath(name, addr string) string {
 	return KeyPrefix + "/services/" + name + "/" + addr
 }
 
+// Subscribe to changes in services of a given name.
 func (b *EtcdBackend) Subscribe(name string) (UpdateStream, error) {
 	stream := &etcdStream{ch: make(chan *ServiceUpdate), stop: make(chan bool)}
 	watch := b.getStateChanges(name, stream.stop)
@@ -96,6 +99,7 @@ func (b *EtcdBackend) getStateChanges(name string, stop chan bool) chan *etcd.Re
 	return watch
 }
 
+// Register a service with etcd.
 func (b *EtcdBackend) Register(name, addr string, attrs map[string]string) error {
 	attrsJSON, err := json.Marshal(attrs)
 	if err != nil {
@@ -115,6 +119,7 @@ func (b *EtcdBackend) Register(name, addr string, attrs map[string]string) error
 	return err
 }
 
+// Unregister a service with etcd.
 func (b *EtcdBackend) Unregister(name, addr string) error {
 	_, err := b.Client.Delete(servicePath(name, addr), false)
 	return err
