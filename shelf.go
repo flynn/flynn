@@ -102,10 +102,10 @@ func main() {
 			log.Fatal(err)
 		}
 		storageDesc = "Postgres"
-	}
 
-	if err := discoverd.Register("shelf", addr); err != nil {
-		log.Fatal(err)
+		if err := discoverd.Register("shelf", addr); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	log.Println("Shelf serving files on " + addr + " from " + storageDesc)
