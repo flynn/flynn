@@ -15,6 +15,7 @@ import (
 )
 
 var storageDir = flag.String("s", "", "Path to store files, instead of Postgres")
+var listenPort = flag.String("p", "3001", "Port to listen on")
 
 func errorResponse(w http.ResponseWriter, err error) {
 	if err == ErrNotFound {
@@ -82,7 +83,7 @@ func main() {
 
 	addr := os.Getenv("PORT")
 	if addr == "" {
-		addr = "3001"
+		addr = *listenPort
 	}
 	addr = ":" + addr
 
