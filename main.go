@@ -17,7 +17,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/flynn/go-crypto-ssh"
+	"code.google.com/p/go.crypto/ssh"
 	"gopkg.in/check.v1"
 )
 
