@@ -7,11 +7,12 @@ This is a more advanced, standalone version of [gitreceive](https://github.com/p
 ## Using gitreceived
 
 ```
-Usage:  ./gitreceived [options] <privatekey> <authchecker> <receiver>
+Usage:  ./gitreceived [options] <authchecker> <receiver>
 
   -n=false: disable client authentication
   -p="22": port to listen on
   -r="/tmp/repos": path to repo cache
+  -k="": pem file containing private keys (read from SSH_PRIVATE_KEYS by default)
 ```
 
 `privatekey` is the path to the server's private key (unencrypted).

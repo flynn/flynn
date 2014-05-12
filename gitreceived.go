@@ -36,11 +36,10 @@ var noAuth = flag.Bool("n", false, "disable client authentication")
 var keys = flag.String("k", "", "pem file containing private keys (read from SSH_PRIVATE_KEYS by default)")
 
 var authChecker []string
-var privateKey string
 
 func init() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %v [options] <privatekey> <authchecker> <receiver>\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %v [options] <authchecker> <receiver>\n\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 }
@@ -52,13 +51,12 @@ func main() {
 		os.Exit(64)
 	}
 	var err error
-	privateKey = flag.Arg(0)
-	authChecker, err = shlex.Split(flag.Arg(1))
+	authChecker, err = shlex.Split(flag.Arg(0))
 	if err != nil {
 		log.Fatalln("Unable to parse authchecker command:", err)
 	}
 
-	receiver, err := shlex.Split(flag.Arg(2))
+	receiver, err := shlex.Split(flag.Arg(1))
 	if err != nil {
 		log.Fatalln("Unable to parse receiver command:", err)
 	}
