@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
 
 	c "gopkg.in/check.v1"
 )
@@ -44,12 +47,35 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 	t.Assert(s.Flynn("create", name), Outputs, fmt.Sprintf("Created %s\n", name))
 
 	push := s.Git("push", "flynn", "master")
-	t.Assert(push, Succeeds)
+	t.Assert(push, OutputContains, "Node.js app detected")
+	t.Assert(push, OutputContains, "Downloading and installing node")
+	t.Assert(push, OutputContains, "Installing dependencies")
+	t.Assert(push, OutputContains, "Procfile declares types -> web")
+	t.Assert(push, OutputContains, "Creating release")
+	t.Assert(push, OutputContains, "Application deployed")
+	t.Assert(push, OutputContains, "* [new branch]      master -> master")
 
-	// flynn scale web=3
-	// flynn route-add-http
-	// flynn ps
-	// flynn routes
-	// flynn log
-	// make requests
+	t.Assert(s.Flynn("scale", "web=3"), Succeeds)
+
+	newRoute := s.Flynn("route-add-http", random()+".dev")
+	t.Assert(newRoute, Succeeds)
+
+	t.Assert(s.Flynn("routes"), OutputContains, strings.TrimSpace(newRoute.Output))
+
+	// TODO: add retry helper
+	time.Sleep(5 * time.Second)
+
+	ps := s.Flynn("ps")
+	t.Assert(ps, Succeeds)
+	psLines := strings.Split(strings.TrimSpace(ps.Output), "\n")
+	t.Assert(len(psLines), c.Equals, 4)
+
+	for _, l := range psLines[1:] {
+		idType := regexp.MustCompile(`\s+`).Split(l, 2)
+		t.Assert(idType[1], c.Equals, "web")
+		log := s.Flynn("log", idType[0])
+		t.Assert(log, OutputContains, "Listening on ")
+	}
+
+	// Make HTTP requests
 }
