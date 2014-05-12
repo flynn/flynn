@@ -15,8 +15,6 @@ Usage:  ./gitreceived [options] <authchecker> <receiver>
   -k="": pem file containing private keys (read from SSH_PRIVATE_KEYS by default)
 ```
 
-`privatekey` is the path to the server's private key (unencrypted).
-
 `authchecker` is a path to an executable that will check if the key is authorized, and exit with status 0 if it is. It will be called with the following arguments:
 
     authchecker $USER $KEY
