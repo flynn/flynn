@@ -83,7 +83,7 @@
     {
       "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'",
       "scripts": [
-        "scripts/docker.sh",
+        "scripts/install.sh",
         "scripts/vm_cleanup.sh"
       ],
       "type": "shell"
