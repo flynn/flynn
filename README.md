@@ -50,7 +50,7 @@ You can also download a [demo environment](https://github.com/flynn/flynn-demo) 
 
 **[slugrunner](https://github.com/flynn/slugrunner)** A Docker container that runs Heroku-like [slugs](https://devcenter.heroku.com/articles/slug-compiler) produced by [slugbuilder](https://github.com/flynn/slugbuilder).
 
-**[flynn-dev](https://github.com/flynn/flynn-dev)** Flynn development environment in a VM
+**[flynn-demo](https://github.com/flynn/flynn-demo)** Flynn development environment in a VM
 
 **[strowger](https://github.com/flynn/strowger)** Flynn TCP/HTTP router
 
