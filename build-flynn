@@ -1,0 +1,16 @@
+#!/bin/bash
+set -e
+
+dest="$1"
+if [ -z "$dest" ]; then
+  dest=/vagrant/src
+fi
+cd "$dest"
+
+for f in *; do
+  echo "=====> Building $f..."
+  pushd $f > /dev/null
+  rm -rf /tmp/godep # work around godep bugs
+  make
+  popd > /dev/null
+done

@@ -1,0 +1,27 @@
+#!/bin/bash
+set -e
+
+manifest="$1"
+dest="$2"
+
+if [ -z "$dest" ]; then
+  dest=/vagrant/src
+fi
+cd "$dest"
+
+if [ -z "$manifest" ]; then
+  manifest=/vagrant/manifest.txt
+fi
+
+while read line; do
+  repo=($line)
+  name=${repo[0]}
+  rev=${repo[1]}
+  if [ ! -d $name ]; then
+    echo "====> Checking out $f..."
+    git clone https://github.com/flynn/$name
+    pushd $name > /dev/null
+    git checkout $rev
+    popd > /dev/null
+  fi
+done < "$manifest"

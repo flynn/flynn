@@ -1,0 +1,11 @@
+flynn-host master
+docker-etcd master
+discoverd master
+flynn-bootstrap master
+flynn-controller master
+flynn-postgres master
+flynn-receive master
+shelf master
+strowger master
+slugbuilder master
+slugrunner master
