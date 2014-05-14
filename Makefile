@@ -1,5 +1,9 @@
 COMMIT := 215ff2839dc5022768f5561b088e0b61ee759c40
 
+etcd/bin/container: etcd/bin/etcd Dockerfile
+	docker build -t flynn/etcd .
+	touch etcd/bin/container
+
 etcd/bin/etcd: etcd/build
 	cd etcd && ./build
 
