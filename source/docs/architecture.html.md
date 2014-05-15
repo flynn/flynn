@@ -88,7 +88,7 @@ At it's core, service discovery is just name resolution with realtime presence, 
 
 There aren't a lot of standalone systems for internal service discovery. Most implementations are intended for WAN or LAN to discover completely vendor independent services, such as printers. Bonjour is a popular example that uses various additions to DNS. However, most internal systems use a simpler, more reliable, centralized approach, such as using ZooKeeper.
 
-Flynn is [implementing service discovery](https://github.com/flynn/go-discover) as an API implemented in a library that can be backed by ZooKeeper, mDNS, or in our case etcd. It lets cooperating services announce themselves and ask for services they're interested in, getting callbacks when their service list is updated. It also allows arbitrary key-values to be included on services, allowing for more advanced querying of services or sharing of meta-data for services.
+Flynn is [implementing service discovery](https://github.com/flynn/discoverd) as an API implemented in a library that can be backed by ZooKeeper, mDNS, or in our case etcd. It lets cooperating services announce themselves and ask for services they're interested in, getting callbacks when their service list is updated. It also allows arbitrary key-values to be included on services, allowing for more advanced querying of services or sharing of meta-data for services.
 
 Non-cooperating services often use service discovery information in configuration, such as the backends for a load balancer defined in an HAproxy configuration. A generalized configuration rendering system is used to tie service discovery into most non-cooperating services.
 
