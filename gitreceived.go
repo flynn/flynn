@@ -46,7 +46,7 @@ func init() {
 
 func main() {
 	flag.Parse()
-	if flag.NArg() < 3 {
+	if flag.NArg() < 2 {
 		flag.Usage()
 		os.Exit(64)
 	}
