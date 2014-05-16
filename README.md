@@ -1,5 +1,7 @@
 # flynn-receive
 
+While [gitreceived](https://github.com/flynn/gitreceived) is genereric git-receive daemon, [flynn-receive](https://github.com/flynn/flynn-receive) wraps it to provide git deploys.
+
 ## Flynn 
 
 [Flynn](https://flynn.io) is a modular, open source Platform as a Service (PaaS). 
