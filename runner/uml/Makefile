@@ -1,6 +1,9 @@
 VERSION := 3.14.4
 AUFS_VERSION := 3.14
 
+linux.xz: linux-$(VERSION)/linux
+	xz --stdout linux-$(VERSION)/linux > linux.xz
+
 linux-$(VERSION)/linux: linux-$(VERSION)/.aufs-patched linux-$(VERSION)/.config
 	cd linux-$(VERSION) && ARCH=um make -j8 && strip linux
 
