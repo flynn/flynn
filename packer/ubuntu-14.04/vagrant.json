@@ -20,7 +20,8 @@
       "ssh_username": "vagrant",
       "ssh_wait_timeout": "20m",
       "tools_upload_flavor": "linux",
-      "type": "vmware-iso"
+      "type": "vmware-iso",
+      "vm_name": "flynn-demo"
     },
     {
       "boot_command": [
@@ -44,7 +45,8 @@
       "ssh_username": "vagrant",
       "ssh_wait_timeout": "20m",
       "type": "virtualbox-iso",
-      "virtualbox_version_file": ".vbox_version"
+      "virtualbox_version_file": ".vbox_version",
+      "vm_name": "flynn-demo"
     }
   ],
   "provisioners": [
