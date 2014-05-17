@@ -8,10 +8,10 @@ The image expects a network configuration to be provided via `hostfs`.
 ## Building
 
 ```text
-./build.sh
+make
 ```
 
-The script depends on `pxz` and `zerofree` packages.
+The script depends on the `zerofree` package.
 
 ## Networking
 

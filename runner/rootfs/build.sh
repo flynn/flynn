@@ -20,4 +20,3 @@ sudo chroot $dir bash < setup.sh
 cleanup
 
 zerofree rootfs.img
-tar -Sc rootfs.img | pxz -9e - > rootfs.img.tar.xz
