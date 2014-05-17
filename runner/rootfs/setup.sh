@@ -50,8 +50,8 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get dist-upgrade -y -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold'
 
-# install ssh server
-apt-get install -y apt-transport-https openssh-server
+# install ssh server and go deps
+apt-get install -y apt-transport-https openssh-server mercurial git
 sed -i 's/^Port 22$/Port 2222/' /etc/ssh/sshd_config
 rm /etc/ssh/ssh_host_*
 
@@ -69,6 +69,18 @@ apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 36A1D7869245C8
 echo deb https://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list
 apt-get update
 apt-get install -y lxc-docker-0.10.0 aufs-tools
+
+# install go
+wget -O- j.mp/godeb | tar xz
+./godeb install
+rm godeb
+
+# install godep
+mkdir /gopkg
+export GOPATH=/gopkg
+go get github.com/tools/godep
+mv /gopkg/bin/godep /usr/bin
+rm -rf /gopkg
 
 # cleanup
 apt-get autoremove -y
