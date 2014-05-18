@@ -2,7 +2,7 @@ VERSION := 3.14.4
 AUFS_VERSION := 3.14
 
 linux: linux-$(VERSION)/linux
-        cp linux-$(VERSION)/linux .
+	cp linux-$(VERSION)/linux .
 
 linux-$(VERSION)/linux: linux-$(VERSION)/.aufs-patched linux-$(VERSION)/.config
 	cd linux-$(VERSION) && ARCH=um make -j8 && strip linux
