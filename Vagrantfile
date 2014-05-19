@@ -20,11 +20,15 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     # Fix for https://github.com/flynn/flynn/issues/13
     echo 3600 > /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_close_wait
 
+    IP_ADDR=$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')
+
+    echo "Configuring flynn with internal ip: ${IP_ADDR}"
+
     docker pull flynn/host
     docker pull flynn/discoverd
     docker pull flynn/etcd
 
-    docker run -d -v=/var/run/docker.sock:/var/run/docker.sock -p=1113:1113 flynn/host -external 10.0.2.15 -force
+    docker run -d -v=/var/run/docker.sock:/var/run/docker.sock -p=1113:1113 flynn/host -external ${IP_ADDR} -force
 
     docker pull flynn/postgres
     docker pull flynn/controller
@@ -35,6 +39,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     docker pull flynn/slugbuilder
     docker pull flynn/bootstrap
 
-    docker run -e=DISCOVERD=10.0.2.15:1111 flynn/bootstrap
+    docker run -e=DISCOVERD=${IP_ADDR}:1111 flynn/bootstrap
 SCRIPT
 end
