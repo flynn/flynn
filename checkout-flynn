@@ -4,14 +4,15 @@ set -e
 manifest="$1"
 dest="$2"
 
+if [ -z "$manifest" ]; then
+  manifest=/vagrant/manifest.txt
+fi
+manifest=$(readlink -f "$manifest")
+
 if [ -z "$dest" ]; then
   dest=/vagrant/src
 fi
 cd "$dest"
-
-if [ -z "$manifest" ]; then
-  manifest=/vagrant/manifest.txt
-fi
 
 while read line; do
   repo=($line)
