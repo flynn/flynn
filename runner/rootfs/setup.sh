@@ -19,9 +19,9 @@ echo %ubuntu ALL=NOPASSWD:ALL > /etc/sudoers.d/ubuntu
 chmod 0440 /etc/sudoers.d/ubuntu
 echo ubuntu:ubuntu | chpasswd
 
-# set up rootfs device and hostfs for network config
-mknod --mode=660 /dev/ubd0 b 98 0
-echo "/dev/ubd0 / ext4 defaults 0 1" > /etc/fstab
+# set up fstab
+echo "/dev/ubda / ext4 defaults 0 1" > /etc/fstab
+echo "/dev/ubdb /var/lib/docker ext4 defaults 0 1" >> /etc/fstab
 echo "none /etc/network/interfaces.d hostfs defaults 0 0" >> /etc/fstab
 
 # configure hosts and dns resolution
