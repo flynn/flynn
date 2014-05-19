@@ -22,27 +22,27 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/discoverd/agent",
-			"Rev": "e6db84a35e4ed58226c2b120ca01dceee78021dc"
+			"Rev": "e8e6fbf2d0c8995114594ed027cdc509cffdcdf1"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/client",
-			"Rev": "d87c39144cc9a03e5c276487bed25cbfb23ec8c1"
+			"Rev": "ad7d1923ccdd054f4f212ccc47f97e15ae87d16e"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/types",
-			"Rev": "d87c39144cc9a03e5c276487bed25cbfb23ec8c1"
+			"Rev": "ad7d1923ccdd054f4f212ccc47f97e15ae87d16e"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/utils",
-			"Rev": "d87c39144cc9a03e5c276487bed25cbfb23ec8c1"
+			"Rev": "ad7d1923ccdd054f4f212ccc47f97e15ae87d16e"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-host/types",
-			"Rev": "8c73e1c8df231016fcf7407ef70b9927edaca096"
+			"Rev": "9baf577fe7a98789109addd17893d07dfbaa7f41"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-discoverd",
-			"Rev": "ef8e9c70ed6335e8db5a66addfa96226f35e2bd3"
+			"Rev": "b07cd6bbd7d9b6144e7faa45fae67e0abc08c89d"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-dockerclient",
@@ -50,15 +50,15 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/attempt",
-			"Rev": "3743ca1e0e1cff877b906dd56983f57699b2cc7d"
+			"Rev": "c88823a638e8dc828d6623252f9132262a71e791"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/demultiplex",
-			"Rev": "3743ca1e0e1cff877b906dd56983f57699b2cc7d"
+			"Rev": "c88823a638e8dc828d6623252f9132262a71e791"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/pinned",
-			"Rev": "3743ca1e0e1cff877b906dd56983f57699b2cc7d"
+			"Rev": "c88823a638e8dc828d6623252f9132262a71e791"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
@@ -66,7 +66,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/strowger/types",
-			"Rev": "d83861789eccac7d559c4558d6b8f66ccac33ba8"
+			"Rev": "ebcd376bbc6654d953417bd7afdb4c1a2dd224b5"
 		},
 		{
 			"ImportPath": "github.com/heroku/hk/term",
