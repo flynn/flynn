@@ -30,4 +30,4 @@ There are many ways to help Flynn besides contributing code:
  - Improve the [documentation](https://github.com/flynn/flynn.io) including this website
  - [Contribute](https://flynn.io/#sponsor) financially to support core development
 
-Flynn is a [trademark](https://flynn.io/docs/trademark-guidelines) of Apollic Software, LLC.
+Flynn is a [trademark](https://flynn.io/docs/trademark-guidelines) of Prime Directive, Inc.
