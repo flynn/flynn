@@ -51,7 +51,7 @@ apt-get update
 apt-get dist-upgrade -y -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold'
 
 # install ssh server and go deps
-apt-get install -y apt-transport-https openssh-server mercurial git
+apt-get install -y apt-transport-https openssh-server mercurial git make curl
 sed -i 's/^Port 22$/Port 2222/' /etc/ssh/sshd_config
 rm /etc/ssh/ssh_host_*
 
@@ -71,7 +71,7 @@ apt-get update
 apt-get install -y lxc-docker-0.10.0 aufs-tools
 
 # install go
-wget -O- j.mp/godeb | tar xz
+curl -L j.mp/godeb | tar xz
 ./godeb install
 rm godeb
 
