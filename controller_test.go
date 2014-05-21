@@ -15,6 +15,7 @@ import (
 	"github.com/flynn/rpcplus"
 	"github.com/go-martini/martini"
 
+	tu "github.com/flynn/flynn-controller/testutils"
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/flynn-controller/utils"
 	_ "github.com/flynn/pq"
@@ -25,7 +26,7 @@ import (
 func Test(t *testing.T) { TestingT(t) }
 
 type S struct {
-	cc  *fakeCluster
+	cc  *tu.FakeCluster
 	srv *httptest.Server
 	m   *martini.Martini
 }
@@ -65,7 +66,7 @@ func (s *S) SetUpSuite(c *C) {
 	}
 	dbw := testDBWrapper{DB: db, dsn: dsn}
 
-	s.cc = newFakeCluster()
+	s.cc = tu.NewFakeCluster()
 	handler, m := appHandler(handlerConfig{db: dbw, cc: s.cc, sc: newFakeRouter(), key: "test"})
 	s.m = m
 	s.srv = httptest.NewServer(handler)

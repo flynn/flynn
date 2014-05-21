@@ -316,6 +316,10 @@ func (fs *Formations) Delete(f *Formation) {
 	fs.mtx.Unlock()
 }
 
+func (fs *Formations) Len() int {
+	return len(fs.formations)
+}
+
 func NewFormation(c *context, ef *ct.ExpandedFormation) *Formation {
 	return &Formation{
 		AppID:     ef.App.ID,

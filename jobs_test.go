@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -20,50 +19,9 @@ import (
 	. "github.com/titanous/gocheck"
 )
 
-func newFakeCluster() *fakeCluster {
-	return &fakeCluster{hostClients: make(map[string]cluster.Host)}
-}
-
-type fakeCluster struct {
-	hosts       map[string]host.Host
-	hostClients map[string]cluster.Host
-}
-
-func (c *fakeCluster) ListHosts() (map[string]host.Host, error) {
-	return c.hosts, nil
-}
-
-func (c *fakeCluster) DialHost(id string) (cluster.Host, error) {
-	client, ok := c.hostClients[id]
-	if !ok {
-		return nil, ErrNotFound
-	}
-	return client, nil
-}
-
-func (c *fakeCluster) AddJobs(req *host.AddJobsReq) (*host.AddJobsRes, error) {
-	for hostID, jobs := range req.HostJobs {
-		host, ok := c.hosts[hostID]
-		if !ok {
-			return nil, errors.New("fakeCluster: unknown host")
-		}
-		host.Jobs = append(host.Jobs, jobs...)
-		c.hosts[hostID] = host
-	}
-	return &host.AddJobsRes{State: c.hosts}, nil
-}
-
-func (c *fakeCluster) setHosts(h map[string]host.Host) {
-	c.hosts = h
-}
-
-func (c *fakeCluster) setHostClient(id string, h cluster.Host) {
-	c.hostClients[id] = h
-}
-
 func (s *S) TestJobList(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "job-list"})
-	s.cc.setHosts(map[string]host.Host{"host0": {
+	s.cc.SetHosts(map[string]host.Host{"host0": {
 		ID: "host0",
 		Jobs: []*host.Job{
 			{ID: "job0", Attributes: map[string]string{"flynn-controller.app": app.ID, "flynn-controller.release": "release0", "flynn-controller.type": "web"}},
@@ -148,7 +106,7 @@ func (s *S) TestKillJob(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "killjob"})
 	hc := newFakeHostClient()
 	hostID, jobID := utils.UUID(), utils.UUID()
-	s.cc.setHostClient(hostID, hc)
+	s.cc.SetHostClient(hostID, hc)
 
 	res, err := s.Delete("/apps/" + app.ID + "/jobs/" + hostID + "-" + jobID)
 	c.Assert(err, IsNil)
@@ -161,7 +119,7 @@ func (s *S) TestJobLog(c *C) {
 	hc := newFakeHostClient()
 	hostID, jobID := utils.UUID(), utils.UUID()
 	hc.setAttach(jobID, newFakeLog(strings.NewReader("foo")))
-	s.cc.setHostClient(hostID, hc)
+	s.cc.SetHostClient(hostID, hc)
 
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log", s.srv.URL, app.ID, hostID, jobID), nil)
 	c.Assert(err, IsNil)
@@ -183,7 +141,7 @@ func (s *S) TestJobLogSSE(c *C) {
 	logData, err := base64.StdEncoding.DecodeString("AQAAAAAAABNMaXN0ZW5pbmcgb24gNTUwMDcKAQAAAAAAAA1oZWxsbyBzdGRvdXQKAgAAAAAAAA1oZWxsbyBzdGRlcnIK")
 	c.Assert(err, IsNil)
 	hc.setAttach(jobID, newFakeLog(bytes.NewReader(logData)))
-	s.cc.setHostClient(hostID, hc)
+	s.cc.SetHostClient(hostID, hc)
 
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log", s.srv.URL, app.ID, hostID, jobID), nil)
 	c.Assert(err, IsNil)
@@ -214,7 +172,7 @@ func (s *S) TestRunJobDetached(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "run-detached"})
 
 	hostID := utils.UUID()
-	s.cc.setHosts(map[string]host.Host{hostID: host.Host{}})
+	s.cc.SetHosts(map[string]host.Host{hostID: host.Host{}})
 
 	artifact := s.createTestArtifact(c, &ct.Artifact{Type: "docker", URI: "docker://foo/bar"})
 	release := s.createTestRelease(c, &ct.Release{
@@ -236,7 +194,7 @@ func (s *S) TestRunJobDetached(c *C) {
 	c.Assert(res.Type, Equals, "")
 	c.Assert(res.Cmd, DeepEquals, cmd)
 
-	job := s.cc.hosts[hostID].Jobs[0]
+	job := s.cc.GetHost(hostID).Jobs[0]
 	c.Assert(res.ID, Equals, hostID+"-"+job.ID)
 	c.Assert(job.Attributes, DeepEquals, map[string]string{
 		"flynn-controller.app":     app.ID,
@@ -279,8 +237,8 @@ func (s *S) TestRunJobAttached(c *C) {
 		return &fakeAttachStream{strings.NewReader("test out"), pipew}, func() error { return nil }, nil
 	})
 
-	s.cc.setHostClient(hostID, hc)
-	s.cc.setHosts(map[string]host.Host{hostID: host.Host{}})
+	s.cc.SetHostClient(hostID, hc)
+	s.cc.SetHosts(map[string]host.Host{hostID: host.Host{}})
 
 	artifact := s.createTestArtifact(c, &ct.Artifact{Type: "docker", URI: "docker://foo/bar"})
 	release := s.createTestRelease(c, &ct.Release{
@@ -312,7 +270,7 @@ func (s *S) TestRunJobAttached(c *C) {
 	c.Assert(string(stdout), Equals, "test out")
 	rwc.Close()
 
-	job := s.cc.hosts[hostID].Jobs[0]
+	job := s.cc.GetHost(hostID).Jobs[0]
 	c.Assert(job.ID, Equals, jobID)
 	c.Assert(job.Attributes, DeepEquals, map[string]string{
 		"flynn-controller.app":     app.ID,
