@@ -2,6 +2,8 @@
 
 set -e
 
+IP_ADDR=$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')
+
 # kill running flynn-host, if any
 host=$(docker ps | grep flynn-host | cut -d" " -f 1)
 if [ -n "$host" ]; then
@@ -14,10 +16,10 @@ ifconfig | grep veth | cut -d" " -f 1 | while read veth; do
 done
 sudo ip neigh flush all
 
-docker run -d -v=/var/run/docker.sock:/var/run/docker.sock -p=1113:1113 flynn/host -external 10.0.2.15 -force
+docker run -d -v=/var/run/docker.sock:/var/run/docker.sock -p=1113:1113 flynn/host -external ${IP_ADDR} -force
 sleep 5
 
 # populate arp cache with etcd (additional workaround for #5737)
 sudo arping -c 1 172.17.0.3 > /dev/null
 
-docker run -e=DISCOVERD=10.0.2.15:1111 flynn/bootstrap
+docker run -e=DISCOVERD=${IP_ADDR}:1111 flynn/bootstrap
