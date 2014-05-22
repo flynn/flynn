@@ -81,7 +81,7 @@ This will run both etcd and discoverd.
 
 ## Writing New Backends
 
-A new backing store can be implemented for `discoverd` in Go by implemeting the `DiscoveryBackend` interface:
+A new backing store can be implemented for `discoverd` in Go by implementing the `DiscoveryBackend` interface:
 
 ```
 type DiscoveryBackend interface {
