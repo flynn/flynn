@@ -5,16 +5,19 @@ import (
 	"github.com/flynn/go-flynn/cluster"
 )
 
-func NewFakeHostClient() *FakeHostClient {
+func NewFakeHostClient(hostID string) *FakeHostClient {
 	return &FakeHostClient{
+		hostID:  hostID,
 		stopped: make(map[string]bool),
 		attach:  make(map[string]attachFunc),
 	}
 }
 
 type FakeHostClient struct {
+	hostID  string
 	stopped map[string]bool
 	attach  map[string]attachFunc
+	cluster *FakeCluster
 }
 
 func (c *FakeHostClient) ListJobs() (map[string]host.ActiveJob, error)                 { return nil, nil }
@@ -31,6 +34,7 @@ func (c *FakeHostClient) Attach(req *host.AttachReq, wait bool) (cluster.ReadWri
 
 func (c *FakeHostClient) StopJob(id string) error {
 	c.stopped[id] = true
+	c.cluster.RemoveJob(c.hostID, id)
 	return nil
 }
 

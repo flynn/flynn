@@ -60,8 +60,8 @@ func (l *fakeLog) Write([]byte) (int, error) {
 
 func (s *S) TestKillJob(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "killjob"})
-	hc := tu.NewFakeHostClient()
 	hostID, jobID := utils.UUID(), utils.UUID()
+	hc := tu.NewFakeHostClient(hostID)
 	s.cc.SetHostClient(hostID, hc)
 
 	res, err := s.Delete("/apps/" + app.ID + "/jobs/" + hostID + "-" + jobID)
@@ -72,8 +72,8 @@ func (s *S) TestKillJob(c *C) {
 
 func (s *S) TestJobLog(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "joblog"})
-	hc := tu.NewFakeHostClient()
 	hostID, jobID := utils.UUID(), utils.UUID()
+	hc := tu.NewFakeHostClient(hostID)
 	hc.SetAttach(jobID, newFakeLog(strings.NewReader("foo")))
 	s.cc.SetHostClient(hostID, hc)
 
@@ -92,8 +92,8 @@ func (s *S) TestJobLog(c *C) {
 
 func (s *S) TestJobLogSSE(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "joblog-sse"})
-	hc := tu.NewFakeHostClient()
 	hostID, jobID := utils.UUID(), utils.UUID()
+	hc := tu.NewFakeHostClient(hostID)
 	logData, err := base64.StdEncoding.DecodeString("AQAAAAAAABNMaXN0ZW5pbmcgb24gNTUwMDcKAQAAAAAAAA1oZWxsbyBzdGRvdXQKAgAAAAAAAA1oZWxsbyBzdGRlcnIK")
 	c.Assert(err, IsNil)
 	hc.SetAttach(jobID, newFakeLog(bytes.NewReader(logData)))
@@ -168,9 +168,9 @@ func (s *S) TestRunJobDetached(c *C) {
 
 func (s *S) TestRunJobAttached(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "run-attached"})
-	hc := tu.NewFakeHostClient()
-
 	hostID := utils.UUID()
+	hc := tu.NewFakeHostClient(hostID)
+
 	done := make(chan struct{})
 	var jobID string
 	hc.SetAttachFunc("*", func(req *host.AttachReq, wait bool) (cluster.ReadWriteCloser, func() error, error) {
