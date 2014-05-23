@@ -3,9 +3,9 @@
 This repo contains a Vagrantfile that boots up Flynn layer 0 and then bootstraps
 Flynn layer 1.
 
-The only requirement is that you have [VirtualBox](https://www.virtualbox.org/)
-and [Vagrant](http://www.vagrantup.com/) installed.
-
+You need to have [VirtualBox](https://www.virtualbox.org/),
+[Vagrant](http://www.vagrantup.com/), and [XZ Utils](http://tukaani.org/xz/)
+installed.
 
 ### Setup
 
@@ -16,6 +16,9 @@ git clone https://github.com/flynn/flynn-demo
 cd flynn-demo
 vagrant up
 ```
+
+If you see an error unpackaging the box, you need to install `xz` (`brew install
+xz` or `apt-get install xz-utils`).
 
 The final log line contains configuration details used to access Flynn via the
 command line tool. Install [flynn-cli](https://github.com/flynn/flynn-cli), and
