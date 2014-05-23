@@ -19,10 +19,10 @@ Many Flynn components are currently prototypes and are expected to change substa
 
 After Flynn is ready for production, development will focus on appliances for major open source databases, operator tooling, log aggregation, user ACLs, and diagnostic tools.
 
-## Later 
+## Later
 
-Lots of other new features are coming, too. Log aggregation, metrics, faster builds, multi datacenter support, and more. 
+Lots of other new features are coming, too. Log aggregation, metrics, faster builds, multi datacenter support, and more.
 
-Flynn is so modular that it isnt even tied to Linux or containers. Eventually you'll be able to run Flynn on other operating systems and use it to manage VMs and other types of jobs
+Flynn is so modular that it isn't even tied to Linux or containers. Eventually you'll be able to run Flynn on other operating systems and use it to manage VMs and other types of jobs.
 
-You will forget how many different tools they had to use before Flynn.
+You will forget how many different tools you had to use before Flynn.
