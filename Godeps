@@ -1,0 +1,56 @@
+{
+	"ImportPath": "github.com/flynn/docker-pull",
+	"GoVersion": "go1.2.1",
+	"Deps": [
+		{
+			"ImportPath": "github.com/dotcloud/docker/archive",
+			"Comment": "v0.11.1-378-g3d78c49",
+			"Rev": "3d78c49aab0829e6c3bcf63b2d7b2d162d11a11e"
+		},
+		{
+			"ImportPath": "github.com/dotcloud/docker/daemon/graphdriver",
+			"Comment": "v0.11.1-378-g3d78c49",
+			"Rev": "3d78c49aab0829e6c3bcf63b2d7b2d162d11a11e"
+		},
+		{
+			"ImportPath": "github.com/dotcloud/docker/dockerversion",
+			"Comment": "v0.11.1-378-g3d78c49",
+			"Rev": "3d78c49aab0829e6c3bcf63b2d7b2d162d11a11e"
+		},
+		{
+			"ImportPath": "github.com/dotcloud/docker/pkg/label",
+			"Comment": "v0.11.1-378-g3d78c49",
+			"Rev": "3d78c49aab0829e6c3bcf63b2d7b2d162d11a11e"
+		},
+		{
+			"ImportPath": "github.com/dotcloud/docker/pkg/mount",
+			"Comment": "v0.11.1-378-g3d78c49",
+			"Rev": "3d78c49aab0829e6c3bcf63b2d7b2d162d11a11e"
+		},
+		{
+			"ImportPath": "github.com/dotcloud/docker/pkg/system",
+			"Comment": "v0.11.1-378-g3d78c49",
+			"Rev": "3d78c49aab0829e6c3bcf63b2d7b2d162d11a11e"
+		},
+		{
+			"ImportPath": "github.com/dotcloud/docker/pkg/term",
+			"Comment": "v0.11.1-378-g3d78c49",
+			"Rev": "3d78c49aab0829e6c3bcf63b2d7b2d162d11a11e"
+		},
+		{
+			"ImportPath": "github.com/dotcloud/docker/pkg/units",
+			"Comment": "v0.11.1-378-g3d78c49",
+			"Rev": "3d78c49aab0829e6c3bcf63b2d7b2d162d11a11e"
+		},
+		{
+			"ImportPath": "github.com/dotcloud/docker/utils",
+			"Comment": "v0.11.1-378-g3d78c49",
+			"Rev": "3d78c49aab0829e6c3bcf63b2d7b2d162d11a11e"
+		},
+		{
+			"ImportPath": "github.com/dotcloud/docker/vendor/src/code.google.com/p/go/src/pkg/archive/tar",
+			"Comment": "v0.11.1-378-g3d78c49",
+			"Rev": "3d78c49aab0829e6c3bcf63b2d7b2d162d11a11e"
+		}
+	]
+}
