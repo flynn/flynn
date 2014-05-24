@@ -39,7 +39,7 @@ func main() {
 	grohl.Log(grohl.Data{"at": "leader"})
 
 	// TODO: periodic full cluster sync for anti-entropy
-	c.watchFormations()
+	c.watchFormations(nil)
 }
 
 func newContext(cc controllerClient, cl clusterClient) *context {
@@ -151,12 +151,15 @@ func (c *context) syncCluster() {
 	}
 }
 
-func (c *context) watchFormations() {
+func (c *context) watchFormations(events chan<- *FormationEvent) {
 	g := grohl.NewContext(grohl.Data{"fn": "watchFormations"})
 
 	ch, _ := c.StreamFormations(nil)
 
 	c.syncCluster()
+	if events != nil {
+		events <- &FormationEvent{}
+	}
 
 	for ef := range ch {
 		if ef.App == nil {
@@ -172,7 +175,12 @@ func (c *context) watchFormations() {
 			f = NewFormation(c, ef)
 			c.formations.Add(f)
 		}
-		go f.Rectify()
+		go func() {
+			f.Rectify()
+			if events != nil {
+				events <- &FormationEvent{Formation: f}
+			}
+		}()
 	}
 
 	// TODO: log disconnect and restart
@@ -277,6 +285,12 @@ func (m *jobMap) Get(host, job string) *Job {
 	return m.jobs[jobKey{host, job}]
 }
 
+func (m *jobMap) Len() int {
+	m.mtx.RLock()
+	defer m.mtx.RUnlock()
+	return len(m.jobs)
+}
+
 type jobKey struct {
 	hostID, jobID string
 }
@@ -317,6 +331,8 @@ func (fs *Formations) Delete(f *Formation) {
 }
 
 func (fs *Formations) Len() int {
+	fs.mtx.Lock()
+	defer fs.mtx.Unlock()
 	return len(fs.formations)
 }
 
@@ -512,3 +528,7 @@ func (h sortHosts) Len() int           { return len(h) }
 func (h sortHosts) Less(i, j int) bool { return h[i].Jobs < h[j].Jobs }
 func (h sortHosts) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
 func (h sortHosts) Sort()              { sort.Sort(h) }
+
+type FormationEvent struct {
+	Formation *Formation
+}

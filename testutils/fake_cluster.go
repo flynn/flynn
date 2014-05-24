@@ -44,10 +44,27 @@ func (c *FakeCluster) AddJobs(req *host.AddJobsReq) (*host.AddJobsRes, error) {
 	return &host.AddJobsRes{State: c.hosts}, nil
 }
 
+func (c *FakeCluster) RemoveJob(hostID, jobID string) error {
+	h, ok := c.hosts[hostID]
+	if !ok {
+		return errors.New("FakeCluster: unknown host")
+	}
+	jobs := make([]*host.Job, 0, len(h.Jobs))
+	for _, job := range h.Jobs {
+		if job.ID != jobID {
+			jobs = append(jobs, job)
+		}
+	}
+	h.Jobs = jobs
+	c.hosts[hostID] = h
+	return nil
+}
+
 func (c *FakeCluster) SetHosts(h map[string]host.Host) {
 	c.hosts = h
 }
 
 func (c *FakeCluster) SetHostClient(id string, h cluster.Host) {
+	h.(*FakeHostClient).cluster = c
 	c.hostClients[id] = h
 }

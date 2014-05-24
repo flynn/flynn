@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	tu "github.com/flynn/flynn-controller/testutils"
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/flynn-host/types"
@@ -43,51 +44,6 @@ func (s *S) TestJobList(c *C) {
 	c.Assert(actual, DeepEquals, expected)
 }
 
-func newFakeHostClient() *fakeHostClient {
-	return &fakeHostClient{
-		stopped: make(map[string]bool),
-		attach:  make(map[string]attachFunc),
-	}
-}
-
-type fakeHostClient struct {
-	stopped map[string]bool
-	attach  map[string]attachFunc
-}
-
-func (c *fakeHostClient) ListJobs() (map[string]host.ActiveJob, error)                 { return nil, nil }
-func (c *fakeHostClient) GetJob(id string) (*host.ActiveJob, error)                    { return nil, nil }
-func (c *fakeHostClient) StreamEvents(id string, ch chan<- *host.Event) cluster.Stream { return nil }
-func (c *fakeHostClient) Close() error                                                 { return nil }
-func (c *fakeHostClient) Attach(req *host.AttachReq, wait bool) (cluster.ReadWriteCloser, func() error, error) {
-	f, ok := c.attach[req.JobID]
-	if !ok {
-		f = c.attach["*"]
-	}
-	return f(req, wait)
-}
-
-func (c *fakeHostClient) StopJob(id string) error {
-	c.stopped[id] = true
-	return nil
-}
-
-func (c *fakeHostClient) isStopped(id string) bool {
-	return c.stopped[id]
-}
-
-func (c *fakeHostClient) setAttach(id string, rwc cluster.ReadWriteCloser) {
-	c.attach[id] = func(*host.AttachReq, bool) (cluster.ReadWriteCloser, func() error, error) {
-		return rwc, nil, nil
-	}
-}
-
-func (c *fakeHostClient) setAttachFunc(id string, f attachFunc) {
-	c.attach[id] = f
-}
-
-type attachFunc func(req *host.AttachReq, wait bool) (cluster.ReadWriteCloser, func() error, error)
-
 func newFakeLog(r io.Reader) *fakeLog {
 	return &fakeLog{r}
 }
@@ -104,21 +60,21 @@ func (l *fakeLog) Write([]byte) (int, error) {
 
 func (s *S) TestKillJob(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "killjob"})
-	hc := newFakeHostClient()
 	hostID, jobID := utils.UUID(), utils.UUID()
+	hc := tu.NewFakeHostClient(hostID)
 	s.cc.SetHostClient(hostID, hc)
 
 	res, err := s.Delete("/apps/" + app.ID + "/jobs/" + hostID + "-" + jobID)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
-	c.Assert(hc.isStopped(jobID), Equals, true)
+	c.Assert(hc.IsStopped(jobID), Equals, true)
 }
 
 func (s *S) TestJobLog(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "joblog"})
-	hc := newFakeHostClient()
 	hostID, jobID := utils.UUID(), utils.UUID()
-	hc.setAttach(jobID, newFakeLog(strings.NewReader("foo")))
+	hc := tu.NewFakeHostClient(hostID)
+	hc.SetAttach(jobID, newFakeLog(strings.NewReader("foo")))
 	s.cc.SetHostClient(hostID, hc)
 
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log", s.srv.URL, app.ID, hostID, jobID), nil)
@@ -136,11 +92,11 @@ func (s *S) TestJobLog(c *C) {
 
 func (s *S) TestJobLogSSE(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "joblog-sse"})
-	hc := newFakeHostClient()
 	hostID, jobID := utils.UUID(), utils.UUID()
+	hc := tu.NewFakeHostClient(hostID)
 	logData, err := base64.StdEncoding.DecodeString("AQAAAAAAABNMaXN0ZW5pbmcgb24gNTUwMDcKAQAAAAAAAA1oZWxsbyBzdGRvdXQKAgAAAAAAAA1oZWxsbyBzdGRlcnIK")
 	c.Assert(err, IsNil)
-	hc.setAttach(jobID, newFakeLog(bytes.NewReader(logData)))
+	hc.SetAttach(jobID, newFakeLog(bytes.NewReader(logData)))
 	s.cc.SetHostClient(hostID, hc)
 
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log", s.srv.URL, app.ID, hostID, jobID), nil)
@@ -212,12 +168,12 @@ func (s *S) TestRunJobDetached(c *C) {
 
 func (s *S) TestRunJobAttached(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "run-attached"})
-	hc := newFakeHostClient()
-
 	hostID := utils.UUID()
+	hc := tu.NewFakeHostClient(hostID)
+
 	done := make(chan struct{})
 	var jobID string
-	hc.setAttachFunc("*", func(req *host.AttachReq, wait bool) (cluster.ReadWriteCloser, func() error, error) {
+	hc.SetAttachFunc("*", func(req *host.AttachReq, wait bool) (cluster.ReadWriteCloser, func() error, error) {
 		c.Assert(wait, Equals, true)
 		c.Assert(req.JobID, Not(Equals), "")
 		c.Assert(req, DeepEquals, &host.AttachReq{
