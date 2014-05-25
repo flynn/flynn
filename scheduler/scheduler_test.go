@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -17,6 +18,17 @@ func Test(t *testing.T) { TestingT(t) }
 type S struct{}
 
 var _ = Suite(&S{})
+
+func newFakeControllerClient(appID string, release *ct.Release, artifact *ct.Artifact, processes map[string]int, stream chan *ct.ExpandedFormation) *fakeControllerClient {
+	return &fakeControllerClient{
+		releases:  map[string]*ct.Release{release.ID: release},
+		artifacts: map[string]*ct.Artifact{artifact.ID: artifact},
+		formations: map[formationKey]*ct.Formation{
+			formationKey{appID, release.ID}: {AppID: appID, ReleaseID: release.ID, Processes: processes},
+		},
+		stream: stream,
+	}
+}
 
 type fakeControllerClient struct {
 	releases   map[string]*ct.Release
@@ -70,44 +82,65 @@ func waitForFormationEvent(events <-chan *FormationEvent, c *C) {
 	}
 }
 
+func waitForJobRemovalEvent(events <-chan *JobRemovalEvent, c *C) {
+	select {
+	case <-events:
+	case <-time.After(time.Second):
+		c.Fatal("timed out waiting for Job Removal event")
+	}
+}
+
+func newRelease(id string, artifact *ct.Artifact, processes map[string]int) *ct.Release {
+	processTypes := make(map[string]ct.ProcessType, len(processes))
+	for t, _ := range processes {
+		processTypes[t] = ct.ProcessType{Cmd: []string{"start", t}}
+	}
+
+	return &ct.Release{
+		ID:         id,
+		ArtifactID: artifact.ID,
+		Processes:  processTypes,
+	}
+}
+
+func newFakeCluster(hostID, appID, releaseID string, processes map[string]int) *tu.FakeCluster {
+	jobs := make([]*host.Job, 0)
+	for t, c := range processes {
+		for i := 0; i < c; i++ {
+			job := &host.Job{
+				ID: fmt.Sprintf("job%d", i),
+				Attributes: map[string]string{
+					"flynn-controller.app":     appID,
+					"flynn-controller.release": releaseID,
+					"flynn-controller.type":    t,
+				},
+			}
+			jobs = append(jobs, job)
+		}
+	}
+
+	cl := tu.NewFakeCluster()
+	cl.SetHosts(map[string]host.Host{hostID: host.Host{ID: hostID, Jobs: jobs}})
+	cl.SetHostClient(hostID, tu.NewFakeHostClient(hostID))
+	return cl
+}
+
 func (s *S) TestWatchFormations(c *C) {
 	// Create a fake cluster with an existing running formation
 	appID := "existing-app"
 	artifact := &ct.Artifact{ID: "existing-artifact"}
-	release := &ct.Release{
-		ID:         "existing-release",
-		ArtifactID: artifact.ID,
-		Processes:  map[string]ct.ProcessType{"web": ct.ProcessType{Cmd: []string{"start", "web"}}},
-	}
 	processes := map[string]int{"web": 1}
+	release := newRelease("existing-release", artifact, processes)
 	stream := make(chan *ct.ExpandedFormation)
-
-	cc := &fakeControllerClient{
-		releases:  map[string]*ct.Release{release.ID: release},
-		artifacts: map[string]*ct.Artifact{artifact.ID: artifact},
-		formations: map[formationKey]*ct.Formation{
-			formationKey{appID, release.ID}: {AppID: appID, ReleaseID: release.ID, Processes: processes},
-		},
-		stream: stream,
-	}
+	defer close(stream)
+	cc := newFakeControllerClient(appID, release, artifact, processes, stream)
 
 	hostID := "host0"
-	jobID := "existing-job"
-	existingJob := &host.Job{
-		ID: jobID,
-		Attributes: map[string]string{
-			"flynn-controller.app":     appID,
-			"flynn-controller.release": release.ID,
-			"flynn-controller.type":    "web",
-		},
-	}
+	cl := newFakeCluster(hostID, appID, release.ID, processes)
 
-	cl := tu.NewFakeCluster()
-	cl.SetHosts(map[string]host.Host{hostID: host.Host{ID: hostID, Jobs: []*host.Job{existingJob}}})
-	cl.SetHostClient(hostID, tu.NewFakeHostClient(hostID))
-
-	events := make(chan *FormationEvent)
 	cx := newContext(cc, cl)
+	events := make(chan *FormationEvent)
+	defer close(events)
 	go cx.watchFormations(events)
 
 	// Give the scheduler chance to sync with the cluster, then check it's in sync
@@ -119,7 +152,7 @@ func (s *S) TestWatchFormations(c *C) {
 	c.Assert(formation.Artifact, DeepEquals, artifact)
 	c.Assert(formation.Processes, DeepEquals, processes)
 	c.Assert(cx.jobs.Len(), Equals, 1)
-	job := cx.jobs.Get(hostID, jobID)
+	job := cx.jobs.Get(hostID, "job0")
 	c.Assert(job.Type, Equals, "web")
 
 	f := &ct.ExpandedFormation{
@@ -166,4 +199,40 @@ func (s *S) TestWatchFormations(c *C) {
 		processes["web"]--
 		c.Assert(processes, DeepEquals, u.processes)
 	}
+}
+
+func (s *S) TestWatchHost(c *C) {
+	// Create a fake cluster with an existing running formation
+	appID := "app"
+	artifact := &ct.Artifact{ID: "artifact", Type: "docker", URI: "docker://foo/bar"}
+	processes := map[string]int{"web": 3}
+	release := newRelease("release", artifact, processes)
+	cc := newFakeControllerClient(appID, release, artifact, processes, nil)
+
+	hostID := "host0"
+	cl := newFakeCluster(hostID, appID, release.ID, processes)
+
+	stream := make(chan *host.Event)
+	defer close(stream)
+	hc := tu.NewFakeHostClient(hostID)
+	hc.SetEventStream(stream)
+	cl.SetHostClient(hostID, hc)
+
+	cx := newContext(cc, cl)
+	cx.syncCluster()
+	c.Assert(cx.jobs.Len(), Equals, 3)
+	c.Assert(len(cl.GetHost(hostID).Jobs), Equals, 3)
+
+	events := make(chan *JobRemovalEvent)
+	defer close(events)
+	go cx.watchHost(hostID, events)
+
+	// Check that when a job is removed, a new one is scheduled
+	cl.RemoveJob(hostID, "job0")
+	stream <- &host.Event{Event: "stop", JobID: "job0"}
+	waitForJobRemovalEvent(events, c)
+	c.Assert(cx.jobs.Len(), Equals, 3)
+	c.Assert(len(cl.GetHost(hostID).Jobs), Equals, 3)
+	job, _ := hc.GetJob("job0")
+	c.Assert(job, IsNil)
 }
