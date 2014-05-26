@@ -219,13 +219,11 @@ func (s *S) TestWatchHost(c *C) {
 	cl.SetHostClient(hostID, hc)
 
 	cx := newContext(cc, cl)
-	cx.syncCluster()
-	c.Assert(cx.jobs.Len(), Equals, 3)
-	c.Assert(len(cl.GetHost(hostID).Jobs), Equals, 3)
-
 	events := make(chan *JobRemovalEvent)
 	defer close(events)
-	go cx.watchHost(hostID, events)
+	cx.syncCluster(events)
+	c.Assert(cx.jobs.Len(), Equals, 3)
+	c.Assert(len(cl.GetHost(hostID).Jobs), Equals, 3)
 
 	// Check that when a job is removed, a new one is scheduled
 	cl.RemoveJob(hostID, "job0")
