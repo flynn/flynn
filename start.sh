@@ -4,11 +4,11 @@ case $1 in
   postgres)
     chown -R postgres:postgres /data
     shift
-    sudo -u postgres -H EXTERNAL_IP=$EXTERNAL_IP PORT=$PORT DISCOVERD=$DISCOVERD /bin/flynn-postgres $*
+    exec sudo -u postgres -H EXTERNAL_IP=$EXTERNAL_IP PORT=$PORT DISCOVERD=$DISCOVERD /bin/flynn-postgres $*
     ;;
   api)
     shift
-    /bin/flynn-postgres-api $*
+    exec /bin/flynn-postgres-api $*
     ;;
   *)
     echo "Usage: $0 {postgres|api}"
