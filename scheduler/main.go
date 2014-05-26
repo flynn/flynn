@@ -187,7 +187,7 @@ func (c *context) watchFormations(events chan<- *FormationEvent) {
 	// TODO: trigger cluster sync
 }
 
-func (c *context) watchHost(id string) {
+func (c *context) watchHost(id string, events chan<- *JobRemovalEvent) {
 	if !c.hosts.Add(id) {
 		return
 	}
@@ -216,7 +216,12 @@ func (c *context) watchHost(id string) {
 		g.Log(grohl.Data{"at": "remove", "job.id": event.JobID, "event": event.Event})
 
 		c.jobs.Remove(id, event.JobID)
-		go job.Formation.RemoveJob(job.Type, id, event.JobID)
+		go func() {
+			job.Formation.RemoveJob(job.Type, id, event.JobID)
+			if events != nil {
+				events <- &JobRemovalEvent{JobID: event.JobID}
+			}
+		}()
 	}
 	// TODO: check error/reconnect
 }
@@ -466,7 +471,7 @@ func (f *Formation) add(n int, name string) {
 		sh.Sort()
 
 		h := hosts[sh[0].ID]
-		go f.c.watchHost(h.ID)
+		go f.c.watchHost(h.ID, nil)
 
 		g.Log(grohl.Data{"host.id": h.ID, "job.id": config.ID})
 
@@ -531,4 +536,8 @@ func (h sortHosts) Sort()              { sort.Sort(h) }
 
 type FormationEvent struct {
 	Formation *Formation
+}
+
+type JobRemovalEvent struct {
+	JobID string
 }
