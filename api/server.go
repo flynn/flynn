@@ -15,7 +15,7 @@ import (
 	"github.com/martini-contrib/render"
 )
 
-var serviceName = os.Getenv("PGSERVICE")
+var serviceName = os.Getenv("FLYNN_POSTGRES")
 
 func init() {
 	if serviceName == "" {
