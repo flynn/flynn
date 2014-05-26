@@ -133,6 +133,20 @@ $$ LANGUAGE plpgsql`,
     PRIMARY KEY (app_id, resource_id)
 )`,
 		`CREATE INDEX ON app_resources (resource_id)`,
+
+		`CREATE TYPE job_state AS ENUM ('starting', 'up', 'down', 'crashed')`,
+		`CREATE TABLE job_cache (
+    job_id text NOT NULL,
+    host_id text NOT NULL,
+    app_id uuid NOT NULL REFERENCES apps (app_id),
+    release_id uuid NOT NULL REFERENCES releases (release_id),
+    process_type text NOT NULL,
+    state job_state NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (job_id, host_id),
+    FOREIGN KEY (app_id, release_id) REFERENCES formations (app_id, release_id)
+)`,
 	)
 	return m.Migrate(db)
 }
