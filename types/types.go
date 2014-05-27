@@ -65,10 +65,14 @@ type Key struct {
 }
 
 type Job struct {
-	ID        string   `json:"id,omitempty"`
-	Type      string   `json:"type,omitempty"`
-	ReleaseID string   `json:"release,omitempty"`
-	Cmd       []string `json:"cmd,omitempty"`
+	ID        string     `json:"id,omitempty"`
+	AppID     string     `json:"app,omitempty"`
+	ReleaseID string     `json:"release,omitempty"`
+	Type      string     `json:"type,omitempty"`
+	State     string     `josn:"state,omitempty"`
+	Cmd       []string   `json:"cmd,omitempty"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
 type NewJob struct {
