@@ -10,6 +10,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/flynn/flynn-host/ports"
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/go-flynn/cluster"
@@ -33,8 +34,8 @@ type ManifestData struct {
 	Env        map[string]string
 	Services   map[string]*ManifestData
 
+	ports    *ports.Allocator
 	readonly bool
-	ports    <-chan int
 }
 
 func (m *ManifestData) TCPPort(id int) (int, error) {
@@ -47,9 +48,12 @@ func (m *ManifestData) TCPPort(id int) (int, error) {
 		return 0, fmt.Errorf("lorne: invalid TCPPort(%d), expecting id <= %d", id, len(m.TCPPorts))
 	}
 
-	port := <-m.ports
-	m.TCPPorts = append(m.TCPPorts, port)
-	return port, nil
+	port, err := m.ports.Get()
+	if err != nil {
+		return 0, err
+	}
+	m.TCPPorts = append(m.TCPPorts, int(port))
+	return int(port), nil
 }
 
 func (m *ManifestData) Volume(v string) string {
@@ -61,15 +65,10 @@ func (m *ManifestData) Volume(v string) string {
 }
 
 type manifestRunner struct {
-	env        map[string]string
-	externalIP string
-	ports      <-chan int
-	processor  interface {
-		processJob(<-chan int, *host.Job) (*docker.Container, error)
-	}
-	docker interface {
-		InspectContainer(string) (*docker.Container, error)
-	}
+	env          map[string]string
+	externalAddr string
+	bindAddr     string
+	backend      Backend
 }
 
 type manifestService struct {
@@ -100,8 +99,8 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 		data := &ManifestData{
 			Env:        parseEnviron(),
 			Services:   serviceData,
-			ExternalIP: m.externalIP,
-			ports:      m.ports,
+			ExternalIP: m.externalAddr,
+			ports:      m.backend.(*DockerBackend).ports,
 		}
 
 		// Add explicit tcp ports to data.TCPPorts
@@ -147,24 +146,13 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 		}
 		data.Env = service.Env
 
-		// Always include at least one port
-		if len(data.TCPPorts) == 0 {
-			data.TCPPorts = append(data.TCPPorts, <-m.ports)
-		}
-
 		if service.Image == "" {
 			service.Image = "flynn/" + service.ID
 		}
 
-		// Preload ports channel with the pre-allocated ports for this job
-		ports := make(chan int, len(data.TCPPorts))
-		for _, p := range data.TCPPorts {
-			ports <- p
-		}
-
 		job := &host.Job{
 			ID:       cluster.RandomJobID("flynn-" + service.ID + "-"),
-			TCPPorts: len(data.TCPPorts),
+			TCPPorts: 1,
 			Config: &docker.Config{
 				Image:        service.Image,
 				Entrypoint:   service.Entrypoint,
@@ -173,14 +161,29 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 				AttachStderr: true,
 				Env:          dockerEnv(data.Env),
 				Volumes:      data.Volumes,
+				ExposedPorts: make(map[string]struct{}, len(service.TCPPorts)),
+			},
+			HostConfig: &docker.HostConfig{
+				PortBindings: make(map[string][]docker.PortBinding, len(service.TCPPorts)),
 			},
 		}
+		job.Config.Env = append(job.Config.Env, "EXTERNAL_IP="+m.externalAddr)
 
-		container, err := m.processor.processJob(ports, job)
-		if err != nil {
+		for i, port := range service.TCPPorts {
+			job.TCPPorts = 0
+			if i == 0 {
+				job.Config.Env = append(job.Config.Env, "PORT="+port)
+			}
+			job.Config.Env = append(job.Config.Env, fmt.Sprintf("PORT_%d=%s", i, port))
+			job.Config.ExposedPorts[port+"/tcp"] = struct{}{}
+			job.HostConfig.PortBindings[port+"/tcp"] = []docker.PortBinding{{HostPort: port, HostIp: m.bindAddr}}
+		}
+
+		if err := m.backend.Run(job); err != nil {
 			return nil, err
 		}
-		container, err = m.docker.InspectContainer(container.ID)
+
+		container, err := m.backend.(*DockerBackend).docker.InspectContainer(job.ID)
 		if err != nil {
 			return nil, err
 		}

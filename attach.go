@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"sync"
 
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-dockerclient"
@@ -12,8 +11,8 @@ import (
 )
 
 type attachHandler struct {
-	state  *State
-	docker dockerAttachClient
+	state   *State
+	backend Backend
 }
 
 func (h *attachHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -51,54 +50,29 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 		<-attachWait
 		job = h.state.GetJob(req.JobID)
 	}
-	if job.Job.Config.Tty && req.Flags&host.AttachFlagStdin != 0 {
-		resize := func() { h.docker.ResizeContainerTTY(job.ContainerID, req.Height, req.Width) }
-		if job.Status == host.StatusRunning {
-			resize()
-		} else {
-			var once sync.Once
-			go func() {
-				ch := make(chan host.Event)
-				h.state.AddListener(req.JobID, ch)
-				go func() {
-					// There is a race that can result in the listener being
-					// added after the container has started, so check the
-					// status *after* subscribing.
-					// This can deadlock if we try to get a state lock while an
-					// event is being sent on the listen channel, so we do it
-					// in the goroutine and wrap in a sync.Once.
-					j := h.state.GetJob(req.JobID)
-					if j.Status == host.StatusRunning {
-						once.Do(resize)
-					}
-				}()
-				defer h.state.RemoveListener(req.JobID, ch)
-				for event := range ch {
-					if event.Event == "start" {
-						once.Do(resize)
-						return
-					}
-					if event.Event == "stop" {
-						return
-					}
-				}
-			}()
-		}
-	}
 
 	success := make(chan struct{})
 	failed := make(chan struct{})
-	opts := docker.AttachToContainerOptions{
-		Container:    job.ContainerID,
-		InputStream:  conn,
-		OutputStream: conn,
-		Stdin:        req.Flags&host.AttachFlagStdin != 0,
-		Stdout:       req.Flags&host.AttachFlagStdout != 0,
-		Stderr:       req.Flags&host.AttachFlagStderr != 0,
-		Logs:         req.Flags&host.AttachFlagLogs != 0,
-		Stream:       req.Flags&host.AttachFlagStream != 0,
-		Success:      success,
+	opts := &AttachRequest{
+		Job:        job,
+		Logs:       req.Flags&host.AttachFlagLogs != 0,
+		Stream:     req.Flags&host.AttachFlagStream != 0,
+		Height:     req.Height,
+		Width:      req.Width,
+		Attached:   success,
+		ReadWriter: conn,
+		Streams:    make([]string, 0, 3),
 	}
+	if req.Flags&host.AttachFlagStdin != 0 {
+		opts.Streams = append(opts.Streams, "stdin")
+	}
+	if req.Flags&host.AttachFlagStdout != 0 {
+		opts.Streams = append(opts.Streams, "stdout")
+	}
+	if req.Flags&host.AttachFlagStderr != 0 {
+		opts.Streams = append(opts.Streams, "stderr")
+	}
+
 	go func() {
 		select {
 		case <-success:
@@ -108,14 +82,14 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 		}
 		close(attachWait)
 	}()
-	if err := h.docker.AttachToContainer(opts); err != nil {
+	if err := h.backend.Attach(opts); err != nil {
 		select {
 		case <-success:
 		default:
 			close(failed)
 			conn.Write(append([]byte{host.AttachError}, err.Error()...))
 		}
-		g.Log(grohl.Data{"at": "docker", "status": "error", "err": err})
+		g.Log(grohl.Data{"status": "error", "err": err})
 		return
 	}
 	g.Log(grohl.Data{"at": "finish"})

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/flynn/flynn-host/ports"
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-dockerclient"
 	"github.com/technoweenie/grohl"
@@ -17,7 +18,7 @@ func (nullLogger) Log(grohl.Data) error { return nil }
 
 func init() { grohl.SetLogger(nullLogger{}) }
 
-type dockerClient struct {
+type fakeDockerClient struct {
 	createErr error
 	startErr  error
 	pullErr   error
@@ -25,9 +26,10 @@ type dockerClient struct {
 	pulled    string
 	started   bool
 	hostConf  *docker.HostConfig
+	events    chan *docker.Event
 }
 
-func (c *dockerClient) CreateContainer(config *docker.Config) (*docker.Container, error) {
+func (c *fakeDockerClient) CreateContainer(config *docker.Config) (*docker.Container, error) {
 	if c.createErr != nil {
 		err := c.createErr
 		c.createErr = nil
@@ -37,7 +39,7 @@ func (c *dockerClient) CreateContainer(config *docker.Config) (*docker.Container
 	return &docker.Container{ID: "asdf"}, nil
 }
 
-func (c *dockerClient) StartContainer(id string, config *docker.HostConfig) error {
+func (c *fakeDockerClient) StartContainer(id string, config *docker.HostConfig) error {
 	if id != "asdf" {
 		return errors.New("Invalid ID")
 	}
@@ -49,7 +51,10 @@ func (c *dockerClient) StartContainer(id string, config *docker.HostConfig) erro
 	return nil
 }
 
-func (c *dockerClient) InspectContainer(id string) (*docker.Container, error) {
+func (c *fakeDockerClient) InspectContainer(id string) (*docker.Container, error) {
+	if id == "1" {
+		return &docker.Container{State: docker.State{ExitCode: 1}}, nil
+	}
 	container := &docker.Container{Volumes: make(map[string]string)}
 	for v := range c.created.Volumes {
 		container.Volumes[v] = "/var/lib/docker/vfs/dir/" + strings.Replace(v, "/", "-", -1)
@@ -57,7 +62,7 @@ func (c *dockerClient) InspectContainer(id string) (*docker.Container, error) {
 	return container, nil
 }
 
-func (c *dockerClient) PullImage(opts docker.PullImageOptions, w io.Writer) error {
+func (c *fakeDockerClient) PullImage(opts docker.PullImageOptions, w io.Writer) error {
 	if c.pullErr != nil {
 		return c.pullErr
 	}
@@ -65,16 +70,40 @@ func (c *dockerClient) PullImage(opts docker.PullImageOptions, w io.Writer) erro
 	return nil
 }
 
-func testProcess(job *host.Job, t *testing.T) (*State, *dockerClient) {
-	client := &dockerClient{}
-	return testProcessWithOpts(job, "", "", client, t), client
+func (c *fakeDockerClient) Events() (*docker.EventStream, error) {
+	return &docker.EventStream{Events: c.events}, nil
 }
 
-func testProcessWithOpts(job *host.Job, extAddr, bindAddr string, client *dockerClient, t *testing.T) *State {
+func (c *fakeDockerClient) StopContainer(string, uint) error {
+	return nil
+}
+
+func (c *fakeDockerClient) ResizeContainerTTY(string, int, int) error {
+	return nil
+}
+
+func (c *fakeDockerClient) AttachToContainer(docker.AttachToContainerOptions) error {
+	return nil
+}
+
+func (c *fakeDockerClient) KillContainer(string) error {
+	return nil
+}
+
+func (c *fakeDockerClient) ListContainers(docker.ListContainersOptions) ([]docker.APIContainers, error) {
+	return nil, nil
+}
+
+func testDockerRun(job *host.Job, t *testing.T) (*State, *fakeDockerClient) {
+	client := &fakeDockerClient{}
+	return testDockerRunWithOpts(job, "", client, t), client
+}
+
+func testDockerRunWithOpts(job *host.Job, bindAddr string, client *fakeDockerClient, t *testing.T) *State {
 	if client == nil {
-		client = &dockerClient{}
+		client = &fakeDockerClient{}
 	}
-	state := processWithOpts(job, extAddr, bindAddr, client)
+	state := dockerRunWithOpts(job, bindAddr, client)
 
 	if client.created != job.Config {
 		t.Error("job not created")
@@ -90,8 +119,8 @@ func testProcessWithOpts(job *host.Job, extAddr, bindAddr string, client *docker
 	return state
 }
 
-func testProcessWithError(job *host.Job, client *dockerClient, err error, t *testing.T) *State {
-	state := processWithOpts(job, "", "", client)
+func testProcessWithError(job *host.Job, client *fakeDockerClient, err error, t *testing.T) *State {
+	state := dockerRunWithOpts(job, "", client)
 
 	sjob := state.GetJob(job.ID)
 	if sjob.Status != host.StatusFailed {
@@ -103,27 +132,24 @@ func testProcessWithError(job *host.Job, client *dockerClient, err error, t *tes
 	return state
 }
 
-func processWithOpts(job *host.Job, extAddr, bindAddr string, client *dockerClient) *State {
-	ports := make(chan int)
+func dockerRunWithOpts(job *host.Job, bindAddr string, client *fakeDockerClient) *State {
 	state := NewState()
-	go allocatePorts(ports, 500, 505)
-	(&jobProcessor{
-		externalAddr: extAddr,
-		bindAddr:     bindAddr,
-		docker:       client,
-		state:        state,
-		discoverd:    extAddr + ":1111",
-	}).processJob(ports, job)
+	(&DockerBackend{
+		bindAddr: bindAddr,
+		docker:   client,
+		state:    state,
+		ports:    ports.NewAllocator(500, 550),
+	}).Run(job)
 	return state
 }
 
 func TestProcessJob(t *testing.T) {
-	testProcess(&host.Job{ID: "a", Config: &docker.Config{}}, t)
+	testDockerRun(&host.Job{ID: "a", Config: &docker.Config{}}, t)
 }
 
 func TestProcessJobWithImplicitPorts(t *testing.T) {
 	job := &host.Job{TCPPorts: 2, ID: "a", Config: &docker.Config{}}
-	_, client := testProcess(job, t)
+	_, client := testDockerRun(job, t)
 
 	if len(job.Config.Env) == 0 || !sliceHasString(job.Config.Env, "PORT=500") {
 		t.Fatal("PORT env not set")
@@ -150,8 +176,8 @@ func TestProcessJobWithImplicitPorts(t *testing.T) {
 
 func TestProcessWithImplicitPortsAndIP(t *testing.T) {
 	job := &host.Job{ID: "a", TCPPorts: 2, Config: &docker.Config{}}
-	client := &dockerClient{}
-	testProcessWithOpts(job, "10.10.10.1", "127.0.42.1", client, t)
+	client := &fakeDockerClient{}
+	testDockerRunWithOpts(job, "127.0.42.1", client, t)
 
 	b := client.hostConf.PortBindings["500/tcp"]
 	if b[0].HostIp != "127.0.42.1" {
@@ -170,39 +196,13 @@ func TestProcessJobWithExplicitPorts(t *testing.T) {
 	hostConfig.PortBindings["443/tcp"] = []docker.PortBinding{{HostPort: "8081"}}
 
 	job := &host.Job{ID: "a", Config: &docker.Config{}, HostConfig: hostConfig}
-	_, client := testProcess(job, t)
+	_, client := testDockerRun(job, t)
 
 	if b := client.hostConf.PortBindings["80/tcp"]; len(b) == 0 || b[0].HostPort != "8080" {
 		t.Error("port 8080 binding not set")
 	}
 	if b := client.hostConf.PortBindings["443/tcp"]; len(b) == 0 || b[0].HostPort != "8081" {
 		t.Error("port 8081 binding not set")
-	}
-}
-
-func TestProcessWithExtAddr(t *testing.T) {
-	job := &host.Job{ID: "a", Config: &docker.Config{}}
-	testProcessWithOpts(job, "10.10.10.1", "", nil, t)
-
-	if !sliceHasString(job.Config.Env, "EXTERNAL_IP=10.10.10.1") {
-		t.Error("EXTERNAL_IP not set")
-	}
-	if !sliceHasString(job.Config.Env, "DISCOVERD=10.10.10.1:1111") {
-		t.Error("DISCOVERD not set")
-	}
-}
-
-func TestProcessWithVolume(t *testing.T) {
-	job := &host.Job{
-		ID: "a",
-		Config: &docker.Config{
-			Volumes: map[string]struct{}{"/data": {}},
-		},
-	}
-	state, _ := testProcess(job, t)
-	j := state.GetJob("a")
-	if j.Volumes["/data"] == "" {
-		t.Error("Volume missing from state")
 	}
 }
 
@@ -217,8 +217,8 @@ func sliceHasString(slice []string, str string) bool {
 
 func TestProcessWithPull(t *testing.T) {
 	job := &host.Job{ID: "a", Config: &docker.Config{Image: "test/foo"}}
-	client := &dockerClient{createErr: docker.ErrNoSuchImage}
-	testProcessWithOpts(job, "", "", client, t)
+	client := &fakeDockerClient{createErr: docker.ErrNoSuchImage}
+	testDockerRunWithOpts(job, "", client, t)
 
 	if client.pulled != "test/foo" {
 		t.Error("image not pulled")
@@ -228,21 +228,21 @@ func TestProcessWithPull(t *testing.T) {
 func TestProcessWithCreateFailure(t *testing.T) {
 	job := &host.Job{ID: "a", Config: &docker.Config{}}
 	err := errors.New("undefined failure")
-	client := &dockerClient{createErr: err}
+	client := &fakeDockerClient{createErr: err}
 	testProcessWithError(job, client, err, t)
 }
 
 func TestProcessWithPullFailure(t *testing.T) {
 	job := &host.Job{ID: "a", Config: &docker.Config{}}
 	err := errors.New("undefined failure")
-	client := &dockerClient{createErr: docker.ErrNoSuchImage, pullErr: err}
+	client := &fakeDockerClient{createErr: docker.ErrNoSuchImage, pullErr: err}
 	testProcessWithError(job, client, err, t)
 }
 
 func TestProcessWithStartFailure(t *testing.T) {
 	job := &host.Job{ID: "a", Config: &docker.Config{}}
 	err := errors.New("undefined failure")
-	client := &dockerClient{startErr: err}
+	client := &fakeDockerClient{startErr: err}
 	testProcessWithError(job, client, err, t)
 }
 
@@ -277,31 +277,20 @@ func TestSyncScheduler(t *testing.T) {
 	}
 }
 
-type streamClient struct {
-	events chan *docker.Event
-}
-
-func (s *streamClient) Events() (*docker.EventStream, error) {
-	return &docker.EventStream{Events: s.events}, nil
-}
-
-func (s *streamClient) InspectContainer(id string) (*docker.Container, error) {
-	if id != "1" {
-		return nil, errors.New("incorrect id")
-	}
-	return &docker.Container{State: docker.State{ExitCode: 1}}, nil
-}
-
 func TestStreamEvents(t *testing.T) {
 	events := make(chan *docker.Event)
 	state := NewState()
 	state.AddJob(&host.Job{ID: "a"})
 	state.SetContainerID("a", "1")
-	state.SetStatusRunning("a", nil)
+	state.SetStatusRunning("a")
 
 	done := make(chan struct{})
 	go func() {
-		streamEvents(&streamClient{events}, state)
+		(&DockerBackend{
+			docker: &fakeDockerClient{events: events},
+			state:  state,
+			ports:  ports.NewAllocator(500, 550),
+		}).handleEvents()
 		close(done)
 	}()
 

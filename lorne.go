@@ -6,14 +6,12 @@ import (
 	"io"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/flynn/flynn-host/sampi"
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/go-flynn/attempt"
 	"github.com/flynn/go-flynn/cluster"
 	rpc "github.com/flynn/rpcplus/comborpc"
@@ -60,40 +58,28 @@ func main() {
 	grohl.Log(grohl.Data{"at": "start"})
 	g := grohl.NewContext(grohl.Data{"fn": "main"})
 
-	dockerc, err := docker.NewClient("unix:///var/run/docker.sock")
+	state := NewState()
+	backend, err := NewDockerBackend(state, *bindAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	go serveHTTP(&Host{state: state}, &attachHandler{state: state, backend: backend})
+
 	if *force {
-		if err := killExistingContainers(dockerc); err != nil {
-			os.Exit(1)
+		if err := backend.Cleanup(); err != nil {
+			log.Fatal(err)
 		}
 	}
 
-	state := NewState()
-	ports := make(chan int)
-
-	go allocatePorts(ports, 55000, 65535)
-	go serveHTTP(&Host{state: state, docker: dockerc}, &attachHandler{state: state, docker: dockerc})
-	go streamEvents(dockerc, state)
-
-	processor := &jobProcessor{
+	runner := &manifestRunner{
+		env:          parseEnviron(),
 		externalAddr: *externalAddr,
 		bindAddr:     *bindAddr,
-		docker:       dockerc,
-		state:        state,
-		discoverd:    os.Getenv("DISCOVERD"),
+		backend:      backend,
 	}
 
-	runner := &manifestRunner{
-		env:        parseEnviron(),
-		externalIP: *externalAddr,
-		ports:      ports,
-		processor:  processor,
-		docker:     dockerc,
-	}
-
+	discAddr := os.Getenv("DISCOVERD")
 	var disc *discoverd.Client
 	if *manifestFile != "" {
 		var r io.Reader
@@ -116,10 +102,10 @@ func main() {
 		}
 
 		if d, ok := services["discoverd"]; ok {
-			processor.discoverd = fmt.Sprintf("%s:%d", d.InternalIP, d.TCPPorts[0])
+			discAddr = fmt.Sprintf("%s:%d", d.InternalIP, d.TCPPorts[0])
 			var disc *discoverd.Client
 			err = Attempts.Run(func() (err error) {
-				disc, err = discoverd.NewClientWithAddr(processor.discoverd)
+				disc, err = discoverd.NewClientWithAddr(discAddr)
 				return
 			})
 			if err != nil {
@@ -128,13 +114,13 @@ func main() {
 		}
 	}
 
-	if processor.discoverd == "" && *externalAddr != "" {
-		processor.discoverd = *externalAddr + ":1111"
+	if discAddr == "" && *externalAddr != "" {
+		discAddr = *externalAddr + ":1111"
 	}
 	// HACK: use env as global for discoverd connection in sampic
-	os.Setenv("DISCOVERD", processor.discoverd)
+	os.Setenv("DISCOVERD", discAddr)
 	if disc == nil {
-		disc, err = discoverd.NewClientWithAddr(processor.discoverd)
+		disc, err = discoverd.NewClientWithAddr(discAddr)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -190,137 +176,16 @@ func main() {
 		jobs := make(chan *host.Job)
 		hostErr := cluster.RegisterHost(h, jobs)
 		g.Log(grohl.Data{"at": "host_registered"})
-		processor.Process(ports, jobs)
+		for job := range jobs {
+			if *externalAddr != "" {
+				job.Config.Env = appendUnique(job.Config.Env, "EXTERNAL_IP="+*externalAddr, "DISCOVERD="+discAddr)
+			}
+			backend.Run(job)
+		}
 		g.Log(grohl.Data{"at": "sampi_disconnected", "err": *hostErr})
 
 		<-newLeader
 	}
-}
-
-type jobProcessor struct {
-	externalAddr string
-	bindAddr     string
-	discoverd    string
-	docker       interface {
-		CreateContainer(*docker.Config) (*docker.Container, error)
-		PullImage(docker.PullImageOptions, io.Writer) error
-		StartContainer(string, *docker.HostConfig) error
-		InspectContainer(string) (*docker.Container, error)
-	}
-	state *State
-}
-
-func killExistingContainers(dc *docker.Client) error {
-	g := grohl.NewContext(grohl.Data{"fn": "kill_existing"})
-	g.Log(grohl.Data{"at": "start"})
-	containers, err := dc.ListContainers(docker.ListContainersOptions{})
-	if err != nil {
-		g.Log(grohl.Data{"at": "list", "status": "error", "err": err})
-		return err
-	}
-outer:
-	for _, c := range containers {
-		for _, name := range c.Names {
-			if strings.HasPrefix(name, "/flynn-") {
-				g.Log(grohl.Data{"at": "kill", "container.id": c.ID, "container.name": name})
-				if err := dc.KillContainer(c.ID); err != nil {
-					g.Log(grohl.Data{"at": "kill", "container.id": c.ID, "container.name": name, "status": "error", "err": err})
-				}
-				continue outer
-			}
-		}
-	}
-	g.Log(grohl.Data{"at": "finish"})
-	return nil
-}
-
-func (p *jobProcessor) Process(ports <-chan int, jobs chan *host.Job) {
-	for job := range jobs {
-		p.processJob(ports, job)
-	}
-}
-
-func (p *jobProcessor) processJob(ports <-chan int, job *host.Job) (*docker.Container, error) {
-	g := grohl.NewContext(grohl.Data{"fn": "process_job", "job.id": job.ID})
-	g.Log(grohl.Data{"at": "start", "job.image": job.Config.Image, "job.cmd": job.Config.Cmd, "job.entrypoint": job.Config.Entrypoint})
-
-	if job.HostConfig == nil {
-		job.HostConfig = &docker.HostConfig{
-			PortBindings: make(map[string][]docker.PortBinding, job.TCPPorts),
-		}
-	}
-	if job.Config.ExposedPorts == nil {
-		job.Config.ExposedPorts = make(map[string]struct{}, job.TCPPorts)
-	}
-	for i := 0; i < job.TCPPorts; i++ {
-		port := strconv.Itoa(<-ports)
-		if i == 0 {
-			job.Config.Env = append(job.Config.Env, "PORT="+port)
-		}
-		job.Config.Env = append(job.Config.Env, fmt.Sprintf("PORT_%d=%s", i, port))
-		job.Config.ExposedPorts[port+"/tcp"] = struct{}{}
-		job.HostConfig.PortBindings[port+"/tcp"] = []docker.PortBinding{{HostPort: port, HostIp: p.bindAddr}}
-	}
-
-	job.Config.AttachStdout = true
-	job.Config.AttachStderr = true
-	if strings.HasPrefix(job.ID, "flynn-") {
-		job.Config.Name = job.ID
-	} else {
-		job.Config.Name = "flynn-" + job.ID
-	}
-	if p.externalAddr != "" {
-		job.Config.Env = appendUnique(job.Config.Env, "EXTERNAL_IP="+p.externalAddr, "SD_HOST="+p.externalAddr, "DISCOVERD="+p.discoverd)
-	}
-
-	p.state.AddJob(job)
-	g.Log(grohl.Data{"at": "create_container"})
-	container, err := p.docker.CreateContainer(job.Config)
-	if err == docker.ErrNoSuchImage {
-		g.Log(grohl.Data{"at": "pull_image"})
-		err = p.docker.PullImage(docker.PullImageOptions{Repository: job.Config.Image}, os.Stdout)
-		if err != nil {
-			g.Log(grohl.Data{"at": "pull_image", "status": "error", "err": err})
-			p.state.SetStatusFailed(job.ID, err)
-			return nil, err
-		}
-		container, err = p.docker.CreateContainer(job.Config)
-	}
-	if err != nil {
-		g.Log(grohl.Data{"at": "create_container", "status": "error", "err": err})
-		p.state.SetStatusFailed(job.ID, err)
-		return nil, err
-	}
-	p.state.SetContainerID(job.ID, container.ID)
-	p.state.WaitAttach(job.ID)
-	g.Log(grohl.Data{"at": "start_container"})
-	if err := p.docker.StartContainer(container.ID, job.HostConfig); err != nil {
-		g.Log(grohl.Data{"at": "start_container", "status": "error", "err": err})
-		p.state.SetStatusFailed(job.ID, err)
-		return nil, err
-	}
-	container, err = p.docker.InspectContainer(container.ID)
-	if err != nil {
-		g.Log(grohl.Data{"at": "inspect_container", "status": "error", "err": err})
-		p.state.SetStatusFailed(job.ID, err)
-		return nil, err
-	}
-	p.state.SetStatusRunning(job.ID, container.Volumes)
-	g.Log(grohl.Data{"at": "finish"})
-	return container, nil
-}
-
-func appendUnique(s []string, vars ...string) []string {
-outer:
-	for _, v := range vars {
-		for _, existing := range s {
-			if strings.HasPrefix(existing, strings.SplitN(v, "=", 2)[0]+"=") {
-				continue outer
-			}
-		}
-		s = append(s, v)
-	}
-	return s
 }
 
 type sampiClient interface {
@@ -342,37 +207,4 @@ func syncScheduler(scheduler sampiSyncClient, events <-chan host.Event) {
 			grohl.Log(grohl.Data{"fn": "scheduler_event", "at": "remove_job", "status": "error", "err": err, "job.id": event.JobID})
 		}
 	}
-}
-
-type dockerStreamClient interface {
-	Events() (*docker.EventStream, error)
-	InspectContainer(string) (*docker.Container, error)
-}
-
-func streamEvents(client dockerStreamClient, state *State) {
-	stream, err := client.Events()
-	if err != nil {
-		log.Fatal(err)
-	}
-	for event := range stream.Events {
-		if event.Status != "die" {
-			continue
-		}
-		container, err := client.InspectContainer(event.ID)
-		if err != nil {
-			log.Println("inspect container", event.ID, "error:", err)
-			// TODO: set job status anyway?
-			continue
-		}
-		state.SetStatusDone(event.ID, container.State.ExitCode)
-	}
-}
-
-// TODO: fix this, horribly broken
-
-func allocatePorts(ports chan<- int, startPort, endPort int) {
-	for i := startPort; i < endPort; i++ {
-		ports <- i
-	}
-	// TODO: handle wrap-around
 }

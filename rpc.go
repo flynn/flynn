@@ -16,16 +16,10 @@ func serveHTTP(host *Host, attach *attachHandler) {
 	http.ListenAndServe(":1113", nil)
 }
 
-type dockerHostClient interface {
-	StopContainer(string, uint) error
-}
-
 type Host struct {
-	state  *State
-	docker dockerHostClient
+	state   *State
+	backend Backend
 }
-
-const stopTimeout = 1
 
 func (h *Host) ListJobs(arg struct{}, res *map[string]host.ActiveJob) error {
 	*res = h.state.Get()
@@ -48,7 +42,7 @@ func (h *Host) StopJob(id string, res *struct{}) error {
 	if job.Status != host.StatusRunning {
 		return errors.New("host: job is not running")
 	}
-	return h.docker.StopContainer(job.ContainerID, stopTimeout)
+	return h.backend.Stop(job.ContainerID)
 }
 
 func (h *Host) StreamEvents(id string, stream rpcplus.Stream) error {
