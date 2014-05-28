@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"errors"
+	"sync"
 
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-flynn/cluster"
@@ -14,14 +15,29 @@ func NewFakeCluster() *FakeCluster {
 type FakeCluster struct {
 	hosts       map[string]host.Host
 	hostClients map[string]cluster.Host
+	mtx         sync.RWMutex
 }
 
 func (c *FakeCluster) ListHosts() (map[string]host.Host, error) {
-	return c.hosts, nil
+	c.mtx.RLock()
+	defer c.mtx.RUnlock()
+	hosts := make(map[string]host.Host, len(c.hosts))
+	for id, _ := range c.hosts {
+		hosts[id] = c.GetHost(id)
+	}
+	return hosts, nil
 }
 
 func (c *FakeCluster) GetHost(id string) host.Host {
-	return c.hosts[id]
+	c.mtx.RLock()
+	defer c.mtx.RUnlock()
+	h := c.hosts[id]
+
+	// copy the jobs to avoid races
+	jobs := make([]*host.Job, len(h.Jobs))
+	copy(jobs, h.Jobs)
+
+	return host.Host{ID: h.ID, Jobs: jobs, Attributes: h.Attributes}
 }
 
 func (c *FakeCluster) DialHost(id string) (cluster.Host, error) {
@@ -33,6 +49,8 @@ func (c *FakeCluster) DialHost(id string) (cluster.Host, error) {
 }
 
 func (c *FakeCluster) AddJobs(req *host.AddJobsReq) (*host.AddJobsRes, error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
 	for hostID, jobs := range req.HostJobs {
 		host, ok := c.hosts[hostID]
 		if !ok {
@@ -45,6 +63,8 @@ func (c *FakeCluster) AddJobs(req *host.AddJobsReq) (*host.AddJobsRes, error) {
 }
 
 func (c *FakeCluster) RemoveJob(hostID, jobID string) error {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
 	h, ok := c.hosts[hostID]
 	if !ok {
 		return errors.New("FakeCluster: unknown host")

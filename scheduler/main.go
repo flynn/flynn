@@ -59,6 +59,7 @@ type context struct {
 
 	hosts *hostClients
 	jobs  *jobMap
+	mtx   sync.RWMutex
 }
 
 type clusterClient interface {
@@ -74,18 +75,21 @@ type controllerClient interface {
 	StreamFormations(since *time.Time) (<-chan *ct.ExpandedFormation, *error)
 }
 
-func (c *context) syncCluster() {
+func (c *context) syncCluster(events chan<- *JobRemovalEvent) {
 	g := grohl.NewContext(grohl.Data{"fn": "syncCluster"})
 
 	artifacts := make(map[string]*ct.Artifact)
 	releases := make(map[string]*ct.Release)
 	rectify := make(map[*Formation]struct{})
 
+	go c.watchHosts(events)
+
 	hosts, err := c.ListHosts()
 	if err != nil {
 		// TODO: log/handle error
 	}
 
+	c.mtx.Lock()
 	for _, h := range hosts {
 		for _, job := range h.Jobs {
 			appID := job.Attributes["flynn-controller.app"]
@@ -145,6 +149,7 @@ func (c *context) syncCluster() {
 			rectify[f] = struct{}{}
 		}
 	}
+	c.mtx.Unlock()
 
 	for f := range rectify {
 		go f.rectify()
@@ -156,7 +161,7 @@ func (c *context) watchFormations(events chan<- *FormationEvent) {
 
 	ch, _ := c.StreamFormations(nil)
 
-	c.syncCluster()
+	c.syncCluster(nil)
 	if events != nil {
 		events <- &FormationEvent{}
 	}
@@ -185,6 +190,18 @@ func (c *context) watchFormations(events chan<- *FormationEvent) {
 
 	// TODO: log disconnect and restart
 	// TODO: trigger cluster sync
+}
+
+func (c *context) watchHosts(events chan<- *JobRemovalEvent) {
+	hosts, err := c.ListHosts()
+	if err != nil {
+		// TODO: log/handle error
+	}
+
+	for id, _ := range hosts {
+		go c.watchHost(id, events)
+	}
+
 }
 
 func (c *context) watchHost(id string, events chan<- *JobRemovalEvent) {
@@ -217,7 +234,9 @@ func (c *context) watchHost(id string, events chan<- *JobRemovalEvent) {
 
 		c.jobs.Remove(id, event.JobID)
 		go func() {
+			c.mtx.RLock()
 			job.Formation.RemoveJob(job.Type, id, event.JobID)
+			c.mtx.RUnlock()
 			if events != nil {
 				events <- &JobRemovalEvent{JobID: event.JobID}
 			}
@@ -471,7 +490,6 @@ func (f *Formation) add(n int, name string) {
 		sh.Sort()
 
 		h := hosts[sh[0].ID]
-		go f.c.watchHost(h.ID, nil)
 
 		g.Log(grohl.Data{"host.id": h.ID, "job.id": config.ID})
 
