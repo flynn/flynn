@@ -98,7 +98,7 @@ func (c *context) syncCluster(events chan<- *host.Event) {
 			jobType := job.Attributes["flynn-controller.type"]
 			gg := g.New(grohl.Data{"host.id": h.ID, "job.id": job.ID, "app.id": appID, "release.id": releaseID, "type": jobType})
 
-			if appID == "" || releaseID == "" || jobType == "" {
+			if appID == "" || releaseID == "" {
 				continue
 			}
 			if job := c.jobs.Get(h.ID, job.ID); job != nil {
@@ -470,6 +470,10 @@ func (f *Formation) rectify() {
 
 	// remove process types
 	for t, jobs := range f.jobs {
+		// ignore one-off jobs which have no type
+		if t == "" {
+			continue
+		}
 		if _, exists := f.Processes[t]; !exists {
 			g.Log(grohl.Data{"at": "cleanup", "type": t, "count": len(jobs)})
 			f.remove(len(jobs), t)
