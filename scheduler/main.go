@@ -73,9 +73,10 @@ type controllerClient interface {
 	GetArtifact(artifactID string) (*ct.Artifact, error)
 	GetFormation(appID, releaseID string) (*ct.Formation, error)
 	StreamFormations(since *time.Time) (<-chan *ct.ExpandedFormation, *error)
+	PutJob(job *ct.Job) error
 }
 
-func (c *context) syncCluster(events chan<- *JobRemovalEvent) {
+func (c *context) syncCluster(events chan<- *host.Event) {
 	g := grohl.NewContext(grohl.Data{"fn": "syncCluster"})
 
 	artifacts := make(map[string]*ct.Artifact)
@@ -192,7 +193,7 @@ func (c *context) watchFormations(events chan<- *FormationEvent) {
 	// TODO: trigger cluster sync
 }
 
-func (c *context) watchHosts(events chan<- *JobRemovalEvent) {
+func (c *context) watchHosts(events chan<- *host.Event) {
 	hosts, err := c.ListHosts()
 	if err != nil {
 		// TODO: log/handle error
@@ -204,7 +205,7 @@ func (c *context) watchHosts(events chan<- *JobRemovalEvent) {
 
 }
 
-func (c *context) watchHost(id string, events chan<- *JobRemovalEvent) {
+func (c *context) watchHost(id string, events chan<- *host.Event) {
 	if !c.hosts.Add(id) {
 		return
 	}
@@ -223,11 +224,30 @@ func (c *context) watchHost(id string, events chan<- *JobRemovalEvent) {
 	ch := make(chan *host.Event)
 	h.StreamEvents("all", ch)
 	for event := range ch {
-		if event.Event != "error" && event.Event != "stop" {
-			continue
-		}
 		job := c.jobs.Get(id, event.JobID)
 		if job == nil {
+			continue
+		}
+
+		j := &ct.Job{ID: id + "-" + event.JobID, AppID: job.Formation.AppID, ReleaseID: job.Formation.Release.ID, Type: job.Type}
+		switch event.Event {
+		case "create":
+			j.State = "starting"
+		case "start":
+			j.State = "up"
+		case "stop":
+			j.State = "down"
+		case "error":
+			j.State = "crashed"
+		}
+		if err = c.PutJob(j); err != nil {
+			// TODO: log/handle error
+		}
+
+		if event.Event != "error" && event.Event != "stop" {
+			if events != nil {
+				events <- event
+			}
 			continue
 		}
 		g.Log(grohl.Data{"at": "remove", "job.id": event.JobID, "event": event.Event})
@@ -238,7 +258,7 @@ func (c *context) watchHost(id string, events chan<- *JobRemovalEvent) {
 			job.Formation.RemoveJob(job.Type, id, event.JobID)
 			c.mtx.RUnlock()
 			if events != nil {
-				events <- &JobRemovalEvent{JobID: event.JobID}
+				events <- event
 			}
 		}()
 	}
@@ -554,8 +574,4 @@ func (h sortHosts) Sort()              { sort.Sort(h) }
 
 type FormationEvent struct {
 	Formation *Formation
-}
-
-type JobRemovalEvent struct {
-	JobID string
 }
