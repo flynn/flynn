@@ -16,8 +16,68 @@ import (
 	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/go-flynn/cluster"
 	"github.com/flynn/go-flynn/demultiplex"
+	"github.com/flynn/go-sql"
+	"github.com/flynn/pq"
 	"github.com/go-martini/martini"
 )
+
+type JobRepo struct {
+	db *DB
+}
+
+func NewJobRepo(db *DB) *JobRepo {
+	return &JobRepo{db}
+}
+
+func (r *JobRepo) Add(job *ct.Job) error {
+	hostID, jobID := parseJobID(job.ID)
+	if hostID == "" {
+		log.Printf("Unable to parse hostID from %q", job.ID)
+		return ErrNotFound
+	}
+	// TODO: actually validate
+	err := r.db.QueryRow("INSERT INTO job_cache (job_id, host_id, app_id, release_id, process_type, state) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at, updated_at",
+		jobID, hostID, job.AppID, job.ReleaseID, job.Type, job.State).Scan(&job.CreatedAt, &job.UpdatedAt)
+	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" {
+		err = r.db.QueryRow("UPDATE job_cache SET state = $3, updated_at = now() WHERE job_id = $1 AND host_id = $2 RETURNING created_at, updated_at",
+			jobID, hostID, job.State).Scan(&job.CreatedAt, &job.UpdatedAt)
+	}
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func scanJob(s Scanner) (*ct.Job, error) {
+	job := &ct.Job{}
+	err := s.Scan(&job.ID, &job.AppID, &job.ReleaseID, &job.Type, &job.State, &job.CreatedAt, &job.UpdatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			err = ErrNotFound
+		}
+		return nil, err
+	}
+	job.AppID = cleanUUID(job.AppID)
+	job.ReleaseID = cleanUUID(job.ReleaseID)
+	return job, nil
+}
+
+func (r *JobRepo) List(appID string) ([]*ct.Job, error) {
+	rows, err := r.db.Query("SELECT concat(host_id, '-', job_id), app_id, release_id, process_type, state, created_at, updated_at FROM job_cache WHERE app_id = $1 ORDER BY created_at DESC", appID)
+	if err != nil {
+		return nil, err
+	}
+	jobs := []*ct.Job{}
+	for rows.Next() {
+		job, err := scanJob(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		jobs = append(jobs, job)
+	}
+	return jobs, nil
+}
 
 type clusterClient interface {
 	ListHosts() (map[string]host.Host, error)
@@ -25,32 +85,22 @@ type clusterClient interface {
 	AddJobs(*host.AddJobsReq) (*host.AddJobsRes, error)
 }
 
-func jobList(app *ct.App, cc clusterClient, r ResponseHelper) {
-	hosts, err := cc.ListHosts()
+func listJobs(app *ct.App, repo *JobRepo, r ResponseHelper) {
+	list, err := repo.List(app.ID)
 	if err != nil {
 		r.Error(err)
 		return
 	}
-	var jobs []ct.Job
-	for _, h := range hosts {
-		for _, j := range h.Jobs {
-			if j.Attributes["flynn-controller.app"] != app.ID {
-				continue
-			}
+	r.JSON(200, list)
+}
 
-			job := ct.Job{
-				ID:        h.ID + "-" + j.ID,
-				Type:      j.Attributes["flynn-controller.type"],
-				ReleaseID: j.Attributes["flynn-controller.release"],
-			}
-			if job.Type == "" {
-				job.Cmd = j.Config.Cmd
-			}
-			jobs = append(jobs, job)
-		}
+func putJob(job ct.Job, app *ct.App, repo *JobRepo, r ResponseHelper) {
+	job.AppID = app.ID
+	if err := repo.Add(&job); err != nil {
+		r.Error(err)
+		return
 	}
-
-	r.JSON(200, jobs)
+	r.JSON(200, &job)
 }
 
 func jobLog(req *http.Request, app *ct.App, params martini.Params, cluster cluster.Host, w http.ResponseWriter, r ResponseHelper) {
@@ -121,8 +171,8 @@ func (w *sseLogStreamWriter) Write(p []byte) (int, error) {
 	return len(p), err
 }
 
-func parseJobID(params martini.Params) (string, string) {
-	id := strings.SplitN(params["jobs_id"], "-", 2)
+func parseJobID(jobID string) (string, string) {
+	id := strings.SplitN(jobID, "-", 2)
 	if len(id) != 2 || id[0] == "" || id[1] == "" {
 		return "", ""
 	}
@@ -130,7 +180,7 @@ func parseJobID(params martini.Params) (string, string) {
 }
 
 func connectHostMiddleware(c martini.Context, params martini.Params, cl clusterClient, r ResponseHelper) {
-	hostID, jobID := parseJobID(params)
+	hostID, jobID := parseJobID(params["jobs_id"])
 	if hostID == "" {
 		log.Printf("Unable to parse hostID from %q", params["jobs_id"])
 		r.Error(ErrNotFound)

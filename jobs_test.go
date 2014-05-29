@@ -15,33 +15,33 @@ import (
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/flynn-host/types"
-	"github.com/flynn/go-dockerclient"
 	"github.com/flynn/go-flynn/cluster"
 	. "github.com/titanous/gocheck"
 )
 
-func (s *S) TestJobList(c *C) {
-	app := s.createTestApp(c, &ct.App{Name: "job-list"})
-	s.cc.SetHosts(map[string]host.Host{"host0": {
-		ID: "host0",
-		Jobs: []*host.Job{
-			{ID: "job0", Attributes: map[string]string{"flynn-controller.app": app.ID, "flynn-controller.release": "release0", "flynn-controller.type": "web"}},
-			{ID: "job1", Attributes: map[string]string{"flynn-controller.app": app.ID}, Config: &docker.Config{Cmd: []string{"bash"}}},
-			{ID: "job2", Attributes: map[string]string{"flynn-controller.app": "otherApp"}},
-			{ID: "job3"},
-		},
-	}})
-
-	expected := []ct.Job{
-		{ID: "host0-job0", Type: "web", ReleaseID: "release0"},
-		{ID: "host0-job1", Cmd: []string{"bash"}},
-	}
-
-	var actual []ct.Job
-	res, err := s.Get("/apps/"+app.ID+"/jobs", &actual)
+func (s *S) createTestJob(c *C, in *ct.Job) *ct.Job {
+	out := &ct.Job{}
+	res, err := s.Put("/apps/"+in.AppID+"/jobs/"+in.ID, in, out)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
-	c.Assert(actual, DeepEquals, expected)
+	return out
+}
+
+func (s *S) TestJobList(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "job-list"})
+	release := s.createTestRelease(c, &ct.Release{})
+	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
+	s.createTestJob(c, &ct.Job{ID: "host0-job0", AppID: app.ID, ReleaseID: release.ID, Type: "web", State: "starting"})
+
+	var list []ct.Job
+	res, err := s.Get("/apps/"+app.ID+"/jobs", &list)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(len(list), Equals, 1)
+	job := list[0]
+	c.Assert(job.ID, Equals, "host0-job0")
+	c.Assert(job.AppID, Equals, app.ID)
+	c.Assert(job.ReleaseID, Equals, release.ID)
 }
 
 func newFakeLog(r io.Reader) *fakeLog {

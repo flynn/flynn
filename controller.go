@@ -123,11 +123,13 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	appRepo := NewAppRepo(d, os.Getenv("DEFAULT_ROUTE_DOMAIN"), c.sc)
 	artifactRepo := NewArtifactRepo(d)
 	releaseRepo := NewReleaseRepo(d)
+	jobRepo := NewJobRepo(d)
 	formationRepo := NewFormationRepo(d, appRepo, releaseRepo, artifactRepo)
 	m.Map(resourceRepo)
 	m.Map(appRepo)
 	m.Map(artifactRepo)
 	m.Map(releaseRepo)
+	m.Map(jobRepo)
 	m.Map(formationRepo)
 	m.Map(c.dc)
 	m.MapTo(c.cc, (*clusterClient)(nil))
@@ -146,7 +148,8 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	r.Get("/apps/:apps_id/formations", getAppMiddleware, listFormations)
 
 	r.Post("/apps/:apps_id/jobs", getAppMiddleware, binding.Bind(ct.NewJob{}), runJob)
-	r.Get("/apps/:apps_id/jobs", getAppMiddleware, jobList)
+	r.Put("/apps/:apps_id/jobs/:jobs_id", getAppMiddleware, binding.Bind(ct.Job{}), putJob)
+	r.Get("/apps/:apps_id/jobs", getAppMiddleware, listJobs)
 	r.Delete("/apps/:apps_id/jobs/:jobs_id", getAppMiddleware, connectHostMiddleware, killJob)
 	r.Get("/apps/:apps_id/jobs/:jobs_id/log", getAppMiddleware, connectHostMiddleware, jobLog)
 
