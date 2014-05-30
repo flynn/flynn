@@ -197,7 +197,6 @@ func (s *S) TestWatchFormations(c *C) {
 		c.Assert(formation.Artifact, DeepEquals, f.Artifact)
 		c.Assert(formation.Processes, DeepEquals, f.Processes)
 
-		c.Assert(cx.jobs.Len(), Equals, u.jobCount()+1)
 		host := cl.GetHost(hostID)
 		c.Assert(len(host.Jobs), Equals, u.jobCount()+1)
 
