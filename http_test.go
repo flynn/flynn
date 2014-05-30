@@ -138,7 +138,7 @@ func assertGet(c *C, url, host, expected string) {
 }
 
 func addHTTPRoute(c *C, l *HTTPListener) *strowger.Route {
-	wait := waitForEvent(c, l, "add", "")
+	wait := waitForEvent(c, l, "set", "")
 	r := (&strowger.HTTPRoute{
 		Domain:  "example.com",
 		Service: "test",
