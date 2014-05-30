@@ -549,7 +549,6 @@ func (f *Formation) remove(n int, name string) {
 			// TODO: log/handle error
 		}
 		f.jobs.Remove(name, k.hostID, k.jobID)
-		f.c.jobs.Remove(k.hostID, k.jobID)
 		if i++; i == n {
 			break
 		}
