@@ -9,5 +9,6 @@ RUN chown -R slugbuilder:slugbuilder /app
 
 ADD ./builder/ /tmp/builder
 RUN mkdir -p /tmp/buildpacks && cd /tmp/buildpacks && xargs -L 1 git clone --depth=1 < /tmp/builder/buildpacks.txt
+RUN chown -R slugbuilder:slugbuilder /tmp/buildpacks
 ENTRYPOINT ["/tmp/builder/build.sh"]
 USER slugbuilder
