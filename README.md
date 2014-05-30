@@ -2,7 +2,7 @@
 
 flynn-host is the [Flynn](https://flynn.io) host service. An instance of it runs
 on every host in the Flynn cluster. It is responsible for running jobs (in
-Docker containers) and reporting back to schedulers and the leader.
+Linux containers) and reporting back to schedulers and the leader.
 
 flynn-host is capable of bootstrapping itself inside of Docker containers with
 its dependencies using the included manifest. It depends on
