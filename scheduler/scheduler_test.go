@@ -99,6 +99,14 @@ func waitForHostEvents(count int, events <-chan *host.Event, c *C) {
 	}
 }
 
+func newHostEvent(event, jobID string) *host.Event {
+	job := &host.ActiveJob{Job: &host.Job{ID: jobID}}
+	if event == "start" {
+		job.StartedAt = time.Now().UTC()
+	}
+	return &host.Event{Event: event, JobID: jobID, Job: job}
+}
+
 func newRelease(id string, artifact *ct.Artifact, processes map[string]int) *ct.Release {
 	processTypes := make(map[string]ct.ProcessType, len(processes))
 	for t, _ := range processes {
@@ -238,10 +246,10 @@ func (s *S) TestWatchHost(c *C) {
 	c.Assert(len(cl.GetHost(hostID).Jobs), Equals, 4)
 
 	// Check jobs are marked as up once started
-	stream <- &host.Event{Event: "start", JobID: "job0"}
-	stream <- &host.Event{Event: "start", JobID: "job1"}
-	stream <- &host.Event{Event: "start", JobID: "job2"}
-	stream <- &host.Event{Event: "start", JobID: "one-off-job"}
+	stream <- newHostEvent("start", "job0")
+	stream <- newHostEvent("start", "job1")
+	stream <- newHostEvent("start", "job2")
+	stream <- newHostEvent("start", "one-off-job")
 	waitForHostEvents(4, events, c)
 	c.Assert(len(cc.jobs), Equals, 4)
 	c.Assert(cc.jobs[hostID+"-job0"].State, Equals, "up")
@@ -251,7 +259,7 @@ func (s *S) TestWatchHost(c *C) {
 
 	// Check that when a formation's job is removed, it is marked as down and a new one is scheduled
 	cl.RemoveJob(hostID, "job0")
-	stream <- &host.Event{Event: "stop", JobID: "job0"}
+	stream <- newHostEvent("stop", "job0")
 	waitForHostEvents(1, events, c)
 	c.Assert(cc.jobs[hostID+"-job0"].State, Equals, "down")
 	c.Assert(cx.jobs.Len(), Equals, 4)
@@ -261,7 +269,7 @@ func (s *S) TestWatchHost(c *C) {
 
 	// Check that when a one-off job is removed, it is marked as down but a new one is not scheduled
 	cl.RemoveJob(hostID, "one-off-job")
-	stream <- &host.Event{Event: "stop", JobID: "one-off-job"}
+	stream <- newHostEvent("stop", "one-off-job")
 	waitForHostEvents(1, events, c)
 	c.Assert(cc.jobs[hostID+"-one-off-job"].State, Equals, "down")
 	c.Assert(cx.jobs.Len(), Equals, 3)
@@ -271,7 +279,7 @@ func (s *S) TestWatchHost(c *C) {
 
 	// Check that when a job errors, it is marked as crashed and a new one is started
 	cl.RemoveJob(hostID, "job1")
-	stream <- &host.Event{Event: "error", JobID: "job1"}
+	stream <- newHostEvent("error", "job1")
 	waitForHostEvents(1, events, c)
 	c.Assert(cc.jobs[hostID+"-job1"].State, Equals, "crashed")
 	c.Assert(cx.jobs.Len(), Equals, 3)
