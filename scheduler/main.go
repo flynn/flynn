@@ -153,7 +153,7 @@ func (c *context) syncCluster(events chan<- *host.Event) {
 	c.mtx.Unlock()
 
 	for f := range rectify {
-		go f.rectify()
+		go f.Rectify()
 	}
 }
 
