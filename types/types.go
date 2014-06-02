@@ -42,6 +42,7 @@ type AddJobsRes struct {
 type Event struct {
 	Event string
 	JobID string
+	Job   *ActiveJob
 }
 
 type ActiveJob struct {

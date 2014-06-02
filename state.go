@@ -28,11 +28,12 @@ func NewState() *State {
 	}
 }
 
-func (s *State) AddJob(job *host.Job) {
+func (s *State) AddJob(j *host.Job) {
 	s.mtx.Lock()
-	s.jobs[job.ID] = &host.ActiveJob{Job: job}
+	job := &host.ActiveJob{Job: j}
+	s.jobs[j.ID] = job
 	s.mtx.Unlock()
-	s.sendEvent(job.ID, "create")
+	s.sendEvent(job, "create")
 }
 
 func (s *State) GetJob(id string) *host.ActiveJob {
@@ -86,7 +87,7 @@ func (s *State) SetStatusRunning(jobID string) {
 	job.StartedAt = time.Now().UTC()
 	job.Status = host.StatusRunning
 	s.mtx.Unlock()
-	s.sendEvent(jobID, "start")
+	s.sendEvent(job, "start")
 }
 
 func (s *State) SetStatusDone(containerID string, exitCode int) {
@@ -105,7 +106,7 @@ func (s *State) SetStatusDone(containerID string, exitCode int) {
 		job.Status = host.StatusCrashed
 	}
 	s.mtx.Unlock()
-	s.sendEvent(job.Job.ID, "stop")
+	s.sendEvent(job, "stop")
 }
 
 func (s *State) SetStatusFailed(jobID string, err error) {
@@ -121,7 +122,7 @@ func (s *State) SetStatusFailed(jobID string, err error) {
 	errStr := err.Error()
 	job.Error = &errStr
 	s.mtx.Unlock()
-	s.sendEvent(job.Job.ID, "error")
+	s.sendEvent(job, "error")
 }
 
 func (s *State) AddAttacher(jobID string, ch chan struct{}) *host.ActiveJob {
@@ -173,14 +174,14 @@ func (s *State) RemoveListener(jobID string, ch chan host.Event) {
 	s.listenMtx.Unlock()
 }
 
-func (s *State) sendEvent(jobID string, event string) {
+func (s *State) sendEvent(job *host.ActiveJob, event string) {
 	s.listenMtx.RLock()
 	defer s.listenMtx.RUnlock()
-	e := host.Event{JobID: jobID, Event: event}
+	e := host.Event{JobID: job.Job.ID, Job: job, Event: event}
 	for ch := range s.listeners["all"] {
 		ch <- e
 	}
-	for ch := range s.listeners[jobID] {
+	for ch := range s.listeners[job.Job.ID] {
 		ch <- e
 	}
 }
