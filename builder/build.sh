@@ -70,8 +70,8 @@ if [[ -n "$BUILDPACK_URL" ]]; then
 	echo_title "Fetching custom buildpack"
 
 	buildpack="$buildpack_root/custom"
-	rm -fr "$buildpack"
-	git clone --quiet --depth=1 "$BUILDPACK_URL" "$buildpack"
+	rm -rf "$buildpack"
+	/tmp/builder/install-buildpack "$buildpack_root" "$BUILDPACK_URL" custom &> /dev/null
 	selected_buildpack="$buildpack"
 	buildpack_name=$($buildpack/bin/detect "$build_root") && selected_buildpack=$buildpack
 else
