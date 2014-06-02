@@ -116,6 +116,16 @@ func (s *HTTPListener) AddRoute(r *strowger.Route) error {
 	return s.ds.Add(r)
 }
 
+func (s *HTTPListener) SetRoute(r *strowger.Route) error {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	if s.closed {
+		return ErrClosed
+	}
+	r.ID = md5sum(r.HTTPRoute().Domain)
+	return s.ds.Set(r)
+}
+
 func md5sum(data string) string {
 	digest := md5.Sum([]byte(data))
 	return hex.EncodeToString(digest[:])
@@ -134,7 +144,7 @@ type httpSyncHandler struct {
 	l *HTTPListener
 }
 
-func (h *httpSyncHandler) Add(data *strowger.Route) error {
+func (h *httpSyncHandler) Set(data *strowger.Route) error {
 	route := data.HTTPRoute()
 	r := &httpRoute{
 		Domain:  route.Domain,
@@ -158,11 +168,16 @@ func (h *httpSyncHandler) Add(data *strowger.Route) error {
 	if h.l.closed {
 		return nil
 	}
-	if _, ok := h.l.routes[data.ID]; ok {
-		return ErrExists
-	}
 
 	service := h.l.services[r.Service]
+	if service != nil && service.name != r.Service {
+		service.refs--
+		if service.refs <= 0 {
+			service.ss.Close()
+			delete(h.l.services, service.name)
+		}
+		service = nil
+	}
 	if service == nil {
 		ss, err := h.l.discoverd.NewServiceSet(r.Service)
 		if err != nil {
@@ -176,7 +191,7 @@ func (h *httpSyncHandler) Add(data *strowger.Route) error {
 	h.l.routes[data.ID] = r
 	h.l.domains[r.Domain] = r
 
-	go h.l.wm.Send(&strowger.Event{Event: "add", ID: r.Domain})
+	go h.l.wm.Send(&strowger.Event{Event: "set", ID: r.Domain})
 	return nil
 }
 

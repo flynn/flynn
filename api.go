@@ -24,6 +24,7 @@ func apiHandler(router *Router) http.Handler {
 	m.Map(router)
 
 	r.Post("/routes", binding.Bind(strowger.Route{}), createRoute)
+	r.Put("/routes", binding.Bind(strowger.Route{}), createOrReplaceRoute)
 	r.Get("/routes", getRoutes)
 	r.Get("/routes/:route_type/:route_id", getRoute)
 	r.Delete("/routes/:route_type/:route_id", deleteRoute)
@@ -42,6 +43,26 @@ func createRoute(req *http.Request, route strowger.Route, router *Router, r rend
 	}
 
 	if err := l.AddRoute(&route); err != nil {
+		log.Println(err)
+		r.JSON(500, struct{}{})
+		return
+	}
+	res := formatRoute(&route)
+	r.JSON(200, res)
+}
+
+func createOrReplaceRoute(req *http.Request, route strowger.Route, router *Router, r render.Render) {
+	now := time.Now()
+	route.CreatedAt = &now
+	route.UpdatedAt = &now
+
+	l := listenerFor(router, route.Type)
+	if l == nil {
+		r.JSON(400, "Invalid route type")
+		return
+	}
+
+	if err := l.SetRoute(&route); err != nil {
 		log.Println(err)
 		r.JSON(500, struct{}{})
 		return

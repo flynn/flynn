@@ -34,6 +34,7 @@ func NewWithDiscoverd(name string, dc dialer.DiscoverdClient) Client {
 
 type Client interface {
 	CreateRoute(*strowger.Route) error
+	SetRoute(*strowger.Route) error
 	DeleteRoute(id string) error
 	GetRoute(id string) (*strowger.Route, error)
 	ListRoutes(parentRef string) ([]*strowger.Route, error)
@@ -72,11 +73,24 @@ func (c *client) get(path string, v interface{}) error {
 }
 
 func (c *client) post(path string, v interface{}) error {
+	return c.postJSON("POST", path, v)
+}
+
+func (c *client) put(path string, v interface{}) error {
+	return c.postJSON("PUT", path, v)
+}
+
+func (c *client) postJSON(method string, path string, v interface{}) error {
 	buf, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
-	res, err := c.http.Post(c.url+path, "application/json", bytes.NewBuffer(buf))
+	req, err := http.NewRequest(method, c.url+path, bytes.NewBuffer(buf))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	res, err := c.http.Do(req)
 	if err != nil {
 		return err
 	}
@@ -108,6 +122,10 @@ func (c *client) delete(path string) error {
 
 func (c *client) CreateRoute(r *strowger.Route) error {
 	return c.post("/routes", r)
+}
+
+func (c *client) SetRoute(r *strowger.Route) error {
+	return c.put("/routes", r)
 }
 
 func (c *client) DeleteRoute(id string) error {

@@ -100,7 +100,7 @@ func (s *S) TestAddTCPRoute(c *C) {
 }
 
 func addTCPRoute(c *C, l *TCPListener, port int) *strowger.TCPRoute {
-	wait := waitForEvent(c, l, "add", "")
+	wait := waitForEvent(c, l, "set", "")
 	r := (&strowger.TCPRoute{
 		Service: "test",
 		Port:    port,

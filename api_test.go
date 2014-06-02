@@ -104,6 +104,19 @@ func (s *S) TestAPIAddHTTPRoute(c *C) {
 	c.Assert(err, Equals, client.ErrNotFound)
 }
 
+func (s *S) TestAPISetHTTPRoute(c *C) {
+	srv := newTestAPIServer()
+	defer srv.Close()
+
+	r := (&strowger.HTTPRoute{Domain: "example.com", Service: "foo"}).ToRoute()
+	err := srv.SetRoute(r)
+	c.Assert(err, IsNil)
+
+	r = (&strowger.HTTPRoute{Domain: "example.com", Service: "bar"}).ToRoute()
+	err = srv.SetRoute(r)
+	c.Assert(err, IsNil)
+}
+
 func (s *S) TestAPIListRoutes(c *C) {
 	srv := newTestAPIServer()
 	defer srv.Close()
