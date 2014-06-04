@@ -1,0 +1,28 @@
+#!/bin/bash
+set -eo pipefail
+
+buildpacks_dir="$1"
+buildpack_url="$2"
+buildpack_name="$3"
+
+if [[ "$buildpack_name" == "" ]]; then
+	buildpack_name="$(basename "$buildpack_url")"
+	buildpack_name="${buildpack_name%.*}"
+fi
+
+mkdir -p "$buildpacks_dir"
+pushd "$buildpacks_dir" > /dev/null
+
+IFS='#' read url treeish <<< "$buildpack_url"
+
+if [[ "$treeish" == "" ]]; then
+	git clone --depth=1 "$url" "$buildpack_name"
+else
+	git clone "$url" "$buildpack_name"
+	pushd $buildpack_name > /dev/null
+	git checkout "$treeish"
+	popd > /dev/null
+fi
+
+popd > /dev/null
+chmod -R 777 "$buildpacks_dir"
