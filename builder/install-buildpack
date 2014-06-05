@@ -25,4 +25,4 @@ else
 fi
 
 popd > /dev/null
-chmod -R 777 "$buildpacks_dir"
+chown -R slugbuilder:slugbuilder "$buildpacks_dir"
