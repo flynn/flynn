@@ -9,7 +9,7 @@ import (
 
 	"github.com/dotcloud/docker/archive"
 	"github.com/dotcloud/docker/daemon/graphdriver"
-	"github.com/flynn/docker-pull/registry"
+	"github.com/flynn/pinkerton/registry"
 )
 
 type Store struct {

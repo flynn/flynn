@@ -10,8 +10,8 @@ import (
 	_ "github.com/dotcloud/docker/daemon/graphdriver/btrfs"
 	_ "github.com/dotcloud/docker/daemon/graphdriver/devmapper"
 	_ "github.com/dotcloud/docker/daemon/graphdriver/vfs"
-	"github.com/flynn/docker-pull/registry"
-	"github.com/flynn/docker-pull/store"
+	"github.com/flynn/pinkerton/registry"
+	"github.com/flynn/pinkerton/store"
 )
 
 type Context struct {
