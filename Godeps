@@ -1,7 +1,12 @@
 {
-	"ImportPath": "github.com/flynn/docker-pull",
+	"ImportPath": "github.com/flynn/pinkerton",
 	"GoVersion": "go1.2.1",
 	"Deps": [
+		{
+			"ImportPath": "github.com/docopt/docopt-go",
+			"Comment": "0.6.1-rc2-24-g7fb3e64",
+			"Rev": "7fb3e64728058525f5940d913d0b854474dcd66a"
+		},
 		{
 			"ImportPath": "github.com/dotcloud/docker/archive",
 			"Comment": "v0.11.1-378-g3d78c49",

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 
@@ -58,23 +57,15 @@ func (c *Context) Pull(url string) {
 	// TODO: update sizes
 }
 
-func init() {
-	log.SetFlags(log.Lshortfile)
-}
-
-func main() {
-	driverName := flag.String("driver", "aufs", "storage driver")
-	root := flag.String("root", "/var/lib/docker", "storage root")
-	flag.Parse()
-
-	driver, err := graphdriver.GetDriver(*driverName, *root)
+func pull(driverName, root, url string) {
+	driver, err := graphdriver.GetDriver(driverName, root)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	s, err := store.New(*root, driver)
+	s, err := store.New(root, driver)
 	if err != nil {
 		log.Fatal(err)
 	}
-	(&Context{s}).Pull(flag.Arg(0))
+	(&Context{s}).Pull(url)
 }
