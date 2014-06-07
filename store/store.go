@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
+	"syscall"
 
 	"github.com/dotcloud/docker/archive"
 	"github.com/dotcloud/docker/daemon/graphdriver"
@@ -15,6 +17,8 @@ import (
 type Store struct {
 	Root   string
 	driver graphdriver.Driver
+	locks  map[string]*os.File
+	mtx    sync.Mutex
 }
 
 func New(root string, driver graphdriver.Driver) (*Store, error) {
@@ -25,13 +29,21 @@ func New(root string, driver graphdriver.Driver) (*Store, error) {
 	if err := os.MkdirAll(filepath.Join(path, "_tmp"), 0700); err != nil {
 		return nil, err
 	}
+	if err := os.MkdirAll(filepath.Join(path, "_locks"), 0700); err != nil {
+		return nil, err
+	}
 
-	return &Store{Root: path, driver: driver}, nil
+	return &Store{Root: path, driver: driver, locks: make(map[string]*os.File)}, nil
 }
 
 var ErrExists = errors.New("store: image exists")
 
 func (s *Store) Add(img *registry.Image) (err error) {
+	if err := s.lock(img.ID); err != nil {
+		return err
+	}
+	defer s.unlock(img.ID)
+
 	if s.Exists(img.ID) {
 		return ErrExists
 	}
@@ -95,4 +107,29 @@ func (s *Store) root(id string) string {
 
 func (s *Store) tempDir() (string, error) {
 	return ioutil.TempDir(filepath.Join(s.Root, "_tmp"), "")
+}
+
+func (s *Store) lock(id string) error {
+	f, err := os.Create(filepath.Join(s.Root, "_locks", id))
+	if err != nil {
+		return err
+	}
+	s.mtx.Lock()
+	if existing, ok := s.locks[id]; ok {
+		go f.Close()
+		f = existing
+	} else {
+		s.locks[id] = f
+	}
+	s.mtx.Unlock()
+	return syscall.Flock(int(f.Fd()), syscall.LOCK_EX)
+}
+
+func (s *Store) unlock(id string) error {
+	s.mtx.Lock()
+	f := s.locks[id]
+	delete(s.locks, id)
+	s.mtx.Unlock()
+	defer f.Close()
+	return syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 }

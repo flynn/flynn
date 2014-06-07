@@ -40,15 +40,19 @@ func (c *Context) Pull(url string) {
 			fmt.Println(layer.ID, "exists")
 			continue
 		}
-		fmt.Println(layer.ID)
+		fmt.Print(layer.ID)
 
-		// TODO: lock layer
 		if err := layer.Fetch(); err != nil {
 			log.Fatal(err)
 		}
 		if err := c.Add(layer); err != nil {
-			log.Fatal(err)
+			if err == store.ErrExists {
+				fmt.Print(" exists")
+			} else {
+				log.Fatal(err)
+			}
 		}
+		fmt.Print("\n")
 	}
 
 	// TODO: update sizes
