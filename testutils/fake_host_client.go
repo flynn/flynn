@@ -2,6 +2,8 @@ package testutils
 
 import (
 	"errors"
+	"sync"
+	"time"
 
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-flynn/cluster"
@@ -16,11 +18,12 @@ func NewFakeHostClient(hostID string) *FakeHostClient {
 }
 
 type FakeHostClient struct {
-	hostID  string
-	stopped map[string]bool
-	attach  map[string]attachFunc
-	cluster *FakeCluster
-	stream  <-chan *host.Event
+	hostID    string
+	stopped   map[string]bool
+	attach    map[string]attachFunc
+	cluster   *FakeCluster
+	listeners []chan<- *host.Event
+	listenMtx sync.RWMutex
 }
 
 func (c *FakeHostClient) ListJobs() (map[string]host.ActiveJob, error) { return nil, nil }
@@ -50,20 +53,15 @@ func (c *FakeHostClient) GetJob(id string) (*host.ActiveJob, error) {
 }
 
 func (c *FakeHostClient) StreamEvents(id string, ch chan<- *host.Event) cluster.Stream {
-	if c.stream != nil {
-		go func() {
-			for event := range c.stream {
-				ch <- event
-			}
-			close(ch)
-		}()
-	}
+	c.listenMtx.Lock()
+	defer c.listenMtx.Unlock()
+	c.listeners = append(c.listeners, ch)
 	return &FakeHostEventStream{ch: ch}
 }
 
 func (c *FakeHostClient) StopJob(id string) error {
 	c.stopped[id] = true
-	c.cluster.RemoveJob(c.hostID, id)
+	c.cluster.RemoveJob(c.hostID, id, false)
 	return nil
 }
 
@@ -81,8 +79,17 @@ func (c *FakeHostClient) SetAttachFunc(id string, f attachFunc) {
 	c.attach[id] = f
 }
 
-func (c *FakeHostClient) SetEventStream(stream <-chan *host.Event) {
-	c.stream = stream
+func (c *FakeHostClient) SendEvent(event, id string) {
+	c.listenMtx.RLock()
+	defer c.listenMtx.RUnlock()
+	job := &host.ActiveJob{Job: &host.Job{ID: id}}
+	if event == "start" {
+		job.StartedAt = time.Now().UTC()
+	}
+	e := &host.Event{Event: event, JobID: id, Job: job}
+	for _, ch := range c.listeners {
+		ch <- e
+	}
 }
 
 type attachFunc func(req *host.AttachReq, wait bool) (cluster.ReadWriteCloser, func() error, error)

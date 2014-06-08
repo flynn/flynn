@@ -256,14 +256,14 @@ func (c *context) watchHost(id string, events chan<- *host.Event) {
 		g.Log(grohl.Data{"at": "remove", "job.id": event.JobID, "event": event.Event})
 
 		c.jobs.Remove(id, event.JobID)
-		go func() {
+		go func(event *host.Event) {
 			c.mtx.RLock()
 			job.Formation.RestartJob(job.Type, id, event.JobID)
 			c.mtx.RUnlock()
 			if events != nil {
 				events <- event
 			}
-		}()
+		}(event)
 	}
 	// TODO: check error/reconnect
 }
