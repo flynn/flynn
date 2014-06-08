@@ -80,6 +80,7 @@ func (c *FakeCluster) RemoveJob(hostID, jobID string, errored bool) error {
 	c.mtx.Lock()
 	h, ok := c.hosts[hostID]
 	if !ok {
+		c.mtx.Unlock()
 		return errors.New("FakeCluster: unknown host")
 	}
 	jobs := make([]*host.Job, 0, len(h.Jobs))
