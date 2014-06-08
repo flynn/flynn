@@ -5,16 +5,13 @@ import (
 	"log"
 
 	"github.com/dotcloud/docker/daemon/graphdriver"
-	_ "github.com/dotcloud/docker/daemon/graphdriver/aufs"
-	_ "github.com/dotcloud/docker/daemon/graphdriver/btrfs"
-	_ "github.com/dotcloud/docker/daemon/graphdriver/devmapper"
-	_ "github.com/dotcloud/docker/daemon/graphdriver/vfs"
 	"github.com/flynn/pinkerton/registry"
 	"github.com/flynn/pinkerton/store"
 )
 
 type Context struct {
 	*store.Store
+	driver graphdriver.Driver
 }
 
 func (c *Context) Pull(url string) {
@@ -57,15 +54,20 @@ func (c *Context) Pull(url string) {
 	// TODO: update sizes
 }
 
-func pull(driverName, root, url string) {
-	driver, err := graphdriver.GetDriver(driverName, root)
+func (c *Context) Checkout(id, imageID string) {
+	id = "tmp-" + id
+	if err := c.driver.Create(id, imageID); err != nil {
+		log.Fatal(err)
+	}
+	path, err := c.driver.Get(id, "")
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Println(path)
+}
 
-	s, err := store.New(root, driver)
-	if err != nil {
+func (c *Context) Cleanup(id string) {
+	if err := c.driver.Remove("tmp-" + id); err != nil {
 		log.Fatal(err)
 	}
-	(&Context{s}).Pull(url)
 }
