@@ -18,6 +18,9 @@ import (
 
 var backoffPeriod = 10 * time.Minute
 
+// Allow mocking time.AfterFunc in tests
+var timeAfterFunc = time.AfterFunc
+
 func main() {
 	grohl.AddContext("app", "controller-scheduler")
 	grohl.Log(grohl.Data{"at": "start"})
@@ -481,7 +484,7 @@ func (f *Formation) RestartJob(typ, hostID, jobID string) {
 		for i := 0; i < job.restarts-1; i++ {
 			duration *= 2
 		}
-		job.timer = time.AfterFunc(duration, func() {
+		job.timer = timeAfterFunc(duration, func() {
 			f.restart(job)
 		})
 	}

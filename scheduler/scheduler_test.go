@@ -99,6 +99,20 @@ func waitForHostEvents(count int, events <-chan *host.Event, c *C) {
 	}
 }
 
+func waitForJobStartEvent(events <-chan *host.Event, c *C) *host.Event {
+	for {
+		select {
+		case e := <-events:
+			if e.Event == "start" {
+				return e
+			}
+		case <-time.After(time.Second):
+			c.Fatal("timed out waiting for Job Start event")
+			return nil
+		}
+	}
+}
+
 func newRelease(id string, artifact *ct.Artifact, processes map[string]int) *ct.Release {
 	processTypes := make(map[string]ct.ProcessType, len(processes))
 	for t, _ := range processes {
@@ -134,6 +148,14 @@ func newFakeCluster(hostID, appID, releaseID string, processes map[string]int, j
 	cl.SetHosts(map[string]host.Host{hostID: host.Host{ID: hostID, Jobs: jobs}})
 	cl.SetHostClient(hostID, tu.NewFakeHostClient(hostID))
 	return cl
+}
+
+func testAfterFunc(durations *[]time.Duration) func(d time.Duration, f func()) *time.Timer {
+	return func(d time.Duration, f func()) *time.Timer {
+		*durations = append(*durations, d)
+		f()
+		return nil
+	}
 }
 
 func (s *S) TestWatchFormations(c *C) {
@@ -275,4 +297,55 @@ func (s *S) TestWatchHost(c *C) {
 	c.Assert(len(cl.GetHost(hostID).Jobs), Equals, 3)
 	job, _ = hc.GetJob("job1")
 	c.Assert(job, IsNil)
+}
+
+func (s *S) TestJobRestartBackoffPolicy(c *C) {
+	// Create a fake cluster with an existing running formation
+	appID := "app"
+	artifact := &ct.Artifact{ID: "artifact", Type: "docker", URI: "docker://foo/bar"}
+	processes := map[string]int{"web": 2}
+	release := newRelease("release", artifact, processes)
+	cc := newFakeControllerClient(appID, release, artifact, processes, nil)
+
+	hostID := "host0"
+	cl := newFakeCluster(hostID, appID, release.ID, processes, nil)
+
+	hc := tu.NewFakeHostClient(hostID)
+	cl.SetHostClient(hostID, hc)
+
+	cx := newContext(cc, cl)
+	events := make(chan *host.Event, 2)
+	defer close(events)
+	cx.syncCluster(events)
+	c.Assert(cx.jobs.Len(), Equals, 2)
+
+	// Give the watchHost goroutine chance to start
+	time.Sleep(100 * time.Millisecond)
+
+	durations := make([]time.Duration, 0)
+	timeAfterFunc = testAfterFunc(&durations)
+
+	// First restart: scheduled immediately
+	cl.RemoveJob(hostID, "job0", false)
+	e := waitForJobStartEvent(events, c)
+	c.Assert(len(durations), Equals, 0)
+
+	// Second restart: scheduled for 1 * backoffPeriod
+	cl.RemoveJob(hostID, e.JobID, false)
+	e = waitForJobStartEvent(events, c)
+	c.Assert(len(durations), Equals, 1)
+	c.Assert(durations[0], Equals, backoffPeriod)
+
+	// Third restart: scheduled for 2 * backoffPeriod
+	cl.RemoveJob(hostID, e.JobID, false)
+	e = waitForJobStartEvent(events, c)
+	c.Assert(len(durations), Equals, 2)
+	c.Assert(durations[1], Equals, 2*backoffPeriod)
+
+	// After backoffPeriod has elapsed: scheduled immediately
+	job := cx.jobs.Get(hostID, e.JobID)
+	job.startedAt = time.Now().Add(-backoffPeriod - 1*time.Second)
+	cl.RemoveJob(hostID, job.ID, false)
+	waitForJobStartEvent(events, c)
+	c.Assert(len(durations), Equals, 2)
 }
