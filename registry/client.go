@@ -55,6 +55,10 @@ type Ref struct {
 	scheme    string
 }
 
+func (r *Ref) ImageID() string {
+	return r.imageID
+}
+
 func (r *Ref) Get() (*Image, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/repositories/%s/images", r.index, r.repo), nil)
 	if err != nil {

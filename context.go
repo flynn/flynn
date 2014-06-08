@@ -20,6 +20,11 @@ func (c *Context) Pull(url string) {
 		log.Fatal(err)
 	}
 
+	if id := ref.ImageID(); id != "" && c.Exists(id) {
+		fmt.Println(id, "exists")
+		return
+	}
+
 	image, err := ref.Get()
 	if err != nil {
 		log.Fatal(err)
