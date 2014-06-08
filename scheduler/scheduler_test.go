@@ -113,6 +113,18 @@ func waitForJobStartEvent(events <-chan *host.Event, c *C) *host.Event {
 	}
 }
 
+func waitForWatchHostStart(events <-chan *host.Event, c *C) {
+	select {
+	case e := <-events:
+		if e == nil {
+			return
+		}
+		c.Fatalf("expected sentinel event, got %+v", e)
+	case <-time.After(time.Second):
+		c.Fatal("timed out waiting for watchHost start event")
+	}
+}
+
 func newRelease(id string, artifact *ct.Artifact, processes map[string]int) *ct.Release {
 	processTypes := make(map[string]ct.ProcessType, len(processes))
 	for t, _ := range processes {
@@ -257,7 +269,7 @@ func (s *S) TestWatchHost(c *C) {
 	c.Assert(len(cl.GetHost(hostID).Jobs), Equals, 4)
 
 	// Give the watchHost goroutine chance to start
-	time.Sleep(100 * time.Millisecond)
+	waitForWatchHostStart(events, c)
 
 	// Check jobs are marked as up once started
 	hc.SendEvent("start", "job0")
@@ -320,7 +332,7 @@ func (s *S) TestJobRestartBackoffPolicy(c *C) {
 	c.Assert(cx.jobs.Len(), Equals, 2)
 
 	// Give the watchHost goroutine chance to start
-	time.Sleep(100 * time.Millisecond)
+	waitForWatchHostStart(events, c)
 
 	durations := make([]time.Duration, 0)
 	timeAfterFunc = testAfterFunc(&durations)

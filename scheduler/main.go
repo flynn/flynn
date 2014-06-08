@@ -218,6 +218,11 @@ func (c *context) watchHost(id string, events chan<- *host.Event) {
 
 	g := grohl.NewContext(grohl.Data{"fn": "watchHost", "host.id": id})
 
+	// Nil event to mark the start of watching a host
+	if events != nil {
+		events <- nil
+	}
+
 	h, err := c.DialHost(id)
 	if err != nil {
 		// TODO: log/handle error
