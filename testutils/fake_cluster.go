@@ -3,7 +3,6 @@ package testutils
 import (
 	"errors"
 	"sync"
-	"time"
 
 	"github.com/flynn/flynn-host/types"
 	"github.com/flynn/go-flynn/cluster"
@@ -59,15 +58,7 @@ func (c *FakeCluster) AddJobs(req *host.AddJobsReq) (*host.AddJobsRes, error) {
 		}
 		if client, ok := c.hostClients[hostID]; ok {
 			for _, job := range jobs {
-				// Send the start event asynchronously after a short period of time
-				// to give the caller chance to finish processing previous events
-				// before it receives the start event (e.g. when restarting jobs,
-				// the scheduler needs to track the new hostID and jobID before it
-				// can deal with a start event for that job).
-				go func() {
-					time.Sleep(100 * time.Millisecond)
-					client.SendEvent("start", job.ID)
-				}()
+				client.SendEvent("start", job.ID)
 			}
 		}
 		host.Jobs = append(host.Jobs, jobs...)

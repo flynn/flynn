@@ -531,15 +531,12 @@ func (f *Formation) add(n int, name string) {
 		// TODO: log/handle error
 	}
 	for i := 0; i < n; i++ {
-		hostID, jobID, err := f.start(name, config)
+		job, err := f.start(name, config)
 		if err != nil {
 			// TODO: log/handle error
+			continue
 		}
-		g.Log(grohl.Data{"host.id": hostID, "job.id": jobID})
-
-		job := f.jobs.Add(name, hostID, jobID)
-		job.Formation = f
-		f.c.jobs.Add(job)
+		g.Log(grohl.Data{"host.id": job.HostID, "job.id": job.ID})
 	}
 }
 
@@ -547,29 +544,28 @@ func (f *Formation) restart(stoppedJob *Job) error {
 	g := grohl.NewContext(grohl.Data{"fn": "restart", "app.id": f.AppID, "release.id": f.Release.ID})
 	g.Log(grohl.Data{"old.host.id": stoppedJob.HostID, "old.job.id": stoppedJob.ID})
 
-	newHostID, newJobID, err := f.start(stoppedJob.Type, nil)
+	f.jobs.Remove(stoppedJob)
+
+	newJob, err := f.start(stoppedJob.Type, nil)
 	if err != nil {
 		return err
 	}
-	g.Log(grohl.Data{"new.host.id": newHostID, "new.job.id": newJobID})
-	f.jobs.Remove(stoppedJob)
-	newJob := f.jobs.Add(stoppedJob.Type, newHostID, newJobID)
-	newJob.Formation = f
 	newJob.restarts = stoppedJob.restarts + 1
-	f.c.jobs.Add(newJob)
+	g.Log(grohl.Data{"new.host.id": newJob.HostID, "new.job.id": newJob.ID})
 	return nil
 }
 
-func (f *Formation) start(typ string, config *host.Job) (hostID, jobID string, err error) {
+func (f *Formation) start(typ string, config *host.Job) (job *Job, err error) {
 	if config == nil {
 		if config, err = f.jobConfig(typ); err != nil {
-			return "", "", err
+			return nil, err
 		}
 	}
 	config.ID = cluster.RandomJobID("")
+
 	hosts, err := f.c.ListHosts()
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 	if len(hosts) == 0 {
 		// TODO: log/handle error
@@ -592,8 +588,17 @@ func (f *Formation) start(typ string, config *host.Job) (hostID, jobID string, e
 
 	h := hosts[sh[0].ID]
 
+	job = f.jobs.Add(typ, h.ID, config.ID)
+	job.Formation = f
+	f.c.jobs.Add(job)
+
 	_, err = f.c.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{h.ID: {config}}})
-	return h.ID, config.ID, err
+	if err != nil {
+		f.jobs.Remove(job)
+		f.c.jobs.Remove(config.ID, h.ID)
+		return nil, err
+	}
+	return job, nil
 }
 
 func (f *Formation) jobType(job *host.Job) string {
