@@ -5,9 +5,8 @@ pinkerton is a standalone tool for working with Docker images.
 Currently it can download images and checkout working copies using the same
 local storage format that Docker uses.
 
-## Usage
-
 ```text
+Usage:
   pinkerton pull [options] <image-url>
   pinkerton checkout [options] <id> <image-id>
   pinkerton cleanup [options] <id>
