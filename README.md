@@ -1,6 +1,6 @@
 # pinkerton
 
-![](https://cloud.githubusercontent.com/assets/13026/3213401/54fed890-ef8c-11e3-92bd-524395d3f2ef.jpg)
+![](https://cloud.githubusercontent.com/assets/13026/3220006/68b7cc1a-effb-11e3-8386-64e34b9c54d8.png)
 
 pinkerton is a standalone tool for working with Docker images.
 
