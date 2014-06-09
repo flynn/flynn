@@ -25,6 +25,18 @@ Usage:
   pinkerton cleanup [options] <id>
   pinkerton -h | --help
 
+Commands:
+  pull      Download a Docker image
+  checkout  Create a working copy of an image
+  cleanup   Destroy a working copy of an image
+
+Examples:
+  pinkerton pull https://registry.hub.docker.com/redis
+  pinkerton pull https://registry.hub.docker.com/ubuntu?tag=trusty
+  pinkerton pull https://registry.hub.docker.com/flynn/slugrunner?id=1443bd6a675b959693a1a4021d660bebbdbff688d00c65ff057c46702e4b8933
+  pinkerton checkout slugrunner-test 1443bd6a675b959693a1a4021d660bebbdbff688d00c65ff057c46702e4b8933
+  pinkerton cleanup slugrunner-test
+
 Options:
   -h, --help       show this message and exit
   --driver=<name>  storage driver [default: aufs]
