@@ -20,7 +20,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-host/types",
-			"Rev": "aa072a4db1972783518e21760146411b1b4dcde9"
+			"Rev": "21bf5b53f8abfa10a56a7e0e011f83d41edc2efe"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-crypto-ssh",

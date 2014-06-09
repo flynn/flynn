@@ -9,12 +9,12 @@ import (
 )
 
 func NewFakeCluster() *FakeCluster {
-	return &FakeCluster{hostClients: make(map[string]cluster.Host)}
+	return &FakeCluster{hostClients: make(map[string]*FakeHostClient)}
 }
 
 type FakeCluster struct {
 	hosts       map[string]host.Host
-	hostClients map[string]cluster.Host
+	hostClients map[string]*FakeHostClient
 	mtx         sync.RWMutex
 }
 
@@ -56,17 +56,22 @@ func (c *FakeCluster) AddJobs(req *host.AddJobsReq) (*host.AddJobsRes, error) {
 		if !ok {
 			return nil, errors.New("FakeCluster: unknown host")
 		}
+		if client, ok := c.hostClients[hostID]; ok {
+			for _, job := range jobs {
+				client.SendEvent("start", job.ID)
+			}
+		}
 		host.Jobs = append(host.Jobs, jobs...)
 		c.hosts[hostID] = host
 	}
 	return &host.AddJobsRes{State: c.hosts}, nil
 }
 
-func (c *FakeCluster) RemoveJob(hostID, jobID string) error {
+func (c *FakeCluster) RemoveJob(hostID, jobID string, errored bool) error {
 	c.mtx.Lock()
-	defer c.mtx.Unlock()
 	h, ok := c.hosts[hostID]
 	if !ok {
+		c.mtx.Unlock()
 		return errors.New("FakeCluster: unknown host")
 	}
 	jobs := make([]*host.Job, 0, len(h.Jobs))
@@ -77,6 +82,15 @@ func (c *FakeCluster) RemoveJob(hostID, jobID string) error {
 	}
 	h.Jobs = jobs
 	c.hosts[hostID] = h
+	c.mtx.Unlock()
+
+	if client, ok := c.hostClients[hostID]; ok {
+		if errored {
+			client.SendEvent("error", jobID)
+		} else {
+			client.SendEvent("stop", jobID)
+		}
+	}
 	return nil
 }
 
@@ -84,7 +98,7 @@ func (c *FakeCluster) SetHosts(h map[string]host.Host) {
 	c.hosts = h
 }
 
-func (c *FakeCluster) SetHostClient(id string, h cluster.Host) {
-	h.(*FakeHostClient).cluster = c
+func (c *FakeCluster) SetHostClient(id string, h *FakeHostClient) {
+	h.cluster = c
 	c.hostClients[id] = h
 }

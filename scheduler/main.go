@@ -16,6 +16,11 @@ import (
 	"github.com/technoweenie/grohl"
 )
 
+var backoffPeriod = 10 * time.Minute
+
+// Allow mocking time.AfterFunc in tests
+var timeAfterFunc = time.AfterFunc
+
 func main() {
 	grohl.AddContext("app", "controller-scheduler")
 	grohl.Log(grohl.Data{"at": "start"})
@@ -146,14 +151,14 @@ func (c *context) syncCluster(events chan<- *host.Event) {
 			gg.Log(grohl.Data{"at": "addJob"})
 			j := f.jobs.Add(jobType, h.ID, job.ID)
 			j.Formation = f
-			c.jobs.Add(h.ID, job.ID, j)
+			c.jobs.Add(j)
 			rectify[f] = struct{}{}
 		}
 	}
 	c.mtx.Unlock()
 
 	for f := range rectify {
-		go f.rectify()
+		go f.Rectify()
 	}
 }
 
@@ -213,6 +218,11 @@ func (c *context) watchHost(id string, events chan<- *host.Event) {
 
 	g := grohl.NewContext(grohl.Data{"fn": "watchHost", "host.id": id})
 
+	// Nil event to mark the start of watching a host
+	if events != nil {
+		events <- nil
+	}
+
 	h, err := c.DialHost(id)
 	if err != nil {
 		// TODO: log/handle error
@@ -235,6 +245,7 @@ func (c *context) watchHost(id string, events chan<- *host.Event) {
 			j.State = "starting"
 		case "start":
 			j.State = "up"
+			job.startedAt = event.Job.StartedAt
 		case "stop":
 			j.State = "down"
 		case "error":
@@ -253,14 +264,14 @@ func (c *context) watchHost(id string, events chan<- *host.Event) {
 		g.Log(grohl.Data{"at": "remove", "job.id": event.JobID, "event": event.Event})
 
 		c.jobs.Remove(id, event.JobID)
-		go func() {
+		go func(event *host.Event) {
 			c.mtx.RLock()
-			job.Formation.RemoveJob(job.Type, id, event.JobID)
+			job.Formation.RestartJob(job.Type, id, event.JobID)
 			c.mtx.RUnlock()
 			if events != nil {
 				events <- event
 			}
-		}()
+		}(event)
 	}
 	// TODO: check error/reconnect
 }
@@ -311,9 +322,9 @@ type jobMap struct {
 	mtx  sync.RWMutex
 }
 
-func (m *jobMap) Add(hostID, jobID string, job *Job) {
+func (m *jobMap) Add(job *Job) {
 	m.mtx.Lock()
-	m.jobs[jobKey{hostID, jobID}] = job
+	m.jobs[jobKey{job.HostID, job.ID}] = job
 	m.mtx.Unlock()
 }
 
@@ -392,8 +403,14 @@ func NewFormation(c *context, ef *ct.ExpandedFormation) *Formation {
 }
 
 type Job struct {
+	ID        string
+	HostID    string
 	Type      string
 	Formation *Formation
+
+	restarts  int
+	timer     *time.Timer
+	startedAt time.Time
 }
 
 type jobTypeMap map[string]map[jobKey]*Job
@@ -404,14 +421,14 @@ func (m jobTypeMap) Add(typ, host, id string) *Job {
 		jobs = make(map[jobKey]*Job)
 		m[typ] = jobs
 	}
-	job := &Job{Type: typ}
+	job := &Job{ID: id, HostID: host, Type: typ}
 	jobs[jobKey{host, id}] = job
 	return job
 }
 
-func (m jobTypeMap) Remove(typ, host, id string) {
-	if jobs, ok := m[typ]; ok {
-		delete(jobs, jobKey{host, id})
+func (m jobTypeMap) Remove(job *Job) {
+	if jobs, ok := m[job.Type]; ok {
+		delete(jobs, jobKey{job.HostID, job.ID})
 	}
 }
 
@@ -446,12 +463,36 @@ func (f *Formation) Rectify() {
 	f.rectify()
 }
 
-func (f *Formation) RemoveJob(typ, hostID, jobID string) {
+func (f *Formation) RestartJob(typ, hostID, jobID string) {
 	f.mtx.Lock()
 	defer f.mtx.Unlock()
 
-	f.jobs.Remove(typ, hostID, jobID)
-	f.rectify()
+	job := f.jobs.Get(typ, hostID, jobID)
+	if job == nil {
+		return
+	}
+	// If it's a one off job, just remove it
+	if job.Type == "" {
+		f.jobs.Remove(job)
+		return
+	}
+	// If the job was started more than backoffPeriod ago, reset it's restart count
+	// so that it will be restarted straight away
+	if job.startedAt.Before(time.Now().Add(-backoffPeriod)) {
+		job.restarts = 0
+	}
+	if job.restarts == 0 {
+		f.restart(job)
+	} else {
+		// wait backoffPeriod * 2 ^ (restarts - 1) before restarting
+		duration := backoffPeriod
+		for i := 0; i < job.restarts-1; i++ {
+			duration *= 2
+		}
+		job.timer = timeAfterFunc(duration, func() {
+			f.restart(job)
+		})
+	}
 }
 
 func (f *Formation) rectify() {
@@ -459,8 +500,9 @@ func (f *Formation) rectify() {
 
 	// update job counts
 	for t, expected := range f.Processes {
-		diff := expected - len(f.jobs[t])
-		g.Log(grohl.Data{"at": "update", "type": t, "expected": expected, "actual": len(f.jobs[t]), "diff": diff})
+		actual := len(f.jobs[t])
+		diff := expected - actual
+		g.Log(grohl.Data{"at": "update", "type": t, "expected": expected, "actual": actual, "diff": diff})
 		if diff > 0 {
 			f.add(diff, t)
 		} else if diff < 0 {
@@ -489,45 +531,74 @@ func (f *Formation) add(n int, name string) {
 		// TODO: log/handle error
 	}
 	for i := 0; i < n; i++ {
-		config.ID = cluster.RandomJobID("")
-		hosts, err := f.c.ListHosts()
+		job, err := f.start(name, config)
 		if err != nil {
 			// TODO: log/handle error
+			continue
 		}
-		if len(hosts) == 0 {
-			// TODO: log/handle error
-		}
-		hostCounts := make(map[string]int, len(hosts))
-		for _, h := range hosts {
-			hostCounts[h.ID] = 0
-			for _, job := range h.Jobs {
-				if f.jobType(job) != name {
-					continue
-				}
-				hostCounts[h.ID]++
-			}
-		}
-		sh := make(sortHosts, 0, len(hosts))
-		for id, count := range hostCounts {
-			sh = append(sh, sortHost{id, count})
-		}
-		sh.Sort()
+		g.Log(grohl.Data{"host.id": job.HostID, "job.id": job.ID})
+	}
+}
 
-		h := hosts[sh[0].ID]
+func (f *Formation) restart(stoppedJob *Job) error {
+	g := grohl.NewContext(grohl.Data{"fn": "restart", "app.id": f.AppID, "release.id": f.Release.ID})
+	g.Log(grohl.Data{"old.host.id": stoppedJob.HostID, "old.job.id": stoppedJob.ID})
 
-		g.Log(grohl.Data{"host.id": h.ID, "job.id": config.ID})
+	f.jobs.Remove(stoppedJob)
 
-		job := f.jobs.Add(name, h.ID, config.ID)
-		job.Formation = f
-		f.c.jobs.Add(h.ID, config.ID, job)
+	newJob, err := f.start(stoppedJob.Type, nil)
+	if err != nil {
+		return err
+	}
+	newJob.restarts = stoppedJob.restarts + 1
+	g.Log(grohl.Data{"new.host.id": newJob.HostID, "new.job.id": newJob.ID})
+	return nil
+}
 
-		_, err = f.c.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{h.ID: {config}}})
-		if err != nil {
-			f.jobs.Remove(name, h.ID, config.ID)
-			f.c.jobs.Remove(h.ID, config.ID)
-			// TODO: log/handle error
+func (f *Formation) start(typ string, config *host.Job) (job *Job, err error) {
+	if config == nil {
+		if config, err = f.jobConfig(typ); err != nil {
+			return nil, err
 		}
 	}
+	config.ID = cluster.RandomJobID("")
+
+	hosts, err := f.c.ListHosts()
+	if err != nil {
+		return nil, err
+	}
+	if len(hosts) == 0 {
+		// TODO: log/handle error
+	}
+	hostCounts := make(map[string]int, len(hosts))
+	for _, h := range hosts {
+		hostCounts[h.ID] = 0
+		for _, job := range h.Jobs {
+			if f.jobType(job) != typ {
+				continue
+			}
+			hostCounts[h.ID]++
+		}
+	}
+	sh := make(sortHosts, 0, len(hosts))
+	for id, count := range hostCounts {
+		sh = append(sh, sortHost{id, count})
+	}
+	sh.Sort()
+
+	h := hosts[sh[0].ID]
+
+	job = f.jobs.Add(typ, h.ID, config.ID)
+	job.Formation = f
+	f.c.jobs.Add(job)
+
+	_, err = f.c.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{h.ID: {config}}})
+	if err != nil {
+		f.jobs.Remove(job)
+		f.c.jobs.Remove(config.ID, h.ID)
+		return nil, err
+	}
+	return job, nil
 }
 
 func (f *Formation) jobType(job *host.Job) string {
@@ -542,13 +613,13 @@ func (f *Formation) remove(n int, name string) {
 	g := grohl.NewContext(grohl.Data{"fn": "remove", "app.id": f.AppID, "release.id": f.Release.ID})
 
 	i := 0
-	for k := range f.jobs[name] {
-		g.Log(grohl.Data{"host.id": k.hostID, "job.id": k.jobID})
+	for _, job := range f.jobs[name] {
+		g.Log(grohl.Data{"host.id": job.HostID, "job.id": job.ID})
 		// TODO: robust host handling
-		if err := f.c.hosts.Get(k.hostID).StopJob(k.jobID); err != nil {
+		if err := f.c.hosts.Get(job.HostID).StopJob(job.ID); err != nil {
 			// TODO: log/handle error
 		}
-		f.jobs.Remove(name, k.hostID, k.jobID)
+		f.jobs.Remove(job)
 		if i++; i == n {
 			break
 		}
