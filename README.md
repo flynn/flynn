@@ -38,9 +38,14 @@ build. Clone this repo into `$GOPATH/src/github.com/flynn/pinkerton` and run
 
 ## Roadmap
 
-Future projects include more support for introspection, building/editing images,
-pushing images to Docker registries, and making the UI more friendly to humans
-(it is currently designed for use by robots).
+Future features might include:
+
+- Repository/image/container introspection
+- Building/editing of images
+- Pushing images to Docker registries
+- Making the UI more friendly to humans
+- Parallel HTTP requests
+- Pull resumption
 
 
 ## Flynn
