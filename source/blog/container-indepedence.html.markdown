@@ -1,11 +1,11 @@
 ---
-title: Announcing Pinkerton
+title: Container Independence
 date: Jun 8, 2014
 ---
 
 At Flynn, one of our highest priorities is modularity.
 
-Today we are deeply pleased to announce [Pinkerton](https://github.com/flynn/pinkerton), a tool that allows you to use Docker images with [other container runners](https://github.com/containers/container-rfc#support-matrix).
+We are pleased to announce [Pinkerton](https://github.com/flynn/pinkerton), a tool that allows you to use Docker images with [other container runners](https://github.com/containers/container-rfc#support-matrix).
 
 Users and operators should have complete control over their dependencies and environments. Although many users have experimented with [Docker](http://www.docker.com/)'s initial iteration, but we believe the story of containers, which began over a decade ago with [FreeBSD jails](https://en.wikipedia.org/wiki/FreeBSD_jail) and [Solaris zones](https://en.wikipedia.org/wiki/Solaris_Containers), remains in its infancy. Docker, Inc. introduced many web developers to containers, first through [LXC](http://linuxcontainers.org), and more recently powered by Docker, Inc's own [libcontainer](https://github.com/dotcloud/docker/tree/master/pkg/libcontainer).
 
@@ -15,11 +15,11 @@ Our users should not be tied to Docker, Inc. or any other company.
 
 [Pinkerton](https://github.com/flynn/pinkerton) guarantees container independence permanently. We are also hard at work switching Flynn's container runner to leverage more mature container solutions that guarantee operators the reliability, stability, and performance in production that we demand and users require of all our dependencies.
 
-We have a great deal more to say about container runners, stability, and performance (backed by extensive benchmarks and tests). We are evaluating Red Hat's [libvirt](http://libvirt.org/) and Google's [lmctfy](https://github.com/google/lmctfy), both of which are used by thousands of the industry's most demanding users in production at companies like Google and projects like OpenStack.
+We have more to say about container runners, stability, and performance (backed by extensive benchmarks and tests). We are evaluating Red Hat's [libvirt](http://libvirt.org/) and Google's [lmctfy](https://github.com/google/lmctfy), both of which are used by the industry's most demanding users in production at companies like Google and projects like OpenStack.
 
-Our goal is to provide you with the greatest possible stability in production. Our commitment is unwavering.
+We will provide you with the greatest possible stability in production. Our commitment is unwavering.
 
-Flynn's initial container runner was one of the few components that did not support user-swappability out of the box. Fixing this is currently our highest development priority and a necessity for production stability. [Alternative runners](https://github.com/flynn/flynn-host/tree/libvirt) are already in development on GitHub.
+Initially, Flynn's container runner was one of the few components that did not support user-swappability out of the box. Correcting this is currently our highest development priority and a necessity for production stability. [Alternative runners](https://github.com/flynn/flynn-host/tree/libvirt) are already in development on GitHub.
 
 We expect to announce Flynn Beta, suitable for internal services and non-production traffic in the next few weeks. Flynn 1.0 will follow before the end of the summer. Flynn will be the most reliable you use. We look forward to exceeding your expectations.
 
