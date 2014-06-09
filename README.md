@@ -1,5 +1,7 @@
 # pinkerton
 
+![](https://cloud.githubusercontent.com/assets/13026/3213401/54fed890-ef8c-11e3-92bd-524395d3f2ef.jpg)
+
 pinkerton is a standalone tool for working with Docker images.
 
 Currently it can download images and checkout working copies using the same
