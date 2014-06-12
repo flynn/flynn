@@ -16,7 +16,7 @@ echo deb https://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/dock
 
 # install docker and some useful packages
 apt-get update
-apt-get install -y curl vim-tiny git mercurial bzr make lxc-docker-0.10.0
+apt-get install -y curl arping vim-tiny git mercurial bzr make lxc-docker-0.10.0
 
 # pull flynn images
 docker pull flynn/host
