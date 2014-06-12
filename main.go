@@ -60,6 +60,7 @@ func (c *Command) List() bool {
 var commands = []*Command{
 	cmdServerAdd,
 	cmdCreate,
+	cmdApps,
 	cmdPs,
 	cmdLog,
 	cmdScale,

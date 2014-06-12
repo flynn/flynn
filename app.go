@@ -33,3 +33,30 @@ func runCreate(cmd *Command, args []string, client *controller.Client) error {
 	log.Printf("Created %s", app.Name)
 	return nil
 }
+
+var cmdApps = &Command{
+	Run:   runApps,
+	Usage: "apps",
+	Short: "list apps",
+	Long: `Lists apps.`,
+}
+
+func runApps(cmd *Command, args []string, client *controller.Client) error {
+	if len(args) != 0 {
+		cmd.printUsage(true)
+	}
+
+	apps, err := client.AppList()
+	if err != nil {
+		return err
+	}
+
+	w := tabWriter()
+	defer w.Flush()
+
+	listRec(w, "ID", "NAME")
+	for _, a := range apps {
+		listRec(w, a.ID, a.Name)
+	}
+	return nil
+}
