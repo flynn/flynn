@@ -325,6 +325,11 @@ func (c *Client) JobList(appID string) ([]*ct.Job, error) {
 	return jobs, c.get(fmt.Sprintf("/apps/%s/jobs", appID), &jobs)
 }
 
+func (c *Client) AppList() ([]*ct.App, error) {
+	var apps []*ct.App
+	return apps, c.get("/apps", &apps)
+}
+
 func (c *Client) KeyList() ([]*ct.Key, error) {
 	var keys []*ct.Key
 	return keys, c.get("/keys", &keys)
