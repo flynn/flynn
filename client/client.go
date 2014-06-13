@@ -244,6 +244,10 @@ func (c *Client) PutJob(job *ct.Job) error {
 	return c.put(fmt.Sprintf("/apps/%s/jobs/%s", job.AppID, job.ID), job, job)
 }
 
+func (c *Client) DeleteJob(appID, jobID string) error {
+	return c.delete(fmt.Sprintf("/apps/%s/jobs/%s", appID, jobID))
+}
+
 func (c *Client) SetAppRelease(appID, releaseID string) error {
 	return c.put(fmt.Sprintf("/apps/%s/release", appID), &ct.Release{ID: releaseID}, nil)
 }
