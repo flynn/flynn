@@ -3,4 +3,4 @@ rootfs.img: build.sh setup.sh
 
 .PHONY: clean
 clean:
-	rm -f rootfs.img
+	rm -f rootfs.img vmlinuz

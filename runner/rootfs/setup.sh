@@ -20,9 +20,9 @@ chmod 0440 /etc/sudoers.d/ubuntu
 echo ubuntu:ubuntu | chpasswd
 
 # set up fstab
-echo "/dev/ubda / ext4 defaults 0 1" > /etc/fstab
-echo "/dev/ubdb /var/lib/docker ext4 defaults 0 1" >> /etc/fstab
-echo "none /etc/network/interfaces.d hostfs defaults 0 0" >> /etc/fstab
+echo "LABEL=rootfs / ext4 defaults 0 1" > /etc/fstab
+echo "LABEL=dockerfs /var/lib/docker btrfs defaults 0 0" >> /etc/fstab
+echo "netfs /etc/network/interfaces.d 9p trans=virtio 0 0" >> /etc/fstab
 
 # configure hosts and dns resolution
 echo "127.0.0.1 localhost localhost.localdomain" > /etc/hosts
@@ -49,10 +49,10 @@ echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/no-languages
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get dist-upgrade -y -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold'
+apt-get install linux-generic-lts-trusty -y -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold'
 
 # install ssh server and go deps
 apt-get install -y apt-transport-https openssh-server mercurial git make curl
-sed -i 's/^Port 22$/Port 2222/' /etc/ssh/sshd_config
 rm /etc/ssh/ssh_host_*
 
 # add script that regenerates missing ssh host keys on boot
@@ -65,10 +65,11 @@ end script
 EOF
 
 # install docker
+# apparmor is required - see https://github.com/dotcloud/docker/issues/4734
 apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 36A1D7869245C8950F966E92D8576A8BA88D21E9
 echo deb https://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list
 apt-get update
-apt-get install -y lxc-docker-0.10.0 aufs-tools
+apt-get install -y lxc-docker-0.10.0 aufs-tools apparmor
 
 # install go
 curl -L j.mp/godeb | tar xz
