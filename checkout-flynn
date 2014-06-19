@@ -19,7 +19,7 @@ while read line; do
   name=${repo[0]}
   rev=${repo[1]}
   if [ ! -d $name ]; then
-    echo "====> Checking out $f..."
+    echo "====> Checking out $name..."
     git clone https://github.com/flynn/$name
     pushd $name > /dev/null
     git checkout $rev
