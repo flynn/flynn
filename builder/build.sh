@@ -47,13 +47,14 @@ function ensure_indent() {
   done 
 }
 
-## Load source from STDIN
+cd $app_dir
 
-cat | tar -xmC $app_dir
+## Load source from STDIN
+cat | tar -xm
 
 # In heroku, there are two separate directories, and some
 # buildpacks expect that.
-cp -r $app_dir/. $build_root
+cp -r . $build_root
 
 ## Buildpack fixes
 
