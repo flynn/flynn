@@ -66,7 +66,9 @@ func main() {
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	cmd.Env = prevRelease.Env
+	if buildpackURL, ok := prevRelease.Env["BUILDPACK_URL"]; ok {
+		cmd.Env = map[string]string{"BUILDPACK_URL": buildpackURL}
+	}
 
 	if err := cmd.Run(); err != nil {
 		log.Fatalln("Build failed:", err)
