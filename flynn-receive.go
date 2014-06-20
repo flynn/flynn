@@ -51,6 +51,12 @@ func main() {
 	} else if err != nil {
 		log.Fatalln("Error retrieving app:", err)
 	}
+	prevRelease, err := client.GetAppRelease(app)
+	if err == controller.ErrNotFound {
+		prevRelease = &ct.Release{}
+	} else if err != nil {
+		log.Fatalln("Error creating getting current app release:", err)
+	}
 
 	fmt.Printf("-----> Building %s...\n", app)
 
@@ -60,6 +66,7 @@ func main() {
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
+	cmd.Env = prevRelease.Env
 
 	if err := cmd.Run(); err != nil {
 		log.Fatalln("Build failed:", err)
@@ -72,12 +79,6 @@ func main() {
 
 	fmt.Printf("-----> Creating release...\n")
 
-	prevRelease, err := client.GetAppRelease(app)
-	if err == controller.ErrNotFound {
-		prevRelease = &ct.Release{}
-	} else if err != nil {
-		log.Fatalln("Error creating getting current app release:", err)
-	}
 	artifact := &ct.Artifact{URI: "docker://flynn/slugrunner"}
 	if err := client.CreateArtifact(artifact); err != nil {
 		log.Fatalln("Error creating artifact:", err)
