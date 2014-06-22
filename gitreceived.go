@@ -193,7 +193,7 @@ func handleChannel(conn *ssh.ServerConn, newChan ssh.NewChannel) {
 				return
 			}
 			cmdargs[1] = strings.TrimSuffix(strings.TrimPrefix(cmdargs[1], "/"), ".git")
-			if strings.Contains(cmdargs[1], "/") {
+			if strings.Contains(cmdargs[1], "..") {
 				ch.Stderr().Write([]byte("Invalid repo.\n"))
 				return
 			}
