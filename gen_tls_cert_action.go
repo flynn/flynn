@@ -42,11 +42,11 @@ func (c *TLSCert) String() string {
 func (a *GenTLSCertAction) Run(s *State) (err error) {
 	data := &TLSCert{}
 	s.StepData[a.ID] = data
-	data.Cert, data.PrivateKey, data.Pin, err = a.generateCert()
+	data.Cert, data.PrivateKey, data.Pin, err = a.generateCert(s)
 	return
 }
 
-func (a *GenTLSCertAction) generateCert() (cert, privKey, pin string, err error) {
+func (a *GenTLSCertAction) generateCert(s *State) (cert, privKey, pin string, err error) {
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return
@@ -66,10 +66,11 @@ func (a *GenTLSCertAction) generateCert() (cert, privKey, pin string, err error)
 	}
 
 	for _, h := range a.Hosts {
-		if ip := net.ParseIP(h); ip != nil {
+		host := interpolate(s, h)
+		if ip := net.ParseIP(host); ip != nil {
 			template.IPAddresses = append(template.IPAddresses, ip)
 		} else {
-			template.DNSNames = append(template.DNSNames, h)
+			template.DNSNames = append(template.DNSNames, host)
 		}
 	}
 

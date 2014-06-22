@@ -42,6 +42,7 @@ func (a *AddRouteAction) Run(s *State) error {
 			return err
 		}
 		route := a.Route.HTTPRoute()
+		route.Domain = interpolate(s, route.Domain)
 		route.TLSCert = cert.Cert
 		route.TLSKey = cert.PrivateKey
 		a.Route = route.ToRoute()

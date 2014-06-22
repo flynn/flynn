@@ -180,7 +180,7 @@
   {
     "id": "controller-cert",
     "action": "gen-tls-cert",
-    "hosts": ["localhost", "127.0.0.1"]
+    "hosts": ["{{ or (getenv `CONTROLLER_DOMAIN`) `localhost` }}", "127.0.0.1"]
   },
   {
     "id": "strowger-wait",
@@ -206,12 +206,12 @@
     "type": "http",
     "config": {
       "service": "flynn-controller",
-      "domain": "localhost"
+      "domain": "{{ or (getenv `CONTROLLER_DOMAIN`) `localhost` }}"
     }
   },
   {
     "id": "log-complete",
     "action": "log",
-    "output": "Flynn bootstrapping complete. Install flynn-cli and paste the line below into a new terminal window:\n\nflynn server-add -g localhost:2201 -p {{ (index .StepData `controller-cert`).Pin }} default https://localhost:8081 {{ (index .StepData `controller-key`).Data }}"
+    "output": "Flynn bootstrapping complete. Install flynn-cli and paste the line below into a new terminal window:\n\nflynn server-add -g localhost:2201 -p {{ (index .StepData `controller-cert`).Pin }} default https://{{ or (getenv `CONTROLLER_DOMAIN`) `localhost` }}:8081 {{ (index .StepData `controller-key`).Data }}"
   }
 ]
