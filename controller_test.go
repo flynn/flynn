@@ -220,6 +220,38 @@ func (s *S) TestUpdateApp(c *C) {
 	c.Assert(gotApp.Protected, Equals, false)
 }
 
+func (s *S) TestDeleteApp(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "delete-app"})
+
+	path := "/apps/" + app.ID
+	res, err := s.Delete(path)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	res, err = s.Get(path, app)
+	c.Assert(res.StatusCode, Equals, 404)
+}
+
+func (s *S) TestRecreateApp(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "recreate-app"})
+
+	// Post a duplicate
+	res, err := s.Post("/apps", app, &ct.App{})
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 500) // TODO: This should probably be a 4xx error
+
+	// Delete the original
+	path := "/apps/" + app.ID
+	res, err = s.Delete(path)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	// Create the same key
+	app = s.createTestApp(c, &ct.App{Name: "recreate-app"})
+	c.Assert(app.Name, Equals, "recreate-app")
+}
+
+
 func (s *S) TestProtectedApp(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "protected-app", Protected: true})
 	release := s.createTestRelease(c, &ct.Release{

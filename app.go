@@ -133,6 +133,31 @@ func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, e
 	return app, tx.Commit()
 }
 
+func (r *AppRepo) Remove(id string) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("UPDATE apps SET deleted_at = now() WHERE app_id = $1 AND deleted_at IS NULL", id)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	_, err = tx.Exec("UPDATE formations SET deleted_at = now(), processes = NULL WHERE app_id = $1 AND deleted_at IS NULL", id)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	_, err = tx.Exec("UPDATE app_resources SET deleted_at = now() WHERE app_id = $1 AND deleted_at IS NULL", id)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
 func (r *AppRepo) List() (interface{}, error) {
 	rows, err := r.db.Query("SELECT app_id, name, protected, meta, created_at, updated_at FROM apps WHERE deleted_at IS NULL ORDER BY created_at DESC")
 	if err != nil {

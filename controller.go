@@ -381,7 +381,7 @@ func parseBasicAuth(h http.Header) (username, password string, err error) {
 
 	c, err := base64.StdEncoding.DecodeString(s[1])
 	if err != nil {
-		return "", "", errors.New("failed to parse base64 basic credenti als")
+		return "", "", errors.New("failed to parse base64 basic credentials")
 	}
 
 	s = strings.SplitN(string(c), ":", 2)
