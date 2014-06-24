@@ -6,8 +6,8 @@ import (
 	"encoding/hex"
 	"errors"
 
+	"code.google.com/p/go.crypto/ssh"
 	ct "github.com/flynn/flynn-controller/types"
-	"github.com/flynn/go-crypto-ssh"
 	"github.com/flynn/go-sql"
 )
 
