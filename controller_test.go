@@ -205,19 +205,30 @@ func (s *S) TestCreateApp(c *C) {
 }
 
 func (s *S) TestUpdateApp(c *C) {
-	app := s.createTestApp(c, &ct.App{Name: "update-app"})
+	meta := map[string]string{"foo": "bar"}
+	app := s.createTestApp(c, &ct.App{Name: "update-app", Meta: meta})
 	c.Assert(app.Protected, Equals, false)
+	c.Assert(app.Meta, DeepEquals, meta)
 
 	gotApp := &ct.App{}
 	res, err := s.Post("/apps/"+app.Name, map[string]bool{"protected": true}, gotApp)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(gotApp.Protected, Equals, true)
+	c.Assert(gotApp.Meta, DeepEquals, meta)
 
-	res, err = s.Post("/apps/"+app.ID, map[string]bool{"protected": false}, gotApp)
+	meta = map[string]string{"foo": "baz", "bar": "foo"}
+	res, err = s.Post("/apps/"+app.ID, map[string]interface{}{"protected": false, "meta": meta}, gotApp)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(gotApp.Protected, Equals, false)
+	c.Assert(gotApp.Meta, DeepEquals, meta)
+
+	res, err = s.Get("/apps/"+app.ID, gotApp)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(gotApp.Protected, Equals, false)
+	c.Assert(gotApp.Meta, DeepEquals, meta)
 }
 
 func (s *S) TestProtectedApp(c *C) {
