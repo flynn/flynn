@@ -171,3 +171,25 @@ func (s *S) TestHTTPInitialSync(c *C) {
 	assertGet(c, "http://"+l.Addr, "example.com", "1")
 	assertGet(c, "https://"+l.TLSAddr, "example.com", "1")
 }
+
+// issue #26
+func (s *S) TestHTTPServiceHandlerBackendConnectionClosed(c *C) {
+	srv := httptest.NewServer(httpTestHandler("1"))
+
+	l, discoverd, err := newHTTPListener(nil)
+	c.Assert(err, IsNil)
+	defer l.Close()
+
+	discoverd.Register("test", srv.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	addHTTPRoute(c, l)
+
+	// a single request is allowed to successfully get issued
+	assertGet(c, "http://"+l.Addr, "example.com", "1")
+
+	// the backend server's connection gets closed, but strowger
+	// is able to recover
+	srv.CloseClientConnections()
+	assertGet(c, "http://"+l.Addr, "example.com", "1")
+}

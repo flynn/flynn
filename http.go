@@ -364,16 +364,15 @@ func (s *httpService) getBackend() *httputil.ClientConn {
 }
 
 func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls bool) {
-	req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
-	backend := s.getBackend()
-	if backend == nil {
-		log.Println("no backend found")
-		fail(sc, req, 503, "Service Unavailable")
-		return
-	}
-	defer backend.Close()
-
 	for {
+		req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
+		backend := s.getBackend()
+		if backend == nil {
+			log.Println("no backend found")
+			fail(sc, req, 503, "Service Unavailable")
+			return
+		}
+
 		if req.Method != "GET" && req.Method != "POST" && req.Method != "HEAD" &&
 			req.Method != "OPTIONS" && req.Method != "PUT" && req.Method != "DELETE" && req.Method != "TRACE" {
 			fail(sc, req, 405, "Method not allowed")
@@ -431,6 +430,10 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls boo
 			return
 		}
 
+		// close the backend connection, so we don't accidently send to
+		// a closed socket on the backend
+		backend.Close()
+
 		// TODO: Proxy HTTP CONNECT? (example: Go RPC over HTTP)
 		if res.StatusCode == http.StatusSwitchingProtocols {
 			serverW, serverR := backend.Hijack()
@@ -456,7 +459,6 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls boo
 			}
 			return
 		}
-		req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
 	}
 }
 
