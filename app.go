@@ -121,11 +121,33 @@ func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, e
 				return nil, fmt.Errorf("controller: expected bool, got %T", v)
 			}
 			if app.Protected != protected {
-				if _, err := tx.Exec("UPDATE apps SET protected = $2 WHERE app_id = $1", app.ID, protected); err != nil {
+				if _, err := tx.Exec("UPDATE apps SET protected = $2, updated_at = now() WHERE app_id = $1", app.ID, protected); err != nil {
 					tx.Rollback()
 					return nil, err
 				}
 				app.Protected = protected
+			}
+		case "meta":
+			data, ok := v.(map[string]interface{})
+			if !ok {
+				tx.Rollback()
+				return nil, fmt.Errorf("controller: expected map[string]interface{}, got %T", v)
+			}
+			var meta hstore.Hstore
+			meta.Map = make(map[string]sql.NullString, len(data))
+			app.Meta = make(map[string]string, len(data))
+			for k, v := range data {
+				s, ok := v.(string)
+				if !ok {
+					tx.Rollback()
+					return nil, fmt.Errorf("controller: expected string, got %T", v)
+				}
+				meta.Map[k] = sql.NullString{String: s, Valid: true}
+				app.Meta[k] = s
+			}
+			if _, err := tx.Exec("UPDATE apps SET meta = $2, updated_at = now() WHERE app_id = $1", app.ID, meta); err != nil {
+				tx.Rollback()
+				return nil, err
 			}
 		}
 	}

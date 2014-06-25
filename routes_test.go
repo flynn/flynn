@@ -54,6 +54,8 @@ func (r *fakeRouter) GetRoute(id string) (*strowger.Route, error) {
 	return route, nil
 }
 
+func (r *fakeRouter) SetRoute(*strowger.Route) error { return nil }
+
 type sortedRoutes []*strowger.Route
 
 func (p sortedRoutes) Len() int           { return len(p) }
