@@ -20,25 +20,38 @@ func NewArtifactRepo(db *DB) *ArtifactRepo {
 func (r *ArtifactRepo) Add(data interface{}) error {
 	a := data.(*ct.Artifact)
 	// TODO: actually validate
-	// TODO: use a transaction here
 	if a.ID == "" {
 		a.ID = utils.UUID()
 	}
 	err := r.db.QueryRow("INSERT INTO artifacts (artifact_id, type, uri) VALUES ($1, $2, $3) RETURNING created_at",
 		a.ID, a.Type, a.URI).Scan(&a.CreatedAt)
 	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" {
-		var deleted *time.Time
-		err = r.db.QueryRow("SELECT artifact_id, created_at, deleted_at FROM artifacts WHERE type = $1 AND uri = $2",
-			a.Type, a.URI).Scan(&a.ID, &a.CreatedAt, &deleted)
+		tx, err := r.db.Begin()
 		if err != nil {
 			return err
 		}
-		if deleted != nil {
-			err = r.db.Exec("UPDATE artifacts SET deleted_at = NULL WHERE artifact_id = $1", a.ID)
+		var deleted *time.Time
+		err = tx.QueryRow("SELECT artifact_id, created_at, deleted_at FROM artifacts WHERE type = $1 AND uri = $2 FOR UPDATE",
+			a.Type, a.URI).Scan(&a.ID, &a.CreatedAt, &deleted)
+		if err != nil {
+			tx.Rollback()
+			return err
 		}
+		if deleted != nil {
+			_, err = tx.Exec("UPDATE artifacts SET deleted_at = NULL WHERE artifact_id = $1", a.ID)
+			if err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
 	}
 	a.ID = cleanUUID(a.ID)
-	return err
+	return nil
 }
 
 func scanArtifact(s Scanner) (*ct.Artifact, error) {
