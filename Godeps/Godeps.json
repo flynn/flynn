@@ -145,6 +145,11 @@
 			"Rev": "664d3777b3faf84fb78cd50271be2726b7f7fae3"
 		},
 		{
+			"ImportPath": "github.com/flynn/lumberjack",
+			"Comment": "v1.0-3-g9aa176d",
+			"Rev": "9aa176d4f85b32711f2a527a694ba8ba5629fb33"
+		},
+		{
 			"ImportPath": "github.com/flynn/pq",
 			"Rev": "5a9734ce1d3157ce437352731f757b82340be3a6"
 		},
@@ -185,6 +190,10 @@
 		{
 			"ImportPath": "github.com/technoweenie/grohl",
 			"Rev": "91868e10032390c992d419d10b17cc8bfdc35808"
+		},
+		{
+			"ImportPath": "github.com/tysontate/gommap",
+			"Rev": "e87a6e482c2ceaa54bd76e0fb30d1f2d40dd3f01"
 		},
 		{
 			"ImportPath": "gopkg.in/check.v1",
