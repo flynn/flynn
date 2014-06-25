@@ -64,7 +64,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	go serveHTTP(&Host{state: state}, &attachHandler{state: state, backend: backend})
+	go serveHTTP(&Host{state: state, backend: backend}, &attachHandler{state: state, backend: backend})
 
 	if *force {
 		if err := backend.Cleanup(); err != nil {
