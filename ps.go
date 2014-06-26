@@ -32,6 +32,9 @@ func runPs(cmd *Command, args []string, client *controller.Client) error {
 		if j.Type == "" {
 			j.Type = "run"
 		}
+		if j.State != "up" {
+			continue
+		}
 		listRec(w, j.ID, j.Type)
 	}
 
