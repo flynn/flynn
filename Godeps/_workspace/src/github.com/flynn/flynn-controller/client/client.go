@@ -237,6 +237,17 @@ func (c *Client) PutFormation(formation *ct.Formation) error {
 	return c.put(fmt.Sprintf("/apps/%s/formations/%s", formation.AppID, formation.ReleaseID), formation, formation)
 }
 
+func (c *Client) PutJob(job *ct.Job) error {
+	if job.ID == "" || job.AppID == "" {
+		return errors.New("controller: missing job id and/or app id")
+	}
+	return c.put(fmt.Sprintf("/apps/%s/jobs/%s", job.AppID, job.ID), job, job)
+}
+
+func (c *Client) DeleteJob(appID, jobID string) error {
+	return c.delete(fmt.Sprintf("/apps/%s/jobs/%s", appID, jobID))
+}
+
 func (c *Client) SetAppRelease(appID, releaseID string) error {
 	return c.put(fmt.Sprintf("/apps/%s/release", appID), &ct.Release{ID: releaseID}, nil)
 }
@@ -316,6 +327,11 @@ func (c *Client) RunJobDetached(appID string, req *ct.NewJob) (*ct.Job, error) {
 func (c *Client) JobList(appID string) ([]*ct.Job, error) {
 	var jobs []*ct.Job
 	return jobs, c.get(fmt.Sprintf("/apps/%s/jobs", appID), &jobs)
+}
+
+func (c *Client) AppList() ([]*ct.App, error) {
+	var apps []*ct.App
+	return apps, c.get("/apps", &apps)
 }
 
 func (c *Client) KeyList() ([]*ct.Key, error) {

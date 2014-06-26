@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/flynn/flynn-cli",
-	"GoVersion": "go1.2.1",
+	"GoVersion": "go1.3",
 	"Deps": [
 		{
 			"ImportPath": "bitbucket.org/kardianos/osext",
@@ -22,27 +22,27 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/discoverd/agent",
-			"Rev": "e8e6fbf2d0c8995114594ed027cdc509cffdcdf1"
+			"Rev": "c8d65504f57d487cc406aeb86cc065c89b3b9d50"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/client",
-			"Rev": "ad7d1923ccdd054f4f212ccc47f97e15ae87d16e"
+			"Rev": "d607c9e1c17e3d4f92b374fddd74e0e7204fb28c"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/types",
-			"Rev": "ad7d1923ccdd054f4f212ccc47f97e15ae87d16e"
+			"Rev": "d607c9e1c17e3d4f92b374fddd74e0e7204fb28c"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/utils",
-			"Rev": "ad7d1923ccdd054f4f212ccc47f97e15ae87d16e"
+			"Rev": "d607c9e1c17e3d4f92b374fddd74e0e7204fb28c"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-host/types",
-			"Rev": "9baf577fe7a98789109addd17893d07dfbaa7f41"
+			"Rev": "580ef473e5d681d9e095e647d080f8ef6322786e"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-discoverd",
-			"Rev": "b07cd6bbd7d9b6144e7faa45fae67e0abc08c89d"
+			"Rev": "0325ff35b2495314ea7ebfc55e4e5b4408c3b78f"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-dockerclient",
@@ -62,11 +62,11 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
-			"Rev": "05df3d30b6e55f5b440c1a78e2f83cb822bc0d76"
+			"Rev": "913bfc4ac01829bd92a241bfdbbc0d1616a4405e"
 		},
 		{
 			"ImportPath": "github.com/flynn/strowger/types",
-			"Rev": "ebcd376bbc6654d953417bd7afdb4c1a2dd224b5"
+			"Rev": "6a493ed44d3a7e9a9c499b364080d1575e82103a"
 		},
 		{
 			"ImportPath": "github.com/heroku/hk/term",
