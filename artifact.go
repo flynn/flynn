@@ -1,8 +1,6 @@
 package main
 
 import (
-	"time"
-
 	ct "github.com/flynn/flynn-controller/types"
 	"github.com/flynn/flynn-controller/utils"
 	"github.com/flynn/go-sql"
@@ -26,32 +24,14 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 	err := r.db.QueryRow("INSERT INTO artifacts (artifact_id, type, uri) VALUES ($1, $2, $3) RETURNING created_at",
 		a.ID, a.Type, a.URI).Scan(&a.CreatedAt)
 	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" {
-		tx, err := r.db.Begin()
+		err = r.db.QueryRow("SELECT artifact_id, created_at FROM artifacts WHERE type = $1 AND uri = $2",
+			a.Type, a.URI).Scan(&a.ID, &a.CreatedAt)
 		if err != nil {
 			return err
 		}
-		var deleted *time.Time
-		err = tx.QueryRow("SELECT artifact_id, created_at, deleted_at FROM artifacts WHERE type = $1 AND uri = $2 FOR UPDATE",
-			a.Type, a.URI).Scan(&a.ID, &a.CreatedAt, &deleted)
-		if err != nil {
-			tx.Rollback()
-			return err
-		}
-		if deleted != nil {
-			_, err = tx.Exec("UPDATE artifacts SET deleted_at = NULL WHERE artifact_id = $1", a.ID)
-			if err != nil {
-				tx.Rollback()
-				return err
-			}
-		}
-		if err := tx.Commit(); err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
 	}
 	a.ID = cleanUUID(a.ID)
-	return nil
+	return err
 }
 
 func scanArtifact(s Scanner) (*ct.Artifact, error) {
