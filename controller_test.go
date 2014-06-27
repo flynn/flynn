@@ -262,7 +262,6 @@ func (s *S) TestRecreateApp(c *C) {
 	c.Assert(app.Name, Equals, "recreate-app")
 }
 
-
 func (s *S) TestProtectedApp(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "protected-app", Protected: true})
 	release := s.createTestRelease(c, &ct.Release{

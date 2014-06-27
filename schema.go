@@ -38,7 +38,7 @@ func migrateDB(db *sql.DB) error {
     updated_at timestamptz NOT NULL DEFAULT now(),
     deleted_at timestamptz
 )`,
-    `CREATE UNIQUE INDEX ON apps (name) WHERE deleted_at IS NULL`,
+		`CREATE UNIQUE INDEX ON apps (name) WHERE deleted_at IS NULL`,
 
 		`CREATE TABLE formations (
     app_id uuid NOT NULL REFERENCES apps (app_id),
