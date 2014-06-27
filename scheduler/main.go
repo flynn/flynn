@@ -526,12 +526,8 @@ func (f *Formation) rectify() {
 func (f *Formation) add(n int, name string) {
 	g := grohl.NewContext(grohl.Data{"fn": "add", "app.id": f.AppID, "release.id": f.Release.ID})
 
-	config, err := f.jobConfig(name)
-	if err != nil {
-		// TODO: log/handle error
-	}
 	for i := 0; i < n; i++ {
-		job, err := f.start(name, config)
+		job, err := f.start(name)
 		if err != nil {
 			// TODO: log/handle error
 			continue
@@ -546,7 +542,7 @@ func (f *Formation) restart(stoppedJob *Job) error {
 
 	f.jobs.Remove(stoppedJob)
 
-	newJob, err := f.start(stoppedJob.Type, nil)
+	newJob, err := f.start(stoppedJob.Type)
 	if err != nil {
 		return err
 	}
@@ -555,11 +551,10 @@ func (f *Formation) restart(stoppedJob *Job) error {
 	return nil
 }
 
-func (f *Formation) start(typ string, config *host.Job) (job *Job, err error) {
-	if config == nil {
-		if config, err = f.jobConfig(typ); err != nil {
-			return nil, err
-		}
+func (f *Formation) start(typ string) (job *Job, err error) {
+	config, err := f.jobConfig(typ)
+	if err != nil {
+		return nil, err
 	}
 	config.ID = cluster.RandomJobID("")
 
