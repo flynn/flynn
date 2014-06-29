@@ -25,7 +25,7 @@ All contributions are made via pull request. Note that **all patches from all co
 
 At least one review from a maintainer is required for all patches (even patches from other maintainers). If only one maintainer is listed in the MAINTAINERS file, then review is not required for patches from the sole maintainer (however it is encouraged).
 
-Maintainers must demonstrate a consistent track record of recent contributions, as repos with only two maintainers can bottleneck easily due to the review requirements. Only active contributors and reviewers will remain maintainers. Changes in maintainership shouldn't be taken personally, they are purely organizational and for the health of the code and project.
+Maintainers must demonstrate a consistent track record of recent contributions, as repos with only two maintainers can bottleneck easily due to the review requirements. Only active contributors and reviewers will remain maintainers. Changes in maintainership should not be taken personally, they are purely organizational and for the health of the code and project.
 
 
 ## Developer’s Certificate of Origin
@@ -81,9 +81,9 @@ For legal reasons, no anonymous or pseudonymous contributions are accepted ([con
 
 ## Pull request procedure
 
-To make a pull request, you will need a Github account; if you're unclear on this process, see Github's documentation on [forking](https://help.github.com/articles/fork-a-repo) and [pull requests](https://help.github.com/articles/using-pull-requests). Pull requests should be targeted at the `master` branch. Before creating a pull request, go through this checklist:
+To make a pull request, you will need a Github account; if you are unclear on this process, see Github's documentation on [forking](https://help.github.com/articles/fork-a-repo) and [pull requests](https://help.github.com/articles/using-pull-requests). Pull requests should be targeted at the `master` branch. Before creating a pull request, go through this checklist:
 
-1. Create a feature branch off of `master` so that changes don't get mixed up.
+1. Create a feature branch off of `master` so that changes do not get mixed up.
 1. [Rebase](http://git-scm.com/book/en/Git-Branching-Rebasing) your local changes against the `master` branch.
 1. Run the full project test suite with the `go test ./...` (or equivalent) command and confirm that it passes.
 1. Run `gofmt -s` (if the project is written in Go).
@@ -95,16 +95,16 @@ Normally, all pull requests must include tests that test your change. Occasional
 
 ## Communication
 
-We use the #flynn IRC channel on [Freenode](irc://chat.freenode.net/flynn). You're welcome to drop in and ask questions, discuss bugs, etc. It is [logged on BotBot.me](https://botbot.me/freenode/flynn/) and you can [connect using webchat](https://webchat.freenode.net/?channels=flynn) if you don't have an IRC client.
+We use the #flynn IRC channel on [Freenode](irc://chat.freenode.net/flynn). You are welcome to drop in and ask questions, discuss bugs, etc. It is [logged on BotBot.me](https://botbot.me/freenode/flynn/) and you can [connect using webchat](https://webchat.freenode.net/?channels=flynn) if you do not have an IRC client.
 
 ## Conduct
 
-Whether you're a regular contributor or a newcomer, we care about making this community a safe place for you and we've got your back.
+Whether you are a regular contributor or a newcomer, we care about making this community a safe place for you and we've got your back.
 
 * We are committed to providing a friendly, safe and welcoming environment for all, regardless of gender, sexual orientation, disability, ethnicity, religion, or similar personal characteristic.
 * Please avoid using nicknames that might detract from a friendly, safe and welcoming environment for all.
-* Be kind and courteous. There's no need to be mean or rude.
-* We will exclude you from interaction if you insult, demean or harass anyone. In particular, we don't tolerate behavior that excludes people in socially marginalized groups.
+* Be kind and courteous. There is no need to be mean or rude.
+* We will exclude you from interaction if you insult, demean or harass anyone. In particular, we do not tolerate behavior that excludes people in socially marginalized groups.
 * Private harassment is also unacceptable. No matter who you are, if you feel you have been or are being harassed or made uncomfortable by a community member, please contact one of the channel ops or a member of the Flynn core team immediately.
 * Likewise any spamming, trolling, flaming, baiting or other attention-stealing behaviour is not welcome.
 
