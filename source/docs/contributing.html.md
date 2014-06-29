@@ -95,7 +95,7 @@ Normally, all pull requests must include tests that test your change. Occasional
 
 ## Communication
 
-There is an IRC channel on chat.freenode.net, channel #flynn. You're welcome to drop in and ask questions, discuss bugs, etc. It is [logged on BotBot.me](https://botbot.me/freenode/flynn/).
+We use the #flynn IRC channel on [Freenode](irc://chat.freenode.net/flynn). You're welcome to drop in and ask questions, discuss bugs, etc. It is [logged on BotBot.me](https://botbot.me/freenode/flynn/) and you can [connect using webchat](https://webchat.freenode.net/?channels=flynn) if you don't have an IRC client.
 
 ## Conduct
 
@@ -109,4 +109,3 @@ Whether you're a regular contributor or a newcomer, we care about making this co
 * Likewise any spamming, trolling, flaming, baiting or other attention-stealing behaviour is not welcome.
 
 We welcome discussion about creating a welcoming, safe, and productive environment for the community. If you have any questions, feedback, or concerns [please let us know](mailto:contact@flynn.io).
-
