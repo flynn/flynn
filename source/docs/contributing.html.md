@@ -74,7 +74,7 @@ By making a contribution to this project, I certify that:
 To accept the DCO, simply add this line to each commit message with your name and email address (`git commit -s` will do this for you):
 
 ```text
-Signed-off-by: John Doe <john@example.com>
+Signed-off-by: Jane Example <jane@example.com>
 ```
 
 For legal reasons, no anonymous or pseudonymous contributions are accepted ([contact us](mailto:contact@flynn.io) if this is an issue).
