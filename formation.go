@@ -119,7 +119,8 @@ func (r *FormationRepo) publish(appID, releaseID string) {
 	formation, err := r.Get(appID, releaseID)
 	if err == ErrNotFound {
 		// formation delete event
-		formation = &ct.Formation{AppID: appID, ReleaseID: releaseID}
+		updated_at := time.Now()
+		formation = &ct.Formation{AppID: appID, ReleaseID: releaseID, UpdatedAt: &updated_at}
 	} else if err != nil {
 		// TODO: log error
 		return
@@ -156,6 +157,7 @@ func (r *FormationRepo) expandFormation(formation *ct.Formation) (*ct.ExpandedFo
 		Release:   release.(*ct.Release),
 		Artifact:  artifact.(*ct.Artifact),
 		Processes: formation.Processes,
+		UpdatedAt: *formation.UpdatedAt,
 	}
 	return f, nil
 }

@@ -11,6 +11,7 @@ type ExpandedFormation struct {
 	Release   *Release       `json:"release,omitempty"`
 	Artifact  *Artifact      `json:"artifact,omitempty"`
 	Processes map[string]int `json:"processes,omitempty"`
+	UpdatedAt time.Time      `json:"updated_at,omitempty"`
 }
 
 type App struct {

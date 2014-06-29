@@ -61,12 +61,17 @@ func (c *fakeControllerClient) GetFormation(appID, releaseID string) (*ct.Format
 }
 
 func (c *fakeControllerClient) StreamFormations(since *time.Time) (<-chan *ct.ExpandedFormation, *error) {
-	return c.stream, nil
+	var err error
+	return c.stream, &err
 }
 
 func (c *fakeControllerClient) PutJob(job *ct.Job) error {
 	c.jobs[job.ID] = job
 	return nil
+}
+
+func (c *fakeControllerClient) setFormationStream(s chan *ct.ExpandedFormation) {
+	c.stream = s
 }
 
 type formationUpdate struct {
@@ -177,7 +182,6 @@ func (s *S) TestWatchFormations(c *C) {
 	processes := map[string]int{"web": 1}
 	release := newRelease("existing-release", artifact, processes)
 	stream := make(chan *ct.ExpandedFormation)
-	defer close(stream)
 	cc := newFakeControllerClient(appID, release, artifact, processes, stream)
 
 	hostID := "host0"
@@ -210,7 +214,8 @@ func (s *S) TestWatchFormations(c *C) {
 				"worker": ct.ProcessType{Cmd: []string{"start", "worker"}},
 			},
 		},
-		Artifact: &ct.Artifact{ID: "artifact0", Type: "docker", URI: "docker://foo/bar"},
+		Artifact:  &ct.Artifact{ID: "artifact0", Type: "docker", URI: "docker://foo/bar"},
+		UpdatedAt: time.Now(),
 	}
 
 	updates := []*formationUpdate{
@@ -243,6 +248,17 @@ func (s *S) TestWatchFormations(c *C) {
 		processes["web"]--
 		c.Assert(processes, DeepEquals, u.processes)
 	}
+
+	// check scheduler reconnects
+	newStream := make(chan *ct.ExpandedFormation)
+	cc.setFormationStream(newStream)
+	close(stream)
+	f.Processes = map[string]int{"web": 3}
+	newStream <- f
+	waitForFormationEvent(events, c)
+	c.Assert(cx.formations.Len(), Equals, 2)
+	host := cl.GetHost(hostID)
+	c.Assert(len(host.Jobs), Equals, 4)
 }
 
 func (s *S) TestWatchHost(c *C) {

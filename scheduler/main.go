@@ -165,36 +165,53 @@ func (c *context) syncCluster(events chan<- *host.Event) {
 func (c *context) watchFormations(events chan<- *FormationEvent) {
 	g := grohl.NewContext(grohl.Data{"fn": "watchFormations"})
 
-	ch, _ := c.StreamFormations(nil)
-
 	c.syncCluster(nil)
 	if events != nil {
 		events <- &FormationEvent{}
 	}
 
-	for ef := range ch {
-		if ef.App == nil {
-			// sentinel
-			continue
+	var attempts int
+	var lastUpdatedAt time.Time
+	for {
+		// wait a second if we've tried more than once
+		attempts++
+		if attempts > 1 {
+			time.Sleep(time.Second)
 		}
-		f := c.formations.Get(ef.App.ID, ef.Release.ID)
-		if f != nil {
-			g.Log(grohl.Data{"app.id": ef.App.ID, "release.id": ef.Release.ID, "at": "update"})
-			f.SetProcesses(ef.Processes)
-		} else {
-			g.Log(grohl.Data{"app.id": ef.App.ID, "release.id": ef.Release.ID, "at": "new"})
-			f = NewFormation(c, ef)
-			c.formations.Add(f)
-		}
-		go func() {
-			f.Rectify()
-			if events != nil {
-				events <- &FormationEvent{Formation: f}
+
+		g.Log(grohl.Data{"at": "connect", "attempt": attempts})
+		ch, err := c.StreamFormations(&lastUpdatedAt)
+		for ef := range ch {
+			// we are now connected so reset attempts
+			attempts = 0
+
+			if ef.App == nil {
+				// sentinel
+				continue
 			}
-		}()
+			lastUpdatedAt = ef.UpdatedAt
+			f := c.formations.Get(ef.App.ID, ef.Release.ID)
+			if f != nil {
+				g.Log(grohl.Data{"app.id": ef.App.ID, "release.id": ef.Release.ID, "at": "update"})
+				f.SetProcesses(ef.Processes)
+			} else {
+				g.Log(grohl.Data{"app.id": ef.App.ID, "release.id": ef.Release.ID, "at": "new"})
+				f = NewFormation(c, ef)
+				c.formations.Add(f)
+			}
+			go func() {
+				f.Rectify()
+				if events != nil {
+					events <- &FormationEvent{Formation: f}
+				}
+			}()
+		}
+		if *err != nil {
+			g.Log(grohl.Data{"at": "error", "error": *err})
+		}
+		g.Log(grohl.Data{"at": "disconnect"})
 	}
 
-	// TODO: log disconnect and restart
 	// TODO: trigger cluster sync
 }
 
