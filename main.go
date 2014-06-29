@@ -46,7 +46,7 @@ Options:
 	args, _ := docopt.Parse(usage, nil, true, "", false)
 
 	root := args["--root"].(string)
-	driver, err := graphdriver.GetDriver(args["--driver"].(string), root)
+	driver, err := graphdriver.GetDriver(args["--driver"].(string), root, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
