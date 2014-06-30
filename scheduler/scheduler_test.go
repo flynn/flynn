@@ -60,9 +60,9 @@ func (c *fakeControllerClient) GetFormation(appID, releaseID string) (*ct.Format
 	return nil, controller.ErrNotFound
 }
 
-func (c *fakeControllerClient) StreamFormations(since *time.Time) (<-chan *ct.ExpandedFormation, *error) {
+func (c *fakeControllerClient) StreamFormations(since *time.Time) (*controller.FormationUpdates, *error) {
 	var err error
-	return c.stream, &err
+	return &controller.FormationUpdates{Chan: c.stream}, &err
 }
 
 func (c *fakeControllerClient) PutJob(job *ct.Job) error {

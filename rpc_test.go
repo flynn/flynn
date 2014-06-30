@@ -17,10 +17,10 @@ func (s *S) TestFormationStreaming(c *C) {
 	client, err := controller.NewClient(s.srv.URL, authKey)
 	c.Assert(err, IsNil)
 
-	ch, streamErr := client.StreamFormations(&before)
+	updates, streamErr := client.StreamFormations(&before)
 
 	var existingFound bool
-	for f := range ch {
+	for f := range updates.Chan {
 		if f.App == nil {
 			break
 		}
@@ -41,7 +41,7 @@ func (s *S) TestFormationStreaming(c *C) {
 
 	var out *ct.ExpandedFormation
 	select {
-	case out = <-ch:
+	case out = <-updates.Chan:
 	case <-time.After(time.Second):
 		c.Fatal("timed out waiting for create")
 	}
@@ -54,7 +54,7 @@ func (s *S) TestFormationStreaming(c *C) {
 	s.Delete(formationPath(app.ID, release.ID))
 
 	select {
-	case out = <-ch:
+	case out = <-updates.Chan:
 	case <-time.After(time.Second):
 		c.Fatal("timed out waiting for delete")
 	}
