@@ -211,8 +211,6 @@ func (c *context) watchFormations(events chan<- *FormationEvent) {
 		}
 		g.Log(grohl.Data{"at": "disconnect"})
 	}
-
-	// TODO: trigger cluster sync
 }
 
 func (c *context) watchHosts(events chan<- *host.Event) {
