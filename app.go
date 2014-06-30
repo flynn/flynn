@@ -167,7 +167,7 @@ func (r *AppRepo) Remove(id string) error {
 		return err
 	}
 
-	_, err = tx.Exec("UPDATE formations SET deleted_at = now(), processes = NULL WHERE app_id = $1 AND deleted_at IS NULL", id)
+	_, err = tx.Exec("UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now() WHERE app_id = $1 AND deleted_at IS NULL", id)
 	if err != nil {
 		tx.Rollback()
 		return err

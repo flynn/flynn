@@ -108,7 +108,7 @@ func (r *FormationRepo) List(appID string) ([]*ct.Formation, error) {
 }
 
 func (r *FormationRepo) Remove(appID, releaseID string) error {
-	err := r.db.Exec("UPDATE formations SET deleted_at = now(), processes = NULL WHERE app_id = $1 AND release_id = $2", appID, releaseID)
+	err := r.db.Exec("UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now() WHERE app_id = $1 AND release_id = $2", appID, releaseID)
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,8 @@ func (r *FormationRepo) publish(appID, releaseID string) {
 	formation, err := r.Get(appID, releaseID)
 	if err == ErrNotFound {
 		// formation delete event
-		formation = &ct.Formation{AppID: appID, ReleaseID: releaseID}
+		updated_at := time.Now()
+		formation = &ct.Formation{AppID: appID, ReleaseID: releaseID, UpdatedAt: &updated_at}
 	} else if err != nil {
 		// TODO: log error
 		return
@@ -156,6 +157,7 @@ func (r *FormationRepo) expandFormation(formation *ct.Formation) (*ct.ExpandedFo
 		Release:   release.(*ct.Release),
 		Artifact:  artifact.(*ct.Artifact),
 		Processes: formation.Processes,
+		UpdatedAt: *formation.UpdatedAt,
 	}
 	return f, nil
 }
