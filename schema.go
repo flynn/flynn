@@ -16,9 +16,9 @@ func migrateDB(db *sql.DB) error {
     type text NOT NULL,
     uri text NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
-    deleted_at timestamptz,
-    UNIQUE (type, uri)
+    deleted_at timestamptz
 )`,
+		`CREATE UNIQUE INDEX ON artifacts (type, uri) WHERE deleted_at IS NULL`,
 
 		`CREATE TABLE releases (
     release_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
