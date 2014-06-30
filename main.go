@@ -41,6 +41,7 @@ Options:
   -h, --help       show this message and exit
   --driver=<name>  storage driver [default: aufs]
   --root=<path>    storage root [default: /var/lib/docker]
+  --json           emit json-formatted output
 `
 
 	args, _ := docopt.Parse(usage, nil, true, "", false)
@@ -55,7 +56,7 @@ Options:
 	if err != nil {
 		log.Fatal(err)
 	}
-	ctx := &Context{Store: s, driver: driver}
+	ctx := &Context{Store: s, driver: driver, json: args.Bool["--json"]}
 
 	switch {
 	case args.Bool["pull"]:

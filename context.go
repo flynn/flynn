@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/dotcloud/docker/daemon/graphdriver"
 	"github.com/flynn/pinkerton/registry"
@@ -12,6 +14,7 @@ import (
 type Context struct {
 	*store.Store
 	driver graphdriver.Driver
+	json   bool
 }
 
 func (c *Context) Pull(url string) {
@@ -21,7 +24,7 @@ func (c *Context) Pull(url string) {
 	}
 
 	if id := ref.ImageID(); id != "" && c.Exists(id) {
-		fmt.Println(id, "exists")
+		c.writeLayerInfo(id, "exists")
 		return
 	}
 
@@ -38,25 +41,36 @@ func (c *Context) Pull(url string) {
 	for i := len(layers) - 1; i >= 0; i-- {
 		layer := layers[i]
 		if c.Exists(layer.ID) {
-			fmt.Println(layer.ID, "exists")
+			c.writeLayerInfo(layer.ID, "exists")
 			continue
 		}
-		fmt.Print(layer.ID)
 
 		if err := layer.Fetch(); err != nil {
 			log.Fatal(err)
 		}
+		status := "downloaded"
 		if err := c.Add(layer); err != nil {
 			if err == store.ErrExists {
-				fmt.Print(" exists")
+				status = "exists"
 			} else {
 				log.Fatal(err)
 			}
 		}
-		fmt.Print("\n")
+		c.writeLayerInfo(layer.ID, status)
 	}
 
 	// TODO: update sizes
+}
+
+func (c *Context) writeLayerInfo(id, status string) {
+	if c.json {
+		json.NewEncoder(os.Stdout).Encode(struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+		}{id, status})
+	} else {
+		fmt.Println(id, status)
+	}
 }
 
 func (c *Context) Checkout(id, imageID string) {
