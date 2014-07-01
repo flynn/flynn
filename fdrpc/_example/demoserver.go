@@ -12,9 +12,9 @@ import (
 type RpcObject struct {
 }
 
-func (o *RpcObject) GetStdOut(a int, b *fdrpc.RpcFD) error {
+func (o *RpcObject) GetStdOut(a int, b *fdrpc.FD) error {
 	fmt.Printf("GetStdOut %d\n", a)
-	b.Fd = 1
+	b.FD = 1
 	return nil
 }
 

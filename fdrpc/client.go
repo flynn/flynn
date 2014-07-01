@@ -9,25 +9,25 @@ import (
 	"syscall"
 )
 
-type RpcFD struct {
-	Fd int
+type FD struct {
+	FD int
 }
 
-type FdReader struct {
+type FDReader struct {
 	conn    *net.UnixConn
-	Fds     map[int]int
+	FDs     map[int]int
 	fdCount int
 }
 
-func NewFdReader(conn *net.UnixConn) *FdReader {
-	return &FdReader{conn, make(map[int]int), 0}
+func NewFDReader(conn *net.UnixConn) *FDReader {
+	return &FDReader{conn, make(map[int]int), 0}
 }
 
-func (r *FdReader) Close() error {
+func (r *FDReader) Close() error {
 	return r.conn.Close()
 }
 
-func (r *FdReader) Read(b []byte) (int, error) {
+func (r *FDReader) Read(b []byte) (int, error) {
 	oob := make([]byte, 32)
 	n, oobn, _, _, err := r.conn.ReadMsgUnix(b, oob)
 	if err != nil {
@@ -50,7 +50,7 @@ func (r *FdReader) Read(b []byte) (int, error) {
 					return n, errno
 				}
 
-				r.Fds[r.fdCount] = fd
+				r.FDs[r.fdCount] = fd
 				r.fdCount++
 			}
 		}
@@ -59,21 +59,21 @@ func (r *FdReader) Read(b []byte) (int, error) {
 	return n, nil
 }
 
-func (r *FdReader) Write(b []byte) (int, error) {
+func (r *FDReader) Write(b []byte) (int, error) {
 	return r.conn.Write(b)
 }
 
-func (r *FdReader) GetFd(index int) (int, error) {
-	fd, ok := r.Fds[index]
+func (r *FDReader) GetFD(index int) (int, error) {
+	fd, ok := r.FDs[index]
 	if !ok {
-		return -1, fmt.Errorf("No recieved FD with index %d\n", index)
+		return -1, fmt.Errorf("No received FD with index %d\n", index)
 	}
-	delete(r.Fds, index)
+	delete(r.FDs, index)
 	return fd, nil
 }
 
 type gobClientCodec struct {
-	fdReader *FdReader
+	fdReader *FDReader
 	dec      *gob.Decoder
 	enc      *gob.Encoder
 	encBuf   *bufio.Writer
@@ -97,13 +97,13 @@ func (c *gobClientCodec) ReadResponseBody(body interface{}) error {
 	if err := c.dec.Decode(body); err != nil {
 		return err
 	}
-	if fd, ok := body.(*RpcFD); ok {
-		index := fd.Fd
-		newFd, err := c.fdReader.GetFd(index)
+	if fd, ok := body.(*FD); ok {
+		index := fd.FD
+		newFD, err := c.fdReader.GetFD(index)
 		if err != nil {
 			return err
 		}
-		fd.Fd = newFd
+		fd.FD = newFD
 	}
 	return nil
 }
@@ -113,7 +113,7 @@ func (c *gobClientCodec) Close() error {
 }
 
 func NewClient(conn *net.UnixConn) *rpc.Client {
-	fdReader := NewFdReader(conn)
+	fdReader := NewFDReader(conn)
 	encBuf := bufio.NewWriter(fdReader)
 	client := &gobClientCodec{fdReader, gob.NewDecoder(fdReader), gob.NewEncoder(encBuf), encBuf}
 	return rpc.NewClientWithCodec(client)

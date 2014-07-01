@@ -22,13 +22,13 @@ func main() {
 	}
 
 	var arg int
-	var ret fdrpc.RpcFD
+	var ret fdrpc.FD
 	arg = 41
 	if err := dockerInitRpc.Call("RpcObject.GetStdOut", &arg, &ret); err != nil {
 		fmt.Printf("resume Error: %v\n", err)
 		return
 	}
-	syscall.Write(ret.Fd, []byte("Hello from client 1\n"))
+	syscall.Write(ret.FD, []byte("Hello from client 1\n"))
 
 	// Call it again to test multiple calls
 
@@ -37,5 +37,5 @@ func main() {
 		fmt.Printf("resume Error: %v\n", err)
 		return
 	}
-	syscall.Write(ret.Fd, []byte("Hello from client 2\n"))
+	syscall.Write(ret.FD, []byte("Hello from client 2\n"))
 }
