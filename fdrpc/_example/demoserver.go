@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"net"
 	"net/rpc"
 	"os"
 
@@ -31,20 +30,5 @@ func main() {
 	}
 
 	os.Remove("/tmp/test.socket")
-	listener, err := net.ListenUnix("unix", &net.UnixAddr{Net: "unix", Name: "/tmp/test.socket"})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for {
-		conn, err := listener.AcceptUnix()
-		if err != nil {
-			log.Printf("rpc socket accept error: %s", err)
-			continue
-		}
-
-		fmt.Printf("New client connected\n")
-		fdrpc.ServeConn(conn)
-		conn.Close()
-	}
+	log.Fatal(fdrpc.ListenAndServe("/tmp/test.socket"))
 }

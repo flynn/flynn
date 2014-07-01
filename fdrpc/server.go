@@ -3,6 +3,7 @@ package fdrpc
 import (
 	"bufio"
 	"encoding/gob"
+	"log"
 	"net"
 	"net/rpc"
 	"syscall"
@@ -80,6 +81,23 @@ func (c *gobServerCodec) WriteResponse(r *rpc.Response, body interface{}) (err e
 
 func (c *gobServerCodec) Close() error {
 	return c.fdWriter.Close()
+}
+
+func ListenAndServe(path string) error {
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Net: "unix", Name: path})
+	if err != nil {
+		return err
+	}
+	for {
+		conn, err := listener.AcceptUnix()
+		if err != nil {
+			log.Printf("rpc socket accept error: %s", err)
+		}
+		go func() {
+			defer conn.Close()
+			ServeConn(conn)
+		}()
+	}
 }
 
 func ServeConn(conn *net.UnixConn) {

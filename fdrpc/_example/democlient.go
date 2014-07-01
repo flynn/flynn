@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"net"
 	"syscall"
 
 	"github.com/titanous/fdrpc"
@@ -11,16 +10,10 @@ import (
 func main() {
 	log.SetFlags(log.Lshortfile)
 
-	addr, err := net.ResolveUnixAddr("unix", "/tmp/test.socket")
+	c, err := fdrpc.Dial("/tmp/test.socket")
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	socket, err := net.DialUnix("unix", nil, addr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	c := fdrpc.NewClient(socket)
 
 	var fd fdrpc.FD
 	if err := c.Call("Obj.GetStdOut", struct{}{}, &fd); err != nil {

@@ -127,3 +127,11 @@ func NewClient(conn *net.UnixConn) *rpc.Client {
 	client := &gobClientCodec{fdReader, gob.NewDecoder(fdReader), gob.NewEncoder(encBuf), encBuf}
 	return rpc.NewClientWithCodec(client)
 }
+
+func Dial(path string) (*rpc.Client, error) {
+	conn, err := net.DialUnix("unix", nil, &net.UnixAddr{Net: "unix", Name: path})
+	if err != nil {
+		return nil, err
+	}
+	return NewClient(conn), nil
+}
