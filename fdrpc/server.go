@@ -60,8 +60,13 @@ func (c *gobServerCodec) ReadRequestBody(body interface{}) error {
 }
 
 func (c *gobServerCodec) WriteResponse(r *rpc.Response, body interface{}) (err error) {
-	if fd, ok := body.(*FD); ok {
-		fd.FD = c.fdWriter.AddFD(fd.FD)
+	switch f := body.(type) {
+	case *FD:
+		f.FD = c.fdWriter.AddFD(f.FD)
+	case *[]FD:
+		for i, fd := range *f {
+			(*f)[i].FD = c.fdWriter.AddFD(fd.FD)
+		}
 	}
 
 	if err = c.enc.Encode(r); err != nil {

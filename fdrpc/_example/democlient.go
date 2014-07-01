@@ -1,42 +1,42 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"net"
-	"net/rpc"
 	"syscall"
 
 	"github.com/titanous/fdrpc"
 )
 
 func main() {
-	var dockerInitRpc *rpc.Client
+	log.SetFlags(log.Lshortfile)
+
 	addr, err := net.ResolveUnixAddr("unix", "/tmp/test.socket")
 	if err != nil {
-		fmt.Printf("resolv: %v\n", err)
-	}
-	if socket, err := net.DialUnix("unix", nil, addr); err != nil {
-		fmt.Printf("dial Error: %v\n", err)
-		return
-	} else {
-		dockerInitRpc = fdrpc.NewClient(socket)
+		log.Fatal(err)
 	}
 
-	var arg int
-	var ret fdrpc.FD
-	arg = 41
-	if err := dockerInitRpc.Call("RpcObject.GetStdOut", &arg, &ret); err != nil {
-		fmt.Printf("resume Error: %v\n", err)
-		return
+	socket, err := net.DialUnix("unix", nil, addr)
+	if err != nil {
+		log.Fatal(err)
 	}
-	syscall.Write(ret.FD, []byte("Hello from client 1\n"))
+	c := fdrpc.NewClient(socket)
 
-	// Call it again to test multiple calls
-
-	arg = 42
-	if err := dockerInitRpc.Call("RpcObject.GetStdOut", &arg, &ret); err != nil {
-		fmt.Printf("resume Error: %v\n", err)
-		return
+	var fd fdrpc.FD
+	if err := c.Call("Obj.GetStdOut", struct{}{}, &fd); err != nil {
+		log.Fatal(err)
 	}
-	syscall.Write(ret.FD, []byte("Hello from client 2\n"))
+	syscall.Write(fd.FD, []byte("Hello from request 1\n"))
+
+	if err := c.Call("Obj.GetStdOut", struct{}{}, &fd); err != nil {
+		log.Fatal(err)
+	}
+	syscall.Write(fd.FD, []byte("Hello from request 2\n"))
+
+	var streams []fdrpc.FD
+	if err := c.Call("Obj.GetStreams", struct{}{}, &streams); err != nil {
+		log.Fatal(err)
+	}
+	syscall.Write(streams[0].FD, []byte("Hello stdout\n"))
+	syscall.Write(streams[1].FD, []byte("Hello stderr\n"))
 }

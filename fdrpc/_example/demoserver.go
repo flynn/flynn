@@ -10,25 +10,28 @@ import (
 	"github.com/titanous/fdrpc"
 )
 
-type RpcObject struct {
+type Obj struct {
 }
 
-func (o *RpcObject) GetStdOut(a int, b *fdrpc.FD) error {
-	fmt.Printf("GetStdOut %d\n", a)
+func (o *Obj) GetStdOut(a struct{}, b *fdrpc.FD) error {
+	fmt.Println("GetStdOut")
 	b.FD = 1
 	return nil
 }
 
-func main() {
-	object := &RpcObject{}
+func (o *Obj) GetStreams(a struct{}, b *[]fdrpc.FD) error {
+	fmt.Println("GetStreams")
+	*b = []fdrpc.FD{{1}, {2}}
+	return nil
+}
 
-	if err := rpc.Register(object); err != nil {
+func main() {
+	if err := rpc.Register(&Obj{}); err != nil {
 		log.Fatal(err)
 	}
 
 	os.Remove("/tmp/test.socket")
-	addr := &net.UnixAddr{Net: "unix", Name: "/tmp/test.socket"}
-	listener, err := net.ListenUnix("unix", addr)
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Net: "unix", Name: "/tmp/test.socket"})
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -97,14 +97,23 @@ func (c *gobClientCodec) ReadResponseBody(body interface{}) error {
 	if err := c.dec.Decode(body); err != nil {
 		return err
 	}
-	if fd, ok := body.(*FD); ok {
-		index := fd.FD
-		newFD, err := c.fdReader.GetFD(index)
+
+	var err error
+	switch f := body.(type) {
+	case *FD:
+		f.FD, err = c.fdReader.GetFD(f.FD)
 		if err != nil {
 			return err
 		}
-		fd.FD = newFD
+	case *[]FD:
+		for i, fd := range *f {
+			(*f)[i].FD, err = c.fdReader.GetFD(fd.FD)
+			if err != nil {
+				return err
+			}
+		}
 	}
+
 	return nil
 }
 
