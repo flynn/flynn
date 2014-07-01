@@ -1,12 +1,13 @@
 package main
 
 import (
-	"fdrpc"
 	"fmt"
 	"log"
 	"net"
 	"net/rpc"
 	"os"
+
+	"github.com/titanous/fdrpc"
 )
 
 type RpcObject struct {

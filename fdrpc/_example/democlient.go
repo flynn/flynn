@@ -1,11 +1,12 @@
 package main
 
 import (
-	"fdrpc"
 	"fmt"
 	"net"
 	"net/rpc"
 	"syscall"
+
+	"github.com/titanous/fdrpc"
 )
 
 func main() {
