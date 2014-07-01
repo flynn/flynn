@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
-	"net/rpc"
 	"os"
 
+	"github.com/flynn/rpcplus"
 	"github.com/titanous/fdrpc"
 )
 
@@ -25,7 +25,7 @@ func (o *Obj) GetStreams(a struct{}, b *[]fdrpc.FD) error {
 }
 
 func main() {
-	if err := rpc.Register(&Obj{}); err != nil {
+	if err := rpcplus.Register(&Obj{}); err != nil {
 		log.Fatal(err)
 	}
 

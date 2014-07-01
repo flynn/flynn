@@ -5,8 +5,9 @@ import (
 	"encoding/gob"
 	"log"
 	"net"
-	"net/rpc"
 	"syscall"
+
+	"github.com/flynn/rpcplus"
 )
 
 type FDWriter struct {
@@ -52,7 +53,7 @@ type gobServerCodec struct {
 	encBuf   *bufio.Writer
 }
 
-func (c *gobServerCodec) ReadRequestHeader(r *rpc.Request) error {
+func (c *gobServerCodec) ReadRequestHeader(r *rpcplus.Request) error {
 	return c.dec.Decode(r)
 }
 
@@ -60,7 +61,7 @@ func (c *gobServerCodec) ReadRequestBody(body interface{}) error {
 	return c.dec.Decode(body)
 }
 
-func (c *gobServerCodec) WriteResponse(r *rpc.Response, body interface{}) (err error) {
+func (c *gobServerCodec) WriteResponse(r *rpcplus.Response, body interface{}, last bool) (err error) {
 	switch f := body.(type) {
 	case *FD:
 		f.FD = c.fdWriter.AddFD(f.FD)
@@ -104,5 +105,5 @@ func ServeConn(conn *net.UnixConn) {
 	fdWriter := NewFDWriter(conn)
 	buf := bufio.NewWriter(fdWriter)
 	srv := &gobServerCodec{fdWriter, gob.NewDecoder(fdWriter), gob.NewEncoder(buf), buf}
-	rpc.ServeCodec(srv)
+	rpcplus.ServeCodec(srv)
 }

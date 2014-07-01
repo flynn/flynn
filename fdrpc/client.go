@@ -5,8 +5,9 @@ import (
 	"encoding/gob"
 	"fmt"
 	"net"
-	"net/rpc"
 	"syscall"
+
+	"github.com/flynn/rpcplus"
 )
 
 type FD struct {
@@ -79,7 +80,7 @@ type gobClientCodec struct {
 	encBuf   *bufio.Writer
 }
 
-func (c *gobClientCodec) WriteRequest(r *rpc.Request, body interface{}) (err error) {
+func (c *gobClientCodec) WriteRequest(r *rpcplus.Request, body interface{}) (err error) {
 	if err = c.enc.Encode(r); err != nil {
 		return
 	}
@@ -89,7 +90,7 @@ func (c *gobClientCodec) WriteRequest(r *rpc.Request, body interface{}) (err err
 	return c.encBuf.Flush()
 }
 
-func (c *gobClientCodec) ReadResponseHeader(r *rpc.Response) error {
+func (c *gobClientCodec) ReadResponseHeader(r *rpcplus.Response) error {
 	return c.dec.Decode(r)
 }
 
@@ -121,14 +122,14 @@ func (c *gobClientCodec) Close() error {
 	return c.fdReader.Close()
 }
 
-func NewClient(conn *net.UnixConn) *rpc.Client {
+func NewClient(conn *net.UnixConn) *rpcplus.Client {
 	fdReader := NewFDReader(conn)
 	encBuf := bufio.NewWriter(fdReader)
 	client := &gobClientCodec{fdReader, gob.NewDecoder(fdReader), gob.NewEncoder(encBuf), encBuf}
-	return rpc.NewClientWithCodec(client)
+	return rpcplus.NewClientWithCodec(client)
 }
 
-func Dial(path string) (*rpc.Client, error) {
+func Dial(path string) (*rpcplus.Client, error) {
 	conn, err := net.DialUnix("unix", nil, &net.UnixAddr{Net: "unix", Name: path})
 	if err != nil {
 		return nil, err
