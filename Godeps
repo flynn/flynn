@@ -25,7 +25,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-host/types",
-			"Rev": "96333d0fb6fba566dab6a3ccb9b5ca10a9fcb3c6"
+			"Rev": "26d417f0a304f76f7ea706f4aa282434263b80a2"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-discoverd",
@@ -37,31 +37,31 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/attempt",
-			"Rev": "c88823a638e8dc828d6623252f9132262a71e791"
+			"Rev": "cd82333194564c6684118dfc1b8fea09d6bef30f"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/cluster",
-			"Rev": "c88823a638e8dc828d6623252f9132262a71e791"
+			"Rev": "cd82333194564c6684118dfc1b8fea09d6bef30f"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/demultiplex",
-			"Rev": "c88823a638e8dc828d6623252f9132262a71e791"
+			"Rev": "cd82333194564c6684118dfc1b8fea09d6bef30f"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/migrate",
-			"Rev": "c88823a638e8dc828d6623252f9132262a71e791"
+			"Rev": "cd82333194564c6684118dfc1b8fea09d6bef30f"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/pinned",
-			"Rev": "c88823a638e8dc828d6623252f9132262a71e791"
+			"Rev": "cd82333194564c6684118dfc1b8fea09d6bef30f"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/postgres",
-			"Rev": "c88823a638e8dc828d6623252f9132262a71e791"
+			"Rev": "cd82333194564c6684118dfc1b8fea09d6bef30f"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/resource",
-			"Rev": "c88823a638e8dc828d6623252f9132262a71e791"
+			"Rev": "cd82333194564c6684118dfc1b8fea09d6bef30f"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-sql",

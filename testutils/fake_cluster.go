@@ -16,6 +16,8 @@ type FakeCluster struct {
 	hosts       map[string]host.Host
 	hostClients map[string]*FakeHostClient
 	mtx         sync.RWMutex
+	listeners   []chan<- *host.HostEvent
+	listenMtx   sync.RWMutex
 }
 
 func (c *FakeCluster) ListHosts() (map[string]host.Host, error) {
@@ -98,7 +100,40 @@ func (c *FakeCluster) SetHosts(h map[string]host.Host) {
 	c.hosts = h
 }
 
+func (c *FakeCluster) AddHost(id string, h host.Host) {
+	c.hosts[id] = h
+}
+
 func (c *FakeCluster) SetHostClient(id string, h *FakeHostClient) {
 	h.cluster = c
 	c.hostClients[id] = h
+}
+
+func (c *FakeCluster) StreamHostEvents(ch chan<- *host.HostEvent) cluster.Stream {
+	c.listenMtx.Lock()
+	defer c.listenMtx.Unlock()
+	c.listeners = append(c.listeners, ch)
+	return &FakeClusterHostEventStream{ch: ch}
+}
+
+func (c *FakeCluster) SendEvent(hostID, event string) {
+	c.listenMtx.RLock()
+	defer c.listenMtx.RUnlock()
+	e := &host.HostEvent{HostID: hostID, Event: event}
+	for _, ch := range c.listeners {
+		ch <- e
+	}
+}
+
+type FakeClusterHostEventStream struct {
+	ch chan<- *host.HostEvent
+}
+
+func (h *FakeClusterHostEventStream) Close() error {
+	close(h.ch)
+	return nil
+}
+
+func (h *FakeClusterHostEventStream) Err() error {
+	return nil
 }
