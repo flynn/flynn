@@ -220,6 +220,10 @@ func (c *Client) RemoveJobs(jobIDs []string) error {
 	return client.Call("Cluster.RemoveJobs", jobIDs, &struct{}{})
 }
 
+func (c *Client) StreamHostEvents(ch chan<- *host.HostEvent) Stream {
+	return rpcStream{c.c.StreamGo("Cluster.StreamHostEvents", struct{}{}, ch)}
+}
+
 func (c *Client) RPCClient() (RPCClient, error) {
 	c.mtx.RLock()
 	defer c.mtx.RUnlock()
