@@ -32,6 +32,9 @@ func (r *FDReader) Read(b []byte) (int, error) {
 	oob := make([]byte, 32)
 	n, oobn, _, _, err := r.conn.ReadMsgUnix(b, oob)
 	if err != nil {
+		if n < 0 {
+			n = 0
+		}
 		return n, err
 	}
 	if oobn > 0 {
