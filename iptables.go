@@ -48,10 +48,10 @@ func NewChain(name, bridge string) (*Chain, error) {
 	}
 
 	if err := chain.Prerouting(Add, "-m", "addrtype", "--dst-type", "LOCAL"); err != nil {
-		return nil, fmt.Errorf("Failed to inject docker in PREROUTING chain: %s", err)
+		return nil, fmt.Errorf("Failed to inject update PREROUTING chain: %s", err)
 	}
 	if err := chain.Output(Add, "-m", "addrtype", "--dst-type", "LOCAL", "!", "--dst", "127.0.0.0/8"); err != nil {
-		return nil, fmt.Errorf("Failed to inject docker in OUTPUT chain: %s", err)
+		return nil, fmt.Errorf("Failed to inject update OUTPUT chain: %s", err)
 	}
 	return chain, nil
 }
