@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/flynn/flynn-host",
-	"GoVersion": "go1.2.1",
+	"GoVersion": "go1.3",
 	"Deps": [
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
@@ -9,11 +9,11 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/discoverd/agent",
-			"Rev": "e8e6fbf2d0c8995114594ed027cdc509cffdcdf1"
+			"Rev": "98fbb6a0c29a087c055734e539690d8176d14517"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-discoverd",
-			"Rev": "b07cd6bbd7d9b6144e7faa45fae67e0abc08c89d"
+			"Rev": "0325ff35b2495314ea7ebfc55e4e5b4408c3b78f"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-dockerclient",
@@ -29,7 +29,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
-			"Rev": "05df3d30b6e55f5b440c1a78e2f83cb822bc0d76"
+			"Rev": "cd680b2cd620be36cd39a58270c6a2894dd2e810"
 		},
 		{
 			"ImportPath": "github.com/technoweenie/grohl",
