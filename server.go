@@ -609,12 +609,12 @@ func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface
 			done:    done,
 			stop:    stop,
 		})
-		go func() {
+		go func(seq uint64) {
 			<-done
 			stopChansMtx.Lock()
-			delete(stopChans, req.Seq)
+			delete(stopChans, seq)
 			stopChansMtx.Unlock()
-		}()
+		}(req.Seq)
 	}
 	close(eof)
 	codec.Close()
