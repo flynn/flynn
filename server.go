@@ -435,6 +435,7 @@ func (s *service) call(c call) {
 		}
 		c.server.sendResponse(c.sending, c.req, c.replyv.Interface(), c.codec, errmsg, true)
 		c.server.freeRequest(c.req)
+		close(c.done)
 		return
 	}
 
