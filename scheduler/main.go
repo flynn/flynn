@@ -234,11 +234,6 @@ func (c *context) watchHost(id string, events chan<- *host.Event) {
 
 	g := grohl.NewContext(grohl.Data{"fn": "watchHost", "host.id": id})
 
-	// Nil event to mark the start of watching a host
-	if events != nil {
-		events <- nil
-	}
-
 	h, err := c.DialHost(id)
 	if err != nil {
 		// TODO: log/handle error
@@ -249,6 +244,12 @@ func (c *context) watchHost(id string, events chan<- *host.Event) {
 
 	ch := make(chan *host.Event)
 	h.StreamEvents("all", ch)
+
+	// Nil event to mark the start of watching a host
+	if events != nil {
+		events <- nil
+	}
+
 	for event := range ch {
 		job := c.jobs.Get(id, event.JobID)
 		if job == nil {
