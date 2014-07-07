@@ -61,6 +61,7 @@ func (s *Cluster) RegisterHost(hostID *string, h *host.Host, stream rpcplus.Stre
 	jobs := make(chan *host.Job)
 	s.state.AddHost(h, jobs)
 	s.state.Commit()
+	go s.state.sendEvent(h.ID, "add")
 
 	var err error
 outer:
@@ -81,6 +82,7 @@ outer:
 	s.state.Begin()
 	s.state.RemoveHost(h.ID)
 	s.state.Commit()
+	go s.state.sendEvent(h.ID, "remove")
 	if err == io.EOF {
 		err = nil
 	}
@@ -92,4 +94,30 @@ func (s *Cluster) RemoveJobs(hostID *string, jobIDs []string, res *struct{}) err
 	s.state.RemoveJobs(*hostID, jobIDs...)
 	s.state.Commit()
 	return nil
+}
+
+func (s *Cluster) StreamHostEvents(arg struct{}, stream rpcplus.Stream) error {
+	ch := make(chan host.HostEvent)
+	s.state.AddListener(ch)
+	defer func() {
+		go func() {
+			// drain to prevent deadlock while removing the listener
+			for _ = range ch {
+			}
+		}()
+		s.state.RemoveListener(ch)
+		close(ch)
+	}()
+	for {
+		select {
+		case event := <-ch:
+			select {
+			case stream.Send <- event:
+			case <-stream.Error:
+				return nil
+			}
+		case <-stream.Error:
+			return nil
+		}
+	}
 }

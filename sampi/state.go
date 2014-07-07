@@ -14,7 +14,9 @@ type State struct {
 	curr *map[string]host.Host
 	next *map[string]host.Host
 
-	streams map[string]chan<- *host.Job
+	listeners map[chan host.HostEvent]struct{}
+	listenMtx sync.RWMutex
+	streams   map[string]chan<- *host.Job
 
 	deleted      map[string]struct{}
 	nextModified bool
@@ -130,4 +132,25 @@ func (s *State) RemoveHost(id string) {
 	s.deleted[id] = struct{}{}
 	delete(s.streams, id)
 	s.nextModified = true
+}
+
+func (s *State) AddListener(ch chan host.HostEvent) {
+	s.listenMtx.Lock()
+	s.listeners[ch] = struct{}{}
+	s.listenMtx.Unlock()
+}
+
+func (s *State) RemoveListener(ch chan host.HostEvent) {
+	s.listenMtx.Lock()
+	delete(s.listeners, ch)
+	s.listenMtx.Unlock()
+}
+
+func (s *State) sendEvent(hostID, event string) {
+	s.listenMtx.RLock()
+	defer s.listenMtx.RUnlock()
+	e := host.HostEvent{HostID: hostID, Event: event}
+	for ch := range s.listeners {
+		ch <- e
+	}
 }
