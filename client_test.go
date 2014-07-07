@@ -323,7 +323,7 @@ func TestFiltering(t *testing.T) {
 	}
 
 	assert(client.RegisterWithAttributes(serviceName, ":3333", map[string]string{"foo": "qux", "id": "3"}), t)
-	waitUpdates(t, watchSet, true, 3)()
+	waitUpdates(t, set, true, 2)()
 	if s := set.Services(); len(s) < 2 {
 		t.Fatalf("Filter not letting new matching services in set: %#v", s[0])
 	}
