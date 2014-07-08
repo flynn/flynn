@@ -5,6 +5,8 @@ package discoverd
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -32,13 +34,16 @@ type Service struct {
 }
 
 type serviceSet struct {
-	l        sync.Mutex
-	services map[string]*Service
-	filters  map[string]string
-	watches  map[chan *agent.ServiceUpdate]struct{}
-	call     *rpcplus.Call
-	self     *Service
-	selfAddr string
+	l         sync.Mutex
+	services  map[string]*Service
+	filters   map[string]string
+	watches   map[chan *agent.ServiceUpdate]struct{}
+	call      *rpcplus.Call
+	self      *Service
+	selfAddr  string
+	closed    bool
+	closedMtx sync.RWMutex
+	c         *Client
 }
 
 // A ServiceSet is long-running query of services, giving you a real-time representation of a
@@ -101,12 +106,12 @@ func copyService(service *Service) *Service {
 	return &s
 }
 
-func makeServiceSet(call *rpcplus.Call) *serviceSet {
+func makeServiceSet(c *Client) *serviceSet {
 	return &serviceSet{
 		services: make(map[string]*Service),
 		filters:  make(map[string]string),
 		watches:  make(map[chan *agent.ServiceUpdate]struct{}),
-		call:     call,
+		c:        c,
 	}
 }
 
@@ -114,52 +119,100 @@ func (s *serviceSet) SelfAddr() string {
 	return s.selfAddr
 }
 
-func (s *serviceSet) bind(updates chan *agent.ServiceUpdate) chan struct{} {
+func (s *serviceSet) bind(name string) chan error {
 	// current is an event when enough service updates have been
 	// received to bring us to "current" state (when subscribed)
-	current := make(chan struct{})
+	current := make(chan error)
 	go func() {
 		isCurrent := false
-		for update := range updates {
-			if update.Addr == "" && update.Name == "" && !isCurrent {
-				close(current)
-				isCurrent = true
-				continue
+		// known is set after reconnecting so we can compare it with the current state
+		// returned by discoverd to determine if any services have gone offline whilst
+		// we were disconnected
+		var known map[string]*Service
+		// services is used to store updates so that when we are receiving the state
+		// from discoverd after reconnecting, s.services continues to contain the services
+		// prior to disconnection until we reach current state
+		services := make(map[string]*Service)
+		for {
+			if len(s.services) == 0 {
+				// we may as well keep s.services in sync if it's empty
+				s.setServices(services)
 			}
-			s.l.Lock()
-			if s.filters != nil && !s.matchFilters(update.Attrs) {
-				s.l.Unlock()
-				continue
-			}
-			// add a new service if the address is unrecognized
-			// and the address is online
-			if s.selfAddr != update.Addr && update.Online {
-				if _, exists := s.services[update.Addr]; !exists {
-					host, port, _ := net.SplitHostPort(update.Addr)
-					s.services[update.Addr] = &Service{
-						Name:    update.Name,
-						Addr:    update.Addr,
-						Host:    host,
-						Port:    port,
-						Created: update.Created,
-					}
-				}
-				s.services[update.Addr].Attrs = update.Attrs
-			} else {
-				if _, exists := s.services[update.Addr]; exists {
-					delete(s.services, update.Addr)
-				} else {
-					if s.selfAddr == update.Addr {
-						s.l.Unlock()
-						s.updateWatches(update)
+			updates := make(chan *agent.ServiceUpdate)
+			client, call := s.c.streamGo("Agent.Subscribe", &agent.Args{
+				Name: name,
+			}, updates)
+			s.call = call
+			for update := range updates {
+				if update.Addr == "" && update.Name == "" {
+					if isCurrent {
+						// check if any known services have gone offline
+						for _, service := range known {
+							if _, exists := services[service.Addr]; !exists {
+								s.updateWatches(&agent.ServiceUpdate{
+									Name:    service.Name,
+									Addr:    service.Addr,
+									Online:  false,
+									Attrs:   service.Attrs,
+									Created: service.Created,
+								})
+							}
+						}
+						s.setServices(services)
 					} else {
-						s.l.Unlock()
+						close(current)
+						isCurrent = true
 					}
 					continue
 				}
+				s.l.Lock()
+				if s.filters != nil && !s.matchFilters(update.Attrs) {
+					s.l.Unlock()
+					continue
+				}
+				// add a new service if the address is unrecognized
+				// and the address is online
+				if s.selfAddr != update.Addr && update.Online {
+					if _, exists := services[update.Addr]; !exists {
+						host, port, _ := net.SplitHostPort(update.Addr)
+						services[update.Addr] = &Service{
+							Name:    update.Name,
+							Addr:    update.Addr,
+							Host:    host,
+							Port:    port,
+							Created: update.Created,
+						}
+					}
+					services[update.Addr].Attrs = update.Attrs
+				} else {
+					if _, exists := services[update.Addr]; exists {
+						delete(services, update.Addr)
+					} else {
+						s.l.Unlock()
+						if s.selfAddr == update.Addr {
+							s.updateWatches(update)
+						}
+						continue
+					}
+				}
+				s.l.Unlock()
+				s.updateWatches(update)
 			}
-			s.l.Unlock()
-			s.updateWatches(update)
+			if (s.call.Error == rpcplus.ErrShutdown || s.call.Error == io.ErrUnexpectedEOF) && !s.isClosed() {
+				if !isCurrent {
+					current <- ErrDisconnected
+					go s.c.reconnect(client)
+				} else {
+					err := s.c.reconnect(client)
+					if err == nil {
+						known = services
+						services = make(map[string]*Service)
+						continue
+					}
+					log.Printf("discover: failed to reconnect: %s", err)
+				}
+			}
+			break
 		}
 		s.closeWatches()
 	}()
@@ -250,6 +303,12 @@ func (s *serviceSet) Services() []*Service {
 	return list
 }
 
+func (s *serviceSet) setServices(services map[string]*Service) {
+	s.l.Lock()
+	defer s.l.Unlock()
+	s.services = services
+}
+
 func (s *serviceSet) Addrs() []string {
 	list := make([]string, 0, len(s.services))
 	for _, service := range s.Services() {
@@ -320,25 +379,59 @@ func (s *serviceSet) Unwatch(ch chan *agent.ServiceUpdate) {
 }
 
 func (s *serviceSet) Close() error {
+	s.setClosed()
 	return s.call.CloseStream()
 }
+
+func (s *serviceSet) isClosed() bool {
+	s.closedMtx.RLock()
+	defer s.closedMtx.RUnlock()
+	return s.closed
+}
+
+func (s *serviceSet) setClosed() {
+	s.closedMtx.Lock()
+	defer s.closedMtx.Unlock()
+	s.closed = true
+}
+
+type ConnEvent struct {
+	Status ConnStatus
+}
+
+type ConnStatus uint8
+
+const (
+	ConnStatusConnected ConnStatus = iota
+	ConnStatusDisconnected
+	ConnStatusConnectFailed
+)
 
 // A Client maintains the RPC client connection and any active registered services, making sure
 // they receive their heartbeat calls.
 type Client struct {
-	l             sync.Mutex
-	client        *rpcplus.Client
-	heartbeats    map[string]chan struct{}
-	expandedAddrs map[string]string
-	names         map[string]string
+	l                sync.Mutex
+	client           *rpcplus.Client
+	addr             string
+	heartbeats       map[string]chan struct{}
+	expandedAddrs    map[string]string
+	names            map[string]string
+	reconnecting     bool
+	reconnMtx        sync.RWMutex
+	clientMtx        sync.RWMutex
+	closed           bool
+	closedMtx        sync.RWMutex
+	reconnectWatches map[chan ConnEvent]struct{}
 }
 
-func newClient(c *rpcplus.Client) *Client {
+func newClient(c *rpcplus.Client, addr string) *Client {
 	return &Client{
-		client:        c,
-		heartbeats:    make(map[string]chan struct{}),
-		expandedAddrs: make(map[string]string),
-		names:         make(map[string]string),
+		client:           c,
+		addr:             addr,
+		heartbeats:       make(map[string]chan struct{}),
+		expandedAddrs:    make(map[string]string),
+		names:            make(map[string]string),
+		reconnectWatches: make(map[chan ConnEvent]struct{}),
 	}
 }
 
@@ -356,21 +449,21 @@ func NewClient() (*Client, error) {
 
 func NewClientWithAddr(addr string) (*Client, error) {
 	c, err := rpcplus.DialHTTP("tcp", addr)
-	return newClient(c), err
+	return newClient(c, addr), err
 }
 
 func NewClientWithRPCClient(c *rpcplus.Client) *Client {
-	return newClient(c)
+	return newClient(c, "")
 }
 
+var ErrDisconnected = errors.New("discover: no active rpc connection")
+
 func (c *Client) newServiceSet(name string) (*serviceSet, error) {
-	updates := make(chan *agent.ServiceUpdate)
-	call := c.client.StreamGo("Agent.Subscribe", &agent.Args{
-		Name: name,
-	}, updates)
-	set := makeServiceSet(call)
-	<-set.bind(updates)
-	return set, nil
+	if c.isReconnecting() {
+		return nil, ErrDisconnected
+	}
+	set := makeServiceSet(c)
+	return set, <-set.bind(name)
 }
 
 // NewServiceSet will produce a ServiceSet for a given service name.
@@ -470,8 +563,11 @@ func (c *Client) RegisterWithAttributes(name, addr string, attributes map[string
 		Attrs: attributes,
 	}
 	var ret string
-	err := c.client.Call("Agent.Register", args, &ret)
+	err := c.call("Agent.Register", args, &ret, false)
 	if err != nil {
+		if err == ErrDisconnected {
+			return err
+		}
 		return errors.New("discover: register failed: " + err.Error())
 	}
 	done := make(chan struct{})
@@ -491,9 +587,9 @@ func (c *Client) RegisterWithAttributes(name, addr string, attributes map[string
 			select {
 			case <-ticker.C:
 				// heartbeat
-				err := c.client.Call("Agent.Register", args, &ret)
+				err := c.call("Agent.Register", args, &ret, true)
 				if err != nil {
-					log.Printf("discover: heartbeat %s (%s) failed: %s", name, addr, err)
+					log.Printf("discover: heartbeat %s (%s) failed: %s", args.Name, args.Addr, err)
 				}
 			case <-done:
 				return
@@ -501,6 +597,111 @@ func (c *Client) RegisterWithAttributes(name, addr string, attributes map[string
 		}
 	}()
 	return nil
+}
+
+func (c *Client) rpcClient() *rpcplus.Client {
+	c.clientMtx.RLock()
+	defer c.clientMtx.RUnlock()
+	return c.client
+}
+
+func (c *Client) call(method string, args interface{}, reply interface{}, waitForReconnect bool) error {
+	if !waitForReconnect && c.isReconnecting() {
+		return ErrDisconnected
+	}
+	client := c.rpcClient()
+	err := client.Call(method, args, reply)
+	if err == rpcplus.ErrShutdown || err == io.ErrUnexpectedEOF {
+		if waitForReconnect {
+			err = c.reconnect(client)
+			if err != nil {
+				return fmt.Errorf("%s, reconnect failed: %s", rpcplus.ErrShutdown, err)
+			}
+			// try again
+			return c.call(method, args, reply, waitForReconnect)
+		}
+		go c.reconnect(client)
+		return ErrDisconnected
+	}
+	return err
+}
+
+func (c *Client) streamGo(method string, args interface{}, reply interface{}) (*rpcplus.Client, *rpcplus.Call) {
+	client := c.rpcClient()
+	return client, client.StreamGo(method, args, reply)
+}
+
+func (c *Client) reconnect(disconnectedClient *rpcplus.Client) error {
+	if c.addr == "" {
+		c.notify(ConnStatusDisconnected)
+		return errors.New("no reconnect address set")
+	}
+	c.clientMtx.Lock()
+	defer c.clientMtx.Unlock()
+	if disconnectedClient != c.client {
+		// another goroutine has already reconnected
+		return nil
+	}
+	c.setReconnecting(true)
+	c.notify(ConnStatusDisconnected)
+	for {
+		if c.isClosed() {
+			return ErrDisconnected
+		}
+		log.Printf("discover: reconnecting to %s", c.addr)
+		client, err := rpcplus.DialHTTP("tcp", c.addr)
+		if err != nil {
+			c.notify(ConnStatusConnectFailed)
+			log.Printf("discover: failed to reconnect to %s: %s", c.addr, err)
+			time.Sleep(time.Second)
+			continue
+		}
+		log.Printf("discover: reconnected to %s", c.addr)
+		c.client = client
+		c.setReconnecting(false)
+		c.notify(ConnStatusConnected)
+		return nil
+	}
+}
+
+func (c *Client) isReconnecting() bool {
+	c.reconnMtx.RLock()
+	defer c.reconnMtx.RUnlock()
+	return c.reconnecting
+}
+
+func (c *Client) setReconnecting(v bool) {
+	c.reconnMtx.Lock()
+	defer c.reconnMtx.Unlock()
+	c.reconnecting = v
+}
+
+func (c *Client) WatchReconnects() chan ConnEvent {
+	ch := make(chan ConnEvent)
+	c.l.Lock()
+	defer c.l.Unlock()
+	c.reconnectWatches[ch] = struct{}{}
+	return ch
+}
+
+func (c *Client) UnwatchReconnects(ch chan ConnEvent) {
+	go func() {
+		// drain channel to prevent deadlock
+		for _ = range ch {
+		}
+	}()
+	c.l.Lock()
+	delete(c.reconnectWatches, ch)
+	c.l.Unlock()
+	close(ch)
+}
+
+func (c *Client) notify(s ConnStatus) {
+	c.l.Lock()
+	defer c.l.Unlock()
+	for ch, _ := range c.reconnectWatches {
+		ch <- ConnEvent{s}
+	}
 }
 
 // ErrUnknownRegistration is returned by Unregister when no registration is found.
@@ -522,7 +723,7 @@ func (c *Client) Unregister(name, addr string) error {
 	close(ch)
 	delete(c.heartbeats, args.Addr)
 	c.l.Unlock()
-	err := c.client.Call("Agent.Unregister", args, &struct{}{})
+	err := c.call("Agent.Unregister", args, &struct{}{}, false)
 	if err != nil {
 		return errors.New("discover: unregister failed: " + err.Error())
 	}
@@ -554,7 +755,20 @@ func (c *Client) Close() error {
 	for _, ch := range c.heartbeats {
 		close(ch)
 	}
-	return c.client.Close()
+	c.setClosed()
+	return c.rpcClient().Close()
+}
+
+func (c *Client) isClosed() bool {
+	c.closedMtx.RLock()
+	defer c.closedMtx.RUnlock()
+	return c.closed
+}
+
+func (c *Client) setClosed() {
+	c.closedMtx.Lock()
+	defer c.closedMtx.Unlock()
+	c.closed = true
 }
 
 // DefaultClient is used by all of the top-level functions. Connect must be

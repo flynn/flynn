@@ -2,6 +2,7 @@ package discoverd_test
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -166,11 +167,11 @@ func logOutput(name string, rs ...io.Reader) {
 	wg.Wait()
 }
 
-func runDiscoverdServer(t *testing.T) func() {
+func runDiscoverdServer(t *testing.T, addr string) func() {
 	killCh := make(chan struct{})
 	doneCh := make(chan struct{})
 	go func() {
-		cmd := exec.Command("discoverd")
+		cmd := exec.Command("discoverd", "-bind", addr)
 		cmd.Env = append(os.Environ(), "EXTERNAL_IP=127.0.0.1")
 		stderr, _ := cmd.StderrPipe()
 		stdout, _ := cmd.StdoutPipe()
@@ -205,18 +206,26 @@ func runDiscoverdServer(t *testing.T) func() {
 	}
 }
 
-func setup(t *testing.T) (*discoverd.Client, func()) {
-	killEtcd := runEtcdServer(t)
-	killDiscoverd := runDiscoverdServer(t)
+func bootDiscoverd(t *testing.T, addr string) (*discoverd.Client, func()) {
+	if addr == "" {
+		addr = "127.0.0.1:1111"
+	}
+	killDiscoverd := runDiscoverdServer(t, addr)
 
 	var client *discoverd.Client
 	err := Attempts.Run(func() (err error) {
-		client, err = discoverd.NewClient()
+		client, err = discoverd.NewClientWithAddr(addr)
 		return
 	})
 	if err != nil {
 		t.Fatalf("Failed to connect to discoverd: %q", err)
 	}
+	return client, killDiscoverd
+}
+
+func setup(t *testing.T) (*discoverd.Client, func()) {
+	killEtcd := runEtcdServer(t)
+	client, killDiscoverd := bootDiscoverd(t, "")
 
 	return client, func() {
 		client.UnregisterAll()
@@ -244,6 +253,92 @@ func waitUpdates(t *testing.T, set discoverd.ServiceSet, bringCurrent bool, n in
 			case <-time.After(3 * time.Second):
 				t.Fatalf("Update wait %d timed out", i)
 			}
+		}
+	}
+}
+
+func checkUpdates(updates chan *agent.ServiceUpdate, expected []*agent.ServiceUpdate) error {
+	for _, u := range expected {
+		if err := checkUpdate(updates, u); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkUpdate(updates chan *agent.ServiceUpdate, expected *agent.ServiceUpdate) error {
+	select {
+	case u := <-updates:
+		if !updatesEqual(u, expected) {
+			return fmt.Errorf("Expected update: %v, got %v", expected, u)
+		}
+		return nil
+	case <-time.After(3 * time.Second):
+		return fmt.Errorf("Timed out waiting for update: %v", expected)
+	}
+}
+
+func updatesEqual(a, b *agent.ServiceUpdate) bool {
+	if a.Name != b.Name || a.Addr != b.Addr || a.Online != b.Online {
+		return false
+	}
+	for key, val := range a.Attrs {
+		v, exists := b.Attrs[key]
+		if !exists || v != val {
+			return false
+		}
+	}
+	return true
+}
+
+func checkServices(t *testing.T, actual []*discoverd.Service, expected []*discoverd.Service) {
+	for _, service := range actual {
+		if !includesService(expected, service) {
+			t.Fatalf("Expected %#v to include %v", actual, service)
+		}
+	}
+}
+
+func includesService(services []*discoverd.Service, service *discoverd.Service) bool {
+	for _, s := range services {
+		if servicesEqual(s, service) {
+			return true
+		}
+	}
+	return false
+}
+
+func servicesEqual(a, b *discoverd.Service) bool {
+	if a.Name != b.Name || a.Host != b.Host || a.Port != b.Port || a.Addr != b.Addr {
+		return false
+	}
+	for key, val := range a.Attrs {
+		v, exists := b.Attrs[key]
+		if !exists || v != val {
+			return false
+		}
+	}
+	return true
+}
+
+func waitForConnStatus(t *testing.T, ch chan discoverd.ConnEvent, status discoverd.ConnStatus) {
+	failureThreshold := 5
+	for {
+		select {
+		case e := <-ch:
+			if status == discoverd.ConnStatusConnected && e.Status == discoverd.ConnStatusConnectFailed {
+				failureThreshold--
+				if failureThreshold == 0 {
+					t.Fatalf("Too many failures waiting for reconnection")
+				}
+				continue
+			}
+			if e.Status != status {
+				t.Fatalf("Expected connection status %d, got %d", status, e.Status)
+			}
+			return
+		case <-time.After(3 * time.Second):
+			t.Fatalf("Timed out waiting for connection status: %d", status)
 		}
 	}
 }
@@ -373,6 +468,131 @@ func TestServices(t *testing.T) {
 	if len(services) != 2 {
 		t.Fatal("Not all registered services were returned:", services)
 	}
+}
+
+func TestReconnect(t *testing.T) {
+	clientA, cleanup := setup(t)
+	defer cleanup()
+
+	clientB, killDiscoverd := bootDiscoverd(t, "127.0.0.1:1112")
+	defer func() {
+		clientB.UnregisterAll()
+		clientB.Close()
+		killDiscoverd()
+	}()
+
+	service1 := "serviceReconnect-1"
+	service2 := "serviceReconnect-2"
+
+	assert(clientA.Register(service1, ":1111"), t)
+	assert(clientA.Register(service1, ":2222"), t)
+	assert(clientA.Register(service2, ":1111"), t)
+	assert(clientA.Register(service2, ":2222"), t)
+
+	set1, err := clientB.NewServiceSet(service1)
+	assert(err, t)
+	waitUpdates(t, set1, true, 2)()
+
+	set2, err := clientB.NewServiceSet(service2)
+	assert(err, t)
+	waitUpdates(t, set2, true, 2)()
+
+	updates1 := set1.Watch(false)
+	updates2 := set2.Watch(false)
+
+	reconnCh := clientB.WatchReconnects()
+	defer clientB.UnwatchReconnects(reconnCh)
+
+	killDiscoverd()
+
+	waitForConnStatus(t, reconnCh, discoverd.ConnStatusDisconnected)
+
+	if err := clientB.Register(service1, ":3333"); err != discoverd.ErrDisconnected {
+		t.Fatal("expected ErrDisconnected from clientB, got:", err)
+	}
+
+	if _, err := clientB.Services(service2, 1); err != discoverd.ErrDisconnected {
+		t.Fatal("expected ErrDisconnected from clientB, got:", err)
+	}
+
+	assert(clientA.RegisterWithAttributes(service1, ":1111", map[string]string{"foo": "bar"}), t)
+	assert(clientA.Unregister(service1, ":2222"), t)
+	assert(clientA.Unregister(service2, ":1111"), t)
+	assert(clientA.Register(service2, ":3333"), t)
+
+	killDiscoverd = runDiscoverdServer(t, "127.0.0.1:1112")
+
+	waitForConnStatus(t, reconnCh, discoverd.ConnStatusConnected)
+
+	// use goroutines to check for updates so slow watchers don't block the rpc stream
+	updateErrors := make(chan error)
+	go func() {
+		updateErrors <- checkUpdates(updates1, []*agent.ServiceUpdate{
+			{
+				Name:   service1,
+				Addr:   "127.0.0.1:1111",
+				Online: true,
+				Attrs:  map[string]string{"foo": "bar"},
+			},
+			{
+				Name:   service1,
+				Addr:   "127.0.0.1:2222",
+				Online: false,
+			},
+		})
+	}()
+	go func() {
+		updateErrors <- checkUpdates(updates2, []*agent.ServiceUpdate{
+			{
+				Name:   service2,
+				Addr:   "127.0.0.1:3333",
+				Online: true,
+			},
+			{
+				Name:   service2,
+				Addr:   "127.0.0.1:2222",
+				Online: true,
+			},
+			{
+				Name:   service2,
+				Addr:   "127.0.0.1:1111",
+				Online: false,
+			},
+		})
+	}()
+
+	var updateError error
+	for i := 0; i < 2; i++ {
+		if err := <-updateErrors; err != nil && updateError == nil {
+			updateError = err
+		}
+	}
+	if updateError != nil {
+		t.Fatal(updateError)
+	}
+
+	assert(clientA.Register(service1, ":3333"), t)
+
+	if err := checkUpdate(updates1, &agent.ServiceUpdate{
+		Name:   service1,
+		Addr:   "127.0.0.1:3333",
+		Online: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// wait for one heartbeat
+	time.Sleep(agent.HeartbeatIntervalSecs*time.Second + time.Second)
+
+	checkServices(t, set1.Services(), []*discoverd.Service{
+		{Name: service1, Host: "127.0.0.1", Port: "1111", Addr: "127.0.0.1:1111", Attrs: map[string]string{"foo": "bar"}},
+		{Name: service1, Host: "127.0.0.1", Port: "3333", Addr: "127.0.0.1:3333"},
+	})
+
+	checkServices(t, set2.Services(), []*discoverd.Service{
+		{Name: service2, Host: "127.0.0.1", Port: "2222", Addr: "127.0.0.1:2222"},
+		{Name: service2, Host: "127.0.0.1", Port: "3333", Addr: "127.0.0.1:3333"},
+	})
 }
 
 func TestWatch(t *testing.T) {
