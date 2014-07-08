@@ -20,8 +20,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 SCRIPT
 
   config.vm.provision "shell", privileged: false, inline: <<SCRIPT
-    grep ^GOPATH ~/.bashrc || echo export GOPATH=~/go >> ~/.bashrc
-    grep ^PATH ~/.bashrc || echo export PATH=\$PATH:~/go/bin:/vagrant >> ~/.bashrc
+    grep '^export GOPATH' ~/.bashrc || echo export GOPATH=~/go >> ~/.bashrc
+    grep '^export PATH' ~/.bashrc || echo export PATH=\$PATH:~/go/bin:/vagrant >> ~/.bashrc
 
     GOPATH=~/go go get github.com/tools/godep
 
