@@ -33,7 +33,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-discoverd",
-			"Rev": "ef8e9c70ed6335e8db5a66addfa96226f35e2bd3"
+			"Rev": "c72b8211b9bfefeef21ad78e3a1f1931f3be1c20"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-dockerclient",
