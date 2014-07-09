@@ -8,6 +8,8 @@ import (
 
 	"github.com/flynn/flynn-controller/client"
 	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/go-discoverd"
+	"github.com/flynn/go-flynn/attempt"
 	"github.com/flynn/go-flynn/cluster"
 )
 
@@ -70,6 +72,12 @@ type StepInfo struct {
 	Timestamp time.Time   `json:"ts"`
 }
 
+var Attempts = attempt.Strategy{
+	Min:   5,
+	Total: 30 * time.Second,
+	Delay: 200 * time.Millisecond,
+}
+
 func Run(manifest []byte, ch chan<- *StepInfo) (err error) {
 	var a StepAction
 	defer close(ch)
@@ -78,6 +86,11 @@ func Run(manifest []byte, ch chan<- *StepInfo) (err error) {
 			ch <- &StepInfo{StepAction: a, State: "error", Error: err.Error(), Timestamp: time.Now().UTC()}
 		}
 	}()
+
+	// Make sure we are connected to discoverd first
+	Attempts.Run(func() error {
+		return discoverd.Connect("")
+	})
 
 	steps := make([]json.RawMessage, 0)
 	if err := json.Unmarshal(manifest, &steps); err != nil {
