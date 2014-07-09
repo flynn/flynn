@@ -449,7 +449,10 @@ func NewClient() (*Client, error) {
 
 func NewClientWithAddr(addr string) (*Client, error) {
 	c, err := rpcplus.DialHTTP("tcp", addr)
-	return newClient(c, addr), err
+	if err != nil {
+		return nil, err
+	}
+	return newClient(c, addr), nil
 }
 
 func NewClientWithRPCClient(c *rpcplus.Client) *Client {
