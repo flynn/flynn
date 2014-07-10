@@ -20,6 +20,7 @@ func manifest() ([]byte, error) {
 
 func main() {
 	logJSON := flag.Bool("json", false, "format log output as json")
+	minHosts := flag.Int("min-hosts", 1, "minimum number of hosts required to be online")
 	flag.Parse()
 
 	log.SetFlags(log.Lmicroseconds)
@@ -42,7 +43,7 @@ func main() {
 		close(done)
 	}()
 
-	err = bootstrap.Run(manifest, ch)
+	err = bootstrap.Run(manifest, ch, *minHosts)
 	<-done
 	if err != nil {
 		os.Exit(1)
