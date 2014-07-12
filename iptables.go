@@ -76,7 +76,7 @@ func (c *Chain) Forward(action Action, ip net.IP, port int, proto, destAddr stri
 		"-d", daddr,
 		"--dport", strconv.Itoa(port),
 		"-j", "DNAT",
-		"--to-destination", net.JoinHostPort(destAddr, strconv.Itoa(destPort))); err != nil {
+		"--to-destination", net.JoinHostPort(destAddr, strconv.Itoa(destPort))); err != nil && action != Delete {
 		return err
 	} else if len(output) != 0 && action != Delete {
 		return fmt.Errorf("Error iptables forward: %s", output)
@@ -92,7 +92,7 @@ func (c *Chain) Forward(action Action, ip net.IP, port int, proto, destAddr stri
 		"-p", proto,
 		"-d", destAddr,
 		"--dport", strconv.Itoa(destPort),
-		"-j", "ACCEPT"); err != nil {
+		"-j", "ACCEPT"); err != nil && action != Delete {
 		return err
 	} else if len(output) != 0 && action != Delete {
 		return fmt.Errorf("Error iptables forward: %s", output)
@@ -103,7 +103,7 @@ func (c *Chain) Forward(action Action, ip net.IP, port int, proto, destAddr stri
 		"-s", destAddr,
 		"-d", destAddr,
 		"--dport", strconv.Itoa(destPort),
-		"-j", "MASQUERADE"); err != nil {
+		"-j", "MASQUERADE"); err != nil && action != Delete {
 		return err
 	} else if len(output) != 0 && action != Delete {
 		return fmt.Errorf("Error iptables forward: %s", output)
