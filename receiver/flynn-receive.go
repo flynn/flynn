@@ -62,7 +62,7 @@ func main() {
 
 	var output bytes.Buffer
 	slugURL := fmt.Sprintf("http://%s/%s.tgz", shelfHost, commit)
-	cmd := exec.Command("flynn/slugbuilder", slugURL)
+	cmd := exec.Command(exec.DockerImage("flynn/slugbuilder", os.Getenv("SLUGBUILDER_IMAGE_ID")), slugURL)
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -81,7 +81,7 @@ func main() {
 
 	fmt.Printf("-----> Creating release...\n")
 
-	artifact := &ct.Artifact{URI: "docker://flynn/slugrunner"}
+	artifact := &ct.Artifact{Type: "docker", URI: "https://registry.hub.docker.com/flynn/slugrunner?id=" + os.Getenv("SLUGRUNNER_IMAGE_ID")}
 	if err := client.CreateArtifact(artifact); err != nil {
 		log.Fatalln("Error creating artifact:", err)
 	}
@@ -95,7 +95,7 @@ func main() {
 		proc := prevRelease.Processes[t]
 		proc.Cmd = []string{"start", t}
 		if t == "web" {
-			proc.Ports.TCP = 1
+			proc.Ports = []ct.Port{{Proto: "tcp"}}
 			if proc.Env == nil {
 				proc.Env = make(map[string]string)
 			}

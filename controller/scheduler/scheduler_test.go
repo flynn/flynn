@@ -155,7 +155,7 @@ func newFakeCluster(hostID, appID, releaseID string, processes map[string]int, j
 		for i := 0; i < c; i++ {
 			job := &host.Job{
 				ID: fmt.Sprintf("job%d", i),
-				Attributes: map[string]string{
+				Metadata: map[string]string{
 					"flynn-controller.app":     appID,
 					"flynn-controller.release": releaseID,
 					"flynn-controller.type":    t,
@@ -245,7 +245,7 @@ func (s *S) TestWatchFormations(c *C) {
 
 		processes := make(map[string]int, len(u.processes))
 		for _, job := range host.Jobs {
-			jobType := job.Attributes["flynn-controller.type"]
+			jobType := job.Metadata["flynn-controller.type"]
 			processes[jobType]++
 		}
 		// Ignore the existing web job
@@ -347,7 +347,7 @@ func (s *S) TestWatchHost(c *C) {
 
 	hostID := "host0"
 	cl := newFakeCluster(hostID, appID, release.ID, processes, []*host.Job{
-		{ID: "one-off-job", Attributes: map[string]string{"flynn-controller.app": appID, "flynn-controller.release": release.ID}},
+		{ID: "one-off-job", Metadata: map[string]string{"flynn-controller.app": appID, "flynn-controller.release": release.ID}},
 	})
 
 	hc := tu.NewFakeHostClient(hostID)

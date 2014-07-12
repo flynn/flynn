@@ -13,7 +13,7 @@ type Host interface {
 	GetJob(id string) (*host.ActiveJob, error)
 	StopJob(id string) error
 	StreamEvents(id string, ch chan<- *host.Event) Stream
-	Attach(req *host.AttachReq, wait bool) (ReadWriteCloser, func() error, error)
+	Attach(req *host.AttachReq, wait bool) (AttachClient, error)
 	Close() error
 }
 

@@ -7,20 +7,19 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-dockerclient"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
-	"github.com/flynn/flynn/pkg/demultiplex"
 )
 
 type Cmd struct {
-	Image  string
 	HostID string
 	JobID  string
 	TTY    bool
-	Attrs  map[string]string
+	Meta   map[string]string
 
 	Entrypoint []string
+
+	Artifact host.Artifact
 
 	Cmd []string
 	Env map[string]string
@@ -30,26 +29,35 @@ type Cmd struct {
 	Stdout io.Writer
 	Stderr io.Writer
 
-	TermHeight, TermWidth int
+	TermHeight, TermWidth uint16
 
 	started      bool
 	finished     bool
 	cluster      ClusterClient
 	closeCluster bool
-	attachConn   io.Closer
-	errCh        chan error
+	attachClient cluster.AttachClient
 	streamErr    error
+	exitStatus   int
 
 	host cluster.Host
 	done chan struct{}
 
-	stderrPipe *readyReader
-	stdoutPipe *readyReader
-	stdinPipe  *readyWriter
+	stdinPipe *readyWriter
 }
 
-func Command(image string, cmd ...string) *Cmd {
-	return &Cmd{Image: image, Cmd: cmd, done: make(chan struct{})}
+func DockerImage(name, id string) host.Artifact {
+	a := host.Artifact{
+		Type: "docker",
+		URI:  "https://registry.hub.docker.com/" + name,
+	}
+	if id != "" {
+		a.URI += "?id=" + id
+	}
+	return a
+}
+
+func Command(artifact host.Artifact, cmd ...string) *Cmd {
+	return &Cmd{Artifact: artifact, Cmd: cmd, done: make(chan struct{})}
 }
 
 type ClusterClient interface {
@@ -58,8 +66,8 @@ type ClusterClient interface {
 	DialHost(string) (cluster.Host, error)
 }
 
-func CommandUsingCluster(c ClusterClient, image string, cmd ...string) *Cmd {
-	command := Command(image, cmd...)
+func CommandUsingCluster(c ClusterClient, artifact host.Artifact, cmd ...string) *Cmd {
+	command := Command(artifact, cmd...)
 	command.cluster = c
 	return command
 }
@@ -75,27 +83,26 @@ func (c *Cmd) StdinPipe() (io.WriteCloser, error) {
 	return c.stdinPipe, nil
 }
 
-func (c *Cmd) StdoutPipe() (io.Reader, error) {
-	if c.Stdout != nil || c.stdoutPipe != nil {
+func (c *Cmd) StdoutPipe() (r io.Reader, err error) {
+	if c.Stdout != nil {
 		return nil, errors.New("exec: Stdout already set")
 	}
 	if c.started {
 		return nil, errors.New("exec: StdoutPipe after job started")
 	}
-	c.stdoutPipe = newReadyReader()
-	c.Stdout = c.stdinPipe
-	return c.stdoutPipe, nil
+	r, c.Stdout = io.Pipe()
+	return
 }
 
-func (c *Cmd) StderrPipe() (io.Reader, error) {
-	if c.Stderr != nil || c.stderrPipe != nil {
+func (c *Cmd) StderrPipe() (r io.Reader, err error) {
+	if c.Stderr != nil {
 		return nil, errors.New("exec: Stderr already set")
 	}
 	if c.started {
 		return nil, errors.New("exec: StderrPipe after job started")
 	}
-	c.stderrPipe = newReadyReader()
-	return c.stderrPipe, nil
+	r, c.Stdout = io.Pipe()
+	return
 }
 
 func (c *Cmd) Start() error {
@@ -127,25 +134,16 @@ func (c *Cmd) Start() error {
 	}
 
 	job := &host.Job{
-		ID: c.JobID,
-		Config: &docker.Config{
-			Image: c.Image,
-			Cmd:   c.Cmd,
-			Tty:   c.TTY,
-			Env:   formatEnv(c.Env),
+		ID:       c.JobID,
+		Artifact: c.Artifact,
+		Config: host.ContainerConfig{
+			Entrypoint: c.Entrypoint,
+			Cmd:        c.Cmd,
+			TTY:        c.TTY,
+			Env:        c.Env,
+			Stdin:      c.Stdin != nil || c.stdinPipe != nil,
 		},
-		Attributes: c.Attrs,
-	}
-	if c.Stdout != nil || c.stdoutPipe != nil {
-		job.Config.AttachStdout = true
-	}
-	if c.Stderr != nil || c.stderrPipe != nil {
-		job.Config.AttachStderr = true
-	}
-	if c.Stdin != nil || c.stdinPipe != nil {
-		job.Config.AttachStdin = true
-		job.Config.OpenStdin = true
-		job.Config.StdinOnce = true
+		Metadata: c.Meta,
 	}
 
 	c.host, err = c.cluster.DialHost(c.HostID)
@@ -153,109 +151,49 @@ func (c *Cmd) Start() error {
 		return err
 	}
 
-	// subscribe to host events
-	ch := make(chan *host.Event)
-	stream := c.host.StreamEvents(job.ID, ch)
-	go func() {
-		for event := range ch {
-			if event.Event == "stop" || event.Event == "error" {
-				close(c.done)
-				return
-			}
-		}
-		c.streamErr = stream.Err()
-		close(c.done)
-		// TODO: handle disconnections
-	}()
-
-	var rwc cluster.ReadWriteCloser
-	var attachWait func() error
-
-	if c.Stdout != nil || c.Stderr != nil || c.Stdin != nil ||
-		c.stdoutPipe != nil || c.stderrPipe != nil || c.stdinPipe != nil {
+	if c.Stdout != nil || c.Stderr != nil || c.Stdin != nil || c.stdinPipe != nil {
 		req := &host.AttachReq{
 			JobID:  job.ID,
 			Height: c.TermHeight,
 			Width:  c.TermWidth,
 			Flags:  host.AttachFlagStream,
 		}
-		if job.Config.AttachStdout {
+		if c.Stdout != nil {
 			req.Flags |= host.AttachFlagStdout
 		}
-		if job.Config.AttachStderr {
+		if c.Stderr != nil {
 			req.Flags |= host.AttachFlagStderr
 		}
-		if job.Config.AttachStdin {
+		if job.Config.Stdin {
 			req.Flags |= host.AttachFlagStdin
 		}
-		rwc, attachWait, err = c.host.Attach(req, true)
+		c.attachClient, err = c.host.Attach(req, true)
 		if err != nil {
 			c.close()
 			return err
 		}
 	}
 
-	goroutines := make([]func() error, 0, 4)
-
-	c.attachConn = rwc
-	if attachWait != nil {
-		goroutines = append(goroutines, attachWait)
-	}
-
 	if c.stdinPipe != nil {
-		c.stdinPipe.set(writeCloseCloser{rwc})
+		c.stdinPipe.set(writeCloseCloser{c.attachClient})
 	} else if c.Stdin != nil {
-		goroutines = append(goroutines, func() error {
-			_, err := io.Copy(rwc, c.Stdin)
-			rwc.CloseWrite()
-			return err
-		})
+		go func() {
+			io.Copy(c.attachClient, c.Stdin)
+			c.attachClient.CloseWrite()
+		}()
 	}
-	if !c.TTY {
-		if c.stdoutPipe != nil || c.stderrPipe != nil {
-			stdout, stderr := demultiplex.Streams(rwc)
-			if c.stdoutPipe != nil {
-				c.stdoutPipe.set(stdout)
-			} else if c.Stdout != nil {
-				goroutines = append(goroutines, cpFunc(c.Stdout, stdout))
-			}
-			if c.stderrPipe != nil {
-				c.stderrPipe.set(stderr)
-			} else if c.Stderr != nil {
-				goroutines = append(goroutines, cpFunc(c.Stderr, stderr))
-			}
-		} else if c.Stdout != nil || c.Stderr != nil {
-			goroutines = append(goroutines, func() error {
-				return demultiplex.Copy(c.Stdout, c.Stderr, rwc)
-			})
-		}
-	} else if c.stdoutPipe != nil {
-		c.stdoutPipe.set(rwc)
-	} else if c.Stdout != nil {
-		goroutines = append(goroutines, cpFunc(c.Stdout, rwc))
-	}
-
-	c.errCh = make(chan error, len(goroutines))
-	for _, fn := range goroutines {
-		go func(fn func() error) {
-			c.errCh <- fn()
-		}(fn)
-	}
+	go func() {
+		c.exitStatus, c.streamErr = c.attachClient.Receive(c.Stdout, c.Stderr)
+		close(c.done)
+	}()
 
 	_, err = c.cluster.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{c.HostID: {job}}})
 	return err
 }
 
-func cpFunc(dest io.Writer, src io.Reader) func() error {
-	return func() error {
-		_, err := io.Copy(dest, src)
-		return err
-	}
-}
-
 func (c *Cmd) close() {
-	if c.attachConn != nil {
-		c.attachConn.Close()
+	if c.attachClient != nil {
+		c.attachClient.Close()
 	}
 	if c.host != nil {
 		c.host.Close()
@@ -276,23 +214,10 @@ func (c *Cmd) Wait() error {
 
 	<-c.done
 	var err error
-	if c.streamErr != nil {
+	if c.exitStatus != 0 {
+		err = ExitError(c.exitStatus)
+	} else if c.streamErr != nil {
 		err = c.streamErr
-	}
-	job, err := c.host.GetJob(c.JobID)
-	if err != nil {
-		err = fmt.Errorf("exec: failed to retrieve job state: %s", err)
-	}
-	if job.Error != nil {
-		err = errors.New(*job.Error)
-	} else if job.ExitCode != 0 {
-		err = ExitError(job.ExitCode)
-	}
-
-	for i := 0; i < cap(c.errCh); i++ {
-		if copyErr := <-c.errCh; copyErr != nil && err == nil {
-			err = copyErr
-		}
 	}
 
 	c.close()
@@ -315,7 +240,7 @@ func (c *Cmd) Run() error {
 }
 
 func (c *Cmd) Output() ([]byte, error) {
-	if c.Stdout != nil || c.stdoutPipe != nil {
+	if c.Stdout != nil {
 		return nil, errors.New("exec: Stdout already set")
 	}
 	var b bytes.Buffer
@@ -326,10 +251,10 @@ func (c *Cmd) Output() ([]byte, error) {
 }
 
 func (c *Cmd) CombinedOutput() ([]byte, error) {
-	if c.Stdout != nil || c.stdoutPipe != nil {
+	if c.Stdout != nil {
 		return nil, errors.New("exec: Stdout already set")
 	}
-	if c.Stderr != nil || c.stderrPipe != nil {
+	if c.Stderr != nil {
 		return nil, errors.New("exec: Stderr already set")
 	}
 	var b bytes.Buffer
@@ -339,22 +264,30 @@ func (c *Cmd) CombinedOutput() ([]byte, error) {
 	return b.Bytes(), err
 }
 
+func (c *Cmd) Signal(sig int) error {
+	if !c.started {
+		return errors.New("exec: not started")
+	}
+	if c.finished {
+		return errors.New("exec: already finished")
+	}
+	return c.attachClient.Signal(sig)
+}
+
+func (c *Cmd) ResizeTTY(height, width uint16) error {
+	if !c.started {
+		return errors.New("exec: not started")
+	}
+	if c.finished {
+		return errors.New("exec: already finished")
+	}
+	return c.attachClient.ResizeTTY(height, width)
+}
+
 type ExitError int
 
 func (e ExitError) Error() string {
 	return fmt.Sprintf("exec: job exited with status %d", e)
-}
-
-func formatEnv(env map[string]string) []string {
-	res := make([]string, 0, len(env))
-	for k, v := range env {
-		res = append(res, k+"="+v)
-	}
-	return res
-}
-
-func newReadyReader() *readyReader {
-	return &readyReader{ready: make(chan struct{})}
 }
 
 type writeCloser interface {
@@ -368,22 +301,6 @@ type writeCloseCloser struct {
 
 func (c writeCloseCloser) Close() error {
 	return c.CloseWrite()
-}
-
-type readyReader struct {
-	r io.Reader
-
-	ready chan struct{}
-}
-
-func (b *readyReader) Read(p []byte) (int, error) {
-	<-b.ready
-	return b.r.Read(p)
-}
-
-func (b *readyReader) set(r io.Reader) {
-	b.r = r
-	close(b.ready)
 }
 
 func newReadyWriter() *readyWriter {

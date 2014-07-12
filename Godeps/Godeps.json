@@ -40,6 +40,11 @@
 			"Rev": "f87ce853111478914f0bcffa34d43a93643e6eda"
 		},
 		{
+			"ImportPath": "github.com/alexzorin/libvirt-go",
+			"Comment": "v2.6.0-2-g99d0178",
+			"Rev": "99d0178daa068fd3a437c218c559e3d3bee4228b"
+		},
+		{
 			"ImportPath": "github.com/bgentry/pflag",
 			"Rev": "b008717215c7236e20ca2faaf805e54ba6c1d208"
 		},
@@ -97,6 +102,11 @@
 			"Rev": "ac3eecf3db5f81a553b71267f2e18ca7b7d95fea"
 		},
 		{
+			"ImportPath": "github.com/docker/docker/pkg/signal",
+			"Comment": "v1.1.1-440-gac3eecf",
+			"Rev": "ac3eecf3db5f81a553b71267f2e18ca7b7d95fea"
+		},
+		{
 			"ImportPath": "github.com/docker/docker/pkg/system",
 			"Comment": "v1.1.1-440-gac3eecf",
 			"Rev": "ac3eecf3db5f81a553b71267f2e18ca7b7d95fea"
@@ -108,6 +118,11 @@
 		},
 		{
 			"ImportPath": "github.com/docker/docker/pkg/units",
+			"Comment": "v1.1.1-440-gac3eecf",
+			"Rev": "ac3eecf3db5f81a553b71267f2e18ca7b7d95fea"
+		},
+		{
+			"ImportPath": "github.com/docker/docker/pkg/user",
 			"Comment": "v1.1.1-440-gac3eecf",
 			"Rev": "ac3eecf3db5f81a553b71267f2e18ca7b7d95fea"
 		},
@@ -133,7 +148,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-dockerclient",
-			"Rev": "7293e94689ede4992e94fdcf1e1152b5947b526b"
+			"Rev": "70a6053bac9d85b17e279d1e9a5337bd3d7e035d"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-docopt",
@@ -184,12 +199,21 @@
 			"Rev": "9955b0ab8708602d411341e55fffd7e0700f86bd"
 		},
 		{
+			"ImportPath": "github.com/kr/pty",
+			"Comment": "release.r56-11-gc46bdbf",
+			"Rev": "c46bdbf4af2e43e5f163092037ec27e9e9aee1f3"
+		},
+		{
 			"ImportPath": "github.com/martini-contrib/binding",
 			"Rev": "f77b87950a1910e11b2de09446f8b331eedc18ac"
 		},
 		{
 			"ImportPath": "github.com/martini-contrib/render",
 			"Rev": "7b617783357fec5b5a6d4ecac82e747e4a14d1b5"
+		},
+		{
+			"ImportPath": "github.com/syndtr/gocapability/capability",
+			"Rev": "3c85049eaeb429febe7788d9c7aac42322a377fe"
 		},
 		{
 			"ImportPath": "github.com/technoweenie/grohl",

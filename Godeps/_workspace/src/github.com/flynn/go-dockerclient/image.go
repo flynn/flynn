@@ -112,18 +112,20 @@ func (c *Client) PushImage(opts PushImageOptions, auth AuthConfiguration, w io.W
 //
 // See http://goo.gl/PhBKnS for more details.
 type PullImageOptions struct {
-	Repository string `qs:"fromImage"`
-	Registry   string
+	Repository   string `qs:"fromImage"`
+	Registry     string
+	Tag          string
+	OutputStream io.Writer `qs:"-"`
 }
 
 // PullImage pulls an image from a remote registry, logging progress to w.
 //
 // See http://goo.gl/PhBKnS for more details.
-func (c *Client) PullImage(opts PullImageOptions, w io.Writer) error {
+func (c *Client) PullImage(opts PullImageOptions) error {
 	if opts.Repository == "" {
 		return ErrNoSuchImage
 	}
-	return c.createImage(queryString(&opts), nil, w)
+	return c.createImage(queryString(&opts), nil, opts.OutputStream)
 }
 
 func (c *Client) createImage(qs string, in io.Reader, w io.Writer) error {
