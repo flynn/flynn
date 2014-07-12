@@ -63,7 +63,7 @@ func RemoveExistingChain(name string) error {
 	return chain.Remove()
 }
 
-func (c *Chain) Forward(action Action, ip net.IP, port int, proto, dest_addr string, dest_port int) error {
+func (c *Chain) Forward(action Action, ip net.IP, port int, proto, destAddr string, destPort int) error {
 	daddr := ip.String()
 	if ip.IsUnspecified() {
 		// iptables interprets "0.0.0.0" as "0.0.0.0/32", whereas we
@@ -76,7 +76,7 @@ func (c *Chain) Forward(action Action, ip net.IP, port int, proto, dest_addr str
 		"-d", daddr,
 		"--dport", strconv.Itoa(port),
 		"-j", "DNAT",
-		"--to-destination", net.JoinHostPort(dest_addr, strconv.Itoa(dest_port))); err != nil {
+		"--to-destination", net.JoinHostPort(destAddr, strconv.Itoa(destPort))); err != nil {
 		return err
 	} else if len(output) != 0 && action != Delete {
 		return fmt.Errorf("Error iptables forward: %s", output)
@@ -90,8 +90,8 @@ func (c *Chain) Forward(action Action, ip net.IP, port int, proto, dest_addr str
 		"!", "-i", c.Bridge,
 		"-o", c.Bridge,
 		"-p", proto,
-		"-d", dest_addr,
-		"--dport", strconv.Itoa(dest_port),
+		"-d", destAddr,
+		"--dport", strconv.Itoa(destPort),
 		"-j", "ACCEPT"); err != nil {
 		return err
 	} else if len(output) != 0 && action != Delete {
@@ -100,9 +100,9 @@ func (c *Chain) Forward(action Action, ip net.IP, port int, proto, dest_addr str
 
 	if output, err := Raw("-t", "nat", string(fAction), "POSTROUTING",
 		"-p", proto,
-		"-s", dest_addr,
-		"-d", dest_addr,
-		"--dport", strconv.Itoa(dest_port),
+		"-s", destAddr,
+		"-d", destAddr,
+		"--dport", strconv.Itoa(destPort),
 		"-j", "MASQUERADE"); err != nil {
 		return err
 	} else if len(output) != 0 && action != Delete {
