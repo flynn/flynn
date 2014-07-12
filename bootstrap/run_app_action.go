@@ -108,11 +108,7 @@ func (a *RunAppAction) Run(s *State) error {
 	}
 	for typ, count := range a.Processes {
 		for i := 0; i < count; i++ {
-			config, err := utils.JobConfig(a.ExpandedFormation, typ)
-			if err != nil {
-				return err
-			}
-			job, err := startJob(s, hostIDs[i%len(hosts)], config)
+			job, err := startJob(s, hostIDs[i%len(hosts)], utils.JobConfig(a.ExpandedFormation, typ))
 			if err != nil {
 				return err
 			}

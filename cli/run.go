@@ -5,12 +5,15 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/heroku/hk/term"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/pkg/demultiplex"
+	"github.com/flynn/flynn/pkg/cluster"
 )
 
 var (
@@ -81,23 +84,50 @@ func runRun(cmd *Command, args []string, client *controller.Client) error {
 		return err
 	}
 	defer rwc.Close()
+	attachClient := cluster.NewAttachClient(rwc)
 
 	if req.TTY {
 		if err := term.MakeRaw(os.Stdin); err != nil {
 			return err
 		}
 		defer term.Restore(os.Stdin)
+		go func() {
+			ch := make(chan os.Signal)
+			signal.Notify(ch, syscall.SIGWINCH)
+			<-ch
+			height, err := term.Lines()
+			if err != nil {
+				return
+			}
+			width, err := term.Cols()
+			if err != nil {
+				return
+			}
+			attachClient.ResizeTTY(uint16(height), uint16(width))
+			attachClient.Signal(int(syscall.SIGWINCH))
+		}()
 	}
 
 	go func() {
-		io.Copy(rwc, os.Stdin)
-		rwc.CloseWrite()
+		ch := make(chan os.Signal)
+		signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+		sig := <-ch
+		attachClient.Signal(int(sig.(syscall.Signal)))
+		time.Sleep(10 * time.Second)
+		attachClient.Signal(int(syscall.SIGKILL))
 	}()
-	if req.TTY {
-		_, err = io.Copy(os.Stdout, rwc)
-	} else {
-		err = demultiplex.Copy(os.Stdout, os.Stderr, rwc)
+	go func() {
+		io.Copy(attachClient, os.Stdin)
+		attachClient.CloseWrite()
+	}()
+	exitStatus, err := attachClient.Receive(os.Stdout, os.Stderr)
+	if err != nil {
+		return err
 	}
-	// TODO: get exit code and use it
-	return err
+	if req.TTY {
+		term.Restore(os.Stdin)
+	}
+	os.Exit(exitStatus)
+
+	panic("unreached")
 }

@@ -34,14 +34,15 @@ type Release struct {
 type ProcessType struct {
 	Cmd   []string          `json:"cmd,omitempty"`
 	Env   map[string]string `json:"env,omitempty"`
-	Ports ProcessPorts      `json:"ports,omitempty"`
+	Ports []Port            `json:"ports,omitempty"`
 	Data  bool              `json:"data,omitempty"`
 	Omni  bool              `json:"omni,omitempty"` // omnipresent - present on all hosts
 }
 
-type ProcessPorts struct {
-	TCP int `json:"tcp,omitempty"`
-	UDP int `json:"udp,omitempty"`
+type Port struct {
+	Port     int    `json:"port"`
+	Proto    string `json:"proto"`
+	RangeEnd int    `json:"range_end"`
 }
 
 type Artifact struct {

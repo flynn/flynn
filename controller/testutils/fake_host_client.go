@@ -28,7 +28,7 @@ type FakeHostClient struct {
 
 func (c *FakeHostClient) ListJobs() (map[string]host.ActiveJob, error) { return nil, nil }
 func (c *FakeHostClient) Close() error                                 { return nil }
-func (c *FakeHostClient) Attach(req *host.AttachReq, wait bool) (cluster.ReadWriteCloser, func() error, error) {
+func (c *FakeHostClient) Attach(req *host.AttachReq, wait bool) (cluster.AttachClient, error) {
 	f, ok := c.attach[req.JobID]
 	if !ok {
 		f = c.attach["*"]
@@ -69,9 +69,9 @@ func (c *FakeHostClient) IsStopped(id string) bool {
 	return c.stopped[id]
 }
 
-func (c *FakeHostClient) SetAttach(id string, rwc cluster.ReadWriteCloser) {
-	c.attach[id] = func(*host.AttachReq, bool) (cluster.ReadWriteCloser, func() error, error) {
-		return rwc, nil, nil
+func (c *FakeHostClient) SetAttach(id string, ac cluster.AttachClient) {
+	c.attach[id] = func(*host.AttachReq, bool) (cluster.AttachClient, error) {
+		return ac, nil
 	}
 }
 
@@ -92,7 +92,7 @@ func (c *FakeHostClient) SendEvent(event, id string) {
 	}
 }
 
-type attachFunc func(req *host.AttachReq, wait bool) (cluster.ReadWriteCloser, func() error, error)
+type attachFunc func(req *host.AttachReq, wait bool) (cluster.AttachClient, error)
 
 type FakeHostEventStream struct {
 	ch chan<- *host.Event

@@ -2,31 +2,58 @@ package host
 
 import (
 	"time"
-
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-dockerclient"
 )
 
 type Job struct {
 	ID string
 
-	// Job attributes
-	Attributes map[string]string
-	// Number of TCP ports required by the job
-	TCPPorts int
+	Metadata map[string]string
 
-	Config     *docker.Config
-	HostConfig *docker.HostConfig
+	Artifact  Artifact
+	Resources JobResources
+
+	Config ContainerConfig
 }
 
-// TODO: cleanup the Job struct (abstract docker stuff, etc)
+type JobResources struct {
+	Memory int // in KiB
+}
+
+type ContainerConfig struct {
+	TTY        bool
+	Stdin      bool
+	Data       bool
+	Entrypoint []string
+	Cmd        []string
+	Env        map[string]string
+	Mounts     []Mount
+	Ports      []Port
+	WorkingDir string
+	Uid        int
+}
+
+type Port struct {
+	Port     int
+	Proto    string
+	RangeEnd int
+}
+
+type Mount struct {
+	Location  string
+	Target    string
+	Writeable bool
+}
+
+type Artifact struct {
+	URI  string
+	Type string
+}
 
 type Host struct {
 	ID string
 
-	// Currently running jobs
-	Jobs []*Job
-	// Host attributes
-	Attributes map[string]string
+	Jobs     []*Job
+	Metadata map[string]string
 }
 
 type AddJobsReq struct {
@@ -51,21 +78,22 @@ type HostEvent struct {
 }
 
 type ActiveJob struct {
-	Job *Job
-
+	Job         *Job
 	ContainerID string
+	InternalIP  string
 	Status      JobStatus
 	StartedAt   time.Time
 	EndedAt     time.Time
-	ExitCode    int
+	ExitStatus  int
 	Error       *string
+	ManifestID  string
 }
 
 type AttachReq struct {
 	JobID  string
 	Flags  AttachFlag
-	Height int
-	Width  int
+	Height uint16
+	Width  uint16
 }
 
 type AttachFlag uint8
@@ -102,4 +130,8 @@ const (
 	AttachSuccess byte = iota
 	AttachWaiting
 	AttachError
+	AttachData
+	AttachSignal
+	AttachExit
+	AttachResize
 )

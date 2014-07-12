@@ -16,7 +16,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
   config.vm.provision "shell", inline: <<SCRIPT
     apt-get update
-    apt-get install -y software-properties-common libdevmapper-dev btrfs-tools
+    apt-get install -y software-properties-common libdevmapper-dev btrfs-tools libvirt-dev
     apt-add-repository 'deb http://ppa.launchpad.net/anatol/tup/ubuntu precise main'
     apt-key adv --keyserver keyserver.ubuntu.com --recv E601AAF9486D3664
     apt-get update

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-dockerclient"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 	"github.com/flynn/flynn/host/ports"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -69,38 +69,74 @@ type manifestRunner struct {
 	externalAddr string
 	bindAddr     string
 	backend      Backend
+	state        *State
+	ports        map[string]*ports.Allocator
 }
 
 type manifestService struct {
 	ID         string            `json:"id"`
 	Image      string            `json:"image"`
+	ImageID    string            `json:"image_id"`
 	Entrypoint []string          `json:"entrypoint"`
 	Args       []string          `json:"args"`
 	Env        map[string]string `json:"env"`
 	TCPPorts   []string          `json:"tcp_ports"`
 }
 
-func dockerEnv(m map[string]string) []string {
-	res := make([]string, 0, len(m))
-	for k, v := range m {
-		res = append(res, k+"="+v)
-	}
-	return res
-}
-
 func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, error) {
-	var services []manifestService
+	g := grohl.NewContext(grohl.Data{"fn": "run_manifest"})
+	var services []*manifestService
 	if err := json.NewDecoder(r).Decode(&services); err != nil {
 		return nil, err
 	}
 
 	serviceData := make(map[string]*ManifestData, len(services))
+
+	m.state.mtx.Lock()
+	for _, job := range m.state.jobs {
+		if job.ManifestID == "" || job.Status != host.StatusRunning {
+			continue
+		}
+		var service *manifestService
+		for _, service = range services {
+			if service.ID == job.ManifestID {
+				break
+			}
+		}
+		if service == nil {
+			continue
+		}
+		g.Log(grohl.Data{"at": "restore", "service": service.ID, "job.id": job.Job.ID})
+
+		data := &ManifestData{
+			ExternalIP: m.externalAddr,
+			InternalIP: job.InternalIP,
+			Env:        job.Job.Config.Env,
+			Services:   serviceData,
+			ports:      m.ports["tcp"],
+			readonly:   true,
+		}
+		data.TCPPorts = make([]int, 0, len(job.Job.Config.Ports))
+		for _, p := range job.Job.Config.Ports {
+			if p.Proto != "tcp" {
+				continue
+			}
+			data.TCPPorts = append(data.TCPPorts, p.Port)
+		}
+		serviceData[service.ID] = data
+	}
+	m.state.mtx.Unlock()
+
 	for _, service := range services {
+		if _, exists := serviceData[service.ID]; exists {
+			continue
+		}
+
 		data := &ManifestData{
 			Env:        parseEnviron(),
 			Services:   serviceData,
 			ExternalIP: m.externalAddr,
-			ports:      m.backend.(*DockerBackend).ports,
+			ports:      m.ports["tcp"],
 		}
 
 		// Add explicit tcp ports to data.TCPPorts
@@ -147,48 +183,44 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 		data.Env = service.Env
 
 		if service.Image == "" {
-			service.Image = "flynn/" + service.ID
+			service.Image = "https://registry.hub.docker.com/flynn/" + service.ID
+		}
+		if service.ImageID != "" {
+			service.Image += "?id=" + service.ImageID
 		}
 
 		job := &host.Job{
-			ID:       cluster.RandomJobID("flynn-" + service.ID + "-"),
-			TCPPorts: 1,
-			Config: &docker.Config{
-				Image:        service.Image,
-				Entrypoint:   service.Entrypoint,
-				Cmd:          args,
-				AttachStdout: true,
-				AttachStderr: true,
-				Env:          dockerEnv(data.Env),
-				Volumes:      data.Volumes,
-				ExposedPorts: make(map[string]struct{}, len(service.TCPPorts)),
+			ID: cluster.RandomJobID("flynn-" + service.ID + "-"),
+			Artifact: host.Artifact{
+				Type: "docker",
+				URI:  service.Image,
 			},
-			HostConfig: &docker.HostConfig{
-				PortBindings: make(map[string][]docker.PortBinding, len(service.TCPPorts)),
+			Config: host.ContainerConfig{
+				Entrypoint: service.Entrypoint,
+				Cmd:        args,
+				Env:        data.Env,
 			},
 		}
-		job.Config.Env = append(job.Config.Env, "EXTERNAL_IP="+m.externalAddr)
+		if job.Config.Env == nil {
+			job.Config.Env = make(map[string]string)
+		}
+		job.Config.Env["EXTERNAL_IP"] = m.externalAddr
 
-		for i, port := range service.TCPPorts {
-			job.TCPPorts = 0
-			if i == 0 {
-				job.Config.Env = append(job.Config.Env, "PORT="+port)
-			}
-			job.Config.Env = append(job.Config.Env, fmt.Sprintf("PORT_%d=%s", i, port))
-			job.Config.ExposedPorts[port+"/tcp"] = struct{}{}
-			job.HostConfig.PortBindings[port+"/tcp"] = []docker.PortBinding{{HostPort: port, HostIp: m.bindAddr}}
+		job.Config.Ports = make([]host.Port, len(data.TCPPorts))
+		for i, port := range data.TCPPorts {
+			job.Config.Ports[i] = host.Port{Proto: "tcp", Port: port}
+		}
+		if len(job.Config.Ports) == 0 {
+			job.Config.Ports = []host.Port{{Proto: "tcp"}}
 		}
 
 		if err := m.backend.Run(job); err != nil {
 			return nil, err
 		}
 
-		container, err := m.backend.(*DockerBackend).docker.InspectContainer(job.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		data.InternalIP = container.NetworkSettings.IPAddress
+		m.state.SetManifestID(job.ID, service.ID)
+		activeJob := m.state.GetJob(job.ID)
+		data.InternalIP = activeJob.InternalIP
 		data.readonly = true
 		serviceData[service.ID] = data
 	}

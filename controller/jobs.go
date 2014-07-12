@@ -10,15 +10,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-dockerclient"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
-	"github.com/flynn/flynn/pkg/demultiplex"
 )
 
 type JobRepo struct {
@@ -112,13 +109,13 @@ func jobLog(req *http.Request, app *ct.App, params martini.Params, cluster clust
 	if tail {
 		attachReq.Flags |= host.AttachFlagStream
 	}
-	stream, _, err := cluster.Attach(attachReq, false)
+	attachClient, err := cluster.Attach(attachReq, false)
 	if err != nil {
 		// TODO: handle AttachWouldWait
 		r.Error(err)
 		return
 	}
-	defer stream.Close()
+	defer attachClient.Close()
 
 	sse := strings.Contains(req.Header.Get("Accept"), "text/event-stream")
 	if sse {
@@ -136,11 +133,11 @@ func jobLog(req *http.Request, app *ct.App, params martini.Params, cluster clust
 
 	if sse {
 		ssew := NewSSELogWriter(w)
-		demultiplex.Copy(flushWriter{ssew.Stream("stdout"), tail}, flushWriter{ssew.Stream("stderr"), tail}, stream)
+		attachClient.Receive(flushWriter{ssew.Stream("stdout"), tail}, flushWriter{ssew.Stream("stderr"), tail})
 		// TODO: include exit code here if tailing
 		flushWriter{w, tail}.Write([]byte("event: eof\ndata: {}\n\n"))
 	} else {
-		io.Copy(flushWriter{w, tail}, stream)
+		io.Copy(flushWriter{w, tail}, attachClient.Conn())
 	}
 }
 
@@ -256,38 +253,31 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 		return
 	}
 	artifact := data.(*ct.Artifact)
-	image, err := utils.DockerImage(artifact.URI)
-	if err != nil {
-		log.Println("error parsing artifact uri", err)
-		r.Error(ct.ValidationError{
-			Field:   "artifact.uri",
-			Message: "is invalid",
-		})
-		return
-	}
 	attach := strings.Contains(req.Header.Get("Accept"), "application/vnd.flynn.attach")
 
+	env := make(map[string]string, len(release.Env)+len(newJob.Env))
+	for k, v := range release.Env {
+		env[k] = v
+	}
+	for k, v := range newJob.Env {
+		env[k] = v
+	}
 	job := &host.Job{
 		ID: cluster.RandomJobID(""),
-		Attributes: map[string]string{
+		Metadata: map[string]string{
 			"flynn-controller.app":     app.ID,
 			"flynn-controller.release": release.ID,
 		},
-		Config: &docker.Config{
-			Cmd:          newJob.Cmd,
-			Env:          utils.FormatEnv(release.Env, newJob.Env),
-			Image:        image,
-			AttachStdout: true,
-			AttachStderr: true,
+		Artifact: host.Artifact{
+			Type: artifact.Type,
+			URI:  artifact.URI,
 		},
-	}
-	if newJob.TTY {
-		job.Config.Tty = true
-	}
-	if attach {
-		job.Config.AttachStdin = true
-		job.Config.StdinOnce = true
-		job.Config.OpenStdin = true
+		Config: host.ContainerConfig{
+			Cmd:   newJob.Cmd,
+			Env:   env,
+			TTY:   newJob.TTY,
+			Stdin: attach,
+		},
 	}
 
 	hosts, err := cl.ListHosts()
@@ -305,14 +295,13 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 		return
 	}
 
-	var attachConn cluster.ReadWriteCloser
-	var attachWait func() error
+	var attachClient cluster.AttachClient
 	if attach {
 		attachReq := &host.AttachReq{
 			JobID:  job.ID,
 			Flags:  host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagStdin | host.AttachFlagStream,
-			Height: newJob.Lines,
-			Width:  newJob.Columns,
+			Height: uint16(newJob.Lines),
+			Width:  uint16(newJob.Columns),
 		}
 		client, err := cl.DialHost(hostID)
 		if err != nil {
@@ -320,12 +309,12 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 			return
 		}
 		defer client.Close()
-		attachConn, attachWait, err = client.Attach(attachReq, true)
+		attachClient, err = client.Attach(attachReq, true)
 		if err != nil {
 			r.Error(fmt.Errorf("attach failed: %s", err.Error()))
 			return
 		}
-		defer attachConn.Close()
+		defer attachClient.Close()
 	}
 
 	_, err = cl.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{hostID: {job}}})
@@ -335,7 +324,7 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 	}
 
 	if attach {
-		if err := attachWait(); err != nil {
+		if err := attachClient.Wait(); err != nil {
 			r.Error(fmt.Errorf("attach wait failed: %s", err.Error()))
 			return
 		}
@@ -349,13 +338,12 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 		defer conn.Close()
 
 		done := make(chan struct{}, 2)
-		cp := func(to cluster.ReadWriteCloser, from io.Reader) {
+		cp := func(to io.Writer, from io.Reader) {
 			io.Copy(to, from)
-			to.CloseWrite()
 			done <- struct{}{}
 		}
-		go cp(conn.(cluster.ReadWriteCloser), attachConn)
-		go cp(attachConn, conn)
+		go cp(conn, attachClient.Conn())
+		go cp(attachClient.Conn(), conn)
 		<-done
 		<-done
 
