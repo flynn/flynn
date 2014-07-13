@@ -22,9 +22,9 @@ import (
 )
 
 var username = flag.String("user", "ubuntu", "user to run QEMU as")
-var rootfs = flag.String("rootfs", "rootfs.img", "fs image to use with QEMU")
+var rootfs = flag.String("rootfs", "rootfs/rootfs.img", "fs image to use with QEMU")
 var dockerfs = flag.String("dockerfs", "", "docker fs")
-var kernel = flag.String("kernel", "vmlinuz", "path to the Linux binary")
+var kernel = flag.String("kernel", "rootfs/vmlinuz", "path to the Linux binary")
 var flagCLI = flag.String("cli", "flynn", "path to flynn-cli binary")
 var debug = flag.Bool("debug", false, "enable debug output")
 var natIface = flag.String("nat", "eth0", "the interface to provide NAT to vms")
