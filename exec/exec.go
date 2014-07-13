@@ -56,7 +56,6 @@ type ClusterClient interface {
 	ListHosts() (map[string]host.Host, error)
 	AddJobs(*host.AddJobsReq) (*host.AddJobsRes, error)
 	DialHost(string) (cluster.Host, error)
-	StreamHostEvents(id string, ch chan<- *host.HostEvent) cluster.Stream
 }
 
 func CommandUsingCluster(c ClusterClient, image string, cmd ...string) *Cmd {
