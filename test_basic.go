@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn-test/util"
+	"github.com/flynn/go-flynn/attempt"
 	c "gopkg.in/check.v1"
 )
 
@@ -43,6 +44,12 @@ func (s *BasicSuite) SetUpSuite(t *c.C) {
 	s.appDir = initApp(t, "basic")
 }
 
+var Attempts = attempt.Strategy{
+	Min:   5,
+	Total: 10 * time.Second,
+	Delay: 500 * time.Millisecond,
+}
+
 func (s *BasicSuite) TestBasic(t *c.C) {
 	name := util.RandomString()[:30]
 	t.Assert(s.Flynn("create", name), Outputs, fmt.Sprintf("Created %s\n", name))
@@ -63,19 +70,30 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 
 	t.Assert(s.Flynn("routes"), OutputContains, strings.TrimSpace(newRoute.Output))
 
-	// TODO: add retry helper
-	time.Sleep(5 * time.Second)
+	// use Attempts to give the processes time to start
+	if err := Attempts.Run(func() error {
+		ps := s.Flynn("ps")
+		if ps.Err != nil {
+			return ps.Err
+		}
+		psLines := strings.Split(strings.TrimSpace(ps.Output), "\n")
+		if len(psLines) != 4 {
+			return fmt.Errorf("Expected 4 ps lines, got %d", len(psLines))
+		}
 
-	ps := s.Flynn("ps")
-	t.Assert(ps, Succeeds)
-	psLines := strings.Split(strings.TrimSpace(ps.Output), "\n")
-	t.Assert(len(psLines), c.Equals, 4)
-
-	for _, l := range psLines[1:] {
-		idType := regexp.MustCompile(`\s+`).Split(l, 2)
-		t.Assert(idType[1], c.Equals, "web")
-		log := s.Flynn("log", idType[0])
-		t.Assert(log, OutputContains, "Listening on ")
+		for _, l := range psLines[1:] {
+			idType := regexp.MustCompile(`\s+`).Split(l, 2)
+			if idType[1] != "web" {
+				return fmt.Errorf("Expected web type, got %s", idType[1])
+			}
+			log := s.Flynn("log", idType[0])
+			if !strings.Contains(log.Output, "Listening on ") {
+				return fmt.Errorf("Expected \"%s\" to contain \"Listening on \"", log.Output)
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Error(err)
 	}
 
 	// Make HTTP requests
