@@ -1,0 +1,15 @@
+{
+	"ImportPath": "github.com/flynn/flynn-release",
+	"GoVersion": "go1.3",
+	"Deps": [
+		{
+			"ImportPath": "github.com/flynn/go-dockerclient",
+			"Rev": "7293e94689ede4992e94fdcf1e1152b5947b526b"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-docopt",
+			"Comment": "0.6.1-rc2-25-gc4d72bb",
+			"Rev": "c4d72bb6e19016aebcf611fe19376d46f85f1752"
+		}
+	]
+}
