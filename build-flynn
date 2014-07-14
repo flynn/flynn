@@ -7,7 +7,8 @@ if [ -z "$dest" ]; then
 fi
 cd "$dest"
 
-for f in *; do
+for f in **/Makefile; do
+  f=$(dirname $f)
   echo "=====> Building $f..."
   pushd $f > /dev/null
   rm -rf /tmp/godep # work around godep bugs
