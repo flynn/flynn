@@ -30,9 +30,9 @@ func NewState() *State {
 
 func (s *State) AddJob(j *host.Job) {
 	s.mtx.Lock()
+	defer s.mtx.Unlock()
 	job := &host.ActiveJob{Job: j}
 	s.jobs[j.ID] = job
-	s.mtx.Unlock()
 	s.sendEvent(job, "create")
 }
 
@@ -70,32 +70,31 @@ func (s *State) ClusterJobs() []*host.Job {
 
 func (s *State) SetContainerID(jobID, containerID string) {
 	s.mtx.Lock()
+	defer s.mtx.Unlock()
 	s.jobs[jobID].ContainerID = containerID
 	s.containers[containerID] = s.jobs[jobID]
-	s.mtx.Unlock()
 }
 
 func (s *State) SetStatusRunning(jobID string) {
 	s.mtx.Lock()
+	defer s.mtx.Unlock()
 
 	job, ok := s.jobs[jobID]
 	if !ok {
-		s.mtx.Unlock()
 		return
 	}
 
 	job.StartedAt = time.Now().UTC()
 	job.Status = host.StatusRunning
-	s.mtx.Unlock()
 	s.sendEvent(job, "start")
 }
 
 func (s *State) SetStatusDone(containerID string, exitCode int) {
 	s.mtx.Lock()
+	defer s.mtx.Unlock()
 
 	job, ok := s.containers[containerID]
 	if !ok || job.Status == host.StatusDone || job.Status == host.StatusCrashed || job.Status == host.StatusFailed {
-		s.mtx.Unlock()
 		return
 	}
 	job.EndedAt = time.Now().UTC()
@@ -105,23 +104,21 @@ func (s *State) SetStatusDone(containerID string, exitCode int) {
 	} else {
 		job.Status = host.StatusCrashed
 	}
-	s.mtx.Unlock()
 	s.sendEvent(job, "stop")
 }
 
 func (s *State) SetStatusFailed(jobID string, err error) {
 	s.mtx.Lock()
+	defer s.mtx.Unlock()
 
 	job, ok := s.jobs[jobID]
 	if !ok || job.Status == host.StatusDone || job.Status == host.StatusCrashed || job.Status == host.StatusFailed {
-		s.mtx.Unlock()
 		return
 	}
 	job.Status = host.StatusFailed
 	job.EndedAt = time.Now().UTC()
 	errStr := err.Error()
 	job.Error = &errStr
-	s.mtx.Unlock()
 	s.sendEvent(job, "error")
 }
 
@@ -175,13 +172,16 @@ func (s *State) RemoveListener(jobID string, ch chan host.Event) {
 }
 
 func (s *State) sendEvent(job *host.ActiveJob, event string) {
-	s.listenMtx.RLock()
-	defer s.listenMtx.RUnlock()
-	e := host.Event{JobID: job.Job.ID, Job: job, Event: event}
-	for ch := range s.listeners["all"] {
-		ch <- e
-	}
-	for ch := range s.listeners[job.Job.ID] {
-		ch <- e
-	}
+	j := *job
+	go func() {
+		s.listenMtx.RLock()
+		defer s.listenMtx.RUnlock()
+		e := host.Event{JobID: job.Job.ID, Job: &j, Event: event}
+		for ch := range s.listeners["all"] {
+			ch <- e
+		}
+		for ch := range s.listeners[job.Job.ID] {
+			ch <- e
+		}
+	}()
 }
