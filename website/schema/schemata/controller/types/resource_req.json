@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-04/hyper-schema",
+  "title": "TYPE.ResourceReq",
+  "description": "FIXME",
+  "id": "schemata/resource_req",
+  "definitions": {
+
+  },
+  "properties": {
+    "apps": {
+      "$ref": "/schemata/resource#/definitions/apps"
+    },
+    "config": {
+      "$ref": "/schemata/basic#/definitions/config"
+    }
+  },
+  "type": ["object"],
+  "links": []
+}
