@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/formation#",
+  "title": "Formation",
+  "description": "A formation is a running release.",
+  "sortIndex": 2,
+  "type": "object",
+  "examples": [
+    "schema/examples/controller/formation_put#",
+    "schema/examples/controller/formation_get#",
+    "schema/examples/controller/formation_list#",
+    "schema/examples/controller/formation_delete#"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "app": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "release": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "processes": {
+      "description": "count of processes to run for each process type",
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "created_at": {
+      "$ref": "/schema/controller/common#/definitions/created_at"
+    },
+    "updated_at": {
+      "$ref": "/schema/controller/common#/definitions/updated_at"
+    }
+  }
+}

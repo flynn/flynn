@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/job#",
+  "title": "Job",
+  "description": "A job is a single process in a container.",
+  "sortIndex": 5,
+  "type": "object",
+  "examples": [
+    "schema/examples/controller/job_log#",
+    "schema/examples/controller/job_list#",
+    "schema/examples/controller/job_update#",
+    "schema/examples/controller/job_delete#"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "app": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "release": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "type": {
+      "description": "process type name from the release",
+      "type": "string"
+    },
+    "state": {
+      "type": "string",
+      "enum": ["starting", "up", "down", "crashed"]
+    },
+    "cmd": {
+      "$ref": "/schema/controller/common#/definitions/cmd"
+    },
+    "meta": {
+      "$ref": "/schema/controller/common#/definitions/meta"
+    },
+    "created_at": {
+      "$ref": "/schema/controller/common#/definitions/created_at"
+    },
+    "updated_at": {
+      "$ref": "/schema/controller/common#/definitions/updated_at"
+    }
+  }
+}

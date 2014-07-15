@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/error#",
+  "title": "Error",
+  "description": "",
+  "sortIndex": 14,
+  "type": "object",
+  "required": ["code", "message"],
+  "properties": {
+    "code": {
+      "type": "string",
+      "enum": [
+        "not_found",
+        "object_not_found",
+        "object_exists",
+        "syntax_error",
+        "validation_error",
+        "unknown_error"
+      ]
+    },
+    "message": {
+      "type": "string"
+    },
+    "detail": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}

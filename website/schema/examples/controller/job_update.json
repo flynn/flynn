@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/examples/controller/job_update#",
+  "title": "Update job",
+  "description": "",
+  "allOf": [
+    { "$ref": "/schema/examples/base#" },
+    {
+      "type": "object",
+      "properties": {
+        "request": {
+          "type": "object",
+          "required": ["body"],
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": ["PUT"]
+            },
+            "body": {
+              "$ref": "/schema/controller/job#"
+            }
+          }
+        },
+        "response": {
+          "type": "object",
+          "required": ["body"],
+          "properties": {
+            "body": {
+              "$ref": "/schema/controller/job#"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/app#",
+  "title": "App",
+  "description": "An app is a namespace for process formations and their dependencies and metadata.",
+  "sortIndex": 0,
+  "type": "object",
+  "examples": [
+    "schema/examples/controller/app_create#",
+    "schema/examples/controller/app_get#",
+    "schema/examples/controller/app_list#",
+    "schema/examples/controller/app_update#",
+    "schema/examples/controller/app_delete#"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "name": {
+      "description": "app name",
+      "type": "string",
+      "maxLength": 100,
+      "minLength": 1,
+      "pattern": "^[a-z\\d]+(-[a-z\\d]+)*$"
+    },
+    "protected": {
+      "description": "if true, app is protected from deletion and scaling to zero",
+      "type": "boolean"
+    },
+    "meta": {
+      "$ref": "/schema/controller/common#/definitions/meta"
+    },
+    "strategy": {
+      "$ref": "/schema/controller/common#/definitions/strategy"
+    },
+    "created_at": {
+      "$ref": "/schema/controller/common#/definitions/created_at"
+    },
+    "updated_at": {
+      "$ref": "/schema/controller/common#/definitions/updated_at"
+    }
+  }
+}

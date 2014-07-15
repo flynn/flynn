@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/resource_req#",
+  "title": "Resource Request",
+  "description": "",
+  "sortIndex": 11,
+  "type": "object",
+  "examples": [
+    "schema/examples/controller/provider_resource_create#"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "apps": {
+      "$ref": "/schema/controller/common#/definitions/apps"
+    },
+    "config": {
+      "$ref": "/schema/controller/common#/definitions/config"
+    }
+  },
+  "required": ["config"]
+}

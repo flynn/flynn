@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/deployment#",
+  "title": "Deployment",
+  "description": "",
+  "sortIndex": 3,
+  "type": "object",
+  "examples": [
+    "schema/examples/controller/deployment_create#"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "app": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "old_release": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "new_release": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "strategy": {
+      "$ref": "/schema/controller/common#/definitions/strategy"
+    },
+    "created_at": {
+      "$ref": "/schema/controller/common#/definitions/created_at"
+    },
+    "finished_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "url": {
+      "type": "string",
+      "format": "uri"
+    }
+  }
+}

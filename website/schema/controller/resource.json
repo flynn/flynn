@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/resource#",
+  "title": "Resource",
+  "description": "",
+  "sortIndex": 12,
+  "type": "object",
+  "examples": [
+    "schema/examples/controller/app_resource_list#",
+    "schema/examples/controller/provider_resource_get#",
+    "schema/examples/controller/provider_resource_list#"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "provider": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "external_id": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "env": {
+      "$ref": "/schema/controller/common#/definitions/env"
+    },
+    "apps": {
+      "$ref": "/schema/controller/common#/definitions/apps"
+    },
+    "created_at": {
+      "$ref": "/schema/controller/common#/definitions/created_at"
+    }
+  }
+}
