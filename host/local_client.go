@@ -36,7 +36,7 @@ func (c *localClient) RegisterHost(h *host.Host, jobs chan *host.Job) *error {
 	}()
 	go func() {
 		for job := range ch {
-			jobs <- job.(*host.Job)
+			jobs <- job.(*host.Job).Dup()
 		}
 		close(jobs)
 	}()

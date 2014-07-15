@@ -15,6 +15,47 @@ type Job struct {
 	Config ContainerConfig
 }
 
+func (j *Job) Dup() *Job {
+	job := *j
+
+	dupMap := func(m map[string]string) (res map[string]string) {
+		if m != nil {
+			res = make(map[string]string, len(m))
+		}
+		for k, v := range m {
+			res[k] = v
+		}
+		return res
+	}
+	dupSlice := func(s []string) (res []string) {
+		if s != nil {
+			res = make([]string, len(s))
+		}
+		for i, v := range s {
+			res[i] = v
+		}
+		return res
+	}
+	job.Metadata = dupMap(j.Metadata)
+	job.Config.Entrypoint = dupSlice(j.Config.Entrypoint)
+	job.Config.Cmd = dupSlice(j.Config.Cmd)
+	job.Config.Env = dupMap(j.Config.Env)
+	if j.Config.Ports != nil {
+		job.Config.Ports = make([]Port, len(j.Config.Ports))
+		for i, p := range j.Config.Ports {
+			job.Config.Ports[i] = p
+		}
+	}
+	if j.Config.Mounts != nil {
+		job.Config.Mounts = make([]Mount, len(j.Config.Mounts))
+		for i, m := range j.Config.Mounts {
+			job.Config.Mounts[i] = m
+		}
+	}
+
+	return &job
+}
+
 type JobResources struct {
 	Memory int // in KiB
 }
