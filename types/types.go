@@ -36,6 +36,7 @@ type ProcessType struct {
 	Env   map[string]string `json:"env,omitempty"`
 	Ports ProcessPorts      `json:"ports,omitempty"`
 	Data  bool              `json:"data,omitempty"`
+	Omni  bool              `json:"omni,omitempty"` // omnipresent - present on all hosts
 }
 
 type ProcessPorts struct {

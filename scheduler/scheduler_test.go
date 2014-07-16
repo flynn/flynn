@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -37,6 +38,7 @@ type fakeControllerClient struct {
 	formations map[formationKey]*ct.Formation
 	jobs       map[string]*ct.Job
 	stream     chan *ct.ExpandedFormation
+	mtx        sync.RWMutex
 }
 
 func (c *fakeControllerClient) GetRelease(releaseID string) (*ct.Release, error) {
@@ -66,7 +68,9 @@ func (c *fakeControllerClient) StreamFormations(since *time.Time) (*controller.F
 }
 
 func (c *fakeControllerClient) PutJob(job *ct.Job) error {
+	c.mtx.Lock()
 	c.jobs[job.ID] = job
+	c.mtx.Unlock()
 	return nil
 }
 
@@ -190,7 +194,7 @@ func (s *S) TestWatchFormations(c *C) {
 	cx := newContext(cc, cl)
 	events := make(chan *FormationEvent)
 	defer close(events)
-	go cx.watchFormations(events)
+	go cx.watchFormations(events, nil)
 
 	// Give the scheduler chance to sync with the cluster, then check it's in sync
 	waitForFormationEvent(events, c)
@@ -261,6 +265,78 @@ func (s *S) TestWatchFormations(c *C) {
 	c.Assert(len(host.Jobs), Equals, 4)
 }
 
+func (s *S) TestOmni(c *C) {
+	// Create a fake cluster with an existing running formation
+	appID := "existing-app"
+	artifact := &ct.Artifact{ID: "existing-artifact"}
+	processes := make(map[string]int)
+	release := newRelease("existing-release", artifact, processes)
+	stream := make(chan *ct.ExpandedFormation)
+	cc := newFakeControllerClient(appID, release, artifact, processes, stream)
+
+	hostID := "host0"
+	cl := newFakeCluster(hostID, appID, release.ID, processes, nil)
+	// inject another host
+	host1ID := "host1"
+	cl.AddHost(host1ID, host.Host{ID: host1ID})
+	cl.SetHostClient(host1ID, tu.NewFakeHostClient(host1ID))
+
+	cx := newContext(cc, cl)
+	events := make(chan *FormationEvent)
+	defer close(events)
+	hostEvents := make(chan *host.Event, 14)
+	defer close(hostEvents)
+	go cx.watchFormations(events, hostEvents)
+
+	// Give the scheduler chance to sync with the cluster, then check it's in sync
+	waitForFormationEvent(events, c)
+	waitForWatchHostStart(hostEvents, c)
+	waitForWatchHostStart(hostEvents, c)
+
+	f := &ct.ExpandedFormation{
+		App: &ct.App{ID: "app0"},
+		Release: &ct.Release{
+			ID:         "release0",
+			ArtifactID: "artifact0",
+			Processes: map[string]ct.ProcessType{
+				"web":    ct.ProcessType{Cmd: []string{"start", "web"}, Omni: true},
+				"worker": ct.ProcessType{Cmd: []string{"start", "worker"}},
+			},
+		},
+		Artifact:  &ct.Artifact{ID: "artifact0", Type: "docker", URI: "docker://foo/bar"},
+		UpdatedAt: time.Now(),
+	}
+
+	updates := []*formationUpdate{
+		&formationUpdate{processes: map[string]int{"web": 2}},
+		&formationUpdate{processes: map[string]int{"web": 3, "worker": 1}},
+		&formationUpdate{processes: map[string]int{"web": 1}},
+	}
+
+	for _, u := range updates {
+		f.Processes = u.processes
+		stream <- f
+		waitForFormationEvent(events, c)
+
+		host := cl.GetHost(hostID)
+		host1 := cl.GetHost(host1ID)
+		c.Assert(len(host.Jobs)+len(host1.Jobs), Equals, u.processes["web"]*2+u.processes["worker"])
+	}
+
+	waitForHostEvents(12, hostEvents, c)
+
+	// Check that a new host gets omni jobs
+	host2ID := "host2"
+	cl.AddHost(host2ID, host.Host{ID: host2ID})
+	cl.SetHostClient(host2ID, tu.NewFakeHostClient(host2ID))
+	cl.SendEvent(host2ID, "add")
+	// wait for host to get up
+	waitForWatchHostStart(hostEvents, c)
+	waitForHostEvents(1, hostEvents, c) // wait for the job to get scheduled
+	host2 := cl.GetHost(host2ID)
+	c.Assert(len(host2.Jobs), Equals, 1)
+}
+
 func (s *S) TestWatchHost(c *C) {
 	// Create a fake cluster with an existing running formation and a one-off job
 	appID := "app"
@@ -325,6 +401,16 @@ func (s *S) TestWatchHost(c *C) {
 	c.Assert(len(cl.GetHost(hostID).Jobs), Equals, 3)
 	job, _ = hc.GetJob("job1")
 	c.Assert(job, IsNil)
+
+	// Check that a new host gets detected
+	host2ID := "host2"
+	cl.AddHost(host2ID, host.Host{ID: host2ID})
+	cl.SetHostClient(host2ID, tu.NewFakeHostClient(host2ID))
+	cl.SendEvent(host2ID, "add")
+	// wait for host to get up
+	waitForWatchHostStart(events, c)
+	host2 := cl.GetHost(host2ID)
+	c.Assert(len(host2.Jobs), Equals, 0)
 }
 
 func (s *S) TestJobRestartBackoffPolicy(c *C) {
