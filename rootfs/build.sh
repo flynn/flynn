@@ -1,11 +1,14 @@
 #!/bin/bash
 set -e -x
 
-truncate -s 16G rootfs.img
-mkfs.ext4 -FqL rootfs rootfs.img
+src_dir="$(cd "$(dirname "$0")" && pwd)"
+build_dir=${1:-.}
+
+truncate -s 16G $build_dir/rootfs.img
+mkfs.ext4 -FqL rootfs $build_dir/rootfs.img
 
 dir=$(mktemp -d)
-sudo mount -o loop rootfs.img $dir
+sudo mount -o loop $build_dir/rootfs.img $dir
 
 function cleanup {
   sudo umount $dir
@@ -15,10 +18,10 @@ trap cleanup ERR
 
 curl -L http://cdimage.ubuntu.com/ubuntu-core/releases/14.04/release/ubuntu-core-14.04-core-amd64.tar.gz | sudo tar -xzC $dir
 
-sudo chroot $dir bash < setup.sh
+sudo chroot $dir bash < "$src_dir/setup.sh"
 
-sudo cp $dir/boot/vmlinuz-* vmlinuz
+sudo cp $dir/boot/vmlinuz-* $build_dir/vmlinuz
 
 cleanup
 
-zerofree rootfs.img
+zerofree $build_dir/rootfs.img
