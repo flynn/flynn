@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"os/exec"
 	"os/user"
 	"strconv"
+	"text/template"
 	"time"
 
 	"github.com/flynn/flynn-test/util"
@@ -21,7 +23,6 @@ import (
 type BootConfig struct {
 	User     string
 	RootFS   string
-	DockerFS string
 	Kernel   string
 	NatIface string
 }
@@ -43,59 +44,71 @@ func New(bc BootConfig) *Cluster {
 	}
 }
 
-func (c *Cluster) Boot(count int) error {
-	u, err := user.Lookup(c.bc.User)
+func BuildFlynn(bc BootConfig, dockerFS string, repos map[string]string) (string, error) {
+	return New(bc).BuildFlynn(dockerFS, repos)
+}
+
+func (c *Cluster) BuildFlynn(dockerFS string, repos map[string]string) (string, error) {
+	fmt.Println("Building Flynn...")
+
+	if err := c.setup(); err != nil {
+		return "", err
+	}
+
+	uid, gid, err := lookupUser(c.bc.User)
 	if err != nil {
+		return "", err
+	}
+
+	dockerDrive := VMDrive{FS: dockerFS, TempCOW: true}
+	if dockerDrive.FS == "" {
+		// create 16GB sparse fs image to store docker data on
+		dockerFS, err := createBtrfs(17179869184, "dockerfs", uid, gid)
+		if err != nil {
+			os.RemoveAll(dockerFS)
+			return "", err
+		}
+		dockerDrive.FS = dockerFS
+		dockerDrive.TempCOW = false
+	}
+
+	build, err := c.vm.NewInstance(&VMConfig{
+		Kernel: c.bc.Kernel,
+		User:   uid,
+		Group:  gid,
+		Memory: "512",
+		Drives: map[string]VMDrive{
+			"hda": VMDrive{FS: c.bc.RootFS, TempCOW: true},
+			"hdb": dockerDrive,
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	fmt.Println("Booting build instance...")
+	if err := build.Start(); err != nil {
+		return "", fmt.Errorf("error starting build instance: %s", err)
+	}
+
+	fmt.Println("Waiting for instance to boot...")
+	if err := buildFlynn(build, repos); err != nil {
+		build.Kill()
+		return "", fmt.Errorf("error running build script: %s", err)
+	}
+
+	if err := build.Kill(); err != nil {
+		return "", fmt.Errorf("error while stopping build instance: %s", err)
+	}
+	return build.Drive("hdb").FS, nil
+}
+
+func (c *Cluster) Boot(dockerfs string, count int) error {
+	if err := c.setup(); err != nil {
 		return err
 	}
-	uid, _ := strconv.Atoi(u.Uid)
-	gid, _ := strconv.Atoi(u.Gid)
-
-	if _, err := os.Stat(c.bc.Kernel); os.IsNotExist(err) {
-		return fmt.Errorf("not a kernel file: %s", c.bc.Kernel)
-	}
-
-	fmt.Println("Initializing networking...")
-	if err := initNetworking(c.bc.NatIface); err != nil {
-		return fmt.Errorf("net init error: %s", err)
-	}
-
-	dockerRoot := c.bc.DockerFS
-	if dockerRoot == "" {
-		fmt.Println("Creating docker fs...")
-		// create 16GB sparse fs image to store docker data on
-		dockerRoot, err = createBtrfs(17179869184, "dockerfs", uid, gid)
-		if err != nil {
-			return err
-		}
-
-		build, err := c.vm.NewInstance(&VMConfig{
-			Kernel: c.bc.Kernel,
-			User:   uid,
-			Group:  gid,
-			Memory: "512",
-			Drives: map[string]VMDrive{
-				"hda": VMDrive{FS: c.bc.RootFS, TempCOW: true},
-				"hdb": VMDrive{FS: dockerRoot},
-			},
-		})
-		if err != nil {
-			return err
-		}
-		fmt.Println("Booting build instance...")
-		if err := build.Start(); err != nil {
-			return fmt.Errorf("error starting build instance: %s", err)
-		}
-
-		fmt.Println("Waiting for instance to boot...")
-		if err := buildFlynn(build); err != nil {
-			build.Kill()
-			return err
-		}
-
-		if err := build.Kill(); err != nil {
-			return fmt.Errorf("error while stopping build instance: %s", err)
-		}
+	uid, gid, err := lookupUser(c.bc.User)
+	if err != nil {
+		return err
 	}
 
 	fmt.Println("Booting", count, "instances")
@@ -107,7 +120,7 @@ func (c *Cluster) Boot(count int) error {
 			Memory: "512",
 			Drives: map[string]VMDrive{
 				"hda": VMDrive{FS: c.bc.RootFS, TempCOW: true},
-				"hdb": VMDrive{FS: dockerRoot, TempCOW: true},
+				"hdb": VMDrive{FS: dockerfs, TempCOW: true},
 			},
 		})
 		if err != nil {
@@ -134,6 +147,17 @@ func (c *Cluster) Boot(count int) error {
 	return nil
 }
 
+func (c *Cluster) setup() error {
+	if _, err := os.Stat(c.bc.Kernel); os.IsNotExist(err) {
+		return fmt.Errorf("cluster: not a kernel file: %s", c.bc.Kernel)
+	}
+	fmt.Println("Initializing networking...")
+	if err := initNetworking(c.bc.NatIface); err != nil {
+		return fmt.Errorf("cluster: net init error: %s", err)
+	}
+	return nil
+}
+
 func (c *Cluster) Shutdown() {
 	for i, inst := range c.instances {
 		log.Println("killing instance", i)
@@ -149,25 +173,40 @@ var attempts = attempt.Strategy{
 	Delay: time.Second,
 }
 
-func buildFlynn(inst Instance) error {
-	buildScript := `
+var flynnBuildScript = template.Must(template.New("flynn-build").Parse(`
 #!/bin/bash
 set -e -x
 
-flynn=~/go/src/github.com/flynn
-mkdir -p $flynn
-export GOPATH=~/go
+export GOPATH=/var/lib/docker/flynn/go
+flynn=$GOPATH/src/github.com/flynn
+sudo mkdir -p $flynn
+sudo chown -R ubuntu:ubuntu $GOPATH
 
-git clone https://github.com/flynn/flynn-devbox
-cd flynn-devbox
-./checkout-flynn manifest.txt $flynn
-./build-flynn $flynn
+build() {
+  repo=$1
+  ref=$2
+  dir=$flynn/$repo
+  test -d $dir || git clone https://github.com/flynn/$repo $dir
+  pushd $dir > /dev/null
+  git fetch
+  git checkout $ref
+  rm -rf /tmp/godep # work around godep bugs
+  test -f Makefile && make clean && make
+  popd > /dev/null
+}
+
+{{ range $repo, $ref := . }}
+build "{{ $repo }}" "{{ $ref }}"
+{{ end }}
 
 sudo stop docker
 sudo umount /var/lib/docker
-`
+`[1:]))
 
-	return inst.Run(buildScript, attempts, os.Stdout)
+func buildFlynn(inst Instance, repos map[string]string) error {
+	var b bytes.Buffer
+	flynnBuildScript.Execute(&b, repos)
+	return inst.Run(b.String(), attempts, os.Stdout)
 }
 
 func (c *Cluster) bootstrapGrid() error {
@@ -284,4 +323,14 @@ func setLocalDNS(domain, ip string) error {
 	)
 	cmd := exec.Command("bash", "-c", command)
 	return cmd.Run()
+}
+
+func lookupUser(name string) (int, int, error) {
+	u, err := user.Lookup(name)
+	if err != nil {
+		return 0, 0, err
+	}
+	uid, _ := strconv.Atoi(u.Uid)
+	gid, _ := strconv.Atoi(u.Gid)
+	return uid, gid, nil
 }

@@ -74,6 +74,7 @@ type Instance interface {
 	Kill() error
 	IP() string
 	Run(string, attempt.Strategy, io.Writer) error
+	Drive(string) VMDrive
 }
 
 type vm struct {
@@ -234,4 +235,8 @@ func (v *vm) Run(command string, attempts attempt.Strategy, out io.Writer) error
 		return fmt.Errorf("failed to run command on %s: %s", v.IP(), err)
 	}
 	return nil
+}
+
+func (v *vm) Drive(name string) VMDrive {
+	return v.Drives[name]
 }
