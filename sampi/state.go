@@ -24,7 +24,11 @@ type State struct {
 
 func NewState() *State {
 	curr := make(map[string]host.Host)
-	return &State{curr: &curr, streams: make(map[string]chan<- *host.Job)}
+	return &State{
+		curr:      &curr,
+		listeners: make(map[chan host.HostEvent]struct{}),
+		streams:   make(map[string]chan<- *host.Job),
+	}
 }
 
 func (s *State) Begin() {
