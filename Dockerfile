@@ -1,4 +1,4 @@
-FROM ubuntu:12.04
+FROM ubuntu:trusty
 MAINTAINER Jonathan Rudenberg <jonathan@titanous.com>
 
 RUN apt-get update && apt-get -qy install git && apt-get clean
