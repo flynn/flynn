@@ -48,6 +48,10 @@
 			"Rev": "cd680b2cd620be36cd39a58270c6a2894dd2e810"
 		},
 		{
+			"ImportPath": "github.com/gorilla/handlers",
+			"Rev": "470089673c69baefb2d80b13019a4ab6f05e2aad"
+		},
+		{
 			"ImportPath": "gopkg.in/check.v1",
 			"Rev": "871360013c92e1c715c2de6d06b54899468a8a2d"
 		}

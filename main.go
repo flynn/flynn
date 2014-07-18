@@ -20,6 +20,7 @@ import (
 
 	"code.google.com/p/go.crypto/ssh"
 	"github.com/flynn/flynn-test/cluster"
+	"github.com/gorilla/handlers"
 	"gopkg.in/check.v1"
 )
 
@@ -88,7 +89,7 @@ func main() {
 		events = make(chan Event, 10)
 		go handleEvents(dockerfs)
 
-		http.HandleFunc("/", webhookHandler)
+		http.Handle("/", handlers.CombinedLoggingHandler(os.Stdout, http.HandlerFunc(webhookHandler)))
 		fmt.Println("Listening on :80...")
 		if err := http.ListenAndServe(":80", nil); err != nil {
 			log.Fatal("ListenAndServer: ", err)
