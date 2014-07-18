@@ -73,7 +73,7 @@ type Instance interface {
 	Wait() error
 	Kill() error
 	IP() string
-	Run(string, attempt.Strategy, io.Writer) error
+	Run(string, attempt.Strategy, io.Writer, io.Writer) error
 	Drive(string) VMDrive
 }
 
@@ -216,10 +216,10 @@ func (v *vm) IP() string {
 	return v.tap.RemoteIP.String()
 }
 
-func (v *vm) Run(command string, attempts attempt.Strategy, out io.Writer) error {
+func (v *vm) Run(command string, attempts attempt.Strategy, out io.Writer, stderr io.Writer) error {
 	var sc *ssh.Client
 	err := attempts.Run(func() (err error) {
-		fmt.Printf("Attempting to ssh to %s:22...\n", v.IP())
+		stderr.Write([]byte(fmt.Sprintf("Attempting to ssh to %s:22...\n", v.IP())))
 		sc, err = v.DialSSH()
 		return
 	})
@@ -230,7 +230,7 @@ func (v *vm) Run(command string, attempts attempt.Strategy, out io.Writer) error
 	sess, err := sc.NewSession()
 	sess.Stdin = bytes.NewBufferString(command)
 	sess.Stdout = out
-	sess.Stderr = os.Stderr
+	sess.Stderr = stderr
 	if err := sess.Run("bash"); err != nil {
 		return fmt.Errorf("failed to run command on %s: %s", v.IP(), err)
 	}

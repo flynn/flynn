@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"os/user"
@@ -35,21 +34,31 @@ type Cluster struct {
 	bc        BootConfig
 	vm        *VMManager
 	instances []Instance
+	out       io.Writer
 }
 
-func New(bc BootConfig) *Cluster {
+func New(bc BootConfig, out io.Writer) *Cluster {
 	return &Cluster{
-		bc: bc,
-		vm: NewVMManager(),
+		bc:  bc,
+		vm:  NewVMManager(),
+		out: out,
 	}
 }
 
-func BuildFlynn(bc BootConfig, dockerFS string, repos map[string]string) (string, error) {
-	return New(bc).BuildFlynn(dockerFS, repos)
+func BuildFlynn(bc BootConfig, dockerFS string, repos map[string]string, out io.Writer) (string, error) {
+	return New(bc, out).BuildFlynn(dockerFS, repos)
+}
+
+func (c *Cluster) log(a ...interface{}) (int, error) {
+	return fmt.Fprintln(c.out, a...)
+}
+
+func (c *Cluster) logf(f string, a ...interface{}) (int, error) {
+	return fmt.Fprintf(c.out, f, a...)
 }
 
 func (c *Cluster) BuildFlynn(dockerFS string, repos map[string]string) (string, error) {
-	fmt.Println("Building Flynn...")
+	c.log("Building Flynn...")
 
 	if err := c.setup(); err != nil {
 		return "", err
@@ -85,13 +94,13 @@ func (c *Cluster) BuildFlynn(dockerFS string, repos map[string]string) (string, 
 	if err != nil {
 		return "", err
 	}
-	fmt.Println("Booting build instance...")
+	c.log("Booting build instance...")
 	if err := build.Start(); err != nil {
 		return "", fmt.Errorf("error starting build instance: %s", err)
 	}
 
-	fmt.Println("Waiting for instance to boot...")
-	if err := buildFlynn(build, repos); err != nil {
+	c.log("Waiting for instance to boot...")
+	if err := buildFlynn(build, repos, c.out); err != nil {
 		build.Kill()
 		return "", fmt.Errorf("error running build script: %s", err)
 	}
@@ -111,7 +120,7 @@ func (c *Cluster) Boot(dockerfs string, count int) error {
 		return err
 	}
 
-	fmt.Println("Booting", count, "instances")
+	c.log("Booting", count, "instances")
 	for i := 0; i < count; i++ {
 		inst, err := c.vm.NewInstance(&VMConfig{
 			Kernel: c.bc.Kernel,
@@ -134,12 +143,12 @@ func (c *Cluster) Boot(dockerfs string, count int) error {
 		c.instances = append(c.instances, inst)
 	}
 
-	fmt.Println("Bootstrapping layer 0...")
+	c.log("Bootstrapping layer 0...")
 	if err := c.bootstrapGrid(); err != nil {
 		c.Shutdown()
 		return err
 	}
-	fmt.Println("Bootstrapping layer 1...")
+	c.log("Bootstrapping layer 1...")
 	if err := c.bootstrapFlynn(); err != nil {
 		c.Shutdown()
 		return err
@@ -151,7 +160,7 @@ func (c *Cluster) setup() error {
 	if _, err := os.Stat(c.bc.Kernel); os.IsNotExist(err) {
 		return fmt.Errorf("cluster: not a kernel file: %s", c.bc.Kernel)
 	}
-	fmt.Println("Initializing networking...")
+	c.log("Initializing networking...")
 	if err := initNetworking(c.bc.NatIface); err != nil {
 		return fmt.Errorf("cluster: net init error: %s", err)
 	}
@@ -160,9 +169,9 @@ func (c *Cluster) setup() error {
 
 func (c *Cluster) Shutdown() {
 	for i, inst := range c.instances {
-		log.Println("killing instance", i)
+		c.log("killing instance", i)
 		if err := inst.Kill(); err != nil {
-			log.Printf("error killing instance %d: %s\n", i, err)
+			c.logf("error killing instance %d: %s\n", i, err)
 		}
 	}
 }
@@ -203,10 +212,10 @@ sudo stop docker
 sudo umount /var/lib/docker
 `[1:]))
 
-func buildFlynn(inst Instance, repos map[string]string) error {
+func buildFlynn(inst Instance, repos map[string]string, out io.Writer) error {
 	var b bytes.Buffer
 	flynnBuildScript.Execute(&b, repos)
-	return inst.Run(b.String(), attempts, os.Stdout)
+	return inst.Run(b.String(), attempts, out, out)
 }
 
 func (c *Cluster) bootstrapGrid() error {
@@ -216,7 +225,7 @@ func (c *Cluster) bootstrapGrid() error {
 			command = fmt.Sprintf("%s -e=ETCD_PEERS=%s:7001", command, c.instances[0].IP())
 		}
 		command = fmt.Sprintf("%s flynn/host -external %s -force", command, inst.IP())
-		if err := inst.Run(command, attempts, os.Stdout); err != nil {
+		if err := inst.Run(command, attempts, c.out, os.Stderr); err != nil {
 			return err
 		}
 	}
@@ -244,7 +253,7 @@ func (c *Cluster) bootstrapFlynn() error {
 			"docker run -e=DISCOVERD=%s:1111 -e CONTROLLER_DOMAIN=%s -e CONTROLLER_KEY=%s flynn/bootstrap -json -min-hosts=%d /etc/manifest.json",
 			inst.IP(), c.ControllerDomain, c.ControllerKey, len(c.instances),
 		)
-		cmdErr = inst.Run(command, attempts, wr)
+		cmdErr = inst.Run(command, attempts, wr, os.Stderr)
 		wr.Close()
 	}()
 
@@ -258,9 +267,9 @@ func (c *Cluster) bootstrapFlynn() error {
 		} else if err != nil {
 			return fmt.Errorf("failed to parse bootstrap JSON output: %s", err)
 		}
-		fmt.Println("bootstrap ===>", msg.Id, msg.State)
+		c.log("bootstrap ===>", msg.Id, msg.State)
 		if msg.State == "error" {
-			fmt.Println(msg)
+			c.log(msg)
 		}
 		if msg.Id == "controller-cert" && msg.State == "done" {
 			json.Unmarshal(msg.Data, &cert)

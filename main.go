@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -17,8 +18,11 @@ import (
 	"os/exec"
 	"strings"
 	"text/template"
+	"time"
 
 	"code.google.com/p/go.crypto/ssh"
+	"github.com/cupcake/goamz/aws"
+	"github.com/cupcake/goamz/s3"
 	"github.com/flynn/flynn-test/cluster"
 	"github.com/gorilla/handlers"
 	"gopkg.in/check.v1"
@@ -45,6 +49,7 @@ var flynnrc string
 var bootConfig cluster.BootConfig
 var events chan Event
 var githubToken string
+var awsAuth aws.Auth
 
 var repos = map[string]string{
 	"flynn-host":       "master",
@@ -80,9 +85,16 @@ func main() {
 		if githubToken == "" {
 			log.Fatal("GITHUB_TOKEN not set")
 		}
+		awsAuth = aws.Auth{
+			AccessKey: os.Getenv("AWS_ACCESS_KEY_ID"),
+			SecretKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
+		}
+		if awsAuth.AccessKey == "" || awsAuth.SecretKey == "" {
+			log.Fatal("AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY not set")
+		}
 		if dockerfs == "" {
 			var err error
-			if dockerfs, err = cluster.BuildFlynn(bootConfig, "", repos); err != nil {
+			if dockerfs, err = cluster.BuildFlynn(bootConfig, "", repos, os.Stdout); err != nil {
 				log.Fatal("could not build flynn:", err)
 			}
 		}
@@ -97,7 +109,7 @@ func main() {
 	}
 
 	if flynnrc == "" {
-		c := cluster.New(bootConfig)
+		c := cluster.New(bootConfig, os.Stdout)
 		if dockerfs == "" {
 			var err error
 			if dockerfs, err = c.BuildFlynn("", repos); err != nil {
@@ -180,36 +192,67 @@ func handleEvents(dockerfs string) {
 		if !needsBuild(event) {
 			continue
 		}
-		updateStatus(event, "pending")
-		log.Printf("building %s[%s]\n", event.Repo(), event.Commit())
-		repos := map[string]string{event.Repo(): event.Commit()}
-		newDockerfs, err := cluster.BuildFlynn(bootConfig, dockerfs, repos)
-		if err != nil {
-			updateStatus(event, "failure")
-			fmt.Printf("could not build flynn: %s\n", err)
-			continue
-		}
-
-		cmd := exec.Command(
-			os.Args[0],
-			"--user", *username,
-			"--rootfs", *rootfs,
-			"--dockerfs", newDockerfs,
-			"--kernel", *kernel,
-			"--cli", *flagCLI,
-			"--nat", *natIface,
-			"--kill", "false",
-		)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			updateStatus(event, "failure")
+		if err := build(event.Repo(), event.Commit(), dockerfs); err != nil {
 			fmt.Printf("build failed: %s\n", err)
 			continue
 		}
-		updateStatus(event, "success")
 		fmt.Printf("build passed!\n")
 	}
+}
+
+func build(repo, commit, dockerfs string) (err error) {
+	updateStatus(repo, commit, "pending", "")
+
+	var log bytes.Buffer
+	defer func() {
+		if err != nil {
+			log.WriteString(fmt.Sprintf("build error: %s\n", err))
+		}
+		url := uploadToS3(log, repo, commit)
+		if err == nil {
+			updateStatus(repo, commit, "success", url)
+		} else {
+			updateStatus(repo, commit, "failure", url)
+		}
+	}()
+
+	fmt.Printf("building %s[%s]\n", repo, commit)
+
+	out := io.MultiWriter(os.Stdout, &log)
+	repos := map[string]string{repo: commit}
+	newDockerfs, err := cluster.BuildFlynn(bootConfig, dockerfs, repos, out)
+	if err != nil {
+		msg := fmt.Sprintf("could not build flynn: %s\n", err)
+		log.WriteString(msg)
+		return errors.New(msg)
+	}
+
+	cmd := exec.Command(
+		os.Args[0],
+		"--user", *username,
+		"--rootfs", *rootfs,
+		"--dockerfs", newDockerfs,
+		"--kernel", *kernel,
+		"--cli", *flagCLI,
+		"--nat", *natIface,
+		"--kill", "false",
+	)
+	cmd.Stdout = out
+	cmd.Stderr = out
+	return cmd.Run()
+}
+
+func uploadToS3(log bytes.Buffer, repo, commit string) string {
+	bucket := s3.New(awsAuth, aws.USEast).Bucket("flynn-ci-logs")
+	name := fmt.Sprintf("%s-%s-%s.txt", repo, commit, time.Now().Format("2006-01-02-15-04-05"))
+	url := fmt.Sprintf("https://s3.amazonaws.com/flynn-ci-logs/%s", name)
+	fmt.Printf("uploading build log to S3: %s\n", url)
+	if err := bucket.Put(name, log.Bytes(), "text/plain", "public-read"); err != nil {
+		// TODO: retry?
+		fmt.Printf("failed to upload build output to S3: %s\n", err)
+		return ""
+	}
+	return url
 }
 
 func logEvent(event Event) {
@@ -256,12 +299,17 @@ var descriptions = map[string]string{
 	"failure": "The Flynn CI build failed",
 }
 
-func updateStatus(event Event, state string) {
+func updateStatus(repo, commit, state, targetUrl string) {
 	go func() {
-		log.Printf("updateStatus: %s %s[%s]\n", state, event.Repo(), event.Commit())
+		log.Printf("updateStatus: %s %s[%s]\n", state, repo, commit)
 
-		url := fmt.Sprintf("https://api.github.com/repos/flynn/%s/statuses/%s", event.Repo(), event.Commit())
-		status := Status{State: state, Description: descriptions[state], Context: "flynn"}
+		url := fmt.Sprintf("https://api.github.com/repos/flynn/%s/statuses/%s", repo, commit)
+		status := Status{
+			State:       state,
+			TargetUrl:   targetUrl,
+			Description: descriptions[state],
+			Context:     "flynn",
+		}
 		body := bytes.NewBufferString("")
 		if err := json.NewEncoder(body).Encode(status); err != nil {
 			log.Printf("updateStatus: could not encode status: %+v\n", status)
