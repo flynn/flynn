@@ -48,10 +48,13 @@ func NewChain(name, bridge string) (*Chain, error) {
 	}
 
 	if err := chain.Prerouting(Add, "-m", "addrtype", "--dst-type", "LOCAL"); err != nil {
-		return nil, fmt.Errorf("Failed to inject update PREROUTING chain: %s", err)
+		return nil, fmt.Errorf("failed to update PREROUTING chain: %s", err)
 	}
-	if err := chain.Output(Add, "-m", "addrtype", "--dst-type", "LOCAL", "!", "--dst", "127.0.0.0/8"); err != nil {
-		return nil, fmt.Errorf("Failed to inject update OUTPUT chain: %s", err)
+	if err := chain.Output(Add, "-m", "addrtype", "--dst-type", "LOCAL"); err != nil {
+		return nil, fmt.Errorf("failed to update OUTPUT chain: %s", err)
+	}
+	if _, err := Raw("-t", "nat", "-A", "POSTROUTING", "-m", "addrtype", "--src-type", "LOCAL", "-o", bridge, "-j", "MASQUERADE"); err != nil {
+		return nil, fmt.Errorf("failed to update POSTROUTING chain: %s", err)
 	}
 	return chain, nil
 }
@@ -141,8 +144,8 @@ func (c *Chain) Output(action Action, args ...string) error {
 func (c *Chain) Remove() error {
 	// Ignore errors - This could mean the chains were never set up
 	c.Prerouting(Delete, "-m", "addrtype", "--dst-type", "LOCAL")
-	c.Output(Delete, "-m", "addrtype", "--dst-type", "LOCAL", "!", "--dst", "127.0.0.0/8")
-	c.Output(Delete, "-m", "addrtype", "--dst-type", "LOCAL") // Created in versions <= 0.1.6
+	c.Output(Delete, "-m", "addrtype", "--dst-type", "LOCAL")
+	Raw("-t", "nat", "-D", "POSTROUTING", "-m", "addrtype", "--src-type", "LOCAL", "-o", c.Bridge, "-j", "MASQUERADE")
 
 	c.Prerouting(Delete)
 	c.Output(Delete)
