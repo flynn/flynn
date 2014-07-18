@@ -43,6 +43,7 @@ var dockerfs string
 var flynnrc string
 var bootConfig cluster.BootConfig
 var events chan Event
+var githubToken string
 
 var repos = map[string]string{
 	"flynn-host":       "master",
@@ -74,6 +75,10 @@ func main() {
 	}
 
 	if *listen == true {
+		githubToken = os.Getenv("GITHUB_TOKEN")
+		if githubToken == "" {
+			log.Fatal("GITHUB_TOKEN not set")
+		}
 		if dockerfs == "" {
 			var err error
 			if dockerfs, err = cluster.BuildFlynn(bootConfig, "", repos); err != nil {
@@ -174,10 +179,12 @@ func handleEvents(dockerfs string) {
 		if !needsBuild(event) {
 			continue
 		}
+		updateStatus(event, "pending")
 		log.Printf("building %s[%s]\n", event.Repo(), event.Commit())
 		repos := map[string]string{event.Repo(): event.Commit()}
 		newDockerfs, err := cluster.BuildFlynn(bootConfig, dockerfs, repos)
 		if err != nil {
+			updateStatus(event, "failure")
 			fmt.Printf("could not build flynn: %s\n", err)
 			continue
 		}
@@ -195,9 +202,11 @@ func handleEvents(dockerfs string) {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
+			updateStatus(event, "failure")
 			fmt.Printf("build failed: %s\n", err)
 			continue
 		}
+		updateStatus(event, "success")
 		fmt.Printf("build passed!\n")
 	}
 }
@@ -231,6 +240,51 @@ func needsBuild(event Event) bool {
 		return false
 	}
 	return true
+}
+
+type Status struct {
+	State       string `json:"state"`
+	TargetUrl   string `json:"target_url,omitempty"`
+	Description string `json:"description,omitempty"`
+	Context     string `json:"context,omitempty"`
+}
+
+var descriptions = map[string]string{
+	"pending": "The Flynn CI build is in progress",
+	"success": "The Flynn CI build passed",
+	"failure": "The Flynn CI build failed",
+}
+
+func updateStatus(event Event, state string) {
+	go func() {
+		log.Printf("updateStatus: %s %s[%s]\n", state, event.Repo(), event.Commit())
+
+		url := fmt.Sprintf("https://api.github.com/repos/flynn/%s/statuses/%s", event.Repo(), event.Commit())
+		status := Status{State: state, Description: descriptions[state], Context: "flynn"}
+		body := bytes.NewBufferString("")
+		if err := json.NewEncoder(body).Encode(status); err != nil {
+			log.Printf("updateStatus: could not encode status: %+v\n", status)
+			return
+		}
+
+		req, err := http.NewRequest("POST", url, body)
+		if err != nil {
+			log.Printf("updateStatus: could not create request: %s\n", err)
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", fmt.Sprintf("token %s", githubToken))
+
+		res, err := http.DefaultClient.Do(req)
+		defer res.Body.Close()
+		if err != nil {
+			log.Printf("updateStatus: could not send request: %s\n", err)
+			return
+		}
+		if res.StatusCode != 201 {
+			log.Printf("updateStatus: request failed: %d\n", res.StatusCode)
+		}
+	}()
 }
 
 type sshData struct {
