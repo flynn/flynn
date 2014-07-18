@@ -4,6 +4,11 @@ import (
 	"time"
 )
 
+type Event interface {
+	Repo() string
+	Commit() string
+}
+
 type PushEvent struct {
 	Ref        string      `json:"ref"`
 	After      string      `json:"after"`
@@ -12,6 +17,30 @@ type PushEvent struct {
 	HeadCommit *Commit     `json:"head_commit"`
 	Repository *Repository `json:"repository"`
 	Pusher     *User       `json:"pusher"`
+}
+
+func (e *PushEvent) Repo() string {
+	return e.Repository.Name
+}
+
+func (e *PushEvent) Commit() string {
+	return e.HeadCommit.Id
+}
+
+type PullRequestEvent struct {
+	Action      string       `json:"action"`
+	Number      int          `json:"number"`
+	PullRequest *PullRequest `json:"pull_request"`
+	Repository  *Repository  `json:"repository"`
+	Sender      *PRUser      `json:"sender"`
+}
+
+func (e *PullRequestEvent) Repo() string {
+	return e.Repository.Name
+}
+
+func (e *PullRequestEvent) Commit() string {
+	return e.PullRequest.Head.Sha
 }
 
 type Commit struct {
@@ -38,4 +67,28 @@ type User struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Username string `json:"username"`
+}
+
+type PullRequest struct {
+	Url       string     `json:"url"`
+	Number    int        `json:"number"`
+	State     string     `json:"state"`
+	Title     string     `json:"title"`
+	User      *PRUser    `json:"user"`
+	CreatedAt *time.Time `json:"created_at"`
+	UpdatedAt *time.Time `json:"updated_at"`
+	Head      *PRBranch  `json:"head"`
+	Base      *PRBranch  `json:"base"`
+}
+
+type PRUser struct {
+	Login string `json:"login"`
+}
+
+type PRBranch struct {
+	Label string      `json:"label"`
+	Ref   string      `json:"ref"`
+	Sha   string      `json:"sha"`
+	User  *PRUser     `json:"user"`
+	Repo  *Repository `json:"repo"`
 }

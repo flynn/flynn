@@ -42,7 +42,7 @@ var gitEnv []string
 var dockerfs string
 var flynnrc string
 var bootConfig cluster.BootConfig
-var events chan *PushEvent
+var events chan Event
 
 var repos = map[string]string{
 	"flynn-host":       "master",
@@ -80,8 +80,8 @@ func main() {
 				log.Fatal("could not build flynn:", err)
 			}
 		}
-		events = make(chan *PushEvent, 10)
-		go handlePushEvents(dockerfs)
+		events = make(chan Event, 10)
+		go handleEvents(dockerfs)
 
 		http.HandleFunc("/", webhookHandler)
 		fmt.Println("Listening on :80...")
@@ -138,41 +138,44 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing X-Github-Event header\n", 400)
 		return
 	}
-	event := strings.Join(header, " ")
-	if event != "push" {
-		log.Println("webhook: unknown X-Github-Event:", event)
-		http.Error(w, fmt.Sprintf("Unknown X-Github-Event: %s\n", event), 400)
+
+	name := strings.Join(header, " ")
+	var event Event
+	switch name {
+	case "push":
+		event = &PushEvent{}
+	case "pull_request":
+		event = &PullRequestEvent{}
+	default:
+		log.Println("webhook: unknown X-Github-Event:", name)
+		http.Error(w, fmt.Sprintf("Unknown X-Github-Event: %s\n", name), 400)
 		return
 	}
 
 	dec := json.NewDecoder(r.Body)
-	var push PushEvent
-	if err := dec.Decode(&push); err != nil && err != io.EOF {
+	if err := dec.Decode(&event); err != nil && err != io.EOF {
 		log.Println("webhook: error decoding JSON", err)
-		http.Error(w, "invalid JSON payload", 400)
+		http.Error(w, fmt.Sprintf("invalid JSON payload for %s event", name), 400)
 		return
 	}
-	repo := push.Repository.Name
+	repo := event.Repo()
 	if _, ok := repos[repo]; !ok {
 		log.Println("webhook: unknown repo", repo)
 		http.Error(w, fmt.Sprintf("unknown repo %s", repo), 400)
 		return
 	}
-	log.Printf(
-		"received push of %s[%s] by %s: %s => %s\n",
-		push.Repository.Name,
-		push.Ref,
-		push.Pusher.Name,
-		push.Before,
-		push.After,
-	)
-	events <- &push
+	logEvent(event)
+	events <- event
 	io.WriteString(w, "ok\n")
 }
 
-func handlePushEvents(dockerfs string) {
+func handleEvents(dockerfs string) {
 	for event := range events {
-		repos := map[string]string{event.Repository.Name: event.HeadCommit.Id}
+		if !needsBuild(event) {
+			continue
+		}
+		log.Printf("building %s[%s]\n", event.Repo(), event.Commit())
+		repos := map[string]string{event.Repo(): event.Commit()}
 		newDockerfs, err := cluster.BuildFlynn(bootConfig, dockerfs, repos)
 		if err != nil {
 			fmt.Printf("could not build flynn: %s\n", err)
@@ -197,6 +200,37 @@ func handlePushEvents(dockerfs string) {
 		}
 		fmt.Printf("build passed!\n")
 	}
+}
+
+func logEvent(event Event) {
+	switch event.(type) {
+	case *PushEvent:
+		e := event.(*PushEvent)
+		log.Printf(
+			"received push of %s[%s] by %s: %s => %s\n",
+			e.Repo(),
+			e.Ref,
+			e.Pusher.Name,
+			e.Before,
+			e.After,
+		)
+	case *PullRequestEvent:
+		e := event.(*PullRequestEvent)
+		log.Printf(
+			"pull request %s/%d %s by %s\n",
+			e.Repo(),
+			e.Number,
+			e.Action,
+			e.Sender.Login,
+		)
+	}
+}
+
+func needsBuild(event Event) bool {
+	if e, ok := event.(*PullRequestEvent); ok && e.Action == "closed" {
+		return false
+	}
+	return true
 }
 
 type sshData struct {
