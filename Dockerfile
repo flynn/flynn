@@ -1,4 +1,4 @@
-FROM ubuntu:12.04
+FROM ubuntu:trusty
 MAINTAINER Jonathan Rudenberg <jonathan@titanous.com>
 
 ENV DEBIAN_FRONTEND noninteractive
@@ -10,7 +10,7 @@ RUN echo "#!/bin/sh\nexit 101" > /usr/sbin/policy-rc.d; chmod +x /usr/sbin/polic
     dpkg-reconfigure locales &&\
     apt-get -y install curl sudo &&\
     curl -s https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - &&\
-    sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ precise-pgdg main" >> /etc/apt/sources.list.d/postgresql.list' &&\
+    sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" >> /etc/apt/sources.list.d/postgresql.list' &&\
     apt-get update &&\
     apt-get install -y -q postgresql-9.3 postgresql-contrib-9.3 postgresql-9.3-pgextwlist &&\
     apt-get clean &&\
