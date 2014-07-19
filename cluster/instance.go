@@ -18,8 +18,8 @@ import (
 	"github.com/flynn/go-flynn/attempt"
 )
 
-func NewVMManager() *VMManager {
-	return &VMManager{taps: &TapManager{}}
+func NewVMManager(bridge *Bridge) *VMManager {
+	return &VMManager{taps: &TapManager{bridge}}
 }
 
 type VMManager struct {

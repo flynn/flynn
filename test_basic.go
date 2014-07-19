@@ -51,7 +51,7 @@ var Attempts = attempt.Strategy{
 }
 
 func (s *BasicSuite) TestBasic(t *c.C) {
-	name := util.RandomString()[:30]
+	name := util.RandomString(30)
 	t.Assert(s.Flynn("create", name), Outputs, fmt.Sprintf("Created %s\n", name))
 
 	push := s.Git("push", "flynn", "master")
@@ -65,7 +65,7 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 
 	t.Assert(s.Flynn("scale", "web=3"), Succeeds)
 
-	newRoute := s.Flynn("route-add-http", util.RandomString()+".dev")
+	newRoute := s.Flynn("route-add-http", util.RandomString(32)+".dev")
 	t.Assert(newRoute, Succeeds)
 
 	t.Assert(s.Flynn("routes"), OutputContains, strings.TrimSpace(newRoute.Output))

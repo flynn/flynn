@@ -23,6 +23,7 @@ type BootConfig struct {
 	User     string
 	RootFS   string
 	Kernel   string
+	Network  string
 	NatIface string
 }
 
@@ -35,18 +36,20 @@ type Cluster struct {
 	vm        *VMManager
 	instances []Instance
 	out       io.Writer
+	bridge    *Bridge
 }
 
 func New(bc BootConfig, out io.Writer) *Cluster {
 	return &Cluster{
 		bc:  bc,
-		vm:  NewVMManager(),
 		out: out,
 	}
 }
 
 func BuildFlynn(bc BootConfig, dockerFS string, repos map[string]string, out io.Writer) (string, error) {
-	return New(bc, out).BuildFlynn(dockerFS, repos)
+	c := New(bc, out)
+	defer c.Shutdown()
+	return c.BuildFlynn(dockerFS, repos)
 }
 
 func (c *Cluster) log(a ...interface{}) (int, error) {
@@ -160,10 +163,16 @@ func (c *Cluster) setup() error {
 	if _, err := os.Stat(c.bc.Kernel); os.IsNotExist(err) {
 		return fmt.Errorf("cluster: not a kernel file: %s", c.bc.Kernel)
 	}
-	c.log("Initializing networking...")
-	if err := initNetworking(c.bc.NatIface); err != nil {
-		return fmt.Errorf("cluster: net init error: %s", err)
+	if c.bridge == nil {
+		var err error
+		name := fmt.Sprintf("flynnbr.%s", util.RandomString(5))
+		c.logf("creating network bridge %s\n", name)
+		c.bridge, err = createBridge(name, c.bc.Network, c.bc.NatIface)
+		if err != nil {
+			return fmt.Errorf("could not create network bridge: %s", err)
+		}
 	}
+	c.vm = NewVMManager(c.bridge)
 	return nil
 }
 
@@ -172,6 +181,12 @@ func (c *Cluster) Shutdown() {
 		c.log("killing instance", i)
 		if err := inst.Kill(); err != nil {
 			c.logf("error killing instance %d: %s\n", i, err)
+		}
+	}
+	if c.bridge != nil {
+		c.logf("deleting network bridge %s\n", c.bridge.name)
+		if err := deleteBridge(c.bridge); err != nil {
+			c.logf("error deleting network bridge %s: %s\n", c.bridge.name, err)
 		}
 	}
 }
@@ -244,8 +259,8 @@ type controllerCert struct {
 
 func (c *Cluster) bootstrapFlynn() error {
 	inst := c.instances[0]
-	c.ControllerDomain = fmt.Sprintf("flynn-%s.local", util.RandomString())
-	c.ControllerKey = util.RandomString()
+	c.ControllerDomain = fmt.Sprintf("flynn-%s.local", util.RandomString(16))
+	c.ControllerKey = util.RandomString(16)
 	rd, wr := io.Pipe()
 	var cmdErr error
 	go func() {

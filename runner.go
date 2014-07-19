@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cupcake/goamz/aws"
@@ -27,6 +28,9 @@ type Runner struct {
 	dockerFS    string
 	githubToken string
 	s3Bucket    *s3.Bucket
+	networks    map[string]struct{}
+	mtx         sync.Mutex
+	builds      int
 }
 
 func NewRunner(bc cluster.BootConfig, dockerFS string) *Runner {
@@ -34,6 +38,7 @@ func NewRunner(bc cluster.BootConfig, dockerFS string) *Runner {
 		bc:       bc,
 		events:   make(chan Event, 10),
 		dockerFS: dockerFS,
+		networks: make(map[string]struct{}),
 	}
 }
 
@@ -54,9 +59,15 @@ func (r *Runner) start() error {
 
 	if r.dockerFS == "" {
 		var err error
-		if r.dockerFS, err = cluster.BuildFlynn(r.bc, "", repos, os.Stdout); err != nil {
+		bc := r.bc
+		bc.Network, err = r.allocateNet()
+		if err != nil {
+			return err
+		}
+		if r.dockerFS, err = cluster.BuildFlynn(bc, "", repos, os.Stdout); err != nil {
 			return fmt.Errorf("could not build flynn: %s", err)
 		}
+		r.releaseNet(bc.Network)
 		defer os.RemoveAll(r.dockerFS)
 	}
 
@@ -75,15 +86,25 @@ func (r *Runner) watchEvents() {
 		if !needsBuild(event) {
 			continue
 		}
-		if err := r.build(event.Repo(), event.Commit()); err != nil {
-			fmt.Printf("build failed: %s\n", err)
-			continue
-		}
-		fmt.Printf("build passed!\n")
+		go func() {
+			id := r.nextBuildId()
+			if err := r.build(id, event.Repo(), event.Commit()); err != nil {
+				fmt.Printf("build %d failed: %s\n", id, err)
+				return
+			}
+			fmt.Printf("build %d passed!\n", id)
+		}()
 	}
 }
 
-func (r *Runner) build(repo, commit string) (err error) {
+func (r *Runner) nextBuildId() int {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	r.builds++
+	return r.builds
+}
+
+func (r *Runner) build(id int, repo, commit string) (err error) {
 	r.updateStatus(repo, commit, "pending", "")
 
 	var log bytes.Buffer
@@ -91,7 +112,7 @@ func (r *Runner) build(repo, commit string) (err error) {
 		if err != nil {
 			log.WriteString(fmt.Sprintf("build error: %s\n", err))
 		}
-		url := r.uploadToS3(log, repo, commit)
+		url := r.uploadToS3(log, id, repo, commit)
 		if err == nil {
 			r.updateStatus(repo, commit, "success", url)
 		} else {
@@ -103,7 +124,13 @@ func (r *Runner) build(repo, commit string) (err error) {
 
 	out := io.MultiWriter(os.Stdout, &log)
 	repos := map[string]string{repo: commit}
-	newDockerfs, err := cluster.BuildFlynn(r.bc, r.dockerFS, repos, out)
+	bc := r.bc
+	bc.Network, err = r.allocateNet()
+	if err != nil {
+		return err
+	}
+	defer r.releaseNet(bc.Network)
+	newDockerfs, err := cluster.BuildFlynn(bc, r.dockerFS, repos, out)
 	defer os.RemoveAll(newDockerfs)
 	if err != nil {
 		msg := fmt.Sprintf("could not build flynn: %s\n", err)
@@ -118,6 +145,7 @@ func (r *Runner) build(repo, commit string) (err error) {
 		"--dockerfs", newDockerfs,
 		"--kernel", r.bc.Kernel,
 		"--cli", *flagCLI,
+		"--network", bc.Network,
 		"--nat", r.bc.NatIface,
 		"--debug",
 	)
@@ -126,8 +154,8 @@ func (r *Runner) build(repo, commit string) (err error) {
 	return cmd.Run()
 }
 
-func (r *Runner) uploadToS3(log bytes.Buffer, repo, commit string) string {
-	name := fmt.Sprintf("%s-%s-%s.txt", repo, commit, time.Now().Format("2006-01-02-15-04-05"))
+func (r *Runner) uploadToS3(log bytes.Buffer, id int, repo, commit string) string {
+	name := fmt.Sprintf("%s-build%d-%s-%s.txt", repo, id, commit, time.Now().Format("2006-01-02-15-04-05"))
 	url := fmt.Sprintf("https://s3.amazonaws.com/%s/%s", logBucket, name)
 	fmt.Printf("uploading build log to S3: %s\n", url)
 	if err := r.s3Bucket.Put(name, log.Bytes(), "text/plain", "public-read"); err != nil {
@@ -255,4 +283,23 @@ func (r *Runner) updateStatus(repo, commit, state, targetUrl string) {
 			log.Printf("updateStatus: request failed: %d\n", res.StatusCode)
 		}
 	}()
+}
+
+func (r *Runner) allocateNet() (string, error) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	for i := 0; i < 256; i++ {
+		net := fmt.Sprintf("10.53.%d.1/24", i)
+		if _, ok := r.networks[net]; !ok {
+			r.networks[net] = struct{}{}
+			return net, nil
+		}
+	}
+	return "", errors.New("no available networks")
+}
+
+func (r *Runner) releaseNet(net string) {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	delete(r.networks, net)
 }

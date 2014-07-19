@@ -27,6 +27,7 @@ var rootfs = flag.String("rootfs", "rootfs/rootfs.img", "fs image to use with QE
 var kernel = flag.String("kernel", "rootfs/vmlinuz", "path to the Linux binary")
 var flagCLI = flag.String("cli", "flynn", "path to flynn-cli binary")
 var debug = flag.Bool("debug", false, "enable debug output")
+var network = flag.String("network", "10.52.0.1/24", "the network to use for vms")
 var natIface = flag.String("nat", "eth0", "the interface to provide NAT to vms")
 var killCluster = flag.Bool("kill", true, "kill the cluster after running the tests")
 var keepDockerfs = flag.Bool("keep-dockerfs", false, "don't remove the dockerfs which was built to run the tests")
@@ -67,6 +68,7 @@ func main() {
 		User:     *username,
 		RootFS:   *rootfs,
 		Kernel:   *kernel,
+		Network:  *network,
 		NatIface: *natIface,
 	}
 

@@ -6,11 +6,11 @@ import (
 	"io"
 )
 
-func RandomString() string {
-	data := make([]byte, 16)
+func RandomString(size int) string {
+	data := make([]byte, size/2+1)
 	_, err := io.ReadFull(rand.Reader, data)
 	if err != nil {
 		panic(err)
 	}
-	return hex.EncodeToString(data)
+	return hex.EncodeToString(data)[:size]
 }
