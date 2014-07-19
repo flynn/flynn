@@ -36,6 +36,7 @@ var flagCLI = flag.String("cli", "flynn", "path to flynn-cli binary")
 var debug = flag.Bool("debug", false, "enable debug output")
 var natIface = flag.String("nat", "eth0", "the interface to provide NAT to vms")
 var killCluster = flag.Bool("kill", true, "kill the cluster after running the tests")
+var keepDockerfs = flag.Bool("keep-dockerfs", false, "don't remove the dockerfs which was built to run the tests")
 
 var sshWrapper = template.Must(template.New("ssh").Parse(`
 #!/bin/bash
@@ -97,6 +98,7 @@ func main() {
 			if dockerfs, err = cluster.BuildFlynn(bootConfig, "", repos, os.Stdout); err != nil {
 				log.Fatal("could not build flynn:", err)
 			}
+			defer os.RemoveAll(dockerfs)
 		}
 		events = make(chan Event, 10)
 		go handleEvents(dockerfs)
@@ -114,6 +116,9 @@ func main() {
 			var err error
 			if dockerfs, err = c.BuildFlynn("", repos); err != nil {
 				log.Fatal("could not build flynn:", err)
+			}
+			if !*keepDockerfs {
+				defer os.RemoveAll(dockerfs)
 			}
 		}
 		if err := c.Boot(dockerfs, 1); err != nil {
@@ -221,6 +226,7 @@ func build(repo, commit, dockerfs string) (err error) {
 	out := io.MultiWriter(os.Stdout, &log)
 	repos := map[string]string{repo: commit}
 	newDockerfs, err := cluster.BuildFlynn(bootConfig, dockerfs, repos, out)
+	defer os.RemoveAll(newDockerfs)
 	if err != nil {
 		msg := fmt.Sprintf("could not build flynn: %s\n", err)
 		log.WriteString(msg)

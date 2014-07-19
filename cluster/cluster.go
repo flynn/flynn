@@ -69,7 +69,7 @@ func (c *Cluster) BuildFlynn(dockerFS string, repos map[string]string) (string, 
 		return "", err
 	}
 
-	dockerDrive := VMDrive{FS: dockerFS, TempCOW: true}
+	dockerDrive := VMDrive{FS: dockerFS, COW: true, Temp: false}
 	if dockerDrive.FS == "" {
 		// create 16GB sparse fs image to store docker data on
 		dockerFS, err := createBtrfs(17179869184, "dockerfs", uid, gid)
@@ -78,7 +78,7 @@ func (c *Cluster) BuildFlynn(dockerFS string, repos map[string]string) (string, 
 			return "", err
 		}
 		dockerDrive.FS = dockerFS
-		dockerDrive.TempCOW = false
+		dockerDrive.COW = false
 	}
 
 	build, err := c.vm.NewInstance(&VMConfig{
@@ -86,9 +86,9 @@ func (c *Cluster) BuildFlynn(dockerFS string, repos map[string]string) (string, 
 		User:   uid,
 		Group:  gid,
 		Memory: "512",
-		Drives: map[string]VMDrive{
-			"hda": VMDrive{FS: c.bc.RootFS, TempCOW: true},
-			"hdb": dockerDrive,
+		Drives: map[string]*VMDrive{
+			"hda": &VMDrive{FS: c.bc.RootFS, COW: true, Temp: true},
+			"hdb": &dockerDrive,
 		},
 	})
 	if err != nil {
@@ -127,9 +127,9 @@ func (c *Cluster) Boot(dockerfs string, count int) error {
 			User:   uid,
 			Group:  gid,
 			Memory: "512",
-			Drives: map[string]VMDrive{
-				"hda": VMDrive{FS: c.bc.RootFS, TempCOW: true},
-				"hdb": VMDrive{FS: dockerfs, TempCOW: true},
+			Drives: map[string]*VMDrive{
+				"hda": &VMDrive{FS: c.bc.RootFS, COW: true, Temp: true},
+				"hdb": &VMDrive{FS: dockerfs, COW: true, Temp: true},
 			},
 		})
 		if err != nil {

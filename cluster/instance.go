@@ -32,7 +32,7 @@ type VMConfig struct {
 	User   int
 	Group  int
 	Memory string
-	Drives map[string]VMDrive
+	Drives map[string]*VMDrive
 	Args   []string
 	Out    io.Writer
 
@@ -40,10 +40,9 @@ type VMConfig struct {
 }
 
 type VMDrive struct {
-	FS  string
-	COW string
-
-	TempCOW bool
+	FS   string
+	COW  bool
+	Temp bool
 }
 
 func (v *VMManager) NewInstance(c *VMConfig) (Instance, error) {
@@ -74,7 +73,7 @@ type Instance interface {
 	Kill() error
 	IP() string
 	Run(string, attempt.Strategy, io.Writer, io.Writer) error
-	Drive(string) VMDrive
+	Drive(string) *VMDrive
 }
 
 type vm struct {
@@ -142,15 +141,15 @@ func (v *vm) Start() error {
 	}
 	var err error
 	for i, d := range v.Drives {
-		fs := d.FS
-		if d.TempCOW {
-			fs, err = v.tempCOW(d.FS)
+		if d.COW {
+			fs, err := v.createCOW(d.FS, d.Temp)
 			if err != nil {
 				v.cleanup()
 				return err
 			}
+			d.FS = fs
 		}
-		v.Args = append(v.Args, fmt.Sprintf("-%s", i), fs)
+		v.Args = append(v.Args, fmt.Sprintf("-%s", i), d.FS)
 	}
 
 	v.cmd = exec.Command("sudo", append([]string{"-u", fmt.Sprintf("#%d", v.User), "-g", fmt.Sprintf("#%d", v.Group), "-H", "/usr/bin/qemu-system-x86_64"}, v.Args...)...)
@@ -162,13 +161,15 @@ func (v *vm) Start() error {
 	return err
 }
 
-func (v *vm) tempCOW(image string) (string, error) {
+func (v *vm) createCOW(image string, temp bool) (string, error) {
 	name := strings.TrimSuffix(filepath.Base(image), filepath.Ext(image))
 	dir, err := ioutil.TempDir("", name+"-")
 	if err != nil {
 		return "", err
 	}
-	v.tempFiles = append(v.tempFiles, dir)
+	if temp {
+		v.tempFiles = append(v.tempFiles, dir)
+	}
 	if err := os.Chown(dir, v.User, v.Group); err != nil {
 		return "", err
 	}
@@ -237,6 +238,6 @@ func (v *vm) Run(command string, attempts attempt.Strategy, out io.Writer, stder
 	return nil
 }
 
-func (v *vm) Drive(name string) VMDrive {
+func (v *vm) Drive(name string) *VMDrive {
 	return v.Drives[name]
 }
