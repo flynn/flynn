@@ -10,6 +10,8 @@ import (
 	"github.com/flynn/rpcplus"
 )
 
+type ClosingFD FD
+
 type FDWriter struct {
 	conn    *net.UnixConn
 	fds     []int
@@ -69,6 +71,9 @@ func (c *gobServerCodec) WriteResponse(r *rpcplus.Response, body interface{}, la
 		for i, fd := range *f {
 			(*f)[i].FD = c.fdWriter.AddFD(fd.FD)
 		}
+	case *ClosingFD:
+		defer syscall.Close(f.FD)
+		body = &FD{c.fdWriter.AddFD(f.FD)}
 	}
 
 	if err = c.enc.Encode(r); err != nil {
