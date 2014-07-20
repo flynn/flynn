@@ -7,5 +7,6 @@ func main() {
 		new(services),
 		new(execCmd),
 		new(expose),
+		new(configure),
 	)
 }
