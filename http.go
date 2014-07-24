@@ -482,12 +482,6 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls, st
 			if stickyCookie != nil {
 				res.Header.Add("Set-Cookie", stickyCookie.String())
 			}
-			// This is a workaround for
-			// https://code.google.com/p/go/issues/detail?id=5381
-			// (fixed in Go tip, remove when Go 1.3 has been released)
-			if res.ContentLength == 0 && res.TransferEncoding == nil {
-				res.TransferEncoding = []string{"identity"}
-			}
 			if res.StatusCode == http.StatusSwitchingProtocols {
 				res.Body = nil
 			}
