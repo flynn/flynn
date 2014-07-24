@@ -4,9 +4,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/httptest"
 
+	"code.google.com/p/go.net/websocket"
 	"github.com/flynn/strowger/types"
 	. "github.com/titanous/gocheck"
 )
@@ -192,4 +194,43 @@ func (s *S) TestHTTPServiceHandlerBackendConnectionClosed(c *C) {
 	// is able to recover
 	srv.CloseClientConnections()
 	assertGet(c, "http://"+l.Addr, "example.com", "1")
+}
+
+func (s *S) TestHTTPWebsocket(c *C) {
+	done := make(chan struct{})
+	srv := httptest.NewServer(
+		websocket.Handler(func(conn *websocket.Conn) {
+			_, err := conn.Write([]byte("1"))
+			c.Assert(err, IsNil)
+			res := make([]byte, 1)
+			_, err = conn.Read(res)
+			c.Assert(err, IsNil)
+			c.Assert(res[0], Equals, byte('2'))
+			close(done)
+		}),
+	)
+
+	l, discoverd, err := newHTTPListener(nil)
+	c.Assert(err, IsNil)
+	defer l.Close()
+
+	discoverd.Register("test", srv.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	addHTTPRoute(c, l)
+
+	conn, err := net.Dial("tcp", l.Addr)
+	c.Assert(err, IsNil)
+	defer conn.Close()
+	conf, err := websocket.NewConfig("ws://example.com", "http://example.net")
+	c.Assert(err, IsNil)
+	wc, err := websocket.NewClient(conf, conn)
+	c.Assert(err, IsNil)
+
+	res := make([]byte, 1)
+	_, err = wc.Read(res)
+	c.Assert(err, IsNil)
+	c.Assert(res[0], Equals, byte('1'))
+	_, err = wc.Write([]byte("2"))
+	c.Assert(err, IsNil)
 }

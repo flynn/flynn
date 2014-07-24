@@ -3,6 +3,11 @@
 	"GoVersion": "go1.3",
 	"Deps": [
 		{
+			"ImportPath": "code.google.com/p/go.net/websocket",
+			"Comment": "null-139",
+			"Rev": "98fd1f5506373df1033b67a1881078705456e2ee"
+		},
+		{
 			"ImportPath": "github.com/codegangsta/inject",
 			"Rev": "9aea7a2fa5b79ef7fc00f63a575e72df33b4e886"
 		},

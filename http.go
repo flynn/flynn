@@ -413,6 +413,9 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls boo
 			if res.ContentLength == 0 && res.TransferEncoding == nil {
 				res.TransferEncoding = []string{"identity"}
 			}
+			if res.StatusCode == http.StatusSwitchingProtocols {
+				res.Body = nil
+			}
 			if err := sc.Write(req, res); err != nil {
 				if err != io.EOF && err != httputil.ErrPersistEOF {
 					log.Println("client write err:", err)
@@ -430,10 +433,6 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls boo
 			return
 		}
 
-		// close the backend connection, so we don't accidently send to
-		// a closed socket on the backend
-		backend.Close()
-
 		// TODO: Proxy HTTP CONNECT? (example: Go RPC over HTTP)
 		if res.StatusCode == http.StatusSwitchingProtocols {
 			serverW, serverR := backend.Hijack()
@@ -450,6 +449,10 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls boo
 			<-done
 			return
 		}
+
+		// close the backend connection, so we don't accidently send to
+		// a closed socket on the backend
+		backend.Close()
 
 		// TODO: http pipelining
 		req, err = sc.Read()
