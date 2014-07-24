@@ -3,8 +3,8 @@ MAINTAINER Jonathan Rudenberg <jonathan@titanous.com>
 
 ENV DEBIAN_FRONTEND noninteractive
 
-RUN echo "#!/bin/sh\nexit 101" > /usr/sbin/policy-rc.d; chmod +x /usr/sbin/policy-rc.d &&\
-    apt-get update &&\
+RUN apt-get update &&\
+    apt-get dist-upgrade -y &&\
     apt-get -qy --fix-missing --force-yes install language-pack-en &&\
     update-locale LANG=en_US.UTF-8 LANGUAGE=en_US.UTF-8 LC_ALL=en_US.UTF-8 &&\
     dpkg-reconfigure locales &&\
@@ -14,7 +14,7 @@ RUN echo "#!/bin/sh\nexit 101" > /usr/sbin/policy-rc.d; chmod +x /usr/sbin/polic
     apt-get update &&\
     apt-get install -y -q postgresql-9.3 postgresql-contrib-9.3 postgresql-9.3-pgextwlist &&\
     apt-get clean &&\
-    rm /usr/sbin/policy-rc.d
+    apt-get autoremove -y
 
 ADD postgresql.conf /etc/postgresql/9.3/main/postgresql.conf
 ADD pg_hba.conf /etc/postgresql/9.3/main/pg_hba.conf
