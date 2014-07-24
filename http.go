@@ -3,13 +3,15 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"io"
 	"io/ioutil"
 	"log"
-	"math/rand"
+	mathrand "math/rand"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -18,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"code.google.com/p/go.crypto/nacl/secretbox"
 	"github.com/flynn/go-discoverd"
 	"github.com/flynn/strowger/types"
 	"github.com/inconshreveable/go-vhost"
@@ -43,13 +46,14 @@ type HTTPListener struct {
 	listener    net.Listener
 	tlsListener net.Listener
 	closed      bool
+	cookieKey   *[32]byte
 }
 
 type DiscoverdClient interface {
 	NewServiceSet(string) (discoverd.ServiceSet, error)
 }
 
-func NewHTTPListener(addr, tlsAddr string, ds DataStore, discoverdc DiscoverdClient) *HTTPListener {
+func NewHTTPListener(addr, tlsAddr string, cookieKey *[32]byte, ds DataStore, discoverdc DiscoverdClient) *HTTPListener {
 	l := &HTTPListener{
 		Addr:      addr,
 		TLSAddr:   tlsAddr,
@@ -59,6 +63,11 @@ func NewHTTPListener(addr, tlsAddr string, ds DataStore, discoverdc DiscoverdCli
 		domains:   make(map[string]*httpRoute),
 		services:  make(map[string]*httpService),
 		wm:        NewWatchManager(),
+		cookieKey: cookieKey,
+	}
+	if cookieKey == nil {
+		var k [32]byte
+		l.cookieKey = &k
 	}
 	l.Watcher = l.wm
 	l.DataStoreReader = l.ds
@@ -151,6 +160,7 @@ func (h *httpSyncHandler) Set(data *strowger.Route) error {
 		Service: route.Service,
 		TLSCert: route.TLSCert,
 		TLSKey:  route.TLSKey,
+		Sticky:  route.Sticky,
 	}
 
 	if r.TLSCert != "" && r.TLSKey != "" {
@@ -183,7 +193,7 @@ func (h *httpSyncHandler) Set(data *strowger.Route) error {
 		if err != nil {
 			return err
 		}
-		service = &httpService{name: r.Service, ss: ss}
+		service = &httpService{name: r.Service, ss: ss, cookieKey: h.l.cookieKey}
 		h.l.services[r.Service] = service
 	}
 	service.refs++
@@ -324,7 +334,7 @@ func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 		}
 	}
 
-	r.service.handle(req, sc, isTLS)
+	r.service.handle(req, sc, isTLS, r.Sticky)
 }
 
 // A domain served by a listener, associated TLS certs,
@@ -334,6 +344,7 @@ type httpRoute struct {
 	Service string
 	TLSCert string
 	TLSKey  string
+	Sticky  bool
 
 	keypair *tls.Certificate
 	service *httpService
@@ -344,9 +355,16 @@ type httpService struct {
 	name string
 	ss   discoverd.ServiceSet
 	refs int
+
+	cookieKey *[32]byte
 }
 
 func (s *httpService) getBackend() *httputil.ClientConn {
+	backend, _ := s.connectBackend()
+	return backend
+}
+
+func (s *httpService) connectBackend() (*httputil.ClientConn, string) {
 	for _, addr := range shuffle(s.ss.Addrs()) {
 		// TODO: set connection timeout
 		backend, err := net.Dial("tcp", addr)
@@ -357,16 +375,70 @@ func (s *httpService) getBackend() *httputil.ClientConn {
 			log.Println("backend error", err)
 			continue
 		}
-		return httputil.NewClientConn(backend, nil)
+		return httputil.NewClientConn(backend, nil), addr
 	}
 	// TODO: log no backends found error
-	return nil
+	return nil, ""
 }
 
-func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls bool) {
+const stickyCookie = "_backend"
+
+func (s *httpService) getNewBackendSticky() (*httputil.ClientConn, *http.Cookie) {
+	backend, addr := s.connectBackend()
+	if backend == nil {
+		return nil, nil
+	}
+
+	var nonce [24]byte
+	_, err := io.ReadFull(rand.Reader, nonce[:])
+	if err != nil {
+		panic(err)
+	}
+	out := make([]byte, len(nonce), len(nonce)+len(addr)+secretbox.Overhead)
+	copy(out, nonce[:])
+	out = secretbox.Seal(out, []byte(addr), &nonce, s.cookieKey)
+
+	return backend, &http.Cookie{Name: stickyCookie, Value: base64.StdEncoding.EncodeToString(out), Path: "/"}
+}
+
+func (s *httpService) getBackendSticky(req *http.Request) (*httputil.ClientConn, *http.Cookie) {
+	cookie, err := req.Cookie(stickyCookie)
+	if err != nil {
+		return s.getNewBackendSticky()
+	}
+
+	data, err := base64.StdEncoding.DecodeString(cookie.Value)
+	if err != nil {
+		return s.getNewBackendSticky()
+	}
+	var nonce [24]byte
+	if len(data) < len(nonce) {
+		return s.getNewBackendSticky()
+	}
+	copy(nonce[:], data)
+	addr, ok := secretbox.Open(nil, data[len(nonce):], &nonce, s.cookieKey)
+	if !ok {
+		return s.getNewBackendSticky()
+	}
+
+	backend, err := net.Dial("tcp", string(addr))
+	if err != nil {
+		return s.getNewBackendSticky()
+	}
+	return httputil.NewClientConn(backend, nil), nil
+}
+
+func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls, sticky bool) {
 	for {
 		req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
-		backend := s.getBackend()
+
+		var backend *httputil.ClientConn
+		var stickyCookie *http.Cookie
+		if sticky {
+			backend, stickyCookie = s.getBackendSticky(req)
+		} else {
+			backend = s.getBackend()
+		}
 		if backend == nil {
 			log.Println("no backend found")
 			fail(sc, req, 503, "Service Unavailable")
@@ -407,6 +479,9 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls boo
 		}
 		res, err := backend.Read(req)
 		if res != nil {
+			if stickyCookie != nil {
+				res.Header.Add("Set-Cookie", stickyCookie.String())
+			}
 			// This is a workaround for
 			// https://code.google.com/p/go/issues/detail?id=5381
 			// (fixed in Go tip, remove when Go 1.3 has been released)
@@ -471,12 +546,12 @@ type writeCloser interface {
 
 func shuffle(s []string) []string {
 	for i := len(s) - 1; i > 0; i-- {
-		j := rand.Intn(i + 1)
+		j := mathrand.Intn(i + 1)
 		s[i], s[j] = s[j], s[i]
 	}
 	return s
 }
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
+	mathrand.Seed(time.Now().UnixNano())
 }

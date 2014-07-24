@@ -64,7 +64,7 @@ func newHTTPListener(etcd *fakeEtcd) (*HTTPListener, *fakeDiscoverd, error) {
 	if etcd == nil {
 		etcd = newFakeEtcd()
 	}
-	l := NewHTTPListener("127.0.0.1:0", "127.0.0.1:0", NewEtcdDataStore(etcd, "/strowger/http/"), discoverd)
+	l := NewHTTPListener("127.0.0.1:0", "127.0.0.1:0", nil, NewEtcdDataStore(etcd, "/strowger/http/"), discoverd)
 	return l, discoverd, l.Start()
 }
 
@@ -129,14 +129,28 @@ func newReq(url, host string) *http.Request {
 	return req
 }
 
-func assertGet(c *C, url, host, expected string) {
-	res, err := httpClient.Do(newReq(url, host))
+func assertGet(c *C, url, host, expected string) *http.Cookie {
+	return assertGetCookie(c, url, host, expected, nil)
+}
+
+func assertGetCookie(c *C, url, host, expected string, cookie *http.Cookie) *http.Cookie {
+	req := newReq(url, host)
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	res, err := httpClient.Do(req)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 	data, err := ioutil.ReadAll(res.Body)
 	res.Body.Close()
 	c.Assert(err, IsNil)
 	c.Assert(string(data), Equals, expected)
+	for _, c := range res.Cookies() {
+		if c.Name == stickyCookie {
+			return c
+		}
+	}
+	return nil
 }
 
 func addHTTPRoute(c *C, l *HTTPListener) *strowger.Route {
@@ -146,6 +160,19 @@ func addHTTPRoute(c *C, l *HTTPListener) *strowger.Route {
 		Service: "test",
 		TLSCert: string(localhostCert),
 		TLSKey:  string(localhostKey),
+	}).ToRoute()
+	err := l.AddRoute(r)
+	c.Assert(err, IsNil)
+	wait()
+	return r
+}
+
+func addStickyHTTPRoute(c *C, l *HTTPListener) *strowger.Route {
+	wait := waitForEvent(c, l, "set", "")
+	r := (&strowger.HTTPRoute{
+		Domain:  "example.com",
+		Service: "test",
+		Sticky:  true,
 	}).ToRoute()
 	err := l.AddRoute(r)
 	c.Assert(err, IsNil)
@@ -233,4 +260,31 @@ func (s *S) TestHTTPWebsocket(c *C) {
 	c.Assert(res[0], Equals, byte('1'))
 	_, err = wc.Write([]byte("2"))
 	c.Assert(err, IsNil)
+}
+
+func (s *S) TestStickyHTTPRoute(c *C) {
+	srv1 := httptest.NewServer(httpTestHandler("1"))
+	srv2 := httptest.NewServer(httpTestHandler("2"))
+	defer srv2.Close()
+
+	l, discoverd, err := newHTTPListener(nil)
+	c.Assert(err, IsNil)
+	defer l.Close()
+
+	discoverd.Register("test", srv1.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	addStickyHTTPRoute(c, l)
+
+	cookie := assertGet(c, "http://"+l.Addr, "example.com", "1")
+	discoverd.Register("test", srv2.Listener.Addr().String())
+	for i := 0; i < 10; i++ {
+		resCookie := assertGetCookie(c, "http://"+l.Addr, "example.com", "1", cookie)
+		c.Assert(resCookie, IsNil)
+		httpClient.Transport.(*http.Transport).CloseIdleConnections()
+	}
+	discoverd.Unregister("test", srv1.Listener.Addr().String())
+	srv1.Close()
+	resCookie := assertGetCookie(c, "http://"+l.Addr, "example.com", "2", cookie)
+	c.Assert(resCookie, Not(IsNil))
 }

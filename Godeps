@@ -3,6 +3,21 @@
 	"GoVersion": "go1.3",
 	"Deps": [
 		{
+			"ImportPath": "code.google.com/p/go.crypto/nacl/secretbox",
+			"Comment": "null-212",
+			"Rev": "1064b89a6fb591df0dd65422295b8498916b092f"
+		},
+		{
+			"ImportPath": "code.google.com/p/go.crypto/poly1305",
+			"Comment": "null-212",
+			"Rev": "1064b89a6fb591df0dd65422295b8498916b092f"
+		},
+		{
+			"ImportPath": "code.google.com/p/go.crypto/salsa20/salsa",
+			"Comment": "null-212",
+			"Rev": "1064b89a6fb591df0dd65422295b8498916b092f"
+		},
+		{
 			"ImportPath": "code.google.com/p/go.net/websocket",
 			"Comment": "null-139",
 			"Rev": "98fd1f5506373df1033b67a1881078705456e2ee"

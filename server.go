@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"log"
@@ -47,6 +48,16 @@ func main() {
 	if apiPort == "" {
 		apiPort = "5000"
 	}
+	var cookieKey *[32]byte
+	if key := os.Getenv("COOKIE_KEY"); key != "" {
+		res, err := base64.StdEncoding.DecodeString(key)
+		if err != nil {
+			log.Fatal("error decoding COOKIE_KEY:", err)
+		}
+		var k [32]byte
+		copy(k[:], res)
+		cookieKey = &k
+	}
 
 	httpAddr := flag.String("httpaddr", ":8080", "http listen address")
 	httpsAddr := flag.String("httpsaddr", ":4433", "https listen address")
@@ -76,7 +87,7 @@ func main() {
 
 	var r Router
 	r.TCP = NewTCPListener(*tcpIP, 0, 0, NewEtcdDataStore(etcdc, "/strowger/tcp/"), d)
-	r.HTTP = NewHTTPListener(*httpAddr, *httpsAddr, NewEtcdDataStore(etcdc, "/strowger/http/"), d)
+	r.HTTP = NewHTTPListener(*httpAddr, *httpsAddr, cookieKey, NewEtcdDataStore(etcdc, "/strowger/http/"), d)
 
 	go func() { log.Fatal(r.ListenAndServe(nil)) }()
 	log.Fatal(http.ListenAndServe(*apiAddr, apiHandler(&r)))
