@@ -284,7 +284,8 @@ func (s *S) TestStickyHTTPRoute(c *C) {
 		httpClient.Transport.(*http.Transport).CloseIdleConnections()
 	}
 	discoverd.Unregister("test", srv1.Listener.Addr().String())
-	srv1.Close()
-	resCookie := assertGetCookie(c, "http://"+l.Addr, "example.com", "2", cookie)
-	c.Assert(resCookie, Not(IsNil))
+	for i := 0; i < 10; i++ {
+		resCookie := assertGetCookie(c, "http://"+l.Addr, "example.com", "2", cookie)
+		c.Assert(resCookie, Not(IsNil))
+	}
 }

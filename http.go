@@ -416,7 +416,19 @@ func (s *httpService) getBackendSticky(req *http.Request) (*httputil.ClientConn,
 		return s.getNewBackendSticky()
 	}
 	copy(nonce[:], data)
-	addr, ok := secretbox.Open(nil, data[len(nonce):], &nonce, s.cookieKey)
+	res, ok := secretbox.Open(nil, data[len(nonce):], &nonce, s.cookieKey)
+	if !ok {
+		return s.getNewBackendSticky()
+	}
+
+	addr := string(res)
+	ok = false
+	for _, a := range s.ss.Addrs() {
+		if a == addr {
+			ok = true
+			break
+		}
+	}
 	if !ok {
 		return s.getNewBackendSticky()
 	}
