@@ -29,7 +29,7 @@ func init() {
 	cmdRouteAddHTTP.Flag.StringVarP(&routeHTTPService, "service", "s", "", "service name to route domain to (defaults to APPNAME-web)")
 	cmdRouteAddHTTP.Flag.StringVarP(&tlsCertPath, "tls-cert", "c", "", "path to PEM encoded certificate for TLS, - for stdin")
 	cmdRouteAddHTTP.Flag.StringVarP(&tlsKeyPath, "tls-key", "k", "", "path to PEM encoded private key for TLS, - for stdin")
-	cmdRouteAddHTTP.Flag.BoolVarP(&sticky, "sticky", "s", false, "enable cookie-based sticky routing")
+	cmdRouteAddHTTP.Flag.BoolVarP(&sticky, "sticky", "t", false, "enable cookie-based sticky routing")
 }
 
 func runRouteAddHTTP(cmd *Command, args []string, client *controller.Client) error {
