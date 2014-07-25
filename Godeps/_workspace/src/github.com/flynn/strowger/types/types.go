@@ -50,6 +50,7 @@ type HTTPRoute struct {
 	Service string `json:"service,omitempty"`
 	TLSCert string `json:"tls_cert,omitempty"`
 	TLSKey  string `json:"tls_key,omitempty"`
+	Sticky  bool   `json:"sticky,omitempty"`
 }
 
 func (r *HTTPRoute) ToRoute() *Route {

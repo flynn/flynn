@@ -11,6 +11,7 @@ type ExpandedFormation struct {
 	Release   *Release       `json:"release,omitempty"`
 	Artifact  *Artifact      `json:"artifact,omitempty"`
 	Processes map[string]int `json:"processes,omitempty"`
+	UpdatedAt time.Time      `json:"updated_at,omitempty"`
 }
 
 type App struct {
@@ -35,6 +36,7 @@ type ProcessType struct {
 	Env   map[string]string `json:"env,omitempty"`
 	Ports ProcessPorts      `json:"ports,omitempty"`
 	Data  bool              `json:"data,omitempty"`
+	Omni  bool              `json:"omni,omitempty"` // omnipresent - present on all hosts
 }
 
 type ProcessPorts struct {

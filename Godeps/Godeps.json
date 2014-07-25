@@ -17,28 +17,28 @@
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
-			"Comment": "v0.2.0-rc1-98-gd88f477",
-			"Rev": "d88f477a542c781eb9ad18ce82b3a0b9b6e2d07e"
+			"Comment": "v0.2.0-rc1-114-g7745cfd",
+			"Rev": "7745cfd7f8e619cc9e6be450238e6253a57a227f"
 		},
 		{
 			"ImportPath": "github.com/flynn/discoverd/agent",
-			"Rev": "c8d65504f57d487cc406aeb86cc065c89b3b9d50"
+			"Rev": "d553fada2899d48e3f5bd08d896d7fee37515d55"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/client",
-			"Rev": "d607c9e1c17e3d4f92b374fddd74e0e7204fb28c"
+			"Rev": "2d025c4fc5c1c59b2521c149522cc5b0b27452fe"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/types",
-			"Rev": "d607c9e1c17e3d4f92b374fddd74e0e7204fb28c"
+			"Rev": "2d025c4fc5c1c59b2521c149522cc5b0b27452fe"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-controller/utils",
-			"Rev": "d607c9e1c17e3d4f92b374fddd74e0e7204fb28c"
+			"Rev": "2d025c4fc5c1c59b2521c149522cc5b0b27452fe"
 		},
 		{
 			"ImportPath": "github.com/flynn/flynn-host/types",
-			"Rev": "580ef473e5d681d9e095e647d080f8ef6322786e"
+			"Rev": "f5b242ca76ecc7b0a5fc5081fd4d31ec5888b115"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-discoverd",
@@ -50,23 +50,23 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/attempt",
-			"Rev": "c88823a638e8dc828d6623252f9132262a71e791"
+			"Rev": "f6d10e4624ad4cb546c93863625a242ce64dac61"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/demultiplex",
-			"Rev": "c88823a638e8dc828d6623252f9132262a71e791"
+			"Rev": "f6d10e4624ad4cb546c93863625a242ce64dac61"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/pinned",
-			"Rev": "c88823a638e8dc828d6623252f9132262a71e791"
+			"Rev": "f6d10e4624ad4cb546c93863625a242ce64dac61"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
-			"Rev": "913bfc4ac01829bd92a241bfdbbc0d1616a4405e"
+			"Rev": "cd680b2cd620be36cd39a58270c6a2894dd2e810"
 		},
 		{
 			"ImportPath": "github.com/flynn/strowger/types",
-			"Rev": "6a493ed44d3a7e9a9c499b364080d1575e82103a"
+			"Rev": "34684e538dfc87e6c797deca9bb98124ba06abac"
 		},
 		{
 			"ImportPath": "github.com/heroku/hk/term",

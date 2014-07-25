@@ -45,6 +45,11 @@ type Event struct {
 	Job   *ActiveJob
 }
 
+type HostEvent struct {
+	Event  string
+	HostID string
+}
+
 type ActiveJob struct {
 	Job *Job
 

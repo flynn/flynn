@@ -173,7 +173,20 @@ func (c *Client) delete(path string) error {
 	return err
 }
 
-func (c *Client) StreamFormations(since *time.Time) (<-chan *ct.ExpandedFormation, *error) {
+type FormationUpdates struct {
+	Chan <-chan *ct.ExpandedFormation
+
+	conn net.Conn
+}
+
+func (u *FormationUpdates) Close() error {
+	if u.conn == nil {
+		return nil
+	}
+	return u.conn.Close()
+}
+
+func (c *Client) StreamFormations(since *time.Time) (*FormationUpdates, *error) {
 	if since == nil {
 		s := time.Unix(0, 0)
 		since = &s
@@ -186,16 +199,16 @@ func (c *Client) StreamFormations(since *time.Time) (<-chan *ct.ExpandedFormatio
 	conn, err := dial("tcp", c.addr)
 	if err != nil {
 		close(ch)
-		return ch, &err
+		return &FormationUpdates{ch, conn}, &err
 	}
 	header := make(http.Header)
 	header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(":"+c.key)))
 	client, err := rpcplus.NewHTTPClient(conn, rpcplus.DefaultRPCPath, header)
 	if err != nil {
 		close(ch)
-		return ch, &err
+		return &FormationUpdates{ch, conn}, &err
 	}
-	return ch, &client.StreamGo("Controller.StreamFormations", since, ch).Error
+	return &FormationUpdates{ch, conn}, &client.StreamGo("Controller.StreamFormations", since, ch).Error
 }
 
 func (c *Client) CreateArtifact(artifact *ct.Artifact) error {
