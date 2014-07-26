@@ -1,0 +1,31 @@
+{
+	"ImportPath": "github.com/flynn/flynn-mongodb",
+	"GoVersion": "go1.3",
+	"Deps": [
+		{
+			"ImportPath": "github.com/coreos/go-etcd/etcd",
+			"Comment": "v0.2.0-rc1-114-g7745cfd",
+			"Rev": "7745cfd7f8e619cc9e6be450238e6253a57a227f"
+		},
+		{
+			"ImportPath": "github.com/flynn/discoverd/agent",
+			"Rev": "d553fada2899d48e3f5bd08d896d7fee37515d55"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-discoverd",
+			"Rev": "0325ff35b2495314ea7ebfc55e4e5b4408c3b78f"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-flynn/attempt",
+			"Rev": "59a4d6b5820cc3f962f92f4a0910f6499068e559"
+		},
+		{
+			"ImportPath": "github.com/flynn/rpcplus",
+			"Rev": "cd680b2cd620be36cd39a58270c6a2894dd2e810"
+		},
+		{
+			"ImportPath": "gopkg.in/mgo.v2",
+			"Rev": "3116f72d0fe0216b75201cb3a1ae61c82c2a4d63"
+		}
+	]
+}
