@@ -522,7 +522,9 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls, st
 			done := make(chan struct{})
 			go func() {
 				serverR.WriteTo(clientW)
-				clientW.(writeCloser).CloseWrite()
+				if cw, ok := clientW.(writeCloser); ok {
+					cw.CloseWrite()
+				}
 				close(done)
 			}()
 			clientR.WriteTo(serverW)
