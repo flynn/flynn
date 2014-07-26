@@ -58,9 +58,10 @@ func NewChain(name, bridge string) (*Chain, error) {
 	return chain, nil
 }
 
-func RemoveExistingChain(name string) error {
+func RemoveExistingChain(name, bridge string) error {
 	chain := &Chain{
-		Name: name,
+		Name:   name,
+		Bridge: bridge,
 	}
 	return chain.Remove()
 }
