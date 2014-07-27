@@ -24,6 +24,10 @@
 			"Rev": "78d7708fc6ca767a04a26c777cdc618f39a34ac4"
 		},
 		{
+			"ImportPath": "github.com/docker/libcontainer/netlink",
+			"Rev": "e6a43c1c2b9f769deb96348a0a93417cd48a36d8"
+		},
+		{
 			"ImportPath": "github.com/dotcloud/docker/daemon/networkdriver",
 			"Comment": "v0.11.1-229-g9405a58",
 			"Rev": "9405a58e99636f7d21e1442b90d3b4a9fdcac5bb"
@@ -34,22 +38,16 @@
 			"Rev": "9405a58e99636f7d21e1442b90d3b4a9fdcac5bb"
 		},
 		{
-			"ImportPath": "github.com/dotcloud/docker/pkg/iptables",
-			"Comment": "v0.11.1-229-g9405a58",
-			"Rev": "9405a58e99636f7d21e1442b90d3b4a9fdcac5bb"
-		},
-		{
-			"ImportPath": "github.com/dotcloud/docker/pkg/netlink",
-			"Comment": "v0.11.1-229-g9405a58",
-			"Rev": "9405a58e99636f7d21e1442b90d3b4a9fdcac5bb"
-		},
-		{
 			"ImportPath": "github.com/flynn/discoverd/agent",
 			"Rev": "98fbb6a0c29a087c055734e539690d8176d14517"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/attempt",
 			"Rev": "3743ca1e0e1cff877b906dd56983f57699b2cc7d"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-iptables",
+			"Rev": "cfe1d96edb30d715058d2aff4f6a1b03570723e1"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-discoverd",

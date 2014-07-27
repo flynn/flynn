@@ -165,7 +165,7 @@ func (c *Cluster) setup() error {
 	}
 	if c.bridge == nil {
 		var err error
-		name := fmt.Sprintf("flynnbr.%s", util.RandomString(5))
+		name := "flynnbr." + util.RandomString(5)
 		c.logf("creating network bridge %s\n", name)
 		c.bridge, err = createBridge(name, c.bc.Network, c.bc.NatIface)
 		if err != nil {

@@ -19,11 +19,12 @@ import (
 	"github.com/cupcake/goamz/s3"
 	"github.com/flynn/flynn-test/cluster"
 	"github.com/flynn/flynn-test/util"
+	"github.com/flynn/go-flynn/attempt"
 	"github.com/gorilla/handlers"
 )
 
 var logBucket = "flynn-ci-logs"
-var dbPath = "/tmp/flynn-test.db"
+var dbPath = "/var/lib/flynn-test.db"
 
 type Build struct {
 	Id     string `json:"id"`
@@ -58,12 +59,9 @@ func (r *Runner) start() error {
 		return errors.New("GITHUB_TOKEN not set")
 	}
 
-	awsAuth := aws.Auth{
-		AccessKey: os.Getenv("AWS_ACCESS_KEY_ID"),
-		SecretKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
-	}
-	if awsAuth.AccessKey == "" || awsAuth.SecretKey == "" {
-		return errors.New("AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY not set")
+	awsAuth, err := aws.EnvAuth()
+	if err != nil {
+		return err
 	}
 	r.s3Bucket = s3.New(awsAuth, aws.USEast).Bucket(logBucket)
 
@@ -102,7 +100,7 @@ func (r *Runner) start() error {
 	go r.watchEvents()
 
 	http.Handle("/", handlers.CombinedLoggingHandler(os.Stdout, http.HandlerFunc(r.httpEventHandler)))
-	fmt.Println("Listening on :80...")
+	log.Println("Listening on :80...")
 	if err := http.ListenAndServe(":80", nil); err != nil {
 		return fmt.Errorf("ListenAndServer: %s", err)
 	}
@@ -120,10 +118,10 @@ func (r *Runner) watchEvents() {
 				Commit: event.Commit(),
 			}
 			if err := r.build(b); err != nil {
-				fmt.Printf("build %s failed: %s\n", b.Id, err)
+				log.Printf("build %s failed: %s\n", b.Id, err)
 				return
 			}
-			fmt.Printf("build %s passed!\n", b.Id)
+			log.Printf("build %s passed!\n", b.Id)
 		}()
 	}
 }
@@ -131,12 +129,12 @@ func (r *Runner) watchEvents() {
 func (r *Runner) build(b *Build) (err error) {
 	r.updateStatus(b, "pending", "")
 
-	var log bytes.Buffer
+	var buildLog bytes.Buffer
 	defer func() {
 		if err != nil {
-			log.WriteString(fmt.Sprintf("build error: %s\n", err))
+			fmt.Fprintf(&buildLog, "build error: %s\n", err)
 		}
-		url := r.uploadToS3(log, b)
+		url := r.uploadToS3(buildLog, b)
 		if err == nil {
 			r.updateStatus(b, "success", url)
 		} else {
@@ -144,9 +142,9 @@ func (r *Runner) build(b *Build) (err error) {
 		}
 	}()
 
-	fmt.Printf("building %s[%s]\n", b.Repo, b.Commit)
+	log.Printf("building %s[%s]\n", b.Repo, b.Commit)
 
-	out := io.MultiWriter(os.Stdout, &log)
+	out := io.MultiWriter(os.Stdout, &buildLog)
 	repos := map[string]string{b.Repo: b.Commit}
 	bc := r.bc
 	bc.Network, err = r.allocateNet()
@@ -158,7 +156,7 @@ func (r *Runner) build(b *Build) (err error) {
 	defer os.RemoveAll(newDockerfs)
 	if err != nil {
 		msg := fmt.Sprintf("could not build flynn: %s\n", err)
-		log.WriteString(msg)
+		buildLog.WriteString(msg)
 		return errors.New(msg)
 	}
 
@@ -178,14 +176,20 @@ func (r *Runner) build(b *Build) (err error) {
 	return cmd.Run()
 }
 
-func (r *Runner) uploadToS3(log bytes.Buffer, b *Build) string {
+var s3attempts = attempt.Strategy{
+	Min:   5,
+	Total: time.Minute,
+	Delay: time.Second,
+}
+
+func (r *Runner) uploadToS3(buildLog bytes.Buffer, b *Build) string {
 	name := fmt.Sprintf("%s-build-%s-%s-%s.txt", b.Repo, b.Id, b.Commit, time.Now().Format("2006-01-02-15-04-05"))
 	url := fmt.Sprintf("https://s3.amazonaws.com/%s/%s", logBucket, name)
-	fmt.Printf("uploading build log to S3: %s\n", url)
-	if err := r.s3Bucket.Put(name, log.Bytes(), "text/plain", "public-read"); err != nil {
-		// TODO: retry?
-		fmt.Printf("failed to upload build output to S3: %s\n", err)
-		return ""
+	log.Printf("uploading build log to S3: %s\n", url)
+	if err := s3attempts.Run(func() error {
+		return r.s3Bucket.Put(name, buildLog.Bytes(), "text/plain", "public-read")
+	}); err != nil {
+		log.Printf("failed to upload build output to S3: %s\n", err)
 	}
 	return url
 }
@@ -288,7 +292,7 @@ func (r *Runner) updateStatus(b *Build, state, targetUrl string) {
 			Description: descriptions[state],
 			Context:     "flynn",
 		}
-		body := bytes.NewBufferString("")
+		body := &bytes.Buffer{}
 		if err := json.NewEncoder(body).Encode(status); err != nil {
 			log.Printf("updateStatus: could not encode status: %+v\n", status)
 			return
@@ -300,7 +304,7 @@ func (r *Runner) updateStatus(b *Build, state, targetUrl string) {
 			return
 		}
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", fmt.Sprintf("token %s", r.githubToken))
+		req.Header.Set("Authorization", "token "+r.githubToken)
 
 		res, err := http.DefaultClient.Do(req)
 		defer res.Body.Close()
@@ -339,9 +343,8 @@ func (r *Runner) buildPending() error {
 	r.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket([]byte("pending-builds"))
 		return bkt.ForEach(func(k, v []byte) error {
-			dec := json.NewDecoder(bytes.NewBuffer(v))
 			var b Build
-			if err := dec.Decode(&b); err != nil {
+			if err := json.Unmarshal(v, &b); err != nil {
 				log.Printf("could not decode build %s: %s", v, err)
 				return nil
 			}
@@ -353,10 +356,10 @@ func (r *Runner) buildPending() error {
 	for _, b := range pending {
 		go func() {
 			if err := r.build(b); err != nil {
-				fmt.Printf("build %s failed: %s\n", b.Id, err)
+				log.Printf("build %s failed: %s\n", b.Id, err)
 				return
 			}
-			fmt.Printf("build %s passed!\n", b.Id)
+			log.Printf("build %s passed!\n", b.Id)
 		}()
 	}
 	return nil
@@ -369,12 +372,11 @@ func (r *Runner) save(b *Build) error {
 	return r.db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket([]byte("pending-builds"))
 		if b.State == "pending" {
-			var buf bytes.Buffer
-			enc := json.NewEncoder(&buf)
-			if err := enc.Encode(&b); err != nil {
+			val, err := json.Marshal(b)
+			if err != nil {
 				return err
 			}
-			return bkt.Put([]byte(b.Id), buf.Bytes())
+			return bkt.Put([]byte(b.Id), val)
 		} else {
 			return bkt.Delete([]byte(b.Id))
 		}

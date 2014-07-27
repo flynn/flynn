@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/docker/libcontainer/netlink"
 	"github.com/dotcloud/docker/daemon/networkdriver/ipallocator"
-	"github.com/dotcloud/docker/pkg/iptables"
-	"github.com/dotcloud/docker/pkg/netlink"
 	"github.com/flynn/flynn-test/util"
+	"github.com/flynn/go-iptables"
 )
 
 type Bridge struct {
@@ -58,10 +58,9 @@ func deleteBridge(bridge *Bridge) error {
 	if err := netlink.NetworkLinkDown(bridge.iface); err != nil {
 		return err
 	}
-	// TODO uncomment once merged: https://github.com/docker/libcontainer/pull/46
-	// if err := netlink.DeleteBridge(bridge.name); err != nil {
-	// 	return err
-	// }
+	if err := netlink.DeleteBridge(bridge.name); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -200,7 +199,7 @@ type TapManager struct {
 }
 
 func (t *TapManager) NewTap(uid, gid int) (*Tap, error) {
-	tap := &Tap{Name: fmt.Sprintf("flynntap.%s", util.RandomString(5)), bridge: t.bridge}
+	tap := &Tap{Name: "flynntap." + util.RandomString(5), bridge: t.bridge}
 
 	if err := createTap(tap.Name, uid, gid); err != nil {
 		return nil, err

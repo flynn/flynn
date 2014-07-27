@@ -220,7 +220,7 @@ func (v *vm) IP() string {
 func (v *vm) Run(command string, attempts attempt.Strategy, out io.Writer, stderr io.Writer) error {
 	var sc *ssh.Client
 	err := attempts.Run(func() (err error) {
-		stderr.Write([]byte(fmt.Sprintf("Attempting to ssh to %s:22...\n", v.IP())))
+		fmt.Fprintf(stderr, "Attempting to ssh to %s:22...\n", v.IP())
 		sc, err = v.DialSSH()
 		return
 	})
