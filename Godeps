@@ -37,15 +37,15 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-discoverd",
-			"Rev": "0325ff35b2495314ea7ebfc55e4e5b4408c3b78f"
+			"Rev": "caf58fe09c28730cd76e731cabdc670bea547b9d"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-flynn/attempt",
-			"Rev": "f6d10e4624ad4cb546c93863625a242ce64dac61"
+			"Rev": "59a4d6b5820cc3f962f92f4a0910f6499068e559"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
-			"Rev": "cd680b2cd620be36cd39a58270c6a2894dd2e810"
+			"Rev": "50c419fe0d665ed5088c6aa7692454fa7784490b"
 		},
 		{
 			"ImportPath": "github.com/go-martini/martini",
