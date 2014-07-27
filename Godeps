@@ -8,6 +8,10 @@
 			"Rev": "5478be1963aafa9025e9bf0837aff6013eb92e5b"
 		},
 		{
+			"ImportPath": "github.com/boltdb/bolt",
+			"Rev": "defbfd35afe342d7fa821ab3cfc53232c31e8d0e"
+		},
+		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
 			"Rev": "7745cfd7f8e619cc9e6be450238e6253a57a227f"
 		},

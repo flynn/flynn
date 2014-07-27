@@ -14,13 +14,23 @@ import (
 	"sync"
 	"time"
 
+	"github.com/boltdb/bolt"
 	"github.com/cupcake/goamz/aws"
 	"github.com/cupcake/goamz/s3"
 	"github.com/flynn/flynn-test/cluster"
+	"github.com/flynn/flynn-test/util"
 	"github.com/gorilla/handlers"
 )
 
 var logBucket = "flynn-ci-logs"
+var dbPath = "/tmp/flynn-test.db"
+
+type Build struct {
+	Id     string `json:"id"`
+	Repo   string `json:"repo"`
+	Commit string `json:"commit"`
+	State  string `json:"state"`
+}
 
 type Runner struct {
 	bc          cluster.BootConfig
@@ -29,8 +39,8 @@ type Runner struct {
 	githubToken string
 	s3Bucket    *s3.Bucket
 	networks    map[string]struct{}
-	mtx         sync.Mutex
-	builds      int
+	netMtx      sync.Mutex
+	db          *bolt.DB
 }
 
 func NewRunner(bc cluster.BootConfig, dockerFS string) *Runner {
@@ -71,6 +81,24 @@ func (r *Runner) start() error {
 		defer os.RemoveAll(r.dockerFS)
 	}
 
+	db, err := bolt.Open(dbPath, 0600, &bolt.Options{Timeout: 5 * time.Second})
+	if err != nil {
+		return fmt.Errorf("could not open db: %s", err)
+	}
+	r.db = db
+	defer r.db.Close()
+
+	if err := r.db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("pending-builds"))
+		return err
+	}); err != nil {
+		return fmt.Errorf("could not create pending-builds bucket: %s", err)
+	}
+
+	if err := r.buildPending(); err != nil {
+		log.Printf("could not build pending builds: %s", err)
+	}
+
 	go r.watchEvents()
 
 	http.Handle("/", handlers.CombinedLoggingHandler(os.Stdout, http.HandlerFunc(r.httpEventHandler)))
@@ -87,43 +115,39 @@ func (r *Runner) watchEvents() {
 			continue
 		}
 		go func() {
-			id := r.nextBuildId()
-			if err := r.build(id, event.Repo(), event.Commit()); err != nil {
-				fmt.Printf("build %d failed: %s\n", id, err)
+			b := &Build{
+				Repo:   event.Repo(),
+				Commit: event.Commit(),
+			}
+			if err := r.build(b); err != nil {
+				fmt.Printf("build %s failed: %s\n", b.Id, err)
 				return
 			}
-			fmt.Printf("build %d passed!\n", id)
+			fmt.Printf("build %s passed!\n", b.Id)
 		}()
 	}
 }
 
-func (r *Runner) nextBuildId() int {
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
-	r.builds++
-	return r.builds
-}
-
-func (r *Runner) build(id int, repo, commit string) (err error) {
-	r.updateStatus(repo, commit, "pending", "")
+func (r *Runner) build(b *Build) (err error) {
+	r.updateStatus(b, "pending", "")
 
 	var log bytes.Buffer
 	defer func() {
 		if err != nil {
 			log.WriteString(fmt.Sprintf("build error: %s\n", err))
 		}
-		url := r.uploadToS3(log, id, repo, commit)
+		url := r.uploadToS3(log, b)
 		if err == nil {
-			r.updateStatus(repo, commit, "success", url)
+			r.updateStatus(b, "success", url)
 		} else {
-			r.updateStatus(repo, commit, "failure", url)
+			r.updateStatus(b, "failure", url)
 		}
 	}()
 
-	fmt.Printf("building %s[%s]\n", repo, commit)
+	fmt.Printf("building %s[%s]\n", b.Repo, b.Commit)
 
 	out := io.MultiWriter(os.Stdout, &log)
-	repos := map[string]string{repo: commit}
+	repos := map[string]string{b.Repo: b.Commit}
 	bc := r.bc
 	bc.Network, err = r.allocateNet()
 	if err != nil {
@@ -154,8 +178,8 @@ func (r *Runner) build(id int, repo, commit string) (err error) {
 	return cmd.Run()
 }
 
-func (r *Runner) uploadToS3(log bytes.Buffer, id int, repo, commit string) string {
-	name := fmt.Sprintf("%s-build%d-%s-%s.txt", repo, id, commit, time.Now().Format("2006-01-02-15-04-05"))
+func (r *Runner) uploadToS3(log bytes.Buffer, b *Build) string {
+	name := fmt.Sprintf("%s-build-%s-%s-%s.txt", b.Repo, b.Id, b.Commit, time.Now().Format("2006-01-02-15-04-05"))
 	url := fmt.Sprintf("https://s3.amazonaws.com/%s/%s", logBucket, name)
 	fmt.Printf("uploading build log to S3: %s\n", url)
 	if err := r.s3Bucket.Put(name, log.Bytes(), "text/plain", "public-read"); err != nil {
@@ -248,11 +272,16 @@ var descriptions = map[string]string{
 	"failure": "The Flynn CI build failed",
 }
 
-func (r *Runner) updateStatus(repo, commit, state, targetUrl string) {
+func (r *Runner) updateStatus(b *Build, state, targetUrl string) {
 	go func() {
-		log.Printf("updateStatus: %s %s[%s]\n", state, repo, commit)
+		log.Printf("updateStatus: %s %s[%s]\n", state, b.Repo, b.Commit)
 
-		url := fmt.Sprintf("https://api.github.com/repos/flynn/%s/statuses/%s", repo, commit)
+		b.State = state
+		if err := r.save(b); err != nil {
+			log.Printf("updateStatus: could not save build: %s", err)
+		}
+
+		url := fmt.Sprintf("https://api.github.com/repos/flynn/%s/statuses/%s", b.Repo, b.Commit)
 		status := Status{
 			State:       state,
 			TargetUrl:   targetUrl,
@@ -286,8 +315,8 @@ func (r *Runner) updateStatus(repo, commit, state, targetUrl string) {
 }
 
 func (r *Runner) allocateNet() (string, error) {
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
+	r.netMtx.Lock()
+	defer r.netMtx.Unlock()
 	for i := 0; i < 256; i++ {
 		net := fmt.Sprintf("10.53.%d.1/24", i)
 		if _, ok := r.networks[net]; !ok {
@@ -299,7 +328,55 @@ func (r *Runner) allocateNet() (string, error) {
 }
 
 func (r *Runner) releaseNet(net string) {
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
+	r.netMtx.Lock()
+	defer r.netMtx.Unlock()
 	delete(r.networks, net)
+}
+
+func (r *Runner) buildPending() error {
+	pending := make([]*Build, 0)
+
+	r.db.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket([]byte("pending-builds"))
+		return bkt.ForEach(func(k, v []byte) error {
+			dec := json.NewDecoder(bytes.NewBuffer(v))
+			var b Build
+			if err := dec.Decode(&b); err != nil {
+				log.Printf("could not decode build %s: %s", v, err)
+				return nil
+			}
+			pending = append(pending, &b)
+			return nil
+		})
+	})
+
+	for _, b := range pending {
+		go func() {
+			if err := r.build(b); err != nil {
+				fmt.Printf("build %s failed: %s\n", b.Id, err)
+				return
+			}
+			fmt.Printf("build %s passed!\n", b.Id)
+		}()
+	}
+	return nil
+}
+
+func (r *Runner) save(b *Build) error {
+	if b.Id == "" {
+		b.Id = util.RandomString(8)
+	}
+	return r.db.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket([]byte("pending-builds"))
+		if b.State == "pending" {
+			var buf bytes.Buffer
+			enc := json.NewEncoder(&buf)
+			if err := enc.Encode(&b); err != nil {
+				return err
+			}
+			return bkt.Put([]byte(b.Id), buf.Bytes())
+		} else {
+			return bkt.Delete([]byte(b.Id))
+		}
+	})
 }
