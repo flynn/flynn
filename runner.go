@@ -42,7 +42,10 @@ type Runner struct {
 	networks    map[string]struct{}
 	netMtx      sync.Mutex
 	db          *bolt.DB
+	buildCh     chan struct{}
 }
+
+var maxBuilds = 10
 
 func NewRunner(bc cluster.BootConfig, dockerFS string) *Runner {
 	return &Runner{
@@ -50,6 +53,7 @@ func NewRunner(bc cluster.BootConfig, dockerFS string) *Runner {
 		events:   make(chan Event, 10),
 		dockerFS: dockerFS,
 		networks: make(map[string]struct{}),
+		buildCh:  make(chan struct{}, maxBuilds),
 	}
 }
 
@@ -93,6 +97,10 @@ func (r *Runner) start() error {
 		return fmt.Errorf("could not create pending-builds bucket: %s", err)
 	}
 
+	for i := 0; i < maxBuilds; i++ {
+		r.buildCh <- struct{}{}
+	}
+
 	if err := r.buildPending(); err != nil {
 		log.Printf("could not build pending builds: %s", err)
 	}
@@ -128,6 +136,11 @@ func (r *Runner) watchEvents() {
 
 func (r *Runner) build(b *Build) (err error) {
 	r.updateStatus(b, "pending", "")
+
+	<-r.buildCh
+	defer func() {
+		r.buildCh <- struct{}{}
+	}()
 
 	var buildLog bytes.Buffer
 	defer func() {
