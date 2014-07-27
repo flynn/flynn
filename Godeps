@@ -8,8 +8,24 @@
 			"Rev": "5478be1963aafa9025e9bf0837aff6013eb92e5b"
 		},
 		{
+			"ImportPath": "github.com/boltdb/bolt",
+			"Rev": "defbfd35afe342d7fa821ab3cfc53232c31e8d0e"
+		},
+		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
 			"Rev": "7745cfd7f8e619cc9e6be450238e6253a57a227f"
+		},
+		{
+			"ImportPath": "github.com/cupcake/goamz/aws",
+			"Rev": "78d7708fc6ca767a04a26c777cdc618f39a34ac4"
+		},
+		{
+			"ImportPath": "github.com/cupcake/goamz/s3",
+			"Rev": "78d7708fc6ca767a04a26c777cdc618f39a34ac4"
+		},
+		{
+			"ImportPath": "github.com/docker/libcontainer/netlink",
+			"Rev": "e6a43c1c2b9f769deb96348a0a93417cd48a36d8"
 		},
 		{
 			"ImportPath": "github.com/dotcloud/docker/daemon/networkdriver",
@@ -22,16 +38,6 @@
 			"Rev": "9405a58e99636f7d21e1442b90d3b4a9fdcac5bb"
 		},
 		{
-			"ImportPath": "github.com/dotcloud/docker/pkg/iptables",
-			"Comment": "v0.11.1-229-g9405a58",
-			"Rev": "9405a58e99636f7d21e1442b90d3b4a9fdcac5bb"
-		},
-		{
-			"ImportPath": "github.com/dotcloud/docker/pkg/netlink",
-			"Comment": "v0.11.1-229-g9405a58",
-			"Rev": "9405a58e99636f7d21e1442b90d3b4a9fdcac5bb"
-		},
-		{
 			"ImportPath": "github.com/flynn/discoverd/agent",
 			"Rev": "98fbb6a0c29a087c055734e539690d8176d14517"
 		},
@@ -40,12 +46,20 @@
 			"Rev": "3743ca1e0e1cff877b906dd56983f57699b2cc7d"
 		},
 		{
+			"ImportPath": "github.com/flynn/go-iptables",
+			"Rev": "cfe1d96edb30d715058d2aff4f6a1b03570723e1"
+		},
+		{
 			"ImportPath": "github.com/flynn/go-discoverd",
 			"Rev": "0325ff35b2495314ea7ebfc55e4e5b4408c3b78f"
 		},
 		{
 			"ImportPath": "github.com/flynn/rpcplus",
 			"Rev": "cd680b2cd620be36cd39a58270c6a2894dd2e810"
+		},
+		{
+			"ImportPath": "github.com/gorilla/handlers",
+			"Rev": "470089673c69baefb2d80b13019a4ab6f05e2aad"
 		},
 		{
 			"ImportPath": "gopkg.in/check.v1",

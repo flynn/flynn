@@ -7,55 +7,64 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"sync/atomic"
 	"syscall"
 	"unsafe"
 
+	"github.com/docker/libcontainer/netlink"
 	"github.com/dotcloud/docker/daemon/networkdriver/ipallocator"
-	"github.com/dotcloud/docker/pkg/iptables"
-	"github.com/dotcloud/docker/pkg/netlink"
+	"github.com/flynn/flynn-test/util"
+	"github.com/flynn/go-iptables"
 )
 
-const bridgeName = "flynnbr0"
+type Bridge struct {
+	name   string
+	iface  *net.Interface
+	ipAddr net.IP
+	ipNet  *net.IPNet
+}
 
-var bridgeAddr, bridgeNet, _ = net.ParseCIDR("192.168.52.1/24")
-var bridge *net.Interface
+func (b *Bridge) IP() string {
+	return b.ipAddr.String()
+}
 
-func initNetworking(natIface string) error {
-	if _, err := net.InterfaceByName(bridgeName); err != nil {
-		// bridge doesn't exist, create it
-		if err := createBridge(); err != nil {
-			return err
-		}
+func createBridge(name, network, natIface string) (*Bridge, error) {
+	ipAddr, ipNet, err := net.ParseCIDR(network)
+	if err != nil {
+		return nil, err
 	}
-	bridge, _ = net.InterfaceByName(bridgeName)
-
+	if err := netlink.CreateBridge(name, true); err != nil {
+		return nil, err
+	}
+	iface, err := net.InterfaceByName(name)
+	if err != nil {
+		return nil, err
+	}
+	if err := netlink.NetworkLinkAddIp(iface, ipAddr, ipNet); err != nil {
+		return nil, err
+	}
+	if err := netlink.NetworkLinkUp(iface); err != nil {
+		return nil, err
+	}
 	if err := ioutil.WriteFile("/proc/sys/net/ipv4/ip_forward", []byte("1\n"), 0644); err != nil {
+		return nil, err
+	}
+	if err := setupIPTables(name, natIface); err != nil {
+		return nil, err
+	}
+	return &Bridge{name, iface, ipAddr, ipNet}, nil
+}
+
+func deleteBridge(bridge *Bridge) error {
+	if err := netlink.NetworkLinkDown(bridge.iface); err != nil {
 		return err
 	}
-
-	if err := setupIPTables(natIface); err != nil {
+	if err := netlink.DeleteBridge(bridge.name); err != nil {
 		return err
 	}
-
 	return nil
 }
 
-func createBridge() error {
-	if err := netlink.CreateBridge(bridgeName, true); err != nil {
-		return err
-	}
-	iface, err := net.InterfaceByName(bridgeName)
-	if err != nil {
-		return err
-	}
-	if err := netlink.NetworkLinkAddIp(iface, bridgeAddr, bridgeNet); err != nil {
-		return err
-	}
-	return netlink.NetworkLinkUp(iface)
-}
-
-func setupIPTables(natIface string) error {
+func setupIPTables(bridgeName, natIface string) error {
 	nat := []string{"POSTROUTING", "-t", "nat", "-o", natIface, "-j", "MASQUERADE"}
 	if !iptables.Exists(nat...) {
 		if output, err := iptables.Raw(append([]string{"-I"}, nat...)...); err != nil {
@@ -153,6 +162,7 @@ func deleteTap(name string) error {
 type Tap struct {
 	Name              string
 	LocalIP, RemoteIP *net.IP
+	bridge            *Bridge
 }
 
 func (t *Tap) Close() error {
@@ -160,10 +170,10 @@ func (t *Tap) Close() error {
 		return err
 	}
 	if t.LocalIP != nil {
-		ipallocator.ReleaseIP(bridgeNet, t.LocalIP)
+		ipallocator.ReleaseIP(t.bridge.ipNet, t.LocalIP)
 	}
 	if t.RemoteIP != nil {
-		ipallocator.ReleaseIP(bridgeNet, t.RemoteIP)
+		ipallocator.ReleaseIP(t.bridge.ipNet, t.RemoteIP)
 	}
 	return nil
 }
@@ -180,30 +190,29 @@ iface eth0 inet static
 func (t *Tap) WriteInterfaceConfig(f io.Writer) error {
 	return ifaceConfig.Execute(f, map[string]string{
 		"Address": t.RemoteIP.String(),
-		"Gateway": bridgeAddr.String(),
+		"Gateway": t.bridge.IP(),
 	})
 }
 
 type TapManager struct {
-	next uint64
+	bridge *Bridge
 }
 
 func (t *TapManager) NewTap(uid, gid int) (*Tap, error) {
-	id := atomic.AddUint64(&t.next, 1) - 1
-	tap := &Tap{Name: fmt.Sprintf("flynntap%d", id)}
+	tap := &Tap{Name: "flynntap." + util.RandomString(5), bridge: t.bridge}
 
 	if err := createTap(tap.Name, uid, gid); err != nil {
 		return nil, err
 	}
 
 	var err error
-	tap.LocalIP, err = ipallocator.RequestIP(bridgeNet, nil)
+	tap.LocalIP, err = ipallocator.RequestIP(t.bridge.ipNet, nil)
 	if err != nil {
 		tap.Close()
 		return nil, err
 	}
 
-	tap.RemoteIP, err = ipallocator.RequestIP(bridgeNet, nil)
+	tap.RemoteIP, err = ipallocator.RequestIP(t.bridge.ipNet, nil)
 	if err != nil {
 		tap.Close()
 		return nil, err
@@ -214,7 +223,7 @@ func (t *TapManager) NewTap(uid, gid int) (*Tap, error) {
 		tap.Close()
 		return nil, err
 	}
-	if err := netlink.NetworkLinkAddIp(iface, *tap.LocalIP, bridgeNet); err != nil {
+	if err := netlink.NetworkLinkAddIp(iface, *tap.LocalIP, t.bridge.ipNet); err != nil {
 		tap.Close()
 		return nil, err
 	}
@@ -222,7 +231,7 @@ func (t *TapManager) NewTap(uid, gid int) (*Tap, error) {
 		tap.Close()
 		return nil, err
 	}
-	if err := netlink.AddToBridge(iface, bridge); err != nil {
+	if err := netlink.AddToBridge(iface, t.bridge.iface); err != nil {
 		tap.Close()
 		return nil, err
 	}
