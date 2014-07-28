@@ -79,7 +79,8 @@ rm godeb
 # install godep
 mkdir /gopkg
 export GOPATH=/gopkg
-go get github.com/tools/godep
+# use lmars fork until merged: https://github.com/tools/godep/pull/105
+go get github.com/lmars/godep
 mv /gopkg/bin/godep /usr/bin
 rm -rf /gopkg
 

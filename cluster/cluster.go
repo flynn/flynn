@@ -214,7 +214,6 @@ build() {
   pushd $dir > /dev/null
   git fetch
   git checkout $ref
-  rm -rf /tmp/godep # work around godep bugs
   test -f Makefile && make clean && make
   popd > /dev/null
 }
