@@ -24,7 +24,6 @@ import (
 )
 
 var logBucket = "flynn-ci-logs"
-var dbPath = "/var/lib/flynn-test.db"
 
 type Build struct {
 	Id     string `json:"id"`
@@ -83,7 +82,7 @@ func (r *Runner) start() error {
 		defer os.RemoveAll(r.dockerFS)
 	}
 
-	db, err := bolt.Open(dbPath, 0600, &bolt.Options{Timeout: 5 * time.Second})
+	db, err := bolt.Open(*dbPath, 0600, &bolt.Options{Timeout: 5 * time.Second})
 	if err != nil {
 		return fmt.Errorf("could not open db: %s", err)
 	}

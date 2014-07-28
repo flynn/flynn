@@ -31,6 +31,7 @@ var network = flag.String("network", "10.52.0.1/24", "the network to use for vms
 var natIface = flag.String("nat", "eth0", "the interface to provide NAT to vms")
 var killCluster = flag.Bool("kill", true, "kill the cluster after running the tests")
 var keepDockerfs = flag.Bool("keep-dockerfs", false, "don't remove the dockerfs which was built to run the tests")
+var dbPath = flag.String("db", "flynn-test.db", "path to BoltDB database to store pending builds")
 
 var sshWrapper = template.Must(template.New("ssh").Parse(`
 #!/bin/bash
