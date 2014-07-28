@@ -5,7 +5,6 @@ case $1 in
     shift
     /bin/flynn-mongodb $*
     ;;
-    ;;
   *)
     echo "Usage: $0 {mongo}"
     exit 2
