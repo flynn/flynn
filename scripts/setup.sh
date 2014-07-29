@@ -35,8 +35,8 @@ main() {
 
   if [ ! -f "$bin_dir/flynn-test" ]; then
     pushd $src_dir >/dev/null
-    godep go build
-    cp flynn-test $bin_dir
+    make
+    cp flynn-test flynn-test-runner $bin_dir
     popd >/dev/null
   fi
 
