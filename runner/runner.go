@@ -17,6 +17,7 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/cupcake/goamz/aws"
 	"github.com/cupcake/goamz/s3"
+	"github.com/flynn/flynn-test/arg"
 	"github.com/flynn/flynn-test/cluster"
 	"github.com/flynn/flynn-test/util"
 	"github.com/flynn/go-flynn/attempt"
@@ -44,15 +45,24 @@ type Runner struct {
 	buildCh     chan struct{}
 }
 
+var args *arg.Args
 var maxBuilds = 10
 
-func NewRunner(bc cluster.BootConfig, dockerFS string) *Runner {
-	return &Runner{
-		bc:       bc,
+func init() {
+	args = arg.Parse()
+	log.SetFlags(log.Lshortfile)
+}
+
+func main() {
+	runner := &Runner{
+		bc:       args.BootConfig,
 		events:   make(chan Event, 10),
-		dockerFS: dockerFS,
+		dockerFS: args.DockerFS,
 		networks: make(map[string]struct{}),
 		buildCh:  make(chan struct{}, maxBuilds),
+	}
+	if err := runner.start(); err != nil {
+		log.Fatal(err)
 	}
 }
 
@@ -75,14 +85,14 @@ func (r *Runner) start() error {
 		if err != nil {
 			return err
 		}
-		if r.dockerFS, err = cluster.BuildFlynn(bc, "", repos, os.Stdout); err != nil {
+		if r.dockerFS, err = cluster.BuildFlynn(bc, "", util.Repos, os.Stdout); err != nil {
 			return fmt.Errorf("could not build flynn: %s", err)
 		}
 		r.releaseNet(bc.Network)
 		defer os.RemoveAll(r.dockerFS)
 	}
 
-	db, err := bolt.Open(*dbPath, 0600, &bolt.Options{Timeout: 5 * time.Second})
+	db, err := bolt.Open(args.DBPath, 0600, &bolt.Options{Timeout: 5 * time.Second})
 	if err != nil {
 		return fmt.Errorf("could not open db: %s", err)
 	}
@@ -173,12 +183,12 @@ func (r *Runner) build(b *Build) (err error) {
 	}
 
 	cmd := exec.Command(
-		os.Args[0],
+		args.TestsPath,
 		"--user", r.bc.User,
 		"--rootfs", r.bc.RootFS,
 		"--dockerfs", newDockerfs,
 		"--kernel", r.bc.Kernel,
-		"--cli", *flagCLI,
+		"--cli", args.CLI,
 		"--network", bc.Network,
 		"--nat", r.bc.NatIface,
 		"--debug",
@@ -234,7 +244,7 @@ func (r *Runner) httpEventHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	repo := event.Repo()
-	if _, ok := repos[repo]; !ok {
+	if _, ok := util.Repos[repo]; !ok {
 		log.Println("webhook: unknown repo", repo)
 		http.Error(w, fmt.Sprintf("unknown repo %s", repo), 400)
 		return

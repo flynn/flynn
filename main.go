@@ -6,7 +6,6 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -17,21 +16,11 @@ import (
 	"text/template"
 
 	"code.google.com/p/go.crypto/ssh"
+	"github.com/flynn/flynn-test/arg"
 	"github.com/flynn/flynn-test/cluster"
+	"github.com/flynn/flynn-test/util"
 	"gopkg.in/check.v1"
 )
-
-var listen = flag.Bool("listen", false, "listen for repository events")
-var username = flag.String("user", "ubuntu", "user to run QEMU as")
-var rootfs = flag.String("rootfs", "rootfs/rootfs.img", "fs image to use with QEMU")
-var kernel = flag.String("kernel", "rootfs/vmlinuz", "path to the Linux binary")
-var flagCLI = flag.String("cli", "flynn", "path to flynn-cli binary")
-var debug = flag.Bool("debug", false, "enable debug output")
-var network = flag.String("network", "10.52.0.1/24", "the network to use for vms")
-var natIface = flag.String("nat", "eth0", "the interface to provide NAT to vms")
-var killCluster = flag.Bool("kill", true, "kill the cluster after running the tests")
-var keepDockerfs = flag.Bool("keep-dockerfs", false, "don't remove the dockerfs which was built to run the tests")
-var dbPath = flag.String("db", "flynn-test.db", "path to BoltDB database to store pending builds")
 
 var sshWrapper = template.Must(template.New("ssh").Parse(`
 #!/bin/bash
@@ -40,62 +29,33 @@ ssh -o LogLevel=FATAL -o IdentitiesOnly=yes -o UserKnownHostsFile=/dev/null -o S
 `[1:]))
 
 var gitEnv []string
-var dockerfs string
+
+var args *arg.Args
 var flynnrc string
 
-var repos = map[string]string{
-	"flynn-host":       "master",
-	"docker-etcd":      "master",
-	"discoverd":        "master",
-	"flynn-bootstrap":  "master",
-	"flynn-controller": "master",
-	"flynn-postgres":   "master",
-	"flynn-receive":    "master",
-	"shelf":            "master",
-	"strowger":         "master",
-	"slugbuilder":      "master",
-	"slugrunner":       "master",
-}
-
 func init() {
-	flag.StringVar(&dockerfs, "dockerfs", "", "docker fs")
-	flag.StringVar(&flynnrc, "flynnrc", "", "path to flynnrc file")
-	flag.Parse()
+	args = arg.Parse()
 	log.SetFlags(log.Lshortfile)
 }
 
 func main() {
-	bootConfig := cluster.BootConfig{
-		User:     *username,
-		RootFS:   *rootfs,
-		Kernel:   *kernel,
-		Network:  *network,
-		NatIface: *natIface,
-	}
-
-	if *listen == true {
-		runner := NewRunner(bootConfig, dockerfs)
-		if err := runner.start(); err != nil {
-			log.Fatal(err)
-		}
-		os.Exit(0)
-	}
-
+	flynnrc = args.Flynnrc
 	if flynnrc == "" {
-		c := cluster.New(bootConfig, os.Stdout)
+		c := cluster.New(args.BootConfig, os.Stdout)
+		dockerfs := args.DockerFS
 		if dockerfs == "" {
 			var err error
-			if dockerfs, err = c.BuildFlynn("", repos); err != nil {
+			if dockerfs, err = c.BuildFlynn("", util.Repos); err != nil {
 				log.Fatal("could not build flynn:", err)
 			}
-			if !*keepDockerfs {
+			if !args.KeepDockerFS {
 				defer os.RemoveAll(dockerfs)
 			}
 		}
 		if err := c.Boot(dockerfs, 1); err != nil {
 			log.Fatal("could not boot cluster: ", err)
 		}
-		if *killCluster {
+		if args.Kill {
 			defer c.Shutdown()
 		}
 
@@ -120,7 +80,7 @@ func main() {
 	res := check.RunAll(&check.RunConf{
 		Stream:      true,
 		Verbose:     true,
-		KeepWorkDir: *debug,
+		KeepWorkDir: args.Debug,
 	})
 	fmt.Println(res)
 }
@@ -203,8 +163,8 @@ type CmdResult struct {
 	Err    error
 }
 
-func flynn(dir string, args ...string) *CmdResult {
-	cmd := exec.Command(*flagCLI, args...)
+func flynn(dir string, cmdArgs ...string) *CmdResult {
+	cmd := exec.Command(args.CLI, cmdArgs...)
 	cmd.Env = append(os.Environ(), "FLYNNRC="+flynnrc)
 	cmd.Dir = dir
 	return run(cmd)
@@ -219,7 +179,7 @@ func git(dir string, args ...string) *CmdResult {
 
 func run(cmd *exec.Cmd) *CmdResult {
 	var out bytes.Buffer
-	if *debug {
+	if args.Debug {
 		fmt.Println("++", cmd.Path, strings.Join(cmd.Args[1:], " "))
 		cmd.Stdout = io.MultiWriter(os.Stdout, &out)
 		cmd.Stderr = io.MultiWriter(os.Stderr, &out)
