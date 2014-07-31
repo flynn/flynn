@@ -3,7 +3,7 @@
 case $1 in
   mongo)
     shift
-    /bin/flynn-mongodb $*
+    exec /bin/flynn-mongodb $*
     ;;
   *)
     echo "Usage: $0 {mongo}"
