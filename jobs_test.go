@@ -70,12 +70,17 @@ func (s *S) TestKillJob(c *C) {
 	c.Assert(hc.IsStopped(jobID), Equals, true)
 }
 
-func (s *S) TestJobLog(c *C) {
-	app := s.createTestApp(c, &ct.App{Name: "joblog"})
+func (s *S) createLogTestApp(c *C, name string, stream io.Reader) (*ct.App, string, string) {
+	app := s.createTestApp(c, &ct.App{Name: name})
 	hostID, jobID := utils.UUID(), utils.UUID()
 	hc := tu.NewFakeHostClient(hostID)
-	hc.SetAttach(jobID, newFakeLog(strings.NewReader("foo")))
+	hc.SetAttach(jobID, newFakeLog(stream))
 	s.cc.SetHostClient(hostID, hc)
+	return app, hostID, jobID
+}
+
+func (s *S) TestJobLog(c *C) {
+	app, hostID, jobID := s.createLogTestApp(c, "joblog", strings.NewReader("foo"))
 
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log", s.srv.URL, app.ID, hostID, jobID), nil)
 	c.Assert(err, IsNil)
@@ -90,14 +95,30 @@ func (s *S) TestJobLog(c *C) {
 	c.Assert(buf.String(), Equals, "foo")
 }
 
+func (s *S) TestJobLogTail(c *C) {
+	pipeR, pipeW := io.Pipe()
+	defer pipeW.Close()
+	app, hostID, jobID := s.createLogTestApp(c, "joblog-stream", pipeR)
+
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log?tail=true", s.srv.URL, app.ID, hostID, jobID), nil)
+	c.Assert(err, IsNil)
+	req.SetBasicAuth("", authKey)
+	res, err := http.DefaultClient.Do(req)
+	c.Assert(err, IsNil)
+	defer res.Body.Close()
+
+	data := []byte("test")
+	go pipeW.Write(data)
+	buf := make([]byte, 4)
+	_, err = res.Body.Read(buf)
+	c.Assert(err, IsNil)
+	c.Assert(buf, DeepEquals, data)
+}
+
 func (s *S) TestJobLogSSE(c *C) {
-	app := s.createTestApp(c, &ct.App{Name: "joblog-sse"})
-	hostID, jobID := utils.UUID(), utils.UUID()
-	hc := tu.NewFakeHostClient(hostID)
 	logData, err := base64.StdEncoding.DecodeString("AQAAAAAAABNMaXN0ZW5pbmcgb24gNTUwMDcKAQAAAAAAAA1oZWxsbyBzdGRvdXQKAgAAAAAAAA1oZWxsbyBzdGRlcnIK")
 	c.Assert(err, IsNil)
-	hc.SetAttach(jobID, newFakeLog(bytes.NewReader(logData)))
-	s.cc.SetHostClient(hostID, hc)
+	app, hostID, jobID := s.createLogTestApp(c, "joblog-sse", bytes.NewReader(logData))
 
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log", s.srv.URL, app.ID, hostID, jobID), nil)
 	c.Assert(err, IsNil)
@@ -114,6 +135,29 @@ func (s *S) TestJobLogSSE(c *C) {
 	expected := "data: {\"stream\":\"stdout\",\"data\":\"Listening on 55007\\n\"}\n\ndata: {\"stream\":\"stdout\",\"data\":\"hello stdout\\n\"}\n\ndata: {\"stream\":\"stderr\",\"data\":\"hello stderr\\n\"}\n\nevent: eof\ndata: {}\n\n"
 
 	c.Assert(buf.String(), Equals, expected)
+}
+
+func (s *S) TestJobLogSSEStream(c *C) {
+	pipeR, pipeW := io.Pipe()
+	defer pipeW.Close()
+	app, hostID, jobID := s.createLogTestApp(c, "joblog-sse-stream", pipeR)
+
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log?tail=true", s.srv.URL, app.ID, hostID, jobID), nil)
+	c.Assert(err, IsNil)
+	req.SetBasicAuth("", authKey)
+	req.Header.Set("Accept", "text/event-stream")
+	res, err := http.DefaultClient.Do(req)
+	c.Assert(err, IsNil)
+	defer res.Body.Close()
+
+	go pipeW.Write([]byte("\x01\x00\x00\x00\x00\x00\x00\x13Listening on 55007\n"))
+	buf := make([]byte, 64)
+	n, err := res.Body.Read(buf)
+	c.Assert(err, IsNil)
+	buf = buf[:n]
+
+	expected := "data: {\"stream\":\"stdout\",\"data\":\"Listening on 55007\\n\"}\n\n"
+	c.Assert(string(buf), Equals, expected)
 }
 
 type fakeAttachStream struct {
