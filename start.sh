@@ -2,10 +2,10 @@
 
 case $1 in
   controller)
-    /bin/flynn-controller
+    exec /bin/flynn-controller
     ;;
   scheduler)
-    /bin/flynn-scheduler
+    exec /bin/flynn-scheduler
     ;;
   *)
     echo "Usage: $0 {controller|scheduler}"
