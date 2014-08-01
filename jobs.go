@@ -108,7 +108,8 @@ func jobLog(req *http.Request, app *ct.App, params martini.Params, cluster clust
 		JobID: params["jobs_id"],
 		Flags: host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagLogs,
 	}
-	if tail := req.FormValue("tail"); tail != "" {
+	tail := req.FormValue("tail") != ""
+	if tail {
 		attachReq.Flags |= host.AttachFlagStream
 	}
 	stream, _, err := cluster.Attach(attachReq, false)
@@ -118,14 +119,28 @@ func jobLog(req *http.Request, app *ct.App, params martini.Params, cluster clust
 		return
 	}
 	defer stream.Close()
-	if strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
+
+	sse := strings.Contains(req.Header.Get("Accept"), "text/event-stream")
+	if sse {
 		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
-		ssew := NewSSELogWriter(w)
-		demultiplex.Copy(ssew.Stream("stdout"), ssew.Stream("stderr"), stream)
-		// TODO: include exit code here if tailing
-		w.Write([]byte("event: eof\ndata: {}\n\n"))
 	} else {
-		io.Copy(w, stream)
+		w.Header().Set("Content-Type", "application/vnd.flynn.attach")
+	}
+	w.WriteHeader(200)
+	// Send headers right away if tailing
+	if wf, ok := w.(http.Flusher); ok && tail {
+		wf.Flush()
+	}
+
+	// TODO: use http.CloseNotifier to clean up when client disconnects
+
+	if sse {
+		ssew := NewSSELogWriter(w)
+		demultiplex.Copy(flushWriter{ssew.Stream("stdout"), tail}, flushWriter{ssew.Stream("stderr"), tail}, stream)
+		// TODO: include exit code here if tailing
+		flushWriter{w, tail}.Write([]byte("event: eof\ndata: {}\n\n"))
+	} else {
+		io.Copy(flushWriter{w, tail}, stream)
 	}
 }
 
@@ -169,6 +184,28 @@ func (w *sseLogStreamWriter) Write(p []byte) (int, error) {
 	}
 	_, err := w.w.Write([]byte("\n"))
 	return len(p), err
+}
+
+func (w *sseLogStreamWriter) Flush() {
+	if fw, ok := w.w.Writer.(http.Flusher); ok {
+		fw.Flush()
+	}
+}
+
+type flushWriter struct {
+	w  io.Writer
+	ok bool
+}
+
+func (f flushWriter) Write(p []byte) (int, error) {
+	if f.ok {
+		defer func() {
+			if fw, ok := f.w.(http.Flusher); ok {
+				fw.Flush()
+			}
+		}()
+	}
+	return f.w.Write(p)
 }
 
 func parseJobID(jobID string) (string, string) {
