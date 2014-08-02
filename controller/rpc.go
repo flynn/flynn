@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"time"
 
-	ct "github.com/flynn/flynn-controller/types"
-	"github.com/flynn/rpcplus"
-	rpc "github.com/flynn/rpcplus/comborpc"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/rpcplus"
+	rpc "github.com/flynn/flynn/pkg/rpcplus/comborpc"
 )
 
 func rpcHandler(repo *FormationRepo) http.Handler {

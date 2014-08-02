@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flynn/discoverd/agent"
-	"github.com/flynn/rpcplus"
+	"github.com/flynn/flynn/discoverd/agent"
+	"github.com/flynn/flynn/pkg/rpcplus"
 )
 
 // This is a reasonable default value to be used for the timeout in the Services method.

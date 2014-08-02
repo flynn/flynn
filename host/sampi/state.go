@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/flynn/flynn-host/types"
+	"github.com/flynn/flynn/host/types"
 )
 
 type State struct {

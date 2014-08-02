@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/flynn/discoverd/agent"
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/strowger/types"
-	. "github.com/titanous/gocheck"
+	"github.com/flynn/flynn/discoverd/agent"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/router/types"
+	. "gopkg.in/check.v1"
 )
 
 func newFakeEtcd() *fakeEtcd {

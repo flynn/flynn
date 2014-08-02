@@ -3,13 +3,13 @@ package main
 import (
 	"log"
 
-	"github.com/dotcloud/docker/daemon/graphdriver"
-	_ "github.com/dotcloud/docker/daemon/graphdriver/aufs"
-	_ "github.com/dotcloud/docker/daemon/graphdriver/btrfs"
-	_ "github.com/dotcloud/docker/daemon/graphdriver/devmapper"
-	_ "github.com/dotcloud/docker/daemon/graphdriver/vfs"
+	"github.com/docker/docker/daemon/graphdriver"
+	_ "github.com/docker/docker/daemon/graphdriver/aufs"
+	_ "github.com/docker/docker/daemon/graphdriver/btrfs"
+	_ "github.com/docker/docker/daemon/graphdriver/devmapper"
+	_ "github.com/docker/docker/daemon/graphdriver/vfs"
+	"github.com/flynn/flynn/pinkerton/store"
 	"github.com/flynn/go-docopt"
-	"github.com/flynn/pinkerton/store"
 )
 
 func init() {

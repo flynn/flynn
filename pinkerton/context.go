@@ -6,9 +6,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/dotcloud/docker/daemon/graphdriver"
-	"github.com/flynn/pinkerton/registry"
-	"github.com/flynn/pinkerton/store"
+	"github.com/docker/docker/daemon/graphdriver"
+	"github.com/flynn/flynn/pinkerton/registry"
+	"github.com/flynn/flynn/pinkerton/store"
 )
 
 type Context struct {

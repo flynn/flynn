@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-flynn/postgres"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/go-martini/martini"
 	"github.com/martini-contrib/render"
 )

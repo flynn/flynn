@@ -7,7 +7,7 @@ import (
 	"text/tabwriter"
 	"text/template"
 
-	"github.com/flynn/flynn-controller/client"
+	"github.com/flynn/flynn/controller/client"
 )
 
 var cmdHelp = &Command{

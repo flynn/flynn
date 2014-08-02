@@ -10,10 +10,10 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/flynn/flynn-host/ports"
-	"github.com/flynn/flynn-host/types"
+	"github.com/flynn/flynn/host/ports"
+	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/go-dockerclient"
-	"github.com/flynn/go-flynn/cluster"
 )
 
 func parseEnviron() map[string]string {

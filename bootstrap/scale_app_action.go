@@ -1,7 +1,7 @@
 package bootstrap
 
 import (
-	ct "github.com/flynn/flynn-controller/types"
+	ct "github.com/flynn/flynn/controller/types"
 )
 
 type ScaleAppAction struct {

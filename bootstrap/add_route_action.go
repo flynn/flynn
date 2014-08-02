@@ -3,8 +3,8 @@ package bootstrap
 import (
 	"fmt"
 
-	ct "github.com/flynn/flynn-controller/types"
-	"github.com/flynn/strowger/types"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/router/types"
 )
 
 type AddRouteAction struct {

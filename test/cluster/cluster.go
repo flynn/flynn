@@ -14,9 +14,9 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/flynn/flynn-test/util"
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-flynn/attempt"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/test/util"
 )
 
 type BootConfig struct {

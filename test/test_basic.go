@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn-test/util"
-	"github.com/flynn/go-flynn/attempt"
+	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/test/util"
 	c "gopkg.in/check.v1"
 )
 

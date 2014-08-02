@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-discoverd/dialer"
-	"github.com/flynn/strowger/types"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/discoverd/client/dialer"
+	"github.com/flynn/flynn/router/types"
 )
 
 func New() (Client, error) {

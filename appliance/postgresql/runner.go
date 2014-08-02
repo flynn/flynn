@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
-	"database/sql"
 	"encoding/base64"
 	"errors"
 	"flag"
@@ -20,9 +19,10 @@ import (
 	"text/template"
 	"time"
 
-	da "github.com/flynn/discoverd/agent"
-	"github.com/flynn/go-discoverd"
-	_ "github.com/lib/pq"
+	da "github.com/flynn/flynn/discoverd/agent"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/go-sql"
+	_ "github.com/flynn/pq"
 )
 
 var dataDir = flag.String("data", "/data", "postgresql data directory")

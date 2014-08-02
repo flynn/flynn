@@ -9,8 +9,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/flynn/flynn-controller/client"
-	"github.com/flynn/strowger/types"
+	"github.com/flynn/flynn/controller/client"
+	"github.com/flynn/flynn/router/types"
 )
 
 var cmdRouteAddHTTP = &Command{

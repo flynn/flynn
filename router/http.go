@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"code.google.com/p/go.crypto/nacl/secretbox"
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/strowger/types"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/router/types"
 	"github.com/inconshreveable/go-vhost"
 )
 

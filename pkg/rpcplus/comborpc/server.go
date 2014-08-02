@@ -6,8 +6,8 @@ import (
 	"mime"
 	"net/http"
 
-	"github.com/flynn/rpcplus"
-	"github.com/flynn/rpcplus/jsonrpc"
+	"github.com/flynn/flynn/pkg/rpcplus"
+	"github.com/flynn/flynn/pkg/rpcplus/jsonrpc"
 )
 
 type Server struct {

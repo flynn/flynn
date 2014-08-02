@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-	"github.com/flynn/flynn-controller/client"
+	"github.com/flynn/flynn/controller/client"
 )
 
 var cmdServerAdd = &Command{

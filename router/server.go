@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/strowger/types"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/router/types"
 )
 
 type Listener interface {

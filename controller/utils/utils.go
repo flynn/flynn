@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"strings"
 
-	ct "github.com/flynn/flynn-controller/types"
-	"github.com/flynn/flynn-host/types"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/go-dockerclient"
 )
 

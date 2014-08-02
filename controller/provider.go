@@ -3,7 +3,7 @@ package main
 import (
 	"errors"
 
-	ct "github.com/flynn/flynn-controller/types"
+	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/go-sql"
 )
 

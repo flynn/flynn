@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/flynn/flynn-controller/client"
+	"github.com/flynn/flynn/controller/client"
 )
 
 func main() {

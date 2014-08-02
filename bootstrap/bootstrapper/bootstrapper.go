@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/flynn/flynn-bootstrap"
+	"github.com/flynn/flynn/bootstrap"
 )
 
 func readManifest() ([]byte, error) {

@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flynn/flynn-host/types"
+	"github.com/flynn/flynn/host/types"
 )
 
 // TODO: prune old jobs?

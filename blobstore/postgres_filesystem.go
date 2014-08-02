@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/flynn/go-flynn/migrate"
+	"github.com/flynn/flynn/pkg/migrate"
 	"github.com/flynn/go-sql"
 	"github.com/flynn/pq"
 	"github.com/flynn/pq/oid"

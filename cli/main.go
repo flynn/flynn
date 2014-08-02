@@ -14,7 +14,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/bgentry/pflag"
-	"github.com/flynn/flynn-controller/client"
+	"github.com/flynn/flynn/controller/client"
 )
 
 type Command struct {

@@ -10,8 +10,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/flynn/strowger/client"
-	"github.com/flynn/strowger/types"
+	"github.com/flynn/flynn/router/client"
+	"github.com/flynn/flynn/router/types"
 )
 
 func main() {

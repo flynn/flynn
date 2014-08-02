@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"code.google.com/p/go.crypto/ssh"
-	"github.com/flynn/go-flynn/attempt"
+	"github.com/flynn/flynn/pkg/attempt"
 )
 
 func NewVMManager(bridge *Bridge) *VMManager {

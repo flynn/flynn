@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/flynn/go-flynn/attempt"
-	"github.com/flynn/rpcplus"
-	rpc "github.com/flynn/rpcplus/comborpc"
+	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/pkg/rpcplus"
+	rpc "github.com/flynn/flynn/pkg/rpcplus/comborpc"
 )
 
 const (

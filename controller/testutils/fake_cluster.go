@@ -4,8 +4,8 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/flynn/flynn-host/types"
-	"github.com/flynn/go-flynn/cluster"
+	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/cluster"
 )
 
 func NewFakeCluster() *FakeCluster {

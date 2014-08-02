@@ -5,9 +5,9 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-discoverd/balancer"
-	"github.com/flynn/go-discoverd/dialer"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/discoverd/client/balancer"
+	"github.com/flynn/flynn/discoverd/client/dialer"
 )
 
 func TestHTTPClient(t *testing.T) {

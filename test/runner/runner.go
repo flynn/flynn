@@ -17,10 +17,10 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/cupcake/goamz/aws"
 	"github.com/cupcake/goamz/s3"
-	"github.com/flynn/flynn-test/arg"
-	"github.com/flynn/flynn-test/cluster"
-	"github.com/flynn/flynn-test/util"
-	"github.com/flynn/go-flynn/attempt"
+	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/test/arg"
+	"github.com/flynn/flynn/test/cluster"
+	"github.com/flynn/flynn/test/util"
 	"github.com/gorilla/handlers"
 )
 

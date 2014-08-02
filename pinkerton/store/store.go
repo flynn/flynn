@@ -9,9 +9,9 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/dotcloud/docker/archive"
-	"github.com/dotcloud/docker/daemon/graphdriver"
-	"github.com/flynn/pinkerton/registry"
+	"github.com/docker/docker/archive"
+	"github.com/docker/docker/daemon/graphdriver"
+	"github.com/flynn/flynn/pinkerton/registry"
 )
 
 type Store struct {

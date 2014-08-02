@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flynn/go-flynn/attempt"
-	. "launchpad.net/gocheck"
+	"github.com/flynn/flynn/pkg/attempt"
+	. "gopkg.in/check.v1"
 )
 
 func Test(t *testing.T) {

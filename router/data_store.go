@@ -7,7 +7,7 @@ import (
 	"path"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/flynn/strowger/types"
+	"github.com/flynn/flynn/router/types"
 )
 
 type EtcdClient interface {

@@ -1,11 +1,11 @@
 package balancer
 
 import (
-	"github.com/flynn/discoverd/agent"
-	"github.com/flynn/go-discoverd"
-
 	"math/rand"
 	"testing"
+
+	"github.com/flynn/flynn/discoverd/agent"
+	"github.com/flynn/flynn/discoverd/client"
 )
 
 // implements discoverd.ServiceSet

@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/flynn/flynn-controller/client"
+	"github.com/flynn/flynn/controller/client"
 )
 
 var cmdKeys = &Command{

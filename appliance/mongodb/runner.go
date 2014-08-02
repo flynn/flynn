@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/flynn/go-discoverd"
+	"github.com/flynn/flynn/discoverd/client"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )

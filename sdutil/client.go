@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/flynn/go-discoverd"
 	"log"
 	"os"
+
+	"github.com/flynn/flynn/discoverd/client"
 )
 
 type clientCmd struct {

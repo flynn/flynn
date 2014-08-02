@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flynn/flynn-host/types"
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-flynn/attempt"
-	"github.com/flynn/rpcplus"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/pkg/rpcplus"
 )
 
 // ErrNoServers is returned if no host servers are found

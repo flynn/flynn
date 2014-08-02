@@ -3,7 +3,7 @@ package sampi
 import (
 	"testing"
 
-	"github.com/flynn/flynn-host/types"
+	"github.com/flynn/flynn/host/types"
 )
 
 func TestStateCommit(t *testing.T) {

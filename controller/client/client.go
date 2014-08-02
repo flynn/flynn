@@ -13,13 +13,13 @@ import (
 	"strings"
 	"time"
 
-	ct "github.com/flynn/flynn-controller/types"
-	"github.com/flynn/flynn-controller/utils"
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-discoverd/dialer"
-	"github.com/flynn/go-flynn/pinned"
-	"github.com/flynn/rpcplus"
-	"github.com/flynn/strowger/types"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/discoverd/client/dialer"
+	"github.com/flynn/flynn/pkg/pinned"
+	"github.com/flynn/flynn/pkg/rpcplus"
+	"github.com/flynn/flynn/router/types"
 )
 
 func NewClient(uri, key string) (*Client, error) {

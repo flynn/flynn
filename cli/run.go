@@ -7,9 +7,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/flynn/flynn-controller/client"
-	ct "github.com/flynn/flynn-controller/types"
-	"github.com/flynn/go-flynn/demultiplex"
+	"github.com/flynn/flynn/controller/client"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/demultiplex"
 	"github.com/heroku/hk/term"
 )
 

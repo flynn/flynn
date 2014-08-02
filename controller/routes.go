@@ -1,9 +1,9 @@
 package main
 
 import (
-	ct "github.com/flynn/flynn-controller/types"
-	strowgerc "github.com/flynn/strowger/client"
-	"github.com/flynn/strowger/types"
+	ct "github.com/flynn/flynn/controller/types"
+	strowgerc "github.com/flynn/flynn/router/client"
+	"github.com/flynn/flynn/router/types"
 	"github.com/go-martini/martini"
 )
 

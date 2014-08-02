@@ -4,7 +4,7 @@ import (
 	"log"
 	"syscall"
 
-	"github.com/titanous/fdrpc"
+	"github.com/flynn/flynn/pkg/rpcplus/fdrpc"
 )
 
 func main() {

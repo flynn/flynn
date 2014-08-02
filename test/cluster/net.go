@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/docker/docker/daemon/networkdriver/ipallocator"
 	"github.com/docker/libcontainer/netlink"
-	"github.com/dotcloud/docker/daemon/networkdriver/ipallocator"
-	"github.com/flynn/flynn-test/util"
-	"github.com/flynn/go-iptables"
+	"github.com/flynn/flynn/pkg/iptables"
+	"github.com/flynn/flynn/test/util"
 )
 
 type Bridge struct {

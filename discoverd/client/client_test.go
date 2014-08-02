@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/flynn/discoverd/agent"
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-flynn/attempt"
+	"github.com/flynn/flynn/discoverd/agent"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/attempt"
 )
 
 func ExampleRegisterAndStandby_standby() {

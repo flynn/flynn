@@ -7,7 +7,7 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/flynn/go-discoverd"
+	"github.com/flynn/flynn/discoverd/client"
 )
 
 var ErrNoServices = errors.New("balancer: no services found")

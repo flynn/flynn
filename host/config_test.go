@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/flynn/flynn-host/types"
+	"github.com/flynn/flynn/host/types"
 )
 
 func TestConfig(t *testing.T) {

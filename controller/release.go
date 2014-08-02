@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 
-	ct "github.com/flynn/flynn-controller/types"
-	"github.com/flynn/flynn-controller/utils"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/go-sql"
 )
 

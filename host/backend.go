@@ -3,7 +3,7 @@ package main
 import (
 	"io"
 
-	"github.com/flynn/flynn-host/types"
+	"github.com/flynn/flynn/host/types"
 )
 
 type AttachRequest struct {

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/flynn/flynn-host/ports"
-	"github.com/flynn/flynn-host/types"
+	"github.com/flynn/flynn/host/ports"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/go-dockerclient"
 	"github.com/technoweenie/grohl"
 )

@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flynn/flynn-controller/client"
-	tu "github.com/flynn/flynn-controller/testutils"
-	ct "github.com/flynn/flynn-controller/types"
-	"github.com/flynn/flynn-host/types"
-	. "github.com/titanous/gocheck"
+	"github.com/flynn/flynn/controller/client"
+	tu "github.com/flynn/flynn/controller/testutils"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/types"
+	. "gopkg.in/check.v1"
 )
 
 // Hook gocheck up to the "go test" runner

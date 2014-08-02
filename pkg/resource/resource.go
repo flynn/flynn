@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-discoverd/balancer"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/discoverd/client/balancer"
 )
 
 func NewServer(uri string) (*Server, error) {

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/flynn/flynn-controller/client"
+	"github.com/flynn/flynn/controller/client"
 )
 
 var cmdProviders = &Command{

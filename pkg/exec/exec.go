@@ -7,10 +7,10 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/flynn/flynn-host/types"
+	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/demultiplex"
 	"github.com/flynn/go-dockerclient"
-	"github.com/flynn/go-flynn/cluster"
-	"github.com/flynn/go-flynn/demultiplex"
 )
 
 type Cmd struct {

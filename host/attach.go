@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/flynn/flynn-host/types"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/go-dockerclient"
 	"github.com/technoweenie/grohl"
 )

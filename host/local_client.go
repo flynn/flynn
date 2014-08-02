@@ -1,10 +1,10 @@
 package main
 
 import (
-	"github.com/flynn/flynn-host/sampi"
-	"github.com/flynn/flynn-host/types"
-	"github.com/flynn/go-flynn/cluster"
-	"github.com/flynn/rpcplus"
+	"github.com/flynn/flynn/host/sampi"
+	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/rpcplus"
 )
 
 func NewLocalClient(host string, c *sampi.Cluster) cluster.LocalClient {

@@ -6,7 +6,7 @@ import (
 	"os"
 	"text/template"
 
-	ct "github.com/flynn/flynn-controller/types"
+	ct "github.com/flynn/flynn/controller/types"
 )
 
 type DeployAppAction struct {

@@ -6,12 +6,12 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/flynn/flynn-controller/client"
-	ct "github.com/flynn/flynn-controller/types"
-	"github.com/flynn/flynn-host/types"
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-flynn/attempt"
-	"github.com/flynn/go-flynn/cluster"
+	"github.com/flynn/flynn/controller/client"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/pkg/cluster"
 )
 
 type State struct {

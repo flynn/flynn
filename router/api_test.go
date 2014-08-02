@@ -3,9 +3,9 @@ package main
 import (
 	"net/http/httptest"
 
-	"github.com/flynn/strowger/client"
-	"github.com/flynn/strowger/types"
-	. "github.com/titanous/gocheck"
+	"github.com/flynn/flynn/router/client"
+	"github.com/flynn/flynn/router/types"
+	. "gopkg.in/check.v1"
 )
 
 func newTestAPIServer() *testAPIServer {

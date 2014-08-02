@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn-host/sampi"
-	"github.com/flynn/flynn-host/types"
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-flynn/attempt"
-	"github.com/flynn/go-flynn/cluster"
-	rpc "github.com/flynn/rpcplus/comborpc"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/sampi"
+	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/pkg/cluster"
+	rpc "github.com/flynn/flynn/pkg/rpcplus/comborpc"
 	"github.com/technoweenie/grohl"
 )
 

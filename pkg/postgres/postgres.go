@@ -6,7 +6,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/flynn/go-discoverd"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/go-sql"
 	_ "github.com/flynn/pq"
 )

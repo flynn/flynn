@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"bitbucket.org/kardianos/osext"
-	"github.com/flynn/flynn-controller/client"
+	"github.com/flynn/flynn/controller/client"
 	"github.com/inconshreveable/go-update"
 	"github.com/kr/binarydist"
 )

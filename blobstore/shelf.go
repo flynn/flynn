@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-flynn/postgres"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/postgres"
 )
 
 var storageDir = flag.String("s", "", "Path to store files, instead of Postgres")

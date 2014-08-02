@@ -8,7 +8,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/flynn/strowger/types"
+	"github.com/flynn/flynn/router/types"
 	"github.com/go-martini/martini"
 	"github.com/martini-contrib/binding"
 	"github.com/martini-contrib/render"

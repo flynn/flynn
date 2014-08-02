@@ -5,12 +5,12 @@ import (
 	"log"
 	"regexp"
 
-	ct "github.com/flynn/flynn-controller/types"
-	"github.com/flynn/flynn-controller/utils"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
+	strowgerc "github.com/flynn/flynn/router/client"
+	"github.com/flynn/flynn/router/types"
 	"github.com/flynn/go-sql"
 	"github.com/flynn/pq/hstore"
-	strowgerc "github.com/flynn/strowger/client"
-	"github.com/flynn/strowger/types"
 )
 
 type AppRepo struct {

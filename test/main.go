@@ -16,9 +16,9 @@ import (
 	"text/template"
 
 	"code.google.com/p/go.crypto/ssh"
-	"github.com/flynn/flynn-test/arg"
-	"github.com/flynn/flynn-test/cluster"
-	"github.com/flynn/flynn-test/util"
+	"github.com/flynn/flynn/test/arg"
+	"github.com/flynn/flynn/test/cluster"
+	"github.com/flynn/flynn/test/util"
 	"gopkg.in/check.v1"
 )
 

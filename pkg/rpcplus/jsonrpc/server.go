@@ -10,7 +10,7 @@ import (
 	"io"
 	"sync"
 
-	rpc "github.com/flynn/rpcplus"
+	rpc "github.com/flynn/flynn/pkg/rpcplus"
 )
 
 type serverCodec struct {

@@ -9,8 +9,8 @@ import (
 	"net/http/httptest"
 
 	"code.google.com/p/go.net/websocket"
-	"github.com/flynn/strowger/types"
-	. "github.com/titanous/gocheck"
+	"github.com/flynn/flynn/router/types"
+	. "gopkg.in/check.v1"
 )
 
 var httpClient = &http.Client{

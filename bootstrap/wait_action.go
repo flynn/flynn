@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-discoverd/dialer"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/discoverd/client/dialer"
 )
 
 type WaitAction struct {

@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 
-	"github.com/flynn/flynn-host/types"
+	"github.com/flynn/flynn/host/types"
 )
 
 type ReadWriteCloser interface {

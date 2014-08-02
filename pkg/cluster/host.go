@@ -3,9 +3,9 @@ package cluster
 import (
 	"net"
 
-	"github.com/flynn/flynn-host/types"
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/rpcplus"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/rpcplus"
 )
 
 type Host interface {

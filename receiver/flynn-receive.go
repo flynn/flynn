@@ -9,11 +9,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/flynn/flynn-controller/client"
-	ct "github.com/flynn/flynn-controller/types"
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-flynn/cluster"
-	"github.com/flynn/go-flynn/exec"
+	"github.com/flynn/flynn/controller/client"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/exec"
 )
 
 var clusterc *cluster.Client

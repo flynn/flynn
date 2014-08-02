@@ -4,8 +4,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/flynn/flynn-controller/client"
-	"github.com/flynn/go-flynn/demultiplex"
+	"github.com/flynn/flynn/controller/client"
+	"github.com/flynn/flynn/pkg/demultiplex"
 )
 
 var cmdLog = &Command{

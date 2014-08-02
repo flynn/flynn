@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/flynn/go-discoverd"
+	"github.com/flynn/flynn/discoverd/client"
 )
 
 func main() {

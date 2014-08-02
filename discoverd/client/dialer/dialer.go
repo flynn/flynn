@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/flynn/go-discoverd"
-	"github.com/flynn/go-discoverd/balancer"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/discoverd/client/balancer"
 )
 
 // NewHTTPClient returns a HTTP client configured to use discoverd to lookup hostnames.

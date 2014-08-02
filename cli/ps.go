@@ -3,8 +3,8 @@ package main
 import (
 	"sort"
 
-	"github.com/flynn/flynn-controller/client"
-	ct "github.com/flynn/flynn-controller/types"
+	"github.com/flynn/flynn/controller/client"
+	ct "github.com/flynn/flynn/controller/types"
 )
 
 var cmdPs = &Command{

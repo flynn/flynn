@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/flynn/flynn-host/types"
+	"github.com/flynn/flynn/host/types"
 )
 
 func openConfig(file string) (*host.Host, error) {
