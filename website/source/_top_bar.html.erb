@@ -1,0 +1,37 @@
+<div class="container-outer fill">
+  &nbsp;
+  <div class="container-inner top-bar">
+    <div class="content">
+      <a href="/" class="brand">Flynn</a>
+
+      <nav class="content nav-h pull-right">
+        <ul>
+          <li class="<%= active_nav_class("/") %>">
+            <a href="/">Hello</a>
+          </li>
+
+          <li class="<%= active_nav_class("/docs", :not => /architecture|roadmap|contributing/) %>">
+            <a href="/docs">Docs</a>
+          </li>
+
+          <li class="<%= active_nav_class("/blog") %>">
+            <a href="/blog">Blog</a>
+          </li>
+
+          <li class="<%= active_nav_class("/docs/architecture") %>">
+            <a href="/docs/architecture">Architecture</a>
+          </li>
+
+          <li class="<%= active_nav_class("/docs/roadmap") %>">
+            <a href="/docs/roadmap">Roadmap</a>
+          </li>
+
+          <li class="<%= active_nav_class("/docs/contributing") %>">
+            <a href="/docs/contributing">Contributing</a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </div>
+  &nbsp;
+</div>

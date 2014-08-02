@@ -1,0 +1,141 @@
+@import "variables";
+@import "fly/variables";
+@import "fly/mixins";
+
+@mixin input-size {
+	@each $size in 3,4,6 {
+		&[size="#{$size}"] {
+			width: 0.72em * $size;
+		}
+	}
+}
+
+@mixin input-common {
+	@include input-size;
+
+	&.username-input {
+		width: 6.4em;
+	}
+}
+
+input[type=text], input[type=password] {
+	@include input-common;
+
+  font-size: 1em;
+  line-height: 1.5em;
+  height: 1.5em;
+  width: 14em;
+  border: 0.1em solid darken($lightColor, 6%);
+  border-radius: 0.125em;
+  padding: 0.25em;
+	outline: none;
+}
+
+input[type="radio"] {
+  margin-right: 0.5em;
+}
+
+label {
+	font-size: 1em;
+	line-height: 1.5em;
+}
+
+.input-group, label {
+	> .text, > .info {
+		font-size: 0.75em;
+	}
+
+	> .info {
+		font-size: 0.75em;
+		font-style: italic;
+		font-weight: 400;
+		line-height: 1.5em;
+	}
+}
+
+.input-append {
+	@include clearfix();
+	width: 14em;
+	font-size: 1em;
+
+	input[type=text], input[type=password] {
+		@include input-common;
+
+		position: relative;
+		vertical-align: top;
+		float: left;
+		width: 12em;
+		border-right: 0px;
+		border-top-right-radius: 0px;
+		border-bottom-right-radius: 0px;
+	}
+
+	.addon {
+		border-top-right-radius: 0.125em;
+		border-bottom-right-radius: 0.125em;
+	}
+
+	.addon:before {
+		display: inline-block;
+
+		width: 1.3em;
+		line-height: 1.5em;
+
+		content: "\00a0";
+
+		font-weight: 400;
+		text-align: center;
+		color: $grayColor;
+	}
+
+	&.valid .addon:before {
+		content: "✓";
+	}
+
+	&.invalid .addon:before {
+		content: "×";
+	}
+
+	.addon-block, .addon {
+		display: inline-block;
+		float: left;
+		vertical-align: top;
+		padding: 0.25em 0 0.25em 0;
+
+		vertical-align: top;
+
+		font-size: 1em;
+		line-height: 1.5em;
+
+		border: 0.1em solid darken($lightColor, 6%);
+		border-left: none;
+		border-right: none;
+
+		background-color: darken($lightColor, 6%);
+	}
+
+	.addon-block {
+		padding-left: 0.5em;
+		padding-right: 0.5em;
+	}
+}
+
+.input-group {
+	display: block;
+	width: 14em;
+	margin-bottom: 1em;
+
+	label {
+		&:last-of-type {
+			.input-append {
+				margin-right: 0px;
+			}
+		}
+	}
+
+	.input-append {
+		display: inline-block;
+		width: auto;
+		margin-right: 0.5em;
+	}
+}
