@@ -1,0 +1,25 @@
+#!/bin/bash
+
+set -e
+
+IP_ADDR=$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')
+
+# kill running flynn-host, if any
+host=$(docker ps | grep flynn-host | cut -d" " -f 1)
+if [ -n "$host" ]; then
+  docker kill $host
+fi
+
+# workaround https://github.com/dotcloud/docker/issues/5737
+ifconfig | grep veth | cut -d" " -f 1 | while read veth; do
+  sudo ip link delete $veth > /dev/null || true
+done
+sudo ip neigh flush all
+
+docker run -d -v=/var/run/docker.sock:/var/run/docker.sock -p=1113:1113 flynn/host -external ${IP_ADDR} -force
+sleep 5
+
+# populate arp cache with etcd (additional workaround for #5737)
+sudo arping -c 1 172.17.0.3 > /dev/null
+
+docker run -e=DISCOVERD=${IP_ADDR}:1111 flynn/bootstrap
