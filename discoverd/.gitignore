@@ -1,0 +1,4 @@
+discoverd
+#Ignoring go test generated files.
+*.test
+build
