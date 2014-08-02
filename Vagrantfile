@@ -21,13 +21,11 @@ SCRIPT
 
   config.vm.provision "shell", privileged: false, inline: <<SCRIPT
     grep '^export GOPATH' ~/.bashrc || echo export GOPATH=~/go >> ~/.bashrc
-    grep '^export PATH' ~/.bashrc || echo export PATH=\$PATH:~/go/bin:/vagrant >> ~/.bashrc
-
+    grep '^export PATH' ~/.bashrc || echo export PATH=\$PATH:~/go/bin:/vagrant/script >> ~/.bashrc
     GOPATH=~/go go get github.com/tools/godep
 
-    mkdir -p ~/go/src/github.com
-    mkdir -p /vagrant/src
-    ln -s /vagrant/src ~/go/src/github.com/flynn
-    grep ^cd ~/.bashrc || echo cd ~/go/src/github.com/flynn >> ~/.bashrc
+    mkdir -p ~/go/src/github.com/flynn
+    ln -s /vagrant ~/go/src/github.com/flynn/flynn
+    grep ^cd ~/.bashrc || echo cd ~/go/src/github.com/flynn/flynn >> ~/.bashrc
 SCRIPT
 end
