@@ -1,0 +1,9 @@
+{
+  "processes": {
+    "mongo": {
+      "ports": [{"proto": "tcp"}],
+      "data": true,
+      "cmd": ["mongo"]
+    }
+  }
+}
