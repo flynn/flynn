@@ -28,7 +28,7 @@ func runCreate(cmd *Command, args []string, client *controller.Client) error {
 	if err := client.CreateApp(app); err != nil {
 		return err
 	}
-	
+
 	exec.Command("git", "remote", "remove", "flynn").Run()
 	exec.Command("git", "remote", "add", "flynn", gitURLPre(serverConf.GitHost)+app.Name+gitURLSuf).Run()
 	log.Printf("Created %s", app.Name)
@@ -39,7 +39,7 @@ var cmdApps = &Command{
 	Run:   runApps,
 	Usage: "apps",
 	Short: "list apps",
-	Long: `Lists apps.`,
+	Long:  `Lists apps.`,
 }
 
 func runApps(cmd *Command, args []string, client *controller.Client) error {
