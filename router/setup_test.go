@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coreos/go-etcd/etcd"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/flynn/discoverd/agent"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/router/types"
-	. "gopkg.in/check.v1"
+	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 )
 
 func newFakeEtcd() *fakeEtcd {

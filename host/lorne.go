@@ -15,7 +15,7 @@ import (
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	rpc "github.com/flynn/flynn/pkg/rpcplus/comborpc"
-	"github.com/technoweenie/grohl"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 )
 
 // Attempts is the attempt strategy that is used to connect to discoverd.

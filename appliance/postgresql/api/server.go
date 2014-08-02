@@ -11,8 +11,8 @@ import (
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/postgres"
-	"github.com/go-martini/martini"
-	"github.com/martini-contrib/render"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
 )
 
 var serviceName = os.Getenv("FLYNN_POSTGRES")

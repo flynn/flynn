@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/docker/docker/daemon/graphdriver"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver"
 	"github.com/flynn/flynn/pinkerton/registry"
 	"github.com/flynn/flynn/pinkerton/store"
 )

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/coreos/go-etcd/etcd"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 )
 
 // KeyPrefix is used to create the full service path.

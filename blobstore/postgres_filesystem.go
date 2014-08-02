@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/pkg/migrate"
-	"github.com/flynn/go-sql"
-	"github.com/flynn/pq"
-	"github.com/flynn/pq/oid"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/oid"
 )
 
 func NewPostgresFilesystem(db *sql.DB) (Filesystem, error) {

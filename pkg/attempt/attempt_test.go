@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/pkg/attempt"
-	. "gopkg.in/check.v1"
+	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 )
 
 func Test(t *testing.T) {

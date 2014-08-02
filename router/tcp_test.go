@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	"github.com/flynn/flynn/router/types"
-	. "gopkg.in/check.v1"
+	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 )
 
 func NewTCPTestServer(prefix string) *TCPTestServer {

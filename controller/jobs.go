@@ -15,10 +15,10 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/demultiplex"
-	"github.com/flynn/go-dockerclient"
-	"github.com/flynn/go-sql"
-	"github.com/flynn/pq"
-	"github.com/go-martini/martini"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-dockerclient"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 )
 
 type JobRepo struct {

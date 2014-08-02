@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"code.google.com/p/go.crypto/ssh"
+	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.crypto/ssh"
 	"github.com/flynn/flynn/pkg/attempt"
 )
 

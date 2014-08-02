@@ -15,10 +15,10 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/pkg/rpcplus"
-	"github.com/flynn/go-sql"
-	_ "github.com/flynn/pq"
-	"github.com/go-martini/martini"
-	. "gopkg.in/check.v1"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
+	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 )
 
 // Hook gocheck up to the "go test" runner

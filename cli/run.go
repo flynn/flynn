@@ -10,7 +10,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/demultiplex"
-	"github.com/heroku/hk/term"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/heroku/hk/term"
 )
 
 var (

@@ -16,7 +16,7 @@ import (
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
-	. "gopkg.in/check.v1"
+	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 )
 
 func (s *S) createTestJob(c *C, in *ct.Job) *ct.Job {

@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/discoverd/client"
-	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/mgo.v2"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/mgo.v2/bson"
 )
 
 var dataDir = flag.String("data", "/data", "mongo data directory")

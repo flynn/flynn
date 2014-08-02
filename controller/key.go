@@ -6,9 +6,9 @@ import (
 	"encoding/hex"
 	"errors"
 
-	"code.google.com/p/go.crypto/ssh"
+	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.crypto/ssh"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/go-sql"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 )
 
 type KeyRepo struct {

@@ -13,7 +13,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
-	"github.com/technoweenie/grohl"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 )
 
 var backoffPeriod = 10 * time.Minute

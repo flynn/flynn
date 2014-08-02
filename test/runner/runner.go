@@ -14,14 +14,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/boltdb/bolt"
-	"github.com/cupcake/goamz/aws"
-	"github.com/cupcake/goamz/s3"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/boltdb/bolt"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/aws"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/s3"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/test/arg"
 	"github.com/flynn/flynn/test/cluster"
 	"github.com/flynn/flynn/test/util"
-	"github.com/gorilla/handlers"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/handlers"
 )
 
 var logBucket = "flynn-ci-logs"

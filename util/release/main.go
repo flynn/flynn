@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/flynn/go-dockerclient"
-	"github.com/flynn/go-docopt"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-dockerclient"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 )
 
 var imageIDPattern = regexp.MustCompile(`\$image_id\[[^\]]+\]`)

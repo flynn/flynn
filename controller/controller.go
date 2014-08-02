@@ -19,10 +19,10 @@ import (
 	"github.com/flynn/flynn/pkg/rpcplus"
 	strowgerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
-	"github.com/flynn/go-sql"
-	"github.com/go-martini/martini"
-	"github.com/martini-contrib/binding"
-	"github.com/martini-contrib/render"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
 )
 
 var ErrNotFound = errors.New("controller: resource not found")

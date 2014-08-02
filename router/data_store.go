@@ -6,7 +6,7 @@ import (
 	"log"
 	"path"
 
-	"github.com/coreos/go-etcd/etcd"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/flynn/router/types"
 )
 

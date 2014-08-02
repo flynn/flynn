@@ -8,8 +8,8 @@ import (
 
 	"github.com/flynn/flynn/host/ports"
 	"github.com/flynn/flynn/host/types"
-	"github.com/flynn/go-dockerclient"
-	"github.com/technoweenie/grohl"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-dockerclient"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 )
 
 type nullLogger struct{}

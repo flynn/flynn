@@ -12,8 +12,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/BurntSushi/toml"
-	"github.com/bgentry/pflag"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/BurntSushi/toml"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/bgentry/pflag"
 	"github.com/flynn/flynn/controller/client"
 )
 

@@ -18,8 +18,8 @@ import (
 	"sync"
 	"syscall"
 
-	"code.google.com/p/go.crypto/ssh"
-	"github.com/flynn/go-shlex"
+	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.crypto/ssh"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-shlex"
 )
 
 const PrereceiveHookTmpl = `#!/bin/bash

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/flynn/go-sql"
-	"github.com/flynn/pq"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 )
 
 type DB struct {

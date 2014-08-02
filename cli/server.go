@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/BurntSushi/toml"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/BurntSushi/toml"
 	"github.com/flynn/flynn/controller/client"
 )
 

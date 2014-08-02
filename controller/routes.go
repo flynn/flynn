@@ -4,7 +4,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	strowgerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
-	"github.com/go-martini/martini"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 )
 
 func createRoute(app *ct.App, router strowgerc.Client, route strowger.Route, r ResponseHelper) {

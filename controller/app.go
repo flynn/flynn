@@ -9,8 +9,8 @@ import (
 	"github.com/flynn/flynn/controller/utils"
 	strowgerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
-	"github.com/flynn/go-sql"
-	"github.com/flynn/pq/hstore"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 )
 
 type AppRepo struct {

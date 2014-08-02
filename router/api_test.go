@@ -5,7 +5,7 @@ import (
 
 	"github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
-	. "gopkg.in/check.v1"
+	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 )
 
 func newTestAPIServer() *testAPIServer {

@@ -10,7 +10,7 @@ import (
 
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/test/util"
-	c "gopkg.in/check.v1"
+	c "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 )
 
 func initApp(t *c.C, app string) string {

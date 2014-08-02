@@ -9,8 +9,8 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/docker/docker/archive"
-	"github.com/docker/docker/daemon/graphdriver"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/archive"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver"
 	"github.com/flynn/flynn/pinkerton/registry"
 )
 

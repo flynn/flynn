@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coreos/go-etcd/etcd"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 )
 
 func runEtcdServer(t *testing.T) (*etcd.Client, func()) {
