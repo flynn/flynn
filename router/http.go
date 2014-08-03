@@ -21,9 +21,9 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.crypto/nacl/secretbox"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/inconshreveable/go-vhost"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/router/types"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/inconshreveable/go-vhost"
 )
 
 type HTTPListener struct {

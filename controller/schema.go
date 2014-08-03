@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/flynn/flynn/pkg/migrate"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/pkg/migrate"
 )
 
 func migrateDB(db *sql.DB) error {

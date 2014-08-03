@@ -8,8 +8,8 @@ import (
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/btrfs"
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/devmapper"
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/vfs"
-	"github.com/flynn/flynn/pinkerton/store"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
+	"github.com/flynn/flynn/pinkerton/store"
 )
 
 func init() {

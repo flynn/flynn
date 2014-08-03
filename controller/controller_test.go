@@ -11,14 +11,14 @@ import (
 	"strings"
 	"testing"
 
-	tu "github.com/flynn/flynn/controller/testutils"
-	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/controller/utils"
-	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
+	tu "github.com/flynn/flynn/controller/testutils"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/pkg/rpcplus"
 )
 
 // Hook gocheck up to the "go test" runner

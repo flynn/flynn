@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
+	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/flynn/flynn/controller/client"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
-	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 )
 
 // Hook gocheck up to the "go test" runner
@@ -136,7 +136,7 @@ func waitForWatchHostStart(events <-chan *host.Event, c *C) {
 
 func newRelease(id string, artifact *ct.Artifact, processes map[string]int) *ct.Release {
 	processTypes := make(map[string]ct.ProcessType, len(processes))
-	for t, _ := range processes {
+	for t := range processes {
 		processTypes[t] = ct.ProcessType{Cmd: []string{"start", t}}
 	}
 
@@ -166,7 +166,7 @@ func newFakeCluster(hostID, appID, releaseID string, processes map[string]int, j
 	}
 
 	cl := tu.NewFakeCluster()
-	cl.SetHosts(map[string]host.Host{hostID: host.Host{ID: hostID, Jobs: jobs}})
+	cl.SetHosts(map[string]host.Host{hostID: {ID: hostID, Jobs: jobs}})
 	cl.SetHostClient(hostID, tu.NewFakeHostClient(hostID))
 	return cl
 }
@@ -214,8 +214,8 @@ func (s *S) TestWatchFormations(c *C) {
 			ID:         "release0",
 			ArtifactID: "artifact0",
 			Processes: map[string]ct.ProcessType{
-				"web":    ct.ProcessType{Cmd: []string{"start", "web"}},
-				"worker": ct.ProcessType{Cmd: []string{"start", "worker"}},
+				"web":    {Cmd: []string{"start", "web"}},
+				"worker": {Cmd: []string{"start", "worker"}},
 			},
 		},
 		Artifact:  &ct.Artifact{ID: "artifact0", Type: "docker", URI: "docker://foo/bar"},
@@ -223,9 +223,9 @@ func (s *S) TestWatchFormations(c *C) {
 	}
 
 	updates := []*formationUpdate{
-		&formationUpdate{processes: map[string]int{"web": 2}},
-		&formationUpdate{processes: map[string]int{"web": 3, "worker": 1}},
-		&formationUpdate{processes: map[string]int{"web": 1}},
+		{processes: map[string]int{"web": 2}},
+		{processes: map[string]int{"web": 3, "worker": 1}},
+		{processes: map[string]int{"web": 1}},
 	}
 
 	for _, u := range updates {
@@ -299,8 +299,8 @@ func (s *S) TestOmni(c *C) {
 			ID:         "release0",
 			ArtifactID: "artifact0",
 			Processes: map[string]ct.ProcessType{
-				"web":    ct.ProcessType{Cmd: []string{"start", "web"}, Omni: true},
-				"worker": ct.ProcessType{Cmd: []string{"start", "worker"}},
+				"web":    {Cmd: []string{"start", "web"}, Omni: true},
+				"worker": {Cmd: []string{"start", "worker"}},
 			},
 		},
 		Artifact:  &ct.Artifact{ID: "artifact0", Type: "docker", URI: "docker://foo/bar"},
@@ -308,9 +308,9 @@ func (s *S) TestOmni(c *C) {
 	}
 
 	updates := []*formationUpdate{
-		&formationUpdate{processes: map[string]int{"web": 2}},
-		&formationUpdate{processes: map[string]int{"web": 3, "worker": 1}},
-		&formationUpdate{processes: map[string]int{"web": 1}},
+		{processes: map[string]int{"web": 2}},
+		{processes: map[string]int{"web": 3, "worker": 1}},
+		{processes: map[string]int{"web": 1}},
 	}
 
 	for _, u := range updates {

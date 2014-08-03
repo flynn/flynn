@@ -7,8 +7,8 @@ import (
 	"errors"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.crypto/ssh"
-	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	ct "github.com/flynn/flynn/controller/types"
 )
 
 type KeyRepo struct {

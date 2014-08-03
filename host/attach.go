@@ -5,9 +5,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-dockerclient"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
+	"github.com/flynn/flynn/host/types"
 )
 
 type attachHandler struct {

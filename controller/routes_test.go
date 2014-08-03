@@ -6,11 +6,11 @@ import (
 	"sync"
 	"time"
 
+	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	strowgerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
-	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 )
 
 func newFakeRouter() strowgerc.Client {

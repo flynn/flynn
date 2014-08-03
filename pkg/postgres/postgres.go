@@ -6,9 +6,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
+	"github.com/flynn/flynn/discoverd/client"
 )
 
 func Open(service, dsn string) (*DB, error) {

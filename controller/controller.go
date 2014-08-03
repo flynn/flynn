@@ -11,6 +11,10 @@ import (
 	"os"
 	"strings"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -19,10 +23,6 @@ import (
 	"github.com/flynn/flynn/pkg/rpcplus"
 	strowgerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
 )
 
 var ErrNotFound = errors.New("controller: resource not found")

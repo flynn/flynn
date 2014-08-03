@@ -16,10 +16,10 @@ import (
 	"text/template"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.crypto/ssh"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/flynn/flynn/test/arg"
 	"github.com/flynn/flynn/test/cluster"
 	"github.com/flynn/flynn/test/util"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 )
 
 var sshWrapper = template.Must(template.New("ssh").Parse(`

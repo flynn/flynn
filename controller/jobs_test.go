@@ -11,12 +11,12 @@ import (
 	"sort"
 	"strings"
 
+	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
-	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 )
 
 func (s *S) createTestJob(c *C, in *ct.Job) *ct.Job {
@@ -172,7 +172,7 @@ func (s *S) TestRunJobDetached(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "run-detached"})
 
 	hostID := utils.UUID()
-	s.cc.SetHosts(map[string]host.Host{hostID: host.Host{}})
+	s.cc.SetHosts(map[string]host.Host{hostID: {}})
 
 	artifact := s.createTestArtifact(c, &ct.Artifact{Type: "docker", URI: "docker://foo/bar"})
 	release := s.createTestRelease(c, &ct.Release{
@@ -238,7 +238,7 @@ func (s *S) TestRunJobAttached(c *C) {
 	})
 
 	s.cc.SetHostClient(hostID, hc)
-	s.cc.SetHosts(map[string]host.Host{hostID: host.Host{}})
+	s.cc.SetHosts(map[string]host.Host{hostID: {}})
 
 	artifact := s.createTestArtifact(c, &ct.Artifact{Type: "docker", URI: "docker://foo/bar"})
 	release := s.createTestRelease(c, &ct.Release{

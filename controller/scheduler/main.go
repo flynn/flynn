@@ -7,13 +7,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 )
 
 var backoffPeriod = 10 * time.Minute
@@ -243,14 +243,14 @@ func (c *context) watchHosts(events chan<- *host.Event) {
 			go c.watchHost(event.HostID, events)
 
 			c.omniMtx.RLock()
-			for f, _ := range c.omni {
+			for f := range c.omni {
 				go f.Rectify()
 			}
 			c.omniMtx.RUnlock()
 		}
 	}()
 
-	for id, _ := range hosts {
+	for id := range hosts {
 		go c.watchHost(id, events)
 	}
 

@@ -18,9 +18,9 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/bitbucket.org/kardianos/osext"
-	"github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/inconshreveable/go-update"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kr/binarydist"
+	"github.com/flynn/flynn/controller/client"
 )
 
 var cmdUpdate = &Command{

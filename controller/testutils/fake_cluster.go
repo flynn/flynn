@@ -24,7 +24,7 @@ func (c *FakeCluster) ListHosts() (map[string]host.Host, error) {
 	c.mtx.RLock()
 	defer c.mtx.RUnlock()
 	hosts := make(map[string]host.Host, len(c.hosts))
-	for id, _ := range c.hosts {
+	for id := range c.hosts {
 		hosts[id] = c.GetHost(id)
 	}
 	return hosts, nil

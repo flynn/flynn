@@ -90,7 +90,7 @@ func (c *Cluster) BuildFlynn(dockerFS string, repos map[string]string) (string, 
 		Group:  gid,
 		Memory: "512",
 		Drives: map[string]*VMDrive{
-			"hda": &VMDrive{FS: c.bc.RootFS, COW: true, Temp: true},
+			"hda": {FS: c.bc.RootFS, COW: true, Temp: true},
 			"hdb": &dockerDrive,
 		},
 	})
@@ -131,8 +131,8 @@ func (c *Cluster) Boot(dockerfs string, count int) error {
 			Group:  gid,
 			Memory: "512",
 			Drives: map[string]*VMDrive{
-				"hda": &VMDrive{FS: c.bc.RootFS, COW: true, Temp: true},
-				"hdb": &VMDrive{FS: dockerfs, COW: true, Temp: true},
+				"hda": {FS: c.bc.RootFS, COW: true, Temp: true},
+				"hdb": {FS: dockerfs, COW: true, Temp: true},
 			},
 		})
 		if err != nil {

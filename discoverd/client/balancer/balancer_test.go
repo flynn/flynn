@@ -36,9 +36,9 @@ func (test *TestSet) Close() error { return nil }
 func NewTestSet() discoverd.ServiceSet {
 	return &TestSet{
 		[]*discoverd.Service{
-			&discoverd.Service{Host: "flying-manta-10.flynn.io"},
-			&discoverd.Service{Host: "singing-shark-82.flynn.io"},
-			&discoverd.Service{Host: "passionate-sheep-19.flynn.io"},
+			{Host: "flying-manta-10.flynn.io"},
+			{Host: "singing-shark-82.flynn.io"},
+			{Host: "passionate-sheep-19.flynn.io"},
 		},
 	}
 }

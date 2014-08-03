@@ -226,7 +226,7 @@ func (s *serviceSet) updateWatches(update *agent.ServiceUpdate) {
 		watches[k] = v
 	}
 	s.l.Unlock()
-	for ch, _ := range watches {
+	for ch := range watches {
 		// TODO: figure out better head blocking for
 		// slow watchers.
 		ch <- update
@@ -702,7 +702,7 @@ func (c *Client) UnwatchReconnects(ch chan ConnEvent) {
 func (c *Client) notify(s ConnStatus) {
 	c.l.Lock()
 	defer c.l.Unlock()
-	for ch, _ := range c.reconnectWatches {
+	for ch := range c.reconnectWatches {
 		ch <- ConnEvent{s}
 	}
 }

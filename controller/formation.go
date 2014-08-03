@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
+	ct "github.com/flynn/flynn/controller/types"
 )
 
 type formationKey struct {

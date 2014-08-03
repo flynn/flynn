@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/mgo.v2"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/mgo.v2/bson"
+	"github.com/flynn/flynn/discoverd/client"
 )
 
 var dataDir = flag.String("data", "/data", "mongo data directory")
