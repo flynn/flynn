@@ -1,6 +1,6 @@
 FROM flynn/busybox
 MAINTAINER Jonathan Rudenberg <jonathan@titanous.com>
 
-ADD ./build/strowger /bin/strowger
+ADD ./bin/flynn-router /bin/flynn-router
 
-ENTRYPOINT ["/bin/strowger"]
+ENTRYPOINT ["/bin/flynn-router"]

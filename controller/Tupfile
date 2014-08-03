@@ -1,0 +1,4 @@
+include_rules
+: |> !go |> bin/flynn-controller
+: |> !go ./scheduler |> bin/flynn-scheduler
+: bin/* |> !docker |>

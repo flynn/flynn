@@ -1,6 +1,6 @@
 FROM flynn/busybox
 MAINTAINER Jonathan Rudenberg <jonathan@titanous.com>
 
-ADD ./build/shelf /bin/shelf
+ADD ./bin/flynn-blobstore /bin/flynn-blobstore
 
-ENTRYPOINT ["/bin/shelf"]
+ENTRYPOINT ["/bin/flynn-blobstore"]

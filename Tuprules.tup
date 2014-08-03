@@ -1,0 +1,5 @@
+export GOPATH
+
+!go = |> go build -o %o |>
+!docker = |> docker build -t flynn/%d . |>
+!cp = |> cp %f %o |>

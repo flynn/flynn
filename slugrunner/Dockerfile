@@ -2,5 +2,5 @@ FROM progrium/cedarish
 MAINTAINER Jonathan Rudenberg <jonathan@titanous.com>
 
 ADD ./runner/ /runner
-ADD ./build/sdutil /bin/sdutil
+ADD ./bin/sdutil /bin/sdutil
 ENTRYPOINT ["/runner/init"]

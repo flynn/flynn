@@ -1,4 +1,1 @@
-.subrepo
-.vagrant
-flynn-host
-*.test
+host

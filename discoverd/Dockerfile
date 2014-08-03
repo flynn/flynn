@@ -1,6 +1,6 @@
 FROM flynn/busybox
 MAINTAINER Jonathan Rudenberg <jonathan@titanous.com>
 
-ADD ./build/discoverd /bin/discoverd
+ADD ./bin/discoverd /bin/discoverd
 
 ENTRYPOINT ["/bin/discoverd"]
