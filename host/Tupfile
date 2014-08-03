@@ -2,4 +2,5 @@ include_rules
 : |> !go |> bin/flynn-host
 : |> !go -tags dockeronly |> bin/flynn-host-docker
 : |> !go ./flynn-init |> bin/flynn-init
+: | $(ROOT)/<layer0> |> !manifest |>
 : bin/* |> !docker |>
