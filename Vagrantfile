@@ -16,11 +16,13 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
   config.vm.provision "shell", inline: <<SCRIPT
     apt-get update
-    apt-get install -y software-properties-common libdevmapper-dev btrfs-tools libvirt-dev
+    apt-get install -y software-properties-common libdevmapper-dev btrfs-tools libvirt-dev ruby2.0 ruby2.0-dev
     apt-add-repository 'deb http://ppa.launchpad.net/anatol/tup/ubuntu precise main'
     apt-key adv --keyserver keyserver.ubuntu.com --recv E601AAF9486D3664
     apt-get update
     apt-get install -y tup
+
+    gem2.0 install fpm --no-rdoc --no-ri
 
     # Fix for https://github.com/flynn/flynn/issues/13
     echo 3600 > /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_close_wait
