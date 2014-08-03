@@ -1,2 +1,4 @@
 .tup
 bin
+*.deb
+.vagrant
