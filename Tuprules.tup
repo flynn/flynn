@@ -5,4 +5,4 @@ ROOT = $(TUP_CWD)
 !go = |> go build -o %o |>
 !docker = |> docker build -t flynn/%d . |>
 !cp = |> cp %f %o |>
-!manifest = | $(ROOT)/util/release/flynn-release |> $(ROOT)/util/release/flynn-release manifest --output=%o manifest_template.json |> bin/manifest.json
+!manifest = | $(ROOT)/<version> |> $(ROOT)/util/release/flynn-release manifest --output=%o --id-file=$(ROOT)/version.json manifest_template.json |> bin/manifest.json
