@@ -10,8 +10,10 @@ main() {
   local src_dir="$(cd "$(dirname "$0")" && pwd)/.."
   local scripts_dir="$src_dir/scripts"
 
+  apt-add-repository 'deb http://ppa.launchpad.net/anatol/tup/ubuntu precise main'
+  apt-key adv --keyserver keyserver.ubuntu.com --recv E601AAF9486D3664
   apt-get update
-  apt-get install -y btrfs-tools zerofree qemu qemu-kvm
+  apt-get install -y btrfs-tools zerofree qemu qemu-kvm tup
 
   if ! id $user >/dev/null 2>&1; then
     useradd --system --home $dir --user-group --groups kvm -M $user
@@ -35,8 +37,8 @@ main() {
 
   if [ ! -f "$bin_dir/flynn-test" ]; then
     pushd $src_dir >/dev/null
-    make
-    cp flynn-test flynn-test-runner $bin_dir
+    tup bin/flynn-test bin/flynn-test-runner
+    cp bin/* $bin_dir
     popd >/dev/null
   fi
 
