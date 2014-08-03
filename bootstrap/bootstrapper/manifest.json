@@ -17,7 +17,7 @@
     },
     "artifact": {
       "type": "docker",
-      "uri": "docker:///flynn/postgres"
+      "uri": "docker:///flynn/postgresql"
     },
     "processes": {
       "postgres": 1,
@@ -101,15 +101,15 @@
     }
   },
   {
-    "id": "shelf",
+    "id": "blobstore",
     "action": "deploy-app",
     "app": {
-      "name": "shelf",
+      "name": "blobstore",
       "protected": true
     },
     "artifact": {
       "type": "docker",
-      "uri": "docker:///flynn/shelf"
+      "uri": "docker:///flynn/blobstore"
     },
     "release": {
       "processes": {
@@ -124,15 +124,15 @@
     "resources": [{"name":"postgres", "url":"discoverd+http://pg-api/databases"}]
   },
   {
-    "id": "strowger",
+    "id": "router",
     "action": "deploy-app",
     "app": {
-      "name": "strowger",
+      "name": "router",
       "protected": true
     },
     "artifact": {
       "type": "docker",
-      "uri": "docker:///flynn/strowger"
+      "uri": "docker:///flynn/router"
     },
     "release": {
       "processes": {
@@ -160,7 +160,7 @@
     },
     "artifact": {
       "type": "docker",
-      "uri": "docker:///flynn/gitreceive"
+      "uri": "docker:///flynn/receiver"
     },
     "release": {
       "processes": {
@@ -183,7 +183,7 @@
     "hosts": ["{{ or (getenv `CONTROLLER_DOMAIN`) `localhost` }}", "127.0.0.1"]
   },
   {
-    "id": "strowger-wait",
+    "id": "router-wait",
     "action": "wait",
     "url": "discoverd+http://strowger-api/",
     "status": 404
