@@ -5,19 +5,19 @@
     "release": {
       "processes": {
         "postgres": {
-          "ports": { "tcp": 1 },
+          "ports": [{"proto": "tcp"}],
           "data": true,
           "cmd": ["postgres"]
         },
         "web": {
-          "ports": { "tcp": 1 },
+          "ports": [{"proto": "tcp"}],
           "cmd": ["api"]
         }
       }
     },
     "artifact": {
       "type": "docker",
-      "uri": "docker:///flynn/postgresql"
+      "uri": "https://registry.hub.docker.com/flynn/postgresql?id=$image_id[postgresql]"
     },
     "processes": {
       "postgres": 1,
@@ -28,7 +28,7 @@
     "id": "controller-key",
     "action": "gen-random",
     "controller_key": true,
-    "data": "{{ getenv `CONTROLLER_KEY` }}"
+    "data": "{{ getenv \"CONTROLLER_KEY\" }}"
   },
   {
     "id": "postgres-wait",
@@ -39,21 +39,20 @@
     "id": "controller",
     "action": "run-app",
     "release": {
-      "env": { "AUTH_KEY": "{{ (index .StepData `controller-key`).Data }}" },
+      "env": { "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}" },
       "processes": {
         "web": {
-          "ports": { "tcp": 1 },
+          "ports": [{"proto": "tcp"}],
           "cmd": ["controller"]
         },
         "scheduler": {
-          "ports": { "tcp": 1 },
           "cmd": ["scheduler"]
         }
       }
     },
     "artifact": {
       "type": "docker",
-      "uri": "docker:///flynn/controller"
+      "uri": "https://registry.hub.docker.com/flynn/controller?id=$image_id[controller]"
     },
     "processes": {
       "web": 1
@@ -109,12 +108,12 @@
     },
     "artifact": {
       "type": "docker",
-      "uri": "docker:///flynn/blobstore"
+      "uri": "https://registry.hub.docker.com/flynn/blobstore?id=$image_id[blobstore]"
     },
     "release": {
       "processes": {
         "web": {
-          "ports": { "tcp": 1 }
+          "ports": [{"proto": "tcp"}]
         }
       }
     },
@@ -132,14 +131,18 @@
     },
     "artifact": {
       "type": "docker",
-      "uri": "docker:///flynn/router"
+      "uri": "https://registry.hub.docker.com/flynn/router?id=$image_id[router]"
     },
     "release": {
       "processes": {
         "app": {
-          "ports": { "tcp": 1 },
-          "cmd": ["-httpaddr", ":80", "-httpsaddr", ":443"],
-          "env": { "FLYNN_HOST_PORTS": "80,443,2222" }
+          "ports": [
+            {"proto": "tcp"},
+            {"proto": "tcp", "port": 80},
+            {"proto": "tcp", "port": 443},
+            {"proto": "tcp", "port": 2222}
+          ],
+          "cmd": ["-httpaddr", ":80", "-httpsaddr", ":443"]
         }
       }
     },
@@ -160,15 +163,17 @@
     },
     "artifact": {
       "type": "docker",
-      "uri": "docker:///flynn/receiver"
+      "uri": "https://registry.hub.docker.com/flynn/receiver?id=$image_id[receiver]"
     },
     "release": {
       "processes": {
         "app": {
-          "ports": { "tcp": 1 },
+          "ports": [{"proto": "tcp"}],
           "env": {
-            "SSH_PRIVATE_KEYS": "{{ (index .StepData `gitreceive-key`).PrivateKeys }}",
-            "CONTROLLER_AUTH_KEY": "{{ (index .StepData `controller-key`).Data }}"
+            "SSH_PRIVATE_KEYS": "{{ (index .StepData \"gitreceive-key\").PrivateKeys }}",
+            "CONTROLLER_AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
+            "SLUGBUILDER_IMAGE_ID": "$image_id[slugbuilder]",
+            "SLUGRUNNER_IMAGE_ID": "$image_id[slugrunner]"
           }
         }
       }
@@ -180,7 +185,7 @@
   {
     "id": "controller-cert",
     "action": "gen-tls-cert",
-    "hosts": ["{{ or (getenv `CONTROLLER_DOMAIN`) `localhost` }}", "127.0.0.1"]
+    "hosts": ["{{ or (getenv \"CONTROLLER_DOMAIN\") \"localhost\" }}", "127.0.0.1"]
   },
   {
     "id": "router-wait",
@@ -206,12 +211,12 @@
     "type": "http",
     "config": {
       "service": "flynn-controller",
-      "domain": "{{ or (getenv `CONTROLLER_DOMAIN`) `localhost` }}"
+      "domain": "{{ or (getenv \"CONTROLLER_DOMAIN\") \"localhost\" }}"
     }
   },
   {
     "id": "log-complete",
     "action": "log",
-    "output": "Flynn bootstrapping complete. Install flynn-cli and paste the line below into a new terminal window:\n\nflynn server-add -g localhost:2201 -p {{ (index .StepData `controller-cert`).Pin }} default https://{{ or (getenv `CONTROLLER_DOMAIN`) `localhost` }}:8081 {{ (index .StepData `controller-key`).Data }}"
+    "output": "Flynn bootstrapping complete. Install flynn-cli and paste the line below into a new terminal window:\n\nflynn server-add -g localhost:2201 -p {{ (index .StepData \"controller-cert\").Pin }} default https://{{ or (getenv \"CONTROLLER_DOMAIN\") \"localhost\" }}:8081 {{ (index .StepData \"controller-key\").Data }}"
   }
 ]
