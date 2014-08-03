@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -15,7 +16,7 @@ import (
 
 var imageIDPattern = regexp.MustCompile(`\$image_id\[[^\]]+\]`)
 
-func interpolateManifest(d *docker.Client, src io.Reader, dest io.Writer) error {
+func interpolateManifest(lookup idLookupFunc, src io.Reader, dest io.Writer) error {
 	manifest, err := ioutil.ReadAll(src)
 	if err != nil {
 		return err
@@ -30,11 +31,11 @@ func interpolateManifest(d *docker.Client, src io.Reader, dest io.Writer) error 
 			if !strings.Contains(imageName, "/") {
 				imageName = "flynn/" + imageName
 			}
-			image, err := d.InspectImage(imageName)
+			res, err := lookup(imageName)
 			if err != nil {
-				panic(fmt.Errorf("Error inspecting %s: %s", imageName, err))
+				panic(err)
 			}
-			return []byte(image.ID)
+			return res
 		})
 	}()
 	if replaceErr != nil {
@@ -44,21 +45,50 @@ func interpolateManifest(d *docker.Client, src io.Reader, dest io.Writer) error 
 	return err
 }
 
+func dockerLookupFunc() (idLookupFunc, error) {
+	d, err := docker.NewClient("unix:///var/run/docker.sock")
+	if err != nil {
+		return nil, err
+	}
+	return func(name string) ([]byte, error) {
+		image, err := d.InspectImage(name)
+		if err != nil {
+			return nil, fmt.Errorf("error inspecting %q: %s", name, err)
+		}
+		return []byte(image.ID), nil
+	}, nil
+}
+
+func fileLookupFunc(filename string) (idLookupFunc, error) {
+	ids := make(map[string]string)
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(data, &ids); err != nil {
+		return nil, err
+	}
+	return func(name string) ([]byte, error) {
+		if id, ok := ids[name]; ok {
+			return []byte(id), nil
+		}
+		return nil, fmt.Errorf("unknown image %q", name)
+	}, nil
+}
+
+type idLookupFunc func(name string) ([]byte, error)
+
 func main() {
 	usage := `flynn-release generates Flynn releases.
 
 Usage:
-  flynn-release manifest [--output=<dest>] <template>
+  flynn-release manifest [--output=<dest>] [--id-file=<file>] <template>
 
 Options:
-  -o --output Output destination file ("-" for stdout) [default: -]
+  -o --output=<dest>   Output destination file ("-" for stdout) [default: -]
+  -i --id-file=<file>  JSON file containing ID mappings
 `
 	args, _ := docopt.Parse(usage, nil, true, "", false)
-
-	dc, err := docker.NewClient("unix:///var/run/docker.sock")
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	var dest io.Writer = os.Stdout
 	if name := args.String["--output"]; name != "-" && name != "" {
@@ -79,7 +109,18 @@ Options:
 		src = f
 	}
 
-	if err := interpolateManifest(dc, src, dest); err != nil {
+	var lookup idLookupFunc
+	var err error
+	if file := args.String["--id-file"]; file != "" {
+		lookup, err = fileLookupFunc(file)
+	} else {
+		lookup, err = dockerLookupFunc()
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err := interpolateManifest(lookup, src, dest); err != nil {
 		log.Fatal(err)
 	}
 }
