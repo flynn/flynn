@@ -15,6 +15,13 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.network "forwarded_port", guest: 2222, host: 2201
 
   config.vm.provision "shell", inline: <<SCRIPT
+    apt-get update
+    apt-get install -y software-properties-common libdevmapper-dev btrfs-tools
+    apt-add-repository 'deb http://ppa.launchpad.net/anatol/tup/ubuntu precise main'
+    apt-key adv --keyserver keyserver.ubuntu.com --recv E601AAF9486D3664
+    apt-get update
+    apt-get install -y tup
+
     # Fix for https://github.com/flynn/flynn/issues/13
     echo 3600 > /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_close_wait
 SCRIPT
