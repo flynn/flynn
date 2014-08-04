@@ -9,6 +9,7 @@ func main() {
 
 Usage:
   flynn-release manifest [--output=<dest>] [--id-file=<file>] <template>
+  flynn-release download <manifest>
 
 Options:
   -o --output=<dest>   Output destination file ("-" for stdout) [default: -]
@@ -19,5 +20,7 @@ Options:
 	switch {
 	case args.Bool["manifest"]:
 		manifest(args)
+	case args.Bool["download"]:
+		download(args)
 	}
 }
