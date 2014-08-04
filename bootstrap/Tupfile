@@ -1,4 +1,4 @@
 include_rules
 : |> !go ./bootstrapper |> bin/flynn-bootstrap
 : | $(ROOT)/<layer1> |> !manifest |>
-: bin/* |> !docker |>
+: bin/* |> !docker |> <docker>
