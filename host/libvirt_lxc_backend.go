@@ -436,6 +436,14 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 	os.Symlink(path.Join(c.RootPath, containerinit.SocketPath), symlink)
 	defer os.Remove(symlink)
 
+	defer func() {
+		c.l.containersMtx.Lock()
+		delete(c.l.containers, c.job.ID)
+		c.l.containersMtx.Unlock()
+		c.cleanup()
+		close(c.done)
+	}()
+
 	var err error
 	for startTime := time.Now(); time.Since(startTime) < time.Second; time.Sleep(time.Millisecond) {
 		c.Client, err = containerinit.NewClient(symlink)
@@ -455,13 +463,6 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 	c.l.containersMtx.Lock()
 	c.l.containers[c.job.ID] = c
 	c.l.containersMtx.Unlock()
-	defer func() {
-		c.l.containersMtx.Lock()
-		delete(c.l.containers, c.job.ID)
-		c.l.containersMtx.Unlock()
-		c.cleanup()
-		close(c.done)
-	}()
 
 	if !c.job.Config.TTY {
 		g.Log(grohl.Data{"at": "get_stdout"})

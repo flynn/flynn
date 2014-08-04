@@ -92,17 +92,17 @@ func main() {
 		log.Fatalf("unknown backend %q", *backendName)
 	}
 	if err != nil {
-		log.Fatal(err)
+		sh.Fatal(err)
 	}
 
 	if err := serveHTTP(&Host{state: state, backend: backend}, &attachHandler{state: state, backend: backend}, sh); err != nil {
-		log.Fatal(err)
+		sh.Fatal(err)
 	}
 
 	if *stateFile != "" {
 		sh.BeforeExit(func() { os.Remove(*stateFile) })
 		if err := state.Restore(*stateFile, backend); err != nil {
-			log.Fatal(err)
+			sh.Fatal(err)
 		}
 	}
 
@@ -110,7 +110,7 @@ func main() {
 
 	if *force {
 		if err := backend.Cleanup(); err != nil {
-			log.Fatal(err)
+			sh.Fatal(err)
 		}
 	}
 
@@ -133,13 +133,13 @@ func main() {
 		} else {
 			f, err = os.Open(*manifestFile)
 			if err != nil {
-				log.Fatal(err)
+				sh.Fatal(err)
 			}
 			r = f
 		}
 		services, err := runner.runManifest(r)
 		if err != nil {
-			log.Fatal(err)
+			sh.Fatal(err)
 		}
 		if f != nil {
 			f.Close()
@@ -153,7 +153,7 @@ func main() {
 				return
 			})
 			if err != nil {
-				log.Fatal(err)
+				sh.Fatal(err)
 			}
 		}
 	}
@@ -166,13 +166,13 @@ func main() {
 	if disc == nil {
 		disc, err = discoverd.NewClientWithAddr(discAddr)
 		if err != nil {
-			log.Fatal(err)
+			sh.Fatal(err)
 		}
 	}
 	sh.BeforeExit(func() { disc.UnregisterAll() })
 	sampiStandby, err := disc.RegisterAndStandby("flynn-host", *externalAddr+":1113", map[string]string{"id": *hostID})
 	if err != nil {
-		log.Fatal(err)
+		sh.Fatal(err)
 	}
 
 	// Check if we are the leader so that we can use the cluster functions directly
@@ -190,7 +190,7 @@ func main() {
 	}
 	cluster, err := cluster.NewClientWithSelf(*hostID, NewLocalClient(*hostID, sampiCluster))
 	if err != nil {
-		log.Fatal(err)
+		sh.Fatal(err)
 	}
 	sh.BeforeExit(func() { cluster.Close() })
 
@@ -204,7 +204,7 @@ func main() {
 	if *configFile != "" {
 		h, err = openConfig(*configFile)
 		if err != nil {
-			log.Fatal(err)
+			sh.Fatal(err)
 		}
 	}
 	if h.Metadata == nil {
@@ -279,6 +279,15 @@ func (h *shutdownHandler) BeforeExit(f func()) {
 		f()
 		h.mtx.RUnlock()
 	}()
+}
+
+func (h *shutdownHandler) Fatal(v ...interface{}) {
+	// signal exit handlers
+	close(h.done)
+	// wait for exit handlers to finish
+	h.mtx.Lock()
+	log.New(os.Stderr, "", log.Lshortfile|log.Lmicroseconds).Output(2, fmt.Sprint(v...))
+	os.Exit(1)
 }
 
 // kill all jobs
