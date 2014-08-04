@@ -427,16 +427,10 @@ func (l *LibvirtLXCBackend) openLog(id string) *logbuf.Log {
 
 func (c *libvirtContainer) watch(ready chan<- error) error {
 	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "watch_container", "job.id": c.job.ID})
-	g.Log(grohl.Data{"at": "start", "job.id": c.job.ID})
-
-	// We can't connect to the socket file directly because
-	// the path to it is longer than 108 characters (UNIX_PATH_MAX).
-	// Create a temporary symlink to connect to.
-	symlink := "/tmp/containerinit-rpc." + c.job.ID
-	os.Symlink(path.Join(c.RootPath, containerinit.SocketPath), symlink)
-	defer os.Remove(symlink)
+	g.Log(grohl.Data{"at": "start"})
 
 	defer func() {
+		// TODO: kill containerinit/domain if it is still running
 		c.l.containersMtx.Lock()
 		delete(c.l.containers, c.job.ID)
 		c.l.containersMtx.Unlock()
@@ -444,8 +438,23 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 		close(c.done)
 	}()
 
+	var symlinked bool
 	var err error
-	for startTime := time.Now(); time.Since(startTime) < time.Second; time.Sleep(time.Millisecond) {
+	symlink := "/tmp/containerinit-rpc." + c.job.ID
+	socketPath := path.Join(c.RootPath, containerinit.SocketPath)
+	for startTime := time.Now(); time.Since(startTime) < 5*time.Second; time.Sleep(time.Millisecond) {
+		if !symlinked {
+			// We can't connect to the socket file directly because
+			// the path to it is longer than 108 characters (UNIX_PATH_MAX).
+			// Create a temporary symlink to connect to.
+			if err = os.Symlink(socketPath, symlink); err != nil {
+				g.Log(grohl.Data{"at": "symlink_socket", "status": "error", "err": err, "source": socketPath, "target": symlink})
+				continue
+			}
+			defer os.Remove(symlink)
+			symlinked = true
+		}
+
 		c.Client, err = containerinit.NewClient(symlink)
 		if err == nil {
 			break
