@@ -85,7 +85,7 @@ func (r *Runner) start() error {
 		if err != nil {
 			return err
 		}
-		if r.dockerFS, err = cluster.BuildFlynn(bc, "", util.Repos, os.Stdout); err != nil {
+		if r.dockerFS, err = cluster.BuildFlynn(bc, "", "master", os.Stdout); err != nil {
 			return fmt.Errorf("could not build flynn: %s", err)
 		}
 		r.releaseNet(bc.Network)
@@ -167,14 +167,13 @@ func (r *Runner) build(b *Build) (err error) {
 	log.Printf("building %s[%s]\n", b.Repo, b.Commit)
 
 	out := io.MultiWriter(os.Stdout, &buildLog)
-	repos := map[string]string{b.Repo: b.Commit}
 	bc := r.bc
 	bc.Network, err = r.allocateNet()
 	if err != nil {
 		return err
 	}
 	defer r.releaseNet(bc.Network)
-	newDockerfs, err := cluster.BuildFlynn(bc, r.dockerFS, repos, out)
+	newDockerfs, err := cluster.BuildFlynn(bc, r.dockerFS, b.Commit, out)
 	defer os.RemoveAll(newDockerfs)
 	if err != nil {
 		msg := fmt.Sprintf("could not build flynn: %s\n", err)
@@ -244,7 +243,7 @@ func (r *Runner) httpEventHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	repo := event.Repo()
-	if _, ok := util.Repos[repo]; !ok {
+	if repo != "flynn" {
 		log.Println("webhook: unknown repo", repo)
 		http.Error(w, fmt.Sprintf("unknown repo %s", repo), 400)
 		return

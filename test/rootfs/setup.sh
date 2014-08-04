@@ -71,18 +71,17 @@ echo deb https://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/dock
 apt-get update
 apt-get install -y lxc-docker-0.10.0 aufs-tools apparmor
 
+# install flynn build dependencies
+apt-get install -y software-properties-common
+apt-add-repository 'deb http://ppa.launchpad.net/anatol/tup/ubuntu precise main'
+apt-key adv --keyserver keyserver.ubuntu.com --recv E601AAF9486D3664
+apt-get update
+apt-get install -y tup fuse build-essential libdevmapper-dev btrfs-tools
+
 # install go
 curl -L j.mp/godeb | tar xz
 ./godeb install
 rm godeb
-
-# install godep
-mkdir /gopkg
-export GOPATH=/gopkg
-# use lmars fork until merged: https://github.com/tools/godep/pull/105
-go get github.com/lmars/godep
-mv /gopkg/bin/godep /usr/bin
-rm -rf /gopkg
 
 # cleanup
 apt-get autoremove -y

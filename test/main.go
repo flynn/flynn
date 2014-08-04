@@ -19,7 +19,6 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/flynn/flynn/test/arg"
 	"github.com/flynn/flynn/test/cluster"
-	"github.com/flynn/flynn/test/util"
 )
 
 var sshWrapper = template.Must(template.New("ssh").Parse(`
@@ -45,7 +44,7 @@ func main() {
 		dockerfs := args.DockerFS
 		if dockerfs == "" {
 			var err error
-			if dockerfs, err = c.BuildFlynn("", util.Repos); err != nil {
+			if dockerfs, err = c.BuildFlynn("", "master"); err != nil {
 				log.Fatal("could not build flynn:", err)
 			}
 			if !args.KeepDockerFS {

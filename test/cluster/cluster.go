@@ -46,10 +46,10 @@ func New(bc BootConfig, out io.Writer) *Cluster {
 	}
 }
 
-func BuildFlynn(bc BootConfig, dockerFS string, repos map[string]string, out io.Writer) (string, error) {
+func BuildFlynn(bc BootConfig, dockerFS, commit string, out io.Writer) (string, error) {
 	c := New(bc, out)
 	defer c.Shutdown()
-	return c.BuildFlynn(dockerFS, repos)
+	return c.BuildFlynn(dockerFS, commit)
 }
 
 func (c *Cluster) log(a ...interface{}) (int, error) {
@@ -60,7 +60,7 @@ func (c *Cluster) logf(f string, a ...interface{}) (int, error) {
 	return fmt.Fprintf(c.out, f, a...)
 }
 
-func (c *Cluster) BuildFlynn(dockerFS string, repos map[string]string) (string, error) {
+func (c *Cluster) BuildFlynn(dockerFS, commit string) (string, error) {
 	c.log("Building Flynn...")
 
 	if err := c.setup(); err != nil {
@@ -103,7 +103,7 @@ func (c *Cluster) BuildFlynn(dockerFS string, repos map[string]string) (string, 
 	}
 
 	c.log("Waiting for instance to boot...")
-	if err := buildFlynn(build, repos, c.out); err != nil {
+	if err := buildFlynn(build, commit, c.out); err != nil {
 		build.Kill()
 		return "", fmt.Errorf("error running build script: %s", err)
 	}
@@ -202,33 +202,26 @@ var flynnBuildScript = template.Must(template.New("flynn-build").Parse(`
 set -e -x
 
 export GOPATH=/var/lib/docker/flynn/go
-flynn=$GOPATH/src/github.com/flynn
-sudo mkdir -p $flynn
-sudo chown -R ubuntu:ubuntu $GOPATH
+flynn=$GOPATH/src/github.com/flynn/flynn
 
-build() {
-  repo=$1
-  ref=$2
-  dir=$flynn/$repo
-  test -d $dir || git clone https://github.com/flynn/$repo $dir
-  pushd $dir > /dev/null
-  git fetch
-  git checkout $ref
-  test -f Makefile && make clean && make
-  popd > /dev/null
-}
+if [ ! -d $flynn ]; then
+  sudo git clone https://github.com/flynn/flynn $flynn
+  sudo chown -R ubuntu:ubuntu $GOPATH
+fi
 
-{{ range $repo, $ref := . }}
-build "{{ $repo }}" "{{ $ref }}"
-{{ end }}
+pushd $flynn > /dev/null
+git fetch
+git checkout {{ . }}
+tup
+popd > /dev/null
 
 sudo stop docker
 sudo umount /var/lib/docker
 `[1:]))
 
-func buildFlynn(inst Instance, repos map[string]string, out io.Writer) error {
+func buildFlynn(inst Instance, commit string, out io.Writer) error {
 	var b bytes.Buffer
-	flynnBuildScript.Execute(&b, repos)
+	flynnBuildScript.Execute(&b, commit)
 	return inst.Run(b.String(), attempts, out, out)
 }
 
