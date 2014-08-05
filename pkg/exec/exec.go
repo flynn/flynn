@@ -39,6 +39,8 @@ type Cmd struct {
 	streamErr    error
 	exitStatus   int
 
+	closeAfterWait []io.Closer
+
 	host cluster.Host
 	done chan struct{}
 
@@ -83,26 +85,30 @@ func (c *Cmd) StdinPipe() (io.WriteCloser, error) {
 	return c.stdinPipe, nil
 }
 
-func (c *Cmd) StdoutPipe() (r io.Reader, err error) {
+func (c *Cmd) StdoutPipe() (io.Reader, error) {
 	if c.Stdout != nil {
 		return nil, errors.New("exec: Stdout already set")
 	}
 	if c.started {
 		return nil, errors.New("exec: StdoutPipe after job started")
 	}
-	r, c.Stdout = io.Pipe()
-	return
+	r, w := io.Pipe()
+	c.Stdout = w
+	c.closeAfterWait = append(c.closeAfterWait, w)
+	return r, nil
 }
 
-func (c *Cmd) StderrPipe() (r io.Reader, err error) {
+func (c *Cmd) StderrPipe() (io.Reader, error) {
 	if c.Stderr != nil {
 		return nil, errors.New("exec: Stderr already set")
 	}
 	if c.started {
 		return nil, errors.New("exec: StderrPipe after job started")
 	}
-	r, c.Stdout = io.Pipe()
-	return
+	r, w := io.Pipe()
+	c.Stderr = w
+	c.closeAfterWait = append(c.closeAfterWait, w)
+	return r, nil
 }
 
 func (c *Cmd) Start() error {
@@ -213,6 +219,11 @@ func (c *Cmd) Wait() error {
 	c.finished = true
 
 	<-c.done
+
+	for _, wc := range c.closeAfterWait {
+		wc.Close()
+	}
+
 	var err error
 	if c.exitStatus != 0 {
 		err = ExitError(c.exitStatus)
