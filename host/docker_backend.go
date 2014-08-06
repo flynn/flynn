@@ -230,8 +230,8 @@ func (d *DockerBackend) Attach(req *AttachRequest) error {
 		} else {
 			var once sync.Once
 			go func() {
-				ch := make(chan host.Event)
-				d.state.AddListener(req.Job.Job.ID, ch)
+				ch := d.state.AddListener(req.Job.Job.ID)
+				defer d.state.RemoveListener(req.Job.Job.ID, ch)
 				go func() {
 					// There is a race that can result in the listener being
 					// added after the container has started, so check the
@@ -244,7 +244,6 @@ func (d *DockerBackend) Attach(req *AttachRequest) error {
 						once.Do(resize)
 					}
 				}()
-				defer d.state.RemoveListener(req.Job.Job.ID, ch)
 				for event := range ch {
 					if event.Event == "start" {
 						once.Do(resize)
@@ -266,8 +265,7 @@ func (d *DockerBackend) Attach(req *AttachRequest) error {
 
 	if req.Job.Job.Config.TTY || req.Stream {
 		exited := make(chan struct{})
-		ch := make(chan host.Event)
-		d.state.AddListener(req.Job.Job.ID, ch)
+		ch := d.state.AddListener(req.Job.Job.ID)
 		go func() {
 			defer d.state.RemoveListener(req.Job.Job.ID, ch)
 			for e := range ch {

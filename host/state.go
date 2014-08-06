@@ -261,13 +261,15 @@ func (s *State) WaitAttach(jobID string) {
 	}
 }
 
-func (s *State) AddListener(jobID string, ch chan host.Event) {
+func (s *State) AddListener(jobID string) chan host.Event {
+	ch := make(chan host.Event)
 	s.listenMtx.Lock()
 	if _, ok := s.listeners[jobID]; !ok {
 		s.listeners[jobID] = make(map[chan host.Event]struct{})
 	}
 	s.listeners[jobID][ch] = struct{}{}
 	s.listenMtx.Unlock()
+	return ch
 }
 
 func (s *State) RemoveListener(jobID string, ch chan host.Event) {
@@ -282,6 +284,7 @@ func (s *State) RemoveListener(jobID string, ch chan host.Event) {
 		delete(s.listeners, jobID)
 	}
 	s.listenMtx.Unlock()
+	close(ch)
 }
 
 func (s *State) sendEvent(job *host.ActiveJob, event string) {

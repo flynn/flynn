@@ -196,8 +196,7 @@ func main() {
 
 	g.Log(grohl.Data{"at": "sampi_connected"})
 
-	events := make(chan host.Event)
-	state.AddListener("all", events)
+	events := state.AddListener("all")
 	go syncScheduler(cluster, events)
 
 	h := &host.Host{}
