@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"net"
 	"path"
 	"strings"
@@ -13,10 +14,73 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/flynn/flynn/discoverd/agent"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/discoverd/client/testutil"
 	"github.com/flynn/flynn/router/types"
 )
 
-func newFakeEtcd() *fakeEtcd {
+var fake = flag.Bool("fake", true, "stub out discoverd/etcd")
+
+func init() {
+	flag.Parse()
+}
+
+type discoverdClient interface {
+	DiscoverdClient
+	Register(string, string) error
+	Unregister(string, string) error
+	UnregisterAll() error
+	Close() error
+}
+
+func newEtcd(t testutil.TestingT) (EtcdClient, func()) {
+	if *fake {
+		return newFakeEtcd(), func() {}
+	}
+	cleanup := testutil.RunEtcdServer(t)
+	return etcd.NewClient(nil), cleanup
+}
+
+func newDiscoverd(t testutil.TestingT) (discoverdClient, func()) {
+	if *fake {
+		return newFakeDiscoverd(), func() {}
+	}
+	discoverd, killDiscoverd := testutil.BootDiscoverd(t, "")
+	return discoverd, func() {
+		discoverd.Close()
+		killDiscoverd()
+	}
+}
+
+func setup(t testutil.TestingT, ec EtcdClient, dc discoverdClient) (discoverdClient, EtcdClient, func()) {
+	if *fake {
+		if ec == nil {
+			ec = newFakeEtcd()
+		}
+		if dc == nil {
+			dc = newFakeDiscoverd()
+		}
+		return dc, ec, nil
+	}
+	var killEtcd, killDiscoverd func()
+	if ec == nil {
+		killEtcd = testutil.RunEtcdServer(t)
+		ec = etcd.NewClient(nil)
+	}
+	if dc == nil {
+		dc, killDiscoverd = testutil.BootDiscoverd(t, "")
+	}
+	return dc, ec, func() {
+		if killDiscoverd != nil {
+			dc.Close()
+			killDiscoverd()
+		}
+		if killEtcd != nil {
+			killEtcd()
+		}
+	}
+}
+
+func newFakeEtcd() EtcdClient {
 	e := &fakeEtcd{
 		index:   make(map[string]*etcd.Node),
 		root:    &etcd.Node{Key: "/", Dir: true},
@@ -201,6 +265,8 @@ func (d *fakeDiscoverd) Register(name, addr string) error {
 	return d.RegisterWithAttributes(name, addr, nil)
 }
 
+func (d *fakeDiscoverd) Close() error { return nil }
+
 func (d *fakeDiscoverd) RegisterWithAttributes(name, addr string, attrs map[string]string) error {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
@@ -316,7 +382,21 @@ func waitForEvent(c *C, w Watcher, event string, id string) func() *strowger.Eve
 				break
 			}
 		}
-		c.Errorf("timeout exceeded waiting for %s %s", event, id)
+		c.Fatalf("timeout exceeded waiting for %s %s", event, id)
 		return nil
+	}
+}
+
+func discoverdRegister(c *C, dc discoverdClient, addr string) {
+	var ch chan *agent.ServiceUpdate
+	if !*fake {
+		ss, err := dc.NewServiceSet("test")
+		c.Assert(err, IsNil)
+		defer ss.Close()
+		ch = ss.Watch(false)
+	}
+	dc.Register("test", addr)
+	if ch != nil {
+		<-ch
 	}
 }

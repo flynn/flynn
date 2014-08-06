@@ -10,6 +10,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.net/websocket"
 	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
+	"github.com/flynn/flynn/discoverd/client/testutil"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -59,13 +60,33 @@ func httpTestHandler(id string) http.Handler {
 	})
 }
 
-func newHTTPListener(etcd *fakeEtcd) (*HTTPListener, *fakeDiscoverd, error) {
-	discoverd := newFakeDiscoverd()
-	if etcd == nil {
-		etcd = newFakeEtcd()
+type httpListener struct {
+	*HTTPListener
+	cleanup func()
+}
+
+func (l *httpListener) Close() error {
+	l.HTTPListener.Close()
+	if l.cleanup != nil {
+		l.cleanup()
 	}
-	l := NewHTTPListener("127.0.0.1:0", "127.0.0.1:0", nil, NewEtcdDataStore(etcd, "/strowger/http/"), discoverd)
-	return l, discoverd, l.Start()
+	return nil
+}
+
+func newHTTPListenerClients(t testutil.TestingT, etcd EtcdClient, discoverd discoverdClient) (*httpListener, discoverdClient) {
+	discoverd, etcd, cleanup := setup(t, etcd, discoverd)
+	l := &httpListener{
+		NewHTTPListener("127.0.0.1:0", "127.0.0.1:0", nil, NewEtcdDataStore(etcd, "/strowger/http/"), discoverd),
+		cleanup,
+	}
+	if err := l.Start(); err != nil {
+		t.Fatal(err)
+	}
+	return l, discoverd
+}
+
+func newHTTPListener(t testutil.TestingT) (*httpListener, discoverdClient) {
+	return newHTTPListenerClients(t, nil, nil)
 }
 
 // https://code.google.com/p/go/issues/detail?id=5381
@@ -73,11 +94,10 @@ func (s *S) TestIssue5381(c *C) {
 	srv := httptest.NewServer(httpTestHandler(""))
 	defer srv.Close()
 
-	l, discoverd, err := newHTTPListener(nil)
-	c.Assert(err, IsNil)
+	l, discoverd := newHTTPListener(c)
 	defer l.Close()
 
-	discoverd.Register("test", srv.Listener.Addr().String())
+	discoverdRegister(c, discoverd, srv.Listener.Addr().String())
 	defer discoverd.UnregisterAll()
 
 	addHTTPRoute(c, l)
@@ -90,11 +110,10 @@ func (s *S) TestAddHTTPRoute(c *C) {
 	defer srv1.Close()
 	defer srv2.Close()
 
-	l, discoverd, err := newHTTPListener(nil)
-	c.Assert(err, IsNil)
+	l, discoverd := newHTTPListener(c)
 	defer l.Close()
 
-	discoverd.Register("test", srv1.Listener.Addr().String())
+	discoverdRegister(c, discoverd, srv1.Listener.Addr().String())
 	defer discoverd.UnregisterAll()
 
 	r := addHTTPRoute(c, l)
@@ -103,7 +122,7 @@ func (s *S) TestAddHTTPRoute(c *C) {
 	assertGet(c, "https://"+l.TLSAddr, "example.com", "1")
 
 	discoverd.Unregister("test", srv1.Listener.Addr().String())
-	discoverd.Register("test", srv2.Listener.Addr().String())
+	discoverdRegister(c, discoverd, srv2.Listener.Addr().String())
 
 	// Close the connection we just used to trigger a new backend choice
 	httpClient.Transport.(*http.Transport).CloseIdleConnections()
@@ -112,7 +131,7 @@ func (s *S) TestAddHTTPRoute(c *C) {
 	assertGet(c, "https://"+l.TLSAddr, "example.com", "2")
 
 	wait := waitForEvent(c, l, "remove", r.ID)
-	err = l.RemoveRoute(r.ID)
+	err := l.RemoveRoute(r.ID)
 	c.Assert(err, IsNil)
 	wait()
 	httpClient.Transport.(*http.Transport).CloseIdleConnections()
@@ -153,7 +172,7 @@ func assertGetCookie(c *C, url, host, expected string, cookie *http.Cookie) *htt
 	return nil
 }
 
-func addHTTPRoute(c *C, l *HTTPListener) *strowger.Route {
+func addHTTPRoute(c *C, l *httpListener) *strowger.Route {
 	wait := waitForEvent(c, l, "set", "")
 	r := (&strowger.HTTPRoute{
 		Domain:  "example.com",
@@ -167,7 +186,7 @@ func addHTTPRoute(c *C, l *HTTPListener) *strowger.Route {
 	return r
 }
 
-func addStickyHTTPRoute(c *C, l *HTTPListener) *strowger.Route {
+func addStickyHTTPRoute(c *C, l *httpListener) *strowger.Route {
 	wait := waitForEvent(c, l, "set", "")
 	r := (&strowger.HTTPRoute{
 		Domain:  "example.com",
@@ -181,20 +200,19 @@ func addStickyHTTPRoute(c *C, l *HTTPListener) *strowger.Route {
 }
 
 func (s *S) TestHTTPInitialSync(c *C) {
-	etcd := newFakeEtcd()
-	l, _, err := newHTTPListener(etcd)
+	etcd, cleanup := newEtcd(c)
+	defer cleanup()
+	l, _ := newHTTPListenerClients(c, etcd, nil)
 	addHTTPRoute(c, l)
-	c.Assert(err, IsNil)
 	l.Close()
 
 	srv := httptest.NewServer(httpTestHandler("1"))
 	defer srv.Close()
 
-	l, discoverd, err := newHTTPListener(etcd)
-	c.Assert(err, IsNil)
+	l, discoverd := newHTTPListenerClients(c, etcd, nil)
 	defer l.Close()
 
-	discoverd.Register("test", srv.Listener.Addr().String())
+	discoverdRegister(c, discoverd, srv.Listener.Addr().String())
 	defer discoverd.UnregisterAll()
 
 	assertGet(c, "http://"+l.Addr, "example.com", "1")
@@ -205,11 +223,10 @@ func (s *S) TestHTTPInitialSync(c *C) {
 func (s *S) TestHTTPServiceHandlerBackendConnectionClosed(c *C) {
 	srv := httptest.NewServer(httpTestHandler("1"))
 
-	l, discoverd, err := newHTTPListener(nil)
-	c.Assert(err, IsNil)
+	l, discoverd := newHTTPListener(c)
 	defer l.Close()
 
-	discoverd.Register("test", srv.Listener.Addr().String())
+	discoverdRegister(c, discoverd, srv.Listener.Addr().String())
 	defer discoverd.UnregisterAll()
 
 	addHTTPRoute(c, l)
@@ -237,11 +254,10 @@ func (s *S) TestHTTPWebsocket(c *C) {
 		}),
 	)
 
-	l, discoverd, err := newHTTPListener(nil)
-	c.Assert(err, IsNil)
+	l, discoverd := newHTTPListener(c)
 	defer l.Close()
 
-	discoverd.Register("test", srv.Listener.Addr().String())
+	discoverdRegister(c, discoverd, srv.Listener.Addr().String())
 	defer discoverd.UnregisterAll()
 
 	addHTTPRoute(c, l)
@@ -267,17 +283,16 @@ func (s *S) TestStickyHTTPRoute(c *C) {
 	srv2 := httptest.NewServer(httpTestHandler("2"))
 	defer srv2.Close()
 
-	l, discoverd, err := newHTTPListener(nil)
-	c.Assert(err, IsNil)
+	l, discoverd := newHTTPListener(c)
 	defer l.Close()
 
-	discoverd.Register("test", srv1.Listener.Addr().String())
+	discoverdRegister(c, discoverd, srv1.Listener.Addr().String())
 	defer discoverd.UnregisterAll()
 
 	addStickyHTTPRoute(c, l)
 
 	cookie := assertGet(c, "http://"+l.Addr, "example.com", "1")
-	discoverd.Register("test", srv2.Listener.Addr().String())
+	discoverdRegister(c, discoverd, srv2.Listener.Addr().String())
 	for i := 0; i < 10; i++ {
 		resCookie := assertGetCookie(c, "http://"+l.Addr, "example.com", "1", cookie)
 		c.Assert(resCookie, IsNil)
