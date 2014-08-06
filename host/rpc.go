@@ -57,12 +57,8 @@ func (h *Host) StopJob(id string, res *struct{}) error {
 }
 
 func (h *Host) StreamEvents(id string, stream rpcplus.Stream) error {
-	ch := make(chan host.Event)
-	h.state.AddListener(id, ch)
-	defer func() {
-		h.state.RemoveListener(id, ch)
-		close(ch)
-	}()
+	ch := h.state.AddListener(id)
+	defer h.state.RemoveListener(id, ch)
 	for {
 		select {
 		case event := <-ch:
