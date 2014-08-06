@@ -18,7 +18,7 @@ vagrant up
 ```
 
 If you see an error unpackaging the box, you need to install `xz` (`brew install
-xz` or `apt-get install xz-utils`).
+xz` or `apt-get install xz-utils`). If running on Windows, update to Vagrant 1.6.
 
 The final log line contains configuration details used to access Flynn via the
 command line tool. Install [flynn-cli](https://github.com/flynn/flynn-cli), and
