@@ -132,7 +132,7 @@ func (s *etcdDataStore) Sync(h SyncHandler, started chan<- error) {
 		started <- err
 		return
 	}
-	since = data.EtcdIndex
+	since = data.EtcdIndex + 1
 	for _, node := range data.Node.Nodes {
 		route := &strowger.Route{}
 		if err := json.Unmarshal([]byte(node.Value), route); err != nil {
