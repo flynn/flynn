@@ -122,7 +122,7 @@ func (s *etcdDataStore) path(id string) string {
 }
 
 func (s *etcdDataStore) Sync(h SyncHandler, started chan<- error) {
-	var since uint64
+	since := uint64(1)
 	data, err := s.etcd.Get(s.prefix, false, true)
 	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
 		// key not found, ignore
