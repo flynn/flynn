@@ -1,23 +1,13 @@
 package discoverd_test
 
 import (
-	"bufio"
 	"fmt"
-	"io"
-	"io/ioutil"
-	"log"
-	"math/rand"
-	"os"
-	"os/exec"
-	"strconv"
-	"sync"
 	"testing"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/flynn/discoverd/agent"
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/discoverd/client/testutil"
 )
 
 func ExampleRegisterAndStandby_standby() {
@@ -87,152 +77,6 @@ func ExampleRegisterWithSet_upgradeDowngrade() {
 		}
 	}()
 	// run server
-}
-
-var Attempts = attempt.Strategy{
-	Min:   5,
-	Total: 5 * time.Second,
-	Delay: 200 * time.Millisecond,
-}
-
-func runEtcdServer(t *testing.T) func() {
-	killCh := make(chan struct{})
-	doneCh := make(chan struct{})
-	name := "etcd-test." + strconv.Itoa(rand.Int())
-	dataDir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatal("tempdir failed:", err)
-	}
-	go func() {
-		cmd := exec.Command("etcd", "-name", name, "-data-dir", dataDir)
-		stdout, _ := cmd.StdoutPipe()
-		stderr, _ := cmd.StderrPipe()
-		if err := cmd.Start(); err != nil {
-			t.Fatal("etcd start failed:", err)
-			return
-		}
-		cmdDone := make(chan error)
-		go func() {
-			if os.Getenv("DEBUG") != "" {
-				logOutput("etcd", stdout, stderr)
-			}
-			cmdDone <- cmd.Wait()
-		}()
-		select {
-		case <-killCh:
-			if err := cmd.Process.Kill(); err != nil {
-				t.Fatal("failed to kill etcd:", err)
-				return
-			}
-			<-cmdDone
-		case err := <-cmdDone:
-			t.Fatal("etcd failed:", err)
-			return
-		}
-		if err := os.RemoveAll(dataDir); err != nil {
-			t.Fatal("etcd cleanup failed:", err)
-			return
-		}
-		doneCh <- struct{}{}
-	}()
-
-	// wait for etcd to come up
-	client := etcd.NewClient(nil)
-	err = Attempts.Run(func() (err error) {
-		_, err = client.Get("/", false, false)
-		return
-	})
-	if err != nil {
-		t.Fatalf("Failed to connect to etcd: %q", err)
-	}
-
-	return func() {
-		close(killCh)
-		<-doneCh
-	}
-}
-
-func logOutput(name string, rs ...io.Reader) {
-	var wg sync.WaitGroup
-	wg.Add(len(rs))
-	for _, r := range rs {
-		go func(r io.Reader) {
-			scanner := bufio.NewScanner(r)
-			for scanner.Scan() {
-				log.Println(name+":", scanner.Text())
-			}
-			wg.Done()
-		}(r)
-	}
-	wg.Wait()
-}
-
-func runDiscoverdServer(t *testing.T, addr string) func() {
-	killCh := make(chan struct{})
-	doneCh := make(chan struct{})
-	go func() {
-		cmd := exec.Command("discoverd", "-bind", addr)
-		cmd.Env = append(os.Environ(), "EXTERNAL_IP=127.0.0.1")
-		stderr, _ := cmd.StderrPipe()
-		stdout, _ := cmd.StdoutPipe()
-		if err := cmd.Start(); err != nil {
-			t.Fatal("discoverd start failed:", err)
-			return
-		}
-		cmdDone := make(chan error)
-		go func() {
-			if os.Getenv("DEBUG") != "" {
-				logOutput("discoverd", stderr, stdout)
-			}
-			cmdDone <- cmd.Wait()
-		}()
-		select {
-		case <-killCh:
-			if err := cmd.Process.Kill(); err != nil {
-				t.Fatal("failed to kill discoverd:", err)
-				return
-			}
-			<-cmdDone
-		case err := <-cmdDone:
-			t.Fatal("discoverd failed:", err)
-			return
-		}
-		doneCh <- struct{}{}
-	}()
-
-	return func() {
-		close(killCh)
-		<-doneCh
-	}
-}
-
-func bootDiscoverd(t *testing.T, addr string) (*discoverd.Client, func()) {
-	if addr == "" {
-		addr = "127.0.0.1:1111"
-	}
-	killDiscoverd := runDiscoverdServer(t, addr)
-
-	var client *discoverd.Client
-	err := Attempts.Run(func() (err error) {
-		client, err = discoverd.NewClientWithAddr(addr)
-		return
-	})
-	if err != nil {
-		t.Fatalf("Failed to connect to discoverd: %q", err)
-	}
-	return client, killDiscoverd
-}
-
-func setup(t *testing.T) (*discoverd.Client, func()) {
-	killEtcd := runEtcdServer(t)
-	client, killDiscoverd := bootDiscoverd(t, "")
-
-	return client, func() {
-		client.UnregisterAll()
-		client.Close()
-		killDiscoverd()
-		killEtcd()
-	}
 }
 
 func assert(err error, t *testing.T) error {
@@ -344,7 +188,7 @@ func waitForConnStatus(t *testing.T, ch chan discoverd.ConnEvent, status discove
 }
 
 func TestBasicRegisterAndServiceSet(t *testing.T) {
-	client, cleanup := setup(t)
+	client, cleanup := testutil.SetupDiscoverd(t)
 	defer cleanup()
 
 	serviceName := "basicTest"
@@ -375,7 +219,7 @@ func TestBasicRegisterAndServiceSet(t *testing.T) {
 }
 
 func TestNewAttributes(t *testing.T) {
-	client, cleanup := setup(t)
+	client, cleanup := testutil.SetupDiscoverd(t)
 	defer cleanup()
 
 	serviceName := "attributeTest"
@@ -397,7 +241,7 @@ func TestNewAttributes(t *testing.T) {
 }
 
 func TestFiltering(t *testing.T) {
-	client, cleanup := setup(t)
+	client, cleanup := testutil.SetupDiscoverd(t)
 	defer cleanup()
 
 	serviceName := "filterTest"
@@ -434,7 +278,7 @@ func TestFiltering(t *testing.T) {
 }
 
 func TestSelecting(t *testing.T) {
-	client, cleanup := setup(t)
+	client, cleanup := testutil.SetupDiscoverd(t)
 	defer cleanup()
 
 	serviceName := "selectTest"
@@ -455,7 +299,7 @@ func TestSelecting(t *testing.T) {
 }
 
 func TestServices(t *testing.T) {
-	client, cleanup := setup(t)
+	client, cleanup := testutil.SetupDiscoverd(t)
 	defer cleanup()
 
 	serviceName := "servicesTest"
@@ -471,10 +315,10 @@ func TestServices(t *testing.T) {
 }
 
 func TestReconnect(t *testing.T) {
-	clientA, cleanup := setup(t)
+	clientA, cleanup := testutil.SetupDiscoverd(t)
 	defer cleanup()
 
-	clientB, killDiscoverd := bootDiscoverd(t, "127.0.0.1:1112")
+	clientB, killDiscoverd := testutil.BootDiscoverd(t, "127.0.0.1:1112")
 	defer func() {
 		clientB.UnregisterAll()
 		clientB.Close()
@@ -520,7 +364,7 @@ func TestReconnect(t *testing.T) {
 	assert(clientA.Unregister(service2, ":1111"), t)
 	assert(clientA.Register(service2, ":3333"), t)
 
-	killDiscoverd = runDiscoverdServer(t, "127.0.0.1:1112")
+	killDiscoverd = testutil.RunDiscoverdServer(t, "127.0.0.1:1112")
 
 	waitForConnStatus(t, reconnCh, discoverd.ConnStatusConnected)
 
@@ -596,7 +440,7 @@ func TestReconnect(t *testing.T) {
 }
 
 func TestWatch(t *testing.T) {
-	client, cleanup := setup(t)
+	client, cleanup := testutil.SetupDiscoverd(t)
 	defer cleanup()
 
 	serviceName := "watchTest"
@@ -628,7 +472,7 @@ func TestWatch(t *testing.T) {
 }
 
 func TestNoServices(t *testing.T) {
-	client, cleanup := setup(t)
+	client, cleanup := testutil.SetupDiscoverd(t)
 	defer cleanup()
 
 	set, err := client.NewServiceSet("nonexistent")
@@ -642,7 +486,7 @@ func TestNoServices(t *testing.T) {
 }
 
 func TestRegisterWithSet(t *testing.T) {
-	client, cleanup := setup(t)
+	client, cleanup := testutil.SetupDiscoverd(t)
 	defer cleanup()
 
 	serviceName := "registerWithSetTest"
@@ -669,7 +513,7 @@ func TestRegisterWithSet(t *testing.T) {
 }
 
 func TestServiceAge(t *testing.T) {
-	client, cleanup := setup(t)
+	client, cleanup := testutil.SetupDiscoverd(t)
 	defer cleanup()
 
 	serviceName := "ageTest"
@@ -696,7 +540,7 @@ func TestServiceAge(t *testing.T) {
 }
 
 func TestLeaderChannel(t *testing.T) {
-	client, cleanup := setup(t)
+	client, cleanup := testutil.SetupDiscoverd(t)
 	defer cleanup()
 
 	serviceName := "leadersTest"
@@ -742,7 +586,7 @@ func TestLeaderChannel(t *testing.T) {
 }
 
 func TestRegisterWithSetLeaderSelf(t *testing.T) {
-	client, cleanup := setup(t)
+	client, cleanup := testutil.SetupDiscoverd(t)
 	defer cleanup()
 
 	serviceName := "registerWithSetLeaderSelfTest"
@@ -778,7 +622,7 @@ func TestRegisterWithSetLeaderSelf(t *testing.T) {
 }
 
 func TestRegisterAndStandby(t *testing.T) {
-	client, cleanup := setup(t)
+	client, cleanup := testutil.SetupDiscoverd(t)
 	defer cleanup()
 
 	serviceName := "registerAndStandbyTest"
@@ -800,7 +644,7 @@ func TestRegisterAndStandby(t *testing.T) {
 }
 
 func TestUnregisterAll(t *testing.T) {
-	client, cleanup := setup(t)
+	client, cleanup := testutil.SetupDiscoverd(t)
 	defer cleanup()
 
 	serviceName := "unregisterAllTest"
@@ -829,7 +673,7 @@ func TestUnregisterAll(t *testing.T) {
 }
 
 func TestDefaultClient(t *testing.T) {
-	_, cleanup := setup(t)
+	_, cleanup := testutil.SetupDiscoverd(t)
 	defer cleanup()
 
 	serviceName := "defaultClientTest"
@@ -859,7 +703,7 @@ func TestDefaultClient(t *testing.T) {
 }
 
 func TestHeartbeat(t *testing.T) {
-	client, cleanup := setup(t)
+	client, cleanup := testutil.SetupDiscoverd(t)
 	defer cleanup()
 
 	serviceName := "heartbeatTest"
