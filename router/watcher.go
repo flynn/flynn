@@ -35,6 +35,7 @@ func (m *WatchManager) Unwatch(ch chan *strowger.Event) {
 	m.mtx.Lock()
 	delete(m.watchers, ch)
 	m.mtx.Unlock()
+	close(ch)
 }
 
 func (m *WatchManager) Send(event *strowger.Event) {
