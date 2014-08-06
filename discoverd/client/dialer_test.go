@@ -8,10 +8,11 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/client/balancer"
 	"github.com/flynn/flynn/discoverd/client/dialer"
+	"github.com/flynn/flynn/discoverd/client/testutil"
 )
 
 func TestHTTPClient(t *testing.T) {
-	client, cleanup := setup(t)
+	client, cleanup := testutil.SetupDiscoverd(t)
 	defer cleanup()
 
 	hc := dialer.NewHTTPClient(client)

@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
+	"github.com/flynn/flynn/discoverd/client/testutil"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -44,15 +45,35 @@ func (s *TCPTestServer) Serve() {
 
 func (s *TCPTestServer) Close() error { return s.l.Close() }
 
-const firstTCPPort, lastTCPPort = 10000, 10009
+const firstTCPPort, lastTCPPort = 10001, 10010
 
-func newTCPListener(etcd *fakeEtcd) (*TCPListener, *fakeDiscoverd, error) {
-	discoverd := newFakeDiscoverd()
-	if etcd == nil {
-		etcd = newFakeEtcd()
+type tcpListener struct {
+	*TCPListener
+	cleanup func()
+}
+
+func (l *tcpListener) Close() error {
+	l.TCPListener.Close()
+	if l.cleanup != nil {
+		l.cleanup()
 	}
-	l := NewTCPListener("127.0.0.1", firstTCPPort, lastTCPPort, NewEtcdDataStore(etcd, "/strowger/tcp/"), discoverd)
-	return l, discoverd, l.Start()
+	return nil
+}
+
+func newTCPListenerClients(t testutil.TestingT, etcd EtcdClient, discoverd discoverdClient) (*tcpListener, discoverdClient) {
+	discoverd, etcd, cleanup := setup(t, etcd, discoverd)
+	l := &tcpListener{
+		NewTCPListener("127.0.0.1", firstTCPPort, lastTCPPort, NewEtcdDataStore(etcd, "/strowger/tcp/"), discoverd),
+		cleanup,
+	}
+	if err := l.Start(); err != nil {
+		t.Fatal(err)
+	}
+	return l, discoverd
+}
+
+func newTCPListener(t testutil.TestingT) (*tcpListener, discoverdClient) {
+	return newTCPListenerClients(t, nil, nil)
 }
 
 func assertTCPConn(c *C, addr, prefix string) {
@@ -74,11 +95,10 @@ func (s *S) TestAddTCPRoute(c *C) {
 	defer srv1.Close()
 	defer srv2.Close()
 
-	l, discoverd, err := newTCPListener(nil)
-	c.Assert(err, IsNil)
+	l, discoverd := newTCPListener(c)
 	defer l.Close()
 
-	discoverd.Register("test", srv1.Addr)
+	discoverdRegister(c, discoverd, srv1.Addr)
 	defer discoverd.UnregisterAll()
 
 	r := addTCPRoute(c, l, portInt)
@@ -86,12 +106,12 @@ func (s *S) TestAddTCPRoute(c *C) {
 	assertTCPConn(c, addr, "1")
 
 	discoverd.Unregister("test", srv1.Addr)
-	discoverd.Register("test", srv2.Addr)
+	discoverdRegister(c, discoverd, srv2.Addr)
 
 	assertTCPConn(c, addr, "2")
 
 	wait := waitForEvent(c, l, "remove", r.Route.ID)
-	err = l.RemoveRoute(r.Route.ID)
+	err := l.RemoveRoute(r.Route.ID)
 	c.Assert(err, IsNil)
 	wait()
 
@@ -99,7 +119,7 @@ func (s *S) TestAddTCPRoute(c *C) {
 	c.Assert(err, Not(IsNil))
 }
 
-func addTCPRoute(c *C, l *TCPListener, port int) *strowger.TCPRoute {
+func addTCPRoute(c *C, l *tcpListener, port int) *strowger.TCPRoute {
 	wait := waitForEvent(c, l, "set", "")
 	r := (&strowger.TCPRoute{
 		Service: "test",
@@ -113,28 +133,26 @@ func addTCPRoute(c *C, l *TCPListener, port int) *strowger.TCPRoute {
 
 func (s *S) TestInitialTCPSync(c *C) {
 	const addr, port = "127.0.0.1:45000", 45000
-	etcd := newFakeEtcd()
-	l, _, err := newTCPListener(etcd)
-	c.Assert(err, IsNil)
+	etcd, cleanup := newEtcd(c)
+	defer cleanup()
+	l, _ := newTCPListenerClients(c, etcd, nil)
 	addTCPRoute(c, l, port)
 	l.Close()
 
 	srv := NewTCPTestServer("1")
 	defer srv.Close()
 
-	l, discoverd, err := newTCPListener(etcd)
-	c.Assert(err, IsNil)
+	l, discoverd := newTCPListenerClients(c, etcd, nil)
 	defer l.Close()
 
-	discoverd.Register("test", srv.Addr)
+	discoverdRegister(c, discoverd, srv.Addr)
 	defer discoverd.UnregisterAll()
 
 	assertTCPConn(c, addr, "1")
 }
 
 func (s *S) TestTCPPortAllocation(c *C) {
-	l, discoverd, err := newTCPListener(nil)
-	c.Assert(err, IsNil)
+	l, discoverd := newTCPListener(c)
 	defer l.Close()
 	for i := 0; i < 2; i++ {
 		ports := make([]string, 0, 10)
@@ -145,11 +163,11 @@ func (s *S) TestTCPPortAllocation(c *C) {
 			port := strconv.Itoa(route.Port)
 			ports = append(ports, route.ID)
 			srv := NewTCPTestServer(port)
-			defer srv.Close()
-			discoverd.Register("test", srv.Addr)
+			discoverdRegister(c, discoverd, srv.Addr)
 
 			assertTCPConn(c, "127.0.0.1:"+port, port)
 			discoverd.UnregisterAll()
+			srv.Close()
 		}
 		r := (&strowger.TCPRoute{Service: "test"}).ToRoute()
 		err := l.AddRoute(r)

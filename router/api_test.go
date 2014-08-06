@@ -4,14 +4,17 @@ import (
 	"net/http/httptest"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
+	"github.com/flynn/flynn/discoverd/client/testutil"
 	"github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
 )
 
-func newTestAPIServer() *testAPIServer {
-	etcd := newFakeEtcd()
-	httpListener, _, _ := newHTTPListener(etcd)
-	tcpListener, _, _ := newTCPListener(etcd)
+func newTestAPIServer(t testutil.TestingT) *testAPIServer {
+	ec, killEtcd := newEtcd(t)
+	dc, killDiscoverd := newDiscoverd(t)
+
+	httpListener, _ := newHTTPListenerClients(t, ec, dc)
+	tcpListener, _ := newTCPListenerClients(t, ec, dc)
 	r := &Router{
 		HTTP: httpListener,
 		TCP:  tcpListener,
@@ -19,6 +22,7 @@ func newTestAPIServer() *testAPIServer {
 	ts := &testAPIServer{
 		Server:    httptest.NewServer(apiHandler(r)),
 		listeners: []Listener{r.HTTP, r.TCP},
+		cleanup:   []func(){killEtcd, killDiscoverd},
 	}
 
 	discoverd := newFakeDiscoverd()
@@ -31,6 +35,7 @@ type testAPIServer struct {
 	client.Client
 	*httptest.Server
 	listeners []Listener
+	cleanup   []func()
 }
 
 func (s *testAPIServer) Close() error {
@@ -38,12 +43,15 @@ func (s *testAPIServer) Close() error {
 	for _, l := range s.listeners {
 		l.Close()
 	}
+	for _, cleanup := range s.cleanup {
+		cleanup()
+	}
 	s.Client.Close()
 	return nil
 }
 
 func (s *S) TestAPIAddTCPRoute(c *C) {
-	srv := newTestAPIServer()
+	srv := newTestAPIServer(c)
 	defer srv.Close()
 
 	r := (&strowger.TCPRoute{Service: "test"}).ToRoute()
@@ -74,7 +82,7 @@ func (s *S) TestAPIAddTCPRoute(c *C) {
 }
 
 func (s *S) TestAPIAddHTTPRoute(c *C) {
-	srv := newTestAPIServer()
+	srv := newTestAPIServer(c)
 	defer srv.Close()
 
 	r := (&strowger.HTTPRoute{Domain: "example.com", Service: "test"}).ToRoute()
@@ -105,7 +113,7 @@ func (s *S) TestAPIAddHTTPRoute(c *C) {
 }
 
 func (s *S) TestAPISetHTTPRoute(c *C) {
-	srv := newTestAPIServer()
+	srv := newTestAPIServer(c)
 	defer srv.Close()
 
 	r := (&strowger.HTTPRoute{Domain: "example.com", Service: "foo"}).ToRoute()
@@ -118,7 +126,7 @@ func (s *S) TestAPISetHTTPRoute(c *C) {
 }
 
 func (s *S) TestAPIListRoutes(c *C) {
-	srv := newTestAPIServer()
+	srv := newTestAPIServer(c)
 	defer srv.Close()
 
 	r0 := (&strowger.HTTPRoute{Domain: "example.com", Service: "test"}).ToRoute()

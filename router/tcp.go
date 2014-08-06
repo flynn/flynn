@@ -211,10 +211,20 @@ type tcpService struct {
 
 func (s *tcpService) Close() {
 	if s.port >= s.parent.startPort && s.port <= s.parent.endPort {
-		s.parent.listeners[s.port] = s.l
-	} else {
-		s.l.Close()
+		// make a copy of the fd and create a new listener with it
+		fd, err := s.l.(*net.TCPListener).File()
+		if err != nil {
+			log.Println("Error getting listener fd", s.l)
+			return
+		}
+		s.parent.listeners[s.port], err = net.FileListener(fd)
+		if err != nil {
+			log.Println("Error copying listener", s.l)
+			return
+		}
+		fd.Close()
 	}
+	s.l.Close()
 	s.ss.Close()
 }
 
