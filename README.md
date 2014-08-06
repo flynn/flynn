@@ -24,7 +24,7 @@ Please **report bugs** as issues on the appropriate repository. If you have a ge
 
 We built a [tool](https://flynn.cupcake.io) for launching Flynn clusters on your Amazon Web Services account [here](https://flynn.cupcake.io). 
 
-You can also download a [demo environment](https://github.com/flynn/flynn-demo) for your local machine or learn about the components below.
+You can also download a [demo environment](https://github.com/flynn/flynn/tree/master/demo) for your local machine or learn about the components below.
 
 ## Components
 
@@ -50,7 +50,7 @@ You can also download a [demo environment](https://github.com/flynn/flynn-demo) 
 
 **[slugrunner](https://github.com/flynn/slugrunner)** A Docker container that runs Heroku-like [slugs](https://devcenter.heroku.com/articles/slug-compiler) produced by [slugbuilder](https://github.com/flynn/slugbuilder).
 
-**[flynn-demo](https://github.com/flynn/flynn-demo)** Flynn development environment in a VM
+**[flynn-demo](https://github.com/flynn/flynn/tree/master/demo)** Flynn development environment in a VM
 
 **[strowger](https://github.com/flynn/strowger)** Flynn TCP/HTTP router
 
