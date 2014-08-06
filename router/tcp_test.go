@@ -145,11 +145,11 @@ func (s *S) TestTCPPortAllocation(c *C) {
 			port := strconv.Itoa(route.Port)
 			ports = append(ports, route.ID)
 			srv := NewTCPTestServer(port)
-			defer srv.Close()
 			discoverd.Register("test", srv.Addr)
 
 			assertTCPConn(c, "127.0.0.1:"+port, port)
 			discoverd.UnregisterAll()
+			srv.Close()
 		}
 		r := (&strowger.TCPRoute{Service: "test"}).ToRoute()
 		err := l.AddRoute(r)
