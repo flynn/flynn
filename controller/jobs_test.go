@@ -94,6 +94,38 @@ func (s *S) TestJobLog(c *C) {
 	c.Assert(buf.String(), Equals, "foo")
 }
 
+func (s *S) TestJobLogWait(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "joblog-wait"})
+	hostID, jobID := random.UUID(), random.UUID()
+	hc := tu.NewFakeHostClient(hostID)
+	hc.SetAttachFunc(jobID, func(req *host.AttachReq, wait bool) (cluster.AttachClient, error) {
+		if !wait {
+			return nil, cluster.ErrWouldWait
+		}
+		return cluster.NewAttachClient(newFakeLog(strings.NewReader("foo"))), nil
+	})
+	s.cc.SetHostClient(hostID, hc)
+
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log", s.srv.URL, app.ID, hostID, jobID), nil)
+	c.Assert(err, IsNil)
+	req.SetBasicAuth("", authKey)
+	res, err := http.DefaultClient.Do(req)
+	c.Assert(err, IsNil)
+	res.Body.Close()
+	c.Assert(res.StatusCode, Equals, 404)
+
+	req, err = http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log?wait=true", s.srv.URL, app.ID, hostID, jobID), nil)
+	c.Assert(err, IsNil)
+	req.SetBasicAuth("", authKey)
+	res, err = http.DefaultClient.Do(req)
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(res.Body)
+	res.Body.Close()
+	c.Assert(err, IsNil)
+
+	c.Assert(buf.String(), Equals, "foo")
+}
+
 func (s *S) TestJobLogTail(c *C) {
 	pipeR, pipeW := io.Pipe()
 	defer pipeW.Close()
