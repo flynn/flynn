@@ -50,7 +50,6 @@ func (c *Config) Dial(network, addr string) (net.Conn, error) {
 		conn.Close()
 		return nil, err
 	}
-	return conn, nil
 
 	state := conn.ConnectionState()
 	hashFunc := c.Hash
