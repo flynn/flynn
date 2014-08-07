@@ -67,7 +67,7 @@ func (s *Server) Provision(config []byte) (*Resource, error) {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
-		return nil, fmt.Errorf("resource: unexpected status code %s", res.StatusCode)
+		return nil, fmt.Errorf("resource: unexpected status code %d", res.StatusCode)
 	}
 
 	resource := &Resource{}

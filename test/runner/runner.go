@@ -129,7 +129,7 @@ func (r *Runner) watchEvents() {
 		if !needsBuild(event) {
 			continue
 		}
-		go func() {
+		go func(event Event) {
 			b := &Build{
 				Repo:   event.Repo(),
 				Commit: event.Commit(),
@@ -139,7 +139,7 @@ func (r *Runner) watchEvents() {
 				return
 			}
 			log.Printf("build %s passed!\n", b.Id)
-		}()
+		}(event)
 	}
 }
 
@@ -375,13 +375,13 @@ func (r *Runner) buildPending() error {
 	})
 
 	for _, b := range pending {
-		go func() {
+		go func(b *Build) {
 			if err := r.build(b); err != nil {
 				log.Printf("build %s failed: %s\n", b.Id, err)
 				return
 			}
 			log.Printf("build %s passed!\n", b.Id)
-		}()
+		}(b)
 	}
 	return nil
 }

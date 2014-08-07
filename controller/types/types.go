@@ -71,7 +71,7 @@ type Job struct {
 	AppID     string     `json:"app,omitempty"`
 	ReleaseID string     `json:"release,omitempty"`
 	Type      string     `json:"type,omitempty"`
-	State     string     `josn:"state,omitempty"`
+	State     string     `json:"state,omitempty"`
 	Cmd       []string   `json:"cmd,omitempty"`
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`

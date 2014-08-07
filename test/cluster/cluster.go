@@ -302,7 +302,7 @@ func (c *Cluster) bootstrapFlynn() error {
 		return errors.New("could not detect strowger ip: no strowger-api leader")
 	}
 	if err = setLocalDNS(c.ControllerDomain, leader.Host); err != nil {
-		return fmt.Errorf("could not set strowger DNS entry:", err)
+		return fmt.Errorf("could not set strowger DNS entry: %s", err)
 	}
 	return nil
 }
