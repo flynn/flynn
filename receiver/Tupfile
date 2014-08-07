@@ -1,6 +1,6 @@
 include_rules
-: |> !go |> bin/flynn-receiver
+: |> !go |> flynn-receiver
 : |> !go ./key-check |> bin/flynn-key-check
 : $(ROOT)/sdutil/sdutil |> !cp |> bin/sdutil
 : $(ROOT)/gitreceived/gitreceived |> !cp |> bin/gitreceived
-: bin/* |> !docker |> $(ROOT)/<layer1>
+: flynn-receiver bin/* |> !docker |> $(ROOT)/<layer1>
