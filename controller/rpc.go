@@ -22,16 +22,17 @@ func (s *ControllerRPC) StreamFormations(since time.Time, stream rpcplus.Stream)
 	ch := make(chan *ct.ExpandedFormation)
 	done := make(chan struct{})
 	go func() {
+	outer:
 		for {
 			select {
 			case f := <-ch:
 				select {
 				case stream.Send <- f:
 				case <-stream.Error:
-					break
+					break outer
 				}
 			case <-stream.Error:
-				break
+				break outer
 			}
 		}
 		close(done)
