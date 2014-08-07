@@ -29,10 +29,10 @@ var appNamePattern = regexp.MustCompile(`^[a-z\d]+(-[a-z\d]+)*$`)
 func (r *AppRepo) Add(data interface{}) error {
 	app := data.(*ct.App)
 	if app.Name == "" {
-		return ct.ValidationError{"name", "must not be blank"}
+		return ct.ValidationError{Field: "name", Message: "must not be blank"}
 	}
 	if len(app.Name) > 30 || !appNamePattern.MatchString(app.Name) {
-		return ct.ValidationError{"name", "is invalid"}
+		return ct.ValidationError{Field: "name", Message: "is invalid"}
 	}
 	if app.ID == "" {
 		app.ID = utils.UUID()
