@@ -100,7 +100,7 @@ func putJob(job ct.Job, app *ct.App, repo *JobRepo, r ResponseHelper) {
 	r.JSON(200, &job)
 }
 
-func jobLog(req *http.Request, app *ct.App, params martini.Params, cluster cluster.Host, w http.ResponseWriter, r ResponseHelper) {
+func jobLog(req *http.Request, app *ct.App, params martini.Params, hc cluster.Host, w http.ResponseWriter, r ResponseHelper) {
 	attachReq := &host.AttachReq{
 		JobID: params["jobs_id"],
 		Flags: host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagLogs,
@@ -109,10 +109,14 @@ func jobLog(req *http.Request, app *ct.App, params martini.Params, cluster clust
 	if tail {
 		attachReq.Flags |= host.AttachFlagStream
 	}
-	attachClient, err := cluster.Attach(attachReq, false)
+	wait := req.FormValue("wait") != ""
+	attachClient, err := hc.Attach(attachReq, wait)
 	if err != nil {
-		// TODO: handle AttachWouldWait
-		r.Error(err)
+		if err == cluster.ErrWouldWait {
+			w.WriteHeader(404)
+		} else {
+			r.Error(err)
+		}
 		return
 	}
 	defer attachClient.Close()
