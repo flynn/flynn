@@ -9,5 +9,6 @@
   "flynn/receiver": "$image_id[receiver]",
   "flynn/slugbuilder": "$image_id[slugbuilder]",
   "flynn/slugrunner": "$image_id[slugrunner]",
-  "flynn/bootstrap": "$image_id[bootstrap]"
+  "flynn/bootstrap": "$image_id[bootstrap]",
+  "flynn/taffy": "$image_id[taffy]"
 }
