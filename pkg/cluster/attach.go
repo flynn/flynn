@@ -27,11 +27,7 @@ func (c *hostClient) Attach(req *host.AttachReq, wait bool) (AttachClient, error
 	if err != nil {
 		return nil, err
 	}
-	addrs := c.service.Addrs()
-	if len(addrs) == 0 {
-		return nil, ErrNoServers
-	}
-	conn, err := c.dial("tcp", addrs[0])
+	conn, err := c.dial("tcp", c.addr)
 	if err != nil {
 		return nil, err
 	}
