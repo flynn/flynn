@@ -2,34 +2,44 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-var cmdReleaseAddDocker = &Command{
-	Run:   runReleaseAddDocker,
-	Usage: "release-add-docker <uri>",
-	Short: "add a docker image release",
-	Long:  "Add a release referencing a Docker image",
-}
+func runRelease(argv []string, client *controller.Client) error {
+	usage := `usage: flynn release add [-t <type>] <uri>
 
-var releaseFile string
+Manage app releases.
 
-func init() {
-	cmdReleaseAddDocker.Flag.StringVarP(&releaseFile, "file", "f", "", "path to JSON release config")
-}
+Options:
+   -t <type>          type of the release. Currently only 'docker' is supported. [default: docker]
+   -f, --file <file>  add a release referencing a Docker image
+Commands:
+   add   add a new release
+	`
+	args, _ := docopt.Parse(usage, argv, true, "", false)
 
-func runReleaseAddDocker(cmd *Command, args []string, client *controller.Client) error {
-	if len(args) != 1 {
-		cmd.printUsage(true)
+	if args.Bool["add"] {
+		if args.String["-t"] == "docker" {
+			return runReleaseAddDocker(args, client)
+		} else {
+			return fmt.Errorf("Release type %s not supported.", args.String["-t"])
+		}
 	}
 
+	log.Fatal("Toplevel command not implemented.")
+	return nil
+}
+
+func runReleaseAddDocker(args *docopt.Args, client *controller.Client) error {
 	release := &ct.Release{}
-	if releaseFile != "" {
-		data, err := ioutil.ReadFile(releaseFile)
+	if args.String["--file"] != "" {
+		data, err := ioutil.ReadFile(args.String["--file"])
 		if err != nil {
 			return err
 		}
@@ -40,7 +50,7 @@ func runReleaseAddDocker(cmd *Command, args []string, client *controller.Client)
 
 	artifact := &ct.Artifact{
 		Type: "docker",
-		URI:  args[0],
+		URI:  args.String["<uri>"],
 	}
 	if err := client.CreateArtifact(artifact); err != nil {
 		return err
