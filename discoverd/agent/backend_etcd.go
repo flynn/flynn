@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"log"
 	"strings"
 	"sync"
 
@@ -26,21 +27,39 @@ func servicePath(name, addr string) string {
 // Subscribe to changes in services of a given name.
 func (b *EtcdBackend) Subscribe(name string) (UpdateStream, error) {
 	stream := &etcdStream{ch: make(chan *ServiceUpdate), stop: make(chan bool)}
-	watch := b.getStateChanges(name, stream.stop)
-	response, _ := b.getCurrentState(name)
+
 	go func() {
+		nextIndex := uint64(1)
+		response, _ := b.getCurrentState(name)
 		if response != nil {
 			for _, n := range response.Node.Nodes {
 				if update := b.responseToUpdate(response, n); update != nil {
 					stream.ch <- update
 				}
 			}
+			nextIndex = response.EtcdIndex + 1
 		}
 		stream.ch <- &ServiceUpdate{}
-		for resp := range watch {
-			if update := b.responseToUpdate(resp, resp.Node); update != nil {
-				stream.ch <- update
+
+		path := servicePath(name, "")
+		for {
+			watch := make(chan *etcd.Response)
+			var watchErr error
+			go func() {
+				_, watchErr = b.Client.Watch(path, nextIndex, true, watch, stream.stop)
+			}()
+			for resp := range watch {
+				if update := b.responseToUpdate(resp, resp.Node); update != nil {
+					stream.ch <- update
+				}
+				nextIndex = resp.EtcdIndex + 1
 			}
+			select {
+			case <-stream.stop:
+				return
+			default:
+			}
+			log.Printf("Restarting etcd watch %s due to error: %s", path, watchErr)
 		}
 	}()
 	return stream, nil
@@ -91,12 +110,6 @@ func (b *EtcdBackend) responseToUpdate(resp *etcd.Response, node *etcd.Node) *Se
 
 func (b *EtcdBackend) getCurrentState(name string) (*etcd.Response, error) {
 	return b.Client.Get(servicePath(name, ""), false, true)
-}
-
-func (b *EtcdBackend) getStateChanges(name string, stop chan bool) chan *etcd.Response {
-	watch := make(chan *etcd.Response)
-	go b.Client.Watch(servicePath(name, ""), 0, true, watch, stop)
-	return watch
 }
 
 // Register a service with etcd.

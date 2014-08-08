@@ -122,7 +122,7 @@ func (s *etcdDataStore) path(id string) string {
 }
 
 func (s *etcdDataStore) Sync(h SyncHandler, started chan<- error) {
-	since := uint64(1)
+	nextIndex := uint64(1)
 	data, err := s.etcd.Get(s.prefix, false, true)
 	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
 		// key not found, ignore
@@ -132,7 +132,7 @@ func (s *etcdDataStore) Sync(h SyncHandler, started chan<- error) {
 		started <- err
 		return
 	}
-	since = data.EtcdIndex + 1
+	nextIndex = data.EtcdIndex + 1
 	for _, node := range data.Node.Nodes {
 		route := &strowger.Route{}
 		if err := json.Unmarshal([]byte(node.Value), route); err != nil {
@@ -147,24 +147,37 @@ func (s *etcdDataStore) Sync(h SyncHandler, started chan<- error) {
 
 watch:
 	started <- nil
-	stream := make(chan *etcd.Response)
-	go s.etcd.Watch(s.prefix, since, true, stream, s.stopSync)
-	for res := range stream {
-		id := path.Base(res.Node.Key)
-		var err error
-		if res.Action == "delete" {
-			err = h.Remove(id)
-		} else {
-			route := &strowger.Route{}
-			if err = json.Unmarshal([]byte(res.Node.Value), route); err != nil {
-				goto fail
+
+	for {
+		stream := make(chan *etcd.Response)
+		var watchErr error
+		go func() {
+			_, watchErr = s.etcd.Watch(s.prefix, nextIndex, true, stream, s.stopSync)
+		}()
+		for res := range stream {
+			nextIndex = res.EtcdIndex + 1
+			id := path.Base(res.Node.Key)
+			var err error
+			if res.Action == "delete" {
+				err = h.Remove(id)
+			} else {
+				route := &strowger.Route{}
+				if err = json.Unmarshal([]byte(res.Node.Value), route); err != nil {
+					goto fail
+				}
+				err = h.Set(route)
 			}
-			err = h.Set(route)
+		fail:
+			if err != nil {
+				log.Printf("Error while processing update from etcd: %s, %#v", err, res.Node)
+			}
 		}
-	fail:
-		if err != nil {
-			log.Printf("Error while processing update from etcd: %s, %#v", err, res.Node)
+		select {
+		case <-s.stopSync:
+			return
+		default:
 		}
+		log.Printf("Restarting etcd watch %s due to error: %s", s.prefix, watchErr)
 	}
 }
 
