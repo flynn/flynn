@@ -19,22 +19,10 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/bitbucket.org/kardianos/osext"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/inconshreveable/go-update"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kr/binarydist"
-	"github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/pkg/random"
 )
 
-var cmdUpdate = &Command{
-	Run:      runUpdate,
-	Usage:    "update",
-	NoClient: true,
-	Long: `
-Update downloads and installs the next version of flynn-cli.
-
-This command is unlisted, since users never have to run it directly.
-`,
-}
-
-func runUpdate(cmd *Command, args []string, client *controller.Client) error {
+func runUpdate(args []string) error {
 	if updater == nil {
 		return errors.New("Dev builds don't support auto-updates")
 	}
