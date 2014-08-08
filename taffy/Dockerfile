@@ -1,4 +1,4 @@
-FROM ubuntu:trusty
+FROM ubuntu-debootstrap:14.04
 
 RUN apt-get update && apt-get -qy install git && apt-get clean
 
