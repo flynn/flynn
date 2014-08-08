@@ -42,7 +42,7 @@ near future.
 
 Next month we will announce a more polished, complete, and documented version of
 the Layer 0 (The Grid) components: [the host
-service](https://github.com/flynn/lorne),
+service](https://github.com/flynn/flynn/tree/master/host),
 [scheduler](https://github.com/flynn/sampi), and [service
 discovery](https://github.com/flynn/go-discover). This layer can be used on its
 own to schedule and run jobs (e.g. replace Mesos). A similar release of the

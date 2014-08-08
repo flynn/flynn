@@ -54,7 +54,7 @@ func main() {
 	attributes := make(AttributeFlag)
 	flag.Var(&attributes, "attribute", "key=value pair to add as an attribute")
 	flag.Parse()
-	grohl.AddContext("app", "lorne")
+	grohl.AddContext("app", "host")
 	grohl.Log(grohl.Data{"at": "start"})
 	g := grohl.NewContext(grohl.Data{"fn": "main"})
 
