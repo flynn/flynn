@@ -1,5 +1,4 @@
 FROM ubuntu:trusty
-MAINTAINER Jonathan Rudenberg <jonathan@titanous.com>
 
 ENV DEBIAN_FRONTEND noninteractive
 

@@ -1,5 +1,4 @@
 FROM progrium/cedarish
-MAINTAINER Jeff Lindsay <progrium@gmail.com>
 
 RUN useradd slugbuilder --home-dir /app
 
