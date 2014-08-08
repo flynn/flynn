@@ -281,6 +281,7 @@ func (s *S) TestHTTPWebsocket(c *C) {
 func (s *S) TestStickyHTTPRoute(c *C) {
 	srv1 := httptest.NewServer(httpTestHandler("1"))
 	srv2 := httptest.NewServer(httpTestHandler("2"))
+	defer srv1.Close()
 	defer srv2.Close()
 
 	l, discoverd := newHTTPListener(c)
