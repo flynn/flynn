@@ -40,12 +40,12 @@ type ManifestData struct {
 
 func (m *ManifestData) TCPPort(id int) (int, error) {
 	if m.readonly {
-		return 0, fmt.Errorf("lorne: invalid TCPPort(%d), ManifestData is read-only", id)
+		return 0, fmt.Errorf("host: invalid TCPPort(%d), ManifestData is read-only", id)
 	}
 	if id < len(m.TCPPorts) {
 		return m.TCPPorts[id], nil
 	} else if id > len(m.TCPPorts) {
-		return 0, fmt.Errorf("lorne: invalid TCPPort(%d), expecting id <= %d", id, len(m.TCPPorts))
+		return 0, fmt.Errorf("host: invalid TCPPort(%d), expecting id <= %d", id, len(m.TCPPorts))
 	}
 
 	port, err := m.ports.Get()

@@ -316,7 +316,7 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 		}
 		client, err := cl.DialHost(hostID)
 		if err != nil {
-			r.Error(fmt.Errorf("lorne connect failed: %s", err.Error()))
+			r.Error(fmt.Errorf("host connect failed: %s", err.Error()))
 			return
 		}
 		defer client.Close()
