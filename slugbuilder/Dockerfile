@@ -1,4 +1,4 @@
-FROM progrium/cedarish
+FROM flynn/cedarish
 
 RUN useradd slugbuilder --home-dir /app
 
