@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
+	"github.com/flynn/flynn/controller/name"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -33,6 +35,14 @@ func main() {
 		port = "3000"
 	}
 	addr := ":" + port
+
+	if seed := os.Getenv("NAME_SEED"); seed != "" {
+		s, err := hex.DecodeString(seed)
+		if err != nil {
+			log.Fatalln("error decoding NAME_SEED:", err)
+		}
+		name.SetSeed(s)
+	}
 
 	db, err := postgres.Open("", "")
 	if err != nil {

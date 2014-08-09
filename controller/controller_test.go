@@ -170,18 +170,9 @@ func (s *S) createTestApp(c *C, in *ct.App) *ct.App {
 }
 
 func (s *S) TestCreateApp(c *C) {
-	// app with no name returns 400
-	res, err := s.Post("/apps", &ct.App{}, &ct.App{})
-	c.Assert(err, IsNil)
-	c.Assert(res.StatusCode, Equals, 400)
-	body, err := s.body(res)
-	c.Assert(err, IsNil)
-	c.Assert(body, Equals, `{"field":"name","message":"must not be blank"}`)
-
-	for i, id := range []string{"", utils.UUID()} {
-		name := fmt.Sprintf("create-app-%d", i)
-		app := s.createTestApp(c, &ct.App{ID: id, Name: name, Protected: true, Meta: map[string]string{"foo": "bar"}})
-		c.Assert(app.Name, Equals, name)
+	for _, id := range []string{"", utils.UUID()} {
+		app := s.createTestApp(c, &ct.App{ID: id, Protected: true, Meta: map[string]string{"foo": "bar"}})
+		c.Assert(app.Name, Not(Equals), "")
 		c.Assert(app.ID, Not(Equals), "")
 		if id != "" {
 			c.Assert(app.ID, Equals, id)

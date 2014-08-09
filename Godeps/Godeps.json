@@ -68,6 +68,10 @@
 			"Rev": "78d7708fc6ca767a04a26c777cdc618f39a34ac4"
 		},
 		{
+			"ImportPath": "github.com/dgryski/go-skip32",
+			"Rev": "6cc5a8b574de3ed084314996231c03b5dd21d8c6"
+		},
+		{
 			"ImportPath": "github.com/docker/docker/archive",
 			"Comment": "v1.1.1-440-gac3eecf",
 			"Rev": "ac3eecf3db5f81a553b71267f2e18ca7b7d95fea"
