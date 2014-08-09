@@ -1,4 +1,7 @@
 {
+  "variables": {
+    "flynn_rev": "{{.Env `FLYNN_REV`}}"
+  },
   "builders": [
     {
       "boot_command": [
@@ -21,7 +24,7 @@
       "ssh_wait_timeout": "20m",
       "tools_upload_flavor": "linux",
       "type": "vmware-iso",
-      "vm_name": "flynn-demo"
+      "vm_name": "flynn-base"
     },
     {
       "boot_command": [
@@ -46,7 +49,7 @@
       "ssh_wait_timeout": "20m",
       "type": "virtualbox-iso",
       "virtualbox_version_file": ".vbox_version",
-      "vm_name": "flynn-demo"
+      "vm_name": "flynn-base"
     }
   ],
   "provisioners": [
@@ -88,7 +91,8 @@
         "scripts/install.sh",
         "scripts/vm_cleanup.sh"
       ],
-      "type": "shell"
+      "type": "shell",
+      "environment_vars": ["FLYNN_REV={{user `flynn_rev`}}"]
     }
   ],
   "post-processors": [{ "type": "vagrant" }]

@@ -1,4 +1,5 @@
 #!/bin/bash
+set -xeo pipefail
 
 # Set up sudo
 echo "%vagrant ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/vagrant

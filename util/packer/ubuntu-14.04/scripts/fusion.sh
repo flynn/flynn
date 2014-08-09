@@ -1,3 +1,6 @@
+#!/bin/bash
+set -xeo pipefail
+
 # Install the Linux headers
 apt-get -y install build-essential linux-headers-$(uname -r)
 
