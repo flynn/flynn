@@ -20,7 +20,8 @@ if [[ "$treeish" == "" ]]; then
 else
 	git clone "$url" "$buildpack_name"
 	pushd $buildpack_name > /dev/null
-	git checkout "$treeish"
+	git checkout -q "$treeish"
+    rm -rf .git
 	popd > /dev/null
 fi
 
