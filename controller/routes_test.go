@@ -8,7 +8,7 @@ import (
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/pkg/random"
 	strowgerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
 )
@@ -25,7 +25,7 @@ type fakeRouter struct {
 func (r *fakeRouter) CreateRoute(route *strowger.Route) error {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
-	route.ID = route.Type + "/" + utils.UUID()
+	route.ID = route.Type + "/" + random.UUID()
 	now := time.Now()
 	route.CreatedAt = &now
 	route.UpdatedAt = &now

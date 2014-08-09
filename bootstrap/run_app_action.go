@@ -5,6 +5,7 @@ import (
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/resource"
 )
 
@@ -56,19 +57,19 @@ func (a *RunAppAction) Run(s *State) error {
 	s.StepData[a.ID] = as
 
 	if a.App == nil || a.App.ID == "" {
-		a.App = &ct.App{ID: utils.UUID()}
+		a.App = &ct.App{ID: random.UUID()}
 	}
 	if a.Artifact == nil {
 		return errors.New("bootstrap: artifact must be set")
 	}
 	if a.Artifact.ID == "" {
-		a.Artifact.ID = utils.UUID()
+		a.Artifact.ID = random.UUID()
 	}
 	if a.Release == nil {
 		return errors.New("bootstrap: release must be set")
 	}
 	if a.Release.ID == "" {
-		a.Release.ID = utils.UUID()
+		a.Release.ID = random.UUID()
 	}
 	a.Release.ArtifactID = a.Artifact.ID
 	if a.Release.Env == nil {

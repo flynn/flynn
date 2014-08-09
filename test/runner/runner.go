@@ -19,9 +19,9 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/s3"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/handlers"
 	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/test/arg"
 	"github.com/flynn/flynn/test/cluster"
-	"github.com/flynn/flynn/test/util"
 )
 
 var logBucket = "flynn-ci-logs"
@@ -388,7 +388,7 @@ func (r *Runner) buildPending() error {
 
 func (r *Runner) save(b *Build) error {
 	if b.Id == "" {
-		b.Id = util.RandomString(8)
+		b.Id = random.String(8)
 	}
 	return r.db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket([]byte("pending-builds"))

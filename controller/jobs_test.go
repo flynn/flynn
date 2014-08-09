@@ -17,6 +17,7 @@ import (
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 func (s *S) createTestJob(c *C, in *ct.Job) *ct.Job {
@@ -60,7 +61,7 @@ func (l *fakeLog) Write([]byte) (int, error) {
 
 func (s *S) TestKillJob(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "killjob"})
-	hostID, jobID := utils.UUID(), utils.UUID()
+	hostID, jobID := random.UUID(), random.UUID()
 	hc := tu.NewFakeHostClient(hostID)
 	s.cc.SetHostClient(hostID, hc)
 
@@ -72,7 +73,7 @@ func (s *S) TestKillJob(c *C) {
 
 func (s *S) createLogTestApp(c *C, name string, stream io.Reader) (*ct.App, string, string) {
 	app := s.createTestApp(c, &ct.App{Name: name})
-	hostID, jobID := utils.UUID(), utils.UUID()
+	hostID, jobID := random.UUID(), random.UUID()
 	hc := tu.NewFakeHostClient(hostID)
 	hc.SetAttach(jobID, newFakeLog(stream))
 	s.cc.SetHostClient(hostID, hc)
@@ -171,7 +172,7 @@ func (l *fakeAttachStream) Close() error      { return l.CloseWrite() }
 func (s *S) TestRunJobDetached(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "run-detached"})
 
-	hostID := utils.UUID()
+	hostID := random.UUID()
 	s.cc.SetHosts(map[string]host.Host{hostID: {}})
 
 	artifact := s.createTestArtifact(c, &ct.Artifact{Type: "docker", URI: "docker://foo/bar"})
@@ -212,7 +213,7 @@ func (s *S) TestRunJobDetached(c *C) {
 
 func (s *S) TestRunJobAttached(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "run-attached"})
-	hostID := utils.UUID()
+	hostID := random.UUID()
 	hc := tu.NewFakeHostClient(hostID)
 
 	done := make(chan struct{})
