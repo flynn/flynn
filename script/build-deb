@@ -5,7 +5,7 @@ ROOT=$(cd $(dirname "$0")/..; pwd)
 cd "$ROOT"
 
 rev=$(git rev-parse HEAD)
-version=${rev:0:8}
+version=0-${rev:0:8}
 if [[ -n "$(git status --porcelain)" ]]; then
   version+="+"
 fi
