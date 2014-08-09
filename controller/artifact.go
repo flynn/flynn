@@ -4,7 +4,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 type ArtifactRepo struct {
@@ -19,7 +19,7 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 	a := data.(*ct.Artifact)
 	// TODO: actually validate
 	if a.ID == "" {
-		a.ID = utils.UUID()
+		a.ID = random.UUID()
 	}
 	err := r.db.QueryRow("INSERT INTO artifacts (artifact_id, type, uri) VALUES ($1, $2, $3) RETURNING created_at",
 		a.ID, a.Type, a.URI).Scan(&a.CreatedAt)

@@ -1,10 +1,7 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -16,6 +13,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 func TestOSFilesystem(t *testing.T) {
@@ -74,7 +72,7 @@ func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {
 	wg.Add(concurrency)
 	for i := 0; i < concurrency; i++ {
 		go func() {
-			path := srv.URL + "/foo/bar/" + random(16)
+			path := srv.URL + "/foo/bar/" + random.Hex(16)
 			res, err := http.Get(path)
 			if err != nil {
 				t.Fatal(err)
@@ -93,7 +91,7 @@ func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {
 				t.Errorf("Expected 404 for non-existent file, got %d", res.StatusCode)
 			}
 
-			data := random(16)
+			data := random.Hex(16)
 			req, err := http.NewRequest("PUT", path, strings.NewReader(data))
 			if err != nil {
 				t.Fatal(err)
@@ -159,7 +157,7 @@ func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {
 				}
 			}
 
-			newData := random(32)
+			newData := random.Hex(32)
 			req, err = http.NewRequest("PUT", path, strings.NewReader(newData))
 			if err != nil {
 				log.Fatal(err)
@@ -251,10 +249,4 @@ func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {
 	}
 
 	wg.Wait()
-}
-
-func random(n int) string {
-	data := make([]byte, n)
-	io.ReadFull(rand.Reader, data)
-	return hex.EncodeToString(data)
 }

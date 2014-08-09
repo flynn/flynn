@@ -5,7 +5,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 type ReleaseRepo struct {
@@ -44,7 +44,7 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 		return err
 	}
 	if release.ID == "" {
-		release.ID = utils.UUID()
+		release.ID = random.UUID()
 	}
 
 	err = r.db.QueryRow("INSERT INTO releases (release_id, artifact_id, data) VALUES ($1, $2, $3) RETURNING created_at",

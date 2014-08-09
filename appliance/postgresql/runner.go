@@ -1,9 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
@@ -23,6 +20,7 @@ import (
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	da "github.com/flynn/flynn/discoverd/agent"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 var dataDir = flag.String("data", "/data", "postgresql data directory")
@@ -128,7 +126,7 @@ func procExit(cmd *exec.Cmd) {
 
 func createSuperuser(db *sql.DB) (password string) {
 	log.Println("Creating superuser...")
-	password = generatePassword()
+	password = random.Base64(16)
 
 	_, err := db.Exec("DROP USER IF EXISTS flynn")
 	if err != nil {
@@ -141,17 +139,6 @@ func createSuperuser(db *sql.DB) (password string) {
 	log.Println("Superuser created.")
 
 	return
-}
-
-func generatePassword() string {
-	b := make([]byte, 16)
-	enc := make([]byte, 24)
-	_, err := io.ReadFull(rand.Reader, b)
-	if err != nil {
-		panic(err) // This shouldn't ever happen, right?
-	}
-	base64.URLEncoding.Encode(enc, b)
-	return string(bytes.TrimRight(enc, "="))
 }
 
 var pgstr = "user=postgres host=/var/run/postgresql sslmode=disable port=" + os.Getenv("PORT")
