@@ -14,6 +14,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 var clusterc *cluster.Client
@@ -43,7 +44,6 @@ func main() {
 	shelfHost := services[0].Addr
 
 	app := os.Args[1]
-	commit := os.Args[2]
 
 	_, err = client.GetApp(app)
 	if err == controller.ErrNotFound {
@@ -61,7 +61,7 @@ func main() {
 	fmt.Printf("-----> Building %s...\n", app)
 
 	var output bytes.Buffer
-	slugURL := fmt.Sprintf("http://%s/%s.tgz", shelfHost, commit)
+	slugURL := fmt.Sprintf("http://%s/%s.tgz", shelfHost, random.UUID())
 	cmd := exec.Command(exec.DockerImage("flynn/slugbuilder", os.Getenv("SLUGBUILDER_IMAGE_ID")), slugURL)
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
