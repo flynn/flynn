@@ -8,6 +8,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/rpcplus"
 )
 
@@ -189,8 +190,9 @@ func (c *Client) DialHost(id string) (Host, error) {
 	if len(services) == 0 {
 		return nil, ErrNoServers
 	}
-	rc, err := rpcplus.DialHTTPPath("tcp", services[0].Addr, rpcplus.DefaultRPCPath, c.dial)
-	return newHostClient(c.service, rc, c.dial), err
+	addr := services[0].Addr
+	rc, err := rpcplus.DialHTTPPath("tcp", addr, rpcplus.DefaultRPCPath, c.dial)
+	return newHostClient(addr, rc, c.dial), err
 }
 
 // Register is used by flynn-host to register itself with the leader and get
@@ -236,3 +238,5 @@ type RPCClient interface {
 	StreamGo(serviceMethod string, args interface{}, replyStream interface{}) *rpcplus.Call
 	Close() error
 }
+
+func RandomJobID(prefix string) string { return prefix + random.UUID() }

@@ -4,26 +4,20 @@ import (
 	"log"
 	"os/exec"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-var cmdCreate = &Command{
-	Run:   runCreate,
-	Usage: "create [<name>]",
-	Short: "create an app",
-	Long:  `Create an application in Flynn`,
-}
+func runCreate(argv []string, client *controller.Client) error {
+	usage := `usage: flynn create [<name>]
 
-func runCreate(cmd *Command, args []string, client *controller.Client) error {
-	if len(args) > 1 {
-		cmd.printUsage(true)
-	}
+Create an application in Flynn.
+	`
+	args, _ := docopt.Parse(usage, argv, true, "", false)
 
 	app := &ct.App{}
-	if len(args) > 0 {
-		app.Name = args[0]
-	}
+	app.Name = args.String["<name>"]
 
 	if err := client.CreateApp(app); err != nil {
 		return err
@@ -35,17 +29,12 @@ func runCreate(cmd *Command, args []string, client *controller.Client) error {
 	return nil
 }
 
-var cmdApps = &Command{
-	Run:   runApps,
-	Usage: "apps",
-	Short: "list apps",
-	Long:  `Lists apps.`,
-}
+func runApps(argv []string, client *controller.Client) error {
+	usage := `usage: flynn apps
 
-func runApps(cmd *Command, args []string, client *controller.Client) error {
-	if len(args) != 0 {
-		cmd.printUsage(true)
-	}
+List flynn apps.
+	`
+	docopt.Parse(usage, argv, true, "", false)
 
 	apps, err := client.AppList()
 	if err != nil {

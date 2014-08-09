@@ -6,11 +6,15 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/ports"
 	"github.com/flynn/flynn/host/sampi"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
@@ -21,26 +25,30 @@ import (
 // Attempts is the attempt strategy that is used to connect to discoverd.
 var Attempts = attempt.Strategy{
 	Min:   5,
-	Total: 5 * time.Second,
+	Total: 10 * time.Second,
 	Delay: 200 * time.Millisecond,
 }
 
-// A command line flag to accumulate multiple key-value pairs into Attributes,
-// e.g. flynn-host -attribute foo=bar -attribute bar=foo
-type AttributeFlag map[string]string
+// A command line flag to accumulate multiple key-value pairs into Metadata,
+// e.g. flynn-host -meta foo=bar -meta bar=foo
+type MetaFlag map[string]string
 
-func (a AttributeFlag) Set(val string) error {
+func (a MetaFlag) Set(val string) error {
 	kv := strings.SplitN(val, "=", 2)
 	a[kv[0]] = kv[1]
 	return nil
 }
 
-func (a AttributeFlag) String() string {
+func (a MetaFlag) String() string {
 	res := make([]string, 0, len(a))
 	for k, v := range a {
 		res = append(res, k+"="+v)
 	}
 	return strings.Join(res, ", ")
+}
+
+func init() {
+	log.SetFlags(log.Lshortfile | log.Lmicroseconds)
 }
 
 func main() {
@@ -49,26 +57,60 @@ func main() {
 	bindAddr := flag.String("bind", "", "bind containers to this IP")
 	configFile := flag.String("config", "", "configuration file")
 	manifestFile := flag.String("manifest", "/etc/flynn-host.json", "manifest file")
-	hostID := flag.String("id", hostname, "host id")
+	stateFile := flag.String("state", "", "state file")
+	hostID := flag.String("id", strings.Replace(hostname, "-", "", -1), "host id")
 	force := flag.Bool("force", false, "kill all containers booted by flynn-host before starting")
-	attributes := make(AttributeFlag)
-	flag.Var(&attributes, "attribute", "key=value pair to add as an attribute")
+	volPath := flag.String("volpath", "/var/lib/flynn-host", "directory to create volumes in")
+	backendName := flag.String("backend", "libvirt-lxc", "runner backend (docker or libvirt-lxc)")
+	metadata := make(MetaFlag)
+	flag.Var(&metadata, "meta", "key=value pair to add as metadata")
 	flag.Parse()
 	grohl.AddContext("app", "host")
 	grohl.Log(grohl.Data{"at": "start"})
 	g := grohl.NewContext(grohl.Data{"fn": "main"})
 
-	state := NewState()
-	backend, err := NewDockerBackend(state, *bindAddr)
-	if err != nil {
-		log.Fatal(err)
+	if strings.Contains(*hostID, "-") {
+		log.Fatal("host id must not contain dashes")
 	}
 
-	go serveHTTP(&Host{state: state, backend: backend}, &attachHandler{state: state, backend: backend})
+	portAlloc := map[string]*ports.Allocator{
+		"tcp": ports.NewAllocator(55000, 65535),
+		"udp": ports.NewAllocator(55000, 65535),
+	}
+
+	sh := newShutdownHandler()
+	state := NewState()
+	var backend Backend
+	var err error
+
+	switch *backendName {
+	case "libvirt-lxc":
+		backend, err = NewLibvirtLXCBackend(state, portAlloc, *volPath, "/tmp/flynn-host-logs", "/usr/bin/flynn-init")
+	case "docker":
+		backend, err = NewDockerBackend(state, portAlloc, *bindAddr)
+	default:
+		log.Fatalf("unknown backend %q", *backendName)
+	}
+	if err != nil {
+		sh.Fatal(err)
+	}
+
+	if err := serveHTTP(&Host{state: state, backend: backend}, &attachHandler{state: state, backend: backend}, sh); err != nil {
+		sh.Fatal(err)
+	}
+
+	if *stateFile != "" {
+		sh.BeforeExit(func() { os.Remove(*stateFile) })
+		if err := state.Restore(*stateFile, backend); err != nil {
+			sh.Fatal(err)
+		}
+	}
+
+	sh.BeforeExit(func() { backend.Cleanup() })
 
 	if *force {
 		if err := backend.Cleanup(); err != nil {
-			log.Fatal(err)
+			sh.Fatal(err)
 		}
 	}
 
@@ -77,6 +119,8 @@ func main() {
 		externalAddr: *externalAddr,
 		bindAddr:     *bindAddr,
 		backend:      backend,
+		state:        state,
+		ports:        portAlloc,
 	}
 
 	discAddr := os.Getenv("DISCOVERD")
@@ -89,13 +133,13 @@ func main() {
 		} else {
 			f, err = os.Open(*manifestFile)
 			if err != nil {
-				log.Fatal(err)
+				sh.Fatal(err)
 			}
 			r = f
 		}
 		services, err := runner.runManifest(r)
 		if err != nil {
-			log.Fatal(err)
+			sh.Fatal(err)
 		}
 		if f != nil {
 			f.Close()
@@ -109,7 +153,7 @@ func main() {
 				return
 			})
 			if err != nil {
-				log.Fatal(err)
+				sh.Fatal(err)
 			}
 		}
 	}
@@ -122,12 +166,13 @@ func main() {
 	if disc == nil {
 		disc, err = discoverd.NewClientWithAddr(discAddr)
 		if err != nil {
-			log.Fatal(err)
+			sh.Fatal(err)
 		}
 	}
+	sh.BeforeExit(func() { disc.UnregisterAll() })
 	sampiStandby, err := disc.RegisterAndStandby("flynn-host", *externalAddr+":1113", map[string]string{"id": *hostID})
 	if err != nil {
-		log.Fatal(err)
+		sh.Fatal(err)
 	}
 
 	// Check if we are the leader so that we can use the cluster functions directly
@@ -145,27 +190,27 @@ func main() {
 	}
 	cluster, err := cluster.NewClientWithSelf(*hostID, NewLocalClient(*hostID, sampiCluster))
 	if err != nil {
-		log.Fatal(err)
+		sh.Fatal(err)
 	}
+	sh.BeforeExit(func() { cluster.Close() })
 
 	g.Log(grohl.Data{"at": "sampi_connected"})
 
-	events := make(chan host.Event)
-	state.AddListener("all", events)
+	events := state.AddListener("all")
 	go syncScheduler(cluster, events)
 
 	h := &host.Host{}
 	if *configFile != "" {
 		h, err = openConfig(*configFile)
 		if err != nil {
-			log.Fatal(err)
+			sh.Fatal(err)
 		}
 	}
-	if h.Attributes == nil {
-		h.Attributes = make(map[string]string)
+	if h.Metadata == nil {
+		h.Metadata = make(map[string]string)
 	}
-	for k, v := range attributes {
-		h.Attributes[k] = v
+	for k, v := range metadata {
+		h.Metadata[k] = v
 	}
 	h.ID = *hostID
 
@@ -178,9 +223,15 @@ func main() {
 		g.Log(grohl.Data{"at": "host_registered"})
 		for job := range jobs {
 			if *externalAddr != "" {
-				job.Config.Env = appendUnique(job.Config.Env, "EXTERNAL_IP="+*externalAddr, "DISCOVERD="+discAddr)
+				if job.Config.Env == nil {
+					job.Config.Env = make(map[string]string)
+				}
+				job.Config.Env["EXTERNAL_IP"] = *externalAddr
+				job.Config.Env["DISCOVERD"] = discAddr
 			}
-			backend.Run(job)
+			if err := backend.Run(job); err != nil {
+				state.SetStatusFailed(job.ID, err)
+			}
 		}
 		g.Log(grohl.Data{"at": "sampi_disconnected", "err": *hostErr})
 
@@ -207,4 +258,47 @@ func syncScheduler(scheduler sampiSyncClient, events <-chan host.Event) {
 			grohl.Log(grohl.Data{"fn": "scheduler_event", "at": "remove_job", "status": "error", "err": err, "job.id": event.JobID})
 		}
 	}
+}
+
+func newShutdownHandler() *shutdownHandler {
+	s := &shutdownHandler{done: make(chan struct{})}
+	go s.wait()
+	return s
+}
+
+type shutdownHandler struct {
+	mtx  sync.RWMutex
+	done chan struct{}
+}
+
+func (h *shutdownHandler) BeforeExit(f func()) {
+	h.mtx.RLock()
+	go func() {
+		<-h.done
+		f()
+		h.mtx.RUnlock()
+	}()
+}
+
+func (h *shutdownHandler) Fatal(v ...interface{}) {
+	// signal exit handlers
+	close(h.done)
+	// wait for exit handlers to finish
+	h.mtx.Lock()
+	log.New(os.Stderr, "", log.Lshortfile|log.Lmicroseconds).Output(2, fmt.Sprint(v...))
+	os.Exit(1)
+}
+
+// kill all jobs
+
+func (h *shutdownHandler) wait() {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, os.Signal(syscall.SIGTERM))
+	sig := <-ch
+	grohl.Log(grohl.Data{"fn": "shutdown", "at": "start", "signal": fmt.Sprint(sig)})
+	// signal exit handlers
+	close(h.done)
+	// wait for exit handlers to finish
+	h.mtx.Lock()
+	os.Exit(0)
 }

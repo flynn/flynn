@@ -14,6 +14,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 var clusterc *cluster.Client
@@ -43,7 +44,6 @@ func main() {
 	shelfHost := services[0].Addr
 
 	app := os.Args[1]
-	commit := os.Args[2]
 
 	_, err = client.GetApp(app)
 	if err == controller.ErrNotFound {
@@ -61,8 +61,8 @@ func main() {
 	fmt.Printf("-----> Building %s...\n", app)
 
 	var output bytes.Buffer
-	slugURL := fmt.Sprintf("http://%s/%s.tgz", shelfHost, commit)
-	cmd := exec.Command("flynn/slugbuilder", slugURL)
+	slugURL := fmt.Sprintf("http://%s/%s.tgz", shelfHost, random.UUID())
+	cmd := exec.Command(exec.DockerImage("flynn/slugbuilder", os.Getenv("SLUGBUILDER_IMAGE_ID")), slugURL)
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -81,7 +81,7 @@ func main() {
 
 	fmt.Printf("-----> Creating release...\n")
 
-	artifact := &ct.Artifact{URI: "docker://flynn/slugrunner"}
+	artifact := &ct.Artifact{Type: "docker", URI: "https://registry.hub.docker.com/flynn/slugrunner?id=" + os.Getenv("SLUGRUNNER_IMAGE_ID")}
 	if err := client.CreateArtifact(artifact); err != nil {
 		log.Fatalln("Error creating artifact:", err)
 	}
@@ -95,7 +95,7 @@ func main() {
 		proc := prevRelease.Processes[t]
 		proc.Cmd = []string{"start", t}
 		if t == "web" {
-			proc.Ports.TCP = 1
+			proc.Ports = []ct.Port{{Proto: "tcp"}}
 			if proc.Env == nil {
 				proc.Env = make(map[string]string)
 			}

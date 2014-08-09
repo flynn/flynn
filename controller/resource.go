@@ -6,7 +6,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 type ResourceRepo struct {
@@ -19,7 +19,7 @@ func NewResourceRepo(db *DB) *ResourceRepo {
 
 func (rr *ResourceRepo) Add(r *ct.Resource) error {
 	if r.ID == "" {
-		r.ID = utils.UUID()
+		r.ID = random.UUID()
 	}
 	tx, err := rr.db.Begin()
 	if err != nil {

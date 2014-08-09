@@ -17,7 +17,7 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/rpcplus"
 )
 
@@ -178,7 +178,7 @@ func (s *S) TestCreateApp(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(body, Equals, `{"field":"name","message":"must not be blank"}`)
 
-	for i, id := range []string{"", utils.UUID()} {
+	for i, id := range []string{"", random.UUID()} {
 		name := fmt.Sprintf("create-app-%d", i)
 		app := s.createTestApp(c, &ct.App{ID: id, Name: name, Protected: true, Meta: map[string]string{"foo": "bar"}})
 		c.Assert(app.Name, Equals, name)
@@ -293,7 +293,7 @@ func (s *S) createTestArtifact(c *C, in *ct.Artifact) *ct.Artifact {
 }
 
 func (s *S) TestCreateArtifact(c *C) {
-	for i, id := range []string{"", utils.UUID()} {
+	for i, id := range []string{"", random.UUID()} {
 		in := &ct.Artifact{
 			ID:   id,
 			Type: "docker-image",
@@ -338,7 +338,7 @@ func (s *S) createTestKey(c *C, in *ct.Key) *ct.Key {
 }
 
 func (s *S) TestCreateRelease(c *C) {
-	for _, id := range []string{"", utils.UUID()} {
+	for _, id := range []string{"", random.UUID()} {
 		in := &ct.Release{ID: id}
 		out := s.createTestRelease(c, in)
 		c.Assert(out.ArtifactID, Equals, in.ArtifactID)

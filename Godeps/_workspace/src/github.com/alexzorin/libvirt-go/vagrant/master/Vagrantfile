@@ -1,0 +1,51 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+require '../vagrant-provision-reboot-plugin'
+
+VAGRANTFILE_API_VERSION = "2"
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  config.vm.box = "wheezy"
+  config.vm.box_url = "https://dl.dropboxusercontent.com/u/197673519/debian-7.2.0.box"
+
+  config.vm.synced_folder "../..", "/libvirt-go"
+
+  config.vm.provision "shell", inline: <<-EOF
+    set -e
+    sudo echo 'deb http://http.debian.net/debian wheezy-backports main' >> /etc/apt/sources.list.d/backports.list
+    echo "Installing LXC + build-essentials"
+    sudo apt-get update
+    sudo DEBCONF_FRONTEND=noninteractive DEBIAN_FRONTEND=noninteractive apt-get install -y lxc gcc g++ build-essential
+    echo "Installing Libvirt 1.2"
+    sudo apt-get install -y -t wheezy-backports libvirt0=1.2.* libvirt-dev=1.2.* libvirt-bin=1.2.*
+
+    GOVERSION="1.2"
+    GOTARBALL="go${GOVERSION}.linux-amd64.tar.gz"
+    export GOROOT=/usr/local/go
+    export GOPATH=/opt/go
+    export PATH=$PATH:$GOROOT/bin:$GOPATH/bin
+    echo "Installing Go $GOVERSION"
+    if [ ! $(which go) ]; then
+    echo " Downloading $GOTARBALL"
+    wget --quiet --directory-prefix=/tmp https://go.googlecode.com/files/$GOTARBALL
+    echo " Extracting $GOTARBALL to $GOROOT"
+    sudo tar -C /usr/local -xzf /tmp/$GOTARBALL
+    echo " Configuring GOPATH"
+    sudo mkdir -p $GOPATH/src $GOPATH/bin $GOPATH/pkg
+    sudo chown -R vagrant $GOPATH
+    echo " Configuring env vars"
+    echo "export PATH=\$PATH:$GOROOT/bin:$GOPATH/bin" | sudo tee /etc/profile.d/golang.sh > /dev/null
+    echo "export GOROOT=$GOROOT" | sudo tee --append /etc/profile.d/golang.sh > /dev/null
+    echo "export GOPATH=$GOPATH" | sudo tee --append /etc/profile.d/golang.sh > /dev/null
+    fi
+
+    echo "Setting up cgroups"
+    echo 'cgroup  /sys/fs/cgroup  cgroup  defaults  0   0' | sudo tee -a /etc/fstab
+    sudo mount /sys/fs/cgroup
+    echo 'GRUB_CMDLINE_LINUX="cgroup_enable=memory"' | sudo tee -a /etc/default/grub
+    sudo update-grub2
+  EOF
+
+  config.vm.provision :unix_reboot
+end

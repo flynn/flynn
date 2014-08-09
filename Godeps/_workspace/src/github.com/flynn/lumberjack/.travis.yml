@@ -1,0 +1,3 @@
+language: go
+
+install:  go get -d -t -v github.com/natefinch/lumberjack

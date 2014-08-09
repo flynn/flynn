@@ -102,9 +102,9 @@ func (c *context) syncCluster(events chan<- *host.Event) {
 	c.mtx.Lock()
 	for _, h := range hosts {
 		for _, job := range h.Jobs {
-			appID := job.Attributes["flynn-controller.app"]
-			releaseID := job.Attributes["flynn-controller.release"]
-			jobType := job.Attributes["flynn-controller.type"]
+			appID := job.Metadata["flynn-controller.app"]
+			releaseID := job.Metadata["flynn-controller.release"]
+			jobType := job.Metadata["flynn-controller.type"]
 			gg := g.New(grohl.Data{"host.id": h.ID, "job.id": job.ID, "app.id": appID, "release.id": releaseID, "type": jobType})
 
 			if appID == "" || releaseID == "" {
@@ -607,7 +607,6 @@ func (f *Formation) rectify() {
 
 func (f *Formation) add(n int, name string, hostID string) {
 	g := grohl.NewContext(grohl.Data{"fn": "add", "app.id": f.AppID, "release.id": f.Release.ID})
-
 	for i := 0; i < n; i++ {
 		job, err := f.start(name, hostID)
 		if err != nil {
@@ -638,10 +637,7 @@ func (f *Formation) restart(stoppedJob *Job) error {
 }
 
 func (f *Formation) start(typ string, hostID string) (job *Job, err error) {
-	config, err := f.jobConfig(typ)
-	if err != nil {
-		return nil, err
-	}
+	config := f.jobConfig(typ)
 	config.ID = cluster.RandomJobID("")
 
 	hosts, err := f.c.ListHosts()
@@ -689,11 +685,11 @@ func (f *Formation) start(typ string, hostID string) (job *Job, err error) {
 }
 
 func (f *Formation) jobType(job *host.Job) string {
-	if job.Attributes["flynn-controller.app"] != f.AppID ||
-		job.Attributes["flynn-controller.release"] != f.Release.ID {
+	if job.Metadata["flynn-controller.app"] != f.AppID ||
+		job.Metadata["flynn-controller.release"] != f.Release.ID {
 		return ""
 	}
-	return job.Attributes["flynn-controller.type"]
+	return job.Metadata["flynn-controller.type"]
 }
 
 func (f *Formation) remove(n int, name string, hostID string) {
@@ -716,7 +712,7 @@ func (f *Formation) remove(n int, name string, hostID string) {
 	}
 }
 
-func (f *Formation) jobConfig(name string) (*host.Job, error) {
+func (f *Formation) jobConfig(name string) *host.Job {
 	return utils.JobConfig(&ct.ExpandedFormation{
 		App:      &ct.App{ID: f.AppID},
 		Release:  f.Release,

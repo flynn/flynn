@@ -197,28 +197,16 @@ func (c *Client) hijack(method, path string, success chan struct{}, in io.Reader
 		<-success
 	}
 	rwc, br := clientconn.Hijack()
-	errs := make(chan error, 2)
 	go func() {
-		_, err := io.Copy(out, br)
-		errs <- err
-	}()
-	go func() {
-		var err error
 		if in != nil {
 			_, err = io.Copy(rwc, in)
 		}
 		rwc.(interface {
 			CloseWrite() error
 		}).CloseWrite()
-		errs <- err
 	}()
-	var connErr error
-	for i := 0; i < cap(errs); i++ {
-		if err := <-errs; connErr == nil {
-			connErr = err
-		}
-	}
-	return connErr
+	_, err = io.Copy(out, br)
+	return err
 }
 
 const version = "1.6"

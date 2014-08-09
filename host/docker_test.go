@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"io"
 	"strings"
 	"testing"
 
@@ -55,14 +54,14 @@ func (c *fakeDockerClient) InspectContainer(id string) (*docker.Container, error
 	if id == "1" {
 		return &docker.Container{State: docker.State{ExitCode: 1}}, nil
 	}
-	container := &docker.Container{Volumes: make(map[string]string)}
+	container := &docker.Container{Volumes: make(map[string]string), NetworkSettings: &docker.NetworkSettings{}}
 	for v := range c.created.Volumes {
 		container.Volumes[v] = "/var/lib/docker/vfs/dir/" + strings.Replace(v, "/", "-", -1)
 	}
 	return container, nil
 }
 
-func (c *fakeDockerClient) PullImage(opts docker.PullImageOptions, w io.Writer) error {
+func (c *fakeDockerClient) PullImage(opts docker.PullImageOptions) error {
 	if c.pullErr != nil {
 		return c.pullErr
 	}
@@ -86,7 +85,7 @@ func (c *fakeDockerClient) AttachToContainer(docker.AttachToContainerOptions) er
 	return nil
 }
 
-func (c *fakeDockerClient) KillContainer(string) error {
+func (c *fakeDockerClient) KillContainer(docker.KillContainerOptions) error {
 	return nil
 }
 
@@ -100,12 +99,18 @@ func testDockerRun(job *host.Job, t *testing.T) (*State, *fakeDockerClient) {
 }
 
 func testDockerRunWithOpts(job *host.Job, bindAddr string, client *fakeDockerClient, t *testing.T) *State {
+	if job.Artifact.URI == "" {
+		job.Artifact = host.Artifact{Type: "docker", URI: "https://registry.hub.docker.com/test/foo"}
+	}
 	if client == nil {
 		client = &fakeDockerClient{}
 	}
-	state := dockerRunWithOpts(job, bindAddr, client)
 
-	if client.created != job.Config {
+	state, err := dockerRunWithOpts(job, bindAddr, client)
+	if err != nil {
+		t.Errorf("run error: %s", err)
+	}
+	if client.created == nil {
 		t.Error("job not created")
 	}
 	if !client.started {
@@ -119,51 +124,53 @@ func testDockerRunWithOpts(job *host.Job, bindAddr string, client *fakeDockerCli
 	return state
 }
 
-func testProcessWithError(job *host.Job, client *fakeDockerClient, err error, t *testing.T) *State {
-	state := dockerRunWithOpts(job, "", client)
-
-	sjob := state.GetJob(job.ID)
-	if sjob.Status != host.StatusFailed {
-		t.Errorf("expected status failed, got %s", sjob.Status)
+func testProcessWithError(job *host.Job, client *fakeDockerClient, expected error, t *testing.T) {
+	if job.Artifact.URI == "" {
+		job.Artifact = host.Artifact{Type: "docker", URI: "https://registry.hub.docker.com/test/foo"}
 	}
-	if *sjob.Error != err.Error() {
-		t.Error("error not saved")
+	_, err := dockerRunWithOpts(job, "", client)
+	if err != expected {
+		t.Errorf("expected %s, got %s", expected, err)
 	}
-	return state
 }
 
-func dockerRunWithOpts(job *host.Job, bindAddr string, client *fakeDockerClient) *State {
+func dockerRunWithOpts(job *host.Job, bindAddr string, client *fakeDockerClient) (*State, error) {
 	state := NewState()
-	(&DockerBackend{
+	err := (&DockerBackend{
 		bindAddr: bindAddr,
 		docker:   client,
 		state:    state,
-		ports:    ports.NewAllocator(500, 550),
+		ports:    map[string]*ports.Allocator{"tcp": ports.NewAllocator(500, 550)},
 	}).Run(job)
-	return state
+	return state, err
 }
 
 func TestProcessJob(t *testing.T) {
-	testDockerRun(&host.Job{ID: "a", Config: &docker.Config{}}, t)
+	testDockerRun(&host.Job{ID: "a"}, t)
 }
 
 func TestProcessJobWithImplicitPorts(t *testing.T) {
-	job := &host.Job{TCPPorts: 2, ID: "a", Config: &docker.Config{}}
+	job := &host.Job{
+		ID: "a",
+		Config: host.ContainerConfig{
+			Ports: []host.Port{{Proto: "tcp"}, {Proto: "tcp"}},
+		},
+	}
 	_, client := testDockerRun(job, t)
 
-	if len(job.Config.Env) == 0 || !sliceHasString(job.Config.Env, "PORT=500") {
+	if len(client.created.Env) == 0 || !sliceHasString(client.created.Env, "PORT=500") {
 		t.Fatal("PORT env not set")
 	}
-	if !sliceHasString(job.Config.Env, "PORT_0=500") {
+	if !sliceHasString(client.created.Env, "PORT_0=500") {
 		t.Error("PORT_0 env not set")
 	}
-	if !sliceHasString(job.Config.Env, "PORT_1=501") {
+	if !sliceHasString(client.created.Env, "PORT_1=501") {
 		t.Error("PORT_1 env not set")
 	}
-	if _, ok := job.Config.ExposedPorts["500/tcp"]; !ok {
+	if _, ok := client.created.ExposedPorts["500/tcp"]; !ok {
 		t.Error("exposed port 500 not set")
 	}
-	if _, ok := job.Config.ExposedPorts["501/tcp"]; !ok {
+	if _, ok := client.created.ExposedPorts["501/tcp"]; !ok {
 		t.Error("exposed port 501 not set")
 	}
 	if b := client.hostConf.PortBindings["500/tcp"]; len(b) == 0 || b[0].HostPort != "500" {
@@ -175,7 +182,12 @@ func TestProcessJobWithImplicitPorts(t *testing.T) {
 }
 
 func TestProcessWithImplicitPortsAndIP(t *testing.T) {
-	job := &host.Job{ID: "a", TCPPorts: 2, Config: &docker.Config{}}
+	job := &host.Job{
+		ID: "a",
+		Config: host.ContainerConfig{
+			Ports: []host.Port{{Proto: "tcp"}, {Proto: "tcp"}},
+		},
+	}
 	client := &fakeDockerClient{}
 	testDockerRunWithOpts(job, "127.0.42.1", client, t)
 
@@ -185,24 +197,6 @@ func TestProcessWithImplicitPortsAndIP(t *testing.T) {
 	}
 	if len(b) == 0 || b[0].HostPort != "500" {
 		t.Error("port 8080 binding not set")
-	}
-}
-
-func TestProcessJobWithExplicitPorts(t *testing.T) {
-	hostConfig := &docker.HostConfig{
-		PortBindings: make(map[string][]docker.PortBinding, 2),
-	}
-	hostConfig.PortBindings["80/tcp"] = []docker.PortBinding{{HostPort: "8080"}}
-	hostConfig.PortBindings["443/tcp"] = []docker.PortBinding{{HostPort: "8081"}}
-
-	job := &host.Job{ID: "a", Config: &docker.Config{}, HostConfig: hostConfig}
-	_, client := testDockerRun(job, t)
-
-	if b := client.hostConf.PortBindings["80/tcp"]; len(b) == 0 || b[0].HostPort != "8080" {
-		t.Error("port 8080 binding not set")
-	}
-	if b := client.hostConf.PortBindings["443/tcp"]; len(b) == 0 || b[0].HostPort != "8081" {
-		t.Error("port 8081 binding not set")
 	}
 }
 
@@ -216,7 +210,7 @@ func sliceHasString(slice []string, str string) bool {
 }
 
 func TestProcessWithPull(t *testing.T) {
-	job := &host.Job{ID: "a", Config: &docker.Config{Image: "test/foo"}}
+	job := &host.Job{ID: "a"}
 	client := &fakeDockerClient{createErr: docker.ErrNoSuchImage}
 	testDockerRunWithOpts(job, "", client, t)
 
@@ -226,21 +220,21 @@ func TestProcessWithPull(t *testing.T) {
 }
 
 func TestProcessWithCreateFailure(t *testing.T) {
-	job := &host.Job{ID: "a", Config: &docker.Config{}}
+	job := &host.Job{ID: "a"}
 	err := errors.New("undefined failure")
 	client := &fakeDockerClient{createErr: err}
 	testProcessWithError(job, client, err, t)
 }
 
 func TestProcessWithPullFailure(t *testing.T) {
-	job := &host.Job{ID: "a", Config: &docker.Config{}}
+	job := &host.Job{ID: "a"}
 	err := errors.New("undefined failure")
 	client := &fakeDockerClient{createErr: docker.ErrNoSuchImage, pullErr: err}
 	testProcessWithError(job, client, err, t)
 }
 
 func TestProcessWithStartFailure(t *testing.T) {
-	job := &host.Job{ID: "a", Config: &docker.Config{}}
+	job := &host.Job{ID: "a"}
 	err := errors.New("undefined failure")
 	client := &fakeDockerClient{startErr: err}
 	testProcessWithError(job, client, err, t)
@@ -289,7 +283,7 @@ func TestStreamEvents(t *testing.T) {
 		(&DockerBackend{
 			docker: &fakeDockerClient{events: events},
 			state:  state,
-			ports:  ports.NewAllocator(500, 550),
+			ports:  map[string]*ports.Allocator{"tcp": ports.NewAllocator(500, 550)},
 		}).handleEvents()
 		close(done)
 	}()
@@ -302,7 +296,7 @@ func TestStreamEvents(t *testing.T) {
 	if job.Status != host.StatusCrashed {
 		t.Error("incorrect status")
 	}
-	if job.ExitCode != 1 {
-		t.Error("incorrect exit code")
+	if job.ExitStatus != 1 {
+		t.Error("incorrect exit status")
 	}
 }

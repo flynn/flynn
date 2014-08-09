@@ -5,35 +5,33 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
+	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/heroku/hk/term"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/pkg/demultiplex"
+	"github.com/flynn/flynn/pkg/cluster"
 )
 
-var (
-	runDetached bool
-	runRelease  string
-)
+func runRun(argv []string, client *controller.Client) error {
+	usage := `usage: flynn run [-d] [-r <release>] <command> [<argument>...]
 
-var cmdRun = &Command{
-	Run:   runRun,
-	Usage: "run [-d] [-r <release>] <command> [<argument>...]",
-	Short: "run a job",
-	Long:  `Run a job`,
-}
+Run a job.
 
-func init() {
-	cmdRun.Flag.BoolVarP(&runDetached, "detached", "d", false, "run job without connecting io streams")
-	cmdRun.Flag.StringVarP(&runRelease, "release", "r", "", "id of release to run (defaults to current app release)")
-}
+Options:
+   -d, --detached  run job without connecting io streams
+   -r <release>    id of release to run (defaults to current app release)
+`
 
-func runRun(cmd *Command, args []string, client *controller.Client) error {
-	if len(args) == 0 {
-		cmd.printUsage(true)
-	}
+	args, _ := docopt.Parse(usage, argv, true, "", false)
+
+	runDetached := args.Bool["--detached"]
+	runRelease := args.String["-r"]
+
 	if runRelease == "" {
 		release, err := client.GetAppRelease(mustApp())
 		if err == controller.ErrNotFound {
@@ -45,7 +43,7 @@ func runRun(cmd *Command, args []string, client *controller.Client) error {
 		runRelease = release.ID
 	}
 	req := &ct.NewJob{
-		Cmd:       args,
+		Cmd:       args.All["<argument>"].([]string),
 		TTY:       term.IsTerminal(os.Stdin) && term.IsTerminal(os.Stdout) && !runDetached,
 		ReleaseID: runRelease,
 	}
@@ -81,23 +79,50 @@ func runRun(cmd *Command, args []string, client *controller.Client) error {
 		return err
 	}
 	defer rwc.Close()
+	attachClient := cluster.NewAttachClient(rwc)
 
 	if req.TTY {
 		if err := term.MakeRaw(os.Stdin); err != nil {
 			return err
 		}
 		defer term.Restore(os.Stdin)
+		go func() {
+			ch := make(chan os.Signal)
+			signal.Notify(ch, syscall.SIGWINCH)
+			<-ch
+			height, err := term.Lines()
+			if err != nil {
+				return
+			}
+			width, err := term.Cols()
+			if err != nil {
+				return
+			}
+			attachClient.ResizeTTY(uint16(height), uint16(width))
+			attachClient.Signal(int(syscall.SIGWINCH))
+		}()
 	}
 
 	go func() {
-		io.Copy(rwc, os.Stdin)
-		rwc.CloseWrite()
+		ch := make(chan os.Signal)
+		signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+		sig := <-ch
+		attachClient.Signal(int(sig.(syscall.Signal)))
+		time.Sleep(10 * time.Second)
+		attachClient.Signal(int(syscall.SIGKILL))
 	}()
-	if req.TTY {
-		_, err = io.Copy(os.Stdout, rwc)
-	} else {
-		err = demultiplex.Copy(os.Stdout, os.Stderr, rwc)
+	go func() {
+		io.Copy(attachClient, os.Stdin)
+		attachClient.CloseWrite()
+	}()
+	exitStatus, err := attachClient.Receive(os.Stdout, os.Stderr)
+	if err != nil {
+		return err
 	}
-	// TODO: get exit code and use it
-	return err
+	if req.TTY {
+		term.Restore(os.Stdin)
+	}
+	os.Exit(exitStatus)
+
+	panic("unreached")
 }

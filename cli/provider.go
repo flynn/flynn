@@ -1,20 +1,16 @@
 package main
 
 import (
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 )
 
-var cmdProviders = &Command{
-	Run:   runProviders,
-	Usage: "providers",
-	Short: "list resource providers",
-	Long:  "Command providers lists resource providers that have been associated with the controller",
-}
+func runProvider(argv []string, client *controller.Client) error {
+	usage := `usage: flynn provider
 
-func runProviders(cmd *Command, args []string, client *controller.Client) error {
-	if len(args) != 0 {
-		cmd.printUsage(true)
-	}
+Lists resource providers that have been associated with the controller.
+	`
+	docopt.Parse(usage, argv, true, "", false)
 
 	providers, err := client.ProviderList()
 	if err != nil {

@@ -2,7 +2,6 @@ package cluster
 
 import (
 	"bytes"
-	"crypto/rand"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.crypto/ssh"
 	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 func NewVMManager(bridge *Bridge) *VMManager {
@@ -123,8 +123,7 @@ func (v *vm) cleanup() {
 func (v *vm) Start() error {
 	v.writeInterfaceConfig()
 
-	macRand := make([]byte, 3)
-	io.ReadFull(rand.Reader, macRand)
+	macRand := random.Bytes(3)
 	macaddr := fmt.Sprintf("52:54:00:%02x:%02x:%02x", macRand[0], macRand[1], macRand[2])
 
 	v.Args = append(v.Args,

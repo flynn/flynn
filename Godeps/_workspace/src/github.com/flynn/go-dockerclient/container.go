@@ -135,14 +135,25 @@ func (c *Client) RestartContainer(id string, timeout uint) error {
 	return nil
 }
 
+// KillContainerOptions represents the set of options that can be used in a
+// call to KillContainer.
+type KillContainerOptions struct {
+	// The ID of the container.
+	ID string `qs:"-"`
+
+	// The signal to send to the container. When omitted, Docker server
+	// will assume SIGKILL.
+	Signal int
+}
+
 // KillContainer kills a container, returning an error in case of failure.
 //
 // See http://goo.gl/DPbbBy for more details.
-func (c *Client) KillContainer(id string) error {
-	path := "/containers/" + id + "/kill"
+func (c *Client) KillContainer(opts KillContainerOptions) error {
+	path := "/containers/" + opts.ID + "/kill" + "?" + queryString(opts)
 	_, status, err := c.do("POST", path, nil)
 	if status == http.StatusNotFound {
-		return &NoSuchContainer{ID: id}
+		return &NoSuchContainer{ID: opts.ID}
 	}
 	if err != nil {
 		return err

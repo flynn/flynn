@@ -16,7 +16,7 @@ import (
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/attempt"
-	"github.com/flynn/flynn/test/util"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 type BootConfig struct {
@@ -165,7 +165,7 @@ func (c *Cluster) setup() error {
 	}
 	if c.bridge == nil {
 		var err error
-		name := "flynnbr." + util.RandomString(5)
+		name := "flynnbr." + random.String(5)
 		c.logf("creating network bridge %s\n", name)
 		c.bridge, err = createBridge(name, c.bc.Network, c.bc.NatIface)
 		if err != nil {
@@ -251,8 +251,8 @@ type controllerCert struct {
 
 func (c *Cluster) bootstrapFlynn() error {
 	inst := c.instances[0]
-	c.ControllerDomain = fmt.Sprintf("flynn-%s.local", util.RandomString(16))
-	c.ControllerKey = util.RandomString(16)
+	c.ControllerDomain = fmt.Sprintf("flynn-%s.local", random.String(16))
+	c.ControllerKey = random.String(16)
 	rd, wr := io.Pipe()
 	var cmdErr error
 	go func() {

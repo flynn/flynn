@@ -1,42 +1,62 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
-	"strings"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-var cmdReleaseAddDocker = &Command{
-	Run:   runReleaseAddDocker,
-	Usage: "release-add-docker <image> <tag>",
-	Short: "add a docker image release",
-	Long:  "Add a release referencing a Docker image",
-}
+func runRelease(argv []string, client *controller.Client) error {
+	usage := `usage: flynn release add [-t <type>] <uri>
 
-func runReleaseAddDocker(cmd *Command, args []string, client *controller.Client) error {
-	if len(args) != 2 {
-		cmd.printUsage(true)
+Manage app releases.
+
+Options:
+   -t <type>          type of the release. Currently only 'docker' is supported. [default: docker]
+   -f, --file <file>  add a release referencing a Docker image
+Commands:
+   add   add a new release
+	`
+	args, _ := docopt.Parse(usage, argv, true, "", false)
+
+	if args.Bool["add"] {
+		if args.String["-t"] == "docker" {
+			return runReleaseAddDocker(args, client)
+		} else {
+			return fmt.Errorf("Release type %s not supported.", args.String["-t"])
+		}
 	}
 
-	image := args[0]
-	tag := args[1]
+	log.Fatal("Toplevel command not implemented.")
+	return nil
+}
 
-	if !strings.Contains(image, ".") {
-		image = "/" + image
+func runReleaseAddDocker(args *docopt.Args, client *controller.Client) error {
+	release := &ct.Release{}
+	if args.String["--file"] != "" {
+		data, err := ioutil.ReadFile(args.String["--file"])
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(data, release); err != nil {
+			return err
+		}
 	}
 
 	artifact := &ct.Artifact{
 		Type: "docker",
-		URI:  fmt.Sprintf("docker://%s?tag=%s", image, tag),
+		URI:  args.String["<uri>"],
 	}
 	if err := client.CreateArtifact(artifact); err != nil {
 		return err
 	}
 
-	release := &ct.Release{ArtifactID: artifact.ID}
+	release.ArtifactID = artifact.ID
 	if err := client.CreateRelease(release); err != nil {
 		return err
 	}

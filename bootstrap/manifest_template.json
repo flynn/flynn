@@ -1,0 +1,222 @@
+[
+  {
+    "id": "postgres",
+    "action": "run-app",
+    "release": {
+      "processes": {
+        "postgres": {
+          "ports": [{"proto": "tcp"}],
+          "data": true,
+          "cmd": ["postgres"]
+        },
+        "web": {
+          "ports": [{"proto": "tcp"}],
+          "cmd": ["api"]
+        }
+      }
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "https://registry.hub.docker.com/flynn/postgresql?id=$image_id[postgresql]"
+    },
+    "processes": {
+      "postgres": 1,
+      "web": 1
+    }
+  },
+  {
+    "id": "controller-key",
+    "action": "gen-random",
+    "controller_key": true,
+    "data": "{{ getenv \"CONTROLLER_KEY\" }}"
+  },
+  {
+    "id": "postgres-wait",
+    "action": "wait",
+    "url": "discoverd+http://pg-api/ping"
+  },
+  {
+    "id": "controller",
+    "action": "run-app",
+    "release": {
+      "env": { "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}" },
+      "processes": {
+        "web": {
+          "ports": [{"proto": "tcp"}],
+          "cmd": ["controller"]
+        },
+        "scheduler": {
+          "cmd": ["scheduler"]
+        }
+      }
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "https://registry.hub.docker.com/flynn/controller?id=$image_id[controller]"
+    },
+    "processes": {
+      "web": 1
+    },
+    "resources": [{"name":"postgres", "url":"discoverd+http://pg-api/databases"}]
+  },
+  {
+    "id": "controller-wait",
+    "action": "wait",
+    "url": "discoverd+http://flynn-controller",
+    "status": 401
+  },
+  {
+    "id": "controller-inception",
+    "action": "add-app",
+    "from_step": "controller",
+    "app": {
+      "name": "controller"
+    }
+  },
+  {
+    "id": "postgres-app",
+    "action": "add-app",
+    "from_step": "postgres",
+    "app": {
+      "name": "postgres",
+      "protected": true
+    }
+  },
+  {
+    "id": "scheduler-scale",
+    "action": "scale-app",
+    "app_step": "controller-inception",
+    "processes": {
+      "scheduler": 1,
+      "web": 1
+    }
+  },
+  {
+    "id": "scheduler",
+    "action": "run-app",
+    "app_step": "controller-inception",
+    "processes": {
+      "scheduler": 1
+    }
+  },
+  {
+    "id": "blobstore",
+    "action": "deploy-app",
+    "app": {
+      "name": "blobstore",
+      "protected": true
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "https://registry.hub.docker.com/flynn/blobstore?id=$image_id[blobstore]"
+    },
+    "release": {
+      "processes": {
+        "web": {
+          "ports": [{"proto": "tcp"}]
+        }
+      }
+    },
+    "processes": {
+      "web": 1
+    },
+    "resources": [{"name":"postgres", "url":"discoverd+http://pg-api/databases"}]
+  },
+  {
+    "id": "router",
+    "action": "deploy-app",
+    "app": {
+      "name": "router",
+      "protected": true
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "https://registry.hub.docker.com/flynn/router?id=$image_id[router]"
+    },
+    "release": {
+      "processes": {
+        "app": {
+          "ports": [
+            {"proto": "tcp"},
+            {"proto": "tcp", "port": 80},
+            {"proto": "tcp", "port": 443},
+            {"proto": "tcp", "port": 2222}
+          ],
+          "cmd": ["-httpaddr", ":80", "-httpsaddr", ":443"]
+        }
+      }
+    },
+    "processes": {
+      "app": 1
+    }
+  },
+  {
+    "id": "gitreceive-key",
+    "action": "gen-ssh-key"
+  },
+  {
+    "id": "gitreceive",
+    "action": "deploy-app",
+    "app": {
+      "name": "gitreceive",
+      "protected": true
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "https://registry.hub.docker.com/flynn/receiver?id=$image_id[receiver]"
+    },
+    "release": {
+      "processes": {
+        "app": {
+          "ports": [{"proto": "tcp"}],
+          "env": {
+            "SSH_PRIVATE_KEYS": "{{ (index .StepData \"gitreceive-key\").PrivateKeys }}",
+            "CONTROLLER_AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
+            "SLUGBUILDER_IMAGE_ID": "$image_id[slugbuilder]",
+            "SLUGRUNNER_IMAGE_ID": "$image_id[slugrunner]"
+          }
+        }
+      }
+    },
+    "processes": {
+      "app": 1
+    }
+  },
+  {
+    "id": "controller-cert",
+    "action": "gen-tls-cert",
+    "hosts": ["{{ or (getenv \"CONTROLLER_DOMAIN\") \"localhost\" }}", "127.0.0.1"]
+  },
+  {
+    "id": "router-wait",
+    "action": "wait",
+    "url": "discoverd+http://strowger-api/",
+    "status": 404
+  },
+  {
+    "id": "gitreceive-route",
+    "action": "add-route",
+    "app_step": "gitreceive",
+    "type": "tcp",
+    "config": {
+      "service": "gitreceive",
+      "port": 2222
+    }
+  },
+  {
+    "id": "controller-route",
+    "action": "add-route",
+    "app_step": "controller-inception",
+    "cert_step": "controller-cert",
+    "type": "http",
+    "config": {
+      "service": "flynn-controller",
+      "domain": "{{ or (getenv \"CONTROLLER_DOMAIN\") \"localhost\" }}"
+    }
+  },
+  {
+    "id": "log-complete",
+    "action": "log",
+    "output": "Flynn bootstrapping complete. Install flynn-cli and paste the line below into a new terminal window:\n\nflynn server-add -g localhost:2201 -p {{ (index .StepData \"controller-cert\").Pin }} default https://{{ or (getenv \"CONTROLLER_DOMAIN\") \"localhost\" }}:8081 {{ (index .StepData \"controller-key\").Data }}"
+  }
+]

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 type AddAppAction struct {
@@ -65,7 +65,7 @@ func (a *AddAppAction) Run(s *State) error {
 		}
 
 		resource := &ct.Resource{
-			ID:         utils.UUID(),
+			ID:         random.UUID(),
 			ProviderID: p.ID,
 			ExternalID: data.Resources[i].ID,
 			Env:        data.Resources[i].Env,

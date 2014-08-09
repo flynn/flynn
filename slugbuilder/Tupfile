@@ -1,2 +1,2 @@
 include_rules
-: |> !docker |>
+: $(ROOT)/util/cedarish/<docker> |> !docker |> $(ROOT)/<layer1>

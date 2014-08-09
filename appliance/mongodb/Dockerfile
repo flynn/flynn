@@ -1,4 +1,4 @@
-FROM ubuntu:trusty
+FROM ubuntu-debootstrap:14.04
 
 ENV DEBIAN_FRONTEND noninteractive
 
