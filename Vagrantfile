@@ -24,12 +24,19 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
     # Fix for https://github.com/flynn/flynn/issues/13
     echo 3600 > /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_close_wait
+
+    # For controller tests
+    apt-get install -y postgresql postgresql-contrib
 SCRIPT
 
   config.vm.provision "shell", privileged: false, inline: <<SCRIPT
     grep '^export GOPATH' ~/.bashrc || echo export GOPATH=~/go >> ~/.bashrc
     grep '^export PATH' ~/.bashrc || echo export PATH=\$PATH:~/go/bin:/vagrant/script >> ~/.bashrc
     GOPATH=~/go go get github.com/tools/godep
+
+    # For controller tests
+    sudo -u postgres createuser --superuser vagrant
+    grep '^export PGHOST' ~/.bashrc || echo export PGHOST=/var/run/postgresql >> ~/.bashrc
 
     mkdir -p ~/go/src/github.com/flynn
     ln -s /vagrant ~/go/src/github.com/flynn/flynn
