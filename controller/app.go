@@ -7,6 +7,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
+	"github.com/flynn/flynn/controller/name"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	strowgerc "github.com/flynn/flynn/router/client"
@@ -29,9 +30,13 @@ var appNamePattern = regexp.MustCompile(`^[a-z\d]+(-[a-z\d]+)*$`)
 func (r *AppRepo) Add(data interface{}) error {
 	app := data.(*ct.App)
 	if app.Name == "" {
-		return ct.ValidationError{Field: "name", Message: "must not be blank"}
+		var nameID uint32
+		if err := r.db.QueryRow("SELECT nextval('name_ids')").Scan(&nameID); err != nil {
+			return err
+		}
+		app.Name = name.Get(nameID)
 	}
-	if len(app.Name) > 30 || !appNamePattern.MatchString(app.Name) {
+	if len(app.Name) > 100 || !appNamePattern.MatchString(app.Name) {
 		return ct.ValidationError{Field: "name", Message: "is invalid"}
 	}
 	if app.ID == "" {

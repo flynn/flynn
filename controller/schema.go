@@ -148,6 +148,7 @@ $$ LANGUAGE plpgsql`,
     PRIMARY KEY (job_id, host_id),
     FOREIGN KEY (app_id, release_id) REFERENCES formations (app_id, release_id)
 )`,
+		`CREATE SEQUENCE name_ids MAXVALUE 4294967295`,
 	)
 	return m.Migrate(db)
 }
