@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"path"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/flynn/router/types"
@@ -122,31 +123,54 @@ func (s *etcdDataStore) path(id string) string {
 }
 
 func (s *etcdDataStore) Sync(h SyncHandler, started chan<- error) {
+	keys := make(map[string]uint64)
 	nextIndex := uint64(1)
+
+fullSync:
 	data, err := s.etcd.Get(s.prefix, false, true)
 	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
-		// key not found, ignore
+		// key not found, delete existing keys and then watch
+		for id := range keys {
+			delete(keys, id)
+			if err := h.Remove(id); err != nil {
+				log.Printf("Error while processing delete from etcd fullsync: %s, %s", id, err)
+			}
+		}
 		goto watch
 	}
+
+syncErr:
 	if err != nil {
-		started <- err
-		return
-	}
-	nextIndex = data.EtcdIndex + 1
-	for _, node := range data.Node.Nodes {
-		route := &strowger.Route{}
-		if err := json.Unmarshal([]byte(node.Value), route); err != nil {
+		if started != nil {
 			started <- err
 			return
 		}
-		if err := h.Set(route); err != nil {
-			started <- err
-			return
+		log.Printf("Error while doing fullsync from etcd: %s", err)
+		time.Sleep(time.Second)
+		goto fullSync
+	}
+
+	nextIndex = data.EtcdIndex + 1
+	for _, node := range data.Node.Nodes {
+		key := path.Base(node.Key)
+		if modified, ok := keys[key]; ok && modified >= node.ModifiedIndex {
+			continue
+		}
+		keys[key] = node.ModifiedIndex
+		route := &strowger.Route{}
+		if err = json.Unmarshal([]byte(node.Value), route); err != nil {
+			goto syncErr
+		}
+		if err = h.Set(route); err != nil {
+			goto syncErr
 		}
 	}
 
 watch:
-	started <- nil
+	if started != nil {
+		started <- nil
+		started = nil
+	}
 
 	for {
 		stream := make(chan *etcd.Response)
@@ -159,8 +183,10 @@ watch:
 			id := path.Base(res.Node.Key)
 			var err error
 			if res.Action == "delete" {
+				delete(keys, id)
 				err = h.Remove(id)
 			} else {
+				keys[id] = res.Node.ModifiedIndex
 				route := &strowger.Route{}
 				if err = json.Unmarshal([]byte(res.Node.Value), route); err != nil {
 					goto fail
@@ -177,7 +203,12 @@ watch:
 			return
 		default:
 		}
+		if e, ok := watchErr.(*etcd.EtcdError); ok && e.ErrorCode == 401 {
+			// event log has been pruned beyond our waitIndex, force fullSync
+			goto fullSync
+		}
 		log.Printf("Restarting etcd watch %s due to error: %s", s.prefix, watchErr)
+		// TODO: backoff here
 	}
 }
 
