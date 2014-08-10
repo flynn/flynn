@@ -131,7 +131,7 @@ func writeHostname(path, hostname string) error {
 		return err
 	}
 	defer f.Close()
-	pos, err := f.Seek(2, 0)
+	pos, err := f.Seek(0, os.SEEK_END)
 	if err != nil {
 		return err
 	}
