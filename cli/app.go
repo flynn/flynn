@@ -9,13 +9,21 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-func runCreate(argv []string, client *controller.Client) error {
-	usage := `usage: flynn create [<name>]
+func init() {
+	register("create", runCreate, `
+usage: flynn create [<name>]
 
 Create an application in Flynn.
-	`
-	args, _ := docopt.Parse(usage, argv, true, "", false)
+`)
 
+	register("apps", runApps, `
+usage: flynn apps
+
+List flynn apps.
+`)
+}
+
+func runCreate(args *docopt.Args, client *controller.Client) error {
 	app := &ct.App{}
 	app.Name = args.String["<name>"]
 
@@ -29,13 +37,7 @@ Create an application in Flynn.
 	return nil
 }
 
-func runApps(argv []string, client *controller.Client) error {
-	usage := `usage: flynn apps
-
-List flynn apps.
-	`
-	docopt.Parse(usage, argv, true, "", false)
-
+func runApps(args *docopt.Args, client *controller.Client) error {
 	apps, err := client.AppList()
 	if err != nil {
 		return err

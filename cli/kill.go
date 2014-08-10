@@ -7,13 +7,15 @@ import (
 	"github.com/flynn/flynn/controller/client"
 )
 
-func runKill(argv []string, client *controller.Client) error {
-	usage := `usage: flynn kill <job>
+func init() {
+	register("kill", runKill, `
+usage: flynn kill <job>
 
-Kill a job.`
-	args, _ := docopt.Parse(usage, argv, true, "", false)
+Kill a job.`)
+}
+
+func runKill(args *docopt.Args, client *controller.Client) error {
 	job := args.String["<job>"]
-
 	if err := client.DeleteJob(mustApp(), job); err != nil {
 		return err
 	}

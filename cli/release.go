@@ -11,8 +11,9 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-func runRelease(argv []string, client *controller.Client) error {
-	usage := `usage: flynn release add [-t <type>] <uri>
+func init() {
+	register("release", runRelease, `
+usage: flynn release add [-t <type>] <uri>
 
 Manage app releases.
 
@@ -21,9 +22,10 @@ Options:
    -f, --file <file>  add a release referencing a Docker image
 Commands:
    add   add a new release
-	`
-	args, _ := docopt.Parse(usage, argv, true, "", false)
+`)
+}
 
+func runRelease(args *docopt.Args, client *controller.Client) error {
 	if args.Bool["add"] {
 		if args.String["-t"] == "docker" {
 			return runReleaseAddDocker(args, client)
@@ -31,9 +33,7 @@ Commands:
 			return fmt.Errorf("Release type %s not supported.", args.String["-t"])
 		}
 	}
-
-	log.Fatal("Toplevel command not implemented.")
-	return nil
+	return fmt.Errorf("Top-level command not implemented.")
 }
 
 func runReleaseAddDocker(args *docopt.Args, client *controller.Client) error {
