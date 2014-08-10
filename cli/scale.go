@@ -11,9 +11,9 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-// takes args of the form "web=1", "worker=3", etc
-func runScale(argv []string, client *controller.Client) error {
-	usage := `usage: flynn scale [-r <release>] <type>=<qty>...
+func init() {
+	register("scale", runScale, `
+usage: flynn scale [-r <release>] <type>=<qty>...
 
 Scale changes the number of jobs for each process type in a release.
 
@@ -23,9 +23,11 @@ Options:
 Example:
 
   $ flynn scale web=2 worker=5
-`
-	args, _ := docopt.Parse(usage, argv, true, "", false)
+`)
+}
 
+// takes args of the form "web=1", "worker=3", etc
+func runScale(args *docopt.Args, client *controller.Client) error {
 	scaleRelease := args.String["--release"]
 
 	if scaleRelease == "" {
@@ -56,11 +58,11 @@ Example:
 	for _, arg := range args.All["<type>=<qty>"].([]string) {
 		i := strings.IndexRune(arg, '=')
 		if i < 0 {
-			fmt.Println(usage)
+			fmt.Println(commands["scale"].usage)
 		}
 		val, err := strconv.Atoi(arg[i+1:])
 		if err != nil {
-			fmt.Println(usage)
+			fmt.Println(commands["scale"].usage)
 		}
 		formation.Processes[arg[:i]] = val
 	}

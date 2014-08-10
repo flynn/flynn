@@ -12,10 +12,8 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-var envProc string
-
-func runEnv(argv []string, client *controller.Client) error {
-	usage := `usage: flynn env [-t <proc>]
+func init() {
+	register("env", runEnv, `usage: flynn env [-t <proc>]
        flynn env set [-t <proc>] <var>=<val>...
        flynn env unset [-t <proc>] <var>...
        flynn env get [-t <proc>] <var>
@@ -31,9 +29,12 @@ Commands:
    set    Sets value of one or more env variables.
    unset  Deletes one or more variables.
    get    Returns the value of variable.
-`
-	args, _ := docopt.Parse(usage, argv, true, "", false)
+`)
+}
 
+var envProc string
+
+func runEnv(args *docopt.Args, client *controller.Client) error {
 	envProc = args.String["--process-type"]
 
 	if args.Bool["set"] {

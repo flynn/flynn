@@ -8,13 +8,14 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-func runPs(argv []string, client *controller.Client) error {
-	usage := `usage: flynn ps
+func init() {
+	register("ps", runPs, `usage: flynn ps
 
 List flynn jobs.
-	`
-	docopt.Parse(usage, argv, true, "", false)
+`)
+}
 
+func runPs(args *docopt.Args, client *controller.Client) error {
 	jobs, err := client.JobList(mustApp())
 	if err != nil {
 		return err
