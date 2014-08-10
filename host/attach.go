@@ -179,6 +179,7 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 				w.WriteByte(host.AttachExit)
 				binary.Write(w, binary.BigEndian, uint32(exit))
 				w.Flush()
+				writeMtx.Unlock()
 				if exit == 0 {
 					err = nil
 				}
@@ -187,6 +188,7 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 			close(failed)
 			writeMtx.Lock()
 			writeError(err.Error())
+			writeMtx.Unlock()
 		}
 		if err != nil {
 			g.Log(grohl.Data{"at": "attach", "status": "error", "err": err.Error()})
