@@ -15,9 +15,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.network "forwarded_port", guest: 2222, host: 2201
 
   config.vm.provision "shell", privileged: false, inline: <<SCRIPT
-    sudo stop flynn-host || true
-    sudo rm /etc/init/flynn-host.conf || true
-
     grep '^export GOPATH' ~/.bashrc || echo export GOPATH=~/go >> ~/.bashrc
     grep '^export PATH' ~/.bashrc || echo export PATH=\$PATH:~/go/bin:/vagrant/script >> ~/.bashrc
     GOPATH=~/go go get github.com/tools/godep
