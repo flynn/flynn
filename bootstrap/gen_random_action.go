@@ -1,10 +1,6 @@
 package bootstrap
 
-import (
-	"crypto/rand"
-	"encoding/hex"
-	"io"
-)
+import "github.com/flynn/flynn/pkg/random"
 
 type GenRandomAction struct {
 	ID     string `json:"id"`
@@ -32,20 +28,11 @@ func (a *GenRandomAction) Run(s *State) error {
 	}
 	data := interpolate(s, a.Data)
 	if data == "" {
-		data = randomData(a.Length)
+		data = random.Hex(a.Length)
 	}
 	s.StepData[a.ID] = &RandomData{Data: data}
 	if a.ControllerKey {
 		s.SetControllerKey(data)
 	}
 	return nil
-}
-
-func randomData(n int) string {
-	data := make([]byte, n)
-	_, err := io.ReadFull(rand.Reader, data)
-	if err != nil {
-		panic(err)
-	}
-	return hex.EncodeToString(data)
 }

@@ -9,7 +9,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	"github.com/flynn/flynn/controller/name"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/pkg/random"
 	strowgerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
 )
@@ -40,7 +40,7 @@ func (r *AppRepo) Add(data interface{}) error {
 		return ct.ValidationError{Field: "name", Message: "is invalid"}
 	}
 	if app.ID == "" {
-		app.ID = utils.UUID()
+		app.ID = random.UUID()
 	}
 	var meta hstore.Hstore
 	if len(app.Meta) > 0 {

@@ -13,7 +13,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/networkdriver/ipallocator"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/netlink"
 	"github.com/flynn/flynn/pkg/iptables"
-	"github.com/flynn/flynn/test/util"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 type Bridge struct {
@@ -199,7 +199,7 @@ type TapManager struct {
 }
 
 func (t *TapManager) NewTap(uid, gid int) (*Tap, error) {
-	tap := &Tap{Name: "flynntap." + util.RandomString(5), bridge: t.bridge}
+	tap := &Tap{Name: "flynntap." + random.String(5), bridge: t.bridge}
 
 	if err := createTap(tap.Name, uid, gid); err != nil {
 		return nil, err

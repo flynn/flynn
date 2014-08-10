@@ -1,10 +1,7 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -13,6 +10,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/postgres"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 var serviceName = os.Getenv("FLYNN_POSTGRES")
@@ -54,15 +52,6 @@ func main() {
 	log.Fatal(http.ListenAndServe(addr, m))
 }
 
-func randomID() string {
-	id := make([]byte, 16)
-	_, err := io.ReadFull(rand.Reader, id)
-	if err != nil {
-		panic(err) // This shouldn't ever happen, right?
-	}
-	return hex.EncodeToString(id)
-}
-
 func waitForPostgres(name string) (string, string) {
 	set, err := discoverd.NewServiceSet(name)
 	if err != nil {
@@ -89,7 +78,7 @@ type resource struct {
 }
 
 func createDatabase(db *postgres.DB, r render.Render) {
-	username, password, database := randomID(), randomID(), randomID()
+	username, password, database := random.Hex(16), random.Hex(16), random.Hex(16)
 
 	if _, err := db.Exec(fmt.Sprintf(`CREATE USER "%s" WITH PASSWORD '%s'`, username, password)); err != nil {
 		log.Println(err)

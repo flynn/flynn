@@ -10,7 +10,7 @@ import (
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/flynn/flynn/pkg/attempt"
-	"github.com/flynn/flynn/test/util"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 func initApp(t *c.C, app string) string {
@@ -51,7 +51,7 @@ var Attempts = attempt.Strategy{
 }
 
 func (s *BasicSuite) TestBasic(t *c.C) {
-	name := util.RandomString(30)
+	name := random.String(30)
 	t.Assert(s.Flynn("create", name), Outputs, fmt.Sprintf("Created %s\n", name))
 
 	push := s.Git("push", "flynn", "master")
@@ -65,7 +65,7 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 
 	t.Assert(s.Flynn("scale", "web=3"), Succeeds)
 
-	newRoute := s.Flynn("route-add-http", util.RandomString(32)+".dev")
+	newRoute := s.Flynn("route-add-http", random.String(32)+".dev")
 	t.Assert(newRoute, Succeeds)
 
 	t.Assert(s.Flynn("routes"), OutputContains, strings.TrimSpace(newRoute.Output))

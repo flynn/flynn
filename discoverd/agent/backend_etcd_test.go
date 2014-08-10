@@ -1,23 +1,21 @@
 package agent
 
 import (
-	"math/rand"
 	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 func runEtcdServer(t *testing.T) (*etcd.Client, func()) {
 	killCh := make(chan struct{})
 	doneCh := make(chan struct{})
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	name := "etcd-test." + strconv.Itoa(r.Int())
+	name := "etcd-test." + strconv.Itoa(random.Math.Int())
 	dataDir := "/tmp/" + name
 	go func() {
 		cmd := exec.Command("etcd", "-name", name, "-data-dir", dataDir)
