@@ -412,8 +412,7 @@ func babySit(process *os.Process) int {
 	// orphaned zombies.
 	var wstatus syscall.WaitStatus
 	for {
-		var rusage syscall.Rusage
-		pid, err := syscall.Wait4(-1, &wstatus, 0, &rusage)
+		pid, err := syscall.Wait4(-1, &wstatus, 0, nil)
 		if err == nil && pid == process.Pid {
 			break
 		}
