@@ -11,7 +11,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	mathrand "math/rand"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -23,6 +22,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.crypto/nacl/secretbox"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/inconshreveable/go-vhost"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -554,12 +554,8 @@ type writeCloser interface {
 
 func shuffle(s []string) []string {
 	for i := len(s) - 1; i > 0; i-- {
-		j := mathrand.Intn(i + 1)
+		j := random.Math.Intn(i + 1)
 		s[i], s[j] = s[j], s[i]
 	}
 	return s
-}
-
-func init() {
-	mathrand.Seed(time.Now().UnixNano())
 }

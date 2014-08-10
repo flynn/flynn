@@ -10,7 +10,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -21,6 +20,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/inconshreveable/go-update"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kr/binarydist"
 	"github.com/flynn/flynn/controller/client"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 var cmdUpdate = &Command{
@@ -239,7 +239,7 @@ func (u *Updater) fetchBin() ([]byte, error) {
 
 // returns a random duration in [0,n).
 func randDuration(n time.Duration) time.Duration {
-	return time.Duration(rand.Int63n(int64(n)))
+	return time.Duration(random.Math.Int63n(int64(n)))
 }
 
 var ErrNoPatchAvailable = errors.New("no patch available")

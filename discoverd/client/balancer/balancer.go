@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"sync"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/wadey/cryptorand"
 	"github.com/flynn/flynn/discoverd/client"
 )
 
@@ -37,7 +38,7 @@ func (r *randomBalancer) Next() (*discoverd.Service, error) {
 // If source is nil, the default will be used.
 func Random(set discoverd.ServiceSet, source rand.Source) LoadBalancer {
 	if source == nil {
-		source = rand.NewSource(rand.Int63())
+		source = cryptorand.Source
 	}
 	return &randomBalancer{set: set, random: rand.New(source)}
 }

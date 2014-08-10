@@ -191,6 +191,10 @@
 			"Rev": "91868e10032390c992d419d10b17cc8bfdc35808"
 		},
 		{
+			"ImportPath": "github.com/wadey/cryptorand",
+			"Rev": "f71da62b90e6a6df720e69d4607dcfd10443c75a"
+		},
+		{
 			"ImportPath": "gopkg.in/check.v1",
 			"Rev": "871360013c92e1c715c2de6d06b54899468a8a2d"
 		},

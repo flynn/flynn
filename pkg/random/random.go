@@ -5,8 +5,13 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"io"
+	mathrand "math/rand"
 	"strings"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/wadey/cryptorand"
 )
+
+var Math = mathrand.New(cryptorand.Source)
 
 func String(n int) string {
 	return Hex(n/2 + 1)[:n]
