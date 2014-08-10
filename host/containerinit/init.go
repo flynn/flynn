@@ -24,7 +24,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path"
 	"path/filepath"
 	"strings"
@@ -421,9 +420,7 @@ func babySit(process *os.Process) int {
 	return wstatus.ExitStatus()
 }
 
-// Run as pid 1 in the typical Flynn usage: an app container that doesn't
-// need its own init process.  Running as pid 1 allows us to monitor the
-// container app and return its exit code.
+// Run as pid 1 and monitor the contained process to return its exit code.
 func containerInitApp(args *ContainerInitArgs) error {
 	init := newContainerInit(args)
 	if err := rpcplus.Register(init); err != nil {
@@ -529,124 +526,6 @@ func containerInitApp(args *ContainerInitArgs) error {
 	return nil
 }
 
-// Runs as pid 1 when starting a machine container that has its own init
-// process. Start the containerinit child, do some container setup, and then
-// exec the real init.
-func containerInitMachineParent(args *ContainerInitArgs) error {
-	// Create a pty slave to be used by the container for its console. The pty
-	// master will be owned by the containerinit child process.
-	ptyMaster, ptySlave, err := pty.Open()
-	if err != nil {
-		return err
-	}
-	defer ptyMaster.Close()
-	defer ptySlave.Close()
-
-	// Hook up /dev/console to the pty with a bind mount
-	if err := syscall.Mount(ptySlave.Name(), "/dev/console", "", syscall.MS_BIND, ""); err != nil {
-		return err
-	}
-
-	// Container setup
-	if err := setupCommon(args); err != nil {
-		return err
-	}
-
-	// Hook up stdin/stdout/stderr to the pty
-	fd := int(ptySlave.Fd())
-	if err := syscall.Dup2(fd, 0); err != nil {
-		return err
-	}
-	if err := syscall.Dup2(fd, 1); err != nil {
-		return err
-	}
-	if err := syscall.Dup2(fd, 2); err != nil {
-		return err
-	}
-
-	// Prepare to receive a signal from the child containerinit
-	sigchan := make(chan os.Signal, 1)
-	signal.Notify(sigchan, syscall.SIGUSR1)
-
-	// Prepare to start the long-running containerinit child via the
-	// containerinit "-child" option
-	cmdArgs := append([]string{"-child"}, os.Args[1:]...)
-	cmd := exec.Command(os.Args[0], cmdArgs...)
-
-	// Pass the pty master FD to the child containerinit so that it can access
-	// the parent's console
-	cmd.ExtraFiles = []*os.File{ptyMaster}
-
-	// Put child containerinit in its own session so that it doesn't get a
-	// signal when e.g. systemd does TIOCNOTTY
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-
-	// Set the child uid/gid credentials if needed.  Not sure if this
-	// really makes sense for a machine container, but if the user asked
-	// for it...
-	credential, err := getCredential(args)
-	if err != nil {
-		return err
-	}
-	cmd.SysProcAttr.Credential = credential
-
-	// Start the child
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-
-	// Wait for signal to continue from the child
-	<-sigchan
-	signal.Stop(sigchan)
-
-	// Exec the container's real init process
-	path, err := exec.LookPath(args.args[0])
-	if err != nil {
-		return err
-	}
-	return syscall.Exec(path, args.args, args.env)
-}
-
-// Long-running non-pid-1 containerinit for the machine container case.  Started
-// by containerInitMachineParent().
-func containerInitMachineChild(args *ContainerInitArgs) error {
-	init := newContainerInit(args)
-	if err := rpcplus.Register(init); err != nil {
-		return err
-	}
-	init.mtx.Lock()
-	defer init.mtx.Unlock()
-
-	var err error
-	init.process, err = os.FindProcess(1)
-	if err != nil {
-		return err
-	}
-
-	init.ptyMaster = os.NewFile(3, "ptyMaster")
-
-	go runRPCServer()
-
-	// Wait for client to tell us to start
-	init.mtx.Unlock() // Allow calls
-	<-init.resume
-	init.mtx.Lock()
-
-	// We're ready now.  Tell containerInitMachineParent() to exec the real init.
-	if err := init.process.Signal(syscall.SIGUSR1); err != nil {
-		return err
-	}
-
-	init.changeState(StateRunning, "", -1)
-
-	init.mtx.Unlock() // Allow calls
-
-	// Sleep forever while the servers run...
-	var block chan struct{}
-	<-block
-	return nil
-}
-
 // This code is run INSIDE the container and is responsible for setting
 // up the environment before running the actual process
 func Main() {
@@ -663,7 +542,6 @@ func Main() {
 	privileged := flag.Bool("privileged", false, "privileged mode")
 	tty := flag.Bool("tty", false, "use pseudo-tty")
 	openStdin := flag.Bool("stdin", false, "open stdin")
-	child := flag.Bool("child", false, "is child containerinit")
 	flag.Parse()
 
 	// Get env
@@ -687,23 +565,11 @@ func Main() {
 		privileged: *privileged,
 		tty:        *tty,
 		openStdin:  *openStdin,
-		child:      *child,
 		env:        env,
 		args:       flag.Args(),
 	}
 
-	if args.child {
-		// Machine container child
-		err = containerInitMachineChild(args)
-	} else if path.Base(args.args[0]) == "systemd" || args.args[0] == "/sbin/init" {
-		// Machine container parent
-		err = containerInitMachineParent(args)
-	} else {
-		// Typical flynn usage: app container
-		err = containerInitApp(args)
-	}
-
-	if err != nil {
+	if err := containerInitApp(args); err != nil {
 		log.Fatal(err)
 	}
 }
