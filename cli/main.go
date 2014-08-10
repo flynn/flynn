@@ -111,7 +111,7 @@ var commands = map[string]interface{}{
 }
 
 func runCommand(cmd string, args []string) (err error) {
-	argv := make([]string, 1+len(args))
+	argv := make([]string, 1, 1+len(args))
 	argv[0] = cmd
 	argv = append(argv, args...)
 
