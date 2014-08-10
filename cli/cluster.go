@@ -11,8 +11,9 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 )
 
-func runCluster(argv []string) error {
-	usage := `usage: flynn cluster
+func init() {
+	register("cluster", runCluster, `
+usage: flynn cluster
        flynn cluster add [-g <githost>] [-p <tlspin>] <cluster-name> <url> <key>
        flynn cluster remove <cluster-name>
 
@@ -27,9 +28,10 @@ Commands:
 
    add     adds a cluster to the ~/.flynnrc configuration file
    remove  removes a cluster from the ~/.flynnrc configuration file
-`
-	args, _ := docopt.Parse(usage, argv, true, "", false)
+`)
+}
 
+func runCluster(args *docopt.Args) error {
 	if args.Bool["add"] {
 		return runClusterAdd(args)
 	} else if args.Bool["remove"] {

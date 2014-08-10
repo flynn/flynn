@@ -14,8 +14,8 @@ import (
 	"github.com/flynn/flynn/controller/client"
 )
 
-func runKey(argv []string, client *controller.Client) error {
-	usage := `usage: flynn key
+func init() {
+	register("key", runKey, `usage: flynn key
        flynn key add [<public-key-file>]
        flynn key remove <fingerprint>
 
@@ -41,9 +41,10 @@ Examples:
 
    $ flynn key remove 5e:67:40:b6:79:db:56:47:cd:3a:a7:65:ab:ed:12:34
    Key 5e:67:40:b6:79:db… removed.
-`
-	args, _ := docopt.Parse(usage, argv, true, "", false)
+`)
+}
 
+func runKey(args *docopt.Args, client *controller.Client) error {
 	if args.Bool["add"] {
 		return runKeyAdd(args, client)
 	} else if args.Bool["remove"] {

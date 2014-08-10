@@ -14,8 +14,9 @@ import (
 	"github.com/flynn/flynn/router/types"
 )
 
-func runRoute(argv []string, client *controller.Client) error {
-	usage := `usage: flynn route
+func init() {
+	register("route", runRoute, `
+usage: flynn route
        flynn route add [-t <type>] [-s <service>] [-c <tls-cert> -k <tls-key>] [--sticky] <domain>
        flynn route remove <id>
 
@@ -32,9 +33,10 @@ Commands:
 
    add     adds a route to an app
    remove  removes a route
-`
-	args, _ := docopt.Parse(usage, argv, true, "", false)
+`)
+}
 
+func runRoute(args *docopt.Args, client *controller.Client) error {
 	if args.Bool["add"] {
 		if args.String["-t"] == "http" {
 			return runRouteAddHTTP(args, client)

@@ -9,16 +9,18 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 )
 
-func runLog(argv []string, client *controller.Client) error {
-	usage := `usage: flynn log [options] <job>
+func init() {
+	register("log", runLog, `
+usage: flynn log [options] <job>
 
 Stream log for a specific job.
 
 Options:
     -s, --split-stderr    send stderr lines to stderr
-	`
-	args, _ := docopt.Parse(usage, argv, true, "", false)
+`)
+}
 
+func runLog(args *docopt.Args, client *controller.Client) error {
 	rc, err := client.GetJobLog(mustApp(), args.String["<job>"])
 	if err != nil {
 		return err

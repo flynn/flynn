@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
@@ -8,22 +9,22 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-func runResource(argv []string, client *controller.Client) error {
-	usage := `usage: flynn resource add <provider>
+func init() {
+	register("resource", runResource, `
+usage: flynn resource add <provider>
 
 Manage resources for the app.
 
 Commands:
    add  provisions a new resource for the app using <provider>.
-	`
-	args, _ := docopt.Parse(usage, argv, true, "", false)
+`)
+}
 
+func runResource(args *docopt.Args, client *controller.Client) error {
 	if args.Bool["add"] {
 		return runResourceAdd(args, client)
 	}
-
-	log.Fatal("Toplevel command not implemented.")
-	return nil
+	return fmt.Errorf("Top-level command not implemented.")
 }
 
 func runResourceAdd(args *docopt.Args, client *controller.Client) error {

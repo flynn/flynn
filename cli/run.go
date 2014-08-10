@@ -17,18 +17,19 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 )
 
-func runRun(argv []string, client *controller.Client) error {
-	usage := `usage: flynn run [-d] [-r <release>] <command> [<argument>...]
+func init() {
+	register("run", runRun, `
+usage: flynn run [-d] [-r <release>] <command> [<argument>...]
 
 Run a job.
 
 Options:
    -d, --detached  run job without connecting io streams
    -r <release>    id of release to run (defaults to current app release)
-`
+`)
+}
 
-	args, _ := docopt.Parse(usage, argv, true, "", false)
-
+func runRun(args *docopt.Args, client *controller.Client) error {
 	runDetached := args.Bool["--detached"]
 	runRelease := args.String["-r"]
 

@@ -9,7 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"text/tabwriter"
+	"unicode"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/BurntSushi/toml"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
@@ -92,30 +94,38 @@ See 'flynn help <command>' for more information on a specific command.
 	}
 }
 
-var commands = map[string]interface{}{
-	"version":  runVersion,
-	"create":   runCreate,
-	"apps":     runApps,
-	"ps":       runPs,
-	"scale":    runScale,
-	"run":      runRun,
-	"log":      runLog,
-	"env":      runEnv,
-	"key":      runKey,
-	"kill":     runKill,
-	"cluster":  runCluster,
-	"route":    runRoute,
-	"resource": runResource,
-	"provider": runProvider,
-	"release":  runRelease,
+type command struct {
+	usage string
+	f     interface{}
 }
 
-func runCommand(cmd string, args []string) (err error) {
+var commands = make(map[string]command)
+
+func register(cmd string, f interface{}, usage string) {
+	switch f.(type) {
+	case func(*docopt.Args, *controller.Client) error, func(*docopt.Args) error, func() error, func():
+	default:
+		panic(fmt.Sprintf("invalid command function %s '%T'", cmd, f))
+	}
+	commands[cmd] = command{strings.TrimLeftFunc(usage, unicode.IsSpace), f}
+}
+
+func runCommand(name string, args []string) (err error) {
 	argv := make([]string, 1, 1+len(args))
-	argv[0] = cmd
+	argv[0] = name
 	argv = append(argv, args...)
 
-	if f, ok := commands[cmd].(func([]string, *controller.Client) error); ok {
+	cmd, ok := commands[name]
+	if !ok {
+		return fmt.Errorf("%s is not a flynn command. See 'flynn help'", cmd)
+	}
+	parsedArgs, err := docopt.Parse(cmd.usage, argv, true, "", false)
+	if err != nil {
+		return err
+	}
+
+	switch f := cmd.f.(type) {
+	case func(*docopt.Args, *controller.Client) error:
 		// create client and run command
 		var client *controller.Client
 		server, err := server()
@@ -135,12 +145,17 @@ func runCommand(cmd string, args []string) (err error) {
 			log.Fatal(err)
 		}
 
-		return f(argv, client)
-	} else if f, ok := commands[cmd].(func([]string) error); ok {
-		return f(argv)
+		return f(parsedArgs, client)
+	case func(*docopt.Args) error:
+		return f(parsedArgs)
+	case func() error:
+		return f()
+	case func():
+		f()
+		return nil
 	}
 
-	return fmt.Errorf("%s is not a flynn command. See 'flynn help'", cmd)
+	return fmt.Errorf("unexpected command type %T", cmd.f)
 }
 
 type Config struct {
