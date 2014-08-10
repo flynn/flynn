@@ -36,7 +36,6 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/user"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/netlink"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kr/pty"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/syndtr/gocapability/capability"
 	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/rpcplus/fdrpc"
 )
@@ -354,41 +353,6 @@ func getCredential(args *ContainerInitArgs) (*syscall.Credential, error) {
 	return &syscall.Credential{Uid: uint32(users[0].Uid), Gid: uint32(users[0].Gid)}, nil
 }
 
-func setupCapabilities(args *ContainerInitArgs) error {
-	if args.privileged {
-		return nil
-	}
-
-	drop := []capability.Cap{
-		capability.CAP_SETPCAP,
-		capability.CAP_SYS_MODULE,
-		capability.CAP_SYS_RAWIO,
-		capability.CAP_SYS_PACCT,
-		capability.CAP_SYS_ADMIN,
-		capability.CAP_SYS_NICE,
-		capability.CAP_SYS_RESOURCE,
-		capability.CAP_SYS_TIME,
-		capability.CAP_SYS_TTY_CONFIG,
-		capability.CAP_MKNOD,
-		capability.CAP_AUDIT_WRITE,
-		capability.CAP_AUDIT_CONTROL,
-		capability.CAP_MAC_OVERRIDE,
-		capability.CAP_MAC_ADMIN,
-	}
-
-	c, err := capability.NewPid(os.Getpid())
-	if err != nil {
-		return err
-	}
-
-	c.Unset(capability.CAPS|capability.BOUNDS, drop...)
-
-	if err := c.Apply(capability.CAPS | capability.BOUNDS); err != nil {
-		return err
-	}
-	return nil
-}
-
 func setupCommon(args *ContainerInitArgs) error {
 	if err := setupHostname(args); err != nil {
 		return err
@@ -397,12 +361,6 @@ func setupCommon(args *ContainerInitArgs) error {
 	if err := setupNetworking(args); err != nil {
 		return err
 	}
-
-	/*
-		if err := setupCapabilities(args); err != nil {
-			return err
-		}
-	*/
 
 	return nil
 }

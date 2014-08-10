@@ -212,10 +212,6 @@
 			"Rev": "7b617783357fec5b5a6d4ecac82e747e4a14d1b5"
 		},
 		{
-			"ImportPath": "github.com/syndtr/gocapability/capability",
-			"Rev": "3c85049eaeb429febe7788d9c7aac42322a377fe"
-		},
-		{
 			"ImportPath": "github.com/technoweenie/grohl",
 			"Rev": "91868e10032390c992d419d10b17cc8bfdc35808"
 		},
