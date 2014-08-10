@@ -17,6 +17,10 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.synced_folder ".", "/vagrant", disabled: true
 
   config.vm.provision "shell", privileged: false, inline: <<SCRIPT
+    curl -sLo /tmp/flynn-host.deb https://dl.flynn.io/flynn-host_current_amd64.deb
+    sudo dpkg -i /tmp/flynn-host.deb
+    sudo flynn-release download /etc/flynn/version.json
+    sudo start flynn-host
     flynn-bootstrap /etc/flynn/bootstrap-manifest.json 2>&1
 SCRIPT
 end
