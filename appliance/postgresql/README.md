@@ -3,7 +3,8 @@ flynn-postgres
 
 Flynn PostgreSQL database appliance.
 
-flynn-postgres is automatically managed by Flynn. To run it standalone use a docker run command like this:
+This appliance is automatically managed by Flynn. To run it standalone use,
+a `docker run` command like this:
 
     docker run 
        -v /srv/data:/data

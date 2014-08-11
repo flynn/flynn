@@ -32,12 +32,6 @@ Options:
   --root=<path>    storage root [default: /var/lib/docker]
 ```
 
-## Building
-
-Pinkerton requires Go >=1.2 and [Godep](https://github.com/tools/godep) to
-build. Clone this repo into `$GOPATH/src/github.com/flynn/pinkerton` and run
-`godep go build` to build a `pinkerton` binary.
-
 ## Roadmap
 
 Future features might include:

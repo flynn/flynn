@@ -1,8 +1,6 @@
 # sdutil
 
-Service discovery utility for systems based on [go-discover](/discoverd/client).
-
-Complete work in progress
+Service discovery utility for systems based on [discoverd](/discoverd).
 
 ```
 sdutil register -a foo=bar www:$PORT
