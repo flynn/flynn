@@ -17,7 +17,7 @@ import (
 )
 
 func TestOSFilesystem(t *testing.T) {
-	dir, err := ioutil.TempDir("", "shelf")
+	dir, err := ioutil.TempDir("", "blobstore")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +26,7 @@ func TestOSFilesystem(t *testing.T) {
 }
 
 func TestPostgresFilesystem(t *testing.T) {
-	dbname := "shelftest"
+	dbname := "blobstoretest"
 	if os.Getenv("PGDATABASE") != "" {
 		dbname = os.Getenv("PGDATABASE")
 	} else {

@@ -37,11 +37,11 @@ func main() {
 		log.Fatalln("Unable to connect to controller:", err)
 	}
 	// TODO: use discoverd http dialer here?
-	services, err := discoverd.Services("shelf", discoverd.DefaultTimeout)
+	services, err := discoverd.Services("blobstore", discoverd.DefaultTimeout)
 	if err != nil || len(services) < 1 {
-		log.Fatalf("Unable to discover shelf %q", err)
+		log.Fatalf("Unable to discover blobstore %q", err)
 	}
-	shelfHost := services[0].Addr
+	blobstoreHost := services[0].Addr
 
 	app := os.Args[1]
 
@@ -61,7 +61,7 @@ func main() {
 	fmt.Printf("-----> Building %s...\n", app)
 
 	var output bytes.Buffer
-	slugURL := fmt.Sprintf("http://%s/%s.tgz", shelfHost, random.UUID())
+	slugURL := fmt.Sprintf("http://%s/%s.tgz", blobstoreHost, random.UUID())
 	cmd := exec.Command(exec.DockerImage("flynn/slugbuilder", os.Getenv("SLUGBUILDER_IMAGE_ID")), slugURL)
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
