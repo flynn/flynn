@@ -33,9 +33,8 @@ extends into anything else Flynn decides to provide.
 
 #### Layer 0
 
-* Container model / management
 * Distributed configuration / coordination
-* Task scheduling
+* Job scheduling
 * Service discovery
 * Host abstraction
 
@@ -44,7 +43,6 @@ extends into anything else Flynn decides to provide.
 * Management API / client
 * Git receiver
 * Heroku Buildpacks
-* Log aggregation
 * Database appliance
 * Routing
 
@@ -69,26 +67,6 @@ different in these ways:
   simpler.
 
 
-#### Container model / management
-
-Flynn uses the concept of a high level container being popularized by the
-project [Docker](https://github.com/dotcloud/docker). In fact, Docker was partly
-inspired to build projects like Flynn. It provides a standard container model
-based on the container technology developed by PaaS providers like dotCloud and
-Heroku.
-
-Docker is the most important and influential of the components in Flynn. Knowing
-how Flynn works depends fairly heavily on an understanding of Docker and Docker
-containers. Luckily, Docker is about to become the next big thing, so we'll
-assume an understanding of Docker from here on.
-
-Docker not only defines what a container is and what you can do with
-a container, but provides the tools to manage them at a host level. This is what
-we mean by container management, management at a host level. And since a Docker
-container is much more than just an LXC container, we also use it as our "model"
-for what a container is in our system.
-
-
 #### Distributed configuration / coordination
 
 One of the magic ingredients to any distributed system is a class of distributed
@@ -98,18 +76,16 @@ distributed systems as they can be used for configuration, synchronization, name
 resolution, group membership, and more.
 
 Only recently have there been many other options for this class of datastore.
-The now effectively defunct Doozer has been spiritually succeeded by CoreOS's
-[etcd](https://github.com/coreos/etcd) project. Due to the common outlook
-between the Flynn team and CoreOS team, a relationship was formed before even
-knowing about etcd. Now, the etcd project, which is written in Go and speaks
-HTTP, has found itself as another core component of Flynn.
+The now defunct Doozer has been spiritually succeeded by CoreOS's
+[etcd](https://github.com/coreos/etcd) project and fills the role of
+a distributed, consistent, key-value store in Flynn.
 
-While etcd is a great option, many of the Flynn components that rely on it are
+While etcd is a great option, all of the Flynn components that rely on it are
 designed to allow other backing services. This opens the potential, for example,
 for etcd to be replaced by ZooKeeper. In most cases, Flynn components won't work
 directly with etcd, but use a specialized service that provides the proper
 abstraction and exposes the right semantics for that particular domain. For
-example, the scheduling and service discovery systems.
+example, the routing and service discovery systems.
 
 
 #### Task scheduling
@@ -139,18 +115,18 @@ Flynn investigated two similar but subtly different scheduling systems: Apache
 Mesos and Google Omega. While Mesos provided a better understanding of
 scheduling as a framework, it seemed that Omega showed that you can achieve
 scheduling in a simpler way using existing infrastructure, at least at our
-target scale. So for simplicity, we are writing our own [scheduling
-framework](https://github.com/flynn/flynn-host/tree/master/sampi) using the
-other components in our system that is loosely based on the concepts of Omega.
+target scale. So for simplicity, we have written our own [scheduling
+framework](https://github.com/flynn/flynn/tree/master/host/sampi) that is
+loosely based on the concepts of Omega.
 
-Out of the box, Flynn will come with schedulers for different purposes that can
+Out of the box, Flynn comes with schedulers for different purposes that can
 modified or replaced as needed. These schedulers are:
 
 * **Service scheduler** -- Emulates the behavior of Heroku for scheduling
   long-running processes (services).
 * **Ephemeral scheduler** -- Simple scheduler for one-off processes, such as
   background jobs or "batch" work, as well as interactive processes (that
-  require TTY).
+  require a TTY).
 
 
 #### Service discovery
@@ -170,9 +146,10 @@ independent services, such as printers. Bonjour is a popular example that uses
 various additions to DNS. However, most internal systems use a simpler, more
 reliable, centralized approach, such as using ZooKeeper.
 
-Flynn is [implementing service discovery](https://github.com/flynn/discoverd) as
-an API implemented in a library that can be backed by ZooKeeper, mDNS, or in our
-case etcd. It lets cooperating services announce themselves and ask for services
+Flynn has [implemented service
+discovery](https://github.com/flynn/flynn/tree/master/discoverd) as an API
+implemented in a library that can be backed by ZooKeeper, mDNS, or in our case
+etcd. It lets cooperating services announce themselves and ask for services
 they're interested in, getting callbacks when their service list is updated. It
 also allows arbitrary key-values to be included on services, allowing for more
 advanced querying of services or sharing of meta-data for services.
