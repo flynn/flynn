@@ -62,6 +62,7 @@ func main() {
 	force := flag.Bool("force", false, "kill all containers booted by flynn-host before starting")
 	volPath := flag.String("volpath", "/var/lib/flynn-host", "directory to create volumes in")
 	backendName := flag.String("backend", "libvirt-lxc", "runner backend (docker or libvirt-lxc)")
+	flynnInit := flag.String("flynn-init", "/usr/bin/flynn-init", "path to flynn-init binary")
 	metadata := make(MetaFlag)
 	flag.Var(&metadata, "meta", "key=value pair to add as metadata")
 	flag.Parse()
@@ -85,7 +86,7 @@ func main() {
 
 	switch *backendName {
 	case "libvirt-lxc":
-		backend, err = NewLibvirtLXCBackend(state, portAlloc, *volPath, "/tmp/flynn-host-logs", "/usr/bin/flynn-init")
+		backend, err = NewLibvirtLXCBackend(state, portAlloc, *volPath, "/tmp/flynn-host-logs", *flynnInit)
 	case "docker":
 		backend, err = NewDockerBackend(state, portAlloc, *bindAddr)
 	default:
