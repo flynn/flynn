@@ -97,10 +97,11 @@ func (s *S) TestIssue5381(c *C) {
 	l, discoverd := newHTTPListener(c)
 	defer l.Close()
 
-	discoverdRegister(c, discoverd, srv.Listener.Addr().String())
+	addHTTPRoute(c, l)
+
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 	defer discoverd.UnregisterAll()
 
-	addHTTPRoute(c, l)
 	assertGet(c, "http://"+l.Addr, "example.com", "")
 }
 
@@ -113,16 +114,16 @@ func (s *S) TestAddHTTPRoute(c *C) {
 	l, discoverd := newHTTPListener(c)
 	defer l.Close()
 
-	discoverdRegister(c, discoverd, srv1.Listener.Addr().String())
-	defer discoverd.UnregisterAll()
-
 	r := addHTTPRoute(c, l)
+
+	discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
 
 	assertGet(c, "http://"+l.Addr, "example.com", "1")
 	assertGet(c, "https://"+l.TLSAddr, "example.com", "1")
 
 	discoverd.Unregister("test", srv1.Listener.Addr().String())
-	discoverdRegister(c, discoverd, srv2.Listener.Addr().String())
+	discoverdRegisterHTTP(c, l, srv2.Listener.Addr().String())
 
 	// Close the connection we just used to trigger a new backend choice
 	httpClient.Transport.(*http.Transport).CloseIdleConnections()
@@ -212,7 +213,7 @@ func (s *S) TestHTTPInitialSync(c *C) {
 	l, discoverd := newHTTPListenerClients(c, etcd, nil)
 	defer l.Close()
 
-	discoverdRegister(c, discoverd, srv.Listener.Addr().String())
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 	defer discoverd.UnregisterAll()
 
 	assertGet(c, "http://"+l.Addr, "example.com", "1")
@@ -226,10 +227,10 @@ func (s *S) TestHTTPServiceHandlerBackendConnectionClosed(c *C) {
 	l, discoverd := newHTTPListener(c)
 	defer l.Close()
 
-	discoverdRegister(c, discoverd, srv.Listener.Addr().String())
-	defer discoverd.UnregisterAll()
-
 	addHTTPRoute(c, l)
+
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
 
 	// a single request is allowed to successfully get issued
 	assertGet(c, "http://"+l.Addr, "example.com", "1")
@@ -257,10 +258,10 @@ func (s *S) TestHTTPWebsocket(c *C) {
 	l, discoverd := newHTTPListener(c)
 	defer l.Close()
 
-	discoverdRegister(c, discoverd, srv.Listener.Addr().String())
-	defer discoverd.UnregisterAll()
-
 	addHTTPRoute(c, l)
+
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
 
 	conn, err := net.Dial("tcp", l.Addr)
 	c.Assert(err, IsNil)
@@ -287,13 +288,13 @@ func (s *S) TestStickyHTTPRoute(c *C) {
 	l, discoverd := newHTTPListener(c)
 	defer l.Close()
 
-	discoverdRegister(c, discoverd, srv1.Listener.Addr().String())
-	defer discoverd.UnregisterAll()
-
 	addStickyHTTPRoute(c, l)
 
+	discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
 	cookie := assertGet(c, "http://"+l.Addr, "example.com", "1")
-	discoverdRegister(c, discoverd, srv2.Listener.Addr().String())
+	discoverdRegisterHTTP(c, l, srv2.Listener.Addr().String())
 	for i := 0; i < 10; i++ {
 		resCookie := assertGetCookie(c, "http://"+l.Addr, "example.com", "1", cookie)
 		c.Assert(resCookie, IsNil)

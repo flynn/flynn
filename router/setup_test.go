@@ -387,16 +387,30 @@ func waitForEvent(c *C, w Watcher, event string, id string) func() *strowger.Eve
 	}
 }
 
-func discoverdRegister(c *C, dc discoverdClient, addr string) {
+func discoverdRegisterTCP(c *C, l *tcpListener, port int, addr string) {
+	dc := l.TCPListener.discoverd.(discoverdClient)
+	ss := l.TCPListener.services[port].ss
+	discoverdRegister(c, dc, ss, addr)
+}
+
+func discoverdRegisterHTTP(c *C, l *httpListener, addr string) {
+	dc := l.HTTPListener.discoverd.(discoverdClient)
+	ss := l.HTTPListener.services["test"].ss
+	discoverdRegister(c, dc, ss, addr)
+}
+
+func discoverdRegister(c *C, dc discoverdClient, ss discoverd.ServiceSet, addr string) {
 	var ch chan *agent.ServiceUpdate
 	if !*fake {
-		ss, err := dc.NewServiceSet("test")
-		c.Assert(err, IsNil)
-		defer ss.Close()
 		ch = ss.Watch(false)
+		defer ss.Unwatch(ch)
 	}
 	dc.Register("test", addr)
 	if ch != nil {
-		<-ch
+		select {
+		case <-ch:
+		case <-time.After(10 * time.Second):
+			c.Fatal("timed out waiting for discoverd registration")
+		}
 	}
 }
