@@ -59,12 +59,10 @@ func RunEtcdServer(t TestingT) func() {
 				return
 			}
 			<-cmdDone
-		case err := <-cmdDone:
-			t.Fatal("etcd failed:", err)
+		case <-cmdDone:
 			return
 		}
 		if err := os.RemoveAll(dataDir); err != nil {
-			t.Fatal("etcd cleanup failed:", err)
 			return
 		}
 	}()
@@ -127,8 +125,7 @@ func RunDiscoverdServer(t TestingT, addr string) func() {
 				return
 			}
 			<-cmdDone
-		case err := <-cmdDone:
-			t.Fatal("discoverd failed:", err)
+		case <-cmdDone:
 			return
 		}
 	}()
