@@ -7,6 +7,10 @@ addons:
   postgresql: "9.3"
 
 before_install:
+  - util/commit-validator/validate-dco
+  - util/commit-validator/validate-gofmt || test "$TRAVIS_GO_VERSION" = "tip"
+
+install:
   - pushd /tmp
 
   - go install -race std
