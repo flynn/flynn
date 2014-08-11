@@ -11,101 +11,73 @@ import (
 	"runtime"
 	"strings"
 	"text/tabwriter"
+	"unicode"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/BurntSushi/toml"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/bgentry/pflag"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 )
-
-type Command struct {
-	// args does not include the command name
-	Run  func(cmd *Command, args []string, client *controller.Client) error
-	Flag pflag.FlagSet
-
-	Usage string // first word is the command name
-	Short string // `flynn help` output
-	Long  string // `flynn help cmd` output
-
-	NoClient bool
-}
-
-func (c *Command) printUsage(errExit bool) {
-	if c.Runnable() {
-		fmt.Printf("Usage: %s %s\n\n", os.Args[0], c.Usage)
-	}
-	fmt.Println(strings.Trim(c.Long, "\n"))
-	if errExit {
-		os.Exit(2)
-	}
-}
-
-func (c *Command) Name() string {
-	name := c.Usage
-	i := strings.Index(name, " ")
-	if i >= 0 {
-		name = name[:i]
-	}
-	return name
-}
-
-func (c *Command) Runnable() bool {
-	return c.Run != nil
-}
-
-func (c *Command) List() bool {
-	return c.Short != ""
-}
-
-// Running `flynn help` will list commands in this order.
-var commands = []*Command{
-	cmdServerAdd,
-	cmdCreate,
-	cmdApps,
-	cmdPs,
-	cmdLog,
-	cmdScale,
-	cmdRun,
-	cmdEnv,
-	cmdEnvSet,
-	cmdEnvGet,
-	cmdEnvUnset,
-	cmdRoutes,
-	cmdRouteAddHTTP,
-	cmdRouteRemove,
-	cmdProviders,
-	cmdResourceAdd,
-	cmdKeys,
-	cmdKeyAdd,
-	cmdKeyRemove,
-	cmdReleaseAddDocker,
-	cmdVersion,
-	cmdHelp,
-}
 
 var (
 	flagServer = os.Getenv("FLYNN_SERVER")
 	flagApp    string
-	flagLong   bool
 )
 
 func main() {
 	log.SetFlags(0)
 
-	args := os.Args[1:]
+	usage := `usage: flynn [-a <app>] <command> [<args>...]
 
+Options:
+   -a <app>
+   -h, --help
+
+Commands:
+   help                show usage for a specific command
+   cluster             manage clusters
+   create              create an app
+   apps                list apps
+   ps                  list jobs
+   kill                kill a job
+   log                 get job log
+   scale               change formation
+   run                 run a job
+   env                 manage env variables
+   route               manage routes
+   provider            manage resource providers
+   resource            provision a new resource
+   key                 manage SSH public keys
+   release             add a docker image release
+   version             show flynn version
+
+See 'flynn help <command>' for more information on a specific command.
+	`
+	args, _ := docopt.Parse(usage, nil, true, Version, true)
+
+	cmd := args.String["<command>"]
+	cmdArgs := args.All["<args>"].([]string)
+
+	if cmd == "help" {
+		if len(cmdArgs) == 0 { // `flynn help`
+			fmt.Println(usage)
+			return
+		} else { // `flynn help <command>`
+			cmd = cmdArgs[0]
+			cmdArgs = make([]string, 1)
+			cmdArgs[0] = "--help"
+		}
+	}
 	// Run the update command as early as possible to avoid the possibility of
 	// installations being stranded without updates due to errors in other code
-	if len(args) > 0 && args[0] == cmdUpdate.Name() {
-		cmdUpdate.Run(cmdUpdate, args, nil)
+	if cmd == "update" {
+		runUpdate(cmdArgs)
 		return
 	} else if updater != nil {
 		defer updater.backgroundRun() // doesn't run if os.Exit is called
 	}
 
-	if len(args) >= 2 && "-a" == args[0] {
-		flagApp = args[1]
-		args = args[2:]
-
+	flagApp = args.String["-a"]
+	if flagApp != "" {
 		if err := readConfig(); err != nil {
 			log.Fatal(err)
 		}
@@ -116,47 +88,74 @@ func main() {
 		}
 	}
 
-	if len(args) < 1 {
-		usage()
+	if err := runCommand(cmd, cmdArgs); err != nil {
+		log.Fatal(err)
+		return
+	}
+}
+
+type command struct {
+	usage string
+	f     interface{}
+}
+
+var commands = make(map[string]command)
+
+func register(cmd string, f interface{}, usage string) {
+	switch f.(type) {
+	case func(*docopt.Args, *controller.Client) error, func(*docopt.Args) error, func() error, func():
+	default:
+		panic(fmt.Sprintf("invalid command function %s '%T'", cmd, f))
+	}
+	commands[cmd] = command{strings.TrimLeftFunc(usage, unicode.IsSpace), f}
+}
+
+func runCommand(name string, args []string) (err error) {
+	argv := make([]string, 1, 1+len(args))
+	argv[0] = name
+	argv = append(argv, args...)
+
+	cmd, ok := commands[name]
+	if !ok {
+		return fmt.Errorf("%s is not a flynn command. See 'flynn help'", cmd)
+	}
+	parsedArgs, err := docopt.Parse(cmd.usage, argv, true, "", false)
+	if err != nil {
+		return err
 	}
 
-	for _, cmd := range commands {
-		if cmd.Name() == args[0] && cmd.Run != nil {
-			cmd.Flag.Usage = func() {
-				cmd.printUsage(false)
-			}
-			if err := cmd.Flag.Parse(args[1:]); err != nil {
-				os.Exit(2)
-			}
-
-			var client *controller.Client
-			if !cmd.NoClient {
-				server, err := server()
-				if err != nil {
-					log.Fatal(err)
-				}
-				if server.TLSPin != "" {
-					pin, err := base64.StdEncoding.DecodeString(server.TLSPin)
-					if err != nil {
-						log.Fatalln("error decoding tls pin:", err)
-					}
-					client, err = controller.NewClientWithPin(server.URL, server.Key, pin)
-				} else {
-					client, err = controller.NewClient(server.URL, server.Key)
-				}
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-			if err := cmd.Run(cmd, cmd.Flag.Args(), client); err != nil {
-				log.Fatal(err)
-			}
-			return
+	switch f := cmd.f.(type) {
+	case func(*docopt.Args, *controller.Client) error:
+		// create client and run command
+		var client *controller.Client
+		server, err := server()
+		if err != nil {
+			log.Fatal(err)
 		}
+		if server.TLSPin != "" {
+			pin, err := base64.StdEncoding.DecodeString(server.TLSPin)
+			if err != nil {
+				log.Fatalln("error decoding tls pin:", err)
+			}
+			client, err = controller.NewClientWithPin(server.URL, server.Key, pin)
+		} else {
+			client, err = controller.NewClient(server.URL, server.Key)
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		return f(parsedArgs, client)
+	case func(*docopt.Args) error:
+		return f(parsedArgs)
+	case func() error:
+		return f()
+	case func():
+		f()
+		return nil
 	}
 
-	fmt.Fprintf(os.Stderr, "Unknown command: %s\n", args[0])
-	usage()
+	return fmt.Errorf("unexpected command type %T", cmd.f)
 }
 
 type Config struct {

@@ -3,18 +3,19 @@ package main
 import (
 	"sort"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-var cmdPs = &Command{
-	Run:   runPs,
-	Usage: "ps",
-	Short: "list jobs",
-	Long:  `Lists jobs.`,
+func init() {
+	register("ps", runPs, `usage: flynn ps
+
+List flynn jobs.
+`)
 }
 
-func runPs(cmd *Command, args []string, client *controller.Client) error {
+func runPs(args *docopt.Args, client *controller.Client) error {
 	jobs, err := client.JobList(mustApp())
 	if err != nil {
 		return err

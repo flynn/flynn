@@ -4,34 +4,29 @@ import (
 	"io"
 	"os"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/pkg/cluster"
 )
 
-var cmdLog = &Command{
-	Run:   runLog,
-	Usage: "log [-s] <job>",
-	Short: "get job log",
-	Long:  `Stream log for a specific job`,
-}
-
-var logSplitOut bool
-
 func init() {
-	cmdLog.Flag.BoolVarP(&logSplitOut, "split-stderr", "s", false, "send stderr lines to stderr")
+	register("log", runLog, `
+usage: flynn log [options] <job>
+
+Stream log for a specific job.
+
+Options:
+    -s, --split-stderr    send stderr lines to stderr
+`)
 }
 
-func runLog(cmd *Command, args []string, client *controller.Client) error {
-	if len(args) != 1 {
-		cmd.printUsage(true)
-	}
-
-	rc, err := client.GetJobLog(mustApp(), args[0])
+func runLog(args *docopt.Args, client *controller.Client) error {
+	rc, err := client.GetJobLog(mustApp(), args.String["<job>"])
 	if err != nil {
 		return err
 	}
 	var stderr io.Writer = os.Stdout
-	if logSplitOut {
+	if args.Bool["--split-stderr"] {
 		stderr = os.Stderr
 	}
 	attachClient := cluster.NewAttachClient(struct {

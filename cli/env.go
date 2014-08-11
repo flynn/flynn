@@ -7,26 +7,42 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-var cmdEnv = &Command{
-	Run:   runEnv,
-	Usage: "env [-t <proc>]",
-	Short: "list env vars",
-	Long:  "Command env shows all env vars.",
+func init() {
+	register("env", runEnv, `usage: flynn env [-t <proc>]
+       flynn env set [-t <proc>] <var>=<val>...
+       flynn env unset [-t <proc>] <var>...
+       flynn env get [-t <proc>] <var>
+
+Manage app environment.
+
+Options:
+   -t, --process-type <proc>   include env from process type
+
+Commands:
+   With no arguments, shows a list of environment variables.
+
+   set    Sets value of one or more env variables.
+   unset  Deletes one or more variables.
+   get    Returns the value of variable.
+`)
 }
 
 var envProc string
 
-func init() {
-	cmdEnv.Flag.StringVarP(&envProc, "process-type", "t", "", "include env from process type")
-}
+func runEnv(args *docopt.Args, client *controller.Client) error {
+	envProc = args.String["--process-type"]
 
-func runEnv(cmd *Command, args []string, client *controller.Client) error {
-	if len(args) != 0 {
-		cmd.printUsage(true)
+	if args.Bool["set"] {
+		return runEnvSet(args, client)
+	} else if args.Bool["unset"] {
+		return runEnvUnset(args, client)
+	} else if args.Bool["get"] {
+		return runEnvGet(args, client)
 	}
 
 	release, err := client.GetAppRelease(mustApp())
@@ -58,24 +74,10 @@ func runEnv(cmd *Command, args []string, client *controller.Client) error {
 	return nil
 }
 
-var cmdEnvSet = &Command{
-	Run:   runEnvSet,
-	Usage: "env-set [-t <proc>] <name>=<value>...",
-	Short: "set env vars",
-	Long:  "Command set sets the value of one or more env vars.",
-}
-
-func init() {
-	cmdEnvSet.Flag.StringVarP(&envProc, "process-type", "t", "", "set env for process type")
-}
-
-func runEnvSet(cmd *Command, args []string, client *controller.Client) error {
-	if len(args) == 0 {
-		cmd.printUsage(true)
-	}
-
-	env := make(map[string]*string, len(args))
-	for _, s := range args {
+func runEnvSet(args *docopt.Args, client *controller.Client) error {
+	pairs := args.All["<var>=<val>"].([]string)
+	env := make(map[string]*string, len(pairs))
+	for _, s := range pairs {
 		v := strings.SplitN(s, "=", 2)
 		if len(v) != 2 {
 			return fmt.Errorf("invalid var format: %q", s)
@@ -90,24 +92,10 @@ func runEnvSet(cmd *Command, args []string, client *controller.Client) error {
 	return nil
 }
 
-var cmdEnvUnset = &Command{
-	Run:   runEnvUnset,
-	Usage: "env-unset [-t <proc>] <name>...",
-	Short: "unset env vars",
-	Long:  "Command unset deletes one or more env vars.",
-}
-
-func init() {
-	cmdEnvUnset.Flag.StringVarP(&envProc, "process-type", "t", "", "unset env var for process type")
-}
-
-func runEnvUnset(cmd *Command, args []string, client *controller.Client) error {
-	if len(args) == 0 {
-		cmd.printUsage(true)
-	}
-
-	env := make(map[string]*string, len(args))
-	for _, s := range args {
+func runEnvUnset(args *docopt.Args, client *controller.Client) error {
+	vars := args.All["<var>"].([]string)
+	env := make(map[string]*string, len(vars))
+	for _, s := range vars {
 		env[s] = nil
 	}
 	id, err := setEnv(client, envProc, env)
@@ -118,22 +106,8 @@ func runEnvUnset(cmd *Command, args []string, client *controller.Client) error {
 	return nil
 }
 
-var cmdEnvGet = &Command{
-	Run:   runEnvGet,
-	Usage: "env-get [-t <proc>] <name>",
-	Short: "get env var",
-	Long:  "Get the value of an env var.",
-}
-
-func init() {
-	cmdEnvGet.Flag.StringVarP(&envProc, "process-type", "t", "", "get env var for process type")
-}
-
-func runEnvGet(cmd *Command, args []string, client *controller.Client) error {
-	if len(args) != 1 {
-		cmd.printUsage(true)
-	}
-
+func runEnvGet(args *docopt.Args, client *controller.Client) error {
+	arg := args.All["<var>"].([]string)[0]
 	release, err := client.GetAppRelease(mustApp())
 	if err == controller.ErrNotFound {
 		return errors.New("no app release found")
@@ -143,16 +117,16 @@ func runEnvGet(cmd *Command, args []string, client *controller.Client) error {
 		return fmt.Errorf("process type %q not found in release %s", envProc, release.ID)
 	}
 
-	if v, ok := release.Env[args[0]]; ok {
+	if v, ok := release.Env[arg]; ok {
 		fmt.Println(v)
 		return nil
 	}
-	if v, ok := release.Processes[envProc].Env[args[0]]; ok {
+	if v, ok := release.Processes[envProc].Env[arg]; ok {
 		fmt.Println(v)
 		return nil
 	}
 
-	return fmt.Errorf("var %q not found in release %q", args[0], release.ID)
+	return fmt.Errorf("var %q not found in release %q", arg, release.ID)
 }
 
 func setEnv(client *controller.Client, proc string, env map[string]*string) (string, error) {

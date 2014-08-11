@@ -1,25 +1,36 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-var cmdResourceAdd = &Command{
-	Run:   runResourceAdd,
-	Usage: "resource-add <provider>",
-	Short: "provision a new resource",
-	Long:  "Command resource-add provisions a new resource for the app using provider.",
+func init() {
+	register("resource", runResource, `
+usage: flynn resource add <provider>
+
+Manage resources for the app.
+
+Commands:
+   add  provisions a new resource for the app using <provider>.
+`)
 }
 
-func runResourceAdd(cmd *Command, args []string, client *controller.Client) error {
-	if len(args) != 1 {
-		cmd.printUsage(true)
+func runResource(args *docopt.Args, client *controller.Client) error {
+	if args.Bool["add"] {
+		return runResourceAdd(args, client)
 	}
+	return fmt.Errorf("Top-level command not implemented.")
+}
 
-	res, err := client.ProvisionResource(&ct.ResourceReq{ProviderID: args[0], Apps: []string{mustApp()}})
+func runResourceAdd(args *docopt.Args, client *controller.Client) error {
+	provider := args.String["<provider>"]
+
+	res, err := client.ProvisionResource(&ct.ResourceReq{ProviderID: provider, Apps: []string{mustApp()}})
 	if err != nil {
 		return err
 	}
