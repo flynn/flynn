@@ -73,6 +73,7 @@ func (c *Cluster) BuildFlynn(rootFS, commit string) (string, error) {
 		User:   uid,
 		Group:  gid,
 		Memory: "512",
+		Cores:  8,
 		Drives: map[string]*VMDrive{
 			"hda": {FS: rootFS, COW: true, Temp: false},
 		},

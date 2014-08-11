@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -33,6 +34,7 @@ type VMConfig struct {
 	User   int
 	Group  int
 	Memory string
+	Cores  int
 	Drives map[string]*VMDrive
 	Args   []string
 	Out    io.Writer
@@ -139,6 +141,9 @@ func (v *vm) Start() error {
 	)
 	if v.Memory != "" {
 		v.Args = append(v.Args, "-m", v.Memory)
+	}
+	if v.Cores > 0 {
+		v.Args = append(v.Args, "-smp", strconv.Itoa(v.Cores))
 	}
 	var err error
 	for i, d := range v.Drives {
