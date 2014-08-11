@@ -597,6 +597,12 @@ func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface
 		stopChans[req.Seq] = stop
 		stopChansMtx.Unlock()
 
+		go func(seq uint64) {
+			<-done
+			stopChansMtx.Lock()
+			delete(stopChans, seq)
+			stopChansMtx.Unlock()
+		}(req.Seq)
 		go service.call(call{
 			server:  server,
 			sending: sending,
@@ -610,12 +616,6 @@ func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface
 			done:    done,
 			stop:    stop,
 		})
-		go func(seq uint64) {
-			<-done
-			stopChansMtx.Lock()
-			delete(stopChans, seq)
-			stopChansMtx.Unlock()
-		}(req.Seq)
 	}
 	close(eof)
 	codec.Close()
