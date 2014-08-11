@@ -1,58 +1,17 @@
 package agent
 
 import (
-	"os"
-	"os/exec"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
-	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/discoverd/client/testutil/etcdrunner"
 )
 
 func runEtcdServer(t *testing.T) (*etcd.Client, func()) {
-	killCh := make(chan struct{})
-	doneCh := make(chan struct{})
-	name := "etcd-test." + strconv.Itoa(random.Math.Int())
-	dataDir := "/tmp/" + name
-	go func() {
-		cmd := exec.Command("etcd", "-name", name, "-data-dir", dataDir)
-		if err := cmd.Start(); err != nil {
-			panic(err)
-		}
-		cmdDone := make(chan error)
-		go func() {
-			cmdDone <- cmd.Wait()
-		}()
-
-		select {
-		case <-killCh:
-			if err := cmd.Process.Kill(); err != nil {
-				panic(err)
-			}
-			<-cmdDone
-		case err := <-cmdDone:
-			panic(err)
-		}
-		if err := os.RemoveAll(dataDir); err != nil {
-			panic(err)
-		}
-		doneCh <- struct{}{}
-	}()
-	client := etcd.NewClient(nil)
-	err := Attempts.Run(func() (err error) {
-		_, err = client.Get("/", false, false)
-		return
-	})
-	if err != nil {
-		t.Fatalf("Failed to connect to etcd: %q", err)
-	}
-	return client, func() {
-		close(killCh)
-		<-doneCh
-	}
+	kill := etcdrunner.RunEtcdServer(t)
+	return etcd.NewClient(nil), kill
 }
 
 const NoAttrService = "null"

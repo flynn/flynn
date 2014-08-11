@@ -4,12 +4,12 @@ import (
 	"net/http/httptest"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
-	"github.com/flynn/flynn/discoverd/client/testutil"
+	"github.com/flynn/flynn/discoverd/client/testutil/etcdrunner"
 	"github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
 )
 
-func newTestAPIServer(t testutil.TestingT) *testAPIServer {
+func newTestAPIServer(t etcdrunner.TestingT) *testAPIServer {
 	ec, killEtcd := newEtcd(t)
 	dc, killDiscoverd := newDiscoverd(t)
 

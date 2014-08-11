@@ -10,7 +10,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.net/websocket"
 	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
-	"github.com/flynn/flynn/discoverd/client/testutil"
+	"github.com/flynn/flynn/discoverd/client/testutil/etcdrunner"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -73,7 +73,7 @@ func (l *httpListener) Close() error {
 	return nil
 }
 
-func newHTTPListenerClients(t testutil.TestingT, etcd EtcdClient, discoverd discoverdClient) (*httpListener, discoverdClient) {
+func newHTTPListenerClients(t etcdrunner.TestingT, etcd EtcdClient, discoverd discoverdClient) (*httpListener, discoverdClient) {
 	discoverd, etcd, cleanup := setup(t, etcd, discoverd)
 	l := &httpListener{
 		NewHTTPListener("127.0.0.1:0", "127.0.0.1:0", nil, NewEtcdDataStore(etcd, "/strowger/http/"), discoverd),
@@ -85,7 +85,7 @@ func newHTTPListenerClients(t testutil.TestingT, etcd EtcdClient, discoverd disc
 	return l, discoverd
 }
 
-func newHTTPListener(t testutil.TestingT) (*httpListener, discoverdClient) {
+func newHTTPListener(t etcdrunner.TestingT) (*httpListener, discoverdClient) {
 	return newHTTPListenerClients(t, nil, nil)
 }
 

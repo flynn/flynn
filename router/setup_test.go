@@ -15,6 +15,7 @@ import (
 	"github.com/flynn/flynn/discoverd/agent"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/client/testutil"
+	"github.com/flynn/flynn/discoverd/client/testutil/etcdrunner"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -32,15 +33,15 @@ type discoverdClient interface {
 	Close() error
 }
 
-func newEtcd(t testutil.TestingT) (EtcdClient, func()) {
+func newEtcd(t etcdrunner.TestingT) (EtcdClient, func()) {
 	if *fake {
 		return newFakeEtcd(), func() {}
 	}
-	cleanup := testutil.RunEtcdServer(t)
+	cleanup := etcdrunner.RunEtcdServer(t)
 	return etcd.NewClient(nil), cleanup
 }
 
-func newDiscoverd(t testutil.TestingT) (discoverdClient, func()) {
+func newDiscoverd(t etcdrunner.TestingT) (discoverdClient, func()) {
 	if *fake {
 		return newFakeDiscoverd(), func() {}
 	}
@@ -51,7 +52,7 @@ func newDiscoverd(t testutil.TestingT) (discoverdClient, func()) {
 	}
 }
 
-func setup(t testutil.TestingT, ec EtcdClient, dc discoverdClient) (discoverdClient, EtcdClient, func()) {
+func setup(t etcdrunner.TestingT, ec EtcdClient, dc discoverdClient) (discoverdClient, EtcdClient, func()) {
 	if *fake {
 		if ec == nil {
 			ec = newFakeEtcd()
@@ -63,7 +64,7 @@ func setup(t testutil.TestingT, ec EtcdClient, dc discoverdClient) (discoverdCli
 	}
 	var killEtcd, killDiscoverd func()
 	if ec == nil {
-		killEtcd = testutil.RunEtcdServer(t)
+		killEtcd = etcdrunner.RunEtcdServer(t)
 		ec = etcd.NewClient(nil)
 	}
 	if dc == nil {

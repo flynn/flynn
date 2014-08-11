@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
-	"github.com/flynn/flynn/discoverd/client/testutil"
+	"github.com/flynn/flynn/discoverd/client/testutil/etcdrunner"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -60,7 +60,7 @@ func (l *tcpListener) Close() error {
 	return nil
 }
 
-func newTCPListenerClients(t testutil.TestingT, etcd EtcdClient, discoverd discoverdClient) (*tcpListener, discoverdClient) {
+func newTCPListenerClients(t etcdrunner.TestingT, etcd EtcdClient, discoverd discoverdClient) (*tcpListener, discoverdClient) {
 	discoverd, etcd, cleanup := setup(t, etcd, discoverd)
 	l := &tcpListener{
 		NewTCPListener("127.0.0.1", firstTCPPort, lastTCPPort, NewEtcdDataStore(etcd, "/strowger/tcp/"), discoverd),
@@ -72,7 +72,7 @@ func newTCPListenerClients(t testutil.TestingT, etcd EtcdClient, discoverd disco
 	return l, discoverd
 }
 
-func newTCPListener(t testutil.TestingT) (*tcpListener, discoverdClient) {
+func newTCPListener(t etcdrunner.TestingT) (*tcpListener, discoverdClient) {
 	return newTCPListenerClients(t, nil, nil)
 }
 
