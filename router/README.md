@@ -1,13 +1,13 @@
-# Strowger [![Build Status](https://travis-ci.org/flynn/strowger.svg?branch=master)](https://travis-ci.org/flynn/strowger)
+# Router
 
 [![](https://f.cloud.github.com/assets/13026/2060788/42916822-8c30-11e3-8c0d-ae743b905759.jpg)](https://commons.wikimedia.org/wiki/File:HebdrehwaehlerbatterieOrtsvermittlung_4954.jpg)
 
-Strowger is the Flynn HTTP/TCP cluster router. It relies on [service
-discovery](https://github.com/flynn/discoverd) to keep track of what backends
-are up and acts as a standard reverse proxy with random load balancing. HTTP
-domains and TCP ports are provisioned via RPC. Only two pieces of data are
-required: the domain name and the service name. etcd is used for persistence so
-that all instances of strowger get the same configuration.
+Router is the Flynn HTTP/TCP cluster router. It relies on [service
+discovery](/discoverd) to keep track of what backends are up and acts as
+a standard reverse proxy with random load balancing. HTTP domains and TCP ports
+are provisioned via RPC. Only two pieces of data are required: the domain name
+and the service name. etcd is used for persistence so that all instances of
+router get the same configuration.
 
 ### Benefits over HAProxy/nginx
 

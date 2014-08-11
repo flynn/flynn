@@ -1,16 +1,16 @@
-# flynn-host
+# Host
 
-flynn-host is the [Flynn](https://flynn.io) host service. An instance of it runs
+Host is the [Flynn](https://flynn.io) host service. An instance of it runs
 on every host in the Flynn cluster. It is responsible for running jobs (in
 Linux containers) and reporting back to schedulers and the leader.
 
-flynn-host is capable of bootstrapping itself inside of Docker containers with
+Host is capable of bootstrapping itself inside of Docker containers with
 its dependencies using the included manifest. It depends on
-[discoverd](https://github.com/flynn/discoverd), which in turn depends on
+[discoverd](/discoverd), which in turn depends on
 [etcd](https://github.com/coreos/etcd). These three components are referred to
 as "layer 0".
 
-One instance of flynn-host acts as the "cluster leader" and serializes the
+One instance of host acts as the "cluster leader" and serializes the
 creation of new jobs. The leader is maintains the entire cluster state (a list
 of hosts and their running jobs) in memory. If the leader disappears, a new one
 is elected by discoverd and the rest of the hosts connect to it and provide

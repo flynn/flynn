@@ -1,7 +1,6 @@
-# flynn-cli
+# cli
 
-flynn-cli is the command-line client for
-[flynn-controller](https://github.com/flynn/flynn-controller). It provides
+cli is the command-line client for the [controller](/controller). It provides
 access to many functions related to deploying and managing applications.
 
 ## Installation
