@@ -10,10 +10,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.box_download_checksum = "75cb598194967fed29d5db19c8f889583655295cce5d9bc0f438f7dd1313c6e4"
   config.vm.box_download_checksum_type = "sha256"
 
-  config.vm.network "forwarded_port", guest: 80, host: 8080
-  config.vm.network "forwarded_port", guest: 443, host: 8081
-  config.vm.network "forwarded_port", guest: 2222, host: 2201
-
+  config.vm.network "private_network", ip: "192.168.84.42"
   config.vm.synced_folder ".", "/vagrant", disabled: true
 
   config.vm.provision "shell", privileged: false, inline: <<SCRIPT
@@ -21,6 +18,9 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     sudo dpkg -i /tmp/flynn-host.deb
     sudo flynn-release download /etc/flynn/version.json
     sudo start flynn-host
+
+    CONTROLLER_DOMAIN=demo.localflynn.com \
+    DEFAULT_ROUTE_DOMAIN=demo.localflynn.com \
     flynn-bootstrap /etc/flynn/bootstrap-manifest.json 2>&1
 SCRIPT
 end
