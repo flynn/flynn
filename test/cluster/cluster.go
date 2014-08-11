@@ -27,6 +27,7 @@ type Cluster struct {
 	ControllerDomain string
 	ControllerPin    string
 	ControllerKey    string
+	RouterIP         string
 
 	bc        BootConfig
 	vm        *VMManager
@@ -290,6 +291,7 @@ func (c *Cluster) bootstrapFlynn() error {
 	if err = setLocalDNS(c.ControllerDomain, leader.Host); err != nil {
 		return fmt.Errorf("could not set router DNS entry: %s", err)
 	}
+	c.RouterIP = leader.Host
 	return nil
 }
 

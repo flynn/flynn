@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -31,6 +32,7 @@ var gitEnv []string
 
 var args *arg.Args
 var flynnrc string
+var RouterIP string
 
 func init() {
 	args = arg.Parse()
@@ -64,6 +66,8 @@ func main() {
 			log.Fatal(err)
 		}
 		defer os.RemoveAll(flynnrc)
+
+		RouterIP = c.RouterIP
 	}
 
 	ssh, err := genSSHKey()
@@ -274,4 +278,37 @@ func (succeedsChecker) Check(params []interface{}, names []string) (bool, string
 		return false, "result must be a *CmdResult"
 	}
 	return res.Err == nil, ""
+}
+
+type matchesChecker struct {
+	*check.CheckerInfo
+}
+
+var Matches check.Checker = &matchesChecker{
+	&check.CheckerInfo{Name: "Matches", Params: []string{"value", "regex"}},
+}
+
+func (checker *matchesChecker) Check(params []interface{}, names []string) (result bool, error string) {
+	return matches(params[0], params[1])
+}
+
+func matches(value, regex interface{}) (result bool, error string) {
+	reStr, ok := regex.(string)
+	if !ok {
+		return false, "Regex must be a string"
+	}
+	valueStr, valueIsStr := value.(string)
+	if !valueIsStr {
+		if valueWithStr, valueHasStr := value.(fmt.Stringer); valueHasStr {
+			valueStr, valueIsStr = valueWithStr.String(), true
+		}
+	}
+	if valueIsStr {
+		matches, err := regexp.MatchString(reStr, valueStr)
+		if err != nil {
+			return false, "Can't compile regex: " + err.Error()
+		}
+		return matches, ""
+	}
+	return false, "Obtained value is not a string and has no .String()"
 }
