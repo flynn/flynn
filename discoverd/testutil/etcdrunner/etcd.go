@@ -37,15 +37,18 @@ func RunEtcdServer(t TestingT) func() {
 	}
 	go func() {
 		cmd := exec.Command("etcd", "-name", name, "-data-dir", dataDir)
-		stdout, _ := cmd.StdoutPipe()
-		stderr, _ := cmd.StderrPipe()
+		var stderr, stdout io.Reader
+		if os.Getenv("DEBUG") != "" {
+			stderr, _ = cmd.StderrPipe()
+			stdout, _ = cmd.StdoutPipe()
+		}
 		if err := cmd.Start(); err != nil {
 			t.Fatal("etcd start failed:", err)
 			return
 		}
 		cmdDone := make(chan error)
 		go func() {
-			if os.Getenv("DEBUG") != "" {
+			if stdout != nil {
 				LogOutput("etcd", stdout, stderr)
 			}
 			cmdDone <- cmd.Wait()

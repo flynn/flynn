@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"io"
 	"os"
 	"os/exec"
 
@@ -14,15 +15,18 @@ func RunDiscoverdServer(t TestingT, addr string) func() {
 	go func() {
 		cmd := exec.Command("discoverd", "-bind", addr)
 		cmd.Env = append(os.Environ(), "EXTERNAL_IP=127.0.0.1")
-		stderr, _ := cmd.StderrPipe()
-		stdout, _ := cmd.StdoutPipe()
+		var stderr, stdout io.Reader
+		if os.Getenv("DEBUG") != "" {
+			stderr, _ = cmd.StderrPipe()
+			stdout, _ = cmd.StdoutPipe()
+		}
 		if err := cmd.Start(); err != nil {
 			t.Fatal("discoverd start failed:", err)
 			return
 		}
 		cmdDone := make(chan error)
 		go func() {
-			if os.Getenv("DEBUG") != "" {
+			if stdout != nil {
 				LogOutput("discoverd", stderr, stdout)
 			}
 			cmdDone <- cmd.Wait()
