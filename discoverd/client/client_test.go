@@ -7,7 +7,7 @@ import (
 
 	"github.com/flynn/flynn/discoverd/agent"
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/discoverd/client/testutil"
+	"github.com/flynn/flynn/discoverd/testutil"
 )
 
 func ExampleRegisterAndStandby_standby() {

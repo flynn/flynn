@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
-	"github.com/flynn/flynn/discoverd/client/testutil/etcdrunner"
+	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
 )
 
 func runEtcdServer(t *testing.T) (*etcd.Client, func()) {

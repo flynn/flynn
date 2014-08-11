@@ -14,8 +14,8 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/flynn/flynn/discoverd/agent"
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/discoverd/client/testutil"
-	"github.com/flynn/flynn/discoverd/client/testutil/etcdrunner"
+	"github.com/flynn/flynn/discoverd/testutil"
+	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
 	"github.com/flynn/flynn/router/types"
 )
 

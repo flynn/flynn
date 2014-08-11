@@ -5,7 +5,7 @@ import (
 	"os/exec"
 
 	"github.com/flynn/flynn/discoverd/client"
-	. "github.com/flynn/flynn/discoverd/client/testutil/etcdrunner"
+	. "github.com/flynn/flynn/discoverd/testutil/etcdrunner"
 )
 
 func RunDiscoverdServer(t TestingT, addr string) func() {
