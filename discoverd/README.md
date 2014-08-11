@@ -1,11 +1,9 @@
 # Discoverd
 
-[![Build Status](https://travis-ci.org/flynn/discoverd.svg?branch=master)](https://travis-ci.org/flynn/discoverd)
-
 A simple but powerful service discovery system written in Go. It's currently backed by etcd, but can be
-extended to use ZooKeeper or other distributed consistent stores. 
+extended to use ZooKeeper or other distributed consistent stores.
 
-Right now the only official client is [go-discoverd](https://github.com/flynn/go-discoverd), but it can be ported to any language as it just wraps a simple RPC protocol that talks to the [discoverd API](https://github.com/flynn/discoverd/blob/master/docs/API.md).
+Right now the only official client is [go-discoverd](/discoverd/client), but it can be ported to any language as it just wraps a simple RPC protocol that talks to the [discoverd API](/discoverd/docs/API.md).
 
 ## Overview
 
@@ -20,7 +18,7 @@ There are three pieces to the discoverd system:
  * Client library and API
  * Backend store (etcd, Zookeeper, etc)
 
-The intended configuration is to have your backend store cluster somewhere on your network, the discoverd agent running on all your hosts, and any applications using discoverd to use a client library. 
+The intended configuration is to have your backend store cluster somewhere on your network, the discoverd agent running on all your hosts, and any applications using discoverd to use a client library.
 
 ## Development
 
