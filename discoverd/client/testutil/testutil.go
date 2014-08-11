@@ -51,6 +51,7 @@ func RunEtcdServer(t TestingT) func() {
 			}
 			cmdDone <- cmd.Wait()
 		}()
+		defer close(doneCh)
 		select {
 		case <-killCh:
 			if err := cmd.Process.Kill(); err != nil {
@@ -66,7 +67,6 @@ func RunEtcdServer(t TestingT) func() {
 			t.Fatal("etcd cleanup failed:", err)
 			return
 		}
-		doneCh <- struct{}{}
 	}()
 
 	// wait for etcd to come up
@@ -119,6 +119,7 @@ func RunDiscoverdServer(t TestingT, addr string) func() {
 			}
 			cmdDone <- cmd.Wait()
 		}()
+		defer close(doneCh)
 		select {
 		case <-killCh:
 			if err := cmd.Process.Kill(); err != nil {
@@ -130,7 +131,6 @@ func RunDiscoverdServer(t TestingT, addr string) func() {
 			t.Fatal("discoverd failed:", err)
 			return
 		}
-		doneCh <- struct{}{}
 	}()
 
 	return func() {
