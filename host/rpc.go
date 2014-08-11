@@ -14,7 +14,6 @@ func serveHTTP(host *Host, attach *attachHandler, sh *shutdownHandler) error {
 	if err := rpc.Register(host); err != nil {
 		return err
 	}
-	rpc.Register(host)
 	rpc.HandleHTTP()
 	http.Handle("/attach", attach)
 
