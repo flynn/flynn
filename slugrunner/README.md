@@ -32,7 +32,7 @@ Lastly there is a `start` command that will run any of the process types defined
 
 ## Service Discovery
 
-The runner can also register with [go-discover](https://github.com/flynn/go-discover) based service discovery using [sdutil](https://github.com/flynn/sdutil). If `$SD_NAME` and `$PORT` environment variables are set, the command is run with `sdutil exec $SD_NAME:$PORT`. `$SD_NAME` is unset before the command is run, but `$PORT` is left set since it is often used without service discovery. 
+The runner can also register with [go-discover](/discoverd/client) based service discovery using [sdutil](/sdutil). If `$SD_NAME` and `$PORT` environment variables are set, the command is run with `sdutil exec $SD_NAME:$PORT`. `$SD_NAME` is unset before the command is run, but `$PORT` is left set since it is often used without service discovery.
 
 It is also possible to fully customize the command line for `sdutil` tool using `$SD_ARGS`.
 

@@ -1,4 +1,4 @@
-# Welcome to Flynn
+# Welcome to Flynn [![Build Status](https://travis-ci.org/flynn/flynn.svg?branch=master)](https://travis-ci.org/flynn/flynn)
 
 [Flynn](https://flynn.io) is a next generation open source Platform as a Service
 (PaaS).
@@ -43,7 +43,7 @@ learn about the components below.
 
 ### Layer 0
 
-**[host](/flynn-host)** The Flynn host service, manages containers on each host
+**[host](/host)** The Flynn host service, manages containers on each host
 and provides the scheduling framework.
 
 **[discoverd](/discoverd)** The Flynn service discovery system.
@@ -70,7 +70,7 @@ running on Flynn via an HTTP API.
 
 **[router](/router)** Flynn's TCP/HTTP router/load balancer.
 
-**[blobstore](/shelf)** A simple, fast HTTP file service.
+**[blobstore](/blobstore)** A simple, fast HTTP file service.
 
 **[sdutil](/sdutil)** Service discovery utility for [discoverd](/discoverd).
 

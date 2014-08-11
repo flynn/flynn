@@ -1,11 +1,11 @@
-# flynn-bootstrap
+# Bootstrap
 
-flynn-bootstrap performs a list of actions against a Flynn cluster. It is
+Bootstrap performs a list of actions against a Flynn cluster. It is
 typically used to boot Flynn layer 1 services on a new layer 0 cluster.
 
 ## Usage
 
-There is an [example manifest](bootstrapper/manifest.json) that boots a default
+There is an [template manifest](manifest_template.json) that boots a default
 configuration of Flynn layer 1. To run the manifest, you need the `bootstrapper`
 binary or `flynn/bootstrap` Docker image and a running Flynn cluster.
 
@@ -30,10 +30,10 @@ godep go build
 ```
 
 Note that the repo must be cloned into the path
-`$GOPATH/src/github.com/flynn/flynn-bootstrap` to build.
+`$GOPATH/src/github.com/flynn/bootstrap` to build.
 
 By default, the bootstrapper will try to connect to
-[discoverd](https://github.com/flynn/discoverd) at `localhost:1111`, use the
+[discoverd](/discoverd) at `localhost:1111`, use the
 `DISCOVERD` environment variable to change this.
 
 A machine-readable output format is available by adding the `-json` flag. The

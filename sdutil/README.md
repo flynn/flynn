@@ -1,6 +1,6 @@
 # sdutil
 
-Service discovery utility for systems based on [go-discover](https://github.com/flynn/go-discover)
+Service discovery utility for systems based on [go-discover](/discoverd/client).
 
 Complete work in progress
 
