@@ -6,22 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/user"
 	"strconv"
 	"text/template"
-	"time"
 
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
 )
 
 type BootConfig struct {
 	User     string
-	RootFS   string
 	Kernel   string
 	Network  string
 	NatIface string
@@ -46,10 +42,10 @@ func New(bc BootConfig, out io.Writer) *Cluster {
 	}
 }
 
-func BuildFlynn(bc BootConfig, dockerFS, commit string, out io.Writer) (string, error) {
+func BuildFlynn(bc BootConfig, rootFS, commit string, out io.Writer) (string, error) {
 	c := New(bc, out)
 	defer c.Shutdown()
-	return c.BuildFlynn(dockerFS, commit)
+	return c.BuildFlynn(rootFS, commit)
 }
 
 func (c *Cluster) log(a ...interface{}) (int, error) {
@@ -60,7 +56,7 @@ func (c *Cluster) logf(f string, a ...interface{}) (int, error) {
 	return fmt.Fprintf(c.out, f, a...)
 }
 
-func (c *Cluster) BuildFlynn(dockerFS, commit string) (string, error) {
+func (c *Cluster) BuildFlynn(rootFS, commit string) (string, error) {
 	c.log("Building Flynn...")
 
 	if err := c.setup(); err != nil {
@@ -72,26 +68,13 @@ func (c *Cluster) BuildFlynn(dockerFS, commit string) (string, error) {
 		return "", err
 	}
 
-	dockerDrive := VMDrive{FS: dockerFS, COW: true, Temp: false}
-	if dockerDrive.FS == "" {
-		// create 16GB sparse fs image to store docker data on
-		dockerFS, err := createBtrfs(17179869184, "dockerfs", uid, gid)
-		if err != nil {
-			os.RemoveAll(dockerFS)
-			return "", err
-		}
-		dockerDrive.FS = dockerFS
-		dockerDrive.COW = false
-	}
-
 	build, err := c.vm.NewInstance(&VMConfig{
 		Kernel: c.bc.Kernel,
 		User:   uid,
 		Group:  gid,
 		Memory: "512",
 		Drives: map[string]*VMDrive{
-			"hda": {FS: c.bc.RootFS, COW: true, Temp: true},
-			"hdb": &dockerDrive,
+			"hda": {FS: rootFS, COW: true, Temp: false},
 		},
 	})
 	if err != nil {
@@ -108,13 +91,13 @@ func (c *Cluster) BuildFlynn(dockerFS, commit string) (string, error) {
 		return "", fmt.Errorf("error running build script: %s", err)
 	}
 
-	if err := build.Kill(); err != nil {
+	if err := build.Shutdown(); err != nil {
 		return "", fmt.Errorf("error while stopping build instance: %s", err)
 	}
-	return build.Drive("hdb").FS, nil
+	return build.Drive("hda").FS, nil
 }
 
-func (c *Cluster) Boot(dockerfs string, count int) error {
+func (c *Cluster) Boot(backend, rootFS string, count int) error {
 	if err := c.setup(); err != nil {
 		return err
 	}
@@ -131,8 +114,7 @@ func (c *Cluster) Boot(dockerfs string, count int) error {
 			Group:  gid,
 			Memory: "512",
 			Drives: map[string]*VMDrive{
-				"hda": {FS: c.bc.RootFS, COW: true, Temp: true},
-				"hdb": {FS: dockerfs, COW: true, Temp: true},
+				"hda": {FS: rootFS, COW: true, Temp: true},
 			},
 		})
 		if err != nil {
@@ -147,7 +129,7 @@ func (c *Cluster) Boot(dockerfs string, count int) error {
 	}
 
 	c.log("Bootstrapping layer 0...")
-	if err := c.bootstrapGrid(); err != nil {
+	if err := c.bootstrapGrid(backend); err != nil {
 		c.Shutdown()
 		return err
 	}
@@ -191,48 +173,50 @@ func (c *Cluster) Shutdown() {
 	}
 }
 
-var attempts = attempt.Strategy{
-	Min:   5,
-	Total: 5 * time.Minute,
-	Delay: time.Second,
-}
-
 var flynnBuildScript = template.Must(template.New("flynn-build").Parse(`
 #!/bin/bash
 set -e -x
 
-export GOPATH=/var/lib/docker/flynn/go
+export GOPATH=~/go
 flynn=$GOPATH/src/github.com/flynn/flynn
 
 if [ ! -d $flynn ]; then
-  sudo git clone https://github.com/flynn/flynn $flynn
-  sudo chown -R ubuntu:ubuntu $GOPATH
+  git clone https://github.com/flynn/flynn $flynn
 fi
 
-pushd $flynn > /dev/null
+cd $flynn
+
 git fetch
 git checkout {{ . }}
 tup
-popd > /dev/null
 
-sudo stop docker
-sudo umount /var/lib/docker
+sudo cp {host/bin/flynn-*,pinkerton/pinkerton,bootstrap/bin/flynn-bootstrap} /usr/bin
+sudo cp host/bin/manifest.json /etc/flynn-host.json
+sudo cp bootstrap/bin/manifest.json /etc/flynn-bootstrap.json
 `[1:]))
 
 func buildFlynn(inst Instance, commit string, out io.Writer) error {
 	var b bytes.Buffer
 	flynnBuildScript.Execute(&b, commit)
-	return inst.Run(b.String(), attempts, out, out)
+	return inst.Run(b.String(), out, out)
 }
 
-func (c *Cluster) bootstrapGrid() error {
+func (c *Cluster) bootstrapGrid(backend string) error {
 	for i, inst := range c.instances {
-		command := "docker run -d -v=/var/run/docker.sock:/var/run/docker.sock -p=1113:1113"
+		var etcdPeers string
 		if i > 0 {
-			command = fmt.Sprintf("%s -e=ETCD_PEERS=%s:7001", command, c.instances[0].IP())
+			etcdPeers = fmt.Sprintf("%s:7001", c.instances[0].IP())
 		}
-		command = fmt.Sprintf("%s flynn/host -external %s -force", command, inst.IP())
-		if err := inst.Run(command, attempts, c.out, os.Stderr); err != nil {
+
+		var command string
+		switch backend {
+		case "libvirt-lxc":
+			command = fmt.Sprintf("sudo virsh net-start default; sudo start-stop-daemon --start --background --no-close --exec /usr/bin/env -- ETCD_PEERS=%s flynn-host -manifest /etc/flynn-host.json -external %s -force -backend %s &>/tmp/flynn-host.log", etcdPeers, inst.IP(), backend)
+		case "docker":
+			command = fmt.Sprintf("docker run -d -v=/var/run/docker.sock:/var/run/docker.sock -p=1113:1113 -e=ETCD_PEERS=%s flynn/host -external %s -force -backend %s", etcdPeers, inst.IP(), backend)
+		}
+
+		if err := inst.Run(command, c.out, os.Stderr); err != nil {
 			return err
 		}
 	}
@@ -243,6 +227,7 @@ type bootstrapMsg struct {
 	Id    string          `json:"id"`
 	State string          `json:"state"`
 	Data  json.RawMessage `json:"data"`
+	Error string          `json:"error"`
 }
 
 type controllerCert struct {
@@ -257,10 +242,10 @@ func (c *Cluster) bootstrapFlynn() error {
 	var cmdErr error
 	go func() {
 		command := fmt.Sprintf(
-			"docker run -e=DISCOVERD=%s:1111 -e CONTROLLER_DOMAIN=%s -e CONTROLLER_KEY=%s flynn/bootstrap -json -min-hosts=%d /etc/manifest.json",
+			"DISCOVERD=%s:1111 CONTROLLER_DOMAIN=%s CONTROLLER_KEY=%s flynn-bootstrap -json -min-hosts=%d /etc/flynn-bootstrap.json",
 			inst.IP(), c.ControllerDomain, c.ControllerKey, len(c.instances),
 		)
-		cmdErr = inst.Run(command, attempts, wr, os.Stderr)
+		cmdErr = inst.Run(command, wr, os.Stderr)
 		wr.Close()
 	}()
 
@@ -276,7 +261,7 @@ func (c *Cluster) bootstrapFlynn() error {
 		}
 		c.log("bootstrap ===>", msg.Id, msg.State)
 		if msg.State == "error" {
-			c.log(msg)
+			c.log(msg.Error)
 		}
 		if msg.Id == "controller-cert" && msg.State == "done" {
 			json.Unmarshal(msg.Data, &cert)
@@ -305,31 +290,6 @@ func (c *Cluster) bootstrapFlynn() error {
 		return fmt.Errorf("could not set router DNS entry: %s", err)
 	}
 	return nil
-}
-
-func createBtrfs(size int64, label string, uid, gid int) (string, error) {
-	f, err := ioutil.TempFile("", label+"-")
-	if err != nil {
-		return "", err
-	}
-	if _, err := f.Seek(size, 0); err != nil {
-		f.Close()
-		os.Remove(f.Name())
-		return "", err
-	}
-	if _, err := f.Write([]byte{0}); err != nil {
-		f.Close()
-		os.Remove(f.Name())
-		return "", err
-	}
-	f.Chown(uid, gid)
-	f.Close()
-
-	res, err := exec.Command("mkfs.btrfs", "--label", label, f.Name()).CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("mkfs.btrfs error %s - %q", err, res)
-	}
-	return f.Name(), nil
 }
 
 func setLocalDNS(domain, ip string) error {

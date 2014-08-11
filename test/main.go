@@ -41,17 +41,19 @@ func main() {
 	flynnrc = args.Flynnrc
 	if flynnrc == "" {
 		c := cluster.New(args.BootConfig, os.Stdout)
-		dockerfs := args.DockerFS
-		if dockerfs == "" {
+		rootFS := args.RootFS
+		if args.Build {
 			var err error
-			if dockerfs, err = c.BuildFlynn("", "master"); err != nil {
+			if rootFS, err = c.BuildFlynn(args.RootFS, "origin/master"); err != nil {
 				log.Fatal("could not build flynn:", err)
 			}
-			if !args.KeepDockerFS {
-				defer os.RemoveAll(dockerfs)
+			if args.KeepRootFS {
+				fmt.Println("Built Flynn in rootfs:", rootFS)
+			} else {
+				defer os.RemoveAll(rootFS)
 			}
 		}
-		if err := c.Boot(dockerfs, 1); err != nil {
+		if err := c.Boot(args.Backend, rootFS, 1); err != nil {
 			log.Fatal("could not boot cluster: ", err)
 		}
 		if args.Kill {

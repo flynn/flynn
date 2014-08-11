@@ -21,7 +21,6 @@ echo ubuntu:ubuntu | chpasswd
 
 # set up fstab
 echo "LABEL=rootfs / ext4 defaults 0 1" > /etc/fstab
-echo "LABEL=dockerfs /var/lib/docker btrfs defaults 0 0" >> /etc/fstab
 echo "netfs /etc/network/interfaces.d 9p trans=virtio 0 0" >> /etc/fstab
 
 # configure hosts and dns resolution
@@ -76,7 +75,7 @@ apt-get install -y software-properties-common
 apt-add-repository 'deb http://ppa.launchpad.net/anatol/tup/ubuntu precise main'
 apt-key adv --keyserver keyserver.ubuntu.com --recv E601AAF9486D3664
 apt-get update
-apt-get install -y tup fuse build-essential libdevmapper-dev btrfs-tools
+apt-get install -y tup fuse build-essential libdevmapper-dev btrfs-tools libvirt-dev libvirt-bin
 
 # install go
 curl -L j.mp/godeb | tar xz
