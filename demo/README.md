@@ -21,7 +21,7 @@ If you see an error unpackaging the box, you need to install `xz` (`brew install
 xz` or `apt-get install xz-utils`).
 
 The final log line contains configuration details used to access Flynn via the
-command line tool. Install [flynn-cli](https://github.com/flynn/flynn-cli), and
+command line tool. Install [cli](/cli), and
 paste the `flynn server-add` command into your terminal.
 
 ### Usage
