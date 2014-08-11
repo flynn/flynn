@@ -21,7 +21,9 @@ func Pull(url string) ([]LayerPullInfo, error) {
 	cmd := exec.Command("pinkerton", "pull", "--json", url)
 	stdout, _ := cmd.StdoutPipe()
 	cmd.Stderr = &errBuf
-	cmd.Start()
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
 	j := json.NewDecoder(stdout)
 	for {
 		var l LayerPullInfo
