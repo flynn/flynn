@@ -42,7 +42,7 @@ install:
   - sudo make install
   - popd
 
-  - psql -c 'create database shelftest;' -U postgres
+  - psql -c 'create database blobstoretest;' -U postgres
   - export PGUSER=postgres
 
   - popd

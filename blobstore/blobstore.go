@@ -104,11 +104,11 @@ func main() {
 		}
 		storageDesc = "Postgres"
 
-		if err := discoverd.Register("shelf", addr); err != nil {
+		if err := discoverd.Register("blobstore", addr); err != nil {
 			log.Fatal(err)
 		}
 	}
 
-	log.Println("Shelf serving files on " + addr + " from " + storageDesc)
+	log.Println("Blobstore serving files on " + addr + " from " + storageDesc)
 	log.Fatal(http.ListenAndServe(addr, handler(fs)))
 }
