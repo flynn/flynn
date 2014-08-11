@@ -15,10 +15,10 @@ down into two layers. The first layer contains the minimum components needed to
 run the rest of the components -- a bootstrapping layer. The second is where the
 rest of Flynn lives.
 
-*Layer 0*, which we call "The Grid", is the core of Flynn. It assumes hosts and
-network environment, and doesn't care how they got there -- cloud or hardware.
-The Grid sits on top of hosts, abstracting them away and provides primitives for
-the rest of the system, namely distributed container management.
+*Layer 0*, is the core of Flynn. It assumes hosts and a network environment, and
+doesn't care how they got there -- cloud or hardware. Layer 0 sits on top of
+hosts, abstracting them away and provides primitives for the rest of the system,
+namely distributed container management.
 
 *Layer 1* is where most of what we consider Flynn to be exists. It's where
 containers become services or applications, and the user workflow is
@@ -55,9 +55,9 @@ We'll actually talk about these last.
 * Messaging and RPC model
 
 
-### Layer 0: The Grid
+### Layer 0
 
-The Grid provides a lower level platform, useful even outside of Flynn, that
+Layer 0 provides a lower level platform, useful even outside of Flynn, that
 provides a solid abstraction between a cluster of hosts and containerized
 processes. In that way it's similar to other general scheduling systems, but is
 different in these ways:
