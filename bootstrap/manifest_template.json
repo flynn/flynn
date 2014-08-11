@@ -39,7 +39,10 @@
     "id": "controller",
     "action": "run-app",
     "release": {
-      "env": { "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}" },
+      "env": {
+        "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
+        "DEFAULT_ROUTE_DOMAIN": "{{ getenv \"DEFAULT_ROUTE_DOMAIN\" }}"
+      },
       "processes": {
         "web": {
           "ports": [{"proto": "tcp"}],
