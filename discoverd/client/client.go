@@ -310,8 +310,9 @@ func (s *serviceSet) setServices(services map[string]*Service) {
 }
 
 func (s *serviceSet) Addrs() []string {
-	list := make([]string, 0, len(s.services))
-	for _, service := range s.Services() {
+	services := s.Services()
+	list := make([]string, 0, len(services))
+	for _, service := range services {
 		list = append(list, service.Addr)
 	}
 	return list
