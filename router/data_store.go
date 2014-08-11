@@ -174,9 +174,11 @@ watch:
 
 	for {
 		stream := make(chan *etcd.Response)
+		watchDone := make(chan struct{})
 		var watchErr error
 		go func() {
 			_, watchErr = s.etcd.Watch(s.prefix, nextIndex, true, stream, s.stopSync)
+			close(watchDone)
 		}()
 		for res := range stream {
 			nextIndex = res.EtcdIndex + 1
@@ -198,6 +200,7 @@ watch:
 				log.Printf("Error while processing update from etcd: %s, %#v", err, res.Node)
 			}
 		}
+		<-watchDone
 		select {
 		case <-s.stopSync:
 			return
