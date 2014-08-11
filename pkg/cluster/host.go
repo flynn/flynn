@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"net"
+
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/rpcplus"
 )
