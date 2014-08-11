@@ -39,8 +39,8 @@ func RunDiscoverdServer(t TestingT, addr string) func() {
 				return
 			}
 			<-cmdDone
-		case <-cmdDone:
-			return
+		case err := <-cmdDone:
+			t.Log("discoverd process exited:", err)
 		}
 	}()
 

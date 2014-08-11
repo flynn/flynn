@@ -25,6 +25,7 @@ var Attempts = attempt.Strategy{
 type TestingT interface {
 	Fatal(...interface{})
 	Fatalf(string, ...interface{})
+	Log(...interface{})
 }
 
 func RunEtcdServer(t TestingT) func() {
@@ -61,11 +62,12 @@ func RunEtcdServer(t TestingT) func() {
 				return
 			}
 			<-cmdDone
-		case <-cmdDone:
+		case err := <-cmdDone:
+			t.Log("etcd process exited:", err)
 			return
 		}
 		if err := os.RemoveAll(dataDir); err != nil {
-			return
+			t.Log("etcd data removal failed:", err)
 		}
 	}()
 
