@@ -39,7 +39,7 @@ func (c *FakeCluster) GetHost(id string) host.Host {
 	jobs := make([]*host.Job, len(h.Jobs))
 	copy(jobs, h.Jobs)
 
-	return host.Host{ID: h.ID, Jobs: jobs, Attributes: h.Attributes}
+	return host.Host{ID: h.ID, Jobs: jobs, Metadata: h.Metadata}
 }
 
 func (c *FakeCluster) DialHost(id string) (cluster.Host, error) {

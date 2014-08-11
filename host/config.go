@@ -26,10 +26,10 @@ func parseConfig(r io.Reader) (*host.Host, error) {
 }
 
 type Config struct {
-	Attributes map[string]string `json:"attributes"`
+	Metadata map[string]string `json:"metadata"`
 }
 
 func (c *Config) hostConfig() (*host.Host, error) {
-	h := &host.Host{Attributes: c.Attributes}
+	h := &host.Host{Metadata: c.Metadata}
 	return h, nil
 }

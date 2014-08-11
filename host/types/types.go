@@ -2,31 +2,99 @@ package host
 
 import (
 	"time"
-
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-dockerclient"
 )
 
 type Job struct {
 	ID string
 
-	// Job attributes
-	Attributes map[string]string
-	// Number of TCP ports required by the job
-	TCPPorts int
+	Metadata map[string]string
 
-	Config     *docker.Config
-	HostConfig *docker.HostConfig
+	Artifact  Artifact
+	Resources JobResources
+
+	Config ContainerConfig
 }
 
-// TODO: cleanup the Job struct (abstract docker stuff, etc)
+func (j *Job) Dup() *Job {
+	job := *j
+
+	dupMap := func(m map[string]string) (res map[string]string) {
+		if m != nil {
+			res = make(map[string]string, len(m))
+		}
+		for k, v := range m {
+			res[k] = v
+		}
+		return res
+	}
+	dupSlice := func(s []string) (res []string) {
+		if s != nil {
+			res = make([]string, len(s))
+		}
+		for i, v := range s {
+			res[i] = v
+		}
+		return res
+	}
+	job.Metadata = dupMap(j.Metadata)
+	job.Config.Entrypoint = dupSlice(j.Config.Entrypoint)
+	job.Config.Cmd = dupSlice(j.Config.Cmd)
+	job.Config.Env = dupMap(j.Config.Env)
+	if j.Config.Ports != nil {
+		job.Config.Ports = make([]Port, len(j.Config.Ports))
+		for i, p := range j.Config.Ports {
+			job.Config.Ports[i] = p
+		}
+	}
+	if j.Config.Mounts != nil {
+		job.Config.Mounts = make([]Mount, len(j.Config.Mounts))
+		for i, m := range j.Config.Mounts {
+			job.Config.Mounts[i] = m
+		}
+	}
+
+	return &job
+}
+
+type JobResources struct {
+	Memory int // in KiB
+}
+
+type ContainerConfig struct {
+	TTY        bool
+	Stdin      bool
+	Data       bool
+	Entrypoint []string
+	Cmd        []string
+	Env        map[string]string
+	Mounts     []Mount
+	Ports      []Port
+	WorkingDir string
+	Uid        int
+}
+
+type Port struct {
+	Port     int
+	Proto    string
+	RangeEnd int
+}
+
+type Mount struct {
+	Location  string
+	Target    string
+	Writeable bool
+}
+
+type Artifact struct {
+	URI  string
+	Type string
+}
 
 type Host struct {
 	ID string
 
-	// Currently running jobs
-	Jobs []*Job
-	// Host attributes
-	Attributes map[string]string
+	Jobs     []*Job
+	Metadata map[string]string
 }
 
 type AddJobsReq struct {
@@ -51,21 +119,22 @@ type HostEvent struct {
 }
 
 type ActiveJob struct {
-	Job *Job
-
+	Job         *Job
 	ContainerID string
+	InternalIP  string
 	Status      JobStatus
 	StartedAt   time.Time
 	EndedAt     time.Time
-	ExitCode    int
+	ExitStatus  int
 	Error       *string
+	ManifestID  string
 }
 
 type AttachReq struct {
 	JobID  string
 	Flags  AttachFlag
-	Height int
-	Width  int
+	Height uint16
+	Width  uint16
 }
 
 type AttachFlag uint8
@@ -102,4 +171,8 @@ const (
 	AttachSuccess byte = iota
 	AttachWaiting
 	AttachError
+	AttachData
+	AttachSignal
+	AttachExit
+	AttachResize
 )

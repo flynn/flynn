@@ -16,29 +16,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
   config.vm.synced_folder ".", "/vagrant", disabled: true
 
-  config.vm.provision "shell", inline: <<SCRIPT
-    # Fix for https://github.com/flynn/flynn/issues/13
-    echo 3600 > /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_close_wait
-
-    IP_ADDR=$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')
-
-    echo "Configuring flynn with internal ip: ${IP_ADDR}"
-
-    docker pull flynn/host
-    docker pull flynn/discoverd
-    docker pull flynn/etcd
-
-    docker run -d -v=/var/run/docker.sock:/var/run/docker.sock -p=1113:1113 flynn/host -external ${IP_ADDR} -force
-
-    docker pull flynn/postgres
-    docker pull flynn/controller
-    docker pull flynn/gitreceive
-    docker pull flynn/strowger
-    docker pull flynn/shelf
-    docker pull flynn/slugrunner
-    docker pull flynn/slugbuilder
-    docker pull flynn/bootstrap
-
-    docker run -e=DISCOVERD=${IP_ADDR}:1111 flynn/bootstrap
+  config.vm.provision "shell", privileged: false, inline: <<SCRIPT
+    curl -sLo /tmp/flynn-host.deb https://dl.flynn.io/flynn-host_current_amd64.deb
+    sudo dpkg -i /tmp/flynn-host.deb
+    sudo flynn-release download /etc/flynn/version.json
+    sudo start flynn-host
+    flynn-bootstrap /etc/flynn/bootstrap-manifest.json 2>&1
 SCRIPT
 end

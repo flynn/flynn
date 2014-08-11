@@ -2,8 +2,6 @@ package cluster
 
 import (
 	"net"
-
-	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/rpcplus"
 )
@@ -13,19 +11,18 @@ type Host interface {
 	GetJob(id string) (*host.ActiveJob, error)
 	StopJob(id string) error
 	StreamEvents(id string, ch chan<- *host.Event) Stream
-	Attach(req *host.AttachReq, wait bool) (ReadWriteCloser, func() error, error)
+	Attach(req *host.AttachReq, wait bool) (AttachClient, error)
 	Close() error
 }
 
 type hostClient struct {
-	service discoverd.ServiceSet
-
+	addr string
 	dial rpcplus.DialFunc
 	c    RPCClient
 }
 
-func newHostClient(ss discoverd.ServiceSet, client RPCClient, dial rpcplus.DialFunc) Host {
-	c := &hostClient{service: ss, dial: dial, c: client}
+func newHostClient(addr string, client RPCClient, dial rpcplus.DialFunc) Host {
+	c := &hostClient{addr: addr, dial: dial, c: client}
 	if dial == nil {
 		c.dial = net.Dial
 	}

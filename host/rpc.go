@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"net"
 	"net/http"
 
 	"github.com/flynn/flynn/host/types"
@@ -9,11 +10,20 @@ import (
 	rpc "github.com/flynn/flynn/pkg/rpcplus/comborpc"
 )
 
-func serveHTTP(host *Host, attach *attachHandler) {
-	rpc.Register(host)
+func serveHTTP(host *Host, attach *attachHandler, sh *shutdownHandler) error {
+	if err := rpc.Register(host); err != nil {
+		return err
+	}
 	rpc.HandleHTTP()
 	http.Handle("/attach", attach)
-	http.ListenAndServe(":1113", nil)
+
+	l, err := net.Listen("tcp", ":1113")
+	if err != nil {
+		return err
+	}
+	sh.BeforeExit(func() { l.Close() })
+	go http.Serve(l, nil)
+	return nil
 }
 
 type Host struct {
@@ -42,21 +52,12 @@ func (h *Host) StopJob(id string, res *struct{}) error {
 	if job.Status != host.StatusRunning {
 		return errors.New("host: job is not running")
 	}
-	return h.backend.Stop(job.ContainerID)
+	return h.backend.Stop(id)
 }
 
 func (h *Host) StreamEvents(id string, stream rpcplus.Stream) error {
-	ch := make(chan host.Event)
-	h.state.AddListener(id, ch)
-	defer func() {
-		go func() {
-			// drain to prevent deadlock while removing the listener
-			for _ = range ch {
-			}
-		}()
-		h.state.RemoveListener(id, ch)
-		close(ch)
-	}()
+	ch := h.state.AddListener(id)
+	defer h.state.RemoveListener(id, ch)
 	for {
 		select {
 		case event := <-ch:

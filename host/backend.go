@@ -1,29 +1,36 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
 
 	"github.com/flynn/flynn/host/types"
 )
 
 type AttachRequest struct {
-	Job     *host.ActiveJob
-	Streams []string
-	Logs    bool
-	Stream  bool
-	Height  int
-	Width   int
+	Job    *host.ActiveJob
+	Logs   bool
+	Stream bool
+	Height uint16
+	Width  uint16
 
-	// If set, after a successful connect, a sentinel will be sent and then the
-	// client will block on receive before continuing.
 	Attached chan struct{}
 
-	io.ReadWriter
+	Stdout io.WriteCloser
+	Stderr io.WriteCloser
+	Stdin  io.Reader
 }
 
 type Backend interface {
 	Run(*host.Job) error
 	Stop(string) error
+	Signal(string, int) error
+	ResizeTTY(id string, height, width uint16) error
 	Attach(*AttachRequest) error
 	Cleanup() error
+	RestoreState(map[string]*host.ActiveJob, *json.Decoder) error
+}
+
+type StateSaver interface {
+	SaveState(*json.Encoder) error
 }

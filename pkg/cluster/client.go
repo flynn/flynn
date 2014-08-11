@@ -190,8 +190,9 @@ func (c *Client) DialHost(id string) (Host, error) {
 	if len(services) == 0 {
 		return nil, ErrNoServers
 	}
-	rc, err := rpcplus.DialHTTPPath("tcp", services[0].Addr, rpcplus.DefaultRPCPath, c.dial)
-	return newHostClient(c.service, rc, c.dial), err
+	addr := services[0].Addr
+	rc, err := rpcplus.DialHTTPPath("tcp", addr, rpcplus.DefaultRPCPath, c.dial)
+	return newHostClient(addr, rc, c.dial), err
 }
 
 // Register is used by flynn-host to register itself with the leader and get

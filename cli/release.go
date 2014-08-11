@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
+	"encoding/json"
+	"io/ioutil"
 	"log"
-	"strings"
 
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
@@ -11,32 +11,42 @@ import (
 
 var cmdReleaseAddDocker = &Command{
 	Run:   runReleaseAddDocker,
-	Usage: "release-add-docker <image> <tag>",
+	Usage: "release-add-docker <uri>",
 	Short: "add a docker image release",
 	Long:  "Add a release referencing a Docker image",
 }
 
+var releaseFile string
+
+func init() {
+	cmdReleaseAddDocker.Flag.StringVarP(&releaseFile, "file", "f", "", "path to JSON release config")
+}
+
 func runReleaseAddDocker(cmd *Command, args []string, client *controller.Client) error {
-	if len(args) != 2 {
+	if len(args) != 1 {
 		cmd.printUsage(true)
 	}
 
-	image := args[0]
-	tag := args[1]
-
-	if !strings.Contains(image, ".") {
-		image = "/" + image
+	release := &ct.Release{}
+	if releaseFile != "" {
+		data, err := ioutil.ReadFile(releaseFile)
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(data, release); err != nil {
+			return err
+		}
 	}
 
 	artifact := &ct.Artifact{
 		Type: "docker",
-		URI:  fmt.Sprintf("docker://%s?tag=%s", image, tag),
+		URI:  args[0],
 	}
 	if err := client.CreateArtifact(artifact); err != nil {
 		return err
 	}
 
-	release := &ct.Release{ArtifactID: artifact.ID}
+	release.ArtifactID = artifact.ID
 	if err := client.CreateRelease(release); err != nil {
 		return err
 	}

@@ -14,27 +14,14 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.network "forwarded_port", guest: 443, host: 8081
   config.vm.network "forwarded_port", guest: 2222, host: 2201
 
-  config.vm.provision "shell", inline: <<SCRIPT
-    apt-get update
-    apt-get install -y software-properties-common libdevmapper-dev btrfs-tools
-    apt-add-repository 'deb http://ppa.launchpad.net/anatol/tup/ubuntu precise main'
-    apt-key adv --keyserver keyserver.ubuntu.com --recv E601AAF9486D3664
-    apt-get update
-    apt-get install -y tup
-
-    # Fix for https://github.com/flynn/flynn/issues/13
-    echo 3600 > /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_close_wait
-
-    # For controller tests
-    apt-get install -y postgresql postgresql-contrib
-SCRIPT
-
   config.vm.provision "shell", privileged: false, inline: <<SCRIPT
     grep '^export GOPATH' ~/.bashrc || echo export GOPATH=~/go >> ~/.bashrc
     grep '^export PATH' ~/.bashrc || echo export PATH=\$PATH:~/go/bin:/vagrant/script >> ~/.bashrc
     GOPATH=~/go go get github.com/tools/godep
 
     # For controller tests
+    sudo apt-get update
+    sudo apt-get install -y postgresql postgresql-contrib
     sudo -u postgres createuser --superuser vagrant
     grep '^export PGHOST' ~/.bashrc || echo export PGHOST=/var/run/postgresql >> ~/.bashrc
 
