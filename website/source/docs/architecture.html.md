@@ -22,8 +22,8 @@ namely distributed container management.
 
 *Layer 1* is where most of what we consider Flynn to be exists. It's where
 containers become services or applications, and the user workflow is
-implemented. Everything in layer 1 is ultimately no different than the services
-it helps to deploy. In fact, we've intentionally stopped at layer 1 as opposed
+implemented. Everything in Layer 1 is ultimately no different than the services
+it helps to deploy. In fact, we've intentionally stopped at Layer 1 as opposed
 to creating a "userland" layer 2 because there would technically be no
 difference.
 
@@ -43,15 +43,8 @@ extends into anything else Flynn decides to provide.
 * Management API / client
 * Git receiver
 * Heroku Buildpacks
-* Database appliance
+* Datastore appliances
 * Routing
-
-There are also two concepts that are shared by both and don't "live" anywhere.
-We'll actually talk about these last.
-
-* Appliance model
-* Messaging and RPC model
-
 
 ### Layer 0
 
@@ -187,14 +180,91 @@ Effectively turning hosts into container-running appliances.
 
 ### Layer 1: Flynn and Beyond
 
+Layer 1 builds on Layer 0 to provide a high-level system that deploys, manages
+and scales services on the cluster. This system feels a lot like other platforms
+like Heroku, CloudFoundry, OpenShift, etc. but is much more modular and generic.
+
+Layer 1 is built on and hosted by Layer 0, but it doesn't get any special
+treatment. It also doesn't depend very heavily on Layer 0, so it would be
+possible to replace Layer 0 with another set of services that provide similar
+APIs.
+
+Applications deployed using Layer 1 components run on Layer 0 just like
+everything else, so there is no "layer 2".
+
 #### Management API / client
+
+The core of Layer 1 is the
+[controller](https://github.com/flynn/flynn/tree/master/controller) which
+provides a HTTP API and scheduler that model the concept of applications and. There
+are a few top-level concepts that come together to form a running application.
+
+The first top-level object is an *artifact*. Artifacts are immutable images that
+are used to run jobs on Layer 0. Usually this is a URI of a container
+image stored somewhere else.
+
+The second top-level object is called a *release*. Releases are immutable
+configurations for running one or more processes from an *artifact*. They
+contain information about process types including the executable name and
+arguments, environment variables, forwarded ports, and resource requirements.
+
+The immutability of artifacts and releases allow for easy rollbacks, and ensure
+that no action is destructive.
+
+The third, and last top-level object is the *app*. Apps are essentially
+containers that have associated metadata and allow instantiation of running
+releases. These running releases are called *formations* and are namespaced
+under apps. Formations reference an immutable release and contain a mutable
+count of desired running processes for each type.
+
+The controller's scheduler gets updates whenever desired formations change and
+then applies changes to the cluster using the Layer 0 scheduling framework.
+
+Every Layer 1 service, including the controller, is an app in the controller and
+is scaled and updated using the same controller APIs that are used to manage
+every other application. This allows Flynn to be entirely self-bootstrapping and
+removes a huge amount of complexity involved in deploying and managing the
+platform.
 
 #### Git receiver
 
+The Git receiver is a special-purpose SSH server daemon that receives git
+pushes. It turns the pushed revision into a tarball and passes it off the the
+Flynn receiver which is responsible for "deploying" the change. There is nothing
+special about this component, it just consumes the controller and Layer 0 APIs
+and creates a new artifact and release in the controller.
+
 #### Heroku Buildpacks
 
-#### Log aggregation
-
-#### Database appliance
+The receiver uses slugbuilder to run a [Heroku
+Buildpack](https://devcenter.heroku.com/articles/buildpacks) against the source
+code which turns the code into a runnable "slug". This slug is a tarball of the
+app and all of its dependencies which can be run by slugrunner. The final
+release in the controller references the slugrunner artifact and the slug via an
+environment variable.
 
 #### Routing
+
+The router is responsible for routing and load balancing HTTP and TCP traffic
+across backend instances of an app. It uses service discovery to find the
+backends, so very little configuration is required. Most incoming public traffic
+goes through the router, including that of the controller and Git receiver.
+However, the router is not special and it is possible to build your own router
+or other service that receives public traffic directly. Most Flynn services
+communicate internally directly using service discovery.
+
+The router stores configuration in and synchronizes from etcd (or another
+datastore that provides similar guarantees) which allows all instances to have
+get the same set of routes right away without restarting. Backends can also come
+and go without restarting, since we use streams from service discovery.
+
+#### Datastore appliance framework
+
+The datastore appliance framework allows users not to know how specific
+datastores work and provides a standardized management system for stateful
+services. The framework is an interface to generically support things like
+provisioning databases and credentials, manage backups, automatically
+configuring replication, automatic or manual failovers, etc.
+
+Currently Flynn has a PostgreSQL appliance that automatically sets up
+replication and does failover, and the appliance framework is in progress.
