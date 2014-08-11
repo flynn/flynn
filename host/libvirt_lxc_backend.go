@@ -553,15 +553,8 @@ func (c *libvirtContainer) cleanup() error {
 }
 
 func (l *LibvirtLXCBackend) Stop(id string) error {
-	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "stop", "job.id": id})
-	g.Log(grohl.Data{})
-	client, err := l.getContainer(id)
-	if err != nil {
-		g.Log(grohl.Data{"status": "error", "err": err})
-		return err
-	}
 	// TODO: follow up with sigkill
-	return client.Signal(int(syscall.SIGTERM))
+	return l.Signal(id, int(syscall.SIGTERM))
 }
 
 func (l *LibvirtLXCBackend) getContainer(id string) (*libvirtContainer, error) {
