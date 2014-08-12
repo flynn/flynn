@@ -6,7 +6,7 @@ Discoverd is made to be used with an official library, since a lot of the magic 
 
 ## Protocol
 
-Currently the API is exposed using [rpcplus](https://github.com/flynn/rpcplus), a variation of Go's builtin RPC that supports streaming. It supports both Gob and JSON encoding. It will eventually be replaced by [Duplex](https://github.com/progrium/duplex).
+Currently the API is exposed using [rpcplus](/pkg/rpcplus), a variation of Go's builtin RPC that supports streaming. It supports both Gob and JSON encoding. It will eventually be replaced by another RPC system.
 
 All methods return an error value with their output value. If there is no output value, there will still be an error value returned, which will be nil if there was no error.
 

@@ -16,7 +16,7 @@ Flynn.Views.SponsorConfirm = React.createClass({
 
 					<ul className="list-block">
 						<li>
-							<a href="https://github.com/flynn">
+							<a href="https://github.com/flynn/flynn">
 								GitHub
 							</a>
 						</li>

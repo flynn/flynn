@@ -9,12 +9,12 @@ Lots of news from the world of Flynn today including the first demo of Flynn,
 a video of our first meetup, and a status report.
 
 Today we are launching the first [Flynn
-demo](https://github.com/flynn/flynn-dev). The demo includes basic features of
-Flynn layers 0 and 1 including the host service, service discovery, and git
-receive. The demo is [on GitHub](https://github.com/flynn/flynn-dev) and
-a screencast is embedded below. After you try the demo check out some of the
-underlying components also on the [Flynn GitHub
-account](https://github.com/flynn).
+demo](https://github.com/flynn/flynn/tree/master/demo). The demo includes basic
+features of Flynn layers 0 and 1 including the host service, service discovery,
+and git receive. The demo is [on
+GitHub](https://github.com/flynn/flynn/tree/master/demo) and a screencast is
+embedded below. After you try the demo check out some of the underlying
+components also on the [Flynn GitHub repo](https://github.com/flynn/flynn).
 
 <video controls="true" poster="https://s3.amazonaws.com/flynn-media/flynn_demo_2013-11-14.jpeg" width="640" height="360">
   <source src="https://s3.amazonaws.com/flynn-media/flynn_demo_2013-11-14.mp4" type="video/mp4">
@@ -42,17 +42,18 @@ near future.
 
 Next month we will announce a more polished, complete, and documented version of
 the Layer 0 components: [the host
-service](https://github.com/flynn/flynn/tree/master/host),
-[scheduler](https://github.com/flynn/sampi), and [service
-discovery](https://github.com/flynn/go-discover). This layer can be used on its
-own to schedule and run jobs (e.g. replace Mesos). A similar release of the
-major Layer 1 components will follow in early 2014. This will likely include the
-[management API](https://github.com/flynn/flynn-api), [git
-receiver](https://github.com/flynn/gitreceive-next), support for
-[Heroku](https://github.com/flynn/slugbuilder)
-[buildpacks](https://github.com/flynn/slugrunner), and the
-[router](https://github.com/flynn/strowger). Other Layer 1 components will
-arrive later in the year.
+service](https://github.com/flynn/flynn/tree/master/host), [scheduling
+framework](https://github.com/flynn/flynn/tree/master/host/sampi), and [service
+discovery](https://github.com/flynn/flynn/tree/master/discoverd). This layer can
+be used on its own to schedule and run jobs (e.g. replace Mesos). A similar
+release of the major Layer 1 components will follow in early 2014. This will
+likely include the [management
+API](https://github.com/flynn/flynn/tree/master/controller), [git
+receiver](https://github.com/flynn/flynn/tree/master/gitreceived), support for
+[Heroku](https://github.com/flynn/flynn/tree/master/slugbuilder)
+[buildpacks](https://github.com/flynn/flynn/tree/master/slugrunner), and the
+[router](https://github.com/flynn/flynn/tree/master/router). Other Layer
+1 components will arrive later in the year.
 
 ### Money
 
@@ -70,9 +71,9 @@ campaign, we are focusing on companies who can contribute on a monthly recurring
 basis, but of course all types and amounts are appreciated.
 
 We encourage everyone to check out the demo and dive into the code. We will be
-in [IRC](irc://irc.freenode.net/flynn) and on [GitHub](https://github.com/flynn)
-to answer any questions and respond to comments. You can also email
-us anytime.
+in [IRC](irc://irc.freenode.net/flynn) and on
+[GitHub](https://github.com/flynn/flynn) to answer any questions and respond to
+comments. You can also email us anytime.
 
 Thank you for your support and encouragement and being part of the Flynn
 community.
