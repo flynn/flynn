@@ -38,7 +38,7 @@ var ErrHashMismatch = errors.New("new file hash mismatch after patch")
 
 // Update protocol.
 //
-//   GET flynn-cli.herokuapp.com/flynn/current/linux-amd64.json
+//   GET https://cli.flynn.io/flynn/current/linux-amd64.json
 //
 //   200 ok
 //   {
@@ -48,14 +48,14 @@ var ErrHashMismatch = errors.New("new file hash mismatch after patch")
 //
 // then
 //
-//   GET flynn-cli-patch.s3.amazonaws.com/flynn/1/2/linux-amd64
+//   GET https://flynn-cli-patch.s3.amazonaws.com/flynn/1/2/linux-amd64
 //
 //   200 ok
 //   [bsdiff data]
 //
 // or
 //
-//   GET flynn-cli-dist.s3.amazonaws.com/flynn/2/linux-amd64.gz
+//   GET https://flynn-cli-dist.s3.amazonaws.com/flynn/2/linux-amd64.gz
 //
 //   200 ok
 //   [gzipped executable data]

@@ -57,7 +57,7 @@ main() {
 install_cli() {
   local path=$1
 
-  curl -sL -A "`uname -sp`" https://flynn-cli.herokuapp.com/flynn.gz | zcat > $path
+  curl -sL -A "`uname -sp`" https://cli.flynn.io/flynn.gz | zcat > $path
   chmod +x $path
 }
 
