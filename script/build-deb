@@ -5,10 +5,7 @@ ROOT=$(cd $(dirname "$0")/..; pwd)
 cd "$ROOT"
 
 rev=$(git rev-parse HEAD)
-version=0-${rev:0:8}
-if [[ -n "$(git status --porcelain)" ]]; then
-  version+="+"
-fi
+version="0:$(date +'%Y%m%d').${ITERATION:-0}~${rev:0:8}"
 
 fpm -s dir -t deb \
   --name flynn-host \
