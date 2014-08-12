@@ -29,6 +29,9 @@ Options:
 `)
 }
 
+// Declared here for Windows portability
+const SIGWINCH syscall.Signal = 28
+
 func runRun(args *docopt.Args, client *controller.Client) error {
 	runDetached := args.Bool["--detached"]
 	runRelease := args.String["-r"]
@@ -89,7 +92,7 @@ func runRun(args *docopt.Args, client *controller.Client) error {
 		defer term.Restore(os.Stdin)
 		go func() {
 			ch := make(chan os.Signal)
-			signal.Notify(ch, syscall.SIGWINCH)
+			signal.Notify(ch, SIGWINCH)
 			<-ch
 			height, err := term.Lines()
 			if err != nil {
@@ -100,7 +103,7 @@ func runRun(args *docopt.Args, client *controller.Client) error {
 				return
 			}
 			attachClient.ResizeTTY(uint16(height), uint16(width))
-			attachClient.Signal(int(syscall.SIGWINCH))
+			attachClient.Signal(int(SIGWINCH))
 		}()
 	}
 
