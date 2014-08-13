@@ -44,8 +44,8 @@ warning will be removed when Flynn is ready for production use.
 
 ## Getting Started
 
-We built a [tool](https://flynn.cupcake.io) for launching Flynn clusters on your
-Amazon Web Services account [here](https://flynn.cupcake.io).
+We built a [tool](https://dashboard.flynn.io) for launching Flynn clusters on your
+Amazon Web Services account [here](https://dashboard.flynn.io).
 
 You can also download a [demo
 environment](https://github.com/flynn/flynn/tree/master/demo) for your local

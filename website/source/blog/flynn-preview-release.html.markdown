@@ -9,7 +9,7 @@ There's still a lot of work to do but today's release lets developers start expe
 
 We would like to stress that Flynn is definitely not production ready. It shouldn't be used for customer-facing or critical services yet. We're working hard on stability, security, and performance, but there are certainly many bugs of which we are unaware (and a few we know about).
 
-[Try it](https://flynn.cupcake.io) now or check out the code on [GitHub](https://github.com/flynn/flynn) to get started with Flynn.
+[Try it](https://dashboard.flynn.io) now or check out the code on [GitHub](https://github.com/flynn/flynn) to get started with Flynn.
 
 Flynn is an open source project and strongly encourages [community contributions](https://flynn.io/docs/contributing).
 

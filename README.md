@@ -33,8 +33,8 @@ anyone has already reported the issue.
 
 ## Getting Started
 
-We built a [tool](https://flynn.cupcake.io) for launching Flynn clusters on your
-Amazon Web Services account [here](https://flynn.cupcake.io).
+We built a [tool](https://dashboard.flynn.io) for launching Flynn clusters on your
+Amazon Web Services account [here](https://dashboard.flynn.io).
 
 You can also download a [demo environment](/demo) for your local machine or
 learn about the components below.
