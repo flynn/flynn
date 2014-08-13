@@ -144,7 +144,7 @@ respective domains.
 ```text
   CONTROLLER_DOMAIN=demo.flynnlocal.com \
   DEFAULT_ROUTE_DOMAIN=demo.flynnlocal.com \
-  flynn-boostrap /etc/flynn/bootstrap-manifest.json
+  flynn-bootstrap /etc/flynn/bootstrap-manifest.json
 ```
 
 The Layer 1 bootstrapper will get all necessary services running using the Layer
