@@ -10,6 +10,10 @@
             <a href="/">Hello</a>
           </li>
 
+          <li class="<%= active_nav_class("/about") %>">
+            <a href="/about">About</a>
+          </li>
+
           <li class="<%= active_nav_class("/docs", :not => /architecture|roadmap|contributing/) %>">
             <a href="/docs">Docs</a>
           </li>
