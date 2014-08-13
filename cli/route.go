@@ -114,7 +114,7 @@ func runRouteAddHTTP(args *docopt.Args, client *controller.Client) error {
 		return errors.New("Both the TLS certificate AND private key need to be specified")
 	}
 
-	hr := &strowger.HTTPRoute{
+	hr := &router.HTTPRoute{
 		Service: routeHTTPService,
 		Domain:  args.String["<domain>"],
 		TLSCert: string(tlsCert),

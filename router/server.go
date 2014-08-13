@@ -17,8 +17,8 @@ import (
 type Listener interface {
 	Start() error
 	Close() error
-	AddRoute(*strowger.Route) error
-	SetRoute(*strowger.Route) error
+	AddRoute(*router.Route) error
+	SetRoute(*router.Route) error
 	RemoveRoute(id string) error
 	Watcher
 	DataStoreReader
@@ -70,7 +70,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := d.Register("strowger-api", *apiAddr); err != nil {
+	if err := d.Register("router-api", *apiAddr); err != nil {
 		log.Fatal(err)
 	}
 
@@ -86,8 +86,8 @@ func main() {
 	etcdc := etcd.NewClient(etcdAddrs)
 
 	var r Router
-	r.TCP = NewTCPListener(*tcpIP, 0, 0, NewEtcdDataStore(etcdc, "/strowger/tcp/"), d)
-	r.HTTP = NewHTTPListener(*httpAddr, *httpsAddr, cookieKey, NewEtcdDataStore(etcdc, "/strowger/http/"), d)
+	r.TCP = NewTCPListener(*tcpIP, 0, 0, NewEtcdDataStore(etcdc, "/router/tcp/"), d)
+	r.HTTP = NewHTTPListener(*httpAddr, *httpsAddr, cookieKey, NewEtcdDataStore(etcdc, "/router/http/"), d)
 
 	go func() { log.Fatal(r.ListenAndServe(nil)) }()
 	log.Fatal(http.ListenAndServe(*apiAddr, apiHandler(&r)))

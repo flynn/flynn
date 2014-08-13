@@ -10,18 +10,18 @@ import (
 	"github.com/flynn/flynn/controller/name"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/random"
-	strowgerc "github.com/flynn/flynn/router/client"
+	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
 )
 
 type AppRepo struct {
-	router        strowgerc.Client
+	router        routerc.Client
 	defaultDomain string
 
 	db *DB
 }
 
-func NewAppRepo(db *DB, defaultDomain string, router strowgerc.Client) *AppRepo {
+func NewAppRepo(db *DB, defaultDomain string, router routerc.Client) *AppRepo {
 	return &AppRepo{db: db, defaultDomain: defaultDomain, router: router}
 }
 
@@ -52,7 +52,7 @@ func (r *AppRepo) Add(data interface{}) error {
 	err := r.db.QueryRow("INSERT INTO apps (app_id, name, protected, meta) VALUES ($1, $2, $3, $4) RETURNING created_at, updated_at", app.ID, app.Name, app.Protected, meta).Scan(&app.CreatedAt, &app.UpdatedAt)
 	app.ID = cleanUUID(app.ID)
 	if !app.Protected && r.defaultDomain != "" {
-		route := (&strowger.HTTPRoute{
+		route := (&router.HTTPRoute{
 			Domain:  fmt.Sprintf("%s.%s", app.Name, r.defaultDomain),
 			Service: app.Name + "-web",
 		}).ToRoute()

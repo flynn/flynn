@@ -290,19 +290,19 @@ func (c *Cluster) bootstrapFlynn() error {
 	}
 	c.ControllerPin = cert.Pin
 
-	// grab the strowger IP from discoverd
+	// grab the router IP from discoverd
 	discoverd.Connect(inst.IP() + ":1111")
-	set, err := discoverd.NewServiceSet("strowger-api")
+	set, err := discoverd.NewServiceSet("router-api")
 	if err != nil {
-		return fmt.Errorf("could not detect strowger ip: %s", err)
+		return fmt.Errorf("could not detect router ip: %s", err)
 	}
 	defer set.Close()
 	leader := set.Leader()
 	if leader == nil {
-		return errors.New("could not detect strowger ip: no strowger-api leader")
+		return errors.New("could not detect router ip: no router-api leader")
 	}
 	if err = setLocalDNS(c.ControllerDomain, leader.Host); err != nil {
-		return fmt.Errorf("could not set strowger DNS entry: %s", err)
+		return fmt.Errorf("could not set router DNS entry: %s", err)
 	}
 	return nil
 }

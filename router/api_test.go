@@ -26,7 +26,7 @@ func newTestAPIServer(t etcdrunner.TestingT) *testAPIServer {
 	}
 
 	discoverd := newFakeDiscoverd()
-	discoverd.Register("strowger-api", ts.Listener.Addr().String())
+	discoverd.Register("router-api", ts.Listener.Addr().String())
 	ts.Client = client.NewWithDiscoverd("", discoverd)
 	return ts
 }
@@ -54,7 +54,7 @@ func (s *S) TestAPIAddTCPRoute(c *C) {
 	srv := newTestAPIServer(c)
 	defer srv.Close()
 
-	r := (&strowger.TCPRoute{Service: "test"}).ToRoute()
+	r := (&router.TCPRoute{Service: "test"}).ToRoute()
 	err := srv.CreateRoute(r)
 	c.Assert(err, IsNil)
 
@@ -85,7 +85,7 @@ func (s *S) TestAPIAddHTTPRoute(c *C) {
 	srv := newTestAPIServer(c)
 	defer srv.Close()
 
-	r := (&strowger.HTTPRoute{Domain: "example.com", Service: "test"}).ToRoute()
+	r := (&router.HTTPRoute{Domain: "example.com", Service: "test"}).ToRoute()
 	err := srv.CreateRoute(r)
 	c.Assert(err, IsNil)
 
@@ -116,11 +116,11 @@ func (s *S) TestAPISetHTTPRoute(c *C) {
 	srv := newTestAPIServer(c)
 	defer srv.Close()
 
-	r := (&strowger.HTTPRoute{Domain: "example.com", Service: "foo"}).ToRoute()
+	r := (&router.HTTPRoute{Domain: "example.com", Service: "foo"}).ToRoute()
 	err := srv.SetRoute(r)
 	c.Assert(err, IsNil)
 
-	r = (&strowger.HTTPRoute{Domain: "example.com", Service: "bar"}).ToRoute()
+	r = (&router.HTTPRoute{Domain: "example.com", Service: "bar"}).ToRoute()
 	err = srv.SetRoute(r)
 	c.Assert(err, IsNil)
 }
@@ -129,10 +129,10 @@ func (s *S) TestAPIListRoutes(c *C) {
 	srv := newTestAPIServer(c)
 	defer srv.Close()
 
-	r0 := (&strowger.HTTPRoute{Domain: "example.com", Service: "test"}).ToRoute()
-	r1 := (&strowger.HTTPRoute{Domain: "example.net", Service: "test", Route: &strowger.Route{ParentRef: "foo"}}).ToRoute()
-	r2 := (&strowger.TCPRoute{Service: "test"}).ToRoute()
-	r3 := (&strowger.TCPRoute{Service: "test", Route: &strowger.Route{ParentRef: "foo"}}).ToRoute()
+	r0 := (&router.HTTPRoute{Domain: "example.com", Service: "test"}).ToRoute()
+	r1 := (&router.HTTPRoute{Domain: "example.net", Service: "test", Route: &router.Route{ParentRef: "foo"}}).ToRoute()
+	r2 := (&router.TCPRoute{Service: "test"}).ToRoute()
+	r3 := (&router.TCPRoute{Service: "test", Route: &router.Route{ParentRef: "foo"}}).ToRoute()
 
 	err := srv.CreateRoute(r0)
 	c.Assert(err, IsNil)

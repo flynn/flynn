@@ -76,7 +76,7 @@ func (l *httpListener) Close() error {
 func newHTTPListenerClients(t etcdrunner.TestingT, etcd EtcdClient, discoverd discoverdClient) (*httpListener, discoverdClient) {
 	discoverd, etcd, cleanup := setup(t, etcd, discoverd)
 	l := &httpListener{
-		NewHTTPListener("127.0.0.1:0", "127.0.0.1:0", nil, NewEtcdDataStore(etcd, "/strowger/http/"), discoverd),
+		NewHTTPListener("127.0.0.1:0", "127.0.0.1:0", nil, NewEtcdDataStore(etcd, "/router/http/"), discoverd),
 		cleanup,
 	}
 	if err := l.Start(); err != nil {
@@ -173,9 +173,9 @@ func assertGetCookie(c *C, url, host, expected string, cookie *http.Cookie) *htt
 	return nil
 }
 
-func addHTTPRoute(c *C, l *httpListener) *strowger.Route {
+func addHTTPRoute(c *C, l *httpListener) *router.Route {
 	wait := waitForEvent(c, l, "set", "")
-	r := (&strowger.HTTPRoute{
+	r := (&router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "test",
 		TLSCert: string(localhostCert),
@@ -187,9 +187,9 @@ func addHTTPRoute(c *C, l *httpListener) *strowger.Route {
 	return r
 }
 
-func addStickyHTTPRoute(c *C, l *httpListener) *strowger.Route {
+func addStickyHTTPRoute(c *C, l *httpListener) *router.Route {
 	wait := waitForEvent(c, l, "set", "")
-	r := (&strowger.HTTPRoute{
+	r := (&router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "test",
 		Sticky:  true,
@@ -235,8 +235,8 @@ func (s *S) TestHTTPServiceHandlerBackendConnectionClosed(c *C) {
 	// a single request is allowed to successfully get issued
 	assertGet(c, "http://"+l.Addr, "example.com", "1")
 
-	// the backend server's connection gets closed, but strowger
-	// is able to recover
+	// the backend server's connection gets closed, but router is
+	// able to recover
 	srv.CloseClientConnections()
 	assertGet(c, "http://"+l.Addr, "example.com", "1")
 }

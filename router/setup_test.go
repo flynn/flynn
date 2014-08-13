@@ -363,10 +363,10 @@ var _ = Suite(&S{})
 
 const waitTimeout = time.Second
 
-func waitForEvent(c *C, w Watcher, event string, id string) func() *strowger.Event {
-	ch := make(chan *strowger.Event)
+func waitForEvent(c *C, w Watcher, event string, id string) func() *router.Event {
+	ch := make(chan *router.Event)
 	w.Watch(ch)
-	return func() *strowger.Event {
+	return func() *router.Event {
 		defer w.Unwatch(ch)
 		start := time.Now()
 		for {

@@ -113,9 +113,9 @@ func (s *HTTPListener) Start() error {
 	return nil
 }
 
-var ErrClosed = errors.New("strowger: listener has been closed")
+var ErrClosed = errors.New("router: listener has been closed")
 
-func (s *HTTPListener) AddRoute(r *strowger.Route) error {
+func (s *HTTPListener) AddRoute(r *router.Route) error {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	if s.closed {
@@ -125,7 +125,7 @@ func (s *HTTPListener) AddRoute(r *strowger.Route) error {
 	return s.ds.Add(r)
 }
 
-func (s *HTTPListener) SetRoute(r *strowger.Route) error {
+func (s *HTTPListener) SetRoute(r *router.Route) error {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	if s.closed {
@@ -153,7 +153,7 @@ type httpSyncHandler struct {
 	l *HTTPListener
 }
 
-func (h *httpSyncHandler) Set(data *strowger.Route) error {
+func (h *httpSyncHandler) Set(data *router.Route) error {
 	route := data.HTTPRoute()
 	r := &httpRoute{
 		Domain:  route.Domain,
@@ -201,7 +201,7 @@ func (h *httpSyncHandler) Set(data *strowger.Route) error {
 	h.l.routes[data.ID] = r
 	h.l.domains[r.Domain] = r
 
-	go h.l.wm.Send(&strowger.Event{Event: "set", ID: r.Domain})
+	go h.l.wm.Send(&router.Event{Event: "set", ID: r.Domain})
 	return nil
 }
 
@@ -224,7 +224,7 @@ func (h *httpSyncHandler) Remove(id string) error {
 
 	delete(h.l.routes, id)
 	delete(h.l.domains, r.Domain)
-	go h.l.wm.Send(&strowger.Event{Event: "remove", ID: id})
+	go h.l.wm.Send(&router.Event{Event: "remove", ID: id})
 	return nil
 }
 

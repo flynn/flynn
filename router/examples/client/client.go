@@ -49,7 +49,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	conf := &strowger.HTTPRoute{
+	conf := &router.HTTPRoute{
 		Service: serviceName,
 		Domain:  domain,
 		TLSCert: string(tlsCert),
