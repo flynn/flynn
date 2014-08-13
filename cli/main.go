@@ -117,7 +117,7 @@ func runCommand(name string, args []string) (err error) {
 
 	cmd, ok := commands[name]
 	if !ok {
-		return fmt.Errorf("%s is not a flynn command. See 'flynn help'", cmd)
+		return fmt.Errorf("%s is not a flynn command. See 'flynn help'", name)
 	}
 	parsedArgs, err := docopt.Parse(cmd.usage, argv, true, "", false)
 	if err != nil {
