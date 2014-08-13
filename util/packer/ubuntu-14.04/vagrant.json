@@ -1,7 +1,4 @@
 {
-  "variables": {
-    "flynn_rev": "{{.Env `FLYNN_REV`}}"
-  },
   "builders": [
     {
       "boot_command": [
@@ -91,8 +88,7 @@
         "scripts/install.sh",
         "scripts/vm_cleanup.sh"
       ],
-      "type": "shell",
-      "environment_vars": ["FLYNN_REV={{user `flynn_rev`}}"]
+      "type": "shell"
     }
   ],
   "post-processors": [{ "type": "vagrant" }]

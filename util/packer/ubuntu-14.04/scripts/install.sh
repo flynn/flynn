@@ -9,26 +9,19 @@ perl -p -i -e 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="cgroup_enable=memory 
 sudo groupadd docker
 sudo usermod -a -G docker vagrant
 
-# add the docker and tup gpg keys
+# add the docker, tup and flynn gpg keys
 apt-key adv --keyserver keyserver.ubuntu.com --recv 36A1D7869245C8950F966E92D8576A8BA88D21E9
 apt-key adv --keyserver keyserver.ubuntu.com --recv E601AAF9486D3664
+apt-key adv --keyserver keyserver.ubuntu.com --recv BC79739C507A9B53BB1B0E7D820A5489998D827B
 
 echo deb https://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list
+echo deb https://dl.flynn.io/ubuntu flynn main > /etc/apt/sources.list.d/flynn.list
+echo deb http://ppa.launchpad.net/anatol/tup/ubuntu precise main > /etc/apt/sources.list.d/tup.list
 
 apt-get update
-apt-get install -y curl vim-tiny git mercurial bzr make lxc-docker linux-image-extra-$(uname -r) software-properties-common libdevmapper-dev btrfs-tools libvirt-dev ruby2.0 ruby2.0-dev
-
-apt-add-repository 'deb http://ppa.launchpad.net/anatol/tup/ubuntu precise main'
-apt-get update
-apt-get install -y tup
+apt-get install -y curl vim-tiny git mercurial bzr make lxc-docker linux-image-extra-$(uname -r) libdevmapper-dev btrfs-tools libvirt-dev ruby2.0 ruby2.0-dev flynn-host tup
 
 gem2.0 install fpm --no-rdoc --no-ri
-
-deb="flynn-host_0-${FLYNN_REV}_amd64.deb"
-cd /tmp
-wget https://s3.amazonaws.com/flynn/$deb
-dpkg -i $deb || true
-apt-get -f install -y
 
 mkdir -p /var/lib/docker
 flynn-release download /etc/flynn/version.json
