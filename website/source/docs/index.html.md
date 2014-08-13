@@ -29,7 +29,8 @@ Flynn components are divided into two _layers_.
 
 **Layer 0** is a low-level resource framework inspired by the [Google
 Omega](http://eurosys2013.tudos.org/wp-content/uploads/2013/paper/Schwarzkopf.pdf)
-paper. Layer 0 also includes [service discovery](/discoverd).
+paper. Layer 0 also includes [service
+discovery](https://github.com/flynn/flynn/tree/master/discoverd).
 
 **Layer 1** is a set of higher level components that makes it easy to deploy and
 maintain applications and databases.
