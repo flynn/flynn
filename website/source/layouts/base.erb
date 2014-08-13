@@ -7,7 +7,7 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
   <link href="/blog.xml" rel="alternate" title="Atom feed" type="application/atom+xml" />
 
-  <title><%= data.page.title ? data.page.title : "Flynn" %></title>
+  <title><%= current_resource.data.title ? current_resource.data.title + (current_resource.data.title =~ /Flynn/ ? "" : " - Flynn") : "Flynn" %></title>
 
   <%= stylesheet_link_tag "application" %>
 </head>

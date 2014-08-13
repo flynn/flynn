@@ -1,5 +1,5 @@
 ---
-title: Docs - Flynn
+title: Docs
 layout: docs
 ---
 

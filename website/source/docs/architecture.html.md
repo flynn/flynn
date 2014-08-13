@@ -1,5 +1,5 @@
 ---
-title: Docs - Flynn
+title: Architecture
 layout: docs
 ---
 
