@@ -39,6 +39,71 @@ Amazon Web Services account [here](https://dashboard.flynn.io).
 You can also download a [demo environment](/demo) for your local machine or
 learn about the components below.
 
+### Trying it out
+
+With a Flynn cluster running and the `flynn` tool installed and configured, the
+first thing you'll want to do is add your SSH key so that you can deploy
+applications:
+
+```text
+flynn key add
+```
+
+After adding your ssh key, you can deploy a new application:
+
+```text
+git clone https://github.com/flynn/nodejs-flynn-example
+cd nodejs-flynn-example
+flynn create example
+git push flynn master
+```
+
+#### Scale
+
+To access the application, add some web processes using the `scale`
+command:
+
+```text
+flynn scale web=3
+```
+
+Visit the application [in your browser](http://example.demo.localflynn.com) or with curl:
+
+```text
+curl http://example.demo.localflynn.com
+```
+
+Repeated requests should show that the requests are load balanced across the
+running processes.
+
+#### Logs
+
+`flynn ps` will show the running processes:
+
+```text
+$ flynn ps
+ID                                             TYPE
+e4cffae4ce2b-8cb1212f582f498eaed467fede768d6f  web
+e4cffae4ce2b-da9c86b1e9e743f2acd5793b151dcf99  web
+e4cffae4ce2b-1b17dd7be8e44ca1a76259a7bca244e1  web
+```
+
+To get the log from a process, use `flynn log`:
+
+```text
+$ flynn log e4cffae4ce2b-8cb1212f582f498eaed467fede768d6f
+Listening on 55007
+```
+
+#### Run
+
+An interactive one-off process may be spawned in a container:
+
+```text
+flynn run bash
+```
+
+
 ### Manual Ubuntu Deployment
 
 Currently only Ubuntu 14.04 is supported for manual installation, but this is
