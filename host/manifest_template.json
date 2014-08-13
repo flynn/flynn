@@ -3,6 +3,8 @@
     "id": "etcd",
     "image_id": "$image_id[etcd]",
     "args": [
+      "-http-read-timeout=525600",
+      "-http-write-timeout=525600",
       "-data-dir={{ .Volume \"/data\" }}",
       "-addr={{ .ExternalIP }}:{{ .TCPPort 0 }}",
       "-bind-addr=0.0.0.0:{{ .TCPPort 0 }}",
