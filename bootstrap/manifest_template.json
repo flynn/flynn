@@ -49,7 +49,8 @@
           "cmd": ["controller"]
         },
         "scheduler": {
-          "cmd": ["scheduler"]
+          "cmd": ["scheduler"],
+          "omni": true
         }
       }
     },
@@ -145,7 +146,8 @@
             {"proto": "tcp", "port": 443},
             {"proto": "tcp", "port": 2222}
           ],
-          "cmd": ["-httpaddr", ":80", "-httpsaddr", ":443"]
+          "cmd": ["-httpaddr", ":80", "-httpsaddr", ":443"],
+          "omni": true
         }
       }
     },
