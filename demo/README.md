@@ -28,8 +28,22 @@ command line tool. Download and install the [CLI](/cli) by running this command:
 L=/usr/local/bin/flynn && curl -sL -A "`uname -sp`" https://cli.flynn.io/flynn.gz | zcat >$L && chmod +x $L
 ```
 
-And paste the `flynn cluster add` command from the Vagrant provisioning log into
-your terminal.
+After installing the `flynn` command, paste the `flynn cluster add` command from
+the Vagrant provisioning log into your terminal.
+
+If you run into a `no such host` error when running the command, verify that
+`demo.localflynn.com` resolves to `192.168.84.42` locally. If the domain does
+not resolve, your DNS server probably has
+[rebinding](https://en.wikipedia.org/wiki/DNS_rebinding) protection on. A quick
+workaround is to add this line to your `/etc/hosts` file:
+
+```text
+192.168.84.42 demo.localflynn.com example.demo.localflynn.com
+```
+
+[See here](https://github.com/flynn/flynn/issues/74#issuecomment-51848061) for
+more info.
+
 
 ### Usage
 
