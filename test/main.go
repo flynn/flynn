@@ -71,7 +71,7 @@ func main() {
 	defer ssh.Cleanup()
 	gitEnv = ssh.Env
 
-	keyAdd := flynn("", "key-add", ssh.Pub)
+	keyAdd := flynn("", "key", "add", ssh.Pub)
 	if keyAdd.Err != nil {
 		log.Fatalf("Error during `%s`:\n%s%s", strings.Join(keyAdd.Cmd, " "), keyAdd.Output, keyAdd.Err)
 	}
@@ -153,7 +153,7 @@ func createFlynnrc(c *cluster.Cluster) error {
 
 	githost := fmt.Sprintf("%s:2222", c.ControllerDomain)
 	url := fmt.Sprintf("https://%s:443", c.ControllerDomain)
-	return flynn("", "server-add", "-g", githost, "-p", c.ControllerPin, "default", url, c.ControllerKey).Err
+	return flynn("", "cluster", "add", "-g", githost, "-p", c.ControllerPin, "default", url, c.ControllerKey).Err
 }
 
 type CmdResult struct {
