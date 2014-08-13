@@ -17,12 +17,19 @@ cd flynn/demo
 vagrant up
 ```
 
-If you see an error unpackaging the box, you need to install `xz` (`brew install
-xz` or `apt-get install xz-utils`).
+If you see an error unpackaging the box, first make sure you are running Vagrant
+v1.6 or later. You may need to install `xz` (`brew install xz` or `apt-get
+install xz-utils`).
 
 The final log line contains configuration details used to access Flynn via the
-command line tool. Install the [CLI](/cli), and paste the `flynn server-add`
-command into your terminal.
+command line tool. Download and install the [CLI](/cli) by running this command:
+
+```bash
+L=/usr/local/bin/flynn && curl -sL -A "`uname -sp`" https://cli.flynn.io/flynn.gz | zcat >$L && chmod +x $L
+```
+
+And paste the `flynn cluster add` command from the Vagrant provisioning log into
+your terminal.
 
 ### Usage
 
@@ -30,7 +37,7 @@ With the Flynn running and the `flynn` tool installed, the first thing you'll
 want to do is add your SSH key so that you can deploy applications:
 
 ```text
-flynn key-add
+flynn key add
 ```
 
 After adding your ssh key, you can deploy a new application:
@@ -45,22 +52,20 @@ git push flynn master
 #### Scale
 
 To access the application, add some web processes using the `scale`
-command and a route with `route-add-http`:
+command:
 
 ```text
 flynn scale web=3
-
-flynn route-add-http localhost:8080
 ```
 
-Visit the application [in your browser](http://localhost:8080) or with curl:
+Visit the application [in your browser](http://example.demo.localflynn.com) or with curl:
 
 ```text
-curl localhost:8080
+curl http://example.demo.localflynn.com
 ```
 
-Repeated requests via curl should show that the requests are load balanced
-across the running processes.
+Repeated requests should show that the requests are load balanced across the
+running processes.
 
 #### Logs
 
