@@ -106,8 +106,8 @@ flynn run bash
 
 ### Manual Ubuntu Deployment
 
-Currently only Ubuntu 14.04 is supported for manual installation, but this is
-a temporary packaging limitation, we have no actual dependency on Ubuntu.
+Currently only Ubuntu 14.04 amd64 is supported for manual installation, but this
+is a temporary packaging limitation, we have no actual dependency on Ubuntu.
 
 The first step is to install the `flynn-host` package from our apt repo:
 
