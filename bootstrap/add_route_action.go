@@ -12,7 +12,7 @@ type AddRouteAction struct {
 
 	AppStep  string `json:"app_step"`
 	CertStep string `json:"cert_step"`
-	*strowger.Route
+	*router.Route
 }
 
 func init() {
@@ -20,8 +20,8 @@ func init() {
 }
 
 type AddRouteState struct {
-	App   *ct.App         `json:"app"`
-	Route *strowger.Route `json:"route"`
+	App   *ct.App       `json:"app"`
+	Route *router.Route `json:"route"`
 }
 
 func (a *AddRouteAction) Run(s *State) error {

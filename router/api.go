@@ -14,24 +14,24 @@ import (
 	"github.com/flynn/flynn/router/types"
 )
 
-func apiHandler(router *Router) http.Handler {
+func apiHandler(rtr *Router) http.Handler {
 	r := martini.NewRouter()
 	m := martini.New()
 	m.Use(martini.Logger())
 	m.Use(martini.Recovery())
 	m.Use(render.Renderer())
 	m.Action(r.Handle)
-	m.Map(router)
+	m.Map(rtr)
 
-	r.Post("/routes", binding.Bind(strowger.Route{}), createRoute)
-	r.Put("/routes", binding.Bind(strowger.Route{}), createOrReplaceRoute)
+	r.Post("/routes", binding.Bind(router.Route{}), createRoute)
+	r.Put("/routes", binding.Bind(router.Route{}), createOrReplaceRoute)
 	r.Get("/routes", getRoutes)
 	r.Get("/routes/:route_type/:route_id", getRoute)
 	r.Delete("/routes/:route_type/:route_id", deleteRoute)
 	return m
 }
 
-func createRoute(req *http.Request, route strowger.Route, router *Router, r render.Render) {
+func createRoute(req *http.Request, route router.Route, router *Router, r render.Render) {
 	now := time.Now()
 	route.CreatedAt = &now
 	route.UpdatedAt = &now
@@ -51,7 +51,7 @@ func createRoute(req *http.Request, route strowger.Route, router *Router, r rend
 	r.JSON(200, res)
 }
 
-func createOrReplaceRoute(req *http.Request, route strowger.Route, router *Router, r render.Render) {
+func createOrReplaceRoute(req *http.Request, route router.Route, router *Router, r render.Render) {
 	now := time.Now()
 	route.CreatedAt = &now
 	route.UpdatedAt = &now
@@ -82,7 +82,7 @@ func listenerFor(router *Router, typ string) Listener {
 	}
 }
 
-func formatRoute(r *strowger.Route) *strowger.Route {
+func formatRoute(r *router.Route) *router.Route {
 	r.ID = fmt.Sprintf("%s/%s", r.Type, r.ID)
 	switch r.Type {
 	case "http":
@@ -96,20 +96,20 @@ func formatRoute(r *strowger.Route) *strowger.Route {
 	return r
 }
 
-type sortedRoutes []*strowger.Route
+type sortedRoutes []*router.Route
 
 func (p sortedRoutes) Len() int           { return len(p) }
 func (p sortedRoutes) Less(i, j int) bool { return p[i].CreatedAt.After(*p[j].CreatedAt) }
 func (p sortedRoutes) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
-func getRoutes(req *http.Request, router *Router, r render.Render) {
-	routes, err := router.HTTP.List()
+func getRoutes(req *http.Request, rtr *Router, r render.Render) {
+	routes, err := rtr.HTTP.List()
 	if err != nil {
 		log.Println(err)
 		r.JSON(500, struct{}{})
 		return
 	}
-	tcpRoutes, err := router.TCP.List()
+	tcpRoutes, err := rtr.TCP.List()
 	if err != nil {
 		log.Println(err)
 		r.JSON(500, struct{}{})
@@ -118,7 +118,7 @@ func getRoutes(req *http.Request, router *Router, r render.Render) {
 	routes = append(routes, tcpRoutes...)
 
 	if ref := req.URL.Query().Get("parent_ref"); ref != "" {
-		filtered := make([]*strowger.Route, 0)
+		filtered := make([]*router.Route, 0)
 		for _, route := range routes {
 			if route.ParentRef == ref {
 				filtered = append(filtered, route)

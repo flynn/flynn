@@ -1,4 +1,4 @@
-package strowger
+package router
 
 import (
 	"encoding/json"
@@ -17,8 +17,8 @@ type Route struct {
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
-var ErrWrongType = errors.New("strowger: the requested route type does not match the actual type")
-var ErrNoConfig = errors.New("strowger: the supplied route has no configuration")
+var ErrWrongType = errors.New("router: the requested route type does not match the actual type")
+var ErrNoConfig = errors.New("router: the supplied route has no configuration")
 
 func (r *Route) HTTPRoute() *HTTPRoute {
 	rCopy := *r

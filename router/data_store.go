@@ -20,22 +20,22 @@ type EtcdClient interface {
 }
 
 type DataStore interface {
-	Add(route *strowger.Route) error
-	Set(route *strowger.Route) error
-	Get(id string) (*strowger.Route, error)
-	List() ([]*strowger.Route, error)
+	Add(route *router.Route) error
+	Set(route *router.Route) error
+	Get(id string) (*router.Route, error)
+	List() ([]*router.Route, error)
 	Remove(id string) error
 	Sync(h SyncHandler, started chan<- error)
 	StopSync()
 }
 
 type DataStoreReader interface {
-	Get(id string) (*strowger.Route, error)
-	List() ([]*strowger.Route, error)
+	Get(id string) (*router.Route, error)
+	List() ([]*router.Route, error)
 }
 
 type SyncHandler interface {
-	Set(route *strowger.Route) error
+	Set(route *router.Route) error
 	Remove(id string) error
 }
 
@@ -53,10 +53,10 @@ type etcdDataStore struct {
 	stopSync chan bool
 }
 
-var ErrExists = errors.New("strowger: route already exists")
-var ErrNotFound = errors.New("strowger: route not found")
+var ErrExists = errors.New("router: route already exists")
+var ErrNotFound = errors.New("router: route not found")
 
-func (s *etcdDataStore) Add(r *strowger.Route) error {
+func (s *etcdDataStore) Add(r *router.Route) error {
 	data, err := json.Marshal(r)
 	if err != nil {
 		return err
@@ -68,7 +68,7 @@ func (s *etcdDataStore) Add(r *strowger.Route) error {
 	return err
 }
 
-func (s *etcdDataStore) Set(r *strowger.Route) error {
+func (s *etcdDataStore) Set(r *router.Route) error {
 	data, err := json.Marshal(r)
 	if err != nil {
 		return err
@@ -85,7 +85,7 @@ func (s *etcdDataStore) Remove(id string) error {
 	return err
 }
 
-func (s *etcdDataStore) Get(id string) (*strowger.Route, error) {
+func (s *etcdDataStore) Get(id string) (*router.Route, error) {
 	res, err := s.etcd.Get(s.path(id), false, false)
 	if err != nil {
 		if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
@@ -93,12 +93,12 @@ func (s *etcdDataStore) Get(id string) (*strowger.Route, error) {
 		}
 		return nil, err
 	}
-	r := &strowger.Route{}
+	r := &router.Route{}
 	err = json.Unmarshal([]byte(res.Node.Value), r)
 	return r, err
 }
 
-func (s *etcdDataStore) List() ([]*strowger.Route, error) {
+func (s *etcdDataStore) List() ([]*router.Route, error) {
 	res, err := s.etcd.Get(s.prefix, false, true)
 	if err != nil {
 		if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
@@ -107,9 +107,9 @@ func (s *etcdDataStore) List() ([]*strowger.Route, error) {
 		return nil, err
 	}
 
-	routes := make([]*strowger.Route, len(res.Node.Nodes))
+	routes := make([]*router.Route, len(res.Node.Nodes))
 	for i, node := range res.Node.Nodes {
-		r := &strowger.Route{}
+		r := &router.Route{}
 		if err := json.Unmarshal([]byte(node.Value), r); err != nil {
 			return nil, err
 		}
@@ -157,7 +157,7 @@ syncErr:
 			continue
 		}
 		keys[key] = node.ModifiedIndex
-		route := &strowger.Route{}
+		route := &router.Route{}
 		if err = json.Unmarshal([]byte(node.Value), route); err != nil {
 			goto syncErr
 		}
@@ -189,7 +189,7 @@ watch:
 				err = h.Remove(id)
 			} else {
 				keys[id] = res.Node.ModifiedIndex
-				route := &strowger.Route{}
+				route := &router.Route{}
 				if err = json.Unmarshal([]byte(res.Node.Value), route); err != nil {
 					goto fail
 				}

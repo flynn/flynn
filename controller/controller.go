@@ -23,7 +23,7 @@ import (
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/pkg/rpcplus"
-	strowgerc "github.com/flynn/flynn/router/client"
+	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -58,7 +58,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	sc, err := strowgerc.New()
+	sc, err := routerc.New()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -80,7 +80,7 @@ type dbWrapper interface {
 type handlerConfig struct {
 	db  dbWrapper
 	cc  clusterClient
-	sc  strowgerc.Client
+	sc  routerc.Client
 	dc  *discoverd.Client
 	key string
 }
@@ -143,7 +143,7 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	m.Map(formationRepo)
 	m.Map(c.dc)
 	m.MapTo(c.cc, (*clusterClient)(nil))
-	m.MapTo(c.sc, (*strowgerc.Client)(nil))
+	m.MapTo(c.sc, (*routerc.Client)(nil))
 	m.MapTo(c.dc, (*resource.DiscoverdClient)(nil))
 
 	getAppMiddleware := crud("apps", ct.App{}, appRepo, r)
@@ -172,7 +172,7 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	r.Put("/providers/:providers_id/resources/:resources_id", getProviderMiddleware, binding.Bind(ct.Resource{}), putResource)
 	r.Get("/apps/:apps_id/resources", getAppMiddleware, getAppResources)
 
-	r.Post("/apps/:apps_id/routes", getAppMiddleware, binding.Bind(strowger.Route{}), createRoute)
+	r.Post("/apps/:apps_id/routes", getAppMiddleware, binding.Bind(router.Route{}), createRoute)
 	r.Get("/apps/:apps_id/routes", getAppMiddleware, getRouteList)
 	r.Get("/apps/:apps_id/routes/:routes_type/:routes_id", getAppMiddleware, getRouteMiddleware, getRoute)
 	r.Delete("/apps/:apps_id/routes/:routes_type/:routes_id", getAppMiddleware, getRouteMiddleware, deleteRoute)

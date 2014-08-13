@@ -22,7 +22,7 @@ func New() (Client, error) {
 
 func NewWithDiscoverd(name string, dc dialer.DiscoverdClient) Client {
 	if name == "" {
-		name = "strowger"
+		name = "router"
 	}
 	c := &client{
 		dialer: dialer.New(dc, nil),
@@ -33,22 +33,22 @@ func NewWithDiscoverd(name string, dc dialer.DiscoverdClient) Client {
 }
 
 type Client interface {
-	CreateRoute(*strowger.Route) error
-	SetRoute(*strowger.Route) error
+	CreateRoute(*router.Route) error
+	SetRoute(*router.Route) error
 	DeleteRoute(id string) error
-	GetRoute(id string) (*strowger.Route, error)
-	ListRoutes(parentRef string) ([]*strowger.Route, error)
+	GetRoute(id string) (*router.Route, error)
+	ListRoutes(parentRef string) ([]*router.Route, error)
 	Close() error
 }
 
-var ErrNotFound = errors.New("strowger: route not found")
+var ErrNotFound = errors.New("router: route not found")
 
 type HTTPError struct {
 	Response *http.Response
 }
 
 func (e HTTPError) Error() string {
-	return fmt.Sprintf("strowger: expected http status 200, got %d", e.Response.StatusCode)
+	return fmt.Sprintf("router: expected http status 200, got %d", e.Response.StatusCode)
 }
 
 type client struct {
@@ -120,11 +120,11 @@ func (c *client) delete(path string) error {
 	return nil
 }
 
-func (c *client) CreateRoute(r *strowger.Route) error {
+func (c *client) CreateRoute(r *router.Route) error {
 	return c.post("/routes", r)
 }
 
-func (c *client) SetRoute(r *strowger.Route) error {
+func (c *client) SetRoute(r *router.Route) error {
 	return c.put("/routes", r)
 }
 
@@ -132,20 +132,20 @@ func (c *client) DeleteRoute(id string) error {
 	return c.delete("/routes/" + id)
 }
 
-func (c *client) GetRoute(id string) (*strowger.Route, error) {
-	res := &strowger.Route{}
+func (c *client) GetRoute(id string) (*router.Route, error) {
+	res := &router.Route{}
 	err := c.get("/routes/"+id, res)
 	return res, err
 }
 
-func (c *client) ListRoutes(parentRef string) ([]*strowger.Route, error) {
+func (c *client) ListRoutes(parentRef string) ([]*router.Route, error) {
 	path := "/routes"
 	if parentRef != "" {
 		q := make(url.Values)
 		q.Set("parent_ref", parentRef)
 		path += "?" + q.Encode()
 	}
-	var res []*strowger.Route
+	var res []*router.Route
 	err := c.get(path, &res)
 	return res, err
 }

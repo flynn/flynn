@@ -63,7 +63,7 @@ func (l *tcpListener) Close() error {
 func newTCPListenerClients(t etcdrunner.TestingT, etcd EtcdClient, discoverd discoverdClient) (*tcpListener, discoverdClient) {
 	discoverd, etcd, cleanup := setup(t, etcd, discoverd)
 	l := &tcpListener{
-		NewTCPListener("127.0.0.1", firstTCPPort, lastTCPPort, NewEtcdDataStore(etcd, "/strowger/tcp/"), discoverd),
+		NewTCPListener("127.0.0.1", firstTCPPort, lastTCPPort, NewEtcdDataStore(etcd, "/router/tcp/"), discoverd),
 		cleanup,
 	}
 	if err := l.Start(); err != nil {
@@ -119,9 +119,9 @@ func (s *S) TestAddTCPRoute(c *C) {
 	c.Assert(err, Not(IsNil))
 }
 
-func addTCPRoute(c *C, l *tcpListener, port int) *strowger.TCPRoute {
+func addTCPRoute(c *C, l *tcpListener, port int) *router.TCPRoute {
 	wait := waitForEvent(c, l, "set", "")
-	r := (&strowger.TCPRoute{
+	r := (&router.TCPRoute{
 		Service: "test",
 		Port:    port,
 	}).ToRoute()
@@ -169,7 +169,7 @@ func (s *S) TestTCPPortAllocation(c *C) {
 			discoverd.UnregisterAll()
 			srv.Close()
 		}
-		r := (&strowger.TCPRoute{Service: "test"}).ToRoute()
+		r := (&router.TCPRoute{Service: "test"}).ToRoute()
 		err := l.AddRoute(r)
 		c.Assert(err, Equals, ErrNoPorts)
 		for _, port := range ports {

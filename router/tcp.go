@@ -50,7 +50,7 @@ type TCPListener struct {
 	closed     bool
 }
 
-func (l *TCPListener) AddRoute(route *strowger.Route) error {
+func (l *TCPListener) AddRoute(route *router.Route) error {
 	r := route.TCPRoute()
 	l.mtx.RLock()
 	defer l.mtx.RUnlock()
@@ -64,7 +64,7 @@ func (l *TCPListener) AddRoute(route *strowger.Route) error {
 	return l.ds.Add(route)
 }
 
-func (l *TCPListener) SetRoute(route *strowger.Route) error {
+func (l *TCPListener) SetRoute(route *router.Route) error {
 	r := route.TCPRoute()
 	l.mtx.RLock()
 	defer l.mtx.RUnlock()
@@ -72,15 +72,15 @@ func (l *TCPListener) SetRoute(route *strowger.Route) error {
 		return ErrClosed
 	}
 	if r.Port == 0 {
-		return errors.New("strowger: a port number needs to be specified")
+		return errors.New("router: a port number needs to be specified")
 	}
 	route.ID = md5sum(strconv.Itoa(r.Port))
 	return l.ds.Set(route)
 }
 
-var ErrNoPorts = errors.New("strowger: no ports available")
+var ErrNoPorts = errors.New("router: no ports available")
 
-func (l *TCPListener) addWithAllocatedPort(route *strowger.Route) error {
+func (l *TCPListener) addWithAllocatedPort(route *router.Route) error {
 	r := route.TCPRoute()
 	l.mtx.RLock()
 	defer l.mtx.RUnlock()
@@ -140,7 +140,7 @@ type tcpSyncHandler struct {
 	l *TCPListener
 }
 
-func (h *tcpSyncHandler) Set(data *strowger.Route) error {
+func (h *tcpSyncHandler) Set(data *router.Route) error {
 	r := data.TCPRoute()
 
 	h.l.mtx.Lock()
@@ -179,7 +179,7 @@ func (h *tcpSyncHandler) Set(data *strowger.Route) error {
 	}
 	h.l.services[r.Port] = s
 	h.l.serviceIDs[data.ID] = s
-	go h.l.wm.Send(&strowger.Event{Event: "set", ID: data.ID})
+	go h.l.wm.Send(&router.Event{Event: "set", ID: data.ID})
 	return nil
 }
 
@@ -197,7 +197,7 @@ func (h *tcpSyncHandler) Remove(id string) error {
 	service.Close()
 	delete(h.l.services, service.port)
 	delete(h.l.serviceIDs, id)
-	go h.l.wm.Send(&strowger.Event{Event: "remove", ID: id})
+	go h.l.wm.Send(&router.Event{Event: "remove", ID: id})
 	return nil
 }
 

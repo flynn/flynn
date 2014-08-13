@@ -193,7 +193,7 @@
   {
     "id": "router-wait",
     "action": "wait",
-    "url": "discoverd+http://strowger-api/",
+    "url": "discoverd+http://router-api/",
     "status": 404
   },
   {
