@@ -39,6 +39,57 @@ Amazon Web Services account [here](https://dashboard.flynn.io).
 You can also download a [demo environment](/demo) for your local machine or
 learn about the components below.
 
+### Manual Ubuntu Deployment
+
+Currently only Ubuntu 14.04 is supported for manual installation, but this is
+a temporary packaging limitation, we have no actual dependency on Ubuntu.
+
+The first step is to install the `flynn-host` package from our apt repo:
+
+```text
+apt-key adv --keyserver keyserver.ubuntu.com --recv BC79739C507A9B53BB1B0E7D820A5489998D827B
+echo deb https://dl.flynn.io/ubuntu flynn main > /etc/apt/sources.list.d/flynn.list
+apt-get update
+apt-get install -y linux-image-extra-$(uname -r) flynn-host
+```
+
+Do this on every host that you want to be in the Flynn cluster.
+
+The next step is to configure a Layer 0 cluster. The host daemon finds other
+members of the cluster using the etcd, which needs to be bootstrapped.
+
+The etcd cluster should be configured using a a [discovery
+token](https://coreos.com/docs/cluster-management/setup/etcd-cluster-discovery/).
+Get a token [from here](https://discovery.etcd.io/new) and add a line like this
+to `/etc/init/flynn-host.conf` on every host:
+
+```text
+env ETCD_DISCOVERY=https://discovery.etcd.io/00000000000000000000000000000000
+```
+
+Then, start the daemon by running `start flynn-host`.
+
+After you have a running Layer 0 cluster, bootstrap Layer 1 with
+`flynn-bootstrap`. You'll need a domain name with DNS A records pointing to
+every node IP address and a second, wildcard domain CNAME to the cluster domain.
+
+`CONTROLLER_DOMAIN` and `DEFAULT_ROUTE_DOMAIN` should be set to the two
+respective domains.
+
+```text
+  CONTROLLER_DOMAIN=demo.flynnlocal.com \
+  DEFAULT_ROUTE_DOMAIN=demo.flynnlocal.com \
+  flynn-boostrap /etc/flynn/bootstrap-manifest.json
+```
+
+The Layer 1 bootstrapper will get all necessary services running using the Layer
+0 API. The final log line will contain configuration that may be used with the
+[command-line interface](/cli).
+
+If you try these instructions and run into issues, please open an issue or pull
+request.
+
+
 ## Components
 
 ### Layer 0
