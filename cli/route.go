@@ -88,12 +88,11 @@ func runRouteAddHTTP(args *docopt.Args, client *controller.Client) error {
 		routeHTTPService = args.String["--service"]
 	}
 
-	if args.String["tls-cert"] != "" && args.String["tls-key"] != "" {
+	tlsCertPath := args.String["--tls-cert"]
+	tlsKeyPath := args.String["--tls-key"]
+	if tlsCertPath != "" && tlsKeyPath != "" {
 		var stdin []byte
 		var err error
-
-		tlsCertPath := args.String["tls-cert"]
-		tlsKeyPath := args.String["tls-key"]
 
 		if tlsCertPath == "-" || tlsKeyPath == "-" {
 			stdin, err = ioutil.ReadAll(os.Stdin)
@@ -110,7 +109,7 @@ func runRouteAddHTTP(args *docopt.Args, client *controller.Client) error {
 		if err != nil {
 			return errors.New("Failed to read TLS Key")
 		}
-	} else if args.String["tls-cert"] != "" || args.String["tls-key"] != "" {
+	} else if tlsCertPath != "" || tlsKeyPath != "" {
 		return errors.New("Both the TLS certificate AND private key need to be specified")
 	}
 
