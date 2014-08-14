@@ -188,7 +188,7 @@ fi
 cd $flynn
 
 git fetch
-git checkout {{ . }}
+git checkout --quiet {{ . }}
 tup
 
 sudo cp {host/bin/flynn-*,pinkerton/pinkerton,bootstrap/bin/flynn-bootstrap} /usr/bin
