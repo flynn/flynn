@@ -5,13 +5,15 @@ import (
 	"github.com/flynn/flynn/controller/client"
 )
 
-func runProvider(argv []string, client *controller.Client) error {
-	usage := `usage: flynn provider
+func init() {
+	register("provider", runProvider, `
+usage: flynn provider
 
 Lists resource providers that have been associated with the controller.
-	`
-	docopt.Parse(usage, argv, true, "", false)
+`)
+}
 
+func runProvider(args *docopt.Args, client *controller.Client) error {
 	providers, err := client.ProviderList()
 	if err != nil {
 		return err
