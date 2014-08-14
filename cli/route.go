@@ -103,11 +103,11 @@ func runRouteAddHTTP(args *docopt.Args, client *controller.Client) error {
 
 		tlsCert, err = readPEM("CERTIFICATE", tlsCertPath, stdin)
 		if err != nil {
-			return errors.New("Failed to read TLS Cert")
+			return fmt.Errorf("Failed to read TLS cert: %s", err)
 		}
 		tlsKey, err = readPEM("PRIVATE KEY", tlsKeyPath, stdin)
 		if err != nil {
-			return errors.New("Failed to read TLS Key")
+			return fmt.Errorf("Failed to read TLS key: %s", err)
 		}
 	} else if tlsCertPath != "" || tlsKeyPath != "" {
 		return errors.New("Both the TLS certificate AND private key need to be specified")
