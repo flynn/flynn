@@ -61,6 +61,7 @@ cp -r . $build_root
 export APP_DIR="$app_dir"
 export HOME="$app_dir"
 export REQUEST_ID=$(openssl rand -base64 32)
+export STACK=cedar-14
 
 # Fix for https://github.com/flynn/flynn/issues/85
 export CURL_CONNECT_TIMEOUT=30
