@@ -42,11 +42,14 @@ RUN echo 'deb http://archive.ubuntu.com/ubuntu trusty main' >/etc/apt/sources.li
       openssh-client \
       openssh-server \
       python \
+      python-dev \
       ruby \
+      ruby-dev \
       socat \
       syslinux \
       tar \
       telnet \
+      zip \
       zlib1g-dev \
       pigz &&\
 
