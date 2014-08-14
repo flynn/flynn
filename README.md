@@ -112,7 +112,7 @@ is a temporary packaging limitation, we have no actual dependency on Ubuntu.
 The first step is to install the `flynn-host` package and container images:
 
 ```text
-apt-key adv --keyserver keyserver.ubuntu.com --recv BC79739C507A9B53BB1B0E7D820A5489998D827B
+apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv BC79739C507A9B53BB1B0E7D820A5489998D827B
 echo deb https://dl.flynn.io/ubuntu flynn main > /etc/apt/sources.list.d/flynn.list
 apt-get update
 apt-get install -y linux-image-extra-$(uname -r) flynn-host
