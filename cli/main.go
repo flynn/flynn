@@ -95,19 +95,22 @@ See 'flynn help <command>' for more information on a specific command.
 }
 
 type command struct {
-	usage string
-	f     interface{}
+	usage     string
+	f         interface{}
+	optsFirst bool
 }
 
-var commands = make(map[string]command)
+var commands = make(map[string]*command)
 
-func register(cmd string, f interface{}, usage string) {
+func register(cmd string, f interface{}, usage string) *command {
 	switch f.(type) {
 	case func(*docopt.Args, *controller.Client) error, func(*docopt.Args) error, func() error, func():
 	default:
 		panic(fmt.Sprintf("invalid command function %s '%T'", cmd, f))
 	}
-	commands[cmd] = command{strings.TrimLeftFunc(usage, unicode.IsSpace), f}
+	c := &command{usage: strings.TrimLeftFunc(usage, unicode.IsSpace), f: f}
+	commands[cmd] = c
+	return c
 }
 
 func runCommand(name string, args []string) (err error) {
@@ -119,7 +122,7 @@ func runCommand(name string, args []string) (err error) {
 	if !ok {
 		return fmt.Errorf("%s is not a flynn command. See 'flynn help'", name)
 	}
-	parsedArgs, err := docopt.Parse(cmd.usage, argv, true, "", false)
+	parsedArgs, err := docopt.Parse(cmd.usage, argv, true, "", cmd.optsFirst)
 	if err != nil {
 		return err
 	}

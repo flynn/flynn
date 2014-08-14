@@ -18,7 +18,7 @@ import (
 )
 
 func init() {
-	register("run", runRun, `
+	cmd := register("run", runRun, `
 usage: flynn run [-d] [-r <release>] <command> [<argument>...]
 
 Run a job.
@@ -27,6 +27,7 @@ Options:
    -d, --detached  run job without connecting io streams
    -r <release>    id of release to run (defaults to current app release)
 `)
+	cmd.optsFirst = true
 }
 
 // Declared here for Windows portability
