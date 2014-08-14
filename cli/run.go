@@ -47,7 +47,7 @@ func runRun(args *docopt.Args, client *controller.Client) error {
 		runRelease = release.ID
 	}
 	req := &ct.NewJob{
-		Cmd:       args.All["<argument>"].([]string),
+		Cmd:       append([]string{args.String["<command>"]}, args.All["<argument>"].([]string)...),
 		TTY:       term.IsTerminal(os.Stdin) && term.IsTerminal(os.Stdout) && !runDetached,
 		ReleaseID: runRelease,
 	}
