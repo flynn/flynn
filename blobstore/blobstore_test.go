@@ -72,6 +72,7 @@ func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {
 	wg.Add(concurrency)
 	for i := 0; i < concurrency; i++ {
 		go func() {
+			defer wg.Done()
 			path := srv.URL + "/foo/bar/" + random.Hex(16)
 			res, err := http.Get(path)
 			if err != nil {
@@ -176,6 +177,7 @@ func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {
 			wg2.Add(concurrency)
 			for i := 0; i < concurrency; i++ {
 				go func() {
+					defer wg2.Done()
 					res, err := http.Get(path)
 					if err != nil {
 						t.Fatal(err)
@@ -208,7 +210,6 @@ func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {
 							t.Errorf(`Expected Content-Type to be "application/text", got %q`, ct)
 						}
 					}
-					wg2.Done()
 				}()
 			}
 			wg2.Wait()
@@ -243,8 +244,6 @@ func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {
 			if res.StatusCode != 404 {
 				t.Errorf("Expected 200 for deleted HEAD, got %d", res.StatusCode)
 			}
-
-			wg.Done()
 		}()
 	}
 
