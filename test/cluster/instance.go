@@ -2,12 +2,14 @@ package cluster
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -32,6 +34,7 @@ type VMConfig struct {
 	User   int
 	Group  int
 	Memory string
+	Cores  int
 	Drives map[string]*VMDrive
 	Args   []string
 	Out    io.Writer
@@ -69,10 +72,11 @@ func (v *VMManager) NewInstance(c *VMConfig) (Instance, error) {
 type Instance interface {
 	DialSSH() (*ssh.Client, error)
 	Start() error
-	Wait() error
+	Wait(time.Duration) error
+	Shutdown() error
 	Kill() error
 	IP() string
-	Run(string, attempt.Strategy, io.Writer, io.Writer) error
+	Run(string, io.Writer, io.Writer) error
 	Drive(string) *VMDrive
 }
 
@@ -138,6 +142,9 @@ func (v *vm) Start() error {
 	if v.Memory != "" {
 		v.Args = append(v.Args, "-m", v.Memory)
 	}
+	if v.Cores > 0 {
+		v.Args = append(v.Args, "-smp", strconv.Itoa(v.Cores))
+	}
 	var err error
 	for i, d := range v.Drives {
 		if d.COW {
@@ -172,7 +179,7 @@ func (v *vm) createCOW(image string, temp bool) (string, error) {
 	if err := os.Chown(dir, v.User, v.Group); err != nil {
 		return "", err
 	}
-	path := filepath.Join(dir, "fs.img")
+	path := filepath.Join(dir, "rootfs.img")
 	cmd := exec.Command("qemu-img", "create", "-f", "qcow2", "-b", image, path)
 	if err = cmd.Run(); err != nil {
 		return "", fmt.Errorf("failed to create COW filesystem: %s", err.Error())
@@ -183,16 +190,7 @@ func (v *vm) createCOW(image string, temp bool) (string, error) {
 	return path, nil
 }
 
-func (v *vm) Wait() error {
-	defer v.cleanup()
-	return v.cmd.Wait()
-}
-
-func (v *vm) Kill() error {
-	defer v.cleanup()
-	if err := v.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		return err
-	}
+func (v *vm) Wait(timeout time.Duration) error {
 	done := make(chan error)
 	go func() {
 		done <- v.cmd.Wait()
@@ -200,9 +198,32 @@ func (v *vm) Kill() error {
 	select {
 	case err := <-done:
 		return err
-	case <-time.After(5 * time.Second):
+	case <-time.After(timeout):
+		return errors.New("timeout")
+	}
+}
+
+func (v *vm) Shutdown() error {
+	buf := bytes.Buffer{}
+	if err := v.Run("sudo poweroff", &buf, &buf); err != nil {
+		return v.Kill()
+	}
+	if err := v.Wait(5 * time.Second); err != nil {
+		return v.Kill()
+	}
+	v.cleanup()
+	return nil
+}
+
+func (v *vm) Kill() error {
+	defer v.cleanup()
+	if err := v.cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		return err
+	}
+	if err := v.Wait(5 * time.Second); err != nil {
 		return v.cmd.Process.Kill()
 	}
+	return nil
 }
 
 func (v *vm) DialSSH() (*ssh.Client, error) {
@@ -216,9 +237,15 @@ func (v *vm) IP() string {
 	return v.tap.RemoteIP.String()
 }
 
-func (v *vm) Run(command string, attempts attempt.Strategy, out io.Writer, stderr io.Writer) error {
+var sshAttempts = attempt.Strategy{
+	Min:   5,
+	Total: 5 * time.Minute,
+	Delay: time.Second,
+}
+
+func (v *vm) Run(command string, out io.Writer, stderr io.Writer) error {
 	var sc *ssh.Client
-	err := attempts.Run(func() (err error) {
+	err := sshAttempts.Run(func() (err error) {
 		fmt.Fprintf(stderr, "Attempting to ssh to %s:22...\n", v.IP())
 		sc, err = v.DialSSH()
 		return

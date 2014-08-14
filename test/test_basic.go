@@ -65,10 +65,10 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 
 	t.Assert(s.Flynn("scale", "web=3"), Succeeds)
 
-	newRoute := s.Flynn("route-add-http", random.String(32)+".dev")
+	newRoute := s.Flynn("route", "add", "-t", "http", random.String(32)+".dev")
 	t.Assert(newRoute, Succeeds)
 
-	t.Assert(s.Flynn("routes"), OutputContains, strings.TrimSpace(newRoute.Output))
+	t.Assert(s.Flynn("route"), OutputContains, strings.TrimSpace(newRoute.Output))
 
 	// use Attempts to give the processes time to start
 	if err := Attempts.Run(func() error {

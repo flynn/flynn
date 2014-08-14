@@ -36,7 +36,7 @@ type Build struct {
 type Runner struct {
 	bc          cluster.BootConfig
 	events      chan Event
-	dockerFS    string
+	rootFS      string
 	githubToken string
 	s3Bucket    *s3.Bucket
 	networks    map[string]struct{}
@@ -57,7 +57,6 @@ func main() {
 	runner := &Runner{
 		bc:       args.BootConfig,
 		events:   make(chan Event, 10),
-		dockerFS: args.DockerFS,
 		networks: make(map[string]struct{}),
 		buildCh:  make(chan struct{}, maxBuilds),
 	}
@@ -78,19 +77,16 @@ func (r *Runner) start() error {
 	}
 	r.s3Bucket = s3.New(awsAuth, aws.USEast).Bucket(logBucket)
 
-	if r.dockerFS == "" {
-		var err error
-		bc := r.bc
-		bc.Network, err = r.allocateNet()
-		if err != nil {
-			return err
-		}
-		if r.dockerFS, err = cluster.BuildFlynn(bc, "", "master", os.Stdout); err != nil {
-			return fmt.Errorf("could not build flynn: %s", err)
-		}
-		r.releaseNet(bc.Network)
-		defer os.RemoveAll(r.dockerFS)
+	bc := r.bc
+	bc.Network, err = r.allocateNet()
+	if err != nil {
+		return err
 	}
+	if r.rootFS, err = cluster.BuildFlynn(bc, args.RootFS, "origin/master", os.Stdout); err != nil {
+		return fmt.Errorf("could not build flynn: %s", err)
+	}
+	r.releaseNet(bc.Network)
+	defer os.RemoveAll(r.rootFS)
 
 	db, err := bolt.Open(args.DBPath, 0600, &bolt.Options{Timeout: 5 * time.Second})
 	if err != nil {
@@ -173,8 +169,8 @@ func (r *Runner) build(b *Build) (err error) {
 		return err
 	}
 	defer r.releaseNet(bc.Network)
-	newDockerfs, err := cluster.BuildFlynn(bc, r.dockerFS, b.Commit, out)
-	defer os.RemoveAll(newDockerfs)
+	newRootFS, err := cluster.BuildFlynn(bc, r.rootFS, b.Commit, out)
+	defer os.RemoveAll(newRootFS)
 	if err != nil {
 		msg := fmt.Sprintf("could not build flynn: %s\n", err)
 		buildLog.WriteString(msg)
@@ -184,13 +180,13 @@ func (r *Runner) build(b *Build) (err error) {
 	cmd := exec.Command(
 		args.TestsPath,
 		"--user", r.bc.User,
-		"--rootfs", r.bc.RootFS,
-		"--dockerfs", newDockerfs,
+		"--rootfs", newRootFS,
 		"--kernel", r.bc.Kernel,
 		"--cli", args.CLI,
 		"--network", bc.Network,
 		"--nat", r.bc.NatIface,
 		"--debug",
+		"--build", "false",
 	)
 	cmd.Stdout = out
 	cmd.Stderr = out
