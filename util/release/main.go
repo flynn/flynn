@@ -9,12 +9,14 @@ func main() {
 
 Usage:
   flynn-release manifest [--output=<dest>] [--id-file=<file>] <template>
-  flynn-release download <manifest>
+  flynn-release download [--driver=<name>] [--root=<path>] <manifest>
   flynn-release upload <manifest> [<tag>]
 
 Options:
-  -o --output=<dest>   Output destination file ("-" for stdout) [default: -]
+  -o --output=<dest>   output destination file ("-" for stdout) [default: -]
   -i --id-file=<file>  JSON file containing ID mappings
+  -d --driver=<name>   image storage driver [default: aufs]
+  -r --root=<path>     image storage root [default: /var/lib/docker]
 `
 	args, _ := docopt.Parse(usage, nil, true, "", false)
 

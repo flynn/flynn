@@ -38,12 +38,15 @@ func run(cmd *exec.Cmd) {
 }
 
 func download(args *docopt.Args) {
+	if err := os.MkdirAll(args.String["--root"], 0755); err != nil {
+		log.Fatalf("error creating root dir: %s", err)
+	}
 	for image, id := range readManifest(args) {
 		fmt.Printf("Downloading %s %s...\n", image, id)
 		if !strings.HasPrefix(image, "http") {
 			image = "https://registry.hub.docker.com/" + image
 		}
 		image += "?id=" + id
-		run(exec.Command("pinkerton", "pull", image))
+		run(exec.Command("pinkerton", "pull", "--root", args.String["--root"], "--driver", args.String["--driver"], image))
 	}
 }
