@@ -40,6 +40,14 @@ func init() {
 }
 
 func main() {
+	var res *check.Result
+	// defer exiting so it runs after all other defers
+	defer func() {
+		if res != nil && !res.Passed() {
+			os.Exit(1)
+		}
+	}()
+
 	flynnrc = args.Flynnrc
 	if flynnrc == "" {
 		c := cluster.New(args.BootConfig, os.Stdout)
@@ -79,7 +87,7 @@ func main() {
 		log.Fatalf("Error during `%s`:\n%s%s", strings.Join(keyAdd.Cmd, " "), keyAdd.Output, keyAdd.Err)
 	}
 
-	res := check.RunAll(&check.RunConf{
+	res = check.RunAll(&check.RunConf{
 		Stream:      true,
 		Verbose:     true,
 		KeepWorkDir: args.Debug,
