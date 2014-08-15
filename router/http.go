@@ -334,6 +334,7 @@ func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 		}
 	}
 
+	req.RemoteAddr = conn.RemoteAddr().String()
 	r.service.handle(req, sc, isTLS, r.Sticky)
 }
 
