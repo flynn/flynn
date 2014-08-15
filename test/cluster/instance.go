@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -76,7 +75,7 @@ type Instance interface {
 	Shutdown() error
 	Kill() error
 	IP() string
-	Run(string, io.Writer, io.Writer) error
+	Run(string, *Streams) error
 	Drive(string) *VMDrive
 }
 
@@ -204,8 +203,7 @@ func (v *vm) Wait(timeout time.Duration) error {
 }
 
 func (v *vm) Shutdown() error {
-	buf := bytes.Buffer{}
-	if err := v.Run("sudo poweroff", &buf, &buf); err != nil {
+	if err := v.Run("sudo poweroff", nil); err != nil {
 		return v.Kill()
 	}
 	if err := v.Wait(5 * time.Second); err != nil {
@@ -243,10 +241,15 @@ var sshAttempts = attempt.Strategy{
 	Delay: time.Second,
 }
 
-func (v *vm) Run(command string, out io.Writer, stderr io.Writer) error {
+func (v *vm) Run(command string, s *Streams) error {
+	if s == nil {
+		s = &Streams{}
+	}
 	var sc *ssh.Client
 	err := sshAttempts.Run(func() (err error) {
-		fmt.Fprintf(stderr, "Attempting to ssh to %s:22...\n", v.IP())
+		if s.Stderr != nil {
+			fmt.Fprintf(s.Stderr, "Attempting to ssh to %s:22...\n", v.IP())
+		}
 		sc, err = v.DialSSH()
 		return
 	})
@@ -255,10 +258,10 @@ func (v *vm) Run(command string, out io.Writer, stderr io.Writer) error {
 	}
 	defer sc.Close()
 	sess, err := sc.NewSession()
-	sess.Stdin = bytes.NewBufferString(command)
-	sess.Stdout = out
-	sess.Stderr = stderr
-	if err := sess.Run("bash"); err != nil {
+	sess.Stdin = s.Stdin
+	sess.Stdout = s.Stdout
+	sess.Stderr = s.Stderr
+	if err := sess.Run(command); err != nil {
 		return fmt.Errorf("failed to run command on %s: %s", v.IP(), err)
 	}
 	return nil
