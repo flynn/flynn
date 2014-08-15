@@ -143,7 +143,7 @@ var testRunScript = template.Must(template.New("test-run").Parse(`
 #!/bin/bash
 set -e -x -o pipefail
 
-echo 127.0.0.1 {{ . }} | sudo tee -a /etc/hosts
+echo {{ .RouterIP }} {{ .ControllerDomain }} | sudo tee -a /etc/hosts
 
 cat > ~/.flynnrc
 
@@ -155,6 +155,7 @@ cd ~/go/src/github.com/flynn/flynn/test
 bin/flynn-test \
   --flynnrc ~/.flynnrc \
   --cli $(pwd)/../cli/flynn-cli \
+  --router-ip {{ .RouterIP }} \
   --debug
 `[1:]))
 
@@ -208,7 +209,7 @@ func (r *Runner) build(b *Build) (err error) {
 	}
 
 	var script bytes.Buffer
-	testRunScript.Execute(&script, c.ControllerDomain)
+	testRunScript.Execute(&script, c)
 	return c.Run(script.String(), &cluster.Streams{
 		Stdin:  bytes.NewBuffer(config.Marshal()),
 		Stdout: out,

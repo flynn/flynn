@@ -32,7 +32,7 @@ var gitEnv []string
 
 var args *arg.Args
 var flynnrc string
-var RouterIP string
+var routerIP string
 
 func init() {
 	args = arg.Parse()
@@ -40,7 +40,16 @@ func init() {
 }
 
 func main() {
+	var res *check.Result
+	// defer exiting so it runs after all other defers
+	defer func() {
+		if res != nil && !res.Passed() {
+			os.Exit(1)
+		}
+	}()
+
 	flynnrc = args.Flynnrc
+	routerIP = args.RouterIP
 	if flynnrc == "" {
 		c := cluster.New(args.BootConfig, os.Stdout)
 		rootFS, err := c.BuildFlynn(args.RootFS, "origin/master")
@@ -64,7 +73,7 @@ func main() {
 		}
 		defer os.RemoveAll(flynnrc)
 
-		RouterIP = c.RouterIP
+		routerIP = c.RouterIP
 	}
 
 	ssh, err := genSSHKey()
@@ -79,7 +88,7 @@ func main() {
 		log.Fatalf("Error during `%s`:\n%s%s", strings.Join(keyAdd.Cmd, " "), keyAdd.Output, keyAdd.Err)
 	}
 
-	res := check.RunAll(&check.RunConf{
+	res = check.RunAll(&check.RunConf{
 		Stream:      true,
 		Verbose:     true,
 		KeepWorkDir: args.Debug,
