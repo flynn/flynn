@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"text/template"
 
+	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -34,6 +35,12 @@ type Cluster struct {
 	instances []Instance
 	out       io.Writer
 	bridge    *Bridge
+}
+
+type Streams struct {
+	Stdin  io.Reader
+	Stdout io.Writer
+	Stderr io.Writer
 }
 
 func New(bc BootConfig, out io.Writer) *Cluster {
@@ -160,6 +167,28 @@ func (c *Cluster) setup() error {
 	return nil
 }
 
+func (c *Cluster) Run(command string, s *Streams) error {
+	if len(c.instances) == 0 {
+		return errors.New("no booted servers in cluster")
+	}
+	return c.instances[0].Run(command, s)
+}
+
+func (c *Cluster) CLIConfig() (*config.Config, error) {
+	conf := &config.Config{}
+	s := &config.Server{
+		Name:    "default",
+		URL:     "https://" + c.ControllerDomain,
+		Key:     c.ControllerKey,
+		GitHost: c.ControllerDomain + ":2222",
+		TLSPin:  c.ControllerPin,
+	}
+	if err := conf.Add(s); err != nil {
+		return nil, err
+	}
+	return conf, nil
+}
+
 func (c *Cluster) Shutdown() {
 	for i, inst := range c.instances {
 		c.log("killing instance", i)
@@ -189,7 +218,7 @@ fi
 cd $flynn
 
 git fetch
-git checkout {{ . }}
+git checkout --quiet {{ . }}
 tup
 
 sudo cp {host/bin/flynn-*,pinkerton/pinkerton,bootstrap/bin/flynn-bootstrap} /usr/bin
@@ -200,7 +229,7 @@ sudo cp bootstrap/bin/manifest.json /etc/flynn-bootstrap.json
 func buildFlynn(inst Instance, commit string, out io.Writer) error {
 	var b bytes.Buffer
 	flynnBuildScript.Execute(&b, commit)
-	return inst.Run(b.String(), out, out)
+	return inst.Run("bash", &Streams{Stdin: &b, Stdout: out, Stderr: out})
 }
 
 func (c *Cluster) bootstrapGrid(backend string) error {
@@ -218,7 +247,7 @@ func (c *Cluster) bootstrapGrid(backend string) error {
 			command = fmt.Sprintf("docker run -d -v=/var/run/docker.sock:/var/run/docker.sock -p=1113:1113 -e=ETCD_PEERS=%s flynn/host -external %s -force -backend %s", etcdPeers, inst.IP(), backend)
 		}
 
-		if err := inst.Run(command, c.out, os.Stderr); err != nil {
+		if err := inst.Run(command, &Streams{Stdout: c.out, Stderr: os.Stderr}); err != nil {
 			return err
 		}
 	}
@@ -247,7 +276,7 @@ func (c *Cluster) bootstrapFlynn() error {
 			"DISCOVERD=%s:1111 CONTROLLER_DOMAIN=%s CONTROLLER_KEY=%s flynn-bootstrap -json -min-hosts=%d /etc/flynn-bootstrap.json",
 			inst.IP(), c.ControllerDomain, c.ControllerKey, len(c.instances),
 		)
-		cmdErr = inst.Run(command, wr, os.Stderr)
+		cmdErr = inst.Run(command, &Streams{Stdout: wr, Stderr: os.Stderr})
 		wr.Close()
 	}()
 

@@ -43,17 +43,14 @@ func main() {
 	flynnrc = args.Flynnrc
 	if flynnrc == "" {
 		c := cluster.New(args.BootConfig, os.Stdout)
-		rootFS := args.RootFS
-		if args.Build {
-			var err error
-			if rootFS, err = c.BuildFlynn(args.RootFS, "origin/master"); err != nil {
-				log.Fatal("could not build flynn:", err)
-			}
-			if args.KeepRootFS {
-				fmt.Println("Built Flynn in rootfs:", rootFS)
-			} else {
-				defer os.RemoveAll(rootFS)
-			}
+		rootFS, err := c.BuildFlynn(args.RootFS, "origin/master")
+		if err != nil {
+			log.Fatal("could not build flynn:", err)
+		}
+		if args.KeepRootFS {
+			fmt.Println("Built Flynn in rootfs:", rootFS)
+		} else {
+			defer os.RemoveAll(rootFS)
 		}
 		if err := c.Boot(args.Backend, rootFS, 1); err != nil {
 			log.Fatal("could not boot cluster: ", err)
@@ -155,11 +152,21 @@ func createFlynnrc(c *cluster.Cluster) error {
 	if err != nil {
 		return err
 	}
-	flynnrc = tmpfile.Name()
+	path := tmpfile.Name()
 
-	githost := fmt.Sprintf("%s:2222", c.ControllerDomain)
-	url := fmt.Sprintf("https://%s:443", c.ControllerDomain)
-	return flynn("", "cluster", "add", "-g", githost, "-p", c.ControllerPin, "default", url, c.ControllerKey).Err
+	config, err := c.CLIConfig()
+	if err != nil {
+		os.RemoveAll(path)
+		return err
+	}
+
+	if err := config.SaveTo(path); err != nil {
+		os.RemoveAll(path)
+		return err
+	}
+
+	flynnrc = path
+	return nil
 }
 
 type CmdResult struct {

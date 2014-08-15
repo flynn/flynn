@@ -16,7 +16,6 @@ type Args struct {
 	Kill       bool
 	KeepRootFS bool
 	DBPath     string
-	TestsPath  string
 	Backend    string
 }
 
@@ -31,7 +30,6 @@ func Parse() *Args {
 	flag.StringVar(&args.CLI, "cli", "flynn", "path to flynn-cli binary")
 	flag.StringVar(&args.Flynnrc, "flynnrc", "", "path to flynnrc file")
 	flag.StringVar(&args.DBPath, "db", "flynn-test.db", "path to BoltDB database to store pending builds")
-	flag.StringVar(&args.TestsPath, "tests", "flynn-test", "path to the tests binary")
 	flag.StringVar(&args.Backend, "backend", "libvirt-lxc", "the host backend to use")
 	flag.BoolVar(&args.Build, "build", true, "build Flynn")
 	flag.BoolVar(&args.Debug, "debug", false, "enable debug output")

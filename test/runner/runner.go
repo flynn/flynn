@@ -9,9 +9,9 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/boltdb/bolt"
@@ -139,6 +139,25 @@ func (r *Runner) watchEvents() {
 	}
 }
 
+var testRunScript = template.Must(template.New("test-run").Parse(`
+#!/bin/bash
+set -e -x -o pipefail
+
+echo 127.0.0.1 {{ . }} | sudo tee -a /etc/hosts
+
+cat > ~/.flynnrc
+
+git config --global user.email "ci@flynn.io"
+git config --global user.name "CI"
+
+cd ~/go/src/github.com/flynn/flynn/test
+
+bin/flynn-test \
+  --flynnrc ~/.flynnrc \
+  --cli $(pwd)/../cli/flynn-cli \
+  --debug
+`[1:]))
+
 func (r *Runner) build(b *Build) (err error) {
 	r.updateStatus(b, "pending", "")
 
@@ -169,28 +188,32 @@ func (r *Runner) build(b *Build) (err error) {
 		return err
 	}
 	defer r.releaseNet(bc.Network)
-	newRootFS, err := cluster.BuildFlynn(bc, r.rootFS, b.Commit, out)
-	defer os.RemoveAll(newRootFS)
+
+	c := cluster.New(bc, out)
+
+	rootFS, err := c.BuildFlynn(r.rootFS, b.Commit)
+	defer os.RemoveAll(rootFS)
 	if err != nil {
-		msg := fmt.Sprintf("could not build flynn: %s\n", err)
-		buildLog.WriteString(msg)
-		return errors.New(msg)
+		return fmt.Errorf("could not build flynn: %s", err)
 	}
 
-	cmd := exec.Command(
-		args.TestsPath,
-		"--user", r.bc.User,
-		"--rootfs", newRootFS,
-		"--kernel", r.bc.Kernel,
-		"--cli", args.CLI,
-		"--network", bc.Network,
-		"--nat", r.bc.NatIface,
-		"--debug",
-		"--build", "false",
-	)
-	cmd.Stdout = out
-	cmd.Stderr = out
-	return cmd.Run()
+	if err := c.Boot(args.Backend, rootFS, 1); err != nil {
+		return fmt.Errorf("could not boot cluster: %s", err)
+	}
+	defer c.Shutdown()
+
+	config, err := c.CLIConfig()
+	if err != nil {
+		return fmt.Errorf("could not generate flynnrc: %s", err)
+	}
+
+	var script bytes.Buffer
+	testRunScript.Execute(&script, c.ControllerDomain)
+	return c.Run(script.String(), &cluster.Streams{
+		Stdin:  bytes.NewBuffer(config.Marshal()),
+		Stdout: out,
+		Stderr: out,
+	})
 }
 
 var s3attempts = attempt.Strategy{
