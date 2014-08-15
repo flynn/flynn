@@ -101,7 +101,7 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 
 	// Make HTTP requests
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", "http://"+RouterIP, nil)
+	req, err := http.NewRequest("GET", "http://"+routerIP, nil)
 	if err != nil {
 		t.Error(err)
 	}

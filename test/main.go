@@ -32,7 +32,7 @@ var gitEnv []string
 
 var args *arg.Args
 var flynnrc string
-var RouterIP string
+var routerIP string
 
 func init() {
 	args = arg.Parse()
@@ -49,6 +49,7 @@ func main() {
 	}()
 
 	flynnrc = args.Flynnrc
+	routerIP = args.RouterIP
 	if flynnrc == "" {
 		c := cluster.New(args.BootConfig, os.Stdout)
 		rootFS, err := c.BuildFlynn(args.RootFS, "origin/master")
@@ -72,7 +73,7 @@ func main() {
 		}
 		defer os.RemoveAll(flynnrc)
 
-		RouterIP = c.RouterIP
+		routerIP = c.RouterIP
 	}
 
 	ssh, err := genSSHKey()
