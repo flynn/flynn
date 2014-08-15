@@ -71,42 +71,6 @@ $$ LANGUAGE plpgsql`,
 )`,
 		`CREATE UNIQUE INDEX ON keys (fingerprint) WHERE deleted_at IS NULL`,
 
-		`CREATE TABLE app_logs (
-    app_id uuid NOT NULL REFERENCES apps (app_id),
-    log_id bigint NOT NULL,
-    event text NOT NULL,
-    subject_id uuid,
-    data text NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (app_id, log_id)
-)`,
-
-		`CREATE TABLE app_log_ids (
-    app_id uuid PRIMARY KEY REFERENCES apps (app_id),
-    log_id bigint NOT NULL
-)`,
-
-		`CREATE FUNCTION next_log_id(uuid) RETURNS bigint AS $$
-DECLARE
-    in_app_id ALIAS FOR $1;
-    next_log_id bigint;
-BEGIN
-    next_log_id := log_id FROM app_log_ids WHERE app_id = in_app_id FOR UPDATE;
-    IF next_log_id IS NULL THEN
-        next_log_id := 0;
-        BEGIN
-            INSERT INTO app_log_ids (app_id, log_id) VALUES (in_app_id, next_log_id+1);
-            RETURN next_log_id;
-        EXCEPTION WHEN unique_violation THEN
-            next_log_id := log_id FROM app_log_ids WHERE app_id = in_app_id FOR UPDATE;
-        END;
-    END IF;
-
-    UPDATE app_log_ids SET log_id = log_id+1 WHERE app_id = in_app_id;
-    RETURN next_log_id;
-END
-$$ LANGUAGE plpgsql`,
-
 		`CREATE TABLE providers (
     provider_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     name text NOT NULL UNIQUE,
