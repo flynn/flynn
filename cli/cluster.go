@@ -1,14 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"net"
-	"net/url"
-	"os"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/BurntSushi/toml"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
+	cfg "github.com/flynn/flynn/cli/config"
 )
 
 func init() {
@@ -32,14 +28,14 @@ Commands:
 }
 
 func runCluster(args *docopt.Args) error {
+	if err := readConfig(); err != nil {
+		return err
+	}
+
 	if args.Bool["add"] {
 		return runClusterAdd(args)
 	} else if args.Bool["remove"] {
 		return runClusterRemove(args)
-	}
-
-	if err := readConfig(); err != nil {
-		return err
 	}
 
 	w := tabWriter()
@@ -53,53 +49,17 @@ func runCluster(args *docopt.Args) error {
 }
 
 func runClusterAdd(args *docopt.Args) error {
-	if err := readConfig(); err != nil {
-		return err
-	}
-
-	serverGitHost := args.String["--git-host"]
-	serverTLSPin := args.String["--tls-pin"]
-
-	s := &ServerConfig{
+	s := &cfg.Server{
 		Name:    args.String["<cluster-name>"],
 		URL:     args.String["<url>"],
 		Key:     args.String["<key>"],
-		GitHost: serverGitHost,
-		TLSPin:  serverTLSPin,
+		GitHost: args.String["--git-host"],
+		TLSPin:  args.String["--tls-pin"],
 	}
-	if serverGitHost == "" {
-		u, err := url.Parse(s.URL)
-		if err != nil {
-			return err
-		}
-		if host, _, err := net.SplitHostPort(u.Host); err == nil {
-			s.GitHost = host
-		} else {
-			s.GitHost = u.Host
-		}
-	}
-
-	for _, existing := range config.Servers {
-		if existing.Name == s.Name {
-			return fmt.Errorf("Server %q already exists in ~/.flynnrc", s.Name)
-		}
-		if existing.URL == s.URL {
-			return fmt.Errorf("A server with the URL %q already exists in ~/.flynnrc", s.URL)
-		}
-		if existing.GitHost == s.GitHost {
-			return fmt.Errorf("A server with the git host %q already exists in ~/.flynnrc", s.GitHost)
-		}
-	}
-
-	config.Servers = append(config.Servers, s)
-
-	f, err := os.Create(configPath())
-	if err != nil {
+	if err := config.Add(s); err != nil {
 		return err
 	}
-	defer f.Close()
-
-	if err := toml.NewEncoder(f).Encode(config); err != nil {
+	if err := config.SaveTo(configPath()); err != nil {
 		return err
 	}
 
@@ -108,32 +68,15 @@ func runClusterAdd(args *docopt.Args) error {
 }
 
 func runClusterRemove(args *docopt.Args) error {
-	if err := readConfig(); err != nil {
-		return err
-	}
-
 	name := args.String["<cluster-name>"]
 
-	for i, s := range config.Servers {
-		if s.Name != name {
-			continue
-		}
-		config.Servers = append(config.Servers[:i], config.Servers[i+1:]...)
-
-		f, err := os.Create(configPath())
-		if err != nil {
+	if config.Remove(name) {
+		if err := config.SaveTo(configPath()); err != nil {
 			return err
 		}
-		defer f.Close()
 
-		if len(config.Servers) != 0 {
-			if err := toml.NewEncoder(f).Encode(config); err != nil {
-				return err
-			}
-		}
-
-		log.Printf("Server %q removed.", s.Name)
-		return nil
+		log.Printf("Server %q removed.", name)
 	}
+
 	return nil
 }

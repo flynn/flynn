@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
+
+	cfg "github.com/flynn/flynn/cli/config"
 )
 
 const gitURLSuf = ".git"
@@ -28,7 +30,7 @@ func mapOutput(out []byte, sep, term string) map[string]string {
 }
 
 type remoteApp struct {
-	Server *ServerConfig
+	Server *cfg.Server
 	Name   string
 }
 

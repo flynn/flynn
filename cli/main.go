@@ -15,6 +15,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/BurntSushi/toml"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
+	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
 )
 
@@ -161,20 +162,8 @@ func runCommand(name string, args []string) (err error) {
 	return fmt.Errorf("unexpected command type %T", cmd.f)
 }
 
-type Config struct {
-	Servers []*ServerConfig `toml:"server"`
-}
-
-type ServerConfig struct {
-	Name    string `json:"name"`
-	GitHost string `json:"git_host"`
-	URL     string `json:"url"`
-	Key     string `json:"key"`
-	TLSPin  string `json:"tls_pin"`
-}
-
-var config *Config
-var serverConf *ServerConfig
+var config *cfg.Config
+var serverConf *cfg.Server
 
 func configPath() string {
 	p := os.Getenv("FLYNNRC")
@@ -188,7 +177,7 @@ func readConfig() error {
 	if config != nil {
 		return nil
 	}
-	conf := &Config{}
+	conf := &cfg.Config{}
 	_, err := toml.DecodeFile(configPath(), conf)
 	if err != nil && !os.IsNotExist(err) {
 		return err
@@ -206,7 +195,7 @@ func homedir() string {
 
 var ErrNoServers = errors.New("no servers configured")
 
-func server() (*ServerConfig, error) {
+func server() (*cfg.Server, error) {
 	if serverConf != nil {
 		return serverConf, nil
 	}
