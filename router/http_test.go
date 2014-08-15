@@ -241,6 +241,31 @@ func (s *S) TestHTTPServiceHandlerBackendConnectionClosed(c *C) {
 	assertGet(c, "http://"+l.Addr, "example.com", "1")
 }
 
+// Act as an app to test HTTP headers
+func httpHeaderTestHandler(c *C, id string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		c.Assert(req.Header["X-Forwarded-Proto"][0], Equals, "http")
+		c.Assert(len(req.Header["X-Request-Start"][0]), Equals, 13)
+		c.Assert(req.Header["X-Forwarded-For"][0], Equals, "127.0.0.1")
+		w.Write([]byte(id))
+	})
+}
+
+// issue #105
+func (s *S) TestHTTPHeaders(c *C) {
+	srv := httptest.NewServer(httpHeaderTestHandler(c, "1"))
+
+	l, discoverd := newHTTPListener(c)
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	assertGet(c, "http://"+l.Addr, "example.com", "1")
+}
+
 func (s *S) TestHTTPWebsocket(c *C) {
 	done := make(chan struct{})
 	srv := httptest.NewServer(
