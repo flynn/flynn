@@ -307,8 +307,12 @@ func (c *Cluster) bootstrapFlynn() error {
 	c.ControllerPin = cert.Pin
 
 	// grab the router IP from discoverd
-	discoverd.Connect(inst.IP() + ":1111")
-	set, err := discoverd.NewServiceSet("router-api")
+	disc, err := discoverd.NewClientWithAddr(inst.IP() + ":1111")
+	if err != nil {
+		return fmt.Errorf("could not connect to discoverd at %s:1111: %s", inst.IP(), err)
+	}
+	defer disc.Close()
+	set, err := disc.NewServiceSet("router-api")
 	if err != nil {
 		return fmt.Errorf("could not detect router ip: %s", err)
 	}
