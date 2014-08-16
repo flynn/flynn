@@ -600,7 +600,7 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 	}
 
 	defer func() {
-		if req.Job.Job.Config.TTY || req.Stream && err == io.EOF {
+		if client != nil && req.Job.Job.Config.TTY || req.Stream && err == io.EOF {
 			<-client.done
 			job := l.state.GetJob(req.Job.Job.ID)
 			if job.Status == host.StatusDone || job.Status == host.StatusCrashed {
