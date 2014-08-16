@@ -124,6 +124,7 @@ func (s *etcdDataStore) path(id string) string {
 
 func (s *etcdDataStore) Sync(h SyncHandler, started chan<- error) {
 	keys := make(map[string]uint64)
+	newKeys := make(map[string]uint64)
 	nextIndex := uint64(1)
 
 fullSync:
@@ -156,7 +157,6 @@ syncErr:
 		if modified, ok := keys[key]; ok && modified >= node.ModifiedIndex {
 			continue
 		}
-		keys[key] = node.ModifiedIndex
 		route := &router.Route{}
 		if err = json.Unmarshal([]byte(node.Value), route); err != nil {
 			goto syncErr
@@ -164,7 +164,18 @@ syncErr:
 		if err = h.Set(route); err != nil {
 			goto syncErr
 		}
+		newKeys[key] = node.ModifiedIndex
 	}
+	for k := range keys {
+		if _, ok := newKeys[k]; ok {
+			continue
+		}
+		if err := h.Remove(k); err != nil {
+			log.Printf("Error while processing delete from etcd fullsync: %s, %s", k, err)
+		}
+	}
+	keys = newKeys
+	newKeys = make(map[string]uint64)
 
 watch:
 	if started != nil {
@@ -208,6 +219,7 @@ watch:
 		}
 		if e, ok := watchErr.(*etcd.EtcdError); ok && e.ErrorCode == 401 {
 			// event log has been pruned beyond our waitIndex, force fullSync
+			log.Printf("Got etcd error 401, doing full sync")
 			goto fullSync
 		}
 		log.Printf("Restarting etcd watch %s due to error: %s", s.prefix, watchErr)
