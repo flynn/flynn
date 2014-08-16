@@ -242,18 +242,19 @@ func (s *S) TestHTTPServiceHandlerBackendConnectionClosed(c *C) {
 }
 
 // Act as an app to test HTTP headers
-func httpHeaderTestHandler(c *C, id string) http.Handler {
+func httpHeaderTestHandler(c *C, ip string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		c.Assert(req.Header["X-Forwarded-Proto"][0], Equals, "http")
 		c.Assert(len(req.Header["X-Request-Start"][0]), Equals, 13)
-		c.Assert(req.Header["X-Forwarded-For"][0], Equals, "127.0.0.1")
-		w.Write([]byte(id))
+		c.Assert(req.Header["X-Forwarded-For"][0], Equals, ip)
+		c.Assert(len(req.Header["X-Request-Id"][0]), Equals, 32)
+		w.Write([]byte("1"))
 	})
 }
 
 // issue #105
 func (s *S) TestHTTPHeaders(c *C) {
-	srv := httptest.NewServer(httpHeaderTestHandler(c, "1"))
+	srv := httptest.NewServer(httpHeaderTestHandler(c, "127.0.0.1"))
 
 	l, discoverd := newHTTPListener(c)
 	defer l.Close()
@@ -264,6 +265,25 @@ func (s *S) TestHTTPHeaders(c *C) {
 	defer discoverd.UnregisterAll()
 
 	assertGet(c, "http://"+l.Addr, "example.com", "1")
+}
+
+func (s *S) TestHTTPHeadersFromClient(c *C) {
+	srv := httptest.NewServer(httpHeaderTestHandler(c, "192.168.1.1, 127.0.0.1"))
+
+	l, discoverd := newHTTPListener(c)
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	req := newReq("http://"+l.Addr, "example.com")
+	req.Header.Set("X-Forwarded-For", "192.168.1.1")
+	req.Header.Set("X-Request-Id", "asdf1234asdf")
+	res, err := httpClient.Do(req)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
 }
 
 func (s *S) TestHTTPWebsocket(c *C) {
