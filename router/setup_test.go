@@ -401,17 +401,25 @@ func discoverdRegisterHTTP(c *C, l *httpListener, addr string) {
 }
 
 func discoverdRegister(c *C, dc discoverdClient, ss discoverd.ServiceSet, addr string) {
-	var ch chan *agent.ServiceUpdate
+	done := make(chan struct{})
 	if !*fake {
-		ch = ss.Watch(false)
-		defer ss.Unwatch(ch)
+		ch := ss.Watch(false)
+		go func() {
+			defer ss.Unwatch(ch)
+			for u := range ch {
+				if u.Addr == addr && u.Online {
+					close(done)
+					return
+				}
+			}
+		}()
+	} else {
+		close(done)
 	}
 	dc.Register("test", addr)
-	if ch != nil {
-		select {
-		case <-ch:
-		case <-time.After(10 * time.Second):
-			c.Fatal("timed out waiting for discoverd registration")
-		}
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		c.Fatal("timed out waiting for discoverd registration")
 	}
 }
