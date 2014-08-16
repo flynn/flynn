@@ -246,6 +246,9 @@ func (r *Runner) httpEventHandler(w http.ResponseWriter, req *http.Request) {
 	name := strings.Join(header, " ")
 	var event Event
 	switch name {
+	case "ping":
+		io.WriteString(w, "pong\n")
+		return
 	case "push":
 		event = &PushEvent{}
 	case "pull_request":
