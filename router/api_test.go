@@ -22,7 +22,7 @@ func newTestAPIServer(t etcdrunner.TestingT) *testAPIServer {
 	ts := &testAPIServer{
 		Server:    httptest.NewServer(apiHandler(r)),
 		listeners: []Listener{r.HTTP, r.TCP},
-		cleanup:   []func(){killEtcd, killDiscoverd},
+		cleanup:   []func(){killDiscoverd, killEtcd},
 	}
 
 	discoverd := newFakeDiscoverd()
