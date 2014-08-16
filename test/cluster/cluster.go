@@ -217,6 +217,11 @@ fi
 
 cd $flynn
 
+# Also fetch Github PR commits
+if ! git config --get-all remote.origin.fetch | grep -q '^+refs/pull'; then
+  git config --add remote.origin.fetch '+refs/pull/*/head:refs/remotes/origin/pr/*'
+fi
+
 git fetch
 git checkout --quiet {{ . }}
 tup
