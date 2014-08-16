@@ -143,8 +143,8 @@ every node IP address and a second, wildcard domain CNAME to the cluster domain.
 respective domains.
 
 ```text
-  CONTROLLER_DOMAIN=demo.flynnlocal.com \
-  DEFAULT_ROUTE_DOMAIN=demo.flynnlocal.com \
+  CONTROLLER_DOMAIN=demo.localflynn.com \
+  DEFAULT_ROUTE_DOMAIN=demo.localflynn.com \
   flynn-bootstrap /etc/flynn/bootstrap-manifest.json
 ```
 
