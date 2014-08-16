@@ -193,7 +193,8 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 		if err != nil {
 			return err
 		}
-		service = &httpService{name: r.Service, ss: ss, cookieKey: h.l.cookieKey}
+		service = &httpService{name: r.Service, ss: ss, cookieKey: h.l.cookieKey, paused: false}
+		service.resumeCond = sync.NewCond(service.pauseMtx.RLocker())
 		h.l.services[r.Service] = service
 	}
 	service.refs++
@@ -347,6 +348,7 @@ type httpRoute struct {
 	TLSCert string
 	TLSKey  string
 	Sticky  bool
+	Paused  bool
 
 	keypair *tls.Certificate
 	service *httpService
@@ -359,6 +361,23 @@ type httpService struct {
 	refs int
 
 	cookieKey *[32]byte
+
+	paused     bool
+	pauseMtx   sync.RWMutex
+	resumeCond *sync.Cond
+}
+
+func (s *httpService) Pause() {
+	s.pauseMtx.Lock()
+	s.paused = true
+	s.pauseMtx.Unlock()
+}
+
+func (s *httpService) Unpause() {
+	s.pauseMtx.Lock()
+	s.paused = false
+	s.pauseMtx.Unlock()
+	s.resumeCond.Broadcast()
 }
 
 func (s *httpService) getBackend() *httputil.ClientConn {
@@ -445,6 +464,12 @@ func (s *httpService) getBackendSticky(req *http.Request) (*httputil.ClientConn,
 func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls, sticky bool) (done bool) {
 	req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
 	req.Header.Set("X-Request-Id", random.UUID())
+
+	s.pauseMtx.RLock()
+	if s.paused {
+		s.resumeCond.Wait()
+	}
+	s.pauseMtx.RUnlock()
 
 	var backend *httputil.ClientConn
 	var stickyCookie *http.Cookie

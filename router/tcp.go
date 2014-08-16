@@ -169,7 +169,9 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 			port:   r.Port,
 			parent: h.l,
 			ss:     ss,
+			paused: false,
 		}
+		service.resumeCond = sync.NewCond(service.pauseMtx.RLocker())
 		if listener, ok := h.l.listeners[r.Port]; ok {
 			service.l = listener
 			delete(h.l.listeners, r.Port)
@@ -227,6 +229,23 @@ type tcpService struct {
 	l      net.Listener
 	ss     discoverd.ServiceSet
 	refs   int
+
+	paused     bool
+	pauseMtx   sync.RWMutex
+	resumeCond *sync.Cond
+}
+
+func (s *tcpService) Pause() {
+	s.pauseMtx.Lock()
+	s.paused = true
+	s.pauseMtx.Unlock()
+}
+
+func (s *tcpService) Unpause() {
+	s.pauseMtx.Lock()
+	s.paused = false
+	s.pauseMtx.Unlock()
+	s.resumeCond.Broadcast()
 }
 
 func (s *tcpService) Close() {
@@ -289,6 +308,12 @@ func (s *tcpService) getBackend() (conn net.Conn) {
 }
 
 func (s *tcpService) handle(conn net.Conn) {
+	s.pauseMtx.RLock()
+	if s.paused {
+		s.resumeCond.Wait()
+	}
+	s.pauseMtx.RUnlock()
+
 	defer conn.Close()
 	backend := s.getBackend()
 	if backend == nil {
