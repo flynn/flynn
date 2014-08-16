@@ -2,24 +2,37 @@
 
 set -e
 
-IP_ADDR=$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')
+info() {
+  local msg=$1
+  echo "==> $msg"
+}
 
-# kill running flynn-host, if any
-host=$(docker ps | grep flynn-host | cut -d" " -f 1)
-if [ -n "$host" ]; then
-  docker kill $host
-fi
+root="$(cd "$(dirname "$0")/.." && pwd)"
+host_dir="${root}/host"
+bootstrap_dir="${root}/bootstrap"
 
-# workaround https://github.com/dotcloud/docker/issues/5737
-ifconfig | grep veth | cut -d" " -f 1 | while read veth; do
-  sudo ip link delete $veth > /dev/null || true
-done
-sudo ip neigh flush all
+ip=$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')
 
-docker run -d -v=/var/run/docker.sock:/var/run/docker.sock -p=1113:1113 flynn/host -external ${IP_ADDR} -force
-sleep 5
+info "Killing running flynn-host, if any"
+sudo start-stop-daemon \
+  --stop \
+  --oknodo \
+  --retry 5 \
+  --exec "${host_dir}/bin/flynn-host"
 
-# populate arp cache with etcd (additional workaround for #5737)
-sudo arping -c 1 172.17.0.3 > /dev/null
+info "Starting flynn-host"
+sudo start-stop-daemon \
+  --start \
+  --background \
+  --no-close \
+  --exec "${host_dir}/bin/flynn-host" \
+  -- \
+  --manifest "${host_dir}/bin/manifest.json" \
+  --external $ip \
+  --force \
+  --backend libvirt-lxc \
+  &>/tmp/flynn-host.log
 
-docker run -e=DISCOVERD=${IP_ADDR}:1111 flynn/bootstrap
+info "Bootstrapping Flynn"
+export DISCOVERD="${ip}:1111"
+"${bootstrap_dir}/bin/flynn-bootstrap" "${bootstrap_dir}/bin/manifest.json"
