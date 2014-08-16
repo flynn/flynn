@@ -444,6 +444,7 @@ func (s *httpService) getBackendSticky(req *http.Request) (*httputil.ClientConn,
 func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls, sticky bool) {
 	for {
 		req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
+		req.Header.Set("X-Request-Id", random.UUID())
 
 		var backend *httputil.ClientConn
 		var stickyCookie *http.Cookie
