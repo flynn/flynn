@@ -27,39 +27,87 @@ func servicePath(name, addr string) string {
 // Subscribe to changes in services of a given name.
 func (b *EtcdBackend) Subscribe(name string) (UpdateStream, error) {
 	stream := &etcdStream{ch: make(chan *ServiceUpdate), stop: make(chan bool)}
-
 	go func() {
-		nextIndex := uint64(1)
-		response, _ := b.getCurrentState(name)
-		if response != nil {
-			for _, n := range response.Node.Nodes {
-				if update := b.responseToUpdate(response, n); update != nil {
-					stream.ch <- update
-				}
-			}
-			nextIndex = response.EtcdIndex + 1
-		}
-		stream.ch <- &ServiceUpdate{}
-
-		path := servicePath(name, "")
-		for {
-			watch := make(chan *etcd.Response)
-			var watchErr error
-			go func() {
-				_, watchErr = b.Client.Watch(path, nextIndex, true, watch, stream.stop)
-			}()
-			for resp := range watch {
-				if update := b.responseToUpdate(resp, resp.Node); update != nil {
-					stream.ch <- update
-				}
-				nextIndex = resp.EtcdIndex + 1
+		send := func(u *ServiceUpdate) bool {
+			if u == nil {
+				return true
 			}
 			select {
+			case stream.ch <- u:
+				return true
 			case <-stream.stop:
-				return
-			default:
+				return false
 			}
-			log.Printf("Restarting etcd watch %s due to error: %s", path, watchErr)
+		}
+
+		var sentinel bool
+		keys := make(map[string]uint64)
+		newKeys := make(map[string]uint64)
+	sync:
+		for {
+			nextIndex := uint64(1)
+			response, _ := b.getCurrentState(name)
+			if response != nil {
+				for _, n := range response.Node.Nodes {
+					if modified, ok := keys[n.Key]; ok && modified >= n.ModifiedIndex {
+						continue
+					}
+					if !send(b.responseToUpdate(response, n, newKeys)) {
+						return
+					}
+				}
+				nextIndex = response.EtcdIndex + 1
+			}
+			if !sentinel {
+				if !send(&ServiceUpdate{}) {
+					return
+				}
+				sentinel = true
+			}
+			for k := range keys {
+				if _, ok := newKeys[k]; ok {
+					continue
+				}
+				serviceName, serviceAddr := splitServiceNameAddr(k)
+				if serviceName == "" {
+					continue
+				}
+				// instance was deleted, send offline update
+				if !send(&ServiceUpdate{Name: serviceName, Addr: serviceAddr}) {
+					return
+				}
+			}
+			keys = newKeys
+			newKeys = make(map[string]uint64)
+
+			path := servicePath(name, "")
+			for {
+				watch := make(chan *etcd.Response)
+				watchDone := make(chan struct{})
+				var watchErr error
+				go func() {
+					_, watchErr = b.Client.Watch(path, nextIndex, true, watch, stream.stop)
+					close(watchDone)
+				}()
+				for resp := range watch {
+					if !send(b.responseToUpdate(resp, resp.Node, keys)) {
+						return
+					}
+					nextIndex = resp.EtcdIndex + 1
+				}
+				<-watchDone
+				select {
+				case <-stream.stop:
+					return
+				default:
+				}
+				if e, ok := watchErr.(*etcd.EtcdError); ok && e.ErrorCode == 401 {
+					// event log has been pruned beyond our waitIndex, force full sync
+					log.Printf("Got etcd error 401, doing full sync")
+					continue sync
+				}
+				log.Printf("Restarting etcd watch %s due to error: %s", path, watchErr)
+			}
 		}
 	}()
 	return stream, nil
@@ -75,14 +123,12 @@ func (s *etcdStream) Chan() chan *ServiceUpdate { return s.ch }
 
 func (s *etcdStream) Close() { s.stopOnce.Do(func() { close(s.stop) }) }
 
-func (b *EtcdBackend) responseToUpdate(resp *etcd.Response, node *etcd.Node) *ServiceUpdate {
-	// expected key structure: /PREFIX/services/NAME/ADDR
-	splitKey := strings.SplitN(node.Key, "/", 5)
-	if len(splitKey) < 5 {
+func (b *EtcdBackend) responseToUpdate(resp *etcd.Response, node *etcd.Node, keys map[string]uint64) *ServiceUpdate {
+	keys[node.Key] = node.ModifiedIndex
+	serviceName, serviceAddr := splitServiceNameAddr(node.Key)
+	if serviceName == "" {
 		return nil
 	}
-	serviceName := splitKey[3]
-	serviceAddr := splitKey[4]
 	if "get" == resp.Action || ("set" == resp.Action || "update" == resp.Action) && (resp.PrevNode == nil || node.Value != resp.PrevNode.Value) {
 		// GET is because getCurrentState returns responses of Action GET.
 		// some SETs are heartbeats, so we ignore SETs where value didn't change.
@@ -99,6 +145,7 @@ func (b *EtcdBackend) responseToUpdate(resp *etcd.Response, node *etcd.Node) *Se
 			Created: uint(node.CreatedIndex),
 		}
 	} else if "delete" == resp.Action || "expire" == resp.Action {
+		delete(keys, node.Key)
 		return &ServiceUpdate{
 			Name: serviceName,
 			Addr: serviceAddr,
@@ -106,6 +153,15 @@ func (b *EtcdBackend) responseToUpdate(resp *etcd.Response, node *etcd.Node) *Se
 	} else {
 		return nil
 	}
+}
+
+func splitServiceNameAddr(key string) (string, string) {
+	// expected key structure: /PREFIX/services/NAME/ADDR
+	splitKey := strings.SplitN(key, "/", 5)
+	if len(splitKey) < 5 {
+		return "", ""
+	}
+	return splitKey[3], splitKey[4]
 }
 
 func (b *EtcdBackend) getCurrentState(name string) (*etcd.Response, error) {
