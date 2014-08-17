@@ -21,7 +21,7 @@ func RunDiscoverdServer(t TestingT, addr string) func() {
 			stdout, _ = cmd.StdoutPipe()
 		}
 		if err := cmd.Start(); err != nil {
-			t.Fatal("discoverd start failed:", err)
+			t.Fatal("discoverd start failed: ", err)
 			return
 		}
 		cmdDone := make(chan error)
@@ -38,9 +38,10 @@ func RunDiscoverdServer(t TestingT, addr string) func() {
 				t.Fatal("failed to kill discoverd:", err)
 				return
 			}
-			<-cmdDone
+			err := <-cmdDone
+			t.Log("discoverd process exited: ", err)
 		case err := <-cmdDone:
-			t.Log("discoverd process exited:", err)
+			t.Log("discoverd process exited unexpectedly: ", err)
 		}
 	}()
 
@@ -62,7 +63,7 @@ func BootDiscoverd(t TestingT, addr string) (*discoverd.Client, func()) {
 		return
 	})
 	if err != nil {
-		t.Fatalf("Failed to connect to discoverd: %q", err)
+		t.Fatal("Failed to connect to discoverd: ", err)
 	}
 	return client, killDiscoverd
 }

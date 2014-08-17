@@ -44,7 +44,7 @@ func RunEtcdServer(t TestingT) func() {
 			stdout, _ = cmd.StdoutPipe()
 		}
 		if err := cmd.Start(); err != nil {
-			t.Fatal("etcd start failed:", err)
+			t.Fatal("etcd start failed: ", err)
 			return
 		}
 		cmdDone := make(chan error)
@@ -58,16 +58,17 @@ func RunEtcdServer(t TestingT) func() {
 		select {
 		case <-killCh:
 			if err := cmd.Process.Kill(); err != nil {
-				t.Fatal("failed to kill etcd:", err)
+				t.Fatal("failed to kill etcd: ", err)
 				return
 			}
-			<-cmdDone
+			err := <-cmdDone
+			t.Log("etcd process exited: ", err)
 		case err := <-cmdDone:
-			t.Log("etcd process exited:", err)
+			t.Log("etcd process exited unexpectedly: ", err)
 			return
 		}
 		if err := os.RemoveAll(dataDir); err != nil {
-			t.Log("etcd data removal failed:", err)
+			t.Log("etcd data removal failed: ", err)
 		}
 	}()
 
@@ -78,7 +79,7 @@ func RunEtcdServer(t TestingT) func() {
 		return
 	})
 	if err != nil {
-		t.Fatalf("Failed to connect to etcd: %q", err)
+		t.Fatal("Failed to connect to etcd: ", err)
 	}
 
 	return func() {
