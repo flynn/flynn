@@ -104,6 +104,43 @@ func (l *TCPListener) RemoveRoute(id string) error {
 	return l.ds.Remove(id)
 }
 
+func (s *TCPListener) PauseService(id string, pause bool) error {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	if s.closed {
+		return ErrClosed
+	}
+	port, err := strconv.Atoi(id)
+	if err != nil {
+		return err
+	}
+	if pause {
+		service.Pause()
+	} else {
+		service.Unpause()
+	}
+	return nil
+}
+func (s *TCPListener) AddDrainListener(serviceID string, ch chan string) {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	r := s.routes[serviceID]
+	srv := s.services[r.Port]
+	srv.listenerMtx.Lock()
+	srv.listeners[ch] = struct{}{}
+	srv.listenerMtx.Unlock()
+}
+
+func (s *TCPListener) RemoveDrainListener(serviceID string, ch chan string) {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	r := s.routes[serviceID]
+	srv := s.services[r.Port]
+	srv.listenerMtx.Lock()
+	delete(srv.listeners, ch)
+	srv.listenerMtx.Unlock()
+}
+
 func (l *TCPListener) Start() error {
 	started := make(chan error)
 
@@ -165,12 +202,13 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 			return err
 		}
 		service = &tcpService{
-			addr:     h.l.IP + ":" + strconv.Itoa(r.Port),
-			port:     r.Port,
-			parent:   h.l,
-			ss:       ss,
-			paused:   false,
-			requests: make(map[string]int32),
+			addr:      h.l.IP + ":" + strconv.Itoa(r.Port),
+			port:      r.Port,
+			parent:    h.l,
+			ss:        ss,
+			paused:    false,
+			requests:  make(map[string]int32),
+			listeners: make(map[chan string]interface{}),
 		}
 		service.resumeCond = sync.NewCond(service.pauseMtx.RLocker())
 		if listener, ok := h.l.listeners[r.Port]; ok {
@@ -231,8 +269,10 @@ type tcpService struct {
 	ss     discoverd.ServiceSet
 	refs   int
 
-	requests   map[string]int32
-	requestMtx sync.RWMutex
+	requests    map[string]int32
+	requestMtx  sync.RWMutex
+	listeners   map[chan string]interface{}
+	listenerMtx sync.RWMutex
 
 	paused     bool
 	pauseMtx   sync.RWMutex
@@ -250,6 +290,14 @@ func (s *tcpService) Unpause() {
 	s.paused = false
 	s.pauseMtx.Unlock()
 	s.resumeCond.Broadcast()
+}
+
+func (s *tcpService) sendEvent(event string) {
+	s.listenerMtx.RLock()
+	defer s.listenerMtx.RUnlock()
+	for ch := range s.listeners {
+		ch <- event
+	}
 }
 
 func (s *tcpService) Close() {
@@ -343,6 +391,13 @@ func (s *tcpService) handle(conn net.Conn) {
 
 	s.requestMtx.Lock()
 	s.requests[addr]--
+	if s.requests[addr] == 0 {
+		delete(s.requests, addr)
+		s.sendEvent(addr)
+	}
+	if len(s.requests) == 0 {
+		s.sendEvent("all")
+	}
 	s.requestMtx.Unlock()
 
 	return

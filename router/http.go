@@ -149,6 +149,42 @@ func (s *HTTPListener) RemoveRoute(id string) error {
 	return s.ds.Remove(id)
 }
 
+func (s *HTTPListener) PauseService(name string, pause bool) error {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	if s.closed {
+		return ErrClosed
+	}
+	service, ok := s.services[name]
+	if !ok {
+		return nil
+	}
+	if pause {
+		service.Pause()
+	} else {
+		service.Unpause()
+	}
+	return nil
+}
+
+func (s *HTTPListener) AddDrainListener(name string, ch chan string) {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	srv := s.services[name]
+	srv.listenerMtx.Lock()
+	srv.listeners[ch] = struct{}{}
+	srv.listenerMtx.Unlock()
+}
+
+func (s *HTTPListener) RemoveDrainListener(name string, ch chan string) {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	srv := s.services[name]
+	srv.listenerMtx.Lock()
+	delete(srv.listeners, ch)
+	srv.listenerMtx.Unlock()
+}
+
 type httpSyncHandler struct {
 	l *HTTPListener
 }
@@ -193,7 +229,14 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 		if err != nil {
 			return err
 		}
-		service = &httpService{name: r.Service, ss: ss, cookieKey: h.l.cookieKey, paused: false, requests: make(map[string]int32)}
+		service = &httpService{
+			name:      r.Service,
+			ss:        ss,
+			cookieKey: h.l.cookieKey,
+			requests:  make(map[string]int32),
+			listeners: make(map[chan string]interface{}),
+			paused:    false,
+		}
 		service.resumeCond = sync.NewCond(service.pauseMtx.RLocker())
 		h.l.services[r.Service] = service
 	}
@@ -360,9 +403,11 @@ type httpService struct {
 	ss   discoverd.ServiceSet
 	refs int
 
-	cookieKey  *[32]byte
-	requests   map[string]int32
-	requestMtx sync.RWMutex
+	cookieKey   *[32]byte
+	requests    map[string]int32
+	requestMtx  sync.RWMutex
+	listeners   map[chan string]interface{}
+	listenerMtx sync.RWMutex
 
 	paused     bool
 	pauseMtx   sync.RWMutex
@@ -380,6 +425,14 @@ func (s *httpService) Unpause() {
 	s.paused = false
 	s.pauseMtx.Unlock()
 	s.resumeCond.Broadcast()
+}
+
+func (s *httpService) sendEvent(event string) {
+	s.listenerMtx.RLock()
+	defer s.listenerMtx.RUnlock()
+	for ch := range s.listeners {
+		ch <- event
+	}
 }
 
 func (s *httpService) getBackend() (*httputil.ClientConn, string) {
@@ -573,6 +626,13 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls, st
 
 	s.requestMtx.Lock()
 	s.requests[addr]--
+	if s.requests[addr] == 0 {
+		delete(s.requests, addr)
+		s.sendEvent(addr)
+	}
+	if len(s.requests) == 0 {
+		s.sendEvent("all")
+	}
 	s.requestMtx.Unlock()
 
 	return
