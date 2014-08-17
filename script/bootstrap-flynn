@@ -35,4 +35,6 @@ sudo start-stop-daemon \
 
 info "Bootstrapping Flynn"
 export DISCOVERD="${ip}:1111"
+export CONTROLLER_DOMAIN="dev.localflynn.com"
+export DEFAULT_ROUTE_DOMAIN="$CONTROLLER_DOMAIN"
 "${bootstrap_dir}/bin/flynn-bootstrap" "${bootstrap_dir}/bin/manifest.json"
