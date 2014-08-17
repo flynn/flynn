@@ -48,7 +48,7 @@ install:
   - popd
 
 script:
-  - DEBUG=1 go test -race -cover ./...
+  - DEBUG=1 go test -race -cover ./... -test.v
   - cd router && DEBUG=1 go test -race -fake=false -check.v
 
 notifications:
