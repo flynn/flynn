@@ -165,11 +165,12 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 			return err
 		}
 		service = &tcpService{
-			addr:   h.l.IP + ":" + strconv.Itoa(r.Port),
-			port:   r.Port,
-			parent: h.l,
-			ss:     ss,
-			paused: false,
+			addr:     h.l.IP + ":" + strconv.Itoa(r.Port),
+			port:     r.Port,
+			parent:   h.l,
+			ss:       ss,
+			paused:   false,
+			requests: make(map[string]int32),
 		}
 		service.resumeCond = sync.NewCond(service.pauseMtx.RLocker())
 		if listener, ok := h.l.listeners[r.Port]; ok {
@@ -230,6 +231,9 @@ type tcpService struct {
 	ss     discoverd.ServiceSet
 	refs   int
 
+	requests   map[string]int32
+	requestMtx sync.RWMutex
+
 	paused     bool
 	pauseMtx   sync.RWMutex
 	resumeCond *sync.Cond
@@ -286,25 +290,25 @@ func (s *tcpService) Serve(started chan<- error) {
 	}
 }
 
-func (s *tcpService) getBackend() (conn net.Conn) {
+func (s *tcpService) getBackend() (net.Conn, string) {
 	var err error
 	for _, addr := range shuffle(s.ss.Addrs()) {
 		// TODO: set deadlines
-		conn, err = net.Dial("tcp", addr)
+		conn, err := net.Dial("tcp", addr)
 		if err != nil {
 			log.Println("Error connecting to TCP backend:", err)
 			// TODO: limit number of backends tried
 			// TODO: temporarily quarantine failing backends
 			continue
 		}
-		return
+		return conn, addr
 	}
 	if err == nil {
 		log.Println("No TCP backends found")
 	} else {
 		log.Println("Unable to find live backend, last error:", err)
 	}
-	return
+	return nil, ""
 }
 
 func (s *tcpService) handle(conn net.Conn) {
@@ -315,11 +319,15 @@ func (s *tcpService) handle(conn net.Conn) {
 	s.pauseMtx.RUnlock()
 
 	defer conn.Close()
-	backend := s.getBackend()
+	backend, addr := s.getBackend()
 	if backend == nil {
 		return
 	}
 	defer backend.Close()
+
+	s.requestMtx.Lock()
+	s.requests[addr]++
+	s.requestMtx.Unlock()
 
 	// TODO: PROXY protocol
 
@@ -332,5 +340,10 @@ func (s *tcpService) handle(conn net.Conn) {
 	io.Copy(conn, backend)
 	conn.(*net.TCPConn).CloseWrite()
 	<-done
+
+	s.requestMtx.Lock()
+	s.requests[addr]--
+	s.requestMtx.Unlock()
+
 	return
 }
