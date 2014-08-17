@@ -31,6 +31,11 @@
     "data": "{{ getenv \"CONTROLLER_KEY\" }}"
   },
   {
+    "id": "name-seed",
+    "action": "gen-random",
+    "length": 10
+  },
+  {
     "id": "postgres-wait",
     "action": "wait",
     "url": "discoverd+http://pg-api/ping"
@@ -41,7 +46,8 @@
     "release": {
       "env": {
         "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
-        "DEFAULT_ROUTE_DOMAIN": "{{ getenv \"DEFAULT_ROUTE_DOMAIN\" }}"
+        "DEFAULT_ROUTE_DOMAIN": "{{ getenv \"DEFAULT_ROUTE_DOMAIN\" }}",
+        "NAME_SEED": "{{ (index .StepData \"name-seed\").Data }}"
       },
       "processes": {
         "web": {
