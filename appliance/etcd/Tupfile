@@ -1,2 +1,2 @@
 include_rules
-: |> !docker |> $(ROOT)/<layer0>
+: |> !docker-layer0 |>

@@ -1,2 +1,2 @@
 include_rules
-: |> !docker |> <docker>
+: |> !docker |>

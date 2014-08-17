@@ -3,3 +3,4 @@ bin
 *.deb
 .vagrant
 /version.json
+/log
