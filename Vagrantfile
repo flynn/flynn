@@ -7,6 +7,7 @@ VAGRANTFILE_API_VERSION = "2"
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.box = "flynn-base"
   config.vm.box_url = "https://dl.flynn.io/vagrant/flynn-base.json"
+  config.vm.box_version = "> 0"
 
   config.vm.network "private_network", ip: "192.168.96.48"
 
