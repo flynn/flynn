@@ -52,9 +52,10 @@ func main() {
 	routerIP = args.RouterIP
 	if flynnrc == "" {
 		c := cluster.New(args.BootConfig, os.Stdout)
-		rootFS, err := c.BuildFlynn(args.RootFS, "origin/master")
+		rootFS, err := c.BuildFlynn(args.RootFS, "origin/master", false)
 		if err != nil {
-			log.Fatal("could not build flynn:", err)
+			c.Shutdown()
+			log.Fatal("could not build flynn: ", err)
 		}
 		if args.KeepRootFS {
 			fmt.Println("Built Flynn in rootfs:", rootFS)

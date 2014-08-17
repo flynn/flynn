@@ -30,6 +30,7 @@ type Build struct {
 	Id     string `json:"id"`
 	Repo   string `json:"repo"`
 	Commit string `json:"commit"`
+	Merge  bool   `json:"merge"`
 	State  string `json:"state"`
 }
 
@@ -82,7 +83,7 @@ func (r *Runner) start() error {
 	if err != nil {
 		return err
 	}
-	if r.rootFS, err = cluster.BuildFlynn(bc, args.RootFS, "origin/master", os.Stdout); err != nil {
+	if r.rootFS, err = cluster.BuildFlynn(bc, args.RootFS, "origin/master", false, os.Stdout); err != nil {
 		return fmt.Errorf("could not build flynn: %s", err)
 	}
 	r.releaseNet(bc.Network)
@@ -129,6 +130,9 @@ func (r *Runner) watchEvents() {
 			b := &Build{
 				Repo:   event.Repo(),
 				Commit: event.Commit(),
+			}
+			if _, ok := event.(*PullRequestEvent); ok {
+				b.Merge = true
 			}
 			if err := r.build(b); err != nil {
 				log.Printf("build %s failed: %s\n", b.Id, err)
@@ -193,7 +197,7 @@ func (r *Runner) build(b *Build) (err error) {
 	c := cluster.New(bc, out)
 	defer c.Shutdown()
 
-	rootFS, err := c.BuildFlynn(r.rootFS, b.Commit)
+	rootFS, err := c.BuildFlynn(r.rootFS, b.Commit, b.Merge)
 	defer os.RemoveAll(rootFS)
 	if err != nil {
 		return fmt.Errorf("could not build flynn: %s", err)

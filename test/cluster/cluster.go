@@ -50,10 +50,10 @@ func New(bc BootConfig, out io.Writer) *Cluster {
 	}
 }
 
-func BuildFlynn(bc BootConfig, rootFS, commit string, out io.Writer) (string, error) {
+func BuildFlynn(bc BootConfig, rootFS, commit string, merge bool, out io.Writer) (string, error) {
 	c := New(bc, out)
 	defer c.Shutdown()
-	return c.BuildFlynn(rootFS, commit)
+	return c.BuildFlynn(rootFS, commit, merge)
 }
 
 func (c *Cluster) log(a ...interface{}) (int, error) {
@@ -64,7 +64,7 @@ func (c *Cluster) logf(f string, a ...interface{}) (int, error) {
 	return fmt.Fprintf(c.out, f, a...)
 }
 
-func (c *Cluster) BuildFlynn(rootFS, commit string) (string, error) {
+func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool) (string, error) {
 	c.log("Building Flynn...")
 
 	if err := c.setup(); err != nil {
@@ -95,7 +95,7 @@ func (c *Cluster) BuildFlynn(rootFS, commit string) (string, error) {
 	}
 
 	c.log("Waiting for instance to boot...")
-	if err := buildFlynn(build, commit, c.out); err != nil {
+	if err := buildFlynn(build, commit, merge, c.out); err != nil {
 		build.Kill()
 		return "", fmt.Errorf("error running build script: %s", err)
 	}
@@ -223,7 +223,14 @@ if ! git config --get-all remote.origin.fetch | grep -q '^+refs/pull'; then
 fi
 
 git fetch
-git checkout --quiet {{ . }}
+git checkout --quiet {{ .Commit }}
+
+{{ if .Merge }}
+git config user.email "ci@flynn.io"
+git config user.name "CI"
+git merge origin/master
+{{ end }}
+
 tup
 
 sudo cp {host/bin/flynn-*,pinkerton/pinkerton,bootstrap/bin/flynn-bootstrap} /usr/bin
@@ -231,9 +238,14 @@ sudo cp host/bin/manifest.json /etc/flynn-host.json
 sudo cp bootstrap/bin/manifest.json /etc/flynn-bootstrap.json
 `[1:]))
 
-func buildFlynn(inst Instance, commit string, out io.Writer) error {
+type buildData struct {
+	Commit string
+	Merge  bool
+}
+
+func buildFlynn(inst Instance, commit string, merge bool, out io.Writer) error {
 	var b bytes.Buffer
-	flynnBuildScript.Execute(&b, commit)
+	flynnBuildScript.Execute(&b, buildData{commit, merge})
 	return inst.Run("bash", &Streams{Stdin: &b, Stdout: out, Stderr: out})
 }
 
