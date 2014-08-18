@@ -153,6 +153,13 @@ func (c *context) syncCluster(events chan<- *host.Event) {
 			}
 
 			gg.Log(grohl.Data{"at": "addJob"})
+			go c.PutJob(&ct.Job{
+				ID:        h.ID + "-" + job.ID,
+				AppID:     appID,
+				ReleaseID: releaseID,
+				Type:      jobType,
+				State:     "up",
+			})
 			j := f.jobs.Add(jobType, h.ID, job.ID)
 			j.Formation = f
 			c.jobs.Add(j)
