@@ -13,6 +13,7 @@ type PushEvent struct {
 	Ref        string      `json:"ref"`
 	After      string      `json:"after"`
 	Before     string      `json:"before"`
+	Deleted    bool        `json:"deleted"`
 	Commits    []*Commit   `json:"commits"`
 	HeadCommit *Commit     `json:"head_commit"`
 	Repository *Repository `json:"repository"`

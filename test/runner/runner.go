@@ -308,6 +308,9 @@ func needsBuild(event Event) bool {
 	if e, ok := event.(*PullRequestEvent); ok && e.Action == "closed" {
 		return false
 	}
+	if e, ok := event.(*PushEvent); ok && e.Deleted {
+		return false
+	}
 	return true
 }
 
