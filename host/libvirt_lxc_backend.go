@@ -255,10 +255,21 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 			return fmt.Errorf("unknown port proto %q", p.Proto)
 		}
 
+		if 0 < p.RangeEnd && p.RangeEnd < p.Port {
+			return fmt.Errorf("port range end %d cannot be less than port %d", p.RangeEnd, p.Port)
+		}
+
 		var port uint16
 		if p.Port <= 0 {
 			job.Config.Ports[i].RangeEnd = 0
 			port, err = l.ports[p.Proto].Get()
+		} else if p.RangeEnd > p.Port {
+			for j := p.RangeEnd; j >= p.Port; j-- {
+				port, err = l.ports[p.Proto].GetPort(uint16(j))
+				if err != nil {
+					break
+				}
+			}
 		} else {
 			port, err = l.ports[p.Proto].GetPort(uint16(p.Port))
 		}
@@ -545,7 +556,12 @@ func (c *libvirtContainer) cleanup() error {
 		if err := c.l.forwarder.Remove(&net.TCPAddr{IP: c.IP, Port: p.Port}, p.RangeEnd, p.Proto); err != nil {
 			g.Log(grohl.Data{"at": "iptables", "status": "error", "err": err, "port": p.Port})
 		}
-		c.l.ports[p.Proto].Put(uint16(p.Port))
+		if p.RangeEnd == 0 {
+			p.RangeEnd = p.Port
+		}
+		for i := p.Port; i <= p.RangeEnd; i++ {
+			c.l.ports[p.Proto].Put(uint16(i))
+		}
 	}
 	ipallocator.ReleaseIP(defaultNet, &c.IP)
 	g.Log(grohl.Data{"at": "finish"})
@@ -723,7 +739,9 @@ func (l *LibvirtLXCBackend) RestoreState(jobs map[string]*host.ActiveJob, dec *j
 		l.containers[j.Job.ID] = container
 
 		for _, p := range j.Job.Config.Ports {
-			l.ports[p.Proto].GetPort(uint16(p.Port))
+			for i := p.Port; i <= p.RangeEnd; i++ {
+				l.ports[p.Proto].GetPort(uint16(i))
+			}
 		}
 
 	}
