@@ -30,8 +30,8 @@ func mapOutput(out []byte, sep, term string) map[string]string {
 }
 
 type remoteApp struct {
-	Server *cfg.Server
-	Name   string
+	Cluster *cfg.Cluster
+	Name    string
 }
 
 func gitRemotes() (map[string]remoteApp, error) {
@@ -43,7 +43,7 @@ func gitRemotes() (map[string]remoteApp, error) {
 }
 
 func appFromGitURL(remote string) *remoteApp {
-	for _, s := range config.Servers {
+	for _, s := range config.Clusters {
 		if strings.HasPrefix(remote, gitURLPre(s.GitHost)) && strings.HasSuffix(remote, gitURLSuf) {
 			return &remoteApp{s, remote[len(gitURLPre(s.GitHost)) : len(remote)-len(gitURLSuf)]}
 		}

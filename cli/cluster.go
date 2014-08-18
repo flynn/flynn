@@ -17,7 +17,7 @@ Manage clusters in the ~/.flynnrc configuration file.
 
 Options:
    -g, --git-host <githost>  git host (if host differs from api URL host)
-   -p, --tls-pin <tlspin>    SHA256 of the server's TLS cert (useful if it is self-signed)
+   -p, --tls-pin <tlspin>    SHA256 of the cluster's TLS cert (useful if it is self-signed)
 
 Commands:
    With no arguments, shows a list of clusters.
@@ -42,14 +42,14 @@ func runCluster(args *docopt.Args) error {
 	defer w.Flush()
 
 	listRec(w, "NAME", "URL")
-	for _, s := range config.Servers {
+	for _, s := range config.Clusters {
 		listRec(w, s.Name, s.URL)
 	}
 	return nil
 }
 
 func runClusterAdd(args *docopt.Args) error {
-	s := &cfg.Server{
+	s := &cfg.Cluster{
 		Name:    args.String["<cluster-name>"],
 		URL:     args.String["<url>"],
 		Key:     args.String["<key>"],
@@ -63,7 +63,7 @@ func runClusterAdd(args *docopt.Args) error {
 		return err
 	}
 
-	log.Printf("Server %q added.", s.Name)
+	log.Printf("Cluster %q added.", s.Name)
 	return nil
 }
 
@@ -75,7 +75,7 @@ func runClusterRemove(args *docopt.Args) error {
 			return err
 		}
 
-		log.Printf("Server %q removed.", name)
+		log.Printf("Cluster %q removed.", name)
 	}
 
 	return nil

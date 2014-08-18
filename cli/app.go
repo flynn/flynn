@@ -32,7 +32,7 @@ func runCreate(args *docopt.Args, client *controller.Client) error {
 	}
 
 	exec.Command("git", "remote", "remove", "flynn").Run()
-	exec.Command("git", "remote", "add", "flynn", gitURLPre(serverConf.GitHost)+app.Name+gitURLSuf).Run()
+	exec.Command("git", "remote", "add", "flynn", gitURLPre(clusterConf.GitHost)+app.Name+gitURLSuf).Run()
 	log.Printf("Created %s", app.Name)
 	return nil
 }
