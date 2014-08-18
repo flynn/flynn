@@ -148,19 +148,27 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 	if h.l.closed {
 		return nil
 	}
-	if _, ok := h.l.services[r.Port]; ok {
-		return ErrExists
+
+	s := h.l.services[r.Port]
+
+	// clean up existing service
+	if s != nil {
+		s.l.Close()
+		s.ss.Close()
+		delete(h.l.services, r.Port)
+		s = nil
 	}
 
-	s := &tcpService{
+	ss, err := h.l.discoverd.NewServiceSet(r.Service)
+	if err != nil {
+		return err
+	}
+
+	s = &tcpService{
 		addr:   h.l.IP + ":" + strconv.Itoa(r.Port),
 		port:   r.Port,
 		parent: h.l,
-	}
-	var err error
-	s.ss, err = h.l.discoverd.NewServiceSet(r.Service)
-	if err != nil {
-		return err
+		ss:     ss,
 	}
 
 	if listener, ok := h.l.listeners[r.Port]; ok {
