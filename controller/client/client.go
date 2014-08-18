@@ -303,8 +303,12 @@ func (c *Client) GetApp(appID string) (*ct.App, error) {
 	return app, c.get(fmt.Sprintf("/apps/%s", appID), app)
 }
 
-func (c *Client) GetJobLog(appID, jobID string) (io.ReadCloser, error) {
-	res, err := c.rawReq("GET", fmt.Sprintf("/apps/%s/jobs/%s/log", appID, jobID), "", nil, nil)
+func (c *Client) GetJobLog(appID, jobID string, tail bool) (io.ReadCloser, error) {
+	path := fmt.Sprintf("/apps/%s/jobs/%s/log", appID, jobID)
+	if tail {
+		path += "?tail=true"
+	}
+	res, err := c.rawReq("GET", path, "", nil, nil)
 	if err != nil {
 		return nil, err
 	}

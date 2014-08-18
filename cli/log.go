@@ -16,12 +16,13 @@ usage: flynn log [options] <job>
 Stream log for a specific job.
 
 Options:
-    -s, --split-stderr    send stderr lines to stderr
+    -s, --split-stderr  send stderr lines to stderr
+    -f, --follow        stream new lines after printing log buffer
 `)
 }
 
 func runLog(args *docopt.Args, client *controller.Client) error {
-	rc, err := client.GetJobLog(mustApp(), args.String["<job>"])
+	rc, err := client.GetJobLog(mustApp(), args.String["<job>"], args.Bool["--follow"])
 	if err != nil {
 		return err
 	}
