@@ -40,10 +40,11 @@ func init() {
 }
 
 func main() {
+	var err error
 	var res *check.Result
 	// defer exiting so it runs after all other defers
 	defer func() {
-		if res != nil && !res.Passed() {
+		if err != nil || res != nil && !res.Passed() {
 			os.Exit(1)
 		}
 	}()
@@ -51,42 +52,50 @@ func main() {
 	flynnrc = args.Flynnrc
 	routerIP = args.RouterIP
 	if flynnrc == "" {
+		var rootFS string
 		c := cluster.New(args.BootConfig, os.Stdout)
-		rootFS, err := c.BuildFlynn(args.RootFS, "origin/master", false)
+		rootFS, err = c.BuildFlynn(args.RootFS, "origin/master", false)
 		if err != nil {
 			c.Shutdown()
-			log.Fatal("could not build flynn: ", err)
+			log.Println("could not build flynn: ", err)
+			return
 		}
 		if args.KeepRootFS {
 			fmt.Println("Built Flynn in rootfs:", rootFS)
 		} else {
 			defer os.RemoveAll(rootFS)
 		}
-		if err := c.Boot(args.Backend, rootFS, 1); err != nil {
-			log.Fatal("could not boot cluster: ", err)
+		if err = c.Boot(args.Backend, rootFS, 1); err != nil {
+			log.Println("could not boot cluster: ", err)
+			return
 		}
 		if args.Kill {
 			defer c.Shutdown()
 		}
 
-		if err := createFlynnrc(c); err != nil {
-			log.Fatal(err)
+		if err = createFlynnrc(c); err != nil {
+			log.Println(err)
+			return
 		}
 		defer os.RemoveAll(flynnrc)
 
 		routerIP = c.RouterIP
 	}
 
-	ssh, err := genSSHKey()
+	var ssh *sshData
+	ssh, err = genSSHKey()
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 	defer ssh.Cleanup()
 	gitEnv = ssh.Env
 
 	keyAdd := flynn("", "key", "add", ssh.Pub)
 	if keyAdd.Err != nil {
-		log.Fatalf("Error during `%s`:\n%s%s", strings.Join(keyAdd.Cmd, " "), keyAdd.Output, keyAdd.Err)
+		err = keyAdd.Err
+		log.Printf("Error during `%s`:\n%s%s", strings.Join(keyAdd.Cmd, " "), keyAdd.Output, keyAdd.Err)
+		return
 	}
 
 	res = check.RunAll(&check.RunConf{
