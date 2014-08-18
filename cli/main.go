@@ -20,8 +20,8 @@ import (
 )
 
 var (
-	flagServer = os.Getenv("FLYNN_SERVER")
-	flagApp    string
+	flagCluster = os.Getenv("FLYNN_CLUSTER")
+	flagApp     string
 )
 
 func main() {
@@ -84,7 +84,7 @@ See 'flynn help <command>' for more information on a specific command.
 		}
 
 		if ra, err := appFromGitRemote(flagApp); err == nil {
-			serverConf = ra.Server
+			clusterConf = ra.Cluster
 			flagApp = ra.Name
 		}
 	}
@@ -132,18 +132,18 @@ func runCommand(name string, args []string) (err error) {
 	case func(*docopt.Args, *controller.Client) error:
 		// create client and run command
 		var client *controller.Client
-		server, err := server()
+		cluster, err := getCluster()
 		if err != nil {
 			log.Fatal(err)
 		}
-		if server.TLSPin != "" {
-			pin, err := base64.StdEncoding.DecodeString(server.TLSPin)
+		if cluster.TLSPin != "" {
+			pin, err := base64.StdEncoding.DecodeString(cluster.TLSPin)
 			if err != nil {
 				log.Fatalln("error decoding tls pin:", err)
 			}
-			client, err = controller.NewClientWithPin(server.URL, server.Key, pin)
+			client, err = controller.NewClientWithPin(cluster.URL, cluster.Key, pin)
 		} else {
-			client, err = controller.NewClient(server.URL, server.Key)
+			client, err = controller.NewClient(cluster.URL, cluster.Key)
 		}
 		if err != nil {
 			log.Fatal(err)
@@ -163,7 +163,7 @@ func runCommand(name string, args []string) (err error) {
 }
 
 var config *cfg.Config
-var serverConf *cfg.Server
+var clusterConf *cfg.Cluster
 
 func configPath() string {
 	p := os.Getenv("FLYNNRC")
@@ -193,29 +193,29 @@ func homedir() string {
 	return os.Getenv("HOME")
 }
 
-var ErrNoServers = errors.New("no servers configured")
+var ErrNoClusters = errors.New("no clusters configured")
 
-func server() (*cfg.Server, error) {
-	if serverConf != nil {
-		return serverConf, nil
+func getCluster() (*cfg.Cluster, error) {
+	if clusterConf != nil {
+		return clusterConf, nil
 	}
 	if err := readConfig(); err != nil {
 		return nil, err
 	}
-	if len(config.Servers) == 0 {
-		return nil, ErrNoServers
+	if len(config.Clusters) == 0 {
+		return nil, ErrNoClusters
 	}
-	if flagServer == "" {
-		serverConf = config.Servers[0]
-		return serverConf, nil
+	if flagCluster == "" {
+		clusterConf = config.Clusters[0]
+		return clusterConf, nil
 	}
-	for _, s := range config.Servers {
-		if s.Name == flagServer {
-			serverConf = s
+	for _, s := range config.Clusters {
+		if s.Name == flagCluster {
+			clusterConf = s
 			return s, nil
 		}
 	}
-	return nil, fmt.Errorf("unknown server %q", flagServer)
+	return nil, fmt.Errorf("unknown cluster %q", flagCluster)
 }
 
 var appName string
@@ -239,7 +239,7 @@ func app() (string, error) {
 	if ra == nil {
 		return "", errors.New("no app found, run from a repo with a flynn remote or specify one with -a")
 	}
-	serverConf = ra.Server
+	clusterConf = ra.Cluster
 	flagApp = ra.Name
 	return ra.Name, nil
 }

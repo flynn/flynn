@@ -176,7 +176,7 @@ func (c *Cluster) Run(command string, s *Streams) error {
 
 func (c *Cluster) CLIConfig() (*config.Config, error) {
 	conf := &config.Config{}
-	s := &config.Server{
+	s := &config.Cluster{
 		Name:    "default",
 		URL:     "https://" + c.ControllerDomain,
 		Key:     c.ControllerKey,
