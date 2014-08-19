@@ -27,13 +27,14 @@ import (
 var logBucket = "flynn-ci-logs"
 
 type Build struct {
-	Id          string `json:"id"`
-	Repo        string `json:"repo"`
-	Commit      string `json:"commit"`
-	Merge       bool   `json:"merge"`
-	State       string `json:"state"`
-	Description string `json:"description"`
-	LogUrl      string `json:"log_url"`
+	Id          string     `json:"id"`
+	CreatedAt   *time.Time `json:"created_at"`
+	Repo        string     `json:"repo"`
+	Commit      string     `json:"commit"`
+	Merge       bool       `json:"merge"`
+	State       string     `json:"state"`
+	Description string     `json:"description"`
+	LogUrl      string     `json:"log_url"`
 }
 
 type Runner struct {
@@ -130,7 +131,9 @@ func (r *Runner) watchEvents() {
 			continue
 		}
 		go func(event Event) {
+			now := time.Now()
 			b := &Build{
+				CreatedAt:   &now,
 				Repo:        event.Repo(),
 				Commit:      event.Commit(),
 				Description: event.String(),
@@ -284,7 +287,11 @@ func (r *Runner) httpEventHandler(w http.ResponseWriter, req *http.Request) {
 	io.WriteString(w, "ok\n")
 }
 
-var buildsPage = template.Must(template.New("builds-page").Parse(`
+var formatters = template.FuncMap{
+	"formatTime": func(t time.Time) string { return t.Format(time.RFC822) },
+}
+
+var buildsPage = template.Must(template.New("builds-page").Funcs(formatters).Parse(`
 <html>
   <head>
     <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
@@ -299,6 +306,7 @@ var buildsPage = template.Must(template.New("builds-page").Parse(`
           <tr>
             <th>Commit</th>
             <th>Description</th>
+            <th>Created</th>
             <th>State</th>
             <th></th>
           </tr>
@@ -315,6 +323,7 @@ var buildsPage = template.Must(template.New("builds-page").Parse(`
                 {{ end }}
               </td>
               <td>{{ .Description }}</td>
+              <td>{{ .CreatedAt | formatTime }}</td>
               <td>{{ .State }}</td>
               <td>
                 <form action="/builds" method="POST">
@@ -340,16 +349,16 @@ func (r *Runner) httpBuildHandler(w http.ResponseWriter, req *http.Request) {
 	builds := make([]*Build, 0)
 
 	r.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket([]byte("builds"))
-		return bkt.ForEach(func(k, v []byte) error {
+		c := tx.Bucket([]byte("builds")).Cursor()
+		for k, v := c.Last(); k != nil; k, v = c.Prev() {
 			var b Build
 			if err := json.Unmarshal(v, &b); err != nil {
 				log.Printf("could not decode build %s: %s", v, err)
-				return nil
+				continue
 			}
 			builds = append(builds, &b)
-			return nil
-		})
+		}
+		return nil
 	})
 
 	var html bytes.Buffer
@@ -502,7 +511,7 @@ func (r *Runner) buildPending() error {
 
 func (r *Runner) save(b *Build) error {
 	if b.Id == "" {
-		b.Id = random.String(8)
+		b.Id = b.CreatedAt.Format("20060102150405") + "-" + random.String(8)
 	}
 	return r.db.Update(func(tx *bolt.Tx) error {
 		val, err := json.Marshal(b)
