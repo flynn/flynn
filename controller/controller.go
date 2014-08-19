@@ -202,16 +202,15 @@ func rpcMuxHandler(main http.Handler, rpch http.Handler, authKey string) http.Ha
 func putFormation(formation ct.Formation, app *ct.App, release *ct.Release, repo *FormationRepo, r ResponseHelper) {
 	formation.AppID = app.ID
 	formation.ReleaseID = release.ID
-	err := repo.Add(&formation)
 	if app.Protected {
 		for typ := range release.Processes {
 			if formation.Processes[typ] == 0 {
-				r.JSON(400, struct{}{})
+				r.Error(ct.ValidationError{Message: "unable to scale to zero, app is protected"})
 				return
 			}
 		}
 	}
-	if err != nil {
+	if err := repo.Add(&formation); err != nil {
 		r.Error(err)
 		return
 	}
