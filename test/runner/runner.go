@@ -27,11 +27,13 @@ import (
 var logBucket = "flynn-ci-logs"
 
 type Build struct {
-	Id     string `json:"id"`
-	Repo   string `json:"repo"`
-	Commit string `json:"commit"`
-	Merge  bool   `json:"merge"`
-	State  string `json:"state"`
+	Id          string `json:"id"`
+	Repo        string `json:"repo"`
+	Commit      string `json:"commit"`
+	Merge       bool   `json:"merge"`
+	State       string `json:"state"`
+	Description string `json:"description"`
+	LogUrl      string `json:"log_url"`
 }
 
 type Runner struct {
@@ -97,10 +99,10 @@ func (r *Runner) start() error {
 	defer r.db.Close()
 
 	if err := r.db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte("pending-builds"))
+		_, err := tx.CreateBucketIfNotExists([]byte("builds"))
 		return err
 	}); err != nil {
-		return fmt.Errorf("could not create pending-builds bucket: %s", err)
+		return fmt.Errorf("could not create builds bucket: %s", err)
 	}
 
 	for i := 0; i < maxBuilds; i++ {
@@ -114,6 +116,7 @@ func (r *Runner) start() error {
 	go r.watchEvents()
 
 	http.Handle("/", handlers.CombinedLoggingHandler(os.Stdout, http.HandlerFunc(r.httpEventHandler)))
+	http.Handle("/builds", handlers.CombinedLoggingHandler(os.Stdout, http.HandlerFunc(r.httpBuildHandler)))
 	log.Println("Listening on :80...")
 	if err := http.ListenAndServe(":80", nil); err != nil {
 		return fmt.Errorf("ListenAndServer: %s", err)
@@ -128,8 +131,9 @@ func (r *Runner) watchEvents() {
 		}
 		go func(event Event) {
 			b := &Build{
-				Repo:   event.Repo(),
-				Commit: event.Commit(),
+				Repo:        event.Repo(),
+				Commit:      event.Commit(),
+				Description: event.String(),
 			}
 			if _, ok := event.(*PullRequestEvent); ok {
 				b.Merge = true
@@ -275,33 +279,110 @@ func (r *Runner) httpEventHandler(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, fmt.Sprintf("unknown repo %s", repo), 400)
 		return
 	}
-	logEvent(event)
+	log.Println(event)
 	r.events <- event
 	io.WriteString(w, "ok\n")
 }
 
-func logEvent(event Event) {
-	switch event.(type) {
-	case *PushEvent:
-		e := event.(*PushEvent)
-		log.Printf(
-			"received push of %s[%s] by %s: %s => %s\n",
-			e.Repo(),
-			e.Ref,
-			e.Pusher.Name,
-			e.Before,
-			e.After,
-		)
-	case *PullRequestEvent:
-		e := event.(*PullRequestEvent)
-		log.Printf(
-			"pull request %s/%d %s by %s\n",
-			e.Repo(),
-			e.Number,
-			e.Action,
-			e.Sender.Login,
-		)
+var buildsPage = template.Must(template.New("builds-page").Parse(`
+<html>
+  <head>
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+  </head>
+
+  <body>
+    <div class="container">
+      <h1>Flynn CI Builds</h1>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Commit</th>
+            <th>Description</th>
+            <th>State</th>
+            <th></th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {{ range . }}
+            <tr>
+              <td>
+                {{ if .LogUrl }}
+                  <a href="{{ .LogUrl }}">{{ .Commit }}</a>
+                {{ else }}
+                  {{ .Commit }}
+                {{ end }}
+              </td>
+              <td>{{ .Description }}</td>
+              <td>{{ .State }}</td>
+              <td>
+                <form action="/builds" method="POST">
+                  <input type="hidden" name="id" value="{{ .Id }}" />
+                  <input type="submit" value="Rebuild" class="btn" />
+                </form>
+              </td>
+            </tr>
+          {{ end }}
+        </tbody>
+      </table>
+    </div>
+  </body>
+</html>
+`))
+
+func (r *Runner) httpBuildHandler(w http.ResponseWriter, req *http.Request) {
+	if req.Method == "POST" {
+		r.handleBuildRequest(w, req)
+		return
 	}
+
+	builds := make([]*Build, 0)
+
+	r.db.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket([]byte("builds"))
+		return bkt.ForEach(func(k, v []byte) error {
+			var b Build
+			if err := json.Unmarshal(v, &b); err != nil {
+				log.Printf("could not decode build %s: %s", v, err)
+				return nil
+			}
+			builds = append(builds, &b)
+			return nil
+		})
+	})
+
+	var html bytes.Buffer
+	buildsPage.Execute(&html, builds)
+	w.Header().Set("Content-Type", "text/html")
+	w.Write(html.Bytes())
+}
+
+func (r *Runner) handleBuildRequest(w http.ResponseWriter, req *http.Request) {
+	id := req.FormValue("id")
+	if id == "" {
+		http.Error(w, "missing id parameter\n", 400)
+		return
+	}
+	var b Build
+	if err := r.db.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket([]byte("builds"))
+		val := bkt.Get([]byte(id))
+		return json.Unmarshal(val, &b)
+	}); err != nil {
+		http.Error(w, fmt.Sprintf("could not decode build %s: %s\n", id, err), 400)
+		return
+	}
+	if b.State != "pending" {
+		go func() {
+			if err := r.build(&b); err != nil {
+				log.Printf("build %s failed: %s\n", b.Id, err)
+				return
+			}
+			log.Printf("build %s passed!\n", b.Id)
+		}()
+	}
+	http.Redirect(w, req, "/builds", 301)
 }
 
 func needsBuild(event Event) bool {
@@ -332,6 +413,7 @@ func (r *Runner) updateStatus(b *Build, state, targetUrl string) {
 		log.Printf("updateStatus: %s %s[%s]\n", state, b.Repo, b.Commit)
 
 		b.State = state
+		b.LogUrl = targetUrl
 		if err := r.save(b); err != nil {
 			log.Printf("updateStatus: could not save build: %s", err)
 		}
@@ -392,14 +474,16 @@ func (r *Runner) buildPending() error {
 	pending := make([]*Build, 0)
 
 	r.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket([]byte("pending-builds"))
+		bkt := tx.Bucket([]byte("builds"))
 		return bkt.ForEach(func(k, v []byte) error {
 			var b Build
 			if err := json.Unmarshal(v, &b); err != nil {
 				log.Printf("could not decode build %s: %s", v, err)
 				return nil
 			}
-			pending = append(pending, &b)
+			if b.State == "pending" {
+				pending = append(pending, &b)
+			}
 			return nil
 		})
 	})
@@ -421,15 +505,11 @@ func (r *Runner) save(b *Build) error {
 		b.Id = random.String(8)
 	}
 	return r.db.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket([]byte("pending-builds"))
-		if b.State == "pending" {
-			val, err := json.Marshal(b)
-			if err != nil {
-				return err
-			}
-			return bkt.Put([]byte(b.Id), val)
-		} else {
-			return bkt.Delete([]byte(b.Id))
+		val, err := json.Marshal(b)
+		if err != nil {
+			return err
 		}
+		bkt := tx.Bucket([]byte("builds"))
+		return bkt.Put([]byte(b.Id), val)
 	})
 }

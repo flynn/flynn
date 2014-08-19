@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"time"
 )
 
 type Event interface {
+	fmt.Stringer
 	Repo() string
 	Commit() string
 }
@@ -28,6 +30,17 @@ func (e *PushEvent) Commit() string {
 	return e.HeadCommit.Id
 }
 
+func (e *PushEvent) String() string {
+	return fmt.Sprintf(
+		"Push of %s[%s] by %s: %s => %s\n",
+		e.Repo(),
+		e.Ref,
+		e.Pusher.Name,
+		e.Before[0:7],
+		e.After[0:7],
+	)
+}
+
 type PullRequestEvent struct {
 	Action      string       `json:"action"`
 	Number      int          `json:"number"`
@@ -42,6 +55,15 @@ func (e *PullRequestEvent) Repo() string {
 
 func (e *PullRequestEvent) Commit() string {
 	return e.PullRequest.Head.Sha
+}
+
+func (e *PullRequestEvent) String() string {
+	return fmt.Sprintf(
+		"Pull Request %d %s by %s\n",
+		e.Number,
+		e.Action,
+		e.Sender.Login,
+	)
 }
 
 type Commit struct {
