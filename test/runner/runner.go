@@ -25,6 +25,7 @@ import (
 )
 
 var logBucket = "flynn-ci-logs"
+var dbBucket = []byte("builds")
 
 type Build struct {
 	Id          string     `json:"id"`
@@ -100,7 +101,7 @@ func (r *Runner) start() error {
 	defer r.db.Close()
 
 	if err := r.db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte("builds"))
+		_, err := tx.CreateBucketIfNotExists(dbBucket)
 		return err
 	}); err != nil {
 		return fmt.Errorf("could not create builds bucket: %s", err)
@@ -351,25 +352,23 @@ func (r *Runner) httpBuildHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	builds := make([]*Build, 0)
+	var builds []*Build
 
 	r.db.View(func(tx *bolt.Tx) error {
-		c := tx.Bucket([]byte("builds")).Cursor()
+		c := tx.Bucket(dbBucket).Cursor()
 		for k, v := c.Last(); k != nil; k, v = c.Prev() {
-			var b Build
-			if err := json.Unmarshal(v, &b); err != nil {
+			b := &Build{}
+			if err := json.Unmarshal(v, b); err != nil {
 				log.Printf("could not decode build %s: %s", v, err)
 				continue
 			}
-			builds = append(builds, &b)
+			builds = append(builds, b)
 		}
 		return nil
 	})
 
-	var html bytes.Buffer
-	buildsPage.Execute(&html, builds)
 	w.Header().Set("Content-Type", "text/html")
-	w.Write(html.Bytes())
+	buildsPage.Execute(w, builds)
 }
 
 func (r *Runner) handleBuildRequest(w http.ResponseWriter, req *http.Request) {
@@ -378,18 +377,17 @@ func (r *Runner) handleBuildRequest(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "missing id parameter\n", 400)
 		return
 	}
-	var b Build
+	b := &Build{}
 	if err := r.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket([]byte("builds"))
-		val := bkt.Get([]byte(id))
-		return json.Unmarshal(val, &b)
+		val := tx.Bucket(dbBucket).Get([]byte(id))
+		return json.Unmarshal(val, b)
 	}); err != nil {
 		http.Error(w, fmt.Sprintf("could not decode build %s: %s\n", id, err), 400)
 		return
 	}
 	if b.State != "pending" {
 		go func() {
-			if err := r.build(&b); err != nil {
+			if err := r.build(b); err != nil {
 				log.Printf("build %s failed: %s\n", b.Id, err)
 				return
 			}
@@ -485,18 +483,17 @@ func (r *Runner) releaseNet(net string) {
 }
 
 func (r *Runner) buildPending() error {
-	pending := make([]*Build, 0)
+	var pending []*Build
 
 	r.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket([]byte("builds"))
-		return bkt.ForEach(func(k, v []byte) error {
-			var b Build
-			if err := json.Unmarshal(v, &b); err != nil {
+		return tx.Bucket(dbBucket).ForEach(func(k, v []byte) error {
+			b := &Build{}
+			if err := json.Unmarshal(v, b); err != nil {
 				log.Printf("could not decode build %s: %s", v, err)
 				return nil
 			}
 			if b.State == "pending" {
-				pending = append(pending, &b)
+				pending = append(pending, b)
 			}
 			return nil
 		})
@@ -523,7 +520,6 @@ func (r *Runner) save(b *Build) error {
 		if err != nil {
 			return err
 		}
-		bkt := tx.Bucket([]byte("builds"))
-		return bkt.Put([]byte(b.Id), val)
+		return tx.Bucket(dbBucket).Put([]byte(b.Id), val)
 	})
 }
