@@ -201,6 +201,7 @@ func (c *Cluster) Shutdown() {
 		if err := deleteBridge(c.bridge); err != nil {
 			c.logf("error deleting network bridge %s: %s\n", c.bridge.name, err)
 		}
+		c.bridge = nil
 	}
 }
 

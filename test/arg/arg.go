@@ -18,6 +18,9 @@ type Args struct {
 	KeepRootFS bool
 	DBPath     string
 	Backend    string
+	ListenAddr string
+	TLSCert    string
+	TLSKey     string
 }
 
 func Parse() *Args {
@@ -33,6 +36,9 @@ func Parse() *Args {
 	flag.StringVar(&args.RouterIP, "router-ip", "127.0.0.1", "IP address of the router")
 	flag.StringVar(&args.DBPath, "db", "flynn-test.db", "path to BoltDB database to store pending builds")
 	flag.StringVar(&args.Backend, "backend", "libvirt-lxc", "the host backend to use")
+	flag.StringVar(&args.ListenAddr, "listen", ":443", "runner https listen address")
+	flag.StringVar(&args.TLSCert, "tls-cert", "", "TLS certificate")
+	flag.StringVar(&args.TLSKey, "tls-key", "", "TLS key")
 	flag.BoolVar(&args.Build, "build", true, "build Flynn")
 	flag.BoolVar(&args.Debug, "debug", false, "enable debug output")
 	flag.BoolVar(&args.Kill, "kill", true, "kill the cluster after running the tests")
