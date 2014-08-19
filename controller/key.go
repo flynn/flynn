@@ -8,6 +8,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.crypto/ssh"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	ct "github.com/flynn/flynn/controller/types"
 )
 
@@ -35,7 +36,11 @@ func (r *KeyRepo) Add(data interface{}) error {
 	key.Key = string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(pubKey)))
 	key.Comment = comment
 
-	return r.db.QueryRow("INSERT INTO keys (fingerprint, key, comment) VALUES ($1, $2, $3) RETURNING created_at", key.ID, key.Key, key.Comment).Scan(&key.CreatedAt)
+	err = r.db.QueryRow("INSERT INTO keys (fingerprint, key, comment) VALUES ($1, $2, $3) RETURNING created_at", key.ID, key.Key, key.Comment).Scan(&key.CreatedAt)
+	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" {
+		return nil
+	}
+	return err
 }
 
 func fingerprintKey(key []byte) string {

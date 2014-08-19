@@ -456,7 +456,14 @@ func (s *S) TestRecreateKey(c *C) {
 	// Post a duplicate
 	res, err := s.Post("/keys", key, &ct.Key{})
 	c.Assert(err, IsNil)
-	c.Assert(res.StatusCode, Equals, 500) // TODO: This should probably be a 4xx error
+	c.Assert(res.StatusCode, Equals, 200)
+
+	// Check there is still only one key
+	var list []ct.Key
+	res, err = s.Get("/keys", &list)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(list, HasLen, 1)
 
 	// Delete the original
 	path := "/keys/" + originalKey.ID
