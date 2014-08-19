@@ -15,15 +15,15 @@ import (
 
 func NewTCPListener(ip string, startPort, endPort int, ds DataStore, dc DiscoverdClient) *TCPListener {
 	l := &TCPListener{
-		IP:         ip,
-		ds:         ds,
-		wm:         NewWatchManager(),
-		discoverd:  dc,
-		services:   make(map[int]*tcpService),
-		serviceIDs: make(map[string]*tcpService),
-		listeners:  make(map[int]net.Listener),
-		startPort:  startPort,
-		endPort:    endPort,
+		IP:        ip,
+		ds:        ds,
+		wm:        NewWatchManager(),
+		discoverd: dc,
+		services:  make(map[int]*tcpService),
+		routes:    make(map[string]*tcpRoute),
+		listeners: make(map[int]net.Listener),
+		startPort: startPort,
+		endPort:   endPort,
 	}
 	l.Watcher = l.wm
 	l.DataStoreReader = l.ds
@@ -44,10 +44,10 @@ type TCPListener struct {
 	endPort   int
 	listeners map[int]net.Listener
 
-	mtx        sync.RWMutex
-	services   map[int]*tcpService
-	serviceIDs map[string]*tcpService
-	closed     bool
+	mtx      sync.RWMutex
+	services map[int]*tcpService
+	routes   map[string]*tcpRoute
+	closed   bool
 }
 
 func (l *TCPListener) AddRoute(route *router.Route) error {
@@ -141,44 +141,54 @@ type tcpSyncHandler struct {
 }
 
 func (h *tcpSyncHandler) Set(data *router.Route) error {
-	r := data.TCPRoute()
+	route := data.TCPRoute()
+	r := &tcpRoute{TCPRoute: route}
 
 	h.l.mtx.Lock()
 	defer h.l.mtx.Unlock()
 	if h.l.closed {
 		return nil
 	}
-	if _, ok := h.l.services[r.Port]; ok {
-		return ErrExists
-	}
 
-	s := &tcpService{
-		addr:   h.l.IP + ":" + strconv.Itoa(r.Port),
-		port:   r.Port,
-		parent: h.l,
-	}
-	var err error
-	s.ss, err = h.l.discoverd.NewServiceSet(r.Service)
-	if err != nil {
-		return err
-	}
-
-	if listener, ok := h.l.listeners[r.Port]; ok {
-		s.l = listener
-		delete(h.l.listeners, r.Port)
-	}
-
-	started := make(chan error)
-	go s.Serve(started)
-	if err := <-started; err != nil {
-		s.ss.Close()
-		if s.l != nil {
-			h.l.listeners[r.Port] = s.l
+	service := h.l.services[r.Port]
+	if service != nil && service.port != r.Port {
+		service.refs--
+		if service.refs <= 0 {
+			service.ss.Close()
+			delete(h.l.services, service.port)
 		}
-		return err
+		service = nil
 	}
-	h.l.services[r.Port] = s
-	h.l.serviceIDs[data.ID] = s
+	if service == nil {
+		ss, err := h.l.discoverd.NewServiceSet(r.Service)
+		if err != nil {
+			return err
+		}
+		service = &tcpService{
+			addr:   h.l.IP + ":" + strconv.Itoa(r.Port),
+			port:   r.Port,
+			parent: h.l,
+			ss:     ss,
+		}
+		if listener, ok := h.l.listeners[r.Port]; ok {
+			service.l = listener
+			delete(h.l.listeners, r.Port)
+		}
+		started := make(chan error)
+		go service.Serve(started)
+		if err := <-started; err != nil {
+			service.ss.Close()
+			if service.l != nil {
+				h.l.listeners[r.Port] = service.l
+			}
+			return err
+		}
+		h.l.services[r.Port] = service
+	}
+	service.refs++
+	r.service = service
+	h.l.routes[data.ID] = r
+
 	go h.l.wm.Send(&router.Event{Event: "set", ID: data.ID})
 	return nil
 }
@@ -189,16 +199,25 @@ func (h *tcpSyncHandler) Remove(id string) error {
 	if h.l.closed {
 		return nil
 	}
-
-	service, ok := h.l.serviceIDs[id]
+	r, ok := h.l.routes[id]
 	if !ok {
 		return ErrNotFound
 	}
-	service.Close()
-	delete(h.l.services, service.port)
-	delete(h.l.serviceIDs, id)
+
+	r.service.refs--
+	if r.service.refs <= 0 {
+		r.service.Close()
+		delete(h.l.services, r.service.port)
+	}
+
+	delete(h.l.routes, id)
 	go h.l.wm.Send(&router.Event{Event: "remove", ID: id})
 	return nil
+}
+
+type tcpRoute struct {
+	*router.TCPRoute
+	service *tcpService
 }
 
 type tcpService struct {
@@ -207,6 +226,7 @@ type tcpService struct {
 	port   int
 	l      net.Listener
 	ss     discoverd.ServiceSet
+	refs   int
 }
 
 func (s *tcpService) Close() {
