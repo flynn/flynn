@@ -18,6 +18,7 @@ type Args struct {
 	KeepRootFS bool
 	DBPath     string
 	Backend    string
+	HTTPAddr   string
 }
 
 func Parse() *Args {
@@ -33,6 +34,7 @@ func Parse() *Args {
 	flag.StringVar(&args.RouterIP, "router-ip", "127.0.0.1", "IP address of the router")
 	flag.StringVar(&args.DBPath, "db", "flynn-test.db", "path to BoltDB database to store pending builds")
 	flag.StringVar(&args.Backend, "backend", "libvirt-lxc", "the host backend to use")
+	flag.StringVar(&args.HTTPAddr, "httpaddr", ":80", "runner http listen address")
 	flag.BoolVar(&args.Build, "build", true, "build Flynn")
 	flag.BoolVar(&args.Debug, "debug", false, "enable debug output")
 	flag.BoolVar(&args.Kill, "kill", true, "kill the cluster after running the tests")
