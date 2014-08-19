@@ -118,9 +118,9 @@ func (r *Runner) start() error {
 
 	http.Handle("/", handlers.CombinedLoggingHandler(os.Stdout, http.HandlerFunc(r.httpEventHandler)))
 	http.Handle("/builds", handlers.CombinedLoggingHandler(os.Stdout, http.HandlerFunc(r.httpBuildHandler)))
-	log.Println("Listening on", args.HTTPAddr, "...")
-	if err := http.ListenAndServe(args.HTTPAddr, nil); err != nil {
-		return fmt.Errorf("ListenAndServe: %s", err)
+	log.Println("Listening on", args.ListenAddr, "...")
+	if err := http.ListenAndServeTLS(args.ListenAddr, args.TLSCert, args.TLSKey, nil); err != nil {
+		return fmt.Errorf("ListenAndServeTLS: %s", err)
 	}
 	return nil
 }
