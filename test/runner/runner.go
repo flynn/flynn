@@ -247,6 +247,11 @@ func (r *Runner) uploadToS3(buildLog bytes.Buffer, b *Build) string {
 }
 
 func (r *Runner) httpEventHandler(w http.ResponseWriter, req *http.Request) {
+	if req.Method == "GET" {
+		http.Redirect(w, req, "/builds", 302)
+		return
+	}
+
 	header, ok := req.Header["X-Github-Event"]
 	if !ok {
 		log.Println("webhook: request missing X-Github-Event header")
