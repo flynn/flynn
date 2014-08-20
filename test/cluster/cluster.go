@@ -250,22 +250,66 @@ func buildFlynn(inst Instance, commit string, merge bool, out io.Writer) error {
 	return inst.Run("bash", &Streams{Stdin: &b, Stdout: out, Stderr: out})
 }
 
+type hostScriptData struct {
+	ID    string
+	IP    string
+	Peers string
+}
+
+var flynnHostScripts = map[string]*template.Template{
+	"libvirt-lxc": template.Must(template.New("flynn-host-libvirt").Parse(`
+set -e
+
+sudo virsh net-start default
+
+sudo start-stop-daemon \
+  --start \
+  --background \
+  --no-close \
+  --exec /usr/bin/env \
+  -- \
+  ETCD_PEERS={{ .Peers }} \
+  flynn-host \
+  -id {{ .ID }} \
+  -manifest /etc/flynn-host.json \
+  -external {{ .IP }} \
+  -force \
+  -backend libvirt-lxc \
+  &>/tmp/flynn-host.log
+`[1:])),
+	"docker": template.Must(template.New("flynn-host-docker").Parse(`
+docker run \
+  -d \
+  -v=/var/run/docker.sock:/var/run/docker.sock \
+  -p=1113:1113 \
+  -e=ETCD_PEERS={{ .Peers }} \
+  flynn/host \
+  -id {{ .ID }} \
+  -external {{ .IP }} \
+  -force \
+  -backend docker
+`[1:])),
+}
+
 func (c *Cluster) bootstrapGrid(backend string) error {
 	for i, inst := range c.instances {
-		var etcdPeers string
+		var script bytes.Buffer
+
+		data := hostScriptData{
+			ID: random.String(8),
+			IP: inst.IP(),
+		}
 		if i > 0 {
-			etcdPeers = fmt.Sprintf("%s:7001", c.instances[0].IP())
+			data.Peers = fmt.Sprintf("%s:7001", c.instances[0].IP())
 		}
 
-		var command string
-		switch backend {
-		case "libvirt-lxc":
-			command = fmt.Sprintf("sudo virsh net-start default; sudo start-stop-daemon --start --background --no-close --exec /usr/bin/env -- ETCD_PEERS=%s flynn-host -manifest /etc/flynn-host.json -external %s -force -backend %s &>/tmp/flynn-host.log", etcdPeers, inst.IP(), backend)
-		case "docker":
-			command = fmt.Sprintf("docker run -d -v=/var/run/docker.sock:/var/run/docker.sock -p=1113:1113 -e=ETCD_PEERS=%s flynn/host -external %s -force -backend %s", etcdPeers, inst.IP(), backend)
+		tmpl, ok := flynnHostScripts[backend]
+		if !ok {
+			return fmt.Errorf("unknown host backend: %s", backend)
 		}
+		tmpl.Execute(&script, data)
 
-		if err := inst.Run(command, &Streams{Stdout: c.out, Stderr: os.Stderr}); err != nil {
+		if err := inst.Run("bash", &Streams{Stdin: &script, Stdout: c.out, Stderr: os.Stderr}); err != nil {
 			return err
 		}
 	}
