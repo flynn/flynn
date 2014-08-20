@@ -251,6 +251,7 @@ func buildFlynn(inst Instance, commit string, merge bool, out io.Writer) error {
 }
 
 type hostScriptData struct {
+	ID    string
 	IP    string
 	Peers string
 }
@@ -269,6 +270,7 @@ sudo start-stop-daemon \
   -- \
   ETCD_PEERS={{ .Peers }} \
   flynn-host \
+  -id {{ .ID }} \
   -manifest /etc/flynn-host.json \
   -external {{ .IP }} \
   -force \
@@ -282,6 +284,7 @@ docker run \
   -p=1113:1113 \
   -e=ETCD_PEERS={{ .Peers }} \
   flynn/host \
+  -id {{ .ID }} \
   -external {{ .IP }} \
   -force \
   -backend docker
@@ -292,7 +295,10 @@ func (c *Cluster) bootstrapGrid(backend string) error {
 	for i, inst := range c.instances {
 		var script bytes.Buffer
 
-		data := hostScriptData{IP: inst.IP()}
+		data := hostScriptData{
+			ID: random.String(8),
+			IP: inst.IP(),
+		}
 		if i > 0 {
 			data.Peers = fmt.Sprintf("%s:7001", c.instances[0].IP())
 		}
