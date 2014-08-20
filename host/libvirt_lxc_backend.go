@@ -568,9 +568,35 @@ func (c *libvirtContainer) cleanup() error {
 	return nil
 }
 
+func (c *libvirtContainer) WaitStop(timeout time.Duration) error {
+	job := c.l.state.GetJob(c.job.ID)
+	if job.Status == host.StatusDone || job.Status == host.StatusFailed {
+		return nil
+	}
+	select {
+	case <-c.done:
+		return nil
+	case <-time.After(timeout):
+		return fmt.Errorf("Timed out: %v", timeout)
+	}
+}
+
+func (c *libvirtContainer) Stop() error {
+	if err := c.Signal(int(syscall.SIGTERM)); err != nil {
+		return err
+	}
+	if err := c.WaitStop(10 * time.Second); err != nil {
+		return c.Signal(int(syscall.SIGKILL))
+	}
+	return nil
+}
+
 func (l *LibvirtLXCBackend) Stop(id string) error {
-	// TODO: follow up with sigkill
-	return l.Signal(id, int(syscall.SIGTERM))
+	c, err := l.getContainer(id)
+	if err != nil {
+		return err
+	}
+	return c.Stop()
 }
 
 func (l *LibvirtLXCBackend) getContainer(id string) (*libvirtContainer, error) {
