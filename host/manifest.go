@@ -14,6 +14,7 @@ import (
 	"github.com/flynn/flynn/host/ports"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 func parseEnviron() map[string]string {
@@ -23,6 +24,11 @@ func parseEnviron() map[string]string {
 		kv := strings.SplitN(v, "=", 2)
 		res[kv[0]] = kv[1]
 	}
+
+	if _, ok := res["ETCD_NAME"]; !ok {
+		res["ETCD_NAME"] = random.String(8)
+	}
+
 	return res
 }
 

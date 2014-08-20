@@ -10,7 +10,7 @@
       "-bind-addr=0.0.0.0:{{ .TCPPort 0 }}",
       "-peer-addr={{ .ExternalIP }}:{{ .TCPPort 1 }}",
       "-peer-bind-addr=0.0.0.0:{{ .TCPPort 1 }}",
-      "-name={{ .Env.HOSTNAME }}",
+      "-name={{ .Env.ETCD_NAME }}",
       "{{ if .Env.ETCD_PEERS }}-peers={{ .Env.ETCD_PEERS }}{{ end }}",
       "{{ if .Env.ETCD_DISCOVERY }}-discovery={{ .Env.ETCD_DISCOVERY }}{{ end }}"
     ],
