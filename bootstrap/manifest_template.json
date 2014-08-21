@@ -241,6 +241,25 @@
     "status": 401
   },
   {
+    "id": "taffy",
+    "action": "deploy-app",
+    "app": {
+      "name": "taffy",
+      "protected": true
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "$image_url_prefix/taffy?id=$image_id[taffy]"
+    },
+    "release": {
+      "env": {
+        "CONTROLLER_AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
+        "SLUGBUILDER_IMAGE_ID": "$image_id[slugbuilder]",
+        "SLUGRUNNER_IMAGE_ID": "$image_id[slugrunner]"
+      }
+    }
+  },
+  {
     "id": "blobstore-wait",
     "action": "wait",
     "url": "discoverd+http://blobstore/",
