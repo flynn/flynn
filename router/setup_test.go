@@ -391,16 +391,20 @@ func waitForEvent(c *C, w Watcher, event string, id string) func() *router.Event
 func discoverdRegisterTCP(c *C, l *tcpListener, port int, addr string) {
 	dc := l.TCPListener.discoverd.(discoverdClient)
 	ss := l.TCPListener.services[port].ss
-	discoverdRegister(c, dc, ss, addr)
+	discoverdRegister(c, dc, ss, "test", addr)
 }
 
 func discoverdRegisterHTTP(c *C, l *httpListener, addr string) {
-	dc := l.HTTPListener.discoverd.(discoverdClient)
-	ss := l.HTTPListener.services["test"].ss
-	discoverdRegister(c, dc, ss, addr)
+	discoverdRegisterHTTPService(c, l, "test", addr)
 }
 
-func discoverdRegister(c *C, dc discoverdClient, ss discoverd.ServiceSet, addr string) {
+func discoverdRegisterHTTPService(c *C, l *httpListener, name, addr string) {
+	dc := l.HTTPListener.discoverd.(discoverdClient)
+	ss := l.HTTPListener.services[name].ss
+	discoverdRegister(c, dc, ss, name, addr)
+}
+
+func discoverdRegister(c *C, dc discoverdClient, ss discoverd.ServiceSet, name, addr string) {
 	done := make(chan struct{})
 	if !*fake {
 		ch := ss.Watch(false)
@@ -416,10 +420,18 @@ func discoverdRegister(c *C, dc discoverdClient, ss discoverd.ServiceSet, addr s
 	} else {
 		close(done)
 	}
-	dc.Register("test", addr)
+	dc.Register(name, addr)
 	select {
 	case <-done:
 	case <-time.After(10 * time.Second):
 		c.Fatal("timed out waiting for discoverd registration")
 	}
+}
+
+func addRoute(c *C, l Listener, r *router.Route) *router.Route {
+	wait := waitForEvent(c, l, "set", "")
+	err := l.AddRoute(r)
+	c.Assert(err, IsNil)
+	wait()
+	return r
 }

@@ -174,30 +174,20 @@ func assertGetCookie(c *C, url, host, expected string, cookie *http.Cookie) *htt
 }
 
 func addHTTPRoute(c *C, l *httpListener) *router.Route {
-	wait := waitForEvent(c, l, "set", "")
-	r := (&router.HTTPRoute{
+	return addRoute(c, l, (&router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "test",
 		TLSCert: string(localhostCert),
 		TLSKey:  string(localhostKey),
-	}).ToRoute()
-	err := l.AddRoute(r)
-	c.Assert(err, IsNil)
-	wait()
-	return r
+	}).ToRoute())
 }
 
 func addStickyHTTPRoute(c *C, l *httpListener) *router.Route {
-	wait := waitForEvent(c, l, "set", "")
-	r := (&router.HTTPRoute{
+	return addRoute(c, l, (&router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "test",
 		Sticky:  true,
-	}).ToRoute()
-	err := l.AddRoute(r)
-	c.Assert(err, IsNil)
-	wait()
-	return r
+	}).ToRoute())
 }
 
 func (s *S) TestHTTPInitialSync(c *C) {
@@ -350,4 +340,31 @@ func (s *S) TestStickyHTTPRoute(c *C) {
 		resCookie := assertGetCookie(c, "http://"+l.Addr, "example.com", "2", cookie)
 		c.Assert(resCookie, Not(IsNil))
 	}
+}
+
+// issue #152
+func (s *S) TestKeepaliveHostname(c *C) {
+	srv1 := httptest.NewServer(httpTestHandler("1"))
+	srv2 := httptest.NewServer(httpTestHandler("2"))
+	defer srv1.Close()
+	defer srv2.Close()
+
+	l, discoverd := newHTTPListener(c)
+	defer l.Close()
+
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "example.com",
+		Service: "example-com",
+	}).ToRoute())
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "example.org",
+		Service: "example-org",
+	}).ToRoute())
+
+	discoverdRegisterHTTPService(c, l, "example-com", srv1.Listener.Addr().String())
+	discoverdRegisterHTTPService(c, l, "example-org", srv2.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	assertGet(c, "http://"+l.Addr, "example.com", "1")
+	assertGet(c, "http://"+l.Addr, "example.org", "2")
 }
