@@ -465,7 +465,7 @@ func (l *LibvirtLXCBackend) openLog(id string) *logbuf.Log {
 	defer l.logsMtx.Unlock()
 	if _, ok := l.logs[id]; !ok {
 		// TODO: configure retention and log size
-		l.logs[id] = logbuf.NewLog(&lumberjack.Logger{Dir: filepath.Join(l.LogPath, id)})
+		l.logs[id] = logbuf.NewLog(&lumberjack.Logger{Filename: filepath.Join(l.LogPath, id, id+".log")})
 	}
 	// TODO: do reference counting and remove logs that are not in use from memory
 	return l.logs[id]
@@ -529,8 +529,8 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 		log := c.l.openLog(c.job.ID)
 		defer log.Close()
 		// TODO: log errors from these
-		go log.ReadFrom(1, stdout)
-		go log.ReadFrom(2, stderr)
+		go log.Follow(1, stdout)
+		go log.Follow(2, stderr)
 	}
 
 	g.Log(grohl.Data{"at": "watch_changes"})
@@ -719,41 +719,38 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 		}()
 	}
 
-	log := l.openLog(req.Job.Job.ID)
-	r := log.NewReader()
-	defer r.Close()
-	if !req.Logs {
-		if err := r.SeekToEnd(); err != nil {
-			return err
-		}
-	}
-
 	if req.Attached != nil {
 		req.Attached <- struct{}{}
 	}
 
-	for {
-		data, err := r.ReadData(req.Stream)
-		if err != nil {
-			return err
-		}
+	lines := -1
+	if !req.Logs {
+		lines = 0
+	}
+
+	log := l.openLog(req.Job.Job.ID)
+	ch := make(chan logbuf.Data)
+	done := make(chan struct{})
+	go log.Read(lines, req.Stream, ch, done)
+	defer close(done)
+
+	for data := range ch {
+		var w io.Writer
 		switch data.Stream {
 		case 1:
-			if req.Stdout == nil {
-				continue
-			}
-			if _, err := req.Stdout.Write([]byte(data.Message)); err != nil {
-				return nil
-			}
+			w = req.Stdout
 		case 2:
-			if req.Stderr == nil {
-				continue
-			}
-			if _, err := req.Stderr.Write([]byte(data.Message)); err != nil {
-				return nil
-			}
+			w = req.Stderr
+		}
+		if w == nil {
+			continue
+		}
+		if _, err := w.Write([]byte(data.Message)); err != nil {
+			return nil
 		}
 	}
+
+	return io.EOF
 }
 
 func (l *LibvirtLXCBackend) Cleanup() error {

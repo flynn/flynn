@@ -119,6 +119,10 @@ func (c *fakeDockerClient) ResizeContainerTTY(string, int, int) error {
 	return nil
 }
 
+func (c *fakeDockerClient) Logs(docker.LogsOptions) error {
+	return nil
+}
+
 func (c *fakeDockerClient) AttachToContainer(docker.AttachToContainerOptions) error {
 	return nil
 }
