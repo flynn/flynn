@@ -139,6 +139,13 @@ After you have a running Layer 0 cluster, bootstrap Layer 1 with
 `flynn-bootstrap`. You'll need a domain name with DNS A records pointing to
 every node IP address and a second, wildcard domain CNAME to the cluster domain.
 
+**Example**
+
+```text
+demo.localflynn.com.    A      192.168.84.42
+*.demo.localflynn.com.  CNAME  demo.localflynn.com.
+```
+
 `CONTROLLER_DOMAIN` and `DEFAULT_ROUTE_DOMAIN` should be set to the two
 respective domains.
 
