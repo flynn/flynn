@@ -181,14 +181,12 @@ func (s *S) TestJobLogSSEStream(c *C) {
 	c.Assert(err, IsNil)
 	defer res.Body.Close()
 
-	go pipeW.Write([]byte("\x03\x01\x00\x00\x00\x13Listening on 55012\n"))
-	buf := make([]byte, 64)
-	n, err := res.Body.Read(buf)
-	c.Assert(err, IsNil)
-	buf = buf[:n]
+	go pipeW.Write([]byte("\x03\x01\x00\x00\x00\x13Listening on 55012\n\x05\x00\x00\x00\x01"))
+	buf := &bytes.Buffer{}
+	buf.ReadFrom(res.Body)
 
-	expected := "data: {\"stream\":\"stdout\",\"data\":\"Listening on 55012\\n\"}\n\n"
-	c.Assert(string(buf), Equals, expected)
+	expected := "data: {\"stream\":\"stdout\",\"data\":\"Listening on 55012\\n\"}\n\nevent: exit\ndata: {\"status\": 1}\n\n"
+	c.Assert(buf.String(), Equals, expected)
 }
 
 func (s *S) TestRunJobDetached(c *C) {
