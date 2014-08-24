@@ -119,7 +119,15 @@ func jobLog(req *http.Request, app *ct.App, params martini.Params, hc cluster.Ho
 		}
 		return
 	}
-	defer attachClient.Close()
+
+	if cn, ok := w.(http.CloseNotifier); ok {
+		go func() {
+			<-cn.CloseNotify()
+			attachClient.Close()
+		}()
+	} else {
+		defer attachClient.Close()
+	}
 
 	sse := strings.Contains(req.Header.Get("Accept"), "text/event-stream")
 	if sse {
@@ -132,8 +140,6 @@ func jobLog(req *http.Request, app *ct.App, params martini.Params, hc cluster.Ho
 	if wf, ok := w.(http.Flusher); ok && tail {
 		wf.Flush()
 	}
-
-	// TODO: use http.CloseNotifier to clean up when client disconnects
 
 	if sse {
 		ssew := NewSSELogWriter(w)
