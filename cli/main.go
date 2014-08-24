@@ -187,10 +187,11 @@ func readConfig() error {
 }
 
 func homedir() string {
-	if runtime.GOOS == "windows" {
+	home := os.Getenv("HOME")
+	if home == "" && runtime.GOOS == "windows" {
 		return os.Getenv("%APPDATA%")
 	}
-	return os.Getenv("HOME")
+	return home
 }
 
 var ErrNoClusters = errors.New("no clusters configured")
