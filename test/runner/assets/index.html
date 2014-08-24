@@ -1,0 +1,62 @@
+<html>
+  <head>
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+  </head>
+
+  <body>
+    <div class="container">
+      <h1>Flynn CI Builds</h1>
+
+      <div class="alert alert-danger alert-dismissible hide" role="alert">
+        <button type="button" class="close" data-dismiss="alert">
+          <span aria-hidden="true">&times;</span>
+          <span class="sr-only">Close</span>
+        </button>
+
+        <p></p>
+      </div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Commit</th>
+            <th>Description</th>
+            <th>Created</th>
+            <th>State</th>
+            <th></th>
+          </tr>
+        </thead>
+
+        <tbody>
+        </tbody>
+      </table>
+    </div>
+
+    <script type="text/template" id="row-template">
+      <tr>
+        <td>
+          <% if(log_url) { %>
+            <a href="<%= log_url %>"><%= commit.substring(0, 7) %></a>
+          <% } else { %>
+            <%= commit.substring(0, 7) %>
+          <% } %>
+        </td>
+        <td><%= description %></td>
+        <td><%= created_at.format("LLL") %></td>
+        <td><%= state %></td>
+        <td>
+          <form action="/builds" method="POST">
+            <input type="hidden" name="id" value="<%= id %>" />
+            <input type="submit" value="Rebuild" class="btn" />
+          </form>
+        </td>
+      </tr>
+    </script>
+
+    <script src="//cdnjs.cloudflare.com/ajax/libs/underscore.js/1.6.0/underscore-min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/moment.js/2.8.1/moment.min.js"></script>
+    <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
+    <script src="/assets/builds.js"></script>
+  </body>
+</html>
