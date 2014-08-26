@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -107,7 +108,13 @@ func main() {
 		}
 	}
 
-	sh.BeforeExit(func() { backend.Cleanup() })
+	var jobStream cluster.Stream
+	sh.BeforeExit(func() {
+		if jobStream != nil {
+			jobStream.Close()
+		}
+		backend.Cleanup()
+	})
 
 	if *force {
 		if err := backend.Cleanup(); err != nil {
@@ -220,7 +227,7 @@ func main() {
 
 		h.Jobs = state.ClusterJobs()
 		jobs := make(chan *host.Job)
-		hostErr := cluster.RegisterHost(h, jobs)
+		jobStream = cluster.RegisterHost(h, jobs)
 		g.Log(grohl.Data{"at": "host_registered"})
 		for job := range jobs {
 			if *externalAddr != "" {
@@ -234,7 +241,12 @@ func main() {
 				state.SetStatusFailed(job.ID, err)
 			}
 		}
-		g.Log(grohl.Data{"at": "sampi_disconnected", "err": *hostErr})
+		g.Log(grohl.Data{"at": "sampi_disconnected", "err": jobStream.Err})
+
+		// if the process is shutting down, just block
+		if sh.Active {
+			<-make(chan struct{})
+		}
 
 		<-newLeader
 	}
@@ -268,6 +280,8 @@ func newShutdownHandler() *shutdownHandler {
 }
 
 type shutdownHandler struct {
+	Active bool
+
 	mtx  sync.RWMutex
 	done chan struct{}
 }
@@ -282,24 +296,26 @@ func (h *shutdownHandler) BeforeExit(f func()) {
 }
 
 func (h *shutdownHandler) Fatal(v ...interface{}) {
-	// signal exit handlers
-	close(h.done)
-	// wait for exit handlers to finish
-	h.mtx.Lock()
-	log.New(os.Stderr, "", log.Lshortfile|log.Lmicroseconds).Output(2, fmt.Sprint(v...))
-	os.Exit(1)
+	h.shutdown(errors.New(fmt.Sprint(v...)))
 }
-
-// kill all jobs
 
 func (h *shutdownHandler) wait() {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, os.Signal(syscall.SIGTERM))
 	sig := <-ch
 	grohl.Log(grohl.Data{"fn": "shutdown", "at": "start", "signal": fmt.Sprint(sig)})
+	h.shutdown(nil)
+}
+
+func (h *shutdownHandler) shutdown(err error) {
+	h.Active = true
 	// signal exit handlers
 	close(h.done)
 	// wait for exit handlers to finish
 	h.mtx.Lock()
+	if err != nil {
+		log.New(os.Stderr, "", log.Lshortfile|log.Lmicroseconds).Output(2, err.Error())
+		os.Exit(1)
+	}
 	os.Exit(0)
 }

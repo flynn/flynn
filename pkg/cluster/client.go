@@ -52,7 +52,7 @@ func newClient(services ServiceSetFunc) (*Client, error) {
 type LocalClient interface {
 	ListHosts() (map[string]host.Host, error)
 	AddJobs(*host.AddJobsReq) (*host.AddJobsRes, error)
-	RegisterHost(*host.Host, chan *host.Job) *error
+	RegisterHost(*host.Host, chan *host.Job) Stream
 	RemoveJobs([]string) error
 }
 
@@ -197,15 +197,15 @@ func (c *Client) DialHost(id string) (Host, error) {
 
 // Register is used by flynn-host to register itself with the leader and get
 // a stream of new jobs. It is not used by clients.
-func (c *Client) RegisterHost(host *host.Host, jobs chan *host.Job) *error {
+func (c *Client) RegisterHost(host *host.Host, jobs chan *host.Job) Stream {
 	if c := c.local(); c != nil {
 		return c.RegisterHost(host, jobs)
 	}
 	client, err := c.RPCClient()
 	if err != nil {
-		return &err
+		return rpcStream{&rpcplus.Call{Error: err}}
 	}
-	return &client.StreamGo("Cluster.RegisterHost", host, jobs).Error
+	return rpcStream{client.StreamGo("Cluster.RegisterHost", host, jobs)}
 }
 
 // RemoveJobs is used by flynn-host to delete jobs from the cluster state. It
