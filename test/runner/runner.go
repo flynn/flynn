@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 	"sync"
 	"text/template"
@@ -117,10 +118,12 @@ func (r *Runner) start() error {
 
 	go r.watchEvents()
 
-	http.Handle("/", handlers.CombinedLoggingHandler(os.Stdout, http.HandlerFunc(r.httpEventHandler)))
-	http.Handle("/builds", handlers.CombinedLoggingHandler(os.Stdout, http.HandlerFunc(r.httpBuildHandler)))
+	http.HandleFunc("/", r.httpEventHandler)
+	http.HandleFunc("/builds", r.httpBuildHandler)
+	http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(args.AssetsDir))))
+	handler := handlers.CombinedLoggingHandler(os.Stdout, http.DefaultServeMux)
 	log.Println("Listening on", args.ListenAddr, "...")
-	if err := http.ListenAndServeTLS(args.ListenAddr, args.TLSCert, args.TLSKey, nil); err != nil {
+	if err := http.ListenAndServeTLS(args.ListenAddr, args.TLSCert, args.TLSKey, handler); err != nil {
 		return fmt.Errorf("ListenAndServeTLS: %s", err)
 	}
 	return nil
@@ -293,62 +296,13 @@ func (r *Runner) httpEventHandler(w http.ResponseWriter, req *http.Request) {
 	io.WriteString(w, "ok\n")
 }
 
-var formatters = template.FuncMap{
-	"formatTime": func(t time.Time) string { return t.Format(time.RFC822) },
-}
-
-var buildsPage = template.Must(template.New("builds-page").Funcs(formatters).Parse(`
-<html>
-  <head>
-    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
-  </head>
-
-  <body>
-    <div class="container">
-      <h1>Flynn CI Builds</h1>
-
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Commit</th>
-            <th>Description</th>
-            <th>Created</th>
-            <th>State</th>
-            <th></th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {{ range . }}
-            <tr>
-              <td>
-                {{ if .LogUrl }}
-                  <a href="{{ .LogUrl }}">{{ .Commit }}</a>
-                {{ else }}
-                  {{ .Commit }}
-                {{ end }}
-              </td>
-              <td>{{ .Description }}</td>
-              <td>{{ .CreatedAt | formatTime }}</td>
-              <td>{{ .State }}</td>
-              <td>
-                <form action="/builds" method="POST">
-                  <input type="hidden" name="id" value="{{ .Id }}" />
-                  <input type="submit" value="Rebuild" class="btn" />
-                </form>
-              </td>
-            </tr>
-          {{ end }}
-        </tbody>
-      </table>
-    </div>
-  </body>
-</html>
-`))
-
 func (r *Runner) httpBuildHandler(w http.ResponseWriter, req *http.Request) {
 	if req.Method == "POST" {
 		r.handleBuildRequest(w, req)
+		return
+	}
+	if !strings.Contains(req.Header.Get("Accept"), "application/json") {
+		http.ServeFile(w, req, path.Join(args.AssetsDir, "index.html"))
 		return
 	}
 
@@ -367,8 +321,8 @@ func (r *Runner) httpBuildHandler(w http.ResponseWriter, req *http.Request) {
 		return nil
 	})
 
-	w.Header().Set("Content-Type", "text/html")
-	buildsPage.Execute(w, builds)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(builds)
 }
 
 func (r *Runner) handleBuildRequest(w http.ResponseWriter, req *http.Request) {

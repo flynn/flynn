@@ -33,8 +33,9 @@ main() {
     $test_dir/rootfs/build.sh $build_dir
   fi
 
-  info "Copying apps"
+  info "Copying apps and assets"
   rsync -avz --quiet "$test_dir/apps" $dir
+  rsync -avz --quiet "$test_dir/runner/assets" $dir
 
   info "Fixing permissions"
   chown -R $user:$user $dir
