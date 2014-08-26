@@ -2,9 +2,7 @@ package main
 
 import (
 	"log"
-	"net"
 	"net/http"
-	"strings"
 
 	"github.com/go-martini/martini"
 	"github.com/gorilla/sessions"
@@ -26,21 +24,6 @@ func reqHelperMiddleware(c martini.Context, req *http.Request, w http.ResponseWr
 		ResponseWriter: w,
 		req:            req,
 		conf:           conf,
-	}
-
-	ip := req.Header.Get("X-Real-Ip")
-	if xff := req.Header.Get("X-Forwarded-For"); ip == "" && xff != "" {
-		ips := strings.Split(xff, ",")
-		if len(ips) > 0 {
-			ip = strings.TrimSpace(ips[0])
-		}
-	}
-	if ip == "" {
-		ip, _, _ = net.SplitHostPort(req.RemoteAddr)
-		if idx := strings.IndexByte(ip, '%'); idx > -1 {
-			// Strip IPv6 scope id like 'fe80::1%lo0'
-			ip = ip[:idx]
-		}
 	}
 
 	session, _ := conf.SessionStore.Get(req, "session")
