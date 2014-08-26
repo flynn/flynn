@@ -119,7 +119,15 @@ func jobLog(req *http.Request, app *ct.App, params martini.Params, hc cluster.Ho
 		}
 		return
 	}
-	defer attachClient.Close()
+
+	if cn, ok := w.(http.CloseNotifier); ok {
+		go func() {
+			<-cn.CloseNotify()
+			attachClient.Close()
+		}()
+	} else {
+		defer attachClient.Close()
+	}
 
 	sse := strings.Contains(req.Header.Get("Accept"), "text/event-stream")
 	if sse {
@@ -133,15 +141,21 @@ func jobLog(req *http.Request, app *ct.App, params martini.Params, hc cluster.Ho
 		wf.Flush()
 	}
 
-	// TODO: use http.CloseNotifier to clean up when client disconnects
-
+	fw := flushWriter{w, tail}
 	if sse {
 		ssew := NewSSELogWriter(w)
-		attachClient.Receive(flushWriter{ssew.Stream("stdout"), tail}, flushWriter{ssew.Stream("stderr"), tail})
-		// TODO: include exit code here if tailing
-		flushWriter{w, tail}.Write([]byte("event: eof\ndata: {}\n\n"))
+		exit, err := attachClient.Receive(flushWriter{ssew.Stream("stdout"), tail}, flushWriter{ssew.Stream("stderr"), tail})
+		if err != nil {
+			fw.Write([]byte("event: error\ndata: {}\n\n"))
+			return
+		}
+		if tail {
+			fmt.Fprintf(fw, "event: exit\ndata: {\"status\": %d}\n\n", exit)
+			return
+		}
+		fw.Write([]byte("event: eof\ndata: {}\n\n"))
 	} else {
-		io.Copy(flushWriter{w, tail}, attachClient.Conn())
+		io.Copy(fw, attachClient.Conn())
 	}
 }
 
