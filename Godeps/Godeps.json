@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/flynn/flynn",
-	"GoVersion": "go1.3",
+	"GoVersion": "go1.3.1",
 	"Packages": [
 		"./..."
 	],
@@ -43,10 +43,6 @@
 			"ImportPath": "github.com/alexzorin/libvirt-go",
 			"Comment": "v2.6.0-2-g99d0178",
 			"Rev": "99d0178daa068fd3a437c218c559e3d3bee4228b"
-		},
-		{
-			"ImportPath": "github.com/bgentry/pflag",
-			"Rev": "b008717215c7236e20ca2faaf805e54ba6c1d208"
 		},
 		{
 			"ImportPath": "github.com/boltdb/bolt",
@@ -157,10 +153,6 @@
 			"Rev": "1ecaf30408c3caece87a49b275dbe4b23d7160ff"
 		},
 		{
-			"ImportPath": "github.com/flynn/go-dockerclient",
-			"Rev": "70a6053bac9d85b17e279d1e9a5337bd3d7e035d"
-		},
-		{
 			"ImportPath": "github.com/flynn/go-docopt",
 			"Comment": "0.6.1-rc2-25-gc4d72bb",
 			"Rev": "c4d72bb6e19016aebcf611fe19376d46f85f1752"
@@ -181,6 +173,11 @@
 		{
 			"ImportPath": "github.com/flynn/pq",
 			"Rev": "5a9734ce1d3157ce437352731f757b82340be3a6"
+		},
+		{
+			"ImportPath": "github.com/fsouza/go-dockerclient",
+			"Comment": "0.2.1-219-gadb8617",
+			"Rev": "adb861704259d548b45e08b5dd7b7c80efcd82e6"
 		},
 		{
 			"ImportPath": "github.com/go-martini/martini",

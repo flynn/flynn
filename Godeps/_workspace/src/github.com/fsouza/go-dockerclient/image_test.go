@@ -1,4 +1,4 @@
-// Copyright 2013 go-dockerclient authors. All rights reserved.
+// Copyright 2014 go-dockerclient authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -6,22 +6,25 @@ package docker
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 )
 
 func newTestClient(rt *FakeRoundTripper) Client {
 	endpoint := "http://localhost:4243"
-	u, _ := parseEndpoint(endpoint)
+	u, _ := parseEndpoint("http://localhost:4243")
 	client := Client{
-		endpoint:    endpoint,
-		endpointURL: u,
-		client:      &http.Client{Transport: rt},
+		HTTPClient:             &http.Client{Transport: rt},
+		endpoint:               endpoint,
+		endpointURL:            u,
+		SkipServerVersionCheck: true,
 	}
 	return client
 }
@@ -55,7 +58,29 @@ func TestListImages(t *testing.T) {
              "Tag":"ubuntu-quantal",
              "Id":"b750fe79269d",
              "Created":1364102658
-     }
+     },
+     {
+             "RepoTag": [
+             "ubuntu:12.04",
+             "ubuntu:precise",
+             "ubuntu:latest"
+             ],
+             "Id": "8dbd9e392a964c",
+             "Created": 1365714795,
+             "Size": 131506275,
+             "VirtualSize": 131506275
+      },
+      {
+             "RepoTag": [
+             "ubuntu:12.10",
+             "ubuntu:quantal"
+             ],
+             "ParentId": "27cf784147099545",
+             "Id": "b750fe79269d2e",
+             "Created": 1364102658,
+             "Size": 24653,
+             "VirtualSize": 180116135
+      }
 ]`
 	var expected []APIImages
 	err := json.Unmarshal([]byte(body), &expected)
@@ -169,7 +194,7 @@ func TestPushImage(t *testing.T) {
 	fakeRT := &FakeRoundTripper{message: "Pushing 1/100", status: http.StatusOK}
 	client := newTestClient(fakeRT)
 	var buf bytes.Buffer
-	err := client.PushImage(PushImageOptions{Name: "test"}, AuthConfiguration{}, &buf)
+	err := client.PushImage(PushImageOptions{Name: "test", OutputStream: &buf}, AuthConfiguration{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,10 +213,14 @@ func TestPushImage(t *testing.T) {
 	if query := req.URL.Query().Encode(); query != "" {
 		t.Errorf("PushImage: Wrong query string. Want no parameters, got %q.", query)
 	}
-	var b [2]byte
-	req.Body.Read(b[:])
-	if string(b[:]) != "{}" {
-		t.Errorf("PushImage: wrong body. Want %q. Got %q.", "{}", string(b[:]))
+
+	auth, err := base64.URLEncoding.DecodeString(req.Header.Get("X-Registry-Auth"))
+	if err != nil {
+		t.Errorf("PushImage: caught error decoding auth. %#v", err.Error())
+	}
+	if strings.TrimSpace(string(auth)) != "{}" {
+		t.Errorf("PushImage: wrong body. Want %q. Got %q.",
+			base64.URLEncoding.EncodeToString([]byte("{}")), req.Header.Get("X-Registry-Auth"))
 	}
 }
 
@@ -204,15 +233,19 @@ func TestPushImageWithAuthentication(t *testing.T) {
 		Password: "gopher123",
 		Email:    "gopher@tsuru.io",
 	}
-	err := client.PushImage(PushImageOptions{Name: "test"}, inputAuth, &buf)
+	err := client.PushImage(PushImageOptions{Name: "test", OutputStream: &buf}, inputAuth)
 	if err != nil {
 		t.Fatal(err)
 	}
 	req := fakeRT.requests[0]
-	var b [128]byte
-	n, _ := req.Body.Read(b[:])
 	var gotAuth AuthConfiguration
-	err = json.Unmarshal(b[:n], &gotAuth)
+
+	auth, err := base64.URLEncoding.DecodeString(req.Header.Get("X-Registry-Auth"))
+	if err != nil {
+		t.Errorf("PushImage: caught error decoding auth. %#v", err.Error())
+	}
+
+	err = json.Unmarshal(auth, &gotAuth)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +259,11 @@ func TestPushImageCustomRegistry(t *testing.T) {
 	client := newTestClient(fakeRT)
 	var authConfig AuthConfiguration
 	var buf bytes.Buffer
-	err := client.PushImage(PushImageOptions{Name: "test", Registry: "docker.tsuru.io"}, authConfig, &buf)
+	opts := PushImageOptions{
+		Name: "test", Registry: "docker.tsuru.io",
+		OutputStream: &buf,
+	}
+	err := client.PushImage(opts, authConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +276,7 @@ func TestPushImageCustomRegistry(t *testing.T) {
 
 func TestPushImageNoName(t *testing.T) {
 	client := Client{}
-	err := client.PushImage(PushImageOptions{}, AuthConfiguration{}, nil)
+	err := client.PushImage(PushImageOptions{}, AuthConfiguration{})
 	if err != ErrNoSuchImage {
 		t.Errorf("PushImage: got wrong error. Want %#v. Got %#v.", ErrNoSuchImage, err)
 	}
@@ -249,7 +286,8 @@ func TestPullImage(t *testing.T) {
 	fakeRT := &FakeRoundTripper{message: "Pulling 1/100", status: http.StatusOK}
 	client := newTestClient(fakeRT)
 	var buf bytes.Buffer
-	err := client.PullImage(PullImageOptions{Repository: "base", OutputStream: &buf})
+	err := client.PullImage(PullImageOptions{Repository: "base", OutputStream: &buf},
+		AuthConfiguration{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,6 +309,25 @@ func TestPullImage(t *testing.T) {
 	}
 }
 
+func TestPullImageWithoutOutputStream(t *testing.T) {
+	fakeRT := &FakeRoundTripper{message: "Pulling 1/100", status: http.StatusOK}
+	client := newTestClient(fakeRT)
+	opts := PullImageOptions{
+		Repository: "base",
+		Registry:   "docker.tsuru.io",
+	}
+	err := client.PullImage(opts, AuthConfiguration{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := fakeRT.requests[0]
+	expected := map[string][]string{"fromImage": {"base"}, "registry": {"docker.tsuru.io"}}
+	got := map[string][]string(req.URL.Query())
+	if !reflect.DeepEqual(got, expected) {
+		t.Errorf("PullImage: wrong query string. Want %#v. Got %#v.", expected, got)
+	}
+}
+
 func TestPullImageCustomRegistry(t *testing.T) {
 	fakeRT := &FakeRoundTripper{message: "Pulling 1/100", status: http.StatusOK}
 	client := newTestClient(fakeRT)
@@ -280,7 +337,7 @@ func TestPullImageCustomRegistry(t *testing.T) {
 		Registry:     "docker.tsuru.io",
 		OutputStream: &buf,
 	}
-	err := client.PullImage(opts)
+	err := client.PullImage(opts, AuthConfiguration{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +359,7 @@ func TestPullImageTag(t *testing.T) {
 		Tag:          "latest",
 		OutputStream: &buf,
 	}
-	err := client.PullImage(opts)
+	err := client.PullImage(opts, AuthConfiguration{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,7 +374,7 @@ func TestPullImageTag(t *testing.T) {
 func TestPullImageNoRepository(t *testing.T) {
 	var opts PullImageOptions
 	client := Client{}
-	err := client.PullImage(opts)
+	err := client.PullImage(opts, AuthConfiguration{})
 	if err != ErrNoSuchImage {
 		t.Errorf("PullImage: got wrong error. Want %#v. Got %#v.", ErrNoSuchImage, err)
 	}
@@ -327,13 +384,18 @@ func TestImportImageFromUrl(t *testing.T) {
 	fakeRT := &FakeRoundTripper{message: "", status: http.StatusOK}
 	client := newTestClient(fakeRT)
 	var buf bytes.Buffer
-	opts := ImportImageOptions{Source: "http://mycompany.com/file.tar", Repository: "testimage"}
-	err := client.ImportImage(opts, nil, &buf)
+	opts := ImportImageOptions{
+		Source:       "http://mycompany.com/file.tar",
+		Repository:   "testimage",
+		Tag:          "tag",
+		OutputStream: &buf,
+	}
+	err := client.ImportImage(opts)
 	if err != nil {
 		t.Fatal(err)
 	}
 	req := fakeRT.requests[0]
-	expected := map[string][]string{"fromSrc": {opts.Source}, "repo": {opts.Repository}}
+	expected := map[string][]string{"fromSrc": {opts.Source}, "repo": {opts.Repository}, "tag": {opts.Tag}}
 	got := map[string][]string(req.URL.Query())
 	if !reflect.DeepEqual(got, expected) {
 		t.Errorf("ImportImage: wrong query string. Want %#v. Got %#v.", expected, got)
@@ -345,13 +407,17 @@ func TestImportImageFromInput(t *testing.T) {
 	client := newTestClient(fakeRT)
 	in := bytes.NewBufferString("tar content")
 	var buf bytes.Buffer
-	opts := ImportImageOptions{Source: "-", Repository: "testimage"}
-	err := client.ImportImage(opts, in, &buf)
+	opts := ImportImageOptions{
+		Source: "-", Repository: "testimage",
+		InputStream: in, OutputStream: &buf,
+		Tag: "tag",
+	}
+	err := client.ImportImage(opts)
 	if err != nil {
 		t.Fatal(err)
 	}
 	req := fakeRT.requests[0]
-	expected := map[string][]string{"fromSrc": {opts.Source}, "repo": {opts.Repository}}
+	expected := map[string][]string{"fromSrc": {opts.Source}, "repo": {opts.Repository}, "tag": {opts.Tag}}
 	got := map[string][]string(req.URL.Query())
 	if !reflect.DeepEqual(got, expected) {
 		t.Errorf("ImportImage: wrong query string. Want %#v. Got %#v.", expected, got)
@@ -371,8 +437,11 @@ func TestImportImageDoesNotPassesInputIfSourceIsNotDash(t *testing.T) {
 	client := newTestClient(fakeRT)
 	var buf bytes.Buffer
 	in := bytes.NewBufferString("foo")
-	opts := ImportImageOptions{Source: "http://test.com/container.tar", Repository: "testimage"}
-	err := client.ImportImage(opts, in, &buf)
+	opts := ImportImageOptions{
+		Source: "http://test.com/container.tar", Repository: "testimage",
+		InputStream: in, OutputStream: &buf,
+	}
+	err := client.ImportImage(opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,8 +465,11 @@ func TestImportImageShouldPassTarContentToBodyWhenSourceIsFilePath(t *testing.T)
 	client := newTestClient(fakeRT)
 	var buf bytes.Buffer
 	tarPath := "testing/data/container.tar"
-	opts := ImportImageOptions{Source: tarPath, Repository: "testimage"}
-	err := client.ImportImage(opts, nil, &buf)
+	opts := ImportImageOptions{
+		Source: tarPath, Repository: "testimage",
+		OutputStream: &buf,
+	}
+	err := client.ImportImage(opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -421,8 +493,11 @@ func TestImportImageShouldChangeSourceToDashWhenItsAFilePath(t *testing.T) {
 	client := newTestClient(fakeRT)
 	var buf bytes.Buffer
 	tarPath := "testing/data/container.tar"
-	opts := ImportImageOptions{Source: tarPath, Repository: "testimage"}
-	err := client.ImportImage(opts, nil, &buf)
+	opts := ImportImageOptions{
+		Source: tarPath, Repository: "testimage",
+		OutputStream: &buf,
+	}
+	err := client.ImportImage(opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,15 +509,134 @@ func TestImportImageShouldChangeSourceToDashWhenItsAFilePath(t *testing.T) {
 	}
 }
 
+func TestBuildImageParameters(t *testing.T) {
+	fakeRT := &FakeRoundTripper{message: "", status: http.StatusOK}
+	client := newTestClient(fakeRT)
+	var buf bytes.Buffer
+	opts := BuildImageOptions{
+		Name:           "testImage",
+		NoCache:        true,
+		SuppressOutput: true,
+		RmTmpContainer: true,
+		InputStream:    &buf,
+		OutputStream:   &buf,
+	}
+	err := client.BuildImage(opts)
+	if err != nil && strings.Index(err.Error(), "build image fail") == -1 {
+		t.Fatal(err)
+	}
+	req := fakeRT.requests[0]
+	expected := map[string][]string{"t": {opts.Name}, "nocache": {"1"}, "q": {"1"}, "rm": {"1"}}
+	got := map[string][]string(req.URL.Query())
+	if !reflect.DeepEqual(got, expected) {
+		t.Errorf("BuildImage: wrong query string. Want %#v. Got %#v.", expected, got)
+	}
+}
+
+func TestBuildImageParametersForRemoteBuild(t *testing.T) {
+	fakeRT := &FakeRoundTripper{message: "", status: http.StatusOK}
+	client := newTestClient(fakeRT)
+	var buf bytes.Buffer
+	opts := BuildImageOptions{
+		Name:           "testImage",
+		Remote:         "testing/data/container.tar",
+		SuppressOutput: true,
+		OutputStream:   &buf,
+	}
+	err := client.BuildImage(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := fakeRT.requests[0]
+	expected := map[string][]string{"t": {opts.Name}, "remote": {opts.Remote}, "q": {"1"}}
+	got := map[string][]string(req.URL.Query())
+	if !reflect.DeepEqual(got, expected) {
+		t.Errorf("ImportImage: wrong query string. Want %#v. Got %#v.", expected, got)
+	}
+}
+
+func TestBuildImageMissingRepoAndNilInput(t *testing.T) {
+	fakeRT := &FakeRoundTripper{message: "", status: http.StatusOK}
+	client := newTestClient(fakeRT)
+	var buf bytes.Buffer
+	opts := BuildImageOptions{
+		Name:           "testImage",
+		SuppressOutput: true,
+		OutputStream:   &buf,
+	}
+	err := client.BuildImage(opts)
+	if err != ErrMissingRepo {
+		t.Errorf("BuildImage: wrong error returned. Want %#v. Got %#v.", ErrMissingRepo, err)
+	}
+}
+
+func TestBuildImageMissingOutputStream(t *testing.T) {
+	fakeRT := &FakeRoundTripper{message: "", status: http.StatusOK}
+	client := newTestClient(fakeRT)
+	opts := BuildImageOptions{Name: "testImage"}
+	err := client.BuildImage(opts)
+	if err != ErrMissingOutputStream {
+		t.Errorf("BuildImage: wrong error returned. Want %#v. Got %#v.", ErrMissingOutputStream, err)
+	}
+}
+
+func TestBuildImageRemoteWithoutName(t *testing.T) {
+	fakeRT := &FakeRoundTripper{message: "", status: http.StatusOK}
+	client := newTestClient(fakeRT)
+	var buf bytes.Buffer
+	opts := BuildImageOptions{
+		Remote:         "testing/data/container.tar",
+		SuppressOutput: true,
+		OutputStream:   &buf,
+	}
+	err := client.BuildImage(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := fakeRT.requests[0]
+	expected := map[string][]string{"t": {opts.Remote}, "remote": {opts.Remote}, "q": {"1"}}
+	got := map[string][]string(req.URL.Query())
+	if !reflect.DeepEqual(got, expected) {
+		t.Errorf("BuildImage: wrong query string. Want %#v. Got %#v.", expected, got)
+	}
+}
+
+func TestTagImageParameters(t *testing.T) {
+	fakeRT := &FakeRoundTripper{message: "", status: http.StatusOK}
+	client := newTestClient(fakeRT)
+	opts := TagImageOptions{Repo: "testImage"}
+	err := client.TagImage("base", opts)
+	if err != nil && strings.Index(err.Error(), "tag image fail") == -1 {
+		t.Fatal(err)
+	}
+	req := fakeRT.requests[0]
+	expected := "http://localhost:4243/images/base/tag?repo=testImage"
+	got := req.URL.String()
+	if !reflect.DeepEqual(got, expected) {
+		t.Errorf("TagImage: wrong query string. Want %#v. Got %#v.", expected, got)
+	}
+}
+
+func TestTagImageMissingRepo(t *testing.T) {
+	fakeRT := &FakeRoundTripper{message: "", status: http.StatusOK}
+	client := newTestClient(fakeRT)
+	opts := TagImageOptions{Repo: "testImage"}
+	err := client.TagImage("", opts)
+	if err != ErrNoSuchImage {
+		t.Errorf("TestTag: wrong error returned. Want %#v. Got %#v.",
+			ErrNoSuchImage, err)
+	}
+}
+
 func TestIsUrl(t *testing.T) {
 	url := "http://foo.bar/"
-	result := isUrl(url)
+	result := isURL(url)
 	if !result {
-		t.Errorf("isUrl: wrong match. Expected %#v to be a url. Got %#v.", url, result)
+		t.Errorf("isURL: wrong match. Expected %#v to be a url. Got %#v.", url, result)
 	}
 	url = "/foo/bar.tar"
-	result = isUrl(url)
+	result = isURL(url)
 	if result {
-		t.Errorf("isUrl: wrong match. Expected %#v to not be a url. Got %#v", url, result)
+		t.Errorf("isURL: wrong match. Expected %#v to not be a url. Got %#v", url, result)
 	}
 }

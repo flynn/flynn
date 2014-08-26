@@ -3,9 +3,10 @@ package main
 import (
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-dockerclient"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/fsouza/go-dockerclient"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 	"github.com/flynn/flynn/host/ports"
 	"github.com/flynn/flynn/host/types"
@@ -17,18 +18,26 @@ func (nullLogger) Log(grohl.Data) error { return nil }
 
 func init() { grohl.SetLogger(nullLogger{}) }
 
-type fakeDockerClient struct {
-	createErr error
-	startErr  error
-	pullErr   error
-	created   *docker.Config
-	pulled    string
-	started   bool
-	hostConf  *docker.HostConfig
-	events    chan *docker.Event
+func NewFakeDockerClient() *fakeDockerClient {
+	return &fakeDockerClient{
+		listeners: make(map[chan<- *docker.APIEvents]struct{}),
+	}
 }
 
-func (c *fakeDockerClient) CreateContainer(config *docker.Config) (*docker.Container, error) {
+type fakeDockerClient struct {
+	createErr   error
+	startErr    error
+	pullErr     error
+	created     docker.CreateContainerOptions
+	pulled      string
+	started     bool
+	hostConf    *docker.HostConfig
+	listeners   map[chan<- *docker.APIEvents]struct{}
+	mtx         sync.RWMutex
+	newListener chan struct{}
+}
+
+func (c *fakeDockerClient) CreateContainer(config docker.CreateContainerOptions) (*docker.Container, error) {
 	if c.createErr != nil {
 		err := c.createErr
 		c.createErr = nil
@@ -55,13 +64,13 @@ func (c *fakeDockerClient) InspectContainer(id string) (*docker.Container, error
 		return &docker.Container{State: docker.State{ExitCode: 1}}, nil
 	}
 	container := &docker.Container{Volumes: make(map[string]string), NetworkSettings: &docker.NetworkSettings{}}
-	for v := range c.created.Volumes {
+	for v := range c.created.Config.Volumes {
 		container.Volumes[v] = "/var/lib/docker/vfs/dir/" + strings.Replace(v, "/", "-", -1)
 	}
 	return container, nil
 }
 
-func (c *fakeDockerClient) PullImage(opts docker.PullImageOptions) error {
+func (c *fakeDockerClient) PullImage(opts docker.PullImageOptions, auth docker.AuthConfiguration) error {
 	if c.pullErr != nil {
 		return c.pullErr
 	}
@@ -69,8 +78,37 @@ func (c *fakeDockerClient) PullImage(opts docker.PullImageOptions) error {
 	return nil
 }
 
-func (c *fakeDockerClient) Events() (*docker.EventStream, error) {
-	return &docker.EventStream{Events: c.events}, nil
+func (c *fakeDockerClient) AddEventListener(ch chan<- *docker.APIEvents) error {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+	c.listeners[ch] = struct{}{}
+	if c.newListener != nil {
+		c.newListener <- struct{}{}
+	}
+	return nil
+}
+
+func (c *fakeDockerClient) RemoveEventListener(ch chan *docker.APIEvents) error {
+	c.mtx.Lock()
+	delete(c.listeners, ch)
+	c.mtx.Unlock()
+	return nil
+}
+
+func (c *fakeDockerClient) sendEvent(data *docker.APIEvents) {
+	c.mtx.RLock()
+	defer c.mtx.RUnlock()
+	for ch := range c.listeners {
+		ch <- data
+	}
+}
+
+func (c *fakeDockerClient) closeListeners() {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+	for ch := range c.listeners {
+		close(ch)
+	}
 }
 
 func (c *fakeDockerClient) StopContainer(string, uint) error {
@@ -94,7 +132,7 @@ func (c *fakeDockerClient) ListContainers(docker.ListContainersOptions) ([]docke
 }
 
 func testDockerRun(job *host.Job, t *testing.T) (*State, *fakeDockerClient) {
-	client := &fakeDockerClient{}
+	client := NewFakeDockerClient()
 	return testDockerRunWithOpts(job, "", client, t), client
 }
 
@@ -103,14 +141,14 @@ func testDockerRunWithOpts(job *host.Job, bindAddr string, client *fakeDockerCli
 		job.Artifact = host.Artifact{Type: "docker", URI: "https://registry.hub.docker.com/test/foo"}
 	}
 	if client == nil {
-		client = &fakeDockerClient{}
+		client = NewFakeDockerClient()
 	}
 
 	state, err := dockerRunWithOpts(job, bindAddr, client)
 	if err != nil {
 		t.Errorf("run error: %s", err)
 	}
-	if client.created == nil {
+	if client.created.Config == nil {
 		t.Error("job not created")
 	}
 	if !client.started {
@@ -158,19 +196,19 @@ func TestProcessJobWithImplicitPorts(t *testing.T) {
 	}
 	_, client := testDockerRun(job, t)
 
-	if len(client.created.Env) == 0 || !sliceHasString(client.created.Env, "PORT=500") {
+	if len(client.created.Config.Env) == 0 || !sliceHasString(client.created.Config.Env, "PORT=500") {
 		t.Fatal("PORT env not set")
 	}
-	if !sliceHasString(client.created.Env, "PORT_0=500") {
+	if !sliceHasString(client.created.Config.Env, "PORT_0=500") {
 		t.Error("PORT_0 env not set")
 	}
-	if !sliceHasString(client.created.Env, "PORT_1=501") {
+	if !sliceHasString(client.created.Config.Env, "PORT_1=501") {
 		t.Error("PORT_1 env not set")
 	}
-	if _, ok := client.created.ExposedPorts["500/tcp"]; !ok {
+	if _, ok := client.created.Config.ExposedPorts["500/tcp"]; !ok {
 		t.Error("exposed port 500 not set")
 	}
-	if _, ok := client.created.ExposedPorts["501/tcp"]; !ok {
+	if _, ok := client.created.Config.ExposedPorts["501/tcp"]; !ok {
 		t.Error("exposed port 501 not set")
 	}
 	if b := client.hostConf.PortBindings["500/tcp"]; len(b) == 0 || b[0].HostPort != "500" {
@@ -188,7 +226,7 @@ func TestProcessWithImplicitPortsAndIP(t *testing.T) {
 			Ports: []host.Port{{Proto: "tcp"}, {Proto: "tcp"}},
 		},
 	}
-	client := &fakeDockerClient{}
+	client := NewFakeDockerClient()
 	testDockerRunWithOpts(job, "127.0.42.1", client, t)
 
 	b := client.hostConf.PortBindings["500/tcp"]
@@ -211,7 +249,8 @@ func sliceHasString(slice []string, str string) bool {
 
 func TestProcessWithPull(t *testing.T) {
 	job := &host.Job{ID: "a"}
-	client := &fakeDockerClient{createErr: docker.ErrNoSuchImage}
+	client := NewFakeDockerClient()
+	client.createErr = docker.ErrNoSuchImage
 	testDockerRunWithOpts(job, "", client, t)
 
 	if client.pulled != "test/foo" {
@@ -222,21 +261,25 @@ func TestProcessWithPull(t *testing.T) {
 func TestProcessWithCreateFailure(t *testing.T) {
 	job := &host.Job{ID: "a"}
 	err := errors.New("undefined failure")
-	client := &fakeDockerClient{createErr: err}
+	client := NewFakeDockerClient()
+	client.createErr = err
 	testProcessWithError(job, client, err, t)
 }
 
 func TestProcessWithPullFailure(t *testing.T) {
 	job := &host.Job{ID: "a"}
 	err := errors.New("undefined failure")
-	client := &fakeDockerClient{createErr: docker.ErrNoSuchImage, pullErr: err}
+	client := NewFakeDockerClient()
+	client.createErr = docker.ErrNoSuchImage
+	client.pullErr = err
 	testProcessWithError(job, client, err, t)
 }
 
 func TestProcessWithStartFailure(t *testing.T) {
 	job := &host.Job{ID: "a"}
 	err := errors.New("undefined failure")
-	client := &fakeDockerClient{startErr: err}
+	client := NewFakeDockerClient()
+	client.startErr = err
 	testProcessWithError(job, client, err, t)
 }
 
@@ -272,7 +315,8 @@ func TestSyncScheduler(t *testing.T) {
 }
 
 func TestStreamEvents(t *testing.T) {
-	events := make(chan *docker.Event)
+	client := NewFakeDockerClient()
+	client.newListener = make(chan struct{})
 	state := NewState()
 	state.AddJob(&host.Job{ID: "a"})
 	state.SetContainerID("a", "1")
@@ -281,15 +325,15 @@ func TestStreamEvents(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		(&DockerBackend{
-			docker: &fakeDockerClient{events: events},
+			docker: client,
 			state:  state,
 			ports:  map[string]*ports.Allocator{"tcp": ports.NewAllocator(500, 550)},
 		}).handleEvents()
 		close(done)
 	}()
-
-	events <- &docker.Event{Status: "die", ID: "1"}
-	close(events)
+	<-client.newListener
+	client.sendEvent(&docker.APIEvents{Status: "die", ID: "1"})
+	client.closeListeners()
 	<-done
 
 	job := state.GetJob("a")
