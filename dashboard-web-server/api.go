@@ -84,7 +84,7 @@ func requireUserMiddleware(rh RequestHelper) {
 
 func login(req *http.Request, w http.ResponseWriter, info LoginInfo, rh RequestHelper, conf *Config) {
 	if info.Token == conf.LoginToken {
-		rh.SetAuthenticated(req, w)
+		rh.SetAuthenticated()
 	} else {
 		rh.Error(ErrInvalidLoginToken)
 		return
@@ -93,7 +93,7 @@ func login(req *http.Request, w http.ResponseWriter, info LoginInfo, rh RequestH
 }
 
 func logout(req *http.Request, w http.ResponseWriter, rh RequestHelper) {
-	rh.UnsetAuthenticated(req, w)
+	rh.UnsetAuthenticated()
 	rh.WriteHeader(200)
 }
 

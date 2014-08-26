@@ -13,13 +13,13 @@ type RequestHelper interface {
 	Error(err error)
 	JSON(int, interface{})
 	IsAuthenticated() bool
-	SetAuthenticated(*http.Request, http.ResponseWriter)
-	UnsetAuthenticated(*http.Request, http.ResponseWriter)
+	SetAuthenticated()
+	UnsetAuthenticated()
 	WriteHeader(int)
 }
 
 func reqHelperMiddleware(c martini.Context, req *http.Request, w http.ResponseWriter, r render.Render, conf *Config) {
-	reqh := &reqHelper{
+	rh := &reqHelper{
 		Render:         r,
 		ResponseWriter: w,
 		req:            req,
@@ -27,9 +27,9 @@ func reqHelperMiddleware(c martini.Context, req *http.Request, w http.ResponseWr
 	}
 
 	session, _ := conf.SessionStore.Get(req, "session")
-	reqh.session = session
+	rh.session = session
 
-	c.MapTo(reqh, (*RequestHelper)(nil))
+	c.MapTo(rh, (*RequestHelper)(nil))
 }
 
 type reqHelper struct {
@@ -60,12 +60,12 @@ func (rh *reqHelper) IsAuthenticated() bool {
 	return rh.session.Values["auth"] == true
 }
 
-func (rh *reqHelper) SetAuthenticated(req *http.Request, w http.ResponseWriter) {
+func (rh *reqHelper) SetAuthenticated() {
 	rh.session.Values["auth"] = true
-	rh.session.Save(req, w)
+	rh.session.Save(rh.req, rh.ResponseWriter)
 }
 
-func (rh *reqHelper) UnsetAuthenticated(req *http.Request, w http.ResponseWriter) {
+func (rh *reqHelper) UnsetAuthenticated() {
 	rh.session.Values["auth"] = false
-	rh.session.Save(req, w)
+	rh.session.Save(rh.req, rh.ResponseWriter)
 }
