@@ -164,11 +164,13 @@ git config --global user.name "CI"
 
 cd ~/go/src/github.com/flynn/flynn/test
 
-bin/flynn-test \
-  --flynnrc ~/.flynnrc \
+cmd="bin/flynn-test \
+  --flynnrc $HOME/.flynnrc \
   --cli $(pwd)/../cli/flynn-cli \
   --router-ip {{ .RouterIP }} \
-  --debug
+  --debug"
+
+timeout --kill-after=10 10m $cmd
 `[1:]))
 
 func (r *Runner) build(b *Build) (err error) {
