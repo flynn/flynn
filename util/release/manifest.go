@@ -10,8 +10,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-dockerclient"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/fsouza/go-dockerclient"
 )
 
 func manifest(args *docopt.Args) {

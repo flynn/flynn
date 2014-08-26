@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-dockerclient"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 	"github.com/flynn/flynn/host/types"
 )
@@ -31,11 +30,6 @@ func (h *attachHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Type: application/vnd.flynn.attach-hijack\r\n\r\n"))
 	h.attach(&attachReq, conn)
-}
-
-type dockerAttachClient interface {
-	ResizeContainerTTY(string, int, int) error
-	AttachToContainer(docker.AttachToContainerOptions) error
 }
 
 func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {

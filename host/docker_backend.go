@@ -11,9 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-dockerclient"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/fsouza/go-dockerclient"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 	"github.com/flynn/flynn/host/ports"
 	"github.com/flynn/flynn/host/types"
@@ -44,11 +43,12 @@ type DockerBackend struct {
 }
 
 type dockerClient interface {
-	PullImage(docker.PullImageOptions) error
-	CreateContainer(*docker.Config) (*docker.Container, error)
+	PullImage(docker.PullImageOptions, docker.AuthConfiguration) error
+	CreateContainer(docker.CreateContainerOptions) (*docker.Container, error)
 	StartContainer(string, *docker.HostConfig) error
 	InspectContainer(string) (*docker.Container, error)
-	Events() (*docker.EventStream, error)
+	AddEventListener(chan<- *docker.APIEvents) error
+	RemoveEventListener(chan *docker.APIEvents) error
 	StopContainer(string, uint) error
 	ResizeContainerTTY(string, int, int) error
 	AttachToContainer(docker.AttachToContainerOptions) error
@@ -76,12 +76,13 @@ func (d *DockerBackend) Run(job *host.Job) error {
 		AttachStdin:  job.Config.Stdin,
 		StdinOnce:    job.Config.Stdin,
 		OpenStdin:    job.Config.Stdin,
-		ExposedPorts: make(map[string]struct{}, len(job.Config.Ports)),
+		ExposedPorts: make(map[docker.Port]struct{}, len(job.Config.Ports)),
 		Env:          make([]string, 0, len(job.Config.Env)+len(job.Config.Ports)+1),
 		Volumes:      make(map[string]struct{}, len(job.Config.Mounts)),
 	}
+	opts := docker.CreateContainerOptions{Config: config}
 	hostConfig := &docker.HostConfig{
-		PortBindings: make(map[string][]docker.PortBinding, len(job.Config.Ports)),
+		PortBindings: make(map[docker.Port][]docker.PortBinding, len(job.Config.Ports)),
 	}
 	for k, v := range job.Config.Env {
 		config.Env = append(config.Env, k+"="+v)
@@ -101,8 +102,8 @@ func (d *DockerBackend) Run(job *host.Job) error {
 			config.Env = append(config.Env, "PORT="+port)
 		}
 		config.Env = append(config.Env, fmt.Sprintf("PORT_%d=%s", i, port))
-		config.ExposedPorts[port+"/"+p.Proto] = struct{}{}
-		hostConfig.PortBindings[port+"/"+p.Proto] = []docker.PortBinding{{HostPort: port, HostIp: d.bindAddr}}
+		config.ExposedPorts[docker.Port(port+"/"+p.Proto)] = struct{}{}
+		hostConfig.PortBindings[docker.Port(port+"/"+p.Proto)] = []docker.PortBinding{{HostPort: port, HostIp: d.bindAddr}}
 	}
 
 	hostConfig.Binds = make([]string, 0, len(job.Config.Mounts))
@@ -121,23 +122,23 @@ func (d *DockerBackend) Run(job *host.Job) error {
 	}
 
 	if strings.HasPrefix(job.ID, "flynn-") {
-		config.Name = job.ID
+		opts.Name = job.ID
 	} else {
-		config.Name = "flynn-" + job.ID
+		opts.Name = "flynn-" + job.ID
 	}
 
 	d.state.AddJob(job)
 	g.Log(grohl.Data{"at": "create_container"})
-	container, err := d.docker.CreateContainer(config)
+	container, err := d.docker.CreateContainer(opts)
 	if err == docker.ErrNoSuchImage {
 		g.Log(grohl.Data{"at": "pull_image"})
 		pullOpts.OutputStream = os.Stdout
-		err = d.docker.PullImage(*pullOpts)
+		err = d.docker.PullImage(*pullOpts, docker.AuthConfiguration{})
 		if err != nil {
 			g.Log(grohl.Data{"at": "pull_image", "status": "error", "err": err})
 			return err
 		}
-		container, err = d.docker.CreateContainer(config)
+		container, err = d.docker.CreateContainer(opts)
 	}
 	if err != nil {
 		g.Log(grohl.Data{"at": "create_container", "status": "error", "err": err})
@@ -194,7 +195,7 @@ func (d *DockerBackend) Signal(id string, sig int) error {
 	if job == nil {
 		return errors.New("unknown job")
 	}
-	return d.docker.KillContainer(docker.KillContainerOptions{ID: job.ContainerID, Signal: sig})
+	return d.docker.KillContainer(docker.KillContainerOptions{ID: job.ContainerID, Signal: docker.Signal(sig)})
 }
 
 func (d *DockerBackend) Attach(req *AttachRequest) error {
@@ -287,11 +288,12 @@ func (d *DockerBackend) Attach(req *AttachRequest) error {
 }
 
 func (d *DockerBackend) handleEvents() {
-	stream, err := d.docker.Events()
-	if err != nil {
+	stream := make(chan *docker.APIEvents)
+	if err := d.docker.AddEventListener(stream); err != nil {
 		log.Fatal(err)
 	}
-	for event := range stream.Events {
+	defer d.docker.RemoveEventListener(stream)
+	for event := range stream {
 		if event.Status != "die" {
 			continue
 		}
@@ -319,7 +321,7 @@ outer:
 		for _, name := range c.Names {
 			if strings.HasPrefix(name, "/flynn-") {
 				g.Log(grohl.Data{"at": "kill", "container.id": c.ID, "container.name": name})
-				if err := d.docker.KillContainer(docker.KillContainerOptions{ID: c.ID, Signal: int(syscall.SIGKILL)}); err != nil {
+				if err := d.docker.KillContainer(docker.KillContainerOptions{ID: c.ID}); err != nil {
 					g.Log(grohl.Data{"at": "kill", "container.id": c.ID, "container.name": name, "status": "error", "err": err})
 				}
 				continue outer

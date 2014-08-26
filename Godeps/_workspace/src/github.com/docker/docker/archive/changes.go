@@ -11,9 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/system"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/utils"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/vendor/src/code.google.com/p/go/src/pkg/archive/tar"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/log"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/system"
 )
 
 type ChangeType int
@@ -363,19 +364,19 @@ func ExportChanges(dir string, changes []Change) (Archive, error) {
 					ChangeTime: timestamp,
 				}
 				if err := tw.WriteHeader(hdr); err != nil {
-					utils.Debugf("Can't write whiteout header: %s\n", err)
+					log.Debugf("Can't write whiteout header: %s", err)
 				}
 			} else {
 				path := filepath.Join(dir, change.Path)
 				if err := addTarFile(path, change.Path[1:], tw, twBuf); err != nil {
-					utils.Debugf("Can't add file %s to tar: %s\n", path, err)
+					log.Debugf("Can't add file %s to tar: %s", path, err)
 				}
 			}
 		}
 
 		// Make sure to check the error on Close.
 		if err := tw.Close(); err != nil {
-			utils.Debugf("Can't close layer: %s\n", err)
+			log.Debugf("Can't close layer: %s", err)
 		}
 		writer.Close()
 	}()
