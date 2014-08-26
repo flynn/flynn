@@ -1,6 +1,6 @@
-// +build !linux !amd64
+// +build !linux
 
-package utils
+package kernel
 
 import (
 	"errors"
