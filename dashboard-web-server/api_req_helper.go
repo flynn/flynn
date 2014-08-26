@@ -42,11 +42,7 @@ type reqHelper struct {
 }
 
 func (rh *reqHelper) Error(err error) {
-	switch err {
-	case ErrNotFound:
-		rh.WriteHeader(404)
-		return
-	case ErrInvalidLoginToken:
+	if err == ErrInvalidLoginToken {
 		rh.JSON(401, err)
 		return
 	}
