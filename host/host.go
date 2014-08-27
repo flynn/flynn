@@ -102,7 +102,6 @@ func main() {
 	}
 
 	if *stateFile != "" {
-		sh.BeforeExit(func() { os.Remove(*stateFile) })
 		if err := state.Restore(*stateFile, backend); err != nil {
 			sh.Fatal(err)
 		}
