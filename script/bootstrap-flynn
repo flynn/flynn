@@ -20,7 +20,8 @@ sudo start-stop-daemon \
   --retry 15 \
   --exec "${host_dir}/bin/flynn-host"
 
-info "Starting flynn-host"
+log="/tmp/flynn-host-$(date +%Y-%m-%dT%H-%M-%S.%N).log"
+info "Starting flynn-host (logging to $log)"
 sudo start-stop-daemon \
   --start \
   --background \
@@ -31,7 +32,7 @@ sudo start-stop-daemon \
   --external $ip \
   --force \
   --backend libvirt-lxc \
-  &>/tmp/flynn-host.log
+  &>$log
 
 info "Bootstrapping Flynn"
 export DISCOVERD="${ip}:1111"
