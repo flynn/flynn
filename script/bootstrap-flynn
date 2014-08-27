@@ -33,6 +33,7 @@ sudo start-stop-daemon \
   --external $ip \
   --force \
   --backend libvirt-lxc \
+  --state /tmp/flynn-host-state.json \
   &>$log
 
 info "Bootstrapping Flynn"
