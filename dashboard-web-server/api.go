@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codegangsta/inject"
 	"github.com/go-martini/martini"
 	"github.com/martini-contrib/binding"
 	"github.com/martini-contrib/render"
@@ -25,7 +26,10 @@ func APIHandler(conf *Config) http.Handler {
 	m.Use(martini.Recovery())
 	m.Use(render.Renderer())
 	m.Action(r.Handle)
-	m.Map(conf)
+
+	i := inject.New()
+	i.Map(conf)
+	m.SetParent(i)
 
 	m.Use(cors.Allow(&cors.Options{
 		AllowOrigins:     []string{conf.InterfaceURL},
