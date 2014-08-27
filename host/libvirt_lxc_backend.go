@@ -458,7 +458,7 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 			// We can't connect to the socket file directly because
 			// the path to it is longer than 108 characters (UNIX_PATH_MAX).
 			// Create a temporary symlink to connect to.
-			if err = os.Symlink(socketPath, symlink); err != nil {
+			if err = os.Symlink(socketPath, symlink); err != nil && !os.IsExist(err) {
 				g.Log(grohl.Data{"at": "symlink_socket", "status": "error", "err": err, "source": socketPath, "target": symlink})
 				continue
 			}
