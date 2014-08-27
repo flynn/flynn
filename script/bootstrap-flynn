@@ -21,6 +21,7 @@ sudo start-stop-daemon \
   --exec "${host_dir}/bin/flynn-host"
 
 log="/tmp/flynn-host-$(date +%Y-%m-%dT%H-%M-%S.%N).log"
+ln -nfs $log /tmp/flynn-host.log
 info "Starting flynn-host (logging to $log)"
 sudo start-stop-daemon \
   --start \
