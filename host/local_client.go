@@ -26,12 +26,26 @@ func (c *localClient) AddJobs(req *host.AddJobsReq) (*host.AddJobsRes, error) {
 	return res, c.c.AddJobs(req, res)
 }
 
-func (c *localClient) RegisterHost(h *host.Host, jobs chan *host.Job) *error {
+type localStream struct {
+	stream rpcplus.Stream
+	err    error
+}
+
+func (s localStream) Close() error {
+	close(s.stream.Error)
+	return nil
+}
+
+func (s localStream) Err() error {
+	return s.err
+}
+
+func (c *localClient) RegisterHost(h *host.Host, jobs chan *host.Job) cluster.Stream {
 	ch := make(chan interface{})
-	stream := rpcplus.Stream{Send: ch}
-	var err error
+	err := make(chan error)
+	s := localStream{stream: rpcplus.Stream{Send: ch, Error: err}}
 	go func() {
-		err = c.c.RegisterHost(&c.host, h, stream)
+		s.err = c.c.RegisterHost(&c.host, h, s.stream)
 		close(ch)
 	}()
 	go func() {
@@ -40,7 +54,7 @@ func (c *localClient) RegisterHost(h *host.Host, jobs chan *host.Job) *error {
 		}
 		close(jobs)
 	}()
-	return &err
+	return s
 }
 
 func (c *localClient) RemoveJobs(jobs []string) error {

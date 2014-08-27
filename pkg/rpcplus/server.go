@@ -251,7 +251,7 @@ func (server *Server) SetContextType(typ reflect.Type) {
 
 type Stream struct {
 	Send  chan<- interface{}
-	Error <-chan error
+	Error chan error
 }
 
 var typeOfStream = reflect.TypeOf(Stream{})
