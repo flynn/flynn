@@ -722,23 +722,34 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 }
 
 func (l *LibvirtLXCBackend) Cleanup() error {
+	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "Cleanup"})
 	l.containersMtx.Lock()
 	ids := make([]string, 0, len(l.containers))
-	chans := make([]chan struct{}, 0, len(l.containers))
-	for id, c := range l.containers {
+	for id := range l.containers {
 		ids = append(ids, id)
-		chans = append(chans, c.done)
 	}
 	l.containersMtx.Unlock()
+	g.Log(grohl.Data{"at": "start", "count": len(ids)})
+	errs := make(chan error)
 	for _, id := range ids {
-		if err := l.Stop(id); err != nil {
-			return err
+		go func(id string) {
+			g.Log(grohl.Data{"at": "stop", "job.id": id})
+			err := l.Stop(id)
+			if err != nil {
+				g.Log(grohl.Data{"at": "error", "job.id": id, "err": err})
+			}
+			errs <- err
+		}(id)
+	}
+	var err error
+	for i := 0; i < len(ids); i++ {
+		stopErr := <-errs
+		if stopErr != nil {
+			err = stopErr
 		}
 	}
-	for _, done := range chans {
-		<-done
-	}
-	return nil
+	g.Log(grohl.Data{"at": "finish"})
+	return err
 }
 
 func (l *LibvirtLXCBackend) RestoreState(jobs map[string]*host.ActiveJob, dec *json.Decoder) error {
