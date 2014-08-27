@@ -2,9 +2,11 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 	"path"
 
+	"github.com/flynn/flynn/pkg/pinned"
 	"github.com/gorilla/sessions"
 )
 
@@ -19,6 +21,7 @@ type Config struct {
 	LoginToken    string
 	GithubToken   string
 	SessionStore  *sessions.CookieStore
+	HTTPClient    *http.Client
 }
 
 func LoadConfigFromEnv() *Config {
@@ -39,6 +42,10 @@ func LoadConfigFromEnv() *Config {
 		log.Fatal("CONTROLLER_KEY is required!")
 	}
 
+	controllerPin := []byte(os.Getenv("CONTROLLER_PIN"))
+	if len(controllerPin) == 0 {
+		log.Fatal("CONTROLLER_PIN is required!")
+	}
 
 	conf.InterfaceURL = os.Getenv("INTERFACE_URL")
 	if conf.InterfaceURL == "" {
@@ -72,6 +79,8 @@ func LoadConfigFromEnv() *Config {
 	}
 
 	conf.GithubToken = os.Getenv("GITHUB_TOKEN")
+
+	conf.HTTPClient = &http.Client{Transport: &http.Transport{Dial: (&pinned.Config{Pin: controllerPin}).Dial}}
 
 	return conf
 }
