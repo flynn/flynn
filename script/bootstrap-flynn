@@ -17,7 +17,7 @@ info "Killing running flynn-host, if any"
 sudo start-stop-daemon \
   --stop \
   --oknodo \
-  --retry 5 \
+  --retry 15 \
   --exec "${host_dir}/bin/flynn-host"
 
 info "Starting flynn-host"
