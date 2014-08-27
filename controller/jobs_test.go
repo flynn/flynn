@@ -147,7 +147,7 @@ func (s *S) TestJobLogTail(c *C) {
 }
 
 func (s *S) TestJobLogSSE(c *C) {
-	logData, err := base64.StdEncoding.DecodeString("AwIAAAANaGVsbG8gc3RkZXJyCgMBAAAADWhlbGxvIHN0ZG91dAoDAQAAABNMaXN0ZW5pbmcgb24gNTUwMTIK")
+	logData, err := base64.StdEncoding.DecodeString("AwIAAAANaGVsbG8gc3RkZXJyCgMBAAAADWhlbGxvIHN0ZG91dAoDAQAAABNMaXN0ZW5pbmcgb24gNTUwMTIKAwEAAAAAAwIAAAAA")
 	c.Assert(err, IsNil)
 	app, hostID, jobID := s.createLogTestApp(c, "joblog-sse", bytes.NewReader(logData))
 
