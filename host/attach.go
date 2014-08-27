@@ -165,7 +165,6 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 
 	g.Log(grohl.Data{"at": "attach"})
 	if err := h.backend.Attach(opts); err != nil && err != io.EOF {
-		// TODO: send AttachExit if the job has exited
 		select {
 		case <-success:
 			if exit, ok := err.(ExitError); ok {
@@ -187,6 +186,13 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 		if err != nil {
 			g.Log(grohl.Data{"at": "attach", "status": "error", "err": err.Error()})
 		}
+	} else {
+		if opts.Stdout != nil {
+			opts.Stdout.Close()
+		}
+		if opts.Stderr != nil {
+			opts.Stderr.Close()
+		}
 	}
 	g.Log(grohl.Data{"at": "finish"})
 }
@@ -198,9 +204,10 @@ func (e ExitError) Error() string {
 }
 
 type frameWriter struct {
-	mtx *sync.Mutex
-	buf [6]byte
-	w   *bufio.Writer
+	mtx    *sync.Mutex
+	buf    [6]byte
+	w      *bufio.Writer
+	closed bool
 }
 
 func newFrameWriter(stream byte, w *bufio.Writer, mtx *sync.Mutex) io.WriteCloser {
@@ -222,6 +229,10 @@ func (w *frameWriter) Write(p []byte) (int, error) {
 func (w *frameWriter) Close() error {
 	w.mtx.Lock()
 	defer w.mtx.Unlock()
+	if w.closed {
+		return nil
+	}
+	w.closed = true
 	binary.BigEndian.PutUint32(w.buf[2:], 0)
 	w.w.Write(w.buf[:])
 	return w.w.Flush()
