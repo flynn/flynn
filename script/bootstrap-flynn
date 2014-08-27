@@ -2,39 +2,93 @@
 
 set -e
 
+usage() {
+  echo "usage: $0 [libvirt-lxc|docker]" >&2
+}
+
+if [ "$#" -gt 1 ]; then
+  usage
+  exit 1
+fi
+
+IP=$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')
+
+main() {
+  local backend=${1:-libvirt-lxc}
+
+  case "${backend}" in
+    libvirt-lxc)
+      boot_libvirt_lxc
+      ;;
+    docker)
+      boot_docker
+      ;;
+    *)
+      usage
+      exit 1
+      ;;
+  esac
+}
+
 info() {
   local msg=$1
   echo "==> $msg"
 }
 
-root="$(cd "$(dirname "$0")/.." && pwd)"
-host_dir="${root}/host"
-bootstrap_dir="${root}/bootstrap"
+boot_libvirt_lxc() {
+  local root="$(cd "$(dirname "$0")/.." && pwd)"
+  local host_dir="${root}/host"
+  local bootstrap_dir="${root}/bootstrap"
 
-ip=$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')
+  info "Killing running flynn-host, if any"
+  sudo start-stop-daemon \
+    --stop \
+    --oknodo \
+    --retry 15 \
+    --exec "${host_dir}/bin/flynn-host"
 
-info "Killing running flynn-host, if any"
-sudo start-stop-daemon \
-  --stop \
-  --oknodo \
-  --retry 5 \
-  --exec "${host_dir}/bin/flynn-host"
+  local log="/tmp/flynn-host-$(date +%Y-%m-%dT%H-%M-%S.%N).log"
+  ln -nfs $log /tmp/flynn-host.log
+  info "Starting flynn-host (logging to $log)"
+  sudo start-stop-daemon \
+    --start \
+    --background \
+    --no-close \
+    --exec "${host_dir}/bin/flynn-host" \
+    -- \
+    --manifest "${host_dir}/bin/manifest.json" \
+    --external $IP \
+    --force \
+    --backend libvirt-lxc \
+    --state /tmp/flynn-host-state.json \
+    &>$log
 
-info "Starting flynn-host"
-sudo start-stop-daemon \
-  --start \
-  --background \
-  --no-close \
-  --exec "${host_dir}/bin/flynn-host" \
-  -- \
-  --manifest "${host_dir}/bin/manifest.json" \
-  --external $ip \
-  --force \
-  --backend libvirt-lxc \
-  &>/tmp/flynn-host.log
+  info "Bootstrapping Flynn"
+  export DISCOVERD="${IP}:1111"
+  export CONTROLLER_DOMAIN="dev.localflynn.com"
+  export DEFAULT_ROUTE_DOMAIN="$CONTROLLER_DOMAIN"
+  "${bootstrap_dir}/bin/flynn-bootstrap" "${bootstrap_dir}/bin/manifest.json"
+}
 
-info "Bootstrapping Flynn"
-export DISCOVERD="${ip}:1111"
-export CONTROLLER_DOMAIN="dev.localflynn.com"
-export DEFAULT_ROUTE_DOMAIN="$CONTROLLER_DOMAIN"
-"${bootstrap_dir}/bin/flynn-bootstrap" "${bootstrap_dir}/bin/manifest.json"
+boot_docker() {
+  info "Killing running flynn-host, if any"
+  local host=$(docker ps | grep flynn-host | cut -d" " -f 1)
+  if [ -n "$host" ]; then
+    docker stop $host >/dev/null
+  fi
+
+  info "Starting flynn-host"
+  docker run \
+    --detach \
+    --volume /var/run/docker.sock:/var/run/docker.sock \
+    --publish 1113:1113 \
+    flynn/host \
+    --external $IP \
+    --force \
+    --backend docker
+
+  info "Bootstrapping Flynn"
+  docker run --env DISCOVERD=$IP:1111 flynn/bootstrap
+}
+
+main $1
