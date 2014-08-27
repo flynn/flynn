@@ -81,6 +81,7 @@ func (c *Config) SaveTo(path string) error {
 		if err := toml.NewEncoder(f).Encode(c); err != nil {
 			return err
 		}
+		f.Write([]byte("\n"))
 	}
 	return nil
 }
