@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/base64"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -45,6 +47,10 @@ func LoadConfigFromEnv() *Config {
 	controllerPin := []byte(os.Getenv("CONTROLLER_PIN"))
 	if len(controllerPin) == 0 {
 		log.Fatal("CONTROLLER_PIN is required!")
+	}
+	controllerPin, err := base64.StdEncoding.DecodeString(string(controllerPin))
+	if err != nil {
+		log.Fatal(fmt.Sprintf("CONTROLLER_PIN: %s", err.Error()))
 	}
 
 	conf.InterfaceURL = os.Getenv("INTERFACE_URL")

@@ -79,7 +79,7 @@ func logout(req *http.Request, w http.ResponseWriter, rh RequestHelper) {
 
 func flynnProxy(req *http.Request, w http.ResponseWriter, params martini.Params, conf *Config, rh RequestHelper) {
 	path := strings.TrimPrefix(req.RequestURI, "/flynn")
-	newReq, err := http.NewRequest(req.Method, fmt.Sprintf("http://%s%s", conf.ClusterDomain, path), req.Body)
+	newReq, err := http.NewRequest(req.Method, fmt.Sprintf("http://%s:443%s", conf.ClusterDomain, path), req.Body)
 	if err != nil {
 		fmt.Errorf("%v", err)
 		return
