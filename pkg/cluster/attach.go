@@ -148,7 +148,7 @@ func (c *attachClient) Receive(stdout, stderr io.Writer) (int, error) {
 	for {
 		frameType, err := r.ReadByte()
 		if err != nil {
-			if err == io.EOF {
+			if err == io.EOF && stdout == nil && stderr == nil {
 				err = nil
 			}
 			return 0, err
