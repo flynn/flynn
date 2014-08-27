@@ -4,14 +4,12 @@ import (
 	"log"
 	"os"
 	"path"
-	"strings"
 
-	"github.com/dchest/uniuri"
 	"github.com/gorilla/sessions"
 )
 
 type Config struct {
-	Port          string
+	Addr          string
 	ClusterDomain string
 	ControllerKey string
 	InterfaceURL  string
@@ -29,30 +27,27 @@ func LoadConfigFromEnv() *Config {
 	if port == "" {
 		port = "5000"
 	}
-	port = strings.Join([]string{":", port}, "")
-	conf.Port = port
+	conf.Addr = ":" + port
 
-	clusterDomain := os.Getenv("CLUSTER_DOMAIN")
-	if clusterDomain == "" {
+	conf.ClusterDomain = os.Getenv("CLUSTER_DOMAIN")
+	if conf.ClusterDomain == "" {
 		log.Fatal("CLUSTER_DOMAIN is required!")
 	}
-	conf.ClusterDomain = clusterDomain
 
-	controllerKey := os.Getenv("CONTROLLER_KEY")
-	if controllerKey == "" {
+	conf.ControllerKey = os.Getenv("CONTROLLER_KEY")
+	if conf.ControllerKey == "" {
 		log.Fatal("CONTROLLER_KEY is required!")
 	}
-	conf.ControllerKey = controllerKey
 
-	interfaceURL := os.Getenv("INTERFACE_URL")
-	if interfaceURL == "" {
+
+	conf.InterfaceURL = os.Getenv("INTERFACE_URL")
+	if conf.InterfaceURL == "" {
 		log.Fatal("INTERFACE_URL is required!")
 	}
-	conf.InterfaceURL = interfaceURL
 
 	sessionSecret := os.Getenv("SESSION_SECRET")
 	if sessionSecret == "" {
-		sessionSecret = uniuri.NewLen(64)
+		log.Fatal("SESSION_SECRET is required!")
 	}
 	conf.SessionStore = sessions.NewCookieStore([]byte(sessionSecret))
 
@@ -74,8 +69,6 @@ func LoadConfigFromEnv() *Config {
 	conf.LoginToken = os.Getenv("LOGIN_TOKEN")
 	if conf.LoginToken == "" {
 		log.Fatal("LOGIN_TOKEN is required")
-	} else if len(conf.LoginToken) < 6 {
-		log.Fatal("LOGIN_TOKEN must be at least six characters long")
 	}
 
 	conf.GithubToken = os.Getenv("GITHUB_TOKEN")

@@ -62,6 +62,6 @@ func (rh *reqHelper) SetAuthenticated() {
 }
 
 func (rh *reqHelper) UnsetAuthenticated() {
-	rh.session.Values["auth"] = false
+	delete(rh.session.Values, "auth")
 	rh.session.Save(rh.req, rh.ResponseWriter)
 }

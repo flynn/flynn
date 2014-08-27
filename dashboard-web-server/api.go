@@ -1,14 +1,13 @@
 package main
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"io"
 	"net/http"
-	"runtime/debug"
 	"strings"
 	"time"
 
-	"github.com/codegangsta/inject"
 	"github.com/go-martini/martini"
 	"github.com/martini-contrib/binding"
 	"github.com/martini-contrib/render"
@@ -23,10 +22,10 @@ func APIHandler(conf *Config) http.Handler {
 	r := martini.NewRouter()
 	m := martini.New()
 	m.Use(martini.Logger())
-	m.Use(apiPanicHandler())
+	m.Use(martini.Recovery())
 	m.Use(render.Renderer())
 	m.Action(r.Handle)
-	m.SetParent(configInjector(conf))
+	m.Map(conf)
 
 	m.Use(cors.Allow(&cors.Options{
 		AllowOrigins:     []string{conf.InterfaceURL},
@@ -54,28 +53,6 @@ func APIHandler(conf *Config) http.Handler {
 	return m
 }
 
-func apiPanicHandler() martini.Handler {
-	return func(c martini.Context, req *http.Request) {
-		defer func() {
-			if err := recover(); err != nil {
-				wval := c.Get(inject.InterfaceOf((*http.ResponseWriter)(nil)))
-				w := wval.Interface().(http.ResponseWriter)
-
-				fmt.Println(err)
-				debug.PrintStack()
-				w.WriteHeader(500)
-			}
-		}()
-		c.Next()
-	}
-}
-
-func configInjector(conf *Config) inject.Injector {
-	m := inject.New()
-	m.Map(conf)
-	return m
-}
-
 func requireUserMiddleware(rh RequestHelper) {
 	if !rh.IsAuthenticated() {
 		rh.WriteHeader(401)
@@ -83,12 +60,11 @@ func requireUserMiddleware(rh RequestHelper) {
 }
 
 func login(req *http.Request, w http.ResponseWriter, info LoginInfo, rh RequestHelper, conf *Config) {
-	if info.Token == conf.LoginToken {
-		rh.SetAuthenticated()
-	} else {
+	if len(info.Token) != len(conf.LoginToken) || subtle.ConstantTimeCompare([]byte(info.Token), []byte(conf.LoginToken)) != 1 {
 		rh.Error(ErrInvalidLoginToken)
 		return
 	}
+	rh.SetAuthenticated()
 	rh.WriteHeader(200)
 }
 
@@ -100,8 +76,7 @@ func logout(req *http.Request, w http.ResponseWriter, rh RequestHelper) {
 func flynnProxy(req *http.Request, w http.ResponseWriter, params martini.Params, conf *Config, rh RequestHelper) {
 	client := &http.Client{}
 	path := strings.TrimPrefix(req.RequestURI, "/flynn")
-	domain := conf.ClusterDomain
-	newReq, err := http.NewRequest(req.Method, fmt.Sprintf("http://%s%s", domain, path), req.Body)
+	newReq, err := http.NewRequest(req.Method, fmt.Sprintf("http://%s%s", conf.ClusterDomain, path), req.Body)
 	if err != nil {
 		fmt.Errorf("%v", err)
 		return
@@ -120,9 +95,6 @@ func flynnProxy(req *http.Request, w http.ResponseWriter, params martini.Params,
 	}
 	for k, v := range res.Header {
 		w.Header()[k] = v
-	}
-	if strings.Contains(res.Header.Get("Content-Type"), "text/event-stream") {
-		w.Header().Set("X-Accel-Buffering", "no")
 	}
 	w.WriteHeader(res.StatusCode)
 
@@ -173,7 +145,6 @@ var baseConfig = UserConfig{
 func getConfig(rh RequestHelper, conf *Config) {
 	config := baseConfig
 
-	fmt.Printf("IsAuthenticated: %v\n", rh.IsAuthenticated())
 	if rh.IsAuthenticated() {
 		config.User = &ExpandedUser{}
 		config.User.Auths = make(map[string]*OAuthToken)

@@ -15,7 +15,6 @@ type ServerError struct {
 
 func main() {
 	conf := LoadConfigFromEnv()
-	addr := conf.Port
 	h := APIHandler(conf)
-	log.Fatal(http.ListenAndServe(addr, h))
+	log.Fatal(http.ListenAndServe(conf.Addr, h))
 }
