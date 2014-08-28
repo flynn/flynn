@@ -47,8 +47,7 @@ func (s *BasicSuite) SetUpSuite(t *c.C) {
 }
 
 var Attempts = attempt.Strategy{
-	Min:   5,
-	Total: 10 * time.Second,
+	Total: 20 * time.Second,
 	Delay: 500 * time.Millisecond,
 }
 
