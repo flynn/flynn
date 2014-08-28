@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.crypto/ssh"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
@@ -214,7 +215,7 @@ func git(dir string, args ...string) *CmdResult {
 func run(cmd *exec.Cmd) *CmdResult {
 	var out bytes.Buffer
 	if args.Debug {
-		fmt.Println("++", cmd.Path, strings.Join(cmd.Args[1:], " "))
+		fmt.Println("++", time.Now().Format("15:04:05.000"), cmd.Path, strings.Join(cmd.Args[1:], " "))
 		cmd.Stdout = io.MultiWriter(os.Stdout, &out)
 		cmd.Stderr = io.MultiWriter(os.Stderr, &out)
 	} else {
