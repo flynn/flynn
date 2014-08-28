@@ -303,6 +303,7 @@ func (r *Runner) httpBuildHandler(w http.ResponseWriter, req *http.Request) {
 		r.handleBuildRequest(w, req)
 		return
 	}
+	w.Header().Set("Vary", "Accept")
 	if !strings.Contains(req.Header.Get("Accept"), "application/json") {
 		http.ServeFile(w, req, path.Join(args.AssetsDir, "index.html"))
 		return
