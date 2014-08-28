@@ -61,6 +61,7 @@ boot_libvirt_lxc() {
     --force \
     --backend libvirt-lxc \
     --state /tmp/flynn-host-state.json \
+    --flynn-init "${host_dir}/bin/flynn-init" \
     &>$log
 
   info "Bootstrapping Flynn"
