@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.crypto/ssh"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
@@ -45,6 +46,9 @@ func main() {
 	// defer exiting so it runs after all other defers
 	defer func() {
 		if err != nil || res != nil && !res.Passed() {
+			if args.Debug {
+				dumpLogs()
+			}
 			os.Exit(1)
 		}
 	}()
@@ -211,7 +215,7 @@ func git(dir string, args ...string) *CmdResult {
 func run(cmd *exec.Cmd) *CmdResult {
 	var out bytes.Buffer
 	if args.Debug {
-		fmt.Println("++", cmd.Path, strings.Join(cmd.Args[1:], " "))
+		fmt.Println("++", time.Now().Format("15:04:05.000"), cmd.Path, strings.Join(cmd.Args[1:], " "))
 		cmd.Stdout = io.MultiWriter(os.Stdout, &out)
 		cmd.Stderr = io.MultiWriter(os.Stderr, &out)
 	} else {
@@ -337,4 +341,24 @@ func matches(value, regex interface{}) (result bool, error string) {
 		return matches, ""
 	}
 	return false, "Obtained value is not a string and has no .String()"
+}
+
+func dumpLogs() {
+	fmt.Println("***** running processes *****")
+	run(exec.Command("ps", "faux"))
+
+	fmt.Println("***** flynn-host log *****")
+	run(exec.Command("cat", "/tmp/flynn-host.log"))
+
+	whitespace := regexp.MustCompile(`\s+`)
+	apps := strings.Split(strings.TrimSpace(flynn("apps").Output), "\n")
+	for _, app := range apps[1:] {
+		appIdName := whitespace.Split(app, 2)
+		ps := strings.Split(strings.TrimSpace(flynn("-a", appIdName[0], "ps").Output), "\n")
+		for _, p := range ps[1:] {
+			idType := whitespace.Split(p, 2)
+			fmt.Println("*****", appIdName[1], idType[1], "log *****")
+			flynn("log", idType[0])
+		}
+	}
 }

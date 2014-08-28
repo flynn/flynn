@@ -305,8 +305,10 @@ func (c *context) watchHost(id string, events chan<- *host.Event) {
 		case "error":
 			j.State = "crashed"
 		}
+		g.Log(grohl.Data{"at": "event", "job.id": event.JobID, "event": event.Event})
 		if err = c.PutJob(j); err != nil {
-			// TODO: log/handle error
+			g.Log(grohl.Data{"at": "error", "job.id": event.JobID, "event": event.Event, "err": err})
+			// TODO: handle error
 		}
 
 		if event.Event != "error" && event.Event != "stop" {
@@ -617,10 +619,11 @@ func (f *Formation) add(n int, name string, hostID string) {
 	for i := 0; i < n; i++ {
 		job, err := f.start(name, hostID)
 		if err != nil {
-			// TODO: log/handle error
+			// TODO: handle error
+			g.Log(grohl.Data{"at": "error", "host.id": job.HostID, "job.id": job.ID, "err": err})
 			continue
 		}
-		g.Log(grohl.Data{"host.id": job.HostID, "job.id": job.ID})
+		g.Log(grohl.Data{"at": "started", "host.id": job.HostID, "job.id": job.ID})
 	}
 }
 
