@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -15,17 +16,17 @@ import (
 	"github.com/flynn/flynn/pkg/random"
 )
 
-func initApp(t *c.C, app string) string {
-	dir := filepath.Join(t.MkDir(), "app")
-	t.Assert(run(exec.Command("cp", "-r", filepath.Join("apps", app), dir)), Succeeds)
-	t.Assert(git(dir, "init"), Succeeds)
-	t.Assert(git(dir, "add", "."), Succeeds)
-	t.Assert(git(dir, "commit", "-am", "init"), Succeeds)
-	return dir
-}
-
 type appSuite struct {
 	appDir string
+	ssh    *sshData
+}
+
+func (s *appSuite) initApp(t *c.C, app string) {
+	s.appDir = filepath.Join(t.MkDir(), "app")
+	t.Assert(run(exec.Command("cp", "-r", filepath.Join("apps", app), s.appDir)), Succeeds)
+	t.Assert(s.Git("init"), Succeeds)
+	t.Assert(s.Git("add", "."), Succeeds)
+	t.Assert(s.Git("commit", "-am", "init"), Succeeds)
 }
 
 func (s *appSuite) Flynn(args ...string) *CmdResult {
@@ -33,7 +34,12 @@ func (s *appSuite) Flynn(args ...string) *CmdResult {
 }
 
 func (s *appSuite) Git(args ...string) *CmdResult {
-	return git(s.appDir, args...)
+	cmd := exec.Command("git", args...)
+	if s.ssh != nil {
+		cmd.Env = append(os.Environ(), s.ssh.Env...)
+	}
+	cmd.Dir = s.appDir
+	return run(cmd)
 }
 
 type BasicSuite struct {
@@ -43,7 +49,7 @@ type BasicSuite struct {
 var _ = c.Suite(&BasicSuite{})
 
 func (s *BasicSuite) SetUpSuite(t *c.C) {
-	s.appDir = initApp(t, "basic")
+	s.initApp(t, "basic")
 }
 
 var Attempts = attempt.Strategy{
@@ -52,6 +58,13 @@ var Attempts = attempt.Strategy{
 }
 
 func (s *BasicSuite) TestBasic(t *c.C) {
+	var err error
+	s.ssh, err = genSSHKey()
+	t.Assert(err, c.IsNil)
+	defer s.ssh.Cleanup()
+
+	t.Assert(s.Flynn("key", "add", s.ssh.Pub).Err, c.IsNil)
+
 	name := random.String(30)
 	t.Assert(s.Flynn("create", name), Outputs, fmt.Sprintf("Created %s\n", name))
 

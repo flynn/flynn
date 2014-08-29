@@ -29,8 +29,6 @@ var sshWrapper = template.Must(template.New("ssh").Parse(`
 ssh -o LogLevel=FATAL -o IdentitiesOnly=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i {{.SSHKey}} "$@"
 `[1:]))
 
-var gitEnv []string
-
 var args *arg.Args
 var flynnrc string
 var routerIP string
@@ -88,22 +86,6 @@ func main() {
 			dumpLogs()
 		}
 	}()
-
-	var ssh *sshData
-	ssh, err = genSSHKey()
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	defer ssh.Cleanup()
-	gitEnv = ssh.Env
-
-	keyAdd := flynn("", "key", "add", ssh.Pub)
-	if keyAdd.Err != nil {
-		err = keyAdd.Err
-		log.Printf("Error during `%s`:\n%s%s", strings.Join(keyAdd.Cmd, " "), keyAdd.Output, keyAdd.Err)
-		return
-	}
 
 	res = check.RunAll(&check.RunConf{
 		Stream:      true,
@@ -204,13 +186,6 @@ type CmdResult struct {
 func flynn(dir string, cmdArgs ...string) *CmdResult {
 	cmd := exec.Command(args.CLI, cmdArgs...)
 	cmd.Env = append(os.Environ(), "FLYNNRC="+flynnrc)
-	cmd.Dir = dir
-	return run(cmd)
-}
-
-func git(dir string, args ...string) *CmdResult {
-	cmd := exec.Command("git", args...)
-	cmd.Env = append(os.Environ(), gitEnv...)
 	cmd.Dir = dir
 	return run(cmd)
 }
