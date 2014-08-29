@@ -6,14 +6,14 @@
   "definitions": {
 
   },
+  "type": "object",
   "properties": {
     "apps": {
       "$ref": "/schemata/resource#/definitions/apps"
     },
     "config": {
-      "$ref": "/schemata/basic#/definitions/config"
+      "$ref": "/schemata/common#/definitions/config"
     }
   },
-  "type": ["object"],
   "links": []
 }

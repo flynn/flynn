@@ -7,34 +7,29 @@
     "tty": {
       "description": "initialize a tty session",
       "example": true,
-      "type": [
-        "boolean"
-      ]
+      "type": "boolean"
     },
     "tty_columns": {
       "description": "number of columns in tty",
       "example": 80,
-      "type": [
-        "number"
-      ]
+      "type": "number"
     },
     "tty_lines": {
       "description": "number of lines/rows in tty",
       "example": 24,
-      "type": [
-        "number"
-      ]
+      "type": "number"
     }
   },
+  "type": "object",
   "properties": {
     "release": {
       "$ref": "/schemata/release#/definitions/identity"
     },
     "cmd": {
-      "$ref": "/schemata/basic#/definitions/cmd"
+      "$ref": "/schemata/common#/definitions/cmd"
     },
     "env": {
-      "$ref": "/schemata/basic#/definitions/env"
+      "$ref": "/schemata/common#/definitions/env"
     },
     "tty": {
       "$ref": "/schemata/new_job#/definitions/tty"
@@ -46,8 +41,5 @@
       "$ref": "/schemata/new_job#/definitions/tty_lines"
     }
   },
-  "type": [
-    "object"
-  ],
   "links": []
 }

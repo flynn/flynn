@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-04/hyper-schema",
+  "title": "TYPE.Release",
+  "description": "FIXME",
+  "id": "schemata/release",
+  "definitions": {
+    "identity": {
+      "$ref": "/schemata/common#/definitions/id"
+    },
+    "processes": {
+      "description": "FIXME",
+      "example": {
+        "web": { "$ref": "/schemata/process_type" }
+      },
+      "type": "object"
+    }
+  },
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "/schemata/release#/definitions/identity"
+    },
+    "artifact": {
+      "$ref": "/schemata/artifact#/definitions/identity"
+    },
+    "env": {
+      "$ref": "/schemata/common#/definitions/env"
+    },
+    "processes": {
+      "$ref": "/schemata/release#/definitions/processes"
+    },
+    "created_at": {
+      "$ref": "/schemata/common#/definitions/created_at"
+    }
+  },
+  "links": []
+}

@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-04/hyper-schema",
+  "title": "TYPE.Formation",
+  "description": "FIXME",
+  "id": "schemata/formation",
+  "definitions": {
+    "identity": {
+      "$ref": "/schemata/common#/definitions/id"
+    },
+    "processes": {
+      "description": "Process ID map",
+      "example": {
+        "web": 4102
+      },
+      "type": "object"
+    }
+  },
+  "type": "object",
+  "properties": {
+    "app": {
+      "$ref": "/schemata/app#/definitions/identity"
+    },
+    "release": {
+      "$ref": "/schemata/release#/definitions/identity"
+    },
+    "processes": {
+      "$ref": "/schemata/formation#/definitions/processes"
+    },
+    "created_at": {
+      "$ref": "/schemata/common#/definitions/created_at"
+    },
+    "updated_at": {
+      "$ref": "/schemata/common#/definitions/updated_at"
+    }
+  },
+  "links": []
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-04/hyper-schema",
+  "title": "TYPE.Provider",
+  "description": "FIXME",
+  "id": "schemata/provider",
+  "definitions": {
+    "identity": {
+      "$ref": "/schemata/common#/definitions/id"
+    },
+    "name": {
+      "description": "name of provider",
+      "example": "my-name-is",
+      "type": "string"
+    },
+    "url": {
+      "description": "url of provider",
+      "example": "FIXME",
+      "format": "uri",
+      "type": "string"
+    }
+  },
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "/schemata/provider#/definitions/identity"
+    },
+    "created_at": {
+      "$ref": "/schemata/common#/definitions/created_at"
+    },
+    "updated_at": {
+      "$ref": "/schemata/common#/definitions/updated_at"
+    },
+    "name": {
+      "$ref": "/schemata/provider#/definitions/name"
+    },
+    "url": {
+      "$ref": "/schemata/provider#/definitions/url"
+    }
+  },
+  "links": []
+}

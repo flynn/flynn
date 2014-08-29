@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-04/hyper-schema",
+  "title": "TYPE.Job",
+  "description": "FIXME",
+  "id": "schemata/job",
+  "definitions": {
+    "identity": {
+      "$ref": "/schemata/common#/definitions/id"
+    },
+    "type": {
+      "description": "job type",
+      "example": "web",
+      "type": "string"
+    },
+    "state": {
+      "description": "job state",
+      "example": "started",
+      "type": "string"
+    }
+  },
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "/schemata/job#/definitions/identity"
+    },
+    "app": {
+      "$ref": "/schemata/app#/definitions/identity"
+    },
+    "release": {
+      "$ref": "/schemata/release#/definitions/identity"
+    },
+    "type": {
+      "$ref": "/schemata/job#/definitions/type"
+    },
+    "state": {
+      "$ref": "/schemata/job#/definitions/state"
+    },
+    "cmd": {
+      "$ref": "/schemata/common#/definitions/cmd"
+    },
+    "created_at": {
+      "$ref": "/schemata/common#/definitions/created_at"
+    },
+    "updated_at": {
+      "$ref": "/schemata/common#/definitions/updated_at"
+    }
+  },
+  "links": []
+}
