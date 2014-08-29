@@ -1,13 +1,16 @@
 package main
 
 import (
+	"archive/tar"
 	"bytes"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"path"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
@@ -65,7 +68,11 @@ func main() {
 	cmd := exec.Command(exec.DockerImage("flynn/slugbuilder", os.Getenv("SLUGBUILDER_IMAGE_ID")), slugURL)
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	go appendEnvDir(os.Stdin, stdin, prevRelease.Env)
 	if buildpackURL, ok := prevRelease.Env["BUILDPACK_URL"]; ok {
 		cmd.Env = map[string]string{"BUILDPACK_URL": buildpackURL}
 	}
@@ -117,4 +124,52 @@ func main() {
 	}
 
 	fmt.Println("=====> Application deployed")
+}
+
+func appendEnvDir(stdin io.Reader, pipe io.WriteCloser, env map[string]string) {
+	defer pipe.Close()
+	tr := tar.NewReader(stdin)
+	tw := tar.NewWriter(pipe)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			// end of tar archive
+			break
+		}
+		if err != nil {
+			log.Fatalln(err)
+		}
+		hdr.Name = path.Join("app", hdr.Name)
+		if err := tw.WriteHeader(hdr); err != nil {
+			log.Fatalln(err)
+		}
+		if _, err := io.Copy(tw, tr); err != nil {
+			log.Fatalln(err)
+		}
+	}
+	// append env dir
+	for key, value := range env {
+		hdr := &tar.Header{
+			Name:    path.Join("env", key),
+			Mode:    0400,
+			ModTime: time.Now(),
+			Size:    int64(len(value)),
+		}
+
+		if err := tw.WriteHeader(hdr); err != nil {
+			log.Fatalln(err)
+		}
+		if _, err := tw.Write([]byte(value)); err != nil {
+			log.Fatalln(err)
+		}
+	}
+	hdr := &tar.Header{
+		Name:    ".ENV_DIR_bdca46b87df0537eaefe79bb632d37709ff1df18",
+		Mode:    0400,
+		ModTime: time.Now(),
+		Size:    0,
+	}
+	if err := tw.WriteHeader(hdr); err != nil {
+		log.Fatalln(err)
+	}
 }
