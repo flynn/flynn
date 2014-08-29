@@ -46,9 +46,6 @@ func main() {
 	// defer exiting so it runs after all other defers
 	defer func() {
 		if err != nil || res != nil && !res.Passed() {
-			if args.Debug {
-				dumpLogs()
-			}
 			os.Exit(1)
 		}
 	}()
@@ -85,6 +82,12 @@ func main() {
 
 		routerIP = c.RouterIP
 	}
+
+	defer func() {
+		if args.Debug && (err != nil || res != nil && !res.Passed()) {
+			dumpLogs()
+		}
+	}()
 
 	var ssh *sshData
 	ssh, err = genSSHKey()
@@ -351,14 +354,14 @@ func dumpLogs() {
 	run(exec.Command("cat", "/tmp/flynn-host.log"))
 
 	whitespace := regexp.MustCompile(`\s+`)
-	apps := strings.Split(strings.TrimSpace(flynn("apps").Output), "\n")
+	apps := strings.Split(strings.TrimSpace(flynn("/", "apps").Output), "\n")
 	for _, app := range apps[1:] {
 		appIdName := whitespace.Split(app, 2)
-		ps := strings.Split(strings.TrimSpace(flynn("-a", appIdName[0], "ps").Output), "\n")
+		ps := strings.Split(strings.TrimSpace(flynn("/", "-a", appIdName[0], "ps").Output), "\n")
 		for _, p := range ps[1:] {
 			idType := whitespace.Split(p, 2)
 			fmt.Println("*****", appIdName[1], idType[1], "log *****")
-			flynn("log", idType[0])
+			flynn("/", "-a", appIdName[0], "log", idType[0])
 		}
 	}
 }
