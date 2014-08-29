@@ -18,13 +18,13 @@ GIT
 
 GIT
   remote: git://github.com/interagent/prmd.git
-  revision: d3aa5d8451249e3a939611a8aa4c3dfb4f8d8971
-  ref: d3aa5d8451249e3a939611a8aa4c3dfb4f8d8971
+  revision: 87f00fcc1d433231f959aebf25a6dc1a703f685d
+  ref: 87f00fcc1d433231f959aebf25a6dc1a703f685d
   branch: master
   specs:
-    prmd (0.3.2)
+    prmd (0.6.2)
       erubis (~> 2.7)
-      json_schema (~> 0.1)
+      json_schema (~> 0.1, >= 0.1.8)
 
 GIT
   remote: git://github.com/jvatic/marbles-js.git
