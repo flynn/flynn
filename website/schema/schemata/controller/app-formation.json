@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-04/hyper-schema",
+  "title": "App Formation",
+  "description": "FIXME",
+  "id": "schemata/app_formation",
+  "$ref": "/schemata/formation",
+  "type": ["object"],
+  "links": [
+    {
+      "title": "Get",
+      "description": "FIXME",
+      "method": "GET",
+      "href": "/apps/{(%2Fschemata%2Fapp%23%2Fdefinitions%2Fidentity)}/formations/{(%2Fschemata%2Frelease%23%2Fdefinitions%2Fidentity)}",
+      "rel": "self"
+    },
+    {
+      "title": "Update",
+      "description": "FIXME",
+      "method": "PUT",
+      "href": "/apps/{(%2Fschemata%2Fapp%23%2Fdefinitions%2Fidentity)}/formations/{(%2Fschemata%2Frelease%23%2Fdefinitions%2Fidentity)}",
+      "rel": "update",
+      "schema": {
+        "$ref": "/schemata/formation"
+      }
+    },
+    {
+      "title": "Delete",
+      "description": "FIXME",
+      "method": "DELETE",
+      "href": "/apps/{(%2Fschemata%2Fapp%23%2Fdefinitions%2Fidentity)}/formations/{(%2Fschemata%2Frelease%23%2Fdefinitions%2Fidentity)}",
+      "rel": "destroy"
+    },
+    {
+      "title": "List",
+      "description": "FIXME",
+      "method": "GET",
+      "href": "/apps/{(%2Fschemata%2Fapp%23%2Fdefinitions%2Fidentity)}/formations",
+      "rel": "instances"
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-04/hyper-schema",
+  "title": "App Job",
+  "description": "FIXME",
+  "id": "schemata/app_job",
+  "$ref": "/schemata/job",
+  "type": ["object"],
+  "links": [
+    {
+      "title": "Create",
+      "description": "FIXME",
+      "method": "POST",
+      "href": "/apps/{(%2Fschemata%2Fapp%23%2Fdefinitions%2Fidentity)}/jobs",
+      "rel": "create",
+      "schema": {
+        "$ref": "/schemata/new_job"
+      }
+    },
+    {
+      "title": "Jobs List",
+      "description": "FIXME",
+      "method": "GET",
+      "href": "/apps/{(%2Fschemata%2Fapp%23%2Fdefinitions%2Fidentity)}/jobs",
+      "rel": "instances"
+    },
+    {
+      "title": "Update",
+      "description": "FIXME",
+      "method": "PUT",
+      "href": "/apps/{(%2Fschemata%2Fapp%23%2Fdefinitions%2Fidentity)}/jobs/{(%2Fschemata%2Fjob%23%2Fdefinitions%2Fidentity)}",
+      "rel": "update",
+      "schema": {
+        "$ref": "/schemata/job"
+      }
+    },
+    {
+      "title": "Delete",
+      "description": "FIXME",
+      "method": "DELETE",
+      "href": "/apps/{(%2Fschemata%2Fapp%23%2Fdefinitions%2Fidentity)}/jobs/{(%2Fschemata%2Fjob%23%2Fdefinitions%2Fidentity)}",
+      "rel": "destroy"
+    },
+    {
+      "title": "Logs",
+      "description": "FIXME",
+      "method": "GET",
+      "href": "/apps/{(%2Fschemata%2Fapp%23%2Fdefinitions%2Fidentity)}/jobs/{(%2Fschemata%2Fjob%23%2Fdefinitions%2Fidentity)}/log",
+      "rel": "self",
+      "query": {
+        "tail": {
+          "description": "Tail the Job's log",
+          "type": ["string"]
+        }
+      }
+    }
+  ]
+}

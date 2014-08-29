@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-04/hyper-schema",
+  "title": "App Route",
+  "description": "FIXME",
+  "id": "schemata/app_route",
+  "$ref": "/schemata/route",
+  "type": ["object"],
+  "links": [
+    {
+      "title": "Create",
+      "description": "FIXME",
+      "method": "POST",
+      "href": "/apps/{(%2Fschemata%2Fapp%23%2Fdefinitions%2Fidentity)}/routes",
+      "rel": "create",
+      "schema": {
+        "$ref": "/schemata/route"
+      }
+    },
+    {
+      "title": "List",
+      "description": "FIXME",
+      "method": "GET",
+      "href": "/apps/{(%2Fschemata%2Fapp%23%2Fdefinitions%2Fidentity)}/routes",
+      "rel": "instances"
+    },
+    {
+      "title": "Get",
+      "description": "FIXME",
+      "method": "GET",
+      "href": "/apps/{(%2Fschemata%2Fapp%23%2Fdefinitions%2Fidentity)}/routes/{(%2Fschemata%2Froute%23%2Fdefinitions%2Ftype)}/{(%2Fschemata%2Froute%23%2Fdefinitions%2Fidentity)}",
+      "rel": "self"
+    },
+    {
+      "title": "Delete",
+      "description": "FIXME",
+      "method": "DELETE",
+      "href": "/apps/{(%2Fschemata%2Fapp%23%2Fdefinitions%2Fidentity)}/routes/{(%2Fschemata%2Froute%23%2Fdefinitions%2Ftype)}/{(%2Fschemata%2Froute%23%2Fdefinitions%2Fidentity)}",
+      "rel": "destroy"
+    }
+  ]
+}
