@@ -23,6 +23,13 @@ At least one review from a maintainer is required for all patches (even patches 
 Maintainers must demonstrate a consistent track record of recent contributions, as components with only two maintainers can bottleneck easily due to the review requirements. Only active contributors and reviewers will remain maintainers. Changes in maintainership should not be taken personally, they are purely organizational and for the health of the code and project.
 
 
+## Code Style
+
+Please follow these guidelines when formatting source code:
+
+* Go code should match the output of `gofmt -s`
+* Shell scripts should adhere to the [Google Shell Style guide](https://google-styleguide.googlecode.com/svn/trunk/shell.xml)
+
 ## Developer’s Certificate of Origin
 
 All contributions must include acceptance of the DCO:
