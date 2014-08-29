@@ -11,9 +11,11 @@ else
 fi
 
 app_dir=/app
+env_dir=/env
 build_root=/tmp/build
 cache_root=/tmp/cache
 buildpack_root=/tmp/buildpacks
+env_cookie=.ENV_DIR_bdca46b87df0537eaefe79bb632d37709ff1df18
 
 mkdir -p $app_dir
 mkdir -p $cache_root
@@ -51,6 +53,14 @@ cd $app_dir
 
 ## Load source from STDIN
 cat | tar -xm
+
+
+if [[ -f "$env_cookie" ]]; then
+    mv /app /apptmp
+    mv /apptmp/* /
+    rm -r /apptmp
+    cd $app_dir
+fi
 
 # In heroku, there are two separate directories, and some
 # buildpacks expect that.
@@ -93,8 +103,11 @@ if [[ -n "$selected_buildpack" ]]; then
 fi
 
 ## Buildpack compile
-
-$selected_buildpack/bin/compile "$build_root" "$cache_root" | ensure_indent
+if [[ -f "$env_cookie" ]]; then
+  $selected_buildpack/bin/compile "$build_root" "$cache_root" "$env_dir" | ensure_indent
+else
+  $selected_buildpack/bin/compile "$build_root" "$cache_root" | ensure_indent
+fi
 
 $selected_buildpack/bin/release "$build_root" "$cache_root" > $build_root/.release
 
