@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-04/hyper-schema",
+  "title": "Basic Types",
+  "description": "FIXME",
+  "id": "schemata/basic",
+  "definitions": {
+    "id": {
+      "description": "unique identifier",
+      "example": "01234567-89ab-cdef-0123-456789abcdef",
+      "format": "uuid",
+      "type": [
+        "string"
+      ]
+    },
+    "identity": {
+      "$ref": "/schemata/artifact#/definitions/id"
+    },
+    "env": {
+      "description": "ENV variables for this release",
+      "example": [{
+        "BREAD": "with butter"
+      }],
+      "type": [
+        "object"
+      ]
+    },
+    "cmd": {
+      "description": "Shell Command",
+      "example": ["bash", "my_script"],
+      "type": [
+        "array"
+      ]
+    },
+    "config": {
+      "description": "raw json message",
+      "example": "{ \"stuff\": \"more stuff\" }",
+      "type": [
+        "string"
+      ]
+    }
+  },
+  "properties": {},
+  "type": ["object"],
+  "links": []
+}
