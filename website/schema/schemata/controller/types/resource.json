@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-04/hyper-schema",
+  "title": "TYPE.Resource",
+  "description": "FIXME",
+  "id": "schemata/resource",
+  "definitions": {
+    "identity": {
+      "$ref": "/schemata/common#/definitions/id"
+    },
+    "external_id": {
+      "$ref": "/schemata/common#/definitions/id"
+    },
+    "apps": {
+      "description": "app ids",
+      "example": ["01234567-89ab-cdef-0123-456789abcdef"],
+      "type": "array",
+      "items": {
+        "$ref": "/schemata/app#/definitions/identity"
+      }
+    }
+  },
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "/schemata/resource#/definitions/identity"
+    },
+    "provider_id": {
+      "$ref": "/schemata/provider#/definitions/identity"
+    },
+    "external_id": {
+      "$ref": "/schemata/resource#/definitions/external_id"
+    },
+    "env": {
+      "$ref": "/schemata/common#/definitions/env"
+    },
+    "apps": {
+      "$ref": "/schemata/resource#/definitions/apps"
+    },
+    "created_at": {
+      "$ref": "/schemata/common#/definitions/created_at"
+    }
+  },
+  "links": []
+}

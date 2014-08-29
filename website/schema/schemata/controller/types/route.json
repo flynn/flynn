@@ -4,49 +4,19 @@
   "description": "FIXME",
   "id": "schemata/route",
   "definitions": {
-    "id": {
-      "description": "unique identifier of route",
-      "example": "01234567-89ab-cdef-0123-456789abcdef",
-      "format": "uuid",
-      "type": [
-        "string"
-      ]
-    },
     "identity": {
-      "$ref": "/schemata/route#/definitions/id"
-    },
-    "created_at": {
-      "description": "when route was created",
-      "example": "2012-01-01T12:00:00Z",
-      "format": "date-time",
-      "type": [
-        "string"
-      ]
-    },
-    "updated_at": {
-      "description": "when route was updated",
-      "example": "2012-01-01T12:00:00Z",
-      "format": "date-time",
-      "type": [
-        "string"
-      ]
+      "$ref": "/schemata/common#/definitions/id"
     },
     "type": {
       "description": "the type of route",
       "example": "web",
-      "type": [
-        "string"
-      ]
+      "type": "string"
     },
     "parent_ref": {
-      "description": "unique identifier for parent",
-      "example": "01234567-89ab-cdef-0123-456789abcdef",
-      "format": "uuid",
-      "type": [
-        "string"
-      ]
+      "$ref": "/schemata/common#/definitions/id"
     }
   },
+  "type": "object",
   "properties": {
     "id": {
       "$ref": "/schemata/route#/definitions/identity"
@@ -58,15 +28,14 @@
       "$ref": "/schemata/route#/definitions/type"
     },
     "config": {
-      "$ref": "/schemata/basic#/definitions/config"
+      "$ref": "/schemata/common#/definitions/config"
     },
     "created_at": {
-      "$ref": "/schemata/route#/definitions/created_at"
+      "$ref": "/schemata/common#/definitions/created_at"
     },
     "updated_at": {
-      "$ref": "/schemata/route#/definitions/updated_at"
+      "$ref": "/schemata/common#/definitions/updated_at"
     }
   },
-  "type": ["object"],
   "links": []
 }

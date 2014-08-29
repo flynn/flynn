@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-04/hyper-schema",
+  "title": "TYPE.Port",
+  "description": "FIXME",
+  "id": "schemata/port",
+  "definitions": {
+    "port": {
+      "description": "Port ID",
+      "example": 64545,
+      "type": "number"
+    },
+    "proto": {
+      "description": "FIXME",
+      "example": "FIXME",
+      "type": "string"
+    },
+    "range_end": {
+      "description": "FIXME",
+      "example": "FIXME",
+      "type": "number"
+    }
+  },
+  "type": "object",
+  "properties": {
+    "port": {
+      "$ref": "/schemata/port#/definitions/port"
+    },
+    "proto": {
+      "$ref": "/schemata/port#/definitions/proto"
+    },
+    "range_end": {
+      "$ref": "/schemata/port#/definitions/range_end"
+    }
+  },
+  "links": []
+}
