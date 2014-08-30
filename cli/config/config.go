@@ -22,6 +22,15 @@ type Config struct {
 	Clusters []*Cluster `toml:"cluster"`
 }
 
+func ReadFile(path string) (*Config, error) {
+	c := &Config{}
+	_, err := toml.DecodeFile(path, c)
+	if err != nil {
+		return c, err
+	}
+	return c, nil
+}
+
 func (c *Config) Marshal() []byte {
 	var buf bytes.Buffer
 	if err := toml.NewEncoder(&buf).Encode(c); err != nil {
