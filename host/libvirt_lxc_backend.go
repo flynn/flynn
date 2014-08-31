@@ -642,7 +642,7 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 	}
 
 	defer func() {
-		if client != nil && req.Job.Job.Config.TTY || req.Stream && err == io.EOF {
+		if client != nil && (req.Job.Job.Config.TTY || req.Stream) && err == io.EOF {
 			<-client.done
 			job := l.state.GetJob(req.Job.Job.ID)
 			if job.Status == host.StatusDone || job.Status == host.StatusCrashed {
@@ -708,14 +708,14 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 				continue
 			}
 			if _, err := req.Stdout.Write([]byte(data.Message)); err != nil {
-				return err
+				return nil
 			}
 		case 2:
 			if req.Stderr == nil {
 				continue
 			}
 			if _, err := req.Stderr.Write([]byte(data.Message)); err != nil {
-				return err
+				return nil
 			}
 		}
 	}
