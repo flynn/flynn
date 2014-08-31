@@ -1,6 +1,9 @@
 package main
 
 import (
+	"io"
+	"net/http"
+
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 	ct "github.com/flynn/flynn/controller/types"
 	routerc "github.com/flynn/flynn/router/client"
@@ -59,4 +62,34 @@ func deleteRoute(route *router.Route, router routerc.Client, r ResponseHelper) {
 		return
 	}
 	r.WriteHeader(200)
+}
+
+func pauseService(router routerc.Client, params martini.Params, r ResponseHelper, req *http.Request) {
+	pause := false
+	if req.FormValue("pause") == "true" {
+		pause = true
+	}
+	err := router.PauseService(params["service_type"], params["service_name"], pause)
+	if err != nil {
+		r.Error(err)
+		return
+	}
+	r.WriteHeader(200)
+}
+
+func streamServiceDrain(req *http.Request, params martini.Params, router routerc.Client, r ResponseHelper, w http.ResponseWriter) {
+	stream, err := router.StreamServiceDrain(params["service_type"], params["service_name"])
+	defer stream.Close()
+	if err != nil {
+		r.Error(err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+	w.WriteHeader(200)
+	if wf, ok := w.(http.Flusher); ok {
+		wf.Flush()
+	}
+	if _, err := io.Copy(w, stream); err != nil {
+		r.Error(err)
+	}
 }

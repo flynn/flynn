@@ -296,6 +296,24 @@ func (c *Client) DeleteRoute(appID string, routeID string) error {
 	return c.delete(fmt.Sprintf("/apps/%s/routes/%s", appID, routeID))
 }
 
+func (c *Client) PauseService(t, name string, pause bool) error {
+	v := url.Values{}
+	if pause {
+		v.Set("pause", "true")
+	}
+	buf := bytes.NewBufferString(v.Encode())
+	return c.put(fmt.Sprintf("/services/%s/%s", t, name), buf, nil)
+}
+
+func (c *Client) StreamServiceDrain(t, id string) (io.ReadCloser, error) {
+	path := fmt.Sprintf("/services/%s/%s/drain", t, id)
+	res, err := c.rawReq("GET", path, "", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return res.Body, nil
+}
+
 func (c *Client) GetFormation(appID, releaseID string) (*ct.Formation, error) {
 	formation := &ct.Formation{}
 	return formation, c.get(fmt.Sprintf("/apps/%s/formations/%s", appID, releaseID), formation)

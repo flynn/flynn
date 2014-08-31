@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 
+	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/client/dialer"
 	"github.com/flynn/flynn/router/types"
@@ -38,6 +40,8 @@ type Client interface {
 	DeleteRoute(id string) error
 	GetRoute(id string) (*router.Route, error)
 	ListRoutes(parentRef string) ([]*router.Route, error)
+	PauseService(typ, name string, pause bool) error
+	StreamServiceDrain(typ, name string) (io.ReadCloser, error)
 	Close() error
 }
 
@@ -148,6 +152,77 @@ func (c *client) ListRoutes(parentRef string) ([]*router.Route, error) {
 	var res []*router.Route
 	err := c.get(path, &res)
 	return res, err
+}
+
+func (c *client) PauseService(t, name string, pause bool) error {
+	return c.put(fmt.Sprintf("/services/%s/%s", t, name), &struct{ pause bool }{pause})
+}
+
+func toJSON(v interface{}) (io.Reader, error) {
+	data, err := json.Marshal(v)
+	return bytes.NewBuffer(data), err
+}
+
+func (c *client) rawReq(method, path string, contentType string, in, out interface{}) (*http.Response, error) {
+	var payload io.Reader
+	switch v := in.(type) {
+	case io.Reader:
+		payload = v
+	case nil:
+	default:
+		var err error
+		payload, err = toJSON(in)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	req, err := http.NewRequest(method, c.url+path, payload)
+	if err != nil {
+		return nil, err
+	}
+	if contentType == "" {
+		contentType = "application/json"
+	}
+	req.Header.Set("Content-Type", contentType)
+	res, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode == 404 {
+		res.Body.Close()
+		return res, ErrNotFound
+	}
+	if res.StatusCode == 400 {
+		var body ct.ValidationError
+		defer res.Body.Close()
+		if err = json.NewDecoder(res.Body).Decode(&body); err != nil {
+			return res, err
+		}
+		return res, body
+	}
+	if res.StatusCode != 200 {
+		res.Body.Close()
+		return res, &url.Error{
+			Op:  req.Method,
+			URL: req.URL.String(),
+			Err: fmt.Errorf("router: unexpected status %d", res.StatusCode),
+		}
+	}
+	if out != nil {
+		defer res.Body.Close()
+		return res, json.NewDecoder(res.Body).Decode(out)
+	}
+	return res, nil
+}
+
+func (c *client) StreamServiceDrain(t, id string) (io.ReadCloser, error) {
+	path := fmt.Sprintf("/services/%s/%s/drain", t, id)
+	res, err := c.rawReq("GET", path, "", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return res.Body, nil
 }
 
 func (c *client) Close() error {

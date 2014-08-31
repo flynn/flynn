@@ -180,6 +180,9 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	r.Get("/apps/:apps_id/routes/:routes_type/:routes_id", getAppMiddleware, getRouteMiddleware, getRoute)
 	r.Delete("/apps/:apps_id/routes/:routes_type/:routes_id", getAppMiddleware, getRouteMiddleware, deleteRoute)
 
+	r.Put("/services/:service_type/:service_name", pauseService)
+	r.Get("/services/:service_type/:service_name/drain", streamServiceDrain)
+
 	return rpcMuxHandler(m, rpcHandler(formationRepo), c.key), m
 }
 
