@@ -10,8 +10,8 @@ import (
 )
 
 func newTestAPIServer(t etcdrunner.TestingT) *testAPIServer {
-	ec, killEtcd := newEtcd(t)
-	dc, killDiscoverd := newDiscoverd(t)
+	ec, etcdAddr, killEtcd := newEtcd(t)
+	dc, killDiscoverd := newDiscoverd(t, etcdAddr)
 
 	httpListener, _ := newHTTPListenerClients(t, ec, dc)
 	tcpListener, _ := newTCPListenerClients(t, ec, dc)

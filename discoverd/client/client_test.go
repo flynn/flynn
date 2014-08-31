@@ -8,6 +8,7 @@ import (
 	"github.com/flynn/flynn/discoverd/agent"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
+	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
 )
 
 func ExampleRegisterAndStandby_standby() {
@@ -315,10 +316,14 @@ func TestServices(t *testing.T) {
 }
 
 func TestReconnect(t *testing.T) {
-	clientA, cleanup := testutil.SetupDiscoverd(t)
+	discoverdPort, err := etcdrunner.RandomPort()
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientA, etcdAddr, cleanup := testutil.SetupDiscoverdWithEtcd(t)
 	defer cleanup()
 
-	clientB, killDiscoverd := testutil.BootDiscoverd(t, "127.0.0.1:1112")
+	clientB, killDiscoverd := testutil.BootDiscoverd(t, discoverdPort, etcdAddr)
 	defer func() {
 		clientB.UnregisterAll()
 		clientB.Close()
@@ -364,7 +369,7 @@ func TestReconnect(t *testing.T) {
 	assert(clientA.Unregister(service2, ":1111"), t)
 	assert(clientA.Register(service2, ":3333"), t)
 
-	killDiscoverd = testutil.RunDiscoverdServer(t, "127.0.0.1:1112")
+	_, killDiscoverd = testutil.RunDiscoverdServer(t, discoverdPort, etcdAddr)
 
 	waitForConnStatus(t, reconnCh, discoverd.ConnStatusConnected)
 
@@ -670,36 +675,6 @@ func TestUnregisterAll(t *testing.T) {
 
 	assert(set.Close(), t)
 
-}
-
-func TestDefaultClient(t *testing.T) {
-	_, cleanup := testutil.SetupDiscoverd(t)
-	defer cleanup()
-
-	serviceName := "defaultClientTest"
-
-	assert(discoverd.Register(serviceName, ":1111"), t)
-	assert(discoverd.Register(serviceName, ":2222"), t)
-	assert(discoverd.Register(serviceName, ":3333"), t)
-
-	services, err := discoverd.Services(serviceName, 1)
-	assert(err, t)
-	if len(services) != 3 {
-		t.Fatal("Wrong number of services")
-	}
-
-	assert(discoverd.UnregisterAll(), t)
-
-	set, err := discoverd.NewServiceSet(serviceName)
-	assert(err, t)
-
-	if len(set.Services()) != 0 {
-		t.Fatal("There should be no services")
-	}
-
-	assert(set.Close(), t)
-	discoverd.DefaultClient.Close()
-	discoverd.DefaultClient = nil
 }
 
 func TestHeartbeat(t *testing.T) {

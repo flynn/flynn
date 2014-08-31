@@ -191,7 +191,7 @@ func addStickyHTTPRoute(c *C, l *httpListener) *router.Route {
 }
 
 func (s *S) TestHTTPInitialSync(c *C) {
-	etcd, cleanup := newEtcd(c)
+	etcd, _, cleanup := newEtcd(c)
 	defer cleanup()
 	l, _ := newHTTPListenerClients(c, etcd, nil)
 	addHTTPRoute(c, l)

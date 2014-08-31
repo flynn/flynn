@@ -10,8 +10,8 @@ import (
 )
 
 func runEtcdServer(t *testing.T) (*etcd.Client, func()) {
-	kill := etcdrunner.RunEtcdServer(t)
-	return etcd.NewClient(nil), kill
+	addr, kill := etcdrunner.RunEtcdServer(t)
+	return etcd.NewClient([]string{addr}), kill
 }
 
 const NoAttrService = "null"

@@ -33,19 +33,19 @@ type discoverdClient interface {
 	Close() error
 }
 
-func newEtcd(t etcdrunner.TestingT) (EtcdClient, func()) {
+func newEtcd(t etcdrunner.TestingT) (EtcdClient, string, func()) {
 	if *fake {
-		return newFakeEtcd(), func() {}
+		return newFakeEtcd(), "", func() {}
 	}
-	cleanup := etcdrunner.RunEtcdServer(t)
-	return etcd.NewClient(nil), cleanup
+	addr, cleanup := etcdrunner.RunEtcdServer(t)
+	return etcd.NewClient([]string{addr}), addr, cleanup
 }
 
-func newDiscoverd(t etcdrunner.TestingT) (discoverdClient, func()) {
+func newDiscoverd(t etcdrunner.TestingT, etcdPort string) (discoverdClient, func()) {
 	if *fake {
 		return newFakeDiscoverd(), func() {}
 	}
-	discoverd, killDiscoverd := testutil.BootDiscoverd(t, "")
+	discoverd, killDiscoverd := testutil.BootDiscoverd(t, "", etcdPort)
 	return discoverd, func() {
 		discoverd.Close()
 		killDiscoverd()
@@ -63,12 +63,15 @@ func setup(t etcdrunner.TestingT, ec EtcdClient, dc discoverdClient) (discoverdC
 		return dc, ec, nil
 	}
 	var killEtcd, killDiscoverd func()
+	var etcdAddr string
 	if ec == nil {
-		killEtcd = etcdrunner.RunEtcdServer(t)
-		ec = etcd.NewClient(nil)
+		etcdAddr, killEtcd = etcdrunner.RunEtcdServer(t)
+		ec = etcd.NewClient([]string{etcdAddr})
+	} else if c, ok := ec.(*etcd.Client); ok {
+		etcdAddr = c.GetCluster()[0]
 	}
 	if dc == nil {
-		dc, killDiscoverd = testutil.BootDiscoverd(t, "")
+		dc, killDiscoverd = testutil.BootDiscoverd(t, "", etcdAddr)
 	}
 	return dc, ec, func() {
 		if killDiscoverd != nil {

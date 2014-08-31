@@ -9,11 +9,21 @@ import (
 	. "github.com/flynn/flynn/discoverd/testutil/etcdrunner"
 )
 
-func RunDiscoverdServer(t TestingT, addr string) func() {
+func RunDiscoverdServer(t TestingT, port string, etcdAddr string) (string, func()) {
 	killCh := make(chan struct{})
 	doneCh := make(chan struct{})
+	if port == "" {
+		var err error
+		port, err = RandomPort()
+		if err != nil {
+			t.Fatal("error getting random discoverd port: ", err)
+		}
+	}
 	go func() {
-		cmd := exec.Command("discoverd", "-bind", addr)
+		cmd := exec.Command("discoverd",
+			"-bind", "127.0.0.1:"+port,
+			"-etcd", etcdAddr,
+		)
 		cmd.Env = append(os.Environ(), "EXTERNAL_IP=127.0.0.1")
 		var stderr, stdout io.Reader
 		if os.Getenv("DEBUG") != "" {
@@ -45,17 +55,14 @@ func RunDiscoverdServer(t TestingT, addr string) func() {
 		}
 	}()
 
-	return func() {
+	return "127.0.0.1:" + port, func() {
 		close(killCh)
 		<-doneCh
 	}
 }
 
-func BootDiscoverd(t TestingT, addr string) (*discoverd.Client, func()) {
-	if addr == "" {
-		addr = "127.0.0.1:1111"
-	}
-	killDiscoverd := RunDiscoverdServer(t, addr)
+func BootDiscoverd(t TestingT, port, etcdAddr string) (*discoverd.Client, func()) {
+	addr, killDiscoverd := RunDiscoverdServer(t, port, etcdAddr)
 
 	var client *discoverd.Client
 	err := Attempts.Run(func() (err error) {
@@ -68,14 +75,19 @@ func BootDiscoverd(t TestingT, addr string) (*discoverd.Client, func()) {
 	return client, killDiscoverd
 }
 
-func SetupDiscoverd(t TestingT) (*discoverd.Client, func()) {
-	killEtcd := RunEtcdServer(t)
-	client, killDiscoverd := BootDiscoverd(t, "")
+func SetupDiscoverdWithEtcd(t TestingT) (*discoverd.Client, string, func()) {
+	etcdAddr, killEtcd := RunEtcdServer(t)
+	client, killDiscoverd := BootDiscoverd(t, "", etcdAddr)
 
-	return client, func() {
+	return client, etcdAddr, func() {
 		client.UnregisterAll()
 		client.Close()
 		killDiscoverd()
 		killEtcd()
 	}
+}
+
+func SetupDiscoverd(t TestingT) (*discoverd.Client, func()) {
+	client, _, cleanup := SetupDiscoverdWithEtcd(t)
+	return client, cleanup
 }

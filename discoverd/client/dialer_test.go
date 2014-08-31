@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/client/balancer"
 	"github.com/flynn/flynn/discoverd/client/dialer"
 	"github.com/flynn/flynn/discoverd/testutil"
@@ -25,7 +24,7 @@ func TestHTTPClient(t *testing.T) {
 	defer s.Close()
 	client.Register("httpclient", s.URL[7:])
 
-	set, _ := discoverd.NewServiceSet("httpclient")
+	set, _ := client.NewServiceSet("httpclient")
 	waitUpdates(t, set, true, 1)()
 	set.Close()
 

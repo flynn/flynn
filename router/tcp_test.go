@@ -133,7 +133,7 @@ func addTCPRoute(c *C, l *tcpListener, port int) *router.TCPRoute {
 
 func (s *S) TestInitialTCPSync(c *C) {
 	const addr, port = "127.0.0.1:45000", 45000
-	etcd, cleanup := newEtcd(c)
+	etcd, _, cleanup := newEtcd(c)
 	defer cleanup()
 	l, _ := newTCPListenerClients(c, etcd, nil)
 	addTCPRoute(c, l, port)

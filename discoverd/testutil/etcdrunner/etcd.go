@@ -5,6 +5,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"strconv"
@@ -28,16 +29,31 @@ type TestingT interface {
 	Log(...interface{})
 }
 
-func RunEtcdServer(t TestingT) func() {
+func RunEtcdServer(t TestingT) (string, func()) {
 	killCh := make(chan struct{})
 	doneCh := make(chan struct{})
 	name := "etcd-test." + strconv.Itoa(random.Math.Int())
 	dataDir, err := ioutil.TempDir("", "")
 	if err != nil {
-		t.Fatal("tempdir failed:", err)
+		t.Fatal("tempdir failed: ", err)
+	}
+	port, err := RandomPort()
+	if err != nil {
+		t.Fatal("error getting random etcd port: ", err)
+	}
+	clusterPort, err := RandomPort()
+	if err != nil {
+		t.Fatal("error getting random cluster port: ", err)
 	}
 	go func() {
-		cmd := exec.Command("etcd", "-name", name, "-data-dir", dataDir)
+		cmd := exec.Command("etcd",
+			"-name", name,
+			"-data-dir", dataDir,
+			"-addr", "127.0.0.1:"+port,
+			"-bind-addr", "127.0.0.1:"+port,
+			"-peer-addr", "127.0.0.1:"+clusterPort,
+			"-peer-bind-addr", "127.0.0.1:"+clusterPort,
+		)
 		var stderr, stdout io.Reader
 		if os.Getenv("DEBUG") != "" {
 			stderr, _ = cmd.StderrPipe()
@@ -71,9 +87,10 @@ func RunEtcdServer(t TestingT) func() {
 			t.Log("etcd data removal failed: ", err)
 		}
 	}()
+	addr := "http://127.0.0.1:" + port
 
 	// wait for etcd to come up
-	client := etcd.NewClient(nil)
+	client := etcd.NewClient([]string{addr})
 	err = Attempts.Run(func() (err error) {
 		_, err = client.Get("/", false, false)
 		return
@@ -82,7 +99,7 @@ func RunEtcdServer(t TestingT) func() {
 		t.Fatal("Failed to connect to etcd: ", err)
 	}
 
-	return func() {
+	return addr, func() {
 		close(killCh)
 		<-doneCh
 	}
@@ -101,4 +118,14 @@ func LogOutput(name string, rs ...io.Reader) {
 		}(r)
 	}
 	wg.Wait()
+}
+
+func RandomPort() (string, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", err
+	}
+	_, port, _ := net.SplitHostPort(l.Addr().String())
+	l.Close()
+	return port, err
 }
