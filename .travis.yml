@@ -48,8 +48,8 @@ install:
   - popd
 
 script:
-  - DEBUG=1 go test -race -cover ./... -test.v
-  - cd router && DEBUG=1 go test -race -fake=false -check.v
+  - go test -race -cover ./...
+  - go test -race ./router -fake=false
 
 notifications:
   irc:
