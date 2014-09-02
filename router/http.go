@@ -287,10 +287,10 @@ func fail(sc *httputil.ServerConn, req *http.Request, code int, msg string) {
 // TODO: create a new logger for the request, pass around..
 func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 	defer func() {
-		log.Debug("End: Closing client connection")
+		log.Debug("End: Closing client connection", "conn", conn)
 		conn.Close()
 	}()
-	log.Debug("Begin: New client connection", "tls", isTLS)
+	log.Debug("New client connection", "conn", conn, "tls", isTLS)
 
 	var r *httpRoute
 
@@ -298,7 +298,7 @@ func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 	// At this stage, if we don't find a match, we simply
 	// close the connection down.
 	if isTLS {
-		log.Debug("Going to determine domain via SNI")
+		log.Debug("Going to determine domain via SNI", "conn", conn)
 
 		// Parse out host via SNI first
 		vhostConn, err := vhost.TLS(conn)
@@ -325,10 +325,9 @@ func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 		conn = tls.Server(vhostConn, tlscfg)
 	}
 
-	// Decode the first request from the connection
-	log.Debug("Going to read the first HTTP request")
 	sc := httputil.NewServerConn(conn, nil)
 	for {
+		log.Debug("Reading next request from connection", "conn", conn)
 		req, err := sc.Read()
 		if err != nil {
 			if err != io.EOF && err != httputil.ErrPersistEOF {
@@ -503,12 +502,14 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls, st
 	}
 	// TODO: Set X-Forwarded-Port
 
+	log.Debug("Starting I/O for request", "req", req)
 	if err := backend.Write(req); err != nil {
-		log.Error("Error while writing to backend", "err", err)
+		log.Error("Error writing to backend", "err", err)
 		// TODO: return error to client here
 		return true
 	}
 	res, err := backend.Read(req)
+	log.Debug("Backend returned response", "res", res)
 	if res != nil {
 		if stickyCookie != nil {
 			res.Header.Add("Set-Cookie", stickyCookie.String())
