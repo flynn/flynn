@@ -450,6 +450,7 @@ func (fs *Formations) Len() int {
 func NewFormation(c *context, ef *ct.ExpandedFormation) *Formation {
 	return &Formation{
 		AppID:     ef.App.ID,
+		AppName:   ef.App.Name,
 		Release:   ef.Release,
 		Artifact:  ef.Artifact,
 		Processes: ef.Processes,
@@ -495,6 +496,7 @@ func (m jobTypeMap) Get(typ, host, id string) *Job {
 type Formation struct {
 	mtx       sync.Mutex
 	AppID     string
+	AppName   string
 	Release   *ct.Release
 	Artifact  *ct.Artifact
 	Processes map[string]int
@@ -724,7 +726,7 @@ func (f *Formation) remove(n int, name string, hostID string) {
 
 func (f *Formation) jobConfig(name string) *host.Job {
 	return utils.JobConfig(&ct.ExpandedFormation{
-		App:      &ct.App{ID: f.AppID},
+		App:      &ct.App{ID: f.AppID, Name: f.AppName},
 		Release:  f.Release,
 		Artifact: f.Artifact,
 	}, name)

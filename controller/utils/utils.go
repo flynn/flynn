@@ -55,9 +55,10 @@ func JobConfig(f *ct.ExpandedFormation, name string) *host.Job {
 	env["FLYNN_RELEASE_ID"] = f.Release.ID
 	job := &host.Job{
 		Metadata: map[string]string{
-			"flynn-controller.app":     f.App.ID,
-			"flynn-controller.release": f.Release.ID,
-			"flynn-controller.type":    name,
+			"flynn-controller.app":      f.App.ID,
+			"flynn-controller.app_name": f.App.Name,
+			"flynn-controller.release":  f.Release.ID,
+			"flynn-controller.type":     name,
 		},
 		Artifact: host.Artifact{
 			Type: f.Artifact.Type,

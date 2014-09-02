@@ -1,6 +1,9 @@
 [
   {
     "id": "postgres",
+    "app": {
+      "name": "postgres"
+    },
     "action": "run-app",
     "release": {
       "processes": {
@@ -43,6 +46,9 @@
   {
     "id": "controller",
     "action": "run-app",
+    "app": {
+      "name": "controller"
+    },
     "release": {
       "env": {
         "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
