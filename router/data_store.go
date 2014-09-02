@@ -119,7 +119,7 @@ func (s *etcdDataStore) List() ([]*router.Route, error) {
 }
 
 func (s *etcdDataStore) path(id string) string {
-	return s.prefix + path.Base(id)
+	return path.Join(s.prefix, path.Base(id))
 }
 
 func (s *etcdDataStore) Sync(h SyncHandler, started chan<- error) {
