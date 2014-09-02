@@ -270,11 +270,12 @@ sudo start-stop-daemon \
   -- \
   ETCD_PEERS={{ .Peers }} \
   flynn-host \
-  -id {{ .ID }} \
-  -manifest /etc/flynn-host.json \
-  -external {{ .IP }} \
-  -force \
-  -backend libvirt-lxc \
+  daemon \
+  --id {{ .ID }} \
+  --manifest /etc/flynn-host.json \
+  --external {{ .IP }} \
+  --force \
+  --backend libvirt-lxc \
   &>/tmp/flynn-host.log
 `[1:])),
 	"docker": template.Must(template.New("flynn-host-docker").Parse(`
@@ -284,10 +285,10 @@ docker run \
   -p=1113:1113 \
   -e=ETCD_PEERS={{ .Peers }} \
   flynn/host \
-  -id {{ .ID }} \
-  -external {{ .IP }} \
-  -force \
-  -backend docker
+  --id {{ .ID }} \
+  --external {{ .IP }} \
+  --force \
+  --backend docker
 `[1:])),
 }
 

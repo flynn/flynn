@@ -218,8 +218,9 @@ func (s *S) TestRunJobDetached(c *C) {
 	job := s.cc.GetHost(hostID).Jobs[0]
 	c.Assert(res.ID, Equals, hostID+"-"+job.ID)
 	c.Assert(job.Metadata, DeepEquals, map[string]string{
-		"flynn-controller.app":     app.ID,
-		"flynn-controller.release": release.ID,
+		"flynn-controller.app":      app.ID,
+		"flynn-controller.app_name": app.Name,
+		"flynn-controller.release":  release.ID,
 	})
 	c.Assert(job.Config.Cmd, DeepEquals, []string{"foo", "bar"})
 	c.Assert(job.Config.Env, DeepEquals, map[string]string{"FOO": "baz", "JOB": "true", "RELEASE": "true"})
@@ -292,8 +293,9 @@ func (s *S) TestRunJobAttached(c *C) {
 	job := s.cc.GetHost(hostID).Jobs[0]
 	c.Assert(job.ID, Equals, jobID)
 	c.Assert(job.Metadata, DeepEquals, map[string]string{
-		"flynn-controller.app":     app.ID,
-		"flynn-controller.release": release.ID,
+		"flynn-controller.app":      app.ID,
+		"flynn-controller.app_name": app.Name,
+		"flynn-controller.release":  release.ID,
 	})
 	c.Assert(job.Config.Cmd, DeepEquals, []string{"foo", "bar"})
 	c.Assert(job.Config.Env, DeepEquals, map[string]string{"FOO": "baz", "JOB": "true", "RELEASE": "true"})

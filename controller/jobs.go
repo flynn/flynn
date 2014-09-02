@@ -283,8 +283,9 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 	job := &host.Job{
 		ID: cluster.RandomJobID(""),
 		Metadata: map[string]string{
-			"flynn-controller.app":     app.ID,
-			"flynn-controller.release": release.ID,
+			"flynn-controller.app":      app.ID,
+			"flynn-controller.app_name": app.Name,
+			"flynn-controller.release":  release.ID,
 		},
 		Artifact: host.Artifact{
 			Type: artifact.Type,

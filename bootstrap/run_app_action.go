@@ -56,8 +56,11 @@ func (a *RunAppAction) Run(s *State) error {
 	}
 	s.StepData[a.ID] = as
 
-	if a.App == nil || a.App.ID == "" {
-		a.App = &ct.App{ID: random.UUID()}
+	if a.App == nil {
+		a.App = &ct.App{}
+	}
+	if a.App.ID == "" {
+		a.App.ID = random.UUID()
 	}
 	if a.Artifact == nil {
 		return errors.New("bootstrap: artifact must be set")
