@@ -488,6 +488,9 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls, st
 	}
 	// TODO: Set X-Forwarded-Port
 
+	// Pass the Request-URI verbatim without any modifications
+	req.URL.Opaque = strings.Split(strings.TrimPrefix(req.RequestURI, req.URL.Scheme+":"), "?")[0]
+
 	if err := backend.Write(req); err != nil {
 		log.Println("server write err:", err)
 		// TODO: return error to client here
