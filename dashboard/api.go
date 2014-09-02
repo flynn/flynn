@@ -24,7 +24,10 @@ func APIHandler(conf *Config) http.Handler {
 	m := martini.New()
 	m.Use(martini.Logger())
 	m.Use(martini.Recovery())
-	m.Use(render.Renderer())
+	m.Use(render.Renderer(render.Options{
+		Directory:  "app/build",
+		Extensions: []string{".html"},
+	}))
 	m.Action(r.Handle)
 
 	i := inject.New()
@@ -51,7 +54,13 @@ func APIHandler(conf *Config) http.Handler {
 
 		r.Get("/config", getConfig)
 
-		r.Get("/", http.RedirectHandler(conf.InterfaceURL, http.StatusMovedPermanently).ServeHTTP)
+		r.Any("/assets.*", martini.Static("app/build/assets", martini.StaticOptions{
+			Prefix: "/assets",
+		}))
+
+		r.Get("/", func(r render.Render) {
+			r.HTML(200, "dashboard", "")
+		})
 	})
 
 	return m
