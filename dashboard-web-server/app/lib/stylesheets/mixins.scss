@@ -1,0 +1,15 @@
+@mixin linear-gradient($startPosition, $startColor, $endColor) {
+  background-color: $startColor;
+
+  /* Safari 5.1, Chrome 10+ */
+  background: -webkit-linear-gradient($startPosition, $startColor, $endColor);
+
+  /* Firefox 3.6+ */
+  background: -moz-linear-gradient($startPosition, $startColor, $endColor);
+
+  /* IE 10 */
+  background: -ms-linear-gradient($startPosition, $startColor, $endColor);
+
+  /* Opera 11.10+ */
+  background: -o-linear-gradient($startPosition, $startColor, $endColor);
+}
