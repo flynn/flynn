@@ -17,30 +17,40 @@ import (
 func init() {
 	register("route", runRoute, `
 usage: flynn route
-       flynn route add [-t <type>] [-s <service>] [-c <tls-cert> -k <tls-key>] [--sticky] <domain>
+       flynn route add http [-s <service>] [-c <tls-cert> -k <tls-key>] [--sticky] <domain>
+       flynn route add tcp [-s <service>]
        flynn route remove <id>
 
 Manage routes for application.
 
 Options:
-   -t <type>                  route's type (Currently only http supported) [default: http]
    -s, --service <service>    service name to route domain to (defaults to APPNAME-web)
-   -c, --tls-cert <tls-cert>  path to PEM encoded certificate for TLS, - for stdin
-   -k, --tls-key <tls-key>    path to PEM encoded private key for TLS, - for stdin
-   --sticky                   enable cookie-based sticky routing
+   -c, --tls-cert <tls-cert>  path to PEM encoded certificate for TLS, - for stdin (http only)
+   -k, --tls-key <tls-key>    path to PEM encoded private key for TLS, - for stdin (http only)
+   --sticky                   enable cookie-based sticky routing (http only)
+
 Commands:
    With no arguments, shows a list of routes.
 
    add     adds a route to an app
    remove  removes a route
+
+Examples:
+
+   $ flynn route add http example.com
+
+   $ flynn route add tcp
 `)
 }
 
 func runRoute(args *docopt.Args, client *controller.Client) error {
 	if args.Bool["add"] {
-		if args.String["-t"] == "http" {
+		switch {
+		case args.Bool["http"]:
 			return runRouteAddHTTP(args, client)
-		} else {
+		case args.Bool["tcp"]:
+			return runRouteAddTCP(args, client)
+		default:
 			return fmt.Errorf("Route type %s not supported.", args.String["-t"])
 		}
 	} else if args.Bool["remove"] {
@@ -77,15 +87,29 @@ func runRoute(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
+func runRouteAddTCP(args *docopt.Args, client *controller.Client) error {
+	service := args.String["--service"]
+	if service == "" {
+		service = mustApp() + "-web"
+	}
+
+	hr := &router.TCPRoute{Service: service}
+	r := hr.ToRoute()
+	if err := client.CreateRoute(mustApp(), r); err != nil {
+		return err
+	}
+	hr = r.TCPRoute()
+	fmt.Printf("%s listening on port %d", r.ID, hr.Port)
+	return nil
+}
+
 func runRouteAddHTTP(args *docopt.Args, client *controller.Client) error {
 	var tlsCert []byte
 	var tlsKey []byte
 
-	var routeHTTPService string
-	if args.String["--service"] == "" {
-		routeHTTPService = mustApp() + "-web"
-	} else {
-		routeHTTPService = args.String["--service"]
+	service := args.String["--service"]
+	if service == "" {
+		service = mustApp() + "-web"
 	}
 
 	tlsCertPath := args.String["--tls-cert"]
@@ -114,7 +138,7 @@ func runRouteAddHTTP(args *docopt.Args, client *controller.Client) error {
 	}
 
 	hr := &router.HTTPRoute{
-		Service: routeHTTPService,
+		Service: service,
 		Domain:  args.String["<domain>"],
 		TLSCert: string(tlsCert),
 		TLSKey:  string(tlsKey),
