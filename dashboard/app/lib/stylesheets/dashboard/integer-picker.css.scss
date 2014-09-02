@@ -1,0 +1,60 @@
+@import "./colors";
+@import "./mixins";
+
+.integer-picker {
+  @extend %clearfix;
+  @include linear-gradient(top, $whiteColor, $almostWhiteColor);
+
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-flow: row;
+  flex-flow: row;
+  border: 1px solid $grayBlueColor;
+  border-radius: 4px;
+  box-shadow: 0px 0px 1px $grayBlueColor;
+
+  font-weight: 600;
+
+  .amount {
+    display: block;
+    -webkit-flex-grow: 2;
+    flex-grow: 2;
+    cursor: default;
+    user-select: none;
+    -moz-user-select: none;
+
+    text-align: center;
+    margin-top: 0.65em;
+    padding-left: 0.35em;
+    padding-right: 0.35em;
+  }
+
+  .controls {
+    display: flex;
+    flex-flow: column;
+    flex-grow: 1;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    color: $darkerGrayBlueColor;
+
+    li {
+      -webkit-flex-grow: 1;
+      height: 50%;
+      flex-grow: 1;
+      border-left: 1px solid $grayBlueColor;
+      border-bottom: 1px solid $grayBlueColor;
+      text-align: center;
+      line-height: 1em;
+      padding: 0.05em 0.25em;
+      cursor: default;
+      user-select: none;
+      -moz-user-select: none;
+
+      &:last-of-type {
+        border-bottom: 0;
+      }
+    }
+  }
+}
+

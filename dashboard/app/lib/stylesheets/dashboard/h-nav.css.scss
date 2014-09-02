@@ -1,0 +1,29 @@
+@import "./colors";
+@import "./mixins";
+
+.h-nav {
+  @extend %clearfix;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  border-bottom: 2px solid $grayBlueColor;
+  > li {
+    float: left;
+    margin-right: 0.5rem;
+
+    > a {
+      display: block;
+      color: $blackGrayColor;
+      text-decoration: none;
+    }
+
+    padding-bottom: 0.5rem;
+    margin-bottom: -2px;
+    border-bottom: 2px solid transparent;
+    &.selected {
+      border-bottom: 2px solid $greenColor;
+    }
+  }
+}
+

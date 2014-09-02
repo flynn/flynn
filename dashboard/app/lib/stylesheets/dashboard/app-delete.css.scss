@@ -1,0 +1,9 @@
+@import "./mixins";
+
+.app-delete {
+  .delete-btn {
+    @extend %btn-red;
+    @extend %btn-block;
+  }
+}
+

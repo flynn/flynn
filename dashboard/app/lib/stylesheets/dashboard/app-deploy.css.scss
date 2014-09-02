@@ -1,0 +1,12 @@
+@import "./mixins";
+
+.app-deploy {
+  .deploy-btn {
+    @extend %btn-green;
+    @extend %btn-block;
+  }
+
+  .alert-error {
+    margin-top: 1rem;
+  }
+}

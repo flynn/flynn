@@ -1,0 +1,9 @@
+@import "./mixins";
+
+.app-env {
+  .save-btn {
+    @extend %btn-green;
+    @extend %btn-block;
+  }
+}
+

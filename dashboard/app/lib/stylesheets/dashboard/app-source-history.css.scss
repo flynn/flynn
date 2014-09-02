@@ -1,0 +1,33 @@
+@import "./mixins";
+
+.app-source-history {
+  > header {
+    padding: 2rem;
+    padding-bottom: 0;
+
+    > h2 {
+      margin: 0;
+      margin-bottom: 1rem;
+      font-weight: 600;
+    }
+
+    > nav {
+      margin-bottom: 1rem;
+    }
+  }
+
+  .pretty-select {
+    margin: 0px 2rem;
+    margin-bottom: 1rem;
+  }
+
+  .deploy-btn-container {
+    padding: 1rem 2rem;
+  }
+
+  .merge-confirm-btn {
+    @extend %btn-green;
+    @extend %btn-block;
+  }
+}
+

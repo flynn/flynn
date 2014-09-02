@@ -1,0 +1,12 @@
+@import "./mixins";
+.app-route-new {
+  .alert-info, .alert-error {
+    margin: 1rem 0;
+  }
+
+  .create-btn {
+    @extend %btn-green;
+    @extend %btn-block;
+  }
+}
+

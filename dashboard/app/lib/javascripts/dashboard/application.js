@@ -1,0 +1,11 @@
+//= require_self
+//= require ./main
+//= require ./config
+//= require ./dispatcher
+//= require ./client
+//= require ./github-client
+//= require ./routers/main
+//= require ./routers/github
+//= require ./routers/apps
+//= require ./views/service-unavailable
+//= require ./boot
