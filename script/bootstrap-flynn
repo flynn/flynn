@@ -56,6 +56,7 @@ boot_libvirt_lxc() {
     --no-close \
     --exec "${host_dir}/bin/flynn-host" \
     -- \
+    daemon \
     --manifest "${host_dir}/bin/manifest.json" \
     --external $IP \
     --force \
