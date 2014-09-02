@@ -120,6 +120,7 @@ func (s *TCPListener) PauseService(id string, pause bool) error {
 	}
 	return nil
 }
+
 func (s *TCPListener) AddDrainListener(serviceID string, ch chan string) {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
@@ -160,7 +161,7 @@ func (l *TCPListener) Close() error {
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
 	l.ds.StopSync()
-	for _, s := range l.services {
+	for _, s := range l.routes {
 		s.Close()
 	}
 	for _, listener := range l.listeners {
@@ -176,7 +177,11 @@ type tcpSyncHandler struct {
 
 func (h *tcpSyncHandler) Set(data *router.Route) error {
 	route := data.TCPRoute()
-	r := &tcpRoute{TCPRoute: route}
+	r := &tcpRoute{
+		TCPRoute: route,
+		addr:     h.l.IP + ":" + strconv.Itoa(route.Port),
+		parent:   h.l,
+	}
 
 	h.l.mtx.Lock()
 	defer h.l.mtx.Unlock()
@@ -185,7 +190,7 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 	}
 
 	service := h.l.services[r.Service]
-	if service != nil && service.port != r.Port {
+	if service != nil && service.name != r.Service {
 		service.refs--
 		if service.refs <= 0 {
 			service.ss.Close()
@@ -200,29 +205,25 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 		}
 		service = &tcpService{
 			name:      r.Service,
-			addr:      h.l.IP + ":" + strconv.Itoa(r.Port),
-			port:      r.Port,
-			parent:    h.l,
 			ss:        ss,
 			paused:    false,
 			requests:  make(map[string]int32),
 			listeners: make(map[chan string]interface{}),
 		}
 		service.resumeCond = sync.NewCond(service.pauseMtx.RLocker())
-		if listener, ok := h.l.listeners[r.Port]; ok {
-			service.l = listener
-			delete(h.l.listeners, r.Port)
-		}
-		started := make(chan error)
-		go service.Serve(started)
-		if err := <-started; err != nil {
-			service.ss.Close()
-			if service.l != nil {
-				h.l.listeners[r.Port] = service.l
-			}
-			return err
-		}
 		h.l.services[r.Service] = service
+	}
+	if listener, ok := h.l.listeners[r.Port]; ok {
+		r.l = listener
+		delete(h.l.listeners, r.Port)
+	}
+	started := make(chan error)
+	go r.Serve(started)
+	if err := <-started; err != nil {
+		if r.l != nil {
+			h.l.listeners[r.Port] = r.l
+		}
+		return err
 	}
 	service.refs++
 	r.service = service
@@ -246,7 +247,7 @@ func (h *tcpSyncHandler) Remove(id string) error {
 
 	r.service.refs--
 	if r.service.refs <= 0 {
-		r.service.Close()
+		r.service.ss.Close()
 		delete(h.l.services, r.service.name)
 	}
 
@@ -257,18 +258,54 @@ func (h *tcpSyncHandler) Remove(id string) error {
 }
 
 type tcpRoute struct {
+	parent *TCPListener
 	*router.TCPRoute
+	l       net.Listener
+	addr    string
 	service *tcpService
 }
 
+func (r *tcpRoute) Serve(started chan<- error) {
+	var err error
+	// TODO: close the listener while there are no backends available
+	if r.l == nil {
+		r.l, err = net.Listen("tcp", r.addr)
+	}
+	started <- err
+	if err != nil {
+		return
+	}
+	for {
+		conn, err := r.l.Accept()
+		if err != nil {
+			break
+		}
+		go r.service.handle(conn)
+	}
+}
+
+func (r *tcpRoute) Close() {
+	if r.Port >= r.parent.startPort && r.Port <= r.parent.endPort {
+		// make a copy of the fd and create a new listener with it
+		fd, err := r.l.(*net.TCPListener).File()
+		if err != nil {
+			log.Println("Error getting listener fd", r.l)
+			return
+		}
+		r.parent.listeners[r.Port], err = net.FileListener(fd)
+		if err != nil {
+			log.Println("Error copying listener", r.l)
+			return
+		}
+		fd.Close()
+	}
+	r.l.Close()
+}
+
 type tcpService struct {
-	parent *TCPListener
-	addr   string
-	port   int
-	l      net.Listener
-	name   string
-	ss     discoverd.ServiceSet
-	refs   int
+	name string
+	ss   discoverd.ServiceSet
+	refs int
 
 	requests    map[string]int32
 	requestMtx  sync.RWMutex
@@ -298,44 +335,6 @@ func (s *tcpService) sendEvent(event string) {
 	defer s.listenerMtx.RUnlock()
 	for ch := range s.listeners {
 		ch <- event
-	}
-}
-
-func (s *tcpService) Close() {
-	if s.port >= s.parent.startPort && s.port <= s.parent.endPort {
-		// make a copy of the fd and create a new listener with it
-		fd, err := s.l.(*net.TCPListener).File()
-		if err != nil {
-			log.Println("Error getting listener fd", s.l)
-			return
-		}
-		s.parent.listeners[s.port], err = net.FileListener(fd)
-		if err != nil {
-			log.Println("Error copying listener", s.l)
-			return
-		}
-		fd.Close()
-	}
-	s.l.Close()
-	s.ss.Close()
-}
-
-func (s *tcpService) Serve(started chan<- error) {
-	var err error
-	// TODO: close the listener while there are no backends available
-	if s.l == nil {
-		s.l, err = net.Listen("tcp", s.addr)
-	}
-	started <- err
-	if err != nil {
-		return
-	}
-	for {
-		conn, err := s.l.Accept()
-		if err != nil {
-			break
-		}
-		go s.handle(conn)
 	}
 }
 
