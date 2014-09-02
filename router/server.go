@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/router/types"
+	log "gopkg.in/inconshreveable/log15.v2"
 )
 
 type Listener interface {
@@ -52,7 +52,8 @@ func main() {
 	if key := os.Getenv("COOKIE_KEY"); key != "" {
 		res, err := base64.StdEncoding.DecodeString(key)
 		if err != nil {
-			log.Fatal("error decoding COOKIE_KEY:", err)
+			log.Crit("error decoding COOKIE_KEY", "err", err)
+			os.Exit(1)
 		}
 		var k [32]byte
 		copy(k[:], res)
@@ -68,10 +69,12 @@ func main() {
 	// Will use DISCOVERD environment variable
 	d, err := discoverd.NewClient()
 	if err != nil {
-		log.Fatal(err)
+		log.Crit("Failed to connect to discoverd", "err", err)
+		os.Exit(1)
 	}
 	if err := d.Register("router-api", *apiAddr); err != nil {
-		log.Fatal(err)
+		log.Crit("Failed to register router API with discoverd", "err", err)
+		os.Exit(1)
 	}
 
 	// Read etcd addresses from ETCD
@@ -89,6 +92,6 @@ func main() {
 	r.TCP = NewTCPListener(*tcpIP, 0, 0, NewEtcdDataStore(etcdc, "/router/tcp/"), d)
 	r.HTTP = NewHTTPListener(*httpAddr, *httpsAddr, cookieKey, NewEtcdDataStore(etcdc, "/router/http/"), d)
 
-	go func() { log.Fatal(r.ListenAndServe(nil)) }()
-	log.Fatal(http.ListenAndServe(*apiAddr, apiHandler(&r)))
+	go func() { log.Crit("Failed to start server", "err", r.ListenAndServe(nil)) }()
+	log.Crit("Failed to start API server", "err", http.ListenAndServe(*apiAddr, apiHandler(&r)))
 }
