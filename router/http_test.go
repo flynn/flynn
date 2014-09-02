@@ -371,7 +371,7 @@ func (s *S) TestKeepaliveHostname(c *C) {
 	assertGet(c, "http://"+l.Addr, "example.org", "2")
 }
 
-// issue #344
+// issue #177
 func (s *S) TestRequestURIEscaping(c *C) {
 	l, discoverd := newHTTPListener(c)
 	defer l.Close()
