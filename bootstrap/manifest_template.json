@@ -156,9 +156,10 @@
             {"proto": "tcp"},
             {"proto": "tcp", "port": 80},
             {"proto": "tcp", "port": 443},
-            {"proto": "tcp", "port": 2222}
+            {"proto": "tcp", "port": 2222},
+            {"proto": "tcp", "port": 3000, "range_end": 3500}
           ],
-          "cmd": ["-httpaddr", ":80", "-httpsaddr", ":443"],
+          "cmd": ["-httpaddr", ":80", "-httpsaddr", ":443", "-tcp-range-start", "3000", "-tcp-range-end", "3500"],
           "omni": true
         }
       }

@@ -63,6 +63,8 @@ func main() {
 	httpAddr := flag.String("httpaddr", ":8080", "http listen address")
 	httpsAddr := flag.String("httpsaddr", ":4433", "https listen address")
 	tcpIP := flag.String("tcpip", "", "tcp router listen ip")
+	tcpRangeStart := flag.Int("tcp-range-start", 3000, "tcp port range start")
+	tcpRangeEnd := flag.Int("tcp-range-end", 3500, "tcp port range end")
 	apiAddr := flag.String("apiaddr", ":"+apiPort, "api listen address")
 	flag.Parse()
 
@@ -91,7 +93,7 @@ func main() {
 		prefix = "/router"
 	}
 	var r Router
-	r.TCP = NewTCPListener(*tcpIP, 0, 0, NewEtcdDataStore(etcdc, path.Join(prefix, "tcp/")), d)
+	r.TCP = NewTCPListener(*tcpIP, *tcpRangeStart, *tcpRangeEnd, NewEtcdDataStore(etcdc, path.Join(prefix, "tcp/")), d)
 	r.HTTP = NewHTTPListener(*httpAddr, *httpsAddr, cookieKey, NewEtcdDataStore(etcdc, path.Join(prefix, "http/")), d)
 
 	go func() { log.Fatal(r.ListenAndServe(nil)) }()
