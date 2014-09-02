@@ -46,7 +46,7 @@ func (b *EtcdBackend) Subscribe(name string) (UpdateStream, error) {
 	sync:
 		for {
 			nextIndex := uint64(1)
-			response, _ := b.getCurrentState(name)
+			response, err := b.getCurrentState(name)
 			if response != nil {
 				for _, n := range response.Node.Nodes {
 					if modified, ok := keys[n.Key]; ok && modified >= n.ModifiedIndex {
@@ -57,6 +57,8 @@ func (b *EtcdBackend) Subscribe(name string) (UpdateStream, error) {
 					}
 				}
 				nextIndex = response.EtcdIndex + 1
+			} else if e, ok := err.(*etcd.EtcdError); ok {
+				nextIndex = e.Index + 1
 			}
 			if !sentinel {
 				if !send(&ServiceUpdate{}) {
