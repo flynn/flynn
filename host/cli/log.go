@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 )
 
 func init() {
-	register("log", runLog, "usage: flynn-host log [-f|--follow] ID")
+	Register("log", runLog, "usage: flynn-host log [-f|--follow] ID")
 }
 
 func runLog(args *docopt.Args, client cluster.Host) error {

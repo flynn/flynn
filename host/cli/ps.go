@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 )
 
 func init() {
-	register("ps", runPs, "usage: flynn-host ps [-a|--all] [-q|--quiet]")
+	Register("ps", runPs, "usage: flynn-host ps [-a|--all] [-q|--quiet]")
 }
 
 type sortJobs []host.ActiveJob

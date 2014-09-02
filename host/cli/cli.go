@@ -1,9 +1,8 @@
-package main
+package cli
 
 import (
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"unicode"
 
@@ -12,23 +11,6 @@ import (
 	"github.com/flynn/flynn/pkg/rpcplus"
 )
 
-func init() {
-	log.SetFlags(log.Lshortfile | log.Lmicroseconds)
-}
-
-func main() {
-	usage := `usage: flynn-host <command> [<args>...]`
-
-	args, _ := docopt.Parse(usage, nil, true, "", true)
-	cmd := args.String["<command>"]
-	cmdArgs := args.All["<args>"].([]string)
-
-	if err := runCommand(cmd, cmdArgs); err != nil {
-		log.Fatal(err)
-		return
-	}
-}
-
 type command struct {
 	usage string
 	f     interface{}
@@ -36,7 +18,7 @@ type command struct {
 
 var commands = make(map[string]*command)
 
-func register(cmd string, f interface{}, usage string) *command {
+func Register(cmd string, f interface{}, usage string) *command {
 	switch f.(type) {
 	case func(*docopt.Args, cluster.Host) error, func(*docopt.Args):
 	default:
@@ -49,7 +31,7 @@ func register(cmd string, f interface{}, usage string) *command {
 
 var localAddr = "127.0.0.1:1113"
 
-func runCommand(name string, args []string) error {
+func Run(name string, args []string) error {
 	argv := make([]string, 1, 1+len(args))
 	argv[0] = name
 	argv = append(argv, args...)

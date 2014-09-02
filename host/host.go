@@ -15,6 +15,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/cli"
 	"github.com/flynn/flynn/host/ports"
 	"github.com/flynn/flynn/host/sampi"
 	"github.com/flynn/flynn/host/types"
@@ -31,7 +32,9 @@ var Attempts = attempt.Strategy{
 }
 
 func init() {
-	register("daemon", runDaemon, `
+	log.SetFlags(log.Lshortfile | log.Lmicroseconds)
+
+	cli.Register("daemon", runDaemon, `
 usage: flynn-host daemon [options] [--meta=<KEY=VAL>...]
 
 options:
@@ -47,6 +50,19 @@ options:
   --bind=IP              bind containers to IP
   --flynn-init=PATH      path to flynn-init binary [default: /usr/bin/flynn-init]
 	`)
+}
+
+func main() {
+	usage := `usage: flynn-host <command> [<args>...]`
+
+	args, _ := docopt.Parse(usage, nil, true, "", true)
+	cmd := args.String["<command>"]
+	cmdArgs := args.All["<args>"].([]string)
+
+	if err := cli.Run(cmd, cmdArgs); err != nil {
+		log.Fatal(err)
+		return
+	}
 }
 
 func runDaemon(args *docopt.Args) {

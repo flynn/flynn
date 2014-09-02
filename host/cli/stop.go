@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	register("stop", runStop, "usage: flynn-host stop ID...")
+	Register("stop", runStop, "usage: flynn-host stop ID...")
 }
 
 func runStop(args *docopt.Args, client cluster.Host) error {
