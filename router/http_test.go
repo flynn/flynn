@@ -124,7 +124,7 @@ func (s *S) TestAddHTTPRoute(c *C) {
 	assertGet(c, "http://"+l.Addr, "example.com", "1")
 	assertGet(c, "https://"+l.TLSAddr, "example.com", "1")
 
-	discoverd.Unregister("test", srv1.Listener.Addr().String())
+	discoverdUnregister(c, discoverd, "test", srv1.Listener.Addr().String())
 	discoverdRegisterHTTP(c, l, srv2.Listener.Addr().String())
 
 	// Close the connection we just used to trigger a new backend choice
@@ -337,7 +337,8 @@ func (s *S) TestStickyHTTPRoute(c *C) {
 		c.Assert(resCookie, IsNil)
 		httpClient.Transport.(*http.Transport).CloseIdleConnections()
 	}
-	discoverd.Unregister("test", srv1.Listener.Addr().String())
+
+	discoverdUnregister(c, discoverd, "test", srv1.Listener.Addr().String())
 	for i := 0; i < 10; i++ {
 		resCookie := assertGetCookie(c, "http://"+l.Addr, "example.com", "2", cookie)
 		c.Assert(resCookie, Not(IsNil))

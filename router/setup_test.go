@@ -431,6 +431,32 @@ func discoverdRegister(c *C, dc discoverdClient, ss discoverd.ServiceSet, name, 
 	}
 }
 
+func discoverdUnregister(c *C, dc discoverdClient, name, addr string) {
+	done := make(chan struct{})
+	ss, err := dc.NewServiceSet(name)
+	c.Assert(err, IsNil)
+	if !*fake {
+		ch := ss.Watch(false)
+		go func() {
+			defer ss.Close()
+			for u := range ch {
+				if u.Addr == addr && !u.Online {
+					close(done)
+					return
+				}
+			}
+		}()
+	} else {
+		close(done)
+	}
+	dc.Unregister(name, addr)
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		c.Fatal("timed out waiting for discoverd unregister")
+	}
+}
+
 func addRoute(c *C, l Listener, r *router.Route) *router.Route {
 	wait := waitForEvent(c, l, "set", "")
 	err := l.AddRoute(r)

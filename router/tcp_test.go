@@ -105,7 +105,7 @@ func (s *S) TestAddTCPRoute(c *C) {
 
 	assertTCPConn(c, addr, "1")
 
-	discoverd.Unregister("test", srv1.Addr)
+	discoverdUnregister(c, discoverd, "test", srv1.Addr)
 	discoverdRegisterTCP(c, l, portInt, srv2.Addr)
 
 	assertTCPConn(c, addr, "2")
