@@ -1,12 +1,15 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strings"
 	"unicode"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
+	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/rpcplus"
 )
 
 func init() {
@@ -35,7 +38,7 @@ var commands = make(map[string]*command)
 
 func register(cmd string, f interface{}, usage string) *command {
 	switch f.(type) {
-	case func(*docopt.Args) error, func(*docopt.Args):
+	case func(*docopt.Args, cluster.Host) error, func(*docopt.Args):
 	default:
 		panic(fmt.Sprintf("invalid command function %s '%T'", cmd, f))
 	}
@@ -43,6 +46,8 @@ func register(cmd string, f interface{}, usage string) *command {
 	commands[cmd] = c
 	return c
 }
+
+var localAddr = "127.0.0.1:1113"
 
 func runCommand(name string, args []string) error {
 	argv := make([]string, 1, 1+len(args))
@@ -59,8 +64,13 @@ func runCommand(name string, args []string) error {
 	}
 
 	switch f := cmd.f.(type) {
-	case func(*docopt.Args) error:
-		return f(parsedArgs)
+	case func(*docopt.Args, cluster.Host) error:
+		rc, err := rpcplus.DialHTTPPath("tcp", localAddr, rpcplus.DefaultRPCPath, nil)
+		if err != nil {
+			return errors.New("error connecting to local flynn-host, is it running?")
+		}
+		client := cluster.NewHostClient(localAddr, rc, nil)
+		return f(parsedArgs, client)
 	case func(*docopt.Args):
 		f(parsedArgs)
 		return nil

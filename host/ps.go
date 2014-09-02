@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -12,7 +11,6 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
-	"github.com/flynn/flynn/pkg/rpcplus"
 )
 
 func init() {
@@ -25,15 +23,7 @@ func (s sortJobs) Len() int           { return len(s) }
 func (s sortJobs) Less(i, j int) bool { return s[i].StartedAt.Sub(s[j].StartedAt) < 0 }
 func (s sortJobs) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
-var localAddr = "127.0.0.1:1113"
-
-func runPs(args *docopt.Args) error {
-	rc, err := rpcplus.DialHTTPPath("tcp", localAddr, rpcplus.DefaultRPCPath, nil)
-	if err != nil {
-		return errors.New("error connecting to local flynn-host, is it running?")
-	}
-	client := cluster.NewHostClient(localAddr, rc, nil)
-
+func runPs(args *docopt.Args, client cluster.Host) error {
 	all, err := client.ListJobs()
 	if err != nil {
 		return fmt.Errorf("could not get local jobs: %s", err)
