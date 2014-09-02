@@ -95,7 +95,7 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 	t.Assert(s.Flynn("scale", "web=3"), Succeeds)
 
 	route := random.String(32) + ".dev"
-	newRoute := s.Flynn("route", "add", "-t", "http", route)
+	newRoute := s.Flynn("route", "add", "http", route)
 	t.Assert(newRoute, Succeeds)
 
 	t.Assert(s.Flynn("route"), OutputContains, strings.TrimSpace(newRoute.Output))
