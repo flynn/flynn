@@ -19,8 +19,9 @@ func NewTCPListener(ip string, startPort, endPort int, ds DataStore, dc Discover
 		ds:        ds,
 		wm:        NewWatchManager(),
 		discoverd: dc,
-		services:  make(map[int]*tcpService),
+		services:  make(map[string]*tcpService),
 		routes:    make(map[string]*tcpRoute),
+		ports:     make(map[int]*tcpRoute),
 		listeners: make(map[int]net.Listener),
 		startPort: startPort,
 		endPort:   endPort,
@@ -45,8 +46,9 @@ type TCPListener struct {
 	listeners map[int]net.Listener
 
 	mtx      sync.RWMutex
-	services map[int]*tcpService
+	services map[string]*tcpService
 	routes   map[string]*tcpRoute
+	ports    map[int]*tcpRoute
 	closed   bool
 }
 
@@ -110,10 +112,7 @@ func (s *TCPListener) PauseService(id string, pause bool) error {
 	if s.closed {
 		return ErrClosed
 	}
-	port, err := strconv.Atoi(id)
-	if err != nil {
-		return err
-	}
+	service := s.services[id]
 	if pause {
 		service.Pause()
 	} else {
@@ -124,8 +123,7 @@ func (s *TCPListener) PauseService(id string, pause bool) error {
 func (s *TCPListener) AddDrainListener(serviceID string, ch chan string) {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
-	r := s.routes[serviceID]
-	srv := s.services[r.Port]
+	srv := s.services[serviceID]
 	srv.listenerMtx.Lock()
 	srv.listeners[ch] = struct{}{}
 	srv.listenerMtx.Unlock()
@@ -134,8 +132,7 @@ func (s *TCPListener) AddDrainListener(serviceID string, ch chan string) {
 func (s *TCPListener) RemoveDrainListener(serviceID string, ch chan string) {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
-	r := s.routes[serviceID]
-	srv := s.services[r.Port]
+	srv := s.services[serviceID]
 	srv.listenerMtx.Lock()
 	delete(srv.listeners, ch)
 	srv.listenerMtx.Unlock()
@@ -187,12 +184,12 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 		return nil
 	}
 
-	service := h.l.services[r.Port]
+	service := h.l.services[r.Service]
 	if service != nil && service.port != r.Port {
 		service.refs--
 		if service.refs <= 0 {
 			service.ss.Close()
-			delete(h.l.services, service.port)
+			delete(h.l.services, service.name)
 		}
 		service = nil
 	}
@@ -202,6 +199,7 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 			return err
 		}
 		service = &tcpService{
+			name:      r.Service,
 			addr:      h.l.IP + ":" + strconv.Itoa(r.Port),
 			port:      r.Port,
 			parent:    h.l,
@@ -224,11 +222,12 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 			}
 			return err
 		}
-		h.l.services[r.Port] = service
+		h.l.services[r.Service] = service
 	}
 	service.refs++
 	r.service = service
 	h.l.routes[data.ID] = r
+	h.l.ports[r.Port] = r
 
 	go h.l.wm.Send(&router.Event{Event: "set", ID: data.ID})
 	return nil
@@ -248,10 +247,11 @@ func (h *tcpSyncHandler) Remove(id string) error {
 	r.service.refs--
 	if r.service.refs <= 0 {
 		r.service.Close()
-		delete(h.l.services, r.service.port)
+		delete(h.l.services, r.service.name)
 	}
 
 	delete(h.l.routes, id)
+	delete(h.l.ports, r.Port)
 	go h.l.wm.Send(&router.Event{Event: "remove", ID: id})
 	return nil
 }
@@ -266,6 +266,7 @@ type tcpService struct {
 	addr   string
 	port   int
 	l      net.Listener
+	name   string
 	ss     discoverd.ServiceSet
 	refs   int
 
