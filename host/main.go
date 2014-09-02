@@ -34,7 +34,9 @@ type command struct {
 var commands = make(map[string]*command)
 
 func register(cmd string, f interface{}, usage string) *command {
-	if _, ok := f.(func(*docopt.Args)); !ok {
+	switch f.(type) {
+	case func(*docopt.Args) error, func(*docopt.Args):
+	default:
 		panic(fmt.Sprintf("invalid command function %s '%T'", cmd, f))
 	}
 	c := &command{usage: strings.TrimLeftFunc(usage, unicode.IsSpace), f: f}
@@ -56,7 +58,10 @@ func runCommand(name string, args []string) error {
 		return err
 	}
 
-	if f, ok := cmd.f.(func(*docopt.Args)); ok {
+	switch f := cmd.f.(type) {
+	case func(*docopt.Args) error:
+		return f(parsedArgs)
+	case func(*docopt.Args):
 		f(parsedArgs)
 		return nil
 	}

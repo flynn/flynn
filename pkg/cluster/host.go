@@ -22,7 +22,7 @@ type hostClient struct {
 	c    RPCClient
 }
 
-func newHostClient(addr string, client RPCClient, dial rpcplus.DialFunc) Host {
+func NewHostClient(addr string, client RPCClient, dial rpcplus.DialFunc) Host {
 	c := &hostClient{addr: addr, dial: dial, c: client}
 	if dial == nil {
 		c.dial = net.Dial
