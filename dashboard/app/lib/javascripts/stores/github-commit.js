@@ -1,0 +1,77 @@
+//= require ../store
+
+(function () {
+"use strict";
+
+var GithubCommit = FlynnDashboard.Stores.GithubCommit = FlynnDashboard.Store.createClass({
+	displayName: "Stores.GithubCommit",
+
+	getState: function () {
+		return this.state;
+	},
+
+	getCommit: function () {
+		if (this.state.commit) {
+			return Promise.resolve(this.state.commit);
+		} else {
+			return this.__fetchCommit();
+		}
+	},
+
+	willInitialize: function () {
+		this.props = this.id;
+	},
+
+	getInitialState: function () {
+		return {
+			commit: null
+		};
+	},
+
+	didBecomeActive: function () {
+		this.__fetchCommit();
+	},
+
+	__fetchCommit: function () {
+		var commit = FlynnDashboard.Stores.GithubCommits.findCommit(this.props.ownerLogin, this.props.repoName, this.props.sha);
+		if (commit) {
+			this.setState({
+				commit: commit
+			});
+			return Promise.resolve(commit);
+		}
+
+		return FlynnDashboard.githubClient.getCommit(this.props.ownerLogin, this.props.repoName, this.props.sha).then(function (args) {
+			var res = args[0];
+			var commit = this.__rewriteJSON(res);
+			this.setState({
+				commit: commit
+			});
+			return commit;
+		}.bind(this));
+	},
+
+	__rewriteJSON: function (commitJSON) {
+		return {
+			committer: {
+				avatarURL: commitJSON.committer.avatar_url,
+				name: commitJSON.commit.committer.name
+			},
+			author: {
+				avatarURL: commitJSON.author.avatar_url,
+				name: commitJSON.commit.author.name
+			},
+			committedAt: Date.parse(commitJSON.commit.committer.date),
+			createdAt: Date.parse(commitJSON.commit.author.date),
+			sha: commitJSON.sha,
+			message: commitJSON.commit.message,
+			githubURL: commitJSON.html_url
+		};
+	}
+});
+
+GithubCommit.isValidId = function (id) {
+	return id.ownerLogin && id.repoName && id.sha;
+};
+
+})();

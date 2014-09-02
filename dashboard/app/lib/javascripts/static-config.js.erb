@@ -1,0 +1,4 @@
+Marbles.Utils.extend(FlynnDashboard.config, {
+  API_SERVER: <%= Yajl::Encoder.encode(ENV['API_SERVER'] || '') %>,
+  PATH_PREFIX: <%= Yajl::Encoder.encode(ENV['PATH_PREFIX'] || '') %>
+});
