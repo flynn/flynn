@@ -55,7 +55,22 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 	name := random.String(30)
 	t.Assert(s.Flynn("create", name), Outputs, fmt.Sprintf("Created %s\n", name))
 
-	push := s.Git("push", "flynn", "master")
+	var push *CmdResult
+	if err := Attempts.Run(func() error {
+		ps := s.Flynn("-a", "gitreceive", "ps")
+		if ps.Err != nil {
+			return ps.Err
+		}
+		psLines := strings.Split(strings.TrimSpace(ps.Output), "\n")
+		if len(psLines) != 2 {
+			return fmt.Errorf("Expected 2 ps lines, got %d", len(psLines))
+		}
+		push = s.Git("push", "flynn", "master")
+		return push.Err
+	}); err != nil {
+		t.Error(err)
+	}
+
 	t.Assert(push, OutputContains, "Node.js app detected")
 	t.Assert(push, OutputContains, "Downloading and installing node")
 	t.Assert(push, OutputContains, "Installing dependencies")
