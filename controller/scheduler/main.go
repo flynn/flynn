@@ -13,6 +13,7 @@ import (
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 )
 
@@ -263,6 +264,11 @@ func (c *context) watchHosts(events chan<- *host.Event) {
 
 }
 
+var putJobAttempts = attempt.Strategy{
+	Total: 30 * time.Second,
+	Delay: 500 * time.Millisecond,
+}
+
 func (c *context) watchHost(id string, events chan<- *host.Event) {
 	if !c.hosts.Add(id) {
 		return
@@ -306,10 +312,18 @@ func (c *context) watchHost(id string, events chan<- *host.Event) {
 			j.State = "crashed"
 		}
 		g.Log(grohl.Data{"at": "event", "job.id": event.JobID, "event": event.Event})
-		if err = c.PutJob(j); err != nil {
-			g.Log(grohl.Data{"at": "error", "job.id": event.JobID, "event": event.Event, "err": err})
-			// TODO: handle error
-		}
+
+		// Call PutJob in a goroutine as it may be the controller which has died
+		go func(event *host.Event) {
+			putJobAttempts.Run(func() error {
+				if err := c.PutJob(j); err != nil {
+					g.Log(grohl.Data{"at": "error", "job.id": event.JobID, "event": event.Event, "err": err})
+					return err
+				}
+				g.Log(grohl.Data{"at": "put_job", "job.id": event.JobID, "event": event.Event})
+				return nil
+			})
+		}(event)
 
 		if event.Event != "error" && event.Event != "stop" {
 			if events != nil {
