@@ -22,6 +22,7 @@ type Args struct {
 	TLSCert    string
 	TLSKey     string
 	AssetsDir  string
+	Run        string
 }
 
 func Parse() *Args {
@@ -41,6 +42,7 @@ func Parse() *Args {
 	flag.StringVar(&args.TLSCert, "tls-cert", "", "TLS certificate")
 	flag.StringVar(&args.TLSKey, "tls-key", "", "TLS key")
 	flag.StringVar(&args.AssetsDir, "assets", "runner/assets", "path to the runner assets dir")
+	flag.StringVar(&args.Run, "run", "", "regular expression selecting which tests and/or suites to run")
 	flag.BoolVar(&args.Build, "build", true, "build Flynn")
 	flag.BoolVar(&args.Debug, "debug", false, "enable debug output")
 	flag.BoolVar(&args.Kill, "kill", true, "kill the cluster after running the tests")
