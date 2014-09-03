@@ -135,7 +135,7 @@ fullSync:
 	s.log.Info("Doing fullsync with etcd")
 	data, err := s.etcd.Get(s.prefix, false, true)
 	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
-		dslog.Debug("No config in etcd, clear local map, watch")
+		s.log.Debug("No config in etcd, clear local map, watch")
 		for id := range keys {
 			delete(keys, id)
 			if err := h.Remove(id); err != nil {
