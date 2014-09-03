@@ -99,7 +99,7 @@ func runRouteAddTCP(args *docopt.Args, client *controller.Client) error {
 		return err
 	}
 	hr = r.TCPRoute()
-	fmt.Printf("%s listening on port %d", r.ID, hr.Port)
+	fmt.Printf("%s listening on port %d\n", r.ID, hr.Port)
 	return nil
 }
 
