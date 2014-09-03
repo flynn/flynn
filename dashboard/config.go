@@ -16,6 +16,7 @@ type Config struct {
 	Addr          string
 	ClusterDomain string
 	ControllerKey string
+	URL           string
 	InterfaceURL  string
 	PathPrefix    string
 	CookiePath    string
@@ -53,10 +54,11 @@ func LoadConfigFromEnv() *Config {
 		log.Fatal(fmt.Sprintf("CONTROLLER_PIN: %s", err.Error()))
 	}
 
-	conf.InterfaceURL = os.Getenv("INTERFACE_URL")
-	if conf.InterfaceURL == "" {
-		log.Fatal("INTERFACE_URL is required!")
+	conf.URL = os.Getenv("URL")
+	if conf.URL == "" {
+		log.Fatal("URL is required!")
 	}
+	conf.InterfaceURL = conf.URL
 
 	sessionSecret := os.Getenv("SESSION_SECRET")
 	if sessionSecret == "" {

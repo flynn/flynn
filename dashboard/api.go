@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"fmt"
 	"io"
@@ -53,6 +54,8 @@ func APIHandler(conf *Config) http.Handler {
 		}, requireUserMiddleware)
 
 		r.Get("/config", getConfig)
+
+		r.Any("/assets/application.*.js", serveApplicationJs)
 
 		r.Any("/assets.*", martini.Static("app/build/assets", martini.StaticOptions{
 			Prefix: "/assets",
@@ -167,4 +170,34 @@ func getConfig(rh RequestHelper, conf *Config) {
 	}
 
 	rh.JSON(200, config)
+}
+
+func serveApplicationJs(res http.ResponseWriter, req *http.Request, conf *Config) {
+	dir := http.Dir("./app/build/assets")
+	file := req.URL.Path
+	file = file[7:] // len("/assets") => 7
+	f, err := dir.Open(file)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	jsConf := bytes.NewReader([]byte(fmt.Sprintf(`
+    window.FlynnDashboardConfig = {
+      API_SERVER: "%s",
+      PATH_PREFIX: "%s"
+    };
+  `, conf.URL, conf.PathPrefix)))
+
+	fmt.Println("Serving application.js")
+
+	r := MultiReadSeeker(jsConf, f)
+
+	http.ServeContent(res, req, file, fi.ModTime(), r)
 }
