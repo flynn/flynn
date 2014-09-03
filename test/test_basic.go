@@ -13,6 +13,7 @@ import (
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
+	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/attempt"
@@ -145,7 +146,10 @@ type BuildpackSuite struct {
 var _ = c.Suite(&BuildpackSuite{})
 
 func (s *BuildpackSuite) SetUpSuite(t *c.C) {
-	s.client = newControllerClient(t)
+	conf, err := config.ReadFile(flynnrc)
+	t.Assert(err, c.IsNil)
+	t.Assert(conf.Clusters, c.HasLen, 1)
+	s.client = newControllerClient(t, conf.Clusters[0])
 }
 
 func (s *BuildpackSuite) TestBuildpacks(t *c.C) {
@@ -234,7 +238,7 @@ func (s *BuildpackSuite) TestBuildpacks(t *c.C) {
 		}); err != nil {
 			t.Error(wrapErr(err))
 		}
-		stream, err := s.client.StreamJobEvents(b.Name)
+		stream, err := s.client.StreamJobEvents(b.Name, 0)
 		if err != nil {
 			t.Error(err)
 		}
@@ -246,15 +250,15 @@ func (s *BuildpackSuite) TestBuildpacks(t *c.C) {
 }
 
 func (s *SchedulerSuite) TestTCPApp(t *c.C) {
-	r, err := s.client.GetAppRelease("gitreceive")
+	r, err := s.controller.GetAppRelease("gitreceive")
 	t.Assert(err, c.IsNil)
 	imageURI := r.Processes["app"].Env["SLUGRUNNER_IMAGE_URI"]
 
 	app := &ct.App{}
-	t.Assert(s.client.CreateApp(app), c.IsNil)
+	t.Assert(s.controller.CreateApp(app), c.IsNil)
 
 	artifact := &ct.Artifact{Type: "docker", URI: imageURI}
-	t.Assert(s.client.CreateArtifact(artifact), c.IsNil)
+	t.Assert(s.controller.CreateArtifact(artifact), c.IsNil)
 
 	release := &ct.Release{
 		ArtifactID: artifact.ID,
@@ -266,10 +270,10 @@ func (s *SchedulerSuite) TestTCPApp(t *c.C) {
 			},
 		},
 	}
-	t.Assert(s.client.CreateRelease(release), c.IsNil)
-	t.Assert(s.client.SetAppRelease(app.ID, release.ID), c.IsNil)
+	t.Assert(s.controller.CreateRelease(release), c.IsNil)
+	t.Assert(s.controller.SetAppRelease(app.ID, release.ID), c.IsNil)
 
-	stream, err := s.client.StreamJobEvents(app.ID)
+	stream, err := s.controller.StreamJobEvents(app.ID, 0)
 	defer stream.Close()
 	if err != nil {
 		t.Error(err)

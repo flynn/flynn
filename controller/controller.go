@@ -161,6 +161,7 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	r.Get("/apps/:apps_id/formations", getAppMiddleware, listFormations)
 
 	r.Post("/apps/:apps_id/jobs", getAppMiddleware, binding.Bind(ct.NewJob{}), runJob)
+	r.Get("/apps/:apps_id/jobs/:jobs_id", getAppMiddleware, getJob)
 	r.Put("/apps/:apps_id/jobs/:jobs_id", getAppMiddleware, binding.Bind(ct.Job{}), putJob)
 	r.Get("/apps/:apps_id/jobs", getAppMiddleware, listJobs)
 	r.Delete("/apps/:apps_id/jobs/:jobs_id", getAppMiddleware, connectHostMiddleware, killJob)

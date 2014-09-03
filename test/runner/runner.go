@@ -217,7 +217,7 @@ func (r *Runner) build(b *Build) (err error) {
 		return fmt.Errorf("could not build flynn: %s", err)
 	}
 
-	if err := c.Boot(args.Backend, rootFS, 1); err != nil {
+	if err := c.Boot(rootFS, 1); err != nil {
 		return fmt.Errorf("could not boot cluster: %s", err)
 	}
 

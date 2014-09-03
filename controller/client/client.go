@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -318,8 +319,12 @@ func (s *JobEventStream) Close() {
 }
 
 // StreamJobEvents returns a JobEventStream for an app.
-func (c *Client) StreamJobEvents(appID string) (*JobEventStream, error) {
-	res, err := c.RawReq("GET", fmt.Sprintf("/apps/%s/jobs", appID), http.Header{"Accept": []string{"text/event-stream"}}, nil, nil)
+func (c *Client) StreamJobEvents(appID string, lastID int64) (*JobEventStream, error) {
+	header := http.Header{
+		"Accept":        []string{"text/event-stream"},
+		"Last-Event-Id": []string{strconv.FormatInt(lastID, 10)},
+	}
+	res, err := c.RawReq("GET", fmt.Sprintf("/apps/%s/jobs", appID), header, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -397,6 +402,12 @@ func (c *Client) RunJobAttached(appID string, job *ct.NewJob) (utils.ReadWriteCl
 func (c *Client) RunJobDetached(appID string, req *ct.NewJob) (*ct.Job, error) {
 	job := &ct.Job{}
 	return job, c.Post(fmt.Sprintf("/apps/%s/jobs", appID), req, job)
+}
+
+// GetJob returns a Job for the given app and job ID
+func (c *Client) GetJob(appID, jobID string) (*ct.Job, error) {
+	job := &ct.Job{}
+	return job, c.Get(fmt.Sprintf("/apps/%s/jobs/%s", appID, jobID), job)
 }
 
 // JobList returns a list of all jobs.

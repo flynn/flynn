@@ -32,6 +32,7 @@ ssh -o LogLevel=FATAL -o IdentitiesOnly=yes -o UserKnownHostsFile=/dev/null -o S
 var args *arg.Args
 var flynnrc string
 var routerIP string
+var testCluster *cluster.Cluster
 
 func init() {
 	args = arg.Parse()
@@ -59,10 +60,10 @@ func main() {
 	routerIP = args.RouterIP
 	if flynnrc == "" {
 		var rootFS string
-		c := cluster.New(args.BootConfig, os.Stdout)
-		rootFS, err = c.BuildFlynn(args.RootFS, "origin/master", false)
+		testCluster = cluster.New(args.BootConfig, os.Stdout)
+		rootFS, err = testCluster.BuildFlynn(args.RootFS, "origin/master", false)
 		if err != nil {
-			c.Shutdown()
+			testCluster.Shutdown()
 			log.Println("could not build flynn: ", err)
 			return
 		}
@@ -71,21 +72,21 @@ func main() {
 		} else {
 			defer os.RemoveAll(rootFS)
 		}
-		if err = c.Boot(args.Backend, rootFS, 1); err != nil {
+		if err = testCluster.Boot(rootFS, 3); err != nil {
 			log.Println("could not boot cluster: ", err)
 			return
 		}
 		if args.Kill {
-			defer c.Shutdown()
+			defer testCluster.Shutdown()
 		}
 
-		if err = createFlynnrc(c); err != nil {
+		if err = createFlynnrc(); err != nil {
 			log.Println(err)
 			return
 		}
 		defer os.RemoveAll(flynnrc)
 
-		routerIP = c.RouterIP
+		routerIP = testCluster.RouterIP
 	}
 
 	res = check.RunAll(&check.RunConf{
@@ -157,14 +158,14 @@ func genSSHKey() (*sshData, error) {
 	}, nil
 }
 
-func createFlynnrc(c *cluster.Cluster) error {
+func createFlynnrc() error {
 	tmpfile, err := ioutil.TempFile("", "flynnrc-")
 	if err != nil {
 		return err
 	}
 	path := tmpfile.Name()
 
-	config, err := c.CLIConfig()
+	config, err := testCluster.CLIConfig()
 	if err != nil {
 		os.RemoveAll(path)
 		return err

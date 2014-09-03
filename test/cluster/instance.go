@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -24,8 +23,7 @@ func NewVMManager(bridge *Bridge) *VMManager {
 }
 
 type VMManager struct {
-	taps   *TapManager
-	nextID uint64
+	taps *TapManager
 }
 
 type VMConfig struct {
@@ -48,17 +46,13 @@ type VMDrive struct {
 }
 
 func (v *VMManager) NewInstance(c *VMConfig) (Instance, error) {
-	id := atomic.AddUint64(&v.nextID, 1) - 1
-	inst := &vm{
-		ID:       fmt.Sprintf("flynn%d", id),
-		VMConfig: c,
-	}
+	inst := &vm{VMConfig: c, id: random.String(8)}
 	if c.Kernel == "" {
 		c.Kernel = "vmlinuz"
 	}
 	if c.Out == nil {
 		var err error
-		c.Out, err = os.Create(inst.ID + ".log")
+		c.Out, err = os.Create("flynn-" + inst.ID() + ".log")
 		if err != nil {
 			return nil, err
 		}
@@ -69,6 +63,7 @@ func (v *VMManager) NewInstance(c *VMConfig) (Instance, error) {
 }
 
 type Instance interface {
+	ID() string
 	DialSSH() (*ssh.Client, error)
 	Start() error
 	Wait(time.Duration) error
@@ -80,7 +75,7 @@ type Instance interface {
 }
 
 type vm struct {
-	ID string
+	id string
 	*VMConfig
 	tap *Tap
 	cmd *exec.Cmd
@@ -229,6 +224,10 @@ func (v *vm) DialSSH() (*ssh.Client, error) {
 		User: "ubuntu",
 		Auth: []ssh.AuthMethod{ssh.Password("ubuntu")},
 	})
+}
+
+func (v *vm) ID() string {
+	return v.id
 }
 
 func (v *vm) IP() string {
