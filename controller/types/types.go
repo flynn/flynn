@@ -78,6 +78,12 @@ type Job struct {
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
+type JobEvent struct {
+	Job
+	ID    int64  `json:"id"`
+	JobID string `json:"job_id,omitempty"`
+}
+
 type NewJob struct {
 	ReleaseID string            `json:"release,omitempty"`
 	Cmd       []string          `json:"cmd,omitempty"`

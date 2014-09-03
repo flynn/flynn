@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
@@ -93,7 +94,7 @@ func toJSON(v interface{}) (io.Reader, error) {
 	return bytes.NewBuffer(data), err
 }
 
-func (c *Client) rawReq(method, path string, contentType string, in, out interface{}) (*http.Response, error) {
+func (c *Client) rawReq(method, path string, header http.Header, in, out interface{}) (*http.Response, error) {
 	var payload io.Reader
 	switch v := in.(type) {
 	case io.Reader:
@@ -111,10 +112,13 @@ func (c *Client) rawReq(method, path string, contentType string, in, out interfa
 	if err != nil {
 		return nil, err
 	}
-	if contentType == "" {
-		contentType = "application/json"
+	if header == nil {
+		header = make(http.Header)
 	}
-	req.Header.Set("Content-Type", contentType)
+	if header.Get("Content-Type") == "" {
+		header.Set("Content-Type", "application/json")
+	}
+	req.Header = header
 	req.SetBasicAuth("", c.key)
 	res, err := c.http.Do(req)
 	if err != nil {
@@ -148,7 +152,7 @@ func (c *Client) rawReq(method, path string, contentType string, in, out interfa
 }
 
 func (c *Client) send(method, path string, in, out interface{}) error {
-	_, err := c.rawReq(method, path, "", in, out)
+	_, err := c.rawReq(method, path, nil, in, out)
 	return err
 }
 
@@ -161,12 +165,12 @@ func (c *Client) post(path string, in, out interface{}) error {
 }
 
 func (c *Client) get(path string, out interface{}) error {
-	_, err := c.rawReq("GET", path, "", nil, out)
+	_, err := c.rawReq("GET", path, nil, nil, out)
 	return err
 }
 
 func (c *Client) delete(path string) error {
-	res, err := c.rawReq("DELETE", path, "", nil, nil)
+	res, err := c.rawReq("DELETE", path, nil, nil, nil)
 	if err == nil {
 		res.Body.Close()
 	}
@@ -303,12 +307,59 @@ func (c *Client) GetApp(appID string) (*ct.App, error) {
 	return app, c.get(fmt.Sprintf("/apps/%s", appID), app)
 }
 
+type sseDecoder struct {
+	*bufio.Reader
+}
+
+// Decode finds the next "data" field and decodes it into v
+func (dec *sseDecoder) Decode(v interface{}) error {
+	for {
+		line, err := dec.ReadBytes('\n')
+		if err != nil {
+			return err
+		}
+		if bytes.HasPrefix(line, []byte("data: ")) {
+			data := bytes.TrimPrefix(line, []byte("data: "))
+			return json.Unmarshal(data, v)
+		}
+	}
+}
+
+type JobEventStream struct {
+	Events chan *ct.JobEvent
+	body   io.ReadCloser
+}
+
+func (s *JobEventStream) Close() {
+	s.body.Close()
+}
+
+func (c *Client) StreamJobEvents(appID string) (*JobEventStream, error) {
+	res, err := c.rawReq("GET", fmt.Sprintf("/apps/%s/jobs", appID), http.Header{"Accept": []string{"text/event-stream"}}, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	stream := &JobEventStream{Events: make(chan *ct.JobEvent), body: res.Body}
+	go func() {
+		defer close(stream.Events)
+		dec := &sseDecoder{bufio.NewReader(stream.body)}
+		for {
+			event := &ct.JobEvent{}
+			if err := dec.Decode(event); err != nil {
+				return
+			}
+			stream.Events <- event
+		}
+	}()
+	return stream, nil
+}
+
 func (c *Client) GetJobLog(appID, jobID string, tail bool) (io.ReadCloser, error) {
 	path := fmt.Sprintf("/apps/%s/jobs/%s/log", appID, jobID)
 	if tail {
 		path += "?tail=true"
 	}
-	res, err := c.rawReq("GET", path, "", nil, nil)
+	res, err := c.rawReq("GET", path, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}

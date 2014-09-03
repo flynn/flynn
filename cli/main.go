@@ -13,7 +13,6 @@ import (
 	"text/tabwriter"
 	"unicode"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/BurntSushi/toml"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
@@ -173,17 +172,15 @@ func configPath() string {
 	return p
 }
 
-func readConfig() error {
+func readConfig() (err error) {
 	if config != nil {
 		return nil
 	}
-	conf := &cfg.Config{}
-	_, err := toml.DecodeFile(configPath(), conf)
-	if err != nil && !os.IsNotExist(err) {
-		return err
+	config, err = cfg.ReadFile(configPath())
+	if os.IsNotExist(err) {
+		err = nil
 	}
-	config = conf
-	return nil
+	return
 }
 
 func homedir() string {

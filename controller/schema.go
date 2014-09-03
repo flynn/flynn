@@ -112,6 +112,27 @@ $$ LANGUAGE plpgsql`,
     PRIMARY KEY (job_id, host_id),
     FOREIGN KEY (app_id, release_id) REFERENCES formations (app_id, release_id)
 )`,
+		`CREATE SEQUENCE job_event_ids`,
+		`CREATE TABLE job_events (
+    event_id bigint PRIMARY KEY DEFAULT nextval('job_event_ids'),
+    job_id text NOT NULL,
+    host_id text NOT NULL,
+    app_id uuid NOT NULL REFERENCES apps (app_id),
+    state job_state NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    FOREIGN KEY (job_id, host_id) REFERENCES job_cache (job_id, host_id)
+)`,
+		`CREATE FUNCTION notify_job_event() RETURNS TRIGGER AS $$
+    BEGIN
+    PERFORM pg_notify('job_events:' || NEW.app_id, NEW.event_id || '');
+        RETURN NULL;
+    END;
+$$ LANGUAGE plpgsql`,
+
+		`CREATE TRIGGER notify_job_event
+    AFTER INSERT ON job_events
+    FOR EACH ROW EXECUTE PROCEDURE notify_job_event()`,
+
 		`CREATE SEQUENCE name_ids MAXVALUE 4294967295`,
 	)
 	return m.Migrate(db)
