@@ -156,6 +156,7 @@ syncErr:
 	for _, node := range data.Node.Nodes {
 		key := path.Base(node.Key)
 		if modified, ok := keys[key]; ok && modified >= node.ModifiedIndex {
+			newKeys[key] = modified
 			continue
 		}
 		route := &router.Route{}

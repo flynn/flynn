@@ -50,6 +50,7 @@ func (b *EtcdBackend) Subscribe(name string) (UpdateStream, error) {
 			if response != nil {
 				for _, n := range response.Node.Nodes {
 					if modified, ok := keys[n.Key]; ok && modified >= n.ModifiedIndex {
+						newKeys[n.Key] = modified
 						continue
 					}
 					if !send(b.responseToUpdate(response, n, newKeys)) {
