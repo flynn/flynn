@@ -11,6 +11,8 @@ import (
 	log "gopkg.in/inconshreveable/log15.v2"
 )
 
+var dslog = log.New("module", "datastore")
+
 type EtcdClient interface {
 	Create(key string, value string, ttl uint64) (*etcd.Response, error)
 	Set(key string, value string, ttl uint64) (*etcd.Response, error)
@@ -44,6 +46,7 @@ func NewEtcdDataStore(etcd EtcdClient, prefix string) DataStore {
 		prefix:   prefix,
 		etcd:     etcd,
 		stopSync: make(chan bool),
+		log:      dslog.New("prefix", prefix),
 	}
 }
 
@@ -51,9 +54,8 @@ type etcdDataStore struct {
 	prefix   string
 	etcd     EtcdClient
 	stopSync chan bool
+	log      log.Logger
 }
-
-var dslog = log.New("module", "datastore")
 
 var ErrExists = errors.New("router: route already exists")
 var ErrNotFound = errors.New("router: route not found")
@@ -130,14 +132,14 @@ func (s *etcdDataStore) Sync(h SyncHandler, started chan<- error) {
 	nextIndex := uint64(1)
 
 fullSync:
-	dslog.Info("Doing fullsync with etcd")
+	s.log.Info("Doing fullsync with etcd")
 	data, err := s.etcd.Get(s.prefix, false, true)
 	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
-		dslog.Debug("No config in etcd, clear local map, watch", "prefix", s.prefix)
+		dslog.Debug("No config in etcd, clear local map, watch")
 		for id := range keys {
 			delete(keys, id)
 			if err := h.Remove(id); err != nil {
-				dslog.Error("Failed to process delete from etcd fullsync", "key", id, "err", err)
+				s.log.Error("Failed to process delete from etcd fullsync", "key", id, "err", err)
 			}
 		}
 		goto watch
@@ -149,7 +151,7 @@ syncErr:
 			started <- err
 			return
 		}
-		dslog.Error("Fullsync from etcd failed: %s", "err", err)
+		s.log.Error("Fullsync from etcd failed: %s", "err", err)
 		time.Sleep(time.Second)
 		goto fullSync
 	}
@@ -174,7 +176,7 @@ syncErr:
 			continue
 		}
 		if err := h.Remove(k); err != nil {
-			dslog.Error("Failed to process delete from etcd fullsync", "key", k, "err", err)
+			s.log.Error("Failed to process delete from etcd fullsync", "key", k, "err", err)
 		}
 	}
 	keys = newKeys
@@ -195,7 +197,7 @@ watch:
 			close(watchDone)
 		}()
 		for res := range stream {
-			dslog.Debug("Received update from etcd")
+			s.log.Debug("Received update from etcd")
 			nextIndex = res.EtcdIndex + 1
 			id := path.Base(res.Node.Key)
 			var err error
@@ -212,7 +214,7 @@ watch:
 			}
 		fail:
 			if err != nil {
-				dslog.Error("Error processing update from etcd", "err", err, "node", res.Node)
+				s.log.Error("Error processing update from etcd", "err", err, "node", res.Node)
 			}
 		}
 		<-watchDone
@@ -223,10 +225,10 @@ watch:
 		}
 		if e, ok := watchErr.(*etcd.EtcdError); ok && e.ErrorCode == 401 {
 			// event log has been pruned beyond our waitIndex, force fullSync
-			dslog.Info("Got etcd error 401, doing full sync")
+			s.log.Info("Got etcd error 401, doing full sync")
 			goto fullSync
 		}
-		dslog.Error("Restarting etcd watch due to error", "path", s.prefix, "err", watchErr)
+		s.log.Error("Restarting etcd watch due to error", "err", watchErr)
 		// TODO: backoff here
 	}
 }
