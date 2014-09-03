@@ -181,6 +181,7 @@ syncErr:
 	}
 	keys = newKeys
 	newKeys = make(map[string]uint64)
+	s.log.Info("Fullsync with etcd complete, no watching", "routes", len(keys))
 
 watch:
 	if started != nil {
