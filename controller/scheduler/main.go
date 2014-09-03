@@ -103,6 +103,7 @@ func (c *context) syncCluster(events chan<- *host.Event) {
 	for _, h := range hosts {
 		for _, job := range h.Jobs {
 			appID := job.Metadata["flynn-controller.app"]
+			appName := job.Metadata["flynn-controller.app_name"]
 			releaseID := job.Metadata["flynn-controller.release"]
 			jobType := job.Metadata["flynn-controller.type"]
 			gg := g.New(grohl.Data{"host.id": h.ID, "job.id": job.ID, "app.id": appID, "release.id": releaseID, "type": jobType})
@@ -143,7 +144,7 @@ func (c *context) syncCluster(events chan<- *host.Event) {
 				}
 
 				f = NewFormation(c, &ct.ExpandedFormation{
-					App:       &ct.App{ID: appID},
+					App:       &ct.App{ID: appID, Name: appName},
 					Release:   release,
 					Artifact:  artifact,
 					Processes: formation.Processes,
