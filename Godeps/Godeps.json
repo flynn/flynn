@@ -45,6 +45,10 @@
 			"Rev": "99d0178daa068fd3a437c218c559e3d3bee4228b"
 		},
 		{
+			"ImportPath": "github.com/badgerodon/ioutil",
+			"Rev": "c3e849398f0ed2429b43c31edcc7f14174453237"
+		},
+		{
 			"ImportPath": "github.com/boltdb/bolt",
 			"Comment": "data/v1-228-g8fb50d5",
 			"Rev": "8fb50d5ee57110936b904a7539d4c5f2bf2359db"
@@ -185,8 +189,20 @@
 			"Rev": "bbe60ba962de9b5627873af719f1c98133d43afb"
 		},
 		{
+			"ImportPath": "github.com/gorilla/context",
+			"Rev": "14f550f51af52180c2eefed15e5fd18d63c0a64a"
+		},
+		{
 			"ImportPath": "github.com/gorilla/handlers",
 			"Rev": "470089673c69baefb2d80b13019a4ab6f05e2aad"
+		},
+		{
+			"ImportPath": "github.com/gorilla/securecookie",
+			"Rev": "1b0c7f6e9ab3d7f500fd7d50c7ad835ff428139b"
+		},
+		{
+			"ImportPath": "github.com/gorilla/sessions",
+			"Rev": "aa5e036e6c44aec69a32eb41097001978b29ad31"
 		},
 		{
 			"ImportPath": "github.com/heroku/hk/term",

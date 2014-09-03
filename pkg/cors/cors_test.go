@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-martini/martini"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 )
 
 func Test_AllowAll(t *testing.T) {
