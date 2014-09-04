@@ -464,6 +464,9 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 			Stdin: attach,
 		},
 	}
+	if len(newJob.Entrypoint) > 0 {
+		job.Config.Entrypoint = newJob.Entrypoint
+	}
 
 	hosts, err := cl.ListHosts()
 	if err != nil {

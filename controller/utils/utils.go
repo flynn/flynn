@@ -69,6 +69,9 @@ func JobConfig(f *ct.ExpandedFormation, name string) *host.Job {
 			Env: env,
 		},
 	}
+	if len(t.Entrypoint) > 0 {
+		job.Config.Entrypoint = t.Entrypoint
+	}
 	job.Config.Ports = make([]host.Port, len(t.Ports))
 	for i, p := range t.Ports {
 		job.Config.Ports[i].Proto = p.Proto
