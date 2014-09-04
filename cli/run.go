@@ -19,13 +19,14 @@ import (
 
 func init() {
 	cmd := register("run", runRun, `
-usage: flynn run [-d] [-r <release>] <command> [<argument>...]
+usage: flynn run [-d] [-r <release>] [-e <entrypoint>] <command> [<argument>...]
 
 Run a job.
 
 Options:
    -d, --detached  run job without connecting io streams
    -r <release>    id of release to run (defaults to current app release)
+   -e <entrypoint> overwrite the default entrypoint of the release's image
 `)
 	cmd.optsFirst = true
 }
@@ -51,6 +52,9 @@ func runRun(args *docopt.Args, client *controller.Client) error {
 		Cmd:       append([]string{args.String["<command>"]}, args.All["<argument>"].([]string)...),
 		TTY:       term.IsTerminal(os.Stdin) && term.IsTerminal(os.Stdout) && !runDetached,
 		ReleaseID: runRelease,
+	}
+	if args.String["-e"] != "" {
+		req.Entrypoint = []string{args.String["-e"]}
 	}
 	if req.TTY {
 		cols, err := term.Cols()
