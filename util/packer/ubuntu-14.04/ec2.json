@@ -1,0 +1,33 @@
+{
+  "builders": [
+    {
+      "type": "amazon-ebs",
+      "ami_block_device_mappings": [{
+        "device_name": "/dev/sda1",
+        "volume_size": "50",
+        "volume_type": "gp2"
+      }],
+      "ami_groups": ["all"],
+      "ami_name": "flynn-ubuntu-14.04-{{timestamp}}",
+      "instance_type": "m3.large",
+      "region": "us-east-1",
+      "source_ami": "ami-10389d78",
+      "ssh_username": "ubuntu"
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "shell",
+      "scripts": [
+        "scripts/upgrade.sh",
+        "scripts/install.sh",
+        "scripts/apt_cleanup.sh"
+      ],
+      "execute_command": "{{ .Vars }} sudo -E bash '{{ .Path }}'"
+    },
+    {
+      "type": "shell",
+      "script": "scripts/flynn.sh"
+    }
+  ]
+}
