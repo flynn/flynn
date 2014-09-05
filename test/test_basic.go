@@ -191,17 +191,17 @@ func (s *SchedulerSuite) TestTCPApp(t *c.C) {
 		if err != nil {
 			return err
 		}
-		echo := random.String(16) + "\n"
-		_, err = conn.Write([]byte(echo))
+		echo := random.Bytes(16)
+		_, err = conn.Write(echo)
 		if err != nil {
 			return err
 		}
-		reply := make([]byte, 1024)
+		reply := make([]byte, 16)
 		_, err = conn.Read(reply)
 		if err != nil {
 			return err
 		}
-		t.Assert(string(reply), c.Equals, echo)
+		t.Assert(reply, c.DeepEquals, echo)
 		return nil
 	}); err != nil {
 		t.Error(err)
