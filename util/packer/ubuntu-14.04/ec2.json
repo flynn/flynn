@@ -9,6 +9,7 @@
       }],
       "ami_groups": ["all"],
       "ami_name": "flynn-ubuntu-14.04-{{timestamp}}",
+      "ami_regions": ["eu-west-1"],
       "instance_type": "m3.large",
       "region": "us-east-1",
       "source_ami": "ami-10389d78",
