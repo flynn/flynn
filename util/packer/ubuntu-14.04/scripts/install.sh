@@ -5,9 +5,9 @@ set -xeo pipefail
 perl -p -i -e 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"/g'  /etc/default/grub
 /usr/sbin/update-grub
 
-# add docker group and add vagrant to it
-sudo groupadd docker
-sudo usermod -a -G docker vagrant
+# add docker group and add the current user to it
+groupadd docker
+usermod -a -G docker "${SUDO_USER}"
 
 # add the docker, tup and flynn gpg keys
 apt-key adv --keyserver keyserver.ubuntu.com --recv 36A1D7869245C8950F966E92D8576A8BA88D21E9

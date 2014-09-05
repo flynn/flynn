@@ -86,7 +86,9 @@
       "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'",
       "scripts": [
         "scripts/install.sh",
-        "scripts/vm_cleanup.sh"
+        "scripts/apt_cleanup.sh",
+        "scripts/net_cleanup.sh",
+        "scripts/compress.sh"
       ],
       "type": "shell"
     }
