@@ -1,6 +1,9 @@
 package sse
 
 import (
+	"bufio"
+	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"sync"
@@ -37,5 +40,23 @@ func (w *Writer) Write(p []byte) (int, error) {
 func (w *Writer) Flush() {
 	if fw, ok := w.Writer.(http.Flusher); ok {
 		fw.Flush()
+	}
+}
+
+type Decoder struct {
+	*bufio.Reader
+}
+
+// Decode finds the next "data" field and decodes it into v
+func (dec *Decoder) Decode(v interface{}) error {
+	for {
+		line, err := dec.ReadBytes('\n')
+		if err != nil {
+			return err
+		}
+		if bytes.HasPrefix(line, []byte("data: ")) {
+			data := bytes.TrimPrefix(line, []byte("data: "))
+			return json.Unmarshal(data, v)
+		}
 	}
 }
