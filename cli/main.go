@@ -49,6 +49,8 @@ Commands:
    resource            provision a new resource
    key                 manage SSH public keys
    release             add a docker image release
+   pause               pause requests to a backend
+   unpause             resume traffic to a backend
    version             show flynn version
 
 See 'flynn help <command>' for more information on a specific command.
