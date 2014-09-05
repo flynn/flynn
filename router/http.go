@@ -406,6 +406,9 @@ type httpService struct {
 func (s *httpService) Pause() {
 	s.pauseMtx.Lock()
 	s.paused = true
+	if len(s.requests) == 0 {
+		s.sendEvent("all")
+	}
 	s.pauseMtx.Unlock()
 }
 

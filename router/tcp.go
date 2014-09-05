@@ -320,6 +320,9 @@ type tcpService struct {
 func (s *tcpService) Pause() {
 	s.pauseMtx.Lock()
 	s.paused = true
+	if len(s.requests) == 0 {
+		s.sendEvent("all")
+	}
 	s.pauseMtx.Unlock()
 }
 
