@@ -233,6 +233,12 @@
     }
   },
   {
+    "id": "controller-route-wait",
+    "action": "wait",
+    "url": "http://{{ or (getenv \"CONTROLLER_DOMAIN\") \"localhost\" }}",
+    "status": 401
+  },
+  {
     "id": "log-complete",
     "action": "log",
     "output": "\n\nFlynn bootstrapping complete. Install flynn-cli and paste the line below into a terminal window:\n\nflynn cluster add -g {{ or (getenv \"CONTROLLER_DOMAIN\") \"localhost\" }}:2222 -p {{ (index .StepData \"controller-cert\").Pin }} default https://{{ or (getenv \"CONTROLLER_DOMAIN\") \"localhost\" }} {{ (index .StepData \"controller-key\").Data }}"

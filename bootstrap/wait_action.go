@@ -28,7 +28,7 @@ func (a *WaitAction) Run(s *State) error {
 		a.Status = 200
 	}
 
-	u, err := url.Parse(a.URL)
+	u, err := url.Parse(interpolate(s, a.URL))
 	if err != nil {
 		return err
 	}
