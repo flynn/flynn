@@ -13,6 +13,7 @@ import (
 
 type WaitAction struct {
 	URL    string `json:"url"`
+	Host   string `json:"host"`
 	Status int    `json:"status"`
 }
 
@@ -46,7 +47,14 @@ func (a *WaitAction) Run(s *State) error {
 	start := time.Now()
 	for {
 		var result string
-		res, err := httpc.Get(u.String())
+		req, err := http.NewRequest("GET", u.String(), nil)
+		if err != nil {
+			return err
+		}
+		if a.Host != "" {
+			req.Host = interpolate(s, a.Host)
+		}
+		res, err := httpc.Do(req)
 		if err != nil {
 			result = fmt.Sprintf("%q", err)
 			goto fail
