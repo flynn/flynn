@@ -719,11 +719,24 @@ func (f *Formation) jobType(job *host.Job) string {
 	return job.Metadata["flynn-controller.type"]
 }
 
+// sortJobs sorts Jobs in reverse chronological order based on their startedAt time
+type sortJobs []*Job
+
+func (s sortJobs) Len() int           { return len(s) }
+func (s sortJobs) Less(i, j int) bool { return s[i].startedAt.Sub(s[j].startedAt) > 0 }
+func (s sortJobs) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s sortJobs) Sort()              { sort.Sort(s) }
+
 func (f *Formation) remove(n int, name string, hostID string) {
 	g := grohl.NewContext(grohl.Data{"fn": "remove", "app.id": f.AppID, "release.id": f.Release.ID})
 
 	i := 0
+	sj := make(sortJobs, 0, len(f.jobs[name]))
 	for _, job := range f.jobs[name] {
+		sj = append(sj, job)
+	}
+	sj.Sort()
+	for _, job := range sj {
 		g.Log(grohl.Data{"host.id": job.HostID, "job.id": job.ID})
 		if hostID != "" && job.HostID != hostID { // remove from a specific host
 			continue
