@@ -270,6 +270,21 @@ var putJobAttempts = attempt.Strategy{
 	Delay: 500 * time.Millisecond,
 }
 
+func jobState(event *host.Event) string {
+	switch event.Job.Status {
+	case host.StatusStarting:
+		return "starting"
+	case host.StatusRunning:
+		return "up"
+	case host.StatusDone:
+		return "down"
+	case host.StatusCrashed, host.StatusFailed:
+		return "crashed"
+	default:
+		return ""
+	}
+}
+
 func (c *context) watchHost(id string, events chan<- *host.Event) {
 	if !c.hosts.Add(id) {
 		return
@@ -295,29 +310,28 @@ func (c *context) watchHost(id string, events chan<- *host.Event) {
 	}
 
 	for event := range ch {
-		job := c.jobs.Get(id, event.JobID)
-		if job == nil {
+		meta := event.Job.Job.Metadata
+		appID := meta["flynn-controller.app"]
+		releaseID := meta["flynn-controller.release"]
+		jobType := meta["flynn-controller.type"]
+
+		if appID == "" || releaseID == "" {
 			continue
 		}
 
-		j := &ct.Job{ID: id + "-" + event.JobID, AppID: job.Formation.AppID, ReleaseID: job.Formation.Release.ID, Type: job.Type}
-		switch event.Event {
-		case "create":
-			j.State = "starting"
-		case "start":
-			j.State = "up"
-			job.startedAt = event.Job.StartedAt
-		case "stop":
-			j.State = "down"
-		case "error":
-			j.State = "crashed"
+		job := &ct.Job{
+			ID:        id + "-" + event.JobID,
+			AppID:     appID,
+			ReleaseID: releaseID,
+			Type:      jobType,
+			State:     jobState(event),
 		}
 		g.Log(grohl.Data{"at": "event", "job.id": event.JobID, "event": event.Event})
 
 		// Call PutJob in a goroutine as it may be the controller which has died
 		go func(event *host.Event) {
 			putJobAttempts.Run(func() error {
-				if err := c.PutJob(j); err != nil {
+				if err := c.PutJob(job); err != nil {
 					g.Log(grohl.Data{"at": "error", "job.id": event.JobID, "event": event.Event, "err": err})
 					return err
 				}
@@ -325,6 +339,12 @@ func (c *context) watchHost(id string, events chan<- *host.Event) {
 				return nil
 			})
 		}(event)
+
+		j := c.jobs.Get(id, event.JobID)
+		if j == nil {
+			continue
+		}
+		j.startedAt = event.Job.StartedAt
 
 		if event.Event != "error" && event.Event != "stop" {
 			if events != nil {
@@ -337,7 +357,7 @@ func (c *context) watchHost(id string, events chan<- *host.Event) {
 		c.jobs.Remove(id, event.JobID)
 		go func(event *host.Event) {
 			c.mtx.RLock()
-			job.Formation.RestartJob(job.Type, id, event.JobID)
+			j.Formation.RestartJob(jobType, id, event.JobID)
 			c.mtx.RUnlock()
 			if events != nil {
 				events <- event
