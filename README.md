@@ -109,6 +109,10 @@ flynn run bash
 Currently only Ubuntu 14.04 amd64 is supported for manual installation, but this
 is a temporary packaging limitation, we have no actual dependency on Ubuntu.
 
+If you plan to run a multi-node cluster, you should boot at least 3 nodes to keep etcd efficient
+(see [here](https://github.com/coreos/etcd/blob/v0.4.6/Documentation/optimal-cluster-size.md) for
+an explanation).
+
 The first step is to install the `flynn-host` package and container images:
 
 ```text
