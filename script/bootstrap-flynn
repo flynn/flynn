@@ -3,25 +3,48 @@
 set -e
 
 usage() {
-  echo "usage: $0 [libvirt-lxc|docker]" >&2
+  cat <<USAGE >&2
+usage: $0 [options]
+
+OPTIONS:
+  -h            Show this message
+  -b BACKEND    The job backend to use (either docker or libvirt-lxc) [default: libvirt-lxc]
+  -i IP         The external IP address to bind to [default: the IP assigned to eth0]
+USAGE
 }
 
-if [ "$#" -gt 1 ]; then
-  usage
-  exit 1
-fi
-
-IP=$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')
 
 main() {
-  local backend=${1:-libvirt-lxc}
+  local backend ip
+
+  while getopts "hb:i:" opt; do
+    case $opt in
+      h)
+	usage
+	exit 1
+	;;
+      b)
+	backend=$OPTARG
+	;;
+      i)
+	ip=$OPTARG
+	;;
+      ?)
+	usage
+	exit 1
+	;;
+    esac
+  done
+
+  backend=${backend:-libvirt-lxc}
+  ip=${ip:-$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')}
 
   case "${backend}" in
     libvirt-lxc)
-      boot_libvirt_lxc
+      boot_libvirt_lxc $ip
       ;;
     docker)
-      boot_docker
+      boot_docker $ip
       ;;
     *)
       usage
@@ -36,6 +59,7 @@ info() {
 }
 
 boot_libvirt_lxc() {
+  local ip=$1
   local root="$(cd "$(dirname "$0")/.." && pwd)"
   local host_dir="${root}/host"
   local bootstrap_dir="${root}/bootstrap"
@@ -58,7 +82,7 @@ boot_libvirt_lxc() {
     -- \
     daemon \
     --manifest "${host_dir}/bin/manifest.json" \
-    --external $IP \
+    --external $ip \
     --force \
     --backend libvirt-lxc \
     --state /tmp/flynn-host-state.json \
@@ -66,13 +90,15 @@ boot_libvirt_lxc() {
     &>$log
 
   info "Bootstrapping Flynn"
-  export DISCOVERD="${IP}:1111"
+  export DISCOVERD="${ip}:1111"
   export CONTROLLER_DOMAIN="dev.localflynn.com"
   export DEFAULT_ROUTE_DOMAIN="$CONTROLLER_DOMAIN"
   "${bootstrap_dir}/bin/flynn-bootstrap" "${bootstrap_dir}/bin/manifest.json"
 }
 
 boot_docker() {
+  local ip=$1
+
   info "Killing running flynn-host, if any"
   local host=$(docker ps | grep flynn-host | cut -d" " -f 1)
   if [ -n "$host" ]; then
@@ -85,12 +111,12 @@ boot_docker() {
     --volume /var/run/docker.sock:/var/run/docker.sock \
     --publish 1113:1113 \
     flynn/host \
-    --external $IP \
+    --external $ip \
     --force \
     --backend docker
 
   info "Bootstrapping Flynn"
-  docker run --env DISCOVERD=$IP:1111 flynn/bootstrap
+  docker run --env DISCOVERD=$ip:1111 flynn/bootstrap
 }
 
-main $1
+main $@
