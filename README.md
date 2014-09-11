@@ -128,7 +128,7 @@ Do this on every host that you want to be in the Flynn cluster.
 The next step is to configure a Layer 0 cluster. The host daemon finds other
 members of the cluster using the etcd, which needs to be bootstrapped.
 
-The etcd cluster should be configured using a a [discovery
+The etcd cluster should be configured using a [discovery
 token](https://coreos.com/docs/cluster-management/setup/etcd-cluster-discovery/).
 Get a token [from here](https://discovery.etcd.io/new) and add a line like this
 to `/etc/init/flynn-host.conf` on every host:
