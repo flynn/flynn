@@ -232,6 +232,9 @@ git config user.name "CI"
 git merge origin/master
 {{ end }}
 
+# A temporary fix for https://github.com/flynn/flynn/issues/199
+git clean -Xdf --exclude '!.tup'
+
 tup
 
 sudo cp {host/bin/flynn-*,pinkerton/pinkerton,bootstrap/bin/flynn-bootstrap} /usr/bin
