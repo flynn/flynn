@@ -189,7 +189,9 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 		return err
 	}
 	service.refs++
+	r.mtx.Lock()
 	r.service = service
+	r.mtx.Unlock()
 	h.l.routes[data.ID] = r
 	h.l.ports[r.Port] = r
 
@@ -226,6 +228,7 @@ type tcpRoute struct {
 	l       net.Listener
 	addr    string
 	service *tcpService
+	mtx     sync.RWMutex
 }
 
 func (r *tcpRoute) Serve(started chan<- error) {
@@ -243,7 +246,9 @@ func (r *tcpRoute) Serve(started chan<- error) {
 		if err != nil {
 			break
 		}
+		r.mtx.RLock()
 		go r.service.handle(conn)
+		r.mtx.RUnlock()
 	}
 }
 
