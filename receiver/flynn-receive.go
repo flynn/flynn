@@ -46,22 +46,22 @@ func main() {
 	}
 	blobstoreHost := services[0].Addr
 
-	app := os.Args[1]
+	appName := os.Args[1]
 
-	_, err = client.GetApp(app)
+	app, err := client.GetApp(appName)
 	if err == controller.ErrNotFound {
-		log.Fatalf("Unknown app %q", app)
+		log.Fatalf("Unknown app %q", appName)
 	} else if err != nil {
 		log.Fatalln("Error retrieving app:", err)
 	}
-	prevRelease, err := client.GetAppRelease(app)
+	prevRelease, err := client.GetAppRelease(app.Name)
 	if err == controller.ErrNotFound {
 		prevRelease = &ct.Release{}
 	} else if err != nil {
 		log.Fatalln("Error creating getting current app release:", err)
 	}
 
-	fmt.Printf("-----> Building %s...\n", app)
+	fmt.Printf("-----> Building %s...\n", app.Name)
 
 	var output bytes.Buffer
 	slugURL := fmt.Sprintf("http://%s/%s.tgz", blobstoreHost, random.UUID())
@@ -106,7 +106,7 @@ func main() {
 			if proc.Env == nil {
 				proc.Env = make(map[string]string)
 			}
-			proc.Env["SD_NAME"] = app + "-web"
+			proc.Env["SD_NAME"] = app.Name + "-web"
 		}
 		procs[t] = proc
 	}
@@ -119,11 +119,26 @@ func main() {
 	if err := client.CreateRelease(release); err != nil {
 		log.Fatalln("Error creating release:", err)
 	}
-	if err := client.SetAppRelease(app, release.ID); err != nil {
+	if err := client.SetAppRelease(app.Name, release.ID); err != nil {
 		log.Fatalln("Error setting app release:", err)
 	}
 
 	fmt.Println("=====> Application deployed")
+
+	// If the app is new and the web process type exists,
+	// it should scale to one process after the release is created.
+	if _, ok := procs["web"]; ok && prevRelease.ID == "" {
+		formation := &ct.Formation{
+			AppID:     app.ID,
+			ReleaseID: release.ID,
+			Processes: map[string]int{"web": 1},
+		}
+		if err := client.PutFormation(formation); err != nil {
+			log.Fatalln("Error putting formation:", err)
+		}
+
+		fmt.Println("=====> Added default web=1 formation")
+	}
 }
 
 func appendEnvDir(stdin io.Reader, pipe io.WriteCloser, env map[string]string) {
