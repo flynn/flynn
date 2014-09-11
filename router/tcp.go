@@ -209,6 +209,7 @@ func (h *tcpSyncHandler) Remove(id string) error {
 	if !ok {
 		return ErrNotFound
 	}
+	r.Close()
 
 	r.service.refs--
 	if r.service.refs <= 0 {
