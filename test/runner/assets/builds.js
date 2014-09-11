@@ -5,6 +5,12 @@ $(function() {
   var alertBox  = $(".alert")
   var template  = _.template($("#row-template").html())
 
+  var label_classes = {
+    "success": "label-success",
+    "pending": "label-info",
+    "failure": "label-danger"
+  }
+
   $(document).ajaxError(function(event, jqxhr, settings, error) {
     var msg = settings.type + " " + settings.url + " Error!"
 
@@ -22,6 +28,7 @@ $(function() {
       _.each(builds, function(build) {
 	lastID = build.id
 	build.created_at = moment(build.created_at)
+	build.label_class = label_classes[build.state]
 	var row = template(build)
 	tableBody.append(row)
       })
