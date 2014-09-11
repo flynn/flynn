@@ -391,10 +391,14 @@ func waitForEvent(c *C, w Watcher, event string, id string) func() *router.Event
 	}
 }
 
-func discoverdRegisterTCP(c *C, l *tcpListener, port int, addr string) {
+func discoverdRegisterTCP(c *C, l *tcpListener, addr string) {
+	discoverdRegisterTCPService(c, l, "test", addr)
+}
+
+func discoverdRegisterTCPService(c *C, l *tcpListener, name, addr string) {
 	dc := l.TCPListener.discoverd.(discoverdClient)
-	ss := l.TCPListener.services[port].ss
-	discoverdRegister(c, dc, ss, "test", addr)
+	ss := l.TCPListener.services[name].ss
+	discoverdRegister(c, dc, ss, name, addr)
 }
 
 func discoverdRegisterHTTP(c *C, l *httpListener, addr string) {
