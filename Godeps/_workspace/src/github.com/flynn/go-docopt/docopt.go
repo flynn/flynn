@@ -103,7 +103,7 @@ func parse(doc string, argv []string, help bool, version string, optionsFirst bo
 		return
 	}
 
-	patternArgv, err := parseArgv(newTokenList(argv, errorUser), &options, optionsFirst)
+	patternArgv, err := parseArgv(newTokenList(argv, errorUser), &options, optionsFirst, pat)
 	if err != nil {
 		output = handleError(err, usage)
 		return
@@ -199,7 +199,7 @@ func parsePattern(source string, options *patternList) (*pattern, error) {
 	return newRequired(result...), nil
 }
 
-func parseArgv(tokens *tokenList, options *patternList, optionsFirst bool) (patternList, error) {
+func parseArgv(tokens *tokenList, options *patternList, optionsFirst bool, pat *pattern) (patternList, error) {
 	/*
 		Parse command-line argument vector.
 
@@ -209,6 +209,16 @@ func parseArgv(tokens *tokenList, options *patternList, optionsFirst bool) (patt
 			argv ::= [ long | shorts | argument ]* [ '--' [ argument ]* ] ;
 	*/
 	parsed := patternList{}
+
+	// This is a HACK that skips the command in:
+	// (*docopt.pattern)(0x208333dc0)(required(required(command(foo, false), ...)))
+	// when parsing with optionsFirst set. For more details see
+	// https://github.com/flynn/flynn/pull/193
+	skipArg := optionsFirst && pat != nil &&
+		pat.t == patternRequired && len(pat.children) == 1 &&
+		pat.children[0].t == patternRequired && len(pat.children[0].children) > 0 &&
+		pat.children[0].children[0].t == patternCommand
+
 	for tokens.current() != nil {
 		if tokens.current().eq("--") {
 			for _, v := range tokens.tokens {
@@ -227,13 +237,14 @@ func parseArgv(tokens *tokenList, options *patternList, optionsFirst bool) (patt
 				return nil, err
 			}
 			parsed = append(parsed, ps...)
-		} else if optionsFirst {
+		} else if !skipArg && optionsFirst {
 			for _, v := range tokens.tokens {
 				parsed = append(parsed, newArgument("", v))
 			}
 			return parsed, nil
 		} else {
 			parsed = append(parsed, newArgument("", tokens.move().String()))
+			skipArg = false
 		}
 	}
 	return parsed, nil
