@@ -36,7 +36,7 @@ Dashboard.Views.AppControls = React.createClass({
 						</RouteLink>
 
 						{formation ? (
-							<Dashboard.Views.AppProcesses formation={formation} />
+							<Dashboard.Views.AppProcesses appId={this.props.appId} formation={formation} />
 						) : (
 							<section className="app-processes">
 								&nbsp;

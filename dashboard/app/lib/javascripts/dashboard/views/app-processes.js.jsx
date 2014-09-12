@@ -114,7 +114,7 @@ Dashboard.Views.AppProcesses = React.createClass({
 			isSaving: true,
 			showSaveConfirmModal: false
 		});
-		AppProcessesActions.createFormation(formation);
+		AppProcessesActions.createFormation(this.props.appId, formation);
 	}
 });
 
