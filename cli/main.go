@@ -36,6 +36,7 @@ Commands:
    help                show usage for a specific command
    cluster             manage clusters
    create              create an app
+   delete              delete an app
    apps                list apps
    ps                  list jobs
    kill                kill a job
