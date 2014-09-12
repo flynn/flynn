@@ -199,11 +199,11 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 	},
 
 	__deleteApp: function () {
-		var appId = this.props.appId;
-		return App.getClient.call(this).deleteApp(appId).then(function (args) {
+		var __appId = this.id.appId;
+		return App.getClient.call(this).deleteApp(this.props.appId).then(function (args) {
 			Dashboard.Dispatcher.handleStoreEvent({
 				name: "APP:DELETED",
-				appId: appId
+				appId: __appId
 			});
 			return args;
 		});
