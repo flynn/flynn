@@ -306,7 +306,7 @@ App.getClient = function () {
 
 App.dispatcherIndex = App.registerWithDispatcher(Dashboard.Dispatcher);
 
-App.findOrFetch = function (appId) {
+App.findOrFetch = function (appId, client) {
 	var instances = this.__instances;
 	var instance;
 	var app;
@@ -323,7 +323,7 @@ App.findOrFetch = function (appId) {
 	if (app) {
 		return Promise.resolve(app);
 	} else {
-		return App.getClient.call(this).getApp(appId).then(function (args) {
+		return (client || App.getClient.call(this)).getApp(appId).then(function (args) {
 			return args[0];
 		});
 	}

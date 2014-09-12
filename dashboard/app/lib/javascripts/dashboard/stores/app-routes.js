@@ -33,7 +33,7 @@ var AppRoutes = Dashboard.Stores.AppRoutes = Dashboard.Store.createClass({
 	handleEvent: function (event) {
 		switch (event.name) {
 			case "NEW_APP_ROUTE:CREATE_ROUTE":
-				Dashboard.Stores.App.findOrFetch(this.props.appId).then(function (app) {
+				Dashboard.Stores.App.findOrFetch(this.props.appId, this.__getClient()).then(function (app) {
 					return this.__createAppRoute(event.domain, app.name);
 				}.bind(this)).then(function () {
 					return this.__fetchRoutes();
