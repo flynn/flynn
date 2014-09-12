@@ -199,6 +199,9 @@ func rpcMuxHandler(main http.Handler, rpch http.Handler, authKey string) http.Ha
 			return
 		}
 		_, password, _ := parseBasicAuth(r.Header)
+		if password == "" && strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+			password = r.URL.Query().Get("key")
+		}
 		if len(password) != len(authKey) || subtle.ConstantTimeCompare([]byte(password), []byte(authKey)) != 1 {
 			w.WriteHeader(401)
 			return
