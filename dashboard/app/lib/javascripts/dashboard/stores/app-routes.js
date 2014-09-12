@@ -33,7 +33,7 @@ var AppRoutes = Dashboard.Stores.AppRoutes = Dashboard.Store.createClass({
 	handleEvent: function (event) {
 		switch (event.name) {
 			case "NEW_APP_ROUTE:CREATE_ROUTE":
-				Dashboard.Stores.App.findOrFetch(this.props.appId, this.__getClient()).then(function (app) {
+				Dashboard.Stores.App.findOrFetch(this.id.appId).then(function (app) {
 					return this.__createAppRoute(event.domain, app.name);
 				}.bind(this)).then(function () {
 					return this.__fetchRoutes();
@@ -68,7 +68,7 @@ var AppRoutes = Dashboard.Stores.AppRoutes = Dashboard.Store.createClass({
 		return this.__getClient().createAppRoute(this.props.appId, data).then(function () {
 			Dashboard.Dispatcher.handleStoreEvent({
 				name: "APP_ROUTES:CREATED",
-				appId: this.props.appId
+				appId: this.id.appId
 			});
 		}.bind(this)).catch(function (args) {
 			if (args instanceof Error) {
@@ -96,7 +96,7 @@ var AppRoutes = Dashboard.Stores.AppRoutes = Dashboard.Store.createClass({
 		return this.__getClient().deleteAppRoute(this.props.appId, routeId).then(function () {
 			Dashboard.Dispatcher.handleStoreEvent({
 				name: "APP_ROUTES:DELETED",
-				appId: this.props.appId,
+				appId: this.id.appId,
 				routeId: routeId
 			});
 		}.bind(this)).catch(function (args) {
