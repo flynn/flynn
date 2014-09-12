@@ -114,65 +114,8 @@ li[class*="icn-"] {
   margin-top: 4em;
 }
 
-.overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  right: 0;
-  background-color: transparentize($blackColor, 0.2);
-  overflow: auto;
-}
-
-  .overlay-top {
-    position: relative;
-    width: 27em;
-    margin: 4% auto;
-  }
-
-  .overlay-content {
-    position: relative;
-    width: 27em;
-    margin: 0 auto;
-    background-color: $lightColor;
-    border-radius: 2px;
-
-    > form {
-      padding: 2em;
-      padding-top: 1px;
-    }
-  }
-
-    .overlay-close {
-      position: absolute;
-      top: 0;
-      right: 0;
-      cursor: pointer;
-      z-index: 2000;
-      background-color: darken($lightColor, 6%);
-      padding: 0.5em;
-      font-size: 1.2em;
-      border-top-right-radius: 2px;
-      border-bottom-left-radius: 2px;
-    }
-
-  @media #{$smallBreakPoint} {
-    .overlay-top {
-      margin: 0;
-      width: 100%;
-    }
-    .overlay-content {
-      margin: 0;
-      width: 100%;
-    }
-  }
-
 .hidden {
   display: none;
-}
-
-.sponsor-back-btn {
-  margin-right: 1em;
 }
 
 .alert {
@@ -240,17 +183,5 @@ li[class*="icn-"] {
 #footer {
   a {
     text-decoration: none;
-  }
-
-  .cupcake-logo {
-    display: block;
-    position: relative;
-    margin-top: 0.5em;
-
-    .icn-cupcake:before {
-      font-size: 2em;
-      line-height: 2em;
-      color: $almostWhiteColor;
-    }
   }
 }

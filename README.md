@@ -3,10 +3,10 @@
 [Flynn](https://flynn.io) is a next generation open source Platform as a Service
 (PaaS).
 
-Unlike most PaaS's, Flynn can run stateful services as well as [12
-factor](http://12factor.net/) apps. This includes built-in database appliances
-(just Postgres to start). Flynn is modular so users can easily modify, upgrade,
-and replace components.
+Unlike most PaaS's, Flynn can run stateful services as well as [twelve-factor
+](http://12factor.net/) apps. This includes built-in database appliances (just
+Postgres to start). Flynn is modular so users can easily modify, upgrade, and
+replace components.
 
 Flynn components are divided into two _layers_.
 
@@ -128,7 +128,7 @@ Do this on every host that you want to be in the Flynn cluster.
 The next step is to configure a Layer 0 cluster. The host daemon finds other
 members of the cluster using the etcd, which needs to be bootstrapped.
 
-The etcd cluster should be configured using a a [discovery
+The etcd cluster should be configured using a [discovery
 token](https://coreos.com/docs/cluster-management/setup/etcd-cluster-discovery/).
 Get a token [from here](https://discovery.etcd.io/new) and add a line like this
 to `/etc/init/flynn-host.conf` on every host:
@@ -224,7 +224,6 @@ There are many ways to help Flynn besides contributing code:
 
  - Find bugs and file issues.
  - Improve the [documentation](/website) and website.
- - [Contribute](https://flynn.io/#sponsor) financially to support core development.
 
 Learn more at [flynn.io](https://flynn.io).
 

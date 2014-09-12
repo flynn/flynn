@@ -171,19 +171,19 @@ func TestParseArgv(t *testing.T) {
 		newOption("-f", "--file", 1, false),
 	}
 
-	p, err := parseArgv(tokenListFromString(""), &o, false)
+	p, err := parseArgv(tokenListFromString(""), &o, false, nil)
 	q := patternList{}
 	if reflect.DeepEqual(p, q) != true {
 		t.Error(err)
 	}
 
-	p, err = parseArgv(tokenListFromString("-h"), &o, false)
+	p, err = parseArgv(tokenListFromString("-h"), &o, false, nil)
 	q = patternList{newOption("-h", "", 0, true)}
 	if reflect.DeepEqual(p, q) != true {
 		t.Error(err)
 	}
 
-	p, err = parseArgv(tokenListFromString("-h --verbose"), &o, false)
+	p, err = parseArgv(tokenListFromString("-h --verbose"), &o, false, nil)
 	q = patternList{
 		newOption("-h", "", 0, true),
 		newOption("-v", "--verbose", 0, true),
@@ -192,7 +192,7 @@ func TestParseArgv(t *testing.T) {
 		t.Error(err)
 	}
 
-	p, err = parseArgv(tokenListFromString("-h --file f.txt"), &o, false)
+	p, err = parseArgv(tokenListFromString("-h --file f.txt"), &o, false, nil)
 	q = patternList{
 		newOption("-h", "", 0, true),
 		newOption("-f", "--file", 1, "f.txt"),
@@ -201,7 +201,7 @@ func TestParseArgv(t *testing.T) {
 		t.Error(err)
 	}
 
-	p, err = parseArgv(tokenListFromString("-h --file f.txt arg"), &o, false)
+	p, err = parseArgv(tokenListFromString("-h --file f.txt arg"), &o, false, nil)
 	q = patternList{
 		newOption("-h", "", 0, true),
 		newOption("-f", "--file", 1, "f.txt"),
@@ -211,7 +211,7 @@ func TestParseArgv(t *testing.T) {
 		t.Error(err)
 	}
 
-	p, err = parseArgv(tokenListFromString("-h --file f.txt arg arg2"), &o, false)
+	p, err = parseArgv(tokenListFromString("-h --file f.txt arg arg2"), &o, false, nil)
 	q = patternList{
 		newOption("-h", "", 0, true),
 		newOption("-f", "--file", 1, "f.txt"),
@@ -222,7 +222,7 @@ func TestParseArgv(t *testing.T) {
 		t.Error(err)
 	}
 
-	p, err = parseArgv(tokenListFromString("-h arg -- -v"), &o, false)
+	p, err = parseArgv(tokenListFromString("-h arg -- -v"), &o, false, nil)
 	q = patternList{
 		newOption("-h", "", 0, true),
 		newArgument("", "arg"),
@@ -1293,6 +1293,10 @@ func TestOptionsFirst(t *testing.T) {
 	}
 
 	if v, err := Parse("usage: prog [--opt] [<args>...]", []string{"this", "that", "--opt"}, true, "", true, false); reflect.DeepEqual(v.All, map[string]interface{}{"--opt": false, "<args>": []string{"this", "that", "--opt"}}) != true {
+		t.Error(err)
+	}
+
+	if v, err := Parse("usage: prog foo [--opt] [<args>...]", []string{"foo", "--opt", "this", "that"}, true, "", true, false); reflect.DeepEqual(v.All, map[string]interface{}{"foo": true, "--opt": true, "<args>": []string{"this", "that"}}) != true {
 		t.Error(err)
 	}
 }

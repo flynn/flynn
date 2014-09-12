@@ -15,7 +15,6 @@ There are many ways to help Flynn besides contributing code:
 
  - Fix bugs or file issues
  - Improve the [documentation](https://github.com/flynn/flynn.io) including this website
- - [Contribute](https://flynn.io/#sponsor) financially to support core development
 
 ## Contributing Code
 

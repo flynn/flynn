@@ -154,8 +154,8 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-docopt",
-			"Comment": "0.6.1-rc2-25-gc4d72bb",
-			"Rev": "c4d72bb6e19016aebcf611fe19376d46f85f1752"
+			"Comment": "0.6.1-rc2-26-gf6dd2eb",
+			"Rev": "f6dd2ebbb31e9721c860cf1faf5c944aa73e3844"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-shlex",
