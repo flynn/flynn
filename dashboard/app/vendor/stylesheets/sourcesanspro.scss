@@ -1,0 +1,120 @@
+@font-face {
+  font-family: "Source Sans Pro";
+  src: asset-url("SourceSansPro-ExtraLight.eot");
+  src: asset-url("SourceSansPro-ExtraLight.eot?iefix") format("embedded-opentype"),
+       asset-data-uri("SourceSansPro-ExtraLight.woff") format("woff"),
+       asset-url("SourceSansPro-ExtraLight.ttf") format("truetype"),
+       asset-url("SourceSansPro-ExtraLight.svg##Source Sans Pro ExtraLight") format("truetype");
+  font-style: regular;
+  font-weight: 200;
+}
+@font-face {
+  font-family: "Source Sans Pro";
+  src: asset-url("SourceSansPro-ExtraLightIt.eot");
+  src: asset-url("SourceSansPro-ExtraLightIt.eot?iefix") format("embedded-opentype"),
+       asset-data-uri("SourceSansPro-ExtraLightIt.woff") format("woff"),
+       asset-url("SourceSansPro-ExtraLightIt.ttf") format("truetype"),
+       asset-url("SourceSansPro-ExtraLightIt.svg##Source Sans Pro ExtraLight") format("truetype");
+  font-style: italic;
+  font-weight: 200;
+}
+@font-face {
+  font-family: "Source Sans Pro";
+  src: asset-url("SourceSansPro-Light.eot");
+  src: asset-url("SourceSansPro-Light.eot?iefix") format("embedded-opentype"),
+       asset-data-uri("SourceSansPro-Light.woff") format("woff"),
+       asset-url("SourceSansPro-Light.ttf") format("truetype"),
+       asset-url("SourceSansPro-Light.svg##Source Sans Pro Light") format("truetype");
+  font-style: regular;
+  font-weight: 300;
+}
+@font-face {
+  font-family: "Source Sans Pro";
+  src: asset-url("SourceSansPro-LightIt.eot");
+  src: asset-url("SourceSansPro-LightIt.eot?iefix") format("embedded-opentype"),
+       asset-data-uri("SourceSansPro-LightIt.woff") format("woff"),
+       asset-url("SourceSansPro-LightIt.ttf") format("truetype"),
+       asset-url("SourceSansPro-LightIt.svg##Source Sans Pro Light") format("truetype");
+  font-style: italic;
+  font-weight: 300;
+}
+@font-face {
+  font-family: "Source Sans Pro";
+  src: asset-url("SourceSansPro-Regular.eot");
+  src: asset-url("SourceSansPro-Regular.eot?iefix") format("embedded-opentype"),
+       asset-data-uri("SourceSansPro-Regular.woff") format("woff"),
+       asset-url("SourceSansPro-Regular.ttf") format("truetype"),
+       asset-url("SourceSansPro-Regular.svg##Source Sans Pro") format("truetype");
+  font-style: regular;
+  font-weight: 400;
+}
+@font-face {
+  font-family: "Source Sans Pro";
+  src: asset-url("SourceSansPro-It.eot");
+  src: asset-url("SourceSansPro-It.eot?iefix") format("embedded-opentype"),
+       asset-data-uri("SourceSansPro-It.woff") format("woff"),
+       asset-url("SourceSansPro-It.ttf") format("truetype"),
+       asset-url("SourceSansPro-It.svg##Source Sans Pro") format("truetype");
+  font-style: italic;
+  font-weight: 400;
+}
+@font-face {
+  font-family: "Source Sans Pro";
+  src: asset-url("SourceSansPro-Semibold.eot");
+  src: asset-url("SourceSansPro-Semibold.eot?iefix") format("embedded-opentype"),
+       asset-data-uri("SourceSansPro-Semibold.woff") format("woff"),
+       asset-url("SourceSansPro-Semibold.ttf") format("truetype"),
+       asset-url("SourceSansPro-Semibold.svg##Source Sans Pro Semibold") format("truetype");
+  font-style: regular;
+  font-weight: 600;
+}
+@font-face {
+  font-family: "Source Sans Pro";
+  src: asset-url("SourceSansPro-SemiboldIt.eot");
+  src: asset-url("SourceSansPro-SemiboldIt.eot?iefix") format("embedded-opentype"),
+       asset-data-uri("SourceSansPro-SemiboldIt.woff") format("woff"),
+       asset-url("SourceSansPro-SemiboldIt.ttf") format("truetype"),
+       asset-url("SourceSansPro-SemiboldIt.svg##Source Sans Pro Semibold") format("truetype");
+  font-style: italic;
+  font-weight: 600;
+}
+@font-face {
+  font-family: "Source Sans Pro";
+  src: asset-url("SourceSansPro-Bold.eot");
+  src: asset-url("SourceSansPro-Bold.eot?iefix") format("embedded-opentype"),
+       asset-data-uri("SourceSansPro-Bold.woff") format("woff"),
+       asset-url("SourceSansPro-Bold.ttf") format("truetype"),
+       asset-url("SourceSansPro-Bold.svg##Source Sans Pro") format("truetype");
+  font-style: regular;
+  font-weight: 700;
+}
+@font-face {
+  font-family: "Source Sans Pro";
+  src: asset-url("SourceSansPro-BoldIt.eot");
+  src: asset-url("SourceSansPro-BoldIt.eot?iefix") format("embedded-opentype"),
+       asset-data-uri("SourceSansPro-BoldIt.woff") format("woff"),
+       asset-url("SourceSansPro-BoldIt.ttf") format("truetype"),
+       asset-url("SourceSansPro-BoldIt.svg##Source Sans Pro") format("truetype");
+  font-style: italic;
+  font-weight: 700;
+}
+@font-face {
+  font-family: "Source Sans Pro";
+  src: asset-url("SourceSansPro-Black.eot");
+  src: asset-url("SourceSansPro-Black.eot?iefix") format("embedded-opentype"),
+       asset-data-uri("SourceSansPro-Black.woff") format("woff"),
+       asset-url("SourceSansPro-Black.ttf") format("truetype"),
+       asset-url("SourceSansPro-Black.svg##Source Sans Pro Black") format("truetype");
+  font-style: regular;
+  font-weight: 900;
+}
+@font-face {
+  font-family: "Source Sans Pro";
+  src: asset-url("SourceSansPro-BlackIt.eot");
+  src: asset-url("SourceSansPro-BlackIt.eot?iefix") format("embedded-opentype"),
+       asset-data-uri("SourceSansPro-BlackIt.woff") format("woff"),
+       asset-url("SourceSansPro-BlackIt.ttf") format("truetype"),
+       asset-url("SourceSansPro-BlackIt.svg##Source Sans Pro Black") format("truetype");
+  font-style: italic;
+  font-weight: 900;
+}

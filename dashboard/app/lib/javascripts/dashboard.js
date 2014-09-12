@@ -1,0 +1,1 @@
+//= require dashboard/application

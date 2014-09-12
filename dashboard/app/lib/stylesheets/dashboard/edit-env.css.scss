@@ -1,0 +1,22 @@
+.edit-env {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+
+  > li {
+    margin-bottom: 0.25em;
+  }
+
+  input[type="text"] {
+    width: 347px;
+    line-height: 1.5em;
+    height: 2.8em;
+    padding: 0.4em 0.8em;
+  }
+
+  .name {
+    text-align: right;
+  }
+}
+

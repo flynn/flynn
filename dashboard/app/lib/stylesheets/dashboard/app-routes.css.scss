@@ -1,0 +1,47 @@
+@import "./colors";
+@import "./mixins";
+
+.app-routes {
+  > header {
+    margin: 0;
+
+    > h2 {
+      margin-bottom: 0.5rem;
+    }
+  }
+
+  .icn-trash {
+    margin-left: 0.5rem;
+    cursor: pointer;
+  }
+
+  .add-route-btn {
+    @extend %btn-green;
+    margin-top: 1rem;
+  }
+
+  > ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    margin-bottom: 0.5rem;
+
+    > li {
+      line-height: 1.5em;
+      color: $darkerGrayBlueColor;
+
+      > a {
+        color: inherit;
+      }
+
+      .icn-trash {
+        visibility: hidden;
+      }
+
+      &:hover .icn-trash {
+        visibility: visible;
+      }
+    }
+  }
+}
+

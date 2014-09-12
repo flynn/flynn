@@ -1,0 +1,53 @@
+@import "./colors";
+@import "./mixins";
+
+.pretty-select {
+  left: 20px;
+  bottom: 50px;
+  border: 1px solid $grayBlueColor;
+  @include linear-gradient(top, $whiteColor, $almostWhiteColor);
+  box-shadow: 0px 0px 1px $grayBlueColor;
+  border-radius: 2px;
+
+  position: relative;
+  display: inline-block;
+  width: 172px;
+  left: auto;
+  bottom: auto;
+
+  > select {
+    width: 173px;
+    padding: 4px 8px;
+    padding-right: 10px;
+    background: transparent;
+    color: $darkerGrayBlueColor;
+    border: none;
+    text-overflow: ' ';
+    text-indent: 0.1px;
+    -moz-appearance: window;
+    -webkit-appearance: none;
+    box-shadow: inset 0px 0px 1px $grayBlueColor;
+  }
+
+  > select, > select > option {
+    outline: 0;
+    &:-moz-focusring {
+      color: transparent;
+      text-shadow: 0 0 0 $darkerGrayBlueColor;
+    }
+  }
+
+  &:after {
+    display: block;
+    position: absolute;
+    top: 12.5px;
+    right: 8px;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid $darkerGrayBlueColor;
+    content: ' ';
+  }
+}
+

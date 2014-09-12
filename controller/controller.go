@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
@@ -20,6 +21,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/cors"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/pkg/rpcplus"
@@ -181,12 +183,25 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 }
 
 func rpcMuxHandler(main http.Handler, rpch http.Handler, authKey string) http.Handler {
+	corsHandler := cors.Allow(&cors.Options{
+		AllowAllOrigins:  true,
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
+		AllowHeaders:     []string{"Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match"},
+		ExposeHeaders:    []string{"ETag"},
+		AllowCredentials: true,
+		MaxAge:           time.Hour,
+	})
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/ping" {
+		corsHandler(w, r)
+		if r.URL.Path == "/ping" || r.Method == "OPTIONS" {
 			w.WriteHeader(200)
 			return
 		}
 		_, password, _ := parseBasicAuth(r.Header)
+		if password == "" && strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+			password = r.URL.Query().Get("key")
+		}
 		if len(password) != len(authKey) || subtle.ConstantTimeCompare([]byte(password), []byte(authKey)) != 1 {
 			w.WriteHeader(401)
 			return
