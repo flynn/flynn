@@ -112,7 +112,10 @@ func (s *TCPListener) PauseService(id string, pause bool) error {
 	if s.closed {
 		return ErrClosed
 	}
-	service := s.services[id]
+	service, ok := s.services[id]
+	if !ok {
+		return nil
+	}
 	if pause {
 		service.Pause()
 	} else {
