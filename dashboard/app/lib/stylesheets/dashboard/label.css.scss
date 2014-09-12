@@ -1,0 +1,39 @@
+@import "./colors";
+
+label {
+  > .name {
+    &:after {
+      content: ":";
+    }
+
+    & + input[type=text] {
+      width: 100%;
+      line-height: 1.5em;
+      height: 2.8em;
+      padding: 0.4em 0.8em;
+    }
+
+    & + input[type=checkbox] {
+      margin-left: 0.5rem;
+    }
+  }
+
+  > .text {
+    display: block;
+    line-height: 1em;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    color: $darkerGrayBlueColor;
+
+    &:after {
+      content: ':';
+    }
+  }
+
+  &:after {
+    display: block;
+    margin-bottom: 1rem;
+    content: " ";
+  }
+}
+

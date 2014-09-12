@@ -1,0 +1,17 @@
+@import "./colors";
+
+h1 {
+  color: $blackGrayColor;
+  font-weight: 400;
+  line-height: 1em;
+
+  &.inline-block {
+    margin-right: 0.75em;
+  }
+
+  small {
+    margin-left: 1em;
+    font-size: 0.5em;
+  }
+}
+

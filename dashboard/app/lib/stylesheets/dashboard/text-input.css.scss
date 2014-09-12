@@ -1,0 +1,11 @@
+@import "./colors";
+
+input[type="text"], input[type="email"], input[type="password"] {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid $grayBlueColor;
+  border-radius: 2px;
+  box-shadow: inset 0px 0px 1px $grayBlueColor;
+  font-size: 1em;
+  line-height: 1.5em;
+}
+
