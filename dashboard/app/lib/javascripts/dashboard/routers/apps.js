@@ -11,6 +11,8 @@
 
 "use strict";
 
+var assertEqual = Marbles.Utils.assertEqual.bind(Marbles.Utils);
+
 Dashboard.routers.Apps = Marbles.Router.createClass({
 	displayName: "routers.apps",
 
@@ -255,7 +257,7 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 	__handleReleaseCreated: function (event) {
 		// exit app env view when successfully saved
 		var view = Dashboard.secondaryView;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.AppEnv" && view.props.appId === event.appId && view.state.isSaving) {
+		if (view && view.isMounted() && view.constructor.displayName === "Views.AppEnv" && assertEqual(view.props.appId, event.appId) && view.state.isSaving) {
 			this.__navigateToApp(event);
 		}
 	},
@@ -263,7 +265,7 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 	__handleAppDeleted: function (event) {
 		// exit app delete view when successfully deleted
 		var view = Dashboard.secondaryView;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.AppDelete" && view.props.appId === event.appId && view.state.isDeleting) {
+		if (view && view.isMounted() && view.constructor.displayName === "Views.AppDelete" && assertEqual(view.props.appId, event.appId) && view.state.isDeleting) {
 			Marbles.history.navigate("");
 		}
 	},
@@ -271,14 +273,14 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 	__handleAppRouteCreated: function (event) {
 		// exit app rotue delete view when successfully deleted
 		var view = Dashboard.secondaryView;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.NewAppRoute" && view.props.appId === event.appId && view.state.isCreating) {
+		if (view && view.isMounted() && view.constructor.displayName === "Views.NewAppRoute" && assertEqual(view.props.appId, event.appId) && view.state.isCreating) {
 			this.__navigateToApp(event);
 		}
 	},
 
 	__handleAppRouteCreateFailure: function (event) {
 		var view = Dashboard.secondaryView;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.AppRouteDelete" && view.props.appId === event.appId && view.state.isDeleting) {
+		if (view && view.isMounted() && view.constructor.displayName === "Views.AppRouteDelete" && assertEqual(view.props.appId, event.appId) && view.state.isDeleting) {
 			view.setProps({
 				errorMsg: event.errorMsg
 			});
@@ -288,14 +290,14 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 	__handleAppRouteDeleted: function (event) {
 		// exit app rotue delete view when successfully deleted
 		var view = Dashboard.secondaryView;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.AppRouteDelete" && view.props.appId === event.appId && view.props.routeId === event.routeId && view.state.isDeleting) {
+		if (view && view.isMounted() && view.constructor.displayName === "Views.AppRouteDelete" && assertEqual(view.props.appId, event.appId) && view.props.routeId === event.routeId && view.state.isDeleting) {
 			this.__navigateToApp(event, {route: null, domain: null});
 		}
 	},
 
 	__handleAppRouteDeleteFailure: function (event) {
 		var view = Dashboard.secondaryView;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.AppRouteDelete" && view.props.appId === event.appId && view.props.routeId === event.routeId && view.state.isDeleting) {
+		if (view && view.isMounted() && view.constructor.displayName === "Views.AppRouteDelete" && assertEqual(view.props.appId, event.appId) && view.props.routeId === event.routeId && view.state.isDeleting) {
 			view.setProps({
 				errorMsg: event.errorMsg
 			});
@@ -341,7 +343,7 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 
 	__handleJobCreated: function (event) {
 		var view = Dashboard.secondaryView;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.AppDeployCommit" && view.props.appId === event.appId) {
+		if (view && view.isMounted() && view.constructor.displayName === "Views.AppDeployCommit" && assertEqual(view.props.appId, event.appId)) {
 			view.setProps({
 				job: event.job
 			});
@@ -350,7 +352,7 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 
 	__handleDeployFailure: function (event) {
 		var view = Dashboard.secondaryView;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.AppDeployCommit" && view.props.appId === event.appId) {
+		if (view && view.isMounted() && view.constructor.displayName === "Views.AppDeployCommit" && assertEqual(view.props.appId, event.appId)) {
 			view.setProps({
 				errorMsg: event.errorMsg
 			});
