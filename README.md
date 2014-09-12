@@ -224,7 +224,6 @@ There are many ways to help Flynn besides contributing code:
 
  - Find bugs and file issues.
  - Improve the [documentation](/website) and website.
- - [Contribute](https://flynn.io/#sponsor) financially to support core development.
 
 Learn more at [flynn.io](https://flynn.io).
 
