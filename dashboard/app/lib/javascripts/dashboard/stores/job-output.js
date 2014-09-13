@@ -108,6 +108,10 @@ var JobOutput = Dashboard.Stores.JobOutput = Dashboard.Store.createClass({
 
 }, Marbles.State);
 
+JobOutput.isValidId = function (id) {
+	return id.appId && id.jobId;
+};
+
 JobOutput.registerWithDispatcher(Dashboard.Dispatcher);
 
 })();

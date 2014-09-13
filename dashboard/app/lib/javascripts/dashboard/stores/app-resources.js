@@ -52,6 +52,10 @@ var AppResources = Dashboard.Stores.AppResources = Dashboard.Store.createClass({
 
 }, Marbles.State);
 
+AppResources.isValidId = function (id) {
+	return !!id.appId;
+};
+
 AppResources.registerWithDispatcher(Dashboard.Dispatcher);
 
 })();

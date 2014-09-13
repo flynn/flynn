@@ -122,6 +122,10 @@ var AppRoutes = Dashboard.Stores.AppRoutes = Dashboard.Store.createClass({
 
 }, Marbles.State);
 
+AppRoutes.isValidId = function (id) {
+	return !!id.appId;
+};
+
 AppRoutes.registerWithDispatcher(Dashboard.Dispatcher);
 
 })();

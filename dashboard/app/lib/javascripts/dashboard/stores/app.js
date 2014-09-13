@@ -309,6 +309,10 @@ App.getClient = function () {
 	return Dashboard.client;
 };
 
+App.isValidId = function (id) {
+	return !!id.appId;
+};
+
 App.dispatcherIndex = App.registerWithDispatcher(Dashboard.Dispatcher);
 
 App.findOrFetch = function (appId) {

@@ -54,6 +54,10 @@ var AppJobs = Dashboard.Stores.AppJobs = Dashboard.Store.createClass({
 
 }, Marbles.State);
 
+AppJobs.isValidId = function (id) {
+	return !!id.appId;
+};
+
 AppJobs.registerWithDispatcher(Dashboard.Dispatcher);
 
 })();
