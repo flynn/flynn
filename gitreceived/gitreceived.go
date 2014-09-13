@@ -18,6 +18,8 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/flynn/flynn/controller/client"
+
 	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.crypto/ssh"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-shlex"
 )
@@ -198,12 +200,13 @@ func handleChannel(conn *ssh.ServerConn, newChan ssh.NewChannel) {
 				return
 			}
 
-			if err := ensureCacheRepo(cmdargs[1]); err != nil {
+			appRepoPath := getAppRepoPath(cmdargs[1])
+			if err := ensureCacheRepo(appRepoPath, cmdargs[1]); err != nil {
 				fail("ensureCacheRepo", err)
 				return
 			}
 			cmd := exec.Command("git-shell", "-c", cmdargs[0]+" '"+cmdargs[1]+"'")
-			cmd.Dir = *repoPath
+			cmd.Dir = appRepoPath
 			cmd.Env = append(os.Environ(),
 				"RECEIVE_USER="+conn.User(),
 				"RECEIVE_REPO="+cmdargs[1],
@@ -302,11 +305,26 @@ func exitStatus(err error) (exitStatusMsg, error) {
 
 var cacheMtx sync.Mutex
 
-func ensureCacheRepo(path string) error {
+func getAppRepoPath(appName string) string {
+	client, err := controller.NewClient("", os.Getenv("CONTROLLER_AUTH_KEY"))
+	if err != nil {
+		log.Fatalln("Unable to connect to controller:", err)
+	}
+	app, err := client.GetApp(appName)
+	if err == controller.ErrNotFound {
+		log.Fatalf("App %q is not created.", appName)
+	} else if err != nil {
+		log.Fatalln("Error retrieving app:", err)
+	}
+
+	return *repoPath + "/" + app.ID
+}
+
+func ensureCacheRepo(appRepoPath, path string) error {
 	cacheMtx.Lock()
 	defer cacheMtx.Unlock()
 
-	cachePath := *repoPath + "/" + path
+	cachePath := appRepoPath + "/" + path
 	if _, err := os.Stat(cachePath); os.IsNotExist(err) {
 		os.MkdirAll(cachePath, 0755)
 		cmd := exec.Command("git", "init", "--bare")
