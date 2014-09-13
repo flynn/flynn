@@ -283,7 +283,6 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 					appId: __appId,
 					errorMsg: "Something went wrong"
 				});
-				throw args;
 			} else {
 				var res = args[0];
 				var xhr = args[1];
@@ -293,12 +292,16 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 					errorMsg: res.message || "Something went wrong ["+ xhr.status +"]"
 				});
 			}
+			return Promise.reject(args);
 		}).then(function () {
 			Dashboard.Dispatcher.handleStoreEvent({
 				name: "APP:DEPLOY_SUCCESS",
 				appId: __appId
 			});
-		});
+			this.setState({
+				app: Marbles.Utils.extend({}, app, { meta: meta })
+			});
+		}.bind(this));
 	}
 });
 
