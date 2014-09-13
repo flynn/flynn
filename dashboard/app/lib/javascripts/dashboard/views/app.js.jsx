@@ -21,7 +21,7 @@ Dashboard.Views.App = React.createClass({
 
 		return (
 			<section>
-				<RouteLink path="/" className="back-link">
+				<RouteLink path={this.props.getClusterPath()} className="back-link">
 					Go back to cluster
 				</RouteLink>
 

@@ -81,7 +81,8 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 			getAppPath: function (subpath, subpathParams) {
 				var __params = Marbles.QueryParams.replaceParams.apply(null, [[Marbles.Utils.extend({}, params)]].concat(subpathParams || []));
 				return this.__getAppPath(params.id, __params[0], subpath);
-			}.bind(this)
+			}.bind(this),
+			getClusterPath: this.__getClusterPath.bind(this, params.id)
 		};
 		if (view && view.isMounted() && view.constructor.displayName === "Views.App") {
 			view.setProps(props);
@@ -377,6 +378,10 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 		params = Marbles.QueryParams.replaceParams(params, Marbles.Utils.extend({id: appId}, __params));
 		subPath = subPath || "";
 		return Marbles.history.pathWithParams("/apps/:id" + subPath, params);
+	},
+
+	__getClusterPath: function () {
+		return "/";
 	},
 
 	__navigateToApp: function (event, __params) {
