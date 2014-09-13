@@ -172,16 +172,16 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 
 	__createRelease: function (release) {
 		var client = App.getClient.call(this);
-		var appId = this.props.appId;
+		var __appId = this.id.appId;
 		return this.__releaseLock.then(function () {
 			return client.createRelease(release).then(function (args) {
 				var res = args[0];
 				var releaseId = res.id;
-				return client.createAppRelease(appId, {id: releaseId});
+				return client.createAppRelease(this.props.appId, {id: releaseId});
 			}.bind(this)).then(function () {
 				Dashboard.Dispatcher.handleStoreEvent({
 					name: "APP:RELEASE_CREATED",
-					appId: appId
+					appId: __appId
 				});
 			}.bind(this));
 		}.bind(this));
@@ -212,6 +212,7 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 	__deployCommit: function (ownerLogin, repoName, branchName, sha) {
 		var client = App.getClient.call(this);
 		var appId = this.props.appId;
+		var __appId = this.id.appId;
 		var app, meta, release, artifactId;
 
 		function createRelease () {
@@ -246,7 +247,7 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 			}).then(function (args) {
 				Dashboard.Dispatcher.handleStoreEvent({
 					name: "APP:JOB_CREATED",
-					appId: appId,
+					appId: __appId,
 					job: args[0]
 				});
 				return args;
@@ -279,7 +280,7 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 			if (args instanceof Error) {
 				Dashboard.Dispatcher.handleStoreEvent({
 					name: "APP:DEPLOY_FAILED",
-					appId: appId,
+					appId: __appId,
 					errorMsg: "Something went wrong"
 				});
 				throw args;
@@ -288,14 +289,14 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 				var xhr = args[1];
 				Dashboard.Dispatcher.handleStoreEvent({
 					name: "APP:DEPLOY_FAILED",
-					appId: appId,
+					appId: __appId,
 					errorMsg: res.message || "Something went wrong ["+ xhr.status +"]"
 				});
 			}
 		}).then(function () {
 			Dashboard.Dispatcher.handleStoreEvent({
 				name: "APP:DEPLOY_SUCCESS",
-				appId: appId
+				appId: __appId
 			});
 		});
 	}
