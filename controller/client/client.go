@@ -279,6 +279,11 @@ func (c *Client) RouteList(appID string) ([]*router.Route, error) {
 	return routes, c.get(fmt.Sprintf("/apps/%s/routes", appID), &routes)
 }
 
+func (c *Client) GetRoute(appID string, routeID string) (*router.Route, error) {
+	route := &router.Route{}
+	return route, c.get(fmt.Sprintf("/apps/%s/routes/%s", appID, routeID), route)
+}
+
 func (c *Client) CreateRoute(appID string, route *router.Route) error {
 	return c.post(fmt.Sprintf("/apps/%s/routes", appID), route, route)
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
+	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -95,7 +97,7 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 	t.Assert(s.Flynn("scale", "web=3"), Succeeds)
 
 	route := random.String(32) + ".dev"
-	newRoute := s.Flynn("route", "add", "-t", "http", route)
+	newRoute := s.Flynn("route", "add", "http", route)
 	t.Assert(newRoute, Succeeds)
 
 	t.Assert(s.Flynn("route"), OutputContains, strings.TrimSpace(newRoute.Output))
@@ -144,4 +146,68 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 	}
 	t.Assert(res.StatusCode, c.Equals, 200)
 	t.Assert(string(contents), Matches, `Hello to Yahoo from Flynn on port \d+`)
+}
+
+func (s *SchedulerSuite) TestTCPApp(t *c.C) {
+	r, err := s.client.GetAppRelease("gitreceive")
+	t.Assert(err, c.IsNil)
+	imageID := r.Processes["app"].Env["SLUGRUNNER_IMAGE_ID"]
+
+	app := &ct.App{}
+	t.Assert(s.client.CreateApp(app), c.IsNil)
+
+	artifact := &ct.Artifact{Type: "docker", URI: "https://registry.hub.docker.com/flynn/slugrunner?id=" + imageID}
+	t.Assert(s.client.CreateArtifact(artifact), c.IsNil)
+
+	release := &ct.Release{
+		ArtifactID: artifact.ID,
+		Processes: map[string]ct.ProcessType{
+			"echo": {
+				Ports:      []ct.Port{{Proto: "tcp"}},
+				Cmd:        []string{"sdutil exec -s echo-service:$PORT socat -v tcp-l:$PORT,fork exec:/bin/cat"},
+				Entrypoint: []string{"sh", "-c"},
+			},
+		},
+	}
+	t.Assert(s.client.CreateRelease(release), c.IsNil)
+	t.Assert(s.client.SetAppRelease(app.ID, release.ID), c.IsNil)
+
+	stream, err := s.client.StreamJobEvents(app.ID)
+	defer stream.Close()
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Assert(flynn("/", "-a", app.Name, "scale", "echo=1"), Succeeds)
+
+	newRoute := flynn("/", "-a", app.Name, "route", "add", "tcp", "-s", "echo-service")
+	t.Assert(newRoute, Succeeds)
+	t.Assert(newRoute.Output, Matches, `.+ on port \d+`)
+	str := strings.Split(strings.TrimSpace(string(newRoute.Output)), " ")
+	port := str[len(str)-1]
+
+	waitForJobEvents(t, stream.Events, map[string]int{"echo": 1})
+	// use Attempts to give the processes time to start
+	if err := Attempts.Run(func() error {
+		servAddr := routerIP + ":" + port
+		conn, err := net.Dial("tcp", servAddr)
+		defer conn.Close()
+		if err != nil {
+			return err
+		}
+		echo := random.Bytes(16)
+		_, err = conn.Write(echo)
+		if err != nil {
+			return err
+		}
+		reply := make([]byte, 16)
+		_, err = conn.Read(reply)
+		if err != nil {
+			return err
+		}
+		t.Assert(reply, c.DeepEquals, echo)
+		return nil
+	}); err != nil {
+		t.Error(err)
+	}
 }

@@ -32,11 +32,12 @@ type Release struct {
 }
 
 type ProcessType struct {
-	Cmd   []string          `json:"cmd,omitempty"`
-	Env   map[string]string `json:"env,omitempty"`
-	Ports []Port            `json:"ports,omitempty"`
-	Data  bool              `json:"data,omitempty"`
-	Omni  bool              `json:"omni,omitempty"` // omnipresent - present on all hosts
+	Cmd        []string          `json:"cmd,omitempty"`
+	Entrypoint []string          `json:"entrypoint,omitempty`
+	Env        map[string]string `json:"env,omitempty"`
+	Ports      []Port            `json:"ports,omitempty"`
+	Data       bool              `json:"data,omitempty"`
+	Omni       bool              `json:"omni,omitempty"` // omnipresent - present on all hosts
 }
 
 type Port struct {
@@ -85,12 +86,13 @@ type JobEvent struct {
 }
 
 type NewJob struct {
-	ReleaseID string            `json:"release,omitempty"`
-	Cmd       []string          `json:"cmd,omitempty"`
-	Env       map[string]string `json:"env,omitempty"`
-	TTY       bool              `json:"tty,omitempty"`
-	Columns   int               `json:"tty_columns,omitempty"`
-	Lines     int               `json:"tty_lines,omitempty"`
+	ReleaseID  string            `json:"release,omitempty"`
+	Cmd        []string          `json:"cmd,omitempty"`
+	Entrypoint []string          `json:"entrypoint,omitempty"`
+	Env        map[string]string `json:"env,omitempty"`
+	TTY        bool              `json:"tty,omitempty"`
+	Columns    int               `json:"tty_columns,omitempty"`
+	Lines      int               `json:"tty_lines,omitempty"`
 }
 
 type Frontend struct {
