@@ -216,6 +216,7 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 
 		function createRelease () {
 			return client.createRelease(Marbles.Utils.extend({}, release, {
+				id: null,
 				artifact: artifactId
 			})).then(function (args) {
 				var res = args[0];
