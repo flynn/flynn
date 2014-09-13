@@ -121,6 +121,7 @@ Dashboard.Views.GithubCommitSelector = React.createClass({
 			if (component && component.isMounted()) {
 				component.scrollIntoView();
 			}
+			this.setState({ shouldScrollToDeployedCommit: false });
 		}
 	},
 
