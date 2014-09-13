@@ -139,13 +139,28 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer res.Body.Close()
 	contents, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
 	if err != nil {
 		t.Error(err)
 	}
 	t.Assert(res.StatusCode, c.Equals, 200)
 	t.Assert(string(contents), Matches, `Hello to Yahoo from Flynn on port \d+`)
+
+	// request pausing
+	t.Assert(s.Flynn("pause", "http", name+"-web"), Succeeds)
+	start := time.Now()
+	go func() {
+		<-time.After(time.Second * 2)
+		t.Assert(s.Flynn("unpause", "http", name+"-web"), Succeeds)
+	}()
+	res, err = client.Do(req)
+	if err != nil {
+		t.Error(err)
+	}
+	defer res.Body.Close()
+	elapsed := time.Since(start)
+	t.Assert(elapsed > time.Second*2, c.Equals, true)
 }
 
 func (s *SchedulerSuite) TestTCPApp(t *c.C) {
