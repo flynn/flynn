@@ -196,7 +196,7 @@ everything else, so there is no "layer 2".
 
 The core of Layer 1 is the
 [controller](https://github.com/flynn/flynn/tree/master/controller) which
-provides a HTTP API and scheduler that model the concept of applications and. There
+provides a HTTP API and scheduler that model the concept of applications. There
 are a few top-level concepts that come together to form a running application.
 
 The first top-level object is an *artifact*. Artifacts are immutable images that
