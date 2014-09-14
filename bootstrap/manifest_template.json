@@ -235,7 +235,8 @@
   {
     "id": "controller-route-wait",
     "action": "wait",
-    "url": "http://{{ or (getenv \"CONTROLLER_DOMAIN\") \"localhost\" }}",
+    "url": "discoverd+http://router-http/",
+    "host": "{{ or (getenv \"CONTROLLER_DOMAIN\") \"localhost\" }}",
     "status": 401
   },
   {

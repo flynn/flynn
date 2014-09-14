@@ -73,8 +73,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := d.Register("router-api", *apiAddr); err != nil {
-		log.Fatal(err)
+	services := map[string]string{
+		"router-api":  *apiAddr,
+		"router-http": *httpAddr,
+	}
+	for service, addr := range services {
+		if err := d.Register(service, addr); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	// Read etcd addresses from ETCD
