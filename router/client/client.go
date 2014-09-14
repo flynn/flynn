@@ -155,7 +155,8 @@ func (c *client) ListRoutes(parentRef string) ([]*router.Route, error) {
 }
 
 func (c *client) PauseService(t, name string, pause bool) error {
-	return c.put(fmt.Sprintf("/services/%s/%s", t, name), &struct{ pause bool }{pause})
+	q := &router.PauseReq{Paused: pause}
+	return c.put(fmt.Sprintf("/services/%s/%s", t, name), q)
 }
 
 func toJSON(v interface{}) (io.Reader, error) {

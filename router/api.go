@@ -31,7 +31,7 @@ func apiHandler(rtr *Router) http.Handler {
 	r.Get("/routes", getRoutes)
 	r.Get("/routes/:route_type/:route_id", getRoute)
 	r.Delete("/routes/:route_type/:route_id", deleteRoute)
-	r.Put("/services/:service_type/:service_name", pauseService)
+	r.Put("/services/:service_type/:service_name", binding.Json(router.PauseReq{}), pauseService)
 	r.Get("/services/:service_type/:service_name/drain", streamServiceDrain)
 	return m
 }
@@ -181,17 +181,13 @@ func deleteRoute(params martini.Params, router *Router, r render.Render) {
 	r.JSON(200, struct{}{})
 }
 
-func pauseService(req *http.Request, params martini.Params, router *Router, r render.Render) {
+func pauseService(req *http.Request, pauseReq router.PauseReq, params martini.Params, router *Router, r render.Render) {
 	l := listenerFor(router, params["service_type"])
 	if l == nil {
 		r.JSON(404, struct{}{})
 		return
 	}
-	pause := false
-	if req.FormValue("pause") == "true" {
-		pause = true
-	}
-	err := l.PauseService(params["service_name"], pause)
+	err := l.PauseService(params["service_name"], pauseReq.Paused)
 	if err == ErrNotFound {
 		r.JSON(404, struct{}{})
 		return

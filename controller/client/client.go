@@ -298,12 +298,8 @@ func (c *Client) DeleteRoute(appID string, routeID string) error {
 }
 
 func (c *Client) PauseService(t, name string, pause bool) error {
-	v := url.Values{}
-	if pause {
-		v.Set("pause", "true")
-	}
-	buf := bytes.NewBufferString(v.Encode())
-	return c.put(fmt.Sprintf("/services/%s/%s", t, name), buf, nil)
+	q := &router.PauseReq{Paused: pause}
+	return c.put(fmt.Sprintf("/services/%s/%s", t, name), q, nil)
 }
 
 func (c *Client) StreamServiceDrain(t, id string) (io.ReadCloser, error) {

@@ -64,12 +64,8 @@ func deleteRoute(route *router.Route, router routerc.Client, r ResponseHelper) {
 	r.WriteHeader(200)
 }
 
-func pauseService(router routerc.Client, params martini.Params, r ResponseHelper, req *http.Request) {
-	pause := false
-	if req.FormValue("pause") == "true" {
-		pause = true
-	}
-	err := router.PauseService(params["service_type"], params["service_name"], pause)
+func pauseService(router routerc.Client, pauseReq router.PauseReq, params martini.Params, r ResponseHelper, req *http.Request) {
+	err := router.PauseService(params["service_type"], params["service_name"], pauseReq.Paused)
 	if err != nil {
 		r.Error(err)
 		return

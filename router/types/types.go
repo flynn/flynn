@@ -90,3 +90,7 @@ type Event struct {
 	ID    string
 	Error error
 }
+
+type PauseReq struct {
+	Paused bool `json:"paused"`
+}
