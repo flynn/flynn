@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -309,17 +310,34 @@ func (r *Runner) httpBuildHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	count := 10
+	if n := req.FormValue("count"); n != "" {
+		var err error
+		if count, err = strconv.Atoi(n); err != nil {
+			http.Error(w, "invalid count parameter\n", 400)
+		}
+	}
 	var builds []*Build
 
 	r.db.View(func(tx *bolt.Tx) error {
 		c := tx.Bucket(dbBucket).Cursor()
-		for k, v := c.Last(); k != nil; k, v = c.Prev() {
+
+		var k, v []byte
+		if before := req.FormValue("before"); before != "" {
+			c.Seek([]byte(before))
+			k, v = c.Prev()
+		} else {
+			k, v = c.Last()
+		}
+
+		for i := 0; k != nil && i < count; k, v = c.Prev() {
 			b := &Build{}
 			if err := json.Unmarshal(v, b); err != nil {
 				log.Printf("could not decode build %s: %s", v, err)
 				continue
 			}
 			builds = append(builds, b)
+			i++
 		}
 		return nil
 	})

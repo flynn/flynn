@@ -1,6 +1,8 @@
 <html>
   <head>
     <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="/assets/style.css">
   </head>
 
   <body>
@@ -30,6 +32,10 @@
         <tbody>
         </tbody>
       </table>
+
+      <p class="more-btn">
+        <a href="javascript:void()" class="btn btn-large btn-primary" onclick="fetch()">More >>></a>
+      </p>
     </div>
 
     <script type="text/template" id="row-template">
@@ -43,11 +49,13 @@
         </td>
         <td><%= description %></td>
         <td><%= created_at.format("LLL") %></td>
-        <td><%= state %></td>
+        <td><span class="label <%= label_class %>"><%= state %></span></td>
         <td>
           <form action="/builds" method="POST">
             <input type="hidden" name="id" value="<%= id %>" />
-            <input type="submit" value="Rebuild" class="btn" />
+            <button type="submit" class="btn btn-primary">
+              <i class="fa fa-refresh"></i>
+            </button>
           </form>
         </td>
       </tr>
