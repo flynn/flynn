@@ -23,6 +23,14 @@ func New() (Client, error) {
 	return NewWithDiscoverd("", discoverd.DefaultClient), nil
 }
 
+// NewWithAddr uses addr as the specified API url and returns a client.
+func NewWithAddr(addr string) Client {
+	return &client{
+		url:  fmt.Sprintf("http://%s", addr),
+		http: http.DefaultClient,
+	}
+}
+
 // NewWithDiscoverd uses the provided discoverd client and returns a client.
 func NewWithDiscoverd(name string, dc dialer.DiscoverdClient) Client {
 	if name == "" {
@@ -167,5 +175,8 @@ func (c *client) ListRoutes(parentRef string) ([]*router.Route, error) {
 }
 
 func (c *client) Close() error {
-	return c.dialer.Close()
+	if c.dialer != nil {
+		return c.dialer.Close()
+	}
+	return nil
 }
