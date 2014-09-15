@@ -43,20 +43,36 @@ func (w *Writer) Flush() {
 	}
 }
 
-type Decoder struct {
+type Reader struct {
 	*bufio.Reader
+}
+
+func (r *Reader) Read() ([]byte, error) {
+	for {
+		line, err := r.ReadBytes('\n')
+		if err != nil {
+			return nil, err
+		}
+		if bytes.HasPrefix(line, []byte("data: ")) {
+			data := bytes.TrimPrefix(line, []byte("data: "))
+			return data, nil
+		}
+	}
+}
+
+type Decoder struct {
+	*Reader
+}
+
+func NewDecoder(r *bufio.Reader) *Decoder {
+	return &Decoder{&Reader{r}}
 }
 
 // Decode finds the next "data" field and decodes it into v
 func (dec *Decoder) Decode(v interface{}) error {
-	for {
-		line, err := dec.ReadBytes('\n')
-		if err != nil {
-			return err
-		}
-		if bytes.HasPrefix(line, []byte("data: ")) {
-			data := bytes.TrimPrefix(line, []byte("data: "))
-			return json.Unmarshal(data, v)
-		}
+	data, err := dec.Reader.Read()
+	if err != nil {
+		return err
 	}
+	return json.Unmarshal(data, v)
 }

@@ -42,13 +42,14 @@ func runPause(args *docopt.Args, client *controller.Client) error {
 		return err
 	}
 	fmt.Println("Backend is now paused. Waiting for backends to be drained...")
-	dec := &sse.Decoder{bufio.NewReader(stream)}
+	dec := &sse.Reader{bufio.NewReader(stream)}
 	for {
-		var line string
-		if err := dec.Decode(&line); err != nil {
+		line, err := dec.Read()
+		if err != nil {
+			fmt.Println("errored in cli:", err)
 			return err
 		}
-		if string(line) == "all\n" {
+		if string(line) == "all" {
 			break
 		}
 	}
