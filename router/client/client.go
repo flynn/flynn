@@ -22,6 +22,13 @@ func New() (Client, error) {
 	return NewWithDiscoverd("", discoverd.DefaultClient), nil
 }
 
+func NewWithAddr(addr string) Client {
+	return &client{
+		url:  fmt.Sprintf("http://%s", addr),
+		http: http.DefaultClient,
+	}
+}
+
 func NewWithDiscoverd(name string, dc dialer.DiscoverdClient) Client {
 	if name == "" {
 		name = "router"
@@ -227,5 +234,8 @@ func (c *client) StreamServiceDrain(t, id string) (io.ReadCloser, error) {
 }
 
 func (c *client) Close() error {
-	return c.dialer.Close()
+	if c.dialer != nil {
+		return c.dialer.Close()
+	}
+	return nil
 }
