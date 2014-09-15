@@ -372,7 +372,7 @@ func (c *Client) StreamJobEvents(appID string) (*JobEventStream, error) {
 	stream := &JobEventStream{Events: make(chan *ct.JobEvent), body: res.Body}
 	go func() {
 		defer close(stream.Events)
-		dec := &sse.Decoder{bufio.NewReader(stream.body)}
+		dec := sse.NewDecoder(bufio.NewReader(stream.body))
 		for {
 			event := &ct.JobEvent{}
 			if err := dec.Decode(event); err != nil {
