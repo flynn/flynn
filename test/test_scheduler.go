@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"net"
+	"strings"
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
@@ -14,14 +16,16 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 type SchedulerSuite struct {
-	config     *config.Cluster
-	cluster    *cluster.Client
-	controller *controller.Client
-	disc       *discoverd.Client
-	hosts      map[string]cluster.Host
+	config        *config.Cluster
+	cluster       *cluster.Client
+	controller    *controller.Client
+	disc          *discoverd.Client
+	hosts         map[string]cluster.Host
+	slugrunnerURI string
 }
 
 var _ = c.Suite(&SchedulerSuite{})
@@ -42,6 +46,11 @@ func (s *SchedulerSuite) SetUpSuite(t *c.C) {
 	s.config = conf.Clusters[0]
 
 	s.controller = newControllerClient(t, s.config)
+
+	r, err := s.controller.GetAppRelease("gitreceive")
+	t.Assert(err, c.IsNil)
+	s.slugrunnerURI = r.Processes["app"].Env["SLUGRUNNER_IMAGE_URI"]
+	t.Assert(s.slugrunnerURI, c.Not(c.Equals), "")
 
 	s.disc, err = discoverd.NewClientWithAddr(routerIP + ":1111")
 	t.Assert(err, c.IsNil)
@@ -96,21 +105,30 @@ func (s *SchedulerSuite) checkJobState(t *c.C, appID, jobID, state string) {
 	t.Assert(job.State, c.Equals, state)
 }
 
-var busyboxID = "184af8860f22e7a87f1416bb12a32b20d0d2c142f719653d87809a6122b04663"
-
-func (s *SchedulerSuite) createBusyboxApp(t *c.C) (*ct.App, *ct.Release) {
+func (s *SchedulerSuite) createApp(t *c.C) (*ct.App, *ct.Release) {
 	app := &ct.App{}
 	t.Assert(s.controller.CreateApp(app), c.IsNil)
 
-	artifact := &ct.Artifact{Type: "docker", URI: "https://registry.hub.docker.com/flynn/busybox?id=" + busyboxID}
+	artifact := &ct.Artifact{Type: "docker", URI: s.slugrunnerURI}
 	t.Assert(s.controller.CreateArtifact(artifact), c.IsNil)
 
 	release := &ct.Release{
 		ArtifactID: artifact.ID,
 		Processes: map[string]ct.ProcessType{
-			"echoer":  {Cmd: []string{"sh", "-c", "while true; do echo I like to echo; sleep 1; done"}},
-			"crasher": {Cmd: []string{"sh", "-c", "trap 'exit 1' SIGTERM; while true; do echo I like to crash; sleep 1; done"}},
-			"omni":    {Cmd: []string{"sh", "-c", "while true; do echo I am everywhere; sleep 1; done"}, Omni: true},
+			"echoer": {
+				Entrypoint: []string{"bash", "-c"},
+				Cmd:        []string{"sdutil exec -s echo-service:$PORT socat -v tcp-l:$PORT,fork exec:/bin/cat"},
+				Ports:      []ct.Port{{Proto: "tcp"}},
+			},
+			"crasher": {
+				Entrypoint: []string{"bash", "-c"},
+				Cmd:        []string{"trap 'exit 1' SIGTERM; while true; do echo I like to crash; sleep 1; done"},
+			},
+			"omni": {
+				Entrypoint: []string{"bash", "-c"},
+				Cmd:        []string{"while true; do echo I am everywhere; sleep 1; done"},
+				Omni:       true,
+			},
 		},
 	}
 	t.Assert(s.controller.CreateRelease(release), c.IsNil)
@@ -198,7 +216,7 @@ func waitForJobRestart(t *c.C, events chan *ct.JobEvent, timeout time.Duration) 
 }
 
 func (s *SchedulerSuite) TestScale(t *c.C) {
-	app, release := s.createBusyboxApp(t)
+	app, release := s.createApp(t)
 
 	stream, err := s.controller.StreamJobEvents(app.ID, 0)
 	t.Assert(err, c.IsNil)
@@ -313,7 +331,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 }
 
 func (s *SchedulerSuite) TestJobStatus(t *c.C) {
-	app, release := s.createBusyboxApp(t)
+	app, release := s.createApp(t)
 
 	stream, err := s.controller.StreamJobEvents(app.ID, 0)
 	t.Assert(err, c.IsNil)
@@ -326,8 +344,9 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 		Processes: map[string]int{"echoer": 1, "crasher": 1},
 	}), c.IsNil)
 	_, err = s.controller.RunJobDetached(app.ID, &ct.NewJob{
-		ReleaseID: release.ID,
-		Cmd:       []string{"sh", "-c", "while true; do echo one-off-job; sleep 1; done"},
+		ReleaseID:  release.ID,
+		Entrypoint: []string{"bash", "-c"},
+		Cmd:        []string{"while true; do echo one-off-job; sleep 1; done"},
 	})
 	t.Assert(err, c.IsNil)
 	waitForJobEvents(t, stream.Events, map[string]int{"echoer": 1, "crasher": 1, "": 1})
@@ -378,7 +397,7 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 		t.Skip("cannot boot new hosts")
 	}
 
-	app, release := s.createBusyboxApp(t)
+	app, release := s.createApp(t)
 
 	stream, err := s.controller.StreamJobEvents(app.ID, 0)
 	t.Assert(err, c.IsNil)
@@ -434,7 +453,7 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 	backoffPeriod := testCluster.BackoffPeriod
 	startTimeout := 5 * time.Second
 
-	app, release := s.createBusyboxApp(t)
+	app, release := s.createApp(t)
 
 	stream, err := s.controller.StreamJobEvents(app.ID, 0)
 	t.Assert(err, c.IsNil)
@@ -467,4 +486,45 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 	time.Sleep(backoffPeriod)
 	s.stopJob(t, id)
 	waitForJobRestart(t, stream.Events, startTimeout)
+}
+
+func (s *SchedulerSuite) TestTCPApp(t *c.C) {
+	app, _ := s.createApp(t)
+
+	stream, err := s.controller.StreamJobEvents(app.ID, 0)
+	t.Assert(err, c.IsNil)
+	defer stream.Close()
+
+	t.Assert(flynn("/", "-a", app.Name, "scale", "echoer=1"), Succeeds)
+
+	newRoute := flynn("/", "-a", app.Name, "route", "add", "tcp", "-s", "echo-service")
+	t.Assert(newRoute, Succeeds)
+	t.Assert(newRoute.Output, Matches, `.+ on port \d+`)
+	str := strings.Split(strings.TrimSpace(string(newRoute.Output)), " ")
+	port := str[len(str)-1]
+
+	waitForJobEvents(t, stream.Events, map[string]int{"echoer": 1})
+	// use Attempts to give the processes time to start
+	if err := Attempts.Run(func() error {
+		servAddr := routerIP + ":" + port
+		conn, err := net.Dial("tcp", servAddr)
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+		echo := random.Bytes(16)
+		_, err = conn.Write(echo)
+		if err != nil {
+			return err
+		}
+		reply := make([]byte, 16)
+		_, err = conn.Read(reply)
+		if err != nil {
+			return err
+		}
+		t.Assert(reply, c.DeepEquals, echo)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 }

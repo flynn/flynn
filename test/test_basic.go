@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -15,7 +14,6 @@ import (
 	c "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
-	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -246,69 +244,5 @@ func (s *BuildpackSuite) TestBuildpacks(t *c.C) {
 		// wait for the jobs to stop
 		waitForJobEvents(t, stream.Events, map[string]int{"web": -1})
 		stream.Close()
-	}
-}
-
-func (s *SchedulerSuite) TestTCPApp(t *c.C) {
-	r, err := s.controller.GetAppRelease("gitreceive")
-	t.Assert(err, c.IsNil)
-	imageURI := r.Processes["app"].Env["SLUGRUNNER_IMAGE_URI"]
-
-	app := &ct.App{}
-	t.Assert(s.controller.CreateApp(app), c.IsNil)
-
-	artifact := &ct.Artifact{Type: "docker", URI: imageURI}
-	t.Assert(s.controller.CreateArtifact(artifact), c.IsNil)
-
-	release := &ct.Release{
-		ArtifactID: artifact.ID,
-		Processes: map[string]ct.ProcessType{
-			"echo": {
-				Ports:      []ct.Port{{Proto: "tcp"}},
-				Cmd:        []string{"sdutil exec -s echo-service:$PORT socat -v tcp-l:$PORT,fork exec:/bin/cat"},
-				Entrypoint: []string{"sh", "-c"},
-			},
-		},
-	}
-	t.Assert(s.controller.CreateRelease(release), c.IsNil)
-	t.Assert(s.controller.SetAppRelease(app.ID, release.ID), c.IsNil)
-
-	stream, err := s.controller.StreamJobEvents(app.ID, 0)
-	defer stream.Close()
-	if err != nil {
-		t.Error(err)
-	}
-
-	t.Assert(flynn("/", "-a", app.Name, "scale", "echo=1"), Succeeds)
-
-	newRoute := flynn("/", "-a", app.Name, "route", "add", "tcp", "-s", "echo-service")
-	t.Assert(newRoute, Succeeds)
-	t.Assert(newRoute.Output, Matches, `.+ on port \d+`)
-	str := strings.Split(strings.TrimSpace(string(newRoute.Output)), " ")
-	port := str[len(str)-1]
-
-	waitForJobEvents(t, stream.Events, map[string]int{"echo": 1})
-	// use Attempts to give the processes time to start
-	if err := Attempts.Run(func() error {
-		servAddr := routerIP + ":" + port
-		conn, err := net.Dial("tcp", servAddr)
-		defer conn.Close()
-		if err != nil {
-			return err
-		}
-		echo := random.Bytes(16)
-		_, err = conn.Write(echo)
-		if err != nil {
-			return err
-		}
-		reply := make([]byte, 16)
-		_, err = conn.Read(reply)
-		if err != nil {
-			return err
-		}
-		t.Assert(reply, c.DeepEquals, echo)
-		return nil
-	}); err != nil {
-		t.Error(err)
 	}
 }
