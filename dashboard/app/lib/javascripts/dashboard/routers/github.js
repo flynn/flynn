@@ -6,7 +6,7 @@
 
 "use strict";
 
-var githubRouter = Dashboard.routers.github = new (Marbles.Router.createClass({
+Dashboard.routers.Github = Marbles.Router.createClass({
 	displayName: "routers.github",
 
 	routes: [
@@ -230,8 +230,6 @@ var githubRouter = Dashboard.routers.github = new (Marbles.Router.createClass({
 			this.__redirectToGithub();
 		}
 	}
-}))();
-
-githubRouter.dispatcherIndex = Dashboard.Dispatcher.register(githubRouter.handleEvent.bind(githubRouter));
+});
 
 })();

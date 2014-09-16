@@ -1,5 +1,6 @@
 //= require_self
 //= require ./routers/apps
+//= require ./routers/github
 
 (function () {
 
@@ -25,6 +26,11 @@ window.Dashboard = {
 		var appsRouter = new this.routers.Apps();
 		appsRouter.dispatcherIndex = this.Dispatcher.register(
 			appsRouter.handleEvent.bind(appsRouter)
+		);
+
+		var githubRouter = new this.routers.Github();
+		githubRouter.dispatcherIndex = Dashboard.Dispatcher.register(
+			githubRouter.handleEvent.bind(githubRouter)
 		);
 
 		this.client = new this.Client(this.config.endpoints);
