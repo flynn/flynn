@@ -143,7 +143,7 @@ Dashboard.Views.GithubDeploy = React.createClass({
 				) : null}
 
 				{this.state.launchComplete ? (
-					<RouteLink className="launch-btn" path={"/apps/"+ encodeURIComponent(this.props.appId)}>Continue</RouteLink>
+					<RouteLink className="launch-btn" path={this.props.getAppPath()}>Continue</RouteLink>
 				) : (
 					<button className="launch-btn" disabled={this.state.launchDisabled} onClick={this.__handleLaunchBtnClick}>{this.state.launching ? "Launching..." : "Launch app"}</button>
 				)}

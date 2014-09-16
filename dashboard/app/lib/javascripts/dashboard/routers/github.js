@@ -215,6 +215,7 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 		var view = Dashboard.secondaryView;
 		if (view && view.constructor.displayName === "Views.GithubDeploy" && view.isMounted() && view.state.name === event.appName) {
 			view.setProps({
+				getAppPath: this.__getAppPath.bind(this, event.appId),
 				appId: event.appId,
 				job: event.job
 			});
@@ -234,6 +235,10 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 		if ( !authenticated && Marbles.history.path.match(/^github/) ) {
 			this.__redirectToGithub();
 		}
+	},
+
+	__getAppPath: function (appId) {
+		return "/apps/"+ encodeURIComponent(appId);
 	},
 
 	__getClusterPath: function () {
