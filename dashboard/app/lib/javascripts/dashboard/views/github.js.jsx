@@ -18,7 +18,7 @@ Dashboard.Views.Github = React.createClass({
 			<section>
 				<header className="page-header">
 					<h1>GitHub repos</h1>
-					<RouteLink path="/" className="back-link">
+					<RouteLink path={this.props.getClusterPath()} className="back-link">
 						Go back to cluster
 					</RouteLink>
 				</header>

@@ -59,7 +59,8 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 			selectedType: params[0].type || null,
 			selectedRepo: selectedRepo || null,
 			selectedRepoPanel: params[0].repo_panel || null,
-			selectedBranchName: params[0].branch || null
+			selectedBranchName: params[0].branch || null,
+			getClusterPath: this.__getClusterPath.bind(this, params)
 		};
 		var view = Dashboard.primaryView;
 		if (view && view.constructor.displayName === "Views.Github" && view.isMounted()) {
@@ -229,6 +230,10 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 		if ( !authenticated && Marbles.history.path.match(/^github/) ) {
 			this.__redirectToGithub();
 		}
+	},
+
+	__getClusterPath: function () {
+		return "/";
 	}
 });
 
