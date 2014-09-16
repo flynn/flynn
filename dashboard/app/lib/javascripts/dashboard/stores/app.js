@@ -437,6 +437,7 @@ App.createFromGithub = function (client, meta, appData) {
 				name: "APP:JOB_CREATED",
 				appId: appId,
 				appName: appName,
+				appData: appData,
 				job: args[0]
 			});
 			return args;
