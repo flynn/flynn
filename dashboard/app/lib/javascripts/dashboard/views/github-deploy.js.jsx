@@ -118,6 +118,8 @@ Dashboard.Views.GithubDeploy = React.createClass({
 					) : null)}
 				</header>
 
+				{this.props.children}
+
 				<label>
 					<span className="name">Name</span>
 					<input type="text" value={this.state.name} onChange={this.__handleNameChange} />
