@@ -178,9 +178,9 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 		}
 	},
 
-	__handleLaunchCommit: function (event) {
+	__handleLaunchCommit: function (event, deployParams) {
 		var storeId = event.storeId;
-		var deployParams = {};
+		deployParams = deployParams || {};
 		deployParams.owner = storeId.ownerLogin;
 		deployParams.repo = storeId.repoName;
 		deployParams.sha = event.sha;
@@ -188,10 +188,10 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 		Marbles.history.navigate(Marbles.history.pathWithParams("/github/deploy", [deployParams]));
 	},
 
-	__handleLaunchPull: function (event) {
+	__handleLaunchPull: function (event, deployParams) {
 		var head = event.pull.head;
 		var base = event.pull.base;
-		var deployParams = {};
+		deployParams = deployParams || {};
 		deployParams.owner = head.ownerLogin;
 		deployParams.repo = head.name;
 		deployParams.base_owner = base.ownerLogin;
