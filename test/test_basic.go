@@ -148,7 +148,16 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 	t.Assert(string(contents), Matches, `Hello to Yahoo from Flynn on port \d+`)
 
 	// request pausing
-	t.Assert(s.Flynn("pause", "http", name+"-web"), Succeeds)
+	ch := make(chan struct{})
+	go func() {
+		t.Assert(s.Flynn("pause", "http", name+"-web"), Succeeds)
+		ch <- struct{}{}
+	}()
+	select {
+	case <-ch:
+	case <-time.After(time.Second * 5):
+		t.Fatal("flynn pause timed out")
+	}
 	start := time.Now()
 	go func() {
 		<-time.After(time.Second * 2)
