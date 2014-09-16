@@ -94,23 +94,17 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 		}
 		var githubPath = Marbles.history.pathWithParams("/github", githubParams);
 
-		var props = {
-			onHide: function () {
-				Marbles.history.navigate(prevPath || githubPath);
-			},
-			ownerLogin: params.owner,
-			repoName: params.repo,
-			branchName: params.branch,
-			pullNumber: params.pull ? Number(params.pull) : null,
-			sha: params.sha,
-			dismissError: function () {
-				view.setProps({ errorMsg: null });
-			}
-		};
+		var props = this.__getDeployProps(params);
 		if (params.base_owner && params.base_repo) {
 			props.baseOwner = params.base_owner;
 			props.baseRepo = params.base_repo;
 		}
+		props.onHide = function () {
+			Marbles.history.navigate(prevPath || githubPath);
+		};
+		props.dismissError = function () {
+			view.setProps({ errorMsg: null });
+		};
 		var view = Dashboard.secondaryView = React.renderComponent(
 			Dashboard.Views.GithubDeploy(props),
 			Dashboard.secondaryEl
@@ -119,6 +113,16 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 		if ( !prevPath ) {
 			this.github(githubParams);
 		}
+	},
+
+	__getDeployProps: function (params) {
+		return {
+			ownerLogin: params.owner,
+			repoName: params.repo,
+			branchName: params.branch,
+			pullNumber: params.pull ? Number(params.pull) : null,
+			sha: params.sha
+		};
 	},
 
 	__redirectToGithub: function (opts) {
