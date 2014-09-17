@@ -17,17 +17,18 @@ Dashboard.Views.AppControls = React.createClass({
 		var app = this.props.app;
 		var formation = this.props.formation;
 		var getAppPath = this.props.getAppPath;
+		var headerComponent = this.props.headerComponent || React.DOM.header;
 
 		return (
 			<section className="app-controls">
-				<header>
+				{headerComponent(this.props,
 					<h1>
 						{app.name}
 						<RouteLink path={getAppPath("/delete")}>
 							<i className="icn-trash" />
 						</RouteLink>
 					</h1>
-				</header>
+				)}
 
 				<section className="flex-row">
 					<section className="col">

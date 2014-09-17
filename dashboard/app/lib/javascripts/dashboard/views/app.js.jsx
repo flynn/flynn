@@ -34,6 +34,7 @@ Dashboard.Views.App = React.createClass({
 				{app ? (
 					<section className="panel">
 						<Dashboard.Views.AppControls
+							headerComponent={this.props.appControlsHeaderComponent}
 							appId={this.props.appId}
 							app={app}
 							formation={this.state.formation}
