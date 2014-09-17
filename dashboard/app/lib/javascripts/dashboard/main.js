@@ -22,7 +22,7 @@ window.Dashboard = {
 		this.client = new this.Client(this.config.endpoints);
 
 		if (this.config.user && this.config.user.auths.github) {
-			this.githubClient = new this.GithubClient(
+			Dashboard.githubClient = new this.GithubClient(
 				this.config.user.auths.github.access_token
 			);
 		}
@@ -110,14 +110,14 @@ window.Dashboard = {
 
 	__handleGithubAuthChange: function (authenticated) {
 		if (authenticated) {
-			if ( !this.githubClient ) {
+			if ( !Dashboard.githubClient ) {
 				var githubAuth = this.config.user.auths.github;
-				this.githubClient = new this.GithubClient(
+				Dashboard.githubClient = new this.GithubClient(
 					githubAuth.access_token
 				);
 			}
 		} else {
-			this.githubClient = null;
+			Dashboard.githubClient = null;
 		}
 	},
 
