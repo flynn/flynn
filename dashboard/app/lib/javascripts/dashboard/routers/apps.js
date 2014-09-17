@@ -73,9 +73,20 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 	},
 
 	app: function (params) {
-		params = params[0];
 		var view = Dashboard.primaryView;
-		var props = {
+		var props = this.__getAppProps(params);
+		if (view && view.isMounted() && view.constructor.displayName === "Views.App") {
+			view.setProps(props);
+		} else {
+			Dashboard.primaryView = view = React.renderComponent(
+				Dashboard.Views.App(props),
+				Dashboard.el);
+			}
+	},
+
+	__getAppProps: function (params) {
+		params = params[0];
+		return {
 			appId: params.id,
 			selectedTab: params.shtab || null,
 			getAppPath: function (subpath, subpathParams) {
@@ -84,13 +95,6 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 			}.bind(this),
 			getClusterPath: this.__getClusterPath.bind(this, params.id)
 		};
-		if (view && view.isMounted() && view.constructor.displayName === "Views.App") {
-			view.setProps(props);
-		} else {
-			Dashboard.primaryView = view = React.renderComponent(
-				Dashboard.Views.App(props),
-				Dashboard.el);
-			}
 	},
 
 	appEnv: function (params) {
