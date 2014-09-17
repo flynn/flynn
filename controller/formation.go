@@ -141,7 +141,9 @@ func (r *FormationRepo) publish(appID, releaseID string) {
 
 func (r *FormationRepo) expandFormation(formation *ct.Formation) (*ct.ExpandedFormation, error) {
 	app, err := r.apps.Get(formation.AppID)
-	if err != nil {
+	if err == ErrNotFound {
+		app.(*ct.App).ID = cleanUUID(formation.AppID)
+	} else if err != nil {
 		return nil, err
 	}
 	release, err := r.releases.Get(formation.ReleaseID)
