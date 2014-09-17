@@ -88,7 +88,7 @@ function getState (props, prevState) {
 	}
 
 	state.launchComplete = props.appId && !state.launching && !state.jobError && !props.errorMsg;
-	state.launchDisabled = !!(!state.repo || !(state.commit || state.pull) || state.launching);
+	state.launchDisabled = props.launchDisabled || !!(!state.repo || !(state.commit || state.pull) || state.launching);
 
 	if (props.errorMsg) {
 		state.launchDisabled = false;
