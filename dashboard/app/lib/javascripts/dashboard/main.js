@@ -22,7 +22,7 @@ window.Dashboard = {
 		this.client = new this.Client(this.config.endpoints);
 
 		if (this.config.user && this.config.user.auths.github) {
-			Dashboard.githubClient = new Dashboard.GithubClient(
+			this.githubClient = new this.GithubClient(
 				this.config.user.auths.github.access_token
 			);
 		}
@@ -123,7 +123,7 @@ window.Dashboard = {
 
 	__handleServiceUnavailable: function (status) {
 		React.renderComponent(
-			Dashboard.Views.ServiceUnavailable({ status: status }),
+			this.Views.ServiceUnavailable({ status: status }),
 			document.getElementById('main')
 		);
 	},
