@@ -38,8 +38,8 @@ window.Dashboard = {
 		});
 	},
 
-	__isLoginPath: function () {
-		var path = Marbles.history.path;
+	__isLoginPath: function (path) {
+		path = path || Marbles.history.path;
 		if ( path === "" ) {
 			return false;
 		}
@@ -55,77 +55,29 @@ window.Dashboard = {
 		if (event.source === "Marbles.History") {
 			switch (event.name) {
 				case "handler:before":
-					this.waitForRouteHandler = new Promise(function (rs) {
-						this.__waitForRouteHandlerResolve = rs;
-					}.bind(this));
-
-					// prevent route handlers requiring auth from being called when app is not authenticated
-					if ( !this.config.authenticated && event.handler.opts.auth !== false ) {
-						event.abort();
-						return;
-					}
-
-					if (event.handler.opts.secondary) {
-						// view is rendered in a modal
-						this.__secondary = true;
-						return;
-					}
-
-					var path = event.path;
-
-					// don't reset view if only params changed
-					var prevPath = Marbles.history.prevPath || "";
-					if (path.split('?')[0] === prevPath.split('?')[0]) {
-						if (event.handler.opts.paramChangeScrollReset !== false) {
-							// reset scroll position
-							window.scrollTo(0,0);
-						}
-						return;
-					}
-
-					// don't reset view when navigating between login/reset and login
-					if (path.substr(0, 5) === "login" && prevPath.substr(0, 5) === "login") {
-						return;
-					}
-
-					// unmount main view / reset scroll position
-					if ( !event.handler.opts.secondary ) {
-						window.scrollTo(0,0);
-						this.primaryView = null;
-						React.unmountComponentAtNode(this.el);
-					}
-
-					// unmount secondary view
-					if (this.__secondary) {
-						this.__secondary = false;
-						React.unmountComponentAtNode(this.secondaryEl);
-					}
+					this.__handleHandlerBeforeEvent(event);
 				break;
 
 				case "handler:after":
-					if (this.__waitForRouteHandlerResolve) {
-						this.__waitForRouteHandlerResolve();
-						this.waitForRouteHandler = Promise.resolve();
-					}
+					this.__handleHandlerAfterEvent(event);
 				break;
 			}
 			return;
 		}
 
 		if (event.name === "LOGOUT_BTN_CLICK") {
-			Dashboard.client.logout();
+			this.client.logout();
 		}
 
-		if (event.source !== "APP_EVENT") {
-			return;
+		if (event.source === "APP_EVENT") {
+			this.__handleAppEvent(event);
 		}
-		var started = this.__started || false;
+	},
+
+	__handleAppEvent: function (event) {
 		switch (event.name) {
 			case "CONFIG_READY":
-				if ( !started ) {
-					this.__started = true;
-					this.run();
-				}
+				this.__handleConfigReady();
 			break;
 
 			case "AUTH_CHANGE":
@@ -139,6 +91,14 @@ window.Dashboard = {
 			case "SERVICE_UNAVAILABLE":
 				this.__handleServiceUnavailable(event.status);
 			break;
+		}
+	},
+
+	__handleConfigReady: function () {
+		var started = this.__started || false;
+		if ( !started ) {
+			this.__started = true;
+			this.run();
 		}
 	},
 
@@ -166,6 +126,61 @@ window.Dashboard = {
 			Dashboard.Views.ServiceUnavailable({ status: status }),
 			document.getElementById('main')
 		);
+	},
+
+	__handleHandlerBeforeEvent: function (event) {
+		this.waitForRouteHandler = new Promise(function (rs) {
+			this.__waitForRouteHandlerResolve = rs;
+		}.bind(this));
+
+		// prevent route handlers requiring auth from being called when app is not authenticated
+		if ( !this.config.authenticated && event.handler.opts.auth !== false ) {
+			event.abort();
+			return;
+		}
+
+		if (event.handler.opts.secondary) {
+			// view is rendered in a modal
+			this.__secondary = true;
+			return;
+		}
+
+		var path = event.path;
+
+		// don't reset view if only params changed
+		var prevPath = Marbles.history.prevPath || "";
+		if (path.split('?')[0] === prevPath.split('?')[0]) {
+			if (event.handler.opts.paramChangeScrollReset !== false) {
+				// reset scroll position
+				window.scrollTo(0,0);
+			}
+			return;
+		}
+
+		// don't reset view when navigating between login/reset and login
+		if (path.substr(0, 5) === "login" && prevPath.substr(0, 5) === "login") {
+			return;
+		}
+
+		// unmount main view / reset scroll position
+		if ( !event.handler.opts.secondary ) {
+			window.scrollTo(0,0);
+			this.primaryView = null;
+			React.unmountComponentAtNode(this.el);
+		}
+
+		// unmount secondary view
+		if (this.__secondary) {
+			this.__secondary = false;
+			React.unmountComponentAtNode(this.secondaryEl);
+		}
+	},
+
+	__handleHandlerAfterEvent: function () {
+		if (this.__waitForRouteHandlerResolve) {
+			this.__waitForRouteHandlerResolve();
+			this.waitForRouteHandler = Promise.resolve();
+		}
 	}
 };
 
