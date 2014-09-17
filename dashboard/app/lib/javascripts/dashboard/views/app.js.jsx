@@ -18,14 +18,15 @@ Dashboard.Views.App = React.createClass({
 
 	render: function () {
 		var app = this.state.app;
+		var headerComponent = this.props.headerComponent || React.DOM.header;
 
 		return (
 			<section>
-				<header>
+				{headerComponent(this.props,
 					<RouteLink path={this.props.getClusterPath()} className="back-link">
 						Go back to cluster
 					</RouteLink>
-				</header>
+				)}
 
 				{ !app && this.state.serviceUnavailable ? (
 					<Dashboard.Views.ServiceUnavailable status={503} />
