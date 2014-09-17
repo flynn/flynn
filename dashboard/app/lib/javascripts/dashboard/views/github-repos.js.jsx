@@ -61,6 +61,7 @@ Dashboard.Views.GithubRepos = React.createClass({
 
 				<ScrollPagination
 					ref="scrollPagination"
+					key={this.state.reposStoreId}
 					hasPrevPage={this.state.reposHasPrevPage}
 					hasNextPage={this.state.reposHasNextPage}
 					unloadPage={GithubReposActions.unloadPageId.bind(null, this.state.reposStoreId)}
