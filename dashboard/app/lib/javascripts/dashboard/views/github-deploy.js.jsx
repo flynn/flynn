@@ -84,6 +84,8 @@ function getState (props, prevState) {
 
 		if (jobOutputState.open === false) {
 			state.launching = false;
+		} else {
+			state.launching = true;
 		}
 	}
 
