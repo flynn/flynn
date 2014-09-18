@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ActiveState/tail"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/lumberjack"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/ActiveState/tail"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/natefinch/lumberjack"
 	"github.com/flynn/flynn/pkg/random"
 )
 

@@ -36,6 +36,10 @@
 			"Rev": "98fd1f5506373df1033b67a1881078705456e2ee"
 		},
 		{
+			"ImportPath": "github.com/ActiveState/tail",
+			"Rev": "fd3ba4e64ca930fe21edc4c8a8bd1a075ef7f4ac"
+		},
+		{
 			"ImportPath": "github.com/BurntSushi/toml",
 			"Rev": "f87ce853111478914f0bcffa34d43a93643e6eda"
 		},
@@ -170,11 +174,6 @@
 			"Rev": "664d3777b3faf84fb78cd50271be2726b7f7fae3"
 		},
 		{
-			"ImportPath": "github.com/flynn/lumberjack",
-			"Comment": "v1.0-3-g9aa176d",
-			"Rev": "9aa176d4f85b32711f2a527a694ba8ba5629fb33"
-		},
-		{
 			"ImportPath": "github.com/flynn/pq",
 			"Rev": "5a9734ce1d3157ce437352731f757b82340be3a6"
 		},
@@ -210,6 +209,11 @@
 			"Rev": "788166ea4e74dae8b21ecec4bfce23b57c4f5adf"
 		},
 		{
+			"ImportPath": "github.com/howeyc/fsnotify",
+			"Comment": "v0.9.0-11-g6b1ef89",
+			"Rev": "6b1ef893dc11e0447abda6da20a5203481878dda"
+		},
+		{
 			"ImportPath": "github.com/inconshreveable/go-update",
 			"Rev": "3f0466666779bd2143f368a207b0641f0ed536e8"
 		},
@@ -235,12 +239,13 @@
 			"Rev": "7b617783357fec5b5a6d4ecac82e747e4a14d1b5"
 		},
 		{
-			"ImportPath": "github.com/technoweenie/grohl",
-			"Rev": "91868e10032390c992d419d10b17cc8bfdc35808"
+			"ImportPath": "github.com/natefinch/lumberjack",
+			"Comment": "v1.0-12-gd28785c",
+			"Rev": "d28785c2f27cd682d872df46ccd8232843629f54"
 		},
 		{
-			"ImportPath": "github.com/tysontate/gommap",
-			"Rev": "e87a6e482c2ceaa54bd76e0fb30d1f2d40dd3f01"
+			"ImportPath": "github.com/technoweenie/grohl",
+			"Rev": "91868e10032390c992d419d10b17cc8bfdc35808"
 		},
 		{
 			"ImportPath": "github.com/wadey/cryptorand",
@@ -253,6 +258,10 @@
 		{
 			"ImportPath": "gopkg.in/mgo.v2",
 			"Rev": "3116f72d0fe0216b75201cb3a1ae61c82c2a4d63"
+		},
+		{
+			"ImportPath": "gopkg.in/tomb.v1",
+			"Rev": "c131134a1947e9afd9cecfe11f4c6dff0732ae58"
 		}
 	]
 }

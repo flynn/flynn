@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/lumberjack"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/natefinch/lumberjack"
 	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 )
 
