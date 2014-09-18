@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-04/hyper-schema",
   "title": "Provider Resource",
   "description": "FIXME",
-  "id": "/schemata/provider_resource",
+  "id": "schemata/provider_resource",
   "$ref": "/schemata/resource",
   "type": "object",
   "links": [
