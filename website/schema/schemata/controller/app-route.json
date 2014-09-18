@@ -4,7 +4,7 @@
   "description": "FIXME",
   "id": "schemata/app_route",
   "$ref": "/schemata/route",
-  "type": ["object"],
+  "type": "object",
   "links": [
     {
       "title": "Create",

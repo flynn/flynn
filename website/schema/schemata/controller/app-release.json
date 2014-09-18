@@ -4,7 +4,7 @@
   "description": "FIXME",
   "id": "schemata/app_release",
   "$ref": "/schemata/release",
-  "type": ["object"],
+  "type": "object",
   "links": [
     {
       "title": "List",

@@ -4,9 +4,7 @@
   "description": "FIXME",
   "id": "/schemata/provider_resource",
   "$ref": "/schemata/resource",
-  "type": [
-    "object"
-  ],
+  "type": "object",
   "links": [
     {
       "title": "Create",

@@ -4,7 +4,7 @@
   "description": "FIXME",
   "id": "schemata/app_formation",
   "$ref": "/schemata/formation",
-  "type": ["object"],
+  "type": "object",
   "links": [
     {
       "title": "Get",
