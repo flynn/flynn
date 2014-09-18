@@ -261,10 +261,6 @@ type hostScriptData struct {
 
 var flynnHostScripts = map[string]*template.Template{
 	"libvirt-lxc": template.Must(template.New("flynn-host-libvirt").Parse(`
-set -e
-
-sudo virsh net-start default
-
 sudo start-stop-daemon \
   --start \
   --background \
