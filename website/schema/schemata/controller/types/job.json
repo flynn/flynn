@@ -14,7 +14,7 @@
     },
     "state": {
       "description": "job state",
-      "example": "started",
+      "example": "starting",
       "type": "string"
     }
   },
