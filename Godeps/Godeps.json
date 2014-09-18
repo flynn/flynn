@@ -143,18 +143,18 @@
 		},
 		{
 			"ImportPath": "github.com/docker/libcontainer/label",
-			"Comment": "v1.2.0-4-g1ecaf30",
-			"Rev": "1ecaf30408c3caece87a49b275dbe4b23d7160ff"
+			"Comment": "v1.2.0-37-g185328a",
+			"Rev": "185328a42654f6dc9a41814e57882f69d65f6ab7"
 		},
 		{
 			"ImportPath": "github.com/docker/libcontainer/netlink",
-			"Comment": "v1.2.0-4-g1ecaf30",
-			"Rev": "1ecaf30408c3caece87a49b275dbe4b23d7160ff"
+			"Comment": "v1.2.0-37-g185328a",
+			"Rev": "185328a42654f6dc9a41814e57882f69d65f6ab7"
 		},
 		{
 			"ImportPath": "github.com/docker/libcontainer/user",
-			"Comment": "v1.2.0-4-g1ecaf30",
-			"Rev": "1ecaf30408c3caece87a49b275dbe4b23d7160ff"
+			"Comment": "v1.2.0-37-g185328a",
+			"Rev": "185328a42654f6dc9a41814e57882f69d65f6ab7"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-docopt",
