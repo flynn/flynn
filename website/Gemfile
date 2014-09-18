@@ -5,7 +5,7 @@ gem 'middleman-more'
 gem 'middleman-blog'
 
 gem 'prmd', git: 'git://github.com/interagent/prmd.git', branch: 'master',
-            ref: '87f00fcc1d433231f959aebf25a6dc1a703f685d'
+            ref: 'f3f24d503f81188248cebe46e49c05097f5161f8'
 
 gem 'builder'
 gem 'rake'
