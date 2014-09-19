@@ -23,6 +23,7 @@ type Args struct {
 	AssetsDir  string
 	Run        string
 	Gist       bool
+	ClusterAPI string
 }
 
 func Parse() *Args {
@@ -43,6 +44,7 @@ func Parse() *Args {
 	flag.StringVar(&args.TLSKey, "tls-key", "", "TLS key")
 	flag.StringVar(&args.AssetsDir, "assets", "runner/assets", "path to the runner assets dir")
 	flag.StringVar(&args.Run, "run", "", "regular expression selecting which tests and/or suites to run")
+	flag.StringVar(&args.ClusterAPI, "cluster-api", "", "cluster-api endpoint for adding and removing hosts")
 	flag.BoolVar(&args.Build, "build", true, "build Flynn")
 	flag.BoolVar(&args.Debug, "debug", false, "enable debug output")
 	flag.BoolVar(&args.Kill, "kill", true, "kill the cluster after running the tests")

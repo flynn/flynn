@@ -27,25 +27,26 @@ type BootConfig struct {
 }
 
 type Cluster struct {
-	BackoffPeriod    time.Duration
-	ControllerDomain string
-	ControllerPin    string
-	ControllerKey    string
-	RouterIP         string
+	ID               string        `json:"id"`
+	Instances        instances     `json:"instances"`
+	BackoffPeriod    time.Duration `json:"backoff_period"`
+	ControllerDomain string        `json:"controller_domain"`
+	ControllerPin    string        `json:"controller_pin"`
+	ControllerKey    string        `json:"controller_key"`
+	RouterIP         string        `json:"router_ip"`
 
-	bc        BootConfig
-	vm        *VMManager
-	instances instances
-	out       io.Writer
-	bridge    *Bridge
-	rootFS    string
+	bc     BootConfig
+	vm     *VMManager
+	out    io.Writer
+	bridge *Bridge
+	rootFS string
 }
 
-type instances []Instance
+type instances []*Instance
 
-func (i instances) Get(id string) (Instance, error) {
+func (i instances) Get(id string) (*Instance, error) {
 	for _, inst := range i {
-		if inst.ID() == id {
+		if inst.ID == id {
 			return inst, nil
 		}
 	}
@@ -60,6 +61,7 @@ type Streams struct {
 
 func New(bc BootConfig, out io.Writer) *Cluster {
 	return &Cluster{
+		ID:  random.String(8),
 		bc:  bc,
 		out: out,
 	}
@@ -141,6 +143,13 @@ func (c *Cluster) Boot(rootFS string, count int) error {
 	return nil
 }
 
+func (c *Cluster) BridgeIP() string {
+	if c.bridge == nil {
+		return ""
+	}
+	return c.bridge.IP()
+}
+
 func (c *Cluster) AddHost() error {
 	if c.rootFS == "" {
 		return errors.New("cluster not yet booted")
@@ -150,7 +159,7 @@ func (c *Cluster) AddHost() error {
 }
 
 func (c *Cluster) RemoveHost(id string) error {
-	inst, err := c.instances.Get(id)
+	inst, err := c.Instances.Get(id)
 	if err != nil {
 		return err
 	}
@@ -171,7 +180,7 @@ func (c *Cluster) RemoveHost(id string) error {
 }
 
 func (c *Cluster) Size() int {
-	return len(c.instances)
+	return len(c.Instances)
 }
 
 func (c *Cluster) startVMs(rootFS string, count int) error {
@@ -202,19 +211,19 @@ func (c *Cluster) startVMs(rootFS string, count int) error {
 		if err = inst.Start(); err != nil {
 			return fmt.Errorf("error starting instance %d: %s", i, err)
 		}
-		c.instances = append(c.instances, inst)
+		c.Instances = append(c.Instances, inst)
 
 		var script bytes.Buffer
 		data := hostScriptData{
-			ID: inst.ID(),
-			IP: inst.IP(),
+			ID: inst.ID,
+			IP: inst.IP,
 		}
-		if len(c.instances) > 1 {
-			data.Peers = fmt.Sprintf("%s:7001", c.instances[0].IP())
+		if len(c.Instances) > 1 {
+			data.Peers = fmt.Sprintf("%s:7001", c.Instances[0].IP)
 		}
 		tmpl.Execute(&script, data)
 
-		c.logf("Starting flynn-host on %s [id: %s]\n", inst.IP(), inst.ID())
+		c.logf("Starting flynn-host on %s [id: %s]\n", inst.IP, inst.ID)
 		if err := inst.Run("bash", &Streams{Stdin: &script, Stdout: c.out, Stderr: os.Stderr}); err != nil {
 			return err
 		}
@@ -240,10 +249,10 @@ func (c *Cluster) setup() error {
 }
 
 func (c *Cluster) Run(command string, s *Streams) error {
-	if len(c.instances) == 0 {
+	if len(c.Instances) == 0 {
 		return errors.New("no booted servers in cluster")
 	}
-	return c.instances[0].Run(command, s)
+	return c.Instances[0].Run(command, s)
 }
 
 func (c *Cluster) CLIConfig() (*config.Config, error) {
@@ -262,8 +271,8 @@ func (c *Cluster) CLIConfig() (*config.Config, error) {
 }
 
 func (c *Cluster) Shutdown() {
-	for i, inst := range c.instances {
-		c.logf("killing instance %d [id: %s]\n", i, inst.ID())
+	for i, inst := range c.Instances {
+		c.logf("killing instance %d [id: %s]\n", i, inst.ID)
 		if err := inst.Kill(); err != nil {
 			c.logf("error killing instance %d: %s\n", i, err)
 		}
@@ -316,7 +325,7 @@ type buildData struct {
 	Merge  bool
 }
 
-func buildFlynn(inst Instance, commit string, merge bool, out io.Writer) error {
+func buildFlynn(inst *Instance, commit string, merge bool, out io.Writer) error {
 	var b bytes.Buffer
 	flynnBuildScript.Execute(&b, buildData{commit, merge})
 	return inst.Run("bash", &Streams{Stdin: &b, Stdout: out, Stderr: out})
@@ -362,7 +371,7 @@ type controllerCert struct {
 }
 
 func (c *Cluster) bootstrapLayer1() error {
-	inst := c.instances[0]
+	inst := c.Instances[0]
 	c.ControllerDomain = fmt.Sprintf("flynn-%s.local", random.String(16))
 	c.ControllerKey = random.String(16)
 	c.BackoffPeriod = 5 * time.Second
@@ -371,7 +380,7 @@ func (c *Cluster) bootstrapLayer1() error {
 	go func() {
 		command := fmt.Sprintf(
 			"DISCOVERD=%s:1111 CONTROLLER_DOMAIN=%s CONTROLLER_KEY=%s BACKOFF_PERIOD=%fs flynn-host bootstrap --json --min-hosts=%d /etc/flynn-bootstrap.json",
-			inst.IP(), c.ControllerDomain, c.ControllerKey, c.BackoffPeriod.Seconds(), len(c.instances),
+			inst.IP, c.ControllerDomain, c.ControllerKey, c.BackoffPeriod.Seconds(), len(c.Instances),
 		)
 		cmdErr = inst.Run(command, &Streams{Stdout: wr, Stderr: os.Stderr})
 		wr.Close()
@@ -404,9 +413,9 @@ func (c *Cluster) bootstrapLayer1() error {
 	c.ControllerPin = cert.Pin
 
 	// grab the router IP from discoverd
-	disc, err := discoverd.NewClientWithAddr(inst.IP() + ":1111")
+	disc, err := discoverd.NewClientWithAddr(inst.IP + ":1111")
 	if err != nil {
-		return fmt.Errorf("could not connect to discoverd at %s:1111: %s", inst.IP(), err)
+		return fmt.Errorf("could not connect to discoverd at %s:1111: %s", inst.IP, err)
 	}
 	defer disc.Close()
 	set, err := disc.NewServiceSet("router-api")

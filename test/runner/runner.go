@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -28,6 +29,7 @@ import (
 
 var logBucket = "flynn-ci-logs"
 var dbBucket = []byte("builds")
+var listenPort string
 
 type Build struct {
 	Id          string     `json:"id"`
@@ -50,6 +52,7 @@ type Runner struct {
 	netMtx      sync.Mutex
 	db          *bolt.DB
 	buildCh     chan struct{}
+	clusters    map[string]*cluster.Cluster
 }
 
 var args *arg.Args
@@ -66,6 +69,7 @@ func main() {
 		events:   make(chan Event, 10),
 		networks: make(map[string]struct{}),
 		buildCh:  make(chan struct{}, maxBuilds),
+		clusters: make(map[string]*cluster.Cluster),
 	}
 	if err := runner.start(); err != nil {
 		log.Fatal(err)
@@ -83,6 +87,11 @@ func (r *Runner) start() error {
 		return err
 	}
 	r.s3Bucket = s3.New(awsAuth, aws.USEast).Bucket(logBucket)
+
+	_, listenPort, err = net.SplitHostPort(args.ListenAddr)
+	if err != nil {
+		return err
+	}
 
 	bc := r.bc
 	bc.Network, err = r.allocateNet()
@@ -121,6 +130,7 @@ func (r *Runner) start() error {
 
 	http.HandleFunc("/", r.httpEventHandler)
 	http.HandleFunc("/builds", r.httpBuildHandler)
+	http.HandleFunc("/cluster/", r.httpClusterHandler)
 	http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(args.AssetsDir))))
 	handler := handlers.CombinedLoggingHandler(os.Stdout, http.DefaultServeMux)
 	log.Println("Listening on", args.ListenAddr, "...")
@@ -159,7 +169,7 @@ var testRunScript = template.Must(template.New("test-run").Parse(`
 #!/bin/bash
 set -e -x -o pipefail
 
-echo {{ .RouterIP }} {{ .ControllerDomain }} | sudo tee -a /etc/hosts
+echo {{ .Cluster.RouterIP }} {{ .Cluster.ControllerDomain }} | sudo tee -a /etc/hosts
 
 cat > ~/.flynnrc
 
@@ -170,8 +180,9 @@ cd ~/go/src/github.com/flynn/flynn/test
 
 cmd="bin/flynn-test \
   --flynnrc $HOME/.flynnrc \
+  --cluster-api https://{{ .Cluster.BridgeIP }}:{{ .ListenPort }}/cluster/{{ .Cluster.ID }} \
   --cli $(pwd)/../cli/flynn-cli \
-  --router-ip {{ .RouterIP }} \
+  --router-ip {{ .Cluster.RouterIP }} \
   --debug"
 
 timeout --kill-after=10 20m $cmd
@@ -209,7 +220,12 @@ func (r *Runner) build(b *Build) (err error) {
 	defer r.releaseNet(bc.Network)
 
 	c := cluster.New(bc, out)
-	defer c.Shutdown()
+	log.Println("created cluster with ID", c.ID)
+	r.clusters[c.ID] = c
+	defer func() {
+		delete(r.clusters, c.ID)
+		c.Shutdown()
+	}()
 
 	rootFS, err := c.BuildFlynn(r.rootFS, b.Commit, b.Merge)
 	defer os.RemoveAll(rootFS)
@@ -217,7 +233,7 @@ func (r *Runner) build(b *Build) (err error) {
 		return fmt.Errorf("could not build flynn: %s", err)
 	}
 
-	if err := c.Boot(rootFS, 1); err != nil {
+	if err := c.Boot(rootFS, 3); err != nil {
 		return fmt.Errorf("could not boot cluster: %s", err)
 	}
 
@@ -227,7 +243,7 @@ func (r *Runner) build(b *Build) (err error) {
 	}
 
 	var script bytes.Buffer
-	testRunScript.Execute(&script, c)
+	testRunScript.Execute(&script, map[string]interface{}{"Cluster": c, "ListenPort": listenPort})
 	return c.Run(script.String(), &cluster.Streams{
 		Stdin:  bytes.NewBuffer(config.Marshal()),
 		Stdout: out,
@@ -497,4 +513,33 @@ func (r *Runner) save(b *Build) error {
 		}
 		return tx.Bucket(dbBucket).Put([]byte(b.Id), val)
 	})
+}
+
+func (r *Runner) httpClusterHandler(w http.ResponseWriter, req *http.Request) {
+	id := strings.TrimPrefix(req.URL.Path, "/cluster/")
+	c, ok := r.clusters[id]
+	if !ok {
+		http.Error(w, "cluster not found", 404)
+		return
+	}
+
+	switch req.Method {
+	case "GET":
+		json.NewEncoder(w).Encode(c)
+	case "POST":
+		if err := c.AddHost(); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.Write([]byte("ok"))
+	case "DELETE":
+		hostID := req.FormValue("host")
+		if err := c.RemoveHost(hostID); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.Write([]byte("ok"))
+	default:
+		http.Error(w, "unknown method", 405)
+	}
 }

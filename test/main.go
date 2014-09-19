@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"regexp"
@@ -33,6 +36,7 @@ var args *arg.Args
 var flynnrc string
 var routerIP string
 var testCluster *cluster.Cluster
+var httpClient *http.Client
 
 func init() {
 	args = arg.Parse()
@@ -87,6 +91,23 @@ func main() {
 		defer os.RemoveAll(flynnrc)
 
 		routerIP = testCluster.RouterIP
+	}
+
+	if args.ClusterAPI != "" {
+		httpClient = &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{ServerName: "ci.flynn.io"}}}
+
+		res, err := httpClient.Get(args.ClusterAPI)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		testCluster = &cluster.Cluster{}
+		err = json.NewDecoder(res.Body).Decode(testCluster)
+		res.Body.Close()
+		if err != nil {
+			log.Println(err)
+			return
+		}
 	}
 
 	res = check.RunAll(&check.RunConf{

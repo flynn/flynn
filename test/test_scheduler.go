@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -143,7 +145,15 @@ func (s *SchedulerSuite) addHosts(t *c.C, count int) []string {
 
 	hosts := make([]string, 0, count)
 	for i := 0; i < count; i++ {
-		t.Assert(testCluster.AddHost(), c.IsNil)
+		res, err := httpClient.PostForm(args.ClusterAPI, url.Values{})
+		if err != nil {
+			t.Fatal("error in POST request to cluster api:", err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatal("expected 200 status, got", res.Status)
+		}
+
 		select {
 		case event := <-ch:
 			hosts = append(hosts, event.HostID)
@@ -160,7 +170,19 @@ func (s *SchedulerSuite) removeHosts(t *c.C, ids []string) {
 	defer stream.Close()
 
 	for _, id := range ids {
-		t.Assert(testCluster.RemoveHost(id), c.IsNil)
+		req, err := http.NewRequest("DELETE", args.ClusterAPI+"?host="+id, nil)
+		if err != nil {
+			t.Fatal("error in DELETE request to cluster api:", err)
+		}
+		res, err := httpClient.Do(req)
+		if err != nil {
+			t.Fatal("error in DELETE request to cluster api:", err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatal("expected 200 status, got", res.Status)
+		}
+
 		select {
 		case <-ch:
 		case <-time.After(5 * time.Second):
@@ -393,7 +415,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 }
 
 func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
-	if testCluster == nil {
+	if args.ClusterAPI == "" {
 		t.Skip("cannot boot new hosts")
 	}
 
