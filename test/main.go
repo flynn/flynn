@@ -329,15 +329,11 @@ func dumpLogs() {
 	fmt.Println("***** flynn-host log *****")
 	run(exec.Command("cat", "/tmp/flynn-host.log"))
 
-	whitespace := regexp.MustCompile(`\s+`)
-	apps := strings.Split(strings.TrimSpace(flynn("/", "apps").Output), "\n")
-	for _, app := range apps[1:] {
-		appIdName := whitespace.Split(app, 2)
-		ps := strings.Split(strings.TrimSpace(flynn("/", "-a", appIdName[0], "ps").Output), "\n")
-		for _, p := range ps[1:] {
-			idType := whitespace.Split(p, 2)
-			fmt.Println("*****", appIdName[1], idType[1], "log *****")
-			flynn("/", "-a", appIdName[0], "log", idType[0])
-		}
+	ids := strings.Split(strings.TrimSpace(run(exec.Command("flynn-host", "ps", "-q")).Output), "\n")
+	for _, id := range ids {
+		fmt.Print("\n\n***** ***** ***** ***** ***** ***** ***** ***** ***** *****\n\n")
+		run(exec.Command("flynn-host", "inspect", id))
+		fmt.Println()
+		run(exec.Command("flynn-host", "log", id))
 	}
 }
