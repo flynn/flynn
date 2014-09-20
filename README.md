@@ -60,8 +60,8 @@ git push flynn master
 
 #### Scale
 
-To access the application, add some web processes using the `scale`
-command:
+By default there will be one process running, add some more web processes using
+the `scale` command:
 
 ```text
 flynn scale web=3
