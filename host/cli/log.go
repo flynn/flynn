@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
@@ -14,11 +15,15 @@ func init() {
 }
 
 func runLog(args *docopt.Args, client cluster.Host) error {
+	return getLog(args.String["ID"], client, args.Bool["-f"] || args.Bool["--follow"], os.Stdout, os.Stderr)
+}
+
+func getLog(id string, client cluster.Host, follow bool, stdout, stderr io.Writer) error {
 	attachReq := &host.AttachReq{
-		JobID: args.String["ID"],
+		JobID: id,
 		Flags: host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagLogs,
 	}
-	if args.Bool["-f"] || args.Bool["--follow"] {
+	if follow {
 		attachReq.Flags |= host.AttachFlagStream
 	}
 	attachClient, err := client.Attach(attachReq, false)
@@ -29,6 +34,6 @@ func runLog(args *docopt.Args, client cluster.Host) error {
 		return err
 	}
 	defer attachClient.Close()
-	attachClient.Receive(os.Stdout, os.Stderr)
+	attachClient.Receive(stdout, stderr)
 	return nil
 }
