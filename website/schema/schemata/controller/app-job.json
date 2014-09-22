@@ -45,12 +45,20 @@
       "description": "FIXME",
       "method": "GET",
       "href": "/apps/{(%2Fschemata%2Fapp%23%2Fdefinitions%2Fidentity)}/jobs/{(%2Fschemata%2Fjob%23%2Fdefinitions%2Fidentity)}/log",
-      "rel": "self",
+      "rel": "empty",
       "query": {
         "tail": {
           "description": "Tail the Job's log",
           "type": ["string"]
         }
+      },
+      /* Special properties */
+      "http_header": {
+        "Accept": "text/event-stream"
+      },
+      "response_example": {
+        "head": "HTTP/1.1 200 OK",
+        "body": "data: {\"stream\":\"stdout\",\"data\":\"Listening on 55017\\n\"}\n\nevent: eof\ndata: {}"
       }
     }
   ]
