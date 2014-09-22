@@ -28,7 +28,7 @@
       "description": "FIXME",
       "method": "DELETE",
       "href": "/apps/{(%2Fschemata%2Fapp%23%2Fdefinitions%2Fidentity)}/formations/{(%2Fschemata%2Frelease%23%2Fdefinitions%2Fidentity)}",
-      "rel": "destroy"
+      "rel": "empty"
     },
     {
       "title": "List",

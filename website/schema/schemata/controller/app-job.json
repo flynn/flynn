@@ -38,7 +38,7 @@
       "description": "FIXME",
       "method": "DELETE",
       "href": "/apps/{(%2Fschemata%2Fapp%23%2Fdefinitions%2Fidentity)}/jobs/{(%2Fschemata%2Fjob%23%2Fdefinitions%2Fidentity)}",
-      "rel": "destroy"
+      "rel": "empty"
     },
     {
       "title": "Logs",

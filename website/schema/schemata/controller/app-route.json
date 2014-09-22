@@ -35,7 +35,7 @@
       "description": "FIXME",
       "method": "DELETE",
       "href": "/apps/{(%2Fschemata%2Fapp%23%2Fdefinitions%2Fidentity)}/routes/{(%2Fschemata%2Froute%23%2Fdefinitions%2Ftype)}/{(%2Fschemata%2Froute%23%2Fdefinitions%2Fidentity)}",
-      "rel": "destroy"
+      "rel": "empty"
     }
   ]
 }
