@@ -21,6 +21,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/alexzorin/libvirt-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/networkdriver/ipallocator"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/netlink"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/lumberjack"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 	"github.com/flynn/flynn/host/containerinit"
@@ -31,7 +32,17 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/iptables"
+	"github.com/flynn/flynn/pkg/random"
 )
+
+const (
+	libvirtNetName = "flynn"
+	bridgeName     = "flynnbr0"
+	bridgeMask     = "255.255.255.0"
+)
+
+// TODO: read these from a configurable libvirt network
+var bridgeAddr, bridgeNet, _ = net.ParseCIDR("192.168.200.1/24")
 
 func NewLibvirtLXCBackend(state *State, portAlloc map[string]*ports.Allocator, volPath, logPath, initPath string) (Backend, error) {
 	libvirtc, err := libvirt.NewVirConnection("lxc:///")
@@ -39,18 +50,45 @@ func NewLibvirtLXCBackend(state *State, portAlloc map[string]*ports.Allocator, v
 		return nil, err
 	}
 
-	iptables.RemoveExistingChain("FLYNN", "virbr0")
-	chain, err := iptables.NewChain("FLYNN", "virbr0")
+	b := random.Bytes(5)
+	bridgeMAC := fmt.Sprintf("fe:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4])
+
+	network, err := libvirtc.LookupNetworkByName(libvirtNetName)
+	if err != nil {
+		n := &lt.Network{
+			Name:   libvirtNetName,
+			Bridge: lt.Bridge{Name: bridgeName, STP: "off"},
+			IP:     lt.IP{Address: bridgeAddr.String(), Netmask: bridgeMask},
+			MAC:    lt.MAC{Address: bridgeMAC},
+		}
+		network, err = libvirtc.NetworkDefineXML(string(n.XML()))
+		if err != nil {
+			return nil, err
+		}
+	}
+	active, err := network.IsActive()
 	if err != nil {
 		return nil, err
 	}
-	if err := ioutil.WriteFile("/proc/sys/net/ipv4/conf/virbr0/route_localnet", []byte("1"), 0666); err != nil {
-		return nil, err
+	if !active {
+		if err := network.Create(); err != nil {
+			return nil, err
+		}
 	}
-	if err := ioutil.WriteFile("/sys/class/net/virbr0/bridge/stp_state", []byte("0"), 0666); err != nil {
+	// We need to explicitly assign the MAC address to avoid it changing to a lower value
+	// See: https://github.com/flynn/flynn/issues/223
+	if err := netlink.NetworkSetMacAddress(bridgeName, bridgeMAC); err != nil {
 		return nil, err
 	}
 
+	iptables.RemoveExistingChain("FLYNN", bridgeName)
+	chain, err := iptables.NewChain("FLYNN", bridgeName)
+	if err != nil {
+		return nil, err
+	}
+	if err := ioutil.WriteFile("/proc/sys/net/ipv4/conf/"+bridgeName+"/route_localnet", []byte("1"), 0666); err != nil {
+		return nil, err
+	}
 	return &LibvirtLXCBackend{
 		LogPath:    logPath,
 		VolPath:    volPath,
@@ -88,9 +126,6 @@ type libvirtContainer struct {
 	done     chan struct{}
 	*containerinit.Client
 }
-
-// TODO: read these from a configurable libvirt network
-var defaultGW, defaultNet, _ = net.ParseCIDR("192.168.122.1/24")
 
 const dockerBase = "/var/lib/docker"
 
@@ -161,7 +196,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "run", "job.id": job.ID})
 	g.Log(grohl.Data{"at": "start", "job.artifact.uri": job.Artifact.URI, "job.cmd": job.Config.Cmd})
 
-	ip, err := ipallocator.RequestIP(defaultNet, nil)
+	ip, err := ipallocator.RequestIP(bridgeNet, nil)
 	if err != nil {
 		g.Log(grohl.Data{"at": "request_ip", "status": "error", "err": err})
 		return err
@@ -307,7 +342,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 
 	args := []string{
 		"-i", ip.String() + "/24",
-		"-g", defaultGW.String(),
+		"-g", bridgeAddr.String(),
 	}
 	if job.Config.TTY {
 		args = append(args, "-tty")
@@ -357,7 +392,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 			}},
 			Interfaces: []lt.Interface{{
 				Type:   "network",
-				Source: lt.InterfaceSrc{Network: "default"},
+				Source: lt.InterfaceSrc{Network: libvirtNetName},
 			}},
 			Consoles: []lt.Console{{Type: "pty"}},
 		},
@@ -563,7 +598,7 @@ func (c *libvirtContainer) cleanup() error {
 			c.l.ports[p.Proto].Put(uint16(i))
 		}
 	}
-	ipallocator.ReleaseIP(defaultNet, &c.IP)
+	ipallocator.ReleaseIP(bridgeNet, &c.IP)
 	g.Log(grohl.Data{"at": "finish"})
 	return nil
 }
