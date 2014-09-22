@@ -1,4 +1,14 @@
 GIT
+  remote: git://github.com/IceDragon200/prmd.git
+  revision: ef8552d99999270755e459eda89f1c4c1e2fd66f
+  ref: ef8552d99999270755e459eda89f1c4c1e2fd66f
+  branch: for-flynn
+  specs:
+    prmd (0.6.2)
+      erubis (~> 2.7)
+      json_schema (~> 0.1, >= 0.1.8)
+
+GIT
   remote: git://github.com/cupcake/cupcake-icons.git
   revision: ed51db3aaf27fed932d5ae562feadd06975b1349
   branch: master
@@ -15,16 +25,6 @@ GIT
       sprockets (~> 2.0)
       sprockets-helpers
       sprockets-sass
-
-GIT
-  remote: git://github.com/interagent/prmd.git
-  revision: 87f00fcc1d433231f959aebf25a6dc1a703f685d
-  ref: 87f00fcc1d433231f959aebf25a6dc1a703f685d
-  branch: master
-  specs:
-    prmd (0.6.2)
-      erubis (~> 2.7)
-      json_schema (~> 0.1, >= 0.1.8)
 
 GIT
   remote: git://github.com/jvatic/marbles-js.git
