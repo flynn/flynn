@@ -33,7 +33,7 @@ task :schema do
                             'schema/controller.md'])
 
   sh %Q(bundle exec prmd combine -m "schema/meta.json" "schema/schemata/controller" > "schema/controller.json")
-  sh %Q(bundle exec prmd verify "schema/controller.json")
+  sh %Q(bundle exec prmd verify "schema/controller.json" > /dev/null)
   sh %Q(bundle exec prmd doc "schema/controller.json" > "schema/controller.md")
 
   renderer = Erubis::Eruby.new(File.read('schema/template.md.erb'))
