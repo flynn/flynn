@@ -39,9 +39,6 @@ task :schema do
   renderer = Erubis::Eruby.new(File.read('schema/template.md.erb'))
   File.open('source/docs/controller.html.md', 'w') do |f|
     content = File.read('schema/controller.md')
-    # pygments does not have an alias for term, so substituting bash for term
-    # solves this issue
-    content.gsub!('```term', '```bash')
     # pygments defaults to json, and strangely, doesn't have an alias for it
     content.gsub!('```json', '```')
     f.write(renderer.result(content: content))
