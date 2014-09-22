@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os/exec"
 
@@ -16,6 +17,11 @@ usage: flynn create [<name>]
 Create an application in Flynn.
 `)
 
+	register("delete", runDelete, `
+usage: flynn delete
+
+Delete Flynn app.
+`)
 	register("apps", runApps, `
 usage: flynn apps
 
@@ -34,6 +40,38 @@ func runCreate(args *docopt.Args, client *controller.Client) error {
 	exec.Command("git", "remote", "remove", "flynn").Run()
 	exec.Command("git", "remote", "add", "flynn", gitURLPre(clusterConf.GitHost)+app.Name+gitURLSuf).Run()
 	log.Printf("Created %s", app.Name)
+	return nil
+}
+
+func runDelete(args *docopt.Args, client *controller.Client) error {
+	appName := mustApp()
+
+	fmt.Printf("Are you sure you want to delete the app %q? (yes/no): ", appName)
+loop:
+	for {
+		var answer string
+		fmt.Scanln(&answer)
+		switch answer {
+		case "y", "yes":
+			break loop
+		case "n", "no":
+			return nil
+		default:
+			fmt.Print("Please type 'yes' or 'no': ")
+		}
+	}
+
+	if err := client.DeleteApp(appName); err != nil {
+		return err
+	}
+
+	if remotes, err := gitRemotes(); err == nil {
+		if app, ok := remotes["flynn"]; ok && app.Name == appName {
+			exec.Command("git", "remote", "remove", "flynn").Run()
+		}
+	}
+
+	log.Printf("Deleted %s", appName)
 	return nil
 }
 
