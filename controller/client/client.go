@@ -227,6 +227,10 @@ func (c *Client) CreateApp(app *ct.App) error {
 	return c.post("/apps", app, app)
 }
 
+func (c *Client) DeleteApp(appID string) error {
+	return c.delete(fmt.Sprintf("/apps/%s", appID))
+}
+
 func (c *Client) CreateProvider(provider *ct.Provider) error {
 	return c.post("/providers", provider, provider)
 }

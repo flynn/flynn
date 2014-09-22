@@ -222,15 +222,22 @@ func (s *S) TestUpdateApp(c *C) {
 }
 
 func (s *S) TestDeleteApp(c *C) {
-	app := s.createTestApp(c, &ct.App{Name: "delete-app"})
+	for i, useName := range []bool{false, true} {
+		app := s.createTestApp(c, &ct.App{Name: fmt.Sprintf("delete-app-%d", i)})
 
-	path := "/apps/" + app.ID
-	res, err := s.Delete(path)
-	c.Assert(err, IsNil)
-	c.Assert(res.StatusCode, Equals, 200)
+		var path string
+		if useName {
+			path = "/apps/" + app.Name
+		} else {
+			path = "/apps/" + app.ID
+		}
+		res, err := s.Delete(path)
+		c.Assert(err, IsNil)
+		c.Assert(res.StatusCode, Equals, 200)
 
-	res, err = s.Get(path, app)
-	c.Assert(res.StatusCode, Equals, 404)
+		res, err = s.Get(path, app)
+		c.Assert(res.StatusCode, Equals, 404)
+	}
 }
 
 func (s *S) TestRecreateApp(c *C) {
