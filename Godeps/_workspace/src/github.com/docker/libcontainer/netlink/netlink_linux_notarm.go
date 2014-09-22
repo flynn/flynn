@@ -2,6 +2,10 @@
 
 package netlink
 
-func ifrDataByte(b byte) int8 {
-	return int8(b)
+import (
+	"math/rand"
+)
+
+func randIfrDataByte() int8 {
+	return int8(rand.Intn(255))
 }

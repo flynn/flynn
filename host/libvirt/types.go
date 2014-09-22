@@ -105,31 +105,3 @@ type InterfaceSrc struct {
 type Console struct {
 	Type string `xml:"type,attr"`
 }
-
-type Network struct {
-	XMLName xml.Name `xml:"network"`
-	Name    string   `xml:"name"`
-	Bridge  Bridge   `xml:"bridge"`
-	Forward string   `xml:"forward"`
-	IP      IP       `xml:"ip"`
-	MAC     MAC      `xml:"mac"`
-}
-
-func (n *Network) XML() []byte {
-	data, _ := xml.Marshal(n)
-	return data
-}
-
-type Bridge struct {
-	Name string `xml:"name,attr"`
-	STP  string `xml:"stp,attr"`
-}
-
-type IP struct {
-	Address string `xml:"address,attr"`
-	Netmask string `xml:"netmask,attr"`
-}
-
-type MAC struct {
-	Address string `xml:"address,attr"`
-}

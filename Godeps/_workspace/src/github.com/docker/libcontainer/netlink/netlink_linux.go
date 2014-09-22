@@ -3,8 +3,6 @@ package netlink
 import (
 	"encoding/binary"
 	"fmt"
-	"io"
-	"math/rand"
 	"net"
 	"sync/atomic"
 	"syscall"
@@ -40,15 +38,12 @@ type ifreqFlags struct {
 	Ifruflags uint16
 }
 
-var native binary.ByteOrder
-
-func init() {
+func nativeEndian() binary.ByteOrder {
 	var x uint32 = 0x01020304
 	if *(*byte)(unsafe.Pointer(&x)) == 0x01 {
-		native = binary.BigEndian
-	} else {
-		native = binary.LittleEndian
+		return binary.BigEndian
 	}
+	return binary.LittleEndian
 }
 
 func getIpFamily(ip net.IP) int {
@@ -85,6 +80,8 @@ func newIfInfomsgChild(parent *RtAttr, family int) *IfInfomsg {
 }
 
 func (msg *IfInfomsg) ToWireFormat() []byte {
+	native := nativeEndian()
+
 	length := syscall.SizeofIfInfomsg
 	b := make([]byte, length)
 	b[0] = msg.Family
@@ -113,6 +110,8 @@ func newIfAddrmsg(family int) *IfAddrmsg {
 }
 
 func (msg *IfAddrmsg) ToWireFormat() []byte {
+	native := nativeEndian()
+
 	length := syscall.SizeofIfAddrmsg
 	b := make([]byte, length)
 	b[0] = msg.Family
@@ -143,6 +142,8 @@ func newRtMsg() *RtMsg {
 }
 
 func (msg *RtMsg) ToWireFormat() []byte {
+	native := nativeEndian()
+
 	length := syscall.SizeofRtMsg
 	b := make([]byte, length)
 	b[0] = msg.Family
@@ -201,6 +202,8 @@ func (a *RtAttr) Len() int {
 }
 
 func (a *RtAttr) ToWireFormat() []byte {
+	native := nativeEndian()
+
 	length := a.Len()
 	buf := make([]byte, rtaAlignOf(length))
 
@@ -222,18 +225,14 @@ func (a *RtAttr) ToWireFormat() []byte {
 	return buf
 }
 
-func uint32Attr(t int, n uint32) *RtAttr {
-	buf := make([]byte, 4)
-	native.PutUint32(buf, n)
-	return newRtAttr(t, buf)
-}
-
 type NetlinkRequest struct {
 	syscall.NlMsghdr
 	Data []NetlinkRequestData
 }
 
 func (rr *NetlinkRequest) ToWireFormat() []byte {
+	native := nativeEndian()
+
 	length := rr.Len
 	dataBytes := make([][]byte, len(rr.Data))
 	for i, data := range rr.Data {
@@ -330,44 +329,36 @@ func (s *NetlinkSocket) GetPid() (uint32, error) {
 	return 0, ErrWrongSockType
 }
 
-func (s *NetlinkSocket) CheckMessage(m syscall.NetlinkMessage, seq, pid uint32) error {
-	if m.Header.Seq != seq {
-		return fmt.Errorf("netlink: invalid seq %d, expected %d", m.Header.Seq, seq)
-	}
-	if m.Header.Pid != pid {
-		return fmt.Errorf("netlink: wrong pid %d, expected %d", m.Header.Pid, pid)
-	}
-	if m.Header.Type == syscall.NLMSG_DONE {
-		return io.EOF
-	}
-	if m.Header.Type == syscall.NLMSG_ERROR {
-		e := int32(native.Uint32(m.Data[0:4]))
-		if e == 0 {
-			return io.EOF
-		}
-		return syscall.Errno(-e)
-	}
-	return nil
-}
-
 func (s *NetlinkSocket) HandleAck(seq uint32) error {
+	native := nativeEndian()
+
 	pid, err := s.GetPid()
 	if err != nil {
 		return err
 	}
 
-outer:
+done:
 	for {
 		msgs, err := s.Receive()
 		if err != nil {
 			return err
 		}
 		for _, m := range msgs {
-			if err := s.CheckMessage(m, seq, pid); err != nil {
-				if err == io.EOF {
-					break outer
+			if m.Header.Seq != seq {
+				return fmt.Errorf("Wrong Seq nr %d, expected %d", m.Header.Seq, seq)
+			}
+			if m.Header.Pid != pid {
+				return fmt.Errorf("Wrong pid %d, expected %d", m.Header.Pid, pid)
+			}
+			if m.Header.Type == syscall.NLMSG_DONE {
+				break done
+			}
+			if m.Header.Type == syscall.NLMSG_ERROR {
+				error := int32(native.Uint32(m.Data[0:4]))
+				if error == 0 {
+					break done
 				}
-				return err
+				return syscall.Errno(-error)
 			}
 		}
 	}
@@ -463,11 +454,17 @@ func AddRoute(destination, source, gateway, device string) error {
 		wb.AddData(attr)
 	}
 
+	var (
+		native = nativeEndian()
+		b      = make([]byte, 4)
+	)
 	iface, err := net.InterfaceByName(device)
 	if err != nil {
 		return err
 	}
-	wb.AddData(uint32Attr(syscall.RTA_OIF, uint32(iface.Index)))
+	native.PutUint32(b, uint32(iface.Index))
+
+	wb.AddData(newRtAttr(syscall.RTA_OIF, b))
 
 	if err := s.Send(wb); err != nil {
 		return err
@@ -541,7 +538,15 @@ func NetworkSetMTU(iface *net.Interface, mtu int) error {
 	msg.Index = int32(iface.Index)
 	msg.Change = DEFAULT_CHANGE
 	wb.AddData(msg)
-	wb.AddData(uint32Attr(syscall.IFLA_MTU, uint32(mtu)))
+
+	var (
+		b      = make([]byte, 4)
+		native = nativeEndian()
+	)
+	native.PutUint32(b, uint32(mtu))
+
+	data := newRtAttr(syscall.IFLA_MTU, b)
+	wb.AddData(data)
 
 	if err := s.Send(wb); err != nil {
 		return err
@@ -565,7 +570,15 @@ func NetworkSetMaster(iface, master *net.Interface) error {
 	msg.Index = int32(iface.Index)
 	msg.Change = DEFAULT_CHANGE
 	wb.AddData(msg)
-	wb.AddData(uint32Attr(syscall.IFLA_MASTER, uint32(master.Index)))
+
+	var (
+		b      = make([]byte, 4)
+		native = nativeEndian()
+	)
+	native.PutUint32(b, uint32(master.Index))
+
+	data := newRtAttr(syscall.IFLA_MASTER, b)
+	wb.AddData(data)
 
 	if err := s.Send(wb); err != nil {
 		return err
@@ -589,7 +602,15 @@ func NetworkSetNsPid(iface *net.Interface, nspid int) error {
 	msg.Index = int32(iface.Index)
 	msg.Change = DEFAULT_CHANGE
 	wb.AddData(msg)
-	wb.AddData(uint32Attr(syscall.IFLA_NET_NS_PID, uint32(nspid)))
+
+	var (
+		b      = make([]byte, 4)
+		native = nativeEndian()
+	)
+	native.PutUint32(b, uint32(nspid))
+
+	data := newRtAttr(syscall.IFLA_NET_NS_PID, b)
+	wb.AddData(data)
 
 	if err := s.Send(wb); err != nil {
 		return err
@@ -613,7 +634,15 @@ func NetworkSetNsFd(iface *net.Interface, fd int) error {
 	msg.Index = int32(iface.Index)
 	msg.Change = DEFAULT_CHANGE
 	wb.AddData(msg)
-	wb.AddData(uint32Attr(IFLA_NET_NS_FD, uint32(fd)))
+
+	var (
+		b      = make([]byte, 4)
+		native = nativeEndian()
+	)
+	native.PutUint32(b, uint32(fd))
+
+	data := newRtAttr(IFLA_NET_NS_FD, b)
+	wb.AddData(data)
 
 	if err := s.Send(wb); err != nil {
 		return err
@@ -753,6 +782,8 @@ func NetworkLinkDel(name string) error {
 // Returns an array of IPNet for all the currently routed subnets on ipv4
 // This is similar to the first column of "ip route" output
 func NetworkGetRoutes() ([]Route, error) {
+	native := nativeEndian()
+
 	s, err := getNetlinkSocket()
 	if err != nil {
 		return nil, err
@@ -775,18 +806,28 @@ func NetworkGetRoutes() ([]Route, error) {
 
 	res := make([]Route, 0)
 
-outer:
+done:
 	for {
 		msgs, err := s.Receive()
 		if err != nil {
 			return nil, err
 		}
 		for _, m := range msgs {
-			if err := s.CheckMessage(m, wb.Seq, pid); err != nil {
-				if err == io.EOF {
-					break outer
+			if m.Header.Seq != wb.Seq {
+				return nil, fmt.Errorf("Wrong Seq nr %d, expected 1", m.Header.Seq)
+			}
+			if m.Header.Pid != pid {
+				return nil, fmt.Errorf("Wrong pid %d, expected %d", m.Header.Pid, pid)
+			}
+			if m.Header.Type == syscall.NLMSG_DONE {
+				break done
+			}
+			if m.Header.Type == syscall.NLMSG_ERROR {
+				error := int32(native.Uint32(m.Data[0:4]))
+				if error == 0 {
+					break done
 				}
-				return nil, err
+				return nil, syscall.Errno(-error)
 			}
 			if m.Header.Type != syscall.RTM_NEWROUTE {
 				continue
@@ -933,7 +974,7 @@ func CreateBridge(name string, setMacAddr bool) error {
 		return err
 	}
 	if setMacAddr {
-		return NetworkSetMacAddress(name, randMacAddr())
+		return setBridgeMacAddress(s, name)
 	}
 	return nil
 }
@@ -989,39 +1030,21 @@ func AddToBridge(iface, master *net.Interface) error {
 	return nil
 }
 
-func randMacAddr() string {
-	hw := make(net.HardwareAddr, 6)
-	for i := 0; i < 6; i++ {
-		hw[i] = byte(rand.Intn(255))
-	}
-	hw[0] &^= 0x1 // clear multicast bit
-	hw[0] |= 0x2  // set local assignment bit (IEEE802)
-	return hw.String()
-}
-
-func NetworkSetMacAddress(name, addr string) error {
+func setBridgeMacAddress(s int, name string) error {
 	if len(name) >= IFNAMSIZ {
 		return fmt.Errorf("Interface name %s too long", name)
 	}
-
-	hw, err := net.ParseMAC(addr)
-	if err != nil {
-		return err
-	}
-
-	s, err := getIfSocket()
-	if err != nil {
-		return err
-	}
-	defer syscall.Close(s)
 
 	ifr := ifreqHwaddr{}
 	ifr.IfruHwaddr.Family = syscall.ARPHRD_ETHER
 	copy(ifr.IfrnName[:len(ifr.IfrnName)-1], name)
 
 	for i := 0; i < 6; i++ {
-		ifr.IfruHwaddr.Data[i] = ifrDataByte(hw[i])
+		ifr.IfruHwaddr.Data[i] = randIfrDataByte()
 	}
+
+	ifr.IfruHwaddr.Data[0] &^= 0x1 // clear multicast bit
+	ifr.IfruHwaddr.Data[0] |= 0x2  // set local assignment bit (IEEE802)
 
 	if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(s), syscall.SIOCSIFHWADDR, uintptr(unsafe.Pointer(&ifr))); err != 0 {
 		return err
