@@ -15,7 +15,8 @@
     "state": {
       "description": "job state",
       "example": "starting",
-      "type": "string"
+      "type": "string",
+      "enum": ["starting", "up", "down", "crashed"]
     }
   },
   "type": "object",
