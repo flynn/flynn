@@ -13,6 +13,7 @@ import (
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 )
 
@@ -103,6 +104,7 @@ func (c *context) syncCluster(events chan<- *host.Event) {
 	for _, h := range hosts {
 		for _, job := range h.Jobs {
 			appID := job.Metadata["flynn-controller.app"]
+			appName := job.Metadata["flynn-controller.app_name"]
 			releaseID := job.Metadata["flynn-controller.release"]
 			jobType := job.Metadata["flynn-controller.type"]
 			gg := g.New(grohl.Data{"host.id": h.ID, "job.id": job.ID, "app.id": appID, "release.id": releaseID, "type": jobType})
@@ -143,7 +145,7 @@ func (c *context) syncCluster(events chan<- *host.Event) {
 				}
 
 				f = NewFormation(c, &ct.ExpandedFormation{
-					App:       &ct.App{ID: appID},
+					App:       &ct.App{ID: appID, Name: appName},
 					Release:   release,
 					Artifact:  artifact,
 					Processes: formation.Processes,
@@ -263,6 +265,26 @@ func (c *context) watchHosts(events chan<- *host.Event) {
 
 }
 
+var putJobAttempts = attempt.Strategy{
+	Total: 30 * time.Second,
+	Delay: 500 * time.Millisecond,
+}
+
+func jobState(event *host.Event) string {
+	switch event.Job.Status {
+	case host.StatusStarting:
+		return "starting"
+	case host.StatusRunning:
+		return "up"
+	case host.StatusDone:
+		return "down"
+	case host.StatusCrashed, host.StatusFailed:
+		return "crashed"
+	default:
+		return ""
+	}
+}
+
 func (c *context) watchHost(id string, events chan<- *host.Event) {
 	if !c.hosts.Add(id) {
 		return
@@ -288,28 +310,41 @@ func (c *context) watchHost(id string, events chan<- *host.Event) {
 	}
 
 	for event := range ch {
-		job := c.jobs.Get(id, event.JobID)
-		if job == nil {
+		meta := event.Job.Job.Metadata
+		appID := meta["flynn-controller.app"]
+		releaseID := meta["flynn-controller.release"]
+		jobType := meta["flynn-controller.type"]
+
+		if appID == "" || releaseID == "" {
 			continue
 		}
 
-		j := &ct.Job{ID: id + "-" + event.JobID, AppID: job.Formation.AppID, ReleaseID: job.Formation.Release.ID, Type: job.Type}
-		switch event.Event {
-		case "create":
-			j.State = "starting"
-		case "start":
-			j.State = "up"
-			job.startedAt = event.Job.StartedAt
-		case "stop":
-			j.State = "down"
-		case "error":
-			j.State = "crashed"
+		job := &ct.Job{
+			ID:        id + "-" + event.JobID,
+			AppID:     appID,
+			ReleaseID: releaseID,
+			Type:      jobType,
+			State:     jobState(event),
 		}
 		g.Log(grohl.Data{"at": "event", "job.id": event.JobID, "event": event.Event})
-		if err = c.PutJob(j); err != nil {
-			g.Log(grohl.Data{"at": "error", "job.id": event.JobID, "event": event.Event, "err": err})
-			// TODO: handle error
+
+		// Call PutJob in a goroutine as it may be the controller which has died
+		go func(event *host.Event) {
+			putJobAttempts.Run(func() error {
+				if err := c.PutJob(job); err != nil {
+					g.Log(grohl.Data{"at": "error", "job.id": event.JobID, "event": event.Event, "err": err})
+					return err
+				}
+				g.Log(grohl.Data{"at": "put_job", "job.id": event.JobID, "event": event.Event})
+				return nil
+			})
+		}(event)
+
+		j := c.jobs.Get(id, event.JobID)
+		if j == nil {
+			continue
 		}
+		j.startedAt = event.Job.StartedAt
 
 		if event.Event != "error" && event.Event != "stop" {
 			if events != nil {
@@ -322,7 +357,7 @@ func (c *context) watchHost(id string, events chan<- *host.Event) {
 		c.jobs.Remove(id, event.JobID)
 		go func(event *host.Event) {
 			c.mtx.RLock()
-			job.Formation.RestartJob(job.Type, id, event.JobID)
+			j.Formation.RestartJob(jobType, id, event.JobID)
 			c.mtx.RUnlock()
 			if events != nil {
 				events <- event
@@ -704,11 +739,24 @@ func (f *Formation) jobType(job *host.Job) string {
 	return job.Metadata["flynn-controller.type"]
 }
 
+// sortJobs sorts Jobs in reverse chronological order based on their startedAt time
+type sortJobs []*Job
+
+func (s sortJobs) Len() int           { return len(s) }
+func (s sortJobs) Less(i, j int) bool { return s[i].startedAt.Sub(s[j].startedAt) > 0 }
+func (s sortJobs) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s sortJobs) Sort()              { sort.Sort(s) }
+
 func (f *Formation) remove(n int, name string, hostID string) {
 	g := grohl.NewContext(grohl.Data{"fn": "remove", "app.id": f.AppID, "release.id": f.Release.ID})
 
 	i := 0
+	sj := make(sortJobs, 0, len(f.jobs[name]))
 	for _, job := range f.jobs[name] {
+		sj = append(sj, job)
+	}
+	sj.Sort()
+	for _, job := range sj {
 		g.Log(grohl.Data{"host.id": job.HostID, "job.id": job.ID})
 		if hostID != "" && job.HostID != hostID { // remove from a specific host
 			continue
