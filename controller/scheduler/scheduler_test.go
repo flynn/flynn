@@ -74,6 +74,18 @@ func (c *fakeControllerClient) PutJob(job *ct.Job) error {
 	return nil
 }
 
+func (c *fakeControllerClient) jobCount() int {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+	return len(c.jobs)
+}
+
+func (c *fakeControllerClient) getJob(id string) *ct.Job {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+	return c.jobs[id]
+}
+
 func (c *fakeControllerClient) setFormationStream(s chan *ct.ExpandedFormation) {
 	c.stream = s
 }
@@ -369,16 +381,16 @@ func (s *S) TestWatchHost(c *C) {
 	hc.SendEvent("start", "job2")
 	hc.SendEvent("start", "one-off-job")
 	waitForHostEvents(4, events, c)
-	c.Assert(len(cc.jobs), Equals, 4)
-	c.Assert(cc.jobs[hostID+"-job0"].State, Equals, "up")
-	c.Assert(cc.jobs[hostID+"-job1"].State, Equals, "up")
-	c.Assert(cc.jobs[hostID+"-job2"].State, Equals, "up")
-	c.Assert(cc.jobs[hostID+"-one-off-job"].State, Equals, "up")
+	c.Assert(cc.jobCount, Equals, 4)
+	c.Assert(cc.getJob(hostID+"-job0").State, Equals, "up")
+	c.Assert(cc.getJob(hostID+"-job1").State, Equals, "up")
+	c.Assert(cc.getJob(hostID+"-job2").State, Equals, "up")
+	c.Assert(cc.getJob(hostID+"-one-off-job").State, Equals, "up")
 
 	// Check that when a formation's job is removed, it is marked as down and a new one is scheduled
 	cl.RemoveJob(hostID, "job0", false)
 	waitForHostEvents(2, events, c) // wait for both a stop and start event
-	c.Assert(cc.jobs[hostID+"-job0"].State, Equals, "down")
+	c.Assert(cc.getJob(hostID+"-job0").State, Equals, "down")
 	c.Assert(cx.jobs.Len(), Equals, 4)
 	c.Assert(len(cl.GetHost(hostID).Jobs), Equals, 4)
 	job, _ := hc.GetJob("job0")
@@ -387,7 +399,7 @@ func (s *S) TestWatchHost(c *C) {
 	// Check that when a one-off job is removed, it is marked as down but a new one is not scheduled
 	cl.RemoveJob(hostID, "one-off-job", false)
 	waitForHostEvents(1, events, c)
-	c.Assert(cc.jobs[hostID+"-one-off-job"].State, Equals, "down")
+	c.Assert(cc.getJob(hostID+"-one-off-job").State, Equals, "down")
 	c.Assert(cx.jobs.Len(), Equals, 3)
 	c.Assert(len(cl.GetHost(hostID).Jobs), Equals, 3)
 	job, _ = hc.GetJob("one-off-job")
@@ -396,7 +408,7 @@ func (s *S) TestWatchHost(c *C) {
 	// Check that when a job errors, it is marked as crashed and a new one is started
 	cl.RemoveJob(hostID, "job1", true)
 	waitForHostEvents(2, events, c) // wait for both an error and start event
-	c.Assert(cc.jobs[hostID+"-job1"].State, Equals, "crashed")
+	c.Assert(cc.getJob(hostID+"-job1").State, Equals, "crashed")
 	c.Assert(cx.jobs.Len(), Equals, 3)
 	c.Assert(len(cl.GetHost(hostID).Jobs), Equals, 3)
 	job, _ = hc.GetJob("job1")
