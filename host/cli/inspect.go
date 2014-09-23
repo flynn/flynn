@@ -26,6 +26,7 @@ func runInspect(args *docopt.Args, client cluster.Host) error {
 	fmt.Fprintln(w, "StartedAt\t", job.StartedAt)
 	fmt.Fprintln(w, "EndedAt\t", job.EndedAt)
 	fmt.Fprintln(w, "ExitStatus\t", job.ExitStatus)
+	fmt.Fprintln(w, "IP Address\t", job.InternalIP)
 	for k, v := range job.Job.Metadata {
 		fmt.Fprintln(w, k, "\t", v)
 	}
