@@ -41,9 +41,12 @@ func init() {
 func main() {
 	var err error
 	var res *check.Result
-	// defer exiting so it runs after all other defers
+	// defer exiting here so it runs after all other defers
 	defer func() {
 		if err != nil || res != nil && !res.Passed() {
+			if args.Debug {
+				dumpLogs()
+			}
 			os.Exit(1)
 		}
 	}()
@@ -80,12 +83,6 @@ func main() {
 
 		routerIP = c.RouterIP
 	}
-
-	defer func() {
-		if args.Debug && (err != nil || res != nil && !res.Passed()) {
-			dumpLogs()
-		}
-	}()
 
 	res = check.RunAll(&check.RunConf{
 		Filter:      args.Run,
