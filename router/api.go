@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sort"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 func apiHandler(rtr *Router) http.Handler {
 	r := martini.NewRouter()
 	m := martini.New()
+	m.Map(log.New(os.Stdout, "[router] ", log.LstdFlags|log.Lmicroseconds))
 	m.Use(martini.Logger())
 	m.Use(martini.Recovery())
 	m.Use(render.Renderer())

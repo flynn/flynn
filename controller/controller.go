@@ -121,6 +121,7 @@ func responseHelperHandler(c martini.Context, w http.ResponseWriter, r render.Re
 func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	r := martini.NewRouter()
 	m := martini.New()
+	m.Map(log.New(os.Stdout, "[controller] ", log.LstdFlags|log.Lmicroseconds))
 	m.Use(martini.Logger())
 	m.Use(martini.Recovery())
 	m.Use(render.Renderer())
