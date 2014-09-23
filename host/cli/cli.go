@@ -20,7 +20,7 @@ var commands = make(map[string]*command)
 
 func Register(cmd string, f interface{}, usage string) *command {
 	switch f.(type) {
-	case func(*docopt.Args, cluster.Host) error, func(*docopt.Args):
+	case func(*docopt.Args, cluster.Host) error, func(*docopt.Args), func() error:
 	default:
 		panic(fmt.Sprintf("invalid command function %s '%T'", cmd, f))
 	}
@@ -47,16 +47,25 @@ func Run(name string, args []string) error {
 
 	switch f := cmd.f.(type) {
 	case func(*docopt.Args, cluster.Host) error:
-		rc, err := rpcplus.DialHTTPPath("tcp", localAddr, rpcplus.DefaultRPCPath, nil)
+		client, err := hostClient()
 		if err != nil {
-			return errors.New("error connecting to local flynn-host, is it running?")
+			return err
 		}
-		client := cluster.NewHostClient(localAddr, rc, nil)
 		return f(parsedArgs, client)
 	case func(*docopt.Args):
 		f(parsedArgs)
 		return nil
+	case func() error:
+		return f()
 	}
 
 	return fmt.Errorf("unexpected command type %T", cmd.f)
+}
+
+func hostClient() (cluster.Host, error) {
+	rc, err := rpcplus.DialHTTPPath("tcp", localAddr, rpcplus.DefaultRPCPath, nil)
+	if err != nil {
+		return nil, errors.New("error connecting to local flynn-host, is it running?")
+	}
+	return cluster.NewHostClient(localAddr, rc, nil), nil
 }
