@@ -417,6 +417,9 @@ func babySit(process *os.Process) int {
 		}
 	}
 
+	if wstatus.Signaled() {
+		return 0
+	}
 	return wstatus.ExitStatus()
 }
 
