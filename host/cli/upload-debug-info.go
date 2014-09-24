@@ -6,6 +6,8 @@ import (
 	"log"
 	"os/exec"
 	"strings"
+
+	"github.com/flynn/flynn/pkg/cluster"
 )
 
 var logs = map[string]string{
@@ -76,10 +78,11 @@ func captureCmd(name string, arg ...string) (string, error) {
 }
 
 func captureJobs(gist *Gist) error {
-	client, err := hostClient()
+	client, err := cluster.NewClient()
 	if err != nil {
 		return err
 	}
+	defer client.Close()
 
 	jobs, err := jobList(client, true)
 	if err != nil {
@@ -103,7 +106,7 @@ func captureJobs(gist *Gist) error {
 		var content bytes.Buffer
 		printJobDesc(&job, &content)
 		fmt.Fprint(&content, "\n\n***** ***** ***** ***** ***** ***** ***** ***** ***** *****\n\n")
-		getLog(job.Job.ID, client, false, &content, &content)
+		getLog(job.HostID, job.Job.ID, client, false, &content, &content)
 
 		gist.AddFile(name, content.String())
 	}
