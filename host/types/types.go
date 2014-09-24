@@ -120,6 +120,7 @@ type HostEvent struct {
 
 type ActiveJob struct {
 	Job         *Job
+	HostID      string
 	ContainerID string
 	InternalIP  string
 	Status      JobStatus

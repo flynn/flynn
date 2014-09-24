@@ -173,7 +173,7 @@ func testProcessWithError(job *host.Job, client *fakeDockerClient, expected erro
 }
 
 func dockerRunWithOpts(job *host.Job, bindAddr string, client *fakeDockerClient) (*State, error) {
-	state := NewState()
+	state := NewState("")
 	err := (&DockerBackend{
 		bindAddr: bindAddr,
 		docker:   client,
@@ -317,7 +317,7 @@ func TestSyncScheduler(t *testing.T) {
 func TestStreamEvents(t *testing.T) {
 	client := NewFakeDockerClient()
 	client.newListener = make(chan struct{})
-	state := NewState()
+	state := NewState("")
 	state.AddJob(&host.Job{ID: "a"})
 	state.SetContainerID("a", "1")
 	state.SetStatusRunning("a")
