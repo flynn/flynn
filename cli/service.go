@@ -1,12 +1,10 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
-	"github.com/flynn/flynn/pkg/sse"
 )
 
 func init() {
@@ -33,25 +31,26 @@ Example:
 }
 
 func runPause(args *docopt.Args, client *controller.Client) error {
-	stream, err := client.StreamServiceDrain(args.String["<type>"], args.String["<service>"])
-	if err != nil {
-		return err
-	}
-	err = client.PauseService(args.String["<type>"], args.String["<service>"], true)
+	drained := make(chan bool)
+	fail := make(chan error)
+
+	go func() {
+		if err := client.StreamServiceDrain(args.String["<type>"], args.String["<service>"]); err != nil {
+			fail <- err
+			return
+		}
+		close(drained)
+	}()
+
+	err := client.PauseService(args.String["<type>"], args.String["<service>"], true)
 	if err != nil {
 		return err
 	}
 	fmt.Println("Backend is now paused. Waiting for backends to be drained...")
-	dec := &sse.Reader{bufio.NewReader(stream)}
-	for {
-		line, err := dec.Read()
-		if err != nil {
-			fmt.Println("errored in cli:", err)
-			return err
-		}
-		if string(line) == "all" {
-			break
-		}
+	select {
+	case <-drained:
+	case err := <-fail:
+		return err
 	}
 	fmt.Printf("All backends drained! Run 'flynn unpause %s %s' when done.\n", args.String["<type>"], args.String["<service>"])
 	return nil

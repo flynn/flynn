@@ -302,13 +302,8 @@ func (c *Client) PauseService(t, name string, pause bool) error {
 	return c.put(fmt.Sprintf("/services/%s/%s", t, name), q, nil)
 }
 
-func (c *Client) StreamServiceDrain(t, id string) (io.ReadCloser, error) {
-	path := fmt.Sprintf("/services/%s/%s/drain", t, id)
-	res, err := c.rawReq("GET", path, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	return res.Body, nil
+func (c *Client) StreamServiceDrain(t, id string) error {
+	return c.get(fmt.Sprintf("/services/%s/%s/drain", t, id), nil)
 }
 
 func (c *Client) GetFormation(appID, releaseID string) (*ct.Formation, error) {
