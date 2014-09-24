@@ -68,11 +68,15 @@ func main() {
 	cmd := exec.Command(exec.DockerImage("flynn/slugbuilder", os.Getenv("SLUGBUILDER_IMAGE_ID")), slugURL)
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		log.Fatalln(err)
+	if len(prevRelease.Env) > 0 {
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			log.Fatalln(err)
+		}
+		go appendEnvDir(os.Stdin, stdin, prevRelease.Env)
+	} else {
+		cmd.Stdin = os.Stdin
 	}
-	go appendEnvDir(os.Stdin, stdin, prevRelease.Env)
 	if buildpackURL, ok := prevRelease.Env["BUILDPACK_URL"]; ok {
 		cmd.Env = map[string]string{"BUILDPACK_URL": buildpackURL}
 	}
