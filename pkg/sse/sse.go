@@ -54,7 +54,7 @@ func (r *Reader) Read() ([]byte, error) {
 			return nil, err
 		}
 		if bytes.HasPrefix(line, []byte("data: ")) {
-			data := bytes.TrimPrefix(line, []byte("data: "))
+			data := bytes.TrimSuffix(bytes.TrimPrefix(line, []byte("data: ")), []byte("\n"))
 			return data, nil
 		}
 	}
