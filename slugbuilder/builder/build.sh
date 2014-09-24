@@ -11,7 +11,7 @@ else
 fi
 
 app_dir=/app
-env_dir=/env
+env_dir=/tmp/env
 build_root=/tmp/build
 cache_root=/tmp/cache
 buildpack_root=/tmp/buildpacks
@@ -56,10 +56,10 @@ cat | tar -xm
 
 
 if [[ -f "$env_cookie" ]]; then
-    mv /app /apptmp
-    mv /apptmp/* /
-    rm -r /apptmp
-    cd $app_dir
+    rm "$env_cookie"
+    mv app env /tmp
+    rsync -aq /tmp/app/ .
+    rm -rf /tmp/app
 fi
 
 # In heroku, there are two separate directories, and some
