@@ -32,8 +32,9 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 		// and allow them to expire when navigating away
 		var view = Dashboard.primaryView;
 		if (view && view.isMounted() && view.constructor.displayName === "Views.App") {
-			if (view.state.app) {
-				var appMeta = view.state.app.meta;
+			var app = view.state.app;
+			var appMeta = app ? app.meta : null;
+			if (app && appMeta) {
 				if (event.nextHandler.router === this) {
 					if (view.props.selectedTab !== event.nextParams[0].shtab) {
 						if (view.props.selectedTab === "pulls") {
