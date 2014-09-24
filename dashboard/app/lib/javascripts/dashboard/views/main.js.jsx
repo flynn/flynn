@@ -34,7 +34,7 @@ Dashboard.Views.Main = React.createClass({
 		return (
 			<section className="panel">
 				<section>
-					<Dashboard.Views.AppsList apps={this.state.apps} />
+					<Dashboard.Views.AppsList apps={this.state.apps} clusterDomain={this.props.clusterDomain} />
 				</section>
 
 				<section className="clearfix">
