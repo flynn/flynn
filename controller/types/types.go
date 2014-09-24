@@ -33,7 +33,7 @@ type Release struct {
 
 type ProcessType struct {
 	Cmd        []string          `json:"cmd,omitempty"`
-	Entrypoint []string          `json:"entrypoint,omitempty`
+	Entrypoint []string          `json:"entrypoint,omitempty"`
 	Env        map[string]string `json:"env,omitempty"`
 	Ports      []Port            `json:"ports,omitempty"`
 	Data       bool              `json:"data,omitempty"`
