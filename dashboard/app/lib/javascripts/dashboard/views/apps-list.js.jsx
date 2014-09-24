@@ -1,11 +1,13 @@
 /** @jsx React.DOM */
 //= require ./route-link
+//= require ./external-link
 
 (function () {
 
 "use strict";
 
 var RouteLink = Dashboard.Views.RouteLink;
+var ExternalLink = Dashboard.Views.ExternalLink;
 
 function getState(props) {
 	var state = {};
@@ -36,6 +38,7 @@ Dashboard.Views.AppsList = React.createClass({
 		var services = this.state.services;
 
 		var getAppPath = this.props.getAppPath;
+		var clusterDomain = this.props.clusterDomain;
 
 		return (
 			<ul className="apps-list">
@@ -51,6 +54,9 @@ Dashboard.Views.AppsList = React.createClass({
 										<li key={app.id}>
 											<span className="name">
 												{app.meta.ref}
+												{app.protected ? null : (
+													<ExternalLink href={"http://"+ app.name +"."+ clusterDomain}>link</ExternalLink>
+												)}
 											</span>
 											<ul className="actions">
 												<li>
@@ -70,7 +76,12 @@ Dashboard.Views.AppsList = React.createClass({
 				{services.map(function (app) {
 					return (
 						<li key={app.id} className={"service"+ (app.protected ? " protected" : "")}>
-							<span className="name">{app.name}</span>
+							<span className="name">
+								{app.name}
+								{app.protected ? null : (
+									<ExternalLink href={"http://"+ app.name +"."+ clusterDomain}>link</ExternalLink>
+								)}
+							</span>
 							<ul className="actions">
 								<li>
 									{app.protected ? (

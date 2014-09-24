@@ -16,6 +16,7 @@ Dashboard.routers.main = new (Marbles.Router.createClass({
 	root: function () {
 		React.renderComponent(
 			Dashboard.Views.Main({
+					clusterDomain: Dashboard.config.user.cluster_domain,
 					githubAuthed: !!Dashboard.githubClient
 				}), Dashboard.el);
 	},

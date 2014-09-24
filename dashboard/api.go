@@ -90,6 +90,7 @@ type OAuthToken struct {
 type ExpandedUser struct {
 	Auths         map[string]*OAuthToken `json:"auths"`
 	ControllerKey string                 `json:"controller_key"`
+	ClusterDomain string                 `json:"cluster_domain"`
 }
 
 type UserConfig struct {
@@ -112,6 +113,7 @@ func getConfig(rh RequestHelper, conf *Config) {
 
 	if rh.IsAuthenticated() {
 		config.User = &ExpandedUser{}
+		config.User.ClusterDomain = conf.ClusterDomain
 		config.User.Auths = make(map[string]*OAuthToken)
 
 		if conf.GithubToken != "" {
