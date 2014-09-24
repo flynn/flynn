@@ -58,7 +58,7 @@ func main() {
 	if err == controller.ErrNotFound {
 		prevRelease = &ct.Release{}
 	} else if err != nil {
-		log.Fatalln("Error creating getting current app release:", err)
+		log.Fatalln("Error getting current app release:", err)
 	}
 
 	fmt.Printf("-----> Building %s...\n", app.Name)
