@@ -15,5 +15,5 @@ Gem::Specification.new do |gem|
   gem.files         = `git ls-files dashboard/app`.split($/)
   gem.executables   = gem.files.grep(%r{^bin/}).map{ |f| File.basename(f) }
   gem.test_files    = gem.files.grep(%r{^(test|spec|features)/})
-  gem.require_paths = ["lib"]
+  gem.require_paths = ["dashboard/app/lib"]
 end
