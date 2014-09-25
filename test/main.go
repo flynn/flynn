@@ -214,10 +214,22 @@ func flynn(dir string, cmdArgs ...string) *CmdResult {
 	return run(cmd)
 }
 
+func debug(v ...interface{}) {
+	if args.Debug {
+		fmt.Println(append([]interface{}{"++", time.Now().Format("15:04:05.000")}, v...)...)
+	}
+}
+
+func debugf(format string, v ...interface{}) {
+	if args.Debug {
+		fmt.Println("++", time.Now().Format("15:04:05.000"), fmt.Sprintf(format, v...))
+	}
+}
+
 func run(cmd *exec.Cmd) *CmdResult {
 	var out bytes.Buffer
 	if args.Debug {
-		fmt.Println("++", time.Now().Format("15:04:05.000"), cmd.Path, strings.Join(cmd.Args[1:], " "))
+		debug(cmd.Path, strings.Join(cmd.Args[1:], " "))
 		cmd.Stdout = io.MultiWriter(os.Stdout, &out)
 		cmd.Stderr = io.MultiWriter(os.Stderr, &out)
 	} else {
