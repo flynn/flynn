@@ -84,9 +84,13 @@ func (cmd *register) Run(fs *flag.FlagSet) {
 	cmd.InitClient(false)
 	cmd.exitStatus = 0
 
-	mapping := strings.SplitN(fs.Arg(0), ":", 2)
-	name := mapping[0]
-	port := mapping[1]
+	colonIdx := strings.LastIndex(fs.Arg(0), ":")
+	if colonIdx == -1 {
+		fmt.Println("Error: specify service in name:port format:", fs.Arg(0))
+		os.Exit(1)
+	}
+	name := fs.Arg(0)[0:colonIdx]
+	port := fs.Arg(0)[colonIdx+1:]
 
 	cmd.RegisterWithExitHook(map[string]string{name: port}, true)
 
