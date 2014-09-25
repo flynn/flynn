@@ -31,25 +31,21 @@ Example:
 }
 
 func runPause(args *docopt.Args, client *controller.Client) error {
-	drained := make(chan bool)
-	fail := make(chan error)
+	drained := make(chan error)
 
 	go func() {
 		if err := client.StreamServiceDrain(args.String["<type>"], args.String["<service>"]); err != nil {
-			fail <- err
+			drained <- err
 			return
 		}
-		close(drained)
+		drained <- nil
 	}()
 
-	err := client.PauseService(args.String["<type>"], args.String["<service>"], true)
-	if err != nil {
+	if err := client.PauseService(args.String["<type>"], args.String["<service>"], true); err != nil {
 		return err
 	}
 	fmt.Println("Backend is now paused. Waiting for backends to be drained...")
-	select {
-	case <-drained:
-	case err := <-fail:
+	if err := <-drained; err != nil {
 		return err
 	}
 	fmt.Printf("All backends drained! Run 'flynn unpause %s %s' when done.\n", args.String["<type>"], args.String["<service>"])
