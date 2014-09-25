@@ -96,7 +96,7 @@ func runDaemon(args *docopt.Args) {
 	}
 
 	sh := newShutdownHandler()
-	state := NewState()
+	state := NewState(hostID)
 	var backend Backend
 	var err error
 

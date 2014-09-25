@@ -29,13 +29,13 @@ func NewJobRepo(db *DB) *JobRepo {
 }
 
 func (r *JobRepo) Add(job *ct.Job) error {
-	hostID, jobID := parseJobID(job.ID)
-	if hostID == "" {
+	hostID, jobID, err := cluster.ParseJobID(job.ID)
+	if err != nil {
 		log.Printf("Unable to parse hostID from %q", job.ID)
 		return ErrNotFound
 	}
 	// TODO: actually validate
-	err := r.db.QueryRow("INSERT INTO job_cache (job_id, host_id, app_id, release_id, process_type, state) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at, updated_at",
+	err = r.db.QueryRow("INSERT INTO job_cache (job_id, host_id, app_id, release_id, process_type, state) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at, updated_at",
 		jobID, hostID, job.AppID, job.ReleaseID, job.Type, job.State).Scan(&job.CreatedAt, &job.UpdatedAt)
 	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" {
 		err = r.db.QueryRow("UPDATE job_cache SET state = $3, updated_at = now() WHERE job_id = $1 AND host_id = $2 RETURNING created_at, updated_at",
@@ -385,21 +385,13 @@ func (f flushWriter) Write(p []byte) (int, error) {
 	return f.w.Write(p)
 }
 
-func parseJobID(jobID string) (string, string) {
-	id := strings.SplitN(jobID, "-", 2)
-	if len(id) != 2 || id[0] == "" || id[1] == "" {
-		return "", ""
-	}
-	return id[0], id[1]
-}
-
 func formatUUID(s string) string {
 	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
 }
 
 func connectHostMiddleware(c martini.Context, params martini.Params, cl clusterClient, r ResponseHelper) {
-	hostID, jobID := parseJobID(params["jobs_id"])
-	if hostID == "" {
+	hostID, jobID, err := cluster.ParseJobID(params["jobs_id"])
+	if err != nil {
 		log.Printf("Unable to parse hostID from %q", params["jobs_id"])
 		r.Error(ErrNotFound)
 		return

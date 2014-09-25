@@ -14,6 +14,8 @@ import (
 // TODO: prune old jobs?
 
 type State struct {
+	id string
+
 	jobs map[string]*host.ActiveJob
 	mtx  sync.RWMutex
 
@@ -27,8 +29,9 @@ type State struct {
 	backend      Backend
 }
 
-func NewState() *State {
+func NewState(id string) *State {
 	return &State{
+		id:         id,
 		jobs:       make(map[string]*host.ActiveJob),
 		containers: make(map[string]*host.ActiveJob),
 		listeners:  make(map[string]map[chan host.Event]struct{}),
@@ -88,7 +91,7 @@ func (s *State) persist() {
 func (s *State) AddJob(j *host.Job) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	job := &host.ActiveJob{Job: j}
+	job := &host.ActiveJob{Job: j, HostID: s.id}
 	s.jobs[j.ID] = job
 	s.sendEvent(job, "create")
 	go s.persist()

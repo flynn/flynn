@@ -15,8 +15,16 @@ func init() {
 	Register("inspect", runInspect, "usage: flynn-host inspect ID")
 }
 
-func runInspect(args *docopt.Args, client cluster.Host) error {
-	job, err := client.GetJob(args.String["ID"])
+func runInspect(args *docopt.Args, client *cluster.Client) error {
+	hostID, jobID, err := cluster.ParseJobID(args.String["ID"])
+	if err != nil {
+		return err
+	}
+	hostClient, err := client.DialHost(hostID)
+	if err != nil {
+		return fmt.Errorf("could not connect to host %s: %s", hostID, err)
+	}
+	job, err := hostClient.GetJob(jobID)
 	if err != nil {
 		return fmt.Errorf("no such job")
 	}
@@ -28,7 +36,7 @@ func runInspect(args *docopt.Args, client cluster.Host) error {
 func printJobDesc(job *host.ActiveJob, out io.Writer) {
 	w := tabwriter.NewWriter(out, 1, 2, 2, ' ', 0)
 	defer w.Flush()
-	fmt.Fprintln(w, "ID\t", job.Job.ID)
+	fmt.Fprintln(w, "ID\t", clusterJobID(*job))
 	fmt.Fprintln(w, "Status\t", job.Status)
 	fmt.Fprintln(w, "StartedAt\t", job.StartedAt)
 	fmt.Fprintln(w, "EndedAt\t", job.EndedAt)

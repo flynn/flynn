@@ -24,7 +24,7 @@ func (s sortJobs) Len() int           { return len(s) }
 func (s sortJobs) Less(i, j int) bool { return s[i].StartedAt.Sub(s[j].StartedAt) < 0 }
 func (s sortJobs) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
-func runPs(args *docopt.Args, client cluster.Host) error {
+func runPs(args *docopt.Args, client *cluster.Client) error {
 	jobs, err := jobList(client, args.Bool["-a"] || args.Bool["--all"])
 	if err != nil {
 		return err
@@ -39,10 +39,25 @@ func runPs(args *docopt.Args, client cluster.Host) error {
 	return nil
 }
 
-func jobList(client cluster.Host, all bool) (sortJobs, error) {
-	jobs, err := client.ListJobs()
+func jobList(client *cluster.Client, all bool) (sortJobs, error) {
+	hosts, err := client.ListHosts()
 	if err != nil {
-		return nil, fmt.Errorf("could not get local jobs: %s", err)
+		return nil, fmt.Errorf("could not list hosts: %s", err)
+	}
+
+	var jobs []host.ActiveJob
+	for id := range hosts {
+		h, err := client.DialHost(id)
+		if err != nil {
+			return nil, fmt.Errorf("could not dial host %s: %s", id, err)
+		}
+		hostJobs, err := h.ListJobs()
+		if err != nil {
+			return nil, fmt.Errorf("could not get jobs for host %s: %s", id, err)
+		}
+		for _, job := range hostJobs {
+			jobs = append(jobs, job)
+		}
 	}
 
 	sorted := make(sortJobs, 0, len(jobs))
@@ -59,8 +74,12 @@ func jobList(client cluster.Host, all bool) (sortJobs, error) {
 func printJobs(jobs sortJobs, out io.Writer) {
 	w := tabwriter.NewWriter(out, 1, 2, 2, ' ', 0)
 	defer w.Flush()
-	fmt.Fprintln(w, "JOB ID\tSTATE\tSTARTED\tCONTROLLER APP\tCONTROLLER TYPE")
+	fmt.Fprintln(w, "ID\tSTATE\tSTARTED\tCONTROLLER APP\tCONTROLLER TYPE")
 	for _, job := range jobs {
-		fmt.Fprintf(w, "%s\t%s\t%s ago\t%s\t%s\n", job.Job.ID, job.Status, units.HumanDuration(time.Now().UTC().Sub(job.StartedAt)), job.Job.Metadata["flynn-controller.app_name"], job.Job.Metadata["flynn-controller.type"])
+		fmt.Fprintf(w, "%s\t%s\t%s ago\t%s\t%s\n", clusterJobID(job), job.Status, units.HumanDuration(time.Now().UTC().Sub(job.StartedAt)), job.Job.Metadata["flynn-controller.app_name"], job.Job.Metadata["flynn-controller.type"])
 	}
+}
+
+func clusterJobID(job host.ActiveJob) string {
+	return job.HostID + "-" + job.Job.ID
 }

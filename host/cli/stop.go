@@ -12,15 +12,34 @@ func init() {
 	Register("stop", runStop, "usage: flynn-host stop ID...")
 }
 
-func runStop(args *docopt.Args, client cluster.Host) error {
+func runStop(args *docopt.Args, client *cluster.Client) error {
 	success := true
+	clients := make(map[string]cluster.Host)
 	for _, id := range args.All["ID"].([]string) {
-		if err := client.StopJob(id); err != nil {
-			fmt.Printf("could not stop job %s: %s\n", id, err)
+		hostID, jobID, err := cluster.ParseJobID(id)
+		if err != nil {
+			fmt.Printf("could not parse %s: %s", id, err)
 			success = false
 			continue
 		}
-		fmt.Println(id, "stopped")
+		hostClient, ok := clients[hostID]
+		if !ok {
+			var err error
+			hostClient, err = client.DialHost(hostID)
+			if err != nil {
+				fmt.Printf("could not connect to host %s: %s\n", hostID, err)
+				success = false
+				continue
+			}
+			defer hostClient.Close()
+			clients[hostID] = hostClient
+		}
+		if err := hostClient.StopJob(jobID); err != nil {
+			fmt.Printf("could not stop job %s: %s\n", jobID, err)
+			success = false
+			continue
+		}
+		fmt.Println(jobID, "stopped")
 	}
 	if !success {
 		return errors.New("could not stop all jobs")

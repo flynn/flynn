@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -14,22 +15,31 @@ func init() {
 	Register("log", runLog, "usage: flynn-host log [-f|--follow] ID")
 }
 
-func runLog(args *docopt.Args, client cluster.Host) error {
-	return getLog(args.String["ID"], client, args.Bool["-f"] || args.Bool["--follow"], os.Stdout, os.Stderr)
+func runLog(args *docopt.Args, client *cluster.Client) error {
+	hostID, jobID, err := cluster.ParseJobID(args.String["ID"])
+	if err != nil {
+		return err
+	}
+	return getLog(hostID, jobID, client, args.Bool["-f"] || args.Bool["--follow"], os.Stdout, os.Stderr)
 }
 
-func getLog(id string, client cluster.Host, follow bool, stdout, stderr io.Writer) error {
+func getLog(hostID, jobID string, client *cluster.Client, follow bool, stdout, stderr io.Writer) error {
+	hostClient, err := client.DialHost(hostID)
+	if err != nil {
+		return fmt.Errorf("could not connect to host %s: %s", hostID, err)
+	}
+	defer hostClient.Close()
 	attachReq := &host.AttachReq{
-		JobID: id,
+		JobID: jobID,
 		Flags: host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagLogs,
 	}
 	if follow {
 		attachReq.Flags |= host.AttachFlagStream
 	}
-	attachClient, err := client.Attach(attachReq, false)
+	attachClient, err := hostClient.Attach(attachReq, false)
 	if err != nil {
 		if err == cluster.ErrWouldWait {
-			return fmt.Errorf("no such job")
+			return errors.New("no such job")
 		}
 		return err
 	}
