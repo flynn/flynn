@@ -161,7 +161,7 @@ func (s *SchedulerSuite) addHosts(t *c.C, count int) []string {
 		case event := <-ch:
 			debug("host added", event.HostID)
 			hosts = append(hosts, event.HostID)
-		case <-time.After(5 * time.Second):
+		case <-time.After(20 * time.Second):
 			t.Fatal("timed out waiting for new host")
 		}
 	}
@@ -491,7 +491,7 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 		t.Skip("cannot determine scheduler backoff period")
 	}
 	backoffPeriod := testCluster.BackoffPeriod
-	startTimeout := 5 * time.Second
+	startTimeout := 20 * time.Second
 	debugf("job restart backoff period: %s", backoffPeriod)
 
 	app, release := s.createApp(t)
