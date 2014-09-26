@@ -170,6 +170,14 @@ The Layer 1 bootstrapper will get all necessary services running using the Layer
 If you try these instructions and run into issues, please open an issue or pull
 request.
 
+### Firewall and ports
+
+If your Flynn installation is behind the firewall,
+you (or your network administrator) may be required to open ports below.
+
+* 80 - (optional) http for your apps
+* 433 - (optional) https for your apps
+* 2222 - gitreceived
 
 ## Components
 
