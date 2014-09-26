@@ -125,6 +125,10 @@ flynn-release download /etc/flynn/version.json
 
 Do this on every host that you want to be in the Flynn cluster.
 
+The ports 80, 443, and 2222 must be open externally on the firewalls for all
+nodes in the cluster, and the nodes neet to be able to communicate with each
+other internally on all ports.
+
 The next step is to configure a Layer 0 cluster. The host daemon finds other
 members of the cluster using the etcd, which needs to be bootstrapped.
 
