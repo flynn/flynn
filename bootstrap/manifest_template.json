@@ -1,5 +1,10 @@
 [
   {
+    "id": "require-env",
+    "action": "require-env",
+    "vars": ["CONTROLLER_DOMAIN"]
+  },
+  {
     "id": "postgres",
     "app": {
       "name": "postgres"
@@ -204,7 +209,7 @@
   {
     "id": "controller-cert",
     "action": "gen-tls-cert",
-    "hosts": ["{{ or (getenv \"CONTROLLER_DOMAIN\") \"localhost\" }}", "127.0.0.1"]
+    "hosts": ["{{ getenv \"CONTROLLER_DOMAIN\" }}"]
   },
   {
     "id": "router-wait",
@@ -230,14 +235,14 @@
     "type": "http",
     "config": {
       "service": "flynn-controller",
-      "domain": "{{ or (getenv \"CONTROLLER_DOMAIN\") \"localhost\" }}"
+      "domain": "{{ getenv \"CONTROLLER_DOMAIN\" }}"
     }
   },
   {
     "id": "controller-route-wait",
     "action": "wait",
     "url": "discoverd+http://router-http/",
-    "host": "{{ or (getenv \"CONTROLLER_DOMAIN\") \"localhost\" }}",
+    "host": "{{ getenv \"CONTROLLER_DOMAIN\" }}",
     "status": 401
   },
   {
@@ -273,6 +278,6 @@
   {
     "id": "log-complete",
     "action": "log",
-    "output": "\n\nFlynn bootstrapping complete. Install flynn-cli and paste the line below into a terminal window:\n\nflynn cluster add -g {{ or (getenv \"CONTROLLER_DOMAIN\") \"localhost\" }}:2222 -p {{ (index .StepData \"controller-cert\").Pin }} default https://{{ or (getenv \"CONTROLLER_DOMAIN\") \"localhost\" }} {{ (index .StepData \"controller-key\").Data }}"
+    "output": "\n\nFlynn bootstrapping complete. Install flynn-cli and paste the line below into a terminal window:\n\nflynn cluster add -g {{ getenv \"CONTROLLER_DOMAIN\" }}:2222 -p {{ (index .StepData \"controller-cert\").Pin }} default https://{{ getenv \"CONTROLLER_DOMAIN\" }} {{ (index .StepData \"controller-key\").Data }}"
   }
 ]
