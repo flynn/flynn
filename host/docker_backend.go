@@ -108,9 +108,7 @@ func (d *DockerBackend) Run(job *host.Job) error {
 
 	hostConfig.Binds = make([]string, 0, len(job.Config.Mounts))
 	for _, m := range job.Config.Mounts {
-		if m.Target == "" {
-			config.Volumes[m.Location] = struct{}{}
-		} else {
+		if m.Target != "" {
 			bind := fmt.Sprintf("%s:%s:", m.Target, m.Location)
 			if m.Writeable {
 				bind += "rw"
@@ -119,6 +117,7 @@ func (d *DockerBackend) Run(job *host.Job) error {
 			}
 			hostConfig.Binds = append(hostConfig.Binds, bind)
 		}
+		config.Volumes[m.Location] = struct{}{}
 	}
 
 	if strings.HasPrefix(job.ID, "flynn-") {
