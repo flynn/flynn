@@ -109,7 +109,7 @@ var baseConfig = UserConfig{
 func getConfig(rh RequestHelper, conf *Config) {
 	config := baseConfig
 
-	config.Endpoints["cluster_controller"] = fmt.Sprintf("http://%s", conf.ClusterDomain)
+	config.Endpoints["cluster_controller"] = fmt.Sprintf("https://%s", conf.ClusterDomain)
 
 	if rh.IsAuthenticated() {
 		config.User = &ExpandedUser{}
