@@ -26,7 +26,7 @@ func APIHandler(conf *Config) http.Handler {
 	m.Use(martini.Logger())
 	m.Use(martini.Recovery())
 	m.Use(render.Renderer(render.Options{
-		Directory:  "app/build",
+		Directory:  conf.StaticPath,
 		Extensions: []string{".html"},
 	}))
 	m.Action(r.Handle)
@@ -51,7 +51,7 @@ func APIHandler(conf *Config) http.Handler {
 
 		r.Any("/assets/application.*.js", serveApplicationJs)
 
-		r.Any("/assets.*", martini.Static("app/build/assets", martini.StaticOptions{
+		r.Any("/assets.*", martini.Static(filepath.Join(conf.StaticPath, "assets"), martini.StaticOptions{
 			Prefix: "/assets",
 		}))
 
@@ -127,7 +127,7 @@ func getConfig(rh RequestHelper, conf *Config) {
 }
 
 func serveApplicationJs(res http.ResponseWriter, req *http.Request, conf *Config) {
-	file := filepath.Join("app/build/assets", filepath.Base(req.URL.Path))
+	file := filepath.Join(conf.StaticPath, "assets", filepath.Base(req.URL.Path))
 	f, err := os.Open(file)
 	if err != nil {
 		fmt.Println(err)

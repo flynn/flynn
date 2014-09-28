@@ -20,6 +20,7 @@ type Config struct {
 	LoginToken    string
 	GithubToken   string
 	SessionStore  *sessions.CookieStore
+	StaticPath    string
 }
 
 func LoadConfigFromEnv() *Config {
@@ -68,6 +69,11 @@ func LoadConfigFromEnv() *Config {
 	}
 
 	conf.GithubToken = os.Getenv("GITHUB_TOKEN")
+
+	conf.StaticPath = os.Getenv("STATIC_PATH")
+	if conf.StaticPath == "" {
+		conf.StaticPath = "app/build"
+	}
 
 	return conf
 }
