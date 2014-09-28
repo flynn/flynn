@@ -1,0 +1,138 @@
+#!/bin/bash
+#
+# A script to build and release Flynn packages.
+#
+# PREREQUISITES:
+#
+# - Install required packages
+#   sudo apt-get install -y s3cmd reprepro dpkg-sig gnupg-agent
+#
+# - Configure s3cmd
+#   s3cmd --configure
+#
+# - Import flynn-release GPG key
+#   gpg --import < /path/to/flynn-release.gpg
+#
+# - Set large gpg-agent cache expiry
+#   echo -e "default-cache-ttl 4294967295\nmax-cache-ttl 4294967295" | tee ~/.gnupg/gpg-agent.conf
+#
+# - Start gpg-agent
+#   eval $(gpg-agent --daemon)
+#
+# - Force cache of passphrase by signing something
+#   export GPG_TTY=`tty`
+#   echo | gpg --sign --yes --use-agent --local-user flynn-release --output /dev/null /dev/stdin
+
+set -eo pipefail
+
+# S3_URI must have a trailing slash
+S3_URI="s3://flynn/ubuntu/"
+
+usage() {
+  cat <<USAGE >&2
+usage: $0 [options] COMMIT
+
+OPTIONS:
+  -h            Show this message
+  -r DIR        Resume the release using DIR
+USAGE
+}
+
+main() {
+  local dir
+
+  while getopts "hr:" opt; do
+    case $opt in
+      h)
+	usage
+	exit 1
+	;;
+      r)
+        dir=$OPTARG
+        if [[ ! -d "${dir}" ]]; then
+          fail "No such directory: ${dir}"
+        fi
+        ;;
+      ?)
+	usage
+	exit 1
+	;;
+    esac
+  done
+  shift $(($OPTIND - 1))
+
+  if [[ $# -ne 1 ]]; then
+    usage
+    exit 1
+  fi
+
+  local commit=$1
+  local root="$(cd "$(dirname "$0")/.." && pwd)"
+  local flynn_release="${root}/util/release/flynn-release"
+
+  info "checking commit status"
+  if ! "${flynn_release}" status $commit; then
+    fail "commit has not passed CI"
+  fi
+
+  dir="${dir:-$(mktemp -d)}"
+  info "using base dir: ${dir}"
+
+  export GOPATH="${dir}"
+  local src="${GOPATH}/src/github.com/flynn/flynn"
+
+  if [[ ! -d "${src}/.git" ]]; then
+    info "cloning git repo"
+    rm -rf "${src}"
+    git clone --quiet https://github.com/flynn/flynn "${src}"
+  fi
+
+  info "building flynn"
+  pushd "${src}" >/dev/null
+  git checkout --force --quiet $commit
+  tup
+  popd >/dev/null
+
+  info "uploading images"
+  "${flynn_release}" upload "${src}/version.json"
+
+  info "downloading apt repo"
+  # NOTE: the trailing slash is necessary
+  apt_dir="${dir}/apt/"
+  mkdir -p "${apt_dir}"
+  s3cmd sync --delete-removed $S3_URI "${apt_dir}"
+
+  info "building deb package"
+  local iteration=$(find "${apt_dir}" -name "flynn-host_$(date +%Y%m%d)*.deb" | wc -l)
+  rm -f "${src}"/*.deb
+  "${root}/script/build-deb" -d "${src}" -i $iteration
+
+  info "signing deb package"
+  local deb=$(ls "${src}"/*.deb)
+  dpkg-sig --sign builder "${deb}"
+
+  info "adding deb to apt repo"
+  reprepro -b "${apt_dir}" includedeb flynn "${deb}"
+
+  info "uploading apt repo"
+  s3cmd sync --acl-public --cf-invalidate --no-preserve "${apt_dir}" $S3_URI
+
+  info "cleaning up"
+  rm -rf "${dir}"
+
+  info "done!"
+}
+
+info() {
+  local msg=$1
+  local timestamp=$(date +%H:%M:%S.%3N)
+  echo "===> $timestamp $msg"
+}
+
+fail() {
+  local msg=$1
+  info "ERROR: ${msg}" >&2
+  exit 1
+}
+
+main $@
