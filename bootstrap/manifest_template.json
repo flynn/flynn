@@ -39,6 +39,14 @@
     "data": "{{ getenv \"CONTROLLER_KEY\" }}"
   },
   {
+    "id": "dashboard-session-secret",
+    "action": "gen-random"
+  },
+  {
+    "id": "dashboard-login-token",
+    "action": "gen-random"
+  },
+  {
     "id": "name-seed",
     "action": "gen-random",
     "length": 10
@@ -209,7 +217,7 @@
   {
     "id": "controller-cert",
     "action": "gen-tls-cert",
-    "hosts": ["{{ getenv \"CONTROLLER_DOMAIN\" }}"]
+    "hosts": ["{{ getenv \"CONTROLLER_DOMAIN\" }}", "*.{{ getenv \"DEFAULT_ROUTE_DOMAIN\" }}"]
   },
   {
     "id": "router-wait",
@@ -262,6 +270,48 @@
         "SLUGBUILDER_IMAGE_ID": "$image_id[slugbuilder]",
         "SLUGRUNNER_IMAGE_ID": "$image_id[slugrunner]"
       }
+    }
+  },
+  {
+    "id": "dashboard",
+    "action": "deploy-app",
+    "app": {
+      "name": "dashboard",
+      "protected": true
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "$image_url_prefix/dashboard?id=$image_id[dashboard]"
+    },
+    "release": {
+      "env": {
+        "CLUSTER_DOMAIN": "{{ getenv \"CONTROLLER_DOMAIN\" }}",
+        "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
+        "URL": "https://dashboard.{{ getenv \"DEFAULT_ROUTE_DOMAIN\" }}",
+        "SESSION_SECRET": "{{ (index .StepData \"dashboard-session-secret\").Data }}",
+        "LOGIN_TOKEN": "{{ (index .StepData \"dashboard-login-token\").Data }}",
+        "STATIC_PATH": "/app",
+        "SECURE_COOKIES": "true"
+      },
+      "processes": {
+        "web": {
+          "ports": [{"proto": "tcp"}]
+        }
+      }
+    },
+    "processes": {
+      "web": 1
+    }
+  },
+  {
+    "id": "dashboard-route",
+    "action": "add-route",
+    "app_step": "dashboard",
+    "cert_step": "controller-cert",
+    "type": "http",
+    "config": {
+      "service": "dashboard-web",
+      "domain": "dashboard.{{ getenv \"DEFAULT_ROUTE_DOMAIN\" }}"
     }
   },
   {
