@@ -19,7 +19,43 @@ echo deb https://dl.flynn.io/ubuntu flynn main > /etc/apt/sources.list.d/flynn.l
 echo deb http://ppa.launchpad.net/anatol/tup/ubuntu precise main > /etc/apt/sources.list.d/tup.list
 
 apt-get update
-apt-get install -y curl vim-tiny git mercurial bzr make lxc-docker linux-image-extra-$(uname -r) libdevmapper-dev btrfs-tools libvirt-dev ruby2.0 ruby2.0-dev flynn-host tup
+
+packages=(
+  "btrfs-tools"
+  "bzr"
+  "curl"
+  "git"
+  "libdevmapper-dev"
+  "libvirt-dev"
+  "linux-image-extra-$(uname -r)"
+  "lxc-docker"
+  "make"
+  "mercurial"
+  "ruby2.0"
+  "ruby2.0-dev"
+  "tup"
+  "vim-tiny"
+)
+
+if [[ -n "${FLYNN_DEB_URL}" ]]; then
+  # If we are manually installing the deb, we need to also
+  # manually install explicit dependencies of flynn-host
+  packages+=(
+    "aufs-tools"
+    "iptables"
+    "libvirt-bin"
+  )
+else
+  packages+=("flynn-host")
+fi
+
+apt-get install -y ${packages[@]}
+
+if [[ -n "${FLYNN_DEB_URL}" ]]; then
+  curl "${FLYNN_DEB_URL}" > /tmp/flynn-host.deb
+  dpkg -i /tmp/flynn-host.deb
+  rm /tmp/flynn-host.deb
+fi
 
 gem2.0 install fpm --no-rdoc --no-ri
 

@@ -1,4 +1,7 @@
 {
+  "variables": {
+    "flynn_deb_url": ""
+  },
   "builders": [
     {
       "type": "amazon-ebs",
@@ -23,6 +26,9 @@
         "scripts/upgrade.sh",
         "scripts/install.sh",
         "scripts/apt_cleanup.sh"
+      ],
+      "environment_vars": [
+        "FLYNN_DEB_URL={{ user `flynn_deb_url` }}"
       ],
       "execute_command": "{{ .Vars }} sudo -E bash '{{ .Path }}'"
     },

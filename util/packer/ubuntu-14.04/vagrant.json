@@ -1,4 +1,7 @@
 {
+  "variables": {
+    "flynn_deb_url": ""
+  },
   "builders": [
     {
       "boot_command": [
@@ -83,6 +86,9 @@
       "type": "shell"
     },
     {
+      "environment_vars": [
+        "FLYNN_DEB_URL={{ user `flynn_deb_url` }}"
+      ],
       "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'",
       "scripts": [
         "scripts/install.sh",
