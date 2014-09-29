@@ -1,4 +1,8 @@
 {
+  "variables": {
+    "flynn_deb_url": "",
+    "headless": "false"
+  },
   "builders": [
     {
       "boot_command": [
@@ -11,6 +15,7 @@
         "initrd=/install/initrd.gz -- <enter>"
       ],
       "boot_wait": "5s",
+      "headless": "{{ user `headless` }}",
       "http_directory": "http",
       "iso_checksum": "946a6077af6f5f95a51f82fdc44051c7aa19f9cfc5f737954845a6050543d7c2",
       "iso_checksum_type": "sha256",
@@ -36,6 +41,7 @@
       "boot_wait": "5s",
       "guest_additions_path": "VBoxGuestAdditions_{{.Version}}.iso",
       "guest_os_type": "Ubuntu_64",
+      "headless": "{{ user `headless` }}",
       "http_directory": "http",
       "iso_checksum": "946a6077af6f5f95a51f82fdc44051c7aa19f9cfc5f737954845a6050543d7c2",
       "iso_checksum_type": "sha256",
@@ -83,6 +89,9 @@
       "type": "shell"
     },
     {
+      "environment_vars": [
+        "FLYNN_DEB_URL={{ user `flynn_deb_url` }}"
+      ],
       "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'",
       "scripts": [
         "scripts/install.sh",
