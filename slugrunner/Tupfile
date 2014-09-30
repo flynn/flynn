@@ -1,3 +1,0 @@
-include_rules
-: $(ROOT)/sdutil/sdutil |> !cp |> bin/sdutil
-: bin/* $(ROOT)/cedarish/<docker> |> !docker-layer1 |>

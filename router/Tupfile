@@ -1,3 +1,0 @@
-include_rules
-: |> !go |> bin/flynn-router
-: bin/* |> !docker-layer1 |>

@@ -1,7 +1,0 @@
-include_rules
-: |> !go |> bin/flynn-host
-: |> !go -tags dockeronly |> bin/flynn-host-docker
-: |> !go ./flynn-init |> bin/flynn-init
-: | $(ROOT)/<layer0> |> ^ LAYER 0^ cat $(ROOT)/log/docker-layer0/* > %o |> $(ROOT)/log/docker-layer0.log
-: $(ROOT)/util/release/flynn-release $(ROOT)/log/docker-layer0.log |> ^ host_manifest.json^ cat $(ROOT)/log/docker-layer0.log > /dev/null && $(ROOT)/util/release/flynn-release manifest --output=%o manifest_template.json |> bin/manifest.json
-: bin/* |> !docker |>

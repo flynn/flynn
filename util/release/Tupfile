@@ -1,4 +1,0 @@
-include_rules
-: |> !go |> flynn-release
-: | $(ROOT)/bootstrap/<docker> $(ROOT)/host/<docker> $(ROOT)/taffy/<docker> |> ^ RELEASE^ cat $(ROOT)/log/docker-bootstrap.log $(ROOT)/log/docker-host.log $(ROOT)/log/docker-taffy.log > %o |> $(ROOT)/log/docker-release.log
-: flynn-release $(ROOT)/log/docker-release.log |> ^ version.json^ cat $(ROOT)/log/docker-release.log > /dev/null && ./flynn-release manifest --output=%o version_template.json |> $(ROOT)/version.json

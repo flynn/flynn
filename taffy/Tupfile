@@ -1,3 +1,0 @@
-include_rules
-: $(ROOT)/receiver/flynn-receiver |> !cp |> bin/flynn-receiver
-: bin/* |> !docker |>

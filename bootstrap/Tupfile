@@ -1,5 +1,0 @@
-include_rules
-: |> !go ./bootstrapper |> bin/flynn-bootstrap
-: | $(ROOT)/<layer1> |> ^ LAYER 1^ cat $(ROOT)/log/docker-layer1/* > %o |> $(ROOT)/log/docker-layer1.log
-: $(ROOT)/util/release/flynn-release $(ROOT)/log/docker-layer1.log |> ^ bootstrap_manifest.json^ cat $(ROOT)/log/docker-layer1.log > /dev/null && $(ROOT)/util/release/flynn-release manifest --output=%o manifest_template.json |> bin/manifest.json
-: bin/* |> !docker |>

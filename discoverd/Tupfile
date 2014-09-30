@@ -1,3 +1,0 @@
-include_rules
-: |> !go |> bin/discoverd
-: bin/* |> !docker-layer0 |>

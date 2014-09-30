@@ -1,3 +1,0 @@
-include_rules
-: |> !go |> bin/flynn-test
-: |> !go ./runner |> bin/flynn-test-runner

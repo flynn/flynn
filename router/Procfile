@@ -1,7 +1,0 @@
-# This Procfile boots router's development dependencies
-etcd: etcd
-discoverd: sleep 1; discoverd
-sample_backend: sleep 2; ./examples/server/server :9999
-
-# router you would run yourself during development.
-#router: sleep 2; build/router
