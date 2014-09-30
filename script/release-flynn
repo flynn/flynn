@@ -96,10 +96,15 @@ main() {
     git clone --quiet https://github.com/flynn/flynn "${src}"
   fi
 
-  info "building flynn"
   pushd "${src}" >/dev/null
+
+  info "pulling dependent images"
+  git grep -h "^FROM" **/Dockerfile | cut -d ' ' -f 2 | sort | uniq | xargs -L 1 docker pull
+
+  info "building flynn"
   git checkout --force --quiet $commit
   tup
+
   popd >/dev/null
 
   info "uploading images"
