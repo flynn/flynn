@@ -146,30 +146,86 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 	}
 	t.Assert(res.StatusCode, c.Equals, 200)
 	t.Assert(string(contents), Matches, `Hello to Yahoo from Flynn on port \d+`)
+}
 
-	// request pausing
-	ch := make(chan struct{})
-	go func() {
-		t.Assert(s.Flynn("pause", "http", name+"-web"), Succeeds)
-		ch <- struct{}{}
-	}()
-	select {
-	case <-ch:
-	case <-time.After(time.Second * 5):
-		t.Fatal("flynn pause timed out")
+func (s *SchedulerSuite) TestRoutePauseResume(t *c.C) {
+	r, err := s.client.GetAppRelease("gitreceive")
+	t.Assert(err, c.IsNil)
+	imageID := r.Processes["app"].Env["SLUGRUNNER_IMAGE_ID"]
+
+	app := &ct.App{}
+	t.Assert(s.client.CreateApp(app), c.IsNil)
+
+	artifact := &ct.Artifact{Type: "docker", URI: "https://registry.hub.docker.com/flynn/slugrunner?id=" + imageID}
+	t.Assert(s.client.CreateArtifact(artifact), c.IsNil)
+
+	release := &ct.Release{
+		ArtifactID: artifact.ID,
+		Processes: map[string]ct.ProcessType{
+			"echo": {
+				Ports:      []ct.Port{{Proto: "tcp"}},
+				Cmd:        []string{"sdutil exec -s pausing-service:$PORT socat -v tcp-l:$PORT,fork exec:/bin/cat"},
+				Entrypoint: []string{"sh", "-c"},
+			},
+		},
 	}
-	start := time.Now()
-	go func() {
-		<-time.After(time.Second * 2)
-		t.Assert(s.Flynn("unpause", "http", name+"-web"), Succeeds)
-	}()
-	res, err = client.Do(req)
+	t.Assert(s.client.CreateRelease(release), c.IsNil)
+	t.Assert(s.client.SetAppRelease(app.ID, release.ID), c.IsNil)
+
+	stream, err := s.client.StreamJobEvents(app.ID)
+	defer stream.Close()
 	if err != nil {
 		t.Error(err)
 	}
-	defer res.Body.Close()
+
+	t.Assert(flynn("/", "-a", app.Name, "scale", "echo=1"), Succeeds)
+
+	newRoute := flynn("/", "-a", app.Name, "route", "add", "tcp", "-s", "pausing-service")
+	t.Assert(newRoute, Succeeds)
+	t.Assert(newRoute.Output, Matches, `.+ on port \d+`)
+	str := strings.Split(strings.TrimSpace(string(newRoute.Output)), " ")
+	port := str[len(str)-1]
+
+	waitForJobEvents(t, stream.Events, map[string]int{"echo": 1})
+
+	makeRequest := func() {
+		// use Attempts to give the processes time to start
+		if err := Attempts.Run(func() error {
+			servAddr := routerIP + ":" + port
+			conn, err := net.Dial("tcp", servAddr)
+			defer conn.Close()
+			if err != nil {
+				return err
+			}
+			echo := random.Bytes(16)
+			_, err = conn.Write(echo)
+			if err != nil {
+				return err
+			}
+			reply := make([]byte, 16)
+			_, err = conn.Read(reply)
+			if err != nil {
+				return err
+			}
+			t.Assert(reply, c.DeepEquals, echo)
+			return nil
+		}); err != nil {
+			t.Error(err)
+		}
+	}
+
+	makeRequest()
+	// request pausing
+	t.Assert(flynn("/", "-a", app.Name, "pause", "tcp", "pausing-service"), Succeeds)
+	start := time.Now()
+	go func() {
+		<-time.After(time.Second * 2)
+		t.Assert(flynn("/", "-a", app.Name, "unpause", "tcp", "pausing-service"), Succeeds)
+	}()
+	makeRequest()
 	elapsed := time.Since(start)
 	t.Assert(elapsed > time.Second*2, c.Equals, true)
+	makeRequest()
 }
 
 func (s *SchedulerSuite) TestTCPApp(t *c.C) {
