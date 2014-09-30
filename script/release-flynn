@@ -7,11 +7,17 @@
 # - Install required packages
 #   sudo apt-get install -y s3cmd reprepro dpkg-sig gnupg-agent
 #
+# - Install up-to-date s3cmd so CloudFront invalidation works:
+#   sudo apt-get install -y python-dateutil
+#   wget -O /tmp/s3cmd.deb http://archive.ubuntu.com/ubuntu/pool/universe/s/s3cmd/s3cmd_1.5.0~rc1-2_all.deb
+#   sudo dpkg -i /tmp/s3cmd.deb
+#   rm /tmp/s3cmd.deb
+#
 # - Configure s3cmd
 #   s3cmd --configure
 #
-# - Import flynn-release GPG key
-#   gpg --import < /path/to/flynn-release.gpg
+# - Import GPG key used to sign packages
+#   gpg --import < /path/to/key.gpg
 #
 # - Set large gpg-agent cache expiry
 #   echo -e "default-cache-ttl 4294967295\nmax-cache-ttl 4294967295" | tee ~/.gnupg/gpg-agent.conf
@@ -19,9 +25,12 @@
 # - Start gpg-agent
 #   eval $(gpg-agent --daemon)
 #
-# - Force cache of passphrase by signing something
+# - Trigger cache of passphrase by signing something
 #   export GPG_TTY=`tty`
-#   echo | gpg --sign --yes --use-agent --local-user flynn-release --output /dev/null /dev/stdin
+#   echo | gpg --sign --yes --use-agent --output /dev/null /dev/stdin
+#
+# - Log in to Docker to push images
+#   docker login
 
 set -eo pipefail
 
@@ -87,10 +96,15 @@ main() {
     git clone --quiet https://github.com/flynn/flynn "${src}"
   fi
 
-  info "building flynn"
   pushd "${src}" >/dev/null
+
+  info "pulling dependent images"
+  git grep -h "^FROM" **/Dockerfile | cut -d ' ' -f 2 | sort | uniq | xargs -L 1 docker pull
+
+  info "building flynn"
   git checkout --force --quiet $commit
   tup
+
   popd >/dev/null
 
   info "uploading images"
