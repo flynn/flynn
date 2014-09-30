@@ -13,7 +13,7 @@ import (
 	"net"
 	"sync"
 
-	rpc "github.com/flynn/flynn/pkg/rpcplus"
+	rpc "github.com/shutej/flynn/pkg/rpcplus"
 )
 
 type clientCodec struct {

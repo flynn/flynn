@@ -5,8 +5,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/flynn/flynn/pkg/rpcplus"
-	"github.com/flynn/flynn/pkg/rpcplus/fdrpc"
+	"github.com/shutej/flynn/pkg/rpcplus"
+	"github.com/shutej/flynn/pkg/rpcplus/fdrpc"
 )
 
 type Obj struct {

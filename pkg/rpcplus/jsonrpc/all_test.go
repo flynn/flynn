@@ -12,7 +12,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/flynn/flynn/pkg/rpcplus"
+	"github.com/shutej/flynn/pkg/rpcplus"
 )
 
 type Args struct {
