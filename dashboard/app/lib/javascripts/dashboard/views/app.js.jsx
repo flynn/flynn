@@ -32,6 +32,12 @@ Dashboard.Views.App = React.createClass({
 					<Dashboard.Views.ServiceUnavailable status={503} />
 				) : null }
 
+				{ !app && this.state.notFound ? (
+					<div>
+						<h1>Not found</h1>
+					</div>
+				) : null }
+
 				{app ? (
 					<section className="panel">
 						<Dashboard.Views.AppControls
@@ -97,6 +103,7 @@ Dashboard.Views.App = React.createClass({
 
 		var appState = AppStore.getState(state.appStoreId);
 		state.serviceUnavailable = appState.serviceUnavailable;
+		state.notFound = appState.notFound;
 		state.app = appState.app;
 		state.formation = appState.formation;
 

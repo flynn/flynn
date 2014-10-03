@@ -24,13 +24,20 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 			app: null,
 			release: null,
 			formation: null,
-			serviceUnavailable: false
+			serviceUnavailable: false,
+			notFound: false
 		};
 	},
 
 	didBecomeActive: function () {
 		this.__fetchApp();
-		this.__fetchAppRelease().then(this.__fetchAppFormation.bind(this));
+		this.__fetchAppRelease().then(this.__fetchAppFormation.bind(this)).catch(function (args) {
+			// ignore 404 errors
+			if (args && args[1] && args[1].status === 404) {
+				return;
+			}
+			return Promise.reject(args);
+		});
 	},
 
 	handleEvent: function (event) {
@@ -87,6 +94,10 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 				if (xhr.status === 503) {
 					this.setState({
 						serviceUnavailable: true
+					});
+				} else if (xhr.status === 404) {
+					this.setState({
+						notFound: true
 					});
 				} else {
 					return Promise.reject(args);
