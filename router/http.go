@@ -265,9 +265,18 @@ func (s *HTTPListener) serveTLS(started chan<- error) {
 func (s *HTTPListener) findRouteForHost(host string) *httpRoute {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
-	// TODO: handle wildcard domains
-	backend := s.domains[host]
-	return backend
+	if backend, ok := s.domains[host]; ok {
+		return backend
+	}
+	// handle wildcard domains up to 5 subdomains deep, from most-specific to
+	// least-specific
+	d := strings.SplitN(host, ".", 5)
+	for i := len(d); i > 0; i-- {
+		if backend, ok := s.domains["*."+strings.Join(d[len(d)-i:], ".")]; ok {
+			return backend
+		}
+	}
+	return nil
 }
 
 func fail(sc *httputil.ServerConn, req *http.Request, code int, msg string) {
