@@ -5,7 +5,7 @@
 # PREREQUISITES:
 #
 # - Install required packages
-#   sudo apt-get install -y s3cmd reprepro dpkg-sig gnupg-agent
+#   sudo apt-get install -y reprepro dpkg-sig gnupg-agent
 #
 # - Install up-to-date s3cmd so CloudFront invalidation works:
 #   sudo apt-get install -y python-dateutil
@@ -129,7 +129,22 @@ main() {
   reprepro -b "${apt_dir}" includedeb flynn "${deb}"
 
   info "uploading apt repo"
-  s3cmd sync --acl-public --cf-invalidate --no-preserve "${apt_dir}" $S3_URI
+  # the sync command will output another command to check CloudFront invalidation, so we need to capture that
+  cf_cmd=$(s3cmd sync --acl-public --cf-invalidate --no-preserve "${apt_dir}" $S3_URI | tee /dev/stderr | grep -oP 's3cmd cfinvalinfo cf://\w+/\w+')
+  if [[ "${cf_cmd:0:5}" != "s3cmd" ]]; then
+    fail "could not determine CloudFront invalidation command"
+  fi
+
+  info "waiting for CloudFront invalidation (can take ~10mins)"
+  while true; do
+    local status="$($cf_cmd | grep '^Status' | awk '{print $2}')"
+    if [[ "${status}" = "Completed" ]]; then
+      break
+    fi
+    info "invalidation status is currently ${status}, waiting 10s"
+    sleep 10
+  done
+  info "CloudFront invalidation complete"
 
   info "cleaning up"
   rm -rf "${dir}"
