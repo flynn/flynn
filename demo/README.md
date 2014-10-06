@@ -29,7 +29,7 @@ vagrant up
 ```
 
 If you see an error unpackaging the box, first make sure you are running Vagrant
-v1.6 or later. You may need to install [XZ](http://tukaani.org/xz/) (see [Prerequisites](#Prerequisites)) above.
+v1.6 or later. You may need to install [XZ](http://tukaani.org/xz/) (see [Prerequisites](#prerequisites)) above.
 
 With a successful installation, The final log line contains a `flynn cluster add` command. Paste that line from the console output into your terminal and execute it.
 
