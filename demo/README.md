@@ -3,11 +3,23 @@
 This repo contains a Vagrantfile that boots up Flynn layer 0 and then bootstraps
 Flynn layer 1.
 
-You need to have [VirtualBox](https://www.virtualbox.org/),
-[Vagrant](http://www.vagrantup.com/), and [XZ Utils](http://tukaani.org/xz/)
-installed.
+## Prerequisites
 
-### Setup
+* [VirtualBox](https://www.virtualbox.org/)
+* [Vagrant 1.6 or greater](http://www.vagrantup.com/)
+* [XZ Utils](http://tukaani.org/xz/)
+  * XZ is available on OS X via [Homebrew](http://brew.sh) with `brew install xz`
+  * XZ is available on Ubuntu via `apt-get install xz-utils`
+
+### Install Flynn CLI
+
+Download and install our [Command Line Tools](/cli) by running this command:
+
+```bash
+L=/usr/local/bin/flynn && curl -sL -A "`uname -sp`" https://cli.flynn.io/flynn.gz | zcat >$L && chmod +x $L
+```
+
+### Cluster Setup
 
 Check out this repo, and boot up the VM using Vagrant:
 
@@ -18,18 +30,11 @@ vagrant up
 ```
 
 If you see an error unpackaging the box, first make sure you are running Vagrant
-v1.6 or later. You may need to install `xz` (`brew install xz` or `apt-get
-install xz-utils`).
+v1.6 or later. You may need to install [XZ](http://tukaani.org/xz/) (see [Prerequisites](#prerequisites)) above.
 
-The final log line contains configuration details used to access Flynn via the
-command line tool. Download and install the [CLI](/cli) by running this command:
-
-```bash
-L=/usr/local/bin/flynn && curl -sL -A "`uname -sp`" https://cli.flynn.io/flynn.gz | zcat >$L && chmod +x $L
-```
-
-After installing the `flynn` command, paste the `flynn cluster add` command from
-the Vagrant provisioning log into your terminal.
+With a successful installation, the final log line contains a `flynn cluster
+add` command. Paste that line from the console output into your terminal and
+execute it.
 
 If you run into a `no such host` error when running the command, verify that
 `demo.localflynn.com` resolves to `192.168.84.42` locally. If the domain does
@@ -47,14 +52,15 @@ more info.
 
 ### Usage
 
-With the Flynn running and the `flynn` tool installed, the first thing you'll
+With the Flynn cluster running and the `flynn` tool installed, the first thing you'll
 want to do is add your SSH key so that you can deploy applications:
 
 ```text
 flynn key add
 ```
 
-After adding your ssh key, you can deploy a new application:
+After adding your ssh key, you can deploy an application using git. We have
+a Node.js example for you to try:
 
 ```text
 git clone https://github.com/flynn/nodejs-flynn-example
@@ -66,7 +72,7 @@ git push flynn master
 #### Scale
 
 To access the application, add some web processes using the `scale`
-command:
+command. We'll spin up three processes here:
 
 ```text
 flynn scale web=3
@@ -79,7 +85,15 @@ curl http://example.demo.localflynn.com
 ```
 
 Repeated requests should show that the requests are load balanced across the
-running processes.
+running processes. You can watch the port number change when Flynn directs you
+to a different process:
+
+```text
+Hello from Flynn on port 55007 from container b8ddaba8c0384988bdc4b81e5603f76e
+Hello from Flynn on port 55008 from container b8ddaba8c0384988bdc4b81e5603f76e
+Hello from Flynn on port 55009 from container b8ddaba8c0384988bdc4b81e5603f76e
+Hello from Flynn on port 55007 from container b8ddaba8c0384988bdc4b81e5603f76e
+```
 
 #### Logs
 
