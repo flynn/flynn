@@ -1,0 +1,11 @@
+# Some useful aliases when working on the vagrant box.
+#
+# You can revert to using the built-in commands by escaping these aliases, e.g. to run
+# /usr/bin/flynn-host, use "\flynn-host" which will not use the alias.
+#
+# You may find it useful to add "source /vagrant/script/development-aliases" to ~/.bashrc
+
+alias clean="git clean -Xdf -e '!.tup' -e '!.vagrant'"
+alias flynn="/vagrant/cli/flynn-cli"
+alias flynn-host="/vagrant/host/bin/flynn-host"
+alias flynn-release="/vagrant/util/release/flynn-release"
