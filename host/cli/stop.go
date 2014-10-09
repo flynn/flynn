@@ -9,7 +9,10 @@ import (
 )
 
 func init() {
-	Register("stop", runStop, "usage: flynn-host stop ID...")
+	Register("stop", runStop, `
+usage: flynn-host stop ID...
+
+Stop running jobs`)
 }
 
 func runStop(args *docopt.Args, client *cluster.Client) error {

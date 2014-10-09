@@ -12,7 +12,10 @@ import (
 )
 
 func init() {
-	Register("log", runLog, "usage: flynn-host log [-f|--follow] ID")
+	Register("log", runLog, `
+usage: flynn-host log [-f|--follow] ID
+
+Get the logs of a job`)
 }
 
 func runLog(args *docopt.Args, client *cluster.Client) error {

@@ -15,7 +15,10 @@ import (
 )
 
 func init() {
-	Register("ps", runPs, "usage: flynn-host ps [-a|--all] [-q|--quiet]")
+	Register("ps", runPs, `
+usage: flynn-host ps [-a|--all] [-q|--quiet]
+
+List jobs`)
 }
 
 type sortJobs []host.ActiveJob
