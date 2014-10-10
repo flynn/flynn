@@ -31,7 +31,7 @@ func runPs(args *docopt.Args, client *cluster.Client) error {
 	}
 	if args.Bool["-q"] || args.Bool["--quiet"] {
 		for _, job := range jobs {
-			fmt.Println(job.Job.ID)
+			fmt.Println(clusterJobID(job))
 		}
 		return nil
 	}
