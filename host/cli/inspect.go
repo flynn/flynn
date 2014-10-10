@@ -12,7 +12,10 @@ import (
 )
 
 func init() {
-	Register("inspect", runInspect, "usage: flynn-host inspect ID")
+	Register("inspect", runInspect, `
+usage: flynn-host inspect ID
+
+Get low-level information about a job.`)
 }
 
 func runInspect(args *docopt.Args, client *cluster.Client) error {

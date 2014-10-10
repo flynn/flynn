@@ -53,15 +53,39 @@ options:
 }
 
 func main() {
-	usage := `usage: flynn-host <command> [<args>...]`
+	usage := `usage: flynn-host [-h|--help] <command> [<args>...]
+
+Options:
+  -h, --help                 Show this message
+
+Commands:
+  help                       Show usage for a specific command
+  daemon                     Start the daemon
+  inspect                    Get low-level information about a job
+  log                        Get the logs of a job
+  ps                         List jobs
+  stop                       Stop running jobs
+  upload-debug-info          Upload debug information to an anonymous gist
+
+See 'flynn-host help <command>' for more information on a specific command.
+`
 
 	args, _ := docopt.Parse(usage, nil, true, "", true)
 	cmd := args.String["<command>"]
 	cmdArgs := args.All["<args>"].([]string)
 
+	if cmd == "help" {
+		if len(cmdArgs) == 0 { // `flynn help`
+			fmt.Println(usage)
+			return
+		} else { // `flynn help <command>`
+			cmd = cmdArgs[0]
+			cmdArgs = []string{"--help"}
+		}
+	}
+
 	if err := cli.Run(cmd, cmdArgs); err != nil {
 		log.Fatal(err)
-		return
 	}
 }
 

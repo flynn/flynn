@@ -28,7 +28,10 @@ var debugCmds = [][]string{
 }
 
 func init() {
-	Register("upload-debug-info", runUploadDebugInfo, "usage: flynn-host upload-debug-info")
+	Register("upload-debug-info", runUploadDebugInfo, `
+usage: flynn-host upload-debug-info
+
+Upload debug information to an anonymous gist`)
 }
 
 func runUploadDebugInfo() error {
