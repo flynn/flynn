@@ -129,8 +129,8 @@ The ports 80, 443, and 2222 must be open externally on the firewalls for all
 nodes in the cluster, and the nodes need to be able to communicate with each
 other internally on all ports.
 
-The next step is to configure a Layer 0 cluster. The host daemon finds other
-members of the cluster using the etcd, which needs to be bootstrapped.
+Next, configure a Layer 0 cluster. The host daemon uses etcd for leader
+election, which needs to be aware of all of the other nodes.
 
 If you are starting more than one node, the etcd cluster should be configured
 using a [discovery
