@@ -12,6 +12,7 @@ Usage:
   flynn-release manifest [--output=<dest>] [--id-file=<file>] <template>
   flynn-release download [--driver=<name>] [--root=<path>] <manifest>
   flynn-release upload <manifest> [<tag>]
+  flynn-release vagrant <url> <checksum> <version> <provider>
 
 Options:
   -o --output=<dest>   output destination file ("-" for stdout) [default: -]
@@ -30,5 +31,7 @@ Options:
 		download(args)
 	case args.Bool["upload"]:
 		upload(args)
+	case args.Bool["vagrant"]:
+		vagrant(args)
 	}
 }
