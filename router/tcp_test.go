@@ -100,13 +100,13 @@ func (s *S) TestAddTCPRoute(c *C) {
 
 	r := addTCPRoute(c, l, portInt)
 
-	discoverdRegisterTCP(c, l, portInt, srv1.Addr)
+	discoverdRegisterTCP(c, l, srv1.Addr)
 	defer discoverd.UnregisterAll()
 
 	assertTCPConn(c, addr, "1")
 
 	discoverdUnregister(c, discoverd, "test", srv1.Addr)
-	discoverdRegisterTCP(c, l, portInt, srv2.Addr)
+	discoverdRegisterTCP(c, l, srv2.Addr)
 
 	assertTCPConn(c, addr, "2")
 
@@ -145,7 +145,7 @@ func (s *S) TestInitialTCPSync(c *C) {
 	l, discoverd := newTCPListenerClients(c, etcd, nil)
 	defer l.Close()
 
-	discoverdRegisterTCP(c, l, port, srv.Addr)
+	discoverdRegisterTCP(c, l, srv.Addr)
 	defer discoverd.UnregisterAll()
 
 	assertTCPConn(c, addr, "1")
@@ -163,7 +163,7 @@ func (s *S) TestTCPPortAllocation(c *C) {
 			port := strconv.Itoa(route.Port)
 			ports = append(ports, route.ID)
 			srv := NewTCPTestServer(port)
-			discoverdRegisterTCP(c, l, route.Port, srv.Addr)
+			discoverdRegisterTCP(c, l, srv.Addr)
 
 			assertTCPConn(c, "127.0.0.1:"+port, port)
 			discoverd.UnregisterAll()

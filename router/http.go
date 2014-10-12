@@ -149,19 +149,49 @@ func (s *HTTPListener) RemoveRoute(id string) error {
 	return s.ds.Remove(id)
 }
 
+func (s *HTTPListener) PauseService(name string, pause bool) error {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	if s.closed {
+		return ErrClosed
+	}
+	service, ok := s.services[name]
+	if !ok {
+		return nil
+	}
+	if pause {
+		service.Pause()
+	} else {
+		service.Unpause()
+	}
+	return nil
+}
+
+func (s *HTTPListener) AddDrainListener(name string, ch chan string) {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	srv := s.services[name]
+	srv.listenerMtx.Lock()
+	srv.listeners[ch] = struct{}{}
+	srv.listenerMtx.Unlock()
+}
+
+func (s *HTTPListener) RemoveDrainListener(name string, ch chan string) {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	srv := s.services[name]
+	srv.listenerMtx.Lock()
+	delete(srv.listeners, ch)
+	srv.listenerMtx.Unlock()
+}
+
 type httpSyncHandler struct {
 	l *HTTPListener
 }
 
 func (h *httpSyncHandler) Set(data *router.Route) error {
 	route := data.HTTPRoute()
-	r := &httpRoute{
-		Domain:  route.Domain,
-		Service: route.Service,
-		TLSCert: route.TLSCert,
-		TLSKey:  route.TLSKey,
-		Sticky:  route.Sticky,
-	}
+	r := &httpRoute{HTTPRoute: route}
 
 	if r.TLSCert != "" && r.TLSKey != "" {
 		kp, err := tls.X509KeyPair([]byte(r.TLSCert), []byte(r.TLSKey))
@@ -193,7 +223,15 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 		if err != nil {
 			return err
 		}
-		service = &httpService{name: r.Service, ss: ss, cookieKey: h.l.cookieKey}
+		service = &httpService{
+			name:      r.Service,
+			ss:        ss,
+			cookieKey: h.l.cookieKey,
+			requests:  make(map[string]int32),
+			listeners: make(map[chan string]interface{}),
+			paused:    false,
+		}
+		service.resumeCond = sync.NewCond(service.pauseMtx.RLocker())
 		h.l.services[r.Service] = service
 	}
 	service.refs++
@@ -342,11 +380,7 @@ func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 // A domain served by a listener, associated TLS certs,
 // and link to backend service set.
 type httpRoute struct {
-	Domain  string
-	Service string
-	TLSCert string
-	TLSKey  string
-	Sticky  bool
+	*router.HTTPRoute
 
 	keypair *tls.Certificate
 	service *httpService
@@ -358,12 +392,44 @@ type httpService struct {
 	ss   discoverd.ServiceSet
 	refs int
 
-	cookieKey *[32]byte
+	cookieKey   *[32]byte
+	requests    map[string]int32
+	requestMtx  sync.RWMutex
+	listeners   map[chan string]interface{}
+	listenerMtx sync.RWMutex
+
+	paused     bool
+	pauseMtx   sync.RWMutex
+	resumeCond *sync.Cond
 }
 
-func (s *httpService) getBackend() *httputil.ClientConn {
-	backend, _ := s.connectBackend()
-	return backend
+func (s *httpService) Pause() {
+	s.pauseMtx.Lock()
+	s.paused = true
+	if len(s.requests) == 0 {
+		s.sendEvent("all")
+	}
+	s.pauseMtx.Unlock()
+}
+
+func (s *httpService) Unpause() {
+	s.pauseMtx.Lock()
+	s.paused = false
+	s.pauseMtx.Unlock()
+	s.resumeCond.Broadcast()
+}
+
+func (s *httpService) sendEvent(event string) {
+	s.listenerMtx.RLock()
+	defer s.listenerMtx.RUnlock()
+	for ch := range s.listeners {
+		ch <- event
+	}
+}
+
+func (s *httpService) getBackend() (*httputil.ClientConn, string) {
+	backend, addr := s.connectBackend()
+	return backend, addr
 }
 
 func (s *httpService) connectBackend() (*httputil.ClientConn, string) {
@@ -385,10 +451,10 @@ func (s *httpService) connectBackend() (*httputil.ClientConn, string) {
 
 const stickyCookie = "_backend"
 
-func (s *httpService) getNewBackendSticky() (*httputil.ClientConn, *http.Cookie) {
+func (s *httpService) getNewBackendSticky() (*httputil.ClientConn, string, *http.Cookie) {
 	backend, addr := s.connectBackend()
 	if backend == nil {
-		return nil, nil
+		return nil, "", nil
 	}
 
 	var nonce [24]byte
@@ -400,10 +466,10 @@ func (s *httpService) getNewBackendSticky() (*httputil.ClientConn, *http.Cookie)
 	copy(out, nonce[:])
 	out = secretbox.Seal(out, []byte(addr), &nonce, s.cookieKey)
 
-	return backend, &http.Cookie{Name: stickyCookie, Value: base64.StdEncoding.EncodeToString(out), Path: "/"}
+	return backend, addr, &http.Cookie{Name: stickyCookie, Value: base64.StdEncoding.EncodeToString(out), Path: "/"}
 }
 
-func (s *httpService) getBackendSticky(req *http.Request) (*httputil.ClientConn, *http.Cookie) {
+func (s *httpService) getBackendSticky(req *http.Request) (*httputil.ClientConn, string, *http.Cookie) {
 	cookie, err := req.Cookie(stickyCookie)
 	if err != nil {
 		return s.getNewBackendSticky()
@@ -439,19 +505,26 @@ func (s *httpService) getBackendSticky(req *http.Request) (*httputil.ClientConn,
 	if err != nil {
 		return s.getNewBackendSticky()
 	}
-	return httputil.NewClientConn(backend, nil), nil
+	return httputil.NewClientConn(backend, nil), addr, nil
 }
 
 func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls, sticky bool) (done bool) {
 	req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
 	req.Header.Set("X-Request-Id", random.UUID())
 
+	s.pauseMtx.RLock()
+	if s.paused {
+		s.resumeCond.Wait()
+	}
+	s.pauseMtx.RUnlock()
+
 	var backend *httputil.ClientConn
+	var addr string
 	var stickyCookie *http.Cookie
 	if sticky {
-		backend, stickyCookie = s.getBackendSticky(req)
+		backend, addr, stickyCookie = s.getBackendSticky(req)
 	} else {
-		backend = s.getBackend()
+		backend, addr = s.getBackend()
 	}
 	if backend == nil {
 		log.Println("no backend found")
@@ -460,11 +533,9 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls, st
 	}
 	defer backend.Close()
 
-	if req.Method != "GET" && req.Method != "POST" && req.Method != "HEAD" &&
-		req.Method != "OPTIONS" && req.Method != "PUT" && req.Method != "DELETE" && req.Method != "TRACE" {
-		fail(sc, req, 405, "Method not allowed")
-		return
-	}
+	s.requestMtx.Lock()
+	s.requests[addr]++
+	s.requestMtx.Unlock()
 
 	req.Proto = "HTTP/1.1"
 	req.ProtoMajor = 1
@@ -539,6 +610,17 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls, st
 		<-done
 		return true
 	}
+
+	s.requestMtx.Lock()
+	s.requests[addr]--
+	if s.requests[addr] == 0 {
+		delete(s.requests, addr)
+		s.sendEvent(addr)
+	}
+	if len(s.requests) == 0 {
+		s.sendEvent("all")
+	}
+	s.requestMtx.Unlock()
 
 	return
 }

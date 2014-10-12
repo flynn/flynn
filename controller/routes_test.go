@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"sort"
 	"sync"
 	"time"
@@ -54,7 +55,9 @@ func (r *fakeRouter) GetRoute(id string) (*router.Route, error) {
 	return route, nil
 }
 
-func (r *fakeRouter) SetRoute(*router.Route) error { return nil }
+func (r *fakeRouter) SetRoute(*router.Route) error                             { return nil }
+func (r *fakeRouter) PauseService(t, name string, pause bool) error            { return nil }
+func (r *fakeRouter) StreamServiceDrain(t, name string) (io.ReadCloser, error) { return nil, nil }
 
 type sortedRoutes []*router.Route
 

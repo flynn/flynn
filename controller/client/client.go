@@ -20,6 +20,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client/dialer"
 	"github.com/flynn/flynn/pkg/pinned"
 	"github.com/flynn/flynn/pkg/rpcplus"
+	"github.com/flynn/flynn/pkg/sse"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -296,6 +297,15 @@ func (c *Client) DeleteRoute(appID string, routeID string) error {
 	return c.delete(fmt.Sprintf("/apps/%s/routes/%s", appID, routeID))
 }
 
+func (c *Client) PauseService(t, name string, pause bool) error {
+	q := &router.PauseReq{Paused: pause}
+	return c.put(fmt.Sprintf("/services/%s/%s", t, name), q, nil)
+}
+
+func (c *Client) StreamServiceDrain(t, id string) error {
+	return c.get(fmt.Sprintf("/services/%s/%s/drain", t, id), nil)
+}
+
 func (c *Client) GetFormation(appID, releaseID string) (*ct.Formation, error) {
 	formation := &ct.Formation{}
 	return formation, c.get(fmt.Sprintf("/apps/%s/formations/%s", appID, releaseID), formation)
@@ -316,24 +326,6 @@ func (c *Client) GetApp(appID string) (*ct.App, error) {
 	return app, c.get(fmt.Sprintf("/apps/%s", appID), app)
 }
 
-type sseDecoder struct {
-	*bufio.Reader
-}
-
-// Decode finds the next "data" field and decodes it into v
-func (dec *sseDecoder) Decode(v interface{}) error {
-	for {
-		line, err := dec.ReadBytes('\n')
-		if err != nil {
-			return err
-		}
-		if bytes.HasPrefix(line, []byte("data: ")) {
-			data := bytes.TrimPrefix(line, []byte("data: "))
-			return json.Unmarshal(data, v)
-		}
-	}
-}
-
 type JobEventStream struct {
 	Events chan *ct.JobEvent
 	body   io.ReadCloser
@@ -351,7 +343,7 @@ func (c *Client) StreamJobEvents(appID string) (*JobEventStream, error) {
 	stream := &JobEventStream{Events: make(chan *ct.JobEvent), body: res.Body}
 	go func() {
 		defer close(stream.Events)
-		dec := &sseDecoder{bufio.NewReader(stream.body)}
+		dec := sse.NewDecoder(bufio.NewReader(stream.body))
 		for {
 			event := &ct.JobEvent{}
 			if err := dec.Decode(event); err != nil {
