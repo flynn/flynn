@@ -7,25 +7,24 @@ layout: docs
 
 We welcome and encourage community contributions to Flynn.
 
-Since the project is still unstable, there are specific priorities for development. Pull requests that do not address these priorities will not be accepted until Flynn is production ready.
+Since the project is still unstable, there are specific priorities for development. We will not accept Pull requests that do not address these priorities until Flynn is production ready.
 
-Please familiarize yourself with the Contribution Guidelines and Project Roadmap before contributing.
+Please read these Contribution Guidelines and our [Project Roadmap](/roadmap.html) before contributing.
 
 There are many ways to help Flynn besides contributing code:
 
- - Fix bugs or file issues
+ - [Fix bugs or file issues](https://github.com/flynn/flynn/issues)
  - Improve the [documentation](https://github.com/flynn/flynn.io) including this website
 
 ## Contributing Code
 
-Unless you are fixing a known bug, we **strongly** recommend discussing it with the core team via a GitHub issue, [IRC](irc://irc.freenode.net/flynn), or [email](mailto:contact@flynn.io) before getting started to ensure your work is consistent with Flynn's roadmap and architecture.
+Unless you are fixing a known bug, we **strongly** recommend discussing it with the core team via a [GitHub issue](https://github.com/flynn/flynn/issues), [IRC](irc://irc.freenode.net/flynn), or [email](mailto:contact@flynn.io) before getting started to ensure your work is consistent with Flynn's roadmap and architecture.
 
-All contributions are made via pull request. Note that **all patches from all contributors get reviewed**. After a pull request is made other contributors will offer feedback, and if the patch passes review a maintainer will accept it with a comment. When pull requests fail testing, authors are expected to update their pull requests to address the failures until the tests pass and the pull request merges successfully.
+You should make contributions via pull request. Note that **all patches from all contributors get reviewed**. After a pull request is made, other contributors will offer feedback. If the patch passes review, a maintainer will accept it with a comment. If the pull request fails testing, authors should update their request to address the failures until all tests pass and the pull request can be merged.
 
-At least one review from a maintainer is required for all patches (even patches from other maintainers). If only one maintainer is listed in the MAINTAINERS file, then review is not required for patches from the sole maintainer (however it is encouraged).
+All patches require at least one review from a maintainer (even patches from other maintainers). If the MAINTAINERS file only lists one maintainer, then review is not required for patches from the sole maintainer (but it is encouraged).
 
-Maintainers must demonstrate a consistent track record of recent contributions, as repos with only two maintainers can bottleneck easily due to the review requirements. Only active contributors and reviewers will remain maintainers. Changes in maintainership should not be taken personally, they are purely organizational and for the health of the code and project.
-
+To be a maintainer, you must have a reliable set of recent contributions to the feature you are working on. Repositories with only two maintainers can go stale quickly due to the review requirements. Only active contributors can remain maintainers. Any change in maintainers should not be taken personally. Our only concern is for the health and organization of the code and project.
 
 ## Developer’s Certificate of Origin
 
@@ -80,7 +79,7 @@ For legal reasons, no anonymous or pseudonymous contributions are accepted ([con
 
 ## Pull request procedure
 
-To make a pull request, you will need a Github account; if you are unclear on this process, see Github's documentation on [forking](https://help.github.com/articles/fork-a-repo) and [pull requests](https://help.github.com/articles/using-pull-requests). Pull requests should be targeted at the `master` branch. Before creating a pull request, go through this checklist:
+To make a pull request, you will need a Github account. For help creating a pull request, see Github's documentation on [forking](https://help.github.com/articles/fork-a-repo) and [pull requests](https://help.github.com/articles/using-pull-requests). Pull requests should target the `master` branch. Before creating a pull request, go through this checklist:
 
 1. Create a feature branch off of `master` so that changes do not get mixed up.
 1. [Rebase](http://git-scm.com/book/en/Git-Branching-Rebasing) your local changes against the `master` branch.
@@ -88,13 +87,13 @@ To make a pull request, you will need a Github account; if you are unclear on th
 1. Run `gofmt -s` (if the project is written in Go).
 1. Accept the Developer's Certificate of Origin on all commits (see above).
 
-Pull requests will be treated as "review requests," and maintainers will give feedback on the style and substance of the patch.
+Pull requests are treated as "review requests," and a maintainer will give feedback on the style and content of the patch.
 
-Normally, all pull requests must include tests that test your change. Occasionally, a change will be very difficult to test for. In those cases, please include a note in your commit message explaining why.
+Unless making a change to documentation, all pull requests must include tests that test your change. If you believe a change will be difficult to test for, please include a note in your commit message explaining why.
 
 ## Communication
 
-We use the #flynn IRC channel on [Freenode](irc://chat.freenode.net/flynn). You are welcome to drop in and ask questions, discuss bugs, etc. It is [logged on BotBot.me](https://botbot.me/freenode/flynn/) and you can [connect using webchat](https://webchat.freenode.net/?channels=flynn) if you do not have an IRC client.
+We use the #flynn IRC channel on [Freenode](irc://chat.freenode.net/flynn). You are welcome to drop in and ask questions, discuss bugs, etc. It is [logged on BotBot.me](https://botbot.me/freenode/flynn/) and you can [connect using webchat](https://webchat.freenode.net/?channels=flynn) if you don't have an IRC client.
 
 ## Conduct
 
@@ -104,7 +103,7 @@ Whether you are a regular contributor or a newcomer, we care about making this c
 * Please avoid using nicknames that might detract from a friendly, safe and welcoming environment for all.
 * Be kind and courteous. There is no need to be mean or rude.
 * We will exclude you from interaction if you insult, demean or harass anyone. In particular, we do not tolerate behavior that excludes people in socially marginalized groups.
-* Private harassment is also unacceptable. No matter who you are, if you feel you have been or are being harassed or made uncomfortable by a community member, please contact one of the channel ops or a member of the Flynn core team immediately.
-* Likewise any spamming, trolling, flaming, baiting or other attention-stealing behaviour is not welcome.
+* Private harassment is also unacceptable. No matter who you are, if you feel you are being harassed or made uncomfortable by a community member, please contact one of the channel ops or a member of the Flynn core team immediately.
+* Likewise any spamming, trolling, flaming, baiting or other attention-stealing behavior is not welcome.
 
 We welcome discussion about creating a welcoming, safe, and productive environment for the community. If you have any questions, feedback, or concerns [please let us know](mailto:contact@flynn.io).

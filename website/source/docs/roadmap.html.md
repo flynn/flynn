@@ -5,7 +5,7 @@ layout: docs
 
 # Flynn Roadmap
 
-Flynn will be the one tool that solves ops. But before we can add more features Flynn needs to be stable enough to run in production.
+Flynn will be the fastest and easiest way to deploy apps in your organization with a web dashboard everyone can understand. But before we can add more features, Flynn needs to be stable enough to run in production.
 
 Flynn is currently unstable and not suitable for production environments.
 

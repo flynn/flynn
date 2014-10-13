@@ -1,4 +1,4 @@
-# Welcome to Flynn [![Build Status](https://travis-ci.org/flynn/flynn.svg?branch=master)](https://travis-ci.org/flynn/flynn)
+# Welcome to Flynn! [![Build Status](https://travis-ci.org/flynn/flynn.svg?branch=master)](https://travis-ci.org/flynn/flynn)
 
 [Flynn](https://flynn.io) is a next generation open source Platform as a Service
 (PaaS).
@@ -14,102 +14,75 @@ Flynn components are divided into two _layers_.
 Omega](http://eurosys2013.tudos.org/wp-content/uploads/2013/paper/Schwarzkopf.pdf)
 paper. Layer 0 also includes [service discovery](/discoverd).
 
-**Layer 1** is a set of higher level components that makes it easy to deploy and
+**Layer 1** is a set of higher-level components that makes it easy to deploy and
 maintain applications and databases.
 
 You can learn more about the project at the [Flynn website](https://flynn.io).
 
 ### Status
 
-Flynn is in active development and **currently unsuitable for production** use.
+Flynn is in active development and **currently unsuitable for production use**. We expect to have a stable release available by January 2015.
 
-Users are encouraged to experiment with Flynn but should assume there are
+We're thrilled to see you experiment with Flynn, but you should assume there are
 stability, security, and performance weaknesses throughout the project. This
 warning will be removed when Flynn is ready for production use.
 
-Please **report bugs** as issues on [this
-repository](https://github.com/flynn/flynn/issues) after searching to see if
-anyone has already reported the issue.
+If you do run into a bug, please [search our repository](https://github.com/flynn/flynn/issues) to see if we are already working on a fix. If not, **please create an issue** so we can let you know when it's resolved and make Flynn better for everyone!
 
 ## Getting Started
 
 We have [a web dashboard](https://dashboard.flynn.io) for launching Flynn
 clusters on your Amazon Web Services account.
 
-You can also download a [demo environment](/demo) for your local machine or
+You can also walk through a [demo environment](/demo) for your local machine or
 learn about the components below.
 
-### Trying it out
+## Components
 
-With a Flynn cluster running and the `flynn` tool installed and configured, the
-first thing you'll want to do is add your SSH key so that you can deploy
-applications:
+### Layer 0
 
-```text
-flynn key add
-```
+**[host](/host)** The Flynn host service manages containers on each host
+and provides the scheduling framework.
 
-After adding your ssh key, you can deploy a new application:
+**[discoverd](/discoverd)** The Flynn service discovery system.
 
-```text
-git clone https://github.com/flynn/nodejs-flynn-example
-cd nodejs-flynn-example
-flynn create example
-git push flynn master
-```
+### Layer 1
 
-#### Scale
+**[bootstrap](/bootstrap)** Bootstraps Flynn Layer 1 from a JSON manifest using
+the Layer 0 API.
 
-By default there will be one process running, add some more web processes using
-the `scale` command:
+**[controller](/controller)** Provides management and scheduling of applications
+running on Flynn via an HTTP API.
 
-```text
-flynn scale web=3
-```
+**[gitreceived](/gitreceived)** An SSH server made specifically for accepting git pushes.
 
-Visit the application [in your browser](http://example.demo.localflynn.com) or with curl:
+**[cli](/cli)** Command-line Flynn HTTP API client.
 
-```text
-curl http://example.demo.localflynn.com
-```
+**[receiver](/receiver)** Flynn's git deployer.
 
-Repeated requests should show that the requests are load balanced across the
-running processes.
+**[slugbuilder](/slugbuilder)** Turns a tarball into a Heroku-style "slug" using
+[buildpacks](https://devcenter.heroku.com/articles/buildpacks).
 
-#### Logs
+**[slugrunner](/slugrunner)** Runs Heroku-like
+[slugs](https://devcenter.heroku.com/articles/slug-compiler).
 
-`flynn ps` will show the running processes:
+**[router](/router)** Flynn's TCP/HTTP router/load balancer.
 
-```text
-$ flynn ps
-ID                                             TYPE
-e4cffae4ce2b-8cb1212f582f498eaed467fede768d6f  web
-e4cffae4ce2b-da9c86b1e9e743f2acd5793b151dcf99  web
-e4cffae4ce2b-1b17dd7be8e44ca1a76259a7bca244e1  web
-```
+**[blobstore](/blobstore)** A simple, fast HTTP file service.
 
-To get the log from a process, use `flynn log`:
+**[sdutil](/sdutil)** Service discovery utility for [discoverd](/discoverd).
 
-```text
-$ flynn log e4cffae4ce2b-8cb1212f582f498eaed467fede768d6f
-Listening on 55007
-```
+**[postgresql](/appliance/postgresql)** Flynn
+[PostgreSQL](http://www.postgresql.org/) database appliance.
 
-#### Run
+**[taffy](/taffy)** Taffy pulls git repos and deploys them to Flynn.
 
-An interactive one-off process may be spawned in a container:
+## Manual Ubuntu Deployment
 
-```text
-flynn run bash
-```
+Manual installation is currently supported only on **Ubuntu 14.04 amd64**, but this
+is a temporary packaging limitation. Flynn has no actual dependency on Ubuntu.
 
-
-### Manual Ubuntu Deployment
-
-Currently only Ubuntu 14.04 amd64 is supported for manual installation, but this
-is a temporary packaging limitation, we have no actual dependency on Ubuntu.
-
-If you plan to run a multi-node cluster, you should boot at least 3 nodes to keep etcd efficient
+If you plan to run a multi-node cluster, you should boot at least 3 nodes to keep `etcd` efficient
 (see [here](https://github.com/coreos/etcd/blob/v0.4.6/Documentation/optimal-cluster-size.md) for
 an explanation).
 
@@ -125,12 +98,12 @@ flynn-release download /etc/flynn/version.json
 
 Do this on every host that you want to be in the Flynn cluster.
 
-The ports 80, 443, and 2222 must be open externally on the firewalls for all
+The **ports 80, 443, and 2222 must be open externally** on the firewalls for all
 nodes in the cluster, and the nodes need to be able to communicate with each
-other internally on all ports.
+other internally on *all* ports.
 
-The next step is to configure a Layer 0 cluster. The host daemon finds other
-members of the cluster using the etcd, which needs to be bootstrapped.
+The next step is to configure a *Layer 0* cluster. The host daemon finds other
+members of the cluster using `etcd`, which needs to be bootstrapped.
 
 If you are starting more than one node, the etcd cluster should be configured
 using a [discovery
@@ -171,49 +144,7 @@ The Layer 1 bootstrapper will get all necessary services running using the Layer
 0 API. The final log line will contain configuration that may be used with the
 [command-line interface](/cli).
 
-If you try these instructions and run into issues, please open an issue or pull
-request.
-
-
-## Components
-
-### Layer 0
-
-**[host](/host)** The Flynn host service, manages containers on each host
-and provides the scheduling framework.
-
-**[discoverd](/discoverd)** The Flynn service discovery system.
-
-### Layer 1
-
-**[bootstrap](/bootstrap)** Bootstraps Flynn Layer 1 from a JSON manifest using
-the Layer 0 API.
-
-**[controller](/controller)** Provides management and scheduling of applications
-running on Flynn via an HTTP API.
-
-**[gitreceived](/gitreceived)** An SSH server made specifically for accepting git pushes.
-
-**[cli](/cli)** Command-line Flynn HTTP API client.
-
-**[receiver](/receiver)** Flynn's git deployer.
-
-**[slugbuilder](/slugbuilder)** Turns a tarball into a Heroku-style "slug" using
-[buildpacks](https://devcenter.heroku.com/articles/buildpacks).
-
-**[slugrunner](/slugrunner)** Runs Heroku-like
-[slugs](https://devcenter.heroku.com/articles/slug-compiler).
-
-**[router](/router)** Flynn's TCP/HTTP router/load balancer.
-
-**[blobstore](/blobstore)** A simple, fast HTTP file service.
-
-**[sdutil](/sdutil)** Service discovery utility for [discoverd](/discoverd).
-
-**[postgresql](/appliance/postgresql)** Flynn
-[PostgreSQL](http://www.postgresql.org/) database appliance.
-
-**[taffy](/taffy)** Taffy pulls git repos and deploys them to Flynn.
+If you try these instructions and run into trouble, please [open an issue](https://github.com/flynn/flynn/issues) or pull request. You can also [reach us on IRC](https://webchat.freenode.net/?channels=flynn) at #flynn.
 
 
 ## Contributing
