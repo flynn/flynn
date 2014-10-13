@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -61,6 +62,15 @@ See 'flynn help <command>' for more information on a specific command.
 	if cmd == "help" {
 		if len(cmdArgs) == 0 { // `flynn help`
 			fmt.Println(usage)
+			return
+		} else if cmdArgs[0] == "--json" {
+			cmds := make(map[string]string)
+			for name, cmd := range commands {
+				cmds[name] = cmd.usage
+			}
+			if err := json.NewEncoder(os.Stdout).Encode(cmds); err != nil {
+				log.Fatal(err)
+			}
 			return
 		} else { // `flynn help <command>`
 			cmd = cmdArgs[0]
