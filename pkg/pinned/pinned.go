@@ -10,6 +10,8 @@ import (
 	"net"
 )
 
+// A Config structure provides pinning and TLS connection information used to
+// dial a server. A Config may be reused, the pinned package will not modify it.
 type Config struct {
 	// Hash specifies the hash function to use to check the Pin, it defaults to
 	// sha256.New.
@@ -22,6 +24,8 @@ type Config struct {
 	Config *tls.Config
 }
 
+// ErrPinFailure is returned by Config.Dial if the TLS handshake succeeded but
+// the peer certificate did not match the pin.
 var ErrPinFailure = errors.New("pinned: the peer leaf certificate did not match the provided pin")
 
 // Dial establishes a TLS connection to addr and checks the peer leaf
@@ -65,11 +69,16 @@ func (c *Config) Dial(network, addr string) (net.Conn, error) {
 	return conn, nil
 }
 
+// A Conn represents a secured connection. It implements the net.Conn interface.
 type Conn struct {
+	// Conn is the actual TLS connection.
 	*tls.Conn
+
+	// Wire is the network connection underlying the TLS connection.
 	Wire net.Conn
 }
 
+// CloseWrite shuts down the writing side of the connection.
 func (c Conn) CloseWrite() error {
 	if cw, ok := c.Wire.(interface {
 		CloseWrite() error
