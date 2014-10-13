@@ -20,8 +20,35 @@ Manage app releases.
 Options:
    -t <type>          type of the release. Currently only 'docker' is supported. [default: docker]
    -f, --file <file>  release configuration file
+
 Commands:
    add   add a new release
+
+      Create a new release from a Docker image.
+
+      The optional file argument takes a path to a file containing release
+      configuration in a JSON format. It's primarily used for specifying the
+      release environment and processes (similar to a Procfile). It can take any
+      of the arguments the controller Release type can take.
+
+Examples:
+
+   Release an echo server using the flynn/slugbuilder image as a base, running socat.
+
+   $ cat config.json
+	{
+		"env": {"MY_VAR": "Hello World, this will be available in all process types."},
+		"processes": {
+			"echo": {
+				"cmd": ["socat -v tcp-l:$PORT,fork exec:/bin/cat"],
+				"entrypoint": ["sh", "-c"],
+				"env": {"ECHO": "This var is specific to the echo process type."},
+				"ports": [{"proto": "tcp"}]
+			}
+		}
+	}
+   $ flynn release add -f config.json https://registry.hub.docker.com/flynn/slugbuilder?id=15d72b7f573b
+   Created release f55fde802170.
 `)
 }
 
