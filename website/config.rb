@@ -73,3 +73,26 @@ configure :build do
   activate :asset_hash
   activate :gzip
 end
+
+# Do the equivalent of nginx "try_files $uri $uri.html" in development
+class HTMLRedirect < Struct.new(:app)
+  def call(env)
+    status, headers, body = app.call(env)
+
+    if status == 404 && env["PATH_INFO"] !~ /.html\Z/
+      return redirect("#{env["PATH_INFO"]}.html")
+    end
+
+    [status, headers, body]
+  end
+
+  def redirect(path)
+    [
+      301,
+      { "Location" => path },
+      [%{You are being redirected to <a href="#{path}">#{path}</a>}]
+    ]
+  end
+end
+
+use HTMLRedirect
