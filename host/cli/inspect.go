@@ -48,6 +48,9 @@ func printJobDesc(job *host.ActiveJob, out io.Writer) {
 	for k, v := range job.Job.Metadata {
 		listRec(w, k, v)
 	}
+	for k, v := range job.Job.Config.Env {
+		listRec(w, fmt.Sprintf("ENV[%s]", k), v)
+	}
 }
 
 func listRec(w io.Writer, a ...interface{}) {
