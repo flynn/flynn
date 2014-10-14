@@ -24,8 +24,15 @@ All contributions are made via pull request. Note that **all patches from all co
 
 At least one review from a maintainer is required for all patches (even patches from other maintainers). If only one maintainer is listed in the MAINTAINERS file, then review is not required for patches from the sole maintainer (however it is encouraged).
 
-Maintainers must demonstrate a consistent track record of recent contributions, as repos with only two maintainers can bottleneck easily due to the review requirements. Only active contributors and reviewers will remain maintainers. Changes in maintainership should not be taken personally, they are purely organizational and for the health of the code and project.
+Maintainers must demonstrate a consistent track record of recent contributions, as components with only two maintainers can bottleneck easily due to the review requirements. Only active contributors and reviewers will remain maintainers. Changes in maintainership should not be taken personally, they are purely organizational and for the health of the code and project.
 
+
+## Code Style
+
+Please follow these guidelines when formatting source code:
+
+* Go code should match the output of `gofmt -s`
+* Shell scripts should adhere to the [Google Shell Style guide](https://google-styleguide.googlecode.com/svn/trunk/shell.xml)
 
 ## Developer’s Certificate of Origin
 
@@ -87,6 +94,7 @@ To make a pull request, you will need a GitHub account; if you are unclear on th
 1. Run the full project test suite with the `go test ./...` (or equivalent) command and confirm that it passes.
 1. Run `gofmt -s` (if the project is written in Go).
 1. Accept the Developer's Certificate of Origin on all commits (see above).
+1. Ensure that each commit has a subsystem prefix (ex: `controller: `).
 
 Pull requests will be treated as "review requests," and maintainers will give feedback on the style and substance of the patch.
 
