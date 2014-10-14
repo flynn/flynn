@@ -19,7 +19,7 @@ the creation of the VM.
 
 ### Running the development VM
 
-If you don't already have Virtualbox and Vagrant installed, you should
+If you don't already have VirtualBox and Vagrant installed, you should
 install them by following the directions on their respective web sites.
 
 Clone the Flynn source code locally:
