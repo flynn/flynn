@@ -106,73 +106,8 @@ flynn run bash
 
 ### Manual Ubuntu Deployment
 
-Currently only Ubuntu 14.04 amd64 is supported for manual installation, but this
-is a temporary packaging limitation, we have no actual dependency on Ubuntu.
-
-If you plan to run a multi-node cluster, you should boot at least 3 nodes to keep etcd efficient
-(see [here](https://github.com/coreos/etcd/blob/v0.4.6/Documentation/optimal-cluster-size.md) for
-an explanation).
-
-The first step is to install the `flynn-host` package and container images:
-
-```text
-apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv BC79739C507A9B53BB1B0E7D820A5489998D827B
-echo deb https://dl.flynn.io/ubuntu flynn main > /etc/apt/sources.list.d/flynn.list
-apt-get update
-apt-get install -y linux-image-extra-$(uname -r) flynn-host
-flynn-release download /etc/flynn/version.json
-```
-
-Do this on every host that you want to be in the Flynn cluster.
-
-The ports 80, 443, and 2222 must be open externally on the firewalls for all
-nodes in the cluster, and the nodes need to be able to communicate with each
-other internally on all ports.
-
-Next, configure a Layer 0 cluster. The host daemon uses etcd for leader
-election, which needs to be aware of all of the other nodes.
-
-If you are starting more than one node, the etcd cluster should be configured
-using a [discovery
-token](https://coreos.com/docs/cluster-management/setup/etcd-cluster-discovery/).
-Get a token [from here](https://discovery.etcd.io/new) and add a line like this
-to `/etc/init/flynn-host.conf` on every host:
-
-```text
-env ETCD_DISCOVERY=https://discovery.etcd.io/00000000000000000000000000000000
-```
-
-**Note:** a new token must be used every time you restart all nodes in the
-cluster.
-
-Then, start the daemon by running `start flynn-host`.
-
-After you have a running Layer 0 cluster, bootstrap Layer 1 with
-`flynn-bootstrap`. You'll need a domain name with DNS A records pointing to
-every node IP address and a second, wildcard domain CNAME to the cluster domain.
-
-**Example**
-
-```text
-demo.localflynn.com.    A      192.168.84.42
-*.demo.localflynn.com.  CNAME  demo.localflynn.com.
-```
-
-`CONTROLLER_DOMAIN` and `DEFAULT_ROUTE_DOMAIN` should be set to the two
-respective domains.
-
-```text
-  CONTROLLER_DOMAIN=demo.localflynn.com \
-  DEFAULT_ROUTE_DOMAIN=demo.localflynn.com \
-  flynn-bootstrap /etc/flynn/bootstrap-manifest.json
-```
-
-The Layer 1 bootstrapper will get all necessary services running using the Layer
-0 API. The final log line will contain configuration that may be used with the
-[command-line interface](/cli).
-
-If you try these instructions and run into issues, please open an issue or pull
-request.
+Instructions on manually installing and running Flynn can be found
+[here](https://flynn.io/docs/installation).
 
 
 ## Components
