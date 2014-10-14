@@ -19,7 +19,7 @@ the creation of the VM.
 
 ### Running the development VM
 
-If you don't already have Virtualbox and Vagrant installed, you should
+If you don't already have VirtualBox and Vagrant installed, you should
 install them by following the directions on their respective web sites.
 
 Clone the Flynn source code locally:
@@ -57,7 +57,7 @@ The development VM has a `GOPATH` of `$HOME/go` and the Flynn source code is sym
 `/vagrant` to `$GOPATH/src/github.com/flynn/flynn`.
 
 If you don't have a specific issue you are trying to fix, but are interested in contributing
-to the project, you should start by looking at Github issues labelled
+to the project, you should start by looking at GitHub issues labelled
 [easy](https://github.com/flynn/flynn/labels/easy).
 
 ## Building Flynn
@@ -71,13 +71,13 @@ To kickoff the build process, just run `tup`:
 $ tup
 ```
 
-This will do things like build go binaries and create docker images. If you're interested in
+This will do things like build Go binaries and create Docker images. If you're interested in
 exactly what `tup` will build, take a look at the `Tupfiles` in various subdirectories.
 
 If any build command fails, `tup` will output an error and abort the entire build. You can then
 fix the issue and then re-run `tup`.
 
-If you want to rebuild all go binaries, `tup` has no equivalent of `make clean`, so
+If you want to rebuild all Go binaries, `tup` has no equivalent of `make clean`, so
 you will need to run `git clean` before running `tup`. We have an alias for doing this:
 
 ```
@@ -92,7 +92,7 @@ available:
 source /vagrant/script/development-aliases
 ```
 
-Once tup runs successfully, you will have a number of built go binaries and docker images which
+Once tup runs successfully, you will have a number of built Go binaries and Docker images which
 can be used to run Flynn.
 
 ## Running Flynn
@@ -269,7 +269,7 @@ $ script/run-integration-tests TestBasic
 ## Pull request
 
 Once you have made changes to the Flynn source code and tested your changes, you
-should open a pull request on Github so we can review your changes and merge
+should open a pull request on GitHub so we can review your changes and merge
 them into the Flynn repository.
 
 Please see the [contribution guide](/docs/contributing) for more information.
