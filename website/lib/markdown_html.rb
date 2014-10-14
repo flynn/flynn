@@ -41,7 +41,9 @@ class Middleman::Renderers::MiddlemanRedcarpetHTML
   end
 
   def header(text, level)
-    el("h#{level}", text, id: anchor(text))
+    link = el('a', el('span', '§'), name: anchor(text), href: "#" + anchor(text), class: "anchor")
+
+    el("h#{level}", link + text)
   end
 end
 
