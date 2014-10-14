@@ -68,9 +68,11 @@ See 'flynn help <command>' for more information on a specific command.
 			for name, cmd := range commands {
 				cmds[name] = cmd.usage
 			}
-			if err := json.NewEncoder(os.Stdout).Encode(cmds); err != nil {
+			out, err := json.MarshalIndent(cmds, "", "\t")
+			if err != nil {
 				log.Fatal(err)
 			}
+			fmt.Println(out)
 			return
 		} else { // `flynn help <command>`
 			cmd = cmdArgs[0]
