@@ -71,13 +71,13 @@ To kickoff the build process, just run `tup`:
 $ tup
 ```
 
-This will do things like build go binaries and create Docker images. If you're interested in
+This will do things like build Go binaries and create Docker images. If you're interested in
 exactly what `tup` will build, take a look at the `Tupfiles` in various subdirectories.
 
 If any build command fails, `tup` will output an error and abort the entire build. You can then
 fix the issue and then re-run `tup`.
 
-If you want to rebuild all go binaries, `tup` has no equivalent of `make clean`, so
+If you want to rebuild all Go binaries, `tup` has no equivalent of `make clean`, so
 you will need to run `git clean` before running `tup`. We have an alias for doing this:
 
 ```
@@ -92,7 +92,7 @@ available:
 source /vagrant/script/development-aliases
 ```
 
-Once tup runs successfully, you will have a number of built go binaries and Docker images which
+Once tup runs successfully, you will have a number of built Go binaries and Docker images which
 can be used to run Flynn.
 
 ## Running Flynn
