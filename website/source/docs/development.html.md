@@ -57,7 +57,7 @@ The development VM has a `GOPATH` of `$HOME/go` and the Flynn source code is sym
 `/vagrant` to `$GOPATH/src/github.com/flynn/flynn`.
 
 If you don't have a specific issue you are trying to fix, but are interested in contributing
-to the project, you should start by looking at Github issues labelled
+to the project, you should start by looking at GitHub issues labelled
 [easy](https://github.com/flynn/flynn/labels/easy).
 
 ## Building Flynn
@@ -269,7 +269,7 @@ $ script/run-integration-tests TestBasic
 ## Pull request
 
 Once you have made changes to the Flynn source code and tested your changes, you
-should open a pull request on Github so we can review your changes and merge
+should open a pull request on GitHub so we can review your changes and merge
 them into the Flynn repository.
 
 Please see the [contribution guide](/docs/contributing) for more information.

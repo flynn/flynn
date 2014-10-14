@@ -11,4 +11,4 @@ Everyone on our team is a major contributor to open source from creating SuperHa
 
 We thank the organizations and individuals who already sponsored Flynn, the Lockitron team for creating Selfstarter, the dotCloud team for the creation of Docker and their incredible moral and technical support, and the growing community who have reached out since we launched. We are honored by the opportunity to contribute back something as substantial as Flynn and look forward to the opportunity to serve the needs of the community. 
 
-We plan to ship an MVP by the end of October. Until then stay tuned to Github, this blog, our mailing list, and IRC channel for the latest on our progress.
+We plan to ship an MVP by the end of October. Until then stay tuned to GitHub, this blog, our mailing list, and IRC channel for the latest on our progress.
