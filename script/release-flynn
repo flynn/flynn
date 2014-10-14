@@ -34,6 +34,9 @@
 
 set -eo pipefail
 
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "${ROOT}/script/lib/ui.sh"
+
 # S3_URI must have a trailing slash
 S3_URI="s3://flynn/ubuntu/"
 
@@ -76,8 +79,7 @@ main() {
   fi
 
   local commit=$1
-  local root="$(cd "$(dirname "$0")/.." && pwd)"
-  local flynn_release="${root}/util/release/flynn-release"
+  local flynn_release="${ROOT}/util/release/flynn-release"
 
   info "checking commit status"
   if ! "${flynn_release}" status $commit; then
@@ -119,7 +121,7 @@ main() {
   info "building deb package"
   local iteration=$(find "${apt_dir}" -name "flynn-host_$(date +%Y%m%d)*.deb" | wc -l)
   rm -f "${src}"/*.deb
-  "${root}/script/build-deb" -d "${src}" -i $iteration
+  "${ROOT}/script/build-deb" -d "${src}" -i $iteration
 
   info "signing deb package"
   local deb=$(ls "${src}"/*.deb)
@@ -150,18 +152,6 @@ main() {
   rm -rf "${dir}"
 
   info "done!"
-}
-
-info() {
-  local msg=$1
-  local timestamp=$(date +%H:%M:%S.%3N)
-  echo "===> $timestamp $msg"
-}
-
-fail() {
-  local msg=$1
-  info "ERROR: ${msg}" >&2
-  exit 1
 }
 
 main $@

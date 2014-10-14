@@ -2,16 +2,17 @@
 
 set -e
 
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
 main() {
   local test_to_run=$1
-  local root="$(cd "$(dirname "$0")/.." && pwd)"
-  local flynn="${root}/cli/flynn-cli"
+  local flynn="${ROOT}/cli/flynn-cli"
 
-  pushd $root >/dev/null
+  pushd "${ROOT}" >/dev/null
   tup
   popd >/dev/null
 
-  cluster_add=$("${root}/script/bootstrap-flynn" &> >(tee /dev/stderr) | tail -1)
+  cluster_add=$("${ROOT}/script/bootstrap-flynn" &> >(tee /dev/stderr) | tail -1)
 
   if [ "${cluster_add:0:17}" != "flynn cluster add" ]; then
     echo Bootstrap failed >&2
@@ -22,7 +23,7 @@ main() {
   "${flynn}" cluster remove default
   "${flynn}" ${cluster_add:6}
 
-  cd "${root}/test"
+  cd "${ROOT}/test"
 
   test_args="--flynnrc $FLYNNRC --cli "${flynn}" --debug"
   if [ -n "${test_to_run}" ]; then
