@@ -9,6 +9,7 @@ gem "builder"
 
 gem 'redcarpet'
 gem 'pygments.rb'
+gem 'activesupport'
 
 gem 'fly', :git => 'git://github.com/cupcake/fly.git', :branch => 'flynn'
 gem "cupcake-icons", :git => "git://github.com/cupcake/cupcake-icons.git", :branch => "master"
