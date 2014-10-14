@@ -39,13 +39,27 @@ func runInspect(args *docopt.Args, client *cluster.Client) error {
 func printJobDesc(job *host.ActiveJob, out io.Writer) {
 	w := tabwriter.NewWriter(out, 1, 2, 2, ' ', 0)
 	defer w.Flush()
-	fmt.Fprintln(w, "ID\t", clusterJobID(*job))
-	fmt.Fprintln(w, "Status\t", job.Status)
-	fmt.Fprintln(w, "StartedAt\t", job.StartedAt)
-	fmt.Fprintln(w, "EndedAt\t", job.EndedAt)
-	fmt.Fprintln(w, "ExitStatus\t", job.ExitStatus)
-	fmt.Fprintln(w, "IP Address\t", job.InternalIP)
+	listRec(w, "ID", clusterJobID(*job))
+	listRec(w, "Status", job.Status)
+	listRec(w, "StartedAt", job.StartedAt)
+	listRec(w, "EndedAt", job.EndedAt)
+	listRec(w, "ExitStatus", job.ExitStatus)
+	listRec(w, "IP Address", job.InternalIP)
 	for k, v := range job.Job.Metadata {
-		fmt.Fprintln(w, k, "\t", v)
+		listRec(w, k, v)
+	}
+	for k, v := range job.Job.Config.Env {
+		listRec(w, fmt.Sprintf("ENV[%s]", k), v)
+	}
+}
+
+func listRec(w io.Writer, a ...interface{}) {
+	for i, x := range a {
+		fmt.Fprint(w, x)
+		if i+1 < len(a) {
+			w.Write([]byte{'\t'})
+		} else {
+			w.Write([]byte{'\n'})
+		}
 	}
 }
