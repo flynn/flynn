@@ -1,5 +1,16 @@
 namespace :assets do
-  task :precompile do
+  task :precompile => :copy_contributing do
     sh 'bundle exec middleman build'
   end
+end
+
+task :copy_contributing do
+  source = <<EOF
+---
+title: Contributing
+layout: docs
+---
+EOF
+  source << File.read("../CONTRIBUTING.md")
+  File.write("source/docs/contributing.html.md", source)
 end
