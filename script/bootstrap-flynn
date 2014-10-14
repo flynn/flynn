@@ -2,6 +2,9 @@
 
 set -e
 
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "${ROOT}/script/lib/ui.sh"
+
 usage() {
   cat <<USAGE >&2
 usage: $0 [options]
@@ -12,7 +15,6 @@ OPTIONS:
   -i IP         The external IP address to bind to [default: the IP assigned to eth0]
 USAGE
 }
-
 
 main() {
   local backend ip
@@ -36,12 +38,12 @@ main() {
     esac
   done
 
-  backend=${backend:-libvirt-lxc}
+  backend=${backend:-"libvirt-lxc"}
   ip=${ip:-$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')}
 
   export DISCOVERD="${ip}:1111"
   export CONTROLLER_DOMAIN="dev.localflynn.com"
-  export DEFAULT_ROUTE_DOMAIN="$CONTROLLER_DOMAIN"
+  export DEFAULT_ROUTE_DOMAIN="${CONTROLLER_DOMAIN}"
 
   case "${backend}" in
     libvirt-lxc)
@@ -57,18 +59,12 @@ main() {
   esac
 }
 
-info() {
-  local msg=$1
-  echo "==> $msg"
-}
-
 boot_libvirt_lxc() {
   local ip=$1
-  local root="$(cd "$(dirname "$0")/.." && pwd)"
-  local host_dir="${root}/host"
-  local bootstrap_dir="${root}/bootstrap"
+  local host_dir="${ROOT}/host"
+  local bootstrap_dir="${ROOT}/bootstrap"
 
-  info "Killing running flynn-host, if any"
+  info "killing running flynn-host, if any"
   sudo start-stop-daemon \
     --stop \
     --oknodo \
@@ -77,7 +73,7 @@ boot_libvirt_lxc() {
 
   local log="/tmp/flynn-host-$(date +%Y-%m-%dT%H-%M-%S.%N).log"
   ln -nfs $log /tmp/flynn-host.log
-  info "Starting flynn-host (logging to $log)"
+  info "starting flynn-host (logging to $log)"
   sudo start-stop-daemon \
     --start \
     --background \
@@ -93,20 +89,20 @@ boot_libvirt_lxc() {
     --flynn-init "${host_dir}/bin/flynn-init" \
     &>$log
 
-  info "Bootstrapping Flynn"
+  info "bootstrapping Flynn"
   "${bootstrap_dir}/bin/flynn-bootstrap" "${bootstrap_dir}/bin/manifest.json"
 }
 
 boot_docker() {
   local ip=$1
 
-  info "Killing running flynn-host, if any"
+  info "killing running flynn-host, if any"
   local host=$(docker ps | grep flynn-host | cut -d" " -f 1)
   if [ -n "$host" ]; then
     docker stop $host >/dev/null
   fi
 
-  info "Starting flynn-host"
+  info "starting flynn-host"
   docker run \
     --detach \
     --volume /var/run/docker.sock:/var/run/docker.sock \
@@ -116,7 +112,7 @@ boot_docker() {
     --force \
     --backend docker
 
-  info "Bootstrapping Flynn"
+  info "bootstrapping Flynn"
   docker run \
     --env DISCOVERD="${DISCOVERD}" \
     --env CONTROLLER_DOMAIN="${CONTROLLER_DOMAIN}" \
