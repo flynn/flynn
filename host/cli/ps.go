@@ -77,9 +77,21 @@ func jobList(client *cluster.Client, all bool) (sortJobs, error) {
 func printJobs(jobs sortJobs, out io.Writer) {
 	w := tabwriter.NewWriter(out, 1, 2, 2, ' ', 0)
 	defer w.Flush()
-	fmt.Fprintln(w, "ID\tSTATE\tSTARTED\tCONTROLLER APP\tCONTROLLER TYPE")
+	listRec(w,
+		"ID",
+		"STATE",
+		"STARTED",
+		"CONTROLLER APP",
+		"CONTROLLER TYPE",
+	)
 	for _, job := range jobs {
-		fmt.Fprintf(w, "%s\t%s\t%s ago\t%s\t%s\n", clusterJobID(job), job.Status, units.HumanDuration(time.Now().UTC().Sub(job.StartedAt)), job.Job.Metadata["flynn-controller.app_name"], job.Job.Metadata["flynn-controller.type"])
+		listRec(w,
+			clusterJobID(job),
+			job.Status,
+			units.HumanDuration(time.Now().UTC().Sub(job.StartedAt))+" ago",
+			job.Job.Metadata["flynn-controller.app_name"],
+			job.Job.Metadata["flynn-controller.type"],
+		)
 	}
 }
 
