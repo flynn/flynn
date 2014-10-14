@@ -45,6 +45,9 @@ main() {
   export CONTROLLER_DOMAIN="dev.localflynn.com"
   export DEFAULT_ROUTE_DOMAIN="${CONTROLLER_DOMAIN}"
 
+  # kill flynn first
+  "${ROOT}/script/kill-flynn" -b "${backend}"
+
   case "${backend}" in
     libvirt-lxc)
       boot_libvirt_lxc $ip
@@ -64,16 +67,10 @@ boot_libvirt_lxc() {
   local host_dir="${ROOT}/host"
   local bootstrap_dir="${ROOT}/bootstrap"
 
-  info "killing running flynn-host, if any"
-  sudo start-stop-daemon \
-    --stop \
-    --oknodo \
-    --retry 15 \
-    --exec "${host_dir}/bin/flynn-host"
-
   local log="/tmp/flynn-host-$(date +%Y-%m-%dT%H-%M-%S.%N).log"
-  ln -nfs $log /tmp/flynn-host.log
-  info "starting flynn-host (logging to $log)"
+  ln -nfs "${log}" /tmp/flynn-host.log
+  info "starting flynn-host (libvirt-lxc backend)"
+  info "forwarding daemon output to ${log}"
   sudo start-stop-daemon \
     --start \
     --background \
@@ -87,7 +84,7 @@ boot_libvirt_lxc() {
     --backend libvirt-lxc \
     --state /tmp/flynn-host-state.json \
     --flynn-init "${host_dir}/bin/flynn-init" \
-    &>$log
+    &>"${log}"
 
   info "bootstrapping Flynn"
   "${bootstrap_dir}/bin/flynn-bootstrap" "${bootstrap_dir}/bin/manifest.json"
@@ -96,13 +93,7 @@ boot_libvirt_lxc() {
 boot_docker() {
   local ip=$1
 
-  info "killing running flynn-host, if any"
-  local host=$(docker ps | grep flynn-host | cut -d" " -f 1)
-  if [ -n "$host" ]; then
-    docker stop $host >/dev/null
-  fi
-
-  info "starting flynn-host"
+  info "starting flynn-host (docker backend)"
   docker run \
     --detach \
     --volume /var/run/docker.sock:/var/run/docker.sock \
