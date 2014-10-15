@@ -5,6 +5,7 @@ gem "middleman-more"
 gem "middleman-blog"
 
 gem "builder"
+gem "rake"
 
 gem 'redcarpet'
 gem 'pygments.rb'
