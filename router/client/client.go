@@ -14,6 +14,7 @@ import (
 	"github.com/flynn/flynn/router/types"
 )
 
+// New uses the default discoverd client and returns a client.
 func New() (Client, error) {
 	if err := discoverd.Connect(""); err != nil {
 		return nil, err
@@ -21,6 +22,7 @@ func New() (Client, error) {
 	return NewWithDiscoverd("", discoverd.DefaultClient), nil
 }
 
+// NewWithDiscoverd uses the provided discoverd client and returns a client.
 func NewWithDiscoverd(name string, dc dialer.DiscoverdClient) Client {
 	if name == "" {
 		name = "router"
@@ -33,18 +35,29 @@ func NewWithDiscoverd(name string, dc dialer.DiscoverdClient) Client {
 	return c
 }
 
+// Client is a client for the router API.
 type Client interface {
+	// CreateRoute creates a new route.
 	CreateRoute(*router.Route) error
+	// SetRoute updates an existing route. If the route does not exist, it
+	// creates a new one.
 	SetRoute(*router.Route) error
+	// DeleteRoute deletes the route with the specified id.
 	DeleteRoute(id string) error
+	// GetRoute returns a route with the specified id.
 	GetRoute(id string) (*router.Route, error)
+	// ListRoutes returns a list of routes. If parentRef is not empty, routes
+	// are filtered by the reference (ex: "controller/apps/myapp").
 	ListRoutes(parentRef string) ([]*router.Route, error)
 	// Closer allows closing the underlying transport connection.
 	io.Closer
 }
 
+// ErrNotFound is returned when no route was found.
 var ErrNotFound = errors.New("router: route not found")
 
+// HTTPError is returned when the server returns a status code that is different
+// from 200, which is normally caused by an error.
 type HTTPError struct {
 	Response *http.Response
 }
