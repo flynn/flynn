@@ -185,3 +185,35 @@ li[class*="icn-"] {
     text-decoration: none;
   }
 }
+
+h1, h2, h3, h4, h5, h6 {
+  position: relative;
+
+  .anchor {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    margin-left: -12px;
+    padding-right: 6px;
+    padding-left: 12px;
+    font-size: 16px;
+    outline: 0;
+
+    &:hover {
+      text-decoration: none;
+    }
+
+    span {
+      display: none;
+    }
+  }
+
+  &:hover .anchor {
+    padding-left: 0;
+
+    span {
+      display: inline-block;
+    }
+  }
+}
