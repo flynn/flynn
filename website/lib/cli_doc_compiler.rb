@@ -20,7 +20,7 @@ module Processor
   def self.preprocess(section)
     case section[:title]
     when /Options/
-      output = [' Flag | Description', ':------|:--------']
+      output = [' Flag | Description', '------|--------']
       section[:content].each_line do |line|
         line = line.strip
         next if line.empty?
