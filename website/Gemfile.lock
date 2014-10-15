@@ -123,6 +123,7 @@ GEM
     rack-test (0.6.2)
       rack (>= 1.0)
     raindrops (0.13.0)
+    rake (10.3.2)
     rb-fsevent (0.9.4)
     rb-inotify (0.9.5)
       ffi (>= 0.5.0)
@@ -166,6 +167,7 @@ DEPENDENCIES
   middleman-livereload (~> 3.1.0)
   middleman-more
   pygments.rb
+  rake
   react-jsx-sprockets!
   redcarpet
   unicorn
