@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 
@@ -38,7 +39,8 @@ type Client interface {
 	DeleteRoute(id string) error
 	GetRoute(id string) (*router.Route, error)
 	ListRoutes(parentRef string) ([]*router.Route, error)
-	Close() error
+	// Closer allows closing the underlying transport connection.
+	io.Closer
 }
 
 var ErrNotFound = errors.New("router: route not found")
