@@ -20,7 +20,7 @@ module MarkdownHelpers
       text = m[1]
     end
 
-    text.downcase.strip.gsub(/[^a-z0-9 ]/, '').gsub(/\s+/, '-')
+    text.downcase.strip.gsub(/<\/?[^>]*>`/, '').gsub(/\s+/, '-')
   end
 
   def el(el, content, attributes = {})
