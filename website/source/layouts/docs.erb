@@ -20,7 +20,11 @@
             <li class='nav-header'>Page Contents</li>
           </ul>
 
-          <%= Redcarpet::Markdown.new(MarkdownHTMLTOC).render(File.read(current_page.source_file)) %>
+          <%=
+            renderer = Redcarpet::Markdown.new(Redcarpet::Render::HTML_TOC.new(nesting_level: current_resource.data.toc_level || 6))
+            contents = File.read(current_page.source_file).gsub(/\A(---\s*\n.*?\n?)^(---\s*$\n?)/m, '') # strip out YAML frontmatter
+            renderer.render(contents)
+          %>
         </nav>
         <div class="content-with-sidebar">
           <%= yield %>

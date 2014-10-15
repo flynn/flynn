@@ -10,7 +10,8 @@ REDCARPET_EXTENTIONS = {
   strikethrough: true,
   lax_html_blocks: true,
   space_after_headers: true,
-  superscript: true
+  superscript: true,
+  #with_toc_data: true
 }.freeze
 
 module MarkdownHelpers
@@ -42,52 +43,5 @@ class Middleman::Renderers::MiddlemanRedcarpetHTML
 
   def header(text, level)
     el("h#{level}", text, id: anchor(text))
-  end
-end
-
-class MarkdownHTMLTOC < Redcarpet::Render::Base
-  include MarkdownHelpers
-
-  def header(text, level)
-    return "" if text =~ /\Alayout:/
-
-    if m = text.match(/\A\[([^\]]+)\]\(([^\)]+)\)/)
-      text = m[1]
-    end
-
-    @current_level ||= 0
-
-    html = []
-
-    if level > @current_level
-      @current_level.upto(level-1) { |i|
-        html << '<ul>'
-        html << '<li>'
-      }
-    elsif level < @current_level
-      level.upto(@current_level-1) { |i|
-        html << '</li>'
-        html << '</ul>'
-      }
-    else
-      html << '</li>'
-      html << '<li>'
-    end
-
-    html << el('a', text, href: '#'+ anchor(text))
-
-    @current_level = level
-
-    html.join("\n")
-  end
-
-  def doc_footer
-    html = []
-    @current_level ||= 2
-    (@current_level-1).times {
-      html << "</li>"
-      html << "</ul>"
-    }
-    html.join("\n")
   end
 end
