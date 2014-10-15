@@ -19,6 +19,12 @@ table {
   }
 }
 
+pre {
+  word-wrap: normal;
+  overflow-x: auto;
+  white-space: pre;
+}
+
 #coming-soon-banner {
   background-color: $almostBlackColor;
   color: $dirtyWhiteColor;
