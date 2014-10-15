@@ -16,8 +16,14 @@ import (
 	"github.com/flynn/flynn/host/types"
 )
 
+// ErrWouldWait is returned when the Attach should not wait, but the job is not
+// running.
 var ErrWouldWait = errors.New("cluster: attach would wait")
 
+// Attach attaches to the job specified in req and returns an attach client. If
+// wait is true, the client will wait for the job to start before returning the
+// first bytes. If wait is false and the job is not running, ErrWouldWait is
+// returned.
 func (c *hostClient) Attach(req *host.AttachReq, wait bool) (AttachClient, error) {
 	data, err := json.Marshal(req)
 	if err != nil {
@@ -102,18 +108,40 @@ func (c *hostClient) Attach(req *host.AttachReq, wait bool) (AttachClient, error
 	return NewAttachClient(rwc), handleState()
 }
 
+// NewAttachClient wraps conn in an implementation of AttachClient.
 func NewAttachClient(conn io.ReadWriteCloser) AttachClient {
 	return &attachClient{conn: conn, w: bufio.NewWriter(conn)}
 }
 
+// An AttachClient provides access to the stdin/stdout/stderr streams of a job
+// and allows sending UNIX signals to it.
 type AttachClient interface {
+	// Conn returns the underlying transport stream for the client.
 	Conn() io.ReadWriteCloser
+
+	// Receive reads stdout/stderr frames from the connection and writes them to
+	// stdout and stderr. If the job exits, the return int will be set to the
+	// exit code.
 	Receive(stdout, stderr io.Writer) (int, error)
+
+	// Wait waits for the job to start. It may optionally be called before
+	// calling Receive.
 	Wait() error
+
+	// Signal sends a Unix signal to the job.
 	Signal(int) error
+
+	// ResizeTTY resizes the job's TTY.
 	ResizeTTY(height, width uint16) error
+
+	// CloseWrite sends an EOF to the stdin stream.
 	CloseWrite() error
-	io.WriteCloser
+
+	// Writer allows writing to the stdin stream.
+	io.Writer
+
+	// Closer allows closing the underlying transport connection.
+	io.Closer
 }
 
 type attachClient struct {
