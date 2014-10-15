@@ -5,6 +5,25 @@
 @import "form";
 
 // TODO: .brand should use Proxima Nova Regular font
+table {
+  font-size: .95rem;
+  th, td {
+    padding: .5rem;
+    border: 1px solid $almostWhiteColor;
+  }
+  th {
+    background-color: $dirtyWhiteColor;
+    text-align: center;
+    color: $grayColor;
+    font-weight: 600
+  }
+}
+
+pre {
+  word-wrap: normal;
+  overflow-x: auto;
+  white-space: pre;
+}
 
 #coming-soon-banner {
   background-color: $almostBlackColor;

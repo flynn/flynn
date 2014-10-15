@@ -156,6 +156,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  activesupport
   builder
   cupcake-icons!
   fly!
