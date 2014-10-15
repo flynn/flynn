@@ -14,12 +14,16 @@ REDCARPET_EXTENTIONS = {
 }.freeze
 
 module MarkdownHelpers
-  def anchor(text)
+  def anchor(text, level)
     if m = text.match(/\A<a[^>]+>([^<]+)<\/a>/)
       text = m[1]
     end
 
-    text.downcase.strip.gsub(/[^a-z0-9 ]/, '').gsub(/\s+/, '-')
+    @parents ||= {}
+    parent = @parents[level]
+    text = (parent ? "#{parent}-" : "") + text.downcase.strip.gsub(/[^a-z0-9 ]/, '').gsub(/\s+/, '-')
+    @parents[level+1] = text
+    text
   end
 
   def el(el, content, attributes = {})
@@ -41,7 +45,7 @@ class Middleman::Renderers::MiddlemanRedcarpetHTML
   end
 
   def header(text, level)
-    el("h#{level}", text, id: anchor(text))
+    el("h#{level}", text, id: anchor(text, level))
   end
 end
 
@@ -74,7 +78,7 @@ class MarkdownHTMLTOC < Redcarpet::Render::Base
       html << '<li>'
     end
 
-    html << el('a', text, href: '#'+ anchor(text))
+    html << el('a', text, href: '#'+ anchor(text, level))
 
     @current_level = level
 
