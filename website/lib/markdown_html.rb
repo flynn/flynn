@@ -38,7 +38,11 @@ class Middleman::Renderers::MiddlemanRedcarpetHTML
   include MarkdownHelpers
 
   def block_code(code, language)
-    language == "text" ? el('pre', CGI::escapeHTML(code)) : Pygments.highlight(code, lexer: language)
+    if language.nil? || language == "text"
+      el('pre', CGI::escapeHTML(code))
+    else
+      Pygments.highlight(code, lexer: language)
+    end
   end
 
   def header(text, level)
