@@ -25,6 +25,15 @@ pre {
   white-space: pre;
 }
 
+code {
+  background-color: darken($lightColor, 6%);
+  border: 1px solid darken($lightColor, 12%);
+  border-radius: 2px;
+  color: $paraTextColor;
+  font-size: 0.75em;
+  padding: 0.2em 0.5em;
+}
+
 #coming-soon-banner {
   background-color: $almostBlackColor;
   color: $dirtyWhiteColor;
