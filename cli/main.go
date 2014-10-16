@@ -72,7 +72,7 @@ See 'flynn help <command>' for more information on a specific command.
 			if err != nil {
 				log.Fatal(err)
 			}
-			fmt.Println(out)
+			fmt.Println(string(out))
 			return
 		} else { // `flynn help <command>`
 			cmd = cmdArgs[0]
