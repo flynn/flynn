@@ -25,6 +25,7 @@ module Processor
         line = line.strip
         next if line.empty?
         f, d = line.split(/\s{2,}/)
+        f = f.split(/,\s*/).map { |s| "`#{s}`" }.join(" ")
         output << "#{f} | #{d}"
       end
       output.join("\n")
