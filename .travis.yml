@@ -61,6 +61,9 @@ notifications:
     on_failure: always
     template:
       - "%{repository}/%{branch} - %{commit}: %{message} %{build_url}"
+  email:
+    on_success: never
+    on_failure: always
 
 matrix:
   allow_failures:
