@@ -18,17 +18,32 @@ func init() {
        flynn env unset [-t <proc>] <var>...
        flynn env get [-t <proc>] <var>
 
-Manage app environment.
+Manage app environment variables.
 
 Options:
-   -t, --process-type <proc>   include env from process type
+   -t, --process-type <proc>  set or read env for specified process type
 
 Commands:
    With no arguments, shows a list of environment variables.
 
-   set    Sets value of one or more env variables.
-   unset  Deletes one or more variables.
-   get    Returns the value of variable.
+   set    sets value of one or more env variables
+   unset  deletes one or more variables
+   get    returns the value of variable
+
+Examples:
+
+	$ flynn env set FOO=bar BAZ=foobar
+	Created release 5058ae7964f74c399a240bdd6e7d1bcb.
+
+	$ flynn env
+	BAZ=foobar
+	FOO=bar
+
+	$ flynn env get -t web FOO
+	bar
+
+	$ flynn env unset FOO
+	Created release b1bbd9bc76d6436ea2fd245300bce72e.
 `)
 }
 
