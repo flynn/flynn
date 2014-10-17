@@ -37,7 +37,7 @@ module Processor
       section[:content].split("\n\n").map do |example|
         example.strip!
         if example.start_with? '$'
-          "```\n#{example}\n```\n"
+          "\n```\n#{example}\n```\n"
         else
           h example
         end
