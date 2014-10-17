@@ -2,7 +2,12 @@
 # vi: set ft=ruby :
 
 # Fail if Vagrant version is too old
-Vagrant.require_version ">= 1.6.0"
+begin
+  Vagrant.require_version ">= 1.6.0"
+rescue NoMethodError
+  $stderr.puts "This Vagrantfile requires Vagrant version >= 1.6.0"
+  exit 1
+end
 
 # Vagrantfile API/syntax version. Don't touch unless you know what you're doing!
 VAGRANTFILE_API_VERSION = "2"
