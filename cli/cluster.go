@@ -16,14 +16,19 @@ usage: flynn cluster
 Manage clusters in the ~/.flynnrc configuration file.
 
 Options:
-   -g, --git-host <githost>  git host (if host differs from api URL host)
-   -p, --tls-pin <tlspin>    SHA256 of the cluster's TLS cert (useful if it is self-signed)
+	-g, --git-host <githost>  git host (if host differs from api URL host)
+	-p, --tls-pin <tlspin>    SHA256 of the cluster's TLS cert (useful if it is self-signed)
 
 Commands:
-   With no arguments, shows a list of clusters.
+	With no arguments, shows a list of clusters.
 
-   add     adds a cluster to the ~/.flynnrc configuration file
-   remove  removes a cluster from the ~/.flynnrc configuration file
+	add     adds a cluster to the ~/.flynnrc configuration file
+	remove  removes a cluster from the ~/.flynnrc configuration file
+
+Examples:
+
+	$ flynn cluster add -g dev.localflynn.com:2222 -p KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs= default https://dev.localflynn.com e09dc5301d72be755a3d666f617c4600
+	Cluster "default" added.
 `)
 }
 

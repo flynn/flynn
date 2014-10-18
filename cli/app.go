@@ -15,17 +15,46 @@ func init() {
 usage: flynn create [<name>]
 
 Create an application in Flynn.
+
+If a name is not provided, a random name will be generated.
+
+If run from a git repository, a 'flynn' remote will be created or replaced that
+allows deploying the application via git.
+
+Examples:
+
+	$ flynn create
+	Created turkeys-stupefy-perry
 `)
 
 	register("delete", runDelete, `
 usage: flynn delete
 
-Delete Flynn app.
+Delete an app.
+
+If run from a git repository with a 'flynn' remote for the app, it will be
+removed.
+
+Examples:
+
+	$ flynn -a turkeys-stupefy-perry delete
+	Are you sure you want to delete the app "turkeys-stupefy-perry"? (yes/no): yes
+	Deleted turkeys-stupefy-perry
 `)
 	register("apps", runApps, `
 usage: flynn apps
 
-List flynn apps.
+List all apps.
+
+Examples:
+
+	$ flynn apps
+	ID                                NAME
+	f1e85f5392454a329929e3f27f7a5644  gitreceive
+	4c6325c1f13547059e5496c91a6a97dd  router
+	8cfd94d040b14bd8aecc086c8f5f5e0d  blobstore
+	f488cfb478f54edea497bf6347c2eb80  postgres
+	9d5be7be873c41b9898032c08aa87597  controller
 `)
 }
 

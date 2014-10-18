@@ -24,22 +24,22 @@ usage: flynn route
 Manage routes for application.
 
 Options:
-   -s, --service <service>    service name to route domain to (defaults to APPNAME-web)
-   -c, --tls-cert <tls-cert>  path to PEM encoded certificate for TLS, - for stdin (http only)
-   -k, --tls-key <tls-key>    path to PEM encoded private key for TLS, - for stdin (http only)
-   --sticky                   enable cookie-based sticky routing (http only)
+	-s, --service <service>    service name to route domain to (defaults to APPNAME-web)
+	-c, --tls-cert <tls-cert>  path to PEM encoded certificate for TLS, - for stdin (http only)
+	-k, --tls-key <tls-key>    path to PEM encoded private key for TLS, - for stdin (http only)
+	--sticky                   enable cookie-based sticky routing (http only)
 
 Commands:
-   With no arguments, shows a list of routes.
-
-   add     adds a route to an app
-   remove  removes a route
+	With no arguments, shows a list of routes.
+	
+	add     adds a route to an app
+	remove  removes a route
 
 Examples:
 
-   $ flynn route add http example.com
+	$ flynn route add http example.com
 
-   $ flynn route add tcp
+	$ flynn route add tcp
 `)
 }
 
