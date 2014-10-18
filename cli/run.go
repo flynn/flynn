@@ -24,9 +24,9 @@ usage: flynn run [-d] [-r <release>] [-e <entrypoint>] <command> [<argument>...]
 Run a job.
 
 Options:
-   -d, --detached   run job without connecting io streams
-   -r <release>     id of release to run (defaults to current app release)
-   -e <entrypoint>  overwrite the default entrypoint of the release's image
+	-d, --detached   run job without connecting io streams
+	-r <release>     id of release to run (defaults to current app release)
+	-e <entrypoint>  overwrite the default entrypoint of the release's image
 `)
 	cmd.optsFirst = true
 }

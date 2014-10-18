@@ -9,13 +9,14 @@ import (
 )
 
 func init() {
-	register("ps", runPs, `usage: flynn ps
+	register("ps", runPs, `
+usage: flynn ps
 
 List flynn jobs.
 
 Example:
 
-    $ flynn ps
+	$ flynn ps
 	ID                                      TYPE
 	flynn-bb97c7dac2fa455dad73459056fabac2  web
 	flynn-c59e02b3e6ad49809424848809d4749a  web

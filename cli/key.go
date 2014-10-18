@@ -15,32 +15,33 @@ import (
 )
 
 func init() {
-	register("key", runKey, `usage: flynn key
+	register("key", runKey, `
+usage: flynn key
        flynn key add [<public-key-file>]
        flynn key remove <fingerprint>
 
 Manage SSH public keys associated with the Flynn controller.
 
 Commands:
-   With no arguments, shows a list of SSH public keys.
+	With no arguments, shows a list of SSH public keys.
 
-   add     adds an ssh public key to the Flynn controller
+	add     adds an ssh public key to the Flynn controller
 
-     It tries these sources for keys, in order:
+		It tries these sources for keys, in order:
 
-     1. <public-key-file> argument
-     2. output of ssh-add -L, if any
-     3. file $HOME/.ssh/id_rsa.pub
+		1. <public-key-file> argument
+		2. output of ssh-add -L, if any
+		3. file $HOME/.ssh/id_rsa.pub
 
-   remove  removes an ssh public key from the Flynn controller.
+	remove  removes an ssh public key from the Flynn controller.
 
 Examples:
 
-   $ flynn key
-   5e:67:40:b6:79:db:56:47:cd:3a:a7:65:ab:ed:12:34  user@test.com
+	$ flynn key
+	5e:67:40:b6:79:db:56:47:cd:3a:a7:65:ab:ed:12:34  user@test.com
 
-   $ flynn key remove 5e:67:40:b6:79:db:56:47:cd:3a:a7:65:ab:ed:12:34
-   Key 5e:67:40:b6:79:db… removed.
+	$ flynn key remove 5e:67:40:b6:79:db:56:47:cd:3a:a7:65:ab:ed:12:34
+	Key 5e:67:40:b6:79:db… removed.
 `)
 }
 

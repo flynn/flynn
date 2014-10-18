@@ -13,7 +13,8 @@ import (
 )
 
 func init() {
-	register("env", runEnv, `usage: flynn env [-t <proc>]
+	register("env", runEnv, `
+usage: flynn env [-t <proc>]
        flynn env set [-t <proc>] <var>=<val>...
        flynn env unset [-t <proc>] <var>...
        flynn env get [-t <proc>] <var>
@@ -21,14 +22,14 @@ func init() {
 Manage app environment variables.
 
 Options:
-   -t, --process-type <proc>  set or read env for specified process type
+	-t, --process-type <proc>  set or read env for specified process type
 
 Commands:
-   With no arguments, shows a list of environment variables.
+	With no arguments, shows a list of environment variables.
 
-   set    sets value of one or more env variables
-   unset  deletes one or more variables
-   get    returns the value of variable
+	set    sets value of one or more env variables
+	unset  deletes one or more variables
+	get    returns the value of variable
 
 Examples:
 
