@@ -28,7 +28,7 @@ available on:
 * OS X via [Homebrew](http://brew.sh) with `brew install xz`
 * Ubuntu via `apt-get install xz-utils`
 
-You should also download and install the Flynn [Command Line Tools](/cli) by running this command:
+You should also download and install the Flynn [Command Line Tools](/docs/cli) by running this command:
 
 ```bash
 L=/usr/local/bin/flynn && curl -sL -A "`uname -sp`" https://cli.flynn.io/flynn.gz | zcat >$L && chmod +x $L
