@@ -16,7 +16,7 @@ usage: flynn resource add <provider>
 Manage resources for the app.
 
 Commands:
-   add  provisions a new resource for the app using <provider>.
+	add  provisions a new resource for the app using <provider>.
 `)
 }
 

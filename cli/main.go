@@ -27,33 +27,34 @@ var (
 func main() {
 	log.SetFlags(0)
 
-	usage := `usage: flynn [-a <app>] <command> [<args>...]
+	usage := `
+usage: flynn [-a <app>] <command> [<args>...]
 
 Options:
-   -a <app>
-   -h, --help
+	-a <app>
+	-h, --help
 
 Commands:
-   help                show usage for a specific command
-   cluster             manage clusters
-   create              create an app
-   delete              delete an app
-   apps                list apps
-   ps                  list jobs
-   kill                kill a job
-   log                 get job log
-   scale               change formation
-   run                 run a job
-   env                 manage env variables
-   route               manage routes
-   provider            manage resource providers
-   resource            provision a new resource
-   key                 manage SSH public keys
-   release             add a docker image release
-   version             show flynn version
+	help      show usage for a specific command
+	cluster   manage clusters
+	create    create an app
+	delete    delete an app
+	apps      list apps
+	ps        list jobs
+	kill      kill a job
+	log       get job log
+	scale     change formation
+	run       run a job
+	env       manage env variables
+	route     manage routes
+	provider  manage resource providers
+	resource  provision a new resource
+	key       manage SSH public keys
+	release   add a docker image release
+	version   show flynn version
 
 See 'flynn help <command>' for more information on a specific command.
-	`
+`[1:]
 	args, _ := docopt.Parse(usage, nil, true, Version, true)
 
 	cmd := args.String["<command>"]

@@ -18,11 +18,11 @@ usage: flynn scale [-r <release>] <type>=<qty>...
 Scale changes the number of jobs for each process type in a release.
 
 Options:
-  -r, --release <release>  id of release to scale (defaults to current app release)
+	-r, --release <release>  id of release to scale (defaults to current app release)
 
 Example:
 
-  $ flynn scale web=2 worker=5
+	$ flynn scale web=2 worker=5
 `)
 }
 
