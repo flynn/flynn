@@ -192,6 +192,40 @@ func addStickyHTTPRoute(c *C, l *httpListener) *router.Route {
 	}).ToRoute())
 }
 
+func (s *S) TestWildcardRouting(c *C) {
+	srv1 := httptest.NewServer(httpTestHandler("1"))
+	srv2 := httptest.NewServer(httpTestHandler("2"))
+	srv3 := httptest.NewServer(httpTestHandler("3"))
+	defer srv1.Close()
+	defer srv2.Close()
+	defer srv3.Close()
+
+	l, discoverd := newHTTPListener(c)
+	defer l.Close()
+
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "foo.bar",
+		Service: "1",
+	}).ToRoute())
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "*.foo.bar",
+		Service: "2",
+	}).ToRoute())
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "dev.foo.bar",
+		Service: "3",
+	}).ToRoute())
+
+	discoverdRegisterHTTPService(c, l, "1", srv1.Listener.Addr().String())
+	discoverdRegisterHTTPService(c, l, "2", srv2.Listener.Addr().String())
+	discoverdRegisterHTTPService(c, l, "3", srv3.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	assertGet(c, "http://"+l.Addr, "foo.bar", "1")
+	assertGet(c, "http://"+l.Addr, "flynn.foo.bar", "2")
+	assertGet(c, "http://"+l.Addr, "dev.foo.bar", "3")
+}
+
 func (s *S) TestHTTPInitialSync(c *C) {
 	etcd, _, cleanup := newEtcd(c)
 	defer cleanup()
