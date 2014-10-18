@@ -14,11 +14,11 @@ down into two layers. Our base layer, **Layer 0**, is a bootstrapping layer. It 
 start the rest of the system. **Layer 1** is where the
 rest of Flynn lives.
 
-**Layer 0**, is the core of Flynn which communicates with the existing hosts and network infrastructure, both cloud and hardware. Layer 0 abstracts away hosts and provides primitives for Flynn to work with,
+**Layer 0**, is the core of Flynn which communicates with the existing hosts and network infrastructure. Layer 0 abstracts away hosts and provides primitives for Flynn to work with,
 making distributed container management simpler.
 
 **Layer 1** is where most of Flynn exists. It's where services and applications are placed into containers and the user workflow is
-implemented. Everything in Layer 1 works just like the services
+implemented. Everything in Layer 1 works just like the apps
 it helps to deploy, which is why there are no additional layers.
 
 Today’s Layer 1 is based on Flynn’s MVP requirements, which you can read more about on our [Product Roadmap](/docs/roadmap), but can expand in the future. Here are the main responsibilities of each layer:
@@ -52,17 +52,17 @@ abstracts communications between a cluster of hosts and their containers. While 
 #### Distributed Configuration / Coordination
 
 An important part of any distributed system is a class of 
-key value stores popularized by [Google Chubby](http://research.google.com/archive/chubby.html) and [Apache ZooKeeper](https://zookeeper.apache.org). These
-consensus-algorithm-powered stores are like Swiss Army knives since they can be used for configuration, synchronization, name
+distributed key-value stores popularized by [Google Chubby](http://research.google.com/archive/chubby.html) and [Apache ZooKeeper](https://zookeeper.apache.org). These consistent
+stores are powered by a consensus algorithm and are like Swiss Army knives, enabling configuration, synchronization, name
 resolution, group membership, and more.
 
-There weren’t many other options for this class of datastore until recently.
+There weren’t many options for this class of datastore until recently.
 CoreOS's
 [etcd](https://github.com/coreos/etcd), the spiritual successor to [Doozer](https://github.com/ha/doozerd), fills the role of
 a distributed key-value store in Flynn.
 
 While etcd is a great option, we designed all of Flynn’s components to allow other backing services. This opens up the potential, for example,
-for [ZooKeeper](https://zookeeper.apache.org) to replace [etcd](https://github.com/coreos/etcd). In most cases, Flynn components don’t work
+for [ZooKeeper](https://zookeeper.apache.org) to replace [etcd](https://github.com/coreos/etcd). Flynn components don’t work
 directly with etcd. They use a specialized service that provides the proper
 abstraction for a particular domain—For
 example, the routing and service discovery systems.
