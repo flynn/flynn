@@ -8,7 +8,7 @@ layout: docs
 If you want to run Flynn on your local machine, the easiest way is to install the
 [Vagrant demo environment](#vagrant).
 
-If you want to manually install Flynn, follow the [Ubuntu 14.04 amd64](#ubuntu-1404-amd64) guide.
+If you want to manually install Flynn, follow the [Ubuntu 14.04 amd64](#ubuntu-14.04-amd64) guide.
 Currently only Ubuntu 14.04 amd64 is supported, but this is a temporary packaging limitation, we
 have no actual dependency on Ubuntu.
 
