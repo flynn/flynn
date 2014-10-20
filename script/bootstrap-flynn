@@ -19,7 +19,7 @@ USAGE
 
 main() {
   local backend ip
-  local domain="${CONTROLLER_DOMAIN}"
+  local domain="${CLUSTER_DOMAIN}"
 
   while getopts 'hb:d:i:' opt; do
     case $opt in
@@ -45,8 +45,7 @@ main() {
     | awk "{ print $1}")}
 
   export DISCOVERD="${ip}:1111"
-  export CONTROLLER_DOMAIN="${domain}"
-  export DEFAULT_ROUTE_DOMAIN="${domain}"
+  export CLUSTER_DOMAIN="${domain}"
 
   # kill flynn first
   "${ROOT}/script/kill-flynn" -b "${backend}"

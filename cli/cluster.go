@@ -27,7 +27,7 @@ Commands:
 
 Examples:
 
-	$ flynn cluster add -g dev.localflynn.com:2222 -p KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs= default https://dev.localflynn.com e09dc5301d72be755a3d666f617c4600
+	$ flynn cluster add -g dev.localflynn.com:2222 -p KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs= default https://controller.dev.localflynn.com e09dc5301d72be755a3d666f617c4600
 	Cluster "default" added.
 `)
 }

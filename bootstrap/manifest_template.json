@@ -2,7 +2,7 @@
   {
     "id": "require-env",
     "action": "require-env",
-    "vars": ["CONTROLLER_DOMAIN"]
+    "vars": ["CLUSTER_DOMAIN"]
   },
   {
     "id": "postgres",
@@ -66,7 +66,7 @@
       "env": {
         "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
         "BACKOFF_PERIOD": "{{ getenv \"BACKOFF_PERIOD\" }}",
-        "DEFAULT_ROUTE_DOMAIN": "{{ getenv \"DEFAULT_ROUTE_DOMAIN\" }}",
+        "DEFAULT_ROUTE_DOMAIN": "{{ getenv \"CLUSTER_DOMAIN\" }}",
         "NAME_SEED": "{{ (index .StepData \"name-seed\").Data }}"
       },
       "processes": {
@@ -217,7 +217,7 @@
   {
     "id": "controller-cert",
     "action": "gen-tls-cert",
-    "hosts": ["{{ getenv \"CONTROLLER_DOMAIN\" }}", "*.{{ getenv \"DEFAULT_ROUTE_DOMAIN\" }}"]
+    "hosts": ["{{ getenv \"CLUSTER_DOMAIN\" }}", "*.{{ getenv \"CLUSTER_DOMAIN\" }}"]
   },
   {
     "id": "router-wait",
@@ -243,14 +243,14 @@
     "type": "http",
     "config": {
       "service": "flynn-controller",
-      "domain": "{{ getenv \"CONTROLLER_DOMAIN\" }}"
+      "domain": "controller.{{ getenv \"CLUSTER_DOMAIN\" }}"
     }
   },
   {
     "id": "controller-route-wait",
     "action": "wait",
     "url": "discoverd+http://router-http/",
-    "host": "{{ getenv \"CONTROLLER_DOMAIN\" }}",
+    "host": "controller.{{ getenv \"CLUSTER_DOMAIN\" }}",
     "status": 401
   },
   {
@@ -285,9 +285,9 @@
     },
     "release": {
       "env": {
-        "CLUSTER_DOMAIN": "{{ getenv \"CONTROLLER_DOMAIN\" }}",
+        "CLUSTER_DOMAIN": "controller.{{ getenv \"CLUSTER_DOMAIN\" }}",
         "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
-        "URL": "https://dashboard.{{ getenv \"DEFAULT_ROUTE_DOMAIN\" }}",
+        "URL": "https://dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}",
         "SESSION_SECRET": "{{ (index .StepData \"dashboard-session-secret\").Data }}",
         "LOGIN_TOKEN": "{{ (index .StepData \"dashboard-login-token\").Data }}",
         "STATIC_PATH": "/app",
@@ -311,7 +311,7 @@
     "type": "http",
     "config": {
       "service": "dashboard-web",
-      "domain": "dashboard.{{ getenv \"DEFAULT_ROUTE_DOMAIN\" }}"
+      "domain": "dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}"
     }
   },
   {
@@ -328,6 +328,6 @@
   {
     "id": "log-complete",
     "action": "log",
-    "output": "\n\nFlynn bootstrapping complete. Install flynn-cli and paste the line below into a terminal window:\n\nflynn cluster add -g {{ getenv \"CONTROLLER_DOMAIN\" }}:2222 -p {{ (index .StepData \"controller-cert\").Pin }} default https://{{ getenv \"CONTROLLER_DOMAIN\" }} {{ (index .StepData \"controller-key\").Data }}"
+    "output": "\n\nFlynn bootstrapping complete. Install flynn-cli and paste the line below into a terminal window:\n\nflynn cluster add -g {{ getenv \"CLUSTER_DOMAIN\" }}:2222 -p {{ (index .StepData \"controller-cert\").Pin }} default https://controller.{{ getenv \"CLUSTER_DOMAIN\" }} {{ (index .StepData \"controller-key\").Data }}"
   }
 ]

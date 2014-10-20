@@ -181,13 +181,11 @@ demo.localflynn.com.    A      192.168.84.44
 records, you can use [xip.io](http://xip.io) which provides wildcard DNS for
 any IP address.*
 
-Set `CONTROLLER_DOMAIN` and `DEFAULT_ROUTE_DOMAIN` to the main domain name and
-start the bootstrap process:
+Set `CLUSTER_DOMAIN` to the main domain name and start the bootstrap process:
 
 ```
 $ sudo \
-    CONTROLLER_DOMAIN=demo.localflynn.com \
-    DEFAULT_ROUTE_DOMAIN=demo.localflynn.com \
+    CLUSTER_DOMAIN=demo.localflynn.com \
     flynn-host bootstrap /etc/flynn/bootstrap-manifest.json
 ```
 

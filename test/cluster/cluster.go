@@ -379,7 +379,7 @@ func (c *Cluster) bootstrapLayer1() error {
 	var cmdErr error
 	go func() {
 		command := fmt.Sprintf(
-			"DISCOVERD=%s:1111 CONTROLLER_DOMAIN=%s CONTROLLER_KEY=%s BACKOFF_PERIOD=%fs flynn-host bootstrap --json --min-hosts=%d /etc/flynn-bootstrap.json",
+			"DISCOVERD=%s:1111 CLUSTER_DOMAIN=%s CONTROLLER_KEY=%s BACKOFF_PERIOD=%fs flynn-host bootstrap --json --min-hosts=%d /etc/flynn-bootstrap.json",
 			inst.IP, c.ControllerDomain, c.ControllerKey, c.BackoffPeriod.Seconds(), len(c.Instances),
 		)
 		cmdErr = inst.Run(command, &Streams{Stdout: wr, Stderr: os.Stderr})

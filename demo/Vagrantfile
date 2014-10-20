@@ -28,8 +28,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     sudo flynn-host download /etc/flynn/version.json
     sudo start flynn-host
 
-    CONTROLLER_DOMAIN=demo.localflynn.com \
-    DEFAULT_ROUTE_DOMAIN=demo.localflynn.com \
+    CLUSTER_DOMAIN=demo.localflynn.com \
     flynn-host bootstrap /etc/flynn/bootstrap-manifest.json 2>&1
 SCRIPT
 end
