@@ -52,13 +52,15 @@ var GithubCommit = Dashboard.Stores.GithubCommit = Dashboard.Store.createClass({
 	},
 
 	__rewriteJSON: function (commitJSON) {
+		var committer = commitJSON.committer || commitJSON.commit.committer;
+		var author = commitJSON.author || commitJSON.commit.author;
 		return {
 			committer: {
-				avatarURL: commitJSON.committer.avatar_url,
+				avatarURL: committer.avatar_url,
 				name: commitJSON.commit.committer.name
 			},
 			author: {
-				avatarURL: commitJSON.author.avatar_url,
+				avatarURL: author.avatar_url,
 				name: commitJSON.commit.author.name
 			},
 			committedAt: Date.parse(commitJSON.commit.committer.date),
