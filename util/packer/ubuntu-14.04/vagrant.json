@@ -1,7 +1,8 @@
 {
   "variables": {
     "flynn_deb_url": "",
-    "headless": "false"
+    "headless": "false",
+    "ova_path": "ubuntu.ova"
   },
   "builders": [
     {
@@ -29,28 +30,17 @@
       "vm_name": "flynn-base"
     },
     {
-      "boot_command": [
-        "<esc><esc><enter><wait>",
-        "/install/vmlinuz noapic preseed/url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.cfg ",
-        "debian-installer=en_US auto locale=en_US kbd-chooser/method=us ",
-        "hostname=flynn ",
-        "fb=false debconf/frontend=noninteractive ",
-        "keyboard-configuration/modelcode=SKIP keyboard-configuration/layout=USA keyboard-configuration/variant=USA console-setup/ask_detect=false ",
-        "initrd=/install/initrd.gz -- <enter>"
-      ],
-      "boot_wait": "5s",
       "guest_additions_path": "VBoxGuestAdditions_{{.Version}}.iso",
-      "guest_os_type": "Ubuntu_64",
       "headless": "{{ user `headless` }}",
-      "http_directory": "http",
-      "iso_checksum": "946a6077af6f5f95a51f82fdc44051c7aa19f9cfc5f737954845a6050543d7c2",
-      "iso_checksum_type": "sha256",
-      "iso_url": "http://releases.ubuntu.com/14.04.1/ubuntu-14.04.1-server-amd64.iso",
       "shutdown_command": "echo 'vagrant' | sudo -S shutdown -P now",
+      "source_path": "{{ user `ova_path` }}",
       "ssh_password": "vagrant",
       "ssh_username": "vagrant",
       "ssh_wait_timeout": "20m",
-      "type": "virtualbox-iso",
+      "type": "virtualbox-ovf",
+      "vboxmanage": [
+        ["modifyvm", "{{ .Name }}", "--memory", "1024"]
+      ],
       "virtualbox_version_file": ".vbox_version",
       "vm_name": "flynn-base"
     }
@@ -66,7 +56,7 @@
     },
     {
       "override": {
-        "virtualbox-iso": {
+        "virtualbox-ovf": {
           "execute_command": "/bin/true"
         },
         "vmware-iso": {
@@ -78,7 +68,7 @@
     },
     {
       "override": {
-        "virtualbox-iso": {
+        "virtualbox-ovf": {
           "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'"
         },
         "vmware-iso": {

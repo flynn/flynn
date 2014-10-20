@@ -16,10 +16,18 @@ Currently supports:
  * VirtualBox
  * VMWare Fusion
 
-To build just a VirtualBox image for use with the Flynn Vagrant file:
+To build just a VirtualBox image for use with the Flynn Vagrantfile, first
+download an Ubuntu cloud image and convert it to an OVA archive:
 
 ```
-$ packer build -only=virtualbox-iso vagrant.json
+$ BOX_URL=https://cloud-images.ubuntu.com/vagrant/trusty/current/trusty-server-cloudimg-amd64-vagrant-disk1.box
+$ curl $BOX_URL | tar --delete Vagrantfile > ubuntu.ova
+```
+
+Then run Packer:
+
+```
+$ packer build -only=virtualbox-ovf vagrant.json
 ```
 
 ## Then What?

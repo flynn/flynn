@@ -2,19 +2,20 @@
 set -xeo pipefail
 
 # Set up sudo
-echo "%vagrant ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/vagrant
-chmod 0440 /etc/sudoers.d/vagrant
-
-# Setup sudo to allow no-password sudo for "sudo"
-usermod -a -G sudo vagrant
+if [[ ! -f /etc/sudoers.d/vagrant ]]; then
+  echo "%vagrant ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/vagrant
+  chmod 0440 /etc/sudoers.d/vagrant
+fi
 
 # Installing vagrant keys
-mkdir /home/vagrant/.ssh
-chmod 700 /home/vagrant/.ssh
-cd /home/vagrant/.ssh
-wget --no-check-certificate 'https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub' -O authorized_keys
-chmod 600 /home/vagrant/.ssh/authorized_keys
-chown -R vagrant /home/vagrant/.ssh
+if [[ ! -f /home/vagrant/.ssh/authorized_keys ]]; then
+  mkdir /home/vagrant/.ssh
+  chmod 700 /home/vagrant/.ssh
+  cd /home/vagrant/.ssh
+  wget --no-check-certificate 'https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub' -O authorized_keys
+  chmod 600 /home/vagrant/.ssh/authorized_keys
+  chown -R vagrant /home/vagrant/.ssh
+fi
 
 # Install NFS for Vagrant
 apt-get update
