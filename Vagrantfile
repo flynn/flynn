@@ -19,6 +19,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
   config.vm.network "private_network", ip: "192.168.96.48"
 
+  config.vm.provider "virtualbox" do |v|
+    v.memory = ENV["VAGRANT_MEMORY"] || 1024
+    v.cpus = ENV["VAGRANT_CPUS"] || 2
+  end
+
   config.vm.provision "shell", privileged: false, inline: <<SCRIPT
     grep '^export GOPATH' ~/.bashrc || echo export GOPATH=~/go >> ~/.bashrc
     grep '^export PATH' ~/.bashrc || echo export PATH=\$PATH:~/go/bin:/vagrant/script >> ~/.bashrc
