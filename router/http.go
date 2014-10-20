@@ -155,13 +155,7 @@ type httpSyncHandler struct {
 
 func (h *httpSyncHandler) Set(data *router.Route) error {
 	route := data.HTTPRoute()
-	r := &httpRoute{
-		Domain:  route.Domain,
-		Service: route.Service,
-		TLSCert: route.TLSCert,
-		TLSKey:  route.TLSKey,
-		Sticky:  route.Sticky,
-	}
+	r := &httpRoute{HTTPRoute: route}
 
 	if r.TLSCert != "" && r.TLSKey != "" {
 		kp, err := tls.X509KeyPair([]byte(r.TLSCert), []byte(r.TLSKey))
@@ -351,11 +345,7 @@ func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 // A domain served by a listener, associated TLS certs,
 // and link to backend service set.
 type httpRoute struct {
-	Domain  string
-	Service string
-	TLSCert string
-	TLSKey  string
-	Sticky  bool
+	*router.HTTPRoute
 
 	keypair *tls.Certificate
 	service *httpService
@@ -468,12 +458,6 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls, st
 		return
 	}
 	defer backend.Close()
-
-	if req.Method != "GET" && req.Method != "POST" && req.Method != "HEAD" &&
-		req.Method != "OPTIONS" && req.Method != "PUT" && req.Method != "DELETE" && req.Method != "TRACE" {
-		fail(sc, req, 405, "Method not allowed")
-		return
-	}
 
 	req.Proto = "HTTP/1.1"
 	req.ProtoMajor = 1

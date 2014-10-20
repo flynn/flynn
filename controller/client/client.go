@@ -21,6 +21,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client/dialer"
 	"github.com/flynn/flynn/pkg/pinned"
 	"github.com/flynn/flynn/pkg/rpcplus"
+	"github.com/flynn/flynn/pkg/sse"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -350,24 +351,6 @@ func (c *Client) GetApp(appID string) (*ct.App, error) {
 	return app, c.get(fmt.Sprintf("/apps/%s", appID), app)
 }
 
-type sseDecoder struct {
-	*bufio.Reader
-}
-
-// Decode finds the next "data" field and decodes it into v
-func (dec *sseDecoder) Decode(v interface{}) error {
-	for {
-		line, err := dec.ReadBytes('\n')
-		if err != nil {
-			return err
-		}
-		if bytes.HasPrefix(line, []byte("data: ")) {
-			data := bytes.TrimPrefix(line, []byte("data: "))
-			return json.Unmarshal(data, v)
-		}
-	}
-}
-
 // JobEventStream is a wrapper around an Events channel, allowing us to close
 // the stream.
 type JobEventStream struct {
@@ -389,7 +372,7 @@ func (c *Client) StreamJobEvents(appID string) (*JobEventStream, error) {
 	stream := &JobEventStream{Events: make(chan *ct.JobEvent), body: res.Body}
 	go func() {
 		defer close(stream.Events)
-		dec := &sseDecoder{bufio.NewReader(stream.body)}
+		dec := sse.NewDecoder(bufio.NewReader(stream.body))
 		for {
 			event := &ct.JobEvent{}
 			if err := dec.Decode(event); err != nil {
