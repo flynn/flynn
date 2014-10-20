@@ -44,6 +44,12 @@ var GithubRepo = Dashboard.Stores.GithubRepo = Dashboard.Store.createClass({
 	},
 
 	__rewriteJSON: function (repoJSON) {
+		var cloneURL = repoJSON.clone_url;
+		if (repoJSON.private) {
+			cloneURL = cloneURL.replace(/^https?:\/\//, function (m) {
+				return m + Dashboard.githubClient.accessToken + "@";
+			});
+		}
 		return {
 			id: repoJSON.id,
 			name: repoJSON.name,
@@ -51,7 +57,7 @@ var GithubRepo = Dashboard.Stores.GithubRepo = Dashboard.Store.createClass({
 			description: repoJSON.description,
 			ownerLogin: repoJSON.owner.login,
 			defaultBranch: repoJSON.default_branch,
-			cloneURL: repoJSON.clone_url
+			cloneURL: cloneURL
 		};
 	}
 });
