@@ -1,0 +1,161 @@
+#!/bin/bash
+#
+# A script to build and release Flynn VM images.
+#
+# PREREQUISITES:
+#
+# - Install packer
+#   sudo apt-get install -y unzip
+#   wget -O /tmp/packer.zip https://dl.bintray.com/mitchellh/packer/packer_0.7.1_linux_amd64.zip
+#   sudo unzip -d /usr/local/bin /tmp/packer.zip
+#   rm /tmp/packer.zip
+#
+# - Install up-to-date s3cmd so "s3cmd info" works
+#   sudo apt-get install -y python-dateutil
+#   wget -O /tmp/s3cmd.deb http://archive.ubuntu.com/ubuntu/pool/universe/s/s3cmd/s3cmd_1.5.0~rc1-2_all.deb
+#   sudo dpkg -i /tmp/s3cmd.deb
+#   rm /tmp/s3cmd.deb
+
+set -eo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "${ROOT}/script/lib/ui.sh"
+source "${ROOT}/script/lib/aws.sh"
+
+UBUNTU_BOX_NAME="ubuntu-trusty-20141016" # used in filenames for caching, bump at the same time as UBUNTU_BOX_URL
+UBUNTU_BOX_URL="http://cloud-images.ubuntu.com/vagrant/trusty/20141016/trusty-server-cloudimg-amd64-vagrant-disk1.box"
+UBUNTU_BOX_SHA="c6623a4850c4d61bc6b96c3b2d2150eb60ca1e4a38f2cb2a8087370139b08d30"
+
+usage() {
+  cat <<USAGE >&2
+usage: $0 [options] VERSION DEB_URL
+
+OPTIONS:
+  -h            Show this message
+  -b BUCKET     The S3 bucket to upload vagrant images to [default: flynn]
+  -d DOMAIN     The CloudFront domain [default: dl.flynn.io]
+  -r DIR        Resume the release using DIR
+USAGE
+}
+
+main() {
+  local bucket dir domain
+
+  while getopts "hb:d:r:" opt; do
+    case $opt in
+      h)
+	usage
+	exit 1
+	;;
+      b)
+	bucket=$OPTARG
+	;;
+      d)
+        domain=$OPTARG
+        ;;
+      r)
+        dir=$OPTARG
+        if [[ ! -d "${dir}" ]]; then
+          fail "No such directory: ${dir}"
+        fi
+        ;;
+      ?)
+	usage
+	exit 1
+	;;
+    esac
+  done
+  shift $(($OPTIND - 1))
+
+  if [[ $# -ne 2 ]]; then
+    usage
+    exit 1
+  fi
+
+  local version=$1
+  local deb_url=$2
+  bucket=${bucket:-"flynn"}
+  dir="${dir:-$(mktemp -d)}"
+  domain="${domain:-"dl.flynn.io"}"
+
+  info "using base dir: ${dir}"
+
+  local box=$(ls "${dir}"/*_virtualbox.box 2>/dev/null)
+  if [[ -z "${box}" ]]; then
+    local ubuntu_box="/tmp/${UBUNTU_BOX_NAME}.box"
+    if [[ ! -f "${ubuntu_box}" ]]; then
+      info "fetching base Ubuntu box"
+      curl "${UBUNTU_BOX_URL}" > "${ubuntu_box}"
+    fi
+
+    info "validating base Ubuntu box"
+    if [[ "$(sha256 "${ubuntu_box}")" != "${UBUNTU_BOX_SHA}" ]]; then
+      rm -f "${ubuntu_box}"
+      fail "base Ubuntu box has incorrect checksum"
+    fi
+
+    local ova_path="/tmp/${UBUNTU_BOX_NAME}.ova"
+    if [[ ! -f "${ova_path}" ]]; then
+      info "converting base Ubuntu box to OVA archive"
+      tar --delete Vagrantfile < "${ubuntu_box}" > "${ova_path}"
+    fi
+
+    info "building virtualbox image"
+    pushd "${ROOT}/util/packer/ubuntu-14.04" >/dev/null
+    packer build \
+      -only="virtualbox-ovf" \
+      -var "flynn_deb_url=${deb_url}" \
+      -var "headless=true" \
+      -var "output_dir=${dir}" \
+      -var "ova_path=${ova_path}" \
+      -var "version=${version}" \
+      vagrant.json
+    popd >/dev/null
+
+    box=$(ls "${dir}"/*_virtualbox.box 2>/dev/null)
+  fi
+
+  local box_name="$(basename "${box}")"
+  if ! s3cmd info "s3://${bucket}/vagrant/boxes/${box_name}" &>/dev/null; then
+    info "uploading ${box_name} to s3://${bucket}/vagrant/boxes"
+    s3cmd put --acl-public "${box}" "s3://${bucket}/vagrant/boxes/"
+  fi
+
+  info "calculating SHA256 checksum of ${box_name}"
+  checksum=$(sha256 "${box}")
+  if [[ ${#checksum} -ne 64 ]]; then
+    fail "invalid checksum generated: '${checksum}'"
+  fi
+  info "checksum is ${checksum}"
+
+  info "fetching current vagrant manifest"
+  local manifest="$(s3cmd --no-progress get "s3://${bucket}/vagrant/flynn-base.json" - 2>/dev/null)"
+  if [[ -z "${manifest}" ]]; then
+    manifest='{"name":"flynn-base"}'
+  fi
+
+  info "updating vagrant manifest"
+  mkdir -p "${dir}/manifest"
+  "${ROOT}/util/release/flynn-release" vagrant \
+    "https://${domain}/vagrant/boxes/${box_name}" \
+    "${checksum}" \
+    "${version}" \
+    "virtualbox" \
+    <<< "${manifest}" \
+    > "${dir}/manifest/flynn-base.json"
+
+  info "releasing vagrant manifest"
+  sync_cloudfront "${dir}/manifest/" "s3://${bucket}/vagrant/"
+
+  info "cleaning up"
+  rm -rf "${dir}"
+
+  info "done!"
+}
+
+sha256() {
+  local file=$1
+  sha256sum "${file}" | cut -d ' ' -f 1
+}
+
+main $@
