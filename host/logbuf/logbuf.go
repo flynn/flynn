@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/ActiveState/tail"
@@ -88,7 +91,7 @@ func (l *Log) Write(data Data) error {
 
 // Read old log lines from a logfile.
 func (l *Log) Read(lines int, follow bool, ch chan Data, done chan struct{}) error {
-	name := l.l.Filename // TODO: stitch older files together
+	name := l.l.Filename
 
 	var seek int64
 	if lines == 0 {
@@ -102,6 +105,33 @@ func (l *Log) Read(lines int, follow bool, ch chan Data, done chan struct{}) err
 		}
 	} else if lines == -1 {
 		// return all lines
+		dir := filepath.Dir(name)
+		files, err := ioutil.ReadDir(dir)
+		if err != nil {
+			return err
+		}
+		basename := filepath.Base(name)
+		ext := filepath.Ext(basename)
+		id := strings.TrimSuffix(basename, ext)
+		for _, f := range files {
+			if !(strings.HasPrefix(f.Name(), id+"-") && strings.HasSuffix(f.Name(), ext)) {
+				continue
+			}
+
+			t, err := tail.TailFile(filepath.Join(dir, f.Name()), tail.Config{
+				Logger: tail.DiscardingLogger,
+			})
+			if err != nil {
+				return err
+			}
+			for line := range t.Lines {
+				data := Data{}
+				if err := json.Unmarshal([]byte(line.Text), &data); err != nil {
+					return err
+				}
+				ch <- data
+			}
+		}
 	}
 
 	t, err := tail.TailFile(name, tail.Config{
