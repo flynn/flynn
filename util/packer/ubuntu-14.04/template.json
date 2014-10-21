@@ -4,10 +4,12 @@
     "headless": "false",
     "output_dir": ".",
     "ova_path": "ubuntu.ova",
+    "source_ami": "ami-9eaa1cf6",
     "version": ""
   },
   "builders": [
     {
+      "type": "vmware-iso",
       "boot_command": [
         "<esc><esc><enter><wait>",
         "/install/vmlinuz noapic preseed/url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.cfg ",
@@ -28,10 +30,10 @@
       "ssh_username": "vagrant",
       "ssh_wait_timeout": "20m",
       "tools_upload_flavor": "linux",
-      "type": "vmware-iso",
       "vm_name": "flynn-base"
     },
     {
+      "type": "virtualbox-ovf",
       "guest_additions_path": "VBoxGuestAdditions_{{.Version}}.iso",
       "headless": "{{ user `headless` }}",
       "shutdown_command": "echo 'vagrant' | sudo -S shutdown -P now",
@@ -39,59 +41,44 @@
       "ssh_password": "vagrant",
       "ssh_username": "vagrant",
       "ssh_wait_timeout": "20m",
-      "type": "virtualbox-ovf",
       "vboxmanage": [
         ["modifyvm", "{{ .Name }}", "--memory", "1024"]
       ],
       "virtualbox_version_file": ".vbox_version",
       "vm_name": "flynn-base"
+    },
+    {
+      "type": "amazon-ebs",
+      "ami_block_device_mappings": [{
+        "device_name": "/dev/sda1",
+        "volume_size": "50",
+        "volume_type": "gp2"
+      }],
+      "ami_groups": ["all"],
+      "ami_name": "flynn-{{ user `version` }}-ubuntu-14.04-{{timestamp}}",
+      "ami_regions": ["eu-west-1"],
+      "instance_type": "m3.large",
+      "region": "us-east-1",
+      "source_ami": "{{ user `source_ami` }}",
+      "ssh_username": "ubuntu"
     }
   ],
   "provisioners": [
     {
-      "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'",
+      "type": "shell",
       "scripts": [
-        "scripts/vagrant.sh",
-        "scripts/upgrade.sh"
+        "scripts/upgrade.sh",
+        "scripts/install.sh"
       ],
-      "type": "shell"
-    },
-    {
-      "override": {
-        "virtualbox-ovf": {
-          "execute_command": "/bin/true"
-        },
-        "vmware-iso": {
-          "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'"
-        }
-      },
-      "script": "scripts/fusion.sh",
-      "type": "shell"
-    },
-    {
-      "override": {
-        "virtualbox-ovf": {
-          "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'"
-        },
-        "vmware-iso": {
-          "execute_command": "/bin/true"
-        }
-      },
-      "script": "scripts/virtualbox.sh",
-      "type": "shell"
-    },
-    {
       "environment_vars": [
         "FLYNN_DEB_URL={{ user `flynn_deb_url` }}"
       ],
       "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'",
-      "scripts": [
-        "scripts/install.sh",
-        "scripts/apt_cleanup.sh",
-        "scripts/net_cleanup.sh",
-        "scripts/compress.sh"
-      ],
-      "type": "shell"
+      "override": {
+        "amazon-ebs": {
+          "execute_command": "{{ .Vars }} sudo -E bash '{{ .Path }}'"
+        }
+      }
     }
   ],
   "post-processors": [

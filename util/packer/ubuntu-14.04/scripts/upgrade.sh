@@ -1,4 +1,5 @@
 #!/bin/bash
+
 set -xeo pipefail
 
 export DEBIAN_FRONTEND=noninteractive

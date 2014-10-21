@@ -27,7 +27,7 @@ $ curl $BOX_URL | tar --delete Vagrantfile > ubuntu.ova
 Then run Packer:
 
 ```
-$ packer build -only=virtualbox-ovf vagrant.json
+$ packer build -only=virtualbox-ovf template.json
 ```
 
 ## Then What?
