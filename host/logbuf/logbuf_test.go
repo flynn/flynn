@@ -52,12 +52,14 @@ func (s *S) TestLogWriteRead(c *C) {
 		wg.Done()
 	}()
 	wg.Wait()
+	l.l.Rotate()
+	stdoutW.Write([]byte("3"))
 	ch = make(chan Data)
 	go l.Read(-1, false, ch, nil)
 	c.Assert(err, IsNil)
 
 	stdout, stderr := 0, 2
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 5; i++ {
 		var line Data
 		select {
 		case line = <-ch:
