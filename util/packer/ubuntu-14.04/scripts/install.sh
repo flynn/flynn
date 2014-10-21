@@ -1,72 +1,204 @@
 #!/bin/bash
+
 set -xeo pipefail
 
-# enable memory and swap cgroup
-perl -p -i -e 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"/g'  /etc/default/grub
-/usr/sbin/update-grub
+export DEBIAN_FRONTEND=noninteractive
 
-# add docker group and add the current user to it
-groupadd docker
-usermod -a -G docker "${SUDO_USER}"
+main() {
+  if vagrant_build; then
+    setup_sudo
+    install_vagrant_ssh_key
+    install_nfs
+  fi
 
-# add the docker, tup and flynn gpg keys
-apt-key adv --keyserver keyserver.ubuntu.com --recv 36A1D7869245C8950F966E92D8576A8BA88D21E9
-apt-key adv --keyserver keyserver.ubuntu.com --recv E601AAF9486D3664
-apt-key adv --keyserver keyserver.ubuntu.com --recv BC79739C507A9B53BB1B0E7D820A5489998D827B
+  if vmware_build; then
+    install_linux_headers
+    install_vmware_guest_tools
+  fi
 
-echo deb https://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list
-echo deb https://dl.flynn.io/ubuntu flynn main > /etc/apt/sources.list.d/flynn.list
-echo deb http://ppa.launchpad.net/anatol/tup/ubuntu precise main > /etc/apt/sources.list.d/tup.list
+  if virtualbox_build; then
+    install_vbox_guest_additions
+  fi
 
-apt-get update
+  enable_cgroups
+  create_docker_group
+  add_apt_sources
+  install_packages
+  download_images
+  disable_docker_auto_restart
+  install_go
+  apt_cleanup
 
-packages=(
-  "btrfs-tools"
-  "bzr"
-  "curl"
-  "git"
-  "libdevmapper-dev"
-  "libvirt-dev"
-  "linux-image-extra-$(uname -r)"
-  "lxc-docker"
-  "make"
-  "mercurial"
-  "ruby2.0"
-  "ruby2.0-dev"
-  "tup"
-  "vim-tiny"
-)
+  if vagrant_build; then
+    net_cleanup
+    compress
+  fi
+}
 
-if [[ -n "${FLYNN_DEB_URL}" ]]; then
-  # If we are manually installing the deb, we need to also
-  # manually install explicit dependencies of flynn-host
-  packages+=(
-    "aufs-tools"
-    "iptables"
-    "libvirt-bin"
+virtualbox_build() {
+  [[ "${PACKER_BUILDER_TYPE}" == "virtualbox-ovf" ]]
+}
+
+vmware_build() {
+  [[ "${PACKER_BUILDER_TYPE}" == "vmware-iso" ]]
+}
+
+vagrant_build() {
+  virtualbox_build || vmware_build
+}
+
+setup_sudo() {
+  if [[ ! -f /etc/sudoers.d/vagrant ]]; then
+    echo "%vagrant ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/vagrant
+    chmod 0440 /etc/sudoers.d/vagrant
+  fi
+}
+
+install_vagrant_ssh_key() {
+  if [[ ! -f /home/vagrant/.ssh/authorized_keys ]]; then
+    mkdir /home/vagrant/.ssh
+    chmod 700 /home/vagrant/.ssh
+    wget --no-check-certificate 'https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub' -O /home/vagrant/.ssh/authorized_keys
+    chmod 600 /home/vagrant/.ssh/authorized_keys
+    chown -R vagrant /home/vagrant/.ssh
+  fi
+}
+
+install_nfs() {
+  apt-get install -y nfs-common
+}
+
+install_linux_headers() {
+  apt-get install -y build-essential linux-headers-$(uname -r)
+}
+
+install_vmware_guest_tools() {
+  cd /tmp
+  mkdir -p /mnt/cdrom
+  mount -o loop ~/linux.iso /mnt/cdrom
+  tar zxf /mnt/cdrom/VMwareTools-*.tar.gz -C /tmp/
+  /tmp/vmware-tools-distrib/vmware-install.pl -d
+  rm /home/vagrant/linux.iso
+  umount /mnt/cdrom
+}
+
+install_vbox_guest_additions() {
+  local vbox_version="$(cat /home/vagrant/.vbox_version)"
+  local vbox_iso="VBoxGuestAdditions_${vbox_version}.iso"
+
+  apt-get install -y dkms
+  mount -o loop "${vbox_iso}" /mnt
+  yes | sh /mnt/VBoxLinuxAdditions.run || true
+  umount /mnt
+  rm "${vbox_iso}"
+}
+
+enable_cgroups() {
+  perl -p -i -e 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"/g'  /etc/default/grub
+  /usr/sbin/update-grub
+}
+
+create_docker_group() {
+  groupadd docker
+  usermod -a -G docker "${SUDO_USER}"
+}
+
+add_apt_sources() {
+  # add the docker, tup and flynn gpg keys
+  apt-key adv --keyserver keyserver.ubuntu.com --recv 36A1D7869245C8950F966E92D8576A8BA88D21E9
+  apt-key adv --keyserver keyserver.ubuntu.com --recv E601AAF9486D3664
+  apt-key adv --keyserver keyserver.ubuntu.com --recv BC79739C507A9B53BB1B0E7D820A5489998D827B
+
+  echo deb https://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list
+  echo deb https://dl.flynn.io/ubuntu flynn main > /etc/apt/sources.list.d/flynn.list
+  echo deb http://ppa.launchpad.net/anatol/tup/ubuntu precise main > /etc/apt/sources.list.d/tup.list
+
+  apt-get update
+}
+
+install_packages() {
+  local packages=(
+    "btrfs-tools"
+    "bzr"
+    "curl"
+    "git"
+    "libdevmapper-dev"
+    "libvirt-dev"
+    "linux-image-extra-$(uname -r)"
+    "lxc-docker"
+    "make"
+    "mercurial"
+    "ruby2.0"
+    "ruby2.0-dev"
+    "tup"
+    "vim-tiny"
   )
-else
-  packages+=("flynn-host")
-fi
 
-apt-get install -y ${packages[@]}
+  if [[ -n "${FLYNN_DEB_URL}" ]]; then
+    # If we are manually installing the deb, we need to also
+    # manually install explicit dependencies of flynn-host
+    packages+=(
+      "aufs-tools"
+      "iptables"
+      "libvirt-bin"
+    )
+  else
+    packages+=("flynn-host")
+  fi
 
-if [[ -n "${FLYNN_DEB_URL}" ]]; then
-  curl "${FLYNN_DEB_URL}" > /tmp/flynn-host.deb
-  dpkg -i /tmp/flynn-host.deb
-  rm /tmp/flynn-host.deb
-fi
+  apt-get install -y ${packages[@]}
 
-gem2.0 install fpm --no-rdoc --no-ri
+  if [[ -n "${FLYNN_DEB_URL}" ]]; then
+    curl "${FLYNN_DEB_URL}" > /tmp/flynn-host.deb
+    dpkg -i /tmp/flynn-host.deb
+    rm /tmp/flynn-host.deb
+  fi
 
-mkdir -p /var/lib/docker
-flynn-release download /etc/flynn/version.json
+  gem2.0 install fpm --no-rdoc --no-ri
+}
 
-# Disable container auto-restart when docker starts
-sed -i 's/^#DOCKER_OPTS=.*/DOCKER_OPTS="-r=false"/' /etc/default/docker
+download_images() {
+  mkdir -p /var/lib/docker
+  flynn-release download /etc/flynn/version.json
+}
 
-# install Go
-cd /tmp
-wget j.mp/godeb
-tar xvzf godeb
-./godeb install
+disable_docker_auto_restart() {
+  sed -i 's/^#DOCKER_OPTS=.*/DOCKER_OPTS="-r=false"/' /etc/default/docker
+}
+
+install_go() {
+  cd /tmp
+  wget j.mp/godeb
+  tar xvzf godeb
+  ./godeb install
+}
+
+apt_cleanup() {
+  echo "cleaning apt cache"
+  apt-get autoremove
+  apt-get clean
+
+  echo "deleting old kernels"
+  cur_kernel=$(uname -r|sed 's/-*[a-z]//g'|sed 's/-386//g')
+  kernel_pkg="linux-(image|headers|ubuntu-modules|restricted-modules)"
+  meta_pkg="${kernel_pkg}-(generic|i386|server|common|rt|xen|ec2|virtual)"
+  apt-get purge -y $(dpkg -l | egrep $kernel_pkg | egrep -v "${cur_kernel}|${meta_pkg}" | awk '{print $2}')
+}
+
+net_cleanup() {
+  # Removing leftover leases and persistent rules
+  echo "cleaning up dhcp leases"
+  rm /var/lib/dhcp/*
+
+  echo "Adding a 2 sec delay to the interface up, to make the dhclient happy"
+  echo "pre-up sleep 2" >> /etc/network/interfaces
+}
+
+compress() {
+  # Zero out the free space to save space in the final image:
+  echo "Zeroing device to make space..."
+  dd if=/dev/zero of=/EMPTY bs=1M || true
+  rm -f /EMPTY
+}
+
+main $@
