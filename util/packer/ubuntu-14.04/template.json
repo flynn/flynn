@@ -84,7 +84,8 @@
   "post-processors": [
     {
       "type": "vagrant",
-      "output": "{{ user `output_dir` }}/flynn-base_{{ user `version` }}_{{ .Provider }}.box"
+      "output": "{{ user `output_dir` }}/flynn-base_{{ user `version` }}_{{ .Provider }}.box",
+      "except": ["amazon-ebs"]
     }
   ]
 }

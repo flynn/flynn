@@ -9,13 +9,13 @@ import (
 )
 
 func vagrant(args *docopt.Args) {
-	manifest := &Manifest{}
+	manifest := &VagrantManifest{}
 
 	if err := json.NewDecoder(os.Stdin).Decode(manifest); err != nil {
 		log.Fatal(err)
 	}
 
-	manifest.Add(args.String["<version>"], &Provider{
+	manifest.Add(args.String["<version>"], &VagrantProvider{
 		Name:         args.String["<provider>"],
 		URL:          args.String["<url>"],
 		Checksum:     args.String["<checksum>"],
@@ -27,9 +27,9 @@ func vagrant(args *docopt.Args) {
 	}
 }
 
-type Manifest struct {
-	Name     string     `json:"name"`
-	Versions []*Version `json:"versions"`
+type VagrantManifest struct {
+	Name     string            `json:"name"`
+	Versions []*VagrantVersion `json:"versions"`
 }
 
 // Add adds a provider to the manifest.
@@ -40,10 +40,10 @@ type Manifest struct {
 //
 // If the version is not already in the manifest a new version is added
 // containing the provider.
-func (m *Manifest) Add(version string, provider *Provider) {
+func (m *VagrantManifest) Add(version string, provider *VagrantProvider) {
 	for _, v := range m.Versions {
 		if v.Version == version {
-			providers := make([]*Provider, len(v.Providers))
+			providers := make([]*VagrantProvider, len(v.Providers))
 			added := false
 			for i, p := range v.Providers {
 				if p.Name == provider.Name {
@@ -62,18 +62,18 @@ func (m *Manifest) Add(version string, provider *Provider) {
 		}
 	}
 
-	m.Versions = append(m.Versions, &Version{
+	m.Versions = append(m.Versions, &VagrantVersion{
 		Version:   version,
-		Providers: []*Provider{provider},
+		Providers: []*VagrantProvider{provider},
 	})
 }
 
-type Version struct {
-	Version   string      `json:"version"`
-	Providers []*Provider `json:"providers"`
+type VagrantVersion struct {
+	Version   string             `json:"version"`
+	Providers []*VagrantProvider `json:"providers"`
 }
 
-type Provider struct {
+type VagrantProvider struct {
 	Name         string `json:"name"`
 	URL          string `json:"url"`
 	ChecksumType string `json:"checksum_type"`

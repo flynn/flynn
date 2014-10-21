@@ -25,6 +25,7 @@ source "${ROOT}/script/lib/aws.sh"
 UBUNTU_BOX_NAME="ubuntu-trusty-20141016" # used in filenames for caching, bump at the same time as UBUNTU_BOX_URL
 UBUNTU_BOX_URL="http://cloud-images.ubuntu.com/vagrant/trusty/20141016/trusty-server-cloudimg-amd64-vagrant-disk1.box"
 UBUNTU_BOX_SHA="c6623a4850c4d61bc6b96c3b2d2150eb60ca1e4a38f2cb2a8087370139b08d30"
+UBUNTU_USEAST_AMI="ami-9eaa1cf6" # us-east-1 | trusty | 14.04 LTS | amd64 | hvm:ebs-ssd | 20140927 | ami-9eaa1cf6 | hvm
 
 usage() {
   cat <<USAGE >&2
@@ -35,11 +36,17 @@ OPTIONS:
   -b BUCKET     The S3 bucket to upload vagrant images to [default: flynn]
   -d DOMAIN     The CloudFront domain [default: dl.flynn.io]
   -r DIR        Resume the release using DIR
+
+Requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set
 USAGE
 }
 
 main() {
   local bucket dir domain
+
+  if [[ -z "${AWS_ACCESS_KEY_ID}" ]] || [[ -z "${AWS_SECRET_ACCESS_KEY}" ]]; then
+    fail "Both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be set"
+  fi
 
   while getopts "hb:d:r:" opt; do
     case $opt in
@@ -80,8 +87,9 @@ main() {
 
   info "using base dir: ${dir}"
 
+  local amis="$(cat "${dir}/amis.txt" 2>/dev/null)"
   local box=$(ls "${dir}"/*_virtualbox.box 2>/dev/null)
-  if [[ -z "${box}" ]]; then
+  if [[ -z "${box}" ]] || [[ -z "${amis}" ]]; then
     local ubuntu_box="/tmp/${UBUNTU_BOX_NAME}.box"
     if [[ ! -f "${ubuntu_box}" ]]; then
       info "fetching base Ubuntu box"
@@ -100,19 +108,39 @@ main() {
       tar --delete Vagrantfile < "${ubuntu_box}" > "${ova_path}"
     fi
 
-    info "building virtualbox image"
+    info "building VirtualBox and EC2 images"
     pushd "${ROOT}/util/packer/ubuntu-14.04" >/dev/null
-    packer build \
-      -only="virtualbox-ovf" \
+    local output=$(packer build \
+      -machine-readable \
+      -only="amazon-ebs,virtualbox-ovf" \
       -var "flynn_deb_url=${deb_url}" \
       -var "headless=true" \
       -var "output_dir=${dir}" \
       -var "ova_path=${ova_path}" \
+      -var "source_ami=${UBUNTU_USEAST_AMI}" \
       -var "version=${version}" \
-      vagrant.json
+      template.json | parse_packer)
     popd >/dev/null
 
-    box=$(ls "${dir}"/*_virtualbox.box 2>/dev/null)
+    info "parsing build output"
+    while read line; do
+      IFS="|" read builder artifacts <<< "${line}"
+
+      case "${builder}" in
+        virtualbox-ovf)
+          box="${artifacts}"
+          ;;
+        amazon-ebs)
+          amis="${artifacts}"
+          ;;
+      esac
+    done <<< "${output}"
+
+    if [[ -z "${box}" ]] || [[ -z "${amis}" ]]; then
+      fail "failed to parse build output"
+    fi
+
+    echo -n "${amis}" > "${dir}/amis.txt"
   fi
 
   local box_name="$(basename "${box}")"
@@ -135,17 +163,31 @@ main() {
   fi
 
   info "updating vagrant manifest"
-  mkdir -p "${dir}/manifest"
+  mkdir -p "${dir}/manifests/vagrant"
   "${ROOT}/util/release/flynn-release" vagrant \
     "https://${domain}/vagrant/boxes/${box_name}" \
     "${checksum}" \
     "${version}" \
     "virtualbox" \
     <<< "${manifest}" \
-    > "${dir}/manifest/flynn-base.json"
+    > "${dir}/manifests/vagrant/flynn-base.json"
 
-  info "releasing vagrant manifest"
-  sync_cloudfront "${dir}/manifest/" "s3://${bucket}/vagrant/"
+  info "fetching current EC2 manifest"
+  local manifest="$(s3cmd --no-progress get "s3://${bucket}/ec2/images.json" - 2>/dev/null)"
+  if [[ -z "${manifest}" ]]; then
+    manifest='{"name":"flynn-base"}'
+  fi
+
+  info "updating EC2 manifest"
+  mkdir -p "${dir}/manifests/ec2"
+  "${ROOT}/util/release/flynn-release" amis \
+    "${version}" \
+    "${amis}" \
+    <<< "${manifest}" \
+    > "${dir}/manifests/ec2/images.json"
+
+  info "releasing manifests"
+  sync_cloudfront "${dir}/manifests/" "s3://${bucket}/"
 
   info "cleaning up"
   rm -rf "${dir}"
@@ -156,6 +198,33 @@ main() {
 sha256() {
   local file=$1
   sha256sum "${file}" | cut -d ' ' -f 1
+}
+
+# parse_packer reads machine readable packer output, prints the
+# ui messages to stderr and prints the artifacts to stdout.
+#
+# example artifact output:
+#
+#   virtualbox-ovf|/tmp/tmp.FhRkEcY9YJ/flynn-base_20141021.1_virtualbox.box
+#   amazon-ebs|eu-west-1:ami-4c832d3b,us-east-1:ami-fea92d96
+#
+parse_packer() {
+  sed 's/%!(PACKER_COMMA)/,/g' | while read -r line; do
+    IFS="," read -r _ target type data <<< "${line}"
+
+    case "${type}" in
+      ui)
+        echo -e "$(cut -d "," -f 2 <<< "${data}")" >&2
+        ;;
+      artifact)
+        if [[ "${target}" == "virtualbox-ovf" ]] && [[ "${data:0:9}" == "0,file,0," ]]; then
+          echo "virtualbox-ovf|${data:9}"
+        elif [[ "${target}" == "amazon-ebs" ]] && [[ "${data:0:5}" == "0,id," ]]; then
+          echo "amazon-ebs|${data:5}"
+        fi
+        ;;
+    esac
+  done
 }
 
 main $@

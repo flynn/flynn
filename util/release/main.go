@@ -13,6 +13,7 @@ Usage:
   flynn-release download [--driver=<name>] [--root=<path>] <manifest>
   flynn-release upload <manifest> [<tag>]
   flynn-release vagrant <url> <checksum> <version> <provider>
+  flynn-release amis <version> <ids>
 
 Options:
   -o --output=<dest>   output destination file ("-" for stdout) [default: -]
@@ -33,5 +34,7 @@ Options:
 		upload(args)
 	case args.Bool["vagrant"]:
 		vagrant(args)
+	case args.Bool["amis"]:
+		amis(args)
 	}
 }

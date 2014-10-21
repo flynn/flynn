@@ -68,6 +68,11 @@
 			"Rev": "78d7708fc6ca767a04a26c777cdc618f39a34ac4"
 		},
 		{
+			"ImportPath": "github.com/cupcake/goamz/ec2",
+			"Comment": "r2013.02.13-151-g78d7708",
+			"Rev": "78d7708fc6ca767a04a26c777cdc618f39a34ac4"
+		},
+		{
 			"ImportPath": "github.com/cupcake/goamz/s3",
 			"Comment": "r2013.02.13-151-g78d7708",
 			"Rev": "78d7708fc6ca767a04a26c777cdc618f39a34ac4"
