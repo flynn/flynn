@@ -794,3 +794,31 @@ func TestIntergrationListAllNWFilters(t *testing.T) {
 		t.Fatalf("NWFilter %s not found", testNWFilterName)
 	}
 }
+
+func TestIntegrationDomainBlockStatsFlags(t *testing.T) {
+	conn, err := NewVirConnection("lxc:///")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.CloseConnection()
+
+	dom, err := defineTestLxcDomain(conn, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		dom.Undefine()
+		dom.Free()
+	}()
+
+	if err := dom.Create(); err != nil {
+		t.Fatal(err)
+	}
+	defer dom.Destroy()
+
+	// special case, count number of parameters
+	_, err = dom.BlockStatsFlags("", nil, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+}

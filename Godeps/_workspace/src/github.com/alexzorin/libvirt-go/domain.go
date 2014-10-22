@@ -9,7 +9,6 @@ package libvirt
 import "C"
 
 import (
-	"errors"
 	"reflect"
 	"strings"
 	"unsafe"
@@ -17,6 +16,10 @@ import (
 
 type VirDomain struct {
 	ptr C.virDomainPtr
+}
+
+type VirDomainBlockInfo struct {
+	ptr C.virDomainBlockInfo
 }
 
 type VirDomainInfo struct {
@@ -73,7 +76,7 @@ func (dest *VirTypedParameters) loadFromCPtr(params C.virTypedParameterPtr, nPar
 
 func (d *VirDomain) Free() error {
 	if result := C.virDomainFree(d.ptr); result != 0 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -81,7 +84,7 @@ func (d *VirDomain) Free() error {
 func (d *VirDomain) Create() error {
 	result := C.virDomainCreate(d.ptr)
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -89,7 +92,7 @@ func (d *VirDomain) Create() error {
 func (d *VirDomain) Destroy() error {
 	result := C.virDomainDestroy(d.ptr)
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -97,7 +100,7 @@ func (d *VirDomain) Destroy() error {
 func (d *VirDomain) Shutdown() error {
 	result := C.virDomainShutdown(d.ptr)
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -105,7 +108,7 @@ func (d *VirDomain) Shutdown() error {
 func (d *VirDomain) Reboot(flags uint) error {
 	result := C.virDomainReboot(d.ptr, C.uint(flags))
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -113,7 +116,7 @@ func (d *VirDomain) Reboot(flags uint) error {
 func (d *VirDomain) IsActive() (bool, error) {
 	result := C.virDomainIsActive(d.ptr)
 	if result == -1 {
-		return false, errors.New(GetLastError())
+		return false, GetLastError()
 	}
 	if result == 1 {
 		return true, nil
@@ -131,7 +134,7 @@ func (d *VirDomain) SetAutostart(autostart bool) error {
 	}
 	result := C.virDomainSetAutostart(d.ptr, cAutostart)
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -140,7 +143,7 @@ func (d *VirDomain) GetAutostart() (bool, error) {
 	var out C.int
 	result := C.virDomainGetAutostart(d.ptr, (*C.int)(unsafe.Pointer(&out)))
 	if result == -1 {
-		return false, errors.New(GetLastError())
+		return false, GetLastError()
 	}
 	switch out {
 	case 1:
@@ -150,10 +153,35 @@ func (d *VirDomain) GetAutostart() (bool, error) {
 	}
 }
 
+func (d *VirDomain) GetBlockInfo(disk string, flag uint) (VirDomainBlockInfo, error) {
+	bi := VirDomainBlockInfo{}
+	var ptr C.virDomainBlockInfo
+	cDisk := C.CString(disk)
+	defer C.free(unsafe.Pointer(cDisk))
+	result := C.virDomainGetBlockInfo(d.ptr, cDisk, (*C.virDomainBlockInfo)(unsafe.Pointer(&ptr)), C.uint(flag))
+	if result == -1 {
+		return bi, GetLastError()
+	}
+	bi.ptr = ptr
+	return bi, nil
+}
+
+func (b *VirDomainBlockInfo) Allocation() uint64 {
+	return uint64(b.ptr.allocation)
+}
+
+func (b *VirDomainBlockInfo) Capacity() uint64 {
+	return uint64(b.ptr.capacity)
+}
+
+func (b *VirDomainBlockInfo) Physical() uint64 {
+	return uint64(b.ptr.physical)
+}
+
 func (d *VirDomain) GetName() (string, error) {
 	name := C.virDomainGetName(d.ptr)
 	if name == nil {
-		return "", errors.New(GetLastError())
+		return "", GetLastError()
 	}
 	return C.GoString(name), nil
 }
@@ -166,9 +194,17 @@ func (d *VirDomain) GetState() ([]int, error) {
 		(*C.int)(unsafe.Pointer(&cReason)),
 		0)
 	if int(result) == -1 {
-		return []int{}, errors.New(GetLastError())
+		return []int{}, GetLastError()
 	}
 	return []int{int(cState), int(cReason)}, nil
+}
+
+func (d *VirDomain) GetID() (uint, error) {
+	id := uint(C.virDomainGetID(d.ptr))
+	if id == ^uint(0) {
+		return id, GetLastError()
+	}
+	return id, nil
 }
 
 func (d *VirDomain) GetUUID() ([]byte, error) {
@@ -176,7 +212,7 @@ func (d *VirDomain) GetUUID() ([]byte, error) {
 	cuidPtr := unsafe.Pointer(&cUuid)
 	result := C.virDomainGetUUID(d.ptr, (*C.uchar)(cuidPtr))
 	if result != 0 {
-		return []byte{}, errors.New(GetLastError())
+		return []byte{}, GetLastError()
 	}
 	return C.GoBytes(cuidPtr, C.VIR_UUID_BUFLEN), nil
 }
@@ -186,7 +222,7 @@ func (d *VirDomain) GetUUIDString() (string, error) {
 	cuidPtr := unsafe.Pointer(&cUuid)
 	result := C.virDomainGetUUIDString(d.ptr, (*C.char)(cuidPtr))
 	if result != 0 {
-		return "", errors.New(GetLastError())
+		return "", GetLastError()
 	}
 	return C.GoString((*C.char)(cuidPtr)), nil
 }
@@ -196,7 +232,7 @@ func (d *VirDomain) GetInfo() (VirDomainInfo, error) {
 	var ptr C.virDomainInfo
 	result := C.virDomainGetInfo(d.ptr, (*C.virDomainInfo)(unsafe.Pointer(&ptr)))
 	if result == -1 {
-		return di, errors.New(GetLastError())
+		return di, GetLastError()
 	}
 	di.ptr = ptr
 	return di, nil
@@ -205,7 +241,7 @@ func (d *VirDomain) GetInfo() (VirDomainInfo, error) {
 func (d *VirDomain) GetXMLDesc(flags uint32) (string, error) {
 	result := C.virDomainGetXMLDesc(d.ptr, C.uint(flags))
 	if result == nil {
-		return "", errors.New(GetLastError())
+		return "", GetLastError()
 	}
 	xml := C.GoString(result)
 	C.free(unsafe.Pointer(result))
@@ -248,7 +284,7 @@ func (d *VirDomain) GetCPUStats(params *VirTypedParameters, nParams int, startCp
 
 	result := int(C.virDomainGetCPUStats(d.ptr, (C.virTypedParameterPtr)(cParams), C.uint(nParams), C.int(startCpu), C.uint(nCpus), C.uint(flags)))
 	if result == -1 {
-		return result, errors.New(GetLastError())
+		return result, GetLastError()
 	}
 
 	if cParamsLen > 0 {
@@ -271,7 +307,7 @@ func (d *VirDomain) GetInterfaceParameters(device string, params *VirTypedParame
 
 	result := int(C.virDomainGetInterfaceParameters(d.ptr, C.CString(device), (C.virTypedParameterPtr)(cParams), (*C.int)(unsafe.Pointer(nParams)), C.uint(flags)))
 	if result == -1 {
-		return result, errors.New(GetLastError())
+		return result, GetLastError()
 	}
 
 	if params != nil && *nParams > 0 {
@@ -290,7 +326,7 @@ func (d *VirDomain) GetMetadata(tipus int, uri string, flags uint32) (string, er
 
 	result := C.virDomainGetMetadata(d.ptr, C.int(tipus), cUri, C.uint(flags))
 	if result == nil {
-		return "", errors.New(GetLastError())
+		return "", GetLastError()
 
 	}
 	defer C.free(unsafe.Pointer(result))
@@ -313,7 +349,7 @@ func (d *VirDomain) SetMetadata(metaDataType int, metaDataCont, uriKey, uri stri
 	}
 	result := C.virDomainSetMetadata(d.ptr, C.int(metaDataType), cMetaDataCont, cUriKey, cUri, C.uint(flags))
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -321,7 +357,7 @@ func (d *VirDomain) SetMetadata(metaDataType int, metaDataCont, uriKey, uri stri
 func (d *VirDomain) Undefine() error {
 	result := C.virDomainUndefine(d.ptr)
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -329,7 +365,7 @@ func (d *VirDomain) Undefine() error {
 func (d *VirDomain) SetMaxMemory(memory uint) error {
 	result := C.virDomainSetMaxMemory(d.ptr, C.ulong(memory))
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -337,7 +373,7 @@ func (d *VirDomain) SetMaxMemory(memory uint) error {
 func (d *VirDomain) SetMemory(memory uint64) error {
 	result := C.virDomainSetMemory(d.ptr, C.ulong(memory))
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -345,7 +381,7 @@ func (d *VirDomain) SetMemory(memory uint64) error {
 func (d *VirDomain) SetMemoryFlags(memory uint64, flags uint32) error {
 	result := C.virDomainSetMemoryFlags(d.ptr, C.ulong(memory), C.uint(flags))
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -353,7 +389,7 @@ func (d *VirDomain) SetMemoryFlags(memory uint64, flags uint32) error {
 func (d *VirDomain) SetMemoryStatsPeriod(period int, flags uint) error {
 	result := C.virDomainSetMemoryStatsPeriod(d.ptr, C.int(period), C.uint(flags))
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -361,7 +397,7 @@ func (d *VirDomain) SetMemoryStatsPeriod(period int, flags uint) error {
 func (d *VirDomain) SetVcpus(vcpu uint) error {
 	result := C.virDomainSetVcpus(d.ptr, C.uint(vcpu))
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -369,7 +405,7 @@ func (d *VirDomain) SetVcpus(vcpu uint) error {
 func (d *VirDomain) SetVcpusFlags(vcpu uint, flags uint) error {
 	result := C.virDomainSetVcpusFlags(d.ptr, C.uint(vcpu), C.uint(flags))
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -377,7 +413,7 @@ func (d *VirDomain) SetVcpusFlags(vcpu uint, flags uint) error {
 func (d *VirDomain) Suspend() error {
 	result := C.virDomainSuspend(d.ptr)
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -385,7 +421,7 @@ func (d *VirDomain) Suspend() error {
 func (d *VirDomain) Resume() error {
 	result := C.virDomainResume(d.ptr)
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -393,7 +429,7 @@ func (d *VirDomain) Resume() error {
 func (d *VirDomain) AbortJob() error {
 	result := C.virDomainAbortJob(d.ptr)
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -401,7 +437,7 @@ func (d *VirDomain) AbortJob() error {
 func (d *VirDomain) DestroyFlags(flags uint) error {
 	result := C.virDomainDestroyFlags(d.ptr, C.uint(flags))
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -409,7 +445,7 @@ func (d *VirDomain) DestroyFlags(flags uint) error {
 func (d *VirDomain) ShutdownFlags(flags uint) error {
 	result := C.virDomainShutdownFlags(d.ptr, C.uint(flags))
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -419,7 +455,7 @@ func (d *VirDomain) AttachDevice(xml string) error {
 	defer C.free(unsafe.Pointer(cXml))
 	result := C.virDomainAttachDevice(d.ptr, cXml)
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -429,7 +465,7 @@ func (d *VirDomain) AttachDeviceFlags(xml string, flags uint) error {
 	defer C.free(unsafe.Pointer(cXml))
 	result := C.virDomainAttachDeviceFlags(d.ptr, cXml, C.uint(flags))
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -439,7 +475,7 @@ func (d *VirDomain) DetachDevice(xml string) error {
 	defer C.free(unsafe.Pointer(cXml))
 	result := C.virDomainDetachDevice(d.ptr, cXml)
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -449,7 +485,53 @@ func (d *VirDomain) DetachDeviceFlags(xml string, flags uint) error {
 	defer C.free(unsafe.Pointer(cXml))
 	result := C.virDomainDetachDeviceFlags(d.ptr, cXml, C.uint(flags))
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
+}
+
+func (d *VirDomain) Screenshot(stream *VirStream, screen, flags uint) (string, error) {
+	cType := C.virDomainScreenshot(d.ptr, stream.ptr, C.uint(screen), C.uint(flags))
+	if cType == nil {
+		return "", GetLastError()
+	}
+	defer C.free(unsafe.Pointer(cType))
+
+	mimeType := C.GoString(cType)
+	return mimeType, nil
+}
+
+func (d *VirDomain) SendKey(codeset, holdtime uint, keycodes []uint, flags uint) error {
+	result := C.virDomainSendKey(d.ptr, C.uint(codeset), C.uint(holdtime), (*C.uint)(unsafe.Pointer(&keycodes[0])), C.int(len(keycodes)), C.uint(flags))
+	if result == -1 {
+		return GetLastError()
+	}
+
+	return nil
+}
+
+func (d *VirDomain) BlockStatsFlags(disk string, params *VirTypedParameters, nParams int, flags uint32) (int, error) {
+	var cParams C.virTypedParameterPtr
+	cDisk := C.CString(disk)
+	defer C.free(unsafe.Pointer(cDisk))
+
+	cParamsLen := C.int(nParams)
+
+	if params != nil && nParams > 0 {
+		cParams = (C.virTypedParameterPtr)(C.calloc(C.size_t(nParams), C.size_t(unsafe.Sizeof(C.struct__virTypedParameter{}))))
+		defer C.virTypedParamsFree(cParams, cParamsLen)
+	} else {
+		cParams = nil
+	}
+
+	result := int(C.virDomainBlockStatsFlags(d.ptr, cDisk, (C.virTypedParameterPtr)(cParams), &cParamsLen, C.uint(flags)))
+	if result == -1 {
+		return result, GetLastError()
+	}
+
+	if cParamsLen > 0 && params != nil {
+		params.loadFromCPtr(cParams, nParams)
+	}
+
+	return int(cParamsLen), nil
 }

@@ -41,8 +41,8 @@
 		},
 		{
 			"ImportPath": "github.com/alexzorin/libvirt-go",
-			"Comment": "v2.6.0-2-g99d0178",
-			"Rev": "99d0178daa068fd3a437c218c559e3d3bee4228b"
+			"Comment": "v2.9.0",
+			"Rev": "b9951d11774a62fbdfb340eeff70c1935d8e531e"
 		},
 		{
 			"ImportPath": "github.com/badgerodon/ioutil",
