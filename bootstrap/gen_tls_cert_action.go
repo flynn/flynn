@@ -5,18 +5,10 @@
 package bootstrap
 
 import (
-	"bytes"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/base64"
-	"encoding/pem"
 	"fmt"
-	"math/big"
-	"net"
 	"time"
+
+	"github.com/flynn/flynn/pkg/certgen"
 )
 
 type GenTLSCertAction struct {
@@ -47,48 +39,10 @@ func (a *GenTLSCertAction) Run(s *State) (err error) {
 }
 
 func (a *GenTLSCertAction) generateCert(s *State) (cert, privKey, pin string, err error) {
-	priv, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return
+	certOptions := certgen.Certificate{
+		Lifespan: 365 * 24 * time.Hour,
+		Hosts:    a.Hosts,
 	}
-
-	template := x509.Certificate{
-		SerialNumber: new(big.Int).SetInt64(0),
-		Subject: pkix.Name{
-			Organization: []string{"Flynn"},
-		},
-		NotBefore: time.Now(),
-		NotAfter:  time.Now().Add(365 * 24 * time.Hour),
-
-		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-	}
-
-	for _, h := range a.Hosts {
-		host := interpolate(s, h)
-		if ip := net.ParseIP(host); ip != nil {
-			template.IPAddresses = append(template.IPAddresses, ip)
-		} else {
-			template.DNSNames = append(template.DNSNames, host)
-		}
-	}
-
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
-	if err != nil {
-		return
-	}
-
-	h := sha256.New()
-	h.Write(derBytes)
-	pin = base64.StdEncoding.EncodeToString(h.Sum(nil))
-
-	var buf bytes.Buffer
-	pem.Encode(&buf, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
-	cert = buf.String()
-	buf.Reset()
-	pem.Encode(&buf, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
-	privKey = buf.String()
-
+	cert, privKey, pin, err = certgen.Generate(certOptions)
 	return
 }
