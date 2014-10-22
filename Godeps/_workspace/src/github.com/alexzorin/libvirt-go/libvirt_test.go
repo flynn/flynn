@@ -146,6 +146,20 @@ func TestHostname(t *testing.T) {
 	}
 }
 
+func TestLibVersion(t *testing.T) {
+	conn := buildTestConnection()
+	defer conn.CloseConnection()
+	version, err := conn.GetLibVersion()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if version == 0 {
+		t.Error("Version was 0")
+		return
+	}
+}
+
 func TestListDefinedDomains(t *testing.T) {
 	conn := buildTestConnection()
 	defer conn.CloseConnection()
@@ -252,6 +266,54 @@ func TestLookupInvalidDomainByName(t *testing.T) {
 	_, err := conn.LookupDomainByName("non_existent_domain")
 	if err == nil {
 		t.Error("Could find non-existent domain by name")
+		return
+	}
+}
+
+func TestDomainCreateXML(t *testing.T) {
+	conn := buildTestConnection()
+	nodom := VirDomain{}
+	defer conn.CloseConnection()
+	// Test a minimally valid xml
+	defName := time.Now().String()
+	xml := `<domain type="test">
+		<name>` + defName + `</name>
+		<memory unit="KiB">8192</memory>
+		<os>
+			<type>hvm</type>
+		</os>
+	</domain>`
+	dom, err := conn.DomainCreateXML(xml, VIR_DOMAIN_NONE)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		if dom != nodom {
+			dom.Destroy()
+			dom.Free()
+		}
+	}()
+	name, err := dom.GetName()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if name != defName {
+		t.Fatalf("Name was not '%s': %s", defName, name)
+		return
+	}
+
+	// Destroy the domain: it should not be persistent
+	if err := dom.Destroy(); err != nil {
+		t.Error(err)
+		return
+	}
+	dom = nodom
+
+	testeddom, err := conn.LookupDomainByName(defName)
+	if testeddom != nodom {
+		t.Fatal("Created domain is persisting")
 		return
 	}
 }
@@ -729,4 +791,83 @@ func TestListAllStoragePools(t *testing.T) {
 	if found == false {
 		t.Fatalf("storage pool %s not found", testStoragePool)
 	}
+}
+
+func TestDomainEventRegister(t *testing.T) {
+
+	callbackId := -1
+
+	conn := buildTestConnection()
+	defer func() {
+		if callbackId >= 0 {
+			conn.DomainEventDeregister(callbackId)
+		}
+		conn.CloseConnection()
+	}()
+
+	nodom := VirDomain{}
+	defName := time.Now().String()
+
+	nbEvents := 0
+
+	callback := DomainEventCallback(
+		func(c *VirConnection, d *VirDomain, eventDetails interface{}, f func()) int {
+			if lifecycleEvent, ok := eventDetails.(DomainLifecycleEvent); ok {
+				if lifecycleEvent.Event == VIR_DOMAIN_EVENT_STARTED {
+					domName, _ := d.GetName()
+					if defName != domName {
+						t.Fatalf("Name was not '%s': %s", defName, domName)
+					}
+				}
+			} else {
+				t.Fatalf("event details isn't DomainLifecycleEvent")
+			}
+			f()
+			return 0
+		},
+	)
+
+	EventRegisterDefaultImpl()
+
+	callbackId = conn.DomainEventRegister(
+		VirDomain{},
+		VIR_DOMAIN_EVENT_ID_LIFECYCLE,
+		&callback,
+		func() {
+			nbEvents++
+		},
+	)
+
+	// Test a minimally valid xml
+	xml := `<domain type="test">
+		<name>` + defName + `</name>
+		<memory unit="KiB">8192</memory>
+		<os>
+			<type>hvm</type>
+		</os>
+	</domain>`
+	dom, err := conn.DomainCreateXML(xml, VIR_DOMAIN_NONE)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	// This is blocking as long as there is no message
+	EventRunDefaultImpl()
+	if nbEvents == 0 {
+		t.Fatal("At least one event was expected")
+	}
+
+	defer func() {
+		if dom != nodom {
+			dom.Destroy()
+			dom.Free()
+		}
+	}()
+
+	// Deregister the event
+	if ret := conn.DomainEventDeregister(callbackId); ret < 0 {
+		t.Fatal("Event deregistration failed")
+	}
+	callbackId = -1 // Don't deregister twice
 }

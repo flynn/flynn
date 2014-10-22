@@ -1,6 +1,7 @@
 package libvirt
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -73,6 +74,25 @@ func TestGetDomainState(t *testing.T) {
 		t.Error("Domain state in test transport should be [5 0]")
 		return
 	}
+}
+
+func TestGetDomainID(t *testing.T) {
+	dom, conn := buildTestDomain()
+	defer func() {
+		dom.Free()
+		conn.CloseConnection()
+	}()
+
+	if err := dom.Create(); err != nil {
+		t.Error("Failed to create domain")
+	}
+
+	if id, err := dom.GetID(); id == ^uint(0) || err != nil {
+		dom.Destroy()
+		t.Error("Couldn't get domain ID")
+		return
+	}
+	dom.Destroy()
 }
 
 func TestGetDomainUUID(t *testing.T) {
@@ -435,5 +455,29 @@ func TesDomainDestoryFlags(t *testing.T) {
 	if state[0] != 5 || state[1] != 1 {
 		t.Fatal("state should be [5 1]")
 		return
+	}
+}
+
+func TestDomainScreenshot(t *testing.T) {
+	dom, conn := buildTestDomain()
+	defer func() {
+		dom.Free()
+		conn.CloseConnection()
+	}()
+	if err := dom.Create(); err != nil {
+		t.Error(err)
+		return
+	}
+	stream, err := NewVirStream(&conn, 0)
+	if err != nil {
+		t.Fatalf("failed to create new stream: %s", err)
+	}
+	defer stream.Free()
+	mime, err := dom.Screenshot(stream, 0, 0)
+	if err != nil {
+		t.Fatalf("failed to take screenshot: %s", err)
+	}
+	if strings.Index(mime, "image/") != 0 {
+		t.Fatalf("Wanted image/*, got %s", mime)
 	}
 }

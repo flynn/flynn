@@ -9,7 +9,6 @@ package libvirt
 import "C"
 
 import (
-	"errors"
 	"unsafe"
 )
 
@@ -19,7 +18,7 @@ type VirNWFilter struct {
 
 func (f *VirNWFilter) Free() error {
 	if result := C.virNWFilterFree(f.ptr); result != 0 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -27,7 +26,7 @@ func (f *VirNWFilter) Free() error {
 func (f *VirNWFilter) GetName() (string, error) {
 	name := C.virNWFilterGetName(f.ptr)
 	if name == nil {
-		return "", errors.New(GetLastError())
+		return "", GetLastError()
 	}
 	return C.GoString(name), nil
 }
@@ -35,7 +34,7 @@ func (f *VirNWFilter) GetName() (string, error) {
 func (f *VirNWFilter) Undefine() error {
 	result := C.virNWFilterUndefine(f.ptr)
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -45,7 +44,7 @@ func (f *VirNWFilter) GetUUID() ([]byte, error) {
 	cuidPtr := unsafe.Pointer(&cUuid)
 	result := C.virNWFilterGetUUID(f.ptr, (*C.uchar)(cuidPtr))
 	if result != 0 {
-		return []byte{}, errors.New(GetLastError())
+		return []byte{}, GetLastError()
 	}
 	return C.GoBytes(cuidPtr, C.VIR_UUID_BUFLEN), nil
 }
@@ -55,7 +54,7 @@ func (f *VirNWFilter) GetUUIDString() (string, error) {
 	cuidPtr := unsafe.Pointer(&cUuid)
 	result := C.virNWFilterGetUUIDString(f.ptr, (*C.char)(cuidPtr))
 	if result != 0 {
-		return "", errors.New(GetLastError())
+		return "", GetLastError()
 	}
 	return C.GoString((*C.char)(cuidPtr)), nil
 }
@@ -63,7 +62,7 @@ func (f *VirNWFilter) GetUUIDString() (string, error) {
 func (f *VirNWFilter) GetXMLDesc(flags uint32) (string, error) {
 	result := C.virNWFilterGetXMLDesc(f.ptr, C.uint(flags))
 	if result == nil {
-		return "", errors.New(GetLastError())
+		return "", GetLastError()
 	}
 	xml := C.GoString(result)
 	C.free(unsafe.Pointer(result))

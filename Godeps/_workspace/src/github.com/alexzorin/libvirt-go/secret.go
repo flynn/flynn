@@ -9,7 +9,6 @@ package libvirt
 import "C"
 
 import (
-	"errors"
 	"unsafe"
 )
 
@@ -19,7 +18,7 @@ type VirSecret struct {
 
 func (s *VirSecret) Free() error {
 	if result := C.virSecretFree(s.ptr); result != 0 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -27,7 +26,7 @@ func (s *VirSecret) Free() error {
 func (s *VirSecret) Undefine() error {
 	result := C.virSecretUndefine(s.ptr)
 	if result == -1 {
-		return errors.New(GetLastError())
+		return GetLastError()
 	}
 	return nil
 }
@@ -37,7 +36,7 @@ func (s *VirSecret) GetUUID() ([]byte, error) {
 	cuidPtr := unsafe.Pointer(&cUuid)
 	result := C.virSecretGetUUID(s.ptr, (*C.uchar)(cuidPtr))
 	if result != 0 {
-		return []byte{}, errors.New(GetLastError())
+		return []byte{}, GetLastError()
 	}
 	return C.GoBytes(cuidPtr, C.VIR_UUID_BUFLEN), nil
 }
@@ -47,7 +46,7 @@ func (s *VirSecret) GetUUIDString() (string, error) {
 	cuidPtr := unsafe.Pointer(&cUuid)
 	result := C.virSecretGetUUIDString(s.ptr, (*C.char)(cuidPtr))
 	if result != 0 {
-		return "", errors.New(GetLastError())
+		return "", GetLastError()
 	}
 	return C.GoString((*C.char)(cuidPtr)), nil
 }
@@ -55,7 +54,7 @@ func (s *VirSecret) GetUUIDString() (string, error) {
 func (s *VirSecret) GetUsageID() (string, error) {
 	result := C.virSecretGetUsageID(s.ptr)
 	if result == nil {
-		return "", errors.New(GetLastError())
+		return "", GetLastError()
 	}
 	return C.GoString(result), nil
 }
@@ -63,7 +62,7 @@ func (s *VirSecret) GetUsageID() (string, error) {
 func (s *VirSecret) GetUsageType() (int, error) {
 	result := int(C.virSecretGetUsageType(s.ptr))
 	if result == -1 {
-		return 0, errors.New(GetLastError())
+		return 0, GetLastError()
 	}
 	return result, nil
 }
@@ -71,10 +70,9 @@ func (s *VirSecret) GetUsageType() (int, error) {
 func (s *VirSecret) GetXMLDesc(flags uint32) (string, error) {
 	result := C.virSecretGetXMLDesc(s.ptr, C.uint(flags))
 	if result == nil {
-		return "", errors.New(GetLastError())
+		return "", GetLastError()
 	}
 	xml := C.GoString(result)
 	C.free(unsafe.Pointer(result))
 	return xml, nil
 }
-
