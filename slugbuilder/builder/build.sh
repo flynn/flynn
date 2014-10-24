@@ -48,6 +48,10 @@ function ensure_indent() {
   done
 }
 
+run_unprivileged() {
+  setuidgid nobody $@
+}
+
 cd $app_dir
 
 ## Load source from STDIN
@@ -64,6 +68,7 @@ fi
 # In heroku, there are two separate directories, and some
 # buildpacks expect that.
 cp -r . $build_root
+chown -R nobody:nogroup $app_dir $build_root $cache_root
 
 ## Buildpack fixes
 
@@ -87,10 +92,10 @@ if [[ -n "$BUILDPACK_URL" ]]; then
   rm -rf "$buildpack"
   /tmp/builder/install-buildpack "$buildpack_root" "$BUILDPACK_URL" custom &> /dev/null
   selected_buildpack="$buildpack"
-  buildpack_name=$($buildpack/bin/detect "$build_root") && selected_buildpack=$buildpack
+  buildpack_name=$(run_unprivileged $buildpack/bin/detect "$build_root") && selected_buildpack=$buildpack
 else
   for buildpack in "${buildpacks[@]}"; do
-    buildpack_name=$($buildpack/bin/detect "$build_root") && selected_buildpack=$buildpack && break
+    buildpack_name=$(run_unprivileged $buildpack/bin/detect "$build_root") && selected_buildpack=$buildpack && break
   done
 fi
 
@@ -103,12 +108,12 @@ fi
 
 ## Buildpack compile
 if [[ -f "$env_cookie" ]]; then
-  $selected_buildpack/bin/compile "$build_root" "$cache_root" "$env_dir" | ensure_indent
+  run_unprivileged $selected_buildpack/bin/compile "$build_root" "$cache_root" "$env_dir" | ensure_indent
 else
-  $selected_buildpack/bin/compile "$build_root" "$cache_root" | ensure_indent
+  run_unprivileged $selected_buildpack/bin/compile "$build_root" "$cache_root" | ensure_indent
 fi
 
-$selected_buildpack/bin/release "$build_root" "$cache_root" > $build_root/.release
+run_unprivileged $selected_buildpack/bin/release "$build_root" "$cache_root" > $build_root/.release
 
 ## Display process types
 

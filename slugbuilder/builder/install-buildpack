@@ -26,4 +26,3 @@ else
 fi
 
 popd > /dev/null
-chown -R slugbuilder:slugbuilder "$buildpacks_dir"
