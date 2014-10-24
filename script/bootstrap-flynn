@@ -22,19 +22,19 @@ main() {
   while getopts "hb:i:" opt; do
     case $opt in
       h)
-	usage
-	exit 1
-	;;
+        usage
+        exit 1
+        ;;
       b)
-	backend=$OPTARG
-	;;
+        backend=$OPTARG
+        ;;
       i)
-	ip=$OPTARG
-	;;
+        ip=$OPTARG
+        ;;
       ?)
-	usage
-	exit 1
-	;;
+        usage
+        exit 1
+        ;;
     esac
   done
 
