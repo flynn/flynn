@@ -12,14 +12,16 @@ usage: $0 [options]
 OPTIONS:
   -h            Show this message
   -b BACKEND    The job backend to use (either docker or libvirt-lxc) [default: libvirt-lxc]
+  -d DOMAIN     The default domain to use [default: dev.localflynn.com]
   -i IP         The external IP address to bind to [default: the IP assigned to eth0]
 USAGE
 }
 
 main() {
   local backend ip
+  local domain="${CONTROLLER_DOMAIN}"
 
-  while getopts "hb:i:" opt; do
+  while getopts "hb:d:i:" opt; do
     case $opt in
       h)
         usage
@@ -27,6 +29,9 @@ main() {
         ;;
       b)
         backend=$OPTARG
+        ;;
+      d)
+        domain=$OPTARG
         ;;
       i)
         ip=$OPTARG
@@ -39,11 +44,12 @@ main() {
   done
 
   backend=${backend:-"libvirt-lxc"}
+  domain="${domain:="dev.localflynn.com"}"
   ip=${ip:-$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')}
 
   export DISCOVERD="${ip}:1111"
-  export CONTROLLER_DOMAIN="dev.localflynn.com"
-  export DEFAULT_ROUTE_DOMAIN="${CONTROLLER_DOMAIN}"
+  export CONTROLLER_DOMAIN="${domain}"
+  export DEFAULT_ROUTE_DOMAIN="${domain}"
 
   # kill flynn first
   "${ROOT}/script/kill-flynn" -b "${backend}"
