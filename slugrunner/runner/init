@@ -63,4 +63,5 @@ fi
 
 ## Run!
 
-exec $runner "$command"
+chown -R nobody:nogroup .
+setuidgid nobody $runner "$command"
