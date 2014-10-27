@@ -4,12 +4,11 @@ import (
 	"io"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/lumberjack"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/natefinch/lumberjack"
 	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 )
 
@@ -25,20 +24,20 @@ func (s *S) TestLogWriteRead(c *C) {
 	defer stdoutW.Close()
 	defer stderrW.Close()
 
-	l := NewLog(&lumberjack.Logger{Dir: c.MkDir()})
+	l := NewLog(&lumberjack.Logger{})
 	defer l.Close()
-	r := l.NewReader()
-	defer r.Close()
-	_, err := r.ReadData(false)
-	c.Assert(err, Equals, io.EOF)
+	ch := make(chan Data)
+	err := l.Read(-1, false, ch, nil)
+	c.Assert(err, IsNil)
+	c.Assert(len(ch), Equals, 0)
 
-	readFrom := func(stream int, r io.Reader) {
-		if err := l.ReadFrom(stream, r); err != nil && err != io.EOF {
+	follow := func(stream int, r io.Reader) {
+		if err := l.Follow(stream, r); err != nil && err != io.EOF {
 			c.Error(err)
 		}
 	}
-	go readFrom(0, stdoutR)
-	go readFrom(1, stderrR)
+	go follow(1, stdoutR)
+	go follow(2, stderrR)
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -53,130 +52,59 @@ func (s *S) TestLogWriteRead(c *C) {
 		wg.Done()
 	}()
 	wg.Wait()
+	l.l.Rotate()
+	stdoutW.Write([]byte("3"))
+	ch = make(chan Data)
+	go l.Read(-1, false, ch, nil)
+	c.Assert(err, IsNil)
 
 	stdout, stderr := 0, 2
-	for i := 0; i < 4; i++ {
-		line, err := r.ReadData(false)
-		c.Assert(err, IsNil)
+	for i := 0; i < 5; i++ {
+		var line Data
+		select {
+		case line = <-ch:
+		case <-time.After(time.Second):
+			c.Error("timed out")
+		}
 		c.Assert(line.Timestamp.After(time.Now().Add(-time.Minute)), Equals, true)
 		switch line.Stream {
-		case 0:
+		case 1:
 			stdout++
 			c.Assert(line.Message, Equals, strconv.Itoa(stdout))
-		case 1:
+		case 2:
 			stderr++
 			c.Assert(line.Message, Equals, strconv.Itoa(stderr))
 		default:
 			c.Errorf("unknown stream: %#v", line)
 		}
 	}
-	_, err = r.ReadData(false)
-	c.Assert(err, Equals, io.EOF)
-
-	err = l.l.Rotate()
-	c.Assert(err, IsNil)
-
-	stdoutW.Write([]byte("5"))
-	line, err := r.ReadData(false)
-	c.Assert(err, IsNil)
-	c.Assert(line.Message, Equals, "5")
-
-	_, err = r.ReadData(false)
-	c.Assert(err, Equals, io.EOF)
 }
 
-func (s *S) TestClosedRead(c *C) {
-	l := NewLog(&lumberjack.Logger{Dir: c.MkDir()})
+func (s *S) TestStreaming(c *C) {
+	l := NewLog(&lumberjack.Logger{})
 	pipeR, pipeW := io.Pipe()
-	defer pipeW.Close()
-	defer l.Close()
-	go l.ReadFrom(0, pipeR)
+	go l.Follow(1, pipeR)
 
-	pipeW.Write([]byte("1"))
-
-	r := l.NewReader()
-	defer r.Close()
-	line, err := r.ReadData(false)
-	c.Assert(err, IsNil)
-	c.Assert(line.Message, Equals, "1")
-
-	_, err = r.ReadData(false)
-	c.Assert(err, Equals, io.EOF)
-}
-
-func (s *S) TestBlockingRead(c *C) {
-	l := NewLog(&lumberjack.Logger{Dir: c.MkDir()})
-	pipeR, pipeW := io.Pipe()
-	go l.ReadFrom(0, pipeR)
-
-	ch := make(chan struct{})
-	r := l.NewReader()
-	defer r.Close()
-	var data *Data
-	readData := func() {
-		var err error
-		data, err = r.ReadData(true)
-		c.Assert(err, IsNil)
-		ch <- struct{}{}
-	}
-	waitData := func() {
-		select {
-		case <-ch:
-		case <-time.After(time.Second):
-			c.Error("timed out waiting for readData")
-		}
-	}
+	ch := make(chan Data)
+	done := make(chan struct{})
+	go l.Read(-1, true, ch, done)
 
 	for i := 0; i < 3; i++ {
-		go readData()
 		s := strconv.Itoa(i)
 		pipeW.Write([]byte(s))
-		waitData()
+		var data Data
+		select {
+		case data = <-ch:
+		case <-time.After(time.Second):
+			c.Error("timed out")
+		}
 		c.Assert(data, Not(IsNil))
 		c.Assert(data.Message, Equals, s)
-		if i == 1 {
-			l.l.Rotate()
-		}
 	}
-
-	go func() {
-		_, err := r.ReadData(true)
-		c.Assert(err, Equals, io.EOF)
-		ch <- struct{}{}
-	}()
+	done <- struct{}{}
 
 	runtime.Gosched()
 	pipeW.Close()
 	l.Close()
 	<-ch
-}
-
-func (s *S) TestSeekToEnd(c *C) {
-	l := NewLog(&lumberjack.Logger{Dir: c.MkDir()})
-	defer l.Close()
-
-	r := l.NewReader()
-	defer r.Close()
-
-	err := r.SeekToEnd()
-	c.Assert(err, IsNil)
-
-	data, err := r.ReadData(false)
-	c.Assert(err, Equals, io.EOF)
-
-	go func() {
-		runtime.Gosched()
-		l.ReadFrom(0, strings.NewReader("1"))
-	}()
-	data, err = r.ReadData(true)
-	c.Assert(err, IsNil)
-	c.Assert(data.Message, Equals, "1")
-
-	l.ReadFrom(0, strings.NewReader("2"))
-	err = r.SeekToEnd()
-	c.Assert(err, IsNil)
-	go l.ReadFrom(0, strings.NewReader("3"))
-	data, err = r.ReadData(true)
-	c.Assert(err, IsNil)
-	c.Assert(data.Message, Equals, "3")
 }

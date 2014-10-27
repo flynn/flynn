@@ -49,6 +49,7 @@ type dockerClient interface {
 	InspectContainer(string) (*docker.Container, error)
 	AddEventListener(chan<- *docker.APIEvents) error
 	RemoveEventListener(chan *docker.APIEvents) error
+	Logs(opts docker.LogsOptions) error
 	StopContainer(string, uint) error
 	ResizeContainerTTY(string, int, int) error
 	AttachToContainer(docker.AttachToContainerOptions) error
