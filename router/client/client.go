@@ -2,8 +2,6 @@
 package client
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,8 +10,16 @@ import (
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/client/dialer"
+	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/router/types"
 )
+
+// ErrNotFound is returned when no route was found.
+var ErrNotFound = errors.New("router: route not found")
+
+type client struct {
+	*httpclient.Client
+}
 
 // New uses the default discoverd client and returns a client.
 func New() (Client, error) {
@@ -23,12 +29,20 @@ func New() (Client, error) {
 	return NewWithDiscoverd("", discoverd.DefaultClient), nil
 }
 
+func newRouterClient() *client {
+	c := &httpclient.Client{
+		ErrPrefix:   "router",
+		ErrNotFound: ErrNotFound,
+	}
+	return &client{Client: c}
+}
+
 // NewWithAddr uses addr as the specified API url and returns a client.
 func NewWithAddr(addr string) Client {
-	return &client{
-		url:  fmt.Sprintf("http://%s", addr),
-		http: http.DefaultClient,
-	}
+	c := newRouterClient()
+	c.URL = fmt.Sprintf("http://%s", addr)
+	c.HTTP = http.DefaultClient
+	return c
 }
 
 // NewWithDiscoverd uses the provided discoverd client and returns a client.
@@ -36,11 +50,13 @@ func NewWithDiscoverd(name string, dc dialer.DiscoverdClient) Client {
 	if name == "" {
 		name = "router"
 	}
-	c := &client{
-		dialer: dialer.New(dc, nil),
-		url:    fmt.Sprintf("http://%s-api", name),
-	}
-	c.http = &http.Client{Transport: &http.Transport{Dial: c.dialer.Dial}}
+	dialer := dialer.New(dc, nil)
+	c := newRouterClient()
+	c.ErrPrefix = name
+	c.Dial = dialer.Dial
+	c.DialClose = dialer
+	c.URL = fmt.Sprintf("http://%s-api", name)
+	c.HTTP = &http.Client{Transport: &http.Transport{Dial: c.Dial}}
 	return c
 }
 
@@ -62,9 +78,6 @@ type Client interface {
 	io.Closer
 }
 
-// ErrNotFound is returned when no route was found.
-var ErrNotFound = errors.New("router: route not found")
-
 // HTTPError is returned when the server returns a status code that is different
 // from 200, which is normally caused by an error.
 type HTTPError struct {
@@ -75,90 +88,21 @@ func (e HTTPError) Error() string {
 	return fmt.Sprintf("router: expected http status 200, got %d", e.Response.StatusCode)
 }
 
-type client struct {
-	url    string
-	dialer dialer.Dialer
-	http   *http.Client
-}
-
-func (c *client) get(path string, v interface{}) error {
-	res, err := c.http.Get(c.url + path)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	if res.StatusCode == 404 {
-		return ErrNotFound
-	}
-	if res.StatusCode != 200 {
-		return HTTPError{res}
-	}
-	return json.NewDecoder(res.Body).Decode(v)
-}
-
-func (c *client) post(path string, v interface{}) error {
-	return c.postJSON("POST", path, v)
-}
-
-func (c *client) put(path string, v interface{}) error {
-	return c.postJSON("PUT", path, v)
-}
-
-func (c *client) postJSON(method string, path string, v interface{}) error {
-	buf, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequest(method, c.url+path, bytes.NewBuffer(buf))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	res, err := c.http.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		return HTTPError{res}
-	}
-	return json.NewDecoder(res.Body).Decode(v)
-}
-
-func (c *client) delete(path string) error {
-	req, err := http.NewRequest("DELETE", c.url+path, nil)
-	if err != nil {
-		return err
-	}
-	res, err := c.http.Do(req)
-	if err != nil {
-		return err
-	}
-	res.Body.Close()
-	if res.StatusCode == 404 {
-		return ErrNotFound
-	}
-	if res.StatusCode != 200 {
-		return HTTPError{res}
-	}
-	return nil
-}
-
 func (c *client) CreateRoute(r *router.Route) error {
-	return c.post("/routes", r)
+	return c.Post("/routes", r, r)
 }
 
 func (c *client) SetRoute(r *router.Route) error {
-	return c.put("/routes", r)
+	return c.Put("/routes", r, r)
 }
 
 func (c *client) DeleteRoute(id string) error {
-	return c.delete("/routes/" + id)
+	return c.Delete("/routes/" + id)
 }
 
 func (c *client) GetRoute(id string) (*router.Route, error) {
 	res := &router.Route{}
-	err := c.get("/routes/"+id, res)
+	err := c.Get("/routes/"+id, res)
 	return res, err
 }
 
@@ -170,13 +114,6 @@ func (c *client) ListRoutes(parentRef string) ([]*router.Route, error) {
 		path += "?" + q.Encode()
 	}
 	var res []*router.Route
-	err := c.get(path, &res)
+	err := c.Get(path, &res)
 	return res, err
-}
-
-func (c *client) Close() error {
-	if c.dialer != nil {
-		return c.dialer.Close()
-	}
-	return nil
 }
