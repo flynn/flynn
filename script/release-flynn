@@ -1,0 +1,114 @@
+#!/bin/bash
+
+set -eo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "${ROOT}/script/lib/ui.sh"
+source "${ROOT}/script/lib/aws.sh"
+
+usage() {
+  cat <<USAGE >&2
+usage: $0 [options] COMMIT
+
+OPTIONS:
+  -h            Show this message
+  -b BUCKET     The S3 bucket to upload packages and vm images to [default: flynn]
+  -d DOMAIN     The CloudFront domain [default: dl.flynn.io]
+  -r DIR        Resume the release using DIR
+
+Requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set
+USAGE
+}
+
+main() {
+  local bucket dir domain
+
+  while getopts "hb:d:r:" opt; do
+    case $opt in
+      h)
+        usage
+        exit 1
+        ;;
+      b)
+        bucket=$OPTARG
+        ;;
+      d)
+        domain=$OPTARG
+        ;;
+      r)
+        dir=$OPTARG
+        if [[ ! -d "${dir}" ]]; then
+          fail "No such directory: ${dir}"
+        fi
+        ;;
+      ?)
+        usage
+        exit 1
+        ;;
+    esac
+  done
+  shift $(($OPTIND - 1))
+
+  if [[ $# -ne 1 ]]; then
+    usage
+    exit 1
+  fi
+
+  check_aws_keys
+
+  local commit=$1
+  bucket="${bucket:-"flynn"}"
+  dir="${dir:-$(mktemp -d)}"
+  domain="${domain:-"dl.flynn.io"}"
+
+  # release-packages prints results to fd 3, so create a pipe to read them
+  results="$(mktemp -u)"
+  mkfifo "${results}"
+  trap "rm -f ${results}" EXIT
+
+  info "releasing packages"
+  "${ROOT}/script/release-packages" \
+    -k \
+    -b "${bucket}" \
+    -r "${dir}" \
+    "${commit}" \
+    3>"${results}" \
+    &
+
+  # grab the version and deb_url from the results
+  local version deb_url
+  while read line; do
+    IFS="|" read field value <<< "${line}"
+
+    case "${field}" in
+      version)
+        version="${value}"
+        ;;
+      deb_url)
+        deb_url="${value}"
+        ;;
+    esac
+  done < "${results}"
+
+  if [[ -z "${version}" ]] || [[ -z "${deb_url}" ]]; then
+    fail "failed to release packages"
+  fi
+
+  info "releasing vm images"
+  "${ROOT}/script/release-vm-images" \
+    -k \
+    -b "${bucket}" \
+    -d "${domain}" \
+    -r "${dir}" \
+    "${version}" \
+    "${deb_url}"
+
+  info "successfully released Flynn version ${version}"
+
+  info "removing locally built files"
+  rm -rf "${dir}"
+
+  info "done!"
+}
+
+main $@

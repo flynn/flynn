@@ -4,17 +4,16 @@ set -eo pipefail
 
 usage() {
   cat <<USAGE >&2
-usage: $0 [options]
+usage: $0 [options] VERSION
 
 OPTIONS:
   -h            Show this message
   -d DIR        The directory containing the built flynn files [default: the repo this script is in]
-  -i ITERATION  The iteration of this release [default: 0]
 USAGE
 }
 
 main() {
-  local dir iteration
+  local dir
 
   while getopts "hd:i:" opt; do
     case $opt in
@@ -25,26 +24,29 @@ main() {
       d)
 	dir=$OPTARG
 	;;
-      i)
-	iteration=$OPTARG
-	;;
       ?)
 	usage
 	exit 1
 	;;
     esac
   done
+  shift $(($OPTIND - 1))
 
+  if [[ $# -ne 1 ]]; then
+    usage
+    exit 1
+  fi
+
+  local version=$1
   dir=${dir:-$(cd $(dirname "$0")/..; pwd)}
-  iteration=${iteration:-0}
 
   cd "${dir}"
   local rev=$(git rev-parse HEAD)
-  local version="0:$(date +%Y%m%d).${iteration}~${rev:0:8}"
+  local deb_version="0:${version}~${rev:0:8}"
 
   fpm -s dir -t deb \
     --name flynn-host \
-    --version "${version}" \
+    --version "${deb_version}" \
     --depends aufs-tools \
     --depends libvirt-bin \
     --depends iptables \

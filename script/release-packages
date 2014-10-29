@@ -38,27 +38,33 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
 
-# S3_URI must have a trailing slash
-S3_URI="s3://flynn/ubuntu/"
-
 usage() {
   cat <<USAGE >&2
 usage: $0 [options] COMMIT
 
 OPTIONS:
   -h            Show this message
+  -k            Keep release directory
+  -b BUCKET     The S3 bucket to sync the apt repo with [default: flynn]
   -r DIR        Resume the release using DIR
 USAGE
 }
 
 main() {
-  local dir
+  local bucket dir
+  local keep=false
 
-  while getopts "hr:" opt; do
+  while getopts "hkb:r:" opt; do
     case $opt in
       h)
 	usage
 	exit 1
+	;;
+      k)
+        keep=true
+        ;;
+      b)
+	bucket=$OPTARG
 	;;
       r)
         dir=$OPTARG
@@ -87,6 +93,7 @@ main() {
     fail "commit has not passed CI"
   fi
 
+  bucket="${bucket:-"flynn"}"
   dir="${dir:-$(mktemp -d)}"
   info "using base dir: ${dir}"
 
@@ -117,12 +124,14 @@ main() {
   # NOTE: the trailing slash is necessary
   apt_dir="${dir}/apt/"
   mkdir -p "${apt_dir}"
-  s3cmd sync --delete-removed $S3_URI "${apt_dir}"
+  s3cmd sync --delete-removed "s3://${bucket}/ubuntu/" "${apt_dir}"
 
   info "building deb package"
-  local iteration=$(find "${apt_dir}" -name "flynn-host_$(date +%Y%m%d)*.deb" | wc -l)
+  local date=$(date +%Y%m%d)
+  local iteration=$(find "${apt_dir}" -name "flynn-host*${date}*.deb" | wc -l)
+  local version="${date}.${iteration}"
   rm -f "${src}"/*.deb
-  "${ROOT}/script/build-deb" -d "${src}" -i $iteration
+  "${ROOT}/script/build-deb" -d "${src}" "${version}"
 
   info "signing deb package"
   local deb=$(ls "${src}"/*.deb)
@@ -132,12 +141,26 @@ main() {
   reprepro -b "${apt_dir}" includedeb flynn "${deb}"
 
   info "uploading apt repo"
-  sync_cloudfront "${apt_dir}" $S3_URI
+  sync_cloudfront "${apt_dir}" "s3://${bucket}/ubuntu/"
 
-  info "cleaning up"
-  rm -rf "${dir}"
+  info "successfully released packages for version ${version}"
 
-  info "done!"
+  if $keep; then
+    info "locally built packages will remain in ${dir}"
+  else
+    info "removing locally built packages"
+    rm -rf "${dir}"
+  fi
+
+  # print results to fd 3 if open
+  if [[ -e "/dev/fd/3" ]]; then
+    local deb_name=$(basename "${apt_dir}pool/main/f/flynn-host/flynn-host_${version}"*.deb)
+
+    cat <<EOF >&3
+version|${version}
+deb_url|https://s3.amazonaws.com/${bucket}/ubuntu/pool/main/f/flynn-host/${deb_name}
+EOF
+  fi
 }
 
 main $@
