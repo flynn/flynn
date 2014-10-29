@@ -31,6 +31,7 @@ set -eo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
+source "${ROOT}/script/lib/util.sh"
 
 UBUNTU_BOX_NAME="ubuntu-trusty-20141016" # used in filenames for caching, bump at the same time as UBUNTU_BOX_URL
 UBUNTU_BOX_URL="http://cloud-images.ubuntu.com/vagrant/trusty/20141016/trusty-server-cloudimg-amd64-vagrant-disk1.box"
@@ -211,11 +212,6 @@ main() {
     info "removing locally built images"
     rm -rf "${dir}"
   fi
-}
-
-sha256() {
-  local file=$1
-  sha256sum "${file}" | cut -d ' ' -f 1
 }
 
 # parse_packer reads machine readable packer output, prints the
