@@ -53,21 +53,13 @@ main() {
   while getopts "hkb:p:r:" opt; do
     case $opt in
       h)
-	usage
-	exit 1
-	;;
-      k)
-        keep=true
+        usage
+        exit 1
         ;;
-      b)
-	bucket=$OPTARG
-	;;
-      g)
-        passphrase_file=$OPTARG
-        ;;
-      p)
-        image_prefix=$OPTARG
-        ;;
+      g) passphrase_file=$OPTARG ;;
+      k) keep=true ;;
+      b) bucket=$OPTARG ;;
+      p) image_prefix=$OPTARG ;;
       r)
         dir=$OPTARG
         if [[ ! -d "${dir}" ]]; then
@@ -75,9 +67,9 @@ main() {
         fi
         ;;
       ?)
-	usage
-	exit 1
-	;;
+        usage
+        exit 1
+        ;;
     esac
   done
   shift $(($OPTIND - 1))
@@ -113,7 +105,11 @@ main() {
   pushd "${src}" >/dev/null
 
   info "pulling dependent images"
-  git grep -h "^FROM" **/Dockerfile | cut -d ' ' -f 2 | sort | uniq | xargs -L 1 docker pull
+  git grep -h "^FROM" **/Dockerfile \
+    | cut -d " " -f 2 \
+    | sort \
+    | uniq \
+    | xargs -L 1 docker pull
 
   info "building flynn"
   git checkout --force --quiet $commit
