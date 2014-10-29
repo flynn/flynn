@@ -66,8 +66,8 @@ main() {
         keep=true
         ;;
       b)
-	bucket=$OPTARG
-	;;
+  bucket=$OPTARG
+  ;;
       d)
         domain=$OPTARG
         ;;
@@ -78,9 +78,9 @@ main() {
         fi
         ;;
       ?)
-	usage
-	exit 1
-	;;
+  usage
+  exit 1
+  ;;
     esac
   done
   shift $(($OPTIND - 1))
