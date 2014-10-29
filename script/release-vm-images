@@ -43,9 +43,10 @@ usage: $0 [options] VERSION DEB_URL
 
 OPTIONS:
   -h            Show this message
-  -k            Keep release directory
-  -b BUCKET     The S3 bucket to upload vagrant images to [default: flynn]
-  -d DOMAIN     The CloudFront domain [default: dl.flynn.io]
+  -b BUCKET     The S3 bucket to upload vagrant images to
+                [default: `flynn`]
+  -d DOMAIN     The CloudFront domain
+                [default: `dl.flynn.io`]
   -r DIR        Resume the release using DIR
 
 Requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set
