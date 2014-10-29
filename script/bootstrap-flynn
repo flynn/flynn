@@ -30,15 +30,9 @@ main() {
         usage
         exit 1
         ;;
-      b)
-        backend=$OPTARG
-        ;;
-      d)
-        domain=$OPTARG
-        ;;
-      i)
-        ip=$OPTARG
-        ;;
+      b) backend=$OPTARG ;;
+      d) domain=$OPTARG ;;
+      i) ip=$OPTARG ;;
       ?)
         usage
         exit 1

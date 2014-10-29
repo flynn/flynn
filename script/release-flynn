@@ -29,12 +29,8 @@ main() {
         usage
         exit 1
         ;;
-      b)
-        bucket=$OPTARG
-        ;;
-      d)
-        domain=$OPTARG
-        ;;
+      b) bucket=$OPTARG ;;
+      d) domain=$OPTARG ;;
       r)
         dir=$OPTARG
         if [[ ! -d "${dir}" ]]; then

@@ -61,18 +61,12 @@ main() {
   while getopts "hkb:d:r:" opt; do
     case $opt in
       h)
-	usage
-	exit 1
-	;;
-      k)
-        keep=true
+        usage
+        exit 1
         ;;
-      b)
-  bucket=$OPTARG
-  ;;
-      d)
-        domain=$OPTARG
-        ;;
+      k) keep=true ;;
+      b) bucket=$OPTARG ;;
+      d) domain=$OPTARG ;;
       r)
         dir=$OPTARG
         if [[ ! -d "${dir}" ]]; then
@@ -80,9 +74,9 @@ main() {
         fi
         ;;
       ?)
-  usage
-  exit 1
-  ;;
+        usage
+        exit 1
+        ;;
     esac
   done
   shift $(($OPTIND - 1))
