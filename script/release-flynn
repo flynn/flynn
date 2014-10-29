@@ -1,36 +1,4 @@
 #!/bin/bash
-#
-# A script to build and release Flynn packages.
-#
-# PREREQUISITES:
-#
-# - Install required packages
-#   sudo apt-get install -y reprepro dpkg-sig gnupg-agent
-#
-# - Install up-to-date s3cmd so CloudFront invalidation works:
-#   sudo apt-get install -y python-dateutil
-#   wget -O /tmp/s3cmd.deb http://archive.ubuntu.com/ubuntu/pool/universe/s/s3cmd/s3cmd_1.5.0~rc1-2_all.deb
-#   sudo dpkg -i /tmp/s3cmd.deb
-#   rm /tmp/s3cmd.deb
-#
-# - Configure s3cmd
-#   s3cmd --configure
-#
-# - Import GPG key used to sign packages
-#   gpg --import < /path/to/key.gpg
-#
-# - Set large gpg-agent cache expiry
-#   echo -e "default-cache-ttl 4294967295\nmax-cache-ttl 4294967295" | tee ~/.gnupg/gpg-agent.conf
-#
-# - Start gpg-agent
-#   eval $(gpg-agent --daemon)
-#
-# - Trigger cache of passphrase by signing something
-#   export GPG_TTY=`tty`
-#   echo | gpg --sign --yes --use-agent --output /dev/null /dev/stdin
-#
-# - Log in to Docker to push images
-#   docker login
 
 set -eo pipefail
 
@@ -38,28 +6,35 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
 
-# S3_URI must have a trailing slash
-S3_URI="s3://flynn/ubuntu/"
-
 usage() {
   cat <<USAGE >&2
 usage: $0 [options] COMMIT
 
 OPTIONS:
   -h            Show this message
+  -b BUCKET     The S3 bucket to upload packages and vm images to [default: flynn]
+  -d DOMAIN     The CloudFront domain [default: dl.flynn.io]
   -r DIR        Resume the release using DIR
+
+Requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set
 USAGE
 }
 
 main() {
-  local dir
+  local bucket dir domain
 
-  while getopts "hr:" opt; do
+  while getopts "hb:d:r:" opt; do
     case $opt in
       h)
-	usage
-	exit 1
-	;;
+        usage
+        exit 1
+        ;;
+      b)
+        bucket=$OPTARG
+        ;;
+      d)
+        domain=$OPTARG
+        ;;
       r)
         dir=$OPTARG
         if [[ ! -d "${dir}" ]]; then
@@ -67,9 +42,9 @@ main() {
         fi
         ;;
       ?)
-	usage
-	exit 1
-	;;
+        usage
+        exit 1
+        ;;
     esac
   done
   shift $(($OPTIND - 1))
@@ -79,62 +54,58 @@ main() {
     exit 1
   fi
 
+  check_aws_keys
+
   local commit=$1
-  local flynn_release="${ROOT}/util/release/flynn-release"
-
-  info "checking commit status"
-  if ! "${flynn_release}" status $commit; then
-    fail "commit has not passed CI"
-  fi
-
+  bucket="${bucket:-"flynn"}"
   dir="${dir:-$(mktemp -d)}"
-  info "using base dir: ${dir}"
+  domain="${domain:-"dl.flynn.io"}"
 
-  export GOPATH="${dir}"
-  local src="${GOPATH}/src/github.com/flynn/flynn"
+  # release-packages prints results to fd 3, so create a pipe to read them
+  results="$(mktemp -u)"
+  mkfifo "${results}"
+  trap "rm -f ${results}" EXIT
 
-  if [[ ! -d "${src}/.git" ]]; then
-    info "cloning git repo"
-    rm -rf "${src}"
-    git clone --quiet https://github.com/flynn/flynn "${src}"
+  info "releasing packages"
+  "${ROOT}/script/release-packages" \
+    -k \
+    -b "${bucket}" \
+    -r "${dir}" \
+    "${commit}" \
+    3>"${results}" \
+    &
+
+  # grab the version and deb_url from the results
+  local version deb_url
+  while read line; do
+    IFS="|" read field value <<< "${line}"
+
+    case "${field}" in
+      version)
+        version="${value}"
+        ;;
+      deb_url)
+        deb_url="${value}"
+        ;;
+    esac
+  done < "${results}"
+
+  if [[ -z "${version}" ]] || [[ -z "${deb_url}" ]]; then
+    fail "failed to release packages"
   fi
 
-  pushd "${src}" >/dev/null
+  info "releasing vm images"
+  "${ROOT}/script/release-vm-images" \
+    -k \
+    -b "${bucket}" \
+    -d "${domain}" \
+    -r "${dir}" \
+    "${version}" \
+    "${deb_url}"
 
-  info "pulling dependent images"
-  git grep -h "^FROM" **/Dockerfile | cut -d ' ' -f 2 | sort | uniq | xargs -L 1 docker pull
+  info "successfully released Flynn version ${version}"
 
-  info "building flynn"
-  git checkout --force --quiet $commit
-  tup
-
-  popd >/dev/null
-
-  info "uploading images"
-  "${flynn_release}" upload "${src}/version.json"
-
-  info "downloading apt repo"
-  # NOTE: the trailing slash is necessary
-  apt_dir="${dir}/apt/"
-  mkdir -p "${apt_dir}"
-  s3cmd sync --delete-removed $S3_URI "${apt_dir}"
-
-  info "building deb package"
-  local iteration=$(find "${apt_dir}" -name "flynn-host_$(date +%Y%m%d)*.deb" | wc -l)
-  rm -f "${src}"/*.deb
-  "${ROOT}/script/build-deb" -d "${src}" -i $iteration
-
-  info "signing deb package"
-  local deb=$(ls "${src}"/*.deb)
-  dpkg-sig --sign builder "${deb}"
-
-  info "adding deb to apt repo"
-  reprepro -b "${apt_dir}" includedeb flynn "${deb}"
-
-  info "uploading apt repo"
-  sync_cloudfront "${apt_dir}" $S3_URI
-
-  info "cleaning up"
+  info "removing locally built files"
   rm -rf "${dir}"
 
   info "done!"

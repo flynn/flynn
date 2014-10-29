@@ -1,5 +1,11 @@
 # Helpers for interacting with AWS services
 
+check_aws_keys() {
+  if [[ -z "${AWS_ACCESS_KEY_ID}" ]] || [[ -z "${AWS_SECRET_ACCESS_KEY}" ]]; then
+    fail "Both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be set"
+  fi
+}
+
 sync_cloudfront() {
   local src=$1
   local dst=$2

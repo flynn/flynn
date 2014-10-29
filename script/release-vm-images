@@ -33,6 +33,7 @@ usage: $0 [options] VERSION DEB_URL
 
 OPTIONS:
   -h            Show this message
+  -k            Keep release directory
   -b BUCKET     The S3 bucket to upload vagrant images to [default: flynn]
   -d DOMAIN     The CloudFront domain [default: dl.flynn.io]
   -r DIR        Resume the release using DIR
@@ -43,17 +44,17 @@ USAGE
 
 main() {
   local bucket dir domain
+  local keep=false
 
-  if [[ -z "${AWS_ACCESS_KEY_ID}" ]] || [[ -z "${AWS_SECRET_ACCESS_KEY}" ]]; then
-    fail "Both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be set"
-  fi
-
-  while getopts "hb:d:r:" opt; do
+  while getopts "hkb:d:r:" opt; do
     case $opt in
       h)
 	usage
 	exit 1
 	;;
+      k)
+        keep=true
+        ;;
       b)
 	bucket=$OPTARG
 	;;
@@ -78,6 +79,8 @@ main() {
     usage
     exit 1
   fi
+
+  check_aws_keys
 
   local version=$1
   local deb_url=$2
@@ -192,7 +195,14 @@ main() {
   info "cleaning up"
   rm -rf "${dir}"
 
-  info "done!"
+  info "successfully released images for version ${version}"
+
+  if $keep; then
+    info "locally built images will remain in ${dir}"
+  else
+    info "removing locally built images"
+    rm -rf "${dir}"
+  fi
 }
 
 sha256() {
