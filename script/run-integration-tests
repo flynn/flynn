@@ -14,7 +14,7 @@ main() {
 
   cluster_add=$("${ROOT}/script/bootstrap-flynn" &> >(tee /dev/stderr) | tail -1)
 
-  if [[ "${cluster_add:0:17}" != 'flynn cluster add' ]]; then
+  if [[ "${cluster_add:0:17}" != "flynn cluster add" ]]; then
     echo Bootstrap failed >&2
     exit 1
   fi

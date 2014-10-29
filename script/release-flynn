@@ -105,7 +105,7 @@ main() {
 
   rm -rf "${dir}"
 
-  info 'done!'
+  info "done!"
 }
 
 main $@

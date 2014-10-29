@@ -18,13 +18,13 @@ sync_cloudfront() {
     --no-preserve \
     "${src}" "${dst}" \
     | tee /dev/stderr \
-    | grep -oP 's3cmd cfinvalinfo cf://\w+/\w+')
+    | grep -oP "s3cmd cfinvalinfo cf://\w+/\w+")
 
   if [[ "${cf_cmd:0:5}" != "s3cmd" ]]; then
-    fail 'could not determine CloudFront invalidation command'
+    fail "could not determine CloudFront invalidation command"
   fi
 
-  info 'waiting for CloudFront invalidation (can take ~10mins)'
+  info "waiting for CloudFront invalidation (can take ~10mins)"
   while true; do
     local status="$($cf_cmd | grep '^Status' | awk '{print $2}')"
     if [[ "${status}" = "Completed" ]]; then
@@ -33,5 +33,5 @@ sync_cloudfront() {
     info "invalidation status is currently ${status}, waiting 10s"
     sleep 10
   done
-  info 'CloudFront invalidation complete'
+  info "CloudFront invalidation complete"
 }
