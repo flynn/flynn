@@ -24,7 +24,7 @@ main() {
   local backend ip
   local domain="${CONTROLLER_DOMAIN}"
 
-  while getopts "hb:d:i:" opt; do
+  while getopts 'hb:d:i:' opt; do
     case $opt in
       h)
         usage
@@ -40,8 +40,8 @@ main() {
     esac
   done
 
-  backend=${backend:-"libvirt-lxc"}
-  domain="${domain:="dev.localflynn.com"}"
+  backend=${backend:-'libvirt-lxc'}
+  domain="${domain:='dev.localflynn.com'}"
   ip=${ip:-$(/sbin/ifconfig eth0 \
     | grep 'inet addr:' \
     | cut -d: -f2 \
@@ -73,9 +73,9 @@ boot_libvirt_lxc() {
   local host_dir="${ROOT}/host"
   local bootstrap_dir="${ROOT}/bootstrap"
 
-  local log="/tmp/flynn-host-$(date +%Y-%m-%dT%H-%M-%S.%N).log"
+  local log='/tmp/flynn-host-$(date +%Y-%m-%dT%H-%M-%S.%N).log'
   ln -nfs "${log}" /tmp/flynn-host.log
-  info "starting flynn-host (libvirt-lxc backend)"
+  info 'starting flynn-host (libvirt-lxc backend)'
   info "forwarding daemon output to ${log}"
   sudo start-stop-daemon \
     --start \
@@ -92,14 +92,14 @@ boot_libvirt_lxc() {
     --flynn-init "${host_dir}/bin/flynn-init" \
     &>"${log}"
 
-  info "bootstrapping Flynn"
+  info 'bootstrapping Flynn'
   "${bootstrap_dir}/bin/flynn-bootstrap" "${bootstrap_dir}/bin/manifest.json"
 }
 
 boot_docker() {
   local ip=$1
 
-  info "starting flynn-host (docker backend)"
+  info 'starting flynn-host (docker backend)'
   docker run \
     --detach \
     --volume /var/run/docker.sock:/var/run/docker.sock \
@@ -109,7 +109,7 @@ boot_docker() {
     --force \
     --backend docker
 
-  info "bootstrapping Flynn"
+  info 'bootstrapping Flynn'
   docker run \
     --env DISCOVERD="${DISCOVERD}" \
     --env CONTROLLER_DOMAIN="${CONTROLLER_DOMAIN}" \

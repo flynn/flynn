@@ -19,7 +19,7 @@ USAGE
 main() {
   local backend
 
-  while getopts "hb:" opt; do
+  while getopts 'hb:' opt; do
     case $opt in
       h)
         usage
@@ -52,7 +52,7 @@ main() {
 kill_libvirt_lxc() {
   local flynn_host="${ROOT}/host/bin/flynn-host"
 
-  info "killing running libvirt-lxc flynn-host, if any"
+  info 'killing running libvirt-lxc flynn-host, if any'
   sudo start-stop-daemon \
     --stop \
     --oknodo \
@@ -65,12 +65,12 @@ kill_libvirt_lxc() {
 kill_docker() {
   local id=$(docker ps | grep flynn-host | cut -d" " -f 1)
 
-  info "killing running docker flynn-host, if any"
+  info 'killing running docker flynn-host, if any'
   if [[ -n "${id}" ]]; then
     docker stop "${id}" >/dev/null
   fi
 
-  info "done!"
+  info 'done!'
 }
 
 main $@

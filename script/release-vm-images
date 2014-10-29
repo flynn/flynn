@@ -33,10 +33,10 @@ source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
 source "${ROOT}/script/lib/util.sh"
 
-UBUNTU_BOX_NAME="ubuntu-trusty-20141016" # used in filenames for caching, bump at the same time as UBUNTU_BOX_URL
-UBUNTU_BOX_URL="http://cloud-images.ubuntu.com/vagrant/trusty/20141016/trusty-server-cloudimg-amd64-vagrant-disk1.box"
-UBUNTU_BOX_SHA="c6623a4850c4d61bc6b96c3b2d2150eb60ca1e4a38f2cb2a8087370139b08d30"
-UBUNTU_USEAST_AMI="ami-9eaa1cf6" # us-east-1 | trusty | 14.04 LTS | amd64 | hvm:ebs-ssd | 20140927 | ami-9eaa1cf6 | hvm
+UBUNTU_BOX_NAME='ubuntu-trusty-20141016' # used in filenames for caching, bump at the same time as UBUNTU_BOX_URL
+UBUNTU_BOX_URL='http://cloud-images.ubuntu.com/vagrant/trusty/20141016/trusty-server-cloudimg-amd64-vagrant-disk1.box'
+UBUNTU_BOX_SHA='c6623a4850c4d61bc6b96c3b2d2150eb60ca1e4a38f2cb2a8087370139b08d30'
+UBUNTU_USEAST_AMI='ami-9eaa1cf6' # us-east-1 | trusty | 14.04 LTS | amd64 | hvm:ebs-ssd | 20140927 | ami-9eaa1cf6 | hvm
 
 usage() {
   cat <<USAGE >&2
@@ -58,7 +58,7 @@ main() {
   local bucket dir domain
   local keep=false
 
-  while getopts "hkb:d:r:" opt; do
+  while getopts 'hkb:d:r:' opt; do
     case $opt in
       h)
         usage
@@ -101,23 +101,23 @@ main() {
   if [[ -z "${box}" ]] || [[ -z "${amis}" ]]; then
     local ubuntu_box="/tmp/${UBUNTU_BOX_NAME}.box"
     if [[ ! -f "${ubuntu_box}" ]]; then
-      info "fetching base Ubuntu box"
+      info 'fetching base Ubuntu box'
       curl "${UBUNTU_BOX_URL}" > "${ubuntu_box}"
     fi
 
-    info "validating base Ubuntu box"
+    info 'validating base Ubuntu box'
     if [[ "$(sha256 "${ubuntu_box}")" != "${UBUNTU_BOX_SHA}" ]]; then
       rm -f "${ubuntu_box}"
-      fail "base Ubuntu box has incorrect checksum"
+      fail 'base Ubuntu box has incorrect checksum'
     fi
 
     local ova_path="/tmp/${UBUNTU_BOX_NAME}.ova"
     if [[ ! -f "${ova_path}" ]]; then
-      info "converting base Ubuntu box to OVA archive"
+      info 'converting base Ubuntu box to OVA archive'
       tar --delete Vagrantfile < "${ubuntu_box}" > "${ova_path}"
     fi
 
-    info "building VirtualBox and EC2 images"
+    info 'building VirtualBox and EC2 images'
     pushd "${ROOT}/util/packer/ubuntu-14.04" >/dev/null
     local output=$(packer build \
       -machine-readable \
@@ -131,7 +131,7 @@ main() {
       template.json | parse_packer)
     popd >/dev/null
 
-    info "parsing build output"
+    info 'parsing build output'
     while read line; do
       IFS="|" read builder artifacts <<< "${line}"
 
@@ -146,7 +146,7 @@ main() {
     done <<< "${output}"
 
     if [[ -z "${box}" ]] || [[ -z "${amis}" ]]; then
-      fail "failed to parse build output"
+      fail 'failed to parse build output'
     fi
 
     echo -n "${amis}" > "${dir}/amis.txt"
@@ -165,13 +165,13 @@ main() {
   fi
   info "checksum is ${checksum}"
 
-  info "fetching current vagrant manifest"
+  info 'fetching current vagrant manifest'
   local manifest="$(s3cmd --no-progress get "s3://${bucket}/vagrant/flynn-base.json" - 2>/dev/null)"
   if [[ -z "${manifest}" ]]; then
     manifest='{"name":"flynn-base"}'
   fi
 
-  info "updating vagrant manifest"
+  info 'updating vagrant manifest'
   mkdir -p "${dir}/manifests/vagrant"
   "${ROOT}/util/release/flynn-release" vagrant \
     "https://${domain}/vagrant/boxes/${box_name}" \
@@ -181,13 +181,13 @@ main() {
     <<< "${manifest}" \
     > "${dir}/manifests/vagrant/flynn-base.json"
 
-  info "fetching current EC2 manifest"
+  info 'fetching current EC2 manifest'
   local manifest="$(s3cmd --no-progress get "s3://${bucket}/ec2/images.json" - 2>/dev/null)"
   if [[ -z "${manifest}" ]]; then
     manifest='{"name":"flynn-base"}'
   fi
 
-  info "updating EC2 manifest"
+  info 'updating EC2 manifest'
   mkdir -p "${dir}/manifests/ec2"
   "${ROOT}/util/release/flynn-release" amis \
     "${version}" \
@@ -195,7 +195,7 @@ main() {
     <<< "${manifest}" \
     > "${dir}/manifests/ec2/images.json"
 
-  info "releasing manifests"
+  info 'releasing manifests'
   sync_cloudfront "${dir}/manifests/" "s3://${bucket}/"
 
   info "successfully released images for version ${version}"
@@ -225,9 +225,9 @@ parse_packer() {
         echo -e "$(cut -d "," -f 2 <<< "${data}")" >&2
         ;;
       artifact)
-        if [[ "${target}" == "virtualbox-ovf" ]] && [[ "${data:0:9}" == "0,file,0," ]]; then
+        if [[ "${target}" == "virtualbox-ovf" ]] && [[ "${data:0:9}" == '0,file,0,' ]]; then
           echo "virtualbox-ovf|${data:9}"
-        elif [[ "${target}" == "amazon-ebs" ]] && [[ "${data:0:5}" == "0,id," ]]; then
+        elif [[ "${target}" == "amazon-ebs" ]] && [[ "${data:0:5}" == '0,id,' ]]; then
           echo "amazon-ebs|${data:5}"
         fi
         ;;
