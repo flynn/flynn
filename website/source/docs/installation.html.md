@@ -139,10 +139,10 @@ nodes. The daemon uses etcd for leader election, and etcd needs to be aware of a
 other nodes for it to function correctly.
 
 If you are starting more than one node, the etcd cluster should be configured
-using a [discovery
-token](https://coreos.com/docs/cluster-management/setup/etcd-cluster-discovery/).
+using a [discovery token](https://coreos.com/docs/cluster-management/setup/etcd-cluster-discovery/).
 Get a token [from here](https://discovery.etcd.io/new) and add a line like this
-to the Flynn Upstart file (`/etc/init/flynn-host.conf`) on every node:
+right after the description in the Flynn Upstart file (`/etc/init/flynn-host.conf`)
+on every node:
 
 ```text
 env ETCD_DISCOVERY=https://discovery.etcd.io/00000000000000000000000000000000
