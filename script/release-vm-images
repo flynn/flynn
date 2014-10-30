@@ -4,6 +4,12 @@
 #
 # PREREQUISITES:
 #
+# - Install VirtualBox
+#   wget -q https://www.virtualbox.org/download/oracle_vbox.asc -O- | sudo apt-key add -
+#   echo deb http://download.virtualbox.org/virtualbox/debian trusty contrib | sudo tee /etc/apt/sources.list.d/virtualbox.list
+#   sudo apt-get update
+#   sudo apt-get install dkms virtualbox-4.3
+#
 # - Install packer
 #   sudo apt-get install -y unzip
 #   wget -O /tmp/packer.zip https://dl.bintray.com/mitchellh/packer/packer_0.7.1_linux_amd64.zip
@@ -15,6 +21,10 @@
 #   wget -O /tmp/s3cmd.deb http://archive.ubuntu.com/ubuntu/pool/universe/s/s3cmd/s3cmd_1.5.0~rc1-2_all.deb
 #   sudo dpkg -i /tmp/s3cmd.deb
 #   rm /tmp/s3cmd.deb
+#
+# - Set AWS keys
+#   export AWS_ACCESS_KEY_ID=XXXXXXXXXXXXXXXXXXXX
+#   export AWS_SECRET_ACCESS_KEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 set -eo pipefail
 
