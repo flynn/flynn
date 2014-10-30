@@ -106,12 +106,12 @@ create_docker_group() {
 add_apt_sources() {
   # add the docker, tup and flynn gpg keys
   apt-key adv --keyserver keyserver.ubuntu.com --recv 36A1D7869245C8950F966E92D8576A8BA88D21E9
-  apt-key adv --keyserver keyserver.ubuntu.com --recv E601AAF9486D3664
+  apt-key adv --keyserver keyserver.ubuntu.com --recv 27947298A222DFA46E207200B34FBCAA90EA7F4E
   apt-key adv --keyserver keyserver.ubuntu.com --recv BC79739C507A9B53BB1B0E7D820A5489998D827B
 
   echo deb https://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list
+  echo deb http://ppa.launchpad.net/titanous/tup/ubuntu trusty main > /etc/apt/sources.list.d/tup.list
   echo deb https://dl.flynn.io/ubuntu flynn main > /etc/apt/sources.list.d/flynn.list
-  echo deb http://ppa.launchpad.net/anatol/tup/ubuntu precise main > /etc/apt/sources.list.d/tup.list
 
   apt-get update
 }
@@ -147,6 +147,9 @@ install_packages() {
   fi
 
   apt-get install -y ${packages[@]}
+
+  # make tup suid root so that we can build in chroots
+  chmod ug+s /usr/bin/tup
 
   if [[ -n "${FLYNN_DEB_URL}" ]]; then
     curl "${FLYNN_DEB_URL}" > /tmp/flynn-host.deb

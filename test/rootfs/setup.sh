@@ -75,10 +75,13 @@ apt-get install -y lxc-docker-0.10.0 aufs-tools apparmor
 
 # install flynn build dependencies
 apt-get install -y software-properties-common
-apt-add-repository 'deb http://ppa.launchpad.net/anatol/tup/ubuntu precise main'
-apt-key adv --keyserver keyserver.ubuntu.com --recv E601AAF9486D3664
+apt-add-repository 'deb http://ppa.launchpad.net/titanous/tup/ubuntu trusty main'
+apt-key adv --keyserver keyserver.ubuntu.com --recv 27947298A222DFA46E207200B34FBCAA90EA7F4E
 apt-get update
 apt-get install -y tup fuse build-essential libdevmapper-dev btrfs-tools libvirt-dev libvirt-bin
+
+# make tup suid root so that we can build in chroots
+chmod ug+s /usr/bin/tup
 
 # install go
 curl -L j.mp/godeb | tar xz
