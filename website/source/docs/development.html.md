@@ -10,6 +10,7 @@ This guide will explain how to:
 * Make changes to the Flynn source code
 * Build and run Flynn
 * Run the tests
+* Create a release of Flynn
 
 ## Development environment
 
@@ -265,6 +266,80 @@ To run an individual integration test (e.g. `TestBasic`):
 ```
 $ script/run-integration-tests TestBasic
 ```
+
+## Releasing Flynn
+
+Once you have built and tested Flynn inside the development VM, you can create a release
+and install the components on other hosts (e.g. in EC2).
+
+A Flynn release consists of a package (currently only Debian packages are supported) and the
+built Docker images, and both of these must be installed in order to run Flynn.
+
+### Docker Registry
+
+By default, Flynn will reference Docker images from the default Docker registry using
+the `flynn` user.
+
+This needs to be changed in order to release your own images, which can be done by
+changing `CONFIG_IMAGE_URL_PREFIX` in the `tup.config` file then re-running `tup`.
+
+To use the default Docker registry but with a different user (e.g. `lmars`):
+
+```
+CONFIG_IMAGE_URL_PREFIX=https://registry.hub.docker.com/lmars
+```
+
+To use a different Docker registry:
+
+```
+CONFIG_IMAGE_URL_PREFIX=https://my.registry.com/flynn
+```
+
+If the registry requires HTTP basic authentication, put the credentials in the URL:
+
+```
+CONFIG_IMAGE_URL_PREFIX=https://username:password@my.registry.com
+```
+
+### Create Package
+
+Create a Debian package of the built files by running the following:
+
+```
+$ script/build-deb $(date +%Y%m%d)
+```
+
+*Note: The argument to the `build-deb` script is the version of the flynn-host package.
+You can set this to whatever you wish, provided it conforms to [Debian versioning]
+(https://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Version).*
+
+This creates a `.deb` file in the current directory which can be installed on other
+systems.
+
+### Upload Images
+
+Log in to the Docker registry:
+
+```
+$ docker login
+```
+
+If you are using a different registry in `CONFIG_IMAGE_URL_PREFIX`, log in to that
+registry instead:
+
+```
+docker login my.registry.com
+```
+
+Upload the images:
+
+```
+$ util/release/flynn-release upload version.json
+```
+
+You can now follow the [installation instructions](/docs/installation#ubuntu-14.04-amd64)
+to install your custom components, replacing the `apt-get install flynn-host` step with the
+installation of the custom Debian package (i.e. `dpkg -i /path/to/flynn-host.deb`).
 
 ## Pull request
 
