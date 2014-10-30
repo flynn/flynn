@@ -59,7 +59,9 @@ func (t *memTransport) writePacket(p []byte) error {
 	if t.write.eof {
 		return io.EOF
 	}
-	t.write.pending = append(t.write.pending, p)
+	c := make([]byte, len(p))
+	copy(c, p)
+	t.write.pending = append(t.write.pending, c)
 	t.write.Cond.Signal()
 	return nil
 }

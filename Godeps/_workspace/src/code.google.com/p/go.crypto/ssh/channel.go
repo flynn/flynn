@@ -69,8 +69,10 @@ type Channel interface {
 	// if the data stream is closed or blocked by flow control.
 	SendRequest(name string, wantReply bool, payload []byte) (bool, error)
 
-	// Stderr returns an io.ReadWriter that writes to this channel with the
-	// extended data type set to stderr.
+	// Stderr returns an io.ReadWriter that writes to this channel
+	// with the extended data type set to stderr. Stderr may
+	// safely be read and written from a different goroutine than
+	// Read and Write respectively.
 	Stderr() io.ReadWriter
 }
 
@@ -188,11 +190,15 @@ type channel struct {
 	myWindow uint32
 
 	// writeMu serializes calls to mux.conn.writePacket() and
-	// protects sentClose. This mutex must be different from
-	// windowMu, as writePacket can block if there is a key
-	// exchange pending
+	// protects sentClose and packetPool. This mutex must be
+	// different from windowMu, as writePacket can block if there
+	// is a key exchange pending.
 	writeMu   sync.Mutex
 	sentClose bool
+
+	// packetPool has a buffer for each extended channel ID to
+	// save allocations during writes.
+	packetPool map[uint32][]byte
 }
 
 // writePacket sends a packet. If the packet is a channel close, it updates
@@ -233,14 +239,26 @@ func (c *channel) WriteExtended(data []byte, extendedCode uint32) (n int, err er
 		opCode = msgChannelExtendedData
 	}
 
+	c.writeMu.Lock()
+	packet := c.packetPool[extendedCode]
+	// We don't remove the buffer from packetPool, so
+	// WriteExtended calls from different goroutines will be
+	// flagged as errors by the race detector.
+	c.writeMu.Unlock()
+
 	for len(data) > 0 {
 		space := min(c.maxRemotePayload, len(data))
 		if space, err = c.remoteWin.reserve(space); err != nil {
 			return n, err
 		}
+		if want := headerLength + space; uint32(cap(packet)) < want {
+			packet = make([]byte, want)
+		} else {
+			packet = packet[:want]
+		}
+
 		todo := data[:space]
 
-		packet := make([]byte, headerLength+uint32(len(todo)))
 		packet[0] = opCode
 		binary.BigEndian.PutUint32(packet[1:], c.remoteId)
 		if extendedCode > 0 {
@@ -255,6 +273,10 @@ func (c *channel) WriteExtended(data []byte, extendedCode uint32) (n int, err er
 		n += len(todo)
 		data = data[len(todo):]
 	}
+
+	c.writeMu.Lock()
+	c.packetPool[extendedCode] = packet
+	c.writeMu.Unlock()
 
 	return n, err
 }
@@ -442,6 +464,7 @@ func (m *mux) newChannel(chanType string, direction channelDirection, extraData 
 		chanType:         chanType,
 		extraData:        extraData,
 		mux:              m,
+		packetPool:       make(map[uint32][]byte),
 	}
 	ch.localId = m.chanList.add(ch)
 	return ch

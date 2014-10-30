@@ -82,7 +82,7 @@ apt-get install -y tup fuse build-essential libdevmapper-dev btrfs-tools libvirt
 
 # install go
 curl -L j.mp/godeb | tar xz
-./godeb install
+./godeb install 1.4beta1
 rm godeb
 
 # cleanup

@@ -159,25 +159,6 @@ func (c *Client) handleChannelOpens(in <-chan NewChannel) {
 	c.mu.Unlock()
 }
 
-// parseTCPAddr parses the originating address from the remote into a *net.TCPAddr.
-// RFC 4254 section 7.2 is mute on what to do if parsing fails but the forwardlist
-// requires a valid *net.TCPAddr to operate, so we enforce that restriction here.
-func parseTCPAddr(b []byte) (*net.TCPAddr, []byte, bool) {
-	addr, b, ok := parseString(b)
-	if !ok {
-		return nil, b, false
-	}
-	port, b, ok := parseUint32(b)
-	if !ok || port == 0 || port > 65535 {
-		return nil, b, false
-	}
-	ip := net.ParseIP(string(addr))
-	if ip == nil {
-		return nil, b, false
-	}
-	return &net.TCPAddr{IP: ip, Port: int(port)}, b, true
-}
-
 // Dial starts a client connection to the given SSH server. It is a
 // convenience function that connects to the given network address,
 // initiates the SSH handshake, and then sets up a Client.  For access

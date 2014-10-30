@@ -11,13 +11,21 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"testing"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.crypto/ssh"
 )
 
+// startAgent executes ssh-agent, and returns a Agent interface to it.
 func startAgent(t *testing.T) (client Agent, socket string, cleanup func()) {
+	if testing.Short() {
+		// ssh-agent is not always available, and the key
+		// types supported vary by platform.
+		t.Skip("skipping test due to -short")
+	}
+
 	bin, err := exec.LookPath("ssh-agent")
 	if err != nil {
 		t.Skip("could not find ssh-agent")
@@ -66,6 +74,7 @@ func startAgent(t *testing.T) (client Agent, socket string, cleanup func()) {
 			proc.Kill()
 		}
 		conn.Close()
+		os.RemoveAll(filepath.Dir(socket))
 	}
 }
 

@@ -170,7 +170,7 @@ install_go() {
   cd /tmp
   wget j.mp/godeb
   tar xvzf godeb
-  ./godeb install
+  ./godeb install 1.4beta1
 }
 
 apt_cleanup() {
