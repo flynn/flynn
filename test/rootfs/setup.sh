@@ -12,9 +12,11 @@ trap cleanup EXIT
 
 # set up ubuntu user
 addgroup docker
+addgroup fuse
 adduser --disabled-password --gecos "" ubuntu
 usermod -a -G sudo ubuntu
 usermod -a -G docker ubuntu
+usermod -a -G fuse ubuntu
 echo %ubuntu ALL=NOPASSWD:ALL > /etc/sudoers.d/ubuntu
 chmod 0440 /etc/sudoers.d/ubuntu
 echo ubuntu:ubuntu | chpasswd
@@ -82,6 +84,9 @@ apt-get install -y tup fuse build-essential libdevmapper-dev btrfs-tools libvirt
 
 # make tup suid root so that we can build in chroots
 chmod ug+s /usr/bin/tup
+
+# give ubuntu user access to tup fuse mounts
+sed 's/#user_allow_other/user_allow_other/' -i /etc/fuse.conf
 
 # install go
 curl -L j.mp/godeb | tar xz
