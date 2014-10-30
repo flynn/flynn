@@ -109,7 +109,7 @@ add_apt_sources() {
   apt-key adv --keyserver keyserver.ubuntu.com --recv 27947298A222DFA46E207200B34FBCAA90EA7F4E
   apt-key adv --keyserver keyserver.ubuntu.com --recv BC79739C507A9B53BB1B0E7D820A5489998D827B
 
-  echo deb https://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list
+  echo deb https://get.docker.com/ubuntu docker main > /etc/apt/sources.list.d/docker.list
   echo deb http://ppa.launchpad.net/titanous/tup/ubuntu trusty main > /etc/apt/sources.list.d/tup.list
   echo deb https://dl.flynn.io/ubuntu flynn main > /etc/apt/sources.list.d/flynn.list
 
