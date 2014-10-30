@@ -2,10 +2,14 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"net/url"
 	"os/exec"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 )
+
+var defaultRegistry = "registry.hub.docker.com"
 
 func upload(args *docopt.Args) {
 	tag := args.String["<tag>"]
@@ -13,7 +17,17 @@ func upload(args *docopt.Args) {
 		tag = "latest"
 	}
 	for image, id := range readManifest(args) {
-		tagged := image + ":" + tag
+		u, err := url.Parse(image)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		var tagged string
+		if u.Host == defaultRegistry {
+			tagged = u.Path[1:] + ":" + tag
+		} else {
+			tagged = u.Host + u.Path + ":" + tag
+		}
 
 		run(exec.Command("docker", "tag", id, tagged))
 		fmt.Println("Tagged", tagged)

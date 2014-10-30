@@ -47,15 +47,8 @@ type Cmd struct {
 	stdinPipe *readyWriter
 }
 
-func DockerImage(name, id string) host.Artifact {
-	a := host.Artifact{
-		Type: "docker",
-		URI:  "https://registry.hub.docker.com/" + name,
-	}
-	if id != "" {
-		a.URI += "?id=" + id
-	}
-	return a
+func DockerImage(uri string) host.Artifact {
+	return host.Artifact{Type: "docker", URI: uri}
 }
 
 func Command(artifact host.Artifact, cmd ...string) *Cmd {

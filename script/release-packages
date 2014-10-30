@@ -46,15 +46,16 @@ OPTIONS:
   -h            Show this message
   -k            Keep release directory
   -b BUCKET     The S3 bucket to sync the apt repo with [default: flynn]
+  -p PREFIX     The image URL prefix
   -r DIR        Resume the release using DIR
 USAGE
 }
 
 main() {
-  local bucket dir
+  local bucket dir image_prefix
   local keep=false
 
-  while getopts "hkb:r:" opt; do
+  while getopts "hkb:p:r:" opt; do
     case $opt in
       h)
 	usage
@@ -66,6 +67,9 @@ main() {
       b)
 	bucket=$OPTARG
 	;;
+      p)
+        image_prefix=$OPTARG
+        ;;
       r)
         dir=$OPTARG
         if [[ ! -d "${dir}" ]]; then
@@ -113,6 +117,11 @@ main() {
 
   info "building flynn"
   git checkout --force --quiet $commit
+
+  if [[ -n "${image_prefix}" ]]; then
+    sed "s/^CONFIG_IMAGE_URL_PREFIX=.*$/CONFIG_IMAGE_URL_PREFIX=${image_prefix}/" -i tup.config
+  fi
+
   tup
 
   popd >/dev/null

@@ -65,7 +65,7 @@ func main() {
 
 	var output bytes.Buffer
 	slugURL := fmt.Sprintf("http://%s/%s.tgz", blobstoreHost, random.UUID())
-	cmd := exec.Command(exec.DockerImage("flynn/slugbuilder", os.Getenv("SLUGBUILDER_IMAGE_ID")), slugURL)
+	cmd := exec.Command(exec.DockerImage(os.Getenv("SLUGBUILDER_IMAGE_URI")), slugURL)
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
 	if len(prevRelease.Env) > 0 {
@@ -92,7 +92,7 @@ func main() {
 
 	fmt.Printf("-----> Creating release...\n")
 
-	artifact := &ct.Artifact{Type: "docker", URI: "https://registry.hub.docker.com/flynn/slugrunner?id=" + os.Getenv("SLUGRUNNER_IMAGE_ID")}
+	artifact := &ct.Artifact{Type: "docker", URI: os.Getenv("SLUGRUNNER_IMAGE_URI")}
 	if err := client.CreateArtifact(artifact); err != nil {
 		log.Fatalln("Error creating artifact:", err)
 	}

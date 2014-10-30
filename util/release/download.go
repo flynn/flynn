@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 )
@@ -43,9 +42,6 @@ func download(args *docopt.Args) {
 	}
 	for image, id := range readManifest(args) {
 		fmt.Printf("Downloading %s %s...\n", image, id)
-		if !strings.HasPrefix(image, "http") {
-			image = "https://registry.hub.docker.com/" + image
-		}
 		image += "?id=" + id
 		run(exec.Command("pinkerton", "pull", "--root", args.String["--root"], "--driver", args.String["--driver"], image))
 	}
