@@ -154,19 +154,47 @@ func (l *forwardList) add(addr net.TCPAddr) chan forward {
 	return f.c
 }
 
+// See RFC 4254, section 7.2
+type forwardedTCPPayload struct {
+	Addr       string
+	Port       uint32
+	OriginAddr string
+	OriginPort uint32
+}
+
+// parseTCPAddr parses the originating address from the remote into a *net.TCPAddr.
+func parseTCPAddr(addr string, port uint32) (*net.TCPAddr, error) {
+	if port == 0 || port > 65535 {
+		return nil, fmt.Errorf("ssh: port number out of range: %d", port)
+	}
+	ip := net.ParseIP(string(addr))
+	if ip == nil {
+		return nil, fmt.Errorf("ssh: cannot parse IP address %q", addr)
+	}
+	return &net.TCPAddr{IP: ip, Port: int(port)}, nil
+}
+
 func (l *forwardList) handleChannels(in <-chan NewChannel) {
 	for ch := range in {
-		laddr, rest, ok := parseTCPAddr(ch.ExtraData())
-		if !ok {
-			// invalid request
-			ch.Reject(ConnectionFailed, "could not parse TCP address")
+		var payload forwardedTCPPayload
+		if err := Unmarshal(ch.ExtraData(), &payload); err != nil {
+			ch.Reject(ConnectionFailed, "could not parse forwarded-tcpip payload: "+err.Error())
 			continue
 		}
 
-		raddr, rest, ok := parseTCPAddr(rest)
-		if !ok {
-			// invalid request
-			ch.Reject(ConnectionFailed, "could not parse TCP address")
+		// RFC 4254 section 7.2 specifies that incoming
+		// addresses should list the address, in string
+		// format. It is implied that this should be an IP
+		// address, as it would be impossible to connect to it
+		// otherwise.
+		laddr, err := parseTCPAddr(payload.Addr, payload.Port)
+		if err != nil {
+			ch.Reject(ConnectionFailed, err.Error())
+			continue
+		}
+		raddr, err := parseTCPAddr(payload.OriginAddr, payload.OriginPort)
+		if err != nil {
+			ch.Reject(ConnectionFailed, err.Error())
 			continue
 		}
 

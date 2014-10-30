@@ -49,6 +49,48 @@ func channelPair(t *testing.T) (*channel, *channel, *mux) {
 	return <-res, ch, c
 }
 
+// Test that stderr and stdout can be addressed from different
+// goroutines. This is intended for use with the race detector.
+func TestMuxChannelExtendedThreadSafety(t *testing.T) {
+	writer, reader, mux := channelPair(t)
+	defer writer.Close()
+	defer reader.Close()
+	defer mux.Close()
+
+	var wr, rd sync.WaitGroup
+	magic := "hello world"
+
+	wr.Add(2)
+	go func() {
+		io.WriteString(writer, magic)
+		wr.Done()
+	}()
+	go func() {
+		io.WriteString(writer.Stderr(), magic)
+		wr.Done()
+	}()
+
+	rd.Add(2)
+	go func() {
+		c, err := ioutil.ReadAll(reader)
+		if string(c) != magic {
+			t.Fatalf("stdout read got %q, want %q (error %s)", c, magic, err)
+		}
+		rd.Done()
+	}()
+	go func() {
+		c, err := ioutil.ReadAll(reader.Stderr())
+		if string(c) != magic {
+			t.Fatalf("stderr read got %q, want %q (error %s)", c, magic, err)
+		}
+		rd.Done()
+	}()
+
+	wr.Wait()
+	writer.CloseWrite()
+	rd.Wait()
+}
+
 func TestMuxReadWrite(t *testing.T) {
 	s, c, mux := channelPair(t)
 	defer s.Close()

@@ -12,23 +12,23 @@
 		},
 		{
 			"ImportPath": "code.google.com/p/go.crypto/nacl/secretbox",
-			"Comment": "null-212",
-			"Rev": "1064b89a6fb591df0dd65422295b8498916b092f"
+			"Comment": "null-230",
+			"Rev": "228579b1f8ccfc93ed9f1709e32e8361ffc9a7ae"
 		},
 		{
 			"ImportPath": "code.google.com/p/go.crypto/poly1305",
-			"Comment": "null-212",
-			"Rev": "1064b89a6fb591df0dd65422295b8498916b092f"
+			"Comment": "null-230",
+			"Rev": "228579b1f8ccfc93ed9f1709e32e8361ffc9a7ae"
 		},
 		{
 			"ImportPath": "code.google.com/p/go.crypto/salsa20/salsa",
-			"Comment": "null-212",
-			"Rev": "1064b89a6fb591df0dd65422295b8498916b092f"
+			"Comment": "null-230",
+			"Rev": "228579b1f8ccfc93ed9f1709e32e8361ffc9a7ae"
 		},
 		{
 			"ImportPath": "code.google.com/p/go.crypto/ssh",
-			"Comment": "null-212",
-			"Rev": "1064b89a6fb591df0dd65422295b8498916b092f"
+			"Comment": "null-230",
+			"Rev": "228579b1f8ccfc93ed9f1709e32e8361ffc9a7ae"
 		},
 		{
 			"ImportPath": "code.google.com/p/go.net/websocket",
