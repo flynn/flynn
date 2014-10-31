@@ -1,8 +1,7 @@
 #!/bin/bash
 set -eo pipefail
 
-if [ $# -ne 4 ]
-then
+if [ $# -ne 4 ]; then
   echo "Usage: `basename $0` <app> <repo> <branch> <rev>"
   exit 65
 fi
