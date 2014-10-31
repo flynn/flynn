@@ -202,9 +202,6 @@ main() {
   info "releasing manifests"
   sync_cloudfront "${dir}/manifests/" "s3://${bucket}/"
 
-  info "cleaning up"
-  rm -rf "${dir}"
-
   info "successfully released images for version ${version}"
 
   if $keep; then
