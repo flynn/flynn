@@ -10,13 +10,14 @@ mkfs.ext4 -FqL rootfs $build_dir/rootfs.img
 dir=$(mktemp -d)
 sudo mount -o loop $build_dir/rootfs.img $dir
 
-function cleanup {
+cleanup() {
   sudo umount $dir
   rm -rf $dir
 }
 trap cleanup ERR
 
-curl -L http://cdimage.ubuntu.com/ubuntu-core/releases/14.04/release/ubuntu-core-14.04-core-amd64.tar.gz | sudo tar -xzC $dir
+image="http://cdimage.ubuntu.com/ubuntu-core/releases/14.04/release/ubuntu-core-14.04-core-amd64.tar.gz"
+curl -L ${image} | sudo tar -xzC $dir
 
 sudo chroot $dir bash < "$src_dir/setup.sh"
 
