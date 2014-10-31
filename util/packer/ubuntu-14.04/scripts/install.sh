@@ -56,10 +56,12 @@ setup_sudo() {
 }
 
 install_vagrant_ssh_key() {
+  local pub="https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub"
   if [[ ! -f /home/vagrant/.ssh/authorized_keys ]]; then
     mkdir /home/vagrant/.ssh
     chmod 700 /home/vagrant/.ssh
-    wget --no-check-certificate 'https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub' -O /home/vagrant/.ssh/authorized_keys
+    wget --no-check-certificate ${pub} \
+      -O /home/vagrant/.ssh/authorized_keys
     chmod 600 /home/vagrant/.ssh/authorized_keys
     chown -R vagrant /home/vagrant/.ssh
   fi
@@ -103,7 +105,9 @@ change_hostname() {
 }
 
 enable_cgroups() {
-  perl -p -i -e 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"/g'  /etc/default/grub
+  perl -p -i -e \
+    's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"/g' \
+    /etc/default/grub
   /usr/sbin/update-grub
 }
 
@@ -115,13 +119,19 @@ create_groups() {
 
 add_apt_sources() {
   # add the docker, tup and flynn gpg keys
-  apt-key adv --keyserver keyserver.ubuntu.com --recv 36A1D7869245C8950F966E92D8576A8BA88D21E9
-  apt-key adv --keyserver keyserver.ubuntu.com --recv 27947298A222DFA46E207200B34FBCAA90EA7F4E
-  apt-key adv --keyserver keyserver.ubuntu.com --recv BC79739C507A9B53BB1B0E7D820A5489998D827B
+  apt-key adv --keyserver keyserver.ubuntu.com \
+    --recv 36A1D7869245C8950F966E92D8576A8BA88D21E9
+  apt-key adv --keyserver keyserver.ubuntu.com \
+    --recv 27947298A222DFA46E207200B34FBCAA90EA7F4E
+  apt-key adv --keyserver keyserver.ubuntu.com \
+    --recv BC79739C507A9B53BB1B0E7D820A5489998D827B
 
-  echo deb https://get.docker.com/ubuntu docker main > /etc/apt/sources.list.d/docker.list
-  echo deb http://ppa.launchpad.net/titanous/tup/ubuntu trusty main > /etc/apt/sources.list.d/tup.list
-  echo deb https://dl.flynn.io/ubuntu flynn main > /etc/apt/sources.list.d/flynn.list
+  echo deb https://get.docker.io/ubuntu docker main \
+    > /etc/apt/sources.list.d/docker.list
+  echo deb http://ppa.launchpad.net/titanous/tup/ubuntu trusty main \
+    > /etc/apt/sources.list.d/tup.list
+  echo deb https://dl.flynn.io/ubuntu flynn main \
+    > /etc/apt/sources.list.d/flynn.list
 
   apt-get update
 }
@@ -195,10 +205,13 @@ apt_cleanup() {
   apt-get clean
 
   echo "deleting old kernels"
-  cur_kernel=$(uname -r|sed 's/-*[a-z]//g'|sed 's/-386//g')
+  cur_kernel=$(uname -r | sed 's/-*[a-z]//g' | sed 's/-386//g')
   kernel_pkg="linux-(image|headers|ubuntu-modules|restricted-modules)"
   meta_pkg="${kernel_pkg}-(generic|i386|server|common|rt|xen|ec2|virtual)"
-  apt-get purge -y $(dpkg -l | egrep $kernel_pkg | egrep -v "${cur_kernel}|${meta_pkg}" | awk '{print $2}')
+  apt-get purge -y $(dpkg -l \
+    | egrep $kernel_pkg \
+    | egrep -v "${cur_kernel}|${meta_pkg}" \
+    | awk '{print $2}')
 }
 
 net_cleanup() {
