@@ -21,7 +21,7 @@ main() {
   fi
 
   enable_cgroups
-  create_docker_group
+  create_groups
   add_apt_sources
   install_packages
   download_images
@@ -98,9 +98,10 @@ enable_cgroups() {
   /usr/sbin/update-grub
 }
 
-create_docker_group() {
+create_groups() {
   groupadd docker
-  usermod -a -G docker "${SUDO_USER}"
+  groupadd fuse
+  usermod -a -G docker,fuse "${SUDO_USER}"
 }
 
 add_apt_sources() {
@@ -150,6 +151,9 @@ install_packages() {
 
   # make tup suid root so that we can build in chroots
   chmod ug+s /usr/bin/tup
+
+  # give non-root users access to tup fuse mounts
+  sed 's/#user_allow_other/user_allow_other/' -i /etc/fuse.conf
 
   if [[ -n "${FLYNN_DEB_URL}" ]]; then
     curl "${FLYNN_DEB_URL}" > /tmp/flynn-host.deb
