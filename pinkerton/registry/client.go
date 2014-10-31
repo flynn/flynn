@@ -86,7 +86,7 @@ func (r *Ref) Get() (*Image, error) {
 		r.token = strings.Join(res.Header["X-Docker-Token"], ",")
 	}
 	if res.Header.Get("X-Docker-Endpoints") != "" {
-		r.endpoints = parseEndpoints(res.Header["X-Docker-Endpoints"], r.scheme)
+		r.endpoints = parseEndpoints(res.Header["X-Docker-Endpoints"], r)
 	} else {
 		r.endpoints = []string{r.index}
 	}
@@ -171,12 +171,16 @@ func (r *Ref) registryGet(path string, out interface{}) (*http.Response, error) 
 	return nil, err
 }
 
-func parseEndpoints(headers []string, scheme string) []string {
+func parseEndpoints(headers []string, ref *Ref) []string {
 	var res []string
 	for _, h := range headers {
 		endpoints := strings.Split(h, ",")
 		for _, e := range endpoints {
-			res = append(res, fmt.Sprintf("%s://%s/v1", scheme, e))
+			u := &url.URL{Scheme: ref.scheme, Host: e, Path: "/v1"}
+			if ref.username != "" {
+				u.User = url.UserPassword(ref.username, ref.password)
+			}
+			res = append(res, u.String())
 		}
 	}
 	return res
