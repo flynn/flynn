@@ -176,7 +176,7 @@ fi
 
 if [[ "${slug_file}" != "-" ]]; then
   slug_size=$(du -Sh "${slug_file}" | cut -f1)
-  echo_title "Compiled slug size is $slug_size"
+  echo_title "Compiled slug size is ${slug_size}"
 
   if [[ ${put_url} ]]; then
     curl -0 -s -o /dev/null -X PUT -T ${slug_file} "${put_url}"

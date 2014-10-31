@@ -7,9 +7,9 @@ case $1 in
     exec sudo \
       -u postgres \
       -H \
-      EXTERNAL_IP=$EXTERNAL_IP \
-      PORT=$PORT \
-      DISCOVERD=$DISCOVERD \
+      EXTERNAL_IP=${EXTERNAL_IP} \
+      PORT=${PORT} \
+      DISCOVERD=${DISCOVERD} \
       /bin/flynn-postgres $*
     ;;
   api)

@@ -12,6 +12,6 @@ BRANCH="$3"
 REV="$4"
 
 DEST=/tmp/app
-git clone --depth=50 --branch="$BRANCH" "$REPO" $DEST
-cd $DEST
-git archive $REV | /bin/flynn-receiver "$APP" "$REV"
+git clone --depth=50 --branch="${BRANCH}" "${REPO}" ${DEST}
+cd ${DEST}
+git archive ${REV} | /bin/flynn-receiver "${APP}" "${REV}"
