@@ -24,7 +24,7 @@ main() {
         usage
         exit 1
         ;;
-      b) backend=$OPTARG ;;
+      b) backend=${OPTARG} ;;
       ?)
         usage
         exit 1

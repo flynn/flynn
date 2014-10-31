@@ -21,14 +21,14 @@ main() {
         usage
         exit 1
         ;;
-      d) dir=$OPTARG ;;
+      d) dir=${OPTARG} ;;
       ?)
         usage
         exit 1
         ;;
     esac
   done
-  shift $(($OPTIND - 1))
+  shift $((${OPTIND} - 1))
 
   if [[ $# -ne 1 ]]; then
     usage

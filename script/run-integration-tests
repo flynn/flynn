@@ -30,7 +30,7 @@ main() {
     test_args="${test_args} --run ${test_to_run}"
   fi
 
-  bin/flynn-test $test_args
+  bin/flynn-test ${test_args}
 }
 
 main $1
