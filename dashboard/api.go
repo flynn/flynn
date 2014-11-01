@@ -48,6 +48,7 @@ func APIHandler(conf *Config) http.Handler {
 		r.Delete("/user/session", logout)
 
 		r.Get("/config", getConfig)
+		r.Get("/cert", getCert)
 
 		r.Any("/assets/application.*.js", serveApplicationJs)
 
@@ -124,6 +125,11 @@ func getConfig(rh RequestHelper, conf *Config) {
 	}
 
 	rh.JSON(200, config)
+}
+
+func getCert(w http.ResponseWriter, conf *Config) {
+	w.Header().Set("Content-Type", "application/x-x509-ca-cert")
+	w.Write(conf.CACert)
 }
 
 func serveApplicationJs(res http.ResponseWriter, req *http.Request, conf *Config) {
