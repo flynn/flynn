@@ -13,6 +13,7 @@ import (
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
+	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
@@ -65,7 +66,7 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 	t.Assert(err, c.IsNil)
 	defer s.ssh.Cleanup()
 
-	t.Assert(s.Flynn("key", "add", s.ssh.Pub).Err, c.IsNil)
+	t.Assert(s.Flynn("key", "add", s.ssh.Pub), Succeeds)
 
 	name := random.String(30)
 	t.Assert(s.Flynn("create", name), Outputs, fmt.Sprintf("Created %s\n", name))
@@ -94,6 +95,7 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 	t.Assert(push, OutputContains, "Application deployed")
 	t.Assert(push, OutputContains, "* [new branch]      master -> master")
 
+	defer s.Flynn("scale", "web=0")
 	t.Assert(s.Flynn("scale", "web=3"), Succeeds)
 
 	route := random.String(32) + ".dev"
@@ -146,6 +148,120 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 	}
 	t.Assert(res.StatusCode, c.Equals, 200)
 	t.Assert(string(contents), Matches, `Hello to Yahoo from Flynn on port \d+`)
+}
+
+type BuildpackSuite struct {
+	appSuite
+	client *controller.Client
+}
+
+var _ = c.Suite(&BuildpackSuite{})
+
+func (s *BuildpackSuite) SetUpSuite(t *c.C) {
+	s.client = newControllerClient(t)
+}
+
+func (s *BuildpackSuite) TestBuildpacks(t *c.C) {
+	var err error
+	s.ssh, err = genSSHKey()
+	t.Assert(err, c.IsNil)
+	defer s.ssh.Cleanup()
+
+	t.Assert(s.Flynn("key", "add", s.ssh.Pub), Succeeds)
+
+	buildpacks := []struct {
+		Name      string   `json:"name"`
+		Resources []string `json:"resources"`
+	}{
+		{
+			Name:      "go-flynn-example",
+			Resources: []string{"postgres"},
+		},
+		{Name: "nodejs-flynn-example"},
+		{Name: "php-flynn-example"},
+		{Name: "ruby-flynn-example"},
+		{Name: "java-flynn-example"},
+		{Name: "clojure-flynn-example"},
+		{Name: "gradle-flynn-example"},
+		{Name: "grails-flynn-example"},
+		{Name: "play-flynn-example"},
+		{Name: "python-flynn-example"},
+	}
+	dir := t.MkDir()
+
+	for _, b := range buildpacks {
+		wrapErr := func(err error) error {
+			return fmt.Errorf("[%q] %s", b.Name, err.Error())
+		}
+
+		s.appDir = dir
+		s.Git("clone", "https://github.com/flynn-examples/"+b.Name, b.Name)
+		s.appDir = filepath.Join(dir, b.Name)
+
+		t.Assert(s.Flynn("create", b.Name), Outputs, fmt.Sprintf("Created %s\n", b.Name))
+
+		for _, r := range b.Resources {
+			t.Assert(s.Flynn("resource", "add", r), Succeeds)
+		}
+
+		var push *CmdResult
+		if err := Attempts.Run(func() error {
+			push = s.Git("push", "flynn", "master")
+			return err
+		}); err != nil {
+			t.Error(wrapErr(err))
+		}
+
+		t.Assert(push, OutputContains, "Creating release")
+		t.Assert(push, OutputContains, "Application deployed")
+		t.Assert(push, OutputContains, "* [new branch]      master -> master")
+
+		t.Assert(s.Flynn("scale", "web=1"), Succeeds)
+
+		route := b.Name + ".dev"
+		newRoute := s.Flynn("route", "add", "http", route)
+		t.Assert(newRoute, Succeeds)
+
+		if err := Attempts.Run(func() error {
+			// Make HTTP requests
+			client := &http.Client{}
+			req, err := http.NewRequest("GET", "http://"+routerIP, nil)
+			if err != nil {
+				return err
+			}
+			req.Host = route
+			res, err := client.Do(req)
+			if err != nil {
+				return err
+			}
+			defer res.Body.Close()
+			contents, err := ioutil.ReadAll(res.Body)
+			if err != nil {
+				return err
+			}
+			if res.StatusCode != 200 {
+				return fmt.Errorf("Expected status 200, got %v", res.StatusCode)
+			}
+			m, err := regexp.MatchString(`Hello from Flynn on port \d+`, string(contents))
+			if err != nil {
+				return err
+			}
+			if !m {
+				return fmt.Errorf("Expected `Hello from Flynn on port \\d+`, got `%v`", string(contents))
+			}
+			return nil
+		}); err != nil {
+			t.Error(wrapErr(err))
+		}
+		stream, err := s.client.StreamJobEvents(b.Name)
+		if err != nil {
+			t.Error(err)
+		}
+		s.Flynn("scale", "web=0")
+		// wait for the jobs to stop
+		waitForJobEvents(t, stream.Events, map[string]int{"web": -1})
+		stream.Close()
+	}
 }
 
 func (s *SchedulerSuite) TestTCPApp(t *c.C) {
