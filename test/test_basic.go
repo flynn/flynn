@@ -151,12 +151,12 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 func (s *SchedulerSuite) TestTCPApp(t *c.C) {
 	r, err := s.client.GetAppRelease("gitreceive")
 	t.Assert(err, c.IsNil)
-	imageID := r.Processes["app"].Env["SLUGRUNNER_IMAGE_ID"]
+	imageURI := r.Processes["app"].Env["SLUGRUNNER_IMAGE_URI"]
 
 	app := &ct.App{}
 	t.Assert(s.client.CreateApp(app), c.IsNil)
 
-	artifact := &ct.Artifact{Type: "docker", URI: "https://registry.hub.docker.com/flynn/slugrunner?id=" + imageID}
+	artifact := &ct.Artifact{Type: "docker", URI: imageURI}
 	t.Assert(s.client.CreateArtifact(artifact), c.IsNil)
 
 	release := &ct.Release{
