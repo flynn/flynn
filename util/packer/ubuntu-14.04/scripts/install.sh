@@ -100,7 +100,7 @@ enable_cgroups() {
 
 create_groups() {
   groupadd docker
-  groupadd fuse
+  groupadd fuse || true
   usermod -a -G docker,fuse "${SUDO_USER}"
 }
 
