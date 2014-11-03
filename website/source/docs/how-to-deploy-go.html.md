@@ -10,8 +10,7 @@ buildpack](https://github.com/kr/heroku-buildpack-go).
 
 ## Detection
 
-The Go buildpack is used if the repository contains any files with names ending
-with `.go`.
+The Go buildpack is used if the repository contains any filenames ending with `.go`.
 
 ## Dependencies
 
@@ -20,10 +19,9 @@ of two methods, `godep` or `go get`. The recommended method is to use
 [godep](https://github.com/tools/godep), which saves application dependencies
 into the git repo so that the application can be reproducibly deployed.
 
-### Godep
+### godep
 
-To save dependencies using [godep](https://github.com/tools/godep), run `godep
-save` in your app directory and commit the `Godeps` directory. When you deploy
+To save dependencies using [godep](https://github.com/tools/godep), run `godep save` in your app directory and commit the `Godeps` directory. When you deploy
 to Flynn, the packages in the `Godeps` directory will be used.
 
 ### go get
@@ -31,8 +29,7 @@ to Flynn, the packages in the `Godeps` directory will be used.
 If you do not have a `Godeps` directory in your app repo, the buildpack
 downloads [Mercurial](http://mercurial.selenic.com/) and
 [Bazaar](http://bazaar.canonical.com/en/) and then runs `go get` to download the
-latest version of each imported package. This method can be slow and is
-unreliable as it does not provide repeatable builds.
+latest version of each imported package. This method can be slow and unreliable, as it does not provide repeatable builds.
 
 A `.godir` file must exist in the root of the repository if you are not using
 godep. This file must contain the full package path of your application, which
@@ -52,8 +49,10 @@ be used.
 
 All main packages in the repo are compiled and binaries placed in the `/app/bin`
 directory, which is in the `PATH`. Binaries are named after the directory that
-contains them. If the root of the repo contains a main package, the binary name
-is derived from the package path, which is read from the `ImportPath` property
+contains them.
+
+If the root of the repo contains a main package, the binary name
+is derived from the package path. The path is read from the `ImportPath` property
 of `Godeps/Godeps.json` if you are using `godep`, or the `.godir` file if you
 are not.
 
