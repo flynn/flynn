@@ -18,6 +18,7 @@ main() {
 
   if virtualbox_build; then
     install_vbox_guest_additions
+    change_hostname
   fi
 
   enable_cgroups
@@ -91,6 +92,14 @@ install_vbox_guest_additions() {
   yes | sh /mnt/VBoxLinuxAdditions.run || true
   umount /mnt
   rm "${vbox_iso}"
+}
+
+change_hostname() {
+  local hostname="flynn"
+
+  echo "${hostname}" > /etc/hostname
+  echo "127.0.1.1 ${hostname}" >> /etc/hosts
+  hostname -F /etc/hostname
 }
 
 enable_cgroups() {
