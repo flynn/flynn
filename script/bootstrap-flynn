@@ -39,10 +39,10 @@ main() {
 
   backend=${backend:-"libvirt-lxc"}
   domain="${domain:="dev.localflynn.com"}"
-  #ip=${ip:-$(/sbin/ifconfig eth0 \
-  #  | grep "inet addr:" \
-  #  | cut -d: -f2 \
-  #  | awk "{ print $1}")}
+  ip=${ip:-$(/sbin/ifconfig eth0 \
+    | grep "inet addr:" \
+    | cut -d: -f2 \
+    | awk "{ print $1}")}
 
   export DISCOVERD="${ip}:1111"
   export CONTROLLER_DOMAIN="${domain}"
