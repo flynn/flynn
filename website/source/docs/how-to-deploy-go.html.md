@@ -3,7 +3,7 @@ title: How To Deploy Go
 layout: docs
 ---
 
-# How to Deploy Go
+# How To Deploy Go
 
 Go apps are supported on Flynn by the [Go
 buildpack](https://github.com/kr/heroku-buildpack-go). 
