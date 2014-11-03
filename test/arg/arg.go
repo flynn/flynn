@@ -23,6 +23,7 @@ type Args struct {
 	TLSKey     string
 	AssetsDir  string
 	Run        string
+	Gist       bool
 }
 
 func Parse() *Args {
@@ -47,6 +48,7 @@ func Parse() *Args {
 	flag.BoolVar(&args.Debug, "debug", false, "enable debug output")
 	flag.BoolVar(&args.Kill, "kill", true, "kill the cluster after running the tests")
 	flag.BoolVar(&args.KeepRootFS, "keep-rootfs", false, "don't remove the rootfs which was built to run the tests")
+	flag.BoolVar(&args.Gist, "gist", false, "upload debug info to a gist")
 	flag.Parse()
 
 	return args
