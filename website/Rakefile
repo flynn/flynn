@@ -1,7 +1,7 @@
 require 'fileutils'
 require 'erubis'
 
-task compile: [:cli, :copy_contributing] do
+task compile: [:cli, :schema, :copy_contributing] do
   sh 'bundle exec middleman build --no-clean'
 end
 
