@@ -96,12 +96,11 @@ if [[ -n "${BUILDPACK_URL}" ]]; then
     custom \
     &> /dev/null
   selected_buildpack="${buildpack}"
-  buildpack_name=$(run_unprivileged ${buildpack}/bin/detect "${build_root}") \
-    && selected_buildpack=${buildpack}
+  buildpack_name=$(run_unprivileged ${buildpack}/bin/detect "${build_root}")
 else
   for buildpack in "${buildpacks[@]}"; do
     buildpack_name=$(run_unprivileged ${buildpack}/bin/detect "${build_root}") \
-      && selected_buildpack=${buildpack} \
+      && selected_buildpack="${buildpack}" \
       && break
   done
 fi
@@ -147,7 +146,7 @@ if [[ -s "${build_root}/.release" ]]; then
     puts (YAML.load_file('${build_root}/.release')['default_process_types'] ||
           {}).keys.join(', ')
   ")
-  [[ ${default_types} ]] \
+  [[ -n "${default_types}" ]] \
   && echo_normal \
     "Default process types for ${buildpack_name} -> ${default_types}"
 fi
