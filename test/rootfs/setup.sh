@@ -30,7 +30,7 @@ echo "127.0.0.1 localhost localhost.localdomain" > /etc/hosts
 echo -e "nameserver 8.8.8.8\nnameserver 8.8.4.4" > /etc/resolv.conf
 
 # enable universe
-sed -i "s/^#\s*\(deb.*universe\)$/\1/g" /etc/apt/sources.list
+sed -i "s/^#\s*\(deb.*universe\)\$/\1/g" /etc/apt/sources.list
 
 # use EC2 apt mirror as it's much quicker in CI
 sed -i \
