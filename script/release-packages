@@ -5,7 +5,7 @@
 # PREREQUISITES:
 #
 # - Install required packages
-#   sudo apt-get install -y reprepro dpkg-sig gnupg-agent
+#   sudo apt-get install -y reprepro dpkg-sig
 #
 # - Install up-to-date s3cmd so CloudFront invalidation works:
 #   sudo apt-get install -y python-dateutil
@@ -19,15 +19,9 @@
 # - Import GPG key used to sign packages
 #   gpg --import < /path/to/key.gpg
 #
-# - Set large gpg-agent cache expiry
-#   echo -e "default-cache-ttl 4294967295\nmax-cache-ttl 4294967295" | tee ~/.gnupg/gpg-agent.conf
-#
-# - Start gpg-agent
-#   eval $(gpg-agent --daemon)
-#
-# - Trigger cache of passphrase by signing something
-#   export GPG_TTY=`tty`
-#   echo | gpg --sign --yes --use-agent --output /dev/null /dev/stdin
+# - Store the passphrase
+#   echo "the-passphrase" > ~/.gnupg/passphrase
+#   chmod 440 ~/.gnupg/passphrase
 #
 # - Log in to Docker to push images
 #   docker login
@@ -46,13 +40,14 @@ OPTIONS:
   -h            Show this message
   -k            Keep release directory
   -b BUCKET     The S3 bucket to sync the apt repo with [default: flynn]
+  -g FILE       Path to the GPG passphrase file [default: $HOME/.gnupg/passphrase]
   -p PREFIX     The image URL prefix
   -r DIR        Resume the release using DIR
 USAGE
 }
 
 main() {
-  local bucket dir image_prefix
+  local bucket dir image_prefix passphrase_file
   local keep=false
 
   while getopts "hkb:p:r:" opt; do
@@ -67,6 +62,9 @@ main() {
       b)
 	bucket=$OPTARG
 	;;
+      g)
+        passphrase_file=$OPTARG
+        ;;
       p)
         image_prefix=$OPTARG
         ;;
@@ -99,6 +97,8 @@ main() {
 
   bucket="${bucket:-"flynn"}"
   dir="${dir:-$(mktemp -d)}"
+  passphrase_file="${passphrase_file:-"$HOME/.gnupg/passphrase"}"
+
   info "using base dir: ${dir}"
 
   export GOPATH="${dir}"
@@ -144,7 +144,7 @@ main() {
 
   info "signing deb package"
   local deb=$(ls "${src}"/*.deb)
-  dpkg-sig --sign builder "${deb}"
+  dpkg-sig -g "--passphrase-file \"${passphrase_file}\"" --sign builder "${deb}"
 
   info "adding deb to apt repo"
   reprepro -b "${apt_dir}" includedeb flynn "${deb}"
