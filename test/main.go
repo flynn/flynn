@@ -364,7 +364,7 @@ func dumpLogs() {
 	fmt.Println("***** flynn-host log *****")
 	run(exec.Command("cat", "/tmp/flynn-host.log"))
 
-	ids := strings.Split(strings.TrimSpace(run(exec.Command("flynn-host", "ps", "-q")).Output), "\n")
+	ids := strings.Split(strings.TrimSpace(run(exec.Command("flynn-host", "ps", "-a", "-q")).Output), "\n")
 	for _, id := range ids {
 		fmt.Print("\n\n***** ***** ***** ***** ***** ***** ***** ***** ***** *****\n\n")
 		run(exec.Command("flynn-host", "inspect", id))
