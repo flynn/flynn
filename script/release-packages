@@ -50,13 +50,13 @@ main() {
   local bucket dir image_prefix passphrase_file
   local keep=false
 
-  while getopts "hkb:p:r:" opt; do
+  while getopts "hkb:p:r:g:" opt; do
     case $opt in
       h)
         usage
         exit 1
         ;;
-      g) passphrase_file=$OPTARG ;;
+      g) passphrase_file=${OPTARG} ;;
       k) keep=true ;;
       b) bucket=${OPTARG} ;;
       p) image_prefix=${OPTARG} ;;
