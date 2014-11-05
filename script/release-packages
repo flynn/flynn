@@ -112,16 +112,12 @@ main() {
     | xargs -L 1 docker pull
 
   info "building flynn"
-<<<<<<< HEAD
   git checkout --force --quiet $commit
 
   if [[ -n "${image_prefix}" ]]; then
     sed "s/^CONFIG_IMAGE_URL_PREFIX=.*$/CONFIG_IMAGE_URL_PREFIX=${image_prefix}/" -i tup.config
   fi
 
-=======
-  git checkout --force --quiet ${commit}
->>>>>>> script: reformatted all variables used as ${name}
   tup
 
   popd >/dev/null
