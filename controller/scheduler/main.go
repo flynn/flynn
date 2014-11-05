@@ -103,6 +103,7 @@ func (c *context) syncCluster(events chan<- *host.Event) {
 	for _, h := range hosts {
 		for _, job := range h.Jobs {
 			appID := job.Metadata["flynn-controller.app"]
+			appName := job.Metadata["flynn-controller.app_name"]
 			releaseID := job.Metadata["flynn-controller.release"]
 			jobType := job.Metadata["flynn-controller.type"]
 			gg := g.New(grohl.Data{"host.id": h.ID, "job.id": job.ID, "app.id": appID, "release.id": releaseID, "type": jobType})
@@ -143,7 +144,7 @@ func (c *context) syncCluster(events chan<- *host.Event) {
 				}
 
 				f = NewFormation(c, &ct.ExpandedFormation{
-					App:       &ct.App{ID: appID},
+					App:       &ct.App{ID: appID, Name: appName},
 					Release:   release,
 					Artifact:  artifact,
 					Processes: formation.Processes,
@@ -704,11 +705,24 @@ func (f *Formation) jobType(job *host.Job) string {
 	return job.Metadata["flynn-controller.type"]
 }
 
+// sortJobs sorts Jobs in reverse chronological order based on their startedAt time
+type sortJobs []*Job
+
+func (s sortJobs) Len() int           { return len(s) }
+func (s sortJobs) Less(i, j int) bool { return s[i].startedAt.Sub(s[j].startedAt) > 0 }
+func (s sortJobs) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s sortJobs) Sort()              { sort.Sort(s) }
+
 func (f *Formation) remove(n int, name string, hostID string) {
 	g := grohl.NewContext(grohl.Data{"fn": "remove", "app.id": f.AppID, "release.id": f.Release.ID})
 
 	i := 0
+	sj := make(sortJobs, 0, len(f.jobs[name]))
 	for _, job := range f.jobs[name] {
+		sj = append(sj, job)
+	}
+	sj.Sort()
+	for _, job := range sj {
 		g.Log(grohl.Data{"host.id": job.HostID, "job.id": job.ID})
 		if hostID != "" && job.HostID != hostID { // remove from a specific host
 			continue

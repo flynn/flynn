@@ -83,7 +83,7 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 		push = s.Git("push", "flynn", "master")
 		return push.Err
 	}); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	t.Assert(push, OutputContains, "Node.js app detected")
@@ -125,24 +125,24 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 		}
 		return nil
 	}); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	// Make HTTP requests
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", "http://"+routerIP, nil)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	req.Host = route
 	res, err := client.Do(req)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	defer res.Body.Close()
 	contents, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	t.Assert(res.StatusCode, c.Equals, 200)
 	t.Assert(string(contents), Matches, `Hello to Yahoo from Flynn on port \d+`)
