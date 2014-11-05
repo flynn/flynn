@@ -50,37 +50,29 @@ main() {
   local bucket dir image_prefix passphrase_file
   local keep=false
 
-  while getopts "hkb:p:r:" opt; do
+  while getopts "hkb:p:r:g:" opt; do
     case $opt in
       h)
-	usage
-	exit 1
-	;;
-      k)
-        keep=true
+        usage
+        exit 1
         ;;
-      b)
-	bucket=$OPTARG
-	;;
-      g)
-        passphrase_file=$OPTARG
-        ;;
-      p)
-        image_prefix=$OPTARG
-        ;;
+      g) passphrase_file=${OPTARG} ;;
+      k) keep=true ;;
+      b) bucket=${OPTARG} ;;
+      p) image_prefix=${OPTARG} ;;
       r)
-        dir=$OPTARG
+        dir=${OPTARG}
         if [[ ! -d "${dir}" ]]; then
           fail "No such directory: ${dir}"
         fi
         ;;
       ?)
-	usage
-	exit 1
-	;;
+        usage
+        exit 1
+        ;;
     esac
   done
-  shift $(($OPTIND - 1))
+  shift $((${OPTIND} - 1))
 
   if [[ $# -ne 1 ]]; then
     usage
@@ -91,7 +83,7 @@ main() {
   local flynn_release="${ROOT}/util/release/flynn-release"
 
   info "checking commit status"
-  if ! "${flynn_release}" status $commit; then
+  if ! "${flynn_release}" status ${commit}; then
     fail "commit has not passed CI"
   fi
 
@@ -113,7 +105,11 @@ main() {
   pushd "${src}" >/dev/null
 
   info "pulling dependent images"
-  git grep -h "^FROM" **/Dockerfile | cut -d ' ' -f 2 | sort | uniq | xargs -L 1 docker pull
+  git grep -h "^FROM" **/Dockerfile \
+    | cut -d " " -f 2 \
+    | sort \
+    | uniq \
+    | xargs -L 1 docker pull
 
   info "building flynn"
   git checkout --force --quiet $commit

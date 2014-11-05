@@ -31,6 +31,7 @@ set -eo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
+source "${ROOT}/script/lib/util.sh"
 
 UBUNTU_BOX_NAME="ubuntu-trusty-20141016" # used in filenames for caching, bump at the same time as UBUNTU_BOX_URL
 UBUNTU_BOX_URL="http://cloud-images.ubuntu.com/vagrant/trusty/20141016/trusty-server-cloudimg-amd64-vagrant-disk1.box"
@@ -44,8 +45,8 @@ usage: $0 [options] VERSION DEB_URL
 OPTIONS:
   -h            Show this message
   -k            Keep release directory
-  -b BUCKET     The S3 bucket to upload vagrant images to [default: flynn]
-  -d DOMAIN     The CloudFront domain [default: dl.flynn.io]
+  -b BUCKET     The S3 bucket to upload vagrant images to [default: `flynn`]
+  -d DOMAIN     The CloudFront domain [default: `dl.flynn.io`]
   -r DIR        Resume the release using DIR
 
 Requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set
@@ -59,31 +60,25 @@ main() {
   while getopts "hkb:d:r:" opt; do
     case $opt in
       h)
-	usage
-	exit 1
-	;;
-      k)
-        keep=true
+        usage
+        exit 1
         ;;
-      b)
-	bucket=$OPTARG
-	;;
-      d)
-        domain=$OPTARG
-        ;;
+      k) keep=true ;;
+      b) bucket=${OPTARG} ;;
+      d) domain=${OPTARG} ;;
       r)
-        dir=$OPTARG
+        dir=${OPTARG}
         if [[ ! -d "${dir}" ]]; then
           fail "No such directory: ${dir}"
         fi
         ;;
       ?)
-	usage
-	exit 1
-	;;
+        usage
+        exit 1
+        ;;
     esac
   done
-  shift $(($OPTIND - 1))
+  shift $((${OPTIND} - 1))
 
   if [[ $# -ne 2 ]]; then
     usage
@@ -170,7 +165,9 @@ main() {
   info "checksum is ${checksum}"
 
   info "fetching current vagrant manifest"
-  local manifest="$(s3cmd --no-progress get "s3://${bucket}/vagrant/flynn-base.json" - 2>/dev/null)"
+  local manifest="$(s3cmd \
+    --no-progress \
+    get "s3://${bucket}/vagrant/flynn-base.json" - 2>/dev/null)"
   if [[ -z "${manifest}" ]]; then
     manifest='{"name":"flynn-base"}'
   fi
@@ -186,7 +183,9 @@ main() {
     > "${dir}/manifests/vagrant/flynn-base.json"
 
   info "fetching current EC2 manifest"
-  local manifest="$(s3cmd --no-progress get "s3://${bucket}/ec2/images.json" - 2>/dev/null)"
+  local manifest="$(s3cmd \
+    --no-progress \
+    get "s3://${bucket}/ec2/images.json" - 2>/dev/null)"
   if [[ -z "${manifest}" ]]; then
     manifest='{"name":"flynn-base"}'
   fi
@@ -212,11 +211,6 @@ main() {
   fi
 }
 
-sha256() {
-  local file=$1
-  sha256sum "${file}" | cut -d ' ' -f 1
-}
-
 # parse_packer reads machine readable packer output, prints the
 # ui messages to stderr and prints the artifacts to stdout.
 #
@@ -226,17 +220,17 @@ sha256() {
 #   amazon-ebs|eu-west-1:ami-4c832d3b,us-east-1:ami-fea92d96
 #
 parse_packer() {
-  sed 's/%!(PACKER_COMMA)/,/g' | while read -r line; do
+  sed "s/%!(PACKER_COMMA)/,/g" | while read -r line; do
     IFS="," read -r _ target type data <<< "${line}"
 
     case "${type}" in
-      ui)
-        echo -e "$(cut -d "," -f 2 <<< "${data}")" >&2
-        ;;
+      ui) echo -e "$(cut -d "," -f 2 <<< "${data}")" >&2 ;;
       artifact)
-        if [[ "${target}" == "virtualbox-ovf" ]] && [[ "${data:0:9}" == "0,file,0," ]]; then
+        if [[ "${target}" == "virtualbox-ovf" ]] \
+          && [[ "${data:0:9}" == "0,file,0," ]]; then
           echo "virtualbox-ovf|${data:9}"
-        elif [[ "${target}" == "amazon-ebs" ]] && [[ "${data:0:5}" == "0,id," ]]; then
+        elif [[ "${target}" == "amazon-ebs" ]] \
+          && [[ "${data:0:5}" == "0,id," ]]; then
           echo "amazon-ebs|${data:5}"
         fi
         ;;

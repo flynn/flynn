@@ -5,22 +5,22 @@ buildpacks_dir="$1"
 buildpack_url="$2"
 buildpack_name="$3"
 
-if [[ "$buildpack_name" == "" ]]; then
-  buildpack_name="$(basename "$buildpack_url")"
+if [[ "${buildpack_name}" == "" ]]; then
+  buildpack_name="$(basename "${buildpack_url}")"
   buildpack_name="${buildpack_name%.*}"
 fi
 
-mkdir -p "$buildpacks_dir"
-pushd "$buildpacks_dir" > /dev/null
+mkdir -p "${buildpacks_dir}"
+pushd "${buildpacks_dir}" > /dev/null
 
-IFS='#' read url treeish <<< "$buildpack_url"
+IFS='#' read url treeish <<< "${buildpack_url}"
 
-if [[ "$treeish" == "" ]]; then
-  git clone --depth=1 "$url" "$buildpack_name"
+if [[ "${treeish}" == "" ]]; then
+  git clone --depth=1 "${url}" "${buildpack_name}"
 else
-  git clone "$url" "$buildpack_name"
-  pushd $buildpack_name > /dev/null
-  git checkout -q "$treeish"
+  git clone "${url}" "${buildpack_name}"
+  pushd ${buildpack_name} > /dev/null
+  git checkout -q "${treeish}"
   rm -rf .git
   popd > /dev/null
 fi

@@ -15,22 +15,20 @@ USAGE
 main() {
   local dir
 
-  while getopts "hd:i:" opt; do
+  while getopts "hd:" opt; do
     case $opt in
       h)
-	usage
-	exit 1
-	;;
-      d)
-	dir=$OPTARG
-	;;
+        usage
+        exit 1
+        ;;
+      d) dir=${OPTARG} ;;
       ?)
-	usage
-	exit 1
-	;;
+        usage
+        exit 1
+        ;;
     esac
   done
-  shift $(($OPTIND - 1))
+  shift $((${OPTIND} - 1))
 
   if [[ $# -ne 1 ]]; then
     usage

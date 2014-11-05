@@ -5,7 +5,7 @@ set -e -x
 export LC_ALL=C
 mount -t proc none /proc
 
-function cleanup {
+cleanup() {
   umount /proc
 }
 trap cleanup EXIT
@@ -30,19 +30,29 @@ echo "127.0.0.1 localhost localhost.localdomain" > /etc/hosts
 echo -e "nameserver 8.8.8.8\nnameserver 8.8.4.4" > /etc/resolv.conf
 
 # enable universe
-sed -i 's/^#\s*\(deb.*universe\)$/\1/g' /etc/apt/sources.list
+sed -i "s/^#\s*\(deb.*universe\)\$/\1/g" /etc/apt/sources.list
 
 # use EC2 apt mirror as it's much quicker in CI
-sed -i 's/archive.ubuntu.com/us-west-1.ec2.archive.ubuntu.com/g' /etc/apt/sources.list
+sed -i \
+  "s/archive.ubuntu.com/us-west-1.ec2.archive.ubuntu.com/g" \
+  /etc/apt/sources.list
 
 # disable apt caching and add speedups
-echo 'force-unsafe-io' > /etc/dpkg/dpkg.cfg.d/02apt-speedup
+echo "force-unsafe-io" > /etc/dpkg/dpkg.cfg.d/02apt-speedup
 cat >/etc/apt/apt.conf.d/no-cache <<EOF
 DPkg::Post-Invoke {
-  "rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*.deb /var/cache/apt/*.bin || true";
+  "rm -f \
+    /var/cache/apt/archives/*.deb \
+    /var/cache/apt/archives/partial/*.deb \
+    /var/cache/apt/*.bin \
+    || true";
 };
 APT::Update::Post-Invoke {
-  "rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*.deb /var/cache/apt/*.bin || true";
+  "rm -f \
+    /var/cache/apt/archives/*.deb \
+    /var/cache/apt/archives/partial/*.deb \
+    /var/cache/apt/*.bin \
+    || true";
 };
 Dir::Cache::pkgcache "";
 Dir::Cache::srcpkgcache "";
@@ -52,8 +62,14 @@ echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/no-languages
 # update packages
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get dist-upgrade -y -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold'
-apt-get install linux-generic-lts-trusty -y -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold'
+apt-get dist-upgrade \
+  -y \
+  -o Dpkg::Options::="--force-confdef" \
+  -o Dpkg::Options::="--force-confold"
+apt-get install linux-generic-lts-trusty \
+  -y \
+  -o Dpkg::Options::="--force-confdef" \
+  -o Dpkg::Options::="--force-confold"
 
 # install ssh server and go deps
 apt-get install -y apt-transport-https openssh-server mercurial git make curl
@@ -70,17 +86,30 @@ EOF
 
 # install docker
 # apparmor is required - see https://github.com/dotcloud/docker/issues/4734
-apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 36A1D7869245C8950F966E92D8576A8BA88D21E9
-echo deb https://get.docker.com/ubuntu docker main > /etc/apt/sources.list.d/docker.list
+apt-key adv \
+  --keyserver hkp://keyserver.ubuntu.com:80 \
+  --recv-keys 36A1D7869245C8950F966E92D8576A8BA88D21E9
+echo deb https://get.docker.com/ubuntu docker main \
+  > /etc/apt/sources.list.d/docker.list
 apt-get update
 apt-get install -y lxc-docker aufs-tools apparmor
 
 # install flynn build dependencies
 apt-get install -y software-properties-common
 apt-add-repository 'deb http://ppa.launchpad.net/titanous/tup/ubuntu trusty main'
-apt-key adv --keyserver keyserver.ubuntu.com --recv 27947298A222DFA46E207200B34FBCAA90EA7F4E
+apt-key adv \
+  --keyserver keyserver.ubuntu.com \
+  --recv 27947298A222DFA46E207200B34FBCAA90EA7F4E
+
 apt-get update
-apt-get install -y tup fuse build-essential libdevmapper-dev btrfs-tools libvirt-dev libvirt-bin
+apt-get install -y \
+  tup \
+  fuse \
+  build-essential \
+  libdevmapper-dev \
+  btrfs-tools \
+  libvirt-dev \
+  libvirt-bin
 
 # make tup suid root so that we can build in chroots
 chmod ug+s /usr/bin/tup

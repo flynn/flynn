@@ -29,14 +29,10 @@ main() {
         usage
         exit 1
         ;;
-      b)
-        bucket=$OPTARG
-        ;;
-      d)
-        domain=$OPTARG
-        ;;
+      b) bucket=${OPTARG} ;;
+      d) domain=${OPTARG} ;;
       r)
-        dir=$OPTARG
+        dir=${OPTARG}
         if [[ ! -d "${dir}" ]]; then
           fail "No such directory: ${dir}"
         fi
@@ -47,7 +43,7 @@ main() {
         ;;
     esac
   done
-  shift $(($OPTIND - 1))
+  shift $((${OPTIND} - 1))
 
   if [[ $# -ne 1 ]]; then
     usage

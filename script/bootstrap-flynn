@@ -11,9 +11,9 @@ usage: $0 [options]
 
 OPTIONS:
   -h            Show this message
-  -b BACKEND    The job backend to use (either docker or libvirt-lxc) [default: libvirt-lxc]
-  -d DOMAIN     The default domain to use [default: dev.localflynn.com]
-  -i IP         The external IP address to bind to [default: the IP assigned to eth0]
+  -b BACKEND    The job backend to use (either `docker` or `libvirt-lxc`) [default: `libvirt-lxc`]
+  -d DOMAIN     The default domain to use [default: `dev.localflynn.com`]
+  -i IP         The external IP address to bind to [default: the IP assigned to `eth0`]
 USAGE
 }
 
@@ -21,21 +21,15 @@ main() {
   local backend ip
   local domain="${CONTROLLER_DOMAIN}"
 
-  while getopts "hb:d:i:" opt; do
+  while getopts 'hb:d:i:' opt; do
     case $opt in
       h)
         usage
         exit 1
         ;;
-      b)
-        backend=$OPTARG
-        ;;
-      d)
-        domain=$OPTARG
-        ;;
-      i)
-        ip=$OPTARG
-        ;;
+      b) backend=${OPTARG} ;;
+      d) domain=${OPTARG} ;;
+      i) ip=${OPTARG} ;;
       ?)
         usage
         exit 1
@@ -45,7 +39,10 @@ main() {
 
   backend=${backend:-"libvirt-lxc"}
   domain="${domain:="dev.localflynn.com"}"
-  ip=${ip:-$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')}
+  ip=${ip:-$(/sbin/ifconfig eth0 \
+    | grep "inet addr:" \
+    | cut -d: -f2 \
+    | awk "{ print $1}")}
 
   export DISCOVERD="${ip}:1111"
   export CONTROLLER_DOMAIN="${domain}"
@@ -85,7 +82,7 @@ boot_libvirt_lxc() {
     -- \
     daemon \
     --manifest "${host_dir}/bin/manifest.json" \
-    --external $ip \
+    --external ${ip} \
     --force \
     --backend libvirt-lxc \
     --state /tmp/flynn-host-state.json \
@@ -105,7 +102,7 @@ boot_docker() {
     --volume /var/run/docker.sock:/var/run/docker.sock \
     --publish 1113:1113 \
     flynn/host \
-    --external $ip \
+    --external ${ip} \
     --force \
     --backend docker
 

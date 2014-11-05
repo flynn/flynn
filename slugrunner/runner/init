@@ -1,67 +1,74 @@
 #!/bin/bash
-set -eo pipefail
-
 ## Load slug from Bind Mount, URL or STDIN
 
-export HOME=/app
-mkdir -p $HOME
+set -eo pipefail
 
-if [[ $(ls -A $HOME) ]]; then
-	true
-elif [[ $SLUG_URL ]]; then
-	curl -s "$SLUG_URL" | tar -xzC $HOME
-	unset SLUG_URL
+export HOME=/app
+mkdir -p "${HOME}"
+
+if [[ -n $(ls -A "${HOME}") ]]; then
+  true
+elif ! [[ -z "${SLUG_URL}" ]]; then
+  curl -s "${SLUG_URL}" | tar -xzC "${HOME}"
+  unset SLUG_URL
 else
-	cat | tar -xzC $HOME
+  cat | tar -xzC "${HOME}"
 fi
-cd $HOME
+cd "${HOME}"
 
 ## Load profile.d and release config
 
 shopt -s nullglob
 mkdir -p .profile.d
 if [[ -s .release ]]; then
-	ruby -e "require 'yaml';(YAML.load_file('.release')['config_vars'] || {}).each{|k,v| puts \"#{k}=\${#{k}:-'#{v}'}\"}" > .profile.d/config_vars
+  ruby -e "require 'yaml';
+    (YAML.load_file('.release')['config_vars'] || {}).each do |k, v|
+      puts \"#{k}=\${#{k}:-'#{v}'}\"
+    end" \
+    > .profile.d/config_vars
 fi
 for file in .profile.d/*; do
-	source $file
+  source "${file}"
 done
 hash -r
 
 ## Inject "start" command to run processes defined in Procfile
 
 case "$1" in
-	start)
-		if [[ -f Procfile ]]; then
-			command="$(ruby -e "require 'yaml';puts YAML.load_file('Procfile')['$2']")"
-		else
-			command="$(ruby -e "require 'yaml';puts (YAML.load_file('.release')['default_process_types'] || {})['$2']")"
-		fi
-		;;
-
-	*)
-		command="$@"
-		;;
+  start)
+    if [[ -f Procfile ]]; then
+      command="$(ruby -e "require 'yaml';
+        puts YAML.load_file('Procfile')['$2']"
+      )"
+    else
+      command="$(ruby -e "require 'yaml';
+        puts (YAML.load_file('.release')['default_process_types'] || {})['$2']"
+      )"
+    fi
+    ;;
+  *)
+    command="$@"
+    ;;
 esac
 
 ## Use sdutil to register with service discovery
 
-if [[ $SD_NAME && $PORT ]]; then
-	if [[ $SD_HOST ]]; then
-		runner="sdutil exec -h $SD_HOST -s $SD_NAME:$PORT bash -c"
-		unset SD_HOST
-	else
-		runner="sdutil exec -s $SD_NAME:$PORT bash -c"
-	fi
-	unset SD_NAME
-elif [[ $SD_ARGS ]]; then
-	runner="sdutil $SD_ARGS bash -c"
-	unset SD_ARGS
+if [[ -n "${SD_NAME}" ]] && [[ -n "${PORT}" ]]; then
+  if ! [[ -n "${SD_HOST}" ]]; then
+    runner="sdutil exec -h ${SD_HOST} -s ${SD_NAME}:${PORT} bash -c"
+    unset SD_HOST
+  else
+    runner="sdutil exec -s ${SD_NAME}:${PORT} bash -c"
+  fi
+  unset SD_NAME
+elif ! [[ -n "${SD_ARGS}" ]]; then
+  runner="sdutil ${SD_ARGS} bash -c"
+  unset SD_ARGS
 else
-	runner="bash -c"
+  runner="bash -c"
 fi
 
 ## Run!
 
 chown -R nobody:nogroup .
-setuidgid nobody $runner "$command"
+setuidgid nobody ${runner} "${command}"

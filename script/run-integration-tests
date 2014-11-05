@@ -14,7 +14,7 @@ main() {
 
   cluster_add=$("${ROOT}/script/bootstrap-flynn" &> >(tee /dev/stderr) | tail -1)
 
-  if [ "${cluster_add:0:17}" != "flynn cluster add" ]; then
+  if [[ "${cluster_add:0:17}" != "flynn cluster add" ]]; then
     echo Bootstrap failed >&2
     exit 1
   fi
@@ -25,12 +25,12 @@ main() {
 
   cd "${ROOT}/test"
 
-  test_args="--flynnrc $FLYNNRC --cli "${flynn}" --debug"
-  if [ -n "${test_to_run}" ]; then
+  test_args="--flynnrc ${FLYNNRC} --cli \"${flynn}\" --debug"
+  if [[ -n "${test_to_run}" ]]; then
     test_args="${test_args} --run ${test_to_run}"
   fi
 
-  bin/flynn-test $test_args
+  bin/flynn-test ${test_args}
 }
 
 main $1
