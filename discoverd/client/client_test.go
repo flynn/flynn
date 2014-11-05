@@ -103,24 +103,26 @@ func waitUpdates(t *testing.T, set discoverd.ServiceSet, bringCurrent bool, n in
 }
 
 func checkUpdates(updates chan *agent.ServiceUpdate, expected []*agent.ServiceUpdate) error {
-	for _, u := range expected {
-		if err := checkUpdate(updates, u); err != nil {
-			return err
+	for i := 0; i < len(expected); i++ {
+		select {
+		case u := <-updates:
+			if !includesUpdate(expected, u) {
+				return fmt.Errorf("Expected %#v to include %v", expected, u)
+			}
+		case <-time.After(3 * time.Second):
+			return fmt.Errorf("Timed out waiting for update")
 		}
 	}
 	return nil
 }
 
-func checkUpdate(updates chan *agent.ServiceUpdate, expected *agent.ServiceUpdate) error {
-	select {
-	case u := <-updates:
-		if !updatesEqual(u, expected) {
-			return fmt.Errorf("Expected update: %v, got %v", expected, u)
+func includesUpdate(updates []*agent.ServiceUpdate, update *agent.ServiceUpdate) bool {
+	for _, u := range updates {
+		if updatesEqual(u, update) {
+			return true
 		}
-		return nil
-	case <-time.After(3 * time.Second):
-		return fmt.Errorf("Timed out waiting for update: %v", expected)
 	}
+	return false
 }
 
 func updatesEqual(a, b *agent.ServiceUpdate) bool {
@@ -139,7 +141,7 @@ func updatesEqual(a, b *agent.ServiceUpdate) bool {
 func checkServices(t *testing.T, actual []*discoverd.Service, expected []*discoverd.Service) {
 	for _, service := range actual {
 		if !includesService(expected, service) {
-			t.Fatalf("Expected %#v to include %v", actual, service)
+			t.Fatalf("Expected %#v to include %v", expected, service)
 		}
 	}
 }
@@ -422,11 +424,11 @@ func TestReconnect(t *testing.T) {
 
 	assert(clientA.Register(service1, ":3333"), t)
 
-	if err := checkUpdate(updates1, &agent.ServiceUpdate{
+	if err := checkUpdates(updates1, []*agent.ServiceUpdate{{
 		Name:   service1,
 		Addr:   "127.0.0.1:3333",
 		Online: true,
-	}); err != nil {
+	}}); err != nil {
 		t.Fatal(err)
 	}
 
