@@ -39,7 +39,7 @@ func main() {
 	if err != nil {
 		log.Fatal("Error getting ServiceSet:", err)
 	}
-	for _ = range time.Tick(time.Second) {
+	for range time.Tick(time.Second) {
 		log.Println(strings.Join(set.Addrs(), ", "))
 	}
 }

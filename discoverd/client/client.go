@@ -370,7 +370,7 @@ func (s *serviceSet) Watch(bringCurrent bool) chan *agent.ServiceUpdate {
 func (s *serviceSet) Unwatch(ch chan *agent.ServiceUpdate) {
 	go func() {
 		// drain channel to prevent deadlock
-		for _ = range ch {
+		for range ch {
 		}
 	}()
 	s.l.Lock()
@@ -691,7 +691,7 @@ func (c *Client) WatchReconnects() chan ConnEvent {
 func (c *Client) UnwatchReconnects(ch chan ConnEvent) {
 	go func() {
 		// drain channel to prevent deadlock
-		for _ = range ch {
+		for range ch {
 		}
 	}()
 	c.l.Lock()

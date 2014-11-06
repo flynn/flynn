@@ -239,7 +239,7 @@ func (s *serviceData) Addrs() []string {
 }
 
 func (s *serviceData) monitor() {
-	for _ = range s.ss.Watch(false) {
+	for range s.ss.Watch(false) {
 		s.mtx.Lock()
 		all := s.all
 		leader := s.leader

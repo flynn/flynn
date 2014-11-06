@@ -278,7 +278,7 @@ func (s *State) AddListener(jobID string) chan host.Event {
 func (s *State) RemoveListener(jobID string, ch chan host.Event) {
 	go func() {
 		// drain to prevent deadlock while removing the listener
-		for _ = range ch {
+		for range ch {
 		}
 	}()
 	s.listenMtx.Lock()

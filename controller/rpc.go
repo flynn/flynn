@@ -44,7 +44,7 @@ func (s *ControllerRPC) StreamFormations(since time.Time, stream rpcplus.Stream)
 	defer func() {
 		go func() {
 			// drain to prevent deadlock while removing the listener
-			for _ = range ch {
+			for range ch {
 			}
 		}()
 		s.formations.Unsubscribe(ch)
