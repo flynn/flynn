@@ -9,7 +9,7 @@ mkdir -p "${HOME}"
 if [[ -n $(ls -A "${HOME}") ]]; then
   true
 elif ! [[ -z "${SLUG_URL}" ]]; then
-  curl -s "${SLUG_URL}" | tar -xzC "${HOME}"
+  curl -s -L "${SLUG_URL}" | tar -xzC "${HOME}"
   unset SLUG_URL
 else
   cat | tar -xzC "${HOME}"
