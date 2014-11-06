@@ -287,6 +287,19 @@ func (c *ContainerInit) changeState(state State, err string, exitStatus int) {
 	}
 }
 
+func (c *ContainerInit) exit(status int) {
+	// Wait for the client to call Resume() again. This gives the client a
+	// chance to get the exit code from the RPC socket call interface
+	// before we die.
+	select {
+	case <-c.resume:
+	case <-time.After(time.Second):
+		log.Println("timeout waiting for client to call Resume()")
+	}
+	c.mtx.Lock()
+	os.Exit(status)
+}
+
 var SocketPath = filepath.Join(SharedPath, "rpc.sock")
 
 func runRPCServer() {
@@ -490,42 +503,31 @@ func containerInitApp(args *ContainerInitArgs) error {
 	<-init.resume
 	init.mtx.Lock()
 
-	exitCode := 1
-
 	if cmdErr != nil {
 		init.changeState(StateFailed, cmdErr.Error(), -1)
-		return cmdErr
+		init.exit(1)
 	}
 	// Container setup
 	if err := setupCommon(args); err != nil {
 		init.changeState(StateFailed, err.Error(), -1)
+		init.exit(1)
 	}
 	// Start the app
 	if err := cmd.Start(); err != nil {
 		init.changeState(StateFailed, err.Error(), -1)
+		init.exit(1)
 	}
 	init.process = cmd.Process
 	init.changeState(StateRunning, "", -1)
 
 	init.mtx.Unlock() // Allow calls
-	exitCode = babySit(init.process)
+	exitCode := babySit(init.process)
 	init.mtx.Lock()
 	init.changeState(StateExited, "", exitCode)
 
 	init.mtx.Unlock() // Allow calls
 
-	// Wait for the client to call Resume() again. This gives the client
-	// a chance to get the exit code from the RPC socket call interface before
-	// we die.
-	select {
-	case <-init.resume:
-	case <-time.After(time.Second):
-		return fmt.Errorf("timeout waiting for client to call Resume()")
-	}
-
-	init.mtx.Lock()
-
-	os.Exit(exitCode)
+	init.exit(exitCode)
 	return nil
 }
 
