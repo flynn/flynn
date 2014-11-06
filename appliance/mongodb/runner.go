@@ -49,7 +49,7 @@ func main() {
 	for l := range leaders {
 		if l.Addr == set.SelfAddr() {
 			go func() {
-				for _ = range leaders {
+				for range leaders {
 				}
 			}()
 			self = l

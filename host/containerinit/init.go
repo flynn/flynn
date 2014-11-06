@@ -251,7 +251,7 @@ func (c *ContainerInit) StreamState(arg struct{}, stream rpcplus.Stream) error {
 	defer func() {
 		go func() {
 			// drain to prevent deadlock while removing the listener
-			for _ = range ch {
+			for range ch {
 			}
 		}()
 		c.streamsMtx.Lock()

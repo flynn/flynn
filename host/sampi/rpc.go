@@ -102,7 +102,7 @@ func (s *Cluster) StreamHostEvents(arg struct{}, stream rpcplus.Stream) error {
 	defer func() {
 		go func() {
 			// drain to prevent deadlock while removing the listener
-			for _ = range ch {
+			for range ch {
 			}
 		}()
 		s.state.RemoveListener(ch)

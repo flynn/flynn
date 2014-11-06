@@ -29,7 +29,7 @@ func (m *WatchManager) Watch(ch chan *router.Event) {
 func (m *WatchManager) Unwatch(ch chan *router.Event) {
 	go func() {
 		// drain channel so that we don't deadlock
-		for _ = range ch {
+		for range ch {
 		}
 	}()
 	m.mtx.Lock()
