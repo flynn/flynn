@@ -65,7 +65,6 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 	writeMtx := &sync.Mutex{}
 	writeMtx.Lock()
 
-	success := make(chan struct{})
 	attached := make(chan struct{})
 	failed := make(chan struct{})
 	opts := &AttachRequest{
@@ -100,7 +99,6 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 			conn.Write([]byte{host.AttachSuccess})
 			writeMtx.Unlock()
 			close(attached)
-			close(success)
 		case <-failed:
 			g.Log(grohl.Data{"at": "failed"})
 			return
@@ -165,25 +163,17 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 
 	g.Log(grohl.Data{"at": "attach"})
 	if err := h.backend.Attach(opts); err != nil && err != io.EOF {
-		select {
-		case <-success:
-			if exit, ok := err.(ExitError); ok {
-				writeMtx.Lock()
-				w.WriteByte(host.AttachExit)
-				binary.Write(w, binary.BigEndian, uint32(exit))
-				w.Flush()
-				writeMtx.Unlock()
-				if exit == 0 {
-					err = nil
-				}
-			}
-		default:
+		if exit, ok := err.(ExitError); ok {
+			writeMtx.Lock()
+			w.WriteByte(host.AttachExit)
+			binary.Write(w, binary.BigEndian, uint32(exit))
+			w.Flush()
+			writeMtx.Unlock()
+		} else {
 			close(failed)
 			writeMtx.Lock()
 			writeError(err.Error())
 			writeMtx.Unlock()
-		}
-		if err != nil {
 			g.Log(grohl.Data{"at": "attach", "status": "error", "err": err.Error()})
 		}
 	} else {
