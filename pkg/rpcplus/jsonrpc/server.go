@@ -134,12 +134,12 @@ func (c *serverCodec) Close() error {
 // ServeConn runs the JSON-RPC server on a single connection.
 // ServeConn blocks, serving the connection until the client hangs up.
 // The caller typically invokes ServeConn in a go statement.
-func ServeConn(conn io.ReadWriteCloser) {
-	ServeConnWithContext(conn, nil)
+func ServeConn(conn io.ReadWriteCloser, logger *func(*rpc.RequestLogItem)) {
+	ServeConnWithContext(conn, nil, logger)
 }
 
 // ServeConnWithContext is like ServeConn but it allows to pass a
 // connection context to the RPC methods.
-func ServeConnWithContext(conn io.ReadWriteCloser, context interface{}) {
-	rpc.ServeCodecWithContext(NewServerCodec(conn), context)
+func ServeConnWithContext(conn io.ReadWriteCloser, context interface{}, logger *func(*rpc.RequestLogItem)) {
+	rpc.ServeCodecWithContext(NewServerCodec(conn), context, logger)
 }

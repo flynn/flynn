@@ -67,7 +67,7 @@ func TestServer(t *testing.T) {
 
 	cli, srv := net.Pipe()
 	defer cli.Close()
-	go ServeConn(srv)
+	go ServeConn(srv, nil)
 	dec := json.NewDecoder(cli)
 
 	// Send hand-coded requests to server, parse responses.
@@ -103,7 +103,7 @@ func TestClient(t *testing.T) {
 	// Assume server is okay (TestServer is above).
 	// Test client against server.
 	cli, srv := net.Pipe()
-	go ServeConn(srv)
+	go ServeConn(srv, nil)
 
 	client := NewClient(cli)
 	defer client.Close()
@@ -167,20 +167,20 @@ func TestClient(t *testing.T) {
 func TestMalformedInput(t *testing.T) {
 	cli, srv := net.Pipe()
 	go cli.Write([]byte(`{id:1}`)) // invalid json
-	ServeConn(srv)                 // must return, not loop
+	ServeConn(srv, nil)            // must return, not loop
 }
 
 func TestUnexpectedError(t *testing.T) {
 	cli, srv := myPipe()
 	go cli.PipeWriter.CloseWithError(errors.New("unexpected error!")) // reader will get this error
-	ServeConn(srv)                                                    // must return, not loop
+	ServeConn(srv, nil)                                               // must return, not loop
 }
 
 func TestStreamingCall(t *testing.T) {
 	// Assume server is okay (TestServer is above).
 	// Test client against server.
 	cli, srv := net.Pipe()
-	go ServeConn(srv)
+	go ServeConn(srv, nil)
 
 	client := NewClient(cli)
 	defer client.Close()
