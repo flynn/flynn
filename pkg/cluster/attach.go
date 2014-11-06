@@ -218,6 +218,16 @@ func (c *attachClient) Receive(stdout, stderr io.Writer) (int, error) {
 				return 0, err
 			}
 			return int(binary.BigEndian.Uint32(buf[:])), nil
+		case host.AttachError:
+			if _, err := io.ReadFull(r, buf[:]); err != nil {
+				return 0, err
+			}
+			length := int64(binary.BigEndian.Uint32(buf[:]))
+			errBytes := make([]byte, length)
+			if _, err := io.ReadFull(r, errBytes); err != nil {
+				return 0, err
+			}
+			return 0, errors.New(string(errBytes))
 		}
 	}
 }
