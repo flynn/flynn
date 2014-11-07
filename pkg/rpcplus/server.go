@@ -166,8 +166,6 @@ type RequestLogItem struct {
 	End           time.Time `json:"end"`
 	Duration      int64     `json:"duration"`
 	RequestMethod *string   `json:"request_method"`
-	ResponseCode  *string   `json:"response_code"`
-	ResponseBytes uint64    `json:"response_byes"`
 }
 
 type methodType struct {
