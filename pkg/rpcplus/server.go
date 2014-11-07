@@ -135,6 +135,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -145,6 +146,14 @@ const (
 	DefaultDebugPath = "/debug/rpc"
 )
 
+func maybeLog(logger *func(*RequestLogItem), item *RequestLogItem) {
+	if logger != nil {
+		item.End = time.Now()
+		item.Duration = int64(item.End.Sub(item.Start) / time.Millisecond)
+		(*logger)(item)
+	}
+}
+
 // Precompute the reflect type for error.  Can't use error directly
 // because Typeof takes an empty interface value.  This is annoying.
 var typeOfError = reflect.TypeOf((*error)(nil)).Elem()
@@ -152,14 +161,13 @@ var typeOfError = reflect.TypeOf((*error)(nil)).Elem()
 // RequestLogItem: a request/response log entry that includes
 // timing information and the full RPC method name
 type RequestLogItem struct {
-	Id            string `json:"id"`
-	RequestId     int    `json:"request_id"`
-	IpAddress     string `json:"ip_address"`
-	Start         string `json:"start"`
-	End           string `json:"end"`
-	RequestMethod string `json:"request_method"`
-	ResponseCode  string `json:"response_code"`
-	ResponseBytes int    `json:"response_byes"`
+	RequestId     uint64    `json:"request_id"`
+	Start         time.Time `json:"start"`
+	End           time.Time `json:"end"`
+	Duration      int64     `json:"duration"`
+	RequestMethod *string   `json:"request_method"`
+	ResponseCode  *string   `json:"response_code"`
+	ResponseBytes uint64    `json:"response_byes"`
 }
 
 type methodType struct {
@@ -577,20 +585,27 @@ func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface
 	} else {
 		contextVal = reflect.New(server.contextType)
 	}
+
+	requestLogMap := make(map[uint64]*RequestLogItem)
+
 	for {
 		service, mtype, req, argv, replyv, keepReading, err := server.readRequest(codec)
 		if err != nil {
+			// an error here means the request was malformed
+			// we won't bother to log these requests/responses
 			if err == errCloseStream {
-				go func() {
+				go func(seq uint64) {
 					stopChansMtx.Lock()
-					stop, ok := stopChans[req.Seq]
-					delete(stopChans, req.Seq)
+					stop, ok := stopChans[seq]
+					delete(stopChans, seq)
 					stopChansMtx.Unlock()
+					maybeLog(logger, requestLogMap[seq])
+					delete(requestLogMap, seq)
 					if !ok {
 						return
 					}
 					close(stop)
-				}()
+				}(req.Seq)
 				continue
 			}
 			if !keepReading {
@@ -603,7 +618,11 @@ func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface
 			}
 			continue
 		}
-
+		requestLogMap[req.Seq] = &RequestLogItem{
+			RequestId:     req.Seq,
+			Start:         time.Now(),
+			RequestMethod: &req.ServiceMethod,
+		}
 		done := make(chan struct{})
 		stop := make(chan struct{})
 		stopChansMtx.Lock()
@@ -615,7 +634,10 @@ func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface
 			stopChansMtx.Lock()
 			delete(stopChans, seq)
 			stopChansMtx.Unlock()
+			maybeLog(logger, requestLogMap[seq])
+			delete(requestLogMap, seq)
 		}(req.Seq)
+
 		go service.call(call{
 			server:  server,
 			sending: sending,
