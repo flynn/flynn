@@ -6,9 +6,9 @@ import (
 	"encoding/hex"
 	"errors"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.crypto/ssh"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
 	ct "github.com/flynn/flynn/controller/types"
 )
 

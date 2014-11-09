@@ -9,7 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.crypto/ssh"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
 )
 
 type GenSSHKeyAction struct {
