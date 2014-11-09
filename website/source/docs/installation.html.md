@@ -183,6 +183,10 @@ demo.localflynn.com.    A      192.168.84.44
 *.demo.localflynn.com.  CNAME  demo.localflynn.com.
 ```
 
+*If you are just using a single node and don't want to initially setup DNS
+records, you can use [xip.io](http://xip.io) which provides wildcard DNS for
+any IP address.*
+
 Set `CONTROLLER_DOMAIN` and `DEFAULT_ROUTE_DOMAIN` to the main domain name and
 start the bootstrap process:
 
