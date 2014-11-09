@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/code.google.com/p/go.crypto/nacl/secretbox"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/inconshreveable/go-vhost"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/router/types"
@@ -285,43 +284,32 @@ func fail(sc *httputil.ServerConn, req *http.Request, code int, msg string) {
 	sc.Write(req, resp)
 }
 
+var errMissingTLS = errors.New("router: route not found or TLS not configured")
+
 func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 	defer conn.Close()
 
 	var r *httpRoute
 
-	// For TLS, use the SNI hello to determine the domain.
-	// At this stage, if we don't find a match, we simply
-	// close the connection down.
 	if isTLS {
-		// Parse out host via SNI first
-		vhostConn, err := vhost.TLS(conn)
-		if err != nil {
-			log.Println("Failed to decode TLS connection", err)
-			return
+		certForHandshake := func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			r = s.findRouteForHost(hello.ServerName)
+			if r == nil {
+				return nil, errMissingTLS
+			}
+			if r.keypair == nil {
+				return nil, errMissingTLS
+			}
+			return r.keypair, nil
 		}
-		host := vhostConn.Host()
-
-		// Find a backend for the key
-		r = s.findRouteForHost(host)
-		if r == nil {
-			return
-		}
-		if r.keypair == nil {
-			log.Println("Cannot serve TLS, no certificate defined for this domain")
-			return
-		}
-
-		// Init a TLS decryptor
-		tlscfg := &tls.Config{Certificates: []tls.Certificate{*r.keypair}}
-		conn = tls.Server(vhostConn, tlscfg)
+		conn = tls.Server(conn, &tls.Config{GetCertificate: certForHandshake, Certificates: []tls.Certificate{{}}})
 	}
 
 	sc := httputil.NewServerConn(conn, nil)
 	for {
 		req, err := sc.Read()
 		if err != nil {
-			if err != io.EOF && err != httputil.ErrPersistEOF {
+			if err != io.EOF && err != httputil.ErrPersistEOF && err != errMissingTLS {
 				log.Println("client read err:", err)
 			}
 			return

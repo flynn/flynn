@@ -133,13 +133,23 @@ func (s *S) TestAddHTTPRoute(c *C) {
 	assertGet(c, "http://"+l.Addr, "example.com", "2")
 	assertGet(c, "https://"+l.TLSAddr, "example.com", "2")
 
+	res, err := httpClient.Do(newReq("http://"+l.Addr, "example2.com"))
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 404)
+	res.Body.Close()
+
+	_, err = (&http.Client{
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{ServerName: "example2.com"}},
+	}).Do(newReq("https://"+l.TLSAddr, "example2.com"))
+	c.Assert(err, Not(IsNil))
+
 	wait := waitForEvent(c, l, "remove", r.ID)
-	err := l.RemoveRoute(r.ID)
+	err = l.RemoveRoute(r.ID)
 	c.Assert(err, IsNil)
 	wait()
 	httpClient.Transport.(*http.Transport).CloseIdleConnections()
 
-	res, err := httpClient.Do(newReq("http://"+l.Addr, "example.com"))
+	res, err = httpClient.Do(newReq("http://"+l.Addr, "example.com"))
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 404)
 	res.Body.Close()
