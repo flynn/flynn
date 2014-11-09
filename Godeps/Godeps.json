@@ -223,10 +223,6 @@
 			"Rev": "3f0466666779bd2143f368a207b0641f0ed536e8"
 		},
 		{
-			"ImportPath": "github.com/inconshreveable/go-vhost",
-			"Rev": "abc5f6a77596abba0c71c07cfe22b6ccfd0a7d2d"
-		},
-		{
 			"ImportPath": "github.com/kr/binarydist",
 			"Rev": "9955b0ab8708602d411341e55fffd7e0700f86bd"
 		},
