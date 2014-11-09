@@ -5,12 +5,11 @@ import (
 	"encoding/gob"
 	"log"
 	"net"
+	"os"
 	"syscall"
 
 	"github.com/flynn/flynn/pkg/rpcplus"
 )
-
-type ClosingFD FD
 
 type FDWriter struct {
 	conn    *net.UnixConn
@@ -71,9 +70,9 @@ func (c *gobServerCodec) WriteResponse(r *rpcplus.Response, body interface{}, la
 		for i, fd := range *f {
 			(*f)[i].FD = c.fdWriter.AddFD(fd.FD)
 		}
-	case *ClosingFD:
-		defer syscall.Close(f.FD)
-		body = &FD{c.fdWriter.AddFD(f.FD)}
+	case *os.File:
+		defer f.Close()
+		body = &FD{c.fdWriter.AddFD(int(f.Fd()))}
 	}
 
 	if err = c.enc.Encode(r); err != nil {
