@@ -220,7 +220,7 @@ func (c *ContainerInit) GetStdout(arg struct{}, fds *[]fdrpc.FD) error {
 	return nil
 }
 
-func (c *ContainerInit) GetStdin(arg struct{}, fd *fdrpc.ClosingFD) error {
+func (c *ContainerInit) GetStdin(arg struct{}, f *os.File) error {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
 
@@ -228,7 +228,7 @@ func (c *ContainerInit) GetStdin(arg struct{}, fd *fdrpc.ClosingFD) error {
 		return errors.New("stdin is closed")
 	}
 
-	fd.FD = int(c.stdin.Fd())
+	*f = *c.stdin
 	c.stdin = nil
 
 	return nil
