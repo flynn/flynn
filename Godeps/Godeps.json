@@ -11,31 +11,6 @@
 			"Rev": "364fb577de68fb646c4cb39cc0e09c887ee16376"
 		},
 		{
-			"ImportPath": "code.google.com/p/go.crypto/nacl/secretbox",
-			"Comment": "null-230",
-			"Rev": "228579b1f8ccfc93ed9f1709e32e8361ffc9a7ae"
-		},
-		{
-			"ImportPath": "code.google.com/p/go.crypto/poly1305",
-			"Comment": "null-230",
-			"Rev": "228579b1f8ccfc93ed9f1709e32e8361ffc9a7ae"
-		},
-		{
-			"ImportPath": "code.google.com/p/go.crypto/salsa20/salsa",
-			"Comment": "null-230",
-			"Rev": "228579b1f8ccfc93ed9f1709e32e8361ffc9a7ae"
-		},
-		{
-			"ImportPath": "code.google.com/p/go.crypto/ssh",
-			"Comment": "null-230",
-			"Rev": "228579b1f8ccfc93ed9f1709e32e8361ffc9a7ae"
-		},
-		{
-			"ImportPath": "code.google.com/p/go.net/websocket",
-			"Comment": "null-139",
-			"Rev": "98fd1f5506373df1033b67a1881078705456e2ee"
-		},
-		{
 			"ImportPath": "github.com/ActiveState/tail",
 			"Rev": "fd3ba4e64ca930fe21edc4c8a8bd1a075ef7f4ac"
 		},
@@ -251,6 +226,31 @@
 		{
 			"ImportPath": "github.com/wadey/cryptorand",
 			"Rev": "f71da62b90e6a6df720e69d4607dcfd10443c75a"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/nacl/secretbox",
+			"Comment": "null-233",
+			"Rev": "8fec09c61d5d66f460d227fd1df3473d7e015bc6"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/poly1305",
+			"Comment": "null-233",
+			"Rev": "8fec09c61d5d66f460d227fd1df3473d7e015bc6"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/salsa20/salsa",
+			"Comment": "null-233",
+			"Rev": "8fec09c61d5d66f460d227fd1df3473d7e015bc6"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/ssh",
+			"Comment": "null-233",
+			"Rev": "8fec09c61d5d66f460d227fd1df3473d7e015bc6"
+		},
+		{
+			"ImportPath": "golang.org/x/net/websocket",
+			"Comment": "null-185",
+			"Rev": "71dc9256ee487dc7e3edc3e15a425c78c657f9ed"
 		},
 		{
 			"ImportPath": "gopkg.in/check.v1",
