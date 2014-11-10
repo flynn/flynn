@@ -1,5 +1,5 @@
 ---
-title: Flynn Progress: Week Ending Nov. 9, 2014
+title: "Flynn Progress: Week Ending Nov. 9, 2014"
 date: November 10, 2014
 ---
 
