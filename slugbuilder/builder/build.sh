@@ -74,6 +74,7 @@ chown -R nobody:nogroup ${app_dir} ${build_root} ${cache_root}
 
 export APP_DIR="${app_dir}"
 export HOME="${app_dir}"
+usermod --home $HOME nobody
 export REQUEST_ID=$(openssl rand -base64 32)
 export STACK=cedar-14
 

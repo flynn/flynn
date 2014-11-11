@@ -16,6 +16,10 @@ else
 fi
 cd "${HOME}"
 
+## Set home to $HOME
+
+usermod --home $HOME nobody
+
 ## Load profile.d and release config
 
 shopt -s nullglob
