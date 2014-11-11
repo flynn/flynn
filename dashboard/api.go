@@ -33,8 +33,13 @@ func APIHandler(conf *Config) http.Handler {
 
 	m.Map(conf)
 
+	httpInterfaceURL := conf.InterfaceURL
+	if strings.HasPrefix(conf.InterfaceURL, "https") {
+		httpInterfaceURL = "http" + strings.TrimPrefix(conf.InterfaceURL, "https")
+	}
+
 	m.Use(cors.Allow(&cors.Options{
-		AllowOrigins:     []string{conf.InterfaceURL},
+		AllowOrigins:     []string{conf.InterfaceURL, httpInterfaceURL},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
 		AllowHeaders:     []string{"Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match"},
 		ExposeHeaders:    []string{"ETag"},
