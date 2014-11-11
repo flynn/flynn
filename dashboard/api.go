@@ -50,7 +50,7 @@ func APIHandler(conf *Config) http.Handler {
 		r.Get("/config", getConfig)
 		r.Get("/cert", getCert)
 
-		r.Any("/assets/application.*.js", serveApplicationJs)
+		r.Any("/assets/dashboard.*.js", serveDashboardJs)
 
 		r.Any("/assets.*", martini.Static(filepath.Join(conf.StaticPath, "assets"), martini.StaticOptions{
 			Prefix: "/assets",
@@ -132,7 +132,7 @@ func getCert(w http.ResponseWriter, conf *Config) {
 	w.Write(conf.CACert)
 }
 
-func serveApplicationJs(res http.ResponseWriter, req *http.Request, conf *Config) {
+func serveDashboardJs(res http.ResponseWriter, req *http.Request, conf *Config) {
 	file := filepath.Join(conf.StaticPath, "assets", filepath.Base(req.URL.Path))
 	f, err := os.Open(file)
 	if err != nil {
@@ -148,7 +148,7 @@ func serveApplicationJs(res http.ResponseWriter, req *http.Request, conf *Config
 	}
 
 	jsConf := strings.NewReader(fmt.Sprintf(`
-    window.FlynnDashboardConfig = {
+    window.DashboardConfig = {
       API_SERVER: "%s",
       PATH_PREFIX: "%s"
     };
