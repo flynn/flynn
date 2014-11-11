@@ -34,8 +34,15 @@ window.Dashboard = {
 
 		Marbles.History.start({
 			root: (this.config.PATH_PREFIX || '') + '/',
-			dispatcher: this.Dispatcher
+			dispatcher: this.Dispatcher,
+			trigger: false
 		});
+		if (window.location.protocol === "http:" && this.config.INSTALL_CERT) {
+			Marbles.history.navigate("installcert");
+			Marbles.history.loadURL();
+		} else {
+			Marbles.history.loadURL();
+		}
 	},
 
 	__isLoginPath: function (path) {
@@ -77,7 +84,11 @@ window.Dashboard = {
 	__handleAppEvent: function (event) {
 		switch (event.name) {
 			case "CONFIG_READY":
-				this.__handleConfigReady();
+				if (window.location.protocol === "http:" && this.config.INSTALL_CERT) {
+					window.location.href = window.location.href.replace("http", "https");
+				} else {
+					this.__handleConfigReady();
+				}
 			break;
 
 			case "AUTH_CHANGE":
@@ -89,7 +100,11 @@ window.Dashboard = {
 			break;
 
 			case "SERVICE_UNAVAILABLE":
-				this.__handleServiceUnavailable(event.status);
+				if (window.location.protocol === "http:" && this.config.INSTALL_CERT) {
+					this.__handleConfigReady();
+				} else {
+					this.__handleServiceUnavailable(event.status);
+				}
 			break;
 		}
 	},

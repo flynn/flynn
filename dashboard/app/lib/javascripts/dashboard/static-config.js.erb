@@ -1,4 +1,5 @@
 Marbles.Utils.extend(Dashboard.config, {
   API_SERVER: <%= Yajl::Encoder.encode(ENV['API_SERVER'] || '') %>,
-  PATH_PREFIX: <%= Yajl::Encoder.encode(ENV['PATH_PREFIX'] || '') %>
+  PATH_PREFIX: <%= Yajl::Encoder.encode(ENV['PATH_PREFIX'] || '') %>,
+  INSTALL_CERT: <%= Yajl::Encoder.encode(ENV['INSTALL_CERT'] || '') %>
 }, window.DashboardConfig || {});
