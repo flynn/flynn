@@ -121,7 +121,7 @@ func (c *Cluster) Boot(backend, rootFS string, count int) error {
 			Kernel: c.bc.Kernel,
 			User:   uid,
 			Group:  gid,
-			Memory: "512",
+			Memory: "1024",
 			Drives: map[string]*VMDrive{
 				"hda": {FS: rootFS, COW: true, Temp: true},
 			},
