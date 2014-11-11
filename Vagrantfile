@@ -39,4 +39,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     ln -s /vagrant ~/go/src/github.com/flynn/flynn
     grep ^cd ~/.bashrc || echo cd ~/go/src/github.com/flynn/flynn >> ~/.bashrc
 SCRIPT
+
+  if File.exists?("script/custom-vagrant")
+    config.vm.provision "shell", path: "script/custom-vagrant"
+  end
 end
