@@ -1,4 +1,12 @@
 #!/bin/bash
+#
+# A script to do a full release of Flynn (packages + VM images)
+#
+# PREREQUISITES:
+#
+# - A recent version of jq (which has the --exit-status flag)
+#   sudo curl -sLo /usr/local/bin/jq http://stedolan.github.io/jq/download/linux64/jq
+#   sudo chmod +x /usr/local/bin/jq
 
 set -eo pipefail
 
@@ -8,11 +16,12 @@ source "${ROOT}/script/lib/aws.sh"
 
 usage() {
   cat <<USAGE >&2
-usage: $0 [options] COMMIT
+usage: $0 [options]
 
 OPTIONS:
   -h            Show this message
   -b BUCKET     The S3 bucket to upload packages and vm images to [default: flynn]
+  -c COMMIT     The commit to build [default: the master branch of https://github.com/flynn/flynn.git]
   -d DOMAIN     The CloudFront domain [default: dl.flynn.io]
   -r DIR        Resume the release using DIR
 
@@ -21,15 +30,16 @@ USAGE
 }
 
 main() {
-  local bucket dir domain
+  local bucket commit dir domain
 
-  while getopts "hb:d:r:" opt; do
+  while getopts "hb:c:d:r:" opt; do
     case $opt in
       h)
         usage
         exit 1
         ;;
       b) bucket=${OPTARG} ;;
+      c) commit=${OPTARG} ;;
       d) domain=${OPTARG} ;;
       r)
         dir=${OPTARG}
@@ -52,10 +62,28 @@ main() {
 
   check_aws_keys
 
-  local commit=$1
   bucket="${bucket:-"flynn"}"
   dir="${dir:-$(mktemp -d)}"
   domain="${domain:-"dl.flynn.io"}"
+
+  if [[ -z "${commit}" ]]; then
+    info "determining commit"
+    commit=$(curl -s https://api.github.com/repos/flynn/flynn/git/refs/heads/master | jq --raw-output .object.sha)
+    if [[ -z "${commit}" ]]; then
+      fail "could not determine commit"
+    fi
+  fi
+
+  info "getting flynn release manifest"
+  local manifest="$(s3cmd --no-progress get "s3://${bucket}/release/manifest.json" - 2>/dev/null)"
+  if [[ -z "${manifest}" ]]; then
+    manifest='{}'
+  fi
+
+  info "checking for existing release"
+  if jq --exit-status ".versions[] | select(.commit==\"${commit}\")" <<< "${manifest}"; then
+    fail "commit ${commit} has already been released"
+  fi
 
   # release-packages prints results to fd 3, so create a pipe to read them
   results="$(mktemp -u)"
@@ -98,6 +126,16 @@ main() {
     -r "${dir}" \
     "${version}" \
     "${deb_url}"
+
+  info "updating flynn release manifest"
+  "${ROOT}/util/release/flynn-release" version \
+    "${version}" \
+    "${commit}" \
+    <<< "${manifest}" \
+    > "${dir}/manifest.json"
+
+  info "uploading flynn release manifest"
+  s3cmd put --acl-public "${dir}/manifest.json" "s3://${bucket}/release/manifest.json"
 
   info "successfully released Flynn version ${version}"
 
