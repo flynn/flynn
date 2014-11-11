@@ -104,6 +104,11 @@ window.Dashboard = {
 
 	__handleAuthChange: function (authenticated) {
 		if ( !authenticated && !this.__isLoginPath() ) {
+			var currentHandler = Marbles.history.getHandler();
+			if (currentHandler && currentHandler.opts.auth === false) {
+				// Don't redirect to login from page not requiring auth
+				return;
+			}
 			this.__redirectToLogin();
 		}
 	},
