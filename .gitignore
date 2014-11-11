@@ -4,3 +4,4 @@ bin
 .vagrant
 /version.json
 /log
+script/custom-vagrant
