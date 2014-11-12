@@ -118,7 +118,7 @@ main() {
     sed "s/^CONFIG_IMAGE_URL_PREFIX=.*$/CONFIG_IMAGE_URL_PREFIX=${image_prefix}/" -i tup.config
   fi
 
-  tup
+  make
 
   popd >/dev/null
 

@@ -66,32 +66,19 @@ to the project, you should start by looking at GitHub issues labelled
 We use the [tup](http://gittup.org/tup/) build system to run the commands which build the various
 components of Flynn.
 
-To kickoff the build process, just run `tup`:
+To kickoff the build process, just run `make`:
 
 ```
-$ tup
+$ make
 ```
 
 This will do things like build Go binaries and create Docker images. If you're interested in
-exactly what `tup` will build, take a look at the `Tupfiles` in various subdirectories.
+exactly what will be built, take a look at the `Tupfiles` in various subdirectories.
 
 If any build command fails, `tup` will output an error and abort the entire build. You can then
-fix the issue and then re-run `tup`.
+fix the issue and then re-run `make`.
 
-If you want to rebuild all Go binaries, `tup` has no equivalent of `make clean`, so
-you will need to run `git clean` before running `tup`. We have an alias for doing this:
-
-```
-$ source script/development-aliases
-$ clean
-```
-
-You may find it useful to add the following to `~/.bashrc` in the VM so these aliases are always
-available:
-
-```
-source /vagrant/script/development-aliases
-```
+If you want to rebuild all Go binaries, run `make clean`.
 
 Once tup runs successfully, you will have a number of built Go binaries and Docker images which
 can be used to run Flynn.
@@ -257,7 +244,7 @@ $ script/run-integration-tests
 
 This will:
 
-* Run `tup` to build Flynn
+* Run `make` to build Flynn
 * Boot a single node Flynn cluster by running `script/bootstrap-flynn`
 * Run the integration test binary (i.e. `bin/flynn-test`)
 
@@ -280,8 +267,9 @@ built Docker images, and both of these must be installed in order to run Flynn.
 By default, Flynn will reference Docker images from the default Docker registry using
 the `flynn` user.
 
-This needs to be changed in order to release your own images, which can be done by
-changing `CONFIG_IMAGE_URL_PREFIX` in the `tup.config` file then re-running `tup`.
+This needs to be changed in order to release your own images, which can be done
+by changing `CONFIG_IMAGE_URL_PREFIX` in the `tup.config` file then re-running
+`make`.
 
 To use the default Docker registry but with a different user (e.g. `lmars`):
 
