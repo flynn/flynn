@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -125,6 +126,29 @@ var fdriver driver.Driver = &fakeDriver{}
 
 func init() {
 	Register("test", fdriver)
+}
+
+func contains(list []string, y string) bool {
+	for _, x := range list {
+		if x == y {
+			return true
+		}
+	}
+	return false
+}
+
+type Dummy struct {
+	driver.Driver
+}
+
+func TestDrivers(t *testing.T) {
+	unregisterAllDrivers()
+	Register("test", fdriver)
+	Register("invalid", Dummy{})
+	all := Drivers()
+	if len(all) < 2 || !sort.StringsAreSorted(all) || !contains(all, "test") || !contains(all, "invalid") {
+		t.Fatalf("Drivers = %v, want sorted list with at least [invalid, test]", all)
+	}
 }
 
 // Supports dsn forms:
