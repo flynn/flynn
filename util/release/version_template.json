@@ -1,7 +1,6 @@
 {
   "$image_url_prefix/etcd": "$image_id[etcd]",
   "$image_url_prefix/discoverd": "$image_id[discoverd]",
-  "$image_url_prefix/host": "$image_id[host]",
   "$image_url_prefix/postgresql": "$image_id[postgresql]",
   "$image_url_prefix/controller": "$image_id[controller]",
   "$image_url_prefix/blobstore": "$image_id[blobstore]",
