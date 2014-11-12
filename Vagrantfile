@@ -17,7 +17,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.box_url = "https://dl.flynn.io/vagrant/flynn-base.json"
   config.vm.box_version = "> 0"
 
-  config.vm.network "private_network", ip: "192.168.96.48"
+  # RFC 5737 TEST-NET-1 used to avoid DNS rebind protection
+  config.vm.network "private_network", ip: "192.0.2.100"
 
   config.vm.provider "virtualbox" do |v|
     v.memory = ENV["VAGRANT_MEMORY"] || 1024
