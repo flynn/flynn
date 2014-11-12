@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/aws"
@@ -76,9 +77,12 @@ type EC2Manifest struct {
 //
 // If the version is not already in the manifest a new version is added
 // containing the image.
+//
+// The number of versions in the manifest is capped at the value of maxVersions.
 func (m *EC2Manifest) Add(version string, image *EC2Image) {
+	versions := make(sortVersions, 0, len(m.Versions)+1)
 	for _, v := range m.Versions {
-		if v.Version == version {
+		if v.version() == version {
 			images := make([]*EC2Image, len(v.Images))
 			added := false
 			for n, i := range v.Images {
@@ -96,17 +100,26 @@ func (m *EC2Manifest) Add(version string, image *EC2Image) {
 			v.Images = images
 			return
 		}
+		versions = append(versions, v)
 	}
-
-	m.Versions = append(m.Versions, &EC2Version{
+	versions = append(versions, &EC2Version{
 		Version: version,
 		Images:  []*EC2Image{image},
 	})
+	sort.Sort(sort.Reverse(versions))
+	m.Versions = make([]*EC2Version, 0, maxVersions)
+	for i := 0; i < len(versions) && i < maxVersions; i++ {
+		m.Versions = append(m.Versions, versions[i].(*EC2Version))
+	}
 }
 
 type EC2Version struct {
 	Version string      `json:"version"`
 	Images  []*EC2Image `json:"images"`
+}
+
+func (v *EC2Version) version() string {
+	return v.Version
 }
 
 type EC2Image struct {
