@@ -151,7 +151,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-sql",
-			"Rev": "664d3777b3faf84fb78cd50271be2726b7f7fae3"
+			"Rev": "30e503bbf3ca38b958ae5c4fae05ca3babe01c9f"
 		},
 		{
 			"ImportPath": "github.com/flynn/pq",
