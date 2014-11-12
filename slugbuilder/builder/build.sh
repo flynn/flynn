@@ -75,7 +75,7 @@ chown -R nobody:nogroup ${app_dir} ${build_root} ${cache_root}
 export APP_DIR="${app_dir}"
 export HOME="${app_dir}"
 usermod --home $HOME nobody
-export REQUEST_ID=$(openssl rand -base64 32)
+export REQUEST_ID="flynn-build"
 export STACK=cedar-14
 
 # Fix for https://github.com/flynn/flynn/issues/85
