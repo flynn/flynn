@@ -1,5 +1,3 @@
-// +build !dockeronly
-
 package main
 
 import (
