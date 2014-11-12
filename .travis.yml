@@ -14,7 +14,7 @@ install:
   - pushd /tmp
 
   - go install -race std
-  - go get code.google.com/p/go.tools/cmd/cover
+  - go get golang.org/x/tools/cmd/cover
 
   - go install github.com/flynn/flynn/discoverd
 
