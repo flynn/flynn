@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"sort"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 )
@@ -40,9 +41,12 @@ type VagrantManifest struct {
 //
 // If the version is not already in the manifest a new version is added
 // containing the provider.
+//
+// The number of versions in the manifest is capped at the value of maxVersions.
 func (m *VagrantManifest) Add(version string, provider *VagrantProvider) {
+	versions := make(sortVersions, 0, len(m.Versions)+1)
 	for _, v := range m.Versions {
-		if v.Version == version {
+		if v.version() == version {
 			providers := make([]*VagrantProvider, len(v.Providers))
 			added := false
 			for i, p := range v.Providers {
@@ -60,17 +64,26 @@ func (m *VagrantManifest) Add(version string, provider *VagrantProvider) {
 			v.Providers = providers
 			return
 		}
+		versions = append(versions, v)
 	}
-
-	m.Versions = append(m.Versions, &VagrantVersion{
+	versions = append(versions, &VagrantVersion{
 		Version:   version,
 		Providers: []*VagrantProvider{provider},
 	})
+	sort.Sort(sort.Reverse(versions))
+	m.Versions = make([]*VagrantVersion, 0, maxVersions)
+	for i := 0; i < len(versions) && i < maxVersions; i++ {
+		m.Versions = append(m.Versions, versions[i].(*VagrantVersion))
+	}
 }
 
 type VagrantVersion struct {
 	Version   string             `json:"version"`
 	Providers []*VagrantProvider `json:"providers"`
+}
+
+func (v *VagrantVersion) version() string {
+	return v.Version
 }
 
 type VagrantProvider struct {
