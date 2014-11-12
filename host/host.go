@@ -45,7 +45,7 @@ options:
   --id=ID                host id
   --force                kill all containers booted by flynn-host before starting
   --volpath=PATH         directory to create volumes in [default: /var/lib/flynn-host]
-  --backend=BACKEND      runner backend (docker or libvirt-lxc) [default: libvirt-lxc]
+  --backend=BACKEND      runner backend [default: libvirt-lxc]
   --meta=<KEY=VAL>...    key=value pair to add as metadata
   --bind=IP              bind containers to IP
   --flynn-init=PATH      path to flynn-init binary [default: /usr/bin/flynn-init]
@@ -127,8 +127,6 @@ func runDaemon(args *docopt.Args) {
 	switch backendName {
 	case "libvirt-lxc":
 		backend, err = NewLibvirtLXCBackend(state, portAlloc, volPath, "/tmp/flynn-host-logs", flynnInit)
-	case "docker":
-		backend, err = NewDockerBackend(state, portAlloc, bindAddr)
 	default:
 		log.Fatalf("unknown backend %q", backendName)
 	}

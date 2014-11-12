@@ -274,18 +274,6 @@ sudo start-stop-daemon \
   --backend libvirt-lxc \
   &>/tmp/flynn-host.log
 `[1:])),
-	"docker": template.Must(template.New("flynn-host-docker").Parse(`
-docker run \
-  -d \
-  -v=/var/run/docker.sock:/var/run/docker.sock \
-  -p=1113:1113 \
-  -e=ETCD_PEERS={{ .Peers }} \
-  flynn/host \
-  --id {{ .ID }} \
-  --external {{ .IP }} \
-  --force \
-  --backend docker
-`[1:])),
 }
 
 func (c *Cluster) bootstrapGrid(backend string) error {
