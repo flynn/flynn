@@ -185,7 +185,7 @@ install_packages() {
 
 download_images() {
   mkdir -p /var/lib/docker
-  flynn-release download /etc/flynn/version.json
+  flynn-host download /etc/flynn/version.json
 }
 
 disable_docker_auto_restart() {
