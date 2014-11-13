@@ -25,7 +25,7 @@ OPTIONS:
   -d DOMAIN     The CloudFront domain [default: dl.flynn.io]
   -r DIR        Resume the release using DIR
 
-Requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set
+Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and GITHUB_TOKEN to be set
 USAGE
 }
 
@@ -55,6 +55,7 @@ main() {
   done
 
   check_aws_keys
+  check_github_token
 
   bucket="${bucket:-"flynn"}"
   dir="${dir:-$(mktemp -d)}"
@@ -131,12 +132,42 @@ main() {
   info "uploading flynn release manifest"
   s3cmd put --acl-public "${dir}/manifest.json" "s3://${bucket}/release/manifest.json"
 
+  info "tagging release"
+  tag_release "${commit}" "${version}"
+
   info "successfully released Flynn version ${version}"
 
   info "removing locally built files"
   rm -rf "${dir}"
 
   info "done!"
+}
+
+check_github_token() {
+  if [[ -z "${GITHUB_TOKEN}" ]]; then
+    fail "GITHUB_TOKEN must be set"
+  fi
+}
+
+# tag_release tags a release by posting to the following Github API endpoint:
+# https://developer.github.com/v3/git/refs/#create-a-reference
+tag_release() {
+  local commit=$1
+  local version=$2
+
+  read -d "" payload <<EOF
+{
+  "ref": "refs/tags/v${version}",
+  "sha": "${commit}"
+}
+EOF
+
+  curl \
+    --header "Content-Type: application/json" \
+    --header "Authorization: token ${GITHUB_TOKEN}" \
+    --data @- \
+    "https://api.github.com/repos/flynn/flynn/git/refs" \
+    <<< "${payload}"
 }
 
 main $@
