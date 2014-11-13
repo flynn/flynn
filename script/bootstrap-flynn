@@ -87,7 +87,7 @@ boot_libvirt_lxc() {
     &>"${log}"
 
   info "bootstrapping Flynn"
-  "${bootstrap_dir}/bin/flynn-bootstrap" "${bootstrap_dir}/bin/manifest.json"
+  "${host_dir}/bin/flynn-host" bootstrap "${bootstrap_dir}/bin/manifest.json"
 }
 
 main $@

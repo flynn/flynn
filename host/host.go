@@ -62,6 +62,7 @@ Commands:
   help                       Show usage for a specific command
   daemon                     Start the daemon
   download                   Download container images
+  bootstrap                  Bootstrap layer 1
   inspect                    Get low-level information about a job
   log                        Get the logs of a job
   ps                         List jobs

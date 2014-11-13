@@ -171,7 +171,7 @@ again.
 ### Start Flynn Layer 1
 
 After you have a running Layer 0 cluster, you can now bootstrap Layer 1 with
-`flynn-bootstrap`. You'll need a domain name with DNS A records pointing to
+`flynn-host bootstrap`. You'll need a domain name with DNS A records pointing to
 every node IP address and a second, wildcard domain CNAME to the cluster domain.
 
 **Example**
@@ -194,7 +194,7 @@ start the bootstrap process:
 $ sudo \
     CONTROLLER_DOMAIN=demo.localflynn.com \
     DEFAULT_ROUTE_DOMAIN=demo.localflynn.com \
-    flynn-bootstrap /etc/flynn/bootstrap-manifest.json
+    flynn-host bootstrap /etc/flynn/bootstrap-manifest.json
 ```
 
 The Layer 1 bootstrapper will get all necessary services running using the Layer

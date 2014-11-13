@@ -234,7 +234,7 @@ git merge origin/master
 
 make dev
 
-sudo cp {host/bin/flynn-*,pinkerton/pinkerton,bootstrap/bin/flynn-bootstrap} /usr/bin
+sudo cp {host/bin/flynn-*,pinkerton/pinkerton} /usr/bin
 sudo cp host/bin/manifest.json /etc/flynn-host.json
 sudo cp bootstrap/bin/manifest.json /etc/flynn-bootstrap.json
 `[1:]))
@@ -320,7 +320,7 @@ func (c *Cluster) bootstrapFlynn() error {
 	var cmdErr error
 	go func() {
 		command := fmt.Sprintf(
-			"DISCOVERD=%s:1111 CONTROLLER_DOMAIN=%s CONTROLLER_KEY=%s flynn-bootstrap -json -min-hosts=%d /etc/flynn-bootstrap.json",
+			"DISCOVERD=%s:1111 CONTROLLER_DOMAIN=%s CONTROLLER_KEY=%s flynn-host bootstrap --json --min-hosts=%d /etc/flynn-bootstrap.json",
 			inst.IP(), c.ControllerDomain, c.ControllerKey, len(c.instances),
 		)
 		cmdErr = inst.Run(command, &Streams{Stdout: wr, Stderr: os.Stderr})
