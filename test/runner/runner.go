@@ -174,7 +174,7 @@ cmd="bin/flynn-test \
   --router-ip {{ .RouterIP }} \
   --debug"
 
-timeout --kill-after=10 10m $cmd
+timeout --kill-after=10 20m $cmd
 `[1:]))
 
 func (r *Runner) build(b *Build) (err error) {
