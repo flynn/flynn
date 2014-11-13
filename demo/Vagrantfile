@@ -17,7 +17,9 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.box_url = "https://dl.flynn.io/vagrant/flynn-base.json"
   config.vm.box_version = "> 0"
 
-  config.vm.network "private_network", ip: "192.168.84.42"
+  # RFC 5737 TEST-NET-1 used to avoid DNS rebind protection
+  config.vm.network "private_network", ip: "192.0.2.200"
+
   config.vm.synced_folder ".", "/vagrant", disabled: true
 
   config.vm.provision "shell", privileged: false, inline: <<SCRIPT
