@@ -102,6 +102,18 @@ main() {
     git clone --quiet https://github.com/flynn/flynn "${src}"
   fi
 
+  info "downloading apt repo"
+  # NOTE: the trailing slash is necessary
+  apt_dir="${dir}/apt/"
+  mkdir -p "${apt_dir}"
+  s3cmd sync --delete-removed "s3://${bucket}/ubuntu/" "${apt_dir}"
+
+  info "determining version"
+  local date=$(date +%Y%m%d)
+  local iteration=$(find "${apt_dir}" -name "flynn-host*${date}*.deb" | wc -l)
+  local version="${date}.${iteration}"
+  info "using version ${version}"
+
   pushd "${src}" >/dev/null
 
   info "pulling dependent images"
@@ -113,6 +125,7 @@ main() {
 
   info "building flynn"
   git checkout --force --quiet $commit
+  git tag "v${version}"
 
   if [[ -n "${image_prefix}" ]]; then
     sed "s/^CONFIG_IMAGE_URL_PREFIX=.*$/CONFIG_IMAGE_URL_PREFIX=${image_prefix}/" -i tup.config
@@ -125,16 +138,7 @@ main() {
   info "uploading images"
   "${flynn_release}" upload "${src}/version.json"
 
-  info "downloading apt repo"
-  # NOTE: the trailing slash is necessary
-  apt_dir="${dir}/apt/"
-  mkdir -p "${apt_dir}"
-  s3cmd sync --delete-removed "s3://${bucket}/ubuntu/" "${apt_dir}"
-
   info "building deb package"
-  local date=$(date +%Y%m%d)
-  local iteration=$(find "${apt_dir}" -name "flynn-host*${date}*.deb" | wc -l)
-  local version="${date}.${iteration}"
   rm -f "${src}"/*.deb
   "${ROOT}/script/build-deb" -d "${src}" "${version}"
 
