@@ -232,7 +232,7 @@ git config user.name "CI"
 git merge origin/master
 {{ end }}
 
-tup
+make dev
 
 sudo cp {host/bin/flynn-*,pinkerton/pinkerton,bootstrap/bin/flynn-bootstrap} /usr/bin
 sudo cp host/bin/manifest.json /etc/flynn-host.json

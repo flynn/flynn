@@ -18,7 +18,7 @@ vagrant ssh
 then build and bootstrap Flynn (this may take a few minutes):
 
 ```text
-tup
+make
 script/bootstrap-flynn
 ```
 

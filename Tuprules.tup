@@ -1,8 +1,13 @@
 export GOPATH
+export GIT_COMMIT
+export GIT_BRANCH
+export GIT_TAG
+export GIT_DIRTY
 
+VPKG = github.com/flynn/flynn/pkg/version
 ROOT = $(TUP_CWD)
 
-!go = |> ^c^ go build -o %o |>
+!go = |> ^c go build %o^ go build -o %o -ldflags="-X $(VPKG).commit $GIT_COMMIT -X $(VPKG).branch $GIT_BRANCH -X $(VPKG).tag $GIT_TAG -X $(VPKG).dirty $GIT_DIRTY" |>
 !docker = |> ^ docker build %d^ docker build -t flynn/%d . | tee %o |> $(ROOT)/log/docker-%d.log <docker>
 !docker-layer0 = |> ^ docker build %d^ docker build -t flynn/%d . | tee %o |> $(ROOT)/log/docker-layer0/%d.log $(ROOT)/<layer0>
 !docker-layer1 = |> ^ docker build %d^ docker build -t flynn/%d . | tee %o |> $(ROOT)/log/docker-layer1/%d.log $(ROOT)/<layer1>

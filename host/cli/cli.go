@@ -18,7 +18,7 @@ var commands = make(map[string]*command)
 
 func Register(cmd string, f interface{}, usage string) *command {
 	switch f.(type) {
-	case func(*docopt.Args, *cluster.Client) error, func(*docopt.Args), func() error:
+	case func(*docopt.Args, *cluster.Client) error, func(*docopt.Args), func() error, func():
 	default:
 		panic(fmt.Sprintf("invalid command function %s '%T'", cmd, f))
 	}
@@ -56,6 +56,9 @@ func Run(name string, args []string) error {
 		return nil
 	case func() error:
 		return f()
+	case func():
+		f()
+		return nil
 	}
 
 	return fmt.Errorf("unexpected command type %T", cmd.f)
