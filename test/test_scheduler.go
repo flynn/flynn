@@ -124,6 +124,11 @@ func (s *SchedulerSuite) createApp(t *c.C) (*ct.App, *ct.Release) {
 				Cmd:        []string{"sdutil exec -s echo-service:$PORT socat -v tcp-l:$PORT,fork exec:/bin/cat"},
 				Ports:      []ct.Port{{Proto: "tcp"}},
 			},
+			"printer": {
+				Entrypoint: []string{"bash", "-c"},
+				Cmd:        []string{"while true; do echo I like to print; sleep 1; done"},
+				Ports:      []ct.Port{{Proto: "tcp"}},
+			},
 			"crasher": {
 				Entrypoint: []string{"bash", "-c"},
 				Cmd:        []string{"trap 'exit 1' SIGTERM; while true; do echo I like to crash; sleep 1; done"},
@@ -262,9 +267,9 @@ func (s *SchedulerSuite) TestScale(t *c.C) {
 
 	current := make(map[string]int)
 	updates := []map[string]int{
-		{"echoer": 2},
-		{"echoer": 3, "crasher": 1},
-		{"echoer": 1},
+		{"printer": 2},
+		{"printer": 3, "crasher": 1},
+		{"printer": 1},
 	}
 
 	for _, procs := range updates {
@@ -379,7 +384,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	t.Assert(s.controller.PutFormation(&ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
-		Processes: map[string]int{"echoer": 1, "crasher": 1},
+		Processes: map[string]int{"printer": 1, "crasher": 1},
 	}), c.IsNil)
 	_, err = s.controller.RunJobDetached(app.ID, &ct.NewJob{
 		ReleaseID:  release.ID,
@@ -387,7 +392,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 		Cmd:        []string{"while true; do echo one-off-job; sleep 1; done"},
 	})
 	t.Assert(err, c.IsNil)
-	waitForJobEvents(t, stream.Events, map[string]int{"echoer": 1, "crasher": 1, "": 1})
+	waitForJobEvents(t, stream.Events, map[string]int{"printer": 1, "crasher": 1, "": 1})
 
 	list, err := s.controller.JobList(app.ID)
 	t.Assert(err, c.IsNil)
@@ -399,14 +404,14 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	}
 
 	// Check jobs are marked as up once started
-	t.Assert(jobs["echoer"].State, c.Equals, "up")
+	t.Assert(jobs["printer"].State, c.Equals, "up")
 	t.Assert(jobs["crasher"].State, c.Equals, "up")
 	t.Assert(jobs[""].State, c.Equals, "up")
 
 	// Check that when a formation's job is removed, it is marked as down and a new one is scheduled
-	job := jobs["echoer"]
+	job := jobs["printer"]
 	s.stopJob(t, job.ID)
-	waitForJobEvents(t, stream.Events, map[string]int{"echoer": 0})
+	waitForJobEvents(t, stream.Events, map[string]int{"printer": 0})
 	s.checkJobState(t, app.ID, job.ID, "down")
 	list, err = s.controller.JobList(app.ID)
 	t.Assert(err, c.IsNil)
@@ -450,9 +455,9 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 
 	current := make(map[string]int)
 	updates := []map[string]int{
-		{"echoer": 2},
-		{"echoer": 3, "omni": 2},
-		{"echoer": 1, "omni": 1},
+		{"printer": 2},
+		{"printer": 3, "omni": 2},
+		{"printer": 1, "omni": 1},
 	}
 
 	for _, procs := range updates {
@@ -503,7 +508,7 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 	t.Assert(s.controller.PutFormation(&ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
-		Processes: map[string]int{"echoer": 1},
+		Processes: map[string]int{"printer": 1},
 	}), c.IsNil)
 	id := waitForJobRestart(t, stream.Events, startTimeout)
 
