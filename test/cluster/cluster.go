@@ -122,6 +122,7 @@ func (c *Cluster) Boot(backend, rootFS string, count int) error {
 			User:   uid,
 			Group:  gid,
 			Memory: "1024",
+			Cores:  2,
 			Drives: map[string]*VMDrive{
 				"hda": {FS: rootFS, COW: true, Temp: true},
 			},
