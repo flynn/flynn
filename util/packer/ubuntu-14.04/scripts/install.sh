@@ -9,6 +9,7 @@ main() {
     setup_sudo
     install_vagrant_ssh_key
     install_nfs
+    package_cleanup
   fi
 
   if vmware_build; then
@@ -69,6 +70,10 @@ install_vagrant_ssh_key() {
 
 install_nfs() {
   apt-get install -y nfs-common
+}
+
+package_cleanup() {
+  apt-get purge -y puppet byobu juju ruby
 }
 
 install_linux_headers() {
@@ -201,7 +206,7 @@ install_go() {
 
 apt_cleanup() {
   echo "cleaning apt cache"
-  apt-get autoremove
+  apt-get autoremove -y
   apt-get clean
 
   echo "deleting old kernels"
