@@ -106,7 +106,7 @@ main() {
   # NOTE: the trailing slash is necessary
   apt_dir="${dir}/apt/"
   mkdir -p "${apt_dir}"
-  s3cmd sync --delete-removed "s3://${bucket}/ubuntu/" "${apt_dir}"
+  s3cmd sync --delete-removed --no-preserve "s3://${bucket}/ubuntu/" "${apt_dir}"
 
   info "determining version"
   local date=$(date +%Y%m%d)

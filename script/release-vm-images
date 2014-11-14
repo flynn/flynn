@@ -154,7 +154,7 @@ main() {
   local box_name="$(basename "${box}")"
   if ! s3cmd info "s3://${bucket}/vagrant/boxes/${box_name}" &>/dev/null; then
     info "uploading ${box_name} to s3://${bucket}/vagrant/boxes"
-    s3cmd put --acl-public "${box}" "s3://${bucket}/vagrant/boxes/"
+    s3cmd put --acl-public --no-preserve "${box}" "s3://${bucket}/vagrant/boxes/"
   fi
 
   info "calculating SHA256 checksum of ${box_name}"
