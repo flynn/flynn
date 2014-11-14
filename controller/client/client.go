@@ -153,14 +153,28 @@ func (c *Client) CreateApp(app *ct.App) error {
 	return c.Post("/apps", app, app)
 }
 
+// UpdateApp updates the protected flag and meta using app.ID.
+func (c *Client) UpdateApp(app *ct.App) error {
+	if app.ID == "" {
+		return errors.New("controller: missing id")
+	}
+	return c.Post(fmt.Sprintf("/apps/%s", app.ID), app, app)
+}
+
 // DeleteApp deletes an app.
 func (c *Client) DeleteApp(appID string) error {
 	return c.Delete(fmt.Sprintf("/apps/%s", appID))
 }
 
-// CreateProvider cretes a new provider.
+// CreateProvider creates a new provider.
 func (c *Client) CreateProvider(provider *ct.Provider) error {
 	return c.Post("/providers", provider, provider)
+}
+
+// GetProvider returns the provider identified by providerID.
+func (c *Client) GetProvider(providerID string) (*ct.Provider, error) {
+	provider := &ct.Provider{}
+	return provider, c.Get(fmt.Sprintf("/providers/%s", providerID), provider)
 }
 
 // ProvisionResource uses a provider to provision a new resource for the
@@ -172,6 +186,25 @@ func (c *Client) ProvisionResource(req *ct.ResourceReq) (*ct.Resource, error) {
 	res := &ct.Resource{}
 	err := c.Post(fmt.Sprintf("/providers/%s/resources", req.ProviderID), req, res)
 	return res, err
+}
+
+// GetResource returns the resource identified by resourceID under providerID.
+func (c *Client) GetResource(providerID, resourceID string) (*ct.Resource, error) {
+	res := &ct.Resource{}
+	err := c.Get(fmt.Sprintf("/providers/%s/resources/%s", providerID, resourceID), res)
+	return res, err
+}
+
+// ResourceList returns all resources under providerID.
+func (c *Client) ResourceList(providerID string) ([]*ct.Resource, error) {
+	var resources []*ct.Resource
+	return resources, c.Get(fmt.Sprintf("/providers/%s/resources", providerID), &resources)
+}
+
+// AppResourceList returns a list of all resources under appID.
+func (c *Client) AppResourceList(appID string) ([]*ct.Resource, error) {
+	var resources []*ct.Resource
+	return resources, c.Get(fmt.Sprintf("/apps/%s/resources", appID), &resources)
 }
 
 // PutResource updates a resource.
@@ -243,6 +276,17 @@ func (c *Client) GetFormation(appID, releaseID string) (*ct.Formation, error) {
 	return formation, c.Get(fmt.Sprintf("/apps/%s/formations/%s", appID, releaseID), formation)
 }
 
+// FormationList returns a list of all formations under appID.
+func (c *Client) FormationList(appID string) ([]*ct.Formation, error) {
+	var formations []*ct.Formation
+	return formations, c.Get(fmt.Sprintf("/apps/%s/formations", appID), &formations)
+}
+
+// DeleteFormation deletes the formation matching appID and releaseID.
+func (c *Client) DeleteFormation(appID, releaseID string) error {
+	return c.Delete(fmt.Sprintf("/apps/%s/formations/%s", appID, releaseID))
+}
+
 // GetRelease returns details for the specified release.
 func (c *Client) GetRelease(releaseID string) (*ct.Release, error) {
 	release := &ct.Release{}
@@ -309,6 +353,21 @@ func (c *Client) GetJobLog(appID, jobID string, tail bool) (io.ReadCloser, error
 	return res.Body, nil
 }
 
+// GetJobLogWithWait waits until the job is created, then returns a ReadCloser
+// stream of the job with id of jobID, running under appID. If tail is true,
+// new log lines are streamed after the buffered log.
+func (c *Client) GetJobLogWithWait(appID, jobID string, tail bool) (io.ReadCloser, error) {
+	path := fmt.Sprintf("/apps/%s/jobs/%s/log?wait=true", appID, jobID)
+	if tail {
+		path += "&tail=true"
+	}
+	res, err := c.RawReq("GET", path, nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return res.Body, nil
+}
+
 // RunJobAttached runs a new job under the specified app, attaching to the job
 // and returning a ReadWriteCloser stream, which can then be used for
 // communicating with the job.
@@ -358,10 +417,28 @@ func (c *Client) KeyList() ([]*ct.Key, error) {
 	return keys, c.Get("/keys", &keys)
 }
 
+// ArtifactList returns a list of all artifacts
+func (c *Client) ArtifactList() ([]*ct.Artifact, error) {
+	var artifacts []*ct.Artifact
+	return artifacts, c.Get("/artifacts", &artifacts)
+}
+
+// ReleaseList returns a list of all releases
+func (c *Client) ReleaseList() ([]*ct.Release, error) {
+	var releases []*ct.Release
+	return releases, c.Get("/releases", &releases)
+}
+
 // CreateKey uploads pubKey as the ssh public key.
 func (c *Client) CreateKey(pubKey string) (*ct.Key, error) {
 	key := &ct.Key{}
 	return key, c.Post("/keys", &ct.Key{Key: pubKey}, key)
+}
+
+// GetKey returns details for the keyID.
+func (c *Client) GetKey(keyID string) (*ct.Key, error) {
+	key := &ct.Key{}
+	return key, c.Get(fmt.Sprintf("/keys/%s", keyID), key)
 }
 
 // DeleteKey deletes a key with the specified id.
