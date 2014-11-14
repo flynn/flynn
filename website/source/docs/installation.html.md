@@ -22,12 +22,6 @@ install them by following the directions on their respective web sites:
 * [VirtualBox](https://www.virtualbox.org/)
 * [Vagrant 1.6 or greater](http://www.vagrantup.com/)
 
-The [XZ Utils](http://tukaani.org/xz/) package is required to unpackage Vagrant boxes, which is
-available on:
-
-* OS X via [Homebrew](http://brew.sh) with `brew install xz`
-* Ubuntu via `apt-get install xz-utils`
-
 You should also download and install the Flynn [Command Line Tools](https://cli.flynn.io) by running this command:
 
 ```bash
