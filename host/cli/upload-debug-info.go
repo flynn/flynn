@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -23,6 +24,7 @@ var debugCmds = [][]string{
 	{"date"},
 	{"free", "-m"},
 	{"dpkg-query", "-W", "-f", "${Package}: ${Version}\n", "libvirt-bin", "flynn-host"},
+	{os.Args[0], "version"},
 	{"virsh", "-c", "lxc:///", "list"},
 	{"virsh", "-c", "lxc:///", "net-list"},
 }
