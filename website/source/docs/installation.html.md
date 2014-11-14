@@ -112,7 +112,7 @@ to the public Docker registry.
 Before you can run Flynn, you will need to download these images by running the following:
 
 ```
-$ sudo flynn-release download /etc/flynn/version.json
+$ sudo flynn-host download /etc/flynn/version.json
 ```
 
 Some of the images are quite large (hundreds of MB) so this could take a while depending on

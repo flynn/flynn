@@ -56,7 +56,6 @@ main() {
     bootstrap/bin/flynn-bootstrap=/usr/bin/ \
     host/bin/flynn-host=/usr/bin/ \
     host/bin/flynn-init=/usr/bin/ \
-    util/release/flynn-release=/usr/bin/ \
     cli/flynn-cli=/usr/bin/flynn \
     host/bin/manifest.json=/etc/flynn/host-manifest.json \
     bootstrap/bin/manifest.json=/etc/flynn/bootstrap-manifest.json \

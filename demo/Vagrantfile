@@ -25,7 +25,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.provision "shell", privileged: false, inline: <<SCRIPT
     sudo apt-get update -qq
     sudo apt-get install -y flynn-host
-    sudo flynn-release download /etc/flynn/version.json
+    sudo flynn-host download /etc/flynn/version.json
     sudo start flynn-host
 
     CONTROLLER_DOMAIN=demo.localflynn.com \
