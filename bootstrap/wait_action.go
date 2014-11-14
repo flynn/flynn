@@ -2,9 +2,11 @@ package bootstrap
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/flynn/flynn/discoverd/client"
@@ -34,37 +36,63 @@ func (a *WaitAction) Run(s *State) error {
 		return err
 	}
 	httpc := http.DefaultClient
-	if u.Scheme == "discoverd+http" {
+	var dial dialer.DialFunc
+	if u.Scheme == "tcp" {
+		dial = net.Dial
+	}
+	if strings.HasPrefix(u.Scheme, "discoverd+") {
 		if err := discoverd.Connect(""); err != nil {
 			return err
 		}
 		d := dialer.New(discoverd.DefaultClient, nil)
 		defer d.Close()
-		httpc = &http.Client{Transport: &http.Transport{Dial: d.Dial}}
-		u.Scheme = "http"
+		dial = d.Dial
+
+		switch u.Scheme {
+		case "discoverd+http":
+			httpc = &http.Client{Transport: &http.Transport{Dial: d.Dial}}
+			u.Scheme = "http"
+		case "discoverd+tcp":
+			u.Scheme = "tcp"
+		default:
+			return fmt.Errorf("bootstrap: unknown protocol")
+		}
 	}
 
 	start := time.Now()
 	for {
 		var result string
-		req, err := http.NewRequest("GET", u.String(), nil)
-		if err != nil {
-			return err
-		}
-		if a.Host != "" {
-			req.Host = interpolate(s, a.Host)
-		}
-		res, err := httpc.Do(req)
-		if err != nil {
-			result = fmt.Sprintf("%q", err)
-			goto fail
-		}
-		res.Body.Close()
-		if res.StatusCode == a.Status {
-			return nil
-		}
-		result = strconv.Itoa(res.StatusCode)
 
+		switch u.Scheme {
+		case "http":
+			req, err := http.NewRequest("GET", u.String(), nil)
+			if err != nil {
+				return err
+			}
+			if a.Host != "" {
+				req.Host = interpolate(s, a.Host)
+			}
+			res, err := httpc.Do(req)
+			if err != nil {
+				result = fmt.Sprintf("%q", err)
+				goto fail
+			}
+			res.Body.Close()
+			if res.StatusCode == a.Status {
+				return nil
+			}
+			result = strconv.Itoa(res.StatusCode)
+		case "tcp":
+			conn, err := dial("tcp", u.Host)
+			conn.Close()
+			if err != nil {
+				result = fmt.Sprintf("%q", err)
+				goto fail
+			}
+			return nil
+		default:
+			return fmt.Errorf("bootstrap: unknown protocol")
+		}
 	fail:
 		if time.Now().Sub(start) >= waitMax {
 			return fmt.Errorf("bootstrap: timed out waiting for %s, last response %s", a.URL, result)

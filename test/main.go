@@ -45,7 +45,11 @@ func main() {
 	defer func() {
 		if err != nil || res != nil && !res.Passed() {
 			if args.Debug {
-				dumpLogs()
+				if args.Gist {
+					run(exec.Command("flynn-host", "upload-debug-info"))
+				} else {
+					dumpLogs()
+				}
 			}
 			os.Exit(1)
 		}

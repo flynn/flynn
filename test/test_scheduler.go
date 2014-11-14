@@ -16,7 +16,7 @@ type SchedulerSuite struct {
 
 var _ = c.Suite(&SchedulerSuite{})
 
-func (s *SchedulerSuite) SetUpSuite(t *c.C) {
+func newControllerClient(t *c.C) *controller.Client {
 	conf, err := config.ReadFile(flynnrc)
 	t.Assert(err, c.IsNil)
 
@@ -26,7 +26,11 @@ func (s *SchedulerSuite) SetUpSuite(t *c.C) {
 	client, err := controller.NewClientWithPin(cluster.URL, cluster.Key, pin)
 	t.Assert(err, c.IsNil)
 
-	s.client = client
+	return client
+}
+
+func (s *SchedulerSuite) SetUpSuite(t *c.C) {
+	s.client = newControllerClient(t)
 }
 
 func processesEqual(expected, actual map[string]int) bool {
