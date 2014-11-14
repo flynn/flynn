@@ -33,9 +33,9 @@ source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
 source "${ROOT}/script/lib/util.sh"
 
-UBUNTU_BOX_NAME="ubuntu-trusty-20141016" # used in filenames for caching, bump at the same time as UBUNTU_BOX_URL
-UBUNTU_BOX_URL="http://cloud-images.ubuntu.com/vagrant/trusty/20141016/trusty-server-cloudimg-amd64-vagrant-disk1.box"
-UBUNTU_BOX_SHA="c6623a4850c4d61bc6b96c3b2d2150eb60ca1e4a38f2cb2a8087370139b08d30"
+UBUNTU_BOX_NAME="ubuntu-trusty-20141114.1" # used in filenames for caching, bump at the same time as UBUNTU_BOX_URL
+UBUNTU_BOX_URL="http://cloud-images.ubuntu.com/vagrant/trusty/20141114.1/trusty-server-cloudimg-amd64-vagrant-disk1.box"
+UBUNTU_BOX_SHA="e9d8cd9e81913ae666c8f7cba7ba9ff8e2af8cebf3fa6250fcd03ebb3e52d8b0"
 UBUNTU_USEAST_AMI="ami-9eaa1cf6" # us-east-1 | trusty | 14.04 LTS | amd64 | hvm:ebs-ssd | 20140927 | ami-9eaa1cf6 | hvm
 
 usage() {
