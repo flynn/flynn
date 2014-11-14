@@ -84,11 +84,11 @@ func (a *WaitAction) Run(s *State) error {
 			result = strconv.Itoa(res.StatusCode)
 		case "tcp":
 			conn, err := dial("tcp", u.Host)
-			conn.Close()
 			if err != nil {
 				result = fmt.Sprintf("%q", err)
 				goto fail
 			}
+			conn.Close()
 			return nil
 		default:
 			return fmt.Errorf("bootstrap: unknown protocol")
