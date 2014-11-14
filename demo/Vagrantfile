@@ -30,6 +30,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
     CONTROLLER_DOMAIN=demo.localflynn.com \
     DEFAULT_ROUTE_DOMAIN=demo.localflynn.com \
-    flynn-bootstrap /etc/flynn/bootstrap-manifest.json 2>&1
+    flynn-host bootstrap /etc/flynn/bootstrap-manifest.json 2>&1
 SCRIPT
 end

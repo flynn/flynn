@@ -1,40 +1,48 @@
-package main
+package cli
 
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/bootstrap"
 )
 
-func readManifest() ([]byte, error) {
-	if flag.NArg() == 0 || flag.Arg(0) == "-" {
+func init() {
+	Register("bootstrap", runBootstrap, `
+usage: flynn-host bootstrap [--min-hosts=<min>] [--json] [<manifest>]
+
+Options:
+  -n, --min-hosts=<min>  minimum number of hosts required to be online [default: 1]
+  --json                 format log output as json
+
+Bootstrap layer 1 using the provided manifest`)
+}
+
+func readBootstrapManifest(name string) ([]byte, error) {
+	if name == "" || name == "-" {
 		return ioutil.ReadAll(os.Stdin)
 	}
-	return ioutil.ReadFile(flag.Arg(0))
+	return ioutil.ReadFile(name)
 }
 
 var manifest []byte
 
-func main() {
-	logJSON := flag.Bool("json", false, "format log output as json")
-	minHosts := flag.Int("min-hosts", 1, "minimum number of hosts required to be online")
-	flag.Parse()
-
+func runBootstrap(args *docopt.Args) {
 	log.SetFlags(log.Lmicroseconds)
 	logf := textLogger
-	if *logJSON {
+	if args.Bool["--json"] {
 		logf = jsonLogger
 	}
 
 	var err error
-	manifest, err = readManifest()
+	manifest, err = readBootstrapManifest(args.String["<manifest>"])
 	if err != nil {
 		log.Fatalln("Error reading manifest:", err)
 	}
@@ -48,7 +56,8 @@ func main() {
 		close(done)
 	}()
 
-	err = bootstrap.Run(manifest, ch, *minHosts)
+	minHosts, _ := strconv.Atoi(args.String["<min>"])
+	err = bootstrap.Run(manifest, ch, minHosts)
 	<-done
 	if err != nil {
 		os.Exit(1)
