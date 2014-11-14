@@ -56,7 +56,7 @@ func runBootstrap(args *docopt.Args) {
 		close(done)
 	}()
 
-	minHosts, _ := strconv.Atoi(args.String["<min>"])
+	minHosts, _ := strconv.Atoi(args.String["--min-hosts"])
 	err = bootstrap.Run(manifest, ch, minHosts)
 	<-done
 	if err != nil {
