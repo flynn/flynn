@@ -130,7 +130,7 @@ main() {
     > "${dir}/manifest.json"
 
   info "uploading flynn release manifest"
-  s3cmd put --acl-public "${dir}/manifest.json" "s3://${bucket}/release/manifest.json"
+  s3cmd put --acl-public --no-preserve "${dir}/manifest.json" "s3://${bucket}/release/manifest.json"
 
   info "tagging release"
   tag_release "${commit}" "${version}"
