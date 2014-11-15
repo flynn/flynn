@@ -175,9 +175,15 @@ func (s *SchedulerSuite) addHosts(t *c.C, count int) []string {
 
 func (s *SchedulerSuite) removeHosts(t *c.C, ids []string) {
 	debugf("removing %d hosts", len(ids))
-	ch := make(chan *host.HostEvent)
-	stream := s.clusterClient(t).StreamHostEvents(ch)
-	defer stream.Close()
+
+	// Wait for router-api services to disappear to indicate host
+	// removal (rather than using StreamHostEvents), so that other
+	// tests won't try and connect to this host via service discovery.
+	set, err := s.disc.NewServiceSet("router-api")
+	t.Assert(err, c.IsNil)
+	defer set.Close()
+	updates := set.Watch(false)
+	defer set.Unwatch(updates)
 
 	for _, id := range ids {
 		req, err := http.NewRequest("DELETE", args.ClusterAPI+"?host="+id, nil)
@@ -193,11 +199,17 @@ func (s *SchedulerSuite) removeHosts(t *c.C, ids []string) {
 			t.Fatal("expected 200 status, got", res.Status)
 		}
 
-		select {
-		case event := <-ch:
-			debug("host removed", event.HostID)
-		case <-time.After(5 * time.Second):
-			t.Fatal("timed out waiting for host removal")
+	loop:
+		for {
+			select {
+			case update := <-updates:
+				if !update.Online {
+					debug("host removed", update.Addr)
+					break loop
+				}
+			case <-time.After(20 * time.Second):
+				t.Fatal("timed out waiting for host removal")
+			}
 		}
 	}
 }
