@@ -90,9 +90,14 @@ func (c *hostClient) Attach(req *host.AttachReq, wait bool) (AttachClient, error
 			return nil, ErrWouldWait
 		}
 		wait := func() error {
-			if _, err := rwc.Read(attachState); err != nil {
-				rwc.Close()
-				return err
+			for {
+				if _, err := rwc.Read(attachState); err != nil {
+					rwc.Close()
+					return err
+				}
+				if attachState[0] != host.AttachKeepalive {
+					break
+				}
 			}
 			return handleState()
 		}
@@ -228,6 +233,8 @@ func (c *attachClient) Receive(stdout, stderr io.Writer) (int, error) {
 				return 0, err
 			}
 			return 0, errors.New(string(errBytes))
+		case host.AttachKeepalive:
+			continue
 		}
 	}
 }

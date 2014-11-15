@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 	"github.com/flynn/flynn/host/types"
@@ -37,6 +38,26 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 
 	g := grohl.NewContext(grohl.Data{"fn": "attach", "job.id": req.JobID})
 	g.Log(grohl.Data{"at": "start"})
+
+	// writeMtx protects writes to conn and w
+	writeMtx := &sync.Mutex{}
+	// w must be flushed before unlocking writeMtx
+	w := bufio.NewWriter(conn)
+
+	go func() {
+		tick := time.NewTicker(time.Minute)
+		defer tick.Stop()
+		// send a byte every minute to keep the connection alive
+		for range tick.C {
+			writeMtx.Lock()
+			_, err := conn.Write([]byte{host.AttachKeepalive})
+			writeMtx.Unlock()
+			if err != nil {
+				return
+			}
+		}
+	}()
+
 	attachWait := make(chan struct{})
 	job := h.state.AddAttacher(req.JobID, attachWait)
 	if job == nil {
@@ -46,10 +67,10 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 		}
 		// TODO: add timeout
 		g.Log(grohl.Data{"at": "wait"})
+		// attachWait is signaled by the state manager after the job starts running
 		<-attachWait
 		job = h.state.GetJob(req.JobID)
 	}
-	w := bufio.NewWriter(conn)
 	writeError := func(err string) {
 		w.WriteByte(host.AttachError)
 		binary.Write(w, binary.BigEndian, uint32(len(err)))
@@ -62,7 +83,7 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 		return
 	}
 
-	writeMtx := &sync.Mutex{}
+	// block writes until attached is signaled
 	writeMtx.Lock()
 
 	attached := make(chan struct{})
@@ -155,6 +176,8 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 					g.Log(grohl.Data{"at": "tty_resize", "status": "error", "err": err})
 					return
 				}
+			case host.AttachKeepalive:
+				continue
 			default:
 				return
 			}

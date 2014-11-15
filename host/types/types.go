@@ -176,4 +176,5 @@ const (
 	AttachSignal
 	AttachExit
 	AttachResize
+	AttachKeepalive
 )
