@@ -156,19 +156,11 @@ tag_release() {
   local commit=$1
   local version=$2
 
-  read -d "" payload <<EOF
-{
-  "ref": "refs/tags/v${version}",
-  "sha": "${commit}"
-}
-EOF
-
   curl \
     --header "Content-Type: application/json" \
     --header "Authorization: token ${GITHUB_TOKEN}" \
-    --data @- \
-    "https://api.github.com/repos/flynn/flynn/git/refs" \
-    <<< "${payload}"
+    --data "{\"ref\":\"refs/tags/v${version}\",\"sha\":\"${commit}\"}" \
+    "https://api.github.com/repos/flynn/flynn/git/refs"
 }
 
 main $@
