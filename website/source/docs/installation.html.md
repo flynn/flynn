@@ -191,6 +191,9 @@ $ sudo \
     flynn-host bootstrap /etc/flynn/bootstrap-manifest.json
 ```
 
+*Note: You only need to run this on a single node in the cluster. It will
+schedule jobs on nodes across the cluster as required.*
+
 The Layer 1 bootstrapper will get all necessary services running using the Layer
 0 API. The final log line will contain configuration that may be used with the
 [command-line interface](/docs/cli).
