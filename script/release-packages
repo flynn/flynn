@@ -82,7 +82,7 @@ main() {
   local commit=$1
   local flynn_release="${ROOT}/util/release/flynn-release"
 
-  info "checking commit status"
+  info "checking status of commit ${commit}"
   if ! "${flynn_release}" status ${commit}; then
     fail "commit has not passed CI"
   fi

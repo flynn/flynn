@@ -68,6 +68,7 @@ main() {
       fail "could not determine commit"
     fi
   fi
+  info "starting release of commit ${commit}"
 
   info "getting flynn release manifest"
   local manifest="$(s3cmd --no-progress get "s3://${bucket}/release/manifest.json" - 2>/dev/null)"
