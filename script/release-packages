@@ -144,7 +144,7 @@ main() {
 
   info "signing deb package"
   local deb=$(ls "${src}"/*.deb)
-  dpkg-sig -g "--passphrase-file \"${passphrase_file}\"" --sign builder "${deb}"
+  dpkg-sig -g "--passphrase-file \"${passphrase_file}\" --batch --no-tty" --sign builder "${deb}"
 
   info "adding deb to apt repo"
   reprepro -b "${apt_dir}" includedeb flynn "${deb}"
