@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -53,6 +54,7 @@ type Runner struct {
 	db          *bolt.DB
 	buildCh     chan struct{}
 	clusters    map[string]*cluster.Cluster
+	authKey     string
 }
 
 var args *arg.Args
@@ -77,6 +79,11 @@ func main() {
 }
 
 func (r *Runner) start() error {
+	r.authKey = os.Getenv("AUTH_KEY")
+	if r.authKey == "" {
+		return errors.New("AUTH_KEY not set")
+	}
+
 	r.githubToken = os.Getenv("GITHUB_TOKEN")
 	if r.githubToken == "" {
 		return errors.New("GITHUB_TOKEN not set")
@@ -180,7 +187,7 @@ cd ~/go/src/github.com/flynn/flynn/test
 
 cmd="bin/flynn-test \
   --flynnrc $HOME/.flynnrc \
-  --cluster-api https://{{ .Cluster.BridgeIP }}:{{ .ListenPort }}/cluster/{{ .Cluster.ID }} \
+  --cluster-api https://{{ .Cluster.BridgeIP }}:{{ .ListenPort }}/cluster/{{ .AuthKey }}/{{ .Cluster.ID }} \
   --cli $(pwd)/../cli/flynn-cli \
   --router-ip {{ .Cluster.RouterIP }} \
   --debug"
@@ -243,7 +250,7 @@ func (r *Runner) build(b *Build) (err error) {
 	}
 
 	var script bytes.Buffer
-	testRunScript.Execute(&script, map[string]interface{}{"Cluster": c, "ListenPort": listenPort})
+	testRunScript.Execute(&script, map[string]interface{}{"Cluster": c, "ListenPort": listenPort, "AuthKey": r.authKey})
 	return c.Run(script.String(), &cluster.Streams{
 		Stdin:  bytes.NewBuffer(config.Marshal()),
 		Stdout: out,
@@ -516,8 +523,12 @@ func (r *Runner) save(b *Build) error {
 }
 
 func (r *Runner) httpClusterHandler(w http.ResponseWriter, req *http.Request) {
-	id := strings.TrimPrefix(req.URL.Path, "/cluster/")
-	c, ok := r.clusters[id]
+	authKeyID := strings.SplitN(strings.TrimPrefix(req.URL.Path, "/cluster/"), "/", 2)
+	if len(authKeyID[0]) != len(r.authKey) || subtle.ConstantTimeCompare([]byte(authKeyID[0]), []byte(r.authKey)) != 1 {
+		w.WriteHeader(401)
+		return
+	}
+	c, ok := r.clusters[authKeyID[1]]
 	if !ok {
 		http.Error(w, "cluster not found", 404)
 		return
