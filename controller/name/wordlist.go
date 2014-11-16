@@ -123,7 +123,7 @@ var animals = [...]string{
 	"monkeys",
 	"moose",
 	"mosquitos",
-	"mouses",
+	"mice",
 	"mules",
 	"narwhals",
 	"newts",
