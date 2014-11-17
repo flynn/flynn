@@ -1,6 +1,6 @@
 language: go
 go:
-  - 1.4beta1
+  - 1.4rc1
   - tip
 
 addons:
