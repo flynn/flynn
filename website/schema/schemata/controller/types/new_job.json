@@ -1,45 +1,28 @@
 {
-  "$schema": "http://json-schema.org/draft-04/hyper-schema",
-  "title": "TYPE.NewJob",
-  "description": "FIXME",
-  "id": "schemata/new_job",
-  "definitions": {
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/new_job#",
+  "type": "object",
+  "properties": {
+    "release": {
+      "$ref": "schema/common#/definitions/id"
+    },
+    "cmd": {
+      "$ref": "schema/common#/definitions/cmd"
+    },
+    "env": {
+      "$ref": "schema/common#/definitions/env"
+    },
     "tty": {
       "description": "initialize a tty session",
-      "example": true,
       "type": "boolean"
     },
     "tty_columns": {
       "description": "number of columns in tty",
-      "example": 80,
       "type": "number"
     },
     "tty_lines": {
       "description": "number of lines/rows in tty",
-      "example": 24,
       "type": "number"
     }
-  },
-  "type": "object",
-  "properties": {
-    "release": {
-      "$ref": "/schemata/release#/definitions/identity"
-    },
-    "cmd": {
-      "$ref": "/schemata/common#/definitions/cmd"
-    },
-    "env": {
-      "$ref": "/schemata/common#/definitions/env"
-    },
-    "tty": {
-      "$ref": "/schemata/new_job#/definitions/tty"
-    },
-    "tty_columns": {
-      "$ref": "/schemata/new_job#/definitions/tty_columns"
-    },
-    "tty_lines": {
-      "$ref": "/schemata/new_job#/definitions/tty_lines"
-    }
-  },
-  "links": []
+  }
 }

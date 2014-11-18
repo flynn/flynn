@@ -1,41 +1,23 @@
 {
-  "$schema": "http://json-schema.org/draft-04/hyper-schema",
-  "title": "TYPE.Provider",
-  "description": "FIXME",
-  "id": "schemata/provider",
-  "definitions": {
-    "identity": {
-      "$ref": "/schemata/common#/definitions/id"
-    },
-    "name": {
-      "description": "name of provider",
-      "example": "my-name-is",
-      "type": "string"
-    },
-    "url": {
-      "description": "url of provider",
-      "example": "FIXME",
-      "format": "uri",
-      "type": "string"
-    }
-  },
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/provider#",
   "type": "object",
   "properties": {
     "id": {
-      "$ref": "/schemata/provider#/definitions/identity"
+      "$ref": "schema/common#/definitions/id"
     },
     "created_at": {
-      "$ref": "/schemata/common#/definitions/created_at"
+      "$ref": "schema/common#/definitions/created_at"
     },
     "updated_at": {
-      "$ref": "/schemata/common#/definitions/updated_at"
+      "$ref": "schema/common#/definitions/updated_at"
     },
     "name": {
-      "$ref": "/schemata/provider#/definitions/name"
+      "type": "string"
     },
     "url": {
-      "$ref": "/schemata/provider#/definitions/url"
+      "type": "string",
+      "format": "uri"
     }
-  },
-  "links": []
+  }
 }

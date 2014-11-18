@@ -1,45 +1,31 @@
 {
-  "$schema": "http://json-schema.org/draft-04/hyper-schema",
-  "title": "TYPE.Process Type",
-  "description": "FIXME",
-  "id": "schemata/process_type",
-  "definitions": {
-    "ports": {
-      "description": "ENV variables for this release",
-      "example": "FIXME",
-      "type": "array",
-      "items": {
-        "$ref": "/schemata/port"
-      }
-    },
-    "data": {
-      "description": "ENV variables for this release",
-      "example": false,
-      "type": "boolean"
-    },
-    "omni": {
-      "description": "FIXME",
-      "example": true,
-      "type": "boolean"
-    }
-  },
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/process_type#",
   "type": "object",
   "properties": {
     "cmd": {
-      "$ref": "/schemata/common#/definitions/cmd"
+      "$ref": "schema/common#/definitions/cmd"
     },
     "env": {
-      "$ref": "/schemata/common#/definitions/env"
+      "$ref": "schema/common#/definitions/env"
+    },
+    "entrypoint": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "ports": {
-      "$ref": "/schemata/process_type#/definitions/ports"
+      "type": "array",
+      "items": {
+        "$ref": "schema/controller/port"
+      }
     },
     "data": {
-      "$ref": "/schemata/process_type#/definitions/data"
+      "type": "boolean"
     },
     "omni": {
-      "$ref": "/schemata/process_type#/definitions/omni"
+      "type": "boolean"
     }
-  },
-  "links": []
+  }
 }

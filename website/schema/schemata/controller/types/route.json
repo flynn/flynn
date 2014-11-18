@@ -1,41 +1,25 @@
 {
-  "$schema": "http://json-schema.org/draft-04/hyper-schema",
-  "title": "TYPE.Route",
-  "description": "FIXME",
-  "id": "schemata/route",
-  "definitions": {
-    "identity": {
-      "$ref": "/schemata/common#/definitions/id"
-    },
-    "type": {
-      "description": "the type of route",
-      "example": "web",
-      "type": "string"
-    },
-    "parent_ref": {
-      "$ref": "/schemata/common#/definitions/id"
-    }
-  },
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/router/route#",
   "type": "object",
   "properties": {
     "id": {
-      "$ref": "/schemata/route#/definitions/identity"
+      "$ref": "schema/common#/definitions/id"
     },
     "parent_ref": {
-      "$ref": "/schemata/route#/definitions/parent_ref"
+      "$ref": "schema/common#/definitions/id"
     },
     "type": {
-      "$ref": "/schemata/route#/definitions/type"
+      "type": "string"
     },
     "config": {
-      "$ref": "/schemata/common#/definitions/config"
+      "$ref": "schema/common#/definitions/config"
     },
     "created_at": {
-      "$ref": "/schemata/common#/definitions/created_at"
+      "$ref": "schema/common#/definitions/created_at"
     },
     "updated_at": {
-      "$ref": "/schemata/common#/definitions/updated_at"
+      "$ref": "schema/common#/definitions/updated_at"
     }
-  },
-  "links": []
+  }
 }

@@ -1,39 +1,21 @@
 {
-  "$schema": "http://json-schema.org/draft-04/hyper-schema",
-  "title": "TYPE.Artifact",
-  "description": "FIXME",
-  "id": "schemata/artifact",
-  "definitions": {
-    "identity": {
-      "$ref": "/schemata/common#/definitions/id"
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/artifact#",
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "schema/common#/definitions/id"
     },
     "type": {
-      "description": "FIXME",
-      "example": "FIXME",
       "format": "uuid",
       "type": "string"
     },
     "uri": {
-      "description": "FIXME",
-      "example": "FIXME",
       "format": "uri",
       "type": "string"
-    }
-  },
-  "type": "object",
-  "properties": {
-    "id": {
-      "$ref": "/schemata/common#/definitions/identity"
-    },
-    "type": {
-      "$ref": "/schemata/artifact#/definitions/type"
-    },
-    "uri": {
-      "$ref": "/schemata/artifact#/definitions/uri"
     },
     "created_at": {
-      "$ref": "/schemata/common#/definitions/created_at"
+      "$ref": "schema/common#/definitions/created_at"
     }
-  },
-  "links": []
+  }
 }

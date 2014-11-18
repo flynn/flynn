@@ -1,37 +1,22 @@
 {
-  "$schema": "http://json-schema.org/draft-04/hyper-schema",
-  "title": "TYPE.Formation",
-  "description": "FIXME",
-  "id": "schemata/formation",
-  "definitions": {
-    "identity": {
-      "$ref": "/schemata/common#/definitions/id"
-    },
-    "processes": {
-      "description": "Process ID map",
-      "example": {
-        "web": 4102
-      },
-      "type": "object"
-    }
-  },
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/formation#",
   "type": "object",
   "properties": {
     "app": {
-      "$ref": "/schemata/app#/definitions/identity"
+      "$ref": "schema/common#/definitions/id"
     },
     "release": {
-      "$ref": "/schemata/release#/definitions/identity"
+      "$ref": "schema/common#/definitions/id"
     },
     "processes": {
-      "$ref": "/schemata/formation#/definitions/processes"
+      "type": "object"
     },
     "created_at": {
-      "$ref": "/schemata/common#/definitions/created_at"
+      "$ref": "schema/common#/definitions/created_at"
     },
     "updated_at": {
-      "$ref": "/schemata/common#/definitions/updated_at"
+      "$ref": "schema/common#/definitions/updated_at"
     }
-  },
-  "links": []
+  }
 }

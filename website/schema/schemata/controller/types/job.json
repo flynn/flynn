@@ -1,50 +1,32 @@
 {
-  "$schema": "http://json-schema.org/draft-04/hyper-schema",
-  "title": "TYPE.Job",
-  "description": "FIXME",
-  "id": "schemata/job",
-  "definitions": {
-    "identity": {
-      "$ref": "/schemata/common#/definitions/id"
-    },
-    "type": {
-      "description": "job type",
-      "example": "web",
-      "type": "string"
-    },
-    "state": {
-      "description": "job state",
-      "example": "starting",
-      "type": "string",
-      "enum": ["starting", "up", "down", "crashed"]
-    }
-  },
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/job#",
   "type": "object",
   "properties": {
     "id": {
-      "$ref": "/schemata/job#/definitions/identity"
+      "$ref": "schema/common#/definitions/id"
     },
     "app": {
-      "$ref": "/schemata/app#/definitions/identity"
+      "$ref": "schema/common#/definitions/id"
     },
     "release": {
-      "$ref": "/schemata/release#/definitions/identity"
+      "$ref": "schema/common#/definitions/id"
     },
     "type": {
-      "$ref": "/schemata/job#/definitions/type"
+      "type": "string"
     },
     "state": {
-      "$ref": "/schemata/job#/definitions/state"
+      "type": "string",
+      "enum": ["starting", "up", "down", "crashed"]
     },
     "cmd": {
-      "$ref": "/schemata/common#/definitions/cmd"
+      "$ref": "schema/common#/definitions/cmd"
     },
     "created_at": {
-      "$ref": "/schemata/common#/definitions/created_at"
+      "$ref": "schema/common#/definitions/created_at"
     },
     "updated_at": {
-      "$ref": "/schemata/common#/definitions/updated_at"
+      "$ref": "schema/common#/definitions/updated_at"
     }
-  },
-  "links": []
+  }
 }

@@ -1,28 +1,13 @@
 {
-  "$schema": "http://json-schema.org/draft-04/hyper-schema",
-  "title": "TYPE.ValidationError",
-  "description": "FIXME",
-  "id": "schemata/validation_error",
-  "definitions": {
-    "field": {
-      "description": "FIXME",
-      "example": "FIXME",
-      "type": "string"
-    },
-    "message": {
-      "description": "FIXME",
-      "example": "FIXME",
-      "type": "string"
-    }
-  },
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/validation_error#",
   "type": "object",
   "properties": {
     "field": {
-      "$ref": "/schemata/validation_error#/definitions/field"
+      "type": "string"
     },
     "message": {
-      "$ref": "/schemata/validation_error#/definitions/message"
+      "type": "string"
     }
-  },
-  "links": []
+  }
 }

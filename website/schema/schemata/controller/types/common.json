@@ -1,52 +1,41 @@
 {
-  "$schema": "http://json-schema.org/draft-04/hyper-schema",
-  "title": "Common Types",
-  "description": "Common, or basic types found in most composite types",
-  "id": "schemata/common",
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/common#",
   "definitions": {
     "id": {
       "description": "unique identifier",
-      "example": "01234567-89ab-cdef-0123-456789abcdef",
       "format": "uuid",
       "type": "string"
     },
-    "identity": {
-      "$ref": "/schemata/common#/definitions/id"
-    },
     "created_at": {
       "description": "when this was created",
-      "example": "2012-01-01T12:00:00Z",
       "format": "date-time",
       "type": "string"
     },
     "updated_at": {
       "description": "when this was updated",
-      "example": "2012-01-01T12:00:00Z",
       "format": "date-time",
       "type": "string"
     },
     "env": {
       "description": "environment variables",
-      "example": {
-        "BREAD": "with butter"
-      },
       "type": "object"
     },
     "cmd": {
       "description": "shell command",
-      "example": ["bash", "my_script"],
       "type": "array",
       "items": {
         "type": "string"
       }
     },
     "config": {
-      "description": "raw json message",
-      "example": { "stuff": "more stuff" },
-      "type": "string"
+      "type": "object"
+    },
+    "apps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/id"
+      }
     }
-  },
-  "type": "object",
-  "properties": {},
-  "links": []
+  }
 }

@@ -1,19 +1,13 @@
 {
-  "$schema": "http://json-schema.org/draft-04/hyper-schema",
-  "title": "TYPE.ResourceReq",
-  "description": "FIXME",
-  "id": "schemata/resource_req",
-  "definitions": {
-
-  },
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/resource_req#",
   "type": "object",
   "properties": {
     "apps": {
-      "$ref": "/schemata/resource#/definitions/apps"
+      "$ref": "schema/common#/definitions/apps"
     },
     "config": {
-      "$ref": "/schemata/common#/definitions/config"
+      "$ref": "schema/common#/definitions/config"
     }
-  },
-  "links": []
+  }
 }

@@ -1,44 +1,25 @@
 {
-  "$schema": "http://json-schema.org/draft-04/hyper-schema",
-  "title": "TYPE.Resource",
-  "description": "FIXME",
-  "id": "schemata/resource",
-  "definitions": {
-    "identity": {
-      "$ref": "/schemata/common#/definitions/id"
-    },
-    "external_id": {
-      "$ref": "/schemata/common#/definitions/id"
-    },
-    "apps": {
-      "description": "app ids",
-      "example": ["01234567-89ab-cdef-0123-456789abcdef"],
-      "type": "array",
-      "items": {
-        "$ref": "/schemata/app#/definitions/identity"
-      }
-    }
-  },
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/resource#",
   "type": "object",
   "properties": {
     "id": {
-      "$ref": "/schemata/resource#/definitions/identity"
+      "$ref": "schema/common#/definitions/id"
     },
     "provider_id": {
-      "$ref": "/schemata/provider#/definitions/identity"
+      "$ref": "schema/common#/definitions/id"
     },
     "external_id": {
-      "$ref": "/schemata/resource#/definitions/external_id"
+      "$ref": "schema/common#/definitions/id"
     },
     "env": {
-      "$ref": "/schemata/common#/definitions/env"
+      "$ref": "schema/common#/definitions/env"
     },
     "apps": {
-      "$ref": "/schemata/resource#/definitions/apps"
+      "$ref": "schema/common#/definitions/apps"
     },
     "created_at": {
-      "$ref": "/schemata/common#/definitions/created_at"
+      "$ref": "schema/common#/definitions/created_at"
     }
-  },
-  "links": []
+  }
 }
