@@ -17,25 +17,8 @@
       "format": "date-time",
       "type": "string"
     },
-    "env": {
-      "description": "environment variables",
-      "type": "object"
-    },
-    "cmd": {
-      "description": "shell command",
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
     "config": {
       "type": "object"
-    },
-    "apps": {
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/id"
-      }
     }
   }
 }

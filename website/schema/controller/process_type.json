@@ -4,10 +4,10 @@
   "type": "object",
   "properties": {
     "cmd": {
-      "$ref": "schema/common#/definitions/cmd"
+      "$ref": "schema/controller/common#/definitions/cmd"
     },
     "env": {
-      "$ref": "schema/common#/definitions/env"
+      "$ref": "schema/controller/common#/definitions/env"
     },
     "entrypoint": {
       "type": "array",

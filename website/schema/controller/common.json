@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/common#",
+  "definitions": {
+    "id": {
+      "$ref": "schema/controller/common#/definitions/id"
+    },
+    "created_at": {
+      "$ref": "schema/controller/common#/definitions/created_at"
+    },
+    "updated_at": {
+      "$ref": "schema/controller/common#/definitions/updated_at"
+    },
+    "config": {
+      "$ref": "schema/controller/common#/definitions/config"
+    },
+    "apps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/id"
+      }
+    },
+    "cmd": {
+      "description": "shell command",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "env": {
+      "description": "environment variables",
+      "type": "object"
+    }
+  }
+}

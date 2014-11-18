@@ -4,19 +4,19 @@
   "type": "object",
   "properties": {
     "app": {
-      "$ref": "schema/common#/definitions/id"
+      "$ref": "schema/controller/common#/definitions/id"
     },
     "release": {
-      "$ref": "schema/common#/definitions/id"
+      "$ref": "schema/controller/common#/definitions/id"
     },
     "processes": {
       "type": "object"
     },
     "created_at": {
-      "$ref": "schema/common#/definitions/created_at"
+      "$ref": "schema/controller/common#/definitions/created_at"
     },
     "updated_at": {
-      "$ref": "schema/common#/definitions/updated_at"
+      "$ref": "schema/controller/common#/definitions/updated_at"
     }
   }
 }

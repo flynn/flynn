@@ -4,13 +4,13 @@
   "type": "object",
   "properties": {
     "release": {
-      "$ref": "schema/common#/definitions/id"
+      "$ref": "schema/controller/common#/definitions/id"
     },
     "cmd": {
-      "$ref": "schema/common#/definitions/cmd"
+      "$ref": "schema/controller/common#/definitions/cmd"
     },
     "env": {
-      "$ref": "schema/common#/definitions/env"
+      "$ref": "schema/controller/common#/definitions/env"
     },
     "tty": {
       "description": "initialize a tty session",

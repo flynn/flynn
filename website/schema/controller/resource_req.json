@@ -4,10 +4,10 @@
   "type": "object",
   "properties": {
     "apps": {
-      "$ref": "schema/common#/definitions/apps"
+      "$ref": "schema/controller/common#/definitions/apps"
     },
     "config": {
-      "$ref": "schema/common#/definitions/config"
+      "$ref": "schema/controller/common#/definitions/config"
     }
   }
 }
