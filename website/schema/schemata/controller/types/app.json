@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-04/hyper-schema",
+  "title": "TYPE.App",
+  "description": "FIXME",
+  "id": "schemata/app",
+  "definitions": {
+    "identity": {
+      "$ref": "/schemata/common#/definitions/id"
+    },
+    "name": {
+      "description": "name of app",
+      "example": "my-name-is",
+      "type": "string"
+    },
+    "protected": {
+      "description": "is the app protected?",
+      "example": true,
+      "type": "boolean"
+    },
+    "meta": {
+      "description": "app meta-data",
+      "example": { "special": "data" },
+      "type": "object"
+    }
+  },
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "/schemata/common#/definitions/identity"
+    },
+    "name": {
+      "$ref": "/schemata/app#/definitions/name"
+    },
+    "protected": {
+      "$ref": "/schemata/app#/definitions/protected"
+    },
+    "meta": {
+      "$ref": "/schemata/app#/definitions/meta"
+    },
+    "created_at": {
+      "$ref": "/schemata/common#/definitions/created_at"
+    },
+    "updated_at": {
+      "$ref": "/schemata/common#/definitions/updated_at"
+    }
+  },
+  "links": []
+}

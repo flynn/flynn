@@ -1,0 +1,9 @@
+{
+  "id": "flynn-controller",
+  "title": "Flynn Controller API",
+  "links": [{
+    "href": "https://controller.flynn.io",
+    "rel": "self"
+  }],
+  "description": "Flynn Controller API"
+}

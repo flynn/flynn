@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-04/hyper-schema",
+  "title": "TYPE.Process Type",
+  "description": "FIXME",
+  "id": "schemata/process_type",
+  "definitions": {
+    "ports": {
+      "description": "ENV variables for this release",
+      "example": "FIXME",
+      "type": "array",
+      "items": {
+        "$ref": "/schemata/port"
+      }
+    },
+    "data": {
+      "description": "ENV variables for this release",
+      "example": false,
+      "type": "boolean"
+    },
+    "omni": {
+      "description": "FIXME",
+      "example": true,
+      "type": "boolean"
+    }
+  },
+  "type": "object",
+  "properties": {
+    "cmd": {
+      "$ref": "/schemata/common#/definitions/cmd"
+    },
+    "env": {
+      "$ref": "/schemata/common#/definitions/env"
+    },
+    "ports": {
+      "$ref": "/schemata/process_type#/definitions/ports"
+    },
+    "data": {
+      "$ref": "/schemata/process_type#/definitions/data"
+    },
+    "omni": {
+      "$ref": "/schemata/process_type#/definitions/omni"
+    }
+  },
+  "links": []
+}

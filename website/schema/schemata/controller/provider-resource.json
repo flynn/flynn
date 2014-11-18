@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-04/hyper-schema",
+  "title": "Provider Resource",
+  "description": "FIXME",
+  "id": "schemata/provider_resource",
+  "$ref": "/schemata/resource",
+  "type": "object",
+  "links": [
+    {
+      "title": "Create",
+      "description": "FIXME",
+      "href": "/providers/{(%2Fschemata%2Fprovider%23%2Fdefinitions%2Fidentity)}/resources",
+      "method": "POST",
+      "rel": "create",
+      "schema": {
+        "$ref": "/schemata/resource_req"
+      }
+    },
+    {
+      "title": "Info",
+      "description": "FIXME",
+      "href": "/providers/{(%2Fschemata%2Fprovider%23%2Fdefinitions%2Fidentity)}/resources/{(%2Fschemata%2Fresource%23%2Fdefinitions%2Fidentity)}",
+      "method": "GET",
+      "rel": "self"
+    },
+    {
+      "title": "List",
+      "description": "FIXME",
+      "href": "/providers/{(%2Fschemata%2Fprovider%23%2Fdefinitions%2Fidentity)}/resources",
+      "method": "GET",
+      "rel": "instances"
+    },
+    {
+      "title": "Update",
+      "description": "FIXME",
+      "method": "PUT",
+      "href": "/providers/{(%2Fschemata%2Fprovider%23%2Fdefinitions%2Fidentity)}/resources",
+      "rel": "update",
+      "schema": {
+        "$ref": "/schemata/resource"
+      }
+    }
+  ]
+}
