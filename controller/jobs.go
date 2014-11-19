@@ -28,6 +28,11 @@ func NewJobRepo(db *DB) *JobRepo {
 	return &JobRepo{db}
 }
 
+func (r *JobRepo) Get(id string) (*ct.Job, error) {
+	row := r.db.QueryRow("SELECT concat(host_id, '-', job_id), app_id, release_id, process_type, state, created_at, updated_at FROM job_cache WHERE concat(host_id, '-', job_id) = $1", id)
+	return scanJob(row)
+}
+
 func (r *JobRepo) Add(job *ct.Job) error {
 	hostID, jobID, err := cluster.ParseJobID(job.ID)
 	if err != nil {
@@ -139,6 +144,15 @@ func listJobs(req *http.Request, w http.ResponseWriter, app *ct.App, repo *JobRe
 		return
 	}
 	r.JSON(200, list)
+}
+
+func getJob(params martini.Params, app *ct.App, repo *JobRepo, r ResponseHelper) {
+	job, err := repo.Get(params["jobs_id"])
+	if err != nil {
+		r.Error(err)
+		return
+	}
+	r.JSON(200, job)
 }
 
 func putJob(job ct.Job, app *ct.App, repo *JobRepo, r ResponseHelper) {

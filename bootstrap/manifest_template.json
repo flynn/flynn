@@ -52,6 +52,7 @@
     "release": {
       "env": {
         "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
+        "BACKOFF_PERIOD": "{{ getenv \"BACKOFF_PERIOD\" }}",
         "DEFAULT_ROUTE_DOMAIN": "{{ getenv \"DEFAULT_ROUTE_DOMAIN\" }}",
         "NAME_SEED": "{{ (index .StepData \"name-seed\").Data }}"
       },

@@ -10,7 +10,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
@@ -68,6 +70,15 @@ func main() {
 	if err := discoverd.Register("flynn-controller", addr); err != nil {
 		log.Fatal(err)
 	}
+
+	// Unregister services on exit
+	go func() {
+		ch := make(chan os.Signal, 1)
+		signal.Notify(ch, os.Interrupt, os.Signal(syscall.SIGTERM))
+		<-ch
+		discoverd.Unregister("flynn-controller", addr)
+		os.Exit(0)
+	}()
 
 	handler, _ := appHandler(handlerConfig{db: db, cc: cc, sc: sc, dc: discoverd.DefaultClient, key: os.Getenv("AUTH_KEY")})
 	log.Fatal(http.ListenAndServe(addr, handler))
@@ -161,6 +172,7 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	r.Get("/apps/:apps_id/formations", getAppMiddleware, listFormations)
 
 	r.Post("/apps/:apps_id/jobs", getAppMiddleware, binding.Bind(ct.NewJob{}), runJob)
+	r.Get("/apps/:apps_id/jobs/:jobs_id", getAppMiddleware, getJob)
 	r.Put("/apps/:apps_id/jobs/:jobs_id", getAppMiddleware, binding.Bind(ct.Job{}), putJob)
 	r.Get("/apps/:apps_id/jobs", getAppMiddleware, listJobs)
 	r.Delete("/apps/:apps_id/jobs/:jobs_id", getAppMiddleware, connectHostMiddleware, killJob)

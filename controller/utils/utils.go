@@ -83,3 +83,11 @@ func JobConfig(f *ct.ExpandedFormation, name string) *host.Job {
 	}
 	return job
 }
+
+func ParseJobID(jobID string) (string, string) {
+	id := strings.SplitN(jobID, "-", 2)
+	if len(id) != 2 || id[0] == "" || id[1] == "" {
+		return "", ""
+	}
+	return id[0], id[1]
+}

@@ -7,8 +7,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path"
 	"strings"
+	"syscall"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/flynn/discoverd/client"
@@ -82,6 +84,17 @@ func main() {
 			log.Fatal(err)
 		}
 	}
+
+	// Unregister services on exit
+	go func() {
+		ch := make(chan os.Signal, 1)
+		signal.Notify(ch, os.Interrupt, os.Signal(syscall.SIGTERM))
+		<-ch
+		for service, addr := range services {
+			discoverd.Unregister(service, addr)
+		}
+		os.Exit(0)
+	}()
 
 	// Read etcd addresses from ETCD
 	etcdAddrs := strings.Split(os.Getenv("ETCD"), ",")
