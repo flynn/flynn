@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/examples/controller/app_release_set#",
+  "allOf": [
+    { "$ref": "schema/examples/base#" },
+    {
+      "type": "object",
+      "properties": {
+        "request": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": ["PUT"]
+            },
+            "body": {
+              "$ref": "schema/controller/release#"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

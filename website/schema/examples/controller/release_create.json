@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/examples/controller/release_create#",
+  "allOf": [
+    { "$ref": "schema/examples/base#" },
+    {
+      "type": "object",
+      "properties": {
+        "request": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": ["POST"]
+            },
+            "body": {
+              "$ref": "schema/controller/release#"
+            }
+          }
+        },
+        "response": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "$ref": "schema/controller/release#"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
