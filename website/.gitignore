@@ -18,3 +18,5 @@
 
 source/docs/contributing.html.md
 source/docs/cli.html.md
+source/docs/api/controller.md
+source/docs/api/router.md

@@ -1,4 +1,7 @@
-task compile: [:cli, :copy_contributing] do
+lib = File.expand_path('../lib', __FILE__)
+$LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
+
+task compile: [:cli, :copy_contributing, :compile_api_doc] do
   sh 'middleman build --no-clean'
 end
 
@@ -23,4 +26,9 @@ layout: docs
 EOF
   source << File.read("../CONTRIBUTING.md")
   File.write("source/docs/contributing.html.md", source)
+end
+
+task :compile_api_doc do
+  require 'api_doc'
+  APIDoc.compile
 end

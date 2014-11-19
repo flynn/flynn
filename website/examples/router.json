@@ -1,0 +1,78 @@
+{
+	"route_create": {
+		"request": {
+			"method": "POST",
+			"url": "/routes",
+			"headers": {
+				"Content-Type": "application/json"
+			},
+			"body": "{\"type\":\"http\",\"config\":{\"domain\":\"http://example.com\",\"service\":\"foo-web\"}}"
+		},
+		"response": {
+			"headers": {
+				"Content-Type": "application/json; charset=UTF-8"
+			},
+			"body": "{\"id\":\"http/a9b9f04336ce0181a08e774e01113b31\",\"type\":\"http\",\"config\":{\"domain\":\"http://example.com\",\"service\":\"foo-web\"},\"created_at\":\"2015-01-27T04:30:38.507331199Z\",\"updated_at\":\"2015-01-27T04:30:38.507331199Z\"}"
+		}
+	},
+	"route_delete": {
+		"request": {
+			"method": "DELETE",
+			"url": "/routes/http/a9b9f04336ce0181a08e774e01113b31",
+			"headers": {
+				"Content-Type": "application/json"
+			}
+		},
+		"response": {
+			"headers": {
+				"Content-Type": "application/json; charset=UTF-8"
+			}
+		}
+	},
+	"route_get": {
+		"request": {
+			"method": "GET",
+			"url": "/routes/http/a9b9f04336ce0181a08e774e01113b31",
+			"headers": {
+				"Content-Type": "application/json"
+			}
+		},
+		"response": {
+			"headers": {
+				"Content-Type": "application/json; charset=UTF-8"
+			},
+			"body": "{\"id\":\"http/a9b9f04336ce0181a08e774e01113b31\",\"type\":\"http\",\"config\":{\"domain\":\"http://example.com\",\"service\":\"foo-web\"},\"created_at\":\"2015-01-27T04:30:38.507331199Z\",\"updated_at\":\"2015-01-27T04:30:38.507331199Z\"}"
+		}
+	},
+	"route_list": {
+		"request": {
+			"method": "GET",
+			"url": "/routes",
+			"headers": {
+				"Content-Type": "application/json"
+			}
+		},
+		"response": {
+			"headers": {
+				"Content-Type": "application/json; charset=UTF-8"
+			},
+			"body": "[{\"id\":\"http/dab521de65f9250b4cca7383feef67dc\",\"type\":\"http\",\"config\":{\"domain\":\"http://example.org\",\"service\":\"bar-web\"},\"created_at\":\"2015-01-27T04:30:38.512962507Z\",\"updated_at\":\"2015-01-27T04:30:38.512962507Z\"},{\"id\":\"http/a9b9f04336ce0181a08e774e01113b31\",\"type\":\"http\",\"config\":{\"domain\":\"http://example.com\",\"service\":\"foo-web\"},\"created_at\":\"2015-01-27T04:30:38.507331199Z\",\"updated_at\":\"2015-01-27T04:30:38.507331199Z\"},{\"id\":\"http/09d9867c98edf98d73b9ff5706723cf9\",\"parent_ref\":\"controller/apps/24fb8465a1074ac59776c12f7f42a9a0\",\"type\":\"http\",\"config\":{\"domain\":\"dashboard.dev.localflynn.com\",\"service\":\"dashboard-web\",\"tls_cert\":\"-----BEGIN CERTIFICATE-----\\nMIIDOjCCAiSgAwIBAgIQImSdprC/3B7jc7uqQHk8DDALBgkqhkiG9w0BAQswHTEO\\nMAwGA1UEChMFRmx5bm4xCzAJBgNVBAsTAkNBMB4XDTE1MDEyNzA0MzAzM1oXDTIw\\nMDEyNjA0MzAzM1owLTEOMAwGA1UEChMFRmx5bm4xGzAZBgNVBAMTEmRldi5sb2Nh\\nbGZseW5uLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMf2jwMo\\n8NSRNRjJ09zMNR6D2NxQR6/ScvqMltU+tyalSPfxl7NHsoium6urSn8vcJWNVkNd\\n2EXdqQxXIS/Kn+7MAITEGFX+IXRi57Gk/XxzdqPjfiJgOGfKA7tzsB0hiaV7hvjT\\n8mV1H+MGaRKg2Kv7Pzf70C2CnkiUXO2Dhu3feCq6f9LIvvl4YuKmdrqdgxeWzPiC\\nu7J4iy33Tf4FqAwt939snErfwCo9hR85TmEULQA433MtOcTXI6bwo8/J/XhcMifc\\nwRqzBor9lJl1dN8f72iMopi05gIVYtPz0Aim2T74p+rICvQtEzW0zOfcZ32Pw6g+\\n5aYrKp8h2nwmaKkCAwEAAaNqMGgwDgYDVR0PAQH/BAQDAgCgMBMGA1UdJQQMMAoG\\nCCsGAQUFBwMBMAwGA1UdEwEB/wQCMAAwMwYDVR0RBCwwKoISZGV2LmxvY2FsZmx5\\nbm4uY29tghQqLmRldi5sb2NhbGZseW5uLmNvbTALBgkqhkiG9w0BAQsDggEBAFFG\\n36tQup+rTEalt93INo3MTgrp28EJ4AGPHOy53jmYRlOtt+c7GmWuBgwZhDoR9Qr8\\nLHMac15rtUKHYO5BZNJz/Q6pUCHxVoRkYaqERsk+Km1VsOCapp1AJawo3He37NyP\\nxuOm063eXaIZnQ3JF+3ivg8ihRMHHlOku+jlG5Y/0zXkemLPkKeztEprufmfXP7q\\nUeZNrh3awVypKNu8slkK9VEWQkhheBEn3icpaJUp+VHYT3ccT0Y4D95EI9t3ak95\\nd2MRwgez2JRh/0cY6YtuRMW5Aj35k7yXKFdDpKeLoYpppqrwKzgUOdHdMl3HmdXO\\nKoLbhrEraL3vdZ3lcn0=\\n-----END CERTIFICATE-----\\n\"},\"created_at\":\"2015-01-27T04:30:34.364964993Z\",\"updated_at\":\"2015-01-27T04:30:34.364964993Z\"},{\"id\":\"http/ecb5daac2d8fb4aba282680847ed1d74\",\"parent_ref\":\"controller/apps/c7c5249036c24f08abf528b4de28bb86\",\"type\":\"http\",\"config\":{\"domain\":\"controller.dev.localflynn.com\",\"service\":\"flynn-controller\",\"tls_cert\":\"-----BEGIN CERTIFICATE-----\\nMIIDOjCCAiSgAwIBAgIQImSdprC/3B7jc7uqQHk8DDALBgkqhkiG9w0BAQswHTEO\\nMAwGA1UEChMFRmx5bm4xCzAJBgNVBAsTAkNBMB4XDTE1MDEyNzA0MzAzM1oXDTIw\\nMDEyNjA0MzAzM1owLTEOMAwGA1UEChMFRmx5bm4xGzAZBgNVBAMTEmRldi5sb2Nh\\nbGZseW5uLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMf2jwMo\\n8NSRNRjJ09zMNR6D2NxQR6/ScvqMltU+tyalSPfxl7NHsoium6urSn8vcJWNVkNd\\n2EXdqQxXIS/Kn+7MAITEGFX+IXRi57Gk/XxzdqPjfiJgOGfKA7tzsB0hiaV7hvjT\\n8mV1H+MGaRKg2Kv7Pzf70C2CnkiUXO2Dhu3feCq6f9LIvvl4YuKmdrqdgxeWzPiC\\nu7J4iy33Tf4FqAwt939snErfwCo9hR85TmEULQA433MtOcTXI6bwo8/J/XhcMifc\\nwRqzBor9lJl1dN8f72iMopi05gIVYtPz0Aim2T74p+rICvQtEzW0zOfcZ32Pw6g+\\n5aYrKp8h2nwmaKkCAwEAAaNqMGgwDgYDVR0PAQH/BAQDAgCgMBMGA1UdJQQMMAoG\\nCCsGAQUFBwMBMAwGA1UdEwEB/wQCMAAwMwYDVR0RBCwwKoISZGV2LmxvY2FsZmx5\\nbm4uY29tghQqLmRldi5sb2NhbGZseW5uLmNvbTALBgkqhkiG9w0BAQsDggEBAFFG\\n36tQup+rTEalt93INo3MTgrp28EJ4AGPHOy53jmYRlOtt+c7GmWuBgwZhDoR9Qr8\\nLHMac15rtUKHYO5BZNJz/Q6pUCHxVoRkYaqERsk+Km1VsOCapp1AJawo3He37NyP\\nxuOm063eXaIZnQ3JF+3ivg8ihRMHHlOku+jlG5Y/0zXkemLPkKeztEprufmfXP7q\\nUeZNrh3awVypKNu8slkK9VEWQkhheBEn3icpaJUp+VHYT3ccT0Y4D95EI9t3ak95\\nd2MRwgez2JRh/0cY6YtuRMW5Aj35k7yXKFdDpKeLoYpppqrwKzgUOdHdMl3HmdXO\\nKoLbhrEraL3vdZ3lcn0=\\n-----END CERTIFICATE-----\\n\"},\"created_at\":\"2015-01-27T04:30:33.749835012Z\",\"updated_at\":\"2015-01-27T04:30:33.749835012Z\"},{\"id\":\"tcp/934b535800b1cba8f96a5d72f72f1611\",\"parent_ref\":\"controller/apps/f86c7cc4d0f14e708dcb214975d0cac1\",\"type\":\"tcp\",\"config\":{\"service\":\"gitreceive\",\"port\":2222},\"created_at\":\"2015-01-27T04:30:33.742035668Z\",\"updated_at\":\"2015-01-27T04:30:33.742035668Z\"}]"
+		}
+	},
+	"route_set": {
+		"request": {
+			"method": "PUT",
+			"url": "/routes",
+			"headers": {
+				"Content-Type": "application/json"
+			},
+			"body": "{\"type\":\"http\",\"config\":{\"domain\":\"http://example.org\",\"service\":\"bar-web\"}}"
+		},
+		"response": {
+			"headers": {
+				"Content-Type": "application/json; charset=UTF-8"
+			},
+			"body": "{\"id\":\"http/dab521de65f9250b4cca7383feef67dc\",\"type\":\"http\",\"config\":{\"domain\":\"http://example.org\",\"service\":\"bar-web\"},\"created_at\":\"2015-01-27T04:30:38.512962507Z\",\"updated_at\":\"2015-01-27T04:30:38.512962507Z\"}"
+		}
+	}
+}
