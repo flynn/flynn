@@ -3,9 +3,13 @@ package cli
 import (
 	"fmt"
 	"os"
-	"os/exec"
 
+	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/aufs"
+	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/btrfs"
+	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/devmapper"
+	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/vfs"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
+	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pkg/cliutil"
 )
 
@@ -30,13 +34,15 @@ func runDownload(args *docopt.Args) error {
 		return err
 	}
 
+	ctx, err := pinkerton.BuildContext(args.String["--driver"], args.String["--root"])
+	if err != nil {
+		return err
+	}
+
 	for image, id := range manifest {
 		fmt.Printf("Downloading %s %s...\n", image, id)
 		image += "?id=" + id
-		cmd := exec.Command("pinkerton", "pull", "--root", args.String["--root"], "--driver", args.String["--driver"], image)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
+		if err := ctx.Pull(image, pinkerton.InfoPrinter(false)); err != nil {
 			return err
 		}
 	}

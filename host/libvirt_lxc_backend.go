@@ -25,9 +25,9 @@ import (
 	"github.com/flynn/flynn/host/containerinit"
 	lt "github.com/flynn/flynn/host/libvirt"
 	"github.com/flynn/flynn/host/logbuf"
-	"github.com/flynn/flynn/host/pinkerton"
 	"github.com/flynn/flynn/host/ports"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/random"
@@ -44,6 +44,11 @@ var bridgeAddr, bridgeNet, _ = net.ParseCIDR("192.168.200.1/24")
 
 func NewLibvirtLXCBackend(state *State, portAlloc map[string]*ports.Allocator, volPath, logPath, initPath string) (Backend, error) {
 	libvirtc, err := libvirt.NewVirConnection("lxc:///")
+	if err != nil {
+		return nil, err
+	}
+
+	pinkertonCtx, err := pinkerton.BuildContext("aufs", "/var/lib/docker")
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +99,7 @@ func NewLibvirtLXCBackend(state *State, portAlloc map[string]*ports.Allocator, v
 		libvirt:    libvirtc,
 		state:      state,
 		ports:      portAlloc,
+		pinkerton:  pinkertonCtx,
 		forwarder:  ports.NewForwarder(net.ParseIP("0.0.0.0"), chain),
 		logs:       make(map[string]*logbuf.Log),
 		containers: make(map[string]*libvirtContainer),
@@ -108,6 +114,7 @@ type LibvirtLXCBackend struct {
 	state     *State
 	ports     map[string]*ports.Allocator
 	forwarder *ports.Forwarder
+	pinkerton *pinkerton.Context
 
 	logsMtx sync.Mutex
 	logs    map[string]*logbuf.Log
@@ -212,7 +219,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 	}()
 
 	g.Log(grohl.Data{"at": "pull_image"})
-	layers, err := pinkerton.Pull(job.Artifact.URI)
+	layers, err := l.pinkertonPull(job.Artifact.URI)
 	if err != nil {
 		g.Log(grohl.Data{"at": "pull_image", "status": "error", "err": err})
 		return err
@@ -233,7 +240,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 	}
 
 	g.Log(grohl.Data{"at": "checkout"})
-	rootPath, err := pinkerton.Checkout(job.ID, imageID)
+	rootPath, err := l.pinkerton.Checkout(job.ID, imageID)
 	if err != nil {
 		g.Log(grohl.Data{"at": "checkout", "status": "error", "err": err})
 		return err
@@ -577,7 +584,7 @@ func (c *libvirtContainer) cleanup() error {
 	if err := syscall.Unmount(filepath.Join(c.RootPath, "etc/resolv.conf"), 0); err != nil {
 		g.Log(grohl.Data{"at": "unmount", "file": "resolv.conf", "status": "error", "err": err})
 	}
-	if err := pinkerton.Cleanup(c.job.ID); err != nil {
+	if err := c.l.pinkerton.Cleanup(c.job.ID); err != nil {
 		g.Log(grohl.Data{"at": "pinkerton", "status": "error", "err": err})
 	}
 	for _, m := range c.job.Config.Mounts {
@@ -821,6 +828,20 @@ func (l *LibvirtLXCBackend) SaveState(e *json.Encoder) error {
 	l.containersMtx.RLock()
 	defer l.containersMtx.RUnlock()
 	return e.Encode(l.containers)
+}
+
+func (l *LibvirtLXCBackend) pinkertonPull(url string) ([]pinkerton.LayerPullInfo, error) {
+	var layers []pinkerton.LayerPullInfo
+	info := make(chan pinkerton.LayerPullInfo)
+	go func() {
+		for l := range info {
+			layers = append(layers, l)
+		}
+	}()
+	if err := l.pinkerton.Pull(url, info); err != nil {
+		return nil, err
+	}
+	return layers, nil
 }
 
 func bindMount(src, dest string, writeable, private bool) error {

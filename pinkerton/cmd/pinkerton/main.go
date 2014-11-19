@@ -1,20 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver"
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/aufs"
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/btrfs"
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/devmapper"
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/vfs"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
-	"github.com/flynn/flynn/pinkerton/store"
+	"github.com/flynn/flynn/pinkerton"
 )
-
-func init() {
-	log.SetFlags(log.Lshortfile)
-}
 
 func main() {
 	usage := `Pinkerton manages Docker images.
@@ -46,24 +38,25 @@ Options:
 
 	args, _ := docopt.Parse(usage, nil, true, "", false)
 
-	root := args.String["--root"]
-	driver, err := graphdriver.GetDriver(args.String["--driver"], root, nil)
+	ctx, err := pinkerton.BuildContext(args.String["--driver"], args.String["--root"])
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	s, err := store.New(root, driver)
-	if err != nil {
-		log.Fatal(err)
-	}
-	ctx := &Context{Store: s, driver: driver, json: args.Bool["--json"]}
 
 	switch {
 	case args.Bool["pull"]:
-		ctx.Pull(args.String["<image-url>"])
+		if err := ctx.Pull(args.String["<image-url>"], pinkerton.InfoPrinter(args.Bool["--json"])); err != nil {
+			log.Fatal(err)
+		}
 	case args.Bool["checkout"]:
-		ctx.Checkout(args.String["<id>"], args.String["<image-id>"])
+		path, err := ctx.Checkout(args.String["<id>"], args.String["<image-id>"])
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(path)
 	case args.Bool["cleanup"]:
-		ctx.Cleanup(args.String["<id>"])
+		if err := ctx.Cleanup(args.String["<id>"]); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
