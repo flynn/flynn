@@ -52,7 +52,6 @@ main() {
     --config-files /etc/flynn/bootstrap-manifest.json \
     --config-files /etc/flynn/version.json \
     --config-files /etc/init/flynn-host.conf \
-    pinkerton/pinkerton=/usr/bin/ \
     host/bin/flynn-host=/usr/bin/ \
     host/bin/flynn-init=/usr/bin/ \
     cli/flynn-cli=/usr/bin/flynn \
