@@ -81,7 +81,7 @@ func compileRequest(r *request) *compiledRequest {
 	}
 	res.Request.URL = uri
 
-	res.Request.Headers = make(map[string]string)
+	res.Request.Headers = make(map[string]string, len(r.req.Header))
 	for k, values := range r.req.Header {
 		if excludeHeaders[k] {
 			continue
@@ -94,7 +94,7 @@ func compileRequest(r *request) *compiledRequest {
 	}
 
 	// response
-	res.Response.Headers = make(map[string]string)
+	res.Response.Headers = make(map[string]string, len(r.res.Header))
 	for k, values := range r.res.Header {
 		if excludeHeaders[k] {
 			continue
