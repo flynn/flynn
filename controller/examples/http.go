@@ -54,6 +54,7 @@ var excludeHeaders = map[string]bool{
 	"Transfer-Encoding": true,
 	"Trailer":           true,
 	"User-Agent":        true,
+	"Date":              true,
 }
 
 func requestMarkdown(r *request) string {
