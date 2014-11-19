@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -57,60 +56,58 @@ var excludeHeaders = map[string]bool{
 	"Date":              true,
 }
 
-func requestMarkdown(r *request) string {
-	buf := &bytes.Buffer{}
+type compiledRequest struct {
+	Request struct {
+		Method  string            `json:"method,omitempty"`
+		URL     string            `json:"url,omitempty"`
+		Headers map[string]string `json:"headers,omitempty"`
+		Body    string            `json:"body,omitempty"`
+	} `json:"request,omitempty"`
+	Response struct {
+		Headers map[string]string `json:"headers,omitempty"`
+		Body    string            `json:"body,omitempty"`
+	} `json:"response,omitempty"`
+}
 
-	// request headers
-	buf.Write([]byte("```text\n"))
-	buf.WriteString(r.req.Method)
-	buf.WriteByte(' ')
+func compileRequest(r *request) *compiledRequest {
+	res := &compiledRequest{}
+
+	// request
+	res.Request.Method = r.req.Method
 
 	uri := r.req.URL.RequestURI()
 	if strings.HasPrefix(uri, "http") {
 		uri = "/" + strings.SplitN(uri[8:], "/", 2)[1]
 	}
-	buf.WriteString(uri)
+	res.Request.URL = uri
 
-	buf.WriteString(" HTTP/1.1\r\n")
-	r.req.Header.WriteSubset(buf, excludeHeaders)
-	buf.Truncate(buf.Len() - 2) // remove the trailing \r\n from headers
-	buf.Write([]byte("\n```\n"))
+	res.Request.Headers = make(map[string]string)
+	for k, values := range r.req.Header {
+		if excludeHeaders[k] {
+			continue
+		}
+		res.Request.Headers[k] = values[0]
+	}
 
-	// request body
 	if r.req.Body != nil {
-		fence(buf, r.reqBody.Bytes())
+		res.Request.Body = r.reqBody.String()
 	}
 
-	// response headers
-	buf.Write([]byte("\n```text\n"))
-	buf.WriteString(r.res.Proto)
-	buf.WriteByte(' ')
-	buf.WriteString(r.res.Status)
-	buf.Write([]byte("\r\n"))
-	r.res.Header["ETag"] = r.res.Header["Etag"]
-	delete(r.res.Header, "Etag")
-	r.res.Header.WriteSubset(buf, excludeHeaders)
-	buf.Truncate(buf.Len() - 2) // remove the trailing \r\n from headers
-	buf.Write([]byte("\n```\n"))
+	// response
+	res.Response.Headers = make(map[string]string)
+	for k, values := range r.res.Header {
+		if excludeHeaders[k] {
+			continue
+		}
+		res.Response.Headers[k] = values[0]
+	}
 
-	// response body
-	resBody := r.resBody.Bytes()
+	resBody := r.resBody.String()
 	if len(resBody) > 0 {
-		fence(buf, resBody)
+		res.Response.Body = resBody
 	}
 
-	return buf.String()
-}
-
-func fence(buf *bytes.Buffer, data []byte) {
-	if len(data) > 0 && (data[0] == '{' || data[0] == '[') {
-		buf.Write([]byte("```json\n"))
-		json.Indent(buf, data, "", "  ")
-	} else {
-		buf.Write([]byte("```text\n"))
-		buf.Write(data)
-	}
-	buf.Write([]byte("\n```\n"))
+	return res
 }
 
 func getRequests() []*request {

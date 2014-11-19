@@ -97,10 +97,10 @@ func main() {
 
 	// TODO: GET /apps/:app_id/jobs/:job_id/log (event-stream)
 
-	res := make(map[string]string)
+	res := make(map[string]*compiledRequest)
 	for _, ex := range examples {
 		ex.f()
-		res[ex.name] = requestMarkdown(getRequests()[0])
+		res[ex.name] = compileRequest(getRequests()[0])
 	}
 
 	var out io.Writer
