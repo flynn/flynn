@@ -2,6 +2,12 @@
   "$schema": "http://json-schema.org/draft-04/schema#",
   "id": "https://flynn.io/schema/controller/job#",
   "type": "object",
+  "examples": [
+    { "name": "job_log" },
+    { "name": "job_list" },
+    { "name": "job_update" },
+    { "name": "job_delete" }
+  ],
   "properties": {
     "id": {
       "$ref": "schema/controller/common#/definitions/id"

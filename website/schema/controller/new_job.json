@@ -2,6 +2,9 @@
   "$schema": "http://json-schema.org/draft-04/schema#",
   "id": "https://flynn.io/schema/controller/new_job#",
   "type": "object",
+  "examples": [
+    { "name": "job_run" }
+  ],
   "properties": {
     "release": {
       "$ref": "schema/controller/common#/definitions/id"

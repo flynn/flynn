@@ -2,6 +2,9 @@
   "$schema": "http://json-schema.org/draft-04/schema#",
   "id": "https://flynn.io/schema/controller/resource_req#",
   "type": "object",
+  "examples": [
+    { "name": "provider_resource_create" }
+  ],
   "properties": {
     "apps": {
       "$ref": "schema/controller/common#/definitions/apps"

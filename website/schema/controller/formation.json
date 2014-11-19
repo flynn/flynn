@@ -2,6 +2,12 @@
   "$schema": "http://json-schema.org/draft-04/schema#",
   "id": "https://flynn.io/schema/controller/formation#",
   "type": "object",
+  "examples": [
+    { "name": "formation_put" },
+    { "name": "formation_get" },
+    { "name": "formation_list" },
+    { "name": "formation_delete" }
+  ],
   "properties": {
     "app": {
       "$ref": "schema/controller/common#/definitions/id"

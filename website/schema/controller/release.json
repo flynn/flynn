@@ -2,6 +2,13 @@
   "$schema": "http://json-schema.org/draft-04/schema#",
   "id": "https://flynn.io/schema/controller/release#",
   "type": "object",
+  "examples": [
+    { "name": "app_initial_release_get" },
+    { "name": "app_release_set" },
+    { "name": "app_release_get" },
+    { "name": "release_create" },
+    { "name": "release_list" }
+  ],
   "properties": {
     "id": {
       "$ref": "schema/controller/common#/definitions/id"

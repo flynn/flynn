@@ -2,6 +2,11 @@
   "$schema": "http://json-schema.org/draft-04/schema#",
   "id": "https://flynn.io/schema/controller/provider#",
   "type": "object",
+  "examples": [
+    { "name": "provider_create" },
+    { "name": "provider_get" },
+    { "name": "provider_list" }
+  ],
   "properties": {
     "id": {
       "$ref": "schema/controller/common#/definitions/id"

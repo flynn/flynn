@@ -2,6 +2,12 @@
   "$schema": "http://json-schema.org/draft-04/schema#",
   "id": "https://flynn.io/schema/controller/key#",
   "type": "object",
+  "examples": [
+    { "name": "key_create" },
+    { "name": "key_get" },
+    { "name": "key_list" },
+    { "name": "key_delete" }
+  ],
   "properties": {
     "id": {
       "$ref": "schema/controller/common#/definitions/id"

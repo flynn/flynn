@@ -2,6 +2,13 @@
   "$schema": "http://json-schema.org/draft-04/schema#",
   "id": "https://flynn.io/schema/controller/app#",
   "type": "object",
+  "examples": [
+    { "name": "app_create" },
+    { "name": "app_get" },
+    { "name": "app_list" },
+    { "name": "app_update" },
+    { "name": "app_delete" }
+  ],
   "properties": {
     "id": {
       "$ref": "schema/controller/common#/definitions/id"
