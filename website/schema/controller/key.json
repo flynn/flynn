@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/key#",
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "schema/controller/common#/definitions/id"
+    },
+    "key": {
+      "type": "string"
+    },
+    "comment": {
+      "type": "string"
+    },
+    "created_at": {
+      "$ref": "schema/controller/common#/definitions/created_at"
+    }
+  }
+}
