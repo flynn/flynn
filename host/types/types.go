@@ -123,6 +123,7 @@ type ActiveJob struct {
 	HostID      string
 	ContainerID string
 	InternalIP  string
+	ForceStop   bool
 	Status      JobStatus
 	StartedAt   time.Time
 	EndedAt     time.Time

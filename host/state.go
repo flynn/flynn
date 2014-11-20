@@ -158,6 +158,19 @@ func (s *State) SetManifestID(jobID, manifestID string) {
 	go s.persist()
 }
 
+func (s *State) SetForceStop(jobID string) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	job, ok := s.jobs[jobID]
+	if !ok {
+		return
+	}
+
+	job.ForceStop = true
+	go s.persist()
+}
+
 func (s *State) SetStatusRunning(jobID string) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()

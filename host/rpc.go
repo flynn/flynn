@@ -49,10 +49,15 @@ func (h *Host) StopJob(id string, res *struct{}) error {
 	if job == nil {
 		return errors.New("host: unknown job")
 	}
-	if job.Status != host.StatusRunning {
-		return errors.New("host: job is not running")
+	switch job.Status {
+	case host.StatusStarting:
+		h.state.SetForceStop(id)
+		return nil
+	case host.StatusRunning:
+		return h.backend.Stop(id)
+	default:
+		return errors.New("host: job is already stopped")
 	}
-	return h.backend.Stop(id)
 }
 
 func (h *Host) StreamEvents(id string, stream rpcplus.Stream) error {
