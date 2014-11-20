@@ -315,7 +315,7 @@ git merge origin/master
 
 make dev
 
-sudo cp {host/bin/flynn-*,pinkerton/pinkerton} /usr/bin
+sudo cp host/bin/flynn-* /usr/bin
 sudo cp host/bin/manifest.json /etc/flynn-host.json
 sudo cp bootstrap/bin/manifest.json /etc/flynn-bootstrap.json
 `[1:]))
