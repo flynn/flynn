@@ -36,10 +36,11 @@ GIT
 
 GIT
   remote: git://github.com/jvatic/static-sprockets.git
-  revision: 86fc3fe0f9537365a05af1eac25960f093758a97
+  revision: a06f4250fab47924b3adada8f6b5d70ff6226264
   branch: master
   specs:
     static-sprockets (0.0.2)
+      mimetype-fu
       rack (~> 1.0)
       rack-putty (= 0.0.1)
       sass
@@ -72,7 +73,7 @@ GEM
       rack (>= 1.0.0)
     rainpress (1.0)
     rake (10.3.2)
-    sass (3.3.10)
+    sass (3.4.5)
     sprockets-helpers (1.1.0)
       sprockets (~> 2.0)
     sprockets-rainpress (0.0.1)

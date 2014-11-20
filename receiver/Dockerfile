@@ -7,4 +7,4 @@ ADD bin/flynn-key-check /bin/flynn-key-check
 ADD bin/gitreceived /bin/gitreceived
 ADD bin/sdutil /bin/sdutil
 
-ENTRYPOINT ["/bin/start-flynn-receiver"]
+CMD ["/bin/start-flynn-receiver"]

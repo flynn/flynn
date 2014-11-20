@@ -1,0 +1,4 @@
+include_rules
+: |> !go |> bin/flynn-dashboard
+: $(ROOT)/sdutil/sdutil |> !cp |> bin/sdutil
+: bin/* app/dashboard.tar |> !docker-layer1 |>

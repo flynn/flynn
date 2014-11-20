@@ -1,5 +1,6 @@
 //= require ../views/main
 //= require ../views/login
+//= require ../views/install-cert
 
 (function () {
 
@@ -11,6 +12,7 @@ Dashboard.routers.main = new (Marbles.Router.createClass({
 	routes: [
 		{ path: "", handler: "root" },
 		{ path: "login", handler: "login", auth: false },
+		{ path: "installcert", handler: "installCert", auth: false },
 	],
 
 	root: function () {
@@ -44,6 +46,23 @@ Dashboard.routers.main = new (Marbles.Router.createClass({
 			Dashboard.Views.Login({
 					onSuccess: performRedirect
 				}), Dashboard.el);
+	},
+
+	installCert: function () {
+		if (window.location.protocol === "https:") {
+			Marbles.history.navigate("");
+			return;
+		}
+		var browserName = navigator.userAgent.match(/((?:Firefox|Chrome|Safari))\/\d+/);
+		browserName = browserName ? (browserName[1] || "").toLowerCase() : "unknown";
+		var osName = navigator.userAgent.match(/(?:OS X|Windows|Linux)/);
+		osName = osName ? osName[0].toLowerCase().replace(/\s+/g, '') : "unknown";
+		React.renderComponent(
+			Dashboard.Views.InstallCert({
+				certURL: Dashboard.config.API_SERVER.replace("https", "http") + "/cert",
+				browserName: browserName,
+				osName: osName
+			}), Dashboard.el);
 	}
 
 }))();

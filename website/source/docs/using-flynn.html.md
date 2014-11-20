@@ -9,10 +9,10 @@ This guide assumes you already have a running Flynn cluster and have configured
 the `flynn` command-line tool. If this is not the case, follow the [Installation
 Guide](/docs/installation) first to get things set up.
 
-It also assumes you are using the `demo.localflynn.com` default domain (which is the
-case if you installed the demo environment). If you are using your own domain,
-substitute `demo.localflynn.com` with whatever you set `DEFAULT_ROUTE_DOMAIN` to
-during the bootstrap process.
+It also assumes you are using the `demo.localflynn.com` default domain (which is
+the case if you installed the demo environment). If you are using your own
+domain, substitute `demo.localflynn.com` with whatever you set `CLUSTER_DOMAIN`
+to during the bootstrap process.
 
 ## Add SSH key
 

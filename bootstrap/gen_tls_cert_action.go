@@ -1,12 +1,7 @@
-// Copyright 2009 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package bootstrap
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/flynn/flynn/pkg/certgen"
 )
@@ -21,8 +16,9 @@ func init() {
 }
 
 type TLSCert struct {
-	Cert string `json:"cert"`
-	Pin  string `json:"pin"`
+	CACert string `json:"ca_cert"`
+	Cert   string `json:"cert"`
+	Pin    string `json:"pin"`
 
 	PrivateKey string `json:"-"`
 }
@@ -34,15 +30,22 @@ func (c *TLSCert) String() string {
 func (a *GenTLSCertAction) Run(s *State) (err error) {
 	data := &TLSCert{}
 	s.StepData[a.ID] = data
-	data.Cert, data.PrivateKey, data.Pin, err = a.generateCert(s)
-	return
-}
 
-func (a *GenTLSCertAction) generateCert(s *State) (cert, privKey, pin string, err error) {
-	certOptions := certgen.Certificate{
-		Lifespan: 365 * 24 * time.Hour,
-		Hosts:    a.Hosts,
+	for i, h := range a.Hosts {
+		a.Hosts[i] = interpolate(s, h)
 	}
-	cert, privKey, pin, err = certgen.Generate(certOptions)
-	return
+	ca, err := certgen.Generate(certgen.Params{IsCA: true})
+	if err != nil {
+		return err
+	}
+	cert, err := certgen.Generate(certgen.Params{Hosts: a.Hosts, CA: ca})
+	if err != nil {
+		return err
+	}
+	data.CACert = ca.PEM
+	data.Cert = cert.PEM
+	data.Pin = cert.Pin
+	data.PrivateKey = cert.KeyPEM
+
+	return err
 }

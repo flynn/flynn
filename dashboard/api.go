@@ -26,15 +26,20 @@ func APIHandler(conf *Config) http.Handler {
 	m.Use(martini.Logger())
 	m.Use(martini.Recovery())
 	m.Use(render.Renderer(render.Options{
-		Directory:  "app/build",
+		Directory:  conf.StaticPath,
 		Extensions: []string{".html"},
 	}))
 	m.Action(r.Handle)
 
 	m.Map(conf)
 
+	httpInterfaceURL := conf.InterfaceURL
+	if strings.HasPrefix(conf.InterfaceURL, "https") {
+		httpInterfaceURL = "http" + strings.TrimPrefix(conf.InterfaceURL, "https")
+	}
+
 	m.Use(cors.Allow(&cors.Options{
-		AllowOrigins:     []string{conf.InterfaceURL},
+		AllowOrigins:     []string{conf.InterfaceURL, httpInterfaceURL},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
 		AllowHeaders:     []string{"Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match"},
 		ExposeHeaders:    []string{"ETag"},
@@ -48,10 +53,11 @@ func APIHandler(conf *Config) http.Handler {
 		r.Delete("/user/session", logout)
 
 		r.Get("/config", getConfig)
+		r.Get("/cert", getCert)
 
-		r.Any("/assets/application.*.js", serveApplicationJs)
+		r.Any("/assets/dashboard.*.js", serveDashboardJs)
 
-		r.Any("/assets.*", martini.Static("app/build/assets", martini.StaticOptions{
+		r.Any("/assets.*", martini.Static(filepath.Join(conf.StaticPath, "assets"), martini.StaticOptions{
 			Prefix: "/assets",
 		}))
 
@@ -109,7 +115,7 @@ var baseConfig = UserConfig{
 func getConfig(rh RequestHelper, conf *Config) {
 	config := baseConfig
 
-	config.Endpoints["cluster_controller"] = fmt.Sprintf("http://%s", conf.ClusterDomain)
+	config.Endpoints["cluster_controller"] = fmt.Sprintf("https://%s", conf.ClusterDomain)
 
 	if rh.IsAuthenticated() {
 		config.User = &ExpandedUser{}
@@ -126,8 +132,13 @@ func getConfig(rh RequestHelper, conf *Config) {
 	rh.JSON(200, config)
 }
 
-func serveApplicationJs(res http.ResponseWriter, req *http.Request, conf *Config) {
-	file := filepath.Join("app/build/assets", filepath.Base(req.URL.Path))
+func getCert(w http.ResponseWriter, conf *Config) {
+	w.Header().Set("Content-Type", "application/x-x509-ca-cert")
+	w.Write(conf.CACert)
+}
+
+func serveDashboardJs(res http.ResponseWriter, req *http.Request, conf *Config) {
+	file := filepath.Join(conf.StaticPath, "assets", filepath.Base(req.URL.Path))
 	f, err := os.Open(file)
 	if err != nil {
 		fmt.Println(err)
@@ -142,9 +153,10 @@ func serveApplicationJs(res http.ResponseWriter, req *http.Request, conf *Config
 	}
 
 	jsConf := strings.NewReader(fmt.Sprintf(`
-    window.FlynnDashboardConfig = {
+    window.DashboardConfig = {
       API_SERVER: "%s",
-      PATH_PREFIX: "%s"
+      PATH_PREFIX: "%s",
+      INSTALL_CERT: true
     };
   `, conf.URL, conf.PathPrefix))
 

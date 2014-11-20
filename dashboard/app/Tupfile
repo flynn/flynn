@@ -1,0 +1,4 @@
+include_rules
+
+: |> ^ docker build dashboard-builder^ ./build.sh image | tee %o |> $(ROOT)/log/docker-dashboard-builder.log <docker>
+: $(ROOT)/log/docker-dashboard-builder.log |> ./build.sh app |> dashboard.tar

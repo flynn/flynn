@@ -5,7 +5,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/flynn/flynn/pkg/certgen"
 )
@@ -13,11 +12,7 @@ import (
 func writeCert(externalIP, dir string) error {
 	fmt.Println("EXTERNAL_IP is", net.ParseIP(externalIP))
 
-	certOptions := certgen.Certificate{
-		Lifespan: 5 * 365 * 24 * time.Hour,
-		Hosts:    []string{externalIP},
-	}
-	cert, privKey, _, err := certgen.Generate(certOptions)
+	cert, err := certgen.Generate(certgen.Params{Hosts: []string{externalIP}})
 	if err != nil {
 		return err
 	}
@@ -26,14 +21,14 @@ func writeCert(externalIP, dir string) error {
 	if err != nil {
 		return err
 	}
-	certOut.Write([]byte(cert))
+	certOut.Write([]byte(cert.PEM))
 	certOut.Close()
 
 	keyOut, err := os.OpenFile(filepath.Join(dir, "server.key"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}
-	keyOut.Write([]byte(privKey))
+	keyOut.Write([]byte(cert.KeyPEM))
 	keyOut.Close()
 
 	return nil
