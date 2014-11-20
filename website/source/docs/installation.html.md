@@ -63,6 +63,10 @@ cluster, you should boot at least 3 nodes to keep etcd efficient
 (see [here](https://github.com/coreos/etcd/blob/v0.4.6/Documentation/optimal-cluster-size.md) for
 an explanation).
 
+Also, jobs running under Flynn will currently not be able to access the internet if there are any
+IPV6 nameservers in `/etc/resolv.conf` on the host (e.g. if you are using an IPV6 enabled DigitalOcean
+droplet). You will need to remove these nameservers before proceeding.
+
 ### Dependencies
 
 Flynn uses Docker images to store job filesystems, and by default uses the AUFS filesystem driver. To
