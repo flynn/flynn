@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -12,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -51,6 +54,10 @@ func NewLibvirtLXCBackend(state *State, portAlloc map[string]*ports.Allocator, v
 	pinkertonCtx, err := pinkerton.BuildContext("aufs", "/var/lib/docker")
 	if err != nil {
 		return nil, err
+	}
+
+	if err := writeResolvConf("/etc/flynn/resolv.conf"); err != nil {
+		return nil, fmt.Errorf("Could not create resolv.conf: %s", err)
 	}
 
 	b := random.Bytes(5)
@@ -141,6 +148,42 @@ type dockerImageConfig struct {
 	Entrypoint []string
 	WorkingDir string
 	Volumes    map[string]struct{}
+}
+
+// writeResolvConf copies /etc/resolv.conf to the given path, removing any IPV6
+// nameservers in the process (as IPV6 routing is currently not supported).
+func writeResolvConf(path string) error {
+	// do nothing if the file exists
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	file, err := os.Open("/etc/resolv.conf")
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	var buf bytes.Buffer
+	s := bufio.NewScanner(file)
+	for s.Scan() {
+		line := strings.Split(s.Text(), " ")
+		if len(line) > 0 && line[0] == "nameserver" && isIPv6(line[1]) {
+			continue
+		}
+		buf.Write(s.Bytes())
+		buf.WriteByte('\n')
+	}
+	if err := ioutil.WriteFile(path, buf.Bytes(), 0644); err != nil {
+		return err
+	}
+	return nil
+}
+
+func isIPv6(s string) bool {
+	ip := net.ParseIP(s)
+	return ip != nil && ip.To4() == nil
 }
 
 func writeContainerEnv(path string, envs ...map[string]string) error {
@@ -256,7 +299,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 		g.Log(grohl.Data{"at": "mkdir", "dir": "etc", "status": "error", "err": err})
 		return err
 	}
-	if err := bindMount("/etc/resolv.conf", filepath.Join(rootPath, "etc/resolv.conf"), false, true); err != nil {
+	if err := bindMount("/etc/flynn/resolv.conf", filepath.Join(rootPath, "etc/resolv.conf"), false, true); err != nil {
 		g.Log(grohl.Data{"at": "mount", "file": "resolv.conf", "status": "error", "err": err})
 		return err
 	}
