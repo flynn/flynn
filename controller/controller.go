@@ -10,9 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
@@ -27,6 +25,7 @@ import (
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/pkg/rpcplus"
+	"github.com/flynn/flynn/pkg/shutdown"
 	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
 )
@@ -71,14 +70,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Unregister services on exit
-	go func() {
-		ch := make(chan os.Signal, 1)
-		signal.Notify(ch, os.Interrupt, os.Signal(syscall.SIGTERM))
-		<-ch
+	shutdown.BeforeExit(func() {
 		discoverd.Unregister("flynn-controller", addr)
-		os.Exit(0)
-	}()
+	})
 
 	handler, _ := appHandler(handlerConfig{db: db, cc: cc, sc: sc, dc: discoverd.DefaultClient, key: os.Getenv("AUTH_KEY")})
 	log.Fatal(http.ListenAndServe(addr, handler))

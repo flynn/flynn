@@ -8,9 +8,10 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/rpcplus"
 	rpc "github.com/flynn/flynn/pkg/rpcplus/comborpc"
+	"github.com/flynn/flynn/pkg/shutdown"
 )
 
-func serveHTTP(host *Host, attach *attachHandler, sh *shutdownHandler) error {
+func serveHTTP(host *Host, attach *attachHandler, sh *shutdown.Handler) error {
 	if err := rpc.Register(host); err != nil {
 		return err
 	}
