@@ -81,32 +81,49 @@ sudo ./flynn-test \
 ### Dependencies
 
 ```text
-apt-add-repository 'deb http://ppa.launchpad.net/anatol/tup/ubuntu precise main'
-apt-key adv --keyserver keyserver.ubuntu.com --recv E601AAF9486D3664
+apt-add-repository 'deb http://ppa.launchpad.net/titanous/tup/ubuntu trusty main'
+apt-key adv --keyserver keyserver.ubuntu.com --recv 27947298A222DFA46E207200B34FBCAA90EA7F4E
 apt-get update
 apt-get install -y zerofree qemu qemu-kvm tup
 ```
 
-### Updating the runner
+### Install the runner
 
-With the updated runner code checked out in your CI repo, build the runner:
+Check out the Flynn git repo and run the following to install the runner
+into `/opt/flynn-test`:
 
-```text
-cd /path/to/flynn/test
-go build -o bin/flynn-test-runner ./runner
+```
+sudo test/scripts/install
 ```
 
-If you need to rebuild the root filesystem, first stop the runner and unmount the build directory:
+Add the following credentials to `/opt/flynn-test/.credentials`:
+
+```
+export AUTH_KEY=XXXXXXXXXX
+export GITHUB_TOKEN=XXXXXXXXXX
+export AWS_ACCESS_KEY_ID=XXXXXXXXXX
+export AWS_SECRET_ACCESS_KEY=XXXXXXXXXX
+```
+
+Now start the runner:
+
+```
+sudo start flynn-test
+```
+
+### Updating the runner
+
+If the runner code has been changed, restart the Upstart job to pull in the new changes:
+
+```
+sudo restart flynn-test
+```
+
+If the rootfs needs rebuilding, you will need to remove the existing image before starting
+the runner again:
 
 ```
 sudo stop flynn-test
-sudo umount /opt/flynn-test/build
+sudo rm -rf /opt/flynn-test/build/{rootfs.img,vmlinuz}
+sudo start flynn-test
 ```
-
-Run the update script:
-
-```
-sudo scripts/update-runner.sh
-```
-
-Since `/etc/default/flynn-test` may contain secrets, the above does not change it so you may have to make some manual edits if `scripts/defaults.conf` has changed.

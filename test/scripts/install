@@ -1,0 +1,49 @@
+#!/bin/bash
+
+set -e
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+source "${ROOT}/script/lib/ui.sh"
+
+main() {
+  local user="flynn-test"
+  local dir="/opt/flynn-test"
+  local src_dir="${dir}/src/github.com/flynn/flynn"
+  local build_dir="${dir}/build"
+
+  info "creating ${user} user"
+  if ! id "${user}" &>/dev/null; then
+    useradd --system --home "${dir}" --user-group --groups "kvm" -M "${user}"
+  fi
+
+  info "cloning Flynn repo"
+  if [[ ! -d "${src_dir}/.git" ]]; then
+    rm -rf "${src_dir}"
+    git clone --quiet "https://github.com/flynn/flynn.git" "${src_dir}"
+  fi
+
+  info "mounting build directory"
+  if ! mount | grep -q "tmpfs on ${build_dir}"; then
+    mount_tmpfs "${build_dir}"
+  fi
+
+  info "fixing permissions"
+  chown -R "${user}:${user}" "${dir}"
+
+  info "installing Upstart job"
+  cp "${src_dir}/test/scripts/upstart.conf" "/etc/init/flynn-test.conf"
+  initctl reload-configuration
+
+  info
+  info "install finished!"
+  info "you should add credentials to ${dir}/.credentials then start flynn-test (sudo start flynn-test)"
+}
+
+mount_tmpfs() {
+  local dir=$1
+  local size="32G"
+
+  mount -t tmpfs -o "size=${size}" tmpfs "${dir}"
+}
+
+main $@
