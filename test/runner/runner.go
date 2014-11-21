@@ -24,6 +24,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/handlers"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/test/arg"
 	"github.com/flynn/flynn/test/cluster"
 )
@@ -100,6 +101,8 @@ func (r *Runner) start() error {
 		return err
 	}
 
+	sh := shutdown.NewHandler()
+
 	bc := r.bc
 	bc.Network, err = r.allocateNet()
 	if err != nil {
@@ -109,14 +112,14 @@ func (r *Runner) start() error {
 		return fmt.Errorf("could not build flynn: %s", err)
 	}
 	r.releaseNet(bc.Network)
-	defer os.RemoveAll(r.rootFS)
+	sh.BeforeExit(func() { os.RemoveAll(r.rootFS) })
 
 	db, err := bolt.Open(args.DBPath, 0600, &bolt.Options{Timeout: 5 * time.Second})
 	if err != nil {
 		return fmt.Errorf("could not open db: %s", err)
 	}
 	r.db = db
-	defer r.db.Close()
+	sh.BeforeExit(func() { r.db.Close() })
 
 	if err := r.db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(dbBucket)

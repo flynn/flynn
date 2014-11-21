@@ -1,15 +1,11 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
-	"os/signal"
 	"strings"
-	"sync"
-	"syscall"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
@@ -22,6 +18,7 @@ import (
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	rpc "github.com/flynn/flynn/pkg/rpcplus/comborpc"
+	"github.com/flynn/flynn/pkg/shutdown"
 )
 
 // Attempts is the attempt strategy that is used to connect to discoverd.
@@ -121,7 +118,7 @@ func runDaemon(args *docopt.Args) {
 		"udp": ports.NewAllocator(55000, 65535),
 	}
 
-	sh := newShutdownHandler()
+	sh := shutdown.NewHandler()
 	state := NewState(hostID)
 	var backend Backend
 	var err error
@@ -310,51 +307,4 @@ func syncScheduler(scheduler sampiSyncClient, events <-chan host.Event) {
 			grohl.Log(grohl.Data{"fn": "scheduler_event", "at": "remove_job", "status": "error", "err": err, "job.id": event.JobID})
 		}
 	}
-}
-
-func newShutdownHandler() *shutdownHandler {
-	s := &shutdownHandler{done: make(chan struct{})}
-	go s.wait()
-	return s
-}
-
-type shutdownHandler struct {
-	Active bool
-
-	mtx  sync.RWMutex
-	done chan struct{}
-}
-
-func (h *shutdownHandler) BeforeExit(f func()) {
-	h.mtx.RLock()
-	go func() {
-		<-h.done
-		f()
-		h.mtx.RUnlock()
-	}()
-}
-
-func (h *shutdownHandler) Fatal(v ...interface{}) {
-	h.shutdown(errors.New(fmt.Sprint(v...)))
-}
-
-func (h *shutdownHandler) wait() {
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt, os.Signal(syscall.SIGTERM))
-	sig := <-ch
-	grohl.Log(grohl.Data{"fn": "shutdown", "at": "start", "signal": fmt.Sprint(sig)})
-	h.shutdown(nil)
-}
-
-func (h *shutdownHandler) shutdown(err error) {
-	h.Active = true
-	// signal exit handlers
-	close(h.done)
-	// wait for exit handlers to finish
-	h.mtx.Lock()
-	if err != nil {
-		log.New(os.Stderr, "", log.Lshortfile|log.Lmicroseconds).Output(2, err.Error())
-		os.Exit(1)
-	}
-	os.Exit(0)
 }
