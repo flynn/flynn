@@ -84,11 +84,17 @@ func printJobs(jobs sortJobs, out io.Writer) {
 		"CONTROLLER APP",
 		"CONTROLLER TYPE",
 	)
+
 	for _, job := range jobs {
+		var started string
+		if !job.StartedAt.IsZero() {
+			started = units.HumanDuration(time.Now().UTC().Sub(job.StartedAt)) + " ago"
+		}
+
 		listRec(w,
 			clusterJobID(job),
 			job.Status,
-			units.HumanDuration(time.Now().UTC().Sub(job.StartedAt))+" ago",
+			started,
 			job.Job.Metadata["flynn-controller.app_name"],
 			job.Job.Metadata["flynn-controller.type"],
 		)
