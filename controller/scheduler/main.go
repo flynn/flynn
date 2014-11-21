@@ -750,7 +750,8 @@ func (f *Formation) remove(n int, name string, hostID string) {
 		}
 		// TODO: robust host handling
 		if err := f.c.hosts.Get(job.HostID).StopJob(job.ID); err != nil {
-			// TODO: log/handle error
+			g.Log(grohl.Data{"at": "error", "err": err.Error()})
+			// TODO: handle error
 		}
 		f.jobs.Remove(job)
 		if i++; i == n {
