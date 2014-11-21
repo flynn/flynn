@@ -7,4 +7,5 @@ RUN apt-get update &&\
     apt-get install -y nodejs &&\
     gem install bundler --no-rdoc --no-ri &&\
     cd /app &&\
-    bundle install --deployment
+    bundle install --deployment &&\
+    chmod -R o+rw /app
