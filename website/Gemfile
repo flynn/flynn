@@ -11,6 +11,8 @@ gem 'redcarpet'
 gem 'pygments.rb'
 gem 'activesupport'
 
+gem 'json-pointer'
+
 gem 'fly', :git => 'git://github.com/cupcake/fly.git', :branch => 'flynn'
 gem "cupcake-icons", :git => "git://github.com/cupcake/cupcake-icons.git", :branch => "master"
 
