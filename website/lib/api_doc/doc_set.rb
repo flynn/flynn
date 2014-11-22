@@ -2,15 +2,15 @@ require 'yajl'
 
 module APIDoc
   class DocSet
-    def self.compile(name, id, output_path)
-      markdown = new(name, id).to_markdown
+    def self.compile(name, id, output_path, exclude = [])
+      markdown = new(name, id, exclude).to_markdown
       File.open(output_path, 'w') do |file|
         file.write(markdown)
       end
     end
 
-    def initialize(name, id)
-      @schemas = Schema.find_all(id)
+    def initialize(name, id, exclude = [])
+      @schemas = Schema.find_all(id).reject { |s| exclude.include?(s.id) }
       @name = name
       @id = id
       @examples = {}

@@ -18,10 +18,11 @@ module APIDoc
     end.map do |path|
       'https://flynn.io/schema/'+ File.split(path).last
     end
+    exclude_schemas = %w[ https://flynn.io/schema/controller/common# ]
     docset_paths.each do |id|
       name = File.split(id).last
       output_path = File.join(PROJECT_ROOT, 'source', 'docs', name+'.md')
-      DocSet.compile(name, id, output_path)
+      DocSet.compile(name, id, output_path, exclude_schemas)
     end
   end
 end
