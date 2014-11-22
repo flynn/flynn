@@ -51,6 +51,17 @@ module APIDoc
         request = data['request']
         response = data['response']
 
+        markdown << %(<article class="example">)
+        markdown << %(<header>)
+        markdown << %(<h3>&nbsp;</h3>)
+        markdown << %(</header>)
+
+        markdown << %(<section class="example-request">)
+        markdown << %(<header>)
+        markdown << %(<h4>Request</h4>)
+        markdown << %(</header>)
+        markdown << ''
+
         # request headers
         markdown << "```"
         markdown << [request['method'], request['url'], 'HTTP/1.1'].join(' ')
@@ -63,6 +74,15 @@ module APIDoc
           markdown << ''
         end
 
+        markdown << ''
+        markdown << %(</section>)
+
+        markdown << %(<section class="example-response">)
+        markdown << %(<header>)
+        markdown << %(<h4>Response</h4>)
+        markdown << %(</header>)
+        markdown << ''
+
         # response headers
         markdown << "```"
         markdown << pretty_headers(response['headers'])
@@ -71,6 +91,10 @@ module APIDoc
         # response body
         markdown << markdown_body(response['body'], response['headers']['Content-Type'])
         markdown << ''
+
+        markdown << %(</section>)
+
+        markdown << %(</article>)
 
         markdown.join("\n")
       end
