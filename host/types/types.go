@@ -61,16 +61,17 @@ type JobResources struct {
 }
 
 type ContainerConfig struct {
-	TTY        bool
-	Stdin      bool
-	Data       bool
-	Entrypoint []string
-	Cmd        []string
-	Env        map[string]string
-	Mounts     []Mount
-	Ports      []Port
-	WorkingDir string
-	Uid        int
+	TTY         bool
+	Stdin       bool
+	Data        bool
+	Entrypoint  []string
+	Cmd         []string
+	Env         map[string]string
+	Mounts      []Mount
+	Ports       []Port
+	WorkingDir  string
+	Uid         int
+	HostNetwork bool
 }
 
 type Port struct {
