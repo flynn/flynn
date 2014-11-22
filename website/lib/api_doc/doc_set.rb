@@ -17,8 +17,18 @@ module APIDoc
       load_examples!
     end
 
+    def frontmatter
+      str = []
+      str << %(---)
+      str << %(title: #{capitalize(@name)})
+      str << %(layout: docs)
+      str << %(---)
+      str << ''
+      str.join("\n")
+    end
+
     def to_markdown
-      @schemas.map do |schema|
+      frontmatter + @schemas.map do |schema|
         [ schema.to_markdown,
           schema['examples'].to_a.map { |item|
             name = item['name']
@@ -30,6 +40,10 @@ module APIDoc
     end
 
     private
+
+    def capitalize(str)
+      str[0].upcase + str[1..-1]
+    end
 
     def load_examples!
       path = File.join(PROJECT_ROOT, 'examples', "#{@name}.json")
