@@ -143,16 +143,16 @@ package the application into the `target` directory.
 
 ### Java Runtime
 
-By default, Flynn uses OpenJDK 6 to run Java applications. OpenJDK 7 and 8 are
+By default, Flynn uses OpenJDK 8 to run Java applications. OpenJDK 6 and 7 are
 also available, and can be used by setting `java.runtime.version` in a
 `system.properties` file in the root directory:
 
 ```
+! OpenJDK 6
+java.runtime.version=1.6
+
 ! OpenJDK 7
 java.runtime.version=1.7
-
-! OpenJDK 8
-java.runtime.version=1.8
 ```
 
 ## Process Types
