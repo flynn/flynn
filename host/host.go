@@ -189,7 +189,7 @@ func runDaemon(args *docopt.Args) {
 		}
 
 		if d, ok := services["discoverd"]; ok {
-			discAddr = fmt.Sprintf("%s:%d", d.InternalIP, d.TCPPorts[0])
+			discAddr = fmt.Sprintf("%s:%d", d.ExternalIP, d.TCPPorts[0])
 			var disc *discoverd.Client
 			err = Attempts.Run(func() (err error) {
 				disc, err = discoverd.NewClientWithAddr(discAddr)
