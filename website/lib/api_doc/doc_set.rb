@@ -86,8 +86,7 @@ module APIDoc
 
       def markdown_body(body, content_type)
         markdown = []
-        body = body.to_s
-        if content_type =~ /\bjson/i
+        if content_type =~ /\bjson/i && body
           markdown << "```json"
           markdown << Yajl::Encoder.encode(Yajl::Parser.parse(body), :pretty => true, :indent => '  ')
         else
