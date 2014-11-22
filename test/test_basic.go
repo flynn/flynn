@@ -148,16 +148,23 @@ func (s *BuildpackSuite) SetUpSuite(t *c.C) {
 	t.Assert(err, c.IsNil)
 	t.Assert(conf.Clusters, c.HasLen, 1)
 	s.client = newControllerClient(t, conf.Clusters[0])
+
+	s.ssh, err = genSSHKey()
+	t.Assert(err, c.IsNil)
+	t.Assert(s.Flynn("key", "add", s.ssh.Pub), Succeeds)
+}
+
+func (s *BuildpackSuite) TestEnvDir(t *c.C) {
+	s.initApp(t, "env-dir")
+	t.Assert(s.Flynn("create"), Succeeds)
+	t.Assert(s.Flynn("env", "set", "FOO=bar", "BUILDPACK_URL=https://github.com/kr/heroku-buildpack-inline"), Succeeds)
+
+	push := s.Git("push", "flynn", "master")
+	t.Assert(push, Succeeds)
+	t.Assert(push, OutputContains, "bar")
 }
 
 func (s *BuildpackSuite) TestBuildpacks(t *c.C) {
-	var err error
-	s.ssh, err = genSSHKey()
-	t.Assert(err, c.IsNil)
-	defer s.ssh.Cleanup()
-
-	t.Assert(s.Flynn("key", "add", s.ssh.Pub), Succeeds)
-
 	buildpacks := []struct {
 		Name      string   `json:"name"`
 		Resources []string `json:"resources"`
