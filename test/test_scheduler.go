@@ -243,7 +243,7 @@ func waitForJobEvents(t *c.C, events chan *ct.JobEvent, diff map[string]int) (la
 			if processesEqual(diff, actual) {
 				return
 			}
-		case <-time.After(5 * time.Second):
+		case <-time.After(20 * time.Second):
 			t.Fatal("timed out waiting for job events: ", diff)
 		}
 	}
