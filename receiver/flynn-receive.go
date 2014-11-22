@@ -170,7 +170,7 @@ func appendEnvDir(stdin io.Reader, pipe io.WriteCloser, env map[string]string) {
 	for key, value := range env {
 		hdr := &tar.Header{
 			Name:    path.Join("env", key),
-			Mode:    0400,
+			Mode:    0644,
 			ModTime: time.Now(),
 			Size:    int64(len(value)),
 		}

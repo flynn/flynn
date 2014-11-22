@@ -63,6 +63,7 @@ if [[ -f "${env_cookie}" ]]; then
   mv app env /tmp
   rsync -aq /tmp/app/ .
   rm -rf /tmp/app
+  envdir="true"
 fi
 
 # In heroku, there are two separate directories, and some
@@ -114,7 +115,7 @@ else
 fi
 
 ## Buildpack compile
-if [[ -f "${env_cookie}" ]]; then
+if [[ -n "${envdir}" ]]; then
   run_unprivileged ${selected_buildpack}/bin/compile \
     "${build_root}" \
     "${cache_root}" \
