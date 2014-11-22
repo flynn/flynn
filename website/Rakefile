@@ -1,7 +1,7 @@
 lib = File.expand_path('../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 
-task compile: [:cli, :copy_contributing] do
+task compile: [:cli, :copy_contributing, :compile_api_doc] do
   sh 'middleman build --no-clean'
 end
 
