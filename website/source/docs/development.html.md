@@ -248,10 +248,10 @@ This will:
 * Boot a single node Flynn cluster by running `script/bootstrap-flynn`
 * Run the integration test binary (i.e. `bin/flynn-test`)
 
-To run an individual integration test (e.g. `TestBasic`):
+To run an individual integration test (e.g. `TestEnvDir`):
 
 ```
-$ script/run-integration-tests TestBasic
+$ script/run-integration-tests TestEnvDir
 ```
 
 ## Releasing Flynn
