@@ -1,6 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-04/schema#",
   "id": "https://flynn.io/schema/controller/new_job#",
+  "title": "New Job",
+  "description": "FIXME",
   "type": "object",
   "examples": [
     { "name": "job_run" }

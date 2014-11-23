@@ -1,6 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-04/schema#",
   "id": "https://flynn.io/schema/controller/artifact#",
+  "title": "Artifact",
+  "description": "FIXME",
   "type": "object",
   "examples": [
      { "name": "artifact_create" },

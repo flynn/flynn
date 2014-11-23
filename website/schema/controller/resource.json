@@ -1,6 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-04/schema#",
   "id": "https://flynn.io/schema/controller/resource#",
+  "title": "Resource",
+  "description": "FIXME",
   "type": "object",
   "examples": [
     { "name": "app_resource_list" },
