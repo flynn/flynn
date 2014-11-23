@@ -202,9 +202,10 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 				URI:  service.Image,
 			},
 			Config: host.ContainerConfig{
-				Entrypoint: service.Entrypoint,
-				Cmd:        args,
-				Env:        data.Env,
+				Entrypoint:  service.Entrypoint,
+				Cmd:         args,
+				Env:         data.Env,
+				HostNetwork: true,
 			},
 		}
 		if job.Config.Env == nil {

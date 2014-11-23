@@ -244,16 +244,18 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "run", "job.id": job.ID})
 	g.Log(grohl.Data{"at": "start", "job.artifact.uri": job.Artifact.URI, "job.cmd": job.Config.Cmd})
 
-	ip, err := ipallocator.RequestIP(bridgeNet, nil)
-	if err != nil {
-		g.Log(grohl.Data{"at": "request_ip", "status": "error", "err": err})
-		return err
-	}
 	container := &libvirtContainer{
 		l:    l,
 		job:  job,
-		IP:   *ip,
 		done: make(chan struct{}),
+	}
+	if !job.Config.HostNetwork {
+		ip, err := ipallocator.RequestIP(bridgeNet, nil)
+		container.IP = *ip
+		if err != nil {
+			g.Log(grohl.Data{"at": "request_ip", "status": "error", "err": err})
+			return err
+		}
 	}
 	defer func() {
 		if err != nil {
@@ -333,42 +335,44 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 	if job.Config.Env == nil {
 		job.Config.Env = make(map[string]string)
 	}
-	for i, p := range job.Config.Ports {
-		if p.Proto != "tcp" && p.Proto != "udp" {
-			return fmt.Errorf("unknown port proto %q", p.Proto)
-		}
-
-		if 0 < p.RangeEnd && p.RangeEnd < p.Port {
-			return fmt.Errorf("port range end %d cannot be less than port %d", p.RangeEnd, p.Port)
-		}
-
-		var port uint16
-		if p.Port <= 0 {
-			job.Config.Ports[i].RangeEnd = 0
-			port, err = l.ports[p.Proto].Get()
-		} else if p.RangeEnd > p.Port {
-			for j := p.RangeEnd; j >= p.Port; j-- {
-				port, err = l.ports[p.Proto].GetPort(uint16(j))
-				if err != nil {
-					break
-				}
+	if !job.Config.HostNetwork {
+		for i, p := range job.Config.Ports {
+			if p.Proto != "tcp" && p.Proto != "udp" {
+				return fmt.Errorf("unknown port proto %q", p.Proto)
 			}
-		} else {
-			port, err = l.ports[p.Proto].GetPort(uint16(p.Port))
-		}
-		if err != nil {
-			g.Log(grohl.Data{"at": "alloc_port", "status": "error", "err": err})
-			return err
-		}
-		job.Config.Ports[i].Port = int(port)
-		if job.Config.Ports[i].RangeEnd == 0 {
-			job.Config.Ports[i].RangeEnd = int(port)
-		}
 
-		if i == 0 {
-			job.Config.Env["PORT"] = strconv.Itoa(int(port))
+			if 0 < p.RangeEnd && p.RangeEnd < p.Port {
+				return fmt.Errorf("port range end %d cannot be less than port %d", p.RangeEnd, p.Port)
+			}
+
+			var port uint16
+			if p.Port <= 0 {
+				job.Config.Ports[i].RangeEnd = 0
+				port, err = l.ports[p.Proto].Get()
+			} else if p.RangeEnd > p.Port {
+				for j := p.RangeEnd; j >= p.Port; j-- {
+					port, err = l.ports[p.Proto].GetPort(uint16(j))
+					if err != nil {
+						break
+					}
+				}
+			} else {
+				port, err = l.ports[p.Proto].GetPort(uint16(p.Port))
+			}
+			if err != nil {
+				g.Log(grohl.Data{"at": "alloc_port", "status": "error", "err": err})
+				return err
+			}
+			job.Config.Ports[i].Port = int(port)
+			if job.Config.Ports[i].RangeEnd == 0 {
+				job.Config.Ports[i].RangeEnd = int(port)
+			}
+
+			if i == 0 {
+				job.Config.Env["PORT"] = strconv.Itoa(int(port))
+			}
+			job.Config.Env[fmt.Sprintf("PORT_%d", i)] = strconv.Itoa(int(port))
 		}
-		job.Config.Env[fmt.Sprintf("PORT_%d", i)] = strconv.Itoa(int(port))
 	}
 
 	g.Log(grohl.Data{"at": "write_env"})
@@ -388,9 +392,12 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 		return err
 	}
 
-	args := []string{
-		"-i", ip.String() + "/24",
-		"-g", bridgeAddr.String(),
+	var args []string
+	if !job.Config.HostNetwork {
+		args = append(args,
+			"-i", container.IP.String()+"/24",
+			"-g", bridgeAddr.String(),
+		)
 	}
 	if job.Config.TTY {
 		args = append(args, "-tty")
@@ -421,7 +428,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 	}
 
 	l.state.AddJob(job)
-	l.state.SetInternalIP(job.ID, ip.String())
+	l.state.SetInternalIP(job.ID, container.IP.String())
 	domain := &lt.Domain{
 		Type:   "lxc",
 		Name:   job.ID,
@@ -438,14 +445,17 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 				Source: lt.FSRef{Dir: rootPath},
 				Target: lt.FSRef{Dir: "/"},
 			}},
-			Interfaces: []lt.Interface{{
-				Type:   "network",
-				Source: lt.InterfaceSrc{Network: libvirtNetName},
-			}},
 			Consoles: []lt.Console{{Type: "pty"}},
 		},
 		OnPoweroff: "preserve",
 		OnCrash:    "preserve",
+	}
+
+	if !job.Config.HostNetwork {
+		domain.Devices.Interfaces = []lt.Interface{{
+			Type:   "network",
+			Source: lt.InterfaceSrc{Network: libvirtNetName},
+		}}
 	}
 
 	g.Log(grohl.Data{"at": "define_domain"})
@@ -479,22 +489,24 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 		return err
 	}
 
-	if len(domain.Devices.Interfaces) == 0 || domain.Devices.Interfaces[0].Target == nil ||
-		domain.Devices.Interfaces[0].Target.Dev == "" {
-		err = errors.New("domain config missing interface")
-		g.Log(grohl.Data{"at": "enable_hairpin", "status": "error", "err": err})
-		return err
-	}
-	iface := domain.Devices.Interfaces[0].Target.Dev
-	if err := enableHairpinMode(iface); err != nil {
-		g.Log(grohl.Data{"at": "enable_hairpin", "status": "error", "err": err})
-		return err
-	}
-
-	for _, p := range job.Config.Ports {
-		if err := l.forwarder.Add(&net.TCPAddr{IP: *ip, Port: p.Port}, p.RangeEnd, p.Proto); err != nil {
-			g.Log(grohl.Data{"at": "forward_port", "port": p.Port, "status": "error", "err": err})
+	if !job.Config.HostNetwork {
+		if len(domain.Devices.Interfaces) == 0 || domain.Devices.Interfaces[0].Target == nil ||
+			domain.Devices.Interfaces[0].Target.Dev == "" {
+			err = errors.New("domain config missing interface")
+			g.Log(grohl.Data{"at": "enable_hairpin", "status": "error", "err": err})
 			return err
+		}
+		iface := domain.Devices.Interfaces[0].Target.Dev
+		if err := enableHairpinMode(iface); err != nil {
+			g.Log(grohl.Data{"at": "enable_hairpin", "status": "error", "err": err})
+			return err
+		}
+
+		for _, p := range job.Config.Ports {
+			if err := l.forwarder.Add(&net.TCPAddr{IP: container.IP, Port: p.Port}, p.RangeEnd, p.Proto); err != nil {
+				g.Log(grohl.Data{"at": "forward_port", "port": p.Port, "status": "error", "err": err})
+				return err
+			}
 		}
 	}
 
@@ -640,18 +652,20 @@ func (c *libvirtContainer) cleanup() error {
 			g.Log(grohl.Data{"at": "unmount", "location": m.Location, "status": "error", "err": err})
 		}
 	}
-	for _, p := range c.job.Config.Ports {
-		if err := c.l.forwarder.Remove(&net.TCPAddr{IP: c.IP, Port: p.Port}, p.RangeEnd, p.Proto); err != nil {
-			g.Log(grohl.Data{"at": "iptables", "status": "error", "err": err, "port": p.Port})
+	if !c.job.Config.HostNetwork {
+		for _, p := range c.job.Config.Ports {
+			if err := c.l.forwarder.Remove(&net.TCPAddr{IP: c.IP, Port: p.Port}, p.RangeEnd, p.Proto); err != nil {
+				g.Log(grohl.Data{"at": "iptables", "status": "error", "err": err, "port": p.Port})
+			}
+			if p.RangeEnd == 0 {
+				p.RangeEnd = p.Port
+			}
+			for i := p.Port; i <= p.RangeEnd; i++ {
+				c.l.ports[p.Proto].Put(uint16(i))
+			}
 		}
-		if p.RangeEnd == 0 {
-			p.RangeEnd = p.Port
-		}
-		for i := p.Port; i <= p.RangeEnd; i++ {
-			c.l.ports[p.Proto].Put(uint16(i))
-		}
+		ipallocator.ReleaseIP(bridgeNet, &c.IP)
 	}
-	ipallocator.ReleaseIP(bridgeNet, &c.IP)
 	g.Log(grohl.Data{"at": "finish"})
 	return nil
 }

@@ -316,6 +316,10 @@ func setupHostname(args *ContainerInitArgs) error {
 }
 
 func setupNetworking(args *ContainerInitArgs) error {
+	if args.ip == "" {
+		return nil
+	}
+
 	// loopback
 	iface, err := net.InterfaceByName("lo")
 	if err != nil {
@@ -324,25 +328,23 @@ func setupNetworking(args *ContainerInitArgs) error {
 	if err := netlink.NetworkLinkUp(iface); err != nil {
 		return fmt.Errorf("Unable to set up networking: %v", err)
 	}
-	if args.ip != "" {
-		if iface, err = net.InterfaceByName("eth0"); err != nil {
+	if iface, err = net.InterfaceByName("eth0"); err != nil {
+		return fmt.Errorf("Unable to set up networking: %v", err)
+	}
+	ip, ipNet, err := net.ParseCIDR(args.ip)
+	if err != nil {
+		return fmt.Errorf("Unable to set up networking: %v", err)
+	}
+	if err := netlink.NetworkLinkAddIp(iface, ip, ipNet); err != nil {
+		return fmt.Errorf("Unable to set up networking: %v", err)
+	}
+	if args.gateway != "" {
+		if err := netlink.AddDefaultGw(args.gateway, "eth0"); err != nil {
 			return fmt.Errorf("Unable to set up networking: %v", err)
 		}
-		ip, ipNet, err := net.ParseCIDR(args.ip)
-		if err != nil {
-			return fmt.Errorf("Unable to set up networking: %v", err)
-		}
-		if err := netlink.NetworkLinkAddIp(iface, ip, ipNet); err != nil {
-			return fmt.Errorf("Unable to set up networking: %v", err)
-		}
-		if args.gateway != "" {
-			if err := netlink.AddDefaultGw(args.gateway, "eth0"); err != nil {
-				return fmt.Errorf("Unable to set up networking: %v", err)
-			}
-		}
-		if err := netlink.NetworkLinkUp(iface); err != nil {
-			return fmt.Errorf("Unable to set up networking: %v", err)
-		}
+	}
+	if err := netlink.NetworkLinkUp(iface); err != nil {
+		return fmt.Errorf("Unable to set up networking: %v", err)
 	}
 
 	return nil
