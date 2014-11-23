@@ -45,22 +45,23 @@ module APIDoc
     end
 
     def find_example(id)
-      name = id.split('/').last.sub(/#\Z/, '')
-      @examples[name]
+      @examples[id]
     end
 
     def load_examples!
       path = File.join(PROJECT_ROOT, 'examples', "#{@name}.json")
       Yajl::Parser.parse(File.read(path)).each_pair do |k,v|
-        @examples[k] = Example.new(v)
+        id = "https://flynn.io/schema/examples/#{@name}/#{k}#"
+        @examples[id] = Example.new(id, v)
       end
     end
 
     class Example
-      attr_reader :data
+      attr_reader :data, :schema
 
-      def initialize(data)
+      def initialize(id, data)
         @data = data
+        @schema = Schema.find(id)
       end
 
       def to_markdown
@@ -71,8 +72,14 @@ module APIDoc
 
         markdown << %(<article class="example">)
         markdown << %(<header>)
-        markdown << %(<h3>&nbsp;</h3>)
+        markdown << %(## #{schema['title']})
         markdown << %(</header>)
+
+        if schema['description']
+          markdown << ''
+          markdown << schema['description']
+          markdown << ''
+        end
 
         markdown << %(<section class="example-request">)
         markdown << %(<header>)

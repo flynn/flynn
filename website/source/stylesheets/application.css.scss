@@ -252,9 +252,17 @@ h1, h2, h3, h4, h5, h6 {
   > header {
     background-color: $dirtyWhiteColor;
     margin: 0;
+    > p {
+      margin: 0;
+      padding: 0;
+    }
   }
 
-  h3, h4 {
+  > p {
+    margin: 1rem;
+  }
+
+  h2, h3, h4 {
     margin: 0;
     padding: 0.25rem 0.5rem;
   }
