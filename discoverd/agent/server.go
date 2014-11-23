@@ -71,6 +71,10 @@ func NewServer(addr string, etcdAddrs []string) *Agent {
 	// etcd takes a while to come online, so we attempt a GET multiple times
 	err := Attempts.Run(func() (err error) {
 		_, err = client.Get("/", false, false)
+		if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
+			// Valid 404 from etcd (> v0.5)
+			err = nil
+		}
 		return
 	})
 	if err != nil {

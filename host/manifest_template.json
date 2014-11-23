@@ -3,15 +3,14 @@
     "id": "etcd",
     "image": "$image_url_prefix/etcd?id=$image_id[etcd]",
     "args": [
-      "-http-read-timeout=525600",
-      "-http-write-timeout=525600",
       "-data-dir={{ .Volume \"/data\" }}",
-      "-addr={{ .ExternalIP }}:{{ .TCPPort 0 }}",
-      "-bind-addr=0.0.0.0:{{ .TCPPort 0 }}",
-      "-peer-addr={{ .ExternalIP }}:{{ .TCPPort 1 }}",
-      "-peer-bind-addr=0.0.0.0:{{ .TCPPort 1 }}",
+      "-advertise-client-urls=http://{{ .ExternalIP }}:{{ .TCPPort 0 }}",
+      "-listen-client-urls=http://0.0.0.0:{{ .TCPPort 0 }}",
+      "-initial-advertise-peer-urls=http://{{ .ExternalIP }}:{{ .TCPPort 1 }}",
+      "-listen-peer-urls=http://0.0.0.0:{{ .TCPPort 1 }}",
       "-name={{ .Env.ETCD_NAME }}",
-      "{{ if .Env.ETCD_PEERS }}-peers={{ .Env.ETCD_PEERS }}{{ end }}",
+      "-initial-cluster-state=new",
+      "-initial-cluster={{ .Env.ETCD_NAME }}=http://{{ .ExternalIP }}:{{ .TCPPort 1 }},{{ if .Env.ETCD_PEERS }},{{ .Env.ETCD_PEERS }}{{ end }}",
       "{{ if .Env.ETCD_DISCOVERY }}-discovery={{ .Env.ETCD_DISCOVERY }}{{ end }}"
     ],
     "tcp_ports": ["4001", "7001"]
