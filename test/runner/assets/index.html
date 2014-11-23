@@ -25,6 +25,7 @@
             <th>Commit</th>
             <th>Description</th>
             <th>Created</th>
+            <th>Duration</th>
             <th>State</th>
             <th></th>
           </tr>
@@ -49,7 +50,14 @@
           <% } %>
         </td>
         <td><%= description %></td>
-        <td><%= created_at.format("LLL") %></td>
+        <td><%= created_at.fromNow() %> (<%= created_at.format("lll") %>)</td>
+        <td>
+          <% if(duration > 0) { %>
+            <%= duration_formatted %>
+          <% } else { %>
+            N/A
+          <% } %>
+        </td>
         <td><span class="label <%= label_class %>"><%= state %></span></td>
         <td>
           <form action="/builds" method="POST">
