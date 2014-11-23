@@ -1,6 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-04/schema#",
   "id": "https://flynn.io/schema/examples/controller/provider_get#",
+  "title": "Get provider",
+  "description": "FIXME",
   "allOf": [
     { "$ref": "schema/examples/base#" },
     {

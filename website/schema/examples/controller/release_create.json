@@ -1,6 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-04/schema#",
   "id": "https://flynn.io/schema/examples/controller/release_create#",
+  "title": "Create release",
+  "description": "FIXME",
   "allOf": [
     { "$ref": "schema/examples/base#" },
     {
