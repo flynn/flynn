@@ -34,14 +34,16 @@ var dbBucket = []byte("builds")
 var listenPort string
 
 type Build struct {
-	Id          string     `json:"id"`
-	CreatedAt   *time.Time `json:"created_at"`
-	Repo        string     `json:"repo"`
-	Commit      string     `json:"commit"`
-	Merge       bool       `json:"merge"`
-	State       string     `json:"state"`
-	Description string     `json:"description"`
-	LogUrl      string     `json:"log_url"`
+	Id                string        `json:"id"`
+	CreatedAt         *time.Time    `json:"created_at"`
+	Repo              string        `json:"repo"`
+	Commit            string        `json:"commit"`
+	Merge             bool          `json:"merge"`
+	State             string        `json:"state"`
+	Description       string        `json:"description"`
+	LogUrl            string        `json:"log_url"`
+	Duration          time.Duration `json:"duration"`
+	DurationFormatted string        `json:"duration_formatted"`
 }
 
 type Runner struct {
@@ -198,6 +200,10 @@ cmd="bin/flynn-test \
 timeout --kill-after=10 20m $cmd
 `[1:]))
 
+func formatDuration(d time.Duration) string {
+	return fmt.Sprintf("%dm%02ds", d/time.Minute, d%time.Minute/time.Second)
+}
+
 func (r *Runner) build(b *Build) (err error) {
 	r.updateStatus(b, "pending", "")
 
@@ -207,7 +213,11 @@ func (r *Runner) build(b *Build) (err error) {
 	}()
 
 	var buildLog bytes.Buffer
+	start := time.Now()
 	defer func() {
+		b.Duration = time.Since(start)
+		b.DurationFormatted = formatDuration(b.Duration)
+		fmt.Fprintf(&buildLog, "build finished in %s\n", b.DurationFormatted)
 		if err != nil {
 			fmt.Fprintf(&buildLog, "build error: %s\n", err)
 		}
