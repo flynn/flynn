@@ -39,14 +39,20 @@ module APIDoc
     end
 
     def property_rows(name, attrs)
-      type = [capitalize(attrs['type'])]
+      type = []
+
+      if attrs['format']
+        type << "#{attrs['format']}"
+      end
+
+      type << attrs['type']
 
       if attrs['type'] == 'array' && attrs['items']
         type << 'of'
         if attrs['items']['format']
           type << attrs['items']['format']
         end
-        type << "#{capitalize(attrs['items']['type'])}s"
+        type << "#{attrs['items']['type']}s"
       end
 
       type = type.join(' ')
