@@ -189,6 +189,6 @@ func (s *GitDeploySuite) runBuildpackTest(t *c.C, name string, resources []strin
 
 	r.flynn("scale", "web=0")
 	// wait for the jobs to stop
-	waitForJobEvents(t, stream.Events, map[string]int{"web": -1})
+	waitForJobEvents(t, stream.Events, jobEvents{"web": {"down": 1}})
 	stream.Close()
 }
