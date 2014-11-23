@@ -4,7 +4,12 @@ module APIDoc
   module Schema
     class RefSchema < BaseSchema
       def initialize(ref, parent)
-        @id = URI(ref)
+        if ref[0] == '#'
+          @id = URI(parent.id)
+          @id.fragment = ref[1...ref.length]
+        else
+          @id = URI(ref)
+        end
         if !@id.absolute? && parent
           parent_id = URI(parent.id)
           @id.scheme = parent_id.scheme
