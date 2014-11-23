@@ -5,10 +5,10 @@
   "description": "FIXME",
   "type": "object",
   "examples": [
-    { "name": "job_log" },
-    { "name": "job_list" },
-    { "name": "job_update" },
-    { "name": "job_delete" }
+    "https://flynn.io/schema/examples/controller/job_log#",
+    "https://flynn.io/schema/examples/controller/job_list#",
+    "https://flynn.io/schema/examples/controller/job_update#",
+    "https://flynn.io/schema/examples/controller/job_delete#"
   ],
   "properties": {
     "id": {

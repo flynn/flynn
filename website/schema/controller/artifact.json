@@ -5,8 +5,8 @@
   "description": "FIXME",
   "type": "object",
   "examples": [
-     { "name": "artifact_create" },
-     { "name": "artifact_list" }
+    "https://flynn.io/schema/examples/controller/artifact_create#",
+    "https://flynn.io/schema/examples/controller/artifact_list#"
   ],
   "properties": {
     "id": {

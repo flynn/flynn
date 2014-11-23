@@ -5,11 +5,11 @@
   "description": "FIXME",
   "type": "object",
   "examples": [
-    { "name": "app_create" },
-    { "name": "app_get" },
-    { "name": "app_list" },
-    { "name": "app_update" },
-    { "name": "app_delete" }
+    "https://flynn.io/schema/examples/controller/app_create#",
+    "https://flynn.io/schema/examples/controller/app_get#",
+    "https://flynn.io/schema/examples/controller/app_list#",
+    "https://flynn.io/schema/examples/controller/app_update#",
+    "https://flynn.io/schema/examples/controller/app_delete#"
   ],
   "properties": {
     "id": {

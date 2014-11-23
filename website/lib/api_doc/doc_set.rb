@@ -30,10 +30,9 @@ module APIDoc
     def to_markdown
       frontmatter + @schemas.map do |schema|
         [ schema.to_markdown,
-          schema['examples'].to_a.map { |item|
-            name = item['name']
-            example = @examples[name]
-            example ? example.to_markdown : "```\nexample #{name} not found\n```"
+          schema['examples'].to_a.map { |id|
+            example = find_example(id)
+            example ? example.to_markdown : "```\nexample #{id} not found\n```"
           }.join("\n\n")
         ].join("\n\n")
       end.join("\n\n")
@@ -43,6 +42,11 @@ module APIDoc
 
     def capitalize(str)
       str[0].upcase + str[1..-1]
+    end
+
+    def find_example(id)
+      name = id.split('/').last.sub(/#\Z/, '')
+      @examples[name]
     end
 
     def load_examples!

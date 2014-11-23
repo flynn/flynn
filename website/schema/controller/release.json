@@ -5,11 +5,11 @@
   "description": "FIXME",
   "type": "object",
   "examples": [
-    { "name": "app_initial_release_get" },
-    { "name": "app_release_set" },
-    { "name": "app_release_get" },
-    { "name": "release_create" },
-    { "name": "release_list" }
+    "https://flynn.io/schema/examples/controller/app_initial_release_get#",
+    "https://flynn.io/schema/examples/controller/app_release_set#",
+    "https://flynn.io/schema/examples/controller/app_release_get#",
+    "https://flynn.io/schema/examples/controller/release_create#",
+    "https://flynn.io/schema/examples/controller/release_list#"
   ],
   "properties": {
     "id": {

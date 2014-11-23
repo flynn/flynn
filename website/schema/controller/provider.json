@@ -5,9 +5,9 @@
   "description": "FIXME",
   "type": "object",
   "examples": [
-    { "name": "provider_create" },
-    { "name": "provider_get" },
-    { "name": "provider_list" }
+    "https://flynn.io/schema/examples/controller/provider_create#",
+    "https://flynn.io/schema/examples/controller/provider_get#",
+    "https://flynn.io/schema/examples/controller/provider_list#"
   ],
   "properties": {
     "id": {

@@ -5,7 +5,7 @@
   "description": "FIXME",
   "type": "object",
   "examples": [
-    { "name": "provider_resource_create" }
+    "https://flynn.io/schema/examples/controller/provider_resource_create#"
   ],
   "properties": {
     "apps": {

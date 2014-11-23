@@ -5,10 +5,10 @@
   "description": "FIXME",
   "type": "object",
   "examples": [
-    { "name": "formation_put" },
-    { "name": "formation_get" },
-    { "name": "formation_list" },
-    { "name": "formation_delete" }
+    "https://flynn.io/schema/examples/controller/formation_put#",
+    "https://flynn.io/schema/examples/controller/formation_get#",
+    "https://flynn.io/schema/examples/controller/formation_list#",
+    "https://flynn.io/schema/examples/controller/formation_delete#"
   ],
   "properties": {
     "app": {

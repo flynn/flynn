@@ -5,7 +5,7 @@
   "description": "FIXME",
   "type": "object",
   "examples": [
-    { "name": "job_run" }
+    "https://flynn.io/schema/examples/controller/job_run#"
   ],
   "properties": {
     "release": {

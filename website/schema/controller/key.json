@@ -5,10 +5,10 @@
   "description": "FIXME",
   "type": "object",
   "examples": [
-    { "name": "key_create" },
-    { "name": "key_get" },
-    { "name": "key_list" },
-    { "name": "key_delete" }
+    "https://flynn.io/schema/examples/controller/key_create#",
+    "https://flynn.io/schema/examples/controller/key_get#",
+    "https://flynn.io/schema/examples/controller/key_list#",
+    "https://flynn.io/schema/examples/controller/key_delete#"
   ],
   "properties": {
     "id": {

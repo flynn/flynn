@@ -3,10 +3,10 @@
     { "$ref": "https://flynn.io/schema/router/route#" },
     {
       "examples": [
-        { "name": "route_create" },
-        { "name": "route_get" },
-        { "name": "route_list" },
-        { "name": "route_delete" }
+        "https://flynn.io/schema/examples/controller/route_create#",
+        "https://flynn.io/schema/examples/controller/route_get#",
+        "https://flynn.io/schema/examples/controller/route_list#",
+        "https://flynn.io/schema/examples/controller/route_delete#"
       ]
     }
   ]
