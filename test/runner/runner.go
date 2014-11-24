@@ -61,7 +61,8 @@ type Runner struct {
 }
 
 var args *arg.Args
-var maxBuilds = 10
+
+const maxBuilds = 10
 
 func init() {
 	args = arg.Parse()
@@ -71,7 +72,7 @@ func init() {
 func main() {
 	runner := &Runner{
 		bc:       args.BootConfig,
-		events:   make(chan Event, 10),
+		events:   make(chan Event),
 		networks: make(map[string]struct{}),
 		buildCh:  make(chan struct{}, maxBuilds),
 		clusters: make(map[string]*cluster.Cluster),
@@ -214,6 +215,7 @@ func (r *Runner) build(b *Build) (err error) {
 
 	var buildLog bytes.Buffer
 	start := time.Now()
+	fmt.Fprintf(&buildLog, "Starting build of %s at %s\n", b.Commit, start.Format(time.RFC822))
 	defer func() {
 		b.Duration = time.Since(start)
 		b.DurationFormatted = formatDuration(b.Duration)
