@@ -3,6 +3,7 @@
   "id": "https://flynn.io/schema/controller/release#",
   "title": "Release",
   "description": "FIXME",
+  "sortIndex": 9,
   "type": "object",
   "examples": [
     "https://flynn.io/schema/examples/controller/app_initial_release_get#",

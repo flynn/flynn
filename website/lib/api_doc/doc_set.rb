@@ -10,7 +10,7 @@ module APIDoc
     end
 
     def initialize(name, id, exclude = [])
-      @schemas = Schema.find_all(id).reject { |s| exclude.include?(s.id) }
+      @schemas = Schema.find_all(id).reject { |s| exclude.include?(s.id) }.sort_by { |s| s['sortIndex'] }
       @name = name
       @id = id
       @examples = {}

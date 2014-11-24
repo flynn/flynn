@@ -3,6 +3,7 @@
   "id": "https://flynn.io/schema/controller/app#",
   "title": "App",
   "description": "FIXME",
+  "sortIndex": 0,
   "type": "object",
   "examples": [
     "https://flynn.io/schema/examples/controller/app_create#",

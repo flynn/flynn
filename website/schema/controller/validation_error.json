@@ -3,6 +3,7 @@
   "id": "https://flynn.io/schema/controller/validation_error#",
   "title": "Validation Error",
   "description": "FIXME",
+  "sortIndex": 13,
   "type": "object",
   "properties": {
     "field": {

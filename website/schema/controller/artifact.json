@@ -3,6 +3,7 @@
   "id": "https://flynn.io/schema/controller/artifact#",
   "title": "Artifact",
   "description": "FIXME",
+  "sortIndex": 1,
   "type": "object",
   "examples": [
     "https://flynn.io/schema/examples/controller/artifact_create#",

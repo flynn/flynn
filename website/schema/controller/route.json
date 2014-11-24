@@ -2,6 +2,7 @@
   "allOf": [
     { "$ref": "https://flynn.io/schema/router/route#" },
     {
+      "sortIndex": 12,
       "examples": [
         "https://flynn.io/schema/examples/controller/route_create#",
         "https://flynn.io/schema/examples/controller/route_get#",

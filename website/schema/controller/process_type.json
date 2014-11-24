@@ -3,6 +3,7 @@
   "id": "https://flynn.io/schema/controller/process_type#",
   "title": "Process Type",
   "description": "FIXME",
+  "sortIndex": 7,
   "type": "object",
   "properties": {
     "cmd": {

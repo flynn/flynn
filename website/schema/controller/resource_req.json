@@ -3,6 +3,7 @@
   "id": "https://flynn.io/schema/controller/resource_req#",
   "title": "Resource Request",
   "description": "FIXME",
+  "sortIndex": 10,
   "type": "object",
   "examples": [
     "https://flynn.io/schema/examples/controller/provider_resource_create#"

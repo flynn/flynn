@@ -3,6 +3,7 @@
   "id": "https://flynn.io/schema/controller/new_job#",
   "title": "New Job",
   "description": "FIXME",
+  "sortIndex": 3,
   "type": "object",
   "examples": [
     "https://flynn.io/schema/examples/controller/job_run#"

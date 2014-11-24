@@ -3,6 +3,7 @@
   "id": "https://flynn.io/schema/controller/port#",
   "title": "Port",
   "description": "FIXME",
+  "sortIndex": 6,
   "type": "object",
   "properties": {
     "port": {

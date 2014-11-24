@@ -3,6 +3,7 @@
   "id": "https://flynn.io/schema/controller/key#",
   "title": "Key",
   "description": "FIXME",
+  "sortIndex": 5,
   "type": "object",
   "examples": [
     "https://flynn.io/schema/examples/controller/key_create#",
