@@ -10,6 +10,7 @@ module APIDoc
 
     def to_html
       table = el('table')
+      table << table_caption.to_html
       table << table_header.to_html
       table << table_body.to_html
 
@@ -17,6 +18,17 @@ module APIDoc
     end
 
     private
+
+    def schema_path
+      URI(schema['id']).path
+    end
+
+    def table_caption
+      caption = el('caption')
+      caption << el('a', schema['id'], {href: schema_path})
+
+      caption
+    end
 
     def table_header
       thead = el('thead')

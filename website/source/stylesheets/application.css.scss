@@ -7,6 +7,12 @@
 // TODO: .brand should use Proxima Nova Regular font
 table {
   font-size: .95rem;
+  caption {
+    padding: 0.25rem 1rem;
+    border: 1px solid $almostWhiteColor;
+    border-bottom: 0px;
+    background-color: $dirtyWhiteColor;
+  }
   th, td {
     padding: .5rem;
     border: 1px solid $almostWhiteColor;
