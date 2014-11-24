@@ -214,48 +214,60 @@ func (s *SchedulerSuite) removeHosts(t *c.C, ids []string) {
 	}
 }
 
-func processesEqual(expected, actual map[string]int) bool {
-	for t, n := range expected {
-		if actual[t] != n {
+func jobEventsEqual(expected, actual jobEvents) bool {
+	for typ, events := range expected {
+		diff, ok := actual[typ]
+		if !ok {
 			return false
+		}
+		for state, count := range events {
+			if diff[state] != count {
+				return false
+			}
 		}
 	}
 	return true
 }
 
-func waitForJobEvents(t *c.C, events chan *ct.JobEvent, diff map[string]int) (lastID int64) {
-	debugf("waiting for job events: %v", diff)
-	actual := make(map[string]int)
+type jobEvents map[string]map[string]int
+
+func waitForJobEvents(t *c.C, events chan *ct.JobEvent, expected jobEvents) (lastID int64, jobID string) {
+	debugf("waiting for job events: %v", expected)
+	actual := make(jobEvents)
 	for {
 	inner:
 		select {
 		case event := <-events:
 			debug("got job event:", event.Type, event.JobID, event.State)
 			lastID = event.ID
+			jobID = event.JobID
+			if _, ok := actual[event.Type]; !ok {
+				actual[event.Type] = make(map[string]int)
+			}
 			switch event.State {
 			case "up":
-				actual[event.Type] += 1
+				actual[event.Type]["up"] += 1
 			case "down", "crashed":
-				actual[event.Type] -= 1
+				actual[event.Type]["down"] += 1
 			default:
 				break inner
 			}
-			if processesEqual(diff, actual) {
+			if jobEventsEqual(expected, actual) {
 				return
 			}
 		case <-time.After(20 * time.Second):
-			t.Fatal("timed out waiting for job events: ", diff)
+			t.Fatal("timed out waiting for job events: ", expected)
 		}
 	}
 }
 
-func waitForJobRestart(t *c.C, events chan *ct.JobEvent, timeout time.Duration) string {
+func waitForJobRestart(t *c.C, events chan *ct.JobEvent, typ string, timeout time.Duration) string {
 	debug("waiting for job restart")
 	for {
 		select {
 		case event := <-events:
 			debug("got job event:", event.Type, event.JobID, event.State)
-			if event.State == "up" {
+			if event.Type == typ && event.State == "up" {
 				return event.JobID
 			}
 		case <-time.After(timeout):
@@ -289,16 +301,21 @@ func (s *SchedulerSuite) TestScale(t *c.C) {
 		formation.Processes = procs
 		t.Assert(s.controller.PutFormation(formation), c.IsNil)
 
-		diff := make(map[string]int)
-		for t, n := range procs {
-			diff[t] = n - current[t]
-		}
-		for t, n := range current {
-			if _, ok := procs[t]; !ok {
-				diff[t] = -n
+		expected := make(jobEvents)
+		for typ, count := range procs {
+			diff := count - current[typ]
+			if diff > 0 {
+				expected[typ] = map[string]int{"up": diff}
+			} else {
+				expected[typ] = map[string]int{"down": -diff}
 			}
 		}
-		waitForJobEvents(t, stream.Events, diff)
+		for typ, count := range current {
+			if _, ok := procs[typ]; !ok {
+				expected[typ] = map[string]int{"down": count}
+			}
+		}
+		waitForJobEvents(t, stream.Events, expected)
 
 		current = procs
 	}
@@ -333,7 +350,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 		ReleaseID: release.ID,
 		Processes: map[string]int{"web": 2, "scheduler": 1},
 	}), c.IsNil)
-	lastID := waitForJobEvents(t, stream.Events, map[string]int{"web": 1})
+	lastID, _ := waitForJobEvents(t, stream.Events, jobEvents{"web": {"up": 1}})
 	stream.Close()
 
 	// get direct client for new controller
@@ -370,7 +387,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	defer hc.Close()
 	debug("stopping job", jobID)
 	t.Assert(hc.StopJob(jobID), c.IsNil)
-	waitForJobEvents(t, stream.Events, map[string]int{"web": 0})
+	waitForJobEvents(t, stream.Events, jobEvents{"web": {"down": 1, "up": 1}})
 
 	// scale back down
 	debug("scaling the controller down")
@@ -379,7 +396,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 		ReleaseID: release.ID,
 		Processes: map[string]int{"web": 1, "scheduler": 1},
 	}), c.IsNil)
-	waitForJobEvents(t, stream.Events, map[string]int{"web": -1})
+	waitForJobEvents(t, stream.Events, jobEvents{"web": {"down": 1}})
 
 	// set the suite's client to the new controller for other tests
 	s.controller = client
@@ -404,7 +421,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 		Cmd:        []string{"while true; do echo one-off-job; sleep 1; done"},
 	})
 	t.Assert(err, c.IsNil)
-	waitForJobEvents(t, stream.Events, map[string]int{"printer": 1, "crasher": 1, "": 1})
+	waitForJobEvents(t, stream.Events, jobEvents{"printer": {"up": 1}, "crasher": {"up": 1}, "": {"up": 1}})
 
 	list, err := s.controller.JobList(app.ID)
 	t.Assert(err, c.IsNil)
@@ -423,7 +440,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	// Check that when a formation's job is removed, it is marked as down and a new one is scheduled
 	job := jobs["printer"]
 	s.stopJob(t, job.ID)
-	waitForJobEvents(t, stream.Events, map[string]int{"printer": 0})
+	waitForJobEvents(t, stream.Events, jobEvents{"printer": {"down": 1, "up": 1}})
 	s.checkJobState(t, app.ID, job.ID, "down")
 	list, err = s.controller.JobList(app.ID)
 	t.Assert(err, c.IsNil)
@@ -432,7 +449,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	// Check that when a one-off job is removed, it is marked as down but a new one is not scheduled
 	job = jobs[""]
 	s.stopJob(t, job.ID)
-	waitForJobEvents(t, stream.Events, map[string]int{"": -1})
+	waitForJobEvents(t, stream.Events, jobEvents{"": {"down": 1}})
 	s.checkJobState(t, app.ID, job.ID, "down")
 	list, err = s.controller.JobList(app.ID)
 	t.Assert(err, c.IsNil)
@@ -441,7 +458,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	// Check that when a job errors, it is marked as crashed and a new one is started
 	job = jobs["crasher"]
 	s.stopJob(t, job.ID)
-	waitForJobEvents(t, stream.Events, map[string]int{"crasher": 0})
+	waitForJobEvents(t, stream.Events, jobEvents{"crasher": {"down": 1, "up": 1}})
 	s.checkJobState(t, app.ID, job.ID, "crashed")
 	list, err = s.controller.JobList(app.ID)
 	t.Assert(err, c.IsNil)
@@ -477,22 +494,28 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 		formation.Processes = procs
 		t.Assert(s.controller.PutFormation(formation), c.IsNil)
 
-		diff := make(map[string]int)
-		for t, n := range procs {
-			diff[t] = n - current[t]
-			if t == "omni" {
-				diff[t] *= testCluster.Size()
+		expected := make(jobEvents)
+		for typ, count := range procs {
+			diff := count - current[typ]
+			if typ == "omni" {
+				diff *= testCluster.Size()
+			}
+			if diff > 0 {
+				expected[typ] = map[string]int{"up": diff}
+			} else {
+				expected[typ] = map[string]int{"down": -diff}
 			}
 		}
-		for t, n := range current {
-			if _, ok := procs[t]; !ok {
-				diff[t] = -n
-				if t == "omni" {
-					diff[t] *= testCluster.Size()
+		for typ, count := range current {
+			if _, ok := procs[typ]; !ok {
+				diff := count
+				if typ == "omni" {
+					diff *= testCluster.Size()
 				}
+				expected[typ] = map[string]int{"down": diff}
 			}
 		}
-		waitForJobEvents(t, stream.Events, diff)
+		waitForJobEvents(t, stream.Events, expected)
 
 		current = procs
 	}
@@ -500,7 +523,7 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 	// Check that new hosts get omni jobs
 	newHosts := s.addHosts(t, 2)
 	defer s.removeHosts(t, newHosts)
-	waitForJobEvents(t, stream.Events, map[string]int{"omni": 2})
+	waitForJobEvents(t, stream.Events, jobEvents{"omni": {"up": 2}})
 }
 
 func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
@@ -522,28 +545,28 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 		ReleaseID: release.ID,
 		Processes: map[string]int{"printer": 1},
 	}), c.IsNil)
-	id := waitForJobRestart(t, stream.Events, startTimeout)
+	_, id := waitForJobEvents(t, stream.Events, jobEvents{"printer": {"up": 1}})
 
 	// First restart: scheduled immediately
 	s.stopJob(t, id)
-	id = waitForJobRestart(t, stream.Events, startTimeout)
+	id = waitForJobRestart(t, stream.Events, "printer", startTimeout)
 
 	// Second restart after 1 * backoffPeriod
 	start := time.Now()
 	s.stopJob(t, id)
-	id = waitForJobRestart(t, stream.Events, backoffPeriod+startTimeout)
+	id = waitForJobRestart(t, stream.Events, "printer", backoffPeriod+startTimeout)
 	t.Assert(time.Now().Sub(start) > backoffPeriod, c.Equals, true)
 
 	// Third restart after 2 * backoffPeriod
 	start = time.Now()
 	s.stopJob(t, id)
-	id = waitForJobRestart(t, stream.Events, 2*backoffPeriod+startTimeout)
+	id = waitForJobRestart(t, stream.Events, "printer", 2*backoffPeriod+startTimeout)
 	t.Assert(time.Now().Sub(start) > 2*backoffPeriod, c.Equals, true)
 
 	// After backoffPeriod has elapsed: scheduled immediately
 	time.Sleep(backoffPeriod)
 	s.stopJob(t, id)
-	waitForJobRestart(t, stream.Events, startTimeout)
+	waitForJobRestart(t, stream.Events, "printer", startTimeout)
 }
 
 func (s *SchedulerSuite) TestTCPApp(t *c.C) {
@@ -561,7 +584,7 @@ func (s *SchedulerSuite) TestTCPApp(t *c.C) {
 	str := strings.Split(strings.TrimSpace(string(newRoute.Output)), " ")
 	port := str[len(str)-1]
 
-	waitForJobEvents(t, stream.Events, map[string]int{"echoer": 1})
+	waitForJobEvents(t, stream.Events, jobEvents{"echoer": {"up": 1}})
 	// use Attempts to give the processes time to start
 	if err := Attempts.Run(func() error {
 		servAddr := routerIP + ":" + port
