@@ -61,7 +61,8 @@ type Runner struct {
 }
 
 var args *arg.Args
-var maxBuilds = 10
+
+const maxBuilds = 10
 
 func init() {
 	args = arg.Parse()
