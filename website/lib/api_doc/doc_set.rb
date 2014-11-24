@@ -70,10 +70,12 @@ module APIDoc
         request = data['request']
         response = data['response']
 
-        markdown << %(<article class="example">)
+        markdown << %(<article class="example clearfix">)
         markdown << %(<header>)
         markdown << %(## #{schema['title']})
         markdown << %(</header>)
+
+        markdown << %(<button class="example-toggle btn btn-primary btn-small pull-right" data-expanded="Collapse">Example</button>)
 
         if schema['description']
           markdown << ''

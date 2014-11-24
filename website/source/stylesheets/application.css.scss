@@ -34,6 +34,10 @@ code {
   padding: 0.2em 0.5em;
 }
 
+.btn-small {
+  font-size: 1rem;
+}
+
 #coming-soon-banner {
   background-color: $almostBlackColor;
   color: $dirtyWhiteColor;
@@ -269,6 +273,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .example-request, .example-response {
+  display: none;
+
   > header {
     margin: 0;
     margin-top: 1em;
@@ -286,4 +292,8 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   padding: 0 1em;
+}
+
+.example-toggle {
+  margin: 0.5rem 1rem;
 }
