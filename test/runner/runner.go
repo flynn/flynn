@@ -72,7 +72,7 @@ func init() {
 func main() {
 	runner := &Runner{
 		bc:       args.BootConfig,
-		events:   make(chan Event, 10),
+		events:   make(chan Event),
 		networks: make(map[string]struct{}),
 		buildCh:  make(chan struct{}, maxBuilds),
 		clusters: make(map[string]*cluster.Cluster),
