@@ -94,11 +94,11 @@ module APIDoc
 
       def to_markdown
         markdown = []
-        if @schema['title']
-          markdown << "# #{@schema['title']}"
+        if self['title']
+          markdown << "# #{self['title']}"
         end
-        if @schema['description']
-          markdown << @schema['description']
+        if self['description']
+          markdown << self['description']
         end
         markdown << to_html_table
         markdown.join("\n\n")

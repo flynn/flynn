@@ -13,6 +13,10 @@ module APIDoc
         end
       end
 
+      def [](k)
+        @schema[k] || (@schema['allOf'].find { |s| s[k] } || {})[k]
+      end
+
       def expand_refs!
         @schema['allOf'].map! do |s|
           if s.is_a?(RefSchema)

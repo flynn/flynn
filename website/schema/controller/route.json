@@ -1,4 +1,5 @@
 {
+  "id": "https://flynn.io/schema/controller/route#",
   "allOf": [
     { "$ref": "https://flynn.io/schema/router/route#" },
     {
