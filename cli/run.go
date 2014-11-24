@@ -19,7 +19,7 @@ import (
 
 func init() {
 	cmd := register("run", runRun, `
-usage: flynn run [-d] [-r <release>] [-e <entrypoint>] <command> [<argument>...]
+usage: flynn run [-d] [-r <release>] [-e <entrypoint>] [--] <command> [<argument>...]
 
 Run a job.
 
