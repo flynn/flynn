@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
@@ -40,6 +41,8 @@ func printJobDesc(job *host.ActiveJob, out io.Writer) {
 	w := tabwriter.NewWriter(out, 1, 2, 2, ' ', 0)
 	defer w.Flush()
 	listRec(w, "ID", clusterJobID(*job))
+	listRec(w, "Entrypoint", strings.Join(job.Job.Config.Entrypoint, " "))
+	listRec(w, "Cmd", strings.Join(job.Job.Config.Cmd, " "))
 	listRec(w, "Status", job.Status)
 	listRec(w, "StartedAt", job.StartedAt)
 	listRec(w, "EndedAt", job.EndedAt)
