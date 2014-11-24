@@ -78,7 +78,7 @@ func (r *gitRepo) git(args ...string) *CmdResult {
 }
 
 var Attempts = attempt.Strategy{
-	Total: 20 * time.Second,
+	Total: 60 * time.Second,
 	Delay: 500 * time.Millisecond,
 }
 
