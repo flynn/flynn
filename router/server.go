@@ -95,7 +95,7 @@ func main() {
 	etcdAddrs := strings.Split(os.Getenv("ETCD"), ",")
 	if len(etcdAddrs) == 1 && etcdAddrs[0] == "" {
 		if externalIP := os.Getenv("EXTERNAL_IP"); externalIP != "" {
-			etcdAddrs = []string{fmt.Sprintf("http://%s:4001", externalIP)}
+			etcdAddrs = []string{fmt.Sprintf("http://%s:2379", externalIP)}
 		} else {
 			etcdAddrs = nil
 		}

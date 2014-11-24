@@ -13,7 +13,7 @@
       "-initial-cluster={{ .Env.ETCD_NAME }}=http://{{ .ExternalIP }}:{{ .TCPPort 1 }},{{ if .Env.ETCD_PEERS }},{{ .Env.ETCD_PEERS }}{{ end }}",
       "{{ if .Env.ETCD_DISCOVERY }}-discovery={{ .Env.ETCD_DISCOVERY }}{{ end }}"
     ],
-    "tcp_ports": ["4001", "7001"]
+    "tcp_ports": ["2379", "2380"]
   },
   {
     "id": "discoverd",
