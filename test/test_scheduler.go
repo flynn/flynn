@@ -255,7 +255,7 @@ func waitForJobEvents(t *c.C, events chan *ct.JobEvent, expected jobEvents) (las
 			if jobEventsEqual(expected, actual) {
 				return
 			}
-		case <-time.After(20 * time.Second):
+		case <-time.After(60 * time.Second):
 			t.Fatal("timed out waiting for job events: ", expected)
 		}
 	}
