@@ -1,0 +1,4 @@
+include_rules
+: |> !go ./echoer |> bin/echoer
+: |> !go ./signal |> bin/signal
+: bin/* |> docker build -t flynn/test-apps . |>
