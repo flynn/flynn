@@ -215,6 +215,7 @@ func (r *Runner) build(b *Build) (err error) {
 
 	var buildLog bytes.Buffer
 	start := time.Now()
+	fmt.Fprintf(&buildLog, "Starting build of %s at %s\n", b.Commit, start.Format(time.RFC822))
 	defer func() {
 		b.Duration = time.Since(start)
 		b.DurationFormatted = formatDuration(b.Duration)
