@@ -150,8 +150,8 @@ Listening on 55006
 
 ## Redeploy
 
-Updating your application and publishing your changes is done by committing changes to Git and pushing those changes
-to Flynn.
+Updating your application and publishing your changes is done by committing 
+changes to Git and pushing those changes to Flynn.
 
 Add the following line to the top of `web.js`:
 
@@ -284,11 +284,17 @@ $ flynn run bash
 
 ## Release existing Docker images
 
-Releasing pre-built Docker images is possible by passing the image URL and image id to Flynn. Because authentication is not supported yet the image needs to be hosted on a public repository, or on your own (private) hosted registry. 
+Releasing pre-built Docker images is possible by passing the image URL and image 
+id to Flynn. Because authentication is not supported yet the image needs to be 
+hosted on a public repository, or on your own (private) hosted registry. 
 
-First you'll need to create a sample configuration file for your release. This file may contain all relevant information such as which command to run, which ports to expose and which environment variables to set.
+First you'll need to create a sample configuration file for your release. This 
+file may contain all relevant information such as which command to run, which 
+ports to expose and which environment variables to set.
 
-Assuming your container image has already specified the command, the json file for our redis image can look like this. (Where 'ports' indicates a tcp route should be setup). 
+Assuming your container image has already specified the command, the json file 
+for our redis image can look like this. (Where 'ports' indicates a tcp route 
+should be setup). 
 
 ```
 {
@@ -312,7 +318,7 @@ And add the 'release'. Note that we add the full image id to the URL. We use -a 
 # Get an access token from the Docker Index
 $ curl -I -X GET -H "X-Docker-Token: true" https://index.docker.io/v1/repositories/redis/images
 
-# Now take the signature from here, you'll use it for the next call. Optionally, add http-basic authentication, if you need to pull it from a private repository.
+# Now take the signature from here, you'll use it for the next call. 
 
 # get which tags exist (with their latest representation)
 curl -H "Authorization: Token signature=23e5ca10b324429c1c952112dba26edc52bb2d39,repository="library/redis",access=read" http://registry-1.docker.io/v1/repositories/redis/tags -v
