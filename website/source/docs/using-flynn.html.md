@@ -148,9 +148,9 @@ Listening on 55006
 
 *See [here](/docs/cli#log) for more information on the `flynn log` command.*
 
-## Release
+## Redeploy
 
-New releases are created by committing changes to Git and pushing those changes
+Updating your application and publishing your changes is done by committing changes to Git and pushing those changes
 to Flynn.
 
 Add the following line to the top of `web.js`:
@@ -280,3 +280,57 @@ $ flynn run bash
 ```
 
 *See [here](/docs/cli#run) for more information on the `flynn run` command.*
+
+
+## Release existing Docker images
+
+Releasing pre-built Docker images is possible by passing the image URL and image id to Flynn. Because authentication is not supported yet the image needs to be hosted on a public repository, or on your own (private) hosted registry. 
+
+First you'll need to create a sample configuration file for your release. This file may contain all relevant information such as which command to run, which ports to expose and which environment variables to set.
+
+Assuming your container image has already specified the command, the json file for our redis image can look like this. (Where 'ports' indicates a tcp route should be setup). 
+
+```
+{
+    "processes": {
+        "redis": {
+          "ports": [{"proto": "tcp"}]
+        }
+    }
+}
+```
+
+Now create the service placeholder on the flynn cluster.
+```
+$ flynn create redis
+```
+
+And add the 'release'. Note that we add the full image id to the URL. We use -a to specify the service.
+
+**Get the image id's for redis**
+```
+# Get an access token from the Docker Index
+$ curl -I -X GET -H "X-Docker-Token: true" https://index.docker.io/v1/repositories/redis/images
+
+# Now take the signature from here, you'll use it for the next call. Optionally, add http-basic authentication, if you need to pull it from a private repository.
+
+# get which tags exist (with their latest representation)
+curl -H "Authorization: Token signature=23e5ca10b324429c1c952112dba26edc52bb2d39,repository="library/redis",access=read" http://registry-1.docker.io/v1/repositories/redis/tags -v
+```
+
+
+```
+$ flynn -a redis release add -f redis.json https://registry.hub.docker.com/redis?id=dad71287aacba854db05966a2211a981355971b40c8a16d5ecaf1f46c028328e
+Created release 24c788b26ad54e97b2ab901a042a78c9.
+```
+
+And finally, to actually start the service we'll need to scale it to at least one instance.
+
+```
+$ flynn -a redis scale redis=1
+```
+
+Wait for the image to pull and then check it's status with:
+```
+$ flynn -a redis ps
+```
