@@ -9,11 +9,12 @@ package txn
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/mgo.v2"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/mgo.v2/bson"
 	"reflect"
 	"sort"
 	"sync"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/mgo.v2"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/mgo.v2/bson"
 
 	crand "crypto/rand"
 	mrand "math/rand"

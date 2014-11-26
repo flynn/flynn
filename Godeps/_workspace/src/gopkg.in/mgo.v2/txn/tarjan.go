@@ -1,8 +1,9 @@
 package txn
 
 import (
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/mgo.v2/bson"
 	"sort"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/mgo.v2/bson"
 )
 
 func tarjanSort(successors map[bson.ObjectId][]bson.ObjectId) [][]bson.ObjectId {

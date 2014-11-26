@@ -6,8 +6,11 @@ package check
 
 import (
 	"fmt"
+	"runtime"
 	"time"
 )
+
+var memStats runtime.MemStats
 
 // testingB is a type passed to Benchmark functions to manage benchmark
 // timing and to specify the number of iterations to run.
@@ -18,6 +21,12 @@ type timer struct {
 	bytes     int64
 	timerOn   bool
 	benchTime time.Duration
+	// The initial states of memStats.Mallocs and memStats.TotalAlloc.
+	startAllocs uint64
+	startBytes  uint64
+	// The net total of this test after being run.
+	netAllocs uint64
+	netBytes  uint64
 }
 
 // StartTimer starts timing a test. This function is called automatically
@@ -27,6 +36,10 @@ func (c *C) StartTimer() {
 	if !c.timerOn {
 		c.start = time.Now()
 		c.timerOn = true
+
+		runtime.ReadMemStats(&memStats)
+		c.startAllocs = memStats.Mallocs
+		c.startBytes = memStats.TotalAlloc
 	}
 }
 
@@ -37,6 +50,9 @@ func (c *C) StopTimer() {
 	if c.timerOn {
 		c.duration += time.Now().Sub(c.start)
 		c.timerOn = false
+		runtime.ReadMemStats(&memStats)
+		c.netAllocs += memStats.Mallocs - c.startAllocs
+		c.netBytes += memStats.TotalAlloc - c.startBytes
 	}
 }
 
@@ -45,8 +61,13 @@ func (c *C) StopTimer() {
 func (c *C) ResetTimer() {
 	if c.timerOn {
 		c.start = time.Now()
+		runtime.ReadMemStats(&memStats)
+		c.startAllocs = memStats.Mallocs
+		c.startBytes = memStats.TotalAlloc
 	}
 	c.duration = 0
+	c.netAllocs = 0
+	c.netBytes = 0
 }
 
 // SetBytes informs the number of bytes that the benchmark processes
@@ -90,7 +111,13 @@ func (c *C) timerString() string {
 			ns = fmt.Sprintf("%12.1f ns/op", float64(c.duration.Nanoseconds())/float64(c.N))
 		}
 	}
-	return fmt.Sprintf("%8d\t%s%s", c.N, ns, mb)
+	memStats := ""
+	if c.benchMem {
+		allocedBytes := fmt.Sprintf("%8d B/op", int64(c.netBytes)/int64(c.N))
+		allocs := fmt.Sprintf("%8d allocs/op", int64(c.netAllocs)/int64(c.N))
+		memStats = fmt.Sprintf("\t%s\t%s", allocedBytes, allocs)
+	}
+	return fmt.Sprintf("%8d\t%s%s%s", c.N, ns, mb, memStats)
 }
 
 func min(x, y int) int {

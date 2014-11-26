@@ -4,7 +4,7 @@
 package check_test
 
 import (
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"os"
 	"reflect"
 	"runtime"
@@ -448,6 +448,34 @@ func (s *HelpersS) TestConcurrentLogging(c *check.C) {
 	}
 	start.Done()
 	stop.Wait()
+}
+
+// -----------------------------------------------------------------------
+// Test the TestName function
+
+type TestNameHelper struct {
+	name1 string
+	name2 string
+	name3 string
+	name4 string
+	name5 string
+}
+
+func (s *TestNameHelper) SetUpSuite(c *check.C)    { s.name1 = c.TestName() }
+func (s *TestNameHelper) SetUpTest(c *check.C)     { s.name2 = c.TestName() }
+func (s *TestNameHelper) Test(c *check.C)          { s.name3 = c.TestName() }
+func (s *TestNameHelper) TearDownTest(c *check.C)  { s.name4 = c.TestName() }
+func (s *TestNameHelper) TearDownSuite(c *check.C) { s.name5 = c.TestName() }
+
+func (s *HelpersS) TestTestName(c *check.C) {
+	helper := TestNameHelper{}
+	output := String{}
+	check.Run(&helper, &check.RunConf{Output: &output})
+	c.Check(helper.name1, check.Equals, "")
+	c.Check(helper.name2, check.Equals, "TestNameHelper.Test")
+	c.Check(helper.name3, check.Equals, "TestNameHelper.Test")
+	c.Check(helper.name4, check.Equals, "TestNameHelper.Test")
+	c.Check(helper.name5, check.Equals, "")
 }
 
 // -----------------------------------------------------------------------

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	c "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
+	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/pkg/attempt"
