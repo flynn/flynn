@@ -40,9 +40,8 @@ main() {
   backend=${backend:-"libvirt-lxc"}
   domain="${domain:="dev.localflynn.com"}"
   ip=${ip:-$(/sbin/ifconfig eth0 \
-    | grep "inet addr:" \
-    | cut -d: -f2 \
-    | awk "{ print $1}")}
+    | grep -oP 'inet addr:\S+' \
+    | cut -d: -f2)}
 
   export DISCOVERD="${ip}:1111"
   export CLUSTER_DOMAIN="${domain}"
