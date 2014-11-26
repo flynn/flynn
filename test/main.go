@@ -40,6 +40,9 @@ var httpClient *http.Client
 
 func init() {
 	args = arg.Parse()
+	if args.Stream {
+		args.Debug = true
+	}
 	log.SetFlags(log.Lshortfile)
 }
 
@@ -51,7 +54,7 @@ func main() {
 		if err != nil || res != nil && !res.Passed() {
 			if args.Debug {
 				if args.Gist {
-					run(exec.Command("flynn-host", "upload-debug-info"))
+					exec.Command("flynn-host", "upload-debug-info").Run()
 				} else {
 					dumpLogs()
 				}
@@ -112,8 +115,8 @@ func main() {
 
 	res = check.RunAll(&check.RunConf{
 		Filter:           args.Run,
-		Stream:           true,
-		Verbose:          true,
+		Stream:           args.Stream,
+		Verbose:          args.Debug,
 		KeepWorkDir:      args.Debug,
 		ConcurrencyLevel: 5,
 	})
@@ -208,29 +211,25 @@ type CmdResult struct {
 	Err    error
 }
 
-func flynn(dir string, cmdArgs ...string) *CmdResult {
+func flynn(t *check.C, dir string, cmdArgs ...string) *CmdResult {
 	cmd := exec.Command(args.CLI, cmdArgs...)
 	cmd.Env = append(os.Environ(), "FLYNNRC="+flynnrc)
 	cmd.Dir = dir
-	return run(cmd)
+	return run(t, cmd)
 }
 
-func debug(v ...interface{}) {
-	if args.Debug {
-		fmt.Println(append([]interface{}{"++", time.Now().Format("15:04:05.000")}, v...)...)
-	}
+func debug(t *check.C, v ...interface{}) {
+	t.Log(append([]interface{}{"++ ", time.Now().Format("15:04:05.000"), " "}, v...)...)
 }
 
-func debugf(format string, v ...interface{}) {
-	if args.Debug {
-		fmt.Println("++", time.Now().Format("15:04:05.000"), fmt.Sprintf(format, v...))
-	}
+func debugf(t *check.C, format string, v ...interface{}) {
+	t.Logf(strings.Join([]string{"++", time.Now().Format("15:04:05.000"), format}, " "), v...)
 }
 
-func run(cmd *exec.Cmd) *CmdResult {
+func run(t *check.C, cmd *exec.Cmd) *CmdResult {
 	var out bytes.Buffer
-	if args.Debug {
-		debug(cmd.Path, strings.Join(cmd.Args[1:], " "))
+	debug(t, strings.Join(append([]string{cmd.Path}, cmd.Args[1:]...), " "))
+	if args.Stream {
 		cmd.Stdout = io.MultiWriter(os.Stdout, &out)
 		cmd.Stderr = io.MultiWriter(os.Stderr, &out)
 	} else {
@@ -242,6 +241,9 @@ func run(cmd *exec.Cmd) *CmdResult {
 		Cmd:    cmd.Args,
 		Err:    err,
 		Output: out.String(),
+	}
+	if !args.Stream {
+		t.Log(res.Output)
 	}
 	return res
 }
@@ -359,13 +361,22 @@ func matches(value, regex interface{}) (result bool, error string) {
 }
 
 func dumpLogs() {
+	run := func(cmd *exec.Cmd) string {
+		fmt.Println(cmd.Path, strings.Join(cmd.Args[1:], " "))
+		var out bytes.Buffer
+		cmd.Stdout = io.MultiWriter(os.Stdout, &out)
+		cmd.Stderr = io.MultiWriter(os.Stderr, &out)
+		cmd.Run()
+		return out.String()
+	}
+
 	fmt.Println("***** running processes *****")
 	run(exec.Command("ps", "faux"))
 
 	fmt.Println("***** flynn-host log *****")
 	run(exec.Command("cat", "/tmp/flynn-host.log"))
 
-	ids := strings.Split(strings.TrimSpace(run(exec.Command("flynn-host", "ps", "-a", "-q")).Output), "\n")
+	ids := strings.Split(strings.TrimSpace(run(exec.Command("flynn-host", "ps", "-a", "-q"))), "\n")
 	for _, id := range ids {
 		fmt.Print("\n\n***** ***** ***** ***** ***** ***** ***** ***** ***** *****\n\n")
 		run(exec.Command("flynn-host", "inspect", id))

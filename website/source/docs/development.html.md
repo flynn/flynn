@@ -251,7 +251,7 @@ This will:
 To run an individual integration test (e.g. `TestEnvDir`):
 
 ```
-$ script/run-integration-tests TestEnvDir
+$ script/run-integration-tests -f TestEnvDir
 ```
 
 ## Releasing Flynn

@@ -4,8 +4,36 @@ set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+usage() {
+  cat <<USAGE >&2
+usage: $0 [options]
+
+OPTIONS:
+  -h            Show this message
+  -f FILTER     Regular expression selecting which tests and/or suites to run
+  -s            Stream debug output
+USAGE
+}
+
 main() {
-  local test_to_run=$1
+  local filter
+  local stream=false
+
+  while getopts 'hf:s' opt; do
+    case "${opt}" in
+      h)
+        usage
+        exit 1
+        ;;
+      f) filter="${OPTARG}" ;;
+      s) stream=true ;;
+      ?)
+        usage
+        exit 1
+        ;;
+    esac
+  done
+
   local flynn="${ROOT}/cli/flynn-cli"
 
   pushd "${ROOT}" >/dev/null
@@ -26,11 +54,14 @@ main() {
   cd "${ROOT}/test"
 
   test_args="--flynnrc ${FLYNNRC} --cli ${flynn} --debug"
-  if [[ -n "${test_to_run}" ]]; then
-    test_args="${test_args} --run ${test_to_run}"
+  if [[ -n "${filter}" ]]; then
+    test_args="${test_args} --run ${filter}"
+  fi
+  if $stream; then
+    test_args="${test_args} --stream"
   fi
 
   bin/flynn-test ${test_args}
 }
 
-main $1
+main $@
