@@ -248,9 +248,6 @@ func streamJobs(req *http.Request, w http.ResponseWriter, app *ct.App, repo *Job
 		w.(http.Flusher).Flush()
 		return nil
 	}
-	if err = sendKeepAlive(); err != nil {
-		return
-	}
 
 	sendJobEvent := func(e *ct.JobEvent) error {
 		if _, err := fmt.Fprintf(w, "id: %d\nevent: %s\ndata: ", e.ID, e.State); err != nil {
@@ -303,6 +300,10 @@ func streamJobs(req *http.Request, w http.ResponseWriter, app *ct.App, repo *Job
 	case <-done:
 		return
 	case <-connected:
+	}
+
+	if err = sendKeepAlive(); err != nil {
+		return
 	}
 
 	closed := w.(http.CloseNotifier).CloseNotify()

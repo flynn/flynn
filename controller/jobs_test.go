@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"strings"
 
-	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
+	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"

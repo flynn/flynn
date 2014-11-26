@@ -2,10 +2,11 @@ package txn_test
 
 import (
 	"bytes"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/mgo.v2"
-	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 	"os/exec"
 	"time"
+
+	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/mgo.v2"
 )
 
 // ----------------------------------------------------------------------------

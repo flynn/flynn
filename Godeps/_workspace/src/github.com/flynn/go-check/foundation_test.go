@@ -8,7 +8,7 @@ package check_test
 
 import (
 	"fmt"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"log"
 	"os"
 	"regexp"

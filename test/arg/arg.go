@@ -14,6 +14,7 @@ type Args struct {
 	RouterIP   string
 	Build      bool
 	Debug      bool
+	Stream     bool
 	Kill       bool
 	KeepRootFS bool
 	DBPath     string
@@ -47,6 +48,7 @@ func Parse() *Args {
 	flag.StringVar(&args.ClusterAPI, "cluster-api", "", "cluster-api endpoint for adding and removing hosts")
 	flag.BoolVar(&args.Build, "build", true, "build Flynn")
 	flag.BoolVar(&args.Debug, "debug", false, "enable debug output")
+	flag.BoolVar(&args.Stream, "stream", false, "stream debug output (implies --debug)")
 	flag.BoolVar(&args.Kill, "kill", true, "kill the cluster after running the tests")
 	flag.BoolVar(&args.KeepRootFS, "keep-rootfs", false, "don't remove the rootfs which was built to run the tests")
 	flag.BoolVar(&args.Gist, "gist", false, "upload debug info to a gist")

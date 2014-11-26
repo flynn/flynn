@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	c "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
+	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
@@ -96,7 +96,7 @@ func (s *SchedulerSuite) hostClient(t *c.C, hostID string) cluster.Host {
 }
 
 func (s *SchedulerSuite) stopJob(t *c.C, id string) {
-	debug("stopping job", id)
+	debug(t, "stopping job ", id)
 	hostID, jobID, _ := cluster.ParseJobID(id)
 	hc := s.hostClient(t, hostID)
 	t.Assert(hc.StopJob(jobID), c.IsNil)
@@ -111,7 +111,7 @@ func (s *SchedulerSuite) checkJobState(t *c.C, appID, jobID, state string) {
 func (s *SchedulerSuite) createApp(t *c.C) (*ct.App, *ct.Release) {
 	app := &ct.App{}
 	t.Assert(s.controller.CreateApp(app), c.IsNil)
-	debugf("created app %s (%s)", app.Name, app.ID)
+	debugf(t, "created app %s (%s)", app.Name, app.ID)
 
 	artifact := &ct.Artifact{Type: "docker", URI: s.slugrunnerURI}
 	t.Assert(s.controller.CreateArtifact(artifact), c.IsNil)
@@ -146,7 +146,7 @@ func (s *SchedulerSuite) createApp(t *c.C) (*ct.App, *ct.Release) {
 }
 
 func (s *SchedulerSuite) addHosts(t *c.C, count int) []string {
-	debugf("adding %d hosts", count)
+	debugf(t, "adding %d hosts", count)
 	ch := make(chan *host.HostEvent)
 	stream := s.clusterClient(t).StreamHostEvents(ch)
 	defer stream.Close()
@@ -164,7 +164,7 @@ func (s *SchedulerSuite) addHosts(t *c.C, count int) []string {
 
 		select {
 		case event := <-ch:
-			debug("host added", event.HostID)
+			debug(t, "host added ", event.HostID)
 			hosts = append(hosts, event.HostID)
 		case <-time.After(20 * time.Second):
 			t.Fatal("timed out waiting for new host")
@@ -174,7 +174,7 @@ func (s *SchedulerSuite) addHosts(t *c.C, count int) []string {
 }
 
 func (s *SchedulerSuite) removeHosts(t *c.C, ids []string) {
-	debugf("removing %d hosts", len(ids))
+	debugf(t, "removing %d hosts", len(ids))
 
 	// Wait for router-api services to disappear to indicate host
 	// removal (rather than using StreamHostEvents), so that other
@@ -204,7 +204,7 @@ func (s *SchedulerSuite) removeHosts(t *c.C, ids []string) {
 			select {
 			case update := <-updates:
 				if !update.Online {
-					debug("host removed", update.Addr)
+					debug(t, "host removed ", update.Addr)
 					break loop
 				}
 			case <-time.After(20 * time.Second):
@@ -232,13 +232,13 @@ func jobEventsEqual(expected, actual jobEvents) bool {
 type jobEvents map[string]map[string]int
 
 func waitForJobEvents(t *c.C, events chan *ct.JobEvent, expected jobEvents) (lastID int64, jobID string) {
-	debugf("waiting for job events: %v", expected)
+	debugf(t, "waiting for job events: %v", expected)
 	actual := make(jobEvents)
 	for {
 	inner:
 		select {
 		case event := <-events:
-			debug("got job event:", event.Type, event.JobID, event.State)
+			debug(t, "got job event: ", event.Type, event.JobID, event.State)
 			lastID = event.ID
 			jobID = event.JobID
 			if _, ok := actual[event.Type]; !ok {
@@ -255,18 +255,18 @@ func waitForJobEvents(t *c.C, events chan *ct.JobEvent, expected jobEvents) (las
 			if jobEventsEqual(expected, actual) {
 				return
 			}
-		case <-time.After(20 * time.Second):
+		case <-time.After(60 * time.Second):
 			t.Fatal("timed out waiting for job events: ", expected)
 		}
 	}
 }
 
 func waitForJobRestart(t *c.C, events chan *ct.JobEvent, typ string, timeout time.Duration) string {
-	debug("waiting for job restart")
+	debug(t, "waiting for job restart")
 	for {
 		select {
 		case event := <-events:
-			debug("got job event:", event.Type, event.JobID, event.State)
+			debug(t, "got job event: ", event.Type, event.JobID, event.State)
 			if event.Type == typ && event.State == "up" {
 				return event.JobID
 			}
@@ -297,7 +297,7 @@ func (s *SchedulerSuite) TestScale(t *c.C) {
 	}
 
 	for _, procs := range updates {
-		debugf("scaling formation to %v", procs)
+		debugf(t, "scaling formation to %v", procs)
 		formation.Processes = procs
 		t.Assert(s.controller.PutFormation(formation), c.IsNil)
 
@@ -339,12 +339,12 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	hostID, jobID, _ := cluster.ParseJobID(jobs[0].ID)
 	t.Assert(hostID, c.Not(c.Equals), "")
 	t.Assert(jobID, c.Not(c.Equals), "")
-	debugf("current controller app[%s] host[%s] job[%s]", app.ID, hostID, jobID)
+	debugf(t, "current controller app[%s] host[%s] job[%s]", app.ID, hostID, jobID)
 
 	// start a second controller and wait for it to come up
 	stream, err := s.controller.StreamJobEvents("controller", 0)
 	t.Assert(err, c.IsNil)
-	debug("scaling the controller up")
+	debug(t, "scaling the controller up")
 	t.Assert(s.controller.PutFormation(&ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
@@ -370,7 +370,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 			return fmt.Errorf("expected 2 controller processes, got %d", len(addrs))
 		}
 		addr := addrs[1]
-		debug("new controller address:", addr)
+		debug(t, "new controller address: ", addr)
 		client, err = controller.NewClient("http://"+addr, s.config.Key)
 		return
 	}), c.IsNil)
@@ -385,12 +385,12 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	hc, err := cc.DialHost(hostID)
 	t.Assert(err, c.IsNil)
 	defer hc.Close()
-	debug("stopping job", jobID)
+	debug(t, "stopping job ", jobID)
 	t.Assert(hc.StopJob(jobID), c.IsNil)
 	waitForJobEvents(t, stream.Events, jobEvents{"web": {"down": 1, "up": 1}})
 
 	// scale back down
-	debug("scaling the controller down")
+	debug(t, "scaling the controller down")
 	t.Assert(s.controller.PutFormation(&ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
@@ -428,7 +428,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	t.Assert(list, c.HasLen, 3)
 	jobs := make(map[string]*ct.Job, len(list))
 	for _, job := range list {
-		debug(job.Type, "job started with ID", job.ID)
+		debug(t, job.Type, "job started with ID ", job.ID)
 		jobs[job.Type] = job
 	}
 
@@ -490,7 +490,7 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 	}
 
 	for _, procs := range updates {
-		debugf("scaling formation to %v", procs)
+		debugf(t, "scaling formation to %v", procs)
 		formation.Processes = procs
 		t.Assert(s.controller.PutFormation(formation), c.IsNil)
 
@@ -532,7 +532,7 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 	}
 	backoffPeriod := testCluster.BackoffPeriod
 	startTimeout := 20 * time.Second
-	debugf("job restart backoff period: %s", backoffPeriod)
+	debugf(t, "job restart backoff period: %s", backoffPeriod)
 
 	app, release := s.createApp(t)
 
@@ -576,9 +576,9 @@ func (s *SchedulerSuite) TestTCPApp(t *c.C) {
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 
-	t.Assert(flynn("/", "-a", app.Name, "scale", "echoer=1"), Succeeds)
+	t.Assert(flynn(t, "/", "-a", app.Name, "scale", "echoer=1"), Succeeds)
 
-	newRoute := flynn("/", "-a", app.Name, "route", "add", "tcp", "-s", "echo-service")
+	newRoute := flynn(t, "/", "-a", app.Name, "route", "add", "tcp", "-s", "echo-service")
 	t.Assert(newRoute, Succeeds)
 	t.Assert(newRoute.Output, Matches, `.+ on port \d+`)
 	str := strings.Split(strings.TrimSpace(string(newRoute.Output)), " ")

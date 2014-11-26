@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 
+	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/websocket"
-	. "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
 	"github.com/flynn/flynn/router/types"
 )

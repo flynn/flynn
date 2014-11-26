@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	c "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
+	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/pkg/attempt"
@@ -22,13 +22,13 @@ type GitDeploySuite struct {
 	client *controller.Client
 }
 
-var _ = c.Suite(&GitDeploySuite{})
+var _ = c.ConcurrentSuite(&GitDeploySuite{})
 
 func (s *GitDeploySuite) SetUpSuite(t *c.C) {
 	var err error
 	s.ssh, err = genSSHKey()
 	t.Assert(err, c.IsNil)
-	t.Assert(flynn("/", "key", "add", s.ssh.Pub), Succeeds)
+	t.Assert(flynn(t, "/", "key", "add", s.ssh.Pub), Succeeds)
 
 	conf, err := config.ReadFile(flynnrc)
 	t.Assert(err, c.IsNil)
@@ -48,18 +48,19 @@ func (s *GitDeploySuite) TearDownSuite(t *c.C) {
 type gitRepo struct {
 	dir string
 	ssh *sshData
+	t   *c.C
 }
 
 func (s *GitDeploySuite) newGitRepo(t *c.C, nameOrURL string) *gitRepo {
 	dir := filepath.Join(t.MkDir(), "repo")
-	r := &gitRepo{dir, s.ssh}
+	r := &gitRepo{dir, s.ssh, t}
 
 	if strings.HasPrefix(nameOrURL, "https://") {
-		t.Assert(run(exec.Command("git", "clone", nameOrURL, dir)), Succeeds)
+		t.Assert(run(t, exec.Command("git", "clone", nameOrURL, dir)), Succeeds)
 		return r
 	}
 
-	t.Assert(run(exec.Command("cp", "-r", filepath.Join("apps", nameOrURL), dir)), Succeeds)
+	t.Assert(run(t, exec.Command("cp", "-r", filepath.Join("apps", nameOrURL), dir)), Succeeds)
 	t.Assert(r.git("init"), Succeeds)
 	t.Assert(r.git("add", "."), Succeeds)
 	t.Assert(r.git("commit", "-am", "init"), Succeeds)
@@ -67,18 +68,18 @@ func (s *GitDeploySuite) newGitRepo(t *c.C, nameOrURL string) *gitRepo {
 }
 
 func (r *gitRepo) flynn(args ...string) *CmdResult {
-	return flynn(r.dir, args...)
+	return flynn(r.t, r.dir, args...)
 }
 
 func (r *gitRepo) git(args ...string) *CmdResult {
 	cmd := exec.Command("git", args...)
 	cmd.Env = append(os.Environ(), r.ssh.Env...)
 	cmd.Dir = r.dir
-	return run(cmd)
+	return run(r.t, cmd)
 }
 
 var Attempts = attempt.Strategy{
-	Total: 20 * time.Second,
+	Total: 60 * time.Second,
 	Delay: 500 * time.Millisecond,
 }
 

@@ -6,12 +6,13 @@ package check_test
 import (
 	"flag"
 	"fmt"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/check.v1"
 	"os"
 	"regexp"
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 )
 
 // We count the number of suites run at least to get a vague hint that the
@@ -152,6 +153,16 @@ func (s *FixtureHelper) Benchmark2(c *check.C) {
 	c.SetBytes(1024)
 	for i := 0; i < c.N; i++ {
 		time.Sleep(s.sleep)
+	}
+}
+
+func (s *FixtureHelper) Benchmark3(c *check.C) {
+	var x []int64
+	s.trace("Benchmark3", c)
+	for i := 0; i < c.N; i++ {
+		time.Sleep(s.sleep)
+		x = make([]int64, 5)
+		_ = x
 	}
 }
 
