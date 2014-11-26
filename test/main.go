@@ -111,10 +111,11 @@ func main() {
 	}
 
 	res = check.RunAll(&check.RunConf{
-		Filter:      args.Run,
-		Stream:      true,
-		Verbose:     true,
-		KeepWorkDir: args.Debug,
+		Filter:           args.Run,
+		Stream:           true,
+		Verbose:          true,
+		KeepWorkDir:      args.Debug,
+		ConcurrencyLevel: 5,
 	})
 	fmt.Println(res)
 }

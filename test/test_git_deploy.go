@@ -22,7 +22,7 @@ type GitDeploySuite struct {
 	client *controller.Client
 }
 
-var _ = c.Suite(&GitDeploySuite{})
+var _ = c.ConcurrentSuite(&GitDeploySuite{})
 
 func (s *GitDeploySuite) SetUpSuite(t *c.C) {
 	var err error
