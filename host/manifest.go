@@ -86,6 +86,7 @@ type manifestService struct {
 	Entrypoint []string          `json:"entrypoint"`
 	Args       []string          `json:"args"`
 	Env        map[string]string `json:"env"`
+	ExposeEnv  []string          `json:"expose_env"`
 	TCPPorts   []string          `json:"tcp_ports"`
 }
 
@@ -212,6 +213,12 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 			job.Config.Env = make(map[string]string)
 		}
 		job.Config.Env["EXTERNAL_IP"] = m.externalAddr
+
+		for _, k := range service.ExposeEnv {
+			if v := os.Getenv(k); v != "" {
+				job.Config.Env[k] = v
+			}
+		}
 
 		job.Config.Ports = make([]host.Port, len(data.TCPPorts))
 		for i, port := range data.TCPPorts {
