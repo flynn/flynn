@@ -177,7 +177,7 @@ func parseEndpoints(headers []string, ref *Ref) []string {
 		endpoints := strings.Split(h, ",")
 		for _, e := range endpoints {
 			u := &url.URL{Scheme: ref.scheme, Host: e, Path: "/v1"}
-			if ref.username != "" {
+			if ref.token == "" && ref.username != "" {
 				u.User = url.UserPassword(ref.username, ref.password)
 			}
 			res = append(res, u.String())
