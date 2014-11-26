@@ -1,9 +1,7 @@
 package main
 
 import (
-	"encoding/base64"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -11,10 +9,8 @@ import (
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -22,77 +18,13 @@ import (
 )
 
 type SchedulerSuite struct {
-	config        *config.Cluster
-	cluster       *cluster.Client
-	controller    *controller.Client
-	disc          *discoverd.Client
-	hosts         map[string]cluster.Host
-	slugrunnerURI string
+	Helper
 }
 
 var _ = c.Suite(&SchedulerSuite{})
 
-func newControllerClient(t *c.C, cluster *config.Cluster) *controller.Client {
-	pin, err := base64.StdEncoding.DecodeString(cluster.TLSPin)
-	t.Assert(err, c.IsNil)
-	client, err := controller.NewClientWithPin(cluster.URL, cluster.Key, pin)
-	t.Assert(err, c.IsNil)
-
-	return client
-}
-
-func (s *SchedulerSuite) SetUpSuite(t *c.C) {
-	conf, err := config.ReadFile(flynnrc)
-	t.Assert(err, c.IsNil)
-	t.Assert(conf.Clusters, c.HasLen, 1)
-	s.config = conf.Clusters[0]
-
-	s.controller = newControllerClient(t, s.config)
-
-	r, err := s.controller.GetAppRelease("gitreceive")
-	t.Assert(err, c.IsNil)
-	s.slugrunnerURI = r.Processes["app"].Env["SLUGRUNNER_IMAGE_URI"]
-	t.Assert(s.slugrunnerURI, c.Not(c.Equals), "")
-
-	s.disc, err = discoverd.NewClientWithAddr(routerIP + ":1111")
-	t.Assert(err, c.IsNil)
-}
-
-func tryClose(clients ...io.Closer) {
-	for _, client := range clients {
-		if client != nil {
-			client.Close()
-		}
-	}
-}
-
 func (s *SchedulerSuite) TearDownSuite(t *c.C) {
-	tryClose(s.disc, s.cluster, s.controller)
-	for _, h := range s.hosts {
-		h.Close()
-	}
-}
-
-func (s *SchedulerSuite) clusterClient(t *c.C) *cluster.Client {
-	if s.cluster == nil {
-		var err error
-		s.cluster, err = cluster.NewClientWithDial(nil, s.disc.NewServiceSet)
-		t.Assert(err, c.IsNil)
-	}
-	return s.cluster
-}
-
-func (s *SchedulerSuite) hostClient(t *c.C, hostID string) cluster.Host {
-	if s.hosts == nil {
-		s.hosts = make(map[string]cluster.Host)
-	}
-	if client, ok := s.hosts[hostID]; ok {
-		return client
-	}
-	client, err := s.clusterClient(t).DialHost(hostID)
-	t.Assert(err, c.IsNil)
-	s.hosts[hostID] = client
-	return client
+	s.cleanup()
 }
 
 func (s *SchedulerSuite) stopJob(t *c.C, id string) {
@@ -103,46 +35,9 @@ func (s *SchedulerSuite) stopJob(t *c.C, id string) {
 }
 
 func (s *SchedulerSuite) checkJobState(t *c.C, appID, jobID, state string) {
-	job, err := s.controller.GetJob(appID, jobID)
+	job, err := s.controllerClient(t).GetJob(appID, jobID)
 	t.Assert(err, c.IsNil)
 	t.Assert(job.State, c.Equals, state)
-}
-
-func (s *SchedulerSuite) createApp(t *c.C) (*ct.App, *ct.Release) {
-	app := &ct.App{}
-	t.Assert(s.controller.CreateApp(app), c.IsNil)
-	debugf(t, "created app %s (%s)", app.Name, app.ID)
-
-	artifact := &ct.Artifact{Type: "docker", URI: s.slugrunnerURI}
-	t.Assert(s.controller.CreateArtifact(artifact), c.IsNil)
-
-	release := &ct.Release{
-		ArtifactID: artifact.ID,
-		Processes: map[string]ct.ProcessType{
-			"echoer": {
-				Entrypoint: []string{"bash", "-c"},
-				Cmd:        []string{"sdutil exec -s echo-service:$PORT socat -v tcp-l:$PORT,fork exec:/bin/cat"},
-				Ports:      []ct.Port{{Proto: "tcp"}},
-			},
-			"printer": {
-				Entrypoint: []string{"bash", "-c"},
-				Cmd:        []string{"while true; do echo I like to print; sleep 1; done"},
-				Ports:      []ct.Port{{Proto: "tcp"}},
-			},
-			"crasher": {
-				Entrypoint: []string{"bash", "-c"},
-				Cmd:        []string{"trap 'exit 1' SIGTERM; while true; do echo I like to crash; sleep 1; done"},
-			},
-			"omni": {
-				Entrypoint: []string{"bash", "-c"},
-				Cmd:        []string{"while true; do echo I am everywhere; sleep 1; done"},
-				Omni:       true,
-			},
-		},
-	}
-	t.Assert(s.controller.CreateRelease(release), c.IsNil)
-	t.Assert(s.controller.SetAppRelease(app.ID, release.ID), c.IsNil)
-	return app, release
 }
 
 func (s *SchedulerSuite) addHosts(t *c.C, count int) []string {
@@ -179,7 +74,7 @@ func (s *SchedulerSuite) removeHosts(t *c.C, ids []string) {
 	// Wait for router-api services to disappear to indicate host
 	// removal (rather than using StreamHostEvents), so that other
 	// tests won't try and connect to this host via service discovery.
-	set, err := s.disc.NewServiceSet("router-api")
+	set, err := s.discoverdClient(t).NewServiceSet("router-api")
 	t.Assert(err, c.IsNil)
 	defer set.Close()
 	updates := set.Watch(false)
@@ -279,7 +174,7 @@ func waitForJobRestart(t *c.C, events chan *ct.JobEvent, typ string, timeout tim
 func (s *SchedulerSuite) TestScale(t *c.C) {
 	app, release := s.createApp(t)
 
-	stream, err := s.controller.StreamJobEvents(app.ID, 0)
+	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, 0)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 
@@ -299,7 +194,7 @@ func (s *SchedulerSuite) TestScale(t *c.C) {
 	for _, procs := range updates {
 		debugf(t, "scaling formation to %v", procs)
 		formation.Processes = procs
-		t.Assert(s.controller.PutFormation(formation), c.IsNil)
+		t.Assert(s.controllerClient(t).PutFormation(formation), c.IsNil)
 
 		expected := make(jobEvents)
 		for typ, count := range procs {
@@ -323,11 +218,11 @@ func (s *SchedulerSuite) TestScale(t *c.C) {
 
 func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	// get the current controller details
-	app, err := s.controller.GetApp("controller")
+	app, err := s.controllerClient(t).GetApp("controller")
 	t.Assert(err, c.IsNil)
-	release, err := s.controller.GetAppRelease("controller")
+	release, err := s.controllerClient(t).GetAppRelease("controller")
 	t.Assert(err, c.IsNil)
-	list, err := s.controller.JobList("controller")
+	list, err := s.controllerClient(t).JobList("controller")
 	t.Assert(err, c.IsNil)
 	var jobs []*ct.Job
 	for _, job := range list {
@@ -342,10 +237,10 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	debugf(t, "current controller app[%s] host[%s] job[%s]", app.ID, hostID, jobID)
 
 	// start a second controller and wait for it to come up
-	stream, err := s.controller.StreamJobEvents("controller", 0)
+	stream, err := s.controllerClient(t).StreamJobEvents("controller", 0)
 	t.Assert(err, c.IsNil)
 	debug(t, "scaling the controller up")
-	t.Assert(s.controller.PutFormation(&ct.Formation{
+	t.Assert(s.controllerClient(t).PutFormation(&ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
 		Processes: map[string]int{"web": 2, "scheduler": 1},
@@ -360,7 +255,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 		Delay: 500 * time.Millisecond,
 	}
 	t.Assert(attempts.Run(func() (err error) {
-		set, err := s.disc.NewServiceSet("flynn-controller")
+		set, err := s.discoverdClient(t).NewServiceSet("flynn-controller")
 		if err != nil {
 			return err
 		}
@@ -371,7 +266,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 		}
 		addr := addrs[1]
 		debug(t, "new controller address: ", addr)
-		client, err = controller.NewClient("http://"+addr, s.config.Key)
+		client, err = controller.NewClient("http://"+addr, s.clusterConf(t).Key)
 		return
 	}), c.IsNil)
 
@@ -379,7 +274,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	stream, err = client.StreamJobEvents("controller", lastID)
 	defer stream.Close()
 	t.Assert(err, c.IsNil)
-	cc, err := cluster.NewClientWithDial(nil, s.disc.NewServiceSet)
+	cc, err := cluster.NewClientWithDial(nil, s.discoverdClient(t).NewServiceSet)
 	t.Assert(err, c.IsNil)
 	defer cc.Close()
 	hc, err := cc.DialHost(hostID)
@@ -391,31 +286,31 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 
 	// scale back down
 	debug(t, "scaling the controller down")
-	t.Assert(s.controller.PutFormation(&ct.Formation{
+	t.Assert(s.controllerClient(t).PutFormation(&ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
 		Processes: map[string]int{"web": 1, "scheduler": 1},
 	}), c.IsNil)
 	waitForJobEvents(t, stream.Events, jobEvents{"web": {"down": 1}})
 
-	// set the suite's client to the new controller for other tests
-	s.controller = client
+	// unset the suite's client so other tests use a new client
+	s.controller = nil
 }
 
 func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	app, release := s.createApp(t)
 
-	stream, err := s.controller.StreamJobEvents(app.ID, 0)
+	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, 0)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 
 	// start 2 formation processes and 1 one-off job
-	t.Assert(s.controller.PutFormation(&ct.Formation{
+	t.Assert(s.controllerClient(t).PutFormation(&ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
 		Processes: map[string]int{"printer": 1, "crasher": 1},
 	}), c.IsNil)
-	_, err = s.controller.RunJobDetached(app.ID, &ct.NewJob{
+	_, err = s.controllerClient(t).RunJobDetached(app.ID, &ct.NewJob{
 		ReleaseID:  release.ID,
 		Entrypoint: []string{"bash", "-c"},
 		Cmd:        []string{"while true; do echo one-off-job; sleep 1; done"},
@@ -423,7 +318,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	t.Assert(err, c.IsNil)
 	waitForJobEvents(t, stream.Events, jobEvents{"printer": {"up": 1}, "crasher": {"up": 1}, "": {"up": 1}})
 
-	list, err := s.controller.JobList(app.ID)
+	list, err := s.controllerClient(t).JobList(app.ID)
 	t.Assert(err, c.IsNil)
 	t.Assert(list, c.HasLen, 3)
 	jobs := make(map[string]*ct.Job, len(list))
@@ -442,7 +337,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	s.stopJob(t, job.ID)
 	waitForJobEvents(t, stream.Events, jobEvents{"printer": {"down": 1, "up": 1}})
 	s.checkJobState(t, app.ID, job.ID, "down")
-	list, err = s.controller.JobList(app.ID)
+	list, err = s.controllerClient(t).JobList(app.ID)
 	t.Assert(err, c.IsNil)
 	t.Assert(list, c.HasLen, 4)
 
@@ -451,7 +346,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	s.stopJob(t, job.ID)
 	waitForJobEvents(t, stream.Events, jobEvents{"": {"down": 1}})
 	s.checkJobState(t, app.ID, job.ID, "down")
-	list, err = s.controller.JobList(app.ID)
+	list, err = s.controllerClient(t).JobList(app.ID)
 	t.Assert(err, c.IsNil)
 	t.Assert(list, c.HasLen, 4)
 
@@ -460,7 +355,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	s.stopJob(t, job.ID)
 	waitForJobEvents(t, stream.Events, jobEvents{"crasher": {"down": 1, "up": 1}})
 	s.checkJobState(t, app.ID, job.ID, "crashed")
-	list, err = s.controller.JobList(app.ID)
+	list, err = s.controllerClient(t).JobList(app.ID)
 	t.Assert(err, c.IsNil)
 	t.Assert(list, c.HasLen, 5)
 }
@@ -472,7 +367,7 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 
 	app, release := s.createApp(t)
 
-	stream, err := s.controller.StreamJobEvents(app.ID, 0)
+	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, 0)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 
@@ -492,7 +387,7 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 	for _, procs := range updates {
 		debugf(t, "scaling formation to %v", procs)
 		formation.Processes = procs
-		t.Assert(s.controller.PutFormation(formation), c.IsNil)
+		t.Assert(s.controllerClient(t).PutFormation(formation), c.IsNil)
 
 		expected := make(jobEvents)
 		for typ, count := range procs {
@@ -536,11 +431,11 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 
 	app, release := s.createApp(t)
 
-	stream, err := s.controller.StreamJobEvents(app.ID, 0)
+	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, 0)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 
-	t.Assert(s.controller.PutFormation(&ct.Formation{
+	t.Assert(s.controllerClient(t).PutFormation(&ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
 		Processes: map[string]int{"printer": 1},
@@ -572,7 +467,7 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 func (s *SchedulerSuite) TestTCPApp(t *c.C) {
 	app, _ := s.createApp(t)
 
-	stream, err := s.controller.StreamJobEvents(app.ID, 0)
+	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, 0)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 
