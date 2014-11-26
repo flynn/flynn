@@ -12,6 +12,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/cli"
+	"github.com/flynn/flynn/host/config"
 	"github.com/flynn/flynn/host/ports"
 	"github.com/flynn/flynn/host/sampi"
 	"github.com/flynn/flynn/host/types"
@@ -28,6 +29,8 @@ var Attempts = attempt.Strategy{
 	Delay: 200 * time.Millisecond,
 }
 
+const configFile = "/etc/flynn/host.json"
+
 func init() {
 	log.SetFlags(log.Lshortfile | log.Lmicroseconds)
 
@@ -36,7 +39,6 @@ usage: flynn-host daemon [options] [--meta=<KEY=VAL>...]
 
 options:
   --external=IP          external IP of host
-  --config=PATH          path to configuration file
   --manifest=PATH        path to manifest file [default: /etc/flynn-host.json]
   --state=PATH           path to state file [default: /var/lib/flynn/host-state.bolt]
   --id=ID                host id
@@ -57,6 +59,7 @@ Options:
 
 Commands:
   help                       Show usage for a specific command
+  init                       Create cluster configuration for daemon
   daemon                     Start the daemon
   download                   Download container images
   bootstrap                  Bootstrap layer 1
@@ -83,6 +86,30 @@ See 'flynn-host help <command>' for more information on a specific command.
 		}
 	}
 
+	if cmd == "daemon" {
+		// merge in args and env from config file, if available
+		var c *config.Config
+		var err error
+		if n := os.Getenv("FLYNN_HOST_CONFIG"); n != "" {
+			c, err = config.Open(n)
+			if err != nil {
+				log.Fatalf("error opening config file %s: %s", n, err)
+			}
+		} else {
+			c, err = config.Open(configFile)
+			if err != nil && !os.IsNotExist(err) {
+				log.Fatalf("error opening config file %s: %s", configFile, err)
+			}
+			if c == nil {
+				c = &config.Config{}
+			}
+		}
+		cmdArgs = append(cmdArgs, c.Args...)
+		for k, v := range c.Env {
+			os.Setenv(k, v)
+		}
+	}
+
 	if err := cli.Run(cmd, cmdArgs); err != nil {
 		log.Fatal(err)
 	}
@@ -92,7 +119,6 @@ func runDaemon(args *docopt.Args) {
 	hostname, _ := os.Hostname()
 	externalAddr := args.String["--external"]
 	bindAddr := args.String["--bind"]
-	configFile := args.String["--config"]
 	manifestFile := args.String["--manifest"]
 	stateFile := args.String["--state"]
 	hostID := args.String["--id"]
@@ -241,12 +267,6 @@ func runDaemon(args *docopt.Args) {
 	go syncScheduler(cluster, events)
 
 	h := &host.Host{}
-	if configFile != "" {
-		h, err = openConfig(configFile)
-		if err != nil {
-			sh.Fatal(err)
-		}
-	}
 	if h.Metadata == nil {
 		h.Metadata = make(map[string]string)
 	}
