@@ -2,16 +2,13 @@
   {
     "id": "etcd",
     "image": "$image_url_prefix/etcd?id=$image_id[etcd]",
+    "expose_env": ["ETCD_INITIAL_CLUSTER", "ETCD_INITIAL_CLUSTER_STATE", "ETCD_NAME", "ETCD_DISCOVERY", "ETCD_PROXY"],
     "args": [
       "-data-dir={{ .Volume \"/data\" }}",
       "-advertise-client-urls=http://{{ .ExternalIP }}:{{ .TCPPort 0 }}",
       "-listen-client-urls=http://0.0.0.0:{{ .TCPPort 0 }}",
       "-initial-advertise-peer-urls=http://{{ .ExternalIP }}:{{ .TCPPort 1 }}",
-      "-listen-peer-urls=http://0.0.0.0:{{ .TCPPort 1 }}",
-      "-name={{ .Env.ETCD_NAME }}",
-      "-initial-cluster-state=new",
-      "-initial-cluster={{ .Env.ETCD_NAME }}=http://{{ .ExternalIP }}:{{ .TCPPort 1 }},{{ if .Env.ETCD_PEERS }},{{ .Env.ETCD_PEERS }}{{ end }}",
-      "{{ if .Env.ETCD_DISCOVERY }}-discovery={{ .Env.ETCD_DISCOVERY }}{{ end }}"
+      "-listen-peer-urls=http://0.0.0.0:{{ .TCPPort 1 }}"
     ],
     "tcp_ports": ["2379", "2380"]
   },
