@@ -1,13 +1,13 @@
 // +build linux
 
-package devmapper
+package devicemapper
 
 import (
 	"fmt"
 	"os"
 	"syscall"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/log"
+	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
 )
 
 func stringToLoopName(src string) [LoNameSize]uint8 {
@@ -52,7 +52,7 @@ func openNextAvailableLoopback(index int, sparseFile *os.File) (loopFile *os.Fil
 		// OpenFile adds O_CLOEXEC
 		loopFile, err = os.OpenFile(target, os.O_RDWR, 0644)
 		if err != nil {
-			log.Errorf("Error openning loopback device: %s", err)
+			log.Errorf("Error opening loopback device: %s", err)
 			return nil, ErrAttachLoopbackDevice
 		}
 
@@ -84,7 +84,7 @@ func openNextAvailableLoopback(index int, sparseFile *os.File) (loopFile *os.Fil
 
 // attachLoopDevice attaches the given sparse file to the next
 // available loopback device. It returns an opened *os.File.
-func attachLoopDevice(sparseName string) (loop *os.File, err error) {
+func AttachLoopDevice(sparseName string) (loop *os.File, err error) {
 
 	// Try to retrieve the next available loopback device via syscall.
 	// If it fails, we discard error and start loopking for a
@@ -97,7 +97,7 @@ func attachLoopDevice(sparseName string) (loop *os.File, err error) {
 	// OpenFile adds O_CLOEXEC
 	sparseFile, err := os.OpenFile(sparseName, os.O_RDWR, 0644)
 	if err != nil {
-		log.Errorf("Error openning sparse file %s: %s", sparseName, err)
+		log.Errorf("Error opening sparse file %s: %s", sparseName, err)
 		return nil, ErrAttachLoopbackDevice
 	}
 	defer sparseFile.Close()

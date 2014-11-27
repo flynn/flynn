@@ -40,13 +40,15 @@ func Init(home string, options []string) (graphdriver.Driver, error) {
 		return nil, err
 	}
 
-	if err := graphdriver.MakePrivate(home); err != nil {
+	if err := mount.MakePrivate(home); err != nil {
 		return nil, err
 	}
 
-	return &Driver{
+	driver := &Driver{
 		home: home,
-	}, nil
+	}
+
+	return graphdriver.NaiveDiffDriver(driver), nil
 }
 
 type Driver struct {
@@ -58,7 +60,14 @@ func (d *Driver) String() string {
 }
 
 func (d *Driver) Status() [][2]string {
-	return nil
+	status := [][2]string{}
+	if bv := BtrfsBuildVersion(); bv != "-" {
+		status = append(status, [2]string{"Build Version", bv})
+	}
+	if lv := BtrfsLibVersion(); lv != -1 {
+		status = append(status, [2]string{"Library Version", fmt.Sprintf("%d", lv)})
+	}
+	return status
 }
 
 func (d *Driver) Cleanup() error {
