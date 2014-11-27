@@ -94,6 +94,9 @@ func NewLibvirtLXCBackend(state *State, portAlloc map[string]*ports.Allocator, v
 	if err := netlink.NetworkSetMacAddress(bridge, bridgeMAC); err != nil {
 		return nil, err
 	}
+	if err := netlink.NetworkLinkUp(bridge); err != nil {
+		return nil, err
+	}
 
 	iptables.RemoveExistingChain("FLYNN", bridgeName)
 	chain, err := iptables.NewChain("FLYNN", bridgeName)
