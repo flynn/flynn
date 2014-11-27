@@ -29,9 +29,6 @@ func runPs(args *docopt.Args, client *controller.Client) error {
 	if err != nil {
 		return err
 	}
-	if len(jobs) == 0 {
-		return nil
-	}
 	sort.Sort(jobsByType(jobs))
 
 	w := tabWriter()
