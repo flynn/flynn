@@ -138,6 +138,13 @@ func runDaemon(args *docopt.Args) {
 	if strings.Contains(hostID, "-") {
 		log.Fatal("host id must not contain dashes")
 	}
+	if externalAddr == "" {
+		var err error
+		externalAddr, err = config.DefaultExternalIP()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 
 	portAlloc := map[string]*ports.Allocator{
 		"tcp": ports.NewAllocator(55000, 65535),
