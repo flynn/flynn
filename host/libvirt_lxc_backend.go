@@ -87,7 +87,11 @@ func NewLibvirtLXCBackend(state *State, portAlloc map[string]*ports.Allocator, v
 	}
 	// We need to explicitly assign the MAC address to avoid it changing to a lower value
 	// See: https://github.com/flynn/flynn/issues/223
-	if err := netlink.NetworkSetMacAddress(bridgeName, bridgeMAC); err != nil {
+	bridge, err := net.InterfaceByName(bridgeName)
+	if err != nil {
+		return nil, err
+	}
+	if err := netlink.NetworkSetMacAddress(bridge, bridgeMAC); err != nil {
 		return nil, err
 	}
 
@@ -250,8 +254,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 		done: make(chan struct{}),
 	}
 	if !job.Config.HostNetwork {
-		ip, err := ipallocator.RequestIP(bridgeNet, nil)
-		container.IP = *ip
+		container.IP, err = ipallocator.RequestIP(bridgeNet, nil)
 		if err != nil {
 			g.Log(grohl.Data{"at": "request_ip", "status": "error", "err": err})
 			return err
@@ -664,7 +667,7 @@ func (c *libvirtContainer) cleanup() error {
 				c.l.ports[p.Proto].Put(uint16(i))
 			}
 		}
-		ipallocator.ReleaseIP(bridgeNet, &c.IP)
+		ipallocator.ReleaseIP(bridgeNet, c.IP)
 	}
 	g.Log(grohl.Data{"at": "finish"})
 	return nil

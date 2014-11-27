@@ -354,7 +354,7 @@ func getCredential(args *ContainerInitArgs) (*syscall.Credential, error) {
 	if args.user == "" {
 		return nil, nil
 	}
-	users, err := user.ParsePasswdFilter(func(u *user.User) bool {
+	users, err := user.ParsePasswdFileFilter("/etc/passwd", func(u user.User) bool {
 		return u.Name == args.user
 	})
 	if err != nil || len(users) == 0 {
