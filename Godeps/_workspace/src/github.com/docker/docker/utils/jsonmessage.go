@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/timeutils"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/units"
 )
 
@@ -96,11 +97,11 @@ func (jm *JSONMessage) Display(out io.Writer, isTerminal bool) error {
 		// <ESC>[2K = erase entire current line
 		fmt.Fprintf(out, "%c[2K\r", 27)
 		endl = "\r"
-	} else if jm.Progress != nil { //disable progressbar in non-terminal
+	} else if jm.Progress != nil && jm.Progress.String() != "" { //disable progressbar in non-terminal
 		return nil
 	}
 	if jm.Time != 0 {
-		fmt.Fprintf(out, "%s ", time.Unix(jm.Time, 0).Format(time.RFC3339Nano))
+		fmt.Fprintf(out, "%s ", time.Unix(jm.Time, 0).Format(timeutils.RFC3339NanoFixed))
 	}
 	if jm.ID != "" {
 		fmt.Fprintf(out, "%s: ", jm.ID)
@@ -108,7 +109,7 @@ func (jm *JSONMessage) Display(out io.Writer, isTerminal bool) error {
 	if jm.From != "" {
 		fmt.Fprintf(out, "(from %s) ", jm.From)
 	}
-	if jm.Progress != nil {
+	if jm.Progress != nil && isTerminal {
 		fmt.Fprintf(out, "%s %s%s", jm.Status, jm.Progress.String(), endl)
 	} else if jm.ProgressMessage != "" { //deprecated
 		fmt.Fprintf(out, "%s %s%s", jm.Status, jm.ProgressMessage, endl)
@@ -143,7 +144,9 @@ func DisplayJSONMessagesStream(in io.Reader, out io.Writer, terminalFd uintptr, 
 			if !ok {
 				line = len(ids)
 				ids[jm.ID] = line
-				fmt.Fprintf(out, "\n")
+				if isTerminal {
+					fmt.Fprintf(out, "\n")
+				}
 				diff = 0
 			} else {
 				diff = len(ids) - line

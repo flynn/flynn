@@ -161,7 +161,7 @@ func deleteTap(name string) error {
 
 type Tap struct {
 	Name              string
-	LocalIP, RemoteIP *net.IP
+	LocalIP, RemoteIP net.IP
 	bridge            *Bridge
 }
 
@@ -223,7 +223,7 @@ func (t *TapManager) NewTap(uid, gid int) (*Tap, error) {
 		tap.Close()
 		return nil, err
 	}
-	if err := netlink.NetworkLinkAddIp(iface, *tap.LocalIP, t.bridge.ipNet); err != nil {
+	if err := netlink.NetworkLinkAddIp(iface, tap.LocalIP, t.bridge.ipNet); err != nil {
 		tap.Close()
 		return nil, err
 	}

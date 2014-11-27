@@ -3,10 +3,13 @@ package vfs
 import (
 	"bytes"
 	"fmt"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver"
 	"os"
 	"os/exec"
 	"path"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/chrootarchive"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/label"
 )
 
 func init() {
@@ -17,7 +20,7 @@ func Init(home string, options []string) (graphdriver.Driver, error) {
 	d := &Driver{
 		home: home,
 	}
-	return d, nil
+	return graphdriver.NaiveDiffDriver(d), nil
 }
 
 type Driver struct {
@@ -44,21 +47,6 @@ func isGNUcoreutils() bool {
 	return false
 }
 
-func copyDir(src, dst string) error {
-	argv := make([]string, 0, 4)
-
-	if isGNUcoreutils() {
-		argv = append(argv, "-aT", "--reflink=auto", src, dst)
-	} else {
-		argv = append(argv, "-a", src+"/.", dst+"/.")
-	}
-
-	if output, err := exec.Command("cp", argv...).CombinedOutput(); err != nil {
-		return fmt.Errorf("Error VFS copying directory: %s (%s)", err, output)
-	}
-	return nil
-}
-
 func (d *Driver) Create(id, parent string) error {
 	dir := d.dir(id)
 	if err := os.MkdirAll(path.Dir(dir), 0700); err != nil {
@@ -67,6 +55,10 @@ func (d *Driver) Create(id, parent string) error {
 	if err := os.Mkdir(dir, 0755); err != nil {
 		return err
 	}
+	opts := []string{"level:s0"}
+	if _, mountLabel, err := label.InitLabels(opts); err == nil {
+		label.Relabel(dir, mountLabel, "")
+	}
 	if parent == "" {
 		return nil
 	}
@@ -74,7 +66,7 @@ func (d *Driver) Create(id, parent string) error {
 	if err != nil {
 		return fmt.Errorf("%s: %s", parent, err)
 	}
-	if err := copyDir(parentDir, dir); err != nil {
+	if err := chrootarchive.CopyWithTar(parentDir, dir); err != nil {
 		return err
 	}
 	return nil

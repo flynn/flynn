@@ -4,7 +4,7 @@ import (
 	"os/exec"
 	"syscall"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/log"
+	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
 )
 
 func Unmount(target string) error {

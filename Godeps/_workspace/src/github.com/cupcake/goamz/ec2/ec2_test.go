@@ -5,7 +5,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/aws"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/ec2"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/testutil"
+	"github.com/cupcake/goamz/testutil"
 	. "launchpad.net/gocheck"
 )
 

@@ -1,6 +1,6 @@
 // +build linux
 
-package devmapper
+package devicemapper
 
 /*
 #cgo LDFLAGS: -L. -ldevmapper
@@ -38,9 +38,7 @@ static void	log_with_errno_init()
 */
 import "C"
 
-import (
-	"unsafe"
-)
+import "unsafe"
 
 type (
 	CDmTask C.struct_dm_task
@@ -84,6 +82,12 @@ const (
 	LoNameSize       = C.LO_NAME_SIZE
 )
 
+const (
+	DmUdevDisableSubsystemRulesFlag = C.DM_UDEV_DISABLE_SUBSYSTEM_RULES_FLAG
+	DmUdevDisableDiskRulesFlag      = C.DM_UDEV_DISABLE_DISK_RULES_FLAG
+	DmUdevDisableOtherRulesFlag     = C.DM_UDEV_DISABLE_OTHER_RULES_FLAG
+)
+
 var (
 	DmGetLibraryVersion    = dmGetLibraryVersionFct
 	DmGetNextTarget        = dmGetNextTargetFct
@@ -92,6 +96,7 @@ var (
 	DmTaskAddTarget        = dmTaskAddTargetFct
 	DmTaskCreate           = dmTaskCreateFct
 	DmTaskDestroy          = dmTaskDestroyFct
+	DmTaskGetDeps          = dmTaskGetDepsFct
 	DmTaskGetInfo          = dmTaskGetInfoFct
 	DmTaskGetDriverVersion = dmTaskGetDriverVersionFct
 	DmTaskRun              = dmTaskRunFct
@@ -166,6 +171,21 @@ func dmTaskAddTargetFct(task *CDmTask,
 	defer free(Cparams)
 
 	return int(C.dm_task_add_target((*C.struct_dm_task)(task), C.uint64_t(start), C.uint64_t(size), Cttype, Cparams))
+}
+
+func dmTaskGetDepsFct(task *CDmTask) *Deps {
+	Cdeps := C.dm_task_get_deps((*C.struct_dm_task)(task))
+	if Cdeps == nil {
+		return nil
+	}
+	deps := &Deps{
+		Count:  uint32(Cdeps.count),
+		Filler: uint32(Cdeps.filler),
+	}
+	for _, device := range Cdeps.device {
+		deps.Device = append(deps.Device, (uint64)(device))
+	}
+	return deps
 }
 
 func dmTaskGetInfoFct(task *CDmTask, info *Info) int {
