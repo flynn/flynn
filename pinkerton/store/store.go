@@ -6,10 +6,10 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"syscall"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/archive"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver"
 	"github.com/flynn/flynn/pinkerton/registry"
 )
@@ -65,23 +65,12 @@ func (s *Store) Add(img *registry.Image) (err error) {
 		return err
 	}
 
-	layer, err := s.driver.Get(img.ID, "")
+	size, err := s.driver.ApplyDiff(img.ID, img.ParentID, img)
 	if err != nil {
 		return err
 	}
-	defer s.driver.Put(img.ID)
 
-	if differ, ok := s.driver.(graphdriver.Differ); ok {
-		if err := differ.ApplyDiff(img.ID, img); err != nil {
-			return err
-		}
-	} else {
-		if err := archive.ApplyLayer(layer, img); err != nil {
-			return err
-		}
-	}
-
-	if err := ioutil.WriteFile(filepath.Join(tmp, "layersize"), []byte{'0'}, 0600); err != nil {
+	if err := ioutil.WriteFile(filepath.Join(tmp, "layersize"), strconv.AppendInt(nil, size, 10), 0600); err != nil {
 		return err
 	}
 	f, err := os.OpenFile(filepath.Join(tmp, "json"), os.O_RDWR|os.O_CREATE, 0600)
