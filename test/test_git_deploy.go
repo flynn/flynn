@@ -12,14 +12,12 @@ import (
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/cli/config"
-	"github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/pkg/attempt"
 )
 
 type GitDeploySuite struct {
-	ssh    *sshData
-	client *controller.Client
+	Helper
+	ssh *sshData
 }
 
 var _ = c.ConcurrentSuite(&GitDeploySuite{})
@@ -29,19 +27,12 @@ func (s *GitDeploySuite) SetUpSuite(t *c.C) {
 	s.ssh, err = genSSHKey()
 	t.Assert(err, c.IsNil)
 	t.Assert(flynn(t, "/", "key", "add", s.ssh.Pub), Succeeds)
-
-	conf, err := config.ReadFile(flynnrc)
-	t.Assert(err, c.IsNil)
-	t.Assert(conf.Clusters, c.HasLen, 1)
-	s.client = newControllerClient(t, conf.Clusters[0])
 }
 
 func (s *GitDeploySuite) TearDownSuite(t *c.C) {
+	s.cleanup()
 	if s.ssh != nil {
 		s.ssh.Cleanup()
-	}
-	if s.client != nil {
-		s.client.Close()
 	}
 }
 
@@ -185,7 +176,7 @@ func (s *GitDeploySuite) runBuildpackTest(t *c.C, name string, resources []strin
 	})
 	t.Assert(err, c.IsNil)
 
-	stream, err := s.client.StreamJobEvents(name, 0)
+	stream, err := s.controllerClient(t).StreamJobEvents(name, 0)
 	t.Assert(err, c.IsNil)
 
 	r.flynn("scale", "web=0")
