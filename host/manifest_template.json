@@ -8,7 +8,8 @@
       "-advertise-client-urls=http://{{ .ExternalIP }}:{{ .TCPPort 0 }}",
       "-listen-client-urls=http://0.0.0.0:{{ .TCPPort 0 }}",
       "-initial-advertise-peer-urls=http://{{ .ExternalIP }}:{{ .TCPPort 1 }}",
-      "-listen-peer-urls=http://0.0.0.0:{{ .TCPPort 1 }}"
+      "-listen-peer-urls=http://0.0.0.0:{{ .TCPPort 1 }}",
+      "{{ if and (not .Env.ETCD_INITIAL_CLUSTER) (not .Env.ETCD_DISCOVERY) }}-initial-cluster=default=http://{{ .ExternalIP }}:{{ .TCPPort 1 }}{{ end }}"
     ],
     "tcp_ports": ["2379", "2380"]
   },
