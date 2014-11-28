@@ -14,9 +14,11 @@ import (
 
 func init() {
 	register("scale", runScale, `
-usage: flynn scale [options] <type>=<qty>...
+usage: flynn scale [options] [<type>=<qty>...]
 
 Scale changes the number of jobs for each process type in a release.
+
+Ommitting the arguments will show the current scale.
 
 Options:
 	-n, --no-wait            don't wait for the scaling events to happen
@@ -24,18 +26,19 @@ Options:
 
 Example:
 
+	$ flynn scale
+	web=4 worker=2
+
 	$ flynn scale web=2 worker=5
-	scaling web: 0=>2, worker: 0=>5
+	scaling web: 4=>2, worker: 2=>5
 
-	02:21:24.997 ==> web flynn-04093a8893d0465db8adbd98f509d011 up
-	02:21:26.010 ==> web flynn-467570f5b4cb45728ddbf8d9f6b9553d up
-	02:21:27.009 ==> worker flynn-0d38b2b6d964463d9a89da9654a54a8a up
-	02:21:28.000 ==> worker flynn-eac9c78786a1462db3a4c2061b057849 up
-	02:21:29.027 ==> worker flynn-988f2a0501654fecba18e73bd09bc891 up
-	02:21:30.070 ==> worker flynn-2ee5a2957bd74363ae1398a756569fbc up
-	02:21:31.154 ==> worker flynn-683470c37797464dbc7034f9ecbc695d up
+	02:28:34.333 ==> web flynn-3f656af6f1e44092aa7037046236b203 down
+	02:28:34.466 ==> web flynn-ee83def0b8e4455793a43c8c70f5b34e down
+	02:28:35.479 ==> worker flynn-84f70ca18c9641ef83a178a19db867a3 up
+	02:28:36.508 ==> worker flynn-a3de8c326cc542aa89235e53ba304260 up
+	02:28:37.601 ==> worker flynn-e24760c511af4733b01ed5b98aa54647 up
 
-	scale completed in 6.649931193s
+	scale completed in 3.944629056s
 `)
 }
 
@@ -64,8 +67,18 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 		formation.Processes = make(map[string]int)
 	}
 
-	processes := make(map[string]int)
-	for _, arg := range args.All["<type>=<qty>"].([]string) {
+	typeCounts := args.All["<type>=<qty>"].([]string)
+	if len(typeCounts) == 0 {
+		scale := make([]string, 0, len(release.Processes))
+		for typ := range release.Processes {
+			scale = append(scale, fmt.Sprintf("%s=%d", typ, formation.Processes[typ]))
+		}
+		fmt.Println(strings.Join(scale, " "))
+		return nil
+	}
+
+	processes := make(map[string]int, len(typeCounts))
+	for _, arg := range typeCounts {
 		i := strings.IndexRune(arg, '=')
 		if i < 0 {
 			fmt.Println(commands["scale"].usage)
