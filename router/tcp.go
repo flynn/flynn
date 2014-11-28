@@ -176,6 +176,7 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 		}
 		h.l.services[r.Service] = service
 	}
+	r.service = service
 	if listener, ok := h.l.listeners[r.Port]; ok {
 		r.l = listener
 		delete(h.l.listeners, r.Port)
@@ -189,9 +190,6 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 		return err
 	}
 	service.refs++
-	r.mtx.Lock()
-	r.service = service
-	r.mtx.Unlock()
 	h.l.routes[data.ID] = r
 	h.l.ports[r.Port] = r
 
