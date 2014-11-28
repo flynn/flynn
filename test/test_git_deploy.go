@@ -176,11 +176,5 @@ func (s *GitDeploySuite) runBuildpackTest(t *c.C, name string, resources []strin
 	})
 	t.Assert(err, c.IsNil)
 
-	stream, err := s.controllerClient(t).StreamJobEvents(name, 0)
-	t.Assert(err, c.IsNil)
-
-	r.flynn("scale", "web=0")
-	// wait for the jobs to stop
-	waitForJobEvents(t, stream.Events, jobEvents{"web": {"down": 1}})
-	stream.Close()
+	t.Assert(r.flynn("scale", "web=0"), Succeeds)
 }

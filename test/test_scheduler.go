@@ -467,10 +467,6 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 func (s *SchedulerSuite) TestTCPApp(t *c.C) {
 	app, _ := s.createApp(t)
 
-	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, 0)
-	t.Assert(err, c.IsNil)
-	defer stream.Close()
-
 	t.Assert(flynn(t, "/", "-a", app.Name, "scale", "echoer=1"), Succeeds)
 
 	newRoute := flynn(t, "/", "-a", app.Name, "route", "add", "tcp", "-s", "echo-service")
@@ -479,7 +475,6 @@ func (s *SchedulerSuite) TestTCPApp(t *c.C) {
 	str := strings.Split(strings.TrimSpace(string(newRoute.Output)), " ")
 	port := str[len(str)-1]
 
-	waitForJobEvents(t, stream.Events, jobEvents{"echoer": {"up": 1}})
 	// use Attempts to give the processes time to start
 	if err := Attempts.Run(func() error {
 		servAddr := routerIP + ":" + port
