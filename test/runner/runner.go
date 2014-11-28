@@ -422,6 +422,7 @@ func (r *Runner) serveBuildLog(w http.ResponseWriter, req *http.Request) {
 		return nil
 	}); err != nil {
 		http.Error(w, err.Error(), 500)
+		return
 	}
 	http.ServeFile(w, req, b.LogFile)
 }
