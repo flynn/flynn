@@ -19,6 +19,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/ActiveState/tail"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/boltdb/bolt"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/aws"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/s3"
@@ -422,7 +423,26 @@ func (r *Runner) serveBuildLog(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	http.ServeFile(w, req, b.LogFile)
+	t, err := tail.TailFile(b.LogFile, tail.Config{Follow: true, MustExist: true})
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	flush := func() {
+		if fw, ok := w.(http.Flusher); ok {
+			fw.Flush()
+		}
+	}
+	w.WriteHeader(http.StatusOK)
+	flush()
+	for line := range t.Lines {
+		if _, err := io.WriteString(w, line.Text+"\n"); err != nil {
+			log.Printf("serveBuildLog write error: %s\n", err)
+			break
+		}
+		flush()
+	}
+	return
 }
 
 func (r *Runner) handleBuildRequest(w http.ResponseWriter, req *http.Request) {
