@@ -19,10 +19,10 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/ActiveState/tail"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/boltdb/bolt"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/aws"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/s3"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/handlers"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -147,9 +147,8 @@ func (r *Runner) start() error {
 	http.HandleFunc("/builds/", r.httpBuildHandler)
 	http.HandleFunc("/cluster/", r.httpClusterHandler)
 	http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(args.AssetsDir))))
-	handler := handlers.CombinedLoggingHandler(os.Stdout, http.DefaultServeMux)
 	log.Println("Listening on", args.ListenAddr, "...")
-	if err := http.ListenAndServeTLS(args.ListenAddr, args.TLSCert, args.TLSKey, handler); err != nil {
+	if err := http.ListenAndServeTLS(args.ListenAddr, args.TLSCert, args.TLSKey, nil); err != nil {
 		return fmt.Errorf("ListenAndServeTLS: %s", err)
 	}
 	return nil
@@ -221,17 +220,19 @@ func (r *Runner) build(b *Build) (err error) {
 		r.buildCh <- struct{}{}
 	}()
 
-	var buildLog bytes.Buffer
 	start := time.Now()
-	fmt.Fprintf(&buildLog, "Starting build of %s at %s\n", b.Commit, start.Format(time.RFC822))
+	fmt.Fprintf(logFile, "Starting build of %s at %s\n", b.Commit, start.Format(time.RFC822))
 	defer func() {
 		b.Duration = time.Since(start)
 		b.DurationFormatted = formatDuration(b.Duration)
-		fmt.Fprintf(&buildLog, "build finished in %s\n", b.DurationFormatted)
+		fmt.Fprintf(logFile, "build finished in %s\n", b.DurationFormatted)
 		if err != nil {
-			fmt.Fprintf(&buildLog, "build error: %s\n", err)
+			fmt.Fprintf(logFile, "build error: %s\n", err)
 		}
-		url := r.uploadToS3(buildLog, b)
+		url := r.uploadToS3(logFile, b)
+		logFile.Close()
+		os.RemoveAll(b.LogFile)
+		b.LogFile = ""
 		if err == nil {
 			r.updateStatus(b, "success", url)
 		} else {
@@ -241,7 +242,7 @@ func (r *Runner) build(b *Build) (err error) {
 
 	log.Printf("building %s[%s]\n", b.Repo, b.Commit)
 
-	out := io.MultiWriter(os.Stdout, logFile, &buildLog)
+	out := io.MultiWriter(os.Stdout, logFile)
 	bc := r.bc
 	bc.Network, err = r.allocateNet()
 	if err != nil {
@@ -287,12 +288,24 @@ var s3attempts = attempt.Strategy{
 	Delay: time.Second,
 }
 
-func (r *Runner) uploadToS3(buildLog bytes.Buffer, b *Build) string {
+func (r *Runner) uploadToS3(file *os.File, b *Build) string {
 	name := fmt.Sprintf("%s-build-%s-%s-%s.txt", b.Repo, b.Id, b.Commit, time.Now().Format("2006-01-02-15-04-05"))
 	url := fmt.Sprintf("https://s3.amazonaws.com/%s/%s", logBucket, name)
+
+	if _, err := file.Seek(0, os.SEEK_SET); err != nil {
+		log.Printf("failed to seek log file: %s\n", err)
+		return ""
+	}
+
+	stat, err := file.Stat()
+	if err != nil {
+		log.Printf("failed to get log file size: %s\n", err)
+		return ""
+	}
+
 	log.Printf("uploading build log to S3: %s\n", url)
 	if err := s3attempts.Run(func() error {
-		return r.s3Bucket.Put(name, buildLog.Bytes(), "text/plain", "public-read")
+		return r.s3Bucket.PutReader(name, file, stat.Size(), "text/plain", "public-read")
 	}); err != nil {
 		log.Printf("failed to upload build output to S3: %s\n", err)
 	}
@@ -408,8 +421,28 @@ func (r *Runner) serveBuildLog(w http.ResponseWriter, req *http.Request) {
 		return nil
 	}); err != nil {
 		http.Error(w, err.Error(), 500)
+		return
 	}
-	http.ServeFile(w, req, b.LogFile)
+	t, err := tail.TailFile(b.LogFile, tail.Config{Follow: true, MustExist: true})
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	flush := func() {
+		if fw, ok := w.(http.Flusher); ok {
+			fw.Flush()
+		}
+	}
+	w.WriteHeader(http.StatusOK)
+	flush()
+	for line := range t.Lines {
+		if _, err := io.WriteString(w, line.Text+"\n"); err != nil {
+			log.Printf("serveBuildLog write error: %s\n", err)
+			break
+		}
+		flush()
+	}
+	return
 }
 
 func (r *Runner) handleBuildRequest(w http.ResponseWriter, req *http.Request) {
