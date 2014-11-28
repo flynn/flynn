@@ -22,7 +22,6 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/boltdb/bolt"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/aws"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/s3"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/handlers"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -147,9 +146,8 @@ func (r *Runner) start() error {
 	http.HandleFunc("/builds/", r.httpBuildHandler)
 	http.HandleFunc("/cluster/", r.httpClusterHandler)
 	http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(args.AssetsDir))))
-	handler := handlers.CombinedLoggingHandler(os.Stdout, http.DefaultServeMux)
 	log.Println("Listening on", args.ListenAddr, "...")
-	if err := http.ListenAndServeTLS(args.ListenAddr, args.TLSCert, args.TLSKey, handler); err != nil {
+	if err := http.ListenAndServeTLS(args.ListenAddr, args.TLSCert, args.TLSKey, nil); err != nil {
 		return fmt.Errorf("ListenAndServeTLS: %s", err)
 	}
 	return nil
