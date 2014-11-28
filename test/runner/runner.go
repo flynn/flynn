@@ -221,17 +221,16 @@ func (r *Runner) build(b *Build) (err error) {
 		r.buildCh <- struct{}{}
 	}()
 
-	var buildLog bytes.Buffer
 	start := time.Now()
-	fmt.Fprintf(&buildLog, "Starting build of %s at %s\n", b.Commit, start.Format(time.RFC822))
+	fmt.Fprintf(logFile, "Starting build of %s at %s\n", b.Commit, start.Format(time.RFC822))
 	defer func() {
 		b.Duration = time.Since(start)
 		b.DurationFormatted = formatDuration(b.Duration)
-		fmt.Fprintf(&buildLog, "build finished in %s\n", b.DurationFormatted)
+		fmt.Fprintf(logFile, "build finished in %s\n", b.DurationFormatted)
 		if err != nil {
-			fmt.Fprintf(&buildLog, "build error: %s\n", err)
+			fmt.Fprintf(logFile, "build error: %s\n", err)
 		}
-		url := r.uploadToS3(buildLog, b)
+		url := r.uploadToS3(logFile, b)
 		logFile.Close()
 		os.RemoveAll(b.LogFile)
 		b.LogFile = ""
@@ -244,7 +243,7 @@ func (r *Runner) build(b *Build) (err error) {
 
 	log.Printf("building %s[%s]\n", b.Repo, b.Commit)
 
-	out := io.MultiWriter(os.Stdout, logFile, &buildLog)
+	out := io.MultiWriter(os.Stdout, logFile)
 	bc := r.bc
 	bc.Network, err = r.allocateNet()
 	if err != nil {
@@ -290,12 +289,24 @@ var s3attempts = attempt.Strategy{
 	Delay: time.Second,
 }
 
-func (r *Runner) uploadToS3(buildLog bytes.Buffer, b *Build) string {
+func (r *Runner) uploadToS3(file *os.File, b *Build) string {
 	name := fmt.Sprintf("%s-build-%s-%s-%s.txt", b.Repo, b.Id, b.Commit, time.Now().Format("2006-01-02-15-04-05"))
 	url := fmt.Sprintf("https://s3.amazonaws.com/%s/%s", logBucket, name)
+
+	if _, err := file.Seek(0, os.SEEK_SET); err != nil {
+		log.Printf("failed to seek log file: %s\n", err)
+		return ""
+	}
+
+	stat, err := file.Stat()
+	if err != nil {
+		log.Printf("failed to get log file size: %s\n", err)
+		return ""
+	}
+
 	log.Printf("uploading build log to S3: %s\n", url)
 	if err := s3attempts.Run(func() error {
-		return r.s3Bucket.Put(name, buildLog.Bytes(), "text/plain", "public-read")
+		return r.s3Bucket.PutReader(name, file, stat.Size(), "text/plain", "public-read")
 	}); err != nil {
 		log.Printf("failed to upload build output to S3: %s\n", err)
 	}
