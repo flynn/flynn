@@ -232,6 +232,9 @@ func (r *Runner) build(b *Build) (err error) {
 			fmt.Fprintf(&buildLog, "build error: %s\n", err)
 		}
 		url := r.uploadToS3(buildLog, b)
+		logFile.Close()
+		os.RemoveAll(b.LogFile)
+		b.LogFile = ""
 		if err == nil {
 			r.updateStatus(b, "success", url)
 		} else {
