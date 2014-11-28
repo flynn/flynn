@@ -34,8 +34,8 @@
 		},
 		{
 			"ImportPath": "github.com/boltdb/bolt",
-			"Comment": "data/v1-228-g8fb50d5",
-			"Rev": "8fb50d5ee57110936b904a7539d4c5f2bf2359db"
+			"Comment": "v1.0",
+			"Rev": "aa66506030b376f848667d84d2596faa8a7099ea"
 		},
 		{
 			"ImportPath": "github.com/codegangsta/inject",
