@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -42,6 +43,7 @@ type Build struct {
 	State             string        `json:"state"`
 	Description       string        `json:"description"`
 	LogUrl            string        `json:"log_url"`
+	LogFile           string        `json:"log_file"`
 	Duration          time.Duration `json:"duration"`
 	DurationFormatted string        `json:"duration_formatted"`
 }
@@ -142,7 +144,7 @@ func (r *Runner) start() error {
 	go r.watchEvents()
 
 	http.HandleFunc("/", r.httpEventHandler)
-	http.HandleFunc("/builds", r.httpBuildHandler)
+	http.HandleFunc("/builds/", r.httpBuildHandler)
 	http.HandleFunc("/cluster/", r.httpClusterHandler)
 	http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(args.AssetsDir))))
 	handler := handlers.CombinedLoggingHandler(os.Stdout, http.DefaultServeMux)
@@ -206,6 +208,12 @@ func formatDuration(d time.Duration) string {
 }
 
 func (r *Runner) build(b *Build) (err error) {
+	logFile, err := ioutil.TempFile("", "build-log")
+	if err != nil {
+		return err
+	}
+	b.LogFile = logFile.Name()
+
 	r.updateStatus(b, "pending", "")
 
 	<-r.buildCh
@@ -233,7 +241,7 @@ func (r *Runner) build(b *Build) (err error) {
 
 	log.Printf("building %s[%s]\n", b.Repo, b.Commit)
 
-	out := io.MultiWriter(os.Stdout, &buildLog)
+	out := io.MultiWriter(os.Stdout, logFile, &buildLog)
 	bc := r.bc
 	bc.Network, err = r.allocateNet()
 	if err != nil {
@@ -338,6 +346,11 @@ func (r *Runner) httpEventHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Runner) httpBuildHandler(w http.ResponseWriter, req *http.Request) {
+	if strings.HasSuffix(req.URL.Path, ".log") {
+		r.serveBuildLog(w, req)
+		return
+	}
+
 	if req.Method == "POST" {
 		r.handleBuildRequest(w, req)
 		return
@@ -382,6 +395,21 @@ func (r *Runner) httpBuildHandler(w http.ResponseWriter, req *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(builds)
+}
+
+func (r *Runner) serveBuildLog(w http.ResponseWriter, req *http.Request) {
+	id := strings.TrimSuffix(path.Base(req.URL.Path), ".log")
+	b := &Build{}
+	if err := r.db.View(func(tx *bolt.Tx) error {
+		v := tx.Bucket(dbBucket).Get([]byte(id))
+		if err := json.Unmarshal(v, b); err != nil {
+			return fmt.Errorf("could not decode build %s: %s", v, err)
+		}
+		return nil
+	}); err != nil {
+		http.Error(w, err.Error(), 500)
+	}
+	http.ServeFile(w, req, b.LogFile)
 }
 
 func (r *Runner) handleBuildRequest(w http.ResponseWriter, req *http.Request) {

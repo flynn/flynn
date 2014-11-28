@@ -46,7 +46,7 @@
           <% if(log_url) { %>
             <a href="<%= log_url %>"><%= commit.substring(0, 7) %></a>
           <% } else { %>
-            <%= commit.substring(0, 7) %>
+            <a href="/builds/<%= id %>.log"><%= commit.substring(0, 7) %></a>
           <% } %>
         </td>
         <td><%= description %></td>
