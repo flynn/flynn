@@ -369,8 +369,10 @@ func (e *generator) listProviders() {
 }
 
 func (e *generator) createProviderResource() {
+	resourceConfig := json.RawMessage(`{}`)
 	resourceReq := &ct.ResourceReq{
 		ProviderID: e.resourceIds["provider"],
+		Config:     &resourceConfig,
 	}
 	resource, err := e.client.ProvisionResource(resourceReq)
 	if err != nil {
