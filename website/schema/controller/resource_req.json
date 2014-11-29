@@ -15,5 +15,6 @@
     "config": {
       "$ref": "/schema/controller/common#/definitions/config"
     }
-  }
+  },
+  "required": ["config"]
 }
