@@ -14,19 +14,19 @@
   ],
   "properties": {
     "id": {
-      "$ref": "schema/controller/common#/definitions/id"
+      "$ref": "/schema/controller/common#/definitions/id"
     },
     "artifact": {
-      "$ref": "schema/controller/common#/definitions/id"
+      "$ref": "/schema/controller/common#/definitions/id"
     },
     "env": {
-      "$ref": "schema/controller/common#/definitions/env"
+      "$ref": "/schema/controller/common#/definitions/env"
     },
     "processes": {
       "type": "object"
     },
     "created_at": {
-      "$ref": "schema/controller/common#/definitions/created_at"
+      "$ref": "/schema/controller/common#/definitions/created_at"
     }
   }
 }

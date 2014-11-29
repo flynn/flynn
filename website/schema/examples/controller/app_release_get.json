@@ -4,7 +4,7 @@
   "title": "Get app release",
   "description": "FIXME",
   "allOf": [
-    { "$ref": "schema/examples/base#" },
+    { "$ref": "/schema/examples/base#" },
     {
       "type": "object",
       "properties": {
@@ -21,7 +21,7 @@
           "type": "object",
           "properties": {
             "body": {
-              "$ref": "schema/controller/release#"
+              "$ref": "/schema/controller/release#"
             }
           }
         }

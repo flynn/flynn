@@ -4,7 +4,7 @@
   "title": "Update formation",
   "description": "FIXME",
   "allOf": [
-    { "$ref": "schema/examples/base#" },
+    { "$ref": "/schema/examples/base#" },
     {
       "type": "object",
       "properties": {
@@ -16,7 +16,7 @@
               "enum": ["PUT"]
             },
             "body": {
-              "$ref": "schema/controller/formation#"
+              "$ref": "/schema/controller/formation#"
             }
           }
         },
@@ -24,7 +24,7 @@
           "type": "object",
           "properties": {
             "body": {
-              "$ref": "schema/controller/formation#"
+              "$ref": "/schema/controller/formation#"
             }
           }
         }

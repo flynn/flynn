@@ -10,10 +10,10 @@
   ],
   "properties": {
     "apps": {
-      "$ref": "schema/controller/common#/definitions/apps"
+      "$ref": "/schema/controller/common#/definitions/apps"
     },
     "config": {
-      "$ref": "schema/controller/common#/definitions/config"
+      "$ref": "/schema/controller/common#/definitions/config"
     }
   }
 }

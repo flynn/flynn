@@ -4,7 +4,7 @@
   "title": "List routes",
   "description": "FIXME",
   "allOf": [
-    { "$ref": "schema/examples/base#" },
+    { "$ref": "/schema/examples/base#" },
     {
       "type": "object",
       "properties": {
@@ -23,7 +23,7 @@
             "body": {
               "type": "array",
               "items": {
-                "$ref": "schema/router/route#"
+                "$ref": "/schema/router/route#"
               }
             }
           }

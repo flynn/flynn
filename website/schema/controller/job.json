@@ -13,13 +13,13 @@
   ],
   "properties": {
     "id": {
-      "$ref": "schema/controller/common#/definitions/id"
+      "$ref": "/schema/controller/common#/definitions/id"
     },
     "app": {
-      "$ref": "schema/controller/common#/definitions/id"
+      "$ref": "/schema/controller/common#/definitions/id"
     },
     "release": {
-      "$ref": "schema/controller/common#/definitions/id"
+      "$ref": "/schema/controller/common#/definitions/id"
     },
     "type": {
       "type": "string"
@@ -29,13 +29,13 @@
       "enum": ["starting", "up", "down", "crashed"]
     },
     "cmd": {
-      "$ref": "schema/controller/common#/definitions/cmd"
+      "$ref": "/schema/controller/common#/definitions/cmd"
     },
     "created_at": {
-      "$ref": "schema/controller/common#/definitions/created_at"
+      "$ref": "/schema/controller/common#/definitions/created_at"
     },
     "updated_at": {
-      "$ref": "schema/controller/common#/definitions/updated_at"
+      "$ref": "/schema/controller/common#/definitions/updated_at"
     }
   }
 }

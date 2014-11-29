@@ -12,22 +12,22 @@
   ],
   "properties": {
     "id": {
-      "$ref": "schema/controller/common#/definitions/id"
+      "$ref": "/schema/controller/common#/definitions/id"
     },
     "provider_id": {
-      "$ref": "schema/controller/common#/definitions/id"
+      "$ref": "/schema/controller/common#/definitions/id"
     },
     "external_id": {
-      "$ref": "schema/controller/common#/definitions/id"
+      "$ref": "/schema/controller/common#/definitions/id"
     },
     "env": {
-      "$ref": "schema/controller/common#/definitions/env"
+      "$ref": "/schema/controller/common#/definitions/env"
     },
     "apps": {
-      "$ref": "schema/controller/common#/definitions/apps"
+      "$ref": "/schema/controller/common#/definitions/apps"
     },
     "created_at": {
-      "$ref": "schema/controller/common#/definitions/created_at"
+      "$ref": "/schema/controller/common#/definitions/created_at"
     }
   }
 }

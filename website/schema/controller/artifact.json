@@ -11,7 +11,7 @@
   ],
   "properties": {
     "id": {
-      "$ref": "schema/controller/common#/definitions/id"
+      "$ref": "/schema/controller/common#/definitions/id"
     },
     "type": {
       "format": "uuid",
@@ -22,7 +22,7 @@
       "type": "string"
     },
     "created_at": {
-      "$ref": "schema/controller/common#/definitions/created_at"
+      "$ref": "/schema/controller/common#/definitions/created_at"
     }
   }
 }

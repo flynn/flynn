@@ -10,13 +10,13 @@
   ],
   "properties": {
     "release": {
-      "$ref": "schema/controller/common#/definitions/id"
+      "$ref": "/schema/controller/common#/definitions/id"
     },
     "cmd": {
-      "$ref": "schema/controller/common#/definitions/cmd"
+      "$ref": "/schema/controller/common#/definitions/cmd"
     },
     "env": {
-      "$ref": "schema/controller/common#/definitions/env"
+      "$ref": "/schema/controller/common#/definitions/env"
     },
     "tty": {
       "description": "initialize a tty session",

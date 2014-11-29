@@ -14,7 +14,7 @@
   ],
   "properties": {
     "id": {
-      "$ref": "schema/controller/common#/definitions/id"
+      "$ref": "/schema/controller/common#/definitions/id"
     },
     "name": {
       "description": "name of app",
@@ -29,10 +29,10 @@
       "type": "object"
     },
     "created_at": {
-      "$ref": "schema/controller/common#/definitions/created_at"
+      "$ref": "/schema/controller/common#/definitions/created_at"
     },
     "updated_at": {
-      "$ref": "schema/controller/common#/definitions/updated_at"
+      "$ref": "/schema/controller/common#/definitions/updated_at"
     }
   }
 }

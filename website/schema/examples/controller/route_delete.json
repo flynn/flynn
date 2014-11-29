@@ -4,7 +4,7 @@
   "title": "Delete route",
   "description": "FIXME",
   "allOf": [
-    { "$ref": "schema/examples/base#" },
+    { "$ref": "/schema/examples/base#" },
     {
       "type": "object",
       "properties": {

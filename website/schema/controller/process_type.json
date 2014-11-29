@@ -7,10 +7,10 @@
   "type": "object",
   "properties": {
     "cmd": {
-      "$ref": "schema/controller/common#/definitions/cmd"
+      "$ref": "/schema/controller/common#/definitions/cmd"
     },
     "env": {
-      "$ref": "schema/controller/common#/definitions/env"
+      "$ref": "/schema/controller/common#/definitions/env"
     },
     "entrypoint": {
       "type": "array",
@@ -21,7 +21,7 @@
     "ports": {
       "type": "array",
       "items": {
-        "$ref": "schema/controller/port"
+        "$ref": "/schema/controller/port"
       }
     },
     "data": {

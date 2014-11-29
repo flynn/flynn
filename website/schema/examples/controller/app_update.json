@@ -4,7 +4,7 @@
   "title": "Update app",
   "description": "FIXME",
   "allOf": [
-    { "$ref": "schema/examples/base#" },
+    { "$ref": "/schema/examples/base#" },
     {
       "type": "object",
       "properties": {
@@ -16,7 +16,7 @@
               "enum": ["POST"]
             },
             "body": {
-              "$ref": "schema/controller/app#"
+              "$ref": "/schema/controller/app#"
             }
           }
         },
@@ -24,7 +24,7 @@
           "type": "object",
           "properties": {
             "body": {
-              "$ref": "schema/controller/app#"
+              "$ref": "/schema/controller/app#"
             }
           }
         }

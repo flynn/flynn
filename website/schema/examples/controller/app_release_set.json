@@ -4,7 +4,7 @@
   "title": "Set app release",
   "description": "FIXME",
   "allOf": [
-    { "$ref": "schema/examples/base#" },
+    { "$ref": "/schema/examples/base#" },
     {
       "type": "object",
       "properties": {
@@ -16,7 +16,7 @@
               "enum": ["PUT"]
             },
             "body": {
-              "$ref": "schema/controller/release#"
+              "$ref": "/schema/controller/release#"
             }
           }
         }

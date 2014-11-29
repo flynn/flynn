@@ -6,22 +6,22 @@
   "type": "object",
   "properties": {
     "id": {
-      "$ref": "schema/common#/definitions/id"
+      "$ref": "/schema/common#/definitions/id"
     },
     "parent_ref": {
-      "$ref": "schema/common#/definitions/id"
+      "$ref": "/schema/common#/definitions/id"
     },
     "type": {
       "type": "string"
     },
     "config": {
-      "$ref": "schema/common#/definitions/config"
+      "$ref": "/schema/common#/definitions/config"
     },
     "created_at": {
-      "$ref": "schema/common#/definitions/created_at"
+      "$ref": "/schema/common#/definitions/created_at"
     },
     "updated_at": {
-      "$ref": "schema/common#/definitions/updated_at"
+      "$ref": "/schema/common#/definitions/updated_at"
     }
   }
 }
