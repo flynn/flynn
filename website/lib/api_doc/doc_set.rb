@@ -31,6 +31,7 @@ module APIDoc
       frontmatter + @schemas.map do |schema|
         [ schema.to_markdown,
           schema['examples'].to_a.map { |id|
+            id = "https://flynn.io/"+ id
             example = find_example(id)
             example ? example.to_markdown : "```\nexample #{id} not found\n```"
           }.join("\n\n")

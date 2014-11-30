@@ -6,8 +6,8 @@
   "sortIndex": 1,
   "type": "object",
   "examples": [
-    "https://flynn.io/schema/examples/controller/artifact_create#",
-    "https://flynn.io/schema/examples/controller/artifact_list#"
+    "schema/examples/controller/artifact_create#",
+    "schema/examples/controller/artifact_list#"
   ],
   "properties": {
     "id": {

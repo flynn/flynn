@@ -5,10 +5,10 @@
     {
       "sortIndex": 12,
       "examples": [
-        "https://flynn.io/schema/examples/controller/route_create#",
-        "https://flynn.io/schema/examples/controller/route_get#",
-        "https://flynn.io/schema/examples/controller/route_list#",
-        "https://flynn.io/schema/examples/controller/route_delete#"
+        "schema/examples/controller/route_create#",
+        "schema/examples/controller/route_get#",
+        "schema/examples/controller/route_list#",
+        "schema/examples/controller/route_delete#"
       ]
     }
   ]

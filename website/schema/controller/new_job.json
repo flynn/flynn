@@ -6,7 +6,7 @@
   "sortIndex": 3,
   "type": "object",
   "examples": [
-    "https://flynn.io/schema/examples/controller/job_run#"
+    "schema/examples/controller/job_run#"
   ],
   "properties": {
     "release": {

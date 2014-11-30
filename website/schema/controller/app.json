@@ -6,11 +6,11 @@
   "sortIndex": 0,
   "type": "object",
   "examples": [
-    "https://flynn.io/schema/examples/controller/app_create#",
-    "https://flynn.io/schema/examples/controller/app_get#",
-    "https://flynn.io/schema/examples/controller/app_list#",
-    "https://flynn.io/schema/examples/controller/app_update#",
-    "https://flynn.io/schema/examples/controller/app_delete#"
+    "schema/examples/controller/app_create#",
+    "schema/examples/controller/app_get#",
+    "schema/examples/controller/app_list#",
+    "schema/examples/controller/app_update#",
+    "schema/examples/controller/app_delete#"
   ],
   "properties": {
     "id": {

@@ -6,10 +6,10 @@
   "sortIndex": 4,
   "type": "object",
   "examples": [
-    "https://flynn.io/schema/examples/controller/job_log#",
-    "https://flynn.io/schema/examples/controller/job_list#",
-    "https://flynn.io/schema/examples/controller/job_update#",
-    "https://flynn.io/schema/examples/controller/job_delete#"
+    "schema/examples/controller/job_log#",
+    "schema/examples/controller/job_list#",
+    "schema/examples/controller/job_update#",
+    "schema/examples/controller/job_delete#"
   ],
   "properties": {
     "id": {

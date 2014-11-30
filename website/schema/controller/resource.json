@@ -6,9 +6,9 @@
   "sortIndex": 11,
   "type": "object",
   "examples": [
-    "https://flynn.io/schema/examples/controller/app_resource_list#",
-    "https://flynn.io/schema/examples/controller/provider_resource_get#",
-    "https://flynn.io/schema/examples/controller/provider_resource_list#"
+    "schema/examples/controller/app_resource_list#",
+    "schema/examples/controller/provider_resource_get#",
+    "schema/examples/controller/provider_resource_list#"
   ],
   "properties": {
     "id": {

@@ -6,10 +6,10 @@
   "sortIndex": 5,
   "type": "object",
   "examples": [
-    "https://flynn.io/schema/examples/controller/key_create#",
-    "https://flynn.io/schema/examples/controller/key_get#",
-    "https://flynn.io/schema/examples/controller/key_list#",
-    "https://flynn.io/schema/examples/controller/key_delete#"
+    "schema/examples/controller/key_create#",
+    "schema/examples/controller/key_get#",
+    "schema/examples/controller/key_list#",
+    "schema/examples/controller/key_delete#"
   ],
   "properties": {
     "id": {
