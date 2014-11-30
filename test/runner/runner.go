@@ -428,21 +428,32 @@ func (r *Runner) serveBuildLog(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	if cn, ok := w.(http.CloseNotifier); ok {
+		go func() {
+			<-cn.CloseNotify()
+			t.Stop()
+		}()
+	} else {
+		defer t.Stop()
+	}
 	flush := func() {
 		if fw, ok := w.(http.Flusher); ok {
 			fw.Flush()
 		}
 	}
+	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	flush()
 	for line := range t.Lines {
 		if _, err := io.WriteString(w, line.Text+"\n"); err != nil {
 			log.Printf("serveBuildLog write error: %s\n", err)
-			break
+			return
 		}
 		flush()
+		if strings.HasPrefix(line.Text, "build finished") {
+			return
+		}
 	}
-	return
 }
 
 func (r *Runner) handleBuildRequest(w http.ResponseWriter, req *http.Request) {
