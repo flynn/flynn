@@ -451,15 +451,23 @@ func (r *Runner) handleBuildRequest(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "missing id parameter\n", 400)
 		return
 	}
-	b := &Build{}
+	build := &Build{}
 	if err := r.db.View(func(tx *bolt.Tx) error {
 		val := tx.Bucket(dbBucket).Get([]byte(id))
-		return json.Unmarshal(val, b)
+		return json.Unmarshal(val, build)
 	}); err != nil {
 		http.Error(w, fmt.Sprintf("could not decode build %s: %s\n", id, err), 400)
 		return
 	}
-	if b.State != "pending" {
+	if build.State != "pending" {
+		now := time.Now()
+		b := &Build{
+			CreatedAt:   &now,
+			Repo:        build.Repo,
+			Commit:      build.Commit,
+			Merge:       build.Merge,
+			Description: "Restart: " + build.Description,
+		}
 		go func() {
 			if err := r.build(b); err != nil {
 				log.Printf("build %s failed: %s\n", b.Id, err)
