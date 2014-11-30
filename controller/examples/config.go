@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net"
 	"os"
 	"strings"
@@ -12,6 +14,7 @@ type config struct {
 	controllerKey    string
 	ourAddr          string
 	ourPort          string
+	logOut           io.Writer
 }
 
 func loadConfigFromEnv() (*config, error) {
@@ -36,6 +39,14 @@ func loadConfigFromEnv() (*config, error) {
 		port = "4456"
 	}
 	c.ourPort = port
+
+	logPath := os.Getenv("LOGFILE")
+	c.logOut = ioutil.Discard
+	if logPath != "" {
+		if f, err := os.OpenFile(logPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666); err == nil {
+			c.logOut = f
+		}
+	}
 	return c, nil
 }
 
