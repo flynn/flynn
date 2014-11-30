@@ -35,6 +35,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.SetOutput(conf.logOut)
 
 	err = discoverd.Connect(conf.controllerDomain + ":1111")
 	if err != nil {
@@ -53,7 +54,7 @@ func main() {
 		resourceIds: make(map[string]string),
 	}
 
-	providerLog := log.New(os.Stdout, "provider: ", 1)
+	providerLog := log.New(conf.logOut, "provider: ", 1)
 	go e.listenAndServe(providerLog)
 
 	examples := []example{
