@@ -285,22 +285,27 @@ $ flynn run bash
 ## Release existing Docker images
 
 Releasing pre-built Docker images is possible by passing the image URL and image 
-id to Flynn. Because authentication is not supported yet the image needs to be 
-hosted on a public repository, or on your own (private) hosted registry. 
+id or tag, and optionally, the username/password for the registry to Flynn. Flynn
+supports both auth basic for self hosted private registries and private repositories
+on the official Docker Registry.
 
-First you'll need to create a sample configuration file for your release. This 
-file may contain all relevant information such as which command to run, which 
-ports to expose and which environment variables to set.
+First, you'll need to create a configuration file for your release. This file may 
+contain all relevant information such as which command to run,  which environment
+variables to set and which port to route. If 'port' is left out; the next available port
+will be assigned.
 
-Assuming your container image has already specified the command, the json file 
-for our redis image can look like this. (Where 'ports' indicates a tcp route 
-should be setup). 
+The process in the container will need to bind to the port that is assigned to it. It 
+will be available under the $PORT environment variable.
+
+Your json file may look like this:
 
 ```
 {
     "processes": {
-        "redis": {
-          "ports": [{"proto": "tcp"}]
+        "env" {"FOO": "bar"},
+        "sshd": {
+            "cmd": ["/bin/bash", "-c", "echo starting sshd on port $PORT; /usr/sbin/sshd -D -p $PORT"],
+            "ports": [{"proto": "tcp", "port": 22222}]
         }
     }
 }
@@ -308,35 +313,28 @@ should be setup).
 
 Now create the service placeholder on the flynn cluster.
 ```
-$ flynn create redis
+$ flynn create sshd
 ```
 
-And add the 'release'. Note that we add the full image id to the URL. We use -a to specify the service.
-
-**Get the image id's for redis**
-```
-# Get an access token from the Docker Index
-$ curl -I -X GET -H "X-Docker-Token: true" https://index.docker.io/v1/repositories/redis/images
-
-# Now take the signature from here, you'll use it for the next call. 
-
-# get which tags exist (with their latest representation)
-curl -H "Authorization: Token signature=23e5ca10b324429c1c952112dba26edc52bb2d39,repository="library/redis",access=read" http://registry-1.docker.io/v1/repositories/redis/tags -v
-```
-
+And add the 'release'. Note that we add the tag to the URL, a tag, or image id is required. 
+We use -a to specify the service.
 
 ```
-$ flynn -a redis release add -f redis.json https://registry.hub.docker.com/redis?id=dad71287aacba854db05966a2211a981355971b40c8a16d5ecaf1f46c028328e
+$ flynn -a sshd release add -f sshd.json https://registry.hub.docker.com/dhrp/sshd?tag=latest
 Created release 24c788b26ad54e97b2ab901a042a78c9.
 ```
 
 And finally, to actually start the service we'll need to scale it to at least one instance.
 
 ```
-$ flynn -a redis scale redis=1
+$ flynn -a sshd scale sshd=1
 ```
 
-Wait for the image to pull and then check it's status with:
+Wait for the image to pull and start, then check it's status with:
 ```
-$ flynn -a redis ps
+$ flynn -a sshd ps
+
+# Connect
+$ ssh root@<hostname> -p 22222
 ```
+
