@@ -1,4 +1,5 @@
 include_rules
 : |> !go |> bin/flynn-controller
+: |> !go ./examples |> bin/flynn-controller-examples
 : |> !go ./scheduler |> bin/flynn-scheduler
 : bin/* |> !docker-layer1 |>

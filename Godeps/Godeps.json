@@ -62,6 +62,10 @@
 			"Rev": "78d7708fc6ca767a04a26c777cdc618f39a34ac4"
 		},
 		{
+			"ImportPath": "github.com/cupcake/jsonschema",
+			"Rev": "50fc36d92889f32da166d1f3d8e396f34f5bcc61"
+		},
+		{
 			"ImportPath": "github.com/dgryski/go-skip32",
 			"Rev": "6cc5a8b574de3ed084314996231c03b5dd21d8c6"
 		},
