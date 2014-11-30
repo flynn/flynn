@@ -296,7 +296,6 @@ func (c *ContainerInit) exit(status int) {
 	case <-time.After(time.Second):
 		log.Println("timeout waiting for client to call Resume()")
 	}
-	c.mtx.Lock()
 	os.Exit(status)
 }
 
