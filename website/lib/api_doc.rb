@@ -2,7 +2,7 @@ require 'api_doc/schema'
 require 'api_doc/doc_set'
 
 module APIDoc
-  PROJECT_ROOT = File.expand_path(File.join(File.dirname(__FILE__), '..'))
+  PROJECT_ROOT = File.expand_path('../..', __FILE__)
 
   def self.compile(docsets = %w( controller ))
     schema_dir = File.join(PROJECT_ROOT, 'schema')
@@ -10,11 +10,11 @@ module APIDoc
     # load all schemas and resolve refs
     schema_paths = Dir[File.join(schema_dir, "**", "*.json")]
     schemas = Schema.load_all(schema_paths)
-    schemas.each { |schema| schema.expand_refs! }
+    schemas.each(&:expand_refs!)
 
     # compile schemas and examples into markdown
     docset_paths = Dir[File.join(schema_dir, "*")].keep_if do |path|
-      File.directory?(path) && docsets.include?(File.split(path).last)
+      File.directory?(path) && docsets.include?(File.basename(path))
     end.map do |path|
       'https://flynn.io/schema/'+ File.split(path).last
     end

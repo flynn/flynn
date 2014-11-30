@@ -12,9 +12,7 @@ module APIDoc
 
     def to_html
       if attributes.keys.any?
-        attrs = ' ' + attributes.map {
-          |k,v| %(#{k}="#{v}")
-        }.join(' ')
+        attrs = ' ' + attributes.map { |k,v| %(#{k}="#{v}") }.join(' ')
       else
         attrs = ''
       end

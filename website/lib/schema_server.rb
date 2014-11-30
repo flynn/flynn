@@ -1,5 +1,5 @@
 class SchemaServer
-  PROJECT_ROOT = File.expand_path(File.join(File.dirname(__FILE__), '..'))
+  PROJECT_ROOT = File.expand_path('../..', __FILE__)
 
   def initialize(app)
     @app = app
@@ -9,10 +9,9 @@ class SchemaServer
     path = env['PATH_INFO']
     if path =~ /\A\/schema\//
       schema_path = path.sub(/\A\/schema\//, '') + '.json'
-      serve_schema(schema_path) || env
-    else
-      env
+      return serve_schema(schema_path)
     end
+    @app.call(env)
   end
 
   private

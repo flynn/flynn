@@ -1,4 +1,5 @@
 require 'yajl'
+require 'active_support/core_ext/string/strip'
 
 module APIDoc
   class DocSet
@@ -18,13 +19,12 @@ module APIDoc
     end
 
     def frontmatter
-      str = []
-      str << %(---)
-      str << %(title: #{capitalize(@name)})
-      str << %(layout: docs)
-      str << %(---)
-      str << ''
-      str.join("\n")
+      <<-STR.strip_heredoc
+      ---
+      title: #{capitalize(@name)}
+      layout: docs
+      ---
+      STR
     end
 
     def to_markdown
@@ -34,9 +34,9 @@ module APIDoc
             id = "https://flynn.io/"+ id
             example = find_example(id)
             example ? example.to_markdown : "```\nexample #{id} not found\n```"
-          }.join("\n\n")
-        ].join("\n\n")
-      end.join("\n\n")
+          }
+        ]
+      end.flatten.join("\n\n")
     end
 
     private
@@ -66,74 +66,52 @@ module APIDoc
       end
 
       def to_markdown
-        markdown = []
-
         request = data['request']
         response = data['response']
 
-        markdown << %(<article class="example clearfix">)
-        markdown << %(<header>)
-        markdown << %(## #{schema['title']})
-        markdown << %(</header>)
+<<-STR
+<article class="example clearfix">
+  <header>
 
-        markdown << %(<button class="example-toggle btn btn-primary btn-small pull-right" data-expanded="Collapse">Example</button>)
+## #{schema['title']}
 
-        if schema['description']
-          markdown << ''
-          markdown << schema['description']
-          markdown << ''
-        end
+  </header>
+  <button class="example-toggle btn btn-primary btn-small pull-right" data-expanded="Collapse">Example</button>
 
-        markdown << %(<section class="example-request">)
-        markdown << %(<header>)
-        markdown << %(<h4>Request</h4>)
-        markdown << %(</header>)
-        markdown << ''
+  #{schema['description'] ? schema['description'] : ''}
 
-        # request headers
-        markdown << "```"
-        markdown << [request['method'], request['url'], 'HTTP/1.1'].join(' ')
-        markdown << pretty_headers(request['headers'])
-        markdown << "```"
+  <section class="example-request">
+    <header>
+      <h4>Request</h4>
+    </header>
 
-        # request body
-        if request.has_key?('body')
-          markdown << markdown_body(request['body'], request['headers']['Content-Type'])
-          markdown << ''
-        end
+```
+#{request['method']} #{request['url']} HTTP/1.1
+#{pretty_headers(request['headers'])}
+```
+#{request.has_key?('body') ? markdown_body(request['body'], request['headers']['Content-Type']) : ''}
 
-        markdown << ''
-        markdown << %(</section>)
+  </section>
 
-        markdown << %(<section class="example-response">)
-        markdown << %(<header>)
-        markdown << %(<h4>Response</h4>)
-        markdown << %(</header>)
-        markdown << ''
+  <section class="example-response">
+    <header>
+      <h4>Response</h4>
+    </header>
 
-        # response headers
-        markdown << "```"
-        markdown << pretty_headers(response['headers'])
-        markdown << "```"
+```
+#{pretty_headers(response['headers'])}
+```
+#{markdown_body(response['body'], response['headers']['Content-Type'])}
 
-        # response body
-        markdown << markdown_body(response['body'], response['headers']['Content-Type'])
-        markdown << ''
-
-        markdown << %(</section>)
-
-        markdown << %(</article>)
-
-        markdown.join("\n")
+  </section>
+</article>
+STR
       end
 
       private
 
       def pretty_headers(headers)
-        headers.inject([]) { |res, (name, value)|
-          res << "#{name}: #{value}"
-          res
-        }.join("\n")
+        headers.map { |name, value| "#{name}: #{value}" }.join("\n")
       end
 
       def markdown_body(body, content_type)
