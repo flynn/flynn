@@ -18,7 +18,7 @@ class SchemaServer
 
   def serve_schema(path)
     path = File.join(PROJECT_ROOT, 'schema', path)
-    return unless File.exists?(path)
+    return [404, {}, []] unless File.exists?(path)
     [200, { 'Content-Type' => 'application/json' }, [File.read(path)]]
   end
 end
