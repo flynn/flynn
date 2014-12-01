@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kavu/go_reuseport"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/rpcplus"
 	rpc "github.com/flynn/flynn/pkg/rpcplus/comborpc"
-	"github.com/kavu/go_reuseport"
 )
 
 const (
