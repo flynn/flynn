@@ -462,7 +462,7 @@ func (s *CLISuite) TestRelease(t *c.C) {
 	file.Close()
 
 	app := s.newCliTestApp(t)
-	t.Assert(app.flynn("release", "add", "-f", file.Name(), testImageURI), Succeeds)
+	t.Assert(app.flynn("release", "add", "-f", file.Name(), testImageURIs["test-apps"]), Succeeds)
 
 	r, err := s.controller.GetAppRelease(app.name)
 	t.Assert(err, c.IsNil)

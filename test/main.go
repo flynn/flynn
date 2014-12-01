@@ -38,9 +38,8 @@ var flynnrc string
 var routerIP string
 var testCluster *cluster.Cluster
 var httpClient *http.Client
-var testImageURI string
-
-const testImageName = "flynn/test-apps"
+var testImageURIs map[string]string
+var testImageNames = []string{"test-apps", "controller-examples"}
 
 func init() {
 	args = arg.Parse()
@@ -51,12 +50,11 @@ func init() {
 }
 
 func main() {
-	id, err := lookupTestImageID()
-	if err != nil {
-		log.Fatalf("could not determine test image ID: %s", err)
+	if err := lookupImages(testImageNames); err != nil {
+		log.Fatal(err)
 	}
-	testImageURI = fmt.Sprintf("https://example.com/%s?id=%s", testImageName, id)
 
+	var err error
 	var res *check.Result
 	// defer exiting here so it runs after all other defers
 	defer func() {
@@ -132,12 +130,24 @@ func main() {
 	fmt.Println(res)
 }
 
-func lookupTestImageID() (string, error) {
+func lookupImages(names []string) error {
+	testImageURIs = make(map[string]string, len(names))
+	for _, name := range names {
+		id, err := lookupImageID("flynn/" + name)
+		if err != nil {
+			return fmt.Errorf("could not determine %s image ID: %s", name, err)
+		}
+		testImageURIs[name] = fmt.Sprintf("https://example.com/%s?id=%s", name, id)
+	}
+	return nil
+}
+
+func lookupImageID(name string) (string, error) {
 	d, err := docker.NewClient("unix:///var/run/docker.sock")
 	if err != nil {
 		return "", err
 	}
-	image, err := d.InspectImage(testImageName)
+	image, err := d.InspectImage(name)
 	if err != nil {
 		return "", err
 	}

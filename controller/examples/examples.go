@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"time"
@@ -37,16 +36,11 @@ func main() {
 	}
 	log.SetOutput(conf.logOut)
 
-	err = discoverd.Connect(conf.controllerDomain + ":1111")
+	client, err = cc.NewClient("", conf.controllerKey)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	client, err = cc.NewClient("http://"+conf.controllerDomain, conf.controllerKey)
-	if err != nil {
-		log.Fatal(err)
-	}
-	client.HTTP.Transport = &roundTripRecorder{roundTripper: &http.Transport{}}
+	client.HTTP.Transport = &roundTripRecorder{roundTripper: &http.Transport{Dial: client.Dial}}
 
 	e := &generator{
 		conf:        conf,
@@ -362,7 +356,7 @@ func (e *generator) createProvider() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = discoverd.Register(provider.Name, net.JoinHostPort(e.conf.ourAddr, e.conf.ourPort))
+	err = discoverd.Register(provider.Name, ":"+e.conf.ourPort)
 	if err != nil {
 		log.Fatal(err)
 	}

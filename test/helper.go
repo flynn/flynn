@@ -92,7 +92,7 @@ func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 	t.Assert(client.CreateApp(app), c.IsNil)
 	debugf(t, "created app %s (%s)", app.Name, app.ID)
 
-	artifact := &ct.Artifact{Type: "docker", URI: testImageURI}
+	artifact := &ct.Artifact{Type: "docker", URI: testImageURIs["test-apps"]}
 	t.Assert(client.CreateArtifact(artifact), c.IsNil)
 
 	release := &ct.Release{

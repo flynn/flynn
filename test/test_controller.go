@@ -1,17 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
-	"fmt"
-	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/jsonschema"
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/cluster"
 )
 
 type ControllerSuite struct {
@@ -23,8 +23,6 @@ type ControllerSuite struct {
 var _ = c.Suite(&ControllerSuite{})
 
 func (s *ControllerSuite) SetUpSuite(t *c.C) {
-	s.clusterConf(t)
-
 	var schemaPaths []string
 	walkFn := func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
@@ -106,21 +104,34 @@ func unmarshalControllerExample(data []byte) (map[string]interface{}, error) {
 }
 
 func (s *ControllerSuite) generateControllerExamples(t *c.C) map[string]interface{} {
-	controllerDomain := strings.TrimPrefix(s.config.URL, "https://")
-	examplesCmd := exec.Command(args.ControllerExamples)
-	env := os.Environ()
-	env = append(env, fmt.Sprintf("CONTROLLER_DOMAIN=%s", controllerDomain))
-	env = append(env, fmt.Sprintf("CONTROLLER_KEY=%s", s.config.Key))
-	if ips, err := net.LookupIP(controllerDomain); err == nil && len(ips) > 0 {
-		env = append(env, fmt.Sprintf("ADDR=%s", ips[0]))
-	}
-	examplesCmd.Env = env
+	client := s.controllerClient(t)
 
-	out, err := examplesCmd.Output()
+	app := &ct.App{}
+	t.Assert(client.CreateApp(app), c.IsNil)
+	artifact := &ct.Artifact{Type: "docker", URI: testImageURIs["controller-examples"]}
+	t.Assert(client.CreateArtifact(artifact), c.IsNil)
+	release := &ct.Release{
+		ArtifactID: artifact.ID,
+		Env:        map[string]string{"CONTROLLER_KEY": s.clusterConf(t).Key},
+	}
+	t.Assert(client.CreateRelease(release), c.IsNil)
+
+	req := &ct.NewJob{
+		Cmd:       []string{"/bin/flynn-controller-examples"},
+		ReleaseID: release.ID,
+		Ports:     []ct.Port{{Proto: "tcp"}},
+	}
+	rwc, err := client.RunJobAttached(app.ID, req)
 	t.Assert(err, c.IsNil)
+	defer rwc.Close()
+	attachClient := cluster.NewAttachClient(rwc)
+	var out bytes.Buffer
+	exitStatus, err := attachClient.Receive(&out, &out)
+	t.Assert(err, c.IsNil)
+	t.Assert(exitStatus, c.Equals, 0)
+
 	var controllerExamples map[string]json.RawMessage
-	err = json.Unmarshal(out, &controllerExamples)
-	t.Assert(err, c.IsNil)
+	t.Assert(json.Unmarshal(out.Bytes(), &controllerExamples), c.IsNil)
 
 	examples := make(map[string]interface{}, len(controllerExamples))
 	for key, data := range controllerExamples {
