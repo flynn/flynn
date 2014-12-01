@@ -109,8 +109,7 @@ $$ LANGUAGE plpgsql`,
     state job_state NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (job_id, host_id),
-    FOREIGN KEY (app_id, release_id) REFERENCES formations (app_id, release_id)
+    PRIMARY KEY (job_id, host_id)
 )`,
 		`CREATE SEQUENCE job_event_ids`,
 		`CREATE TABLE job_events (

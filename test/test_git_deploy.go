@@ -4,11 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"regexp"
-	"strings"
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
@@ -17,56 +13,16 @@ import (
 
 type GitDeploySuite struct {
 	Helper
-	ssh *sshData
 }
 
 var _ = c.ConcurrentSuite(&GitDeploySuite{})
 
 func (s *GitDeploySuite) SetUpSuite(t *c.C) {
-	var err error
-	s.ssh, err = genSSHKey()
-	t.Assert(err, c.IsNil)
-	t.Assert(flynn(t, "/", "key", "add", s.ssh.Pub), Succeeds)
+	t.Assert(flynn(t, "/", "key", "add", s.sshKeys(t).Pub), Succeeds)
 }
 
 func (s *GitDeploySuite) TearDownSuite(t *c.C) {
 	s.cleanup()
-	if s.ssh != nil {
-		s.ssh.Cleanup()
-	}
-}
-
-type gitRepo struct {
-	dir string
-	ssh *sshData
-	t   *c.C
-}
-
-func (s *GitDeploySuite) newGitRepo(t *c.C, nameOrURL string) *gitRepo {
-	dir := filepath.Join(t.MkDir(), "repo")
-	r := &gitRepo{dir, s.ssh, t}
-
-	if strings.HasPrefix(nameOrURL, "https://") {
-		t.Assert(run(t, exec.Command("git", "clone", nameOrURL, dir)), Succeeds)
-		return r
-	}
-
-	t.Assert(run(t, exec.Command("cp", "-r", filepath.Join("apps", nameOrURL), dir)), Succeeds)
-	t.Assert(r.git("init"), Succeeds)
-	t.Assert(r.git("add", "."), Succeeds)
-	t.Assert(r.git("commit", "-am", "init"), Succeeds)
-	return r
-}
-
-func (r *gitRepo) flynn(args ...string) *CmdResult {
-	return flynn(r.t, r.dir, args...)
-}
-
-func (r *gitRepo) git(args ...string) *CmdResult {
-	cmd := exec.Command("git", args...)
-	cmd.Env = append(os.Environ(), r.ssh.Env...)
-	cmd.Dir = r.dir
-	return run(r.t, cmd)
 }
 
 var Attempts = attempt.Strategy{

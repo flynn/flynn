@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/fsouza/go-dockerclient"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
 	"github.com/flynn/flynn/test/arg"
 	"github.com/flynn/flynn/test/cluster"
@@ -37,6 +38,9 @@ var flynnrc string
 var routerIP string
 var testCluster *cluster.Cluster
 var httpClient *http.Client
+var testImageURI string
+
+const testImageName = "flynn/test-apps"
 
 func init() {
 	args = arg.Parse()
@@ -47,7 +51,12 @@ func init() {
 }
 
 func main() {
-	var err error
+	id, err := lookupTestImageID()
+	if err != nil {
+		log.Fatalf("could not determine test image ID: %s", err)
+	}
+	testImageURI = fmt.Sprintf("https://example.com/%s?id=%s", testImageName, id)
+
 	var res *check.Result
 	// defer exiting here so it runs after all other defers
 	defer func() {
@@ -121,6 +130,18 @@ func main() {
 		ConcurrencyLevel: 5,
 	})
 	fmt.Println(res)
+}
+
+func lookupTestImageID() (string, error) {
+	d, err := docker.NewClient("unix:///var/run/docker.sock")
+	if err != nil {
+		return "", err
+	}
+	image, err := d.InspectImage(testImageName)
+	if err != nil {
+		return "", err
+	}
+	return image.ID, nil
 }
 
 type sshData struct {
@@ -211,11 +232,27 @@ type CmdResult struct {
 	Err    error
 }
 
-func flynn(t *check.C, dir string, cmdArgs ...string) *CmdResult {
+func flynnEnv(path string) []string {
+	env := os.Environ()
+	res := make([]string, 0, len(env)+1)
+	for _, v := range env {
+		if !strings.HasPrefix(v, "FLYNNRC=") {
+			res = append(res, v)
+		}
+	}
+	res = append(res, "FLYNNRC="+path)
+	return res
+}
+
+func flynnCmd(dir string, cmdArgs ...string) *exec.Cmd {
 	cmd := exec.Command(args.CLI, cmdArgs...)
-	cmd.Env = append(os.Environ(), "FLYNNRC="+flynnrc)
+	cmd.Env = flynnEnv(flynnrc)
 	cmd.Dir = dir
-	return run(t, cmd)
+	return cmd
+}
+
+func flynn(t *check.C, dir string, args ...string) *CmdResult {
+	return run(t, flynnCmd(dir, args...))
 }
 
 func debug(t *check.C, v ...interface{}) {

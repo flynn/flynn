@@ -14,7 +14,6 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
-	"github.com/flynn/flynn/pkg/random"
 )
 
 type SchedulerSuite struct {
@@ -25,13 +24,6 @@ var _ = c.Suite(&SchedulerSuite{})
 
 func (s *SchedulerSuite) TearDownSuite(t *c.C) {
 	s.cleanup()
-}
-
-func (s *SchedulerSuite) stopJob(t *c.C, id string) {
-	debug(t, "stopping job ", id)
-	hostID, jobID, _ := cluster.ParseJobID(id)
-	hc := s.hostClient(t, hostID)
-	t.Assert(hc.StopJob(jobID), c.IsNil)
 }
 
 func (s *SchedulerSuite) checkJobState(t *c.C, appID, jobID, state string) {
@@ -133,7 +125,7 @@ func waitForJobEvents(t *c.C, events chan *ct.JobEvent, expected jobEvents) (las
 	inner:
 		select {
 		case event := <-events:
-			debug(t, "got job event: ", event.Type, event.JobID, event.State)
+			debugf(t, "got job event: %s %s %s", event.Type, event.JobID, event.State)
 			lastID = event.ID
 			jobID = event.JobID
 			if _, ok := actual[event.Type]; !ok {
@@ -311,9 +303,8 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 		Processes: map[string]int{"printer": 1, "crasher": 1},
 	}), c.IsNil)
 	_, err = s.controllerClient(t).RunJobDetached(app.ID, &ct.NewJob{
-		ReleaseID:  release.ID,
-		Entrypoint: []string{"bash", "-c"},
-		Cmd:        []string{"while true; do echo one-off-job; sleep 1; done"},
+		ReleaseID: release.ID,
+		Cmd:       []string{"sh", "-c", "while true; do echo one-off-job; sleep 1; done"},
 	})
 	t.Assert(err, c.IsNil)
 	waitForJobEvents(t, stream.Events, jobEvents{"printer": {"up": 1}, "crasher": {"up": 1}, "": {"up": 1}})
@@ -483,17 +474,17 @@ func (s *SchedulerSuite) TestTCPApp(t *c.C) {
 			return err
 		}
 		defer conn.Close()
-		echo := random.Bytes(16)
-		_, err = conn.Write(echo)
+		msg := []byte("hello there!\n")
+		_, err = conn.Write(msg)
 		if err != nil {
 			return err
 		}
-		reply := make([]byte, 16)
+		reply := make([]byte, len(msg))
 		_, err = conn.Read(reply)
 		if err != nil {
 			return err
 		}
-		t.Assert(reply, c.DeepEquals, echo)
+		t.Assert(reply, c.DeepEquals, msg)
 		return nil
 	}); err != nil {
 		t.Fatal(err)

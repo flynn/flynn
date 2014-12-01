@@ -28,12 +28,15 @@ Examples:
 `)
 
 	register("delete", runDelete, `
-usage: flynn delete
+usage: flynn delete [-y]
 
 Delete an app.
 
 If run from a git repository with a 'flynn' remote for the app, it will be
 removed.
+
+Options:
+	-y, --yes  Skip the confirmation prompt.
 
 Examples:
 
@@ -75,18 +78,20 @@ func runCreate(args *docopt.Args, client *controller.Client) error {
 func runDelete(args *docopt.Args, client *controller.Client) error {
 	appName := mustApp()
 
-	fmt.Printf("Are you sure you want to delete the app %q? (yes/no): ", appName)
-loop:
-	for {
-		var answer string
-		fmt.Scanln(&answer)
-		switch answer {
-		case "y", "yes":
-			break loop
-		case "n", "no":
-			return nil
-		default:
-			fmt.Print("Please type 'yes' or 'no': ")
+	if !args.Bool["--yes"] {
+		fmt.Printf("Are you sure you want to delete the app %q? (yes/no): ", appName)
+	loop:
+		for {
+			var answer string
+			fmt.Scanln(&answer)
+			switch answer {
+			case "y", "yes":
+				break loop
+			case "n", "no":
+				return nil
+			default:
+				fmt.Print("Please type 'yes' or 'no': ")
+			}
 		}
 	}
 
