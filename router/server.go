@@ -14,6 +14,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/router/types"
+	"github.com/kavu/go_reuseport"
 )
 
 type Listener interface {
@@ -110,5 +111,9 @@ func main() {
 	r.HTTP = NewHTTPListener(*httpAddr, *httpsAddr, cookieKey, NewEtcdDataStore(etcdc, path.Join(prefix, "http/")), d)
 
 	go func() { log.Fatal(r.ListenAndServe(nil)) }()
-	log.Fatal(http.ListenAndServe(*apiAddr, apiHandler(&r)))
+	listener, err := reuseport.NewReusablePortListener("tcp4", *apiAddr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Fatal(http.Serve(listener, apiHandler(&r)))
 }
