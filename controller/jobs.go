@@ -469,6 +469,17 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 	if len(newJob.Entrypoint) > 0 {
 		job.Config.Entrypoint = newJob.Entrypoint
 	}
+	if len(newJob.Ports) > 0 {
+		ports := make([]host.Port, len(newJob.Ports))
+		for i, p := range newJob.Ports {
+			ports[i] = host.Port{
+				Port:     p.Port,
+				Proto:    p.Proto,
+				RangeEnd: p.RangeEnd,
+			}
+		}
+		job.Config.Ports = ports
+	}
 
 	hosts, err := cl.ListHosts()
 	if err != nil {

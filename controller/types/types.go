@@ -93,6 +93,7 @@ type NewJob struct {
 	TTY        bool              `json:"tty,omitempty"`
 	Columns    int               `json:"tty_columns,omitempty"`
 	Lines      int               `json:"tty_lines,omitempty"`
+	Ports      []Port            `json:"ports,omitempty"`
 }
 
 type Frontend struct {
