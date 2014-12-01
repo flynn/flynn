@@ -13,6 +13,7 @@ import (
 
 	cc "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/router/types"
 )
@@ -35,7 +36,7 @@ func main() {
 	}
 	log.SetOutput(conf.logOut)
 
-	client, err = cc.NewClient("http://"+conf.controllerDomain, conf.controllerKey)
+	client, err = cc.NewClient("", conf.controllerKey)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -351,9 +352,13 @@ func (e *generator) createProvider() {
 	t := time.Now().UnixNano()
 	provider := &ct.Provider{
 		Name: fmt.Sprintf("example-provider-%d", t),
-		URL:  fmt.Sprintf("http://%s:%s/providers/%d", e.conf.ourAddr, e.conf.ourPort, t),
+		URL:  fmt.Sprintf("http://example-provider-%d.discoverd:%s/providers/%d", t, e.conf.ourPort, t),
 	}
 	err := e.client.CreateProvider(provider)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = discoverd.AddServiceAndRegister(provider.Name, ":"+e.conf.ourPort)
 	if err != nil {
 		log.Fatal(err)
 	}

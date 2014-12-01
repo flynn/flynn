@@ -1,11 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
-	"fmt"
-	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -13,6 +11,8 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/jsonschema"
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/exec"
 )
 
 type ControllerSuite struct {
@@ -24,8 +24,6 @@ type ControllerSuite struct {
 var _ = c.Suite(&ControllerSuite{})
 
 func (s *ControllerSuite) SetUpSuite(t *c.C) {
-	s.clusterConf(t)
-
 	var schemaPaths []string
 	walkFn := func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
@@ -108,21 +106,32 @@ func unmarshalControllerExample(data []byte) (map[string]interface{}, error) {
 }
 
 func (s *ControllerSuite) generateControllerExamples(t *c.C) map[string]interface{} {
-	controllerDomain := strings.TrimPrefix(s.config.URL, "https://")
-	examplesCmd := exec.Command(args.ControllerExamples)
-	env := os.Environ()
-	env = append(env, fmt.Sprintf("CONTROLLER_DOMAIN=%s", controllerDomain))
-	env = append(env, fmt.Sprintf("CONTROLLER_KEY=%s", s.config.Key))
-	if ips, err := net.LookupIP(controllerDomain); err == nil && len(ips) > 0 {
-		env = append(env, fmt.Sprintf("ADDR=%s", ips[0]))
-	}
-	examplesCmd.Env = env
+	client := s.controllerClient(t)
 
-	out, err := examplesCmd.Output()
+	app := &ct.App{}
+	t.Assert(client.CreateApp(app), c.IsNil)
+	artifact := &ct.Artifact{Type: "docker", URI: imageURIs["controller-examples"]}
+	t.Assert(client.CreateArtifact(artifact), c.IsNil)
+	env := map[string]string{"CONTROLLER_KEY": s.clusterConf(t).Key}
+	release := &ct.Release{
+		ArtifactID: artifact.ID,
+		Env:        env,
+	}
+	t.Assert(client.CreateRelease(release), c.IsNil)
+
+	cmd := exec.Command(exec.DockerImage(imageURIs["controller-examples"]), "/bin/flynn-controller-examples")
+	cmd.Env = env
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	t.Log(string(stderr.Bytes()))
 	t.Assert(err, c.IsNil)
+
 	var controllerExamples map[string]json.RawMessage
-	err = json.Unmarshal(out, &controllerExamples)
-	t.Assert(err, c.IsNil)
+	t.Assert(json.Unmarshal(stdout.Bytes(), &controllerExamples), c.IsNil)
 
 	examples := make(map[string]interface{}, len(controllerExamples))
 	for key, data := range controllerExamples {

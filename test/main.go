@@ -137,8 +137,9 @@ func main() {
 }
 
 var imageURIs = map[string]string{
-	"test-apps":  "",
-	"postgresql": "",
+	"test-apps":           "",
+	"postgresql":          "",
+	"controller-examples": "",
 }
 
 func lookupImageURIs() error {
