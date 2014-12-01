@@ -49,29 +49,36 @@ hardware or using a cloud provider) take a look at the
 Check out the [Using Flynn](https://flynn.io/docs/using-flynn) guide for
 instructions on deploying and scaling applications.
 
-
 ## Components
 
 ### Layer 0
 
+**[discoverd](/discoverd)** The Flynn service discovery system.
+
 **[host](/host)** The Flynn host service, manages containers on each host
 and provides the scheduling framework.
 
-**[discoverd](/discoverd)** The Flynn service discovery system.
-
 ### Layer 1
+
+**[blobstore](/blobstore)** A simple, fast HTTP file service.
 
 **[bootstrap](/bootstrap)** Bootstraps Flynn Layer 1 from a JSON manifest using
 the Layer 0 API.
+
+**[cli](/cli)** Command-line Flynn HTTP API client.
 
 **[controller](/controller)** Provides management and scheduling of applications
 running on Flynn via an HTTP API.
 
 **[gitreceived](/gitreceived)** An SSH server made specifically for accepting git pushes.
 
-**[cli](/cli)** Command-line Flynn HTTP API client.
+**[postgresql](/appliance/postgresql)** Flynn [PostgreSQL](http://www.postgresql.org/) database appliance.
 
 **[receiver](/receiver)** Flynn's git deployer.
+
+**[router](/router)** Flynn's TCP/HTTP router/load balancer.
+
+**[sdutil](/sdutil)** Service discovery utility for [discoverd](/discoverd).
 
 **[slugbuilder](/slugbuilder)** Turns a tarball into a Heroku-style "slug" using
 [buildpacks](https://devcenter.heroku.com/articles/buildpacks).
@@ -79,17 +86,7 @@ running on Flynn via an HTTP API.
 **[slugrunner](/slugrunner)** Runs Heroku-like
 [slugs](https://devcenter.heroku.com/articles/slug-compiler).
 
-**[router](/router)** Flynn's TCP/HTTP router/load balancer.
-
-**[blobstore](/blobstore)** A simple, fast HTTP file service.
-
-**[sdutil](/sdutil)** Service discovery utility for [discoverd](/discoverd).
-
-**[postgresql](/appliance/postgresql)** Flynn
-[PostgreSQL](http://www.postgresql.org/) database appliance.
-
 **[taffy](/taffy)** Taffy pulls git repos and deploys them to Flynn.
-
 
 ## Contributing
 
