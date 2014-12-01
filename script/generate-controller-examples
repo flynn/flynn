@@ -1,0 +1,63 @@
+#!/bin/bash
+#
+# A script to generate controller examples to STDOUT.
+
+set -e
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "${ROOT}/script/lib/ui.sh"
+
+usage() {
+  cat <<USAGE >&2
+usage: $0 [options]
+
+OPTIONS:
+  -h            Show this message
+  -i IP         The external IP address [default: the IP assigned to `eth0`]
+  -p PORT       The port to start the resource server on [default: 12345]
+USAGE
+}
+
+main() {
+  local ip port
+
+  while getopts 'hi:p:' opt; do
+    case "${opt}" in
+      h)
+        usage
+        exit 1
+        ;;
+      i) ip="${OPTARG}" ;;
+      p) port="${OPTARG}" ;;
+      ?)
+        usage
+        exit 1
+        ;;
+    esac
+  done
+
+  ip="${ip:-$(/sbin/ifconfig eth0 \
+    | grep -oP 'inet addr:\S+' \
+    | cut -d: -f2)}"
+  port="${port:-"12345"}"
+
+  export CONTROLLER_KEY="s3cr3t"
+
+  info "bootstrapping flynn" >&2
+  cluster_add=$("${ROOT}/script/bootstrap-flynn" &> >(tee /dev/stderr) | tail -1)
+  if [[ "${cluster_add:0:17}" != "flynn cluster add" ]]; then
+    fail "Bootstrap failed"
+  fi
+
+  info "generating controller examples..." >&2
+  docker run \
+    -e "CONTROLLER_KEY=${CONTROLLER_KEY}" \
+    -e "DISCOVERD=${ip}:1111" \
+    -e "PORT=${port}" \
+    -p "${port}:${port}" \
+    "flynn/controller-examples" \
+    "/bin/flynn-controller-examples" \
+    2>&1
+}
+
+main $@
