@@ -65,8 +65,9 @@ func JobConfig(f *ct.ExpandedFormation, name string) *host.Job {
 			URI:  f.Artifact.URI,
 		},
 		Config: host.ContainerConfig{
-			Cmd: t.Cmd,
-			Env: env,
+			Cmd:         t.Cmd,
+			Env:         env,
+			HostNetwork: t.HostNetwork,
 		},
 	}
 	if len(t.Entrypoint) > 0 {
