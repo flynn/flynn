@@ -117,7 +117,7 @@ func (r *Runner) start() error {
 		return fmt.Errorf("could not build flynn: %s", err)
 	}
 	r.releaseNet(bc.Network)
-	sh.BeforeExit(func() { os.RemoveAll(r.rootFS) })
+	sh.BeforeExit(func() { removeRootFS(r.rootFS) })
 
 	db, err := bolt.Open(args.DBPath, 0600, &bolt.Options{Timeout: 5 * time.Second})
 	if err != nil {
@@ -259,7 +259,7 @@ func (r *Runner) build(b *Build) (err error) {
 	}()
 
 	rootFS, err := c.BuildFlynn(r.rootFS, b.Commit, b.Merge)
-	defer os.RemoveAll(rootFS)
+	defer removeRootFS(rootFS)
 	if err != nil {
 		return fmt.Errorf("could not build flynn: %s", err)
 	}
@@ -648,4 +648,13 @@ func (r *Runner) httpClusterHandler(w http.ResponseWriter, req *http.Request) {
 	default:
 		http.Error(w, "unknown method", 405)
 	}
+}
+
+func removeRootFS(path string) {
+	fmt.Println("removing rootfs", path)
+	if err := os.RemoveAll(path); err != nil {
+		fmt.Println("could not remove rootfs", path, err)
+		return
+	}
+	fmt.Println("rootfs removed", path)
 }
