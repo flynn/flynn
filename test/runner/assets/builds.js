@@ -24,7 +24,7 @@ $(function() {
       params.before = lastID
     }
 
-    $.getJSON("/builds", params, function(builds) {
+    $.getJSON("/builds/", params, function(builds) {
       _.each(builds, function(build) {
 	lastID = build.id
 	build.created_at = moment(build.created_at)
