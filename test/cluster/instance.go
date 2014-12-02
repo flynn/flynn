@@ -101,6 +101,7 @@ func (i *Instance) writeInterfaceConfig() error {
 
 func (i *Instance) cleanup() {
 	for _, f := range i.tempFiles {
+		fmt.Printf("removing temp file %s\n", f)
 		if err := os.RemoveAll(f); err != nil {
 			fmt.Printf("could not remove temp file %s: %s\n", f, err)
 		}
