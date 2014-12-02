@@ -7,9 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/bgentry/que-go"
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/controller/client"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
@@ -48,8 +50,19 @@ func (s *S) SetUpSuite(c *C) {
 	}
 	pg := postgres.New(db, dsn)
 
+	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
+		ConnConfig: pgx.ConnConfig{
+			Host:     "/var/run/postgresql",
+			Database: dbname,
+		},
+		AfterConnect: que.PrepareStatements,
+	})
+	if err != nil {
+		c.Fatal(err)
+	}
+
 	s.cc = tu.NewFakeCluster()
-	s.hc = handlerConfig{db: pg, cc: s.cc, sc: newFakeRouter(), key: authKey}
+	s.hc = handlerConfig{db: pg, cc: s.cc, sc: newFakeRouter(), pgxpool: pgxpool, key: authKey}
 	handler := appHandler(s.hc)
 	s.srv = httptest.NewServer(handler)
 	client, err := controller.NewClient(s.srv.URL, authKey)
@@ -432,14 +445,6 @@ func (s *S) TestSetAppRelease(c *C) {
 	formations, err := s.c.FormationList(app.ID)
 	c.Assert(err, IsNil)
 	c.Assert(formations, HasLen, 0)
-
-	s.createTestFormation(c, &ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 1}})
-	newRelease := s.createTestRelease(c, &ct.Release{})
-	s.setAppRelease(c, app.ID, newRelease.ID)
-	formations, err = s.c.FormationList(app.ID)
-	c.Assert(err, IsNil)
-	c.Assert(formations, HasLen, 1)
-	c.Assert(formations[0].ReleaseID, Equals, newRelease.ID)
 }
 
 func (s *S) createTestProvider(c *C, provider *ct.Provider) *ct.Provider {

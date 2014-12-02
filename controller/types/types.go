@@ -19,6 +19,7 @@ type App struct {
 	Name      string            `json:"name,omitempty"`
 	Protected bool              `json:"protected"`
 	Meta      map[string]string `json:"meta,omitempty"`
+	Strategy  string            `json:"strategy,omitempty"`
 	CreatedAt *time.Time        `json:"created_at,omitempty"`
 	UpdatedAt *time.Time        `json:"updated_at,omitempty"`
 }
@@ -96,6 +97,30 @@ type NewJob struct {
 	TTY        bool              `json:"tty,omitempty"`
 	Columns    int               `json:"tty_columns,omitempty"`
 	Lines      int               `json:"tty_lines,omitempty"`
+}
+
+type Deployment struct {
+	ID           string     `json:"id,omitempty"`
+	AppID        string     `json:"app_id,omitempty"`
+	OldReleaseID string     `json:"old_release_id,omitempty"`
+	NewReleaseID string     `json:"new_release_id,omitempty"`
+	Strategy     string     `json:"strategy,omitempty"`
+	CreatedAt    *time.Time `json:"created_at,omitempty"`
+	FinishedAt   *time.Time `json:"finished_at,omitempty"`
+}
+
+type DeployID struct {
+	ID string
+}
+
+type DeploymentEvent struct {
+	ID           int64      `json:"id"`
+	DeploymentID string     `json:"deployment_id"`
+	ReleaseID    string     `json:"release_id"`
+	Status       string     `json:"status"`
+	JobType      string     `json:"job_type"`
+	JobState     string     `json:"job_state"`
+	CreatedAt    *time.Time `json:"created_at"`
 }
 
 type Provider struct {
