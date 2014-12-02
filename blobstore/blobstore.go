@@ -103,10 +103,10 @@ func main() {
 			log.Fatal(err)
 		}
 		storageDesc = "Postgres"
+	}
 
-		if err := discoverd.Register("blobstore", addr); err != nil {
-			log.Fatal(err)
-		}
+	if err := discoverd.Register("blobstore", addr); err != nil {
+		log.Fatal(err)
 	}
 
 	log.Println("Blobstore serving files on " + addr + " from " + storageDesc)
