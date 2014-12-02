@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kavu/go_reuseport"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/router/types"
 )
@@ -111,7 +112,7 @@ func (l *TCPListener) Start() error {
 
 	if l.startPort != 0 && l.endPort != 0 {
 		for i := l.startPort; i <= l.endPort; i++ {
-			listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", l.IP, i))
+			listener, err := reuseport.NewReusablePortListener("tcp4", fmt.Sprintf("%s:%d", l.IP, i))
 			if err != nil {
 				l.Close()
 				return err
@@ -234,7 +235,7 @@ func (r *tcpRoute) Serve(started chan<- error) {
 	var err error
 	// TODO: close the listener while there are no backends available
 	if r.l == nil {
-		r.l, err = net.Listen("tcp", r.addr)
+		r.l, err = reuseport.NewReusablePortListener("tcp4", r.addr)
 	}
 	started <- err
 	if err != nil {
