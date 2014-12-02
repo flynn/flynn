@@ -130,6 +130,32 @@
     }
   },
   {
+    "id": "deployer",
+    "action": "deploy-app",
+    "app": {
+      "name": "deployer",
+      "protected": true
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "$image_url_prefix/deployer?id=$image_id[deployer]"
+    },
+    "release": {
+      "processes": {
+        "app": {
+          "ports": [{"proto": "tcp"}],
+          "env": {
+            "CONTROLLER_AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}"
+          }
+        }
+      }
+    },
+    "processes": {
+      "app": 1
+    },
+    "resources": [{"name":"postgres", "url":"discoverd+http://pg-api/databases"}]
+  },
+  {
     "id": "blobstore",
     "action": "deploy-app",
     "app": {

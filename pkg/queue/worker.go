@@ -180,13 +180,13 @@ func (w *Worker) lockJob() (*Job, error) {
 }
 
 func (w *Worker) setState(job *Job, state JobState) {
-	w.q.DB.Exec(fmt.Sprintf("INSERT INTO %s_events (job_id, q_name, attempt, error_message, state) VALUES ($1, $2, $3, $4, $5)", w.q.Table), job.ID, w.name, job.Attempts, job.ErrorMessage, state)
+	w.q.DB.Exec(fmt.Sprintf("INSERT INTO %s_events (job_id, q_name, attempt, error_message, state) VALUES ($1, $2, $3, $4, $5)", w.q.table), job.ID, w.name, job.Attempts, job.ErrorMessage, state)
 }
 
 func (w *Worker) unlock(job *Job) {
-	w.q.DB.Exec(fmt.Sprintf("UPDATE %s set error_message = $1, attempts = $2, locked_at = null, run_at = $3 where id = $4", w.q.Table), job.ErrorMessage, job.Attempts, job.RunAt, job.ID)
+	w.q.DB.Exec(fmt.Sprintf("UPDATE %s set error_message = $1, attempts = $2, locked_at = null, run_at = $3 where id = $4", w.q.table), job.ErrorMessage, job.Attempts, job.RunAt, job.ID)
 }
 
 func (w *Worker) remove(job *Job) {
-	w.q.DB.Exec(fmt.Sprintf("DELETE FROM %s where id = $1", w.q.Table), job.ID)
+	w.q.DB.Exec(fmt.Sprintf("DELETE FROM %s where id = $1", w.q.table), job.ID)
 }

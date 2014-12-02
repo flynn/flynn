@@ -124,16 +124,25 @@ CREATE TRIGGER {{ .Table }}_events_notify
   FOR EACH ROW EXECUTE PROCEDURE {{ .Table }}_events_notify()`[1:])),
 }
 
-func (q *Queue) SetupDB() error {
-	m := postgres.NewMigrations()
+func SetupSQL(table string) ([]string, error) {
 	stmts := make([]string, len(stmtTemplates))
+	data := struct{ Table string }{table}
 	for i, tmpl := range stmtTemplates {
 		var buf bytes.Buffer
-		if err := tmpl.Execute(&buf, q); err != nil {
-			return err
+		if err := tmpl.Execute(&buf, data); err != nil {
+			return nil, err
 		}
 		stmts[i] = buf.String()
 	}
+	return stmts, nil
+}
+
+func (q *Queue) SetupDB() error {
+	stmts, err := SetupSQL(q.table)
+	if err != nil {
+		return err
+	}
+	m := postgres.NewMigrations()
 	m.Add(1, stmts...)
 	return m.Migrate(q.DB)
 }

@@ -14,7 +14,7 @@ type Handler func(*Job) error
 
 type Queue struct {
 	DB    *sql.DB
-	Table string
+	table string
 
 	mtx          sync.Mutex
 	l            *listener
@@ -28,7 +28,7 @@ type Queue struct {
 func New(db *sql.DB, table string) *Queue {
 	q := &Queue{
 		DB:           db,
-		Table:        table,
+		table:        table,
 		stopListener: make(chan struct{}),
 		subscribers:  make(map[string]map[chan *Event]struct{}),
 		waiters:      make(map[string]chan error),
@@ -45,12 +45,12 @@ func (q *Queue) Push(name string, data []byte) (*Job, error) {
 
 func (q *Queue) PushWithMaxAttempts(name string, data []byte, maxAttempts int) (*Job, error) {
 	job := &Job{}
-	return job, q.DB.QueryRow(fmt.Sprintf("INSERT INTO %s (q_name, data, max_attempts) VALUES ($1, $2, $3) RETURNING id, created_at", q.Table), name, data, maxAttempts).Scan(&job.ID, &job.CreatedAt)
+	return job, q.DB.QueryRow(fmt.Sprintf("INSERT INTO %s (q_name, data, max_attempts) VALUES ($1, $2, $3) RETURNING id, created_at", q.table), name, data, maxAttempts).Scan(&job.ID, &job.CreatedAt)
 }
 
 func (q *Queue) Get(id int64) (*Job, error) {
 	job := &Job{}
-	return job, q.DB.QueryRow(fmt.Sprintf("SELECT id, q_name, data, error_message, attempts, max_attempts, created_at FROM %s WHERE id = $1", q.Table), id).Scan(&job.ID, &job.Name, &job.Data, &job.ErrorMessage, &job.Attempts, &job.MaxAttempts, &job.CreatedAt)
+	return job, q.DB.QueryRow(fmt.Sprintf("SELECT id, q_name, data, error_message, attempts, max_attempts, created_at FROM %s WHERE id = $1", q.table), id).Scan(&job.ID, &job.Name, &job.Data, &job.ErrorMessage, &job.Attempts, &job.MaxAttempts, &job.CreatedAt)
 }
 
 func (q *Queue) NewWorker(name string, concurrency int, h Handler) *Worker {
@@ -93,7 +93,7 @@ func (q *Queue) Wait(name string) chan error {
 }
 
 func (q *Queue) unlockJobsOfDeadWorkers() {
-	q.DB.Exec(fmt.Sprintf("UPDATE %s SET locked_at = NULL, locked_by = NULL WHERE locked_by NOT IN (SELECT pid FROM pg_stat_activity)", q.Table))
+	q.DB.Exec(fmt.Sprintf("UPDATE %s SET locked_at = NULL, locked_by = NULL WHERE locked_by NOT IN (SELECT pid FROM pg_stat_activity)", q.table))
 }
 
 func (q *Queue) listener() *listener {
@@ -169,7 +169,7 @@ func (q *Queue) Unsubscribe(name string, ch chan *Event) {
 }
 
 func (q *Queue) startEventListener() error {
-	channel := q.Table + "_events"
+	channel := q.table + "_events"
 	notify, err := q.listener().listen(channel)
 	if err != nil {
 		return err
@@ -231,7 +231,7 @@ func (q *Queue) getEvent(id int64) (*Event, error) {
 	    %[1]s.created_at
 	  FROM %[1]s_events
 	  INNER JOIN %[1]s ON %[1]s_events.job_id = %[1]s.id
-	  WHERE %[1]s_events.id = $1`, q.Table)
+	  WHERE %[1]s_events.id = $1`, q.table)
 	return event, q.DB.QueryRow(query, id).Scan(
 		&event.ID,
 		&event.State,
