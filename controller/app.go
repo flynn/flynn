@@ -9,6 +9,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	"github.com/flynn/flynn/controller/name"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
@@ -18,10 +19,10 @@ type AppRepo struct {
 	router        routerc.Client
 	defaultDomain string
 
-	db *DB
+	db *postgres.DB
 }
 
-func NewAppRepo(db *DB, defaultDomain string, router routerc.Client) *AppRepo {
+func NewAppRepo(db *postgres.DB, defaultDomain string, router routerc.Client) *AppRepo {
 	return &AppRepo{db: db, defaultDomain: defaultDomain, router: router}
 }
 
@@ -50,7 +51,7 @@ func (r *AppRepo) Add(data interface{}) error {
 		}
 	}
 	err := r.db.QueryRow("INSERT INTO apps (app_id, name, protected, meta) VALUES ($1, $2, $3, $4) RETURNING created_at, updated_at", app.ID, app.Name, app.Protected, meta).Scan(&app.CreatedAt, &app.UpdatedAt)
-	app.ID = cleanUUID(app.ID)
+	app.ID = postgres.CleanUUID(app.ID)
 	if !app.Protected && r.defaultDomain != "" {
 		route := (&router.HTTPRoute{
 			Domain:  fmt.Sprintf("%s.%s", app.Name, r.defaultDomain),
@@ -64,7 +65,7 @@ func (r *AppRepo) Add(data interface{}) error {
 	return err
 }
 
-func scanApp(s Scanner) (*ct.App, error) {
+func scanApp(s postgres.Scanner) (*ct.App, error) {
 	app := &ct.App{}
 	var meta hstore.Hstore
 	err := s.Scan(&app.ID, &app.Name, &app.Protected, &meta, &app.CreatedAt, &app.UpdatedAt)
@@ -77,18 +78,18 @@ func scanApp(s Scanner) (*ct.App, error) {
 			app.Meta[k] = v.String
 		}
 	}
-	app.ID = cleanUUID(app.ID)
+	app.ID = postgres.CleanUUID(app.ID)
 	return app, err
 }
 
 var idPattern = regexp.MustCompile(`^[a-f0-9]{8}-?([a-f0-9]{4}-?){3}[a-f0-9]{12}$`)
 
 type rowQueryer interface {
-	QueryRow(query string, args ...interface{}) Scanner
+	QueryRow(query string, args ...interface{}) postgres.Scanner
 }
 
 func selectApp(db rowQueryer, id string, update bool) (*ct.App, error) {
-	var row Scanner
+	var row postgres.Scanner
 	query := "SELECT app_id, name, protected, meta, created_at, updated_at FROM apps WHERE deleted_at IS NULL AND "
 	var suffix string
 	if update {

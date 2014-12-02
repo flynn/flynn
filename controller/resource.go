@@ -6,14 +6,15 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 )
 
 type ResourceRepo struct {
-	db *DB
+	db *postgres.DB
 }
 
-func NewResourceRepo(db *DB) *ResourceRepo {
+func NewResourceRepo(db *postgres.DB) *ResourceRepo {
 	return &ResourceRepo{db}
 }
 
@@ -49,9 +50,9 @@ func (rr *ResourceRepo) Add(r *ct.Resource) error {
 			tx.Rollback()
 			return err
 		}
-		r.Apps[i] = cleanUUID(r.Apps[i])
+		r.Apps[i] = postgres.CleanUUID(r.Apps[i])
 	}
-	r.ID = cleanUUID(r.ID)
+	r.ID = postgres.CleanUUID(r.ID)
 	return tx.Commit()
 }
 
@@ -70,7 +71,7 @@ func split(s string, sep string) []string {
 	return strings.Split(s, ",")
 }
 
-func scanResource(s Scanner) (*ct.Resource, error) {
+func scanResource(s postgres.Scanner) (*ct.Resource, error) {
 	r := &ct.Resource{}
 	var env hstore.Hstore
 	var appIDs string
@@ -78,8 +79,8 @@ func scanResource(s Scanner) (*ct.Resource, error) {
 	if err == sql.ErrNoRows {
 		err = ErrNotFound
 	}
-	r.ID = cleanUUID(r.ID)
-	r.ProviderID = cleanUUID(r.ProviderID)
+	r.ID = postgres.CleanUUID(r.ID)
+	r.ProviderID = postgres.CleanUUID(r.ProviderID)
 	r.Env = make(map[string]string, len(env.Map))
 	for k, v := range env.Map {
 		r.Env[k] = v.String
@@ -88,7 +89,7 @@ func scanResource(s Scanner) (*ct.Resource, error) {
 		r.Apps = split(appIDs[1:len(appIDs)-1], ",")
 	}
 	for i, id := range r.Apps {
-		r.Apps[i] = cleanUUID(id)
+		r.Apps[i] = postgres.CleanUUID(id)
 	}
 	return r, err
 }

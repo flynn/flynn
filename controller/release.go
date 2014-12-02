@@ -5,18 +5,19 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 )
 
 type ReleaseRepo struct {
-	db *DB
+	db *postgres.DB
 }
 
-func NewReleaseRepo(db *DB) *ReleaseRepo {
+func NewReleaseRepo(db *postgres.DB) *ReleaseRepo {
 	return &ReleaseRepo{db}
 }
 
-func scanRelease(s Scanner) (*ct.Release, error) {
+func scanRelease(s postgres.Scanner) (*ct.Release, error) {
 	release := &ct.Release{}
 	var data []byte
 	err := s.Scan(&release.ID, &release.ArtifactID, &data, &release.CreatedAt)
@@ -26,8 +27,8 @@ func scanRelease(s Scanner) (*ct.Release, error) {
 		}
 		return nil, err
 	}
-	release.ID = cleanUUID(release.ID)
-	release.ArtifactID = cleanUUID(release.ArtifactID)
+	release.ID = postgres.CleanUUID(release.ID)
+	release.ArtifactID = postgres.CleanUUID(release.ArtifactID)
 	err = json.Unmarshal(data, release)
 	return release, err
 }
@@ -49,8 +50,8 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 
 	err = r.db.QueryRow("INSERT INTO releases (release_id, artifact_id, data) VALUES ($1, $2, $3) RETURNING created_at",
 		release.ID, release.ArtifactID, data).Scan(&release.CreatedAt)
-	release.ID = cleanUUID(release.ID)
-	release.ArtifactID = cleanUUID(release.ArtifactID)
+	release.ID = postgres.CleanUUID(release.ID)
+	release.ArtifactID = postgres.CleanUUID(release.ArtifactID)
 	return err
 }
 
