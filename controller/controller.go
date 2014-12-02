@@ -13,7 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/bgentry/que-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
@@ -57,6 +59,19 @@ func main() {
 		log.Fatal(err)
 	}
 
+	pgxcfg, err := pgx.ParseURI(fmt.Sprintf("http://%s:%s@%s/%s", os.Getenv("PGUSER"), os.Getenv("PGPASSWORD"), db.Addr(), os.Getenv("PGDATABASE")))
+	if err != nil {
+		log.Fatal(err)
+	}
+	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
+		ConnConfig:   pgxcfg,
+		AfterConnect: que.PrepareStatements,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	shutdown.BeforeExit(func() { pgxpool.Close() })
+
 	cc, err := cluster.NewClient()
 	if err != nil {
 		log.Fatal(err)
@@ -75,16 +90,17 @@ func main() {
 		discoverd.Unregister("flynn-controller", addr)
 	})
 
-	handler, _ := appHandler(handlerConfig{db: db, cc: cc, sc: sc, dc: discoverd.DefaultClient, key: os.Getenv("AUTH_KEY")})
+	handler, _ := appHandler(handlerConfig{db: db, cc: cc, sc: sc, pgxpool: pgxpool, dc: discoverd.DefaultClient, key: os.Getenv("AUTH_KEY")})
 	log.Fatal(http.ListenAndServe(addr, handler))
 }
 
 type handlerConfig struct {
-	db  *postgres.DB
-	cc  clusterClient
-	sc  routerc.Client
-	dc  *discoverd.Client
-	key string
+	db      *postgres.DB
+	cc      clusterClient
+	sc      routerc.Client
+	dc      *discoverd.Client
+	pgxpool *pgx.ConnPool
+	key     string
 }
 
 type ResponseHelper interface {
@@ -151,12 +167,14 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	releaseRepo := NewReleaseRepo(c.db)
 	jobRepo := NewJobRepo(c.db)
 	formationRepo := NewFormationRepo(c.db, appRepo, releaseRepo, artifactRepo)
+	deploymentRepo := NewDeploymentRepo(c.db, c.pgxpool)
 	m.Map(resourceRepo)
 	m.Map(appRepo)
 	m.Map(artifactRepo)
 	m.Map(releaseRepo)
 	m.Map(jobRepo)
 	m.Map(formationRepo)
+	m.Map(deploymentRepo)
 	m.Map(c.dc)
 	m.MapTo(c.cc, (*clusterClient)(nil))
 	m.MapTo(c.sc, (*routerc.Client)(nil))
@@ -188,6 +206,9 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 
 	r.Put("/apps/:apps_id/release", getAppMiddleware, binding.Bind(releaseID{}), setAppRelease)
 	r.Get("/apps/:apps_id/release", getAppMiddleware, getAppRelease)
+
+	r.Post("/apps/:apps_id/deploy", getAppMiddleware, binding.Bind(releaseID{}), createDeployment)
+	r.Get("/deployments/:deployment_id", getDeploymentMiddleware, getDeployment)
 
 	r.Post("/providers/:providers_id/resources", getProviderMiddleware, binding.Bind(ct.ResourceReq{}), resourceServerMiddleware, provisionResource)
 	r.Get("/providers/:providers_id/resources", getProviderMiddleware, getProviderResources)
@@ -286,7 +307,7 @@ type releaseID struct {
 	ID string `json:"id"`
 }
 
-func setAppRelease(app *ct.App, rid releaseID, apps *AppRepo, releases *ReleaseRepo, formations *FormationRepo, r ResponseHelper) {
+func setAppRelease(app *ct.App, rid releaseID, apps *AppRepo, releases *ReleaseRepo, r ResponseHelper) {
 	rel, err := releases.Get(rid.ID)
 	if err != nil {
 		if err == ErrNotFound {
@@ -299,28 +320,6 @@ func setAppRelease(app *ct.App, rid releaseID, apps *AppRepo, releases *ReleaseR
 	}
 	release := rel.(*ct.Release)
 	apps.SetRelease(app.ID, release.ID)
-
-	// TODO: use transaction/lock
-	fs, err := formations.List(app.ID)
-	if err != nil {
-		r.Error(err)
-		return
-	}
-	if len(fs) == 1 && fs[0].ReleaseID != release.ID {
-		if err := formations.Add(&ct.Formation{
-			AppID:     app.ID,
-			ReleaseID: release.ID,
-			Processes: fs[0].Processes,
-		}); err != nil {
-			r.Error(err)
-			return
-		}
-		if err := formations.Remove(app.ID, fs[0].ReleaseID); err != nil {
-			r.Error(err)
-			return
-		}
-	}
-
 	r.JSON(200, release)
 }
 
