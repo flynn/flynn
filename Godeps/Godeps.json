@@ -237,6 +237,10 @@
 			"Rev": "014200e60fbd2172d2b14c5703b62657f826eaa9"
 		},
 		{
+			"ImportPath": "github.com/julienschmidt/httprouter",
+			"Rev": "46807412fe50aaceb73bb57061c2230fd26a1640"
+		},
+		{
 			"ImportPath": "github.com/kr/binarydist",
 			"Rev": "9955b0ab8708602d411341e55fffd7e0700f86bd"
 		},
