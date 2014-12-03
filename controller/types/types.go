@@ -32,12 +32,13 @@ type Release struct {
 }
 
 type ProcessType struct {
-	Cmd        []string          `json:"cmd,omitempty"`
-	Entrypoint []string          `json:"entrypoint,omitempty"`
-	Env        map[string]string `json:"env,omitempty"`
-	Ports      []Port            `json:"ports,omitempty"`
-	Data       bool              `json:"data,omitempty"`
-	Omni       bool              `json:"omni,omitempty"` // omnipresent - present on all hosts
+	Cmd         []string          `json:"cmd,omitempty"`
+	Entrypoint  []string          `json:"entrypoint,omitempty"`
+	Env         map[string]string `json:"env,omitempty"`
+	Ports       []Port            `json:"ports,omitempty"`
+	Data        bool              `json:"data,omitempty"`
+	Omni        bool              `json:"omni,omitempty"` // omnipresent - present on all hosts
+	HostNetwork bool              `json:"host_network,omitempty"`
 }
 
 type Port struct {

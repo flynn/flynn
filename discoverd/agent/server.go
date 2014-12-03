@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kavu/go_reuseport"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/rpcplus"
 	rpc "github.com/flynn/flynn/pkg/rpcplus/comborpc"
@@ -88,7 +89,11 @@ func ListenAndServe(server *Agent) error {
 	if err := rpc.Register(server); err != nil {
 		return err
 	}
-	return http.ListenAndServe(server.Address, nil)
+	listener, err := reuseport.NewReusablePortListener("tcp4", server.Address)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return http.Serve(listener, nil)
 }
 
 var externalIP = os.Getenv("EXTERNAL_IP")

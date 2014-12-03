@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kavu/go_reuseport"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/nacl/secretbox"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/random"
@@ -223,7 +224,7 @@ func (h *httpSyncHandler) Remove(id string) error {
 
 func (s *HTTPListener) serve(started chan<- error) {
 	var err error
-	s.listener, err = net.Listen("tcp", s.Addr)
+	s.listener, err = reuseport.NewReusablePortListener("tcp4", s.Addr)
 	started <- err
 	if err != nil {
 		return
@@ -240,7 +241,7 @@ func (s *HTTPListener) serve(started chan<- error) {
 
 func (s *HTTPListener) serveTLS(started chan<- error) {
 	var err error
-	s.tlsListener, err = net.Listen("tcp", s.TLSAddr)
+	s.tlsListener, err = reuseport.NewReusablePortListener("tcp4", s.TLSAddr)
 	started <- err
 	if err != nil {
 		return
