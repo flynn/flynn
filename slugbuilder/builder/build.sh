@@ -89,7 +89,6 @@ selected_buildpack=
 
 if [[ -n "${BUILDPACK_URL}" ]]; then
   echo_title "Fetching custom buildpack"
-  
   buildpack="${buildpack_root}/custom"
   rm -rf "${buildpack}"
   /tmp/builder/install-buildpack \
