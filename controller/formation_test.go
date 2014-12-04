@@ -19,6 +19,7 @@ func (s *S) TestFormationStreaming(c *C) {
 
 	updates, streamErr := client.StreamFormations(&before)
 
+	c.Assert(streamErr, IsNil)
 	var existingFound bool
 	for f := range updates.Chan {
 		if f.App == nil {
@@ -29,7 +30,6 @@ func (s *S) TestFormationStreaming(c *C) {
 		}
 	}
 	c.Assert(existingFound, Equals, true)
-	c.Assert(*streamErr, IsNil)
 
 	release = s.createTestRelease(c, &ct.Release{})
 	app = s.createTestApp(c, &ct.App{Name: "streamtest"})

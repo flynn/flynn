@@ -3,7 +3,6 @@ package controller
 
 import (
 	"bufio"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -99,44 +98,51 @@ func NewClientWithPin(uri, key string, pin []byte) (*Client, error) {
 // FormationUpdates is a wrapper around a Chan channel, allowing us to close
 // the stream.
 type FormationUpdates struct {
-	Chan <-chan *ct.ExpandedFormation
-
-	conn net.Conn
+	Chan chan *ct.ExpandedFormation
+	body io.ReadCloser
 }
 
 // Close closes the underlying stream.
 func (u *FormationUpdates) Close() error {
-	if u.conn == nil {
-		return nil
-	}
-	return u.conn.Close()
+	return u.body.Close()
 }
 
 // StreamFormations returns a FormationUpdates stream. If since is not nil, only
 // retrieves formation updates since the specified time.
-func (c *Client) StreamFormations(since *time.Time) (*FormationUpdates, *error) {
+func (c *Client) StreamFormations(since *time.Time) (*FormationUpdates, error) {
+	header := http.Header{
+		"Accept": []string{"text/event-stream"},
+	}
 	if since == nil {
 		s := time.Unix(0, 0)
 		since = &s
 	}
-	dial := c.Dial
-	if dial == nil {
-		dial = net.Dial
-	}
-	ch := make(chan *ct.ExpandedFormation)
-	conn, err := dial("tcp", c.addr)
+	t := since.Format(time.RFC3339)
+	res, err := c.RawReq("GET", "/formations?since="+t, header, nil, nil)
 	if err != nil {
-		close(ch)
-		return &FormationUpdates{ch, conn}, &err
+		return nil, err
 	}
-	header := make(http.Header)
-	header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(":"+c.Key)))
-	client, err := rpcplus.NewHTTPClient(conn, rpcplus.DefaultRPCPath, header)
-	if err != nil {
-		close(ch)
-		return &FormationUpdates{ch, conn}, &err
+	stream := &FormationUpdates{
+		Chan: make(chan *ct.ExpandedFormation),
+		body: res.Body,
 	}
-	return &FormationUpdates{ch, conn}, &client.StreamGo("Controller.StreamFormations", since, ch).Error
+	go func() {
+		defer func() {
+			close(stream.Chan)
+			stream.Close()
+		}()
+
+		r := bufio.NewReader(stream.body)
+		dec := sse.NewDecoder(r)
+		for {
+			event := &ct.ExpandedFormation{}
+			if err := dec.Decode(event); err != nil {
+				break
+			}
+			stream.Chan <- event
+		}
+	}()
+	return stream, nil
 }
 
 // CreateArtifact creates a new artifact.
