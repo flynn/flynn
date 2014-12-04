@@ -1,0 +1,78 @@
+{
+	"route_create": {
+		"request": {
+			"method": "POST",
+			"url": "/routes",
+			"headers": {
+				"Content-Type": "application/json"
+			},
+			"body": "{\"type\":\"http\",\"config\":{\"domain\":\"http://example.com\",\"service\":\"foo-web\"}}"
+		},
+		"response": {
+			"headers": {
+				"Content-Type": "application/json; charset=UTF-8"
+			},
+			"body": "{\"id\":\"http/a9b9f04336ce0181a08e774e01113b31\",\"type\":\"http\",\"config\":{\"domain\":\"http://example.com\",\"service\":\"foo-web\"},\"created_at\":\"2014-12-04T15:02:57.568627385Z\",\"updated_at\":\"2014-12-04T15:02:57.568627385Z\"}"
+		}
+	},
+	"route_delete": {
+		"request": {
+			"method": "DELETE",
+			"url": "/routes/http/a9b9f04336ce0181a08e774e01113b31",
+			"headers": {
+				"Content-Type": "application/json"
+			}
+		},
+		"response": {
+			"headers": {
+				"Content-Type": "application/json; charset=UTF-8"
+			}
+		}
+	},
+	"route_get": {
+		"request": {
+			"method": "GET",
+			"url": "/routes/http/a9b9f04336ce0181a08e774e01113b31",
+			"headers": {
+				"Content-Type": "application/json"
+			}
+		},
+		"response": {
+			"headers": {
+				"Content-Type": "application/json; charset=UTF-8"
+			},
+			"body": "{\"id\":\"http/a9b9f04336ce0181a08e774e01113b31\",\"type\":\"http\",\"config\":{\"domain\":\"http://example.com\",\"service\":\"foo-web\"},\"created_at\":\"2014-12-04T15:02:57.568627385Z\",\"updated_at\":\"2014-12-04T15:02:57.568627385Z\"}"
+		}
+	},
+	"route_list": {
+		"request": {
+			"method": "GET",
+			"url": "/routes",
+			"headers": {
+				"Content-Type": "application/json"
+			}
+		},
+		"response": {
+			"headers": {
+				"Content-Type": "application/json; charset=UTF-8"
+			},
+			"body": "[{\"id\":\"http/dab521de65f9250b4cca7383feef67dc\",\"type\":\"http\",\"config\":{\"domain\":\"http://example.org\",\"service\":\"bar-web\"},\"created_at\":\"2014-12-04T15:02:57.574987106Z\",\"updated_at\":\"2014-12-04T15:02:57.574987106Z\"},{\"id\":\"http/a9b9f04336ce0181a08e774e01113b31\",\"type\":\"http\",\"config\":{\"domain\":\"http://example.com\",\"service\":\"foo-web\"},\"created_at\":\"2014-12-04T15:02:57.568627385Z\",\"updated_at\":\"2014-12-04T15:02:57.568627385Z\"},{\"id\":\"http/09d9867c98edf98d73b9ff5706723cf9\",\"parent_ref\":\"controller/apps/4efe5fa225604f7194530e45ba7d8031\",\"type\":\"http\",\"config\":{\"domain\":\"dashboard.dev.localflynn.com\",\"service\":\"dashboard-web\",\"tls_cert\":\"-----BEGIN CERTIFICATE-----\\nMIIDOzCCAiWgAwIBAgIRAM4f61p374Q+DbOhxSYJ+DUwCwYJKoZIhvcNAQELMB0x\\nDjAMBgNVBAoTBUZseW5uMQswCQYDVQQLEwJDQTAeFw0xNDEyMDQxNTAyMzFaFw0x\\nOTEyMDMxNTAyMzFaMC0xDjAMBgNVBAoTBUZseW5uMRswGQYDVQQDExJkZXYubG9j\\nYWxmbHlubi5jb20wggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDmq5VP\\nL4/5UDcf2g6cpv5TvqXUHIOqb/4VGlmhjPf7UPQD2SSeHf4NQFQgNPafRjEpnPlt\\n4KPq7yzfACTVQed4dduJ4ejd/oGNI/5t4ZrRWDk/hHjxniVWBnDr3DDwq62Y+rei\\nK+xhZMQlvmn4EPxtAWynZLQI+LhKBYWSDY1QktQ236iI4ln1pesD0uEyzqFq4LBA\\nEAlnj69Vg8AL6Nm+hM06jIulhFAU3YDkzqgPs5/jCImSagfD6OiG/ap2I7htzdBc\\nyFO93qOnYVxkdct6NhfMt5nItDs1KyAqnXNno8sQfvmr3EPQmBrq6VUO6/ea13ad\\nW++Z+lkxTTsr4HldAgMBAAGjajBoMA4GA1UdDwEB/wQEAwIAoDATBgNVHSUEDDAK\\nBggrBgEFBQcDATAMBgNVHRMBAf8EAjAAMDMGA1UdEQQsMCqCEmRldi5sb2NhbGZs\\neW5uLmNvbYIUKi5kZXYubG9jYWxmbHlubi5jb20wCwYJKoZIhvcNAQELA4IBAQAn\\nbNxHOLFGMnpIPEproth8Lus06/Any9+p6iwCIXfwA36fE5hMwQ/1M7p2gPiKhVI0\\ne01FoIU6e9+mt7EHmDvux9RIrYVEeGh88wk+jtpXkqA7acTYeJYR/+StKlO1QVLm\\nwO13aa0A/BFDU/QJYyYSo7+D/gWiVxIv0Guu8go3KCs58RKQ6V20MgeaMp3wiXmQ\\n1Zh7dfsZz0S3eCsGeBj6PFBXTIs4HffouBBENxfSP4wDhSDCxFBTfgwUcPt38nHe\\nJvCrj/JcqmtSqgScYMCMZQB1uIM0pA2WCDCp3QtNDT6LtFE3qspWnUpCPJnOQUBH\\nBZl1+pgLNaY4SHe60nXn\\n-----END CERTIFICATE-----\\n\"},\"created_at\":\"2014-12-04T15:02:31.920223967Z\",\"updated_at\":\"2014-12-04T15:02:31.920223967Z\"},{\"id\":\"http/ecb5daac2d8fb4aba282680847ed1d74\",\"parent_ref\":\"controller/apps/bb410572a8194e89b0212b5650b576db\",\"type\":\"http\",\"config\":{\"domain\":\"controller.dev.localflynn.com\",\"service\":\"flynn-controller\",\"tls_cert\":\"-----BEGIN CERTIFICATE-----\\nMIIDOzCCAiWgAwIBAgIRAM4f61p374Q+DbOhxSYJ+DUwCwYJKoZIhvcNAQELMB0x\\nDjAMBgNVBAoTBUZseW5uMQswCQYDVQQLEwJDQTAeFw0xNDEyMDQxNTAyMzFaFw0x\\nOTEyMDMxNTAyMzFaMC0xDjAMBgNVBAoTBUZseW5uMRswGQYDVQQDExJkZXYubG9j\\nYWxmbHlubi5jb20wggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDmq5VP\\nL4/5UDcf2g6cpv5TvqXUHIOqb/4VGlmhjPf7UPQD2SSeHf4NQFQgNPafRjEpnPlt\\n4KPq7yzfACTVQed4dduJ4ejd/oGNI/5t4ZrRWDk/hHjxniVWBnDr3DDwq62Y+rei\\nK+xhZMQlvmn4EPxtAWynZLQI+LhKBYWSDY1QktQ236iI4ln1pesD0uEyzqFq4LBA\\nEAlnj69Vg8AL6Nm+hM06jIulhFAU3YDkzqgPs5/jCImSagfD6OiG/ap2I7htzdBc\\nyFO93qOnYVxkdct6NhfMt5nItDs1KyAqnXNno8sQfvmr3EPQmBrq6VUO6/ea13ad\\nW++Z+lkxTTsr4HldAgMBAAGjajBoMA4GA1UdDwEB/wQEAwIAoDATBgNVHSUEDDAK\\nBggrBgEFBQcDATAMBgNVHRMBAf8EAjAAMDMGA1UdEQQsMCqCEmRldi5sb2NhbGZs\\neW5uLmNvbYIUKi5kZXYubG9jYWxmbHlubi5jb20wCwYJKoZIhvcNAQELA4IBAQAn\\nbNxHOLFGMnpIPEproth8Lus06/Any9+p6iwCIXfwA36fE5hMwQ/1M7p2gPiKhVI0\\ne01FoIU6e9+mt7EHmDvux9RIrYVEeGh88wk+jtpXkqA7acTYeJYR/+StKlO1QVLm\\nwO13aa0A/BFDU/QJYyYSo7+D/gWiVxIv0Guu8go3KCs58RKQ6V20MgeaMp3wiXmQ\\n1Zh7dfsZz0S3eCsGeBj6PFBXTIs4HffouBBENxfSP4wDhSDCxFBTfgwUcPt38nHe\\nJvCrj/JcqmtSqgScYMCMZQB1uIM0pA2WCDCp3QtNDT6LtFE3qspWnUpCPJnOQUBH\\nBZl1+pgLNaY4SHe60nXn\\n-----END CERTIFICATE-----\\n\"},\"created_at\":\"2014-12-04T15:02:31.255269118Z\",\"updated_at\":\"2014-12-04T15:02:31.255269118Z\"},{\"id\":\"tcp/934b535800b1cba8f96a5d72f72f1611\",\"parent_ref\":\"controller/apps/46af7c5ed34f42858bbbaba23d4c3510\",\"type\":\"tcp\",\"config\":{\"service\":\"gitreceive\",\"port\":2222},\"created_at\":\"2014-12-04T15:02:31.249458661Z\",\"updated_at\":\"2014-12-04T15:02:31.249458661Z\"}]"
+		}
+	},
+	"route_set": {
+		"request": {
+			"method": "PUT",
+			"url": "/routes",
+			"headers": {
+				"Content-Type": "application/json"
+			},
+			"body": "{\"type\":\"http\",\"config\":{\"domain\":\"http://example.org\",\"service\":\"bar-web\"}}"
+		},
+		"response": {
+			"headers": {
+				"Content-Type": "application/json; charset=UTF-8"
+			},
+			"body": "{\"id\":\"http/dab521de65f9250b4cca7383feef67dc\",\"type\":\"http\",\"config\":{\"domain\":\"http://example.org\",\"service\":\"bar-web\"},\"created_at\":\"2014-12-04T15:02:57.574987106Z\",\"updated_at\":\"2014-12-04T15:02:57.574987106Z\"}"
+		}
+	}
+}

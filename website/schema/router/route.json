@@ -4,6 +4,13 @@
   "title": "Route",
   "description": "FIXME",
   "type": "object",
+  "examples": [
+    "schema/examples/router/route_create#",
+    "schema/examples/router/route_set#",
+    "schema/examples/router/route_get#",
+    "schema/examples/router/route_list#",
+    "schema/examples/router/route_delete#"
+  ],
   "properties": {
     "id": {
       "$ref": "/schema/common#/definitions/id"
