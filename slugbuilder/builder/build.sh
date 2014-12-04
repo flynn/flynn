@@ -48,8 +48,12 @@ ensure_indent() {
   done
 }
 
-run_unprivileged() {
-  setuidgid nobody $@
+maybe_run_privileged() {
+  if [[ -s "${env_dir}/BUILD_AS_ROOT" ]]; then
+    $@
+  else
+    setuidgid nobody $@
+  fi
 }
 
 cd ${app_dir}
@@ -82,6 +86,8 @@ export STACK=cedar-14
 # Fix for https://github.com/flynn/flynn/issues/85
 export CURL_CONNECT_TIMEOUT=30
 
+[[ -s "${env_dir}/BUILD_AS_ROOT" ]] && echo_title "BUILD_AS_ROOT is set, honoring it"
+
 ## Buildpack detection
 
 buildpacks=(${buildpack_root}/*)
@@ -98,10 +104,10 @@ if [[ -n "${BUILDPACK_URL}" ]]; then
     custom \
     &> /dev/null
   selected_buildpack="${buildpack}"
-  buildpack_name=$(run_unprivileged ${buildpack}/bin/detect "${build_root}")
+  buildpack_name=$(maybe_run_privileged ${buildpack}/bin/detect "${build_root}")
 else
   for buildpack in "${buildpacks[@]}"; do
-    buildpack_name=$(run_unprivileged ${buildpack}/bin/detect "${build_root}") \
+    buildpack_name=$(maybe_run_privileged ${buildpack}/bin/detect "${build_root}") \
       && selected_buildpack="${buildpack}" \
       && break
   done
@@ -116,19 +122,19 @@ fi
 
 ## Buildpack compile
 if [[ -n "${envdir}" ]]; then
-  run_unprivileged ${selected_buildpack}/bin/compile \
+  maybe_run_privileged ${selected_buildpack}/bin/compile \
     "${build_root}" \
     "${cache_root}" \
     "${env_dir}" \
     | ensure_indent
 else
-  run_unprivileged ${selected_buildpack}/bin/compile \
+  maybe_run_privileged ${selected_buildpack}/bin/compile \
     "${build_root}" \
     "${cache_root}" \
     | ensure_indent
 fi
 
-run_unprivileged ${selected_buildpack}/bin/release \
+maybe_run_privileged ${selected_buildpack}/bin/release \
   "${build_root}" \
   "${cache_root}" \
   > ${build_root}/.release
@@ -155,6 +161,7 @@ fi
 
 
 ## Produce slug
+chown -R nobody:nogroup ${app_dir} ${build_root} ${cache_root}
 
 if [[ -f "${build_root}/.slugignore" ]]; then
   tar \

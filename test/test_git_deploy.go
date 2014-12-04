@@ -40,6 +40,26 @@ func (s *GitDeploySuite) TestEnvDir(t *c.C) {
 	t.Assert(push, OutputContains, "bar")
 }
 
+func (s *GitDeploySuite) TestBuildAsRoot(t *c.C) {
+	r := s.newGitRepo(t, "build-as-root")
+	t.Assert(r.flynn("create"), Succeeds)
+	t.Assert(r.flynn("env", "set", "BUILD_AS_ROOT=1", "BUILDPACK_URL=https://github.com/kr/heroku-buildpack-inline"), Succeeds)
+
+	push := r.git("push", "flynn", "master")
+	t.Assert(push, Succeeds)
+	t.Assert(push, OutputContains, "I am groot")
+}
+
+func (s *GitDeploySuite) TestBuildAsNobody(t *c.C) {
+	r := s.newGitRepo(t, "build-as-root")
+	t.Assert(r.flynn("create"), Succeeds)
+	t.Assert(r.flynn("env", "set", "BUILDPACK_URL=https://github.com/kr/heroku-buildpack-inline"), Succeeds)
+
+	push := r.git("push", "flynn", "master")
+	t.Assert(push, Succeeds)
+	t.Assert(push, OutputContains, "I am gnobody")
+}
+
 func (s *GitDeploySuite) TestGoBuildpack(t *c.C) {
 	s.runBuildpackTest(t, "go-flynn-example", []string{"postgres"})
 }
