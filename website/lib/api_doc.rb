@@ -4,7 +4,7 @@ require 'api_doc/doc_set'
 module APIDoc
   PROJECT_ROOT = File.expand_path('../..', __FILE__)
 
-  def self.compile(docsets = %w( controller ))
+  def self.compile(docsets = %w( controller router ))
     schema_dir = File.join(PROJECT_ROOT, 'schema')
 
     # load all schemas and resolve refs
