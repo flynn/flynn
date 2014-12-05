@@ -88,7 +88,7 @@ type controllerClient interface {
 	GetRelease(releaseID string) (*ct.Release, error)
 	GetArtifact(artifactID string) (*ct.Artifact, error)
 	GetFormation(appID, releaseID string) (*ct.Formation, error)
-	StreamFormations(since *time.Time) (*controller.FormationUpdates, *error)
+	StreamFormations(since *time.Time) (*controller.FormationUpdates, error)
 	PutJob(job *ct.Job) error
 }
 
@@ -197,6 +197,10 @@ func (c *context) watchFormations() {
 
 		g.Log(grohl.Data{"at": "connect", "attempt": attempts})
 		updates, err := c.StreamFormations(&lastUpdatedAt)
+		if err != nil {
+			g.Log(grohl.Data{"at": "error", "error": err})
+			continue
+		}
 		for ef := range updates.Chan {
 			// we are now connected so reset attempts
 			attempts = 0
@@ -226,11 +230,7 @@ func (c *context) watchFormations() {
 			}
 			go f.Rectify()
 		}
-		if *err != nil {
-			g.Log(grohl.Data{"at": "error", "error": *err})
-		}
 		g.Log(grohl.Data{"at": "disconnect"})
-		updates.Close()
 	}
 }
 

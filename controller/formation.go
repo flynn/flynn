@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -10,7 +12,9 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/sse"
 )
 
 type formationKey struct {
@@ -204,7 +208,8 @@ func (r *FormationRepo) Subscribe(ch chan<- *ct.ExpandedFormation, since time.Ti
 			return err
 		}
 	}
-	return r.sendUpdatedSince(ch, since)
+	go r.sendUpdatedSince(ch, since)
+	return nil
 }
 
 func (r *FormationRepo) sendUpdatedSince(ch chan<- *ct.ExpandedFormation, since time.Time) error {
@@ -229,11 +234,43 @@ func (r *FormationRepo) sendUpdatedSince(ch chan<- *ct.ExpandedFormation, since 
 	return rows.Err()
 }
 
-func (r *FormationRepo) Unsubscribe(ch chan<- *ct.ExpandedFormation) {
+func (r *FormationRepo) Unsubscribe(ch chan *ct.ExpandedFormation) {
 	r.subMtx.Lock()
 	defer r.subMtx.Unlock()
+	go func() {
+		// drain to prevent deadlock while removing the listener
+		for range ch {
+		}
+	}()
 	delete(r.subscriptions, ch)
 	if len(r.subscriptions) == 0 {
 		r.stopListener <- struct{}{}
+	}
+}
+
+func getFormations(repo *FormationRepo, req *http.Request, params martini.Params, w http.ResponseWriter, r ResponseHelper) {
+	ch := make(chan *ct.ExpandedFormation)
+	wr := sse.NewSSEWriter(w)
+	enc := json.NewEncoder(wr)
+	since, err := time.Parse(time.RFC3339, req.FormValue("since"))
+	if err != nil {
+		r.Error(err)
+		return
+	}
+	if err := repo.Subscribe(ch, since); err != nil {
+		r.Error(err)
+		return
+	}
+	go func() {
+		<-w.(http.CloseNotifier).CloseNotify()
+		repo.Unsubscribe(ch)
+		close(ch)
+	}()
+	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+	w.WriteHeader(200)
+	wr.Flush()
+	for data := range ch {
+		enc.Encode(data)
+		wr.Flush()
 	}
 }

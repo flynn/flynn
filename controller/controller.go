@@ -24,7 +24,6 @@ import (
 	"github.com/flynn/flynn/pkg/cors"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/resource"
-	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/shutdown"
 	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
@@ -186,10 +185,12 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	r.Get("/apps/:apps_id/routes/:routes_type/:routes_id", getAppMiddleware, getRouteMiddleware, getRoute)
 	r.Delete("/apps/:apps_id/routes/:routes_type/:routes_id", getAppMiddleware, getRouteMiddleware, deleteRoute)
 
-	return rpcMuxHandler(m, rpcHandler(formationRepo), c.key), m
+	r.Get("/formations", getFormations)
+
+	return muxHandler(m, c.key), m
 }
 
-func rpcMuxHandler(main http.Handler, rpch http.Handler, authKey string) http.Handler {
+func muxHandler(main http.Handler, authKey string) http.Handler {
 	corsHandler := cors.Allow(&cors.Options{
 		AllowAllOrigins:  true,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
@@ -213,11 +214,7 @@ func rpcMuxHandler(main http.Handler, rpch http.Handler, authKey string) http.Ha
 			w.WriteHeader(401)
 			return
 		}
-		if r.URL.Path == rpcplus.DefaultRPCPath {
-			rpch.ServeHTTP(w, r)
-		} else {
-			main.ServeHTTP(w, r)
-		}
+		main.ServeHTTP(w, r)
 	})
 }
 
