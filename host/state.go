@@ -88,10 +88,10 @@ func (s *State) persist() {
 	}
 }
 
-func (s *State) AddJob(j *host.Job) {
+func (s *State) AddJob(j *host.Job, ip string) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	job := &host.ActiveJob{Job: j, HostID: s.id}
+	job := &host.ActiveJob{Job: j, HostID: s.id, InternalIP: ip}
 	s.jobs[j.ID] = job
 	s.sendEvent(job, "create")
 	go s.persist()
@@ -141,13 +141,6 @@ func (s *State) SetContainerID(jobID, containerID string) {
 	defer s.mtx.Unlock()
 	s.jobs[jobID].ContainerID = containerID
 	s.containers[containerID] = s.jobs[jobID]
-	go s.persist()
-}
-
-func (s *State) SetInternalIP(jobID, ip string) {
-	s.mtx.Lock()
-	s.jobs[jobID].InternalIP = ip
-	s.mtx.Unlock()
 	go s.persist()
 }
 
