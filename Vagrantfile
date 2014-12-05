@@ -27,7 +27,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
   config.vm.provision "shell", privileged: false, inline: <<SCRIPT
     grep '^export GOPATH' ~/.bashrc || echo export GOPATH=~/go >> ~/.bashrc
-    grep '^export PATH' ~/.bashrc || echo export PATH=\$PATH:~/go/bin:/vagrant/script >> ~/.bashrc
+    grep '^export PATH' ~/.bashrc || echo export PATH=\\\$PATH:~/go/bin:/vagrant/script >> ~/.bashrc
     GOPATH=~/go go get github.com/tools/godep
 
     # For controller tests
