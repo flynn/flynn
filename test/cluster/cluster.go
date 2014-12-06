@@ -362,7 +362,7 @@ sudo start-stop-daemon \
   flynn-host \
   daemon \
   --id {{ .ID }} \
-  --manifest /etc/flynn-host.json \
+  --manifest /etc/flynn-host.bolt \
   --external {{ .IP }} \
   --force \
   --backend libvirt-lxc \
