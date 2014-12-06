@@ -17,14 +17,15 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/sse"
 )
 
 type JobRepo struct {
-	db *DB
+	db *postgres.DB
 }
 
-func NewJobRepo(db *DB) *JobRepo {
+func NewJobRepo(db *postgres.DB) *JobRepo {
 	return &JobRepo{db}
 }
 
@@ -52,7 +53,7 @@ func (r *JobRepo) Add(job *ct.Job) error {
 	return r.db.Exec("INSERT INTO job_events (job_id, host_id, app_id, state) VALUES ($1, $2, $3, $4)", jobID, hostID, job.AppID, job.State)
 }
 
-func scanJob(s Scanner) (*ct.Job, error) {
+func scanJob(s postgres.Scanner) (*ct.Job, error) {
 	job := &ct.Job{}
 	err := s.Scan(&job.ID, &job.AppID, &job.ReleaseID, &job.Type, &job.State, &job.CreatedAt, &job.UpdatedAt)
 	if err != nil {
@@ -61,8 +62,8 @@ func scanJob(s Scanner) (*ct.Job, error) {
 		}
 		return nil, err
 	}
-	job.AppID = cleanUUID(job.AppID)
-	job.ReleaseID = cleanUUID(job.ReleaseID)
+	job.AppID = postgres.CleanUUID(job.AppID)
+	job.ReleaseID = postgres.CleanUUID(job.ReleaseID)
 	return job, nil
 }
 
@@ -111,7 +112,7 @@ func (r *JobRepo) getEvent(eventID int64) (*ct.JobEvent, error) {
 	return scanJobEvent(row)
 }
 
-func scanJobEvent(s Scanner) (*ct.JobEvent, error) {
+func scanJobEvent(s postgres.Scanner) (*ct.JobEvent, error) {
 	event := &ct.JobEvent{}
 	err := s.Scan(&event.ID, &event.JobID, &event.AppID, &event.ReleaseID, &event.Type, &event.State, &event.CreatedAt)
 	if err != nil {
@@ -120,8 +121,8 @@ func scanJobEvent(s Scanner) (*ct.JobEvent, error) {
 		}
 		return nil, err
 	}
-	event.AppID = cleanUUID(event.AppID)
-	event.ReleaseID = cleanUUID(event.ReleaseID)
+	event.AppID = postgres.CleanUUID(event.AppID)
+	event.ReleaseID = postgres.CleanUUID(event.ReleaseID)
 	return event, nil
 }
 

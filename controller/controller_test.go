@@ -17,6 +17,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/rpcplus"
 )
@@ -63,21 +64,13 @@ func (s *S) SetUpSuite(c *C) {
 	if err = migrateDB(db); err != nil {
 		c.Fatal(err)
 	}
-	dbw := testDBWrapper{DB: db, dsn: dsn}
+	pg := postgres.New(db, dsn)
 
 	s.cc = tu.NewFakeCluster()
-	handler, m := appHandler(handlerConfig{db: dbw, cc: s.cc, sc: newFakeRouter(), key: "test"})
+	handler, m := appHandler(handlerConfig{db: pg, cc: s.cc, sc: newFakeRouter(), key: "test"})
 	s.m = m
 	s.srv = httptest.NewServer(handler)
 }
-
-type testDBWrapper struct {
-	*sql.DB
-	dsn string
-}
-
-func (w testDBWrapper) DSN() string       { return w.dsn }
-func (w testDBWrapper) Database() *sql.DB { return w.DB }
 
 var authKey = "test"
 

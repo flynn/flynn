@@ -80,12 +80,12 @@ type resource struct {
 func createDatabase(db *postgres.DB, r render.Render) {
 	username, password, database := random.Hex(16), random.Hex(16), random.Hex(16)
 
-	if _, err := db.Exec(fmt.Sprintf(`CREATE USER "%s" WITH PASSWORD '%s'`, username, password)); err != nil {
+	if err := db.Exec(fmt.Sprintf(`CREATE USER "%s" WITH PASSWORD '%s'`, username, password)); err != nil {
 		log.Println(err)
 		r.JSON(500, struct{}{})
 		return
 	}
-	if _, err := db.Exec(fmt.Sprintf(`CREATE DATABASE "%s" WITH OWNER = "%s"`, database, username)); err != nil {
+	if err := db.Exec(fmt.Sprintf(`CREATE DATABASE "%s" WITH OWNER = "%s"`, database, username)); err != nil {
 		db.Exec(fmt.Sprintf(`DROP USER "%s"`, username))
 		log.Println(err)
 		r.JSON(500, struct{}{})
@@ -104,7 +104,7 @@ func createDatabase(db *postgres.DB, r render.Render) {
 }
 
 func ping(db *postgres.DB, w http.ResponseWriter) {
-	if _, err := db.Exec("SELECT 1"); err != nil {
+	if err := db.Exec("SELECT 1"); err != nil {
 		log.Println(err)
 		w.WriteHeader(500)
 		return

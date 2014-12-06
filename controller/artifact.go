@@ -4,14 +4,15 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 )
 
 type ArtifactRepo struct {
-	db *DB
+	db *postgres.DB
 }
 
-func NewArtifactRepo(db *DB) *ArtifactRepo {
+func NewArtifactRepo(db *postgres.DB) *ArtifactRepo {
 	return &ArtifactRepo{db}
 }
 
@@ -30,17 +31,17 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 			return err
 		}
 	}
-	a.ID = cleanUUID(a.ID)
+	a.ID = postgres.CleanUUID(a.ID)
 	return err
 }
 
-func scanArtifact(s Scanner) (*ct.Artifact, error) {
+func scanArtifact(s postgres.Scanner) (*ct.Artifact, error) {
 	artifact := &ct.Artifact{}
 	err := s.Scan(&artifact.ID, &artifact.Type, &artifact.URI, &artifact.CreatedAt)
 	if err == sql.ErrNoRows {
 		err = ErrNotFound
 	}
-	artifact.ID = cleanUUID(artifact.ID)
+	artifact.ID = postgres.CleanUUID(artifact.ID)
 	return artifact, err
 }
 

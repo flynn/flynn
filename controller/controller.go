@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
@@ -77,14 +76,8 @@ func main() {
 	log.Fatal(http.ListenAndServe(addr, handler))
 }
 
-type dbWrapper interface {
-	Database() *sql.DB
-	DSN() string
-	Close() error
-}
-
 type handlerConfig struct {
-	db  dbWrapper
+	db  *postgres.DB
 	cc  clusterClient
 	sc  routerc.Client
 	dc  *discoverd.Client
@@ -132,16 +125,14 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	m.Use(responseHelperHandler)
 	m.Action(r.Handle)
 
-	d := NewDB(c.db)
-
-	providerRepo := NewProviderRepo(d)
-	keyRepo := NewKeyRepo(d)
-	resourceRepo := NewResourceRepo(d)
-	appRepo := NewAppRepo(d, os.Getenv("DEFAULT_ROUTE_DOMAIN"), c.sc)
-	artifactRepo := NewArtifactRepo(d)
-	releaseRepo := NewReleaseRepo(d)
-	jobRepo := NewJobRepo(d)
-	formationRepo := NewFormationRepo(d, appRepo, releaseRepo, artifactRepo)
+	providerRepo := NewProviderRepo(c.db)
+	keyRepo := NewKeyRepo(c.db)
+	resourceRepo := NewResourceRepo(c.db)
+	appRepo := NewAppRepo(c.db, os.Getenv("DEFAULT_ROUTE_DOMAIN"), c.sc)
+	artifactRepo := NewArtifactRepo(c.db)
+	releaseRepo := NewReleaseRepo(c.db)
+	jobRepo := NewJobRepo(c.db)
+	formationRepo := NewFormationRepo(c.db, appRepo, releaseRepo, artifactRepo)
 	m.Map(resourceRepo)
 	m.Map(appRepo)
 	m.Map(artifactRepo)

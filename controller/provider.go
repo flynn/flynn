@@ -5,13 +5,14 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/postgres"
 )
 
 type ProviderRepo struct {
-	db *DB
+	db *postgres.DB
 }
 
-func NewProviderRepo(db *DB) *ProviderRepo {
+func NewProviderRepo(db *postgres.DB) *ProviderRepo {
 	return &ProviderRepo{db}
 }
 
@@ -25,22 +26,22 @@ func (r *ProviderRepo) Add(data interface{}) error {
 	}
 	// TODO: validate url
 	err := r.db.QueryRow("INSERT INTO providers (name, url) VALUES ($1, $2) RETURNING provider_id, created_at, updated_at", p.Name, p.URL).Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
-	p.ID = cleanUUID(p.ID)
+	p.ID = postgres.CleanUUID(p.ID)
 	return err
 }
 
-func scanProvider(s Scanner) (*ct.Provider, error) {
+func scanProvider(s postgres.Scanner) (*ct.Provider, error) {
 	p := &ct.Provider{}
 	err := s.Scan(&p.ID, &p.Name, &p.URL, &p.CreatedAt, &p.UpdatedAt)
 	if err == sql.ErrNoRows {
 		err = ErrNotFound
 	}
-	p.ID = cleanUUID(p.ID)
+	p.ID = postgres.CleanUUID(p.ID)
 	return p, err
 }
 
 func (r *ProviderRepo) Get(id string) (interface{}, error) {
-	var row Scanner
+	var row postgres.Scanner
 	query := "SELECT provider_id, name, url, created_at, updated_at FROM providers WHERE deleted_at IS NULL AND "
 	if idPattern.MatchString(id) {
 		row = r.db.QueryRow(query+"(provider_id = $1 OR name = $2) LIMIT 1", id, id)

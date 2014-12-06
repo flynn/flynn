@@ -14,6 +14,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/sse"
 )
 
@@ -22,7 +23,7 @@ type formationKey struct {
 }
 
 type FormationRepo struct {
-	db        *DB
+	db        *postgres.DB
 	apps      *AppRepo
 	releases  *ReleaseRepo
 	artifacts *ArtifactRepo
@@ -32,7 +33,7 @@ type FormationRepo struct {
 	subMtx        sync.RWMutex
 }
 
-func NewFormationRepo(db *DB, appRepo *AppRepo, releaseRepo *ReleaseRepo, artifactRepo *ArtifactRepo) *FormationRepo {
+func NewFormationRepo(db *postgres.DB, appRepo *AppRepo, releaseRepo *ReleaseRepo, artifactRepo *ArtifactRepo) *FormationRepo {
 	return &FormationRepo{
 		db:            db,
 		apps:          appRepo,
@@ -67,7 +68,7 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 	return nil
 }
 
-func scanFormation(s Scanner) (*ct.Formation, error) {
+func scanFormation(s postgres.Scanner) (*ct.Formation, error) {
 	f := &ct.Formation{}
 	var procs hstore.Hstore
 	err := s.Scan(&f.AppID, &f.ReleaseID, &procs, &f.CreatedAt, &f.UpdatedAt)
@@ -84,8 +85,8 @@ func scanFormation(s Scanner) (*ct.Formation, error) {
 			f.Processes[k] = n
 		}
 	}
-	f.AppID = cleanUUID(f.AppID)
-	f.ReleaseID = cleanUUID(f.ReleaseID)
+	f.AppID = postgres.CleanUUID(f.AppID)
+	f.ReleaseID = postgres.CleanUUID(f.ReleaseID)
 	return f, nil
 }
 
@@ -146,7 +147,7 @@ func (r *FormationRepo) publish(appID, releaseID string) {
 func (r *FormationRepo) expandFormation(formation *ct.Formation) (*ct.ExpandedFormation, error) {
 	app, err := r.apps.Get(formation.AppID)
 	if err == ErrNotFound {
-		app = &ct.App{ID: cleanUUID(formation.AppID)}
+		app = &ct.App{ID: postgres.CleanUUID(formation.AppID)}
 	} else if err != nil {
 		return nil, err
 	}

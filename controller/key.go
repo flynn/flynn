@@ -10,13 +10,14 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/postgres"
 )
 
 type KeyRepo struct {
-	db *DB
+	db *postgres.DB
 }
 
-func NewKeyRepo(db *DB) *KeyRepo {
+func NewKeyRepo(db *postgres.DB) *KeyRepo {
 	return &KeyRepo{db}
 }
 
@@ -48,7 +49,7 @@ func fingerprintKey(key []byte) string {
 	return hex.EncodeToString(digest[:])
 }
 
-func scanKey(s Scanner) (*ct.Key, error) {
+func scanKey(s postgres.Scanner) (*ct.Key, error) {
 	key := &ct.Key{}
 	err := s.Scan(&key.ID, &key.Key, &key.Comment, &key.CreatedAt)
 	if err == sql.ErrNoRows {
