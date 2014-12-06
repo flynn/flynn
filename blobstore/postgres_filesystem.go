@@ -9,11 +9,11 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/oid"
-	"github.com/flynn/flynn/pkg/migrate"
+	"github.com/flynn/flynn/pkg/postgres"
 )
 
 func NewPostgresFilesystem(db *sql.DB) (Filesystem, error) {
-	m := migrate.NewMigrations()
+	m := postgres.NewMigrations()
 	m.Add(1,
 		`CREATE TABLE files (
 	file_id oid PRIMARY KEY DEFAULT lo_create(0),
