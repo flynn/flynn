@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/vendor/src/code.google.com/p/go/src/pkg/archive/tar"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/docker/vendor/src/code.google.com/p/go/src/pkg/archive/tar"
 )
 
 func TestCmdStreamLargeStderr(t *testing.T) {

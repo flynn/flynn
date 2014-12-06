@@ -7,12 +7,12 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver"
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/aufs"
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/btrfs"
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/devmapper"
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/vfs"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/reexec"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/docker/daemon/graphdriver"
+	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/docker/daemon/graphdriver/aufs"
+	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/docker/daemon/graphdriver/btrfs"
+	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/docker/daemon/graphdriver/devmapper"
+	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/docker/daemon/graphdriver/vfs"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/docker/pkg/reexec"
 	"github.com/flynn/flynn/pinkerton/registry"
 	"github.com/flynn/flynn/pinkerton/store"
 )

@@ -31,9 +31,9 @@ import (
 	"syscall"
 	"time"
 
-	sigutil "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/signal"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/netlink"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/user"
+	sigutil "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/docker/pkg/signal"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kr/pty"
 	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/rpcplus/fdrpc"
