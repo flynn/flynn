@@ -4,24 +4,6 @@ set -eo pipefail
 buildpacks_dir="$1"
 buildpack_url="$2"
 buildpack_name="$3"
-env_dir="$4"
-
-export_env_dir() {
-  env_dir=$1
-  whitelist_regex=${2:-''}
-  blacklist_regex=${3:-'^(PATH|GIT_DIR|CPATH|CPPATH|LD_PRELOAD|LIBRARY_PATH)$'}
-  if [ -d "${env_dir}" ]; then
-    for e in $(ls $env_dir); do
-      echo "$e" | grep -Ei "$whitelist_regex" | grep -qvE "$blacklist_regex" &&
-      export "$e=$(cat $env_dir/$e)"
-      :
-    done
-  fi
-}
-
-#Only import proxy related environment variables to support 'git clone'
-export_env_dir "${env_dir}" '(HTTP_PROXY|HTTPS_PROXY|NO_PROXY)$'
-
 
 if [[ "${buildpack_name}" == "" ]]; then
   buildpack_name="$(basename "${buildpack_url}")"
