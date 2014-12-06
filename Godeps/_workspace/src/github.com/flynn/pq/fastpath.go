@@ -53,7 +53,7 @@ func fpInt64Arg(n int64) fpArg {
 }
 
 func (f *fastpath) Call(oid oid.Oid, args []fpArg) (res []byte, err error) {
-	defer errRecover(&err)
+	defer f.cn.errRecover(&err)
 
 	req := f.cn.writeBuf('F') // function call
 	req.int32(int(oid))       // function object id

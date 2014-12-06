@@ -60,8 +60,6 @@ const ciBufferSize = 64 * 1024
 const ciBufferFlushSize = 63 * 1024
 
 func (cn *conn) prepareCopyIn(q string) (_ driver.Stmt, err error) {
-	defer errRecover(&err)
-
 	if !cn.isInTransaction() {
 		return nil, errCopyNotSupportedOutsideTxn
 	}
@@ -97,11 +95,13 @@ awaitCopyInResponse:
 			err = parseError(r)
 		case 'Z':
 			if err == nil {
+				cn.bad = true
 				errorf("unexpected ReadyForQuery in response to COPY")
 			}
 			cn.processReadyForQuery(r)
 			return nil, err
 		default:
+			cn.bad = true
 			errorf("unknown response for copy query: %q", t)
 		}
 	}
@@ -120,6 +120,7 @@ awaitCopyInResponse:
 			cn.processReadyForQuery(r)
 			return nil, err
 		default:
+			cn.bad = true
 			errorf("unknown response for CopyFail: %q", t)
 		}
 	}
@@ -151,6 +152,7 @@ func (ci *copyin) resploop() {
 			err := parseError(r)
 			ci.setError(err)
 		default:
+			ci.cn.bad = true
 			errorf("unknown response: %q", t)
 		}
 	}
@@ -181,11 +183,14 @@ func (ci *copyin) Query(v []driver.Value) (r driver.Rows, err error) {
 // errors from pending data, since Stmt.Close() doesn't return errors
 // to the user.
 func (ci *copyin) Exec(v []driver.Value) (r driver.Result, err error) {
-	defer errRecover(&err)
-
 	if ci.closed {
 		return nil, errCopyInClosed
 	}
+
+	if ci.cn.bad {
+		return nil, driver.ErrBadConn
+	}
+	defer ci.cn.errRecover(&err)
 
 	if ci.isErrorSet() {
 		return nil, ci.err
@@ -217,11 +222,14 @@ func (ci *copyin) Exec(v []driver.Value) (r driver.Result, err error) {
 }
 
 func (ci *copyin) Close() (err error) {
-	defer errRecover(&err)
-
 	if ci.closed {
 		return errCopyInClosed
 	}
+
+	if ci.cn.bad {
+		return driver.ErrBadConn
+	}
+	defer ci.cn.errRecover(&err)
 
 	if len(ci.buffer) > 0 {
 		ci.flush(ci.buffer)

@@ -199,7 +199,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/pq",
-			"Rev": "5a9734ce1d3157ce437352731f757b82340be3a6"
+			"Rev": "29bc57434aa700fa80bc713bd85d3fe1d0cd4fc0"
 		},
 		{
 			"ImportPath": "github.com/fsouza/go-dockerclient",
