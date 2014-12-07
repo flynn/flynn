@@ -23,10 +23,25 @@ type client struct {
 
 // New uses the default discoverd client and returns a client.
 func New() (Client, error) {
+	return newWithDiscoverdConnect()
+}
+
+func newWithDiscoverdConnect() (*client, error) {
 	if err := discoverd.Connect(""); err != nil {
 		return nil, err
 	}
-	return NewWithDiscoverd("", discoverd.DefaultClient), nil
+	return newWithDiscoverd("", discoverd.DefaultClient), nil
+}
+
+// NewWithHTTP does the same thing as New but uses the given *http.Client
+func NewWithHTTP(http *http.Client) (Client, error) {
+	c, err := newWithDiscoverdConnect()
+	if err != nil {
+		return nil, err
+	}
+	http.Transport = c.HTTP.Transport
+	c.HTTP = http
+	return c, nil
 }
 
 func newRouterClient() *client {
@@ -47,6 +62,10 @@ func NewWithAddr(addr string) Client {
 
 // NewWithDiscoverd uses the provided discoverd client and returns a client.
 func NewWithDiscoverd(name string, dc dialer.DiscoverdClient) Client {
+	return newWithDiscoverd(name, dc)
+}
+
+func newWithDiscoverd(name string, dc dialer.DiscoverdClient) *client {
 	if name == "" {
 		name = "router"
 	}
