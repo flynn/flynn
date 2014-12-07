@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/cli/config"
@@ -22,9 +23,12 @@ type Helper struct {
 	disc       *discoverd.Client
 	hosts      map[string]cluster.Host
 	ssh        *sshData
+	mtx        sync.Mutex
 }
 
 func (h *Helper) clusterConf(t *c.C) *config.Cluster {
+	h.mtx.Lock()
+	defer h.mtx.Unlock()
 	if h.config == nil {
 		conf, err := config.ReadFile(flynnrc)
 		t.Assert(err, c.IsNil)
@@ -35,26 +39,45 @@ func (h *Helper) clusterConf(t *c.C) *config.Cluster {
 }
 
 func (h *Helper) clusterClient(t *c.C) *cluster.Client {
+	h.mtx.Lock()
+	defer h.mtx.Unlock()
 	if h.cluster == nil {
-		var err error
-		h.cluster, err = cluster.NewClientWithDial(nil, h.discoverdClient(t).NewServiceSet)
+		h.mtx.Unlock()
+		client, err := cluster.NewClientWithDial(nil, h.discoverdClient(t).NewServiceSet)
 		t.Assert(err, c.IsNil)
+		h.mtx.Lock()
+		if h.cluster != nil {
+			client.Close()
+		} else {
+			h.cluster = client
+		}
 	}
 	return h.cluster
 }
 
 func (h *Helper) controllerClient(t *c.C) *controller.Client {
+	h.mtx.Lock()
+	defer h.mtx.Unlock()
 	if h.controller == nil {
+		h.mtx.Unlock()
 		conf := h.clusterConf(t)
 		pin, err := base64.StdEncoding.DecodeString(conf.TLSPin)
 		t.Assert(err, c.IsNil)
-		h.controller, err = controller.NewClientWithPin(conf.URL, conf.Key, pin)
+		client, err := controller.NewClientWithPin(conf.URL, conf.Key, pin)
 		t.Assert(err, c.IsNil)
+		h.mtx.Lock()
+		if h.controller != nil {
+			client.Close()
+		} else {
+			h.controller = client
+		}
 	}
 	return h.controller
 }
 
 func (h *Helper) discoverdClient(t *c.C) *discoverd.Client {
+	h.mtx.Lock()
+	defer h.mtx.Unlock()
 	if h.disc == nil {
 		var err error
 		h.disc, err = discoverd.NewClientWithAddr(routerIP + ":1111")
@@ -64,19 +87,30 @@ func (h *Helper) discoverdClient(t *c.C) *discoverd.Client {
 }
 
 func (h *Helper) hostClient(t *c.C, hostID string) cluster.Host {
+	h.mtx.Lock()
+	defer h.mtx.Unlock()
 	if h.hosts == nil {
 		h.hosts = make(map[string]cluster.Host)
 	}
 	if client, ok := h.hosts[hostID]; ok {
 		return client
 	}
+	h.mtx.Unlock()
 	client, err := h.clusterClient(t).DialHost(hostID)
 	t.Assert(err, c.IsNil)
-	h.hosts[hostID] = client
-	return client
+	h.mtx.Lock()
+	if prevClient, ok := h.hosts[hostID]; ok {
+		client.Close()
+		return prevClient
+	} else {
+		h.hosts[hostID] = client
+		return client
+	}
 }
 
 func (h *Helper) sshKeys(t *c.C) *sshData {
+	h.mtx.Lock()
+	defer h.mtx.Unlock()
 	if h.ssh == nil {
 		var err error
 		h.ssh, err = genSSHKey()
@@ -160,6 +194,8 @@ func (r *gitRepo) git(args ...string) *CmdResult {
 }
 
 func (h *Helper) cleanup() {
+	h.mtx.Lock()
+	defer h.mtx.Unlock()
 	if h.disc != nil {
 		h.disc.Close()
 	}
