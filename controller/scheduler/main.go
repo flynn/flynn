@@ -283,6 +283,11 @@ func jobState(event *host.Event) string {
 	}
 }
 
+var dialHostAttempts = attempt.Strategy{
+	Total: 60 * time.Second,
+	Delay: 200 * time.Millisecond,
+}
+
 func (c *context) watchHost(id string) {
 	if !c.hosts.Add(id) {
 		return
@@ -291,9 +296,14 @@ func (c *context) watchHost(id string) {
 
 	g := grohl.NewContext(grohl.Data{"fn": "watchHost", "host.id": id})
 
-	h, err := c.DialHost(id)
-	if err != nil {
-		// TODO: log/handle error
+	var h cluster.Host
+	if err := dialHostAttempts.Run(func() (err error) {
+		h, err = c.DialHost(id)
+		return
+	}); err != nil {
+		// assume the host is down and give up
+		g.Log(grohl.Data{"at": "dial_host_error", "host.id": id, "err": err})
+		return
 	}
 	c.hosts.Set(id, h)
 
