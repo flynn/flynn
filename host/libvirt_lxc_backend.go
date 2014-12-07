@@ -554,7 +554,7 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 	var err error
 	symlink := "/tmp/containerinit-rpc." + c.job.ID
 	socketPath := path.Join(c.RootPath, containerinit.SocketPath)
-	for startTime := time.Now(); time.Since(startTime) < 5*time.Second; time.Sleep(time.Millisecond) {
+	for startTime := time.Now(); time.Since(startTime) < 10*time.Second; time.Sleep(time.Millisecond) {
 		if !symlinked {
 			// We can't connect to the socket file directly because
 			// the path to it is longer than 108 characters (UNIX_PATH_MAX).
