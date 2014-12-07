@@ -6,6 +6,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -284,6 +285,60 @@ func TestParameterCountMismatch(t *testing.T) {
 	}
 }
 
+// Test that EmptyQueryResponses are handled correctly.
+func TestEmptyQuery(t *testing.T) {
+	db := openTestConn(t)
+	defer db.Close()
+
+	_, err := db.Exec("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.Query("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cols, err := rows.Columns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cols) != 0 {
+		t.Fatalf("unexpected number of columns %d in response to an empty query", len(cols))
+	}
+	if rows.Next() {
+		t.Fatal("unexpected row")
+	}
+	if rows.Err() != nil {
+		t.Fatal(rows.Err())
+	}
+
+	stmt, err := db.Prepare("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = stmt.Exec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err = stmt.Query()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cols, err = rows.Columns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cols) != 0 {
+		t.Fatalf("unexpected number of columns %d in response to an empty query", len(cols))
+	}
+	if rows.Next() {
+		t.Fatal("unexpected row")
+	}
+	if rows.Err() != nil {
+		t.Fatal(rows.Err())
+	}
+}
+
 func TestEncodeDecode(t *testing.T) {
 	db := openTestConn(t)
 	defer db.Close()
@@ -394,7 +449,7 @@ func TestNoData(t *testing.T) {
 	}
 }
 
-func TestError(t *testing.T) {
+func TestErrorDuringStartup(t *testing.T) {
 	// Don't use the normal connection setup, this is intended to
 	// blow up in the startup packet from a non-existent user.
 	db, err := openTestConnConninfo("user=thisuserreallydoesntexist")
@@ -408,31 +463,40 @@ func TestError(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
-	if err != driver.ErrBadConn {
-		t.Fatalf("expected driver.ErrBadConn, got: %v", err)
+	e, ok := err.(*Error)
+	if !ok {
+		t.Fatalf("expected Error, got %#v", err)
+	} else if e.Code.Name() != "invalid_authorization_specification" && e.Code.Name() != "invalid_password" {
+		t.Fatalf("expected invalid_authorization_specification or invalid_password, got %s (%+v)", e.Code.Name(), err)
 	}
 }
 
 func TestBadConn(t *testing.T) {
 	var err error
 
+	cn := conn{}
 	func() {
-		defer errRecover(&err)
+		defer cn.errRecover(&err)
 		panic(io.EOF)
 	}()
-
 	if err != driver.ErrBadConn {
 		t.Fatalf("expected driver.ErrBadConn, got: %#v", err)
 	}
+	if !cn.bad {
+		t.Fatalf("expected cn.bad")
+	}
 
+	cn = conn{}
 	func() {
-		defer errRecover(&err)
+		defer cn.errRecover(&err)
 		e := &Error{Severity: Efatal}
 		panic(e)
 	}()
-
 	if err != driver.ErrBadConn {
 		t.Fatalf("expected driver.ErrBadConn, got: %#v", err)
+	}
+	if !cn.bad {
+		t.Fatalf("expected cn.bad")
 	}
 }
 
@@ -772,6 +836,30 @@ func TestIssue196(t *testing.T) {
 	}
 }
 
+// Test that any CommandComplete messages sent before the query results are
+// ignored.
+func TestIssue282(t *testing.T) {
+	if strings.HasPrefix(runtime.Version(), "go1.0") {
+		fmt.Println("Skipping test due to lack of Queryer implementation")
+		return
+	}
+
+	db := openTestConn(t)
+	defer db.Close()
+
+	var search_path string
+	err := db.QueryRow(`
+		SET LOCAL search_path TO pg_catalog;
+		SET LOCAL search_path TO pg_catalog;
+		SHOW search_path`).Scan(&search_path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if search_path != "pg_catalog" {
+		t.Fatalf("unexpected search_path %s", search_path)
+	}
+}
+
 func TestReadFloatPrecision(t *testing.T) {
 	db := openTestConn(t)
 	defer db.Close()
@@ -827,7 +915,8 @@ func TestParseComplete(t *testing.T) {
 				}
 			}
 		}()
-		res, c := parseComplete(commandTag)
+		cn := &conn{}
+		res, c := cn.parseComplete(commandTag)
 		if c != command {
 			t.Errorf("Expected %v, got %v", command, c)
 		}
@@ -1045,8 +1134,7 @@ func TestParseOpts(t *testing.T) {
 func TestRuntimeParameters(t *testing.T) {
 	type RuntimeTestResult int
 	const (
-		ResultBadConn RuntimeTestResult = iota
-		ResultPanic
+		ResultUnknown RuntimeTestResult = iota
 		ResultSuccess
 		ResultError // other error
 	)
@@ -1058,10 +1146,10 @@ func TestRuntimeParameters(t *testing.T) {
 		expectedOutcome RuntimeTestResult
 	}{
 		// invalid parameter
-		{"DOESNOTEXIST=foo", "", "", ResultBadConn},
+		{"DOESNOTEXIST=foo", "", "", ResultError},
 		// we can only work with a specific value for these two
 		{"client_encoding=SQL_ASCII", "", "", ResultError},
-		{"datestyle='ISO, YDM'", "", "", ResultPanic},
+		{"datestyle='ISO, YDM'", "", "", ResultError},
 		// "options" should work exactly as it does in libpq
 		{"options='-c search_path=pqgotest'", "search_path", "pqgotest", ResultSuccess},
 		// pq should override client_encoding in this case
@@ -1089,16 +1177,8 @@ func TestRuntimeParameters(t *testing.T) {
 		}
 
 		tryGetParameterValue := func() (value string, outcome RuntimeTestResult) {
-			defer func() {
-				if p := recover(); p != nil {
-					outcome = ResultPanic
-				}
-			}()
 			row := db.QueryRow("SELECT current_setting($1)", test.param)
 			err = row.Scan(&value)
-			if err == driver.ErrBadConn {
-				return "", ResultBadConn
-			}
 			if err != nil {
 				return "", ResultError
 			}
