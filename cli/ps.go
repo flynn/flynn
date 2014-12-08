@@ -51,5 +51,5 @@ func runPs(args *docopt.Args, client *controller.Client) error {
 type jobsByType []*ct.Job
 
 func (p jobsByType) Len() int           { return len(p) }
-func (p jobsByType) Less(i, j int) bool { return p[i].Type < p[i].Type }
+func (p jobsByType) Less(i, j int) bool { return p[i].Type < p[j].Type }
 func (p jobsByType) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
