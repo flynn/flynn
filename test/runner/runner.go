@@ -213,7 +213,7 @@ func (r *Runner) build(b *Build) (err error) {
 	}
 	b.LogFile = logFile.Name()
 
-	r.updateStatus(b, "pending", "")
+	r.updateStatus(b, "pending", fmt.Sprintf("https://ci.flynn.io/builds/%s.log", b.Id))
 
 	<-r.buildCh
 	defer func() {
