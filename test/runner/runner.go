@@ -528,7 +528,7 @@ func (r *Runner) updateStatus(b *Build, state, targetUrl string) {
 			State:       state,
 			TargetUrl:   targetUrl,
 			Description: descriptions[state],
-			Context:     "flynn",
+			Context:     "continuous-integration/flynn",
 		}
 		body := &bytes.Buffer{}
 		if err := json.NewEncoder(body).Encode(status); err != nil {
