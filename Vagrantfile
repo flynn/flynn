@@ -36,6 +36,13 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     sudo -u postgres createuser --superuser vagrant
     grep '^export PGHOST' ~/.bashrc || echo export PGHOST=/var/run/postgresql >> ~/.bashrc
 
+    # For integration tests.
+    #
+    # Override these in script/custom-vagrant if you use git to make
+    # real commits in the VM.
+    git config --global user.email "flynn.dev@example.com"
+    git config --global user.name "Flynn Dev"
+
     mkdir -p ~/go/src/github.com/flynn
     ln -s /vagrant ~/go/src/github.com/flynn/flynn
     grep ^cd ~/.bashrc || echo cd ~/go/src/github.com/flynn/flynn >> ~/.bashrc
