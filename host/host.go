@@ -288,16 +288,7 @@ func runDaemon(args *docopt.Args) {
 	}
 }
 
-type sampiClient interface {
-	ConnectHost(*host.Host, chan *host.Job) *error
-	RemoveJobs([]string) error
-}
-
-type sampiSyncClient interface {
-	RemoveJobs([]string) error
-}
-
-func syncScheduler(scheduler sampiSyncClient, events <-chan host.Event) {
+func syncScheduler(scheduler *cluster.Client, events <-chan host.Event) {
 	for event := range events {
 		if event.Event != "stop" {
 			continue
