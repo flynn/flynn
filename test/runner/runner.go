@@ -213,7 +213,7 @@ func (r *Runner) build(b *Build) (err error) {
 	}
 	b.LogFile = logFile.Name()
 
-	r.updateStatus(b, "pending", "")
+	r.updateStatus(b, "pending", fmt.Sprintf("https://ci.flynn.io/builds/%s.log", b.Id))
 
 	<-r.buildCh
 	defer func() {
@@ -528,7 +528,7 @@ func (r *Runner) updateStatus(b *Build, state, targetUrl string) {
 			State:       state,
 			TargetUrl:   targetUrl,
 			Description: descriptions[state],
-			Context:     "flynn",
+			Context:     "continuous-integration/flynn",
 		}
 		body := &bytes.Buffer{}
 		if err := json.NewEncoder(body).Encode(status); err != nil {
