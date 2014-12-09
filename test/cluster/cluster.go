@@ -174,8 +174,6 @@ func (c *Cluster) RemoveHost(id string) error {
 	switch c.bc.Backend {
 	case "libvirt-lxc":
 		cmd = "sudo start-stop-daemon --stop --pidfile /var/run/flynn-host.pid --retry 15"
-	case "docker":
-		cmd = "docker stop -t 15 flynn-host"
 	}
 	if err := inst.Run(cmd, nil); err != nil {
 		fmt.Errorf("failed to stop flynn-host on %s", id)
