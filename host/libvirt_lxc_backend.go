@@ -382,12 +382,18 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 	}
 
 	g.Log(grohl.Data{"at": "write_env"})
+	dockerEnv := make(map[string]string)
+	for _, s := range imageConfig.Env {
+		i := strings.IndexRune(s, '=')
+		dockerEnv[s[:i]] = s[i+1:]
+	}
 	err = writeContainerEnv(filepath.Join(rootPath, ".containerenv"),
 		map[string]string{
 			"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 			"TERM": "xterm",
 			"HOME": "/",
 		},
+		dockerEnv,
 		job.Config.Env,
 		map[string]string{
 			"HOSTNAME": job.ID,
