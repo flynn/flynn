@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
+	tc "github.com/flynn/flynn/test/cluster"
 )
 
 type SchedulerSuite struct {
@@ -44,14 +46,20 @@ func (s *SchedulerSuite) addHosts(t *c.C, count int) []string {
 		if err != nil {
 			t.Fatal("error in POST request to cluster api:", err)
 		}
-		res.Body.Close()
+		defer res.Body.Close()
 		if res.StatusCode != http.StatusOK {
 			t.Fatal("expected 200 status, got", res.Status)
+		}
+		instance := &tc.Instance{}
+		err = json.NewDecoder(res.Body).Decode(instance)
+		if err != nil {
+			t.Fatal("could not decode new instance:", err)
 		}
 
 		select {
 		case event := <-ch:
 			debug(t, "host added ", event.HostID)
+			testCluster.Instances = append(testCluster.Instances, instance)
 			hosts = append(hosts, event.HostID)
 		case <-time.After(20 * time.Second):
 			t.Fatal("timed out waiting for new host")

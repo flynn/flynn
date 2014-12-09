@@ -61,11 +61,11 @@ func main() {
 	// defer exiting here so it runs after all other defers
 	defer func() {
 		if err != nil || res != nil && !res.Passed() {
-			if args.Debug {
+			if args.DumpLogs {
 				if args.Gist {
 					exec.Command("flynn-host", "upload-debug-info").Run()
-				} else {
-					dumpLogs()
+				} else if testCluster != nil {
+					testCluster.DumpLogs(os.Stdout)
 				}
 			}
 			os.Exit(1)
@@ -88,7 +88,7 @@ func main() {
 		} else {
 			defer os.RemoveAll(rootFS)
 		}
-		if err = testCluster.Boot(rootFS, 3); err != nil {
+		if err = testCluster.Boot(rootFS, 3, nil); err != nil {
 			log.Println("could not boot cluster: ", err)
 			return
 		}
@@ -395,29 +395,4 @@ func matches(value, regex interface{}) (result bool, error string) {
 		return matches, ""
 	}
 	return false, "Obtained value is not a string and has no .String()"
-}
-
-func dumpLogs() {
-	run := func(cmd *exec.Cmd) string {
-		fmt.Println(cmd.Path, strings.Join(cmd.Args[1:], " "))
-		var out bytes.Buffer
-		cmd.Stdout = io.MultiWriter(os.Stdout, &out)
-		cmd.Stderr = io.MultiWriter(os.Stderr, &out)
-		cmd.Run()
-		return out.String()
-	}
-
-	fmt.Println("***** running processes *****")
-	run(exec.Command("ps", "faux"))
-
-	fmt.Println("***** flynn-host log *****")
-	run(exec.Command("cat", "/tmp/flynn-host.log"))
-
-	ids := strings.Split(strings.TrimSpace(run(exec.Command("flynn-host", "ps", "-a", "-q"))), "\n")
-	for _, id := range ids {
-		fmt.Print("\n\n***** ***** ***** ***** ***** ***** ***** ***** ***** *****\n\n")
-		run(exec.Command("flynn-host", "inspect", id))
-		fmt.Println()
-		run(exec.Command("flynn-host", "log", id))
-	}
 }
