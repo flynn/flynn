@@ -87,7 +87,6 @@ export CURL_CONNECT_TIMEOUT=30
 buildpacks=(${buildpack_root}/*)
 selected_buildpack=
 
-#Install custom 
 if [[ -n "${BUILDPACK_URL}" ]]; then
   echo_title "Fetching custom buildpack"
   buildpack="${buildpack_root}/custom"
@@ -100,7 +99,6 @@ if [[ -n "${BUILDPACK_URL}" ]]; then
     &> /dev/null
   selected_buildpack="${buildpack}"
   buildpack_name=$(run_unprivileged ${buildpack}/bin/detect "${build_root}")
-#Iterate over defaults
 else
   for buildpack in "${buildpacks[@]}"; do
     buildpack_name=$(run_unprivileged ${buildpack}/bin/detect "${build_root}") \
