@@ -96,6 +96,7 @@ if [[ -n "${BUILDPACK_URL}" ]]; then
     "${buildpack_root}" \
     "${BUILDPACK_URL}" \
     custom \
+    "${env_dir}" \
     &> /dev/null
   selected_buildpack="${buildpack}"
   buildpack_name=$(run_unprivileged ${buildpack}/bin/detect "${build_root}")
