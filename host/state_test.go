@@ -37,6 +37,7 @@ func (MockBackend) Cleanup() error                                  { return nil
 func (MockBackend) UnmarshalState(map[string]*host.ActiveJob, map[string][]byte, []byte) error {
 	return nil
 }
+func (MockBackend) ConfigureNetworking(NetworkStrategy, string) error { return nil }
 
 func (S) TestStatePersistRestore(c *C) {
 	workdir := c.MkDir()

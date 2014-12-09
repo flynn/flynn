@@ -7,151 +7,57 @@ package iptables
 import (
 	"errors"
 	"fmt"
-	"net"
-	"os"
 	"os/exec"
 	"strings"
 )
 
-type Action string
-
-const (
-	Add    Action = "-A"
-	Delete Action = "-D"
-)
-
 var (
 	ErrIptablesNotFound = errors.New("Iptables not found")
-	nat                 = []string{"-t", "nat"}
 	supportsXlock       = false
 )
 
-type Chain struct {
-	Name   string
-	Bridge string
+type ChainError struct {
+	Chain  string
+	Output []byte
+}
+
+func (e *ChainError) Error() string {
+	return fmt.Sprintf("iptables: %s: %s", e.Chain, string(e.Output))
 }
 
 func init() {
 	supportsXlock = exec.Command("iptables", "--wait", "-L", "-n").Run() == nil
 }
 
-func NewChain(name, bridge string) (*Chain, error) {
-	if output, err := Raw("-t", "nat", "-N", name); err != nil {
-		return nil, err
-	} else if len(output) != 0 {
-		return nil, fmt.Errorf("Error creating new iptables chain: %s", output)
-	}
-	chain := &Chain{
-		Name:   name,
-		Bridge: bridge,
-	}
-
-	if err := chain.Prerouting(Add, "-m", "addrtype", "--dst-type", "LOCAL"); err != nil {
-		return nil, fmt.Errorf("failed to update PREROUTING chain: %s", err)
-	}
-	if err := chain.Output(Add, "-m", "addrtype", "--dst-type", "LOCAL"); err != nil {
-		return nil, fmt.Errorf("failed to update OUTPUT chain: %s", err)
-	}
-	if _, err := Raw("-t", "nat", "-A", "POSTROUTING", "-m", "addrtype", "--src-type", "LOCAL", "-o", bridge, "-j", "MASQUERADE"); err != nil {
-		return nil, fmt.Errorf("failed to update POSTROUTING chain: %s", err)
-	}
-	return chain, nil
-}
-
-func RemoveExistingChain(name, bridge string) error {
-	chain := &Chain{
-		Name:   name,
-		Bridge: bridge,
-	}
-	return chain.Remove()
-}
-
-func (c *Chain) Forward(action Action, ip net.IP, port, rangeEnd int, proto, destAddr string) error {
-	daddr := ip.String()
-	if ip.IsUnspecified() {
-		// iptables interprets "0.0.0.0" as "0.0.0.0/32", whereas we
-		// want "0.0.0.0/0". "0/0" is correctly interpreted as "any
-		// value" by both iptables and ip6tables.
-		daddr = "0/0"
-	}
-	if output, err := Raw("-t", "nat", fmt.Sprint(action), c.Name,
-		"-p", proto,
-		"-d", daddr,
-		"--dport", fmt.Sprintf("%d:%d", port, rangeEnd),
-		"-j", "DNAT",
-		"--to-destination", destAddr); err != nil && action != Delete {
-		return err
-	} else if len(output) != 0 && action != Delete {
-		return fmt.Errorf("Error iptables forward: %s", output)
+func EnableOutboundNAT(bridge, network string) error {
+	natArgs := []string{"POSTROUTING", "-t", "nat", "-s", network, "!", "-o", bridge, "-j", "MASQUERADE"}
+	if !Exists(natArgs...) {
+		if output, err := Raw(append([]string{"-I"}, natArgs...)...); err != nil {
+			return fmt.Errorf("Unable to enable network bridge NAT: %s", err)
+		} else if len(output) != 0 {
+			return &ChainError{Chain: "POSTROUTING", Output: output}
+		}
 	}
 
-	fAction := action
-	if fAction == Add {
-		fAction = "-I"
-	}
-	if output, err := Raw(string(fAction), "FORWARD",
-		"!", "-i", c.Bridge,
-		"-o", c.Bridge,
-		"-p", proto,
-		"-d", destAddr,
-		"--dport", fmt.Sprintf("%d:%d", port, rangeEnd),
-		"-j", "ACCEPT"); err != nil && action != Delete {
-		return err
-	} else if len(output) != 0 && action != Delete {
-		return fmt.Errorf("Error iptables forward: %s", output)
+	// Accept all non-intercontainer outgoing packets
+	outgoingArgs := []string{"FORWARD", "-i", bridge, "!", "-o", bridge, "-j", "ACCEPT"}
+	if !Exists(outgoingArgs...) {
+		if output, err := Raw(append([]string{"-I"}, outgoingArgs...)...); err != nil {
+			return fmt.Errorf("Unable to allow outgoing packets: %s", err)
+		} else if len(output) != 0 {
+			return &ChainError{Chain: "FORWARD outgoing", Output: output}
+		}
 	}
 
-	if output, err := Raw("-t", "nat", string(fAction), "POSTROUTING",
-		"-p", proto,
-		"-s", destAddr,
-		"-d", destAddr,
-		"--dport", fmt.Sprintf("%d:%d", port, rangeEnd),
-		"-j", "MASQUERADE"); err != nil && action != Delete {
-		return err
-	} else if len(output) != 0 && action != Delete {
-		return fmt.Errorf("Error iptables forward: %s", output)
+	// Accept incoming packets for existing connections
+	existingArgs := []string{"FORWARD", "-o", bridge, "-m", "conntrack", "--ctstate", "RELATED,ESTABLISHED", "-j", "ACCEPT"}
+	if !Exists(existingArgs...) {
+		if output, err := Raw(append([]string{"-I"}, existingArgs...)...); err != nil {
+			return fmt.Errorf("Unable to allow incoming packets: %s", err)
+		} else if len(output) != 0 {
+			return &ChainError{Chain: "FORWARD incoming", Output: output}
+		}
 	}
-
-	return nil
-}
-
-func (c *Chain) Prerouting(action Action, args ...string) error {
-	a := append(nat, fmt.Sprint(action), "PREROUTING")
-	if len(args) > 0 {
-		a = append(a, args...)
-	}
-	if output, err := Raw(append(a, "-j", c.Name)...); err != nil {
-		return err
-	} else if len(output) != 0 {
-		return fmt.Errorf("Error iptables prerouting: %s", output)
-	}
-	return nil
-}
-
-func (c *Chain) Output(action Action, args ...string) error {
-	a := append(nat, fmt.Sprint(action), "OUTPUT")
-	if len(args) > 0 {
-		a = append(a, args...)
-	}
-	if output, err := Raw(append(a, "-j", c.Name)...); err != nil {
-		return err
-	} else if len(output) != 0 {
-		return fmt.Errorf("Error iptables output: %s", output)
-	}
-	return nil
-}
-
-func (c *Chain) Remove() error {
-	// Ignore errors - This could mean the chains were never set up
-	c.Prerouting(Delete, "-m", "addrtype", "--dst-type", "LOCAL")
-	c.Output(Delete, "-m", "addrtype", "--dst-type", "LOCAL")
-	Raw("-t", "nat", "-D", "POSTROUTING", "-m", "addrtype", "--src-type", "LOCAL", "-o", c.Bridge, "-j", "MASQUERADE")
-
-	c.Prerouting(Delete)
-	c.Output(Delete)
-
-	Raw("-t", "nat", "-F", c.Name)
-	Raw("-t", "nat", "-X", c.Name)
 
 	return nil
 }
@@ -172,10 +78,6 @@ func Raw(args ...string) ([]byte, error) {
 
 	if supportsXlock {
 		args = append([]string{"--wait"}, args...)
-	}
-
-	if os.Getenv("DEBUG") != "" {
-		fmt.Fprintf(os.Stderr, fmt.Sprintf("[debug] %s, %v\n", path, args))
 	}
 
 	output, err := exec.Command(path, args...).CombinedOutput()

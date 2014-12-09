@@ -110,7 +110,7 @@ type Network struct {
 	XMLName xml.Name `xml:"network"`
 	Name    string   `xml:"name"`
 	Bridge  Bridge   `xml:"bridge"`
-	Forward string   `xml:"forward"`
+	Forward Forward  `xml:"forward"`
 	IP      IP       `xml:"ip"`
 	MAC     MAC      `xml:"mac"`
 }
@@ -123,6 +123,10 @@ func (n *Network) XML() []byte {
 type Bridge struct {
 	Name string `xml:"name,attr"`
 	STP  string `xml:"stp,attr"`
+}
+
+type Forward struct {
+	Mode string `xml:"mode,attr"`
 }
 
 type IP struct {

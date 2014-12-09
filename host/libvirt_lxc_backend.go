@@ -28,9 +28,9 @@ import (
 	"github.com/flynn/flynn/host/containerinit"
 	lt "github.com/flynn/flynn/host/libvirt"
 	"github.com/flynn/flynn/host/logbuf"
-	"github.com/flynn/flynn/host/ports"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pinkerton"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/random"
@@ -39,13 +39,9 @@ import (
 const (
 	libvirtNetName = "flynn"
 	bridgeName     = "flynnbr0"
-	bridgeMask     = "255.255.255.0"
 )
 
-// TODO: read these from a configurable libvirt network
-var bridgeAddr, bridgeNet, _ = net.ParseCIDR("192.168.200.1/24")
-
-func NewLibvirtLXCBackend(state *State, portAlloc map[string]*ports.Allocator, volPath, logPath, initPath string) (Backend, error) {
+func NewLibvirtLXCBackend(state *State, volPath, logPath, initPath string) (Backend, error) {
 	libvirtc, err := libvirt.NewVirConnection("lxc:///")
 	if err != nil {
 		return nil, err
@@ -60,61 +56,13 @@ func NewLibvirtLXCBackend(state *State, portAlloc map[string]*ports.Allocator, v
 		return nil, fmt.Errorf("Could not create resolv.conf: %s", err)
 	}
 
-	b := random.Bytes(5)
-	bridgeMAC := fmt.Sprintf("fe:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4])
-
-	network, err := libvirtc.LookupNetworkByName(libvirtNetName)
-	if err != nil {
-		n := &lt.Network{
-			Name:   libvirtNetName,
-			Bridge: lt.Bridge{Name: bridgeName, STP: "off"},
-			IP:     lt.IP{Address: bridgeAddr.String(), Netmask: bridgeMask},
-			MAC:    lt.MAC{Address: bridgeMAC},
-		}
-		network, err = libvirtc.NetworkDefineXML(string(n.XML()))
-		if err != nil {
-			return nil, err
-		}
-	}
-	active, err := network.IsActive()
-	if err != nil {
-		return nil, err
-	}
-	if !active {
-		if err := network.Create(); err != nil {
-			return nil, err
-		}
-	}
-	// We need to explicitly assign the MAC address to avoid it changing to a lower value
-	// See: https://github.com/flynn/flynn/issues/223
-	bridge, err := net.InterfaceByName(bridgeName)
-	if err != nil {
-		return nil, err
-	}
-	if err := netlink.NetworkSetMacAddress(bridge, bridgeMAC); err != nil {
-		return nil, err
-	}
-	if err := netlink.NetworkLinkUp(bridge); err != nil {
-		return nil, err
-	}
-
-	iptables.RemoveExistingChain("FLYNN", bridgeName)
-	chain, err := iptables.NewChain("FLYNN", bridgeName)
-	if err != nil {
-		return nil, err
-	}
-	if err := ioutil.WriteFile("/proc/sys/net/ipv4/conf/"+bridgeName+"/route_localnet", []byte("1"), 0666); err != nil {
-		return nil, err
-	}
 	return &LibvirtLXCBackend{
 		LogPath:    logPath,
 		VolPath:    volPath,
 		InitPath:   initPath,
 		libvirt:    libvirtc,
 		state:      state,
-		ports:      portAlloc,
 		pinkerton:  pinkertonCtx,
-		forwarder:  ports.NewForwarder(net.ParseIP("0.0.0.0"), chain),
 		logs:       make(map[string]*logbuf.Log),
 		containers: make(map[string]*libvirtContainer),
 	}, nil
@@ -126,9 +74,10 @@ type LibvirtLXCBackend struct {
 	VolPath   string
 	libvirt   libvirt.VirConnection
 	state     *State
-	ports     map[string]*ports.Allocator
-	forwarder *ports.Forwarder
 	pinkerton *pinkerton.Context
+
+	bridgeAddr net.IP
+	bridgeNet  *net.IPNet
 
 	logsMtx sync.Mutex
 	logs    map[string]*logbuf.Log
@@ -247,6 +196,145 @@ func readDockerImageConfig(id string) (*dockerImageConfig, error) {
 	return &res.Config, nil
 }
 
+var networkConfigAttempts = attempt.Strategy{
+	Total: 10 * time.Minute,
+	Delay: 200 * time.Millisecond,
+}
+
+// ConfigureNetworking is called once during host startup and passed the
+// strategy and identifier of the networking coordinatior job. Currently the
+// only strategy implemented uses flannel.
+func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job string) error {
+	if strategy != NetworkStrategyFlannel {
+		return errors.New("host: unknown network strategy")
+	}
+
+	// wait for the job to start
+	func() {
+		events := l.state.AddListener(job)
+		defer l.state.RemoveListener(job, events)
+
+		job := l.state.GetJob(job)
+		if job.Status != host.StatusStarting {
+			return
+		}
+
+		// job is already created, so the next event will be running, crashed, or failed
+		evt := <-events
+		switch evt.Event {
+		case "start", "stop", "error":
+		default:
+			panic(fmt.Sprintf("unexpected job event %q", evt.Event))
+		}
+	}()
+
+	container, err := l.getContainer(job)
+	if err != nil {
+		return err
+	}
+
+	path := filepath.Join(container.RootPath, "/run/flannel/subnet.env")
+	var data []byte
+	networkConfigAttempts.Run(func() error {
+		select {
+		case <-container.done:
+			return errors.New("host: networking container unexpectedly gone")
+		default:
+		}
+
+		data, err = ioutil.ReadFile(path)
+		return err
+	})
+
+	var bridgeMTU int
+	for _, line := range bytes.Split(data, []byte("\n")) {
+		if bytes.HasPrefix(line, []byte("FLANNEL_MTU=")) {
+			bridgeMTU, err = strconv.Atoi(string(line[12:]))
+			if err != nil {
+				return fmt.Errorf("host: error parsing mtu %q - %s", string(line), err)
+			}
+		}
+		if bytes.HasPrefix(line, []byte("FLANNEL_SUBNET=")) {
+			l.bridgeAddr, l.bridgeNet, err = net.ParseCIDR(string(line[15:]))
+			if err != nil {
+				return fmt.Errorf("host: error parsing subnet %q - %s", string(line), err)
+			}
+		}
+	}
+
+	var networkConfig *lt.Network
+	var network *libvirt.VirNetwork
+
+	if virtNet, err := l.libvirt.LookupNetworkByName(libvirtNetName); err == nil {
+		// network already exists
+		network = &virtNet
+		networkConfig = &lt.Network{}
+		desc, err := network.GetXMLDesc(0)
+		if err != nil {
+			return err
+		}
+		if err := xml.Unmarshal([]byte(desc), networkConfig); err != nil {
+			return err
+		}
+		if networkConfig.IP.Address != l.bridgeAddr.String() || networkConfig.IP.Netmask != net.IP(l.bridgeNet.Mask).String() {
+			// network does not match new settings, destroy it
+			network.Destroy()
+			network.Undefine()
+			network = nil
+		}
+	}
+	if network == nil {
+		// network doesn't exist
+		b := random.Bytes(5)
+		bridgeMAC := fmt.Sprintf("fe:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4])
+		networkConfig = &lt.Network{
+			Name:    libvirtNetName,
+			Bridge:  lt.Bridge{Name: bridgeName, STP: "off"},
+			IP:      lt.IP{Address: l.bridgeAddr.String(), Netmask: net.IP(l.bridgeNet.Mask).String()},
+			MAC:     lt.MAC{Address: bridgeMAC},
+			Forward: lt.Forward{Mode: "route"},
+		}
+		net, err := l.libvirt.NetworkDefineXML(string(networkConfig.XML()))
+		if err != nil {
+			return err
+		}
+		network = &net
+	}
+	active, err := network.IsActive()
+	if err != nil {
+		return err
+	}
+	if !active {
+		if err := network.Create(); err != nil {
+			return err
+		}
+	}
+
+	// We need to explicitly assign the MAC address to avoid it changing to a lower value
+	// See: https://github.com/flynn/flynn/issues/223
+	bridge, err := net.InterfaceByName(bridgeName)
+	if err != nil {
+		return err
+	}
+	if err := netlink.NetworkSetMacAddress(bridge, networkConfig.MAC.Address); err != nil {
+		return err
+	}
+	if err := netlink.NetworkSetMTU(bridge, bridgeMTU); err != nil {
+		return err
+	}
+	if err := netlink.NetworkLinkUp(bridge); err != nil {
+		return err
+	}
+
+	// Set up iptables for outbound traffic masquerading from containers to the
+	// rest of the network.
+	if err := iptables.EnableOutboundNAT(bridgeName, l.bridgeNet.String()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "run", "job.id": job.ID})
 	g.Log(grohl.Data{"at": "start", "job.artifact.uri": job.Artifact.URI, "job.cmd": job.Config.Cmd})
@@ -257,7 +345,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 		done: make(chan struct{}),
 	}
 	if !job.Config.HostNetwork {
-		container.IP, err = ipallocator.RequestIP(bridgeNet, nil)
+		container.IP, err = ipallocator.RequestIP(l.bridgeNet, nil)
 		if err != nil {
 			g.Log(grohl.Data{"at": "request_ip", "status": "error", "err": err})
 			return err
@@ -341,46 +429,26 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 	if job.Config.Env == nil {
 		job.Config.Env = make(map[string]string)
 	}
-	if !job.Config.HostNetwork {
-		for i, p := range job.Config.Ports {
-			if p.Proto != "tcp" && p.Proto != "udp" {
-				return fmt.Errorf("unknown port proto %q", p.Proto)
-			}
-
-			if 0 < p.RangeEnd && p.RangeEnd < p.Port {
-				return fmt.Errorf("port range end %d cannot be less than port %d", p.RangeEnd, p.Port)
-			}
-
-			var port uint16
-			if p.Port <= 0 {
-				job.Config.Ports[i].RangeEnd = 0
-				port, err = l.ports[p.Proto].Get()
-			} else if p.RangeEnd > p.Port {
-				for j := p.RangeEnd; j >= p.Port; j-- {
-					port, err = l.ports[p.Proto].GetPort(uint16(j))
-					if err != nil {
-						break
-					}
-				}
-			} else {
-				port, err = l.ports[p.Proto].GetPort(uint16(p.Port))
-			}
-			if err != nil {
-				g.Log(grohl.Data{"at": "alloc_port", "status": "error", "err": err})
-				return err
-			}
-			job.Config.Ports[i].Port = int(port)
-			if job.Config.Ports[i].RangeEnd == 0 {
-				job.Config.Ports[i].RangeEnd = int(port)
-			}
-
-			if i == 0 {
-				job.Config.Env["PORT"] = strconv.Itoa(int(port))
-			}
-			job.Config.Env[fmt.Sprintf("PORT_%d", i)] = strconv.Itoa(int(port))
+	for i, p := range job.Config.Ports {
+		if p.Proto != "tcp" && p.Proto != "udp" {
+			return fmt.Errorf("unknown port proto %q", p.Proto)
 		}
+		if 0 < p.RangeEnd && p.RangeEnd < p.Port {
+			return fmt.Errorf("port range end %d cannot be less than port %d", p.RangeEnd, p.Port)
+		}
+
+		if p.Port == 0 {
+			job.Config.Ports[i].Port = 5000 + i
+		}
+		if i == 0 {
+			job.Config.Env["PORT"] = strconv.Itoa(job.Config.Ports[i].Port)
+		}
+		job.Config.Env[fmt.Sprintf("PORT_%d", i)] = strconv.Itoa(job.Config.Ports[i].Port)
 	}
 
+	if !job.Config.HostNetwork {
+		job.Config.Env["EXTERNAL_IP"] = container.IP.String()
+	}
 	g.Log(grohl.Data{"at": "write_env"})
 	err = writeContainerEnv(filepath.Join(rootPath, ".containerenv"),
 		map[string]string{
@@ -402,7 +470,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 	if !job.Config.HostNetwork {
 		args = append(args,
 			"-i", container.IP.String()+"/24",
-			"-g", bridgeAddr.String(),
+			"-g", l.bridgeAddr.String(),
 		)
 	}
 	if job.Config.TTY {
@@ -494,35 +562,10 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 		return err
 	}
 
-	if !job.Config.HostNetwork {
-		if len(domain.Devices.Interfaces) == 0 || domain.Devices.Interfaces[0].Target == nil ||
-			domain.Devices.Interfaces[0].Target.Dev == "" {
-			err = errors.New("domain config missing interface")
-			g.Log(grohl.Data{"at": "enable_hairpin", "status": "error", "err": err})
-			return err
-		}
-		iface := domain.Devices.Interfaces[0].Target.Dev
-		if err := enableHairpinMode(iface); err != nil {
-			g.Log(grohl.Data{"at": "enable_hairpin", "status": "error", "err": err})
-			return err
-		}
-
-		for _, p := range job.Config.Ports {
-			if err := l.forwarder.Add(&net.TCPAddr{IP: container.IP, Port: p.Port}, p.RangeEnd, p.Proto); err != nil {
-				g.Log(grohl.Data{"at": "forward_port", "port": p.Port, "status": "error", "err": err})
-				return err
-			}
-		}
-	}
-
 	go container.watch(nil)
 
 	g.Log(grohl.Data{"at": "finish"})
 	return nil
-}
-
-func enableHairpinMode(iface string) error {
-	return ioutil.WriteFile("/sys/class/net/"+iface+"/brport/hairpin_mode", []byte("1"), 0666)
 }
 
 func (l *LibvirtLXCBackend) openLog(id string) *logbuf.Log {
@@ -667,19 +710,8 @@ func (c *libvirtContainer) cleanup() error {
 			g.Log(grohl.Data{"at": "unmount", "location": m.Location, "status": "error", "err": err})
 		}
 	}
-	if !c.job.Config.HostNetwork {
-		for _, p := range c.job.Config.Ports {
-			if err := c.l.forwarder.Remove(&net.TCPAddr{IP: c.IP, Port: p.Port}, p.RangeEnd, p.Proto); err != nil {
-				g.Log(grohl.Data{"at": "iptables", "status": "error", "err": err, "port": p.Port})
-			}
-			if p.RangeEnd == 0 {
-				p.RangeEnd = p.Port
-			}
-			for i := p.Port; i <= p.RangeEnd; i++ {
-				c.l.ports[p.Proto].Put(uint16(i))
-			}
-		}
-		ipallocator.ReleaseIP(bridgeNet, c.IP)
+	if !c.job.Config.HostNetwork && c.l.bridgeNet != nil {
+		ipallocator.ReleaseIP(c.l.bridgeNet, c.IP)
 	}
 	g.Log(grohl.Data{"at": "finish"})
 	return nil
@@ -909,12 +941,6 @@ func (l *LibvirtLXCBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jobB
 			continue
 		}
 		l.containers[j.Job.ID] = container
-
-		for _, p := range j.Job.Config.Ports {
-			for i := p.Port; i <= p.RangeEnd; i++ {
-				l.ports[p.Proto].GetPort(uint16(i))
-			}
-		}
 	}
 	return nil
 }
