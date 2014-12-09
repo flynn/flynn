@@ -47,6 +47,17 @@ type Build struct {
 	DurationFormatted string        `json:"duration_formatted"`
 }
 
+func newBuild(commit, description string, merge bool) *Build {
+	now := time.Now()
+	return &Build{
+		Id:          now.Format("20060102150405") + "-" + random.String(8),
+		CreatedAt:   &now,
+		Commit:      commit,
+		Description: description,
+		Merge:       merge,
+	}
+}
+
 type Runner struct {
 	bc          cluster.BootConfig
 	events      chan Event
@@ -158,22 +169,9 @@ func (r *Runner) watchEvents() {
 		if !needsBuild(event) {
 			continue
 		}
-		go func(event Event) {
-			now := time.Now()
-			b := &Build{
-				CreatedAt:   &now,
-				Commit:      event.Commit(),
-				Description: event.String(),
-			}
-			if _, ok := event.(*PullRequestEvent); ok {
-				b.Merge = true
-			}
-			if err := r.build(b); err != nil {
-				log.Printf("build %s failed: %s\n", b.Id, err)
-				return
-			}
-			log.Printf("build %s passed!\n", b.Id)
-		}(event)
+		_, merge := event.(*PullRequestEvent)
+		b := newBuild(event.Commit(), event.String(), merge)
+		go r.build(b)
 	}
 }
 
@@ -232,8 +230,10 @@ func (r *Runner) build(b *Build) (err error) {
 		os.RemoveAll(b.LogFile)
 		b.LogFile = ""
 		if err == nil {
+			log.Printf("build %s passed!\n", b.Id)
 			r.updateStatus(b, "success", url)
 		} else {
+			log.Printf("build %s failed: %s\n", b.Id, err)
 			r.updateStatus(b, "failure", url)
 		}
 	}()
@@ -469,20 +469,8 @@ func (r *Runner) handleBuildRequest(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if build.State != "pending" {
-		now := time.Now()
-		b := &Build{
-			CreatedAt:   &now,
-			Commit:      build.Commit,
-			Merge:       build.Merge,
-			Description: "Restart: " + build.Description,
-		}
-		go func() {
-			if err := r.build(b); err != nil {
-				log.Printf("build %s failed: %s\n", b.Id, err)
-				return
-			}
-			log.Printf("build %s passed!\n", b.Id)
-		}()
+		b := newBuild(build.Commit, "Restart: "+build.Description, build.Merge)
+		go r.build(b)
 	}
 	http.Redirect(w, req, "/builds", 301)
 }
@@ -590,21 +578,12 @@ func (r *Runner) buildPending() error {
 	})
 
 	for _, b := range pending {
-		go func(b *Build) {
-			if err := r.build(b); err != nil {
-				log.Printf("build %s failed: %s\n", b.Id, err)
-				return
-			}
-			log.Printf("build %s passed!\n", b.Id)
-		}(b)
+		go r.build(b)
 	}
 	return nil
 }
 
 func (r *Runner) save(b *Build) error {
-	if b.Id == "" {
-		b.Id = b.CreatedAt.Format("20060102150405") + "-" + random.String(8)
-	}
 	return r.db.Update(func(tx *bolt.Tx) error {
 		val, err := json.Marshal(b)
 		if err != nil {
