@@ -37,7 +37,6 @@ var listenPort string
 type Build struct {
 	Id                string        `json:"id"`
 	CreatedAt         *time.Time    `json:"created_at"`
-	Repo              string        `json:"repo"`
 	Commit            string        `json:"commit"`
 	Merge             bool          `json:"merge"`
 	State             string        `json:"state"`
@@ -163,7 +162,6 @@ func (r *Runner) watchEvents() {
 			now := time.Now()
 			b := &Build{
 				CreatedAt:   &now,
-				Repo:        event.Repo(),
 				Commit:      event.Commit(),
 				Description: event.String(),
 			}
@@ -240,7 +238,7 @@ func (r *Runner) build(b *Build) (err error) {
 		}
 	}()
 
-	log.Printf("building %s[%s]\n", b.Repo, b.Commit)
+	log.Printf("building %s\n", b.Commit)
 
 	out := io.MultiWriter(os.Stdout, logFile)
 	bc := r.bc
@@ -289,7 +287,7 @@ var s3attempts = attempt.Strategy{
 }
 
 func (r *Runner) uploadToS3(file *os.File, b *Build) string {
-	name := fmt.Sprintf("%s-build-%s-%s-%s.txt", b.Repo, b.Id, b.Commit, time.Now().Format("2006-01-02-15-04-05"))
+	name := fmt.Sprintf("%s-build-%s-%s.txt", b.Id, b.Commit, time.Now().Format("2006-01-02-15-04-05"))
 	url := fmt.Sprintf("https://s3.amazonaws.com/%s/%s", logBucket, name)
 
 	if _, err := file.Seek(0, os.SEEK_SET); err != nil {
@@ -474,7 +472,6 @@ func (r *Runner) handleBuildRequest(w http.ResponseWriter, req *http.Request) {
 		now := time.Now()
 		b := &Build{
 			CreatedAt:   &now,
-			Repo:        build.Repo,
 			Commit:      build.Commit,
 			Merge:       build.Merge,
 			Description: "Restart: " + build.Description,
@@ -515,7 +512,7 @@ var descriptions = map[string]string{
 
 func (r *Runner) updateStatus(b *Build, state, targetUrl string) {
 	go func() {
-		log.Printf("updateStatus: %s %s[%s]\n", state, b.Repo, b.Commit)
+		log.Printf("updateStatus: %s %s\n", state, b.Commit)
 
 		b.State = state
 		b.LogUrl = targetUrl
@@ -523,7 +520,7 @@ func (r *Runner) updateStatus(b *Build, state, targetUrl string) {
 			log.Printf("updateStatus: could not save build: %s", err)
 		}
 
-		url := fmt.Sprintf("https://api.github.com/repos/flynn/%s/statuses/%s", b.Repo, b.Commit)
+		url := fmt.Sprintf("https://api.github.com/repos/flynn/flynn/statuses/%s", b.Commit)
 		status := Status{
 			State:       state,
 			TargetUrl:   targetUrl,
