@@ -134,6 +134,9 @@ func (s *State) AddHost(host *host.Host, ch chan<- *host.Job) {
 func (s *State) RemoveHost(id string) {
 	delete(s.next, id)
 	s.deleted[id] = struct{}{}
+	if stream := s.streams[id]; stream != nil {
+		close(stream)
+	}
 	delete(s.streams, id)
 	s.nextModified = true
 }

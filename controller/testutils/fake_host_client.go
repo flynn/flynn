@@ -53,11 +53,11 @@ func (c *FakeHostClient) GetJob(id string) (*host.ActiveJob, error) {
 	return nil, errors.New("job not found")
 }
 
-func (c *FakeHostClient) StreamEvents(id string, ch chan<- *host.Event) stream.Stream {
+func (c *FakeHostClient) StreamEvents(id string, ch chan<- *host.Event) (stream.Stream, error) {
 	c.listenMtx.Lock()
 	defer c.listenMtx.Unlock()
 	c.listeners = append(c.listeners, ch)
-	return &FakeHostEventStream{ch: ch}
+	return &FakeHostEventStream{ch: ch}, nil
 }
 
 func (c *FakeHostClient) StopJob(id string) error {

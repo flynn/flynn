@@ -34,7 +34,10 @@ func (s *SchedulerSuite) checkJobState(t *c.C, appID, jobID, state string) {
 func (s *SchedulerSuite) addHosts(t *c.C, count int) []string {
 	debugf(t, "adding %d hosts", count)
 	ch := make(chan *host.HostEvent)
-	stream := s.clusterClient(t).StreamHostEvents(ch)
+	stream, err := s.clusterClient(t).StreamHostEvents(ch)
+	if err != nil {
+		t.Fatal("error when attempting to StreamHostEvents", err)
+	}
 	defer stream.Close()
 
 	hosts := make([]string, 0, count)
@@ -282,7 +285,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	defer stream.Close()
 
 	// kill the first controller and check the scheduler brings it back online
-	cc, err := cluster.NewClientWithDial(nil, s.discoverdClient(t).NewServiceSet)
+	cc, err := cluster.NewClientWithServices(s.discoverdClient(t).NewServiceSet)
 	t.Assert(err, c.IsNil)
 	defer cc.Close()
 	hc, err := cc.DialHost(hostID)

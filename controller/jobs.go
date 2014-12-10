@@ -17,11 +17,57 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/schedutil"
 	"github.com/flynn/flynn/pkg/sse"
 )
 
+/* SSE Logger */
+type SSELogWriter interface {
+	Stream(string) io.Writer
+}
+
+type sseLogWriter struct {
+	sse.SSEWriter
+}
+
+func (w *sseLogWriter) Stream(s string) io.Writer {
+	return &sseLogStreamWriter{w: w, s: s}
+}
+
+func NewSSELogWriter(w io.Writer) SSELogWriter {
+	return &sseLogWriter{SSEWriter: &sse.Writer{Writer: w}}
+}
+
+type sseLogChunk struct {
+	Stream string `json:"stream"`
+	Data   string `json:"data"`
+}
+
+type sseLogStreamWriter struct {
+	w *sseLogWriter
+	s string
+}
+
+func (w *sseLogStreamWriter) Write(p []byte) (int, error) {
+	data, err := json.Marshal(&sseLogChunk{Stream: w.s, Data: string(p)})
+	if err != nil {
+		return 0, err
+	}
+	if _, err := w.w.Write(data); err != nil {
+		return 0, err
+	}
+	return len(p), err
+}
+
+func (w *sseLogStreamWriter) Flush() {
+	if fw, ok := w.w.SSEWriter.(http.Flusher); ok {
+		fw.Flush()
+	}
+}
+
+/* Job Stuff */
 type JobRepo struct {
 	db *postgres.DB
 }
@@ -130,7 +176,7 @@ func scanJobEvent(s postgres.Scanner) (*ct.JobEvent, error) {
 type clusterClient interface {
 	ListHosts() ([]host.Host, error)
 	DialHost(string) (cluster.Host, error)
-	AddJobs(*host.AddJobsReq) (*host.AddJobsRes, error)
+	AddJobs(map[string][]*host.Job) (map[string]host.Host, error)
 }
 
 func listJobs(req *http.Request, w http.ResponseWriter, app *ct.App, repo *JobRepo, r ResponseHelper) {
@@ -195,8 +241,8 @@ func jobLog(req *http.Request, app *ct.App, params martini.Params, hc cluster.Ho
 		defer attachClient.Close()
 	}
 
-	sse := strings.Contains(req.Header.Get("Accept"), "text/event-stream")
-	if sse {
+	useSSE := strings.Contains(req.Header.Get("Accept"), "text/event-stream")
+	if useSSE {
 		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	} else {
 		w.Header().Set("Content-Type", "application/vnd.flynn.attach")
@@ -207,12 +253,12 @@ func jobLog(req *http.Request, app *ct.App, params martini.Params, hc cluster.Ho
 		wf.Flush()
 	}
 
-	fw := flushWriter{w, tail}
-	if sse {
-		ssew := NewSSELogWriter(w)
-		exit, err := attachClient.Receive(flushWriter{ssew.Stream("stdout"), tail}, flushWriter{ssew.Stream("stderr"), tail})
+	fw := httphelper.FlushWriter{Writer: w, Enabled: tail}
+	if useSSE {
+		ssew := NewSSELogWriter(fw)
+		exit, err := attachClient.Receive(ssew.Stream("stdout"), ssew.Stream("stderr"))
 		if err != nil {
-			fw.Write([]byte("event: error\ndata: {}\n\n"))
+			fmt.Fprintf(fw, "event: error\ndata: %s\n\n", err)
 			return
 		}
 		if tail {
@@ -338,65 +384,6 @@ func streamJobs(req *http.Request, w http.ResponseWriter, app *ct.App, repo *Job
 	}
 }
 
-type SSELogWriter interface {
-	Stream(string) io.Writer
-}
-
-func NewSSELogWriter(w io.Writer) SSELogWriter {
-	return &sseLogWriter{SSEWriter: &sse.Writer{Writer: w}}
-}
-
-type sseLogWriter struct {
-	sse.SSEWriter
-}
-
-func (w *sseLogWriter) Stream(s string) io.Writer {
-	return &sseLogStreamWriter{w: w, s: s}
-}
-
-type sseLogStreamWriter struct {
-	w *sseLogWriter
-	s string
-}
-
-type sseLogChunk struct {
-	Stream string `json:"stream"`
-	Data   string `json:"data"`
-}
-
-func (w *sseLogStreamWriter) Write(p []byte) (int, error) {
-	data, err := json.Marshal(&sseLogChunk{Stream: w.s, Data: string(p)})
-	if err != nil {
-		return 0, err
-	}
-	if _, err := w.w.Write(data); err != nil {
-		return 0, err
-	}
-	return len(p), err
-}
-
-func (w *sseLogStreamWriter) Flush() {
-	if fw, ok := w.w.SSEWriter.(http.Flusher); ok {
-		fw.Flush()
-	}
-}
-
-type flushWriter struct {
-	w  io.Writer
-	ok bool
-}
-
-func (f flushWriter) Write(p []byte) (int, error) {
-	if f.ok {
-		defer func() {
-			if fw, ok := f.w.(http.Flusher); ok {
-				fw.Flush()
-			}
-		}()
-	}
-	return f.w.Write(p)
-}
-
 func formatUUID(s string) string {
 	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
 }
@@ -506,7 +493,7 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 		defer attachClient.Close()
 	}
 
-	_, err = cl.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{hostID: {job}}})
+	_, err = cl.AddJobs(map[string][]*host.Job{hostID: {job}})
 	if err != nil {
 		r.Error(fmt.Errorf("schedule failed: %s", err.Error()))
 		return

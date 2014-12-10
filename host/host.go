@@ -18,7 +18,6 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
-	rpc "github.com/flynn/flynn/pkg/rpcplus/comborpc"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -167,7 +166,8 @@ func runDaemon(args *docopt.Args) {
 		sh.Fatal(err)
 	}
 
-	if err := serveHTTP(&Host{state: state, backend: backend}, &attachHandler{state: state, backend: backend}, sh); err != nil {
+	router, err := serveHTTP(&Host{state: state, backend: backend}, &attachHandler{state: state, backend: backend}, sh)
+	if err != nil {
 		sh.Fatal(err)
 	}
 
@@ -252,18 +252,19 @@ func runDaemon(args *docopt.Args) {
 
 	// Check if we are the leader so that we can use the cluster functions directly
 	sampiCluster := sampi.NewCluster(sampi.NewState())
+	sampiAPI := sampi.NewHTTPAPI(sampiCluster)
 	select {
 	case <-sampiStandby:
 		g.Log(grohl.Data{"at": "sampi_leader"})
-		rpc.Register(sampiCluster)
+		sampiAPI.RegisterRoutes(router, sh)
 	case <-time.After(5 * time.Millisecond):
 		go func() {
 			<-sampiStandby
 			g.Log(grohl.Data{"at": "sampi_leader"})
-			rpc.Register(sampiCluster)
+			sampiAPI.RegisterRoutes(router, sh)
 		}()
 	}
-	cluster, err := cluster.NewClientWithSelf(hostID, NewLocalClient(hostID, sampiCluster))
+	cluster, err := cluster.NewClient()
 	if err != nil {
 		sh.Fatal(err)
 	}
@@ -272,7 +273,7 @@ func runDaemon(args *docopt.Args) {
 	g.Log(grohl.Data{"at": "sampi_connected"})
 
 	events := state.AddListener("all")
-	go syncScheduler(cluster, events)
+	go syncScheduler(cluster, hostID, events)
 
 	h := &host.Host{}
 	if h.Metadata == nil {
@@ -289,7 +290,10 @@ func runDaemon(args *docopt.Args) {
 
 		h.Jobs = state.ClusterJobs()
 		jobs := make(chan *host.Job)
-		jobStream = cluster.RegisterHost(h, jobs)
+		jobStream, err = cluster.RegisterHost(h, jobs)
+		if err != nil {
+			sh.Fatal(err)
+		}
 		g.Log(grohl.Data{"at": "host_registered"})
 		for job := range jobs {
 			if externalAddr != "" {
@@ -314,13 +318,13 @@ func runDaemon(args *docopt.Args) {
 	}
 }
 
-func syncScheduler(scheduler *cluster.Client, events <-chan host.Event) {
+func syncScheduler(scheduler *cluster.Client, hostID string, events <-chan host.Event) {
 	for event := range events {
 		if event.Event != "stop" {
 			continue
 		}
 		grohl.Log(grohl.Data{"fn": "scheduler_event", "at": "remove_job", "job.id": event.JobID})
-		if err := scheduler.RemoveJobs([]string{event.JobID}); err != nil {
+		if err := scheduler.RemoveJob(hostID, event.JobID); err != nil {
 			grohl.Log(grohl.Data{"fn": "scheduler_event", "at": "remove_job", "status": "error", "err": err, "job.id": event.JobID})
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 	"github.com/flynn/flynn/host/types"
 )
@@ -18,7 +19,7 @@ type attachHandler struct {
 	backend Backend
 }
 
-func (h *attachHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (h *attachHandler) ServeHTTP(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	var attachReq host.AttachReq
 	if err := json.NewDecoder(req.Body).Decode(&attachReq); err != nil {
 		http.Error(w, "invalid JSON", 400)
