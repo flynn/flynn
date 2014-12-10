@@ -21,8 +21,14 @@ func init() {
 	}
 }
 
+type dbInfo struct {
+	db      *postgres.DB
+	db_host string
+	db_port string
+}
+
 func main() {
-	username, password := waitForPostgres(serviceName)
+	username, password, db_host, db_port := waitForPostgres(serviceName)
 	db, err := postgres.Open(serviceName, fmt.Sprintf("dbname=postgres user=%s password=%s", username, password))
 	if err != nil {
 		log.Fatal(err)
@@ -34,7 +40,7 @@ func main() {
 	m.Use(martini.Recovery())
 	m.Use(render.Renderer())
 	m.Action(r.Handle)
-	m.Map(db)
+	m.Map(dbInfo{db: db, db_host: db_host, db_port: db_port})
 
 	r.Post("/databases", createDatabase)
 	r.Get("/ping", ping)
@@ -52,7 +58,7 @@ func main() {
 	log.Fatal(http.ListenAndServe(addr, m))
 }
 
-func waitForPostgres(name string) (string, string) {
+func waitForPostgres(name string) (string, string, string, string) {
 	set, err := discoverd.NewServiceSet(name)
 	if err != nil {
 		log.Fatal(err)
@@ -66,7 +72,7 @@ func waitForPostgres(name string) (string, string) {
 			continue
 		}
 		if u.Online && u.Addr == l.Addr && u.Attrs["up"] == "true" && u.Attrs["username"] != "" && u.Attrs["password"] != "" {
-			return u.Attrs["username"], u.Attrs["password"]
+			return u.Attrs["username"], u.Attrs["password"], l.Host, l.Port
 		}
 	}
 	panic("discoverd disconnected before postgres came up")
@@ -77,7 +83,10 @@ type resource struct {
 	Env map[string]string `json:"env"`
 }
 
-func createDatabase(db *postgres.DB, r render.Render) {
+func createDatabase(dbi dbInfo, r render.Render) {
+	db := dbi.db
+	db_host := dbi.db_host
+	db_port := dbi.db_port
 	username, password, database := random.Hex(16), random.Hex(16), random.Hex(16)
 
 	if err := db.Exec(fmt.Sprintf(`CREATE USER "%s" WITH PASSWORD '%s'`, username, password)); err != nil {
@@ -92,6 +101,8 @@ func createDatabase(db *postgres.DB, r render.Render) {
 		return
 	}
 
+	database_url := fmt.Sprintf("postgresql://%s:%s@%s:%s/%s", username, password, db_host, db_port, database)
+
 	r.JSON(200, &resource{
 		ID: fmt.Sprintf("/databases/%s:%s", username, database),
 		Env: map[string]string{
@@ -99,11 +110,15 @@ func createDatabase(db *postgres.DB, r render.Render) {
 			"PGUSER":         username,
 			"PGPASSWORD":     password,
 			"PGDATABASE":     database,
+			"PGHOST":         db_host,
+			"PHPORT":         db_port,
+			"DATABASE_URL":   database_url,
 		},
 	})
 }
 
-func ping(db *postgres.DB, w http.ResponseWriter) {
+func ping(dbi dbInfo, w http.ResponseWriter) {
+	db := dbi.db
 	if err := db.Exec("SELECT 1"); err != nil {
 		log.Println(err)
 		w.WriteHeader(500)
