@@ -1,6 +1,6 @@
 https://github.com/heroku/heroku-buildpack-multi.git#cddec34c
 https://github.com/heroku/heroku-buildpack-ruby.git#v129
-https://github.com/heroku/heroku-buildpack-nodejs.git#v60
+https://github.com/heroku/heroku-buildpack-nodejs.git#fae41898
 https://github.com/heroku/heroku-buildpack-clojure.git#eb4ff18a
 https://github.com/heroku/heroku-buildpack-python.git#a51c1624
 https://github.com/heroku/heroku-buildpack-java.git#83549077
