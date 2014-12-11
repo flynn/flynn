@@ -576,7 +576,16 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 		ready <- err
 	}
 	if err != nil {
-		g.Log(grohl.Data{"at": "connect", "status": "error", "err": err})
+		g.Log(grohl.Data{"at": "connect", "status": "error", "err": err.Error()})
+		c.l.state.SetStatusFailed(c.job.ID, errors.New("failed to connect to container"))
+
+		d, e := c.l.libvirt.LookupDomainByName(c.job.ID)
+		if e != nil {
+			return e
+		}
+		if err := d.Destroy(); err != nil {
+			g.Log(grohl.Data{"at": "destroy", "status": "error", "err": err.Error()})
+		}
 		return err
 	}
 	defer c.Client.Close()
