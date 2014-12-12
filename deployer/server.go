@@ -17,13 +17,17 @@ import (
 	"github.com/flynn/flynn/deployer/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/postgres"
+	"github.com/flynn/flynn/pkg/queue"
 	"github.com/flynn/flynn/pkg/random"
 )
 
+var q *queue.Queue
 var db *postgres.DB
 var client *controller.Client
 
 var ErrNotFound = errors.New("deployer: resource not found")
+
+const queueName = "deployments"
 
 func main() {
 	var err error
@@ -51,11 +55,27 @@ func main() {
 		log.Fatal(err)
 	}
 
+	q = queue.New(db.DB, "jobs")
+	// TODO start new worker on error
+	go q.NewWorker(queueName, 10, handleJob).Start()
+
 	router := httprouter.New()
 	router.POST("/deployments", createDeployment)
 	router.GET("/deployments/:deployment_id/events", streamDeploymentEvents)
 
+	log.Println("Listening for HTTP requests on", addr)
 	log.Fatal(http.ListenAndServe(addr, router))
+}
+
+func handleJob(job *queue.Job) error {
+	id := string(job.Data)
+	deployment, err := getDeployment(id)
+	if err != nil {
+		// TODO: log/handle error
+		return nil
+	}
+	// TODO: do deployment
+	return nil
 }
 
 func createDeployment(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
@@ -96,10 +116,14 @@ func createDeployment(w http.ResponseWriter, req *http.Request, params httproute
 	if deployment.ID == "" {
 		deployment.ID = random.UUID()
 	}
+	// TODO: wrap insert + queue push in a transaction
 	query := "INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, steps) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at"
 	if err := db.QueryRow(query, deployment.ID, deployment.AppID, deployment.OldReleaseID, deployment.NewReleaseID, deployment.Strategy, steps).Scan(&deployment.CreatedAt); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	if _, err := q.Push(queueName, []byte(deployment.ID)); err != nil {
+		http.Error(w, err.Error(), 500)
 	}
 	deployment.ID = postgres.CleanUUID(deployment.ID)
 	w.WriteHeader(http.StatusOK)
@@ -107,6 +131,20 @@ func createDeployment(w http.ResponseWriter, req *http.Request, params httproute
 		http.Error(w, err.Error(), 500)
 		return
 	}
+}
+
+func getDeployment(id string) (*deployer.Deployment, error) {
+	var steps []byte
+	d := &deployer.Deployment{}
+	query := "SELECT deployment_id, app_id, old_release_id, new_release_id, strategy, steps, created_at FROM deployments WHERE deployment_id = $1"
+	err := db.QueryRow(query, id).Scan(&d.ID, &d.AppID, &d.OldReleaseID, &d.NewReleaseID, &d.Strategy, &steps, &d.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(steps, &d.Steps); err != nil {
+		return nil, err
+	}
+	return d, nil
 }
 
 // TODO: share with controller streamJobs
