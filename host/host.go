@@ -22,10 +22,10 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 )
 
-// Attempts is the attempt strategy that is used to connect to discoverd.
-var Attempts = attempt.Strategy{
+// discoverdAttempts is the attempt strategy that is used to connect to discoverd.
+var discoverdAttempts = attempt.Strategy{
 	Min:   5,
-	Total: 10 * time.Second,
+	Total: 10 * time.Minute,
 	Delay: 200 * time.Millisecond,
 }
 
@@ -222,7 +222,7 @@ func runDaemon(args *docopt.Args) {
 		if d, ok := services["discoverd"]; ok {
 			discAddr = fmt.Sprintf("%s:%d", d.ExternalIP, d.TCPPorts[0])
 			var disc *discoverd.Client
-			err = Attempts.Run(func() (err error) {
+			err = discoverdAttempts.Run(func() (err error) {
 				disc, err = discoverd.NewClientWithAddr(discAddr)
 				return
 			})
