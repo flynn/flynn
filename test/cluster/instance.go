@@ -78,6 +78,8 @@ type Instance struct {
 
 	sshMtx sync.RWMutex
 	ssh    *ssh.Client
+
+	initial bool
 }
 
 func (i *Instance) writeInterfaceConfig() error {
