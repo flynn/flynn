@@ -867,6 +867,12 @@ func (l *LibvirtLXCBackend) Cleanup() error {
 	return err
 }
 
+/*
+	Loads a series of jobs, and reconstructs whatever additional backend state was saved.
+
+	This may include reconnecting rpc systems and communicating with containers
+	(thus this may take a significant moment; it's not just deserializing).
+*/
 func (l *LibvirtLXCBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jobBackendStates map[string][]byte, backendGlobalState []byte) error {
 	containers := make(map[string]*libvirtContainer)
 	for k, v := range jobBackendStates {
@@ -876,6 +882,8 @@ func (l *LibvirtLXCBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jobB
 		}
 		containers[k] = container
 	}
+	readySignals := make(map[string]chan error)
+	// for every job with a matching container, attempt to restablish a connection
 	for _, j := range jobs {
 		container, ok := containers[j.Job.ID]
 		if !ok {
@@ -884,9 +892,16 @@ func (l *LibvirtLXCBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jobB
 		container.l = l
 		container.job = j.Job
 		container.done = make(chan struct{})
-		status := make(chan error)
-		go container.watch(status)
-		if err := <-status; err != nil {
+		readySignals[j.Job.ID] = make(chan error)
+		go container.watch(readySignals[j.Job.ID])
+	}
+	// gather connection attempts and finish reconstruction if success.  failures will time out.
+	for _, j := range jobs {
+		container, ok := containers[j.Job.ID]
+		if !ok {
+			continue
+		}
+		if err := <-readySignals[j.Job.ID]; err != nil {
 			// log error
 			l.state.RemoveJob(j.Job.ID)
 			container.cleanup()
@@ -899,7 +914,6 @@ func (l *LibvirtLXCBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jobB
 				l.ports[p.Proto].GetPort(uint16(i))
 			}
 		}
-
 	}
 	return nil
 }
