@@ -56,10 +56,10 @@ type Agent struct {
 	Address string
 }
 
-// Attempts is the attempt strategy that is used to connect to etcd.
-var Attempts = attempt.Strategy{
+// etcdAttempts is the attempt strategy that is used to connect to etcd.
+var etcdAttempts = attempt.Strategy{
 	Min:   5,
-	Total: 5 * time.Second,
+	Total: 10 * time.Minute,
 	Delay: 200 * time.Millisecond,
 }
 
@@ -69,7 +69,7 @@ func NewServer(addr string, etcdAddrs []string) *Agent {
 
 	// check to make sure that etcd is online and accepting connections
 	// etcd takes a while to come online, so we attempt a GET multiple times
-	err := Attempts.Run(func() (err error) {
+	err := etcdAttempts.Run(func() (err error) {
 		_, err = client.Get("/", false, false)
 		if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
 			// Valid 404 from etcd (> v0.5)
