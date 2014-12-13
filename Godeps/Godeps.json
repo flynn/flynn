@@ -273,28 +273,23 @@
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/nacl/secretbox",
-			"Comment": "null-233",
-			"Rev": "8fec09c61d5d66f460d227fd1df3473d7e015bc6"
+			"Rev": "1fbbd62cfec66bd39d91e97749579579d4d3037e"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/poly1305",
-			"Comment": "null-233",
-			"Rev": "8fec09c61d5d66f460d227fd1df3473d7e015bc6"
+			"Rev": "1fbbd62cfec66bd39d91e97749579579d4d3037e"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/salsa20/salsa",
-			"Comment": "null-233",
-			"Rev": "8fec09c61d5d66f460d227fd1df3473d7e015bc6"
+			"Rev": "1fbbd62cfec66bd39d91e97749579579d4d3037e"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/ssh",
-			"Comment": "null-233",
-			"Rev": "8fec09c61d5d66f460d227fd1df3473d7e015bc6"
+			"Rev": "1fbbd62cfec66bd39d91e97749579579d4d3037e"
 		},
 		{
 			"ImportPath": "golang.org/x/net/websocket",
-			"Comment": "null-185",
-			"Rev": "71dc9256ee487dc7e3edc3e15a425c78c657f9ed"
+			"Rev": "cbcac7bb8415db9b6cb4d1ebab1dc9afbd688b97"
 		},
 		{
 			"ImportPath": "gopkg.in/mgo.v2",
