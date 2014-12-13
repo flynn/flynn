@@ -80,7 +80,7 @@ boot_libvirt_lxc() {
     --external ${ip} \
     --force \
     --backend libvirt-lxc \
-    --state /tmp/flynn-host-state.json \
+    --state /tmp/flynn-host-state.bolt \
     --flynn-init "${host_dir}/bin/flynn-init" \
     &>"${log}"
 

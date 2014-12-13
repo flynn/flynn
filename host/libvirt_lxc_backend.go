@@ -433,8 +433,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 		}
 	}
 
-	l.state.AddJob(job)
-	l.state.SetInternalIP(job.ID, container.IP.String())
+	l.state.AddJob(job, container.IP.String())
 	domain := &lt.Domain{
 		Type:   "lxc",
 		Name:   job.ID,
@@ -868,11 +867,23 @@ func (l *LibvirtLXCBackend) Cleanup() error {
 	return err
 }
 
-func (l *LibvirtLXCBackend) RestoreState(jobs map[string]*host.ActiveJob, dec *json.Decoder) error {
+/*
+	Loads a series of jobs, and reconstructs whatever additional backend state was saved.
+
+	This may include reconnecting rpc systems and communicating with containers
+	(thus this may take a significant moment; it's not just deserializing).
+*/
+func (l *LibvirtLXCBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jobBackendStates map[string][]byte, backendGlobalState []byte) error {
 	containers := make(map[string]*libvirtContainer)
-	if err := dec.Decode(&containers); err != nil {
-		return err
+	for k, v := range jobBackendStates {
+		container := &libvirtContainer{}
+		if err := json.Unmarshal(v, container); err != nil {
+			return fmt.Errorf("failed to deserialize backed container state: %s", err)
+		}
+		containers[k] = container
 	}
+	readySignals := make(map[string]chan error)
+	// for every job with a matching container, attempt to restablish a connection
 	for _, j := range jobs {
 		container, ok := containers[j.Job.ID]
 		if !ok {
@@ -881,9 +892,16 @@ func (l *LibvirtLXCBackend) RestoreState(jobs map[string]*host.ActiveJob, dec *j
 		container.l = l
 		container.job = j.Job
 		container.done = make(chan struct{})
-		status := make(chan error)
-		go container.watch(status)
-		if err := <-status; err != nil {
+		readySignals[j.Job.ID] = make(chan error)
+		go container.watch(readySignals[j.Job.ID])
+	}
+	// gather connection attempts and finish reconstruction if success.  failures will time out.
+	for _, j := range jobs {
+		container, ok := containers[j.Job.ID]
+		if !ok {
+			continue
+		}
+		if err := <-readySignals[j.Job.ID]; err != nil {
 			// log error
 			l.state.RemoveJob(j.Job.ID)
 			container.cleanup()
@@ -896,15 +914,17 @@ func (l *LibvirtLXCBackend) RestoreState(jobs map[string]*host.ActiveJob, dec *j
 				l.ports[p.Proto].GetPort(uint16(i))
 			}
 		}
-
 	}
 	return nil
 }
 
-func (l *LibvirtLXCBackend) SaveState(e *json.Encoder) error {
+func (l *LibvirtLXCBackend) MarshalJobState(jobID string) ([]byte, error) {
 	l.containersMtx.RLock()
 	defer l.containersMtx.RUnlock()
-	return e.Encode(l.containers)
+	if associatedState, exists := l.containers[jobID]; exists {
+		return json.Marshal(associatedState)
+	}
+	return nil, nil
 }
 
 func (l *LibvirtLXCBackend) pinkertonPull(url string) ([]pinkerton.LayerPullInfo, error) {

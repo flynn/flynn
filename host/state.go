@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/boltdb/bolt"
 	"github.com/flynn/flynn/host/types"
 )
 
@@ -24,77 +26,169 @@ type State struct {
 	listenMtx  sync.RWMutex
 	attachers  map[string]map[chan struct{}]struct{}
 
-	stateFileMtx sync.Mutex
-	stateFile    *os.File
-	backend      Backend
+	stateFilePath string
+	stateDB       *bolt.DB
+
+	backend Backend
 }
 
-func NewState(id string) *State {
-	return &State{
-		id:         id,
-		jobs:       make(map[string]*host.ActiveJob),
-		containers: make(map[string]*host.ActiveJob),
-		listeners:  make(map[string]map[chan host.Event]struct{}),
-		attachers:  make(map[string]map[chan struct{}]struct{}),
+func NewState(id string, stateFilePath string) *State {
+	s := &State{
+		id:            id,
+		stateFilePath: stateFilePath,
+		jobs:          make(map[string]*host.ActiveJob),
+		containers:    make(map[string]*host.ActiveJob),
+		listeners:     make(map[string]map[chan host.Event]struct{}),
+		attachers:     make(map[string]map[chan struct{}]struct{}),
 	}
+	s.initializePersistence()
+	return s
 }
 
-func (s *State) Restore(file string, backend Backend) error {
-	s.stateFileMtx.Lock()
-	defer s.stateFileMtx.Unlock()
-	f, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE, 0666)
-	if err != nil {
-		return err
-	}
-	s.stateFile = f
+/*
+	Restore prior state from the save location defined at construction time.
+	If the state save file is empty, nothing is loaded, and no error is returned.
+*/
+func (s *State) Restore(backend Backend) error {
 	s.backend = backend
-	d := json.NewDecoder(f)
-	if err := d.Decode(&s.jobs); err != nil {
-		if err == io.EOF {
-			err = nil
+
+	if err := s.stateDB.View(func(tx *bolt.Tx) error {
+		jobsBucket := tx.Bucket([]byte("jobs"))
+		backendJobsBucket := tx.Bucket([]byte("backend-jobs"))
+		backendGlobalBucket := tx.Bucket([]byte("backend-global"))
+
+		// restore jobs
+		if err := jobsBucket.ForEach(func(k, v []byte) error {
+			job := &host.ActiveJob{}
+			if err := json.Unmarshal(v, job); err != nil {
+				return err
+			}
+			if job.ContainerID != "" {
+				s.containers[job.ContainerID] = job
+			}
+			s.jobs[string(k)] = job
+			return nil
+		}); err != nil {
+			return err
 		}
-		return err
-	}
-	for _, job := range s.jobs {
-		if job.ContainerID != "" {
-			s.containers[job.ContainerID] = job
+
+		// hand opaque blobs back to backend so it can do its restore
+		backendJobsBlobs := make(map[string][]byte)
+		if err := backendJobsBucket.ForEach(func(k, v []byte) error {
+			backendJobsBlobs[string(k)] = v
+			return nil
+		}); err != nil {
+			return err
 		}
+		backendGlobalBlob := backendGlobalBucket.Get([]byte("backend"))
+		return backend.UnmarshalState(s.jobs, backendJobsBlobs, backendGlobalBlob)
+	}); err != nil && err != io.EOF {
+		return fmt.Errorf("could not restore from host persistence db: %s", err)
 	}
-	return backend.RestoreState(s.jobs, d)
+	return nil
 }
 
-func (s *State) persist() {
-	s.stateFileMtx.Lock()
-	defer s.stateFileMtx.Unlock()
-	if _, err := s.stateFile.Seek(0, 0); err != nil {
-		// log error
+func (s *State) initializePersistence() {
+	if s.stateDB != nil {
 		return
 	}
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
-	enc := json.NewEncoder(s.stateFile)
-	if err := enc.Encode(s.jobs); err != nil {
-		// log error
-		return
+
+	// open/initialize db
+	if err := os.MkdirAll(filepath.Dir(s.stateFilePath), 0755); err != nil {
+		panic(fmt.Errorf("could not not mkdir for db: %s", err))
 	}
-	if b, ok := s.backend.(StateSaver); ok {
-		if err := b.SaveState(enc); err != nil {
-			// log error
-			return
-		}
+	stateDB, err := bolt.Open(s.stateFilePath, 0600, &bolt.Options{Timeout: 5 * time.Second})
+	if err != nil {
+		panic(fmt.Errorf("could not open db: %s", err))
 	}
-	if err := s.stateFile.Sync(); err != nil {
-		// log error
+	s.stateDB = stateDB
+	if err := s.stateDB.Update(func(tx *bolt.Tx) error {
+		// idempotently create buckets.  (errors ignored because they're all compile-time impossible args checks.)
+		tx.CreateBucketIfNotExists([]byte("jobs"))
+		tx.CreateBucketIfNotExists([]byte("backend-jobs"))
+		tx.CreateBucketIfNotExists([]byte("backend-global"))
+		return nil
+	}); err != nil {
+		panic(fmt.Errorf("could not initialize host persistence db: %s", err))
 	}
 }
 
-func (s *State) AddJob(j *host.Job) {
+func (s *State) persist(jobID string) {
+	// s.mtx.RLock() should already be covered by caller
+
+	if err := s.stateDB.Update(func(tx *bolt.Tx) error {
+		jobsBucket := tx.Bucket([]byte("jobs"))
+		backendJobsBucket := tx.Bucket([]byte("backend-jobs"))
+		backendGlobalBucket := tx.Bucket([]byte("backend-global"))
+
+		// serialize the changed job, and push it into jobs bucket
+		if _, exists := s.jobs[jobID]; exists {
+			b, err := json.Marshal(s.jobs[jobID])
+			if err != nil {
+				return fmt.Errorf("failed to serialize job state: %s", err)
+			}
+			err = jobsBucket.Put([]byte(jobID), b)
+			if err != nil {
+				return fmt.Errorf("could not persist job to boltdb: %s", err)
+			}
+		} else {
+			jobsBucket.Delete([]byte(jobID))
+		}
+
+		// save the opaque blob the backend provides regarding this job
+		if backend, ok := s.backend.(JobStateSaver); ok {
+			if _, exists := s.jobs[jobID]; exists {
+				backendState, err := backend.MarshalJobState(jobID)
+				if err != nil {
+					return fmt.Errorf("backend failed to serialize job state: %s", err)
+				}
+				if backendState == nil {
+					backendJobsBucket.Delete([]byte(jobID))
+				} else {
+					err = backendJobsBucket.Put([]byte(jobID), backendState)
+					if err != nil {
+						return fmt.Errorf("could not persist backend job state to boltdb: %s", err)
+					}
+				}
+			} else {
+				backendJobsBucket.Delete([]byte(jobID))
+			}
+		}
+
+		// (re)save any state the backend provides that isn't tied to specific jobs.
+		if backend, ok := s.backend.(StateSaver); ok {
+			bytes, err := backend.MarshalGlobalState()
+			if err != nil {
+				return fmt.Errorf("backend failed to serialize global state: %s", err)
+			}
+			err = backendGlobalBucket.Put([]byte("backend"), bytes)
+			if err != nil {
+				return fmt.Errorf("could not persist backend global state to boltdb: %s", err)
+			}
+		}
+
+		return nil
+	}); err != nil {
+		panic(fmt.Errorf("could not persist to boltdb: %s", err))
+	}
+}
+
+/*
+	Close the DB that persists the host state.
+	This is not called in typical flow because there's no need to release this file descriptor,
+	but it is needed in testing so that bolt releases locks such that the file can be reopened.
+*/
+func (s *State) persistenceDBClose() error {
+	return s.stateDB.Close()
+}
+
+func (s *State) AddJob(j *host.Job, ip string) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	job := &host.ActiveJob{Job: j, HostID: s.id}
+	job := &host.ActiveJob{Job: j, HostID: s.id, InternalIP: ip}
 	s.jobs[j.ID] = job
 	s.sendEvent(job, "create")
-	go s.persist()
+	s.persist(j.ID)
 }
 
 func (s *State) GetJob(id string) *host.ActiveJob {
@@ -108,11 +202,11 @@ func (s *State) GetJob(id string) *host.ActiveJob {
 	return &jobCopy
 }
 
-func (s *State) RemoveJob(id string) {
+func (s *State) RemoveJob(jobID string) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	delete(s.jobs, id)
-	go s.persist()
+	delete(s.jobs, jobID)
+	s.persist(jobID)
 }
 
 func (s *State) Get() map[string]host.ActiveJob {
@@ -141,21 +235,14 @@ func (s *State) SetContainerID(jobID, containerID string) {
 	defer s.mtx.Unlock()
 	s.jobs[jobID].ContainerID = containerID
 	s.containers[containerID] = s.jobs[jobID]
-	go s.persist()
-}
-
-func (s *State) SetInternalIP(jobID, ip string) {
-	s.mtx.Lock()
-	s.jobs[jobID].InternalIP = ip
-	s.mtx.Unlock()
-	go s.persist()
+	s.persist(jobID)
 }
 
 func (s *State) SetManifestID(jobID, manifestID string) {
 	s.mtx.Lock()
 	s.jobs[jobID].ManifestID = manifestID
 	s.mtx.Unlock()
-	go s.persist()
+	s.persist(jobID)
 }
 
 func (s *State) SetForceStop(jobID string) {
@@ -168,7 +255,7 @@ func (s *State) SetForceStop(jobID string) {
 	}
 
 	job.ForceStop = true
-	go s.persist()
+	s.persist(jobID)
 }
 
 func (s *State) SetStatusRunning(jobID string) {
@@ -183,7 +270,7 @@ func (s *State) SetStatusRunning(jobID string) {
 	job.StartedAt = time.Now().UTC()
 	job.Status = host.StatusRunning
 	s.sendEvent(job, "start")
-	go s.persist()
+	s.persist(jobID)
 }
 
 func (s *State) SetContainerStatusDone(containerID string, exitCode int) {
@@ -219,7 +306,7 @@ func (s *State) setStatusDone(job *host.ActiveJob, exitStatus int) {
 		job.Status = host.StatusCrashed
 	}
 	s.sendEvent(job, "stop")
-	go s.persist()
+	s.persist(job.Job.ID)
 }
 
 func (s *State) SetStatusFailed(jobID string, err error) {
@@ -235,7 +322,7 @@ func (s *State) SetStatusFailed(jobID string, err error) {
 	errStr := err.Error()
 	job.Error = &errStr
 	s.sendEvent(job, "error")
-	go s.persist()
+	s.persist(jobID)
 	go s.WaitAttach(jobID)
 }
 

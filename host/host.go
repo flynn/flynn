@@ -38,10 +38,10 @@ options:
   --external=IP          external IP of host
   --config=PATH          path to configuration file
   --manifest=PATH        path to manifest file [default: /etc/flynn-host.json]
-  --state=PATH           path to state file
+  --state=PATH           path to state file [default: /var/lib/flynn/host-state.bolt]
   --id=ID                host id
   --force                kill all containers booted by flynn-host before starting
-  --volpath=PATH         directory to create volumes in [default: /var/lib/flynn-host]
+  --volpath=PATH         directory to create volumes in [default: /var/lib/flynn/host-volumes]
   --backend=BACKEND      runner backend [default: libvirt-lxc]
   --meta=<KEY=VAL>...    key=value pair to add as metadata
   --bind=IP              bind containers to IP
@@ -119,7 +119,7 @@ func runDaemon(args *docopt.Args) {
 	}
 
 	sh := shutdown.NewHandler()
-	state := NewState(hostID)
+	state := NewState(hostID, stateFile)
 	var backend Backend
 	var err error
 
@@ -137,10 +137,8 @@ func runDaemon(args *docopt.Args) {
 		sh.Fatal(err)
 	}
 
-	if stateFile != "" {
-		if err := state.Restore(stateFile, backend); err != nil {
-			sh.Fatal(err)
-		}
+	if err := state.Restore(backend); err != nil {
+		sh.Fatal(err)
 	}
 
 	var jobStream cluster.Stream
