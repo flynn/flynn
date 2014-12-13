@@ -22,6 +22,14 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
   config.vm.synced_folder ".", "/vagrant", disabled: true
 
+  # Address issues some hosts experience with networking (specifically, DNS latency) inside the development environment VM.
+  # See also https://github.com/mitchellh/vagrant/issues/1172 for a description of the problem.
+  config.vm.provision :shell, inline: <<SCRIPT
+    if [ ! $(grep single-request-reopen /etc/resolvconf/resolv.conf.d/base) ]; then
+      echo "options single-request-reopen" >> /etc/resolvconf/resolv.conf.d/base && resolvconf -u
+    fi
+SCRIPT
+
   config.vm.provision "shell", privileged: false, inline: <<SCRIPT
     ## Uncomment these lines to update flynn before starting
     # sudo apt-get update -qq
