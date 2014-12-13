@@ -38,7 +38,7 @@ func Run(name string, args []string) error {
 	if !ok {
 		return fmt.Errorf("%s is not a valid command", name)
 	}
-	parsedArgs, err := docopt.Parse(cmd.usage, argv, true, "", false)
+	parsedArgs, err := docopt.Parse(cmd.usage, argv, true, "", strings.Contains(cmd.usage, "[--]"))
 	if err != nil {
 		return err
 	}
