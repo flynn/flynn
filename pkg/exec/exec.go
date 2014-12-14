@@ -273,18 +273,12 @@ func (c *Cmd) Signal(sig int) error {
 	if !c.started {
 		return errors.New("exec: not started")
 	}
-	if c.finished {
-		return errors.New("exec: already finished")
-	}
 	return c.attachClient.Signal(sig)
 }
 
 func (c *Cmd) ResizeTTY(height, width uint16) error {
 	if !c.started {
 		return errors.New("exec: not started")
-	}
-	if c.finished {
-		return errors.New("exec: already finished")
 	}
 	return c.attachClient.ResizeTTY(height, width)
 }
