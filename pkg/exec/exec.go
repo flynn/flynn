@@ -52,7 +52,7 @@ func DockerImage(uri string) host.Artifact {
 }
 
 func Command(artifact host.Artifact, cmd ...string) *Cmd {
-	return &Cmd{Artifact: artifact, Cmd: cmd, done: make(chan struct{})}
+	return &Cmd{Artifact: artifact, Cmd: cmd}
 }
 
 type ClusterClient interface {
@@ -108,6 +108,7 @@ func (c *Cmd) Start() error {
 	if c.started {
 		return errors.New("exec: already started")
 	}
+	c.done = make(chan struct{})
 	c.started = true
 	if c.cluster == nil {
 		var err error
@@ -272,18 +273,12 @@ func (c *Cmd) Signal(sig int) error {
 	if !c.started {
 		return errors.New("exec: not started")
 	}
-	if c.finished {
-		return errors.New("exec: already finished")
-	}
 	return c.attachClient.Signal(sig)
 }
 
 func (c *Cmd) ResizeTTY(height, width uint16) error {
 	if !c.started {
 		return errors.New("exec: not started")
-	}
-	if c.finished {
-		return errors.New("exec: already finished")
 	}
 	return c.attachClient.ResizeTTY(height, width)
 }

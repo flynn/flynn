@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/heroku/hk/term"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -50,26 +50,22 @@ func runRun(args *docopt.Args, client *controller.Client) error {
 	}
 	req := &ct.NewJob{
 		Cmd:       append([]string{args.String["<command>"]}, args.All["<argument>"].([]string)...),
-		TTY:       term.IsTerminal(os.Stdin) && term.IsTerminal(os.Stdout) && !runDetached,
+		TTY:       term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()) && !runDetached,
 		ReleaseID: runRelease,
 	}
 	if args.String["-e"] != "" {
 		req.Entrypoint = []string{args.String["-e"]}
 	}
 	if req.TTY {
-		cols, err := term.Cols()
+		ws, err := term.GetWinsize(os.Stdin.Fd())
 		if err != nil {
 			return err
 		}
-		lines, err := term.Lines()
-		if err != nil {
-			return err
-		}
-		req.Columns = cols
-		req.Lines = lines
+		req.Columns = int(ws.Width)
+		req.Lines = int(ws.Height)
 		req.Env = map[string]string{
-			"COLUMNS": strconv.Itoa(cols),
-			"LINES":   strconv.Itoa(lines),
+			"COLUMNS": strconv.Itoa(int(ws.Width)),
+			"LINES":   strconv.Itoa(int(ws.Height)),
 			"TERM":    os.Getenv("TERM"),
 		}
 	}
@@ -90,25 +86,25 @@ func runRun(args *docopt.Args, client *controller.Client) error {
 	defer rwc.Close()
 	attachClient := cluster.NewAttachClient(rwc)
 
+	var termState *term.State
 	if req.TTY {
-		if err := term.MakeRaw(os.Stdin); err != nil {
+		termState, err = term.MakeRaw(os.Stdin.Fd())
+		if err != nil {
 			return err
 		}
-		defer term.Restore(os.Stdin)
+		// Restore the terminal if we return without calling os.Exit
+		defer term.RestoreTerminal(os.Stdin.Fd(), termState)
 		go func() {
 			ch := make(chan os.Signal)
 			signal.Notify(ch, SIGWINCH)
-			<-ch
-			height, err := term.Lines()
-			if err != nil {
-				return
+			for range ch {
+				ws, err := term.GetWinsize(os.Stdin.Fd())
+				if err != nil {
+					return
+				}
+				attachClient.ResizeTTY(ws.Height, ws.Width)
+				attachClient.Signal(int(SIGWINCH))
 			}
-			width, err := term.Cols()
-			if err != nil {
-				return
-			}
-			attachClient.ResizeTTY(uint16(height), uint16(width))
-			attachClient.Signal(int(SIGWINCH))
 		}()
 	}
 
@@ -129,7 +125,7 @@ func runRun(args *docopt.Args, client *controller.Client) error {
 		return err
 	}
 	if req.TTY {
-		term.Restore(os.Stdin)
+		term.RestoreTerminal(os.Stdin.Fd(), termState)
 	}
 	os.Exit(exitStatus)
 

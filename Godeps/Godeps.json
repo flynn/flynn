@@ -224,11 +224,6 @@
 			"Rev": "aa5e036e6c44aec69a32eb41097001978b29ad31"
 		},
 		{
-			"ImportPath": "github.com/heroku/hk/term",
-			"Comment": "v20140407.1-2-g788166e",
-			"Rev": "788166ea4e74dae8b21ecec4bfce23b57c4f5adf"
-		},
-		{
 			"ImportPath": "github.com/howeyc/fsnotify",
 			"Comment": "v0.9.0-11-g6b1ef89",
 			"Rev": "6b1ef893dc11e0447abda6da20a5203481878dda"
