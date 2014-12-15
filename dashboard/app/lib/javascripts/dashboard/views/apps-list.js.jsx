@@ -38,7 +38,7 @@ Dashboard.Views.AppsList = React.createClass({
 		var services = this.state.services;
 
 		var getAppPath = this.props.getAppPath;
-		var clusterDomain = this.props.clusterDomain;
+		var defaultRouteDomain = this.props.defaultRouteDomain;
 
 		return (
 			<ul className="apps-list">
@@ -55,7 +55,7 @@ Dashboard.Views.AppsList = React.createClass({
 											<span className="name">
 												{app.meta.ref}
 												{app.protected ? null : (
-													<ExternalLink href={"http://"+ app.name +"."+ clusterDomain}>link</ExternalLink>
+													<ExternalLink href={"http://"+ app.name +"."+ defaultRouteDomain}>link</ExternalLink>
 												)}
 											</span>
 											<ul className="actions">
@@ -79,7 +79,7 @@ Dashboard.Views.AppsList = React.createClass({
 							<span className="name">
 								{app.name}
 								{app.protected ? null : (
-									<ExternalLink href={"http://"+ app.name +"."+ clusterDomain}>link</ExternalLink>
+									<ExternalLink href={"http://"+ app.name +"."+ defaultRouteDomain}>link</ExternalLink>
 								)}
 							</span>
 							<ul className="actions">
