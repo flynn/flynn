@@ -96,7 +96,6 @@ type OAuthToken struct {
 type ExpandedUser struct {
 	Auths         map[string]*OAuthToken `json:"auths"`
 	ControllerKey string                 `json:"controller_key"`
-	ClusterDomain string                 `json:"cluster_domain"`
 }
 
 type UserConfig struct {
@@ -116,12 +115,11 @@ var baseConfig = UserConfig{
 func getConfig(rh RequestHelper, conf *Config) {
 	config := baseConfig
 
-	config.Endpoints["cluster_controller"] = fmt.Sprintf("https://%s", conf.ClusterDomain)
+	config.Endpoints["cluster_controller"] = fmt.Sprintf("https://%s", conf.ControllerDomain)
 	config.DefaultRouteDomain = conf.DefaultRouteDomain
 
 	if rh.IsAuthenticated() {
 		config.User = &ExpandedUser{}
-		config.User.ClusterDomain = conf.ClusterDomain
 		config.User.Auths = make(map[string]*OAuthToken)
 
 		if conf.GithubToken != "" {
