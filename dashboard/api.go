@@ -116,7 +116,7 @@ var baseConfig = UserConfig{
 func getConfig(rh RequestHelper, conf *Config) {
 	config := baseConfig
 
-	config.Endpoints["cluster_controller"] = fmt.Sprintf("https://%s", conf.ClusterDomain)
+	config.Endpoints["cluster_controller"] = fmt.Sprintf("https://%s", conf.ControllerDomain)
 	config.DefaultRouteDomain = conf.DefaultRouteDomain
 
 	if rh.IsAuthenticated() {

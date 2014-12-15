@@ -280,7 +280,7 @@
     "release": {
       "env": {
         "DEFAULT_ROUTE_DOMAIN": "{{ getenv \"CLUSTER_DOMAIN\" }}",
-        "CLUSTER_DOMAIN": "controller.{{ getenv \"CLUSTER_DOMAIN\" }}",
+        "CONTROLLER_DOMAIN": "controller.{{ getenv \"CLUSTER_DOMAIN\" }}",
         "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
         "URL": "https://dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}",
         "SESSION_SECRET": "{{ (index .StepData \"dashboard-session-secret\").Data }}",

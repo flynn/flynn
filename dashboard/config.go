@@ -11,7 +11,7 @@ import (
 type Config struct {
 	Addr               string
 	DefaultRouteDomain string
-	ClusterDomain      string
+	ControllerDomain   string
 	ControllerKey      string
 	URL                string
 	InterfaceURL       string
@@ -38,9 +38,9 @@ func LoadConfigFromEnv() *Config {
 		log.Fatal("DEFAULT_ROUTE_DOMAIN is required!")
 	}
 
-	conf.ClusterDomain = os.Getenv("CLUSTER_DOMAIN")
-	if conf.ClusterDomain == "" {
-		log.Fatal("CLUSTER_DOMAIN is required!")
+	conf.ControllerDomain = os.Getenv("CONTROLLER_DOMAIN")
+	if conf.ControllerDomain == "" {
+		log.Fatal("CONTROLLER_DOMAIN is required!")
 	}
 
 	conf.ControllerKey = os.Getenv("CONTROLLER_KEY")
