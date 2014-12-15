@@ -102,7 +102,8 @@ type ExpandedUser struct {
 type UserConfig struct {
 	User *ExpandedUser `json:"user,omitempty"`
 
-	Endpoints map[string]string `json:"endpoints"`
+	Endpoints          map[string]string `json:"endpoints"`
+	DefaultRouteDomain string            `json:"default_route_domain"`
 }
 
 var baseConfig = UserConfig{
@@ -116,6 +117,7 @@ func getConfig(rh RequestHelper, conf *Config) {
 	config := baseConfig
 
 	config.Endpoints["cluster_controller"] = fmt.Sprintf("https://%s", conf.ClusterDomain)
+	config.DefaultRouteDomain = conf.DefaultRouteDomain
 
 	if rh.IsAuthenticated() {
 		config.User = &ExpandedUser{}

@@ -9,19 +9,20 @@ import (
 )
 
 type Config struct {
-	Addr          string
-	ClusterDomain string
-	ControllerKey string
-	URL           string
-	InterfaceURL  string
-	PathPrefix    string
-	CookiePath    string
-	SecureCookies bool
-	LoginToken    string
-	GithubToken   string
-	SessionStore  *sessions.CookieStore
-	StaticPath    string
-	CACert        []byte
+	Addr               string
+	DefaultRouteDomain string
+	ClusterDomain      string
+	ControllerKey      string
+	URL                string
+	InterfaceURL       string
+	PathPrefix         string
+	CookiePath         string
+	SecureCookies      bool
+	LoginToken         string
+	GithubToken        string
+	SessionStore       *sessions.CookieStore
+	StaticPath         string
+	CACert             []byte
 }
 
 func LoadConfigFromEnv() *Config {
@@ -31,6 +32,11 @@ func LoadConfigFromEnv() *Config {
 		port = "5000"
 	}
 	conf.Addr = ":" + port
+
+	conf.DefaultRouteDomain = os.Getenv("DEFAULT_ROUTE_DOMAIN")
+	if conf.DefaultRouteDomain == "" {
+		log.Fatal("DEFAULT_ROUTE_DOMAIN is required!")
+	}
 
 	conf.ClusterDomain = os.Getenv("CLUSTER_DOMAIN")
 	if conf.ClusterDomain == "" {
