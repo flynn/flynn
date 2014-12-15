@@ -12,7 +12,7 @@ import (
 
 type BlobstoreSuite struct{}
 
-var _ = c.Suite(&BlobstoreSuite{})
+var _ = c.ConcurrentSuite(&BlobstoreSuite{})
 
 // Transfer >512MB data to avoid regressing on https://github.com/flynn/flynn/issues/101
 func (b *BlobstoreSuite) TestLargeAmountOfData(t *c.C) {
