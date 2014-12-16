@@ -33,10 +33,10 @@ source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
 source "${ROOT}/script/lib/util.sh"
 
-UBUNTU_BOX_NAME="ubuntu-trusty-20141114.1" # used in filenames for caching, bump at the same time as UBUNTU_BOX_URL
-UBUNTU_BOX_URL="http://cloud-images.ubuntu.com/vagrant/trusty/20141114.1/trusty-server-cloudimg-amd64-vagrant-disk1.box"
-UBUNTU_BOX_SHA="e9d8cd9e81913ae666c8f7cba7ba9ff8e2af8cebf3fa6250fcd03ebb3e52d8b0"
-UBUNTU_USEAST_AMI="ami-9eaa1cf6" # us-east-1 | trusty | 14.04 LTS | amd64 | hvm:ebs-ssd | 20140927 | ami-9eaa1cf6 | hvm
+UBUNTU_BOX_NAME="ubuntu-trusty-20141211" # used in filenames for caching, bump at the same time as UBUNTU_BOX_URL
+UBUNTU_BOX_URL="http://cloud-images.ubuntu.com/vagrant/trusty/20141211/trusty-server-cloudimg-amd64-vagrant-disk1.box"
+UBUNTU_BOX_SHA="3522932d0c9f2605241b7d700b0c121e27866e3bd028e1099655c2e719a38e72"
+UBUNTU_USEAST_AMI="ami-4ae27e22" # us-east-1 | trusty | 14.04 LTS | amd64 | hvm:ebs-ssd | 20141125 | hvm
 
 usage() {
   cat <<USAGE >&2
