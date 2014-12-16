@@ -114,6 +114,9 @@ main() {
     fail "failed to release packages"
   fi
 
+  info "tagging release"
+  tag_release "${commit}" "${version}"
+
   info "releasing vm images"
   "${ROOT}/script/release-vm-images" \
     -k \
@@ -132,9 +135,6 @@ main() {
 
   info "uploading flynn release manifest"
   s3cmd put --acl-public --no-preserve "${dir}/manifest.json" "s3://${bucket}/release/manifest.json"
-
-  info "tagging release"
-  tag_release "${commit}" "${version}"
 
   info "successfully released Flynn version ${version}"
 
