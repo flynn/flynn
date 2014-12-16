@@ -5,6 +5,11 @@ set -xeo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 main() {
+  if virtualbox_build; then
+    # run early to speed up subsequent steps
+    fix_dns_resolution
+  fi
+
   if vagrant_build; then
     setup_sudo
     install_vagrant_ssh_key
@@ -61,7 +66,7 @@ install_vagrant_ssh_key() {
   if [[ ! -f /home/vagrant/.ssh/authorized_keys ]]; then
     mkdir /home/vagrant/.ssh
     chmod 700 /home/vagrant/.ssh
-    wget --no-check-certificate ${pub} \
+    wget ${pub} \
       -O /home/vagrant/.ssh/authorized_keys
     chmod 600 /home/vagrant/.ssh/authorized_keys
     chown -R vagrant /home/vagrant/.ssh
@@ -107,6 +112,13 @@ change_hostname() {
   echo "${hostname}" > /etc/hostname
   echo "127.0.1.1 ${hostname}" >> /etc/hosts
   hostname -F /etc/hostname
+}
+
+fix_dns_resolution() {
+  # Address issues some hosts experience with DNS latency.
+  # See https://github.com/mitchellh/vagrant/issues/1172 for a detailed discussion of the problem.
+  echo "options single-request-reopen" >> /etc/resolvconf/resolv.conf.d/base
+  resolvconf -u
 }
 
 enable_cgroups() {
