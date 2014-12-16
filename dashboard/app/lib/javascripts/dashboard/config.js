@@ -105,4 +105,12 @@ Dashboard.config.fetch = function () {
 	return promise;
 };
 
+Dashboard.config.setGithubToken = function (token) {
+	Dashboard.config.user.auths.github = { access_token: token };
+	Dispatcher.handleAppEvent({
+		name: "GITHUB_AUTH_CHANGE",
+		authenticated: true
+	});
+};
+
 })();

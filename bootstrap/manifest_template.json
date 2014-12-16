@@ -285,6 +285,7 @@
         "URL": "https://dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}",
         "SESSION_SECRET": "{{ (index .StepData \"dashboard-session-secret\").Data }}",
         "LOGIN_TOKEN": "{{ (index .StepData \"dashboard-login-token\").Data }}",
+        "APP_NAME": "dashboard",
         "STATIC_PATH": "/app",
         "SECURE_COOKIES": "true",
         "CA_CERT": "{{ (index .StepData \"controller-cert\").CACert }}"

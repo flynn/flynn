@@ -194,6 +194,14 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 					name: "APP:RELEASE_CREATED",
 					appId: __appId
 				});
+			}.bind(this)).catch(function (args) {
+				var res = args[0];
+				var xhr = args[1];
+				Dashboard.Dispatcher.handleStoreEvent({
+					name: "APP:RELEASE_CREATE_FAILED",
+					appId: __appId,
+					errorMsg: res.message || "Something went wrong ["+ xhr.status +"]"
+				});
 			}.bind(this));
 		}.bind(this));
 	},

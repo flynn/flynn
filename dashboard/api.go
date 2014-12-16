@@ -154,11 +154,12 @@ func serveDashboardJs(res http.ResponseWriter, req *http.Request, conf *Config) 
 
 	jsConf := strings.NewReader(fmt.Sprintf(`
     window.DashboardConfig = {
+      APP_NAME: "%s",
       API_SERVER: "%s",
       PATH_PREFIX: "%s",
       INSTALL_CERT: %t
     };
-  `, conf.URL, conf.PathPrefix, len(conf.CACert) > 0))
+  `, conf.AppName, conf.URL, conf.PathPrefix, len(conf.CACert) > 0))
 
 	r := ioutil.NewMultiReadSeeker(jsConf, f)
 

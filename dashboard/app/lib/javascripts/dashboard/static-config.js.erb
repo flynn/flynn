@@ -1,4 +1,5 @@
 Marbles.Utils.extend(Dashboard.config, {
+  APP_NAME: <%= Yajl::Encoder.encode(ENV['APP_NAME'] || '') %>,
   API_SERVER: <%= Yajl::Encoder.encode(ENV['API_SERVER'] || '') %>,
   PATH_PREFIX: <%= Yajl::Encoder.encode(ENV['PATH_PREFIX'] || '') %>,
   INSTALL_CERT: <%= Yajl::Encoder.encode(ENV['INSTALL_CERT'] || '') %>,
@@ -20,6 +21,9 @@ Marbles.Utils.extend(Dashboard.config, {
     windows-cert-5.png
     windows-cert-6.png
     windows-cert-7.png
+
+    github-token-gen.png
+    github-token-copy.png
   ).inject({}) { |memo, name| memo[name] = "/assets/"+ asset_path(name).sub(/\A\.\//, ''); memo }) %>
 }, window.DashboardConfig || {});
 
