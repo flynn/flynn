@@ -25,14 +25,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     v.cpus = ENV["VAGRANT_CPUS"] || 2
   end
 
-  # Address issues some hosts experience with networking (specifically, DNS latency) inside the development environment VM.
-  # See also https://github.com/mitchellh/vagrant/issues/1172 for a description of the problem.
-  config.vm.provision :shell, inline: <<SCRIPT
-    if [ ! $(grep single-request-reopen /etc/resolvconf/resolv.conf.d/base) ]; then
-      echo "options single-request-reopen" >> /etc/resolvconf/resolv.conf.d/base && resolvconf -u
-    fi
-SCRIPT
-
   config.vm.provision "shell", privileged: false, inline: <<SCRIPT
     grep '^export GOPATH' ~/.bashrc || echo export GOPATH=~/go >> ~/.bashrc
     grep '^export PATH' ~/.bashrc || echo export PATH=\\\$PATH:~/go/bin:/vagrant/script >> ~/.bashrc
