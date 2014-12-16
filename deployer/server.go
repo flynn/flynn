@@ -14,6 +14,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/controller/client"
+	"github.com/flynn/flynn/deployer/strategies"
 	"github.com/flynn/flynn/deployer/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -74,7 +75,25 @@ func handleJob(job *queue.Job) error {
 		// TODO: log/handle error
 		return nil
 	}
-	// TODO: do deployment
+	strategy, err := strategy.GetStrategy(deployment.Strategy, client)
+	if err != nil {
+		// TODO: log/handle error
+		return nil
+	}
+	events := make(chan deployer.DeploymentEvent)
+	defer close(events)
+	go func() {
+		for e := range events {
+			sendDeploymentEvent(e)
+		}
+	}()
+	if err := strategy.Perform(deployment, events); err != nil {
+		// TODO: log/handle error
+		return nil
+	}
+	if err := client.SetAppRelease(deployment.AppID, deployment.NewReleaseID); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -145,6 +164,11 @@ func getDeployment(id string) (*deployer.Deployment, error) {
 		return nil, err
 	}
 	return d, nil
+}
+
+func sendDeploymentEvent(e deployer.DeploymentEvent) error {
+	query := "INSERT INTO deployment_events (SELECT event_id, deployment_id, release_id, job_type, job_state, created_at) VALUES ($1, $2, $3, $4, $5, $6)"
+	return db.Exec(query, random.UUID(), e.DeploymentID, e.ReleaseID, e.JobType, e.JobState, time.Now())
 }
 
 // TODO: share with controller streamJobs
