@@ -261,8 +261,8 @@
     "release": {
       "env": {
         "CONTROLLER_AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
-        "SLUGBUILDER_IMAGE_ID": "$image_id[slugbuilder]",
-        "SLUGRUNNER_IMAGE_ID": "$image_id[slugrunner]"
+        "SLUGBUILDER_IMAGE_URI": "$image_url_prefix/slugbuilder?id=$image_id[slugbuilder]",
+        "SLUGRUNNER_IMAGE_URI": "$image_url_prefix/slugrunner?id=$image_id[slugrunner]"
       }
     }
   },
