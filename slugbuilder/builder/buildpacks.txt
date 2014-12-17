@@ -8,5 +8,5 @@ https://github.com/heroku/heroku-buildpack-gradle.git#24a8ebe7
 https://github.com/heroku/heroku-buildpack-grails.git#1ef927d2
 https://github.com/heroku/heroku-buildpack-scala.git#26cb564a
 https://github.com/heroku/heroku-buildpack-play.git#9c137b4a
-https://github.com/heroku/heroku-buildpack-php.git#v49
+https://github.com/heroku/heroku-buildpack-php.git#v50
 https://github.com/kr/heroku-buildpack-go.git#3a2cc0fa
