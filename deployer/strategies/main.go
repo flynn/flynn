@@ -42,13 +42,13 @@ func jobEventsEqual(expected, actual jobEvents) bool {
 type jobEvents map[string]map[string]int
 
 func waitForJobEvents(events chan *ct.JobEvent, deployEvents chan<- deployer.DeploymentEvent, expected jobEvents) (lastID int64, jobID string, err error) {
-	fmt.Printf("waiting for job events: %v", expected)
+	fmt.Printf("waiting for job events: %v\n", expected)
 	actual := make(jobEvents)
 	for {
 	inner:
 		select {
 		case event := <-events:
-			fmt.Printf("got job event: %s %s %s", event.Type, event.JobID, event.State)
+			fmt.Printf("got job event: %s %s %s\n", event.Type, event.JobID, event.State)
 			lastID = event.ID
 			jobID = event.JobID
 			if _, ok := actual[event.Type]; !ok {
