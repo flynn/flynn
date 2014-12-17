@@ -129,6 +129,9 @@ main() {
   git checkout --force --quiet $commit
   git tag "v${version}"
 
+  info "forcing calculation of image checksums"
+  sed "s/^CONFIG_IMAGE_CHECKSUMS=.*$/CONFIG_IMAGE_CHECKSUMS=true/" -i tup.config
+
   if [[ -n "${image_prefix}" ]]; then
     sed "s/^CONFIG_IMAGE_URL_PREFIX=.*$/CONFIG_IMAGE_URL_PREFIX=${image_prefix}/" -i tup.config
   fi
@@ -138,7 +141,7 @@ main() {
   popd >/dev/null
 
   info "uploading images"
-  "${flynn_release}" upload "${src}/version.json"
+  "${flynn_release}" upload "${src}/images.json"
 
   info "building deb package"
   rm -f "${src}"/*.deb

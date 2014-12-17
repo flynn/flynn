@@ -29,7 +29,10 @@ func runDownload(args *docopt.Args) error {
 		return fmt.Errorf("error creating root dir: %s", err)
 	}
 
-	var manifest map[string]string
+	var manifest struct {
+		Images    map[string]string `json:"images"`
+		Checksums map[string]string `json:"checksums"`
+	}
 	if err := cliutil.DecodeJSONArg(args.String["<manifest>"], &manifest); err != nil {
 		return err
 	}
@@ -39,10 +42,10 @@ func runDownload(args *docopt.Args) error {
 		return err
 	}
 
-	for image, id := range manifest {
+	for image, id := range manifest.Images {
 		fmt.Printf("Downloading %s %s...\n", image, id)
 		image += "?id=" + id
-		if err := ctx.Pull(image, pinkerton.InfoPrinter(false)); err != nil {
+		if err := ctx.Pull(image, pinkerton.InfoPrinter(false), manifest.Checksums); err != nil {
 			return err
 		}
 	}

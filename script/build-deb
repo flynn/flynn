@@ -50,14 +50,14 @@ main() {
     --depends iptables \
     --config-files /etc/flynn/host-manifest.json \
     --config-files /etc/flynn/bootstrap-manifest.json \
-    --config-files /etc/flynn/version.json \
+    --config-files /etc/flynn/images.json \
     --config-files /etc/init/flynn-host.conf \
     host/bin/flynn-host=/usr/bin/ \
     host/bin/flynn-init=/usr/bin/ \
     cli/flynn-cli=/usr/bin/flynn \
     host/bin/manifest.json=/etc/flynn/host-manifest.json \
     bootstrap/bin/manifest.json=/etc/flynn/bootstrap-manifest.json \
-    version.json=/etc/flynn/version.json \
+    images.json=/etc/flynn/images.json \
     host/upstart.conf=/etc/init/flynn-host.conf
 }
 
