@@ -156,9 +156,9 @@ func serveDashboardJs(res http.ResponseWriter, req *http.Request, conf *Config) 
     window.DashboardConfig = {
       API_SERVER: "%s",
       PATH_PREFIX: "%s",
-      INSTALL_CERT: true
+      INSTALL_CERT: %t
     };
-  `, conf.URL, conf.PathPrefix))
+  `, conf.URL, conf.PathPrefix, len(conf.CACert) > 0))
 
 	r := ioutil.NewMultiReadSeeker(jsConf, f)
 
