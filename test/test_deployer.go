@@ -7,6 +7,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	deployerc "github.com/flynn/flynn/deployer/client"
 	"github.com/flynn/flynn/deployer/types"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 type DeployerSuite struct {
@@ -35,11 +36,14 @@ func (s *DeployerSuite) TestDeployment(t *c.C) {
 	client, err := deployerc.New()
 	t.Assert(err, c.IsNil)
 
-	stream, err := client.StreamDeploymentEvents(app.ID, 0)
+	deployID := random.UUID()
+
+	stream, err := client.StreamDeploymentEvents(deployID, 0)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 
 	deployment := &deployer.Deployment{
+		ID:           deployID,
 		AppID:        app.ID,
 		OldReleaseID: oldReleaseID,
 		NewReleaseID: release.ID,
