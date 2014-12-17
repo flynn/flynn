@@ -33,9 +33,14 @@ func (s AllAtOnce) Perform(d *deployer.Deployment, events chan<- deployer.Deploy
 	}
 	expect := make(jobEvents)
 	for typ, n := range f.Processes {
+		events <- deployer.DeploymentEvent{
+			ReleaseID: d.NewReleaseID,
+			JobState:  "starting",
+			JobType:   typ,
+		}
 		expect[typ] = map[string]int{"up": n}
 	}
-	if _, _, err := waitForJobEvents(stream.Events, expect); err != nil {
+	if _, _, err := waitForJobEvents(stream.Events, events, expect); err != nil {
 		return err
 	}
 	if err := s.client.DeleteFormation(d.AppID, d.OldReleaseID); err != nil {
@@ -43,9 +48,14 @@ func (s AllAtOnce) Perform(d *deployer.Deployment, events chan<- deployer.Deploy
 	}
 	expect = make(jobEvents)
 	for typ, n := range f.Processes {
+		events <- deployer.DeploymentEvent{
+			ReleaseID: d.OldReleaseID,
+			JobState:  "stopping",
+			JobType:   typ,
+		}
 		expect[typ] = map[string]int{"down": n}
 	}
-	if _, _, err := waitForJobEvents(stream.Events, expect); err != nil {
+	if _, _, err := waitForJobEvents(stream.Events, events, expect); err != nil {
 		return err
 	}
 	return nil

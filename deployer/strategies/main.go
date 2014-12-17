@@ -41,7 +41,7 @@ func jobEventsEqual(expected, actual jobEvents) bool {
 
 type jobEvents map[string]map[string]int
 
-func waitForJobEvents(events chan *ct.JobEvent, expected jobEvents) (lastID int64, jobID string, err error) {
+func waitForJobEvents(events chan *ct.JobEvent, deployEvents chan<- deployer.DeploymentEvent, expected jobEvents) (lastID int64, jobID string, err error) {
 	fmt.Printf("waiting for job events: %v", expected)
 	actual := make(jobEvents)
 	for {
@@ -57,8 +57,18 @@ func waitForJobEvents(events chan *ct.JobEvent, expected jobEvents) (lastID int6
 			switch event.State {
 			case "up":
 				actual[event.Type]["up"] += 1
+				deployEvents <- deployer.DeploymentEvent{
+					ReleaseID: event.Job.ReleaseID,
+					JobState:  event.State,
+					JobType:   "up",
+				}
 			case "down", "crashed":
 				actual[event.Type]["down"] += 1
+				deployEvents <- deployer.DeploymentEvent{
+					ReleaseID: event.Job.ReleaseID,
+					JobState:  event.State,
+					JobType:   "down",
+				}
 			default:
 				break inner
 			}

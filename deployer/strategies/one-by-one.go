@@ -38,7 +38,12 @@ func (s OneByOne) Perform(d *deployer.Deployment, events chan<- deployer.Deploym
 			}); err != nil {
 				return err
 			}
-			if _, _, err := waitForJobEvents(stream.Events, jobEvents{typ: {"up": 1}}); err != nil {
+			events <- deployer.DeploymentEvent{
+				ReleaseID: d.NewReleaseID,
+				JobState:  "starting",
+				JobType:   typ,
+			}
+			if _, _, err := waitForJobEvents(stream.Events, events, jobEvents{typ: {"up": 1}}); err != nil {
 				return err
 			}
 			// stop one process
@@ -50,7 +55,12 @@ func (s OneByOne) Perform(d *deployer.Deployment, events chan<- deployer.Deploym
 			}); err != nil {
 				return err
 			}
-			if _, _, err := waitForJobEvents(stream.Events, jobEvents{typ: {"down": 1}}); err != nil {
+			events <- deployer.DeploymentEvent{
+				ReleaseID: d.OldReleaseID,
+				JobState:  "stopping",
+				JobType:   typ,
+			}
+			if _, _, err := waitForJobEvents(stream.Events, events, jobEvents{typ: {"down": 1}}); err != nil {
 				return err
 			}
 		}
