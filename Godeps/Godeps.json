@@ -258,6 +258,11 @@
 			"Rev": "7b617783357fec5b5a6d4ecac82e747e4a14d1b5"
 		},
 		{
+			"ImportPath": "github.com/mistifyio/go-zfs",
+			"Comment": "v2.1.0-2-gdda1f4c",
+			"Rev": "dda1f4cd04dc1fdc319970bf6f3f5d6f91b2465f"
+		},
+		{
 			"ImportPath": "github.com/natefinch/lumberjack",
 			"Comment": "v1.0-12-gd28785c",
 			"Rev": "d28785c2f27cd682d872df46ccd8232843629f54"
