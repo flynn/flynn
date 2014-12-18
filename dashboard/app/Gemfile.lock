@@ -1,6 +1,6 @@
 GIT
   remote: git://github.com/flynn/flynn-dashboard-web-icons.git
-  revision: b1549d3f40eeee8921c105c08b0792937d80c7f3
+  revision: a03e56dbe3dd6f073a7ab212ae0912a355a85ab0
   branch: master
   specs:
     flynn-dashboard-web-icons (0.0.1)
