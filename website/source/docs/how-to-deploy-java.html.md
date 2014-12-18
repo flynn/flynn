@@ -5,9 +5,10 @@ layout: docs
 
 # How to Deploy Java
 
-Flynn supports deploying Java applications which use either the [Maven](http://maven.apache.org/)
-or [Gradle](http://www.gradle.org/) build tools, and supports [Grails](https://grails.org/)
-applications through the [Java](https://github.com/heroku/heroku-buildpack-java), [Gradle](https://github.com/heroku/heroku-buildpack-gradle), and [Grails](https://github.com/heroku/heroku-buildpack-grails) buildpacks.
+Flynn supports deploying Java applications which use either the
+[Maven](http://maven.apache.org/) or [Gradle](http://www.gradle.org/) build
+tools, through the [Java](https://github.com/heroku/heroku-buildpack-java) and
+[Gradle](https://github.com/heroku/heroku-buildpack-gradle) buildpacks.
 
 Flynn uses [OpenJDK](http://openjdk.java.net) to run Java applications.
 
@@ -19,7 +20,6 @@ Flynn detects Java applications using the following rules:
 the Maven build tool.
 * A `gradlew`, `build.gradle`, or `settings.gradle` file in the root
 directory indicates a Java application which uses the Gradle build tool.
-* A `grails-app` root sub-directory indicates a Grails application.
 
 ## Dependencies
 
@@ -113,33 +113,6 @@ This downloads the necessary dependencies and compiles the application into the
 *Note: It is recommended that the application contain the `gradlew` script which determines which version of Gradle to use. If it is not present, Flynn will install one, but then the version is not deterministic. See the [Gradle Wrapper page](http://www.gradle.org/docs/current/userguide/gradle_wrapper.html) for more information.*
 
 *For more information on specifying dependencies with Gradle, see the [Gradle Dependencies page](http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html).*
-
-### Grails
-
-Grails applications define their dependencies within the `grails.project.dependency.resolution`
-setting in the `grails-app/conf/BuildConfig.groovy` file.
-
-For example, the following declares a runtime dependency on `postgresql`:
-
-```groovy
-grails.project.dependency.resolution = {
-  dependencies {
-    runtime group: "org.postgresql", name: "postgresql", version: "9.3-1102-jdbc41"
-  }
-}
-```
-
-When a Grails application is deployed to Flynn, the following commands are run:
-
-```
-./grailsw compile --non-interactive
-./grailsw war --non-interactive
-```
-
-These download the necessary dependencies (including Grails), then compile and
-package the application into the `target` directory.
-
-*For more information on specifying dependencies in a Grails application, see the [Grails Dependency Resolution page](http://grails.org/doc/latest/guide/conf.html#dependencyResolution).*
 
 ### Java Runtime
 
@@ -238,22 +211,4 @@ the process type is defined in the `Procfile` as:
 
 ```
 web: java $JAVA_OPTS -jar target/dependency/jetty-runner.jar --port $PORT target/*.war
-```
-
-#### Grails
-
-Flynn installs the [webapp runner](https://github.com/jsimone/webapp-runner)
-into a `server` directory when it compiles Grails applications, so can be used
-to start the application:
-
-```
-web: java $JAVA_OPTS -jar server/webapp-runner.jar --port $PORT target/*.war
-```
-
-Grails applications can choose to instead have a Jetty runner installed by setting
-`grails.application.container=jetty` in a `system.properties` file in the root
-directory, and defining the process type as:
-
-```
-web java $JAVA_OPTS -jar server/jetty-runner.jar --port $PORT target/*.war
 ```
