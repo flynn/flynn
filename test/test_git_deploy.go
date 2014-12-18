@@ -88,10 +88,6 @@ func (s *GitDeploySuite) TestGradleBuildpack(t *c.C) {
 	s.runBuildpackTest(t, "gradle-flynn-example", nil)
 }
 
-func (s *GitDeploySuite) TestGrailsBuildpack(t *c.C) {
-	s.runBuildpackTest(t, "grails-flynn-example", nil)
-}
-
 func (s *GitDeploySuite) TestPlayBuildpack(t *c.C) {
 	s.runBuildpackTest(t, "play-flynn-example", nil)
 }
