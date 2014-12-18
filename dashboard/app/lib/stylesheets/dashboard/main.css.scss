@@ -10,6 +10,7 @@ html, body {
   font-family: "Source Sans Pro", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 15px;
   font-weight: 400;
+  height: 100%;
 }
 
 code {
@@ -41,9 +42,14 @@ code {
   @extend %btn-green;
 }
 
+.full-height {
+  height: 100%;
+}
+
 #main {
-  margin: 2rem;
-  margin-left: calc(2rem + 70px);
+  position: relative;
+  margin-left: 70px;
+  height: 100%;
 }
 
 .login-form {

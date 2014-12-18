@@ -3,7 +3,6 @@
 //= require ./app-controls
 //= require ./app-source-history
 //= require ./service-unavailable
-//= require ./route-link
 
 (function () {
 
@@ -11,23 +10,14 @@
 
 var AppStore = Dashboard.Stores.App;
 
-var RouteLink = Dashboard.Views.RouteLink;
-
 Dashboard.Views.App = React.createClass({
 	displayName: "Views.App",
 
 	render: function () {
 		var app = this.state.app;
-		var headerComponent = this.props.headerComponent || React.DOM.header;
 
 		return (
 			<section>
-				{headerComponent(this.props,
-					<RouteLink path={this.props.getClusterPath()} className="back-link">
-						Go back to cluster
-					</RouteLink>
-				)}
-
 				{ !app && this.state.serviceUnavailable ? (
 					<Dashboard.Views.ServiceUnavailable status={503} />
 				) : null }
@@ -38,28 +28,31 @@ Dashboard.Views.App = React.createClass({
 					</div>
 				) : null }
 
-				{app ? (
-					<section className="panel">
-						<Dashboard.Views.AppControls
-							headerComponent={this.props.appControlsHeaderComponent}
-							appId={this.props.appId}
-							app={app}
-							formation={this.state.formation}
-							getAppPath={this.props.getAppPath} />
-					</section>
-				) : null}
+				<section className="flex-row">
+					{app ? (
+						<section className="col app-controls-container">
+							<Dashboard.Views.AppControls
+								headerComponent={this.props.appControlsHeaderComponent}
+								appId={this.props.appId}
+								app={app}
+								formation={this.state.formation}
+								getAppPath={this.props.getAppPath} />
+						</section>
+					) : null}
 
-				{app && app.meta && app.meta.type === "github" ? (
-					<section className="panel">
-						<Dashboard.Views.AppSourceHistory
-							appId={this.props.appId}
-							app={app}
-							selectedBranchName={this.props.selectedBranchName}
-							selectedSha={this.props.selectedSha}
-							selectedTab={this.props.selectedTab}
-							getAppPath={this.props.getAppPath} />
-					</section>
-				) : null}
+					{app && app.meta && app.meta.type === "github" ? (
+						<section className="col">
+							<Dashboard.Views.AppSourceHistory
+								appId={this.props.appId}
+								app={app}
+								selectedBranchName={this.props.selectedBranchName}
+								selectedSha={this.props.selectedSha}
+								selectedTab={this.props.selectedTab}
+								getAppPath={this.props.getAppPath} />
+						</section>
+					) : null}
+				</section>
+
 			</section>
 		);
 	},
@@ -108,6 +101,13 @@ Dashboard.Views.App = React.createClass({
 		state.formation = appState.formation;
 
 		return state;
+	},
+
+	__getClusterPathParams: function () {
+		if (this.state.app && this.state.app.protected) {
+			return [{ protected: "true" }];
+		}
+		return null;
 	}
 });
 

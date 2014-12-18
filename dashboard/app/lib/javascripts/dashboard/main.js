@@ -87,10 +87,6 @@ window.Dashboard = {
 			}
 		}
 
-		if (event.name === "LOGOUT_BTN_CLICK") {
-			this.client.logout();
-		}
-
 		if (event.source === "APP_EVENT") {
 			this.__handleAppEvent(event);
 		}

@@ -2,6 +2,10 @@
 @import "./mixins";
 @import "./panel";
 
+.github-container {
+  padding: 1rem;
+}
+
 .github-sources {
   list-style: none;
   padding: 2rem;
@@ -42,6 +46,7 @@
 
 .github-repos-panel {
   @extend .panel;
+  margin-top: 1rem;
   min-width: 275px;
   width: 400px;
   flex-basis: 275px;
@@ -49,6 +54,7 @@
 
 .github-repo-panel {
   @extend .panel;
+  margin-top: 1rem;
 
   > section {
     padding: 0;

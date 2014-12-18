@@ -1,5 +1,10 @@
 @import "./mixins";
 
+.app-controls-container {
+  flex-basis: 300px !important;
+  max-width: 300px;
+}
+
 .app-controls {
   > header > h1 {
     a {
