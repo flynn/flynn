@@ -173,8 +173,8 @@ func getDeployment(id string) (*deployer.Deployment, error) {
 }
 
 func sendDeploymentEvent(e deployer.DeploymentEvent) error {
-	query := "INSERT INTO deployment_events (SELECT event_id, deployment_id, release_id, job_type, job_state, created_at) VALUES ($1, $2, $3, $4, $5, $6)"
-	return db.Exec(query, random.UUID(), e.DeploymentID, e.ReleaseID, e.JobType, e.JobState, time.Now())
+	query := "INSERT INTO deployment_events (deployment_id, release_id, job_type, job_state) VALUES ($1, $2, $3, $4)"
+	return db.Exec(query, e.DeploymentID, e.ReleaseID, e.JobType, e.JobState)
 }
 
 // TODO: share with controller streamJobs

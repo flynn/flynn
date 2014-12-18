@@ -30,7 +30,7 @@ func migrateDB(db *sql.DB) error {
 		`CREATE TABLE deployment_events (
     event_id bigint PRIMARY KEY DEFAULT nextval('deployment_event_ids'),
     deployment_id uuid NOT NULL REFERENCES deployments (deployment_id),
-    release_id uuid NOT NULL,
+    release_id text NOT NULL,
     job_type text,
     job_state text,
     created_at timestamptz NOT NULL DEFAULT now())`,
