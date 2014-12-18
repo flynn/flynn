@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
@@ -70,11 +71,25 @@ loop:
 			t.Fatal("timed out waiting for deployment event")
 		}
 	}
-	t.Assert(events, c.DeepEquals, []*deployer.DeploymentEvent{
+	expected := []*deployer.DeploymentEvent{
+		{ReleaseID: release.ID, JobType: "printer", JobState: "starting"},
 		{ReleaseID: release.ID, JobType: "printer", JobState: "up"},
+		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "stopping"},
 		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "down"},
+		{ReleaseID: release.ID, JobType: "printer", JobState: "starting"},
 		{ReleaseID: release.ID, JobType: "printer", JobState: "up"},
+		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "stopping"},
 		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "down"},
-		{ReleaseID: ""},
-	})
+		{ReleaseID: "", JobType: "", JobState: ""},
+	}
+	compare := func(t *c.C, i *deployer.DeploymentEvent, j *deployer.DeploymentEvent) {
+		fmt.Println("Comparing", i, j)
+		t.Assert(i.ReleaseID, c.Equals, j.ReleaseID)
+		t.Assert(i.JobType, c.Equals, j.JobType)
+		t.Assert(i.JobState, c.Equals, j.JobState)
+	}
+
+	for i, e := range expected {
+		compare(t, events[i], e)
+	}
 }

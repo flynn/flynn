@@ -59,15 +59,15 @@ func waitForJobEvents(events chan *ct.JobEvent, deployEvents chan<- deployer.Dep
 				actual[event.Type]["up"] += 1
 				deployEvents <- deployer.DeploymentEvent{
 					ReleaseID: event.Job.ReleaseID,
-					JobState:  event.State,
-					JobType:   "up",
+					JobState:  "up",
+					JobType:   event.Type,
 				}
 			case "down", "crashed":
 				actual[event.Type]["down"] += 1
 				deployEvents <- deployer.DeploymentEvent{
 					ReleaseID: event.Job.ReleaseID,
-					JobState:  event.State,
-					JobType:   "down",
+					JobState:  "down",
+					JobType:   event.Type,
 				}
 			default:
 				break inner
