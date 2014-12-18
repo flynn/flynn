@@ -21,11 +21,11 @@ Dashboard.Views.RouteLink = React.createClass({
 	},
 
 	componentWillMount: function () {
-		this.__setHrefFromPath(this.props.path);
+		this.__setHrefFromPath(this.props.path, this.props.params);
 	},
 
 	componentWillReceiveProps: function (props) {
-		this.__setHrefFromPath(props.path);
+		this.__setHrefFromPath(props.path, props.params);
 	},
 
 	handleClick: function (e) {
@@ -33,12 +33,17 @@ Dashboard.Views.RouteLink = React.createClass({
 			return;
 		}
 		e.preventDefault();
-		Marbles.history.navigate(this.props.path);
+		var options = {};
+		if (this.props.params) {
+			options.params = this.props.params;
+		}
+		Marbles.history.navigate(this.props.path, options);
 		return false;
 	},
 
-	__setHrefFromPath: function (path) {
+	__setHrefFromPath: function (path, params) {
 		var href;
+		path = Marbles.history.pathWithParams(path, params || [{}]);
 		if (Dashboard.config.PATH_PREFIX === null) {
 			href = path;
 		} else {
@@ -53,6 +58,7 @@ Dashboard.Views.RouteLink = React.createClass({
 		props.onClick = this.handleClick;
 		delete props.children;
 		delete props.path;
+		delete props.params;
 		return React.DOM.a(props, this.props.children);
 	},
 });
