@@ -100,6 +100,11 @@ apt-add-repository 'deb http://ppa.launchpad.net/titanous/tup/ubuntu trusty main
 apt-key adv \
   --keyserver keyserver.ubuntu.com \
   --recv 27947298A222DFA46E207200B34FBCAA90EA7F4E
+echo deb http://ppa.launchpad.net/zfs-native/stable/ubuntu trusty main \
+  > /etc/apt/sources.list.d/zfs.list
+apt-key adv \
+  --keyserver keyserver.ubuntu.com \
+  --recv E871F18B51E0147C77796AC81196BA81F6B0FC61
 
 apt-get update
 apt-get install -y \
@@ -107,6 +112,7 @@ apt-get install -y \
   fuse \
   build-essential \
   libdevmapper-dev \
+  ubuntu-zfs \
   btrfs-tools \
   libvirt-dev \
   libvirt-bin
