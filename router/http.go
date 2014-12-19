@@ -30,9 +30,8 @@ type HTTPListener struct {
 	Watcher
 	DataStoreReader
 
-	Addr      string
-	TLSAddr   string
-	TLSConfig *tls.Config
+	Addr    string
+	TLSAddr string
 
 	mtx      sync.RWMutex
 	domains  map[string]*httpRoute
