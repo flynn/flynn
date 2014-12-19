@@ -56,7 +56,11 @@ Dashboard.Views.Apps = React.createClass({
 				</section>
 
 				<section className="panel app-panel">
-					{this.props.appProps.appId ? Dashboard.Views.App(Marbles.Utils.extend({}, this.props.appProps, { ref: "appComponent" })) : null}
+					{this.props.appProps.appId ? (
+						Dashboard.Views.App(Marbles.Utils.extend({}, this.props.appProps, { ref: "appComponent" }))
+					) : (
+						<p className="placeholder">No app selected</p>
+					)}
 				</section>
 			</section>
 		);
