@@ -272,8 +272,8 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 
 	// kill the first controller and check the scheduler brings it back online
 	stream, err = client.StreamJobEvents("controller", lastID)
-	defer stream.Close()
 	t.Assert(err, c.IsNil)
+	defer stream.Close()
 	cc, err := cluster.NewClientWithDial(nil, s.discoverdClient(t).NewServiceSet)
 	t.Assert(err, c.IsNil)
 	defer cc.Close()
