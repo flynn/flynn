@@ -12,10 +12,19 @@ Dashboard.Views.CommandOutput = React.createClass({
 	render: function () {
 		var data = this.__formatOutputStream(this.props.outputStreamData);
 		return (
-			<pre className="command-output">
+			<pre ref="pre" className="command-output">
 				{data}
 			</pre>
 		);
+	},
+
+	componentDidUpdate: function () {
+		var pre = this.refs.pre.getDOMNode();
+		var __maxScrollTop = this.__maxScrollTop;
+		this.__maxScrollTop = pre.scrollHeight - pre.clientHeight;
+		if (pre.scrollTop === __maxScrollTop) {
+			pre.scrollTop = pre.scrollHeight;
+		}
 	},
 
 	__formatOutputStream: function (outputStreamData) {

@@ -5,5 +5,7 @@
   color: $whiteColor;
   border-radius: 4px;
   padding: 1em;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
