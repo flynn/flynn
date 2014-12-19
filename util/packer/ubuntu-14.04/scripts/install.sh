@@ -135,22 +135,27 @@ create_groups() {
 }
 
 add_apt_sources() {
-  # add the docker, tup, zfs, and flynn gpg keys
+  # docker
   apt-key adv --keyserver keyserver.ubuntu.com \
     --recv 36A1D7869245C8950F966E92D8576A8BA88D21E9
-  apt-key adv --keyserver keyserver.ubuntu.com \
-    --recv 27947298A222DFA46E207200B34FBCAA90EA7F4E
-  apt-key adv --keyserver keyserver.ubuntu.com \
-    --recv E871F18B51E0147C77796AC81196BA81F6B0FC61
-  apt-key adv --keyserver keyserver.ubuntu.com \
-    --recv BC79739C507A9B53BB1B0E7D820A5489998D827B
-
   echo deb https://get.docker.io/ubuntu docker main \
     > /etc/apt/sources.list.d/docker.list
+
+  # tup
+  apt-key adv --keyserver keyserver.ubuntu.com \
+    --recv 27947298A222DFA46E207200B34FBCAA90EA7F4E
   echo deb http://ppa.launchpad.net/titanous/tup/ubuntu trusty main \
     > /etc/apt/sources.list.d/tup.list
+
+  # zfs
+  apt-key adv --keyserver keyserver.ubuntu.com \
+    --recv E871F18B51E0147C77796AC81196BA81F6B0FC61
   echo deb http://ppa.launchpad.net/zfs-native/stable/ubuntu trusty main \
     > /etc/apt/sources.list.d/zfs.list
+
+  # flynn
+  apt-key adv --keyserver keyserver.ubuntu.com \
+    --recv BC79739C507A9B53BB1B0E7D820A5489998D827B
   echo deb https://dl.flynn.io/ubuntu flynn main \
     > /etc/apt/sources.list.d/flynn.list
 
