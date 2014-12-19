@@ -59,7 +59,7 @@ func runRun(args *docopt.Args, client *cluster.Client) error {
 		// Restore the terminal if we return without calling os.Exit
 		defer term.RestoreTerminal(os.Stdin.Fd(), termState)
 		go func() {
-			ch := make(chan os.Signal)
+			ch := make(chan os.Signal, 1)
 			signal.Notify(ch, syscall.SIGWINCH)
 			for range ch {
 				ws, err := term.GetWinsize(os.Stdin.Fd())
@@ -73,7 +73,7 @@ func runRun(args *docopt.Args, client *cluster.Client) error {
 	}
 
 	go func() {
-		ch := make(chan os.Signal)
+		ch := make(chan os.Signal, 1)
 		signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 		sig := <-ch
 		cmd.Signal(int(sig.(syscall.Signal)))
