@@ -10,21 +10,6 @@
 
 var AppsStore = Dashboard.Stores.Apps;
 
-function getAppsStoreId () {
-	return null;
-}
-
-function getState () {
-	var state = {
-		appsStoreId: getAppsStoreId()
-	};
-
-	var appsState = AppsStore.getState(state.appsStoreId);
-	state.apps = appsState.apps;
-
-	return state;
-}
-
 Dashboard.Views.Apps = React.createClass({
 	displayName: "Views.Apps",
 
@@ -47,12 +32,9 @@ Dashboard.Views.Apps = React.createClass({
 						</Dashboard.Views.RouteLink>
 					</section>
 
-					<Dashboard.Views.AppsList
-						selectedAppId={this.props.appProps.appId}
-						getAppPath={this.props.getAppPath}
-						apps={this.state.apps}
-						defaultRouteDomain={this.props.defaultRouteDomain}
-						showProtected={this.props.showProtected} />
+					{Dashboard.Views.AppsList(Marbles.Utils.extend({}, this.props.appsListProps, {
+						apps: this.state.apps
+					}))}
 				</section>
 
 				<section className="panel app-panel">
@@ -66,8 +48,23 @@ Dashboard.Views.Apps = React.createClass({
 		);
 	},
 
+	__getAppsStoreId: function () {
+		return null;
+	},
+
+	__getState: function (props) {
+		var state = {
+			appsStoreId: this.__getAppsStoreId(props)
+		};
+
+		var appsState = AppsStore.getState(state.appsStoreId);
+		state.apps = appsState.apps;
+
+		return state;
+	},
+
 	getInitialState: function () {
-		return getState();
+		return this.__getState(this.props);
 	},
 
 	componentDidMount: function () {
@@ -79,7 +76,7 @@ Dashboard.Views.Apps = React.createClass({
 	},
 
 	__handleStoreChange: function () {
-		this.setState(getState());
+		this.setState(this.__getState(this.props));
 	}
 });
 

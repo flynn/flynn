@@ -76,24 +76,36 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 
 	apps: function (params) {
 		var view = Dashboard.primaryView;
-		var appProps = this.__getAppProps(params);
-		var props = {
-			showProtected: params[0].protected === "true",
-			defaultRouteDomain: Dashboard.config.default_route_domain,
-			githubAuthed: !!Dashboard.githubClient,
-			appProps: appProps,
-			getAppPath: function (appId) {
-				var __params = Marbles.Utils.extend({}, params[0]);
-				delete __params.id;
-				return this.__getAppPath(appId, __params, "");
-			}.bind(this)
-		};
+		var props = this.__getAppsProps(params);
 		if (view && view.isMounted() && view.constructor.displayName === "Views.Apps") {
 			view.setProps(props);
 		} else {
 			Dashboard.primaryView = view = React.renderComponent(
 				Dashboard.Views.Apps(props), Dashboard.el);
 		}
+	},
+
+	__getAppsProps: function (params) {
+		var appProps = this.__getAppProps(params);
+		var showProtected = params[0].protected === "true";
+		var defaultRouteDomain = Dashboard.config.default_route_domain;
+		var getAppPath = function (appId) {
+			var __params = Marbles.Utils.extend({}, params[0]);
+			delete __params.id;
+			return this.__getAppPath(appId, __params, "");
+		}.bind(this);
+		return {
+			showProtected: showProtected,
+			defaultRouteDomain: defaultRouteDomain,
+			githubAuthed: !!Dashboard.githubClient,
+			appProps: appProps,
+			appsListProps: {
+				selectedAppId: appProps.appId,
+				getAppPath: getAppPath,
+				defaultRouteDomain: defaultRouteDomain,
+				showProtected: showProtected,
+			}
+		};
 	},
 
 	app: function (params) {

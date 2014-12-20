@@ -8,17 +8,6 @@
 
 var RouteLink = Dashboard.Views.RouteLink;
 
-function getState(props) {
-	var state = {};
-
-	var showProtected = props.showProtected;
-	state.apps = props.apps.filter(function (app) {
-		return !app.protected || showProtected;
-	});
-
-	return state;
-}
-
 Dashboard.Views.AppsList = React.createClass({
 	displayName: "Views.AppsList",
 
@@ -32,7 +21,7 @@ Dashboard.Views.AppsList = React.createClass({
 			<ul className="apps-list">
 				{apps.map(function (app) {
 					return (
-						<li key={app.id} className={app.id === selectedAppId ? "selected" : ""}>
+						<li key={app.id} className={Marbles.Utils.assertEqual(app.id, selectedAppId) ? "selected" : ""}>
 							<RouteLink path={getAppPath(app.id)}>
 								{app.name}
 							</RouteLink>
@@ -53,11 +42,22 @@ Dashboard.Views.AppsList = React.createClass({
 	},
 
 	componentWillMount: function () {
-		this.setState(getState(this.props));
+		this.setState(this.__getState(this.props));
 	},
 
 	componentWillReceiveProps: function (props) {
-		this.setState(getState(props));
+		this.setState(this.__getState(props));
+	},
+
+	__getState: function (props) {
+		var state = {};
+
+		var showProtected = props.showProtected;
+		state.apps = props.apps.filter(function (app) {
+			return !app.protected || showProtected;
+		});
+
+		return state;
 	}
 });
 
