@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"crypto/subtle"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -137,6 +139,13 @@ func getCert(w http.ResponseWriter, conf *Config) {
 	w.Write(conf.CACert)
 }
 
+type DashboardConfig struct {
+	AppName     string `json:"APP_NAME"`
+	ApiServer   string `json:"API_SERVER"`
+	PathPrefix  string `json:"PATH_PREFIX"`
+	InstallCert bool   `json:"INSTALL_CERT"`
+}
+
 func serveDashboardJs(res http.ResponseWriter, req *http.Request, conf *Config) {
 	file := filepath.Join(conf.StaticPath, "assets", filepath.Base(req.URL.Path))
 	f, err := os.Open(file)
@@ -152,15 +161,17 @@ func serveDashboardJs(res http.ResponseWriter, req *http.Request, conf *Config) 
 		return
 	}
 
-	jsConf := strings.NewReader(fmt.Sprintf(`
-    window.DashboardConfig = {
-      API_SERVER: "%s",
-      PATH_PREFIX: "%s",
-      INSTALL_CERT: true
-    };
-  `, conf.URL, conf.PathPrefix))
+	var jsConf bytes.Buffer
+	jsConf.Write([]byte("window.DashboardConfig = "))
+	json.NewEncoder(&jsConf).Encode(DashboardConfig{
+		AppName:     conf.AppName,
+		ApiServer:   conf.URL,
+		PathPrefix:  conf.PathPrefix,
+		InstallCert: len(conf.CACert) > 0,
+	})
+	jsConf.Write([]byte(";\n"))
 
-	r := ioutil.NewMultiReadSeeker(jsConf, f)
+	r := ioutil.NewMultiReadSeeker(bytes.NewReader(jsConf.Bytes()), f)
 
 	http.ServeContent(res, req, file, fi.ModTime(), r)
 }

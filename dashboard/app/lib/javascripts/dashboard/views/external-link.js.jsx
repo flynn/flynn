@@ -8,6 +8,9 @@ Dashboard.Views.ExternalLink = React.createClass({
 	displayName: "Views.ExternalLink",
 
 	handleClick: function (e) {
+		if (this.props.onClick) {
+			this.props.onClick();
+		}
 		if (e.ctrlKey || e.metaKey || e.shiftKey) {
 			return;
 		}

@@ -18,5 +18,6 @@ StaticSprockets.configure(
   :layout => File.expand_path(File.join(File.dirname(__FILE__), 'lib', 'dashboard.html.erb')),
   :layout_output_name => ENV['LAYOUT_OUTPUT_FILENAME'] || 'dashboard.html',
   :output_dir => ENV['OUTPUT_DIR'] || File.expand_path(File.join(File.dirname(__FILE__), 'build')),
-  :asset_root => ENV['ASSET_ROOT'] || '/assets'
+  :asset_root => ENV['ASSET_ROOT'] || '/assets',
+  :asset_cache_dir => ENV['ASSET_CACHE_DIR']
 )
