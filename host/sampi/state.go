@@ -4,37 +4,38 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
-	"unsafe"
 
 	"github.com/flynn/flynn/host/types"
 )
 
 type State struct {
+	curr atomic.Value
+
+	// Mutex locks next, streams, deleted and nextModified.
+	// It is locked when a transaction begins, and unlocked when the transaction
+	// is committed or rolled back.
 	sync.Mutex
-	curr *map[string]host.Host
-	next *map[string]host.Host
-
-	listeners map[chan host.HostEvent]struct{}
-	listenMtx sync.RWMutex
-	streams   map[string]chan<- *host.Job
-
+	next         map[string]host.Host
+	streams      map[string]chan<- *host.Job
 	deleted      map[string]struct{}
 	nextModified bool
+
+	listenMtx sync.RWMutex
+	listeners map[chan host.HostEvent]struct{}
 }
 
 func NewState() *State {
-	curr := make(map[string]host.Host)
-	return &State{
-		curr:      &curr,
+	s := &State{
 		listeners: make(map[chan host.HostEvent]struct{}),
 		streams:   make(map[string]chan<- *host.Job),
 	}
+	s.curr.Store(make(map[string]host.Host))
+	return s
 }
 
 func (s *State) Begin() {
 	s.Lock()
-	next := make(map[string]host.Host, len(*s.curr))
-	s.next = &next
+	s.next = make(map[string]host.Host, len(s.Get()))
 	s.nextModified = false
 	s.deleted = make(map[string]struct{})
 }
@@ -43,31 +44,30 @@ func (s *State) Commit() map[string]host.Host {
 	defer s.Unlock()
 	if !s.nextModified {
 		s.next = nil
-		return *s.curr
+		return s.Get()
 	}
 	// copy hosts that were not modified to next
-	next := *s.next
-	for k, v := range *s.curr {
+	next := s.next
+	for k, v := range s.Get() {
 		if _, deleted := s.deleted[k]; !deleted {
 			if _, ok := next[k]; !ok {
 				next[k] = v
 			}
 		}
 	}
-	// replace curr with next
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&s.curr)), unsafe.Pointer(s.next))
+	s.curr.Store(next)
 	s.next = nil
-	return *s.curr
+	return next
 }
 
 func (s *State) Rollback() map[string]host.Host {
 	defer s.Unlock()
 	s.next = nil
-	return *s.curr
+	return s.Get()
 }
 
 func (s *State) Get() map[string]host.Host {
-	return *(*map[string]host.Host)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&s.curr))))
+	return s.curr.Load().(map[string]host.Host)
 }
 
 func (s *State) AddJobs(hostID string, jobs []*host.Job) error {
@@ -81,7 +81,7 @@ func (s *State) AddJobs(hostID string, jobs []*host.Job) error {
 	newJobs = append(newJobs, jobs...)
 	h.Jobs = newJobs
 
-	(*s.next)[hostID] = h
+	s.next[hostID] = h
 	s.nextModified = true
 	return nil
 }
@@ -93,9 +93,9 @@ func (s *State) SendJob(host string, job *host.Job) {
 }
 
 func (s *State) host(id string) (h host.Host, ok bool) {
-	h, ok = (*s.next)[id]
+	h, ok = s.next[id]
 	if !ok {
-		h, ok = (*s.curr)[id]
+		h, ok = s.Get()[id]
 	}
 	return
 }
@@ -116,23 +116,23 @@ outer:
 		jobs = append(jobs, job)
 	}
 	h.Jobs = jobs
-	(*s.next)[hostID] = h
+	s.next[hostID] = h
 	s.nextModified = true
 }
 
 func (s *State) HostExists(id string) bool {
-	_, exists := (*s.next)[id]
+	_, exists := s.next[id]
 	return exists
 }
 
 func (s *State) AddHost(host *host.Host, ch chan<- *host.Job) {
-	(*s.next)[host.ID] = *host
+	s.next[host.ID] = *host
 	s.streams[host.ID] = ch
 	s.nextModified = true
 }
 
 func (s *State) RemoveHost(id string) {
-	delete(*s.next, id)
+	delete(s.next, id)
 	s.deleted[id] = struct{}{}
 	delete(s.streams, id)
 	s.nextModified = true
