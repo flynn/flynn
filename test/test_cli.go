@@ -21,6 +21,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
 )
 
@@ -282,26 +283,48 @@ func (s *CLISuite) TestKill(t *c.C) {
 func (s *CLISuite) TestRoute(t *c.C) {
 	app := s.newCliTestApp(t)
 
+	// The router API does not currently give us a "read your own writes"
+	// guarantee, so we must retry a few times if we don't get the expected
+	// result.
+	assertRouteContains := func(str string, contained bool) {
+		var res *CmdResult
+		attempt.Strategy{
+			Total: 10 * time.Second,
+			Delay: 500 * time.Millisecond,
+		}.Run(func() error {
+			res = app.flynn("route")
+			if contained == strings.Contains(res.Output, str) {
+				return nil
+			}
+			return errors.New("unexpected output")
+		})
+		if contained {
+			t.Assert(res, OutputContains, str)
+		} else {
+			t.Assert(res, c.Not(OutputContains), str)
+		}
+	}
+
 	// flynn route add http
 	route := random.String(32) + ".dev"
 	newRoute := app.flynn("route", "add", "http", route)
 	t.Assert(newRoute, Succeeds)
 	routeID := strings.TrimSpace(newRoute.Output)
-	t.Assert(app.flynn("route"), OutputContains, routeID)
+	assertRouteContains(routeID, true)
 
 	// flynn route remove
 	t.Assert(app.flynn("route", "remove", routeID), Succeeds)
-	t.Assert(app.flynn("route"), c.Not(OutputContains), routeID)
+	assertRouteContains(routeID, false)
 
 	// flynn route add tcp
 	tcpRoute := app.flynn("route", "add", "tcp")
 	t.Assert(tcpRoute, Succeeds)
 	routeID = strings.Split(tcpRoute.Output, " ")[0]
-	t.Assert(app.flynn("route"), OutputContains, routeID)
+	assertRouteContains(routeID, true)
 
 	// flynn route remove
 	t.Assert(app.flynn("route", "remove", routeID), Succeeds)
-	t.Assert(app.flynn("route"), c.Not(OutputContains), routeID)
+	assertRouteContains(routeID, false)
 }
 
 func (s *CLISuite) TestProvider(t *c.C) {
