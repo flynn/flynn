@@ -8,4 +8,5 @@
 //= require ./routers/github
 //= require ./routers/apps
 //= require ./views/service-unavailable
+//= require ./views/nav
 //= require ./boot

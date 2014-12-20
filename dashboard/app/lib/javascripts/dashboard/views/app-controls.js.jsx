@@ -30,33 +30,31 @@ Dashboard.Views.AppControls = React.createClass({
 					</h1>
 				)}
 
-				<section className="flex-row">
-					<section className="col">
-						<RouteLink path={getAppPath("/env")} className="btn-green">
-							App environment
-						</RouteLink>
+				<section>
+					<RouteLink path={getAppPath("/env")} className="btn-green">
+						App environment
+					</RouteLink>
 
-						{formation ? (
-							<Dashboard.Views.AppProcesses appId={this.props.appId} formation={formation} />
-						) : (
-							<section className="app-processes">
-								&nbsp;
-							</section>
-						)}
+					{formation ? (
+						<Dashboard.Views.AppProcesses appId={this.props.appId} formation={formation} />
+					) : (
+						<section className="app-processes">
+							&nbsp;
+						</section>
+					)}
 
-						<RouteLink path={getAppPath("/logs")} className="logs-btn">
-							Show logs
-						</RouteLink>
-					</section>
+					<RouteLink path={getAppPath("/logs")} className="logs-btn">
+						Show logs
+					</RouteLink>
+				</section>
 
-					<section className="col">
-						<Dashboard.Views.AppResources
-							appId={this.props.appId} />
+				<section>
+					<Dashboard.Views.AppResources
+						appId={this.props.appId} />
 
-						<Dashboard.Views.AppRoutes
-							appId={this.props.appId}
-							getAppPath={this.props.getAppPath} />
-					</section>
+					<Dashboard.Views.AppRoutes
+						appId={this.props.appId}
+						getAppPath={this.props.getAppPath} />
 				</section>
 			</section>
 		);

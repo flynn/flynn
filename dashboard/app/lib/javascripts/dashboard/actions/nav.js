@@ -6,10 +6,10 @@
 
 var Dispatcher = Dashboard.Dispatcher;
 
-Dashboard.Actions.Main = {
-	handleLoginBtnClick: function () {
+Dashboard.Actions.Nav = {
+	handleAuthBtnClick: function () {
 		Dispatcher.handleViewAction({
-			name: "LOGOUT_BTN_CLICK"
+			name: "AUTH_BTN_CLICK"
 		});
 	}
 };

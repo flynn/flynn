@@ -37,7 +37,7 @@ var Apps = Dashboard.Stores.Apps = Dashboard.Store.createClass({
 	},
 
 	__fetchApps: function () {
-		return Dashboard.client.getApps().then(function (args) {
+		return this.__getClient().getApps().then(function (args) {
 			var res = args[0];
 			this.setState({
 				apps: res.map(function (app) {
@@ -64,6 +64,10 @@ var Apps = Dashboard.Stores.Apps = Dashboard.Store.createClass({
 		this.setState({
 			apps: apps
 		});
+	},
+
+	__getClient: function () {
+		return Dashboard.client;
 	}
 
 }, Marbles.State);

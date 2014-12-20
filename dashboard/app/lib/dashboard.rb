@@ -9,7 +9,8 @@ module Dashboard
     unless self.settings[:asset_paths]
       self.settings[:asset_paths] = [
         File.expand_path('../javascripts', __FILE__),
-        File.expand_path('../stylesheets', __FILE__)
+        File.expand_path('../stylesheets', __FILE__),
+        File.expand_path('../images', __FILE__)
       ]
     end
   end

@@ -17,6 +17,7 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 	displayName: "routers.apps",
 
 	routes: [
+		{ path: "apps", handler: "apps" },
 		{ path: "apps/:id", handler: "app", paramChangeScrollReset: false },
 		{ path: "apps/:id/env", handler: "appEnv", secondary: true },
 		{ path: "apps/:id/logs", handler: "appLogs", secondary: true },
@@ -73,16 +74,42 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 		}
 	},
 
-	app: function (params) {
+	apps: function (params) {
 		var view = Dashboard.primaryView;
-		var props = this.__getAppProps(params);
-		if (view && view.isMounted() && view.constructor.displayName === "Views.App") {
+		var props = this.__getAppsProps(params);
+		if (view && view.isMounted() && view.constructor.displayName === "Views.Apps") {
 			view.setProps(props);
 		} else {
 			Dashboard.primaryView = view = React.renderComponent(
-				Dashboard.Views.App(props),
-				Dashboard.el);
+				Dashboard.Views.Apps(props), Dashboard.el);
+		}
+	},
+
+	__getAppsProps: function (params) {
+		var appProps = this.__getAppProps(params);
+		var showProtected = params[0].protected === "true";
+		var defaultRouteDomain = Dashboard.config.default_route_domain;
+		var getAppPath = function (appId) {
+			var __params = Marbles.Utils.extend({}, params[0]);
+			delete __params.id;
+			return this.__getAppPath(appId, __params, "");
+		}.bind(this);
+		return {
+			showProtected: showProtected,
+			defaultRouteDomain: defaultRouteDomain,
+			githubAuthed: !!Dashboard.githubClient,
+			appProps: appProps,
+			appsListProps: {
+				selectedAppId: appProps.appId,
+				getAppPath: getAppPath,
+				defaultRouteDomain: defaultRouteDomain,
+				showProtected: showProtected,
 			}
+		};
+	},
+
+	app: function (params) {
+		this.apps(params);
 	},
 
 	__getAppProps: function (params) {
@@ -311,25 +338,39 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 	},
 
 	__handleCommitSelected: function (event) {
-		var view = Dashboard.primaryView;
+		var view = Dashboard.primaryView, appView;
+		if (view.refs && view.refs.appComponent) {
+			appView = view.refs.appComponent;
+		} else {
+			return;
+		}
 		var storeId = event.storeId;
-		var app = view.state ? view.state.app : null;
+		var app = appView.state ? appView.state.app : null;
 		var meta = app ? app.meta : null;
-		if (storeId && meta && view && view.isMounted() && view.constructor.displayName === "Views.App" && storeId && meta.user_login === storeId.ownerLogin && meta.repo_name === storeId.repoName) {
+		if (storeId && meta && view && view.isMounted() && view.constructor.displayName === "Views.Apps" && meta.user_login === storeId.ownerLogin && meta.repo_name === storeId.repoName) {
 			view.setProps({
-				selectedSha: event.sha
+				appProps: Marbles.Utils.extend({}, view.props.appProps, {
+					selectedSha: event.sha
+				})
 			});
 		}
 	},
 
 	__handleBranchSelected: function (event) {
-		var view = Dashboard.primaryView;
+		var view = Dashboard.primaryView, appView;
+		if (view.refs && view.refs.appComponent) {
+			appView = view.refs.appComponent;
+		} else {
+			return;
+		}
 		var storeId = event.storeId;
-		var app = view.state ? view.state.app : null;
+		var app = appView.state ? appView.state.app : null;
 		var meta = app ? app.meta : null;
-		if (storeId && meta && view && view.isMounted() && view.constructor.displayName === "Views.App" && storeId && meta.user_login === storeId.ownerLogin && meta.repo_name === storeId.repoName) {
+		if (storeId && meta && view && view.isMounted() && view.constructor.displayName === "Views.Apps" && meta.user_login === storeId.ownerLogin && meta.repo_name === storeId.repoName) {
 			view.setProps({
-				selectedBranchName: event.branchName
+				appProps: Marbles.Utils.extend({}, view.props.appProps, {
+					selectedBranchName: event.branchName
+				})
 			});
 		}
 	},
@@ -337,7 +378,7 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 	__handleConfirmDeployCommit: function (event) {
 		var view = Dashboard.primaryView;
 		var appId = event.storeId ? event.storeId.appId : null;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.App" && view.props.appId === appId) {
+		if (view && view.isMounted() && view.constructor.displayName === "Views.Apps" && view.props.appProps.appId === appId) {
 			Marbles.history.navigate(this.__getAppPath(appId, {
 				owner: event.ownerLogin,
 				repo: event.repoName,
@@ -368,8 +409,8 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 	__handleGithubPullMerged: function (event) {
 		var view = Dashboard.primaryView;
 		var base = event.pull.base;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.App") {
-			Marbles.history.navigate(this.__getAppPath(view.props.appId, {
+		if (view && view.isMounted() && view.constructor.displayName === "Views.Apps" && view.props.appProps.appId) {
+			Marbles.history.navigate(this.__getAppPath(view.props.appProps.appId, {
 				owner: base.ownerLogin,
 				repo: base.name,
 				branch: base.ref,
@@ -386,7 +427,7 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 	},
 
 	__getClusterPath: function () {
-		return "/";
+		return "/apps";
 	},
 
 	__navigateToApp: function (event, __params) {

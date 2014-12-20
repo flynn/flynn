@@ -27,6 +27,7 @@ window.Dashboard = {
 			);
 		}
 
+		this.navEl = document.getElementById("nav");
 		this.el = document.getElementById("main");
 		this.secondaryEl = document.getElementById("secondary");
 
@@ -43,6 +44,12 @@ window.Dashboard = {
 		} else {
 			Marbles.history.loadURL();
 		}
+	},
+
+	__renderNavComponent: function () {
+		this.nav = React.renderComponent(this.Views.Nav({
+				authenticated: this.config.authenticated
+			}), this.navEl);
 	},
 
 	__isLoginPath: function (path) {
@@ -72,8 +79,12 @@ window.Dashboard = {
 			return;
 		}
 
-		if (event.name === "LOGOUT_BTN_CLICK") {
-			this.client.logout();
+		if (event.name === "AUTH_BTN_CLICK") {
+			if (Dashboard.config.authenticated) {
+				this.client.logout();
+			} else if ( !this.__isLoginPath() ) {
+				this.__redirectToLogin();
+			}
 		}
 
 		if (event.source === "APP_EVENT") {
@@ -118,6 +129,8 @@ window.Dashboard = {
 	},
 
 	__handleAuthChange: function (authenticated) {
+		this.__renderNavComponent();
+
 		if ( !authenticated && !this.__isLoginPath() ) {
 			var currentHandler = Marbles.history.getHandler();
 			if (currentHandler && currentHandler.opts.auth === false) {
@@ -152,6 +165,8 @@ window.Dashboard = {
 		this.waitForRouteHandler = new Promise(function (rs) {
 			this.__waitForRouteHandlerResolve = rs;
 		}.bind(this));
+
+		this.__renderNavComponent();
 
 		// prevent route handlers requiring auth from being called when app is not authenticated
 		if ( !this.config.authenticated && event.handler.opts.auth !== false ) {

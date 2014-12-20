@@ -1,7 +1,7 @@
 .flex-row {
   display: -webkit-flex;
   display: flex;
-  -webit-flex-direction: row;
+  -webkit-flex-direction: row;
   flex-direction: row;
 
   > .col {
@@ -14,3 +14,18 @@
   }
 }
 
+.flex-col {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+
+  > .row {
+    flex-grow: 1;
+    margin-top: 2rem;
+    flex-basis: 50%;
+    &:last-of-type {
+      margin-right: 0;
+    }
+  }
+}

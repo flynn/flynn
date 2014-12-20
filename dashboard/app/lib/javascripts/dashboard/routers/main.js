@@ -1,4 +1,4 @@
-//= require ../views/main
+//= require ../views/apps
 //= require ../views/login
 //= require ../views/install-cert
 
@@ -15,12 +15,11 @@ Dashboard.routers.main = new (Marbles.Router.createClass({
 		{ path: "installcert", handler: "installCert", auth: false },
 	],
 
-	root: function () {
-		React.renderComponent(
-			Dashboard.Views.Main({
-					defaultRouteDomain: Dashboard.config.default_route_domain,
-					githubAuthed: !!Dashboard.githubClient
-				}), Dashboard.el);
+	root: function (params) {
+		Marbles.history.navigate("/apps", {
+			replace: true,
+			params: params
+		});
 	},
 
 	login: function (params) {

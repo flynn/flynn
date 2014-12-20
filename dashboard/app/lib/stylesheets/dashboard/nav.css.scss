@@ -1,0 +1,40 @@
+@import "./colors";
+
+#nav {
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  background-color: $blackGrayColor;
+  color: $whiteColor;
+  width: 70px;
+  height: 100%;
+  text-align: center;
+  font-size: 1.75rem;
+
+  > ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+
+    > li {
+      border-bottom: 2px solid $almostBlackColor;
+
+      cursor: pointer;
+
+      a {
+        display: block;
+        color: inherit;
+        padding: 1rem 1rem;
+        &:visited, &:active {
+          color: inherit;
+        }
+      }
+
+      &.active {
+        background-color: $almostBlackColor;
+        color: $greenColor;
+      }
+    }
+  }
+}

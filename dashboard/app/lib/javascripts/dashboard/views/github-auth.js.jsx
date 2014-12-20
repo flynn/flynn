@@ -20,7 +20,7 @@ Dashboard.Views.GithubAuth = React.createClass({
 
 	render: function () {
 		return (
-			<section>
+			<section className="github-auth-container">
 				<header>
 					<h1>Connect with GitHub</h1>
 					<RouteLink path="/" className="back-link">

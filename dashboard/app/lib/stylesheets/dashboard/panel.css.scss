@@ -4,26 +4,22 @@
 .panel-row {
   display: -webkit-flex;
   display: flex;
-  -webit-flex-direction: row;
+  -webkit-flex-direction: row;
   flex-direction: row;
 
-  margin-top: 1rem;
+  padding-bottom: 2rem;
 
   > .panel {
     flex-grow: 1;
-    margin-right: 2rem;
     &:last-of-type {
       margin-right: 0;
-    }
-    &+ .panel {
-      margin-top: 0;
     }
   }
 }
 
 .panel {
+  @extend %clearfix;
   background-color: $whiteColor;
-  border-radius: 4px;
   color: $blackGrayColor;
   box-shadow: 0px 1px 2px $grayBlueColor;
 
@@ -39,9 +35,4 @@
   > .placeholder {
     @extend %placeholder;
   }
-
-  &+ .panel {
-    margin-top: 2rem;
-  }
 }
-

@@ -8,35 +8,28 @@ Dashboard.Views.EditEnv = React.createClass({
 	displayName: "Views.EditEnv",
 
 	render: function () {
+		var nRemoved = this.state.nRemoved;
 		return (
 			<ul className="edit-env">
-				{this.state.env.map(function (env, i) {
+				{this.state.env.concat([{ isNew: true }]).map(function (env, i) {
 					return (
-						<li key={i}>
+						<li key={nRemoved + i}>
 							<AppEnv
-								index={i}
+								index={env.isNew ? null : i}
 								name={env.key}
 								value={env.value}
 								onChange={this.handleEnvChange} />
 						</li>
 					);
 				}.bind(this))}
-				<li>
-					<AppEnv
-						key={'new-env'}
-						ref="newEnv"
-						index={null}
-						name={null}
-						value={null}
-						onChange={this.handleEnvChange} />
-				</li>
 			</ul>
 		);
 	},
 
 	getInitialState: function () {
 		return {
-			env: []
+			env: [],
+			nRemoved: 0
 		};
 	},
 
@@ -46,13 +39,6 @@ Dashboard.Views.EditEnv = React.createClass({
 
 	componentWillReceiveProps: function (props) {
 		this.__setEnv(props.env || {});
-	},
-
-	componentDidUpdate: function () {
-		if (this.__focusNewEnv) {
-			delete this.__focusNewEnv;
-			this.refs.newEnv.focusNameField();
-		}
 	},
 
 	__setEnv: function (env) {
@@ -70,11 +56,11 @@ Dashboard.Views.EditEnv = React.createClass({
 
 	handleEnvChange: function (index, oldName, newName, newValue) {
 		var env = [].concat(this.state.env);
+		var nRemoved = this.state.nRemoved;
 
 		if (index === null) {
 			index = env.length;
 			env.push({});
-			this.__focusNewEnv = true;
 		}
 
 		if ( !newName ) {
@@ -90,6 +76,7 @@ Dashboard.Views.EditEnv = React.createClass({
 				var __env = [];
 				for (var i = 0, len = env.length; i < len; i++) {
 					if (i !== index && env[i].key === newName) {
+						nRemoved++;
 					} else {
 						__env.push(env[i]);
 					}
@@ -102,10 +89,9 @@ Dashboard.Views.EditEnv = React.createClass({
 		env.forEach(function (i) {
 			__env[i.key] = i.value;
 		});
-		env = __env;
 
-		this.__setEnv(env);
-		this.props.onChange(env);
+		this.setState({ env: env, nRemoved: nRemoved });
+		this.props.onChange(__env);
 	}
 });
 
@@ -156,26 +142,30 @@ var AppEnv = React.createClass({
 	handleNameChange: function () {
 		var newName = this.refs.name.getDOMNode().value;
 		this.setState({name: newName});
+		if (this.state.value) {
+			this.propagateChange(newName, this.state.value);
+		}
 	},
 
 	handleValueChange: function () {
 		var newValue = this.refs.value.getDOMNode().value;
 		this.setState({value: newValue});
+		if (this.state.name) {
+			this.propagateChange(this.state.name, newValue);
+		}
 	},
 
 	handleNameBlur: function () {
-		this.propagateChange();
+		this.propagateChange(this.state.name, this.state.value);
 	},
 
 	handleValueBlur: function () {
-		this.propagateChange();
+		this.propagateChange(this.state.name, this.state.value);
 	},
 
-	propagateChange: function () {
+	propagateChange: function (newName, newValue) {
 		var oldName = this.props.name;
-		var newName = this.state.name.trim();
 		var oldValue = this.props.value;
-		var newValue = this.state.value.trim();
 
 		if ( !oldName && (!newName || !newValue) ) {
 			return;
