@@ -26,6 +26,7 @@ import (
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/tlsconfig"
 	"github.com/flynn/flynn/test/arg"
 	"github.com/flynn/flynn/test/cluster"
 )
@@ -158,9 +159,15 @@ func (r *Runner) start() error {
 	http.HandleFunc("/cluster/", r.httpClusterHandler)
 	http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(args.AssetsDir))))
 	log.Println("Listening on", args.ListenAddr, "...")
-	if err := http.ListenAndServeTLS(args.ListenAddr, args.TLSCert, args.TLSKey, nil); err != nil {
+
+	srv := &http.Server{
+		Addr:      args.ListenAddr,
+		TLSConfig: tlsconfig.SecureCiphers(nil),
+	}
+	if err := srv.ListenAndServeTLS(args.TLSCert, args.TLSKey); err != nil {
 		return fmt.Errorf("ListenAndServeTLS: %s", err)
 	}
+
 	return nil
 }
 
