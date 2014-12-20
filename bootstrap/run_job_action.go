@@ -5,6 +5,7 @@ import (
 
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/schedutil"
 )
 
 type RunJobAction struct {
@@ -92,9 +93,8 @@ func randomHost(cc *cluster.Client) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	for _, host := range hosts {
-		return host.ID, nil
+	if len(hosts) == 0 {
+		return "", cluster.ErrNoServers
 	}
-	return "", cluster.ErrNoServers
+	return schedutil.PickHost(hosts).ID, nil
 }

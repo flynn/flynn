@@ -59,7 +59,7 @@ func newClient(services ServiceSetFunc) (*Client, error) {
 
 // A LocalClient implements Client methods against an in-process leader.
 type LocalClient interface {
-	ListHosts() (map[string]host.Host, error)
+	ListHosts() ([]host.Host, error)
 	AddJobs(*host.AddJobsReq) (*host.AddJobsRes, error)
 	RegisterHost(*host.Host, chan *host.Job) Stream
 	RemoveJobs([]string) error
@@ -179,7 +179,7 @@ func (c *Client) LeaderID() string {
 
 // ListHosts returns a map of host ids to host structures containing metadata
 // and job lists.
-func (c *Client) ListHosts() (map[string]host.Host, error) {
+func (c *Client) ListHosts() ([]host.Host, error) {
 	if c := c.local(); c != nil {
 		return c.ListHosts()
 	}
@@ -187,7 +187,7 @@ func (c *Client) ListHosts() (map[string]host.Host, error) {
 	if err != nil {
 		return nil, err
 	}
-	var state map[string]host.Host
+	var state []host.Host
 	return state, client.Call("Cluster.ListHosts", struct{}{}, &state)
 }
 

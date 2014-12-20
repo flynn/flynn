@@ -9,6 +9,7 @@ import (
 
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/schedutil"
 )
 
 type Cmd struct {
@@ -56,7 +57,7 @@ func Command(artifact host.Artifact, cmd ...string) *Cmd {
 }
 
 type ClusterClient interface {
-	ListHosts() (map[string]host.Host, error)
+	ListHosts() ([]host.Host, error)
 	AddJobs(*host.AddJobsReq) (*host.AddJobsRes, error)
 	DialHost(string) (cluster.Host, error)
 }
@@ -119,15 +120,15 @@ func (c *Cmd) Start() error {
 		c.closeCluster = true
 	}
 
-	hosts, err := c.cluster.ListHosts()
-	if err != nil {
-		return err
-	}
 	if c.HostID == "" {
-		// TODO: check if this is actually random
-		for c.HostID = range hosts {
-			break
+		hosts, err := c.cluster.ListHosts()
+		if err != nil {
+			return err
 		}
+		if len(hosts) == 0 {
+			return errors.New("exec: no hosts found")
+		}
+		c.HostID = schedutil.PickHost(hosts).ID
 	}
 	if c.JobID == "" {
 		c.JobID = cluster.RandomJobID("")
@@ -146,6 +147,7 @@ func (c *Cmd) Start() error {
 		Metadata: c.Meta,
 	}
 
+	var err error
 	c.host, err = c.cluster.DialHost(c.HostID)
 	if err != nil {
 		return err

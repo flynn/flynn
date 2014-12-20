@@ -18,6 +18,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/postgres"
+	"github.com/flynn/flynn/pkg/schedutil"
 	"github.com/flynn/flynn/pkg/sse"
 )
 
@@ -127,7 +128,7 @@ func scanJobEvent(s postgres.Scanner) (*ct.JobEvent, error) {
 }
 
 type clusterClient interface {
-	ListHosts() (map[string]host.Host, error)
+	ListHosts() ([]host.Host, error)
 	DialHost(string) (cluster.Host, error)
 	AddJobs(*host.AddJobsReq) (*host.AddJobsRes, error)
 }
@@ -476,15 +477,12 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 		r.Error(err)
 		return
 	}
-	// pick a random host
-	var hostID string
-	for hostID = range hosts {
-		break
-	}
-	if hostID == "" {
+	if len(hosts) == 0 {
 		r.Error(errors.New("no hosts found"))
 		return
 	}
+
+	hostID := schedutil.PickHost(hosts).ID
 
 	var attachClient cluster.AttachClient
 	if attach {

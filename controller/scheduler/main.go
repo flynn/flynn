@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"os"
 	"sort"
@@ -78,7 +79,7 @@ type context struct {
 }
 
 type clusterClient interface {
-	ListHosts() (map[string]host.Host, error)
+	ListHosts() ([]host.Host, error)
 	AddJobs(req *host.AddJobsReq) (*host.AddJobsRes, error)
 	DialHost(id string) (cluster.Host, error)
 	StreamHostEvents(ch chan<- *host.HostEvent) cluster.Stream
@@ -257,8 +258,8 @@ func (c *context) watchHosts() {
 		}
 	}()
 
-	for id := range hosts {
-		go c.watchHost(id)
+	for _, h := range hosts {
+		go c.watchHost(h.ID)
 	}
 
 }
@@ -588,7 +589,7 @@ func (f *Formation) RestartJob(typ, hostID, jobID string) {
 func (f *Formation) rectify() {
 	g := grohl.NewContext(grohl.Data{"fn": "rectify", "app.id": f.AppID, "release.id": f.Release.ID})
 
-	var hosts map[string]host.Host
+	var hosts []host.Host
 	if _, ok := f.c.omni[f]; ok {
 		var err error
 		hosts, err = f.c.ListHosts()
@@ -689,30 +690,31 @@ func (f *Formation) start(typ string, hostID string) (job *Job, err error) {
 		return nil, err
 	}
 	if len(hosts) == 0 {
-		// TODO: log/handle error
+		return nil, errors.New("scheduler: no online hosts")
 	}
-	var h host.Host
 
+	var h host.Host
 	if hostID != "" {
-		h = hosts[hostID]
+		for _, host := range hosts {
+			if hostID == host.ID {
+				h = host
+				break
+			}
+		}
 	} else {
-		hostCounts := make(map[string]int, len(hosts))
-		for _, h := range hosts {
-			hostCounts[h.ID] = 0
+		sh := make(sortHosts, 0, len(hosts))
+		for _, host := range hosts {
+			var count int
 			for _, job := range h.Jobs {
 				if f.jobType(job) != typ {
 					continue
 				}
-				hostCounts[h.ID]++
+				count++
 			}
-		}
-		sh := make(sortHosts, 0, len(hosts))
-		for id, count := range hostCounts {
-			sh = append(sh, sortHost{id, count})
+			sh = append(sh, sortHost{host, count})
 		}
 		sh.Sort()
-
-		h = hosts[sh[0].ID]
+		h = sh[0].Host
 	}
 
 	job = f.jobs.Add(typ, h.ID, config.ID)
@@ -779,7 +781,7 @@ func (f *Formation) jobConfig(name string) *host.Job {
 }
 
 type sortHost struct {
-	ID   string
+	Host host.Host
 	Jobs int
 }
 

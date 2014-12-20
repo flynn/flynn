@@ -20,12 +20,12 @@ type FakeCluster struct {
 	listenMtx   sync.RWMutex
 }
 
-func (c *FakeCluster) ListHosts() (map[string]host.Host, error) {
+func (c *FakeCluster) ListHosts() ([]host.Host, error) {
 	c.mtx.RLock()
 	defer c.mtx.RUnlock()
-	hosts := make(map[string]host.Host, len(c.hosts))
+	hosts := make([]host.Host, 0, len(c.hosts))
 	for id := range c.hosts {
-		hosts[id] = c.GetHost(id)
+		hosts = append(hosts, c.GetHost(id))
 	}
 	return hosts, nil
 }
