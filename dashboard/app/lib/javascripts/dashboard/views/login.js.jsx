@@ -23,7 +23,7 @@ Dashboard.Views.Login = React.createClass({
 
 	render: function () {
 		return (
-			<section>
+			<section className="login-container">
 				<header>
 					<h1>Log in</h1>
 				</header>
