@@ -158,6 +158,11 @@
   .pretty-select {
     margin: 1rem 2rem;
   }
+
+  .buildpack {
+    margin: 1rem 2rem;
+    margin-top: 0;
+  }
 }
 
 .github-pulls, .github-commits {
@@ -233,6 +238,10 @@
 
   .alert-error {
     margin-top: 1rem;
+  }
+
+  .buildpack {
+    margin: 1rem 0;
   }
 }
 

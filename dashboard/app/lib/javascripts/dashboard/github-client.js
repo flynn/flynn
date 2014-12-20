@@ -74,6 +74,13 @@ Dashboard.GithubClient = Marbles.Utils.createClass({
 		return this.performRequest('GET', '/repos/'+ encodeURIComponent(owner) +'/'+ encodeURIComponent(repo));
 	},
 
+	getRepoTree: function (owner, repo, ref, params) {
+		params = params || [{}];
+		return this.performRequest('GET', '/repos/'+ encodeURIComponent(owner) +'/'+ encodeURIComponent(repo) +'/git/trees/'+ encodeURIComponent(ref), {
+			params: params
+		});
+	},
+
 	getOrgs: function () {
 		return this.performRequest('GET', '/user/orgs');
 	},
