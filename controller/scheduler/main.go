@@ -655,7 +655,7 @@ func (f *Formation) add(n int, name string, hostID string) {
 		job, err := f.start(name, hostID)
 		if err != nil {
 			// TODO: handle error
-			g.Log(grohl.Data{"at": "error", "host.id": job.HostID, "job.id": job.ID, "err": err})
+			g.Log(grohl.Data{"at": "error", "host.id": hostID, "job.name": name, "err": err.Error()})
 			continue
 		}
 		g.Log(grohl.Data{"at": "started", "host.id": job.HostID, "job.id": job.ID})
