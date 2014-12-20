@@ -50,6 +50,7 @@
   min-width: 275px;
   width: 400px;
   flex-basis: 275px;
+  margin-right: 2rem;
 }
 
 .github-repo-panel {
@@ -141,7 +142,6 @@
 
 .github-repo {
   background-color: $whiteColor;
-  border-radius: 4px;
   color: $blackGrayColor;
   box-shadow: 0px 1px 2px $grayBlueColor;
   position: relative;

@@ -23,17 +23,8 @@
     }
 
     &.selected {
-      &:after {
-        position: absolute;
-        top: calc(50% - 8px);
-        right: 0;
-        width: 0;
-        height: 0;
-        border-top: 8px solid transparent;
-        border-bottom: 8px solid transparent;
-        border-right: 8px solid $grayBlueColor;
-        content: " ";
-      }
+      background-color: $greenColor;
+      color: $whiteColor;
     }
   }
 }
