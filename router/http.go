@@ -23,6 +23,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/nacl/secretbox"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/tlsconfig"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -302,7 +303,10 @@ func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 			}
 			return r.keypair, nil
 		}
-		conn = tls.Server(conn, &tls.Config{GetCertificate: certForHandshake, Certificates: []tls.Certificate{{}}})
+		conn = tls.Server(conn, tlsconfig.SecureCiphers(&tls.Config{
+			GetCertificate: certForHandshake,
+			Certificates:   []tls.Certificate{{}},
+		}))
 	}
 
 	sc := httputil.NewServerConn(conn, nil)
