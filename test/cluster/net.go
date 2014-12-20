@@ -39,6 +39,15 @@ func createBridge(name, network, natIface string) (*Bridge, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// We need to explicitly assign the MAC address to avoid it changing to a lower value
+	// See: https://github.com/flynn/flynn/issues/223
+	b := random.Bytes(5)
+	mac := fmt.Sprintf("fe:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4])
+	if err := netlink.NetworkSetMacAddress(iface, mac); err != nil {
+		return nil, err
+	}
+
 	if err := netlink.NetworkLinkAddIp(iface, ipAddr, ipNet); err != nil {
 		return nil, err
 	}
