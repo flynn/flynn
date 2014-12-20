@@ -20,7 +20,12 @@ func WithTmpfileZpool(poolName string, fn func() error) error {
 		return err
 	}
 	defer os.Remove(backingFile.Name())
-	pool, err := zfs.CreateZpool(poolName, nil, backingFile.Name()) // the default point where this mounts is in "/poolName", so... you're gonna wanna override that
+	pool, err := zfs.CreateZpool(
+		poolName,
+		nil,
+		"-mnone", // do not mount the root dataset.  (we'll mount our own datasets as necessary.)
+		backingFile.Name(),
+	)
 	if err != nil {
 		return err
 	}
