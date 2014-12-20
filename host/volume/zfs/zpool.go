@@ -29,7 +29,11 @@ func WithTmpfileZpool(poolName string, fn func() error) error {
 	if err != nil {
 		return err
 	}
-	defer pool.Destroy()
+	defer func() {
+		if err := pool.Destroy(); err != nil {
+			panic(err)
+		}
+	}()
 
 	return fn()
 }
