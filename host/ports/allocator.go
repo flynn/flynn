@@ -27,6 +27,8 @@ func (e InUseError) Error() string {
 var ErrNoPorts = errors.New("ports: all ports are allocated")
 
 func (a *Allocator) Get() (uint16, error) {
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
 	port := a.start
 	for {
 		if _, allocated := a.ports[port]; !allocated {
