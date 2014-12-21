@@ -787,10 +787,16 @@ type sortHost struct {
 
 type sortHosts []sortHost
 
-func (h sortHosts) Len() int           { return len(h) }
-func (h sortHosts) Less(i, j int) bool { return h[i].Jobs < h[j].Jobs }
-func (h sortHosts) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-func (h sortHosts) Sort()              { sort.Sort(h) }
+func (h sortHosts) Len() int      { return len(h) }
+func (h sortHosts) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+func (h sortHosts) Sort()         { sort.Sort(h) }
+
+func (h sortHosts) Less(i, j int) bool {
+	if h[i].Jobs == h[j].Jobs {
+		return len(h[i].Host.Jobs) < len(h[j].Host.Jobs)
+	}
+	return h[i].Jobs < h[j].Jobs
+}
 
 type FormationEvent struct {
 	Formation *Formation
