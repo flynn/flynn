@@ -141,6 +141,11 @@
 			"Rev": "d727e3bea6cb0b833f415f6ba2207ee2f82c1453"
 		},
 		{
+			"ImportPath": "github.com/docker/docker/pkg/tarsum",
+			"Comment": "v1.4.0-24-gd727e3b",
+			"Rev": "d727e3bea6cb0b833f415f6ba2207ee2f82c1453"
+		},
+		{
 			"ImportPath": "github.com/docker/docker/pkg/term",
 			"Comment": "v1.4.0-24-gd727e3b",
 			"Rev": "d727e3bea6cb0b833f415f6ba2207ee2f82c1453"

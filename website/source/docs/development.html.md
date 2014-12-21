@@ -322,7 +322,7 @@ docker login my.registry.com
 Upload the images:
 
 ```
-$ util/release/flynn-release upload version.json
+$ util/release/flynn-release upload images.json
 ```
 
 You can now follow the [installation instructions](/docs/installation#ubuntu-14.04-amd64)

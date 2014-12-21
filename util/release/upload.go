@@ -27,12 +27,15 @@ func upload(args *docopt.Args) {
 		tag = "latest"
 	}
 
-	var manifest map[string]string
+	var manifest struct {
+		Images    map[string]string `json:"images"`
+		Checksums map[string]string `json:"checksums"`
+	}
 	if err := cliutil.DecodeJSONArg(args.String["<manifest>"], &manifest); err != nil {
 		log.Fatal(err)
 	}
 
-	for image, id := range manifest {
+	for image, id := range manifest.Images {
 		u, err := url.Parse(image)
 		if err != nil {
 			log.Fatal(err)

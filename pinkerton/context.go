@@ -52,11 +52,12 @@ type LayerPullInfo struct {
 type LayerStatus string
 
 const (
-	LayerStatusExists     LayerStatus = "exists"
-	LayerStatusDownloaded LayerStatus = "downloaded"
+	LayerStatusExists         LayerStatus = "exists"
+	LayerStatusDownloaded     LayerStatus = "downloaded"
+	LayerStatusChecksumFailed LayerStatus = "checksum-failed"
 )
 
-func (c *Context) Pull(url string, progress chan<- LayerPullInfo) error {
+func (c *Context) Pull(url string, progress chan<- LayerPullInfo, checksums map[string]string) error {
 	defer func() {
 		if progress != nil {
 			close(progress)
@@ -94,14 +95,25 @@ func (c *Context) Pull(url string, progress chan<- LayerPullInfo) error {
 			continue
 		}
 
+		var checksum string
+		if len(checksums) > 0 {
+			var ok bool
+			if checksum, ok = checksums[layer.ID]; !ok {
+				return fmt.Errorf("store: missing checksum for layer %s", layer.ID)
+			}
+		}
+
 		if err := layer.Fetch(); err != nil {
 			return err
 		}
 		status := LayerStatusDownloaded
-		if err := c.Add(layer); err != nil {
-			if err == store.ErrExists {
+		if err := c.Add(layer, checksum); err != nil {
+			switch err {
+			case store.ErrExists:
 				status = LayerStatusExists
-			} else {
+			case store.ErrChecksumFailed:
+				status = LayerStatusChecksumFailed
+			default:
 				return err
 			}
 		}

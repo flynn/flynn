@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -11,6 +12,8 @@ import (
 	"syscall"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/archive"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/tarsum"
 	"github.com/flynn/flynn/pinkerton/registry"
 )
 
@@ -37,8 +40,9 @@ func New(root string, driver graphdriver.Driver) (*Store, error) {
 }
 
 var ErrExists = errors.New("store: image exists")
+var ErrChecksumFailed = errors.New("store: checksum failed")
 
-func (s *Store) Add(img *registry.Image) (err error) {
+func (s *Store) Add(img *registry.Image, checksum string) (err error) {
 	if err := s.lock(img.ID); err != nil {
 		return err
 	}
@@ -65,9 +69,24 @@ func (s *Store) Add(img *registry.Image) (err error) {
 		return err
 	}
 
-	size, err := s.driver.ApplyDiff(img.ID, img.ParentID, img)
+	var layer io.Reader = img
+	if checksum != "" {
+		a, err := archive.DecompressStream(img)
+		if err != nil {
+			return err
+		}
+		defer a.Close()
+		layer, err = tarsum.NewTarSum(a, false, tarsum.Version0)
+		if err != nil {
+			return err
+		}
+	}
+	size, err := s.driver.ApplyDiff(img.ID, img.ParentID, layer)
 	if err != nil {
 		return err
+	}
+	if checksum != "" && layer.(tarsum.TarSum).Sum(nil) != checksum {
+		return ErrChecksumFailed
 	}
 
 	if err := ioutil.WriteFile(filepath.Join(tmp, "layersize"), strconv.AppendInt(nil, size, 10), 0600); err != nil {
@@ -88,6 +107,61 @@ func (s *Store) Add(img *registry.Image) (err error) {
 func (s *Store) Exists(id string) bool {
 	_, err := os.Stat(s.root(id))
 	return err == nil
+}
+
+type Image struct {
+	ID     string `json:"id"`
+	Parent string `json:"parent"`
+}
+
+func (s *Store) WalkHistory(id string, f func(*Image) error) error {
+	img, err := s.Get(id)
+	if err != nil {
+		return err
+	}
+	for {
+		if err := f(img); err != nil {
+			return err
+		}
+		if img.Parent == "" {
+			break
+		}
+		img, err = s.Get(img.Parent)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) Checksum(img *Image) (string, error) {
+	diff, err := s.driver.Diff(img.ID, img.Parent)
+	if err != nil {
+		return "", err
+	}
+	defer diff.Close()
+	t, err := tarsum.NewTarSum(diff, false, tarsum.Version0)
+	if err != nil {
+		return "", err
+	}
+	if _, err := io.Copy(ioutil.Discard, t); err != nil {
+		return "", err
+	}
+	return t.Sum(nil), nil
+}
+
+func (s *Store) Get(id string) (*Image, error) {
+	f, err := os.Open(filepath.Join(s.root(id), "json"))
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	img := &Image{}
+	if err := json.NewDecoder(f).Decode(img); err != nil {
+		return nil, err
+	}
+	return img, nil
 }
 
 func (s *Store) root(id string) string {

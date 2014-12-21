@@ -45,7 +45,7 @@ Options:
 
 	switch {
 	case args.Bool["pull"]:
-		if err := ctx.Pull(args.String["<image-url>"], pinkerton.InfoPrinter(args.Bool["--json"])); err != nil {
+		if err := ctx.Pull(args.String["<image-url>"], pinkerton.InfoPrinter(args.Bool["--json"]), nil); err != nil {
 			log.Fatal(err)
 		}
 	case args.Bool["checkout"]:
