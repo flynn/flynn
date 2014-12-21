@@ -100,8 +100,8 @@ func (c *FakeCluster) SetHosts(h map[string]host.Host) {
 	c.hosts = h
 }
 
-func (c *FakeCluster) AddHost(id string, h host.Host) {
-	c.hosts[id] = h
+func (c *FakeCluster) AddHost(h host.Host) {
+	c.hosts[h.ID] = h
 }
 
 func (c *FakeCluster) SetHostClient(id string, h *FakeHostClient) {
