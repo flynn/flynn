@@ -18,8 +18,13 @@ func NewCluster(state *State) *Cluster {
 
 // Scheduler Methods
 
-func (s *Cluster) ListHosts(arg struct{}, ret *map[string]host.Host) error {
-	*ret = s.state.Get()
+func (s *Cluster) ListHosts(arg struct{}, ret *[]host.Host) error {
+	hostMap := s.state.Get()
+	hostSlice := make([]host.Host, 0, len(hostMap))
+	for _, h := range hostMap {
+		hostSlice = append(hostSlice, h)
+	}
+	*ret = hostSlice
 	return nil
 }
 

@@ -193,7 +193,7 @@ func (s *S) TestRunJobDetached(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "run-detached"})
 
 	hostID := random.UUID()
-	s.cc.SetHosts(map[string]host.Host{hostID: {}})
+	s.cc.SetHosts(map[string]host.Host{hostID: {ID: hostID}})
 
 	artifact := s.createTestArtifact(c, &ct.Artifact{Type: "docker", URI: "docker://foo/bar"})
 	release := s.createTestRelease(c, &ct.Release{
@@ -258,7 +258,7 @@ func (s *S) TestRunJobAttached(c *C) {
 	})
 
 	s.cc.SetHostClient(hostID, hc)
-	s.cc.SetHosts(map[string]host.Host{hostID: {}})
+	s.cc.SetHosts(map[string]host.Host{hostID: {ID: hostID}})
 
 	artifact := s.createTestArtifact(c, &ct.Artifact{Type: "docker", URI: "docker://foo/bar"})
 	release := s.createTestRelease(c, &ct.Release{

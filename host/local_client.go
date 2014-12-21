@@ -16,8 +16,8 @@ type localClient struct {
 	host string
 }
 
-func (c *localClient) ListHosts() (map[string]host.Host, error) {
-	res := make(map[string]host.Host)
+func (c *localClient) ListHosts() ([]host.Host, error) {
+	var res []host.Host
 	return res, c.c.ListHosts(struct{}{}, &res)
 }
 

@@ -181,7 +181,7 @@ loop:
 	})
 }
 
-func clusterHosts(state *State) (map[string]host.Host, error) {
+func clusterHosts(state *State) ([]host.Host, error) {
 	cc, err := state.ClusterClient()
 	if err != nil {
 		return nil, err

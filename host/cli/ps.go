@@ -49,14 +49,14 @@ func jobList(client *cluster.Client, all bool) (sortJobs, error) {
 	}
 
 	var jobs []host.ActiveJob
-	for id := range hosts {
-		h, err := client.DialHost(id)
+	for _, host := range hosts {
+		h, err := client.DialHost(host.ID)
 		if err != nil {
-			return nil, fmt.Errorf("could not dial host %s: %s", id, err)
+			return nil, fmt.Errorf("could not dial host %s: %s", host.ID, err)
 		}
 		hostJobs, err := h.ListJobs()
 		if err != nil {
-			return nil, fmt.Errorf("could not get jobs for host %s: %s", id, err)
+			return nil, fmt.Errorf("could not get jobs for host %s: %s", host.ID, err)
 		}
 		for _, job := range hostJobs {
 			jobs = append(jobs, job)

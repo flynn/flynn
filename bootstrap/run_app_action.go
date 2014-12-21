@@ -2,11 +2,13 @@ package bootstrap
 
 import (
 	"errors"
+	"sort"
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/resource"
+	"github.com/flynn/flynn/pkg/schedutil"
 )
 
 type RunAppAction struct {
@@ -101,17 +103,14 @@ func (a *RunAppAction) Run(s *State) error {
 	if err != nil {
 		return err
 	}
-	hosts, err := cc.ListHosts()
-	if err != nil {
-		return err
-	}
-	hostIDs := make([]string, 0, len(hosts))
-	for id := range hosts {
-		hostIDs = append(hostIDs, id)
-	}
 	for typ, count := range a.Processes {
+		hosts, err := cc.ListHosts()
+		if err != nil {
+			return err
+		}
+		sort.Sort(schedutil.HostSlice(hosts))
 		for i := 0; i < count; i++ {
-			job, err := startJob(s, hostIDs[i%len(hosts)], utils.JobConfig(a.ExpandedFormation, typ))
+			job, err := startJob(s, hosts[i%len(hosts)].ID, utils.JobConfig(a.ExpandedFormation, typ))
 			if err != nil {
 				return err
 			}
