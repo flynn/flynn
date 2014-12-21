@@ -68,29 +68,53 @@ func main() {
 	log.Fatal(http.ListenAndServe(addr, router))
 }
 
-func handleJob(job *queue.Job) error {
+func handleJob(job *queue.Job) (e error) {
 	id := string(job.Data)
 	deployment, err := getDeployment(id)
 	if err != nil {
-		// TODO: log/handle error
-		return nil
+		// TODO: log error
+		return err
 	}
+	// for recovery purposes, fetch old formation
+	f, err := client.GetFormation(deployment.AppID, deployment.OldReleaseID)
+	if err != nil {
+		// TODO: log error
+		return err
+	}
+	defer func() {
+		// rollback failed deploy
+		if e != nil {
+			if err := client.PutFormation(f); err != nil {
+				e = err
+				return
+			}
+			if err := client.DeleteFormation(deployment.AppID, deployment.NewReleaseID); err != nil {
+				e = err
+				return
+			}
+			if err := client.SetAppRelease(deployment.AppID, deployment.NewReleaseID); err != nil {
+				e = err
+				return
+			}
+		}
+		e = nil
+	}()
 	strategy, err := strategy.GetStrategy(deployment.Strategy, client)
 	if err != nil {
-		// TODO: log/handle error
-		return nil
+		// TODO: log error
+		return err
 	}
 	events := make(chan deployer.DeploymentEvent)
 	defer close(events)
 	go func() {
-		for e := range events {
-			e.DeploymentID = deployment.ID
-			sendDeploymentEvent(e)
+		for ev := range events {
+			ev.DeploymentID = deployment.ID
+			sendDeploymentEvent(ev)
 		}
 	}()
 	if err := strategy.Perform(deployment, events); err != nil {
-		// TODO: log/handle error
-		return nil
+		// TODO: log error
+		return err
 	}
 	if err := client.SetAppRelease(deployment.AppID, deployment.NewReleaseID); err != nil {
 		return err
