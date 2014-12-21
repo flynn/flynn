@@ -45,6 +45,7 @@ func main() {
 		name.SetSeed(s)
 	}
 
+	postgres.Wait("")
 	db, err := postgres.Open("", "")
 	if err != nil {
 		log.Fatal(err)
