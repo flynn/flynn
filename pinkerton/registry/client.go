@@ -115,9 +115,11 @@ func (r *Ref) tags() (map[string]string, error) {
 	return tags, err
 }
 
-func (r *Ref) setToken(req *http.Request) {
+func (r *Ref) setAuth(req *http.Request) {
 	if r.token != "" {
 		req.Header.Set("Authorization", "Token "+r.token)
+	} else if r.username != "" || r.password != "" {
+		req.SetBasicAuth(r.username, r.password)
 	}
 }
 
@@ -143,7 +145,7 @@ func (r *Ref) registryGet(path string, out interface{}) (*http.Response, error) 
 		if err != nil {
 			continue
 		}
-		r.setToken(req)
+		r.setAuth(req)
 		if out != nil {
 			req.Header.Set("Accept", "application/json")
 		}
