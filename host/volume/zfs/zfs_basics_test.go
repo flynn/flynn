@@ -51,8 +51,9 @@ func (S) TestSnapshotShouldCarryFiles(c *C) {
 		// a new volume should start out empty:
 		c.Assert(v.(*zfsVolume).basemount, DirContains, []string{})
 
-		_, err = os.Create(filepath.Join(v.(*zfsVolume).basemount, "alpha"))
+		f, err := os.Create(filepath.Join(v.(*zfsVolume).basemount, "alpha"))
 		c.Assert(err, IsNil)
+		f.Close()
 
 		// sanity check, can we so much as even write a file:
 		c.Assert(v.(*zfsVolume).basemount, DirContains, []string{"alpha"})
@@ -87,8 +88,9 @@ func (S) TestSnapshotShouldIsolateNewChangesToSource(c *C) {
 		// a new volume should start out empty:
 		c.Assert(v.(*zfsVolume).basemount, DirContains, []string{})
 
-		_, err = os.Create(filepath.Join(v.(*zfsVolume).basemount, "alpha"))
+		f, err := os.Create(filepath.Join(v.(*zfsVolume).basemount, "alpha"))
 		c.Assert(err, IsNil)
+		f.Close()
 
 		// sanity check, can we so much as even write a file:
 		c.Assert(v.(*zfsVolume).basemount, DirContains, []string{"alpha"})
@@ -99,8 +101,9 @@ func (S) TestSnapshotShouldIsolateNewChangesToSource(c *C) {
 		}
 
 		// write another file to the source
-		_, err = os.Create(filepath.Join(v.(*zfsVolume).basemount, "beta"))
+		f, err = os.Create(filepath.Join(v.(*zfsVolume).basemount, "beta"))
 		c.Assert(err, IsNil)
+		f.Close()
 
 		// the source dir should contain our changes:
 		c.Assert(v.(*zfsVolume).basemount, DirContains, []string{"alpha", "beta"})
@@ -127,8 +130,9 @@ func (S) TestSnapshotShouldIsolateNewChangesToFork(c *C) {
 		// a new volume should start out empty:
 		c.Assert(v.(*zfsVolume).basemount, DirContains, []string{})
 
-		_, err = os.Create(filepath.Join(v.(*zfsVolume).basemount, "alpha"))
+		f, err := os.Create(filepath.Join(v.(*zfsVolume).basemount, "alpha"))
 		c.Assert(err, IsNil)
+		f.Close()
 
 		// sanity check, can we so much as even write a file:
 		c.Assert(v.(*zfsVolume).basemount, DirContains, []string{"alpha"})
@@ -139,8 +143,9 @@ func (S) TestSnapshotShouldIsolateNewChangesToFork(c *C) {
 		}
 
 		// write another file to the fork
-		_, err = os.Create(filepath.Join(v2.(*zfsVolume).basemount, "beta"))
+		f, err = os.Create(filepath.Join(v2.(*zfsVolume).basemount, "beta"))
 		c.Assert(err, IsNil)
+		f.Close()
 
 		// the source dir should be unaffected:
 		c.Assert(v.(*zfsVolume).basemount, DirContains, []string{"alpha"})
