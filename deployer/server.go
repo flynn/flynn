@@ -263,7 +263,7 @@ func streamDeploymentEvents(w http.ResponseWriter, req *http.Request, params htt
 	listener.Listen("deployment_events:" + formatUUID(deploymentID))
 
 	var currID int64
-	if lastID > 0 {
+	if lastID >= 0 {
 		events, err := listDeploymentEvents(deploymentID, lastID)
 		if err != nil {
 			return
