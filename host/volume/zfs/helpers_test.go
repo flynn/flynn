@@ -41,6 +41,7 @@ func (checker *dirContainsChecker) Check(params []interface{}, names []string) (
 	if err != nil {
 		return false, err.Error()
 	}
+	defer dir.Close()
 	fileinfos, err := dir.Readdir(-1)
 	if err != nil {
 		return false, err.Error()
