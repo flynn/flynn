@@ -122,12 +122,12 @@ func (s *DeployerSuite) TestAllAtOnceStrategy(t *c.C) {
 
 	expected := []*deployer.DeploymentEvent{
 		{ReleaseID: releaseID, JobType: "printer", JobState: "starting"},
-		{ReleaseID: releaseID, JobType: "printer", JobState: "up"},
 		{ReleaseID: releaseID, JobType: "printer", JobState: "starting"},
 		{ReleaseID: releaseID, JobType: "printer", JobState: "up"},
+		{ReleaseID: releaseID, JobType: "printer", JobState: "up"},
+		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "stopping"},
 		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "stopping"},
 		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "down"},
-		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "stopping"},
 		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "down"},
 		{ReleaseID: "", JobType: "", JobState: ""},
 	}
