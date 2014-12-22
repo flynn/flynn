@@ -33,10 +33,12 @@ func (s AllAtOnce) Perform(d *deployer.Deployment, events chan<- deployer.Deploy
 	}
 	expect := make(jobEvents)
 	for typ, n := range f.Processes {
-		events <- deployer.DeploymentEvent{
-			ReleaseID: d.NewReleaseID,
-			JobState:  "starting",
-			JobType:   typ,
+		for i := 0; i < n; i++ {
+			events <- deployer.DeploymentEvent{
+				ReleaseID: d.NewReleaseID,
+				JobState:  "starting",
+				JobType:   typ,
+			}
 		}
 		expect[typ] = map[string]int{"up": n}
 	}
@@ -48,10 +50,12 @@ func (s AllAtOnce) Perform(d *deployer.Deployment, events chan<- deployer.Deploy
 	}
 	expect = make(jobEvents)
 	for typ, n := range f.Processes {
-		events <- deployer.DeploymentEvent{
-			ReleaseID: d.OldReleaseID,
-			JobState:  "stopping",
-			JobType:   typ,
+		for i := 0; i < n; i++ {
+			events <- deployer.DeploymentEvent{
+				ReleaseID: d.OldReleaseID,
+				JobState:  "stopping",
+				JobType:   typ,
+			}
 		}
 		expect[typ] = map[string]int{"down": n}
 	}
