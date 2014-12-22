@@ -51,16 +51,14 @@ func NewLog(l *lumberjack.Logger) *Log {
 	l.Rotate() // force creating a log file straight away
 	log := &Log{
 		l:      l,
-		buf:    make(map[int]*Data),
-		closed: false,
+		closed: make(chan struct{}),
 	}
 	return log
 }
 
 type Log struct {
 	l      *lumberjack.Logger
-	buf    map[int]*Data
-	closed bool
+	closed chan struct{}
 }
 
 // Watch stream for new log events and transmit them.
@@ -160,10 +158,7 @@ outer:
 			ch <- data
 		case <-done:
 			break outer
-		case <-time.After(200 * time.Millisecond):
-			if !l.closed {
-				continue
-			}
+		case <-l.closed:
 			break outer
 		}
 	}
@@ -172,6 +167,6 @@ outer:
 }
 
 func (l *Log) Close() error {
-	l.closed = true
+	close(l.closed)
 	return l.l.Close()
 }
