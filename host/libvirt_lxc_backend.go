@@ -931,14 +931,17 @@ func (l *LibvirtLXCBackend) MarshalJobState(jobID string) ([]byte, error) {
 func (l *LibvirtLXCBackend) pinkertonPull(url string) ([]pinkerton.LayerPullInfo, error) {
 	var layers []pinkerton.LayerPullInfo
 	info := make(chan pinkerton.LayerPullInfo)
+	done := make(chan struct{})
 	go func() {
 		for l := range info {
 			layers = append(layers, l)
 		}
+		close(done)
 	}()
 	if err := l.pinkerton.Pull(url, info); err != nil {
 		return nil, err
 	}
+	<-done
 	return layers, nil
 }
 
