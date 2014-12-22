@@ -23,6 +23,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/fsouza/go-dockerclient"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
+	"github.com/flynn/flynn/pkg/iotool"
 	"github.com/flynn/flynn/test/arg"
 	"github.com/flynn/flynn/test/cluster"
 )
@@ -65,7 +66,7 @@ func main() {
 				if args.Gist {
 					exec.Command("flynn-host", "upload-debug-info").Run()
 				} else if testCluster != nil {
-					testCluster.DumpLogs(os.Stdout)
+					testCluster.DumpLogs(&iotool.SafeWriter{W: os.Stdout})
 				}
 			}
 			os.Exit(1)
