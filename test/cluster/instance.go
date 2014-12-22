@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -74,6 +75,9 @@ type Instance struct {
 	cmd *exec.Cmd
 
 	tempFiles []string
+
+	sshMtx sync.RWMutex
+	ssh    *ssh.Client
 }
 
 func (i *Instance) writeInterfaceConfig() error {
@@ -110,6 +114,12 @@ func (i *Instance) cleanup() {
 		fmt.Printf("could not close tap device %s: %s\n", i.tap.Name, err)
 	}
 	i.tempFiles = nil
+
+	i.sshMtx.Lock()
+	defer i.sshMtx.Unlock()
+	if i.ssh != nil {
+		i.ssh.Close()
+	}
 }
 
 func (i *Instance) Start() error {
@@ -213,11 +223,35 @@ func (i *Instance) Kill() error {
 	return nil
 }
 
-func (i *Instance) DialSSH() (*ssh.Client, error) {
-	return ssh.Dial("tcp", i.IP+":22", &ssh.ClientConfig{
-		User: "ubuntu",
-		Auth: []ssh.AuthMethod{ssh.Password("ubuntu")},
+func (i *Instance) dialSSH(stderr io.Writer) error {
+	if i.ssh != nil {
+		return nil
+	}
+
+	i.sshMtx.RUnlock()
+	i.sshMtx.Lock()
+	defer i.sshMtx.RLock()
+	defer i.sshMtx.Unlock()
+
+	if i.ssh != nil {
+		return nil
+	}
+
+	var sc *ssh.Client
+	err := sshAttempts.Run(func() (err error) {
+		if stderr != nil {
+			fmt.Fprintf(stderr, "Attempting to ssh to %s:22...\n", i.IP)
+		}
+		sc, err = ssh.Dial("tcp", i.IP+":22", &ssh.ClientConfig{
+			User: "ubuntu",
+			Auth: []ssh.AuthMethod{ssh.Password("ubuntu")},
+		})
+		return
 	})
+	if sc != nil {
+		i.ssh = sc
+	}
+	return err
 }
 
 var sshAttempts = attempt.Strategy{
@@ -230,19 +264,18 @@ func (i *Instance) Run(command string, s *Streams) error {
 	if s == nil {
 		s = &Streams{}
 	}
-	var sc *ssh.Client
-	err := sshAttempts.Run(func() (err error) {
-		if s.Stderr != nil {
-			fmt.Fprintf(s.Stderr, "Attempting to ssh to %s:22...\n", i.IP)
-		}
-		sc, err = i.DialSSH()
-		return
-	})
+
+	i.sshMtx.RLock()
+	defer i.sshMtx.RUnlock()
+	if err := i.dialSSH(s.Stderr); err != nil {
+		return err
+	}
+
+	sess, err := i.ssh.NewSession()
 	if err != nil {
 		return err
 	}
-	defer sc.Close()
-	sess, err := sc.NewSession()
+	defer sess.Close()
 	sess.Stdin = s.Stdin
 	sess.Stdout = s.Stdout
 	sess.Stderr = s.Stderr
