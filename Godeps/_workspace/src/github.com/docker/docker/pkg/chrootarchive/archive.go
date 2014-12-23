@@ -16,7 +16,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/reexec"
 )
 
-var chrootArchiver = &archive.Archiver{Untar}
+var chrootArchiver = &archive.Archiver{Untar: Untar}
 
 func chroot(path string) error {
 	if err := syscall.Chroot(path); err != nil {
