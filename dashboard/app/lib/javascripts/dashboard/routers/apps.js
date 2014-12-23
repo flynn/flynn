@@ -97,13 +97,15 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 		return {
 			showProtected: showProtected,
 			defaultRouteDomain: defaultRouteDomain,
-			githubAuthed: !!Dashboard.githubClient,
 			appProps: appProps,
 			appsListProps: {
 				selectedAppId: appProps.appId,
 				getAppPath: getAppPath,
 				defaultRouteDomain: defaultRouteDomain,
 				showProtected: showProtected,
+			},
+			appsListHeaderProps: {
+				githubAuthed: !!Dashboard.githubClient
 			}
 		};
 	},
