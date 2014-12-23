@@ -134,15 +134,15 @@ func supportsAufs() error {
 	return ErrAufsNotSupported
 }
 
-func (a Driver) rootPath() string {
+func (a *Driver) rootPath() string {
 	return a.root
 }
 
-func (Driver) String() string {
+func (*Driver) String() string {
 	return "aufs"
 }
 
-func (a Driver) Status() [][2]string {
+func (a *Driver) Status() [][2]string {
 	ids, _ := loadIds(path.Join(a.rootPath(), "layers"))
 	return [][2]string{
 		{"Root Dir", a.rootPath()},
@@ -152,7 +152,7 @@ func (a Driver) Status() [][2]string {
 
 // Exists returns true if the given id is registered with
 // this driver
-func (a Driver) Exists(id string) bool {
+func (a *Driver) Exists(id string) bool {
 	if _, err := os.Lstat(path.Join(a.rootPath(), "layers", id)); err != nil {
 		return false
 	}
@@ -312,7 +312,7 @@ func (a *Driver) applyDiff(id string, diff archive.ArchiveReader) error {
 // DiffSize calculates the changes between the specified id
 // and its parent and returns the size in bytes of the changes
 // relative to its base filesystem directory.
-func (a *Driver) DiffSize(id, parent string) (bytes int64, err error) {
+func (a *Driver) DiffSize(id, parent string) (size int64, err error) {
 	// AUFS doesn't need the parent layer to calculate the diff size.
 	return utils.TreeSize(path.Join(a.rootPath(), "diff", id))
 }
@@ -320,7 +320,7 @@ func (a *Driver) DiffSize(id, parent string) (bytes int64, err error) {
 // ApplyDiff extracts the changeset from the given diff into the
 // layer with the specified id and parent, returning the size of the
 // new layer in bytes.
-func (a *Driver) ApplyDiff(id, parent string, diff archive.ArchiveReader) (bytes int64, err error) {
+func (a *Driver) ApplyDiff(id, parent string, diff archive.ArchiveReader) (size int64, err error) {
 	// AUFS doesn't need the parent id to apply the diff.
 	if err = a.applyDiff(id, diff); err != nil {
 		return

@@ -1,10 +1,9 @@
 package networkdriver
 
 import (
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/netlink"
 	"net"
 	"testing"
-
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/netlink"
 )
 
 func TestNonOverlapingNameservers(t *testing.T) {
