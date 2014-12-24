@@ -5,8 +5,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/ActiveState/tail"
 	"os"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/tail"
 )
 
 func args2config() (tail.Config, int64) {
@@ -42,7 +43,7 @@ func main() {
 		go tailFile(filename, config, done)
 	}
 
-	for _, _ = range flag.Args() {
+	for range flag.Args() {
 		<-done
 	}
 }

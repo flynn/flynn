@@ -4,11 +4,12 @@ package watch
 
 import (
 	"fmt"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/ActiveState/tail/util"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/howeyc/fsnotify"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/tomb.v1"
 	"os"
 	"path/filepath"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/tail/util"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/howeyc/fsnotify"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/tomb.v1"
 )
 
 var inotifyTracker *InotifyTracker
@@ -77,7 +78,6 @@ func (fw *InotifyFileWatcher) ChangeEvents(t *tomb.Tomb, fi os.FileInfo) *FileCh
 
 	go func() {
 		defer inotifyTracker.CloseWatcher(w)
-		defer changes.Close()
 
 		for {
 			prevSize := fw.Size

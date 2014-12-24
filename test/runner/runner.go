@@ -19,10 +19,10 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/ActiveState/tail"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/boltdb/bolt"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/aws"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/s3"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/tail"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/iotool"
 	"github.com/flynn/flynn/pkg/random"

@@ -1,5 +1,5 @@
 // Copyright (c) 2013 ActiveState Software Inc. All rights reserved.
-// +build linux darwin
+// +build linux darwin freebsd
 
 package watch
 

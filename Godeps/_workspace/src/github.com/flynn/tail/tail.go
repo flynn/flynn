@@ -4,17 +4,19 @@ package tail
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/ActiveState/tail/ratelimiter"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/ActiveState/tail/util"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/ActiveState/tail/watch"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/tomb.v1"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/tail/ratelimiter"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/tail/util"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/tail/watch"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/tomb.v1"
 )
 
 var (
@@ -136,6 +138,14 @@ func (tail *Tail) Stop() error {
 	return tail.Wait()
 }
 
+// StopAtEOF stops tailing as soon as the end of the file is reached.
+func (tail *Tail) StopAtEOF() error {
+	tail.Kill(errStopAtEOF)
+	return tail.Wait()
+}
+
+var errStopAtEOF = errors.New("tail: stop at eof")
+
 func (tail *Tail) close() {
 	close(tail.Lines)
 	if tail.file != nil {
@@ -209,6 +219,8 @@ func (tail *Tail) tailFileSync() {
 
 	tail.openReader()
 
+	var stopAtEOF bool
+
 	// Read line by line.
 	for {
 		line, err := tail.readLine()
@@ -228,14 +240,16 @@ func (tail *Tail) tailFileSync() {
 				case <-tail.Dying():
 					return
 				}
-				err = tail.seekEnd()
-				if err != nil {
+				if err := tail.seekEnd(); err != nil {
 					tail.Kill(err)
 					return
 				}
 			}
+			if stopAtEOF && err == io.EOF {
+				return
+			}
 		} else if err == io.EOF {
-			if !tail.Follow {
+			if stopAtEOF || !tail.Follow {
 				return
 			}
 			// When EOF is reached, wait for more data to become
@@ -256,6 +270,10 @@ func (tail *Tail) tailFileSync() {
 
 		select {
 		case <-tail.Dying():
+			if tail.Err() == errStopAtEOF {
+				stopAtEOF = true
+				continue
+			}
 			return
 		default:
 		}

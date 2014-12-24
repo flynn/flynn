@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/ActiveState/tail"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/tail"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/natefinch/lumberjack"
 	"github.com/flynn/flynn/pkg/random"
 )
