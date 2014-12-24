@@ -55,6 +55,6 @@ func (a *Allocator) GetPort(port uint16) (uint16, error) {
 
 func (a *Allocator) Put(port uint16) {
 	a.mtx.Lock()
+	defer a.mtx.Unlock()
 	delete(a.ports, port)
-	a.mtx.Unlock()
 }
