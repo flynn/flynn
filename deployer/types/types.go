@@ -10,7 +10,18 @@ type Deployment struct {
 	Strategy     string          `json:"strategy,omitempty"`
 	CreatedAt    *time.Time      `json:"created_at,omitempty"`
 	Steps        map[string]Step `json:"steps,omitempty"`
+	Status       Status          `json:"status,omitempty"`
 }
+
+type Status uint8
+
+const (
+	StatusWaiting Status = iota
+	StatusRunning
+	StatusDone
+	StatusCrashed
+	StatusFailed
+)
 
 type Step struct {
 	Cmd []string `json:"cmd,omitempty"`

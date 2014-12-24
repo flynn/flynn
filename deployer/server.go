@@ -81,9 +81,11 @@ func handleJob(job *queue.Job) (e error) {
 		// TODO: log error
 		return err
 	}
+	setDeploymentStatus(id, deployer.StatusRunning)
 	defer func() {
 		// rollback failed deploy
 		if e != nil {
+			setDeploymentStatus(id, deployer.StatusFailed)
 			if err := client.PutFormation(f); err != nil {
 				e = err
 				return
@@ -120,6 +122,7 @@ func handleJob(job *queue.Job) (e error) {
 		return err
 	}
 	// signal success
+	setDeploymentStatus(id, deployer.StatusDone)
 	sendDeploymentEvent(deployer.DeploymentEvent{
 		DeploymentID: deployment.ID,
 		ReleaseID:    "",
@@ -185,8 +188,8 @@ func createDeployment(w http.ResponseWriter, req *http.Request, params httproute
 func getDeployment(id string) (*deployer.Deployment, error) {
 	var steps []byte
 	d := &deployer.Deployment{}
-	query := "SELECT deployment_id, app_id, old_release_id, new_release_id, strategy, steps, created_at FROM deployments WHERE deployment_id = $1"
-	err := db.QueryRow(query, id).Scan(&d.ID, &d.AppID, &d.OldReleaseID, &d.NewReleaseID, &d.Strategy, &steps, &d.CreatedAt)
+	query := "SELECT deployment_id, app_id, old_release_id, new_release_id, strategy, steps, status, created_at FROM deployments WHERE deployment_id = $1"
+	err := db.QueryRow(query, id).Scan(&d.ID, &d.AppID, &d.OldReleaseID, &d.NewReleaseID, &d.Strategy, &steps, &d.Status, &d.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -194,6 +197,36 @@ func getDeployment(id string) (*deployer.Deployment, error) {
 		return nil, err
 	}
 	return d, nil
+}
+
+func listDeployments(status deployer.Status) ([]*deployer.Deployment, error) {
+	query := "SELECT deployment_id, app_id, old_release_id, new_release_id, strategy, steps, created_at FROM deployments WHERE status = $1"
+	rows, err := db.Query(query, status)
+	if err != nil {
+		return nil, err
+	}
+	deployments := []*deployer.Deployment{}
+	for rows.Next() {
+		var steps []byte
+		d := &deployer.Deployment{}
+		err := rows.Scan(&d.ID, &d.AppID, &d.OldReleaseID, &d.NewReleaseID, &d.Strategy, &steps, &d.CreatedAt)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if err := json.Unmarshal(steps, &d.Steps); err != nil {
+			return nil, err
+		}
+	}
+	return deployments, nil
+}
+
+func setDeploymentStatus(id string, status deployer.Status) error {
+	query := "UPDATE deployments SET status = $1 WHERE deployment_id = $2"
+	if err := db.Exec(query, status, id); err != nil {
+		return err
+	}
+	return nil
 }
 
 func sendDeploymentEvent(e deployer.DeploymentEvent) error {

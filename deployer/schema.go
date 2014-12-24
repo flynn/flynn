@@ -24,6 +24,7 @@ func migrateDB(db *sql.DB) error {
     new_release_id uuid NOT NULL,
     strategy deployment_strategy NOT NULL,
     steps text NOT NULL,
+    status int8 NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now())`,
 
 		`CREATE SEQUENCE deployment_event_ids`,
