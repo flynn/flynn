@@ -144,6 +144,7 @@ func (l *Log) Read(lines int, follow bool, ch chan Data, done chan struct{}) err
 	if err != nil {
 		return err
 	}
+	defer t.Stop()
 outer:
 	for {
 		select {
