@@ -24,6 +24,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/aws"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/s3"
 	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/pkg/iotool"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/tlsconfig"
@@ -248,7 +249,7 @@ func (r *Runner) build(b *Build) (err error) {
 
 	log.Printf("building %s\n", b.Commit)
 
-	out := io.MultiWriter(os.Stdout, logFile)
+	out := &iotool.SafeWriter{W: io.MultiWriter(os.Stdout, logFile)}
 	bc := r.bc
 	bc.Network, err = r.allocateNet()
 	if err != nil {
