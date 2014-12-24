@@ -1,5 +1,6 @@
 /** @jsx React.DOM */
 //= require ../stores/apps
+//= require ./apps-list-header
 //= require ./apps-list
 //= require ./route-link
 //= require ./app
@@ -17,20 +18,7 @@ Dashboard.Views.Apps = React.createClass({
 		return (
 			<section className="panel-row full-height">
 				<section className="panel full-height apps-list-panel">
-					<section className="clearfix">
-						<Dashboard.Views.RouteLink
-							className="btn-green float-right"
-							path="/github">
-								{this.props.githubAuthed ? (
-									"Add Services"
-								) : (
-									<span className="connect-with-github">
-										<i className="icn-github-mark" />
-										Connect with Github
-									</span>
-								)}
-						</Dashboard.Views.RouteLink>
-					</section>
+					{Dashboard.Views.AppsListHeader(this.props.appsListHeaderProps || {})}
 
 					{Dashboard.Views.AppsList(Marbles.Utils.extend({}, this.props.appsListProps, {
 						apps: this.state.apps
