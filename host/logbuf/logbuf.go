@@ -160,7 +160,9 @@ outer:
 		case <-done:
 			break outer
 		case <-l.closed:
-			break outer
+			// StopAtEOF will wait until the log hits an EOF before closing
+			// t.Lines
+			go t.StopAtEOF()
 		}
 	}
 	close(ch) // send a close event so we know everything was read
