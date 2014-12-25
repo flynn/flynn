@@ -66,6 +66,10 @@ if [[ -f "${env_cookie}" ]]; then
   envdir="true"
 fi
 
+if [[ -n "${BUILD_CACHE_URL}" ]]; then
+  curl --silent "${BUILD_CACHE_URL}" | tar --extract --gunzip --directory "${cache_root}" &>/dev/null || true
+fi
+
 # In heroku, there are two separate directories, and some
 # buildpacks expect that.
 cp -r . ${build_root}
@@ -187,4 +191,18 @@ if [[ "${slug_file}" != "-" ]]; then
   if [[ ${put_url} ]]; then
     curl -0 -s -o /dev/null -X PUT -T ${slug_file} "${put_url}"
   fi
+fi
+
+if [[ -n "${BUILD_CACHE_URL}" ]]; then
+  tar \
+    --create \
+    --directory "${cache_root}" \
+    --use-compress-program=pigz \
+    . \
+  | curl \
+    --silent \
+    --output /dev/null \
+    --request PUT \
+    --upload-file - \
+    "${BUILD_CACHE_URL}"
 fi
