@@ -37,6 +37,8 @@ type Cmd struct {
 	cluster      ClusterClient
 	closeCluster bool
 	attachClient cluster.AttachClient
+	eventStream  cluster.Stream
+	eventChan    chan *host.Event
 	streamErr    error
 	exitStatus   int
 
@@ -184,9 +186,33 @@ func (c *Cmd) Start() error {
 			c.attachClient.CloseWrite()
 		}()
 	}
+
+	if c.attachClient == nil {
+		c.eventChan = make(chan *host.Event)
+		c.eventStream = c.host.StreamEvents(job.ID, c.eventChan)
+	}
+
 	go func() {
-		c.exitStatus, c.streamErr = c.attachClient.Receive(c.Stdout, c.Stderr)
-		close(c.done)
+		defer close(c.done)
+		if c.attachClient != nil {
+			c.exitStatus, c.streamErr = c.attachClient.Receive(c.Stdout, c.Stderr)
+		} else {
+		outer:
+			for e := range c.eventChan {
+				switch e.Event {
+				case "stop":
+					c.exitStatus = e.Job.ExitStatus
+					break outer
+				case "error":
+					c.streamErr = errors.New(*e.Job.Error)
+					break outer
+				}
+			}
+			c.eventStream.Close()
+			if c.streamErr == nil {
+				c.streamErr = c.eventStream.Err()
+			}
+		}
 	}()
 
 	_, err = c.cluster.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{c.HostID: {job}}})
