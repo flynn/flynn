@@ -184,6 +184,10 @@ func (r *gitRepo) git(args ...string) *CmdResult {
 	return run(r.t, cmd)
 }
 
+func (h *Helper) TearDownSuite(t *c.C) {
+	h.cleanup()
+}
+
 func (h *Helper) cleanup() {
 	h.discMtx.Lock()
 	if h.disc != nil {

@@ -31,10 +31,6 @@ type CLISuite struct {
 
 var _ = c.ConcurrentSuite(&CLISuite{})
 
-func (s *CLISuite) TearDownSuite(t *c.C) {
-	s.cleanup()
-}
-
 func (s *CLISuite) flynn(t *c.C, args ...string) *CmdResult {
 	return flynn(t, "/", args...)
 }

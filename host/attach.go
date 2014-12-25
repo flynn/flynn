@@ -101,6 +101,7 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 			close(attached)
 		case <-failed:
 			g.Log(grohl.Data{"at": "failed"})
+			writeMtx.Unlock()
 			return
 		}
 		close(attachWait)

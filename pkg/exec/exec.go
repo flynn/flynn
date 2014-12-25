@@ -32,19 +32,50 @@ type Cmd struct {
 
 	TermHeight, TermWidth uint16
 
-	started      bool
-	finished     bool
-	cluster      ClusterClient
-	closeCluster bool
-	attachClient cluster.AttachClient
-	streamErr    error
-	exitStatus   int
+	// cluster is used to communicate with the layer 0 cluster
+	cluster ClusterClient
 
+	// host is used to communicate with the host that the job will run on
+	host cluster.Host
+
+	// started is true if Start has been called
+	started bool
+
+	// finished is true if Wait has been called
+	finished bool
+
+	// closeCluster indicates that cluster should be closed after the job
+	// finishes, it is set if the cluster connection was created by Start
+	closeCluster bool
+
+	// attachClient connects to the job's io streams and is also used to
+	// retrieve the job's exit status if any of Stdin, Stdout, or Stderr are
+	// specified
+	attachClient cluster.AttachClient
+
+	// eventChan is used to get job events (including the exit status) from the
+	// host if no io streams are attached
+	eventChan chan *host.Event
+
+	// eventStream allows closing eventChan and checking for connection errors,
+	// it is only set if eventChan is set
+	eventStream cluster.Stream
+
+	// streamErr is set if an error is received from attachClient or
+	// eventStream, it supercedes a non-zero exitStatus
+	streamErr error
+
+	// exitStatus is the job's exit status
+	exitStatus int
+
+	// closeAfterWait lists connections that should be closed before Wait returns
 	closeAfterWait []io.Closer
 
-	host cluster.Host
+	// done is closed after the job exits or fails
 	done chan struct{}
 
+	// stdinPipe is set if StdinPipe is called, and holds a readyWriter that
+	// blocks until stdin has been attached to the job
 	stdinPipe *readyWriter
 }
 
@@ -184,9 +215,33 @@ func (c *Cmd) Start() error {
 			c.attachClient.CloseWrite()
 		}()
 	}
+
+	if c.attachClient == nil {
+		c.eventChan = make(chan *host.Event)
+		c.eventStream = c.host.StreamEvents(job.ID, c.eventChan)
+	}
+
 	go func() {
-		c.exitStatus, c.streamErr = c.attachClient.Receive(c.Stdout, c.Stderr)
-		close(c.done)
+		defer close(c.done)
+		if c.attachClient != nil {
+			c.exitStatus, c.streamErr = c.attachClient.Receive(c.Stdout, c.Stderr)
+		} else {
+		outer:
+			for e := range c.eventChan {
+				switch e.Event {
+				case "stop":
+					c.exitStatus = e.Job.ExitStatus
+					break outer
+				case "error":
+					c.streamErr = errors.New(*e.Job.Error)
+					break outer
+				}
+			}
+			c.eventStream.Close()
+			if c.streamErr == nil {
+				c.streamErr = c.eventStream.Err()
+			}
+		}
 	}()
 
 	_, err = c.cluster.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{c.HostID: {job}}})

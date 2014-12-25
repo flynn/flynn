@@ -24,10 +24,6 @@ type SchedulerSuite struct {
 
 var _ = c.Suite(&SchedulerSuite{})
 
-func (s *SchedulerSuite) TearDownSuite(t *c.C) {
-	s.cleanup()
-}
-
 func (s *SchedulerSuite) checkJobState(t *c.C, appID, jobID, state string) {
 	job, err := s.controllerClient(t).GetJob(appID, jobID)
 	t.Assert(err, c.IsNil)

@@ -21,10 +21,6 @@ func (s *GitDeploySuite) SetUpSuite(t *c.C) {
 	t.Assert(flynn(t, "/", "key", "add", s.sshKeys(t).Pub), Succeeds)
 }
 
-func (s *GitDeploySuite) TearDownSuite(t *c.C) {
-	s.cleanup()
-}
-
 var Attempts = attempt.Strategy{
 	Total: 60 * time.Second,
 	Delay: 500 * time.Millisecond,
