@@ -1,0 +1,13 @@
+#!/bin/bash
+
+cache="$2"
+file="${cache}/a"
+i=$(cat "${file}")
+
+if [[ -n "${i}" ]]; then
+  echo "cached: ${i}"
+  ((i++))
+  echo "${i}" > "${file}"
+else
+  echo 0 > "${file}"
+fi

@@ -77,8 +77,10 @@ func main() {
 	} else {
 		cmd.Stdin = os.Stdin
 	}
+	cmd.Env = make(map[string]string)
+	cmd.Env["BUILD_CACHE_URL"] = fmt.Sprintf("http://%s/%s-cache.tgz", blobstoreHost, app.ID)
 	if buildpackURL, ok := prevRelease.Env["BUILDPACK_URL"]; ok {
-		cmd.Env = map[string]string{"BUILDPACK_URL": buildpackURL}
+		cmd.Env["BUILDPACK_URL"] = buildpackURL
 	}
 
 	if err := cmd.Run(); err != nil {
