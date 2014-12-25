@@ -82,6 +82,10 @@ export STACK=cedar-14
 # Fix for https://github.com/flynn/flynn/issues/85
 export CURL_CONNECT_TIMEOUT=30
 
+# Bump max time to download a single runtime tarball from its default of
+# 30s (only makes sense on EC2) to 10 minutes
+export CURL_TIMEOUT=600
+
 ## Buildpack detection
 
 buildpacks=(${buildpack_root}/*)
