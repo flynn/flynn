@@ -1,11 +1,17 @@
 package main
 
 import (
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"strings"
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/exec"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 type HostSuite struct {
@@ -52,4 +58,43 @@ func (s *HostSuite) TestAttachFinishedInteractiveJob(t *c.C) {
 	case <-time.After(time.Second):
 		t.Error("timed out waiting for attach")
 	}
+}
+
+func (s *HostSuite) TestNetworkedPersistentJob(t *c.C) {
+	// this isn't much more impressive than what's already running by the time we've got a cluster engaged
+	// but the idea is to use this basic design to enable testing a series manipulations on a single container.
+
+	cluster := s.clusterClient(t)
+
+	// run a job that accepts tcp connections and performs tasks we ask of it in its container
+	serviceName := "ish-service-" + random.String(6)
+	cmd := exec.JobUsingCluster(cluster, exec.DockerImage(testImageURI), &host.Job{
+		Config: host.ContainerConfig{
+			Cmd:   []string{"/bin/ish"},
+			Ports: []host.Port{{Proto: "tcp"}},
+			Env: map[string]string{
+				"NAME": serviceName,
+			},
+		},
+	})
+	cmd.Start()
+	defer cmd.Kill()
+
+	// get the ip:port that that job exposed.
+	// phone discoverd and ask by serviceName -- we set a unique one so this works with concurrent tests.
+	services, err := discoverd.Services(serviceName, time.Second*4)
+	t.Assert(err, c.IsNil)
+	t.Assert(services, c.HasLen, 1)
+
+	resp, err := http.Post(
+		fmt.Sprintf("http://%s/ish", services[0].Addr),
+		"text/plain",
+		strings.NewReader("echo echocococo"),
+	)
+	t.Assert(err, c.IsNil)
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	t.Assert(err, c.IsNil)
+
+	t.Assert(string(body), c.Equals, "echocococo\n")
 }
