@@ -32,21 +32,50 @@ type Cmd struct {
 
 	TermHeight, TermWidth uint16
 
-	started      bool
-	finished     bool
-	cluster      ClusterClient
-	closeCluster bool
-	attachClient cluster.AttachClient
-	eventStream  cluster.Stream
-	eventChan    chan *host.Event
-	streamErr    error
-	exitStatus   int
+	// cluster is used to communicate with the layer 0 cluster
+	cluster ClusterClient
 
+	// host is used to communicate with the host that the job will run on
+	host cluster.Host
+
+	// started is true if Start has been called
+	started bool
+
+	// finished is true if Wait has been called
+	finished bool
+
+	// closeCluster indicates that cluster should be closed after the job
+	// finishes, it is set if the cluster connection was created by Start
+	closeCluster bool
+
+	// attachClient connects to the job's io streams and is also used to
+	// retrieve the job's exit status if any of Stdin, Stdout, or Stderr are
+	// specified
+	attachClient cluster.AttachClient
+
+	// eventChan is used to get job events (including the exit status) from the
+	// host if no io streams are attached
+	eventChan chan *host.Event
+
+	// eventStream allows closing eventChan and checking for connection errors,
+	// it is only set if eventChan is set
+	eventStream cluster.Stream
+
+	// streamErr is set if an error is received from attachClient or
+	// eventStream, it supercedes a non-zero exitStatus
+	streamErr error
+
+	// exitStatus is the job's exit status
+	exitStatus int
+
+	// closeAfterWait lists connections that should be closed before Wait returns
 	closeAfterWait []io.Closer
 
-	host cluster.Host
+	// done is closed after the job exits or fails
 	done chan struct{}
 
+	// stdinPipe is set if StdinPipe is called, and holds a readyWriter that
+	// blocks until stdin has been attached to the job
 	stdinPipe *readyWriter
 }
 
