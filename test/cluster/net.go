@@ -70,7 +70,14 @@ func deleteBridge(bridge *Bridge) error {
 	if err := netlink.DeleteBridge(bridge.name); err != nil {
 		return err
 	}
+	cleanupIPTables(bridge.name)
 	return nil
+}
+
+func cleanupIPTables(bridgeName string) {
+	// Delete the forwarding rule. The postrouting rule does not need deletion
+	// as there is usually only one per box and it doesn't change.
+	iptables.Raw("-D", "FORWARD", "-i", bridgeName, "-j", "ACCEPT")
 }
 
 func setupIPTables(bridgeName, natIface string) error {
