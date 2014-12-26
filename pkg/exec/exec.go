@@ -13,8 +13,9 @@ import (
 )
 
 type Cmd struct {
+	Job *host.Job
+
 	HostID string
-	JobID  string
 	TTY    bool
 	Meta   map[string]string
 
@@ -87,6 +88,10 @@ func Command(artifact host.Artifact, cmd ...string) *Cmd {
 	return &Cmd{Artifact: artifact, Cmd: cmd}
 }
 
+func Job(artifact host.Artifact, job *host.Job) *Cmd {
+	return &Cmd{Artifact: artifact, Job: job}
+}
+
 type ClusterClient interface {
 	ListHosts() ([]host.Host, error)
 	AddJobs(*host.AddJobsReq) (*host.AddJobsRes, error)
@@ -95,6 +100,12 @@ type ClusterClient interface {
 
 func CommandUsingCluster(c ClusterClient, artifact host.Artifact, cmd ...string) *Cmd {
 	command := Command(artifact, cmd...)
+	command.cluster = c
+	return command
+}
+
+func JobUsingCluster(c ClusterClient, artifact host.Artifact, job *host.Job) *Cmd {
+	command := Job(artifact, job)
 	command.cluster = c
 	return command
 }
@@ -161,21 +172,26 @@ func (c *Cmd) Start() error {
 		}
 		c.HostID = schedutil.PickHost(hosts).ID
 	}
-	if c.JobID == "" {
-		c.JobID = cluster.RandomJobID("")
-	}
 
-	job := &host.Job{
-		ID:       c.JobID,
-		Artifact: c.Artifact,
-		Config: host.ContainerConfig{
-			Entrypoint: c.Entrypoint,
-			Cmd:        c.Cmd,
-			TTY:        c.TTY,
-			Env:        c.Env,
-			Stdin:      c.Stdin != nil || c.stdinPipe != nil,
-		},
-		Metadata: c.Meta,
+	// Use the pre-defined host.Job configuration if provided;
+	// otherwise generate one from the fields on exec.Cmd that mirror stdlib's os.exec.
+	if c.Job == nil {
+		c.Job = &host.Job{
+			Artifact: c.Artifact,
+			Config: host.ContainerConfig{
+				Entrypoint: c.Entrypoint,
+				Cmd:        c.Cmd,
+				TTY:        c.TTY,
+				Env:        c.Env,
+				Stdin:      c.Stdin != nil || c.stdinPipe != nil,
+			},
+			Metadata: c.Meta,
+		}
+	} else {
+		c.Job.Artifact = c.Artifact
+	}
+	if c.Job.ID == "" {
+		c.Job.ID = cluster.RandomJobID("")
 	}
 
 	var err error
@@ -186,7 +202,7 @@ func (c *Cmd) Start() error {
 
 	if c.Stdout != nil || c.Stderr != nil || c.Stdin != nil || c.stdinPipe != nil {
 		req := &host.AttachReq{
-			JobID:  job.ID,
+			JobID:  c.Job.ID,
 			Height: c.TermHeight,
 			Width:  c.TermWidth,
 			Flags:  host.AttachFlagStream,
@@ -197,7 +213,7 @@ func (c *Cmd) Start() error {
 		if c.Stderr != nil {
 			req.Flags |= host.AttachFlagStderr
 		}
-		if job.Config.Stdin {
+		if c.Job.Config.Stdin {
 			req.Flags |= host.AttachFlagStdin
 		}
 		c.attachClient, err = c.host.Attach(req, true)
@@ -218,7 +234,7 @@ func (c *Cmd) Start() error {
 
 	if c.attachClient == nil {
 		c.eventChan = make(chan *host.Event)
-		c.eventStream = c.host.StreamEvents(job.ID, c.eventChan)
+		c.eventStream = c.host.StreamEvents(c.Job.ID, c.eventChan)
 	}
 
 	go func() {
@@ -244,7 +260,7 @@ func (c *Cmd) Start() error {
 		}
 	}()
 
-	_, err = c.cluster.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{c.HostID: {job}}})
+	_, err = c.cluster.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{c.HostID: {c.Job}}})
 	return err
 }
 
@@ -291,7 +307,7 @@ func (c *Cmd) Kill() error {
 	if !c.started {
 		return errors.New("exec: not started")
 	}
-	return c.host.StopJob(c.JobID)
+	return c.host.StopJob(c.Job.ID)
 }
 
 func (c *Cmd) Run() error {

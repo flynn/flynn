@@ -43,7 +43,7 @@ func (s *HostSuite) TestAttachFinishedInteractiveJob(t *c.C) {
 	// interactive
 	done := make(chan struct{})
 	go func() {
-		_, err = h.Attach(&host.AttachReq{JobID: cmd.JobID, Flags: host.AttachFlagLogs}, false)
+		_, err = h.Attach(&host.AttachReq{JobID: cmd.Job.ID, Flags: host.AttachFlagLogs}, false)
 		t.Assert(err, c.NotNil)
 		close(done)
 	}()
