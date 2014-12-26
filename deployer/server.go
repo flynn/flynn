@@ -60,6 +60,19 @@ func main() {
 	// TODO start new worker on error
 	go q.NewWorker(queueName, 10, handleJob).Start()
 
+	// jobs that are marked as running must have failed
+	jobs, err := listDeployments(deployer.StatusRunning)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, d := range jobs {
+		// reschedule those jobs
+		setDeploymentStatus(d.ID, deployer.StatusWaiting)
+		if _, err := q.Push(queueName, []byte(d.ID)); err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	router := httprouter.New()
 	router.POST("/deployments", createDeployment)
 	router.GET("/deployments/:deployment_id/events", streamDeploymentEvents)
