@@ -263,13 +263,15 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 		addr := addrs[1]
 		debug(t, "new controller address: ", addr)
 		client, err = controller.NewClient("http://"+addr, s.clusterConf(t).Key)
+		if err != nil {
+			return err
+		}
+		stream, err = client.StreamJobEvents("controller", lastID)
 		return
 	}), c.IsNil)
+	defer stream.Close()
 
 	// kill the first controller and check the scheduler brings it back online
-	stream, err = client.StreamJobEvents("controller", lastID)
-	t.Assert(err, c.IsNil)
-	defer stream.Close()
 	cc, err := cluster.NewClientWithDial(nil, s.discoverdClient(t).NewServiceSet)
 	t.Assert(err, c.IsNil)
 	defer cc.Close()
