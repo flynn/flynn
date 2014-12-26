@@ -42,7 +42,7 @@ func (t *InotifyTracker) CloseWatcher(w *fsnotify.Watcher) (err error) {
 func (t *InotifyTracker) CloseAll() {
 	t.mux.Lock()
 	defer t.mux.Unlock()
-	for w, _ := range t.watchers {
+	for w := range t.watchers {
 		if err := w.Close(); err != nil {
 			log.Printf("Error closing watcher: %v", err)
 		}

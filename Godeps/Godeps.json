@@ -11,10 +11,6 @@
 			"Rev": "364fb577de68fb646c4cb39cc0e09c887ee16376"
 		},
 		{
-			"ImportPath": "github.com/ActiveState/tail",
-			"Rev": "fd3ba4e64ca930fe21edc4c8a8bd1a075ef7f4ac"
-		},
-		{
 			"ImportPath": "github.com/BurntSushi/toml",
 			"Rev": "f87ce853111478914f0bcffa34d43a93643e6eda"
 		},
@@ -200,6 +196,10 @@
 		{
 			"ImportPath": "github.com/flynn/pq",
 			"Rev": "29bc57434aa700fa80bc713bd85d3fe1d0cd4fc0"
+		},
+		{
+			"ImportPath": "github.com/flynn/tail",
+			"Rev": "165e62b6a7aefaaa964b678ee167abeaa152c47e"
 		},
 		{
 			"ImportPath": "github.com/fsouza/go-dockerclient",

@@ -108,3 +108,49 @@ func (s *S) TestStreaming(c *C) {
 	l.Close()
 	<-ch
 }
+
+func (s *S) TestClose(c *C) {
+	l := NewLog(&lumberjack.Logger{})
+	pipeR, pipeW := io.Pipe()
+	go l.Follow(1, pipeR)
+
+	ch := make(chan Data)
+	done := make(chan struct{})
+	go l.Read(-1, true, ch, done)
+
+	// stream five bytes
+	for i := int64(0); i <= 4; i++ {
+		pipeW.Write(strconv.AppendInt(nil, i, 10))
+	}
+	select {
+	case data := <-ch:
+		c.Assert(data, Not(IsNil))
+		c.Assert(data.Message, Equals, "0")
+	case <-time.After(time.Second):
+		c.Error("timed out")
+	}
+
+	// Close before the second byte is read
+	pipeW.Close()
+	l.Close()
+
+	// ensure that the next four bytes are read
+	for i := 1; i <= 4; i++ {
+		select {
+		case data, ok := <-ch:
+			c.Assert(ok, Equals, true)
+			c.Assert(data, Not(IsNil))
+			c.Assert(data.Message, Equals, strconv.Itoa(i))
+		case <-time.After(time.Second):
+			c.Error("timed out")
+		}
+	}
+
+	// ensure that the channel closes
+	select {
+	case _, ok := <-ch:
+		c.Assert(ok, Equals, false)
+	case <-time.After(time.Second):
+		c.Error("timed out")
+	}
+}

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/ActiveState/tail"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/tail"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/natefinch/lumberjack"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -51,16 +51,14 @@ func NewLog(l *lumberjack.Logger) *Log {
 	l.Rotate() // force creating a log file straight away
 	log := &Log{
 		l:      l,
-		buf:    make(map[int]*Data),
-		closed: false,
+		closed: make(chan struct{}),
 	}
 	return log
 }
 
 type Log struct {
 	l      *lumberjack.Logger
-	buf    map[int]*Data
-	closed bool
+	closed chan struct{}
 }
 
 // Watch stream for new log events and transmit them.
@@ -146,6 +144,7 @@ func (l *Log) Read(lines int, follow bool, ch chan Data, done chan struct{}) err
 	if err != nil {
 		return err
 	}
+	defer t.Stop()
 outer:
 	for {
 		select {
@@ -160,11 +159,10 @@ outer:
 			ch <- data
 		case <-done:
 			break outer
-		case <-time.After(200 * time.Millisecond):
-			if !l.closed {
-				continue
-			}
-			break outer
+		case <-l.closed:
+			// StopAtEOF will wait until the log hits an EOF before closing
+			// t.Lines
+			go t.StopAtEOF()
 		}
 	}
 	close(ch) // send a close event so we know everything was read
@@ -172,6 +170,6 @@ outer:
 }
 
 func (l *Log) Close() error {
-	l.closed = true
+	close(l.closed)
 	return l.l.Close()
 }

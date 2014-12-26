@@ -3,7 +3,7 @@
 package watch
 
 import (
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/ActiveState/tail/util"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/tail/util"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/tomb.v1"
 	"os"
 	"time"
@@ -49,8 +49,6 @@ func (fw *PollingFileWatcher) ChangeEvents(t *tomb.Tomb, origFi os.FileInfo) *Fi
 	fw.Size = origFi.Size()
 
 	go func() {
-		defer changes.Close()
-
 		var retry int = 0
 
 		prevSize := fw.Size

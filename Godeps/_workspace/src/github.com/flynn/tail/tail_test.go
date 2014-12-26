@@ -6,14 +6,15 @@
 package tail
 
 import (
-	"./watch"
 	_ "fmt"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/ActiveState/tail/ratelimiter"
 	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"./watch"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/tail/ratelimiter"
 )
 
 func init() {
@@ -51,6 +52,25 @@ func TestStop(t *testing.T) {
 	if tail.Stop() != nil {
 		t.Error("Should be stoped successfully")
 	}
+	Cleanup()
+}
+
+func TestStopAtEOF(_t *testing.T) {
+	t := NewTailTest("maxlinesize", _t)
+	t.CreateFile("test.txt", "hello\nthere\nworld\n")
+	tail := t.StartTail("test.txt", Config{Follow: true, Location: nil})
+
+	// read "hello"
+	<-tail.Lines
+
+	done := make(chan struct{})
+	go func() {
+		<-time.After(100 * time.Millisecond)
+		t.VerifyTailOutput(tail, []string{"there", "world"})
+		close(done)
+	}()
+	tail.StopAtEOF()
+	<-done
 	Cleanup()
 }
 

@@ -23,12 +23,6 @@ func (fc *FileChanges) NotifyDeleted() {
 	sendOnlyIfEmpty(fc.Deleted)
 }
 
-func (fc *FileChanges) Close() {
-	close(fc.Modified)
-	close(fc.Truncated)
-	close(fc.Deleted)
-}
-
 // sendOnlyIfEmpty sends on a bool channel only if the channel has no
 // backlog to be read by other goroutines. This concurrency pattern
 // can be used to notify other goroutines if and only if they are

@@ -3,8 +3,9 @@
 package tail
 
 import (
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/ActiveState/tail/winfile"
 	"os"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/tail/winfile"
 )
 
 func OpenFile(name string) (file *os.File, err error) {
