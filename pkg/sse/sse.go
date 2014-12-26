@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"sync"
@@ -26,14 +27,13 @@ type Writer struct {
 func (w *Writer) Write(p []byte) (int, error) {
 	w.Lock()
 	defer w.Unlock()
-
-	if _, err := w.Writer.Write([]byte("data: ")); err != nil {
-		return 0, err
+	for _, line := range bytes.Split(p, []byte("\n")) {
+		if _, err := fmt.Fprintf(w.Writer, "data: %s\n", line); err != nil {
+			return 0, err
+		}
 	}
-	if _, err := w.Writer.Write(p); err != nil {
-		return 0, err
-	}
-	_, err := w.Writer.Write([]byte("\n\n"))
+	// add a terminating newline
+	_, err := w.Writer.Write([]byte("\n"))
 	return len(p), err
 }
 
