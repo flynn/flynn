@@ -47,17 +47,36 @@ type Reader struct {
 	*bufio.Reader
 }
 
+type Error string
+
+func (e Error) Error() string {
+	return "Server error: " + string(e)
+}
+
 func (r *Reader) Read() ([]byte, error) {
+	buf := []byte{}
+	var isErr bool
 	for {
 		line, err := r.ReadBytes('\n')
 		if err != nil {
 			return nil, err
 		}
+		if bytes.HasPrefix(line, []byte("event: error")) {
+			isErr = true
+		}
 		if bytes.HasPrefix(line, []byte("data: ")) {
 			data := bytes.TrimSuffix(bytes.TrimPrefix(line, []byte("data: ")), []byte("\n"))
-			return data, nil
+			buf = append(buf, data...)
+		}
+		// peek ahead one byte to see if we have a double newline (terminator)
+		if peek, err := r.Peek(1); err == nil && string(peek) == "\n" {
+			break
 		}
 	}
+	if isErr {
+		return nil, Error(string(buf))
+	}
+	return buf, nil
 }
 
 type Decoder struct {
