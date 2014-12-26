@@ -22,7 +22,7 @@ func init() {
 }
 
 func main() {
-	username, password := waitForPostgres(serviceName)
+	username, password := postgres.Wait(serviceName)
 	db, err := postgres.Open(serviceName, fmt.Sprintf("dbname=postgres user=%s password=%s", username, password))
 	if err != nil {
 		log.Fatal(err)
@@ -50,26 +50,6 @@ func main() {
 	}
 
 	log.Fatal(http.ListenAndServe(addr, m))
-}
-
-func waitForPostgres(name string) (string, string) {
-	set, err := discoverd.NewServiceSet(name)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer set.Close()
-	ch := set.Watch(true)
-	for u := range ch {
-		fmt.Printf("%#v\n", u)
-		l := set.Leader()
-		if l == nil {
-			continue
-		}
-		if u.Online && u.Addr == l.Addr && u.Attrs["up"] == "true" && u.Attrs["username"] != "" && u.Attrs["password"] != "" {
-			return u.Attrs["username"], u.Attrs["password"]
-		}
-	}
-	panic("discoverd disconnected before postgres came up")
 }
 
 type resource struct {

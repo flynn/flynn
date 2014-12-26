@@ -3,6 +3,7 @@ package postgres
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"sync"
@@ -18,6 +19,28 @@ func New(db *sql.DB, dsn string) *DB {
 		dsn:   dsn,
 		stmts: make(map[string]*sql.Stmt),
 	}
+}
+
+func Wait(service string) (string, string) {
+	if service == "" {
+		service = os.Getenv("FLYNN_POSTGRES")
+	}
+	set, err := discoverd.NewServiceSet(service)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer set.Close()
+	ch := set.Watch(true)
+	for u := range ch {
+		l := set.Leader()
+		if l == nil {
+			continue
+		}
+		if u.Online && u.Addr == l.Addr && u.Attrs["up"] == "true" && u.Attrs["username"] != "" && u.Attrs["password"] != "" {
+			return u.Attrs["username"], u.Attrs["password"]
+		}
+	}
+	panic("discoverd disconnected before postgres came up")
 }
 
 func Open(service, dsn string) (*DB, error) {
