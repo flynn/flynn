@@ -37,6 +37,14 @@ func (w *Writer) Write(p []byte) (int, error) {
 	return len(p), err
 }
 
+func (w *Writer) Error(err error) (int, error) {
+	_, e := w.Writer.Write([]byte("event: error\n"))
+	if e != nil {
+		return 0, e
+	}
+	return w.Write([]byte(err.Error()))
+}
+
 func (w *Writer) Flush() {
 	if fw, ok := w.Writer.(http.Flusher); ok {
 		fw.Flush()
