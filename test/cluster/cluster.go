@@ -134,7 +134,7 @@ func (c *Cluster) Boot(rootFS string, count int, dumpLogs io.Writer) error {
 	}
 
 	c.log("Booting", count, "VMs")
-	_, err := c.startVMs(rootFS, count)
+	_, err := c.startVMs(rootFS, true, count)
 	if err != nil {
 		if dumpLogs != nil && len(c.Instances) > 0 {
 			c.DumpLogs(dumpLogs)
@@ -167,7 +167,7 @@ func (c *Cluster) AddHost() (*Instance, error) {
 		return nil, errors.New("cluster not yet booted")
 	}
 	c.log("Booting 1 VM")
-	instances, err := c.startVMs(c.rootFS, 1)
+	instances, err := c.startVMs(c.rootFS, false, 1)
 	return instances[0], err
 }
 
@@ -192,7 +192,7 @@ func (c *Cluster) Size() int {
 	return len(c.Instances)
 }
 
-func (c *Cluster) startVMs(rootFS string, count int) ([]*Instance, error) {
+func (c *Cluster) startVMs(rootFS string, initial bool, count int) ([]*Instance, error) {
 	tmpl, ok := flynnHostScripts[c.bc.Backend]
 	if !ok {
 		return nil, fmt.Errorf("unknown host backend: %s", c.bc.Backend)
@@ -221,16 +221,24 @@ func (c *Cluster) startVMs(rootFS string, count int) ([]*Instance, error) {
 		if err = inst.Start(); err != nil {
 			return nil, fmt.Errorf("error starting instance %d: %s", i, err)
 		}
+		inst.initial = initial
 		instances[i] = inst
 		c.Instances = append(c.Instances, inst)
-
+	}
+	peers := make([]string, 0, len(c.Instances))
+	for _, inst := range c.Instances {
+		if !inst.initial {
+			continue
+		}
+		peers = append(peers, fmt.Sprintf("%s=http://%s:2380", inst.ID, inst.IP))
+	}
+	for _, inst := range instances {
 		var script bytes.Buffer
 		data := hostScriptData{
-			ID: inst.ID,
-			IP: inst.IP,
-		}
-		if len(c.Instances) > 1 {
-			data.Peers = fmt.Sprintf("%s:7001", c.Instances[0].IP)
+			ID:        inst.ID,
+			IP:        inst.IP,
+			Peers:     strings.Join(peers, ","),
+			EtcdProxy: !initial,
 		}
 		tmpl.Execute(&script, data)
 
@@ -343,9 +351,10 @@ func buildFlynn(inst *Instance, commit string, merge bool, out io.Writer) error 
 }
 
 type hostScriptData struct {
-	ID    string
-	IP    string
-	Peers string
+	ID        string
+	IP        string
+	Peers     string
+	EtcdProxy bool
 }
 
 var flynnHostScripts = map[string]*template.Template{
@@ -358,7 +367,10 @@ sudo start-stop-daemon \
   --pidfile /var/run/flynn-host.pid \
   --exec /usr/bin/env \
   -- \
-  ETCD_PEERS={{ .Peers }} \
+  ETCD_NAME={{ .ID }} \
+  ETCD_INITIAL_CLUSTER={{ .Peers }} \
+  ETCD_INITIAL_CLUSTER_STATE=new \
+  {{ if .EtcdProxy }} ETCD_PROXY=on {{ end }} \
   flynn-host \
   daemon \
   --id {{ .ID }} \

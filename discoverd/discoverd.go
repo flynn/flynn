@@ -9,7 +9,7 @@ import (
 )
 
 var addr = flag.String("bind", ":1111", "address to bind on")
-var etcd = flag.String("etcd", "http://127.0.0.1:4001", "etcd servers")
+var etcd = flag.String("etcd", "http://127.0.0.1:2379", "etcd servers")
 
 func main() {
 	flag.Parse()

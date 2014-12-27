@@ -2,19 +2,16 @@
   {
     "id": "etcd",
     "image": "$image_url_prefix/etcd?id=$image_id[etcd]",
+    "expose_env": ["ETCD_INITIAL_CLUSTER", "ETCD_INITIAL_CLUSTER_STATE", "ETCD_NAME", "ETCD_DISCOVERY", "ETCD_PROXY"],
     "args": [
-      "-http-read-timeout=525600",
-      "-http-write-timeout=525600",
       "-data-dir={{ .Volume \"/data\" }}",
-      "-addr={{ .ExternalIP }}:{{ .TCPPort 0 }}",
-      "-bind-addr=0.0.0.0:{{ .TCPPort 0 }}",
-      "-peer-addr={{ .ExternalIP }}:{{ .TCPPort 1 }}",
-      "-peer-bind-addr=0.0.0.0:{{ .TCPPort 1 }}",
-      "-name={{ .Env.ETCD_NAME }}",
-      "{{ if .Env.ETCD_PEERS }}-peers={{ .Env.ETCD_PEERS }}{{ end }}",
-      "{{ if .Env.ETCD_DISCOVERY }}-discovery={{ .Env.ETCD_DISCOVERY }}{{ end }}"
+      "-advertise-client-urls=http://{{ .ExternalIP }}:{{ .TCPPort 0 }}",
+      "-listen-client-urls=http://0.0.0.0:{{ .TCPPort 0 }}",
+      "-initial-advertise-peer-urls=http://{{ .ExternalIP }}:{{ .TCPPort 1 }}",
+      "-listen-peer-urls=http://0.0.0.0:{{ .TCPPort 1 }}",
+      "{{ if and (not .Env.ETCD_INITIAL_CLUSTER) (not .Env.ETCD_DISCOVERY) }}-initial-cluster=default=http://{{ .ExternalIP }}:{{ .TCPPort 1 }}{{ end }}"
     ],
-    "tcp_ports": ["4001", "7001"]
+    "tcp_ports": ["2379", "2380"]
   },
   {
     "id": "discoverd",

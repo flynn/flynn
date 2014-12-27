@@ -8,13 +8,11 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/flynn/pkg/attempt"
-	"github.com/flynn/flynn/pkg/random"
 )
 
 var Attempts = attempt.Strategy{
@@ -32,7 +30,6 @@ type TestingT interface {
 func RunEtcdServer(t TestingT) (string, func()) {
 	killCh := make(chan struct{})
 	doneCh := make(chan struct{})
-	name := "etcd-test." + strconv.Itoa(random.Math.Int())
 	dataDir, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatal("tempdir failed: ", err)
@@ -47,12 +44,11 @@ func RunEtcdServer(t TestingT) (string, func()) {
 	}
 	go func() {
 		cmd := exec.Command("etcd",
-			"-name", name,
-			"-data-dir", dataDir,
-			"-addr", "127.0.0.1:"+port,
-			"-bind-addr", "127.0.0.1:"+port,
-			"-peer-addr", "127.0.0.1:"+clusterPort,
-			"-peer-bind-addr", "127.0.0.1:"+clusterPort,
+			"--data-dir", dataDir,
+			"--listen-client-urls", "http://127.0.0.1:"+port,
+			"--listen-peer-urls", "http://127.0.0.1:"+clusterPort,
+			"--initial-advertise-peer-urls", "http://127.0.0.1:"+clusterPort,
+			"--initial-cluster", "default=http://127.0.0.1:"+clusterPort,
 		)
 		var stderr, stdout io.Reader
 		if os.Getenv("DEBUG") != "" {
@@ -93,6 +89,10 @@ func RunEtcdServer(t TestingT) (string, func()) {
 	client := etcd.NewClient([]string{addr})
 	err = Attempts.Run(func() (err error) {
 		_, err = client.Get("/", false, false)
+		if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
+			// Valid 404 from etcd (> v0.5)
+			err = nil
+		}
 		return
 	})
 	if err != nil {
