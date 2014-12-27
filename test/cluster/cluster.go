@@ -209,7 +209,7 @@ func (c *Cluster) startVMs(rootFS string, initial bool, count int) ([]*Instance,
 			Kernel: c.bc.Kernel,
 			User:   uid,
 			Group:  gid,
-			Memory: "1024",
+			Memory: "2048",
 			Cores:  2,
 			Drives: map[string]*VMDrive{
 				"hda": {FS: rootFS, COW: true, Temp: true},
