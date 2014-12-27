@@ -233,6 +233,10 @@
 			"Rev": "3f0466666779bd2143f368a207b0641f0ed536e8"
 		},
 		{
+			"ImportPath": "github.com/johto/notifyutils/notifydispatcher",
+			"Rev": "ca7fef705ef3a3099fa0da6fbc65b54a29d77227"
+		},
+		{
 			"ImportPath": "github.com/kavu/go_reuseport",
 			"Rev": "014200e60fbd2172d2b14c5703b62657f826eaa9"
 		},
