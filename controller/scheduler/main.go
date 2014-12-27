@@ -518,6 +518,11 @@ func (m jobTypeMap) Add(typ, host, id string) *Job {
 
 func (m jobTypeMap) Remove(job *Job) {
 	if jobs, ok := m[job.Type]; ok {
+		j := jobs[jobKey{job.HostID, job.ID}]
+		// cancel job restarts
+		if j.timer != nil {
+			j.timer.Stop()
+		}
 		delete(jobs, jobKey{job.HostID, job.ID})
 	}
 }

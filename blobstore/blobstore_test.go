@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/testutils"
 )
 
 func TestOSFilesystem(t *testing.T) {
@@ -26,29 +26,10 @@ func TestOSFilesystem(t *testing.T) {
 }
 
 func TestPostgresFilesystem(t *testing.T) {
-	dbname := "blobstoretest"
-	if os.Getenv("PGDATABASE") != "" {
-		dbname = os.Getenv("PGDATABASE")
-	} else {
-		os.Setenv("PGDATABASE", dbname)
-	}
-	if os.Getenv("PGSSLMODE") == "" {
-		os.Setenv("PGSSLMODE", "disable")
-	}
-
-	db, err := sql.Open("postgres", "dbname=postgres")
-	if err != nil {
+	if err := testutils.SetupPostgres("blobstoretest"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbname)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(fmt.Sprintf("CREATE DATABASE %s", dbname)); err != nil {
-		t.Fatal(err)
-	}
-	db.Close()
-
-	db, err = sql.Open("postgres", "")
+	db, err := sql.Open("postgres", "")
 	if err != nil {
 		t.Fatal(err)
 	}

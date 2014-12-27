@@ -3,6 +3,7 @@
   "$image_url_prefix/discoverd": "$image_id[discoverd]",
   "$image_url_prefix/postgresql": "$image_id[postgresql]",
   "$image_url_prefix/controller": "$image_id[controller]",
+  "$image_url_prefix/deployer": "$image_id[deployer]",
   "$image_url_prefix/blobstore": "$image_id[blobstore]",
   "$image_url_prefix/router": "$image_id[router]",
   "$image_url_prefix/receiver": "$image_id[receiver]",

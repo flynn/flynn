@@ -233,6 +233,10 @@
 			"Rev": "3f0466666779bd2143f368a207b0641f0ed536e8"
 		},
 		{
+			"ImportPath": "github.com/julienschmidt/httprouter",
+			"Rev": "46807412fe50aaceb73bb57061c2230fd26a1640"
+		},
+		{
 			"ImportPath": "github.com/kavu/go_reuseport",
 			"Rev": "014200e60fbd2172d2b14c5703b62657f826eaa9"
 		},
