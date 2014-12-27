@@ -2,12 +2,14 @@ package queue
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/discoverd/client"
 )
 
 type Handler func(*Job) error
@@ -15,6 +17,8 @@ type Handler func(*Job) error
 type Queue struct {
 	DB    *sql.DB
 	Table string
+
+	discoverd *discoverd.Client
 
 	mtx          sync.Mutex
 	l            *listener
@@ -25,13 +29,21 @@ type Queue struct {
 	waitMtx      sync.Mutex
 }
 
-func New(db *sql.DB, table string) *Queue {
+func New(db *sql.DB, table string, cl *discoverd.Client) *Queue {
 	q := &Queue{
 		DB:           db,
 		Table:        table,
 		stopListener: make(chan struct{}),
 		subscribers:  make(map[string]map[chan *Event]struct{}),
 		waiters:      make(map[string]chan error),
+		discoverd:    cl,
+	}
+	if q.discoverd == nil {
+		cl, err := discoverd.NewClient()
+		if err != nil {
+			log.Fatal(err)
+		}
+		q.discoverd = cl
 	}
 	go q.unlockJobsOfDeadWorkers()
 	return q
@@ -93,7 +105,14 @@ func (q *Queue) Wait(name string) chan error {
 }
 
 func (q *Queue) unlockJobsOfDeadWorkers() {
-	q.DB.Exec(fmt.Sprintf("UPDATE %s SET locked_at = NULL, locked_by = NULL WHERE locked_by NOT IN (SELECT pid FROM pg_stat_activity)", q.Table))
+	set, err := q.discoverd.NewServiceSet("flynn-queue-worker")
+	if err != nil {
+		log.Fatal(err)
+	}
+	workers := set.Addrs()
+	if len(workers) > 0 {
+		q.DB.Exec(fmt.Sprintf("UPDATE %s SET locked_at = NULL, locked_by = NULL WHERE locked_by NOT IN (%s)", q.Table, strings.Join(workers, ", ")))
+	}
 }
 
 func (q *Queue) listener() *listener {

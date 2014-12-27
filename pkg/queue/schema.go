@@ -17,12 +17,12 @@ CREATE TABLE {{ .Table }} (
   attempts integer NOT NULL DEFAULT 0,
   max_attempts integer NOT NULL DEFAULT 1,
   locked_at timestamptz,
-  locked_by integer,
+  locked_by uuid,
   created_at timestamptz DEFAULT now(),
   run_at timestamptz DEFAULT now()
 );`[1:])),
 	template.Must(template.New("queue-sql-2").Parse(`
-CREATE OR REPLACE FUNCTION lock_head(q_name varchar, top_boundary integer)
+CREATE OR REPLACE FUNCTION lock_head(q_name varchar, w_id uuid, top_boundary integer)
 RETURNS SETOF {{ .Table }} AS $$
 DECLARE
   unlocked bigint;
@@ -74,7 +74,8 @@ BEGIN
 
   RETURN QUERY EXECUTE 'UPDATE {{ .Table }} '
     || ' SET locked_at = (CURRENT_TIMESTAMP),'
-    || ' locked_by = (select pg_backend_pid())'
+    || ' locked_by = '
+    || quote_literal(w_id)
     || ' WHERE id = $1'
     || ' AND locked_at is NULL'
     || ' RETURNING *'
@@ -84,10 +85,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;`[1:])),
 	template.Must(template.New("queue-sql-3").Parse(`
-CREATE OR REPLACE FUNCTION lock_head(tname varchar)
+CREATE OR REPLACE FUNCTION lock_head(tname varchar, w_id uuid)
 RETURNS SETOF {{ .Table }} AS $$
 BEGIN
-  RETURN QUERY EXECUTE 'SELECT * FROM lock_head($1,10)' USING tname;
+  RETURN QUERY EXECUTE 'SELECT * FROM lock_head($1,$2,10)' USING tname, w_id;
 END;
 $$ LANGUAGE plpgsql;`[1:])),
 	template.Must(template.New("queue-sql-4").Parse(`

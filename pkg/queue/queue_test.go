@@ -10,6 +10,8 @@ import (
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/pkg/testutils"
 )
 
@@ -17,12 +19,17 @@ import (
 func Test(t *testing.T) { TestingT(t) }
 
 type S struct {
-	q *Queue
+	q         *Queue
+	cleanup   func()
+	discoverd *discoverd.Client
 }
 
 var _ = ConcurrentSuite(&S{})
 
 func (s *S) SetUpSuite(c *C) {
+	s.discoverd, s.cleanup = testutil.SetupDiscoverd(c)
+	c.Assert(s.discoverd, Not(IsNil))
+
 	dbname := "queuetest"
 	c.Assert(testutils.SetupPostgres(dbname), IsNil)
 
@@ -30,8 +37,12 @@ func (s *S) SetUpSuite(c *C) {
 	db, err := sql.Open("postgres", dsn)
 	c.Assert(err, IsNil)
 
-	s.q = New(db, "jobs")
+	s.q = New(db, "jobs", s.discoverd)
 	c.Assert(s.q.SetupDB(), IsNil)
+}
+
+func (s *S) TearDownSuite(c *C) {
+	s.cleanup()
 }
 
 type testHelper struct {

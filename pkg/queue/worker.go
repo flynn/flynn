@@ -3,6 +3,7 @@ package queue
 import (
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 type Worker struct {
 	q           *Queue
 	name        string
+	id          string
 	handler     Handler
 	mtx         sync.RWMutex
 	stopped     bool
@@ -34,14 +36,19 @@ type Job struct {
 }
 
 func newWorker(q *Queue, name string, concurrency int, h Handler) *Worker {
-	return &Worker{
+	w := &Worker{
 		q:           q,
 		name:        name,
+		id:          random.UUID(),
 		handler:     h,
 		stop:        make(chan struct{}),
 		done:        make(chan struct{}),
 		concurrency: concurrency,
 	}
+	if err := q.discoverd.Register("flynn-queue-worker", w.id); err != nil {
+		log.Fatal(err)
+	}
+	return w
 }
 
 func (w *Worker) Start() error {
@@ -159,7 +166,7 @@ func (w *Worker) lockJob() (*Job, error) {
 	wait := w.q.Wait(w.name)
 
 	for {
-		err := w.q.DB.QueryRow("SELECT id, data, attempts, max_attempts FROM lock_head($1)", w.name).Scan(&job.ID, &job.Data, &job.Attempts, &job.MaxAttempts)
+		err := w.q.DB.QueryRow("SELECT id, data, attempts, max_attempts FROM lock_head($1, $2)", w.name, w.id).Scan(&job.ID, &job.Data, &job.Attempts, &job.MaxAttempts)
 		if err == sql.ErrNoRows {
 			select {
 			case <-w.stop:
