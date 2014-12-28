@@ -478,23 +478,40 @@ func lookupUser(name string) (int, int, error) {
 
 func (c *Cluster) DumpLogs(w io.Writer) {
 	streams := &Streams{Stdout: w, Stderr: w}
-	run := func(inst *Instance, cmd string) {
+	run := func(inst *Instance, cmd string) error {
 		fmt.Fprint(w, "\n\n***** ***** ***** ***** ***** ***** ***** ***** ***** *****\n\n")
 		fmt.Fprintln(w, "HostID:", inst.ID, "-", cmd)
 		fmt.Fprintln(w)
-		inst.Run(cmd, streams)
+		err := inst.Run(cmd, streams)
 		fmt.Fprintln(w)
+		return err
 	}
+	fallback := func() {
+		fmt.Fprintln(w, "\n*** Error getting job logs via flynn-host, falling back to tail log dump\n")
+		for _, inst := range c.Instances {
+			run(inst, "sudo bash -c 'tail -n +1 /tmp/flynn-host-logs/**/*.log'")
+		}
+	}
+
 	fmt.Fprint(w, "\n\n***** ***** ***** DUMPING ALL LOGS ***** ***** *****\n\n")
 	for _, inst := range c.Instances {
 		run(inst, "ps faux")
 		run(inst, "cat /tmp/flynn-host.log")
 	}
+
 	var out bytes.Buffer
-	c.Run("flynn-host ps -a -q", &Streams{Stdout: &out})
+	if err := c.Run("flynn-host ps -a -q", &Streams{Stdout: &out}); err != nil {
+		io.Copy(w, &out)
+		fallback()
+		return
+	}
+
 	ids := strings.Split(strings.TrimSpace(out.String()), "\n")
 	for _, id := range ids {
-		run(c.Instances[0], fmt.Sprintf("flynn-host inspect %s", id))
+		if err := run(c.Instances[0], fmt.Sprintf("flynn-host inspect %s", id)); err != nil {
+			fallback()
+			return
+		}
 		run(c.Instances[0], fmt.Sprintf("flynn-host log %s", id))
 	}
 }
