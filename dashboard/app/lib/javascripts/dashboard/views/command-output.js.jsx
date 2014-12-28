@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require_self
 //= require ansiparse
 

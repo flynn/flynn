@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ../actions/app-route-new
 //= require Modal
 

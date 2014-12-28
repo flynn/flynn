@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ./github-sources
 //= require ./github-repos
 //= require ./github-repo

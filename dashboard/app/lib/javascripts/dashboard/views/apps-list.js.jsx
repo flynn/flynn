@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ./route-link
 //= require ./external-link
 

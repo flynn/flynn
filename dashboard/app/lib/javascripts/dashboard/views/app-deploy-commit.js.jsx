@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ../stores/github-commit
 //= require ../stores/job-output
 //= require ../actions/app-deploy-commit

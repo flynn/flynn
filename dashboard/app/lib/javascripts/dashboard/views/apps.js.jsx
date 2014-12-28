@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ../stores/apps
 //= require ./apps-list-header
 //= require ./apps-list
@@ -18,16 +17,16 @@ Dashboard.Views.Apps = React.createClass({
 		return (
 			<section className="panel-row full-height">
 				<section className="panel full-height apps-list-panel">
-					{Dashboard.Views.AppsListHeader(this.props.appsListHeaderProps || {})}
+					{React.createElement(Dashboard.Views.AppsListHeader, this.props.appsListHeaderProps || {})}
 
-					{Dashboard.Views.AppsList(Marbles.Utils.extend({}, this.props.appsListProps, {
+					{React.createElement(Dashboard.Views.AppsList, Marbles.Utils.extend({}, this.props.appsListProps, {
 						apps: this.state.apps
 					}))}
 				</section>
 
 				<section className="panel app-panel">
 					{this.props.appProps.appId ? (
-						Dashboard.Views.App(Marbles.Utils.extend({}, this.props.appProps, { ref: "appComponent" }))
+						React.createElement(Dashboard.Views.App, Marbles.Utils.extend({}, this.props.appProps, { ref: "appComponent" }))
 					) : (
 						<p className="placeholder">No app selected</p>
 					)}

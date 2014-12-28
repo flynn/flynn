@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ../stores/github-user
 //= require ../stores/github-repos
 //= require ../actions/github-repos
@@ -75,7 +74,7 @@ Dashboard.Views.GithubRepos = React.createClass({
 								id={page.id}
 								className="github-repos"
 								onPageEvent={handlePageEvent}
-								component={React.DOM.ul}>
+								component='ul'>
 
 								{page.repos.map(function (repo) {
 									return (

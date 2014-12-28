@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ../actions/app-route-delete
 //= require Modal
 

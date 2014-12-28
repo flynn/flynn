@@ -80,8 +80,8 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 		if (view && view.isMounted() && view.constructor.displayName === "Views.Apps") {
 			view.setProps(props);
 		} else {
-			Dashboard.primaryView = view = React.renderComponent(
-				Dashboard.Views.Apps(props), Dashboard.el);
+			Dashboard.primaryView = view = React.render(React.createElement(
+				Dashboard.Views.Apps, props), Dashboard.el);
 		}
 	},
 
@@ -130,8 +130,9 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 	appEnv: function (params) {
 		params = params[0];
 
-		Dashboard.secondaryView = React.renderComponent(
-			Dashboard.Views.AppEnv({
+		Dashboard.secondaryView = React.render(React.createElement(
+			Dashboard.Views.AppEnv,
+			{
 				appId: params.id,
 				onHide: function () {
 					Marbles.history.navigate(this.__getAppPath(params.id, params));
@@ -147,8 +148,9 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 	appLogs: function (params) {
 		params = params[0];
 
-		Dashboard.secondaryView = React.renderComponent(
-			Dashboard.Views.AppLogs({
+		Dashboard.secondaryView = React.render(React.createElement(
+			Dashboard.Views.AppLogs,
+			{
 				appId: params.id,
 				onHide: function () {
 					Marbles.history.navigate(this.__getAppPath(params.id, params));
@@ -164,8 +166,9 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 	appDelete: function (params) {
 		params = params[0];
 
-		Dashboard.secondaryView = React.renderComponent(
-			Dashboard.Views.AppDelete({
+		Dashboard.secondaryView = React.render(React.createElement(
+			Dashboard.Views.AppDelete,
+			{
 				appId: params.id,
 				onHide: function () {
 					Marbles.history.navigate(this.__getAppPath(params.id, params));
@@ -181,8 +184,9 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 	newAppRoute: function (params) {
 		params = params[0];
 
-		Dashboard.secondaryView = React.renderComponent(
-			Dashboard.Views.NewAppRoute({
+		Dashboard.secondaryView = React.render(React.createElement(
+			Dashboard.Views.NewAppRoute,
+			{
 				appId: params.id,
 				onHide: function () {
 					Marbles.history.navigate(this.__getAppPath(params.id, params));
@@ -198,8 +202,9 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 	appRouteDelete: function (params) {
 		params = params[0];
 
-		Dashboard.secondaryView = React.renderComponent(
-			Dashboard.Views.AppRouteDelete({
+		Dashboard.secondaryView = React.render(React.createElement(
+			Dashboard.Views.AppRouteDelete,
+			{
 				appId: params.id,
 				routeId: params.route,
 				domain: params.domain,
@@ -218,8 +223,9 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 	appDeployCommit: function (params) {
 		params = params[0];
 
-		Dashboard.secondaryView = React.renderComponent(
-			Dashboard.Views.AppDeployCommit({
+		Dashboard.secondaryView = React.render(React.createElement(
+			Dashboard.Views.AppDeployCommit,
+			{
 				appId: params.id,
 				ownerLogin: params.owner,
 				repoName: params.repo,

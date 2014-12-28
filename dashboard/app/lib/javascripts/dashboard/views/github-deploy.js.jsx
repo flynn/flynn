@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ../stores/github-commit
 //= require ../stores/github-pull
 //= require ../stores/app

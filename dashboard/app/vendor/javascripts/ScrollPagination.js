@@ -63,7 +63,7 @@ var ScrollPagination = window.ScrollPagination = React.createClass({
 		if (this.__paddingTop) {
 			style.paddingTop = this.__paddingTop + "px";
 		}
-		return React.DOM.div({
+		return React.createElement('div', {
 			style: style,
 			ref: "wrapper"
 		}, this.props.children);
@@ -145,9 +145,9 @@ var ScrollPagination = window.ScrollPagination = React.createClass({
 				if (child === null) {
 					return;
 				}
-				if (child.constructor.displayName === "ScrollPagination.Page") {
+				if (child.type.displayName === "ScrollPagination.Page") {
 					pageIds.push(child.props.id);
-				} else if (child.constructor.displayName === "ul") {
+				} else if (child.type === "ul") {
 					findPages(child.props.children);
 				}
 			});
@@ -278,7 +278,7 @@ ScrollPagination.Page = React.createClass({
 
 	getDefaultProps: function () {
 		return {
-			component: React.DOM.div
+			component: 'div'
 		};
 	},
 
@@ -299,7 +299,7 @@ ScrollPagination.Page = React.createClass({
 				props[k] = this.props[k];
 			}
 		}
-		return this.props.component(props, this.props.children);
+		return React.createElement(this.props.component, props, this.props.children);
 	},
 
 	__determineHeight: function () {

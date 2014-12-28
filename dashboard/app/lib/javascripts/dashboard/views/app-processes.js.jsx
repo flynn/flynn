@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ../actions/app-processes
 //= require ./integer-picker
 //= require Modal

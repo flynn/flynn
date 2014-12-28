@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ../stores/github-commits
 //= require ../actions/github-commits
 //= require ./helpers/findScrollParent
@@ -84,7 +83,7 @@ Dashboard.Views.GithubCommitSelector = React.createClass({
 								key={page.id}
 								id={page.id}
 								onPageEvent={handlePageEvent}
-								component={React.DOM.ul}>
+								component='ul'>
 
 								{page.commits.map(function (commit) {
 									return (

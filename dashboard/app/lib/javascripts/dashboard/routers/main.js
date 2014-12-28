@@ -41,8 +41,8 @@ Dashboard.routers.main = new (Marbles.Router.createClass({
 			return;
 		}
 
-		React.renderComponent(
-			Dashboard.Views.Login({
+		React.render(React.createElement(
+			Dashboard.Views.Login, {
 					onSuccess: performRedirect
 				}), Dashboard.el);
 	},
@@ -56,8 +56,8 @@ Dashboard.routers.main = new (Marbles.Router.createClass({
 		browserName = browserName ? (browserName[1] || "").toLowerCase() : "unknown";
 		var osName = navigator.userAgent.match(/(?:OS X|Windows|Linux)/);
 		osName = osName ? osName[0].toLowerCase().replace(/\s+/g, '') : "unknown";
-		React.renderComponent(
-			Dashboard.Views.InstallCert({
+		React.render(React.createElement(
+			Dashboard.Views.InstallCert, {
 				certURL: Dashboard.config.API_SERVER.replace("https", "http") + "/cert",
 				browserName: browserName,
 				osName: osName

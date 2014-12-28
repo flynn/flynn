@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ../stores/app
 //= require ./app-controls
 //= require ./app-source-history

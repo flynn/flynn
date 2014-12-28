@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ./input
 //= require ./models/login
 

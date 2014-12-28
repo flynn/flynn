@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ./external-link
 //= require ./timestamp
 
