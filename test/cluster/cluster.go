@@ -334,6 +334,10 @@ git merge origin/master
 
 make dev
 
+if [[ -f test/scripts/debug-info.sh ]]; then
+  sudo cp test/scripts/debug-info.sh /usr/local/bin/debug-info.sh
+fi
+
 sudo cp host/bin/flynn-* /usr/bin
 sudo cp host/bin/manifest.json /etc/flynn-host.json
 sudo cp bootstrap/bin/manifest.json /etc/flynn-bootstrap.json
@@ -359,6 +363,10 @@ type hostScriptData struct {
 
 var flynnHostScripts = map[string]*template.Template{
 	"libvirt-lxc": template.Must(template.New("flynn-host-libvirt").Parse(`
+if [[ -f /usr/local/bin/debug-info.sh ]]; then
+  /usr/local/bin/debug-info.sh &>/tmp/debug-info.log &
+fi
+
 sudo start-stop-daemon \
   --start \
   --background \
@@ -497,6 +505,7 @@ func (c *Cluster) DumpLogs(w io.Writer) {
 	for _, inst := range c.Instances {
 		run(inst, "ps faux")
 		run(inst, "cat /tmp/flynn-host.log")
+		run(inst, "cat /tmp/debug-info.log")
 	}
 
 	var out bytes.Buffer
