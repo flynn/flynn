@@ -195,7 +195,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/pq",
-			"Rev": "29bc57434aa700fa80bc713bd85d3fe1d0cd4fc0"
+			"Rev": "9fdf1e3a841ca657740fc5a4e29d37b8711ede4a"
 		},
 		{
 			"ImportPath": "github.com/flynn/tail",

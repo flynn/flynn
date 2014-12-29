@@ -1,8 +1,8 @@
 package notifydispatcher
 
 import (
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/lib/pq"
 	"fmt"
+	"github.com/lib/pq"
 	"runtime"
 	"sync"
 	"testing"
