@@ -143,7 +143,7 @@ multi-node cluster size is three, and this command does not need to be run if
 you are only starting a single node.
 
 ```
-$ sudo flynn-host init --discovery-init=3
+$ sudo flynn-host init --init-discovery=3
 https://discovery.etcd.io/ac4581ec13a1d4baee9f9c78cf06a8c0
 ```
 
