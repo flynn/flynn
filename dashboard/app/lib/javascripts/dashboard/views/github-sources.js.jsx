@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ../stores/github-user
 //= require ../stores/github-orgs
 //= require ./helpers/getPath

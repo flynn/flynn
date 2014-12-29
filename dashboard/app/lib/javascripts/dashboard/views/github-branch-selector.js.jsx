@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ../stores/github-branches
 //= require ../actions/github-branches
 

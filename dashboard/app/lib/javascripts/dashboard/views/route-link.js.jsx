@@ -1,5 +1,3 @@
-/** @jsx React.DOM */
-
 (function () {
 
 "use strict";
@@ -38,7 +36,6 @@ Dashboard.Views.RouteLink = React.createClass({
 			options.params = this.props.params;
 		}
 		Marbles.history.navigate(this.props.path, options);
-		return false;
 	},
 
 	__setHrefFromPath: function (path, params) {
@@ -59,7 +56,7 @@ Dashboard.Views.RouteLink = React.createClass({
 		delete props.children;
 		delete props.path;
 		delete props.params;
-		return React.DOM.a(props, this.props.children);
+		return React.createElement('a', props, this.props.children);
 	},
 });
 

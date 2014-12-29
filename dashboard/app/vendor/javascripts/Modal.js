@@ -99,17 +99,17 @@ window.Modal = React.createClass({
 
 	render: function () {
 		return (
-			React.DOM.div({
+			React.createElement('div', {
 				className: "overlay"+ (this.state.visible ? "" : " hidden") + (this.props.className ? " "+ this.props.className : ""),
 				ref: "overlay",
 				onClick: this.handleOverlayClick
-			}, React.DOM.div({ className: "overlay-top" }, React.DOM.div({
+			}, React.createElement('div', { className: "overlay-top" }, React.createElement('div', {
 					className: "overlay-close",
 					title: "Close",
 					onClick: this.handleCloseBtnClick
 				}, "×")),
 
-				React.DOM.div({ className: "overlay-content" }, this.props.children)));
+				React.createElement('div', { className: "overlay-content" }, this.props.children)));
 	}
 });
 

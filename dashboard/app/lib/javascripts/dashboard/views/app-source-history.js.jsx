@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ../stores/github-repos
 //= require ../stores/github-repo
 //= require ../stores/github-pull

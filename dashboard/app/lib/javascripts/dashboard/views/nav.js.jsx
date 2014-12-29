@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ../actions/nav
 //= require ./route-link
 

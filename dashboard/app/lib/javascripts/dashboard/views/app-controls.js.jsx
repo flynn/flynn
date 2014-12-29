@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ./app-processes
 //= require ./app-resources
 //= require ./app-routes
@@ -17,11 +16,11 @@ Dashboard.Views.AppControls = React.createClass({
 		var app = this.props.app;
 		var formation = this.props.formation;
 		var getAppPath = this.props.getAppPath;
-		var headerComponent = this.props.headerComponent || React.DOM.header;
+		var headerComponent = this.props.headerComponent || "header";
 
 		return (
 			<section className="app-controls">
-				{headerComponent(this.props,
+				{React.createElement(headerComponent, this.props,
 					<h1>
 						{app.name}
 						<RouteLink path={getAppPath("/delete")}>

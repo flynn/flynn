@@ -47,7 +47,7 @@ window.Dashboard = {
 	},
 
 	__renderNavComponent: function () {
-		this.nav = React.renderComponent(this.Views.Nav({
+		this.nav = React.render(React.createElement(this.Views.Nav, {
 				authenticated: this.config.authenticated
 			}), this.navEl);
 	},
@@ -155,8 +155,8 @@ window.Dashboard = {
 	},
 
 	__handleServiceUnavailable: function (status) {
-		React.renderComponent(
-			this.Views.ServiceUnavailable({ status: status }),
+		React.render(
+			React.createElement(this.Views.ServiceUnavailable, { status: status }),
 			document.getElementById('main')
 		);
 	},

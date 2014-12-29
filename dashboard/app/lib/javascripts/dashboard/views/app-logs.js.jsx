@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ../stores/app-jobs
 //= require ./job-output
 //= require Modal

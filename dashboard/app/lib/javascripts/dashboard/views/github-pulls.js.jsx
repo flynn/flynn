@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ../stores/github-pulls
 //= require ../actions/github-pulls
 //= require ./github-pull
@@ -62,7 +61,7 @@ Dashboard.Views.GithubPulls = React.createClass({
 								key={page.id}
 								id={page.id}
 								onPageEvent={handlePageEvent}
-								component={React.DOM.ul}>
+								component='ul'>
 
 								{page.pulls.map(function (pull) {
 									return (

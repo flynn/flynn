@@ -46,8 +46,8 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 		if (view && view.constructor.displayName === "Views.GithubAuth" && view.isMounted()) {
 			view.setProps(props);
 		} else {
-			view = Dashboard.primaryView = React.renderComponent(
-				Dashboard.Views.GithubAuth(props),
+			view = Dashboard.primaryView = React.render(React.createElement(
+				Dashboard.Views.GithubAuth, props),
 				Dashboard.el
 			);
 		}
@@ -74,8 +74,8 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 		if (view && view.constructor.displayName === "Views.Github" && view.isMounted()) {
 			view.setProps(props);
 		} else {
-			view = Dashboard.primaryView = React.renderComponent(
-				Dashboard.Views.Github(props),
+			view = Dashboard.primaryView = React.render(React.createElement(
+				Dashboard.Views.Github, props),
 				Dashboard.el);
 			}
 	},
@@ -113,8 +113,8 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 		props.dismissError = function () {
 			view.setProps({ errorMsg: null });
 		};
-		var view = Dashboard.secondaryView = React.renderComponent(
-			Dashboard.Views.GithubDeploy(props),
+		var view = Dashboard.secondaryView = React.render(React.createElement(
+			Dashboard.Views.GithubDeploy, props),
 			Dashboard.secondaryEl
 		);
 

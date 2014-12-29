@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 //= require ../stores/app-resources
 
 (function () {
