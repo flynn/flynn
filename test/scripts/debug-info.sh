@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # This script is run by the CI runner to collect debugging information
-# which will be printed if any tests fail.
+# which will be printed if any tests fail. It currently runs no code.
 
 memwatch() {
   interests=("$@")
@@ -24,5 +24,3 @@ memwatch() {
     sleep 1
   done
 }
-
-memwatch "etcd" "discoverd"
