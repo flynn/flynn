@@ -134,7 +134,5 @@ rm godeb
 apt-get autoremove -y
 apt-get clean
 
-echo "vm.overcommit_memory = 1" >> /etc/sysctl.conf
-
 # recreate resolv.conf symlink
 ln -nsf ../run/resolvconf/resolv.conf /etc/resolv.conf
