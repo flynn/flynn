@@ -36,7 +36,7 @@ Dashboard.Views.Nav = React.createClass({
 	getInitialState: function () {
 		return {
 			items: [
-				{ title: "Dashboard", icon: "icn-dashboard", path: "/apps" }
+				{ title: "Dashboard", icon: "icn-dashboard", path: "/" }
 			]
 		};
 	},
