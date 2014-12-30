@@ -145,6 +145,7 @@ func (l *Log) Read(lines int, follow bool, ch chan Data, done chan struct{}) err
 		return err
 	}
 	defer t.Stop()
+	closed := l.closed
 outer:
 	for {
 		select {
@@ -159,10 +160,12 @@ outer:
 			ch <- data
 		case <-done:
 			break outer
-		case <-l.closed:
+		case <-closed:
 			// StopAtEOF will wait until the log hits an EOF before closing
 			// t.Lines
 			go t.StopAtEOF()
+			// make sure that we don't hit this path again
+			closed = nil
 		}
 	}
 	close(ch) // send a close event so we know everything was read
