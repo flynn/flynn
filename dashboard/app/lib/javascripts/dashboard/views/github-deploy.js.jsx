@@ -1,10 +1,12 @@
 //= require ../stores/github-commit
 //= require ../stores/github-pull
+//= require ../stores/github-repo-buildpack
 //= require ../stores/app
 //= require ../stores/job-output
 //= require ../actions/github-deploy
 //= require ./github-commit
 //= require ./github-pull
+//= require ./github-repo-buildpack
 //= require ./edit-env
 //= require ./command-output
 //= require ./route-link
@@ -17,6 +19,7 @@
 var GithubRepoStore = Dashboard.Stores.GithubRepo;
 var GithubCommitStore = Dashboard.Stores.GithubCommit;
 var GithubPullStore = Dashboard.Stores.GithubPull;
+var BuildpackStore = Dashboard.Stores.GithubRepoBuildpack;
 var JobOutputStore = Dashboard.Stores.JobOutput;
 
 var GithubDeployActions = Dashboard.Actions.GithubDeploy;
@@ -47,6 +50,14 @@ function getPullStoreId (props) {
 	};
 }
 
+function getBuildpackStoreId (props, commit, pull) {
+	return {
+		ownerLogin: props.ownerLogin,
+		repoName: props.repoName,
+		ref: commit ? commit.sha : (pull ? pull.head.sha : props.branchName)
+	};
+}
+
 function getJobOutputStoreId (props) {
 	if ( !props.job ) {
 		return null;
@@ -60,7 +71,10 @@ function getJobOutputStoreId (props) {
 function getState (props, prevState) {
 	prevState = prevState || {};
 	var state = {
-		launching: prevState.launching
+		launching: prevState.launching,
+		env: prevState.env,
+		name: prevState.name,
+		db: prevState.dbRequested
 	};
 
 	if (props.pullNumber) {
@@ -69,6 +83,18 @@ function getState (props, prevState) {
 	} else {
 		state.commitStoreId = getCommitStoreId(props);
 		state.commit = GithubCommitStore.getState(state.commitStoreId).commit;
+	}
+
+	var prevBuildpackStoreId = prevState.buildpackStoreId;
+	var nextBuildpackStoreId = getBuildpackStoreId(props, state.commit, state.pull);
+	if ( !Marbles.Utils.assertEqual(prevBuildpackStoreId, nextBuildpackStoreId) ) {
+		BuildpackStore.removeChangeListener(prevBuildpackStoreId, this.__handleStoreChange);
+		BuildpackStore.addChangeListener(nextBuildpackStoreId, this.__handleStoreChange);
+	}
+	state.buildpackStoreId = nextBuildpackStoreId;
+	state.buildpack = BuildpackStore.getState(state.buildpackStoreId);
+	if (state.buildpack.unknown) {
+		state.env.BUILDPACK_URL = "";
 	}
 
 	state.repoStoreId = getRepoStoreId(props);
@@ -117,6 +143,11 @@ Dashboard.Views.GithubDeploy = React.createClass({
 					) : (pull ? (
 						<Dashboard.Views.GithubPull pull={pull} />
 					) : null)}
+
+					<Dashboard.Views.GithubRepoBuildpack
+						ownerLogin={this.props.ownerLogin}
+						repoName={this.props.repoName}
+						selectedBranchName={this.state.buildpackStoreId.ref} />
 				</header>
 
 				{this.props.children}
@@ -155,7 +186,7 @@ Dashboard.Views.GithubDeploy = React.createClass({
 	},
 
 	getInitialState: function () {
-		return Marbles.Utils.extend(getState(this.props), {
+		return getState.call(this, this.props, {
 			name: this.__formatName([this.props.ownerLogin, this.props.repoName, this.props.branchName].join("-")),
 			db: false,
 			env: {}
@@ -169,6 +200,9 @@ Dashboard.Views.GithubDeploy = React.createClass({
 		}
 		if (this.state.pullStoreId) {
 			GithubPullStore.addChangeListener(this.state.pullStoreId, this.__handleStoreChange);
+		}
+		if (this.state.buildpackStoreId) {
+			BuildpackStore.addChangeListener(this.state.buildpackStoreId, this.__handleStoreChange);
 		}
 		if (this.state.jobOutputStoreId) {
 			JobOutputStore.addChangeListener(this.state.jobOutputStoreId, this.__handleStoreChange);
@@ -241,13 +275,16 @@ Dashboard.Views.GithubDeploy = React.createClass({
 		if (this.state.pullStoreId) {
 			GithubPullStore.removeChangeListener(this.state.pullStoreId, this.__handleStoreChange);
 		}
+		if (this.state.buildpackStoreId) {
+			BuildpackStore.removeChangeListener(this.state.buildpackStoreId, this.__handleStoreChange);
+		}
 		if (this.state.jobOutputStoreId) {
 			JobOutputStore.removeChangeListener(this.state.jobOutputStoreId, this.__handleStoreChange);
 		}
 	},
 
 	__handleStoreChange: function (props) {
-		this.setState(getState(props || this.props, this.state));
+		this.setState(getState.call(this, props || this.props, this.state));
 	},
 
 	__handleNameChange: function (e) {

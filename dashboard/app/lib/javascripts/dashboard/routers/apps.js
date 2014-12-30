@@ -366,7 +366,7 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 
 	__handleBranchSelected: function (event) {
 		var view = Dashboard.primaryView, appView;
-		if (view.refs && view.refs.appComponent) {
+		if (view && view.refs && view.refs.appComponent) {
 			appView = view.refs.appComponent;
 		} else {
 			return;
