@@ -237,6 +237,12 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 		data.InternalIP = activeJob.InternalIP
 		data.readonly = true
 		serviceData[service.ID] = data
+
+		if service.ID == "flannel" {
+			if err := m.backend.ConfigureNetworking(NetworkStrategyFlannel, job.ID); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	return serviceData, nil

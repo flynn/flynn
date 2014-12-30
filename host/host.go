@@ -158,7 +158,7 @@ func runDaemon(args *docopt.Args) {
 
 	switch backendName {
 	case "libvirt-lxc":
-		backend, err = NewLibvirtLXCBackend(state, portAlloc, volPath, "/tmp/flynn-host-logs", flynnInit)
+		backend, err = NewLibvirtLXCBackend(state, volPath, "/tmp/flynn-host-logs", flynnInit)
 	default:
 		log.Fatalf("unknown backend %q", backendName)
 	}

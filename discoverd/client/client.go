@@ -508,6 +508,7 @@ func (c *Client) Register(name, addr string) error {
 // representing the service registered, in case this service does become leader. In that case, you
 // can use the SelfAddr property of ServiceSet to compare to the Service returned by Leader.
 func (c *Client) RegisterWithSet(name, addr string, attributes map[string]string) (ServiceSet, error) {
+	addr = expandAddr(addr)
 	err := c.RegisterWithAttributes(name, addr, attributes)
 	if err != nil {
 		return nil, err
@@ -558,12 +559,21 @@ func (c *Client) RegisterAndStandby(name, addr string, attributes map[string]str
 	return standbyCh, nil
 }
 
+var externalIP = os.Getenv("EXTERNAL_IP")
+
+func expandAddr(addr string) string {
+	if addr[0] == ':' {
+		return os.Getenv("EXTERNAL_IP") + addr
+	}
+	return addr
+}
+
 // RegisterWithAttributes registers a service to be discovered, setting the attribtues specified, however,
 // attributes are optional so the value can be nil. If you need to change attributes, you just reregister.
 func (c *Client) RegisterWithAttributes(name, addr string, attributes map[string]string) error {
 	args := &agent.Args{
 		Name:  name,
-		Addr:  addr,
+		Addr:  expandAddr(addr),
 		Attrs: attributes,
 	}
 	var ret string
