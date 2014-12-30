@@ -414,7 +414,7 @@ type Client struct {
 	l                sync.Mutex
 	client           *rpcplus.Client
 	addr             string
-	heartbeats       map[string]chan struct{}
+	heartbeats       map[string]*heartbeater
 	expandedAddrs    map[string]string
 	names            map[string]string
 	reconnecting     bool
@@ -429,7 +429,7 @@ func newClient(c *rpcplus.Client, addr string) *Client {
 	return &Client{
 		client:           c,
 		addr:             addr,
-		heartbeats:       make(map[string]chan struct{}),
+		heartbeats:       make(map[string]*heartbeater),
 		expandedAddrs:    make(map[string]string),
 		names:            make(map[string]string),
 		reconnectWatches: make(map[chan ConnEvent]struct{}),
@@ -576,6 +576,16 @@ func (c *Client) RegisterWithAttributes(name, addr string, attributes map[string
 		Addr:  expandAddr(addr),
 		Attrs: attributes,
 	}
+
+	c.l.Lock()
+	h, heartbeating := c.heartbeats[args.Addr]
+	c.l.Unlock()
+	if heartbeating {
+		// we're already heartbeating this address, so update the attrs in the
+		// heartbeat before we update them manually to avoid races.
+		h.SetAttrs(args.Attrs)
+	}
+
 	var ret string
 	err := c.call("Agent.Register", args, &ret, false)
 	if err != nil {
@@ -584,33 +594,64 @@ func (c *Client) RegisterWithAttributes(name, addr string, attributes map[string
 		}
 		return errors.New("discover: register failed: " + err.Error())
 	}
-	done := make(chan struct{})
-	c.l.Lock()
-	if ch, exists := c.heartbeats[args.Addr]; exists {
-		// stop the old heartbeat if this is a re-registration
-		close(ch)
+
+	if !heartbeating {
+		c.l.Lock()
+		// if we're not already heartbeating this address, start a new one
+		c.heartbeats[args.Addr] = c.newHeartbeater(args)
+		c.expandedAddrs[args.Addr] = ret
+		c.names[args.Addr] = name
+		c.l.Unlock()
 	}
-	c.heartbeats[args.Addr] = done
-	c.expandedAddrs[args.Addr] = ret
-	c.names[args.Addr] = name
-	c.l.Unlock()
-	go func() {
-		ticker := time.NewTicker(agent.HeartbeatIntervalSecs * time.Second) // TODO: add jitter
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				// heartbeat
-				err := c.call("Agent.Register", args, &ret, true)
-				if err != nil {
-					log.Printf("discover: heartbeat %s (%s) failed: %s", args.Name, args.Addr, err)
-				}
-			case <-done:
-				return
-			}
-		}
-	}()
+
 	return nil
+}
+
+func (c *Client) newHeartbeater(args *agent.Args) *heartbeater {
+	h := &heartbeater{
+		c:    c,
+		args: args,
+		stop: make(chan struct{}),
+	}
+	go h.run()
+	return h
+}
+
+type heartbeater struct {
+	c *Client
+	sync.Mutex
+	stop chan struct{}
+	args *agent.Args
+}
+
+func (h *heartbeater) Stop() {
+	close(h.stop)
+}
+
+func (h *heartbeater) SetAttrs(attrs map[string]string) {
+	h.Lock()
+	defer h.Unlock()
+	h.args.Attrs = attrs
+}
+
+func (h *heartbeater) run() {
+	ticker := time.NewTicker(agent.HeartbeatIntervalSecs * time.Second) // TODO: add jitter
+	defer ticker.Stop()
+	var ret string
+	for {
+		select {
+		case <-ticker.C:
+			// heartbeat
+			h.Lock()
+			err := h.c.call("Agent.Register", h.args, &ret, true)
+			if err != nil {
+				log.Printf("discover: heartbeat %s (%s) failed: %s", h.args.Name, h.args.Addr, err)
+			}
+			h.Unlock()
+		case <-h.stop:
+			return
+		}
+	}
 }
 
 func (c *Client) rpcClient() *rpcplus.Client {
@@ -729,12 +770,12 @@ func (c *Client) Unregister(name, addr string) error {
 		Addr: addr,
 	}
 	c.l.Lock()
-	ch, ok := c.heartbeats[args.Addr]
+	h, ok := c.heartbeats[args.Addr]
 	if !ok {
 		c.l.Unlock()
 		return ErrUnknownRegistration
 	}
-	close(ch)
+	h.Stop()
 	delete(c.heartbeats, args.Addr)
 	c.l.Unlock()
 	err := c.call("Agent.Unregister", args, &struct{}{}, false)
@@ -766,8 +807,8 @@ func (c *Client) UnregisterAll() error {
 func (c *Client) Close() error {
 	c.l.Lock()
 	defer c.l.Unlock()
-	for _, ch := range c.heartbeats {
-		close(ch)
+	for _, h := range c.heartbeats {
+		h.Stop()
 	}
 	c.setClosed()
 	return c.rpcClient().Close()
