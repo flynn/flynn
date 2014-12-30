@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/aufs"
@@ -40,7 +41,13 @@ func runDownload(args *docopt.Args) error {
 	}
 
 	for image, id := range manifest {
-		fmt.Printf("Downloading %s %s...\n", image, id)
+		parsedURL, err := url.Parse(image)
+		if err != nil {
+			return err
+		}
+		// Hide login info from printing.
+		parsedURL.User = nil
+		fmt.Printf("Downloading %s %s...\n", parsedURL, id)
 		image += "?id=" + id
 		if err := ctx.Pull(image, pinkerton.InfoPrinter(false)); err != nil {
 			return err
