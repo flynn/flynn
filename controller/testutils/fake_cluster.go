@@ -6,6 +6,7 @@ import (
 
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 func NewFakeCluster() *FakeCluster {
@@ -109,7 +110,7 @@ func (c *FakeCluster) SetHostClient(id string, h *FakeHostClient) {
 	c.hostClients[id] = h
 }
 
-func (c *FakeCluster) StreamHostEvents(ch chan<- *host.HostEvent) cluster.Stream {
+func (c *FakeCluster) StreamHostEvents(ch chan<- *host.HostEvent) stream.Stream {
 	c.listenMtx.Lock()
 	defer c.listenMtx.Unlock()
 	c.listeners = append(c.listeners, ch)

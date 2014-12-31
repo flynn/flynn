@@ -5,6 +5,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/rpcplus"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 func NewLocalClient(host string, c *sampi.Cluster) cluster.LocalClient {
@@ -40,7 +41,7 @@ func (s localStream) Err() error {
 	return s.err
 }
 
-func (c *localClient) RegisterHost(h *host.Host, jobs chan *host.Job) cluster.Stream {
+func (c *localClient) RegisterHost(h *host.Host, jobs chan *host.Job) stream.Stream {
 	ch := make(chan interface{})
 	err := make(chan error)
 	s := localStream{stream: rpcplus.Stream{Send: ch, Error: err}}

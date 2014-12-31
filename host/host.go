@@ -20,6 +20,7 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 	rpc "github.com/flynn/flynn/pkg/rpcplus/comborpc"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 // discoverdAttempts is the attempt strategy that is used to connect to discoverd.
@@ -174,7 +175,7 @@ func runDaemon(args *docopt.Args) {
 		sh.Fatal(err)
 	}
 
-	var jobStream cluster.Stream
+	var jobStream stream.Stream
 	sh.BeforeExit(func() {
 		if jobStream != nil {
 			jobStream.Close()

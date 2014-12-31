@@ -16,6 +16,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 var backoffPeriod = 10 * time.Minute
@@ -82,14 +83,14 @@ type clusterClient interface {
 	ListHosts() ([]host.Host, error)
 	AddJobs(req *host.AddJobsReq) (*host.AddJobsRes, error)
 	DialHost(id string) (cluster.Host, error)
-	StreamHostEvents(ch chan<- *host.HostEvent) cluster.Stream
+	StreamHostEvents(ch chan<- *host.HostEvent) stream.Stream
 }
 
 type controllerClient interface {
 	GetRelease(releaseID string) (*ct.Release, error)
 	GetArtifact(artifactID string) (*ct.Artifact, error)
 	GetFormation(appID, releaseID string) (*ct.Formation, error)
-	StreamFormations(since *time.Time) (*controller.FormationUpdates, error)
+	StreamFormations(since *time.Time, output chan<- *ct.ExpandedFormation) (stream.Stream, error)
 	PutJob(job *ct.Job) error
 }
 
@@ -197,12 +198,13 @@ func (c *context) watchFormations() {
 		}
 
 		g.Log(grohl.Data{"at": "connect", "attempt": attempts})
-		updates, err := c.StreamFormations(&lastUpdatedAt)
+		updates := make(chan *ct.ExpandedFormation)
+		streamCtrl, err := c.StreamFormations(&lastUpdatedAt, updates)
 		if err != nil {
 			g.Log(grohl.Data{"at": "error", "error": err})
 			continue
 		}
-		for ef := range updates.Chan {
+		for ef := range updates {
 			// we are now connected so reset attempts
 			attempts = 0
 
@@ -230,6 +232,9 @@ func (c *context) watchFormations() {
 				}
 			}
 			go f.Rectify()
+		}
+		if streamCtrl.Err() != nil {
+			g.Log(grohl.Data{"at": "disconnect", "err": streamCtrl.Err()})
 		}
 		g.Log(grohl.Data{"at": "disconnect"})
 	}

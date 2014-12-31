@@ -7,6 +7,7 @@ import (
 
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 func NewFakeHostClient(hostID string) *FakeHostClient {
@@ -52,7 +53,7 @@ func (c *FakeHostClient) GetJob(id string) (*host.ActiveJob, error) {
 	return nil, errors.New("job not found")
 }
 
-func (c *FakeHostClient) StreamEvents(id string, ch chan<- *host.Event) cluster.Stream {
+func (c *FakeHostClient) StreamEvents(id string, ch chan<- *host.Event) stream.Stream {
 	c.listenMtx.Lock()
 	defer c.listenMtx.Unlock()
 	c.listeners = append(c.listeners, ch)
