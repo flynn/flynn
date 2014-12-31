@@ -39,9 +39,6 @@ var flynnrc string
 var routerIP string
 var testCluster *cluster.Cluster
 var httpClient *http.Client
-var testImageURI string
-
-const testImageName = "flynn/test-apps"
 
 func init() {
 	args = arg.Parse()
@@ -52,11 +49,10 @@ func init() {
 }
 
 func main() {
-	id, err := lookupTestImageID()
-	if err != nil {
-		log.Fatalf("could not determine test image ID: %s", err)
+	var err error
+	if err = lookupImageURIs(); err != nil {
+		log.Fatalf("could not determine image ID: %s", err)
 	}
-	testImageURI = fmt.Sprintf("https://example.com/%s?id=%s", testImageName, id)
 
 	var res *check.Result
 	// defer exiting here so it runs after all other defers
@@ -133,16 +129,24 @@ func main() {
 	fmt.Println(res)
 }
 
-func lookupTestImageID() (string, error) {
+var imageURIs = map[string]string{
+	"test-apps": "",
+}
+
+func lookupImageURIs() error {
 	d, err := docker.NewClient("unix:///var/run/docker.sock")
 	if err != nil {
-		return "", err
+		return err
 	}
-	image, err := d.InspectImage(testImageName)
-	if err != nil {
-		return "", err
+	for name := range imageURIs {
+		fullName := "flynn/" + name
+		image, err := d.InspectImage(fullName)
+		if err != nil {
+			return err
+		}
+		imageURIs[name] = fmt.Sprintf("https://example.com/%s?id=%s", fullName, image.ID)
 	}
-	return image.ID, nil
+	return nil
 }
 
 type sshData struct {
