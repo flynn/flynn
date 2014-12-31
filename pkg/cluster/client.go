@@ -11,6 +11,7 @@ import (
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/rpcplus"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 // ErrNoServers is returned if no host servers are found
@@ -61,7 +62,7 @@ func newClient(services ServiceSetFunc) (*Client, error) {
 type LocalClient interface {
 	ListHosts() ([]host.Host, error)
 	AddJobs(*host.AddJobsReq) (*host.AddJobsRes, error)
-	RegisterHost(*host.Host, chan *host.Job) Stream
+	RegisterHost(*host.Host, chan *host.Job) stream.Stream
 	RemoveJobs([]string) error
 }
 
@@ -218,7 +219,7 @@ func (c *Client) DialHost(id string) (Host, error) {
 
 // RegisterHost is used by the host service to register itself with the leader
 // and get a stream of new jobs. It is not used by clients.
-func (c *Client) RegisterHost(host *host.Host, jobs chan *host.Job) Stream {
+func (c *Client) RegisterHost(host *host.Host, jobs chan *host.Job) stream.Stream {
 	if c := c.local(); c != nil {
 		return c.RegisterHost(host, jobs)
 	}
@@ -244,7 +245,7 @@ func (c *Client) RemoveJobs(jobIDs []string) error {
 }
 
 // StreamHostEvents sends a stream of host events from the host to ch.
-func (c *Client) StreamHostEvents(ch chan<- *host.HostEvent) Stream {
+func (c *Client) StreamHostEvents(ch chan<- *host.HostEvent) stream.Stream {
 	return rpcStream{c.c.StreamGo("Cluster.StreamHostEvents", struct{}{}, ch)}
 }
 

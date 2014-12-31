@@ -16,6 +16,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 var backoffPeriod = 10 * time.Minute
@@ -82,7 +83,7 @@ type clusterClient interface {
 	ListHosts() ([]host.Host, error)
 	AddJobs(req *host.AddJobsReq) (*host.AddJobsRes, error)
 	DialHost(id string) (cluster.Host, error)
-	StreamHostEvents(ch chan<- *host.HostEvent) cluster.Stream
+	StreamHostEvents(ch chan<- *host.HostEvent) stream.Stream
 }
 
 type controllerClient interface {

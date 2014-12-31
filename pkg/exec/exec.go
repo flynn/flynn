@@ -10,6 +10,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/schedutil"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 type Cmd struct {
@@ -60,7 +61,7 @@ type Cmd struct {
 
 	// eventStream allows closing eventChan and checking for connection errors,
 	// it is only set if eventChan is set
-	eventStream cluster.Stream
+	eventStream stream.Stream
 
 	// streamErr is set if an error is received from attachClient or
 	// eventStream, it supercedes a non-zero exitStatus
