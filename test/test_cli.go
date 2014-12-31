@@ -18,11 +18,11 @@ import (
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
 	"github.com/flynn/flynn/cli/config"
-	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 type CLISuite struct {
@@ -37,14 +37,22 @@ func (s *CLISuite) flynn(t *c.C, args ...string) *CmdResult {
 
 func (s *CLISuite) newCliTestApp(t *c.C) *cliTestApp {
 	app, _ := s.createApp(t)
-	stream, err := s.controllerClient(t).StreamJobEvents(app.Name, 0)
+	events := make(chan *ct.JobEvent)
+	stream, err := s.controllerClient(t).StreamJobEvents(app.Name, 0, events)
 	t.Assert(err, c.IsNil)
-	return &cliTestApp{app.Name, stream, s.discoverdClient(t), t}
+	return &cliTestApp{
+		name:   app.Name,
+		stream: stream,
+		events: events,
+		disc:   s.discoverdClient(t),
+		t:      t,
+	}
 }
 
 type cliTestApp struct {
 	name   string
-	stream *controller.JobEventStream
+	stream stream.Stream
+	events chan *ct.JobEvent
 	disc   *discoverd.Client
 	t      *c.C
 }
@@ -58,7 +66,7 @@ func (a *cliTestApp) flynnCmd(args ...string) *exec.Cmd {
 }
 
 func (a *cliTestApp) waitFor(events jobEvents) (int64, string) {
-	return waitForJobEvents(a.t, a.stream.Events, events)
+	return waitForJobEvents(a.t, a.stream, a.events, events)
 }
 
 func (a *cliTestApp) waitForService(name string) {
