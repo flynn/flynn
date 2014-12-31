@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/host/config"
@@ -142,8 +143,18 @@ func runInit(args *docopt.Args) error {
 	return c.WriteTo(args.String["--file"])
 }
 
+func httpGetRetry(url string, retries int) (*http.Response, error) {
+	res, err := http.Get(url)
+
+	if (res.StatusCode != 200) && retries > 0 {
+		time.Sleep(100 * time.Millisecond)
+		return httpGetRetry(url, retries-1)
+	}
+
+	return res, err
+}
 func newDiscoveryToken(size string) (string, error) {
-	res, err := http.Get("https://discovery.etcd.io/new?size=" + size)
+	res, err := httpGetRetry("https://discovery.etcd.io/new?size="+size, 3)
 	if err != nil {
 		return "", err
 	}
