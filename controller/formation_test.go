@@ -17,11 +17,12 @@ func (s *S) TestFormationStreaming(c *C) {
 	client, err := controller.NewClient(s.srv.URL, authKey)
 	c.Assert(err, IsNil)
 
-	updates, streamErr := client.StreamFormations(&before)
+	updates := make(chan *ct.ExpandedFormation)
+	streamCtrl, connectErr := client.StreamFormations(&before, updates)
 
-	c.Assert(streamErr, IsNil)
+	c.Assert(connectErr, IsNil)
 	var existingFound bool
-	for f := range updates.Chan {
+	for f := range updates {
 		if f.App == nil {
 			break
 		}
@@ -29,6 +30,7 @@ func (s *S) TestFormationStreaming(c *C) {
 			existingFound = true
 		}
 	}
+	c.Assert(streamCtrl.Err(), IsNil)
 	c.Assert(existingFound, Equals, true)
 
 	release = s.createTestRelease(c, &ct.Release{})
@@ -41,10 +43,11 @@ func (s *S) TestFormationStreaming(c *C) {
 
 	var out *ct.ExpandedFormation
 	select {
-	case out = <-updates.Chan:
+	case out = <-updates:
 	case <-time.After(time.Second):
 		c.Fatal("timed out waiting for create")
 	}
+	c.Assert(streamCtrl.Err(), IsNil)
 	c.Assert(out.Release, DeepEquals, release)
 	c.Assert(out.App, DeepEquals, app)
 	c.Assert(out.Processes, DeepEquals, formation.Processes)
@@ -54,10 +57,11 @@ func (s *S) TestFormationStreaming(c *C) {
 	s.Delete(formationPath(app.ID, release.ID))
 
 	select {
-	case out = <-updates.Chan:
+	case out = <-updates:
 	case <-time.After(time.Second):
 		c.Fatal("timed out waiting for delete")
 	}
+	c.Assert(streamCtrl.Err(), IsNil)
 	c.Assert(out.Release, DeepEquals, release)
 	c.Assert(out.App, DeepEquals, app)
 	c.Assert(out.Processes, IsNil)

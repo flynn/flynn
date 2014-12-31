@@ -21,6 +21,7 @@ import (
 	"github.com/flynn/flynn/pkg/pinned"
 	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/sse"
+	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -95,21 +96,9 @@ func NewClientWithPin(uri, key string, pin []byte) (*Client, error) {
 	return c, nil
 }
 
-// FormationUpdates is a wrapper around a Chan channel, allowing us to close
-// the stream.
-type FormationUpdates struct {
-	Chan chan *ct.ExpandedFormation
-	body io.ReadCloser
-}
-
-// Close closes the underlying stream.
-func (u *FormationUpdates) Close() error {
-	return u.body.Close()
-}
-
-// StreamFormations returns a FormationUpdates stream. If since is not nil, only
-// retrieves formation updates since the specified time.
-func (c *Client) StreamFormations(since *time.Time) (*FormationUpdates, error) {
+// StreamFormations yields a series of ExpandedFormation into the provided channel.
+// If since is not nil, only retrieves formation updates since the specified time.
+func (c *Client) StreamFormations(since *time.Time, output chan<- *ct.ExpandedFormation) (stream.Stream, error) {
 	header := http.Header{
 		"Accept": []string{"text/event-stream"},
 	}
@@ -122,24 +111,26 @@ func (c *Client) StreamFormations(since *time.Time) (*FormationUpdates, error) {
 	if err != nil {
 		return nil, err
 	}
-	stream := &FormationUpdates{
-		Chan: make(chan *ct.ExpandedFormation),
-		body: res.Body,
-	}
+	stream := stream.New()
 	go func() {
 		defer func() {
-			close(stream.Chan)
-			stream.Close()
+			close(output)
+			res.Body.Close()
 		}()
 
-		r := bufio.NewReader(stream.body)
+		r := bufio.NewReader(res.Body)
 		dec := sse.NewDecoder(r)
 		for {
 			event := &ct.ExpandedFormation{}
 			if err := dec.Decode(event); err != nil {
-				break
+				stream.Error = err
+				return
 			}
-			stream.Chan <- event
+			select {
+			case output <- event:
+			case <-stream.StopCh:
+				return
+			}
 		}
 	}()
 	return stream, nil
