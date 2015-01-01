@@ -106,7 +106,8 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 	}
 	fmt.Printf("scaling %s\n\n", strings.Join(scale, ", "))
 
-	stream, err := client.StreamJobEvents(app, 0)
+	events := make(chan *ct.JobEvent)
+	stream, err := client.StreamJobEvents(app, 0, events)
 	if err != nil {
 		return err
 	}
@@ -121,7 +122,13 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 loop:
 	for {
 		select {
-		case e := <-stream.Events:
+		case e, ok := <-events:
+			if !ok {
+				if err := stream.Err(); err != nil {
+					return err
+				}
+				return fmt.Errorf("event stream unexpectedly ended")
+			}
 			// ignore one-off jobs or starting events
 			if e.Job.State == "starting" || e.Job.Type == "" {
 				continue loop

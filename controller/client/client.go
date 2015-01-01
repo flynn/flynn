@@ -118,8 +118,7 @@ func (c *Client) StreamFormations(since *time.Time, output chan<- *ct.ExpandedFo
 			res.Body.Close()
 		}()
 
-		r := bufio.NewReader(res.Body)
-		dec := sse.NewDecoder(r)
+		dec := sse.NewDecoder(bufio.NewReader(res.Body))
 		for {
 			event := &ct.ExpandedFormation{}
 			if err := dec.Decode(event); err != nil {
@@ -303,20 +302,8 @@ func (c *Client) GetApp(appID string) (*ct.App, error) {
 	return app, c.Get(fmt.Sprintf("/apps/%s", appID), app)
 }
 
-// JobEventStream is a wrapper around an Events channel, allowing us to close
-// the stream.
-type JobEventStream struct {
-	Events chan *ct.JobEvent
-	body   io.ReadCloser
-}
-
-// Close closes the underlying stream.
-func (s *JobEventStream) Close() {
-	s.body.Close()
-}
-
-// StreamJobEvents returns a JobEventStream for an app.
-func (c *Client) StreamJobEvents(appID string, lastID int64) (*JobEventStream, error) {
+// StreamJobEvents streams job events to the output channel.
+func (c *Client) StreamJobEvents(appID string, lastID int64, output chan<- *ct.JobEvent) (stream.Stream, error) {
 	header := http.Header{
 		"Accept":        []string{"text/event-stream"},
 		"Last-Event-Id": []string{strconv.FormatInt(lastID, 10)},
@@ -325,16 +312,25 @@ func (c *Client) StreamJobEvents(appID string, lastID int64) (*JobEventStream, e
 	if err != nil {
 		return nil, err
 	}
-	stream := &JobEventStream{Events: make(chan *ct.JobEvent), body: res.Body}
+	stream := stream.New()
 	go func() {
-		defer close(stream.Events)
-		dec := sse.NewDecoder(bufio.NewReader(stream.body))
+		defer func() {
+			close(output)
+			res.Body.Close()
+		}()
+
+		dec := sse.NewDecoder(bufio.NewReader(res.Body))
 		for {
 			event := &ct.JobEvent{}
 			if err := dec.Decode(event); err != nil {
+				stream.Error = err
 				return
 			}
-			stream.Events <- event
+			select {
+			case output <- event:
+			case <-stream.StopCh:
+				return
+			}
 		}
 	}()
 	return stream, nil
