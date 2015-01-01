@@ -130,7 +130,8 @@ func main() {
 }
 
 var imageURIs = map[string]string{
-	"test-apps": "",
+	"test-apps":  "",
+	"postgresql": "",
 }
 
 func lookupImageURIs() error {
