@@ -1,14 +1,17 @@
 package dialer
 
 import (
+	"errors"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
 
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/discoverd/client/balancer"
+	"github.com/flynn/flynn/pkg/random"
 )
+
+var ErrNoServices = errors.New("dialer: no services found")
 
 // NewHTTPClient returns a HTTP client configured to use discoverd to lookup hostnames.
 func NewHTTPClient(c DiscoverdClient) *http.Client {
@@ -33,7 +36,7 @@ type Dialer interface {
 }
 
 func newDialer(c DiscoverdClient, f DialFunc) *dialer {
-	d := &dialer{c: c, sets: make(map[string]*set), dial: f}
+	d := &dialer{c: c, sets: make(map[string]discoverd.ServiceSet), dial: f}
 	if d.dial == nil {
 		d.dial = net.Dial
 	}
@@ -43,41 +46,45 @@ func newDialer(c DiscoverdClient, f DialFunc) *dialer {
 type dialer struct {
 	c    DiscoverdClient
 	dial DialFunc
-	sets map[string]*set
+	sets map[string]discoverd.ServiceSet
 	mtx  sync.RWMutex
 }
 
-type set struct {
-	discoverd.ServiceSet
-	balancer.LoadBalancer
-}
-
-func (d *dialer) Dial(network, addr string) (net.Conn, error) {
+func (d *dialer) Dial(network, addr string) (conn net.Conn, err error) {
 	name := strings.SplitN(addr, ":", 2)[0]
 	set, err := d.getSet(name)
 	if err != nil {
 		return nil, err
 	}
 
-	server, err := set.Next()
-	if err != nil {
-		return nil, err
+	services := set.Services()
+	if len(services) == 0 {
+		return nil, ErrNoServices
 	}
 
-	return d.dial(network, server.Addr)
+	// try to dial each service in random order until one is found or all have
+	// errored
+	for _, i := range random.Math.Perm(len(services)) {
+		conn, err = d.dial(network, services[i].Addr)
+		if err == nil {
+			break
+		}
+	}
+
+	return
 }
 
 func (d *dialer) Close() error {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 	for k, v := range d.sets {
-		v.ServiceSet.Close()
+		v.Close()
 		delete(d.sets, k)
 	}
 	return nil
 }
 
-func (d *dialer) getSet(name string) (*set, error) {
+func (d *dialer) getSet(name string) (discoverd.ServiceSet, error) {
 	d.mtx.RLock()
 	set := d.sets[name]
 	d.mtx.RUnlock()
@@ -87,7 +94,7 @@ func (d *dialer) getSet(name string) (*set, error) {
 	return set, nil
 }
 
-func (d *dialer) createSet(name string) (*set, error) {
+func (d *dialer) createSet(name string) (discoverd.ServiceSet, error) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 
@@ -99,7 +106,6 @@ func (d *dialer) createSet(name string) (*set, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &set{services, balancer.Random(services, nil)}
-	d.sets[name] = s
-	return s, nil
+	d.sets[name] = services
+	return services, nil
 }
