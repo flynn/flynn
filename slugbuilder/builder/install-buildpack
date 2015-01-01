@@ -44,3 +44,6 @@ else
 fi
 
 popd > /dev/null
+
+# Ensure buildpack directories are writeable (see https://github.com/heroku/heroku-buildpack-nodejs/issues/152)
+chmod -R ugo+w "${buildpacks_dir}"
