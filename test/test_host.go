@@ -36,7 +36,7 @@ func (s *HostSuite) TestAttachFinishedInteractiveJob(t *c.C) {
 	cluster := s.clusterClient(t)
 
 	// run a quick interactive job
-	cmd := exec.CommandUsingCluster(cluster, exec.DockerImage(testImageURI), "/bin/true")
+	cmd := exec.CommandUsingCluster(cluster, exec.DockerImage(imageURIs["test-apps"]), "/bin/true")
 	cmd.TTY = true
 	err := cmd.Run()
 	t.Assert(err, c.IsNil)
@@ -68,7 +68,7 @@ func (s *HostSuite) TestNetworkedPersistentJob(t *c.C) {
 
 	// run a job that accepts tcp connections and performs tasks we ask of it in its container
 	serviceName := "ish-service-" + random.String(6)
-	cmd := exec.JobUsingCluster(cluster, exec.DockerImage(testImageURI), &host.Job{
+	cmd := exec.JobUsingCluster(cluster, exec.DockerImage(imageURIs["test-apps"]), &host.Job{
 		Config: host.ContainerConfig{
 			Cmd:   []string{"/bin/ish"},
 			Ports: []host.Port{{Proto: "tcp"}},
