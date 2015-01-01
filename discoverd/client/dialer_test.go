@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/flynn/flynn/discoverd/client/balancer"
 	"github.com/flynn/flynn/discoverd/client/dialer"
 	"github.com/flynn/flynn/discoverd/testutil"
 )
@@ -16,7 +15,7 @@ func TestHTTPClient(t *testing.T) {
 
 	hc := dialer.NewHTTPClient(client)
 	_, err := hc.Get("http://httpclient/")
-	if ue, ok := err.(*url.Error); !ok || ue.Err != balancer.ErrNoServices {
+	if ue, ok := err.(*url.Error); !ok || ue.Err != dialer.ErrNoServices {
 		t.Error("Expected err to be ErrNoServices, got", ue.Err)
 	}
 
