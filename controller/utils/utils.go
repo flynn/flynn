@@ -1,46 +1,9 @@
 package utils
 
 import (
-	"errors"
-	"net/url"
-	"strings"
-
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 )
-
-func FormatEnv(envs ...map[string]string) []string {
-	env := make(map[string]string)
-	for _, e := range envs {
-		for k, v := range e {
-			env[k] = v
-		}
-	}
-	res := make([]string, 0, len(env))
-	for k, v := range env {
-		res = append(res, k+"="+v)
-	}
-	return res
-}
-
-func DockerImage(uri string) (string, error) {
-	// TODO: ID refs (see https://github.com/dotcloud/docker/issues/4106)
-	u, err := url.Parse(uri)
-	if err != nil {
-		return "", err
-	}
-	if u.Scheme != "docker" {
-		return "", errors.New("utils: only docker artifact URIs are currently supported")
-	}
-	if tag := u.Query().Get("tag"); tag != "" {
-		u.Path += ":" + tag
-	}
-	if u.Host == "" {
-		// docker:///foo/bar results in u.Host == ""
-		u.Path = strings.TrimPrefix(u.Path, "/")
-	}
-	return u.Host + u.Path, nil
-}
 
 func JobConfig(f *ct.ExpandedFormation, name string) *host.Job {
 	t := f.Release.Processes[name]
@@ -83,12 +46,4 @@ func JobConfig(f *ct.ExpandedFormation, name string) *host.Job {
 		job.Config.Mounts = []host.Mount{{Location: "/data", Writeable: true}}
 	}
 	return job
-}
-
-func ParseJobID(jobID string) (string, string) {
-	id := strings.SplitN(jobID, "-", 2)
-	if len(id) != 2 || id[0] == "" || id[1] == "" {
-		return "", ""
-	}
-	return id[0], id[1]
 }
