@@ -30,8 +30,13 @@ func runDownload(args *docopt.Args) error {
 		return fmt.Errorf("error creating root dir: %s", err)
 	}
 
+	manifestFile := args.String["<manifest>"]
+	if manifestFile == "" {
+		manifestFile = "/etc/flynn/version.json"
+	}
+
 	var manifest map[string]string
-	if err := cliutil.DecodeJSONArg(args.String["<manifest>"], &manifest); err != nil {
+	if err := cliutil.DecodeJSONArg(manifestFile, &manifest); err != nil {
 		return err
 	}
 
