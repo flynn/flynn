@@ -41,8 +41,13 @@ func runBootstrap(args *docopt.Args) {
 		logf = jsonLogger
 	}
 
+	manifestFile := args.String["<manifest>"]
+	if manifestFile == "" {
+		manifestFile = "/etc/flynn/bootstrap-manifest.json"
+	}
+
 	var err error
-	manifest, err = readBootstrapManifest(args.String["<manifest>"])
+	manifest, err = readBootstrapManifest(manifestFile)
 	if err != nil {
 		log.Fatalln("Error reading manifest:", err)
 	}
