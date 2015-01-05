@@ -3,6 +3,7 @@ source 'https://rubygems.org'
 gem "middleman"
 gem "middleman-more"
 gem "middleman-blog"
+gem "middleman-sitemap"
 
 gem "builder"
 gem "rake"

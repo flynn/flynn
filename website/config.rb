@@ -83,6 +83,7 @@ configure :build do
   activate :minify_javascript
   activate :asset_hash
   activate :gzip
+  activate :sitemap, :hostname => "https://flynn.io"
 end
 
 # Do the equivalent of nginx "try_files $uri $uri.html" in development

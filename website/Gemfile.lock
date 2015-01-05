@@ -118,6 +118,8 @@ GEM
       middleman-core (>= 3.3)
       rack-livereload (~> 0.3.15)
     middleman-more (3.1.6)
+    middleman-sitemap (0.0.13)
+      middleman-core (>= 3.2.2)
     middleman-sprockets (3.4.1)
       middleman-core (>= 3.3)
       sprockets (~> 2.12.1)
@@ -187,6 +189,7 @@ DEPENDENCIES
   middleman-blog
   middleman-livereload
   middleman-more
+  middleman-sitemap
   pygments.rb
   rake
   react-jsx-sprockets!
