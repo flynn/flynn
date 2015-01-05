@@ -9,7 +9,6 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
-	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -264,6 +263,3 @@ type RPCClient interface {
 	StreamGo(serviceMethod string, args interface{}, replyStream interface{}) *rpcplus.Call
 	Close() error
 }
-
-// RandomJobID returns a random job identifier with an optional prefix.
-func RandomJobID(prefix string) string { return prefix + random.UUID() }
