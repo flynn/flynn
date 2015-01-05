@@ -11,7 +11,7 @@ end
 helpers do
   def active_nav_class(path, opts={})
     current = current_path.sub(/\.html\Z/, '').sub(/\/index\Z/, '')
-    path = full_path(path).sub(/\A\//, '').sub(/\.html\Z/, '').sub(/\/index\Z/, '')
+    path = Middleman::Util.full_path(path, self).sub(/\A\//, '').sub(/\.html\Z/, '').sub(/\/index\Z/, '')
 
     if opts[:not] && opts[:not].match(current)
       return ""
@@ -22,7 +22,7 @@ helpers do
   end
 
   def nav_link_with_active(text, target, attributes = {})
-    target_path = full_path(target).sub(/\A\//, '').sub(/\.html\Z/, '')
+    target_path = Middleman::Util.full_path(target, self).sub(/\A\//, '').sub(/\.html\Z/, '')
     item_path = current_path.sub(/\.html\Z/, '')
 
     active = if attributes.delete(:top)
@@ -33,6 +33,17 @@ helpers do
 
     "<li #{'class="active"' if active}>" + link_to(text, target, attributes) + "</li>"
   end
+end
+
+
+# Ugly monkey-patch to fix middleman's completely broken URL handling. There is
+# no option to strip .html from the end of URLs.
+Middleman::Sitemap::Resource.class_eval do
+  def url_with_strip
+    url_with_no_strip.sub(/\.html\Z/, '')
+  end
+  alias_method :url_with_no_strip, :url
+  alias_method :url, :url_with_strip
 end
 
 require 'builder'
@@ -72,6 +83,7 @@ configure :build do
   activate :minify_javascript
   activate :asset_hash
   activate :gzip
+  activate :sitemap, :hostname => "https://flynn.io"
 end
 
 # Do the equivalent of nginx "try_files $uri $uri.html" in development

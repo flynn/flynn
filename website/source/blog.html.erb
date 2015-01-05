@@ -7,7 +7,7 @@ title: Blog
     <article class="post">
       <header>
         <time datetime="<%= article.date.to_s %>"><%= article.date.strftime('%b %e, %Y') %></time>
-        <h1><%= link_to article.title, article.url.sub('.html', '') %></h1>
+        <h1><%= link_to article.title, article.url %></h1>
       </header>
 
       <%= article.body %>
