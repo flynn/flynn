@@ -35,6 +35,17 @@ helpers do
   end
 end
 
+
+# Ugly monkey-patch to fix middleman's completely broken URL handling. There is
+# no option to strip .html from the end of URLs.
+Middleman::Sitemap::Resource.class_eval do
+  def url_with_strip
+    url_with_no_strip.sub(/\.html\Z/, '')
+  end
+  alias_method :url_with_no_strip, :url
+  alias_method :url, :url_with_strip
+end
+
 require 'builder'
 require 'markdown_html'
 
