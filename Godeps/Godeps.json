@@ -29,6 +29,10 @@
 			"Rev": "c3e849398f0ed2429b43c31edcc7f14174453237"
 		},
 		{
+			"ImportPath": "github.com/bgentry/que-go",
+			"Rev": "4ad3cf5c7e0aa6382d5a437deed9951efbe5d2fa"
+		},
+		{
 			"ImportPath": "github.com/boltdb/bolt",
 			"Comment": "v1.0",
 			"Rev": "aa66506030b376f848667d84d2596faa8a7099ea"
@@ -231,6 +235,11 @@
 		{
 			"ImportPath": "github.com/inconshreveable/go-update",
 			"Rev": "3f0466666779bd2143f368a207b0641f0ed536e8"
+		},
+		{
+			"ImportPath": "github.com/jackc/pgx",
+			"Comment": "v2.4.0-34-g1e92e5a",
+			"Rev": "1e92e5afe62cbf6fc9ef72aaf5d6522f0dd7ef4c"
 		},
 		{
 			"ImportPath": "github.com/julienschmidt/httprouter",
