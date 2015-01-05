@@ -76,6 +76,7 @@ type LibvirtLXCBackend struct {
 	state     *State
 	pinkerton *pinkerton.Context
 
+	ifaceMTU   int
 	bridgeAddr net.IP
 	bridgeNet  *net.IPNet
 
@@ -246,10 +247,9 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 		return err
 	})
 
-	var bridgeMTU int
 	for _, line := range bytes.Split(data, []byte("\n")) {
 		if bytes.HasPrefix(line, []byte("FLANNEL_MTU=")) {
-			bridgeMTU, err = strconv.Atoi(string(line[12:]))
+			l.ifaceMTU, err = strconv.Atoi(string(line[12:]))
 			if err != nil {
 				return fmt.Errorf("host: error parsing mtu %q - %s", string(line), err)
 			}
@@ -317,9 +317,6 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 		return err
 	}
 	if err := netlink.NetworkSetMacAddress(bridge, networkConfig.MAC.Address); err != nil {
-		return err
-	}
-	if err := netlink.NetworkSetMTU(bridge, bridgeMTU); err != nil {
 		return err
 	}
 	if err := netlink.NetworkLinkUp(bridge); err != nil {
