@@ -11,7 +11,7 @@ end
 helpers do
   def active_nav_class(path, opts={})
     current = current_path.sub(/\.html\Z/, '').sub(/\/index\Z/, '')
-    path = full_path(path).sub(/\A\//, '').sub(/\.html\Z/, '').sub(/\/index\Z/, '')
+    path = Middleman::Util.full_path(path, self).sub(/\A\//, '').sub(/\.html\Z/, '').sub(/\/index\Z/, '')
 
     if opts[:not] && opts[:not].match(current)
       return ""
@@ -22,7 +22,7 @@ helpers do
   end
 
   def nav_link_with_active(text, target, attributes = {})
-    target_path = full_path(target).sub(/\A\//, '').sub(/\.html\Z/, '')
+    target_path = Middleman::Util.full_path(target, self).sub(/\A\//, '').sub(/\.html\Z/, '')
     item_path = current_path.sub(/\.html\Z/, '')
 
     active = if attributes.delete(:top)
