@@ -68,6 +68,30 @@ main() {
       fail "could not determine commit"
     fi
   fi
+
+  info "checking script is from commit being released"
+  local src_commit="$(git rev-parse HEAD)"
+  if [[ "${src_commit}" != "${commit}" ]]; then
+    info "re-executing using scripts from commit ${commit}"
+
+    export GOPATH="$(mktemp -d)"
+    trap "rm -rf ${GOPATH}" EXIT
+    local src="${GOPATH}/src/github.com/flynn/flynn"
+
+    info "cloning Flynn source"
+    git clone --quiet https://github.com/flynn/flynn "${src}"
+    pushd "${src}" >/dev/null
+    git checkout --force --quiet "${commit}"
+    info "building flynn-release binary"
+    go build -o util/release/flynn-release ./util/release
+    popd >/dev/null
+
+    exec "${src}/script/release-flynn" \
+      -b "${bucket}" \
+      -c "${commit}" \
+      -d "${domain}" \
+      -r "${dir}"
+  fi
   info "starting release of commit ${commit}"
 
   info "getting flynn release manifest"
