@@ -195,7 +195,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/pq",
-			"Rev": "29bc57434aa700fa80bc713bd85d3fe1d0cd4fc0"
+			"Rev": "9fdf1e3a841ca657740fc5a4e29d37b8711ede4a"
 		},
 		{
 			"ImportPath": "github.com/flynn/tail",
@@ -231,6 +231,10 @@
 		{
 			"ImportPath": "github.com/inconshreveable/go-update",
 			"Rev": "3f0466666779bd2143f368a207b0641f0ed536e8"
+		},
+		{
+			"ImportPath": "github.com/johto/notifyutils/notifydispatcher",
+			"Rev": "ca7fef705ef3a3099fa0da6fbc65b54a29d77227"
 		},
 		{
 			"ImportPath": "github.com/kavu/go_reuseport",

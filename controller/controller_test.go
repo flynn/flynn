@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
@@ -20,6 +19,7 @@ import (
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/rpcplus"
+	"github.com/flynn/flynn/pkg/testutils"
 )
 
 // Hook gocheck up to the "go test" runner
@@ -35,29 +35,12 @@ var _ = Suite(&S{})
 
 func (s *S) SetUpSuite(c *C) {
 	dbname := "controllertest"
-	if os.Getenv("PGDATABASE") != "" {
-		dbname = os.Getenv("PGDATABASE")
-	} else {
-		os.Setenv("PGDATABASE", dbname)
-	}
-	if os.Getenv("PGSSLMODE") == "" {
-		os.Setenv("PGSSLMODE", "disable")
-	}
-
-	db, err := sql.Open("postgres", "dbname=postgres")
-	if err != nil {
+	if err := testutils.SetupPostgres(dbname); err != nil {
 		c.Fatal(err)
 	}
-	if _, err := db.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbname)); err != nil {
-		c.Fatal(err)
-	}
-	if _, err := db.Exec(fmt.Sprintf("CREATE DATABASE %s", dbname)); err != nil {
-		c.Fatal(err)
-	}
-	db.Close()
 
 	dsn := fmt.Sprintf("dbname=%s", dbname)
-	db, err = sql.Open("postgres", dsn)
+	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		c.Fatal(err)
 	}
