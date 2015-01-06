@@ -6,6 +6,7 @@ import (
 	"sort"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/pkg/random"
@@ -50,14 +51,28 @@ func assertNoEvent(c *C, events chan *Event) {
 	}
 }
 
+func assertEvent(c *C, events chan *Event, service string, kind EventKind, instance *Instance) {
+	var event *Event
+	select {
+	case event = <-events:
+	case <-time.After(10 * time.Second):
+		c.Errorf("timed out waiting for %s %#v", kind, instance)
+	}
+	c.Assert(event, DeepEquals, &Event{
+		Service:  service,
+		Kind:     kind,
+		Instance: instance,
+	})
+}
+
 func receiveEvents(c *C, events chan *Event, count int) map[string]*Event {
 	res := make(map[string]*Event, count)
 	for i := 0; i < count; i++ {
 		select {
 		case e := <-events:
-			c.Logf("+ event %v %#v", e, e.Instance)
+			c.Logf("+ event %s", e)
 			res[e.Instance.ID] = e
-		default:
+		case <-time.After(10 * time.Second):
 			c.Errorf("expected %d events, got %d", count, len(res))
 		}
 	}
@@ -76,11 +91,7 @@ func (StateSuite) TestAddInstance(c *C) {
 	data := state.Get("a")
 	c.Assert(data, HasLen, 1)
 	c.Assert(data[0], DeepEquals, inst1)
-	c.Assert(<-events, DeepEquals, &Event{
-		Service:  "a",
-		Kind:     EventKindUp,
-		Instance: inst1,
-	})
+	assertEvent(c, events, "a", EventKindUp, inst1)
 
 	// + with new instance
 	inst2 := fakeInstance()
@@ -88,11 +99,7 @@ func (StateSuite) TestAddInstance(c *C) {
 	data = state.Get("a")
 	c.Assert(data, HasLen, 2)
 	assertHasInstance(c, data, inst2)
-	c.Assert(<-events, DeepEquals, &Event{
-		Service:  "a",
-		Kind:     EventKindUp,
-		Instance: inst2,
-	})
+	assertEvent(c, events, "a", EventKindUp, inst2)
 
 	// + with updated instance
 	inst3 := *inst2
@@ -101,11 +108,7 @@ func (StateSuite) TestAddInstance(c *C) {
 	data = state.Get("a")
 	c.Assert(data, HasLen, 2)
 	assertHasInstance(c, data, &inst3)
-	c.Assert(<-events, DeepEquals, &Event{
-		Service:  "a",
-		Kind:     EventKindUpdate,
-		Instance: &inst3,
-	})
+	assertEvent(c, events, "a", EventKindUpdate, &inst3)
 
 	// + with unchanged instance
 	inst4 := inst3
@@ -134,17 +137,13 @@ func (StateSuite) TestDeleteInstance(c *C) {
 	// + with instance that exists
 	state.RemoveInstance("a", inst.ID)
 	c.Assert(state.Get("a"), HasLen, 0)
-	c.Assert(<-events, DeepEquals, &Event{
-		Service:  "a",
-		Kind:     EventKindDown,
-		Instance: inst,
-	})
+	assertEvent(c, events, "a", EventKindDown, inst)
 }
 
 func (StateSuite) TestSetService(c *C) {
 	state := NewState()
 	events := make(chan *Event, 3)
-	state.Subscribe("a", false, EventKindDown|EventKindUp|EventKindUpdate, events)
+	state.Subscribe("a", false, EventKindAll, events)
 
 	// + with service that doesn't exist
 	newData := []*Instance{fakeInstance(), fakeInstance()}
@@ -153,11 +152,7 @@ func (StateSuite) TestSetService(c *C) {
 	c.Assert(data, HasLen, 2)
 	assertHasInstance(c, data, newData...)
 	for _, expected := range newData {
-		c.Assert(<-events, DeepEquals, &Event{
-			Service:  "a",
-			Kind:     EventKindUp,
-			Instance: expected,
-		})
+		assertEvent(c, events, "a", EventKindUp, expected)
 	}
 	assertNoEvent(c, events)
 
@@ -220,24 +215,16 @@ func (StateSuite) TestSubscribe(c *C) {
 	state.AddInstance("a", inst1)
 
 	events := make(chan *Event, 1)
-	stream := state.Subscribe("a", true, EventKindDown|EventKindUp|EventKindUpdate, events)
+	stream := state.Subscribe("a", true, EventKindAll, events)
 
 	// initial instance
-	c.Assert(<-events, DeepEquals, &Event{
-		Service:  "a",
-		Kind:     EventKindUp,
-		Instance: inst1,
-	})
+	assertEvent(c, events, "a", EventKindUp, inst1)
 
 	inst2 := fakeInstance()
 	state.AddInstance("a", inst2)
 
 	// subsequent event
-	c.Assert(<-events, DeepEquals, &Event{
-		Service:  "a",
-		Kind:     EventKindUp,
-		Instance: inst2,
-	})
+	assertEvent(c, events, "a", EventKindUp, inst2)
 
 	stream.Close()
 	_, open := <-events
