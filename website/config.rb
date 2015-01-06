@@ -33,6 +33,18 @@ helpers do
 
     "<li #{'class="active"' if active}>" + link_to(text, target, attributes) + "</li>"
   end
+
+  def head_tag(name, attrs = {})
+    @head_tags ||= []
+    attrs = attrs.keys.any? ? ' '+ attrs.map { |k,v| "#{k}=\"#{v}\"" }.join(' ') : ''
+    @head_tags << "<#{name}#{attrs} />"
+    nil
+  end
+
+  def head_tags
+    tags, @head_tags = @head_tags.to_a, []
+    tags.join("\n")
+  end
 end
 
 

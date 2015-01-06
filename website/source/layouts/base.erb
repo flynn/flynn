@@ -9,6 +9,8 @@
 
   <title><%= current_resource.data.title ? current_resource.data.title + (current_resource.data.title =~ /Flynn/ ? "" : " - Flynn") : "Flynn" %></title>
 
+  <%= head_tags %>
+
   <%= stylesheet_link_tag "application" %>
 </head>
 
