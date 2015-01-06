@@ -325,6 +325,6 @@
   {
     "id": "log-complete",
     "action": "log",
-    "output": "\n\nFlynn bootstrapping complete. Install flynn-cli and paste the line below into a terminal window:\n\nflynn cluster add -g {{ getenv \"CLUSTER_DOMAIN\" }}:2222 -p {{ (index .StepData \"controller-cert\").Pin }} default https://controller.{{ getenv \"CLUSTER_DOMAIN\" }} {{ (index .StepData \"controller-key\").Data }}"
+    "output": "\n\nFlynn bootstrapping complete. Install the flynn-cli (see https://cli.flynn.io for instructions) and paste the line below into a terminal window:\n\nflynn cluster add -g {{ getenv \"CLUSTER_DOMAIN\" }}:2222 -p {{ (index .StepData \"controller-cert\").Pin }} default https://controller.{{ getenv \"CLUSTER_DOMAIN\" }} {{ (index .StepData \"controller-key\").Data }}\n\nThe built-in dashboard can be accessed at http://dashboard.{{ getenv \"CLUSTER_DOMAIN\" }} with login token {{ (index .StepData \"dashboard-login-token\").Data }}"
   }
 ]
