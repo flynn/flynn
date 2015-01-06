@@ -48,6 +48,16 @@ class Middleman::Renderers::MiddlemanRedcarpetHTML
   def header(text, level)
     link = el('a', el('span', '§'), name: anchor(text), href: "#" + anchor(text), class: "anchor")
 
-    el("h#{level}", link + text)
+    attrs = {}
+    if level == 1
+      attrs['data-swiftype-name'] = 'title'
+      attrs['data-swiftype-type'] = 'string'
+    elsif level == 2
+      attrs['data-swiftype-name'] = 'section'
+      attrs['data-swiftype-type'] = 'string'
+    end
+    wrapped_text = el('span', text, attrs)
+
+    el("h#{level}", link + wrapped_text)
   end
 end
