@@ -3,6 +3,7 @@ package server
 import (
 	"container/list"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/flynn/flynn/pkg/stream"
@@ -15,6 +16,7 @@ const (
 	EventKindUpdate
 	EventKindDown
 	EventKindLeader
+	EventKindAll = ^EventKind(0)
 )
 
 func (k EventKind) String() string {
@@ -36,6 +38,10 @@ type Event struct {
 	Service string
 	Kind    EventKind
 	*Instance
+}
+
+func (e *Event) String() string {
+	return fmt.Sprintf("[%s] %s %#v", e.Service, e.Kind, e.Instance)
 }
 
 func eventKindUpdate(existing bool) EventKind {
