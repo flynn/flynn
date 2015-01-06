@@ -208,6 +208,16 @@ func (s *State) Get(service string) []*Instance {
 	return s.getLocked(service)
 }
 
+func (s *State) ListServices() []string {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	res := make([]string, 0, len(s.services))
+	for name := range s.services {
+		res = append(res, name)
+	}
+	return res
+}
+
 func (s *State) getLocked(service string) []*Instance {
 	data, ok := s.services[service]
 	if !ok {
