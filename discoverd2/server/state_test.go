@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"sync/atomic"
 	"testing"
 
@@ -257,4 +258,13 @@ func (StateSuite) TestBlockedSubscription(c *C) {
 	_, open := <-events
 	c.Assert(open, Equals, false)
 	c.Assert(stream.Err(), Equals, ErrSendBlocked)
+}
+
+func (StateSuite) TestListServices(c *C) {
+	state := NewState()
+	state.AddInstance("a", fakeInstance())
+	state.AddInstance("b", fakeInstance())
+	services := state.ListServices()
+	sort.Strings(services)
+	c.Assert(services, DeepEquals, []string{"a", "b"})
 }
