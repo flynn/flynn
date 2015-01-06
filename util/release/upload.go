@@ -45,7 +45,7 @@ func upload(args *docopt.Args) {
 			tagged = u.Host + u.Path + ":" + tag
 		}
 
-		run(exec.Command("docker", "tag", id, tagged))
+		run(exec.Command("docker", "tag", "--force", id, tagged))
 		fmt.Println("Tagged", tagged)
 
 		fmt.Printf("Uploading %s...\n", tagged)
