@@ -85,11 +85,13 @@ main() {
     info "building flynn-release binary"
     go build -o util/release/flynn-release ./util/release
 
-    exec "${src}/script/release-flynn" \
+    "${src}/script/release-flynn" \
       -b "${bucket}" \
       -c "${commit}" \
       -d "${domain}" \
       -r "${dir}"
+
+    exit 0
   fi
   info "starting release of commit ${commit}"
 
