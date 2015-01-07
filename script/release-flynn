@@ -80,11 +80,10 @@ main() {
 
     info "cloning Flynn source"
     git clone --quiet https://github.com/flynn/flynn "${src}"
-    pushd "${src}" >/dev/null
+    cd "${src}"
     git checkout --force --quiet "${commit}"
     info "building flynn-release binary"
     go build -o util/release/flynn-release ./util/release
-    popd >/dev/null
 
     exec "${src}/script/release-flynn" \
       -b "${bucket}" \
