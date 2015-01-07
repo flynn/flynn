@@ -44,11 +44,11 @@ type NotFoundError struct {
 }
 
 func (e NotFoundError) Error() string {
-	return fmt.Sprintf("discoverd: %s/%s not found", e.Service, e.Instance)
+	return fmt.Sprintf("discoverd: %s %s not found", e.Service, e.Instance)
 }
 
 func (b *etcdBackend) instanceKey(service, id string) string {
-	return path.Join(b.prefix, "instances", service, id)
+	return path.Join(b.serviceKey(service), "instances", id)
 }
 
 func (b *etcdBackend) AddInstance(service string, inst *Instance) error {
@@ -99,7 +99,7 @@ func (b *etcdBackend) StartSync() error {
 			for {
 				stream := make(chan *etcd.Response)
 				watchDone := make(chan error)
-				keyPrefix := path.Join(b.prefix, "instances")
+				keyPrefix := path.Join(b.prefix, "services")
 
 				go func() {
 					_, err := b.etcd.Watch(keyPrefix, nextIndex, true, stream, b.stopSync)
@@ -109,11 +109,11 @@ func (b *etcdBackend) StartSync() error {
 				for res := range stream {
 					nextIndex = res.EtcdIndex + 1
 
-					// ensure we have a key like /foo/bar/instances/service/id
-					if strings.Count(res.Node.Key[len(keyPrefix):], "/") != 2 {
+					// ensure we have a key like /foo/bar/services/a/instances/id
+					if strings.Count(res.Node.Key[len(keyPrefix):], "/") != 3 {
 						continue
 					}
-					serviceName := path.Base(path.Dir(res.Node.Key))
+					serviceName := strings.SplitN(res.Node.Key[len(keyPrefix)+1:], "/", 2)[0]
 					instanceID := path.Base(res.Node.Key)
 
 					if res.Action == "delete" {
@@ -121,7 +121,7 @@ func (b *etcdBackend) StartSync() error {
 					} else {
 						inst := &Instance{}
 						if err := json.Unmarshal([]byte(res.Node.Value), inst); err != nil {
-							log.Printf("Error decoding JSON for instance %s/%s: %s", instanceID, serviceName, err)
+							log.Printf("Error decoding JSON for instance %s: %s", res.Node.Key, err)
 							continue
 						}
 						b.h.AddInstance(serviceName, inst)
@@ -149,7 +149,8 @@ func (b *etcdBackend) StartSync() error {
 }
 
 func (b *etcdBackend) fullSync() (uint64, error) {
-	data, err := b.etcd.Get(path.Join(b.prefix, "instances"), false, true)
+	keyPrefix := path.Join(b.prefix, "services")
+	data, err := b.etcd.Get(keyPrefix, false, true)
 	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
 		// key not found, remove existing services
 		for _, name := range b.h.ListServices() {
@@ -167,13 +168,18 @@ func (b *etcdBackend) fullSync() (uint64, error) {
 		added[serviceName] = struct{}{}
 
 		var instances []*Instance
-		for _, instNode := range serviceNode.Nodes {
-			inst := &Instance{}
-			if err := json.Unmarshal([]byte(instNode.Value), inst); err != nil {
-				log.Printf("Error decoding JSON for instance %s: %s", instNode.Key, err)
+		for _, n := range serviceNode.Nodes {
+			if path.Base(n.Key) != "instances" {
 				continue
 			}
-			instances = append(instances, inst)
+			for _, instNode := range n.Nodes {
+				inst := &Instance{}
+				if err := json.Unmarshal([]byte(instNode.Value), inst); err != nil {
+					log.Printf("Error decoding JSON for instance %s: %s", instNode.Key, err)
+					continue
+				}
+				instances = append(instances, inst)
+			}
 		}
 		b.h.SetService(serviceName, instances)
 	}
