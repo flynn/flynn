@@ -53,7 +53,7 @@ class Middleman::Renderers::MiddlemanRedcarpetHTML
       attrs['data-swiftype-name'] = 'title'
       attrs['data-swiftype-type'] = 'string'
     elsif level == 2
-      attrs['data-swiftype-name'] = 'section'
+      attrs['data-swiftype-name'] = 'sections'
       attrs['data-swiftype-type'] = 'string'
     end
     wrapped_text = el('span', text, attrs)
