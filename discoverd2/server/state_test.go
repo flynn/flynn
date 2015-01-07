@@ -255,3 +255,81 @@ func (StateSuite) TestListServices(c *C) {
 	sort.Strings(services)
 	c.Assert(services, DeepEquals, []string{"a", "b"})
 }
+
+func (StateSuite) TestInstanceValid(c *C) {
+	for _, t := range []struct {
+		name string
+		inst *Instance
+		err  string
+	}{
+		{
+			name: "invalid proto",
+			inst: &Instance{
+				ID:    md5sum("TCP-127.0.0.1:2"),
+				Proto: "TCP",
+				Addr:  "127.0.0.1:2",
+			},
+			err: ErrInvalidProto.Error(),
+		},
+		{
+			name: "empty proto",
+			inst: &Instance{
+				ID:   md5sum("-127.0.0.1:2"),
+				Addr: "127.0.0.1:2",
+			},
+			err: ErrUnsetProto.Error(),
+		},
+		{
+			name: "invalid addr",
+			inst: &Instance{
+				ID:    md5sum("tcp-asdf"),
+				Proto: "tcp",
+				Addr:  "asdf",
+			},
+			err: "missing port in address asdf",
+		},
+		{
+			name: "empty addr",
+			inst: &Instance{
+				ID:    md5sum("tcp-"),
+				Proto: "tcp",
+				Addr:  "",
+			},
+			err: "missing port in address",
+		},
+		{
+			name: "empty id",
+			inst: &Instance{
+				Proto: "tcp",
+				Addr:  "127.0.0.1:2",
+			},
+			err: "discoverd: instance id is incorrect, expected 35ee81ee2b44f7521139b75e865e3c98",
+		},
+		{
+			name: "invalid id",
+			inst: &Instance{
+				ID:    "asdf",
+				Proto: "tcp",
+				Addr:  "127.0.0.1:2",
+			},
+			err: "discoverd: instance id is incorrect, expected 35ee81ee2b44f7521139b75e865e3c98",
+		},
+		{
+			name: "valid",
+			inst: &Instance{
+				ID:    md5sum("tcp-127.0.0.1:2"),
+				Proto: "tcp",
+				Addr:  "127.0.0.1:2",
+			},
+		},
+	} {
+		c.Log(t.name)
+		err := t.inst.Valid()
+		if t.err == "" {
+			c.Check(err, IsNil)
+		} else {
+			c.Assert(err, NotNil)
+			c.Check(err.Error(), Equals, t.err)
+		}
+	}
+}
