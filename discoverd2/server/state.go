@@ -2,8 +2,11 @@ package server
 
 import (
 	"container/list"
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 
 	"github.com/flynn/flynn/pkg/stream"
@@ -54,7 +57,7 @@ func eventKindUpdate(existing bool) EventKind {
 // Instance is a single running instance of a service.
 type Instance struct {
 	// ID is unique within the service, and is currently defined as
-	// Hex(SHA256(Proto + "-" + Addr)) but this may change in the future.
+	// Hex(MD5(Proto + "-" + Addr)) but this may change in the future.
 	ID string `json:"id"`
 
 	// Addr is the IP/port address that can be used to communicate with the
@@ -84,6 +87,43 @@ func (inst *Instance) Equal(other *Instance) bool {
 		inst.Proto == other.Proto &&
 		inst.Index == other.Index &&
 		mapEqual(inst.Meta, other.Meta)
+}
+
+func (inst *Instance) Valid() error {
+	if err := inst.validProto(); err != nil {
+		return err
+	}
+	if _, _, err := net.SplitHostPort(inst.Addr); err != nil {
+		return err
+	}
+	if expected := inst.id(); inst.ID != expected {
+		return fmt.Errorf("discoverd: instance id is incorrect, expected %s", expected)
+	}
+	return nil
+}
+
+var ErrUnsetProto = errors.New("discoverd: proto must be set")
+var ErrInvalidProto = errors.New("discoverd: proto must be lowercase alphanumeric")
+
+func (inst *Instance) validProto() error {
+	if inst.Proto == "" {
+		return ErrUnsetProto
+	}
+	for _, r := range inst.Proto {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '0') {
+			return ErrInvalidProto
+		}
+	}
+	return nil
+}
+
+func (inst *Instance) id() string {
+	return md5sum(inst.Proto + "-" + inst.Addr)
+}
+
+func md5sum(data string) string {
+	digest := md5.Sum([]byte(data))
+	return hex.EncodeToString(digest[:])
 }
 
 func mapEqual(x, y map[string]string) bool {
