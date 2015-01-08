@@ -35,15 +35,20 @@ func (s *EtcdSuite) TestBasicSync(c *C) {
 	events := make(chan *Event, 1)
 	s.state.Subscribe("a", false, EventKindAll, events)
 
+	c.Assert(s.backend.AddService("a"), IsNil)
 	c.Assert(s.backend.StartSync(), IsNil)
 
 	s.testBasicSync(c, events)
 }
 
 func (s *EtcdSuite) testBasicSync(c *C, events chan *Event) {
-	// create instance
+	// Remove instance that doesn't exist
+	err := s.backend.RemoveInstance("a", "b")
+	c.Assert(err, DeepEquals, NotFoundError{Service: "a", Instance: "b"})
+
+	// Create instance
 	inst := fakeInstance()
-	err := s.backend.AddInstance("a", inst)
+	err = s.backend.AddInstance("a", inst)
 	c.Assert(err, IsNil)
 	assertEvent(c, events, "a", EventKindUp, inst)
 
@@ -68,6 +73,7 @@ func (s *EtcdSuite) TestNoServiceSync(c *C) {
 	events := make(chan *Event, 1)
 	s.state.Subscribe("a", false, EventKindAll, events)
 
+	c.Assert(s.backend.AddService("a"), IsNil)
 	c.Assert(s.backend.StartSync(), IsNil)
 
 	assertEvent(c, events, "a", EventKindDown, inst)
@@ -90,6 +96,7 @@ func (s *EtcdSuite) TestLocalDiffSync(c *C) {
 
 	updated2 := *updated
 	updated2.Meta = map[string]string{"a": "b"}
+	c.Assert(s.backend.AddService("a"), IsNil)
 	c.Assert(s.backend.AddInstance("a", existing), IsNil)
 	c.Assert(s.backend.AddInstance("a", &updated2), IsNil)
 	c.Assert(s.backend.AddInstance("a", added), IsNil)
@@ -122,4 +129,21 @@ func (s *EtcdSuite) TestLocalDiffSync(c *C) {
 	})
 
 	s.testBasicSync(c, aEvents)
+}
+
+func (s *EtcdSuite) TestServiceAddRemove(c *C) {
+	err := s.backend.RemoveService("a")
+	c.Assert(err, DeepEquals, NotFoundError{Service: "a"})
+
+	err = s.backend.AddService("a")
+	c.Assert(err, IsNil)
+
+	err = s.backend.AddService("a")
+	c.Assert(err, DeepEquals, ServiceExistsError("a"))
+
+	err = s.backend.RemoveService("a")
+	c.Assert(err, IsNil)
+
+	err = s.backend.RemoveService("a")
+	c.Assert(err, DeepEquals, NotFoundError{Service: "a"})
 }
