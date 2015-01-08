@@ -317,8 +317,8 @@ func (StateSuite) TestInstanceValid(c *C) {
 		{
 			name: "valid",
 			inst: &Instance{
-				ID:    md5sum("tcp-127.0.0.1:2"),
-				Proto: "tcp",
+				ID:    md5sum("tcp1234567890-127.0.0.1:2"),
+				Proto: "tcp1234567890",
 				Addr:  "127.0.0.1:2",
 			},
 		},
