@@ -138,6 +138,21 @@ func mapEqual(x, y map[string]string) bool {
 	return true
 }
 
+var ErrUnsetService = errors.New("discoverd: service name must not be empty")
+var ErrInvalidService = errors.New("discoverd: service must be lowercase alphanumeric plus dash")
+
+func ValidServiceName(service string) error {
+	if service == "" {
+		return ErrUnsetService
+	}
+	for _, r := range service {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
+			return ErrInvalidService
+		}
+	}
+	return nil
+}
+
 func NewState() *State {
 	return &State{
 		services:    make(map[string]map[string]*Instance),
