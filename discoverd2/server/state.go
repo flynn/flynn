@@ -110,7 +110,7 @@ func (inst *Instance) validProto() error {
 		return ErrUnsetProto
 	}
 	for _, r := range inst.Proto {
-		if (r < 'a' || r > 'z') && (r < '0' || r > '0') {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') {
 			return ErrInvalidProto
 		}
 	}
