@@ -11,6 +11,7 @@ import (
 )
 
 type etcdClient interface {
+	CreateDir(key string, ttl uint64) (*etcd.Response, error)
 	Create(key string, value string, ttl uint64) (*etcd.Response, error)
 	Set(key string, value string, ttl uint64) (*etcd.Response, error)
 	Get(key string, sort, recursive bool) (*etcd.Response, error)
@@ -24,7 +25,6 @@ func NewEtcdBackend(client etcdClient, prefix string, h SyncHandler) Backend {
 		etcd:     client,
 		h:        h,
 		stopSync: make(chan bool),
-		done:     make(chan struct{}),
 	}
 }
 
@@ -44,15 +44,61 @@ type NotFoundError struct {
 }
 
 func (e NotFoundError) Error() string {
-	return fmt.Sprintf("discoverd: %s %s not found", e.Service, e.Instance)
+	if e.Instance == "" {
+		return fmt.Sprintf("discoverd: service %q not found", e.Service)
+	}
+	return fmt.Sprintf("discoverd: instance %s/%s not found", e.Service, e.Instance)
 }
+
+type ServiceExistsError string
+
+func (e ServiceExistsError) Error() string {
+	return fmt.Sprintf("discoverd: service %q already exists", string(e))
+}
+
+func isEtcdError(err error, code int) bool {
+	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == code {
+		return true
+	}
+	return false
+}
+
+func isEtcdNotFound(err error) bool { return isEtcdError(err, 100) }
+func isEtcdExists(err error) bool   { return isEtcdError(err, 105) }
 
 func (b *etcdBackend) instanceKey(service, id string) string {
 	return path.Join(b.serviceKey(service), "instances", id)
 }
 
+func (b *etcdBackend) serviceKey(service string) string {
+	return path.Join(b.prefix, "services", service)
+}
+
+func (b *etcdBackend) AddService(service string) error {
+	_, err := b.etcd.CreateDir(b.serviceKey(service), 0)
+	if isEtcdExists(err) {
+		return ServiceExistsError(service)
+	}
+	return err
+}
+
+func (b *etcdBackend) RemoveService(service string) error {
+	_, err := b.etcd.Delete(b.serviceKey(service), true)
+	if isEtcdNotFound(err) {
+		return NotFoundError{Service: service}
+	}
+	return err
+}
+
 func (b *etcdBackend) AddInstance(service string, inst *Instance) error {
 	data, err := json.Marshal(inst)
+	if err != nil {
+		return err
+	}
+	_, err = b.etcd.Get(b.serviceKey(service), false, false)
+	if isEtcdNotFound(err) {
+		return NotFoundError{Service: service}
+	}
 	if err != nil {
 		return err
 	}
@@ -62,20 +108,24 @@ func (b *etcdBackend) AddInstance(service string, inst *Instance) error {
 
 func (b *etcdBackend) RemoveInstance(service, id string) error {
 	_, err := b.etcd.Delete(b.instanceKey(service, id), true)
-	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
+	if isEtcdNotFound(err) {
 		return NotFoundError{Service: service, Instance: id}
 	}
 	return err
 }
 
 func (b *etcdBackend) Close() error {
-	close(b.stopSync)
-	<-b.done
+	if b.done != nil {
+		close(b.stopSync)
+		<-b.done
+		b.done = nil
+	}
 	return nil
 }
 
 func (b *etcdBackend) StartSync() error {
 	started := make(chan error)
+	b.done = make(chan struct{})
 	go func() {
 		defer close(b.done)
 	outer:
