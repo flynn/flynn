@@ -11,6 +11,7 @@ import (
 )
 
 type etcdClient interface {
+	CreateDir(key string, ttl uint64) (*etcd.Response, error)
 	Create(key string, value string, ttl uint64) (*etcd.Response, error)
 	Set(key string, value string, ttl uint64) (*etcd.Response, error)
 	Get(key string, sort, recursive bool) (*etcd.Response, error)
@@ -24,7 +25,6 @@ func NewEtcdBackend(client etcdClient, prefix string, h SyncHandler) Backend {
 		etcd:     client,
 		h:        h,
 		stopSync: make(chan bool),
-		done:     make(chan struct{}),
 	}
 }
 
@@ -44,15 +44,61 @@ type NotFoundError struct {
 }
 
 func (e NotFoundError) Error() string {
-	return fmt.Sprintf("discoverd: %s/%s not found", e.Service, e.Instance)
+	if e.Instance == "" {
+		return fmt.Sprintf("discoverd: service %q not found", e.Service)
+	}
+	return fmt.Sprintf("discoverd: instance %s/%s not found", e.Service, e.Instance)
 }
 
+type ServiceExistsError string
+
+func (e ServiceExistsError) Error() string {
+	return fmt.Sprintf("discoverd: service %q already exists", string(e))
+}
+
+func isEtcdError(err error, code int) bool {
+	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == code {
+		return true
+	}
+	return false
+}
+
+func isEtcdNotFound(err error) bool { return isEtcdError(err, 100) }
+func isEtcdExists(err error) bool   { return isEtcdError(err, 105) }
+
 func (b *etcdBackend) instanceKey(service, id string) string {
-	return path.Join(b.prefix, "instances", service, id)
+	return path.Join(b.serviceKey(service), "instances", id)
+}
+
+func (b *etcdBackend) serviceKey(service string) string {
+	return path.Join(b.prefix, "services", service)
+}
+
+func (b *etcdBackend) AddService(service string) error {
+	_, err := b.etcd.CreateDir(b.serviceKey(service), 0)
+	if isEtcdExists(err) {
+		return ServiceExistsError(service)
+	}
+	return err
+}
+
+func (b *etcdBackend) RemoveService(service string) error {
+	_, err := b.etcd.Delete(b.serviceKey(service), true)
+	if isEtcdNotFound(err) {
+		return NotFoundError{Service: service}
+	}
+	return err
 }
 
 func (b *etcdBackend) AddInstance(service string, inst *Instance) error {
 	data, err := json.Marshal(inst)
+	if err != nil {
+		return err
+	}
+	_, err = b.etcd.Get(b.serviceKey(service), false, false)
+	if isEtcdNotFound(err) {
+		return NotFoundError{Service: service}
+	}
 	if err != nil {
 		return err
 	}
@@ -62,20 +108,24 @@ func (b *etcdBackend) AddInstance(service string, inst *Instance) error {
 
 func (b *etcdBackend) RemoveInstance(service, id string) error {
 	_, err := b.etcd.Delete(b.instanceKey(service, id), true)
-	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
+	if isEtcdNotFound(err) {
 		return NotFoundError{Service: service, Instance: id}
 	}
 	return err
 }
 
 func (b *etcdBackend) Close() error {
-	close(b.stopSync)
-	<-b.done
+	if b.done != nil {
+		close(b.stopSync)
+		<-b.done
+		b.done = nil
+	}
 	return nil
 }
 
 func (b *etcdBackend) StartSync() error {
 	started := make(chan error)
+	b.done = make(chan struct{})
 	go func() {
 		defer close(b.done)
 	outer:
@@ -99,7 +149,7 @@ func (b *etcdBackend) StartSync() error {
 			for {
 				stream := make(chan *etcd.Response)
 				watchDone := make(chan error)
-				keyPrefix := path.Join(b.prefix, "instances")
+				keyPrefix := path.Join(b.prefix, "services")
 
 				go func() {
 					_, err := b.etcd.Watch(keyPrefix, nextIndex, true, stream, b.stopSync)
@@ -109,11 +159,11 @@ func (b *etcdBackend) StartSync() error {
 				for res := range stream {
 					nextIndex = res.EtcdIndex + 1
 
-					// ensure we have a key like /foo/bar/instances/service/id
-					if strings.Count(res.Node.Key[len(keyPrefix):], "/") != 2 {
+					// ensure we have a key like /foo/bar/services/a/instances/id
+					if strings.Count(res.Node.Key[len(keyPrefix):], "/") != 3 {
 						continue
 					}
-					serviceName := path.Base(path.Dir(res.Node.Key))
+					serviceName := strings.SplitN(res.Node.Key[len(keyPrefix)+1:], "/", 2)[0]
 					instanceID := path.Base(res.Node.Key)
 
 					if res.Action == "delete" {
@@ -121,7 +171,7 @@ func (b *etcdBackend) StartSync() error {
 					} else {
 						inst := &Instance{}
 						if err := json.Unmarshal([]byte(res.Node.Value), inst); err != nil {
-							log.Printf("Error decoding JSON for instance %s/%s: %s", instanceID, serviceName, err)
+							log.Printf("Error decoding JSON for instance %s: %s", res.Node.Key, err)
 							continue
 						}
 						b.h.AddInstance(serviceName, inst)
@@ -149,7 +199,8 @@ func (b *etcdBackend) StartSync() error {
 }
 
 func (b *etcdBackend) fullSync() (uint64, error) {
-	data, err := b.etcd.Get(path.Join(b.prefix, "instances"), false, true)
+	keyPrefix := path.Join(b.prefix, "services")
+	data, err := b.etcd.Get(keyPrefix, false, true)
 	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
 		// key not found, remove existing services
 		for _, name := range b.h.ListServices() {
@@ -167,13 +218,18 @@ func (b *etcdBackend) fullSync() (uint64, error) {
 		added[serviceName] = struct{}{}
 
 		var instances []*Instance
-		for _, instNode := range serviceNode.Nodes {
-			inst := &Instance{}
-			if err := json.Unmarshal([]byte(instNode.Value), inst); err != nil {
-				log.Printf("Error decoding JSON for instance %s: %s", instNode.Key, err)
+		for _, n := range serviceNode.Nodes {
+			if path.Base(n.Key) != "instances" {
 				continue
 			}
-			instances = append(instances, inst)
+			for _, instNode := range n.Nodes {
+				inst := &Instance{}
+				if err := json.Unmarshal([]byte(instNode.Value), inst); err != nil {
+					log.Printf("Error decoding JSON for instance %s: %s", instNode.Key, err)
+					continue
+				}
+				instances = append(instances, inst)
+			}
 		}
 		b.h.SetService(serviceName, instances)
 	}
