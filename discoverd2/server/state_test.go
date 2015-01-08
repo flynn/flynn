@@ -333,3 +333,34 @@ func (StateSuite) TestInstanceValid(c *C) {
 		}
 	}
 }
+
+func (StateSuite) TestServiceNameValid(c *C) {
+	for _, t := range []struct {
+		name    string
+		service string
+		err     string
+	}{
+		{
+			name:    "invalid service",
+			service: "ASDF",
+			err:     ErrInvalidService.Error(),
+		},
+		{
+			name: "empty service",
+			err:  ErrUnsetService.Error(),
+		},
+		{
+			name:    "valid",
+			service: "asdf123456-7890",
+		},
+	} {
+		c.Log(t.name)
+		err := ValidServiceName(t.service)
+		if t.err == "" {
+			c.Check(err, IsNil)
+		} else {
+			c.Assert(err, NotNil)
+			c.Check(err.Error(), Equals, t.err)
+		}
+	}
+}
