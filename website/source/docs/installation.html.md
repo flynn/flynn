@@ -137,7 +137,7 @@ using a [discovery
 token](https://coreos.com/docs/cluster-management/setup/etcd-cluster-discovery/).
 `flynn-host init` is a tool that handles generating and configuring the token.
 
-On the first node, create a new token with the `--discovery-init=3` flag,
+On the first node, create a new token with the `--init-discovery=3` flag,
 replacing `3` with the total number of nodes that will be started. The minimum
 multi-node cluster size is three, and this command does not need to be run if
 you are only starting a single node.
