@@ -4,6 +4,9 @@
     <div class="container-inner">
       <div class="content">
         <nav class="nav-list sidebar">
+          <aside class="search-bar">
+          </aside>
+
           <ul>
             <li class="nav-header">Documentation</li>
             <%= nav_link_with_active("Introduction", "/docs") %>
@@ -38,11 +41,18 @@
             renderer.render(contents)
           %>
         </nav>
-        <div class="content-with-sidebar" data-swiftype-name="body" data-swiftype-type="text">
+        <div id="main" class="content-with-sidebar" data-swiftype-name="body" data-swiftype-type="text">
           <%= yield %>
         </div>
       </div>
     </div>
     &nbsp;
   </div>
+
+  <% if development? %>
+    <%= javascript_include_tag "react-dev" %>
+  <% else %>
+    <%= javascript_include_tag "react" %>
+  <% end %>
+  <%= javascript_include_tag "docs" %>
 <% end %>

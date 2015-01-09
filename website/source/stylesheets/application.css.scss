@@ -19,6 +19,45 @@ table {
   }
 }
 
+.search-bar > input[type=text] {
+  border-color: $grayColor;
+}
+
+.search-bar > input[placeholder] {
+  font-weight: 600;
+}
+
+.search-results > ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  > li + li {
+    margin-top: 1rem;
+  }
+
+  > li {
+    padding: 0.25rem 0.5rem;
+    &.selected {
+      background-color: $dirtyWhiteColor;
+    }
+    em {
+      font-weight: 600;
+      font-style: normal;
+      color: $darkColor;
+    }
+  }
+}
+
+.nav-list.no-active {
+  > ul li.active {
+    background-color: transparent;
+    > a {
+      color: $darkColor;
+    }
+  }
+}
+
 pre {
   word-wrap: normal;
   overflow-x: auto;

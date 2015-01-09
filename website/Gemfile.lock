@@ -18,10 +18,10 @@ GIT
 
 GIT
   remote: git://github.com/jvatic/marbles-js.git
-  revision: 951e432c3e9bec28d5f42787f9e5b5f760972d1e
-  ref: 951e432c3e9bec28d5f42787f9e5b5f760972d1e
+  revision: e11f4b306d0bddac25a768fcee1a3092bfa12700
+  ref: e11f4b306d0bddac25a768fcee1a3092bfa12700
   specs:
-    marbles-js (0.0.4)
+    marbles-js (0.0.5)
 
 GIT
   remote: git://github.com/jvatic/react-jsx-sprockets.git

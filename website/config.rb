@@ -78,6 +78,7 @@ set :images_dir, 'images'
 
 # React JSX compiler
 require 'react-jsx-sprockets'
+::Sprockets.register_engine ".js", ReactJSXSprockets::Tilt
 
 # Add marbles-js to sprockets paths
 require 'marbles-js'
