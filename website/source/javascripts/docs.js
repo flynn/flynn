@@ -59,7 +59,8 @@ var SearchStore = Marbles.Store.createClass({
 				query: ""
 			},
 			selectedIndex: -1,
-			selectedRecord: null
+			selectedRecord: null,
+			loading: false
 		};
 	},
 
@@ -115,6 +116,10 @@ var SearchStore = Marbles.Store.createClass({
 			return;
 		}
 
+		this.setState({
+			loading: true
+		});
+
 		var params = [{
 			engine_key: this.props.engineKey,
 			q: query
@@ -139,8 +144,14 @@ var SearchStore = Marbles.Store.createClass({
 					query: info.query
 				},
 				selectedIndex:	-1,
-				selectedRecord: null
+				selectedRecord: null,
+				loading: false
 			});
+		}.bind(this)).catch(function (err) {
+			this.setState({
+				loading: false
+			});
+			return Promise.reject(err);
 		}.bind(this));
 	},
 
@@ -348,7 +359,11 @@ var SearchResultsComponent = React.createClass({
 						})}
 					</ul>
 				) : (
-					<p>No results</p>
+					this.state.loading ? (
+						<p>Loading...</p>
+					) : (
+						<p>No results</p>
+					)
 				)}
 			</div>
 		);
@@ -389,6 +404,7 @@ var SearchResultsComponent = React.createClass({
 		state.query = searchStoreState.info.query;
 		state.selectedIndex = searchStoreState.selectedIndex;
 		state.selectedRecord = searchStoreState.selectedRecord;
+		state.loading = searchStoreState.loading;
 
 		return state;
 	},
