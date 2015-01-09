@@ -81,9 +81,7 @@ var SearchStore = Marbles.Store.createClass({
 	},
 
 	didBecomeInactive: function () {
-		if (this.__currentFetchRequest) {
-			this.__currentFetchRequest.old = true;
-		}
+		this.__abortCurrentFetchRequest();
 	},
 
 	handleEvent: function (event) {
@@ -98,10 +96,18 @@ var SearchStore = Marbles.Store.createClass({
 		}
 	},
 
-	__fetchResults: function () {
+	__abortCurrentFetchRequest: function () {
 		if (this.__currentFetchRequest) {
 			this.__currentFetchRequest.old = true;
+			var xhr = this.__currentFetchRequest.xhr;
+			if (xhr) {
+				xhr.abort();
+			}
 		}
+	},
+
+	__fetchResults: function () {
+		this.__abortCurrentFetchRequest();
 
 		var query = this.props.query || "";
 		if (query === "") {
