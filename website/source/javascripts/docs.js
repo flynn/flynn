@@ -521,10 +521,16 @@ window.addEventListener("keydown", function (e) {
 	}
 }, false);
 
+var ignorePopstate = true;
+window.addEventListener('load', function () {
+	setTimeout(function () {
+		ignorePopstate = false;
+	}, 200);
+});
 window.addEventListener("popstate", function () {
 	if (window.location.pathname.match(/^\/search/)) {
 		initSearch();
-	} else {
+	} else if ( !ignorePopstate ) {
 		window.location.reload();
 	}
 });
