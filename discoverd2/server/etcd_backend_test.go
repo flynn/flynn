@@ -46,11 +46,21 @@ func (s *EtcdSuite) testBasicSync(c *C, events chan *Event) {
 	err := s.backend.RemoveInstance("a", "b")
 	c.Assert(err, DeepEquals, NotFoundError{Service: "a", Instance: "b"})
 
+	// Create service, and use instance creation as write barrier
+	err = s.backend.AddService("new-service")
+	c.Assert(err, IsNil)
+
 	// Create instance
 	inst := fakeInstance()
 	err = s.backend.AddInstance("a", inst)
 	c.Assert(err, IsNil)
 	assertEvent(c, events, "a", EventKindUp, inst)
+
+	c.Assert(s.state.Get("new-service"), NotNil)
+
+	// Delete service, and use instance update as write barrier
+	err = s.backend.RemoveService("new-service")
+	c.Assert(err, IsNil)
 
 	// Update instance
 	inst2 := *inst
@@ -58,6 +68,8 @@ func (s *EtcdSuite) testBasicSync(c *C, events chan *Event) {
 	err = s.backend.AddInstance("a", &inst2)
 	c.Assert(err, IsNil)
 	assertEvent(c, events, "a", EventKindUpdate, &inst2)
+
+	c.Assert(s.state.Get("new-service"), IsNil)
 
 	// Remove instance
 	err = s.backend.RemoveInstance("a", inst.ID)
@@ -89,6 +101,9 @@ func (s *EtcdSuite) TestLocalDiffSync(c *C) {
 	added := fakeInstance()
 	missingService := fakeInstance()
 
+	s.state.AddService("existing")
+	s.state.AddService("deleted")
+
 	s.state.AddInstance("a", existing)
 	s.state.AddInstance("a", updated)
 	s.state.AddInstance("a", deleted)
@@ -97,6 +112,8 @@ func (s *EtcdSuite) TestLocalDiffSync(c *C) {
 	updated2 := *updated
 	updated2.Meta = map[string]string{"a": "b"}
 	c.Assert(s.backend.AddService("a"), IsNil)
+	c.Assert(s.backend.AddService("existing"), IsNil)
+	c.Assert(s.backend.AddService("new"), IsNil)
 	c.Assert(s.backend.AddInstance("a", existing), IsNil)
 	c.Assert(s.backend.AddInstance("a", &updated2), IsNil)
 	c.Assert(s.backend.AddInstance("a", added), IsNil)
@@ -110,6 +127,11 @@ func (s *EtcdSuite) TestLocalDiffSync(c *C) {
 
 	// Ensure that a service that is not in etcd is removed
 	assertEvent(c, bEvents, "b", EventKindDown, missingService)
+
+	// Ensure that service sync works
+	c.Assert(s.state.Get("existing"), NotNil)
+	c.Assert(s.state.Get("new"), NotNil)
+	c.Assert(s.state.Get("deleted"), IsNil)
 
 	res := receiveEvents(c, aEvents, 3)
 	c.Assert(res[updated.ID], DeepEquals, &Event{
