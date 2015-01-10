@@ -159,22 +159,17 @@ func (b *etcdBackend) StartSync() error {
 				for res := range stream {
 					nextIndex = res.EtcdIndex + 1
 
-					// ensure we have a key like /foo/bar/services/a/instances/id
-					if strings.Count(res.Node.Key[len(keyPrefix):], "/") != 3 {
+					// ensure we have a key like /foo/bar/services/a/instances/id or /foo/bar/services/a
+					slashes := strings.Count(res.Node.Key[len(keyPrefix):], "/")
+					if slashes != 3 && slashes != 1 {
 						continue
 					}
-					serviceName := strings.SplitN(res.Node.Key[len(keyPrefix)+1:], "/", 2)[0]
-					instanceID := path.Base(res.Node.Key)
 
-					if res.Action == "delete" {
-						b.h.RemoveInstance(serviceName, instanceID)
+					serviceName := strings.SplitN(res.Node.Key[len(keyPrefix)+1:], "/", 2)[0]
+					if slashes == 3 {
+						b.instanceEvent(serviceName, res)
 					} else {
-						inst := &Instance{}
-						if err := json.Unmarshal([]byte(res.Node.Value), inst); err != nil {
-							log.Printf("Error decoding JSON for instance %s: %s", res.Node.Key, err)
-							continue
-						}
-						b.h.AddInstance(serviceName, inst)
+						b.serviceEvent(serviceName, res)
 					}
 				}
 
@@ -198,6 +193,29 @@ func (b *etcdBackend) StartSync() error {
 	return <-started
 }
 
+func (b *etcdBackend) instanceEvent(serviceName string, res *etcd.Response) {
+	instanceID := path.Base(res.Node.Key)
+
+	if res.Action == "delete" {
+		b.h.RemoveInstance(serviceName, instanceID)
+	} else {
+		inst := &Instance{}
+		if err := json.Unmarshal([]byte(res.Node.Value), inst); err != nil {
+			log.Printf("Error decoding JSON for instance %s: %s", res.Node.Key, err)
+			return
+		}
+		b.h.AddInstance(serviceName, inst)
+	}
+}
+
+func (b *etcdBackend) serviceEvent(serviceName string, res *etcd.Response) {
+	if res.Action == "delete" {
+		b.h.RemoveService(serviceName)
+	} else {
+		b.h.AddService(serviceName)
+	}
+}
+
 func (b *etcdBackend) fullSync() (uint64, error) {
 	keyPrefix := path.Join(b.prefix, "services")
 	data, err := b.etcd.Get(keyPrefix, false, true)
@@ -217,7 +235,7 @@ func (b *etcdBackend) fullSync() (uint64, error) {
 		serviceName := path.Base(serviceNode.Key)
 		added[serviceName] = struct{}{}
 
-		var instances []*Instance
+		instances := []*Instance{}
 		for _, n := range serviceNode.Nodes {
 			if path.Base(n.Key) != "instances" {
 				continue

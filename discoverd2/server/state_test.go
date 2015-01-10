@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -156,9 +157,9 @@ func (StateSuite) TestSetService(c *C) {
 	}
 	assertNoEvent(c, events)
 
-	// + with service that exists and zero-length new
+	// + with service that exists and nil new
 	state.SetService("a", nil)
-	c.Assert(state.Get("a"), HasLen, 0)
+	c.Assert(state.Get("a"), IsNil)
 	// make sure we get exactly two down events, one for each existing instance
 	down := receiveEvents(c, events, 2)
 	for _, e := range down {
@@ -167,6 +168,11 @@ func (StateSuite) TestSetService(c *C) {
 	}
 	c.Assert(down[newData[0].ID].Instance, DeepEquals, newData[0])
 	c.Assert(down[newData[1].ID].Instance, DeepEquals, newData[1])
+
+	// + with service that doesn't exist and zero-length new
+	state.SetService("a", []*Instance{})
+	c.Assert(state.Get("a"), NotNil)
+	c.Assert(state.Get("a"), HasLen, 0)
 
 	// + one existing, one updated, one new, one deleted
 	initial := []*Instance{fakeInstance(), fakeInstance(), fakeInstance()}
@@ -256,6 +262,26 @@ func (StateSuite) TestListServices(c *C) {
 	c.Assert(services, DeepEquals, []string{"a", "b"})
 }
 
+func (StateSuite) TestAddRemoveService(c *C) {
+	state := NewState()
+
+	c.Assert(state.Get("a"), IsNil)
+	state.AddService("a")
+	c.Assert(state.Get("a"), NotNil)
+	c.Assert(state.Get("a"), HasLen, 0)
+
+	inst := fakeInstance()
+	state.AddInstance("a", inst)
+
+	events := make(chan *Event, 1)
+	state.Subscribe("a", true, EventKindDown, events)
+
+	state.RemoveService("a")
+	assertEvent(c, events, "a", EventKindDown, inst)
+
+	c.Assert(state.Get("a"), IsNil)
+}
+
 func (StateSuite) TestInstanceValid(c *C) {
 	for _, t := range []struct {
 		name string
@@ -317,8 +343,8 @@ func (StateSuite) TestInstanceValid(c *C) {
 		{
 			name: "valid",
 			inst: &Instance{
-				ID:    md5sum("tcp-127.0.0.1:2"),
-				Proto: "tcp",
+				ID:    md5sum("tcp1234567890-127.0.0.1:2"),
+				Proto: "tcp1234567890",
 				Addr:  "127.0.0.1:2",
 			},
 		},
@@ -332,4 +358,49 @@ func (StateSuite) TestInstanceValid(c *C) {
 			c.Check(err.Error(), Equals, t.err)
 		}
 	}
+}
+
+func (StateSuite) TestServiceNameValid(c *C) {
+	for _, t := range []struct {
+		name    string
+		service string
+		err     string
+	}{
+		{
+			name:    "invalid service",
+			service: "ASDF",
+			err:     ErrInvalidService.Error(),
+		},
+		{
+			name: "empty service",
+			err:  ErrUnsetService.Error(),
+		},
+		{
+			name:    "valid",
+			service: "asdf123456-7890",
+		},
+	} {
+		c.Log(t.name)
+		err := ValidServiceName(t.service)
+		if t.err == "" {
+			c.Check(err, IsNil)
+		} else {
+			c.Assert(err, NotNil)
+			c.Check(err.Error(), Equals, t.err)
+		}
+	}
+}
+
+func (StateSuite) TestEventKindJSON(c *C) {
+	kind := struct {
+		Kind EventKind `json:"kind"`
+	}{EventKindUpdate}
+
+	data, err := json.Marshal(kind)
+	c.Assert(err, IsNil)
+	c.Assert(string(data), Equals, `{"kind":"update"}`)
+
+	err = json.Unmarshal([]byte(`{"kind":"leader"}`), &kind)
+	c.Assert(err, IsNil)
+	c.Assert(kind.Kind, Equals, EventKindLeader)
 }

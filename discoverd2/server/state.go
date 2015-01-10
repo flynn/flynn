@@ -19,28 +19,55 @@ const (
 	EventKindUpdate
 	EventKindDown
 	EventKindLeader
-	EventKindAll = ^EventKind(0)
+	EventKindAll     = ^EventKind(0)
+	EventKindUnknown = EventKind(0)
 )
 
+var eventKindStrings = map[EventKind]string{
+	EventKindUp:      "up",
+	EventKindUpdate:  "update",
+	EventKindDown:    "down",
+	EventKindLeader:  "leader",
+	EventKindUnknown: "unknown",
+}
+
 func (k EventKind) String() string {
-	switch k {
-	case EventKindUp:
-		return "up"
-	case EventKindUpdate:
-		return "update"
-	case EventKindDown:
-		return "down"
-	case EventKindLeader:
-		return "leader"
-	default:
-		return "unknown"
+	if s, ok := eventKindStrings[k]; ok {
+		return s
+	}
+	return eventKindStrings[EventKindUnknown]
+}
+
+var eventKindMarshalJSON = make(map[EventKind][]byte, len(eventKindStrings))
+var eventKindUnmarshalJSON = make(map[string]EventKind, len(eventKindStrings))
+
+func init() {
+	for k, s := range eventKindStrings {
+		json := `"` + s + `"`
+		eventKindMarshalJSON[k] = []byte(json)
+		eventKindUnmarshalJSON[json] = k
 	}
 }
 
+func (k EventKind) MarshalJSON() ([]byte, error) {
+	data, ok := eventKindMarshalJSON[k]
+	if ok {
+		return data, nil
+	}
+	return eventKindMarshalJSON[EventKindUnknown], nil
+}
+
+func (k *EventKind) UnmarshalJSON(data []byte) error {
+	if kind, ok := eventKindUnmarshalJSON[string(data)]; ok {
+		*k = kind
+	}
+	return nil
+}
+
 type Event struct {
-	Service string
-	Kind    EventKind
-	*Instance
+	Service   string    `json:"service"`
+	Kind      EventKind `json:"kind"`
+	*Instance `json:"instance"`
 }
 
 func (e *Event) String() string {
@@ -110,7 +137,7 @@ func (inst *Instance) validProto() error {
 		return ErrUnsetProto
 	}
 	for _, r := range inst.Proto {
-		if (r < 'a' || r > 'z') && (r < '0' || r > '0') {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') {
 			return ErrInvalidProto
 		}
 	}
@@ -138,6 +165,21 @@ func mapEqual(x, y map[string]string) bool {
 	return true
 }
 
+var ErrUnsetService = errors.New("discoverd: service name must not be empty")
+var ErrInvalidService = errors.New("discoverd: service must be lowercase alphanumeric plus dash")
+
+func ValidServiceName(service string) error {
+	if service == "" {
+		return ErrUnsetService
+	}
+	for _, r := range service {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
+			return ErrInvalidService
+		}
+	}
+	return nil
+}
+
 func NewState() *State {
 	return &State{
 		services:    make(map[string]map[string]*Instance),
@@ -155,6 +197,28 @@ type State struct {
 	// service name -> list of *subscriber
 	subscribers    map[string]*list.List
 	subscribersMtx sync.Mutex
+}
+
+func (s *State) AddService(service string) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	if _, ok := s.services[service]; !ok {
+		s.services[service] = make(map[string]*Instance)
+	}
+}
+
+func (s *State) RemoveService(service string) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	for _, inst := range s.services[service] {
+		s.broadcast(&Event{
+			Service:  service,
+			Kind:     EventKindDown,
+			Instance: inst,
+		})
+	}
+	delete(s.services, service)
 }
 
 func (s *State) AddInstance(service string, inst *Instance) {
@@ -204,7 +268,7 @@ func (s *State) SetService(service string, data []*Instance) {
 	defer s.mtx.Unlock()
 
 	oldData, ok := s.services[service]
-	if len(data) == 0 {
+	if data == nil {
 		delete(s.services, service)
 	} else {
 		newData := make(map[string]*Instance, len(data))
