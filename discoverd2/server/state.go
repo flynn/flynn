@@ -199,6 +199,28 @@ type State struct {
 	subscribersMtx sync.Mutex
 }
 
+func (s *State) AddService(service string) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	if _, ok := s.services[service]; !ok {
+		s.services[service] = make(map[string]*Instance)
+	}
+}
+
+func (s *State) RemoveService(service string) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	for _, inst := range s.services[service] {
+		s.broadcast(&Event{
+			Service:  service,
+			Kind:     EventKindDown,
+			Instance: inst,
+		})
+	}
+	delete(s.services, service)
+}
+
 func (s *State) AddInstance(service string, inst *Instance) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
@@ -246,7 +268,7 @@ func (s *State) SetService(service string, data []*Instance) {
 	defer s.mtx.Unlock()
 
 	oldData, ok := s.services[service]
-	if len(data) == 0 {
+	if data == nil {
 		delete(s.services, service)
 	} else {
 		newData := make(map[string]*Instance, len(data))
