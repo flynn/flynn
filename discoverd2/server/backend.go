@@ -10,6 +10,8 @@ type Backend interface {
 }
 
 type SyncHandler interface {
+	AddService(service string)
+	RemoveService(service string)
 	AddInstance(service string, inst *Instance)
 	RemoveInstance(service, id string)
 	SetService(service string, data []*Instance)
