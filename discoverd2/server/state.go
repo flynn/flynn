@@ -19,28 +19,55 @@ const (
 	EventKindUpdate
 	EventKindDown
 	EventKindLeader
-	EventKindAll = ^EventKind(0)
+	EventKindAll     = ^EventKind(0)
+	EventKindUnknown = EventKind(0)
 )
 
+var eventKindStrings = map[EventKind]string{
+	EventKindUp:      "up",
+	EventKindUpdate:  "update",
+	EventKindDown:    "down",
+	EventKindLeader:  "leader",
+	EventKindUnknown: "unknown",
+}
+
 func (k EventKind) String() string {
-	switch k {
-	case EventKindUp:
-		return "up"
-	case EventKindUpdate:
-		return "update"
-	case EventKindDown:
-		return "down"
-	case EventKindLeader:
-		return "leader"
-	default:
-		return "unknown"
+	if s, ok := eventKindStrings[k]; ok {
+		return s
+	}
+	return eventKindStrings[EventKindUnknown]
+}
+
+var eventKindMarshalJSON = make(map[EventKind][]byte, len(eventKindStrings))
+var eventKindUnmarshalJSON = make(map[string]EventKind, len(eventKindStrings))
+
+func init() {
+	for k, s := range eventKindStrings {
+		json := `"` + s + `"`
+		eventKindMarshalJSON[k] = []byte(json)
+		eventKindUnmarshalJSON[json] = k
 	}
 }
 
+func (k EventKind) MarshalJSON() ([]byte, error) {
+	data, ok := eventKindMarshalJSON[k]
+	if ok {
+		return data, nil
+	}
+	return eventKindMarshalJSON[EventKindUnknown], nil
+}
+
+func (k *EventKind) UnmarshalJSON(data []byte) error {
+	if kind, ok := eventKindUnmarshalJSON[string(data)]; ok {
+		*k = kind
+	}
+	return nil
+}
+
 type Event struct {
-	Service string
-	Kind    EventKind
-	*Instance
+	Service   string    `json:"service"`
+	Kind      EventKind `json:"kind"`
+	*Instance `json:"instance"`
 }
 
 func (e *Event) String() string {
