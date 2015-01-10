@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -363,4 +364,18 @@ func (StateSuite) TestServiceNameValid(c *C) {
 			c.Check(err.Error(), Equals, t.err)
 		}
 	}
+}
+
+func (StateSuite) TestEventKindJSON(c *C) {
+	kind := struct {
+		Kind EventKind `json:"kind"`
+	}{EventKindUpdate}
+
+	data, err := json.Marshal(kind)
+	c.Assert(err, IsNil)
+	c.Assert(string(data), Equals, `{"kind":"update"}`)
+
+	err = json.Unmarshal([]byte(`{"kind":"leader"}`), &kind)
+	c.Assert(err, IsNil)
+	c.Assert(kind.Kind, Equals, EventKindLeader)
 }
