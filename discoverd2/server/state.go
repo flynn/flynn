@@ -182,14 +182,14 @@ func ValidServiceName(service string) error {
 
 func NewState() *State {
 	return &State{
-		services:    make(map[string]map[string]*Instance),
+		services:    make(map[string]*service),
 		subscribers: make(map[string]*list.List),
 	}
 }
 
 type State struct {
-	// service name -> instance ID -> instance
-	services map[string]map[string]*Instance
+	// service name -> service
+	services map[string]*service
 	// TODO: change to atomic.Value and CoW for the services map, and a RWMutex
 	// for each service map
 	mtx sync.RWMutex
@@ -199,89 +199,95 @@ type State struct {
 	subscribersMtx sync.Mutex
 }
 
-func (s *State) AddService(service string) {
+type service struct {
+	// instance ID -> instance
+	instances map[string]*Instance
+}
+
+func (s *State) AddService(name string) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	if _, ok := s.services[service]; !ok {
-		s.services[service] = make(map[string]*Instance)
+	if _, ok := s.services[name]; !ok {
+		s.services[name] = &service{instances: make(map[string]*Instance)}
 	}
 }
 
-func (s *State) RemoveService(service string) {
+func (s *State) RemoveService(name string) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	for _, inst := range s.services[service] {
+	for _, inst := range s.services[name].instances {
 		s.broadcast(&Event{
-			Service:  service,
+			Service:  name,
 			Kind:     EventKindDown,
 			Instance: inst,
 		})
 	}
-	delete(s.services, service)
+	delete(s.services, name)
 }
 
-func (s *State) AddInstance(service string, inst *Instance) {
+func (s *State) AddInstance(serviceName string, inst *Instance) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	data, ok := s.services[service]
+	data, ok := s.services[serviceName]
 	if !ok {
-		data = make(map[string]*Instance)
-		s.services[service] = data
+		data = &service{instances: make(map[string]*Instance)}
+		s.services[serviceName] = data
 	}
-	old, existing := data[inst.ID]
-	data[inst.ID] = inst
+	old, existing := data.instances[inst.ID]
+	data.instances[inst.ID] = inst
 
 	if !existing || !inst.Equal(old) {
 		s.broadcast(&Event{
-			Service:  service,
+			Service:  serviceName,
 			Kind:     eventKindUpdate(existing),
 			Instance: inst,
 		})
 	}
 }
 
-func (s *State) RemoveInstance(service, id string) {
+func (s *State) RemoveInstance(serviceName, id string) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	data, ok := s.services[service]
+	data, ok := s.services[serviceName]
 	if !ok {
 		return
 	}
-	inst, exists := data[id]
+	inst, exists := data.instances[id]
 	if !exists {
 		return
 	}
-	delete(data, id)
+	delete(data.instances, id)
 
 	s.broadcast(&Event{
-		Service:  service,
+		Service:  serviceName,
 		Kind:     EventKindDown,
 		Instance: inst,
 	})
 }
 
-func (s *State) SetService(service string, data []*Instance) {
+func (s *State) SetService(serviceName string, data []*Instance) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	oldData, ok := s.services[service]
+	var newData map[string]*Instance
+	oldService, ok := s.services[serviceName]
 	if data == nil {
-		delete(s.services, service)
+		delete(s.services, serviceName)
 	} else {
-		newData := make(map[string]*Instance, len(data))
+		newData = make(map[string]*Instance, len(data))
 		for _, inst := range data {
 			newData[inst.ID] = inst
 		}
-		s.services[service] = newData
+		s.services[serviceName] = &service{instances: newData}
 	}
 	if !ok {
 		// Service doesn't currently exist, send updates for each instance
 		for _, inst := range data {
 			s.broadcast(&Event{
-				Service:  service,
+				Service:  serviceName,
 				Kind:     EventKindUp,
 				Instance: inst,
 			})
@@ -291,9 +297,9 @@ func (s *State) SetService(service string, data []*Instance) {
 
 	// diff existing
 	for _, inst := range data {
-		if old, existing := oldData[inst.ID]; !existing || !inst.Equal(old) {
+		if old, existing := oldService.instances[inst.ID]; !existing || !inst.Equal(old) {
 			s.broadcast(&Event{
-				Service:  service,
+				Service:  serviceName,
 				Kind:     eventKindUpdate(existing),
 				Instance: inst,
 			})
@@ -301,10 +307,10 @@ func (s *State) SetService(service string, data []*Instance) {
 	}
 
 	// find deleted
-	for k, v := range oldData {
-		if _, ok := s.services[service][k]; !ok {
+	for k, v := range oldService.instances {
+		if _, ok := newData[k]; !ok {
 			s.broadcast(&Event{
-				Service:  service,
+				Service:  serviceName,
 				Kind:     EventKindDown,
 				Instance: v,
 			})
@@ -328,14 +334,14 @@ func (s *State) ListServices() []string {
 	return res
 }
 
-func (s *State) getLocked(service string) []*Instance {
-	data, ok := s.services[service]
+func (s *State) getLocked(name string) []*Instance {
+	data, ok := s.services[name]
 	if !ok {
 		return nil
 	}
 
-	res := make([]*Instance, 0, len(data))
-	for _, inst := range data {
+	res := make([]*Instance, 0, len(data.instances))
+	for _, inst := range data.instances {
 		res = append(res, inst)
 	}
 	return res
