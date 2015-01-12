@@ -33,7 +33,7 @@ var _ = Suite(&EtcdSuite{})
 // Sync starting with a clean slate
 func (s *EtcdSuite) TestBasicSync(c *C) {
 	events := make(chan *Event, 1)
-	s.state.Subscribe("a", false, EventKindAll, events)
+	s.state.Subscribe("a", false, EventKindUp|EventKindDown|EventKindUpdate, events)
 
 	c.Assert(s.backend.AddService("a"), IsNil)
 	c.Assert(s.backend.StartSync(), IsNil)
@@ -77,13 +77,43 @@ func (s *EtcdSuite) testBasicSync(c *C, events chan *Event) {
 	assertEvent(c, events, "a", EventKindDown, &inst2)
 }
 
+func (s *EtcdSuite) TestLeaderElection(c *C) {
+	events := make(chan *Event, 2)
+	s.state.Subscribe("a", false, EventKindLeader|EventKindUp, events)
+
+	c.Assert(s.backend.AddService("a"), IsNil)
+	first := fakeInstance()
+	c.Assert(s.backend.AddInstance("a", first), IsNil)
+
+	// first instance is leader
+	c.Assert(s.backend.StartSync(), IsNil)
+	assertEvent(c, events, "a", EventKindUp, first)
+	assertEvent(c, events, "a", EventKindLeader, first)
+
+	// no event for second instance
+	second := fakeInstance()
+	c.Assert(s.backend.AddInstance("a", second), IsNil)
+	assertEvent(c, events, "a", EventKindUp, second)
+	assertNoEvent(c, events)
+
+	// no event for update of first instance
+	update := *first
+	update.Meta = map[string]string{"a": "b"}
+	c.Assert(s.backend.AddInstance("a", &update), IsNil)
+	assertNoEvent(c, events)
+
+	// second instance becomes leader
+	c.Assert(s.backend.RemoveInstance("a", first.ID), IsNil)
+	assertEvent(c, events, "a", EventKindLeader, second)
+}
+
 // Sync starting with empty etcd, but services in local state
 func (s *EtcdSuite) TestNoServiceSync(c *C) {
 	inst := fakeInstance()
 	s.state.AddInstance("a", inst)
 
 	events := make(chan *Event, 1)
-	s.state.Subscribe("a", false, EventKindAll, events)
+	s.state.Subscribe("a", false, EventKindUp|EventKindDown|EventKindUpdate, events)
 
 	c.Assert(s.backend.AddService("a"), IsNil)
 	c.Assert(s.backend.StartSync(), IsNil)
@@ -120,8 +150,8 @@ func (s *EtcdSuite) TestLocalDiffSync(c *C) {
 
 	aEvents := make(chan *Event, 3)
 	bEvents := make(chan *Event, 1)
-	s.state.Subscribe("a", false, EventKindAll, aEvents)
-	s.state.Subscribe("b", false, EventKindAll, bEvents)
+	s.state.Subscribe("a", false, EventKindUp|EventKindDown|EventKindUpdate, aEvents)
+	s.state.Subscribe("b", false, EventKindDown, bEvents)
 
 	c.Assert(s.backend.StartSync(), IsNil)
 
@@ -134,17 +164,17 @@ func (s *EtcdSuite) TestLocalDiffSync(c *C) {
 	c.Assert(s.state.Get("deleted"), IsNil)
 
 	res := receiveEvents(c, aEvents, 3)
-	c.Assert(res[updated.ID], DeepEquals, &Event{
+	assertEventEqual(c, res[updated.ID][0], &Event{
 		Service:  "a",
 		Kind:     EventKindUpdate,
 		Instance: &updated2,
 	})
-	c.Assert(res[deleted.ID], DeepEquals, &Event{
+	assertEventEqual(c, res[deleted.ID][0], &Event{
 		Service:  "a",
 		Kind:     EventKindDown,
 		Instance: deleted,
 	})
-	c.Assert(res[added.ID], DeepEquals, &Event{
+	assertEventEqual(c, res[added.ID][0], &Event{
 		Service:  "a",
 		Kind:     EventKindUp,
 		Instance: added,
