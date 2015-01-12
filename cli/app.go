@@ -90,7 +90,7 @@ func runCreate(args *docopt.Args, client *controller.Client) error {
 	}
 
 	// Test if remote name exists and prompt user
-	remotes, err = gitRemoteNames()
+	remotes, err := gitRemoteNames()
 	if err != nil {
 		return err
 	}
