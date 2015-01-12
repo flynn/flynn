@@ -19,6 +19,7 @@ const (
 	EventKindUpdate
 	EventKindDown
 	EventKindLeader
+	EventKindCurrent
 	EventKindAll     = ^EventKind(0)
 	EventKindUnknown = EventKind(0)
 )
@@ -28,6 +29,7 @@ var eventKindStrings = map[EventKind]string{
 	EventKindUpdate:  "update",
 	EventKindDown:    "down",
 	EventKindLeader:  "leader",
+	EventKindCurrent: "current",
 	EventKindUnknown: "unknown",
 }
 
@@ -65,9 +67,9 @@ func (k *EventKind) UnmarshalJSON(data []byte) error {
 }
 
 type Event struct {
-	Service   string    `json:"service"`
-	Kind      EventKind `json:"kind"`
-	*Instance `json:"instance"`
+	Service  string    `json:"service"`
+	Kind     EventKind `json:"kind"`
+	Instance *Instance `json:"instance,omitempty"`
 }
 
 func (e *Event) String() string {
@@ -492,8 +494,8 @@ func (s *State) Subscribe(service string, sendCurrent bool, kinds EventKind, ch 
 	// locked.
 	var current []*Instance
 	var currentLeader *Instance
-	sendCurrent = sendCurrent && kinds&(EventKindUp|EventKindUpdate|EventKindLeader) != 0
-	if sendCurrent {
+	getCurrent := sendCurrent && kinds&(EventKindUp|EventKindLeader) != 0
+	if getCurrent {
 		s.mtx.RLock()
 		current = s.getLocked(service)
 		currentLeader = s.services[service].Leader()
@@ -502,7 +504,7 @@ func (s *State) Subscribe(service string, sendCurrent bool, kinds EventKind, ch 
 	s.subscribersMtx.Lock()
 	defer s.subscribersMtx.Unlock()
 
-	if sendCurrent {
+	if getCurrent {
 		// Make sure we unlock this *after* locking subscribersMtx to prevent any
 		// changes from being applied before we send the current state
 		s.mtx.RUnlock()
@@ -521,14 +523,14 @@ func (s *State) Subscribe(service string, sendCurrent bool, kinds EventKind, ch 
 	}
 	sub.el = l.PushBack(sub)
 
-	if kinds&(EventKindUp|EventKindUpdate) != 0 {
+	if kinds&EventKindUp != 0 {
 		for _, inst := range current {
 			ch <- &Event{
 				Service:  service,
 				Kind:     EventKindUp,
 				Instance: inst,
 			}
-			// TODO: add a timeout here so that clients can't slow things down too much
+			// TODO: add a timeout to sends so that clients can't slow things down too much
 		}
 	}
 	if kinds&EventKindLeader != 0 && currentLeader != nil {
@@ -536,6 +538,12 @@ func (s *State) Subscribe(service string, sendCurrent bool, kinds EventKind, ch 
 			Service:  service,
 			Kind:     EventKindLeader,
 			Instance: currentLeader,
+		}
+	}
+	if sendCurrent && kinds&EventKindCurrent != 0 {
+		ch <- &Event{
+			Service: service,
+			Kind:    EventKindCurrent,
 		}
 	}
 
