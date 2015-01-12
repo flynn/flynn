@@ -204,6 +204,7 @@ func (b *etcdBackend) instanceEvent(serviceName string, res *etcd.Response) {
 			log.Printf("Error decoding JSON for instance %s: %s", res.Node.Key, err)
 			return
 		}
+		inst.Index = res.Node.CreatedIndex
 		b.h.AddInstance(serviceName, inst)
 	}
 }
@@ -246,6 +247,7 @@ func (b *etcdBackend) fullSync() (uint64, error) {
 					log.Printf("Error decoding JSON for instance %s: %s", instNode.Key, err)
 					continue
 				}
+				inst.Index = instNode.CreatedIndex
 				instances = append(instances, inst)
 			}
 		}
