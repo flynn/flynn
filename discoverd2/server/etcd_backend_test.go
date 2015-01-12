@@ -4,6 +4,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
+	"github.com/flynn/flynn/discoverd2/client"
 )
 
 type EtcdSuite struct {
@@ -32,8 +33,8 @@ var _ = Suite(&EtcdSuite{})
 
 // Sync starting with a clean slate
 func (s *EtcdSuite) TestBasicSync(c *C) {
-	events := make(chan *Event, 1)
-	s.state.Subscribe("a", false, EventKindUp|EventKindDown|EventKindUpdate, events)
+	events := make(chan *discoverd.Event, 1)
+	s.state.Subscribe("a", false, discoverd.EventKindUp|discoverd.EventKindDown|discoverd.EventKindUpdate, events)
 
 	c.Assert(s.backend.AddService("a"), IsNil)
 	c.Assert(s.backend.StartSync(), IsNil)
@@ -41,7 +42,7 @@ func (s *EtcdSuite) TestBasicSync(c *C) {
 	s.testBasicSync(c, events)
 }
 
-func (s *EtcdSuite) testBasicSync(c *C, events chan *Event) {
+func (s *EtcdSuite) testBasicSync(c *C, events chan *discoverd.Event) {
 	// Remove instance that doesn't exist
 	err := s.backend.RemoveInstance("a", "b")
 	c.Assert(err, DeepEquals, NotFoundError{Service: "a", Instance: "b"})
@@ -54,7 +55,7 @@ func (s *EtcdSuite) testBasicSync(c *C, events chan *Event) {
 	inst := fakeInstance()
 	err = s.backend.AddInstance("a", inst)
 	c.Assert(err, IsNil)
-	assertEvent(c, events, "a", EventKindUp, inst)
+	assertEvent(c, events, "a", discoverd.EventKindUp, inst)
 
 	c.Assert(s.state.Get("new-service"), NotNil)
 
@@ -67,19 +68,19 @@ func (s *EtcdSuite) testBasicSync(c *C, events chan *Event) {
 	inst2.Meta = map[string]string{"a": "b"}
 	err = s.backend.AddInstance("a", &inst2)
 	c.Assert(err, IsNil)
-	assertEvent(c, events, "a", EventKindUpdate, &inst2)
+	assertEvent(c, events, "a", discoverd.EventKindUpdate, &inst2)
 
 	c.Assert(s.state.Get("new-service"), IsNil)
 
 	// Remove instance
 	err = s.backend.RemoveInstance("a", inst.ID)
 	c.Assert(err, IsNil)
-	assertEvent(c, events, "a", EventKindDown, &inst2)
+	assertEvent(c, events, "a", discoverd.EventKindDown, &inst2)
 }
 
 func (s *EtcdSuite) TestLeaderElection(c *C) {
-	events := make(chan *Event, 2)
-	s.state.Subscribe("a", false, EventKindLeader|EventKindUp, events)
+	events := make(chan *discoverd.Event, 2)
+	s.state.Subscribe("a", false, discoverd.EventKindLeader|discoverd.EventKindUp, events)
 
 	c.Assert(s.backend.AddService("a"), IsNil)
 	first := fakeInstance()
@@ -87,13 +88,13 @@ func (s *EtcdSuite) TestLeaderElection(c *C) {
 
 	// first instance is leader
 	c.Assert(s.backend.StartSync(), IsNil)
-	assertEvent(c, events, "a", EventKindUp, first)
-	assertEvent(c, events, "a", EventKindLeader, first)
+	assertEvent(c, events, "a", discoverd.EventKindUp, first)
+	assertEvent(c, events, "a", discoverd.EventKindLeader, first)
 
 	// no event for second instance
 	second := fakeInstance()
 	c.Assert(s.backend.AddInstance("a", second), IsNil)
-	assertEvent(c, events, "a", EventKindUp, second)
+	assertEvent(c, events, "a", discoverd.EventKindUp, second)
 	assertNoEvent(c, events)
 
 	// no event for update of first instance
@@ -104,7 +105,7 @@ func (s *EtcdSuite) TestLeaderElection(c *C) {
 
 	// second instance becomes leader
 	c.Assert(s.backend.RemoveInstance("a", first.ID), IsNil)
-	assertEvent(c, events, "a", EventKindLeader, second)
+	assertEvent(c, events, "a", discoverd.EventKindLeader, second)
 }
 
 // Sync starting with empty etcd, but services in local state
@@ -112,13 +113,13 @@ func (s *EtcdSuite) TestNoServiceSync(c *C) {
 	inst := fakeInstance()
 	s.state.AddInstance("a", inst)
 
-	events := make(chan *Event, 1)
-	s.state.Subscribe("a", false, EventKindUp|EventKindDown|EventKindUpdate, events)
+	events := make(chan *discoverd.Event, 1)
+	s.state.Subscribe("a", false, discoverd.EventKindUp|discoverd.EventKindDown|discoverd.EventKindUpdate, events)
 
 	c.Assert(s.backend.AddService("a"), IsNil)
 	c.Assert(s.backend.StartSync(), IsNil)
 
-	assertEvent(c, events, "a", EventKindDown, inst)
+	assertEvent(c, events, "a", discoverd.EventKindDown, inst)
 
 	s.testBasicSync(c, events)
 }
@@ -148,15 +149,15 @@ func (s *EtcdSuite) TestLocalDiffSync(c *C) {
 	c.Assert(s.backend.AddInstance("a", &updated2), IsNil)
 	c.Assert(s.backend.AddInstance("a", added), IsNil)
 
-	aEvents := make(chan *Event, 3)
-	bEvents := make(chan *Event, 1)
-	s.state.Subscribe("a", false, EventKindUp|EventKindDown|EventKindUpdate, aEvents)
-	s.state.Subscribe("b", false, EventKindDown, bEvents)
+	aEvents := make(chan *discoverd.Event, 3)
+	bEvents := make(chan *discoverd.Event, 1)
+	s.state.Subscribe("a", false, discoverd.EventKindUp|discoverd.EventKindDown|discoverd.EventKindUpdate, aEvents)
+	s.state.Subscribe("b", false, discoverd.EventKindDown, bEvents)
 
 	c.Assert(s.backend.StartSync(), IsNil)
 
 	// Ensure that a service that is not in etcd is removed
-	assertEvent(c, bEvents, "b", EventKindDown, missingService)
+	assertEvent(c, bEvents, "b", discoverd.EventKindDown, missingService)
 
 	// Ensure that service sync works
 	c.Assert(s.state.Get("existing"), NotNil)
@@ -164,19 +165,19 @@ func (s *EtcdSuite) TestLocalDiffSync(c *C) {
 	c.Assert(s.state.Get("deleted"), IsNil)
 
 	res := receiveEvents(c, aEvents, 3)
-	assertEventEqual(c, res[updated.ID][0], &Event{
+	assertEventEqual(c, res[updated.ID][0], &discoverd.Event{
 		Service:  "a",
-		Kind:     EventKindUpdate,
+		Kind:     discoverd.EventKindUpdate,
 		Instance: &updated2,
 	})
-	assertEventEqual(c, res[deleted.ID][0], &Event{
+	assertEventEqual(c, res[deleted.ID][0], &discoverd.Event{
 		Service:  "a",
-		Kind:     EventKindDown,
+		Kind:     discoverd.EventKindDown,
 		Instance: deleted,
 	})
-	assertEventEqual(c, res[added.ID][0], &Event{
+	assertEventEqual(c, res[added.ID][0], &discoverd.Event{
 		Service:  "a",
-		Kind:     EventKindUp,
+		Kind:     discoverd.EventKindUp,
 		Instance: added,
 	})
 
