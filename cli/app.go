@@ -84,7 +84,10 @@ func promptYesNo(msg string) (result bool) {
 func runCreate(args *docopt.Args, client *controller.Client) error {
 	app := &ct.App{}
 	app.Name = args.String["<name>"]
-	remote := args.String["<remote>"] || "flynn"
+	remote := args.String["<remote>"]
+	if remote == "" {
+		remote = "flynn"
+	}
 
 	// Test if remote name exists and prompt user
 	remotes, err = gitRemoteNames()
