@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,8 +19,6 @@ type StateSuite struct{}
 
 var _ = Suite(&StateSuite{})
 
-var instanceIdx uint64
-
 func fakeInstance() *Instance {
 	octet := func() int { return random.Math.Intn(255) + 1 }
 	return &Instance{
@@ -29,7 +26,6 @@ func fakeInstance() *Instance {
 		Addr:  fmt.Sprintf("%d.%d.%d.%d:%d", octet(), octet(), octet(), octet(), random.Math.Intn(65535)+1),
 		Proto: "tcp",
 		Meta:  map[string]string{"foo": "bar"},
-		Index: uint(atomic.AddUint64(&instanceIdx, 1)),
 	}
 }
 
@@ -40,44 +36,74 @@ func assertHasInstance(c *C, list []*Instance, want ...*Instance) {
 				return
 			}
 		}
-		c.Errorf("couldn't find %#v in %#v", want, list)
+		c.Fatalf("couldn't find %#v in %#v", want, list)
 	}
 }
 
 func assertNoEvent(c *C, events chan *Event) {
 	select {
-	case e := <-events:
-		c.Errorf("unexpected event %v %#v", e, e.Instance)
+	case e, ok := <-events:
+		if !ok {
+			c.Fatal("channel closed")
+		}
+		c.Fatalf("unexpected event %v %#v", e, e.Instance)
 	default:
 	}
 }
 
 func assertEvent(c *C, events chan *Event, service string, kind EventKind, instance *Instance) {
 	var event *Event
+	var ok bool
 	select {
-	case event = <-events:
+	case event, ok = <-events:
+		if !ok {
+			c.Fatal("channel closed")
+		}
 	case <-time.After(10 * time.Second):
-		c.Errorf("timed out waiting for %s %#v", kind, instance)
+		c.Fatalf("timed out waiting for %s %#v", kind, instance)
 	}
-	c.Assert(event, DeepEquals, &Event{
+
+	assertEventEqual(c, event, &Event{
 		Service:  service,
 		Kind:     kind,
 		Instance: instance,
 	})
 }
 
-func receiveEvents(c *C, events chan *Event, count int) map[string]*Event {
-	res := make(map[string]*Event, count)
+func assertEventEqual(c *C, actual, expected *Event) {
+	c.Assert(actual.Service, Equals, expected.Service)
+	c.Assert(actual.Kind, Equals, expected.Kind)
+	if expected.Instance == nil {
+		c.Assert(actual.Instance, IsNil)
+		return
+	}
+	c.Assert(actual.Instance, NotNil)
+
+	// zero out the index for comparison purposes
+	eInst := *expected.Instance
+	eInst.Index = 0
+	aInst := *actual.Instance
+	aInst.Index = 0
+	c.Assert(aInst, DeepEquals, eInst)
+}
+
+func receiveEvents(c *C, events chan *Event, count int) map[string][]*Event {
+	res := receiveSomeEvents(c, events, count)
+	assertNoEvent(c, events)
+	return res
+}
+
+func receiveSomeEvents(c *C, events chan *Event, count int) map[string][]*Event {
+	res := make(map[string][]*Event, count)
 	for i := 0; i < count; i++ {
 		select {
 		case e := <-events:
 			c.Logf("+ event %s", e)
-			res[e.Instance.ID] = e
+			res[e.Instance.ID] = append(res[e.Instance.ID], e)
 		case <-time.After(10 * time.Second):
-			c.Errorf("expected %d events, got %d", count, len(res))
+			c.Fatalf("expected %d events, got %d", count, len(res))
 		}
 	}
-	assertNoEvent(c, events)
 	return res
 }
 
@@ -144,7 +170,7 @@ func (StateSuite) TestDeleteInstance(c *C) {
 func (StateSuite) TestSetService(c *C) {
 	state := NewState()
 	events := make(chan *Event, 3)
-	state.Subscribe("a", false, EventKindAll, events)
+	state.Subscribe("a", false, EventKindUp|EventKindUpdate|EventKindDown, events)
 
 	// + with service that doesn't exist
 	newData := []*Instance{fakeInstance(), fakeInstance()}
@@ -163,11 +189,11 @@ func (StateSuite) TestSetService(c *C) {
 	// make sure we get exactly two down events, one for each existing instance
 	down := receiveEvents(c, events, 2)
 	for _, e := range down {
-		c.Assert(e.Kind, Equals, EventKindDown)
-		c.Assert(e.Service, Equals, "a")
+		c.Assert(e[0].Kind, Equals, EventKindDown)
+		c.Assert(e[0].Service, Equals, "a")
 	}
-	c.Assert(down[newData[0].ID].Instance, DeepEquals, newData[0])
-	c.Assert(down[newData[1].ID].Instance, DeepEquals, newData[1])
+	c.Assert(down[newData[0].ID][0].Instance, DeepEquals, newData[0])
+	c.Assert(down[newData[1].ID][0].Instance, DeepEquals, newData[1])
 
 	// + with service that doesn't exist and zero-length new
 	state.SetService("a", []*Instance{})
@@ -193,20 +219,114 @@ func (StateSuite) TestSetService(c *C) {
 
 	changes := receiveEvents(c, events, 3)
 
-	modifiedEvent := changes[modified.ID]
+	modifiedEvent := changes[modified.ID][0]
 	c.Assert(modifiedEvent.Kind, Equals, EventKindUpdate)
 	c.Assert(modifiedEvent.Service, Equals, "a")
 	c.Assert(modifiedEvent.Instance, DeepEquals, &modified)
 
-	deletedEvent := changes[deleted.ID]
+	deletedEvent := changes[deleted.ID][0]
 	c.Assert(deletedEvent.Kind, Equals, EventKindDown)
 	c.Assert(deletedEvent.Service, Equals, "a")
 	c.Assert(deletedEvent.Instance, DeepEquals, deleted)
 
-	addedEvent := changes[added.ID]
+	addedEvent := changes[added.ID][0]
 	c.Assert(addedEvent.Kind, Equals, EventKindUp)
 	c.Assert(addedEvent.Service, Equals, "a")
 	c.Assert(addedEvent.Instance, DeepEquals, added)
+}
+
+func (StateSuite) TestLeaderElection(c *C) {
+	state := NewState()
+	events := make(chan *Event, 1)
+	state.Subscribe("a", false, EventKindLeader, events)
+
+	// nil for non-existent service
+	c.Assert(state.GetLeader("a"), IsNil)
+	state.AddService("a")
+	// nil for existent service with no instances
+	c.Assert(state.GetLeader("a"), IsNil)
+
+	// first instance becomes leader
+	first := fakeInstance()
+	first.Index = 3
+	state.AddInstance("a", first)
+	assertEvent(c, events, "a", EventKindLeader, first)
+	c.Assert(state.GetLeader("a"), DeepEquals, first)
+
+	// update doesn't trigger event
+	updated := *first
+	updated.Meta = map[string]string{"a": "b"}
+	state.AddInstance("a", &updated)
+	assertNoEvent(c, events)
+	c.Assert(state.GetLeader("a"), DeepEquals, &updated)
+
+	// subsequent instance with higher index doesn't become leader
+	second := fakeInstance()
+	second.Index = 4
+	state.AddInstance("a", second)
+	assertNoEvent(c, events)
+	c.Assert(state.GetLeader("a"), DeepEquals, &updated)
+
+	// subsequent instance with lower index becomes leader
+	third := fakeInstance()
+	third.Index = 2
+	state.AddInstance("a", third)
+	assertEvent(c, events, "a", EventKindLeader, third)
+	c.Assert(state.GetLeader("a"), DeepEquals, third)
+
+	// set with same instance and another instance triggers no events
+	fourth := fakeInstance()
+	fourth.Index = 5
+	state.SetService("a", []*Instance{fourth, third})
+	assertNoEvent(c, events)
+	c.Assert(state.GetLeader("a"), DeepEquals, third)
+
+	// set with same instance and lower index selects a new leader
+	fifth := fakeInstance()
+	fifth.Index = 1
+	state.SetService("a", []*Instance{third, fifth})
+	assertEvent(c, events, "a", EventKindLeader, fifth)
+	c.Assert(state.GetLeader("a"), DeepEquals, fifth)
+
+	// set with new instances chooses lowest
+	sixth := fakeInstance()
+	sixth.Index = 6
+	seventh := fakeInstance()
+	seventh.Index = 7
+	state.SetService("a", []*Instance{sixth, seventh})
+	assertEvent(c, events, "a", EventKindLeader, sixth)
+	c.Assert(state.GetLeader("a"), DeepEquals, sixth)
+
+	eighth := fakeInstance()
+	eighth.Index = 8
+	state.AddInstance("a", eighth)
+
+	// remove of high instance triggers no events
+	state.RemoveInstance("a", eighth.ID)
+	assertNoEvent(c, events)
+	c.Assert(state.GetLeader("a"), DeepEquals, sixth)
+
+	// remove of low instance triggers new leader
+	state.RemoveInstance("a", sixth.ID)
+	assertEvent(c, events, "a", EventKindLeader, seventh)
+	c.Assert(state.GetLeader("a"), DeepEquals, seventh)
+
+	// remove of last instance triggers no events
+	state.RemoveInstance("a", seventh.ID)
+	assertNoEvent(c, events)
+	c.Assert(state.GetLeader("a"), IsNil)
+
+	// add of a new instance triggers leader
+	ninth := fakeInstance()
+	ninth.Index = 9
+	state.AddInstance("a", ninth)
+	assertEvent(c, events, "a", EventKindLeader, ninth)
+	c.Assert(state.GetLeader("a"), DeepEquals, ninth)
+
+	// removing service triggers no events
+	state.RemoveService("a")
+	assertNoEvent(c, events)
+	c.Assert(state.GetLeader("a"), IsNil)
 }
 
 func (StateSuite) TestGetNilService(c *C) {
@@ -214,19 +334,122 @@ func (StateSuite) TestGetNilService(c *C) {
 	c.Assert(state.Get("a"), HasLen, 0)
 }
 
+func (StateSuite) TestSubscribeInitial(c *C) {
+	for _, t := range []struct {
+		name  string
+		kinds EventKind
+	}{
+		{
+			name:  "up",
+			kinds: EventKindUp,
+		},
+		{
+			name:  "up+update",
+			kinds: EventKindUp | EventKindUpdate,
+		},
+		{
+			name:  "down",
+			kinds: EventKindDown,
+		},
+		{
+			name:  "update+down",
+			kinds: EventKindDown | EventKindUpdate,
+		},
+		{
+			name:  "leader",
+			kinds: EventKindLeader,
+		},
+		{
+			name:  "leader+up",
+			kinds: EventKindLeader | EventKindUp,
+		},
+		{
+			name:  "leader+current",
+			kinds: EventKindLeader | EventKindCurrent,
+		},
+		{
+			name:  "up+leader+current",
+			kinds: EventKindUp | EventKindLeader | EventKindCurrent,
+		},
+		{
+			name:  "up+current",
+			kinds: EventKindUp | EventKindCurrent,
+		},
+		{
+			name:  "down+current",
+			kinds: EventKindDown | EventKindCurrent,
+		},
+		{
+			name:  "current",
+			kinds: EventKindDown | EventKindCurrent,
+		},
+	} {
+		c.Log(t.name)
+
+		// with no instances
+		events := make(chan *Event, 1)
+		state := NewState()
+		state.Subscribe("a", true, t.kinds, events)
+
+		if t.kinds&EventKindCurrent != 0 {
+			assertEvent(c, events, "a", EventKindCurrent, nil)
+		}
+		assertNoEvent(c, events)
+
+		// with two instances
+		one := fakeInstance()
+		one.Index = 1
+		two := fakeInstance()
+		two.Index = 2
+		state.AddInstance("a", one)
+		state.AddInstance("a", two)
+		events = make(chan *Event, 4)
+		state.Subscribe("a", true, t.kinds, events)
+		if t.kinds&EventKindUp != 0 {
+			up := receiveSomeEvents(c, events, 2)
+			assertEventEqual(c, up[one.ID][0], &Event{
+				Service:  "a",
+				Kind:     EventKindUp,
+				Instance: one,
+			})
+			assertEventEqual(c, up[two.ID][0], &Event{
+				Service:  "a",
+				Kind:     EventKindUp,
+				Instance: two,
+			})
+		}
+		if t.kinds&EventKindLeader != 0 {
+			assertEvent(c, events, "a", EventKindLeader, one)
+		}
+		if t.kinds&EventKindCurrent != 0 {
+			assertEvent(c, events, "a", EventKindCurrent, nil)
+		}
+		assertNoEvent(c, events)
+
+		// with sendCurrent false
+		events = make(chan *Event, 1)
+		state.Subscribe("a", false, t.kinds, events)
+		assertNoEvent(c, events)
+	}
+}
+
 func (StateSuite) TestSubscribe(c *C) {
 	state := NewState()
 
 	inst1 := fakeInstance()
+	inst1.Index = 1
 	state.AddInstance("a", inst1)
 
-	events := make(chan *Event, 1)
-	stream := state.Subscribe("a", true, EventKindAll, events)
+	events := make(chan *Event, 2)
+	stream := state.Subscribe("a", true, EventKindUp|EventKindLeader, events)
 
 	// initial instance
 	assertEvent(c, events, "a", EventKindUp, inst1)
+	// initial leader
+	assertEvent(c, events, "a", EventKindLeader, inst1)
 
 	inst2 := fakeInstance()
+	inst2.Index = 2
 	state.AddInstance("a", inst2)
 
 	// subsequent event

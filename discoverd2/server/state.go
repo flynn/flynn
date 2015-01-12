@@ -19,6 +19,7 @@ const (
 	EventKindUpdate
 	EventKindDown
 	EventKindLeader
+	EventKindCurrent
 	EventKindAll     = ^EventKind(0)
 	EventKindUnknown = EventKind(0)
 )
@@ -28,6 +29,7 @@ var eventKindStrings = map[EventKind]string{
 	EventKindUpdate:  "update",
 	EventKindDown:    "down",
 	EventKindLeader:  "leader",
+	EventKindCurrent: "current",
 	EventKindUnknown: "unknown",
 }
 
@@ -65,9 +67,9 @@ func (k *EventKind) UnmarshalJSON(data []byte) error {
 }
 
 type Event struct {
-	Service   string    `json:"service"`
-	Kind      EventKind `json:"kind"`
-	*Instance `json:"instance"`
+	Service  string    `json:"service"`
+	Kind     EventKind `json:"kind"`
+	Instance *Instance `json:"instance,omitempty"`
 }
 
 func (e *Event) String() string {
@@ -98,21 +100,16 @@ type Instance struct {
 	// Meta is arbitrary metadata specified when registering the instance.
 	Meta map[string]string `json:"meta,omitempty"`
 
-	// Leader is true if the instance is the leader of the service. Exactly one
-	// instance per service has this set to true at any point in time.
-	Leader bool `json:"leader,omitempty"`
-
 	// Index is the logical epoch of the initial registration of the instance.
-	// It is guaranteed to be unique, not change as long as the instance does
-	// not expire, and sort with other indexes in the order of instance
-	// creation.
-	Index uint `json:"index"`
+	// It is guaranteed to be unique, greater than zero, not change as long as
+	// the instance does not expire, and sort with other indexes in the order of
+	// instance creation.
+	Index uint64 `json:"index,omitempty"`
 }
 
 func (inst *Instance) Equal(other *Instance) bool {
 	return inst.Addr == other.Addr &&
 		inst.Proto == other.Proto &&
-		inst.Index == other.Index &&
 		mapEqual(inst.Meta, other.Meta)
 }
 
@@ -182,14 +179,14 @@ func ValidServiceName(service string) error {
 
 func NewState() *State {
 	return &State{
-		services:    make(map[string]map[string]*Instance),
+		services:    make(map[string]*service),
 		subscribers: make(map[string]*list.List),
 	}
 }
 
 type State struct {
-	// service name -> instance ID -> instance
-	services map[string]map[string]*Instance
+	// service name -> service
+	services map[string]*service
 	// TODO: change to atomic.Value and CoW for the services map, and a RWMutex
 	// for each service map
 	mtx sync.RWMutex
@@ -199,93 +196,188 @@ type State struct {
 	subscribersMtx sync.Mutex
 }
 
-func (s *State) AddService(service string) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	if _, ok := s.services[service]; !ok {
-		s.services[service] = make(map[string]*Instance)
+func newService() *service {
+	return &service{
+		instances: make(map[string]*Instance),
 	}
 }
 
-func (s *State) RemoveService(service string) {
+type service struct {
+	// instance ID -> instance
+	instances map[string]*Instance
+
+	leaderID string
+	// leaderIndex is >0 when set, zero is unset
+	leaderIndex uint64
+	// notifyLeader is true if there is a new leader and the event has not been
+	// broadcasted to subscribers
+	notifyLeader bool
+}
+
+func (s *service) maybeSetLeader(inst *Instance) {
+	if s.leaderIndex == 0 || s.leaderIndex > inst.Index {
+		s.notifyLeader = s.notifyLeader || inst.ID != s.leaderID
+		s.leaderID = inst.ID
+		s.leaderIndex = inst.Index
+	}
+}
+
+func (s *service) maybePickLeader() {
+	for _, inst := range s.instances {
+		s.maybeSetLeader(inst)
+	}
+}
+
+func (s *service) AddInstance(inst *Instance) *Instance {
+	old := s.instances[inst.ID]
+	s.instances[inst.ID] = inst
+	s.maybeSetLeader(inst)
+	return old
+}
+
+func (s *service) RemoveInstance(id string) *Instance {
+	inst, ok := s.instances[id]
+	if !ok {
+		return nil
+	}
+	delete(s.instances, id)
+	if inst.ID == s.leaderID {
+		s.leaderID = ""
+		s.leaderIndex = 0
+		s.maybePickLeader()
+	}
+	return inst
+}
+
+func (s *service) SetInstances(data map[string]*Instance) {
+	if _, ok := data[s.leaderID]; !ok {
+		// the current leader is not in the new set
+		s.leaderID = ""
+		s.leaderIndex = 0
+	}
+	s.instances = data
+	s.maybePickLeader()
+}
+
+func (s *service) BroadcastLeader() *Instance {
+	if s.notifyLeader {
+		s.notifyLeader = false
+		return s.instances[s.leaderID]
+	}
+	return nil
+}
+
+func (s *service) Leader() *Instance {
+	if s == nil {
+		return nil
+	}
+	return s.instances[s.leaderID]
+}
+
+func (s *State) AddService(name string) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	if _, ok := s.services[name]; !ok {
+		s.services[name] = newService()
+	}
+}
+
+func (s *State) RemoveService(name string) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	for _, inst := range s.services[service] {
+	for _, inst := range s.services[name].instances {
 		s.broadcast(&Event{
-			Service:  service,
+			Service:  name,
 			Kind:     EventKindDown,
 			Instance: inst,
 		})
 	}
-	delete(s.services, service)
+	delete(s.services, name)
 }
 
-func (s *State) AddInstance(service string, inst *Instance) {
+func (s *State) AddInstance(serviceName string, inst *Instance) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	data, ok := s.services[service]
+	data, ok := s.services[serviceName]
 	if !ok {
-		data = make(map[string]*Instance)
-		s.services[service] = data
+		data = newService()
+		s.services[serviceName] = data
 	}
-	old, existing := data[inst.ID]
-	data[inst.ID] = inst
 
-	if !existing || !inst.Equal(old) {
+	if old := data.AddInstance(inst); old == nil || !inst.Equal(old) {
 		s.broadcast(&Event{
-			Service:  service,
-			Kind:     eventKindUpdate(existing),
+			Service:  serviceName,
+			Kind:     eventKindUpdate(old != nil),
 			Instance: inst,
+		})
+	}
+	s.broadcastLeader(serviceName)
+}
+
+func (s *State) RemoveInstance(serviceName, id string) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	data, ok := s.services[serviceName]
+	if !ok {
+		return
+	}
+	inst := data.RemoveInstance(id)
+	if inst == nil {
+		return
+	}
+
+	s.broadcast(&Event{
+		Service:  serviceName,
+		Kind:     EventKindDown,
+		Instance: inst,
+	})
+	s.broadcastLeader(serviceName)
+}
+
+func (s *State) broadcastLeader(serviceName string) {
+	if leader := s.services[serviceName].BroadcastLeader(); leader != nil {
+		s.broadcast(&Event{
+			Service:  serviceName,
+			Kind:     EventKindLeader,
+			Instance: leader,
 		})
 	}
 }
 
-func (s *State) RemoveInstance(service, id string) {
+func (s *State) SetService(serviceName string, data []*Instance) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	data, ok := s.services[service]
-	if !ok {
-		return
+	var newData, oldData map[string]*Instance
+	oldService, ok := s.services[serviceName]
+	if ok {
+		oldData = oldService.instances
 	}
-	inst, exists := data[id]
-	if !exists {
-		return
-	}
-	delete(data, id)
-
-	s.broadcast(&Event{
-		Service:  service,
-		Kind:     EventKindDown,
-		Instance: inst,
-	})
-}
-
-func (s *State) SetService(service string, data []*Instance) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
-	oldData, ok := s.services[service]
 	if data == nil {
-		delete(s.services, service)
+		delete(s.services, serviceName)
 	} else {
-		newData := make(map[string]*Instance, len(data))
+		newData = make(map[string]*Instance, len(data))
 		for _, inst := range data {
 			newData[inst.ID] = inst
 		}
-		s.services[service] = newData
+		if !ok {
+			s.services[serviceName] = &service{}
+		}
+		s.services[serviceName].SetInstances(newData)
 	}
 	if !ok {
 		// Service doesn't currently exist, send updates for each instance
 		for _, inst := range data {
 			s.broadcast(&Event{
-				Service:  service,
+				Service:  serviceName,
 				Kind:     EventKindUp,
 				Instance: inst,
 			})
 		}
+		s.broadcastLeader(serviceName)
 		return
 	}
 
@@ -293,7 +385,7 @@ func (s *State) SetService(service string, data []*Instance) {
 	for _, inst := range data {
 		if old, existing := oldData[inst.ID]; !existing || !inst.Equal(old) {
 			s.broadcast(&Event{
-				Service:  service,
+				Service:  serviceName,
 				Kind:     eventKindUpdate(existing),
 				Instance: inst,
 			})
@@ -302,14 +394,24 @@ func (s *State) SetService(service string, data []*Instance) {
 
 	// find deleted
 	for k, v := range oldData {
-		if _, ok := s.services[service][k]; !ok {
+		if _, ok := newData[k]; !ok {
 			s.broadcast(&Event{
-				Service:  service,
+				Service:  serviceName,
 				Kind:     EventKindDown,
 				Instance: v,
 			})
 		}
 	}
+
+	if len(data) > 0 {
+		s.broadcastLeader(serviceName)
+	}
+}
+
+func (s *State) GetLeader(service string) *Instance {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	return s.services[service].Leader()
 }
 
 func (s *State) Get(service string) []*Instance {
@@ -328,14 +430,14 @@ func (s *State) ListServices() []string {
 	return res
 }
 
-func (s *State) getLocked(service string) []*Instance {
-	data, ok := s.services[service]
+func (s *State) getLocked(name string) []*Instance {
+	data, ok := s.services[name]
 	if !ok {
 		return nil
 	}
 
-	res := make([]*Instance, 0, len(data))
-	for _, inst := range data {
+	res := make([]*Instance, 0, len(data.instances))
+	for _, inst := range data.instances {
 		res = append(res, inst)
 	}
 	return res
@@ -350,6 +452,7 @@ type subscription struct {
 	el      *list.Element
 	service string
 	state   *State
+	closed  bool
 }
 
 func (s *subscription) Err() error {
@@ -370,12 +473,19 @@ func (s *subscription) Close() error {
 func (s *subscription) close() {
 	s.state.subscribersMtx.Lock()
 	defer s.state.subscribersMtx.Unlock()
+
+	if s.closed {
+		return
+	}
+
 	l := s.state.subscribers[s.service]
 	l.Remove(s.el)
 	if l.Len() == 0 {
 		delete(s.state.subscribers, s.service)
 	}
 	close(s.ch)
+
+	s.closed = true
 }
 
 func (s *State) Subscribe(service string, sendCurrent bool, kinds EventKind, ch chan *Event) stream.Stream {
@@ -383,16 +493,18 @@ func (s *State) Subscribe(service string, sendCurrent bool, kinds EventKind, ch 
 	// a deadlock as updates are broadcast with mtx and subscribersMtx both
 	// locked.
 	var current []*Instance
-	sendCurrent = sendCurrent && kinds&(EventKindUp|EventKindUpdate) != 0
-	if sendCurrent {
+	var currentLeader *Instance
+	getCurrent := sendCurrent && kinds&(EventKindUp|EventKindLeader) != 0
+	if getCurrent {
 		s.mtx.RLock()
 		current = s.getLocked(service)
+		currentLeader = s.services[service].Leader()
 	}
 
 	s.subscribersMtx.Lock()
 	defer s.subscribersMtx.Unlock()
 
-	if sendCurrent {
+	if getCurrent {
 		// Make sure we unlock this *after* locking subscribersMtx to prevent any
 		// changes from being applied before we send the current state
 		s.mtx.RUnlock()
@@ -411,13 +523,28 @@ func (s *State) Subscribe(service string, sendCurrent bool, kinds EventKind, ch 
 	}
 	sub.el = l.PushBack(sub)
 
-	for _, inst := range current {
+	if kinds&EventKindUp != 0 {
+		for _, inst := range current {
+			ch <- &Event{
+				Service:  service,
+				Kind:     EventKindUp,
+				Instance: inst,
+			}
+			// TODO: add a timeout to sends so that clients can't slow things down too much
+		}
+	}
+	if kinds&EventKindLeader != 0 && currentLeader != nil {
 		ch <- &Event{
 			Service:  service,
-			Kind:     EventKindUp,
-			Instance: inst,
+			Kind:     EventKindLeader,
+			Instance: currentLeader,
 		}
-		// TODO: add a timeout here so that clients can't slow things down too much
+	}
+	if sendCurrent && kinds&EventKindCurrent != 0 {
+		ch <- &Event{
+			Service: service,
+			Kind:    EventKindCurrent,
+		}
 	}
 
 	return sub
