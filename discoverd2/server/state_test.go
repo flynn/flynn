@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -9,6 +11,7 @@ import (
 	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	"github.com/flynn/flynn/discoverd2/client"
 	"github.com/flynn/flynn/pkg/random"
 )
 
@@ -19,9 +22,9 @@ type StateSuite struct{}
 
 var _ = Suite(&StateSuite{})
 
-func fakeInstance() *Instance {
+func fakeInstance() *discoverd.Instance {
 	octet := func() int { return random.Math.Intn(255) + 1 }
-	return &Instance{
+	return &discoverd.Instance{
 		ID:    random.String(16),
 		Addr:  fmt.Sprintf("%d.%d.%d.%d:%d", octet(), octet(), octet(), octet(), random.Math.Intn(65535)+1),
 		Proto: "tcp",
@@ -29,7 +32,7 @@ func fakeInstance() *Instance {
 	}
 }
 
-func assertHasInstance(c *C, list []*Instance, want ...*Instance) {
+func assertHasInstance(c *C, list []*discoverd.Instance, want ...*discoverd.Instance) {
 	for _, want := range want {
 		for _, have := range list {
 			if reflect.DeepEqual(have, want) {
@@ -40,7 +43,7 @@ func assertHasInstance(c *C, list []*Instance, want ...*Instance) {
 	}
 }
 
-func assertNoEvent(c *C, events chan *Event) {
+func assertNoEvent(c *C, events chan *discoverd.Event) {
 	select {
 	case e, ok := <-events:
 		if !ok {
@@ -51,8 +54,8 @@ func assertNoEvent(c *C, events chan *Event) {
 	}
 }
 
-func assertEvent(c *C, events chan *Event, service string, kind EventKind, instance *Instance) {
-	var event *Event
+func assertEvent(c *C, events chan *discoverd.Event, service string, kind discoverd.EventKind, instance *discoverd.Instance) {
+	var event *discoverd.Event
 	var ok bool
 	select {
 	case event, ok = <-events:
@@ -63,14 +66,14 @@ func assertEvent(c *C, events chan *Event, service string, kind EventKind, insta
 		c.Fatalf("timed out waiting for %s %#v", kind, instance)
 	}
 
-	assertEventEqual(c, event, &Event{
+	assertEventEqual(c, event, &discoverd.Event{
 		Service:  service,
 		Kind:     kind,
 		Instance: instance,
 	})
 }
 
-func assertEventEqual(c *C, actual, expected *Event) {
+func assertEventEqual(c *C, actual, expected *discoverd.Event) {
 	c.Assert(actual.Service, Equals, expected.Service)
 	c.Assert(actual.Kind, Equals, expected.Kind)
 	if expected.Instance == nil {
@@ -87,14 +90,14 @@ func assertEventEqual(c *C, actual, expected *Event) {
 	c.Assert(aInst, DeepEquals, eInst)
 }
 
-func receiveEvents(c *C, events chan *Event, count int) map[string][]*Event {
+func receiveEvents(c *C, events chan *discoverd.Event, count int) map[string][]*discoverd.Event {
 	res := receiveSomeEvents(c, events, count)
 	assertNoEvent(c, events)
 	return res
 }
 
-func receiveSomeEvents(c *C, events chan *Event, count int) map[string][]*Event {
-	res := make(map[string][]*Event, count)
+func receiveSomeEvents(c *C, events chan *discoverd.Event, count int) map[string][]*discoverd.Event {
+	res := make(map[string][]*discoverd.Event, count)
 	for i := 0; i < count; i++ {
 		select {
 		case e := <-events:
@@ -109,8 +112,8 @@ func receiveSomeEvents(c *C, events chan *Event, count int) map[string][]*Event 
 
 func (StateSuite) TestAddInstance(c *C) {
 	state := NewState()
-	events := make(chan *Event, 1)
-	state.Subscribe("a", false, EventKindUpdate|EventKindUp, events)
+	events := make(chan *discoverd.Event, 1)
+	state.Subscribe("a", false, discoverd.EventKindUpdate|discoverd.EventKindUp, events)
 
 	// + with service that doesn't exist
 	inst1 := fakeInstance()
@@ -118,7 +121,7 @@ func (StateSuite) TestAddInstance(c *C) {
 	data := state.Get("a")
 	c.Assert(data, HasLen, 1)
 	c.Assert(data[0], DeepEquals, inst1)
-	assertEvent(c, events, "a", EventKindUp, inst1)
+	assertEvent(c, events, "a", discoverd.EventKindUp, inst1)
 
 	// + with new instance
 	inst2 := fakeInstance()
@@ -126,7 +129,7 @@ func (StateSuite) TestAddInstance(c *C) {
 	data = state.Get("a")
 	c.Assert(data, HasLen, 2)
 	assertHasInstance(c, data, inst2)
-	assertEvent(c, events, "a", EventKindUp, inst2)
+	assertEvent(c, events, "a", discoverd.EventKindUp, inst2)
 
 	// + with updated instance
 	inst3 := *inst2
@@ -135,7 +138,7 @@ func (StateSuite) TestAddInstance(c *C) {
 	data = state.Get("a")
 	c.Assert(data, HasLen, 2)
 	assertHasInstance(c, data, &inst3)
-	assertEvent(c, events, "a", EventKindUpdate, &inst3)
+	assertEvent(c, events, "a", discoverd.EventKindUpdate, &inst3)
 
 	// + with unchanged instance
 	inst4 := inst3
@@ -147,8 +150,8 @@ func (StateSuite) TestAddInstance(c *C) {
 
 func (StateSuite) TestDeleteInstance(c *C) {
 	state := NewState()
-	events := make(chan *Event, 1)
-	state.Subscribe("a", false, EventKindDown, events)
+	events := make(chan *discoverd.Event, 1)
+	state.Subscribe("a", false, discoverd.EventKindDown, events)
 
 	// + with service that doesn't exist
 	state.RemoveInstance("a", "b")
@@ -164,22 +167,22 @@ func (StateSuite) TestDeleteInstance(c *C) {
 	// + with instance that exists
 	state.RemoveInstance("a", inst.ID)
 	c.Assert(state.Get("a"), HasLen, 0)
-	assertEvent(c, events, "a", EventKindDown, inst)
+	assertEvent(c, events, "a", discoverd.EventKindDown, inst)
 }
 
 func (StateSuite) TestSetService(c *C) {
 	state := NewState()
-	events := make(chan *Event, 3)
-	state.Subscribe("a", false, EventKindUp|EventKindUpdate|EventKindDown, events)
+	events := make(chan *discoverd.Event, 3)
+	state.Subscribe("a", false, discoverd.EventKindUp|discoverd.EventKindUpdate|discoverd.EventKindDown, events)
 
 	// + with service that doesn't exist
-	newData := []*Instance{fakeInstance(), fakeInstance()}
+	newData := []*discoverd.Instance{fakeInstance(), fakeInstance()}
 	state.SetService("a", newData)
 	data := state.Get("a")
 	c.Assert(data, HasLen, 2)
 	assertHasInstance(c, data, newData...)
 	for _, expected := range newData {
-		assertEvent(c, events, "a", EventKindUp, expected)
+		assertEvent(c, events, "a", discoverd.EventKindUp, expected)
 	}
 	assertNoEvent(c, events)
 
@@ -189,19 +192,19 @@ func (StateSuite) TestSetService(c *C) {
 	// make sure we get exactly two down events, one for each existing instance
 	down := receiveEvents(c, events, 2)
 	for _, e := range down {
-		c.Assert(e[0].Kind, Equals, EventKindDown)
+		c.Assert(e[0].Kind, Equals, discoverd.EventKindDown)
 		c.Assert(e[0].Service, Equals, "a")
 	}
 	c.Assert(down[newData[0].ID][0].Instance, DeepEquals, newData[0])
 	c.Assert(down[newData[1].ID][0].Instance, DeepEquals, newData[1])
 
 	// + with service that doesn't exist and zero-length new
-	state.SetService("a", []*Instance{})
+	state.SetService("a", []*discoverd.Instance{})
 	c.Assert(state.Get("a"), NotNil)
 	c.Assert(state.Get("a"), HasLen, 0)
 
 	// + one existing, one updated, one new, one deleted
-	initial := []*Instance{fakeInstance(), fakeInstance(), fakeInstance()}
+	initial := []*discoverd.Instance{fakeInstance(), fakeInstance(), fakeInstance()}
 	state.SetService("a", initial)
 	// eat the three up events
 	receiveEvents(c, events, 3)
@@ -212,7 +215,7 @@ func (StateSuite) TestSetService(c *C) {
 	modified.Meta = map[string]string{"a": "b"}
 	added := fakeInstance()
 
-	state.SetService("a", []*Instance{existing, &modified, added})
+	state.SetService("a", []*discoverd.Instance{existing, &modified, added})
 	data = state.Get("a")
 	c.Assert(data, HasLen, 3)
 	assertHasInstance(c, data, existing, &modified, added)
@@ -220,25 +223,25 @@ func (StateSuite) TestSetService(c *C) {
 	changes := receiveEvents(c, events, 3)
 
 	modifiedEvent := changes[modified.ID][0]
-	c.Assert(modifiedEvent.Kind, Equals, EventKindUpdate)
+	c.Assert(modifiedEvent.Kind, Equals, discoverd.EventKindUpdate)
 	c.Assert(modifiedEvent.Service, Equals, "a")
 	c.Assert(modifiedEvent.Instance, DeepEquals, &modified)
 
 	deletedEvent := changes[deleted.ID][0]
-	c.Assert(deletedEvent.Kind, Equals, EventKindDown)
+	c.Assert(deletedEvent.Kind, Equals, discoverd.EventKindDown)
 	c.Assert(deletedEvent.Service, Equals, "a")
 	c.Assert(deletedEvent.Instance, DeepEquals, deleted)
 
 	addedEvent := changes[added.ID][0]
-	c.Assert(addedEvent.Kind, Equals, EventKindUp)
+	c.Assert(addedEvent.Kind, Equals, discoverd.EventKindUp)
 	c.Assert(addedEvent.Service, Equals, "a")
 	c.Assert(addedEvent.Instance, DeepEquals, added)
 }
 
 func (StateSuite) TestLeaderElection(c *C) {
 	state := NewState()
-	events := make(chan *Event, 1)
-	state.Subscribe("a", false, EventKindLeader, events)
+	events := make(chan *discoverd.Event, 1)
+	state.Subscribe("a", false, discoverd.EventKindLeader, events)
 
 	// nil for non-existent service
 	c.Assert(state.GetLeader("a"), IsNil)
@@ -250,7 +253,7 @@ func (StateSuite) TestLeaderElection(c *C) {
 	first := fakeInstance()
 	first.Index = 3
 	state.AddInstance("a", first)
-	assertEvent(c, events, "a", EventKindLeader, first)
+	assertEvent(c, events, "a", discoverd.EventKindLeader, first)
 	c.Assert(state.GetLeader("a"), DeepEquals, first)
 
 	// update doesn't trigger event
@@ -271,21 +274,21 @@ func (StateSuite) TestLeaderElection(c *C) {
 	third := fakeInstance()
 	third.Index = 2
 	state.AddInstance("a", third)
-	assertEvent(c, events, "a", EventKindLeader, third)
+	assertEvent(c, events, "a", discoverd.EventKindLeader, third)
 	c.Assert(state.GetLeader("a"), DeepEquals, third)
 
 	// set with same instance and another instance triggers no events
 	fourth := fakeInstance()
 	fourth.Index = 5
-	state.SetService("a", []*Instance{fourth, third})
+	state.SetService("a", []*discoverd.Instance{fourth, third})
 	assertNoEvent(c, events)
 	c.Assert(state.GetLeader("a"), DeepEquals, third)
 
 	// set with same instance and lower index selects a new leader
 	fifth := fakeInstance()
 	fifth.Index = 1
-	state.SetService("a", []*Instance{third, fifth})
-	assertEvent(c, events, "a", EventKindLeader, fifth)
+	state.SetService("a", []*discoverd.Instance{third, fifth})
+	assertEvent(c, events, "a", discoverd.EventKindLeader, fifth)
 	c.Assert(state.GetLeader("a"), DeepEquals, fifth)
 
 	// set with new instances chooses lowest
@@ -293,8 +296,8 @@ func (StateSuite) TestLeaderElection(c *C) {
 	sixth.Index = 6
 	seventh := fakeInstance()
 	seventh.Index = 7
-	state.SetService("a", []*Instance{sixth, seventh})
-	assertEvent(c, events, "a", EventKindLeader, sixth)
+	state.SetService("a", []*discoverd.Instance{sixth, seventh})
+	assertEvent(c, events, "a", discoverd.EventKindLeader, sixth)
 	c.Assert(state.GetLeader("a"), DeepEquals, sixth)
 
 	eighth := fakeInstance()
@@ -308,7 +311,7 @@ func (StateSuite) TestLeaderElection(c *C) {
 
 	// remove of low instance triggers new leader
 	state.RemoveInstance("a", sixth.ID)
-	assertEvent(c, events, "a", EventKindLeader, seventh)
+	assertEvent(c, events, "a", discoverd.EventKindLeader, seventh)
 	c.Assert(state.GetLeader("a"), DeepEquals, seventh)
 
 	// remove of last instance triggers no events
@@ -320,7 +323,7 @@ func (StateSuite) TestLeaderElection(c *C) {
 	ninth := fakeInstance()
 	ninth.Index = 9
 	state.AddInstance("a", ninth)
-	assertEvent(c, events, "a", EventKindLeader, ninth)
+	assertEvent(c, events, "a", discoverd.EventKindLeader, ninth)
 	c.Assert(state.GetLeader("a"), DeepEquals, ninth)
 
 	// removing service triggers no events
@@ -337,62 +340,62 @@ func (StateSuite) TestGetNilService(c *C) {
 func (StateSuite) TestSubscribeInitial(c *C) {
 	for _, t := range []struct {
 		name  string
-		kinds EventKind
+		kinds discoverd.EventKind
 	}{
 		{
 			name:  "up",
-			kinds: EventKindUp,
+			kinds: discoverd.EventKindUp,
 		},
 		{
 			name:  "up+update",
-			kinds: EventKindUp | EventKindUpdate,
+			kinds: discoverd.EventKindUp | discoverd.EventKindUpdate,
 		},
 		{
 			name:  "down",
-			kinds: EventKindDown,
+			kinds: discoverd.EventKindDown,
 		},
 		{
 			name:  "update+down",
-			kinds: EventKindDown | EventKindUpdate,
+			kinds: discoverd.EventKindDown | discoverd.EventKindUpdate,
 		},
 		{
 			name:  "leader",
-			kinds: EventKindLeader,
+			kinds: discoverd.EventKindLeader,
 		},
 		{
 			name:  "leader+up",
-			kinds: EventKindLeader | EventKindUp,
+			kinds: discoverd.EventKindLeader | discoverd.EventKindUp,
 		},
 		{
 			name:  "leader+current",
-			kinds: EventKindLeader | EventKindCurrent,
+			kinds: discoverd.EventKindLeader | discoverd.EventKindCurrent,
 		},
 		{
 			name:  "up+leader+current",
-			kinds: EventKindUp | EventKindLeader | EventKindCurrent,
+			kinds: discoverd.EventKindUp | discoverd.EventKindLeader | discoverd.EventKindCurrent,
 		},
 		{
 			name:  "up+current",
-			kinds: EventKindUp | EventKindCurrent,
+			kinds: discoverd.EventKindUp | discoverd.EventKindCurrent,
 		},
 		{
 			name:  "down+current",
-			kinds: EventKindDown | EventKindCurrent,
+			kinds: discoverd.EventKindDown | discoverd.EventKindCurrent,
 		},
 		{
 			name:  "current",
-			kinds: EventKindDown | EventKindCurrent,
+			kinds: discoverd.EventKindDown | discoverd.EventKindCurrent,
 		},
 	} {
 		c.Log(t.name)
 
 		// with no instances
-		events := make(chan *Event, 1)
+		events := make(chan *discoverd.Event, 1)
 		state := NewState()
 		state.Subscribe("a", true, t.kinds, events)
 
-		if t.kinds&EventKindCurrent != 0 {
-			assertEvent(c, events, "a", EventKindCurrent, nil)
+		if t.kinds&discoverd.EventKindCurrent != 0 {
+			assertEvent(c, events, "a", discoverd.EventKindCurrent, nil)
 		}
 		assertNoEvent(c, events)
 
@@ -403,31 +406,31 @@ func (StateSuite) TestSubscribeInitial(c *C) {
 		two.Index = 2
 		state.AddInstance("a", one)
 		state.AddInstance("a", two)
-		events = make(chan *Event, 4)
+		events = make(chan *discoverd.Event, 4)
 		state.Subscribe("a", true, t.kinds, events)
-		if t.kinds&EventKindUp != 0 {
+		if t.kinds&discoverd.EventKindUp != 0 {
 			up := receiveSomeEvents(c, events, 2)
-			assertEventEqual(c, up[one.ID][0], &Event{
+			assertEventEqual(c, up[one.ID][0], &discoverd.Event{
 				Service:  "a",
-				Kind:     EventKindUp,
+				Kind:     discoverd.EventKindUp,
 				Instance: one,
 			})
-			assertEventEqual(c, up[two.ID][0], &Event{
+			assertEventEqual(c, up[two.ID][0], &discoverd.Event{
 				Service:  "a",
-				Kind:     EventKindUp,
+				Kind:     discoverd.EventKindUp,
 				Instance: two,
 			})
 		}
-		if t.kinds&EventKindLeader != 0 {
-			assertEvent(c, events, "a", EventKindLeader, one)
+		if t.kinds&discoverd.EventKindLeader != 0 {
+			assertEvent(c, events, "a", discoverd.EventKindLeader, one)
 		}
-		if t.kinds&EventKindCurrent != 0 {
-			assertEvent(c, events, "a", EventKindCurrent, nil)
+		if t.kinds&discoverd.EventKindCurrent != 0 {
+			assertEvent(c, events, "a", discoverd.EventKindCurrent, nil)
 		}
 		assertNoEvent(c, events)
 
 		// with sendCurrent false
-		events = make(chan *Event, 1)
+		events = make(chan *discoverd.Event, 1)
 		state.Subscribe("a", false, t.kinds, events)
 		assertNoEvent(c, events)
 	}
@@ -440,20 +443,20 @@ func (StateSuite) TestSubscribe(c *C) {
 	inst1.Index = 1
 	state.AddInstance("a", inst1)
 
-	events := make(chan *Event, 2)
-	stream := state.Subscribe("a", true, EventKindUp|EventKindLeader, events)
+	events := make(chan *discoverd.Event, 2)
+	stream := state.Subscribe("a", true, discoverd.EventKindUp|discoverd.EventKindLeader, events)
 
 	// initial instance
-	assertEvent(c, events, "a", EventKindUp, inst1)
+	assertEvent(c, events, "a", discoverd.EventKindUp, inst1)
 	// initial leader
-	assertEvent(c, events, "a", EventKindLeader, inst1)
+	assertEvent(c, events, "a", discoverd.EventKindLeader, inst1)
 
 	inst2 := fakeInstance()
 	inst2.Index = 2
 	state.AddInstance("a", inst2)
 
 	// subsequent event
-	assertEvent(c, events, "a", EventKindUp, inst2)
+	assertEvent(c, events, "a", discoverd.EventKindUp, inst2)
 
 	stream.Close()
 	_, open := <-events
@@ -465,8 +468,8 @@ func (StateSuite) TestSubscribe(c *C) {
 
 func (StateSuite) TestBlockedSubscription(c *C) {
 	state := NewState()
-	events := make(chan *Event)
-	stream := state.Subscribe("a", true, EventKindUp, events)
+	events := make(chan *discoverd.Event)
+	stream := state.Subscribe("a", true, discoverd.EventKindUp, events)
 
 	// send to the channel will fail immediately because there is no receiver
 	state.AddInstance("a", fakeInstance())
@@ -496,11 +499,11 @@ func (StateSuite) TestAddRemoveService(c *C) {
 	inst := fakeInstance()
 	state.AddInstance("a", inst)
 
-	events := make(chan *Event, 1)
-	state.Subscribe("a", true, EventKindDown, events)
+	events := make(chan *discoverd.Event, 1)
+	state.Subscribe("a", true, discoverd.EventKindDown, events)
 
 	state.RemoveService("a")
-	assertEvent(c, events, "a", EventKindDown, inst)
+	assertEvent(c, events, "a", discoverd.EventKindDown, inst)
 
 	c.Assert(state.Get("a"), IsNil)
 }
@@ -508,29 +511,29 @@ func (StateSuite) TestAddRemoveService(c *C) {
 func (StateSuite) TestInstanceValid(c *C) {
 	for _, t := range []struct {
 		name string
-		inst *Instance
+		inst *discoverd.Instance
 		err  string
 	}{
 		{
 			name: "invalid proto",
-			inst: &Instance{
+			inst: &discoverd.Instance{
 				ID:    md5sum("TCP-127.0.0.1:2"),
 				Proto: "TCP",
 				Addr:  "127.0.0.1:2",
 			},
-			err: ErrInvalidProto.Error(),
+			err: discoverd.ErrInvalidProto.Error(),
 		},
 		{
 			name: "empty proto",
-			inst: &Instance{
+			inst: &discoverd.Instance{
 				ID:   md5sum("-127.0.0.1:2"),
 				Addr: "127.0.0.1:2",
 			},
-			err: ErrUnsetProto.Error(),
+			err: discoverd.ErrUnsetProto.Error(),
 		},
 		{
 			name: "invalid addr",
-			inst: &Instance{
+			inst: &discoverd.Instance{
 				ID:    md5sum("tcp-asdf"),
 				Proto: "tcp",
 				Addr:  "asdf",
@@ -539,7 +542,7 @@ func (StateSuite) TestInstanceValid(c *C) {
 		},
 		{
 			name: "empty addr",
-			inst: &Instance{
+			inst: &discoverd.Instance{
 				ID:    md5sum("tcp-"),
 				Proto: "tcp",
 				Addr:  "",
@@ -548,7 +551,7 @@ func (StateSuite) TestInstanceValid(c *C) {
 		},
 		{
 			name: "empty id",
-			inst: &Instance{
+			inst: &discoverd.Instance{
 				Proto: "tcp",
 				Addr:  "127.0.0.1:2",
 			},
@@ -556,7 +559,7 @@ func (StateSuite) TestInstanceValid(c *C) {
 		},
 		{
 			name: "invalid id",
-			inst: &Instance{
+			inst: &discoverd.Instance{
 				ID:    "asdf",
 				Proto: "tcp",
 				Addr:  "127.0.0.1:2",
@@ -565,7 +568,7 @@ func (StateSuite) TestInstanceValid(c *C) {
 		},
 		{
 			name: "valid",
-			inst: &Instance{
+			inst: &discoverd.Instance{
 				ID:    md5sum("tcp1234567890-127.0.0.1:2"),
 				Proto: "tcp1234567890",
 				Addr:  "127.0.0.1:2",
@@ -616,8 +619,8 @@ func (StateSuite) TestServiceNameValid(c *C) {
 
 func (StateSuite) TestEventKindJSON(c *C) {
 	kind := struct {
-		Kind EventKind `json:"kind"`
-	}{EventKindUpdate}
+		Kind discoverd.EventKind `json:"kind"`
+	}{discoverd.EventKindUpdate}
 
 	data, err := json.Marshal(kind)
 	c.Assert(err, IsNil)
@@ -625,5 +628,10 @@ func (StateSuite) TestEventKindJSON(c *C) {
 
 	err = json.Unmarshal([]byte(`{"kind":"leader"}`), &kind)
 	c.Assert(err, IsNil)
-	c.Assert(kind.Kind, Equals, EventKindLeader)
+	c.Assert(kind.Kind, Equals, discoverd.EventKindLeader)
+}
+
+func md5sum(data string) string {
+	digest := md5.Sum([]byte(data))
+	return hex.EncodeToString(digest[:])
 }
