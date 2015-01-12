@@ -73,6 +73,10 @@ func assertEvent(c *C, events chan *Event, service string, kind EventKind, insta
 func assertEventEqual(c *C, actual, expected *Event) {
 	c.Assert(actual.Service, Equals, expected.Service)
 	c.Assert(actual.Kind, Equals, expected.Kind)
+	if expected.Instance == nil {
+		c.Assert(actual.Instance, IsNil)
+		return
+	}
 	c.Assert(actual.Instance, NotNil)
 
 	// zero out the index for comparison purposes
@@ -84,6 +88,12 @@ func assertEventEqual(c *C, actual, expected *Event) {
 }
 
 func receiveEvents(c *C, events chan *Event, count int) map[string][]*Event {
+	res := receiveSomeEvents(c, events, count)
+	assertNoEvent(c, events)
+	return res
+}
+
+func receiveSomeEvents(c *C, events chan *Event, count int) map[string][]*Event {
 	res := make(map[string][]*Event, count)
 	for i := 0; i < count; i++ {
 		select {
@@ -94,7 +104,6 @@ func receiveEvents(c *C, events chan *Event, count int) map[string][]*Event {
 			c.Fatalf("expected %d events, got %d", count, len(res))
 		}
 	}
-	assertNoEvent(c, events)
 	return res
 }
 
@@ -323,6 +332,105 @@ func (StateSuite) TestLeaderElection(c *C) {
 func (StateSuite) TestGetNilService(c *C) {
 	state := NewState()
 	c.Assert(state.Get("a"), HasLen, 0)
+}
+
+func (StateSuite) TestSubscribeInitial(c *C) {
+	for _, t := range []struct {
+		name  string
+		kinds EventKind
+	}{
+		{
+			name:  "up",
+			kinds: EventKindUp,
+		},
+		{
+			name:  "up+update",
+			kinds: EventKindUp | EventKindUpdate,
+		},
+		{
+			name:  "down",
+			kinds: EventKindDown,
+		},
+		{
+			name:  "update+down",
+			kinds: EventKindDown | EventKindUpdate,
+		},
+		{
+			name:  "leader",
+			kinds: EventKindLeader,
+		},
+		{
+			name:  "leader+up",
+			kinds: EventKindLeader | EventKindUp,
+		},
+		{
+			name:  "leader+current",
+			kinds: EventKindLeader | EventKindCurrent,
+		},
+		{
+			name:  "up+leader+current",
+			kinds: EventKindUp | EventKindLeader | EventKindCurrent,
+		},
+		{
+			name:  "up+current",
+			kinds: EventKindUp | EventKindCurrent,
+		},
+		{
+			name:  "down+current",
+			kinds: EventKindDown | EventKindCurrent,
+		},
+		{
+			name:  "current",
+			kinds: EventKindDown | EventKindCurrent,
+		},
+	} {
+		c.Log(t.name)
+
+		// with no instances
+		events := make(chan *Event, 1)
+		state := NewState()
+		state.Subscribe("a", true, t.kinds, events)
+
+		if t.kinds&EventKindCurrent != 0 {
+			assertEvent(c, events, "a", EventKindCurrent, nil)
+		}
+		assertNoEvent(c, events)
+
+		// with two instances
+		one := fakeInstance()
+		one.Index = 1
+		two := fakeInstance()
+		two.Index = 2
+		state.AddInstance("a", one)
+		state.AddInstance("a", two)
+		events = make(chan *Event, 4)
+		state.Subscribe("a", true, t.kinds, events)
+		if t.kinds&EventKindUp != 0 {
+			up := receiveSomeEvents(c, events, 2)
+			assertEventEqual(c, up[one.ID][0], &Event{
+				Service:  "a",
+				Kind:     EventKindUp,
+				Instance: one,
+			})
+			assertEventEqual(c, up[two.ID][0], &Event{
+				Service:  "a",
+				Kind:     EventKindUp,
+				Instance: two,
+			})
+		}
+		if t.kinds&EventKindLeader != 0 {
+			assertEvent(c, events, "a", EventKindLeader, one)
+		}
+		if t.kinds&EventKindCurrent != 0 {
+			assertEvent(c, events, "a", EventKindCurrent, nil)
+		}
+		assertNoEvent(c, events)
+
+		// with sendCurrent false
+		events = make(chan *Event, 1)
+		state.Subscribe("a", false, t.kinds, events)
+		assertNoEvent(c, events)
+	}
 }
 
 func (StateSuite) TestSubscribe(c *C) {
