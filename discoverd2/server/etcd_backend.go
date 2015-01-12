@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
+	"github.com/flynn/flynn/discoverd2/client"
 )
 
 type etcdClient interface {
@@ -90,7 +91,7 @@ func (b *etcdBackend) RemoveService(service string) error {
 	return err
 }
 
-func (b *etcdBackend) AddInstance(service string, inst *Instance) error {
+func (b *etcdBackend) AddInstance(service string, inst *discoverd.Instance) error {
 	data, err := json.Marshal(inst)
 	if err != nil {
 		return err
@@ -199,7 +200,7 @@ func (b *etcdBackend) instanceEvent(serviceName string, res *etcd.Response) {
 	if res.Action == "delete" {
 		b.h.RemoveInstance(serviceName, instanceID)
 	} else {
-		inst := &Instance{}
+		inst := &discoverd.Instance{}
 		if err := json.Unmarshal([]byte(res.Node.Value), inst); err != nil {
 			log.Printf("Error decoding JSON for instance %s: %s", res.Node.Key, err)
 			return
@@ -236,13 +237,13 @@ func (b *etcdBackend) fullSync() (uint64, error) {
 		serviceName := path.Base(serviceNode.Key)
 		added[serviceName] = struct{}{}
 
-		instances := []*Instance{}
+		instances := []*discoverd.Instance{}
 		for _, n := range serviceNode.Nodes {
 			if path.Base(n.Key) != "instances" {
 				continue
 			}
 			for _, instNode := range n.Nodes {
-				inst := &Instance{}
+				inst := &discoverd.Instance{}
 				if err := json.Unmarshal([]byte(instNode.Value), inst); err != nil {
 					log.Printf("Error decoding JSON for instance %s: %s", instNode.Key, err)
 					continue
