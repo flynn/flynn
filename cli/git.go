@@ -34,6 +34,31 @@ type remoteApp struct {
 	Name    string
 }
 
+func gitRemoteNames() (results []string, err error) {
+	b, err := exec.Command("git", "remote").Output()
+	if err != nil {
+		return nil, err
+	}
+
+	s := bufio.NewScanner(bytes.NewBuffer(b))
+	s.Split(bufio.ScanWords)
+
+	results = make([]string, 1)
+
+	for s.Scan() {
+		by := s.Bytes()
+		f := bytes.Fields(by)
+
+		results = append(results, string(f[0]))
+	}
+
+	if err = s.Err(); err != nil {
+		return nil, err
+	}
+
+	return
+}
+
 func gitRemotes() (map[string]remoteApp, error) {
 	b, err := exec.Command("git", "remote", "-v").Output()
 	if err != nil {
