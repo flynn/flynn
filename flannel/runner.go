@@ -33,7 +33,7 @@ var networkConfigAttempts = attempt.Strategy{
 func main() {
 	var config Config
 	config.Backend.Type = "vxlan"
-	flag.StringVar(&config.Network, "network", "172.16.0.0/12", "container network")
+	flag.StringVar(&config.Network, "network", "100.100.0.0/16", "container network")
 	flag.StringVar(&config.SubnetMin, "subnet-min", "", "container network min subnet")
 	flag.StringVar(&config.SubnetMax, "subnet-max", "", "container network max subnet")
 	flag.UintVar(&config.SubnetLen, "subnet-len", 0, "container network subnet length")

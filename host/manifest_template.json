@@ -17,7 +17,7 @@
     "id": "flannel",
     "image": "$image_url_prefix/flannel?id=$image_id[flannel]",
     "env": {
-      "FLANNEL_NETWORK": "172.16.0.0/12",
+      "FLANNEL_NETWORK": "100.100.0.0/16",
       "ETCD_ADDR": "{{ .Services.etcd.ExternalIP }}:{{ index .Services.etcd.TCPPorts 0 }}"
     }
   },
