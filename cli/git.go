@@ -43,8 +43,6 @@ func gitRemoteNames() (results []string, err error) {
 	s := bufio.NewScanner(bytes.NewBuffer(b))
 	s.Split(bufio.ScanWords)
 
-	results = make([]string, 1)
-
 	for s.Scan() {
 		by := s.Bytes()
 		f := bytes.Fields(by)
