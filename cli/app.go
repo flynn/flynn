@@ -121,19 +121,8 @@ func runDelete(args *docopt.Args, client *controller.Client) error {
 	appName := mustApp()
 
 	if !args.Bool["--yes"] {
-		fmt.Printf("Are you sure you want to delete the app %q? (yes/no): ", appName)
-	loop:
-		for {
-			var answer string
-			fmt.Scanln(&answer)
-			switch answer {
-			case "y", "yes":
-				break loop
-			case "n", "no":
-				return nil
-			default:
-				fmt.Print("Please type 'yes' or 'no': ")
-			}
+		if !promptYesNo(fmt.Sprintf("Are you sure you want to delete the app %q?", appName)) {
+			return nil
 		}
 	}
 
