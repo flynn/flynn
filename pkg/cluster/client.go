@@ -185,7 +185,7 @@ func (c *Client) RegisterHost(h *host.Host, jobs chan *host.Job) (stream.Stream,
 		return nil, err
 	}
 
-	return httpclient.Stream(res, func() interface{} { return &host.Job{} }, jobs), nil
+	return httpclient.Stream(res, jobs), nil
 }
 
 // RemoveJob is used by flynn-host to delete jobs from the cluster state. It
@@ -203,5 +203,5 @@ func (c *Client) StreamHostEvents(output chan<- *host.HostEvent) (stream.Stream,
 		return nil, err
 	}
 
-	return httpclient.Stream(res, func() interface{} { return &host.HostEvent{} }, output), nil
+	return httpclient.Stream(res, output), nil
 }

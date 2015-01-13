@@ -78,7 +78,7 @@ func (c *hostClient) StreamEvents(id string, ch chan<- *host.Event) (stream.Stre
 		return nil, err
 	}
 
-	return httpclient.Stream(res, func() interface{} { return &host.Event{} }, ch), nil
+	return httpclient.Stream(res, ch), nil
 }
 
 func (c *hostClient) Close() error {
