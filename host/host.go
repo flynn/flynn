@@ -19,7 +19,6 @@ import (
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/shutdown"
-	"github.com/flynn/flynn/pkg/stream"
 )
 
 // discoverdAttempts is the attempt strategy that is used to connect to discoverd.
@@ -175,13 +174,7 @@ func runDaemon(args *docopt.Args) {
 		sh.Fatal(err)
 	}
 
-	var jobStream stream.Stream
-	sh.BeforeExit(func() {
-		if jobStream != nil {
-			jobStream.Close()
-		}
-		backend.Cleanup()
-	})
+	sh.BeforeExit(func() { backend.Cleanup() })
 
 	if force {
 		if err := backend.Cleanup(); err != nil {
@@ -286,7 +279,7 @@ func runDaemon(args *docopt.Args) {
 
 		h.Jobs = state.ClusterJobs()
 		jobs := make(chan *host.Job)
-		jobStream, err = cluster.RegisterHost(h, jobs)
+		jobStream, err := cluster.RegisterHost(h, jobs)
 		if err != nil {
 			sh.Fatal(err)
 		}
