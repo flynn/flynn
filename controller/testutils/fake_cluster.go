@@ -51,10 +51,10 @@ func (c *FakeCluster) DialHost(id string) (cluster.Host, error) {
 	return client, nil
 }
 
-func (c *FakeCluster) AddJobs(req *host.AddJobsReq) (*host.AddJobsRes, error) {
+func (c *FakeCluster) AddJobs(req map[string][]*host.Job) (map[string]host.Host, error) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
-	for hostID, jobs := range req.HostJobs {
+	for hostID, jobs := range req {
 		host, ok := c.hosts[hostID]
 		if !ok {
 			return nil, errors.New("FakeCluster: unknown host")
@@ -67,7 +67,7 @@ func (c *FakeCluster) AddJobs(req *host.AddJobsReq) (*host.AddJobsRes, error) {
 		host.Jobs = append(host.Jobs, jobs...)
 		c.hosts[hostID] = host
 	}
-	return &host.AddJobsRes{State: c.hosts}, nil
+	return c.hosts, nil
 }
 
 func (c *FakeCluster) RemoveJob(hostID, jobID string, errored bool) error {
@@ -110,11 +110,11 @@ func (c *FakeCluster) SetHostClient(id string, h *FakeHostClient) {
 	c.hostClients[id] = h
 }
 
-func (c *FakeCluster) StreamHostEvents(ch chan<- *host.HostEvent) stream.Stream {
+func (c *FakeCluster) StreamHostEvents(ch chan<- *host.HostEvent) (stream.Stream, error) {
 	c.listenMtx.Lock()
 	defer c.listenMtx.Unlock()
 	c.listeners = append(c.listeners, ch)
-	return &FakeClusterHostEventStream{ch: ch}
+	return &FakeClusterHostEventStream{ch: ch}, nil
 }
 
 func (c *FakeCluster) SendEvent(hostID, event string) {

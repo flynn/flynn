@@ -52,7 +52,7 @@ func (h *Helper) clusterClient(t *c.C) *cluster.Client {
 	h.clusterMtx.Lock()
 	defer h.clusterMtx.Unlock()
 	if h.cluster == nil {
-		client, err := cluster.NewClientWithDial(nil, h.discoverdClient(t).NewServiceSet)
+		client, err := cluster.NewClientWithServices(h.discoverdClient(t).NewServiceSet)
 		t.Assert(err, c.IsNil)
 		h.cluster = client
 	}

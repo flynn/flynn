@@ -95,7 +95,7 @@ func Job(artifact host.Artifact, job *host.Job) *Cmd {
 
 type ClusterClient interface {
 	ListHosts() ([]host.Host, error)
-	AddJobs(*host.AddJobsReq) (*host.AddJobsRes, error)
+	AddJobs(map[string][]*host.Job) (map[string]host.Host, error)
 	DialHost(string) (cluster.Host, error)
 }
 
@@ -235,7 +235,10 @@ func (c *Cmd) Start() error {
 
 	if c.attachClient == nil {
 		c.eventChan = make(chan *host.Event)
-		c.eventStream = c.host.StreamEvents(c.Job.ID, c.eventChan)
+		c.eventStream, err = c.host.StreamEvents(c.Job.ID, c.eventChan)
+		if err != nil {
+			return err
+		}
 	}
 
 	go func() {
@@ -261,7 +264,7 @@ func (c *Cmd) Start() error {
 		}
 	}()
 
-	_, err = c.cluster.AddJobs(&host.AddJobsReq{HostJobs: map[string][]*host.Job{c.HostID: {c.Job}}})
+	_, err = c.cluster.AddJobs(map[string][]*host.Job{c.HostID: {c.Job}})
 	return err
 }
 

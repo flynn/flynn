@@ -196,7 +196,7 @@ func (r *FormationRepo) startListener() error {
 	return nil
 }
 
-func (r *FormationRepo) Subscribe(ch chan<- *ct.ExpandedFormation, since time.Time) error {
+func (r *FormationRepo) Subscribe(ch chan<- *ct.ExpandedFormation, stopCh <-chan struct{}, since time.Time) error {
 	var startListener bool
 	r.subMtx.Lock()
 	if len(r.subscriptions) == 0 {
@@ -209,27 +209,30 @@ func (r *FormationRepo) Subscribe(ch chan<- *ct.ExpandedFormation, since time.Ti
 			return err
 		}
 	}
-	go r.sendUpdatedSince(ch, since)
+	go r.sendUpdatedSince(ch, stopCh, since)
 	return nil
 }
 
-func (r *FormationRepo) sendUpdatedSince(ch chan<- *ct.ExpandedFormation, since time.Time) error {
+func (r *FormationRepo) sendUpdatedSince(ch chan<- *ct.ExpandedFormation, stopCh <-chan struct{}, since time.Time) error {
 	rows, err := r.db.Query("SELECT app_id, release_id, processes, created_at, updated_at FROM formations WHERE updated_at >= $1 ORDER BY updated_at DESC", since)
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
 	for rows.Next() {
 		formation, err := scanFormation(rows)
 		if err != nil {
-			rows.Close()
 			return err
 		}
 		ef, err := r.expandFormation(formation)
 		if err != nil {
-			rows.Close()
 			return err
 		}
-		ch <- ef
+		select {
+		case ch <- ef:
+		case <-stopCh:
+			return nil
+		}
 	}
 	ch <- &ct.ExpandedFormation{} // sentinel
 	return rows.Err()
@@ -251,6 +254,7 @@ func (r *FormationRepo) Unsubscribe(ch chan *ct.ExpandedFormation) {
 
 func getFormations(repo *FormationRepo, req *http.Request, params martini.Params, w http.ResponseWriter, r ResponseHelper) {
 	ch := make(chan *ct.ExpandedFormation)
+	stopCh := make(chan struct{})
 	wr := sse.NewSSEWriter(w)
 	enc := json.NewEncoder(wr)
 	since, err := time.Parse(time.RFC3339, req.FormValue("since"))
@@ -258,14 +262,14 @@ func getFormations(repo *FormationRepo, req *http.Request, params martini.Params
 		r.Error(err)
 		return
 	}
-	if err := repo.Subscribe(ch, since); err != nil {
+	if err := repo.Subscribe(ch, stopCh, since); err != nil {
 		r.Error(err)
 		return
 	}
 	go func() {
 		<-w.(http.CloseNotifier).CloseNotify()
 		repo.Unsubscribe(ch)
-		close(ch)
+		close(stopCh)
 	}()
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.WriteHeader(200)

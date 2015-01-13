@@ -5,14 +5,14 @@ import (
 )
 
 type Job struct {
-	ID string
+	ID string `json:"id,omitempty"`
 
-	Metadata map[string]string
+	Metadata map[string]string `json:"metadata,omitempty"`
 
-	Artifact  Artifact
-	Resources JobResources
+	Artifact  Artifact     `json:"artifact,omitempty"`
+	Resources JobResources `json:"resources,omitempty"`
 
-	Config ContainerConfig
+	Config ContainerConfig `json:"config,omitempty"`
 }
 
 func (j *Job) Dup() *Job {
@@ -57,87 +57,77 @@ func (j *Job) Dup() *Job {
 }
 
 type JobResources struct {
-	Memory int // in KiB
+	Memory int `json:"memory,omitempty"` // in KiB
 }
 
 type ContainerConfig struct {
-	TTY         bool
-	Stdin       bool
-	Data        bool
-	Entrypoint  []string
-	Cmd         []string
-	Env         map[string]string
-	Mounts      []Mount
-	Ports       []Port
-	WorkingDir  string
-	Uid         int
-	HostNetwork bool
+	TTY         bool              `json:"tty,omitempty"`
+	Stdin       bool              `json:"stdin,omitempty"`
+	Data        bool              `json:"data,omitempty"`
+	Entrypoint  []string          `json:"entry_point,omitempty"`
+	Cmd         []string          `json:"cmd,omitempty"`
+	Env         map[string]string `json:"env,omitempty"`
+	Mounts      []Mount           `json:"mounts,omitempty"`
+	Ports       []Port            `json:"ports,omitempty"`
+	WorkingDir  string            `json:"working_dir,omitempty"`
+	Uid         int               `json:"uid,omitempty"`
+	HostNetwork bool              `json:"host_network,omitempty"`
 }
 
 type Port struct {
-	Port     int
-	Proto    string
-	RangeEnd int
+	Port     int    `json:"port,omitempty"`
+	Proto    string `json:"proto,omitempty"`
+	RangeEnd int    `json:"range_end,omitempty"`
 }
 
 type Mount struct {
-	Location  string
-	Target    string
-	Writeable bool
+	Location  string `json:"location,omitempty"`
+	Target    string `json:"target,omitempty"`
+	Writeable bool   `json:"writeable,omitempty"`
 }
 
 type Artifact struct {
-	URI  string
-	Type string
+	URI  string `json:"url,omitempty"`
+	Type string `json:"type,omitempty"`
 }
 
 type Host struct {
-	ID string
+	ID string `json:"id,omitempty"`
 
-	Jobs     []*Job
-	Metadata map[string]string
-}
-
-type AddJobsReq struct {
-	// map of host id -> new jobs
-	HostJobs map[string][]*Job
-}
-
-type AddJobsRes struct {
-	// The state of the cluster after the operation
-	State map[string]Host
+	Jobs     []*Job            `json:"jobs,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 type Event struct {
-	Event string
-	JobID string
-	Job   *ActiveJob
+	Event string     `json:"event,omitempty"`
+	JobID string     `json:"job_id,omitempty"`
+	Job   *ActiveJob `json:"job,omitempty"`
 }
 
 type HostEvent struct {
-	Event  string
-	HostID string
+	Event  string `json:"event,omitempty"`
+	HostID string `json:"host_id,omitempty"`
 }
 
 type ActiveJob struct {
-	Job         *Job
-	HostID      string
-	ContainerID string
-	InternalIP  string
-	ForceStop   bool
-	Status      JobStatus
-	StartedAt   time.Time
-	EndedAt     time.Time
-	ExitStatus  int
-	Error       *string
-	ManifestID  string
+	Job         *Job      `json:"job,omitempty"`
+	HostID      string    `json:"host_id,omitempty"`
+	ContainerID string    `json:"container_id,omitempty"`
+	InternalIP  string    `json:"internal_ip,omitempty"`
+	ForceStop   bool      `json:"force_stop,omitempty"`
+	Status      JobStatus `json:"status,omitempty"`
+	StartedAt   time.Time `json:"started_at,omitempty"`
+	EndedAt     time.Time `json:"ended_at,omitempty"`
+	ExitStatus  int       `json:"exit_status,omitempty"`
+	Error       *string   `json:"error,omitempty"`
+	ManifestID  string    `json:"manifest_id,omitempty"`
 }
 
 type AttachReq struct {
-	JobID  string
-	Flags  AttachFlag
-	Height uint16
-	Width  uint16
+	JobID  string     `json:"job_id,omitempty"`
+	Flags  AttachFlag `json:"flags,omitempty"`
+	Height uint16     `json:"height,omitempty"`
+	Width  uint16     `json:"width,omitempty"`
 }
 
 type AttachFlag uint8

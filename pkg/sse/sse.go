@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"sync"
@@ -26,15 +27,22 @@ type Writer struct {
 func (w *Writer) Write(p []byte) (int, error) {
 	w.Lock()
 	defer w.Unlock()
-
-	if _, err := w.Writer.Write([]byte("data: ")); err != nil {
-		return 0, err
+	for _, line := range bytes.Split(p, []byte("\n")) {
+		if _, err := fmt.Fprintf(w.Writer, "data: %s\n", line); err != nil {
+			return 0, err
+		}
 	}
-	if _, err := w.Writer.Write(p); err != nil {
-		return 0, err
-	}
-	_, err := w.Writer.Write([]byte("\n\n"))
+	// add a terminating newline
+	_, err := w.Writer.Write([]byte("\n"))
 	return len(p), err
+}
+
+func (w *Writer) Error(err error) (int, error) {
+	_, e := w.Writer.Write([]byte("event: error\n"))
+	if e != nil {
+		return 0, e
+	}
+	return w.Write([]byte(err.Error()))
 }
 
 func (w *Writer) Flush() {
@@ -47,17 +55,36 @@ type Reader struct {
 	*bufio.Reader
 }
 
+type Error string
+
+func (e Error) Error() string {
+	return "Server error: " + string(e)
+}
+
 func (r *Reader) Read() ([]byte, error) {
+	buf := []byte{}
+	var isErr bool
 	for {
 		line, err := r.ReadBytes('\n')
 		if err != nil {
 			return nil, err
 		}
+		if bytes.HasPrefix(line, []byte("event: error")) {
+			isErr = true
+		}
 		if bytes.HasPrefix(line, []byte("data: ")) {
 			data := bytes.TrimSuffix(bytes.TrimPrefix(line, []byte("data: ")), []byte("\n"))
-			return data, nil
+			buf = append(buf, data...)
+		}
+		// peek ahead one byte to see if we have a double newline (terminator)
+		if peek, err := r.Peek(1); err == nil && string(peek) == "\n" {
+			break
 		}
 	}
+	if isErr {
+		return nil, Error(string(buf))
+	}
+	return buf, nil
 }
 
 type Decoder struct {

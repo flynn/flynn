@@ -2,7 +2,6 @@
 package controller
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -20,7 +19,6 @@ import (
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/pinned"
 	"github.com/flynn/flynn/pkg/rpcplus"
-	"github.com/flynn/flynn/pkg/sse"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/router/types"
 )
@@ -111,28 +109,7 @@ func (c *Client) StreamFormations(since *time.Time, output chan<- *ct.ExpandedFo
 	if err != nil {
 		return nil, err
 	}
-	stream := stream.New()
-	go func() {
-		defer func() {
-			close(output)
-			res.Body.Close()
-		}()
-
-		dec := sse.NewDecoder(bufio.NewReader(res.Body))
-		for {
-			event := &ct.ExpandedFormation{}
-			if err := dec.Decode(event); err != nil {
-				stream.Error = err
-				return
-			}
-			select {
-			case output <- event:
-			case <-stream.StopCh:
-				return
-			}
-		}
-	}()
-	return stream, nil
+	return httpclient.Stream(res, func() interface{} { return &ct.ExpandedFormation{} }, output), nil
 }
 
 // CreateArtifact creates a new artifact.
@@ -312,28 +289,7 @@ func (c *Client) StreamJobEvents(appID string, lastID int64, output chan<- *ct.J
 	if err != nil {
 		return nil, err
 	}
-	stream := stream.New()
-	go func() {
-		defer func() {
-			close(output)
-			res.Body.Close()
-		}()
-
-		dec := sse.NewDecoder(bufio.NewReader(res.Body))
-		for {
-			event := &ct.JobEvent{}
-			if err := dec.Decode(event); err != nil {
-				stream.Error = err
-				return
-			}
-			select {
-			case output <- event:
-			case <-stream.StopCh:
-				return
-			}
-		}
-	}()
-	return stream, nil
+	return httpclient.Stream(res, func() interface{} { return &ct.JobEvent{} }, output), nil
 }
 
 // GetJobLog returns a ReadCloser stream of the job with id of jobID, running
