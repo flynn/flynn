@@ -275,15 +275,11 @@ func runDaemon(args *docopt.Args) {
 	events := state.AddListener("all")
 	go syncScheduler(cluster, hostID, events)
 
-	h := &host.Host{}
-	if h.Metadata == nil {
-		h.Metadata = make(map[string]string)
-	}
+	h := &host.Host{ID: hostID, Metadata: make(map[string]string)}
 	for _, s := range metadata {
 		kv := strings.SplitN(s, "=", 2)
 		h.Metadata[kv[0]] = kv[1]
 	}
-	h.ID = hostID
 
 	for {
 		newLeader := cluster.NewLeaderSignal()
