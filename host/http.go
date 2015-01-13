@@ -54,11 +54,11 @@ func (h *Host) streamEvents(id string, w http.ResponseWriter) error {
 	return nil
 }
 
-type httpAPI struct {
+type jobAPI struct {
 	host *Host
 }
 
-func (h *httpAPI) ListJobs(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (h *jobAPI) ListJobs(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
 		if err := h.host.streamEvents("all", w); err != nil {
 			httphelper.Error(w, err)
@@ -70,7 +70,7 @@ func (h *httpAPI) ListJobs(w http.ResponseWriter, r *http.Request, ps httprouter
 	httphelper.JSON(w, 200, res)
 }
 
-func (h *httpAPI) GetJob(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (h *jobAPI) GetJob(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	id := ps.ByName("id")
 
 	if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
@@ -83,7 +83,7 @@ func (h *httpAPI) GetJob(w http.ResponseWriter, r *http.Request, ps httprouter.P
 	httphelper.JSON(w, 200, job)
 }
 
-func (h *httpAPI) StopJob(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (h *jobAPI) StopJob(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	id := ps.ByName("id")
 	if err := h.host.StopJob(id); err != nil {
 		httphelper.Error(w, err)
@@ -92,15 +92,11 @@ func (h *httpAPI) StopJob(w http.ResponseWriter, r *http.Request, ps httprouter.
 	w.WriteHeader(200)
 }
 
-func (h *httpAPI) RegisterRoutes(r *httprouter.Router, sh *shutdown.Handler) error {
+func (h *jobAPI) RegisterRoutes(r *httprouter.Router) error {
 	r.GET("/host/jobs", h.ListJobs)
 	r.GET("/host/jobs/:id", h.GetJob)
 	r.DELETE("/host/jobs/:id", h.StopJob)
 	return nil
-}
-
-func NewHTTPAPI(h *Host) *httpAPI {
-	return &httpAPI{h}
 }
 
 func serveHTTP(host *Host, attach *attachHandler, sh *shutdown.Handler) (*httprouter.Router, error) {
@@ -114,8 +110,8 @@ func serveHTTP(host *Host, attach *attachHandler, sh *shutdown.Handler) (*httpro
 
 	r.POST("/attach", attach.ServeHTTP)
 
-	api := NewHTTPAPI(host)
-	api.RegisterRoutes(r, sh)
+	jobAPI := &jobAPI{host}
+	jobAPI.RegisterRoutes(r)
 
 	go http.Serve(l, r)
 
