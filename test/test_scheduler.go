@@ -308,6 +308,33 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	s.controller = nil
 }
 
+func (s *SchedulerSuite) TestJobMeta(t *c.C) {
+	app, release := s.createApp(t)
+
+	events := make(chan *ct.JobEvent)
+	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, 0, events)
+	t.Assert(err, c.IsNil)
+	defer stream.Close()
+
+	// start 1 one-off job
+	_, err = s.controllerClient(t).RunJobDetached(app.ID, &ct.NewJob{
+		ReleaseID: release.ID,
+		Cmd:       []string{"sh", "-c", "while true; do echo one-off-job; sleep 1; done"},
+		Meta: map[string]string{
+			"foo": "baz",
+		},
+	})
+	t.Assert(err, c.IsNil)
+	waitForJobEvents(t, stream, events, jobEvents{"": {"up": 1}})
+
+	list, err := s.controllerClient(t).JobList(app.ID)
+	t.Assert(err, c.IsNil)
+	t.Assert(list, c.HasLen, 1)
+	t.Assert(list[0].Meta, c.DeepEquals, map[string]string{
+		"foo": "baz",
+	})
+}
+
 func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	app, release := s.createApp(t)
 
