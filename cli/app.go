@@ -87,13 +87,13 @@ func runCreate(args *docopt.Args, client *controller.Client) error {
 	app.Name = args.String["<name>"]
 	remote := args.String["<remote>"]
 
-	// Test if remote name exists and prompt user
-	remotes, err := gitRemoteNames()
-	if err != nil {
-		return err
-	}
-
 	if !args.Bool["--yes"] {
+		// Test if remote name exists and prompt user
+		remotes, err := gitRemoteNames()
+		if err != nil {
+			return err
+		}
+
 		for _, r := range remotes {
 			if r == remote {
 				fmt.Println("There is already a git remote called", remote)
