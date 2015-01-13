@@ -109,7 +109,7 @@ func (c *Client) StreamFormations(since *time.Time, output chan<- *ct.ExpandedFo
 	if err != nil {
 		return nil, err
 	}
-	return httpclient.Stream(res, func() interface{} { return &ct.ExpandedFormation{} }, output), nil
+	return httpclient.Stream(res, output), nil
 }
 
 // CreateArtifact creates a new artifact.
@@ -289,7 +289,7 @@ func (c *Client) StreamJobEvents(appID string, lastID int64, output chan<- *ct.J
 	if err != nil {
 		return nil, err
 	}
-	return httpclient.Stream(res, func() interface{} { return &ct.JobEvent{} }, output), nil
+	return httpclient.Stream(res, output), nil
 }
 
 // GetJobLog returns a ReadCloser stream of the job with id of jobID, running
