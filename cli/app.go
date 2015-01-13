@@ -23,6 +23,7 @@ allows deploying the application via git.
 
 Options:
 	-r, --remote <remote>  Name of git remote to create, empty string for none. [default: flynn]
+	-y, --yes              Skip the confirmation prompt if there is already a "flynn" git remote.
 
 Examples:
 
@@ -92,12 +93,14 @@ func runCreate(args *docopt.Args, client *controller.Client) error {
 		return err
 	}
 
-	for _, r := range remotes {
-		if r == remote {
-			fmt.Println("There is already a git remote called", remote)
-			if !promptYesNo("Are you sure you want to replace it?") {
-				log.Println("The app was not created. Please, declare the desired local git remote name with --remote flag.")
-				return nil
+	if !args.Bool["--yes"] {
+		for _, r := range remotes {
+			if r == remote {
+				fmt.Println("There is already a git remote called", remote)
+				if !promptYesNo("Are you sure you want to replace it?") {
+					log.Println("The app was not created. Please, declare the desired local git remote name with --remote flag.")
+					return nil
+				}
 			}
 		}
 	}
