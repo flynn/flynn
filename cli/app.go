@@ -22,7 +22,7 @@ If run from a git repository, a 'flynn' remote will be created or replaced that
 allows deploying the application via git.
 
 Options:
-	-r, --remote <remote>  Name of git remote on local repo.
+	-r, --remote <remote>  Name of git remote to create, empty string for none. [default: flynn]
 
 Examples:
 
@@ -85,9 +85,6 @@ func runCreate(args *docopt.Args, client *controller.Client) error {
 	app := &ct.App{}
 	app.Name = args.String["<name>"]
 	remote := args.String["<remote>"]
-	if remote == "" {
-		remote = "flynn"
-	}
 
 	// Test if remote name exists and prompt user
 	remotes, err := gitRemoteNames()
