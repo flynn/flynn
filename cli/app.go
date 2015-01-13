@@ -23,7 +23,7 @@ allows deploying the application via git.
 
 Options:
 	-r, --remote <remote>  Name of git remote to create, empty string for none. [default: flynn]
-	-y, --yes              Skip the confirmation prompt if there is already a "flynn" git remote.
+	-y, --yes              Skip the confirmation prompt if the git remote already exists.
 
 Examples:
 
