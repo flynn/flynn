@@ -99,7 +99,7 @@ func runCreate(args *docopt.Args, client *controller.Client) error {
 		if r == remote {
 			fmt.Println("There is already a git remote called", remote)
 			if !promptYesNo("Are you sure you want to replace it?") {
-				log.Println("Please, declare the desired local git remote name with --remote flag.")
+				log.Println("The app was not created. Please, declare the desired local git remote name with --remote flag.")
 				return nil
 			}
 		}
