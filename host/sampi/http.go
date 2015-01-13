@@ -76,8 +76,8 @@ func (s *Cluster) StreamHostEvents(ch chan host.HostEvent, done chan bool) error
 	return nil
 }
 
-type httpAPI struct {
-	cluster *Cluster
+type HTTPAPI struct {
+	Cluster *Cluster
 }
 
 /* This will setup a SSEWriter + JSONEncoder and Write out the required Headers
@@ -94,8 +94,8 @@ func startJSONEventStreaming(w http.ResponseWriter) *json.Encoder {
 }
 
 // HTTP Route Handles
-func (c *httpAPI) ListHosts(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	ret, err := c.cluster.ListHosts()
+func (c *HTTPAPI) ListHosts(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	ret, err := c.Cluster.ListHosts()
 	if err != nil {
 		httphelper.Error(w, err)
 		return
@@ -103,7 +103,7 @@ func (c *httpAPI) ListHosts(w http.ResponseWriter, r *http.Request, _ httprouter
 	httphelper.JSON(w, 200, ret)
 }
 
-func (c *httpAPI) RegisterHost(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (c *HTTPAPI) RegisterHost(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	h := &host.Host{}
 	if err := json.NewDecoder(r.Body).Decode(&h); err != nil {
 		httphelper.Error(w, err)
@@ -117,23 +117,23 @@ func (c *httpAPI) RegisterHost(w http.ResponseWriter, r *http.Request, ps httpro
 
 	ch := make(chan *host.Job)
 
-	c.cluster.state.Begin()
-	if c.cluster.state.HostExists(h.ID) {
-		c.cluster.state.Rollback()
+	c.Cluster.state.Begin()
+	if c.Cluster.state.HostExists(h.ID) {
+		c.Cluster.state.Rollback()
 		httphelper.Error(w, errors.New("sampi: host exists"))
 		return
 	}
-	c.cluster.state.AddHost(h, ch)
-	c.cluster.state.Commit()
-	go c.cluster.state.sendEvent(h.ID, "add")
+	c.Cluster.state.AddHost(h, ch)
+	c.Cluster.state.Commit()
+	go c.Cluster.state.sendEvent(h.ID, "add")
 
 	// "defer" cleanups in a goroutine that waits until the http stream is closed.
 	go func() {
 		<-w.(http.CloseNotifier).CloseNotify()
-		c.cluster.state.Begin()
-		c.cluster.state.RemoveHost(h.ID)
-		c.cluster.state.Commit()
-		c.cluster.state.sendEvent(h.ID, "remove")
+		c.Cluster.state.Begin()
+		c.Cluster.state.RemoveHost(h.ID)
+		c.Cluster.state.Commit()
+		c.Cluster.state.sendEvent(h.ID, "remove")
 	}()
 
 	enc := startJSONEventStreaming(w)
@@ -142,7 +142,7 @@ func (c *httpAPI) RegisterHost(w http.ResponseWriter, r *http.Request, ps httpro
 	}
 }
 
-func (c *httpAPI) AddJobs(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (c *HTTPAPI) AddJobs(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		httphelper.Error(w, err)
@@ -154,7 +154,7 @@ func (c *httpAPI) AddJobs(w http.ResponseWriter, r *http.Request, ps httprouter.
 		httphelper.Error(w, err)
 		return
 	}
-	res, err := c.cluster.AddJobs(req)
+	res, err := c.Cluster.AddJobs(req)
 	if err != nil {
 		httphelper.Error(w, err)
 		return
@@ -162,18 +162,18 @@ func (c *httpAPI) AddJobs(w http.ResponseWriter, r *http.Request, ps httprouter.
 	httphelper.JSON(w, 200, res)
 }
 
-func (c *httpAPI) RemoveJob(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	if err := c.cluster.RemoveJobs(ps.ByName("host_id"), ps.ByName("job_id")); err != nil {
+func (c *HTTPAPI) RemoveJob(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	if err := c.Cluster.RemoveJobs(ps.ByName("host_id"), ps.ByName("job_id")); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
 	w.WriteHeader(200)
 }
 
-func (c *httpAPI) StreamHostEvents(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (c *HTTPAPI) StreamHostEvents(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	ch := make(chan host.HostEvent)
 	done := make(chan bool)
-	if err := c.cluster.StreamHostEvents(ch, done); err != nil {
+	if err := c.Cluster.StreamHostEvents(ch, done); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
@@ -187,15 +187,11 @@ func (c *httpAPI) StreamHostEvents(w http.ResponseWriter, r *http.Request, ps ht
 	}
 }
 
-func (c *httpAPI) RegisterRoutes(r *httprouter.Router, sh *shutdown.Handler) error {
+func (c *HTTPAPI) RegisterRoutes(r *httprouter.Router, sh *shutdown.Handler) error {
 	r.GET("/cluster/hosts", c.ListHosts)
 	r.PUT("/cluster/hosts/:id", c.RegisterHost)
 	r.POST("/cluster/jobs", c.AddJobs)
 	r.DELETE("/cluster/hosts/:host_id/jobs/:job_id", c.RemoveJob)
 	r.GET("/cluster/events", c.StreamHostEvents)
 	return nil
-}
-
-func NewHTTPAPI(c *Cluster) *httpAPI {
-	return &httpAPI{c}
 }

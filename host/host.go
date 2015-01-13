@@ -252,7 +252,7 @@ func runDaemon(args *docopt.Args) {
 
 	// Check if we are the leader so that we can use the cluster functions directly
 	sampiCluster := sampi.NewCluster(sampi.NewState())
-	sampiAPI := sampi.NewHTTPAPI(sampiCluster)
+	sampiAPI := &sampi.HTTPAPI{Cluster: sampiCluster}
 	select {
 	case <-sampiStandby:
 		g.Log(grohl.Data{"at": "sampi_leader"})
