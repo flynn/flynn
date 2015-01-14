@@ -51,10 +51,20 @@ func (e NotFoundError) Error() string {
 	return fmt.Sprintf("discoverd: instance %s/%s not found", e.Service, e.Instance)
 }
 
+func IsNotFound(err error) bool {
+	_, ok := err.(NotFoundError)
+	return ok
+}
+
 type ServiceExistsError string
 
 func (e ServiceExistsError) Error() string {
 	return fmt.Sprintf("discoverd: service %q already exists", string(e))
+}
+
+func IsServiceExists(err error) bool {
+	_, ok := err.(ServiceExistsError)
+	return ok
 }
 
 func isEtcdError(err error, code int) bool {
