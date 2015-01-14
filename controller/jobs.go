@@ -29,7 +29,7 @@ type SSELogWriter interface {
 }
 
 type sseLogWriter struct {
-	sse.SSEWriter
+	*sse.Writer
 }
 
 func (w *sseLogWriter) Stream(s string) io.Writer {
@@ -37,7 +37,7 @@ func (w *sseLogWriter) Stream(s string) io.Writer {
 }
 
 func NewSSELogWriter(w io.Writer) SSELogWriter {
-	return &sseLogWriter{SSEWriter: &sse.Writer{Writer: w}}
+	return &sseLogWriter{Writer: sse.NewWriter(w)}
 }
 
 type sseLogChunk struct {
@@ -62,9 +62,7 @@ func (w *sseLogStreamWriter) Write(p []byte) (int, error) {
 }
 
 func (w *sseLogStreamWriter) Flush() {
-	if fw, ok := w.w.SSEWriter.(http.Flusher); ok {
-		fw.Flush()
-	}
+	w.w.Writer.Flush()
 }
 
 /* Job Stuff */

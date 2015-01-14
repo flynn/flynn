@@ -255,7 +255,7 @@ func (r *FormationRepo) Unsubscribe(ch chan *ct.ExpandedFormation) {
 func getFormations(repo *FormationRepo, req *http.Request, params martini.Params, w http.ResponseWriter, r ResponseHelper) {
 	ch := make(chan *ct.ExpandedFormation)
 	stopCh := make(chan struct{})
-	wr := sse.NewSSEWriter(w)
+	wr := sse.NewWriter(w)
 	enc := json.NewEncoder(wr)
 	since, err := time.Parse(time.RFC3339, req.FormValue("since"))
 	if err != nil {
