@@ -134,6 +134,15 @@ func (inst *Instance) id() string {
 	return md5sum(inst.Proto + "-" + inst.Addr)
 }
 
+func (inst *Instance) Clone() *Instance {
+	res := *inst
+	res.Meta = make(map[string]string, len(inst.Meta))
+	for k, v := range inst.Meta {
+		res.Meta[k] = v
+	}
+	return &res
+}
+
 func md5sum(data string) string {
 	digest := md5.Sum([]byte(data))
 	return hex.EncodeToString(digest[:])
