@@ -95,7 +95,10 @@ func (c *Client) RawReq(method, path string, header http.Header, in, out interfa
 }
 
 func (c *Client) Send(method, path string, in, out interface{}) error {
-	_, err := c.RawReq(method, path, nil, in, out)
+	res, err := c.RawReq(method, path, nil, in, out)
+	if err == nil && out == nil {
+		res.Body.Close()
+	}
 	return err
 }
 
@@ -108,14 +111,9 @@ func (c *Client) Post(path string, in, out interface{}) error {
 }
 
 func (c *Client) Get(path string, out interface{}) error {
-	_, err := c.RawReq("GET", path, nil, nil, out)
-	return err
+	return c.Send("GET", path, nil, out)
 }
 
 func (c *Client) Delete(path string) error {
-	res, err := c.RawReq("DELETE", path, nil, nil, nil)
-	if err == nil {
-		res.Body.Close()
-	}
-	return err
+	return c.Send("DELETE", path, nil, nil)
 }
