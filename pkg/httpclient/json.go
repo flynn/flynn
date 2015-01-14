@@ -5,13 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/stream"
 )
+
+type DialFunc func(network, addr string) (net.Conn, error)
 
 type Client struct {
 	ErrNotFound error
@@ -19,7 +21,7 @@ type Client struct {
 	URL         string
 	Key         string
 	HTTP        *http.Client
-	Dial        rpcplus.DialFunc
+	Dial        DialFunc
 	DialClose   io.Closer
 }
 

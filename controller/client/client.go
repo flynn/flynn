@@ -18,7 +18,6 @@ import (
 	"github.com/flynn/flynn/discoverd/client/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/pinned"
-	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/router/types"
 )
@@ -327,7 +326,7 @@ func (c *Client) RunJobAttached(appID string, job *ct.NewJob) (utils.ReadWriteCl
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/vnd.flynn.attach")
 	req.SetBasicAuth("", c.Key)
-	var dial rpcplus.DialFunc
+	var dial httpclient.DialFunc
 	if c.Dial != nil {
 		dial = c.Dial
 	}
