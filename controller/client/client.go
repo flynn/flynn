@@ -24,7 +24,6 @@ import (
 
 // Client is a client for the controller API.
 type Client struct {
-	addr string
 	*httpclient.Client
 }
 
@@ -33,9 +32,8 @@ var ErrNotFound = errors.New("controller: resource not found")
 
 // newClient creates a generic Client object, additional attributes must
 // be set by the caller
-func newClient(addr string, key string, url string, http *http.Client) *Client {
+func newClient(key string, url string, http *http.Client) *Client {
 	c := &Client{
-		addr: addr,
 		Client: &httpclient.Client{
 			ErrPrefix:   "controller",
 			ErrNotFound: ErrNotFound,
@@ -54,7 +52,7 @@ func newDiscoverdClient(u *url.URL, key string) (*Client, error) {
 	u.Scheme = "http"
 	d := dialer.New(discoverd.DefaultClient, nil)
 	httpClient := &http.Client{Transport: &http.Transport{Dial: d.Dial}}
-	c := newClient(u.Host, key, u.String(), httpClient)
+	c := newClient(key, u.String(), httpClient)
 	c.Dial = d.Dial
 	c.DialClose = d
 	return c, nil
@@ -73,7 +71,7 @@ func NewClient(uri, key string) (*Client, error) {
 	if u.Scheme == "discoverd+http" {
 		return newDiscoverdClient(u, key)
 	}
-	return newClient(u.Host, key, u.String(), http.DefaultClient), nil
+	return newClient(key, u.String(), http.DefaultClient), nil
 }
 
 // NewClientWithPin acts like NewClient, but specifies a TLS pin.
@@ -88,7 +86,7 @@ func NewClientWithPin(uri, key string, pin []byte) (*Client, error) {
 	u.Scheme = "http"
 	d := &pinned.Config{Pin: pin}
 	httpClient := &http.Client{Transport: &http.Transport{Dial: d.Dial}}
-	c := newClient(u.Host, key, u.String(), httpClient)
+	c := newClient(key, u.String(), httpClient)
 	c.Dial = d.Dial
 	return c, nil
 }
