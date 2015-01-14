@@ -34,7 +34,6 @@ func runStop(args *docopt.Args, client *cluster.Client) error {
 				success = false
 				continue
 			}
-			defer hostClient.Close()
 			clients[hostID] = hostClient
 		}
 		if err := hostClient.StopJob(jobID); err != nil {

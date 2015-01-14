@@ -28,7 +28,6 @@ type FakeHostClient struct {
 }
 
 func (c *FakeHostClient) ListJobs() (map[string]host.ActiveJob, error) { return nil, nil }
-func (c *FakeHostClient) Close() error                                 { return nil }
 func (c *FakeHostClient) Attach(req *host.AttachReq, wait bool) (cluster.AttachClient, error) {
 	f, ok := c.attach[req.JobID]
 	if !ok {

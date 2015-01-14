@@ -43,7 +43,6 @@ func (s *HostSuite) TestAttachFinishedInteractiveJob(t *c.C) {
 
 	h, err := cluster.DialHost(cmd.HostID)
 	t.Assert(err, c.IsNil)
-	defer h.Close()
 
 	// Getting the logs for the job should fail, as it has none because it was
 	// interactive

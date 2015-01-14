@@ -290,7 +290,6 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	defer cc.Close()
 	hc, err := cc.DialHost(hostID)
 	t.Assert(err, c.IsNil)
-	defer hc.Close()
 	debug(t, "stopping job ", jobID)
 	t.Assert(hc.StopJob(jobID), c.IsNil)
 	waitForJobEvents(t, stream, events, jobEvents{"web": {"down": 1, "up": 1}})
