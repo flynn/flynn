@@ -24,12 +24,13 @@ var _ = Suite(&StateSuite{})
 
 func fakeInstance() *discoverd.Instance {
 	octet := func() int { return random.Math.Intn(255) + 1 }
-	return &discoverd.Instance{
-		ID:    random.String(16),
+	inst := &discoverd.Instance{
 		Addr:  fmt.Sprintf("%d.%d.%d.%d:%d", octet(), octet(), octet(), octet(), random.Math.Intn(65535)+1),
 		Proto: "tcp",
 		Meta:  map[string]string{"foo": "bar"},
 	}
+	inst.ID = md5sum(inst.Proto + "-" + inst.Addr)
+	return inst
 }
 
 func assertHasInstance(c *C, list []*discoverd.Instance, want ...*discoverd.Instance) {
@@ -81,11 +82,14 @@ func assertEventEqual(c *C, actual, expected *discoverd.Event) {
 		return
 	}
 	c.Assert(actual.Instance, NotNil)
+	assertInstanceEqual(c, actual.Instance, expected.Instance)
+}
 
+func assertInstanceEqual(c *C, actual, expected *discoverd.Instance) {
 	// zero out the index for comparison purposes
-	eInst := *expected.Instance
+	eInst := *expected
 	eInst.Index = 0
-	aInst := *actual.Instance
+	aInst := *actual
 	aInst.Index = 0
 	c.Assert(aInst, DeepEquals, eInst)
 }
