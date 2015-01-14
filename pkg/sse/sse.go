@@ -10,35 +10,30 @@ import (
 	"sync"
 )
 
-type SSEWriter interface {
-	Write([]byte) (int, error)
-	Flush()
-}
-
-func NewSSEWriter(w io.Writer) SSEWriter {
-	return &Writer{Writer: w}
+func NewWriter(w io.Writer) *Writer {
+	return &Writer{w: w}
 }
 
 type Writer struct {
-	io.Writer
-	sync.Mutex
+	w   io.Writer
+	mtx sync.Mutex
 }
 
 func (w *Writer) Write(p []byte) (int, error) {
-	w.Lock()
-	defer w.Unlock()
+	w.mtx.Lock()
+	defer w.mtx.Unlock()
 	for _, line := range bytes.Split(p, []byte("\n")) {
-		if _, err := fmt.Fprintf(w.Writer, "data: %s\n", line); err != nil {
+		if _, err := fmt.Fprintf(w.w, "data: %s\n", line); err != nil {
 			return 0, err
 		}
 	}
 	// add a terminating newline
-	_, err := w.Writer.Write([]byte("\n"))
+	_, err := w.w.Write([]byte("\n"))
 	return len(p), err
 }
 
 func (w *Writer) Error(err error) (int, error) {
-	_, e := w.Writer.Write([]byte("event: error\n"))
+	_, e := w.w.Write([]byte("event: error\n"))
 	if e != nil {
 		return 0, e
 	}
@@ -46,7 +41,7 @@ func (w *Writer) Error(err error) (int, error) {
 }
 
 func (w *Writer) Flush() {
-	if fw, ok := w.Writer.(http.Flusher); ok {
+	if fw, ok := w.w.(http.Flusher); ok {
 		fw.Flush()
 	}
 }

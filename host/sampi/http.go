@@ -85,7 +85,7 @@ type httpAPI struct {
  * Stream + JSON from data/objects/structs.
  */
 func startJSONEventStreaming(w http.ResponseWriter) *json.Encoder {
-	wr := sse.NewSSEWriter(w)
+	wr := sse.NewWriter(w)
 	enc := json.NewEncoder(httphelper.FlushWriter{Writer: wr, Enabled: true})
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.WriteHeader(200)

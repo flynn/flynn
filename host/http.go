@@ -41,7 +41,7 @@ func (h *Host) streamEvents(id string, w http.ResponseWriter) error {
 		<-w.(http.CloseNotifier).CloseNotify()
 		h.state.RemoveListener(id, ch)
 	}()
-	enc := json.NewEncoder(sse.NewSSEWriter(w))
+	enc := json.NewEncoder(sse.NewWriter(w))
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.WriteHeader(200)
 	w.(http.Flusher).Flush()
