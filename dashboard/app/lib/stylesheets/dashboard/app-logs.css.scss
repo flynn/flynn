@@ -1,6 +1,13 @@
 @import "./colors";
 
 .app-logs {
+  > .placeholder {
+    display: block;
+    text-align: center;
+    color: $darkerGrayBlueColor;
+    font-size: 1.5rem;
+  }
+
   > .processes {
     list-style: none;
     margin: 0;
