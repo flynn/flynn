@@ -3,6 +3,7 @@ package server
 import (
 	"container/list"
 	"errors"
+	"sort"
 	"sync"
 
 	"github.com/flynn/flynn/discoverd2/client"
@@ -271,7 +272,9 @@ func (s *State) GetLeader(service string) *discoverd.Instance {
 func (s *State) Get(service string) []*discoverd.Instance {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
-	return s.getLocked(service)
+	res := s.getLocked(service)
+	sort.Sort(sortInstances(res))
+	return res
 }
 
 func (s *State) ListServices() []string {
@@ -432,3 +435,9 @@ func (s *State) broadcast(event *discoverd.Event) {
 		}
 	}
 }
+
+type sortInstances []*discoverd.Instance
+
+func (p sortInstances) Len() int           { return len(p) }
+func (p sortInstances) Less(i, j int) bool { return p[i].Index < p[j].Index }
+func (p sortInstances) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
