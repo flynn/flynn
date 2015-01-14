@@ -67,18 +67,11 @@ func (c *hostClient) StopJob(id string) error {
 }
 
 func (c *hostClient) StreamEvents(id string, ch chan<- *host.Event) (stream.Stream, error) {
-	header := http.Header{"Accept": []string{"text/event-stream"}}
 	r := fmt.Sprintf("/host/jobs/%s", id)
 	if id == "all" {
 		r = "/host/jobs"
 	}
-	res, err := c.c.RawReq("GET", r, header, nil, nil)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return httpclient.Stream(res, ch), nil
+	return c.c.Stream("GET", r, nil, ch)
 }
 
 func (c *hostClient) Close() error {

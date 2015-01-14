@@ -97,19 +97,12 @@ func NewClientWithPin(uri, key string, pin []byte) (*Client, error) {
 // StreamFormations yields a series of ExpandedFormation into the provided channel.
 // If since is not nil, only retrieves formation updates since the specified time.
 func (c *Client) StreamFormations(since *time.Time, output chan<- *ct.ExpandedFormation) (stream.Stream, error) {
-	header := http.Header{
-		"Accept": []string{"text/event-stream"},
-	}
 	if since == nil {
 		s := time.Unix(0, 0)
 		since = &s
 	}
 	t := since.Format(time.RFC3339)
-	res, err := c.RawReq("GET", "/formations?since="+t, header, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	return httpclient.Stream(res, output), nil
+	return c.Stream("GET", "/formations?since="+t, nil, output)
 }
 
 // CreateArtifact creates a new artifact.

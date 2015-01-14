@@ -10,6 +10,7 @@ import (
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/rpcplus"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 type Client struct {
@@ -92,6 +93,18 @@ func (c *Client) RawReq(method, path string, header http.Header, in, out interfa
 		return res, json.NewDecoder(res.Body).Decode(out)
 	}
 	return res, nil
+}
+
+// Stream returns a stream.Stream for a specific method and path. in is an
+// optional json object to be sent to the server via the body, and out is a
+// required channel, to which the output will be streamed.
+func (c *Client) Stream(method, path string, in, out interface{}) (stream.Stream, error) {
+	header := http.Header{"Accept": []string{"text/event-stream"}}
+	res, err := c.RawReq(method, path, header, in, nil)
+	if err != nil {
+		return nil, err
+	}
+	return Stream(res, out), nil
 }
 
 func (c *Client) Send(method, path string, in, out interface{}) error {
