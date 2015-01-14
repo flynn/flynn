@@ -25,8 +25,17 @@ func Stream(res *http.Response, outputCh interface{}) stream.Stream {
 	stopChanValue := reflect.ValueOf(stream.StopCh)
 	msgType := chanValue.Type().Elem().Elem()
 	go func() {
+		done := make(chan struct{})
 		defer func() {
 			chanValue.Close()
+			close(done)
+		}()
+
+		go func() {
+			select {
+			case <-stream.StopCh:
+			case <-done:
+			}
 			res.Body.Close()
 		}()
 
