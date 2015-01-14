@@ -31,7 +31,7 @@ func (s *S) TestJobList(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "job-list"})
 	release := s.createTestRelease(c, &ct.Release{})
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
-	s.createTestJob(c, &ct.Job{ID: "host0-job0", AppID: app.ID, ReleaseID: release.ID, Type: "web", State: "starting"})
+	s.createTestJob(c, &ct.Job{ID: "host0-job0", AppID: app.ID, ReleaseID: release.ID, Type: "web", State: "starting", Meta: map[string]string{"some": "info"}})
 
 	var list []ct.Job
 	res, err := s.Get("/apps/"+app.ID+"/jobs", &list)
@@ -42,6 +42,23 @@ func (s *S) TestJobList(c *C) {
 	c.Assert(job.ID, Equals, "host0-job0")
 	c.Assert(job.AppID, Equals, app.ID)
 	c.Assert(job.ReleaseID, Equals, release.ID)
+	c.Assert(job.Meta, DeepEquals, map[string]string{"some": "info"})
+}
+
+func (s *S) TestJobGet(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "job-get"})
+	release := s.createTestRelease(c, &ct.Release{})
+	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
+	jobID := s.createTestJob(c, &ct.Job{ID: "host0-job1", AppID: app.ID, ReleaseID: release.ID, Type: "web", State: "starting", Meta: map[string]string{"some": "info"}}).ID
+
+	var job ct.Job
+	res, err := s.Get("/apps/"+app.ID+"/jobs/"+jobID, &job)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(job.ID, Equals, "host0-job1")
+	c.Assert(job.AppID, Equals, app.ID)
+	c.Assert(job.ReleaseID, Equals, release.ID)
+	c.Assert(job.Meta, DeepEquals, map[string]string{"some": "info"})
 }
 
 func newFakeLog(r io.Reader) *fakeLog {
@@ -206,6 +223,7 @@ func (s *S) TestRunJobDetached(c *C) {
 		ReleaseID: release.ID,
 		Cmd:       cmd,
 		Env:       map[string]string{"JOB": "true", "FOO": "baz"},
+		Meta:      map[string]string{"foo": "baz"},
 	}
 	res := &ct.Job{}
 	_, err := s.Post(fmt.Sprintf("/apps/%s/jobs", app.ID), req, res)
@@ -221,6 +239,7 @@ func (s *S) TestRunJobDetached(c *C) {
 		"flynn-controller.app":      app.ID,
 		"flynn-controller.app_name": app.Name,
 		"flynn-controller.release":  release.ID,
+		"foo": "baz",
 	})
 	c.Assert(job.Config.Cmd, DeepEquals, []string{"foo", "bar"})
 	c.Assert(job.Config.Env, DeepEquals, map[string]string{"FOO": "baz", "JOB": "true", "RELEASE": "true"})
@@ -270,6 +289,7 @@ func (s *S) TestRunJobAttached(c *C) {
 		ReleaseID: release.ID,
 		Cmd:       []string{"foo", "bar"},
 		Env:       map[string]string{"JOB": "true", "FOO": "baz"},
+		Meta:      map[string]string{"foo": "baz"},
 		TTY:       true,
 		Columns:   10,
 		Lines:     20,
@@ -296,6 +316,7 @@ func (s *S) TestRunJobAttached(c *C) {
 		"flynn-controller.app":      app.ID,
 		"flynn-controller.app_name": app.Name,
 		"flynn-controller.release":  release.ID,
+		"foo": "baz",
 	})
 	c.Assert(job.Config.Cmd, DeepEquals, []string{"foo", "bar"})
 	c.Assert(job.Config.Env, DeepEquals, map[string]string{"FOO": "baz", "JOB": "true", "RELEASE": "true"})

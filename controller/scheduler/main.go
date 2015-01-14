@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -94,6 +95,17 @@ type controllerClient interface {
 	PutJob(job *ct.Job) error
 }
 
+func jobMetaFromMetadata(metadata map[string]string) map[string]string {
+	jobMeta := make(map[string]string, len(metadata))
+	for k, v := range metadata {
+		if strings.HasPrefix(k, "flynn-controller.") {
+			continue
+		}
+		jobMeta[k] = v
+	}
+	return jobMeta
+}
+
 func (c *context) syncCluster() {
 	g := grohl.NewContext(grohl.Data{"fn": "syncCluster"})
 
@@ -169,6 +181,7 @@ func (c *context) syncCluster() {
 				ReleaseID: releaseID,
 				Type:      jobType,
 				State:     "up",
+				Meta:      jobMetaFromMetadata(job.Metadata),
 			})
 			j := f.jobs.Add(jobType, h.ID, job.ID)
 			j.Formation = f
@@ -334,6 +347,7 @@ func (c *context) watchHost(id string) {
 			ReleaseID: releaseID,
 			Type:      jobType,
 			State:     jobState(event),
+			Meta:      jobMetaFromMetadata(meta),
 		}
 		g.Log(grohl.Data{"at": "event", "job.id": event.JobID, "event": event.Event})
 

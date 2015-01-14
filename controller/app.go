@@ -43,13 +43,7 @@ func (r *AppRepo) Add(data interface{}) error {
 	if app.ID == "" {
 		app.ID = random.UUID()
 	}
-	var meta hstore.Hstore
-	if len(app.Meta) > 0 {
-		meta.Map = make(map[string]sql.NullString, len(app.Meta))
-		for k, v := range app.Meta {
-			meta.Map[k] = sql.NullString{String: v, Valid: true}
-		}
-	}
+	meta := metaToHstore(app.Meta)
 	err := r.db.QueryRow("INSERT INTO apps (app_id, name, protected, meta) VALUES ($1, $2, $3, $4) RETURNING created_at, updated_at", app.ID, app.Name, app.Protected, meta).Scan(&app.CreatedAt, &app.UpdatedAt)
 	app.ID = postgres.CleanUUID(app.ID)
 	if !app.Protected && r.defaultDomain != "" {

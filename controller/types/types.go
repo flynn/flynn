@@ -70,14 +70,15 @@ type Key struct {
 }
 
 type Job struct {
-	ID        string     `json:"id,omitempty"`
-	AppID     string     `json:"app,omitempty"`
-	ReleaseID string     `json:"release,omitempty"`
-	Type      string     `json:"type,omitempty"`
-	State     string     `json:"state,omitempty"`
-	Cmd       []string   `json:"cmd,omitempty"`
-	CreatedAt *time.Time `json:"created_at,omitempty"`
-	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	ID        string            `json:"id,omitempty"`
+	AppID     string            `json:"app,omitempty"`
+	ReleaseID string            `json:"release,omitempty"`
+	Type      string            `json:"type,omitempty"`
+	State     string            `json:"state,omitempty"`
+	Cmd       []string          `json:"cmd,omitempty"`
+	Meta      map[string]string `json:"meta,omitempty"`
+	CreatedAt *time.Time        `json:"created_at,omitempty"`
+	UpdatedAt *time.Time        `json:"updated_at,omitempty"`
 }
 
 type JobEvent struct {
@@ -91,6 +92,7 @@ type NewJob struct {
 	Cmd        []string          `json:"cmd,omitempty"`
 	Entrypoint []string          `json:"entrypoint,omitempty"`
 	Env        map[string]string `json:"env,omitempty"`
+	Meta       map[string]string `json:"meta,omitempty"`
 	TTY        bool              `json:"tty,omitempty"`
 	Columns    int               `json:"tty_columns,omitempty"`
 	Lines      int               `json:"tty_lines,omitempty"`

@@ -107,6 +107,7 @@ $$ LANGUAGE plpgsql`,
     release_id uuid NOT NULL REFERENCES releases (release_id),
     process_type text,
     state job_state NOT NULL,
+    meta hstore,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (job_id, host_id)
