@@ -233,12 +233,12 @@
 			"Rev": "3f0466666779bd2143f368a207b0641f0ed536e8"
 		},
 		{
-			"ImportPath": "github.com/kavu/go_reuseport",
-			"Rev": "014200e60fbd2172d2b14c5703b62657f826eaa9"
-		},
-		{
 			"ImportPath": "github.com/julienschmidt/httprouter",
 			"Rev": "46807412fe50aaceb73bb57061c2230fd26a1640"
+		},
+		{
+			"ImportPath": "github.com/kavu/go_reuseport",
+			"Rev": "014200e60fbd2172d2b14c5703b62657f826eaa9"
 		},
 		{
 			"ImportPath": "github.com/kr/binarydist",
@@ -256,6 +256,10 @@
 		{
 			"ImportPath": "github.com/martini-contrib/render",
 			"Rev": "7b617783357fec5b5a6d4ecac82e747e4a14d1b5"
+		},
+		{
+			"ImportPath": "github.com/mattn/go-colorable",
+			"Rev": "043ae16291351db8465272edf465c9f388161627"
 		},
 		{
 			"ImportPath": "github.com/natefinch/lumberjack",
@@ -289,6 +293,11 @@
 		{
 			"ImportPath": "golang.org/x/net/websocket",
 			"Rev": "cbcac7bb8415db9b6cb4d1ebab1dc9afbd688b97"
+		},
+		{
+			"ImportPath": "gopkg.in/inconshreveable/log15.v2",
+			"Comment": "v2.7",
+			"Rev": "7cf5571b3b32a7c7b5605dc5ed8ad8fdbb2135f0"
 		},
 		{
 			"ImportPath": "gopkg.in/mgo.v2",
