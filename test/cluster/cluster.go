@@ -495,7 +495,7 @@ func (c *Cluster) DumpLogs(w io.Writer) {
 		return err
 	}
 	fallback := func() {
-		fmt.Fprintln(w, "\n*** Error getting job logs via flynn-host, falling back to tail log dump\n")
+		fmt.Fprintf(w, "\n*** Error getting job logs via flynn-host, falling back to tail log dump\n\n")
 		for _, inst := range c.Instances {
 			run(inst, "sudo bash -c 'tail -n +1 /tmp/flynn-host-logs/**/*.log'")
 		}
