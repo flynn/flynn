@@ -184,7 +184,7 @@ func runDaemon(args *docopt.Args) {
 		sh.Fatal(err)
 	}
 
-	router, err := serveHTTP(&Host{state: state, backend: backend}, &attachHandler{state: state, backend: backend}, sh)
+	router, err := serveHTTP(&Host{state: state, backend: backend}, &attachHandler{state: state, backend: backend}, vman, sh)
 	if err != nil {
 		sh.Fatal(err)
 	}

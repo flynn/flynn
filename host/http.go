@@ -9,6 +9,8 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/host/volume"
+	"github.com/flynn/flynn/host/volume/api"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/sse"
@@ -99,7 +101,7 @@ func (h *jobAPI) RegisterRoutes(r *httprouter.Router) error {
 	return nil
 }
 
-func serveHTTP(host *Host, attach *attachHandler, sh *shutdown.Handler) (*httprouter.Router, error) {
+func serveHTTP(host *Host, attach *attachHandler, vman *volume.Manager, sh *shutdown.Handler) (*httprouter.Router, error) {
 	l, err := net.Listen("tcp", ":1113")
 	if err != nil {
 		return nil, err
@@ -112,6 +114,7 @@ func serveHTTP(host *Host, attach *attachHandler, sh *shutdown.Handler) (*httpro
 
 	jobAPI := &jobAPI{host}
 	jobAPI.RegisterRoutes(r)
+	volumeapi.RegisterRoutes(volumeapi.NewHttpAPI(vman), r)
 
 	go http.Serve(l, r)
 
