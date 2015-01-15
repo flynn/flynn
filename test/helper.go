@@ -99,6 +99,13 @@ func (h *Helper) hostClient(t *c.C, hostID string) cluster.Host {
 	return client
 }
 
+func (h *Helper) anyHostClient(t *c.C) cluster.Host {
+	cluster := h.clusterClient(t)
+	hosts, err := cluster.ListHosts()
+	t.Assert(err, c.IsNil)
+	return h.hostClient(t, hosts[0].ID)
+}
+
 func (h *Helper) sshKeys(t *c.C) *sshData {
 	h.sshMtx.Lock()
 	defer h.sshMtx.Unlock()
