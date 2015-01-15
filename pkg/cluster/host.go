@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -27,6 +28,10 @@ type Host interface {
 	// Attach attaches to a job, optionally waiting for it to start before
 	// attaching.
 	Attach(req *host.AttachReq, wait bool) (AttachClient, error)
+
+	// Creates a new volume, returning its ID.
+	// When in doubt, use a providerId of "default".
+	CreateVolume(providerId string) (*volume.Info, error)
 }
 
 type hostClient struct {
@@ -69,4 +74,10 @@ func (c *hostClient) StreamEvents(id string, ch chan<- *host.Event) (stream.Stre
 		r = "/host/jobs"
 	}
 	return c.c.Stream("GET", r, nil, ch)
+}
+
+func (c *hostClient) CreateVolume(providerId string) (*volume.Info, error) {
+	var res volume.Info
+	err := c.c.Post(fmt.Sprintf("/volume/provider/%s/newVolume", providerId), nil, &res)
+	return &res, err
 }

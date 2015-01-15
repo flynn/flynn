@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -105,4 +106,8 @@ func (h *FakeHostEventStream) Close() error {
 
 func (h *FakeHostEventStream) Err() error {
 	return nil
+}
+
+func (c *FakeHostClient) CreateVolume(providerId string) (*volume.Info, error) {
+	return nil, nil
 }
