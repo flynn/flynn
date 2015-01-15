@@ -1,9 +1,5 @@
 package volume
 
-import (
-	"github.com/flynn/flynn/host/types"
-)
-
 /*
 	A Volume is a persistent and sharable filesystem.  Unlike most of the filesystem in a job's
 	container, which is ephemeral and is discarded after job termination, Volumes can be used to
@@ -24,9 +20,8 @@ type Volume interface {
 
 	Mounts() map[VolumeMount]struct{}
 
-	// Note: NOT provided: a method that gets the host's path to a mount.  Not all backends have such a useable raw path on the host.
-
-	Mount(job host.ActiveJob, path string) (VolumeMount, error)
+	// Inform the volume that it is being mounted.  (The returned information is used by the host backend to create the mount.)
+	Mount(jobId, path string) (string, error)
 
 	TakeSnapshot() (Volume, error)
 }
