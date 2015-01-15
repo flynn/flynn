@@ -43,6 +43,7 @@ RUN echo 'deb http://archive.ubuntu.com/ubuntu trusty main' >/etc/apt/sources.li
       openjdk-7-jre-headless \
       openssh-client \
       openssh-server \
+      postgresql-server-dev-9.3 \
       python \
       python-dev \
       ruby \
