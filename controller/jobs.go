@@ -410,9 +410,6 @@ func connectHostMiddleware(c martini.Context, params martini.Params, cl clusterC
 		return
 	}
 	c.MapTo(client, (*cluster.Host)(nil))
-
-	c.Next()
-	client.Close()
 }
 
 func killJob(app *ct.App, params martini.Params, client cluster.Host, r ResponseHelper) {
@@ -494,7 +491,6 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 			r.Error(fmt.Errorf("host connect failed: %s", err.Error()))
 			return
 		}
-		defer client.Close()
 		attachClient, err = client.Attach(attachReq, true)
 		if err != nil {
 			r.Error(fmt.Errorf("attach failed: %s", err.Error()))

@@ -19,7 +19,6 @@ import (
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/shutdown"
-	"github.com/flynn/flynn/pkg/stream"
 )
 
 // discoverdAttempts is the attempt strategy that is used to connect to discoverd.
@@ -175,13 +174,7 @@ func runDaemon(args *docopt.Args) {
 		sh.Fatal(err)
 	}
 
-	var jobStream stream.Stream
-	sh.BeforeExit(func() {
-		if jobStream != nil {
-			jobStream.Close()
-		}
-		backend.Cleanup()
-	})
+	sh.BeforeExit(func() { backend.Cleanup() })
 
 	if force {
 		if err := backend.Cleanup(); err != nil {
@@ -252,7 +245,7 @@ func runDaemon(args *docopt.Args) {
 
 	// Check if we are the leader so that we can use the cluster functions directly
 	sampiCluster := sampi.NewCluster(sampi.NewState())
-	sampiAPI := sampi.NewHTTPAPI(sampiCluster)
+	sampiAPI := &sampi.HTTPAPI{Cluster: sampiCluster}
 	select {
 	case <-sampiStandby:
 		g.Log(grohl.Data{"at": "sampi_leader"})
@@ -275,22 +268,18 @@ func runDaemon(args *docopt.Args) {
 	events := state.AddListener("all")
 	go syncScheduler(cluster, hostID, events)
 
-	h := &host.Host{}
-	if h.Metadata == nil {
-		h.Metadata = make(map[string]string)
-	}
+	h := &host.Host{ID: hostID, Metadata: make(map[string]string)}
 	for _, s := range metadata {
 		kv := strings.SplitN(s, "=", 2)
 		h.Metadata[kv[0]] = kv[1]
 	}
-	h.ID = hostID
 
 	for {
 		newLeader := cluster.NewLeaderSignal()
 
 		h.Jobs = state.ClusterJobs()
 		jobs := make(chan *host.Job)
-		jobStream, err = cluster.RegisterHost(h, jobs)
+		jobStream, err := cluster.RegisterHost(h, jobs)
 		if err != nil {
 			sh.Fatal(err)
 		}

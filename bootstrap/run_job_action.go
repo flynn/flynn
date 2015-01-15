@@ -50,7 +50,6 @@ func startJob(s *State, hostID string, job *host.Job) (*Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer hc.Close()
 
 	jobStatus := make(chan error)
 	events := make(chan *host.Event)

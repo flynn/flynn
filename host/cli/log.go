@@ -31,7 +31,6 @@ func getLog(hostID, jobID string, client *cluster.Client, follow bool, stdout, s
 	if err != nil {
 		return fmt.Errorf("could not connect to host %s: %s", hostID, err)
 	}
-	defer hostClient.Close()
 	attachReq := &host.AttachReq{
 		JobID: jobID,
 		Flags: host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagLogs,

@@ -18,14 +18,12 @@ import (
 	"github.com/flynn/flynn/discoverd/client/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/pinned"
-	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/router/types"
 )
 
 // Client is a client for the controller API.
 type Client struct {
-	addr string
 	*httpclient.Client
 }
 
@@ -34,9 +32,8 @@ var ErrNotFound = errors.New("controller: resource not found")
 
 // newClient creates a generic Client object, additional attributes must
 // be set by the caller
-func newClient(addr string, key string, url string, http *http.Client) *Client {
+func newClient(key string, url string, http *http.Client) *Client {
 	c := &Client{
-		addr: addr,
 		Client: &httpclient.Client{
 			ErrPrefix:   "controller",
 			ErrNotFound: ErrNotFound,
@@ -55,7 +52,7 @@ func newDiscoverdClient(u *url.URL, key string) (*Client, error) {
 	u.Scheme = "http"
 	d := dialer.New(discoverd.DefaultClient, nil)
 	httpClient := &http.Client{Transport: &http.Transport{Dial: d.Dial}}
-	c := newClient(u.Host, key, u.String(), httpClient)
+	c := newClient(key, u.String(), httpClient)
 	c.Dial = d.Dial
 	c.DialClose = d
 	return c, nil
@@ -74,7 +71,7 @@ func NewClient(uri, key string) (*Client, error) {
 	if u.Scheme == "discoverd+http" {
 		return newDiscoverdClient(u, key)
 	}
-	return newClient(u.Host, key, u.String(), http.DefaultClient), nil
+	return newClient(key, u.String(), http.DefaultClient), nil
 }
 
 // NewClientWithPin acts like NewClient, but specifies a TLS pin.
@@ -89,7 +86,7 @@ func NewClientWithPin(uri, key string, pin []byte) (*Client, error) {
 	u.Scheme = "http"
 	d := &pinned.Config{Pin: pin}
 	httpClient := &http.Client{Transport: &http.Transport{Dial: d.Dial}}
-	c := newClient(u.Host, key, u.String(), httpClient)
+	c := newClient(key, u.String(), httpClient)
 	c.Dial = d.Dial
 	return c, nil
 }
@@ -97,19 +94,12 @@ func NewClientWithPin(uri, key string, pin []byte) (*Client, error) {
 // StreamFormations yields a series of ExpandedFormation into the provided channel.
 // If since is not nil, only retrieves formation updates since the specified time.
 func (c *Client) StreamFormations(since *time.Time, output chan<- *ct.ExpandedFormation) (stream.Stream, error) {
-	header := http.Header{
-		"Accept": []string{"text/event-stream"},
-	}
 	if since == nil {
 		s := time.Unix(0, 0)
 		since = &s
 	}
 	t := since.Format(time.RFC3339)
-	res, err := c.RawReq("GET", "/formations?since="+t, header, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	return httpclient.Stream(res, output), nil
+	return c.Stream("GET", "/formations?since="+t, nil, output)
 }
 
 // CreateArtifact creates a new artifact.
@@ -334,7 +324,7 @@ func (c *Client) RunJobAttached(appID string, job *ct.NewJob) (utils.ReadWriteCl
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/vnd.flynn.attach")
 	req.SetBasicAuth("", c.Key)
-	var dial rpcplus.DialFunc
+	var dial httpclient.DialFunc
 	if c.Dial != nil {
 		dial = c.Dial
 	}

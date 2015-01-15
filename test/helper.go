@@ -207,12 +207,6 @@ func (h *Helper) cleanup() {
 	}
 	h.controllerMtx.Unlock()
 
-	h.hostsMtx.Lock()
-	for _, host := range h.hosts {
-		host.Close()
-	}
-	h.hostsMtx.Unlock()
-
 	h.sshMtx.Lock()
 	if h.ssh != nil {
 		h.ssh.Cleanup()
