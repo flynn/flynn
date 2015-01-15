@@ -20,7 +20,7 @@ import (
 	the API from a higher level service).
 */
 type Volume interface {
-	ID() string // guid (v4, random.  not globally sync'd, entropy should be high enough to be unique)
+	Info() *Info
 
 	Mounts() map[VolumeMount]struct{}
 
@@ -29,6 +29,17 @@ type Volume interface {
 	Mount(job host.ActiveJob, path string) (VolumeMount, error)
 
 	TakeSnapshot() (Volume, error)
+}
+
+/*
+	`volume.Info` names and describes info about a volume.
+	It is a serializable structure intended for API use.
+*/
+type Info struct {
+	// Volumes have a unique identifier.
+	// These are guid formatted (v4, random); selected by the server;
+	// and though not globally sync'd, entropy should be high enough to be unique.
+	ID string `json:"id"`
 }
 
 /*
