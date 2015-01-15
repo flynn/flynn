@@ -39,7 +39,7 @@ Dashboard.Views.App = React.createClass({
 						</section>
 					) : null}
 
-					{app && app.meta && app.meta.type === "github" ? (
+					{app && app.meta && app.meta.type === "github" && Dashboard.githubClient ? (
 						<section className="col">
 							<Dashboard.Views.AppSourceHistory
 								appId={this.props.appId}
