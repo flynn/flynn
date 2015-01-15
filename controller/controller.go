@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
 	"github.com/flynn/flynn/controller/name"
@@ -21,6 +22,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/cors"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -96,6 +98,7 @@ type responseHelper struct {
 	render.Render
 }
 
+// deprecated, use respondWithError
 func (r *responseHelper) Error(err error) {
 	switch err.(type) {
 	case ct.ValidationError:
@@ -109,6 +112,20 @@ func (r *responseHelper) Error(err error) {
 		}
 		log.Println(err)
 		r.JSON(500, struct{}{})
+	}
+}
+
+// NOTE: this is temporary until httphelper supports custom errors
+func respondWithError(w http.ResponseWriter, err error) {
+	switch err.(type) {
+	case ct.ValidationError:
+		httphelper.JSON(w, 400, err)
+	default:
+		if err == ErrNotFound {
+			w.WriteHeader(404)
+			return
+		}
+		httphelper.Error(w, err)
 	}
 }
 
@@ -145,11 +162,17 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	m.MapTo(c.sc, (*routerc.Client)(nil))
 	m.MapTo(c.dc, (*resource.DiscoverdClient)(nil))
 
-	getAppMiddleware := crud("apps", ct.App{}, appRepo, r)
-	getReleaseMiddleware := crud("releases", ct.Release{}, releaseRepo, r)
-	getProviderMiddleware := crud("providers", ct.Provider{}, providerRepo, r)
-	crud("artifacts", ct.Artifact{}, artifactRepo, r)
-	crud("keys", ct.Key{}, keyRepo, r)
+	// We're transitioning away from martini to httprouter
+	httpRouter := httprouter.New()
+	httpRouter.NotFound = http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		m.ServeHTTP(res, req)
+	})
+
+	getAppMiddleware := crud(httpRouter, "apps", ct.App{}, appRepo)
+	getReleaseMiddleware := crud(httpRouter, "releases", ct.Release{}, releaseRepo)
+	getProviderMiddleware := crud(httpRouter, "providers", ct.Provider{}, providerRepo)
+	crud(httpRouter, "artifacts", ct.Artifact{}, artifactRepo)
+	crud(httpRouter, "keys", ct.Key{}, keyRepo)
 
 	r.Put("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getReleaseMiddleware, binding.Bind(ct.Formation{}), putFormation)
 	r.Get("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getFormationMiddleware, getFormation)
@@ -179,7 +202,7 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 
 	r.Get("/formations", getFormations)
 
-	return muxHandler(m, c.key), m
+	return muxHandler(httpRouter, c.key), m
 }
 
 func muxHandler(main http.Handler, authKey string) http.Handler {
