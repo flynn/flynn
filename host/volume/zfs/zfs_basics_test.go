@@ -16,7 +16,7 @@ var _ = Suite(&S{})
 
 func (S) TestSnapshotShouldCarryFiles(c *C) {
 	err := WithTmpfileZpool("testpool", func() error {
-		provider, err := NewProvider("testpool")
+		provider, err := NewProvider(&ProviderConfig{DatasetName: "testpool"})
 		if err != nil {
 			return err
 		}
@@ -53,7 +53,7 @@ func (S) TestSnapshotShouldCarryFiles(c *C) {
 
 func (S) TestSnapshotShouldIsolateNewChangesToSource(c *C) {
 	err := WithTmpfileZpool("testpool", func() error {
-		provider, err := NewProvider("testpool")
+		provider, err := NewProvider(&ProviderConfig{DatasetName: "testpool"})
 		if err != nil {
 			return err
 		}
@@ -95,7 +95,7 @@ func (S) TestSnapshotShouldIsolateNewChangesToSource(c *C) {
 
 func (S) TestSnapshotShouldIsolateNewChangesToFork(c *C) {
 	err := WithTmpfileZpool("testpool", func() error {
-		provider, err := NewProvider("testpool")
+		provider, err := NewProvider(&ProviderConfig{DatasetName: "testpool"})
 		if err != nil {
 			return err
 		}
