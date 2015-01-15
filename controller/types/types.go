@@ -98,12 +98,6 @@ type NewJob struct {
 	Lines      int               `json:"tty_lines,omitempty"`
 }
 
-type Frontend struct {
-	Type       string `json:"type,omitempty"`
-	HTTPDomain string `json:"http_domain,omitempty"`
-	Service    string `json:"service,omitempty"`
-}
-
 type Provider struct {
 	ID        string     `json:"id,omitempty"`
 	URL       string     `json:"url,omitempty"`
