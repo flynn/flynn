@@ -68,6 +68,7 @@ type ContainerConfig struct {
 	Cmd         []string          `json:"cmd,omitempty"`
 	Env         map[string]string `json:"env,omitempty"`
 	Mounts      []Mount           `json:"mounts,omitempty"`
+	Volumes     []VolumeBinding   `json:"volumes,omitempty"`
 	Ports       []Port            `json:"ports,omitempty"`
 	WorkingDir  string            `json:"working_dir,omitempty"`
 	Uid         int               `json:"uid,omitempty"`
@@ -84,6 +85,14 @@ type Mount struct {
 	Location  string `json:"location,omitempty"`
 	Target    string `json:"target,omitempty"`
 	Writeable bool   `json:"writeable,omitempty"`
+}
+
+type VolumeBinding struct {
+	// Target defines the filesystem path inside the container where the volume will be mounted.
+	Target string
+	// VolumeID can be thought of as the source path if this were a simple bind-mount.  It is resolved by a VolumeManager.
+	VolumeID  string
+	Writeable bool
 }
 
 type Artifact struct {

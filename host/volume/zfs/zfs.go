@@ -9,7 +9,6 @@ import (
 	"time"
 
 	zfs "github.com/flynn/flynn/Godeps/_workspace/src/github.com/mistifyio/go-zfs"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -133,17 +132,16 @@ func (v *zfsVolume) Mounts() map[volume.VolumeMount]struct{} {
 	return v.mounts
 }
 
-func (v *zfsVolume) Mount(job host.ActiveJob, path string) (volume.VolumeMount, error) {
+func (v *zfsVolume) Mount(jobId, path string) (string, error) {
 	mount := volume.VolumeMount{
-		JobID:    job.Job.ID,
+		JobID:    jobId,
 		Location: path,
 	}
 	if _, exists := v.mounts[mount]; exists {
-		return volume.VolumeMount{}, fmt.Errorf("volume: cannot make same mount twice!")
+		return "", fmt.Errorf("volume: cannot make same mount twice!")
 	}
-	// TODO: fire syscalls
 	v.mounts[mount] = struct{}{}
-	return mount, nil
+	return v.basemount, nil
 }
 
 func (v1 *zfsVolume) TakeSnapshot() (volume.Volume, error) {
