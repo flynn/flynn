@@ -539,11 +539,11 @@ func (r *Runner) updateStatus(b *Build, state, targetUrl string) {
 		req.Header.Set("Authorization", "token "+r.githubToken)
 
 		res, err := http.DefaultClient.Do(req)
-		defer res.Body.Close()
 		if err != nil {
 			log.Printf("updateStatus: could not send request: %s\n", err)
 			return
 		}
+		res.Body.Close()
 		if res.StatusCode != 201 {
 			log.Printf("updateStatus: request failed: %d\n", res.StatusCode)
 		}
