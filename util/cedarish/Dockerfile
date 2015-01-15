@@ -39,8 +39,11 @@ RUN echo 'deb http://archive.ubuntu.com/ubuntu trusty main' >/etc/apt/sources.li
       libxml2-dev \
       libxslt-dev \
       netcat-openbsd \
+      openjdk-7-jdk \
+      openjdk-7-jre-headless \
       openssh-client \
       openssh-server \
+      postgresql-server-dev-9.3 \
       python \
       python-dev \
       ruby \
