@@ -10,6 +10,6 @@ dev:
 	@GIT_COMMIT=dev GIT_BRANCH=dev GIT_TAG=none GIT_DIRTY=false tup
 
 clean:
-	git clean -Xdf -e '!.tup' -e '!.vagrant'
+	git clean -Xdf -e '!.tup' -e '!.vagrant' -e '!script/custom-vagrant'
 
 .PHONY: all clean dev
