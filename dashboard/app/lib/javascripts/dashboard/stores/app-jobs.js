@@ -31,7 +31,21 @@ var AppJobs = Dashboard.Stores.AppJobs = Dashboard.Store.createClass({
 		};
 	},
 
-	handleEvent: function () {
+	handleEvent: function (event) {
+		if (event.name === "JOB_EXIT") {
+			var hasChanges = false;
+			this.state.processes.forEach(function (process) {
+				if (process.id === event.jobId) {
+					hasChanges = true;
+					process.state = event.status === 0 ? "down" : "crashed";
+				}
+			});
+			if (hasChanges) {
+				this.setState({
+					processes: this.state.processes
+				});
+			}
+		}
 	},
 
 	__fetchJobs: function () {
@@ -52,7 +66,7 @@ var AppJobs = Dashboard.Stores.AppJobs = Dashboard.Store.createClass({
 		return Dashboard.client;
 	}
 
-}, Marbles.State);
+});
 
 AppJobs.isValidId = function (id) {
 	return !!id.appId;

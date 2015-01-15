@@ -146,21 +146,25 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 	},
 
 	appLogs: function (params) {
-		params = params[0];
-
 		Dashboard.secondaryView = React.render(React.createElement(
 			Dashboard.Views.AppLogs,
-			{
-				appId: params.id,
-				onHide: function () {
-					Marbles.history.navigate(this.__getAppPath(params.id, params));
-				}.bind(this)
-			}),
+			this.__getAppLogsProps(params)),
 			Dashboard.secondaryEl
 		);
 
 		// render app view in background
 		this.app.apply(this, arguments);
+	},
+
+	__getAppLogsProps: function (params) {
+		params = params[0];
+		return {
+			taffyJobsStoreId: null,
+			appId: params.id,
+			onHide: function () {
+				Marbles.history.navigate(this.__getAppPath(params.id, params));
+			}.bind(this)
+		};
 	},
 
 	appDelete: function (params) {
