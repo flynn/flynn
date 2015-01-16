@@ -18,8 +18,8 @@ type Cluster struct {
 	state *State
 }
 
-func NewCluster(state *State) *Cluster {
-	return &Cluster{state}
+func NewCluster() *Cluster {
+	return &Cluster{NewState()}
 }
 
 // Scheduler Methods
