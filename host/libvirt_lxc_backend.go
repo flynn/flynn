@@ -737,6 +737,11 @@ func (c *libvirtContainer) cleanup() error {
 			g.Log(grohl.Data{"at": "unmount", "location": m.Location, "status": "error", "err": err})
 		}
 	}
+	for _, v := range c.job.Config.Volumes {
+		if err := syscall.Unmount(filepath.Join(c.RootPath, v.Target), 0); err != nil {
+			g.Log(grohl.Data{"at": "unmount", "target": v.Target, "volumeID": v.VolumeID, "status": "error", "err": err})
+		}
+	}
 	if !c.job.Config.HostNetwork && c.l.bridgeNet != nil {
 		ipallocator.ReleaseIP(c.l.bridgeNet, c.IP)
 	}
