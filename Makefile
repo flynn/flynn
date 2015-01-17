@@ -4,12 +4,15 @@ GIT_TAG=`git describe --tags --exact-match --match "v*" 2>/dev/null || echo "non
 GIT_DIRTY=`test -n "$(git status --porcelain)" && echo true || echo false`
 
 all:
-	@GIT_COMMIT=$(GIT_COMMIT) GIT_BRANCH=$(GIT_BRANCH) GIT_TAG=$(GIT_TAG) GIT_DIRTY=$(GIT_DIRTY) tup
+	@GIT_COMMIT=dev GIT_BRANCH=dev GIT_TAG=none GIT_DIRTY=false tup
 
 dev:
-	@GIT_COMMIT=dev GIT_BRANCH=dev GIT_TAG=none GIT_DIRTY=false tup
+	@echo 'dev is no longer a valid target, just run `make`'
+
+release:
+	@GIT_COMMIT=$(GIT_COMMIT) GIT_BRANCH=$(GIT_BRANCH) GIT_TAG=$(GIT_TAG) GIT_DIRTY=$(GIT_DIRTY) tup
 
 clean:
 	git clean -Xdf -e '!.tup' -e '!.vagrant' -e '!script/custom-vagrant'
 
-.PHONY: all clean dev
+.PHONY: all clean dev release
