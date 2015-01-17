@@ -12,4 +12,5 @@ cleanup() {
 trap cleanup EXIT
 
 curl -L "https://github.com/coreos/etcd/releases/download/v${version}/${pkg}.tar.gz" | tar xzC "${tmpdir}"
-mv ${tmpdir}/${pkg}/{etcd,etcdctl} .
+mkdir -p bin
+mv ${tmpdir}/${pkg}/{etcd,etcdctl} bin/
