@@ -46,8 +46,11 @@ func NewLibvirtLXCBackend(state *State, volPath, logPath, initPath string) (Back
 	if err != nil {
 		return nil, err
 	}
-
-	pinkertonCtx, err := pinkerton.BuildContext("aufs", "/var/lib/docker")
+	default_driver := os.Getenv("DOCKER_DRIVER")
+	if default_driver == "" {
+		default_driver = "aufs"
+	}
+	pinkertonCtx, err := pinkerton.BuildContext(default_driver, "/var/lib/docker")
 	if err != nil {
 		return nil, err
 	}
