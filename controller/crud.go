@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"reflect"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/pkg/httphelper"
 )
@@ -24,7 +23,7 @@ type Updater interface {
 	Update(string, map[string]interface{}) (interface{}, error)
 }
 
-func crud(r *httprouter.Router, resource string, example interface{}, repo Repository) interface{} {
+func crud(r *httprouter.Router, resource string, example interface{}, repo Repository) {
 	resourceType := reflect.TypeOf(example)
 	prefix := "/" + resource
 
@@ -96,15 +95,5 @@ func crud(r *httprouter.Router, resource string, example interface{}, repo Repos
 			}
 			httphelper.JSON(rw, 200, app)
 		})
-	}
-
-	// TODO: make this not use martini
-	return func(c martini.Context, params martini.Params, req *http.Request, r ResponseHelper) {
-		thing, err := repo.Get(params[resource+"_id"])
-		if err != nil {
-			r.Error(err)
-			return
-		}
-		c.Map(thing)
 	}
 }

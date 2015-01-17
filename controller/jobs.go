@@ -14,7 +14,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -186,42 +186,92 @@ type clusterClient interface {
 	AddJobs(map[string][]*host.Job) (map[string]host.Host, error)
 }
 
-func listJobs(req *http.Request, w http.ResponseWriter, app *ct.App, repo *JobRepo, r ResponseHelper) {
+func (c *controllerAPI) connectHost(params httprouter.Params) (cluster.Host, string, error) {
+	hostID, jobID, err := cluster.ParseJobID(params.ByName("jobs_id"))
+	if err != nil {
+		log.Printf("Unable to parse hostID from %q", params.ByName("jobs_id"))
+		return nil, jobID, err
+	}
+
+	client, err := c.clusterClient.DialHost(hostID)
+	if err != nil {
+		return nil, jobID, err
+	}
+	return client, jobID, nil
+}
+
+func (c *controllerAPI) ListJobs(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	app, err := c.getApp(params)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
 	if strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
-		if err := streamJobs(req, w, app, repo); err != nil {
-			r.Error(err)
+		if err := streamJobs(req, w, app, c.jobRepo); err != nil {
+			respondWithError(w, err)
 		}
 		return
 	}
-	list, err := repo.List(app.ID)
+	list, err := c.jobRepo.List(app.ID)
 	if err != nil {
-		r.Error(err)
+		respondWithError(w, err)
 		return
 	}
-	r.JSON(200, list)
+	httphelper.JSON(w, 200, list)
 }
 
-func getJob(params martini.Params, app *ct.App, repo *JobRepo, r ResponseHelper) {
-	job, err := repo.Get(params["jobs_id"])
+func (c *controllerAPI) GetJob(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	_, err := c.getApp(params)
 	if err != nil {
-		r.Error(err)
+		respondWithError(w, err)
 		return
 	}
-	r.JSON(200, job)
+	job, err := c.jobRepo.Get(params.ByName("jobs_id"))
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, job)
 }
 
-func putJob(job ct.Job, app *ct.App, repo *JobRepo, r ResponseHelper) {
+func (c *controllerAPI) PutJob(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	app, err := c.getApp(params)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	var job ct.Job
+	dec := json.NewDecoder(req.Body)
+	err = dec.Decode(&job)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
 	job.AppID = app.ID
-	if err := repo.Add(&job); err != nil {
-		r.Error(err)
+	if err := c.jobRepo.Add(&job); err != nil {
+		respondWithError(w, err)
 		return
 	}
-	r.JSON(200, &job)
+	httphelper.JSON(w, 200, &job)
 }
 
-func jobLog(req *http.Request, app *ct.App, params martini.Params, hc cluster.Host, w http.ResponseWriter, r ResponseHelper) {
+func (c *controllerAPI) JobLog(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	_, err := c.getApp(params)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	hc, jobID, err := c.connectHost(params)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
 	attachReq := &host.AttachReq{
-		JobID: params["jobs_id"],
+		JobID: jobID,
 		Flags: host.AttachFlagStdout | host.AttachFlagStderr | host.AttachFlagLogs,
 	}
 	tail := req.FormValue("tail") != ""
@@ -234,7 +284,7 @@ func jobLog(req *http.Request, app *ct.App, params martini.Params, hc cluster.Ho
 		if err == cluster.ErrWouldWait {
 			w.WriteHeader(404)
 		} else {
-			r.Error(err)
+			respondWithError(w, err)
 		}
 		return
 	}
@@ -391,40 +441,49 @@ func streamJobs(req *http.Request, w http.ResponseWriter, app *ct.App, repo *Job
 	}
 }
 
-func connectHostMiddleware(c martini.Context, params martini.Params, cl clusterClient, r ResponseHelper) {
-	hostID, jobID, err := cluster.ParseJobID(params["jobs_id"])
+func (c *controllerAPI) KillJob(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	_, err := c.getApp(params)
 	if err != nil {
-		log.Printf("Unable to parse hostID from %q", params["jobs_id"])
-		r.Error(ErrNotFound)
+		respondWithError(w, err)
 		return
 	}
-	params["jobs_id"] = jobID
 
-	client, err := cl.DialHost(hostID)
+	client, jobID, err := c.connectHost(params)
 	if err != nil {
-		r.Error(err)
+		respondWithError(w, err)
 		return
 	}
-	c.MapTo(client, (*cluster.Host)(nil))
-}
 
-func killJob(app *ct.App, params martini.Params, client cluster.Host, r ResponseHelper) {
-	if err := client.StopJob(params["jobs_id"]); err != nil {
-		r.Error(err)
+	if err = client.StopJob(jobID); err != nil {
+		respondWithError(w, err)
 		return
 	}
 }
 
-func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *ArtifactRepo, cl clusterClient, req *http.Request, w http.ResponseWriter, r ResponseHelper) {
-	data, err := releases.Get(newJob.ReleaseID)
+func (c *controllerAPI) RunJob(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	app, err := c.getApp(params)
 	if err != nil {
-		r.Error(err)
+		respondWithError(w, err)
+		return
+	}
+
+	var newJob ct.NewJob
+	dec := json.NewDecoder(req.Body)
+	err = dec.Decode(&newJob)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	data, err := c.releaseRepo.Get(newJob.ReleaseID)
+	if err != nil {
+		respondWithError(w, err)
 		return
 	}
 	release := data.(*ct.Release)
-	data, err = artifacts.Get(release.ArtifactID)
+	data, err = c.artifactRepo.Get(release.ArtifactID)
 	if err != nil {
-		r.Error(err)
+		respondWithError(w, err)
 		return
 	}
 	artifact := data.(*ct.Artifact)
@@ -462,13 +521,13 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 		job.Config.Entrypoint = newJob.Entrypoint
 	}
 
-	hosts, err := cl.ListHosts()
+	hosts, err := c.clusterClient.ListHosts()
 	if err != nil {
-		r.Error(err)
+		respondWithError(w, err)
 		return
 	}
 	if len(hosts) == 0 {
-		r.Error(errors.New("no hosts found"))
+		respondWithError(w, errors.New("no hosts found"))
 		return
 	}
 
@@ -482,28 +541,28 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 			Height: uint16(newJob.Lines),
 			Width:  uint16(newJob.Columns),
 		}
-		client, err := cl.DialHost(hostID)
+		client, err := c.clusterClient.DialHost(hostID)
 		if err != nil {
-			r.Error(fmt.Errorf("host connect failed: %s", err.Error()))
+			respondWithError(w, fmt.Errorf("host connect failed: %s", err.Error()))
 			return
 		}
 		attachClient, err = client.Attach(attachReq, true)
 		if err != nil {
-			r.Error(fmt.Errorf("attach failed: %s", err.Error()))
+			respondWithError(w, fmt.Errorf("attach failed: %s", err.Error()))
 			return
 		}
 		defer attachClient.Close()
 	}
 
-	_, err = cl.AddJobs(map[string][]*host.Job{hostID: {job}})
+	_, err = c.clusterClient.AddJobs(map[string][]*host.Job{hostID: {job}})
 	if err != nil {
-		r.Error(fmt.Errorf("schedule failed: %s", err.Error()))
+		respondWithError(w, fmt.Errorf("schedule failed: %s", err.Error()))
 		return
 	}
 
 	if attach {
 		if err := attachClient.Wait(); err != nil {
-			r.Error(fmt.Errorf("attach wait failed: %s", err.Error()))
+			respondWithError(w, fmt.Errorf("attach wait failed: %s", err.Error()))
 			return
 		}
 		w.Header().Set("Content-Type", "application/vnd.flynn.attach")
@@ -527,7 +586,7 @@ func runJob(app *ct.App, newJob ct.NewJob, releases *ReleaseRepo, artifacts *Art
 
 		return
 	} else {
-		r.JSON(200, &ct.Job{
+		httphelper.JSON(w, 200, &ct.Job{
 			ID:        hostID + "-" + job.ID,
 			ReleaseID: newJob.ReleaseID,
 			Cmd:       newJob.Cmd,

@@ -4,7 +4,6 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -13,10 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
 	"github.com/flynn/flynn/controller/name"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
@@ -87,34 +83,6 @@ type handlerConfig struct {
 	key string
 }
 
-type ResponseHelper interface {
-	Error(error)
-	JSON(int, interface{})
-	WriteHeader(int)
-}
-
-type responseHelper struct {
-	http.ResponseWriter
-	render.Render
-}
-
-// deprecated, use respondWithError
-func (r *responseHelper) Error(err error) {
-	switch err.(type) {
-	case ct.ValidationError:
-		r.JSON(400, err)
-	case *json.SyntaxError, *json.UnmarshalTypeError:
-		r.JSON(400, ct.ValidationError{Message: "The provided JSON input is invalid"})
-	default:
-		if err == ErrNotFound {
-			r.WriteHeader(404)
-			return
-		}
-		log.Println(err)
-		r.JSON(500, struct{}{})
-	}
-}
-
 // NOTE: this is temporary until httphelper supports custom errors
 func respondWithError(w http.ResponseWriter, err error) {
 	switch err.(type) {
@@ -129,20 +97,7 @@ func respondWithError(w http.ResponseWriter, err error) {
 	}
 }
 
-func responseHelperHandler(c martini.Context, w http.ResponseWriter, r render.Render) {
-	c.MapTo(&responseHelper{w, r}, (*ResponseHelper)(nil))
-}
-
 func appHandler(c handlerConfig) http.Handler {
-	r := martini.NewRouter()
-	m := martini.New()
-	m.Map(log.New(os.Stdout, "[controller] ", log.LstdFlags|log.Lmicroseconds))
-	m.Use(martini.Logger())
-	m.Use(martini.Recovery())
-	m.Use(render.Renderer())
-	m.Use(responseHelperHandler)
-	m.Action(r.Handle)
-
 	providerRepo := NewProviderRepo(c.db)
 	keyRepo := NewKeyRepo(c.db)
 	resourceRepo := NewResourceRepo(c.db)
@@ -151,56 +106,54 @@ func appHandler(c handlerConfig) http.Handler {
 	releaseRepo := NewReleaseRepo(c.db)
 	jobRepo := NewJobRepo(c.db)
 	formationRepo := NewFormationRepo(c.db, appRepo, releaseRepo, artifactRepo)
-	m.Map(resourceRepo)
-	m.Map(appRepo)
-	m.Map(artifactRepo)
-	m.Map(releaseRepo)
-	m.Map(jobRepo)
-	m.Map(formationRepo)
-	m.Map(c.dc)
-	m.MapTo(c.cc, (*clusterClient)(nil))
-	m.MapTo(c.sc, (*routerc.Client)(nil))
-	m.MapTo(c.dc, (*resource.DiscoverdClient)(nil))
 
-	// We're transitioning away from martini to httprouter
+	api := controllerAPI{
+		appRepo:         appRepo,
+		releaseRepo:     releaseRepo,
+		providerRepo:    providerRepo,
+		formationRepo:   formationRepo,
+		artifactRepo:    artifactRepo,
+		jobRepo:         jobRepo,
+		resourceRepo:    resourceRepo,
+		clusterClient:   c.cc,
+		discoverdClient: c.dc,
+		routerc:         c.sc,
+	}
+
 	httpRouter := httprouter.New()
-	httpRouter.NotFound = http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		m.ServeHTTP(res, req)
-	})
 
-	getAppMiddleware := crud(httpRouter, "apps", ct.App{}, appRepo)
-	getReleaseMiddleware := crud(httpRouter, "releases", ct.Release{}, releaseRepo)
-	getProviderMiddleware := crud(httpRouter, "providers", ct.Provider{}, providerRepo)
+	crud(httpRouter, "apps", ct.App{}, appRepo)
+	crud(httpRouter, "releases", ct.Release{}, releaseRepo)
+	crud(httpRouter, "providers", ct.Provider{}, providerRepo)
 	crud(httpRouter, "artifacts", ct.Artifact{}, artifactRepo)
 	crud(httpRouter, "keys", ct.Key{}, keyRepo)
 
-	r.Put("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getReleaseMiddleware, binding.Bind(ct.Formation{}), putFormation)
-	r.Get("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getFormationMiddleware, getFormation)
-	r.Delete("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getFormationMiddleware, deleteFormation)
-	r.Get("/apps/:apps_id/formations", getAppMiddleware, listFormations)
+	httpRouter.PUT("/apps/:apps_id/formations/:releases_id", api.PutFormation)
+	httpRouter.GET("/apps/:apps_id/formations/:releases_id", api.GetFormation)
+	httpRouter.DELETE("/apps/:apps_id/formations/:releases_id", api.DeleteFormation)
+	httpRouter.GET("/apps/:apps_id/formations", api.ListFormations)
+	httpRouter.GET("/formations", api.GetFormations)
 
-	r.Post("/apps/:apps_id/jobs", getAppMiddleware, binding.Bind(ct.NewJob{}), runJob)
-	r.Get("/apps/:apps_id/jobs/:jobs_id", getAppMiddleware, getJob)
-	r.Put("/apps/:apps_id/jobs/:jobs_id", getAppMiddleware, binding.Bind(ct.Job{}), putJob)
-	r.Get("/apps/:apps_id/jobs", getAppMiddleware, listJobs)
-	r.Delete("/apps/:apps_id/jobs/:jobs_id", getAppMiddleware, connectHostMiddleware, killJob)
-	r.Get("/apps/:apps_id/jobs/:jobs_id/log", getAppMiddleware, connectHostMiddleware, jobLog)
+	httpRouter.POST("/apps/:apps_id/jobs", api.RunJob)
+	httpRouter.GET("/apps/:apps_id/jobs/:jobs_id", api.GetJob)
+	httpRouter.PUT("/apps/:apps_id/jobs/:jobs_id", api.PutJob)
+	httpRouter.GET("/apps/:apps_id/jobs", api.ListJobs)
+	httpRouter.DELETE("/apps/:apps_id/jobs/:jobs_id", api.KillJob)
+	httpRouter.GET("/apps/:apps_id/jobs/:jobs_id/log", api.JobLog)
 
-	r.Put("/apps/:apps_id/release", getAppMiddleware, binding.Bind(releaseID{}), setAppRelease)
-	r.Get("/apps/:apps_id/release", getAppMiddleware, getAppRelease)
+	httpRouter.PUT("/apps/:apps_id/release", api.SetAppRelease)
+	httpRouter.GET("/apps/:apps_id/release", api.GetAppRelease)
 
-	r.Post("/providers/:providers_id/resources", getProviderMiddleware, binding.Bind(ct.ResourceReq{}), resourceServerMiddleware, provisionResource)
-	r.Get("/providers/:providers_id/resources", getProviderMiddleware, getProviderResources)
-	r.Get("/providers/:providers_id/resources/:resources_id", getProviderMiddleware, getResourceMiddleware, getResource)
-	r.Put("/providers/:providers_id/resources/:resources_id", getProviderMiddleware, binding.Bind(ct.Resource{}), putResource)
-	r.Get("/apps/:apps_id/resources", getAppMiddleware, getAppResources)
+	httpRouter.POST("/providers/:providers_id/resources", api.ProvisionResource)
+	httpRouter.GET("/providers/:providers_id/resources", api.GetProviderResources)
+	httpRouter.GET("/providers/:providers_id/resources/:resources_id", api.GetResource)
+	httpRouter.PUT("/providers/:providers_id/resources/:resources_id", api.PutResource)
+	httpRouter.GET("/apps/:apps_id/resources", api.GetAppResources)
 
-	r.Post("/apps/:apps_id/routes", getAppMiddleware, binding.Bind(router.Route{}), createRoute)
-	r.Get("/apps/:apps_id/routes", getAppMiddleware, getRouteList)
-	r.Get("/apps/:apps_id/routes/:routes_type/:routes_id", getAppMiddleware, getRouteMiddleware, getRoute)
-	r.Delete("/apps/:apps_id/routes/:routes_type/:routes_id", getAppMiddleware, getRouteMiddleware, deleteRoute)
-
-	r.Get("/formations", getFormations)
+	httpRouter.POST("/apps/:apps_id/routes", api.CreateRoute)
+	httpRouter.GET("/apps/:apps_id/routes", api.GetRouteList)
+	httpRouter.GET("/apps/:apps_id/routes/:routes_type/:routes_id", api.GetRoute)
+	httpRouter.DELETE("/apps/:apps_id/routes/:routes_type/:routes_id", api.DeleteRoute)
 
 	return muxHandler(httpRouter, c.key)
 }
@@ -233,183 +186,63 @@ func muxHandler(main http.Handler, authKey string) http.Handler {
 	})
 }
 
-func putFormation(formation ct.Formation, app *ct.App, release *ct.Release, repo *FormationRepo, r ResponseHelper) {
-	formation.AppID = app.ID
-	formation.ReleaseID = release.ID
-	if app.Protected {
-		for typ := range release.Processes {
-			if formation.Processes[typ] == 0 {
-				r.Error(ct.ValidationError{Message: "unable to scale to zero, app is protected"})
-				return
-			}
-		}
-	}
-	if err := repo.Add(&formation); err != nil {
-		r.Error(err)
-		return
-	}
-	r.JSON(200, &formation)
+type controllerAPI struct {
+	appRepo         *AppRepo
+	releaseRepo     *ReleaseRepo
+	providerRepo    *ProviderRepo
+	formationRepo   *FormationRepo
+	artifactRepo    *ArtifactRepo
+	jobRepo         *JobRepo
+	resourceRepo    *ResourceRepo
+	clusterClient   clusterClient
+	discoverdClient resource.DiscoverdClient
+	routerc         routerc.Client
 }
 
-func getFormationMiddleware(c martini.Context, app *ct.App, params martini.Params, repo *FormationRepo, r ResponseHelper) {
-	formation, err := repo.Get(app.ID, params["releases_id"])
+func (c *controllerAPI) getApp(params httprouter.Params) (*ct.App, error) {
+	data, err := c.appRepo.Get(params.ByName("apps_id"))
 	if err != nil {
-		r.Error(err)
-		return
+		return nil, err
 	}
-	c.Map(formation)
+	app, _ := data.(*ct.App)
+	return app, nil
 }
 
-func getFormation(formation *ct.Formation, r ResponseHelper) {
-	r.JSON(200, formation)
-}
-
-func deleteFormation(formation *ct.Formation, repo *FormationRepo, r ResponseHelper) {
-	err := repo.Remove(formation.AppID, formation.ReleaseID)
+func (c *controllerAPI) getRelease(params httprouter.Params) (*ct.Release, error) {
+	data, err := c.releaseRepo.Get(params.ByName("releases_id"))
 	if err != nil {
-		r.Error(err)
-		return
+		return nil, err
 	}
-	r.WriteHeader(200)
+	release, _ := data.(*ct.Release)
+	return release, nil
 }
 
-func listFormations(app *ct.App, repo *FormationRepo, r ResponseHelper) {
-	list, err := repo.List(app.ID)
+func (c *controllerAPI) getProvider(params httprouter.Params) (*ct.Provider, error) {
+	data, err := c.providerRepo.Get(params.ByName("providers_id"))
 	if err != nil {
-		r.Error(err)
-		return
+		return nil, err
 	}
-	r.JSON(200, list)
+	provider, _ := data.(*ct.Provider)
+	return provider, nil
 }
 
-type releaseID struct {
-	ID string `json:"id"`
+func routeParentRef(appID string) string {
+	return "controller/apps/" + appID
 }
 
-func setAppRelease(app *ct.App, rid releaseID, apps *AppRepo, releases *ReleaseRepo, formations *FormationRepo, r ResponseHelper) {
-	rel, err := releases.Get(rid.ID)
+func routeID(params httprouter.Params) string {
+	return params.ByName("routes_type") + "/" + params.ByName("routes_id")
+}
+
+func (c *controllerAPI) getRoute(appID string, params httprouter.Params) (*router.Route, error) {
+	route, err := c.routerc.GetRoute(routeID(params))
+	if err == routerc.ErrNotFound || err == nil && route.ParentRef != routeParentRef(appID) {
+		err = ErrNotFound
+	}
 	if err != nil {
-		if err == ErrNotFound {
-			err = ct.ValidationError{
-				Message: fmt.Sprintf("could not find release with ID %s", rid.ID),
-			}
-		}
-		r.Error(err)
-		return
+		return nil, err
 	}
-	release := rel.(*ct.Release)
-	apps.SetRelease(app.ID, release.ID)
-
-	// TODO: use transaction/lock
-	fs, err := formations.List(app.ID)
-	if err != nil {
-		r.Error(err)
-		return
-	}
-	if len(fs) == 1 && fs[0].ReleaseID != release.ID {
-		if err := formations.Add(&ct.Formation{
-			AppID:     app.ID,
-			ReleaseID: release.ID,
-			Processes: fs[0].Processes,
-		}); err != nil {
-			r.Error(err)
-			return
-		}
-		if err := formations.Remove(app.ID, fs[0].ReleaseID); err != nil {
-			r.Error(err)
-			return
-		}
-	}
-
-	r.JSON(200, release)
-}
-
-func getAppRelease(app *ct.App, apps *AppRepo, r ResponseHelper) {
-	release, err := apps.GetRelease(app.ID)
-	if err != nil {
-		r.Error(err)
-		return
-	}
-	r.JSON(200, release)
-}
-
-func resourceServerMiddleware(c martini.Context, p *ct.Provider, dc resource.DiscoverdClient, r ResponseHelper) {
-	server, err := resource.NewServerWithDiscoverd(p.URL, dc)
-	if err != nil {
-		r.Error(err)
-		return
-	}
-	c.Map(server)
-	c.Next()
-	server.Close()
-}
-
-func putResource(p *ct.Provider, params martini.Params, resource ct.Resource, repo *ResourceRepo, r ResponseHelper) {
-	resource.ID = params["resources_id"]
-	resource.ProviderID = p.ID
-	if err := repo.Add(&resource); err != nil {
-		r.Error(err)
-		return
-	}
-	r.JSON(200, &resource)
-}
-
-func provisionResource(rs *resource.Server, p *ct.Provider, req ct.ResourceReq, repo *ResourceRepo, r ResponseHelper) {
-	var config []byte
-	if req.Config != nil {
-		config = *req.Config
-	} else {
-		config = []byte(`{}`)
-	}
-	data, err := rs.Provision(config)
-	if err != nil {
-		r.Error(err)
-		return
-	}
-
-	res := &ct.Resource{
-		ProviderID: p.ID,
-		ExternalID: data.ID,
-		Env:        data.Env,
-		Apps:       req.Apps,
-	}
-	if err := repo.Add(res); err != nil {
-		// TODO: attempt to "rollback" provisioning
-		r.Error(err)
-		return
-	}
-	r.JSON(200, res)
-}
-
-func getResourceMiddleware(c martini.Context, params martini.Params, repo *ResourceRepo, r ResponseHelper) {
-	resource, err := repo.Get(params["resources_id"])
-	if err != nil {
-		r.Error(err)
-		return
-	}
-	c.Map(resource)
-}
-
-func getResource(resource *ct.Resource, r ResponseHelper) {
-	r.JSON(200, resource)
-}
-
-func getProviderResources(p *ct.Provider, repo *ResourceRepo, r ResponseHelper) {
-	res, err := repo.ProviderList(p.ID)
-	if err != nil {
-		r.Error(err)
-		return
-	}
-	r.JSON(200, res)
-}
-
-func getAppResources(app *ct.App, repo *ResourceRepo, r ResponseHelper) {
-	res, err := repo.AppList(app.ID)
-	if err != nil {
-		r.Error(err)
-		return
-	}
-	r.JSON(200, res)
+	return route, err
 }
 
 func parseBasicAuth(h http.Header) (username, password string, err error) {
