@@ -15,4 +15,13 @@ release:
 clean:
 	git clean -Xdf -e '!.tup' -e '!.vagrant' -e '!script/custom-vagrant'
 
-.PHONY: all clean dev release
+test: test-unit test-integration
+
+test-unit:
+	@GIT_COMMIT=dev GIT_BRANCH=dev GIT_TAG=none GIT_DIRTY=false tup appliance/etcd discoverd
+	go test ./...
+
+test-integration:
+	script/run-integration-tests
+
+.PHONY: all clean dev release test test-unit test-integration
