@@ -37,7 +37,7 @@ main() {
   local flynn="${ROOT}/cli/flynn-cli"
 
   pushd "${ROOT}" >/dev/null
-  make dev
+  make
   popd >/dev/null
 
   cluster_add=$("${ROOT}/script/bootstrap-flynn" &> >(tee /dev/stderr) | tail -3 | head -1)

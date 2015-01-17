@@ -332,7 +332,7 @@ git config user.name "CI"
 git merge origin/master
 {{ end }}
 
-make dev
+make
 
 if [[ -f test/scripts/debug-info.sh ]]; then
   sudo cp test/scripts/debug-info.sh /usr/local/bin/debug-info.sh
