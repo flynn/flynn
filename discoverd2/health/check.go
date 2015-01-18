@@ -48,8 +48,12 @@ type HTTPCheck struct {
 	// used.
 	Host string
 
-	Timeout    time.Duration
+	Timeout time.Duration
+	// The response must respond with StatusCode for the check to pass. It
+	// defaults to 200.
 	StatusCode int
+	// If set, MatchBytes must be a subset present in the first 5120 bytes of
+	// the response for the check to pass.
 	MatchBytes []byte
 }
 
