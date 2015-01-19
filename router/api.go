@@ -46,7 +46,7 @@ func createRoute(req *http.Request, route router.Route, router *Router, r render
 
 	if err := l.AddRoute(&route); err != nil {
 		log.Println(err)
-		r.JSON(500, struct{}{})
+		r.JSON(500, "unknown error")
 		return
 	}
 	res := formatRoute(&route)
@@ -66,7 +66,7 @@ func createOrReplaceRoute(req *http.Request, route router.Route, router *Router,
 
 	if err := l.SetRoute(&route); err != nil {
 		log.Println(err)
-		r.JSON(500, struct{}{})
+		r.JSON(500, "unknown error")
 		return
 	}
 	res := formatRoute(&route)
@@ -108,13 +108,13 @@ func getRoutes(req *http.Request, rtr *Router, r render.Render) {
 	routes, err := rtr.HTTP.List()
 	if err != nil {
 		log.Println(err)
-		r.JSON(500, struct{}{})
+		r.JSON(500, "unknown error")
 		return
 	}
 	tcpRoutes, err := rtr.TCP.List()
 	if err != nil {
 		log.Println(err)
-		r.JSON(500, struct{}{})
+		r.JSON(500, "unknown error")
 		return
 	}
 	routes = append(routes, tcpRoutes...)
@@ -139,18 +139,18 @@ func getRoutes(req *http.Request, rtr *Router, r render.Render) {
 func getRoute(params martini.Params, router *Router, r render.Render) {
 	l := listenerFor(router, params["route_type"])
 	if l == nil {
-		r.JSON(404, struct{}{})
+		r.JSON(404, "not found")
 		return
 	}
 
 	route, err := l.Get(params["route_id"])
 	if err == ErrNotFound {
-		r.JSON(404, struct{}{})
+		r.JSON(404, "not found")
 		return
 	}
 	if err != nil {
 		log.Println(err)
-		r.JSON(500, struct{}{})
+		r.JSON(500, "unknown error")
 		return
 	}
 
@@ -160,20 +160,20 @@ func getRoute(params martini.Params, router *Router, r render.Render) {
 func deleteRoute(params martini.Params, router *Router, r render.Render) {
 	l := listenerFor(router, params["route_type"])
 	if l == nil {
-		r.JSON(404, struct{}{})
+		r.JSON(404, "not found")
 		return
 	}
 
 	err := l.RemoveRoute(params["route_id"])
 	if err == ErrNotFound {
-		r.JSON(404, struct{}{})
+		r.JSON(404, "not found")
 		return
 	}
 	if err != nil {
 		log.Println(err)
-		r.JSON(500, struct{}{})
+		r.JSON(500, "unknown error")
 		return
 	}
 
-	r.JSON(200, struct{}{})
+	r.JSON(200, "unknown error")
 }
