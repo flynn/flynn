@@ -173,7 +173,7 @@ func (s *HTTPSuite) TestLeader(c *C) {
 
 	// Leader with no instances 404s
 	_, err := srv.Leader()
-	c.Assert(err, Equals, discoverd.ErrNotFound)
+	c.Assert(discoverd.IsNotFound(err), Equals, true)
 
 	events := make(chan *discoverd.Event, 1)
 	s.state.Subscribe("a", false, discoverd.EventKindUp|discoverd.EventKindDown, events)
@@ -203,13 +203,13 @@ func (s *HTTPSuite) TestLeader(c *C) {
 	c.Assert(s.client.RemoveService("a"), IsNil)
 	assertEvent(c, events, "a", discoverd.EventKindDown, inst2)
 	_, err = srv.Leader()
-	c.Assert(err, Equals, discoverd.ErrNotFound)
+	c.Assert(discoverd.IsNotFound(err), Equals, true)
 }
 
 func (s *HTTPSuite) TestInstances(c *C) {
 	// Instances with no service 404s
 	_, err := s.client.Service("b").Instances()
-	c.Assert(err, Equals, discoverd.ErrNotFound)
+	c.Assert(discoverd.IsNotFound(err), Equals, true)
 
 	// Instances with existing service and no instances returns no results
 	srv := s.client.Service("a")
