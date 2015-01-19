@@ -290,8 +290,9 @@ func (s *S) TestHTTPServiceHandlerBackendConnectionClosed(c *C) {
 }
 
 // Act as an app to test HTTP headers
-func httpHeaderTestHandler(c *C, ip string) http.Handler {
+func httpHeaderTestHandler(c *C, ip, port string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		c.Assert(req.Header["X-Forwarded-Port"][0], Equals, port)
 		c.Assert(req.Header["X-Forwarded-Proto"][0], Equals, "http")
 		c.Assert(len(req.Header["X-Request-Start"][0]), Equals, 13)
 		c.Assert(req.Header["X-Forwarded-For"][0], Equals, ip)
@@ -302,7 +303,7 @@ func httpHeaderTestHandler(c *C, ip string) http.Handler {
 
 // issue #105
 func (s *S) TestHTTPHeaders(c *C) {
-	srv := httptest.NewServer(httpHeaderTestHandler(c, "127.0.0.1"))
+	srv := httptest.NewServer(httpHeaderTestHandler(c, "127.0.0.1", "0"))
 
 	l, discoverd := newHTTPListener(c)
 	defer l.Close()
@@ -316,7 +317,7 @@ func (s *S) TestHTTPHeaders(c *C) {
 }
 
 func (s *S) TestHTTPHeadersFromClient(c *C) {
-	srv := httptest.NewServer(httpHeaderTestHandler(c, "192.168.1.1, 127.0.0.1"))
+	srv := httptest.NewServer(httpHeaderTestHandler(c, "192.168.1.1, 127.0.0.1", "0"))
 
 	l, discoverd := newHTTPListener(c)
 	defer l.Close()
