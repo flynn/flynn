@@ -25,11 +25,14 @@ func (h *attachHandler) ServeHTTP(w http.ResponseWriter, req *http.Request, _ ht
 		http.Error(w, "invalid JSON", 400)
 		return
 	}
+	w.Header().Set("Content-Type", "application/vnd.flynn.attach")
+	w.Header().Set("Content-Length", "0")
+	w.WriteHeader(http.StatusSwitchingProtocols)
+
 	conn, _, err := w.(http.Hijacker).Hijack()
 	if err != nil {
 		return
 	}
-	conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Type: application/vnd.flynn.attach-hijack\r\n\r\n"))
 	h.attach(&attachReq, conn)
 }
 
