@@ -8,8 +8,9 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 
-	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/stream"
 )
 
@@ -70,24 +71,21 @@ func (c *Client) RawReq(method, path string, header http.Header, in, out interfa
 	if err != nil {
 		return nil, err
 	}
-	if res.StatusCode == 404 {
-		res.Body.Close()
-		return res, c.ErrNotFound
-	}
-	if res.StatusCode == 400 {
-		var body ct.ValidationError
-		defer res.Body.Close()
-		if err = json.NewDecoder(res.Body).Decode(&body); err != nil {
-			return res, err
-		}
-		return res, body
-	}
 	if res.StatusCode != 200 {
-		res.Body.Close()
+		defer res.Body.Close()
+		if strings.Contains(res.Header.Get("Content-Type"), "application/json") {
+			var jsonErr httphelper.JSONError
+			if err := json.NewDecoder(res.Body).Decode(&jsonErr); err == nil {
+				return res, jsonErr
+			}
+		}
+		if res.StatusCode == 404 {
+			return res, c.ErrNotFound
+		}
 		return res, &url.Error{
 			Op:  req.Method,
 			URL: req.URL.String(),
-			Err: fmt.Errorf(c.ErrPrefix+": unexpected status %d", res.StatusCode),
+			Err: fmt.Errorf("httpclient: unexpected status %d", res.StatusCode),
 		}
 	}
 	if out != nil {
