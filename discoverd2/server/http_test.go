@@ -286,3 +286,26 @@ func (s *HTTPSuite) TestInstancesShortcut(c *C) {
 	assertInstanceEqual(c, res[0], inst1)
 	assertInstanceEqual(c, res[1], inst2)
 }
+
+func (s *HTTPSuite) TestAddServiceAndRegister(c *C) {
+	events := make(chan *discoverd.Event, 1)
+	s.state.Subscribe("b", false, discoverd.EventKindUp, events)
+
+	// Creates service
+	inst := &discoverd.Instance{Addr: "127.0.0.1:1", Proto: "tcp"}
+	inst.ID = md5sum(inst.Proto + "-" + inst.Addr)
+	hb, err := s.client.AddServiceAndRegister("b", inst.Addr)
+	c.Assert(err, IsNil)
+	assertEvent(c, events, "b", discoverd.EventKindUp, inst)
+	hb.Close()
+
+	// Service already exists
+	hb, err = s.client.AddServiceAndRegisterInstance("b", inst)
+	c.Assert(err, IsNil)
+	assertEvent(c, events, "b", discoverd.EventKindUp, inst)
+	hb.Close()
+
+	// Invalid service name
+	_, err = s.client.AddServiceAndRegisterInstance("$", inst)
+	c.Assert(err, NotNil)
+}
