@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/pkg/httpclient"
+	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/stream"
 )
 
@@ -20,7 +21,6 @@ type Service interface {
 	Watch(events chan *Event) (stream.Stream, error)
 }
 
-var ErrNotFound = errors.New("discoverd: not found")
 var ErrTimedOut = errors.New("discoverd: timed out waiting for instances")
 
 type Client struct {
@@ -41,10 +41,8 @@ func NewClientWithURL(url string) *Client {
 	}
 	return &Client{
 		c: &httpclient.Client{
-			ErrPrefix:   "discoverd",
-			ErrNotFound: ErrNotFound,
-			URL:         url,
-			HTTP:        http.DefaultClient,
+			URL:  url,
+			HTTP: http.DefaultClient,
 		},
 	}
 }
@@ -61,10 +59,15 @@ func (c *Client) Service(name string) Service {
 	return newService(c, name)
 }
 
+func IsNotFound(err error) bool {
+	je, ok := err.(hh.JSONError)
+	return ok && je.Code == hh.ObjectNotFoundError
+}
+
 func (c *Client) Instances(service string, timeout time.Duration) ([]*Instance, error) {
 	s := c.Service(service)
 	instances, err := s.Instances()
-	if len(instances) > 0 || err != nil && err != c.c.ErrNotFound {
+	if len(instances) > 0 || err != nil && !IsNotFound(err) {
 		return instances, err
 	}
 
