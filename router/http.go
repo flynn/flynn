@@ -241,12 +241,24 @@ func (s *HTTPListener) listenAndServe(started chan<- error) {
 }
 
 func (s *HTTPListener) listenAndServeTLS(started chan<- error) {
-	var err error
-	s.tlsListener, err = reuseport.NewReusablePortListener("tcp4", s.TLSAddr)
+	certForHandshake := func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		r := s.findRouteForHost(hello.ServerName)
+		if r == nil {
+			return nil, errMissingTLS
+		}
+		return r.keypair, nil
+	}
+	tlsConfig := tlsconfig.SecureCiphers(&tls.Config{
+		GetCertificate: certForHandshake,
+		Certificates:   []tls.Certificate{s.keypair},
+	})
+
+	l, err := reuseport.NewReusablePortListener("tcp4", s.TLSAddr)
 	started <- err
 	if err != nil {
 		return
 	}
+	s.tlsListener = tls.NewListener(l, tlsConfig)
 	for {
 		conn, err := s.tlsListener.Accept()
 		if err != nil {
@@ -292,22 +304,6 @@ var errMissingTLS = errors.New("router: route not found or TLS not configured")
 func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 	defer conn.Close() // TODO(benburkert): for TLS, check that closing this conn sends the TLS "close notify"
 
-	var r *httpRoute
-
-	if isTLS {
-		certForHandshake := func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			r = s.findRouteForHost(hello.ServerName)
-			if r == nil {
-				return nil, errMissingTLS
-			}
-			return r.keypair, nil
-		}
-		conn = tls.Server(conn, tlsconfig.SecureCiphers(&tls.Config{
-			GetCertificate: certForHandshake,
-			Certificates:   []tls.Certificate{s.keypair},
-		}))
-	}
-
 	sc := httputil.NewServerConn(conn, nil)
 	for {
 		req, err := sc.Read()
@@ -318,12 +314,10 @@ func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 			return
 		}
 
-		if !isTLS {
-			r = s.findRouteForHost(req.Host)
-			if r == nil {
-				fail(sc, req, 404, "Not Found")
-				continue
-			}
+		r := s.findRouteForHost(req.Host)
+		if r == nil {
+			fail(sc, req, 404, "Not Found")
+			continue
 		}
 
 		req.RemoteAddr = conn.RemoteAddr().String()
