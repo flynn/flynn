@@ -35,7 +35,6 @@ var ErrNotFound = errors.New("controller: resource not found")
 func newClient(key string, url string, http *http.Client) *Client {
 	c := &Client{
 		Client: &httpclient.Client{
-			ErrPrefix:   "controller",
 			ErrNotFound: ErrNotFound,
 			Key:         key,
 			URL:         url,
