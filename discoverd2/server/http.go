@@ -8,7 +8,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/discoverd2/client"
-	"github.com/flynn/flynn/pkg/httphelper"
+	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/sse"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -75,23 +75,21 @@ type httpAPI struct {
 	Store Datastore
 }
 
-func jsonError(w http.ResponseWriter, code int, err error) {
-	httphelper.JSON(w, code, struct {
-		Error string `json:"error"`
-	}{err.Error()})
+func jsonError(w http.ResponseWriter, code hh.ErrorCode, err error) {
+	hh.Error(w, hh.JSONError{Code: code, Message: err.Error()})
 }
 
 func (h *httpAPI) AddService(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	service := params.ByName("service")
 	if err := ValidServiceName(service); err != nil {
-		jsonError(w, 400, err)
+		jsonError(w, hh.ValidationError, err)
 		return
 	}
 	if err := h.Store.AddService(service); err != nil {
 		if IsServiceExists(err) {
-			jsonError(w, 400, err)
+			jsonError(w, hh.ObjectExistsError, err)
 		} else {
-			jsonError(w, 500, err)
+			hh.Error(w, err)
 		}
 		return
 	}
@@ -100,14 +98,14 @@ func (h *httpAPI) AddService(w http.ResponseWriter, r *http.Request, params http
 func (h *httpAPI) RemoveService(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	service := params.ByName("service")
 	if err := ValidServiceName(service); err != nil {
-		jsonError(w, 400, err)
+		jsonError(w, hh.ValidationError, err)
 		return
 	}
 	if err := h.Store.RemoveService(params.ByName("service")); err != nil {
 		if IsNotFound(err) {
-			jsonError(w, 404, err)
+			jsonError(w, hh.ObjectNotFoundError, err)
 		} else {
-			jsonError(w, 500, err)
+			hh.Error(w, err)
 		}
 		return
 	}
@@ -116,18 +114,18 @@ func (h *httpAPI) RemoveService(w http.ResponseWriter, r *http.Request, params h
 func (h *httpAPI) AddInstance(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	inst := &discoverd.Instance{}
 	if err := json.NewDecoder(r.Body).Decode(inst); err != nil {
-		jsonError(w, 400, err)
+		hh.Error(w, err)
 		return
 	}
 	if err := inst.Valid(); err != nil {
-		jsonError(w, 400, err)
+		jsonError(w, hh.ValidationError, err)
 		return
 	}
 	if err := h.Store.AddInstance(params.ByName("service"), inst); err != nil {
 		if IsNotFound(err) {
-			jsonError(w, 404, err)
+			jsonError(w, hh.ObjectNotFoundError, err)
 		} else {
-			jsonError(w, 500, err)
+			hh.Error(w, err)
 		}
 		return
 	}
@@ -136,9 +134,9 @@ func (h *httpAPI) AddInstance(w http.ResponseWriter, r *http.Request, params htt
 func (h *httpAPI) RemoveInstance(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	if err := h.Store.RemoveInstance(params.ByName("service"), params.ByName("instance_id")); err != nil {
 		if IsNotFound(err) {
-			jsonError(w, 404, err)
+			jsonError(w, hh.ObjectNotFoundError, err)
 		} else {
-			jsonError(w, 500, err)
+			hh.Error(w, err)
 		}
 		return
 	}
@@ -152,10 +150,10 @@ func (h *httpAPI) GetInstances(w http.ResponseWriter, r *http.Request, params ht
 
 	instances := h.Store.Get(params.ByName("service"))
 	if instances == nil {
-		jsonError(w, 404, errors.New("service not found"))
+		jsonError(w, hh.ObjectNotFoundError, errors.New("service not found"))
 		return
 	}
-	httphelper.JSON(w, 200, instances)
+	hh.JSON(w, 200, instances)
 }
 
 func (h *httpAPI) GetLeader(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
@@ -166,10 +164,10 @@ func (h *httpAPI) GetLeader(w http.ResponseWriter, r *http.Request, params httpr
 
 	leader := h.Store.GetLeader(params.ByName("service"))
 	if leader == nil {
-		jsonError(w, 404, errors.New("no leader found"))
+		jsonError(w, hh.ObjectNotFoundError, errors.New("no leader found"))
 		return
 	}
-	httphelper.JSON(w, 200, leader)
+	hh.JSON(w, 200, leader)
 }
 
 func (h *httpAPI) GetServiceStream(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
@@ -181,7 +179,7 @@ func (h *httpAPI) GetServiceStream(w http.ResponseWriter, r *http.Request, param
 
 func (h *httpAPI) handleStream(w http.ResponseWriter, params httprouter.Params, kind discoverd.EventKind) {
 	sw := sse.NewWriter(w)
-	enc := json.NewEncoder(httphelper.FlushWriter{Writer: sw, Enabled: true})
+	enc := json.NewEncoder(hh.FlushWriter{Writer: sw, Enabled: true})
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.WriteHeader(200)
 	sw.Flush()
