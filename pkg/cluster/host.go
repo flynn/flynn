@@ -40,7 +40,6 @@ func NewHostClient(addr string, h *http.Client) Host {
 		h = http.DefaultClient
 	}
 	return &hostClient{c: &httpclient.Client{
-		ErrPrefix:   "host",
 		ErrNotFound: ErrNotFound,
 		URL:         addr,
 		HTTP:        h,

@@ -59,7 +59,6 @@ func newClient(services ServiceSetFunc) (*Client, error) {
 		return nil, err
 	}
 	c := &httpclient.Client{
-		ErrPrefix:   "cluster",
 		ErrNotFound: ErrNotFound,
 		HTTP:        http.DefaultClient,
 	}

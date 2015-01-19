@@ -18,7 +18,6 @@ type DialFunc func(network, addr string) (net.Conn, error)
 
 type Client struct {
 	ErrNotFound error
-	ErrPrefix   string
 	URL         string
 	Key         string
 	HTTP        *http.Client
