@@ -426,7 +426,7 @@ func (s *httpService) getBackendSticky(req *http.Request) (*httputil.ClientConn,
 	return httputil.NewClientConn(backend, nil), nil
 }
 
-func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls, sticky bool) (done bool) {
+func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, isTLS, sticky bool) (done bool) {
 	req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
 	req.Header.Set("X-Request-Id", random.UUID())
 
@@ -459,7 +459,7 @@ func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, tls, st
 		}
 		req.Header.Set("X-Forwarded-For", clientIP)
 	}
-	if tls {
+	if isTLS {
 		req.Header.Set("X-Forwarded-Proto", "https")
 	} else {
 		req.Header.Set("X-Forwarded-Proto", "http")
