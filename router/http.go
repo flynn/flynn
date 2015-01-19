@@ -299,6 +299,12 @@ func fail(sc *httputil.ServerConn, req *http.Request, code int, msg string) {
 	sc.Write(req, resp)
 }
 
+func failw(w http.ResponseWriter, code int, msg string) {
+	w.Header().Set("Content-Length", strconv.Itoa(len(msg)))
+	w.WriteHeader(code)
+	w.Write([]byte(msg))
+}
+
 var errMissingTLS = errors.New("router: route not found or TLS not configured")
 
 func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
