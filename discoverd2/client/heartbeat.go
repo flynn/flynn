@@ -5,11 +5,36 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	hh "github.com/flynn/flynn/pkg/httphelper"
 )
 
 type Heartbeater interface {
 	SetMeta(map[string]string) error
 	Close() error
+}
+
+func (c *Client) maybeAddService(service string) error {
+	if err := c.AddService(service); err != nil {
+		if je, ok := err.(hh.JSONError); !ok || je.Code != hh.ObjectExistsError {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Client) AddServiceAndRegister(service, addr string) (Heartbeater, error) {
+	if err := c.maybeAddService(service); err != nil {
+		return nil, err
+	}
+	return c.Register(service, addr)
+}
+
+func (c *Client) AddServiceAndRegisterInstance(service string, inst *Instance) (Heartbeater, error) {
+	if err := c.maybeAddService(service); err != nil {
+		return nil, err
+	}
+	return c.RegisterInstance(service, inst)
 }
 
 func (c *Client) Register(service, addr string) (Heartbeater, error) {
