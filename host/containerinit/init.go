@@ -17,7 +17,6 @@ package containerinit
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -26,7 +25,6 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -39,17 +37,15 @@ import (
 	"github.com/flynn/flynn/pkg/rpcplus/fdrpc"
 )
 
-type ContainerInitArgs struct {
-	user       string
-	gateway    string
-	workDir    string
-	ip         string
-	privileged bool
-	tty        bool
-	openStdin  bool
-	child      bool
-	env        []string
-	args       []string
+type Config struct {
+	User      string
+	Gateway   string
+	WorkDir   string
+	IP        string
+	TTY       bool
+	OpenStdin bool
+	Env       map[string]string
+	Args      []string
 }
 
 const SharedPath = "/.container-shared"
@@ -147,11 +143,11 @@ func (c *Client) Signal(signal int) error {
 	return err
 }
 
-func newContainerInit(args *ContainerInitArgs) *ContainerInit {
+func newContainerInit(c *Config) *ContainerInit {
 	return &ContainerInit{
 		resume:    make(chan struct{}),
 		streams:   make(map[chan StateChange]struct{}),
-		openStdin: args.openStdin,
+		openStdin: c.OpenStdin,
 	}
 }
 
@@ -306,16 +302,16 @@ func runRPCServer() {
 	log.Fatal(fdrpc.ListenAndServe(SocketPath))
 }
 
-func setupHostname(args *ContainerInitArgs) error {
-	hostname := getEnv(args, "HOSTNAME")
+func setupHostname(c *Config) error {
+	hostname := c.Env["HOSTNAME"]
 	if hostname == "" {
 		return nil
 	}
 	return syscall.Sethostname([]byte(hostname))
 }
 
-func setupNetworking(args *ContainerInitArgs) error {
-	if args.ip == "" {
+func setupNetworking(c *Config) error {
+	if c.IP == "" {
 		return nil
 	}
 
@@ -330,15 +326,15 @@ func setupNetworking(args *ContainerInitArgs) error {
 	if iface, err = net.InterfaceByName("eth0"); err != nil {
 		return fmt.Errorf("Unable to set up networking: %v", err)
 	}
-	ip, ipNet, err := net.ParseCIDR(args.ip)
+	ip, ipNet, err := net.ParseCIDR(c.IP)
 	if err != nil {
 		return fmt.Errorf("Unable to set up networking: %v", err)
 	}
 	if err := netlink.NetworkLinkAddIp(iface, ip, ipNet); err != nil {
 		return fmt.Errorf("Unable to set up networking: %v", err)
 	}
-	if args.gateway != "" {
-		if err := netlink.AddDefaultGw(args.gateway, "eth0"); err != nil {
+	if c.Gateway != "" {
+		if err := netlink.AddDefaultGw(c.Gateway, "eth0"); err != nil {
 			return fmt.Errorf("Unable to set up networking: %v", err)
 		}
 	}
@@ -349,58 +345,48 @@ func setupNetworking(args *ContainerInitArgs) error {
 	return nil
 }
 
-func getCredential(args *ContainerInitArgs) (*syscall.Credential, error) {
-	if args.user == "" {
+func getCredential(c *Config) (*syscall.Credential, error) {
+	if c.User == "" {
 		return nil, nil
 	}
 	users, err := user.ParsePasswdFileFilter("/etc/passwd", func(u user.User) bool {
-		return u.Name == args.user
+		return u.Name == c.User
 	})
 	if err != nil || len(users) == 0 {
 		if err == nil {
 			err = errors.New("unknown user")
 		}
-		return nil, fmt.Errorf("Unable to find user %v: %v", args.user, err)
+		return nil, fmt.Errorf("Unable to find user %v: %v", c.User, err)
 	}
 
 	return &syscall.Credential{Uid: uint32(users[0].Uid), Gid: uint32(users[0].Gid)}, nil
 }
 
-func setupCommon(args *ContainerInitArgs) error {
-	if err := setupHostname(args); err != nil {
+func setupCommon(c *Config) error {
+	if err := setupHostname(c); err != nil {
 		return err
 	}
 
-	if err := setupNetworking(args); err != nil {
+	if err := setupNetworking(c); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func getEnv(args *ContainerInitArgs, key string) string {
-	for _, kv := range args.env {
-		parts := strings.SplitN(kv, "=", 2)
-		if parts[0] == key && len(parts) == 2 {
-			return parts[1]
-		}
-	}
-	return ""
-}
-
-func getCmdPath(args *ContainerInitArgs) (string, error) {
+func getCmdPath(c *Config) (string, error) {
 	// Set PATH in containerinit so we can find the cmd
-	if envPath := getEnv(args, "PATH"); envPath != "" {
+	if envPath := c.Env["PATH"]; envPath != "" {
 		os.Setenv("PATH", envPath)
 	}
 
 	// Find the cmd
-	cmdPath, err := exec.LookPath(args.args[0])
+	cmdPath, err := exec.LookPath(c.Args[0])
 	if err != nil {
-		if args.workDir == "" {
+		if c.WorkDir == "" {
 			return "", err
 		}
-		if cmdPath, err = exec.LookPath(path.Join(args.workDir, args.args[0])); err != nil {
+		if cmdPath, err = exec.LookPath(path.Join(c.WorkDir, c.Args[0])); err != nil {
 			return "", err
 		}
 	}
@@ -438,8 +424,8 @@ func babySit(process *os.Process) int {
 }
 
 // Run as pid 1 and monitor the contained process to return its exit code.
-func containerInitApp(args *ContainerInitArgs) error {
-	init := newContainerInit(args)
+func containerInitApp(c *Config) error {
+	init := newContainerInit(c)
 	if err := rpcplus.Register(init); err != nil {
 		return err
 	}
@@ -448,10 +434,14 @@ func containerInitApp(args *ContainerInitArgs) error {
 
 	// Prepare the cmd based on the given args
 	// If this fails we report that below
-	cmdPath, cmdErr := getCmdPath(args)
-	cmd := exec.Command(cmdPath, args.args[1:]...)
-	cmd.Dir = args.workDir
-	cmd.Env = args.env
+	cmdPath, cmdErr := getCmdPath(c)
+	cmd := exec.Command(cmdPath, c.Args[1:]...)
+	cmd.Dir = c.WorkDir
+
+	cmd.Env = make([]string, 0, len(c.Env))
+	for k, v := range c.Env {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
 
 	// App runs in its own session
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
@@ -459,7 +449,7 @@ func containerInitApp(args *ContainerInitArgs) error {
 	// Console setup.  Hook up the container app's stdin/stdout/stderr to
 	// either a pty or pipes.  The FDs for the controlling side of the
 	// pty/pipes will be passed to flynn-host later via a UNIX socket.
-	if args.tty {
+	if c.TTY {
 		ptyMaster, ptySlave, err := pty.Open()
 		if err != nil {
 			return err
@@ -467,7 +457,7 @@ func containerInitApp(args *ContainerInitArgs) error {
 		init.ptyMaster = ptyMaster
 		cmd.Stdout = ptySlave
 		cmd.Stderr = ptySlave
-		if args.openStdin {
+		if c.OpenStdin {
 			cmd.Stdin = ptySlave
 			cmd.SysProcAttr.Setctty = true
 		}
@@ -483,7 +473,7 @@ func containerInitApp(args *ContainerInitArgs) error {
 			return err
 		}
 		init.stderr = stderr.(*os.File)
-		if args.openStdin {
+		if c.OpenStdin {
 			// Can't use cmd.StdinPipe() here, since in Go 1.2 it
 			// returns an io.WriteCloser with the underlying object
 			// being an *exec.closeOnce, neither of which provides
@@ -509,7 +499,7 @@ func containerInitApp(args *ContainerInitArgs) error {
 		init.exit(1)
 	}
 	// Container setup
-	if err := setupCommon(args); err != nil {
+	if err := setupCommon(c); err != nil {
 		init.changeState(StateFailed, err.Error(), -1)
 		init.exit(1)
 	}
@@ -535,47 +525,19 @@ func containerInitApp(args *ContainerInitArgs) error {
 // This code is run INSIDE the container and is responsible for setting
 // up the environment before running the actual process
 func Main() {
-	if len(os.Args) <= 1 {
-		fmt.Println("You should not invoke containerinit manually")
-		os.Exit(1)
-	}
-
-	// Get cmdline arguments
-	user := flag.String("u", "", "username or uid")
-	gateway := flag.String("g", "", "gateway address")
-	workDir := flag.String("w", "", "workdir")
-	ip := flag.String("i", "", "ip address")
-	privileged := flag.Bool("privileged", false, "privileged mode")
-	tty := flag.Bool("tty", false, "use pseudo-tty")
-	openStdin := flag.Bool("stdin", false, "open stdin")
-	flag.Parse()
-
-	// Get env
-	var env []string
-	content, err := ioutil.ReadFile("/.containerenv")
+	config := &Config{}
+	data, err := ioutil.ReadFile("/.containerconfig")
 	if err != nil {
-		log.Fatalf("Unable to load environment variables: %v", err)
+		log.Fatalf("Unable to load config: %v", err)
 	}
-	if err := json.Unmarshal(content, &env); err != nil {
-		log.Fatalf("Unable to unmarshal environment variables: %v", err)
+	if err := json.Unmarshal(data, config); err != nil {
+		log.Fatalf("Unable to unmarshal config: %v", err)
 	}
 
 	// Propagate the plugin-specific container env variable
-	env = append(env, "container="+os.Getenv("container"))
+	config.Env["container"] = os.Getenv("container")
 
-	args := &ContainerInitArgs{
-		user:       *user,
-		gateway:    *gateway,
-		workDir:    *workDir,
-		ip:         *ip,
-		privileged: *privileged,
-		tty:        *tty,
-		openStdin:  *openStdin,
-		env:        env,
-		args:       flag.Args(),
-	}
-
-	if err := containerInitApp(args); err != nil {
+	if err := containerInitApp(config); err != nil {
 		log.Fatal(err)
 	}
 }

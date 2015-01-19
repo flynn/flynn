@@ -143,26 +143,21 @@ func isIPv6(s string) bool {
 	return ip != nil && ip.To4() == nil
 }
 
-func writeContainerEnv(path string, envs ...map[string]string) error {
+func writeContainerConfig(path string, c *containerinit.Config, envs ...map[string]string) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	var length int
-	for _, e := range envs {
-		length += len(e)
-	}
-	data := make([]string, 0, length)
-
+	c.Env = make(map[string]string)
 	for _, e := range envs {
 		for k, v := range e {
-			data = append(data, k+"="+v)
+			c.Env[k] = v
 		}
 	}
 
-	return json.NewEncoder(f).Encode(data)
+	return json.NewEncoder(f).Encode(c)
 }
 
 func writeHostname(path, hostname string) error {
@@ -446,8 +441,38 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 	if !job.Config.HostNetwork {
 		job.Config.Env["EXTERNAL_IP"] = container.IP.String()
 	}
-	g.Log(grohl.Data{"at": "write_env"})
-	err = writeContainerEnv(filepath.Join(rootPath, ".containerenv"),
+
+	config := &containerinit.Config{
+		TTY:       job.Config.TTY,
+		OpenStdin: job.Config.Stdin,
+		WorkDir:   job.Config.WorkingDir,
+	}
+	if !job.Config.HostNetwork {
+		config.IP = container.IP.String() + "/24"
+		config.Gateway = l.bridgeAddr.String()
+	}
+	if config.WorkDir == "" {
+		config.WorkDir = imageConfig.WorkingDir
+	}
+	if job.Config.Uid > 0 {
+		config.User = strconv.Itoa(job.Config.Uid)
+	} else if imageConfig.User != "" {
+		// TODO: check and lookup user from image config
+	}
+	if len(job.Config.Entrypoint) > 0 {
+		config.Args = job.Config.Entrypoint
+		config.Args = append(config.Args, job.Config.Cmd...)
+	} else {
+		config.Args = imageConfig.Entrypoint
+		if len(job.Config.Cmd) > 0 {
+			config.Args = append(config.Args, job.Config.Cmd...)
+		} else {
+			config.Args = append(config.Args, imageConfig.Cmd...)
+		}
+	}
+
+	g.Log(grohl.Data{"at": "write_config"})
+	err = writeContainerConfig(filepath.Join(rootPath, ".containerconfig"), config,
 		map[string]string{
 			"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 			"TERM": "xterm",
@@ -459,43 +484,8 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 		},
 	)
 	if err != nil {
-		g.Log(grohl.Data{"at": "write_env", "status": "error", "err": err})
+		g.Log(grohl.Data{"at": "write_config", "status": "error", "err": err})
 		return err
-	}
-
-	var args []string
-	if !job.Config.HostNetwork {
-		args = append(args,
-			"-i", container.IP.String()+"/24",
-			"-g", l.bridgeAddr.String(),
-		)
-	}
-	if job.Config.TTY {
-		args = append(args, "-tty")
-	}
-	if job.Config.Stdin {
-		args = append(args, "-stdin")
-	}
-	if job.Config.WorkingDir != "" {
-		args = append(args, "-w", job.Config.WorkingDir)
-	} else if imageConfig.WorkingDir != "" {
-		args = append(args, "-w", imageConfig.WorkingDir)
-	}
-	if job.Config.Uid > 0 {
-		args = append(args, "-u", strconv.Itoa(job.Config.Uid))
-	} else if imageConfig.User != "" {
-		// TODO: check and lookup user from image config
-	}
-	if len(job.Config.Entrypoint) > 0 {
-		args = append(args, job.Config.Entrypoint...)
-		args = append(args, job.Config.Cmd...)
-	} else {
-		args = append(args, imageConfig.Entrypoint...)
-		if len(job.Config.Cmd) > 0 {
-			args = append(args, job.Config.Cmd...)
-		} else {
-			args = append(args, imageConfig.Cmd...)
-		}
 	}
 
 	l.state.AddJob(job, container.IP.String())
@@ -505,9 +495,8 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 		Memory: lt.UnitInt{Value: 1, Unit: "GiB"},
 		VCPU:   1,
 		OS: lt.OS{
-			Type:     lt.OSType{Value: "exe"},
-			Init:     "/.containerinit",
-			InitArgs: args,
+			Type: lt.OSType{Value: "exe"},
+			Init: "/.containerinit",
 		},
 		Devices: lt.Devices{
 			Filesystems: []lt.Filesystem{{
