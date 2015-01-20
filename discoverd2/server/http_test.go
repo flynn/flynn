@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http/httptest"
+	"os"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
@@ -48,12 +49,15 @@ func (s *HTTPSuite) TestRegister(c *C) {
 	events := make(chan *discoverd.Event, 1)
 	s.state.Subscribe("a", false, discoverd.EventKindUp|discoverd.EventKindDown|discoverd.EventKindUpdate, events)
 
-	// Ensure that register works
-	inst := &discoverd.Instance{Addr: "127.0.0.1:1", Proto: "tcp"}
-	inst.ID = md5sum(inst.Proto + "-" + inst.Addr)
+	// Ensure that register works with address expansion
+	os.Setenv("EXTERNAL_IP", "127.0.0.1")
+	inst := &discoverd.Instance{Addr: ":80", Proto: "tcp"}
 	hb, err := s.client.Register("a", inst.Addr)
 	c.Assert(err, IsNil)
+	inst.Addr = "127.0.0.1:80"
+	inst.ID = md5sum(inst.Proto + "-" + inst.Addr)
 	assertEvent(c, events, "a", discoverd.EventKindUp, inst)
+	c.Assert(hb.Addr(), Equals, inst.Addr)
 
 	// Ensure that Close unregisters
 	err = hb.Close()
