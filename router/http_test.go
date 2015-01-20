@@ -16,11 +16,7 @@ import (
 	"github.com/flynn/flynn/router/types"
 )
 
-var httpClient = &http.Client{
-	Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{ServerName: "example.com"},
-	},
-}
+var httpClient = newHTTPClient("example.com")
 
 // borrowed from net/http/httptest/server.go
 // localhostCert is a PEM-encoded TLS cert with SAN IPs
@@ -50,12 +46,6 @@ xQIhAMM0/bYtVbzW+PPjqAev3TKhMyWkY3t9Qvw5OtgmBQ+PAiEA8RGk9OvMxBbR
 oD+LQmyOKcahAiB05Btab2QQyQfwpsWOpP5GShCwefoj+CGgfr7kWRJdLQIgTMZe
 ++SKD8ascROyDnZ0Td8wbrFnO0YRPEkwlhn6h0U=
 -----END RSA PRIVATE KEY-----`)
-
-func init() {
-	pool := x509.NewCertPool()
-	pool.AppendCertsFromPEM(localhostCert)
-	httpClient.Transport.(*http.Transport).TLSClientConfig.RootCAs = pool
-}
 
 func httpTestHandler(id string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -90,6 +80,17 @@ func newHTTPListenerClients(t etcdrunner.TestingT, etcd EtcdClient, discoverd di
 		t.Fatal(err)
 	}
 	return l, discoverd
+}
+
+func newHTTPClient(serverName string) *http.Client {
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(localhostCert)
+
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{ServerName: serverName, RootCAs: pool},
+		},
+	}
 }
 
 func newHTTPListener(t etcdrunner.TestingT) (*httpListener, discoverdClient) {
@@ -175,7 +176,7 @@ func assertGetCookie(c *C, url, host, expected string, cookie *http.Cookie) *htt
 	if cookie != nil {
 		req.AddCookie(cookie)
 	}
-	res, err := httpClient.Do(req)
+	res, err := newHTTPClient(host).Do(req)
 	c.Assert(err, IsNil)
 	c.Assert(res.StatusCode, Equals, 200)
 	data, err := ioutil.ReadAll(res.Body)
@@ -450,8 +451,10 @@ func (s *S) TestRequestURIEscaping(c *C) {
 }
 
 func (s *S) TestDefaultServerKeypair(c *C) {
-	srv := httptest.NewServer(httpTestHandler("1"))
-	defer srv.Close()
+	srv1 := httptest.NewServer(httpTestHandler("1"))
+	srv2 := httptest.NewServer(httpTestHandler("2"))
+	defer srv1.Close()
+	defer srv2.Close()
 
 	l, discoverd := newHTTPListener(c)
 	defer l.Close()
@@ -460,9 +463,15 @@ func (s *S) TestDefaultServerKeypair(c *C) {
 		Domain:  "example.com",
 		Service: "example-com",
 	}).ToRoute())
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "foo.example.com",
+		Service: "foo-example-com",
+	}).ToRoute())
 
-	discoverdRegisterHTTPService(c, l, "example-com", srv.Listener.Addr().String())
+	discoverdRegisterHTTPService(c, l, "example-com", srv1.Listener.Addr().String())
+	discoverdRegisterHTTPService(c, l, "foo-example-com", srv2.Listener.Addr().String())
 	defer discoverd.UnregisterAll()
 
 	assertGet(c, "https://"+l.TLSAddr, "example.com", "1")
+	assertGet(c, "https://"+l.TLSAddr, "foo.example.com", "2")
 }
