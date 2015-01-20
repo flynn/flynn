@@ -341,12 +341,22 @@ func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 	}
 }
 
+const hdrUseStickySessions = "Flynn-Use-Sticky-Sessions"
+
 func (s *HTTPListener) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r := s.findRouteForHost(req.Host)
 	if r == nil {
 		failw(w, 404, "Not Found")
 		return
 	}
+
+	// TODO(bgentry): find a better way to access this setting in the service
+	// where it's needed.
+	stickyValue := "false"
+	if r.Sticky {
+		stickyValue = "true"
+	}
+	req.Header.Set(hdrUseStickySessions, stickyValue)
 
 	r.service.ServeHTTP(w, req)
 }
@@ -377,6 +387,61 @@ func (s *httpService) pickBackend() string {
 	return addrs[random.Math.Intn(len(addrs))]
 }
 
+const stickyCookie = "_backend"
+
+func (s *httpService) pickBackendSticky(req *http.Request) (string, *http.Cookie) {
+	cookie, err := req.Cookie(stickyCookie)
+	if err != nil {
+		return s.pickNewBackendSticky()
+	}
+
+	data, err := base64.StdEncoding.DecodeString(cookie.Value)
+	if err != nil {
+		return s.pickNewBackendSticky()
+	}
+	var nonce [24]byte
+	if len(data) < len(nonce) {
+		return s.pickNewBackendSticky()
+	}
+	copy(nonce[:], data)
+	res, ok := secretbox.Open(nil, data[len(nonce):], &nonce, s.cookieKey)
+	if !ok {
+		return s.pickNewBackendSticky()
+	}
+
+	addr := string(res)
+	ok = false
+	for _, a := range s.ss.Addrs() {
+		if a == addr {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return s.pickNewBackendSticky()
+	}
+
+	return addr, nil
+}
+
+func (s *httpService) pickNewBackendSticky() (string, *http.Cookie) {
+	backend := s.pickBackend()
+	if backend == "" {
+		return "", nil
+	}
+
+	var nonce [24]byte
+	_, err := io.ReadFull(rand.Reader, nonce[:])
+	if err != nil {
+		panic(err)
+	}
+	out := make([]byte, len(nonce), len(nonce)+len(backend)+secretbox.Overhead)
+	copy(out, nonce[:])
+	out = secretbox.Seal(out, []byte(backend), &nonce, s.cookieKey)
+
+	return backend, &http.Cookie{Name: stickyCookie, Value: base64.StdEncoding.EncodeToString(out), Path: "/"}
+}
+
 func (s *httpService) getBackend() *httputil.ClientConn {
 	backend, _ := s.connectBackend()
 	return backend
@@ -398,8 +463,6 @@ func (s *httpService) connectBackend() (*httputil.ClientConn, string) {
 	// TODO: log no backends found error
 	return nil, ""
 }
-
-const stickyCookie = "_backend"
 
 func (s *httpService) getNewBackendSticky() (*httputil.ClientConn, *http.Cookie) {
 	backend, addr := s.connectBackend()
@@ -557,9 +620,19 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
 	req.Header.Set("X-Request-Id", random.UUID())
 
+	var (
+		backend      string
+		stickyCookie *http.Cookie
+	)
 	// TODO(bgentry): retry multiple backends until we get a conn, use custom
 	// net.Dial func to return matchable error when no conn was made.
-	backend := s.pickBackend()
+	if req.Header.Get(hdrUseStickySessions) == "true" {
+		// TODO(bgentry): switch to better way to check sticky setting
+		req.Header.Del(hdrUseStickySessions)
+		backend, stickyCookie = s.pickBackendSticky(req)
+	} else {
+		backend = s.pickBackend()
+	}
 
 	if backend == "" {
 		log.Println("no backend found")
@@ -612,6 +685,10 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	defer res.Body.Close()
+
+	if stickyCookie != nil {
+		res.Header.Add("Set-Cookie", stickyCookie.String())
+	}
 
 	for _, h := range hopHeaders {
 		res.Header.Del(h)
