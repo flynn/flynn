@@ -78,21 +78,49 @@ func (a *cliTestApp) sh(cmd string) *CmdResult {
 	return a.flynn("run", "sh", "-c", cmd)
 }
 
-func (s *CLISuite) TestApp(t *c.C) {
+func testApp(s *CLISuite, t *c.C, remote string) {
 	app := s.newGitRepo(t, "")
 	name := random.String(30)
-	flynnRemote := fmt.Sprintf("flynn\tssh://git@%s/%s.git (push)", s.clusterConf(t).GitHost, name)
+	flynnRemote := fmt.Sprintf("%s\tssh://git@%s/%s.git (push)", remote, s.clusterConf(t).GitHost, name)
 
-	t.Assert(app.flynn("create", name), Outputs, fmt.Sprintf("Created %s\n", name))
+	if remote == "flynn" {
+		t.Assert(app.flynn("create", name), Outputs, fmt.Sprintf("Created %s\n", name))
+	} else {
+		t.Assert(app.flynn("create", "-r", remote, name), Outputs, fmt.Sprintf("Created %s\n", name))
+	}
 	t.Assert(app.flynn("apps"), OutputContains, name)
-	t.Assert(app.git("remote", "-v"), OutputContains, flynnRemote)
+	if remote == "" {
+		t.Assert(app.git("remote", "-v"), c.Not(OutputContains), flynnRemote)
+	} else {
+		t.Assert(app.git("remote", "-v"), OutputContains, flynnRemote)
+	}
 
 	// make sure flynn components are listed
 	t.Assert(app.flynn("apps"), OutputContains, "router")
 
 	// flynn delete
-	t.Assert(app.flynn("delete", "--yes"), Succeeds)
+	if remote == "flynn" {
+		t.Assert(app.flynn("delete", "--yes"), Succeeds)
+	} else {
+		if remote == "" {
+			t.Assert(app.flynn("-a", name, "delete", "--yes", "-r", remote), Succeeds)
+		} else {
+			t.Assert(app.flynn("delete", "--yes", "-r", remote), Succeeds)
+		}
+	}
 	t.Assert(app.git("remote", "-v"), c.Not(OutputContains), flynnRemote)
+}
+
+func (s *CLISuite) TestApp(t *c.C) {
+	testApp(s, t, "flynn")
+}
+
+func (s *CLISuite) TestAppWithCustomRemote(t *c.C) {
+	testApp(s, t, random.String(8))
+}
+
+func (s *CLISuite) TestAppWithNoRemote(t *c.C) {
+	testApp(s, t, "")
 }
 
 // TODO: share with cli/key.go

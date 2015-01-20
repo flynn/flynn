@@ -12,7 +12,7 @@ import (
 
 func init() {
 	register("create", runCreate, `
-usage: flynn create [<name>]
+usage: flynn create [-r <remote>] [<name>]
 
 Create an application in Flynn.
 
@@ -21,6 +21,10 @@ If a name is not provided, a random name will be generated.
 If run from a git repository, a 'flynn' remote will be created or replaced that
 allows deploying the application via git.
 
+Options:
+	-r, --remote <remote>  Name of git remote to create, empty string for none. [default: flynn]
+	-y, --yes              Skip the confirmation prompt if the git remote already exists.
+
 Examples:
 
 	$ flynn create
@@ -28,7 +32,7 @@ Examples:
 `)
 
 	register("delete", runDelete, `
-usage: flynn delete [-y]
+usage: flynn delete [-y] [-r <remote>]
 
 Delete an app.
 
@@ -36,7 +40,8 @@ If run from a git repository with a 'flynn' remote for the app, it will be
 removed.
 
 Options:
-	-y, --yes  Skip the confirmation prompt.
+	-r, --remote <remote>  Name of git remote to delete, empty string for none. [default: flynn]
+	-y, --yes              Skip the confirmation prompt.
 
 Examples:
 
@@ -61,37 +66,67 @@ Examples:
 `)
 }
 
+func promptYesNo(msg string) (result bool) {
+	fmt.Print(msg)
+	fmt.Print(" (yes/no): ")
+	for {
+		var answer string
+		fmt.Scanln(&answer)
+		switch answer {
+		case "y", "yes":
+			return true
+		case "n", "no":
+			return false
+		default:
+			fmt.Print("Please type 'yes' or 'no': ")
+		}
+	}
+}
+
 func runCreate(args *docopt.Args, client *controller.Client) error {
 	app := &ct.App{}
 	app.Name = args.String["<name>"]
+	remote := args.String["--remote"]
 
+	if !args.Bool["--yes"] {
+		// Test if remote name exists and prompt user
+		remotes, err := gitRemoteNames()
+		if err != nil {
+			return err
+		}
+
+		for _, r := range remotes {
+			if r == remote {
+				fmt.Println("There is already a git remote called", remote)
+				if !promptYesNo("Are you sure you want to replace it?") {
+					log.Println("The app was not created. Please, declare the desired local git remote name with --remote flag.")
+					return nil
+				}
+			}
+		}
+	}
+
+	// Create the app
 	if err := client.CreateApp(app); err != nil {
 		return err
 	}
 
-	exec.Command("git", "remote", "remove", "flynn").Run()
-	exec.Command("git", "remote", "add", "flynn", gitURLPre(clusterConf.GitHost)+app.Name+gitURLSuf).Run()
+	// Register git remote
+	if remote != "" {
+		exec.Command("git", "remote", "remove", remote).Run()
+		exec.Command("git", "remote", "add", "--", remote, gitURLPre(clusterConf.GitHost)+app.Name+gitURLSuf).Run()
+	}
 	log.Printf("Created %s", app.Name)
 	return nil
 }
 
 func runDelete(args *docopt.Args, client *controller.Client) error {
 	appName := mustApp()
+	remote := args.String["--remote"]
 
 	if !args.Bool["--yes"] {
-		fmt.Printf("Are you sure you want to delete the app %q? (yes/no): ", appName)
-	loop:
-		for {
-			var answer string
-			fmt.Scanln(&answer)
-			switch answer {
-			case "y", "yes":
-				break loop
-			case "n", "no":
-				return nil
-			default:
-				fmt.Print("Please type 'yes' or 'no': ")
-			}
+		if !promptYesNo(fmt.Sprintf("Are you sure you want to delete the app %q?", appName)) {
+			return nil
 		}
 	}
 
@@ -99,9 +134,11 @@ func runDelete(args *docopt.Args, client *controller.Client) error {
 		return err
 	}
 
-	if remotes, err := gitRemotes(); err == nil {
-		if app, ok := remotes["flynn"]; ok && app.Name == appName {
-			exec.Command("git", "remote", "remove", "flynn").Run()
+	if remote != "" {
+		if remotes, err := gitRemotes(); err == nil {
+			if app, ok := remotes[remote]; ok && app.Name == appName {
+				exec.Command("git", "remote", "remove", remote).Run()
+			}
 		}
 	}
 
