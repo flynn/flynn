@@ -49,7 +49,6 @@ install:
 
 script:
   - go test -race -cover ./...
-  - go test -race ./router -fake=false
 
 notifications:
   irc:
