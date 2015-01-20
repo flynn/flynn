@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/md5"
 	"crypto/rand"
 	"crypto/tls"
@@ -9,11 +8,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"strconv"
 	"strings"
 	"sync"
@@ -248,6 +245,8 @@ func (s *HTTPListener) listenAndServe(started chan<- error) {
 	_ = server.Serve(s.listener)
 }
 
+var errMissingTLS = errors.New("router: route not found or TLS not configured")
+
 func (s *HTTPListener) listenAndServeTLS(started chan<- error) {
 	_, port, err := net.SplitHostPort(s.TLSAddr)
 	if err != nil {
@@ -303,50 +302,10 @@ func (s *HTTPListener) findRouteForHost(host string) *httpRoute {
 	return nil
 }
 
-func fail(sc *httputil.ServerConn, req *http.Request, code int, msg string) {
-	resp := &http.Response{
-		StatusCode:    code,
-		ProtoMajor:    1,
-		ProtoMinor:    0,
-		Request:       req,
-		Body:          ioutil.NopCloser(bytes.NewBufferString(msg)),
-		ContentLength: int64(len(msg)),
-	}
-	sc.Write(req, resp)
-}
-
-func failw(w http.ResponseWriter, code int, msg string) {
+func fail(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(msg)))
 	w.WriteHeader(code)
 	w.Write([]byte(msg))
-}
-
-var errMissingTLS = errors.New("router: route not found or TLS not configured")
-
-func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
-	defer conn.Close() // TODO(benburkert): for TLS, check that closing this conn sends the TLS "close notify"
-
-	sc := httputil.NewServerConn(conn, nil)
-	for {
-		req, err := sc.Read()
-		if err != nil {
-			if err != io.EOF && err != httputil.ErrPersistEOF && err != errMissingTLS {
-				log.Println("client read err:", err)
-			}
-			return
-		}
-
-		r := s.findRouteForHost(req.Host)
-		if r == nil {
-			fail(sc, req, 404, "Not Found")
-			continue
-		}
-
-		req.RemoteAddr = conn.RemoteAddr().String()
-		if r.service.handle(req, sc, isTLS, r.Sticky) {
-			return
-		}
-	}
 }
 
 const hdrUseStickySessions = "Flynn-Use-Sticky-Sessions"
@@ -354,7 +313,7 @@ const hdrUseStickySessions = "Flynn-Use-Sticky-Sessions"
 func (s *HTTPListener) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r := s.findRouteForHost(req.Host)
 	if r == nil {
-		failw(w, 404, "Not Found")
+		fail(w, 404, "Not Found")
 		return
 	}
 
@@ -450,180 +409,6 @@ func (s *httpService) pickNewBackendSticky() (string, *http.Cookie) {
 	return backend, &http.Cookie{Name: stickyCookie, Value: base64.StdEncoding.EncodeToString(out), Path: "/"}
 }
 
-func (s *httpService) getBackend() *httputil.ClientConn {
-	backend, _ := s.connectBackend()
-	return backend
-}
-
-func (s *httpService) connectBackend() (*httputil.ClientConn, string) {
-	for _, addr := range shuffle(s.ss.Addrs()) {
-		// TODO: set connection timeout
-		backend, err := net.Dial("tcp", addr)
-		if err != nil {
-			// TODO: log error
-			// TODO: limit number of backends tried
-			// TODO: temporarily quarantine failing backends
-			log.Println("backend error", err)
-			continue
-		}
-		return httputil.NewClientConn(backend, nil), addr
-	}
-	// TODO: log no backends found error
-	return nil, ""
-}
-
-func (s *httpService) getNewBackendSticky() (*httputil.ClientConn, *http.Cookie) {
-	backend, addr := s.connectBackend()
-	if backend == nil {
-		return nil, nil
-	}
-
-	var nonce [24]byte
-	_, err := io.ReadFull(rand.Reader, nonce[:])
-	if err != nil {
-		panic(err)
-	}
-	out := make([]byte, len(nonce), len(nonce)+len(addr)+secretbox.Overhead)
-	copy(out, nonce[:])
-	out = secretbox.Seal(out, []byte(addr), &nonce, s.cookieKey)
-
-	return backend, &http.Cookie{Name: stickyCookie, Value: base64.StdEncoding.EncodeToString(out), Path: "/"}
-}
-
-func (s *httpService) getBackendSticky(req *http.Request) (*httputil.ClientConn, *http.Cookie) {
-	cookie, err := req.Cookie(stickyCookie)
-	if err != nil {
-		return s.getNewBackendSticky()
-	}
-
-	data, err := base64.StdEncoding.DecodeString(cookie.Value)
-	if err != nil {
-		return s.getNewBackendSticky()
-	}
-	var nonce [24]byte
-	if len(data) < len(nonce) {
-		return s.getNewBackendSticky()
-	}
-	copy(nonce[:], data)
-	res, ok := secretbox.Open(nil, data[len(nonce):], &nonce, s.cookieKey)
-	if !ok {
-		return s.getNewBackendSticky()
-	}
-
-	addr := string(res)
-	ok = false
-	for _, a := range s.ss.Addrs() {
-		if a == addr {
-			ok = true
-			break
-		}
-	}
-	if !ok {
-		return s.getNewBackendSticky()
-	}
-
-	backend, err := net.Dial("tcp", string(addr))
-	if err != nil {
-		return s.getNewBackendSticky()
-	}
-	return httputil.NewClientConn(backend, nil), nil
-}
-
-func (s *httpService) handle(req *http.Request, sc *httputil.ServerConn, isTLS, sticky bool) (done bool) {
-	req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
-	req.Header.Set("X-Request-Id", random.UUID())
-
-	var backend *httputil.ClientConn
-	var stickyCookie *http.Cookie
-	if sticky {
-		backend, stickyCookie = s.getBackendSticky(req)
-	} else {
-		backend = s.getBackend()
-	}
-	if backend == nil {
-		log.Println("no backend found")
-		fail(sc, req, 503, "Service Unavailable")
-		return
-	}
-	defer backend.Close()
-
-	req.Proto = "HTTP/1.1"
-	req.ProtoMajor = 1
-	req.ProtoMinor = 1
-	delete(req.Header, "Te")
-	delete(req.Header, "Transfer-Encoding")
-
-	if clientIP, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
-		// If we aren't the first proxy retain prior
-		// X-Forwarded-For information as a comma+space
-		// separated list and fold multiple headers into one.
-		if prior, ok := req.Header["X-Forwarded-For"]; ok {
-			clientIP = strings.Join(prior, ", ") + ", " + clientIP
-		}
-		req.Header.Set("X-Forwarded-For", clientIP)
-	}
-	if isTLS {
-		req.Header.Set("X-Forwarded-Proto", "https")
-	} else {
-		req.Header.Set("X-Forwarded-Proto", "http")
-	}
-	// TODO: Set X-Forwarded-Port
-
-	// Pass the Request-URI verbatim without any modifications
-	req.URL.Opaque = strings.Split(strings.TrimPrefix(req.RequestURI, req.URL.Scheme+":"), "?")[0]
-
-	if err := backend.Write(req); err != nil {
-		log.Println("server write err:", err)
-		// TODO: return error to client here
-		return true
-	}
-	res, err := backend.Read(req)
-	if res != nil {
-		if stickyCookie != nil {
-			res.Header.Add("Set-Cookie", stickyCookie.String())
-		}
-		if res.StatusCode == http.StatusSwitchingProtocols {
-			res.Body = nil
-		}
-		if err := sc.Write(req, res); err != nil {
-			if err != io.EOF && err != httputil.ErrPersistEOF {
-				log.Println("client write err:", err)
-				// TODO: log error
-			}
-			return true
-		}
-	}
-	if err != nil {
-		if err != io.EOF && err != httputil.ErrPersistEOF {
-			log.Println("server read err:", err)
-			// TODO: log error
-			fail(sc, req, 502, "Bad Gateway")
-		}
-		return
-	}
-
-	// TODO: Proxy HTTP CONNECT? (example: Go RPC over HTTP)
-	if res.StatusCode == http.StatusSwitchingProtocols {
-		serverW, serverR := backend.Hijack()
-		clientW, clientR := sc.Hijack()
-		defer serverW.Close()
-		done := make(chan struct{})
-		go func() {
-			serverR.WriteTo(clientW)
-			if cw, ok := clientW.(writeCloser); ok {
-				cw.CloseWrite()
-			}
-			close(done)
-		}()
-		clientR.WriteTo(serverW)
-		serverW.(writeCloser).CloseWrite()
-		<-done
-		return true
-	}
-
-	return
-}
-
 func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
 	req.Header.Set("X-Request-Id", random.UUID())
@@ -644,7 +429,7 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	if backend == "" {
 		log.Println("no backend found")
-		failw(w, 503, "Service Unavailable")
+		fail(w, 503, "Service Unavailable")
 		return
 	}
 
@@ -715,7 +500,7 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 func (s *httpService) forwardAndProxyTCP(w http.ResponseWriter, req *http.Request) {
 	upconn, err := net.Dial("tcp", req.URL.Host)
 	if err != nil {
-		failw(w, 503, http.StatusText(503))
+		fail(w, 503, http.StatusText(503))
 		return
 	}
 	defer upconn.Close()
@@ -723,13 +508,13 @@ func (s *httpService) forwardAndProxyTCP(w http.ResponseWriter, req *http.Reques
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		log.Println("not a hijacker")
-		failw(w, 500, http.StatusText(500))
+		fail(w, 500, http.StatusText(500))
 		return
 	}
 	downconn, _, err := hj.Hijack()
 	if err != nil {
 		log.Println("hijack failed:", err)
-		failw(w, 500, http.StatusText(500))
+		fail(w, 500, http.StatusText(500))
 		return
 	}
 	defer downconn.Close()
