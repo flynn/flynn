@@ -5,7 +5,6 @@ import (
 	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/pkg/stream"
 )
 
 type MonitorSuite struct{}
@@ -22,14 +21,18 @@ func (MonitorSuite) TestMonitor(c *C) {
 		event MonitorStatus
 	}
 
-	var stream stream.Stream
-	checker := func(steps []step) (chan MonitorEvent, Check) {
+	checker := func(steps []step, threshold int) (chan MonitorEvent, chan MonitorEvent) {
 		var i int
-		events := make(chan MonitorEvent, 1)
-		return events, CheckFunc(func() error {
+		done := make(chan struct{})
+		expectedEvents := make(chan MonitorEvent, 1)
+		actualEvents := make(chan MonitorEvent)
+
+		check := CheckFunc(func() error {
 			defer func() {
 				if i >= len(steps) {
-					stream.Close()
+					done <- struct{}{}
+					// ensure the stream has been closed before returning
+					<-done
 				}
 			}()
 
@@ -39,7 +42,7 @@ func (MonitorSuite) TestMonitor(c *C) {
 			if !step.up {
 				err := errors.New("check failure")
 				if step.event > 0 {
-					events <- MonitorEvent{
+					expectedEvents <- MonitorEvent{
 						Status: step.event,
 						Err:    err,
 					}
@@ -47,10 +50,23 @@ func (MonitorSuite) TestMonitor(c *C) {
 				return err
 			}
 			if step.event > 0 {
-				events <- MonitorEvent{Status: step.event}
+				expectedEvents <- MonitorEvent{Status: step.event}
 			}
 			return nil
 		})
+
+		stream := Monitor(MonitorConfig{
+			Threshold:     threshold,
+			StartInterval: time.Nanosecond,
+			Interval:      time.Nanosecond,
+		}, check, actualEvents)
+		go func() {
+			<-done
+			stream.Close()
+			done <- struct{}{}
+		}()
+
+		return expectedEvents, actualEvents
 	}
 
 	for _, t := range []struct {
@@ -141,13 +157,7 @@ func (MonitorSuite) TestMonitor(c *C) {
 	} {
 		c.Log(t.name)
 
-		expectedEvents, check := checker(t.steps)
-		actualEvents := make(chan MonitorEvent)
-		stream = Monitor(MonitorConfig{
-			Threshold:     t.threshold,
-			StartInterval: time.Nanosecond,
-			Interval:      time.Nanosecond,
-		}, check, actualEvents)
+		expectedEvents, actualEvents := checker(t.steps, t.threshold)
 
 		for actual := range actualEvents {
 			select {
