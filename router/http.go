@@ -47,31 +47,11 @@ type HTTPListener struct {
 	tlsListener net.Listener
 	closed      bool
 	cookieKey   *[32]byte
+	keypair     tls.Certificate
 }
 
 type DiscoverdClient interface {
 	NewServiceSet(string) (discoverd.ServiceSet, error)
-}
-
-func NewHTTPListener(addr, tlsAddr string, cookieKey *[32]byte, ds DataStore, discoverdc DiscoverdClient) *HTTPListener {
-	l := &HTTPListener{
-		Addr:      addr,
-		TLSAddr:   tlsAddr,
-		ds:        ds,
-		discoverd: discoverdc,
-		routes:    make(map[string]*httpRoute),
-		domains:   make(map[string]*httpRoute),
-		services:  make(map[string]*httpService),
-		wm:        NewWatchManager(),
-		cookieKey: cookieKey,
-	}
-	if cookieKey == nil {
-		var k [32]byte
-		l.cookieKey = &k
-	}
-	l.Watcher = l.wm
-	l.DataStoreReader = l.ds
-	return l
 }
 
 func (s *HTTPListener) Close() error {
@@ -88,6 +68,27 @@ func (s *HTTPListener) Close() error {
 }
 
 func (s *HTTPListener) Start() error {
+	if s.Watcher != nil {
+		return errors.New("router: http listener already started")
+	}
+	if s.wm == nil {
+		s.wm = NewWatchManager()
+	}
+	s.Watcher = s.wm
+
+	if s.ds == nil {
+		return errors.New("router: http listener missing data store")
+	}
+	s.DataStoreReader = s.ds
+
+	s.routes = make(map[string]*httpRoute)
+	s.domains = make(map[string]*httpRoute)
+	s.services = make(map[string]*httpService)
+
+	if s.cookieKey == nil {
+		s.cookieKey = &[32]byte{}
+	}
+
 	started := make(chan error)
 
 	go s.ds.Sync(&httpSyncHandler{l: s}, started)
@@ -288,7 +289,7 @@ func fail(sc *httputil.ServerConn, req *http.Request, code int, msg string) {
 var errMissingTLS = errors.New("router: route not found or TLS not configured")
 
 func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
-	defer conn.Close()
+	defer conn.Close() // TODO(benburkert): for TLS, check that closing this conn sends the TLS "close notify"
 
 	var r *httpRoute
 
@@ -298,14 +299,11 @@ func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 			if r == nil {
 				return nil, errMissingTLS
 			}
-			if r.keypair == nil {
-				return nil, errMissingTLS
-			}
 			return r.keypair, nil
 		}
 		conn = tls.Server(conn, tlsconfig.SecureCiphers(&tls.Config{
 			GetCertificate: certForHandshake,
-			Certificates:   []tls.Certificate{{}},
+			Certificates:   []tls.Certificate{s.keypair},
 		}))
 	}
 

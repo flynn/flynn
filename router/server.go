@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/base64"
 	"flag"
 	"fmt"
@@ -67,8 +68,25 @@ func main() {
 	tcpIP := flag.String("tcpip", "", "tcp router listen ip")
 	tcpRangeStart := flag.Int("tcp-range-start", 3000, "tcp port range start")
 	tcpRangeEnd := flag.Int("tcp-range-end", 3500, "tcp port range end")
+	certFile := flag.String("tlscert", "", "TLS (SSL) cert file in pem format")
+	keyFile := flag.String("tlskey", "", "TLS (SSL) key file in pem format")
 	apiAddr := flag.String("apiaddr", ":"+apiPort, "api listen address")
 	flag.Parse()
+
+	keypair := tls.Certificate{}
+	var err error
+	if *certFile != "" {
+		if keypair, err = tls.LoadX509KeyPair(*certFile, *keyFile); err != nil {
+			log.Fatal(err)
+		}
+	} else if tlsCert := os.Getenv("TLSCERT"); tlsCert != "" {
+		if tlsKey := os.Getenv("TLSKEY"); tlsKey != "" {
+			os.Setenv("TLSKEY", fmt.Sprintf("md5^(%s)", md5sum(tlsKey)))
+			if keypair, err = tls.X509KeyPair([]byte(tlsCert), []byte(tlsKey)); err != nil {
+				log.Fatal(err)
+			}
+		}
+	}
 
 	// Will use DISCOVERD environment variable
 	d, err := discoverd.NewClient()
@@ -106,9 +124,23 @@ func main() {
 	if prefix == "" {
 		prefix = "/router"
 	}
-	var r Router
-	r.TCP = NewTCPListener(*tcpIP, *tcpRangeStart, *tcpRangeEnd, NewEtcdDataStore(etcdc, path.Join(prefix, "tcp/")), d)
-	r.HTTP = NewHTTPListener(*httpAddr, *httpsAddr, cookieKey, NewEtcdDataStore(etcdc, path.Join(prefix, "http/")), d)
+	r := Router{
+		TCP: &TCPListener{
+			IP:        *tcpIP,
+			startPort: *tcpRangeStart,
+			endPort:   *tcpRangeEnd,
+			ds:        NewEtcdDataStore(etcdc, path.Join(prefix, "tcp/")),
+			discoverd: d,
+		},
+		HTTP: &HTTPListener{
+			Addr:      *httpAddr,
+			TLSAddr:   *httpsAddr,
+			cookieKey: cookieKey,
+			keypair:   keypair,
+			ds:        NewEtcdDataStore(etcdc, path.Join(prefix, "http/")),
+			discoverd: d,
+		},
+	}
 
 	go func() { log.Fatal(r.ListenAndServe(nil)) }()
 	listener, err := reuseport.NewReusablePortListener("tcp4", *apiAddr)
