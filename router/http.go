@@ -189,6 +189,9 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 			return err
 		}
 		service = &httpService{name: r.Service, ss: ss, cookieKey: h.l.cookieKey}
+		service.rp = &httputil.ReverseProxy{
+			Director: service.direct,
+		}
 		h.l.services[r.Service] = service
 	}
 	service.refs++
@@ -367,6 +370,30 @@ type httpService struct {
 	refs int
 
 	cookieKey *[32]byte
+	rp        *httputil.ReverseProxy
+}
+
+func (s *httpService) direct(req *http.Request) {
+	req.URL.Scheme = "http"
+
+	// TODO(bgentry): handle sticky sessions
+	backend := s.pickBackend()
+
+	if backend == "" {
+		log.Println("no backend found")
+		// TODO(bgentry): return a proper 503 situation this situation
+		// failw(w, 503, "Service Unavailable")
+		return
+	}
+	req.URL.Host = backend
+}
+
+func (s *httpService) pickBackend() string {
+	addrs := s.ss.Addrs()
+	if len(addrs) == 0 {
+		return ""
+	}
+	return addrs[random.Math.Intn(len(addrs))]
 }
 
 func (s *httpService) getBackend() *httputil.ClientConn {
@@ -550,6 +577,7 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	req.Header.Set("X-Request-Id", random.UUID())
 
 	// TODO(bgentry): implement rest of this from handle above
+	s.rp.ServeHTTP(w, req)
 }
 
 type writeCloser interface {
