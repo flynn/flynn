@@ -73,7 +73,13 @@ func newHTTPListenerClients(t etcdrunner.TestingT, etcd EtcdClient, discoverd di
 		t.Fatal(err)
 	}
 	l := &httpListener{
-		NewHTTPListener("127.0.0.1:0", "127.0.0.1:0", nil, pair, NewEtcdDataStore(etcd, "/router/http/"), discoverd),
+		&HTTPListener{
+			Addr:      "127.0.0.1:0",
+			TLSAddr:   "127.0.0.1:0",
+			keypair:   pair,
+			ds:        NewEtcdDataStore(etcd, "/router/http/"),
+			discoverd: discoverd,
+		},
 		cleanup,
 	}
 	if err := l.Start(); err != nil {

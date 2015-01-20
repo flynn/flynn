@@ -54,28 +54,6 @@ type DiscoverdClient interface {
 	NewServiceSet(string) (discoverd.ServiceSet, error)
 }
 
-func NewHTTPListener(addr, tlsAddr string, cookieKey *[32]byte, keypair tls.Certificate, ds DataStore, discoverdc DiscoverdClient) *HTTPListener {
-	l := &HTTPListener{
-		Addr:      addr,
-		TLSAddr:   tlsAddr,
-		ds:        ds,
-		discoverd: discoverdc,
-		routes:    make(map[string]*httpRoute),
-		domains:   make(map[string]*httpRoute),
-		services:  make(map[string]*httpService),
-		wm:        NewWatchManager(),
-		cookieKey: cookieKey,
-		keypair:   keypair,
-	}
-	if cookieKey == nil {
-		var k [32]byte
-		l.cookieKey = &k
-	}
-	l.Watcher = l.wm
-	l.DataStoreReader = l.ds
-	return l
-}
-
 func (s *HTTPListener) Close() error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
@@ -90,6 +68,27 @@ func (s *HTTPListener) Close() error {
 }
 
 func (s *HTTPListener) Start() error {
+	if s.Watcher != nil {
+		return errors.New("router: http listener already started")
+	}
+	if s.wm == nil {
+		s.wm = NewWatchManager()
+	}
+	s.Watcher = s.wm
+
+	if s.ds == nil {
+		return errors.New("router: http listener missing data store")
+	}
+	s.DataStoreReader = s.ds
+
+	s.routes = make(map[string]*httpRoute)
+	s.domains = make(map[string]*httpRoute)
+	s.services = make(map[string]*httpService)
+
+	if s.cookieKey == nil {
+		s.cookieKey = &[32]byte{}
+	}
+
 	started := make(chan error)
 
 	go s.ds.Sync(&httpSyncHandler{l: s}, started)

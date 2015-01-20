@@ -14,24 +14,6 @@ import (
 	"github.com/flynn/flynn/router/types"
 )
 
-func NewTCPListener(ip string, startPort, endPort int, ds DataStore, dc DiscoverdClient) *TCPListener {
-	l := &TCPListener{
-		IP:        ip,
-		ds:        ds,
-		wm:        NewWatchManager(),
-		discoverd: dc,
-		services:  make(map[string]*tcpService),
-		routes:    make(map[string]*tcpRoute),
-		ports:     make(map[int]*tcpRoute),
-		listeners: make(map[int]net.Listener),
-		startPort: startPort,
-		endPort:   endPort,
-	}
-	l.Watcher = l.wm
-	l.DataStoreReader = l.ds
-	return l
-}
-
 type TCPListener struct {
 	Watcher
 	DataStoreReader
@@ -108,6 +90,24 @@ func (l *TCPListener) RemoveRoute(id string) error {
 }
 
 func (l *TCPListener) Start() error {
+	if l.Watcher != nil {
+		return errors.New("router: tcp listener already started")
+	}
+	if l.wm == nil {
+		l.wm = NewWatchManager()
+	}
+	l.Watcher = l.wm
+
+	if l.ds == nil {
+		return errors.New("router: tcp listener missing data store")
+	}
+	l.DataStoreReader = l.ds
+
+	l.services = make(map[string]*tcpService)
+	l.routes = make(map[string]*tcpRoute)
+	l.ports = make(map[int]*tcpRoute)
+	l.listeners = make(map[int]net.Listener)
+
 	started := make(chan error)
 
 	if l.startPort != 0 && l.endPort != 0 {

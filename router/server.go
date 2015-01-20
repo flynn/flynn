@@ -117,9 +117,23 @@ func main() {
 	if prefix == "" {
 		prefix = "/router"
 	}
-	var r Router
-	r.TCP = NewTCPListener(*tcpIP, *tcpRangeStart, *tcpRangeEnd, NewEtcdDataStore(etcdc, path.Join(prefix, "tcp/")), d)
-	r.HTTP = NewHTTPListener(*httpAddr, *httpsAddr, cookieKey, keypair, NewEtcdDataStore(etcdc, path.Join(prefix, "http/")), d)
+	r := Router{
+		TCP: &TCPListener{
+			IP:        *tcpIP,
+			startPort: *tcpRangeStart,
+			endPort:   *tcpRangeEnd,
+			ds:        NewEtcdDataStore(etcdc, path.Join(prefix, "tcp/")),
+			discoverd: d,
+		},
+		HTTP: &HTTPListener{
+			Addr:      *httpAddr,
+			TLSAddr:   *httpsAddr,
+			cookieKey: cookieKey,
+			keypair:   keypair,
+			ds:        NewEtcdDataStore(etcdc, path.Join(prefix, "http/")),
+			discoverd: d,
+		},
+	}
 
 	go func() { log.Fatal(r.ListenAndServe(nil)) }()
 	listener, err := reuseport.NewReusablePortListener("tcp4", *apiAddr)
