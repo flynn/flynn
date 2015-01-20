@@ -28,7 +28,12 @@ type Backend interface {
 	Attach(*AttachRequest) error
 	Cleanup() error
 	UnmarshalState(map[string]*host.ActiveJob, map[string][]byte, []byte) error
-	ConfigureNetworking(strategy NetworkStrategy, job string) error
+	ConfigureNetworking(strategy NetworkStrategy, job string) (*NetworkInfo, error)
+}
+
+type NetworkInfo struct {
+	BridgeAddr  string
+	Nameservers []string
 }
 
 type JobStateSaver interface {
