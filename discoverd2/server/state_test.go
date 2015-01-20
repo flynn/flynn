@@ -91,6 +91,9 @@ func assertInstanceEqual(c *C, actual, expected *discoverd.Instance) {
 	eInst.Index = 0
 	aInst := *actual
 	aInst.Index = 0
+	// initialize internal cache fields
+	eInst.Host()
+	aInst.Host()
 	c.Assert(aInst, DeepEquals, eInst)
 }
 
@@ -633,6 +636,12 @@ func (StateSuite) TestEventKindJSON(c *C) {
 	err = json.Unmarshal([]byte(`{"kind":"leader"}`), &kind)
 	c.Assert(err, IsNil)
 	c.Assert(kind.Kind, Equals, discoverd.EventKindLeader)
+}
+
+func (StateSuite) TestInstanceHostPort(c *C) {
+	inst := &discoverd.Instance{Addr: "[fe80::bae8:56ff:fe46:243c]:80"}
+	c.Assert(inst.Host(), Equals, "fe80::bae8:56ff:fe46:243c")
+	c.Assert(inst.Port(), Equals, "80")
 }
 
 func md5sum(data string) string {
