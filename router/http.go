@@ -580,6 +580,14 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	outreq.ProtoMinor = 1
 	outreq.Close = false
 
+	// TODO: Proxy HTTP CONNECT? (example: Go RPC over HTTP)
+
+	// Directly bridge `Connection: Upgrade` requests
+	if strings.ToLower(outreq.Header.Get("Connection")) == "upgrade" {
+		s.forwardAndProxyTCP(w, outreq)
+		return
+	}
+
 	// Remove hop-by-hop headers to the backend.  Especially
 	// important is "Connection" because we want a persistent
 	// connection, regardless of what the client sent to us.  This
@@ -617,6 +625,45 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		log.Println("reverse proxy copy err:", err)
 		return
 	}
+}
+
+func (s *httpService) forwardAndProxyTCP(w http.ResponseWriter, req *http.Request) {
+	upconn, err := net.Dial("tcp", req.URL.Host)
+	if err != nil {
+		failw(w, 503, http.StatusText(503))
+		return
+	}
+	defer upconn.Close()
+
+	hj, ok := w.(http.Hijacker)
+	if !ok {
+		log.Println("not a hijacker")
+		failw(w, 500, http.StatusText(500))
+		return
+	}
+	downconn, _, err := hj.Hijack()
+	if err != nil {
+		log.Println("hijack failed:", err)
+		failw(w, 500, http.StatusText(500))
+		return
+	}
+	defer downconn.Close()
+
+	err = req.Write(upconn)
+	if err != nil {
+		log.Println("error copying request to target:", err)
+		// TODO(bgentry): write proper 503 response for downstream
+		return
+	}
+
+	errc := make(chan error, 2)
+	cp := func(dst io.Writer, src io.Reader) {
+		_, err := io.Copy(dst, src)
+		errc <- err
+	}
+	go cp(upconn, downconn)
+	go cp(downconn, upconn)
+	<-errc
 }
 
 func copyHeader(dst, src http.Header) {
