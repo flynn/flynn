@@ -36,38 +36,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var username, password string
-	var follower *follower
 	var leaderProc *exec.Cmd
 	var done <-chan struct{}
-	var leader *discoverd.Service
 
 	if l := set.Leader(); l.Addr == set.SelfAddr() {
 		leaderProc, done = startLeader()
 		goto wait
+	} else {
+		log.Fatal("there is already a leader")
 	}
-
-	for u := range set.Watch(true) {
-		l := set.Leader()
-		if u.Online && u.Addr == l.Addr && u.Attrs["username"] != "" && u.Attrs["password"] != "" {
-			username, password = u.Attrs["username"], u.Attrs["password"]
-		}
-		if leader != nil && l.Addr == leader.Addr {
-			continue
-		}
-		leader = l
-		if leader.Addr == set.SelfAddr() {
-			leaderProc, done = promoteToLeader(follower, username, password)
-			goto wait
-		} else {
-			if follower == nil {
-				follower = startFollower(leader, set)
-			} else {
-				follower = switchLeader(leader, set, follower)
-			}
-		}
-	}
-	// TODO: handle service discovery disconnection
 
 wait:
 	set.Close()
