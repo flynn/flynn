@@ -207,7 +207,7 @@ func (b *etcdBackend) StartSync() error {
 func (b *etcdBackend) instanceEvent(serviceName string, res *etcd.Response) {
 	instanceID := path.Base(res.Node.Key)
 
-	if res.Action == "delete" {
+	if res.Action == "delete" || res.Action == "expire" {
 		b.h.RemoveInstance(serviceName, instanceID)
 	} else {
 		inst := &discoverd.Instance{}
