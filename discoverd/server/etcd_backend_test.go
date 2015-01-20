@@ -3,8 +3,8 @@ package server
 import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
-	"github.com/flynn/flynn/discoverd2/client"
 )
 
 type EtcdSuite struct {

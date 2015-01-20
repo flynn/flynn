@@ -6,7 +6,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/flynn/flynn/discoverd2/client"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/stream"
 )
 

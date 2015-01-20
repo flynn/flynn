@@ -1,6 +1,6 @@
 package server
 
-import "github.com/flynn/flynn/discoverd2/client"
+import "github.com/flynn/flynn/discoverd/client"
 
 type Backend interface {
 	AddService(service string) error

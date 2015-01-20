@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
-	"github.com/flynn/flynn/discoverd2/client"
+	"github.com/flynn/flynn/discoverd/client"
 )
 
 type etcdClient interface {
