@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 )
 
 type EventKind uint
@@ -72,7 +73,8 @@ func (e *Event) String() string {
 	return fmt.Sprintf("[%s] %s %#v", e.Service, e.Kind, e.Instance)
 }
 
-// Instance is a single running instance of a service.
+// Instance is a single running instance of a service. It is immutable after it
+// has been initialized.
 type Instance struct {
 	// ID is unique within the service, and is currently defined as
 	// Hex(MD5(Proto + "-" + Addr)) but this may change in the future.
@@ -94,6 +96,11 @@ type Instance struct {
 	// the instance does not expire, and sort with other indexes in the order of
 	// instance creation.
 	Index uint64 `json:"index,omitempty"`
+
+	// addrOnce is used to initialize host/port
+	addrOnce sync.Once
+	host     string
+	port     string
 }
 
 func (inst *Instance) Equal(other *Instance) bool {
@@ -113,6 +120,22 @@ func (inst *Instance) Valid() error {
 		return fmt.Errorf("discoverd: instance id is incorrect, expected %s", expected)
 	}
 	return nil
+}
+
+func (inst *Instance) Host() string {
+	inst.splitHostPort()
+	return inst.host
+}
+
+func (inst *Instance) Port() string {
+	inst.splitHostPort()
+	return inst.port
+}
+
+func (inst *Instance) splitHostPort() {
+	inst.addrOnce.Do(func() {
+		inst.host, inst.port, _ = net.SplitHostPort(inst.Addr)
+	})
 }
 
 var ErrUnsetProto = errors.New("discoverd: proto must be set")
