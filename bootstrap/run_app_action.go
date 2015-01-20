@@ -83,12 +83,7 @@ func (a *RunAppAction) Run(s *State) error {
 	interpolateRelease(s, a.Release)
 
 	for _, p := range a.Resources {
-		server, err := resource.NewServer(p.URL)
-		if err != nil {
-			return err
-		}
-		res, err := server.Provision(nil)
-		server.Close()
+		res, err := resource.Provision(p.URL, nil)
 		if err != nil {
 			return err
 		}

@@ -87,7 +87,7 @@
     "processes": {
       "web": 1
     },
-    "resources": [{"name":"postgres", "url":"discoverd+http://pg-api/databases"}]
+    "resources": [{"name":"postgres", "url":"http://pg-api.discoverd/databases"}]
   },
   {
     "id": "controller-wait",
@@ -150,7 +150,7 @@
     "processes": {
       "web": 1
     },
-    "resources": [{"name":"postgres", "url":"discoverd+http://pg-api/databases"}]
+    "resources": [{"name":"postgres", "url":"http://pg-api.discoverd/databases"}]
   },
   {
     "id": "router",
