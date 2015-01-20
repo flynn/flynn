@@ -54,6 +54,7 @@ const (
 	CtxKeyComponent CtxKey = "component"
 	CtxKeyReqID            = "req_id"
 	CtxKeyParams           = "params"
+	CtxKeyLogger           = "logger"
 )
 
 type Handle func(context.Context, http.ResponseWriter, *http.Request)
