@@ -40,7 +40,7 @@ func (c *Client) AddServiceAndRegisterInstance(service string, inst *Instance) (
 }
 
 func (c *Client) Register(service, addr string) (Heartbeater, error) {
-	return c.RegisterInstance(service, &Instance{Addr: addr, Proto: "tcp"})
+	return c.RegisterInstance(service, &Instance{Addr: addr})
 }
 
 func (c *Client) RegisterInstance(service string, inst *Instance) (Heartbeater, error) {
@@ -52,6 +52,9 @@ func (c *Client) RegisterInstance(service string, inst *Instance) (Heartbeater, 
 		inst:    inst.Clone(),
 	}
 	h.inst.Addr = expandAddr(h.inst.Addr)
+	if h.inst.Proto == "" {
+		h.inst.Proto = "tcp"
+	}
 	go h.run(firstErr)
 	return h, <-firstErr
 }
