@@ -75,7 +75,7 @@ func main() {
 		discoverd.Unregister("flynn-controller", addr)
 	})
 
-	handler, _ := appHandler(handlerConfig{db: db, cc: cc, sc: sc, dc: discoverd.DefaultClient, key: os.Getenv("AUTH_KEY")})
+	handler := appHandler(handlerConfig{db: db, cc: cc, sc: sc, dc: discoverd.DefaultClient, key: os.Getenv("AUTH_KEY")})
 	log.Fatal(http.ListenAndServe(addr, handler))
 }
 
@@ -83,7 +83,7 @@ type handlerConfig struct {
 	db  *postgres.DB
 	cc  clusterClient
 	sc  routerc.Client
-	dc  *discoverd.Client
+	dc  resource.DiscoverdClient
 	key string
 }
 
@@ -133,7 +133,7 @@ func responseHelperHandler(c martini.Context, w http.ResponseWriter, r render.Re
 	c.MapTo(&responseHelper{w, r}, (*ResponseHelper)(nil))
 }
 
-func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
+func appHandler(c handlerConfig) http.Handler {
 	r := martini.NewRouter()
 	m := martini.New()
 	m.Map(log.New(os.Stdout, "[controller] ", log.LstdFlags|log.Lmicroseconds))
@@ -202,7 +202,7 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 
 	r.Get("/formations", getFormations)
 
-	return muxHandler(httpRouter, c.key), m
+	return muxHandler(httpRouter, c.key)
 }
 
 func muxHandler(main http.Handler, authKey string) http.Handler {

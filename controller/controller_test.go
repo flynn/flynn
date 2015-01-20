@@ -13,7 +13,6 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -28,7 +27,7 @@ func Test(t *testing.T) { TestingT(t) }
 type S struct {
 	cc  *tu.FakeCluster
 	srv *httptest.Server
-	m   *martini.Martini
+	hc  handlerConfig
 }
 
 var _ = Suite(&S{})
@@ -50,8 +49,8 @@ func (s *S) SetUpSuite(c *C) {
 	pg := postgres.New(db, dsn)
 
 	s.cc = tu.NewFakeCluster()
-	handler, m := appHandler(handlerConfig{db: pg, cc: s.cc, sc: newFakeRouter(), key: "test"})
-	s.m = m
+	s.hc = handlerConfig{db: pg, cc: s.cc, sc: newFakeRouter(), key: "test"}
+	handler := appHandler(s.hc)
 	s.srv = httptest.NewServer(handler)
 }
 

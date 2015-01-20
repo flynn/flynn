@@ -61,7 +61,8 @@ func (s *S) provisionTestResource(c *C, name string, apps []string) (*ct.Resourc
 	defer srv.Close()
 
 	host, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
-	s.m.MapTo(&resourceDiscoverd{
+	var dc resource.DiscoverdClient
+	dc = &resourceDiscoverd{
 		fn: func() []*discoverd.Service {
 			return []*discoverd.Service{{
 				Addr: srv.Listener.Addr().String(),
@@ -69,7 +70,10 @@ func (s *S) provisionTestResource(c *C, name string, apps []string) (*ct.Resourc
 				Port: port,
 			}}
 		},
-	}, (*resource.DiscoverdClient)(nil))
+	}
+
+	newHandler := appHandler(handlerConfig{db: s.hc.db, cc: s.cc, sc: s.hc.sc, dc: dc, key: "test"})
+	s.srv = httptest.NewServer(newHandler)
 
 	p := s.createTestProvider(c, &ct.Provider{URL: fmt.Sprintf("discoverd+http://%s/things", name), Name: name})
 	conf := json.RawMessage(data)
