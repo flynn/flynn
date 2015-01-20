@@ -122,6 +122,11 @@ func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool) (string, error) 
 		return build.Drive("hda").FS, fmt.Errorf("error running build script: %s", err)
 	}
 
+	if err := runUnitTests(build, c.out); err != nil {
+		build.Kill()
+		return build.Drive("hda").FS, fmt.Errorf("unit tests failed: %s", err)
+	}
+
 	if err := build.Shutdown(); err != nil {
 		return build.Drive("hda").FS, fmt.Errorf("error while stopping build instance: %s", err)
 	}
@@ -354,6 +359,23 @@ func buildFlynn(inst *Instance, commit string, merge bool, out io.Writer) error 
 	var b bytes.Buffer
 	flynnBuildScript.Execute(&b, buildData{commit, merge})
 	return inst.Run("bash", &Streams{Stdin: &b, Stdout: out, Stderr: out})
+}
+
+var flynnUnitTestScript = `
+#!/bin/bash
+set -e -x
+
+export GOPATH=~/go
+flynn=$GOPATH/src/github.com/flynn/flynn
+cd $flynn
+
+if [[ -f test/scripts/test-unit.sh ]]; then
+  test/scripts/test-unit.sh
+fi
+`[1:]
+
+func runUnitTests(inst *Instance, out io.Writer) error {
+	return inst.Run("bash", &Streams{Stdin: bytes.NewBufferString(flynnUnitTestScript), Stdout: out, Stderr: out})
 }
 
 type hostScriptData struct {
