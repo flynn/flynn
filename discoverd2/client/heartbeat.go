@@ -3,6 +3,7 @@ package discoverd
 import (
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 type Heartbeater interface {
 	SetMeta(map[string]string) error
 	Close() error
+	Addr() string
 }
 
 func (c *Client) maybeAddService(service string) error {
@@ -49,6 +51,7 @@ func (c *Client) RegisterInstance(service string, inst *Instance) (Heartbeater, 
 		stop:    make(chan struct{}),
 		inst:    inst.Clone(),
 	}
+	h.inst.Addr = expandAddr(h.inst.Addr)
 	go h.run(firstErr)
 	return h, <-firstErr
 }
@@ -80,6 +83,10 @@ func (h *heartbeater) SetMeta(meta map[string]string) error {
 	return h.c.c.Put(fmt.Sprintf("/services/%s/instances/%s", h.service, h.inst.ID), h.inst, nil)
 }
 
+func (h *heartbeater) Addr() string {
+	return h.inst.Addr
+}
+
 const heartbeatInterval = 5 * time.Second
 
 func (h *heartbeater) run(firstErr chan<- error) {
@@ -108,4 +115,13 @@ func (h *heartbeater) run(firstErr chan<- error) {
 			return
 		}
 	}
+}
+
+var externalIP = os.Getenv("EXTERNAL_IP")
+
+func expandAddr(addr string) string {
+	if addr[0] == ':' {
+		return os.Getenv("EXTERNAL_IP") + addr
+	}
+	return addr
 }
