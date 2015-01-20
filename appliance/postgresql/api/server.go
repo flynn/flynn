@@ -45,7 +45,7 @@ func main() {
 	}
 	addr := ":" + port
 
-	if err := discoverd.Register(serviceName+"-api", addr); err != nil {
+	if _, err := discoverd.AddServiceAndRegister(serviceName+"-api", addr); err != nil {
 		log.Fatal(err)
 	}
 
