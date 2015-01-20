@@ -224,20 +224,28 @@ func (h *httpSyncHandler) Remove(id string) error {
 }
 
 func (s *HTTPListener) listenAndServe(started chan<- error) {
-	var err error
+	_, port, err := net.SplitHostPort(s.Addr)
+	if err != nil {
+		started <- err
+		return
+	}
 	s.listener, err = reuseport.NewReusablePortListener("tcp4", s.Addr)
 	started <- err
 	if err != nil {
 		return
 	}
-	for {
-		conn, err := s.listener.Accept()
-		if err != nil {
-			// TODO: log error
-			break
-		}
-		go s.handle(conn, false)
+
+	server := &http.Server{
+		Addr: s.Addr,
+		Handler: fwdProtoHandler{
+			Handler: s,
+			Proto:   "http",
+			Port:    port,
+		},
 	}
+
+	// TODO: log error
+	_ = server.Serve(s.listener)
 }
 
 func (s *HTTPListener) listenAndServeTLS(started chan<- error) {
