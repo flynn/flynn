@@ -38,7 +38,7 @@ else
       echo 'Please amend each commit to include a properly formatted DCO sign-off.'
       echo
       echo "Visit the following URL for information about the Developer's Certificate of Origin:"
-      echo ' https://flynn.io/docs/contributing#developers-certificate-of-origin'
+      echo ' https://flynn.io/docs/contributing#developer’s-certificate-of-origin'
       echo
     } >&2
     false
