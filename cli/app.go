@@ -32,7 +32,7 @@ Examples:
 `)
 
 	register("delete", runDelete, `
-usage: flynn delete [-y]
+usage: flynn delete [-y] [-r <remote>]
 
 Delete an app.
 
@@ -40,7 +40,8 @@ If run from a git repository with a 'flynn' remote for the app, it will be
 removed.
 
 Options:
-	-y, --yes  Skip the confirmation prompt.
+	-r, --remote <remote>  Name of git remote to delete, empty string for none. [default: flynn]
+	-y, --yes              Skip the confirmation prompt.
 
 Examples:
 
@@ -121,6 +122,7 @@ func runCreate(args *docopt.Args, client *controller.Client) error {
 
 func runDelete(args *docopt.Args, client *controller.Client) error {
 	appName := mustApp()
+	remote := args.String["--remote"]
 
 	if !args.Bool["--yes"] {
 		if !promptYesNo(fmt.Sprintf("Are you sure you want to delete the app %q?", appName)) {
@@ -132,9 +134,11 @@ func runDelete(args *docopt.Args, client *controller.Client) error {
 		return err
 	}
 
-	if remotes, err := gitRemotes(); err == nil {
-		if app, ok := remotes["flynn"]; ok && app.Name == appName {
-			exec.Command("git", "remote", "remove", "flynn").Run()
+	if remote != "" {
+		if remotes, err := gitRemotes(); err == nil {
+			if app, ok := remotes[remote]; ok && app.Name == appName {
+				exec.Command("git", "remote", "remove", remote).Run()
+			}
 		}
 	}
 
