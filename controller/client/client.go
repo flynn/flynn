@@ -315,24 +315,10 @@ func (c *Client) GetJobLogWithWait(appID, jobID string, tail bool) (io.ReadClose
 // and returning a ReadWriteCloser stream, which can then be used for
 // communicating with the job.
 func (c *Client) RunJobAttached(appID string, job *ct.NewJob) (utils.ReadWriteCloser, error) {
-	data, err := httpclient.ToJSON(job)
-	if err != nil {
-		return nil, err
+	header := http.Header{
+		"Accept": []string{"application/vnd.flynn.attach"},
 	}
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/apps/%s/jobs", c.URL, appID), data)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/vnd.flynn.attach")
-	req.SetBasicAuth("", c.Key)
-	var dial httpclient.DialFunc
-	if c.Dial != nil {
-		dial = c.Dial
-	}
-	res, rwc, err := utils.HijackRequest(req, dial)
-	if err != nil {
-		res.Body.Close()
-		return nil, err
-	}
-	return rwc, nil
+	return c.Hijack("POST", fmt.Sprintf("%s/apps/%s/jobs", c.URL, appID), header, job)
 }
 
 // RunJobDetached runs a new job under the specified app, returning the job's
