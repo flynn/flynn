@@ -481,3 +481,24 @@ func (s *S) TestDefaultServerKeypair(c *C) {
 	assertGet(c, "https://"+l.TLSAddr, "example.com", "1")
 	assertGet(c, "https://"+l.TLSAddr, "foo.example.com", "2")
 }
+
+func (s *S) TestCaseInsensitiveDomain(c *C) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Write([]byte(req.Host))
+	}))
+	defer srv.Close()
+
+	l, discoverd := newHTTPListener(c)
+	defer l.Close()
+
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "exaMple.com",
+		Service: "example-com",
+	}).ToRoute())
+
+	discoverdRegisterHTTPService(c, l, "example-com", srv.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	assertGet(c, "http://"+l.Addr, "Example.com", "Example.com")
+	assertGet(c, "https://"+l.TLSAddr, "ExamPle.cOm", "ExamPle.cOm")
+}
