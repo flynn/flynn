@@ -74,10 +74,17 @@ func main() {
 	flag.Parse()
 
 	keypair := tls.Certificate{}
+	var err error
 	if *certFile != "" {
-		var err error
 		if keypair, err = tls.LoadX509KeyPair(*certFile, *keyFile); err != nil {
 			log.Fatal(err)
+		}
+	} else if tlsCert := os.Getenv("TLSCERT"); tlsCert != "" {
+		if tlsKey := os.Getenv("TLSKEY"); tlsKey != "" {
+			os.Setenv("TLSKEY", fmt.Sprintf("md5^(%s)", md5sum(tlsKey)))
+			if keypair, err = tls.X509KeyPair([]byte(tlsCert), []byte(tlsKey)); err != nil {
+				log.Fatal(err)
+			}
 		}
 	}
 
