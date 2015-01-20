@@ -194,7 +194,7 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 	service.refs++
 	r.service = service
 	h.l.routes[data.ID] = r
-	h.l.domains[r.Domain] = r
+	h.l.domains[strings.ToLower(r.Domain)] = r
 
 	go h.l.wm.Send(&router.Event{Event: "set", ID: r.Domain})
 	return nil
@@ -258,6 +258,7 @@ func (s *HTTPListener) serveTLS(started chan<- error) {
 }
 
 func (s *HTTPListener) findRouteForHost(host string) *httpRoute {
+	host = strings.ToLower(host)
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	if backend, ok := s.domains[host]; ok {
