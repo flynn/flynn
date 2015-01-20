@@ -68,6 +68,8 @@ func NewHTTPHandler(ds Datastore) http.Handler {
 
 	router.GET("/services/:service/leader", api.GetLeader)
 
+	router.GET("/ping", func(http.ResponseWriter, *http.Request, httprouter.Params) {})
+
 	return router
 }
 

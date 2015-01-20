@@ -47,6 +47,10 @@ func NewClientWithURL(url string) *Client {
 	}
 }
 
+func (c *Client) Ping() error {
+	return c.c.Get("/ping", nil)
+}
+
 func (c *Client) AddService(name string) error {
 	return c.c.Put("/services/"+name, nil, nil)
 }

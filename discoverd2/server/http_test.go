@@ -313,3 +313,7 @@ func (s *HTTPSuite) TestAddServiceAndRegister(c *C) {
 	_, err = s.client.AddServiceAndRegisterInstance("$", inst)
 	c.Assert(err, NotNil)
 }
+
+func (s *HTTPSuite) TestPing(c *C) {
+	c.Assert(s.client.Ping(), IsNil)
+}
