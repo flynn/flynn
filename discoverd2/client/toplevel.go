@@ -6,7 +6,7 @@ import (
 
 var DefaultClient = NewClient()
 
-func GetService(name string) Service {
+func NewService(name string) Service {
 	return DefaultClient.Service(name)
 }
 
