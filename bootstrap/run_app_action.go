@@ -2,7 +2,9 @@ package bootstrap
 
 import (
 	"errors"
+	"net/url"
 	"sort"
+	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
@@ -83,7 +85,12 @@ func (a *RunAppAction) Run(s *State) error {
 	interpolateRelease(s, a.Release)
 
 	for _, p := range a.Resources {
-		res, err := resource.Provision(p.URL, nil)
+		u, err := url.Parse(p.URL)
+		if err != nil {
+			return err
+		}
+		lookupDiscoverdURLHost(u, time.Second)
+		res, err := resource.Provision(u.String(), nil)
 		if err != nil {
 			return err
 		}
