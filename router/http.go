@@ -47,13 +47,14 @@ type HTTPListener struct {
 	tlsListener net.Listener
 	closed      bool
 	cookieKey   *[32]byte
+	keypair     tls.Certificate
 }
 
 type DiscoverdClient interface {
 	NewServiceSet(string) (discoverd.ServiceSet, error)
 }
 
-func NewHTTPListener(addr, tlsAddr string, cookieKey *[32]byte, ds DataStore, discoverdc DiscoverdClient) *HTTPListener {
+func NewHTTPListener(addr, tlsAddr string, cookieKey *[32]byte, keypair tls.Certificate, ds DataStore, discoverdc DiscoverdClient) *HTTPListener {
 	l := &HTTPListener{
 		Addr:      addr,
 		TLSAddr:   tlsAddr,
@@ -64,6 +65,7 @@ func NewHTTPListener(addr, tlsAddr string, cookieKey *[32]byte, ds DataStore, di
 		services:  make(map[string]*httpService),
 		wm:        NewWatchManager(),
 		cookieKey: cookieKey,
+		keypair:   keypair,
 	}
 	if cookieKey == nil {
 		var k [32]byte
@@ -288,7 +290,7 @@ func fail(sc *httputil.ServerConn, req *http.Request, code int, msg string) {
 var errMissingTLS = errors.New("router: route not found or TLS not configured")
 
 func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
-	defer conn.Close()
+	defer conn.Close() // TODO(benburkert): for TLS, check that closing this conn sends the TLS "close notify"
 
 	var r *httpRoute
 
@@ -298,14 +300,11 @@ func (s *HTTPListener) handle(conn net.Conn, isTLS bool) {
 			if r == nil {
 				return nil, errMissingTLS
 			}
-			if r.keypair == nil {
-				return nil, errMissingTLS
-			}
 			return r.keypair, nil
 		}
 		conn = tls.Server(conn, tlsconfig.SecureCiphers(&tls.Config{
 			GetCertificate: certForHandshake,
-			Certificates:   []tls.Certificate{{}},
+			Certificates:   []tls.Certificate{s.keypair},
 		}))
 	}
 

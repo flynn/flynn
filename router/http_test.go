@@ -77,8 +77,12 @@ func (l *httpListener) Close() error {
 
 func newHTTPListenerClients(t etcdrunner.TestingT, etcd EtcdClient, discoverd discoverdClient) (*httpListener, discoverdClient) {
 	discoverd, etcd, cleanup := setup(t, etcd, discoverd)
+	pair, err := tls.X509KeyPair(localhostCert, localhostKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	l := &httpListener{
-		NewHTTPListener("127.0.0.1:0", "127.0.0.1:0", nil, NewEtcdDataStore(etcd, "/router/http/"), discoverd),
+		NewHTTPListener("127.0.0.1:0", "127.0.0.1:0", nil, pair, NewEtcdDataStore(etcd, "/router/http/"), discoverd),
 		cleanup,
 	}
 	if err := l.Start(); err != nil {
@@ -442,4 +446,22 @@ func (s *S) TestRequestURIEscaping(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(res.StatusCode, Equals, 200)
 	}
+}
+
+func (s *S) TestDefaultServerKeypair(c *C) {
+	srv := httptest.NewServer(httpTestHandler("1"))
+	defer srv.Close()
+
+	l, discoverd := newHTTPListener(c)
+	defer l.Close()
+
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "example.com",
+		Service: "example-com",
+	}).ToRoute())
+
+	discoverdRegisterHTTPService(c, l, "example-com", srv.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	assertGet(c, "https://"+l.TLSAddr, "example.com", "1")
 }
