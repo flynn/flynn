@@ -14,6 +14,12 @@ type S struct{}
 
 var _ = Suite(&S{})
 
+func (S) SetUpSuite(c *C) {
+	// Skip all tests in this suite if not running as root.
+	// Many zfs operations require root priviledges.
+	skipIfNotRoot(c)
+}
+
 func (S) TestSnapshotShouldCarryFiles(c *C) {
 	err := WithTmpfileZpool("testpool", func() error {
 		provider, err := NewProvider(&ProviderConfig{DatasetName: "testpool"})

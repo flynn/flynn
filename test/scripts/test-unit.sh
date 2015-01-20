@@ -12,5 +12,6 @@ export PGHOST=/var/run/postgresql
 sudo service postgresql start
 
 go test -race -cover ./...
+sudo -E go test -race -cover ./host/volume/zfs # these tests skip unless root
 
 sudo service postgresql stop
