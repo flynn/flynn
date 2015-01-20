@@ -14,8 +14,12 @@ func TestFwdProtoHandler(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	request, _ := http.NewRequest("GET", "http://test.com", nil)
+	request.RemoteAddr = "1.2.3.4:5678"
 	h := fwdProtoHandler{Handler: nopHandler, Proto: "https", Port: "443"}
 	h.ServeHTTP(rec, request)
+	if v := request.Header.Get("X-Forwarded-For"); v != "1.2.3.4" {
+		t.Errorf("want X-Forwarded-For %s, got %s", "1.2.3.4", v)
+	}
 	if v := request.Header.Get("X-Forwarded-Proto"); v != "https" {
 		t.Errorf("want X-Forwarded-Proto %s, got %s", "https", v)
 	}

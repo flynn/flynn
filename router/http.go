@@ -189,9 +189,6 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 			return err
 		}
 		service = &httpService{name: r.Service, ss: ss, cookieKey: h.l.cookieKey}
-		service.rp = &httputil.ReverseProxy{
-			Director: service.direct,
-		}
 		h.l.services[r.Service] = service
 	}
 	service.refs++
@@ -370,22 +367,6 @@ type httpService struct {
 	refs int
 
 	cookieKey *[32]byte
-	rp        *httputil.ReverseProxy
-}
-
-func (s *httpService) direct(req *http.Request) {
-	req.URL.Scheme = "http"
-
-	// TODO(bgentry): handle sticky sessions
-	backend := s.pickBackend()
-
-	if backend == "" {
-		log.Println("no backend found")
-		// TODO(bgentry): return a proper 503 situation this situation
-		// failw(w, 503, "Service Unavailable")
-		return
-	}
-	req.URL.Host = backend
 }
 
 func (s *httpService) pickBackend() string {
@@ -576,8 +557,87 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
 	req.Header.Set("X-Request-Id", random.UUID())
 
-	// TODO(bgentry): implement rest of this from handle above
-	s.rp.ServeHTTP(w, req)
+	// TODO(bgentry): retry multiple backends until we get a conn, use custom
+	// net.Dial func to return matchable error when no conn was made.
+	backend := s.pickBackend()
+
+	if backend == "" {
+		log.Println("no backend found")
+		failw(w, 503, "Service Unavailable")
+		return
+	}
+
+	// Most of this is borrowed from httputil.ReverseProxy
+	outreq := &http.Request{}
+	*outreq = *req // includes shallow copies of maps, but okay
+
+	outreq.URL.Host = backend
+	// Pass the Request-URI verbatim without any modifications
+	outreq.URL.Opaque = strings.Split(strings.TrimPrefix(req.RequestURI, req.URL.Scheme+":"), "?")[0]
+	outreq.URL.Scheme = "http"
+	outreq.Proto = "HTTP/1.1"
+	outreq.ProtoMajor = 1
+	outreq.ProtoMinor = 1
+	outreq.Close = false
+
+	// Remove hop-by-hop headers to the backend.  Especially
+	// important is "Connection" because we want a persistent
+	// connection, regardless of what the client sent to us.  This
+	// is modifying the same underlying map from req (shallow
+	// copied above) so we only copy it if necessary.
+	copiedHeaders := false
+	for _, h := range hopHeaders {
+		if outreq.Header.Get(h) != "" {
+			if !copiedHeaders {
+				outreq.Header = make(http.Header)
+				copyHeader(outreq.Header, req.Header)
+				copiedHeaders = true
+			}
+			outreq.Header.Del(h)
+		}
+	}
+
+	res, err := http.DefaultTransport.RoundTrip(outreq)
+	if err != nil {
+		log.Println("http: proxy error:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer res.Body.Close()
+
+	for _, h := range hopHeaders {
+		res.Header.Del(h)
+	}
+
+	copyHeader(w.Header(), res.Header)
+
+	w.WriteHeader(res.StatusCode)
+	_, err = io.Copy(w, res.Body) // TODO(bgentry): consider using a flush interval
+	if err != nil {
+		log.Println("reverse proxy copy err:", err)
+		return
+	}
+}
+
+func copyHeader(dst, src http.Header) {
+	for k, vv := range src {
+		for _, v := range vv {
+			dst.Add(k, v)
+		}
+	}
+}
+
+// Hop-by-hop headers. These are removed when sent to the backend.
+// http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html
+var hopHeaders = []string{
+	"Connection",
+	"Keep-Alive",
+	"Proxy-Authenticate",
+	"Proxy-Authorization",
+	"Te", // canonicalized version of "TE"
+	"Trailers",
+	"Transfer-Encoding",
+	"Upgrade",
 }
 
 type writeCloser interface {
