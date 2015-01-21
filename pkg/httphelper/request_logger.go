@@ -19,7 +19,11 @@ func NewRequestLogger(ctx log.Ctx, handler http.Handler) http.Handler {
 				addr = req.RemoteAddr
 			}
 		}
-		logger := l.New(log.Ctx{"req_id": random.UUID()})
+		reqID := req.Header.Get("X-Request-ID")
+		if reqID == "" {
+			reqID = random.UUID()
+		}
+		logger := l.New(log.Ctx{"req_id": reqID})
 		logger.Info("request started", "method", req.Method, "path", req.URL.Path, "addr", addr)
 
 		rw := NewResponseWriter(w)
