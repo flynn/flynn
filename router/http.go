@@ -512,15 +512,13 @@ func sortStringFirst(ss []string, s string) {
 	}
 }
 
-// TODO(bgentry): these are defaults from DefaultTransport. Ask about
-// changing them.
 var transport http.RoundTripper = &http.Transport{
 	Dial:                customDial,
-	TLSHandshakeTimeout: 10 * time.Second,
+	TLSHandshakeTimeout: 10 * time.Second, // unused, but safer to leave default in place
 }
 
 var dialer = &net.Dialer{
-	Timeout:   30 * time.Second,
+	Timeout:   1 * time.Second,
 	KeepAlive: 30 * time.Second,
 }
 
