@@ -21,10 +21,10 @@ func RunDiscoverdServer(t TestingT, port string, etcdAddr string) (string, func(
 	}
 	go func() {
 		cmd := exec.Command("discoverd",
-			"-bind", "127.0.0.1:"+port,
+			"-http-addr", "127.0.0.1:"+port,
+			"-dns-addr", "127.0.0.1:0",
 			"-etcd", etcdAddr,
 		)
-		cmd.Env = append(os.Environ(), "EXTERNAL_IP=127.0.0.1")
 		var stderr, stdout io.Reader
 		if os.Getenv("DEBUG") != "" {
 			stderr, _ = cmd.StderrPipe()
@@ -64,12 +64,8 @@ func RunDiscoverdServer(t TestingT, port string, etcdAddr string) (string, func(
 func BootDiscoverd(t TestingT, port, etcdAddr string) (*discoverd.Client, func()) {
 	addr, killDiscoverd := RunDiscoverdServer(t, port, etcdAddr)
 
-	var client *discoverd.Client
-	err := Attempts.Run(func() (err error) {
-		client, err = discoverd.NewClientWithAddr(addr)
-		return
-	})
-	if err != nil {
+	client := discoverd.NewClientWithURL("http://" + addr)
+	if err := Attempts.Run(client.Ping); err != nil {
 		t.Fatal("Failed to connect to discoverd: ", err)
 	}
 	return client, killDiscoverd
@@ -80,8 +76,6 @@ func SetupDiscoverdWithEtcd(t TestingT) (*discoverd.Client, string, func()) {
 	client, killDiscoverd := BootDiscoverd(t, "", etcdAddr)
 
 	return client, etcdAddr, func() {
-		client.UnregisterAll()
-		client.Close()
 		killDiscoverd()
 		killEtcd()
 	}
