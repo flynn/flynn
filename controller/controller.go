@@ -19,7 +19,6 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
-	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/pkg/shutdown"
 	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
@@ -59,15 +58,16 @@ func main() {
 
 	sc := routerc.New()
 
-	if err := discoverd.Register("flynn-controller", addr); err != nil {
+	hb, err := discoverd.AddServiceAndRegister("flynn-controller", addr)
+	if err != nil {
 		log.Fatal(err)
 	}
 
 	shutdown.BeforeExit(func() {
-		discoverd.Unregister("flynn-controller", addr)
+		hb.Close()
 	})
 
-	handler := appHandler(handlerConfig{db: db, cc: cc, sc: sc, dc: discoverd.DefaultClient, key: os.Getenv("AUTH_KEY")})
+	handler := appHandler(handlerConfig{db: db, cc: cc, sc: sc, key: os.Getenv("AUTH_KEY")})
 	log.Fatal(http.ListenAndServe(addr, handler))
 }
 
@@ -75,7 +75,6 @@ type handlerConfig struct {
 	db  *postgres.DB
 	cc  clusterClient
 	sc  routerc.Client
-	dc  resource.DiscoverdClient
 	key string
 }
 
@@ -104,16 +103,15 @@ func appHandler(c handlerConfig) http.Handler {
 	formationRepo := NewFormationRepo(c.db, appRepo, releaseRepo, artifactRepo)
 
 	api := controllerAPI{
-		appRepo:         appRepo,
-		releaseRepo:     releaseRepo,
-		providerRepo:    providerRepo,
-		formationRepo:   formationRepo,
-		artifactRepo:    artifactRepo,
-		jobRepo:         jobRepo,
-		resourceRepo:    resourceRepo,
-		clusterClient:   c.cc,
-		discoverdClient: c.dc,
-		routerc:         c.sc,
+		appRepo:       appRepo,
+		releaseRepo:   releaseRepo,
+		providerRepo:  providerRepo,
+		formationRepo: formationRepo,
+		artifactRepo:  artifactRepo,
+		jobRepo:       jobRepo,
+		resourceRepo:  resourceRepo,
+		clusterClient: c.cc,
+		routerc:       c.sc,
 	}
 
 	httpRouter := httprouter.New()
@@ -175,16 +173,15 @@ func muxHandler(main http.Handler, authKey string) http.Handler {
 }
 
 type controllerAPI struct {
-	appRepo         *AppRepo
-	releaseRepo     *ReleaseRepo
-	providerRepo    *ProviderRepo
-	formationRepo   *FormationRepo
-	artifactRepo    *ArtifactRepo
-	jobRepo         *JobRepo
-	resourceRepo    *ResourceRepo
-	clusterClient   clusterClient
-	discoverdClient resource.DiscoverdClient
-	routerc         routerc.Client
+	appRepo       *AppRepo
+	releaseRepo   *ReleaseRepo
+	providerRepo  *ProviderRepo
+	formationRepo *FormationRepo
+	artifactRepo  *ArtifactRepo
+	jobRepo       *JobRepo
+	resourceRepo  *ResourceRepo
+	clusterClient clusterClient
+	routerc       routerc.Client
 }
 
 func (c *controllerAPI) getApp(ctx context.Context) *ct.App {
