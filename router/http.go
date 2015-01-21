@@ -346,34 +346,26 @@ type httpService struct {
 	cookieKey *[32]byte
 }
 
-func (s *httpService) pickBackend() string {
-	addrs := s.ss.Addrs()
-	if len(addrs) == 0 {
-		return ""
-	}
-	return addrs[random.Math.Intn(len(addrs))]
-}
-
 const stickyCookie = "_backend"
 
-func (s *httpService) pickBackendSticky(req *http.Request) (string, *http.Cookie) {
+func (s *httpService) stickyCookieAddr(req *http.Request) string {
 	cookie, err := req.Cookie(stickyCookie)
 	if err != nil {
-		return s.pickNewBackendSticky()
+		return ""
 	}
 
 	data, err := base64.StdEncoding.DecodeString(cookie.Value)
 	if err != nil {
-		return s.pickNewBackendSticky()
+		return ""
 	}
 	var nonce [24]byte
 	if len(data) < len(nonce) {
-		return s.pickNewBackendSticky()
+		return ""
 	}
 	copy(nonce[:], data)
 	res, ok := secretbox.Open(nil, data[len(nonce):], &nonce, s.cookieKey)
 	if !ok {
-		return s.pickNewBackendSticky()
+		return ""
 	}
 
 	addr := string(res)
@@ -385,18 +377,13 @@ func (s *httpService) pickBackendSticky(req *http.Request) (string, *http.Cookie
 		}
 	}
 	if !ok {
-		return s.pickNewBackendSticky()
+		return ""
 	}
 
-	return addr, nil
+	return addr
 }
 
-func (s *httpService) pickNewBackendSticky() (string, *http.Cookie) {
-	backend := s.pickBackend()
-	if backend == "" {
-		return "", nil
-	}
-
+func (s *httpService) newStickyCookie(backend string) *http.Cookie {
 	var nonce [24]byte
 	_, err := io.ReadFull(rand.Reader, nonce[:])
 	if err != nil {
@@ -406,38 +393,35 @@ func (s *httpService) pickNewBackendSticky() (string, *http.Cookie) {
 	copy(out, nonce[:])
 	out = secretbox.Seal(out, []byte(backend), &nonce, s.cookieKey)
 
-	return backend, &http.Cookie{Name: stickyCookie, Value: base64.StdEncoding.EncodeToString(out), Path: "/"}
+	return &http.Cookie{Name: stickyCookie, Value: base64.StdEncoding.EncodeToString(out), Path: "/"}
 }
 
 func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
 	req.Header.Set("X-Request-Id", random.UUID())
 
-	var (
-		backend      string
-		stickyCookie *http.Cookie
-	)
-	// TODO(bgentry): retry multiple backends until we get a conn, use custom
-	// net.Dial func to return matchable error when no conn was made.
-	if req.Header.Get(hdrUseStickySessions) == "true" {
-		// TODO(bgentry): switch to better way to check sticky setting
-		req.Header.Del(hdrUseStickySessions)
-		backend, stickyCookie = s.pickBackendSticky(req)
-	} else {
-		backend = s.pickBackend()
-	}
-
-	if backend == "" {
-		log.Println("no backend found")
+	addrs := shuffle(s.ss.Addrs())
+	if len(addrs) == 0 {
+		log.Println("no backends found")
 		fail(w, 503, "Service Unavailable")
 		return
+	}
+
+	isSticky := false
+	stickyAddr := ""
+	if req.Header.Get(hdrUseStickySessions) == "true" {
+		// TODO(bgentry): switch to better way to check sticky setting
+		isSticky = true
+		req.Header.Del(hdrUseStickySessions)
+		if stickyAddr = s.stickyCookieAddr(req); stickyAddr != "" {
+			sortStringFirst(addrs, stickyAddr)
+		}
 	}
 
 	// Most of this is borrowed from httputil.ReverseProxy
 	outreq := &http.Request{}
 	*outreq = *req // includes shallow copies of maps, but okay
 
-	outreq.URL.Host = backend
 	// Pass the Request-URI verbatim without any modifications
 	outreq.URL.Opaque = strings.Split(strings.TrimPrefix(req.RequestURI, req.URL.Scheme+":"), "?")[0]
 	outreq.URL.Scheme = "http"
@@ -450,7 +434,7 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	// Directly bridge `Connection: Upgrade` requests
 	if strings.ToLower(outreq.Header.Get("Connection")) == "upgrade" {
-		s.forwardAndProxyTCP(w, outreq)
+		s.forwardAndProxyTCP(w, outreq, addrs, stickyAddr, isSticky)
 		return
 	}
 
@@ -471,16 +455,39 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	res, err := http.DefaultTransport.RoundTrip(outreq)
-	if err != nil {
-		log.Println("http: proxy error:", err)
-		w.WriteHeader(http.StatusInternalServerError)
+	var (
+		backend string
+		res     *http.Response
+		err     error
+	)
+
+	for _, backend = range addrs {
+		// TODO: limit number of backends tried
+		// TODO: temporarily quarantine failing backends
+
+		outreq.URL.Host = backend
+		res, err = transport.RoundTrip(outreq)
+		if err != nil {
+			if _, ok := err.(*dialErr); ok {
+				// retry, maybe log a message about it
+				continue
+			}
+			log.Println("http: proxy error:", err)
+			fail(w, 503, http.StatusText(503))
+			return
+		}
+		defer res.Body.Close()
+		break
+	}
+
+	if res == nil {
+		log.Println("no backends available")
+		fail(w, 503, "Service Unavailable")
 		return
 	}
-	defer res.Body.Close()
 
-	if stickyCookie != nil {
-		res.Header.Add("Set-Cookie", stickyCookie.String())
+	if isSticky && stickyAddr != backend {
+		res.Header.Add("Set-Cookie", s.newStickyCookie(backend).String())
 	}
 
 	for _, h := range hopHeaders {
@@ -497,13 +504,62 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (s *httpService) forwardAndProxyTCP(w http.ResponseWriter, req *http.Request) {
-	upconn, err := net.Dial("tcp", req.URL.Host)
+func sortStringFirst(ss []string, s string) {
+	for i := range ss {
+		if ss[i] == s {
+			ss[0], ss[i] = ss[i], ss[0]
+		}
+	}
+}
+
+// TODO(bgentry): these are defaults from DefaultTransport. Ask about
+// changing them.
+var transport http.RoundTripper = &http.Transport{
+	Dial:                customDial,
+	TLSHandshakeTimeout: 10 * time.Second,
+}
+
+var dialer = &net.Dialer{
+	Timeout:   30 * time.Second,
+	KeepAlive: 30 * time.Second,
+}
+
+func customDial(network, addr string) (net.Conn, error) {
+	conn, err := dialer.Dial(network, addr)
 	if err != nil {
+		return nil, dialErr{err}
+	}
+	return conn, nil
+}
+
+type dialErr struct {
+	error
+}
+
+func (s *httpService) forwardAndProxyTCP(w http.ResponseWriter, req *http.Request, addrs []string, stickyAddr string, isSticky bool) {
+	var (
+		backend string
+		err     error
+		upconn  net.Conn
+	)
+	for _, backend = range addrs {
+		req.URL.Host = backend
+		upconn, err = dialer.Dial("tcp", req.URL.Host)
+		if err != nil {
+			// retry, maybe log a message about it
+			continue
+		}
+		defer upconn.Close()
+		break
+	}
+	if upconn == nil {
 		fail(w, 503, http.StatusText(503))
 		return
 	}
-	defer upconn.Close()
+
+	// TODO(bgentry): need to complete the handshake and set sticky cookie on
+	// response, otherwise websocket reconnections won't go to the right backend
+	// :(
 
 	hj, ok := w.(http.Hijacker)
 	if !ok {
