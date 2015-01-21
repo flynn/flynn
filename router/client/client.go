@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/discoverd/client/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/router/types"
 )
@@ -22,33 +20,24 @@ type client struct {
 }
 
 // New uses the default discoverd client and returns a client.
-func New() (Client, error) {
-	return newWithDiscoverdConnect()
-}
-
-func newWithDiscoverdConnect() (*client, error) {
-	if err := discoverd.Connect(""); err != nil {
-		return nil, err
-	}
-	return newWithDiscoverd("", discoverd.DefaultClient), nil
+func New() Client {
+	return newRouterClient()
 }
 
 // NewWithHTTP does the same thing as New but uses the given *http.Client
-func NewWithHTTP(http *http.Client) (Client, error) {
-	c, err := newWithDiscoverdConnect()
-	if err != nil {
-		return nil, err
-	}
+func NewWithHTTP(http *http.Client) Client {
+	c := newRouterClient()
 	http.Transport = c.HTTP.Transport
 	c.HTTP = http
-	return c, nil
+	return c
 }
 
 func newRouterClient() *client {
-	c := &httpclient.Client{
+	return &client{Client: &httpclient.Client{
 		ErrNotFound: ErrNotFound,
-	}
-	return &client{Client: c}
+		URL:         "http://router-api.discoverd:5000",
+		HTTP:        http.DefaultClient,
+	}}
 }
 
 // NewWithAddr uses addr as the specified API url and returns a client.
@@ -56,24 +45,6 @@ func NewWithAddr(addr string) Client {
 	c := newRouterClient()
 	c.URL = fmt.Sprintf("http://%s", addr)
 	c.HTTP = http.DefaultClient
-	return c
-}
-
-// NewWithDiscoverd uses the provided discoverd client and returns a client.
-func NewWithDiscoverd(name string, dc dialer.DiscoverdClient) Client {
-	return newWithDiscoverd(name, dc)
-}
-
-func newWithDiscoverd(name string, dc dialer.DiscoverdClient) *client {
-	if name == "" {
-		name = "router"
-	}
-	dialer := dialer.New(dc, nil)
-	c := newRouterClient()
-	c.Dial = dialer.Dial
-	c.DialClose = dialer
-	c.URL = fmt.Sprintf("http://%s-api", name)
-	c.HTTP = &http.Client{Transport: &http.Transport{Dial: c.Dial}}
 	return c
 }
 

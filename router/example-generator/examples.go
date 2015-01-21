@@ -21,10 +21,7 @@ func main() {
 	log.SetOutput(os.Stderr)
 
 	httpClient := &http.Client{}
-	client, err := rc.NewWithHTTP(httpClient)
-	if err != nil {
-		log.Fatal(err)
-	}
+	client := rc.NewWithHTTP(httpClient)
 	recorder := httprecorder.NewWithClient(httpClient)
 
 	e := &generator{
@@ -41,6 +38,7 @@ func main() {
 
 	var out io.Writer
 	if len(os.Args) > 1 {
+		var err error
 		out, err = os.Create(os.Args[1])
 		if err != nil {
 			log.Fatal(err)

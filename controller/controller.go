@@ -57,10 +57,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	sc, err := routerc.New()
-	if err != nil {
-		log.Fatal(err)
-	}
+	sc := routerc.New()
 
 	if err := discoverd.Register("flynn-controller", addr); err != nil {
 		log.Fatal(err)

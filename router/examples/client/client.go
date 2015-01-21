@@ -44,10 +44,7 @@ func main() {
 		return
 	}
 
-	client, err := client.New()
-	if err != nil {
-		log.Fatal(err)
-	}
+	client := client.New()
 
 	conf := &router.HTTPRoute{
 		Service: serviceName,
