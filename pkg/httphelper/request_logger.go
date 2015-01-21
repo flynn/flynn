@@ -12,8 +12,15 @@ func NewRequestLogger(ctx log.Ctx, handler http.Handler) http.Handler {
 	l := log.New(ctx)
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
+		addr := req.Header.Get("X-Real-IP")
+		if addr == "" {
+			addr = req.Header.Get("X-Forwarded-For")
+			if addr == "" {
+				addr = req.RemoteAddr
+			}
+		}
 		logger := l.New(log.Ctx{"req_id": random.UUID()})
-		logger.Info("request started", "method", req.Method, "path", req.URL.Path)
+		logger.Info("request started", "method", req.Method, "path", req.URL.Path, "addr", addr)
 
 		rw := NewResponseWriter(w)
 		handler.ServeHTTP(rw, req)
