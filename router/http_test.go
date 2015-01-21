@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/websocket"
@@ -286,6 +287,11 @@ func (s *S) TestHTTPServiceHandlerBackendConnectionClosed(c *C) {
 	// the backend server's connection gets closed, but router is
 	// able to recover
 	srv.CloseClientConnections()
+	// Though we've closed the conn on the server, the client might not have
+	// handled the FIN yet. The Transport offers no way to safely retry in those
+	// scenarios, so instead we just sleep long enough to handle the FIN.
+	// https://golang.org/issue/4677
+	time.Sleep(500 * time.Microsecond)
 	assertGet(c, "http://"+l.Addr, "example.com", "1")
 }
 
