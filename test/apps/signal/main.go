@@ -18,7 +18,7 @@ func main() {
 	log.Println("setting signal handler")
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	log.Println("registering service")
-	if err := discoverd.Register(service, ":12345"); err != nil {
+	if _, err := discoverd.AddServiceAndRegister(service, ":12345"); err != nil {
 		log.Fatal(err)
 	}
 	log.Println("waiting for signal")
