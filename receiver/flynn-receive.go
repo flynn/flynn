@@ -14,7 +14,6 @@ import (
 
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/random"
@@ -34,17 +33,13 @@ func init() {
 
 var typesPattern = regexp.MustCompile("types.* -> (.+)\n")
 
+const blobstoreURL = "http://blobstore.discoverd"
+
 func main() {
 	client, err := controller.NewClient("", os.Getenv("CONTROLLER_AUTH_KEY"))
 	if err != nil {
 		log.Fatalln("Unable to connect to controller:", err)
 	}
-	// TODO: use discoverd http dialer here?
-	services, err := discoverd.Services("blobstore", discoverd.DefaultTimeout)
-	if err != nil || len(services) < 1 {
-		log.Fatalf("Unable to discover blobstore %q", err)
-	}
-	blobstoreHost := services[0].Addr
 
 	appName := os.Args[1]
 
@@ -64,7 +59,7 @@ func main() {
 	fmt.Printf("-----> Building %s...\n", app.Name)
 
 	var output bytes.Buffer
-	slugURL := fmt.Sprintf("http://%s/%s.tgz", blobstoreHost, random.UUID())
+	slugURL := fmt.Sprintf("%s/%s.tgz", blobstoreURL, random.UUID())
 	cmd := exec.Command(exec.DockerImage(os.Getenv("SLUGBUILDER_IMAGE_URI")), slugURL)
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
@@ -78,7 +73,7 @@ func main() {
 		cmd.Stdin = os.Stdin
 	}
 	cmd.Env = make(map[string]string)
-	cmd.Env["BUILD_CACHE_URL"] = fmt.Sprintf("http://%s/%s-cache.tgz", blobstoreHost, app.ID)
+	cmd.Env["BUILD_CACHE_URL"] = fmt.Sprintf("%s/%s-cache.tgz", blobstoreURL, app.ID)
 	if buildpackURL, ok := prevRelease.Env["BUILDPACK_URL"]; ok {
 		cmd.Env["BUILDPACK_URL"] = buildpackURL
 	}
@@ -108,7 +103,7 @@ func main() {
 		proc := prevRelease.Processes[t]
 		proc.Cmd = []string{"start", t}
 		if t == "web" {
-			proc.Ports = []ct.Port{{Proto: "tcp"}}
+			proc.Ports = []ct.Port{{Port: 80, Proto: "tcp"}}
 			if proc.Env == nil {
 				proc.Env = make(map[string]string)
 			}
