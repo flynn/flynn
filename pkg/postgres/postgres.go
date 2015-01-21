@@ -25,19 +25,18 @@ func Wait(service string) (string, string) {
 	if service == "" {
 		service = os.Getenv("FLYNN_POSTGRES")
 	}
-	set, err := discoverd.NewServiceSet(service)
+	events := make(chan *discoverd.Event)
+	stream, err := discoverd.NewService(service).Watch(events)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer set.Close()
-	ch := set.Watch(true)
-	for u := range ch {
-		l := set.Leader()
-		if l == nil {
-			continue
-		}
-		if u.Online && u.Addr == l.Addr && u.Attrs["up"] == "true" && u.Attrs["username"] != "" && u.Attrs["password"] != "" {
-			return u.Attrs["username"], u.Attrs["password"]
+	defer stream.Close()
+	for e := range events {
+		if e.Kind&(discoverd.EventKindUp|discoverd.EventKindUpdate) != 0 &&
+			e.Instance.Meta["up"] == "true" &&
+			e.Instance.Meta["username"] != "" &&
+			e.Instance.Meta["password"] != "" {
+			return e.Instance.Meta["username"], e.Instance.Meta["password"]
 		}
 	}
 	panic("discoverd disconnected before postgres came up")
@@ -47,24 +46,18 @@ func Open(service, dsn string) (*DB, error) {
 	if service == "" {
 		service = os.Getenv("FLYNN_POSTGRES")
 	}
-	set, err := discoverd.NewServiceSet(service)
-	if err != nil {
-		return nil, err
-	}
 	db := &DB{
-		set:       set,
 		dsnSuffix: dsn,
+		dsn:       fmt.Sprintf("host=leader.%s.discoverd %s", service, dsn),
 		stmts:     make(map[string]*sql.Stmt),
 	}
-	firstErr := make(chan error)
-	go db.followLeader(firstErr)
-	return db, <-firstErr
+	var err error
+	db.DB, err = sql.Open("postgres", db.dsn)
+	return db, err
 }
 
 type DB struct {
 	*sql.DB
-
-	set discoverd.ServiceSet
 
 	dsnSuffix string
 
@@ -76,39 +69,6 @@ type DB struct {
 
 var ErrNoServers = errors.New("postgres: no servers found")
 
-func (db *DB) followLeader(firstErr chan<- error) {
-	for update := range db.set.Watch(true) {
-		leader := db.set.Leader()
-		if leader == nil || leader.Attrs["up"] != "true" {
-			if firstErr != nil {
-				firstErr <- ErrNoServers
-				return
-			}
-			continue
-		}
-		if !update.Online || update.Addr != leader.Addr {
-			continue
-		}
-
-		dsn := fmt.Sprintf("host=%s port=%s %s", leader.Host, leader.Port, db.dsnSuffix)
-		db.mtx.Lock()
-		db.dsn = dsn
-		db.mtx.Unlock()
-
-		if db.DB == nil {
-			var err error
-			db.DB, err = sql.Open("postgres", dsn)
-			firstErr <- err
-			if err != nil {
-				return
-			}
-		} else {
-			db.DB.SetDSN(dsn)
-		}
-	}
-	// TODO: reconnect to discoverd here
-}
-
 func (db *DB) DSN() string {
 	db.mtx.RLock()
 	defer db.mtx.RUnlock()
@@ -116,9 +76,6 @@ func (db *DB) DSN() string {
 }
 
 func (db *DB) Close() error {
-	if db.set != nil {
-		db.set.Close()
-	}
 	return db.DB.Close()
 }
 
