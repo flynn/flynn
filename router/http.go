@@ -303,15 +303,16 @@ func (s *HTTPListener) findRouteForHost(host string) *httpRoute {
 	return nil
 }
 
-func failAndClose(w http.ResponseWriter, code int, msg string) {
+func failAndClose(w http.ResponseWriter, code int) {
 	w.Header().Set("Connection", "close")
-	fail(w, code, msg)
+	fail(w, code)
 }
 
-func fail(w http.ResponseWriter, code int, msg string) {
+func fail(w http.ResponseWriter, code int) {
+	msg := []byte(http.StatusText(code) + "\n")
 	w.Header().Set("Content-Length", strconv.Itoa(len(msg)))
 	w.WriteHeader(code)
-	w.Write([]byte(msg))
+	w.Write(msg)
 }
 
 const hdrUseStickySessions = "Flynn-Use-Sticky-Sessions"
@@ -319,7 +320,7 @@ const hdrUseStickySessions = "Flynn-Use-Sticky-Sessions"
 func (s *HTTPListener) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r := s.findRouteForHost(req.Host)
 	if r == nil {
-		fail(w, 404, "Not Found")
+		fail(w, 404)
 		return
 	}
 
@@ -409,7 +410,7 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	addrs := shuffle(s.ss.Addrs())
 	if len(addrs) == 0 {
 		log.Println("no backends found")
-		fail(w, 503, "Service Unavailable")
+		fail(w, 503)
 		return
 	}
 
@@ -479,7 +480,7 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				continue
 			}
 			log.Println("http: proxy error:", err)
-			fail(w, 503, http.StatusText(503))
+			fail(w, 503)
 			return
 		}
 		defer res.Body.Close()
@@ -488,7 +489,7 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	if res == nil {
 		log.Println("no backends available")
-		fail(w, 503, "Service Unavailable")
+		fail(w, 503)
 		return
 	}
 
@@ -558,14 +559,14 @@ func (s *httpService) forwardAndProxyTCP(w http.ResponseWriter, req *http.Reques
 	}
 	if upconn == nil {
 		log.Println("no backends available")
-		failAndClose(w, 503, http.StatusText(503))
+		failAndClose(w, 503)
 		return
 	}
 
 	err = req.Write(upconn)
 	if err != nil {
 		log.Println("error copying request to target:", err)
-		failAndClose(w, 503, http.StatusText(503))
+		failAndClose(w, 503)
 		return
 	}
 
@@ -575,7 +576,7 @@ func (s *httpService) forwardAndProxyTCP(w http.ResponseWriter, req *http.Reques
 	res, err := http.ReadResponse(upconnbr, req)
 	if err != nil {
 		log.Println("http: proxy error:", err)
-		failAndClose(w, 503, http.StatusText(503))
+		failAndClose(w, 503)
 		return
 	}
 	defer res.Body.Close()
@@ -608,7 +609,7 @@ func (s *httpService) forwardAndProxyTCP(w http.ResponseWriter, req *http.Reques
 	downconn, _, err := w.(http.Hijacker).Hijack()
 	if err != nil {
 		log.Println("hijack failed:", err)
-		failAndClose(w, 500, http.StatusText(500))
+		failAndClose(w, 500)
 		return
 	}
 	defer downconn.Close()
