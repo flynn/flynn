@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"testing"
 	"time"
 
@@ -12,12 +13,35 @@ import (
 	"github.com/flynn/flynn/router/types"
 )
 
+func init() {
+	testMode = true
+}
+
 type discoverdClient interface {
 	DiscoverdClient
-	Register(string, string) error
-	Unregister(string, string) error
-	UnregisterAll() error
-	Close() error
+	AddServiceAndRegister(string, string) (discoverd.Heartbeater, error)
+}
+
+// discoverdWrapper wraps a discoverd client to expose Close method that closes
+// all heartbeaters
+type discoverdWrapper struct {
+	discoverdClient
+	hbs []io.Closer
+}
+
+func (d *discoverdWrapper) AddServiceAndRegister(service, addr string) (discoverd.Heartbeater, error) {
+	hb, err := d.discoverdClient.AddServiceAndRegister(service, addr)
+	if err != nil {
+		return nil, err
+	}
+	d.hbs = append(d.hbs, hb)
+	return hb, nil
+}
+
+func (d *discoverdWrapper) Close() {
+	for _, hb := range d.hbs {
+		hb.Close()
+	}
 }
 
 func newEtcd(t etcdrunner.TestingT) (EtcdClient, string, func()) {
@@ -26,9 +50,10 @@ func newEtcd(t etcdrunner.TestingT) (EtcdClient, string, func()) {
 }
 
 func newDiscoverd(t etcdrunner.TestingT, etcdPort string) (discoverdClient, func()) {
-	discoverd, killDiscoverd := testutil.BootDiscoverd(t, "", etcdPort)
-	return discoverd, func() {
-		discoverd.Close()
+	dc, killDiscoverd := testutil.BootDiscoverd(t, "", etcdPort)
+	dw := &discoverdWrapper{discoverdClient: dc}
+	return dw, func() {
+		dw.Close()
 		killDiscoverd()
 	}
 }
@@ -45,9 +70,10 @@ func setup(t etcdrunner.TestingT, ec EtcdClient, dc discoverdClient) (discoverdC
 	if dc == nil {
 		dc, killDiscoverd = testutil.BootDiscoverd(t, "", etcdAddr)
 	}
-	return dc, ec, func() {
+	dw := &discoverdWrapper{discoverdClient: dc}
+	return dw, ec, func() {
 		if killDiscoverd != nil {
-			dc.Close()
+			dw.Close()
 			killDiscoverd()
 		}
 		if killEtcd != nil {
@@ -90,65 +116,70 @@ func waitForEvent(c *C, w Watcher, event string, id string) func() *router.Event
 	}
 }
 
-func discoverdRegisterTCP(c *C, l *tcpListener, addr string) {
-	discoverdRegisterTCPService(c, l, "test", addr)
+func discoverdRegisterTCP(c *C, l *tcpListener, addr string) func() {
+	return discoverdRegisterTCPService(c, l, "test", addr)
 }
 
-func discoverdRegisterTCPService(c *C, l *tcpListener, name, addr string) {
+func discoverdRegisterTCPService(c *C, l *tcpListener, name, addr string) func() {
 	dc := l.TCPListener.discoverd.(discoverdClient)
-	ss := l.TCPListener.services[name].ss
-	discoverdRegister(c, dc, ss, name, addr)
+	sc := l.TCPListener.services[name].sc
+	return discoverdRegister(c, dc, sc.(*discoverdServiceCache), name, addr)
 }
 
-func discoverdRegisterHTTP(c *C, l *httpListener, addr string) {
-	discoverdRegisterHTTPService(c, l, "test", addr)
+func discoverdRegisterHTTP(c *C, l *httpListener, addr string) func() {
+	return discoverdRegisterHTTPService(c, l, "test", addr)
 }
 
-func discoverdRegisterHTTPService(c *C, l *httpListener, name, addr string) {
+func discoverdRegisterHTTPService(c *C, l *httpListener, name, addr string) func() {
 	dc := l.HTTPListener.discoverd.(discoverdClient)
-	ss := l.HTTPListener.services[name].ss
-	discoverdRegister(c, dc, ss, name, addr)
+	sc := l.HTTPListener.services[name].sc
+	return discoverdRegister(c, dc, sc.(*discoverdServiceCache), name, addr)
 }
 
-func discoverdRegister(c *C, dc discoverdClient, ss discoverd.ServiceSet, name, addr string) {
+func discoverdRegister(c *C, dc discoverdClient, sc *discoverdServiceCache, name, addr string) func() {
 	done := make(chan struct{})
-	ch := ss.Watch(false)
 	go func() {
-		defer ss.Unwatch(ch)
-		for u := range ch {
-			if u.Addr == addr && u.Online {
+		events := sc.watch(true)
+		defer sc.unwatch(events)
+		for event := range events {
+			if event.Kind == discoverd.EventKindUp && event.Instance.Addr == addr {
 				close(done)
 				return
 			}
 		}
 	}()
-	dc.Register(name, addr)
+	hb, err := dc.AddServiceAndRegister(name, addr)
+	c.Assert(err, IsNil)
 	select {
 	case <-done:
 	case <-time.After(10 * time.Second):
 		c.Fatal("timed out waiting for discoverd registration")
 	}
+	return discoverdUnregisterFunc(c, hb, sc)
 }
 
-func discoverdUnregister(c *C, dc discoverdClient, name, addr string) {
-	done := make(chan struct{})
-	ss, err := dc.NewServiceSet(name)
-	c.Assert(err, IsNil)
-	ch := ss.Watch(false)
-	go func() {
-		defer ss.Close()
-		for u := range ch {
-			if u.Addr == addr && !u.Online {
-				close(done)
-				return
+func discoverdUnregisterFunc(c *C, hb discoverd.Heartbeater, sc *discoverdServiceCache) func() {
+	return func() {
+		done := make(chan struct{})
+		started := make(chan struct{})
+		go func() {
+			events := sc.watch(false)
+			defer sc.unwatch(events)
+			close(started)
+			for event := range events {
+				if event.Kind == discoverd.EventKindDown && event.Instance.Addr == hb.Addr() {
+					close(done)
+					return
+				}
 			}
+		}()
+		<-started
+		c.Assert(hb.Close(), IsNil)
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			c.Fatal("timed out waiting for discoverd unregister")
 		}
-	}()
-	dc.Unregister(name, addr)
-	select {
-	case <-done:
-	case <-time.After(10 * time.Second):
-		c.Fatal("timed out waiting for discoverd unregister")
 	}
 }
 

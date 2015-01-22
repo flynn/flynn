@@ -9,12 +9,8 @@ import (
 )
 
 func main() {
-	d, err := discoverd.NewClient()
-	if err != nil {
-		log.Fatal(err)
-	}
 	addr := ":" + os.Args[1]
-	if err := d.Register("example-server", addr); err != nil {
+	if _, err := discoverd.AddServiceAndRegister("example-server", addr); err != nil {
 		log.Fatal(err)
 	}
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
