@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
@@ -410,61 +409,76 @@ func (s *S) TestStickyHTTPRoute(c *C) {
 }
 
 func (s *S) TestStickyHTTPRouteWebsocket(c *C) {
-	wshandler := func(w http.ResponseWriter, req *http.Request) {
-		w.Write([]byte("ok " + strings.TrimPrefix(req.URL.Path, "/")))
-	}
-	srv1 := httptest.NewServer(http.HandlerFunc(wshandler))
-	srv2 := httptest.NewServer(http.HandlerFunc(wshandler))
+	srv1 := httptest.NewServer(httpTestHandler("1"))
+	srv2 := httptest.NewServer(httpTestHandler("2"))
 	defer srv1.Close()
 	defer srv2.Close()
 
 	l, discoverd := newHTTPListener(c)
+	url := "http://" + l.Addr
 	defer l.Close()
+	defer discoverd.UnregisterAll()
 
 	addStickyHTTPRoute(c, l)
 
-	discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())
-	defer discoverd.UnregisterAll()
+	steps := []struct {
+		do        func()
+		backend   string
+		setCookie bool
+	}{
+		// step 1: register srv1, assert requests to srv1
+		{
+			do:        func() { discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String()) },
+			backend:   "1",
+			setCookie: true,
+		},
+		// step 2: register srv2, assert requests stay with srv1
+		{
+			do:      func() { discoverdRegisterHTTP(c, l, srv2.Listener.Addr().String()) },
+			backend: "1",
+		},
+		// step 3: unregister srv1, assert requests switch to srv2
+		{
+			do:        func() { discoverdUnregister(c, discoverd, "test", srv1.Listener.Addr().String()) },
+			backend:   "2",
+			setCookie: true,
+		},
+	}
 
-	// triggers the TCP-mode conn upgrade path, but does not hit the websocket
-	// handler and so the upgrade is not successful.
-	assertGetCookieUpgradeClosed := func(c *C, url, host, expected string, cookie *http.Cookie) *http.Cookie {
-		req := newReq(url, host)
-		if cookie != nil {
-			req.AddCookie(cookie)
-		}
-		req.Header.Set("Connection", "Upgrade")
-		res, err := httpClient.Do(req)
-		defer res.Body.Close()
+	var sessionCookie *http.Cookie
+	for _, step := range steps {
+		step.do()
 
-		c.Assert(err, IsNil)
-		c.Assert(res.StatusCode, Equals, 200)
-		data, err := ioutil.ReadAll(res.Body)
-		c.Assert(err, IsNil)
-		c.Assert(string(data), Equals, expected)
-		// make sure unsuccessful upgrade conn was closed
-		c.Assert(res.Close, Equals, true)
-		for _, c := range res.Cookies() {
-			if c.Name == stickyCookie {
-				return c
+		cookieSet := false
+		for i := 0; i < 10; i++ {
+			req := newReq(url, "example.com")
+			if sessionCookie != nil {
+				req.AddCookie(sessionCookie)
+			}
+			req.Header.Set("Connection", "Upgrade")
+			res, err := httpClient.Do(req)
+			defer res.Body.Close()
+
+			c.Assert(err, IsNil)
+			c.Assert(res.StatusCode, Equals, 200)
+			data, err := ioutil.ReadAll(res.Body)
+			c.Assert(err, IsNil)
+			c.Assert(string(data), Equals, step.backend)
+			// make sure unsuccessful upgrade conn was closed
+			c.Assert(res.Close, Equals, true)
+
+			// reuse the session cookie if present
+			for _, c := range res.Cookies() {
+				if c.Name == stickyCookie {
+					cookieSet = true
+					sessionCookie = c
+				}
 			}
 		}
-		return nil
-	}
 
-	cookie := assertGetCookieUpgradeClosed(c, "http://"+l.Addr+"/1", "example.com", "ok 1", nil)
-	httpClient.Transport.(*http.Transport).CloseIdleConnections()
+		c.Assert(cookieSet, Equals, step.setCookie)
 
-	discoverdRegisterHTTP(c, l, srv2.Listener.Addr().String())
-	for i := 0; i < 10; i++ {
-		resCookie := assertGetCookieUpgradeClosed(c, "http://"+l.Addr+"/1", "example.com", "ok 1", cookie)
-		c.Assert(resCookie, IsNil)
-	}
-
-	discoverdUnregister(c, discoverd, "test", srv1.Listener.Addr().String())
-	for i := 0; i < 10; i++ {
-		resCookie := assertGetCookieUpgradeClosed(c, "http://"+l.Addr+"/2", "example.com", "ok 2", cookie)
-		c.Assert(resCookie, Not(IsNil))
+		httpClient.Transport.(*http.Transport).CloseIdleConnections()
 	}
 }
 
