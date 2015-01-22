@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/md5"
 	"crypto/rand"
 	"crypto/tls"
@@ -302,6 +303,11 @@ func (s *HTTPListener) findRouteForHost(host string) *httpRoute {
 	return nil
 }
 
+func failAndClose(w http.ResponseWriter, code int, msg string) {
+	w.Header().Set("Connection", "close")
+	fail(w, code, msg)
+}
+
 func fail(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(msg)))
 	w.WriteHeader(code)
@@ -551,34 +557,61 @@ func (s *httpService) forwardAndProxyTCP(w http.ResponseWriter, req *http.Reques
 		break
 	}
 	if upconn == nil {
-		fail(w, 503, http.StatusText(503))
+		log.Println("no backends available")
+		failAndClose(w, 503, http.StatusText(503))
 		return
 	}
-
-	// TODO(bgentry): need to complete the handshake and set sticky cookie on
-	// response, otherwise websocket reconnections won't go to the right backend
-	// :(
-
-	hj, ok := w.(http.Hijacker)
-	if !ok {
-		log.Println("not a hijacker")
-		fail(w, 500, http.StatusText(500))
-		return
-	}
-	downconn, _, err := hj.Hijack()
-	if err != nil {
-		log.Println("hijack failed:", err)
-		fail(w, 500, http.StatusText(500))
-		return
-	}
-	defer downconn.Close()
 
 	err = req.Write(upconn)
 	if err != nil {
 		log.Println("error copying request to target:", err)
-		// TODO(bgentry): write proper 503 response for downstream
+		failAndClose(w, 503, http.StatusText(503))
 		return
 	}
+
+	// Need to complete the handshake and set sticky cookie on response, otherwise
+	// websocket reconnections won't go to the right backend
+	upconnbr := bufio.NewReader(upconn)
+	res, err := http.ReadResponse(upconnbr, req)
+	if err != nil {
+		log.Println("http: proxy error:", err)
+		failAndClose(w, 503, http.StatusText(503))
+		return
+	}
+	defer res.Body.Close()
+
+	// Copy the response headers and body over to the downstream ResponseWriter,
+	// the same as done in the non-TCP path.
+	copyHeader(w.Header(), res.Header)
+
+	if res.StatusCode != 101 {
+		// Upgrade was not successful, not going to reuse this connection.
+		w.Header().Set("Connection", "close")
+	}
+
+	if isSticky && stickyAddr != backend {
+		http.SetCookie(w, s.newStickyCookie(backend))
+	}
+
+	w.WriteHeader(res.StatusCode)
+	_, err = io.Copy(w, res.Body) // TODO(bgentry): consider using a flush interval
+	if err != nil {
+		log.Println("reverse proxy copy err:", err)
+		return
+	}
+
+	if res.StatusCode != 101 {
+		return
+	}
+	res.Body.Close() // close this now since we've copied everything
+
+	downconn, _, err := w.(http.Hijacker).Hijack()
+	if err != nil {
+		log.Println("hijack failed:", err)
+		failAndClose(w, 500, http.StatusText(500))
+		return
+	}
+	defer downconn.Close()
 
 	errc := make(chan error, 2)
 	cp := func(dst io.Writer, src io.Reader) {
@@ -586,7 +619,7 @@ func (s *httpService) forwardAndProxyTCP(w http.ResponseWriter, req *http.Reques
 		errc <- err
 	}
 	go cp(upconn, downconn)
-	go cp(downconn, upconn)
+	go cp(downconn, upconnbr)
 	<-errc
 }
 

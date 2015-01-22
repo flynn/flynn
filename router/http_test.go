@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
@@ -185,9 +186,9 @@ func assertGetCookie(c *C, url, host, expected string, cookie *http.Cookie) *htt
 	}
 	res, err := newHTTPClient(host).Do(req)
 	c.Assert(err, IsNil)
+	defer res.Body.Close()
 	c.Assert(res.StatusCode, Equals, 200)
 	data, err := ioutil.ReadAll(res.Body)
-	res.Body.Close()
 	c.Assert(err, IsNil)
 	c.Assert(string(data), Equals, expected)
 	for _, c := range res.Cookies() {
@@ -404,6 +405,65 @@ func (s *S) TestStickyHTTPRoute(c *C) {
 	discoverdUnregister(c, discoverd, "test", srv1.Listener.Addr().String())
 	for i := 0; i < 10; i++ {
 		resCookie := assertGetCookie(c, "http://"+l.Addr, "example.com", "2", cookie)
+		c.Assert(resCookie, Not(IsNil))
+	}
+}
+
+func (s *S) TestStickyHTTPRouteWebsocket(c *C) {
+	wshandler := func(w http.ResponseWriter, req *http.Request) {
+		w.Write([]byte("ok " + strings.TrimPrefix(req.URL.Path, "/")))
+	}
+	srv1 := httptest.NewServer(http.HandlerFunc(wshandler))
+	srv2 := httptest.NewServer(http.HandlerFunc(wshandler))
+	defer srv1.Close()
+	defer srv2.Close()
+
+	l, discoverd := newHTTPListener(c)
+	defer l.Close()
+
+	addStickyHTTPRoute(c, l)
+
+	discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	// triggers the TCP-mode conn upgrade path, but does not hit the websocket
+	// handler and so the upgrade is not successful.
+	assertGetCookieUpgradeClosed := func(c *C, url, host, expected string, cookie *http.Cookie) *http.Cookie {
+		req := newReq(url, host)
+		if cookie != nil {
+			req.AddCookie(cookie)
+		}
+		req.Header.Set("Connection", "Upgrade")
+		res, err := httpClient.Do(req)
+		defer res.Body.Close()
+
+		c.Assert(err, IsNil)
+		c.Assert(res.StatusCode, Equals, 200)
+		data, err := ioutil.ReadAll(res.Body)
+		c.Assert(err, IsNil)
+		c.Assert(string(data), Equals, expected)
+		// make sure unsuccessful upgrade conn was closed
+		c.Assert(res.Close, Equals, true)
+		for _, c := range res.Cookies() {
+			if c.Name == stickyCookie {
+				return c
+			}
+		}
+		return nil
+	}
+
+	cookie := assertGetCookieUpgradeClosed(c, "http://"+l.Addr+"/1", "example.com", "ok 1", nil)
+	httpClient.Transport.(*http.Transport).CloseIdleConnections()
+
+	discoverdRegisterHTTP(c, l, srv2.Listener.Addr().String())
+	for i := 0; i < 10; i++ {
+		resCookie := assertGetCookieUpgradeClosed(c, "http://"+l.Addr+"/1", "example.com", "ok 1", cookie)
+		c.Assert(resCookie, IsNil)
+	}
+
+	discoverdUnregister(c, discoverd, "test", srv1.Listener.Addr().String())
+	for i := 0; i < 10; i++ {
+		resCookie := assertGetCookieUpgradeClosed(c, "http://"+l.Addr+"/2", "example.com", "ok 2", cookie)
 		c.Assert(resCookie, Not(IsNil))
 	}
 }
