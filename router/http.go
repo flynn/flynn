@@ -419,11 +419,11 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if req.Header.Get(hdrUseStickySessions) == "true" {
 		// TODO(bgentry): switch to better way to check sticky setting
 		isSticky = true
-		req.Header.Del(hdrUseStickySessions)
 		if stickyAddr = s.stickyCookieAddr(req); stickyAddr != "" {
 			sortStringFirst(addrs, stickyAddr)
 		}
 	}
+	req.Header.Del(hdrUseStickySessions) // delete this no matter what
 
 	// Most of this is borrowed from httputil.ReverseProxy
 	outreq := &http.Request{}

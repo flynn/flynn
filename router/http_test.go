@@ -482,6 +482,26 @@ func (s *S) TestStickyHTTPRouteWebsocket(c *C) {
 	}
 }
 
+func (s *S) TestNoStickyHeaderAtBackend(c *C) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		_, ok := req.Header[hdrUseStickySessions]
+		c.Assert(ok, Equals, false)
+	})
+
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	l, discoverd := newHTTPListener(c)
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	assertGet(c, "http://"+l.Addr, "example.com", "")
+}
+
 func (s *S) TestNoBackends(c *C) {
 	l, _ := newHTTPListener(c)
 	defer l.Close()
