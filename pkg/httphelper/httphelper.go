@@ -9,6 +9,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	log15 "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/pkg/cors"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -107,7 +108,12 @@ func Error(w http.ResponseWriter, err error) {
 	case *JSONError:
 		jsonError = *err.(*JSONError)
 	default:
-		log.Println(err)
+		rw, ok := w.(*ResponseWriter)
+		if ok {
+			rw.Context().Value(CtxKeyLogger).(log15.Logger).Error(err.Error())
+		} else {
+			log.Println(err)
+		}
 		jsonError = JSONError{
 			Code:    UnknownError,
 			Message: "Something went wrong",
