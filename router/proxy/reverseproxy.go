@@ -9,9 +9,7 @@ package proxy
 import (
 	"io"
 	"log"
-	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 )
@@ -68,6 +66,32 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		transport = http.DefaultTransport
 	}
 
+	outreq := prepareRequest(req)
+
+	res, err := transport.RoundTrip(outreq)
+	if err != nil {
+		p.logf("router: proxy error: %v", err)
+		rw.WriteHeader(http.StatusServiceUnavailable)
+		rw.Write([]byte(http.StatusText(http.StatusServiceUnavailable)))
+		return
+	}
+	defer res.Body.Close()
+
+	p.writeResponse(rw, res)
+}
+
+func (p *ReverseProxy) writeResponse(rw http.ResponseWriter, res *http.Response) {
+	for _, h := range hopHeaders {
+		res.Header.Del(h)
+	}
+
+	copyHeader(rw.Header(), res.Header)
+
+	rw.WriteHeader(res.StatusCode)
+	p.copyResponse(rw, res.Body)
+}
+
+func prepareRequest(req *http.Request) *http.Request {
 	outreq := new(http.Request)
 	*outreq = *req // includes shallow copies of maps, but okay
 
@@ -94,32 +118,7 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	if clientIP, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
-		// If we aren't the first proxy retain prior
-		// X-Forwarded-For information as a comma+space
-		// separated list and fold multiple headers into one.
-		if prior, ok := outreq.Header["X-Forwarded-For"]; ok {
-			clientIP = strings.Join(prior, ", ") + ", " + clientIP
-		}
-		outreq.Header.Set("X-Forwarded-For", clientIP)
-	}
-
-	res, err := transport.RoundTrip(outreq)
-	if err != nil {
-		p.logf("http: proxy error: %v", err)
-		rw.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	defer res.Body.Close()
-
-	for _, h := range hopHeaders {
-		res.Header.Del(h)
-	}
-
-	copyHeader(rw.Header(), res.Header)
-
-	rw.WriteHeader(res.StatusCode)
-	p.copyResponse(rw, res.Body)
+	return outreq
 }
 
 func (p *ReverseProxy) copyResponse(dst io.Writer, src io.Reader) {
