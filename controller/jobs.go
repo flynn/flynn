@@ -245,9 +245,7 @@ func (c *controllerAPI) PutJob(ctx context.Context, w http.ResponseWriter, req *
 	}
 
 	var job ct.Job
-	dec := json.NewDecoder(req.Body)
-	err = dec.Decode(&job)
-	if err != nil {
+	if err = httphelper.DecodeJSON(req, &job); err != nil {
 		respondWithError(w, err)
 		return
 	}
@@ -471,9 +469,7 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	}
 
 	var newJob ct.NewJob
-	dec := json.NewDecoder(req.Body)
-	err = dec.Decode(&newJob)
-	if err != nil {
+	if err = httphelper.DecodeJSON(req, &newJob); err != nil {
 		respondWithError(w, err)
 		return
 	}

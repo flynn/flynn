@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
@@ -18,9 +17,7 @@ func (c *controllerAPI) CreateRoute(ctx context.Context, w http.ResponseWriter, 
 	}
 
 	var route router.Route
-	dec := json.NewDecoder(req.Body)
-	err = dec.Decode(&route)
-	if err != nil {
+	if err = httphelper.DecodeJSON(req, &route); err != nil {
 		respondWithError(w, err)
 		return
 	}

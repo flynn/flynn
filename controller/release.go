@@ -93,9 +93,7 @@ func (c *controllerAPI) SetAppRelease(ctx context.Context, w http.ResponseWriter
 	}
 
 	var rid releaseID
-	dec := json.NewDecoder(req.Body)
-	err = dec.Decode(&rid)
-	if err != nil {
+	if err = httphelper.DecodeJSON(req, &rid); err != nil {
 		respondWithError(w, err)
 		return
 	}

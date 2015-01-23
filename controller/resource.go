@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -165,9 +164,7 @@ func (c *controllerAPI) ProvisionResource(ctx context.Context, w http.ResponseWr
 	}
 
 	var rr ct.ResourceReq
-	dec := json.NewDecoder(req.Body)
-	err = dec.Decode(&rr)
-	if err != nil {
+	if err = httphelper.DecodeJSON(req, &rr); err != nil {
 		respondWithError(w, err)
 		return
 	}
@@ -246,9 +243,7 @@ func (c *controllerAPI) PutResource(ctx context.Context, w http.ResponseWriter, 
 	}
 
 	var resource ct.Resource
-	dec := json.NewDecoder(req.Body)
-	err = dec.Decode(&resource)
-	if err != nil {
+	if err = httphelper.DecodeJSON(req, &resource); err != nil {
 		respondWithError(w, err)
 		return
 	}

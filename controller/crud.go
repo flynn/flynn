@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 	"reflect"
 
@@ -30,13 +29,12 @@ func crud(r *httprouter.Router, resource string, example interface{}, repo Repos
 
 	r.POST(prefix, httphelper.WrapHandler(func(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
 		thing := reflect.New(resourceType).Interface()
-		err := json.NewDecoder(req.Body).Decode(thing)
-		if err != nil {
+		if err := httphelper.DecodeJSON(req, thing); err != nil {
 			respondWithError(rw, err)
 			return
 		}
 
-		err = repo.Add(thing)
+		err := repo.Add(thing)
 		if err != nil {
 			respondWithError(rw, err)
 			return
@@ -88,7 +86,7 @@ func crud(r *httprouter.Router, resource string, example interface{}, repo Repos
 			params := httphelper.ParamsFromContext(ctx)
 
 			var data map[string]interface{}
-			if err := json.NewDecoder(req.Body).Decode(&data); err != nil {
+			if err := httphelper.DecodeJSON(req, &data); err != nil {
 				respondWithError(rw, err)
 				return
 			}

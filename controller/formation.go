@@ -266,9 +266,7 @@ func (c *controllerAPI) PutFormation(ctx context.Context, w http.ResponseWriter,
 	}
 
 	var formation ct.Formation
-	dec := json.NewDecoder(req.Body)
-	err = dec.Decode(&formation)
-	if err != nil {
+	if err = httphelper.DecodeJSON(req, &formation); err != nil {
 		respondWithError(w, err)
 		return
 	}
