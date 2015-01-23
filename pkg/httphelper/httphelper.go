@@ -140,3 +140,8 @@ func JSON(w http.ResponseWriter, status int, v interface{}) {
 	w.WriteHeader(status)
 	w.Write(result)
 }
+
+func DecodeJSON(req *http.Request, i interface{}) error {
+	dec := json.NewDecoder(req.Body)
+	return dec.Decode(i)
+}
