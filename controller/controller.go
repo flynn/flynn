@@ -154,7 +154,8 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.GET("/apps/:apps_id/routes/:routes_type/:routes_id", httphelper.WrapHandler(api.GetRoute))
 	httpRouter.DELETE("/apps/:apps_id/routes/:routes_type/:routes_id", httphelper.WrapHandler(api.DeleteRoute))
 
-	return httphelper.ContextInjector("controller", muxHandler(httpRouter, c.key))
+	return httphelper.ContextInjector("controller",
+		httphelper.NewRequestLogger(muxHandler(httpRouter, c.key)))
 }
 
 func muxHandler(main http.Handler, authKey string) http.Handler {
