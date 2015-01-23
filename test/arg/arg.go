@@ -7,25 +7,25 @@ import (
 )
 
 type Args struct {
-	BootConfig cluster.BootConfig
-	CLI        string
-	RootFS     string
-	Flynnrc    string
-	RouterIP   string
-	Build      bool
-	Debug      bool
-	Stream     bool
-	DumpLogs   bool
-	Kill       bool
-	KeepRootFS bool
-	DBPath     string
-	ListenAddr string
-	TLSCert    string
-	TLSKey     string
-	AssetsDir  string
-	Run        string
-	Gist       bool
-	ClusterAPI string
+	BootConfig  cluster.BootConfig
+	CLI         string
+	RootFS      string
+	Flynnrc     string
+	RouterIP    string
+	Build       bool
+	Debug       bool
+	Stream      bool
+	DumpLogs    bool
+	Kill        bool
+	BuildRootFS bool
+	DBPath      string
+	ListenAddr  string
+	TLSCert     string
+	TLSKey      string
+	AssetsDir   string
+	Run         string
+	Gist        bool
+	ClusterAPI  string
 }
 
 func Parse() *Args {
@@ -52,7 +52,7 @@ func Parse() *Args {
 	flag.BoolVar(&args.Stream, "stream", false, "stream debug output (implies --debug)")
 	flag.BoolVar(&args.DumpLogs, "dump-logs", false, "dump logs on error")
 	flag.BoolVar(&args.Kill, "kill", true, "kill the cluster after running the tests")
-	flag.BoolVar(&args.KeepRootFS, "keep-rootfs", false, "don't remove the rootfs which was built to run the tests")
+	flag.BoolVar(&args.BuildRootFS, "build-rootfs", false, "just build the rootfs (leaving it behind for future use) without running tests")
 	flag.BoolVar(&args.Gist, "gist", false, "upload debug info to a gist")
 	flag.Parse()
 

@@ -78,10 +78,14 @@ func main() {
 		if err != nil {
 			testCluster.Shutdown()
 			log.Println("could not build flynn: ", err)
+			if rootFS != "" {
+				os.RemoveAll(rootFS)
+			}
 			return
 		}
-		if args.KeepRootFS {
+		if args.BuildRootFS {
 			fmt.Println("Built Flynn in rootfs:", rootFS)
+			os.Exit(0)
 		} else {
 			defer os.RemoveAll(rootFS)
 		}

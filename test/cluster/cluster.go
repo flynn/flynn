@@ -109,21 +109,21 @@ func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool) (string, error) 
 		},
 	})
 	if err != nil {
-		return "", err
+		return build.Drive("hda").FS, err
 	}
 	c.log("Booting build instance...")
 	if err := build.Start(); err != nil {
-		return "", fmt.Errorf("error starting build instance: %s", err)
+		return build.Drive("hda").FS, fmt.Errorf("error starting build instance: %s", err)
 	}
 
 	c.log("Waiting for instance to boot...")
 	if err := buildFlynn(build, commit, merge, c.out); err != nil {
 		build.Kill()
-		return "", fmt.Errorf("error running build script: %s", err)
+		return build.Drive("hda").FS, fmt.Errorf("error running build script: %s", err)
 	}
 
 	if err := build.Shutdown(); err != nil {
-		return "", fmt.Errorf("error while stopping build instance: %s", err)
+		return build.Drive("hda").FS, fmt.Errorf("error while stopping build instance: %s", err)
 	}
 	return build.Drive("hda").FS, nil
 }
@@ -331,6 +331,8 @@ git config user.email "ci@flynn.io"
 git config user.name "CI"
 git merge origin/master
 {{ end }}
+
+docker pull scratch
 
 make
 
