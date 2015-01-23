@@ -283,6 +283,35 @@ func (c *Client) StreamDeployment(deploymentID string, output chan<- *ct.Deploym
 	return c.Stream("GET", fmt.Sprintf("/deployments/%s", deploymentID), nil, output)
 }
 
+func (c *Client) DeployApp(appID, releaseID string) (initial bool, err error) {
+	d, err := c.CreateDeployment(appID, releaseID)
+	if err != nil {
+		return true, err
+	}
+
+	// if initial deploy, just stop here
+	if d.ID == "" {
+		return true, nil
+	}
+
+	events := make(chan *ct.DeploymentEvent)
+	stream, err := c.StreamDeployment(d.ID, events)
+	if err != nil {
+		return false, err
+	}
+	defer stream.Close()
+	select {
+	case e := <-events:
+		if e.Status == "complete" {
+			break
+		}
+	case <-time.After(10 * time.Second):
+		return false, fmt.Errorf("Timed out waiting for deployment completion!")
+
+	}
+	return true, nil
+}
+
 // StreamJobEvents streams job events to the output channel.
 func (c *Client) StreamJobEvents(appID string, lastID int64, output chan<- *ct.JobEvent) (stream.Stream, error) {
 	header := http.Header{

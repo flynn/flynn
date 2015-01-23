@@ -112,9 +112,8 @@ func (a *DeployAppAction) Run(s *State) error {
 	}
 	as.Formation = formation
 
-	if err := client.SetAppRelease(a.App.ID, a.Release.ID); err != nil {
+	if _, err := client.DeployApp(a.App.ID, a.Release.ID); err != nil {
 		return err
 	}
-
 	return nil
 }

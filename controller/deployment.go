@@ -106,23 +106,21 @@ func createDeployment(app *ct.App, rid releaseID, apps *AppRepo, releases *Relea
 
 	fs, err := formations.List(app.ID)
 	if err != nil {
+		fmt.Printf("2 err: %s", err)
 		r.Error(err)
 		return
 	}
-	if len(fs) == 0 {
+	if len(fs) == 0 || (len(fs) == 1 && fs[0].ReleaseID == release.ID) {
 		// immediately set app release
 		apps.SetRelease(app.ID, release.ID)
-		// render out ErrNoDeploy
-		r.Error(ct.ValidationError{Message: "Initial deploy"})
+		// empty ID means initial deploy
+		r.JSON(200, &ct.Deployment{})
 		return
 	}
 	oldRelease, err := apps.GetRelease(app.ID)
 	if err != nil {
+		fmt.Printf("3 err: %s", err)
 		r.Error(err)
-		return
-	}
-	if oldRelease.ID == release.ID {
-		r.JSON(200, release)
 		return
 	}
 	deployment := &ct.Deployment{
