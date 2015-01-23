@@ -482,6 +482,26 @@ func (s *S) TestStickyHTTPRouteWebsocket(c *C) {
 	}
 }
 
+func (s *S) TestNoBackends(c *C) {
+	l, _ := newHTTPListener(c)
+	defer l.Close()
+
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "example.com",
+		Service: "example-com",
+	}).ToRoute())
+
+	req := newReq("http://"+l.Addr, "example.com")
+	res, err := newHTTPClient("example.com").Do(req)
+	c.Assert(err, IsNil)
+	defer res.Body.Close()
+
+	c.Assert(res.StatusCode, Equals, 503)
+	data, err := ioutil.ReadAll(res.Body)
+	c.Assert(err, IsNil)
+	c.Assert(string(data), Equals, "Service Unavailable\n")
+}
+
 // issue #152
 func (s *S) TestKeepaliveHostname(c *C) {
 	srv1 := httptest.NewServer(httpTestHandler("1"))
