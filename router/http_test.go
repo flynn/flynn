@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/websocket"
@@ -184,9 +185,9 @@ func assertGetCookie(c *C, url, host, expected string, cookie *http.Cookie) *htt
 	}
 	res, err := newHTTPClient(host).Do(req)
 	c.Assert(err, IsNil)
+	defer res.Body.Close()
 	c.Assert(res.StatusCode, Equals, 200)
 	data, err := ioutil.ReadAll(res.Body)
-	res.Body.Close()
 	c.Assert(err, IsNil)
 	c.Assert(string(data), Equals, expected)
 	for _, c := range res.Cookies() {
@@ -286,12 +287,18 @@ func (s *S) TestHTTPServiceHandlerBackendConnectionClosed(c *C) {
 	// the backend server's connection gets closed, but router is
 	// able to recover
 	srv.CloseClientConnections()
+	// Though we've closed the conn on the server, the client might not have
+	// handled the FIN yet. The Transport offers no way to safely retry in those
+	// scenarios, so instead we just sleep long enough to handle the FIN.
+	// https://golang.org/issue/4677
+	time.Sleep(500 * time.Microsecond)
 	assertGet(c, "http://"+l.Addr, "example.com", "1")
 }
 
 // Act as an app to test HTTP headers
-func httpHeaderTestHandler(c *C, ip string) http.Handler {
+func httpHeaderTestHandler(c *C, ip, port string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		c.Assert(req.Header["X-Forwarded-Port"][0], Equals, port)
 		c.Assert(req.Header["X-Forwarded-Proto"][0], Equals, "http")
 		c.Assert(len(req.Header["X-Request-Start"][0]), Equals, 13)
 		c.Assert(req.Header["X-Forwarded-For"][0], Equals, ip)
@@ -302,7 +309,7 @@ func httpHeaderTestHandler(c *C, ip string) http.Handler {
 
 // issue #105
 func (s *S) TestHTTPHeaders(c *C) {
-	srv := httptest.NewServer(httpHeaderTestHandler(c, "127.0.0.1"))
+	srv := httptest.NewServer(httpHeaderTestHandler(c, "127.0.0.1", "0"))
 
 	l, discoverd := newHTTPListener(c)
 	defer l.Close()
@@ -316,7 +323,7 @@ func (s *S) TestHTTPHeaders(c *C) {
 }
 
 func (s *S) TestHTTPHeadersFromClient(c *C) {
-	srv := httptest.NewServer(httpHeaderTestHandler(c, "192.168.1.1, 127.0.0.1"))
+	srv := httptest.NewServer(httpHeaderTestHandler(c, "192.168.1.1, 127.0.0.1", "0"))
 
 	l, discoverd := newHTTPListener(c)
 	defer l.Close()
@@ -398,6 +405,80 @@ func (s *S) TestStickyHTTPRoute(c *C) {
 	for i := 0; i < 10; i++ {
 		resCookie := assertGetCookie(c, "http://"+l.Addr, "example.com", "2", cookie)
 		c.Assert(resCookie, Not(IsNil))
+	}
+}
+
+func (s *S) TestStickyHTTPRouteWebsocket(c *C) {
+	srv1 := httptest.NewServer(httpTestHandler("1"))
+	srv2 := httptest.NewServer(httpTestHandler("2"))
+	defer srv1.Close()
+	defer srv2.Close()
+
+	l, discoverd := newHTTPListener(c)
+	url := "http://" + l.Addr
+	defer l.Close()
+	defer discoverd.UnregisterAll()
+
+	addStickyHTTPRoute(c, l)
+
+	steps := []struct {
+		do        func()
+		backend   string
+		setCookie bool
+	}{
+		// step 1: register srv1, assert requests to srv1
+		{
+			do:        func() { discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String()) },
+			backend:   "1",
+			setCookie: true,
+		},
+		// step 2: register srv2, assert requests stay with srv1
+		{
+			do:      func() { discoverdRegisterHTTP(c, l, srv2.Listener.Addr().String()) },
+			backend: "1",
+		},
+		// step 3: unregister srv1, assert requests switch to srv2
+		{
+			do:        func() { discoverdUnregister(c, discoverd, "test", srv1.Listener.Addr().String()) },
+			backend:   "2",
+			setCookie: true,
+		},
+	}
+
+	var sessionCookie *http.Cookie
+	for _, step := range steps {
+		step.do()
+
+		cookieSet := false
+		for i := 0; i < 10; i++ {
+			req := newReq(url, "example.com")
+			if sessionCookie != nil {
+				req.AddCookie(sessionCookie)
+			}
+			req.Header.Set("Connection", "Upgrade")
+			res, err := httpClient.Do(req)
+			defer res.Body.Close()
+
+			c.Assert(err, IsNil)
+			c.Assert(res.StatusCode, Equals, 200)
+			data, err := ioutil.ReadAll(res.Body)
+			c.Assert(err, IsNil)
+			c.Assert(string(data), Equals, step.backend)
+			// make sure unsuccessful upgrade conn was closed
+			c.Assert(res.Close, Equals, true)
+
+			// reuse the session cookie if present
+			for _, c := range res.Cookies() {
+				if c.Name == stickyCookie {
+					cookieSet = true
+					sessionCookie = c
+				}
+			}
+		}
+
+		c.Assert(cookieSet, Equals, step.setCookie)
+
+		httpClient.Transport.(*http.Transport).CloseIdleConnections()
 	}
 }
 
