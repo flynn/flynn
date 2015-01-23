@@ -332,6 +332,8 @@ git config user.name "CI"
 git merge origin/master
 {{ end }}
 
+docker pull scratch
+
 make
 
 if [[ -f test/scripts/debug-info.sh ]]; then
