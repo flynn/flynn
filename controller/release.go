@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -85,8 +85,8 @@ type releaseID struct {
 	ID string `json:"id"`
 }
 
-func (c *controllerAPI) SetAppRelease(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	app, err := c.getApp(params)
+func (c *controllerAPI) SetAppRelease(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	app, err := c.getApp(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -137,8 +137,8 @@ func (c *controllerAPI) SetAppRelease(w http.ResponseWriter, req *http.Request, 
 	httphelper.JSON(w, 200, release)
 }
 
-func (c *controllerAPI) GetAppRelease(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	app, err := c.getApp(params)
+func (c *controllerAPI) GetAppRelease(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	app, err := c.getApp(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return

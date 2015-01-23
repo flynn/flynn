@@ -14,7 +14,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -186,7 +186,8 @@ type clusterClient interface {
 	AddJobs(map[string][]*host.Job) (map[string]host.Host, error)
 }
 
-func (c *controllerAPI) connectHost(params httprouter.Params) (cluster.Host, string, error) {
+func (c *controllerAPI) connectHost(ctx context.Context) (cluster.Host, string, error) {
+	params := httphelper.ParamsFromContext(ctx)
 	hostID, jobID, err := cluster.ParseJobID(params.ByName("jobs_id"))
 	if err != nil {
 		log.Printf("Unable to parse hostID from %q", params.ByName("jobs_id"))
@@ -200,8 +201,8 @@ func (c *controllerAPI) connectHost(params httprouter.Params) (cluster.Host, str
 	return client, jobID, nil
 }
 
-func (c *controllerAPI) ListJobs(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	app, err := c.getApp(params)
+func (c *controllerAPI) ListJobs(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	app, err := c.getApp(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -220,8 +221,10 @@ func (c *controllerAPI) ListJobs(w http.ResponseWriter, req *http.Request, param
 	httphelper.JSON(w, 200, list)
 }
 
-func (c *controllerAPI) GetJob(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	_, err := c.getApp(params)
+func (c *controllerAPI) GetJob(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params := httphelper.ParamsFromContext(ctx)
+
+	_, err := c.getApp(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -234,8 +237,8 @@ func (c *controllerAPI) GetJob(w http.ResponseWriter, req *http.Request, params 
 	httphelper.JSON(w, 200, job)
 }
 
-func (c *controllerAPI) PutJob(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	app, err := c.getApp(params)
+func (c *controllerAPI) PutJob(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	app, err := c.getApp(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -257,14 +260,14 @@ func (c *controllerAPI) PutJob(w http.ResponseWriter, req *http.Request, params 
 	httphelper.JSON(w, 200, &job)
 }
 
-func (c *controllerAPI) JobLog(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	_, err := c.getApp(params)
+func (c *controllerAPI) JobLog(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	_, err := c.getApp(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
 	}
 
-	hc, jobID, err := c.connectHost(params)
+	hc, jobID, err := c.connectHost(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -441,14 +444,14 @@ func streamJobs(req *http.Request, w http.ResponseWriter, app *ct.App, repo *Job
 	}
 }
 
-func (c *controllerAPI) KillJob(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	_, err := c.getApp(params)
+func (c *controllerAPI) KillJob(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	_, err := c.getApp(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
 	}
 
-	client, jobID, err := c.connectHost(params)
+	client, jobID, err := c.connectHost(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -460,8 +463,8 @@ func (c *controllerAPI) KillJob(w http.ResponseWriter, req *http.Request, params
 	}
 }
 
-func (c *controllerAPI) RunJob(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	app, err := c.getApp(params)
+func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	app, err := c.getApp(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return

@@ -7,7 +7,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -157,8 +157,8 @@ func (r *ResourceRepo) AppList(appID string) ([]*ct.Resource, error) {
 	return resourceList(rows)
 }
 
-func (c *controllerAPI) ProvisionResource(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	p, err := c.getProvider(params)
+func (c *controllerAPI) ProvisionResource(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	p, err := c.getProvider(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -204,8 +204,8 @@ func (c *controllerAPI) ProvisionResource(w http.ResponseWriter, req *http.Reque
 	httphelper.JSON(w, 200, res)
 }
 
-func (c *controllerAPI) GetProviderResources(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	p, err := c.getProvider(params)
+func (c *controllerAPI) GetProviderResources(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	p, err := c.getProvider(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -219,8 +219,10 @@ func (c *controllerAPI) GetProviderResources(w http.ResponseWriter, req *http.Re
 	httphelper.JSON(w, 200, res)
 }
 
-func (c *controllerAPI) GetResource(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	_, err := c.getProvider(params)
+func (c *controllerAPI) GetResource(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params := httphelper.ParamsFromContext(ctx)
+
+	_, err := c.getProvider(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -234,8 +236,10 @@ func (c *controllerAPI) GetResource(w http.ResponseWriter, req *http.Request, pa
 	httphelper.JSON(w, 200, res)
 }
 
-func (c *controllerAPI) PutResource(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	p, err := c.getProvider(params)
+func (c *controllerAPI) PutResource(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params := httphelper.ParamsFromContext(ctx)
+
+	p, err := c.getProvider(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -258,8 +262,8 @@ func (c *controllerAPI) PutResource(w http.ResponseWriter, req *http.Request, pa
 	httphelper.JSON(w, 200, &resource)
 }
 
-func (c *controllerAPI) GetAppResources(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	app, err := c.getApp(params)
+func (c *controllerAPI) GetAppResources(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	app, err := c.getApp(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return

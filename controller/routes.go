@@ -4,14 +4,14 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/pkg/httphelper"
 	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
 )
 
-func (c *controllerAPI) CreateRoute(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	app, err := c.getApp(params)
+func (c *controllerAPI) CreateRoute(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	app, err := c.getApp(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -33,8 +33,10 @@ func (c *controllerAPI) CreateRoute(w http.ResponseWriter, req *http.Request, pa
 	httphelper.JSON(w, 200, &route)
 }
 
-func (c *controllerAPI) GetRoute(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	app, err := c.getApp(params)
+func (c *controllerAPI) GetRoute(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params := httphelper.ParamsFromContext(ctx)
+
+	app, err := c.getApp(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -49,8 +51,8 @@ func (c *controllerAPI) GetRoute(w http.ResponseWriter, req *http.Request, param
 	httphelper.JSON(w, 200, route)
 }
 
-func (c *controllerAPI) GetRouteList(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	app, err := c.getApp(params)
+func (c *controllerAPI) GetRouteList(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	app, err := c.getApp(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -64,8 +66,10 @@ func (c *controllerAPI) GetRouteList(w http.ResponseWriter, req *http.Request, p
 	httphelper.JSON(w, 200, routes)
 }
 
-func (c *controllerAPI) DeleteRoute(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	app, err := c.getApp(params)
+func (c *controllerAPI) DeleteRoute(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params := httphelper.ParamsFromContext(ctx)
+
+	app, err := c.getApp(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return

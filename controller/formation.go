@@ -12,7 +12,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -253,13 +253,13 @@ func (r *FormationRepo) Unsubscribe(ch chan *ct.ExpandedFormation) {
 	}
 }
 
-func (c *controllerAPI) PutFormation(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	app, err := c.getApp(params)
+func (c *controllerAPI) PutFormation(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	app, err := c.getApp(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
 	}
-	release, err := c.getRelease(params)
+	release, err := c.getRelease(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -290,8 +290,10 @@ func (c *controllerAPI) PutFormation(w http.ResponseWriter, req *http.Request, p
 	httphelper.JSON(w, 200, &formation)
 }
 
-func (c *controllerAPI) GetFormation(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	app, err := c.getApp(params)
+func (c *controllerAPI) GetFormation(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params := httphelper.ParamsFromContext(ctx)
+
+	app, err := c.getApp(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -304,8 +306,10 @@ func (c *controllerAPI) GetFormation(w http.ResponseWriter, req *http.Request, p
 	httphelper.JSON(w, 200, formation)
 }
 
-func (c *controllerAPI) DeleteFormation(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	app, err := c.getApp(params)
+func (c *controllerAPI) DeleteFormation(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params := httphelper.ParamsFromContext(ctx)
+
+	app, err := c.getApp(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -323,8 +327,8 @@ func (c *controllerAPI) DeleteFormation(w http.ResponseWriter, req *http.Request
 	w.WriteHeader(200)
 }
 
-func (c *controllerAPI) ListFormations(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	app, err := c.getApp(params)
+func (c *controllerAPI) ListFormations(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	app, err := c.getApp(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -337,7 +341,7 @@ func (c *controllerAPI) ListFormations(w http.ResponseWriter, req *http.Request,
 	httphelper.JSON(w, 200, list)
 }
 
-func (c *controllerAPI) GetFormations(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+func (c *controllerAPI) GetFormations(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	ch := make(chan *ct.ExpandedFormation)
 	stopCh := make(chan struct{})
 	wr := sse.NewWriter(w)
