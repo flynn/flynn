@@ -10,14 +10,12 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/controller/name"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/cluster"
-	"github.com/flynn/flynn/pkg/cors"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/resource"
@@ -159,17 +157,8 @@ func appHandler(c handlerConfig) http.Handler {
 }
 
 func muxHandler(main http.Handler, authKey string) http.Handler {
-	corsHandler := cors.Allow(&cors.Options{
-		AllowAllOrigins:  true,
-		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
-		AllowHeaders:     []string{"Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match"},
-		ExposeHeaders:    []string{"ETag"},
-		AllowCredentials: true,
-		MaxAge:           time.Hour,
-	})
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		corsHandler(w, r)
+		httphelper.CORSAllowAllHandler(w, r)
 		if r.URL.Path == "/ping" || r.Method == "OPTIONS" {
 			w.WriteHeader(200)
 			return
