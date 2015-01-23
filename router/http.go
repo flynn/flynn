@@ -475,7 +475,7 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		outreq.URL.Host = backend
 		res, err = transport.RoundTrip(outreq)
 		if err != nil {
-			if _, ok := err.(*dialErr); ok {
+			if _, ok := err.(dialErr); ok {
 				// retry, maybe log a message about it
 				continue
 			}

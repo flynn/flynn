@@ -502,6 +502,37 @@ func (s *S) TestNoBackends(c *C) {
 	c.Assert(string(data), Equals, "Service Unavailable\n")
 }
 
+func (s *S) TestClosedBackendRetriesAnotherBackend(c *C) {
+	l, _ := newHTTPListener(c)
+	defer l.Close()
+
+	srv1 := httptest.NewServer(httpTestHandler("1"))
+	srv1.Close() // close this server immediately
+	srv2 := httptest.NewServer(httpTestHandler("2"))
+	defer srv2.Close()
+
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "example.com",
+		Service: "example-com",
+		Sticky:  true,
+	}).ToRoute())
+	discoverdRegisterHTTPService(c, l, "example-com", srv1.Listener.Addr().String())
+	discoverdRegisterHTTPService(c, l, "example-com", srv2.Listener.Addr().String())
+
+	req := newReq("http://"+l.Addr, "example.com")
+	// add a cookie to stick to srv1
+	stickyCookie := l.findRouteForHost("example.com").service.newStickyCookie(srv1.Listener.Addr().String())
+	req.AddCookie(stickyCookie)
+	res, err := newHTTPClient("example.com").Do(req)
+	c.Assert(err, IsNil)
+	defer res.Body.Close()
+
+	c.Assert(res.StatusCode, Equals, 200)
+	data, err := ioutil.ReadAll(res.Body)
+	c.Assert(err, IsNil)
+	c.Assert(string(data), Equals, "2")
+}
+
 // issue #152
 func (s *S) TestKeepaliveHostname(c *C) {
 	srv1 := httptest.NewServer(httpTestHandler("1"))
