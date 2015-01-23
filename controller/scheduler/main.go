@@ -519,6 +519,7 @@ type Job struct {
 
 	restarts  int
 	timer     *time.Timer
+	timerMtx  sync.Mutex
 	startedAt time.Time
 }
 
@@ -537,6 +538,14 @@ func (m jobTypeMap) Add(typ, host, id string) *Job {
 
 func (m jobTypeMap) Remove(job *Job) {
 	if jobs, ok := m[job.Type]; ok {
+		j := jobs[jobKey{job.HostID, job.ID}]
+		// cancel job restarts
+		j.timerMtx.Lock()
+		if j.timer != nil {
+			j.timer.Stop()
+			j.timer = nil
+		}
+		j.timerMtx.Unlock()
 		delete(jobs, jobKey{job.HostID, job.ID})
 	}
 }
@@ -599,9 +608,11 @@ func (f *Formation) RestartJob(typ, hostID, jobID string) {
 		for i := 0; i < job.restarts-1; i++ {
 			duration *= 2
 		}
+		job.timerMtx.Lock()
 		job.timer = time.AfterFunc(duration, func() {
 			f.restart(job)
 		})
+		job.timerMtx.Unlock()
 	}
 }
 
@@ -760,10 +771,23 @@ func (f *Formation) jobType(job *host.Job) string {
 // sortJobs sorts Jobs in reverse chronological order based on their startedAt time
 type sortJobs []*Job
 
-func (s sortJobs) Len() int           { return len(s) }
-func (s sortJobs) Less(i, j int) bool { return s[i].startedAt.Sub(s[j].startedAt) > 0 }
-func (s sortJobs) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-func (s sortJobs) Sort()              { sort.Sort(s) }
+func (s sortJobs) Len() int { return len(s) }
+func (s sortJobs) Less(i, j int) bool {
+	s[i].timerMtx.Lock()
+	s[j].timerMtx.Lock()
+	defer s[i].timerMtx.Unlock()
+	defer s[j].timerMtx.Unlock()
+	switch {
+	case s[i].timer != nil && s[j].timer == nil:
+		return true
+	case s[i].timer == nil && s[j].timer != nil:
+		return false
+	default:
+		return s[i].startedAt.Sub(s[j].startedAt) > 0
+	}
+}
+func (s sortJobs) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (s sortJobs) Sort()         { sort.Sort(s) }
 
 func (f *Formation) remove(n int, name string, hostID string) {
 	g := grohl.NewContext(grohl.Data{"fn": "remove", "app.id": f.AppID, "release.id": f.Release.ID})
