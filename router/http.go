@@ -419,11 +419,11 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if req.Header.Get(hdrUseStickySessions) == "true" {
 		// TODO(bgentry): switch to better way to check sticky setting
 		isSticky = true
-		req.Header.Del(hdrUseStickySessions)
 		if stickyAddr = s.stickyCookieAddr(req); stickyAddr != "" {
 			sortStringFirst(addrs, stickyAddr)
 		}
 	}
+	req.Header.Del(hdrUseStickySessions) // delete this no matter what
 
 	// Most of this is borrowed from httputil.ReverseProxy
 	outreq := &http.Request{}
@@ -475,7 +475,7 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		outreq.URL.Host = backend
 		res, err = transport.RoundTrip(outreq)
 		if err != nil {
-			if _, ok := err.(*dialErr); ok {
+			if _, ok := err.(dialErr); ok {
 				// retry, maybe log a message about it
 				continue
 			}
