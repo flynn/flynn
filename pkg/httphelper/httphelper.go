@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
+
+	"github.com/flynn/flynn/pkg/cors"
 )
 
 type ErrorCode string
@@ -32,6 +35,15 @@ type JSONError struct {
 	Message string          `json:"message"`
 	Detail  json.RawMessage `json:"detail,omitempty"`
 }
+
+var CORSAllowAllHandler = cors.Allow(&cors.Options{
+	AllowAllOrigins:  true,
+	AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
+	AllowHeaders:     []string{"Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match"},
+	ExposeHeaders:    []string{"ETag"},
+	AllowCredentials: true,
+	MaxAge:           time.Hour,
+})
 
 func (jsonError JSONError) Error() string {
 	return fmt.Sprintf("%s: %s", jsonError.Code, jsonError.Message)
