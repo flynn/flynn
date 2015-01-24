@@ -338,6 +338,7 @@ func (s *S) TestHTTPHeadersFromClient(c *C) {
 	req.Header.Set("X-Request-Id", "asdf1234asdf")
 	res, err := httpClient.Do(req)
 	c.Assert(err, IsNil)
+	defer res.Body.Close()
 	c.Assert(res.StatusCode, Equals, 200)
 }
 
@@ -522,6 +523,47 @@ func (s *S) TestNoBackends(c *C) {
 	c.Assert(string(data), Equals, "Service Unavailable\n")
 }
 
+func (s *S) TestNoResponsiveBackends(c *C) {
+	l, _ := newHTTPListener(c)
+	defer l.Close()
+
+	// close both servers immediately
+	srv1 := httptest.NewServer(httpTestHandler("1"))
+	srv1.Close()
+	srv2 := httptest.NewServer(httpTestHandler("2"))
+	srv2.Close()
+
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "example.com",
+		Service: "example-com",
+		Sticky:  true,
+	}).ToRoute())
+	discoverdRegisterHTTPService(c, l, "example-com", srv1.Listener.Addr().String())
+	discoverdRegisterHTTPService(c, l, "example-com", srv2.Listener.Addr().String())
+
+	tests := []struct {
+		upgrade bool
+	}{
+		{upgrade: false}, // regular path
+		{upgrade: true},  // tcp/websocket path
+	}
+	for _, test := range tests {
+		c.Log("upgrade:", test.upgrade)
+		req := newReq("http://"+l.Addr, "example.com")
+		if test.upgrade {
+			req.Header.Set("Connection", "Upgrade")
+		}
+		res, err := newHTTPClient("example.com").Do(req)
+		c.Assert(err, IsNil)
+		defer res.Body.Close()
+
+		c.Assert(res.StatusCode, Equals, 503)
+		data, err := ioutil.ReadAll(res.Body)
+		c.Assert(err, IsNil)
+		c.Assert(string(data), Equals, "Service Unavailable\n")
+	}
+}
+
 func (s *S) TestClosedBackendRetriesAnotherBackend(c *C) {
 	l, _ := newHTTPListener(c)
 	defer l.Close()
@@ -551,6 +593,75 @@ func (s *S) TestClosedBackendRetriesAnotherBackend(c *C) {
 	data, err := ioutil.ReadAll(res.Body)
 	c.Assert(err, IsNil)
 	c.Assert(string(data), Equals, "2")
+}
+
+// Note: this behavior may change if the following issue is fixed, in which case
+// this behavior would only apply to non-idempotent requests (i.e. POST):
+// https://golang.org/issue/4677
+func (s *S) TestErrorAfterConnOnlyHitsOneBackend(c *C) {
+	tests := []struct {
+		upgrade bool
+	}{
+		{upgrade: false}, // regular path
+		{upgrade: true},  // tcp/websocket path
+	}
+	for _, test := range tests {
+		runTestErrorAfterConnOnlyHitsOneBackend(c, test.upgrade)
+	}
+}
+
+func runTestErrorAfterConnOnlyHitsOneBackend(c *C, upgrade bool) {
+	c.Log("upgrade:", upgrade)
+	closec := make(chan struct{})
+	defer close(closec)
+	hitCount := 0
+	acceptOnlyOnce := func(listener net.Listener) {
+		for {
+			conn, err := listener.Accept()
+			select {
+			case <-closec:
+				return
+			default:
+				c.Assert(err, IsNil)
+				hitCount++
+				conn.Close()
+				if hitCount > 1 {
+					c.Fatal("received a second conn")
+				}
+			}
+		}
+	}
+	srv1, err := net.Listen("tcp", "127.0.0.1:0")
+	c.Assert(err, IsNil)
+	defer srv1.Close()
+	srv2, err := net.Listen("tcp", "127.0.0.1:0")
+	c.Assert(err, IsNil)
+	defer srv2.Close()
+
+	go acceptOnlyOnce(srv1)
+	go acceptOnlyOnce(srv2)
+
+	l, discoverd := newHTTPListener(c)
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+
+	discoverdRegisterHTTP(c, l, srv1.Addr().String())
+	discoverdRegisterHTTP(c, l, srv2.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	req := newReq("http://"+l.Addr, "example.com")
+	if upgrade {
+		req.Header.Set("Connection", "Upgrade")
+	}
+	res, err := newHTTPClient("example.com").Do(req)
+	c.Assert(err, IsNil)
+	defer res.Body.Close()
+
+	c.Assert(res.StatusCode, Equals, 503)
+	data, err := ioutil.ReadAll(res.Body)
+	c.Assert(err, IsNil)
+	c.Assert(string(data), Equals, "Service Unavailable\n")
 }
 
 // issue #152
