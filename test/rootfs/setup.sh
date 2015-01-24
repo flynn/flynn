@@ -119,6 +119,13 @@ apt-get install -y \
   libvirt-dev \
   libvirt-bin
 
+# install flynn test dependencies: postgres
+# (normally this is used via an appliance; this is for unit tests)
+apt-get install -y postgresql postgresql-contrib
+sudo -u postgres createuser --superuser ubuntu
+update-rc.d postgresql disable
+service postgresql stop
+
 # make tup suid root so that we can build in chroots
 chmod ug+s /usr/bin/tup
 
