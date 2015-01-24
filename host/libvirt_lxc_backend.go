@@ -231,16 +231,20 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 
 	path := filepath.Join(container.RootPath, "/run/flannel/subnet.env")
 	var data []byte
-	networkConfigAttempts.Run(func() error {
+	err = networkConfigAttempts.Run(func() error {
 		select {
 		case <-container.done:
 			return errors.New("host: networking container unexpectedly gone")
 		default:
 		}
 
+		var err error
 		data, err = ioutil.ReadFile(path)
 		return err
 	})
+	if err != nil {
+		return err
+	}
 
 	for _, line := range bytes.Split(data, []byte("\n")) {
 		if bytes.HasPrefix(line, []byte("FLANNEL_MTU=")) {
