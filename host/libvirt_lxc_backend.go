@@ -257,43 +257,61 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 		}
 	}
 
-	var networkConfig *lt.Network
-	var network *libvirt.VirNetwork
-
-	if virtNet, err := l.libvirt.LookupNetworkByName(libvirtNetName); err == nil {
-		// network already exists
-		network = &virtNet
-		networkConfig = &lt.Network{}
-		desc, err := network.GetXMLDesc(0)
-		if err != nil {
-			return err
-		}
-		if err := xml.Unmarshal([]byte(desc), networkConfig); err != nil {
-			return err
-		}
-		if networkConfig.IP.Address != l.bridgeAddr.String() || networkConfig.IP.Netmask != net.IP(l.bridgeNet.Mask).String() {
-			// network does not match new settings, destroy it
-			network.Destroy()
-			network.Undefine()
-			network = nil
-		}
+	err = netlink.CreateBridge(bridgeName, false)
+	bridgeExists := os.IsExist(err)
+	if err != nil && !bridgeExists {
+		return err
 	}
-	if network == nil {
-		// network doesn't exist
+
+	bridge, err := net.InterfaceByName(bridgeName)
+	if err != nil {
+		return err
+	}
+	if !bridgeExists {
+		// We need to explicitly assign the MAC address to avoid it changing to a lower value
+		// See: https://github.com/flynn/flynn/issues/223
 		b := random.Bytes(5)
 		bridgeMAC := fmt.Sprintf("fe:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4])
-		networkConfig = &lt.Network{
-			Name:    libvirtNetName,
-			Bridge:  lt.Bridge{Name: bridgeName, STP: "off"},
-			IP:      lt.IP{Address: l.bridgeAddr.String(), Netmask: net.IP(l.bridgeNet.Mask).String()},
-			MAC:     lt.MAC{Address: bridgeMAC},
-			Forward: lt.Forward{Mode: "route"},
+		if err := netlink.NetworkSetMacAddress(bridge, bridgeMAC); err != nil {
+			return err
 		}
-		net, err := l.libvirt.NetworkDefineXML(string(networkConfig.XML()))
+	}
+	currAddrs, err := bridge.Addrs()
+	if err != nil {
+		return err
+	}
+	setIP := true
+	for _, addr := range currAddrs {
+		ip, net, _ := net.ParseCIDR(addr.String())
+		if ip.Equal(l.bridgeAddr) && net.String() == l.bridgeNet.String() {
+			setIP = false
+		} else {
+			if err := netlink.NetworkLinkDelIp(bridge, ip, net); err != nil {
+				return err
+			}
+		}
+	}
+	if setIP {
+		if err := netlink.NetworkLinkAddIp(bridge, l.bridgeAddr, l.bridgeNet); err != nil {
+			return err
+		}
+	}
+	if err := netlink.NetworkLinkUp(bridge); err != nil {
+		return err
+	}
+
+	network, err := l.libvirt.LookupNetworkByName(libvirtNetName)
+	if err != nil {
+		// network doesn't exist
+		networkConfig := &lt.Network{
+			Name:    libvirtNetName,
+			Bridge:  lt.Bridge{Name: bridgeName},
+			Forward: lt.Forward{Mode: "bridge"},
+		}
+		network, err = l.libvirt.NetworkDefineXML(string(networkConfig.XML()))
 		if err != nil {
 			return err
 		}
-		network = &net
 	}
 	active, err := network.IsActive()
 	if err != nil {
@@ -303,19 +321,6 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 		if err := network.Create(); err != nil {
 			return err
 		}
-	}
-
-	// We need to explicitly assign the MAC address to avoid it changing to a lower value
-	// See: https://github.com/flynn/flynn/issues/223
-	bridge, err := net.InterfaceByName(bridgeName)
-	if err != nil {
-		return err
-	}
-	if err := netlink.NetworkSetMacAddress(bridge, networkConfig.MAC.Address); err != nil {
-		return err
-	}
-	if err := netlink.NetworkLinkUp(bridge); err != nil {
-		return err
 	}
 
 	// Set up iptables for outbound traffic masquerading from containers to the
