@@ -12,8 +12,9 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/sse"
 )
@@ -252,23 +253,93 @@ func (r *FormationRepo) Unsubscribe(ch chan *ct.ExpandedFormation) {
 	}
 }
 
-func getFormations(repo *FormationRepo, req *http.Request, params martini.Params, w http.ResponseWriter, r ResponseHelper) {
+func (c *controllerAPI) PutFormation(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	app := c.getApp(ctx)
+	release, err := c.getRelease(ctx)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	var formation ct.Formation
+	if err = httphelper.DecodeJSON(req, &formation); err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	formation.AppID = app.ID
+	formation.ReleaseID = release.ID
+	if app.Protected {
+		for typ := range release.Processes {
+			if formation.Processes[typ] == 0 {
+				respondWithError(w, ct.ValidationError{Message: "unable to scale to zero, app is protected"})
+				return
+			}
+		}
+	}
+	if err = c.formationRepo.Add(&formation); err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, &formation)
+}
+
+func (c *controllerAPI) GetFormation(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params := httphelper.ParamsFromContext(ctx)
+
+	app := c.getApp(ctx)
+	formation, err := c.formationRepo.Get(app.ID, params.ByName("releases_id"))
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, formation)
+}
+
+func (c *controllerAPI) DeleteFormation(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params := httphelper.ParamsFromContext(ctx)
+
+	app := c.getApp(ctx)
+	formation, err := c.formationRepo.Get(app.ID, params.ByName("releases_id"))
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	err = c.formationRepo.Remove(app.ID, formation.ReleaseID)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	w.WriteHeader(200)
+}
+
+func (c *controllerAPI) ListFormations(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	app := c.getApp(ctx)
+	list, err := c.formationRepo.List(app.ID)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, list)
+}
+
+func (c *controllerAPI) GetFormations(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	ch := make(chan *ct.ExpandedFormation)
 	stopCh := make(chan struct{})
 	wr := sse.NewWriter(w)
 	enc := json.NewEncoder(wr)
 	since, err := time.Parse(time.RFC3339, req.FormValue("since"))
 	if err != nil {
-		r.Error(err)
+		respondWithError(w, err)
 		return
 	}
-	if err := repo.Subscribe(ch, stopCh, since); err != nil {
-		r.Error(err)
+	if err := c.formationRepo.Subscribe(ch, stopCh, since); err != nil {
+		respondWithError(w, err)
 		return
 	}
 	go func() {
 		<-w.(http.CloseNotifier).CloseNotify()
-		repo.Unsubscribe(ch)
+		c.formationRepo.Unsubscribe(ch)
 		close(stopCh)
 	}()
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")

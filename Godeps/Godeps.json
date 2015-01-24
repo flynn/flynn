@@ -291,6 +291,10 @@
 			"Rev": "1fbbd62cfec66bd39d91e97749579579d4d3037e"
 		},
 		{
+			"ImportPath": "golang.org/x/net/context",
+			"Rev": "cbcac7bb8415db9b6cb4d1ebab1dc9afbd688b97"
+		},
+		{
 			"ImportPath": "golang.org/x/net/websocket",
 			"Rev": "cbcac7bb8415db9b6cb4d1ebab1dc9afbd688b97"
 		},

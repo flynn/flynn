@@ -5,6 +5,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	log15 "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
+	"github.com/flynn/flynn/pkg/cors"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 type ErrorCode string
@@ -33,6 +40,57 @@ type JSONError struct {
 	Detail  json.RawMessage `json:"detail,omitempty"`
 }
 
+var CORSAllowAllHandler = cors.Allow(&cors.Options{
+	AllowAllOrigins:  true,
+	AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
+	AllowHeaders:     []string{"Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match"},
+	ExposeHeaders:    []string{"ETag"},
+	AllowCredentials: true,
+	MaxAge:           time.Hour,
+})
+
+type CtxKey string
+
+const (
+	CtxKeyComponent CtxKey = "component"
+	CtxKeyReqID            = "req_id"
+	CtxKeyParams           = "params"
+	CtxKeyLogger           = "logger"
+)
+
+type Handle func(context.Context, http.ResponseWriter, *http.Request)
+
+func WrapHandler(handler Handle) httprouter.Handle {
+	return func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		ctx := contextFromResponseWriter(w)
+		ctx = context.WithValue(ctx, CtxKeyParams, params)
+		handler(ctx, w, req)
+	}
+}
+
+func ContextInjector(componentName string, handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		reqID := req.Header.Get("X-Request-ID")
+		if reqID == "" {
+			reqID = random.UUID()
+		}
+		ctx := context.WithValue(context.Background(), CtxKeyReqID, reqID)
+		ctx = context.WithValue(ctx, CtxKeyComponent, componentName)
+		rw := NewResponseWriter(w, ctx)
+		handler.ServeHTTP(rw, req)
+	})
+}
+
+func ParamsFromContext(ctx context.Context) httprouter.Params {
+	params := ctx.Value(CtxKeyParams).(httprouter.Params)
+	return params
+}
+
+func contextFromResponseWriter(w http.ResponseWriter) context.Context {
+	ctx := w.(*ResponseWriter).Context()
+	return ctx
+}
+
 func (jsonError JSONError) Error() string {
 	return fmt.Sprintf("%s: %s", jsonError.Code, jsonError.Message)
 }
@@ -50,7 +108,12 @@ func Error(w http.ResponseWriter, err error) {
 	case *JSONError:
 		jsonError = *err.(*JSONError)
 	default:
-		log.Println(err)
+		rw, ok := w.(*ResponseWriter)
+		if ok {
+			rw.Context().Value(CtxKeyLogger).(log15.Logger).Error(err.Error())
+		} else {
+			log.Println(err)
+		}
 		jsonError = JSONError{
 			Code:    UnknownError,
 			Message: "Something went wrong",
@@ -76,4 +139,9 @@ func JSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	w.Write(result)
+}
+
+func DecodeJSON(req *http.Request, i interface{}) error {
+	dec := json.NewDecoder(req.Body)
+	return dec.Decode(i)
 }

@@ -1,13 +1,17 @@
 package main
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/resource"
 )
 
 type ResourceRepo struct {
@@ -138,7 +142,7 @@ func resourceList(rows *sql.Rows) ([]*ct.Resource, error) {
 func (r *ResourceRepo) AppList(appID string) ([]*ct.Resource, error) {
 	rows, err := r.db.Query(`SELECT DISTINCT(r.resource_id), r.provider_id, r.external_id, r.env,
 									ARRAY(SELECT a.app_id
-									      FROM app_resources a 
+									      FROM app_resources a
 										  WHERE a.resource_id = r.resource_id AND a.deleted_at IS NULL
 										  ORDER BY a.created_at DESC),
 									r.created_at
@@ -150,4 +154,114 @@ func (r *ResourceRepo) AppList(appID string) ([]*ct.Resource, error) {
 		return nil, err
 	}
 	return resourceList(rows)
+}
+
+func (c *controllerAPI) ProvisionResource(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	p, err := c.getProvider(ctx)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	var rr ct.ResourceReq
+	if err = httphelper.DecodeJSON(req, &rr); err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	rs, err := resource.NewServerWithDiscoverd(p.URL, c.discoverdClient)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	var config []byte
+	if rr.Config != nil {
+		config = *rr.Config
+	} else {
+		config = []byte(`{}`)
+	}
+	data, err := rs.Provision(config)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	res := &ct.Resource{
+		ProviderID: p.ID,
+		ExternalID: data.ID,
+		Env:        data.Env,
+		Apps:       rr.Apps,
+	}
+	if err := c.resourceRepo.Add(res); err != nil {
+		// TODO: attempt to "rollback" provisioning
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, res)
+}
+
+func (c *controllerAPI) GetProviderResources(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	p, err := c.getProvider(ctx)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	res, err := c.resourceRepo.ProviderList(p.ID)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, res)
+}
+
+func (c *controllerAPI) GetResource(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params := httphelper.ParamsFromContext(ctx)
+
+	_, err := c.getProvider(ctx)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	res, err := c.resourceRepo.Get(params.ByName("resources_id"))
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, res)
+}
+
+func (c *controllerAPI) PutResource(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params := httphelper.ParamsFromContext(ctx)
+
+	p, err := c.getProvider(ctx)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	var resource ct.Resource
+	if err = httphelper.DecodeJSON(req, &resource); err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	resource.ID = params.ByName("resources_id")
+	resource.ProviderID = p.ID
+	if err := c.resourceRepo.Add(&resource); err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, &resource)
+}
+
+func (c *controllerAPI) GetAppResources(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	res, err := c.resourceRepo.AppList(c.getApp(ctx).ID)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, res)
 }

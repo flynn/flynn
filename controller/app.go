@@ -53,7 +53,7 @@ func (r *AppRepo) Add(data interface{}) error {
 			Domain:  fmt.Sprintf("%s.%s", app.Name, r.defaultDomain),
 			Service: app.Name + "-web",
 		}).ToRoute()
-		route.ParentRef = routeParentRef(app)
+		route.ParentRef = routeParentRef(app.ID)
 		if err := r.router.CreateRoute(route); err != nil {
 			log.Printf("Error creating default route for %s: %s", app.Name, err)
 		}

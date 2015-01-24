@@ -2,9 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -75,4 +79,62 @@ func (r *ReleaseRepo) List() (interface{}, error) {
 		releases = append(releases, release)
 	}
 	return releases, rows.Err()
+}
+
+type releaseID struct {
+	ID string `json:"id"`
+}
+
+func (c *controllerAPI) SetAppRelease(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	var rid releaseID
+	if err := httphelper.DecodeJSON(req, &rid); err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	rel, err := c.releaseRepo.Get(rid.ID)
+	if err != nil {
+		if err == ErrNotFound {
+			err = ct.ValidationError{
+				Message: fmt.Sprintf("could not find release with ID %s", rid.ID),
+			}
+		}
+		respondWithError(w, err)
+		return
+	}
+	release := rel.(*ct.Release)
+	app := c.getApp(ctx)
+	c.appRepo.SetRelease(app.ID, release.ID)
+
+	// TODO: use transaction/lock
+	fs, err := c.formationRepo.List(app.ID)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	if len(fs) == 1 && fs[0].ReleaseID != release.ID {
+		if err := c.formationRepo.Add(&ct.Formation{
+			AppID:     app.ID,
+			ReleaseID: release.ID,
+			Processes: fs[0].Processes,
+		}); err != nil {
+			respondWithError(w, err)
+			return
+		}
+		if err := c.formationRepo.Remove(app.ID, fs[0].ReleaseID); err != nil {
+			respondWithError(w, err)
+			return
+		}
+	}
+
+	httphelper.JSON(w, 200, release)
+}
+
+func (c *controllerAPI) GetAppRelease(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	release, err := c.appRepo.GetRelease(c.getApp(ctx).ID)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, release)
 }
