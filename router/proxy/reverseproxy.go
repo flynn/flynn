@@ -16,6 +16,10 @@ import (
 	"time"
 )
 
+const (
+	stickyCookie = "_backend"
+)
+
 // onExitFlushLoop is a callback set by tests to detect the state of the
 // flushLoop() goroutine.
 var onExitFlushLoop func()
@@ -25,8 +29,7 @@ var onExitFlushLoop func()
 // client.
 type ReverseProxy struct {
 	// The transport used to perform proxy requests.
-	// If nil, http.DefaultTransport is used.
-	Transport http.RoundTripper
+	transport *transport
 
 	// FlushInterval specifies the flush interval
 	// to flush to the client while copying the
@@ -60,9 +63,9 @@ var (
 )
 
 func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	transport := p.Transport
+	transport := p.transport
 	if transport == nil {
-		transport = http.DefaultTransport
+		panic("router: nil transport for proxy")
 	}
 
 	outreq := prepareRequest(req)
