@@ -132,6 +132,7 @@ func (c *Client) Hijack(method, path string, header http.Header, in interface{})
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("Connection", "upgrade")
 	res, err := clientconn.Do(req)
 	if err != nil && err != httputil.ErrPersistEOF {
 		return nil, err

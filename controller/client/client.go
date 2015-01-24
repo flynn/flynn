@@ -315,10 +315,7 @@ func (c *Client) GetJobLogWithWait(appID, jobID string, tail bool) (io.ReadClose
 // and returning a ReadWriteCloser stream, which can then be used for
 // communicating with the job.
 func (c *Client) RunJobAttached(appID string, job *ct.NewJob) (utils.ReadWriteCloser, error) {
-	header := http.Header{
-		"Accept": []string{"application/vnd.flynn.attach"},
-	}
-	return c.Hijack("POST", fmt.Sprintf("/apps/%s/jobs", appID), header, job)
+	return c.Hijack("POST", fmt.Sprintf("/apps/%s/jobs", appID), http.Header{"Upgrade": {"flynn-attach/0"}}, job)
 }
 
 // RunJobDetached runs a new job under the specified app, returning the job's

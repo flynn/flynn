@@ -454,7 +454,7 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		return
 	}
 	artifact := data.(*ct.Artifact)
-	attach := strings.Contains(req.Header.Get("Accept"), "application/vnd.flynn.attach")
+	attach := strings.Contains(req.Header.Get("Upgrade"), "flynn-attach/0")
 
 	env := make(map[string]string, len(release.Env)+len(newJob.Env))
 	for k, v := range release.Env {
@@ -533,8 +533,8 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 			respondWithError(w, fmt.Errorf("attach wait failed: %s", err.Error()))
 			return
 		}
-		w.Header().Set("Content-Type", "application/vnd.flynn.attach")
-		w.Header().Set("Content-Length", "0")
+		w.Header().Set("Connection", "upgrade")
+		w.Header().Set("Upgrade", "flynn-attach/0")
 		w.WriteHeader(http.StatusSwitchingProtocols)
 		conn, _, err := w.(http.Hijacker).Hijack()
 		if err != nil {

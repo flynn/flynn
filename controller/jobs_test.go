@@ -298,7 +298,7 @@ func (s *S) TestRunJobAttached(c *C) {
 	c.Assert(err, IsNil)
 	req.SetBasicAuth("", authKey)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/vnd.flynn.attach")
+	req.Header.Set("Upgrade", "flynn-attach/0")
 	_, rwc, err := utils.HijackRequest(req, nil)
 	c.Assert(err, IsNil)
 
