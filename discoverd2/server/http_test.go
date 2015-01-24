@@ -36,7 +36,16 @@ func (s *HTTPSuite) SetUpTest(c *C) {
 	s.cleanup = append(s.cleanup, s.server.Close)
 
 	s.client = discoverd.NewClientWithURL(s.server.URL)
-	c.Assert(s.client.AddService("a"), IsNil)
+
+	// create and delete an instance; poor man's write barrier for service create
+	events := make(chan *discoverd.Event, 1)
+	stream := s.state.Subscribe("a", false, discoverd.EventKindDown, events)
+	inst := fakeInstance()
+	hb, err := s.client.AddServiceAndRegisterInstance("a", inst)
+	c.Assert(err, IsNil)
+	c.Assert(hb.Close(), IsNil)
+	assertEvent(c, events, "a", discoverd.EventKindDown, inst)
+	stream.Close()
 }
 
 func (s *HTTPSuite) TearDownTest(c *C) {
