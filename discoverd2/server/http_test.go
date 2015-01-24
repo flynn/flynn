@@ -82,12 +82,16 @@ func (s *HTTPSuite) TestRegister(c *C) {
 }
 
 func (s *HTTPSuite) TestWatch(c *C) {
+	events := make(chan *discoverd.Event, 1)
+	stream := s.state.Subscribe("a", false, discoverd.EventKindUp, events)
 	inst1 := fakeInstance()
 	hb1, err := s.client.RegisterInstance("a", inst1)
 	c.Assert(err, IsNil)
+	assertEvent(c, events, "a", discoverd.EventKindUp, inst1)
+	stream.Close()
 
-	events := make(chan *discoverd.Event)
-	stream, err := s.client.Service("a").Watch(events)
+	events = make(chan *discoverd.Event)
+	stream, err = s.client.Service("a").Watch(events)
 	c.Assert(err, IsNil)
 	defer stream.Close()
 
