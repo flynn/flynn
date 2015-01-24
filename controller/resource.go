@@ -258,13 +258,7 @@ func (c *controllerAPI) PutResource(ctx context.Context, w http.ResponseWriter, 
 }
 
 func (c *controllerAPI) GetAppResources(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	app, err := c.getApp(ctx)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
-
-	res, err := c.resourceRepo.AppList(app.ID)
+	res, err := c.resourceRepo.AppList(c.getApp(ctx).ID)
 	if err != nil {
 		respondWithError(w, err)
 		return

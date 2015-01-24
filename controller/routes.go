@@ -10,19 +10,13 @@ import (
 )
 
 func (c *controllerAPI) CreateRoute(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	app, err := c.getApp(ctx)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
-
 	var route router.Route
-	if err = httphelper.DecodeJSON(req, &route); err != nil {
+	if err := httphelper.DecodeJSON(req, &route); err != nil {
 		respondWithError(w, err)
 		return
 	}
 
-	route.ParentRef = routeParentRef(app.ID)
+	route.ParentRef = routeParentRef(c.getApp(ctx).ID)
 	if err := c.routerc.CreateRoute(&route); err != nil {
 		respondWithError(w, err)
 		return
@@ -31,15 +25,7 @@ func (c *controllerAPI) CreateRoute(ctx context.Context, w http.ResponseWriter, 
 }
 
 func (c *controllerAPI) GetRoute(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	params := httphelper.ParamsFromContext(ctx)
-
-	app, err := c.getApp(ctx)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
-
-	route, err := c.getRoute(app.ID, params)
+	route, err := c.getRoute(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -49,13 +35,7 @@ func (c *controllerAPI) GetRoute(ctx context.Context, w http.ResponseWriter, req
 }
 
 func (c *controllerAPI) GetRouteList(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	app, err := c.getApp(ctx)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
-
-	routes, err := c.routerc.ListRoutes(routeParentRef(app.ID))
+	routes, err := c.routerc.ListRoutes(routeParentRef(c.getApp(ctx).ID))
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -64,15 +44,7 @@ func (c *controllerAPI) GetRouteList(ctx context.Context, w http.ResponseWriter,
 }
 
 func (c *controllerAPI) DeleteRoute(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	params := httphelper.ParamsFromContext(ctx)
-
-	app, err := c.getApp(ctx)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
-
-	route, err := c.getRoute(app.ID, params)
+	route, err := c.getRoute(ctx)
 	if err != nil {
 		respondWithError(w, err)
 		return

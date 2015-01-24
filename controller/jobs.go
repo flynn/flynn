@@ -202,11 +202,7 @@ func (c *controllerAPI) connectHost(ctx context.Context) (cluster.Host, string, 
 }
 
 func (c *controllerAPI) ListJobs(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	app, err := c.getApp(ctx)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
+	app := c.getApp(ctx)
 	if strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
 		if err := streamJobs(req, w, app, c.jobRepo); err != nil {
 			respondWithError(w, err)
@@ -223,12 +219,6 @@ func (c *controllerAPI) ListJobs(ctx context.Context, w http.ResponseWriter, req
 
 func (c *controllerAPI) GetJob(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	params := httphelper.ParamsFromContext(ctx)
-
-	_, err := c.getApp(ctx)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
 	job, err := c.jobRepo.Get(params.ByName("jobs_id"))
 	if err != nil {
 		respondWithError(w, err)
@@ -238,14 +228,10 @@ func (c *controllerAPI) GetJob(ctx context.Context, w http.ResponseWriter, req *
 }
 
 func (c *controllerAPI) PutJob(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	app, err := c.getApp(ctx)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
+	app := c.getApp(ctx)
 
 	var job ct.Job
-	if err = httphelper.DecodeJSON(req, &job); err != nil {
+	if err := httphelper.DecodeJSON(req, &job); err != nil {
 		respondWithError(w, err)
 		return
 	}
@@ -259,12 +245,6 @@ func (c *controllerAPI) PutJob(ctx context.Context, w http.ResponseWriter, req *
 }
 
 func (c *controllerAPI) JobLog(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	_, err := c.getApp(ctx)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
-
 	hc, jobID, err := c.connectHost(ctx)
 	if err != nil {
 		respondWithError(w, err)
@@ -443,12 +423,6 @@ func streamJobs(req *http.Request, w http.ResponseWriter, app *ct.App, repo *Job
 }
 
 func (c *controllerAPI) KillJob(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	_, err := c.getApp(ctx)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
-
 	client, jobID, err := c.connectHost(ctx)
 	if err != nil {
 		respondWithError(w, err)
@@ -462,14 +436,8 @@ func (c *controllerAPI) KillJob(ctx context.Context, w http.ResponseWriter, req 
 }
 
 func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	app, err := c.getApp(ctx)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
-
 	var newJob ct.NewJob
-	if err = httphelper.DecodeJSON(req, &newJob); err != nil {
+	if err := httphelper.DecodeJSON(req, &newJob); err != nil {
 		respondWithError(w, err)
 		return
 	}
@@ -499,6 +467,7 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	for k, v := range newJob.Meta {
 		metadata[k] = v
 	}
+	app := c.getApp(ctx)
 	metadata["flynn-controller.app"] = app.ID
 	metadata["flynn-controller.app_name"] = app.Name
 	metadata["flynn-controller.release"] = release.ID

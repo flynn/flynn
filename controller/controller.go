@@ -127,32 +127,32 @@ func appHandler(c handlerConfig) http.Handler {
 	crud(httpRouter, "artifacts", ct.Artifact{}, artifactRepo)
 	crud(httpRouter, "keys", ct.Key{}, keyRepo)
 
-	httpRouter.PUT("/apps/:apps_id/formations/:releases_id", httphelper.WrapHandler(api.PutFormation))
-	httpRouter.GET("/apps/:apps_id/formations/:releases_id", httphelper.WrapHandler(api.GetFormation))
-	httpRouter.DELETE("/apps/:apps_id/formations/:releases_id", httphelper.WrapHandler(api.DeleteFormation))
-	httpRouter.GET("/apps/:apps_id/formations", httphelper.WrapHandler(api.ListFormations))
+	httpRouter.PUT("/apps/:apps_id/formations/:releases_id", httphelper.WrapHandler(api.appLookup(api.PutFormation)))
+	httpRouter.GET("/apps/:apps_id/formations/:releases_id", httphelper.WrapHandler(api.appLookup(api.GetFormation)))
+	httpRouter.DELETE("/apps/:apps_id/formations/:releases_id", httphelper.WrapHandler(api.appLookup(api.DeleteFormation)))
+	httpRouter.GET("/apps/:apps_id/formations", httphelper.WrapHandler(api.appLookup(api.ListFormations)))
 	httpRouter.GET("/formations", httphelper.WrapHandler(api.GetFormations))
 
-	httpRouter.POST("/apps/:apps_id/jobs", httphelper.WrapHandler(api.RunJob))
-	httpRouter.GET("/apps/:apps_id/jobs/:jobs_id", httphelper.WrapHandler(api.GetJob))
-	httpRouter.PUT("/apps/:apps_id/jobs/:jobs_id", httphelper.WrapHandler(api.PutJob))
-	httpRouter.GET("/apps/:apps_id/jobs", httphelper.WrapHandler(api.ListJobs))
-	httpRouter.DELETE("/apps/:apps_id/jobs/:jobs_id", httphelper.WrapHandler(api.KillJob))
-	httpRouter.GET("/apps/:apps_id/jobs/:jobs_id/log", httphelper.WrapHandler(api.JobLog))
+	httpRouter.POST("/apps/:apps_id/jobs", httphelper.WrapHandler(api.appLookup(api.RunJob)))
+	httpRouter.GET("/apps/:apps_id/jobs/:jobs_id", httphelper.WrapHandler(api.appLookup(api.GetJob)))
+	httpRouter.PUT("/apps/:apps_id/jobs/:jobs_id", httphelper.WrapHandler(api.appLookup(api.PutJob)))
+	httpRouter.GET("/apps/:apps_id/jobs", httphelper.WrapHandler(api.appLookup(api.ListJobs)))
+	httpRouter.DELETE("/apps/:apps_id/jobs/:jobs_id", httphelper.WrapHandler(api.appLookup(api.KillJob)))
+	httpRouter.GET("/apps/:apps_id/jobs/:jobs_id/log", httphelper.WrapHandler(api.appLookup(api.JobLog)))
 
-	httpRouter.PUT("/apps/:apps_id/release", httphelper.WrapHandler(api.SetAppRelease))
-	httpRouter.GET("/apps/:apps_id/release", httphelper.WrapHandler(api.GetAppRelease))
+	httpRouter.PUT("/apps/:apps_id/release", httphelper.WrapHandler(api.appLookup(api.SetAppRelease)))
+	httpRouter.GET("/apps/:apps_id/release", httphelper.WrapHandler(api.appLookup(api.GetAppRelease)))
 
 	httpRouter.POST("/providers/:providers_id/resources", httphelper.WrapHandler(api.ProvisionResource))
 	httpRouter.GET("/providers/:providers_id/resources", httphelper.WrapHandler(api.GetProviderResources))
 	httpRouter.GET("/providers/:providers_id/resources/:resources_id", httphelper.WrapHandler(api.GetResource))
 	httpRouter.PUT("/providers/:providers_id/resources/:resources_id", httphelper.WrapHandler(api.PutResource))
-	httpRouter.GET("/apps/:apps_id/resources", httphelper.WrapHandler(api.GetAppResources))
+	httpRouter.GET("/apps/:apps_id/resources", httphelper.WrapHandler(api.appLookup(api.GetAppResources)))
 
-	httpRouter.POST("/apps/:apps_id/routes", httphelper.WrapHandler(api.CreateRoute))
-	httpRouter.GET("/apps/:apps_id/routes", httphelper.WrapHandler(api.GetRouteList))
-	httpRouter.GET("/apps/:apps_id/routes/:routes_type/:routes_id", httphelper.WrapHandler(api.GetRoute))
-	httpRouter.DELETE("/apps/:apps_id/routes/:routes_type/:routes_id", httphelper.WrapHandler(api.DeleteRoute))
+	httpRouter.POST("/apps/:apps_id/routes", httphelper.WrapHandler(api.appLookup(api.CreateRoute)))
+	httpRouter.GET("/apps/:apps_id/routes", httphelper.WrapHandler(api.appLookup(api.GetRouteList)))
+	httpRouter.GET("/apps/:apps_id/routes/:routes_type/:routes_id", httphelper.WrapHandler(api.appLookup(api.GetRoute)))
+	httpRouter.DELETE("/apps/:apps_id/routes/:routes_type/:routes_id", httphelper.WrapHandler(api.appLookup(api.DeleteRoute)))
 
 	return httphelper.ContextInjector("controller",
 		httphelper.NewRequestLogger(muxHandler(httpRouter, c.key)))
@@ -190,12 +190,8 @@ type controllerAPI struct {
 	routerc         routerc.Client
 }
 
-func (c *controllerAPI) getApp(ctx context.Context) (*ct.App, error) {
-	data, err := c.appRepo.Get(httphelper.ParamsFromContext(ctx).ByName("apps_id"))
-	if err != nil {
-		return nil, err
-	}
-	return data.(*ct.App), nil
+func (c *controllerAPI) getApp(ctx context.Context) *ct.App {
+	return ctx.Value("app").(*ct.App)
 }
 
 func (c *controllerAPI) getRelease(ctx context.Context) (*ct.Release, error) {
@@ -214,6 +210,18 @@ func (c *controllerAPI) getProvider(ctx context.Context) (*ct.Provider, error) {
 	return data.(*ct.Provider), nil
 }
 
+func (c *controllerAPI) appLookup(handler httphelper.Handle) httphelper.Handle {
+	return func(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+		data, err := c.appRepo.Get(httphelper.ParamsFromContext(ctx).ByName("apps_id"))
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		ctx = context.WithValue(ctx, "app", data.(*ct.App))
+		handler(ctx, w, req)
+	}
+}
+
 func routeParentRef(appID string) string {
 	return "controller/apps/" + appID
 }
@@ -222,9 +230,9 @@ func routeID(params httprouter.Params) string {
 	return params.ByName("routes_type") + "/" + params.ByName("routes_id")
 }
 
-func (c *controllerAPI) getRoute(appID string, params httprouter.Params) (*router.Route, error) {
-	route, err := c.routerc.GetRoute(routeID(params))
-	if err == routerc.ErrNotFound || err == nil && route.ParentRef != routeParentRef(appID) {
+func (c *controllerAPI) getRoute(ctx context.Context) (*router.Route, error) {
+	route, err := c.routerc.GetRoute(routeID(httphelper.ParamsFromContext(ctx)))
+	if err == routerc.ErrNotFound || err == nil && route.ParentRef != routeParentRef(c.getApp(ctx).ID) {
 		err = ErrNotFound
 	}
 	if err != nil {

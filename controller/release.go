@@ -86,14 +86,8 @@ type releaseID struct {
 }
 
 func (c *controllerAPI) SetAppRelease(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	app, err := c.getApp(ctx)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
-
 	var rid releaseID
-	if err = httphelper.DecodeJSON(req, &rid); err != nil {
+	if err := httphelper.DecodeJSON(req, &rid); err != nil {
 		respondWithError(w, err)
 		return
 	}
@@ -109,6 +103,7 @@ func (c *controllerAPI) SetAppRelease(ctx context.Context, w http.ResponseWriter
 		return
 	}
 	release := rel.(*ct.Release)
+	app := c.getApp(ctx)
 	c.appRepo.SetRelease(app.ID, release.ID)
 
 	// TODO: use transaction/lock
@@ -136,13 +131,7 @@ func (c *controllerAPI) SetAppRelease(ctx context.Context, w http.ResponseWriter
 }
 
 func (c *controllerAPI) GetAppRelease(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	app, err := c.getApp(ctx)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
-
-	release, err := c.appRepo.GetRelease(app.ID)
+	release, err := c.appRepo.GetRelease(c.getApp(ctx).ID)
 	if err != nil {
 		respondWithError(w, err)
 		return

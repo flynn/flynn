@@ -254,11 +254,7 @@ func (r *FormationRepo) Unsubscribe(ch chan *ct.ExpandedFormation) {
 }
 
 func (c *controllerAPI) PutFormation(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	app, err := c.getApp(ctx)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
+	app := c.getApp(ctx)
 	release, err := c.getRelease(ctx)
 	if err != nil {
 		respondWithError(w, err)
@@ -291,11 +287,7 @@ func (c *controllerAPI) PutFormation(ctx context.Context, w http.ResponseWriter,
 func (c *controllerAPI) GetFormation(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	params := httphelper.ParamsFromContext(ctx)
 
-	app, err := c.getApp(ctx)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
+	app := c.getApp(ctx)
 	formation, err := c.formationRepo.Get(app.ID, params.ByName("releases_id"))
 	if err != nil {
 		respondWithError(w, err)
@@ -307,11 +299,7 @@ func (c *controllerAPI) GetFormation(ctx context.Context, w http.ResponseWriter,
 func (c *controllerAPI) DeleteFormation(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	params := httphelper.ParamsFromContext(ctx)
 
-	app, err := c.getApp(ctx)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
+	app := c.getApp(ctx)
 	formation, err := c.formationRepo.Get(app.ID, params.ByName("releases_id"))
 	if err != nil {
 		respondWithError(w, err)
@@ -326,11 +314,7 @@ func (c *controllerAPI) DeleteFormation(ctx context.Context, w http.ResponseWrit
 }
 
 func (c *controllerAPI) ListFormations(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	app, err := c.getApp(ctx)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
+	app := c.getApp(ctx)
 	list, err := c.formationRepo.List(app.ID)
 	if err != nil {
 		respondWithError(w, err)
