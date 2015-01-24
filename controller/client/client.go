@@ -318,7 +318,7 @@ func (c *Client) RunJobAttached(appID string, job *ct.NewJob) (utils.ReadWriteCl
 	header := http.Header{
 		"Accept": []string{"application/vnd.flynn.attach"},
 	}
-	return c.Hijack("POST", fmt.Sprintf("%s/apps/%s/jobs", c.URL, appID), header, job)
+	return c.Hijack("POST", fmt.Sprintf("/apps/%s/jobs", appID), header, job)
 }
 
 // RunJobDetached runs a new job under the specified app, returning the job's
