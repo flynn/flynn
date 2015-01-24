@@ -44,7 +44,9 @@ func (r *AppRepo) Add(data interface{}) error {
 		app.ID = random.UUID()
 	}
 	meta := metaToHstore(app.Meta)
-	err := r.db.QueryRow("INSERT INTO apps (app_id, name, protected, meta) VALUES ($1, $2, $3, $4) RETURNING created_at, updated_at", app.ID, app.Name, app.Protected, meta).Scan(&app.CreatedAt, &app.UpdatedAt)
+	if err := r.db.QueryRow("INSERT INTO apps (app_id, name, protected, meta) VALUES ($1, $2, $3, $4) RETURNING created_at, updated_at", app.ID, app.Name, app.Protected, meta).Scan(&app.CreatedAt, &app.UpdatedAt); err != nil {
+		return err
+	}
 	app.ID = postgres.CleanUUID(app.ID)
 	if !app.Protected && r.defaultDomain != "" {
 		route := (&router.HTTPRoute{
@@ -56,7 +58,7 @@ func (r *AppRepo) Add(data interface{}) error {
 			log.Printf("Error creating default route for %s: %s", app.Name, err)
 		}
 	}
-	return err
+	return nil
 }
 
 func scanApp(s postgres.Scanner) (*ct.App, error) {
