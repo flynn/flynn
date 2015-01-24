@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
@@ -93,6 +94,9 @@ func newHTTPClient(serverName string) *http.Client {
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(localhostCert)
 
+	if strings.Contains(serverName, ":") {
+		serverName, _, _ = net.SplitHostPort(serverName)
+	}
 	return &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{ServerName: serverName, RootCAs: pool},
@@ -764,4 +768,25 @@ func (s *S) TestCaseInsensitiveDomain(c *C) {
 
 	assertGet(c, "http://"+l.Addr, "Example.com", "Example.com")
 	assertGet(c, "https://"+l.TLSAddr, "ExamPle.cOm", "ExamPle.cOm")
+}
+
+func (s *S) TestHostPortStripping(c *C) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Write([]byte(req.Host))
+	}))
+	defer srv.Close()
+
+	l, discoverd := newHTTPListener(c)
+	defer l.Close()
+
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "example.com",
+		Service: "example-com",
+	}).ToRoute())
+
+	discoverdRegisterHTTPService(c, l, "example-com", srv.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	assertGet(c, "http://"+l.Addr, "example.com:80", "example.com:80")
+	assertGet(c, "https://"+l.TLSAddr, "example.com:443", "example.com:443")
 }

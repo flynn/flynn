@@ -287,6 +287,9 @@ func (s *HTTPListener) listenAndServeTLS(started chan<- error) {
 
 func (s *HTTPListener) findRouteForHost(host string) *httpRoute {
 	host = strings.ToLower(host)
+	if strings.Contains(host, ":") {
+		host, _, _ = net.SplitHostPort(host)
+	}
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	if backend, ok := s.domains[host]; ok {
