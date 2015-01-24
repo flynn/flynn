@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 )
 
 func NewResponseWriter(w http.ResponseWriter) *ResponseWriter {
@@ -12,8 +14,13 @@ func NewResponseWriter(w http.ResponseWriter) *ResponseWriter {
 }
 
 type ResponseWriter struct {
+	ctx    context.Context
 	w      http.ResponseWriter
 	status int
+}
+
+func (r *ResponseWriter) Context() context.Context {
+	return r.ctx
 }
 
 func (r *ResponseWriter) Status() int {
@@ -30,9 +37,6 @@ func (r *ResponseWriter) Header() http.Header {
 }
 
 func (r *ResponseWriter) Write(b []byte) (int, error) {
-	if !r.Written() {
-		r.WriteHeader(http.StatusOK)
-	}
 	return r.w.Write(b)
 }
 

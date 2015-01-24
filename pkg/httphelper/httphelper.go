@@ -7,7 +7,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/pkg/cors"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 type ErrorCode string
@@ -44,6 +47,48 @@ var CORSAllowAllHandler = cors.Allow(&cors.Options{
 	AllowCredentials: true,
 	MaxAge:           time.Hour,
 })
+
+type CtxKey string
+
+const (
+	CtxKeyComponent CtxKey = "component"
+	CtxKeyReqID            = "req_id"
+	CtxKeyParams           = "params"
+)
+
+type Handle func(context.Context, http.ResponseWriter, *http.Request)
+
+func WrapHandler(handler Handle) httprouter.Handle {
+	return func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		ctx := contextFromResponseWriter(w)
+		ctx = context.WithValue(ctx, CtxKeyParams, params)
+		handler(ctx, w, req)
+	}
+}
+
+func ContextInjector(componentName string, handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		reqID := req.Header.Get("X-Request-ID")
+		if reqID == "" {
+			reqID = random.UUID()
+		}
+		ctx := context.WithValue(context.Background(), CtxKeyReqID, reqID)
+		ctx = context.WithValue(ctx, CtxKeyComponent, componentName)
+		rw := NewResponseWriter(w)
+		rw.ctx = ctx
+		handler.ServeHTTP(rw, req)
+	})
+}
+
+func ParamsFromContext(ctx context.Context) httprouter.Params {
+	params := ctx.Value(CtxKeyParams).(httprouter.Params)
+	return params
+}
+
+func contextFromResponseWriter(w http.ResponseWriter) context.Context {
+	ctx := w.(*ResponseWriter).Context()
+	return ctx
+}
 
 func (jsonError JSONError) Error() string {
 	return fmt.Sprintf("%s: %s", jsonError.Code, jsonError.Message)
