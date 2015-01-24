@@ -44,6 +44,17 @@ type ReverseProxy struct {
 	ErrorLog *log.Logger
 }
 
+func NewReverseProxy(bf BackendListFunc, stickyKey *[32]byte, sticky bool) *ReverseProxy {
+	return &ReverseProxy{
+		transport: &transport{
+			getBackends:       bf,
+			stickyCookieKey:   stickyKey,
+			useStickySessions: sticky,
+		},
+		FlushInterval: 10 * time.Millisecond,
+	}
+}
+
 func copyHeader(dst, src http.Header) {
 	for k, vv := range src {
 		for _, v := range vv {
