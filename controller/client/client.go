@@ -13,7 +13,6 @@ import (
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/pinned"
 	"github.com/flynn/flynn/pkg/stream"
@@ -296,7 +295,7 @@ func (c *Client) GetJobLogWithWait(appID, jobID string, tail bool) (io.ReadClose
 // RunJobAttached runs a new job under the specified app, attaching to the job
 // and returning a ReadWriteCloser stream, which can then be used for
 // communicating with the job.
-func (c *Client) RunJobAttached(appID string, job *ct.NewJob) (utils.ReadWriteCloser, error) {
+func (c *Client) RunJobAttached(appID string, job *ct.NewJob) (httpclient.ReadWriteCloser, error) {
 	return c.Hijack("POST", fmt.Sprintf("/apps/%s/jobs", appID), http.Header{"Upgrade": {"flynn-attach/0"}}, job)
 }
 

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -27,12 +28,12 @@ func (s *S) provisionTestResource(c *C, name string, apps []string) (*ct.Resourc
 	newHandler := appHandler(handlerConfig{db: s.hc.db, cc: s.cc, sc: s.hc.sc, key: "test"})
 	s.srv = httptest.NewServer(newHandler)
 
-	p := s.createTestProvider(c, &ct.Provider{URL: fmt.Sprintf("http://%s/things", srv.Listener.Addr()), Name: name})
+	client, err := controller.NewClient(s.srv.URL, authKey)
+	p := &ct.Provider{URL: fmt.Sprintf("http://%s/things", srv.Listener.Addr()), Name: name}
+	c.Assert(client.CreateProvider(p), IsNil)
 	conf := json.RawMessage(data)
-	out := &ct.Resource{}
-	res, err := s.Post("/providers/"+p.ID+"/resources", &ct.ResourceReq{Config: &conf, Apps: apps}, out)
+	out, err := client.ProvisionResource(&ct.ResourceReq{ProviderID: p.ID, Config: &conf, Apps: apps})
 	c.Assert(err, IsNil)
-	c.Assert(res.StatusCode, Equals, 200)
 	return out, p
 }
 
@@ -47,14 +48,12 @@ func (s *S) TestProvisionResource(c *C) {
 	c.Assert(resource.ID, Not(Equals), "")
 	c.Assert(resource.Apps, DeepEquals, []string{app1.ID, app2.ID})
 
-	gotResource := &ct.Resource{}
-	path := fmt.Sprintf("/providers/%s/resources/%s", provider.ID, resource.ID)
-	res, err := s.Get(path, gotResource)
+	gotResource, err := s.c.GetResource(provider.ID, resource.ID)
 	c.Assert(err, IsNil)
 	c.Assert(gotResource, DeepEquals, resource)
 
-	res, err = s.Get(path+"fail", gotResource)
-	c.Assert(res.StatusCode, Equals, 404)
+	gotResource, err = s.c.GetResource(provider.ID, resource.ID+"fail")
+	c.Assert(err, Equals, controller.ErrNotFound)
 }
 
 func (s *S) TestPutResource(c *C) {
@@ -62,26 +61,20 @@ func (s *S) TestPutResource(c *C) {
 	provider := s.createTestProvider(c, &ct.Provider{URL: "https://example.ca", Name: "put-resource"})
 
 	resource := &ct.Resource{
+		ID:         random.UUID(),
+		ProviderID: provider.ID,
 		ExternalID: "/foo/bar",
 		Env:        map[string]string{"FOO": "BAR"},
 		Apps:       []string{app.ID},
 	}
-	id := random.UUID()
-	path := fmt.Sprintf("/providers/%s/resources/%s", provider.ID, id)
-	created := &ct.Resource{}
-	_, err := s.Put(path, resource, created)
-	c.Assert(err, IsNil)
+	c.Assert(s.c.PutResource(resource), IsNil)
 
-	c.Assert(created.ID, Equals, id)
-	c.Assert(created.ProviderID, Equals, provider.ID)
-	c.Assert(created.Env, DeepEquals, resource.Env)
-	c.Assert(created.Apps, DeepEquals, resource.Apps)
-	c.Assert(created.CreatedAt, Not(IsNil))
+	c.Assert(resource.ProviderID, Equals, provider.ID)
+	c.Assert(resource.CreatedAt, Not(IsNil))
 
-	gotResource := &ct.Resource{}
-	_, err = s.Get(path, gotResource)
+	gotResource, err := s.c.GetResource(provider.ID, resource.ID)
 	c.Assert(err, IsNil)
-	c.Assert(gotResource, DeepEquals, created)
+	c.Assert(gotResource, DeepEquals, resource)
 }
 
 func (s *S) TestResourceLists(c *C) {
@@ -91,21 +84,16 @@ func (s *S) TestResourceLists(c *C) {
 
 	resource, provider := s.provisionTestResource(c, "resource-list", apps)
 
-	paths := []string{
-		fmt.Sprintf("/providers/%s/resources", provider.ID),
-		fmt.Sprintf("/providers/%s/resources", provider.Name),
-		fmt.Sprintf("/apps/%s/resources", app1.ID),
-		fmt.Sprintf("/apps/%s/resources", app1.Name),
-	}
-
-	for _, path := range paths {
-		var list []*ct.Resource
-		res, err := s.Get(path, &list)
+	check := func(list []*ct.Resource, err error) {
 		c.Assert(err, IsNil)
-		c.Assert(res.StatusCode, Equals, 200)
 
 		c.Assert(len(list) > 0, Equals, true)
 		c.Assert(list[0].ID, Equals, resource.ID)
 		c.Assert(list[0].Apps, DeepEquals, apps)
 	}
+
+	check(s.c.ResourceList(provider.ID))
+	check(s.c.ResourceList(provider.Name))
+	check(s.c.AppResourceList(app1.ID))
+	check(s.c.AppResourceList(app1.ID))
 }

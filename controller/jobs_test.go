@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -11,20 +10,17 @@ import (
 	"strings"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	"github.com/flynn/flynn/controller/client"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/random"
 )
 
 func (s *S) createTestJob(c *C, in *ct.Job) *ct.Job {
-	out := &ct.Job{}
-	res, err := s.Put("/apps/"+in.AppID+"/jobs/"+in.ID, in, out)
-	c.Assert(err, IsNil)
-	c.Assert(res.StatusCode, Equals, 200)
-	return out
+	c.Assert(s.c.PutJob(in), IsNil)
+	return in
 }
 
 func (s *S) TestJobList(c *C) {
@@ -33,10 +29,8 @@ func (s *S) TestJobList(c *C) {
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
 	s.createTestJob(c, &ct.Job{ID: "host0-job0", AppID: app.ID, ReleaseID: release.ID, Type: "web", State: "starting", Meta: map[string]string{"some": "info"}})
 
-	var list []ct.Job
-	res, err := s.Get("/apps/"+app.ID+"/jobs", &list)
+	list, err := s.c.JobList(app.ID)
 	c.Assert(err, IsNil)
-	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(len(list), Equals, 1)
 	job := list[0]
 	c.Assert(job.ID, Equals, "host0-job0")
@@ -51,10 +45,8 @@ func (s *S) TestJobGet(c *C) {
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
 	jobID := s.createTestJob(c, &ct.Job{ID: "host0-job1", AppID: app.ID, ReleaseID: release.ID, Type: "web", State: "starting", Meta: map[string]string{"some": "info"}}).ID
 
-	var job ct.Job
-	res, err := s.Get("/apps/"+app.ID+"/jobs/"+jobID, &job)
+	job, err := s.c.GetJob(app.ID, jobID)
 	c.Assert(err, IsNil)
-	c.Assert(res.StatusCode, Equals, 200)
 	c.Assert(job.ID, Equals, "host0-job1")
 	c.Assert(job.AppID, Equals, app.ID)
 	c.Assert(job.ReleaseID, Equals, release.ID)
@@ -80,9 +72,7 @@ func (s *S) TestKillJob(c *C) {
 	hc := tu.NewFakeHostClient(hostID)
 	s.cc.SetHostClient(hostID, hc)
 
-	res, err := s.Delete("/apps/" + app.ID + "/jobs/" + hostID + "-" + jobID)
-	c.Assert(err, IsNil)
-	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(s.c.DeleteJob(app.ID, hostID+"-"+jobID), IsNil)
 	c.Assert(hc.IsStopped(jobID), Equals, true)
 }
 
@@ -98,14 +88,11 @@ func (s *S) createLogTestApp(c *C, name string, stream io.Reader) (*ct.App, stri
 func (s *S) TestJobLog(c *C) {
 	app, hostID, jobID := s.createLogTestApp(c, "joblog", strings.NewReader("foo"))
 
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log", s.srv.URL, app.ID, hostID, jobID), nil)
-	c.Assert(err, IsNil)
-	req.SetBasicAuth("", authKey)
-	res, err := http.DefaultClient.Do(req)
+	body, err := s.c.GetJobLog(app.ID, hostID+"-"+jobID, false)
 	c.Assert(err, IsNil)
 	var buf bytes.Buffer
-	_, err = buf.ReadFrom(res.Body)
-	res.Body.Close()
+	_, err = buf.ReadFrom(body)
+	body.Close()
 	c.Assert(err, IsNil)
 
 	c.Assert(buf.String(), Equals, "foo")
@@ -123,21 +110,14 @@ func (s *S) TestJobLogWait(c *C) {
 	})
 	s.cc.SetHostClient(hostID, hc)
 
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log", s.srv.URL, app.ID, hostID, jobID), nil)
-	c.Assert(err, IsNil)
-	req.SetBasicAuth("", authKey)
-	res, err := http.DefaultClient.Do(req)
-	c.Assert(err, IsNil)
-	res.Body.Close()
-	c.Assert(res.StatusCode, Equals, 404)
+	res, err := s.c.GetJobLog(app.ID, hostID+"-"+jobID, false)
+	c.Assert(err, Equals, controller.ErrNotFound)
 
-	req, err = http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log?wait=true", s.srv.URL, app.ID, hostID, jobID), nil)
+	res, err = s.c.GetJobLogWithWait(app.ID, hostID+"-"+jobID, false)
 	c.Assert(err, IsNil)
-	req.SetBasicAuth("", authKey)
-	res, err = http.DefaultClient.Do(req)
 	var buf bytes.Buffer
-	_, err = buf.ReadFrom(res.Body)
-	res.Body.Close()
+	_, err = buf.ReadFrom(res)
+	res.Close()
 	c.Assert(err, IsNil)
 
 	c.Assert(buf.String(), Equals, "foo")
@@ -225,8 +205,7 @@ func (s *S) TestRunJobDetached(c *C) {
 		Env:       map[string]string{"JOB": "true", "FOO": "baz"},
 		Meta:      map[string]string{"foo": "baz"},
 	}
-	res := &ct.Job{}
-	_, err := s.Post(fmt.Sprintf("/apps/%s/jobs", app.ID), req, res)
+	res, err := s.c.RunJobDetached(app.ID, req)
 	c.Assert(err, IsNil)
 	c.Assert(res.ID, Not(Equals), "")
 	c.Assert(res.ReleaseID, Equals, release.ID)
@@ -285,7 +264,7 @@ func (s *S) TestRunJobAttached(c *C) {
 		Env:        map[string]string{"RELEASE": "true", "FOO": "bar"},
 	})
 
-	data, _ := json.Marshal(&ct.NewJob{
+	data := &ct.NewJob{
 		ReleaseID: release.ID,
 		Cmd:       []string{"foo", "bar"},
 		Env:       map[string]string{"JOB": "true", "FOO": "baz"},
@@ -293,13 +272,8 @@ func (s *S) TestRunJobAttached(c *C) {
 		TTY:       true,
 		Columns:   10,
 		Lines:     20,
-	})
-	req, err := http.NewRequest("POST", s.srv.URL+"/apps/"+app.ID+"/jobs", bytes.NewBuffer(data))
-	c.Assert(err, IsNil)
-	req.SetBasicAuth("", authKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Upgrade", "flynn-attach/0")
-	_, rwc, err := utils.HijackRequest(req, nil)
+	}
+	rwc, err := s.c.RunJobAttached(app.ID, data)
 	c.Assert(err, IsNil)
 
 	_, err = rwc.Write([]byte("test in"))
