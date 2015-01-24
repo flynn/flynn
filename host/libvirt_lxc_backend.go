@@ -285,6 +285,12 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 			return nil, err
 		}
 	}
+	if defaultNet, err := l.libvirt.LookupNetworkByName("default"); err == nil {
+		// The default network causes dnsmasq to run and bind to all interfaces,
+		// including ours. This prevents discoverd from binding its DNS server.
+		// We don't use it, so destroy it if it exists.
+		defaultNet.Destroy()
+	}
 
 	// Set up iptables for outbound traffic masquerading from containers to the
 	// rest of the network.
