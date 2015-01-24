@@ -1,4 +1,4 @@
-# Welcome to Flynn [![Build Status](https://travis-ci.org/flynn/flynn.svg?branch=master)](https://travis-ci.org/flynn/flynn)
+# Welcome to Flynn
 
 [Flynn](https://flynn.io) is a next generation open source Platform as a Service
 (PaaS).
