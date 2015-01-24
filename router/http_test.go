@@ -790,3 +790,48 @@ func (s *S) TestHostPortStripping(c *C) {
 	assertGet(c, "http://"+l.Addr, "example.com:80", "example.com:80")
 	assertGet(c, "https://"+l.TLSAddr, "example.com:443", "example.com:443")
 }
+
+func (s *S) TestHTTPResponseStreaming(c *C) {
+	done := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path == "/body" {
+			w.Write([]byte("a"))
+		} else {
+			w.WriteHeader(200)
+		}
+		w.(http.Flusher).Flush()
+		<-done
+	}))
+	defer srv.Close()
+	defer close(done)
+
+	l, discoverd := newHTTPListener(c)
+	defer l.Close()
+
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "example.com",
+		Service: "example-com",
+	}).ToRoute())
+
+	discoverdRegisterHTTPService(c, l, "example-com", srv.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	client := newHTTPClient("example.com")
+	client.Timeout = 1 * time.Second
+
+	// ensure that we get a flushed response header with no body written immediately
+	req := newReq(fmt.Sprintf("http://%s/header", l.Addr), "example.com")
+	res, err := client.Do(req)
+	c.Assert(err, IsNil)
+	defer res.Body.Close()
+
+	// ensure that we get a body write immediately
+	req = newReq(fmt.Sprintf("http://%s/body", l.Addr), "example.com")
+	res, err = client.Do(req)
+	c.Assert(err, IsNil)
+	defer res.Body.Close()
+	buf := make([]byte, 1)
+	_, err = res.Body.Read(buf)
+	c.Assert(err, IsNil)
+	c.Assert(string(buf), Equals, "a")
+}
