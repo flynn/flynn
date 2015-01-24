@@ -29,6 +29,7 @@ func HijackRequest(req *http.Request, dial func(string, string) (net.Conn, error
 		return nil, nil, err
 	}
 	clientconn := httputil.NewClientConn(conn, nil)
+	req.Header.Set("Connection", "upgrade")
 	res, err := clientconn.Do(req)
 	if err != nil && err != httputil.ErrPersistEOF {
 		return nil, nil, err
