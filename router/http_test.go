@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/websocket"
@@ -16,45 +17,36 @@ import (
 	"github.com/flynn/flynn/router/types"
 )
 
-var httpClient = &http.Client{
-	Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{ServerName: "example.com"},
-	},
-}
+var httpClient = newHTTPClient("example.com")
 
 // borrowed from net/http/httptest/server.go
 // localhostCert is a PEM-encoded TLS cert with SAN IPs
 // "127.0.0.1" and "[::1]", expiring at the last second of 2049 (the end
 // of ASN.1 time).
 // generated from src/pkg/crypto/tls:
-// go run generate_cert.go  --rsa-bits 512 --host 127.0.0.1,::1,example.com --ca --start-date "Jan 1 00:00:00 1970" --duration=1000000h
+// go run generate_cert.go  --rsa-bits 512 --host 127.0.0.1,::1,example.com,*.example.com --ca --start-date "Jan 1 00:00:00 1970" --duration=1000000h
 var localhostCert = []byte(`-----BEGIN CERTIFICATE-----
-MIIBdzCCASOgAwIBAgIBADALBgkqhkiG9w0BAQUwEjEQMA4GA1UEChMHQWNtZSBD
-bzAeFw03MDAxMDEwMDAwMDBaFw00OTEyMzEyMzU5NTlaMBIxEDAOBgNVBAoTB0Fj
-bWUgQ28wWjALBgkqhkiG9w0BAQEDSwAwSAJBAN55NcYKZeInyTuhcCwFMhDHCmwa
-IUSdtXdcbItRB/yfXGBhiex00IaLXQnSU+QZPRZWYqeTEbFSgihqi1PUDy8CAwEA
-AaNoMGYwDgYDVR0PAQH/BAQDAgCkMBMGA1UdJQQMMAoGCCsGAQUFBwMBMA8GA1Ud
-EwEB/wQFMAMBAf8wLgYDVR0RBCcwJYILZXhhbXBsZS5jb22HBH8AAAGHEAAAAAAA
-AAAAAAAAAAAAAAEwCwYJKoZIhvcNAQEFA0EAAoQn/ytgqpiLcZu9XKbCJsJcvkgk
-Se6AbGXgSlq+ZCEVo0qIwSgeBqmsJxUu7NCSOwVJLYNEBO2DtIxoYVk+MA==
+MIIBmjCCAUagAwIBAgIRAP5DRqWA/pgvAnbC6gnl82kwCwYJKoZIhvcNAQELMBIx
+EDAOBgNVBAoTB0FjbWUgQ28wIBcNNzAwMTAxMDAwMDAwWhgPMjA4NDAxMjkxNjAw
+MDBaMBIxEDAOBgNVBAoTB0FjbWUgQ28wXDANBgkqhkiG9w0BAQEFAANLADBIAkEA
+t9JXJg6fCMxvBKfLCukH7dnF1nIdCBuurjXxVM69E2+97G3aDBTIm7rXtxilAYib
+BwzBtgqPzUVngbmK25cguQIDAQABo3cwdTAOBgNVHQ8BAf8EBAMCAKQwEwYDVR0l
+BAwwCgYIKwYBBQUHAwEwDwYDVR0TAQH/BAUwAwEB/zA9BgNVHREENjA0ggtleGFt
+cGxlLmNvbYINKi5leGFtcGxlLmNvbYcEfwAAAYcQAAAAAAAAAAAAAAAAAAAAATAL
+BgkqhkiG9w0BAQsDQQBJxy1zotHYLZpyoockAlJWRa88hs1PrroUNMlueRtzNkpx
+9heaebvotwUkFlnNYJZsfPnO23R0lUlzLJ3p1RNz
 -----END CERTIFICATE-----`)
 
 // localhostKey is the private key for localhostCert.
 var localhostKey = []byte(`-----BEGIN RSA PRIVATE KEY-----
-MIIBPAIBAAJBAN55NcYKZeInyTuhcCwFMhDHCmwaIUSdtXdcbItRB/yfXGBhiex0
-0IaLXQnSU+QZPRZWYqeTEbFSgihqi1PUDy8CAwEAAQJBAQdUx66rfh8sYsgfdcvV
-NoafYpnEcB5s4m/vSVe6SU7dCK6eYec9f9wpT353ljhDUHq3EbmE4foNzJngh35d
-AekCIQDhRQG5Li0Wj8TM4obOnnXUXf1jRv0UkzE9AHWLG5q3AwIhAPzSjpYUDjVW
-MCUXgckTpKCuGwbJk7424Nb8bLzf3kllAiA5mUBgjfr/WtFSJdWcPQ4Zt9KTMNKD
-EUO0ukpTwEIl6wIhAMbGqZK3zAAFdq8DD2jPx+UJXnh0rnOkZBzDtJ6/iN69AiEA
-1Aq8MJgTaYsDQWyU/hDq5YkDJc9e9DSCvUIzqxQWMQE=
+MIIBOQIBAAJBALfSVyYOnwjMbwSnywrpB+3ZxdZyHQgbrq418VTOvRNvvext2gwU
+yJu617cYpQGImwcMwbYKj81FZ4G5ituXILkCAwEAAQJAXvmhp3skdkJSFgCv6qou
+O5kqG7uH/nl3DnG2iA/tJw3SlEPftQyzNk5jcIFSxvr8pu1pj+L1vw5pR68/7fre
+xQIhAMM0/bYtVbzW+PPjqAev3TKhMyWkY3t9Qvw5OtgmBQ+PAiEA8RGk9OvMxBbR
+8zJmOXminEE2VVE1VF0K0OiFLDG+JzcCIHurptE0B42L5E0ffeTg1hKtben7K8ug
+oD+LQmyOKcahAiB05Btab2QQyQfwpsWOpP5GShCwefoj+CGgfr7kWRJdLQIgTMZe
+++SKD8ascROyDnZ0Td8wbrFnO0YRPEkwlhn6h0U=
 -----END RSA PRIVATE KEY-----`)
-
-func init() {
-	pool := x509.NewCertPool()
-	pool.AppendCertsFromPEM(localhostCert)
-	httpClient.Transport.(*http.Transport).TLSClientConfig.RootCAs = pool
-}
 
 func httpTestHandler(id string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -77,14 +69,35 @@ func (l *httpListener) Close() error {
 
 func newHTTPListenerClients(t etcdrunner.TestingT, etcd EtcdClient, discoverd discoverdClient) (*httpListener, discoverdClient) {
 	discoverd, etcd, cleanup := setup(t, etcd, discoverd)
+	pair, err := tls.X509KeyPair(localhostCert, localhostKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	l := &httpListener{
-		NewHTTPListener("127.0.0.1:0", "127.0.0.1:0", nil, NewEtcdDataStore(etcd, "/router/http/"), discoverd),
+		&HTTPListener{
+			Addr:      "127.0.0.1:0",
+			TLSAddr:   "127.0.0.1:0",
+			keypair:   pair,
+			ds:        NewEtcdDataStore(etcd, "/router/http/"),
+			discoverd: discoverd,
+		},
 		cleanup,
 	}
 	if err := l.Start(); err != nil {
 		t.Fatal(err)
 	}
 	return l, discoverd
+}
+
+func newHTTPClient(serverName string) *http.Client {
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(localhostCert)
+
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{ServerName: serverName, RootCAs: pool},
+		},
+	}
 }
 
 func newHTTPListener(t etcdrunner.TestingT) (*httpListener, discoverdClient) {
@@ -170,11 +183,11 @@ func assertGetCookie(c *C, url, host, expected string, cookie *http.Cookie) *htt
 	if cookie != nil {
 		req.AddCookie(cookie)
 	}
-	res, err := httpClient.Do(req)
+	res, err := newHTTPClient(host).Do(req)
 	c.Assert(err, IsNil)
+	defer res.Body.Close()
 	c.Assert(res.StatusCode, Equals, 200)
 	data, err := ioutil.ReadAll(res.Body)
-	res.Body.Close()
 	c.Assert(err, IsNil)
 	c.Assert(string(data), Equals, expected)
 	for _, c := range res.Cookies() {
@@ -274,12 +287,18 @@ func (s *S) TestHTTPServiceHandlerBackendConnectionClosed(c *C) {
 	// the backend server's connection gets closed, but router is
 	// able to recover
 	srv.CloseClientConnections()
+	// Though we've closed the conn on the server, the client might not have
+	// handled the FIN yet. The Transport offers no way to safely retry in those
+	// scenarios, so instead we just sleep long enough to handle the FIN.
+	// https://golang.org/issue/4677
+	time.Sleep(500 * time.Microsecond)
 	assertGet(c, "http://"+l.Addr, "example.com", "1")
 }
 
 // Act as an app to test HTTP headers
-func httpHeaderTestHandler(c *C, ip string) http.Handler {
+func httpHeaderTestHandler(c *C, ip, port string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		c.Assert(req.Header["X-Forwarded-Port"][0], Equals, port)
 		c.Assert(req.Header["X-Forwarded-Proto"][0], Equals, "http")
 		c.Assert(len(req.Header["X-Request-Start"][0]), Equals, 13)
 		c.Assert(req.Header["X-Forwarded-For"][0], Equals, ip)
@@ -290,7 +309,7 @@ func httpHeaderTestHandler(c *C, ip string) http.Handler {
 
 // issue #105
 func (s *S) TestHTTPHeaders(c *C) {
-	srv := httptest.NewServer(httpHeaderTestHandler(c, "127.0.0.1"))
+	srv := httptest.NewServer(httpHeaderTestHandler(c, "127.0.0.1", "0"))
 
 	l, discoverd := newHTTPListener(c)
 	defer l.Close()
@@ -304,7 +323,7 @@ func (s *S) TestHTTPHeaders(c *C) {
 }
 
 func (s *S) TestHTTPHeadersFromClient(c *C) {
-	srv := httptest.NewServer(httpHeaderTestHandler(c, "192.168.1.1, 127.0.0.1"))
+	srv := httptest.NewServer(httpHeaderTestHandler(c, "192.168.1.1, 127.0.0.1", "0"))
 
 	l, discoverd := newHTTPListener(c)
 	defer l.Close()
@@ -389,6 +408,151 @@ func (s *S) TestStickyHTTPRoute(c *C) {
 	}
 }
 
+func (s *S) TestStickyHTTPRouteWebsocket(c *C) {
+	srv1 := httptest.NewServer(httpTestHandler("1"))
+	srv2 := httptest.NewServer(httpTestHandler("2"))
+	defer srv1.Close()
+	defer srv2.Close()
+
+	l, discoverd := newHTTPListener(c)
+	url := "http://" + l.Addr
+	defer l.Close()
+	defer discoverd.UnregisterAll()
+
+	addStickyHTTPRoute(c, l)
+
+	steps := []struct {
+		do        func()
+		backend   string
+		setCookie bool
+	}{
+		// step 1: register srv1, assert requests to srv1
+		{
+			do:        func() { discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String()) },
+			backend:   "1",
+			setCookie: true,
+		},
+		// step 2: register srv2, assert requests stay with srv1
+		{
+			do:      func() { discoverdRegisterHTTP(c, l, srv2.Listener.Addr().String()) },
+			backend: "1",
+		},
+		// step 3: unregister srv1, assert requests switch to srv2
+		{
+			do:        func() { discoverdUnregister(c, discoverd, "test", srv1.Listener.Addr().String()) },
+			backend:   "2",
+			setCookie: true,
+		},
+	}
+
+	var sessionCookie *http.Cookie
+	for _, step := range steps {
+		step.do()
+
+		cookieSet := false
+		for i := 0; i < 10; i++ {
+			req := newReq(url, "example.com")
+			if sessionCookie != nil {
+				req.AddCookie(sessionCookie)
+			}
+			req.Header.Set("Connection", "Upgrade")
+			res, err := httpClient.Do(req)
+			defer res.Body.Close()
+
+			c.Assert(err, IsNil)
+			c.Assert(res.StatusCode, Equals, 200)
+			data, err := ioutil.ReadAll(res.Body)
+			c.Assert(err, IsNil)
+			c.Assert(string(data), Equals, step.backend)
+			// make sure unsuccessful upgrade conn was closed
+			c.Assert(res.Close, Equals, true)
+
+			// reuse the session cookie if present
+			for _, c := range res.Cookies() {
+				if c.Name == stickyCookie {
+					cookieSet = true
+					sessionCookie = c
+				}
+			}
+		}
+
+		c.Assert(cookieSet, Equals, step.setCookie)
+
+		httpClient.Transport.(*http.Transport).CloseIdleConnections()
+	}
+}
+
+func (s *S) TestNoStickyHeaderAtBackend(c *C) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		_, ok := req.Header[hdrUseStickySessions]
+		c.Assert(ok, Equals, false)
+	})
+
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	l, discoverd := newHTTPListener(c)
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	assertGet(c, "http://"+l.Addr, "example.com", "")
+}
+
+func (s *S) TestNoBackends(c *C) {
+	l, _ := newHTTPListener(c)
+	defer l.Close()
+
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "example.com",
+		Service: "example-com",
+	}).ToRoute())
+
+	req := newReq("http://"+l.Addr, "example.com")
+	res, err := newHTTPClient("example.com").Do(req)
+	c.Assert(err, IsNil)
+	defer res.Body.Close()
+
+	c.Assert(res.StatusCode, Equals, 503)
+	data, err := ioutil.ReadAll(res.Body)
+	c.Assert(err, IsNil)
+	c.Assert(string(data), Equals, "Service Unavailable\n")
+}
+
+func (s *S) TestClosedBackendRetriesAnotherBackend(c *C) {
+	l, _ := newHTTPListener(c)
+	defer l.Close()
+
+	srv1 := httptest.NewServer(httpTestHandler("1"))
+	srv1.Close() // close this server immediately
+	srv2 := httptest.NewServer(httpTestHandler("2"))
+	defer srv2.Close()
+
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "example.com",
+		Service: "example-com",
+		Sticky:  true,
+	}).ToRoute())
+	discoverdRegisterHTTPService(c, l, "example-com", srv1.Listener.Addr().String())
+	discoverdRegisterHTTPService(c, l, "example-com", srv2.Listener.Addr().String())
+
+	req := newReq("http://"+l.Addr, "example.com")
+	// add a cookie to stick to srv1
+	stickyCookie := l.findRouteForHost("example.com").service.newStickyCookie(srv1.Listener.Addr().String())
+	req.AddCookie(stickyCookie)
+	res, err := newHTTPClient("example.com").Do(req)
+	c.Assert(err, IsNil)
+	defer res.Body.Close()
+
+	c.Assert(res.StatusCode, Equals, 200)
+	data, err := ioutil.ReadAll(res.Body)
+	c.Assert(err, IsNil)
+	c.Assert(string(data), Equals, "2")
+}
+
 // issue #152
 func (s *S) TestKeepaliveHostname(c *C) {
 	srv1 := httptest.NewServer(httpTestHandler("1"))
@@ -442,4 +606,51 @@ func (s *S) TestRequestURIEscaping(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(res.StatusCode, Equals, 200)
 	}
+}
+
+func (s *S) TestDefaultServerKeypair(c *C) {
+	srv1 := httptest.NewServer(httpTestHandler("1"))
+	srv2 := httptest.NewServer(httpTestHandler("2"))
+	defer srv1.Close()
+	defer srv2.Close()
+
+	l, discoverd := newHTTPListener(c)
+	defer l.Close()
+
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "example.com",
+		Service: "example-com",
+	}).ToRoute())
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "foo.example.com",
+		Service: "foo-example-com",
+	}).ToRoute())
+
+	discoverdRegisterHTTPService(c, l, "example-com", srv1.Listener.Addr().String())
+	discoverdRegisterHTTPService(c, l, "foo-example-com", srv2.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	assertGet(c, "https://"+l.TLSAddr, "example.com", "1")
+	assertGet(c, "https://"+l.TLSAddr, "foo.example.com", "2")
+}
+
+func (s *S) TestCaseInsensitiveDomain(c *C) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Write([]byte(req.Host))
+	}))
+	defer srv.Close()
+
+	l, discoverd := newHTTPListener(c)
+	defer l.Close()
+
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "exaMple.com",
+		Service: "example-com",
+	}).ToRoute())
+
+	discoverdRegisterHTTPService(c, l, "example-com", srv.Listener.Addr().String())
+	defer discoverd.UnregisterAll()
+
+	assertGet(c, "http://"+l.Addr, "Example.com", "Example.com")
+	assertGet(c, "https://"+l.TLSAddr, "ExamPle.cOm", "ExamPle.cOm")
 }

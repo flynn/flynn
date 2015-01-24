@@ -1,23 +1,35 @@
 package httpclient
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
+	"strings"
 
-	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/stream"
 )
 
 type DialFunc func(network, addr string) (net.Conn, error)
 
+type writeCloser interface {
+	io.WriteCloser
+	CloseWrite() error
+}
+
+type ReadWriteCloser interface {
+	io.ReadWriteCloser
+	CloseWrite() error
+}
+
 type Client struct {
 	ErrNotFound error
-	ErrPrefix   string
 	URL         string
 	Key         string
 	HTTP        *http.Client
@@ -38,7 +50,7 @@ func ToJSON(v interface{}) (io.Reader, error) {
 	return bytes.NewBuffer(data), err
 }
 
-func (c *Client) RawReq(method, path string, header http.Header, in, out interface{}) (*http.Response, error) {
+func (c *Client) prepareReq(method, path string, header http.Header, in interface{}) (*http.Request, error) {
 	var payload io.Reader
 	switch v := in.(type) {
 	case io.Reader:
@@ -66,28 +78,33 @@ func (c *Client) RawReq(method, path string, header http.Header, in, out interfa
 	if c.Key != "" {
 		req.SetBasicAuth("", c.Key)
 	}
+	return req, nil
+}
+
+func (c *Client) RawReq(method, path string, header http.Header, in, out interface{}) (*http.Response, error) {
+	req, err := c.prepareReq(method, path, header, in)
+	if err != nil {
+		return nil, err
+	}
 	res, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, err
 	}
-	if res.StatusCode == 404 {
-		res.Body.Close()
-		return res, c.ErrNotFound
-	}
-	if res.StatusCode == 400 {
-		var body ct.ValidationError
-		defer res.Body.Close()
-		if err = json.NewDecoder(res.Body).Decode(&body); err != nil {
-			return res, err
-		}
-		return res, body
-	}
 	if res.StatusCode != 200 {
-		res.Body.Close()
+		defer res.Body.Close()
+		if strings.Contains(res.Header.Get("Content-Type"), "application/json") {
+			var jsonErr httphelper.JSONError
+			if err := json.NewDecoder(res.Body).Decode(&jsonErr); err == nil {
+				return res, jsonErr
+			}
+		}
+		if res.StatusCode == 404 {
+			return res, c.ErrNotFound
+		}
 		return res, &url.Error{
 			Op:  req.Method,
 			URL: req.URL.String(),
-			Err: fmt.Errorf(c.ErrPrefix+": unexpected status %d", res.StatusCode),
+			Err: fmt.Errorf("httpclient: unexpected status %d", res.StatusCode),
 		}
 	}
 	if out != nil {
@@ -95,6 +112,51 @@ func (c *Client) RawReq(method, path string, header http.Header, in, out interfa
 		return res, json.NewDecoder(res.Body).Decode(out)
 	}
 	return res, nil
+}
+
+func (c *Client) Hijack(method, path string, header http.Header, in interface{}) (ReadWriteCloser, error) {
+	uri, err := url.Parse(c.URL)
+	if err != nil {
+		return nil, err
+	}
+	dial := c.Dial
+	if dial == nil {
+		dial = net.Dial
+	}
+	conn, err := dial("tcp", uri.Host)
+	if err != nil {
+		return nil, err
+	}
+	clientconn := httputil.NewClientConn(conn, nil)
+	req, err := c.prepareReq(method, path, header, in)
+	if err != nil {
+		return nil, err
+	}
+	res, err := clientconn.Do(req)
+	if err != nil && err != httputil.ErrPersistEOF {
+		return nil, err
+	}
+	if res.StatusCode != http.StatusSwitchingProtocols {
+		res.Body.Close()
+		return nil, &url.Error{
+			Op:  req.Method,
+			URL: req.URL.String(),
+			Err: fmt.Errorf("httpclient: unexpected status %d", res.StatusCode),
+		}
+	}
+	var rwc io.ReadWriteCloser
+	var buf *bufio.Reader
+	rwc, buf = clientconn.Hijack()
+	if buf.Buffered() > 0 {
+		rwc = struct {
+			io.Reader
+			writeCloser
+		}{
+			io.MultiReader(io.LimitReader(buf, int64(buf.Buffered())), rwc),
+			rwc.(writeCloser),
+		}
+	}
+	return rwc.(ReadWriteCloser), nil
 }
 
 // Stream returns a stream.Stream for a specific method and path. in is an

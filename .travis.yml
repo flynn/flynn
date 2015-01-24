@@ -1,6 +1,6 @@
 language: go
 go:
-  - 1.4
+  - 1.4.1
   - tip
 
 addons:
@@ -49,7 +49,6 @@ install:
 
 script:
   - go test -race -cover ./...
-  - go test -race ./router -fake=false
 
 notifications:
   irc:

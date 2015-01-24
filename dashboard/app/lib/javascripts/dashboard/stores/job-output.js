@@ -1,4 +1,5 @@
 //= require ../store
+//= require ../dispatcher
 
 (function () {
 
@@ -88,6 +89,11 @@ var JobOutput = Dashboard.Stores.JobOutput = Dashboard.Store.createClass({
 		}.bind(this), false);
 		eventSource.addEventListener("exit", function (e) {
 			var data = JSON.parse(e.data);
+			Dashboard.Dispatcher.handleStoreEvent({
+				name: "JOB_EXIT",
+				jobId: this.props.jobId,
+				status: data.status
+			});
 			if (data.status === 0) {
 				this.setState({
 					open: false,

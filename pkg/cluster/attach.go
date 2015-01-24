@@ -2,17 +2,11 @@ package cluster
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
-	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"sync"
 
 	"github.com/flynn/flynn/host/types"
@@ -27,41 +21,9 @@ var ErrWouldWait = errors.New("cluster: attach would wait")
 // first bytes. If wait is false and the job is not running, ErrWouldWait is
 // returned.
 func (c *hostClient) Attach(req *host.AttachReq, wait bool) (AttachClient, error) {
-	data, err := json.Marshal(req)
+	rwc, err := c.c.Hijack("POST", "/attach", nil, req)
 	if err != nil {
 		return nil, err
-	}
-	httpReq, err := http.NewRequest("POST", "/attach", bytes.NewBuffer(data))
-	if err != nil {
-		return nil, err
-	}
-	uri, err := url.Parse(c.c.URL)
-	if err != nil {
-		return nil, err
-	}
-	conn, err := net.Dial("tcp", uri.Host)
-	if err != nil {
-		return nil, err
-	}
-	clientconn := httputil.NewClientConn(conn, nil)
-	res, err := clientconn.Do(httpReq)
-	if err != nil && err != httputil.ErrPersistEOF {
-		return nil, err
-	}
-	if res.StatusCode != 200 {
-		return nil, fmt.Errorf("cluster: unexpected status %d", res.StatusCode)
-	}
-	var rwc io.ReadWriteCloser
-	var buf *bufio.Reader
-	rwc, buf = clientconn.Hijack()
-	if buf.Buffered() > 0 {
-		rwc = struct {
-			io.Reader
-			io.WriteCloser
-		}{
-			io.MultiReader(io.LimitReader(buf, int64(buf.Buffered())), rwc),
-			rwc,
-		}
 	}
 
 	attachState := make([]byte, 1)

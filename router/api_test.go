@@ -25,9 +25,7 @@ func newTestAPIServer(t etcdrunner.TestingT) *testAPIServer {
 		cleanup:   []func(){killDiscoverd, killEtcd},
 	}
 
-	discoverd := newFakeDiscoverd()
-	discoverd.Register("router-api", ts.Listener.Addr().String())
-	ts.Client = client.NewWithDiscoverd("", discoverd)
+	ts.Client = client.NewWithAddr(ts.Listener.Addr().String())
 	return ts
 }
 

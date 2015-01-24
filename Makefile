@@ -4,12 +4,24 @@ GIT_TAG=`git describe --tags --exact-match --match "v*" 2>/dev/null || echo "non
 GIT_DIRTY=`test -n "$(git status --porcelain)" && echo true || echo false`
 
 all:
-	@GIT_COMMIT=$(GIT_COMMIT) GIT_BRANCH=$(GIT_BRANCH) GIT_TAG=$(GIT_TAG) GIT_DIRTY=$(GIT_DIRTY) tup
-
-dev:
 	@GIT_COMMIT=dev GIT_BRANCH=dev GIT_TAG=none GIT_DIRTY=false tup
 
-clean:
-	git clean -Xdf -e '!.tup' -e '!.vagrant'
+dev:
+	@echo 'dev is no longer a valid target, just run `make`'
 
-.PHONY: all clean dev
+release:
+	@GIT_COMMIT=$(GIT_COMMIT) GIT_BRANCH=$(GIT_BRANCH) GIT_TAG=$(GIT_TAG) GIT_DIRTY=$(GIT_DIRTY) tup
+
+clean:
+	git clean -Xdf -e '!.tup' -e '!.vagrant' -e '!script/custom-vagrant'
+
+test: test-unit test-integration
+
+test-unit:
+	@GIT_COMMIT=dev GIT_BRANCH=dev GIT_TAG=none GIT_DIRTY=false tup appliance/etcd discoverd
+	go test ./...
+
+test-integration:
+	script/run-integration-tests
+
+.PHONY: all clean dev release test test-unit test-integration

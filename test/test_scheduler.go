@@ -134,7 +134,7 @@ func waitForJobEvents(t *c.C, stream stream.Stream, events chan *ct.JobEvent, ex
 		select {
 		case event, ok := <-events:
 			if !ok {
-				t.Fatal("job event stream closed: %s", stream.Err())
+				t.Fatalf("job event stream closed: %s", stream.Err())
 			}
 			debugf(t, "got job event: %s %s %s", event.Type, event.JobID, event.State)
 			lastID = event.ID
@@ -165,7 +165,7 @@ func waitForJobRestart(t *c.C, stream stream.Stream, events chan *ct.JobEvent, t
 		select {
 		case event, ok := <-events:
 			if !ok {
-				t.Fatal("job event stream closed: %s", stream.Err())
+				t.Fatalf("job event stream closed: %s", stream.Err())
 			}
 			debug(t, "got job event: ", event.Type, event.JobID, event.State)
 			if event.Type == typ && event.State == "up" {

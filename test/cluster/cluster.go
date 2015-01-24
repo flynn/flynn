@@ -109,21 +109,21 @@ func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool) (string, error) 
 		},
 	})
 	if err != nil {
-		return "", err
+		return build.Drive("hda").FS, err
 	}
 	c.log("Booting build instance...")
 	if err := build.Start(); err != nil {
-		return "", fmt.Errorf("error starting build instance: %s", err)
+		return build.Drive("hda").FS, fmt.Errorf("error starting build instance: %s", err)
 	}
 
 	c.log("Waiting for instance to boot...")
 	if err := buildFlynn(build, commit, merge, c.out); err != nil {
 		build.Kill()
-		return "", fmt.Errorf("error running build script: %s", err)
+		return build.Drive("hda").FS, fmt.Errorf("error running build script: %s", err)
 	}
 
 	if err := build.Shutdown(); err != nil {
-		return "", fmt.Errorf("error while stopping build instance: %s", err)
+		return build.Drive("hda").FS, fmt.Errorf("error while stopping build instance: %s", err)
 	}
 	return build.Drive("hda").FS, nil
 }
@@ -332,7 +332,9 @@ git config user.name "CI"
 git merge origin/master
 {{ end }}
 
-make dev
+docker pull scratch
+
+make
 
 if [[ -f test/scripts/debug-info.sh ]]; then
   sudo cp test/scripts/debug-info.sh /usr/local/bin/debug-info.sh
@@ -495,7 +497,7 @@ func (c *Cluster) DumpLogs(w io.Writer) {
 		return err
 	}
 	fallback := func() {
-		fmt.Fprintln(w, "\n*** Error getting job logs via flynn-host, falling back to tail log dump\n")
+		fmt.Fprintf(w, "\n*** Error getting job logs via flynn-host, falling back to tail log dump\n\n")
 		for _, inst := range c.Instances {
 			run(inst, "sudo bash -c 'tail -n +1 /tmp/flynn-host-logs/**/*.log'")
 		}

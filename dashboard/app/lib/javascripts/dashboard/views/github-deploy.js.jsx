@@ -68,13 +68,13 @@ function getJobOutputStoreId (props) {
 	};
 }
 
-function getState (props, prevState) {
+function getState (props, prevState, env, dbRequested) {
 	prevState = prevState || {};
 	var state = {
 		launching: prevState.launching,
-		env: prevState.env,
+		env: env,
 		name: prevState.name,
-		db: prevState.dbRequested
+		db: dbRequested
 	};
 
 	if (props.pullNumber) {
@@ -210,13 +210,13 @@ Dashboard.Views.GithubDeploy = React.createClass({
 	},
 
 	componentWillReceiveProps: function (props) {
-		if (props.env) {
-			this.setState({
-				env: props.env
-			});
-		}
-
 		var didChange = false;
+
+		var env = this.state.env;
+		if (props.env) {
+			didChange = true;
+			env = props.env;
+		}
 
 		if (props.errorMsg) {
 			didChange = true;
@@ -263,7 +263,7 @@ Dashboard.Views.GithubDeploy = React.createClass({
 		}
 
 		if (didChange) {
-			this.__handleStoreChange(props);
+			this.__handleStoreChange(props, env);
 		}
 	},
 
@@ -283,8 +283,8 @@ Dashboard.Views.GithubDeploy = React.createClass({
 		}
 	},
 
-	__handleStoreChange: function (props) {
-		this.setState(getState.call(this, props || this.props, this.state));
+	__handleStoreChange: function (props, env, dbRequested) {
+		this.setState(getState.call(this, props || this.props, this.state, env || this.state.env, dbRequested !== undefined ? dbRequested : this.state.db));
 	},
 
 	__handleNameChange: function (e) {
@@ -296,9 +296,7 @@ Dashboard.Views.GithubDeploy = React.createClass({
 
 	__handleDbChange: function (e) {
 		var db = e.target.checked;
-		this.setState({
-			db: db
-		});
+		this.__handleStoreChange(this.props, null, db);
 	},
 
 	__handleEnvChange: function (env) {

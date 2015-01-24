@@ -333,7 +333,7 @@ func streamJobs(req *http.Request, w http.ResponseWriter, app *ct.App, repo *Job
 	}
 	listener := pq.NewListener(repo.db.DSN(), 10*time.Second, time.Minute, listenEvent)
 	defer listener.Close()
-	listener.Listen("job_events:" + formatUUID(app.ID))
+	listener.Listen("job_events:" + postgres.FormatUUID(app.ID))
 
 	var currID int64
 	if lastID > 0 || count > 0 {
@@ -389,10 +389,6 @@ func streamJobs(req *http.Request, w http.ResponseWriter, app *ct.App, repo *Job
 			}
 		}
 	}
-}
-
-func formatUUID(s string) string {
-	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
 }
 
 func connectHostMiddleware(c martini.Context, params martini.Params, cl clusterClient, r ResponseHelper) {

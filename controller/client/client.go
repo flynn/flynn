@@ -35,7 +35,6 @@ var ErrNotFound = errors.New("controller: resource not found")
 func newClient(key string, url string, http *http.Client) *Client {
 	c := &Client{
 		Client: &httpclient.Client{
-			ErrPrefix:   "controller",
 			ErrNotFound: ErrNotFound,
 			Key:         key,
 			URL:         url,
@@ -117,7 +116,7 @@ func (c *Client) CreateApp(app *ct.App) error {
 	return c.Post("/apps", app, app)
 }
 
-// UpdateApp updates the protected flag and meta using app.ID.
+// UpdateApp updates the protected flag, meta and update strategy using app.ID.
 func (c *Client) UpdateApp(app *ct.App) error {
 	if app.ID == "" {
 		return errors.New("controller: missing id")
@@ -269,6 +268,50 @@ func (c *Client) GetApp(appID string) (*ct.App, error) {
 	return app, c.Get(fmt.Sprintf("/apps/%s", appID), app)
 }
 
+// GetDeployment returns a deployment queued on the deployer.
+func (c *Client) GetDeployment(deploymentID string) (*ct.Deployment, error) {
+	res := &ct.Deployment{}
+	return res, c.Get(fmt.Sprintf("/deployments/%s", deploymentID), res)
+}
+
+func (c *Client) CreateDeployment(appID, releaseID string) (*ct.Deployment, error) {
+	deployment := &ct.Deployment{}
+	return deployment, c.Post(fmt.Sprintf("/apps/%s/deploy", appID), &ct.Release{ID: releaseID}, deployment)
+}
+
+func (c *Client) StreamDeployment(deploymentID string, output chan<- *ct.DeploymentEvent) (stream.Stream, error) {
+	return c.Stream("GET", fmt.Sprintf("/deployments/%s", deploymentID), nil, output)
+}
+
+func (c *Client) DeployApp(appID, releaseID string) (initial bool, err error) {
+	d, err := c.CreateDeployment(appID, releaseID)
+	if err != nil {
+		return true, err
+	}
+
+	// if initial deploy, just stop here
+	if d.ID == "" {
+		return true, nil
+	}
+
+	events := make(chan *ct.DeploymentEvent)
+	stream, err := c.StreamDeployment(d.ID, events)
+	if err != nil {
+		return false, err
+	}
+	defer stream.Close()
+	select {
+	case e := <-events:
+		if e.Status == "complete" {
+			break
+		}
+	case <-time.After(10 * time.Second):
+		return false, fmt.Errorf("Timed out waiting for deployment completion!")
+
+	}
+	return true, nil
+}
+
 // StreamJobEvents streams job events to the output channel.
 func (c *Client) StreamJobEvents(appID string, lastID int64, output chan<- *ct.JobEvent) (stream.Stream, error) {
 	header := http.Header{
@@ -316,24 +359,10 @@ func (c *Client) GetJobLogWithWait(appID, jobID string, tail bool) (io.ReadClose
 // and returning a ReadWriteCloser stream, which can then be used for
 // communicating with the job.
 func (c *Client) RunJobAttached(appID string, job *ct.NewJob) (utils.ReadWriteCloser, error) {
-	data, err := httpclient.ToJSON(job)
-	if err != nil {
-		return nil, err
+	header := http.Header{
+		"Accept": []string{"application/vnd.flynn.attach"},
 	}
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/apps/%s/jobs", c.URL, appID), data)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/vnd.flynn.attach")
-	req.SetBasicAuth("", c.Key)
-	var dial httpclient.DialFunc
-	if c.Dial != nil {
-		dial = c.Dial
-	}
-	res, rwc, err := utils.HijackRequest(req, dial)
-	if err != nil {
-		res.Body.Close()
-		return nil, err
-	}
-	return rwc, nil
+	return c.Hijack("POST", fmt.Sprintf("%s/apps/%s/jobs", c.URL, appID), header, job)
 }
 
 // RunJobDetached runs a new job under the specified app, returning the job's

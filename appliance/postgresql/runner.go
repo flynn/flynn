@@ -3,10 +3,8 @@ package main
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"log"
-	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -18,7 +16,6 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
-	da "github.com/flynn/flynn/discoverd/agent"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -36,38 +33,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var username, password string
-	var follower *follower
 	var leaderProc *exec.Cmd
 	var done <-chan struct{}
-	var leader *discoverd.Service
 
 	if l := set.Leader(); l.Addr == set.SelfAddr() {
 		leaderProc, done = startLeader()
 		goto wait
+	} else {
+		log.Fatal("there is already a leader")
 	}
-
-	for u := range set.Watch(true) {
-		l := set.Leader()
-		if u.Online && u.Addr == l.Addr && u.Attrs["username"] != "" && u.Attrs["password"] != "" {
-			username, password = u.Attrs["username"], u.Attrs["password"]
-		}
-		if leader != nil && l.Addr == leader.Addr {
-			continue
-		}
-		leader = l
-		if leader.Addr == set.SelfAddr() {
-			leaderProc, done = promoteToLeader(follower, username, password)
-			goto wait
-		} else {
-			if follower == nil {
-				follower = startFollower(leader, set)
-			} else {
-				follower = switchLeader(leader, set, follower)
-			}
-		}
-	}
-	// TODO: handle service discovery disconnection
 
 wait:
 	set.Close()
@@ -220,19 +194,6 @@ func runCmd(cmd *exec.Cmd) {
 	}
 }
 
-func pullBaseBackup(s *discoverd.Service) {
-	log.Println("Running pg_basebackup...")
-	runCmd(exec.Command(
-		"pg_basebackup",
-		"-D", *dataDir,
-		"-d", fmt.Sprintf("host=%s port=%s user=%s password=%s", s.Host, s.Port, s.Attrs["username"], s.Attrs["password"]),
-		"--xlog-method=stream",
-		"--progress",
-		"--verbose",
-	))
-	log.Println("pg_basebackup complete.")
-}
-
 var recoveryTempl = template.Must(template.New("recovery").Parse(`
 standby_mode = 'on'
 primary_conninfo = 'host={{.Host}} port={{.Port}} user={{.Username}} password={{.Password}}'
@@ -245,93 +206,6 @@ type recoveryConfig struct {
 	Username string
 	Password string
 	Trigger  string
-}
-
-func writeRecoveryConf(dir string, leader *discoverd.Service) {
-	f, err := os.Create(filepath.Join(dir, "recovery.conf"))
-	if err != nil {
-		log.Fatalln("Error creating recovery.conf:", err)
-	}
-	defer f.Close()
-
-	err = recoveryTempl.Execute(f, &recoveryConfig{
-		Host:     leader.Host,
-		Port:     leader.Port,
-		Username: leader.Attrs["username"],
-		Password: leader.Attrs["password"],
-		Trigger:  filepath.Join(dir, "promote.trigger"),
-	})
-	if err != nil {
-		log.Fatalln("Error writing recovery.conf:", err)
-	}
-}
-
-func updateToService(u *da.ServiceUpdate) *discoverd.Service {
-	host, port, _ := net.SplitHostPort(u.Addr)
-	return &discoverd.Service{
-		Created: u.Created,
-		Name:    u.Name,
-		Addr:    u.Addr,
-		Attrs:   u.Attrs,
-		Host:    host,
-		Port:    port,
-	}
-}
-
-func waitForLeaderUp(leader *discoverd.Service, set discoverd.ServiceSet) *discoverd.Service {
-	if leader.Attrs["up"] == "true" {
-		return leader
-	}
-	log.Println("Waiting for leader to come up...")
-	watch := set.Watch(true)
-	defer set.Unwatch(watch)
-	for update := range watch {
-		if update.Addr == set.Leader().Addr && update.Attrs["up"] == "true" && update.Attrs["username"] != "" && update.Attrs["password"] != "" {
-			return updateToService(update)
-		}
-	}
-	return nil
-}
-
-func startFollower(leader *discoverd.Service, set discoverd.ServiceSet) *follower {
-	log.Println("Starting as follower...")
-	leader = waitForLeaderUp(leader, set)
-	if err := dirIsEmpty(*dataDir); err == nil {
-		pullBaseBackup(leader)
-	} else if err != ErrNotEmpty {
-		log.Fatal(err)
-	}
-
-	writeRecoveryConf(*dataDir, leader)
-	cmd, err := startPostgres(*dataDir)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	waitForPostgres(time.Minute).Close()
-	register(map[string]string{"up": "true"})
-	log.Println("Follower started.")
-
-	// TODO: if data and insufficient WAL, pg_basebackup
-	return newFollower(cmd)
-}
-
-func switchLeader(leader *discoverd.Service, set discoverd.ServiceSet, follower *follower) *follower {
-	log.Println("Switching leaders...")
-	leader = waitForLeaderUp(leader, set)
-	register(map[string]string{"up": "false"})
-	writeRecoveryConf(*dataDir, leader)
-	follower.Stop()
-
-	cmd, err := startPostgres(*dataDir)
-	if err != nil {
-		log.Fatal(err)
-	}
-	waitForPostgres(time.Minute).Close()
-	// TODO: check for insufficient WAL, then pg_basebackup
-	register(map[string]string{"up": "true"})
-	log.Println("Leader switch complete.")
-	return newFollower(cmd)
 }
 
 func newFollower(cmd *exec.Cmd) *follower {

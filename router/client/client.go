@@ -46,7 +46,6 @@ func NewWithHTTP(http *http.Client) (Client, error) {
 
 func newRouterClient() *client {
 	c := &httpclient.Client{
-		ErrPrefix:   "router",
 		ErrNotFound: ErrNotFound,
 	}
 	return &client{Client: c}
@@ -71,7 +70,6 @@ func newWithDiscoverd(name string, dc dialer.DiscoverdClient) *client {
 	}
 	dialer := dialer.New(dc, nil)
 	c := newRouterClient()
-	c.ErrPrefix = name
 	c.Dial = dialer.Dial
 	c.DialClose = dialer
 	c.URL = fmt.Sprintf("http://%s-api", name)

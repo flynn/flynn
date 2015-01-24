@@ -63,7 +63,13 @@ func (l *tcpListener) Close() error {
 func newTCPListenerClients(t etcdrunner.TestingT, etcd EtcdClient, discoverd discoverdClient) (*tcpListener, discoverdClient) {
 	discoverd, etcd, cleanup := setup(t, etcd, discoverd)
 	l := &tcpListener{
-		NewTCPListener("127.0.0.1", firstTCPPort, lastTCPPort, NewEtcdDataStore(etcd, "/router/tcp/"), discoverd),
+		&TCPListener{
+			IP:        "127.0.0.1",
+			startPort: firstTCPPort,
+			endPort:   lastTCPPort,
+			ds:        NewEtcdDataStore(etcd, "/router/tcp/"),
+			discoverd: discoverd,
+		},
 		cleanup,
 	}
 	if err := l.Start(); err != nil {

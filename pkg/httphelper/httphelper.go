@@ -2,18 +2,66 @@ package httphelper
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 )
 
+type ErrorCode string
+
+const (
+	NotFoundError       ErrorCode = "not_found"
+	ObjectNotFoundError           = "object_not_found"
+	ObjectExistsError             = "object_exists"
+	SyntaxError                   = "syntax_error"
+	ValidationError               = "validation_error"
+	UnknownError                  = "unknown_error"
+)
+
+var errorResponseCodes = map[ErrorCode]int{
+	NotFoundError:       404,
+	ObjectNotFoundError: 404,
+	ObjectExistsError:   409,
+	SyntaxError:         400,
+	ValidationError:     400,
+	UnknownError:        500,
+}
+
+type JSONError struct {
+	Code    ErrorCode       `json:"code"`
+	Message string          `json:"message"`
+	Detail  json.RawMessage `json:"detail,omitempty"`
+}
+
+func (jsonError JSONError) Error() string {
+	return fmt.Sprintf("%s: %s", jsonError.Code, jsonError.Message)
+}
+
 func Error(w http.ResponseWriter, err error) {
+	var jsonError JSONError
 	switch err.(type) {
 	case *json.SyntaxError, *json.UnmarshalTypeError:
-		JSON(w, 400, "The provided JSON input is invalid")
+		jsonError = JSONError{
+			Code:    SyntaxError,
+			Message: "The provided JSON input is invalid",
+		}
+	case JSONError:
+		jsonError = err.(JSONError)
+	case *JSONError:
+		jsonError = *err.(*JSONError)
 	default:
 		log.Println(err)
-		JSON(w, 500, struct{}{})
+		jsonError = JSONError{
+			Code:    UnknownError,
+			Message: "Something went wrong",
+		}
 	}
+
+	responseCode, ok := errorResponseCodes[jsonError.Code]
+	if !ok {
+		responseCode = 500
+	}
+	JSON(w, responseCode, jsonError)
 }
 
 func JSON(w http.ResponseWriter, status int, v interface{}) {

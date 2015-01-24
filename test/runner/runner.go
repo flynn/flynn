@@ -76,7 +76,7 @@ type Runner struct {
 
 var args *arg.Args
 
-const maxBuilds = 10
+const maxConcurrentBuilds = 3
 
 func init() {
 	args = arg.Parse()
@@ -88,7 +88,7 @@ func main() {
 		bc:       args.BootConfig,
 		events:   make(chan Event),
 		networks: make(map[string]struct{}),
-		buildCh:  make(chan struct{}, maxBuilds),
+		buildCh:  make(chan struct{}, maxConcurrentBuilds),
 		clusters: make(map[string]*cluster.Cluster),
 	}
 	if err := runner.start(); err != nil {
@@ -145,7 +145,7 @@ func (r *Runner) start() error {
 		return fmt.Errorf("could not create builds bucket: %s", err)
 	}
 
-	for i := 0; i < maxBuilds; i++ {
+	for i := 0; i < maxConcurrentBuilds; i++ {
 		r.buildCh <- struct{}{}
 	}
 
@@ -539,11 +539,11 @@ func (r *Runner) updateStatus(b *Build, state, targetUrl string) {
 		req.Header.Set("Authorization", "token "+r.githubToken)
 
 		res, err := http.DefaultClient.Do(req)
-		defer res.Body.Close()
 		if err != nil {
 			log.Printf("updateStatus: could not send request: %s\n", err)
 			return
 		}
+		res.Body.Close()
 		if res.StatusCode != 201 {
 			log.Printf("updateStatus: request failed: %d\n", res.StatusCode)
 		}

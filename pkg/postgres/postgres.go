@@ -68,8 +68,9 @@ type DB struct {
 
 	dsnSuffix string
 
-	mtx sync.RWMutex
-	dsn string
+	mtx  sync.RWMutex
+	dsn  string
+	addr string
 
 	stmts map[string]*sql.Stmt
 }
@@ -93,6 +94,7 @@ func (db *DB) followLeader(firstErr chan<- error) {
 		dsn := fmt.Sprintf("host=%s port=%s %s", leader.Host, leader.Port, db.dsnSuffix)
 		db.mtx.Lock()
 		db.dsn = dsn
+		db.addr = leader.Addr
 		db.mtx.Unlock()
 
 		if db.DB == nil {
@@ -113,6 +115,12 @@ func (db *DB) DSN() string {
 	db.mtx.RLock()
 	defer db.mtx.RUnlock()
 	return db.dsn
+}
+
+func (db *DB) Addr() string {
+	db.mtx.RLock()
+	defer db.mtx.RUnlock()
+	return db.addr
 }
 
 func (db *DB) Close() error {
@@ -210,4 +218,8 @@ func (f rowErrFixer) Scan(args ...interface{}) error {
 
 func CleanUUID(u string) string {
 	return strings.Replace(u, "-", "", -1)
+}
+
+func FormatUUID(s string) string {
+	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
 }

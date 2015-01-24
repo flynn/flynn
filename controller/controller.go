@@ -13,7 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/bgentry/que-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
 	"github.com/flynn/flynn/controller/name"
@@ -21,6 +24,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/cors"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -55,6 +59,19 @@ func main() {
 		log.Fatal(err)
 	}
 
+	pgxcfg, err := pgx.ParseURI(fmt.Sprintf("http://%s:%s@%s/%s", os.Getenv("PGUSER"), os.Getenv("PGPASSWORD"), db.Addr(), os.Getenv("PGDATABASE")))
+	if err != nil {
+		log.Fatal(err)
+	}
+	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
+		ConnConfig:   pgxcfg,
+		AfterConnect: que.PrepareStatements,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	shutdown.BeforeExit(func() { pgxpool.Close() })
+
 	cc, err := cluster.NewClient()
 	if err != nil {
 		log.Fatal(err)
@@ -73,16 +90,17 @@ func main() {
 		discoverd.Unregister("flynn-controller", addr)
 	})
 
-	handler, _ := appHandler(handlerConfig{db: db, cc: cc, sc: sc, dc: discoverd.DefaultClient, key: os.Getenv("AUTH_KEY")})
+	handler, _ := appHandler(handlerConfig{db: db, cc: cc, sc: sc, pgxpool: pgxpool, dc: discoverd.DefaultClient, key: os.Getenv("AUTH_KEY")})
 	log.Fatal(http.ListenAndServe(addr, handler))
 }
 
 type handlerConfig struct {
-	db  *postgres.DB
-	cc  clusterClient
-	sc  routerc.Client
-	dc  *discoverd.Client
-	key string
+	db      *postgres.DB
+	cc      clusterClient
+	sc      routerc.Client
+	dc      *discoverd.Client
+	pgxpool *pgx.ConnPool
+	key     string
 }
 
 type ResponseHelper interface {
@@ -96,6 +114,7 @@ type responseHelper struct {
 	render.Render
 }
 
+// deprecated, use respondWithError
 func (r *responseHelper) Error(err error) {
 	switch err.(type) {
 	case ct.ValidationError:
@@ -109,6 +128,20 @@ func (r *responseHelper) Error(err error) {
 		}
 		log.Println(err)
 		r.JSON(500, struct{}{})
+	}
+}
+
+// NOTE: this is temporary until httphelper supports custom errors
+func respondWithError(w http.ResponseWriter, err error) {
+	switch err.(type) {
+	case ct.ValidationError:
+		httphelper.JSON(w, 400, err)
+	default:
+		if err == ErrNotFound {
+			w.WriteHeader(404)
+			return
+		}
+		httphelper.Error(w, err)
 	}
 }
 
@@ -134,22 +167,30 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	releaseRepo := NewReleaseRepo(c.db)
 	jobRepo := NewJobRepo(c.db)
 	formationRepo := NewFormationRepo(c.db, appRepo, releaseRepo, artifactRepo)
+	deploymentRepo := NewDeploymentRepo(c.db, c.pgxpool)
 	m.Map(resourceRepo)
 	m.Map(appRepo)
 	m.Map(artifactRepo)
 	m.Map(releaseRepo)
 	m.Map(jobRepo)
 	m.Map(formationRepo)
+	m.Map(deploymentRepo)
 	m.Map(c.dc)
 	m.MapTo(c.cc, (*clusterClient)(nil))
 	m.MapTo(c.sc, (*routerc.Client)(nil))
 	m.MapTo(c.dc, (*resource.DiscoverdClient)(nil))
 
-	getAppMiddleware := crud("apps", ct.App{}, appRepo, r)
-	getReleaseMiddleware := crud("releases", ct.Release{}, releaseRepo, r)
-	getProviderMiddleware := crud("providers", ct.Provider{}, providerRepo, r)
-	crud("artifacts", ct.Artifact{}, artifactRepo, r)
-	crud("keys", ct.Key{}, keyRepo, r)
+	// We're transitioning away from martini to httprouter
+	httpRouter := httprouter.New()
+	httpRouter.NotFound = http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		m.ServeHTTP(res, req)
+	})
+
+	getAppMiddleware := crud(httpRouter, "apps", ct.App{}, appRepo)
+	getReleaseMiddleware := crud(httpRouter, "releases", ct.Release{}, releaseRepo)
+	getProviderMiddleware := crud(httpRouter, "providers", ct.Provider{}, providerRepo)
+	crud(httpRouter, "artifacts", ct.Artifact{}, artifactRepo)
+	crud(httpRouter, "keys", ct.Key{}, keyRepo)
 
 	r.Put("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getReleaseMiddleware, binding.Bind(ct.Formation{}), putFormation)
 	r.Get("/apps/:apps_id/formations/:releases_id", getAppMiddleware, getFormationMiddleware, getFormation)
@@ -166,6 +207,9 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 	r.Put("/apps/:apps_id/release", getAppMiddleware, binding.Bind(releaseID{}), setAppRelease)
 	r.Get("/apps/:apps_id/release", getAppMiddleware, getAppRelease)
 
+	r.Post("/apps/:apps_id/deploy", getAppMiddleware, binding.Bind(releaseID{}), createDeployment)
+	r.Get("/deployments/:deployment_id", getDeploymentMiddleware, getDeployment)
+
 	r.Post("/providers/:providers_id/resources", getProviderMiddleware, binding.Bind(ct.ResourceReq{}), resourceServerMiddleware, provisionResource)
 	r.Get("/providers/:providers_id/resources", getProviderMiddleware, getProviderResources)
 	r.Get("/providers/:providers_id/resources/:resources_id", getProviderMiddleware, getResourceMiddleware, getResource)
@@ -179,7 +223,7 @@ func appHandler(c handlerConfig) (http.Handler, *martini.Martini) {
 
 	r.Get("/formations", getFormations)
 
-	return muxHandler(m, c.key), m
+	return muxHandler(httpRouter, c.key), m
 }
 
 func muxHandler(main http.Handler, authKey string) http.Handler {
@@ -263,7 +307,7 @@ type releaseID struct {
 	ID string `json:"id"`
 }
 
-func setAppRelease(app *ct.App, rid releaseID, apps *AppRepo, releases *ReleaseRepo, formations *FormationRepo, r ResponseHelper) {
+func setAppRelease(app *ct.App, rid releaseID, apps *AppRepo, releases *ReleaseRepo, r ResponseHelper) {
 	rel, err := releases.Get(rid.ID)
 	if err != nil {
 		if err == ErrNotFound {
@@ -276,28 +320,6 @@ func setAppRelease(app *ct.App, rid releaseID, apps *AppRepo, releases *ReleaseR
 	}
 	release := rel.(*ct.Release)
 	apps.SetRelease(app.ID, release.ID)
-
-	// TODO: use transaction/lock
-	fs, err := formations.List(app.ID)
-	if err != nil {
-		r.Error(err)
-		return
-	}
-	if len(fs) == 1 && fs[0].ReleaseID != release.ID {
-		if err := formations.Add(&ct.Formation{
-			AppID:     app.ID,
-			ReleaseID: release.ID,
-			Processes: fs[0].Processes,
-		}); err != nil {
-			r.Error(err)
-			return
-		}
-		if err := formations.Remove(app.ID, fs[0].ReleaseID); err != nil {
-			r.Error(err)
-			return
-		}
-	}
-
 	r.JSON(200, release)
 }
 
