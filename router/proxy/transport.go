@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bufio"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
@@ -85,6 +86,41 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return nil, errNoBackends
 }
 
+func (t *transport) UpgradeHTTP(req *http.Request) (*http.Response, net.Conn, *bufio.ReadWriter, error) {
+	stickyBackend := t.getStickyBackend(req)
+	backends := t.getOrderedBackends(stickyBackend)
+
+	conn, addr, err := dialTCP(backends)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	req.URL.Host = addr
+
+	bufrw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
+	if err := req.Write(bufrw); err != nil {
+		return nil, nil, nil, err
+	}
+	if err := bufrw.Flush(); err != nil {
+		return nil, nil, nil, err
+	}
+
+	res, err := http.ReadResponse(bufrw.Reader, req)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	t.setStickyBackend(res, stickyBackend)
+	return res, conn, bufrw, err
+}
+
+func dialTCP(addrs []string) (net.Conn, string, error) {
+	for _, addr := range addrs {
+		if conn, err := dialer.Dial("tcp", addr); err == nil {
+			return conn, addr, nil
+		}
+	}
+	return nil, "", errNoBackends
+}
+
 func customDial(network, addr string) (net.Conn, error) {
 	conn, err := dialer.Dial(network, addr)
 	if err != nil {
@@ -127,6 +163,7 @@ func swapToFront(ss []string, s string) {
 		}
 	}
 }
+
 func getStickyCookieBackend(req *http.Request, cookieKey [32]byte) string {
 	cookie, err := req.Cookie(stickyCookie)
 	if err != nil {
