@@ -338,6 +338,7 @@ func (s *S) TestHTTPHeadersFromClient(c *C) {
 	req.Header.Set("X-Request-Id", "asdf1234asdf")
 	res, err := httpClient.Do(req)
 	c.Assert(err, IsNil)
+	defer res.Body.Close()
 	c.Assert(res.StatusCode, Equals, 200)
 }
 
