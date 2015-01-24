@@ -281,10 +281,13 @@ func (s *HTTPSuite) TestInstancesShortcut(c *C) {
 	assertInstanceEqual(c, res[0], inst1)
 
 	// Instances with existing instances returns them
+	events := make(chan *discoverd.Event, 1)
+	s.state.Subscribe("a", false, discoverd.EventKindUp, events)
 	inst2 := fakeInstance()
 	hb2, err := s.client.RegisterInstance("a", inst2)
 	c.Assert(err, IsNil)
 	defer hb2.Close()
+	assertEvent(c, events, "a", discoverd.EventKindUp, inst2)
 	res, err = s.client.Instances("a", 10*time.Second)
 	c.Assert(res, HasLen, 2)
 	assertInstanceEqual(c, res[0], inst1)
