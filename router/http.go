@@ -20,6 +20,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kavu/go_reuseport"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/nacl/secretbox"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/tlsconfig"
 	"github.com/flynn/flynn/router/types"
@@ -509,7 +510,8 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	copyHeader(w.Header(), res.Header)
 
 	w.WriteHeader(res.StatusCode)
-	_, err = io.Copy(w, res.Body) // TODO(bgentry): consider using a flush interval
+	w.(http.Flusher).Flush()
+	_, err = io.Copy(httphelper.FlushWriter{Writer: w, Enabled: true}, res.Body) // TODO(bgentry): consider using a flush interval
 	if err != nil {
 		log.Println("reverse proxy copy err:", err)
 		return
