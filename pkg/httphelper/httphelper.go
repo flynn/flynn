@@ -74,8 +74,7 @@ func ContextInjector(componentName string, handler http.Handler) http.Handler {
 		}
 		ctx := context.WithValue(context.Background(), CtxKeyReqID, reqID)
 		ctx = context.WithValue(ctx, CtxKeyComponent, componentName)
-		rw := NewResponseWriter(w)
-		rw.ctx = ctx
+		rw := NewResponseWriter(w, ctx)
 		handler.ServeHTTP(rw, req)
 	})
 }

@@ -9,8 +9,8 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 )
 
-func NewResponseWriter(w http.ResponseWriter) *ResponseWriter {
-	return &ResponseWriter{w: w}
+func NewResponseWriter(w http.ResponseWriter, ctx context.Context) *ResponseWriter {
+	return &ResponseWriter{w: w, ctx: ctx}
 }
 
 type ResponseWriter struct {
