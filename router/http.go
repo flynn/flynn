@@ -234,7 +234,7 @@ func (s *HTTPListener) listenAndServe(started chan<- error) {
 	}
 
 	server := &http.Server{
-		Addr: s.Addr,
+		Addr: s.listener.Addr().String(),
 		Handler: fwdProtoHandler{
 			Handler: s,
 			Proto:   "http",
@@ -266,8 +266,16 @@ func (s *HTTPListener) listenAndServeTLS(started chan<- error) {
 		Certificates:   []tls.Certificate{s.keypair},
 	})
 
+	l, err := reuseport.NewReusablePortListener("tcp4", s.TLSAddr)
+	if err == nil {
+		s.tlsListener = tls.NewListener(l, tlsConfig)
+	}
+	started <- err
+	if err != nil {
+		return
+	}
 	server := &http.Server{
-		Addr: s.TLSAddr,
+		Addr: s.tlsListener.Addr().String(),
 		Handler: fwdProtoHandler{
 			Handler: s,
 			Proto:   "https",
@@ -275,12 +283,6 @@ func (s *HTTPListener) listenAndServeTLS(started chan<- error) {
 		},
 	}
 
-	l, err := reuseport.NewReusablePortListener("tcp4", s.TLSAddr)
-	started <- err
-	if err != nil {
-		return
-	}
-	s.tlsListener = tls.NewListener(l, tlsConfig)
 	// TODO: log error
 	_ = server.Serve(s.tlsListener)
 }
