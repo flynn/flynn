@@ -13,6 +13,7 @@ import (
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/httphelper"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 type State struct {
@@ -145,7 +146,7 @@ func Run(manifest []byte, ch chan<- *StepInfo, minHosts int) (err error) {
 	return nil
 }
 
-var clusterAttempts = attempt.Strategy{
+var onlineHostAttempts = attempt.Strategy{
 	Min:   5,
 	Total: 5 * time.Second,
 	Delay: 200 * time.Millisecond,
@@ -155,11 +156,14 @@ func checkOnlineHosts(count int, state *State) error {
 	var online int
 	service := discoverd.NewService("flynn-host")
 	updates := make(chan *discoverd.Event)
-	stream, err := service.Watch(updates)
-	if err != nil {
+	var s stream.Stream
+	if err := onlineHostAttempts.Run(func() (err error) {
+		s, err = service.Watch(updates)
+		return
+	}); err != nil {
 		return err
 	}
-	defer stream.Close()
+	defer s.Close()
 
 	timeout := time.After(30 * time.Second)
 loop:
@@ -182,7 +186,7 @@ loop:
 		}
 	}
 
-	return clusterAttempts.Run(func() error {
+	return onlineHostAttempts.Run(func() error {
 		hosts, err := clusterHosts(state)
 		if err != nil {
 			return err
