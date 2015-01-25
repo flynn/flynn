@@ -14,8 +14,6 @@ import (
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
-	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/discoverd/client/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/pinned"
 	"github.com/flynn/flynn/pkg/stream"
@@ -44,31 +42,15 @@ func newClient(key string, url string, http *http.Client) *Client {
 	return c
 }
 
-func newDiscoverdClient(u *url.URL, key string) (*Client, error) {
-	if err := discoverd.Connect(""); err != nil {
-		return nil, err
-	}
-	u.Scheme = "http"
-	d := dialer.New(discoverd.DefaultClient, nil)
-	httpClient := &http.Client{Transport: &http.Transport{Dial: d.Dial}}
-	c := newClient(key, u.String(), httpClient)
-	c.Dial = d.Dial
-	c.DialClose = d
-	return c, nil
-}
-
 // NewClient creates a new Client pointing at uri and using key for
 // authentication.
 func NewClient(uri, key string) (*Client, error) {
 	if uri == "" {
-		uri = "discoverd+http://flynn-controller"
+		uri = "http://flynn-controller.discoverd"
 	}
 	u, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
-	}
-	if u.Scheme == "discoverd+http" {
-		return newDiscoverdClient(u, key)
 	}
 	return newClient(key, u.String(), http.DefaultClient), nil
 }

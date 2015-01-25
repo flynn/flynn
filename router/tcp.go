@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kavu/go_reuseport"
-	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -161,19 +160,19 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 	if service != nil && service.name != r.Service {
 		service.refs--
 		if service.refs <= 0 {
-			service.ss.Close()
+			service.sc.Close()
 			delete(h.l.services, service.name)
 		}
 		service = nil
 	}
 	if service == nil {
-		ss, err := h.l.discoverd.NewServiceSet(r.Service)
+		sc, err := NewDiscoverdServiceCache(h.l.discoverd.Service(r.Service))
 		if err != nil {
 			return err
 		}
 		service = &tcpService{
 			name: r.Service,
-			ss:   ss,
+			sc:   sc,
 		}
 		h.l.services[r.Service] = service
 	}
@@ -212,7 +211,7 @@ func (h *tcpSyncHandler) Remove(id string) error {
 
 	r.service.refs--
 	if r.service.refs <= 0 {
-		r.service.ss.Close()
+		r.service.sc.Close()
 		delete(h.l.services, r.service.name)
 	}
 
@@ -272,13 +271,13 @@ func (r *tcpRoute) Close() {
 
 type tcpService struct {
 	name string
-	ss   discoverd.ServiceSet
+	sc   DiscoverdServiceCache
 	refs int
 }
 
 func (s *tcpService) getBackend() (conn net.Conn) {
 	var err error
-	for _, addr := range shuffle(s.ss.Addrs()) {
+	for _, addr := range shuffle(s.sc.Addrs()) {
 		// TODO: set deadlines
 		conn, err = net.Dial("tcp", addr)
 		if err != nil {

@@ -33,12 +33,14 @@ func parseEnviron() map[string]string {
 }
 
 type ManifestData struct {
-	ExternalIP string
-	InternalIP string
-	TCPPorts   []int
-	Volumes    map[string]struct{}
-	Env        map[string]string
-	Services   map[string]*ManifestData
+	ExternalIP  string
+	InternalIP  string
+	BridgeIP    string
+	Nameservers string
+	TCPPorts    []int
+	Volumes     map[string]struct{}
+	Env         map[string]string
+	Services    map[string]*ManifestData
 
 	ports    *ports.Allocator
 	readonly bool
@@ -134,16 +136,19 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 	}
 	m.state.mtx.Unlock()
 
+	var netInfo NetworkInfo
 	for _, service := range services {
 		if _, exists := serviceData[service.ID]; exists {
 			continue
 		}
 
 		data := &ManifestData{
-			Env:        parseEnviron(),
-			Services:   serviceData,
-			ExternalIP: m.externalAddr,
-			ports:      m.ports["tcp"],
+			Env:         parseEnviron(),
+			Services:    serviceData,
+			ExternalIP:  m.externalAddr,
+			BridgeIP:    netInfo.BridgeAddr,
+			Nameservers: strings.Join(netInfo.Nameservers, ","),
+			ports:       m.ports["tcp"],
 		}
 
 		// Add explicit tcp ports to data.TCPPorts
@@ -239,9 +244,11 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 		serviceData[service.ID] = data
 
 		if service.ID == "flannel" {
-			if err := m.backend.ConfigureNetworking(NetworkStrategyFlannel, job.ID); err != nil {
+			ni, err := m.backend.ConfigureNetworking(NetworkStrategyFlannel, job.ID)
+			if err != nil {
 				return nil, err
 			}
+			netInfo = *ni
 		}
 	}
 

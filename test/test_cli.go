@@ -70,7 +70,7 @@ func (a *cliTestApp) waitFor(events jobEvents) (int64, string) {
 }
 
 func (a *cliTestApp) waitForService(name string) {
-	_, err := a.disc.Services(name, 30*time.Second)
+	_, err := a.disc.Instances(name, 30*time.Second)
 	a.t.Assert(err, c.IsNil)
 }
 

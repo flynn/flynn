@@ -15,7 +15,7 @@ func main() {
 	port := os.Getenv("PORT")
 	addr := ":" + port
 
-	if err := discoverd.Register(service, addr); err != nil {
+	if _, err := discoverd.AddServiceAndRegister(service, addr); err != nil {
 		log.Fatal(err)
 	}
 

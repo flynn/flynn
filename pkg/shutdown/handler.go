@@ -54,7 +54,7 @@ func (h *Handler) exit(err error) {
 	// wait for exit handlers to finish
 	h.mtx.Lock()
 	if err != nil {
-		log.New(os.Stderr, "", log.Lshortfile|log.Lmicroseconds).Output(2, err.Error())
+		log.New(os.Stderr, "", log.Lshortfile|log.Lmicroseconds).Output(3, err.Error())
 		os.Exit(1)
 	}
 	os.Exit(0)

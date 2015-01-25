@@ -16,7 +16,7 @@ var _ = c.ConcurrentSuite(&PostgresSuite{})
 
 // Check postgres config to avoid regressing on https://github.com/flynn/flynn/issues/101
 func (s *PostgresSuite) TestSSLRenegotiationLimit(t *c.C) {
-	services, err := s.discoverdClient(t).Services("pg", 5*time.Second)
+	instances, err := s.discoverdClient(t).Instances("pg", 5*time.Second)
 	t.Assert(err, c.IsNil)
 
 	cmd := exec.Command(exec.DockerImage(imageURIs["postgresql"]),
@@ -24,10 +24,10 @@ func (s *PostgresSuite) TestSSLRenegotiationLimit(t *c.C) {
 	cmd.Entrypoint = []string{"psql"}
 	cmd.Env = map[string]string{
 		"PGDATABASE": "postgres",
-		"PGHOST":     services[0].Host,
-		"PGPORT":     services[0].Port,
-		"PGUSER":     services[0].Attrs["username"],
-		"PGPASSWORD": services[0].Attrs["password"],
+		"PGHOST":     instances[0].Host(),
+		"PGPORT":     instances[0].Port(),
+		"PGUSER":     instances[0].Meta["username"],
+		"PGPASSWORD": instances[0].Meta["password"],
 	}
 
 	res, err := cmd.CombinedOutput()

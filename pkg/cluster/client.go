@@ -32,14 +32,14 @@ func NewClient() (*Client, error) {
 	return NewClientWithServices(nil)
 }
 
-// A ServiceSetFunc is a function that takes a service name and returns
-// a discoverd.ServiceSet.
-type ServiceSetFunc func(name string) (discoverd.ServiceSet, error)
+// A ServiceFunc is a function that takes a service name and returns
+// a discoverd.Service.
+type ServiceFunc func(name string) discoverd.Service
 
 // NewClientWithServices uses the provided services to call the cluster
 // leader and return a Client. If services is nil, the default discoverd
 // client is used.
-func NewClientWithServices(services ServiceSetFunc) (*Client, error) {
+func NewClientWithServices(services ServiceFunc) (*Client, error) {
 	client, err := newClient(services)
 	if err != nil {
 		return nil, err
@@ -50,26 +50,23 @@ func NewClientWithServices(services ServiceSetFunc) (*Client, error) {
 // ErrNotFound is returned when a resource is not found (HTTP status 404).
 var ErrNotFound = errors.New("cluster: resource not found")
 
-func newClient(services ServiceSetFunc) (*Client, error) {
+func newClient(services ServiceFunc) (*Client, error) {
 	if services == nil {
-		services = discoverd.NewServiceSet
+		services = discoverd.NewService
 	}
-	ss, err := services("flynn-host")
-	if err != nil {
-		return nil, err
-	}
+	s := services("flynn-host")
 	c := &httpclient.Client{
 		ErrNotFound: ErrNotFound,
 		HTTP:        http.DefaultClient,
 	}
-	return &Client{service: ss, c: c, leaderChange: make(chan struct{})}, nil
+	return &Client{service: s, c: c, leaderChange: make(chan struct{})}, nil
 }
 
 // A Client is used to interact with the leader of a Flynn host service cluster
 // leader. If the leader changes, the client uses service discovery to connect
 // to the new leader automatically.
 type Client struct {
-	service  discoverd.ServiceSet
+	service  discoverd.Service
 	leaderID string
 
 	c   *httpclient.Client
@@ -86,7 +83,9 @@ func (c *Client) start() error {
 }
 
 func (c *Client) followLeader(firstErr chan<- error) {
-	for leader := range c.service.Leaders() {
+	leaders := make(chan *discoverd.Instance)
+	c.service.Leaders(leaders)
+	for leader := range leaders {
 		if leader == nil {
 			if firstErr != nil {
 				firstErr <- ErrNoServers
@@ -96,7 +95,7 @@ func (c *Client) followLeader(firstErr chan<- error) {
 			continue
 		}
 		c.mtx.Lock()
-		c.leaderID = leader.Attrs["id"]
+		c.leaderID = leader.Meta["id"]
 		c.c.URL = "http://" + leader.Addr
 		// TODO: cancel any current requests
 		if c.err == nil {
@@ -134,7 +133,7 @@ func (c *Client) Close() error {
 	if c.c != nil {
 		c.c.Close()
 	}
-	return c.service.Close()
+	return nil
 }
 
 // LeaderID returns the identifier of the current leader.
@@ -166,11 +165,21 @@ func (c *Client) DialHost(id string) (Host, error) {
 		return NewHostClient(c.c.URL, nil), nil
 	}
 
-	services := c.service.Select(map[string]string{"id": id})
-	if len(services) == 0 {
+	instances, err := c.service.Instances()
+	if err != nil {
+		return nil, err
+	}
+	var instance *discoverd.Instance
+	for _, inst := range instances {
+		if inst.Meta["id"] == id {
+			instance = inst
+			break
+		}
+	}
+	if instance == nil {
 		return nil, ErrNoServers
 	}
-	addr := "http://" + services[0].Addr
+	addr := "http://" + instance.Addr
 	return NewHostClient(addr, nil), nil
 }
 

@@ -10,10 +10,11 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/flynn/flynn/discoverd/client"
 )
 
 type register struct {
-	clientCmd
 	exitStatus   int
 	exitSignalCh chan os.Signal
 	host         *string
@@ -65,23 +66,27 @@ func (cmd *register) ValidateFlags() {
 func (cmd *register) RegisterWithExitHook(services map[string]string, verbose bool) {
 	cmd.exitSignalCh = make(chan os.Signal, 1)
 	signal.Notify(cmd.exitSignalCh, os.Interrupt, syscall.SIGTERM)
+	hbs := make([]discoverd.Heartbeater, 0, len(services))
+	for name, port := range services {
+		hb, err := discoverd.DefaultClient.AddServiceAndRegister(name, *cmd.host+":"+port)
+		if err != nil {
+			log.Fatal(err)
+		}
+		hbs = append(hbs, hb)
+	}
 	go func() {
 		<-cmd.exitSignalCh
 		if verbose {
 			log.Println("Unregistering service...")
 		}
-		for name, port := range services {
-			cmd.client.Unregister(name, *cmd.host+":"+port)
+		for _, hb := range hbs {
+			hb.Close()
 		}
 		os.Exit(cmd.exitStatus)
 	}()
-	for name, port := range services {
-		cmd.client.Register(name, *cmd.host+":"+port)
-	}
 }
 
 func (cmd *register) Run(fs *flag.FlagSet) {
-	cmd.InitClient(false)
 	cmd.exitStatus = 0
 
 	colonIdx := strings.LastIndex(fs.Arg(0), ":")

@@ -25,6 +25,12 @@
     "id": "discoverd",
     "image": "$image_url_prefix/discoverd?id=$image_id[discoverd]",
     "args": ["-bind=:{{ .TCPPort 0 }}", "-etcd=http://{{ .Services.etcd.ExternalIP }}:{{ index .Services.etcd.TCPPorts 0 }}"],
-    "tcp_ports": ["1111"]
+    "args": [
+		"-http-addr=:{{ .TCPPort 0 }}", 
+		"-dns-addr={{ .BridgeIP }}:{{ .TCPPort 1 }}",
+		"-recursors={{ .Nameservers }}",
+		"-etcd=http://{{ .Services.etcd.ExternalIP }}:{{ index .Services.etcd.TCPPorts 0 }}"
+	],
+    "tcp_ports": ["1111", "53"]
   }
 ]

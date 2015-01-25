@@ -169,19 +169,13 @@ func (c *controllerAPI) ProvisionResource(ctx context.Context, w http.ResponseWr
 		return
 	}
 
-	rs, err := resource.NewServerWithDiscoverd(p.URL, c.discoverdClient)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
-
 	var config []byte
 	if rr.Config != nil {
 		config = *rr.Config
 	} else {
 		config = []byte(`{}`)
 	}
-	data, err := rs.Provision(config)
+	data, err := resource.Provision(p.URL, config)
 	if err != nil {
 		respondWithError(w, err)
 		return
