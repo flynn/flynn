@@ -23,6 +23,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/aws"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/s3"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/tail"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/iotool"
 	"github.com/flynn/flynn/pkg/random"
@@ -152,16 +153,25 @@ func (r *Runner) start() error {
 
 	go r.watchEvents()
 
-	http.HandleFunc("/", r.httpEventHandler)
-	http.HandleFunc("/builds/", r.httpBuildHandler)
-	http.HandleFunc("/cluster/", r.httpClusterHandler)
-	http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(args.AssetsDir))))
-	log.Println("Listening on", args.ListenAddr, "...")
+	router := httprouter.New()
+	router.RedirectTrailingSlash = true
+	router.Handler("GET", "/", http.RedirectHandler("/builds", 302))
+	router.POST("/", r.handleEvent)
+	router.GET("/builds/:build", r.getBuildLog)
+	router.POST("/builds/:build/restart", r.restartBuild)
+	router.GET("/builds", r.getBuilds)
+	router.ServeFiles("/assets/*filepath", http.Dir(args.AssetsDir))
+	router.GET("/cluster/:key/:cluster", r.clusterAPI(r.getCluster))
+	router.POST("/cluster/:key/:cluster", r.clusterAPI(r.addHost))
+	router.DELETE("/cluster/:key/:cluster/:host", r.clusterAPI(r.removeHost))
+	router.GET("/cluster/:key/:cluster/dump-logs", r.clusterAPI(r.dumpLogs))
 
 	srv := &http.Server{
 		Addr:      args.ListenAddr,
+		Handler:   router,
 		TLSConfig: tlsconfig.SecureCiphers(nil),
 	}
+	log.Println("Listening on", args.ListenAddr, "...")
 	if err := srv.ListenAndServeTLS(args.TLSCert, args.TLSKey); err != nil {
 		return fmt.Errorf("ListenAndServeTLS: %s", err)
 	}
@@ -215,7 +225,7 @@ func (r *Runner) build(b *Build) (err error) {
 	}
 	b.LogFile = logFile.Name()
 
-	r.updateStatus(b, "pending", fmt.Sprintf("https://ci.flynn.io/builds/%s.log", b.Id))
+	r.updateStatus(b, "pending", fmt.Sprintf("https://ci.flynn.io/builds/%s", b.Id))
 
 	<-r.buildCh
 	defer func() {
@@ -313,12 +323,7 @@ func (r *Runner) uploadToS3(file *os.File, b *Build) string {
 	return url
 }
 
-func (r *Runner) httpEventHandler(w http.ResponseWriter, req *http.Request) {
-	if req.Method == "GET" {
-		http.Redirect(w, req, "/builds", 302)
-		return
-	}
-
+func (r *Runner) handleEvent(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 	header, ok := req.Header["X-Github-Event"]
 	if !ok {
 		log.Println("webhook: request missing X-Github-Event header")
@@ -359,16 +364,7 @@ func (r *Runner) httpEventHandler(w http.ResponseWriter, req *http.Request) {
 	io.WriteString(w, "ok\n")
 }
 
-func (r *Runner) httpBuildHandler(w http.ResponseWriter, req *http.Request) {
-	if strings.HasSuffix(req.URL.Path, ".log") {
-		r.serveBuildLog(w, req)
-		return
-	}
-
-	if req.Method == "POST" {
-		r.handleBuildRequest(w, req)
-		return
-	}
+func (r *Runner) getBuilds(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 	w.Header().Set("Vary", "Accept")
 	if !strings.Contains(req.Header.Get("Accept"), "application/json") {
 		http.ServeFile(w, req, path.Join(args.AssetsDir, "index.html"))
@@ -411,8 +407,8 @@ func (r *Runner) httpBuildHandler(w http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(w).Encode(builds)
 }
 
-func (r *Runner) serveBuildLog(w http.ResponseWriter, req *http.Request) {
-	id := strings.TrimSuffix(path.Base(req.URL.Path), ".log")
+func (r *Runner) getBuildLog(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	id := ps.ByName("build")
 	b := &Build{}
 	if err := r.db.View(func(tx *bolt.Tx) error {
 		v := tx.Bucket(dbBucket).Get([]byte(id))
@@ -461,12 +457,8 @@ func (r *Runner) serveBuildLog(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (r *Runner) handleBuildRequest(w http.ResponseWriter, req *http.Request) {
-	id := req.FormValue("id")
-	if id == "" {
-		http.Error(w, "missing id parameter\n", 400)
-		return
-	}
+func (r *Runner) restartBuild(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	id := ps.ByName("build")
 	build := &Build{}
 	if err := r.db.View(func(tx *bolt.Tx) error {
 		val := tx.Bucket(dbBucket).Get([]byte(id))
@@ -600,42 +592,51 @@ func (r *Runner) save(b *Build) error {
 	})
 }
 
-func (r *Runner) httpClusterHandler(w http.ResponseWriter, req *http.Request) {
-	authKeyID := strings.SplitN(strings.TrimPrefix(req.URL.Path, "/cluster/"), "/", 2)
-	if len(authKeyID[0]) != len(r.authKey) || subtle.ConstantTimeCompare([]byte(authKeyID[0]), []byte(r.authKey)) != 1 {
-		w.WriteHeader(401)
-		return
-	}
-	c, ok := r.clusters[authKeyID[1]]
-	if !ok {
-		http.Error(w, "cluster not found", 404)
-		return
-	}
+type clusterHandle func(c *cluster.Cluster, w http.ResponseWriter, ps httprouter.Params) error
 
-	switch req.Method {
-	case "GET":
-		if err := json.NewEncoder(w).Encode(c); err != nil {
-			http.Error(w, fmt.Sprintf("error encoding cluster: %s", err), 500)
-		}
-	case "POST":
-		instance, err := c.AddHost()
-		if err != nil {
-			http.Error(w, err.Error(), 500)
+func (r *Runner) clusterAPI(handle clusterHandle) httprouter.Handle {
+	return func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		authKey := ps.ByName("key")
+		if len(authKey) != len(r.authKey) || subtle.ConstantTimeCompare([]byte(authKey), []byte(r.authKey)) != 1 {
+			w.WriteHeader(401)
 			return
 		}
-		if err := json.NewEncoder(w).Encode(instance); err != nil {
-			http.Error(w, fmt.Sprintf("error encoding instance: %s", err), 500)
-		}
-	case "DELETE":
-		hostID := req.FormValue("host")
-		if err := c.RemoveHost(hostID); err != nil {
-			http.Error(w, err.Error(), 500)
+		id := ps.ByName("cluster")
+		c, ok := r.clusters[id]
+		if !ok {
+			http.Error(w, "cluster not found", 404)
 			return
 		}
-		w.Write([]byte("ok"))
-	default:
-		http.Error(w, "unknown method", 405)
+		if err := handle(c, w, ps); err != nil {
+			http.Error(w, err.Error(), 500)
+		}
 	}
+}
+
+func (r *Runner) getCluster(c *cluster.Cluster, w http.ResponseWriter, ps httprouter.Params) error {
+	return json.NewEncoder(w).Encode(c)
+}
+
+func (r *Runner) addHost(c *cluster.Cluster, w http.ResponseWriter, ps httprouter.Params) error {
+	instance, err := c.AddHost()
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(w).Encode(instance)
+}
+
+func (r *Runner) removeHost(c *cluster.Cluster, w http.ResponseWriter, ps httprouter.Params) error {
+	hostID := ps.ByName("host")
+	if err := c.RemoveHost(hostID); err != nil {
+		return err
+	}
+	w.WriteHeader(200)
+	return nil
+}
+
+func (r *Runner) dumpLogs(c *cluster.Cluster, w http.ResponseWriter, ps httprouter.Params) error {
+	c.DumpLogs(w)
+	return nil
 }
 
 func removeRootFS(path string) {
