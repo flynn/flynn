@@ -524,7 +524,7 @@ func (c *Cluster) DumpLogs(w io.Writer) {
 	}
 
 	var out bytes.Buffer
-	if err := c.Run("flynn-host ps -a -q", &Streams{Stdout: &out}); err != nil {
+	if err := c.Run("flynn-host ps -a -q", &Streams{Stdout: &out, Stderr: w}); err != nil {
 		io.Copy(w, &out)
 		fallback()
 		return
