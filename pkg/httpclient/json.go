@@ -33,16 +33,6 @@ type Client struct {
 	URL         string
 	Key         string
 	HTTP        *http.Client
-	Dial        DialFunc
-	DialClose   io.Closer
-}
-
-// Close closes the underlying transport connection.
-func (c *Client) Close() error {
-	if c.DialClose != nil {
-		c.DialClose.Close()
-	}
-	return nil
 }
 
 func ToJSON(v interface{}) (io.Reader, error) {
@@ -119,11 +109,7 @@ func (c *Client) Hijack(method, path string, header http.Header, in interface{})
 	if err != nil {
 		return nil, err
 	}
-	dial := c.Dial
-	if dial == nil {
-		dial = net.Dial
-	}
-	conn, err := dial("tcp", uri.Host)
+	conn, err := net.Dial("tcp", uri.Host)
 	if err != nil {
 		return nil, err
 	}

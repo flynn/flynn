@@ -272,9 +272,6 @@ func (c *Cmd) close() {
 	if c.attachClient != nil {
 		c.attachClient.Close()
 	}
-	if c.closeCluster {
-		c.cluster.(*cluster.Client).Close()
-	}
 }
 
 func (c *Cmd) Wait() error {

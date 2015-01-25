@@ -285,7 +285,6 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	// kill the first controller and check the scheduler brings it back online
 	cc, err := cluster.NewClientWithServices(s.discoverdClient(t).Service)
 	t.Assert(err, c.IsNil)
-	defer cc.Close()
 	hc, err := cc.DialHost(hostID)
 	t.Assert(err, c.IsNil)
 	debug(t, "stopping job ", jobID)

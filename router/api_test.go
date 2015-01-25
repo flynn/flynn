@@ -44,7 +44,6 @@ func (s *testAPIServer) Close() error {
 	for _, cleanup := range s.cleanup {
 		cleanup()
 	}
-	s.Client.Close()
 	return nil
 }
 

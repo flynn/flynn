@@ -49,7 +49,6 @@ func Run(name string, args []string) error {
 		if err != nil {
 			return err
 		}
-		defer client.Close()
 		return f(parsedArgs, client)
 	case func(*docopt.Args):
 		f(parsedArgs)

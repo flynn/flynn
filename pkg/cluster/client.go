@@ -89,7 +89,6 @@ func (c *Client) followLeader(firstErr chan<- error) {
 		if leader == nil {
 			if firstErr != nil {
 				firstErr <- ErrNoServers
-				c.Close()
 				return
 			}
 			continue
@@ -107,7 +106,6 @@ func (c *Client) followLeader(firstErr chan<- error) {
 			firstErr <- c.err
 			if c.err != nil {
 				c.c = nil
-				c.Close()
 				return
 			}
 			firstErr = nil
@@ -123,17 +121,6 @@ func (c *Client) NewLeaderSignal() <-chan struct{} {
 	c.mtx.RLock()
 	defer c.mtx.RUnlock()
 	return c.leaderChange
-}
-
-// Close disconnects from the server and cleans up internal resources used by
-// the client.
-func (c *Client) Close() error {
-	c.mtx.Lock()
-	defer c.mtx.Unlock()
-	if c.c != nil {
-		c.c.Close()
-	}
-	return nil
 }
 
 // LeaderID returns the identifier of the current leader.
