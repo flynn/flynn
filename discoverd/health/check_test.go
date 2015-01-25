@@ -39,7 +39,7 @@ func (CheckSuite) TestTCPFailure(c *C) {
 		Timeout: 10 * time.Millisecond,
 	}).Check()
 	c.Assert(err, NotNil)
-	c.Assert(strings.Contains(err.Error(), "connection refused"), Equals, true)
+	c.Assert(strings.Contains(err.Error(), "connection refused"), Equals, true, Commentf("err = %s", err))
 }
 
 var okHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +79,7 @@ func (CheckSuite) TestHTTPS(c *C) {
 		Host: "foo.com",
 	}).Check()
 	c.Assert(err, NotNil)
-	c.Assert(strings.Contains(err.Error(), "400"), Equals, true)
+	c.Assert(strings.Contains(err.Error(), "400"), Equals, true, Commentf("err = %s", err))
 }
 
 func (CheckSuite) TestHTTPCustomStatusHost(c *C) {
@@ -112,7 +112,7 @@ func (CheckSuite) TestHTTPMatch(c *C) {
 		MatchBytes: []byte("notok"),
 	}).Check()
 	c.Assert(err, NotNil)
-	c.Assert(strings.Contains(err.Error(), "did not match"), Equals, true)
+	c.Assert(strings.Contains(err.Error(), "did not match"), Equals, true, Commentf("err = %s", err))
 }
 
 func (CheckSuite) TestHTTPReadTimeout(c *C) {
@@ -129,7 +129,7 @@ func (CheckSuite) TestHTTPReadTimeout(c *C) {
 		MatchBytes: []byte("foo"),
 	}).Check()
 	c.Assert(err, NotNil)
-	c.Assert(strings.Contains(err.Error(), "use of closed network connection"), Equals, true)
+	c.Assert(strings.Contains(err.Error(), "use of closed network connection"), Equals, true, Commentf("err = %s", err))
 }
 
 func (CheckSuite) TestHTTPConnectRefused(c *C) {
@@ -138,11 +138,11 @@ func (CheckSuite) TestHTTPConnectRefused(c *C) {
 		Timeout: 10 * time.Millisecond,
 	}).Check()
 	c.Assert(err, NotNil)
-	c.Assert(strings.Contains(err.Error(), "connection refused"), Equals, true)
+	c.Assert(strings.Contains(err.Error(), "connection refused"), Equals, true, Commentf("err = %s", err))
 }
 
 func (CheckSuite) TestHTTPInvalidURL(c *C) {
 	err := (&HTTPCheck{URL: "http%:"}).Check()
 	c.Assert(err, NotNil)
-	c.Assert(strings.Contains(err.Error(), "invalid URL escape"), Equals, true)
+	c.Assert(strings.Contains(err.Error(), "invalid URL escape"), Equals, true, Commentf("err = %s", err))
 }
