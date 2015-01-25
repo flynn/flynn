@@ -86,30 +86,27 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return nil, errNoBackends
 }
 
-func (t *transport) UpgradeHTTP(req *http.Request) (*http.Response, net.Conn, *bufio.ReadWriter, error) {
+func (t *transport) UpgradeHTTP(req *http.Request) (*http.Response, net.Conn, error) {
 	stickyBackend := t.getStickyBackend(req)
 	backends := t.getOrderedBackends(stickyBackend)
-
-	conn, addr, err := dialTCP(backends)
+	c, addr, err := dialTCP(backends)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	req.URL.Host = addr
+	conn := &streamConn{bufio.NewReader(c), c}
 
-	bufrw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
-	if err := req.Write(bufrw); err != nil {
-		return nil, nil, nil, err
+	if err := req.Write(conn); err != nil {
+		conn.Close()
+		return nil, nil, err
 	}
-	if err := bufrw.Flush(); err != nil {
-		return nil, nil, nil, err
-	}
-
-	res, err := http.ReadResponse(bufrw.Reader, req)
+	res, err := http.ReadResponse(conn.Reader, req)
 	if err != nil {
-		return nil, nil, nil, err
+		conn.Close()
+		return nil, nil, err
 	}
 	t.setStickyBackend(res, stickyBackend)
-	return res, conn, bufrw, err
+	return res, conn, nil
 }
 
 func dialTCP(addrs []string) (net.Conn, string, error) {
