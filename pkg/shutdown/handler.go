@@ -10,24 +10,30 @@ import (
 	"syscall"
 )
 
-type Handler struct {
+var h = newHandler()
+
+type handler struct {
 	Active bool
 
 	mtx  sync.RWMutex
 	done chan struct{}
 }
 
-func NewHandler() *Handler {
-	h := &Handler{done: make(chan struct{})}
+func newHandler() *handler {
+	h := &handler{done: make(chan struct{})}
 	go h.wait()
 	return h
 }
 
-func BeforeExit(f func()) {
-	NewHandler().BeforeExit(f)
+func IsActive() bool {
+	return h.Active
 }
 
-func (h *Handler) BeforeExit(f func()) {
+func BeforeExit(f func()) {
+	h.BeforeExit(f)
+}
+
+func (h *handler) BeforeExit(f func()) {
 	h.mtx.RLock()
 	go func() {
 		<-h.done
@@ -36,18 +42,22 @@ func (h *Handler) BeforeExit(f func()) {
 	}()
 }
 
-func (h *Handler) Fatal(v ...interface{}) {
+func Fatal(v ...interface{}) {
+	h.Fatal(v)
+}
+
+func (h *handler) Fatal(v ...interface{}) {
 	h.exit(errors.New(fmt.Sprint(v...)))
 }
 
-func (h *Handler) wait() {
+func (h *handler) wait() {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, os.Signal(syscall.SIGTERM))
 	<-ch
 	h.exit(nil)
 }
 
-func (h *Handler) exit(err error) {
+func (h *handler) exit(err error) {
 	h.Active = true
 	// signal exit handlers
 	close(h.done)

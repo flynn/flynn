@@ -118,8 +118,6 @@ func (r *Runner) start() error {
 		return err
 	}
 
-	sh := shutdown.NewHandler()
-
 	bc := r.bc
 	bc.Network, err = r.allocateNet()
 	if err != nil {
@@ -129,14 +127,14 @@ func (r *Runner) start() error {
 		return fmt.Errorf("could not build flynn: %s", err)
 	}
 	r.releaseNet(bc.Network)
-	sh.BeforeExit(func() { removeRootFS(r.rootFS) })
+	shutdown.BeforeExit(func() { removeRootFS(r.rootFS) })
 
 	db, err := bolt.Open(args.DBPath, 0600, &bolt.Options{Timeout: 5 * time.Second})
 	if err != nil {
 		return fmt.Errorf("could not open db: %s", err)
 	}
 	r.db = db
-	sh.BeforeExit(func() { r.db.Close() })
+	shutdown.BeforeExit(func() { r.db.Close() })
 
 	if err := r.db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(dbBucket)

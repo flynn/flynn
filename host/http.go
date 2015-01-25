@@ -10,7 +10,6 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/httphelper"
-	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/sse"
 )
 
@@ -99,12 +98,11 @@ func (h *jobAPI) RegisterRoutes(r *httprouter.Router) error {
 	return nil
 }
 
-func serveHTTP(host *Host, attach *attachHandler, sh *shutdown.Handler) (*httprouter.Router, error) {
+func serveHTTP(host *Host, attach *attachHandler) (*httprouter.Router, error) {
 	l, err := net.Listen("tcp", ":1113")
 	if err != nil {
 		return nil, err
 	}
-	sh.BeforeExit(func() { l.Close() })
 
 	r := httprouter.New()
 
