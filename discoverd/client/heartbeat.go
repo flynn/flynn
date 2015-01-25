@@ -49,6 +49,7 @@ func (c *Client) RegisterInstance(service string, inst *Instance) (Heartbeater, 
 		c:       c,
 		service: service,
 		stop:    make(chan struct{}),
+		done:    make(chan struct{}),
 		inst:    inst.Clone(),
 	}
 	h.inst.Addr = expandAddr(h.inst.Addr)
@@ -62,6 +63,7 @@ func (c *Client) RegisterInstance(service string, inst *Instance) (Heartbeater, 
 type heartbeater struct {
 	c    *Client
 	stop chan struct{}
+	done chan struct{}
 
 	// Mutex protects inst.Meta
 	sync.Mutex
@@ -75,6 +77,7 @@ func (h *heartbeater) Close() error {
 	if !h.closed {
 		close(h.stop)
 		h.closed = true
+		<-h.done
 	}
 	return nil
 }
@@ -115,6 +118,7 @@ func (h *heartbeater) run(firstErr chan<- error) {
 			}
 		case <-h.stop:
 			h.c.c.Delete(path)
+			close(h.done)
 			return
 		}
 	}
