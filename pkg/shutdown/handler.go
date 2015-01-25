@@ -40,6 +40,10 @@ func (h *handler) BeforeExit(f func()) {
 	h.mtx.Unlock()
 }
 
+func Exit() {
+	h.exit(nil)
+}
+
 func Fatal(v ...interface{}) {
 	h.Fatal(v)
 }
