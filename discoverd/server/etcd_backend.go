@@ -6,6 +6,7 @@ import (
 	"log"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/flynn/discoverd/client"
@@ -134,11 +135,20 @@ func (b *etcdBackend) Close() error {
 	return nil
 }
 
+const retrySleep = 1 * time.Second
+
 func (b *etcdBackend) StartSync() error {
 	started := make(chan error)
 	b.done = make(chan struct{})
 	go func() {
 		defer close(b.done)
+		recentError := false
+		maybeRetrySleep := func() {
+			if recentError {
+				time.Sleep(retrySleep)
+			}
+			recentError = true
+		}
 	outer:
 		for {
 			nextIndex, err := b.fullSync()
@@ -148,7 +158,7 @@ func (b *etcdBackend) StartSync() error {
 					return
 				}
 				log.Printf("Error while performing etcd fullsync: %s", err)
-				// TODO: backoff/sleep
+				maybeRetrySleep()
 				continue
 			}
 
@@ -156,6 +166,7 @@ func (b *etcdBackend) StartSync() error {
 				started <- nil
 				started = nil
 			}
+			recentError = false
 
 			for {
 				stream := make(chan *etcd.Response)
@@ -168,6 +179,7 @@ func (b *etcdBackend) StartSync() error {
 				}()
 
 				for res := range stream {
+					recentError = false
 					nextIndex = res.EtcdIndex + 1
 
 					// ensure we have a key like /foo/bar/services/a/instances/id or /foo/bar/services/a
@@ -194,10 +206,11 @@ func (b *etcdBackend) StartSync() error {
 				if e, ok := watchErr.(*etcd.EtcdError); ok && e.ErrorCode == 401 {
 					// event log has been pruned beyond our waitIndex, force fullSync
 					log.Printf("Got etcd error 401, doing full sync")
+					maybeRetrySleep()
 					continue outer
 				}
 				log.Printf("Restarting etcd watch %s due to error: %s", keyPrefix, watchErr)
-				// TODO: add sleep/backoff
+				maybeRetrySleep()
 			}
 		}
 	}()
