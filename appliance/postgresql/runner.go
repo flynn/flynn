@@ -18,6 +18,7 @@ import (
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/shutdown"
 )
 
 var dataDir = flag.String("data", "/data", "postgresql data directory")
@@ -35,6 +36,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	shutdown.BeforeExit(func() { heartbeater.Close() })
 
 	var leaderProc *exec.Cmd
 	var done <-chan struct{}

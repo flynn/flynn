@@ -11,6 +11,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/shutdown"
 )
 
 var serviceName = os.Getenv("FLYNN_POSTGRES")
@@ -45,9 +46,11 @@ func main() {
 	}
 	addr := ":" + port
 
-	if _, err := discoverd.AddServiceAndRegister(serviceName+"-api", addr); err != nil {
+	hb, err := discoverd.AddServiceAndRegister(serviceName+"-api", addr)
+	if err != nil {
 		log.Fatal(err)
 	}
+	shutdown.BeforeExit(func() { hb.Close() })
 
 	log.Fatal(http.ListenAndServe(addr, m))
 }

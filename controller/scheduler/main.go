@@ -17,6 +17,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/stream"
 )
 
@@ -50,6 +51,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	shutdown.BeforeExit(func() { hb.Close() })
 
 	leaders := make(chan *discoverd.Instance)
 	stream, err := discoverd.NewService("flynn-controller-scheduler").Leaders(leaders)

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/shutdown"
 )
 
 /*
@@ -31,12 +32,16 @@ func main() {
 	defer l.Close()
 	log.Println("Listening on", addr)
 
-	if _, err := discoverd.AddServiceAndRegister(name, addr); err != nil {
+	hb, err := discoverd.AddServiceAndRegister(name, addr)
+	if err != nil {
 		log.Fatal(err)
 	}
+	shutdown.BeforeExit(func() { hb.Close() })
 
 	http.HandleFunc("/ish", ish)
-	log.Fatal(http.Serve(l, nil))
+	if err := http.Serve(l, nil); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func ish(resp http.ResponseWriter, req *http.Request) {

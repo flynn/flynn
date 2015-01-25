@@ -12,6 +12,7 @@ import (
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/postgres"
+	"github.com/flynn/flynn/pkg/shutdown"
 )
 
 var storageDir = flag.String("s", "", "Path to store files, instead of Postgres")
@@ -105,9 +106,11 @@ func main() {
 		storageDesc = "Postgres"
 	}
 
-	if _, err := discoverd.AddServiceAndRegister("blobstore", addr); err != nil {
+	hb, err := discoverd.AddServiceAndRegister("blobstore", addr)
+	if err != nil {
 		log.Fatal(err)
 	}
+	shutdown.BeforeExit(func() { hb.Close() })
 
 	log.Println("Blobstore serving files on " + addr + " from " + storageDesc)
 	log.Fatal(http.ListenAndServe(addr, handler(fs)))
