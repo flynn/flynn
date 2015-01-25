@@ -58,7 +58,7 @@ func (h *handler) wait() {
 func (h *handler) exit(err error) {
 	h.mtx.Lock()
 	h.active.Store(true)
-	for i := len(h.stack) - 1; i > 0; i-- {
+	for i := len(h.stack) - 1; i >= 0; i-- {
 		h.stack[i]()
 	}
 	if err != nil {
