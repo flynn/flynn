@@ -15,12 +15,12 @@ var h = newHandler()
 type handler struct {
 	Active bool
 
-	mtx  sync.RWMutex
-	done chan struct{}
+	mtx   sync.Mutex
+	stack []func()
 }
 
 func newHandler() *handler {
-	h := &handler{done: make(chan struct{})}
+	h := &handler{}
 	go h.wait()
 	return h
 }
@@ -34,12 +34,9 @@ func BeforeExit(f func()) {
 }
 
 func (h *handler) BeforeExit(f func()) {
-	h.mtx.RLock()
-	go func() {
-		<-h.done
-		f()
-		h.mtx.RUnlock()
-	}()
+	h.mtx.Lock()
+	h.stack = append(h.stack, f)
+	h.mtx.Unlock()
 }
 
 func Fatal(v ...interface{}) {
@@ -58,11 +55,11 @@ func (h *handler) wait() {
 }
 
 func (h *handler) exit(err error) {
-	h.Active = true
-	// signal exit handlers
-	close(h.done)
-	// wait for exit handlers to finish
 	h.mtx.Lock()
+	h.Active = true
+	for i := len(h.stack) - 1; i > 0; i-- {
+		h.stack[i]()
+	}
 	if err != nil {
 		log.New(os.Stderr, "", log.Lshortfile|log.Lmicroseconds).Output(3, err.Error())
 		os.Exit(1)
