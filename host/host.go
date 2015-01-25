@@ -150,7 +150,6 @@ func runDaemon(args *docopt.Args) {
 		"udp": ports.NewAllocator(55000, 65535),
 	}
 
-	sh := shutdown.NewHandler()
 	state := NewState(hostID, stateFile)
 	var backend Backend
 	var err error
@@ -162,23 +161,23 @@ func runDaemon(args *docopt.Args) {
 		log.Fatalf("unknown backend %q", backendName)
 	}
 	if err != nil {
-		sh.Fatal(err)
+		shutdown.Fatal(err)
 	}
 
-	router, err := serveHTTP(&Host{state: state, backend: backend}, &attachHandler{state: state, backend: backend}, sh)
+	router, err := serveHTTP(&Host{state: state, backend: backend}, &attachHandler{state: state, backend: backend})
 	if err != nil {
-		sh.Fatal(err)
+		shutdown.Fatal(err)
 	}
 
 	if err := state.Restore(backend); err != nil {
-		sh.Fatal(err)
+		shutdown.Fatal(err)
 	}
 
-	sh.BeforeExit(func() { backend.Cleanup() })
+	shutdown.BeforeExit(func() { backend.Cleanup() })
 
 	if force {
 		if err := backend.Cleanup(); err != nil {
-			sh.Fatal(err)
+			shutdown.Fatal(err)
 		}
 	}
 
@@ -201,13 +200,13 @@ func runDaemon(args *docopt.Args) {
 		} else {
 			f, err = os.Open(manifestFile)
 			if err != nil {
-				sh.Fatal(err)
+				shutdown.Fatal(err)
 			}
 			r = f
 		}
 		services, err := runner.runManifest(r)
 		if err != nil {
-			sh.Fatal(err)
+			shutdown.Fatal(err)
 		}
 		if f != nil {
 			f.Close()
@@ -217,7 +216,7 @@ func runDaemon(args *docopt.Args) {
 			discURL = fmt.Sprintf("http://%s:%d", d.ExternalIP, d.TCPPorts[0])
 			disc = discoverd.NewClientWithURL(discURL)
 			if err := discoverdAttempts.Run(disc.Ping); err != nil {
-				sh.Fatal(err)
+				shutdown.Fatal(err)
 			}
 		}
 	}
@@ -230,7 +229,7 @@ func runDaemon(args *docopt.Args) {
 	if disc == nil {
 		disc = discoverd.NewClientWithURL(discURL)
 		if err := disc.Ping(); err != nil {
-			sh.Fatal(err)
+			shutdown.Fatal(err)
 		}
 	}
 	hb, err := disc.AddServiceAndRegisterInstance("flynn-host", &discoverd.Instance{
@@ -238,19 +237,19 @@ func runDaemon(args *docopt.Args) {
 		Meta: map[string]string{"id": hostID},
 	})
 	if err != nil {
-		sh.Fatal(err)
+		shutdown.Fatal(err)
 	}
-	sh.BeforeExit(func() { hb.Close() })
+	shutdown.BeforeExit(func() { hb.Close() })
 
 	sampiAPI := sampi.NewHTTPAPI(sampi.NewCluster())
 	leaders := make(chan *discoverd.Instance)
 	leaderStream, err := disc.Service("flynn-host").Leaders(leaders)
 	if err != nil {
-		sh.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	promote := func() {
 		g.Log(grohl.Data{"at": "sampi_leader"})
-		sampiAPI.RegisterRoutes(router, sh)
+		sampiAPI.RegisterRoutes(router)
 		leaderStream.Close()
 	}
 	leader := <-leaders
@@ -271,9 +270,9 @@ func runDaemon(args *docopt.Args) {
 
 	cluster, err := cluster.NewClient()
 	if err != nil {
-		sh.Fatal(err)
+		shutdown.Fatal(err)
 	}
-	sh.BeforeExit(func() { cluster.Close() })
+	shutdown.BeforeExit(func() { cluster.Close() })
 
 	g.Log(grohl.Data{"at": "sampi_connected"})
 
@@ -293,7 +292,7 @@ func runDaemon(args *docopt.Args) {
 		jobs := make(chan *host.Job)
 		jobStream, err := cluster.RegisterHost(h, jobs)
 		if err != nil {
-			sh.Fatal(err)
+			shutdown.Fatal(err)
 		}
 		g.Log(grohl.Data{"at": "host_registered"})
 		for job := range jobs {
@@ -311,7 +310,7 @@ func runDaemon(args *docopt.Args) {
 		g.Log(grohl.Data{"at": "sampi_disconnected", "err": jobStream.Err})
 
 		// if the process is shutting down, just block
-		if sh.Active {
+		if shutdown.IsActive() {
 			<-make(chan struct{})
 		}
 

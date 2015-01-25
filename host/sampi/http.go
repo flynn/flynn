@@ -10,7 +10,6 @@ import (
 	log "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/httphelper"
-	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/sse"
 )
 
@@ -219,7 +218,7 @@ func (c *HTTPAPI) StreamHostEvents(w http.ResponseWriter, r *http.Request, ps ht
 	}
 }
 
-func (c *HTTPAPI) RegisterRoutes(r *httprouter.Router, sh *shutdown.Handler) error {
+func (c *HTTPAPI) RegisterRoutes(r *httprouter.Router) error {
 	r.GET("/cluster/hosts", c.ListHosts)
 	r.PUT("/cluster/hosts/:id", c.RegisterHost)
 	r.POST("/cluster/jobs", c.AddJobs)
