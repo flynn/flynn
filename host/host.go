@@ -293,6 +293,11 @@ func runDaemon(args *docopt.Args) {
 		if err != nil {
 			shutdown.Fatal(err)
 		}
+		shutdown.BeforeExit(func() {
+			// close the connection that registers use with the cluster
+			// during shutdown; this unregisters us immediately.
+			jobStream.Close()
+		})
 		g.Log(grohl.Data{"at": "host_registered"})
 		for job := range jobs {
 			if externalAddr != "" {
