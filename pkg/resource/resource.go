@@ -3,65 +3,17 @@ package resource
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
-
-	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/discoverd/client/balancer"
 )
-
-func NewServer(uri string) (*Server, error) {
-	if err := discoverd.Connect(""); err != nil {
-		return nil, err
-	}
-	return NewServerWithDiscoverd(uri, discoverd.DefaultClient)
-}
-
-type DiscoverdClient interface {
-	NewServiceSet(name string) (discoverd.ServiceSet, error)
-}
-
-func NewServerWithDiscoverd(uri string, d DiscoverdClient) (*Server, error) {
-	u, err := url.Parse(uri)
-	if err != nil {
-		return nil, err
-	}
-	if u.Scheme != "discoverd+http" {
-		return nil, errors.New("resource: uri scheme must be discoverd+http")
-	}
-
-	set, err := d.NewServiceSet(u.Host)
-	if err != nil {
-		return nil, err
-	}
-	s := &Server{
-		path: u.Path,
-		set:  set,
-		lb:   balancer.Random(set, nil),
-	}
-	return s, err
-}
-
-type Server struct {
-	path string
-	set  discoverd.ServiceSet
-	lb   balancer.LoadBalancer
-}
 
 type Resource struct {
 	ID  string            `json:"id"`
 	Env map[string]string `json:"env"`
 }
 
-func (s *Server) Provision(config []byte) (*Resource, error) {
-	server, err := s.lb.Next()
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := http.Post(fmt.Sprintf("http://%s%s", server.Addr, s.path), "", bytes.NewBuffer(config))
+func Provision(uri string, config []byte) (*Resource, error) {
+	res, err := http.Post(uri, "application/json", bytes.NewBuffer(config))
 	if err != nil {
 		return nil, err
 	}
@@ -75,8 +27,4 @@ func (s *Server) Provision(config []byte) (*Resource, error) {
 		return nil, err
 	}
 	return resource, nil
-}
-
-func (s *Server) Close() error {
-	return s.set.Close()
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/httphelper"
 )
 
 type State struct {
@@ -37,7 +38,11 @@ func (s *State) ClusterClient() (*cluster.Client, error) {
 
 func (s *State) ControllerClient() (*controller.Client, error) {
 	if s.controllerc == nil {
-		cc, err := controller.NewClient("discoverd+http://flynn-controller", s.controllerKey)
+		instances, err := discoverd.GetInstances("flynn-controller", time.Second)
+		if err != nil {
+			return nil, err
+		}
+		cc, err := controller.NewClient("http://"+instances[0].Addr, s.controllerKey)
 		if err != nil {
 			return nil, err
 		}
@@ -91,7 +96,7 @@ func Run(manifest []byte, ch chan<- *StepInfo, minHosts int) (err error) {
 
 	// Make sure we are connected to discoverd first
 	discoverdAttempts.Run(func() error {
-		return discoverd.Connect("")
+		return discoverd.DefaultClient.Ping()
 	})
 
 	steps := make([]json.RawMessage, 0)
@@ -147,19 +152,28 @@ var clusterAttempts = attempt.Strategy{
 }
 
 func checkOnlineHosts(count int, state *State) error {
-	set, err := discoverd.NewServiceSet("flynn-host")
+	var online int
+	service := discoverd.NewService("flynn-host")
+	updates := make(chan *discoverd.Event)
+	stream, err := service.Watch(updates)
 	if err != nil {
 		return err
 	}
-	defer set.Close()
-	var online int
-	updates := set.Watch(true)
+	defer stream.Close()
+
 	timeout := time.After(30 * time.Second)
 loop:
 	for {
 		select {
 		case <-updates:
-			online = len(set.Services())
+			instances, err := service.Instances()
+			if err != nil {
+				if e, ok := err.(httphelper.JSONError); ok && e.Code == httphelper.ObjectNotFoundError {
+					continue
+				}
+				return err
+			}
+			online = len(instances)
 			if online >= count {
 				break loop
 			}

@@ -191,7 +191,7 @@ func runDaemon(args *docopt.Args) {
 		ports:        portAlloc,
 	}
 
-	discAddr := os.Getenv("DISCOVERD")
+	discURL := os.Getenv("DISCOVERD")
 	var disc *discoverd.Client
 	if manifestFile != "" {
 		var r io.Reader
@@ -214,48 +214,61 @@ func runDaemon(args *docopt.Args) {
 		}
 
 		if d, ok := services["discoverd"]; ok {
-			discAddr = fmt.Sprintf("%s:%d", d.ExternalIP, d.TCPPorts[0])
-			var disc *discoverd.Client
-			err = discoverdAttempts.Run(func() (err error) {
-				disc, err = discoverd.NewClientWithAddr(discAddr)
-				return
-			})
-			if err != nil {
+			discURL = fmt.Sprintf("http://%s:%d", d.ExternalIP, d.TCPPorts[0])
+			disc = discoverd.NewClientWithURL(discURL)
+			if err := discoverdAttempts.Run(disc.Ping); err != nil {
 				sh.Fatal(err)
 			}
 		}
 	}
 
-	if discAddr == "" && externalAddr != "" {
-		discAddr = externalAddr + ":1111"
+	if discURL == "" && externalAddr != "" {
+		discURL = fmt.Sprintf("http://%s:1111", externalAddr)
 	}
 	// HACK: use env as global for discoverd connection in sampic
-	os.Setenv("DISCOVERD", discAddr)
+	os.Setenv("DISCOVERD", discURL)
 	if disc == nil {
-		disc, err = discoverd.NewClientWithAddr(discAddr)
-		if err != nil {
+		disc = discoverd.NewClientWithURL(discURL)
+		if err := disc.Ping(); err != nil {
 			sh.Fatal(err)
 		}
 	}
-	sh.BeforeExit(func() { disc.UnregisterAll() })
-	sampiStandby, err := disc.RegisterAndStandby("flynn-host", externalAddr+":1113", map[string]string{"id": hostID})
+	hb, err := disc.AddServiceAndRegisterInstance("flynn-host", &discoverd.Instance{
+		Addr: externalAddr + ":1113",
+		Meta: map[string]string{"id": hostID},
+	})
 	if err != nil {
 		sh.Fatal(err)
 	}
+	sh.BeforeExit(func() { hb.Close() })
 
-	// Check if we are the leader so that we can use the cluster functions directly
 	sampiAPI := sampi.NewHTTPAPI(sampi.NewCluster())
-	select {
-	case <-sampiStandby:
+	leaders := make(chan *discoverd.Instance)
+	leaderStream, err := disc.Service("flynn-host").Leaders(leaders)
+	if err != nil {
+		sh.Fatal(err)
+	}
+	promote := func() {
 		g.Log(grohl.Data{"at": "sampi_leader"})
 		sampiAPI.RegisterRoutes(router, sh)
-	case <-time.After(5 * time.Millisecond):
+		leaderStream.Close()
+	}
+	leader := <-leaders
+	if leader.Addr == hb.Addr() {
+		promote()
+		// TODO: handle demotion
+	} else {
 		go func() {
-			<-sampiStandby
-			g.Log(grohl.Data{"at": "sampi_leader"})
-			sampiAPI.RegisterRoutes(router, sh)
+			for leader := range leaders {
+				if leader.Addr == hb.Addr() {
+					promote()
+					return
+				}
+			}
+			// TODO: handle discoverd disconnection
 		}()
 	}
+
 	cluster, err := cluster.NewClient()
 	if err != nil {
 		sh.Fatal(err)
@@ -289,7 +302,7 @@ func runDaemon(args *docopt.Args) {
 					job.Config.Env = make(map[string]string)
 				}
 				job.Config.Env["EXTERNAL_IP"] = externalAddr
-				job.Config.Env["DISCOVERD"] = discAddr
+				job.Config.Env["DISCOVERD"] = discURL
 			}
 			if err := backend.Run(job); err != nil {
 				state.SetStatusFailed(job.ID, err)

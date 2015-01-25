@@ -44,7 +44,6 @@ func (cmd *execCmd) DefineFlags(fs *flag.FlagSet) {
 }
 
 func (cmd *execCmd) Run(fs *flag.FlagSet) {
-	cmd.InitClient(false)
 	cmd.exitStatus = 0
 
 	cmd.ValidateFlags()

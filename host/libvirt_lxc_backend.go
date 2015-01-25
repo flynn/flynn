@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
@@ -14,7 +13,6 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -23,6 +21,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/networkdriver/ipallocator"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/netlink"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/miekg/dns"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/natefinch/lumberjack"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 	"github.com/flynn/flynn/host/containerinit"
@@ -50,10 +49,6 @@ func NewLibvirtLXCBackend(state *State, volPath, logPath, initPath string) (Back
 	pinkertonCtx, err := pinkerton.BuildContext("aufs", "/var/lib/docker")
 	if err != nil {
 		return nil, err
-	}
-
-	if err := writeResolvConf("/etc/flynn/resolv.conf"); err != nil {
-		return nil, fmt.Errorf("Could not create resolv.conf: %s", err)
 	}
 
 	return &LibvirtLXCBackend{
@@ -105,42 +100,6 @@ type dockerImageConfig struct {
 	Entrypoint []string
 	WorkingDir string
 	Volumes    map[string]struct{}
-}
-
-// writeResolvConf copies /etc/resolv.conf to the given path, removing any IPV6
-// nameservers in the process (as IPV6 routing is currently not supported).
-func writeResolvConf(path string) error {
-	// do nothing if the file exists
-	if _, err := os.Stat(path); err == nil {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	file, err := os.Open("/etc/resolv.conf")
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	var buf bytes.Buffer
-	s := bufio.NewScanner(file)
-	for s.Scan() {
-		line := strings.Split(s.Text(), " ")
-		if len(line) > 0 && line[0] == "nameserver" && isIPv6(line[1]) {
-			continue
-		}
-		buf.Write(s.Bytes())
-		buf.WriteByte('\n')
-	}
-	if err := ioutil.WriteFile(path, buf.Bytes(), 0644); err != nil {
-		return err
-	}
-	return nil
-}
-
-func isIPv6(s string) bool {
-	ip := net.ParseIP(s)
-	return ip != nil && ip.To4() == nil
 }
 
 func writeContainerConfig(path string, c *containerinit.Config, envs ...map[string]string) error {
@@ -200,9 +159,9 @@ var networkConfigAttempts = attempt.Strategy{
 // ConfigureNetworking is called once during host startup and passed the
 // strategy and identifier of the networking coordinatior job. Currently the
 // only strategy implemented uses flannel.
-func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job string) error {
+func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job string) (*NetworkInfo, error) {
 	if strategy != NetworkStrategyFlannel {
-		return errors.New("host: unknown network strategy")
+		return nil, errors.New("host: unknown network strategy")
 	}
 
 	// wait for the job to start
@@ -226,7 +185,7 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 
 	container, err := l.getContainer(job)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	path := filepath.Join(container.RootPath, "/run/flannel/subnet.env")
@@ -243,20 +202,20 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 		return err
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, line := range bytes.Split(data, []byte("\n")) {
 		if bytes.HasPrefix(line, []byte("FLANNEL_MTU=")) {
 			l.ifaceMTU, err = strconv.Atoi(string(line[12:]))
 			if err != nil {
-				return fmt.Errorf("host: error parsing mtu %q - %s", string(line), err)
+				return nil, fmt.Errorf("host: error parsing mtu %q - %s", string(line), err)
 			}
 		}
 		if bytes.HasPrefix(line, []byte("FLANNEL_SUBNET=")) {
 			l.bridgeAddr, l.bridgeNet, err = net.ParseCIDR(string(line[15:]))
 			if err != nil {
-				return fmt.Errorf("host: error parsing subnet %q - %s", string(line), err)
+				return nil, fmt.Errorf("host: error parsing subnet %q - %s", string(line), err)
 			}
 		}
 	}
@@ -264,12 +223,12 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 	err = netlink.CreateBridge(bridgeName, false)
 	bridgeExists := os.IsExist(err)
 	if err != nil && !bridgeExists {
-		return err
+		return nil, err
 	}
 
 	bridge, err := net.InterfaceByName(bridgeName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !bridgeExists {
 		// We need to explicitly assign the MAC address to avoid it changing to a lower value
@@ -277,12 +236,12 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 		b := random.Bytes(5)
 		bridgeMAC := fmt.Sprintf("fe:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4])
 		if err := netlink.NetworkSetMacAddress(bridge, bridgeMAC); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	currAddrs, err := bridge.Addrs()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	setIP := true
 	for _, addr := range currAddrs {
@@ -291,17 +250,17 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 			setIP = false
 		} else {
 			if err := netlink.NetworkLinkDelIp(bridge, ip, net); err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
 	if setIP {
 		if err := netlink.NetworkLinkAddIp(bridge, l.bridgeAddr, l.bridgeNet); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if err := netlink.NetworkLinkUp(bridge); err != nil {
-		return err
+		return nil, err
 	}
 
 	network, err := l.libvirt.LookupNetworkByName(libvirtNetName)
@@ -314,26 +273,41 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 		}
 		network, err = l.libvirt.NetworkDefineXML(string(networkConfig.XML()))
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 	active, err := network.IsActive()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !active {
 		if err := network.Create(); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	// Set up iptables for outbound traffic masquerading from containers to the
 	// rest of the network.
 	if err := iptables.EnableOutboundNAT(bridgeName, l.bridgeNet.String()); err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	// Write a resolv.conf to be bind-mounted into containers pointing at the
+	// future discoverd DNS listener
+	if err := os.MkdirAll("/etc/flynn", 0755); err != nil {
+		return nil, err
+	}
+	if err := ioutil.WriteFile("/etc/flynn/resolv.conf", []byte(fmt.Sprintf("nameserver %s\n", l.bridgeAddr.String())), 0644); err != nil {
+		return nil, err
+	}
+
+	// Read DNS config, discoverd uses the nameservers
+	dnsConf, err := dns.ClientConfigFromFile("/etc/resolv.conf")
+	if err != nil {
+		return nil, err
+	}
+
+	return &NetworkInfo{BridgeAddr: l.bridgeAddr.String(), Nameservers: dnsConf.Servers}, nil
 }
 
 func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
@@ -396,10 +370,16 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 		g.Log(grohl.Data{"at": "mkdir", "dir": "etc", "status": "error", "err": err})
 		return err
 	}
-	if err := bindMount("/etc/flynn/resolv.conf", filepath.Join(rootPath, "etc/resolv.conf"), false, true); err != nil {
+
+	resolvConf := "/etc/flynn/resolv.conf"
+	if job.Config.HostNetwork {
+		resolvConf = "/etc/resolv.conf"
+	}
+	if err := bindMount(resolvConf, filepath.Join(rootPath, "etc/resolv.conf"), false, true); err != nil {
 		g.Log(grohl.Data{"at": "mount", "file": "resolv.conf", "status": "error", "err": err})
 		return err
 	}
+
 	if err := writeHostname(filepath.Join(rootPath, "etc/hosts"), job.ID); err != nil {
 		g.Log(grohl.Data{"at": "write_hosts", "status": "error", "err": err})
 		return err

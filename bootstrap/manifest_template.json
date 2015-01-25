@@ -13,12 +13,12 @@
     "release": {
       "processes": {
         "postgres": {
-          "ports": [{"proto": "tcp"}],
+          "ports": [{"port": 5432, "proto": "tcp"}],
           "data": true,
           "cmd": ["postgres"]
         },
         "web": {
-          "ports": [{"proto": "tcp"}],
+          "ports": [{"port": 80, "proto": "tcp"}],
           "cmd": ["api"]
         }
       }
@@ -54,7 +54,7 @@
   {
     "id": "postgres-wait",
     "action": "wait",
-    "url": "discoverd+http://pg-api/ping"
+    "url": "http://pg-api.discoverd/ping"
   },
   {
     "id": "controller",
@@ -71,7 +71,7 @@
       },
       "processes": {
         "web": {
-          "ports": [{"proto": "tcp"}],
+          "ports": [{"port": 80, "proto": "tcp"}],
           "cmd": ["controller"]
         },
         "scheduler": {
@@ -87,12 +87,12 @@
     "processes": {
       "web": 1
     },
-    "resources": [{"name":"postgres", "url":"discoverd+http://pg-api/databases"}]
+    "resources": [{"name":"postgres", "url":"http://pg-api.discoverd/databases"}]
   },
   {
     "id": "controller-wait",
     "action": "wait",
-    "url": "discoverd+http://flynn-controller",
+    "url": "http://flynn-controller.discoverd",
     "status": 401
   },
   {
@@ -143,14 +143,14 @@
     "release": {
       "processes": {
         "web": {
-          "ports": [{"proto": "tcp"}]
+          "ports": [{"port": 80, "proto": "tcp"}]
         }
       }
     },
     "processes": {
       "web": 1
     },
-    "resources": [{"name":"postgres", "url":"discoverd+http://pg-api/databases"}]
+    "resources": [{"name":"postgres", "url":"http://pg-api.discoverd/databases"}]
   },
   {
     "id": "router",
@@ -216,7 +216,7 @@
   {
     "id": "router-wait",
     "action": "wait",
-    "url": "discoverd+http://router-api/",
+    "url": "http://router-api.discoverd",
     "status": 404
   },
   {
@@ -243,7 +243,7 @@
   {
     "id": "controller-route-wait",
     "action": "wait",
-    "url": "discoverd+http://router-http/",
+    "url": "http://router-http.discoverd",
     "host": "controller.{{ getenv \"CLUSTER_DOMAIN\" }}",
     "status": 401
   },
@@ -292,7 +292,7 @@
       },
       "processes": {
         "web": {
-          "ports": [{"proto": "tcp"}]
+          "ports": [{"port": 80, "proto": "tcp"}]
         }
       }
     },
@@ -314,13 +314,13 @@
   {
     "id": "blobstore-wait",
     "action": "wait",
-    "url": "discoverd+http://blobstore/",
+    "url": "http://blobstore.discoverd",
     "status": 404
   },
   {
     "id": "gitreceive-wait",
     "action": "wait",
-    "url": "discoverd+tcp://gitreceive/"
+    "url": "tcp://gitreceive.discoverd"
   },
   {
     "id": "log-complete",

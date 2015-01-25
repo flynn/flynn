@@ -46,11 +46,28 @@ func main() {
 	c := newContext(cc, cl)
 
 	grohl.Log(grohl.Data{"at": "leaderwait"})
-	leaderWait, err := discoverd.RegisterAndStandby("flynn-controller-scheduler", ":"+os.Getenv("PORT"), nil)
+	hb, err := discoverd.AddServiceAndRegister("flynn-controller-scheduler", ":"+os.Getenv("PORT"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	<-leaderWait
+
+	leaders := make(chan *discoverd.Instance)
+	stream, err := discoverd.NewService("flynn-controller-scheduler").Leaders(leaders)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for leader := range leaders {
+		if leader.Addr == hb.Addr() {
+			break
+		}
+	}
+	if err := stream.Err(); err != nil {
+		// TODO: handle discoverd errors
+		log.Fatal(err)
+	}
+	stream.Close()
+	// TODO: handle demotion
+
 	grohl.Log(grohl.Data{"at": "leader"})
 
 	// TODO: periodic full cluster sync for anti-entropy

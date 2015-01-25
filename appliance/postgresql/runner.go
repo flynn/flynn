@@ -25,10 +25,13 @@ var serviceName = flag.String("service", "pg", "discoverd service name")
 var pgbin = flag.String("pgbin", "/usr/lib/postgresql/9.3/bin/", "postgres binary directory")
 var addr = ":" + os.Getenv("PORT")
 
+var heartbeater discoverd.Heartbeater
+
 func main() {
 	flag.Parse()
 
-	set, err := discoverd.RegisterWithSet(*serviceName, addr, nil)
+	var err error
+	heartbeater, err = discoverd.AddServiceAndRegister(*serviceName, addr)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -36,7 +39,12 @@ func main() {
 	var leaderProc *exec.Cmd
 	var done <-chan struct{}
 
-	if l := set.Leader(); l.Addr == set.SelfAddr() {
+	leaders := make(chan *discoverd.Instance)
+	stream, err := discoverd.NewService(*serviceName).Leaders(leaders)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if leader := <-leaders; leader.Addr == heartbeater.Addr() {
 		leaderProc, done = startLeader()
 		goto wait
 	} else {
@@ -44,7 +52,7 @@ func main() {
 	}
 
 wait:
-	set.Close()
+	stream.Close()
 	<-done
 	procExit(leaderProc)
 }
@@ -83,14 +91,14 @@ func startLeader() (*exec.Cmd, <-chan struct{}) {
 }
 
 func register(attrs map[string]string) {
-	err := discoverd.RegisterWithAttributes(*serviceName, addr, attrs)
+	err := heartbeater.SetMeta(attrs)
 	if err != nil {
 		log.Fatalln("discoverd registration error:", err)
 	}
 }
 
 func procExit(cmd *exec.Cmd) {
-	discoverd.UnregisterAll()
+	heartbeater.Close()
 	var status int
 	if ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok {
 		status = ws.ExitStatus()
@@ -311,7 +319,6 @@ func handleSignals(cmd *exec.Cmd) {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 
 	sig := <-c
-	discoverd.UnregisterAll()
 	cmd.Process.Signal(sig)
 }
 

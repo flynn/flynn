@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/discoverd/client/dialer"
 )
 
 type WaitAction struct {
@@ -35,29 +34,7 @@ func (a *WaitAction) Run(s *State) error {
 	if err != nil {
 		return err
 	}
-	httpc := http.DefaultClient
-	var dial dialer.DialFunc
-	if u.Scheme == "tcp" {
-		dial = net.Dial
-	}
-	if strings.HasPrefix(u.Scheme, "discoverd+") {
-		if err := discoverd.Connect(""); err != nil {
-			return err
-		}
-		d := dialer.New(discoverd.DefaultClient, nil)
-		defer d.Close()
-		dial = d.Dial
-
-		switch u.Scheme {
-		case "discoverd+http":
-			httpc = &http.Client{Transport: &http.Transport{Dial: d.Dial}}
-			u.Scheme = "http"
-		case "discoverd+tcp":
-			u.Scheme = "tcp"
-		default:
-			return fmt.Errorf("bootstrap: unknown protocol")
-		}
-	}
+	lookupDiscoverdURLHost(u, waitMax)
 
 	start := time.Now()
 	for {
@@ -72,7 +49,7 @@ func (a *WaitAction) Run(s *State) error {
 			if a.Host != "" {
 				req.Host = interpolate(s, a.Host)
 			}
-			res, err := httpc.Do(req)
+			res, err := http.DefaultClient.Do(req)
 			if err != nil {
 				result = fmt.Sprintf("%q", err)
 				goto fail
@@ -83,7 +60,7 @@ func (a *WaitAction) Run(s *State) error {
 			}
 			result = strconv.Itoa(res.StatusCode)
 		case "tcp":
-			conn, err := dial("tcp", u.Host)
+			conn, err := net.Dial("tcp", u.Host)
 			if err != nil {
 				result = fmt.Sprintf("%q", err)
 				goto fail
@@ -99,4 +76,15 @@ func (a *WaitAction) Run(s *State) error {
 		}
 		time.Sleep(waitInterval)
 	}
+}
+
+func lookupDiscoverdURLHost(u *url.URL, timeout time.Duration) error {
+	if strings.HasSuffix(u.Host, ".discoverd") {
+		instances, err := discoverd.GetInstances(strings.Split(u.Host, ".")[0], timeout)
+		if err != nil {
+			return err
+		}
+		u.Host = instances[0].Addr
+	}
+	return nil
 }

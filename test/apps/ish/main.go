@@ -31,7 +31,7 @@ func main() {
 	defer l.Close()
 	log.Println("Listening on", addr)
 
-	if err := discoverd.Register(name, addr); err != nil {
+	if _, err := discoverd.AddServiceAndRegister(name, addr); err != nil {
 		log.Fatal(err)
 	}
 

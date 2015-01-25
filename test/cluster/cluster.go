@@ -468,24 +468,15 @@ func (c *Cluster) bootstrapLayer1() error {
 	c.ControllerPin = cert.Pin
 
 	// grab the router IP from discoverd
-	disc, err := discoverd.NewClientWithAddr(inst.IP + ":1111")
-	if err != nil {
-		return fmt.Errorf("could not connect to discoverd at %s:1111: %s", inst.IP, err)
-	}
-	defer disc.Close()
-	set, err := disc.NewServiceSet("router-api")
+	disc := discoverd.NewClientWithURL(fmt.Sprintf("http://%s:1111", inst.IP))
+	leader, err := disc.Service("router-api").Leader()
 	if err != nil {
 		return fmt.Errorf("could not detect router ip: %s", err)
 	}
-	defer set.Close()
-	leader := set.Leader()
-	if leader == nil {
-		return errors.New("could not detect router ip: no router-api leader")
-	}
-	if err = setLocalDNS([]string{c.ClusterDomain, c.ControllerDomain()}, leader.Host); err != nil {
+	if err = setLocalDNS([]string{c.ClusterDomain, c.ControllerDomain()}, leader.Host()); err != nil {
 		return fmt.Errorf("could not set cluster DNS entries: %s", err)
 	}
-	c.RouterIP = leader.Host
+	c.RouterIP = leader.Host()
 	return nil
 }
 

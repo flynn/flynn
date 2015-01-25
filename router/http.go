@@ -50,14 +50,14 @@ type HTTPListener struct {
 }
 
 type DiscoverdClient interface {
-	NewServiceSet(string) (discoverd.ServiceSet, error)
+	Service(string) discoverd.Service
 }
 
 func (s *HTTPListener) Close() error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	for _, service := range s.services {
-		service.ss.Close()
+		service.sc.Close()
 	}
 	s.listener.Close()
 	s.tlsListener.Close()
@@ -177,17 +177,17 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 	if service != nil && service.name != r.Service {
 		service.refs--
 		if service.refs <= 0 {
-			service.ss.Close()
+			service.sc.Close()
 			delete(h.l.services, service.name)
 		}
 		service = nil
 	}
 	if service == nil {
-		ss, err := h.l.discoverd.NewServiceSet(r.Service)
+		sc, err := NewDiscoverdServiceCache(h.l.discoverd.Service(r.Service))
 		if err != nil {
 			return err
 		}
-		service = &httpService{name: r.Service, ss: ss, cookieKey: h.l.cookieKey}
+		service = &httpService{name: r.Service, sc: sc, cookieKey: h.l.cookieKey}
 		h.l.services[r.Service] = service
 	}
 	service.refs++
@@ -212,7 +212,7 @@ func (h *httpSyncHandler) Remove(id string) error {
 
 	r.service.refs--
 	if r.service.refs <= 0 {
-		r.service.ss.Close()
+		r.service.sc.Close()
 		delete(h.l.services, r.service.name)
 	}
 
@@ -353,7 +353,7 @@ type httpRoute struct {
 // A service definition: name, and set of backends.
 type httpService struct {
 	name string
-	ss   discoverd.ServiceSet
+	sc   DiscoverdServiceCache
 	refs int
 
 	cookieKey *[32]byte
@@ -383,7 +383,7 @@ func (s *httpService) stickyCookieAddr(req *http.Request) string {
 
 	addr := string(res)
 	ok = false
-	for _, a := range s.ss.Addrs() {
+	for _, a := range s.sc.Addrs() {
 		if a == addr {
 			ok = true
 			break
@@ -413,7 +413,7 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
 	req.Header.Set("X-Request-Id", random.UUID())
 
-	addrs := shuffle(s.ss.Addrs())
+	addrs := shuffle(s.sc.Addrs())
 	if len(addrs) == 0 {
 		log.Println("no backends found")
 		fail(w, 503)

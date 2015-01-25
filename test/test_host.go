@@ -8,7 +8,6 @@ import (
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/random"
@@ -81,12 +80,12 @@ func (s *HostSuite) TestNetworkedPersistentJob(t *c.C) {
 
 	// get the ip:port that that job exposed.
 	// phone discoverd and ask by serviceName -- we set a unique one so this works with concurrent tests.
-	services, err := discoverd.Services(serviceName, time.Second*4)
+	instances, err := s.discoverdClient(t).Instances(serviceName, time.Second*4)
 	t.Assert(err, c.IsNil)
-	t.Assert(services, c.HasLen, 1)
+	t.Assert(instances, c.HasLen, 1)
 
 	resp, err := http.Post(
-		fmt.Sprintf("http://%s/ish", services[0].Addr),
+		fmt.Sprintf("http://%s/ish", instances[0].Addr),
 		"text/plain",
 		strings.NewReader("echo echocococo"),
 	)

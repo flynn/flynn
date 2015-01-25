@@ -13,8 +13,8 @@ func newTestAPIServer(t etcdrunner.TestingT) *testAPIServer {
 	ec, etcdAddr, killEtcd := newEtcd(t)
 	dc, killDiscoverd := newDiscoverd(t, etcdAddr)
 
-	httpListener, _ := newHTTPListenerClients(t, ec, dc)
-	tcpListener, _ := newTCPListenerClients(t, ec, dc)
+	httpListener := newHTTPListenerClients(t, ec, dc)
+	tcpListener := newTCPListenerClients(t, ec, dc)
 	r := &Router{
 		HTTP: httpListener,
 		TCP:  tcpListener,

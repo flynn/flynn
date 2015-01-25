@@ -12,6 +12,7 @@ import (
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -74,11 +75,10 @@ func (s *SchedulerSuite) removeHosts(t *c.C, ids []string) {
 	// Wait for router-api services to disappear to indicate host
 	// removal (rather than using StreamHostEvents), so that other
 	// tests won't try and connect to this host via service discovery.
-	set, err := s.discoverdClient(t).NewServiceSet("router-api")
+	events := make(chan *discoverd.Event)
+	stream, err := s.discoverdClient(t).Service("router-api").Watch(events)
 	t.Assert(err, c.IsNil)
-	defer set.Close()
-	updates := set.Watch(false)
-	defer set.Unwatch(updates)
+	defer stream.Close()
 
 	for _, id := range ids {
 		req, err := http.NewRequest("DELETE", args.ClusterAPI+"?host="+id, nil)
@@ -97,9 +97,9 @@ func (s *SchedulerSuite) removeHosts(t *c.C, ids []string) {
 	loop:
 		for {
 			select {
-			case update := <-updates:
-				if !update.Online {
-					debug(t, "host removed ", update.Addr)
+			case event := <-events:
+				if event.Kind == discoverd.EventKindDown {
+					debug(t, "host removed ", event.Instance.Addr)
 					break loop
 				}
 			case <-time.After(20 * time.Second):
@@ -263,12 +263,10 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 		Delay: 500 * time.Millisecond,
 	}
 	t.Assert(attempts.Run(func() (err error) {
-		set, err := s.discoverdClient(t).NewServiceSet("flynn-controller")
+		addrs, err := s.discoverdClient(t).Service("flynn-controller").Addrs()
 		if err != nil {
 			return err
 		}
-		defer set.Close()
-		addrs := set.Addrs()
 		if len(addrs) != 2 {
 			return fmt.Errorf("expected 2 controller processes, got %d", len(addrs))
 		}
@@ -285,7 +283,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	defer stream.Close()
 
 	// kill the first controller and check the scheduler brings it back online
-	cc, err := cluster.NewClientWithServices(s.discoverdClient(t).NewServiceSet)
+	cc, err := cluster.NewClientWithServices(s.discoverdClient(t).Service)
 	t.Assert(err, c.IsNil)
 	defer cc.Close()
 	hc, err := cc.DialHost(hostID)

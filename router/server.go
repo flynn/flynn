@@ -88,26 +88,17 @@ func main() {
 		}
 	}
 
-	// Will use DISCOVERD environment variable
-	d, err := discoverd.NewClient()
-	if err != nil {
-		log.Fatal(err)
-	}
 	services := map[string]string{
 		"router-api":  *apiAddr,
 		"router-http": *httpAddr,
 	}
 	for service, addr := range services {
-		if err := d.Register(service, addr); err != nil {
+		hb, err := discoverd.AddServiceAndRegister(service, addr)
+		if err != nil {
 			log.Fatal(err)
 		}
+		shutdown.BeforeExit(func() { hb.Close() })
 	}
-
-	shutdown.BeforeExit(func() {
-		for service, addr := range services {
-			discoverd.Unregister(service, addr)
-		}
-	})
 
 	// Read etcd addresses from ETCD
 	etcdAddrs := strings.Split(os.Getenv("ETCD"), ",")
@@ -130,7 +121,7 @@ func main() {
 			startPort: *tcpRangeStart,
 			endPort:   *tcpRangeEnd,
 			ds:        NewEtcdDataStore(etcdc, path.Join(prefix, "tcp/")),
-			discoverd: d,
+			discoverd: discoverd.DefaultClient,
 		},
 		HTTP: &HTTPListener{
 			Addr:      *httpAddr,
@@ -138,7 +129,7 @@ func main() {
 			cookieKey: cookieKey,
 			keypair:   keypair,
 			ds:        NewEtcdDataStore(etcdc, path.Join(prefix, "http/")),
-			discoverd: d,
+			discoverd: discoverd.DefaultClient,
 		},
 	}
 

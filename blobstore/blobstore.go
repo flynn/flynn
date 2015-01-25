@@ -105,7 +105,7 @@ func main() {
 		storageDesc = "Postgres"
 	}
 
-	if err := discoverd.Register("blobstore", addr); err != nil {
+	if _, err := discoverd.AddServiceAndRegister("blobstore", addr); err != nil {
 		log.Fatal(err)
 	}
 

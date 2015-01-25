@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/base64"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -52,7 +53,7 @@ func (h *Helper) clusterClient(t *c.C) *cluster.Client {
 	h.clusterMtx.Lock()
 	defer h.clusterMtx.Unlock()
 	if h.cluster == nil {
-		client, err := cluster.NewClientWithServices(h.discoverdClient(t).NewServiceSet)
+		client, err := cluster.NewClientWithServices(h.discoverdClient(t).Service)
 		t.Assert(err, c.IsNil)
 		h.cluster = client
 	}
@@ -77,9 +78,7 @@ func (h *Helper) discoverdClient(t *c.C) *discoverd.Client {
 	h.discMtx.Lock()
 	defer h.discMtx.Unlock()
 	if h.disc == nil {
-		var err error
-		h.disc, err = discoverd.NewClientWithAddr(routerIP + ":1111")
-		t.Assert(err, c.IsNil)
+		h.disc = discoverd.NewClientWithURL(fmt.Sprintf("http://%s:1111", routerIP))
 	}
 	return h.disc
 }
@@ -189,12 +188,6 @@ func (h *Helper) TearDownSuite(t *c.C) {
 }
 
 func (h *Helper) cleanup() {
-	h.discMtx.Lock()
-	if h.disc != nil {
-		h.disc.Close()
-	}
-	h.discMtx.Unlock()
-
 	h.clusterMtx.Lock()
 	if h.cluster != nil {
 		h.cluster.Close()

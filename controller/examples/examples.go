@@ -7,14 +7,12 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"time"
 
 	cc "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/router/types"
 )
@@ -32,11 +30,6 @@ type example struct {
 
 func main() {
 	conf, err := loadConfigFromEnv()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = discoverd.Connect(conf.controllerDomain + ":1111")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -355,13 +348,9 @@ func (e *generator) createProvider() {
 	t := time.Now().UnixNano()
 	provider := &ct.Provider{
 		Name: fmt.Sprintf("example-provider-%d", t),
-		URL:  fmt.Sprintf("discoverd+http://example-provider-%d/providers/%d", t, t),
+		URL:  fmt.Sprintf("http://%s:%s/providers/%d", e.conf.ourAddr, e.conf.ourPort, t),
 	}
 	err := e.client.CreateProvider(provider)
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = discoverd.Register(provider.Name, net.JoinHostPort(e.conf.ourAddr, e.conf.ourPort))
 	if err != nil {
 		log.Fatal(err)
 	}
