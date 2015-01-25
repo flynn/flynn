@@ -80,7 +80,7 @@ func (s *HostSuite) TestNetworkedPersistentJob(t *c.C) {
 
 	// get the ip:port that that job exposed.
 	// phone discoverd and ask by serviceName -- we set a unique one so this works with concurrent tests.
-	instances, err := s.discoverdClient(t).Instances(serviceName, time.Second*4)
+	instances, err := s.discoverdClient(t).Instances(serviceName, 15*time.Second)
 	t.Assert(err, c.IsNil)
 	t.Assert(instances, c.HasLen, 1)
 
