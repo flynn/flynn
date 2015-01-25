@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
@@ -128,6 +129,11 @@ func Error(w http.ResponseWriter, err error) {
 }
 
 func JSON(w http.ResponseWriter, status int, v interface{}) {
+	// Encode nil slices as `[]` instead of `null`
+	if rv := reflect.ValueOf(v); rv.Type().Kind() == reflect.Slice && rv.IsNil() {
+		v = []struct{}{}
+	}
+
 	var result []byte
 	var err error
 	result, err = json.Marshal(v)
