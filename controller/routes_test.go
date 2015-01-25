@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"sort"
 	"sync"
 	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/random"
 	routerc "github.com/flynn/flynn/router/client"
@@ -80,11 +80,8 @@ func (r *fakeRouter) ListRoutes(parentRef string) ([]*router.Route, error) {
 func (r *fakeRouter) Close() error { return nil }
 
 func (s *S) createTestRoute(c *C, appID string, in *router.Route) *router.Route {
-	out := &router.Route{}
-	res, err := s.Post(fmt.Sprintf("/apps/%s/routes", appID), in, out)
-	c.Assert(err, IsNil)
-	c.Assert(res.StatusCode, Equals, 200)
-	return out
+	c.Assert(s.c.CreateRoute(appID, in), IsNil)
+	return in
 }
 
 func (s *S) TestCreateRoute(c *C) {
@@ -92,9 +89,7 @@ func (s *S) TestCreateRoute(c *C) {
 	route := s.createTestRoute(c, app.ID, (&router.TCPRoute{Service: "foo"}).ToRoute())
 	c.Assert(route.ID, Not(Equals), "")
 
-	gotRoute := &router.Route{}
-	path := fmt.Sprintf("/apps/%s/routes/%s", app.ID, route.ID)
-	_, err := s.Get(path, gotRoute)
+	gotRoute, err := s.c.GetRoute(app.ID, route.ID)
 	c.Assert(err, IsNil)
 	c.Assert(gotRoute, DeepEquals, route)
 }
@@ -103,13 +98,10 @@ func (s *S) TestDeleteRoute(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "delete-route"})
 	route := s.createTestRoute(c, app.ID, (&router.TCPRoute{Service: "foo"}).ToRoute())
 
-	path := fmt.Sprintf("/apps/%s/routes/%s", app.ID, route.ID)
-	res, err := s.Delete(path)
-	c.Assert(err, IsNil)
-	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(s.c.DeleteRoute(app.ID, route.ID), IsNil)
 
-	res, err = s.Get(path, route)
-	c.Assert(res.StatusCode, Equals, 404)
+	_, err := s.c.GetRoute(app.ID, route.ID)
+	c.Assert(err, Equals, controller.ErrNotFound)
 }
 
 func (s *S) TestListRoutes(c *C) {
@@ -121,10 +113,8 @@ func (s *S) TestListRoutes(c *C) {
 	s.createTestRoute(c, app1.ID, (&router.TCPRoute{Service: "bar"}).ToRoute())
 	s.createTestRoute(c, app1.ID, (&router.HTTPRoute{Service: "buzz", Domain: "example.net"}).ToRoute())
 
-	var routes []*router.Route
-	res, err := s.Get(fmt.Sprintf("/apps/%s/routes", app0.ID), &routes)
+	routes, err := s.c.RouteList(app0.ID)
 	c.Assert(err, IsNil)
-	c.Assert(res.StatusCode, Equals, 200)
 
 	c.Assert(routes, HasLen, 2)
 	c.Assert(routes[1].ID, Equals, route0.ID)

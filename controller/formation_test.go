@@ -4,7 +4,6 @@ import (
 	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 )
 
@@ -14,11 +13,8 @@ func (s *S) TestFormationStreaming(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "streamtest-existing"})
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
 
-	client, err := controller.NewClient(s.srv.URL, authKey)
-	c.Assert(err, IsNil)
-
 	updates := make(chan *ct.ExpandedFormation)
-	streamCtrl, connectErr := client.StreamFormations(&before, updates)
+	streamCtrl, connectErr := s.c.StreamFormations(&before, updates)
 
 	c.Assert(connectErr, IsNil)
 	var existingFound bool
@@ -54,7 +50,7 @@ func (s *S) TestFormationStreaming(c *C) {
 	c.Assert(out.Artifact.CreatedAt, Not(IsNil))
 	c.Assert(out.Artifact.ID, Equals, release.ArtifactID)
 
-	s.Delete(formationPath(app.ID, release.ID))
+	c.Assert(s.c.DeleteFormation(app.ID, release.ID), IsNil)
 
 	select {
 	case out = <-updates:
@@ -65,6 +61,4 @@ func (s *S) TestFormationStreaming(c *C) {
 	c.Assert(out.Release, DeepEquals, release)
 	c.Assert(out.App, DeepEquals, app)
 	c.Assert(out.Processes, IsNil)
-
-	client.Close()
 }
