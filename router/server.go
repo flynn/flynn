@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path"
@@ -56,7 +55,7 @@ func main() {
 	if key := os.Getenv("COOKIE_KEY"); key != "" {
 		res, err := base64.StdEncoding.DecodeString(key)
 		if err != nil {
-			log.Fatal("error decoding COOKIE_KEY:", err)
+			shutdown.Fatal("error decoding COOKIE_KEY:", err)
 		}
 		var k [32]byte
 		copy(k[:], res)
@@ -77,13 +76,13 @@ func main() {
 	var err error
 	if *certFile != "" {
 		if keypair, err = tls.LoadX509KeyPair(*certFile, *keyFile); err != nil {
-			log.Fatal(err)
+			shutdown.Fatal(err)
 		}
 	} else if tlsCert := os.Getenv("TLSCERT"); tlsCert != "" {
 		if tlsKey := os.Getenv("TLSKEY"); tlsKey != "" {
 			os.Setenv("TLSKEY", fmt.Sprintf("md5^(%s)", md5sum(tlsKey)))
 			if keypair, err = tls.X509KeyPair([]byte(tlsCert), []byte(tlsKey)); err != nil {
-				log.Fatal(err)
+				shutdown.Fatal(err)
 			}
 		}
 	}
@@ -95,7 +94,7 @@ func main() {
 	for service, addr := range services {
 		hb, err := discoverd.AddServiceAndRegister(service, addr)
 		if err != nil {
-			log.Fatal(err)
+			shutdown.Fatal(err)
 		}
 		shutdown.BeforeExit(func() { hb.Close() })
 	}
@@ -133,10 +132,10 @@ func main() {
 		},
 	}
 
-	go func() { log.Fatal(r.ListenAndServe(nil)) }()
+	go func() { shutdown.Fatal(r.ListenAndServe(nil)) }()
 	listener, err := reuseport.NewReusablePortListener("tcp4", *apiAddr)
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
-	log.Fatal(http.Serve(listener, apiHandler(&r)))
+	shutdown.Fatal(http.Serve(listener, apiHandler(&r)))
 }

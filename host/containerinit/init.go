@@ -35,6 +35,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kr/pty"
 	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/rpcplus/fdrpc"
+	"github.com/flynn/flynn/pkg/shutdown"
 )
 
 type Config struct {
@@ -299,7 +300,7 @@ var SocketPath = filepath.Join(SharedPath, "rpc.sock")
 
 func runRPCServer() {
 	os.Remove(SocketPath)
-	log.Fatal(fdrpc.ListenAndServe(SocketPath))
+	shutdown.Fatal(fdrpc.ListenAndServe(SocketPath))
 }
 
 func setupHostname(c *Config) error {
@@ -538,6 +539,6 @@ func Main() {
 	config.Env["container"] = os.Getenv("container")
 
 	if err := containerInitApp(config); err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 }

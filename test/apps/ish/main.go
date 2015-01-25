@@ -27,20 +27,20 @@ func main() {
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	defer l.Close()
 	log.Println("Listening on", addr)
 
 	hb, err := discoverd.AddServiceAndRegister(name, addr)
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	shutdown.BeforeExit(func() { hb.Close() })
 
 	http.HandleFunc("/ish", ish)
 	if err := http.Serve(l, nil); err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 }
 

@@ -44,23 +44,23 @@ func main() {
 	postgres.Wait("")
 	db, err := postgres.Open("", "")
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 
 	if err := migrateDB(db.DB); err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 
 	cc, err := cluster.NewClient()
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 
 	sc := routerc.New()
 
 	hb, err := discoverd.AddServiceAndRegister("flynn-controller", addr)
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 
 	shutdown.BeforeExit(func() {
@@ -68,7 +68,7 @@ func main() {
 	})
 
 	handler := appHandler(handlerConfig{db: db, cc: cc, sc: sc, key: os.Getenv("AUTH_KEY")})
-	log.Fatal(http.ListenAndServe(addr, handler))
+	shutdown.Fatal(http.ListenAndServe(addr, handler))
 }
 
 type handlerConfig struct {

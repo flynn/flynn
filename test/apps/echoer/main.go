@@ -18,13 +18,13 @@ func main() {
 
 	hb, err := discoverd.AddServiceAndRegister(service, addr)
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	shutdown.BeforeExit(func() { hb.Close() })
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	defer l.Close()
 	log.Println("Listening on", addr)
@@ -32,7 +32,7 @@ func main() {
 	for {
 		conn, err := l.Accept()
 		if err != nil {
-			log.Fatal(err)
+			shutdown.Fatal(err)
 		}
 		go handle(conn)
 	}

@@ -97,21 +97,21 @@ func main() {
 	} else {
 		db, err := postgres.Open("", "")
 		if err != nil {
-			log.Fatal(err)
+			shutdown.Fatal(err)
 		}
 		fs, err = NewPostgresFilesystem(db.DB)
 		if err != nil {
-			log.Fatal(err)
+			shutdown.Fatal(err)
 		}
 		storageDesc = "Postgres"
 	}
 
 	hb, err := discoverd.AddServiceAndRegister("blobstore", addr)
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	shutdown.BeforeExit(func() { hb.Close() })
 
 	log.Println("Blobstore serving files on " + addr + " from " + storageDesc)
-	log.Fatal(http.ListenAndServe(addr, handler(fs)))
+	shutdown.Fatal(http.ListenAndServe(addr, handler(fs)))
 }

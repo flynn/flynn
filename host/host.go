@@ -110,7 +110,7 @@ See 'flynn-host help <command>' for more information on a specific command.
 	}
 
 	if err := cli.Run(cmd, cmdArgs); err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 }
 
@@ -135,13 +135,13 @@ func runDaemon(args *docopt.Args) {
 		hostID = strings.Replace(hostname, "-", "", -1)
 	}
 	if strings.Contains(hostID, "-") {
-		log.Fatal("host id must not contain dashes")
+		shutdown.Fatal("host id must not contain dashes")
 	}
 	if externalAddr == "" {
 		var err error
 		externalAddr, err = config.DefaultExternalIP()
 		if err != nil {
-			log.Fatal(err)
+			shutdown.Fatal(err)
 		}
 	}
 

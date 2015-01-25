@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"log"
 	"os"
 	"sort"
 	"strings"
@@ -31,32 +30,32 @@ func main() {
 		var err error
 		backoffPeriod, err = time.ParseDuration(period)
 		if err != nil {
-			log.Fatal(err)
+			shutdown.Fatal(err)
 		}
 		grohl.Log(grohl.Data{"at": "backoff_period", "period": backoffPeriod.String()})
 	}
 
 	cc, err := controller.NewClient("", os.Getenv("AUTH_KEY"))
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	cl, err := cluster.NewClient()
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	c := newContext(cc, cl)
 
 	grohl.Log(grohl.Data{"at": "leaderwait"})
 	hb, err := discoverd.AddServiceAndRegister("flynn-controller-scheduler", ":"+os.Getenv("PORT"))
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	shutdown.BeforeExit(func() { hb.Close() })
 
 	leaders := make(chan *discoverd.Instance)
 	stream, err := discoverd.NewService("flynn-controller-scheduler").Leaders(leaders)
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	for leader := range leaders {
 		if leader.Addr == hb.Addr() {
@@ -65,7 +64,7 @@ func main() {
 	}
 	if err := stream.Err(); err != nil {
 		// TODO: handle discoverd errors
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	stream.Close()
 	// TODO: handle demotion

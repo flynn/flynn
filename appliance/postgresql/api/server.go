@@ -26,7 +26,7 @@ func main() {
 	username, password := postgres.Wait(serviceName)
 	db, err := postgres.Open(serviceName, fmt.Sprintf("dbname=postgres user=%s password=%s", username, password))
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 
 	r := martini.NewRouter()
@@ -48,11 +48,11 @@ func main() {
 
 	hb, err := discoverd.AddServiceAndRegister(serviceName+"-api", addr)
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	shutdown.BeforeExit(func() { hb.Close() })
 
-	log.Fatal(http.ListenAndServe(addr, m))
+	shutdown.Fatal(http.ListenAndServe(addr, m))
 }
 
 type resource struct {

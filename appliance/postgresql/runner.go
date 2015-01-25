@@ -34,7 +34,7 @@ func main() {
 	var err error
 	heartbeater, err = discoverd.AddServiceAndRegister(*serviceName, addr)
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	shutdown.BeforeExit(func() { heartbeater.Close() })
 
@@ -44,13 +44,13 @@ func main() {
 	leaders := make(chan *discoverd.Instance)
 	stream, err := discoverd.NewService(*serviceName).Leaders(leaders)
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	if leader := <-leaders; leader.Addr == heartbeater.Addr() {
 		leaderProc, done = startLeader()
 		goto wait
 	} else {
-		log.Fatal("there is already a leader")
+		shutdown.Fatal("there is already a leader")
 	}
 
 wait:
@@ -70,12 +70,12 @@ func startLeader() (*exec.Cmd, <-chan struct{}) {
 			"--locale=en_US.UTF-8", // TODO: make this configurable?
 		))
 	} else if err != ErrNotEmpty {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 
 	cmd, err := startPostgres(*dataDir)
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 
 	db := waitForPostgres(time.Minute)
@@ -200,7 +200,7 @@ func runCmd(cmd *exec.Cmd) {
 				os.Exit(status.ExitStatus())
 			}
 		}
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 }
 

@@ -92,7 +92,7 @@ func main() {
 		clusters: make(map[string]*cluster.Cluster),
 	}
 	if err := runner.start(); err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 }
 

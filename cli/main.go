@@ -17,6 +17,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
+	"github.com/flynn/flynn/pkg/shutdown"
 )
 
 var (
@@ -71,7 +72,7 @@ See 'flynn help <command>' for more information on a specific command.
 			}
 			out, err := json.MarshalIndent(cmds, "", "\t")
 			if err != nil {
-				log.Fatal(err)
+				shutdown.Fatal(err)
 			}
 			fmt.Println(string(out))
 			return
@@ -93,7 +94,7 @@ See 'flynn help <command>' for more information on a specific command.
 	flagApp = args.String["-a"]
 	if flagApp != "" {
 		if err := readConfig(); err != nil {
-			log.Fatal(err)
+			shutdown.Fatal(err)
 		}
 
 		if ra, err := appFromGitRemote(flagApp); err == nil {
@@ -103,7 +104,7 @@ See 'flynn help <command>' for more information on a specific command.
 	}
 
 	if err := runCommand(cmd, cmdArgs); err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 		return
 	}
 }
@@ -147,7 +148,7 @@ func runCommand(name string, args []string) (err error) {
 		var client *controller.Client
 		cluster, err := getCluster()
 		if err != nil {
-			log.Fatal(err)
+			shutdown.Fatal(err)
 		}
 		if cluster.TLSPin != "" {
 			pin, err := base64.StdEncoding.DecodeString(cluster.TLSPin)
@@ -159,7 +160,7 @@ func runCommand(name string, args []string) (err error) {
 			client, err = controller.NewClient(cluster.URL, cluster.Key)
 		}
 		if err != nil {
-			log.Fatal(err)
+			shutdown.Fatal(err)
 		}
 
 		return f(parsedArgs, client)
@@ -259,7 +260,7 @@ func app() (string, error) {
 func mustApp() string {
 	name, err := app()
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	return name
 }
