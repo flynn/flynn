@@ -317,10 +317,6 @@
 			"Rev": "7cf5571b3b32a7c7b5605dc5ed8ad8fdbb2135f0"
 		},
 		{
-			"ImportPath": "gopkg.in/mgo.v2",
-			"Rev": "3116f72d0fe0216b75201cb3a1ae61c82c2a4d63"
-		},
-		{
 			"ImportPath": "gopkg.in/tomb.v1",
 			"Rev": "c131134a1947e9afd9cecfe11f4c6dff0732ae58"
 		}
