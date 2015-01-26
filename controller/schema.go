@@ -22,7 +22,7 @@ func migrateDB(db *sql.DB) error {
 
 		`CREATE TABLE releases (
     release_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-    artifact_id uuid NOT NULL REFERENCES artifacts (artifact_id),
+    artifact_id uuid REFERENCES artifacts (artifact_id),
     data text NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     deleted_at timestamptz
