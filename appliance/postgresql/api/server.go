@@ -23,6 +23,8 @@ func init() {
 }
 
 func main() {
+	defer shutdown.Exit()
+
 	username, password := postgres.Wait(serviceName)
 	db, err := postgres.Open(serviceName, fmt.Sprintf("dbname=postgres user=%s password=%s", username, password))
 	if err != nil {

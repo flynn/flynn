@@ -51,6 +51,8 @@ options:
 }
 
 func main() {
+	defer shutdown.Exit()
+
 	usage := `usage: flynn-host [-h|--help] <command> [<args>...]
 
 Options:

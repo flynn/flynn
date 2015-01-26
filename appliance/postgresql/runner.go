@@ -29,6 +29,8 @@ var addr = ":" + os.Getenv("PORT")
 var heartbeater discoverd.Heartbeater
 
 func main() {
+	defer shutdown.Exit()
+
 	flag.Parse()
 
 	var err error

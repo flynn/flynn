@@ -16,6 +16,8 @@ import (
 	ish: the Inexusable/Insecure/Internet SHell.
 */
 func main() {
+	defer shutdown.Exit()
+
 	name := os.Getenv("NAME")
 	port := os.Getenv("PORT")
 	addr := ":" + port

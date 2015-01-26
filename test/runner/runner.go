@@ -84,6 +84,7 @@ func init() {
 }
 
 func main() {
+	defer shutdown.Exit()
 	runner := &Runner{
 		bc:       args.BootConfig,
 		events:   make(chan Event),

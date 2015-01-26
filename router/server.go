@@ -47,6 +47,8 @@ func (s *Router) ListenAndServe(quit <-chan struct{}) error {
 }
 
 func main() {
+	defer shutdown.Exit()
+
 	apiPort := os.Getenv("PORT")
 	if apiPort == "" {
 		apiPort = "5000"

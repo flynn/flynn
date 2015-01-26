@@ -27,6 +27,8 @@ import (
 var ErrNotFound = errors.New("controller: resource not found")
 
 func main() {
+	defer shutdown.Exit()
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3000"

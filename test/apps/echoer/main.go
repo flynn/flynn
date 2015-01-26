@@ -13,6 +13,8 @@ import (
 const service = "echo-service"
 
 func main() {
+	defer shutdown.Exit()
+
 	port := os.Getenv("PORT")
 	addr := ":" + port
 

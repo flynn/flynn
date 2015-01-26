@@ -80,6 +80,8 @@ func handler(fs Filesystem) http.Handler {
 }
 
 func main() {
+	defer shutdown.Exit()
+
 	flag.Parse()
 
 	addr := os.Getenv("PORT")

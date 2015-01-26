@@ -23,6 +23,8 @@ import (
 var backoffPeriod = 10 * time.Minute
 
 func main() {
+	defer shutdown.Exit()
+
 	grohl.AddContext("app", "controller-scheduler")
 	grohl.Log(grohl.Data{"at": "start"})
 

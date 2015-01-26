@@ -26,6 +26,8 @@ var (
 )
 
 func main() {
+	defer shutdown.Exit()
+
 	log.SetFlags(0)
 
 	usage := `
