@@ -284,5 +284,5 @@ func (b *etcdBackend) fullSync() (uint64, error) {
 		}
 	}
 
-	return data.Node.ModifiedIndex, nil
+	return data.EtcdIndex, nil
 }
