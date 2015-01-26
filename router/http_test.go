@@ -373,6 +373,30 @@ func (s *S) TestHTTPProxyHeadersFromClient(c *C) {
 	}
 }
 
+func (s *S) TestConnectionCloseHeaderFromClient(c *C) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		// Connection: close header should be stripped by the reverse proxy so it
+		// always does keep-alive with backends.
+		c.Assert(req.Close, Equals, false)
+	})
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	l := newHTTPListener(c)
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+
+	req := newReq("http://"+l.Addr, "example.com")
+	req.Header.Set("Connection", "close")
+	res, err := httpClient.Do(req)
+	c.Assert(err, IsNil)
+	defer res.Body.Close()
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(res.Close, Equals, true)
+}
+
 func (s *S) TestHTTPWebsocket(c *C) {
 	done := make(chan struct{})
 	srv := httptest.NewServer(
@@ -386,6 +410,7 @@ func (s *S) TestHTTPWebsocket(c *C) {
 			close(done)
 		}),
 	)
+	defer srv.Close()
 
 	l := newHTTPListener(c)
 	defer l.Close()
