@@ -356,10 +356,16 @@ func streamJobs(req *http.Request, w http.ResponseWriter, app *ct.App, repo *Job
 		case pq.ListenerEventConnected:
 			close(connected)
 		case pq.ListenerEventDisconnected:
-			close(done)
+			if done != nil {
+				close(done)
+				done = nil
+			}
 		case pq.ListenerEventConnectionAttemptFailed:
 			err = listenErr
-			close(done)
+			if done != nil {
+				close(done)
+				done = nil
+			}
 		}
 	}
 	listener := pq.NewListener(repo.db.DSN(), 10*time.Second, time.Minute, listenEvent)
