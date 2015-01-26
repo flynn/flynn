@@ -107,7 +107,7 @@ func procExit(cmd *exec.Cmd) {
 	if ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok {
 		status = ws.ExitStatus()
 	}
-	os.Exit(status)
+	shutdown.ExitWithCode(status)
 }
 
 func createSuperuser(db *sql.DB) (password string) {
@@ -199,7 +199,7 @@ func runCmd(cmd *exec.Cmd) {
 	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
-				os.Exit(status.ExitStatus())
+				shutdown.ExitWithCode(status.ExitStatus())
 			}
 		}
 		shutdown.Fatal(err)

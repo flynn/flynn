@@ -41,7 +41,11 @@ func (h *handler) BeforeExit(f func()) {
 }
 
 func Exit() {
-	h.exit(nil)
+	h.exit(nil, 0)
+}
+
+func ExitWithCode(code int) {
+	h.exit(nil, code)
 }
 
 func Fatal(v ...interface{}) {
@@ -49,17 +53,17 @@ func Fatal(v ...interface{}) {
 }
 
 func (h *handler) Fatal(v ...interface{}) {
-	h.exit(errors.New(fmt.Sprint(v...)))
+	h.exit(errors.New(fmt.Sprint(v...)), 1)
 }
 
 func (h *handler) wait() {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, os.Signal(syscall.SIGTERM))
 	<-ch
-	h.exit(nil)
+	h.exit(nil, 0)
 }
 
-func (h *handler) exit(err error) {
+func (h *handler) exit(err error, code int) {
 	h.mtx.Lock()
 	h.active.Store(true)
 	for i := len(h.stack) - 1; i >= 0; i-- {
@@ -67,7 +71,6 @@ func (h *handler) exit(err error) {
 	}
 	if err != nil {
 		log.New(os.Stderr, "", log.Lshortfile|log.Lmicroseconds).Output(3, err.Error())
-		os.Exit(1)
 	}
-	os.Exit(0)
+	os.Exit(code)
 }
