@@ -18,11 +18,11 @@ type ErrorCode string
 
 const (
 	NotFoundError       ErrorCode = "not_found"
-	ObjectNotFoundError           = "object_not_found"
-	ObjectExistsError             = "object_exists"
-	SyntaxError                   = "syntax_error"
-	ValidationError               = "validation_error"
-	UnknownError                  = "unknown_error"
+	ObjectNotFoundError ErrorCode = "object_not_found"
+	ObjectExistsError   ErrorCode = "object_exists"
+	SyntaxError         ErrorCode = "syntax_error"
+	ValidationError     ErrorCode = "validation_error"
+	UnknownError        ErrorCode = "unknown_error"
 )
 
 var errorResponseCodes = map[ErrorCode]int{
