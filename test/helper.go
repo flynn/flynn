@@ -188,18 +188,6 @@ func (h *Helper) TearDownSuite(t *c.C) {
 }
 
 func (h *Helper) cleanup() {
-	h.clusterMtx.Lock()
-	if h.cluster != nil {
-		h.cluster.Close()
-	}
-	h.clusterMtx.Unlock()
-
-	h.controllerMtx.Lock()
-	if h.controller != nil {
-		h.controller.Close()
-	}
-	h.controllerMtx.Unlock()
-
 	h.sshMtx.Lock()
 	if h.ssh != nil {
 		h.ssh.Cleanup()

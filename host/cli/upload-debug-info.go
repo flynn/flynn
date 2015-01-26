@@ -87,7 +87,6 @@ func captureJobs(gist *Gist) error {
 	if err != nil {
 		return err
 	}
-	defer client.Close()
 
 	jobs, err := jobList(client, true)
 	if err != nil {

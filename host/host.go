@@ -272,7 +272,6 @@ func runDaemon(args *docopt.Args) {
 	if err != nil {
 		shutdown.Fatal(err)
 	}
-	shutdown.BeforeExit(func() { cluster.Close() })
 
 	g.Log(grohl.Data{"at": "sampi_connected"})
 

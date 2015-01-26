@@ -4,7 +4,6 @@ package client
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 
@@ -44,7 +43,6 @@ func newRouterClient() *client {
 func NewWithAddr(addr string) Client {
 	c := newRouterClient()
 	c.URL = fmt.Sprintf("http://%s", addr)
-	c.HTTP = http.DefaultClient
 	return c
 }
 
@@ -62,8 +60,6 @@ type Client interface {
 	// ListRoutes returns a list of routes. If parentRef is not empty, routes
 	// are filtered by the reference (ex: "controller/apps/myapp").
 	ListRoutes(parentRef string) ([]*router.Route, error)
-	// Closer allows closing the underlying transport connection.
-	io.Closer
 }
 
 // HTTPError is returned when the server returns a status code that is different
