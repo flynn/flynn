@@ -51,6 +51,8 @@ options:
 }
 
 func main() {
+	defer shutdown.Exit()
+
 	usage := `usage: flynn-host [-h|--help] <command> [<args>...]
 
 Options:
@@ -110,7 +112,7 @@ See 'flynn-host help <command>' for more information on a specific command.
 	}
 
 	if err := cli.Run(cmd, cmdArgs); err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 }
 
@@ -135,13 +137,13 @@ func runDaemon(args *docopt.Args) {
 		hostID = strings.Replace(hostname, "-", "", -1)
 	}
 	if strings.Contains(hostID, "-") {
-		log.Fatal("host id must not contain dashes")
+		shutdown.Fatal("host id must not contain dashes")
 	}
 	if externalAddr == "" {
 		var err error
 		externalAddr, err = config.DefaultExternalIP()
 		if err != nil {
-			log.Fatal(err)
+			shutdown.Fatal(err)
 		}
 	}
 
@@ -293,6 +295,11 @@ func runDaemon(args *docopt.Args) {
 		if err != nil {
 			shutdown.Fatal(err)
 		}
+		shutdown.BeforeExit(func() {
+			// close the connection that registers use with the cluster
+			// during shutdown; this unregisters us immediately.
+			jobStream.Close()
+		})
 		g.Log(grohl.Data{"at": "host_registered"})
 		for job := range jobs {
 			if externalAddr != "" {

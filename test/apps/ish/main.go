@@ -9,12 +9,15 @@ import (
 	"os/exec"
 
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/shutdown"
 )
 
 /*
 	ish: the Inexusable/Insecure/Internet SHell.
 */
 func main() {
+	defer shutdown.Exit()
+
 	name := os.Getenv("NAME")
 	port := os.Getenv("PORT")
 	addr := ":" + port
@@ -26,17 +29,21 @@ func main() {
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	defer l.Close()
 	log.Println("Listening on", addr)
 
-	if _, err := discoverd.AddServiceAndRegister(name, addr); err != nil {
-		log.Fatal(err)
+	hb, err := discoverd.AddServiceAndRegister(name, addr)
+	if err != nil {
+		shutdown.Fatal(err)
 	}
+	shutdown.BeforeExit(func() { hb.Close() })
 
 	http.HandleFunc("/ish", ish)
-	log.Fatal(http.Serve(l, nil))
+	if err := http.Serve(l, nil); err != nil {
+		shutdown.Fatal(err)
+	}
 }
 
 func ish(resp http.ResponseWriter, req *http.Request) {

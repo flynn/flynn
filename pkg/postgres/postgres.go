@@ -3,7 +3,6 @@ package postgres
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"sync"
@@ -11,6 +10,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/shutdown"
 )
 
 func New(db *sql.DB, dsn string) *DB {
@@ -28,7 +28,7 @@ func Wait(service string) (string, string) {
 	events := make(chan *discoverd.Event)
 	stream, err := discoverd.NewService(service).Watch(events)
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	defer stream.Close()
 	for e := range events {

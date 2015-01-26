@@ -24,6 +24,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/fsouza/go-dockerclient"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
 	"github.com/flynn/flynn/pkg/iotool"
+	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/test/arg"
 	"github.com/flynn/flynn/test/cluster"
 )
@@ -49,6 +50,8 @@ func init() {
 }
 
 func main() {
+	defer shutdown.Exit()
+
 	var err error
 	if err = lookupImageURIs(); err != nil {
 		log.Fatalf("could not determine image ID: %s", err)

@@ -18,6 +18,7 @@ import (
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/shutdown"
 )
 
 var dataDir = flag.String("data", "/data", "postgresql data directory")
@@ -28,13 +29,16 @@ var addr = ":" + os.Getenv("PORT")
 var heartbeater discoverd.Heartbeater
 
 func main() {
+	defer shutdown.Exit()
+
 	flag.Parse()
 
 	var err error
 	heartbeater, err = discoverd.AddServiceAndRegister(*serviceName, addr)
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
+	shutdown.BeforeExit(func() { heartbeater.Close() })
 
 	var leaderProc *exec.Cmd
 	var done <-chan struct{}
@@ -42,13 +46,13 @@ func main() {
 	leaders := make(chan *discoverd.Instance)
 	stream, err := discoverd.NewService(*serviceName).Leaders(leaders)
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 	if leader := <-leaders; leader.Addr == heartbeater.Addr() {
 		leaderProc, done = startLeader()
 		goto wait
 	} else {
-		log.Fatal("there is already a leader")
+		shutdown.Fatal("there is already a leader")
 	}
 
 wait:
@@ -68,12 +72,12 @@ func startLeader() (*exec.Cmd, <-chan struct{}) {
 			"--locale=en_US.UTF-8", // TODO: make this configurable?
 		))
 	} else if err != ErrNotEmpty {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 
 	cmd, err := startPostgres(*dataDir)
 	if err != nil {
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 
 	db := waitForPostgres(time.Minute)
@@ -103,7 +107,7 @@ func procExit(cmd *exec.Cmd) {
 	if ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok {
 		status = ws.ExitStatus()
 	}
-	os.Exit(status)
+	shutdown.ExitWithCode(status)
 }
 
 func createSuperuser(db *sql.DB) (password string) {
@@ -195,10 +199,10 @@ func runCmd(cmd *exec.Cmd) {
 	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
-				os.Exit(status.ExitStatus())
+				shutdown.ExitWithCode(status.ExitStatus())
 			}
 		}
-		log.Fatal(err)
+		shutdown.Fatal(err)
 	}
 }
 

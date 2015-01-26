@@ -11,9 +11,12 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/flynn/discoverd/server"
 	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/pkg/shutdown"
 )
 
 func main() {
+	defer shutdown.Exit()
+
 	httpAddr := flag.String("http-addr", ":1111", "address to serve HTTP API from")
 	dnsAddr := flag.String("dns-addr", ":53", "address to service DNS from")
 	resolvers := flag.String("recursors", "8.8.8.8,8.8.4.4", "upstream recursive DNS servers")

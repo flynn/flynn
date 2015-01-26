@@ -2,7 +2,6 @@ package main
 
 import (
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/testutils"
 )
 
@@ -142,12 +142,12 @@ func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {
 			newData := random.Hex(32)
 			req, err = http.NewRequest("PUT", path, strings.NewReader(newData))
 			if err != nil {
-				log.Fatal(err)
+				shutdown.Fatal(err)
 			}
 			req.Header.Set("Content-Type", "application/text")
 			res, err = http.DefaultClient.Do(req)
 			if err != nil {
-				log.Fatal(err)
+				shutdown.Fatal(err)
 			}
 			res.Body.Close()
 			if res.StatusCode != 200 {
@@ -197,11 +197,11 @@ func testFilesystem(fs Filesystem, testMeta bool, t *testing.T) {
 
 			req, err = http.NewRequest("DELETE", path, nil)
 			if err != nil {
-				log.Fatal(err)
+				shutdown.Fatal(err)
 			}
 			res, err = http.DefaultClient.Do(req)
 			if err != nil {
-				log.Fatal(err)
+				shutdown.Fatal(err)
 			}
 			res.Body.Close()
 			if res.StatusCode != 200 {

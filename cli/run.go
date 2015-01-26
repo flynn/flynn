@@ -15,6 +15,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/shutdown"
 )
 
 func init() {
@@ -116,18 +117,25 @@ func runRun(args *docopt.Args, client *controller.Client) error {
 		time.Sleep(10 * time.Second)
 		attachClient.Signal(int(syscall.SIGKILL))
 	}()
+
 	go func() {
 		io.Copy(attachClient, os.Stdin)
 		attachClient.CloseWrite()
 	}()
+
+	childDone := make(chan struct{})
+	shutdown.BeforeExit(func() {
+		<-childDone
+	})
 	exitStatus, err := attachClient.Receive(os.Stdout, os.Stderr)
+	close(childDone)
 	if err != nil {
 		return err
 	}
 	if req.TTY {
 		term.RestoreTerminal(os.Stdin.Fd(), termState)
 	}
-	os.Exit(exitStatus)
+	shutdown.ExitWithCode(exitStatus)
 
 	panic("unreached")
 }
