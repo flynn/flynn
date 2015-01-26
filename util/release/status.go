@@ -29,8 +29,8 @@ func status(args *docopt.Args) {
 	if err := json.NewDecoder(res.Body).Decode(status); err != nil {
 		log.Fatal("error decoding Github response:", err)
 	}
-	if status.Count < 2 {
-		log.Fatalf("commit does not have enough statuses (expected 2, got %d)", status.Count)
+	if status.Count < 1 {
+		log.Fatalf("commit does not have enough statuses (expected 1, got %d)", status.Count)
 	}
 	fmt.Println(status.State)
 	if status.State != "success" {
