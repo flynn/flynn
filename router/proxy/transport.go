@@ -96,12 +96,12 @@ func (t *transport) Connect(remoteAddr net.Addr) (net.Conn, error) {
 func (t *transport) UpgradeHTTP(req *http.Request) (*http.Response, net.Conn, error) {
 	stickyBackend := t.getStickyBackend(req)
 	backends := t.getOrderedBackends(stickyBackend)
-	c, addr, err := dialTCP(backends)
+	upconn, addr, err := dialTCP(backends)
 	if err != nil {
 		return nil, nil, err
 	}
+	conn := &streamConn{bufio.NewReader(upconn), upconn}
 	req.URL.Host = addr
-	conn := &streamConn{bufio.NewReader(c), c}
 
 	if err := req.Write(conn); err != nil {
 		conn.Close()

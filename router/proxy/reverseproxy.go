@@ -89,6 +89,22 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	p.writeResponse(rw, res)
 }
 
+func (p *ReverseProxy) ServeConn(conn net.Conn) {
+	transport := p.transport
+	if transport == nil {
+		panic("router: nil transport for proxy")
+	}
+	defer conn.Close()
+
+	dconn, err := transport.Connect(conn.RemoteAddr())
+	if err != nil {
+		p.logf("router: proxy error: %v", err)
+		return
+	}
+
+	joinConns(conn, dconn)
+}
+
 func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, req *http.Request) {
 	transport := p.transport
 	if transport == nil {
