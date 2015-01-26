@@ -60,6 +60,8 @@ var (
 		"Trailers",
 		"Transfer-Encoding",
 	}
+
+	serviceUnavailable = []byte("Service Unavailable\n")
 )
 
 func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
@@ -70,16 +72,51 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	outreq := prepareRequest(req)
 
+	if isConnectionUpgrade(req.Header) {
+		p.serveUpgrade(rw, outreq)
+		return
+	}
+
 	res, err := transport.RoundTrip(outreq)
 	if err != nil {
 		p.logf("router: proxy error: %v", err)
 		rw.WriteHeader(http.StatusServiceUnavailable)
-		rw.Write([]byte(http.StatusText(http.StatusServiceUnavailable)))
+		rw.Write(serviceUnavailable)
 		return
 	}
 	defer res.Body.Close()
 
 	p.writeResponse(rw, res)
+}
+
+func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, req *http.Request) {
+	transport := p.transport
+	if transport == nil {
+		panic("router: nil transport for proxy")
+	}
+
+	res, uconn, err := transport.UpgradeHTTP(req)
+	if err != nil {
+		p.logf("router: proxy error: %v", err)
+		rw.WriteHeader(http.StatusServiceUnavailable)
+		rw.Write(serviceUnavailable)
+		return
+	}
+	defer uconn.Close()
+
+	p.writeResponse(rw, res)
+	res.Body.Close()
+
+	if res.StatusCode != 101 {
+		return
+	}
+
+	dconn, bufrw, err := rw.(http.Hijacker).Hijack()
+	if err != nil {
+		p.logf("router: hijack failed: %v", err)
+		return
+	}
+	joinConns(uconn, &streamConn{bufrw.Reader, dconn})
 }
 
 func (p *ReverseProxy) writeResponse(rw http.ResponseWriter, res *http.Response) {
