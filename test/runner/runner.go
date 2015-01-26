@@ -72,6 +72,7 @@ type Runner struct {
 	buildCh     chan struct{}
 	clusters    map[string]*cluster.Cluster
 	authKey     string
+	subnet      uint64
 }
 
 var args *arg.Args
@@ -120,10 +121,7 @@ func (r *Runner) start() error {
 	}
 
 	bc := r.bc
-	bc.Network, err = r.allocateNet()
-	if err != nil {
-		return err
-	}
+	bc.Network = r.allocateNet()
 	if r.rootFS, err = cluster.BuildFlynn(bc, args.RootFS, "origin/master", false, os.Stdout); err != nil {
 		return fmt.Errorf("could not build flynn: %s", err)
 	}
@@ -250,10 +248,7 @@ func (r *Runner) build(b *Build) (err error) {
 
 	out := &iotool.SafeWriter{W: io.MultiWriter(os.Stdout, logFile)}
 	bc := r.bc
-	bc.Network, err = r.allocateNet()
-	if err != nil {
-		return err
-	}
+	bc.Network = r.allocateNet()
 	defer r.releaseNet(bc.Network)
 
 	c := cluster.New(bc, out)
@@ -549,17 +544,17 @@ func (r *Runner) updateStatus(b *Build, state, targetUrl string) {
 	}()
 }
 
-func (r *Runner) allocateNet() (string, error) {
+func (r *Runner) allocateNet() string {
 	r.netMtx.Lock()
 	defer r.netMtx.Unlock()
-	for i := 0; i < 256; i++ {
-		net := fmt.Sprintf("10.53.%d.1/24", i)
+	for {
+		net := fmt.Sprintf("10.69.%d.1/24", r.subnet%256)
+		r.subnet++
 		if _, ok := r.networks[net]; !ok {
 			r.networks[net] = struct{}{}
-			return net, nil
+			return net
 		}
 	}
-	return "", errors.New("no available networks")
 }
 
 func (r *Runner) releaseNet(net string) {

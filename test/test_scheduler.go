@@ -62,7 +62,7 @@ func (s *SchedulerSuite) addHosts(t *c.C, count int) []string {
 			debug(t, "host added ", event.HostID)
 			testCluster.Instances = append(testCluster.Instances, instance)
 			hosts = append(hosts, event.HostID)
-		case <-time.After(20 * time.Second):
+		case <-time.After(60 * time.Second):
 			t.Fatal("timed out waiting for new host")
 		}
 	}
