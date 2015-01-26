@@ -13,7 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/fsouza/go-dockerclient"
-	"github.com/gorilla/mux"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/mux"
 	mathrand "math/rand"
 	"net"
 	"net/http"
