@@ -67,6 +67,7 @@ func NewClientWithPin(uri, key string, pin []byte) (*Client, error) {
 	d := &pinned.Config{Pin: pin}
 	httpClient := &http.Client{Transport: &http.Transport{Dial: d.Dial}}
 	c := newClient(key, u.String(), httpClient)
+	c.HijackDial = d.Dial
 	return c, nil
 }
 
