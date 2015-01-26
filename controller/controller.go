@@ -11,6 +11,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/bgentry/que-go"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/name"
@@ -53,6 +55,19 @@ func main() {
 		shutdown.Fatal(err)
 	}
 
+	pgxcfg, err := pgx.ParseURI(fmt.Sprintf("http://%s:%s@%s/%s", os.Getenv("PGUSER"), os.Getenv("PGPASSWORD"), db.Addr(), os.Getenv("PGDATABASE")))
+	if err != nil {
+		log.Fatal(err)
+	}
+	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
+		ConnConfig:   pgxcfg,
+		AfterConnect: que.PrepareStatements,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	shutdown.BeforeExit(func() { pgxpool.Close() })
+
 	cc, err := cluster.NewClient()
 	if err != nil {
 		shutdown.Fatal(err)
@@ -69,15 +84,16 @@ func main() {
 		hb.Close()
 	})
 
-	handler := appHandler(handlerConfig{db: db, cc: cc, sc: sc, key: os.Getenv("AUTH_KEY")})
+	handler := appHandler(handlerConfig{db: db, cc: cc, sc: sc, pgxpool: pgxpool, key: os.Getenv("AUTH_KEY")})
 	shutdown.Fatal(http.ListenAndServe(addr, handler))
 }
 
 type handlerConfig struct {
-	db  *postgres.DB
-	cc  clusterClient
-	sc  routerc.Client
-	key string
+	db      *postgres.DB
+	cc      clusterClient
+	sc      routerc.Client
+	pgxpool *pgx.ConnPool
+	key     string
 }
 
 // NOTE: this is temporary until httphelper supports custom errors
@@ -103,17 +119,19 @@ func appHandler(c handlerConfig) http.Handler {
 	releaseRepo := NewReleaseRepo(c.db)
 	jobRepo := NewJobRepo(c.db)
 	formationRepo := NewFormationRepo(c.db, appRepo, releaseRepo, artifactRepo)
+	deploymentRepo := NewDeploymentRepo(c.db, c.pgxpool)
 
 	api := controllerAPI{
-		appRepo:       appRepo,
-		releaseRepo:   releaseRepo,
-		providerRepo:  providerRepo,
-		formationRepo: formationRepo,
-		artifactRepo:  artifactRepo,
-		jobRepo:       jobRepo,
-		resourceRepo:  resourceRepo,
-		clusterClient: c.cc,
-		routerc:       c.sc,
+		appRepo:        appRepo,
+		releaseRepo:    releaseRepo,
+		providerRepo:   providerRepo,
+		formationRepo:  formationRepo,
+		artifactRepo:   artifactRepo,
+		jobRepo:        jobRepo,
+		resourceRepo:   resourceRepo,
+		deploymentRepo: deploymentRepo,
+		clusterClient:  c.cc,
+		routerc:        c.sc,
 	}
 
 	httpRouter := httprouter.New()
@@ -136,6 +154,9 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.GET("/apps/:apps_id/jobs", httphelper.WrapHandler(api.appLookup(api.ListJobs)))
 	httpRouter.DELETE("/apps/:apps_id/jobs/:jobs_id", httphelper.WrapHandler(api.appLookup(api.KillJob)))
 	httpRouter.GET("/apps/:apps_id/jobs/:jobs_id/log", httphelper.WrapHandler(api.appLookup(api.JobLog)))
+
+	httpRouter.POST("/apps/:apps_id/deploy", httphelper.WrapHandler(api.appLookup(api.CreateDeployment)))
+	httpRouter.GET("/deployments/:deployment_id", httphelper.WrapHandler(api.GetDeployment))
 
 	httpRouter.PUT("/apps/:apps_id/release", httphelper.WrapHandler(api.appLookup(api.SetAppRelease)))
 	httpRouter.GET("/apps/:apps_id/release", httphelper.WrapHandler(api.appLookup(api.GetAppRelease)))
@@ -175,15 +196,16 @@ func muxHandler(main http.Handler, authKey string) http.Handler {
 }
 
 type controllerAPI struct {
-	appRepo       *AppRepo
-	releaseRepo   *ReleaseRepo
-	providerRepo  *ProviderRepo
-	formationRepo *FormationRepo
-	artifactRepo  *ArtifactRepo
-	jobRepo       *JobRepo
-	resourceRepo  *ResourceRepo
-	clusterClient clusterClient
-	routerc       routerc.Client
+	appRepo        *AppRepo
+	releaseRepo    *ReleaseRepo
+	providerRepo   *ProviderRepo
+	formationRepo  *FormationRepo
+	artifactRepo   *ArtifactRepo
+	jobRepo        *JobRepo
+	resourceRepo   *ResourceRepo
+	deploymentRepo *DeploymentRepo
+	clusterClient  clusterClient
+	routerc        routerc.Client
 }
 
 func (c *controllerAPI) getApp(ctx context.Context) *ct.App {

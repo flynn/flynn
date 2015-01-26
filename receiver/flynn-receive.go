@@ -120,8 +120,8 @@ func main() {
 	if err := client.CreateRelease(release); err != nil {
 		log.Fatalln("Error creating release:", err)
 	}
-	if err := client.SetAppRelease(app.Name, release.ID); err != nil {
-		log.Fatalln("Error setting app release:", err)
+	if err := client.DeployAppRelease(app.Name, release.ID); err != nil {
+		log.Fatalln("Error deploying app release:", err)
 	}
 
 	fmt.Println("=====> Application deployed")

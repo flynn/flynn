@@ -49,6 +49,7 @@ func Open(service, dsn string) (*DB, error) {
 	db := &DB{
 		dsnSuffix: dsn,
 		dsn:       fmt.Sprintf("host=leader.%s.discoverd %s", service, dsn),
+		addr:      fmt.Sprintf("leader.%s.discoverd", service),
 		stmts:     make(map[string]*sql.Stmt),
 	}
 	var err error
@@ -61,8 +62,9 @@ type DB struct {
 
 	dsnSuffix string
 
-	mtx sync.RWMutex
-	dsn string
+	mtx  sync.RWMutex
+	dsn  string
+	addr string
 
 	stmts map[string]*sql.Stmt
 }
@@ -73,6 +75,12 @@ func (db *DB) DSN() string {
 	db.mtx.RLock()
 	defer db.mtx.RUnlock()
 	return db.dsn
+}
+
+func (db *DB) Addr() string {
+	db.mtx.RLock()
+	defer db.mtx.RUnlock()
+	return db.addr
 }
 
 func (db *DB) Close() error {

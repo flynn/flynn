@@ -97,7 +97,7 @@ func (c *Client) CreateApp(app *ct.App) error {
 	return c.Post("/apps", app, app)
 }
 
-// UpdateApp updates the protected flag and meta using app.ID.
+// UpdateApp updates the protected flag, meta and update strategy using app.ID.
 func (c *Client) UpdateApp(app *ct.App) error {
 	if app.ID == "" {
 		return errors.New("controller: missing id")
@@ -247,6 +247,53 @@ func (c *Client) GetArtifact(artifactID string) (*ct.Artifact, error) {
 func (c *Client) GetApp(appID string) (*ct.App, error) {
 	app := &ct.App{}
 	return app, c.Get(fmt.Sprintf("/apps/%s", appID), app)
+}
+
+// GetDeployment returns a deployment queued on the deployer.
+func (c *Client) GetDeployment(deploymentID string) (*ct.Deployment, error) {
+	res := &ct.Deployment{}
+	return res, c.Get(fmt.Sprintf("/deployments/%s", deploymentID), res)
+}
+
+func (c *Client) CreateDeployment(appID, releaseID string) (*ct.Deployment, error) {
+	deployment := &ct.Deployment{}
+	return deployment, c.Post(fmt.Sprintf("/apps/%s/deploy", appID), &ct.Release{ID: releaseID}, deployment)
+}
+
+func (c *Client) StreamDeployment(deploymentID string, output chan<- *ct.DeploymentEvent) (stream.Stream, error) {
+	return c.Stream("GET", fmt.Sprintf("/deployments/%s", deploymentID), nil, output)
+}
+
+func (c *Client) DeployAppRelease(appID, releaseID string) error {
+	d, err := c.CreateDeployment(appID, releaseID)
+	if err != nil {
+		return err
+	}
+
+	// if initial deploy, just stop here
+	if d.ID == "" {
+		return nil
+	}
+
+	events := make(chan *ct.DeploymentEvent)
+	stream, err := c.StreamDeployment(d.ID, events)
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+outer:
+	for {
+		select {
+		case e := <-events:
+			if e.Status == "complete" {
+				break outer
+			}
+		case <-time.After(10 * time.Second):
+			return fmt.Errorf("Timed out waiting for deployment completion!")
+
+		}
+	}
+	return nil
 }
 
 // StreamJobEvents streams job events to the output channel.

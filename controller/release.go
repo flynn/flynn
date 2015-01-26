@@ -105,28 +105,6 @@ func (c *controllerAPI) SetAppRelease(ctx context.Context, w http.ResponseWriter
 	release := rel.(*ct.Release)
 	app := c.getApp(ctx)
 	c.appRepo.SetRelease(app.ID, release.ID)
-
-	// TODO: use transaction/lock
-	fs, err := c.formationRepo.List(app.ID)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
-	if len(fs) == 1 && fs[0].ReleaseID != release.ID {
-		if err := c.formationRepo.Add(&ct.Formation{
-			AppID:     app.ID,
-			ReleaseID: release.ID,
-			Processes: fs[0].Processes,
-		}); err != nil {
-			respondWithError(w, err)
-			return
-		}
-		if err := c.formationRepo.Remove(app.ID, fs[0].ReleaseID); err != nil {
-			respondWithError(w, err)
-			return
-		}
-	}
-
 	httphelper.JSON(w, 200, release)
 }
 
