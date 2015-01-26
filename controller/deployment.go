@@ -138,6 +138,13 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 		Strategy:     app.Strategy,
 	}
 	if err := c.deploymentRepo.Add(deployment); err != nil {
+		if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" && e.Constraint == "isolate_deploys" {
+			httphelper.Error(w, httphelper.JSONError{
+				Code:    httphelper.ValidationError,
+				Message: "Cannot create deploy, there is already one in progress for this app.",
+			})
+			return
+		}
 		respondWithError(w, err)
 		return
 	}

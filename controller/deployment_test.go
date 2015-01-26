@@ -6,6 +6,7 @@ import (
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	ct "github.com/flynn/flynn/controller/types"
+	hh "github.com/flynn/flynn/pkg/httphelper"
 )
 
 func (s *S) TestCreateDeployment(c *C) {
@@ -36,7 +37,8 @@ func (s *S) TestCreateDeployment(c *C) {
 
 	// quickly recreating a deployment should error
 	_, err = s.c.CreateDeployment(app.ID, newRelease.ID)
-	c.Assert(err, NotNil)
+	c.Assert(err.(hh.JSONError).Code, Equals, hh.ValidationError)
+	c.Assert(err.(hh.JSONError).Message, Equals, "Cannot create deploy, there is already one in progress for this app.")
 }
 
 func (s *S) TestStreamDeployment(c *C) {
