@@ -135,7 +135,7 @@ func (CheckSuite) TestHTTPReadTimeout(c *C) {
 func (CheckSuite) TestHTTPConnectRefused(c *C) {
 	err := (&HTTPCheck{
 		URL:     "http://127.0.0.1:65535",
-		Timeout: 10 * time.Millisecond,
+		Timeout: 100 * time.Millisecond,
 	}).Check()
 	c.Assert(err, NotNil)
 	c.Assert(strings.Contains(err.Error(), "connection refused"), Equals, true, Commentf("err = %s", err))
