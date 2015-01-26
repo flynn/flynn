@@ -376,6 +376,41 @@ func (s *S) TestHTTPWebsocket(c *C) {
 	c.Assert(err, IsNil)
 }
 
+func (s *S) TestUpgradeHeaderIsCaseInsensitive(c *C) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		c.Assert(strings.ToLower(req.Header.Get("Connection")), Equals, "upgrade")
+		// ensure that Upgrade header is passed along intact
+		c.Assert(req.Header.Get("Upgrade"), Equals, "Some-proto-2")
+		w.Write([]byte("ok\n"))
+	}))
+	defer srv.Close()
+
+	l := newHTTPListener(c)
+	url := "http://" + l.Addr
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+
+	values := []string{"upgrade", "Upgrade", "upGradE"}
+
+	for _, value := range values {
+		req := newReq(url, "example.com")
+		req.Header.Set("Connection", value)
+		req.Header.Set("Upgrade", "Some-proto-2")
+		res, err := httpClient.Do(req)
+		defer res.Body.Close()
+
+		c.Assert(err, IsNil)
+		c.Assert(res.StatusCode, Equals, 200)
+		data, err := ioutil.ReadAll(res.Body)
+		c.Assert(err, IsNil)
+		c.Assert(string(data), Equals, "ok\n")
+	}
+
+	httpClient.Transport.(*http.Transport).CloseIdleConnections()
+}
+
 func (s *S) TestStickyHTTPRoute(c *C) {
 	srv1 := httptest.NewServer(httpTestHandler("1"))
 	srv2 := httptest.NewServer(httpTestHandler("2"))
