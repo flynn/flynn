@@ -644,8 +644,6 @@ func copyHeader(dst, src http.Header) {
 var hopHeaders = []string{
 	"Connection",
 	"Keep-Alive",
-	"Proxy-Authenticate",
-	"Proxy-Authorization",
 	"Te", // canonicalized version of "TE"
 	"Trailers",
 	"Transfer-Encoding",

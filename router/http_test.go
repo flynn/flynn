@@ -339,6 +339,40 @@ func (s *S) TestHTTPHeadersFromClient(c *C) {
 	c.Assert(res.StatusCode, Equals, 200)
 }
 
+func (s *S) TestHTTPProxyHeadersFromClient(c *C) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		c.Assert(req.Header.Get("Proxy-Authenticate"), Equals, "fake")
+		c.Assert(req.Header.Get("Proxy-Authorization"), Equals, "not-empty")
+	})
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	l := newHTTPListener(c)
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+
+	tests := []struct {
+		upgrade bool
+	}{
+		{upgrade: false}, // regular path
+		{upgrade: true},  // tcp/websocket path
+	}
+	for _, test := range tests {
+		req := newReq("http://"+l.Addr, "example.com")
+		req.Header.Set("Proxy-Authenticate", "fake")
+		req.Header.Set("Proxy-Authorization", "not-empty")
+		if test.upgrade {
+			req.Header.Set("Connection", "upgrade")
+		}
+		res, err := httpClient.Do(req)
+		c.Assert(err, IsNil)
+		defer res.Body.Close()
+		c.Assert(res.StatusCode, Equals, 200)
+	}
+}
+
 func (s *S) TestHTTPWebsocket(c *C) {
 	done := make(chan struct{})
 	srv := httptest.NewServer(
