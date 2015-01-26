@@ -192,6 +192,12 @@ func (s *S) TestProtectedApp(c *C) {
 }
 
 func (s *S) createTestArtifact(c *C, in *ct.Artifact) *ct.Artifact {
+	if in.Type == "" {
+		in.Type = "docker"
+	}
+	if in.URI == "" {
+		in.URI = fmt.Sprintf("https://example.com/%s", random.String(8))
+	}
 	c.Assert(s.c.CreateArtifact(in), IsNil)
 	return in
 }

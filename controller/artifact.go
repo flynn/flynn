@@ -22,6 +22,12 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 	if a.ID == "" {
 		a.ID = random.UUID()
 	}
+	if a.Type == "" {
+		return ct.ValidationError{"type", "must not be empty"}
+	}
+	if a.URI == "" {
+		return ct.ValidationError{"uri", "must not be empty"}
+	}
 	err := r.db.QueryRow("INSERT INTO artifacts (artifact_id, type, uri) VALUES ($1, $2, $3) RETURNING created_at",
 		a.ID, a.Type, a.URI).Scan(&a.CreatedAt)
 	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" {

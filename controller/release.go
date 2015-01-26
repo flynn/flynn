@@ -22,14 +22,18 @@ func NewReleaseRepo(db *postgres.DB) *ReleaseRepo {
 }
 
 func scanRelease(s postgres.Scanner) (*ct.Release, error) {
+	var artifactID *string
 	release := &ct.Release{}
 	var data []byte
-	err := s.Scan(&release.ID, &release.ArtifactID, &data, &release.CreatedAt)
+	err := s.Scan(&release.ID, &artifactID, &data, &release.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			err = ErrNotFound
 		}
 		return nil, err
+	}
+	if artifactID != nil {
+		release.ArtifactID = *artifactID
 	}
 	release.ID = postgres.CleanUUID(release.ID)
 	release.ArtifactID = postgres.CleanUUID(release.ArtifactID)
@@ -52,10 +56,18 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 		release.ID = random.UUID()
 	}
 
+	var artifactID *string
+	if release.ArtifactID != "" {
+		artifactID = &release.ArtifactID
+	}
+
 	err = r.db.QueryRow("INSERT INTO releases (release_id, artifact_id, data) VALUES ($1, $2, $3) RETURNING created_at",
-		release.ID, release.ArtifactID, data).Scan(&release.CreatedAt)
+		release.ID, artifactID, data).Scan(&release.CreatedAt)
+
 	release.ID = postgres.CleanUUID(release.ID)
-	release.ArtifactID = postgres.CleanUUID(release.ArtifactID)
+	if release.ArtifactID != "" {
+		release.ArtifactID = postgres.CleanUUID(release.ArtifactID)
+	}
 	return err
 }
 

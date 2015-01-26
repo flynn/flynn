@@ -267,6 +267,11 @@ func (c *controllerAPI) PutFormation(ctx context.Context, w http.ResponseWriter,
 		return
 	}
 
+	if release.ArtifactID == "" {
+		respondWithError(w, ct.ValidationError{Message: "release is not deployable"})
+		return
+	}
+
 	formation.AppID = app.ID
 	formation.ReleaseID = release.ID
 	if app.Protected {
