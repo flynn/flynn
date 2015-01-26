@@ -56,7 +56,16 @@
       }],
       "ami_groups": ["all"],
       "ami_name": "flynn-{{ user `version` }}-ubuntu-14.04-{{timestamp}}",
-      "ami_regions": ["eu-west-1", "ap-northeast-1"],
+      "ami_regions": [
+        "ap-northeast-1",
+        "ap-southeast-1",
+        "ap-southeast-2",
+        "eu-central-1",
+        "eu-west-1",
+        "sa-east-1",
+        "us-west-1",
+        "us-west-2"
+      ],
       "instance_type": "m3.large",
       "region": "us-east-1",
       "source_ami": "{{ user `source_ami` }}",
