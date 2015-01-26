@@ -148,11 +148,7 @@ func runEnvGet(args *docopt.Args, client *controller.Client) error {
 func setEnv(client *controller.Client, proc string, env map[string]*string) (string, error) {
 	release, err := client.GetAppRelease(mustApp())
 	if err == controller.ErrNotFound {
-		artifact := &ct.Artifact{}
-		if err := client.CreateArtifact(artifact); err != nil {
-			return "", err
-		}
-		release = &ct.Release{ArtifactID: artifact.ID}
+		release = &ct.Release{}
 		if proc != "" {
 			release.Processes = make(map[string]ct.ProcessType)
 			release.Processes[proc] = ct.ProcessType{}
