@@ -33,6 +33,7 @@ type Client struct {
 	URL         string
 	Key         string
 	HTTP        *http.Client
+	HijackDial  DialFunc
 }
 
 func ToJSON(v interface{}) (io.Reader, error) {
@@ -109,7 +110,11 @@ func (c *Client) Hijack(method, path string, header http.Header, in interface{})
 	if err != nil {
 		return nil, err
 	}
-	conn, err := net.Dial("tcp", uri.Host)
+	dial := c.HijackDial
+	if dial == nil {
+		dial = net.Dial
+	}
+	conn, err := dial("tcp", uri.Host)
 	if err != nil {
 		return nil, err
 	}
