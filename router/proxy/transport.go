@@ -86,6 +86,13 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return nil, errNoBackends
 }
 
+func (t *transport) Connect(remoteAddr net.Addr) (net.Conn, error) {
+	backends := t.getBackends()
+	shuffle(backends)
+	conn, _, err := dialTCP(backends)
+	return conn, err
+}
+
 func (t *transport) UpgradeHTTP(req *http.Request) (*http.Response, net.Conn, error) {
 	stickyBackend := t.getStickyBackend(req)
 	backends := t.getOrderedBackends(stickyBackend)
