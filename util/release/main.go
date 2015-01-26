@@ -14,6 +14,7 @@ Usage:
   flynn-release vagrant <url> <checksum> <version> <provider>
   flynn-release amis <version> <ids>
   flynn-release version <version> <commit>
+  flynn-release export <manifest> <dir>
 
 Options:
   -o --output=<dest>              output destination file ("-" for stdout) [default: -]
@@ -35,5 +36,7 @@ Options:
 		amis(args)
 	case args.Bool["version"]:
 		version(args)
+	case args.Bool["export"]:
+		export(args)
 	}
 }
