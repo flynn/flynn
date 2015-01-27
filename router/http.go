@@ -592,11 +592,6 @@ func (s *httpService) forwardAndProxyTCP(w http.ResponseWriter, req *http.Reques
 	// the same as done in the non-TCP path.
 	copyHeader(w.Header(), res.Header)
 
-	if res.StatusCode != 101 {
-		// Upgrade was not successful, not going to reuse this connection.
-		w.Header().Set("Connection", "close")
-	}
-
 	if isSticky && stickyAddr != backend {
 		http.SetCookie(w, s.newStickyCookie(backend))
 	}

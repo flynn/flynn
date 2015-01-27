@@ -554,8 +554,6 @@ func (s *S) TestStickyHTTPRouteWebsocket(c *C) {
 			data, err := ioutil.ReadAll(res.Body)
 			c.Assert(err, IsNil)
 			c.Assert(string(data), Equals, step.backend)
-			// make sure unsuccessful upgrade conn was closed
-			c.Assert(res.Close, Equals, true)
 
 			// reuse the session cookie if present
 			for _, c := range res.Cookies() {
