@@ -176,20 +176,17 @@ func deleteTap(name string) error {
 }
 
 type Tap struct {
-	Name              string
-	LocalIP, RemoteIP net.IP
-	bridge            *Bridge
+	Name   string
+	IP     net.IP
+	bridge *Bridge
 }
 
 func (t *Tap) Close() error {
 	if err := deleteTap(t.Name); err != nil {
 		return err
 	}
-	if t.LocalIP != nil {
-		ipallocator.ReleaseIP(t.bridge.ipNet, t.LocalIP)
-	}
-	if t.RemoteIP != nil {
-		ipallocator.ReleaseIP(t.bridge.ipNet, t.RemoteIP)
+	if t.IP != nil {
+		ipallocator.ReleaseIP(t.bridge.ipNet, t.IP)
 	}
 	return nil
 }
@@ -205,7 +202,7 @@ iface eth0 inet static
 
 func (t *Tap) WriteInterfaceConfig(f io.Writer) error {
 	return ifaceConfig.Execute(f, map[string]string{
-		"Address": t.RemoteIP.String(),
+		"Address": t.IP.String(),
 		"Gateway": t.bridge.IP(),
 	})
 }
@@ -222,13 +219,7 @@ func (t *TapManager) NewTap(uid, gid int) (*Tap, error) {
 	}
 
 	var err error
-	tap.LocalIP, err = ipallocator.RequestIP(t.bridge.ipNet, nil)
-	if err != nil {
-		tap.Close()
-		return nil, err
-	}
-
-	tap.RemoteIP, err = ipallocator.RequestIP(t.bridge.ipNet, nil)
+	tap.IP, err = ipallocator.RequestIP(t.bridge.ipNet, nil)
 	if err != nil {
 		tap.Close()
 		return nil, err
@@ -236,10 +227,6 @@ func (t *TapManager) NewTap(uid, gid int) (*Tap, error) {
 
 	iface, err := net.InterfaceByName(tap.Name)
 	if err != nil {
-		tap.Close()
-		return nil, err
-	}
-	if err := netlink.NetworkLinkAddIp(iface, tap.LocalIP, t.bridge.ipNet); err != nil {
 		tap.Close()
 		return nil, err
 	}

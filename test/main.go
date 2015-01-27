@@ -77,7 +77,7 @@ func main() {
 	if flynnrc == "" {
 		var rootFS string
 		testCluster = cluster.New(args.BootConfig, os.Stdout)
-		rootFS, err = testCluster.BuildFlynn(args.RootFS, "origin/master", false)
+		rootFS, err = testCluster.BuildFlynn(args.RootFS, "origin/master", false, false)
 		if err != nil {
 			testCluster.Shutdown()
 			log.Println("could not build flynn: ", err)

@@ -259,7 +259,7 @@ func (r *Runner) build(b *Build) (err error) {
 		c.Shutdown()
 	}()
 
-	rootFS, err := c.BuildFlynn(r.rootFS, b.Commit, b.Merge)
+	rootFS, err := c.BuildFlynn(r.rootFS, b.Commit, b.Merge, true)
 	defer removeRootFS(rootFS)
 	if err != nil {
 		return fmt.Errorf("could not build flynn: %s", err)
