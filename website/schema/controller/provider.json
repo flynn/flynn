@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/provider#",
+  "title": "Provider",
+  "description": "",
+  "sortIndex": 9,
+  "type": "object",
+  "examples": [
+    "schema/examples/controller/provider_create#",
+    "schema/examples/controller/provider_get#",
+    "schema/examples/controller/provider_list#"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "created_at": {
+      "$ref": "/schema/controller/common#/definitions/created_at"
+    },
+    "updated_at": {
+      "$ref": "/schema/controller/common#/definitions/updated_at"
+    },
+    "name": {
+      "type": "string"
+    },
+    "url": {
+      "type": "string",
+      "format": "uri"
+    }
+  }
+}

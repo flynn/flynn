@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/examples/controller/app_initial_release_get#",
+  "title": "Get initial app release",
+  "description": "",
+  "allOf": [
+    { "$ref": "/schema/examples/base#" },
+    {
+      "type": "object",
+      "properties": {
+        "request": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": ["GET"]
+            }
+          }
+        },
+        "response": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "$ref": "/schema/controller/release#"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

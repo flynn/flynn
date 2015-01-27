@@ -1,0 +1,53 @@
+[
+    {
+        "description": "any type",
+        "schema": {
+            "id": "http://localhost:1234/",
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "any"
+              }
+            },
+            "required": ["data"]
+        },
+        "tests": [
+            {
+                "description": "as object",
+                "data": {
+                  "data": {
+                    "foo": 123
+                  }
+                },
+                "valid": true
+            },
+            {
+                "description": "as array",
+                "data": {
+                  "data": [123, "Hello"]
+                },
+                "valid": true
+            },
+            {
+                "description": "as string",
+                "data": {
+                  "data": "Hello!"
+                },
+                "valid": true
+            },
+            {
+                "description": "as number",
+                "data": {
+                  "data": 123
+                },
+                "valid": true
+            },
+            {
+                "description": "missing",
+                "data": {
+                },
+                "valid": false
+            }
+        ]
+    }
+]

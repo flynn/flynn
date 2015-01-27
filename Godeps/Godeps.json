@@ -62,6 +62,10 @@
 			"Rev": "78d7708fc6ca767a04a26c777cdc618f39a34ac4"
 		},
 		{
+			"ImportPath": "github.com/cupcake/jsonschema",
+			"Rev": "9ed24dff3f2f097c8c35cc8ca31ba550a0397abc"
+		},
+		{
 			"ImportPath": "github.com/dgryski/go-skip32",
 			"Rev": "6cc5a8b574de3ed084314996231c03b5dd21d8c6"
 		},
@@ -278,6 +282,10 @@
 			"ImportPath": "github.com/natefinch/lumberjack",
 			"Comment": "v1.0-12-gd28785c",
 			"Rev": "d28785c2f27cd682d872df46ccd8232843629f54"
+		},
+		{
+			"ImportPath": "github.com/rnd42/go-jsonpointer",
+			"Rev": "0480215403db768c5bf6db30d82908043c58422c"
 		},
 		{
 			"ImportPath": "github.com/technoweenie/grohl",

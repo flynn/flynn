@@ -13,6 +13,9 @@ import (
 
 	cc "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/discoverd/client"
+	g "github.com/flynn/flynn/pkg/examplegenerator"
+	"github.com/flynn/flynn/pkg/httprecorder"
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/router/types"
 )
@@ -33,12 +36,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.SetOutput(conf.logOut)
 
-	client, err = cc.NewClient("http://"+conf.controllerDomain, conf.controllerKey)
+	httpClient := &http.Client{}
+	client, err := cc.NewClientWithHTTP("", conf.controllerKey, httpClient)
 	if err != nil {
 		log.Fatal(err)
 	}
-	client.HTTP.Transport = &roundTripRecorder{roundTripper: &http.Transport{}}
+	recorder := httprecorder.NewWithClient(httpClient)
 
 	e := &generator{
 		conf:        conf,
@@ -46,10 +51,10 @@ func main() {
 		resourceIds: make(map[string]string),
 	}
 
-	providerLog := log.New(os.Stdout, "provider: ", 1)
+	providerLog := log.New(conf.logOut, "provider: ", 1)
 	go e.listenAndServe(providerLog)
 
-	examples := []example{
+	examples := []g.Example{
 		{"key_create", e.createKey},
 		{"key_get", e.getKey},
 		{"key_list", e.listKeys},
@@ -73,6 +78,8 @@ func main() {
 		{"formation_put", e.putFormation},
 		{"formation_get", e.getFormation},
 		{"formation_list", e.listFormations},
+		{"release_create2", e.createRelease},
+		{"deployment_create", e.createDeployment},
 		{"formation_delete", e.deleteFormation},
 		{"job_run", e.runJob},
 		{"job_log", e.getJobLog},
@@ -90,14 +97,9 @@ func main() {
 
 	// TODO: GET /apps/:app_id/jobs/:job_id/log (event-stream)
 
-	res := make(map[string]*compiledRequest)
-	for _, ex := range examples {
-		ex.f()
-		res[ex.name] = compileRequest(getRequests()[0])
-	}
-
 	var out io.Writer
 	if len(os.Args) > 1 {
+		var err error
 		out, err = os.Create(os.Args[1])
 		if err != nil {
 			log.Fatal(err)
@@ -105,12 +107,7 @@ func main() {
 	} else {
 		out = os.Stdout
 	}
-	data, err := json.MarshalIndent(res, "", "\t")
-	if err != nil {
-		log.Fatal(err)
-	}
-	_, err = out.Write(data)
-	if err != nil {
+	if err := g.WriteOutput(recorder, examples, out); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -177,7 +174,7 @@ func (e *generator) createApp() {
 }
 
 func (e *generator) getInitialAppRelease() {
-	appRelease, err := client.GetAppRelease("gitreceive")
+	appRelease, err := e.client.GetAppRelease("gitreceive")
 	if err == nil {
 		e.resourceIds["SLUGRUNNER_IMAGE_URI"] = appRelease.Processes["app"].Env["SLUGRUNNER_IMAGE_URI"]
 	}
@@ -348,9 +345,13 @@ func (e *generator) createProvider() {
 	t := time.Now().UnixNano()
 	provider := &ct.Provider{
 		Name: fmt.Sprintf("example-provider-%d", t),
-		URL:  fmt.Sprintf("http://%s:%s/providers/%d", e.conf.ourAddr, e.conf.ourPort, t),
+		URL:  fmt.Sprintf("http://example-provider-%d.discoverd:%s/providers/%d", t, e.conf.ourPort, t),
 	}
 	err := e.client.CreateProvider(provider)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = discoverd.AddServiceAndRegister(provider.Name, ":"+e.conf.ourPort)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -366,8 +367,10 @@ func (e *generator) listProviders() {
 }
 
 func (e *generator) createProviderResource() {
+	resourceConfig := json.RawMessage(`{}`)
 	resourceReq := &ct.ResourceReq{
 		ProviderID: e.resourceIds["provider"],
+		Config:     &resourceConfig,
 	}
 	resource, err := e.client.ProvisionResource(resourceReq)
 	if err != nil {
@@ -384,4 +387,8 @@ func (e *generator) getProviderResource() {
 
 func (e *generator) listProviderResources() {
 	e.client.ResourceList(e.resourceIds["provider"])
+}
+
+func (e *generator) createDeployment() {
+	e.client.CreateDeployment(e.resourceIds["app"], e.resourceIds["release"])
 }

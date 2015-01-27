@@ -79,7 +79,7 @@ GEM
       uber (~> 0.0.4)
     http_parser.rb (0.6.0)
     i18n (0.6.11)
-    json (1.8.1)
+    json-pointer (0.0.1)
     kgio (2.9.2)
     kramdown (1.5.0)
     listen (2.8.4)
@@ -147,7 +147,7 @@ GEM
     rb-fsevent (0.9.4)
     rb-inotify (0.9.5)
       ffi (>= 0.5.0)
-    redcarpet (3.2.2)
+    redcarpet (3.1.2)
     sass (3.4.9)
     sprockets (2.12.3)
       hike (~> 1.2)
@@ -184,6 +184,7 @@ DEPENDENCIES
   builder
   cupcake-icons!
   fly!
+  json-pointer
   marbles-js!
   middleman
   middleman-blog
@@ -193,5 +194,5 @@ DEPENDENCIES
   pygments.rb
   rake
   react-jsx-sprockets!
-  redcarpet
+  redcarpet (= 3.1.2)
   unicorn

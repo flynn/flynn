@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/artifact#",
+  "title": "Artifact",
+  "description": "An artifact is an immutable reference to a image used by a job.",
+  "sortIndex": 1,
+  "type": "object",
+  "examples": [
+    "schema/examples/controller/artifact_create#",
+    "schema/examples/controller/artifact_list#"
+  ],
+  "additionalProperties": false,
+  "required": ["type", "uri"],
+  "properties": {
+    "id": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "type": {
+      "description": "artifact type",
+      "type": "string",
+      "enum": ["docker"]
+    },
+    "uri": {
+      "description": "URI used to retrieve the artifact",
+      "format": "uri",
+      "type": "string"
+    },
+    "created_at": {
+      "$ref": "/schema/controller/common#/definitions/created_at"
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/router/route#",
+  "title": "Route",
+  "description": "",
+  "type": "object",
+  "examples": [
+    "schema/examples/router/route_create#",
+    "schema/examples/router/route_set#",
+    "schema/examples/router/route_get#",
+    "schema/examples/router/route_list#",
+    "schema/examples/router/route_delete#"
+  ],
+  "sortIndex": 0,
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "/schema/common#/definitions/id"
+    },
+    "parent_ref": {
+      "$ref": "/schema/common#/definitions/id"
+    },
+    "type": {
+      "type": "string"
+    },
+    "config": {
+      "$ref": "/schema/common#/definitions/config"
+    },
+    "created_at": {
+      "$ref": "/schema/common#/definitions/created_at"
+    },
+    "updated_at": {
+      "$ref": "/schema/common#/definitions/updated_at"
+    }
+  }
+}

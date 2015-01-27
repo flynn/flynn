@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/new_job#",
+  "title": "New Job",
+  "description": "A new job describes a desired process configuration.",
+  "sortIndex": 4,
+  "type": "object",
+  "examples": [
+    "schema/examples/controller/job_run#"
+  ],
+  "required": ["release"],
+  "additionalProperties": false,
+  "properties": {
+    "release": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "cmd": {
+      "$ref": "/schema/controller/common#/definitions/cmd"
+    },
+    "env": {
+      "$ref": "/schema/controller/common#/definitions/env"
+    },
+    "meta": {
+      "$ref": "/schema/controller/common#/definitions/meta"
+    },
+    "tty": {
+      "description": "initialize a tty session",
+      "type": "boolean"
+    },
+    "tty_columns": {
+      "description": "number of columns in tty",
+      "type": "integer"
+    },
+    "tty_lines": {
+      "description": "number of lines/rows in tty",
+      "type": "integer"
+    }
+  }
+}

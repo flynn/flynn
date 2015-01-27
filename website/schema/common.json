@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/common#",
+  "definitions": {
+    "id": {
+      "description": "unique identifier",
+      "format": "uuid",
+      "type": "string"
+    },
+    "created_at": {
+      "description": "object creation timestamp",
+      "format": "date-time",
+      "type": "string"
+    },
+    "updated_at": {
+      "description": "object last updated timestamp",
+      "format": "date-time",
+      "type": "string"
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}

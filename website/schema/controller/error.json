@@ -1,0 +1,9 @@
+{
+  "id": "https://flynn.io/schema/controller/error#",
+  "allOf": [
+    {
+      "sortIndex": 14
+    },
+    { "$ref": "https://flynn.io/schema/error#" }
+  ]
+}

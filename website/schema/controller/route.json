@@ -1,0 +1,15 @@
+{
+  "id": "https://flynn.io/schema/controller/route#",
+  "allOf": [
+    {
+      "sortIndex": 13,
+      "examples": [
+        "schema/examples/controller/route_create#",
+        "schema/examples/controller/route_get#",
+        "schema/examples/controller/route_list#",
+        "schema/examples/controller/route_delete#"
+      ]
+    },
+    { "$ref": "https://flynn.io/schema/router/route#" }
+  ]
+}

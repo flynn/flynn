@@ -1,0 +1,3 @@
+include_rules
+: |> !go |> flynn-controller-examples
+: flynn-controller-examples |> docker build -t flynn/controller-examples . |>

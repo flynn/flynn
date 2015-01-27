@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/examples/controller/artifact_create#",
+  "title": "Create artifact",
+  "description": "",
+  "allOf": [
+    { "$ref": "/schema/examples/base#" },
+    {
+      "type": "object",
+      "properties": {
+        "request": {
+          "type": "object",
+          "required": ["body"],
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": ["POST"]
+            },
+            "body": {
+              "$ref": "/schema/controller/artifact#"
+            }
+          }
+        },
+        "response": {
+          "type": "object",
+          "required": ["body"],
+          "properties": {
+            "body": {
+              "$ref": "/schema/controller/artifact#"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

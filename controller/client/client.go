@@ -44,6 +44,10 @@ func newClient(key string, url string, http *http.Client) *Client {
 // NewClient creates a new Client pointing at uri and using key for
 // authentication.
 func NewClient(uri, key string) (*Client, error) {
+	return NewClientWithHTTP(uri, key, http.DefaultClient)
+}
+
+func NewClientWithHTTP(uri, key string, httpClient *http.Client) (*Client, error) {
 	if uri == "" {
 		uri = "http://flynn-controller.discoverd"
 	}
@@ -51,7 +55,7 @@ func NewClient(uri, key string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newClient(key, u.String(), http.DefaultClient), nil
+	return newClient(key, u.String(), httpClient), nil
 }
 
 // NewClientWithPin acts like NewClient, but specifies a TLS pin.

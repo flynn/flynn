@@ -32,6 +32,12 @@ end
 use Rack::Deflater
 use Rack::TryStatic, :root => "build", :urls => %w[/], :try => ['.html', 'index.html', '/index.html']
 
+# Serve JSON schemas
+lib = File.expand_path('../lib', __FILE__)
+$LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
+require 'schema_server'
+use SchemaServer
+
 # Run your own Rack app here or use this one to serve 404 messages:
 not_found_path = File.expand_path("../build/404.html", __FILE__)
 not_found_body = File.exists?(not_found_path) ? File.read(not_found_path) : "Not Found"
