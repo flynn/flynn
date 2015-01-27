@@ -133,7 +133,7 @@ type Provider struct {
 
 type Resource struct {
 	ID         string            `json:"id,omitempty"`
-	ProviderID string            `json:"provider_id,omitempty"`
+	ProviderID string            `json:"provider,omitempty"`
 	ExternalID string            `json:"external_id,omitempty"`
 	Env        map[string]string `json:"env,omitempty"`
 	Apps       []string          `json:"apps,omitempty"`

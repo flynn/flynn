@@ -41,7 +41,7 @@ Dashboard.Views.AppResources = React.createClass({
 						{this.state.resources.map(function (resource) {
 							return (
 								<li key={resource.id}>
-									{resource.provider_id}
+									{resource.provider}
 								</li>
 							);
 						}, this)}
