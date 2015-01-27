@@ -258,7 +258,7 @@ func (i *Instance) dialSSH(stderr io.Writer) error {
 
 var sshAttempts = attempt.Strategy{
 	Min:   5,
-	Total: 5 * time.Minute,
+	Total: 30 * time.Second,
 	Delay: time.Second,
 }
 
