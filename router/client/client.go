@@ -62,16 +62,6 @@ type Client interface {
 	ListRoutes(parentRef string) ([]*router.Route, error)
 }
 
-// HTTPError is returned when the server returns a status code that is different
-// from 200, which is normally caused by an error.
-type HTTPError struct {
-	Response *http.Response
-}
-
-func (e HTTPError) Error() string {
-	return fmt.Sprintf("router: expected http status 200, got %d", e.Response.StatusCode)
-}
-
 func (c *client) CreateRoute(r *router.Route) error {
 	return c.Post("/routes", r, r)
 }
