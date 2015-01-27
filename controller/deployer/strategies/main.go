@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-type PerformFunc func(*controller.Client, *ct.Deployment, chan<- ct.DeploymentEvent) error
+type PerformFunc func(log15.Logger, *controller.Client, *ct.Deployment, chan<- ct.DeploymentEvent) error
 
 var performFuncs = map[string]PerformFunc{
 	"all-at-once": allAtOnce,
