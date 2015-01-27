@@ -40,10 +40,23 @@ func (s *BounceSuite) TestHostUpDown(t *c.C) {
 	t.Assert(err, c.IsNil)
 }
 
-func (s *BounceSuite) TestBounceHostProcess(t *c.C) {
-	// TODO
-}
-
 func (s *BounceSuite) TestBounceHostVM(t *c.C) {
-	// TODO
+	// get host event stream to watch
+	ch := make(chan *host.HostEvent)
+	stream, err := s.clusterClient(t).StreamHostEvents(ch)
+	t.Assert(err, c.IsNil)
+	defer stream.Close()
+
+	// request a new host; use stream to await its availability
+	instance, err := testCluster.AddHost(ch, false)
+	t.Assert(err, c.IsNil)
+
+	// bounce that host
+	// this includes VM reboot and then relaunching of the host daemon
+	err = testCluster.BounceHost(instance)
+	t.Assert(err, c.IsNil)
+
+	// destroy that host to clean up
+	err = testCluster.RemoveHost(instance)
+	t.Assert(err, c.IsNil)
 }

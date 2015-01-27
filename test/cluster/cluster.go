@@ -241,6 +241,26 @@ loop:
 	return nil
 }
 
+func (c *Cluster) BounceHost(id string) error {
+	inst, err := c.Instances.Get(id)
+	if err != nil {
+		return err
+	}
+
+	// send reboot to the host, and wait for new ssh
+	c.log("bouncing host", id)
+	if err := inst.Reboot(); err != nil {
+		return err
+	}
+
+	// restart the flynn-host
+	c.log("restarting flynn-host process", id)
+	if err := c.startHostProcess(inst); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (c *Cluster) Size() int {
 	return len(c.Instances)
 }
