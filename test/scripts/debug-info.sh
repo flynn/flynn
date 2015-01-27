@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # This script is run by the CI runner to collect debugging information
-# which will be printed if any tests fail. It currently runs no code.
+# which will be printed if any tests fail.
 
 memwatch() {
   interests=("$@")
@@ -24,3 +24,23 @@ memwatch() {
     sleep 1
   done
 }
+
+netdebug() {
+  while true; do
+    echo "===> $(date +%H:%M:%S.%3N)"
+    trace ifconfig eth0
+    trace route -n
+    trace arp -a
+    echo "==================="
+    echo
+    sleep 5
+  done
+}
+
+trace() {
+    local cmd=$@
+    echo "+ ${cmd}"
+    $cmd
+}
+
+netdebug
