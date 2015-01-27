@@ -208,6 +208,7 @@ func runDaemon(args *docopt.Args) {
 		bindAddr:     bindAddr,
 		backend:      backend,
 		state:        state,
+		vman:         vman,
 		ports:        portAlloc,
 	}
 

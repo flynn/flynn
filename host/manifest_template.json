@@ -4,7 +4,7 @@
     "image": "$image_url_prefix/etcd?id=$image_id[etcd]",
     "expose_env": ["ETCD_INITIAL_CLUSTER", "ETCD_INITIAL_CLUSTER_STATE", "ETCD_NAME", "ETCD_DISCOVERY", "ETCD_PROXY"],
     "args": [
-      "-data-dir={{ .Volume \"/data\" }}",
+      "-data-dir={{ .Volume \"flynn-etcd-data\" \"/data\" }}",
       "-advertise-client-urls=http://{{ .ExternalIP }}:{{ .TCPPort 0 }}",
       "-listen-client-urls=http://0.0.0.0:{{ .TCPPort 0 }}",
       "-initial-advertise-peer-urls=http://{{ .ExternalIP }}:{{ .TCPPort 1 }}",

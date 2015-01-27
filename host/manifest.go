@@ -13,6 +13,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 	"github.com/flynn/flynn/host/ports"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -38,7 +39,7 @@ type ManifestData struct {
 	BridgeIP    string
 	Nameservers string
 	TCPPorts    []int
-	Volumes     map[string]struct{}
+	Volumes     map[string]string // maps 'mntpath'->'volName'
 	Env         map[string]string
 	Services    map[string]*ManifestData
 
@@ -64,12 +65,12 @@ func (m *ManifestData) TCPPort(id int) (int, error) {
 	return int(port), nil
 }
 
-func (m *ManifestData) Volume(v string) string {
+func (m *ManifestData) Volume(volName string, mntPath string) string {
 	if m.Volumes == nil {
-		m.Volumes = make(map[string]struct{})
+		m.Volumes = make(map[string]string)
 	}
-	m.Volumes[v] = struct{}{}
-	return v
+	m.Volumes[mntPath] = volName
+	return mntPath
 }
 
 type manifestRunner struct {
@@ -78,6 +79,7 @@ type manifestRunner struct {
 	bindAddr     string
 	backend      Backend
 	state        *State
+	vman         *volume.Manager
 	ports        map[string]*ports.Allocator
 }
 
@@ -201,6 +203,19 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 			service.Image += "?id=" + service.ImageID
 		}
 
+		// prepare named volumes
+		volumeBindings := make([]host.VolumeBinding, 0, len(data.Volumes))
+		for mntPath, volName := range data.Volumes {
+			vol, err := m.vman.CreateOrGetNamedVolume(volName, "")
+			if err != nil {
+				return nil, err
+			}
+			volumeBindings = append(volumeBindings, host.VolumeBinding{
+				Target:   mntPath,
+				VolumeID: vol.Info().ID,
+			})
+		}
+
 		job := &host.Job{
 			ID: cluster.RandomJobID("flynn-" + service.ID + "-"),
 			Artifact: host.Artifact{
@@ -212,6 +227,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 				Cmd:         args,
 				Env:         data.Env,
 				HostNetwork: true,
+				Volumes:     volumeBindings,
 			},
 		}
 		if job.Config.Env == nil {
