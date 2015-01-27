@@ -500,6 +500,19 @@ func lookupUser(name string) (int, int, error) {
 }
 
 func (c *Cluster) DumpLogs(w io.Writer) {
+	done := make(chan struct{})
+	go func() {
+		c.dumpLogs(w)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(60 * time.Second):
+		fmt.Fprintln(w, "failed to dump logs within 60 seconds, skipping")
+	}
+}
+
+func (c *Cluster) dumpLogs(w io.Writer) {
 	streams := &Streams{Stdout: w, Stderr: w}
 	run := func(inst *Instance, cmd string) error {
 		fmt.Fprint(w, "\n\n***** ***** ***** ***** ***** ***** ***** ***** ***** *****\n\n")
