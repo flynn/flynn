@@ -64,7 +64,7 @@ func (m *Manager) Volumes() map[string]Volume {
 func (m *Manager) NewVolume() (Volume, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	return managerProviderProxy{m.defaultProvider, m}.NewVolume()
+	return m.newVolumeFromProviderLocked("")
 }
 
 /*
@@ -74,6 +74,13 @@ func (m *Manager) NewVolume() (Volume, error) {
 func (m *Manager) NewVolumeFromProvider(providerID string) (Volume, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+	return m.newVolumeFromProviderLocked(providerID)
+}
+
+func (m *Manager) newVolumeFromProviderLocked(providerID string) (Volume, error) {
+	if providerID == "" {
+		return managerProviderProxy{m.defaultProvider, m}.NewVolume()
+	}
 	if p, ok := m.providers[providerID]; ok {
 		return managerProviderProxy{p, m}.NewVolume()
 	} else {
