@@ -1,0 +1,118 @@
+[
+    {
+        "description": "nested resolution scopes",
+        "schema": {
+            "id": "http://localhost:1234/",
+            "type": "object",
+            "properties": {
+              "level1": {
+                "id": "level1",
+                "type": "object",
+                "properties": {
+                  "level2": {
+                    "id": "level2",
+                    "type": "object",
+                    "properties": {
+                      "level3": {
+                        "id": "folder",
+                        "type": "object",
+                        "properties": {
+                          "level4": {
+                            "$ref": "folderInteger.json"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+        },
+        "tests": [
+            {
+                "description": "changed scope ref valid",
+                "data": {
+                  "level1": {
+                    "level2": {
+                      "level3": {
+                        "level4": 4
+                      }
+                    }
+                  }
+                },
+                "valid": true
+            },
+            {
+                "description": "changed scope ref invalid",
+                "data": {
+                  "level1": {
+                    "level2": {
+                      "level3": {
+                        "level4": "d"
+                      }
+                    }
+                  }
+                },
+                "valid": false
+            }
+        ]
+    },
+    {
+        "description": "nested resolution scopes with absolutes",
+        "schema": {
+            "id": "http://localhost:1234/",
+            "type": "object",
+            "properties": {
+              "level1": {
+                "id": "level1",
+                "type": "object",
+                "properties": {
+                  "level2": {
+                    "id": "http://example.org/level2",
+                    "type": "object",
+                    "properties": {
+                      "level3": {
+                        "id": "http://localhost:1234/folder",
+                        "type": "object",
+                        "properties": {
+                          "level4": {
+                            "$ref": "folderInteger.json"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+        },
+        "tests": [
+            {
+                "description": "changed scope ref valid",
+                "data": {
+                  "level1": {
+                    "level2": {
+                      "level3": {
+                        "level4": 4
+                      }
+                    }
+                  }
+                },
+                "valid": true
+            },
+            {
+                "description": "changed scope ref invalid",
+                "data": {
+                  "level1": {
+                    "level2": {
+                      "level3": {
+                        "level4": "d"
+                      }
+                    }
+                  }
+                },
+                "valid": false
+            }
+        ]
+    }
+]
