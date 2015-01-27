@@ -29,6 +29,9 @@ type CompiledRequest struct {
 func NewWithClient(client *http.Client) *Recorder {
 	r := &Recorder{Client: client}
 	r.originalTransport = client.Transport
+	if r.originalTransport == nil {
+		r.originalTransport = &http.Transport{}
+	}
 	client.Transport = &roundTripRecorder{RoundTripper: r.originalTransport}
 	return r
 }
