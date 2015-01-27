@@ -24,6 +24,9 @@ type Manager struct {
 
 	// `map[volume.Id]volume`
 	volumes map[string]Volume
+
+	// `map[wellKnownName]volume.Id`
+	namedVolumes map[string]string
 }
 
 var NoSuchProvider = errors.New("no such provider")
@@ -34,6 +37,7 @@ func NewManager(p Provider) *Manager {
 		defaultProvider: p,
 		providers:       map[string]Provider{"default": p},
 		volumes:         map[string]Volume{},
+		namedVolumes:    map[string]string{},
 	}
 }
 
@@ -110,4 +114,23 @@ func (p managerProviderProxy) NewVolume() (Volume, error) {
 	}
 	p.m.volumes[v.Info().ID] = v
 	return v, err
+}
+
+/*
+	Gets a reference to a volume by name if that exists; if no volume is so named,
+	it is created using the named provider (the zero string can be used to invoke
+	the default provider).
+*/
+func (m *Manager) CreateOrGetNamedVolume(name string, providerID string) (Volume, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	if v, ok := m.namedVolumes[name]; ok {
+		return m.volumes[v], nil
+	}
+	v, err := m.newVolumeFromProviderLocked(providerID)
+	if err != nil {
+		return nil, err
+	}
+	m.namedVolumes[name] = v.Info().ID
+	return v, nil
 }
