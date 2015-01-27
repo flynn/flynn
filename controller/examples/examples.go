@@ -14,6 +14,8 @@ import (
 	cc "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
+	g "github.com/flynn/flynn/pkg/examplegenerator"
+	"github.com/flynn/flynn/pkg/httprecorder"
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/router/types"
 )
@@ -36,11 +38,12 @@ func main() {
 	}
 	log.SetOutput(conf.logOut)
 
-	client, err = cc.NewClient("", conf.controllerKey)
+	httpClient := &http.Client{}
+	client, err := cc.NewClientWithHTTP("", conf.controllerKey, httpClient)
 	if err != nil {
 		log.Fatal(err)
 	}
-	client.HTTP.Transport = &roundTripRecorder{roundTripper: &http.Transport{}}
+	recorder := httprecorder.NewWithClient(httpClient)
 
 	e := &generator{
 		conf:        conf,
@@ -51,7 +54,7 @@ func main() {
 	providerLog := log.New(conf.logOut, "provider: ", 1)
 	go e.listenAndServe(providerLog)
 
-	examples := []example{
+	examples := []g.Example{
 		{"key_create", e.createKey},
 		{"key_get", e.getKey},
 		{"key_list", e.listKeys},
@@ -94,14 +97,9 @@ func main() {
 
 	// TODO: GET /apps/:app_id/jobs/:job_id/log (event-stream)
 
-	res := make(map[string]*compiledRequest)
-	for _, ex := range examples {
-		ex.f()
-		res[ex.name] = compileRequest(getRequests()[0])
-	}
-
 	var out io.Writer
 	if len(os.Args) > 1 {
+		var err error
 		out, err = os.Create(os.Args[1])
 		if err != nil {
 			log.Fatal(err)
@@ -109,12 +107,7 @@ func main() {
 	} else {
 		out = os.Stdout
 	}
-	data, err := json.MarshalIndent(res, "", "\t")
-	if err != nil {
-		log.Fatal(err)
-	}
-	_, err = out.Write(data)
-	if err != nil {
+	if err := g.WriteOutput(recorder, examples, out); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -181,7 +174,7 @@ func (e *generator) createApp() {
 }
 
 func (e *generator) getInitialAppRelease() {
-	appRelease, err := client.GetAppRelease("gitreceive")
+	appRelease, err := e.client.GetAppRelease("gitreceive")
 	if err == nil {
 		e.resourceIds["SLUGRUNNER_IMAGE_URI"] = appRelease.Processes["app"].Env["SLUGRUNNER_IMAGE_URI"]
 	}

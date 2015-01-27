@@ -55,7 +55,7 @@ func NewClientWithHTTP(uri, key string, httpClient *http.Client) (*Client, error
 	if err != nil {
 		return nil, err
 	}
-	return newClient(key, u.String(), http.DefaultClient), nil
+	return newClient(key, u.String(), httpClient), nil
 }
 
 // NewClientWithPin acts like NewClient, but specifies a TLS pin.
