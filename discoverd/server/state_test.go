@@ -397,7 +397,7 @@ func (StateSuite) TestSubscribeInitial(c *C) {
 		state := NewState()
 		state.Subscribe("a", true, t.kinds, events)
 
-		if t.kinds&discoverd.EventKindCurrent != 0 {
+		if t.kinds.Any(discoverd.EventKindCurrent) {
 			assertEvent(c, events, "a", discoverd.EventKindCurrent, nil)
 		}
 		assertNoEvent(c, events)
@@ -411,7 +411,7 @@ func (StateSuite) TestSubscribeInitial(c *C) {
 		state.AddInstance("a", two)
 		events = make(chan *discoverd.Event, 4)
 		state.Subscribe("a", true, t.kinds, events)
-		if t.kinds&discoverd.EventKindUp != 0 {
+		if t.kinds.Any(discoverd.EventKindUp) {
 			up := receiveSomeEvents(c, events, 2)
 			assertEventEqual(c, up[one.ID][0], &discoverd.Event{
 				Service:  "a",
@@ -424,10 +424,10 @@ func (StateSuite) TestSubscribeInitial(c *C) {
 				Instance: two,
 			})
 		}
-		if t.kinds&discoverd.EventKindLeader != 0 {
+		if t.kinds.Any(discoverd.EventKindLeader) {
 			assertEvent(c, events, "a", discoverd.EventKindLeader, one)
 		}
-		if t.kinds&discoverd.EventKindCurrent != 0 {
+		if t.kinds.Any(discoverd.EventKindCurrent) {
 			assertEvent(c, events, "a", discoverd.EventKindCurrent, nil)
 		}
 		assertNoEvent(c, events)

@@ -351,7 +351,7 @@ func (s *State) Subscribe(service string, sendCurrent bool, kinds discoverd.Even
 	// locked.
 	var current []*discoverd.Instance
 	var currentLeader *discoverd.Instance
-	getCurrent := sendCurrent && kinds&(discoverd.EventKindUp|discoverd.EventKindLeader) != 0
+	getCurrent := sendCurrent && kinds.Any(discoverd.EventKindUp, discoverd.EventKindLeader)
 	if getCurrent {
 		s.mtx.RLock()
 		current = s.getLocked(service)
@@ -380,7 +380,7 @@ func (s *State) Subscribe(service string, sendCurrent bool, kinds discoverd.Even
 	}
 	sub.el = l.PushBack(sub)
 
-	if kinds&discoverd.EventKindUp != 0 {
+	if kinds.Any(discoverd.EventKindUp) {
 		for _, inst := range current {
 			ch <- &discoverd.Event{
 				Service:  service,
@@ -397,7 +397,7 @@ func (s *State) Subscribe(service string, sendCurrent bool, kinds discoverd.Even
 			Instance: currentLeader,
 		}
 	}
-	if sendCurrent && kinds&discoverd.EventKindCurrent != 0 {
+	if sendCurrent && kinds.Any(discoverd.EventKindCurrent) {
 		ch <- &discoverd.Event{
 			Service: service,
 			Kind:    discoverd.EventKindCurrent,

@@ -37,6 +37,15 @@ func (k EventKind) String() string {
 	return eventKindStrings[EventKindUnknown]
 }
 
+func (k EventKind) Any(kinds ...EventKind) bool {
+	for _, other := range kinds {
+		if k&other != 0 {
+			return true
+		}
+	}
+	return false
+}
+
 var eventKindMarshalJSON = make(map[EventKind][]byte, len(eventKindStrings))
 var eventKindUnmarshalJSON = make(map[string]EventKind, len(eventKindStrings))
 
