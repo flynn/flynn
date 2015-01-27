@@ -10,7 +10,6 @@ func main() {
 Usage:
   flynn-release status <commit>
   flynn-release manifest [--output=<dest>] [--image-url-prefix=<prefix>] [--id-file=<file>] <template>
-  flynn-release upload <manifest> [<tag>]
   flynn-release vagrant <url> <checksum> <version> <provider>
   flynn-release amis <version> <ids>
   flynn-release version <version> <commit>
@@ -28,8 +27,6 @@ Options:
 		status(args)
 	case args.Bool["manifest"]:
 		manifest(args)
-	case args.Bool["upload"]:
-		upload(args)
 	case args.Bool["vagrant"]:
 		vagrant(args)
 	case args.Bool["amis"]:
