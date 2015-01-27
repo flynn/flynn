@@ -73,6 +73,8 @@ func main() {
 		{"formation_put", e.putFormation},
 		{"formation_get", e.getFormation},
 		{"formation_list", e.listFormations},
+		{"release_create2", e.createRelease},
+		{"deployment_create", e.createDeployment},
 		{"formation_delete", e.deleteFormation},
 		{"job_run", e.runJob},
 		{"job_log", e.getJobLog},
@@ -384,4 +386,8 @@ func (e *generator) getProviderResource() {
 
 func (e *generator) listProviderResources() {
 	e.client.ResourceList(e.resourceIds["provider"])
+}
+
+func (e *generator) createDeployment() {
+	e.client.CreateDeployment(e.resourceIds["app"], e.resourceIds["release"])
 }
