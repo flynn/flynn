@@ -62,7 +62,7 @@ func (v *VMManager) NewInstance(c *VMConfig) (*Instance, error) {
 	if err != nil {
 		return nil, err
 	}
-	inst.IP = inst.tap.RemoteIP.String()
+	inst.IP = inst.tap.IP.String()
 	return inst, nil
 }
 
