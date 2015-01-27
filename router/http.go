@@ -431,6 +431,11 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	req.Header.Del(hdrUseStickySessions) // delete this no matter what
 
+	// A proxy or gateway MUST parse a received Connection header field before a
+	// message is forwarded: https://tools.ietf.org/html/rfc7230#section-6.1
+	reqConnHdrOpts := parseConnHeader(req.Header.Get("Connection"))
+	isRequestConnUpgrade := isConnUpgrade(reqConnHdrOpts)
+
 	// Most of this is borrowed from httputil.ReverseProxy
 	outreq := &http.Request{}
 	*outreq = *req // includes shallow copies of maps, but okay
@@ -445,27 +450,36 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	// TODO: Proxy HTTP CONNECT? (example: Go RPC over HTTP)
 
+	// Remove hop-by-hop headers to the backend.  This is modifying the same
+	// underlying map from req (shallow copied above) so we only copy it if
+	// necessary.
+	outreq.Header = make(http.Header, len(req.Header))
+	copyHeader(outreq.Header, req.Header)
+	for _, h := range alwaysHopHeaders {
+		outreq.Header.Del(h)
+	}
+
+	// remove the Upgrade header if HTTP < 1.1 or if Connection header didn't
+	// contain "upgrade": https://tools.ietf.org/html/rfc7230#section-6.7
+	if outreq.Header.Get("Upgrade") != "" && (!req.ProtoAtLeast(1, 1) || !isRequestConnUpgrade) {
+		outreq.Header.Del("Upgrade")
+	}
+
 	// Directly bridge `Connection: Upgrade` requests
-	if strings.ToLower(outreq.Header.Get("Connection")) == "upgrade" {
+	if isRequestConnUpgrade {
 		s.forwardAndProxyTCP(w, outreq, addrs, stickyAddr, isSticky)
 		return
 	}
 
-	// Remove hop-by-hop headers to the backend.  Especially
-	// important is "Connection" because we want a persistent
-	// connection, regardless of what the client sent to us.  This
-	// is modifying the same underlying map from req (shallow
-	// copied above) so we only copy it if necessary.
-	copiedHeaders := false
-	for _, h := range hopHeaders {
-		if outreq.Header.Get(h) != "" {
-			if !copiedHeaders {
-				outreq.Header = make(http.Header)
-				copyHeader(outreq.Header, req.Header)
-				copiedHeaders = true
-			}
-			outreq.Header.Del(h)
-		}
+	// A proxy or gateway MUST parse a received Connection header field before a
+	// message is forwarded and, for each connection-option in this field, remove
+	// any header field(s) from the message with the same name as the
+	// connection-option, and then remove the Connection header field itself (or
+	// replace it with the intermediary's own connection options for the
+	// forwarded message): https://tools.ietf.org/html/rfc7230#section-6.1
+	outreq.Header.Del("Connection")
+	for _, opt := range reqConnHdrOpts {
+		outreq.Header.Del(opt)
 	}
 
 	var (
@@ -503,8 +517,21 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		http.SetCookie(w, s.newStickyCookie(backend))
 	}
 
-	for _, h := range hopHeaders {
+	// A proxy or gateway MUST parse a received Connection header field before a
+	// message is forwarded: https://tools.ietf.org/html/rfc7230#section-6.1
+	respConnHdrOpts := parseConnHeader(res.Header.Get("Connection"))
+	res.Header.Del("Connection")
+	for _, h := range alwaysHopHeaders {
 		res.Header.Del(h)
+	}
+	// remove hop-by-hop headers as specified in connection options
+	for _, opt := range respConnHdrOpts {
+		res.Header.Del(opt)
+	}
+	// remove the Upgrade header if HTTP < 1.1 or if Connection header didn't
+	// contain "upgrade": https://tools.ietf.org/html/rfc7230#section-6.7
+	if res.Header.Get("Upgrade") != "" && (!req.ProtoAtLeast(1, 1) || !isConnUpgrade(respConnHdrOpts)) {
+		res.Header.Del("Upgrade")
 	}
 
 	copyHeader(w.Header(), res.Header)
@@ -588,14 +615,17 @@ func (s *httpService) forwardAndProxyTCP(w http.ResponseWriter, req *http.Reques
 	}
 	defer res.Body.Close()
 
+	respConnHdrOpts := parseConnHeader(res.Header.Get("Connection"))
+	for _, h := range alwaysHopHeaders {
+		res.Header.Del(h)
+	}
+	if res.Header.Get("Upgrade") != "" && !isConnUpgrade(respConnHdrOpts) {
+		res.Header.Del("Upgrade")
+	}
+
 	// Copy the response headers and body over to the downstream ResponseWriter,
 	// the same as done in the non-TCP path.
 	copyHeader(w.Header(), res.Header)
-
-	if res.StatusCode != 101 {
-		// Upgrade was not successful, not going to reuse this connection.
-		w.Header().Set("Connection", "close")
-	}
 
 	if isSticky && stickyAddr != backend {
 		http.SetCookie(w, s.newStickyCookie(backend))
@@ -639,17 +669,33 @@ func copyHeader(dst, src http.Header) {
 	}
 }
 
-// Hop-by-hop headers. These are removed when sent to the backend.
-// http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html
-var hopHeaders = []string{
-	"Connection",
-	"Keep-Alive",
-	"Proxy-Authenticate",
-	"Proxy-Authorization",
+func isConnUpgrade(connOpts []string) bool {
+	for _, opt := range connOpts {
+		if opt == "upgrade" {
+			return true
+		}
+	}
+	return false
+}
+
+// Hop-by-hop headers. These are removed when sent to the backend (or forwarded
+// to the client) because they only apply to a single connection.
+var alwaysHopHeaders = []string{
 	"Te", // canonicalized version of "TE"
 	"Trailers",
 	"Transfer-Encoding",
-	"Upgrade",
+}
+
+func parseConnHeader(value string) []string {
+	splitOpts := strings.Split(value, ",")
+	headerOpts := make([]string, 0, len(splitOpts))
+	for _, opt := range splitOpts {
+		// remove empty values, trim space
+		if opt = strings.ToLower(strings.TrimSpace(opt)); opt != "" {
+			headerOpts = append(headerOpts, opt)
+		}
+	}
+	return headerOpts
 }
 
 type writeCloser interface {

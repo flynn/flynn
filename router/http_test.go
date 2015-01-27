@@ -339,6 +339,177 @@ func (s *S) TestHTTPHeadersFromClient(c *C) {
 	c.Assert(res.StatusCode, Equals, 200)
 }
 
+func (s *S) TestHTTPProxyHeadersFromClient(c *C) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		c.Assert(req.Header.Get("Proxy-Authenticate"), Equals, "fake")
+		c.Assert(req.Header.Get("Proxy-Authorization"), Equals, "not-empty")
+	})
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	l := newHTTPListener(c)
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+
+	tests := []struct {
+		upgrade bool
+	}{
+		{upgrade: false}, // regular path
+		{upgrade: true},  // tcp/websocket path
+	}
+	for _, test := range tests {
+		req := newReq("http://"+l.Addr, "example.com")
+		req.Header.Set("Proxy-Authenticate", "fake")
+		req.Header.Set("Proxy-Authorization", "not-empty")
+		if test.upgrade {
+			req.Header.Set("Connection", "upgrade")
+		}
+		res, err := httpClient.Do(req)
+		c.Assert(err, IsNil)
+		defer res.Body.Close()
+		c.Assert(res.StatusCode, Equals, 200)
+	}
+}
+
+func (s *S) TestConnectionCloseHeaderFromClient(c *C) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		// Connection: close header should be stripped by the reverse proxy so it
+		// always does keep-alive with backends.
+		c.Assert(req.Close, Equals, false)
+	})
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	l := newHTTPListener(c)
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+
+	req := newReq("http://"+l.Addr, "example.com")
+	req.Header.Set("Connection", "close")
+	res, err := httpClient.Do(req)
+	c.Assert(err, IsNil)
+	defer res.Body.Close()
+	c.Assert(res.StatusCode, Equals, 200)
+	c.Assert(res.Close, Equals, true)
+}
+
+func (s *S) TestConnectionHeaders(c *C) {
+	srv := httptest.NewServer(httpTestHandler("ok"))
+	defer srv.Close()
+
+	l := newHTTPListener(c)
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+
+	tests := []struct {
+		conn              string   // connection header string to send, if any
+		upgradeFromClient bool     // for server tests, whether to send an upgrade request
+		emptyHeaders      []string // headers that shouldn't be set
+		presentHeaders    []string // headers that should be set
+	}{
+		{
+			conn: "",
+			// Upgrade header must be deleted if Connection header != "upgrade".
+			// Transfer-Encoding is always deleted before forwarding.
+			emptyHeaders: []string{"Transfer-Encoding", "Upgrade"},
+			// Keep all others
+			presentHeaders: []string{"Another-Option", "Custom-Conn-Header", "Keep-Alive"},
+		},
+		{
+			conn: "keep-alive",
+			// Keep-Alive header should be deleted because that's a conn-specific
+			// header here. Upgrade still gets deleted b/c Connection != "upgrade".
+			emptyHeaders:   []string{"Keep-Alive", "Transfer-Encoding", "Upgrade"},
+			presentHeaders: []string{"Another-Option", "Custom-Conn-Header"},
+		},
+		{
+			conn:           "custom-conn-header",
+			emptyHeaders:   []string{"Custom-Conn-Header", "Transfer-Encoding", "Upgrade"},
+			presentHeaders: []string{"Another-Option", "Keep-Alive"},
+		},
+		{ // test multiple connection-options
+			conn:           "custom-conn-header,   ,another-option   ",
+			emptyHeaders:   []string{"Another-Option", "Custom-Conn-Header", "Transfer-Encoding", "Upgrade"},
+			presentHeaders: []string{"Keep-Alive"},
+		},
+		{
+			// tcp/websocket path, all headers should be sent to backend (except
+			// Transfer-Encoding)
+			conn:              "upgrade",
+			upgradeFromClient: true,
+			emptyHeaders:      []string{"Transfer-Encoding"},
+			presentHeaders:    []string{"Custom-Conn-Header", "Keep-Alive", "Upgrade"},
+		},
+		{
+			// tcp/websocket path, all headers should be sent to backend (except
+			// Transfer-Encoding)
+			conn:              "upgrade, custom-conn-header,   ,another-option   ",
+			upgradeFromClient: true,
+			emptyHeaders:      []string{"Transfer-Encoding"},
+			presentHeaders:    []string{"Another-Option", "Custom-Conn-Header", "Keep-Alive", "Upgrade"},
+		},
+	}
+
+	for _, test := range tests {
+		c.Logf("testing client with Connection: %q", test.conn)
+		srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			for _, k := range test.emptyHeaders {
+				c.Assert(req.Header.Get(k), Equals, "", Commentf("header = %s", k))
+			}
+			for _, k := range test.presentHeaders {
+				c.Assert(req.Header.Get(k), Not(Equals), "", Commentf("header = %s", k))
+			}
+		})
+		req := newReq("http://"+l.Addr, "example.com")
+		if test.conn != "" {
+			req.Header.Set("Connection", test.conn)
+		}
+		req.Header.Set("Another-Option", "test-another-option")
+		req.Header.Set("Custom-Conn-Header", "test-custom-conn-header")
+		req.Header.Set("Keep-Alive", "test-keep-alive")
+		req.Header.Set("Transfer-Encoding", "test-transfer-encoding")
+		req.Header.Set("Upgrade", "test-upgrade")
+		res, err := httpClient.Do(req)
+		c.Assert(err, IsNil)
+		res.Body.Close()
+		c.Assert(res.StatusCode, Equals, 200)
+	}
+
+	for _, test := range tests {
+		c.Logf("testing server with Connection: %q", test.conn)
+		srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			if test.conn != "" {
+				w.Header().Set("Connection", test.conn)
+			}
+			w.Header().Set("Keep-Alive", "test-keep-alive")
+			w.Header().Set("Another-Option", "test-another-option")
+			w.Header().Set("Custom-Conn-Header", "test-custom-conn-header")
+			w.Header().Set("Upgrade", "test-upgrade")
+		})
+		req := newReq("http://"+l.Addr, "example.com")
+		if test.upgradeFromClient {
+			req.Header.Set("Connection", "upgrade")
+			req.Header.Set("Upgrade", "special-proto")
+		}
+		res, err := httpClient.Do(req)
+		c.Assert(err, IsNil)
+		res.Body.Close()
+		c.Assert(res.StatusCode, Equals, 200)
+		for _, k := range test.emptyHeaders {
+			c.Assert(res.Header.Get(k), Equals, "", Commentf("header = %s", k))
+		}
+		for _, k := range test.presentHeaders {
+			c.Assert(res.Header.Get(k), Not(Equals), "", Commentf("header = %s", k))
+		}
+	}
+}
+
 func (s *S) TestHTTPWebsocket(c *C) {
 	done := make(chan struct{})
 	srv := httptest.NewServer(
@@ -352,6 +523,7 @@ func (s *S) TestHTTPWebsocket(c *C) {
 			close(done)
 		}),
 	)
+	defer srv.Close()
 
 	l := newHTTPListener(c)
 	defer l.Close()
@@ -374,6 +546,41 @@ func (s *S) TestHTTPWebsocket(c *C) {
 	c.Assert(res[0], Equals, byte('1'))
 	_, err = wc.Write([]byte("2"))
 	c.Assert(err, IsNil)
+}
+
+func (s *S) TestUpgradeHeaderIsCaseInsensitive(c *C) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		c.Assert(strings.ToLower(req.Header.Get("Connection")), Equals, "upgrade")
+		// ensure that Upgrade header is passed along intact
+		c.Assert(req.Header.Get("Upgrade"), Equals, "Some-proto-2")
+		w.Write([]byte("ok\n"))
+	}))
+	defer srv.Close()
+
+	l := newHTTPListener(c)
+	url := "http://" + l.Addr
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+
+	values := []string{"upgrade", "Upgrade", "upGradE"}
+
+	for _, value := range values {
+		req := newReq(url, "example.com")
+		req.Header.Set("Connection", value)
+		req.Header.Set("Upgrade", "Some-proto-2")
+		res, err := httpClient.Do(req)
+		defer res.Body.Close()
+
+		c.Assert(err, IsNil)
+		c.Assert(res.StatusCode, Equals, 200)
+		data, err := ioutil.ReadAll(res.Body)
+		c.Assert(err, IsNil)
+		c.Assert(string(data), Equals, "ok\n")
+	}
+
+	httpClient.Transport.(*http.Transport).CloseIdleConnections()
 }
 
 func (s *S) TestStickyHTTPRoute(c *C) {
@@ -460,8 +667,6 @@ func (s *S) TestStickyHTTPRouteWebsocket(c *C) {
 			data, err := ioutil.ReadAll(res.Body)
 			c.Assert(err, IsNil)
 			c.Assert(string(data), Equals, step.backend)
-			// make sure unsuccessful upgrade conn was closed
-			c.Assert(res.Close, Equals, true)
 
 			// reuse the session cookie if present
 			for _, c := range res.Cookies() {
