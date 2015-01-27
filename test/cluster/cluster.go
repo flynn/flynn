@@ -75,7 +75,7 @@ func New(bc BootConfig, out io.Writer) *Cluster {
 func BuildFlynn(bc BootConfig, rootFS, commit string, merge bool, out io.Writer) (string, error) {
 	c := New(bc, out)
 	defer c.Shutdown()
-	return c.BuildFlynn(rootFS, commit, merge)
+	return c.BuildFlynn(rootFS, commit, merge, false)
 }
 
 func (c *Cluster) log(a ...interface{}) (int, error) {
@@ -86,7 +86,7 @@ func (c *Cluster) logf(f string, a ...interface{}) (int, error) {
 	return fmt.Fprintf(c.out, f, a...)
 }
 
-func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool) (string, error) {
+func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool, runTests bool) (string, error) {
 	c.log("Building Flynn...")
 
 	if err := c.setup(); err != nil {
@@ -122,9 +122,11 @@ func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool) (string, error) 
 		return build.Drive("hda").FS, fmt.Errorf("error running build script: %s", err)
 	}
 
-	if err := runUnitTests(build, c.out); err != nil {
-		build.Kill()
-		return build.Drive("hda").FS, fmt.Errorf("unit tests failed: %s", err)
+	if runTests {
+		if err := runUnitTests(build, c.out); err != nil {
+			build.Kill()
+			return build.Drive("hda").FS, fmt.Errorf("unit tests failed: %s", err)
+		}
 	}
 
 	if err := build.Shutdown(); err != nil {
