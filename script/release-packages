@@ -29,8 +29,13 @@
 #   export GPG_TTY=`tty`
 #   echo | gpg --sign --yes --use-agent --output /dev/null /dev/stdin
 #
-# - Log in to Docker to push images
-#   docker login
+# - Install go-tuf
+#   go get github.com/flynn/go-tuf/tuf
+#
+# - Set the TUF passphrases
+#   export TUF_TARGETS_PASSPHRASE=xxxxxx
+#   export TUF_SNAPSHOT_PASSPHRASE=xxxxxx
+#   export TUF_TIMESTAMP_PASSPHRASE=xxxxxx
 
 set -eo pipefail
 
@@ -48,14 +53,15 @@ OPTIONS:
   -b BUCKET     The S3 bucket to sync the apt repo with [default: flynn]
   -p PREFIX     The image URL prefix
   -r DIR        Resume the release using DIR
+  -t DIR        Path to the local TUF repository [default: /etc/flynn/images]
 USAGE
 }
 
 main() {
-  local bucket dir image_prefix
+  local bucket dir image_prefix tuf_dir
   local keep=false
 
-  while getopts "hkb:p:r:" opt; do
+  while getopts "hkb:p:r:t:" opt; do
     case $opt in
       h)
         usage
@@ -68,6 +74,12 @@ main() {
         dir=${OPTARG}
         if [[ ! -d "${dir}" ]]; then
           fail "No such directory: ${dir}"
+        fi
+        ;;
+      t)
+        tuf_dir=${OPTARG}
+        if [[ ! -d "${tuf_dir}" ]]; then
+          fail "No such directory: ${tuf_dir}"
         fi
         ;;
       ?)
@@ -93,7 +105,15 @@ main() {
 
   bucket="${bucket:-"flynn"}"
   dir="${dir:-$(mktemp -d)}"
+  tuf_dir="${tuf_dir:="/etc/flynn/images"}"
   info "using base dir: ${dir}"
+
+  info "checking TUF signing keys"
+  for role in "targets" "snapshot" "timestamp"; do
+    if [[ ! -s "${tuf_dir}/keys/${role}.json" ]]; then
+      fail "the TUF repo is missing the ${role} signing key"
+    fi
+  done
 
   export GOPATH="${dir}"
   local src="${GOPATH}/src/github.com/flynn/flynn"
@@ -127,7 +147,7 @@ main() {
 
   info "building flynn"
   git checkout --force --quiet $commit
-  git tag "v${version}"
+  git tag --force "v${version}"
 
   if [[ -n "${image_prefix}" ]]; then
     sed "s/^CONFIG_IMAGE_URL_PREFIX=.*$/CONFIG_IMAGE_URL_PREFIX=${image_prefix}/" -i tup.config
@@ -137,8 +157,22 @@ main() {
 
   popd >/dev/null
 
-  info "uploading images"
-  "${flynn_release}" upload "${src}/version.json"
+  info "downloading existing TUF metadata"
+  mkdir -p "${tuf_dir}/repository"
+  for role in "root" "targets" "snapshot" "timestamp"; do
+    s3cmd get --force "s3://${bucket}/images/${role}.json" "${tuf_dir}/repository/${role}.json"
+  done
+
+  info "adding images to the TUF repository"
+  pushd "${tuf_dir}" >/dev/null
+  tuf clean
+  cp "${src}/version.json" "staged/targets"
+  "${flynn_release}" export "${src}/version.json" "staged/targets"
+  tuf add
+  tuf snapshot
+  tuf timestamp
+  tuf commit
+  popd >/dev/null
 
   info "building deb package"
   rm -f "${src}"/*.deb
@@ -151,8 +185,11 @@ main() {
   info "adding deb to apt repo"
   reprepro -b "${apt_dir}" includedeb flynn "${deb}"
 
-  info "uploading apt repo"
-  sync_cloudfront "${apt_dir}" "s3://${bucket}/ubuntu/"
+  info "uploading packages and images to S3"
+  mkdir -p "${dir}/s3"
+  ln -s "${apt_dir}" "${dir}/s3/ubuntu"
+  ln -s "${tuf_dir}/repository" "${dir}/s3/images"
+  sync_cloudfront "${dir}/s3/" "s3://${bucket}/"
 
   info "successfully released packages for version ${version}"
 
