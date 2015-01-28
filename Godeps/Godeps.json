@@ -20,6 +20,10 @@
 			"Rev": "6c28e16200e55c2549705ac24ea58976c07f18ac"
 		},
 		{
+			"ImportPath": "github.com/agl/ed25519",
+			"Rev": "d2b94fd789ea21d12fac1a4443dd3a3f79cda72c"
+		},
+		{
 			"ImportPath": "github.com/alexzorin/libvirt-go",
 			"Comment": "v2.9.0",
 			"Rev": "b9951d11774a62fbdfb340eeff70c1935d8e531e"
@@ -282,6 +286,26 @@
 			"Rev": "30e503bbf3ca38b958ae5c4fae05ca3babe01c9f"
 		},
 		{
+			"ImportPath": "github.com/flynn/go-tuf/client",
+			"Rev": "e897c1d45b1dd430b064bcc6874bc2c3922cd248"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-tuf/data",
+			"Rev": "e897c1d45b1dd430b064bcc6874bc2c3922cd248"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-tuf/keys",
+			"Rev": "e897c1d45b1dd430b064bcc6874bc2c3922cd248"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-tuf/signed",
+			"Rev": "e897c1d45b1dd430b064bcc6874bc2c3922cd248"
+		},
+		{
+			"ImportPath": "github.com/flynn/go-tuf/util",
+			"Rev": "e897c1d45b1dd430b064bcc6874bc2c3922cd248"
+		},
+		{
 			"ImportPath": "github.com/flynn/pq",
 			"Rev": "29bc57434aa700fa80bc713bd85d3fe1d0cd4fc0"
 		},
@@ -375,6 +399,10 @@
 		{
 			"ImportPath": "github.com/technoweenie/grohl",
 			"Rev": "91868e10032390c992d419d10b17cc8bfdc35808"
+		},
+		{
+			"ImportPath": "github.com/tent/canonical-json-go",
+			"Rev": "96e4ba3a7613a1216cbd1badca4efe382adea337"
 		},
 		{
 			"ImportPath": "github.com/wadey/cryptorand",
