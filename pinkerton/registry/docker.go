@@ -27,6 +27,10 @@ func (s *dockerSession) ImageID() string {
 	return s.ref.imageID
 }
 
+func (s *dockerSession) Repo() string {
+	return s.ref.repo
+}
+
 func (s *dockerSession) GetImage() (*Image, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/repositories/%s/images", s.index, s.ref.repo), nil)
 	if err != nil {
