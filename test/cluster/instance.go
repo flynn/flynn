@@ -134,8 +134,8 @@ func (i *Instance) Start() error {
 		"-enable-kvm",
 		"-kernel", i.Kernel,
 		"-append", `"root=/dev/sda"`,
-		"-net", "nic,macaddr="+macaddr,
-		"-net", "tap,ifname="+i.tap.Name+",script=no,downscript=no",
+		"-netdev", "tap,id=vmnic,ifname="+i.tap.Name+",script=no,downscript=no",
+		"-device", "virtio-net,netdev=vmnic,mac="+macaddr,
 		"-virtfs", "fsdriver=local,path="+i.netFS+",security_model=passthrough,readonly,mount_tag=netfs",
 		"-nographic",
 	)
