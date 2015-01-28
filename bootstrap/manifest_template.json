@@ -25,7 +25,7 @@
     },
     "artifact": {
       "type": "docker",
-      "uri": "$image_url_prefix/postgresql?id=$image_id[postgresql]"
+      "uri": "$image_repository?name=flynn/postgresql&id=$image_id[postgresql]"
     },
     "processes": {
       "postgres": 1,
@@ -85,7 +85,7 @@
     },
     "artifact": {
       "type": "docker",
-      "uri": "$image_url_prefix/controller?id=$image_id[controller]"
+      "uri": "$image_repository?name=flynn/controller&id=$image_id[controller]"
     },
     "processes": {
       "web": 1
@@ -150,7 +150,7 @@
     },
     "artifact": {
       "type": "docker",
-      "uri": "$image_url_prefix/blobstore?id=$image_id[blobstore]"
+      "uri": "$image_repository?name=flynn/blobstore&id=$image_id[blobstore]"
     },
     "release": {
       "processes": {
@@ -173,7 +173,7 @@
     },
     "artifact": {
       "type": "docker",
-      "uri": "$image_url_prefix/router?id=$image_id[router]"
+      "uri": "$image_repository?name=flynn/router&id=$image_id[router]"
     },
     "release": {
       "processes": {
@@ -201,7 +201,7 @@
     },
     "artifact": {
       "type": "docker",
-      "uri": "$image_url_prefix/receiver?id=$image_id[receiver]"
+      "uri": "$image_repository?name=flynn/receiver&id=$image_id[receiver]"
     },
     "release": {
       "processes": {
@@ -210,8 +210,8 @@
           "env": {
             "SSH_PRIVATE_KEYS": "{{ (index .StepData \"gitreceive-key\").PrivateKeys }}",
             "CONTROLLER_AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
-            "SLUGBUILDER_IMAGE_URI": "$image_url_prefix/slugbuilder?id=$image_id[slugbuilder]",
-            "SLUGRUNNER_IMAGE_URI": "$image_url_prefix/slugrunner?id=$image_id[slugrunner]"
+            "SLUGBUILDER_IMAGE_URI": "$image_repository?name=flynn/slugbuilder&id=$image_id[slugbuilder]",
+            "SLUGRUNNER_IMAGE_URI": "$image_repository?name=flynn/slugrunner&id=$image_id[slugrunner]"
           }
         }
       }
@@ -268,13 +268,13 @@
     },
     "artifact": {
       "type": "docker",
-      "uri": "$image_url_prefix/taffy?id=$image_id[taffy]"
+      "uri": "$image_repository?name=flynn/taffy&id=$image_id[taffy]"
     },
     "release": {
       "env": {
         "CONTROLLER_AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
-        "SLUGBUILDER_IMAGE_URI": "$image_url_prefix/slugbuilder?id=$image_id[slugbuilder]",
-        "SLUGRUNNER_IMAGE_URI": "$image_url_prefix/slugrunner?id=$image_id[slugrunner]"
+        "SLUGBUILDER_IMAGE_URI": "$image_repository?name=flynn/slugbuilder&id=$image_id[slugbuilder]",
+        "SLUGRUNNER_IMAGE_URI": "$image_repository?name=flynn/slugrunner&id=$image_id[slugrunner]"
       }
     }
   },
@@ -287,7 +287,7 @@
     },
     "artifact": {
       "type": "docker",
-      "uri": "$image_url_prefix/dashboard?id=$image_id[dashboard]"
+      "uri": "$image_repository?name=flynn/dashboard&id=$image_id[dashboard]"
     },
     "release": {
       "env": {

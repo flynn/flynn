@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 
 	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
+	"github.com/flynn/flynn/pkg/tufutil"
 )
 
 func NewTUFSession(client *tuf.Client, ref *Ref) Session {
@@ -22,6 +22,10 @@ type tufSession struct {
 
 func (s *tufSession) ImageID() string {
 	return s.ref.imageID
+}
+
+func (s *tufSession) Repo() string {
+	return s.ref.repo
 }
 
 func (s *tufSession) GetImage() (*Image, error) {
@@ -70,26 +74,12 @@ func (s *tufSession) tags() (map[string]string, error) {
 	return tags, err
 }
 
-type tmpFile struct {
-	*os.File
-}
-
-func (t *tmpFile) Delete() error {
-	t.File.Close()
-	return os.Remove(t.Name())
-}
-
-func (t *tmpFile) Close() error {
-	return t.Delete()
-}
-
 func (s *tufSession) get(name string, out interface{}) (io.ReadCloser, error) {
-	file, err := ioutil.TempFile("", "pinkerton")
+	tmp, err := tufutil.NewTempFile()
 	if err != nil {
 		return nil, err
 	}
 	name = path.Join("v1", name)
-	tmp := &tmpFile{file}
 	if err := s.client.Download(name, tmp); err != nil {
 		return nil, err
 	}
