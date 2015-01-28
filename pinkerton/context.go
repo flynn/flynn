@@ -13,6 +13,7 @@ import (
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/devmapper"
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/vfs"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/reexec"
+	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
 	"github.com/flynn/flynn/pinkerton/registry"
 	"github.com/flynn/flynn/pinkerton/store"
 )
@@ -56,26 +57,37 @@ const (
 	LayerStatusDownloaded LayerStatus = "downloaded"
 )
 
-func (c *Context) Pull(url string, progress chan<- LayerPullInfo) error {
+func (c *Context) PullDocker(url string, progress chan<- LayerPullInfo) error {
+	ref, err := registry.NewRef(url)
+	if err != nil {
+		return err
+	}
+	return c.pull(url, registry.NewDockerSession(ref), progress)
+}
+
+func (c *Context) PullTUF(url string, client *tuf.Client, progress chan<- LayerPullInfo) error {
+	ref, err := registry.NewRef(url)
+	if err != nil {
+		return err
+	}
+	return c.pull(url, registry.NewTUFSession(client, ref), progress)
+}
+
+func (c *Context) pull(url string, session registry.Session, progress chan<- LayerPullInfo) error {
 	defer func() {
 		if progress != nil {
 			close(progress)
 		}
 	}()
 
-	ref, err := registry.NewRef(url)
-	if err != nil {
-		return err
-	}
-
-	if id := ref.ImageID(); id != "" && c.Exists(id) {
+	if id := session.ImageID(); id != "" && c.Exists(id) {
 		if progress != nil {
 			progress <- LayerPullInfo{ID: id, Status: LayerStatusExists}
 		}
 		return nil
 	}
 
-	image, err := ref.Get()
+	image, err := session.GetImage()
 	if err != nil {
 		return err
 	}
@@ -94,9 +106,6 @@ func (c *Context) Pull(url string, progress chan<- LayerPullInfo) error {
 			continue
 		}
 
-		if err := layer.Fetch(); err != nil {
-			return err
-		}
 		status := LayerStatusDownloaded
 		if err := c.Add(layer); err != nil {
 			if err == store.ErrExists {
