@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"net/url"
 	"os"
 	"os/exec"
 
@@ -31,15 +30,8 @@ func export(args *docopt.Args) {
 	}
 
 	images := make([]string, 0, len(manifest))
-	for uri, id := range manifest {
-		// assuming the path is the name of the repo won't work in all cases, but
-		// this is going to get replaced very soon as the manifest will just
-		// include mappings of name -> id
-		u, err := url.Parse(uri)
-		if err != nil {
-			log.Fatal(err)
-		}
-		tagged := u.Path[1:] + ":latest"
+	for name, id := range manifest {
+		tagged := name + ":latest"
 		run(exec.Command("docker", "tag", "--force", id, tagged))
 		images = append(images, tagged)
 	}

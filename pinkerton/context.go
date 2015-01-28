@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"sync"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver"
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/aufs"
@@ -16,6 +17,7 @@ import (
 	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
 	"github.com/flynn/flynn/pinkerton/registry"
 	"github.com/flynn/flynn/pinkerton/store"
+	"github.com/flynn/flynn/pkg/tufutil"
 )
 
 func init() {
@@ -46,6 +48,7 @@ func NewContext(store *store.Store, driver graphdriver.Driver) *Context {
 }
 
 type LayerPullInfo struct {
+	Repo   string      `json:"repo"`
 	ID     string      `json:"id"`
 	Status LayerStatus `json:"status"`
 }
@@ -80,10 +83,14 @@ func (c *Context) pull(url string, session registry.Session, progress chan<- Lay
 		}
 	}()
 
-	if id := session.ImageID(); id != "" && c.Exists(id) {
+	sendProgress := func(id string, status LayerStatus) {
 		if progress != nil {
-			progress <- LayerPullInfo{ID: id, Status: LayerStatusExists}
+			progress <- LayerPullInfo{Repo: session.Repo(), ID: id, Status: status}
 		}
+	}
+
+	if id := session.ImageID(); id != "" && c.Exists(id) {
+		sendProgress(id, LayerStatusExists)
 		return nil
 	}
 
@@ -100,9 +107,7 @@ func (c *Context) pull(url string, session registry.Session, progress chan<- Lay
 	for i := len(layers) - 1; i >= 0; i-- {
 		layer := layers[i]
 		if c.Exists(layer.ID) {
-			if progress != nil {
-				progress <- LayerPullInfo{ID: layer.ID, Status: LayerStatusExists}
-			}
+			sendProgress(layer.ID, LayerStatusExists)
 			continue
 		}
 
@@ -114,9 +119,7 @@ func (c *Context) pull(url string, session registry.Session, progress chan<- Lay
 				return err
 			}
 		}
-		if progress != nil {
-			progress <- LayerPullInfo{ID: layer.ID, Status: status}
-		}
+		sendProgress(layer.ID, status)
 	}
 
 	// TODO: update sizes
@@ -148,7 +151,7 @@ func InfoPrinter(jsonOut bool) chan<- LayerPullInfo {
 			if jsonOut {
 				enc.Encode(l)
 			} else {
-				fmt.Println(l.ID, l.Status)
+				fmt.Println(l.Repo, l.ID, l.Status)
 			}
 		}
 	}()
@@ -168,4 +171,41 @@ func ImageID(s string) (string, error) {
 		return "", ErrNoImageID
 	}
 	return id, nil
+}
+
+func PullImagesWithClient(client *tuf.Client, repository, driver, root string, progress chan<- LayerPullInfo) error {
+	tmp, err := tufutil.Download(client, "/version.json")
+	if err != nil {
+		return err
+	}
+	defer tmp.Close()
+
+	var versions map[string]string
+	if err := json.NewDecoder(tmp).Decode(&versions); err != nil {
+		return err
+	}
+
+	ctx, err := BuildContext(driver, root)
+	if err != nil {
+		return err
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(len(versions))
+	for name, id := range versions {
+		info := make(chan LayerPullInfo)
+		go func() {
+			for l := range info {
+				progress <- l
+			}
+			wg.Done()
+		}()
+		url := fmt.Sprintf("%s?name=%s&id=%s", repository, name, id)
+		if err := ctx.PullTUF(url, client, info); err != nil {
+			return err
+		}
+	}
+	wg.Wait()
+	close(progress)
+	return nil
 }
