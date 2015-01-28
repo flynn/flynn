@@ -945,7 +945,7 @@ func (l *LibvirtLXCBackend) pinkertonPull(url string) ([]pinkerton.LayerPullInfo
 		}
 		close(done)
 	}()
-	if err := l.pinkerton.Pull(url, info); err != nil {
+	if err := l.pinkerton.PullDocker(url, info); err != nil {
 		return nil, err
 	}
 	<-done
