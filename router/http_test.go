@@ -434,7 +434,7 @@ func (s *S) TestConnectionHeaders(c *C) {
 		{
 			// tcp/websocket path, all headers should be sent to backend (except
 			// Transfer-Encoding)
-			conn:              "upgrade, custom-conn-header,   ,another-option   ",
+			conn:              "upGrade, custom-Conn-header,   ,Another-option   ",
 			upgradeFromClient: true,
 			emptyHeaders:      []string{"Transfer-Encoding"},
 			presentHeaders:    []string{"Another-Option", "Custom-Conn-Header", "Keep-Alive", "Upgrade"},

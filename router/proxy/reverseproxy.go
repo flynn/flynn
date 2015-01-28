@@ -9,7 +9,9 @@ package proxy
 import (
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -48,17 +50,14 @@ func copyHeader(dst, src http.Header) {
 }
 
 // Hop-by-hop headers. These are removed when sent to the backend.
-// http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html
-var hopHeaders = []string{
-	"Connection",
-	"Keep-Alive",
-	"Proxy-Authenticate",
-	"Proxy-Authorization",
-	"Te", // canonicalized version of "TE"
-	"Trailers",
-	"Transfer-Encoding",
-	"Upgrade",
-}
+// https://tools.ietf.org/html/rfc7230#section-6.1
+var (
+	hopHeaders = []string{
+		"Te", // canonicalized version of "TE"
+		"Trailers",
+		"Transfer-Encoding",
+	}
+)
 
 func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	transport := p.Transport
@@ -81,8 +80,28 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 }
 
 func (p *ReverseProxy) writeResponse(rw http.ResponseWriter, res *http.Response) {
+	// remove global hop-by-hop headers.
 	for _, h := range hopHeaders {
 		res.Header.Del(h)
+	}
+
+	// remove the Upgrade header and headers referenced in the Connection
+	// header if HTTP < 1.1 or if Connection header didn't contain "upgrade":
+	// https://tools.ietf.org/html/rfc7230#section-6.7
+	if !res.ProtoAtLeast(1, 1) || !isConnectionUpgrade(res.Header) {
+		res.Header.Del("Upgrade")
+
+		// A proxy or gateway MUST parse a received Connection header field before a
+		// message is forwarded and, for each connection-option in this field, remove
+		// any header field(s) from the message with the same name as the
+		// connection-option, and then remove the Connection header field itself (or
+		// replace it with the intermediary's own connection options for the
+		// forwarded message): https://tools.ietf.org/html/rfc7230#section-6.1
+		tokens := strings.Split(res.Header.Get("Connection"), ",")
+		for _, hdr := range tokens {
+			res.Header.Del(hdr)
+		}
+		res.Header.Del("Connection")
 	}
 
 	copyHeader(rw.Header(), res.Header)
@@ -91,34 +110,13 @@ func (p *ReverseProxy) writeResponse(rw http.ResponseWriter, res *http.Response)
 	p.copyResponse(rw, res.Body)
 }
 
-func prepareRequest(req *http.Request) *http.Request {
-	outreq := new(http.Request)
-	*outreq = *req // includes shallow copies of maps, but okay
-
-	outreq.URL.Scheme = "http"
-	outreq.Proto = "HTTP/1.1"
-	outreq.ProtoMajor = 1
-	outreq.ProtoMinor = 1
-	outreq.Close = false
-
-	// Remove hop-by-hop headers to the backend.  Especially
-	// important is "Connection" because we want a persistent
-	// connection, regardless of what the client sent to us.  This
-	// is modifying the same underlying map from req (shallow
-	// copied above) so we only copy it if necessary.
-	copiedHeaders := false
-	for _, h := range hopHeaders {
-		if outreq.Header.Get(h) != "" {
-			if !copiedHeaders {
-				outreq.Header = make(http.Header)
-				copyHeader(outreq.Header, req.Header)
-				copiedHeaders = true
-			}
-			outreq.Header.Del(h)
+func isConnectionUpgrade(h http.Header) bool {
+	for _, token := range strings.Split(h.Get("Connection"), ",") {
+		if v := strings.ToLower(strings.TrimSpace(token)); v == "upgrade" {
+			return true
 		}
 	}
-
-	return outreq
+	return false
 }
 
 func (p *ReverseProxy) copyResponse(dst io.Writer, src io.Reader) {
@@ -144,6 +142,74 @@ func (p *ReverseProxy) logf(format string, args ...interface{}) {
 	} else {
 		log.Printf(format, args...)
 	}
+}
+
+type closeWriter interface {
+	CloseWrite() error
+}
+
+func closeWrite(conn net.Conn) {
+	if cw, ok := conn.(closeWriter); ok {
+		cw.CloseWrite()
+	} else {
+		conn.Close()
+	}
+}
+
+func joinConns(uconn, dconn net.Conn) {
+	done := make(chan struct{})
+
+	go func() {
+		io.Copy(uconn, dconn)
+		closeWrite(uconn)
+		done <- struct{}{}
+	}()
+
+	io.Copy(dconn, uconn)
+	closeWrite(dconn)
+	<-done
+}
+
+func prepareRequest(req *http.Request) *http.Request {
+	outreq := new(http.Request)
+	*outreq = *req // includes shallow copies of maps, but okay
+
+	outreq.URL.Scheme = "http"
+	outreq.Proto = "HTTP/1.1"
+	outreq.ProtoMajor = 1
+	outreq.ProtoMinor = 1
+	outreq.Close = false
+
+	// Remove hop-by-hop headers to the backend.
+	outreq.Header = make(http.Header)
+	copyHeader(outreq.Header, req.Header)
+	for _, h := range hopHeaders {
+		outreq.Header.Del(h)
+	}
+
+	// remove the Upgrade header and headers referenced in the Connection
+	// header if HTTP < 1.1 or if Connection header didn't contain "upgrade":
+	// https://tools.ietf.org/html/rfc7230#section-6.7
+	if !req.ProtoAtLeast(1, 1) || !isConnectionUpgrade(req.Header) {
+		outreq.Header.Del("Upgrade")
+
+		// Especially important is "Connection" because we want a persistent
+		// connection, regardless of what the client sent to us.
+		outreq.Header.Del("Connection")
+
+		// A proxy or gateway MUST parse a received Connection header field before a
+		// message is forwarded and, for each connection-option in this field, remove
+		// any header field(s) from the message with the same name as the
+		// connection-option, and then remove the Connection header field itself (or
+		// replace it with the intermediary's own connection options for the
+		// forwarded message): https://tools.ietf.org/html/rfc7230#section-6.1
+		tokens := strings.Split(req.Header.Get("Connection"), ",")
+		for _, hdr := range tokens {
+			outreq.Header.Del(hdr)
+		}
+	}
+
+	return outreq
 }
 
 type writeFlusher interface {
