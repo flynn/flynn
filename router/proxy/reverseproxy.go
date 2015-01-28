@@ -24,6 +24,18 @@ const (
 // flushLoop() goroutine.
 var onExitFlushLoop func()
 
+// Hop-by-hop headers. These are removed when sent to the backend.
+// https://tools.ietf.org/html/rfc7230#section-6.1
+var (
+	hopHeaders = []string{
+		"Te", // canonicalized version of "TE"
+		"Trailers",
+		"Transfer-Encoding",
+	}
+
+	serviceUnavailable = []byte("Service Unavailable\n")
+)
+
 // ReverseProxy is an HTTP Handler that takes an incoming request and
 // sends it to another server, proxying the response back to the
 // client.
@@ -44,6 +56,9 @@ type ReverseProxy struct {
 	ErrorLog *log.Logger
 }
 
+// NewReverseProxy initializes a new ReverseProxy with a callback to get
+// backends, a stickyKey for encrypting sticky session cookies, and a flag
+// sticky to enable sticky sessions.
 func NewReverseProxy(bf BackendListFunc, stickyKey *[32]byte, sticky bool) *ReverseProxy {
 	return &ReverseProxy{
 		transport: &transport{
@@ -55,26 +70,7 @@ func NewReverseProxy(bf BackendListFunc, stickyKey *[32]byte, sticky bool) *Reve
 	}
 }
 
-func copyHeader(dst, src http.Header) {
-	for k, vv := range src {
-		for _, v := range vv {
-			dst.Add(k, v)
-		}
-	}
-}
-
-// Hop-by-hop headers. These are removed when sent to the backend.
-// https://tools.ietf.org/html/rfc7230#section-6.1
-var (
-	hopHeaders = []string{
-		"Te", // canonicalized version of "TE"
-		"Trailers",
-		"Transfer-Encoding",
-	}
-
-	serviceUnavailable = []byte("Service Unavailable\n")
-)
-
+// ServeHTTP implements http.Handler.
 func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	transport := p.transport
 	if transport == nil {
@@ -100,6 +96,7 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	p.writeResponse(rw, res)
 }
 
+// ServeConn takes an inbound conn and proxies it to a backend.
 func (p *ReverseProxy) ServeConn(conn net.Conn) {
 	transport := p.transport
 	if transport == nil {
@@ -208,6 +205,14 @@ func (p *ReverseProxy) logf(format string, args ...interface{}) {
 		p.ErrorLog.Printf(format, args...)
 	} else {
 		log.Printf(format, args...)
+	}
+}
+
+func copyHeader(dst, src http.Header) {
+	for k, vv := range src {
+		for _, v := range vv {
+			dst.Add(k, v)
+		}
 	}
 }
 
