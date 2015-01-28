@@ -25,14 +25,10 @@ func (s *S) provisionTestResource(c *C, name string, apps []string) (*ct.Resourc
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
 
-	newHandler := appHandler(handlerConfig{db: s.hc.db, cc: s.cc, sc: s.hc.sc, key: "test"})
-	s.srv = httptest.NewServer(newHandler)
-
-	client, err := controller.NewClient(s.srv.URL, authKey)
 	p := &ct.Provider{URL: fmt.Sprintf("http://%s/things", srv.Listener.Addr()), Name: name}
-	c.Assert(client.CreateProvider(p), IsNil)
+	c.Assert(s.c.CreateProvider(p), IsNil)
 	conf := json.RawMessage(data)
-	out, err := client.ProvisionResource(&ct.ResourceReq{ProviderID: p.ID, Config: &conf, Apps: apps})
+	out, err := s.c.ProvisionResource(&ct.ResourceReq{ProviderID: p.ID, Config: &conf, Apps: apps})
 	c.Assert(err, IsNil)
 	return out, p
 }
