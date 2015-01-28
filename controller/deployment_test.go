@@ -21,7 +21,7 @@ func (s *S) TestCreateDeployment(c *C) {
 	// deploying an initial release should no-op
 	d, err := s.c.CreateDeployment(app.ID, release.ID)
 	c.Assert(err, IsNil)
-	c.Assert(d.ID, Equals, "")
+	c.Assert(d.FinishedAt, NotNil)
 	// but the app release should now be set
 	gotRelease, err := s.c.GetAppRelease(app.ID)
 	c.Assert(release.ID, Equals, gotRelease.ID)

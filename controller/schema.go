@@ -140,7 +140,7 @@ $$ LANGUAGE plpgsql`,
 		`CREATE TABLE deployments (
     deployment_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     app_id uuid NOT NULL,
-    old_release_id uuid NOT NULL REFERENCES releases (release_id),
+    old_release_id uuid REFERENCES releases (release_id),
     new_release_id uuid NOT NULL REFERENCES releases (release_id),
     strategy deployment_strategy NOT NULL,
 	created_at timestamptz NOT NULL DEFAULT now(),
