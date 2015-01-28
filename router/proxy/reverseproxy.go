@@ -174,6 +174,8 @@ func prepareRequest(req *http.Request) *http.Request {
 	outreq := new(http.Request)
 	*outreq = *req // includes shallow copies of maps, but okay
 
+	// Pass the Request-URI verbatim without any modifications
+	outreq.URL.Opaque = strings.Split(strings.TrimPrefix(req.RequestURI, req.URL.Scheme+":"), "?")[0]
 	outreq.URL.Scheme = "http"
 	outreq.Proto = "HTTP/1.1"
 	outreq.ProtoMajor = 1
