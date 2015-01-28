@@ -308,12 +308,13 @@ func httpHeaderTestHandler(c *C, ip, port string) http.Handler {
 
 // issue #105
 func (s *S) TestHTTPHeaders(c *C) {
-	srv := httptest.NewServer(httpHeaderTestHandler(c, "127.0.0.1", "0"))
-
 	l := newHTTPListener(c)
 	defer l.Close()
 
 	addHTTPRoute(c, l)
+
+	port := mustPortFromAddr(l.HTTPListener.listener.Addr().String())
+	srv := httptest.NewServer(httpHeaderTestHandler(c, "127.0.0.1", port))
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
@@ -321,12 +322,13 @@ func (s *S) TestHTTPHeaders(c *C) {
 }
 
 func (s *S) TestHTTPHeadersFromClient(c *C) {
-	srv := httptest.NewServer(httpHeaderTestHandler(c, "192.168.1.1, 127.0.0.1", "0"))
-
 	l := newHTTPListener(c)
 	defer l.Close()
 
 	addHTTPRoute(c, l)
+
+	port := mustPortFromAddr(l.HTTPListener.listener.Addr().String())
+	srv := httptest.NewServer(httpHeaderTestHandler(c, "192.168.1.1, 127.0.0.1", port))
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
