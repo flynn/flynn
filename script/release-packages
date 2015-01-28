@@ -167,6 +167,8 @@ main() {
   pushd "${tuf_dir}" >/dev/null
   tuf clean
   cp "${src}/version.json" "staged/targets"
+  cp "${src}/host/bin/manifest.json" "staged/targets/host-manifest.json"
+  cp "${src}/bootstrap/bin/manifest.json" "staged/targets/bootstrap-manifest.json"
   "${flynn_release}" export "${src}/version.json" "staged/targets"
   tuf add
   tuf snapshot
