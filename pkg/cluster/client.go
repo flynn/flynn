@@ -84,7 +84,10 @@ func (c *Client) start() error {
 
 func (c *Client) followLeader(firstErr chan<- error) {
 	leaders := make(chan *discoverd.Instance)
-	c.service.Leaders(leaders)
+	if _, err := c.service.Leaders(leaders); err != nil {
+		firstErr <- err
+		return
+	}
 	for leader := range leaders {
 		if leader == nil {
 			if firstErr != nil {
