@@ -136,7 +136,9 @@ func (s *DeployerSuite) TestAllAtOnceStrategy(t *c.C) {
 }
 
 func (s *DeployerSuite) TestRollback(t *c.C) {
-	deployment := s.createDeployment(t, "crasher", "all-at-once")
+	app, _ := s.createApp(t)
+	s.createFormation(t, app, map[string]int{"failer": 2})
+	deployment := s.createDeployment(t, app, "all-at-once")
 	events := make(chan *ct.DeploymentEvent)
 	stream, err := s.controllerClient(t).StreamDeployment(deployment.ID, events)
 	t.Assert(err, c.IsNil)
@@ -145,13 +147,9 @@ func (s *DeployerSuite) TestRollback(t *c.C) {
 	oldReleaseID := deployment.OldReleaseID
 
 	expected := []*ct.DeploymentEvent{
-		{ReleaseID: releaseID, JobType: "crasher", JobState: "starting", Status: "running"},
-		{ReleaseID: releaseID, JobType: "crasher", JobState: "starting", Status: "running"},
-		{ReleaseID: releaseID, JobType: "crasher", JobState: "up", Status: "running"},
-		{ReleaseID: releaseID, JobType: "crasher", JobState: "up", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "crasher", JobState: "stopping", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "crasher", JobState: "stopping", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "crasher", JobState: "crashed", Status: "running"},
+		{ReleaseID: releaseID, JobType: "failer", JobState: "starting", Status: "running"},
+		{ReleaseID: releaseID, JobType: "failer", JobState: "starting", Status: "running"},
+		{ReleaseID: oldReleaseID, JobType: "failer", JobState: "crashed", Status: "running"},
 		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "failed"},
 	}
 	waitForDeploymentEvents(t, events, expected)
@@ -164,7 +162,7 @@ func (s *DeployerSuite) TestRollback(t *c.C) {
 	// check that the old formation is the same and there's no new formation
 	f, err := s.controllerClient(t).GetFormation(deployment.AppID, oldReleaseID)
 	t.Assert(err, c.IsNil)
-	t.Assert(f.Processes, c.DeepEquals, map[string]int{"crasher": 2})
+	t.Assert(f.Processes, c.DeepEquals, map[string]int{"failer": 2})
 	_, err = s.controllerClient(t).GetFormation(deployment.AppID, releaseID)
 	t.Assert(err, c.NotNil)
 }
