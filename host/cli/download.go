@@ -54,7 +54,7 @@ func runDownload(args *docopt.Args) error {
 		parsedURL.User = nil
 		fmt.Printf("Downloading %s %s...\n", parsedURL, id)
 		image += "?id=" + id
-		if err := ctx.Pull(image, pinkerton.InfoPrinter(false)); err != nil {
+		if err := ctx.PullDocker(image, pinkerton.InfoPrinter(false)); err != nil {
 			return err
 		}
 	}
