@@ -2,7 +2,7 @@
 
 set -eo pipefail
 
-version=2.0.0-rc.1
+version=2.0.0
 tmpdir=$(mktemp --directory)
 pkg="etcd-v${version}-linux-amd64"
 
