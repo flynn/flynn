@@ -11,6 +11,14 @@ import (
 	"github.com/flynn/flynn/pkg/cliutil"
 )
 
+func run(cmd *exec.Cmd) {
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
 func export(args *docopt.Args) {
 	var manifest map[string]string
 	if err := cliutil.DecodeJSONArg(args.String["<manifest>"], &manifest); err != nil {
