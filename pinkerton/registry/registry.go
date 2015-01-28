@@ -8,6 +8,7 @@ import (
 )
 
 type Session interface {
+	Repo() string
 	ImageID() string
 	GetImage() (*Image, error)
 	GetLayer(string) (io.ReadCloser, error)
