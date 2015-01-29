@@ -438,6 +438,7 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	outreq.ProtoMajor = 1
 	outreq.ProtoMinor = 1
 	outreq.Close = false
+	outreq.Body = &fakeCloseReadCloser{outreq.Body}
 
 	// TODO: Proxy HTTP CONNECT? (example: Go RPC over HTTP)
 
@@ -491,9 +492,11 @@ func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				continue
 			}
 			log.Println("http: proxy error:", err)
+			outreq.Body.(*fakeCloseReadCloser).RealClose()
 			fail(w, 503)
 			return
 		}
+		outreq.Body.(*fakeCloseReadCloser).RealClose()
 		defer res.Body.Close()
 		break
 	}
@@ -707,4 +710,19 @@ func shuffle(s []string) []string {
 		s[i], s[j] = s[j], s[i]
 	}
 	return s
+}
+
+type fakeCloseReadCloser struct {
+	io.ReadCloser
+}
+
+func (w *fakeCloseReadCloser) Close() error {
+	return nil
+}
+
+func (w *fakeCloseReadCloser) RealClose() error {
+	if w.ReadCloser == nil {
+		return nil
+	}
+	return w.ReadCloser.Close()
 }
