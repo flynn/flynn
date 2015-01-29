@@ -110,7 +110,7 @@ func respondWithError(w http.ResponseWriter, err error) {
 			Message: fmt.Sprintf("%s %s", v.Field, v.Message),
 			Detail:  detail,
 		}
-		httphelper.JSON(w, 400, err)
+		httphelper.Error(w, err)
 	default:
 		if err == ErrNotFound {
 			w.WriteHeader(404)
