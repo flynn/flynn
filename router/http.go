@@ -223,23 +223,18 @@ func (h *httpSyncHandler) Remove(id string) error {
 }
 
 func (s *HTTPListener) listenAndServe(started chan<- error) {
-	_, port, err := net.SplitHostPort(s.Addr)
-	if err != nil {
-		started <- err
-		return
-	}
+	var err error
 	s.listener, err = reuseport.NewReusablePortListener("tcp4", s.Addr)
 	started <- err
 	if err != nil {
 		return
 	}
-
 	server := &http.Server{
 		Addr: s.listener.Addr().String(),
 		Handler: fwdProtoHandler{
 			Handler: s,
 			Proto:   "http",
-			Port:    port,
+			Port:    mustPortFromAddr(s.listener.Addr().String()),
 		},
 	}
 
@@ -250,11 +245,6 @@ func (s *HTTPListener) listenAndServe(started chan<- error) {
 var errMissingTLS = errors.New("router: route not found or TLS not configured")
 
 func (s *HTTPListener) listenAndServeTLS(started chan<- error) {
-	_, port, err := net.SplitHostPort(s.TLSAddr)
-	if err != nil {
-		started <- err
-		return
-	}
 	certForHandshake := func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		r := s.findRouteForHost(hello.ServerName)
 		if r == nil {
@@ -275,12 +265,13 @@ func (s *HTTPListener) listenAndServeTLS(started chan<- error) {
 	if err != nil {
 		return
 	}
+
 	server := &http.Server{
 		Addr: s.tlsListener.Addr().String(),
 		Handler: fwdProtoHandler{
 			Handler: s,
 			Proto:   "https",
-			Port:    port,
+			Port:    mustPortFromAddr(s.tlsListener.Addr().String()),
 		},
 	}
 
@@ -696,6 +687,14 @@ func parseConnHeader(value string) []string {
 		}
 	}
 	return headerOpts
+}
+
+func mustPortFromAddr(addr string) string {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		panic(err)
+	}
+	return port
 }
 
 type writeCloser interface {
