@@ -96,7 +96,15 @@ func (jsonError JSONError) Error() string {
 	return fmt.Sprintf("%s: %s", jsonError.Code, jsonError.Message)
 }
 
-func Error(w http.ResponseWriter, err error) {
+func logError(w http.ResponseWriter, err error) {
+	if rw, ok := w.(*ResponseWriter); ok {
+		rw.Context().Value(CtxKeyLogger).(log15.Logger).Error(err.Error())
+	} else {
+		log.Println(err)
+	}
+}
+
+func buildJSONError(err error) *JSONError {
 	var jsonError *JSONError
 	switch v := err.(type) {
 	case *json.SyntaxError, *json.UnmarshalTypeError:
@@ -109,23 +117,28 @@ func Error(w http.ResponseWriter, err error) {
 	case *JSONError:
 		jsonError = v
 	default:
-		rw, ok := w.(*ResponseWriter)
-		if ok {
-			rw.Context().Value(CtxKeyLogger).(log15.Logger).Error(err.Error())
-		} else {
-			log.Println(err)
-		}
 		jsonError = &JSONError{
 			Code:    UnknownError,
 			Message: "Something went wrong",
 		}
 	}
+	return jsonError
+}
 
-	responseCode, ok := errorResponseCodes[jsonError.Code]
-	if !ok {
-		responseCode = 500
+func Error(w http.ResponseWriter, err error) {
+	if rw, ok := w.(*ResponseWriter); !ok || (ok && rw.Status() == 0) {
+		jsonError := buildJSONError(err)
+		if jsonError.Code == UnknownError {
+			logError(w, err)
+		}
+		responseCode, ok := errorResponseCodes[jsonError.Code]
+		if !ok {
+			responseCode = 500
+		}
+		JSON(w, responseCode, jsonError)
+	} else {
+		logError(w, err)
 	}
-	JSON(w, responseCode, jsonError)
 }
 
 func JSON(w http.ResponseWriter, status int, v interface{}) {
