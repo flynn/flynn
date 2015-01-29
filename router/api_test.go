@@ -9,12 +9,9 @@ import (
 	"github.com/flynn/flynn/router/types"
 )
 
-func newTestAPIServer(t etcdrunner.TestingT) *testAPIServer {
-	ec, etcdAddr, killEtcd := newEtcd(t)
-	dc, killDiscoverd := newDiscoverd(t, etcdAddr)
-
-	httpListener := newHTTPListenerClients(t, ec, dc)
-	tcpListener := newTCPListenerClients(t, ec, dc)
+func (s *S) newTestAPIServer(t etcdrunner.TestingT) *testAPIServer {
+	httpListener := s.newHTTPListener(t)
+	tcpListener := s.newTCPListener(t)
 	r := &Router{
 		HTTP: httpListener,
 		TCP:  tcpListener,
@@ -22,7 +19,6 @@ func newTestAPIServer(t etcdrunner.TestingT) *testAPIServer {
 	ts := &testAPIServer{
 		Server:    httptest.NewServer(apiHandler(r)),
 		listeners: []Listener{r.HTTP, r.TCP},
-		cleanup:   []func(){killDiscoverd, killEtcd},
 	}
 
 	ts.Client = client.NewWithAddr(ts.Listener.Addr().String())
@@ -33,7 +29,6 @@ type testAPIServer struct {
 	client.Client
 	*httptest.Server
 	listeners []Listener
-	cleanup   []func()
 }
 
 func (s *testAPIServer) Close() error {
@@ -41,14 +36,11 @@ func (s *testAPIServer) Close() error {
 	for _, l := range s.listeners {
 		l.Close()
 	}
-	for _, cleanup := range s.cleanup {
-		cleanup()
-	}
 	return nil
 }
 
 func (s *S) TestAPIAddTCPRoute(c *C) {
-	srv := newTestAPIServer(c)
+	srv := s.newTestAPIServer(c)
 	defer srv.Close()
 
 	r := (&router.TCPRoute{Service: "test"}).ToRoute()
@@ -79,7 +71,7 @@ func (s *S) TestAPIAddTCPRoute(c *C) {
 }
 
 func (s *S) TestAPIAddHTTPRoute(c *C) {
-	srv := newTestAPIServer(c)
+	srv := s.newTestAPIServer(c)
 	defer srv.Close()
 
 	r := (&router.HTTPRoute{Domain: "example.com", Service: "test"}).ToRoute()
@@ -110,7 +102,7 @@ func (s *S) TestAPIAddHTTPRoute(c *C) {
 }
 
 func (s *S) TestAPISetHTTPRoute(c *C) {
-	srv := newTestAPIServer(c)
+	srv := s.newTestAPIServer(c)
 	defer srv.Close()
 
 	r := (&router.HTTPRoute{Domain: "example.com", Service: "foo"}).ToRoute()
@@ -123,7 +115,7 @@ func (s *S) TestAPISetHTTPRoute(c *C) {
 }
 
 func (s *S) TestAPIListRoutes(c *C) {
-	srv := newTestAPIServer(c)
+	srv := s.newTestAPIServer(c)
 	defer srv.Close()
 
 	r0 := (&router.HTTPRoute{Domain: "example.com", Service: "test"}).ToRoute()

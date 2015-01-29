@@ -38,27 +38,14 @@ func (d *discoverdWrapper) AddServiceAndRegister(service, addr string) (discover
 	return hb, nil
 }
 
-func (d *discoverdWrapper) Close() {
+func (d *discoverdWrapper) Cleanup() {
 	for _, hb := range d.hbs {
 		hb.Close()
 	}
+	d.hbs = nil
 }
 
-func newEtcd(t etcdrunner.TestingT) (EtcdClient, string, func()) {
-	addr, cleanup := etcdrunner.RunEtcdServer(t)
-	return etcd.NewClient([]string{addr}), addr, cleanup
-}
-
-func newDiscoverd(t etcdrunner.TestingT, etcdPort string) (discoverdClient, func()) {
-	dc, killDiscoverd := testutil.BootDiscoverd(t, "", etcdPort)
-	dw := &discoverdWrapper{discoverdClient: dc}
-	return dw, func() {
-		dw.Close()
-		killDiscoverd()
-	}
-}
-
-func setup(t etcdrunner.TestingT, ec EtcdClient, dc discoverdClient) (discoverdClient, EtcdClient, func()) {
+func setup(t etcdrunner.TestingT, ec EtcdClient, dc discoverdClient) (*discoverdWrapper, EtcdClient, func()) {
 	var killEtcd, killDiscoverd func()
 	var etcdAddr string
 	if ec == nil {
@@ -73,7 +60,6 @@ func setup(t etcdrunner.TestingT, ec EtcdClient, dc discoverdClient) (discoverdC
 	dw := &discoverdWrapper{discoverdClient: dc}
 	return dw, ec, func() {
 		if killDiscoverd != nil {
-			dw.Close()
 			killDiscoverd()
 		}
 		if killEtcd != nil {
@@ -85,9 +71,25 @@ func setup(t etcdrunner.TestingT, ec EtcdClient, dc discoverdClient) (discoverdC
 // Hook gocheck up to the "go test" runner
 func Test(t *testing.T) { TestingT(t) }
 
-type S struct{}
+type S struct {
+	discoverd *discoverdWrapper
+	etcd      EtcdClient
+	cleanup   func()
+}
 
 var _ = Suite(&S{})
+
+func (s *S) SetUpSuite(c *C) {
+	s.discoverd, s.etcd, s.cleanup = setup(c, nil, nil)
+}
+
+func (s *S) TearDownSuite(c *C) {
+	s.cleanup()
+}
+
+func (s *S) TearDownTest(c *C) {
+	s.discoverd.Cleanup()
+}
 
 const waitTimeout = time.Second
 
@@ -116,23 +118,23 @@ func waitForEvent(c *C, w Watcher, event string, id string) func() *router.Event
 	}
 }
 
-func discoverdRegisterTCP(c *C, l *tcpListener, addr string) func() {
+func discoverdRegisterTCP(c *C, l *TCPListener, addr string) func() {
 	return discoverdRegisterTCPService(c, l, "test", addr)
 }
 
-func discoverdRegisterTCPService(c *C, l *tcpListener, name, addr string) func() {
-	dc := l.TCPListener.discoverd.(discoverdClient)
-	sc := l.TCPListener.services[name].sc
+func discoverdRegisterTCPService(c *C, l *TCPListener, name, addr string) func() {
+	dc := l.discoverd.(discoverdClient)
+	sc := l.services[name].sc
 	return discoverdRegister(c, dc, sc.(*discoverdServiceCache), name, addr)
 }
 
-func discoverdRegisterHTTP(c *C, l *httpListener, addr string) func() {
+func discoverdRegisterHTTP(c *C, l *HTTPListener, addr string) func() {
 	return discoverdRegisterHTTPService(c, l, "test", addr)
 }
 
-func discoverdRegisterHTTPService(c *C, l *httpListener, name, addr string) func() {
-	dc := l.HTTPListener.discoverd.(discoverdClient)
-	sc := l.HTTPListener.services[name].sc
+func discoverdRegisterHTTPService(c *C, l *HTTPListener, name, addr string) func() {
+	dc := l.discoverd.(discoverdClient)
+	sc := l.services[name].sc
 	return discoverdRegister(c, dc, sc.(*discoverdServiceCache), name, addr)
 }
 
