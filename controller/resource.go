@@ -7,6 +7,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -187,6 +188,12 @@ func (c *controllerAPI) ProvisionResource(ctx context.Context, w http.ResponseWr
 		Env:        data.Env,
 		Apps:       rr.Apps,
 	}
+
+	if err := schema.Validate(res); err != nil {
+		respondWithError(w, err)
+		return
+	}
+
 	if err := c.resourceRepo.Add(res); err != nil {
 		// TODO: attempt to "rollback" provisioning
 		respondWithError(w, err)
@@ -244,6 +251,12 @@ func (c *controllerAPI) PutResource(ctx context.Context, w http.ResponseWriter, 
 
 	resource.ID = params.ByName("resources_id")
 	resource.ProviderID = p.ID
+
+	if err := schema.Validate(resource); err != nil {
+		respondWithError(w, err)
+		return
+	}
+
 	if err := c.resourceRepo.Add(&resource); err != nil {
 		respondWithError(w, err)
 		return

@@ -6,6 +6,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/controller/schema"
 	"github.com/flynn/flynn/pkg/httphelper"
 )
 
@@ -30,8 +31,12 @@ func crud(r *httprouter.Router, resource string, example interface{}, repo Repos
 			return
 		}
 
-		err := repo.Add(thing)
-		if err != nil {
+		if err := schema.Validate(thing); err != nil {
+			respondWithError(rw, err)
+			return
+		}
+
+		if err := repo.Add(thing); err != nil {
 			respondWithError(rw, err)
 			return
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/name"
+	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -238,6 +239,11 @@ func (c *controllerAPI) UpdateApp(ctx context.Context, rw http.ResponseWriter, r
 
 	var data appUpdate
 	if err := httphelper.DecodeJSON(req, &data); err != nil {
+		respondWithError(rw, err)
+		return
+	}
+
+	if err := schema.Validate(data); err != nil {
 		respondWithError(rw, err)
 		return
 	}

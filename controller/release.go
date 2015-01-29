@@ -7,6 +7,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -115,6 +116,12 @@ func (c *controllerAPI) SetAppRelease(ctx context.Context, w http.ResponseWriter
 		return
 	}
 	release := rel.(*ct.Release)
+
+	if err := schema.Validate(release); err != nil {
+		respondWithError(w, err)
+		return
+	}
+
 	app := c.getApp(ctx)
 	c.appRepo.SetRelease(app.ID, release.ID)
 	httphelper.JSON(w, 200, release)

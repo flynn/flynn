@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -19,6 +20,10 @@ import (
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/testutils"
 )
+
+func init() {
+	schemaRoot, _ = filepath.Abs(filepath.Join("..", "website", "schema"))
+}
 
 // Hook gocheck up to the "go test" runner
 func Test(t *testing.T) { TestingT(t) }
@@ -206,7 +211,7 @@ func (s *S) TestCreateArtifact(c *C) {
 	for i, id := range []string{"", random.UUID()} {
 		in := &ct.Artifact{
 			ID:   id,
-			Type: "docker-image",
+			Type: "docker",
 			URI:  fmt.Sprintf("docker://flynn/host?id=adsf%d", i),
 		}
 		out := s.createTestArtifact(c, in)
