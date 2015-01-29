@@ -3,12 +3,15 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"regexp"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/name"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	routerc "github.com/flynn/flynn/router/client"
@@ -21,6 +24,8 @@ type AppRepo struct {
 
 	db *postgres.DB
 }
+
+type appUpdate map[string]interface{}
 
 func NewAppRepo(db *postgres.DB, defaultDomain string, router routerc.Client) *AppRepo {
 	return &AppRepo{db: db, defaultDomain: defaultDomain, router: router}
@@ -226,4 +231,21 @@ func (r *AppRepo) SetRelease(appID string, releaseID string) error {
 func (r *AppRepo) GetRelease(id string) (*ct.Release, error) {
 	row := r.db.QueryRow("SELECT r.release_id, r.artifact_id, r.data, r.created_at FROM apps a JOIN releases r USING (release_id) WHERE a.app_id = $1", id)
 	return scanRelease(row)
+}
+
+func (c *controllerAPI) UpdateApp(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
+	params := httphelper.ParamsFromContext(ctx)
+
+	var data appUpdate
+	if err := httphelper.DecodeJSON(req, &data); err != nil {
+		respondWithError(rw, err)
+		return
+	}
+
+	app, err := c.appRepo.Update(params.ByName("apps_id"), data)
+	if err != nil {
+		respondWithError(rw, err)
+		return
+	}
+	httphelper.JSON(rw, 200, app)
 }
