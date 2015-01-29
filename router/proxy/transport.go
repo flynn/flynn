@@ -64,6 +64,10 @@ func (t *transport) setStickyBackend(res *http.Response, originalStickyBackend s
 }
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// http.Transport closes the request body on a failed dial, issue #875
+	req.Body = &fakeCloseReadCloser{req.Body}
+	defer req.Body.(*fakeCloseReadCloser).RealClose()
+
 	stickyBackend := t.getStickyBackend(req)
 	backends := t.getOrderedBackends(stickyBackend)
 	for _, backend := range backends {
@@ -91,6 +95,21 @@ func customDial(network, addr string) (net.Conn, error) {
 
 type dialErr struct {
 	error
+}
+
+type fakeCloseReadCloser struct {
+	io.ReadCloser
+}
+
+func (w *fakeCloseReadCloser) Close() error {
+	return nil
+}
+
+func (w *fakeCloseReadCloser) RealClose() error {
+	if w.ReadCloser == nil {
+		return nil
+	}
+	return w.ReadCloser.Close()
 }
 
 func shuffle(s []string) {
