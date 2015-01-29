@@ -16,6 +16,7 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/websocket"
 	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
+	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/router/types"
 )
@@ -1052,4 +1053,48 @@ func (s *S) TestHTTPResponseStreaming(c *C) {
 	_, err = res.Body.Read(buf)
 	c.Assert(err, IsNil)
 	c.Assert(string(buf), Equals, "a")
+}
+
+func (s *S) TestHTTPHijackUpgrade(c *C) {
+	h := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		rw.Header().Set("Connection", "upgrade")
+		rw.Header().Set("Upgrade", "pinger")
+		rw.WriteHeader(101)
+
+		conn, bufrw, err := rw.(http.Hijacker).Hijack()
+		defer conn.Close()
+
+		line, _, err := bufrw.ReadLine()
+		c.Assert(err, IsNil)
+		c.Assert(string(line), Equals, "ping!")
+
+		bufrw.Write([]byte("pong!\n"))
+		bufrw.Flush()
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(h))
+	defer srv.Close()
+
+	l := s.newHTTPListener(c)
+	defer l.Close()
+
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "127.0.0.1", // TODO: httpclient overrides the Host header
+		Service: "example-com",
+	}).ToRoute())
+	discoverdRegisterHTTPService(c, l, "example-com", srv.Listener.Addr().String())
+
+	client := httpclient.Client{
+		URL:  "http://" + l.Addr,
+		HTTP: http.DefaultClient,
+	}
+
+	rwc, err := client.Hijack("GET", "/", nil, nil)
+	c.Assert(err, IsNil)
+
+	rwc.Write([]byte("ping!\n"))
+
+	pong, err := ioutil.ReadAll(rwc)
+	c.Assert(err, IsNil)
+	c.Assert(string(pong), Equals, "pong!\n")
 }
