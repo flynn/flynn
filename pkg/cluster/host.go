@@ -11,6 +11,9 @@ import (
 
 // Host is a client for a host daemon.
 type Host interface {
+	// ID returns the ID of the host this client communicates with.
+	ID() string
+
 	// ListJobs lists the jobs running on the host.
 	ListJobs() (map[string]host.ActiveJob, error)
 
@@ -30,20 +33,28 @@ type Host interface {
 }
 
 type hostClient struct {
-	c *httpclient.Client
+	id string
+	c  *httpclient.Client
 }
 
 // NewHostClient creates a new Host that uses client to communicate with it.
 // addr is used by Attach.
-func NewHostClient(addr string, h *http.Client) Host {
+func NewHostClient(id string, addr string, h *http.Client) Host {
 	if h == nil {
 		h = http.DefaultClient
 	}
-	return &hostClient{c: &httpclient.Client{
-		ErrNotFound: ErrNotFound,
-		URL:         addr,
-		HTTP:        h,
-	}}
+	return &hostClient{
+		id: id,
+		c: &httpclient.Client{
+			ErrNotFound: ErrNotFound,
+			URL:         addr,
+			HTTP:        h,
+		},
+	}
+}
+
+func (c *hostClient) ID() string {
+	return c.id
 }
 
 func (c *hostClient) ListJobs() (map[string]host.ActiveJob, error) {
