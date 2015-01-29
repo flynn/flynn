@@ -59,6 +59,7 @@ func main() {
 		{"key_get", e.getKey},
 		{"key_list", e.listKeys},
 		{"key_delete", e.deleteKey},
+		{"app_create_error", e.createAppError},
 		{"app_create", e.createApp},
 		{"app_initial_release_get", e.getInitialAppRelease},
 		{"app_get", e.getApp},
@@ -171,6 +172,14 @@ func (e *generator) createApp() {
 		e.resourceIds["app"] = app.ID
 		e.resourceIds["app-name"] = app.Name
 	}
+}
+
+func (e *generator) createAppError() {
+	// create an invalid app
+	// this should return a validation error
+	e.client.CreateApp(&ct.App{
+		Name: "this is not valid",
+	})
 }
 
 func (e *generator) getInitialAppRelease() {
