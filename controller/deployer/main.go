@@ -21,6 +21,8 @@ type context struct {
 	log    log15.Logger
 }
 
+const workerCount = 10
+
 func main() {
 	log := log15.New("app", "deployer")
 
@@ -46,8 +48,9 @@ func main() {
 	}
 
 	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
-		ConnConfig:   pgxcfg,
-		AfterConnect: que.PrepareStatements,
+		ConnConfig:     pgxcfg,
+		AfterConnect:   que.PrepareStatements,
+		MaxConnections: workerCount,
 	})
 	if err != nil {
 		log.Error("Failed to create a pgx.ConnPool", "err", err)
@@ -58,7 +61,7 @@ func main() {
 	q := que.NewClient(pgxpool)
 	wm := que.WorkMap{"deployment": cxt.HandleJob}
 
-	workers := que.NewWorkerPool(q, wm, 10)
+	workers := que.NewWorkerPool(q, wm, workerCount)
 	go workers.Start()
 	shutdown.BeforeExit(func() { workers.Shutdown() })
 
