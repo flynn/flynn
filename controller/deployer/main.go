@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/bgentry/que-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
@@ -62,6 +63,7 @@ func main() {
 	wm := que.WorkMap{"deployment": cxt.HandleJob}
 
 	workers := que.NewWorkerPool(q, wm, workerCount)
+	workers.Interval = 5 * time.Second
 	go workers.Start()
 	shutdown.BeforeExit(func() { workers.Shutdown() })
 
