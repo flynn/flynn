@@ -397,7 +397,7 @@ func (s *CLISuite) TestLogStderr(t *c.C) {
 		log := app.flynnCmd(args...)
 		log.Stdout = &stdout
 		log.Stderr = &stderr
-		t.Assert(log.Run(), c.IsNil)
+		t.Assert(log.Run(), c.IsNil, c.Commentf("STDERR = %q", stderr.String()))
 		return
 	}
 	stdout, stderr := runLog(false)
@@ -413,7 +413,9 @@ func (s *CLISuite) TestLogStderr(t *c.C) {
 func (s *CLISuite) TestLogFollow(t *c.C) {
 	app := s.newCliTestApp(t)
 
+	var stderr bytes.Buffer
 	job := app.flynnCmd("run", "cat")
+	job.Stderr = &stderr
 	jobStdin, err := job.StdinPipe()
 	t.Assert(err, c.IsNil)
 	t.Assert(job.Start(), c.IsNil)
@@ -460,6 +462,9 @@ func (s *CLISuite) TestLogFollow(t *c.C) {
 		expected := fmt.Sprintf("line %d\n", i)
 		io.WriteString(jobStdin, expected)
 		actual, err := readline()
+		if err != nil {
+			t.Logf("STDERR = %q", stderr.String())
+		}
 		t.Assert(err, c.IsNil)
 		t.Assert(actual, c.Equals, expected)
 	}
