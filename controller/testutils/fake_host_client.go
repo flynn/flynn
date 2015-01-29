@@ -27,7 +27,10 @@ type FakeHostClient struct {
 	listenMtx sync.RWMutex
 }
 
+func (c *FakeHostClient) ID() string { return c.hostID }
+
 func (c *FakeHostClient) ListJobs() (map[string]host.ActiveJob, error) { return nil, nil }
+
 func (c *FakeHostClient) Attach(req *host.AttachReq, wait bool) (cluster.AttachClient, error) {
 	f, ok := c.attach[req.JobID]
 	if !ok {

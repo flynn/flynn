@@ -152,7 +152,7 @@ func (c *Client) AddJobs(jobs map[string][]*host.Job) (map[string]host.Host, err
 func (c *Client) DialHost(id string) (Host, error) {
 	// don't lookup addr if leader id == id
 	if c.LeaderID() == id {
-		return NewHostClient(c.c.URL, nil), nil
+		return NewHostClient(id, c.c.URL, nil), nil
 	}
 
 	instances, err := c.service.Instances()
@@ -170,7 +170,7 @@ func (c *Client) DialHost(id string) (Host, error) {
 		return nil, ErrNoServers
 	}
 	addr := "http://" + instance.Addr
-	return NewHostClient(addr, nil), nil
+	return NewHostClient(id, addr, nil), nil
 }
 
 // RegisterHost is used by the host service to register itself with the leader
