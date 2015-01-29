@@ -97,17 +97,17 @@ func (jsonError JSONError) Error() string {
 }
 
 func Error(w http.ResponseWriter, err error) {
-	var jsonError JSONError
-	switch err.(type) {
+	var jsonError *JSONError
+	switch v := err.(type) {
 	case *json.SyntaxError, *json.UnmarshalTypeError:
-		jsonError = JSONError{
+		jsonError = &JSONError{
 			Code:    SyntaxError,
 			Message: "The provided JSON input is invalid",
 		}
 	case JSONError:
-		jsonError = err.(JSONError)
+		jsonError = &v
 	case *JSONError:
-		jsonError = *err.(*JSONError)
+		jsonError = v
 	default:
 		rw, ok := w.(*ResponseWriter)
 		if ok {
@@ -115,7 +115,7 @@ func Error(w http.ResponseWriter, err error) {
 		} else {
 			log.Println(err)
 		}
-		jsonError = JSONError{
+		jsonError = &JSONError{
 			Code:    UnknownError,
 			Message: "Something went wrong",
 		}
