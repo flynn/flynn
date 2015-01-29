@@ -39,6 +39,7 @@ func New(root string, driver graphdriver.Driver) (*Store, error) {
 var ErrExists = errors.New("store: image exists")
 
 func (s *Store) Add(img *registry.Image) (err error) {
+	defer img.Close()
 	if err := s.lock(img.ID); err != nil {
 		return err
 	}
