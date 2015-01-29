@@ -31,10 +31,6 @@ func IsActive() bool {
 }
 
 func BeforeExit(f func()) {
-	h.BeforeExit(f)
-}
-
-func (h *handler) BeforeExit(f func()) {
 	h.mtx.Lock()
 	h.stack = append(h.stack, f)
 	h.mtx.Unlock()
@@ -49,10 +45,6 @@ func ExitWithCode(code int) {
 }
 
 func Fatal(v ...interface{}) {
-	h.Fatal(v)
-}
-
-func (h *handler) Fatal(v ...interface{}) {
 	h.exit(errors.New(fmt.Sprint(v...)), 1, recover())
 }
 
