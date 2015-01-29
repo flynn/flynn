@@ -14,9 +14,19 @@ import (
 // in the event of stateful catastrophe (zfs is quite capable of carrying state
 // between tests!).
 
+type ZpoolTests struct{}
+
+var _ = Suite(&ZpoolTests{})
+
+func (ZpoolTests) SetUpSuite(c *C) {
+	// Skip all tests in this suite if not running as root.
+	// Many zfs operations require root priviledges.
+	skipIfNotRoot(c)
+}
+
 var one_gig = int64(math.Pow(2, float64(30)))
 
-func (S) TestProviderRequestingNonexistentZpoolFails(c *C) {
+func (ZpoolTests) TestProviderRequestingNonexistentZpoolFails(c *C) {
 	dataset := "testpool-starfish"
 	provider, err := NewProvider(&ProviderConfig{
 		DatasetName: dataset,
@@ -27,7 +37,7 @@ func (S) TestProviderRequestingNonexistentZpoolFails(c *C) {
 	c.Assert(isDatasetNotExistsError(err), Equals, true)
 }
 
-func (S) TestProviderAutomaticFileVdevZpoolCreation(c *C) {
+func (ZpoolTests) TestProviderAutomaticFileVdevZpoolCreation(c *C) {
 	dataset := "testpool-dinosaur"
 
 	// don't actually use ioutil.Tempfile;
@@ -57,7 +67,7 @@ func (S) TestProviderAutomaticFileVdevZpoolCreation(c *C) {
 	c.Assert(os.IsNotExist(err), Equals, true)
 }
 
-func (S) TestProviderExistingZpoolDetection(c *C) {
+func (ZpoolTests) TestProviderExistingZpoolDetection(c *C) {
 	dataset := "testpool-festival"
 
 	backingFilePath := fmt.Sprintf("/tmp/zfs-%s", random.String(12))
