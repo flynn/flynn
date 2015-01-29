@@ -17,6 +17,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/name"
+	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -28,6 +29,8 @@ import (
 )
 
 var ErrNotFound = errors.New("controller: resource not found")
+
+var schemaRoot = "/etc/flynn-controller/jsonschema"
 
 func main() {
 	defer shutdown.Exit()
@@ -121,6 +124,11 @@ func respondWithError(w http.ResponseWriter, err error) {
 }
 
 func appHandler(c handlerConfig) http.Handler {
+	err := schema.Load(schemaRoot)
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+
 	providerRepo := NewProviderRepo(c.db)
 	keyRepo := NewKeyRepo(c.db)
 	resourceRepo := NewResourceRepo(c.db)
@@ -151,6 +159,8 @@ func appHandler(c handlerConfig) http.Handler {
 	crud(httpRouter, "providers", ct.Provider{}, providerRepo)
 	crud(httpRouter, "artifacts", ct.Artifact{}, artifactRepo)
 	crud(httpRouter, "keys", ct.Key{}, keyRepo)
+
+	httpRouter.POST("/apps/:apps_id", httphelper.WrapHandler(api.UpdateApp))
 
 	httpRouter.PUT("/apps/:apps_id/formations/:releases_id", httphelper.WrapHandler(api.appLookup(api.PutFormation)))
 	httpRouter.GET("/apps/:apps_id/formations/:releases_id", httphelper.WrapHandler(api.appLookup(api.GetFormation)))

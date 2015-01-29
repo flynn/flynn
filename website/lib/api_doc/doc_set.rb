@@ -3,6 +3,8 @@ require 'active_support/core_ext/string/strip'
 
 module APIDoc
   class DocSet
+    ExampleNotFoundError = Class.new(StandardError)
+
     def self.compile(name, id, output_path, exclude = [])
       markdown = new(name, id, exclude).to_markdown
       File.open(output_path, 'w') do |file|
@@ -33,7 +35,10 @@ module APIDoc
           schema['examples'].to_a.map { |id|
             id = "https://flynn.io/"+ id
             example = find_example(id)
-            example ? example.to_markdown : "```\nexample #{id} not found\n```"
+            if example.nil?
+              raise ExampleNotFoundError.new("example #{id} not found")
+            end
+            example.to_markdown
           }
         ]
       end.flatten.join("\n\n")

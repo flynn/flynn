@@ -13,6 +13,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -137,6 +138,12 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 		NewReleaseID: release.ID,
 		Strategy:     app.Strategy,
 	}
+
+	if err := schema.Validate(deployment); err != nil {
+		respondWithError(w, err)
+		return
+	}
+
 	if err := c.deploymentRepo.Add(deployment); err != nil {
 		if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" && e.Constraint == "isolate_deploys" {
 			httphelper.Error(w, httphelper.JSONError{

@@ -15,6 +15,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -237,6 +238,12 @@ func (c *controllerAPI) PutJob(ctx context.Context, w http.ResponseWriter, req *
 	}
 
 	job.AppID = app.ID
+
+	if err := schema.Validate(job); err != nil {
+		respondWithError(w, err)
+		return
+	}
+
 	if err := c.jobRepo.Add(&job); err != nil {
 		respondWithError(w, err)
 		return
@@ -444,6 +451,11 @@ func (c *controllerAPI) KillJob(ctx context.Context, w http.ResponseWriter, req 
 func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	var newJob ct.NewJob
 	if err := httphelper.DecodeJSON(req, &newJob); err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	if err := schema.Validate(newJob); err != nil {
 		respondWithError(w, err)
 		return
 	}

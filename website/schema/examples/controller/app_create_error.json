@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/examples/controller/app_create_error#",
+  "title": "Create invalid app",
+  "description": "",
+  "allOf": [
+    { "$ref": "/schema/examples/base#" },
+    {
+      "type": "object",
+      "properties": {
+        "request": {
+          "type": "object",
+          "required": ["body"],
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": ["POST"]
+            }
+          }
+        },
+        "response": {
+          "type": "object",
+          "required": ["body"],
+          "properties": {
+            "body": {
+              "$ref": "/schema/controller/error#"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "response": {
+          "type": "object",
+          "required": ["body"],
+          "properties": {
+            "body": {
+              "code": {
+                "type": "string",
+                "enum": ["validation_error"]
+              },
+              "detail": {
+                "type": "object",
+                "properties": {
+                  "field": {
+                    "type": "string",
+                    "enum": ["name"]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

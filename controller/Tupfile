@@ -2,4 +2,7 @@ include_rules
 : |> !go |> bin/flynn-controller
 : |> !go ./scheduler |> bin/flynn-scheduler
 : |> !go ./deployer |> bin/flynn-deployer
-: bin/* examples/flynn-controller-examples |> !docker-layer1 |>
+: foreach $(ROOT)/website/schema/*.json |> !cp |> bin/jsonschema/%g.json
+: foreach $(ROOT)/website/schema/controller/*.json |> !cp |> bin/jsonschema/controller/%g.json
+: foreach $(ROOT)/website/schema/router/*.json |> !cp |> bin/jsonschema/router/%g.json
+: bin/* bin/jsonschema/*.json bin/jsonschema/controller/*.json bin/jsonschema/router/*.json examples/flynn-controller-examples |> !docker-layer1 |>
