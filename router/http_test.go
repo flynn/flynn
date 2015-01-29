@@ -742,13 +742,13 @@ func (s *S) TestNoResponsiveBackends(c *C) {
 	discoverdRegisterHTTPService(c, l, "example-com", srv1.Listener.Addr().String())
 	discoverdRegisterHTTPService(c, l, "example-com", srv2.Listener.Addr().String())
 
-	tests := []struct {
-		upgrade bool
-	}{
+	type ts struct{ upgrade bool }
+	tests := []ts{
 		{upgrade: false}, // regular path
 		{upgrade: true},  // tcp/websocket path
 	}
-	for _, test := range tests {
+
+	runTest := func(test ts) {
 		c.Log("upgrade:", test.upgrade)
 		req := newReq("http://"+l.Addr, "example.com")
 		if test.upgrade {
@@ -762,6 +762,10 @@ func (s *S) TestNoResponsiveBackends(c *C) {
 		data, err := ioutil.ReadAll(res.Body)
 		c.Assert(err, IsNil)
 		c.Assert(string(data), Equals, "Service Unavailable\n")
+	}
+
+	for _, test := range tests {
+		runTest(test)
 	}
 }
 
