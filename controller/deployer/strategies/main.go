@@ -50,10 +50,18 @@ type jobEvents map[string]map[string]map[string]int
 func waitForJobEvents(events chan *ct.JobEvent, deployEvents chan<- ct.DeploymentEvent, expected jobEvents) error {
 	fmt.Printf("waiting for job events: %v\n", expected)
 	actual := make(jobEvents)
+outer:
 	for {
 	inner:
 		select {
-		case event := <-events:
+		case event, ok := <-events:
+			if !ok {
+				// if this happens, it means defer cleanup is in progress
+
+				// TODO: this could also happen if the stream connection
+				// dropped. handle that case
+				break outer
+			}
 			fmt.Printf("got job event: %s %s %s\n", event.Type, event.JobID, event.State)
 			if _, ok := actual[event.Job.ReleaseID]; !ok {
 				actual[event.Job.ReleaseID] = make(map[string]map[string]int)
@@ -94,4 +102,5 @@ func waitForJobEvents(events chan *ct.JobEvent, deployEvents chan<- ct.Deploymen
 			return fmt.Errorf("timed out waiting for job events: ", expected)
 		}
 	}
+	return nil
 }
