@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -8,6 +9,7 @@ import (
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
+	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -47,39 +49,22 @@ func (s *TCPTestServer) Close() error { return s.l.Close() }
 
 const firstTCPPort, lastTCPPort = 10001, 10010
 
-type tcpListener struct {
-	*TCPListener
-	cleanup func()
+func (s *S) newTCPListener(t etcdrunner.TestingT) *TCPListener {
+	return s.newTCPListenerPrefix(t, random.String(8))
 }
 
-func (l *tcpListener) Close() error {
-	l.TCPListener.Close()
-	if l.cleanup != nil {
-		l.cleanup()
-	}
-	return nil
-}
-
-func newTCPListenerClients(t etcdrunner.TestingT, etcd EtcdClient, discoverd discoverdClient) *tcpListener {
-	discoverd, etcd, cleanup := setup(t, etcd, discoverd)
-	l := &tcpListener{
-		&TCPListener{
-			IP:        "127.0.0.1",
-			startPort: firstTCPPort,
-			endPort:   lastTCPPort,
-			ds:        NewEtcdDataStore(etcd, "/router/tcp/"),
-			discoverd: discoverd,
-		},
-		cleanup,
+func (s *S) newTCPListenerPrefix(t etcdrunner.TestingT, prefix string) *TCPListener {
+	l := &TCPListener{
+		IP:        "127.0.0.1",
+		startPort: firstTCPPort,
+		endPort:   lastTCPPort,
+		ds:        NewEtcdDataStore(s.etcd, fmt.Sprintf("/router/tcp/%s/", prefix)),
+		discoverd: s.discoverd,
 	}
 	if err := l.Start(); err != nil {
 		t.Fatal(err)
 	}
 	return l
-}
-
-func newTCPListener(t etcdrunner.TestingT) *tcpListener {
-	return newTCPListenerClients(t, nil, nil)
 }
 
 func assertTCPConn(c *C, addr, prefix string) {
@@ -101,7 +86,7 @@ func (s *S) TestAddTCPRoute(c *C) {
 	defer srv1.Close()
 	defer srv2.Close()
 
-	l := newTCPListener(c)
+	l := s.newTCPListener(c)
 	defer l.Close()
 
 	r := addTCPRoute(c, l, portInt)
@@ -124,7 +109,7 @@ func (s *S) TestAddTCPRoute(c *C) {
 	c.Assert(err, Not(IsNil))
 }
 
-func addTCPRoute(c *C, l *tcpListener, port int) *router.TCPRoute {
+func addTCPRoute(c *C, l *TCPListener, port int) *router.TCPRoute {
 	wait := waitForEvent(c, l, "set", "")
 	r := (&router.TCPRoute{
 		Service: "test",
@@ -138,16 +123,14 @@ func addTCPRoute(c *C, l *tcpListener, port int) *router.TCPRoute {
 
 func (s *S) TestInitialTCPSync(c *C) {
 	const addr, port = "127.0.0.1:45000", 45000
-	etcd, _, cleanup := newEtcd(c)
-	defer cleanup()
-	l := newTCPListenerClients(c, etcd, nil)
+	l := s.newTCPListenerPrefix(c, "initial")
 	addTCPRoute(c, l, port)
 	l.Close()
 
 	srv := NewTCPTestServer("1")
 	defer srv.Close()
 
-	l = newTCPListenerClients(c, etcd, nil)
+	l = s.newTCPListenerPrefix(c, "initial")
 	defer l.Close()
 
 	discoverdRegisterTCP(c, l, srv.Addr)
@@ -156,7 +139,7 @@ func (s *S) TestInitialTCPSync(c *C) {
 }
 
 func (s *S) TestTCPPortAllocation(c *C) {
-	l := newTCPListener(c)
+	l := s.newTCPListener(c)
 	defer l.Close()
 	for i := 0; i < 2; i++ {
 		ports := make([]string, 0, 10)

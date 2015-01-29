@@ -16,6 +16,7 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/websocket"
 	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
+	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -56,41 +57,6 @@ func httpTestHandler(id string) http.Handler {
 	})
 }
 
-type httpListener struct {
-	*HTTPListener
-	cleanup func()
-}
-
-func (l *httpListener) Close() error {
-	l.HTTPListener.Close()
-	if l.cleanup != nil {
-		l.cleanup()
-	}
-	return nil
-}
-
-func newHTTPListenerClients(t etcdrunner.TestingT, etcd EtcdClient, discoverd discoverdClient) *httpListener {
-	discoverd, etcd, cleanup := setup(t, etcd, discoverd)
-	pair, err := tls.X509KeyPair(localhostCert, localhostKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	l := &httpListener{
-		&HTTPListener{
-			Addr:      "127.0.0.1:0",
-			TLSAddr:   "127.0.0.1:0",
-			keypair:   pair,
-			ds:        NewEtcdDataStore(etcd, "/router/http/"),
-			discoverd: discoverd,
-		},
-		cleanup,
-	}
-	if err := l.Start(); err != nil {
-		t.Fatal(err)
-	}
-	return l
-}
-
 func newHTTPClient(serverName string) *http.Client {
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(localhostCert)
@@ -105,8 +71,26 @@ func newHTTPClient(serverName string) *http.Client {
 	}
 }
 
-func newHTTPListener(t etcdrunner.TestingT) *httpListener {
-	return newHTTPListenerClients(t, nil, nil)
+func (s *S) newHTTPListener(t etcdrunner.TestingT) *HTTPListener {
+	return s.newHTTPListenerPrefix(t, random.String(8))
+}
+
+func (s *S) newHTTPListenerPrefix(t etcdrunner.TestingT, prefix string) *HTTPListener {
+	pair, err := tls.X509KeyPair(localhostCert, localhostKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l := &HTTPListener{
+		Addr:      "127.0.0.1:0",
+		TLSAddr:   "127.0.0.1:0",
+		keypair:   pair,
+		ds:        NewEtcdDataStore(s.etcd, fmt.Sprintf("/router/http/%s/", prefix)),
+		discoverd: s.discoverd,
+	}
+	if err := l.Start(); err != nil {
+		t.Fatal(err)
+	}
+	return l
 }
 
 // https://code.google.com/p/go/issues/detail?id=5381
@@ -114,7 +98,7 @@ func (s *S) TestIssue5381(c *C) {
 	srv := httptest.NewServer(httpTestHandler(""))
 	defer srv.Close()
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addHTTPRoute(c, l)
@@ -130,7 +114,7 @@ func (s *S) TestAddHTTPRoute(c *C) {
 	defer srv1.Close()
 	defer srv2.Close()
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	r := addHTTPRoute(c, l)
@@ -201,7 +185,7 @@ func assertGetCookie(c *C, url, host, expected string, cookie *http.Cookie) *htt
 	return nil
 }
 
-func addHTTPRoute(c *C, l *httpListener) *router.Route {
+func addHTTPRoute(c *C, l *HTTPListener) *router.Route {
 	return addRoute(c, l, (&router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "test",
@@ -210,7 +194,7 @@ func addHTTPRoute(c *C, l *httpListener) *router.Route {
 	}).ToRoute())
 }
 
-func addStickyHTTPRoute(c *C, l *httpListener) *router.Route {
+func addStickyHTTPRoute(c *C, l *HTTPListener) *router.Route {
 	return addRoute(c, l, (&router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "test",
@@ -226,7 +210,7 @@ func (s *S) TestWildcardRouting(c *C) {
 	defer srv2.Close()
 	defer srv3.Close()
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addRoute(c, l, (&router.HTTPRoute{
@@ -252,16 +236,14 @@ func (s *S) TestWildcardRouting(c *C) {
 }
 
 func (s *S) TestHTTPInitialSync(c *C) {
-	etcd, _, cleanup := newEtcd(c)
-	defer cleanup()
-	l := newHTTPListenerClients(c, etcd, nil)
+	l := s.newHTTPListenerPrefix(c, "initial")
 	addHTTPRoute(c, l)
 	l.Close()
 
 	srv := httptest.NewServer(httpTestHandler("1"))
 	defer srv.Close()
 
-	l = newHTTPListenerClients(c, etcd, nil)
+	l = s.newHTTPListenerPrefix(c, "initial")
 	defer l.Close()
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
@@ -274,7 +256,7 @@ func (s *S) TestHTTPInitialSync(c *C) {
 func (s *S) TestHTTPServiceHandlerBackendConnectionClosed(c *C) {
 	srv := httptest.NewServer(httpTestHandler("1"))
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addHTTPRoute(c, l)
@@ -309,12 +291,12 @@ func httpHeaderTestHandler(c *C, ip, port string) http.Handler {
 
 // issue #105
 func (s *S) TestHTTPHeaders(c *C) {
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addHTTPRoute(c, l)
 
-	port := mustPortFromAddr(l.HTTPListener.listener.Addr().String())
+	port := mustPortFromAddr(l.listener.Addr().String())
 	srv := httptest.NewServer(httpHeaderTestHandler(c, "127.0.0.1", port))
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
@@ -323,12 +305,12 @@ func (s *S) TestHTTPHeaders(c *C) {
 }
 
 func (s *S) TestHTTPHeadersFromClient(c *C) {
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addHTTPRoute(c, l)
 
-	port := mustPortFromAddr(l.HTTPListener.listener.Addr().String())
+	port := mustPortFromAddr(l.listener.Addr().String())
 	srv := httptest.NewServer(httpHeaderTestHandler(c, "192.168.1.1, 127.0.0.1", port))
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
@@ -350,7 +332,7 @@ func (s *S) TestHTTPProxyHeadersFromClient(c *C) {
 	srv := httptest.NewServer(h)
 	defer srv.Close()
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addHTTPRoute(c, l)
@@ -385,7 +367,7 @@ func (s *S) TestConnectionCloseHeaderFromClient(c *C) {
 	srv := httptest.NewServer(h)
 	defer srv.Close()
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addHTTPRoute(c, l)
@@ -404,7 +386,7 @@ func (s *S) TestConnectionHeaders(c *C) {
 	srv := httptest.NewServer(httpTestHandler("ok"))
 	defer srv.Close()
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addHTTPRoute(c, l)
@@ -528,7 +510,7 @@ func (s *S) TestHTTPWebsocket(c *C) {
 	)
 	defer srv.Close()
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addHTTPRoute(c, l)
@@ -560,7 +542,7 @@ func (s *S) TestUpgradeHeaderIsCaseInsensitive(c *C) {
 	}))
 	defer srv.Close()
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	url := "http://" + l.Addr
 	defer l.Close()
 
@@ -592,7 +574,7 @@ func (s *S) TestStickyHTTPRoute(c *C) {
 	defer srv1.Close()
 	defer srv2.Close()
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addStickyHTTPRoute(c, l)
@@ -620,7 +602,7 @@ func (s *S) TestStickyHTTPRouteWebsocket(c *C) {
 	defer srv1.Close()
 	defer srv2.Close()
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	url := "http://" + l.Addr
 	defer l.Close()
 
@@ -695,7 +677,7 @@ func (s *S) TestNoStickyHeaderAtBackend(c *C) {
 	srv := httptest.NewServer(h)
 	defer srv.Close()
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addHTTPRoute(c, l)
@@ -706,7 +688,7 @@ func (s *S) TestNoStickyHeaderAtBackend(c *C) {
 }
 
 func (s *S) TestNoBackends(c *C) {
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addRoute(c, l, (&router.HTTPRoute{
@@ -726,7 +708,7 @@ func (s *S) TestNoBackends(c *C) {
 }
 
 func (s *S) TestNoResponsiveBackends(c *C) {
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	// close both servers immediately
@@ -771,7 +753,7 @@ func (s *S) TestNoResponsiveBackends(c *C) {
 }
 
 func (s *S) TestClosedBackendRetriesAnotherBackend(c *C) {
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	srv1 := httptest.NewServer(httpTestHandler("1"))
@@ -835,11 +817,11 @@ func (s *S) TestErrorAfterConnOnlyHitsOneBackend(c *C) {
 		{upgrade: true},  // tcp/websocket path
 	}
 	for _, test := range tests {
-		runTestErrorAfterConnOnlyHitsOneBackend(c, test.upgrade)
+		s.runTestErrorAfterConnOnlyHitsOneBackend(c, test.upgrade)
 	}
 }
 
-func runTestErrorAfterConnOnlyHitsOneBackend(c *C, upgrade bool) {
+func (s *S) runTestErrorAfterConnOnlyHitsOneBackend(c *C, upgrade bool) {
 	c.Log("upgrade:", upgrade)
 	closec := make(chan struct{})
 	defer close(closec)
@@ -870,7 +852,7 @@ func runTestErrorAfterConnOnlyHitsOneBackend(c *C, upgrade bool) {
 	go acceptOnlyOnce(srv1)
 	go acceptOnlyOnce(srv2)
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addHTTPRoute(c, l)
@@ -899,7 +881,7 @@ func (s *S) TestKeepaliveHostname(c *C) {
 	defer srv1.Close()
 	defer srv2.Close()
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addRoute(c, l, (&router.HTTPRoute{
@@ -920,7 +902,7 @@ func (s *S) TestKeepaliveHostname(c *C) {
 
 // issue #177
 func (s *S) TestRequestURIEscaping(c *C) {
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 	var prefix string
 	uri := "/O08YqxVCf6KRJM6I8p594tzJizQ=/200x300/filters:no_upscale()/http://i.imgur.com/Wru0cNM.jpg?foo=bar"
@@ -946,7 +928,7 @@ func (s *S) TestRequestURIEscaping(c *C) {
 }
 
 func (s *S) TestRequestQueryParams(c *C) {
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	req := newReq(fmt.Sprintf("http://%s/query", l.Addr), "example.com")
@@ -975,7 +957,7 @@ func (s *S) TestDefaultServerKeypair(c *C) {
 	defer srv1.Close()
 	defer srv2.Close()
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addRoute(c, l, (&router.HTTPRoute{
@@ -1000,7 +982,7 @@ func (s *S) TestCaseInsensitiveDomain(c *C) {
 	}))
 	defer srv.Close()
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addRoute(c, l, (&router.HTTPRoute{
@@ -1020,7 +1002,7 @@ func (s *S) TestHostPortStripping(c *C) {
 	}))
 	defer srv.Close()
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addRoute(c, l, (&router.HTTPRoute{
@@ -1048,7 +1030,7 @@ func (s *S) TestHTTPResponseStreaming(c *C) {
 	defer srv.Close()
 	defer close(done)
 
-	l := newHTTPListener(c)
+	l := s.newHTTPListener(c)
 	defer l.Close()
 
 	addRoute(c, l, (&router.HTTPRoute{
