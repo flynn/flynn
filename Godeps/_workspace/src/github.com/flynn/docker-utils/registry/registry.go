@@ -74,11 +74,12 @@ func (r Registry) EnsureRepoReady(name string) error {
 }
 
 func (r Registry) CreateAncestry(hashid string) error {
-	hashes := []string{}
-	// Unmarshal the json for the layer, get the parent
+	// the ancestry starts at the given ID and ends at the scratch layer
+	hashes := []string{hashid}
 
 	thisHash := hashid
 	for {
+		// Unmarshal the json for the layer, get the parent
 		imageJson, err := ioutil.ReadFile(r.JsonFileName(thisHash))
 		if err != nil {
 			return err

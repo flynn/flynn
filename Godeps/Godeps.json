@@ -259,18 +259,18 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/docker-utils/registry",
-			"Comment": "1.1.1-5-g97f04d8",
-			"Rev": "97f04d814b31f35fa978cb0e4bc042025cca0848"
+			"Comment": "1.1.1-7-g2bfd558",
+			"Rev": "2bfd558e1d0eb036d930957dc3bbd8c38ab1fae1"
 		},
 		{
 			"ImportPath": "github.com/flynn/docker-utils/sum",
-			"Comment": "1.1.1-5-g97f04d8",
-			"Rev": "97f04d814b31f35fa978cb0e4bc042025cca0848"
+			"Comment": "1.1.1-7-g2bfd558",
+			"Rev": "2bfd558e1d0eb036d930957dc3bbd8c38ab1fae1"
 		},
 		{
 			"ImportPath": "github.com/flynn/docker-utils/version",
-			"Comment": "1.1.1-5-g97f04d8",
-			"Rev": "97f04d814b31f35fa978cb0e4bc042025cca0848"
+			"Comment": "1.1.1-7-g2bfd558",
+			"Rev": "2bfd558e1d0eb036d930957dc3bbd8c38ab1fae1"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-check",
