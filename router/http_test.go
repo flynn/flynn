@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -786,18 +787,41 @@ func (s *S) TestClosedBackendRetriesAnotherBackend(c *C) {
 	discoverdRegisterHTTPService(c, l, "example-com", srv1.Listener.Addr().String())
 	discoverdRegisterHTTPService(c, l, "example-com", srv2.Listener.Addr().String())
 
-	req := newReq("http://"+l.Addr, "example.com")
-	// add a cookie to stick to srv1
-	stickyCookie := l.findRouteForHost("example.com").service.newStickyCookie(srv1.Listener.Addr().String())
-	req.AddCookie(stickyCookie)
-	res, err := newHTTPClient("example.com").Do(req)
-	c.Assert(err, IsNil)
-	defer res.Body.Close()
+	type ts struct {
+		method  string
+		upgrade bool // whether to trigger the Upgrade/websocket path
+	}
+	tests := []ts{
+		{method: "GET", upgrade: false},
+		{method: "GET", upgrade: true},
+		{method: "POST", upgrade: false},
+		{method: "POST", upgrade: true},
+	}
 
-	c.Assert(res.StatusCode, Equals, 200)
-	data, err := ioutil.ReadAll(res.Body)
-	c.Assert(err, IsNil)
-	c.Assert(string(data), Equals, "2")
+	runTest := func(test ts) {
+		c.Log("method:", test.method, "upgrade:", test.upgrade)
+		var body io.Reader
+		if test.method == "POST" {
+			body = strings.NewReader("A not-so-large Flynn test body...")
+		}
+		req, _ := http.NewRequest(test.method, "http://"+l.Addr, body)
+		req.Host = "example.com"
+		// add a cookie to stick to srv1
+		stickyCookie := l.findRouteForHost("example.com").service.newStickyCookie(srv1.Listener.Addr().String())
+		req.AddCookie(stickyCookie)
+
+		res, err := newHTTPClient("example.com").Do(req)
+		c.Assert(err, IsNil)
+		defer res.Body.Close()
+
+		c.Assert(res.StatusCode, Equals, 200)
+		data, err := ioutil.ReadAll(res.Body)
+		c.Assert(err, IsNil)
+		c.Assert(string(data), Equals, "2")
+	}
+	for _, test := range tests {
+		runTest(test)
+	}
 }
 
 // Note: this behavior may change if the following issue is fixed, in which case
