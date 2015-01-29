@@ -42,5 +42,3 @@ trace() {
     echo "+ ${cmd}"
     $cmd
 }
-
-netdebug
