@@ -945,6 +945,30 @@ func (s *S) TestRequestURIEscaping(c *C) {
 	}
 }
 
+func (s *S) TestRequestQueryParams(c *C) {
+	l := newHTTPListener(c)
+	defer l.Close()
+
+	req := newReq(fmt.Sprintf("http://%s/query", l.Addr), "example.com")
+	req.URL.RawQuery = "first=this+is+a+field&second=was+it+clear+%28already%29%3F"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, inreq *http.Request) {
+		c.Assert(inreq.URL.RawQuery, Not(Equals), "")
+		c.Assert(inreq.URL.RawQuery, Equals, req.URL.RawQuery)
+		c.Assert(inreq.URL.Query().Encode(), Equals, req.URL.Query().Encode())
+		c.Assert(inreq.URL.Query().Get("first"), Equals, "this is a field")
+		c.Assert(inreq.URL.Query().Get("second"), Equals, "was it clear (already)?")
+	}))
+	defer srv.Close()
+
+	addHTTPRoute(c, l)
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+
+	res, err := newHTTPClient("example.com").Do(req)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+}
+
 func (s *S) TestDefaultServerKeypair(c *C) {
 	srv1 := httptest.NewServer(httpTestHandler("1"))
 	srv2 := httptest.NewServer(httpTestHandler("2"))
