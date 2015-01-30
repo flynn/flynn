@@ -12,6 +12,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
+	"github.com/flynn/flynn/pkg/pprof"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -30,6 +31,7 @@ func apiHandler(rtr *Router) http.Handler {
 	r.Get("/routes", getRoutes)
 	r.Get("/routes/:route_type/:route_id", getRoute)
 	r.Delete("/routes/:route_type/:route_id", deleteRoute)
+	r.Any("/debug/**", pprof.Handler.ServeHTTP)
 	return m
 }
 
