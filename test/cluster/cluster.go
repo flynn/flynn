@@ -135,7 +135,7 @@ func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool, runTests bool) (
 	return build.Drive("hda").FS, nil
 }
 
-func (c *Cluster) Boot(rootFS string, count int, dumpLogs io.Writer) error {
+func (c *Cluster) Boot(rootFS string, count int, dumpLogs io.Writer, killOnFailure bool) error {
 	if err := c.setup(); err != nil {
 		return err
 	}
@@ -146,7 +146,9 @@ func (c *Cluster) Boot(rootFS string, count int, dumpLogs io.Writer) error {
 		if dumpLogs != nil && len(c.Instances) > 0 {
 			c.DumpLogs(dumpLogs)
 		}
-		c.Shutdown()
+		if killOnFailure {
+			c.Shutdown()
+		}
 		return err
 	}
 
@@ -155,7 +157,9 @@ func (c *Cluster) Boot(rootFS string, count int, dumpLogs io.Writer) error {
 		if dumpLogs != nil {
 			c.DumpLogs(dumpLogs)
 		}
-		c.Shutdown()
+		if killOnFailure {
+			c.Shutdown()
+		}
 		return err
 	}
 	c.rootFS = rootFS

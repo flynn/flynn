@@ -79,7 +79,9 @@ func main() {
 		testCluster = cluster.New(args.BootConfig, os.Stdout)
 		rootFS, err = testCluster.BuildFlynn(args.RootFS, "origin/master", false, false)
 		if err != nil {
-			testCluster.Shutdown()
+			if args.Kill {
+				testCluster.Shutdown()
+			}
 			log.Println("could not build flynn: ", err)
 			if rootFS != "" {
 				os.RemoveAll(rootFS)
@@ -93,7 +95,7 @@ func main() {
 		} else {
 			defer os.RemoveAll(rootFS)
 		}
-		if err = testCluster.Boot(rootFS, 3, nil); err != nil {
+		if err = testCluster.Boot(rootFS, 3, nil, args.Kill); err != nil {
 			log.Println("could not boot cluster: ", err)
 			return
 		}
