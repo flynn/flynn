@@ -19,6 +19,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/schedutil"
@@ -188,7 +189,7 @@ type clusterClient interface {
 }
 
 func (c *controllerAPI) connectHost(ctx context.Context) (cluster.Host, string, error) {
-	params := httphelper.ParamsFromContext(ctx)
+	params, _ := ctxhelper.ParamsFromContext(ctx)
 	hostID, jobID, err := cluster.ParseJobID(params.ByName("jobs_id"))
 	if err != nil {
 		log.Printf("Unable to parse hostID from %q", params.ByName("jobs_id"))
@@ -219,7 +220,7 @@ func (c *controllerAPI) ListJobs(ctx context.Context, w http.ResponseWriter, req
 }
 
 func (c *controllerAPI) GetJob(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	params := httphelper.ParamsFromContext(ctx)
+	params, _ := ctxhelper.ParamsFromContext(ctx)
 	job, err := c.jobRepo.Get(params.ByName("jobs_id"))
 	if err != nil {
 		respondWithError(w, err)

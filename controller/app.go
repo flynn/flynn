@@ -12,6 +12,7 @@ import (
 	"github.com/flynn/flynn/controller/name"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
@@ -235,7 +236,7 @@ func (r *AppRepo) GetRelease(id string) (*ct.Release, error) {
 }
 
 func (c *controllerAPI) UpdateApp(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
-	params := httphelper.ParamsFromContext(ctx)
+	params, _ := ctxhelper.ParamsFromContext(ctx)
 
 	var data appUpdate
 	if err := httphelper.DecodeJSON(req, &data); err != nil {

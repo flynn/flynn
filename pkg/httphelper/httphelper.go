@@ -10,8 +10,8 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
-	log15 "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/pkg/cors"
+	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/random"
 )
 
@@ -50,21 +50,12 @@ var CORSAllowAllHandler = cors.Allow(&cors.Options{
 	MaxAge:           time.Hour,
 })
 
-type CtxKey string
-
-const (
-	CtxKeyComponent CtxKey = "component"
-	CtxKeyReqID            = "req_id"
-	CtxKeyParams           = "params"
-	CtxKeyLogger           = "logger"
-)
-
 type Handle func(context.Context, http.ResponseWriter, *http.Request)
 
 func WrapHandler(handler Handle) httprouter.Handle {
 	return func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		ctx := contextFromResponseWriter(w)
-		ctx = context.WithValue(ctx, CtxKeyParams, params)
+		ctx = ctxhelper.NewContextParams(ctx, params)
 		handler(ctx, w, req)
 	}
 }
@@ -75,16 +66,11 @@ func ContextInjector(componentName string, handler http.Handler) http.Handler {
 		if reqID == "" {
 			reqID = random.UUID()
 		}
-		ctx := context.WithValue(context.Background(), CtxKeyReqID, reqID)
-		ctx = context.WithValue(ctx, CtxKeyComponent, componentName)
+		ctx := ctxhelper.NewContextRequestID(context.Background(), reqID)
+		ctx = ctxhelper.NewContextComponentName(ctx, componentName)
 		rw := NewResponseWriter(w, ctx)
 		handler.ServeHTTP(rw, req)
 	})
-}
-
-func ParamsFromContext(ctx context.Context) httprouter.Params {
-	params := ctx.Value(CtxKeyParams).(httprouter.Params)
-	return params
 }
 
 func contextFromResponseWriter(w http.ResponseWriter) context.Context {
@@ -98,7 +84,8 @@ func (jsonError JSONError) Error() string {
 
 func logError(w http.ResponseWriter, err error) {
 	if rw, ok := w.(*ResponseWriter); ok {
-		rw.Context().Value(CtxKeyLogger).(log15.Logger).Error(err.Error())
+		logger, _ := ctxhelper.LoggerFromContext(rw.Context())
+		logger.Error(err.Error())
 	} else {
 		log.Println(err)
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/sse"
@@ -297,7 +298,7 @@ func (c *controllerAPI) PutFormation(ctx context.Context, w http.ResponseWriter,
 }
 
 func (c *controllerAPI) GetFormation(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	params := httphelper.ParamsFromContext(ctx)
+	params, _ := ctxhelper.ParamsFromContext(ctx)
 
 	app := c.getApp(ctx)
 	formation, err := c.formationRepo.Get(app.ID, params.ByName("releases_id"))
@@ -309,7 +310,7 @@ func (c *controllerAPI) GetFormation(ctx context.Context, w http.ResponseWriter,
 }
 
 func (c *controllerAPI) DeleteFormation(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	params := httphelper.ParamsFromContext(ctx)
+	params, _ := ctxhelper.ParamsFromContext(ctx)
 
 	app := c.getApp(ctx)
 	formation, err := c.formationRepo.Get(app.ID, params.ByName("releases_id"))
