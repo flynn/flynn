@@ -251,7 +251,7 @@ func (c *controllerAPI) getProvider(ctx context.Context) (*ct.Provider, error) {
 	return data.(*ct.Provider), nil
 }
 
-func (c *controllerAPI) appLookup(handler httphelper.Handle) httphelper.Handle {
+func (c *controllerAPI) appLookup(handler httphelper.HandlerFunc) httphelper.HandlerFunc {
 	return func(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 		params, _ := ctxhelper.ParamsFromContext(ctx)
 		data, err := c.appRepo.Get(params.ByName("apps_id"))

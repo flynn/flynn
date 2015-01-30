@@ -50,9 +50,9 @@ var CORSAllowAllHandler = cors.Allow(&cors.Options{
 	MaxAge:           time.Hour,
 })
 
-type Handle func(context.Context, http.ResponseWriter, *http.Request)
+type HandlerFunc func(context.Context, http.ResponseWriter, *http.Request)
 
-func WrapHandler(handler Handle) httprouter.Handle {
+func WrapHandler(handler HandlerFunc) httprouter.Handle {
 	return func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		ctx := contextFromResponseWriter(w)
 		ctx = ctxhelper.NewContextParams(ctx, params)
