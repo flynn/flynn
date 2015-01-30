@@ -65,6 +65,7 @@ Commands:
   help                       Show usage for a specific command
   init                       Create cluster configuration for daemon
   daemon                     Start the daemon
+  update                     Update Flynn components
   download                   Download container images
   bootstrap                  Bootstrap layer 1
   inspect                    Get low-level information about a job
