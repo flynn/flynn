@@ -225,7 +225,7 @@ watch:
 			goto fullSync
 		}
 		log.Printf("Restarting etcd watch %s due to error: %s", s.prefix, watchErr)
-		// TODO: backoff here
+		time.Sleep(time.Second)
 	}
 }
 
