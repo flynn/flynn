@@ -74,6 +74,43 @@ type ContainerConfig struct {
 	HostNetwork bool              `json:"host_network,omitempty"`
 }
 
+// Apply 'y' to 'x', returning a new structure.  'y' trumps.
+func (x ContainerConfig) Merge(y ContainerConfig) ContainerConfig {
+	x.TTY = x.TTY || y.TTY
+	x.Stdin = x.Stdin || y.Stdin
+	x.Data = x.Data || y.Data
+	if y.Entrypoint != nil {
+		x.Entrypoint = y.Entrypoint
+	}
+	if y.Cmd != nil {
+		x.Cmd = y.Cmd
+	}
+	env := make(map[string]string, len(x.Env)+len(y.Env))
+	for k, v := range x.Env {
+		env[k] = v
+	}
+	for k, v := range y.Env {
+		env[k] = v
+	}
+	x.Env = env
+	mounts := make([]Mount, 0, len(x.Mounts)+len(y.Mounts))
+	mounts = append(mounts, x.Mounts...)
+	mounts = append(mounts, y.Mounts...)
+	x.Mounts = mounts
+	ports := make([]Port, 0, len(x.Ports)+len(y.Ports))
+	ports = append(ports, x.Ports...)
+	ports = append(ports, y.Ports...)
+	x.Ports = ports
+	if y.WorkingDir != "" {
+		x.WorkingDir = y.WorkingDir
+	}
+	if y.Uid != 0 {
+		x.Uid = y.Uid
+	}
+	x.HostNetwork = x.HostNetwork || y.HostNetwork
+	return x
+}
+
 type Port struct {
 	Port     int    `json:"port,omitempty"`
 	Proto    string `json:"proto,omitempty"`
