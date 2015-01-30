@@ -68,6 +68,7 @@ type ContainerConfig struct {
 	Cmd         []string          `json:"cmd,omitempty"`
 	Env         map[string]string `json:"env,omitempty"`
 	Mounts      []Mount           `json:"mounts,omitempty"`
+	Volumes     []VolumeBinding   `json:"volumes,omitempty"`
 	Ports       []Port            `json:"ports,omitempty"`
 	WorkingDir  string            `json:"working_dir,omitempty"`
 	Uid         int               `json:"uid,omitempty"`
@@ -97,6 +98,10 @@ func (x ContainerConfig) Merge(y ContainerConfig) ContainerConfig {
 	mounts = append(mounts, x.Mounts...)
 	mounts = append(mounts, y.Mounts...)
 	x.Mounts = mounts
+	volumes := make([]VolumeBinding, 0, len(x.Volumes)+len(y.Volumes))
+	volumes = append(volumes, x.Volumes...)
+	volumes = append(volumes, y.Volumes...)
+	x.Volumes = volumes
 	ports := make([]Port, 0, len(x.Ports)+len(y.Ports))
 	ports = append(ports, x.Ports...)
 	ports = append(ports, y.Ports...)
@@ -121,6 +126,14 @@ type Mount struct {
 	Location  string `json:"location,omitempty"`
 	Target    string `json:"target,omitempty"`
 	Writeable bool   `json:"writeable,omitempty"`
+}
+
+type VolumeBinding struct {
+	// Target defines the filesystem path inside the container where the volume will be mounted.
+	Target string `json:"target"`
+	// VolumeID can be thought of as the source path if this were a simple bind-mount.  It is resolved by a VolumeManager.
+	VolumeID  string `json:"volume"`
+	Writeable bool   `json:"isWritable"`
 }
 
 type Artifact struct {

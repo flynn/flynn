@@ -28,6 +28,7 @@ import (
 	lt "github.com/flynn/flynn/host/libvirt"
 	"github.com/flynn/flynn/host/logbuf"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -40,7 +41,7 @@ const (
 	bridgeName     = "flynnbr0"
 )
 
-func NewLibvirtLXCBackend(state *State, volPath, logPath, initPath string) (Backend, error) {
+func NewLibvirtLXCBackend(state *State, vman *volume.Manager, volPath, logPath, initPath string) (Backend, error) {
 	libvirtc, err := libvirt.NewVirConnection("lxc:///")
 	if err != nil {
 		return nil, err
@@ -57,6 +58,7 @@ func NewLibvirtLXCBackend(state *State, volPath, logPath, initPath string) (Back
 		InitPath:   initPath,
 		libvirt:    libvirtc,
 		state:      state,
+		vman:       vman,
 		pinkerton:  pinkertonCtx,
 		logs:       make(map[string]*logbuf.Log),
 		containers: make(map[string]*libvirtContainer),
@@ -69,6 +71,7 @@ type LibvirtLXCBackend struct {
 	VolPath   string
 	libvirt   libvirt.VirConnection
 	state     *State
+	vman      *volume.Manager
 	pinkerton *pinkerton.Context
 
 	ifaceMTU   int
@@ -413,6 +416,29 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 		}
 	}
 
+	// apply volumes
+	for _, v := range job.Config.Volumes {
+		vol := l.vman.GetVolume(v.VolumeID)
+		if vol == nil {
+			err := fmt.Errorf("job %s required volume %s, but that volume does not exist", job.ID, v.VolumeID)
+			g.Log(grohl.Data{"at": "volume", "volumeID": v.VolumeID, "status": "error", "err": err})
+			return err
+		}
+		if err := os.MkdirAll(filepath.Join(rootPath, v.Target), 0755); err != nil {
+			g.Log(grohl.Data{"at": "volume_mkdir", "dir": v.Target, "status": "error", "err": err})
+			return err
+		}
+		volumePath, err := vol.Mount(job.ID, v.Target)
+		if err != nil {
+			g.Log(grohl.Data{"at": "volume_mount", "target": v.Target, "volumeID": v.VolumeID, "status": "error", "err": err})
+			return err
+		}
+		if err := bindMount(volumePath, filepath.Join(rootPath, v.Target), v.Writeable, true); err != nil {
+			g.Log(grohl.Data{"at": "volume_mount2", "target": v.Target, "volumeID": v.VolumeID, "status": "error", "err": err})
+			return err
+		}
+	}
+
 	if job.Config.Env == nil {
 		job.Config.Env = make(map[string]string)
 	}
@@ -689,6 +715,11 @@ func (c *libvirtContainer) cleanup() error {
 	for _, m := range c.job.Config.Mounts {
 		if err := syscall.Unmount(filepath.Join(c.RootPath, m.Location), 0); err != nil {
 			g.Log(grohl.Data{"at": "unmount", "location": m.Location, "status": "error", "err": err})
+		}
+	}
+	for _, v := range c.job.Config.Volumes {
+		if err := syscall.Unmount(filepath.Join(c.RootPath, v.Target), 0); err != nil {
+			g.Log(grohl.Data{"at": "unmount", "target": v.Target, "volumeID": v.VolumeID, "status": "error", "err": err})
 		}
 	}
 	if !c.job.Config.HostNetwork && c.l.bridgeNet != nil {
