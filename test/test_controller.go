@@ -113,7 +113,8 @@ func (s *ControllerSuite) generateControllerExamples(t *c.C) map[string]interfac
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
-	t.Log(string(stderr.Bytes()))
+	t.Logf("stdout: %q", stdout.String())
+	t.Logf("stderr: %q", stderr.String())
 	t.Assert(err, c.IsNil)
 
 	var controllerExamples map[string]json.RawMessage
