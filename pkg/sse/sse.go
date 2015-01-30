@@ -40,6 +40,8 @@ func (w *writer) Write(p []byte) (int, error) {
 }
 
 func (w *writer) Error(err error) (int, error) {
+	w.mtx.Lock()
+	defer w.mtx.Unlock()
 	_, e := w.w.Write([]byte("event: error\n"))
 	if e != nil {
 		return 0, e
