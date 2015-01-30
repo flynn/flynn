@@ -14,70 +14,80 @@ import (
 )
 
 type DNSSuite struct {
-	state   *State
-	srv     *DNSServer
-	cleanup []func()
-	addr    string
+	state *State
+	srv   *DNSServer
 }
 
 var _ = Suite(&DNSSuite{})
 
-// recurse with valid recursors
-// recurse with invalid recursors
-// recurse without any recursors
-
 func (s *DNSSuite) SetUpTest(c *C) {
-	s.cleanup = nil
 	s.state = NewState()
-	s.addr = "127.0.0.1:5553"
-
-	s.srv = &DNSServer{
-		UDPAddr:   s.addr,
-		TCPAddr:   s.addr,
-		Store:     s.state,
-		Recursors: []string{"8.8.8.8", "8.8.4.4"},
-	}
-	c.Assert(s.srv.ListenAndServe(), IsNil)
-	s.cleanup = append(s.cleanup, func() { s.srv.Close() })
-
+	s.srv = s.newServer(c, []string{"8.8.8.8", "8.8.4.4"})
 	s.state.AddService("a")
 }
 
+func (s *DNSSuite) newServer(c *C, recursors []string) *DNSServer {
+	srv := &DNSServer{
+		UDPAddr:   "127.0.0.1:0",
+		TCPAddr:   "127.0.0.1:0",
+		Store:     s.state,
+		Recursors: recursors,
+	}
+	c.Assert(srv.ListenAndServe(), IsNil)
+	return srv
+}
+
 func (s *DNSSuite) TearDownTest(c *C) {
-	for i := len(s.cleanup); i != 0; i-- {
-		s.cleanup[i-1]()
+	if s.srv != nil {
+		c.Assert(s.srv.Close(), IsNil)
 	}
 }
 
 func (s *DNSSuite) TestRecursor(c *C) {
+	s.srv.Close()
+	s.srv = nil
+
+	withResolvers := func(resolvers []string, net string, f func(string)) {
+		srv := s.newServer(c, resolvers)
+		defer func() { c.Assert(srv.Close(), IsNil) }()
+		addr := srv.UDPAddr
+		if net == "tcp" {
+			addr = srv.TCPAddr
+		}
+		f(addr)
+	}
+
 	for _, net := range []string{"tcp", "udp"} {
 		c.Log(net)
 		client := &dns.Client{
 			ReadTimeout: 10 * time.Second,
 			Net:         net,
 		}
-
-		// Valid request
-		s.srv.Recursors = []string{"8.8.8.8:53"}
 		msg := &dns.Msg{}
 		msg.SetQuestion("google.com.", dns.TypeA)
-		res, _, err := client.Exchange(msg, s.addr)
-		c.Assert(err, IsNil)
-		c.Assert(res.Rcode, Equals, dns.RcodeSuccess)
-		c.Assert(len(res.Answer) > 0, Equals, true)
+
+		// Valid request
+		withResolvers([]string{"8.8.8.8:53"}, net, func(addr string) {
+			res, _, err := client.Exchange(msg, addr)
+			c.Assert(err, IsNil)
+			c.Assert(res.Rcode, Equals, dns.RcodeSuccess)
+			c.Assert(len(res.Answer) > 0, Equals, true)
+		})
 
 		// Failing recursor fallback
-		s.srv.Recursors = []string{"127.1.1.1:55", "8.8.8.8:53"}
-		res, _, err = client.Exchange(msg, s.addr)
-		c.Assert(err, IsNil)
-		c.Assert(res.Rcode, Equals, dns.RcodeSuccess)
-		c.Assert(len(res.Answer) > 0, Equals, true)
+		withResolvers([]string{"127.1.1.1:55", "8.8.8.8:53"}, net, func(addr string) {
+			res, _, err := client.Exchange(msg, addr)
+			c.Assert(err, IsNil)
+			c.Assert(res.Rcode, Equals, dns.RcodeSuccess)
+			c.Assert(len(res.Answer) > 0, Equals, true)
+		})
 
 		// All failing
-		s.srv.Recursors = []string{"127.1.1.1:55"}
-		res, _, err = client.Exchange(msg, s.addr)
-		c.Assert(err, IsNil)
-		c.Assert(res.Rcode, Equals, dns.RcodeServerFailure)
+		withResolvers([]string{"127.1.1.1:55"}, net, func(addr string) {
+			res, _, err := client.Exchange(msg, addr)
+			c.Assert(err, IsNil)
+			c.Assert(res.Rcode, Equals, dns.RcodeServerFailure)
+		})
 	}
 }
 
@@ -369,7 +379,11 @@ func (s *DNSSuite) TestServiceLookup(c *C) {
 			// exchange the question
 			req := &dns.Msg{}
 			req.SetQuestion(t.domain, q)
-			res, _, err := client.Exchange(req, s.addr)
+			addr := s.srv.UDPAddr
+			if t.net == "tcp" {
+				addr = s.srv.TCPAddr
+			}
+			res, _, err := client.Exchange(req, addr)
 			c.Assert(err, IsNil)
 
 			if strings.Contains(t.name, "NXDOMAIN") {
