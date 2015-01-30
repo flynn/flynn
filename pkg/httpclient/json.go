@@ -155,7 +155,11 @@ func (c *Client) Hijack(method, path string, header http.Header, in interface{})
 // optional json object to be sent to the server via the body, and out is a
 // required channel, to which the output will be streamed.
 func (c *Client) Stream(method, path string, in, out interface{}) (stream.Stream, error) {
-	header := http.Header{"Accept": []string{"text/event-stream"}}
+	return c.StreamWithHeader(method, path, make(http.Header), in, out)
+}
+
+func (c *Client) StreamWithHeader(method, path string, header http.Header, in, out interface{}) (stream.Stream, error) {
+	header.Set("Accept", "text/event-stream")
 	res, err := c.RawReq(method, path, header, in, nil)
 	if err != nil {
 		return nil, err
