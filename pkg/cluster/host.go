@@ -2,9 +2,11 @@ package cluster
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -27,6 +29,9 @@ type Host interface {
 	// Attach attaches to a job, optionally waiting for it to start before
 	// attaching.
 	Attach(req *host.AttachReq, wait bool) (AttachClient, error)
+
+	// PullImages pulls images from a TUF repository using the local TUF file in tufDB
+	PullImages(repository, driver, root string, tufDB io.Reader, ch chan<- *pinkerton.LayerPullInfo) (stream.Stream, error)
 }
 
 type hostClient struct {
@@ -68,4 +73,10 @@ func (c *hostClient) StreamEvents(id string, ch chan<- *host.Event) (stream.Stre
 		r = "/host/jobs"
 	}
 	return c.c.Stream("GET", r, nil, ch)
+}
+
+func (c *hostClient) PullImages(repository, driver, root string, tufDB io.Reader, ch chan<- *pinkerton.LayerPullInfo) (stream.Stream, error) {
+	header := http.Header{"Content-Type": {"application/octet-stream"}}
+	path := fmt.Sprintf("/host/pull-images?repository=%s&driver=%s&root=%s", repository, driver, root)
+	return c.c.StreamWithHeader("POST", path, header, tufDB, ch)
 }

@@ -173,6 +173,18 @@ func ImageID(s string) (string, error) {
 	return id, nil
 }
 
+func PullImages(tufDB, repository, driver, root string, progress chan<- LayerPullInfo) error {
+	local, err := tuf.FileLocalStore(tufDB)
+	if err != nil {
+		return err
+	}
+	remote, err := tuf.HTTPRemoteStore(repository, nil)
+	if err != nil {
+		return err
+	}
+	return PullImagesWithClient(tuf.NewClient(local, remote), repository, driver, root, progress)
+}
+
 func PullImagesWithClient(client *tuf.Client, repository, driver, root string, progress chan<- LayerPullInfo) error {
 	tmp, err := tufutil.Download(client, "/version.json")
 	if err != nil {
