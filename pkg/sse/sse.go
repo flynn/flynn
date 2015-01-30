@@ -19,6 +19,13 @@ type Writer struct {
 	mtx sync.Mutex
 }
 
+func (w *Writer) WriteID(id string) error {
+	w.mtx.Lock()
+	defer w.mtx.Unlock()
+	_, err := fmt.Fprintf(w.w, "id: %s\n", id)
+	return err
+}
+
 func (w *Writer) Write(p []byte) (int, error) {
 	w.mtx.Lock()
 	defer w.mtx.Unlock()
