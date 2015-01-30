@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	zfs "github.com/flynn/flynn/Godeps/_workspace/src/github.com/mistifyio/go-zfs"
@@ -71,22 +72,29 @@ func NewProvider(config *ProviderConfig) (volume.Provider, error) {
 			if err := os.MkdirAll(filepath.Dir(config.Make.BackingFilename), 0755); err != nil {
 				return nil, err
 			}
-			f, err := os.OpenFile(config.Make.BackingFilename, os.O_CREATE|os.O_WRONLY, 0600)
-			// TODO: as part of reboot persistence, add 'os.O_EXCL' flag here and additional remount detection
-			if err != nil {
-				return nil, err
-			}
-			if err = f.Truncate(config.Make.Size); err != nil {
-				return nil, err
-			}
-			f.Close()
-			if _, err = zfs.CreateZpool(
-				config.DatasetName,
-				nil,
-				"-f",     // force.  TODO: as part of reboot persistence, this will be removed
-				"-mnone", // do not mount the root dataset.  (we'll mount our own datasets as necessary.)
-				config.Make.BackingFilename,
-			); err != nil {
+			f, err := os.OpenFile(config.Make.BackingFilename, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+			if err == nil {
+				// if we've created a new file, size it and create a new zpool
+				if err = f.Truncate(config.Make.Size); err != nil {
+					return nil, err
+				}
+				f.Close()
+				if _, err = zfs.CreateZpool(
+					config.DatasetName,
+					nil,
+					"-mnone", // do not mount the root dataset.  (we'll mount our own datasets as necessary.)
+					config.Make.BackingFilename,
+				); err != nil {
+					return nil, err
+				}
+			} else if err.(*os.PathError).Err == syscall.EEXIST {
+				// if the file already exists, check it for existing zpool
+				if err := zpoolImportFile(config.Make.BackingFilename); err != nil {
+					// if 'zpool import' didn't believe it... halt here
+					// we could overwrite but we'd rather stop and avoid potential data loss.
+					return nil, fmt.Errorf("error attempting import of existing zpool file: %s", err)
+				}
+			} else {
 				return nil, err
 			}
 			// get the dataset again... `zfs.Zpool` isn't a `zfs.Dataset`
