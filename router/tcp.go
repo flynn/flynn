@@ -3,13 +3,13 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"strconv"
 	"sync"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kavu/go_reuseport"
+	"github.com/flynn/flynn/router/proxy"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -173,6 +173,7 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 		service = &tcpService{
 			name: r.Service,
 			sc:   sc,
+			rp:   proxy.NewReverseProxy(sc.Addrs, nil, false),
 		}
 		h.l.services[r.Service] = service
 	}
@@ -246,7 +247,7 @@ func (r *tcpRoute) Serve(started chan<- error) {
 			break
 		}
 		r.mtx.RLock()
-		go r.service.handle(conn)
+		go r.service.ServeConn(conn)
 		r.mtx.RUnlock()
 	}
 }
@@ -273,47 +274,10 @@ type tcpService struct {
 	name string
 	sc   DiscoverdServiceCache
 	refs int
+
+	rp *proxy.ReverseProxy
 }
 
-func (s *tcpService) getBackend() (conn net.Conn) {
-	var err error
-	for _, addr := range shuffle(s.sc.Addrs()) {
-		// TODO: set deadlines
-		conn, err = net.Dial("tcp", addr)
-		if err != nil {
-			log.Println("Error connecting to TCP backend:", err)
-			// TODO: limit number of backends tried
-			// TODO: temporarily quarantine failing backends
-			continue
-		}
-		return
-	}
-	if err == nil {
-		log.Println("No TCP backends found")
-	} else {
-		log.Println("Unable to find live backend, last error:", err)
-	}
-	return
-}
-
-func (s *tcpService) handle(conn net.Conn) {
-	defer conn.Close()
-	backend := s.getBackend()
-	if backend == nil {
-		return
-	}
-	defer backend.Close()
-
-	// TODO: PROXY protocol
-
-	done := make(chan struct{})
-	go func() {
-		io.Copy(backend, conn)
-		backend.(*net.TCPConn).CloseWrite()
-		close(done)
-	}()
-	io.Copy(conn, backend)
-	conn.(*net.TCPConn).CloseWrite()
-	<-done
-	return
+func (s *tcpService) ServeConn(conn net.Conn) {
+	s.rp.ServeConn(conn)
 }

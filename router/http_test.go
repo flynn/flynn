@@ -16,6 +16,7 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/websocket"
 	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
+	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/router/types"
 )
@@ -161,13 +162,13 @@ func newReq(url, host string) *http.Request {
 	return req
 }
 
-func assertGet(c *C, url, host, expected string) *http.Cookie {
-	return assertGetCookie(c, url, host, expected, nil)
+func assertGet(c *C, url, host, expected string) []*http.Cookie {
+	return assertGetCookies(c, url, host, expected, nil)
 }
 
-func assertGetCookie(c *C, url, host, expected string, cookie *http.Cookie) *http.Cookie {
+func assertGetCookies(c *C, url, host, expected string, cookies []*http.Cookie) []*http.Cookie {
 	req := newReq(url, host)
-	if cookie != nil {
+	for _, cookie := range cookies {
 		req.AddCookie(cookie)
 	}
 	res, err := newHTTPClient(host).Do(req)
@@ -177,12 +178,7 @@ func assertGetCookie(c *C, url, host, expected string, cookie *http.Cookie) *htt
 	data, err := ioutil.ReadAll(res.Body)
 	c.Assert(err, IsNil)
 	c.Assert(string(data), Equals, expected)
-	for _, c := range res.Cookies() {
-		if c.Name == stickyCookie {
-			return c
-		}
-	}
-	return nil
+	return res.Cookies()
 }
 
 func addHTTPRoute(c *C, l *HTTPListener) *router.Route {
@@ -434,7 +430,7 @@ func (s *S) TestConnectionHeaders(c *C) {
 		{
 			// tcp/websocket path, all headers should be sent to backend (except
 			// Transfer-Encoding)
-			conn:              "upgrade, custom-conn-header,   ,another-option   ",
+			conn:              "upGrade, custom-Conn-header,   ,Another-option   ",
 			upgradeFromClient: true,
 			emptyHeaders:      []string{"Transfer-Encoding"},
 			presentHeaders:    []string{"Another-Option", "Custom-Conn-Header", "Keep-Alive", "Upgrade"},
@@ -581,24 +577,37 @@ func (s *S) TestStickyHTTPRoute(c *C) {
 
 	unregister := discoverdRegisterHTTP(c, l, srv1.Listener.Addr().String())
 
-	cookie := assertGet(c, "http://"+l.Addr, "example.com", "1")
+	cookies := assertGet(c, "http://"+l.Addr, "example.com", "1")
 	discoverdRegisterHTTP(c, l, srv2.Listener.Addr().String())
 	for i := 0; i < 10; i++ {
-		resCookie := assertGetCookie(c, "http://"+l.Addr, "example.com", "1", cookie)
-		c.Assert(resCookie, IsNil)
+		resCookies := assertGetCookies(c, "http://"+l.Addr, "example.com", "1", cookies)
+		c.Assert(resCookies, HasLen, 0)
 		httpClient.Transport.(*http.Transport).CloseIdleConnections()
 	}
 
 	unregister()
 	for i := 0; i < 10; i++ {
-		resCookie := assertGetCookie(c, "http://"+l.Addr, "example.com", "2", cookie)
-		c.Assert(resCookie, Not(IsNil))
+		resCookies := assertGetCookies(c, "http://"+l.Addr, "example.com", "2", cookies)
+		c.Assert(resCookies, Not(HasLen), 0)
 	}
 }
 
+func wsHandshakeTestHandler(id string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if strings.ToLower(req.Header.Get("Connection")) == "upgrade" {
+			w.Header().Set("Connection", "Upgrade")
+			w.Header().Set("Upgrade", "websocket")
+			w.Header().Set("Backend-Id", id)
+			w.WriteHeader(http.StatusSwitchingProtocols)
+		} else {
+			http.NotFound(w, req)
+		}
+	})
+}
+
 func (s *S) TestStickyHTTPRouteWebsocket(c *C) {
-	srv1 := httptest.NewServer(httpTestHandler("1"))
-	srv2 := httptest.NewServer(httpTestHandler("2"))
+	srv1 := httptest.NewServer(wsHandshakeTestHandler("1"))
+	srv2 := httptest.NewServer(wsHandshakeTestHandler("2"))
 	defer srv1.Close()
 	defer srv2.Close()
 
@@ -633,32 +642,32 @@ func (s *S) TestStickyHTTPRouteWebsocket(c *C) {
 		},
 	}
 
-	var sessionCookie *http.Cookie
+	var sessionCookies []*http.Cookie
 	for _, step := range steps {
 		step.do()
 
 		cookieSet := false
 		for i := 0; i < 10; i++ {
 			req := newReq(url, "example.com")
-			if sessionCookie != nil {
-				req.AddCookie(sessionCookie)
+			for _, cookie := range sessionCookies {
+				req.AddCookie(cookie)
 			}
 			req.Header.Set("Connection", "Upgrade")
+			req.Header.Set("Upgrade", "websocket")
 			res, err := httpClient.Do(req)
 			defer res.Body.Close()
 
 			c.Assert(err, IsNil)
-			c.Assert(res.StatusCode, Equals, 200)
-			data, err := ioutil.ReadAll(res.Body)
-			c.Assert(err, IsNil)
-			c.Assert(string(data), Equals, step.backend)
+			c.Assert(res.StatusCode, Equals, 101)
+			c.Assert(res.Header.Get("Backend-Id"), Equals, step.backend)
 
 			// reuse the session cookie if present
-			for _, c := range res.Cookies() {
-				if c.Name == stickyCookie {
-					cookieSet = true
-					sessionCookie = c
-				}
+			if len(res.Cookies()) > 0 {
+				// TODO(benburkert): instead of assuming that a session cookie is set
+				// if a response has cookies, switch back to checking for the session
+				// cookie once this test can access proxy.stickyCookie
+				sessionCookies = res.Cookies()
+				cookieSet = true
 			}
 		}
 
@@ -666,25 +675,6 @@ func (s *S) TestStickyHTTPRouteWebsocket(c *C) {
 
 		httpClient.Transport.(*http.Transport).CloseIdleConnections()
 	}
-}
-
-func (s *S) TestNoStickyHeaderAtBackend(c *C) {
-	h := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		_, ok := req.Header[hdrUseStickySessions]
-		c.Assert(ok, Equals, false)
-	})
-
-	srv := httptest.NewServer(h)
-	defer srv.Close()
-
-	l := s.newHTTPListener(c)
-	defer l.Close()
-
-	addHTTPRoute(c, l)
-
-	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
-
-	assertGet(c, "http://"+l.Addr, "example.com", "")
 }
 
 func (s *S) TestNoBackends(c *C) {
@@ -757,7 +747,6 @@ func (s *S) TestClosedBackendRetriesAnotherBackend(c *C) {
 	defer l.Close()
 
 	srv1 := httptest.NewServer(httpTestHandler("1"))
-	srv1.Close() // close this server immediately
 	srv2 := httptest.NewServer(httpTestHandler("2"))
 	defer srv2.Close()
 
@@ -767,6 +756,10 @@ func (s *S) TestClosedBackendRetriesAnotherBackend(c *C) {
 		Sticky:  true,
 	}).ToRoute())
 	discoverdRegisterHTTPService(c, l, "example-com", srv1.Listener.Addr().String())
+	cookies := assertGet(c, "http://"+l.Addr, "example.com", "1")
+
+	// close srv1, register srv2
+	srv1.Close()
 	discoverdRegisterHTTPService(c, l, "example-com", srv2.Listener.Addr().String())
 
 	type ts struct {
@@ -788,9 +781,10 @@ func (s *S) TestClosedBackendRetriesAnotherBackend(c *C) {
 		}
 		req, _ := http.NewRequest(test.method, "http://"+l.Addr, body)
 		req.Host = "example.com"
-		// add a cookie to stick to srv1
-		stickyCookie := l.findRouteForHost("example.com").service.newStickyCookie(srv1.Listener.Addr().String())
-		req.AddCookie(stickyCookie)
+		// add cookies to stick to srv1
+		for _, cookie := range cookies {
+			req.AddCookie(cookie)
+		}
 
 		res, err := newHTTPClient("example.com").Do(req)
 		c.Assert(err, IsNil)
@@ -863,6 +857,7 @@ func (s *S) runTestErrorAfterConnOnlyHitsOneBackend(c *C, upgrade bool) {
 	req := newReq("http://"+l.Addr, "example.com")
 	if upgrade {
 		req.Header.Set("Connection", "Upgrade")
+		req.Header.Set("Upgrade", "websocket")
 	}
 	res, err := newHTTPClient("example.com").Do(req)
 	c.Assert(err, IsNil)
@@ -1058,4 +1053,48 @@ func (s *S) TestHTTPResponseStreaming(c *C) {
 	_, err = res.Body.Read(buf)
 	c.Assert(err, IsNil)
 	c.Assert(string(buf), Equals, "a")
+}
+
+func (s *S) TestHTTPHijackUpgrade(c *C) {
+	h := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		rw.Header().Set("Connection", "upgrade")
+		rw.Header().Set("Upgrade", "pinger")
+		rw.WriteHeader(101)
+
+		conn, bufrw, err := rw.(http.Hijacker).Hijack()
+		defer conn.Close()
+
+		line, _, err := bufrw.ReadLine()
+		c.Assert(err, IsNil)
+		c.Assert(string(line), Equals, "ping!")
+
+		bufrw.Write([]byte("pong!\n"))
+		bufrw.Flush()
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(h))
+	defer srv.Close()
+
+	l := s.newHTTPListener(c)
+	defer l.Close()
+
+	addRoute(c, l, (&router.HTTPRoute{
+		Domain:  "127.0.0.1", // TODO: httpclient overrides the Host header
+		Service: "example-com",
+	}).ToRoute())
+	discoverdRegisterHTTPService(c, l, "example-com", srv.Listener.Addr().String())
+
+	client := httpclient.Client{
+		URL:  "http://" + l.Addr,
+		HTTP: http.DefaultClient,
+	}
+
+	rwc, err := client.Hijack("GET", "/", nil, nil)
+	c.Assert(err, IsNil)
+
+	rwc.Write([]byte("ping!\n"))
+
+	pong, err := ioutil.ReadAll(rwc)
+	c.Assert(err, IsNil)
+	c.Assert(string(pong), Equals, "pong!\n")
 }

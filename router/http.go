@@ -1,15 +1,10 @@
 package main
 
 import (
-	"bufio"
 	"crypto/md5"
-	"crypto/rand"
 	"crypto/tls"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"io"
-	"log"
 	"net"
 	"net/http"
 	"strconv"
@@ -18,11 +13,10 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kavu/go_reuseport"
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/nacl/secretbox"
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/tlsconfig"
+	"github.com/flynn/flynn/router/proxy"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -187,7 +181,11 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 		if err != nil {
 			return err
 		}
-		service = &httpService{name: r.Service, sc: sc, cookieKey: h.l.cookieKey}
+		service = &httpService{
+			name: r.Service,
+			sc:   sc,
+			rp:   proxy.NewReverseProxy(sc.Addrs, h.l.cookieKey, r.Sticky),
+		}
 		h.l.services[r.Service] = service
 	}
 	service.refs++
@@ -312,22 +310,12 @@ func fail(w http.ResponseWriter, code int) {
 	w.Write(msg)
 }
 
-const hdrUseStickySessions = "Flynn-Use-Sticky-Sessions"
-
 func (s *HTTPListener) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r := s.findRouteForHost(req.Host)
 	if r == nil {
 		fail(w, 404)
 		return
 	}
-
-	// TODO(bgentry): find a better way to access this setting in the service
-	// where it's needed.
-	stickyValue := "false"
-	if r.Sticky {
-		stickyValue = "true"
-	}
-	req.Header.Set(hdrUseStickySessions, stickyValue)
 
 	r.service.ServeHTTP(w, req)
 }
@@ -347,349 +335,14 @@ type httpService struct {
 	sc   DiscoverdServiceCache
 	refs int
 
-	cookieKey *[32]byte
-}
-
-const stickyCookie = "_backend"
-
-func (s *httpService) stickyCookieAddr(req *http.Request) string {
-	cookie, err := req.Cookie(stickyCookie)
-	if err != nil {
-		return ""
-	}
-
-	data, err := base64.StdEncoding.DecodeString(cookie.Value)
-	if err != nil {
-		return ""
-	}
-	var nonce [24]byte
-	if len(data) < len(nonce) {
-		return ""
-	}
-	copy(nonce[:], data)
-	res, ok := secretbox.Open(nil, data[len(nonce):], &nonce, s.cookieKey)
-	if !ok {
-		return ""
-	}
-
-	addr := string(res)
-	ok = false
-	for _, a := range s.sc.Addrs() {
-		if a == addr {
-			ok = true
-			break
-		}
-	}
-	if !ok {
-		return ""
-	}
-
-	return addr
-}
-
-func (s *httpService) newStickyCookie(backend string) *http.Cookie {
-	var nonce [24]byte
-	_, err := io.ReadFull(rand.Reader, nonce[:])
-	if err != nil {
-		panic(err)
-	}
-	out := make([]byte, len(nonce), len(nonce)+len(backend)+secretbox.Overhead)
-	copy(out, nonce[:])
-	out = secretbox.Seal(out, []byte(backend), &nonce, s.cookieKey)
-
-	return &http.Cookie{Name: stickyCookie, Value: base64.StdEncoding.EncodeToString(out), Path: "/"}
+	rp *proxy.ReverseProxy
 }
 
 func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
 	req.Header.Set("X-Request-Id", random.UUID())
 
-	addrs := shuffle(s.sc.Addrs())
-	if len(addrs) == 0 {
-		log.Println("no backends found")
-		fail(w, 503)
-		return
-	}
-
-	isSticky := false
-	stickyAddr := ""
-	if req.Header.Get(hdrUseStickySessions) == "true" {
-		// TODO(bgentry): switch to better way to check sticky setting
-		isSticky = true
-		if stickyAddr = s.stickyCookieAddr(req); stickyAddr != "" {
-			sortStringFirst(addrs, stickyAddr)
-		}
-	}
-	req.Header.Del(hdrUseStickySessions) // delete this no matter what
-
-	// A proxy or gateway MUST parse a received Connection header field before a
-	// message is forwarded: https://tools.ietf.org/html/rfc7230#section-6.1
-	reqConnHdrOpts := parseConnHeader(req.Header.Get("Connection"))
-	isRequestConnUpgrade := isConnUpgrade(reqConnHdrOpts)
-
-	// Most of this is borrowed from httputil.ReverseProxy
-	outreq := &http.Request{}
-	*outreq = *req // includes shallow copies of maps, but okay
-
-	// Pass the Request-URI verbatim without any modifications
-	outreq.URL.Opaque = strings.Split(strings.TrimPrefix(req.RequestURI, req.URL.Scheme+":"), "?")[0]
-	outreq.URL.Scheme = "http"
-	outreq.Proto = "HTTP/1.1"
-	outreq.ProtoMajor = 1
-	outreq.ProtoMinor = 1
-	outreq.Close = false
-	outreq.Body = &fakeCloseReadCloser{outreq.Body}
-
-	// TODO: Proxy HTTP CONNECT? (example: Go RPC over HTTP)
-
-	// Remove hop-by-hop headers to the backend.  This is modifying the same
-	// underlying map from req (shallow copied above) so we only copy it if
-	// necessary.
-	outreq.Header = make(http.Header, len(req.Header))
-	copyHeader(outreq.Header, req.Header)
-	for _, h := range alwaysHopHeaders {
-		outreq.Header.Del(h)
-	}
-
-	// remove the Upgrade header if HTTP < 1.1 or if Connection header didn't
-	// contain "upgrade": https://tools.ietf.org/html/rfc7230#section-6.7
-	if outreq.Header.Get("Upgrade") != "" && (!req.ProtoAtLeast(1, 1) || !isRequestConnUpgrade) {
-		outreq.Header.Del("Upgrade")
-	}
-
-	// Directly bridge `Connection: Upgrade` requests
-	if isRequestConnUpgrade {
-		s.forwardAndProxyTCP(w, outreq, addrs, stickyAddr, isSticky)
-		return
-	}
-
-	// A proxy or gateway MUST parse a received Connection header field before a
-	// message is forwarded and, for each connection-option in this field, remove
-	// any header field(s) from the message with the same name as the
-	// connection-option, and then remove the Connection header field itself (or
-	// replace it with the intermediary's own connection options for the
-	// forwarded message): https://tools.ietf.org/html/rfc7230#section-6.1
-	outreq.Header.Del("Connection")
-	for _, opt := range reqConnHdrOpts {
-		outreq.Header.Del(opt)
-	}
-
-	var (
-		backend string
-		res     *http.Response
-		err     error
-	)
-
-	for _, backend = range addrs {
-		// TODO: limit number of backends tried
-		// TODO: temporarily quarantine failing backends
-
-		outreq.URL.Host = backend
-		res, err = transport.RoundTrip(outreq)
-		if err != nil {
-			if _, ok := err.(dialErr); ok {
-				// retry, maybe log a message about it
-				continue
-			}
-			log.Println("http: proxy error:", err)
-			outreq.Body.(*fakeCloseReadCloser).RealClose()
-			fail(w, 503)
-			return
-		}
-		outreq.Body.(*fakeCloseReadCloser).RealClose()
-		defer res.Body.Close()
-		break
-	}
-
-	if res == nil {
-		log.Println("no backends available")
-		fail(w, 503)
-		return
-	}
-
-	if isSticky && stickyAddr != backend {
-		http.SetCookie(w, s.newStickyCookie(backend))
-	}
-
-	// A proxy or gateway MUST parse a received Connection header field before a
-	// message is forwarded: https://tools.ietf.org/html/rfc7230#section-6.1
-	respConnHdrOpts := parseConnHeader(res.Header.Get("Connection"))
-	res.Header.Del("Connection")
-	for _, h := range alwaysHopHeaders {
-		res.Header.Del(h)
-	}
-	// remove hop-by-hop headers as specified in connection options
-	for _, opt := range respConnHdrOpts {
-		res.Header.Del(opt)
-	}
-	// remove the Upgrade header if HTTP < 1.1 or if Connection header didn't
-	// contain "upgrade": https://tools.ietf.org/html/rfc7230#section-6.7
-	if res.Header.Get("Upgrade") != "" && (!req.ProtoAtLeast(1, 1) || !isConnUpgrade(respConnHdrOpts)) {
-		res.Header.Del("Upgrade")
-	}
-
-	copyHeader(w.Header(), res.Header)
-
-	w.WriteHeader(res.StatusCode)
-	w.(http.Flusher).Flush()
-	_, err = io.Copy(httphelper.FlushWriter{Writer: w, Enabled: true}, res.Body) // TODO(bgentry): consider using a flush interval
-	if err != nil {
-		log.Println("reverse proxy copy err:", err)
-		return
-	}
-}
-
-func sortStringFirst(ss []string, s string) {
-	for i := range ss {
-		if ss[i] == s {
-			ss[0], ss[i] = ss[i], ss[0]
-		}
-	}
-}
-
-var transport http.RoundTripper = &http.Transport{
-	Dial:                customDial,
-	TLSHandshakeTimeout: 10 * time.Second, // unused, but safer to leave default in place
-}
-
-var dialer = &net.Dialer{
-	Timeout:   1 * time.Second,
-	KeepAlive: 30 * time.Second,
-}
-
-func customDial(network, addr string) (net.Conn, error) {
-	conn, err := dialer.Dial(network, addr)
-	if err != nil {
-		return nil, dialErr{err}
-	}
-	return conn, nil
-}
-
-type dialErr struct {
-	error
-}
-
-func (s *httpService) forwardAndProxyTCP(w http.ResponseWriter, req *http.Request, addrs []string, stickyAddr string, isSticky bool) {
-	var (
-		backend string
-		err     error
-		upconn  net.Conn
-	)
-	for _, backend = range addrs {
-		req.URL.Host = backend
-		upconn, err = dialer.Dial("tcp", req.URL.Host)
-		if err != nil {
-			// retry, maybe log a message about it
-			continue
-		}
-		defer upconn.Close()
-		break
-	}
-	if upconn == nil {
-		log.Println("no backends available")
-		failAndClose(w, 503)
-		return
-	}
-
-	err = req.Write(upconn)
-	if err != nil {
-		log.Println("error copying request to target:", err)
-		failAndClose(w, 503)
-		return
-	}
-
-	// Need to complete the handshake and set sticky cookie on response, otherwise
-	// websocket reconnections won't go to the right backend
-	upconnbr := bufio.NewReader(upconn)
-	res, err := http.ReadResponse(upconnbr, req)
-	if err != nil {
-		log.Println("http: proxy error:", err)
-		failAndClose(w, 503)
-		return
-	}
-	defer res.Body.Close()
-
-	respConnHdrOpts := parseConnHeader(res.Header.Get("Connection"))
-	for _, h := range alwaysHopHeaders {
-		res.Header.Del(h)
-	}
-	if res.Header.Get("Upgrade") != "" && !isConnUpgrade(respConnHdrOpts) {
-		res.Header.Del("Upgrade")
-	}
-
-	// Copy the response headers and body over to the downstream ResponseWriter,
-	// the same as done in the non-TCP path.
-	copyHeader(w.Header(), res.Header)
-
-	if isSticky && stickyAddr != backend {
-		http.SetCookie(w, s.newStickyCookie(backend))
-	}
-
-	w.WriteHeader(res.StatusCode)
-	_, err = io.Copy(w, res.Body) // TODO(bgentry): consider using a flush interval
-	if err != nil {
-		log.Println("reverse proxy copy err:", err)
-		return
-	}
-
-	if res.StatusCode != 101 {
-		return
-	}
-	res.Body.Close() // close this now since we've copied everything
-
-	downconn, _, err := w.(http.Hijacker).Hijack()
-	if err != nil {
-		log.Println("hijack failed:", err)
-		failAndClose(w, 500)
-		return
-	}
-	defer downconn.Close()
-
-	errc := make(chan error, 2)
-	cp := func(dst io.Writer, src io.Reader) {
-		_, err := io.Copy(dst, src)
-		errc <- err
-	}
-	go cp(upconn, downconn)
-	go cp(downconn, upconnbr)
-	<-errc
-}
-
-func copyHeader(dst, src http.Header) {
-	for k, vv := range src {
-		for _, v := range vv {
-			dst.Add(k, v)
-		}
-	}
-}
-
-func isConnUpgrade(connOpts []string) bool {
-	for _, opt := range connOpts {
-		if opt == "upgrade" {
-			return true
-		}
-	}
-	return false
-}
-
-// Hop-by-hop headers. These are removed when sent to the backend (or forwarded
-// to the client) because they only apply to a single connection.
-var alwaysHopHeaders = []string{
-	"Te", // canonicalized version of "TE"
-	"Trailers",
-	"Transfer-Encoding",
-}
-
-func parseConnHeader(value string) []string {
-	splitOpts := strings.Split(value, ",")
-	headerOpts := make([]string, 0, len(splitOpts))
-	for _, opt := range splitOpts {
-		// remove empty values, trim space
-		if opt = strings.ToLower(strings.TrimSpace(opt)); opt != "" {
-			headerOpts = append(headerOpts, opt)
-		}
-	}
-	return headerOpts
+	s.rp.ServeHTTP(w, req)
 }
 
 func mustPortFromAddr(addr string) string {
@@ -698,31 +351,4 @@ func mustPortFromAddr(addr string) string {
 		panic(err)
 	}
 	return port
-}
-
-type writeCloser interface {
-	CloseWrite() error
-}
-
-func shuffle(s []string) []string {
-	for i := len(s) - 1; i > 0; i-- {
-		j := random.Math.Intn(i + 1)
-		s[i], s[j] = s[j], s[i]
-	}
-	return s
-}
-
-type fakeCloseReadCloser struct {
-	io.ReadCloser
-}
-
-func (w *fakeCloseReadCloser) Close() error {
-	return nil
-}
-
-func (w *fakeCloseReadCloser) RealClose() error {
-	if w.ReadCloser == nil {
-		return nil
-	}
-	return w.ReadCloser.Close()
 }
