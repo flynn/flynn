@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
 )
 
@@ -10,6 +11,10 @@ type config struct {
 	controllerKey string
 	ourPort       string
 	logOut        io.Writer
+}
+
+func init() {
+	log.SetFlags(log.Lshortfile | log.Lmicroseconds)
 }
 
 func loadConfigFromEnv() (*config, error) {
