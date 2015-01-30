@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 )
 
@@ -25,12 +24,13 @@ func loadConfigFromEnv() (*config, error) {
 	}
 	c.ourPort = port
 
-	logPath := os.Getenv("LOGFILE")
-	c.logOut = ioutil.Discard
-	if logPath != "" {
+	if logPath := os.Getenv("LOGFILE"); logPath != "" {
 		if f, err := os.OpenFile(logPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666); err == nil {
 			c.logOut = f
 		}
+	}
+	if c.logOut == nil {
+		c.logOut = os.Stderr
 	}
 	return c, nil
 }
