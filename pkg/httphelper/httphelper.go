@@ -50,13 +50,27 @@ var CORSAllowAllHandler = cors.Allow(&cors.Options{
 	MaxAge:           time.Hour,
 })
 
+// Handler is an extended version of http.Handler that also takes a context
+// argument ctx.
+type Handler interface {
+	ServeHTTP(ctx context.Context, w http.ResponseWriter, r *http.Request)
+}
+
+// The HandlerFunc type is an adapter to allow the use of ordinary functions as
+// Handlers.  If f is a function with the appropriate signature, HandlerFunc(f)
+// is a Handler object that calls f.
 type HandlerFunc func(context.Context, http.ResponseWriter, *http.Request)
+
+// ServeHTTP calls f(ctx, w, r).
+func (f HandlerFunc) ServeHTTP(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	f(ctx, w, r)
+}
 
 func WrapHandler(handler HandlerFunc) httprouter.Handle {
 	return func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		ctx := contextFromResponseWriter(w)
 		ctx = ctxhelper.NewContextParams(ctx, params)
-		handler(ctx, w, req)
+		handler.ServeHTTP(ctx, w, req)
 	}
 }
 
