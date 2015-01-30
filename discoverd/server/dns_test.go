@@ -16,22 +16,20 @@ import (
 type DNSSuite struct {
 	state *State
 	srv   *DNSServer
-	addr  string
 }
 
 var _ = Suite(&DNSSuite{})
 
 func (s *DNSSuite) SetUpTest(c *C) {
 	s.state = NewState()
-	s.addr = "127.0.0.1:5553"
 	s.srv = s.newServer(c, []string{"8.8.8.8", "8.8.4.4"})
 	s.state.AddService("a")
 }
 
 func (s *DNSSuite) newServer(c *C, recursors []string) *DNSServer {
 	srv := &DNSServer{
-		UDPAddr:   s.addr,
-		TCPAddr:   s.addr,
+		UDPAddr:   "127.0.0.1:0",
+		TCPAddr:   "127.0.0.1:0",
 		Store:     s.state,
 		Recursors: recursors,
 	}
@@ -49,10 +47,14 @@ func (s *DNSSuite) TestRecursor(c *C) {
 	s.srv.Close()
 	s.srv = nil
 
-	withResolvers := func(resolvers []string, f func()) {
+	withResolvers := func(resolvers []string, net string, f func(string)) {
 		srv := s.newServer(c, resolvers)
 		defer func() { c.Assert(srv.Close(), IsNil) }()
-		f()
+		addr := srv.UDPAddr
+		if net == "tcp" {
+			addr = srv.TCPAddr
+		}
+		f(addr)
 	}
 
 	for _, net := range []string{"tcp", "udp"} {
@@ -65,24 +67,24 @@ func (s *DNSSuite) TestRecursor(c *C) {
 		msg.SetQuestion("google.com.", dns.TypeA)
 
 		// Valid request
-		withResolvers([]string{"8.8.8.8:53"}, func() {
-			res, _, err := client.Exchange(msg, s.addr)
+		withResolvers([]string{"8.8.8.8:53"}, net, func(addr string) {
+			res, _, err := client.Exchange(msg, addr)
 			c.Assert(err, IsNil)
 			c.Assert(res.Rcode, Equals, dns.RcodeSuccess)
 			c.Assert(len(res.Answer) > 0, Equals, true)
 		})
 
 		// Failing recursor fallback
-		withResolvers([]string{"127.1.1.1:55", "8.8.8.8:53"}, func() {
-			res, _, err := client.Exchange(msg, s.addr)
+		withResolvers([]string{"127.1.1.1:55", "8.8.8.8:53"}, net, func(addr string) {
+			res, _, err := client.Exchange(msg, addr)
 			c.Assert(err, IsNil)
 			c.Assert(res.Rcode, Equals, dns.RcodeSuccess)
 			c.Assert(len(res.Answer) > 0, Equals, true)
 		})
 
 		// All failing
-		withResolvers([]string{"127.1.1.1:55"}, func() {
-			res, _, err := client.Exchange(msg, s.addr)
+		withResolvers([]string{"127.1.1.1:55"}, net, func(addr string) {
+			res, _, err := client.Exchange(msg, addr)
 			c.Assert(err, IsNil)
 			c.Assert(res.Rcode, Equals, dns.RcodeServerFailure)
 		})
@@ -377,7 +379,11 @@ func (s *DNSSuite) TestServiceLookup(c *C) {
 			// exchange the question
 			req := &dns.Msg{}
 			req.SetQuestion(t.domain, q)
-			res, _, err := client.Exchange(req, s.addr)
+			addr := s.srv.UDPAddr
+			if t.net == "tcp" {
+				addr = s.srv.TCPAddr
+			}
+			res, _, err := client.Exchange(req, addr)
 			c.Assert(err, IsNil)
 
 			if strings.Contains(t.name, "NXDOMAIN") {
