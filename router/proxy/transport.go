@@ -64,8 +64,6 @@ func (t *transport) setStickyBackend(res *http.Response, originalStickyBackend s
 	}
 }
 
-// always sets the response.Request.URL.Host to the last backend that was
-// connected to.
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// http.Transport closes the request body on a failed dial, issue #875
 	req.Body = &fakeCloseReadCloser{req.Body}
