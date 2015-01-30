@@ -206,7 +206,7 @@ func (c *controllerAPI) connectHost(ctx context.Context) (cluster.Host, string, 
 func (c *controllerAPI) ListJobs(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	app := c.getApp(ctx)
 	if strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
-		if err := streamJobs(req, w, app, c.jobRepo); err != nil {
+		if err := streamJobs(ctx, req, w, app, c.jobRepo); err != nil {
 			respondWithError(w, err)
 		}
 		return
@@ -317,7 +317,7 @@ func (c *controllerAPI) JobLog(ctx context.Context, w http.ResponseWriter, req *
 	}
 }
 
-func streamJobs(req *http.Request, w http.ResponseWriter, app *ct.App, repo *JobRepo) (err error) {
+func streamJobs(ctx context.Context, req *http.Request, w http.ResponseWriter, app *ct.App, repo *JobRepo) (err error) {
 	var lastID int64
 	if req.Header.Get("Last-Event-Id") != "" {
 		lastID, err = strconv.ParseInt(req.Header.Get("Last-Event-Id"), 10, 64)
@@ -333,29 +333,10 @@ func streamJobs(req *http.Request, w http.ResponseWriter, app *ct.App, repo *Job
 		}
 	}
 
-	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
-
-	sendKeepAlive := func() error {
-		if _, err := w.Write([]byte(":\n")); err != nil {
-			return err
-		}
-		w.(http.Flusher).Flush()
-		return nil
-	}
-
-	sendJobEvent := func(e *ct.JobEvent) error {
-		if _, err := fmt.Fprintf(w, "id: %d\nevent: %s\ndata: ", e.ID, e.State); err != nil {
-			return err
-		}
-		if err := json.NewEncoder(w).Encode(e); err != nil {
-			return err
-		}
-		if _, err := w.Write([]byte("\n")); err != nil {
-			return err
-		}
-		w.(http.Flusher).Flush()
-		return nil
-	}
+	ch := make(chan *ct.JobEvent)
+	l, _ := ctxhelper.LoggerFromContext(ctx)
+	s := sse.NewStream(w, ch, l)
+	s.Serve()
 
 	connected := make(chan struct{})
 	done := make(chan struct{})
@@ -389,9 +370,7 @@ func streamJobs(req *http.Request, w http.ResponseWriter, app *ct.App, repo *Job
 		// events are in ID DESC order, so iterate in reverse
 		for i := len(events) - 1; i >= 0; i-- {
 			e := events[i]
-			if err := sendJobEvent(e); err != nil {
-				return err
-			}
+			ch <- e
 			currID = e.ID
 		}
 	}
@@ -402,21 +381,12 @@ func streamJobs(req *http.Request, w http.ResponseWriter, app *ct.App, repo *Job
 	case <-connected:
 	}
 
-	if err = sendKeepAlive(); err != nil {
-		return
-	}
-
-	closed := w.(http.CloseNotifier).CloseNotify()
 	for {
 		select {
+		case <-s.Done:
+			return
 		case <-done:
 			return
-		case <-closed:
-			return
-		case <-time.After(30 * time.Second):
-			if err := sendKeepAlive(); err != nil {
-				return err
-			}
 		case n := <-listener.Notify:
 			id, err := strconv.ParseInt(n.Extra, 10, 64)
 			if err != nil {
@@ -429,9 +399,7 @@ func streamJobs(req *http.Request, w http.ResponseWriter, app *ct.App, repo *Job
 			if err != nil {
 				return err
 			}
-			if err = sendJobEvent(e); err != nil {
-				return err
-			}
+			ch <- e
 		}
 	}
 }

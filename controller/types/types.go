@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -121,6 +122,10 @@ type DeploymentEvent struct {
 	JobType      string     `json:"job_type"`
 	JobState     string     `json:"job_state"`
 	CreatedAt    *time.Time `json:"created_at"`
+}
+
+func (de *DeploymentEvent) EventID() string {
+	return strconv.FormatInt(de.ID, 10)
 }
 
 type Provider struct {
