@@ -11,6 +11,7 @@ import (
 	"os/user"
 	"strconv"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
@@ -36,6 +37,9 @@ type Cluster struct {
 	ControllerKey string        `json:"controller_key"`
 	RouterIP      string        `json:"router_ip"`
 
+	discMtx sync.Mutex
+	disc    *discoverd.Client
+
 	bc     BootConfig
 	vm     *VMManager
 	out    io.Writer
@@ -56,6 +60,15 @@ func (i instances) Get(id string) (*Instance, error) {
 		}
 	}
 	return nil, fmt.Errorf("no such host: %s", id)
+}
+
+func (c *Cluster) discoverdClient() *discoverd.Client {
+	c.discMtx.Lock()
+	defer c.discMtx.Unlock()
+	if c.disc == nil {
+		c.disc = discoverd.NewClientWithURL(fmt.Sprintf("http://%s:1111", c.RouterIP))
+	}
+	return c.disc
 }
 
 type Streams struct {
@@ -135,7 +148,7 @@ func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool, runTests bool) (
 	return build.Drive("hda").FS, nil
 }
 
-func (c *Cluster) Boot(rootFS string, count int, dumpLogs io.Writer) error {
+func (c *Cluster) Boot(rootFS string, count int, dumpLogs io.Writer, killOnFailure bool) error {
 	if err := c.setup(); err != nil {
 		return err
 	}
@@ -146,7 +159,9 @@ func (c *Cluster) Boot(rootFS string, count int, dumpLogs io.Writer) error {
 		if dumpLogs != nil && len(c.Instances) > 0 {
 			c.DumpLogs(dumpLogs)
 		}
-		c.Shutdown()
+		if killOnFailure {
+			c.Shutdown()
+		}
 		return err
 	}
 
@@ -155,7 +170,9 @@ func (c *Cluster) Boot(rootFS string, count int, dumpLogs io.Writer) error {
 		if dumpLogs != nil {
 			c.DumpLogs(dumpLogs)
 		}
-		c.Shutdown()
+		if killOnFailure {
+			c.Shutdown()
+		}
 		return err
 	}
 	c.rootFS = rootFS
@@ -187,12 +204,40 @@ func (c *Cluster) RemoveHost(id string) error {
 	}
 	c.log("removing host", id)
 
+	// Clean shutdown requires waiting for that host to unadvertise on discoverd.
+	// Specifically: Wait for router-api services to disappear to indicate host
+	// removal (rather than using StreamHostEvents), so that other
+	// tests won't try and connect to this host via service discovery.
+	events := make(chan *discoverd.Event)
+	stream, err := c.discoverdClient().Service("router-api").Watch(events)
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+
+	// ssh into the host and tell the flynn-host daemon to stop
 	var cmd string
 	switch c.bc.Backend {
 	case "libvirt-lxc":
 		cmd = "sudo start-stop-daemon --stop --pidfile /var/run/flynn-host.pid --retry 15"
 	}
-	return inst.Run(cmd, nil)
+	if err := inst.Run(cmd, nil); err != nil {
+		return err
+	}
+
+loop:
+	for {
+		select {
+		case event := <-events:
+			if event.Kind == discoverd.EventKindDown {
+				break loop
+			}
+		case <-time.After(20 * time.Second):
+			return fmt.Errorf("timed out waiting for host removal")
+		}
+	}
+
+	return nil
 }
 
 func (c *Cluster) Size() int {

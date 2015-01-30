@@ -1,23 +1,18 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
-	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/stream"
-	tc "github.com/flynn/flynn/test/cluster"
 )
 
 type SchedulerSuite struct {
@@ -34,78 +29,27 @@ func (s *SchedulerSuite) checkJobState(t *c.C, appID, jobID, state string) {
 
 func (s *SchedulerSuite) addHosts(t *c.C, count int) []string {
 	debugf(t, "adding %d hosts", count)
+
 	ch := make(chan *host.HostEvent)
 	stream, err := s.clusterClient(t).StreamHostEvents(ch)
-	if err != nil {
-		t.Fatal("error when attempting to StreamHostEvents", err)
-	}
+	t.Assert(err, c.IsNil)
 	defer stream.Close()
 
-	hosts := make([]string, 0, count)
+	hostIDs := make([]string, count)
 	for i := 0; i < count; i++ {
-		res, err := httpClient.PostForm(args.ClusterAPI, url.Values{})
-		if err != nil {
-			t.Fatal("error in POST request to cluster api:", err)
-		}
-		defer res.Body.Close()
-		if res.StatusCode != http.StatusOK {
-			t.Fatal("expected 200 status, got", res.Status)
-		}
-		instance := &tc.Instance{}
-		err = json.NewDecoder(res.Body).Decode(instance)
-		if err != nil {
-			t.Fatal("could not decode new instance:", err)
-		}
-		testCluster.Instances = append(testCluster.Instances, instance)
-
-		select {
-		case event := <-ch:
-			debug(t, "host added ", event.HostID)
-			hosts = append(hosts, event.HostID)
-		case <-time.After(60 * time.Second):
-			t.Fatal("timed out waiting for new host")
-		}
+		id, err := testCluster.AddHost(ch)
+		t.Assert(err, c.IsNil)
+		debugf(t, "host added: %s", id)
+		hostIDs[i] = id
 	}
-	return hosts
+	return hostIDs
 }
 
 func (s *SchedulerSuite) removeHosts(t *c.C, ids []string) {
 	debugf(t, "removing %d hosts", len(ids))
-
-	// Wait for router-api services to disappear to indicate host
-	// removal (rather than using StreamHostEvents), so that other
-	// tests won't try and connect to this host via service discovery.
-	events := make(chan *discoverd.Event)
-	stream, err := s.discoverdClient(t).Service("router-api").Watch(events)
-	t.Assert(err, c.IsNil)
-	defer stream.Close()
-
 	for _, id := range ids {
-		req, err := http.NewRequest("DELETE", args.ClusterAPI+"?host="+id, nil)
-		if err != nil {
-			t.Fatal("error in DELETE request to cluster api:", err)
-		}
-		res, err := httpClient.Do(req)
-		if err != nil {
-			t.Fatal("error in DELETE request to cluster api:", err)
-		}
-		res.Body.Close()
-		if res.StatusCode != http.StatusOK {
-			t.Fatal("expected 200 status, got", res.Status)
-		}
-
-	loop:
-		for {
-			select {
-			case event := <-events:
-				if event.Kind == discoverd.EventKindDown {
-					debug(t, "host removed ", event.Instance.Addr)
-					break loop
-				}
-			case <-time.After(20 * time.Second):
-				t.Fatal("timed out waiting for host removal")
-			}
-		}
+		t.Assert(testCluster.RemoveHost(id), c.IsNil)
+		debugf(t, "host removed: %s", id)
 	}
 }
 
@@ -395,7 +339,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 }
 
 func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
-	if args.ClusterAPI == "" {
+	if testCluster == nil {
 		t.Skip("cannot boot new hosts")
 	}
 
@@ -460,7 +404,7 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 	if testCluster == nil {
 		t.Skip("cannot determine scheduler backoff period")
 	}
-	backoffPeriod := testCluster.BackoffPeriod
+	backoffPeriod := testCluster.BackoffPeriod()
 	startTimeout := 20 * time.Second
 	debugf(t, "job restart backoff period: %s", backoffPeriod)
 

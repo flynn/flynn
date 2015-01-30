@@ -4,15 +4,12 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
 	"regexp"
@@ -27,6 +24,7 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/test/arg"
 	"github.com/flynn/flynn/test/cluster"
+	"github.com/flynn/flynn/test/cluster/client"
 )
 
 var sshWrapper = template.Must(template.New("ssh").Parse(`
@@ -38,8 +36,7 @@ ssh -o LogLevel=FATAL -o IdentitiesOnly=yes -o UserKnownHostsFile=/dev/null -o S
 var args *arg.Args
 var flynnrc string
 var routerIP string
-var testCluster *cluster.Cluster
-var httpClient *http.Client
+var testCluster *testcluster.Client
 
 func init() {
 	args = arg.Parse()
@@ -75,11 +72,13 @@ func main() {
 	flynnrc = args.Flynnrc
 	routerIP = args.RouterIP
 	if flynnrc == "" {
+		c := cluster.New(args.BootConfig, os.Stdout)
 		var rootFS string
-		testCluster = cluster.New(args.BootConfig, os.Stdout)
-		rootFS, err = testCluster.BuildFlynn(args.RootFS, "origin/master", false, false)
+		rootFS, err = c.BuildFlynn(args.RootFS, "origin/master", false, false)
 		if err != nil {
-			testCluster.Shutdown()
+			if args.Kill {
+				c.Shutdown()
+			}
 			log.Println("could not build flynn: ", err)
 			if rootFS != "" {
 				os.RemoveAll(rootFS)
@@ -87,39 +86,31 @@ func main() {
 			return
 		}
 		if args.BuildRootFS {
+			c.Shutdown()
 			fmt.Println("Built Flynn in rootfs:", rootFS)
-			os.Exit(0)
+			return
 		} else {
 			defer os.RemoveAll(rootFS)
 		}
-		if err = testCluster.Boot(rootFS, 3, nil); err != nil {
+		if err = c.Boot(rootFS, 3, nil, args.Kill); err != nil {
 			log.Println("could not boot cluster: ", err)
 			return
 		}
 		if args.Kill {
-			defer testCluster.Shutdown()
+			defer c.Shutdown()
 		}
 
-		if err = createFlynnrc(); err != nil {
+		if err = createFlynnrc(c); err != nil {
 			log.Println(err)
 			return
 		}
 		defer os.RemoveAll(flynnrc)
 
-		routerIP = testCluster.RouterIP
+		routerIP = c.RouterIP
 	}
 
 	if args.ClusterAPI != "" {
-		httpClient = &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{ServerName: "ci.flynn.io"}}}
-
-		res, err := httpClient.Get(args.ClusterAPI)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		testCluster = &cluster.Cluster{}
-		err = json.NewDecoder(res.Body).Decode(testCluster)
-		res.Body.Close()
+		testCluster, err = testcluster.NewClient(args.ClusterAPI)
 		if err != nil {
 			log.Println(err)
 			return
@@ -218,14 +209,14 @@ func genSSHKey() (*sshData, error) {
 	}, nil
 }
 
-func createFlynnrc() error {
+func createFlynnrc(c *cluster.Cluster) error {
 	tmpfile, err := ioutil.TempFile("", "flynnrc-")
 	if err != nil {
 		return err
 	}
 	path := tmpfile.Name()
 
-	config, err := testCluster.CLIConfig()
+	config, err := c.CLIConfig()
 	if err != nil {
 		os.RemoveAll(path)
 		return err
