@@ -15,6 +15,7 @@ import (
 type etcdClient interface {
 	CreateDir(key string, ttl uint64) (*etcd.Response, error)
 	Create(key string, value string, ttl uint64) (*etcd.Response, error)
+	Update(key string, value string, ttl uint64) (*etcd.Response, error)
 	Set(key string, value string, ttl uint64) (*etcd.Response, error)
 	Get(key string, sort, recursive bool) (*etcd.Response, error)
 	Delete(key string, recursive bool) (*etcd.Response, error)
@@ -114,7 +115,17 @@ func (b *etcdBackend) AddInstance(service string, inst *discoverd.Instance) erro
 	if err != nil {
 		return err
 	}
-	_, err = b.etcd.Set(b.instanceKey(service, inst.ID), string(data), defaultTTL)
+	dataString := string(data)
+	key := b.instanceKey(service, inst.ID)
+
+	_, err = b.etcd.Update(key, dataString, defaultTTL)
+	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
+		// This is a workaround for etcd issue #407: https://github.com/coreos/etcd/issues/407
+		// If we just do a Set and don't try to Update first, createdIndex will get incremented
+		// on each heartbeat, breaking leader election.
+		_, err = b.etcd.Set(key, dataString, defaultTTL)
+	}
+
 	return err
 }
 

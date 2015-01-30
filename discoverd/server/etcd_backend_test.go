@@ -200,3 +200,18 @@ func (s *EtcdSuite) TestServiceAddRemove(c *C) {
 	err = s.backend.RemoveService("a")
 	c.Assert(err, DeepEquals, NotFoundError{Service: "a"})
 }
+
+func (s *EtcdSuite) TestLeaderElectionCreatedIndex(c *C) {
+	c.Assert(s.backend.AddService("a"), IsNil)
+
+	inst1, inst2 := fakeInstance(), fakeInstance()
+	c.Assert(s.backend.AddInstance("a", inst1), IsNil)
+	c.Assert(s.backend.AddInstance("a", inst2), IsNil)
+	inst1.Meta = map[string]string{"a": "b"}
+	c.Assert(s.backend.AddInstance("a", inst1), IsNil)
+
+	events := make(chan *discoverd.Event, 1)
+	s.state.Subscribe("a", false, discoverd.EventKindLeader, events)
+	c.Assert(s.backend.StartSync(), IsNil)
+	assertEvent(c, events, "a", discoverd.EventKindLeader, inst1)
+}
