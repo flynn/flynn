@@ -11,7 +11,6 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/jsonschema"
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/exec"
 )
 
@@ -106,28 +105,16 @@ func unmarshalControllerExample(data []byte) (map[string]interface{}, error) {
 }
 
 func (s *ControllerSuite) generateControllerExamples(t *c.C) map[string]interface{} {
-	client := s.controllerClient(t)
-
-	app := &ct.App{}
-	t.Assert(client.CreateApp(app), c.IsNil)
-	artifact := &ct.Artifact{Type: "docker", URI: imageURIs["controller-examples"]}
-	t.Assert(client.CreateArtifact(artifact), c.IsNil)
-	env := map[string]string{"CONTROLLER_KEY": s.clusterConf(t).Key}
-	release := &ct.Release{
-		ArtifactID: artifact.ID,
-		Env:        env,
-	}
-	t.Assert(client.CreateRelease(release), c.IsNil)
-
 	cmd := exec.Command(exec.DockerImage(imageURIs["controller-examples"]), "/bin/flynn-controller-examples")
-	cmd.Env = env
+	cmd.Env = map[string]string{"CONTROLLER_KEY": s.clusterConf(t).Key}
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
-	t.Log(string(stderr.Bytes()))
+	t.Logf("stdout: %q", stdout.String())
+	t.Logf("stderr: %q", stderr.String())
 	t.Assert(err, c.IsNil)
 
 	var controllerExamples map[string]json.RawMessage
