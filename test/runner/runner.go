@@ -424,6 +424,10 @@ func (r *Runner) serveBuildLog(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	if b.LogFile == "" {
+		http.Redirect(w, req, b.LogUrl, http.StatusMovedPermanently)
+		return
+	}
 	t, err := tail.TailFile(b.LogFile, tail.Config{Follow: true, MustExist: true})
 	if err != nil {
 		http.Error(w, err.Error(), 500)
