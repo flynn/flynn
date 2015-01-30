@@ -15,6 +15,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
@@ -76,7 +77,7 @@ func scanDeployment(s postgres.Scanner) (*ct.Deployment, error) {
 }
 
 func (c *controllerAPI) GetDeployment(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	params := httphelper.ParamsFromContext(ctx)
+	params, _ := ctxhelper.ParamsFromContext(ctx)
 	deployment, err := c.deploymentRepo.Get(params.ByName("deployment_id"))
 	if err != nil {
 		respondWithError(w, err)

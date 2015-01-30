@@ -6,18 +6,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	log "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
+	"github.com/flynn/flynn/pkg/ctxhelper"
 )
 
 func NewRequestLogger(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		rw := w.(*ResponseWriter)
 
-		reqID, _ := rw.Context().Value(CtxKeyReqID).(string)
-		componentName, _ := rw.Context().Value(CtxKeyComponent).(string)
+		reqID, _ := ctxhelper.RequestIDFromContext(rw.Context())
+		componentName, _ := ctxhelper.ComponentNameFromContext(rw.Context())
 		logger := log.New(log.Ctx{"component": componentName, "req_id": reqID})
-		rw.ctx = context.WithValue(rw.Context(), CtxKeyLogger, logger)
+		rw.ctx = ctxhelper.NewContextLogger(rw.Context(), logger)
 
 		start := time.Now()
 		var clientIP string

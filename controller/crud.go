@@ -7,6 +7,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
+	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 )
 
@@ -44,7 +45,8 @@ func crud(r *httprouter.Router, resource string, example interface{}, repo Repos
 	}))
 
 	lookup := func(ctx context.Context) (interface{}, error) {
-		return repo.Get(httphelper.ParamsFromContext(ctx).ByName(resource + "_id"))
+		params, _ := ctxhelper.ParamsFromContext(ctx)
+		return repo.Get(params.ByName(resource + "_id"))
 	}
 
 	singletonPath := prefix + "/:" + resource + "_id"
@@ -73,7 +75,7 @@ func crud(r *httprouter.Router, resource string, example interface{}, repo Repos
 				respondWithError(rw, err)
 				return
 			}
-			params := httphelper.ParamsFromContext(ctx)
+			params, _ := ctxhelper.ParamsFromContext(ctx)
 			if err = remover.Remove(params.ByName(resource + "_id")); err != nil {
 				respondWithError(rw, err)
 				return

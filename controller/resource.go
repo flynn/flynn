@@ -9,6 +9,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
@@ -218,7 +219,7 @@ func (c *controllerAPI) GetProviderResources(ctx context.Context, w http.Respons
 }
 
 func (c *controllerAPI) GetResource(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	params := httphelper.ParamsFromContext(ctx)
+	params, _ := ctxhelper.ParamsFromContext(ctx)
 
 	_, err := c.getProvider(ctx)
 	if err != nil {
@@ -235,7 +236,7 @@ func (c *controllerAPI) GetResource(ctx context.Context, w http.ResponseWriter, 
 }
 
 func (c *controllerAPI) PutResource(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	params := httphelper.ParamsFromContext(ctx)
+	params, _ := ctxhelper.ParamsFromContext(ctx)
 
 	p, err := c.getProvider(ctx)
 	if err != nil {

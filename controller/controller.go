@@ -21,6 +21,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -233,7 +234,8 @@ func (c *controllerAPI) getApp(ctx context.Context) *ct.App {
 }
 
 func (c *controllerAPI) getRelease(ctx context.Context) (*ct.Release, error) {
-	data, err := c.releaseRepo.Get(httphelper.ParamsFromContext(ctx).ByName("releases_id"))
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+	data, err := c.releaseRepo.Get(params.ByName("releases_id"))
 	if err != nil {
 		return nil, err
 	}
@@ -241,16 +243,18 @@ func (c *controllerAPI) getRelease(ctx context.Context) (*ct.Release, error) {
 }
 
 func (c *controllerAPI) getProvider(ctx context.Context) (*ct.Provider, error) {
-	data, err := c.providerRepo.Get(httphelper.ParamsFromContext(ctx).ByName("providers_id"))
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+	data, err := c.providerRepo.Get(params.ByName("providers_id"))
 	if err != nil {
 		return nil, err
 	}
 	return data.(*ct.Provider), nil
 }
 
-func (c *controllerAPI) appLookup(handler httphelper.Handle) httphelper.Handle {
+func (c *controllerAPI) appLookup(handler httphelper.HandlerFunc) httphelper.HandlerFunc {
 	return func(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-		data, err := c.appRepo.Get(httphelper.ParamsFromContext(ctx).ByName("apps_id"))
+		params, _ := ctxhelper.ParamsFromContext(ctx)
+		data, err := c.appRepo.Get(params.ByName("apps_id"))
 		if err != nil {
 			respondWithError(w, err)
 			return
@@ -269,7 +273,8 @@ func routeID(params httprouter.Params) string {
 }
 
 func (c *controllerAPI) getRoute(ctx context.Context) (*router.Route, error) {
-	route, err := c.routerc.GetRoute(routeID(httphelper.ParamsFromContext(ctx)))
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+	route, err := c.routerc.GetRoute(routeID(params))
 	if err == routerc.ErrNotFound || err == nil && route.ParentRef != routeParentRef(c.getApp(ctx).ID) {
 		err = ErrNotFound
 	}
