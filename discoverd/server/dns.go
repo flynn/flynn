@@ -52,24 +52,38 @@ func (srv *DNSServer) ListenAndServe() error {
 	done := func() { errors <- nil }
 
 	if srv.UDPAddr != "" {
+		addr, err := net.ResolveUDPAddr("udp", srv.UDPAddr)
+		if err != nil {
+			return err
+		}
+		l, err := net.ListenUDP("udp", addr)
+		if err != nil {
+			return err
+		}
+		srv.UDPAddr = l.LocalAddr().String()
 		server := &dns.Server{
 			Net:               "udp",
-			Addr:              srv.UDPAddr,
+			PacketConn:        l,
 			Handler:           mux,
 			NotifyStartedFunc: done,
 		}
-		go func() { errors <- server.ListenAndServe() }()
+		go func() { errors <- server.ActivateAndServe() }()
 		srv.servers = append(srv.servers, server)
 	}
 
 	if srv.TCPAddr != "" {
+		l, err := net.Listen("tcp", srv.TCPAddr)
+		if err != nil {
+			return err
+		}
+		srv.TCPAddr = l.Addr().String()
 		server := &dns.Server{
 			Net:               "tcp",
-			Addr:              srv.TCPAddr,
+			Listener:          l,
 			Handler:           mux,
 			NotifyStartedFunc: done,
 		}
-		go func() { errors <- server.ListenAndServe() }()
+		go func() { errors <- server.ActivateAndServe() }()
 		srv.servers = append(srv.servers, server)
 	}
 
