@@ -56,11 +56,11 @@ func (s *SchedulerSuite) addHosts(t *c.C, count int) []string {
 		if err != nil {
 			t.Fatal("could not decode new instance:", err)
 		}
+		testCluster.Instances = append(testCluster.Instances, instance)
 
 		select {
 		case event := <-ch:
 			debug(t, "host added ", event.HostID)
-			testCluster.Instances = append(testCluster.Instances, instance)
 			hosts = append(hosts, event.HostID)
 		case <-time.After(60 * time.Second):
 			t.Fatal("timed out waiting for new host")
