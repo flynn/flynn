@@ -115,7 +115,7 @@ func serveHTTP(host *Host, attach *attachHandler, vman *volume.Manager) (*httpro
 	volAPI := volumeapi.NewHTTPAPI(vman)
 	volAPI.RegisterRoutes(r)
 
-	go http.Serve(l, r)
+	go http.Serve(l, httphelper.ContextInjector("host", httphelper.NewRequestLogger(r)))
 
 	return r, nil
 }
