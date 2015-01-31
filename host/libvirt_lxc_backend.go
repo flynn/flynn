@@ -223,6 +223,10 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 		}
 	}
 
+	if l.ifaceMTU == 0 || l.bridgeAddr == nil || l.bridgeNet == nil {
+		return nil, fmt.Errorf("host: error parsing flannel config - %q", string(data))
+	}
+
 	err = netlink.CreateBridge(bridgeName, false)
 	bridgeExists := os.IsExist(err)
 	if err != nil && !bridgeExists {
