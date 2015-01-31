@@ -8,7 +8,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
-	"github.com/flynn/flynn/pinkerton"
+	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pkg/cluster"
 )
 
@@ -67,7 +67,7 @@ func runUpdate(args *docopt.Args) error {
 				hostErrs <- err
 				return
 			}
-			ch := make(chan *pinkerton.LayerPullInfo)
+			ch := make(chan *layer.PullInfo)
 			stream, err := host.PullImages(
 				args.String["--repository"],
 				args.String["--driver"],
