@@ -31,7 +31,7 @@ main() {
   create_groups
   add_apt_sources
   install_packages
-  download_images
+  install_flynn
   disable_docker_auto_restart
   install_go
   apt_cleanup
@@ -153,45 +153,28 @@ add_apt_sources() {
   echo deb http://ppa.launchpad.net/zfs-native/stable/ubuntu trusty main \
     > /etc/apt/sources.list.d/zfs.list
 
-  # flynn
-  apt-key adv --keyserver keyserver.ubuntu.com \
-    --recv BC79739C507A9B53BB1B0E7D820A5489998D827B
-  echo deb https://dl.flynn.io/ubuntu flynn main \
-    > /etc/apt/sources.list.d/flynn.list
-
   apt-get update
 }
 
 install_packages() {
   local packages=(
+    "aufs-tools"
     "btrfs-tools"
     "bzr"
     "curl"
     "git"
+    "iptables"
     "libdevmapper-dev"
+    "libvirt-bin"
     "libvirt-dev"
     "linux-image-extra-$(uname -r)"
     "lxc-docker"
     "make"
     "mercurial"
-    "ruby2.0"
-    "ruby2.0-dev"
     "tup"
     "ubuntu-zfs"
     "vim-tiny"
   )
-
-  if [[ -n "${FLYNN_DEB_URL}" ]]; then
-    # If we are manually installing the deb, we need to also
-    # manually install explicit dependencies of flynn-host
-    packages+=(
-      "aufs-tools"
-      "iptables"
-      "libvirt-bin"
-    )
-  else
-    packages+=("flynn-host")
-  fi
 
   apt-get install -y ${packages[@]}
 
@@ -200,19 +183,17 @@ install_packages() {
 
   # give non-root users access to tup fuse mounts
   sed 's/#user_allow_other/user_allow_other/' -i /etc/fuse.conf
-
-  if [[ -n "${FLYNN_DEB_URL}" ]]; then
-    curl "${FLYNN_DEB_URL}" > /tmp/flynn-host.deb
-    dpkg -i /tmp/flynn-host.deb
-    rm /tmp/flynn-host.deb
-  fi
-
-  gem2.0 install fpm --no-rdoc --no-ri
 }
 
-download_images() {
-  mkdir -p /var/lib/docker
-  flynn-host download /etc/flynn/version.json
+install_flynn() {
+  local repo="${FLYNN_REPOSITORY:-"https://dl.flynn.io"}"
+
+  local script="install-flynn"
+  if [[ -n "${FLYNN_VERSION}" ]]; then
+    script="${script}-${FLYNN_VERSION}"
+  fi
+
+  bash -es -- -r "${repo}" < <(curl -sL --fail "${repo}/${script}")
 }
 
 disable_docker_auto_restart() {
