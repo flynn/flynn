@@ -24,15 +24,16 @@ OPTIONS:
   -c COMMIT     The commit to build [default: the master branch of https://github.com/flynn/flynn.git]
   -d DOMAIN     The CloudFront domain [default: dl.flynn.io]
   -r DIR        Resume the release using DIR
+  -t DIR        Path to the local TUF repository [default: /etc/flynn/tuf]
 
 Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and GITHUB_TOKEN to be set
 USAGE
 }
 
 main() {
-  local bucket commit dir domain
+  local bucket commit dir domain tuf_dir
 
-  while getopts "hb:c:d:r:" opt; do
+  while getopts "hb:c:d:r:t:" opt; do
     case $opt in
       h)
         usage
@@ -47,6 +48,12 @@ main() {
           fail "No such directory: ${dir}"
         fi
         ;;
+      t)
+        tuf_dir=${OPTARG}
+        if [[ ! -d "${tuf_dir}" ]]; then
+          fail "No such directory: ${tuf_dir}"
+        fi
+        ;;
       ?)
         usage
         exit 1
@@ -59,6 +66,7 @@ main() {
 
   bucket="${bucket:-"flynn"}"
   dir="${dir:-$(mktemp -d)}"
+  tuf_dir="${tuf_dir:="/etc/flynn/tuf"}"
   domain="${domain:-"dl.flynn.io"}"
 
   if [[ -z "${commit}" ]]; then
@@ -98,7 +106,7 @@ main() {
   info "getting flynn release manifest"
   local manifest="$(s3cmd --no-progress get "s3://${bucket}/release/manifest.json" - 2>/dev/null)"
   if [[ -z "${manifest}" ]]; then
-    manifest='{}'
+    manifest='{"versions":[]}'
   fi
 
   info "checking for existing release"
@@ -106,38 +114,20 @@ main() {
     fail "commit ${commit} has already been released"
   fi
 
-  # release-packages prints results to fd 3, so create a pipe to read them
-  results="$(mktemp -u)"
-  mkfifo "${results}"
-  trap "rm -f ${results}" EXIT
+  info "determining version"
+  local date=$(date +%Y%m%d)
+  local iteration=$(jq --raw-output '.versions[].version' <<< "${manifest}" | grep --quiet "${date}" | wc -l)
+  local version="${date}.${iteration}"
+  info "using version ${version}"
 
-  info "releasing packages"
-  "${ROOT}/script/release-packages" \
+  info "releasing components"
+  "${ROOT}/script/release-components" \
     -k \
     -b "${bucket}" \
     -r "${dir}" \
+    -t "${tuf_dir}" \
     "${commit}" \
-    3>"${results}" \
-    &
-
-  # grab the version and deb_url from the results
-  local version deb_url
-  while read line; do
-    IFS="|" read field value <<< "${line}"
-
-    case "${field}" in
-      version)
-        version="${value}"
-        ;;
-      deb_url)
-        deb_url="${value}"
-        ;;
-    esac
-  done < "${results}"
-
-  if [[ -z "${version}" ]] || [[ -z "${deb_url}" ]]; then
-    fail "failed to release packages"
-  fi
+    "${version}"
 
   info "tagging release"
   tag_release "${commit}" "${version}"
@@ -148,8 +138,7 @@ main() {
     -b "${bucket}" \
     -d "${domain}" \
     -r "${dir}" \
-    "${version}" \
-    "${deb_url}"
+    "${version}"
 
   info "updating flynn release manifest"
   "${ROOT}/util/release/flynn-release" version \
