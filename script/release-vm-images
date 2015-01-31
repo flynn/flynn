@@ -40,7 +40,7 @@ UBUNTU_USEAST_AMI="ami-9a562df2" # us-east-1 | trusty | 14.04 LTS | amd64 | hvm:
 
 usage() {
   cat <<USAGE >&2
-usage: $0 [options] VERSION DEB_URL
+usage: $0 [options] VERSION
 
 OPTIONS:
   -h            Show this message
@@ -80,7 +80,7 @@ main() {
   done
   shift $((${OPTIND} - 1))
 
-  if [[ $# -ne 2 ]]; then
+  if [[ $# -ne 1 ]]; then
     usage
     exit 1
   fi
@@ -88,7 +88,6 @@ main() {
   check_aws_keys
 
   local version=$1
-  local deb_url=$2
   bucket=${bucket:-"flynn"}
   dir="${dir:-$(mktemp -d)}"
   domain="${domain:-"dl.flynn.io"}"
@@ -121,10 +120,10 @@ main() {
     local output=$(packer build \
       -machine-readable \
       -only="amazon-ebs,virtualbox-ovf" \
-      -var "flynn_deb_url=${deb_url}" \
       -var "headless=true" \
       -var "output_dir=${dir}" \
       -var "ova_path=${ova_path}" \
+      -var "flynn_repository=https://${domain}" \
       -var "source_ami=${UBUNTU_USEAST_AMI}" \
       -var "version=${version}" \
       template.json | parse_packer)

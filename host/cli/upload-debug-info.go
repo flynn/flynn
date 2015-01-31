@@ -23,7 +23,7 @@ var debugCmds = [][]string{
 	{"lsb_release", "-a"},
 	{"date"},
 	{"free", "-m"},
-	{"dpkg-query", "-W", "-f", "${Package}: ${Version}\n", "libvirt-bin", "flynn-host"},
+	{"dpkg-query", "-W", "-f", "${Package}: ${Version}\n", "libvirt-bin"},
 	{os.Args[0], "version"},
 	{"virsh", "-c", "lxc:///", "list"},
 	{"virsh", "-c", "lxc:///", "net-list"},

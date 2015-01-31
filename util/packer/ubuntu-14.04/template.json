@@ -1,9 +1,9 @@
 {
   "variables": {
-    "flynn_deb_url": "",
     "headless": "false",
     "output_dir": ".",
     "ova_path": "ubuntu.ova",
+    "flynn_repository": "https://dl.flynn.io",
     "source_ami": "ami-9a562df2",
     "version": ""
   },
@@ -79,7 +79,8 @@
         "scripts/install.sh"
       ],
       "environment_vars": [
-        "FLYNN_DEB_URL={{ user `flynn_deb_url` }}"
+        "FLYNN_REPOSITORY={{ user `flynn_repository` }}",
+        "FLYNN_VERSION={{ user `version` }}"
       ],
       "execute_command": "echo 'vagrant' | {{.Vars}} sudo -E -S bash '{{.Path}}'",
       "override": {
