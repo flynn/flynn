@@ -89,15 +89,13 @@ func (s *HTTPListener) Start() error {
 		return err
 	}
 
-	go s.listenAndServe(started)
-	if err := <-started; err != nil {
+	if err := s.listenAndServe(); err != nil {
 		s.ds.StopSync()
 		return err
 	}
 	s.Addr = s.listener.Addr().String()
 
-	go s.listenAndServeTLS(started)
-	if err := <-started; err != nil {
+	if err := s.listenAndServeTLS(); err != nil {
 		s.ds.StopSync()
 		s.listener.Close()
 		return err
@@ -220,13 +218,13 @@ func (h *httpSyncHandler) Remove(id string) error {
 	return nil
 }
 
-func (s *HTTPListener) listenAndServe(started chan<- error) {
+func (s *HTTPListener) listenAndServe() error {
 	var err error
 	s.listener, err = reuseport.NewReusablePortListener("tcp4", s.Addr)
-	started <- err
 	if err != nil {
-		return
+		return err
 	}
+
 	server := &http.Server{
 		Addr: s.listener.Addr().String(),
 		Handler: fwdProtoHandler{
@@ -237,12 +235,13 @@ func (s *HTTPListener) listenAndServe(started chan<- error) {
 	}
 
 	// TODO: log error
-	_ = server.Serve(s.listener)
+	go server.Serve(s.listener)
+	return nil
 }
 
 var errMissingTLS = errors.New("router: route not found or TLS not configured")
 
-func (s *HTTPListener) listenAndServeTLS(started chan<- error) {
+func (s *HTTPListener) listenAndServeTLS() error {
 	certForHandshake := func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		r := s.findRouteForHost(hello.ServerName)
 		if r == nil {
@@ -256,13 +255,10 @@ func (s *HTTPListener) listenAndServeTLS(started chan<- error) {
 	})
 
 	l, err := reuseport.NewReusablePortListener("tcp4", s.TLSAddr)
-	if err == nil {
-		s.tlsListener = tls.NewListener(l, tlsConfig)
-	}
-	started <- err
 	if err != nil {
-		return
+		return err
 	}
+	s.tlsListener = tls.NewListener(l, tlsConfig)
 
 	server := &http.Server{
 		Addr: s.tlsListener.Addr().String(),
@@ -274,7 +270,8 @@ func (s *HTTPListener) listenAndServeTLS(started chan<- error) {
 	}
 
 	// TODO: log error
-	_ = server.Serve(s.tlsListener)
+	go server.Serve(s.tlsListener)
+	return nil
 }
 
 func (s *HTTPListener) findRouteForHost(host string) *httpRoute {
