@@ -275,7 +275,7 @@ func (c *Client) DeployAppRelease(appID, releaseID string) error {
 	}
 
 	// if initial deploy, just stop here
-	if d.ID == "" {
+	if d.FinishedAt != nil {
 		return nil
 	}
 

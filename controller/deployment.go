@@ -32,19 +32,40 @@ func NewDeploymentRepo(db *postgres.DB, pgxpool *pgx.ConnPool) *DeploymentRepo {
 }
 
 func (r *DeploymentRepo) Add(data interface{}) error {
-	deployment := data.(*ct.Deployment)
-	if deployment.ID == "" {
-		deployment.ID = random.UUID()
+	d := data.(*ct.Deployment)
+	if d.ID == "" {
+		d.ID = random.UUID()
 	}
-	query := "INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy) VALUES ($1, $2, $3, $4, $5) RETURNING created_at"
-	if err := r.db.QueryRow(query, deployment.ID, deployment.AppID, deployment.OldReleaseID, deployment.NewReleaseID, deployment.Strategy).Scan(&deployment.CreatedAt); err != nil {
+	var oldReleaseID *string
+	if d.OldReleaseID != "" {
+		oldReleaseID = &d.OldReleaseID
+	}
+	tx, err := r.db.Begin()
+	if err != nil {
 		return err
 	}
-	deployment.ID = postgres.CleanUUID(deployment.ID)
-	deployment.OldReleaseID = postgres.CleanUUID(deployment.OldReleaseID)
-	deployment.NewReleaseID = postgres.CleanUUID(deployment.NewReleaseID)
+	query := "INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy) VALUES ($1, $2, $3, $4, $5) RETURNING created_at"
+	if err := tx.QueryRow(query, d.ID, d.AppID, oldReleaseID, d.NewReleaseID, d.Strategy).Scan(&d.CreatedAt); err != nil {
+		tx.Rollback()
+		return err
+	}
+	d.ID = postgres.CleanUUID(d.ID)
+	d.OldReleaseID = postgres.CleanUUID(d.OldReleaseID)
+	d.NewReleaseID = postgres.CleanUUID(d.NewReleaseID)
 
-	args, err := json.Marshal(ct.DeployID{ID: deployment.ID})
+	// fake initial deployment
+	if d.FinishedAt != nil {
+		if _, err := tx.Exec("UPDATE deployments SET finished_at = $2 WHERE deployment_id = $1", d.ID, d.FinishedAt); err != nil {
+			tx.Rollback()
+			return err
+		}
+		return tx.Commit()
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	args, err := json.Marshal(ct.DeployID{ID: d.ID})
 	if err != nil {
 		return err
 	}
@@ -118,31 +139,33 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 		respondWithError(w, err)
 		return
 	}
-	if len(fs) == 0 || (len(fs) == 1 && fs[0].ReleaseID == release.ID) {
-		// immediately set app release
-		if err := c.appRepo.SetRelease(app.ID, release.ID); err != nil {
-			respondWithError(w, err)
-			return
-		}
-		// empty ID means initial deploy
-		httphelper.JSON(w, 200, &ct.Deployment{})
-		return
-	}
 	oldRelease, err := c.appRepo.GetRelease(app.ID)
-	if err != nil {
+	if err == ErrNotFound {
+		oldRelease = &ct.Release{}
+	} else if err != nil {
 		respondWithError(w, err)
 		return
 	}
 	deployment := &ct.Deployment{
 		AppID:        app.ID,
-		OldReleaseID: oldRelease.ID,
 		NewReleaseID: release.ID,
 		Strategy:     app.Strategy,
+		OldReleaseID: oldRelease.ID,
 	}
 
 	if err := schema.Validate(deployment); err != nil {
 		respondWithError(w, err)
 		return
+	}
+
+	if len(fs) == 0 || (len(fs) == 1 && fs[0].ReleaseID == release.ID) || len(fs[0].Processes) == 0 {
+		// immediately set app release
+		if err := c.appRepo.SetRelease(app.ID, release.ID); err != nil {
+			respondWithError(w, err)
+			return
+		}
+		now := time.Now()
+		deployment.FinishedAt = &now
 	}
 
 	if err := c.deploymentRepo.Add(deployment); err != nil {
