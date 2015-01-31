@@ -6,7 +6,7 @@ import (
 	"github.com/flynn/flynn/pkg/stream"
 )
 
-type MonitorConfig struct {
+type Monitor struct {
 	// StartInterval is the check interval to use when waiting for the service
 	// to transition from created -> up. It defaults to 100ms.
 	StartInterval time.Duration
@@ -43,21 +43,21 @@ const (
 	defaultThreshold     = 2
 )
 
-// Monitor monitors a service using Check and sends up/down transitions to ch
-func Monitor(cfg MonitorConfig, check Check, ch chan MonitorEvent) stream.Stream {
-	if cfg.StartInterval == 0 {
-		cfg.StartInterval = defaultStartInterval
+// Run monitors a service using Check and sends up/down transitions to ch
+func (m Monitor) Run(check Check, ch chan MonitorEvent) stream.Stream {
+	if m.StartInterval == 0 {
+		m.StartInterval = defaultStartInterval
 	}
-	if cfg.Interval == 0 {
-		cfg.Interval = defaultInterval
+	if m.Interval == 0 {
+		m.Interval = defaultInterval
 	}
-	if cfg.Threshold == 0 {
-		cfg.Threshold = defaultThreshold
+	if m.Threshold == 0 {
+		m.Threshold = defaultThreshold
 	}
 
 	stream := stream.New()
 	go func() {
-		t := time.NewTicker(cfg.StartInterval)
+		t := time.NewTicker(m.StartInterval)
 		defer close(ch)
 
 		status := MonitorStatusCreated
@@ -65,10 +65,10 @@ func Monitor(cfg MonitorConfig, check Check, ch chan MonitorEvent) stream.Stream
 		up := func() {
 			downCount = 0
 			upCount++
-			if status == MonitorStatusCreated || status == MonitorStatusDown && upCount >= cfg.Threshold {
+			if status == MonitorStatusCreated || status == MonitorStatusDown && upCount >= m.Threshold {
 				if status == MonitorStatusCreated {
 					t.Stop()
-					t = time.NewTicker(cfg.Interval)
+					t = time.NewTicker(m.Interval)
 				}
 				status = MonitorStatusUp
 				ch <- MonitorEvent{
@@ -80,7 +80,7 @@ func Monitor(cfg MonitorConfig, check Check, ch chan MonitorEvent) stream.Stream
 		down := func(err error) {
 			upCount = 0
 			downCount++
-			if status == MonitorStatusUp && downCount >= cfg.Threshold {
+			if status == MonitorStatusUp && downCount >= m.Threshold {
 				status = MonitorStatusDown
 				ch <- MonitorEvent{
 					Status: status,
