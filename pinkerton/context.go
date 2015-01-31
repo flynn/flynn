@@ -15,6 +15,7 @@ import (
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/vfs"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/reexec"
 	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
+	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pinkerton/registry"
 	"github.com/flynn/flynn/pinkerton/store"
 	"github.com/flynn/flynn/pkg/tufutil"
@@ -47,20 +48,7 @@ func NewContext(store *store.Store, driver graphdriver.Driver) *Context {
 	return &Context{Store: store, driver: driver}
 }
 
-type LayerPullInfo struct {
-	Repo   string      `json:"repo"`
-	ID     string      `json:"id"`
-	Status LayerStatus `json:"status"`
-}
-
-type LayerStatus string
-
-const (
-	LayerStatusExists     LayerStatus = "exists"
-	LayerStatusDownloaded LayerStatus = "downloaded"
-)
-
-func (c *Context) PullDocker(url string, progress chan<- LayerPullInfo) error {
+func (c *Context) PullDocker(url string, progress chan<- layer.PullInfo) error {
 	ref, err := registry.NewRef(url)
 	if err != nil {
 		return err
@@ -68,7 +56,7 @@ func (c *Context) PullDocker(url string, progress chan<- LayerPullInfo) error {
 	return c.pull(url, registry.NewDockerSession(ref), progress)
 }
 
-func (c *Context) PullTUF(url string, client *tuf.Client, progress chan<- LayerPullInfo) error {
+func (c *Context) PullTUF(url string, client *tuf.Client, progress chan<- layer.PullInfo) error {
 	ref, err := registry.NewRef(url)
 	if err != nil {
 		return err
@@ -76,21 +64,21 @@ func (c *Context) PullTUF(url string, client *tuf.Client, progress chan<- LayerP
 	return c.pull(url, registry.NewTUFSession(client, ref), progress)
 }
 
-func (c *Context) pull(url string, session registry.Session, progress chan<- LayerPullInfo) error {
+func (c *Context) pull(url string, session registry.Session, progress chan<- layer.PullInfo) error {
 	defer func() {
 		if progress != nil {
 			close(progress)
 		}
 	}()
 
-	sendProgress := func(id string, status LayerStatus) {
+	sendProgress := func(id string, status layer.Status) {
 		if progress != nil {
-			progress <- LayerPullInfo{Repo: session.Repo(), ID: id, Status: status}
+			progress <- layer.PullInfo{Repo: session.Repo(), ID: id, Status: status}
 		}
 	}
 
 	if id := session.ImageID(); id != "" && c.Exists(id) {
-		sendProgress(id, LayerStatusExists)
+		sendProgress(id, layer.StatusExists)
 		return nil
 	}
 
@@ -105,21 +93,21 @@ func (c *Context) pull(url string, session registry.Session, progress chan<- Lay
 	}
 
 	for i := len(layers) - 1; i >= 0; i-- {
-		layer := layers[i]
-		if c.Exists(layer.ID) {
-			sendProgress(layer.ID, LayerStatusExists)
+		l := layers[i]
+		if c.Exists(l.ID) {
+			sendProgress(l.ID, layer.StatusExists)
 			continue
 		}
 
-		status := LayerStatusDownloaded
-		if err := c.Add(layer); err != nil {
+		status := layer.StatusDownloaded
+		if err := c.Add(l); err != nil {
 			if err == store.ErrExists {
-				status = LayerStatusExists
+				status = layer.StatusExists
 			} else {
 				return err
 			}
 		}
-		sendProgress(layer.ID, status)
+		sendProgress(l.ID, status)
 	}
 
 	// TODO: update sizes
@@ -143,9 +131,9 @@ func (c *Context) Cleanup(id string) error {
 	return c.driver.Remove("tmp-" + id)
 }
 
-func InfoPrinter(jsonOut bool) chan<- LayerPullInfo {
+func InfoPrinter(jsonOut bool) chan<- layer.PullInfo {
 	enc := json.NewEncoder(os.Stdout)
-	info := make(chan LayerPullInfo)
+	info := make(chan layer.PullInfo)
 	go func() {
 		for l := range info {
 			if jsonOut {
@@ -173,7 +161,7 @@ func ImageID(s string) (string, error) {
 	return id, nil
 }
 
-func PullImages(tufDB, repository, driver, root string, progress chan<- LayerPullInfo) error {
+func PullImages(tufDB, repository, driver, root string, progress chan<- layer.PullInfo) error {
 	local, err := tuf.FileLocalStore(tufDB)
 	if err != nil {
 		return err
@@ -185,7 +173,7 @@ func PullImages(tufDB, repository, driver, root string, progress chan<- LayerPul
 	return PullImagesWithClient(tuf.NewClient(local, remote), repository, driver, root, progress)
 }
 
-func PullImagesWithClient(client *tuf.Client, repository, driver, root string, progress chan<- LayerPullInfo) error {
+func PullImagesWithClient(client *tuf.Client, repository, driver, root string, progress chan<- layer.PullInfo) error {
 	tmp, err := tufutil.Download(client, "/version.json")
 	if err != nil {
 		return err
@@ -205,7 +193,7 @@ func PullImagesWithClient(client *tuf.Client, repository, driver, root string, p
 	var wg sync.WaitGroup
 	wg.Add(len(versions))
 	for name, id := range versions {
-		info := make(chan LayerPullInfo)
+		info := make(chan layer.PullInfo)
 		go func() {
 			for l := range info {
 				progress <- l
