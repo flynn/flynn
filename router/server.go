@@ -135,6 +135,7 @@ func main() {
 	}
 
 	go func() { shutdown.Fatal(r.ListenAndServe(nil)) }()
+
 	listener, err := reuseport.NewReusablePortListener("tcp4", *apiAddr)
 	if err != nil {
 		shutdown.Fatal(err)
