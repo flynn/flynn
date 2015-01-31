@@ -55,6 +55,9 @@ func main() {
 	go e.listenAndServe(providerLog)
 
 	examples := []g.Example{
+		// Run provider_create first so that discoverd service has time to
+		// propagate
+		{"provider_create", e.createProvider},
 		{"key_create", e.createKey},
 		{"key_get", e.getKey},
 		{"key_list", e.listKeys},
@@ -87,7 +90,6 @@ func main() {
 		{"job_list", e.listJobs},
 		{"job_update", e.updateJob},
 		{"job_delete", e.deleteJob},
-		{"provider_create", e.createProvider},
 		{"provider_get", e.getProvider},
 		{"provider_list", e.listProviders},
 		{"provider_resource_create", e.createProviderResource},
