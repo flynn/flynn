@@ -24,16 +24,17 @@ func init() {
 	}
 
 	Register("download", runDownload, `
-usage: flynn-host download [--driver=<name>] [--root=<path>] [--repository=<uri>] [--tuf-db=<path>] [--manifest-dir=<dir>]
+usage: flynn-host download [--driver=<name>] [--root=<path>] [--repository=<uri>] [--tuf-db=<path>] [--config-dir=<dir>] [--bin-dir=<dir>]
 
 Options:
   -d --driver=<name>       image storage driver [default: aufs]
   -r --root=<path>         image storage root [default: /var/lib/docker]
-  -u --repository=<uri>    image repository URI [default: https://dl.flynn.io/images]
+  -u --repository=<uri>    TUF repository URI [default: https://dl.flynn.io/tuf]
   -t --tuf-db=<path>       local TUF file [default: /etc/flynn/tuf.db]
-  -m --manifest-dir=<dir>  directory to copy manifests into [default: /etc/flynn]
+  -c --config-dir=<dir>    config directory [default: /etc/flynn]
+  -b --bin-dir=<dir>       binary directory [default: /usr/local/bin]
 
-Download container images from a TUF repository`)
+Download container images and Flynn binaries from a TUF repository`)
 }
 
 func runDownload(args *docopt.Args) error {
@@ -76,19 +77,29 @@ func runDownload(args *docopt.Args) error {
 		return err
 	}
 
-	// download the host and bootstrap manifests
-	if err := os.MkdirAll(args.String["--manifest-dir"], 0755); err != nil {
-		return fmt.Errorf("error creating manifest dir: %s", err)
+	// download the upstart config and image manifests
+	if err := os.MkdirAll(args.String["--config-dir"], 0755); err != nil {
+		return fmt.Errorf("error creating config dir: %s", err)
 	}
-	for _, path := range []string{"/host-manifest.json", "/bootstrap-manifest.json"} {
-		if err := downloadManifest(client, path, args.String["--manifest-dir"]); err != nil {
+	for _, path := range []string{"/upstart.conf", "/host-manifest.json", "/bootstrap-manifest.json"} {
+		if err := downloadFile(client, path, args.String["--config-dir"]); err != nil {
+			return err
+		}
+	}
+
+	// download the init and cli binaries
+	if err := os.MkdirAll(args.String["--bin-dir"], 0755); err != nil {
+		return fmt.Errorf("error creating bin dir: %s", err)
+	}
+	for _, path := range []string{"/flynn-linux-amd64", "/flynn-init"} {
+		if err := downloadFile(client, path, args.String["--bin-dir"]); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func downloadManifest(client *tuf.Client, path, dir string) error {
+func downloadFile(client *tuf.Client, path, dir string) error {
 	file, err := tufutil.Download(client, path)
 	if err != nil {
 		return err
