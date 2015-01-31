@@ -117,9 +117,40 @@ func (x ContainerConfig) Merge(y ContainerConfig) ContainerConfig {
 }
 
 type Port struct {
-	Port     int    `json:"port,omitempty"`
-	Proto    string `json:"proto,omitempty"`
-	RangeEnd int    `json:"range_end,omitempty"`
+	Port    int      `json:"port,omitempty"`
+	Proto   string   `json:"proto,omitempty"`
+	Service *Service `json:"service,omitempty"`
+}
+
+type Service struct {
+	Name string `json:"name,omitempty"`
+	// Create the service in service discovery
+	Create bool         `json:"create,omitempty"`
+	Check  *HealthCheck `json:"check,omitempty"`
+}
+
+type HealthCheck struct {
+	// Type is one of tcp, http, https
+	Type string `json:"type,omitempty"`
+	// Interval is the time to wait between checks after the service has been
+	// marked as up. It defaults to two seconds.
+	Interval time.Duration `json:"interval,omitempty"`
+	// Threshold is the number of consecutive checks of the same status before
+	// a service will be marked as up or down after coming up for the first
+	// time. It defaults to 2.
+	Threshold int `json:"threshold,omitempty"`
+	// If KillDown is true, the job will be killed if the service goes down (or
+	// does not come up)
+	KillDown bool `json:"kill_down,omitempty"`
+	// StartTimeout is the maximum duration that a service can take to come up
+	// for the first time if KillDown is true. It defaults to ten seconds.
+	StartTimeout time.Duration `json:"start_timeout,omitempty"`
+
+	// Extra optional config fields for http/https checks
+	Path   string `json:"path,omitempty"`
+	Host   string `json:"host,omitempty"`
+	Match  string `json:"match,omitempty"`
+	Status int    `json:"status.omitempty"`
 }
 
 type Mount struct {
