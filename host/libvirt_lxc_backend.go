@@ -798,12 +798,9 @@ func (l *LibvirtLXCBackend) Signal(id string, sig int) error {
 }
 
 func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
-	var client *libvirtContainer
-	if req.Stdin != nil || req.Job.Job.Config.TTY {
-		client, err = l.getContainer(req.Job.Job.ID)
-		if err != nil {
-			return err
-		}
+	client, err := l.getContainer(req.Job.Job.ID)
+	if err != nil && (req.Job.Job.Config.TTY || req.Stdin != nil) {
+		return err
 	}
 
 	defer func() {
