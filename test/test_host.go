@@ -60,6 +60,20 @@ func (s *HostSuite) TestAttachFinishedInteractiveJob(t *c.C) {
 	}
 }
 
+func (s *HostSuite) TestExecCrashingJob(t *c.C) {
+	cluster := s.clusterClient(t)
+
+	for _, attach := range []bool{true, false} {
+		t.Logf("attach = %v", attach)
+		cmd := exec.CommandUsingCluster(cluster, exec.DockerImage(imageURIs["test-apps"]), "sh", "-c", "exit 1")
+		if attach {
+			cmd.Stdout = ioutil.Discard
+			cmd.Stderr = ioutil.Discard
+		}
+		t.Assert(cmd.Run(), c.DeepEquals, exec.ExitError(1))
+	}
+}
+
 /*
 	Make an 'ish' application on the given host, returning it when
 	it has registered readiness with discoverd.
