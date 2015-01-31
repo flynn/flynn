@@ -17,6 +17,7 @@ import (
 
 	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/iotool"
 	"github.com/flynn/flynn/pkg/random"
 )
 
@@ -547,16 +548,9 @@ func lookupUser(name string) (int, int, error) {
 }
 
 func (c *Cluster) DumpLogs(w io.Writer) {
-	done := make(chan struct{})
-	go func() {
-		c.dumpLogs(w)
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(60 * time.Second):
-		fmt.Fprintln(w, "failed to dump logs within 60 seconds, skipping")
-	}
+	tw := iotool.NewTimeoutWriter(w, 60*time.Second)
+	c.dumpLogs(tw)
+	tw.Finished()
 }
 
 func (c *Cluster) dumpLogs(w io.Writer) {
