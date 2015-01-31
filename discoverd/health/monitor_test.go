@@ -55,11 +55,11 @@ func (MonitorSuite) TestMonitor(c *C) {
 			return nil
 		})
 
-		stream := Monitor(MonitorConfig{
+		stream := Monitor{
 			Threshold:     threshold,
 			StartInterval: time.Nanosecond,
 			Interval:      time.Nanosecond,
-		}, check, actualEvents)
+		}.Run(check, actualEvents)
 		go func() {
 			<-done
 			stream.Close()
@@ -158,7 +158,6 @@ func (MonitorSuite) TestMonitor(c *C) {
 		c.Log(t.name)
 
 		expectedEvents, actualEvents := checker(t.steps, t.threshold)
-
 		for actual := range actualEvents {
 			select {
 			case expected := <-expectedEvents:
