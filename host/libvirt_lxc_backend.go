@@ -30,6 +30,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pinkerton"
+	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/iptables"
@@ -966,9 +967,9 @@ func (l *LibvirtLXCBackend) MarshalJobState(jobID string) ([]byte, error) {
 	return nil, nil
 }
 
-func (l *LibvirtLXCBackend) pinkertonPull(url string) ([]pinkerton.LayerPullInfo, error) {
-	var layers []pinkerton.LayerPullInfo
-	info := make(chan pinkerton.LayerPullInfo)
+func (l *LibvirtLXCBackend) pinkertonPull(url string) ([]layer.PullInfo, error) {
+	var layers []layer.PullInfo
+	info := make(chan layer.PullInfo)
 	done := make(chan struct{})
 	go func() {
 		for l := range info {

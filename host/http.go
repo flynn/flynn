@@ -15,6 +15,7 @@ import (
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/host/volume/api"
 	"github.com/flynn/flynn/pinkerton"
+	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/sse"
 )
@@ -109,7 +110,7 @@ func (h *jobAPI) PullImages(w http.ResponseWriter, r *http.Request, ps httproute
 	w.(http.Flusher).Flush()
 
 	ws := sse.NewWriter(w)
-	info := make(chan pinkerton.LayerPullInfo)
+	info := make(chan layer.PullInfo)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)

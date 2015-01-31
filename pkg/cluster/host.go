@@ -7,7 +7,7 @@ import (
 
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
-	"github.com/flynn/flynn/pinkerton"
+	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -39,7 +39,7 @@ type Host interface {
 	CreateVolume(providerId string) (*volume.Info, error)
 
 	// PullImages pulls images from a TUF repository using the local TUF file in tufDB
-	PullImages(repository, driver, root string, tufDB io.Reader, ch chan<- *pinkerton.LayerPullInfo) (stream.Stream, error)
+	PullImages(repository, driver, root string, tufDB io.Reader, ch chan<- *layer.PullInfo) (stream.Stream, error)
 }
 
 type hostClient struct {
@@ -97,7 +97,7 @@ func (c *hostClient) CreateVolume(providerId string) (*volume.Info, error) {
 	return &res, err
 }
 
-func (c *hostClient) PullImages(repository, driver, root string, tufDB io.Reader, ch chan<- *pinkerton.LayerPullInfo) (stream.Stream, error) {
+func (c *hostClient) PullImages(repository, driver, root string, tufDB io.Reader, ch chan<- *layer.PullInfo) (stream.Stream, error) {
 	header := http.Header{"Content-Type": {"application/octet-stream"}}
 	path := fmt.Sprintf("/host/pull-images?repository=%s&driver=%s&root=%s", repository, driver, root)
 	return c.c.StreamWithHeader("POST", path, header, tufDB, ch)
