@@ -5,10 +5,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
 )
 
 var _ = Suite(&HTTPSuite{})
@@ -23,12 +21,9 @@ type HTTPSuite struct {
 
 func (s *HTTPSuite) SetUpTest(c *C) {
 	s.cleanup = nil
-	etcdAddr, etcdCleanup := etcdrunner.RunEtcdServer(c)
-	s.cleanup = append(s.cleanup, etcdCleanup)
-
 	s.state = NewState()
 
-	s.backend = NewEtcdBackend(etcd.NewClient([]string{etcdAddr}), "/test/discoverd", s.state)
+	s.backend = newEtcdBackend(s.state)
 	c.Assert(s.backend.StartSync(), IsNil)
 	s.cleanup = append(s.cleanup, func() { s.backend.Close() })
 

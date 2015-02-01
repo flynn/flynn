@@ -7,16 +7,12 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
-	"testing"
 	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/random"
 )
-
-// Hook gocheck up to the "go test" runner
-func Test(t *testing.T) { TestingT(t) }
 
 type StateSuite struct{}
 
