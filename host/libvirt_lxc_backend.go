@@ -491,6 +491,9 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 			config.Args = append(config.Args, imageConfig.Cmd...)
 		}
 	}
+	for _, port := range job.Config.Ports {
+		config.Ports = append(config.Ports, port)
+	}
 
 	g.Log(grohl.Data{"at": "write_config"})
 	err = writeContainerConfig(filepath.Join(rootPath, ".containerconfig"), config,

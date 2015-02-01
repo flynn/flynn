@@ -40,6 +40,7 @@ func JobConfig(f *ct.ExpandedFormation, name string) *host.Job {
 	for i, p := range t.Ports {
 		job.Config.Ports[i].Proto = p.Proto
 		job.Config.Ports[i].Port = p.Port
+		job.Config.Ports[i].Service = p.Service
 	}
 	if t.Data {
 		job.Config.Mounts = []host.Mount{{Location: "/data", Writeable: true}}
