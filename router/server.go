@@ -32,17 +32,13 @@ type Router struct {
 	TCP  Listener
 }
 
-func (s *Router) ListenAndServe(quit <-chan struct{}) error {
+func (s *Router) Start() error {
 	if err := s.HTTP.Start(); err != nil {
 		return err
 	}
 	if err := s.TCP.Start(); err != nil {
 		return err
 	}
-	<-quit
-	// TODO: unregister from service discovery
-	s.HTTP.Close()
-	// TODO: wait for client connections to finish
 	return nil
 }
 
@@ -89,18 +85,6 @@ func main() {
 		}
 	}
 
-	services := map[string]string{
-		"router-api":  *apiAddr,
-		"router-http": *httpAddr,
-	}
-	for service, addr := range services {
-		hb, err := discoverd.AddServiceAndRegister(service, addr)
-		if err != nil {
-			shutdown.Fatal(err)
-		}
-		shutdown.BeforeExit(func() { hb.Close() })
-	}
-
 	// Read etcd addresses from ETCD
 	etcdAddrs := strings.Split(os.Getenv("ETCD"), ",")
 	if len(etcdAddrs) == 1 && etcdAddrs[0] == "" {
@@ -134,11 +118,26 @@ func main() {
 		},
 	}
 
-	go func() { shutdown.Fatal(r.ListenAndServe(nil)) }()
+	if err := r.Start(); err != nil {
+		shutdown.Fatal(err)
+	}
 
 	listener, err := reuseport.NewReusablePortListener("tcp4", *apiAddr)
 	if err != nil {
 		shutdown.Fatal(err)
 	}
+
+	services := map[string]string{
+		"router-api":  *apiAddr,
+		"router-http": *httpAddr,
+	}
+	for service, addr := range services {
+		hb, err := discoverd.AddServiceAndRegister(service, addr)
+		if err != nil {
+			shutdown.Fatal(err)
+		}
+		shutdown.BeforeExit(func() { hb.Close() })
+	}
+
 	shutdown.Fatal(http.Serve(listener, apiHandler(&r)))
 }
