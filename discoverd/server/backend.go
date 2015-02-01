@@ -7,6 +7,7 @@ type Backend interface {
 	RemoveService(service string) error
 	AddInstance(service string, inst *discoverd.Instance) error
 	RemoveInstance(service, id string) error
+	SetServiceMeta(service string, meta *discoverd.ServiceMeta) error
 	StartSync() error
 	Close() error
 }
@@ -17,5 +18,6 @@ type SyncHandler interface {
 	AddInstance(service string, inst *discoverd.Instance)
 	RemoveInstance(service, id string)
 	SetService(service string, data []*discoverd.Instance)
+	SetServiceMeta(service string, meta []byte, index uint64)
 	ListServices() []string
 }
