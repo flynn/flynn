@@ -37,6 +37,8 @@ var logBucket = "flynn-ci-logs"
 var dbBucket = []byte("builds")
 var listenPort string
 
+const textPlain = "text/plain; charset=utf-8"
+
 type Build struct {
 	Id                string        `json:"id"`
 	CreatedAt         *time.Time    `json:"created_at"`
@@ -316,7 +318,7 @@ func (r *Runner) uploadToS3(file *os.File, b *Build) string {
 
 	log.Printf("uploading build log to S3: %s\n", url)
 	if err := s3attempts.Run(func() error {
-		return r.s3Bucket.PutReader(name, file, stat.Size(), "text/plain", "public-read")
+		return r.s3Bucket.PutReader(name, file, stat.Size(), textPlain, "public-read")
 	}); err != nil {
 		log.Printf("failed to upload build output to S3: %s\n", err)
 	}
@@ -442,7 +444,7 @@ func (r *Runner) getBuildLog(w http.ResponseWriter, req *http.Request, ps httpro
 			fw.Flush()
 		}
 	}
-	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Type", textPlain)
 	w.WriteHeader(http.StatusOK)
 	flush()
 	for line := range t.Lines {
