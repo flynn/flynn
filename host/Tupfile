@@ -1,5 +1,6 @@
 include_rules
-: |> !go |> bin/flynn-host
+: |> sed 's/{{TUF-ROOT-KEYS}}/@(TUF_ROOT_KEYS)/g' cli/root_keys.go.tmpl > %o |> cli/root_keys.go
+: cli/root_keys.go |> !go |> bin/flynn-host
 : bin/flynn-host |> gzip -9 --keep bin/flynn-host |> bin/flynn-host.gz
 : |> !go ./flynn-init |> bin/flynn-init
 : | $(ROOT)/<layer0> |> ^ LAYER 0^ cat $(ROOT)/log/docker-layer0/* > %o |> $(ROOT)/log/docker-layer0.log
