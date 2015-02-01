@@ -40,6 +40,7 @@ import (
 const (
 	libvirtNetName = "flynn"
 	bridgeName     = "flynnbr0"
+	imageRoot      = "/var/lib/docker"
 )
 
 func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, logPath, initPath string) (Backend, error) {
@@ -48,7 +49,7 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, lo
 		return nil, err
 	}
 
-	pinkertonCtx, err := pinkerton.BuildContext("aufs", "/var/lib/docker")
+	pinkertonCtx, err := pinkerton.BuildContext("aufs", imageRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -97,8 +98,6 @@ type libvirtContainer struct {
 	*containerinit.Client
 }
 
-const dockerBase = "/var/lib/docker"
-
 type dockerImageConfig struct {
 	User       string
 	Env        []string
@@ -146,7 +145,7 @@ func writeHostname(path, hostname string) error {
 
 func readDockerImageConfig(id string) (*dockerImageConfig, error) {
 	res := &struct{ Config dockerImageConfig }{}
-	f, err := os.Open(filepath.Join(dockerBase, "graph", id, "json"))
+	f, err := os.Open(filepath.Join(imageRoot, "graph", id, "json"))
 	if err != nil {
 		return nil, err
 	}
