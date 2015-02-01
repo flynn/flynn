@@ -1,31 +1,54 @@
 package server
 
 import (
+	"fmt"
+	"log"
+	"os"
+	"testing"
+
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
+	"github.com/flynn/flynn/pkg/random"
 )
+
+// Hook gocheck up to the "go test" runner
+func Test(t *testing.T) { TestingT(t) }
+
+var etcdAddr string
+
+type etcdLogger struct {
+	*log.Logger
+}
+
+func (l etcdLogger) Log(v ...interface{}) { l.Output(2, fmt.Sprintln(v...)) }
+
+func TestMain(m *testing.M) {
+	var cleanup func()
+	etcdAddr, cleanup = etcdrunner.RunEtcdServer(etcdLogger{log.New(os.Stderr, "", log.Lmicroseconds|log.Lshortfile)})
+	exitCode := m.Run()
+	cleanup()
+	os.Exit(exitCode)
+}
 
 type EtcdSuite struct {
 	state   *State
 	backend Backend
-	cleanup func()
+}
+
+func newEtcdBackend(state *State) Backend {
+	return NewEtcdBackend(etcd.NewClient([]string{etcdAddr}), fmt.Sprintf("/test/discoverd/%s", random.String(8)), state)
 }
 
 func (s *EtcdSuite) SetUpTest(c *C) {
-	var addr string
-	addr, s.cleanup = etcdrunner.RunEtcdServer(c)
 	s.state = NewState()
-	s.backend = NewEtcdBackend(etcd.NewClient([]string{addr}), "/test/discoverd", s.state)
+	s.backend = newEtcdBackend(s.state)
 }
 
 func (s *EtcdSuite) TearDownTest(c *C) {
 	if s.backend != nil {
 		s.backend.Close()
-	}
-	if s.cleanup != nil {
-		s.cleanup()
 	}
 }
 
