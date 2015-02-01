@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -9,20 +8,11 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
-	tufdata "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/data"
 	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pkg/tufutil"
 )
 
-const rootKeysJSON = `[{"keytype":"ed25519","keyval":{"public":"8c13396bf5e722fc292b3cbe5b6c4947374787e69fc4c2bb9791f060a5394e0f"}}]`
-
-var rootKeys []*tufdata.Key
-
 func init() {
-	if err := json.Unmarshal([]byte(rootKeysJSON), &rootKeys); err != nil {
-		panic("error decoding root keys")
-	}
-
 	Register("download", runDownload, `
 usage: flynn-host download [--driver=<name>] [--root=<path>] [--repository=<uri>] [--tuf-db=<path>] [--config-dir=<dir>] [--bin-dir=<dir>]
 

@@ -1,5 +1,6 @@
 include_rules
-: |> !go |> bin/flynn-host
+: |> sed 's/{{TUF-ROOT-KEYS}}/@(TUF_ROOT_KEYS)/g' cli/root_keys.go.tmpl > %o |> cli/root_keys.go
+: cli/root_keys.go |> !go |> bin/flynn-host
 : |> !go ./flynn-init |> bin/flynn-init
 : | $(ROOT)/<layer0> |> ^ LAYER 0^ cat $(ROOT)/log/docker-layer0/* > %o |> $(ROOT)/log/docker-layer0.log
 : $(ROOT)/util/release/flynn-release $(ROOT)/log/docker-layer0.log |> ^ host_manifest.json^ cat $(ROOT)/log/docker-layer0.log > /dev/null && $(ROOT)/util/release/flynn-release manifest --output=%o --image-repository=@(IMAGE_REPOSITORY) manifest_template.json |> bin/manifest.json
