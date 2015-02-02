@@ -55,24 +55,7 @@ case "$1" in
     ;;
 esac
 
-## Use sdutil to register with service discovery
-
-if [[ -n "${SD_NAME}" ]] && [[ -n "${PORT}" ]]; then
-  if [[ -n "${SD_HOST}" ]]; then
-    runner="sdutil exec -h ${SD_HOST} -s ${SD_NAME}:${PORT} bash -c"
-    unset SD_HOST
-  else
-    runner="sdutil exec -s ${SD_NAME}:${PORT} bash -c"
-  fi
-  unset SD_NAME
-elif [[ -n "${SD_ARGS}" ]]; then
-  runner="sdutil ${SD_ARGS} bash -c"
-  unset SD_ARGS
-else
-  runner="bash -c"
-fi
-
 ## Run!
 
 chown -R nobody:nogroup .
-exec setuidgid nobody ${runner} "${command}"
+exec setuidgid nobody bash -c "${command}"
