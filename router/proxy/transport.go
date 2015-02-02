@@ -18,8 +18,9 @@ var (
 	errNoBackends = errors.New("router: no backends available")
 
 	httpTransport = &http.Transport{
-		Dial:                customDial,
-		TLSHandshakeTimeout: 10 * time.Second, // unused, but safer to leave default in place
+		Dial: customDial,
+		ResponseHeaderTimeout: 120 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second, // unused, but safer to leave default in place
 	}
 
 	dialer = &net.Dialer{
