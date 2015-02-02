@@ -14,10 +14,6 @@
     "proto": {
       "type": "string",
 	  "enum": ["tcp", "udp"]
-    },
-    "range_end": {
-      "description": "",
-      "type": "integer"
     }
   }
 }

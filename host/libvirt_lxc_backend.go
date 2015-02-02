@@ -449,9 +449,6 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 		if p.Proto != "tcp" && p.Proto != "udp" {
 			return fmt.Errorf("unknown port proto %q", p.Proto)
 		}
-		if 0 < p.RangeEnd && p.RangeEnd < p.Port {
-			return fmt.Errorf("port range end %d cannot be less than port %d", p.RangeEnd, p.Port)
-		}
 
 		if p.Port == 0 {
 			job.Config.Ports[i].Port = 5000 + i

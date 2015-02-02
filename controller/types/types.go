@@ -44,9 +44,8 @@ type ProcessType struct {
 }
 
 type Port struct {
-	Port     int    `json:"port"`
-	Proto    string `json:"proto"`
-	RangeEnd int    `json:"range_end"`
+	Port  int    `json:"port"`
+	Proto string `json:"proto"`
 }
 
 type Artifact struct {
