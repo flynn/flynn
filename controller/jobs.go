@@ -27,45 +27,23 @@ import (
 )
 
 /* SSE Logger */
-type SSELogWriter interface {
-	Stream(string) io.Writer
+type sseLogStream struct {
+	Name string
+	Chan chan<- *sseLogChunk
 }
 
-type sseLogWriter struct {
-	*sse.Writer
-}
-
-func (w *sseLogWriter) Stream(s string) io.Writer {
-	return &sseLogStreamWriter{w: w, s: s}
-}
-
-func NewSSELogWriter(w io.Writer) SSELogWriter {
-	return &sseLogWriter{Writer: sse.NewWriter(w)}
-}
-
-type sseLogChunk struct {
-	Stream string `json:"stream"`
-	Data   string `json:"data"`
-}
-
-type sseLogStreamWriter struct {
-	w *sseLogWriter
-	s string
-}
-
-func (w *sseLogStreamWriter) Write(p []byte) (int, error) {
-	data, err := json.Marshal(&sseLogChunk{Stream: w.s, Data: string(p)})
+func (s *sseLogStream) Write(p []byte) (int, error) {
+	data, err := json.Marshal(string(p))
 	if err != nil {
 		return 0, err
 	}
-	if _, err := w.w.Write(data); err != nil {
-		return 0, err
-	}
-	return len(p), err
+	s.Chan <- &sseLogChunk{Event: s.Name, Data: data}
+	return len(p), nil
 }
 
-func (w *sseLogStreamWriter) Flush() {
-	w.w.Writer.Flush()
+type sseLogChunk struct {
+	Event string          `json:"event,omitempty"`
+	Data  json.RawMessage `json:"data,omitempty"`
 }
 
 /* Job Stuff */
@@ -287,32 +265,33 @@ func (c *controllerAPI) JobLog(ctx context.Context, w http.ResponseWriter, req *
 		defer attachClient.Close()
 	}
 
-	useSSE := strings.Contains(req.Header.Get("Accept"), "text/event-stream")
-	if useSSE {
-		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
-	} else {
-		w.Header().Set("Content-Type", "application/vnd.flynn.attach")
-	}
-	w.WriteHeader(200)
-	// Send headers right away if tailing
-	if wf, ok := w.(http.Flusher); ok && tail {
-		wf.Flush()
-	}
-
-	fw := httphelper.FlushWriter{Writer: w, Enabled: tail}
-	if useSSE {
-		ssew := NewSSELogWriter(fw)
-		exit, err := attachClient.Receive(ssew.Stream("stdout"), ssew.Stream("stderr"))
+	if strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
+		ch := make(chan *sseLogChunk)
+		l, _ := ctxhelper.LoggerFromContext(ctx)
+		s := sse.NewStream(w, ch, l)
+		defer s.Close()
+		s.Serve()
+		exit, err := attachClient.Receive(&sseLogStream{Name: "stdout", Chan: ch}, &sseLogStream{Name: "stderr", Chan: ch})
 		if err != nil {
-			fmt.Fprintf(fw, "event: error\ndata: %s\n\n", err)
+			if errBytes, err := json.Marshal(err); err != nil {
+				ch <- &sseLogChunk{Event: "error", Data: errBytes}
+			}
 			return
 		}
 		if tail {
-			fmt.Fprintf(fw, "event: exit\ndata: {\"status\": %d}\n\n", exit)
+			ch <- &sseLogChunk{Event: "exit", Data: []byte(fmt.Sprintf(`{"status": %d}`, exit))}
 			return
 		}
-		fw.Write([]byte("event: eof\ndata: {}\n\n"))
+		ch <- &sseLogChunk{Event: "eof"}
 	} else {
+		w.Header().Set("Content-Type", "application/vnd.flynn.attach")
+		w.WriteHeader(200)
+		// Send headers right away if tailing
+		if wf, ok := w.(http.Flusher); ok && tail {
+			wf.Flush()
+		}
+
+		fw := httphelper.FlushWriter{Writer: w, Enabled: tail}
 		io.Copy(fw, attachClient.Conn())
 	}
 }

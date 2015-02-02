@@ -58,7 +58,7 @@ var JobOutput = Dashboard.Stores.JobOutput = Dashboard.Store.createClass({
 		var eventSource;
 		var open = false;
 		eventSource = new window.EventSource(url, {withCredentials: true});
-		eventSource.addEventListener("error", function () {
+		var handleError = function () {
 			eventSource.close();
 			if ( !open && (!retryCount || retryCount < 3) ) {
 				setTimeout(function () {
@@ -71,42 +71,50 @@ var JobOutput = Dashboard.Stores.JobOutput = Dashboard.Store.createClass({
 					streamError: "Failed to connect to log"
 				});
 			}
-		}.bind(this), false);
+		}.bind(this);
+		eventSource.addEventListener("error", handleError, false);
 		eventSource.addEventListener("open", function () {
 			open = true;
 		});
 		eventSource.addEventListener("message", function (e) {
-			this.setState({
-				output: this.state.output.concat(JSON.parse(e.data))
-			});
-		}.bind(this), false);
-		eventSource.addEventListener("eof", function () {
-			this.setState({
-				open: false,
-				eof: true
-			});
-			eventSource.close();
-		}.bind(this), false);
-		eventSource.addEventListener("exit", function (e) {
-			var data = JSON.parse(e.data);
-			Dashboard.Dispatcher.handleStoreEvent({
-				name: "JOB_EXIT",
-				jobId: this.props.jobId,
-				status: data.status
-			});
-			if (data.status === 0) {
-				this.setState({
-					open: false,
-					eof: true
-				});
-			} else {
-				this.setState({
-					open: false,
-					eof: false,
-					streamError: "Non-zero exit status: "+ data.status
-				});
+			var evnt = JSON.parse(e.data || "");
+			switch (evnt.event) {
+				case "error":
+					handleError();
+					return;
+				case "eof":
+					this.setState({
+						open: false,
+						eof: true
+					});
+					eventSource.close();
+					return;
+
+				case "exit":
+					Dashboard.Dispatcher.handleStoreEvent({
+						name: "JOB_EXIT",
+						jobId: this.props.jobId,
+						status: evnt.data.status
+					});
+					if (evnt.data.status === 0) {
+						this.setState({
+							open: false,
+							eof: true
+						});
+					} else {
+						this.setState({
+							open: false,
+							eof: false,
+							streamError: "Non-zero exit status: "+ evnt.data.status
+						});
+					}
+					eventSource.close();
+					return;
 			}
-			eventSource.close();
+			evnt.data.stream = evnt.name;
+			this.setState({
+				output: this.state.output.concat([evnt])
+			});
 		}.bind(this), false);
 
 		this.__eventSource = eventSource;
