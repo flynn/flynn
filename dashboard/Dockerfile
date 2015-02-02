@@ -1,7 +1,6 @@
 FROM flynn/busybox
 
-ADD start.sh /bin/start-flynn-dashboard
 ADD bin/flynn-dashboard /bin/flynn-dashboard
 ADD app/dashboard.tar /app
 
-CMD ["/bin/start-flynn-dashboard"]
+CMD ["/bin/flynn-dashboard"]

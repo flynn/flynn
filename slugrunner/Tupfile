@@ -1,2 +1,2 @@
 include_rules
-: bin/* $(ROOT)/util/cedarish/<docker> |> !docker-cedarish |>
+: $(ROOT)/util/cedarish/<docker> |> !docker-cedarish |>

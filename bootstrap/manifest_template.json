@@ -198,7 +198,14 @@
     "release": {
       "processes": {
         "app": {
-          "ports": [{"proto": "tcp"}],
+          "ports": [{
+            "proto": "tcp",
+            "service": {
+              "name": "gitreceive",
+              "create": true,
+              "check": {"type": "tcp"}
+            }
+          }],
           "env": {
             "SSH_PRIVATE_KEYS": "{{ (index .StepData \"gitreceive-key\").PrivateKeys }}",
             "CONTROLLER_AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
@@ -296,7 +303,15 @@
       },
       "processes": {
         "web": {
-          "ports": [{"port": 80, "proto": "tcp"}]
+          "ports": [{
+            "port": 80,
+            "proto": "tcp",
+            "service": {
+              "name": "dashboard-web",
+              "create": true,
+              "check": {"type": "http"}
+            }
+          }]
         }
       }
     },
