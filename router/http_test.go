@@ -869,6 +869,50 @@ func (s *S) runTestErrorAfterConnOnlyHitsOneBackend(c *C, upgrade bool) {
 	c.Assert(string(data), Equals, "Service Unavailable\n")
 }
 
+func (s *S) TestClientClosesConnectionBeforeResponse(c *C) {
+	gotReq := make(chan struct{})
+	backendDone := make(chan struct{})
+
+	h := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		close(gotReq)
+		defer close(backendDone)
+
+		cn := w.(http.CloseNotifier).CloseNotify()
+		select {
+		case <-cn:
+		case <-time.After(time.Second):
+			c.Fatal("expected reverse proxy to close the connection quickly")
+		}
+	})
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	l := s.newHTTPListener(c)
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+
+	req := newReq("http://"+l.Addr, "example.com")
+
+	go func() {
+		httpClient.Do(req)
+	}()
+
+	select {
+	case <-gotReq: // wait for backend to get the request
+	case <-time.After(2 * time.Second):
+		c.Fatal("never received on gotReq")
+	}
+	httpClient.Transport.(*http.Transport).CancelRequest(req)
+
+	select {
+	case <-backendDone:
+	case <-time.After(2 * time.Second):
+		c.Fatal("never received on backendDone")
+	}
+}
+
 // issue #152
 func (s *S) TestKeepaliveHostname(c *C) {
 	srv1 := httptest.NewServer(httpTestHandler("1"))

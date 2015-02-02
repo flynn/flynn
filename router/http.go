@@ -344,7 +344,7 @@ func (s *httpService) ServeHTTP(ctx context.Context, w http.ResponseWriter, req 
 	req.Header.Set("X-Request-Start", strconv.FormatInt(start.UnixNano()/int64(time.Millisecond), 10))
 	req.Header.Set("X-Request-Id", random.UUID())
 
-	s.rp.ServeHTTP(w, req)
+	s.rp.ServeHTTP(ctx, w, req)
 }
 
 func mustPortFromAddr(addr string) string {

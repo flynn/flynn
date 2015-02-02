@@ -11,11 +11,13 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/nacl/secretbox"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/pkg/random"
 )
 
 var (
-	errNoBackends = errors.New("router: no backends available")
+	errNoBackends      = errors.New("router: no backends available")
+	errRequestCanceled = errors.New("router: request canceled")
 
 	httpTransport = &http.Transport{
 		Dial:                customDial,
@@ -64,14 +66,43 @@ func (t *transport) setStickyBackend(res *http.Response, originalStickyBackend s
 	}
 }
 
-func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (t *transport) RoundTrip(ctx context.Context, req *http.Request) (*http.Response, error) {
 	// http.Transport closes the request body on a failed dial, issue #875
-	req.Body = &fakeCloseReadCloser{req.Body}
-	defer req.Body.(*fakeCloseReadCloser).RealClose()
+	fakeBodyCloser := &fakeCloser{req.Body}
+	defer fakeBodyCloser.RealClose()
+
+	cancelc := ctx.Done()
+	reqDone := make(chan struct{})
+	defer close(reqDone)
+
+	req.Body = struct {
+		io.Reader
+		io.Closer
+	}{
+		// This special Reader guards against another subtle race: when the context
+		// is Done() before the httpTransport knows about the request. Details here:
+		// https://go-review.googlesource.com/#/c/2320/5/src/net/http/httputil/reverseproxy.go@120
+		Reader: &runOnFirstRead{
+			Reader: req.Body,
+			fn: func() {
+				select {
+				case <-cancelc:
+					httpTransport.CancelRequest(req)
+				case <-reqDone:
+				}
+			},
+		},
+		Closer: fakeBodyCloser,
+	}
 
 	stickyBackend := t.getStickyBackend(req)
 	backends := t.getOrderedBackends(stickyBackend)
 	for _, backend := range backends {
+		select {
+		case <-cancelc:
+			return nil, errRequestCanceled
+		default:
+		}
 		req.URL.Host = backend
 		res, err := httpTransport.RoundTrip(req)
 		if err == nil {
@@ -136,19 +167,30 @@ type dialErr struct {
 	error
 }
 
-type fakeCloseReadCloser struct {
-	io.ReadCloser
+type fakeCloser struct {
+	io.Closer
 }
 
-func (w *fakeCloseReadCloser) Close() error {
+func (w *fakeCloser) Close() error {
 	return nil
 }
 
-func (w *fakeCloseReadCloser) RealClose() error {
-	if w.ReadCloser == nil {
-		return nil
+func (w *fakeCloser) RealClose() error {
+	return w.Closer.Close()
+}
+
+type runOnFirstRead struct {
+	io.Reader
+
+	fn func() // Run in own goroutine before first Read, then set to nil
+}
+
+func (c *runOnFirstRead) Read(bs []byte) (int, error) {
+	if c.fn != nil {
+		go c.fn()
+		c.fn = nil
 	}
-	return w.ReadCloser.Close()
+	return c.Reader.Read(bs)
 }
 
 func shuffle(s []string) {
