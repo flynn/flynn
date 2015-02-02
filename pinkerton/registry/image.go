@@ -52,14 +52,5 @@ func (i *Image) Ancestors() ([]*Image, error) {
 	if i.ParentID == "" {
 		return nil, ErrNoParent
 	}
-	ids, err := i.session.GetAncestors(i.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	res := make([]*Image, len(ids))
-	for n, id := range ids {
-		res[n] = &Image{ID: id, session: i.session}
-	}
-	return res, nil
+	return i.session.GetAncestors(i.ID)
 }

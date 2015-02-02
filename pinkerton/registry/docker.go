@@ -87,10 +87,20 @@ func (s *dockerSession) GetLayer(id string) (io.ReadCloser, error) {
 	return res.Body, nil
 }
 
-func (s *dockerSession) GetAncestors(id string) ([]string, error) {
+func (s *dockerSession) GetAncestors(id string) ([]*Image, error) {
 	var ids []string
-	_, err := s.get(fmt.Sprintf("/images/%s/ancestry", id), &ids)
-	return ids, err
+	if _, err := s.get(fmt.Sprintf("/images/%s/ancestry", id), &ids); err != nil {
+		return nil, err
+	}
+	images := make([]*Image, len(ids))
+	for i, id := range ids {
+		img := &Image{session: s}
+		if _, err := s.get(fmt.Sprintf("/images/%s/json", id), img); err != nil {
+			return nil, err
+		}
+		images[i] = img
+	}
+	return images, nil
 }
 
 func (s *dockerSession) tags() (map[string]string, error) {

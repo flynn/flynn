@@ -12,7 +12,7 @@ type Session interface {
 	ImageID() string
 	GetImage() (*Image, error)
 	GetLayer(string) (io.ReadCloser, error)
-	GetAncestors(string) ([]string, error)
+	GetAncestors(string) ([]*Image, error)
 }
 
 func NewRef(s string) (*Ref, error) {
