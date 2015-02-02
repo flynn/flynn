@@ -7,16 +7,17 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/host/volume"
+	"github.com/flynn/flynn/host/volume/manager"
 	"github.com/flynn/flynn/host/volume/zfs"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 )
 
 type HTTPAPI struct {
-	vman *volume.Manager
+	vman *volumemanager.Manager
 }
 
-func NewHTTPAPI(vman *volume.Manager) *HTTPAPI {
+func NewHTTPAPI(vman *volumemanager.Manager) *HTTPAPI {
 	return &HTTPAPI{vman: vman}
 }
 

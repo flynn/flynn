@@ -28,7 +28,7 @@ import (
 	lt "github.com/flynn/flynn/host/libvirt"
 	"github.com/flynn/flynn/host/logbuf"
 	"github.com/flynn/flynn/host/types"
-	"github.com/flynn/flynn/host/volume"
+	"github.com/flynn/flynn/host/volume/manager"
 	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -41,7 +41,7 @@ const (
 	bridgeName     = "flynnbr0"
 )
 
-func NewLibvirtLXCBackend(state *State, vman *volume.Manager, volPath, logPath, initPath string) (Backend, error) {
+func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, logPath, initPath string) (Backend, error) {
 	libvirtc, err := libvirt.NewVirConnection("lxc:///")
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ type LibvirtLXCBackend struct {
 	VolPath   string
 	libvirt   libvirt.VirConnection
 	state     *State
-	vman      *volume.Manager
+	vman      *volumemanager.Manager
 	pinkerton *pinkerton.Context
 
 	ifaceMTU   int

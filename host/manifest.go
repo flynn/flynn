@@ -13,7 +13,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 	"github.com/flynn/flynn/host/ports"
 	"github.com/flynn/flynn/host/types"
-	"github.com/flynn/flynn/host/volume"
+	"github.com/flynn/flynn/host/volume/manager"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -79,7 +79,7 @@ type manifestRunner struct {
 	bindAddr     string
 	backend      Backend
 	state        *State
-	vman         *volume.Manager
+	vman         *volumemanager.Manager
 	ports        map[string]*ports.Allocator
 }
 
