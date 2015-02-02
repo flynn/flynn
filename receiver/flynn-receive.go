@@ -14,6 +14,7 @@ import (
 
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/random"
@@ -103,11 +104,15 @@ func main() {
 		proc := prevRelease.Processes[t]
 		proc.Cmd = []string{"start", t}
 		if t == "web" {
-			proc.Ports = []ct.Port{{Port: 8080, Proto: "tcp"}}
-			if proc.Env == nil {
-				proc.Env = make(map[string]string)
-			}
-			proc.Env["SD_NAME"] = app.Name + "-web"
+			proc.Ports = []ct.Port{{
+				Port:  8080,
+				Proto: "tcp",
+				Service: &host.Service{
+					Name:   app.Name + "-web",
+					Create: true,
+					Check:  &host.HealthCheck{Type: "tcp"},
+				},
+			}}
 		}
 		procs[t] = proc
 	}
