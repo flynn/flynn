@@ -10,12 +10,14 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/flynn/discoverd/client"
+	hh "github.com/flynn/flynn/pkg/httphelper"
 )
 
 type etcdClient interface {
 	CreateDir(key string, ttl uint64) (*etcd.Response, error)
 	Create(key string, value string, ttl uint64) (*etcd.Response, error)
 	Update(key string, value string, ttl uint64) (*etcd.Response, error)
+	CompareAndSwap(key string, value string, ttl uint64, prevValue string, prevIndex uint64) (*etcd.Response, error)
 	Set(key string, value string, ttl uint64) (*etcd.Response, error)
 	Get(key string, sort, recursive bool) (*etcd.Response, error)
 	Delete(key string, recursive bool) (*etcd.Response, error)
@@ -76,8 +78,9 @@ func isEtcdError(err error, code int) bool {
 	return false
 }
 
-func isEtcdNotFound(err error) bool { return isEtcdError(err, 100) }
-func isEtcdExists(err error) bool   { return isEtcdError(err, 105) }
+func isEtcdNotFound(err error) bool      { return isEtcdError(err, 100) }
+func isEtcdCompareFailed(err error) bool { return isEtcdError(err, 101) }
+func isEtcdExists(err error) bool        { return isEtcdError(err, 105) }
 
 func (b *etcdBackend) instanceKey(service, id string) string {
 	return path.Join(b.serviceKey(service), "instances", id)
@@ -101,6 +104,47 @@ func (b *etcdBackend) RemoveService(service string) error {
 		return NotFoundError{Service: service}
 	}
 	return err
+}
+
+func (b *etcdBackend) SetServiceMeta(service string, meta *discoverd.ServiceMeta) error {
+	serviceKey := b.serviceKey(service)
+	_, err := b.etcd.Get(serviceKey, false, false)
+	if isEtcdNotFound(err) {
+		return NotFoundError{Service: service}
+	}
+	if err != nil {
+		return err
+	}
+
+	var res *etcd.Response
+	key := path.Join(serviceKey, "meta")
+	if meta.Index == 0 {
+		res, err = b.etcd.Create(key, string(meta.Data), 0)
+		if isEtcdExists(err) {
+			err = hh.JSONError{
+				Code:    hh.ObjectExistsError,
+				Message: fmt.Sprintf("Service metadata for %q already exists, use index=n to set", service),
+			}
+		}
+	} else {
+		res, err = b.etcd.CompareAndSwap(key, string(meta.Data), 0, "", meta.Index)
+		if isEtcdNotFound(err) {
+			err = hh.JSONError{
+				Code:    hh.PreconditionFailedError,
+				Message: fmt.Sprintf("Service metadata for %q does not exist, use index=0 to set", service),
+			}
+		} else if isEtcdCompareFailed(err) {
+			err = hh.JSONError{
+				Code:    hh.PreconditionFailedError,
+				Message: fmt.Sprintf("Service metadata for %q exists, but wrong index provided", service),
+			}
+		}
+	}
+	if err != nil {
+		return err
+	}
+	meta.Index = res.Node.ModifiedIndex
+	return nil
 }
 
 func (b *etcdBackend) AddInstance(service string, inst *discoverd.Instance) error {
@@ -193,17 +237,26 @@ func (b *etcdBackend) StartSync() error {
 					recentError = false
 					nextIndex = res.EtcdIndex + 1
 
-					// ensure we have a key like /foo/bar/services/a/instances/id or /foo/bar/services/a
+					// ensure we have a key like:
+					// /foo/bar/services/a/instances/id,
+					// /foo/bar/services/a/meta,
+					// /foo/bar/services/a
 					slashes := strings.Count(res.Node.Key[len(keyPrefix):], "/")
-					if slashes != 3 && slashes != 1 {
+					if slashes < 1 || slashes > 3 {
 						continue
 					}
 
 					serviceName := strings.SplitN(res.Node.Key[len(keyPrefix)+1:], "/", 2)[0]
-					if slashes == 3 {
-						b.instanceEvent(serviceName, res)
-					} else {
+					switch slashes {
+					case 1:
 						b.serviceEvent(serviceName, res)
+					case 2:
+						if path.Base(res.Node.Key) == "meta" {
+							b.h.SetServiceMeta(serviceName, []byte(res.Node.Value), res.Node.ModifiedIndex)
+							continue
+						}
+					case 3:
+						b.instanceEvent(serviceName, res)
 					}
 				}
 
@@ -273,6 +326,10 @@ func (b *etcdBackend) fullSync() (uint64, error) {
 
 		instances := []*discoverd.Instance{}
 		for _, n := range serviceNode.Nodes {
+			if path.Base(n.Key) == "meta" {
+				b.h.SetServiceMeta(serviceName, []byte(n.Value), n.ModifiedIndex)
+				continue
+			}
 			if path.Base(n.Key) != "instances" {
 				continue
 			}
@@ -295,5 +352,5 @@ func (b *etcdBackend) fullSync() (uint64, error) {
 		}
 	}
 
-	return data.EtcdIndex, nil
+	return data.EtcdIndex + 1, nil
 }

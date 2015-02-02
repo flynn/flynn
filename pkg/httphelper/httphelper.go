@@ -18,21 +18,23 @@ import (
 type ErrorCode string
 
 const (
-	NotFoundError       ErrorCode = "not_found"
-	ObjectNotFoundError ErrorCode = "object_not_found"
-	ObjectExistsError   ErrorCode = "object_exists"
-	SyntaxError         ErrorCode = "syntax_error"
-	ValidationError     ErrorCode = "validation_error"
-	UnknownError        ErrorCode = "unknown_error"
+	NotFoundError           ErrorCode = "not_found"
+	ObjectNotFoundError     ErrorCode = "object_not_found"
+	ObjectExistsError       ErrorCode = "object_exists"
+	SyntaxError             ErrorCode = "syntax_error"
+	ValidationError         ErrorCode = "validation_error"
+	PreconditionFailedError ErrorCode = "precondition_failed"
+	UnknownError            ErrorCode = "unknown_error"
 )
 
 var errorResponseCodes = map[ErrorCode]int{
-	NotFoundError:       404,
-	ObjectNotFoundError: 404,
-	ObjectExistsError:   409,
-	SyntaxError:         400,
-	ValidationError:     400,
-	UnknownError:        500,
+	NotFoundError:           404,
+	ObjectNotFoundError:     404,
+	ObjectExistsError:       409,
+	PreconditionFailedError: 412,
+	SyntaxError:             400,
+	ValidationError:         400,
+	UnknownError:            500,
 }
 
 type JSONError struct {

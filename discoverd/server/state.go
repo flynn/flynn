@@ -54,6 +54,9 @@ type service struct {
 	// instance ID -> instance
 	instances map[string]*discoverd.Instance
 
+	meta      []byte
+	metaIndex uint64
+
 	leaderID string
 	// leaderIndex is >0 when set, zero is unset
 	leaderIndex uint64
@@ -120,6 +123,13 @@ func (s *service) Leader() *discoverd.Instance {
 		return nil
 	}
 	return s.instances[s.leaderID]
+}
+
+func (s *service) Meta() *discoverd.ServiceMeta {
+	if s == nil || s.metaIndex == 0 {
+		return nil
+	}
+	return &discoverd.ServiceMeta{Data: s.meta, Index: s.metaIndex}
 }
 
 func (s *State) AddService(name string) {
@@ -200,6 +210,36 @@ func (s *State) broadcastLeader(serviceName string) {
 			Instance: leader,
 		})
 	}
+}
+
+func (s *State) SetServiceMeta(serviceName string, data []byte, index uint64) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	service, ok := s.services[serviceName]
+	if !ok {
+		service = newService()
+		s.services[serviceName] = service
+	}
+
+	if service.metaIndex == index {
+		return
+	}
+
+	service.meta = data
+	service.metaIndex = index
+
+	s.broadcast(&discoverd.Event{
+		Service:     serviceName,
+		Kind:        discoverd.EventKindServiceMeta,
+		ServiceMeta: &discoverd.ServiceMeta{Data: data, Index: index},
+	})
+}
+
+func (s *State) GetServiceMeta(service string) *discoverd.ServiceMeta {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	return s.services[service].Meta()
 }
 
 func (s *State) SetService(serviceName string, data []*discoverd.Instance) {
@@ -351,11 +391,19 @@ func (s *State) Subscribe(service string, sendCurrent bool, kinds discoverd.Even
 	// locked.
 	var current []*discoverd.Instance
 	var currentLeader *discoverd.Instance
-	getCurrent := sendCurrent && kinds&(discoverd.EventKindUp|discoverd.EventKindLeader) != 0
+	var currentMeta *discoverd.ServiceMeta
+	getCurrent := sendCurrent && kinds.Any(discoverd.EventKindUp, discoverd.EventKindLeader, discoverd.EventKindServiceMeta)
 	if getCurrent {
 		s.mtx.RLock()
-		current = s.getLocked(service)
-		currentLeader = s.services[service].Leader()
+		if kinds.Any(discoverd.EventKindUp) {
+			current = s.getLocked(service)
+		}
+		if kinds.Any(discoverd.EventKindLeader) {
+			currentLeader = s.services[service].Leader()
+		}
+		if kinds.Any(discoverd.EventKindServiceMeta) {
+			currentMeta = s.services[service].Meta()
+		}
 	}
 
 	s.subscribersMtx.Lock()
@@ -380,7 +428,7 @@ func (s *State) Subscribe(service string, sendCurrent bool, kinds discoverd.Even
 	}
 	sub.el = l.PushBack(sub)
 
-	if kinds&discoverd.EventKindUp != 0 {
+	if kinds.Any(discoverd.EventKindUp) {
 		for _, inst := range current {
 			ch <- &discoverd.Event{
 				Service:  service,
@@ -397,7 +445,14 @@ func (s *State) Subscribe(service string, sendCurrent bool, kinds discoverd.Even
 			Instance: currentLeader,
 		}
 	}
-	if sendCurrent && kinds&discoverd.EventKindCurrent != 0 {
+	if sendCurrent && kinds.Any(discoverd.EventKindServiceMeta) && currentMeta != nil {
+		ch <- &discoverd.Event{
+			Service:     service,
+			Kind:        discoverd.EventKindServiceMeta,
+			ServiceMeta: currentMeta,
+		}
+	}
+	if sendCurrent && kinds.Any(discoverd.EventKindCurrent) {
 		ch <- &discoverd.Event{
 			Service: service,
 			Kind:    discoverd.EventKindCurrent,

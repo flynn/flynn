@@ -7,6 +7,7 @@ import (
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/discoverd/client"
+	hh "github.com/flynn/flynn/pkg/httphelper"
 )
 
 var _ = Suite(&HTTPSuite{})
@@ -327,4 +328,44 @@ func (s *HTTPSuite) TestAddServiceAndRegister(c *C) {
 
 func (s *HTTPSuite) TestPing(c *C) {
 	c.Assert(s.client.Ping(), IsNil)
+}
+
+func (s *HTTPSuite) TestServiceMeta(c *C) {
+	srv := s.client.Service("a")
+	events := make(chan *discoverd.Event)
+	stream, err := srv.Watch(events)
+	c.Assert(err, IsNil)
+	defer stream.Close()
+	assertEvent(c, events, "a", discoverd.EventKindCurrent, nil)
+
+	// Get non-existent meta
+	_, err = srv.GetMeta()
+	c.Assert(discoverd.IsNotFound(err), Equals, true)
+
+	// Set new meta
+	meta := &discoverd.ServiceMeta{Data: []byte("1")}
+	c.Assert(srv.SetMeta(meta), IsNil)
+	c.Assert(meta.Index > 0, Equals, true)
+	assertMetaEvent(c, events, "a", meta)
+
+	res, err := srv.GetMeta()
+	c.Assert(err, IsNil)
+	c.Assert(res, DeepEquals, meta)
+
+	// Set meta on non-existent service
+	err = s.client.Service("foo").SetMeta(meta)
+	c.Assert(discoverd.IsNotFound(err), Equals, true, Commentf("err = %#v", err))
+
+	// Update meta
+	meta.Data = []byte("2")
+	c.Assert(srv.SetMeta(meta), IsNil)
+	c.Assert(meta.Index > res.Index, Equals, true, Commentf("old = %d, new = %d", res.Index, meta.Index))
+	assertMetaEvent(c, events, "a", meta)
+
+	// Update meta with wrong index
+	meta.Index--
+	err = srv.SetMeta(meta)
+	c.Assert(err, NotNil)
+	c.Assert(err, FitsTypeOf, hh.JSONError{})
+	c.Assert(err.(hh.JSONError).Code, Equals, hh.PreconditionFailedError)
 }

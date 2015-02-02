@@ -70,13 +70,36 @@ func assertEvent(c *C, events chan *discoverd.Event, service string, kind discov
 	})
 }
 
+func assertMetaEvent(c *C, events chan *discoverd.Event, service string, meta *discoverd.ServiceMeta) {
+	var event *discoverd.Event
+	var ok bool
+	select {
+	case event, ok = <-events:
+		if !ok {
+			c.Fatal("channel closed")
+		}
+	case <-time.After(10 * time.Second):
+		c.Fatalf("timed out waiting for meta event %s", string(meta.Data))
+	}
+
+	assertEventEqual(c, event, &discoverd.Event{
+		Service:     service,
+		Kind:        discoverd.EventKindServiceMeta,
+		ServiceMeta: meta,
+	})
+}
+
 func assertEventEqual(c *C, actual, expected *discoverd.Event) {
 	c.Assert(actual.Service, Equals, expected.Service)
 	c.Assert(actual.Kind, Equals, expected.Kind)
+	if expected.Kind == discoverd.EventKindServiceMeta {
+		c.Assert(actual.ServiceMeta.Data, DeepEquals, expected.ServiceMeta.Data)
+	}
 	if expected.Instance == nil {
 		c.Assert(actual.Instance, IsNil)
 		return
 	}
+	c.Assert(actual.ServiceMeta, IsNil)
 	c.Assert(actual.Instance, NotNil)
 	assertInstanceEqual(c, actual.Instance, expected.Instance)
 }
@@ -389,6 +412,10 @@ func (StateSuite) TestSubscribeInitial(c *C) {
 			name:  "current",
 			kinds: discoverd.EventKindDown | discoverd.EventKindCurrent,
 		},
+		{
+			name:  "meta+current",
+			kinds: discoverd.EventKindServiceMeta | discoverd.EventKindCurrent,
+		},
 	} {
 		c.Log(t.name)
 
@@ -397,7 +424,7 @@ func (StateSuite) TestSubscribeInitial(c *C) {
 		state := NewState()
 		state.Subscribe("a", true, t.kinds, events)
 
-		if t.kinds&discoverd.EventKindCurrent != 0 {
+		if t.kinds.Any(discoverd.EventKindCurrent) {
 			assertEvent(c, events, "a", discoverd.EventKindCurrent, nil)
 		}
 		assertNoEvent(c, events)
@@ -409,9 +436,10 @@ func (StateSuite) TestSubscribeInitial(c *C) {
 		two.Index = 2
 		state.AddInstance("a", one)
 		state.AddInstance("a", two)
+		state.SetServiceMeta("a", []byte("{}"), 1)
 		events = make(chan *discoverd.Event, 4)
 		state.Subscribe("a", true, t.kinds, events)
-		if t.kinds&discoverd.EventKindUp != 0 {
+		if t.kinds.Any(discoverd.EventKindUp) {
 			up := receiveSomeEvents(c, events, 2)
 			assertEventEqual(c, up[one.ID][0], &discoverd.Event{
 				Service:  "a",
@@ -424,10 +452,13 @@ func (StateSuite) TestSubscribeInitial(c *C) {
 				Instance: two,
 			})
 		}
-		if t.kinds&discoverd.EventKindLeader != 0 {
+		if t.kinds.Any(discoverd.EventKindLeader) {
 			assertEvent(c, events, "a", discoverd.EventKindLeader, one)
 		}
-		if t.kinds&discoverd.EventKindCurrent != 0 {
+		if t.kinds.Any(discoverd.EventKindServiceMeta) {
+			assertMetaEvent(c, events, "a", &discoverd.ServiceMeta{Data: []byte("{}"), Index: 1})
+		}
+		if t.kinds.Any(discoverd.EventKindCurrent) {
 			assertEvent(c, events, "a", discoverd.EventKindCurrent, nil)
 		}
 		assertNoEvent(c, events)
@@ -638,6 +669,42 @@ func (StateSuite) TestInstanceHostPort(c *C) {
 	inst := &discoverd.Instance{Addr: "[fe80::bae8:56ff:fe46:243c]:80"}
 	c.Assert(inst.Host(), Equals, "fe80::bae8:56ff:fe46:243c")
 	c.Assert(inst.Port(), Equals, "80")
+}
+
+func (StateSuite) TestServiceMeta(c *C) {
+	state := NewState()
+
+	// non-existent service
+	c.Assert(state.GetServiceMeta("a"), IsNil)
+
+	// unset meta
+	state.AddService("a")
+	c.Assert(state.GetServiceMeta("a"), IsNil)
+
+	events := make(chan *discoverd.Event, 1)
+	state.Subscribe("a", false, discoverd.EventKindServiceMeta, events)
+
+	// first set meta
+	meta := &discoverd.ServiceMeta{Data: []byte("{}"), Index: 1}
+	state.SetServiceMeta("a", meta.Data, meta.Index)
+	c.Assert(state.GetServiceMeta("a"), DeepEquals, meta)
+	assertMetaEvent(c, events, "a", meta)
+
+	// set on service that doesn't exist creates service
+	state.SetServiceMeta("b", meta.Data, meta.Index)
+	c.Assert(state.GetServiceMeta("b"), DeepEquals, meta)
+
+	// set meta with same index doesn't update
+	newMeta := &discoverd.ServiceMeta{Data: []byte("asdf"), Index: 1}
+	state.SetServiceMeta("a", newMeta.Data, newMeta.Index)
+	c.Assert(state.GetServiceMeta("a"), DeepEquals, meta)
+	assertNoEvent(c, events)
+
+	// update meta
+	meta = &discoverd.ServiceMeta{Data: []byte("foo"), Index: 2}
+	state.SetServiceMeta("a", meta.Data, meta.Index)
+	c.Assert(state.GetServiceMeta("a"), DeepEquals, meta)
+	assertMetaEvent(c, events, "a", meta)
 }
 
 func md5sum(data string) string {

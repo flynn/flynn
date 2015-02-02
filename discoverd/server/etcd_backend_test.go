@@ -10,6 +10,7 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
+	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 )
 
@@ -163,6 +164,8 @@ func (s *EtcdSuite) TestLocalDiffSync(c *C) {
 	s.state.AddInstance("a", deleted)
 	s.state.AddInstance("b", missingService)
 
+	s.state.SetServiceMeta("a", []byte("existing"), 1)
+
 	updated2 := *updated
 	updated2.Meta = map[string]string{"a": "b"}
 	c.Assert(s.backend.AddService("a"), IsNil)
@@ -172,12 +175,16 @@ func (s *EtcdSuite) TestLocalDiffSync(c *C) {
 	c.Assert(s.backend.AddInstance("a", &updated2), IsNil)
 	c.Assert(s.backend.AddInstance("a", added), IsNil)
 
-	aEvents := make(chan *discoverd.Event, 3)
-	bEvents := make(chan *discoverd.Event, 1)
-	s.state.Subscribe("a", false, discoverd.EventKindUp|discoverd.EventKindDown|discoverd.EventKindUpdate, aEvents)
+	c.Assert(s.backend.SetServiceMeta("a", &discoverd.ServiceMeta{Data: []byte("new")}), IsNil)
+
+	aEvents := make(chan *discoverd.Event, 4)
+	bEvents := make(chan *discoverd.Event, 2)
+	s.state.Subscribe("a", false, discoverd.EventKindUp|discoverd.EventKindDown|discoverd.EventKindUpdate|discoverd.EventKindServiceMeta, aEvents)
 	s.state.Subscribe("b", false, discoverd.EventKindDown, bEvents)
 
 	c.Assert(s.backend.StartSync(), IsNil)
+
+	assertMetaEvent(c, aEvents, "a", &discoverd.ServiceMeta{Data: []byte("new")})
 
 	// Ensure that a service that is not in etcd is removed
 	assertEvent(c, bEvents, "b", discoverd.EventKindDown, missingService)
@@ -237,4 +244,43 @@ func (s *EtcdSuite) TestLeaderElectionCreatedIndex(c *C) {
 	s.state.Subscribe("a", false, discoverd.EventKindLeader, events)
 	c.Assert(s.backend.StartSync(), IsNil)
 	assertEvent(c, events, "a", discoverd.EventKindLeader, inst1)
+}
+
+func (s *EtcdSuite) TestSetMeta(c *C) {
+	events := make(chan *discoverd.Event, 1)
+	s.state.Subscribe("a", false, discoverd.EventKindServiceMeta, events)
+
+	c.Assert(s.backend.AddService("a"), IsNil)
+	c.Assert(s.backend.StartSync(), IsNil)
+
+	// with service that doesn't exist
+	err := s.backend.SetServiceMeta("b", &discoverd.ServiceMeta{Data: []byte("foo")})
+	c.Assert(err, FitsTypeOf, NotFoundError{})
+
+	// new with wrong index
+	err = s.backend.SetServiceMeta("a", &discoverd.ServiceMeta{Data: []byte("foo"), Index: 1})
+	c.Assert(err, FitsTypeOf, hh.JSONError{})
+	c.Assert(err.(hh.JSONError).Code, Equals, hh.PreconditionFailedError)
+
+	// new
+	meta := &discoverd.ServiceMeta{Data: []byte("foo"), Index: 0}
+	c.Assert(s.backend.SetServiceMeta("a", meta), IsNil)
+	assertMetaEvent(c, events, "a", meta)
+
+	// index=0 set with existing
+	err = s.backend.SetServiceMeta("a", &discoverd.ServiceMeta{Data: []byte("foo"), Index: 0})
+	c.Assert(err, FitsTypeOf, hh.JSONError{})
+	c.Assert(err.(hh.JSONError).Code, Equals, hh.ObjectExistsError)
+
+	// set with existing, valid index
+	meta.Data = []byte("bar")
+	c.Assert(s.backend.SetServiceMeta("a", meta), IsNil)
+	assertMetaEvent(c, events, "a", meta)
+
+	// set with existing, low index
+	meta.Index--
+	meta.Data = []byte("baz")
+	err = s.backend.SetServiceMeta("a", meta)
+	c.Assert(err, FitsTypeOf, hh.JSONError{})
+	c.Assert(err.(hh.JSONError).Code, Equals, hh.PreconditionFailedError)
 }

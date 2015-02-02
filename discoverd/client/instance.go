@@ -17,17 +17,19 @@ const (
 	EventKindDown
 	EventKindLeader
 	EventKindCurrent
+	EventKindServiceMeta
 	EventKindAll     = ^EventKind(0)
 	EventKindUnknown = EventKind(0)
 )
 
 var eventKindStrings = map[EventKind]string{
-	EventKindUp:      "up",
-	EventKindUpdate:  "update",
-	EventKindDown:    "down",
-	EventKindLeader:  "leader",
-	EventKindCurrent: "current",
-	EventKindUnknown: "unknown",
+	EventKindUp:          "up",
+	EventKindUpdate:      "update",
+	EventKindDown:        "down",
+	EventKindLeader:      "leader",
+	EventKindCurrent:     "current",
+	EventKindUnknown:     "unknown",
+	EventKindServiceMeta: "service_meta",
 }
 
 func (k EventKind) String() string {
@@ -35,6 +37,15 @@ func (k EventKind) String() string {
 		return s
 	}
 	return eventKindStrings[EventKindUnknown]
+}
+
+func (k EventKind) Any(kinds ...EventKind) bool {
+	for _, other := range kinds {
+		if k&other != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 var eventKindMarshalJSON = make(map[EventKind][]byte, len(eventKindStrings))
@@ -64,9 +75,10 @@ func (k *EventKind) UnmarshalJSON(data []byte) error {
 }
 
 type Event struct {
-	Service  string    `json:"service"`
-	Kind     EventKind `json:"kind"`
-	Instance *Instance `json:"instance,omitempty"`
+	Service     string       `json:"service"`
+	Kind        EventKind    `json:"kind"`
+	Instance    *Instance    `json:"instance,omitempty"`
+	ServiceMeta *ServiceMeta `json:"service_meta,omitempty"`
 }
 
 func (e *Event) String() string {

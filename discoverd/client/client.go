@@ -1,6 +1,7 @@
 package discoverd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -19,6 +20,8 @@ type Service interface {
 	Addrs() ([]string, error)
 	Leaders(chan *Instance) (stream.Stream, error)
 	Watch(events chan *Event) (stream.Stream, error)
+	GetMeta() (*ServiceMeta, error)
+	SetMeta(*ServiceMeta) error
 }
 
 var ErrTimedOut = errors.New("discoverd: timed out waiting for instances")
@@ -187,4 +190,22 @@ func (s *service) Leaders(leaders chan *Instance) (stream.Stream, error) {
 
 func (s *service) Watch(events chan *Event) (stream.Stream, error) {
 	return s.client.c.Stream("GET", fmt.Sprintf("/services/%s", s.name), nil, events)
+}
+
+type ServiceMeta struct {
+	Data json.RawMessage
+
+	// When calling SetMeta, Index is checked against the current index and the
+	// set only succeeds if the index is the same. A zero index means the meta
+	// does not currently exist.
+	Index uint64
+}
+
+func (s *service) GetMeta() (*ServiceMeta, error) {
+	meta := &ServiceMeta{}
+	return meta, s.client.c.Get(fmt.Sprintf("/services/%s/meta", s.name), meta)
+}
+
+func (s *service) SetMeta(m *ServiceMeta) error {
+	return s.client.c.Put(fmt.Sprintf("/services/%s/meta", s.name), m, m)
 }

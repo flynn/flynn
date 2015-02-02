@@ -19,9 +19,11 @@ type Datastore interface {
 	RemoveService(service string) error
 	AddInstance(service string, inst *discoverd.Instance) error
 	RemoveInstance(service, id string) error
+	SetServiceMeta(service string, meta *discoverd.ServiceMeta) error
 
 	// Typically implemented by State
 	Get(service string) []*discoverd.Instance
+	GetServiceMeta(service string) *discoverd.ServiceMeta
 	GetLeader(service string) *discoverd.Instance
 	Subscribe(service string, sendCurrent bool, kinds discoverd.EventKind, ch chan *discoverd.Event) stream.Stream
 }
@@ -47,6 +49,10 @@ func (d basicDatastore) RemoveInstance(service, id string) error {
 	return d.Backend.RemoveInstance(service, id)
 }
 
+func (d basicDatastore) SetServiceMeta(service string, meta *discoverd.ServiceMeta) error {
+	return d.Backend.SetServiceMeta(service, meta)
+}
+
 func NewBasicDatastore(state *State, backend Backend) Datastore {
 	return &basicDatastore{state, backend}
 }
@@ -61,6 +67,9 @@ func NewHTTPHandler(ds Datastore) http.Handler {
 	router.PUT("/services/:service", api.AddService)
 	router.DELETE("/services/:service", api.RemoveService)
 	router.GET("/services/:service", api.GetServiceStream)
+
+	router.PUT("/services/:service/meta", api.SetServiceMeta)
+	router.GET("/services/:service/meta", api.GetServiceMeta)
 
 	router.PUT("/services/:service/instances/:instance_id", api.AddInstance)
 	router.DELETE("/services/:service/instances/:instance_id", api.RemoveInstance)
@@ -111,6 +120,34 @@ func (h *httpAPI) RemoveService(w http.ResponseWriter, r *http.Request, params h
 		}
 		return
 	}
+}
+
+func (h *httpAPI) SetServiceMeta(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	meta := &discoverd.ServiceMeta{}
+	if err := hh.DecodeJSON(r, meta); err != nil {
+		hh.Error(w, err)
+		return
+	}
+
+	if err := h.Store.SetServiceMeta(params.ByName("service"), meta); err != nil {
+		if IsNotFound(err) {
+			jsonError(w, hh.ObjectNotFoundError, err)
+		} else {
+			hh.Error(w, err)
+		}
+		return
+	}
+
+	hh.JSON(w, 200, meta)
+}
+
+func (h *httpAPI) GetServiceMeta(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	meta := h.Store.GetServiceMeta(params.ByName("service"))
+	if meta == nil {
+		jsonError(w, hh.ObjectNotFoundError, errors.New("service meta not found"))
+		return
+	}
+	hh.JSON(w, 200, meta)
 }
 
 func (h *httpAPI) AddInstance(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
