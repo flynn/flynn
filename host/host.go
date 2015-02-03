@@ -161,15 +161,18 @@ func runDaemon(args *docopt.Args) {
 	var err error
 
 	// create volume manager
-	vman, err := volumemanager.New(func() (volume.Provider, error) {
-		return zfsVolume.NewProvider(&zfsVolume.ProviderConfig{
-			DatasetName: "flynn-default",
-			Make: &zfsVolume.MakeDev{
-				BackingFilename: "/var/lib/flynn/volumes/zfs/vdev/flynn-default-zpool.vdev",
-				Size:            int64(math.Pow(2, float64(30))),
-			},
-		})
-	})
+	vman, err := volumemanager.New(
+		"/var/lib/flynn/volumes/volumes.bolt",
+		func() (volume.Provider, error) {
+			return zfsVolume.NewProvider(&zfsVolume.ProviderConfig{
+				DatasetName: "flynn-default",
+				Make: &zfsVolume.MakeDev{
+					BackingFilename: "/var/lib/flynn/volumes/zfs/vdev/flynn-default-zpool.vdev",
+					Size:            int64(math.Pow(2, float64(30))),
+				},
+			})
+		},
+	)
 	if err != nil {
 		shutdown.Fatal(err)
 	}

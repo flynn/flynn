@@ -432,12 +432,11 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 			g.Log(grohl.Data{"at": "volume_mkdir", "dir": v.Target, "status": "error", "err": err})
 			return err
 		}
-		volumePath, err := vol.Mount(job.ID, v.Target)
 		if err != nil {
 			g.Log(grohl.Data{"at": "volume_mount", "target": v.Target, "volumeID": v.VolumeID, "status": "error", "err": err})
 			return err
 		}
-		if err := bindMount(volumePath, filepath.Join(rootPath, v.Target), v.Writeable, true); err != nil {
+		if err := bindMount(vol.Location(), filepath.Join(rootPath, v.Target), v.Writeable, true); err != nil {
 			g.Log(grohl.Data{"at": "volume_mount2", "target": v.Target, "volumeID": v.VolumeID, "status": "error", "err": err})
 			return err
 		}
