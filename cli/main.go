@@ -106,7 +106,8 @@ See 'flynn help <command>' for more information on a specific command.
 	}
 
 	if err := runCommand(cmd, cmdArgs); err != nil {
-		shutdown.Fatal(err)
+		log.Println(err)
+		shutdown.ExitWithCode(1)
 		return
 	}
 }
