@@ -1,6 +1,7 @@
 package zfs
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -17,19 +18,22 @@ import (
 type zfsVolume struct {
 	info      *volume.Info
 	provider  *Provider
-	mounts    map[volume.VolumeMount]struct{}
-	basemount string // This is the location of the main mount of the ZFS dataset.  Mounts into containers are bind-mounts pointing back out to this.  The user does not control it (it is essentially an implementation detail).
+	dataset   *zfs.Dataset
+	basemount string
 }
 
 type Provider struct {
 	config  *ProviderConfig
 	dataset *zfs.Dataset
+	volumes map[string]*zfsVolume
 }
 
 /*
 	Describes zfs config used at provider setup time.
 
 	`volume.ProviderSpec.Config` is deserialized to this for zfs.
+
+	Also is the output of `MarshalGlobalState`.
 */
 type ProviderConfig struct {
 	// DatasetName specifies the zfs dataset this provider will create volumes under.
@@ -93,6 +97,8 @@ func NewProvider(config *ProviderConfig) (volume.Provider, error) {
 					// we could overwrite but we'd rather stop and avoid potential data loss.
 					return nil, fmt.Errorf("error attempting import of existing zpool file: %s", err)
 				}
+				// note: 'zpool import' recreated *all* the volume datasets in that pool.
+				// currently, even if they're not known to a volume manager, they're not garbage collected.
 			} else {
 				return nil, err
 			}
@@ -109,7 +115,12 @@ func NewProvider(config *ProviderConfig) (volume.Provider, error) {
 	return &Provider{
 		config:  config,
 		dataset: dataset,
+		volumes: make(map[string]*zfsVolume),
 	}, nil
+}
+
+func (b Provider) Kind() string {
+	return "zfs"
 }
 
 func (b *Provider) NewVolume() (volume.Volume, error) {
@@ -117,14 +128,16 @@ func (b *Provider) NewVolume() (volume.Volume, error) {
 	v := &zfsVolume{
 		info:      &volume.Info{ID: id},
 		provider:  b,
-		mounts:    make(map[volume.VolumeMount]struct{}),
 		basemount: filepath.Join("/var/lib/flynn/volumes/zfs/mnt/", id),
 	}
-	if _, err := zfs.CreateFilesystem(path.Join(v.provider.dataset.Name, id), map[string]string{
+	var err error
+	v.dataset, err = zfs.CreateFilesystem(path.Join(v.provider.dataset.Name, id), map[string]string{
 		"mountpoint": v.basemount,
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
+	b.volumes[id] = v
 	return v, nil
 }
 
@@ -132,24 +145,48 @@ func (v *zfsVolume) Provider() volume.Provider {
 	return v.provider
 }
 
+func (v *zfsVolume) Location() string {
+	return v.basemount
+}
+
+func (b *Provider) MarshalGlobalState() (json.RawMessage, error) {
+	return json.Marshal(b.config)
+}
+
+type zfsVolumeRecord struct {
+	Dataset   string `json:"dataset"`
+	Basemount string `json:"basemount"`
+}
+
+func (b *Provider) MarshalVolumeState(volumeID string) (json.RawMessage, error) {
+	vol := b.volumes[volumeID]
+	record := zfsVolumeRecord{}
+	record.Dataset = vol.dataset.Name
+	record.Basemount = vol.basemount
+	return json.Marshal(record)
+}
+
+func (b *Provider) RestoreVolumeState(volInfo *volume.Info, data json.RawMessage) (volume.Volume, error) {
+	record := &zfsVolumeRecord{}
+	if err := json.Unmarshal(data, record); err != nil {
+		return nil, fmt.Errorf("cannot restore volume %q: %s", volInfo.ID, err)
+	}
+	dataset, err := zfs.GetDataset(record.Dataset)
+	if err != nil {
+		return nil, fmt.Errorf("cannot restore volume %q: %s", volInfo.ID, err)
+	}
+	v := &zfsVolume{
+		info:      volInfo,
+		provider:  b,
+		dataset:   dataset,
+		basemount: record.Basemount,
+	}
+	b.volumes[volInfo.ID] = v
+	return v, nil
+}
+
 func (v *zfsVolume) Info() *volume.Info {
 	return v.info
-}
-
-func (v *zfsVolume) Mounts() map[volume.VolumeMount]struct{} {
-	return v.mounts
-}
-
-func (v *zfsVolume) Mount(jobId, path string) (string, error) {
-	mount := volume.VolumeMount{
-		JobID:    jobId,
-		Location: path,
-	}
-	if _, exists := v.mounts[mount]; exists {
-		return "", fmt.Errorf("volume: cannot make same mount twice!")
-	}
-	v.mounts[mount] = struct{}{}
-	return v.basemount, nil
 }
 
 func (v1 *zfsVolume) TakeSnapshot() (volume.Volume, error) {
@@ -157,33 +194,35 @@ func (v1 *zfsVolume) TakeSnapshot() (volume.Volume, error) {
 	v2 := &zfsVolume{
 		info:      &volume.Info{ID: id},
 		provider:  v1.provider,
-		mounts:    make(map[volume.VolumeMount]struct{}),
 		basemount: filepath.Join("/var/lib/flynn/volumes/zfs/", id),
 	}
-	if err := cloneFilesystem(path.Join(v2.provider.dataset.Name, v2.info.ID), path.Join(v1.provider.dataset.Name, v1.info.ID), v2.basemount); err != nil {
+	var err error
+	v2.dataset, err = cloneFilesystem(path.Join(v2.provider.dataset.Name, v2.info.ID), path.Join(v1.provider.dataset.Name, v1.info.ID), v2.basemount)
+	if err != nil {
 		return nil, err
 	}
+	v2.provider.volumes[id] = v2
 	return v2, nil
 }
 
-func cloneFilesystem(newDatasetName string, parentDatasetName string, mountPath string) error {
+func cloneFilesystem(newDatasetName string, parentDatasetName string, mountPath string) (*zfs.Dataset, error) {
 	parentDataset, err := zfs.GetDataset(parentDatasetName)
 	if parentDataset == nil {
-		return err
+		return nil, err
 	}
 	snapshotName := fmt.Sprintf("%d", time.Now().Nanosecond())
 	snapshot, err := parentDataset.Snapshot(snapshotName, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	_, err = snapshot.Clone(newDatasetName, map[string]string{
+	dataset, err := snapshot.Clone(newDatasetName, map[string]string{
 		"mountpoint": mountPath,
 	})
 	if err != nil {
 		snapshot.Destroy(zfs.DestroyDeferDeletion)
-		return err
+		return nil, err
 	}
 	err = snapshot.Destroy(zfs.DestroyDeferDeletion)
-	return err
+	return dataset, err
 }
