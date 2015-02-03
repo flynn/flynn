@@ -133,7 +133,7 @@ type VolumeBinding struct {
 	Target string `json:"target"`
 	// VolumeID can be thought of as the source path if this were a simple bind-mount.  It is resolved by a VolumeManager.
 	VolumeID  string `json:"volume"`
-	Writeable bool   `json:"isWritable"`
+	Writeable bool   `json:"writeable"`
 }
 
 type Artifact struct {
