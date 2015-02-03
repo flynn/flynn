@@ -21,7 +21,8 @@ type Manager struct {
 	// It's possible to configure multiple volume providers for a flynn-host daemon.
 	// This can be used to create volumes using providers backed by different storage resources,
 	// or different volume backends entirely.
-	providers map[string]volume.Provider
+	providers   map[string]volume.Provider
+	providerIDs map[volume.Provider]string
 
 	// `map[volume.Id]volume`
 	volumes map[string]volume.Volume
@@ -33,6 +34,7 @@ type Manager struct {
 func New(defProvFn func() (volume.Provider, error)) (*Manager, error) {
 	m := &Manager{
 		providers:    make(map[string]volume.Provider),
+		providerIDs:  make(map[volume.Provider]string),
 		volumes:      make(map[string]volume.Volume),
 		namedVolumes: make(map[string]string),
 	}
@@ -42,6 +44,7 @@ func New(defProvFn func() (volume.Provider, error)) (*Manager, error) {
 			return nil, fmt.Errorf("could not initialize default provider: %s", err)
 		}
 		m.providers["default"] = p
+		m.providerIDs[p] = "default"
 	}
 	return m, nil
 }
@@ -56,6 +59,7 @@ func (m *Manager) AddProvider(id string, p volume.Provider) error {
 		return ProviderAlreadyExists
 	}
 	m.providers[id] = p
+	m.providerIDs[p] = id
 	return nil
 }
 
