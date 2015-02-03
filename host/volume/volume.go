@@ -18,6 +18,8 @@ package volume
 type Volume interface {
 	Info() *Info
 
+	Provider() Provider
+
 	Mounts() map[VolumeMount]struct{}
 
 	// Inform the volume that it is being mounted.  (The returned information is used by the host backend to create the mount.)
