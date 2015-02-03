@@ -17,6 +17,7 @@ import (
 	"github.com/flynn/flynn/host/ports"
 	"github.com/flynn/flynn/host/sampi"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/host/volume/manager"
 	zfsVolume "github.com/flynn/flynn/host/volume/zfs"
 	"github.com/flynn/flynn/pkg/attempt"
@@ -159,21 +160,19 @@ func runDaemon(args *docopt.Args) {
 	var backend Backend
 	var err error
 
-	// create default volume backend and minimum viable storage pool
-	// TODO: need to collect config or cli flags for either initializable params if the min-viable zpool doesn't already exist or if the default is overriden
-	volProv, err := zfsVolume.NewProvider(&zfsVolume.ProviderConfig{
-		DatasetName: "flynn-default",
-		Make: &zfsVolume.MakeDev{
-			BackingFilename: "/var/lib/flynn/volumes/zfs/vdev/flynn-default-zpool.vdev",
-			Size:            int64(math.Pow(2, float64(30))),
-		},
+	// create volume manager
+	vman, err := volumemanager.New(func() (volume.Provider, error) {
+		return zfsVolume.NewProvider(&zfsVolume.ProviderConfig{
+			DatasetName: "flynn-default",
+			Make: &zfsVolume.MakeDev{
+				BackingFilename: "/var/lib/flynn/volumes/zfs/vdev/flynn-default-zpool.vdev",
+				Size:            int64(math.Pow(2, float64(30))),
+			},
+		})
 	})
 	if err != nil {
-		log.Fatalf("unable to create volume backend: %s", err)
+		shutdown.Fatal(err)
 	}
-
-	// create volume manager
-	vman := volumemanager.New(volProv)
 
 	switch backendName {
 	case "libvirt-lxc":

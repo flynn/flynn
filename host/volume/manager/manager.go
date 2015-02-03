@@ -1,6 +1,8 @@
 package volumemanager
 
 import (
+	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/flynn/flynn/host/volume"
@@ -13,8 +15,6 @@ import (
 */
 type Manager struct {
 	mutex sync.Mutex
-
-	defaultProvider volume.Provider
 
 	// `map[providerName]provider`
 	//
@@ -30,20 +30,30 @@ type Manager struct {
 	namedVolumes map[string]string
 }
 
-func New(p volume.Provider) *Manager {
-	return &Manager{
-		defaultProvider: p,
-		providers:       map[string]volume.Provider{"default": p},
-		volumes:         map[string]volume.Volume{},
-		namedVolumes:    map[string]string{},
+func New(defProvFn func() (volume.Provider, error)) (*Manager, error) {
+	m := &Manager{
+		providers:    make(map[string]volume.Provider),
+		volumes:      make(map[string]volume.Volume),
+		namedVolumes: make(map[string]string),
 	}
+	if _, ok := m.providers["default"]; !ok {
+		p, err := defProvFn()
+		if err != nil {
+			return nil, fmt.Errorf("could not initialize default provider: %s", err)
+		}
+		m.providers["default"] = p
+	}
+	return m, nil
 }
+
+var NoSuchProvider = errors.New("no such provider")
+var ProviderAlreadyExists = errors.New("that provider id already exists")
 
 func (m *Manager) AddProvider(id string, p volume.Provider) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	if _, ok := m.providers[id]; ok {
-		return volume.ProviderAlreadyExists
+		return ProviderAlreadyExists
 	}
 	m.providers[id] = p
 	return nil
@@ -81,12 +91,12 @@ func (m *Manager) NewVolumeFromProvider(providerID string) (volume.Volume, error
 
 func (m *Manager) newVolumeFromProviderLocked(providerID string) (volume.Volume, error) {
 	if providerID == "" {
-		return managerProviderProxy{m.defaultProvider, m}.NewVolume()
+		providerID = "default"
 	}
 	if p, ok := m.providers[providerID]; ok {
 		return managerProviderProxy{p, m}.NewVolume()
 	} else {
-		return nil, volume.NoSuchProvider
+		return nil, NoSuchProvider
 	}
 }
 

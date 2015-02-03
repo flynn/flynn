@@ -8,7 +8,6 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/host/volume/manager"
-	"github.com/flynn/flynn/host/volume/zfs"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -36,25 +35,18 @@ func (api *HTTPAPI) CreateProvider(w http.ResponseWriter, r *http.Request, ps ht
 		httphelper.Error(w, err)
 		return
 	}
-	switch pspec.Kind {
-	case "zfs":
-		config := &zfs.ProviderConfig{}
-		if err := json.Unmarshal(pspec.Config, config); err != nil {
-			httphelper.Error(w, err)
-			return
-		}
-		var err error
-		if provider, err = zfs.NewProvider(config); err != nil {
-			httphelper.Error(w, err)
-			return
-		}
-	case "":
+	if pspec.ID == "" {
+		pspec.ID = random.UUID()
+	}
+	if pspec.Kind == "" {
 		httphelper.Error(w, httphelper.JSONError{
 			Code:    httphelper.ValidationError,
 			Message: fmt.Sprintf("volume provider 'kind' field must not be blank"),
 		})
 		return
-	default:
+	}
+	provider, err := volumemanager.NewProvider(pspec)
+	if err == volume.UnknownProviderKind {
 		httphelper.Error(w, httphelper.JSONError{
 			Code:    httphelper.ValidationError,
 			Message: fmt.Sprintf("volume provider kind %q is not known", pspec.Kind),
@@ -62,13 +54,9 @@ func (api *HTTPAPI) CreateProvider(w http.ResponseWriter, r *http.Request, ps ht
 		return
 	}
 
-	if pspec.ID == "" {
-		pspec.ID = random.UUID()
-	}
-
 	if err := api.vman.AddProvider(pspec.ID, provider); err != nil {
 		switch err {
-		case volume.ProviderAlreadyExists:
+		case volumemanager.ProviderAlreadyExists:
 			httphelper.Error(w, httphelper.JSONError{
 				Code:    httphelper.ObjectExistsError,
 				Message: fmt.Sprintf("provider %q already exists", pspec.ID),
@@ -87,7 +75,7 @@ func (api *HTTPAPI) Create(w http.ResponseWriter, r *http.Request, ps httprouter
 	providerID := ps.ByName("provider_id")
 
 	vol, err := api.vman.NewVolumeFromProvider(providerID)
-	if err == volume.NoSuchProvider {
+	if err == volumemanager.NoSuchProvider {
 		httphelper.Error(w, httphelper.JSONError{
 			Code:    httphelper.ObjectNotFoundError,
 			Message: fmt.Sprintf("No volume provider by id %q", providerID),
