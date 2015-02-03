@@ -13,6 +13,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kavu/go_reuseport"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/router/types"
 )
@@ -83,6 +84,16 @@ func main() {
 				shutdown.Fatal(err)
 			}
 		}
+	}
+
+	postgres.Wait("")
+	db, err := postgres.Open("", "")
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+
+	if err := migrateDB(db.DB); err != nil {
+		shutdown.Fatal(err)
 	}
 
 	// Read etcd addresses from ETCD
