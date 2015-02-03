@@ -13,7 +13,13 @@ import (
 	configured for their final storage location.
 */
 type Provider interface {
+	Kind() string
+
 	NewVolume() (Volume, error)
+
+	MarshalGlobalState() (json.RawMessage, error)
+	MarshalVolumeState(volumeID string) (json.RawMessage, error)
+	RestoreVolumeState(volumeInfo *Info, data json.RawMessage) (Volume, error)
 }
 
 type ProviderSpec struct {
