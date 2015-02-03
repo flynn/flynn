@@ -97,21 +97,21 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 }
 
 // ServeConn takes an inbound conn and proxies it to a backend.
-func (p *ReverseProxy) ServeConn(conn net.Conn) {
+func (p *ReverseProxy) ServeConn(dconn net.Conn) {
 	transport := p.transport
 	if transport == nil {
 		panic("router: nil transport for proxy")
 	}
-	defer conn.Close()
+	defer dconn.Close()
 
-	dconn, err := transport.Connect(conn.RemoteAddr())
+	uconn, err := transport.Connect()
 	if err != nil {
 		p.logf("router: proxy error: %v", err)
 		return
 	}
-	defer dconn.Close()
+	defer uconn.Close()
 
-	joinConns(conn, dconn)
+	joinConns(uconn, dconn)
 }
 
 func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, req *http.Request) {

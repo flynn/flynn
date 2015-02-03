@@ -87,7 +87,7 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return nil, errNoBackends
 }
 
-func (t *transport) Connect(remoteAddr net.Addr) (net.Conn, error) {
+func (t *transport) Connect() (net.Conn, error) {
 	backends := t.getOrderedBackends("")
 	conn, _, err := dialTCP(backends)
 	return conn, err
