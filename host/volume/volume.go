@@ -20,10 +20,8 @@ type Volume interface {
 
 	Provider() Provider
 
-	Mounts() map[VolumeMount]struct{}
-
-	// Inform the volume that it is being mounted.  (The returned information is used by the host backend to create the mount.)
-	Mount(jobId, path string) (string, error)
+	// Location returns the path to this volume's mount.  To use the volume in a job, bind mount this into the container's filesystem.
+	Location() string
 
 	TakeSnapshot() (Volume, error)
 }
@@ -37,15 +35,4 @@ type Info struct {
 	// These are guid formatted (v4, random); selected by the server;
 	// and though not globally sync'd, entropy should be high enough to be unique.
 	ID string `json:"id"`
-}
-
-/*
-	VolumeMount names the location in which a shared+persistent filesystem is mounted into a job's container.
-
-	A Volume has a one-to-many relationship with `VolumeMount`s -- the same volume
-	may be mounted to many containers (or even multiple places within a single container).
-*/
-type VolumeMount struct {
-	JobID    string // job which the volume is mounted to
-	Location string // path within the container where the mount shall appear
 }
