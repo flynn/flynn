@@ -133,6 +133,10 @@ func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 				Cmd:   []string{"/bin/echoer"},
 				Ports: []ct.Port{{Proto: "tcp"}},
 			},
+			"ping": {
+				Cmd:   []string{"/bin/pingserv"},
+				Ports: []ct.Port{{Proto: "tcp"}},
+			},
 			"printer": {
 				Cmd: []string{"sh", "-c", "while true; do echo I like to print; sleep 1; done"},
 			},
