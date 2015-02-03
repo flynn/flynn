@@ -127,6 +127,7 @@ func (p *ReverseProxy) ServeConn(conn net.Conn) {
 		p.logf("router: proxy error: %v", err)
 		return
 	}
+	defer dconn.Close()
 
 	joinConns(conn, dconn)
 }
@@ -158,6 +159,7 @@ func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, req *http.Request) {
 		p.logf("router: hijack failed: %v", err)
 		return
 	}
+	defer dconn.Close()
 	joinConns(uconn, &streamConn{bufrw.Reader, dconn})
 }
 
