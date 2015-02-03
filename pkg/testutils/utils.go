@@ -1,33 +1,18 @@
 package testutils
 
 import (
-	"fmt"
 	"os"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
+	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 )
 
-func SetupPostgres(dbname string) error {
-	if os.Getenv("PGDATABASE") != "" {
-		dbname = os.Getenv("PGDATABASE")
-	} else {
-		os.Setenv("PGDATABASE", dbname)
-	}
-	if os.Getenv("PGSSLMODE") == "" {
-		os.Setenv("PGSSLMODE", "disable")
-	}
+/*
+	Skips a test if the UID isn't 0.
 
-	db, err := sql.Open("postgres", "dbname=postgres")
-	if err != nil {
-		return err
+	Use in a suite's `SetUpSuite` method for great effect.
+*/
+func SkipIfNotRoot(t *C) {
+	if os.Getuid() != 0 {
+		t.Skip("cannot perform operations requiring root")
 	}
-	defer db.Close()
-	if _, err := db.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbname)); err != nil {
-		return err
-	}
-	if _, err := db.Exec(fmt.Sprintf("CREATE DATABASE %s", dbname)); err != nil {
-		return err
-	}
-	return nil
 }

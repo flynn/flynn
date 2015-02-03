@@ -18,7 +18,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
-	"github.com/flynn/flynn/pkg/testutils"
+	"github.com/flynn/flynn/pkg/testutils/postgres"
 )
 
 func init() {
@@ -41,7 +41,7 @@ var authKey = "test"
 
 func (s *S) SetUpSuite(c *C) {
 	dbname := "controllertest"
-	if err := testutils.SetupPostgres(dbname); err != nil {
+	if err := pgtestutils.SetupPostgres(dbname); err != nil {
 		c.Fatal(err)
 	}
 

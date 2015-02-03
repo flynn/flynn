@@ -13,7 +13,7 @@ import (
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
-	"github.com/flynn/flynn/pkg/testutils"
+	"github.com/flynn/flynn/pkg/testutils/postgres"
 )
 
 func TestOSFilesystem(t *testing.T) {
@@ -26,7 +26,7 @@ func TestOSFilesystem(t *testing.T) {
 }
 
 func TestPostgresFilesystem(t *testing.T) {
-	if err := testutils.SetupPostgres("blobstoretest"); err != nil {
+	if err := pgtestutils.SetupPostgres("blobstoretest"); err != nil {
 		t.Fatal(err)
 	}
 	db, err := sql.Open("postgres", "")

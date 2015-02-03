@@ -11,6 +11,7 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	gzfs "github.com/flynn/flynn/Godeps/_workspace/src/github.com/mistifyio/go-zfs"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/testutils"
 )
 
 // note: whimsical/unique dataset names per test are chosen to help debug
@@ -24,7 +25,7 @@ var _ = Suite(&ZpoolTests{})
 func (ZpoolTests) SetUpSuite(c *C) {
 	// Skip all tests in this suite if not running as root.
 	// Many zfs operations require root priviledges.
-	skipIfNotRoot(c)
+	testutils.SkipIfNotRoot(c)
 }
 
 var one_gig = int64(math.Pow(2, float64(30)))
