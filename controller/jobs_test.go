@@ -160,7 +160,7 @@ func (s *S) TestJobLogSSE(c *C) {
 	res.Body.Close()
 	c.Assert(err, IsNil)
 
-	expected := "data: {\"stream\":\"stderr\",\"data\":\"hello stderr\\n\"}\n\ndata: {\"stream\":\"stdout\",\"data\":\"hello stdout\\n\"}\n\ndata: {\"stream\":\"stdout\",\"data\":\"Listening on 55012\\n\"}\n\nevent: eof\ndata: {}\n\n"
+	expected := "data: {\"event\":\"stderr\",\"data\":\"hello stderr\\n\"}\n\ndata: {\"event\":\"stdout\",\"data\":\"hello stdout\\n\"}\n\ndata: {\"event\":\"stdout\",\"data\":\"Listening on 55012\\n\"}\n\ndata: {\"event\":\"eof\"}\n\n"
 
 	c.Assert(buf.String(), Equals, expected)
 }
@@ -182,7 +182,7 @@ func (s *S) TestJobLogSSEStream(c *C) {
 	buf := &bytes.Buffer{}
 	buf.ReadFrom(res.Body)
 
-	expected := "data: {\"stream\":\"stdout\",\"data\":\"Listening on 55012\\n\"}\n\nevent: exit\ndata: {\"status\": 1}\n\n"
+	expected := "data: {\"event\":\"stdout\",\"data\":\"Listening on 55012\\n\"}\n\ndata: {\"event\":\"exit\",\"data\":{\"status\":1}}\n\n"
 	c.Assert(buf.String(), Equals, expected)
 }
 

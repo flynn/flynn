@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -339,8 +338,6 @@ func (c *controllerAPI) ListFormations(ctx context.Context, w http.ResponseWrite
 func (c *controllerAPI) GetFormations(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	ch := make(chan *ct.ExpandedFormation)
 	stopCh := make(chan struct{})
-	wr := sse.NewWriter(w)
-	enc := json.NewEncoder(wr)
 	since, err := time.Parse(time.RFC3339, req.FormValue("since"))
 	if err != nil {
 		respondWithError(w, err)
@@ -350,16 +347,8 @@ func (c *controllerAPI) GetFormations(ctx context.Context, w http.ResponseWriter
 		respondWithError(w, err)
 		return
 	}
-	go func() {
-		<-w.(http.CloseNotifier).CloseNotify()
-		c.formationRepo.Unsubscribe(ch)
-		close(stopCh)
-	}()
-	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
-	w.WriteHeader(200)
-	wr.Flush()
-	for data := range ch {
-		enc.Encode(data)
-		wr.Flush()
-	}
+	defer c.formationRepo.Unsubscribe(ch)
+	defer close(stopCh)
+	l, _ := ctxhelper.LoggerFromContext(ctx)
+	sse.ServeStream(w, ch, l)
 }

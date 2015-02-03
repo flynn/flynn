@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
@@ -38,20 +37,8 @@ func (h *Host) StopJob(id string) error {
 
 func (h *Host) streamEvents(id string, w http.ResponseWriter) error {
 	ch := h.state.AddListener(id)
-	go func() {
-		<-w.(http.CloseNotifier).CloseNotify()
-		h.state.RemoveListener(id, ch)
-	}()
-	enc := json.NewEncoder(sse.NewWriter(w))
-	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
-	w.WriteHeader(200)
-	w.(http.Flusher).Flush()
-	for data := range ch {
-		if err := enc.Encode(data); err != nil {
-			return err
-		}
-		w.(http.Flusher).Flush()
-	}
+	defer h.state.RemoveListener(id, ch)
+	sse.ServeStream(w, ch, nil)
 	return nil
 }
 

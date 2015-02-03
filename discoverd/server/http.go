@@ -217,38 +217,13 @@ func (h *httpAPI) GetServiceStream(w http.ResponseWriter, r *http.Request, param
 }
 
 func (h *httpAPI) handleStream(w http.ResponseWriter, params httprouter.Params, kind discoverd.EventKind) {
-	sw := sse.NewWriter(w)
-	enc := json.NewEncoder(hh.FlushWriter{Writer: sw, Enabled: true})
-	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
-	w.WriteHeader(200)
-	sw.Flush()
-
 	ch := make(chan *discoverd.Event, 64) // TODO: figure out how big this buffer should be
-	done := make(chan struct{})
-
-	go func() {
-		defer close(done)
-		for e := range ch {
-			if err := enc.Encode(e); err != nil {
-				return
-			}
-		}
-	}()
-
 	stream := h.Store.Subscribe(params.ByName("service"), true, kind, ch)
-
-	if cn, ok := w.(http.CloseNotifier); ok {
-		go func() {
-			<-cn.CloseNotify()
-			stream.Close()
-		}()
-	} else {
-		defer stream.Close()
-	}
-
-	<-done
-
+	s := sse.NewStream(w, ch, nil)
+	s.Serve()
+	s.Wait()
+	stream.Close()
 	if err := stream.Err(); err != nil {
-		sw.Error(err)
+		s.CloseWithError(err)
 	}
 }
