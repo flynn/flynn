@@ -342,3 +342,40 @@ h1, h2, h3, h4, h5, h6 {
 .example-toggle {
   margin: 0.5rem 1rem;
 }
+
+.pagination {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  &:after {
+    display: table;
+    clear: both;
+    content: "";
+  }
+
+  > * {
+    float: left;
+    color: $greenColor;
+    > a, > a:hover, a:visited {
+      text-decoration: none;
+      color: inherit;
+      display: block;
+      padding: 0.5rem 1rem;
+    }
+    &:hover {
+      background-color: $dirtyWhiteColor;
+    }
+    &.active {
+      color: $grayColor;
+      background-color: transparent;
+      > a {
+        cursor: default;
+      }
+    }
+  }
+
+  > * + * {
+    margin-left: 1rem;
+  }
+}

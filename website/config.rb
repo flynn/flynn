@@ -68,6 +68,9 @@ activate :blog do |blog|
   blog.permalink = "blog/:title.html"
   blog.sources = "blog/:title.html"
   blog.layout = 'article'
+
+  blog.paginate = true
+  blog.page_link = "pages/:num"
 end
 
 set :css_dir, 'stylesheets'

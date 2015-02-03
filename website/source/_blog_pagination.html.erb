@@ -1,0 +1,29 @@
+<nav rel='pagination' class='text-center'>
+  <ul class='pagination'>
+    <% if prev_page %>
+      <li>
+        <a href="<%= prev_page.url.sub('.html', '') %>">&laquo;</a>
+      </li>
+    <% end %>
+
+    <% (1..num_pages).each do |n| %>
+      <% if page_number == n %>
+        <li class='active'>
+      <% else %>
+        <li>
+      <% end %>
+        <% if n == 1 %>
+          <%= link_to n, "/blog" %>
+        <% else %>
+          <%= link_to n, "/blog/pages/#{n}" %>
+        <% end %>
+      </li>
+    <% end %>
+
+    <% if next_page %>
+      <li>
+        <a href="<%= next_page.url.sub('.html', '') %>">&raquo;</a>
+      </li>
+    <% end %>
+  </ul>
+</nav>
