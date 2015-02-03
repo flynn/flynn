@@ -109,6 +109,7 @@ func (p *ReverseProxy) ServeConn(conn net.Conn) {
 		p.logf("router: proxy error: %v", err)
 		return
 	}
+	defer dconn.Close()
 
 	joinConns(conn, dconn)
 }
