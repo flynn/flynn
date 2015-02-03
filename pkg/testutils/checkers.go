@@ -1,4 +1,4 @@
-package zfs
+package testutils
 
 import (
 	"os"
@@ -7,12 +7,6 @@ import (
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 )
-
-func skipIfNotRoot(t *C) {
-	if os.Getuid() != 0 {
-		t.Skip("cannot perform operations requiring root")
-	}
-}
 
 type dirContainsChecker struct {
 	*CheckerInfo

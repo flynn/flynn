@@ -9,6 +9,7 @@ import (
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	zfs "github.com/flynn/flynn/Godeps/_workspace/src/github.com/mistifyio/go-zfs"
+	"github.com/flynn/flynn/pkg/testutils"
 )
 
 func Test(t *testing.T) { TestingT(t) }
@@ -23,7 +24,7 @@ var _ = Suite(&ZfsSnapshotTests{})
 func (ZfsSnapshotTests) SetUpSuite(c *C) {
 	// Skip all tests in this suite if not running as root.
 	// Many zfs operations require root priviledges.
-	skipIfNotRoot(c)
+	testutils.SkipIfNotRoot(c)
 }
 
 func (s *ZfsSnapshotTests) SetUpTest(c *C) {
@@ -61,22 +62,22 @@ func (ZfsSnapshotTests) TestSnapshotShouldCarryFiles(c *C) {
 	c.Assert(err, IsNil)
 
 	// a new volume should start out empty:
-	c.Assert(v.(*zfsVolume).basemount, DirContains, []string{})
+	c.Assert(v.(*zfsVolume).basemount, testutils.DirContains, []string{})
 
 	f, err := os.Create(filepath.Join(v.(*zfsVolume).basemount, "alpha"))
 	c.Assert(err, IsNil)
 	f.Close()
 
 	// sanity check, can we so much as even write a file:
-	c.Assert(v.(*zfsVolume).basemount, DirContains, []string{"alpha"})
+	c.Assert(v.(*zfsVolume).basemount, testutils.DirContains, []string{"alpha"})
 
 	v2, err := v.TakeSnapshot()
 	c.Assert(err, IsNil)
 
 	// taking a snapshot shouldn't change the source dir:
-	c.Assert(v.(*zfsVolume).basemount, DirContains, []string{"alpha"})
+	c.Assert(v.(*zfsVolume).basemount, testutils.DirContains, []string{"alpha"})
 	// the newly mounted snapshot in the new location should have the same content:
-	c.Assert(v2.(*zfsVolume).basemount, DirContains, []string{"alpha"})
+	c.Assert(v2.(*zfsVolume).basemount, testutils.DirContains, []string{"alpha"})
 }
 
 func (ZfsSnapshotTests) TestSnapshotShouldIsolateNewChangesToSource(c *C) {
@@ -87,14 +88,14 @@ func (ZfsSnapshotTests) TestSnapshotShouldIsolateNewChangesToSource(c *C) {
 	c.Assert(err, IsNil)
 
 	// a new volume should start out empty:
-	c.Assert(v.(*zfsVolume).basemount, DirContains, []string{})
+	c.Assert(v.(*zfsVolume).basemount, testutils.DirContains, []string{})
 
 	f, err := os.Create(filepath.Join(v.(*zfsVolume).basemount, "alpha"))
 	c.Assert(err, IsNil)
 	f.Close()
 
 	// sanity check, can we so much as even write a file:
-	c.Assert(v.(*zfsVolume).basemount, DirContains, []string{"alpha"})
+	c.Assert(v.(*zfsVolume).basemount, testutils.DirContains, []string{"alpha"})
 
 	v2, err := v.TakeSnapshot()
 	c.Assert(err, IsNil)
@@ -105,9 +106,9 @@ func (ZfsSnapshotTests) TestSnapshotShouldIsolateNewChangesToSource(c *C) {
 	f.Close()
 
 	// the source dir should contain our changes:
-	c.Assert(v.(*zfsVolume).basemount, DirContains, []string{"alpha", "beta"})
+	c.Assert(v.(*zfsVolume).basemount, testutils.DirContains, []string{"alpha", "beta"})
 	// the snapshot should be unaffected:
-	c.Assert(v2.(*zfsVolume).basemount, DirContains, []string{"alpha"})
+	c.Assert(v2.(*zfsVolume).basemount, testutils.DirContains, []string{"alpha"})
 }
 
 func (ZfsSnapshotTests) TestSnapshotShouldIsolateNewChangesToFork(c *C) {
@@ -118,14 +119,14 @@ func (ZfsSnapshotTests) TestSnapshotShouldIsolateNewChangesToFork(c *C) {
 	c.Assert(err, IsNil)
 
 	// a new volume should start out empty:
-	c.Assert(v.(*zfsVolume).basemount, DirContains, []string{})
+	c.Assert(v.(*zfsVolume).basemount, testutils.DirContains, []string{})
 
 	f, err := os.Create(filepath.Join(v.(*zfsVolume).basemount, "alpha"))
 	c.Assert(err, IsNil)
 	f.Close()
 
 	// sanity check, can we so much as even write a file:
-	c.Assert(v.(*zfsVolume).basemount, DirContains, []string{"alpha"})
+	c.Assert(v.(*zfsVolume).basemount, testutils.DirContains, []string{"alpha"})
 
 	v2, err := v.TakeSnapshot()
 	c.Assert(err, IsNil)
@@ -136,7 +137,7 @@ func (ZfsSnapshotTests) TestSnapshotShouldIsolateNewChangesToFork(c *C) {
 	f.Close()
 
 	// the source dir should be unaffected:
-	c.Assert(v.(*zfsVolume).basemount, DirContains, []string{"alpha"})
+	c.Assert(v.(*zfsVolume).basemount, testutils.DirContains, []string{"alpha"})
 	// the snapshot should contain our changes:
-	c.Assert(v2.(*zfsVolume).basemount, DirContains, []string{"alpha", "beta"})
+	c.Assert(v2.(*zfsVolume).basemount, testutils.DirContains, []string{"alpha", "beta"})
 }
