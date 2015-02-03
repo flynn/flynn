@@ -2,6 +2,7 @@ package volume
 
 import (
 	"encoding/json"
+	"fmt"
 )
 
 /*
@@ -27,3 +28,5 @@ type ProviderSpec struct {
 	// see the ProviderConfig struct in implementation packages for known values.
 	Config json.RawMessage `json:"metadata,omitempty"`
 }
+
+var UnknownProviderKind error = fmt.Errorf("volume provider kind is not known")
