@@ -16,7 +16,7 @@ type identifier interface {
 }
 
 type Stream struct {
-	w         *Writer
+	w         *writer
 	rw        http.ResponseWriter
 	fw        hh.FlushWriter
 	ch        interface{}
@@ -28,7 +28,7 @@ type Stream struct {
 }
 
 func NewStream(w http.ResponseWriter, ch interface{}, l log.Logger) *Stream {
-	sw := NewWriter(w)
+	sw := newWriter(w)
 	return &Stream{
 		rw:        w,
 		w:         sw,
@@ -51,7 +51,7 @@ func (s *Stream) Serve() {
 	s.rw.WriteHeader(200)
 	s.w.Flush()
 
-	s.fw = hh.FlushWriter{Writer: NewWriter(s.rw), Enabled: true}
+	s.fw = hh.FlushWriter{Writer: newWriter(s.rw), Enabled: true}
 
 	if cw, ok := s.rw.(http.CloseNotifier); ok {
 		go func() {
