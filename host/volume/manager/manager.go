@@ -2,6 +2,7 @@ package volumemanager
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/flynn/flynn/host/volume"
@@ -29,12 +30,20 @@ type Manager struct {
 	namedVolumes map[string]string
 }
 
-func New(p volume.Provider) *Manager {
-	return &Manager{
-		providers:    map[string]volume.Provider{"default": p},
-		volumes:      map[string]volume.Volume{},
-		namedVolumes: map[string]string{},
+func New(defProvFn func() (volume.Provider, error)) (*Manager, error) {
+	m := &Manager{
+		providers:    make(map[string]volume.Provider),
+		volumes:      make(map[string]volume.Volume),
+		namedVolumes: make(map[string]string),
 	}
+	if _, ok := m.providers["default"]; !ok {
+		p, err := defProvFn()
+		if err != nil {
+			return nil, fmt.Errorf("could not initialize default provider: %s", err)
+		}
+		m.providers["default"] = p
+	}
+	return m, nil
 }
 
 var NoSuchProvider = errors.New("no such provider")
