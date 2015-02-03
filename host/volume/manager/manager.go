@@ -1,8 +1,9 @@
-package volume
+package volumemanager
 
 import (
-	"errors"
 	"sync"
+
+	"github.com/flynn/flynn/host/volume"
 )
 
 /*
@@ -13,48 +14,45 @@ import (
 type Manager struct {
 	mutex sync.Mutex
 
-	defaultProvider Provider
+	defaultProvider volume.Provider
 
 	// `map[providerName]provider`
 	//
 	// It's possible to configure multiple volume providers for a flynn-host daemon.
 	// This can be used to create volumes using providers backed by different storage resources,
 	// or different volume backends entirely.
-	providers map[string]Provider
+	providers map[string]volume.Provider
 
 	// `map[volume.Id]volume`
-	volumes map[string]Volume
+	volumes map[string]volume.Volume
 
 	// `map[wellKnownName]volume.Id`
 	namedVolumes map[string]string
 }
 
-var NoSuchProvider = errors.New("no such provider")
-var ProviderAlreadyExists = errors.New("that provider id already exists")
-
-func NewManager(p Provider) *Manager {
+func New(p volume.Provider) *Manager {
 	return &Manager{
 		defaultProvider: p,
-		providers:       map[string]Provider{"default": p},
-		volumes:         map[string]Volume{},
+		providers:       map[string]volume.Provider{"default": p},
+		volumes:         map[string]volume.Volume{},
 		namedVolumes:    map[string]string{},
 	}
 }
 
-func (m *Manager) AddProvider(id string, p Provider) error {
+func (m *Manager) AddProvider(id string, p volume.Provider) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	if _, ok := m.providers[id]; ok {
-		return ProviderAlreadyExists
+		return volume.ProviderAlreadyExists
 	}
 	m.providers[id] = p
 	return nil
 }
 
-func (m *Manager) Volumes() map[string]Volume {
+func (m *Manager) Volumes() map[string]volume.Volume {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	r := make(map[string]Volume)
+	r := make(map[string]volume.Volume)
 	for k, v := range m.volumes {
 		r[k] = v
 	}
@@ -65,7 +63,7 @@ func (m *Manager) Volumes() map[string]Volume {
 	volume.Manager implements the volume.Provider interface by
 	delegating NewVolume requests to the default Provider.
 */
-func (m *Manager) NewVolume() (Volume, error) {
+func (m *Manager) NewVolume() (volume.Volume, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	return m.newVolumeFromProviderLocked("")
@@ -75,24 +73,24 @@ func (m *Manager) NewVolume() (Volume, error) {
 	volume.Manager implements the volume.Provider interface by
 	delegating NewVolume requests to the named Provider.
 */
-func (m *Manager) NewVolumeFromProvider(providerID string) (Volume, error) {
+func (m *Manager) NewVolumeFromProvider(providerID string) (volume.Volume, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	return m.newVolumeFromProviderLocked(providerID)
 }
 
-func (m *Manager) newVolumeFromProviderLocked(providerID string) (Volume, error) {
+func (m *Manager) newVolumeFromProviderLocked(providerID string) (volume.Volume, error) {
 	if providerID == "" {
 		return managerProviderProxy{m.defaultProvider, m}.NewVolume()
 	}
 	if p, ok := m.providers[providerID]; ok {
 		return managerProviderProxy{p, m}.NewVolume()
 	} else {
-		return nil, NoSuchProvider
+		return nil, volume.NoSuchProvider
 	}
 }
 
-func (m *Manager) GetVolume(id string) Volume {
+func (m *Manager) GetVolume(id string) volume.Volume {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	return m.volumes[id]
@@ -103,11 +101,11 @@ func (m *Manager) GetVolume(id string) Volume {
 	apprised of all volume lifecycle events.
 */
 type managerProviderProxy struct {
-	Provider
+	volume.Provider
 	m *Manager
 }
 
-func (p managerProviderProxy) NewVolume() (Volume, error) {
+func (p managerProviderProxy) NewVolume() (volume.Volume, error) {
 	v, err := p.Provider.NewVolume()
 	if err != nil {
 		return v, err
@@ -121,7 +119,7 @@ func (p managerProviderProxy) NewVolume() (Volume, error) {
 	it is created using the named provider (the zero string can be used to invoke
 	the default provider).
 */
-func (m *Manager) CreateOrGetNamedVolume(name string, providerID string) (Volume, error) {
+func (m *Manager) CreateOrGetNamedVolume(name string, providerID string) (volume.Volume, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	if v, ok := m.namedVolumes[name]; ok {

@@ -17,7 +17,7 @@ import (
 	"github.com/flynn/flynn/host/ports"
 	"github.com/flynn/flynn/host/sampi"
 	"github.com/flynn/flynn/host/types"
-	"github.com/flynn/flynn/host/volume"
+	"github.com/flynn/flynn/host/volume/manager"
 	zfsVolume "github.com/flynn/flynn/host/volume/zfs"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -173,7 +173,7 @@ func runDaemon(args *docopt.Args) {
 	}
 
 	// create volume manager
-	vman := volume.NewManager(volProv)
+	vman := volumemanager.New(volProv)
 
 	switch backendName {
 	case "libvirt-lxc":
