@@ -15,8 +15,6 @@ import (
 type Manager struct {
 	mutex sync.Mutex
 
-	defaultProvider volume.Provider
-
 	// `map[providerName]provider`
 	//
 	// It's possible to configure multiple volume providers for a flynn-host daemon.
@@ -33,10 +31,9 @@ type Manager struct {
 
 func New(p volume.Provider) *Manager {
 	return &Manager{
-		defaultProvider: p,
-		providers:       map[string]volume.Provider{"default": p},
-		volumes:         map[string]volume.Volume{},
-		namedVolumes:    map[string]string{},
+		providers:    map[string]volume.Provider{"default": p},
+		volumes:      map[string]volume.Volume{},
+		namedVolumes: map[string]string{},
 	}
 }
 
@@ -85,7 +82,7 @@ func (m *Manager) NewVolumeFromProvider(providerID string) (volume.Volume, error
 
 func (m *Manager) newVolumeFromProviderLocked(providerID string) (volume.Volume, error) {
 	if providerID == "" {
-		return managerProviderProxy{m.defaultProvider, m}.NewVolume()
+		providerID = "default"
 	}
 	if p, ok := m.providers[providerID]; ok {
 		return managerProviderProxy{p, m}.NewVolume()
