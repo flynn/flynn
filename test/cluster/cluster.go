@@ -395,6 +395,9 @@ git merge origin/master
 
 docker pull scratch
 
+root_keys="$(tuf --dir test/release root-keys)"
+sed "s/^CONFIG_TUF_ROOT_KEYS=.*$/CONFIG_TUF_ROOT_KEYS=${root_keys}/" -i tup.config
+
 make
 
 if [[ -f test/scripts/debug-info.sh ]]; then
