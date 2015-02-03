@@ -869,6 +869,75 @@ func (s *S) runTestErrorAfterConnOnlyHitsOneBackend(c *C, upgrade bool) {
 	c.Assert(string(data), Equals, "Service Unavailable\n")
 }
 
+func (s *S) TestUpgradeAfterKeepAlive(c *C) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		// empty 200
+	}))
+
+	defer srv.Close()
+
+	l := s.newHTTPListener(c)
+	defer l.Close()
+
+	addHTTPRoute(c, l)
+	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
+
+	conn, err := net.Dial("tcp", l.listener.Addr().String())
+	c.Assert(err, IsNil)
+	defer conn.Close()
+
+	req := newReq("http://"+l.Addr, "example.com")
+	err = req.Write(conn)
+	c.Assert(err, IsNil)
+
+	connReader := bufio.NewReader(conn)
+	res, err := http.ReadResponse(connReader, req)
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 200)
+
+	data, err := ioutil.ReadAll(res.Body)
+	c.Assert(err, IsNil)
+	res.Body.Close()
+	c.Assert(string(data), Equals, "")
+
+	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Connection", "upgrade")
+		w.WriteHeader(101)
+		conn, bufrw, err := w.(http.Hijacker).Hijack()
+		c.Assert(err, IsNil)
+		defer conn.Close()
+
+		bufrw.Write([]byte("data after upgrade"))
+	})
+
+	req = newReq("http://"+l.Addr, "example.com")
+	req.Header.Set("Connection", "upgrade")
+	err = req.Write(conn)
+	c.Assert(err, IsNil)
+
+	res, err = http.ReadResponse(connReader, req)
+	c.Assert(err, IsNil)
+
+	data, err = ioutil.ReadAll(res.Body)
+	c.Assert(err, IsNil)
+	res.Body.Close()
+	c.Assert(res.StatusCode, Equals, 101)
+	c.Assert(string(data), Equals, "")
+
+	datac := make(chan []byte)
+	go func() {
+		data, err = ioutil.ReadAll(connReader)
+		c.Assert(err, IsNil)
+		datac <- data
+	}()
+
+	select {
+	case <-datac:
+	case <-time.After(2 * time.Second):
+		c.Fatal("never received from datac")
+	}
+}
+
 func (s *S) TestClientClosesConnectionBeforeResponse(c *C) {
 	gotReq := make(chan struct{})
 	backendDone := make(chan struct{})
