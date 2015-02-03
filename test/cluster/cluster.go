@@ -149,31 +149,30 @@ func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool, runTests bool) (
 	return build.Drive("hda").FS, nil
 }
 
-func (c *Cluster) Boot(rootFS string, count int, dumpLogs io.Writer, killOnFailure bool) error {
+func (c *Cluster) Boot(rootFS string, count int, dumpLogs io.Writer, killOnFailure bool) (err error) {
 	if err := c.setup(); err != nil {
 		return err
 	}
 
+	defer func() {
+		if err != nil {
+			if dumpLogs != nil && len(c.Instances) > 0 {
+				c.DumpLogs(dumpLogs)
+			}
+			if killOnFailure {
+				c.Shutdown()
+			}
+		}
+	}()
+
 	c.log("Booting", count, "VMs")
-	_, err := c.startVMs(rootFS, true, count)
+	_, err = c.startVMs(rootFS, count, true, true)
 	if err != nil {
-		if dumpLogs != nil && len(c.Instances) > 0 {
-			c.DumpLogs(dumpLogs)
-		}
-		if killOnFailure {
-			c.Shutdown()
-		}
 		return err
 	}
 
 	c.log("Bootstrapping layer 1...")
 	if err := c.bootstrapLayer1(); err != nil {
-		if dumpLogs != nil {
-			c.DumpLogs(dumpLogs)
-		}
-		if killOnFailure {
-			c.Shutdown()
-		}
 		return err
 	}
 	c.rootFS = rootFS
@@ -192,7 +191,13 @@ func (c *Cluster) AddHost() (*Instance, error) {
 		return nil, errors.New("cluster not yet booted")
 	}
 	c.log("Booting 1 VM")
-	instances, err := c.startVMs(c.rootFS, false, 1)
+	instances, err := c.startVMs(c.rootFS, 1, true, false)
+	return instances[0], err
+}
+
+func (c *Cluster) AddVanillaHost(rootFS string) (*Instance, error) {
+	c.log("Booting 1 VM")
+	instances, err := c.startVMs(rootFS, 1, false, false)
 	return instances[0], err
 }
 
@@ -245,7 +250,7 @@ func (c *Cluster) Size() int {
 	return len(c.Instances)
 }
 
-func (c *Cluster) startVMs(rootFS string, initial bool, count int) ([]*Instance, error) {
+func (c *Cluster) startVMs(rootFS string, count int, startFlynnHost, initial bool) ([]*Instance, error) {
 	tmpl, ok := flynnHostScripts[c.bc.Backend]
 	if !ok {
 		return nil, fmt.Errorf("unknown host backend: %s", c.bc.Backend)
@@ -277,6 +282,9 @@ func (c *Cluster) startVMs(rootFS string, initial bool, count int) ([]*Instance,
 		inst.initial = initial
 		instances[i] = inst
 		c.Instances = append(c.Instances, inst)
+	}
+	if !startFlynnHost {
+		return instances, nil
 	}
 	peers := make([]string, 0, len(c.Instances))
 	for _, inst := range c.Instances {

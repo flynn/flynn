@@ -14,7 +14,9 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	tc "github.com/flynn/flynn/test/cluster"
 )
 
 type Helper struct {
@@ -155,6 +157,44 @@ func (h *Helper) stopJob(t *c.C, id string) {
 	hostID, jobID, _ := cluster.ParseJobID(id)
 	hc := h.hostClient(t, hostID)
 	t.Assert(hc.StopJob(jobID), c.IsNil)
+}
+
+func (h *Helper) addHost(t *c.C) *tc.Instance {
+	return h.addHosts(t, 1, false)[0]
+}
+
+func (h *Helper) addVanillaHost(t *c.C) *tc.Instance {
+	return h.addHosts(t, 1, true)[0]
+}
+
+func (h *Helper) addHosts(t *c.C, count int, vanilla bool) []*tc.Instance {
+	debugf(t, "adding %d hosts", count)
+
+	ch := make(chan *host.HostEvent)
+	stream, err := h.clusterClient(t).StreamHostEvents(ch)
+	t.Assert(err, c.IsNil)
+	defer stream.Close()
+
+	hosts := make([]*tc.Instance, count)
+	for i := 0; i < count; i++ {
+		host, err := testCluster.AddHost(ch, vanilla)
+		t.Assert(err, c.IsNil)
+		debugf(t, "host added: %s", host.ID)
+		hosts[i] = host
+	}
+	return hosts
+}
+
+func (h *Helper) removeHost(t *c.C, host *tc.Instance) {
+	h.removeHosts(t, []*tc.Instance{host})
+}
+
+func (h *Helper) removeHosts(t *c.C, hosts []*tc.Instance) {
+	debugf(t, "removing %d hosts", len(hosts))
+	for _, host := range hosts {
+		t.Assert(testCluster.RemoveHost(host), c.IsNil)
+		debugf(t, "host removed: %s", host.ID)
+	}
 }
 
 type gitRepo struct {

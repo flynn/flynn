@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -594,7 +595,7 @@ func (r *Runner) save(b *Build) error {
 	})
 }
 
-type clusterHandle func(c *cluster.Cluster, w http.ResponseWriter, ps httprouter.Params) error
+type clusterHandle func(*cluster.Cluster, http.ResponseWriter, url.Values, httprouter.Params) error
 
 func (r *Runner) clusterAPI(handle clusterHandle) httprouter.Handle {
 	return func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
@@ -609,25 +610,30 @@ func (r *Runner) clusterAPI(handle clusterHandle) httprouter.Handle {
 			http.Error(w, "cluster not found", 404)
 			return
 		}
-		if err := handle(c, w, ps); err != nil {
+		if err := handle(c, w, req.URL.Query(), ps); err != nil {
 			http.Error(w, err.Error(), 500)
 		}
 	}
 }
 
-func (r *Runner) getCluster(c *cluster.Cluster, w http.ResponseWriter, ps httprouter.Params) error {
+func (r *Runner) getCluster(c *cluster.Cluster, w http.ResponseWriter, q url.Values, ps httprouter.Params) error {
 	return json.NewEncoder(w).Encode(c)
 }
 
-func (r *Runner) addHost(c *cluster.Cluster, w http.ResponseWriter, ps httprouter.Params) error {
-	instance, err := c.AddHost()
+func (r *Runner) addHost(c *cluster.Cluster, w http.ResponseWriter, q url.Values, ps httprouter.Params) (err error) {
+	var instance *cluster.Instance
+	if q.Get("vanilla") == "" {
+		instance, err = c.AddHost()
+	} else {
+		instance, err = c.AddVanillaHost(args.RootFS)
+	}
 	if err != nil {
 		return err
 	}
 	return json.NewEncoder(w).Encode(instance)
 }
 
-func (r *Runner) removeHost(c *cluster.Cluster, w http.ResponseWriter, ps httprouter.Params) error {
+func (r *Runner) removeHost(c *cluster.Cluster, w http.ResponseWriter, q url.Values, ps httprouter.Params) error {
 	hostID := ps.ByName("host")
 	if err := c.RemoveHost(hostID); err != nil {
 		return err
@@ -636,7 +642,7 @@ func (r *Runner) removeHost(c *cluster.Cluster, w http.ResponseWriter, ps httpro
 	return nil
 }
 
-func (r *Runner) dumpLogs(c *cluster.Cluster, w http.ResponseWriter, ps httprouter.Params) error {
+func (r *Runner) dumpLogs(c *cluster.Cluster, w http.ResponseWriter, q url.Values, ps httprouter.Params) error {
 	c.DumpLogs(w)
 	return nil
 }
