@@ -15,8 +15,11 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 )
 
-var storageDir = flag.String("s", "", "Path to store files, instead of Postgres")
-var listenPort = flag.String("p", "3001", "Port to listen on")
+var (
+	storageDir       = flag.String("s", "", "Path to store files, instead of Postgres")
+	listenPort       = flag.String("p", "3001", "Port to listen on")
+	serviceDiscovery = flag.Bool("d", true, "Register with service discovery")
+)
 
 func errorResponse(w http.ResponseWriter, err error) {
 	if err == ErrNotFound {
@@ -108,11 +111,13 @@ func main() {
 		storageDesc = "Postgres"
 	}
 
-	hb, err := discoverd.AddServiceAndRegister("blobstore", addr)
-	if err != nil {
-		shutdown.Fatal(err)
+	if *serviceDiscovery {
+		hb, err := discoverd.AddServiceAndRegister("blobstore", addr)
+		if err != nil {
+			shutdown.Fatal(err)
+		}
+		shutdown.BeforeExit(func() { hb.Close() })
 	}
-	shutdown.BeforeExit(func() { hb.Close() })
 
 	log.Println("Blobstore serving files on " + addr + " from " + storageDesc)
 	shutdown.Fatal(http.ListenAndServe(addr, handler(fs)))
