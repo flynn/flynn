@@ -15,10 +15,9 @@ import (
 )
 
 type zfsVolume struct {
-	info   *volume.Info
-	mounts map[volume.VolumeMount]struct{}
-	// FIXME: starting to look better to put this back in the hands of the provider, and making all of the challenges of maintaining entanglement with external state confined to that.
-	poolName  string // The name of the zpool this storage is cut from.  (We need this when forking snapshots, or doing some inspections.)
+	info      *volume.Info
+	provider  *Provider
+	mounts    map[volume.VolumeMount]struct{}
 	basemount string // This is the location of the main mount of the ZFS dataset.  Mounts into containers are bind-mounts pointing back out to this.  The user does not control it (it is essentially an implementation detail).
 }
 
@@ -113,20 +112,24 @@ func NewProvider(config *ProviderConfig) (volume.Provider, error) {
 	}, nil
 }
 
-func (b Provider) NewVolume() (volume.Volume, error) {
+func (b *Provider) NewVolume() (volume.Volume, error) {
 	id := random.UUID()
 	v := &zfsVolume{
 		info:      &volume.Info{ID: id},
+		provider:  b,
 		mounts:    make(map[volume.VolumeMount]struct{}),
-		poolName:  b.config.DatasetName,
 		basemount: filepath.Join("/var/lib/flynn/volumes/zfs/mnt/", id),
 	}
-	if _, err := zfs.CreateFilesystem(path.Join(v.poolName, id), map[string]string{
+	if _, err := zfs.CreateFilesystem(path.Join(v.provider.dataset.Name, id), map[string]string{
 		"mountpoint": v.basemount,
 	}); err != nil {
 		return nil, err
 	}
 	return v, nil
+}
+
+func (v *zfsVolume) Provider() volume.Provider {
+	return v.provider
 }
 
 func (v *zfsVolume) Info() *volume.Info {
@@ -153,11 +156,11 @@ func (v1 *zfsVolume) TakeSnapshot() (volume.Volume, error) {
 	id := random.UUID()
 	v2 := &zfsVolume{
 		info:      &volume.Info{ID: id},
+		provider:  v1.provider,
 		mounts:    make(map[volume.VolumeMount]struct{}),
-		poolName:  v1.poolName,
 		basemount: filepath.Join("/var/lib/flynn/volumes/zfs/", id),
 	}
-	if err := cloneFilesystem(path.Join(v2.poolName, v2.info.ID), path.Join(v1.poolName, v1.info.ID), v2.basemount); err != nil {
+	if err := cloneFilesystem(path.Join(v2.provider.dataset.Name, v2.info.ID), path.Join(v1.provider.dataset.Name, v1.info.ID), v2.basemount); err != nil {
 		return nil, err
 	}
 	return v2, nil
