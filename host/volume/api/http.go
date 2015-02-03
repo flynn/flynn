@@ -68,7 +68,7 @@ func (api *HTTPAPI) CreateProvider(w http.ResponseWriter, r *http.Request, ps ht
 
 	if err := api.vman.AddProvider(pspec.ID, provider); err != nil {
 		switch err {
-		case volume.ProviderAlreadyExists:
+		case volumemanager.ProviderAlreadyExists:
 			httphelper.Error(w, httphelper.JSONError{
 				Code:    httphelper.ObjectExistsError,
 				Message: fmt.Sprintf("provider %q already exists", pspec.ID),
@@ -87,7 +87,7 @@ func (api *HTTPAPI) Create(w http.ResponseWriter, r *http.Request, ps httprouter
 	providerID := ps.ByName("provider_id")
 
 	vol, err := api.vman.NewVolumeFromProvider(providerID)
-	if err == volume.NoSuchProvider {
+	if err == volumemanager.NoSuchProvider {
 		httphelper.Error(w, httphelper.JSONError{
 			Code:    httphelper.ObjectNotFoundError,
 			Message: fmt.Sprintf("No volume provider by id %q", providerID),

@@ -2,7 +2,6 @@ package volume
 
 import (
 	"encoding/json"
-	"errors"
 )
 
 /*
@@ -28,6 +27,3 @@ type ProviderSpec struct {
 	// see the ProviderConfig struct in implementation packages for known values.
 	Config json.RawMessage `json:"metadata,omitempty"`
 }
-
-var NoSuchProvider = errors.New("no such provider")
-var ProviderAlreadyExists = errors.New("that provider id already exists")

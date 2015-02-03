@@ -1,6 +1,7 @@
 package volumemanager
 
 import (
+	"errors"
 	"sync"
 
 	"github.com/flynn/flynn/host/volume"
@@ -39,11 +40,14 @@ func New(p volume.Provider) *Manager {
 	}
 }
 
+var NoSuchProvider = errors.New("no such provider")
+var ProviderAlreadyExists = errors.New("that provider id already exists")
+
 func (m *Manager) AddProvider(id string, p volume.Provider) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	if _, ok := m.providers[id]; ok {
-		return volume.ProviderAlreadyExists
+		return ProviderAlreadyExists
 	}
 	m.providers[id] = p
 	return nil
@@ -86,7 +90,7 @@ func (m *Manager) newVolumeFromProviderLocked(providerID string) (volume.Volume,
 	if p, ok := m.providers[providerID]; ok {
 		return managerProviderProxy{p, m}.NewVolume()
 	} else {
-		return nil, volume.NoSuchProvider
+		return nil, NoSuchProvider
 	}
 }
 
