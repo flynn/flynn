@@ -117,7 +117,8 @@ apt-get install -y \
   ubuntu-zfs \
   btrfs-tools \
   libvirt-dev \
-  libvirt-bin
+  libvirt-bin \
+  inotify-tools
 
 # install flynn test dependencies: postgres
 # (normally this is used via an appliance; this is for unit tests)
