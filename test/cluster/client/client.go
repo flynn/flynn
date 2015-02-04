@@ -45,26 +45,33 @@ func (c *Client) BackoffPeriod() time.Duration {
 	return c.cluster.BackoffPeriod
 }
 
-func (c *Client) AddHost(ch chan *host.HostEvent) (string, error) {
+func (c *Client) AddHost(ch chan *host.HostEvent, vanilla bool) (*tc.Instance, error) {
 	var instance tc.Instance
-	if err := c.Post("", nil, &instance); err != nil {
-		return "", err
+	path := ""
+	if vanilla {
+		path = "?vanilla=true"
+	}
+	if err := c.Post(path, nil, &instance); err != nil {
+		return nil, err
 	}
 	c.cluster.Instances = append(c.cluster.Instances, &instance)
+	if vanilla {
+		return &instance, nil
+	}
 	for {
 		select {
 		case event := <-ch:
 			if event.HostID == instance.ID {
-				return instance.ID, nil
+				return &instance, nil
 			}
 		case <-time.After(60 * time.Second):
-			return "", fmt.Errorf("timed out waiting for new host")
+			return nil, fmt.Errorf("timed out waiting for new host")
 		}
 	}
 }
 
-func (c *Client) RemoveHost(id string) error {
-	return c.Delete("/" + id)
+func (c *Client) RemoveHost(host *tc.Instance) error {
+	return c.Delete("/" + host.ID)
 }
 
 func (c *Client) DumpLogs(out io.Writer) error {

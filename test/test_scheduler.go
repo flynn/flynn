@@ -9,7 +9,6 @@ import (
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/stream"
@@ -25,32 +24,6 @@ func (s *SchedulerSuite) checkJobState(t *c.C, appID, jobID, state string) {
 	job, err := s.controllerClient(t).GetJob(appID, jobID)
 	t.Assert(err, c.IsNil)
 	t.Assert(job.State, c.Equals, state)
-}
-
-func (s *SchedulerSuite) addHosts(t *c.C, count int) []string {
-	debugf(t, "adding %d hosts", count)
-
-	ch := make(chan *host.HostEvent)
-	stream, err := s.clusterClient(t).StreamHostEvents(ch)
-	t.Assert(err, c.IsNil)
-	defer stream.Close()
-
-	hostIDs := make([]string, count)
-	for i := 0; i < count; i++ {
-		id, err := testCluster.AddHost(ch)
-		t.Assert(err, c.IsNil)
-		debugf(t, "host added: %s", id)
-		hostIDs[i] = id
-	}
-	return hostIDs
-}
-
-func (s *SchedulerSuite) removeHosts(t *c.C, ids []string) {
-	debugf(t, "removing %d hosts", len(ids))
-	for _, id := range ids {
-		t.Assert(testCluster.RemoveHost(id), c.IsNil)
-		debugf(t, "host removed: %s", id)
-	}
 }
 
 func jobEventsEqual(expected, actual jobEvents) bool {
@@ -395,7 +368,7 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 	}
 
 	// Check that new hosts get omni jobs
-	newHosts := s.addHosts(t, 2)
+	newHosts := s.addHosts(t, 2, false)
 	defer s.removeHosts(t, newHosts)
 	waitForJobEvents(t, stream, events, jobEvents{"omni": {"up": 2}})
 }
