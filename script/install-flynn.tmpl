@@ -65,18 +65,19 @@ main() {
   info "downloading flynn-host binary to tmp dir"
   local tmp="$(mktemp --directory)"
   trap "rm -rf ${tmp}" EXIT
-  if ! curl -sL --fail -o "${tmp}/flynn-host" "${repo_url}/tuf/targets/${FLYNN_HOST_CHECKSUM}.flynn-host"; then
+  if ! curl -sL --fail -o "${tmp}/flynn-host.gz" "${repo_url}/tuf/targets/${FLYNN_HOST_CHECKSUM}.flynn-host.gz"; then
     fail "failed to download flynn-host binary from ${repo_url}"
   fi
 
   info "verifying flynn-host binary checksum"
   pushd "${tmp}" >/dev/null
-  if ! echo "${FLYNN_HOST_CHECKSUM} *flynn-host" | sha512sum --check --status; then
+  if ! echo "${FLYNN_HOST_CHECKSUM} *flynn-host.gz" | sha512sum --check --status; then
     fail "failed to verify flynn-host binary checksum!"
   fi
   popd >/dev/null
 
   info "moving verified flynn-host binary to /usr/bin"
+  gunzip "${tmp}/flynn-host.gz"
   mv "${tmp}/flynn-host" /usr/bin/flynn-host
   chmod +x /usr/bin/flynn-host
 

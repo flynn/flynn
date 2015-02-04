@@ -1,6 +1,7 @@
 package pinkerton
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -174,14 +175,20 @@ func PullImages(tufDB, repository, driver, root string, progress chan<- layer.Pu
 }
 
 func PullImagesWithClient(client *tuf.Client, repository, driver, root string, progress chan<- layer.PullInfo) error {
-	tmp, err := tufutil.Download(client, "/version.json")
+	tmp, err := tufutil.Download(client, "/version.json.gz")
 	if err != nil {
 		return err
 	}
 	defer tmp.Close()
 
+	gz, err := gzip.NewReader(tmp)
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+
 	var versions map[string]string
-	if err := json.NewDecoder(tmp).Decode(&versions); err != nil {
+	if err := json.NewDecoder(gz).Decode(&versions); err != nil {
 		return err
 	}
 
