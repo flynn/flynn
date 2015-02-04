@@ -18,8 +18,9 @@ var (
 	errNoBackends = errors.New("router: no backends available")
 
 	httpTransport = &http.Transport{
-		Dial:                customDial,
-		TLSHandshakeTimeout: 10 * time.Second, // unused, but safer to leave default in place
+		Dial: customDial,
+		ResponseHeaderTimeout: 120 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second, // unused, but safer to leave default in place
 	}
 
 	dialer = &net.Dialer{
@@ -64,8 +65,6 @@ func (t *transport) setStickyBackend(res *http.Response, originalStickyBackend s
 	}
 }
 
-// always sets the response.Request.URL.Host to the last backend that was
-// connected to.
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// http.Transport closes the request body on a failed dial, issue #875
 	req.Body = &fakeCloseReadCloser{req.Body}
@@ -88,7 +87,7 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return nil, errNoBackends
 }
 
-func (t *transport) Connect(remoteAddr net.Addr) (net.Conn, error) {
+func (t *transport) Connect() (net.Conn, error) {
 	backends := t.getOrderedBackends("")
 	conn, _, err := dialTCP(backends)
 	return conn, err
