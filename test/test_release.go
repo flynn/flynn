@@ -41,6 +41,9 @@ export GIT_DIRTY=false
 
   pushd "${src}" >/dev/null
 
+  root_keys="$(tuf --dir test/release root-keys)"
+  sed "s/^CONFIG_TUF_ROOT_KEYS=.*$/CONFIG_TUF_ROOT_KEYS=${root_keys}/" -i tup.config
+
   # rebuild layer 0 components
   rebuild=(
     "host/bin/flynn-host"
