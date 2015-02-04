@@ -31,13 +31,13 @@ main() {
 
   cd "${tuf_dir}"
   tuf clean
-  cp "${ROOT}/host/bin/flynn-host"         "staged/targets/flynn-host"
-  cp "${ROOT}/host/bin/flynn-init"         "staged/targets/flynn-init"
-  cp "${ROOT}/cli/flynn-cli"               "staged/targets/flynn-linux-amd64"
-  cp "${ROOT}/host/upstart.conf"           "staged/targets/upstart.conf"
-  cp "${ROOT}/host/bin/manifest.json"      "staged/targets/host-manifest.json"
-  cp "${ROOT}/bootstrap/bin/manifest.json" "staged/targets/bootstrap-manifest.json"
-  cp "${ROOT}/version.json"                "staged/targets/version.json"
+  cp "${ROOT}/host/bin/flynn-host.gz"                      "staged/targets/flynn-host.gz"
+  gzip -9 --stdout "${ROOT}/host/bin/flynn-init"         > "staged/targets/flynn-init.gz"
+  gzip -9 --stdout "${ROOT}/cli/flynn-cli"               > "staged/targets/flynn-linux-amd64.gz"
+  gzip -9 --stdout "${ROOT}/host/upstart.conf"           > "staged/targets/upstart.conf.gz"
+  gzip -9 --stdout "${ROOT}/host/bin/manifest.json"      > "staged/targets/host-manifest.json.gz"
+  gzip -9 --stdout "${ROOT}/bootstrap/bin/manifest.json" > "staged/targets/bootstrap-manifest.json.gz"
+  gzip -9 --stdout "${ROOT}/version.json"                > "staged/targets/version.json.gz"
   "${ROOT}/util/release/flynn-release" export "${ROOT}/version.json" "staged/targets"
   tuf add
   tuf snapshot
