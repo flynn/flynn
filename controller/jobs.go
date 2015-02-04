@@ -279,8 +279,11 @@ func (c *controllerAPI) JobLog(ctx context.Context, w http.ResponseWriter, req *
 			return
 		}
 		if tail {
-			ch <- &sseLogChunk{Event: "exit", Data: []byte(fmt.Sprintf(`{"status": %d}`, exit))}
-			return
+			// Send eof if we don't know the exit code
+			if exit != -1 {
+				ch <- &sseLogChunk{Event: "exit", Data: []byte(fmt.Sprintf(`{"status": %d}`, exit))}
+				return
+			}
 		}
 		ch <- &sseLogChunk{Event: "eof"}
 	} else {

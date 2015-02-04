@@ -35,7 +35,7 @@ var AppJobs = Dashboard.Stores.AppJobs = Dashboard.Store.createClass({
 		if (event.name === "JOB_EXIT") {
 			var hasChanges = false;
 			this.state.processes.forEach(function (process) {
-				if (process.id === event.jobId) {
+				if (process.id === event.jobId && event.status !== undefined) {
 					hasChanges = true;
 					process.state = event.status === 0 ? "down" : "crashed";
 				}
