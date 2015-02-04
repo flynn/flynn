@@ -493,7 +493,11 @@ func (s *S) TestConnectionHeaders(c *C) {
 
 func (s *S) TestHTTPWebsocket(c *C) {
 	done := make(chan struct{})
-	srv := httptest.NewServer(
+	h := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != "/websocket" {
+			w.Write([]byte("not a websocket upgrade\n"))
+			return
+		}
 		websocket.Handler(func(conn *websocket.Conn) {
 			_, err := conn.Write([]byte("1"))
 			c.Assert(err, IsNil)
@@ -501,9 +505,10 @@ func (s *S) TestHTTPWebsocket(c *C) {
 			_, err = conn.Read(res)
 			c.Assert(err, IsNil)
 			c.Assert(res[0], Equals, byte('2'))
-			close(done)
-		}),
-	)
+			done <- struct{}{}
+		}).ServeHTTP(w, req)
+	})
+	srv := httptest.NewServer(h)
 	defer srv.Close()
 
 	l := s.newHTTPListener(c)
@@ -513,20 +518,44 @@ func (s *S) TestHTTPWebsocket(c *C) {
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())
 
-	conn, err := net.Dial("tcp", l.Addr)
-	c.Assert(err, IsNil)
-	defer conn.Close()
-	conf, err := websocket.NewConfig("ws://example.com", "http://example.net")
-	c.Assert(err, IsNil)
-	wc, err := websocket.NewClient(conf, conn)
-	c.Assert(err, IsNil)
+	tests := []struct {
+		afterKeepAlive bool
+	}{
+		{afterKeepAlive: false},
+		{afterKeepAlive: true}, // ensure that upgrade still works on reused conn
+	}
+	for _, test := range tests {
+		conn, err := net.Dial("tcp", l.Addr)
+		c.Assert(err, IsNil)
+		defer conn.Close()
 
-	res := make([]byte, 1)
-	_, err = wc.Read(res)
-	c.Assert(err, IsNil)
-	c.Assert(res[0], Equals, byte('1'))
-	_, err = wc.Write([]byte("2"))
-	c.Assert(err, IsNil)
+		if test.afterKeepAlive {
+			req, err := http.NewRequest("GET", "http://example.com", nil)
+			c.Assert(err, IsNil)
+			err = req.Write(conn)
+			c.Assert(err, IsNil)
+			res, err := http.ReadResponse(bufio.NewReader(conn), req)
+			c.Assert(err, IsNil)
+			data, err := ioutil.ReadAll(res.Body)
+			c.Assert(err, IsNil)
+			res.Body.Close()
+			c.Assert(res.StatusCode, Equals, 200)
+			c.Assert(string(data), Equals, "not a websocket upgrade\n")
+		}
+
+		conf, err := websocket.NewConfig("ws://example.com/websocket", "http://example.net")
+		c.Assert(err, IsNil)
+		wc, err := websocket.NewClient(conf, conn)
+		c.Assert(err, IsNil)
+
+		res := make([]byte, 1)
+		_, err = wc.Read(res)
+		c.Assert(err, IsNil)
+		c.Assert(res[0], Equals, byte('1'))
+		_, err = wc.Write([]byte("2"))
+		c.Assert(err, IsNil)
+		<-done
+	}
 }
 
 func (s *S) TestUpgradeHeaderIsCaseInsensitive(c *C) {
@@ -781,6 +810,9 @@ func (s *S) TestClosedBackendRetriesAnotherBackend(c *C) {
 		}
 		req, _ := http.NewRequest(test.method, "http://"+l.Addr, body)
 		req.Host = "example.com"
+		if test.upgrade {
+			req.Header.Set("Connection", "upgrade")
+		}
 		// add cookies to stick to srv1
 		for _, cookie := range cookies {
 			req.AddCookie(cookie)
@@ -794,6 +826,8 @@ func (s *S) TestClosedBackendRetriesAnotherBackend(c *C) {
 		data, err := ioutil.ReadAll(res.Body)
 		c.Assert(err, IsNil)
 		c.Assert(string(data), Equals, "2")
+		// ensure that unsuccessful upgrades are closed, and non-upgrades aren't.
+		c.Assert(res.Close, Equals, test.upgrade)
 	}
 	for _, test := range tests {
 		runTest(test)
