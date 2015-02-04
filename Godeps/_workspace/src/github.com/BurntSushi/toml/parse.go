@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -66,7 +67,7 @@ func parse(data string) (p *parser, err error) {
 }
 
 func (p *parser) panicf(format string, v ...interface{}) {
-	msg := fmt.Sprintf("Near line %d, key '%s': %s",
+	msg := fmt.Sprintf("Near line %d (last key parsed '%s'): %s",
 		p.approxLine, p.current(), fmt.Sprintf(format, v...))
 	panic(parseError(msg))
 }
@@ -74,7 +75,7 @@ func (p *parser) panicf(format string, v ...interface{}) {
 func (p *parser) next() item {
 	it := p.lx.nextItem()
 	if it.typ == itemError {
-		p.panicf("Near line %d: %s", it.line, it.val)
+		p.panicf("%s", it.val)
 	}
 	return it
 }
@@ -101,12 +102,12 @@ func (p *parser) topLevel(item item) {
 		p.approxLine = item.line
 		p.expect(itemText)
 	case itemTableStart:
-		kg := p.expect(itemText)
+		kg := p.next()
 		p.approxLine = kg.line
 
-		key := make(Key, 0)
-		for ; kg.typ == itemText; kg = p.next() {
-			key = append(key, kg.val)
+		var key Key
+		for ; kg.typ != itemTableEnd && kg.typ != itemEOF; kg = p.next() {
+			key = append(key, p.keyString(kg))
 		}
 		p.assertEqual(itemTableEnd, kg.typ)
 
@@ -114,12 +115,12 @@ func (p *parser) topLevel(item item) {
 		p.setType("", tomlHash)
 		p.ordered = append(p.ordered, key)
 	case itemArrayTableStart:
-		kg := p.expect(itemText)
+		kg := p.next()
 		p.approxLine = kg.line
 
-		key := make(Key, 0)
-		for ; kg.typ == itemText; kg = p.next() {
-			key = append(key, kg.val)
+		var key Key
+		for ; kg.typ != itemArrayTableEnd && kg.typ != itemEOF; kg = p.next() {
+			key = append(key, p.keyString(kg))
 		}
 		p.assertEqual(itemArrayTableEnd, kg.typ)
 
@@ -127,18 +128,32 @@ func (p *parser) topLevel(item item) {
 		p.setType("", tomlArrayHash)
 		p.ordered = append(p.ordered, key)
 	case itemKeyStart:
-		kname := p.expect(itemText)
-		p.currentKey = kname.val
+		kname := p.next()
 		p.approxLine = kname.line
+		p.currentKey = p.keyString(kname)
 
 		val, typ := p.value(p.next())
 		p.setValue(p.currentKey, val)
 		p.setType(p.currentKey, typ)
 		p.ordered = append(p.ordered, p.context.add(p.currentKey))
-
 		p.currentKey = ""
 	default:
 		p.bug("Unexpected type at top level: %s", item.typ)
+	}
+}
+
+// Gets a string for a key (or part of a key in a table name).
+func (p *parser) keyString(it item) string {
+	switch it.typ {
+	case itemText:
+		return it.val
+	case itemString, itemMultilineString,
+		itemRawString, itemRawMultilineString:
+		s, _ := p.value(it)
+		return s.(string)
+	default:
+		p.bug("Unexpected key type: %s", it.typ)
+		panic("unreachable")
 	}
 }
 
@@ -147,7 +162,14 @@ func (p *parser) topLevel(item item) {
 func (p *parser) value(it item) (interface{}, tomlType) {
 	switch it.typ {
 	case itemString:
-		return p.replaceUnicode(replaceEscapes(it.val)), p.typeOfPrimitive(it)
+		return p.replaceEscapes(it.val), p.typeOfPrimitive(it)
+	case itemMultilineString:
+		trimmed := stripFirstNewline(stripEscapedWhitespace(it.val))
+		return p.replaceEscapes(trimmed), p.typeOfPrimitive(it)
+	case itemRawString:
+		return it.val, p.typeOfPrimitive(it)
+	case itemRawMultilineString:
+		return stripFirstNewline(it.val), p.typeOfPrimitive(it)
 	case itemBool:
 		switch it.val {
 		case "true":
@@ -352,7 +374,8 @@ func (p *parser) addImplicit(key Key) {
 	p.implicits[key.String()] = true
 }
 
-// removeImplicit stops tagging the given key as having been implicitly created.
+// removeImplicit stops tagging the given key as having been implicitly
+// created.
 func (p *parser) removeImplicit(key Key) {
 	p.implicits[key.String()] = false
 }
@@ -374,31 +397,85 @@ func (p *parser) current() string {
 	return fmt.Sprintf("%s.%s", p.context, p.currentKey)
 }
 
-func replaceEscapes(s string) string {
-	return strings.NewReplacer(
-		"\\b", "\u0008",
-		"\\t", "\u0009",
-		"\\n", "\u000A",
-		"\\f", "\u000C",
-		"\\r", "\u000D",
-		"\\\"", "\u0022",
-		"\\/", "\u002F",
-		"\\\\", "\u005C",
-	).Replace(s)
+func stripFirstNewline(s string) string {
+	if len(s) == 0 || s[0] != '\n' {
+		return s
+	}
+	return s[1:len(s)]
 }
 
-func (p *parser) replaceUnicode(s string) string {
-	indexEsc := func() int {
-		return strings.Index(s, "\\u")
+func stripEscapedWhitespace(s string) string {
+	esc := strings.Split(s, "\\\n")
+	if len(esc) > 1 {
+		for i := 1; i < len(esc); i++ {
+			esc[i] = strings.TrimLeftFunc(esc[i], unicode.IsSpace)
+		}
 	}
-	for i := indexEsc(); i != -1; i = indexEsc() {
-		asciiBytes := s[i+2 : i+6]
-		s = strings.Replace(s, s[i:i+6], p.asciiEscapeToUnicode(asciiBytes), -1)
-	}
-	return s
+	return strings.Join(esc, "")
 }
 
-func (p *parser) asciiEscapeToUnicode(s string) string {
+func (p *parser) replaceEscapes(str string) string {
+	var replaced []rune
+	s := []byte(str)
+	r := 0
+	for r < len(s) {
+		if s[r] != '\\' {
+			c, size := utf8.DecodeRune(s[r:])
+			r += size
+			replaced = append(replaced, c)
+			continue
+		}
+		r += 1
+		if r >= len(s) {
+			p.bug("Escape sequence at end of string.")
+			return ""
+		}
+		switch s[r] {
+		default:
+			p.bug("Expected valid escape code after \\, but got %q.", s[r])
+			return ""
+		case 'b':
+			replaced = append(replaced, rune(0x0008))
+			r += 1
+		case 't':
+			replaced = append(replaced, rune(0x0009))
+			r += 1
+		case 'n':
+			replaced = append(replaced, rune(0x000A))
+			r += 1
+		case 'f':
+			replaced = append(replaced, rune(0x000C))
+			r += 1
+		case 'r':
+			replaced = append(replaced, rune(0x000D))
+			r += 1
+		case '"':
+			replaced = append(replaced, rune(0x0022))
+			r += 1
+		case '\\':
+			replaced = append(replaced, rune(0x005C))
+			r += 1
+		case 'u':
+			// At this point, we know we have a Unicode escape of the form
+			// `uXXXX` at [r, r+5). (Because the lexer guarantees this
+			// for us.)
+			escaped := p.asciiEscapeToUnicode(s[r+1 : r+5])
+			replaced = append(replaced, escaped)
+			r += 5
+		case 'U':
+			// At this point, we know we have a Unicode escape of the form
+			// `uXXXX` at [r, r+9). (Because the lexer guarantees this
+			// for us.)
+			escaped := p.asciiEscapeToUnicode(s[r+1 : r+9])
+			replaced = append(replaced, escaped)
+			r += 9
+		}
+	}
+	return string(replaced)
+}
+
+func (p *parser) asciiEscapeToUnicode(bs []byte) rune {
+	s := string(bs)
 	hex, err := strconv.ParseUint(strings.ToLower(s), 16, 32)
 	if err != nil {
 		p.bug("Could not parse '%s' as a hexadecimal number, but the "+
@@ -409,9 +486,13 @@ func (p *parser) asciiEscapeToUnicode(s string) string {
 	// I honestly don't understand how this works. I can't seem
 	// to find a way to make this fail. I figured this would fail on invalid
 	// UTF-8 characters like U+DCFF, but it doesn't.
-	r := string(rune(hex))
-	if !utf8.ValidString(r) {
+	if !utf8.ValidString(string(rune(hex))) {
 		p.panicf("Escaped character '\\u%s' is not valid UTF-8.", s)
 	}
-	return string(r)
+	return rune(hex)
+}
+
+func isStringType(ty itemType) bool {
+	return ty == itemString || ty == itemMultilineString ||
+		ty == itemRawString || ty == itemRawMultilineString
 }
