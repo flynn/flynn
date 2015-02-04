@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kavu/go_reuseport"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/tlsconfig"
 	"github.com/flynn/flynn/router/proxy"
@@ -308,13 +310,15 @@ func fail(w http.ResponseWriter, code int) {
 }
 
 func (s *HTTPListener) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	ctx := context.Background()
+	ctx = ctxhelper.NewContextStartTime(ctx, time.Now())
 	r := s.findRouteForHost(req.Host)
 	if r == nil {
 		fail(w, 404)
 		return
 	}
 
-	r.service.ServeHTTP(w, req)
+	r.service.ServeHTTP(ctx, w, req)
 }
 
 // A domain served by a listener, associated TLS certs,
@@ -335,11 +339,12 @@ type httpService struct {
 	rp *proxy.ReverseProxy
 }
 
-func (s *httpService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	req.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10))
+func (s *httpService) ServeHTTP(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	start, _ := ctxhelper.StartTimeFromContext(ctx)
+	req.Header.Set("X-Request-Start", strconv.FormatInt(start.UnixNano()/int64(time.Millisecond), 10))
 	req.Header.Set("X-Request-Id", random.UUID())
 
-	s.rp.ServeHTTP(w, req)
+	s.rp.ServeHTTP(ctx, w, req)
 }
 
 func mustPortFromAddr(addr string) string {

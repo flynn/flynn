@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 )
 
 const (
@@ -71,7 +73,7 @@ func NewReverseProxy(bf BackendListFunc, stickyKey *[32]byte, sticky bool) *Reve
 }
 
 // ServeHTTP implements http.Handler.
-func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+func (p *ReverseProxy) ServeHTTP(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
 	transport := p.transport
 	if transport == nil {
 		panic("router: nil transport for proxy")
@@ -84,8 +86,24 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	res, err := transport.RoundTrip(outreq)
+	clientGone := rw.(http.CloseNotifier).CloseNotify()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel() // tells cancellation goroutine to exit
+
+	go func() {
+		select {
+		case <-clientGone:
+			cancel() // client went away, cancel request
+		case <-ctx.Done():
+		}
+	}()
+
+	res, err := transport.RoundTrip(ctx, outreq)
 	if err != nil {
+		if err == errRequestCanceled {
+			// TODO(bgentry): anything special to log here?
+			return
+		}
 		p.logf("router: proxy error: %v", err)
 		rw.WriteHeader(http.StatusServiceUnavailable)
 		rw.Write(serviceUnavailable)
@@ -97,20 +115,21 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 }
 
 // ServeConn takes an inbound conn and proxies it to a backend.
-func (p *ReverseProxy) ServeConn(conn net.Conn) {
+func (p *ReverseProxy) ServeConn(dconn net.Conn) {
 	transport := p.transport
 	if transport == nil {
 		panic("router: nil transport for proxy")
 	}
-	defer conn.Close()
+	defer dconn.Close()
 
-	dconn, err := transport.Connect(conn.RemoteAddr())
+	uconn, err := transport.Connect()
 	if err != nil {
 		p.logf("router: proxy error: %v", err)
 		return
 	}
+	defer uconn.Close()
 
-	joinConns(conn, dconn)
+	joinConns(uconn, dconn)
 }
 
 func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, req *http.Request) {
@@ -140,6 +159,7 @@ func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, req *http.Request) {
 		p.logf("router: hijack failed: %v", err)
 		return
 	}
+	defer dconn.Close()
 	joinConns(uconn, &streamConn{bufrw.Reader, dconn})
 }
 
