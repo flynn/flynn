@@ -136,7 +136,7 @@ func (c *attachClient) Wait() error {
 func (c *attachClient) Receive(stdout, stderr io.Writer) (int, error) {
 	if c.wait != nil {
 		if err := c.wait(); err != nil {
-			return 0, err
+			return -1, err
 		}
 		c.mtx.Unlock()
 	}
@@ -148,31 +148,31 @@ func (c *attachClient) Receive(stdout, stderr io.Writer) (int, error) {
 			if err == io.EOF && stdout == nil && stderr == nil {
 				err = nil
 			}
-			return 0, err
+			return -1, err
 		}
 		switch frameType {
 		case host.AttachData:
 			stream, err := r.ReadByte()
 			if err != nil {
-				return 0, err
+				return -1, err
 			}
 			var out *io.Writer
 			switch stream {
 			case 1:
 				if stdout == nil {
-					return 0, errors.New("attach: got frame for stdout, but no writer available")
+					return -1, errors.New("attach: got frame for stdout, but no writer available")
 				}
 				out = &stdout
 			case 2:
 				if stderr == nil {
-					return 0, errors.New("attach: got frame for stderr, but no writer available")
+					return -1, errors.New("attach: got frame for stderr, but no writer available")
 				}
 				out = &stderr
 			default:
-				return 0, fmt.Errorf("attach: unknown stream %d", stream)
+				return -1, fmt.Errorf("attach: unknown stream %d", stream)
 			}
 			if _, err := io.ReadFull(r, buf[:]); err != nil {
-				return 0, err
+				return -1, err
 			}
 			length := int64(binary.BigEndian.Uint32(buf[:]))
 			if length == 0 {
@@ -180,23 +180,23 @@ func (c *attachClient) Receive(stdout, stderr io.Writer) (int, error) {
 				continue
 			}
 			if _, err := io.CopyN(*out, r, length); err != nil {
-				return 0, err
+				return -1, err
 			}
 		case host.AttachExit:
 			if _, err := io.ReadFull(r, buf[:]); err != nil {
-				return 0, err
+				return -1, err
 			}
 			return int(binary.BigEndian.Uint32(buf[:])), nil
 		case host.AttachError:
 			if _, err := io.ReadFull(r, buf[:]); err != nil {
-				return 0, err
+				return -1, err
 			}
 			length := int64(binary.BigEndian.Uint32(buf[:]))
 			errBytes := make([]byte, length)
 			if _, err := io.ReadFull(r, errBytes); err != nil {
-				return 0, err
+				return -1, err
 			}
-			return 0, errors.New(string(errBytes))
+			return -1, errors.New(string(errBytes))
 		}
 	}
 }
