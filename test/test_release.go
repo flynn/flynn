@@ -35,11 +35,14 @@ export GIT_DIRTY=false
 # send all output to stderr so only version.json is output to stdout
 (
   # tup hangs waiting on the FUSE socket after building the components, so
-  # for now we just kill the connection ater an appropriate amount of time.
+  # for now we just kill the connection once the host manifest has been generated.
   # See https://github.com/flynn/flynn/issues/949
-  (sleep 30; sudo bash -c 'echo 1 > /sys/fs/fuse/connections/*/abort') &
+  (inotifywait --event modify host/bin/manifest.json; sudo bash -c 'echo 1 > /sys/fs/fuse/connections/*/abort') &
 
   pushd "${src}" >/dev/null
+
+  root_keys="$(tuf --dir test/release root-keys)"
+  sed "s/^CONFIG_TUF_ROOT_KEYS=.*$/CONFIG_TUF_ROOT_KEYS=${root_keys}/" -i tup.config
 
   # rebuild layer 0 components
   rebuild=(
