@@ -137,6 +137,12 @@ curl -L j.mp/godeb | tar xz
 ./godeb install 1.4.1
 rm godeb
 
+# install go-tuf
+export GOPATH="$(mktemp --directory)"
+trap "rm -rf ${GOPATH}" EXIT
+go get github.com/flynn/go-tuf/cmd/tuf
+mv "${GOPATH}/bin/tuf" /usr/bin/tuf
+
 # cleanup
 apt-get autoremove -y
 apt-get clean
