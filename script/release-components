@@ -135,9 +135,9 @@ main() {
 
   info "uploading files to S3"
   mkdir -p "${dir}/upload"
-  ln -s "${src}/script/install-flynn" "${dir}/upload/install-flynn"
-  ln -s "${src}/script/install-flynn" "${dir}/upload/install-flynn-${version}"
-  ln -s "${tuf_dir}/repository" "${dir}/upload/tuf"
+  ln -fs "${src}/script/install-flynn" "${dir}/upload/install-flynn"
+  ln -fs "${src}/script/install-flynn" "${dir}/upload/install-flynn-${version}"
+  ln -fs "${tuf_dir}/repository" "${dir}/upload/tuf"
   sync_cloudfront "${dir}/upload/" "s3://${bucket}/"
 
   info "successfully released components for version ${version}"
