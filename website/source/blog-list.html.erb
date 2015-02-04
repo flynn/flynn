@@ -1,7 +1,5 @@
 ---
 title: Blog
-pageable: true
-per_page: 5
 ---
 
 <div class="content narrow">
@@ -11,14 +9,7 @@ per_page: 5
         <time datetime="<%= article.date.to_s.to_time.iso8601 %>"><%= article.date.strftime('%b %e, %Y') %></time>
         <h1><%= link_to article.title, article.url %></h1>
       </header>
-
-      <%= article.body %>
     </article>
-  <% end %>
-
-  <% if paginate %>
-    <br /> <br />
-    <%= partial 'blog_pagination', :locals => locals %>
   <% end %>
 
   <br /> <br />
