@@ -10,7 +10,14 @@ type tomlType interface {
 
 // typeEqual accepts any two types and returns true if they are equal.
 func typeEqual(t1, t2 tomlType) bool {
+	if t1 == nil || t2 == nil {
+		return false
+	}
 	return t1.typeString() == t2.typeString()
+}
+
+func typeIsHash(t tomlType) bool {
+	return typeEqual(t, tomlHash) || typeEqual(t, tomlArrayHash)
 }
 
 type tomlBaseType string
@@ -49,6 +56,12 @@ func (p *parser) typeOfPrimitive(lexItem item) tomlType {
 		return tomlDatetime
 	case itemString:
 		return tomlString
+	case itemMultilineString:
+		return tomlString
+	case itemRawString:
+		return tomlString
+	case itemRawMultilineString:
+		return tomlString
 	case itemBool:
 		return tomlBool
 	}
@@ -70,8 +83,8 @@ func (p *parser) typeOfArray(types []tomlType) tomlType {
 	theType := types[0]
 	for _, t := range types[1:] {
 		if !typeEqual(theType, t) {
-			p.panicf("Array contains values of type '%s' and '%s', but arrays "+
-				"must be homogeneous.", theType, t)
+			p.panicf("Array contains values of type '%s' and '%s', but "+
+				"arrays must be homogeneous.", theType, t)
 		}
 	}
 	return tomlArray
