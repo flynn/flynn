@@ -135,11 +135,6 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 	app := c.getApp(ctx)
 
 	// TODO: wrap all of this in a transaction
-	fs, err := c.formationRepo.List(app.ID)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
 	oldRelease, err := c.appRepo.GetRelease(app.ID)
 	if err == ErrNotFound {
 		oldRelease = &ct.Release{}
@@ -147,6 +142,18 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 		respondWithError(w, err)
 		return
 	}
+	oldFormation, err := c.formationRepo.Get(app.ID, oldRelease.ID)
+	if err == ErrNotFound {
+		oldFormation = &ct.Formation{}
+	} else if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	procCount := 0
+	for _, i := range oldFormation.Processes {
+		procCount += i
+	}
+
 	deployment := &ct.Deployment{
 		AppID:        app.ID,
 		NewReleaseID: release.ID,
@@ -158,8 +165,7 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 		respondWithError(w, err)
 		return
 	}
-
-	if len(fs) == 0 || (len(fs) == 1 && fs[0].ReleaseID == release.ID) || len(fs[0].Processes) == 0 {
+	if procCount == 0 {
 		// immediately set app release
 		if err := c.appRepo.SetRelease(app.ID, release.ID); err != nil {
 			respondWithError(w, err)
