@@ -84,9 +84,9 @@ func testApp(s *CLISuite, t *c.C, remote string) {
 	flynnRemote := fmt.Sprintf("%s\tssh://git@%s/%s.git (push)", remote, s.clusterConf(t).GitHost, name)
 
 	if remote == "flynn" {
-		t.Assert(app.flynn("create", name), Outputs, fmt.Sprintf("Created %s\n", name))
+		t.Assert(app.flynn("create", "-y", name), Outputs, fmt.Sprintf("Created %s\n", name))
 	} else {
-		t.Assert(app.flynn("create", "-r", remote, name), Outputs, fmt.Sprintf("Created %s\n", name))
+		t.Assert(app.flynn("create", "-r", remote, "-y", name), Outputs, fmt.Sprintf("Created %s\n", name))
 	}
 	t.Assert(app.flynn("apps"), OutputContains, name)
 	if remote == "" {
