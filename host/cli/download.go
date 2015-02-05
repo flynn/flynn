@@ -73,7 +73,7 @@ func runDownload(args *docopt.Args) error {
 		return fmt.Errorf("error creating config dir: %s", err)
 	}
 	for _, path := range []string{"/upstart.conf", "/host-manifest.json", "/bootstrap-manifest.json"} {
-		if err := downloadGzippedFile(client, path, args.String["--config-dir"]); err != nil {
+		if _, err := downloadGzippedFile(client, path, args.String["--config-dir"]); err != nil {
 			return err
 		}
 	}
@@ -83,28 +83,33 @@ func runDownload(args *docopt.Args) error {
 		return fmt.Errorf("error creating bin dir: %s", err)
 	}
 	for _, path := range []string{"/flynn-linux-amd64", "/flynn-init"} {
-		if err := downloadGzippedFile(client, path, args.String["--bin-dir"]); err != nil {
+		dst, err := downloadGzippedFile(client, path, args.String["--bin-dir"])
+		if err != nil {
+			return err
+		}
+		if err := os.Chmod(dst, 0755); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func downloadGzippedFile(client *tuf.Client, path, dir string) error {
+func downloadGzippedFile(client *tuf.Client, path, dir string) (string, error) {
 	file, err := tufutil.Download(client, path+".gz")
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer file.Close()
-	out, err := os.Create(filepath.Join(dir, path))
+	dst := filepath.Join(dir, path)
+	out, err := os.Create(dst)
 	if err != nil {
-		return err
+		return "", err
 	}
 	gz, err := gzip.NewReader(file)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer gz.Close()
 	_, err = io.Copy(out, gz)
-	return err
+	return dst, err
 }
