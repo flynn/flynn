@@ -93,6 +93,7 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	defer res.Body.Close()
 
+	prepareResponseHeaders(res)
 	p.writeResponse(rw, res)
 }
 
@@ -129,6 +130,13 @@ func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, req *http.Request) {
 	}
 	defer uconn.Close()
 
+	prepareResponseHeaders(res)
+	if res.StatusCode != 101 {
+		res.Header.Set("Connection", "close")
+		p.writeResponse(rw, res)
+		return
+	}
+
 	dconn, bufrw, err := rw.(http.Hijacker).Hijack()
 	if err != nil {
 		p.logf("router: hijack failed: %v", err)
@@ -138,18 +146,10 @@ func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, req *http.Request) {
 	}
 	defer dconn.Close()
 
-	prepareResponseHeaders(res)
-	if res.StatusCode != 101 {
-		res.Header.Set("Connection", "close")
-	}
 	if err := res.Write(dconn); err != nil {
+		p.logf("router: proxy error: %v", err)
 		return
 	}
-
-	if res.StatusCode != 101 {
-		return
-	}
-
 	joinConns(uconn, &streamConn{bufrw.Reader, dconn})
 }
 
@@ -180,7 +180,6 @@ func prepareResponseHeaders(res *http.Response) {
 }
 
 func (p *ReverseProxy) writeResponse(rw http.ResponseWriter, res *http.Response) {
-	prepareResponseHeaders(res)
 	copyHeader(rw.Header(), res.Header)
 
 	rw.WriteHeader(res.StatusCode)
