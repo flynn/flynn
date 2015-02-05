@@ -134,14 +134,6 @@
     }
   },
   {
-    "id": "deployer",
-    "action": "run-app",
-    "app_step": "controller-inception",
-    "processes": {
-      "deployer": 1
-    }
-  },
-  {
     "id": "blobstore",
     "action": "deploy-app",
     "app": {
