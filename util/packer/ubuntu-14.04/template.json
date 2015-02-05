@@ -4,7 +4,7 @@
     "headless": "false",
     "output_dir": ".",
     "ova_path": "ubuntu.ova",
-    "source_ami": "ami-9eaa1cf6",
+    "source_ami": "ami-9a562df2",
     "version": ""
   },
   "builders": [
