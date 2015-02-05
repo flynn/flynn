@@ -11,11 +11,17 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/nacl/secretbox"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/pkg/random"
 )
 
+type backendDialer interface {
+	Dial(network, addr string) (c net.Conn, err error)
+}
+
 var (
 	errNoBackends = errors.New("router: no backends available")
+	errCanceled   = errors.New("router: backend connection canceled")
 
 	httpTransport = &http.Transport{
 		Dial: customDial,
@@ -23,7 +29,7 @@ var (
 		TLSHandshakeTimeout:   10 * time.Second, // unused, but safer to leave default in place
 	}
 
-	dialer = &net.Dialer{
+	dialer backendDialer = &net.Dialer{
 		Timeout:   1 * time.Second,
 		KeepAlive: 30 * time.Second,
 	}
@@ -87,16 +93,16 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return nil, errNoBackends
 }
 
-func (t *transport) Connect() (net.Conn, error) {
+func (t *transport) Connect(ctx context.Context) (net.Conn, error) {
 	backends := t.getOrderedBackends("")
-	conn, _, err := dialTCP(backends)
+	conn, _, err := dialTCP(ctx, backends)
 	return conn, err
 }
 
 func (t *transport) UpgradeHTTP(req *http.Request) (*http.Response, net.Conn, error) {
 	stickyBackend := t.getStickyBackend(req)
 	backends := t.getOrderedBackends(stickyBackend)
-	upconn, addr, err := dialTCP(backends)
+	upconn, addr, err := dialTCP(context.Background(), backends)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -116,8 +122,15 @@ func (t *transport) UpgradeHTTP(req *http.Request) (*http.Response, net.Conn, er
 	return res, conn, nil
 }
 
-func dialTCP(addrs []string) (net.Conn, string, error) {
+func dialTCP(ctx context.Context, addrs []string) (net.Conn, string, error) {
+	donec := ctx.Done()
 	for _, addr := range addrs {
+		select {
+		case <-donec:
+			return nil, "", errCanceled
+		default:
+		}
+
 		if conn, err := dialer.Dial("tcp", addr); err == nil {
 			return conn, addr, nil
 		}
