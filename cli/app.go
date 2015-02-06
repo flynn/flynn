@@ -12,7 +12,7 @@ import (
 
 func init() {
 	register("create", runCreate, `
-usage: flynn create [-r <remote>] [<name>]
+usage: flynn create [-r <remote>] [-y] [<name>]
 
 Create an application in Flynn.
 
