@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 )
 
 const (
@@ -98,14 +100,26 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 }
 
 // ServeConn takes an inbound conn and proxies it to a backend.
-func (p *ReverseProxy) ServeConn(dconn net.Conn) {
+func (p *ReverseProxy) ServeConn(ctx context.Context, dconn net.Conn) {
 	transport := p.transport
 	if transport == nil {
 		panic("router: nil transport for proxy")
 	}
 	defer dconn.Close()
 
-	uconn, err := transport.Connect()
+	clientGone := dconn.(http.CloseNotifier).CloseNotify()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel() // finish cancellation goroutine
+
+	go func() {
+		select {
+		case <-clientGone:
+			cancel() // client went away, cancel request
+		case <-ctx.Done():
+		}
+	}()
+
+	uconn, err := transport.Connect(ctx)
 	if err != nil {
 		p.logf("router: proxy error: %v", err)
 		return
