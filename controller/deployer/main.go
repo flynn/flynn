@@ -19,51 +19,57 @@ import (
 type context struct {
 	db     *postgres.DB
 	client *controller.Client
-	log    log15.Logger
 }
 
 const workerCount = 10
 
-func main() {
-	log := log15.New("app", "deployer")
+var logger = log15.New("app", "deployer")
 
+func main() {
+	log := logger.New("fn", "main")
+
+	log.Info("creating controller client")
 	client, err := controller.NewClient("", os.Getenv("AUTH_KEY"))
 	if err != nil {
-		log.Error("Unable to create controller client", "err", err)
+		log.Error("error creating controller client", "err", err)
 		shutdown.Fatal()
 	}
 
+	log.Info("connecting to postgres")
 	postgres.Wait("")
 	db, err := postgres.Open("", "")
 	if err != nil {
-		log.Error("Unable to connect to postgres", "err", err)
+		log.Error("error connecting to postgres", "err", err)
 		shutdown.Fatal()
 	}
-
-	cxt := context{db: db, client: client, log: log}
 
 	pgxcfg, err := pgx.ParseURI(fmt.Sprintf("http://%s:%s@%s/%s", os.Getenv("PGUSER"), os.Getenv("PGPASSWORD"), db.Addr(), os.Getenv("PGDATABASE")))
 	if err != nil {
-		log.Error("Unable to ParseURI", "err", err)
+		log.Error("error parsing postgres URI", "err", err)
 		shutdown.Fatal()
 	}
 
+	log.Info("creating postgres connection pool")
 	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
 		ConnConfig:     pgxcfg,
 		AfterConnect:   que.PrepareStatements,
 		MaxConnections: workerCount,
 	})
 	if err != nil {
-		log.Error("Failed to create a pgx.ConnPool", "err", err)
+		log.Error("error creating postgres connection pool", "err", err)
 		shutdown.Fatal()
 	}
 	shutdown.BeforeExit(func() { pgxpool.Close() })
 
-	q := que.NewClient(pgxpool)
-	wm := que.WorkMap{"deployment": cxt.HandleJob}
-
-	workers := que.NewWorkerPool(q, wm, workerCount)
+	ctx := context{db: db, client: client}
+	workers := que.NewWorkerPool(
+		que.NewClient(pgxpool),
+		que.WorkMap{"deployment": ctx.HandleJob},
+		workerCount,
+	)
 	workers.Interval = 5 * time.Second
+
+	log.Info("starting workers", "count", workerCount, "interval", workers.Interval)
 	go workers.Start()
 	shutdown.BeforeExit(func() { workers.Shutdown() })
 
@@ -71,50 +77,58 @@ func main() {
 }
 
 func (c *context) HandleJob(job *que.Job) (e error) {
-	log := c.log.New("fn", "HandleJob")
+	log := logger.New("fn", "HandleJob")
+	log.Info("handling job", "id", job.ID, "error_count", job.ErrorCount)
+
 	var args ct.DeployID
 	if err := json.Unmarshal(job.Args, &args); err != nil {
-		log.Error("Failed to extract deployment ID", "err", err)
+		log.Error("error unmarshaling job", "err", err)
 		return err
 	}
-	log = c.log.New("fn", "HandleJob", "deployment_id", args.ID)
+
+	log.Info("getting deployment record", "deployment_id", args.ID)
 	deployment, err := c.client.GetDeployment(args.ID)
 	if err != nil {
-		log.Error("Failed to fetch the deployment", "at", "get_deployment", "err", err)
+		log.Error("error getting deployment record", "deployment_id", args.ID, "err", err)
 		return err
 	}
-	log = c.log.New(
-		"fn", "HandleJob",
-		"deployment_id", args.ID,
+
+	log = log.New(
+		"deployment_id", deployment.ID,
 		"app_id", deployment.AppID,
-		"old_release_id", deployment.OldReleaseID,
-		"new_release_id", deployment.NewReleaseID,
 		"strategy", deployment.Strategy,
 	)
 	// for recovery purposes, fetch old formation
+	log.Info("getting old formation")
 	f, err := c.client.GetFormation(deployment.AppID, deployment.OldReleaseID)
 	if err != nil {
-		log.Error("Failed to fetch the formation", "at", "get_formation", "err", err)
+		log.Error("error getting old formation", "err", err)
 		return err
 	}
+
+	log.Info("validating deployment strategy")
 	strategyFunc, err := strategy.Get(deployment.Strategy)
 	if err != nil {
-		log.Error("Failed to determine a strategy", "at", "get_strategy", "err", err)
+		log.Error("unknown deployment strategy")
 		return err
 	}
 	events := make(chan ct.DeploymentEvent)
 	go func() {
+		log.Info("watching deployment events")
 		for ev := range events {
+			log.Info("received deployment event", "status", ev.Status, "type", ev.JobType, "state", ev.JobState)
 			ev.DeploymentID = deployment.ID
 			if err := c.createDeploymentEvent(ev); err != nil {
-				log.Error("Failed to create an event", "at", "create_deployment_event", "err", err)
+				log.Error("error creating deployment event record", "err", err)
 			}
 		}
 		close(events)
+		log.Info("stopped watching deployment events")
 	}()
 	defer func() {
 		// rollback failed deploy
 		if e != nil {
+			log.Warn("rolling back deployment due to error", "err", e)
 			events <- ct.DeploymentEvent{
 				ReleaseID: deployment.NewReleaseID,
 				Status:    "failed",
@@ -122,36 +136,45 @@ func (c *context) HandleJob(job *que.Job) (e error) {
 			e = c.rollback(log, deployment, f)
 		}
 	}()
-	if err := strategyFunc(c.log, c.client, deployment, events); err != nil {
-		log.Error("Error while running the strategy", "at", "run_strategy", "err", err)
+	log.Info("performing deployment")
+	if err := strategyFunc(logger, c.client, deployment, events); err != nil {
+		log.Error("error performing deployment", "err", err)
 		return err
 	}
+	log.Info("setting the app release")
 	if err := c.client.SetAppRelease(deployment.AppID, deployment.NewReleaseID); err != nil {
-		log.Error("Error setting the app release", "at", "set_app_release", "err", err)
+		log.Error("error setting the app release", "err", err)
 		return err
 	}
+	log.Info("marking the deployment as done")
 	if err := c.setDeploymentDone(deployment.ID); err != nil {
-		log.Error("Error marking the deployment as done", "at", "set_deployment_done", "err", err)
+		log.Error("error marking the deployment as done", "err", err)
 	}
 	// signal success
 	events <- ct.DeploymentEvent{
 		ReleaseID: deployment.NewReleaseID,
 		Status:    "complete",
 	}
-	log.Info("Deployment complete", "at", "done")
+	log.Info("deployment complete")
 	return nil
 }
 
 func (c *context) rollback(l log15.Logger, deployment *ct.Deployment, original *ct.Formation) error {
 	log := l.New("fn", "rollback")
+
+	log.Info("restoring the original formation")
 	if err := c.client.PutFormation(original); err != nil {
-		log.Error("Error restoring formation", "err", err)
+		log.Error("error restoring the original formation", "err", err)
 		return err
 	}
+
+	log.Info("deleting the new formation")
 	if err := c.client.DeleteFormation(deployment.AppID, deployment.NewReleaseID); err != nil {
-		log.Error("Failed to delete new formation:", "err", err)
+		log.Error("error deleting the new formation:", "err", err)
 		return err
 	}
+
+	log.Info("rollback complete")
 	return nil
 }
 

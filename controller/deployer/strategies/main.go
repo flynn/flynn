@@ -25,30 +25,23 @@ func Get(strategy string) (PerformFunc, error) {
 
 // TODO: share with tests
 func jobEventsEqual(expected, actual jobEvents) bool {
-	for rel, m := range expected {
-		j, ok := actual[rel]
+	for typ, events := range expected {
+		diff, ok := actual[typ]
 		if !ok {
 			return false
 		}
-		for typ, events := range m {
-			diff, ok := j[typ]
-			if !ok {
+		for state, count := range events {
+			if diff[state] != count {
 				return false
-			}
-			for state, count := range events {
-				if diff[state] != count {
-					return false
-				}
 			}
 		}
 	}
 	return true
 }
 
-type jobEvents map[string]map[string]map[string]int
+type jobEvents map[string]map[string]int
 
-func waitForJobEvents(events chan *ct.JobEvent, deployEvents chan<- ct.DeploymentEvent, expected jobEvents) error {
-	fmt.Printf("waiting for job events: %v\n", expected)
+func waitForJobEvents(events chan *ct.JobEvent, deployEvents chan<- ct.DeploymentEvent, releaseID string, expected jobEvents, log log15.Logger) error {
 	actual := make(jobEvents)
 outer:
 	for {
@@ -62,32 +55,32 @@ outer:
 				// dropped. handle that case
 				break outer
 			}
-			fmt.Printf("got job event: %s %s %s\n", event.Type, event.JobID, event.State)
-			if _, ok := actual[event.Job.ReleaseID]; !ok {
-				actual[event.Job.ReleaseID] = make(map[string]map[string]int)
+			if event.Job.ReleaseID != releaseID {
+				continue
 			}
-			if _, ok := actual[event.Job.ReleaseID][event.Type]; !ok {
-				actual[event.Job.ReleaseID][event.Type] = make(map[string]int)
+			log.Info("got job event", "job_id", event.JobID, "type", event.Type, "state", event.State)
+			if _, ok := actual[event.Type]; !ok {
+				actual[event.Type] = make(map[string]int)
 			}
 			switch event.State {
 			case "up":
-				actual[event.Job.ReleaseID][event.Type]["up"] += 1
+				actual[event.Type]["up"] += 1
 				deployEvents <- ct.DeploymentEvent{
-					ReleaseID: event.Job.ReleaseID,
+					ReleaseID: releaseID,
 					JobState:  "up",
 					JobType:   event.Type,
 				}
 			case "down":
-				actual[event.Job.ReleaseID][event.Type]["down"] += 1
+				actual[event.Type]["down"] += 1
 				deployEvents <- ct.DeploymentEvent{
-					ReleaseID: event.Job.ReleaseID,
+					ReleaseID: releaseID,
 					JobState:  "down",
 					JobType:   event.Type,
 				}
 			case "crashed":
-				actual[event.Job.ReleaseID][event.Type]["crashed"] += 1
+				actual[event.Type]["crashed"] += 1
 				deployEvents <- ct.DeploymentEvent{
-					ReleaseID: event.Job.ReleaseID,
+					ReleaseID: releaseID,
 					JobState:  "crashed",
 					JobType:   event.Type,
 				}
