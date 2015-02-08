@@ -113,6 +113,7 @@ func (c *context) HandleJob(job *que.Job) (e error) {
 		return err
 	}
 	events := make(chan ct.DeploymentEvent)
+	defer close(events)
 	go func() {
 		log.Info("watching deployment events")
 		for ev := range events {
@@ -122,7 +123,6 @@ func (c *context) HandleJob(job *que.Job) (e error) {
 				log.Error("error creating deployment event record", "err", err)
 			}
 		}
-		close(events)
 		log.Info("stopped watching deployment events")
 	}()
 	defer func() {
