@@ -63,62 +63,31 @@ cluster, you should boot at least 3 nodes to keep etcd efficient
 (see [here](https://github.com/coreos/etcd/blob/v0.4.6/Documentation/optimal-cluster-size.md) for
 an explanation).
 
-### Dependencies
-
-Flynn uses Docker images to store job filesystems, and by default uses the AUFS filesystem driver. To
-check if your system supports AUFS, run this command:
-
-```
-$ sudo modprobe aufs
-```
-
-If you get no output, then AUFS is supported, but if you get `modprobe: FATAL: Module aufs not found.`
-then you need to run the following commands:
-
-```
-$ sudo apt-get update
-$ sudo apt-get install linux-image-extra-$(uname -r)
-```
-
-Flynn uses ZFS for persistent data volumes.  To install ZFS, run these commands:
-
-```
-$ sudo apt-key adv --keyserver keyserver.ubuntu.com --recv E871F18B51E0147C77796AC81196BA81F6B0FC61
-$ echo deb http://ppa.launchpad.net/zfs-native/stable/ubuntu trusty main | sudo tee /etc/apt/sources.list.d/zfs.list
-$ sudo apt-get update
-$ sudo apt-get install ubuntu-zfs
-```
-
 ### Installation
 
-Flynn is available as a Debian package from the Flynn apt repository.
-
-First, add the Flynn repository key to your list of trusted apt keys:
+Download and run the Flynn installer script:
 
 ```
-$ sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv BC79739C507A9B53BB1B0E7D820A5489998D827B
+$ sudo bash <(curl -fsSL https://dl.flynn.io/install-flynn)
 ```
 
-Now add the Flynn repository to your apt sources list and install the `flynn-host` package:
+If you would rather take a look at the contents of the script before running it as root, download and
+run it in two separate steps:
 
 ```
-$ echo deb https://dl.flynn.io/ubuntu flynn main | sudo tee /etc/apt/sources.list.d/flynn.list
-$ sudo apt-get update
-$ sudo apt-get install flynn-host
+$ curl -fsSL -o /tmp/install-flynn https://dl.flynn.io/install-flynn
+... take a look at the contents of /tmp/install-flynn ...
+$ sudo bash /tmp/install-flynn
 ```
 
-### Download images
+Running the installer script will:
 
-Flynn is made up of many interacting components, each of which get built into a Docker image and pushed
-to the public Docker registry.
+1. Install Flynn's runtime dependencies
+2. Download, verify and install the `flynn-host` binary
+3. Download and verify filesystem images for each of the Flynn components
+4. Install an Upstart job for controlling the `flynn-host` daemon
 
-Before you can run Flynn, you will need to download these images by running the following:
-
-```
-$ sudo flynn-host download /etc/flynn/version.json
-```
-
-Some of the images are quite large (hundreds of MB) so this could take a while depending on
+Some of the filesystem images are quite large (hundreds of MB) so step 3 could take a while depending on
 your internet connection.
 
 ### Rinse and repeat
