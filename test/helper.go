@@ -135,11 +135,18 @@ func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 				Cmd:   []string{"/bin/echoer"},
 				Ports: []ct.Port{{Proto: "tcp"}},
 			},
+			"ping": {
+				Cmd:   []string{"/bin/pingserv"},
+				Ports: []ct.Port{{Proto: "tcp"}},
+			},
 			"printer": {
 				Cmd: []string{"sh", "-c", "while true; do echo I like to print; sleep 1; done"},
 			},
 			"crasher": {
 				Cmd: []string{"sh", "-c", "trap 'exit 1' SIGTERM; while true; do echo I like to crash; sleep 1; done"},
+			},
+			"failer": {
+				Cmd: []string{"nonexistent"},
 			},
 			"omni": {
 				Cmd:  []string{"sh", "-c", "while true; do echo I am everywhere; sleep 1; done"},
