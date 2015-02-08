@@ -289,8 +289,11 @@ outer:
 	for {
 		select {
 		case e := <-events:
-			if e.Status == "complete" {
+			switch e.Status {
+			case "complete":
 				break outer
+			case "failed":
+				return e.Err()
 			}
 		case <-time.After(10 * time.Second):
 			return fmt.Errorf("Timed out waiting for deployment completion!")
