@@ -289,14 +289,7 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 				sha: sha
 			});
 
-			return client.createArtifact({
-				type: "docker",
-				uri: "example://uri"
-			}).then(function (args) {
-				var res = args[0];
-				artifactId = res.id;
-				return createRelease();
-			}).then(function () {
+			return createRelease().then(function () {
 				var data = {
 					name: app.name,
 					meta: meta
@@ -403,7 +396,7 @@ App.createFromGithub = function (client, meta, appData) {
 		meta: meta
 	};
 
-	var appId, appName, databaseEnv, artifactId;
+	var appId, appName, databaseEnv;
 
 	function createDatabase () {
 		return client.createAppDatabase({ apps: [appId] }).then(function (args) {
@@ -415,25 +408,13 @@ App.createFromGithub = function (client, meta, appData) {
 				appName: appName,
 				env: Marbles.Utils.extend({}, appData.env, databaseEnv)
 			});
-			return createArtifact();
-		});
-	}
-
-	function createArtifact () {
-		return client.createArtifact({
-			type: "docker",
-			uri: "example://uri"
-		}).then(function (args) {
-			var res = args[0];
-			artifactId = res.id;
 			return createRelease();
 		});
 	}
 
 	function createRelease () {
 		return client.createRelease({
-			env: Marbles.Utils.extend({}, appData.env, databaseEnv),
-			artifact: artifactId
+			env: Marbles.Utils.extend({}, appData.env, databaseEnv)
 		}).then(function (args) {
 			var res = args[0];
 			return createAppRelease(res.id);
