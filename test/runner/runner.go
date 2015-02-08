@@ -170,6 +170,12 @@ func (r *Runner) start() error {
 	router.GET("/cluster/:key/:cluster/dump-logs", r.clusterAPI(r.dumpLogs))
 	router.POST("/cluster/:key/:cluster/:host/reboot", r.clusterAPI(r.rebootHost))
 
+	router.NotFound = func(w http.ResponseWriter, r *http.Request) {
+		msg := fmt.Sprintf("no route matched for query path %s %q\n", r.Method, r.URL.Path)
+		log.Printf("testrunner: WARN: %s\n", msg)
+		http.Error(w, "testrunner: 404 page not found: "+msg, http.StatusNotFound)
+	}
+
 	srv := &http.Server{
 		Addr:      args.ListenAddr,
 		Handler:   router,
