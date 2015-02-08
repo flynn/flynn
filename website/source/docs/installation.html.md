@@ -83,9 +83,10 @@ $ sudo apt-get install linux-image-extra-$(uname -r)
 Flynn uses ZFS for persistent data volumes.  To install ZFS, run these commands:
 
 ```
-apt-key adv --keyserver keyserver.ubuntu.com --recv E871F18B51E0147C77796AC81196BA81F6B0FC61
-echo deb http://ppa.launchpad.net/zfs-native/stable/ubuntu trusty main > /etc/apt/sources.list.d/zfs.list
-apt-get install -y ubuntu-zfs
+$ sudo apt-key adv --keyserver keyserver.ubuntu.com --recv E871F18B51E0147C77796AC81196BA81F6B0FC61
+$ echo deb http://ppa.launchpad.net/zfs-native/stable/ubuntu trusty main | sudo tee /etc/apt/sources.list.d/zfs.list
+$ sudo apt-get update
+$ sudo apt-get install ubuntu-zfs
 ```
 
 ### Installation
