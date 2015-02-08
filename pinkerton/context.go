@@ -72,14 +72,19 @@ func (c *Context) pull(url string, session registry.Session, progress chan<- lay
 		}
 	}()
 
-	sendProgress := func(id string, status layer.Status) {
+	sendProgress := func(id string, typ layer.Type, status layer.Status) {
 		if progress != nil {
-			progress <- layer.PullInfo{Repo: session.Repo(), ID: id, Status: status}
+			progress <- layer.PullInfo{
+				Repo:   session.Repo(),
+				Type:   typ,
+				ID:     id,
+				Status: status,
+			}
 		}
 	}
 
 	if id := session.ImageID(); id != "" && c.Exists(id) {
-		sendProgress(id, layer.StatusExists)
+		sendProgress(id, layer.TypeImage, layer.StatusExists)
 		return nil
 	}
 
@@ -96,7 +101,7 @@ func (c *Context) pull(url string, session registry.Session, progress chan<- lay
 	for i := len(layers) - 1; i >= 0; i-- {
 		l := layers[i]
 		if c.Exists(l.ID) {
-			sendProgress(l.ID, layer.StatusExists)
+			sendProgress(l.ID, layer.TypeLayer, layer.StatusExists)
 			continue
 		}
 
@@ -108,8 +113,10 @@ func (c *Context) pull(url string, session registry.Session, progress chan<- lay
 				return err
 			}
 		}
-		sendProgress(l.ID, status)
+		sendProgress(l.ID, layer.TypeLayer, status)
 	}
+
+	sendProgress(image.ID, layer.TypeImage, layer.StatusDownloaded)
 
 	// TODO: update sizes
 
@@ -140,7 +147,7 @@ func InfoPrinter(jsonOut bool) chan<- layer.PullInfo {
 			if jsonOut {
 				enc.Encode(l)
 			} else {
-				fmt.Println(l.Repo, l.ID, l.Status)
+				fmt.Println(l.Repo, l.Type, l.ID, l.Status)
 			}
 		}
 	}()
