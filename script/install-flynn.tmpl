@@ -2,9 +2,8 @@
 #
 # A script to install Flynn from a TUF repository.
 
-set -eo pipefail
-
 FLYNN_HOST_CHECKSUM="{{FLYNN-HOST-CHECKSUM}}"
+VERBOSE=false
 
 usage() {
   cat <<USAGE >&2
@@ -13,6 +12,7 @@ usage: $0 [options]
 OPTIONS:
   -h            Show this message
   -r URL        The TUF repository to download files from [default: https://dl.flynn.io]
+  -v            Show verbose output
 USAGE
 }
 
@@ -29,13 +29,14 @@ main() {
 
   local repo_url
 
-  while getopts 'hr:' opt; do
+  while getopts 'hr:v' opt; do
     case $opt in
       h)
         usage
         exit 1
         ;;
       r) repo_url=${OPTARG} ;;
+      v) VERBOSE=true ;;
       ?)
         usage
         exit 1
@@ -57,15 +58,15 @@ main() {
       "linux-image-extra-$(uname -r)"
     )
   fi
-  apt-key adv --keyserver keyserver.ubuntu.com --recv E871F18B51E0147C77796AC81196BA81F6B0FC61
+  run apt-key adv --keyserver keyserver.ubuntu.com --recv E871F18B51E0147C77796AC81196BA81F6B0FC61
   echo deb http://ppa.launchpad.net/zfs-native/stable/ubuntu trusty main > /etc/apt/sources.list.d/zfs.list
-  apt-get update --quiet=2
-  apt-get install --quiet=2 --yes ${packages[@]}
+  run apt-get update
+  run apt-get install --yes ${packages[@]}
 
   info "downloading flynn-host binary to tmp dir"
   local tmp="$(mktemp --directory)"
   trap "rm -rf ${tmp}" EXIT
-  if ! curl -sL --fail -o "${tmp}/flynn-host.gz" "${repo_url}/tuf/targets/${FLYNN_HOST_CHECKSUM}.flynn-host.gz"; then
+  if ! curl -qsL --fail -o "${tmp}/flynn-host.gz" "${repo_url}/tuf/targets/${FLYNN_HOST_CHECKSUM}.flynn-host.gz"; then
     fail "failed to download flynn-host binary from ${repo_url}"
   fi
 
@@ -77,7 +78,7 @@ main() {
   popd >/dev/null
 
   info "moving verified flynn-host binary to /usr/bin"
-  gunzip "${tmp}/flynn-host.gz"
+  run gunzip "${tmp}/flynn-host.gz"
   mv "${tmp}/flynn-host" /usr/bin/flynn-host
   chmod +x /usr/bin/flynn-host
 
@@ -114,6 +115,27 @@ check_installed() {
 
   if [[ ${#missing[@]} -gt 0 ]]; then
     fail "this script requires: ${missing[@]}"
+  fi
+}
+
+run() {
+  local cmd=$@
+  local output
+
+  info "running \"${cmd}\""
+  if $VERBOSE; then
+    $cmd
+  else
+    output=$($cmd 2>&1)
+  fi
+
+  local status=$?
+  if [[ $status -ne 0 ]]; then
+    if [[ -n "${output}" ]]; then
+      echo "${output}" >&2
+    fi
+
+    fail "failed to run \"${cmd}\", exit status ${status}"
   fi
 }
 
