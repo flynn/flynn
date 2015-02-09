@@ -63,8 +63,10 @@ func New(stateFilePath string, defProvFn func() (volume.Provider, error)) (*Mana
 		if err != nil {
 			return nil, fmt.Errorf("could not initialize default provider: %s", err)
 		}
-		if err := m.AddProvider("default", p); err != nil {
-			panic(err)
+		if p != nil {
+			if err := m.AddProvider("default", p); err != nil {
+				panic(err)
+			}
 		}
 	}
 	return m, nil
