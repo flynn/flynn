@@ -148,6 +148,19 @@ func (b *Provider) NewVolume() (volume.Volume, error) {
 	return v, nil
 }
 
+func (b *Provider) DestroyVolume(vol volume.Volume) error {
+	zvol := b.volumes[vol.Info().ID]
+	if zvol == nil {
+		return fmt.Errorf("volume does not belong to this provider")
+	}
+	if err := zvol.dataset.Destroy(zfs.DestroyRecursive | zfs.DestroyForceUmount); err != nil {
+		return err
+	}
+	os.Remove(zvol.basemount)
+	delete(b.volumes, vol.Info().ID)
+	return nil
+}
+
 func (v *zfsVolume) Provider() volume.Provider {
 	return v.provider
 }
