@@ -16,6 +16,7 @@ type Provider interface {
 	Kind() string
 
 	NewVolume() (Volume, error)
+	DestroyVolume(Volume) error
 
 	MarshalGlobalState() (json.RawMessage, error)
 	MarshalVolumeState(volumeID string) (json.RawMessage, error)
