@@ -27,35 +27,25 @@ export TUF_TIMESTAMP_PASSPHRASE="flynn-test"
 export GOPATH=~/go
 src="${GOPATH}/src/github.com/flynn/flynn"
 
-export GIT_COMMIT=dev
-export GIT_BRANCH=dev
-export GIT_TAG="v20150131.0-test"
-export GIT_DIRTY=false
-
 # send all output to stderr so only version.json is output to stdout
 (
-  # tup hangs waiting on the FUSE socket after building the components, so
-  # for now we just kill the connection once the host manifest has been generated.
+
+  # rebuild layer 0 components.
+  #
+  # ideally we would use tup to do this, but it hangs waiting on the
+  # FUSE socket after building, so for now we do it manually.
+  #
   # See https://github.com/flynn/flynn/issues/949
-  (inotifywait --event modify host/bin/manifest.json; sudo bash -c 'echo 1 > /sys/fs/fuse/connections/*/abort') &
-
   pushd "${src}" >/dev/null
-
-  root_keys="$(tuf --dir test/release root-keys)"
-  sed "s/^CONFIG_TUF_ROOT_KEYS=.*$/CONFIG_TUF_ROOT_KEYS=${root_keys}/" -i tup.config
-
-  # rebuild layer 0 components
-  rebuild=(
-    "host/bin/flynn-host"
-    "host/bin/flynn-init"
-    "host/bin/manifest.json"
-    "script/install-flynn"
-  )
-  tup ${rebuild[@]}
-
-  # manually rebuild version.json for the export to avoid rebuilding all of layer 1
+  sed "s/{{TUF-ROOT-KEYS}}/$(tuf --dir test/release root-keys)/g" host/cli/root_keys.go.tmpl > host/cli/root_keys.go
+  vpkg="github.com/flynn/flynn/pkg/version"
+  go build -o host/bin/flynn-host -ldflags="-X ${vpkg}.commit dev -X ${vpkg}.branch dev -X ${vpkg}.tag v20150131.0-test -X ${vpkg}.dirty false" ./host
+  gzip -9 --keep --force host/bin/flynn-host
+  docker build --no-cache --tag flynn/etcd appliance/etcd
+  docker build --no-cache --tag flynn/flannel flannel
+  docker build --no-cache --tag flynn/discoverd discoverd
+  sed "s/{{FLYNN-HOST-CHECKSUM}}/$(sha512sum host/bin/flynn-host.gz | cut -d " " -f 1)/g" script/install-flynn.tmpl > script/install-flynn
   util/release/flynn-release manifest util/release/version_template.json > version.json
-
   popd >/dev/null
 
   "${src}/script/export-components" "${src}/test/release"
