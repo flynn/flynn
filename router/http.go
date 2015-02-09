@@ -86,6 +86,8 @@ func (s *HTTPListener) Start() error {
 
 	started := make(chan error)
 
+	// TODO(benburkert): the sync API cannot handle routes deleted while the
+	// listen/notify connection is disconnected
 	go s.ds.Sync(&httpSyncHandler{l: s}, started)
 	if err := <-started; err != nil {
 		return err
@@ -115,6 +117,8 @@ func (s *HTTPListener) AddRoute(r *router.Route) error {
 	if s.closed {
 		return ErrClosed
 	}
+	// TODO(bgentry): figure out ID setup. This was meant to prevent domain
+	// conflicts, but now it doesn't do that.
 	r.ID = md5sum(r.HTTPRoute().Domain)
 	return s.ds.Add(r)
 }

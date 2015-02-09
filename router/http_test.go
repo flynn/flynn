@@ -17,7 +17,6 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/websocket"
 	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
 	"github.com/flynn/flynn/pkg/httpclient"
-	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -73,10 +72,6 @@ func newHTTPClient(serverName string) *http.Client {
 }
 
 func (s *S) newHTTPListener(t etcdrunner.TestingT) *HTTPListener {
-	return s.newHTTPListenerPrefix(t, random.String(8))
-}
-
-func (s *S) newHTTPListenerPrefix(t etcdrunner.TestingT, prefix string) *HTTPListener {
 	pair, err := tls.X509KeyPair(localhostCert, localhostKey)
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +80,7 @@ func (s *S) newHTTPListenerPrefix(t etcdrunner.TestingT, prefix string) *HTTPLis
 		Addr:      "127.0.0.1:0",
 		TLSAddr:   "127.0.0.1:0",
 		keypair:   pair,
-		ds:        NewEtcdDataStore(s.etcd, fmt.Sprintf("/router/http/%s/", prefix)),
+		ds:        NewPostgresDataStore("http", s.pgx),
 		discoverd: s.discoverd,
 	}
 	if err := l.Start(); err != nil {
@@ -232,14 +227,14 @@ func (s *S) TestWildcardRouting(c *C) {
 }
 
 func (s *S) TestHTTPInitialSync(c *C) {
-	l := s.newHTTPListenerPrefix(c, "initial")
+	l := s.newHTTPListener(c)
 	addHTTPRoute(c, l)
 	l.Close()
 
 	srv := httptest.NewServer(httpTestHandler("1"))
 	defer srv.Close()
 
-	l = s.newHTTPListenerPrefix(c, "initial")
+	l = s.newHTTPListener(c)
 	defer l.Close()
 
 	discoverdRegisterHTTP(c, l, srv.Listener.Addr().String())

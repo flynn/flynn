@@ -121,6 +121,8 @@ func (l *TCPListener) Start() error {
 		}
 	}
 
+	// TODO(benburkert): the sync API cannot handle routes deleted while the
+	// listen/notify connection is disconnected
 	go l.ds.Sync(&tcpSyncHandler{l: l}, started)
 	return <-started
 }

@@ -1,15 +1,19 @@
 package main
 
 import (
+	"fmt"
 	"io"
+	"os"
 	"testing"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
+	"github.com/flynn/flynn/pkg/testutils/postgres"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -45,26 +49,14 @@ func (d *discoverdWrapper) Cleanup() {
 	d.hbs = nil
 }
 
-func setup(t etcdrunner.TestingT, ec EtcdClient, dc discoverdClient) (*discoverdWrapper, EtcdClient, func()) {
-	var killEtcd, killDiscoverd func()
-	var etcdAddr string
-	if ec == nil {
-		etcdAddr, killEtcd = etcdrunner.RunEtcdServer(t)
-		ec = etcd.NewClient([]string{etcdAddr})
-	} else if c, ok := ec.(*etcd.Client); ok {
-		etcdAddr = c.GetCluster()[0]
-	}
-	if dc == nil {
-		dc, killDiscoverd = testutil.BootDiscoverd(t, "", etcdAddr)
-	}
+func setup(t etcdrunner.TestingT) (*discoverdWrapper, func()) {
+	etcdAddr, killEtcd := etcdrunner.RunEtcdServer(t)
+	dc, killDiscoverd := testutil.BootDiscoverd(t, "", etcdAddr)
 	dw := &discoverdWrapper{discoverdClient: dc}
-	return dw, ec, func() {
-		if killDiscoverd != nil {
-			killDiscoverd()
-		}
-		if killEtcd != nil {
-			killEtcd()
-		}
+
+	return dw, func() {
+		killDiscoverd()
+		killEtcd()
 	}
 }
 
@@ -73,14 +65,44 @@ func Test(t *testing.T) { TestingT(t) }
 
 type S struct {
 	discoverd *discoverdWrapper
-	etcd      EtcdClient
 	cleanup   func()
+	pgx       *pgx.ConnPool
 }
 
 var _ = Suite(&S{})
 
 func (s *S) SetUpSuite(c *C) {
-	s.discoverd, s.etcd, s.cleanup = setup(c, nil, nil)
+	s.discoverd, s.cleanup = setup(c)
+
+	dbname := "routertest"
+	if err := pgtestutils.SetupPostgres(dbname); err != nil {
+		c.Fatal(err)
+	}
+
+	dsn := fmt.Sprintf("dbname=%s", dbname)
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		c.Fatal(err)
+	}
+	if err = migrateDB(db); err != nil {
+		c.Fatal(err)
+	}
+	db.Close()
+	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
+		ConnConfig: pgx.ConnConfig{
+			Host:     os.Getenv("PGHOST"),
+			Database: dbname,
+		},
+	})
+	if err != nil {
+		c.Fatal(err)
+	}
+	s.pgx = pgxpool
+	s.pgx.Exec(sqlCreateTruncateTables)
+}
+
+func (s *S) SetUpTest(c *C) {
+	s.pgx.Exec("SELECT truncate_tables()")
 }
 
 func (s *S) TearDownSuite(c *C) {
@@ -89,6 +111,7 @@ func (s *S) TearDownSuite(c *C) {
 
 func (s *S) TearDownTest(c *C) {
 	s.discoverd.Cleanup()
+	s.pgx.Exec("SELECT truncate_tables()")
 }
 
 const waitTimeout = time.Second
@@ -192,3 +215,19 @@ func addRoute(c *C, l Listener, r *router.Route) *router.Route {
 	wait()
 	return r
 }
+
+const sqlCreateTruncateTables = `
+CREATE OR REPLACE FUNCTION truncate_tables() RETURNS void AS $$
+DECLARE
+    statements CURSOR FOR
+        SELECT tablename FROM pg_tables
+        WHERE tablename != 'schema_migrations'
+          AND tableowner = session_user
+          AND schemaname = 'public';
+BEGIN
+    FOR stmt IN statements LOOP
+        EXECUTE 'TRUNCATE TABLE ' || quote_ident(stmt.tablename) || ' CASCADE;';
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+`

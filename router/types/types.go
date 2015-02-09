@@ -4,14 +4,48 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 )
+
+type Config json.RawMessage
+
+func (c Config) Encode(w *pgx.WriteBuf, oid pgx.Oid) error {
+	if len(c) == 0 {
+		w.WriteInt32(-1)
+		return nil
+	}
+	w.WriteInt32(int32(len(c)))
+	w.WriteBytes(c)
+	return nil
+}
+
+func (c Config) FormatCode() int16 {
+	return pgx.TextFormatCode
+}
+
+func (c *Config) Scan(r *pgx.ValueReader) error {
+	*c = Config(r.ReadBytes(r.Len()))
+	return nil
+}
+
+func (c *Config) MarshalJSON() ([]byte, error) {
+	if c == nil {
+		return []byte("{}"), nil
+	}
+	return (*json.RawMessage)(c).MarshalJSON()
+}
+
+func (c *Config) UnmarshalJSON(data []byte) error {
+	return (*json.RawMessage)(c).UnmarshalJSON(data)
+}
 
 type Route struct {
 	ID        string `json:"id,omitempty"`
 	ParentRef string `json:"parent_ref,omitempty"`
 	Type      string `json:"type,omitempty"`
 
-	Config *json.RawMessage `json:"config,omitempty"`
+	Config *Config `json:"config,omitempty"`
 
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
@@ -22,10 +56,6 @@ var ErrNoConfig = errors.New("router: the supplied route has no configuration")
 
 func (r *Route) HTTPRoute() *HTTPRoute {
 	rCopy := *r
-	if rCopy.Config == nil {
-		empty := json.RawMessage(`{}`)
-		rCopy.Config = &empty
-	}
 	route := &HTTPRoute{Route: &rCopy}
 	route.Route.Config = nil
 	json.Unmarshal(*r.Config, route)
@@ -34,10 +64,6 @@ func (r *Route) HTTPRoute() *HTTPRoute {
 
 func (r *Route) TCPRoute() *TCPRoute {
 	rCopy := *r
-	if rCopy.Config == nil {
-		empty := json.RawMessage(`{}`)
-		rCopy.Config = &empty
-	}
 	route := &TCPRoute{Route: &rCopy}
 	route.Route.Config = nil
 	json.Unmarshal(*r.Config, route)
@@ -59,10 +85,10 @@ func (r *HTTPRoute) ToRoute() *Route {
 	}
 	r.Route.Type = "http"
 
-	config, _ := json.Marshal(r)
-	jsonConfig := json.RawMessage(config)
+	rawConfig, _ := json.Marshal(r)
 	route := *r.Route
-	route.Config = &jsonConfig
+	config := Config(rawConfig)
+	route.Config = &config
 	return &route
 }
 
@@ -78,10 +104,10 @@ func (r *TCPRoute) ToRoute() *Route {
 	}
 	r.Route.Type = "tcp"
 
-	config, _ := json.Marshal(r)
-	jsonConfig := json.RawMessage(config)
+	rawConfig, _ := json.Marshal(r)
 	route := *r.Route
-	route.Config = &jsonConfig
+	config := Config(rawConfig)
+	route.Config = &config
 	return &route
 }
 

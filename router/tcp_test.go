@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -9,7 +8,6 @@ import (
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
-	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -50,20 +48,17 @@ func (s *TCPTestServer) Close() error { return s.l.Close() }
 const firstTCPPort, lastTCPPort = 10001, 10010
 
 func (s *S) newTCPListener(t etcdrunner.TestingT) *TCPListener {
-	return s.newTCPListenerPrefix(t, random.String(8))
-}
-
-func (s *S) newTCPListenerPrefix(t etcdrunner.TestingT, prefix string) *TCPListener {
 	l := &TCPListener{
 		IP:        "127.0.0.1",
 		startPort: firstTCPPort,
 		endPort:   lastTCPPort,
-		ds:        NewEtcdDataStore(s.etcd, fmt.Sprintf("/router/tcp/%s/", prefix)),
+		ds:        NewPostgresDataStore("tcp", s.pgx),
 		discoverd: s.discoverd,
 	}
 	if err := l.Start(); err != nil {
 		t.Fatal(err)
 	}
+
 	return l
 }
 
@@ -123,14 +118,14 @@ func addTCPRoute(c *C, l *TCPListener, port int) *router.TCPRoute {
 
 func (s *S) TestInitialTCPSync(c *C) {
 	const addr, port = "127.0.0.1:45000", 45000
-	l := s.newTCPListenerPrefix(c, "initial")
+	l := s.newTCPListener(c)
 	addTCPRoute(c, l, port)
 	l.Close()
 
 	srv := NewTCPTestServer("1")
 	defer srv.Close()
 
-	l = s.newTCPListenerPrefix(c, "initial")
+	l = s.newTCPListener(c)
 	defer l.Close()
 
 	discoverdRegisterTCP(c, l, srv.Addr)
