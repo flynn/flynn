@@ -7,10 +7,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path"
-	"strings"
+	"strconv"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kavu/go_reuseport"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -91,32 +90,38 @@ func main() {
 	if err != nil {
 		shutdown.Fatal(err)
 	}
-
 	if err := migrateDB(db.DB); err != nil {
 		shutdown.Fatal(err)
 	}
 
-	// Read etcd addresses from ETCD
-	etcdAddrs := strings.Split(os.Getenv("ETCD"), ",")
-	if len(etcdAddrs) == 1 && etcdAddrs[0] == "" {
-		if externalIP := os.Getenv("EXTERNAL_IP"); externalIP != "" {
-			etcdAddrs = []string{fmt.Sprintf("http://%s:2379", externalIP)}
-		} else {
-			etcdAddrs = nil
+	var pgport int
+	if port := os.Getenv("PGPORT"); port != "" {
+		var err error
+		if pgport, err = strconv.Atoi(port); err != nil {
+			shutdown.Fatal(err)
 		}
 	}
-	etcdc := etcd.NewClient(etcdAddrs)
 
-	prefix := os.Getenv("ETCD_PREFIX")
-	if prefix == "" {
-		prefix = "/router"
+	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
+		ConnConfig: pgx.ConnConfig{
+			Host:     os.Getenv("PGHOST"),
+			Port:     uint16(pgport),
+			Database: os.Getenv("PGDATABASE"),
+			User:     os.Getenv("PGUSER"),
+			Password: os.Getenv("PGPASSWORD"),
+		},
+	})
+	if err != nil {
+		shutdown.Fatal(err)
 	}
+	shutdown.BeforeExit(func() { pgxpool.Close() })
+
 	r := Router{
 		TCP: &TCPListener{
 			IP:        *tcpIP,
 			startPort: *tcpRangeStart,
 			endPort:   *tcpRangeEnd,
-			ds:        NewEtcdDataStore(etcdc, path.Join(prefix, "tcp/")),
+			ds:        NewPostgresDataStore("tcp", pgxpool),
 			discoverd: discoverd.DefaultClient,
 		},
 		HTTP: &HTTPListener{
@@ -124,7 +129,7 @@ func main() {
 			TLSAddr:   *httpsAddr,
 			cookieKey: cookieKey,
 			keypair:   keypair,
-			ds:        NewEtcdDataStore(etcdc, path.Join(prefix, "http/")),
+			ds:        NewPostgresDataStore("http", pgxpool),
 			discoverd: discoverd.DefaultClient,
 		},
 	}
