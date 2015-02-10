@@ -44,6 +44,10 @@ type ProviderConfig struct {
 	DatasetName string `json:"dataset"`
 
 	Make *MakeDev `json:"makedev,omitempty"`
+
+	// WorkingDir specifies the working directory zfs will use to expose mounts.
+	// A default will be chosen if left blank.
+	WorkingDir string `json:"working_dir"`
 }
 
 /*
@@ -112,6 +116,9 @@ func NewProvider(config *ProviderConfig) (volume.Provider, error) {
 			return nil, err
 		}
 	}
+	if config.WorkingDir == "" {
+		config.WorkingDir = "/var/lib/flynn/volumes/zfs/"
+	}
 	return &Provider{
 		config:  config,
 		dataset: dataset,
@@ -128,7 +135,7 @@ func (b *Provider) NewVolume() (volume.Volume, error) {
 	v := &zfsVolume{
 		info:      &volume.Info{ID: id},
 		provider:  b,
-		basemount: filepath.Join("/var/lib/flynn/volumes/zfs/mnt/", id),
+		basemount: filepath.Join(b.config.WorkingDir, "/mnt/", id),
 	}
 	var err error
 	v.dataset, err = zfs.CreateFilesystem(path.Join(v.provider.dataset.Name, id), map[string]string{
@@ -139,6 +146,19 @@ func (b *Provider) NewVolume() (volume.Volume, error) {
 	}
 	b.volumes[id] = v
 	return v, nil
+}
+
+func (b *Provider) DestroyVolume(vol volume.Volume) error {
+	zvol := b.volumes[vol.Info().ID]
+	if zvol == nil {
+		return fmt.Errorf("volume does not belong to this provider")
+	}
+	if err := zvol.dataset.Destroy(zfs.DestroyRecursive | zfs.DestroyForceUmount); err != nil {
+		return err
+	}
+	os.Remove(zvol.basemount)
+	delete(b.volumes, vol.Info().ID)
+	return nil
 }
 
 func (v *zfsVolume) Provider() volume.Provider {
@@ -194,7 +214,7 @@ func (v1 *zfsVolume) TakeSnapshot() (volume.Volume, error) {
 	v2 := &zfsVolume{
 		info:      &volume.Info{ID: id},
 		provider:  v1.provider,
-		basemount: filepath.Join("/var/lib/flynn/volumes/zfs/", id),
+		basemount: filepath.Join(v1.provider.config.WorkingDir, "/mnt/", id),
 	}
 	var err error
 	v2.dataset, err = cloneFilesystem(path.Join(v2.provider.dataset.Name, v2.info.ID), path.Join(v1.provider.dataset.Name, v1.info.ID), v2.basemount)

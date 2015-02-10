@@ -41,6 +41,7 @@ type Manager struct {
 
 var NoSuchProvider = errors.New("no such provider")
 var ProviderAlreadyExists = errors.New("that provider id already exists")
+var NoSuchVolume = errors.New("no such volume")
 
 func New(stateFilePath string, defProvFn func() (volume.Provider, error)) (*Manager, error) {
 	stateDB, err := initializePersistence(stateFilePath)
@@ -62,8 +63,10 @@ func New(stateFilePath string, defProvFn func() (volume.Provider, error)) (*Mana
 		if err != nil {
 			return nil, fmt.Errorf("could not initialize default provider: %s", err)
 		}
-		if err := m.AddProvider("default", p); err != nil {
-			panic(err)
+		if p != nil {
+			if err := m.AddProvider("default", p); err != nil {
+				panic(err)
+			}
 		}
 	}
 	return m, nil
@@ -126,6 +129,20 @@ func (m *Manager) GetVolume(id string) volume.Volume {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	return m.volumes[id]
+}
+
+func (m *Manager) DestroyVolume(id string) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	vol := m.volumes[id]
+	if vol == nil {
+		return NoSuchVolume
+	}
+	if err := vol.Provider().DestroyVolume(vol); err != nil {
+		return err
+	}
+	delete(m.volumes, id)
+	return nil
 }
 
 func initializePersistence(stateFilePath string) (*bolt.DB, error) {
