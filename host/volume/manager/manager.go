@@ -162,6 +162,38 @@ func (m *Manager) DestroyVolume(id string) error {
 	return nil
 }
 
+func (m *Manager) CreateSnapshot(id string) (volume.Volume, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	vol := m.volumes[id]
+	if vol == nil {
+		return nil, NoSuchVolume
+	}
+	snap, err := vol.Provider().CreateSnapshot(vol)
+	if err != nil {
+		return nil, err
+	}
+	m.volumes[snap.Info().ID] = snap
+	m.persist(func(tx *bolt.Tx) error { return m.persistVolume(tx, snap) })
+	return snap, nil
+}
+
+func (m *Manager) ForkVolume(id string) (volume.Volume, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	vol := m.volumes[id]
+	if vol == nil {
+		return nil, NoSuchVolume
+	}
+	vol2, err := vol.Provider().ForkVolume(vol)
+	if err != nil {
+		return nil, err
+	}
+	m.volumes[vol2.Info().ID] = vol2
+	m.persist(func(tx *bolt.Tx) error { return m.persistVolume(tx, vol2) })
+	return vol2, nil
+}
+
 func initializePersistence(stateFilePath string) (*bolt.DB, error) {
 	if stateFilePath == "" {
 		return nil, nil

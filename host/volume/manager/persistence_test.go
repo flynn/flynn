@@ -220,3 +220,96 @@ func (s *PersistenceTests) TestVolumeDeletion(c *C) {
 	_, err = os.Stat(vol.Location())
 	c.Assert(os.IsNotExist(err), Equals, true)
 }
+
+func (s *PersistenceTests) TestSnapshotPersistence(c *C) {
+	idString := random.String(12)
+	vmanDBfilePath := fmt.Sprintf("/tmp/flynn-volumes-%s.bolt", idString)
+	zfsDatasetName := fmt.Sprintf("flynn-test-dataset-%s", idString)
+	zfsVdevFilePath := fmt.Sprintf("/tmp/flynn-test-zpool-%s.vdev", idString)
+	defer os.Remove(vmanDBfilePath)
+	defer os.Remove(zfsVdevFilePath)
+	defer func() {
+		pool, _ := gzfs.GetZpool(zfsDatasetName)
+		if pool != nil {
+			if datasets, err := pool.Datasets(); err == nil {
+				for _, dataset := range datasets {
+					dataset.Destroy(gzfs.DestroyRecursive | gzfs.DestroyForceUmount)
+					os.Remove(dataset.Mountpoint)
+				}
+			}
+			err := pool.Destroy()
+			c.Assert(err, IsNil)
+		}
+	}()
+
+	// new volume provider with a new backing zfs vdev file
+	volProv, err := zfs.NewProvider(&zfs.ProviderConfig{
+		DatasetName: zfsDatasetName,
+		Make: &zfs.MakeDev{
+			BackingFilename: zfsVdevFilePath,
+			Size:            int64(math.Pow(2, float64(30))),
+		},
+	})
+	c.Assert(err, IsNil)
+
+	// new volume manager with that shiny new backing zfs vdev file and a new boltdb
+	vman, err := volumemanager.New(
+		vmanDBfilePath,
+		func() (volume.Provider, error) { return volProv, nil },
+	)
+	c.Assert(err, IsNil)
+
+	// make a volume
+	vol1, err := vman.NewVolume()
+	c.Assert(err, IsNil)
+
+	// assert existence of filesystems; emplace some data
+	f, err := os.Create(filepath.Join(vol1.Location(), "alpha"))
+	c.Assert(err, IsNil)
+	f.Close()
+
+	// snapshot it
+	snap, err := vman.CreateSnapshot(vol1.Info().ID)
+
+	// close persistence
+	c.Assert(vman.PersistenceDBClose(), IsNil)
+
+	// hack zfs export/umounting to emulate host shutdown
+	err = exec.Command("zpool", "export", "-f", zfsDatasetName).Run()
+	c.Assert(err, IsNil)
+
+	// sanity check: assert the filesystems are gone
+	// note that the directories remain present after 'zpool export'
+	_, err = os.Stat(filepath.Join(vol1.Location(), "alpha"))
+	c.Assert(os.IsNotExist(err), Equals, true)
+	_, err = os.Stat(filepath.Join(snap.Location(), "alpha"))
+	c.Assert(os.IsNotExist(err), Equals, true)
+
+	// restore
+	vman, err = volumemanager.New(
+		vmanDBfilePath,
+		func() (volume.Provider, error) {
+			c.Fatal("default provider setup should not be called if the previous provider was restored")
+			return nil, nil
+		},
+	)
+	c.Assert(err, IsNil)
+
+	// assert volumes
+	restoredVolumes := vman.Volumes()
+	c.Assert(restoredVolumes, HasLen, 2)
+	c.Assert(restoredVolumes[vol1.Info().ID], NotNil)
+	c.Assert(restoredVolumes[snap.Info().ID], NotNil)
+
+	// switch to the new volume references; do a bunch of smell checks on those
+	vol1restored := restoredVolumes[vol1.Info().ID]
+	snapRestored := restoredVolumes[snap.Info().ID]
+	c.Assert(vol1restored.Info(), DeepEquals, vol1.Info())
+	c.Assert(snapRestored.Info(), DeepEquals, snap.Info())
+	c.Assert(vol1restored.Provider(), NotNil)
+	c.Assert(vol1restored.Provider(), Equals, snapRestored.Provider())
+
+	// assert existences of filesystems and previous data
+	c.Assert(vol1restored.Location(), testutils.DirContains, []string{"alpha"})
+	c.Assert(snapRestored.Location(), testutils.DirContains, []string{"alpha"})
+}

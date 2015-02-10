@@ -23,7 +23,7 @@ type Volume interface {
 	// Location returns the path to this volume's mount.  To use the volume in a job, bind mount this into the container's filesystem.
 	Location() string
 
-	TakeSnapshot() (Volume, error)
+	IsSnapshot() bool
 }
 
 /*
