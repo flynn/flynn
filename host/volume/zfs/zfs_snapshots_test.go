@@ -1,22 +1,15 @@
 package zfs
 
 import (
-	"io/ioutil"
-	"math"
 	"os"
 	"path/filepath"
-	"testing"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	gzfs "github.com/flynn/flynn/Godeps/_workspace/src/github.com/mistifyio/go-zfs"
 	"github.com/flynn/flynn/pkg/testutils"
 )
 
-func Test(t *testing.T) { TestingT(t) }
-
 type ZfsSnapshotTests struct {
-	zpoolBackingFile *os.File
-	zpool            *gzfs.Zpool
+	TempZpool
 }
 
 var _ = Suite(&ZfsSnapshotTests{})
@@ -27,38 +20,8 @@ func (ZfsSnapshotTests) SetUpSuite(c *C) {
 	testutils.SkipIfNotRoot(c)
 }
 
-func (s *ZfsSnapshotTests) SetUpTest(c *C) {
-	// Set up a temporary zpool.
-	var err error
-	s.zpoolBackingFile, err = ioutil.TempFile("/tmp/", "zfs-")
-	c.Assert(err, IsNil)
-	err = s.zpoolBackingFile.Truncate(int64(math.Pow(2, float64(30))))
-	c.Assert(err, IsNil)
-	s.zpool, err = gzfs.CreateZpool(
-		"testpool",
-		nil,
-		"-mnone", // do not mount the root dataset.  (we'll mount our own datasets as necessary.)
-		s.zpoolBackingFile.Name(),
-	)
-	c.Assert(err, IsNil)
-}
-
-func (s *ZfsSnapshotTests) TearDownTest(c *C) {
-	if s.zpoolBackingFile != nil {
-		s.zpoolBackingFile.Close()
-		os.Remove(s.zpoolBackingFile.Name())
-		if s.zpool != nil {
-			err := s.zpool.Destroy()
-			c.Assert(err, IsNil)
-		}
-	}
-}
-
-func (ZfsSnapshotTests) TestSnapshotShouldCarryFiles(c *C) {
-	provider, err := NewProvider(&ProviderConfig{DatasetName: "testpool"})
-	c.Assert(err, IsNil)
-
-	v, err := provider.NewVolume()
+func (s *ZfsSnapshotTests) TestSnapshotShouldCarryFiles(c *C) {
+	v, err := s.VolProv.NewVolume()
 	c.Assert(err, IsNil)
 
 	// a new volume should start out empty:
@@ -80,11 +43,8 @@ func (ZfsSnapshotTests) TestSnapshotShouldCarryFiles(c *C) {
 	c.Assert(v2.Location(), testutils.DirContains, []string{"alpha"})
 }
 
-func (ZfsSnapshotTests) TestSnapshotShouldIsolateNewChangesToSource(c *C) {
-	provider, err := NewProvider(&ProviderConfig{DatasetName: "testpool"})
-	c.Assert(err, IsNil)
-
-	v, err := provider.NewVolume()
+func (s *ZfsSnapshotTests) TestSnapshotShouldIsolateNewChangesToSource(c *C) {
+	v, err := s.VolProv.NewVolume()
 	c.Assert(err, IsNil)
 
 	// a new volume should start out empty:
@@ -111,11 +71,8 @@ func (ZfsSnapshotTests) TestSnapshotShouldIsolateNewChangesToSource(c *C) {
 	c.Assert(v2.Location(), testutils.DirContains, []string{"alpha"})
 }
 
-func (ZfsSnapshotTests) TestSnapshotShouldIsolateNewChangesToFork(c *C) {
-	provider, err := NewProvider(&ProviderConfig{DatasetName: "testpool"})
-	c.Assert(err, IsNil)
-
-	v, err := provider.NewVolume()
+func (s *ZfsSnapshotTests) TestSnapshotShouldIsolateNewChangesToFork(c *C) {
+	v, err := s.VolProv.NewVolume()
 	c.Assert(err, IsNil)
 
 	// a new volume should start out empty:
