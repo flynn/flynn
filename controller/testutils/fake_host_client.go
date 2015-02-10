@@ -2,11 +2,13 @@ package testutils
 
 import (
 	"errors"
+	"io"
 	"sync"
 	"time"
 
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
+	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -94,6 +96,10 @@ func (c *FakeHostClient) SendEvent(event, id string) {
 	for _, ch := range c.listeners {
 		ch <- e
 	}
+}
+
+func (c *FakeHostClient) PullImages(repository, driver, root string, tufDB io.Reader, ch chan<- *layer.PullInfo) (stream.Stream, error) {
+	return nil, nil
 }
 
 type attachFunc func(req *host.AttachReq, wait bool) (cluster.AttachClient, error)

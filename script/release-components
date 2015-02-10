@@ -1,0 +1,153 @@
+#!/bin/bash
+#
+# A script to build and release Flynn components.
+#
+# PREREQUISITES:
+#
+# - Install up-to-date s3cmd so CloudFront invalidation works:
+#   sudo apt-get install -y python-dateutil
+#   wget -O /tmp/s3cmd.deb http://archive.ubuntu.com/ubuntu/pool/universe/s/s3cmd/s3cmd_1.5.0~rc1-2_all.deb
+#   sudo dpkg -i /tmp/s3cmd.deb
+#   rm /tmp/s3cmd.deb
+#
+# - Configure s3cmd
+#   s3cmd --configure
+#
+# - Install go-tuf
+#   go get github.com/flynn/go-tuf/cmd/tuf
+#
+# - Set the TUF passphrases
+#   export TUF_TARGETS_PASSPHRASE=xxxxxx
+#   export TUF_SNAPSHOT_PASSPHRASE=xxxxxx
+#   export TUF_TIMESTAMP_PASSPHRASE=xxxxxx
+
+set -eo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "${ROOT}/script/lib/ui.sh"
+source "${ROOT}/script/lib/aws.sh"
+
+usage() {
+  cat <<USAGE >&2
+usage: $0 [options] COMMIT VERSION
+
+OPTIONS:
+  -h            Show this message
+  -k            Keep release directory
+  -b BUCKET     The S3 bucket to sync with [default: flynn]
+  -r DIR        Resume the release using DIR
+  -t DIR        Path to the local TUF repository [default: /etc/flynn/tuf]
+USAGE
+}
+
+main() {
+  local bucket dir tuf_dir
+  local keep=false
+
+  while getopts "hkb:r:t:" opt; do
+    case $opt in
+      h)
+        usage
+        exit 1
+        ;;
+      k) keep=true ;;
+      b) bucket=${OPTARG} ;;
+      r)
+        dir=${OPTARG}
+        if [[ ! -d "${dir}" ]]; then
+          fail "No such directory: ${dir}"
+        fi
+        ;;
+      t)
+        tuf_dir=${OPTARG}
+        if [[ ! -d "${tuf_dir}" ]]; then
+          fail "No such directory: ${tuf_dir}"
+        fi
+        ;;
+      ?)
+        usage
+        exit 1
+        ;;
+    esac
+  done
+  shift $((${OPTIND} - 1))
+
+  if [[ $# -ne 2 ]]; then
+    usage
+    exit 1
+  fi
+
+  local commit=$1
+  local version=$2
+  local flynn_release="${ROOT}/util/release/flynn-release"
+
+  info "checking status of commit ${commit}"
+  if ! "${flynn_release}" status ${commit}; then
+    fail "commit has not passed CI"
+  fi
+
+  bucket="${bucket:-"flynn"}"
+  dir="${dir:-$(mktemp -d)}"
+  tuf_dir="${tuf_dir:="/etc/flynn/tuf"}"
+  info "using base dir: ${dir}"
+
+  info "checking TUF signing keys"
+  for role in "targets" "snapshot" "timestamp"; do
+    if [[ ! -s "${tuf_dir}/keys/${role}.json" ]]; then
+      fail "the TUF repo is missing the ${role} signing key"
+    fi
+  done
+
+  export GOPATH="${dir}"
+  local src="${GOPATH}/src/github.com/flynn/flynn"
+
+  if [[ ! -d "${src}/.git" ]]; then
+    info "cloning git repo"
+    rm -rf "${src}"
+    git clone --quiet https://github.com/flynn/flynn "${src}"
+  fi
+
+  pushd "${src}" >/dev/null
+
+  info "pulling dependent images"
+  git grep -h "^FROM" **/Dockerfile \
+    | cut -d " " -f 2 \
+    | sort \
+    | uniq \
+    | xargs -L 1 docker pull
+
+  info "building flynn"
+  git checkout --force --quiet $commit
+  git tag --force "v${version}"
+
+  make release
+
+  popd >/dev/null
+
+  info "downloading existing TUF metadata"
+  mkdir -p "${tuf_dir}/repository"
+  for role in "root" "targets" "snapshot" "timestamp"; do
+    s3cmd get --force "s3://${bucket}/tuf/${role}.json" "${tuf_dir}/repository/${role}.json"
+  done
+
+  info "adding components to the TUF repository"
+  "${src}/script/export-components" "${tuf_dir}"
+
+  info "uploading files to S3"
+  mkdir -p "${dir}/upload"
+  ln -fs "${src}/script/install-flynn" "${dir}/upload/install-flynn"
+  ln -fs "${src}/script/install-flynn" "${dir}/upload/install-flynn-${version}"
+  ln -fs "${tuf_dir}/repository" "${dir}/upload/tuf"
+  sync_cloudfront "${dir}/upload/" "s3://${bucket}/"
+
+  info "successfully released components for version ${version}"
+
+  if $keep; then
+    info "locally built packages will remain in ${dir}"
+  else
+    info "removing locally built packages"
+    rm -rf "${dir}"
+  fi
+}
+
+main $@

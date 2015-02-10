@@ -42,7 +42,7 @@ usage: flynn-host daemon [options] [--meta=<KEY=VAL>...]
 
 options:
   --external=IP          external IP of host
-  --manifest=PATH        path to manifest file [default: /etc/flynn-host.json]
+  --manifest=PATH        path to manifest file [default: /etc/flynn/host-manifest.json]
   --state=PATH           path to state file [default: /var/lib/flynn/host-state.bolt]
   --id=ID                host id
   --force                kill all containers booted by flynn-host before starting
@@ -66,6 +66,7 @@ Commands:
   help                       Show usage for a specific command
   init                       Create cluster configuration for daemon
   daemon                     Start the daemon
+  update                     Update Flynn components
   download                   Download container images
   bootstrap                  Bootstrap layer 1
   inspect                    Get low-level information about a job

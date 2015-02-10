@@ -16,6 +16,7 @@ import (
 type Client struct {
 	*httpclient.Client
 	cluster *tc.Cluster
+	size    int
 }
 
 var ErrNotFound = errors.New("testcluster: resource not found")
@@ -34,11 +35,12 @@ func NewClient(endpoint string) (*Client, error) {
 		return nil, err
 	}
 	client.cluster = &cluster
+	client.size = cluster.Size()
 	return client, nil
 }
 
 func (c *Client) Size() int {
-	return c.cluster.Size()
+	return c.size
 }
 
 func (c *Client) BackoffPeriod() time.Duration {
@@ -62,6 +64,7 @@ func (c *Client) AddHost(ch chan *host.HostEvent, vanilla bool) (*tc.Instance, e
 		select {
 		case event := <-ch:
 			if event.HostID == instance.ID {
+				c.size++
 				return &instance, nil
 			}
 		case <-time.After(60 * time.Second):
@@ -71,6 +74,7 @@ func (c *Client) AddHost(ch chan *host.HostEvent, vanilla bool) (*tc.Instance, e
 }
 
 func (c *Client) RemoveHost(host *tc.Instance) error {
+	c.size--
 	return c.Delete("/" + host.ID)
 }
 

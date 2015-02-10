@@ -144,7 +144,7 @@ func lookupImageURIs() error {
 		if err != nil {
 			return err
 		}
-		imageURIs[name] = fmt.Sprintf("https://example.com/%s?id=%s", fullName, image.ID)
+		imageURIs[name] = fmt.Sprintf("https://example.com?name=%s&id=%s", fullName, image.ID)
 	}
 	return nil
 }

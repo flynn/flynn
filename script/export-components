@@ -1,0 +1,48 @@
+#!/bin/bash
+#
+# A script to export Flynn components to a TUF repository.
+#
+# PREREQUISITES:
+#
+# - Install go-tuf
+#   go get github.com/flynn/go-tuf/cmd/tuf
+#
+# - Set the TUF passphrases
+#   export TUF_TARGETS_PASSPHRASE=xxxxxx
+#   export TUF_SNAPSHOT_PASSPHRASE=xxxxxx
+#   export TUF_TIMESTAMP_PASSPHRASE=xxxxxx
+
+set -eo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "${ROOT}/script/lib/ui.sh"
+
+usage() {
+  echo "usage: $0 TUF_DIR" >&2
+}
+
+main() {
+  if [[ $# -ne 1 ]]; then
+    usage
+    exit 1
+  fi
+
+  local tuf_dir=$1
+
+  cd "${tuf_dir}"
+  tuf clean
+  cp "${ROOT}/host/bin/flynn-host.gz"                      "staged/targets/flynn-host.gz"
+  gzip -9 --stdout "${ROOT}/host/bin/flynn-init"         > "staged/targets/flynn-init.gz"
+  gzip -9 --stdout "${ROOT}/cli/flynn-cli"               > "staged/targets/flynn-linux-amd64.gz"
+  gzip -9 --stdout "${ROOT}/host/upstart.conf"           > "staged/targets/upstart.conf.gz"
+  gzip -9 --stdout "${ROOT}/host/bin/manifest.json"      > "staged/targets/host-manifest.json.gz"
+  gzip -9 --stdout "${ROOT}/bootstrap/bin/manifest.json" > "staged/targets/bootstrap-manifest.json.gz"
+  gzip -9 --stdout "${ROOT}/version.json"                > "staged/targets/version.json.gz"
+  "${ROOT}/util/release/flynn-release" export "${ROOT}/version.json" "staged/targets"
+  tuf add
+  tuf snapshot
+  tuf timestamp
+  tuf commit
+}
+
+main $@

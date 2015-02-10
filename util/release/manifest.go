@@ -46,19 +46,19 @@ func manifest(args *docopt.Args) {
 		log.Fatal(err)
 	}
 
-	if err := interpolateManifest(lookup, args.String["--image-url-prefix"], src, dest); err != nil {
+	if err := interpolateManifest(lookup, args.String["--image-repository"], src, dest); err != nil {
 		log.Fatal(err)
 	}
 }
 
 var imageIDPattern = regexp.MustCompile(`\$image_id\[[^\]]+\]`)
 
-func interpolateManifest(lookup idLookupFunc, imageURLPrefix string, src io.Reader, dest io.Writer) error {
+func interpolateManifest(lookup idLookupFunc, imageRepository string, src io.Reader, dest io.Writer) error {
 	manifest, err := ioutil.ReadAll(src)
 	if err != nil {
 		return err
 	}
-	manifest = bytes.Replace(manifest, []byte("$image_url_prefix"), []byte(imageURLPrefix), -1)
+	manifest = bytes.Replace(manifest, []byte("$image_repository"), []byte(imageRepository), -1)
 	var replaceErr interface{}
 	func() {
 		defer func() {

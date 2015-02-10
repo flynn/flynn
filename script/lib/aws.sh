@@ -16,6 +16,7 @@ sync_cloudfront() {
     --acl-public \
     --cf-invalidate \
     --no-preserve \
+    --follow-symlinks \
     "${src}" "${dst}" \
     | tee /dev/stderr \
     | grep -oP "s3cmd cfinvalinfo cf://\w+/\w+")
