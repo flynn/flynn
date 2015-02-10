@@ -120,13 +120,13 @@ func (s *HTTPListener) AddRoute(r *router.Route) error {
 	return s.ds.Add(r)
 }
 
-func (s *HTTPListener) SetRoute(r *router.Route) error {
+func (s *HTTPListener) UpdateRoute(r *router.Route) error {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	if s.closed {
 		return ErrClosed
 	}
-	return s.ds.Set(r)
+	return s.ds.Update(r)
 }
 
 func md5sum(data string) string {

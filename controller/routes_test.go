@@ -8,6 +8,7 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
@@ -25,7 +26,7 @@ type fakeRouter struct {
 func (r *fakeRouter) CreateRoute(route *router.Route) error {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
-	route.ID = route.Type + "/" + random.UUID()
+	route.ID = route.Type + "/" + postgres.FormatUUID(random.UUID())
 	now := time.Now()
 	route.CreatedAt = now
 	route.UpdatedAt = now
@@ -54,7 +55,7 @@ func (r *fakeRouter) GetRoute(routeType, id string) (*router.Route, error) {
 	return route, nil
 }
 
-func (r *fakeRouter) SetRoute(*router.Route) error { return nil }
+func (r *fakeRouter) UpdateRoute(*router.Route) error { return nil }
 
 type sortedRoutes []*router.Route
 

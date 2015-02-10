@@ -24,7 +24,7 @@ func apiHandler(rtr *Router) http.Handler {
 	m.Map(rtr)
 
 	r.Post("/routes", binding.Bind(router.Route{}), createRoute)
-	r.Put("/routes", binding.Bind(router.Route{}), createOrReplaceRoute)
+	r.Put("/routes/:route_type/:id", binding.Bind(router.Route{}), updateRoute)
 	r.Get("/routes", getRoutes)
 	r.Get("/routes/:route_type/:id", getRoute)
 	r.Delete("/routes/:route_type/:id", deleteRoute)
@@ -47,19 +47,9 @@ func createRoute(req *http.Request, route router.Route, router *Router, r render
 	r.JSON(200, route)
 }
 
-func createOrReplaceRoute(req *http.Request, route router.Route, router *Router, r render.Render) {
-	// TODO(bgentry): this is broken right now. Clients won't send an ID on this
-	// request.
-	panic("NOT YET IMPLEMENTED")
-	if route.ID == "" {
-		createRoute(req, route, router, r)
-		return
-	}
-
-	if route.ID == "" {
-		createRoute(req, route, router, r)
-		return
-	}
+func updateRoute(params martini.Params, route router.Route, router *Router, r render.Render) {
+	route.Type = params["route_type"]
+	route.ID = params["id"]
 
 	l := listenerFor(router, route.Type)
 	if l == nil {
@@ -67,7 +57,7 @@ func createOrReplaceRoute(req *http.Request, route router.Route, router *Router,
 		return
 	}
 
-	if err := l.SetRoute(&route); err != nil {
+	if err := l.UpdateRoute(&route); err != nil {
 		log.Println(err)
 		r.JSON(500, "unknown error")
 		return

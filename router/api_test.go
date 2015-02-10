@@ -107,11 +107,12 @@ func (s *S) TestAPISetHTTPRoute(c *C) {
 	defer srv.Close()
 
 	r := router.HTTPRoute{Domain: "example.com", Service: "foo"}.ToRoute()
-	err := srv.SetRoute(r)
+	err := srv.CreateRoute(r)
 	c.Assert(err, IsNil)
+	c.Assert(r.ID, Not(IsNil))
 
-	r = router.HTTPRoute{Domain: "example.com", Service: "bar"}.ToRoute()
-	err = srv.SetRoute(r)
+	r = router.HTTPRoute{ID: r.ID, Domain: "example.com", Service: "bar"}.ToRoute()
+	err = srv.UpdateRoute(r)
 	c.Assert(err, IsNil)
 }
 

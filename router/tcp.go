@@ -49,7 +49,7 @@ func (l *TCPListener) AddRoute(route *router.Route) error {
 	return l.ds.Add(route)
 }
 
-func (l *TCPListener) SetRoute(route *router.Route) error {
+func (l *TCPListener) UpdateRoute(route *router.Route) error {
 	r := route.TCPRoute()
 	l.mtx.RLock()
 	defer l.mtx.RUnlock()
@@ -60,7 +60,7 @@ func (l *TCPListener) SetRoute(route *router.Route) error {
 		return errors.New("router: a port number needs to be specified")
 	}
 	route.ID = md5sum(strconv.Itoa(r.Port))
-	return l.ds.Set(route)
+	return l.ds.Update(route)
 }
 
 var ErrNoPorts = errors.New("router: no ports available")

@@ -15,7 +15,7 @@ var ErrNotFound = errors.New("router: route not found")
 
 type DataStore interface {
 	Add(route *router.Route) error
-	Set(route *router.Route) error
+	Update(route *router.Route) error
 	Get(id string) (*router.Route, error)
 	List() ([]*router.Route, error)
 	Remove(id string) error
@@ -105,45 +105,44 @@ func (d *pgDataStore) Add(r *router.Route) (err error) {
 	return err
 }
 
-const sqlSetRouteHTTP = `
-UPDATE %s SET parent_ref = $1, service = $2, domain = $3, tls_cert = $4, tls_key = $5, sticky = $6
-	WHERE id = $7 AND deleted_at IS NULL
-	RETURNING updated_at`
+const sqlUpdateRouteHTTP = `
+UPDATE ` + tableNameHTTP + ` SET parent_ref = $1, service = $2, tls_cert = $3, tls_key = $4, sticky = $5
+	WHERE id = $6 AND domain = $7 AND deleted_at IS NULL
+	RETURNING %s`
 
-const sqlSetRouteTCP = `
-UPDATE %s SET parent_ref = $1, service = $2, port = $3
-	WHERE id = $4 AND deleted_at IS NULL
-	RETURNING updated_at`
+const sqlUpdateRouteTCP = `
+UPDATE ` + tableNameTCP + ` SET parent_ref = $1, service = $2
+	WHERE id = $3 AND port = $4 AND deleted_at IS NULL
+	RETURNING %s`
 
-func (d *pgDataStore) Set(r *router.Route) error {
+func (d *pgDataStore) Update(r *router.Route) error {
 	var row *pgx.Row
 
 	switch d.tableName {
 	case tableNameHTTP:
 		row = d.pgx.QueryRow(
-			fmt.Sprintf(sqlSetRouteHTTP, d.tableName),
+			fmt.Sprintf(sqlUpdateRouteHTTP, d.columnNames()),
 			r.ParentRef,
 			r.Service,
-			r.Domain,
 			r.TLSCert,
 			r.TLSKey,
 			r.Sticky,
 			r.ID,
+			r.Domain,
 		)
 	case tableNameTCP:
 		row = d.pgx.QueryRow(
-			fmt.Sprintf(sqlSetRouteTCP, d.tableName),
+			fmt.Sprintf(sqlUpdateRouteTCP, d.columnNames()),
 			r.ParentRef,
 			r.Service,
-			r.Port,
 			r.ID,
+			r.Port,
 		)
 	}
-	err := row.Scan(&r.UpdatedAt)
+	err := d.scanRoute(r, row)
 	if err == pgx.ErrNoRows {
 		return ErrNotFound
 	}
-	r.Type = d.routeType
 	return err
 }
 

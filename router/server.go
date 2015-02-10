@@ -21,7 +21,7 @@ type Listener interface {
 	Start() error
 	Close() error
 	AddRoute(*router.Route) error
-	SetRoute(*router.Route) error
+	UpdateRoute(*router.Route) error
 	RemoveRoute(id string) error
 	Watcher
 	DataStoreReader

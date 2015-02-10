@@ -50,9 +50,9 @@ func NewWithAddr(addr string) Client {
 type Client interface {
 	// CreateRoute creates a new route.
 	CreateRoute(*router.Route) error
-	// SetRoute updates an existing route. If the route does not exist, it
-	// creates a new one.
-	SetRoute(*router.Route) error
+	// UpdateRoute updates an existing route by overwriting all fields on the route
+	// except ID and Domain.
+	UpdateRoute(*router.Route) error
 	// DeleteRoute deletes the route with the specified routeType and id.
 	DeleteRoute(routeType, id string) error
 	// GetRoute returns a route with the specified routeType and id.
@@ -66,8 +66,8 @@ func (c *client) CreateRoute(r *router.Route) error {
 	return c.Post("/routes", r, r)
 }
 
-func (c *client) SetRoute(r *router.Route) error {
-	return c.Put("/routes", r, r)
+func (c *client) UpdateRoute(r *router.Route) error {
+	return c.Put("/routes/"+r.Type+"/"+r.ID, r, r)
 }
 
 func (c *client) DeleteRoute(routeType, id string) error {
