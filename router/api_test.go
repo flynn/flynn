@@ -43,7 +43,7 @@ func (s *S) TestAPIAddTCPRoute(c *C) {
 	srv := s.newTestAPIServer(c)
 	defer srv.Close()
 
-	r := (&router.TCPRoute{Service: "test"}).ToRoute()
+	r := router.TCPRoute{Service: "test"}.ToRoute()
 	err := srv.CreateRoute(r)
 	c.Assert(err, IsNil)
 
@@ -54,7 +54,7 @@ func (s *S) TestAPIAddTCPRoute(c *C) {
 	c.Assert(tcpRoute.Service, Equals, "test")
 	c.Assert(tcpRoute.Port, Not(Equals), 0)
 
-	route, err := srv.GetRoute(tcpRoute.ID)
+	route, err := srv.GetRoute("tcp", tcpRoute.ID)
 	c.Assert(err, IsNil)
 
 	getTCPRoute := route.TCPRoute()
@@ -64,9 +64,9 @@ func (s *S) TestAPIAddTCPRoute(c *C) {
 	c.Assert(getTCPRoute.Service, Equals, "test")
 	c.Assert(getTCPRoute.Port, Equals, tcpRoute.Port)
 
-	err = srv.DeleteRoute(route.ID)
+	err = srv.DeleteRoute("tcp", route.ID)
 	c.Assert(err, IsNil)
-	_, err = srv.GetRoute(route.ID)
+	_, err = srv.GetRoute("tcp", route.ID)
 	c.Assert(err, Equals, client.ErrNotFound)
 }
 
@@ -74,7 +74,7 @@ func (s *S) TestAPIAddHTTPRoute(c *C) {
 	srv := s.newTestAPIServer(c)
 	defer srv.Close()
 
-	r := (&router.HTTPRoute{Domain: "example.com", Service: "test"}).ToRoute()
+	r := router.HTTPRoute{Domain: "example.com", Service: "test"}.ToRoute()
 	err := srv.CreateRoute(r)
 	c.Assert(err, IsNil)
 
@@ -85,8 +85,9 @@ func (s *S) TestAPIAddHTTPRoute(c *C) {
 	c.Assert(httpRoute.Service, Equals, "test")
 	c.Assert(httpRoute.Domain, Equals, "example.com")
 
-	route, err := srv.GetRoute(httpRoute.ID)
+	route, err := srv.GetRoute("http", httpRoute.ID)
 	c.Assert(err, IsNil)
+	c.Assert(httpRoute.ID, Not(Equals), "")
 
 	getHTTPRoute := route.HTTPRoute()
 	c.Assert(getHTTPRoute.ID, Equals, httpRoute.ID)
@@ -95,9 +96,9 @@ func (s *S) TestAPIAddHTTPRoute(c *C) {
 	c.Assert(getHTTPRoute.Service, Equals, "test")
 	c.Assert(getHTTPRoute.Domain, Equals, "example.com")
 
-	err = srv.DeleteRoute(route.ID)
+	err = srv.DeleteRoute("http", route.ID)
 	c.Assert(err, IsNil)
-	_, err = srv.GetRoute(route.ID)
+	_, err = srv.GetRoute("http", route.ID)
 	c.Assert(err, Equals, client.ErrNotFound)
 }
 
@@ -105,11 +106,11 @@ func (s *S) TestAPISetHTTPRoute(c *C) {
 	srv := s.newTestAPIServer(c)
 	defer srv.Close()
 
-	r := (&router.HTTPRoute{Domain: "example.com", Service: "foo"}).ToRoute()
+	r := router.HTTPRoute{Domain: "example.com", Service: "foo"}.ToRoute()
 	err := srv.SetRoute(r)
 	c.Assert(err, IsNil)
 
-	r = (&router.HTTPRoute{Domain: "example.com", Service: "bar"}).ToRoute()
+	r = router.HTTPRoute{Domain: "example.com", Service: "bar"}.ToRoute()
 	err = srv.SetRoute(r)
 	c.Assert(err, IsNil)
 }
@@ -118,10 +119,10 @@ func (s *S) TestAPIListRoutes(c *C) {
 	srv := s.newTestAPIServer(c)
 	defer srv.Close()
 
-	r0 := (&router.HTTPRoute{Domain: "example.com", Service: "test"}).ToRoute()
-	r1 := (&router.HTTPRoute{Domain: "example.net", Service: "test", Route: &router.Route{ParentRef: "foo"}}).ToRoute()
-	r2 := (&router.TCPRoute{Service: "test"}).ToRoute()
-	r3 := (&router.TCPRoute{Service: "test", Route: &router.Route{ParentRef: "foo"}}).ToRoute()
+	r0 := router.HTTPRoute{Domain: "example.com", Service: "test"}.ToRoute()
+	r1 := router.HTTPRoute{Domain: "example.net", Service: "test", ParentRef: "foo"}.ToRoute()
+	r2 := router.TCPRoute{Service: "test"}.ToRoute()
+	r3 := router.TCPRoute{Service: "test", ParentRef: "foo"}.ToRoute()
 
 	err := srv.CreateRoute(r0)
 	c.Assert(err, IsNil)

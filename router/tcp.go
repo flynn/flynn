@@ -70,7 +70,6 @@ func (l *TCPListener) addWithAllocatedPort(route *router.Route) error {
 	l.mtx.RLock()
 	defer l.mtx.RUnlock()
 	for r.Port = range l.listeners {
-		r.Route.ID = md5sum(strconv.Itoa(r.Port))
 		tempRoute := r.ToRoute()
 		if err := l.ds.Add(tempRoute); err == nil {
 			*route = *tempRoute

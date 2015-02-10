@@ -53,10 +53,10 @@ type Client interface {
 	// SetRoute updates an existing route. If the route does not exist, it
 	// creates a new one.
 	SetRoute(*router.Route) error
-	// DeleteRoute deletes the route with the specified id.
-	DeleteRoute(id string) error
-	// GetRoute returns a route with the specified id.
-	GetRoute(id string) (*router.Route, error)
+	// DeleteRoute deletes the route with the specified routeType and id.
+	DeleteRoute(routeType, id string) error
+	// GetRoute returns a route with the specified routeType and id.
+	GetRoute(routeType, id string) (*router.Route, error)
 	// ListRoutes returns a list of routes. If parentRef is not empty, routes
 	// are filtered by the reference (ex: "controller/apps/myapp").
 	ListRoutes(parentRef string) ([]*router.Route, error)
@@ -70,13 +70,13 @@ func (c *client) SetRoute(r *router.Route) error {
 	return c.Put("/routes", r, r)
 }
 
-func (c *client) DeleteRoute(id string) error {
-	return c.Delete("/routes/" + id)
+func (c *client) DeleteRoute(routeType, id string) error {
+	return c.Delete("/routes/" + routeType + "/" + id)
 }
 
-func (c *client) GetRoute(id string) (*router.Route, error) {
+func (c *client) GetRoute(routeType, id string) (*router.Route, error) {
 	res := &router.Route{}
-	err := c.Get("/routes/"+id, res)
+	err := c.Get(fmt.Sprintf("/routes/%s/%s", routeType, id), res)
 	return res, err
 }
 

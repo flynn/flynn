@@ -117,9 +117,6 @@ func (s *HTTPListener) AddRoute(r *router.Route) error {
 	if s.closed {
 		return ErrClosed
 	}
-	// TODO(bgentry): figure out ID setup. This was meant to prevent domain
-	// conflicts, but now it doesn't do that.
-	r.ID = md5sum(r.HTTPRoute().Domain)
 	return s.ds.Add(r)
 }
 
@@ -129,7 +126,6 @@ func (s *HTTPListener) SetRoute(r *router.Route) error {
 	if s.closed {
 		return ErrClosed
 	}
-	r.ID = md5sum(r.HTTPRoute().Domain)
 	return s.ds.Set(r)
 }
 

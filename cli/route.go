@@ -82,7 +82,7 @@ func runRoute(args *docopt.Args, client *controller.Client) error {
 				protocol = "https"
 			}
 		}
-		listRec(w, protocol+":"+route, service, k.ID)
+		listRec(w, protocol+":"+route, service, k.FormattedID())
 	}
 	return nil
 }
@@ -99,7 +99,7 @@ func runRouteAddTCP(args *docopt.Args, client *controller.Client) error {
 		return err
 	}
 	hr = r.TCPRoute()
-	fmt.Printf("%s listening on port %d\n", r.ID, hr.Port)
+	fmt.Printf("%s listening on port %d\n", hr.FormattedID(), hr.Port)
 	return nil
 }
 
@@ -148,7 +148,7 @@ func runRouteAddHTTP(args *docopt.Args, client *controller.Client) error {
 	if err := client.CreateRoute(mustApp(), route); err != nil {
 		return err
 	}
-	fmt.Println(route.ID)
+	fmt.Println(route.FormattedID())
 	return nil
 }
 

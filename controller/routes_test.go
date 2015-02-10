@@ -27,13 +27,13 @@ func (r *fakeRouter) CreateRoute(route *router.Route) error {
 	defer r.mtx.Unlock()
 	route.ID = route.Type + "/" + random.UUID()
 	now := time.Now()
-	route.CreatedAt = &now
-	route.UpdatedAt = &now
+	route.CreatedAt = now
+	route.UpdatedAt = now
 	r.routes[route.ID] = route
 	return nil
 }
 
-func (r *fakeRouter) DeleteRoute(id string) error {
+func (r *fakeRouter) DeleteRoute(routeType, id string) error {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 	if _, exists := r.routes[id]; !exists {
@@ -43,11 +43,11 @@ func (r *fakeRouter) DeleteRoute(id string) error {
 	return nil
 }
 
-func (r *fakeRouter) GetRoute(id string) (*router.Route, error) {
+func (r *fakeRouter) GetRoute(routeType, id string) (*router.Route, error) {
 	r.mtx.RLock()
 	defer r.mtx.RUnlock()
 
-	route, ok := r.routes[id]
+	route, ok := r.routes[routeType+"/"+id]
 	if !ok {
 		return nil, routerc.ErrNotFound
 	}
@@ -59,7 +59,7 @@ func (r *fakeRouter) SetRoute(*router.Route) error { return nil }
 type sortedRoutes []*router.Route
 
 func (p sortedRoutes) Len() int           { return len(p) }
-func (p sortedRoutes) Less(i, j int) bool { return p[i].CreatedAt.After(*p[j].CreatedAt) }
+func (p sortedRoutes) Less(i, j int) bool { return p[i].CreatedAt.After(p[j].CreatedAt) }
 func (p sortedRoutes) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 func (r *fakeRouter) ListRoutes(parentRef string) ([]*router.Route, error) {

@@ -95,8 +95,8 @@ func (s *S) TestAddTCPRoute(c *C) {
 
 	assertTCPConn(c, addr, "2")
 
-	wait := waitForEvent(c, l, "remove", r.Route.ID)
-	err := l.RemoveRoute(r.Route.ID)
+	wait := waitForEvent(c, l, "remove", r.ID)
+	err := l.RemoveRoute(r.ID)
 	c.Assert(err, IsNil)
 	wait()
 
@@ -106,10 +106,10 @@ func (s *S) TestAddTCPRoute(c *C) {
 
 func addTCPRoute(c *C, l *TCPListener, port int) *router.TCPRoute {
 	wait := waitForEvent(c, l, "set", "")
-	r := (&router.TCPRoute{
+	r := router.TCPRoute{
 		Service: "test",
 		Port:    port,
-	}).ToRoute()
+	}.ToRoute()
 	err := l.AddRoute(r)
 	c.Assert(err, IsNil)
 	wait()
@@ -151,7 +151,7 @@ func (s *S) TestTCPPortAllocation(c *C) {
 			unregister()
 			srv.Close()
 		}
-		r := (&router.TCPRoute{Service: "test"}).ToRoute()
+		r := router.TCPRoute{Service: "test"}.ToRoute()
 		err := l.AddRoute(r)
 		c.Assert(err, Equals, ErrNoPorts)
 		for _, port := range ports {

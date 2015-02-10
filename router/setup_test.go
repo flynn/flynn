@@ -101,10 +101,6 @@ func (s *S) SetUpSuite(c *C) {
 	s.pgx.Exec(sqlCreateTruncateTables)
 }
 
-func (s *S) SetUpTest(c *C) {
-	s.pgx.Exec("SELECT truncate_tables()")
-}
-
 func (s *S) TearDownSuite(c *C) {
 	s.cleanup()
 }
@@ -231,3 +227,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 `
+
+func removeRoute(c *C, l Listener, id string) {
+	wait := waitForEvent(c, l, "remove", "")
+	err := l.RemoveRoute(id)
+	c.Assert(err, IsNil)
+	wait()
+}

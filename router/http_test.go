@@ -177,20 +177,24 @@ func assertGetCookies(c *C, url, host, expected string, cookies []*http.Cookie) 
 }
 
 func addHTTPRoute(c *C, l *HTTPListener) *router.Route {
-	return addRoute(c, l, (&router.HTTPRoute{
+	return addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "test",
 		TLSCert: string(localhostCert),
 		TLSKey:  string(localhostKey),
-	}).ToRoute())
+	}.ToRoute())
+}
+
+func removeHTTPRoute(c *C, l *HTTPListener, id string) {
+	removeRoute(c, l, id)
 }
 
 func addStickyHTTPRoute(c *C, l *HTTPListener) *router.Route {
-	return addRoute(c, l, (&router.HTTPRoute{
+	return addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "test",
 		Sticky:  true,
-	}).ToRoute())
+	}.ToRoute())
 }
 
 func (s *S) TestWildcardRouting(c *C) {
@@ -204,18 +208,18 @@ func (s *S) TestWildcardRouting(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addRoute(c, l, (&router.HTTPRoute{
+	addRoute(c, l, router.HTTPRoute{
 		Domain:  "foo.bar",
 		Service: "1",
-	}).ToRoute())
-	addRoute(c, l, (&router.HTTPRoute{
+	}.ToRoute())
+	addRoute(c, l, router.HTTPRoute{
 		Domain:  "*.foo.bar",
 		Service: "2",
-	}).ToRoute())
-	addRoute(c, l, (&router.HTTPRoute{
+	}.ToRoute())
+	addRoute(c, l, router.HTTPRoute{
 		Domain:  "dev.foo.bar",
 		Service: "3",
-	}).ToRoute())
+	}.ToRoute())
 
 	discoverdRegisterHTTPService(c, l, "1", srv1.Listener.Addr().String())
 	discoverdRegisterHTTPService(c, l, "2", srv2.Listener.Addr().String())
@@ -705,10 +709,10 @@ func (s *S) TestNoBackends(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addRoute(c, l, (&router.HTTPRoute{
+	addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "example-com",
-	}).ToRoute())
+	}.ToRoute())
 
 	req := newReq("http://"+l.Addr, "example.com")
 	res, err := newHTTPClient("example.com").Do(req)
@@ -731,11 +735,11 @@ func (s *S) TestNoResponsiveBackends(c *C) {
 	srv2 := httptest.NewServer(httpTestHandler("2"))
 	srv2.Close()
 
-	addRoute(c, l, (&router.HTTPRoute{
+	addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "example-com",
 		Sticky:  true,
-	}).ToRoute())
+	}.ToRoute())
 	discoverdRegisterHTTPService(c, l, "example-com", srv1.Listener.Addr().String())
 	discoverdRegisterHTTPService(c, l, "example-com", srv2.Listener.Addr().String())
 
@@ -774,11 +778,11 @@ func (s *S) TestClosedBackendRetriesAnotherBackend(c *C) {
 	srv2 := httptest.NewServer(httpTestHandler("2"))
 	defer srv2.Close()
 
-	addRoute(c, l, (&router.HTTPRoute{
+	addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "example-com",
 		Sticky:  true,
-	}).ToRoute())
+	}.ToRoute())
 	discoverdRegisterHTTPService(c, l, "example-com", srv1.Listener.Addr().String())
 	cookies := assertGet(c, "http://"+l.Addr, "example.com", "1")
 
@@ -878,7 +882,7 @@ func (s *S) runTestErrorAfterConnOnlyHitsOneBackend(c *C, upgrade bool) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addHTTPRoute(c, l)
+	defer removeHTTPRoute(c, l, addHTTPRoute(c, l).ID)
 
 	discoverdRegisterHTTP(c, l, srv1.Addr().String())
 	discoverdRegisterHTTP(c, l, srv2.Addr().String())
@@ -908,14 +912,14 @@ func (s *S) TestKeepaliveHostname(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addRoute(c, l, (&router.HTTPRoute{
+	addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "example-com",
-	}).ToRoute())
-	addRoute(c, l, (&router.HTTPRoute{
+	}.ToRoute())
+	addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.org",
 		Service: "example-org",
-	}).ToRoute())
+	}.ToRoute())
 
 	discoverdRegisterHTTPService(c, l, "example-com", srv1.Listener.Addr().String())
 	discoverdRegisterHTTPService(c, l, "example-org", srv2.Listener.Addr().String())
@@ -984,14 +988,14 @@ func (s *S) TestDefaultServerKeypair(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addRoute(c, l, (&router.HTTPRoute{
+	addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "example-com",
-	}).ToRoute())
-	addRoute(c, l, (&router.HTTPRoute{
+	}.ToRoute())
+	addRoute(c, l, router.HTTPRoute{
 		Domain:  "foo.example.com",
 		Service: "foo-example-com",
-	}).ToRoute())
+	}.ToRoute())
 
 	discoverdRegisterHTTPService(c, l, "example-com", srv1.Listener.Addr().String())
 	discoverdRegisterHTTPService(c, l, "foo-example-com", srv2.Listener.Addr().String())
@@ -1009,10 +1013,10 @@ func (s *S) TestCaseInsensitiveDomain(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addRoute(c, l, (&router.HTTPRoute{
+	addRoute(c, l, router.HTTPRoute{
 		Domain:  "exaMple.com",
 		Service: "example-com",
-	}).ToRoute())
+	}.ToRoute())
 
 	discoverdRegisterHTTPService(c, l, "example-com", srv.Listener.Addr().String())
 
@@ -1029,10 +1033,10 @@ func (s *S) TestHostPortStripping(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addRoute(c, l, (&router.HTTPRoute{
+	addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "example-com",
-	}).ToRoute())
+	}.ToRoute())
 
 	discoverdRegisterHTTPService(c, l, "example-com", srv.Listener.Addr().String())
 
@@ -1057,10 +1061,10 @@ func (s *S) TestHTTPResponseStreaming(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addRoute(c, l, (&router.HTTPRoute{
+	addRoute(c, l, router.HTTPRoute{
 		Domain:  "example.com",
 		Service: "example-com",
-	}).ToRoute())
+	}.ToRoute())
 
 	discoverdRegisterHTTPService(c, l, "example-com", srv.Listener.Addr().String())
 
@@ -1107,10 +1111,10 @@ func (s *S) TestHTTPHijackUpgrade(c *C) {
 	l := s.newHTTPListener(c)
 	defer l.Close()
 
-	addRoute(c, l, (&router.HTTPRoute{
+	addRoute(c, l, router.HTTPRoute{
 		Domain:  "127.0.0.1", // TODO: httpclient overrides the Host header
 		Service: "example-com",
-	}).ToRoute())
+	}.ToRoute())
 	discoverdRegisterHTTPService(c, l, "example-com", srv.Listener.Addr().String())
 
 	client := httpclient.Client{
