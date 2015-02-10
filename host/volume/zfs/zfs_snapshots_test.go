@@ -3,6 +3,7 @@ package zfs
 import (
 	"os"
 	"path/filepath"
+	"syscall"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/pkg/testutils"
@@ -26,6 +27,7 @@ func (s *ZfsSnapshotTests) TestSnapshotShouldCarryFiles(c *C) {
 
 	// a new volume should start out empty:
 	c.Assert(v.Location(), testutils.DirContains, []string{})
+	c.Assert(v.IsSnapshot(), Equals, false)
 
 	f, err := os.Create(filepath.Join(v.Location(), "alpha"))
 	c.Assert(err, IsNil)
@@ -34,8 +36,10 @@ func (s *ZfsSnapshotTests) TestSnapshotShouldCarryFiles(c *C) {
 	// sanity check, can we so much as even write a file:
 	c.Assert(v.Location(), testutils.DirContains, []string{"alpha"})
 
-	v2, err := v.TakeSnapshot()
+	// create a volume.  check that it looks like one.
+	v2, err := s.VolProv.CreateSnapshot(v)
 	c.Assert(err, IsNil)
+	c.Assert(v2.IsSnapshot(), Equals, true)
 
 	// taking a snapshot shouldn't change the source dir:
 	c.Assert(v.Location(), testutils.DirContains, []string{"alpha"})
@@ -57,7 +61,7 @@ func (s *ZfsSnapshotTests) TestSnapshotShouldIsolateNewChangesToSource(c *C) {
 	// sanity check, can we so much as even write a file:
 	c.Assert(v.Location(), testutils.DirContains, []string{"alpha"})
 
-	v2, err := v.TakeSnapshot()
+	v2, err := s.VolProv.CreateSnapshot(v)
 	c.Assert(err, IsNil)
 
 	// write another file to the source
@@ -71,7 +75,7 @@ func (s *ZfsSnapshotTests) TestSnapshotShouldIsolateNewChangesToSource(c *C) {
 	c.Assert(v2.Location(), testutils.DirContains, []string{"alpha"})
 }
 
-func (s *ZfsSnapshotTests) TestSnapshotShouldIsolateNewChangesToFork(c *C) {
+func (s *ZfsSnapshotTests) TestSnapshotShouldBeReadOnly(c *C) {
 	v, err := s.VolProv.NewVolume()
 	c.Assert(err, IsNil)
 
@@ -85,7 +89,34 @@ func (s *ZfsSnapshotTests) TestSnapshotShouldIsolateNewChangesToFork(c *C) {
 	// sanity check, can we so much as even write a file:
 	c.Assert(v.Location(), testutils.DirContains, []string{"alpha"})
 
-	v2, err := v.TakeSnapshot()
+	v2, err := s.VolProv.CreateSnapshot(v)
+	c.Assert(err, IsNil)
+
+	// write another file to the snapshot; should fail
+	f, err = os.Create(filepath.Join(v2.Location(), "beta"))
+	f.Close()
+	c.Assert(err, NotNil)
+	c.Assert(err, FitsTypeOf, &os.PathError{})
+	c.Assert(err.(*os.PathError).Err, Equals, syscall.EROFS)
+}
+
+func (s *ZfsSnapshotTests) TestForkedSnapshotShouldIsolateNewChangesToFork(c *C) {
+	v, err := s.VolProv.NewVolume()
+	c.Assert(err, IsNil)
+
+	// a new volume should start out empty:
+	c.Assert(v.Location(), testutils.DirContains, []string{})
+
+	f, err := os.Create(filepath.Join(v.Location(), "alpha"))
+	c.Assert(err, IsNil)
+	f.Close()
+
+	// sanity check, can we so much as even write a file:
+	c.Assert(v.Location(), testutils.DirContains, []string{"alpha"})
+
+	snap, err := s.VolProv.CreateSnapshot(v)
+	c.Assert(err, IsNil)
+	v2, err := s.VolProv.ForkVolume(snap)
 	c.Assert(err, IsNil)
 
 	// write another file to the fork

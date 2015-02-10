@@ -17,6 +17,8 @@ type Provider interface {
 
 	NewVolume() (Volume, error)
 	DestroyVolume(Volume) error
+	CreateSnapshot(Volume) (Volume, error)
+	ForkVolume(Volume) (Volume, error)
 
 	MarshalGlobalState() (json.RawMessage, error)
 	MarshalVolumeState(volumeID string) (json.RawMessage, error)
