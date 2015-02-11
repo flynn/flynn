@@ -3,7 +3,6 @@
 # A script to install Flynn from a TUF repository.
 
 FLYNN_HOST_CHECKSUM="{{FLYNN-HOST-CHECKSUM}}"
-VERBOSE=false
 
 usage() {
   cat <<USAGE >&2
@@ -46,7 +45,11 @@ main() {
 
   repo_url="${repo_url:="https://dl.flynn.io"}"
 
-  info "installing runtime dependencies"
+  info "adding zfs-native APT PPA"
+  run apt-key adv --keyserver keyserver.ubuntu.com --recv E871F18B51E0147C77796AC81196BA81F6B0FC61
+  echo deb http://ppa.launchpad.net/zfs-native/stable/ubuntu trusty main > /etc/apt/sources.list.d/zfs.list
+  run apt-get update
+
   local packages=(
     "aufs-tools"
     "iptables"
@@ -58,15 +61,13 @@ main() {
       "linux-image-extra-$(uname -r)"
     )
   fi
-  run apt-key adv --keyserver keyserver.ubuntu.com --recv E871F18B51E0147C77796AC81196BA81F6B0FC61
-  echo deb http://ppa.launchpad.net/zfs-native/stable/ubuntu trusty main > /etc/apt/sources.list.d/zfs.list
-  run apt-get update
+  info "installing runtime dependencies"
   run apt-get install --yes ${packages[@]}
 
   info "downloading flynn-host binary to tmp dir"
   local tmp="$(mktemp --directory)"
   trap "rm -rf ${tmp}" EXIT
-  if ! curl -qsL --fail -o "${tmp}/flynn-host.gz" "${repo_url}/tuf/targets/${FLYNN_HOST_CHECKSUM}.flynn-host.gz"; then
+  if ! curl -fsSL -o "${tmp}/flynn-host.gz" "${repo_url}/tuf/targets/${FLYNN_HOST_CHECKSUM}.flynn-host.gz"; then
     fail "failed to download flynn-host binary from ${repo_url}"
   fi
 
@@ -79,8 +80,8 @@ main() {
 
   info "moving verified flynn-host binary to /usr/local/bin"
   run gunzip "${tmp}/flynn-host.gz"
-  mv "${tmp}/flynn-host" /usr/local/bin/flynn-host
-  chmod +x /usr/local/bin/flynn-host
+  run mv "${tmp}/flynn-host" "/usr/local/bin/flynn-host"
+  run chmod +x "/usr/local/bin/flynn-host"
 
   info "downloading Flynn components"
   mkdir -p "/etc/flynn"
@@ -94,6 +95,8 @@ main() {
   info "installing Upstart job"
   cp /etc/flynn/upstart.conf /etc/init/flynn-host.conf
   initctl reload-configuration
+
+  info "installation complete!"
 }
 
 is_root() {
@@ -120,21 +123,11 @@ check_installed() {
 
 run() {
   local cmd=$@
-  local output
-
   info "running \"${cmd}\""
-  if $VERBOSE; then
-    $cmd
-  else
-    output=$($cmd 2>&1)
-  fi
+  $cmd
 
   local status=$?
   if [[ $status -ne 0 ]]; then
-    if [[ -n "${output}" ]]; then
-      echo "${output}" >&2
-    fi
-
     fail "failed to run \"${cmd}\", exit status ${status}"
   fi
 }
