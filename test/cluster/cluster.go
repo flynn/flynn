@@ -401,7 +401,7 @@ if [[ -f test/scripts/debug-info.sh ]]; then
   sudo cp test/scripts/debug-info.sh /usr/local/bin/debug-info.sh
 fi
 
-sudo cp host/bin/flynn-* /usr/bin
+sudo cp host/bin/flynn-* /usr/local/bin
 sudo cp host/bin/manifest.json /etc/flynn-host.json
 sudo cp bootstrap/bin/manifest.json /etc/flynn-bootstrap.json
 `[1:]))

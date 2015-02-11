@@ -77,19 +77,19 @@ main() {
   fi
   popd >/dev/null
 
-  info "moving verified flynn-host binary to /usr/bin"
+  info "moving verified flynn-host binary to /usr/local/bin"
   run gunzip "${tmp}/flynn-host.gz"
-  mv "${tmp}/flynn-host" /usr/bin/flynn-host
-  chmod +x /usr/bin/flynn-host
+  mv "${tmp}/flynn-host" /usr/local/bin/flynn-host
+  chmod +x /usr/local/bin/flynn-host
 
   info "downloading Flynn components"
   mkdir -p "/etc/flynn"
-  /usr/bin/flynn-host download \
+  /usr/local/bin/flynn-host download \
     --repository "${repo_url}/tuf" \
     --tuf-db     "/etc/flynn/tuf.db" \
     --config-dir "/etc/flynn" \
-    --bin-dir    "/usr/bin"
-  ln -fs "/usr/bin/flynn-linux-amd64" "/usr/bin/flynn"
+    --bin-dir    "/usr/local/bin"
+  ln -fs "/usr/local/bin/flynn-linux-amd64" "/usr/local/bin/flynn"
 
   info "installing Upstart job"
   cp /etc/flynn/upstart.conf /etc/init/flynn-host.conf
