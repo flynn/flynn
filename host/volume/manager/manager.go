@@ -142,6 +142,23 @@ func (m *Manager) DestroyVolume(id string) error {
 		return err
 	}
 	delete(m.volumes, id)
+	// clean up named volumes
+	namesToRemove := make([]string, 0, 1)
+	for name, volID := range m.namedVolumes {
+		if volID == id {
+			namesToRemove = append(namesToRemove, name)
+		}
+		delete(m.namedVolumes, name)
+	}
+	// commit both changes
+	m.persist(func(tx *bolt.Tx) error {
+		for _, id := range namesToRemove {
+			if err := m.persistNamedVolume(tx, id); err != nil {
+				return err
+			}
+		}
+		return m.persistVolume(tx, vol)
+	})
 	return nil
 }
 
@@ -279,13 +296,14 @@ func (m *Manager) getProviderBucket(tx *bolt.Tx, providerID string) (*bolt.Bucke
 	return providerBucket, err
 }
 
-// Called to sync changes to disk when a VolumeInfo is updated
-func (m *Manager) persistVolume(tx *bolt.Tx, id string) error {
+// Called to sync changes to disk when a volume is updated
+func (m *Manager) persistVolume(tx *bolt.Tx, vol volume.Volume) error {
 	// Save the general volume info
 	volumesBucket := tx.Bucket([]byte("volumes"))
+	id := vol.Info().ID
 	k := []byte(id)
-	vol, ok := m.volumes[id]
-	if !ok {
+	_, volExists := m.volumes[id]
+	if !volExists {
 		volumesBucket.Delete(k)
 	} else {
 		b, err := json.Marshal(vol.Info())
@@ -304,7 +322,7 @@ func (m *Manager) persistVolume(tx *bolt.Tx, id string) error {
 		return fmt.Errorf("could not persist provider volume info to boltdb: %s", err)
 	}
 	providerVolumesBucket := providerBucket.Bucket([]byte("volumes"))
-	if !ok {
+	if !volExists {
 		providerVolumesBucket.Delete(k)
 	} else {
 		b, err := vol.Provider().MarshalVolumeState(id)
@@ -378,7 +396,7 @@ func (p managerProviderProxy) NewVolume() (volume.Volume, error) {
 		return v, err
 	}
 	p.m.volumes[v.Info().ID] = v
-	p.m.persist(func(tx *bolt.Tx) error { return p.m.persistVolume(tx, v.Info().ID) })
+	p.m.persist(func(tx *bolt.Tx) error { return p.m.persistVolume(tx, v) })
 	return v, err
 }
 
