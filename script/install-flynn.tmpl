@@ -89,7 +89,7 @@ main() {
     --tuf-db     "/etc/flynn/tuf.db" \
     --config-dir "/etc/flynn" \
     --bin-dir    "/usr/bin"
-  ln -s "/usr/bin/flynn-linux-amd64" "/usr/bin/flynn"
+  ln -fs "/usr/bin/flynn-linux-amd64" "/usr/bin/flynn"
 
   info "installing Upstart job"
   cp /etc/flynn/upstart.conf /etc/init/flynn-host.conf
