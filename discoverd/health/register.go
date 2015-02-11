@@ -111,5 +111,11 @@ func (h *heartbeater) SetMeta(meta map[string]string) error {
 
 func (h *heartbeater) Close() error {
 	h.stream.Close()
+	h.Lock()
+	if h.hb != nil {
+		h.hb.Close()
+		h.hb = nil
+	}
+	h.Unlock()
 	return nil
 }
