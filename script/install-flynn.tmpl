@@ -132,15 +132,18 @@ run() {
   fi
 }
 
+timestamp() {
+  date "+%H:%M:%S.%3N"
+}
+
 info() {
   local msg=$1
-  local timestamp=$(date +%H:%M:%S.%3N)
-  echo "===> ${timestamp} ${msg}"
+  echo -e "\e[1;32m===> $(timestamp) ${msg}\e[0m"
 }
 
 fail() {
   local msg=$1
-  info "ERROR: ${msg}"
+  echo -e "\e[1;31m===> $(timestamp) ERROR: ${msg}\e[0m"
   exit 1
 }
 
