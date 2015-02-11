@@ -50,7 +50,7 @@ options:
   --backend=BACKEND      runner backend [default: libvirt-lxc]
   --meta=<KEY=VAL>...    key=value pair to add as metadata
   --bind=IP              bind containers to IP
-  --flynn-init=PATH      path to flynn-init binary [default: /usr/bin/flynn-init]
+  --flynn-init=PATH      path to flynn-init binary [default: /usr/local/bin/flynn-init]
 	`)
 }
 
