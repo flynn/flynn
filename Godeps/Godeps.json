@@ -376,6 +376,14 @@
 			"Rev": "c46bdbf4af2e43e5f163092037ec27e9e9aee1f3"
 		},
 		{
+			"ImportPath": "github.com/kylelemons/godebug/diff",
+			"Rev": "808ac284003ce2b08ef590da08f95379e8a06936"
+		},
+		{
+			"ImportPath": "github.com/kylelemons/godebug/pretty",
+			"Rev": "808ac284003ce2b08ef590da08f95379e8a06936"
+		},
+		{
 			"ImportPath": "github.com/martini-contrib/binding",
 			"Rev": "f77b87950a1910e11b2de09446f8b331eedc18ac"
 		},
