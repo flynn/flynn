@@ -178,7 +178,8 @@
     },
     "processes": {
       "app": 1
-    }
+    },
+    "resources": [{"name":"postgres", "url":"http://pg-api.discoverd/databases"}]
   },
   {
     "id": "gitreceive-key",
@@ -235,10 +236,8 @@
     "action": "add-route",
     "app_step": "gitreceive",
     "type": "tcp",
-    "config": {
-      "service": "gitreceive",
-      "port": 2222
-    }
+    "service": "gitreceive",
+    "port": 2222
   },
   {
     "id": "controller-route",
@@ -246,10 +245,8 @@
     "app_step": "controller-inception",
     "cert_step": "controller-cert",
     "type": "http",
-    "config": {
-      "service": "flynn-controller",
-      "domain": "controller.{{ getenv \"CLUSTER_DOMAIN\" }}"
-    }
+    "service": "flynn-controller",
+    "domain": "controller.{{ getenv \"CLUSTER_DOMAIN\" }}"
   },
   {
     "id": "controller-route-wait",
@@ -325,10 +322,8 @@
     "app_step": "dashboard",
     "cert_step": "controller-cert",
     "type": "http",
-    "config": {
-      "service": "dashboard-web",
-      "domain": "dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}"
-    }
+    "service": "dashboard-web",
+    "domain": "dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}"
   },
   {
     "id": "blobstore-wait",
