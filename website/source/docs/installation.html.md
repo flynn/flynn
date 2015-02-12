@@ -125,7 +125,7 @@ $ sudo flynn-host init --init-discovery=3
 https://discovery.etcd.io/ac4581ec13a1d4baee9f9c78cf06a8c0
 ```
 
-On each subsequent node, configure the generated discovery token:
+On the rest of the nodes, configure the generated discovery token:
 
 ```
 $ sudo flynn-host init --discovery https://discovery.etcd.io/ac4581ec13a1d4baee9f9c78cf06a8c0
