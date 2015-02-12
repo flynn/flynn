@@ -43,6 +43,26 @@ func (s *DNSSuite) TearDownTest(c *C) {
 	}
 }
 
+func (s *DNSSuite) TestRecursorParsing(c *C) {
+	srv := s.newServer(c, []string{
+		"2001:4860:4860::8844",
+		"[2001:4860:4860::8888]:553",
+		"8.8.8.8",
+		"8.8.4.4:5553",
+		"google-public-dns-a.google.com",
+		"google-public-dns-b.google.com:55553",
+	})
+	srv.Close()
+	c.Assert(srv.Recursors, DeepEquals, []string{
+		"[2001:4860:4860::8844]:53",
+		"[2001:4860:4860::8888]:553",
+		"8.8.8.8:53",
+		"8.8.4.4:5553",
+		"8.8.8.8:53",
+		"8.8.4.4:55553",
+	})
+}
+
 func (s *DNSSuite) TestRecursor(c *C) {
 	s.srv.Close()
 	s.srv = nil
