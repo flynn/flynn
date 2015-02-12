@@ -98,8 +98,14 @@ func (srv *DNSServer) ListenAndServe() error {
 func (srv *DNSServer) validateRecursors() error {
 	for i, r := range srv.Recursors {
 		_, _, err := net.SplitHostPort(r)
-		if e, ok := err.(*net.AddrError); ok && e.Err == "missing port in address" {
-			r = r + ":53"
+		if e, ok := err.(*net.AddrError); ok {
+			switch e.Err {
+			case "missing port in address":
+				r = r + ":53"
+			case "too many colons in address":
+				// Assume a bare IPv6 address
+				r = fmt.Sprintf("[%s]:53", r)
+			}
 		} else if err != nil {
 			return fmt.Errorf("discoverd: invalid recursor address %s: %s", r, err)
 		}
