@@ -15,11 +15,13 @@ import (
 )
 
 var serviceName = os.Getenv("FLYNN_POSTGRES")
+var serviceHost string
 
 func init() {
 	if serviceName == "" {
 		serviceName = "pg"
 	}
+	serviceHost = fmt.Sprintf("leader.%s.discoverd", serviceName)
 }
 
 func main() {
@@ -81,6 +83,7 @@ func createDatabase(db *postgres.DB, r render.Render) {
 		ID: fmt.Sprintf("/databases/%s:%s", username, database),
 		Env: map[string]string{
 			"FLYNN_POSTGRES": serviceName,
+			"PGHOST":         serviceHost,
 			"PGUSER":         username,
 			"PGPASSWORD":     password,
 			"PGDATABASE":     database,
