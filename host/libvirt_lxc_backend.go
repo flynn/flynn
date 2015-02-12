@@ -63,6 +63,7 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, lo
 		pinkerton:  pinkertonCtx,
 		logs:       make(map[string]*logbuf.Log),
 		containers: make(map[string]*libvirtContainer),
+		resolvConf: "/etc/resolv.conf",
 	}, nil
 }
 
@@ -78,6 +79,7 @@ type LibvirtLXCBackend struct {
 	ifaceMTU   int
 	bridgeAddr net.IP
 	bridgeNet  *net.IPNet
+	resolvConf string
 
 	logsMtx sync.Mutex
 	logs    map[string]*logbuf.Log
@@ -314,6 +316,7 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 	if err := ioutil.WriteFile("/etc/flynn/resolv.conf", []byte(fmt.Sprintf("nameserver %s\n", l.bridgeAddr.String())), 0644); err != nil {
 		return nil, err
 	}
+	l.resolvConf = "/etc/flynn/resolv.conf"
 
 	// Read DNS config, discoverd uses the nameservers
 	dnsConf, err := dns.ClientConfigFromFile("/etc/resolv.conf")
@@ -385,11 +388,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 		return err
 	}
 
-	resolvConf := "/etc/flynn/resolv.conf"
-	if job.Config.HostNetwork {
-		resolvConf = "/etc/resolv.conf"
-	}
-	if err := bindMount(resolvConf, filepath.Join(rootPath, "etc/resolv.conf"), false, true); err != nil {
+	if err := bindMount(l.resolvConf, filepath.Join(rootPath, "etc/resolv.conf"), false, true); err != nil {
 		g.Log(grohl.Data{"at": "mount", "file": "resolv.conf", "status": "error", "err": err})
 		return err
 	}
