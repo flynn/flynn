@@ -23,6 +23,7 @@ type TCPListener struct {
 	discoverd DiscoverdClient
 	ds        DataStore
 	wm        *WatchManager
+	stopSync  func()
 
 	startPort int
 	endPort   int
@@ -89,6 +90,9 @@ func (l *TCPListener) RemoveRoute(id string) error {
 }
 
 func (l *TCPListener) Start() error {
+	ctx := context.Background() // TODO(benburkert): make this an argument
+	ctx, l.stopSync = context.WithCancel(ctx)
+
 	if l.Watcher != nil {
 		return errors.New("router: tcp listener already started")
 	}
@@ -107,8 +111,6 @@ func (l *TCPListener) Start() error {
 	l.ports = make(map[int]*tcpRoute)
 	l.listeners = make(map[int]net.Listener)
 
-	started := make(chan error)
-
 	if l.startPort != 0 && l.endPort != 0 {
 		for i := l.startPort; i <= l.endPort; i++ {
 			listener, err := reuseport.NewReusablePortListener("tcp4", fmt.Sprintf("%s:%d", l.IP, i))
@@ -122,14 +124,53 @@ func (l *TCPListener) Start() error {
 
 	// TODO(benburkert): the sync API cannot handle routes deleted while the
 	// listen/notify connection is disconnected
-	go l.ds.Sync(&tcpSyncHandler{l: l}, started)
-	return <-started
+	if err := l.startSync(ctx); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (l *TCPListener) startSync(ctx context.Context) error {
+	errc := make(chan error)
+	startc := l.doSync(ctx, errc)
+
+	select {
+	case err := <-errc:
+		return err
+	case <-startc:
+		go l.runSync(ctx, errc)
+		return nil
+	}
+}
+
+func (l *TCPListener) runSync(ctx context.Context, errc chan error) {
+	err := <-errc
+
+	for {
+		if err == nil {
+			return
+		}
+		log.Printf("router: tcp sync error: %s", err)
+
+		l.doSync(ctx, errc)
+
+		err = <-errc
+	}
+}
+
+func (l *TCPListener) doSync(ctx context.Context, errc chan<- error) <-chan struct{} {
+	startc := make(chan struct{})
+
+	go func() { errc <- l.ds.Sync(ctx, &tcpSyncHandler{l: l}, startc) }()
+
+	return startc
 }
 
 func (l *TCPListener) Close() error {
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
-	l.ds.StopSync()
+	l.stopSync()
 	for _, s := range l.routes {
 		s.Close()
 	}
