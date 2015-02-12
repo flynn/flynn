@@ -14,7 +14,6 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/cli"
 	"github.com/flynn/flynn/host/config"
-	"github.com/flynn/flynn/host/ports"
 	"github.com/flynn/flynn/host/sampi"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
@@ -152,11 +151,6 @@ func runDaemon(args *docopt.Args) {
 		}
 	}
 
-	portAlloc := map[string]*ports.Allocator{
-		"tcp": ports.NewAllocator(55000, 65535),
-		"udp": ports.NewAllocator(55000, 65535),
-	}
-
 	state := NewState(hostID, stateFile)
 	var backend Backend
 	var err error
@@ -209,7 +203,6 @@ func runDaemon(args *docopt.Args) {
 		backend:      backend,
 		state:        state,
 		vman:         vman,
-		ports:        portAlloc,
 	}
 
 	discURL := os.Getenv("DISCOVERD")

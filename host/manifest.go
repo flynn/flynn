@@ -11,7 +11,6 @@ import (
 	"text/template"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
-	"github.com/flynn/flynn/host/ports"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume/manager"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -43,7 +42,6 @@ type ManifestData struct {
 	Env         map[string]string
 	Services    map[string]*ManifestData
 
-	ports    *ports.Allocator
 	readonly bool
 }
 
@@ -57,12 +55,9 @@ func (m *ManifestData) TCPPort(id int) (int, error) {
 		return 0, fmt.Errorf("host: invalid TCPPort(%d), expecting id <= %d", id, len(m.TCPPorts))
 	}
 
-	port, err := m.ports.Get()
-	if err != nil {
-		return 0, err
-	}
-	m.TCPPorts = append(m.TCPPorts, int(port))
-	return int(port), nil
+	port := 5000 + len(m.TCPPorts)
+	m.TCPPorts = append(m.TCPPorts, port)
+	return port, nil
 }
 
 func (m *ManifestData) Volume(volName string, mntPath string) string {
@@ -80,7 +75,6 @@ type manifestRunner struct {
 	backend      Backend
 	state        *State
 	vman         *volumemanager.Manager
-	ports        map[string]*ports.Allocator
 }
 
 type manifestService struct {
@@ -124,7 +118,6 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 			InternalIP: job.InternalIP,
 			Env:        job.Job.Config.Env,
 			Services:   serviceData,
-			ports:      m.ports["tcp"],
 			readonly:   true,
 		}
 		data.TCPPorts = make([]int, 0, len(job.Job.Config.Ports))
@@ -150,7 +143,6 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 			ExternalIP:  m.externalAddr,
 			BridgeIP:    netInfo.BridgeAddr,
 			Nameservers: strings.Join(netInfo.Nameservers, ","),
-			ports:       m.ports["tcp"],
 		}
 
 		// Add explicit tcp ports to data.TCPPorts
