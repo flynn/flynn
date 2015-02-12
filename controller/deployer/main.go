@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"time"
 
@@ -43,15 +42,14 @@ func main() {
 		shutdown.Fatal()
 	}
 
-	pgxcfg, err := pgx.ParseURI(fmt.Sprintf("http://%s:%s@%s/%s", os.Getenv("PGUSER"), os.Getenv("PGPASSWORD"), db.Addr(), os.Getenv("PGDATABASE")))
-	if err != nil {
-		log.Error("error parsing postgres URI", "err", err)
-		shutdown.Fatal()
-	}
-
 	log.Info("creating postgres connection pool")
 	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
-		ConnConfig:     pgxcfg,
+		ConnConfig: pgx.ConnConfig{
+			Host:     os.Getenv("PGHOST"),
+			User:     os.Getenv("PGUSER"),
+			Password: os.Getenv("PGPASSWORD"),
+			Database: os.Getenv("PGDATABASE"),
+		},
 		AfterConnect:   que.PrepareStatements,
 		MaxConnections: workerCount,
 	})
