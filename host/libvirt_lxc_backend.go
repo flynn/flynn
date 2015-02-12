@@ -40,6 +40,7 @@ import (
 const (
 	libvirtNetName = "flynn"
 	bridgeName     = "flynnbr0"
+	imageRoot      = "/var/lib/docker"
 )
 
 func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, logPath, initPath string) (Backend, error) {
@@ -48,7 +49,7 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, lo
 		return nil, err
 	}
 
-	pinkertonCtx, err := pinkerton.BuildContext("aufs", "/var/lib/docker")
+	pinkertonCtx, err := pinkerton.BuildContext("aufs", imageRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -97,8 +98,6 @@ type libvirtContainer struct {
 	*containerinit.Client
 }
 
-const dockerBase = "/var/lib/docker"
-
 type dockerImageConfig struct {
 	User       string
 	Env        []string
@@ -146,7 +145,7 @@ func writeHostname(path, hostname string) error {
 
 func readDockerImageConfig(id string) (*dockerImageConfig, error) {
 	res := &struct{ Config dockerImageConfig }{}
-	f, err := os.Open(filepath.Join(dockerBase, "graph", id, "json"))
+	f, err := os.Open(filepath.Join(imageRoot, "graph", id, "json"))
 	if err != nil {
 		return nil, err
 	}
@@ -450,9 +449,6 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 		if p.Proto != "tcp" && p.Proto != "udp" {
 			return fmt.Errorf("unknown port proto %q", p.Proto)
 		}
-		if 0 < p.RangeEnd && p.RangeEnd < p.Port {
-			return fmt.Errorf("port range end %d cannot be less than port %d", p.RangeEnd, p.Port)
-		}
 
 		if p.Port == 0 {
 			job.Config.Ports[i].Port = 5000 + i
@@ -494,6 +490,9 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 		} else {
 			config.Args = append(config.Args, imageConfig.Cmd...)
 		}
+	}
+	for _, port := range job.Config.Ports {
+		config.Ports = append(config.Ports, port)
 	}
 
 	g.Log(grohl.Data{"at": "write_config"})

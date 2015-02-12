@@ -78,8 +78,6 @@ running on Flynn via an HTTP API.
 
 **[router](/router)** Flynn's TCP/HTTP router/load balancer.
 
-**[sdutil](/sdutil)** Service discovery utility for [discoverd](/discoverd).
-
 **[slugbuilder](/slugbuilder)** Turns a tarball into a Heroku-style "slug" using
 [buildpacks](https://devcenter.heroku.com/articles/buildpacks).
 

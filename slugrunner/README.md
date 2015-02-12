@@ -42,17 +42,6 @@ buildpack that built the app. For example, here we can start the `web` process:
 
 	$ cat myslug.tgz | docker run -i -a stdin -a stdout -a stderr flynn/slugrunner start web
 
-## Service Discovery
-
-The runner can also register with [go-discover](/discoverd/client) based service
-discovery using [sdutil](/sdutil). If `$SD_NAME` and `$PORT` environment
-variables are set, the command is run with `sdutil exec $SD_NAME:$PORT`.
-`$SD_NAME` is unset before the command is run, but `$PORT` is left set since it
-is often used without service discovery.
-
-It is also possible to fully customize the command line for `sdutil` tool using
-`$SD_ARGS`.
-
 ## Base Environment
 
 The container image is based on

@@ -136,7 +136,11 @@ func (RegisterSuite) TestRegister(c *C) {
 			Events:    make(chan MonitorEvent),
 		}
 		hb := reg.Register()
-		defer hb.Close()
+		defer func() {
+			go func() { <-unregisterChan }()
+			hb.Close()
+			close(unregisterChan)
+		}()
 
 		errCh := make(chan bool)
 		errCheck := func(ch chan called, stop chan bool) {
@@ -224,7 +228,6 @@ func (RegisterSuite) TestRegister(c *C) {
 				}
 			}
 		}
-		close(unregisterChan)
 		close(monitorChan)
 		close(registrarChan)
 		close(metaChan)
