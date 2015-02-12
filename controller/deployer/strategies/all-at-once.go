@@ -7,32 +7,38 @@ import (
 )
 
 func allAtOnce(l log15.Logger, client *controller.Client, d *ct.Deployment, events chan<- ct.DeploymentEvent) error {
-	log := l.New("fn", "allAtOnce")
-	log.Info("Starting")
+	log := l.New("fn", "allAtOnce", "deployment_id", d.ID, "app_id", d.AppID)
+	log.Info("starting all-at-once deployment")
 
+	log.Info("getting job event stream")
 	jobStream := make(chan *ct.JobEvent)
 	stream, err := client.StreamJobEvents(d.AppID, 0, jobStream)
 	if err != nil {
-		log.Error("Failed to create a job event stream", "at", "stream_job_events", "err", err)
+		log.Error("error getting job event stream", "err", err)
 		return err
 	}
 	defer stream.Close()
 
+	olog := log.New("release_id", d.OldReleaseID)
+	olog.Info("getting old formation")
 	f, err := client.GetFormation(d.AppID, d.OldReleaseID)
 	if err != nil {
-		log.Error("Failed to fetch the old formation", "at", "get_formation", "err", err)
+		olog.Error("error getting old formation", "err", err)
 		return err
 	}
 
+	nlog := log.New("release_id", d.NewReleaseID)
+	nlog.Info("creating new formation", "processes", f.Processes)
 	if err := client.PutFormation(&ct.Formation{
 		AppID:     d.AppID,
 		ReleaseID: d.NewReleaseID,
 		Processes: f.Processes,
 	}); err != nil {
-		log.Error("Failed to start processes", "at", "start_processes", "err", err)
+		nlog.Error("error creating new formation", "err", err)
 		return err
 	}
-	expect := make(jobEvents)
+
+	expected := make(jobEvents)
 	for typ, n := range f.Processes {
 		for i := 0; i < n; i++ {
 			events <- ct.DeploymentEvent{
@@ -41,21 +47,24 @@ func allAtOnce(l log15.Logger, client *controller.Client, d *ct.Deployment, even
 				JobType:   typ,
 			}
 		}
-		expect[d.NewReleaseID] = map[string]map[string]int{typ: {"up": n}}
+		expected[typ] = map[string]int{"up": n}
 	}
-	if err := waitForJobEvents(jobStream, events, expect); err != nil {
-		log.Error("Error during waiting for job events", "at", "wait", "err", err)
+	nlog.Info("waiting for job events", "expected", expected)
+	if err := waitForJobEvents(jobStream, events, d.NewReleaseID, expected, nlog); err != nil {
+		nlog.Error("error waiting for job events", "err", err)
 		return err
 	}
-	// scale to 0
+
+	olog.Info("scaling old formation to zero")
 	if err := client.PutFormation(&ct.Formation{
 		AppID:     d.AppID,
 		ReleaseID: d.OldReleaseID,
 	}); err != nil {
-		log.Error("Failed to stop processes", "at", "stop_processes", "err", err)
+		log.Error("error scaling old formation to zero", "err", err)
 		return err
 	}
-	expect = make(jobEvents)
+
+	expected = make(jobEvents)
 	for typ, n := range f.Processes {
 		for i := 0; i < n; i++ {
 			events <- ct.DeploymentEvent{
@@ -64,12 +73,13 @@ func allAtOnce(l log15.Logger, client *controller.Client, d *ct.Deployment, even
 				JobType:   typ,
 			}
 		}
-		expect[d.OldReleaseID] = map[string]map[string]int{typ: {"down": n}}
+		expected[typ] = map[string]int{"down": n}
 	}
-	if err := waitForJobEvents(jobStream, events, expect); err != nil {
-		log.Error("Error during waiting for job events", "at", "wait", "err", err)
+	olog.Info("waiting for job events", "expected", expected)
+	if err := waitForJobEvents(jobStream, events, d.OldReleaseID, expected, olog); err != nil {
+		olog.Error("error waiting for job events", "err", err)
 		return err
 	}
-	log.Info("Done")
+	log.Info("finished all-at-once deployment")
 	return nil
 }

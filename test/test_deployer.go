@@ -41,14 +41,14 @@ func (s *DeployerSuite) createDeployment(t *c.C, process, strategy string) *ct.D
 }
 
 func waitForDeploymentEvents(t *c.C, stream chan *ct.DeploymentEvent, expected []*ct.DeploymentEvent) {
-	// wait for an event with no release to mark the end of the deployment,
-	// collecting events along the way
-	events := []*ct.DeploymentEvent{}
+	debugf(t, "waiting for %d deployment events", len(expected))
+	actual := make([]*ct.DeploymentEvent, 0, len(expected))
 loop:
 	for {
 		select {
 		case e := <-stream:
-			events = append(events, e)
+			debugf(t, "got deployment event: %s %s", e.JobType, e.JobState)
+			actual = append(actual, e)
 			if e.Status == "complete" || e.Status == "failed" {
 				break loop
 			}
@@ -57,7 +57,6 @@ loop:
 		}
 	}
 	compare := func(t *c.C, i *ct.DeploymentEvent, j *ct.DeploymentEvent) {
-		debug(t, "Comparing", i, j)
 		t.Assert(i.ReleaseID, c.Equals, j.ReleaseID)
 		t.Assert(i.JobType, c.Equals, j.JobType)
 		t.Assert(i.JobState, c.Equals, j.JobState)
@@ -65,7 +64,7 @@ loop:
 	}
 
 	for i, e := range expected {
-		compare(t, events[i], e)
+		compare(t, actual[i], e)
 	}
 }
 

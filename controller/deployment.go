@@ -93,6 +93,7 @@ func scanDeployment(s postgres.Scanner) (*ct.Deployment, error) {
 		err = ErrNotFound
 	}
 	d.ID = postgres.CleanUUID(d.ID)
+	d.AppID = postgres.CleanUUID(d.AppID)
 	d.OldReleaseID = postgres.CleanUUID(d.OldReleaseID)
 	d.NewReleaseID = postgres.CleanUUID(d.NewReleaseID)
 	return d, err

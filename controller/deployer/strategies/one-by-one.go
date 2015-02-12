@@ -7,36 +7,40 @@ import (
 )
 
 func oneByOne(l log15.Logger, client *controller.Client, d *ct.Deployment, events chan<- ct.DeploymentEvent) error {
-	log := l.New("fn", "oneByOne")
-	log.Info("Starting")
+	log := l.New("fn", "oneByOne", "deployment_id", d.ID, "app_id", d.AppID)
+	log.Info("starting one-by-one deployment")
 
+	log.Info("getting job event stream")
 	jobStream := make(chan *ct.JobEvent)
 	stream, err := client.StreamJobEvents(d.AppID, 0, jobStream)
 	if err != nil {
-		log.Error("Failed to create a job event stream", "at", "stream_job_events", "err", err)
+		log.Error("error getting job event stream", "err", err)
 		return err
 	}
 	defer stream.Close()
 
+	olog := log.New("release_id", d.OldReleaseID)
+	olog.Info("getting old formation")
 	f, err := client.GetFormation(d.AppID, d.OldReleaseID)
 	if err != nil {
-		log.Error("Failed fetching the old formation", "at", "get_formation", "err", err)
+		olog.Error("error getting old formation", "err", err)
 		return err
 	}
 
-	oldFormation := f.Processes
-	newFormation := map[string]int{}
+	oldProcesses := f.Processes
+	newProcesses := make(map[string]int, len(oldProcesses))
 
+	nlog := log.New("release_id", d.NewReleaseID)
 	for typ, num := range f.Processes {
 		for i := 0; i < num; i++ {
-			// start one process
-			newFormation[typ]++
+			nlog.Info("scaling new formation up by one", "type", typ)
+			newProcesses[typ]++
 			if err := client.PutFormation(&ct.Formation{
 				AppID:     d.AppID,
 				ReleaseID: d.NewReleaseID,
-				Processes: newFormation,
+				Processes: newProcesses,
 			}); err != nil {
-				log.Error("Failed starting a process", "at", "start_process", "err", err)
+				nlog.Error("error scaling new formation up by one", "type", typ, "err", err)
 				return err
 			}
 			events <- ct.DeploymentEvent{
@@ -44,18 +48,21 @@ func oneByOne(l log15.Logger, client *controller.Client, d *ct.Deployment, event
 				JobState:  "starting",
 				JobType:   typ,
 			}
-			if err := waitForJobEvents(jobStream, events, jobEvents{d.NewReleaseID: {typ: {"up": 1}}}); err != nil {
-				log.Error("Error during waiting for job events", "at", "wait", "err", err)
+
+			nlog.Info("waiting for job up event", "type", typ)
+			if err := waitForJobEvents(jobStream, events, d.NewReleaseID, jobEvents{typ: {"up": 1}}, nlog); err != nil {
+				nlog.Error("error waiting for job up event", "err", err)
 				return err
 			}
-			// stop one process
-			oldFormation[typ]--
+
+			olog.Info("scaling old formation down by one", "type", typ)
+			oldProcesses[typ]--
 			if err := client.PutFormation(&ct.Formation{
 				AppID:     d.AppID,
 				ReleaseID: d.OldReleaseID,
-				Processes: oldFormation,
+				Processes: oldProcesses,
 			}); err != nil {
-				log.Error("Failed stopping a process", "at", "stop_process", "err", err)
+				olog.Error("error scaling old formation down by one", "type", typ, "err", err)
 				return err
 			}
 			events <- ct.DeploymentEvent{
@@ -63,12 +70,13 @@ func oneByOne(l log15.Logger, client *controller.Client, d *ct.Deployment, event
 				JobState:  "stopping",
 				JobType:   typ,
 			}
-			if err := waitForJobEvents(jobStream, events, jobEvents{d.OldReleaseID: {typ: {"down": 1}}}); err != nil {
-				log.Error("Error during waiting for job events", "at", "wait", "err", err)
+			olog.Info("waiting for job down event", "type", typ)
+			if err := waitForJobEvents(jobStream, events, d.OldReleaseID, jobEvents{typ: {"down": 1}}, olog); err != nil {
+				olog.Error("error waiting for job down event", "err", err)
 				return err
 			}
 		}
 	}
-	log.Info("Done")
+	log.Info("finished one-by-one deployment")
 	return nil
 }
