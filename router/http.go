@@ -86,6 +86,8 @@ func (s *HTTPListener) Start() error {
 
 	started := make(chan error)
 
+	// TODO(benburkert): the sync API cannot handle routes deleted while the
+	// listen/notify connection is disconnected
 	go s.ds.Sync(&httpSyncHandler{l: s}, started)
 	if err := <-started; err != nil {
 		return err
@@ -115,18 +117,16 @@ func (s *HTTPListener) AddRoute(r *router.Route) error {
 	if s.closed {
 		return ErrClosed
 	}
-	r.ID = md5sum(r.HTTPRoute().Domain)
 	return s.ds.Add(r)
 }
 
-func (s *HTTPListener) SetRoute(r *router.Route) error {
+func (s *HTTPListener) UpdateRoute(r *router.Route) error {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	if s.closed {
 		return ErrClosed
 	}
-	r.ID = md5sum(r.HTTPRoute().Domain)
-	return s.ds.Set(r)
+	return s.ds.Update(r)
 }
 
 func md5sum(data string) string {

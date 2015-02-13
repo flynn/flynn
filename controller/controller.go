@@ -268,13 +268,9 @@ func routeParentRef(appID string) string {
 	return "controller/apps/" + appID
 }
 
-func routeID(params httprouter.Params) string {
-	return params.ByName("routes_type") + "/" + params.ByName("routes_id")
-}
-
 func (c *controllerAPI) getRoute(ctx context.Context) (*router.Route, error) {
 	params, _ := ctxhelper.ParamsFromContext(ctx)
-	route, err := c.routerc.GetRoute(routeID(params))
+	route, err := c.routerc.GetRoute(params.ByName("routes_type"), params.ByName("routes_id"))
 	if err == routerc.ErrNotFound || err == nil && route.ParentRef != routeParentRef(c.getApp(ctx).ID) {
 		err = ErrNotFound
 	}

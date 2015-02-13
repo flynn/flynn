@@ -2,87 +2,143 @@ package router
 
 import (
 	"encoding/json"
-	"errors"
 	"time"
 )
 
+// Route is a struct that combines the fields of HTTPRoute and TCPRoute
+// for easy JSON marshaling.
 type Route struct {
-	ID        string `json:"id,omitempty"`
+	// Type is the type of Route, either "http" or "tcp".
+	Type string `json:"type"`
+	// ID is the unique ID of this route.
+	ID string `json:"id,omitempty"`
+	// ParentRef is an external opaque identifier used by the route creator for
+	// filtering and correlation. It typically contains the app ID.
 	ParentRef string `json:"parent_ref,omitempty"`
-	Type      string `json:"type,omitempty"`
-
-	Config *json.RawMessage `json:"config,omitempty"`
-
-	CreatedAt *time.Time `json:"created_at,omitempty"`
-	UpdatedAt *time.Time `json:"updated_at,omitempty"`
-}
-
-var ErrWrongType = errors.New("router: the requested route type does not match the actual type")
-var ErrNoConfig = errors.New("router: the supplied route has no configuration")
-
-func (r *Route) HTTPRoute() *HTTPRoute {
-	rCopy := *r
-	if rCopy.Config == nil {
-		empty := json.RawMessage(`{}`)
-		rCopy.Config = &empty
-	}
-	route := &HTTPRoute{Route: &rCopy}
-	route.Route.Config = nil
-	json.Unmarshal(*r.Config, route)
-	return route
-}
-
-func (r *Route) TCPRoute() *TCPRoute {
-	rCopy := *r
-	if rCopy.Config == nil {
-		empty := json.RawMessage(`{}`)
-		rCopy.Config = &empty
-	}
-	route := &TCPRoute{Route: &rCopy}
-	route.Route.Config = nil
-	json.Unmarshal(*r.Config, route)
-	return route
-}
-
-type HTTPRoute struct {
-	*Route  `json:"-"`
-	Domain  string `json:"domain,omitempty"`
-	Service string `json:"service,omitempty"`
-	TLSCert string `json:"tls_cert,omitempty"`
-	TLSKey  string `json:"tls_key,omitempty"`
-	Sticky  bool   `json:"sticky,omitempty"`
-}
-
-func (r *HTTPRoute) ToRoute() *Route {
-	if r.Route == nil {
-		r.Route = &Route{}
-	}
-	r.Route.Type = "http"
-
-	config, _ := json.Marshal(r)
-	jsonConfig := json.RawMessage(config)
-	route := *r.Route
-	route.Config = &jsonConfig
-	return &route
-}
-
-type TCPRoute struct {
-	*Route  `json:"-"`
-	Port    int    `json:"port"`
+	// Service is the ID of the service.
 	Service string `json:"service"`
+	// CreatedAt is the time this Route was created.
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	// UpdatedAt is the time this Route was last updated.
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+
+	// Domain is the domain name of this Route. It is only used for HTTP routes.
+	Domain string `json:"domain,omitempty"`
+	// TLSCert is the optional TLS public certificate of this Route. It is only
+	// used for HTTP routes.
+	TLSCert string `json:"tls_cert,omitempty"`
+	// TLSCert is the optional TLS private key of this Route. It is only
+	// used for HTTP routes.
+	TLSKey string `json:"tls_key,omitempty"`
+	// Sticky is whether or not to use sticky sessions for this route. It is only
+	// used for HTTP routes.
+	Sticky bool `json:"sticky,omitempty"`
+
+	// Port is the TCP port to listen on for TCP Routes.
+	Port int32 `json:"port,omitempty"`
 }
 
-func (r *TCPRoute) ToRoute() *Route {
-	if r.Route == nil {
-		r.Route = &Route{}
-	}
-	r.Route.Type = "tcp"
+func (r Route) FormattedID() string {
+	return r.Type + "/" + r.ID
+}
 
-	config, _ := json.Marshal(r)
-	jsonConfig := json.RawMessage(config)
-	route := *r.Route
-	route.Config = &jsonConfig
-	return &route
+func (r Route) HTTPRoute() *HTTPRoute {
+	return &HTTPRoute{
+		ID:        r.ID,
+		ParentRef: r.ParentRef,
+		Service:   r.Service,
+		CreatedAt: r.CreatedAt,
+		UpdatedAt: r.UpdatedAt,
+
+		Domain:  r.Domain,
+		TLSCert: r.TLSCert,
+		TLSKey:  r.TLSKey,
+		Sticky:  r.Sticky,
+	}
+}
+
+func (r Route) TCPRoute() *TCPRoute {
+	return &TCPRoute{
+		ID:        r.ID,
+		ParentRef: r.ParentRef,
+		Service:   r.Service,
+		CreatedAt: r.CreatedAt,
+		UpdatedAt: r.UpdatedAt,
+
+		Port: int(r.Port),
+	}
+}
+
+// HTTPRoute is an HTTP Route.
+type HTTPRoute struct {
+	ID        string
+	ParentRef string
+	Service   string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	Domain  string
+	TLSCert string
+	TLSKey  string
+	Sticky  bool
+}
+
+func (r HTTPRoute) FormattedID() string {
+	return "http/" + r.ID
+}
+
+func (r HTTPRoute) MarshalJSON() ([]byte, error) {
+	return json.Marshal(r.ToRoute())
+}
+
+func (r HTTPRoute) ToRoute() *Route {
+	return &Route{
+		// common fields
+		Type:      "http",
+		ID:        r.ID,
+		ParentRef: r.ParentRef,
+		Service:   r.Service,
+		CreatedAt: r.CreatedAt,
+		UpdatedAt: r.UpdatedAt,
+
+		// http-specific fields
+		Domain:  r.Domain,
+		TLSCert: r.TLSCert,
+		TLSKey:  r.TLSKey,
+		Sticky:  r.Sticky,
+	}
+}
+
+// TCPRoute is a TCP Route.
+type TCPRoute struct {
+	ID        string
+	ParentRef string
+	Service   string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	Port int
+}
+
+func (r TCPRoute) FormattedID() string {
+	return "tcp/" + r.ID
+}
+
+func (r TCPRoute) MarshalJSON() ([]byte, error) {
+	return json.Marshal(r.ToRoute())
+}
+
+func (r TCPRoute) ToRoute() *Route {
+	return &Route{
+		Type:      "tcp",
+		ID:        r.ID,
+		ParentRef: r.ParentRef,
+		Service:   r.Service,
+		CreatedAt: r.CreatedAt,
+		UpdatedAt: r.UpdatedAt,
+
+		Port: int32(r.Port),
+	}
 }
 
 type Event struct {

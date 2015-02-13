@@ -6,7 +6,7 @@
   "type": "object",
   "examples": [
     "schema/examples/router/route_create#",
-    "schema/examples/router/route_set#",
+    "schema/examples/router/route_update#",
     "schema/examples/router/route_get#",
     "schema/examples/router/route_list#",
     "schema/examples/router/route_delete#"
@@ -23,8 +23,23 @@
     "type": {
       "type": "string"
     },
-    "config": {
-      "$ref": "/schema/common#/definitions/config"
+    "service": {
+      "$ref": "/schema/common#/definitions/service"
+    },
+    "domain": {
+      "$ref": "/schema/common#/definitions/domain"
+    },
+    "tls_cert": {
+      "$ref": "/schema/common#/definitions/tls_cert"
+    },
+    "tls_key": {
+      "$ref": "/schema/common#/definitions/tls_key"
+    },
+    "sticky": {
+      "$ref": "/schema/common#/definitions/sticky"
+    },
+    "port": {
+      "$ref": "/schema/common#/definitions/port"
     },
     "created_at": {
       "$ref": "/schema/common#/definitions/created_at"

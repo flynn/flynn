@@ -1,13 +1,10 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"sort"
-	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
@@ -27,19 +24,15 @@ func apiHandler(rtr *Router) http.Handler {
 	m.Map(rtr)
 
 	r.Post("/routes", binding.Bind(router.Route{}), createRoute)
-	r.Put("/routes", binding.Bind(router.Route{}), createOrReplaceRoute)
+	r.Put("/routes/:route_type/:id", binding.Bind(router.Route{}), updateRoute)
 	r.Get("/routes", getRoutes)
-	r.Get("/routes/:route_type/:route_id", getRoute)
-	r.Delete("/routes/:route_type/:route_id", deleteRoute)
+	r.Get("/routes/:route_type/:id", getRoute)
+	r.Delete("/routes/:route_type/:id", deleteRoute)
 	r.Any("/debug/**", pprof.Handler.ServeHTTP)
 	return m
 }
 
 func createRoute(req *http.Request, route router.Route, router *Router, r render.Render) {
-	now := time.Now()
-	route.CreatedAt = &now
-	route.UpdatedAt = &now
-
 	l := listenerFor(router, route.Type)
 	if l == nil {
 		r.JSON(400, "Invalid route type")
@@ -51,14 +44,12 @@ func createRoute(req *http.Request, route router.Route, router *Router, r render
 		r.JSON(500, "unknown error")
 		return
 	}
-	res := formatRoute(&route)
-	r.JSON(200, res)
+	r.JSON(200, route)
 }
 
-func createOrReplaceRoute(req *http.Request, route router.Route, router *Router, r render.Render) {
-	now := time.Now()
-	route.CreatedAt = &now
-	route.UpdatedAt = &now
+func updateRoute(params martini.Params, route router.Route, router *Router, r render.Render) {
+	route.Type = params["route_type"]
+	route.ID = params["id"]
 
 	l := listenerFor(router, route.Type)
 	if l == nil {
@@ -66,13 +57,12 @@ func createOrReplaceRoute(req *http.Request, route router.Route, router *Router,
 		return
 	}
 
-	if err := l.SetRoute(&route); err != nil {
+	if err := l.UpdateRoute(&route); err != nil {
 		log.Println(err)
 		r.JSON(500, "unknown error")
 		return
 	}
-	res := formatRoute(&route)
-	r.JSON(200, res)
+	r.JSON(200, route)
 }
 
 func listenerFor(router *Router, typ string) Listener {
@@ -86,24 +76,10 @@ func listenerFor(router *Router, typ string) Listener {
 	}
 }
 
-func formatRoute(r *router.Route) *router.Route {
-	r.ID = fmt.Sprintf("%s/%s", r.Type, r.ID)
-	switch r.Type {
-	case "http":
-		httpRoute := r.HTTPRoute()
-		httpRoute.TLSKey = ""
-		httpRoute.Route = nil
-		conf, _ := json.Marshal(httpRoute)
-		jsonConf := json.RawMessage(conf)
-		r.Config = &jsonConf
-	}
-	return r
-}
-
 type sortedRoutes []*router.Route
 
 func (p sortedRoutes) Len() int           { return len(p) }
-func (p sortedRoutes) Less(i, j int) bool { return p[i].CreatedAt.After(*p[j].CreatedAt) }
+func (p sortedRoutes) Less(i, j int) bool { return p[i].CreatedAt.After(p[j].CreatedAt) }
 func (p sortedRoutes) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 func getRoutes(req *http.Request, rtr *Router, r render.Render) {
@@ -130,9 +106,6 @@ func getRoutes(req *http.Request, rtr *Router, r render.Render) {
 		}
 		routes = filtered
 	}
-	for i, route := range routes {
-		routes[i] = formatRoute(route)
-	}
 
 	sort.Sort(sortedRoutes(routes))
 	r.JSON(200, routes)
@@ -145,7 +118,7 @@ func getRoute(params martini.Params, router *Router, r render.Render) {
 		return
 	}
 
-	route, err := l.Get(params["route_id"])
+	route, err := l.Get(params["id"])
 	if err == ErrNotFound {
 		r.JSON(404, "not found")
 		return
@@ -156,7 +129,7 @@ func getRoute(params martini.Params, router *Router, r render.Render) {
 		return
 	}
 
-	r.JSON(200, formatRoute(route))
+	r.JSON(200, route)
 }
 
 func deleteRoute(params martini.Params, router *Router, r render.Render) {
@@ -166,7 +139,7 @@ func deleteRoute(params martini.Params, router *Router, r render.Render) {
 		return
 	}
 
-	err := l.RemoveRoute(params["route_id"])
+	err := l.RemoveRoute(params["id"])
 	if err == ErrNotFound {
 		r.JSON(404, "not found")
 		return

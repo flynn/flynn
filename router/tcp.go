@@ -49,7 +49,7 @@ func (l *TCPListener) AddRoute(route *router.Route) error {
 	return l.ds.Add(route)
 }
 
-func (l *TCPListener) SetRoute(route *router.Route) error {
+func (l *TCPListener) UpdateRoute(route *router.Route) error {
 	r := route.TCPRoute()
 	l.mtx.RLock()
 	defer l.mtx.RUnlock()
@@ -60,7 +60,7 @@ func (l *TCPListener) SetRoute(route *router.Route) error {
 		return errors.New("router: a port number needs to be specified")
 	}
 	route.ID = md5sum(strconv.Itoa(r.Port))
-	return l.ds.Set(route)
+	return l.ds.Update(route)
 }
 
 var ErrNoPorts = errors.New("router: no ports available")
@@ -70,7 +70,6 @@ func (l *TCPListener) addWithAllocatedPort(route *router.Route) error {
 	l.mtx.RLock()
 	defer l.mtx.RUnlock()
 	for r.Port = range l.listeners {
-		r.Route.ID = md5sum(strconv.Itoa(r.Port))
 		tempRoute := r.ToRoute()
 		if err := l.ds.Add(tempRoute); err == nil {
 			*route = *tempRoute
@@ -121,6 +120,8 @@ func (l *TCPListener) Start() error {
 		}
 	}
 
+	// TODO(benburkert): the sync API cannot handle routes deleted while the
+	// listen/notify connection is disconnected
 	go l.ds.Sync(&tcpSyncHandler{l: l}, started)
 	return <-started
 }

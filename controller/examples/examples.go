@@ -220,7 +220,7 @@ func (e *generator) createRoute() {
 	}).ToRoute()
 	err := e.client.CreateRoute(e.resourceIds["app"], route)
 	if err == nil {
-		e.resourceIds["route"] = route.ID
+		e.resourceIds["route"] = route.FormattedID()
 	}
 }
 

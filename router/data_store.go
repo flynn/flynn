@@ -1,27 +1,21 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
-	"path"
+	"sync"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/router/types"
 )
 
-type EtcdClient interface {
-	Create(key string, value string, ttl uint64) (*etcd.Response, error)
-	Set(key string, value string, ttl uint64) (*etcd.Response, error)
-	Get(key string, sort, recursive bool) (*etcd.Response, error)
-	Delete(key string, recursive bool) (*etcd.Response, error)
-	Watch(prefix string, waitIndex uint64, recursive bool, receiver chan *etcd.Response, stop chan bool) (*etcd.Response, error)
-}
+var ErrNotFound = errors.New("router: route not found")
 
 type DataStore interface {
 	Add(route *router.Route) error
-	Set(route *router.Route) error
+	Update(route *router.Route) error
 	Get(id string) (*router.Route, error)
 	List() ([]*router.Route, error)
 	Remove(id string) error
@@ -39,196 +33,322 @@ type SyncHandler interface {
 	Remove(id string) error
 }
 
-func NewEtcdDataStore(etcd EtcdClient, prefix string) DataStore {
-	return &etcdDataStore{
-		prefix:   prefix,
-		etcd:     etcd,
-		stopSync: make(chan bool),
+type pgDataStore struct {
+	pgx *pgx.ConnPool
+
+	routeType string
+	tableName string
+
+	doneo sync.Once
+	donec chan struct{}
+}
+
+const (
+	routeTypeHTTP = "http"
+	routeTypeTCP  = "tcp"
+	tableNameHTTP = "http_routes"
+	tableNameTCP  = "tcp_routes"
+)
+
+// NewPostgresDataStore returns a DataStore that stores route information in a
+// Postgres database. It uses pg_notify and a listener connection to watch for
+// route changes.
+func NewPostgresDataStore(routeType string, pgx *pgx.ConnPool) *pgDataStore {
+	tableName := ""
+	switch routeType {
+	case routeTypeHTTP:
+		tableName = tableNameHTTP
+	case routeTypeTCP:
+		tableName = tableNameTCP
+	default:
+		panic(fmt.Sprintf("unknown routeType: %q", routeType))
+	}
+	return &pgDataStore{
+		pgx:       pgx,
+		routeType: routeType,
+		tableName: tableName,
+		donec:     make(chan struct{}),
 	}
 }
 
-type etcdDataStore struct {
-	prefix   string
-	etcd     EtcdClient
-	stopSync chan bool
-}
+const sqlAddRouteHTTP = `
+INSERT INTO ` + tableNameHTTP + ` (parent_ref, service, domain, tls_cert, tls_key, sticky)
+	VALUES ($1, $2, $3, $4, $5, $6)
+	RETURNING id, created_at, updated_at`
 
-var ErrExists = errors.New("router: route already exists")
-var ErrNotFound = errors.New("router: route not found")
+const sqlAddRouteTCP = `
+INSERT INTO ` + tableNameTCP + ` (parent_ref, service, port)
+	VALUES ($1, $2, $3)
+	RETURNING id, created_at, updated_at`
 
-func (s *etcdDataStore) Add(r *router.Route) error {
-	data, err := json.Marshal(r)
-	if err != nil {
-		return err
+func (d *pgDataStore) Add(r *router.Route) (err error) {
+	switch d.tableName {
+	case tableNameHTTP:
+		err = d.pgx.QueryRow(
+			sqlAddRouteHTTP,
+			r.ParentRef,
+			r.Service,
+			r.Domain,
+			r.TLSCert,
+			r.TLSKey,
+			r.Sticky,
+		).Scan(&r.ID, &r.CreatedAt, &r.UpdatedAt)
+	case tableNameTCP:
+		err = d.pgx.QueryRow(
+			sqlAddRouteTCP,
+			r.ParentRef,
+			r.Service,
+			r.Port,
+		).Scan(&r.ID, &r.CreatedAt, &r.UpdatedAt)
 	}
-	_, err = s.etcd.Create(s.path(r.ID), string(data), 0)
-	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 105 {
-		err = ErrExists
-	}
+	r.Type = d.routeType
 	return err
 }
 
-func (s *etcdDataStore) Set(r *router.Route) error {
-	data, err := json.Marshal(r)
-	if err != nil {
-		return err
-	}
-	_, err = s.etcd.Set(s.path(r.ID), string(data), 0)
-	return err
-}
+const sqlUpdateRouteHTTP = `
+UPDATE ` + tableNameHTTP + ` SET parent_ref = $1, service = $2, tls_cert = $3, tls_key = $4, sticky = $5
+	WHERE id = $6 AND domain = $7 AND deleted_at IS NULL
+	RETURNING %s`
 
-func (s *etcdDataStore) Remove(id string) error {
-	_, err := s.etcd.Delete(s.path(id), true)
-	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
+const sqlUpdateRouteTCP = `
+UPDATE ` + tableNameTCP + ` SET parent_ref = $1, service = $2
+	WHERE id = $3 AND port = $4 AND deleted_at IS NULL
+	RETURNING %s`
+
+func (d *pgDataStore) Update(r *router.Route) error {
+	var row *pgx.Row
+
+	switch d.tableName {
+	case tableNameHTTP:
+		row = d.pgx.QueryRow(
+			fmt.Sprintf(sqlUpdateRouteHTTP, d.columnNames()),
+			r.ParentRef,
+			r.Service,
+			r.TLSCert,
+			r.TLSKey,
+			r.Sticky,
+			r.ID,
+			r.Domain,
+		)
+	case tableNameTCP:
+		row = d.pgx.QueryRow(
+			fmt.Sprintf(sqlUpdateRouteTCP, d.columnNames()),
+			r.ParentRef,
+			r.Service,
+			r.ID,
+			r.Port,
+		)
+	}
+	err := d.scanRoute(r, row)
+	if err == pgx.ErrNoRows {
 		return ErrNotFound
 	}
 	return err
 }
 
-func (s *etcdDataStore) Get(id string) (*router.Route, error) {
-	res, err := s.etcd.Get(s.path(id), false, false)
-	if err != nil {
-		if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
-			err = ErrNotFound
-		}
-		return nil, err
-	}
-	r := &router.Route{}
-	err = json.Unmarshal([]byte(res.Node.Value), r)
-	return r, err
+const sqlRemoveRoute = `UPDATE %s SET deleted_at = now() WHERE id = $1`
+
+func (d *pgDataStore) Remove(id string) error {
+	_, err := d.pgx.Exec(fmt.Sprintf(sqlRemoveRoute, d.tableName), id)
+	return err
 }
 
-func (s *etcdDataStore) List() ([]*router.Route, error) {
-	res, err := s.etcd.Get(s.prefix, false, true)
+const sqlGetRoute = `SELECT %s FROM %s WHERE id = $1 AND deleted_at IS NULL`
+
+func (d *pgDataStore) Get(id string) (*router.Route, error) {
+	if id == "" {
+		return nil, ErrNotFound
+	}
+
+	query := fmt.Sprintf(sqlGetRoute, d.columnNames(), d.tableName)
+	row := d.pgx.QueryRow(query, id)
+
+	r := &router.Route{}
+	err := d.scanRoute(r, row)
+	if err == pgx.ErrNoRows {
+		return nil, ErrNotFound
+	}
 	if err != nil {
-		if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
-			err = nil
-		}
 		return nil, err
 	}
 
-	routes := make([]*router.Route, len(res.Node.Nodes))
-	for i, node := range res.Node.Nodes {
+	return r, nil
+}
+
+const sqlListRoutes = `SELECT %s FROM %s WHERE deleted_at IS NULL`
+
+func (d *pgDataStore) List() ([]*router.Route, error) {
+	query := fmt.Sprintf(sqlListRoutes, d.columnNames(), d.tableName)
+	rows, err := d.pgx.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	routes := []*router.Route{}
+	for rows.Next() {
 		r := &router.Route{}
-		if err := json.Unmarshal([]byte(node.Value), r); err != nil {
+		err := d.scanRoute(r, rows)
+		if err != nil {
 			return nil, err
 		}
-		routes[i] = r
+
+		r.Type = d.routeType
+		routes = append(routes, r)
 	}
-	return routes, nil
+	return routes, rows.Err()
 }
 
-func (s *etcdDataStore) path(id string) string {
-	return path.Join(s.prefix, path.Base(id))
-}
-
-func (s *etcdDataStore) Sync(h SyncHandler, started chan<- error) {
-	keys := make(map[string]uint64)
-	newKeys := make(map[string]uint64)
-	nextIndex := uint64(1)
-
-fullSync:
-	data, err := s.etcd.Get(s.prefix, false, true)
-	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
-		nextIndex = e.Index + 1
-		// key not found, delete existing keys and then watch
-		for id := range keys {
-			delete(keys, id)
-			if err := h.Remove(id); err != nil {
-				log.Printf("Error while processing delete from etcd fullsync: %s, %s", id, err)
-			}
-		}
-		goto watch
+func (d *pgDataStore) Sync(h SyncHandler, started chan<- error) {
+	idc := make(chan string)
+	if err := d.startListener(idc); err != nil {
+		started <- err
+		return
 	}
+	defer d.StopSync()
 
-syncErr:
+	initialRoutes, err := d.List()
 	if err != nil {
-		if started != nil {
+		started <- err
+		return
+	}
+
+	for _, route := range initialRoutes {
+		if err := h.Set(route); err != nil {
 			started <- err
 			return
 		}
-		log.Printf("Error while doing fullsync from etcd: %s", err)
-		time.Sleep(time.Second)
-		goto fullSync
 	}
-
-	nextIndex = data.EtcdIndex + 1
-	for _, node := range data.Node.Nodes {
-		key := path.Base(node.Key)
-		if modified, ok := keys[key]; ok && modified >= node.ModifiedIndex {
-			newKeys[key] = modified
-			continue
-		}
-		route := &router.Route{}
-		if err = json.Unmarshal([]byte(node.Value), route); err != nil {
-			goto syncErr
-		}
-		if err = h.Set(route); err != nil {
-			goto syncErr
-		}
-		newKeys[key] = node.ModifiedIndex
-	}
-	for k := range keys {
-		if _, ok := newKeys[k]; ok {
-			continue
-		}
-		if err := h.Remove(k); err != nil {
-			log.Printf("Error while processing delete from etcd fullsync: %s, %s", k, err)
-		}
-	}
-	keys = newKeys
-	newKeys = make(map[string]uint64)
-
-watch:
-	if started != nil {
-		started <- nil
-		started = nil
-	}
+	close(started)
 
 	for {
-		stream := make(chan *etcd.Response)
-		watchDone := make(chan struct{})
-		var watchErr error
-		go func() {
-			_, watchErr = s.etcd.Watch(s.prefix, nextIndex, true, stream, s.stopSync)
-			close(watchDone)
-		}()
-		for res := range stream {
-			nextIndex = res.EtcdIndex + 1
-			id := path.Base(res.Node.Key)
-			var err error
-			if res.Action == "delete" {
-				delete(keys, id)
-				err = h.Remove(id)
-			} else {
-				keys[id] = res.Node.ModifiedIndex
-				route := &router.Route{}
-				if err = json.Unmarshal([]byte(res.Node.Value), route); err != nil {
-					goto fail
-				}
-				err = h.Set(route)
-			}
-		fail:
-			if err != nil {
-				log.Printf("Error while processing update from etcd: %s, %#v", err, res.Node)
-			}
-		}
-		<-watchDone
 		select {
-		case <-s.stopSync:
+		case id := <-idc:
+			d.handleUpdate(h, id)
+		case <-d.donec:
+			for range idc {
+			}
 			return
-		default:
 		}
-		if e, ok := watchErr.(*etcd.EtcdError); ok && e.ErrorCode == 401 {
-			// event log has been pruned beyond our waitIndex, force fullSync
-			log.Printf("Got etcd error 401, doing full sync")
-			goto fullSync
-		}
-		log.Printf("Restarting etcd watch %s due to error: %s", s.prefix, watchErr)
-		time.Sleep(time.Second)
 	}
 }
 
-func (s *etcdDataStore) StopSync() {
-	close(s.stopSync)
+func (d *pgDataStore) StopSync() {
+	d.doneo.Do(func() { close(d.donec) })
+}
+
+func (d *pgDataStore) handleUpdate(h SyncHandler, id string) {
+	route, err := d.Get(id)
+	if err == ErrNotFound {
+		if err = h.Remove(id); err != nil && err != ErrNotFound {
+			// TODO(benburkert): structured logging
+			log.Printf("router: sync handler remove error: %s, %s", id, err)
+		}
+		return
+	}
+
+	if err != nil {
+		log.Printf("router: datastore error: %s, %s", id, err)
+		return
+	}
+
+	if err := h.Set(route); err != nil {
+		log.Printf("router: sync handler set error: %s, %s", id, err)
+	}
+}
+
+func (d *pgDataStore) startListener(idc chan<- string) error {
+	conn, err := d.pgx.Acquire()
+	if err != nil {
+		return err
+	}
+	if err = conn.Listen(d.tableName); err != nil {
+		d.pgx.Release(conn)
+		return err
+	}
+
+	go func() {
+		defer unlistenAndRelease(d.pgx, conn, d.tableName)
+		defer close(idc)
+
+		for {
+			select {
+			case <-d.donec:
+				return
+			default:
+			}
+			notification, err := conn.WaitForNotification(time.Second)
+			if err == pgx.ErrNotificationTimeout {
+				continue
+			}
+			if err != nil {
+				log.Printf("router: notifier error: %s", err)
+				d.StopSync()
+				return
+			}
+
+			idc <- notification.Payload
+		}
+	}()
+
+	return nil
+}
+
+const (
+	selectColumnsHTTP = "id, parent_ref, service, domain, sticky, tls_cert, tls_key, created_at, updated_at"
+	selectColumnsTCP  = "id, parent_ref, service, port, created_at, updated_at"
+)
+
+func (d *pgDataStore) columnNames() string {
+	switch d.routeType {
+	case routeTypeHTTP:
+		return selectColumnsHTTP
+	case routeTypeTCP:
+		return selectColumnsTCP
+	default:
+		panic(fmt.Sprintf("unknown routeType: %q", d.routeType))
+	}
+}
+
+type scannable interface {
+	Scan(dest ...interface{}) (err error)
+}
+
+func (d *pgDataStore) scanRoute(route *router.Route, s scannable) error {
+	route.Type = d.routeType
+	switch d.tableName {
+	case tableNameHTTP:
+		return s.Scan(
+			&route.ID,
+			&route.ParentRef,
+			&route.Service,
+			&route.Domain,
+			&route.Sticky,
+			&route.TLSCert,
+			&route.TLSKey,
+			&route.CreatedAt,
+			&route.UpdatedAt,
+		)
+	case tableNameTCP:
+		return s.Scan(
+			&route.ID,
+			&route.ParentRef,
+			&route.Service,
+			&route.Port,
+			&route.CreatedAt,
+			&route.UpdatedAt,
+		)
+	}
+	panic("unknown tableName: " + d.tableName)
+}
+
+const sqlUnlisten = `UNLISTEN %s`
+
+func unlistenAndRelease(pool *pgx.ConnPool, conn *pgx.Conn, channel string) {
+	_, err := conn.Exec(fmt.Sprintf(sqlUnlisten, channel))
+	if err != nil {
+		conn.Close()
+		return
+	}
+	pool.Release(conn)
 }

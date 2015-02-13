@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-04/schema#",
-  "id": "https://flynn.io/schema/examples/router/route_set#",
-  "title": "Create or Replace route",
+  "id": "https://flynn.io/schema/examples/router/route_update#",
+  "title": "Update a route",
   "description": "",
   "allOf": [
     { "$ref": "/schema/examples/base#" },

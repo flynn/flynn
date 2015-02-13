@@ -57,7 +57,7 @@ func (c *controllerAPI) DeleteRoute(ctx context.Context, w http.ResponseWriter, 
 		return
 	}
 
-	err = c.routerc.DeleteRoute(route.ID)
+	err = c.routerc.DeleteRoute(route.Type, route.ID)
 	if err == routerc.ErrNotFound {
 		err = ErrNotFound
 	}

@@ -30,7 +30,7 @@ func main() {
 
 	examples := []g.Example{
 		{"route_create", e.createRoute},
-		{"route_set", e.setRoute},
+		{"route_update", e.updateRoute},
 		{"route_list", e.listRoutes},
 		{"route_get", e.getRoute},
 		{"route_delete", e.deleteRoute},
@@ -62,12 +62,13 @@ func (e *generator) createRoute() {
 	}
 }
 
-func (e *generator) setRoute() {
+func (e *generator) updateRoute() {
 	route := (&rt.HTTPRoute{
+		ID:      e.route.ID,
 		Domain:  "http://example.org",
 		Service: "bar" + "-web",
 	}).ToRoute()
-	e.client.SetRoute(route)
+	e.client.UpdateRoute(route)
 }
 
 func (e *generator) listRoutes() {
@@ -75,9 +76,9 @@ func (e *generator) listRoutes() {
 }
 
 func (e *generator) getRoute() {
-	e.client.GetRoute(e.route.ID)
+	e.client.GetRoute(e.route.Type, e.route.ID)
 }
 
 func (e *generator) deleteRoute() {
-	e.client.DeleteRoute(e.route.ID)
+	e.client.DeleteRoute(e.route.Type, e.route.ID)
 }
