@@ -323,6 +323,17 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 		return nil, err
 	}
 
+	// Allocate IPs for running jobs
+	for i, container := range l.containers {
+		if !container.job.Config.HostNetwork {
+			var err error
+			l.containers[i].IP, err = ipallocator.RequestIP(l.bridgeNet, container.IP)
+			if err != nil {
+				grohl.Log(grohl.Data{"fn": "ConfigureNetworking", "at": "request_ip", "status": "error", "err": err})
+			}
+		}
+	}
+
 	return &NetworkInfo{BridgeAddr: l.bridgeAddr.String(), Nameservers: dnsConf.Servers}, nil
 }
 
