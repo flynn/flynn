@@ -132,9 +132,10 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 	m.state.mtx.Unlock()
 
 	var netInfo NetworkInfo
-	for _, service := range services {
+
+	runService := func(service *manifestService) error {
 		if _, exists := serviceData[service.ID]; exists {
-			continue
+			return nil
 		}
 
 		data := &ManifestData{
@@ -149,7 +150,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 		for _, port := range service.TCPPorts {
 			port, err := strconv.Atoi(port)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			data.TCPPorts = append(data.TCPPorts, port)
 		}
@@ -172,7 +173,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 		for _, arg := range service.Args {
 			arg, err := interp(arg)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			if strings.TrimSpace(arg) == "" {
 				continue
@@ -183,7 +184,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 		for k, v := range service.Env {
 			service.Env[k], err = interp(v)
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 		data.Env = service.Env
@@ -200,7 +201,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 		for mntPath, volName := range data.Volumes {
 			vol, err := m.vman.CreateOrGetNamedVolume(volName, "")
 			if err != nil {
-				return nil, err
+				return err
 			}
 			volumeBindings = append(volumeBindings, host.VolumeBinding{
 				Target:   mntPath,
@@ -242,7 +243,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 		}
 
 		if err := m.backend.Run(job); err != nil {
-			return nil, err
+			return err
 		}
 
 		m.state.SetManifestID(job.ID, service.ID)
@@ -250,8 +251,25 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 		data.InternalIP = activeJob.InternalIP
 		data.readonly = true
 		serviceData[service.ID] = data
+		return nil
+	}
 
+	for _, service := range services {
+		if err := runService(service); err != nil {
+			return nil, err
+		}
 		if service.ID == "flannel" {
+			var job *host.Job
+			for _, j := range m.state.jobs {
+				if j.ManifestID != service.ID {
+					continue
+				}
+				job = j.Job
+				break
+			}
+			if job == nil {
+				return nil, fmt.Errorf("Could not find the flannel container!")
+			}
 			ni, err := m.backend.ConfigureNetworking(NetworkStrategyFlannel, job.ID)
 			if err != nil {
 				return nil, err
