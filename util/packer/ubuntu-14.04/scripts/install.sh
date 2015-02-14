@@ -5,6 +5,8 @@ set -xeo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 main() {
+  stop_cron
+
   if virtualbox_build; then
     # run early to speed up subsequent steps
     fix_dns_resolution
@@ -40,6 +42,11 @@ main() {
     net_cleanup
     compress
   fi
+}
+
+stop_cron() {
+  # cron can run apt/dpkg commands that will disrupt our tasks
+  service cron stop
 }
 
 virtualbox_build() {
