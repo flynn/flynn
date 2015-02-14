@@ -4,6 +4,9 @@ set -xeo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
+# cron can run apt/dpkg commands that will disrupt our tasks
+service cron stop
+
 apt-get update
 
 if [[ "${PACKER_BUILDER_TYPE}" == "virtualbox-ovf" ]]; then
