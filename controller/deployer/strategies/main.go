@@ -70,21 +70,20 @@ outer:
 					JobState:  "up",
 					JobType:   event.Type,
 				}
-			case "down":
+			case "down", "crashed":
 				actual[event.Type]["down"] += 1
 				deployEvents <- ct.DeploymentEvent{
 					ReleaseID: releaseID,
 					JobState:  "down",
 					JobType:   event.Type,
 				}
-			case "crashed":
-				actual[event.Type]["crashed"] += 1
+			case "failed":
 				deployEvents <- ct.DeploymentEvent{
 					ReleaseID: releaseID,
-					JobState:  "crashed",
+					JobState:  "failed",
 					JobType:   event.Type,
 				}
-				return fmt.Errorf("job crashed!")
+				return fmt.Errorf("deployer: %s job failed to start", event.Type)
 			default:
 				break inner
 			}
