@@ -13,7 +13,7 @@ type DeployerSuite struct {
 
 var _ = c.Suite(&DeployerSuite{})
 
-func (s *DeployerSuite) createDeployment(t *c.C, process, strategy string) *ct.Deployment {
+func (s *DeployerSuite) createRelease(t *c.C, process, strategy string) (*ct.App, *ct.Release) {
 	app, release := s.createApp(t)
 	app.Strategy = strategy
 	s.controllerClient(t).UpdateApp(app)
@@ -31,6 +31,12 @@ func (s *DeployerSuite) createDeployment(t *c.C, process, strategy string) *ct.D
 
 	waitForJobEvents(t, scale, jobStream, jobEvents{process: {"up": 2}})
 
+	return app, release
+}
+
+func (s *DeployerSuite) createDeployment(t *c.C, process, strategy string) *ct.Deployment {
+	app, release := s.createRelease(t, process, strategy)
+
 	// create a new release for the deployment
 	release.ID = ""
 	t.Assert(s.controllerClient(t).CreateRelease(release), c.IsNil)
@@ -47,11 +53,12 @@ loop:
 	for {
 		select {
 		case e := <-stream:
-			debugf(t, "got deployment event: %s %s", e.JobType, e.JobState)
 			actual = append(actual, e)
 			if e.Status == "complete" || e.Status == "failed" {
+				debugf(t, "got deployment event: %s", e.Status)
 				break loop
 			}
+			debugf(t, "got deployment event: %s %s", e.JobType, e.JobState)
 		case <-time.After(5 * time.Second):
 			t.Fatal("timed out waiting for deployment event")
 		}
@@ -115,35 +122,41 @@ func (s *DeployerSuite) TestAllAtOnceStrategy(t *c.C) {
 }
 
 func (s *DeployerSuite) TestRollback(t *c.C) {
-	deployment := s.createDeployment(t, "crasher", "all-at-once")
+	// create a running release
+	app, release := s.createRelease(t, "printer", "all-at-once")
+
+	// deploy a release which will fail to start
+	client := s.controllerClient(t)
+	release.ID = ""
+	printer := release.Processes["printer"]
+	printer.Cmd = []string{"this-is-gonna-fail"}
+	release.Processes["printer"] = printer
+	t.Assert(client.CreateRelease(release), c.IsNil)
+	deployment, err := client.CreateDeployment(app.ID, release.ID)
+	t.Assert(err, c.IsNil)
+
+	// check the deployment fails
 	events := make(chan *ct.DeploymentEvent)
-	stream, err := s.controllerClient(t).StreamDeployment(deployment.ID, events)
+	stream, err := client.StreamDeployment(deployment.ID, events)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
-	releaseID := deployment.NewReleaseID
-	oldReleaseID := deployment.OldReleaseID
-
 	expected := []*ct.DeploymentEvent{
-		{ReleaseID: releaseID, JobType: "crasher", JobState: "starting", Status: "running"},
-		{ReleaseID: releaseID, JobType: "crasher", JobState: "starting", Status: "running"},
-		{ReleaseID: releaseID, JobType: "crasher", JobState: "up", Status: "running"},
-		{ReleaseID: releaseID, JobType: "crasher", JobState: "up", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "crasher", JobState: "stopping", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "crasher", JobState: "stopping", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "crasher", JobState: "crashed", Status: "running"},
-		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "failed"},
+		{ReleaseID: release.ID, JobType: "printer", JobState: "starting", Status: "running"},
+		{ReleaseID: release.ID, JobType: "printer", JobState: "starting", Status: "running"},
+		{ReleaseID: release.ID, JobType: "printer", JobState: "failed", Status: "running"},
+		{ReleaseID: release.ID, JobType: "", JobState: "", Status: "failed"},
 	}
 	waitForDeploymentEvents(t, events, expected)
 
 	// check that we're running the old release
-	rel, err := s.controllerClient(t).GetAppRelease(deployment.AppID)
+	rel, err := client.GetAppRelease(deployment.AppID)
 	t.Assert(err, c.IsNil)
-	t.Assert(rel.ID, c.Equals, oldReleaseID)
+	t.Assert(rel.ID, c.Equals, deployment.OldReleaseID)
 
 	// check that the old formation is the same and there's no new formation
-	f, err := s.controllerClient(t).GetFormation(deployment.AppID, oldReleaseID)
+	f, err := client.GetFormation(deployment.AppID, deployment.OldReleaseID)
 	t.Assert(err, c.IsNil)
-	t.Assert(f.Processes, c.DeepEquals, map[string]int{"crasher": 2})
-	_, err = s.controllerClient(t).GetFormation(deployment.AppID, releaseID)
+	t.Assert(f.Processes, c.DeepEquals, map[string]int{"printer": 2})
+	_, err = client.GetFormation(deployment.AppID, deployment.NewReleaseID)
 	t.Assert(err, c.NotNil)
 }

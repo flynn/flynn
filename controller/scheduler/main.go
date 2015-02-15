@@ -315,8 +315,10 @@ func jobState(event *host.Event) string {
 		return "up"
 	case host.StatusDone:
 		return "down"
-	case host.StatusCrashed, host.StatusFailed:
+	case host.StatusCrashed:
 		return "crashed"
+	case host.StatusFailed:
+		return "failed"
 	default:
 		return ""
 	}

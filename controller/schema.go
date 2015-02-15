@@ -102,7 +102,7 @@ $$ LANGUAGE plpgsql`,
 )`,
 		`CREATE INDEX ON app_resources (resource_id)`,
 
-		`CREATE TYPE job_state AS ENUM ('starting', 'up', 'down', 'crashed')`,
+		`CREATE TYPE job_state AS ENUM ('starting', 'up', 'down', 'crashed', 'failed')`,
 		`CREATE TABLE job_cache (
     job_id text NOT NULL,
     host_id text NOT NULL,
