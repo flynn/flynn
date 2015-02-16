@@ -47,6 +47,8 @@ func main() {
 	}
 	c := newContext(cc, cl)
 
+	c.watchHosts()
+
 	grohl.Log(grohl.Data{"at": "leaderwait"})
 	hb, err := discoverd.AddServiceAndRegister("flynn-controller-scheduler", ":"+os.Getenv("PORT"))
 	if err != nil {
@@ -132,8 +134,6 @@ func (c *context) syncCluster() {
 	artifacts := make(map[string]*ct.Artifact)
 	releases := make(map[string]*ct.Release)
 	rectify := make(map[*Formation]struct{})
-
-	go c.watchHosts()
 
 	hosts, err := c.ListHosts()
 	if err != nil {
@@ -286,7 +286,7 @@ func (c *context) watchHosts() {
 			if event.Event != "add" {
 				continue
 			}
-			go c.watchHost(event.HostID)
+			go c.watchHost(event.HostID, nil)
 
 			c.omniMtx.RLock()
 			for f := range c.omni {
@@ -296,8 +296,12 @@ func (c *context) watchHosts() {
 		}
 	}()
 
+	ready := make(chan struct{}, len(hosts))
 	for _, h := range hosts {
-		go c.watchHost(h.ID)
+		go c.watchHost(h.ID, ready)
+	}
+	for range hosts {
+		<-ready
 	}
 
 }
@@ -329,8 +333,11 @@ var dialHostAttempts = attempt.Strategy{
 	Delay: 200 * time.Millisecond,
 }
 
-func (c *context) watchHost(id string) {
+func (c *context) watchHost(id string, ready chan struct{}) {
 	if !c.hosts.Add(id) {
+		if ready != nil {
+			ready <- struct{}{}
+		}
 		return
 	}
 	defer c.hosts.Remove(id)
@@ -344,6 +351,9 @@ func (c *context) watchHost(id string) {
 	}); err != nil {
 		// assume the host is down and give up
 		g.Log(grohl.Data{"at": "dial_host_error", "host.id": id, "err": err})
+		if ready != nil {
+			ready <- struct{}{}
+		}
 		return
 	}
 	c.hosts.Set(id, h)
@@ -352,6 +362,9 @@ func (c *context) watchHost(id string) {
 
 	ch := make(chan *host.Event)
 	h.StreamEvents("all", ch)
+	if ready != nil {
+		ready <- struct{}{}
+	}
 
 	for event := range ch {
 		meta := event.Job.Job.Metadata
@@ -385,7 +398,11 @@ func (c *context) watchHost(id string) {
 			})
 		}(event)
 
+		// get a read lock on the mutex to ensure we are not currently
+		// syncing with the cluster
+		c.mtx.RLock()
 		j := c.jobs.Get(id, event.JobID)
+		c.mtx.RUnlock()
 		if j == nil {
 			continue
 		}
