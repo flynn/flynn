@@ -3,11 +3,10 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
-	"sync"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -19,8 +18,7 @@ type DataStore interface {
 	Get(id string) (*router.Route, error)
 	List() ([]*router.Route, error)
 	Remove(id string) error
-	Sync(h SyncHandler, started chan<- error)
-	StopSync()
+	Sync(ctx context.Context, h SyncHandler, startc chan<- struct{}) error
 }
 
 type DataStoreReader interface {
@@ -38,9 +36,6 @@ type pgDataStore struct {
 
 	routeType string
 	tableName string
-
-	doneo sync.Once
-	donec chan struct{}
 }
 
 const (
@@ -67,7 +62,6 @@ func NewPostgresDataStore(routeType string, pgx *pgx.ConnPool) *pgDataStore {
 		pgx:       pgx,
 		routeType: routeType,
 		tableName: tableName,
-		donec:     make(chan struct{}),
 	}
 }
 
@@ -199,72 +193,69 @@ func (d *pgDataStore) List() ([]*router.Route, error) {
 	return routes, rows.Err()
 }
 
-func (d *pgDataStore) Sync(h SyncHandler, started chan<- error) {
-	idc := make(chan string)
-	if err := d.startListener(idc); err != nil {
-		started <- err
-		return
+func (d *pgDataStore) Sync(ctx context.Context, h SyncHandler, startc chan<- struct{}) error {
+	ctx, cancel := context.WithCancel(ctx)
+
+	idc, errc, err := d.startListener(ctx)
+	if err != nil {
+		return err
 	}
-	defer d.StopSync()
 
 	initialRoutes, err := d.List()
 	if err != nil {
-		started <- err
-		return
+		cancel()
+		return err
 	}
 
 	for _, route := range initialRoutes {
 		if err := h.Set(route); err != nil {
-			started <- err
-			return
+			return err
 		}
 	}
-	close(started)
+	close(startc)
 
 	for {
 		select {
 		case id := <-idc:
-			d.handleUpdate(h, id)
-		case <-d.donec:
-			for range idc {
+			if err := d.handleUpdate(h, id); err != nil {
+				cancel()
+				return err
 			}
-			return
+		case err = <-errc:
+			return err
+		case <-ctx.Done():
+			<-idc
+			return nil
 		}
 	}
 }
 
-func (d *pgDataStore) StopSync() {
-	d.doneo.Do(func() { close(d.donec) })
-}
-
-func (d *pgDataStore) handleUpdate(h SyncHandler, id string) {
+func (d *pgDataStore) handleUpdate(h SyncHandler, id string) error {
 	route, err := d.Get(id)
 	if err == ErrNotFound {
 		if err = h.Remove(id); err != nil && err != ErrNotFound {
-			// TODO(benburkert): structured logging
-			log.Printf("router: sync handler remove error: %s, %s", id, err)
+			return err
 		}
-		return
+		return nil
 	}
-
-	if err != nil {
-		log.Printf("router: datastore error: %s, %s", id, err)
-		return
-	}
-
-	if err := h.Set(route); err != nil {
-		log.Printf("router: sync handler set error: %s, %s", id, err)
-	}
-}
-
-func (d *pgDataStore) startListener(idc chan<- string) error {
-	conn, err := d.pgx.Acquire()
 	if err != nil {
 		return err
+	}
+
+	return h.Set(route)
+}
+
+func (d *pgDataStore) startListener(ctx context.Context) (<-chan string, <-chan error, error) {
+	idc := make(chan string)
+	errc := make(chan error)
+
+	conn, err := d.pgx.Acquire()
+	if err != nil {
+		return nil, nil, err
 	}
 	if err = conn.Listen(d.tableName); err != nil {
 		d.pgx.Release(conn)
-		return err
+		return nil, nil, err
 	}
 
 	go func() {
@@ -273,7 +264,7 @@ func (d *pgDataStore) startListener(idc chan<- string) error {
 
 		for {
 			select {
-			case <-d.donec:
+			case <-ctx.Done():
 				return
 			default:
 			}
@@ -282,8 +273,7 @@ func (d *pgDataStore) startListener(idc chan<- string) error {
 				continue
 			}
 			if err != nil {
-				log.Printf("router: notifier error: %s", err)
-				d.StopSync()
+				errc <- err
 				return
 			}
 
@@ -291,7 +281,7 @@ func (d *pgDataStore) startListener(idc chan<- string) error {
 		}
 	}()
 
-	return nil
+	return idc, errc, nil
 }
 
 const (
