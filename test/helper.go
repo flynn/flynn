@@ -132,8 +132,15 @@ func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 		ArtifactID: artifact.ID,
 		Processes: map[string]ct.ProcessType{
 			"echoer": {
-				Cmd:   []string{"/bin/echoer"},
-				Ports: []ct.Port{{Proto: "tcp"}},
+				Cmd:     []string{"/bin/echoer"},
+				Service: "echo-service",
+				Ports: []ct.Port{{
+					Proto: "tcp",
+					Service: &host.Service{
+						Name:   "echo-service",
+						Create: true,
+					},
+				}},
 			},
 			"ping": {
 				Cmd:   []string{"/bin/pingserv"},

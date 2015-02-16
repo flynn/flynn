@@ -412,20 +412,33 @@ func monitor(port host.Port, container *ContainerInit, env map[string]string) (d
 			}
 		}
 	}
-	addr := fmt.Sprintf("%s:%v", env["EXTERNAL_IP"], port.Port)
+	inst := &discoverd.Instance{
+		Addr:  fmt.Sprintf("%s:%v", env["EXTERNAL_IP"], port.Port),
+		Proto: port.Proto,
+	}
+	// add discoverd.EnvInstanceMeta if present
+	for k, v := range env {
+		if _, ok := discoverd.EnvInstanceMeta[k]; !ok {
+			continue
+		}
+		if inst.Meta == nil {
+			inst.Meta = make(map[string]string)
+		}
+		inst.Meta[k] = v
+	}
 
 	// no checker, but we still want to register a service
 	if config.Check == nil {
-		return client.Register(config.Name, addr)
+		return client.RegisterInstance(config.Name, inst)
 	}
 
 	var check health.Check
 	switch config.Check.Type {
 	case "tcp":
-		check = &health.TCPCheck{Addr: addr}
+		check = &health.TCPCheck{Addr: inst.Addr}
 	case "http", "https":
 		check = &health.HTTPCheck{
-			URL:        fmt.Sprintf("%s://%s%s", config.Check.Type, addr, config.Check.Path),
+			URL:        fmt.Sprintf("%s://%s%s", config.Check.Type, inst.Addr, config.Check.Path),
 			Host:       config.Check.Host,
 			StatusCode: config.Check.Status,
 			MatchBytes: []byte(config.Check.Match),
@@ -437,10 +450,7 @@ func monitor(port host.Port, container *ContainerInit, env map[string]string) (d
 	reg := health.Registration{
 		Registrar: client,
 		Service:   config.Name,
-		Instance: &discoverd.Instance{
-			Addr:  addr,
-			Proto: port.Proto,
-		},
+		Instance:  inst,
 		Monitor: health.Monitor{
 			Interval:  config.Check.Interval,
 			Threshold: config.Check.Threshold,

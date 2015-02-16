@@ -735,7 +735,6 @@ func (f *Formation) restart(stoppedJob *Job) error {
 
 func (f *Formation) start(typ string, hostID string) (job *Job, err error) {
 	config := f.jobConfig(typ)
-	config.ID = cluster.RandomJobID("")
 
 	hosts, err := f.c.ListHosts()
 	if err != nil {
