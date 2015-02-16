@@ -33,6 +33,12 @@ main() {
         ;;
     esac
   done
+  shift $((${OPTIND} - 1))
+
+  if [[ $# -ne 0 ]]; then
+    usage
+    exit 1
+  fi
 
   local flynn="${ROOT}/cli/flynn-cli"
 

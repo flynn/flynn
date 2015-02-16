@@ -60,6 +60,12 @@ main() {
         ;;
     esac
   done
+  shift $((${OPTIND} - 1))
+
+  if [[ $# -ne 0 ]]; then
+    usage
+    exit 1
+  fi
 
   check_aws_keys
   check_github_token
