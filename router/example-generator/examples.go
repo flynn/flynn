@@ -65,7 +65,7 @@ func (e *generator) createRoute() {
 func (e *generator) updateRoute() {
 	route := (&rt.HTTPRoute{
 		ID:      e.route.ID,
-		Domain:  "http://example.org",
+		Domain:  "http://example.com",
 		Service: "bar" + "-web",
 	}).ToRoute()
 	e.client.UpdateRoute(route)
