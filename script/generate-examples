@@ -59,7 +59,7 @@ main() {
   info "generating ${component} examples..." >&2
 
   imageid=`sudo docker images --no-trunc -q flynn/${component}-examples | tr -d '\r\n'`
-  imageurl="https://registry.hub.docker.com/flynn/${component}-examples?id=$imageid"
+  imageurl="https://dl.flynn.io/images?name=flynn/${component}-examples&id=$imageid"
 
   ${ROOT}/host/bin/flynn-host run $imageurl sh -c "CONTROLLER_KEY=${CONTROLLER_KEY} PORT=${port} /bin/flynn-${component}-examples" 2>&1
 }
