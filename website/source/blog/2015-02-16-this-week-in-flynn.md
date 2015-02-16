@@ -4,7 +4,7 @@ date: February 16, 2015
 ---
 
 It's been a busy week at Flynn. Most importantly, Flynn binaries and container
-images are now distributed securely using faster servers. We also created an
+images are now distributed securely using faster servers. We also created a
 script that replaces the manual installation instructions.
 
 ## Changes
