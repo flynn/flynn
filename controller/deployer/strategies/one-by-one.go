@@ -6,19 +6,16 @@ func oneByOne(d *Deploy) error {
 	log := d.logger.New("fn", "oneByOne")
 	log.Info("starting one-by-one deployment")
 
-	oldProcesses := d.Processes
-	newProcesses := make(map[string]int, len(oldProcesses))
-
 	olog := log.New("release_id", d.OldReleaseID)
 	nlog := log.New("release_id", d.NewReleaseID)
 	for typ, num := range d.Processes {
-		for i := 0; i < num; i++ {
+		for i := d.newReleaseState[typ]; i < num; i++ {
 			nlog.Info("scaling new formation up by one", "type", typ)
-			newProcesses[typ]++
+			d.newReleaseState[typ]++
 			if err := d.client.PutFormation(&ct.Formation{
 				AppID:     d.AppID,
 				ReleaseID: d.NewReleaseID,
-				Processes: newProcesses,
+				Processes: d.newReleaseState,
 			}); err != nil {
 				nlog.Error("error scaling new formation up by one", "type", typ, "err", err)
 				return err
@@ -36,11 +33,11 @@ func oneByOne(d *Deploy) error {
 			}
 
 			olog.Info("scaling old formation down by one", "type", typ)
-			oldProcesses[typ]--
+			d.oldReleaseState[typ]--
 			if err := d.client.PutFormation(&ct.Formation{
 				AppID:     d.AppID,
 				ReleaseID: d.OldReleaseID,
-				Processes: oldProcesses,
+				Processes: d.oldReleaseState,
 			}); err != nil {
 				olog.Error("error scaling old formation down by one", "type", typ, "err", err)
 				return err
