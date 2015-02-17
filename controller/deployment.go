@@ -11,6 +11,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/bgentry/que-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
@@ -41,16 +42,18 @@ func (r *DeploymentRepo) Add(data interface{}) error {
 	if d.OldReleaseID != "" {
 		oldReleaseID = &d.OldReleaseID
 	}
+	procs := procsHstore(d.Processes)
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
 	}
-	query := "INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy) VALUES ($1, $2, $3, $4, $5) RETURNING created_at"
-	if err := tx.QueryRow(query, d.ID, d.AppID, oldReleaseID, d.NewReleaseID, d.Strategy).Scan(&d.CreatedAt); err != nil {
+	query := "INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, processes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at"
+	if err := tx.QueryRow(query, d.ID, d.AppID, oldReleaseID, d.NewReleaseID, d.Strategy, procs).Scan(&d.CreatedAt); err != nil {
 		tx.Rollback()
 		return err
 	}
 	d.ID = postgres.CleanUUID(d.ID)
+	d.AppID = postgres.CleanUUID(d.AppID)
 	d.OldReleaseID = postgres.CleanUUID(d.OldReleaseID)
 	d.NewReleaseID = postgres.CleanUUID(d.NewReleaseID)
 
@@ -81,16 +84,24 @@ func (r *DeploymentRepo) Add(data interface{}) error {
 }
 
 func (r *DeploymentRepo) Get(id string) (*ct.Deployment, error) {
-	query := "SELECT deployment_id, app_id, old_release_id, new_release_id, strategy, created_at, finished_at FROM deployments WHERE deployment_id = $1"
+	query := "SELECT deployment_id, app_id, old_release_id, new_release_id, strategy, processes, created_at, finished_at FROM deployments WHERE deployment_id = $1"
 	row := r.db.QueryRow(query, id)
 	return scanDeployment(row)
 }
 
 func scanDeployment(s postgres.Scanner) (*ct.Deployment, error) {
 	d := &ct.Deployment{}
-	err := s.Scan(&d.ID, &d.AppID, &d.OldReleaseID, &d.NewReleaseID, &d.Strategy, &d.CreatedAt, &d.FinishedAt)
+	var procs hstore.Hstore
+	err := s.Scan(&d.ID, &d.AppID, &d.OldReleaseID, &d.NewReleaseID, &d.Strategy, &procs, &d.CreatedAt, &d.FinishedAt)
 	if err == sql.ErrNoRows {
 		err = ErrNotFound
+	}
+	d.Processes = make(map[string]int, len(procs.Map))
+	for k, v := range procs.Map {
+		n, _ := strconv.Atoi(v.String)
+		if n > 0 {
+			d.Processes[k] = n
+		}
 	}
 	d.ID = postgres.CleanUUID(d.ID)
 	d.AppID = postgres.CleanUUID(d.AppID)
@@ -160,6 +171,7 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 		NewReleaseID: release.ID,
 		Strategy:     app.Strategy,
 		OldReleaseID: oldRelease.ID,
+		Processes:    oldFormation.Processes,
 	}
 
 	if err := schema.Validate(deployment); err != nil {

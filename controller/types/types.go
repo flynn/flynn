@@ -108,13 +108,14 @@ type NewJob struct {
 }
 
 type Deployment struct {
-	ID           string     `json:"id,omitempty"`
-	AppID        string     `json:"app,omitempty"`
-	OldReleaseID string     `json:"old_release,omitempty"`
-	NewReleaseID string     `json:"new_release,omitempty"`
-	Strategy     string     `json:"strategy,omitempty"`
-	CreatedAt    *time.Time `json:"created_at,omitempty"`
-	FinishedAt   *time.Time `json:"finished_at,omitempty"`
+	ID           string         `json:"id,omitempty"`
+	AppID        string         `json:"app,omitempty"`
+	OldReleaseID string         `json:"old_release,omitempty"`
+	NewReleaseID string         `json:"new_release,omitempty"`
+	Strategy     string         `json:"strategy,omitempty"`
+	Processes    map[string]int `json:"processes,omitempty"`
+	CreatedAt    *time.Time     `json:"created_at,omitempty"`
+	FinishedAt   *time.Time     `json:"finished_at,omitempty"`
 }
 
 type DeployID struct {

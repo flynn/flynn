@@ -6,27 +6,19 @@ func allAtOnce(d *Deploy) error {
 	log := d.logger.New("fn", "allAtOnce")
 	log.Info("starting all-at-once deployment")
 
-	olog := log.New("release_id", d.OldReleaseID)
-	olog.Info("getting old formation")
-	f, err := d.client.GetFormation(d.AppID, d.OldReleaseID)
-	if err != nil {
-		olog.Error("error getting old formation", "err", err)
-		return err
-	}
-
 	nlog := log.New("release_id", d.NewReleaseID)
-	nlog.Info("creating new formation", "processes", f.Processes)
+	nlog.Info("creating new formation", "processes", d.Processes)
 	if err := d.client.PutFormation(&ct.Formation{
 		AppID:     d.AppID,
 		ReleaseID: d.NewReleaseID,
-		Processes: f.Processes,
+		Processes: d.Processes,
 	}); err != nil {
 		nlog.Error("error creating new formation", "err", err)
 		return err
 	}
 
 	expected := make(jobEvents)
-	for typ, n := range f.Processes {
+	for typ, n := range d.Processes {
 		for i := 0; i < n; i++ {
 			d.deployEvents <- ct.DeploymentEvent{
 				ReleaseID: d.NewReleaseID,
@@ -42,6 +34,7 @@ func allAtOnce(d *Deploy) error {
 		return err
 	}
 
+	olog := log.New("release_id", d.OldReleaseID)
 	olog.Info("scaling old formation to zero")
 	if err := d.client.PutFormation(&ct.Formation{
 		AppID:     d.AppID,
@@ -52,7 +45,7 @@ func allAtOnce(d *Deploy) error {
 	}
 
 	expected = make(jobEvents)
-	for typ, n := range f.Processes {
+	for typ, n := range d.Processes {
 		for i := 0; i < n; i++ {
 			d.deployEvents <- ct.DeploymentEvent{
 				ReleaseID: d.OldReleaseID,
