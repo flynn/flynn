@@ -14,13 +14,17 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kavu/go_reuseport"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/tlsconfig"
 	"github.com/flynn/flynn/router/proxy"
+	"github.com/flynn/flynn/router/reqlog"
 	"github.com/flynn/flynn/router/types"
 )
+
+var logger = log15.New("app", "router")
 
 type HTTPListener struct {
 	Watcher
@@ -311,14 +315,31 @@ func fail(w http.ResponseWriter, code int) {
 
 func (s *HTTPListener) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := context.Background()
-	ctx = ctxhelper.NewContextStartTime(ctx, time.Now())
+	startTime := time.Now()
+	ctx = ctxhelper.NewContextStartTime(ctx, startTime)
+	ctx = ctxhelper.NewContextLogger(ctx, logger)
+	ctx = reqlog.NewContext(ctx, reqlog.Log{
+		Method:     req.Method,
+		Path:       req.RequestURI,
+		Host:       portlessHost(req.Host),
+		RemoteAddr: portlessHost(req.RemoteAddr),
+		Start:      startTime,
+	})
+
 	r := s.findRouteForHost(req.Host)
 	if r == nil {
 		fail(w, 404)
 		return
 	}
 
-	r.service.ServeHTTP(ctx, w, req)
+	rt := &reqlog.ResponseTracker{ResponseWriterPlus: w.(reqlog.ResponseWriterPlus)}
+	r.service.ServeHTTP(ctx, rt, req)
+
+	// TODO(bgentry): can we avoid logging if this is returning after a successful hijack?
+	rl, _ := reqlog.FromContext(ctx)
+	rl.StatusCode = rt.StatusCode
+	rl.BodyBytes = rt.Size
+	rl.WriteTo(logger)
 }
 
 // A domain served by a listener, associated TLS certs,
@@ -341,10 +362,15 @@ type httpService struct {
 
 func (s *httpService) ServeHTTP(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	start, _ := ctxhelper.StartTimeFromContext(ctx)
+	reqID := random.UUID()
 	req.Header.Set("X-Request-Start", strconv.FormatInt(start.UnixNano()/int64(time.Millisecond), 10))
-	req.Header.Set("X-Request-Id", random.UUID())
+	req.Header.Set("X-Request-Id", reqID)
+	if rl, ok := reqlog.FromContext(ctx); ok {
+		rl.ID = reqID
+	}
+	// TODO(bgentry): should we add anything else to the request log about the service?
 
-	s.rp.ServeHTTP(w, req)
+	s.rp.ServeHTTP(ctx, w, req)
 }
 
 func mustPortFromAddr(addr string) string {
@@ -353,4 +379,13 @@ func mustPortFromAddr(addr string) string {
 		panic(err)
 	}
 	return port
+}
+
+func portlessHost(hostport string) string {
+	host, _, err := net.SplitHostPort(hostport)
+	if err != nil {
+		return hostport
+	}
+
+	return host
 }
