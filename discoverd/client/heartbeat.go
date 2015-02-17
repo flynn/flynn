@@ -4,11 +4,21 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	hh "github.com/flynn/flynn/pkg/httphelper"
 )
+
+// EnvInstanceMeta are environment variables which will be automatically added
+// to instance metadata if present.
+var EnvInstanceMeta = map[string]struct{}{
+	"FLYNN_APP_ID":       {},
+	"FLYNN_RELEASE_ID":   {},
+	"FLYNN_PROCESS_TYPE": {},
+	"FLYNN_JOB_ID":       {},
+}
 
 type Heartbeater interface {
 	SetMeta(map[string]string) error
@@ -55,6 +65,17 @@ func (c *Client) RegisterInstance(service string, inst *Instance) (Heartbeater, 
 	h.inst.Addr = expandAddr(h.inst.Addr)
 	if h.inst.Proto == "" {
 		h.inst.Proto = "tcp"
+	}
+	// add EnvInstanceMeta if present
+	for _, env := range os.Environ() {
+		kv := strings.SplitN(env, "=", 2)
+		if _, ok := EnvInstanceMeta[kv[0]]; !ok {
+			continue
+		}
+		if h.inst.Meta == nil {
+			h.inst.Meta = make(map[string]string)
+		}
+		h.inst.Meta[kv[0]] = kv[1]
 	}
 	go h.run(firstErr)
 	return h, <-firstErr

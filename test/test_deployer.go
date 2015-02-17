@@ -5,6 +5,7 @@ import (
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/types"
 )
 
 type DeployerSuite struct {
@@ -121,7 +122,46 @@ func (s *DeployerSuite) TestAllAtOnceStrategy(t *c.C) {
 	waitForDeploymentEvents(t, events, expected)
 }
 
-func (s *DeployerSuite) TestRollback(t *c.C) {
+func (s *DeployerSuite) TestServiceEvents(t *c.C) {
+	deployment := s.createDeployment(t, "echoer", "all-at-once")
+	events := make(chan *ct.DeploymentEvent)
+	stream, err := s.controllerClient(t).StreamDeployment(deployment.ID, events)
+	t.Assert(err, c.IsNil)
+	defer stream.Close()
+	releaseID := deployment.NewReleaseID
+	oldReleaseID := deployment.OldReleaseID
+
+	expected := []*ct.DeploymentEvent{
+		{ReleaseID: releaseID, JobType: "echoer", JobState: "starting", Status: "running"},
+		{ReleaseID: releaseID, JobType: "echoer", JobState: "starting", Status: "running"},
+		{ReleaseID: releaseID, JobType: "echoer", JobState: "up", Status: "running"},
+		{ReleaseID: releaseID, JobType: "echoer", JobState: "up", Status: "running"},
+		{ReleaseID: oldReleaseID, JobType: "echoer", JobState: "stopping", Status: "running"},
+		{ReleaseID: oldReleaseID, JobType: "echoer", JobState: "stopping", Status: "running"},
+		{ReleaseID: oldReleaseID, JobType: "echoer", JobState: "down", Status: "running"},
+		{ReleaseID: oldReleaseID, JobType: "echoer", JobState: "down", Status: "running"},
+		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "complete"},
+	}
+	waitForDeploymentEvents(t, events, expected)
+}
+
+func (s *DeployerSuite) assertRolledBack(t *c.C, deployment *ct.Deployment, processes map[string]int) {
+	client := s.controllerClient(t)
+
+	// check that we're running the old release
+	release, err := client.GetAppRelease(deployment.AppID)
+	t.Assert(err, c.IsNil)
+	t.Assert(release.ID, c.Equals, deployment.OldReleaseID)
+
+	// check that the old formation is the same and there's no new formation
+	formation, err := client.GetFormation(deployment.AppID, deployment.OldReleaseID)
+	t.Assert(err, c.IsNil)
+	t.Assert(formation.Processes, c.DeepEquals, processes)
+	_, err = client.GetFormation(deployment.AppID, deployment.NewReleaseID)
+	t.Assert(err, c.NotNil)
+}
+
+func (s *DeployerSuite) TestRollbackFailedJob(t *c.C) {
 	// create a running release
 	app, release := s.createRelease(t, "printer", "all-at-once")
 
@@ -148,15 +188,50 @@ func (s *DeployerSuite) TestRollback(t *c.C) {
 	}
 	waitForDeploymentEvents(t, events, expected)
 
-	// check that we're running the old release
-	rel, err := client.GetAppRelease(deployment.AppID)
-	t.Assert(err, c.IsNil)
-	t.Assert(rel.ID, c.Equals, deployment.OldReleaseID)
+	s.assertRolledBack(t, deployment, map[string]int{"printer": 2})
+}
 
-	// check that the old formation is the same and there's no new formation
-	f, err := client.GetFormation(deployment.AppID, deployment.OldReleaseID)
+func (s *DeployerSuite) TestRollbackNoService(t *c.C) {
+	// create a running release
+	app, release := s.createRelease(t, "printer", "all-at-once")
+
+	// deploy a release which will not register the service
+	client := s.controllerClient(t)
+	release.ID = ""
+	printer := release.Processes["printer"]
+	printer.Service = "printer"
+	printer.Ports = []ct.Port{{
+		Port:  12345,
+		Proto: "tcp",
+		Service: &host.Service{
+			Name:   "printer",
+			Create: true,
+			Check: &host.HealthCheck{
+				Type:         "tcp",
+				Interval:     100 * time.Millisecond,
+				Threshold:    1,
+				KillDown:     true,
+				StartTimeout: 100 * time.Millisecond,
+			},
+		},
+	}}
+	release.Processes["printer"] = printer
+	t.Assert(client.CreateRelease(release), c.IsNil)
+	deployment, err := client.CreateDeployment(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
-	t.Assert(f.Processes, c.DeepEquals, map[string]int{"printer": 2})
-	_, err = client.GetFormation(deployment.AppID, deployment.NewReleaseID)
-	t.Assert(err, c.NotNil)
+
+	// check the deployment fails
+	events := make(chan *ct.DeploymentEvent)
+	stream, err := client.StreamDeployment(deployment.ID, events)
+	t.Assert(err, c.IsNil)
+	defer stream.Close()
+	expected := []*ct.DeploymentEvent{
+		{ReleaseID: release.ID, JobType: "printer", JobState: "starting", Status: "running"},
+		{ReleaseID: release.ID, JobType: "printer", JobState: "starting", Status: "running"},
+		{ReleaseID: release.ID, JobType: "printer", JobState: "down", Status: "running"},
+		{ReleaseID: release.ID, JobType: "", JobState: "", Status: "failed"},
+	}
+	waitForDeploymentEvents(t, events, expected)
+
+	s.assertRolledBack(t, deployment, map[string]int{"printer": 2})
 }

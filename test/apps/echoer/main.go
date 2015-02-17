@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 
-	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/shutdown"
 )
 
@@ -17,12 +16,6 @@ func main() {
 
 	port := os.Getenv("PORT")
 	addr := ":" + port
-
-	hb, err := discoverd.AddServiceAndRegister(service, addr)
-	if err != nil {
-		shutdown.Fatal(err)
-	}
-	shutdown.BeforeExit(func() { hb.Close() })
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {

@@ -43,6 +43,7 @@ type ProcessType struct {
 	Data        bool              `json:"data,omitempty"`
 	Omni        bool              `json:"omni,omitempty"` // omnipresent - present on all hosts
 	HostNetwork bool              `json:"host_network,omitempty"`
+	Service     string            `json:"service,omitempty"`
 }
 
 type Port struct {
@@ -89,6 +90,10 @@ type JobEvent struct {
 	Job
 	ID    int64  `json:"id"`
 	JobID string `json:"job_id,omitempty"`
+}
+
+func (e *JobEvent) IsDown() bool {
+	return e.State == "failed" || e.State == "crashed" || e.State == "down"
 }
 
 type NewJob struct {

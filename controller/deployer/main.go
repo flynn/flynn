@@ -104,12 +104,6 @@ func (c *context) HandleJob(job *que.Job) (e error) {
 		return err
 	}
 
-	log.Info("validating deployment strategy")
-	strategyFunc, err := strategy.Get(deployment.Strategy)
-	if err != nil {
-		log.Error("unknown deployment strategy")
-		return err
-	}
 	events := make(chan ct.DeploymentEvent)
 	defer close(events)
 	go func() {
@@ -135,7 +129,7 @@ func (c *context) HandleJob(job *que.Job) (e error) {
 		}
 	}()
 	log.Info("performing deployment")
-	if err := strategyFunc(logger, c.client, deployment, events); err != nil {
+	if err := strategy.Perform(deployment, c.client, events, logger); err != nil {
 		log.Error("error performing deployment", "err", err)
 		return err
 	}

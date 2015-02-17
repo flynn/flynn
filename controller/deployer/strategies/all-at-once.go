@@ -1,27 +1,14 @@
 package strategy
 
-import (
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
-	"github.com/flynn/flynn/controller/client"
-	ct "github.com/flynn/flynn/controller/types"
-)
+import ct "github.com/flynn/flynn/controller/types"
 
-func allAtOnce(l log15.Logger, client *controller.Client, d *ct.Deployment, events chan<- ct.DeploymentEvent) error {
-	log := l.New("fn", "allAtOnce", "deployment_id", d.ID, "app_id", d.AppID)
+func allAtOnce(d *Deploy) error {
+	log := d.logger.New("fn", "allAtOnce")
 	log.Info("starting all-at-once deployment")
-
-	log.Info("getting job event stream")
-	jobStream := make(chan *ct.JobEvent)
-	stream, err := client.StreamJobEvents(d.AppID, 0, jobStream)
-	if err != nil {
-		log.Error("error getting job event stream", "err", err)
-		return err
-	}
-	defer stream.Close()
 
 	olog := log.New("release_id", d.OldReleaseID)
 	olog.Info("getting old formation")
-	f, err := client.GetFormation(d.AppID, d.OldReleaseID)
+	f, err := d.client.GetFormation(d.AppID, d.OldReleaseID)
 	if err != nil {
 		olog.Error("error getting old formation", "err", err)
 		return err
@@ -29,7 +16,7 @@ func allAtOnce(l log15.Logger, client *controller.Client, d *ct.Deployment, even
 
 	nlog := log.New("release_id", d.NewReleaseID)
 	nlog.Info("creating new formation", "processes", f.Processes)
-	if err := client.PutFormation(&ct.Formation{
+	if err := d.client.PutFormation(&ct.Formation{
 		AppID:     d.AppID,
 		ReleaseID: d.NewReleaseID,
 		Processes: f.Processes,
@@ -41,7 +28,7 @@ func allAtOnce(l log15.Logger, client *controller.Client, d *ct.Deployment, even
 	expected := make(jobEvents)
 	for typ, n := range f.Processes {
 		for i := 0; i < n; i++ {
-			events <- ct.DeploymentEvent{
+			d.deployEvents <- ct.DeploymentEvent{
 				ReleaseID: d.NewReleaseID,
 				JobState:  "starting",
 				JobType:   typ,
@@ -50,13 +37,13 @@ func allAtOnce(l log15.Logger, client *controller.Client, d *ct.Deployment, even
 		expected[typ] = map[string]int{"up": n}
 	}
 	nlog.Info("waiting for job events", "expected", expected)
-	if err := waitForJobEvents(jobStream, events, d.NewReleaseID, expected, nlog); err != nil {
+	if err := d.waitForJobEvents(d.NewReleaseID, expected, nlog); err != nil {
 		nlog.Error("error waiting for job events", "err", err)
 		return err
 	}
 
 	olog.Info("scaling old formation to zero")
-	if err := client.PutFormation(&ct.Formation{
+	if err := d.client.PutFormation(&ct.Formation{
 		AppID:     d.AppID,
 		ReleaseID: d.OldReleaseID,
 	}); err != nil {
@@ -67,7 +54,7 @@ func allAtOnce(l log15.Logger, client *controller.Client, d *ct.Deployment, even
 	expected = make(jobEvents)
 	for typ, n := range f.Processes {
 		for i := 0; i < n; i++ {
-			events <- ct.DeploymentEvent{
+			d.deployEvents <- ct.DeploymentEvent{
 				ReleaseID: d.OldReleaseID,
 				JobState:  "stopping",
 				JobType:   typ,
@@ -76,7 +63,7 @@ func allAtOnce(l log15.Logger, client *controller.Client, d *ct.Deployment, even
 		expected[typ] = map[string]int{"down": n}
 	}
 	olog.Info("waiting for job events", "expected", expected)
-	if err := waitForJobEvents(jobStream, events, d.OldReleaseID, expected, olog); err != nil {
+	if err := d.waitForJobEvents(d.OldReleaseID, expected, olog); err != nil {
 		olog.Error("error waiting for job events", "err", err)
 		return err
 	}
