@@ -42,10 +42,10 @@ Dashboard.Views.AppRoutes = React.createClass({
 				<ul>
 					{this.state.routes.map(function (route) {
 						return (
-							<li key={route.id || route.config.domain}>
-								<ExternalLink href={"http://"+ route.config.domain}>{route.config.domain}</ExternalLink>
+							<li key={route.id || route.domain}>
+								<ExternalLink href={"http://"+ route.domain}>{route.domain}</ExternalLink>
 								{route.id ? (
-									<RouteLink path={getAppPath("/routes/:route/delete", {route: route.id, domain: route.config.domain})}>
+									<RouteLink path={getAppPath("/routes/:route/delete", {route: route.id, domain: route.domain})}>
 										<i className="icn-trash" />
 									</RouteLink>
 								) : null}
