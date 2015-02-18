@@ -11,6 +11,12 @@ Dashboard.Views.InstallCert = React.createClass({
 				<section>
 					<header>
 						<h1>Install CA certificate to continue</h1>
+						<p>
+							This CA certificate allows you to access the dashboard securely.
+							The certificate was generated as part of the installation process, and the private key has already been discarded.
+							The only certificates it has signed are for the cluster domain, and no more certificates can be signed by it.
+							You <em>should not</em> continue if you are on an untrusted connection.
+						</p>
 					</header>
 
 					{this.props.browserName === "firefox" ? (
