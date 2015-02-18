@@ -77,7 +77,13 @@ func (r *JobRepo) Add(job *ct.Job) error {
 	if err != nil {
 		return err
 	}
-	return r.db.Exec("INSERT INTO job_events (job_id, host_id, app_id, state) VALUES ($1, $2, $3, $4)", jobID, hostID, job.AppID, job.State)
+
+	// create a job event, ignoring possible duplications
+	err = r.db.Exec("INSERT INTO job_events (job_id, host_id, app_id, state) VALUES ($1, $2, $3, $4)", jobID, hostID, job.AppID, job.State)
+	if e, ok := err.(*pq.Error); !ok || e.Code.Name() != "unique_violation" {
+		return err
+	}
+	return nil
 }
 
 func scanJob(s postgres.Scanner) (*ct.Job, error) {

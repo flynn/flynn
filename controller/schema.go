@@ -125,6 +125,7 @@ $$ LANGUAGE plpgsql`,
     created_at timestamptz NOT NULL DEFAULT now(),
     FOREIGN KEY (job_id, host_id) REFERENCES job_cache (job_id, host_id)
 )`,
+		`CREATE UNIQUE INDEX ON job_events (job_id, host_id, app_id, state)`,
 		`CREATE FUNCTION notify_job_event() RETURNS TRIGGER AS $$
     BEGIN
     PERFORM pg_notify('job_events:' || NEW.app_id, NEW.event_id || '');
