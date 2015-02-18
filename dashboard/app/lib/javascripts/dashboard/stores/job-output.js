@@ -111,7 +111,6 @@ var JobOutput = Dashboard.Stores.JobOutput = Dashboard.Store.createClass({
 					eventSource.close();
 					return;
 			}
-			evnt.data.stream = evnt.name;
 			this.setState({
 				output: this.state.output.concat([evnt])
 			});
