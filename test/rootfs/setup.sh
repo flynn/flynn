@@ -135,7 +135,7 @@ sed 's/#user_allow_other/user_allow_other/' -i /etc/fuse.conf
 
 # install go
 curl -L j.mp/godeb | tar xz
-./godeb install 1.4.1
+./godeb install 1.4.2
 rm godeb
 
 # install go-tuf
