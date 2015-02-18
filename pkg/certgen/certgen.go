@@ -56,7 +56,7 @@ func Generate(p Params) (*Certificate, error) {
 		IsCA: p.IsCA,
 	}
 	if p.IsCA {
-		template.Subject.OrganizationalUnit = []string{"CA"}
+		template.Subject.OrganizationalUnit = []string{"Flynn Ephemeral CA"}
 		template.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageCRLSign
 	} else {
 		template.Subject.CommonName = p.Hosts[0]
