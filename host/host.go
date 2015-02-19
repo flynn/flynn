@@ -187,11 +187,6 @@ func runDaemon(args *docopt.Args) {
 		shutdown.Fatal(err)
 	}
 
-	router, err := serveHTTP(&Host{state: state, backend: backend}, &attachHandler{state: state, backend: backend}, vman)
-	if err != nil {
-		shutdown.Fatal(err)
-	}
-
 	if err := state.Restore(backend); err != nil {
 		shutdown.Fatal(err)
 	}
@@ -264,6 +259,21 @@ func runDaemon(args *docopt.Args) {
 	}
 	shutdown.BeforeExit(func() { hb.Close() })
 
+	cluster, err := cluster.NewClient()
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+
+	router, err := serveHTTP(
+		&Host{state: state, backend: backend},
+		&attachHandler{state: state, backend: backend},
+		cluster,
+		vman,
+	)
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+
 	sampiAPI := sampi.NewHTTPAPI(sampi.NewCluster())
 	leaders := make(chan *discoverd.Instance)
 	leaderStream, err := disc.Service("flynn-host").Leaders(leaders)
@@ -289,11 +299,6 @@ func runDaemon(args *docopt.Args) {
 			}
 			// TODO: handle discoverd disconnection
 		}()
-	}
-
-	cluster, err := cluster.NewClient()
-	if err != nil {
-		shutdown.Fatal(err)
 	}
 
 	g.Log(grohl.Data{"at": "sampi_connected"})

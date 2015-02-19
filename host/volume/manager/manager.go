@@ -194,6 +194,48 @@ func (m *Manager) ForkVolume(id string) (volume.Volume, error) {
 	return vol2, nil
 }
 
+func (m *Manager) ListHaves(id string) ([]json.RawMessage, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	vol := m.volumes[id]
+	if vol == nil {
+		return nil, NoSuchVolume
+	}
+	haves, err := vol.Provider().ListHaves(vol)
+	if err != nil {
+		return nil, err
+	}
+	return haves, nil
+}
+
+func (m *Manager) SendSnapshot(id string, haves []json.RawMessage, stream io.Writer) error {
+	m.mutex.Lock()
+	vol := m.volumes[id]
+	if vol == nil {
+		return NoSuchVolume
+	}
+	m.mutex.Unlock() // don't lock the manager for the duration of the send operation.
+	return vol.Provider().SendSnapshot(vol, haves, stream)
+}
+
+func (m *Manager) ReceiveSnapshot(id string, stream io.Reader) (volume.Volume, error) {
+	m.mutex.Lock()
+	vol := m.volumes[id]
+	if vol == nil {
+		return nil, NoSuchVolume
+	}
+	m.mutex.Unlock() // don't lock the manager for the duration of the recv operation.
+	snap, err := vol.Provider().ReceiveSnapshot(vol, stream)
+	if err != nil {
+		return nil, err
+	}
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.volumes[snap.Info().ID] = snap
+	m.persist(func(tx *bolt.Tx) error { return m.persistVolume(tx, snap) })
+	return snap, nil
+}
+
 func initializePersistence(stateFilePath string) (*bolt.DB, error) {
 	if stateFilePath == "" {
 		return nil, nil

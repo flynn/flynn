@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -37,6 +38,16 @@ type Host interface {
 	// Creates a new volume, returning its ID.
 	// When in doubt, use a providerId of "default".
 	CreateVolume(providerId string) (*volume.Info, error)
+
+	CreateSnapshot(volumeID string) (*volume.Info, error)
+
+	// Requests the host pull a snapshot from another host onto one of its volumes.
+	// Returns the info for the new snapshot.
+	PullSnapshot(receiveVolID string, sourceHostID string, sourceSnapID string) (*volume.Info, error)
+
+	// Request transfer of volume snapshot data
+	// (this is used by other hosts in service of the PullSnapshot request).
+	SendSnapshot(snapID string, assumeHaves []json.RawMessage) (io.ReadCloser, error)
 
 	// PullImages pulls images from a TUF repository using the local TUF file in tufDB
 	PullImages(repository, driver, root string, tufDB io.Reader, ch chan<- *layer.PullInfo) (stream.Stream, error)
@@ -95,6 +106,33 @@ func (c *hostClient) CreateVolume(providerId string) (*volume.Info, error) {
 	var res volume.Info
 	err := c.c.Post(fmt.Sprintf("/storage/providers/%s/volumes", providerId), nil, &res)
 	return &res, err
+}
+
+func (c *hostClient) CreateSnapshot(volumeID string) (*volume.Info, error) {
+	var res volume.Info
+	err := c.c.Put(fmt.Sprintf("/storage/volumes/%s/snapshot", volumeID), nil, &res)
+	return &res, err
+}
+
+func (c *hostClient) PullSnapshot(receiveVolID string, sourceHostID string, sourceSnapID string) (*volume.Info, error) {
+	var res volume.Info
+	pull := volume.PullCoordinate{
+		HostID:     sourceHostID,
+		SnapshotID: sourceSnapID,
+	}
+	err := c.c.Post(fmt.Sprintf("/storage/volumes/%s/pull_snapshot", receiveVolID), pull, &res)
+	return &res, err
+}
+
+func (c *hostClient) SendSnapshot(snapID string, assumeHaves []json.RawMessage) (io.ReadCloser, error) {
+	header := http.Header{
+		"Accept": []string{"application/vnd.zfs.snapshot-stream"},
+	}
+	res, err := c.c.RawReq("GET", fmt.Sprintf("/storage/volumes/%s/send", snapID), header, assumeHaves, nil)
+	if err != nil {
+		return nil, err
+	}
+	return res.Body, nil
 }
 
 func (c *hostClient) PullImages(repository, driver, root string, tufDB io.Reader, ch chan<- *layer.PullInfo) (stream.Stream, error) {
