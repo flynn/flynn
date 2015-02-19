@@ -9,6 +9,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/stream"
 )
 
@@ -37,6 +38,8 @@ type Deploy struct {
 	newReleaseState map[string]int
 	knownJobStates  map[jobIDState]struct{}
 	lastEventID     int64
+	omni            map[string]struct{}
+	hostCount       int
 }
 
 var streamAttempts = attempt.Strategy{
@@ -60,6 +63,11 @@ func (d *Deploy) streamJobEvents() error {
 
 func (d *Deploy) closeJobEventStream() error {
 	return d.jobStream.Close()
+}
+
+func (d *Deploy) isOmni(typ string) bool {
+	_, ok := d.omni[typ]
+	return ok
 }
 
 type PerformFunc func(d *Deploy) error
@@ -90,7 +98,21 @@ func Perform(d *ct.Deployment, client *controller.Client, deployEvents chan<- ct
 		oldReleaseState: make(map[string]int, len(d.Processes)),
 		newReleaseState: make(map[string]int, len(d.Processes)),
 		knownJobStates:  make(map[jobIDState]struct{}),
+		omni:            make(map[string]struct{}),
 	}
+
+	log.Info("determining cluster size")
+	c, err := cluster.NewClient()
+	if err != nil {
+		log.Error("error connecting to cluster", "err", err)
+		return err
+	}
+	hosts, err := c.ListHosts()
+	if err != nil {
+		log.Error("error listing cluster hosts", "err", err)
+		return err
+	}
+	deploy.hostCount = len(hosts)
 
 	log.Info("determining release services and deployment state")
 	release, err := client.GetRelease(d.NewReleaseID)
@@ -99,6 +121,9 @@ func Perform(d *ct.Deployment, client *controller.Client, deployEvents chan<- ct
 		return err
 	}
 	for typ, proc := range release.Processes {
+		if proc.Omni {
+			deploy.omni[typ] = struct{}{}
+		}
 		if proc.Service == "" {
 			log.Info(fmt.Sprintf("using job events for %s process type, no service defined", typ))
 			deploy.useJobEvents[typ] = struct{}{}

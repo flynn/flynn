@@ -325,3 +325,77 @@ loop:
 	}}
 	t.Assert(actual, c.DeepEquals, expected)
 }
+
+func (s *DeployerSuite) TestOmniProcess(t *c.C) {
+	if testCluster == nil {
+		t.Skip("cannot determine test cluster size")
+	}
+
+	// create and scale an omni release
+	omniScale := 2
+	totalJobs := omniScale * testCluster.Size()
+	client := s.controllerClient(t)
+	app, release := s.createApp(t)
+	jEvents := make(chan *ct.JobEvent)
+	jobStream, err := client.StreamJobEvents(app.Name, 0, jEvents)
+	t.Assert(err, c.IsNil)
+	defer jobStream.Close()
+	t.Assert(client.PutFormation(&ct.Formation{
+		AppID:     app.ID,
+		ReleaseID: release.ID,
+		Processes: map[string]int{"omni": omniScale},
+	}), c.IsNil)
+	waitForJobEvents(t, jobStream, jEvents, jobEvents{"omni": {"up": totalJobs}})
+
+	// deploy using all-at-once and check we get the correct events
+	app.Strategy = "all-at-once"
+	t.Assert(client.UpdateApp(app), c.IsNil)
+	release.ID = ""
+	t.Assert(client.CreateRelease(release), c.IsNil)
+	deployment, err := client.CreateDeployment(app.ID, release.ID)
+	t.Assert(err, c.IsNil)
+	events := make(chan *ct.DeploymentEvent)
+	stream, err := client.StreamDeployment(deployment.ID, events)
+	t.Assert(err, c.IsNil)
+	defer stream.Close()
+	expected := make([]*ct.DeploymentEvent, 0, 4*totalJobs+1)
+	appendEvents := func(releaseID, state string, count int) {
+		for i := 0; i < count; i++ {
+			event := &ct.DeploymentEvent{
+				ReleaseID: releaseID,
+				JobType:   "omni",
+				JobState:  state,
+				Status:    "running",
+			}
+			expected = append(expected, event)
+		}
+	}
+	appendEvents(deployment.NewReleaseID, "starting", totalJobs)
+	appendEvents(deployment.NewReleaseID, "up", totalJobs)
+	appendEvents(deployment.OldReleaseID, "stopping", totalJobs)
+	appendEvents(deployment.OldReleaseID, "down", totalJobs)
+	expected = append(expected, &ct.DeploymentEvent{ReleaseID: deployment.NewReleaseID, Status: "complete"})
+	waitForDeploymentEvents(t, events, expected)
+
+	// deploy using one-by-one and check we get the correct events
+	app.Strategy = "one-by-one"
+	t.Assert(client.UpdateApp(app), c.IsNil)
+	release.ID = ""
+	t.Assert(client.CreateRelease(release), c.IsNil)
+	deployment, err = client.CreateDeployment(app.ID, release.ID)
+	t.Assert(err, c.IsNil)
+	events = make(chan *ct.DeploymentEvent)
+	stream, err = client.StreamDeployment(deployment.ID, events)
+	t.Assert(err, c.IsNil)
+	expected = make([]*ct.DeploymentEvent, 0, 4*totalJobs+1)
+	appendEvents(deployment.NewReleaseID, "starting", testCluster.Size())
+	appendEvents(deployment.NewReleaseID, "up", testCluster.Size())
+	appendEvents(deployment.OldReleaseID, "stopping", testCluster.Size())
+	appendEvents(deployment.OldReleaseID, "down", testCluster.Size())
+	appendEvents(deployment.NewReleaseID, "starting", testCluster.Size())
+	appendEvents(deployment.NewReleaseID, "up", testCluster.Size())
+	appendEvents(deployment.OldReleaseID, "stopping", testCluster.Size())
+	appendEvents(deployment.OldReleaseID, "down", testCluster.Size())
+	expected = append(expected, &ct.DeploymentEvent{ReleaseID: deployment.NewReleaseID, Status: "complete"})
+	waitForDeploymentEvents(t, events, expected)
+}

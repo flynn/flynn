@@ -8,15 +8,19 @@ func allAtOnce(d *Deploy) error {
 
 	expected := make(jobEvents)
 	for typ, n := range d.Processes {
+		total := n
+		if d.isOmni(typ) {
+			total *= d.hostCount
+		}
 		existing := d.newReleaseState[typ]
-		for i := existing; i < n; i++ {
+		for i := existing; i < total; i++ {
 			d.deployEvents <- ct.DeploymentEvent{
 				ReleaseID: d.NewReleaseID,
 				JobState:  "starting",
 				JobType:   typ,
 			}
 		}
-		expected[typ] = map[string]int{"up": n - existing}
+		expected[typ] = map[string]int{"up": total - existing}
 	}
 	if expected.Count() > 0 {
 		log := log.New("release_id", d.NewReleaseID)
