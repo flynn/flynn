@@ -10,6 +10,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# divert initctl and set rc.d policy so we don't start any daemons in the chroot
+dpkg-divert --local --rename --add /sbin/initctl
+ln -s /bin/true /sbin/initctl
+echo $'#!/bin/sh\nexit 101' > /usr/sbin/policy-rc.d
+chmod +x /usr/sbin/policy-rc.d
+
 # set up ubuntu user
 addgroup docker
 addgroup fuse
@@ -123,6 +129,7 @@ apt-get install -y \
 # install flynn test dependencies: postgres
 # (normally this is used via an appliance; this is for unit tests)
 apt-get install -y postgresql postgresql-contrib
+service postgresql start
 sudo -u postgres createuser --superuser ubuntu
 update-rc.d postgresql disable
 service postgresql stop
@@ -150,3 +157,8 @@ apt-get clean
 
 # recreate resolv.conf symlink
 ln -nsf ../run/resolvconf/resolv.conf /etc/resolv.conf
+
+# remove the initctl diversion and rc.d policy so Upstart works in VMs
+rm /usr/sbin/policy-rc.d
+rm /sbin/initctl
+dpkg-divert --rename --remove /sbin/initctl

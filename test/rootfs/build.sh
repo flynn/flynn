@@ -19,7 +19,9 @@ trap cleanup ERR
 image="http://cdimage.ubuntu.com/ubuntu-core/releases/14.04.1/release/ubuntu-core-14.04.1-core-amd64.tar.gz"
 curl -L ${image} | sudo tar -xzC ${dir}
 
-sudo chroot ${dir} bash < "${src_dir}/setup.sh"
+# use jchroot (https://github.com/vincentbernat/jchroot) which uses a PID
+# namespace so daemons do not outlive the setup and prevent unmounting rootfs.img
+sudo jchroot ${dir} bash < "${src_dir}/setup.sh"
 
 sudo cp ${dir}/boot/vmlinuz-* ${build_dir}/vmlinuz
 
