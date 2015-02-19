@@ -352,7 +352,7 @@ func (c *Cluster) CLIConfig() (*config.Config, error) {
 		GitHost: c.ClusterDomain + ":2222",
 		TLSPin:  c.ControllerPin,
 	}
-	if err := conf.Add(s); err != nil {
+	if err := conf.Add(s, true /*force*/); err != nil {
 		return nil, err
 	}
 	return conf, nil
