@@ -38,8 +38,8 @@ func (s *LogAggregatorTestSuite) TestAggregatorListensOnAddr(c *C) {
 }
 
 const (
-	sampleLogLine1 = "120 <40>1 2012-11-30T06:45:26+00:00 host app web.3 - - Starting process with command `bundle exec rackup config.ru -p 24405`"
-	sampleLogLine2 = "77 <40>1 2012-11-30T06:45:26+00:00 host app web.3 - - 25 yay this is a message!!!\n"
+	sampleLogLine1 = "120 <40>1 2012-11-30T06:45:26+00:00 host app web.1 - - Starting process with command `bundle exec rackup config.ru -p 24405`"
+	sampleLogLine2 = "77 <40>1 2012-11-30T06:45:26+00:00 host app web.2 - - 25 yay this is a message!!!\n"
 )
 
 func (s *LogAggregatorTestSuite) TestAggregatorShutdown(c *C) {
@@ -51,7 +51,7 @@ func (s *LogAggregatorTestSuite) TestAggregatorShutdown(c *C) {
 	s.a.Shutdown()
 }
 
-func (s *LogAggregatorTestSuite) TestAggregatorReceivesMessages(c *C) {
+func (s *LogAggregatorTestSuite) TestAggregatorBuffersMessages(c *C) {
 	// set up testing hook:
 	messageReceived := make(chan struct{})
 	afterMessage = func() {
@@ -73,6 +73,11 @@ func (s *LogAggregatorTestSuite) TestAggregatorReceivesMessages(c *C) {
 		<-messageReceived // wait for messages to be received
 	}
 
+	buf := s.a.getBuffer("app")
+	msgs := buf.ReadAll()
+	c.Assert(msgs, HasLen, 2)
+	c.Assert(string(msgs[0].ProcID), Equals, "web.1")
+	c.Assert(string(msgs[1].ProcID), Equals, "web.2")
 	s.a.Shutdown()
 }
 

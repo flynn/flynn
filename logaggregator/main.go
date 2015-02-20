@@ -3,10 +3,10 @@ package main
 import (
 	"bufio"
 	"flag"
-	"fmt"
 	"net"
 	"sync"
 
+	"github.com/flynn/flynn/logaggregator/ring"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 	"github.com/flynn/flynn/pkg/syslog/rfc6587"
@@ -33,6 +33,8 @@ type Aggregator struct {
 	// Addr is the address (host:port) to listen on for incoming syslog messages.
 	Addr string
 
+	bmu        sync.Mutex // protects buffers
+	buffers    map[string]*ring.Buffer
 	listener   net.Listener
 	producerwg sync.WaitGroup
 
@@ -44,6 +46,7 @@ type Aggregator struct {
 func NewAggregator(addr string) *Aggregator {
 	return &Aggregator{
 		Addr:     addr,
+		buffers:  make(map[string]*ring.Buffer),
 		shutdown: make(chan struct{}),
 	}
 }
@@ -100,6 +103,18 @@ func (a *Aggregator) accept() {
 // testing hook:
 var afterMessage func()
 
+func (a *Aggregator) getBuffer(id string) *ring.Buffer {
+	a.bmu.Lock()
+	defer a.bmu.Unlock()
+
+	if buf, ok := a.buffers[id]; ok {
+		return buf
+	}
+	buf := ring.NewBuffer()
+	a.buffers[id] = buf
+	return buf
+}
+
 func (a *Aggregator) readLogsFromConn(conn net.Conn) {
 	defer conn.Close()
 
@@ -122,13 +137,12 @@ func (a *Aggregator) readLogsFromConn(conn net.Conn) {
 		msgCopy := make([]byte, len(msgBytes))
 		copy(msgCopy, msgBytes)
 
-		fmt.Printf("message received: %q\n", string(msgCopy))
 		msg, err := rfc5424.Parse(msgCopy)
 		if err != nil {
 			log15.Error("rfc5424 parse error", "err", err)
 			continue
 		}
-		fmt.Printf("MSG: %#v\n", msg)
+		a.getBuffer(string(msg.AppName)).Add(msg)
 		if afterMessage != nil {
 			afterMessage()
 		}
