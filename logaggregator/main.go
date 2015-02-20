@@ -8,7 +8,10 @@ import (
 	"sync"
 
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 	"github.com/flynn/flynn/pkg/syslog/rfc6587"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 )
 
 func main() {
@@ -120,6 +123,12 @@ func (a *Aggregator) readLogsFromConn(conn net.Conn) {
 		copy(msgCopy, msgBytes)
 
 		fmt.Printf("message received: %q\n", string(msgCopy))
+		msg, err := rfc5424.Parse(msgCopy)
+		if err != nil {
+			log15.Error("rfc5424 parse error", "err", err)
+			continue
+		}
+		fmt.Printf("MSG: %#v\n", msg)
 		if afterMessage != nil {
 			afterMessage()
 		}
