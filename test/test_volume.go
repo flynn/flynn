@@ -36,6 +36,9 @@ func (s *VolumeSuite) doVolumeTransmitAPI(h0, h1 cluster.Host, t *c.C) {
 	// create a volume!
 	vol, err := h0.CreateVolume("default")
 	t.Assert(err, c.IsNil)
+	defer func() {
+		t.Assert(h0.DestroyVolume(vol.ID), c.IsNil)
+	}()
 	// create a job and use it to add data to the volume
 	cmd, service, err := makeIshApp(clus, h0, s.discoverdClient(t), host.ContainerConfig{
 		Volumes: []host.VolumeBinding{{
@@ -53,12 +56,21 @@ func (s *VolumeSuite) doVolumeTransmitAPI(h0, h1 cluster.Host, t *c.C) {
 	// take a snapshot
 	snapInfo, err := h0.CreateSnapshot(vol.ID)
 	t.Assert(err, c.IsNil)
+	defer func() {
+		t.Assert(h0.DestroyVolume(snapInfo.ID), c.IsNil)
+	}()
 	// make a volume on another host to yank the snapshot content into
 	vol2, err := h1.CreateVolume("default")
 	t.Assert(err, c.IsNil)
+	defer func() {
+		t.Assert(h1.DestroyVolume(vol2.ID), c.IsNil)
+	}()
 	// transfer the snapshot to the new volume on the other host
-	_, err = h1.PullSnapshot(vol2.ID, h0.ID(), snapInfo.ID)
+	snapInfo2, err := h1.PullSnapshot(vol2.ID, h0.ID(), snapInfo.ID)
 	t.Assert(err, c.IsNil)
+	defer func() {
+		t.Assert(h1.DestroyVolume(snapInfo2.ID), c.IsNil)
+	}()
 
 	// start a job on the other host that mounts and inspects the transmitted volume
 	cmd, service, err = makeIshApp(clus, h1, s.discoverdClient(t), host.ContainerConfig{
