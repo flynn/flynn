@@ -5,6 +5,7 @@ import (
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/stream"
@@ -37,8 +38,35 @@ func (s *DeployerSuite) createRelease(t *c.C, process, strategy string) (*ct.App
 	return app, release
 }
 
-func (s *DeployerSuite) createDeployment(t *c.C, process, strategy string) *ct.Deployment {
+func (s *DeployerSuite) createDeployment(t *c.C, process, strategy, service string) *ct.Deployment {
 	app, release := s.createRelease(t, process, strategy)
+
+	if service != "" {
+		debugf(t, "waiting for 2 %s services", service)
+		events := make(chan *discoverd.Event)
+		stream, err := s.discoverdClient(t).Service(service).Watch(events)
+		t.Assert(err, c.IsNil)
+		defer stream.Close()
+		count := 0
+	loop:
+		for {
+			select {
+			case event, ok := <-events:
+				if !ok {
+					t.Fatalf("service discovery stream closed unexpectedly")
+				}
+				if event.Kind == discoverd.EventKindUp {
+					debugf(t, "got %s service up event", service)
+					count++
+				}
+				if count == 2 {
+					break loop
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatalf("timed out waiting for %s service to come up", service)
+			}
+		}
+	}
 
 	// create a new release for the deployment
 	release.ID = ""
@@ -79,7 +107,7 @@ loop:
 }
 
 func (s *DeployerSuite) TestOneByOneStrategy(t *c.C) {
-	deployment := s.createDeployment(t, "printer", "one-by-one")
+	deployment := s.createDeployment(t, "printer", "one-by-one", "")
 	events := make(chan *ct.DeploymentEvent)
 	stream, err := s.controllerClient(t).StreamDeployment(deployment.ID, events)
 	t.Assert(err, c.IsNil)
@@ -102,7 +130,7 @@ func (s *DeployerSuite) TestOneByOneStrategy(t *c.C) {
 }
 
 func (s *DeployerSuite) TestAllAtOnceStrategy(t *c.C) {
-	deployment := s.createDeployment(t, "printer", "all-at-once")
+	deployment := s.createDeployment(t, "printer", "all-at-once", "")
 	events := make(chan *ct.DeploymentEvent)
 	stream, err := s.controllerClient(t).StreamDeployment(deployment.ID, events)
 	t.Assert(err, c.IsNil)
@@ -125,7 +153,7 @@ func (s *DeployerSuite) TestAllAtOnceStrategy(t *c.C) {
 }
 
 func (s *DeployerSuite) TestServiceEvents(t *c.C) {
-	deployment := s.createDeployment(t, "echoer", "all-at-once")
+	deployment := s.createDeployment(t, "echoer", "all-at-once", "echo-service")
 	events := make(chan *ct.DeploymentEvent)
 	stream, err := s.controllerClient(t).StreamDeployment(deployment.ID, events)
 	t.Assert(err, c.IsNil)
