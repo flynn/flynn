@@ -33,6 +33,7 @@ func (api *HTTPAPI) RegisterRoutes(r *httprouter.Router) {
 	r.POST("/storage/providers/:provider_id/volumes", api.Create)
 	r.GET("/storage/volumes", api.List)
 	r.GET("/storage/volumes/:volume_id", api.Inspect)
+	r.DELETE("/storage/volumes/:volume_id", api.Destroy)
 	r.PUT("/storage/volumes/:volume_id/snapshot", api.Snapshot)
 	// takes host and volID parameters, triggers a send on the remote host and give it a list of snaps already here, and pipes it into recv
 	r.POST("/storage/volumes/:volume_id/pull_snapshot", api.Pull)
@@ -119,6 +120,26 @@ func (api *HTTPAPI) Inspect(w http.ResponseWriter, r *http.Request, ps httproute
 	}
 
 	httphelper.JSON(w, 200, vol.Info())
+}
+
+func (api *HTTPAPI) Destroy(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	volumeID := ps.ByName("volume_id")
+	err := api.vman.DestroyVolume(volumeID)
+	if err != nil {
+		switch err {
+		case volumemanager.NoSuchVolume:
+			httphelper.Error(w, httphelper.JSONError{
+				Code:    httphelper.ObjectNotFoundError,
+				Message: fmt.Sprintf("No volume by id %q", volumeID),
+			})
+			return
+		default:
+			httphelper.Error(w, err)
+			return
+		}
+	}
+
+	w.WriteHeader(200)
 }
 
 func (api *HTTPAPI) Snapshot(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {

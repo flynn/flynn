@@ -39,6 +39,8 @@ type Host interface {
 	// When in doubt, use a providerId of "default".
 	CreateVolume(providerId string) (*volume.Info, error)
 
+	DestroyVolume(volumeID string) error
+
 	CreateSnapshot(volumeID string) (*volume.Info, error)
 
 	// Requests the host pull a snapshot from another host onto one of its volumes.
@@ -106,6 +108,10 @@ func (c *hostClient) CreateVolume(providerId string) (*volume.Info, error) {
 	var res volume.Info
 	err := c.c.Post(fmt.Sprintf("/storage/providers/%s/volumes", providerId), nil, &res)
 	return &res, err
+}
+
+func (c *hostClient) DestroyVolume(volumeID string) error {
+	return c.c.Delete(fmt.Sprintf("/storage/volumes/%s", volumeID))
 }
 
 func (c *hostClient) CreateSnapshot(volumeID string) (*volume.Info, error) {
