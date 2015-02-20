@@ -38,3 +38,11 @@ func eunwrap(e error) error {
 func isDatasetNotExistsError(e error) bool {
 	return strings.HasSuffix(e.Error(), "dataset does not exist\n")
 }
+
+/*
+	"dataset is busy" errors from ZFS typically indicate that there are open
+	files in that dataset mount.
+*/
+func IsDatasetBusyError(e error) bool {
+	return strings.HasSuffix(e.Error(), "dataset is busy\n")
+}
