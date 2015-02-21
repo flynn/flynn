@@ -73,8 +73,7 @@ func (s *LogAggregatorTestSuite) TestAggregatorBuffersMessages(c *C) {
 		<-messageReceived // wait for messages to be received
 	}
 
-	buf := s.a.getBuffer("app")
-	msgs := buf.ReadAll()
+	msgs := s.a.ReadLastN("app", 0)
 	c.Assert(msgs, HasLen, 2)
 	c.Assert(string(msgs[0].ProcID), Equals, "web.1")
 	c.Assert(string(msgs[1].ProcID), Equals, "web.2")
