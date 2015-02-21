@@ -168,6 +168,13 @@ func (r *Runner) start() error {
 	router.POST("/cluster/:key/:cluster", r.clusterAPI(r.addHost))
 	router.DELETE("/cluster/:key/:cluster/:host", r.clusterAPI(r.removeHost))
 	router.GET("/cluster/:key/:cluster/dump-logs", r.clusterAPI(r.dumpLogs))
+	router.POST("/cluster/:key/:cluster/:host/reboot", r.clusterAPI(r.rebootHost))
+
+	router.NotFound = func(w http.ResponseWriter, r *http.Request) {
+		msg := fmt.Sprintf("no route matched for query path %s %q\n", r.Method, r.URL.Path)
+		log.Printf("testrunner: WARN: %s\n", msg)
+		http.Error(w, "testrunner: 404 page not found: "+msg, http.StatusNotFound)
+	}
 
 	srv := &http.Server{
 		Addr:      args.ListenAddr,
@@ -636,6 +643,15 @@ func (r *Runner) addHost(c *cluster.Cluster, w http.ResponseWriter, q url.Values
 func (r *Runner) removeHost(c *cluster.Cluster, w http.ResponseWriter, q url.Values, ps httprouter.Params) error {
 	hostID := ps.ByName("host")
 	if err := c.RemoveHost(hostID); err != nil {
+		return err
+	}
+	w.WriteHeader(200)
+	return nil
+}
+
+func (r *Runner) rebootHost(c *cluster.Cluster, w http.ResponseWriter, q url.Values, ps httprouter.Params) error {
+	hostID := ps.ByName("host")
+	if err := c.BounceHost(hostID); err != nil {
 		return err
 	}
 	w.WriteHeader(200)

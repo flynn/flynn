@@ -203,6 +203,17 @@ func (i *Instance) Wait(timeout time.Duration) error {
 	}
 }
 
+func (i *Instance) Reboot() error {
+	if err := i.Run("sudo reboot && sleep 60", nil); err != nil {
+		return i.Kill()
+	}
+	i.sshMtx.Lock()
+	i.ssh.Close()
+	i.ssh = nil
+	i.sshMtx.Unlock()
+	return i.Run("uptime", nil)
+}
+
 func (i *Instance) Shutdown() error {
 	if err := i.Run("sudo poweroff", nil); err != nil {
 		return i.Kill()
