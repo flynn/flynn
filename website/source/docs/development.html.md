@@ -259,75 +259,73 @@ $ script/run-integration-tests -f TestEnvDir
 Once you have built and tested Flynn inside the development VM, you can create a release
 and install the components on other hosts (e.g. in EC2).
 
-A Flynn release consists of a package (currently only Debian packages are supported) and the
-built Docker images, and both of these must be installed in order to run Flynn.
+A Flynn release is a set of components consisting of binaries, configuration files and
+filesystem images, all of which must be installed in order to run Flynn.
 
-### Docker Registry
+### The Update Framework (TUF)
 
-By default, Flynn will reference Docker images from the default Docker registry using
-the `flynn` user.
+Flynn uses [The Update Framework](http://theupdateframework.com/) (also known as TUF) to
+securely distribute all of the Flynn components.
 
-This needs to be changed in order to release your own images, which can be done
-by changing `CONFIG_IMAGE_URL_PREFIX` in the `tup.config` file then re-running
-`make`.
+To release Flynn, you will need to generate a TUF repository using the
+[go-tuf](https://github.com/flynn/go-tuf) library.
 
-To use the default Docker registry but with a different user (e.g. `lmars`):
+Follow the [installation instructions](https://github.com/flynn/go-tuf#install)
+and then follow the ["Create signed root manifest"](https://github.com/flynn/go-tuf#examples)
+example. You should now have a directory with the following layout:
 
-```
-CONFIG_IMAGE_URL_PREFIX=https://registry.hub.docker.com/lmars
-```
-
-To use a different Docker registry:
 
 ```
-CONFIG_IMAGE_URL_PREFIX=https://my.registry.com/flynn
+.
+├── keys
+│   ├── snapshot.json
+│   ├── targets.json
+│   └── timestamp.json
+├── repository
+└── staged
+    ├── root.json
+    └── targets
 ```
 
-If the registry requires HTTP basic authentication, put the credentials in the URL:
+The TUF root keys need to be compiled into the Flynn release, and image URLs must
+be relative to the file server the TUF repository will be uploaded to. This can be
+accomplished by setting `CONFIG_TUF_ROOT_KEYS` and `CONFIG_IMAGE_REPOSITORY` in
+the `tup.config` file then re-running `make`, e.g.:
 
 ```
-CONFIG_IMAGE_URL_PREFIX=https://username:password@my.registry.com
+CONFIG_IMAGE_REPOSITORY=https://s3.amazonaws.com/my-flynn-repo/tuf
+CONFIG_TUF_ROOT_KEYS=[{"keytype":"ed25519","keyval":{"public":"31351ecc833417968faabf98e004d1ef48ecfd996f971aeed399a7dc735d2c8c"}}]
 ```
 
-### Create Package
+*The TUF root keys can be determined by running `tuf root-keys` in the TUF repository.*
 
-Create a Debian package of the built files by running the following:
+### Export components
 
-```
-$ script/build-deb $(date +%Y%m%d)
-```
-
-*Note: The argument to the `build-deb` script is the version of the flynn-host package.
-You can set this to whatever you wish, provided it conforms to [Debian versioning]
-(https://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Version).*
-
-This creates a `.deb` file in the current directory which can be installed on other
-systems.
-
-### Upload Images
-
-Log in to the Docker registry:
+Export the Flynn components into the TUF repository (this will prompt for TUF key
+passphrases):
 
 ```
-$ docker login
+$ script/export-components /path/to/tuf-repo
 ```
 
-If you are using a different registry in `CONFIG_IMAGE_URL_PREFIX`, log in to that
-registry instead:
+### Upload components
+
+Upload the `repository` directory of the TUF repo to the file server referenced
+by `CONFIG_IMAGE_REPOSITORY`.
+
+For example, if using S3 and `CONFIG_IMAGE_REPOSITORY` is set to
+`https://s3.amazonaws.com/my-flynn-repo/tuf`, use `s3cmd` to sync the files:
 
 ```
-docker login my.registry.com
+$ s3cmd sync --acl-public /path/to/tuf-repo/repository s3://my-flynn-repo/tuf
 ```
 
-Upload the images:
+You can now distribute `script/install-flynn` and run it with an explicit repo URL
+to install the custom built Flynn components:
 
 ```
-$ util/release/flynn-release upload version.json
+install-flynn -r https://s3.amazonaws.com/my-flynn-repo
 ```
-
-You can now follow the [installation instructions](/docs/installation#ubuntu-14.04-amd64)
-to install your custom components, replacing the `apt-get install flynn-host` step with the
-installation of the custom Debian package (i.e. `dpkg -i /path/to/flynn-host.deb`).
 
 ## Pull request
 
