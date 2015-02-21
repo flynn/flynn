@@ -101,6 +101,15 @@ func (a *Aggregator) Shutdown() {
 	})
 }
 
+// ReadNLogs reads up to N logs from the log buffer with id. If n is 0, or if
+// there are fewer than n logs buffered, all buffered logs are returned.
+func (a *Aggregator) ReadLastN(id string, n int) []*rfc5424.Message {
+	if n == 0 {
+		return a.getBuffer(id).ReadAll()
+	}
+	return a.getBuffer(id).ReadLastN(n)
+}
+
 func (a *Aggregator) accept() {
 	defer a.listener.Close()
 
