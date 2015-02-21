@@ -15,6 +15,7 @@ import (
 	"github.com/flynn/flynn/host/volume/manager"
 	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pinkerton/layer"
+	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/sse"
 )
@@ -131,7 +132,7 @@ func (h *jobAPI) RegisterRoutes(r *httprouter.Router) error {
 	return nil
 }
 
-func serveHTTP(host *Host, attach *attachHandler, vman *volumemanager.Manager) (*httprouter.Router, error) {
+func serveHTTP(host *Host, attach *attachHandler, clus *cluster.Client, vman *volumemanager.Manager) (*httprouter.Router, error) {
 	l, err := net.Listen("tcp", ":1113")
 	if err != nil {
 		return nil, err
@@ -143,7 +144,7 @@ func serveHTTP(host *Host, attach *attachHandler, vman *volumemanager.Manager) (
 
 	jobAPI := &jobAPI{host}
 	jobAPI.RegisterRoutes(r)
-	volAPI := volumeapi.NewHTTPAPI(vman)
+	volAPI := volumeapi.NewHTTPAPI(clus, vman)
 	volAPI.RegisterRoutes(r)
 
 	go http.Serve(l, httphelper.ContextInjector("host", httphelper.NewRequestLogger(r)))
