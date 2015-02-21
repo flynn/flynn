@@ -89,6 +89,9 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 	if req.Flags&host.AttachFlagStderr != 0 {
 		opts.Stderr = newFrameWriter(2, w, writeMtx)
 	}
+	if req.Flags&host.AttachFlagInitLog != 0 {
+		opts.InitLog = newFrameWriter(3, w, writeMtx)
+	}
 
 	go func() {
 		defer func() {

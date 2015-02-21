@@ -163,9 +163,9 @@ func (c *attachClient) Receive(stdout, stderr io.Writer) (int, error) {
 					return -1, errors.New("attach: got frame for stdout, but no writer available")
 				}
 				out = &stdout
-			case 2:
+			case 2, 3:
 				if stderr == nil {
-					return -1, errors.New("attach: got frame for stderr, but no writer available")
+					return -1, errors.New("attach: got frame for stderr / initLog, but no writer available")
 				}
 				out = &stderr
 			default:

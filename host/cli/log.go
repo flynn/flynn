@@ -13,7 +13,7 @@ import (
 
 func init() {
 	Register("log", runLog, `
-usage: flynn-host log [-f|--follow] ID
+usage: flynn-host log [--init] [-f|--follow] ID
 
 Get the logs of a job`)
 }
@@ -23,10 +23,18 @@ func runLog(args *docopt.Args, client *cluster.Client) error {
 	if err != nil {
 		return err
 	}
-	return getLog(hostID, jobID, client, args.Bool["-f"] || args.Bool["--follow"], os.Stdout, os.Stderr)
+	return getLog(
+		hostID,
+		jobID,
+		client,
+		args.Bool["-f"] || args.Bool["--follow"],
+		args.Bool["--init"],
+		os.Stdout,
+		os.Stderr,
+	)
 }
 
-func getLog(hostID, jobID string, client *cluster.Client, follow bool, stdout, stderr io.Writer) error {
+func getLog(hostID, jobID string, client *cluster.Client, follow, init bool, stdout, stderr io.Writer) error {
 	hostClient, err := client.DialHost(hostID)
 	if err != nil {
 		return fmt.Errorf("could not connect to host %s: %s", hostID, err)
@@ -38,6 +46,9 @@ func getLog(hostID, jobID string, client *cluster.Client, follow bool, stdout, s
 	if follow {
 		attachReq.Flags |= host.AttachFlagStream
 	}
+	if init {
+		attachReq.Flags |= host.AttachFlagInitLog
+	}
 	attachClient, err := hostClient.Attach(attachReq, false)
 	if err != nil {
 		if err == cluster.ErrWouldWait {
@@ -46,6 +57,6 @@ func getLog(hostID, jobID string, client *cluster.Client, follow bool, stdout, s
 		return err
 	}
 	defer attachClient.Close()
-	attachClient.Receive(stdout, stderr)
-	return nil
+	_, err = attachClient.Receive(stdout, stderr)
+	return err
 }

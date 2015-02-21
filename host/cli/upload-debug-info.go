@@ -110,7 +110,7 @@ func captureJobs(gist *Gist) error {
 		var content bytes.Buffer
 		printJobDesc(&job, &content)
 		fmt.Fprint(&content, "\n\n***** ***** ***** ***** ***** ***** ***** ***** ***** *****\n\n")
-		getLog(job.HostID, job.Job.ID, client, false, &content, &content)
+		getLog(job.HostID, job.Job.ID, client, false, true, &content, &content)
 
 		gist.AddFile(name, content.String())
 	}

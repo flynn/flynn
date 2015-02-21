@@ -596,6 +596,6 @@ func (c *Cluster) dumpLogs(w io.Writer) {
 			fallback()
 			return
 		}
-		run(c.Instances[0], fmt.Sprintf("flynn-host log %s", id))
+		run(c.Instances[0], fmt.Sprintf("flynn-host log --init %s", id))
 	}
 }
