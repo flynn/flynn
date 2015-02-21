@@ -9,6 +9,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/host/volume/manager"
+	"github.com/flynn/flynn/host/volume/zfs"
 	"github.com/flynn/flynn/pkg/shutdown"
 )
 
@@ -107,6 +108,19 @@ func loadVolumeState(volumeDBPath string) (*volumemanager.Manager, error) {
 
 func destroyVolumes(vman *volumemanager.Manager) error {
 	someVolumesNotDestroyed := false
+	var secondPass []string
+	for volID := range vman.Volumes() {
+		fmt.Printf("removing volume id=%q... ", volID)
+		if err := vman.DestroyVolume(volID); err == nil {
+			fmt.Println("success")
+		} else if zfs.IsDatasetHasChildrenError(err) {
+			fmt.Println("has children, coming back to it later")
+			secondPass = append(secondPass, volID)
+		} else {
+			fmt.Printf("error: %s\n", err)
+			someVolumesNotDestroyed = true
+		}
+	}
 	for volID := range vman.Volumes() {
 		fmt.Printf("removing volume id=%q... ", volID)
 		if err := vman.DestroyVolume(volID); err == nil {
