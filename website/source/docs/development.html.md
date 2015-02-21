@@ -254,6 +254,14 @@ To run an individual integration test (e.g. `TestEnvDir`):
 $ script/run-integration-tests -f TestEnvDir
 ```
 
+## Pull request
+
+Once you have made changes to the Flynn source code and tested your changes, you
+should open a pull request on GitHub so we can review your changes and merge
+them into the Flynn repository.
+
+Please see the [contribution guide](/docs/contributing) for more information.
+
 ## Releasing Flynn
 
 Once you have built and tested Flynn inside the development VM, you can create a release
@@ -326,11 +334,3 @@ to install the custom built Flynn components:
 ```
 install-flynn -r https://s3.amazonaws.com/my-flynn-repo
 ```
-
-## Pull request
-
-Once you have made changes to the Flynn source code and tested your changes, you
-should open a pull request on GitHub so we can review your changes and merge
-them into the Flynn repository.
-
-Please see the [contribution guide](/docs/contributing) for more information.
