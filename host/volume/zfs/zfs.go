@@ -1,14 +1,16 @@
 package zfs
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strings"
 	"syscall"
-	"time"
 
 	zfs "github.com/flynn/flynn/Godeps/_workspace/src/github.com/mistifyio/go-zfs"
 	"github.com/flynn/flynn/host/volume"
@@ -135,7 +137,7 @@ func (b *Provider) NewVolume() (volume.Volume, error) {
 	v := &zfsVolume{
 		info:      &volume.Info{ID: id},
 		provider:  b,
-		basemount: filepath.Join(b.config.WorkingDir, "/mnt/", id),
+		basemount: b.mountPath(id),
 	}
 	var err error
 	v.dataset, err = zfs.CreateFilesystem(path.Join(v.provider.dataset.Name, id), map[string]string{
@@ -148,17 +150,240 @@ func (b *Provider) NewVolume() (volume.Volume, error) {
 	return v, nil
 }
 
-func (b *Provider) DestroyVolume(vol volume.Volume) error {
+func (b *Provider) owns(vol volume.Volume) (*zfsVolume, error) {
 	zvol := b.volumes[vol.Info().ID]
 	if zvol == nil {
-		return fmt.Errorf("volume does not belong to this provider")
+		return nil, fmt.Errorf("volume does not belong to this provider")
 	}
-	if err := zvol.dataset.Destroy(zfs.DestroyRecursive | zfs.DestroyForceUmount); err != nil {
+	if zvol != vol { // these pointers should be canonical
+		panic(fmt.Errorf("volume does not belong to this provider"))
+	}
+	return zvol, nil
+}
+
+func (b Provider) mountPath(id string) string {
+	return filepath.Join(b.config.WorkingDir, "/mnt/", id)
+}
+
+func (b *Provider) DestroyVolume(vol volume.Volume) error {
+	zvol, err := b.owns(vol)
+	if err != nil {
+		return err
+	}
+	if vol.IsSnapshot() {
+		if err := syscall.Unmount(vol.Location(), 0); err != nil {
+			return err
+		}
+		os.Remove(vol.Location())
+	}
+	if err := zvol.dataset.Destroy(zfs.DestroyForceUmount); err != nil {
 		return err
 	}
 	os.Remove(zvol.basemount)
 	delete(b.volumes, vol.Info().ID)
 	return nil
+}
+
+func (b *Provider) CreateSnapshot(vol volume.Volume) (volume.Volume, error) {
+	zvol, err := b.owns(vol)
+	if err != nil {
+		return nil, err
+	}
+	id := random.UUID()
+	snap := &zfsVolume{
+		info:      &volume.Info{ID: id},
+		provider:  zvol.provider,
+		basemount: b.mountPath(id),
+	}
+	snap.dataset, err = zvol.dataset.Snapshot(id, false)
+	if err != nil {
+		return nil, err
+	}
+	if err := b.mountSnapshot(snap); err != nil {
+		return nil, err
+	}
+	b.volumes[id] = snap
+	return snap, nil
+}
+
+func (b *Provider) mountSnapshot(vol *zfsVolume) error {
+	// mount the snapshot (readonly)
+	// 'zfs mount' currently can't perform on snapshots; seealso https://github.com/zfsonlinux/zfs/issues/173
+	alreadyMounted, err := volume.IsMount(vol.basemount)
+	if err != nil {
+		return fmt.Errorf("could not mount snapshot: %s", err)
+	}
+	if alreadyMounted {
+		return nil
+	}
+	if err = os.MkdirAll(vol.basemount, 0644); err != nil {
+		return fmt.Errorf("could not mount snapshot: %s", err)
+	}
+	var buf bytes.Buffer
+	cmd := exec.Command("mount", "-tzfs", vol.dataset.Name, vol.basemount)
+	cmd.Stderr = &buf
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("could not mount snapshot: %s (%s)", err, strings.TrimSpace(buf.String()))
+	}
+	return nil
+}
+
+func (b *Provider) ForkVolume(vol volume.Volume) (volume.Volume, error) {
+	zvol, err := b.owns(vol)
+	if err != nil {
+		return nil, err
+	}
+	if !vol.IsSnapshot() {
+		return nil, fmt.Errorf("can only fork a snapshot")
+	}
+	id := random.UUID()
+	v2 := &zfsVolume{
+		info:      &volume.Info{ID: id},
+		provider:  zvol.provider,
+		basemount: b.mountPath(id),
+	}
+	cloneID := fmt.Sprintf("%s/%s", zvol.provider.dataset.Name, id)
+	v2.dataset, err = zvol.dataset.Clone(cloneID, map[string]string{
+		"mountpoint": v2.basemount,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("could not fork volume: %s", err)
+	}
+	b.volumes[id] = v2
+	return v2, nil
+}
+
+type zfsHaves struct {
+	SnapID string `json:"snap_id"`
+}
+
+/*
+	Returns the set of snapshot UIDs available in this volume's backing dataset.
+*/
+func (b *Provider) ListHaves(vol volume.Volume) ([]json.RawMessage, error) {
+	zvol, err := b.owns(vol)
+	if err != nil {
+		return nil, err
+	}
+	snapshots, err := zvol.dataset.Snapshots()
+	if err != nil {
+		return nil, err
+	}
+	res := make([]json.RawMessage, len(snapshots))
+	for i, snapshot := range snapshots {
+		have := &zfsHaves{SnapID: strings.SplitN(snapshot.Name, "@", 2)[1]}
+		serial, err := json.Marshal(have)
+		if err != nil {
+			return nil, err
+		}
+		res[i] = serial
+	}
+	return res, nil
+}
+
+func (b *Provider) SendSnapshot(vol volume.Volume, haves []json.RawMessage, output io.Writer) error {
+	zvol, err := b.owns(vol)
+	if err != nil {
+		return err
+	}
+	if !vol.IsSnapshot() {
+		return fmt.Errorf("can only send a snapshot")
+	}
+	// zfs recv can only really accept snapshots that apply to the current tip
+	var latestRemote string
+	if haves != nil && len(haves) > 0 {
+		have := &zfsHaves{}
+		if err := json.Unmarshal(haves[len(haves)-1], have); err == nil {
+			latestRemote = have.SnapID
+		}
+	}
+	// look for intersection of existing snapshots on this volume; if so do incremental
+	parentName := strings.SplitN(zvol.dataset.Name, "@", 2)[0]
+	parentDataset, err := zfs.GetDataset(parentName)
+	if err != nil {
+		return err
+	}
+	snapshots, err := parentDataset.Snapshots()
+	if err != nil {
+		return err
+	}
+	// we can fly incremental iff the latest snap on the remote is available here
+	useIncremental := false
+	if latestRemote != "" {
+		for _, snap := range snapshots {
+			if strings.SplitN(snap.Name, "@", 2)[1] == latestRemote {
+				useIncremental = true
+				break
+			}
+		}
+	}
+	// at last, send:
+	if useIncremental {
+		sendCmd := exec.Command("zfs", "send", "-i", latestRemote, zvol.dataset.Name)
+		sendCmd.Stdout = output
+		return sendCmd.Run()
+	}
+	return zvol.dataset.SendSnapshot(output)
+}
+
+/*
+	ReceiveSnapshot both accepts a snapshotted filesystem as a byte stream,
+	and applies that state to the given `vol` (i.e., if this were git, it's like
+	`git fetch && git pull` at the same time; regretably, it's pretty hard to get
+	zfs to separate those operations).  If there are local working changes in
+	the volume, they will be overwritten.
+
+	In addition to the given volume being mutated on disk, a reference to the
+	new snapshot will be returned (this can be used for cleanup, though be aware
+	that with zfs, removing snapshots may impact the ability to use incremental
+	deltas when receiving future snapshots).
+
+	Also note that ZFS is *extremely* picky about receiving snapshots; in
+	addition to obvious failure modes like an incremental snapshot with
+	insufficient data, the following complications apply:
+	- Sending an incremental snapshot with too much history will fail.
+	- Sending a full snapshot to a volume with any other snapshots will fail.
+	In the former case, you can renegociate; in the latter, you will have to
+	either *destroy snapshots* or make a new volume.
+*/
+func (b *Provider) ReceiveSnapshot(vol volume.Volume, input io.Reader) (volume.Volume, error) {
+	zvol, err := b.owns(vol)
+	if err != nil {
+		return nil, err
+	}
+	// recv does the right thing with input either fresh or incremental.
+	// recv with the dataset name and no snapshot suffix means the snapshot name from farside is kept;
+	// this is important because though we've assigned it a new UUID, the zfs dataset name match is used for incr hinting.
+	var buf bytes.Buffer
+	recvCmd := exec.Command("zfs", "recv", "-F", zvol.dataset.Name)
+	recvCmd.Stdin = input
+	recvCmd.Stderr = &buf
+	if err := recvCmd.Run(); err != nil {
+		return nil, fmt.Errorf("zfs recv rejected snapshot data: %s (%s)", err, strings.TrimSpace(buf.String()))
+	}
+	// get the dataset reference back; whatever the latest snapshot is must be what we received
+	snapshots, err := zvol.dataset.Snapshots()
+	if err != nil {
+		return nil, err
+	}
+	if len(snapshots) == 0 {
+		// should never happen, unless someone else is racing the zfs controls
+		return nil, fmt.Errorf("zfs recv misplaced snapshot data")
+	}
+	snapds := snapshots[len(snapshots)-1]
+	// reassemble as a flynn volume for return
+	id := random.UUID()
+	snap := &zfsVolume{
+		info:      &volume.Info{ID: id},
+		provider:  zvol.provider,
+		dataset:   snapds,
+		basemount: b.mountPath(id),
+	}
+	if err := b.mountSnapshot(snap); err != nil {
+		return nil, err
+	}
+	b.volumes[id] = snap
+	return snap, nil
 }
 
 func (v *zfsVolume) Provider() volume.Provider {
@@ -201,6 +426,12 @@ func (b *Provider) RestoreVolumeState(volInfo *volume.Info, data json.RawMessage
 		dataset:   dataset,
 		basemount: record.Basemount,
 	}
+	// zfs should have already remounted filesystems; special remount case for snapshots
+	if v.IsSnapshot() {
+		if err := b.mountSnapshot(v); err != nil {
+			return nil, err
+		}
+	}
 	b.volumes[volInfo.ID] = v
 	return v, nil
 }
@@ -209,40 +440,6 @@ func (v *zfsVolume) Info() *volume.Info {
 	return v.info
 }
 
-func (v1 *zfsVolume) TakeSnapshot() (volume.Volume, error) {
-	id := random.UUID()
-	v2 := &zfsVolume{
-		info:      &volume.Info{ID: id},
-		provider:  v1.provider,
-		basemount: filepath.Join(v1.provider.config.WorkingDir, "/mnt/", id),
-	}
-	var err error
-	v2.dataset, err = cloneFilesystem(path.Join(v2.provider.dataset.Name, v2.info.ID), path.Join(v1.provider.dataset.Name, v1.info.ID), v2.basemount)
-	if err != nil {
-		return nil, err
-	}
-	v2.provider.volumes[id] = v2
-	return v2, nil
-}
-
-func cloneFilesystem(newDatasetName string, parentDatasetName string, mountPath string) (*zfs.Dataset, error) {
-	parentDataset, err := zfs.GetDataset(parentDatasetName)
-	if parentDataset == nil {
-		return nil, err
-	}
-	snapshotName := fmt.Sprintf("%d", time.Now().Nanosecond())
-	snapshot, err := parentDataset.Snapshot(snapshotName, false)
-	if err != nil {
-		return nil, err
-	}
-
-	dataset, err := snapshot.Clone(newDatasetName, map[string]string{
-		"mountpoint": mountPath,
-	})
-	if err != nil {
-		snapshot.Destroy(zfs.DestroyDeferDeletion)
-		return nil, err
-	}
-	err = snapshot.Destroy(zfs.DestroyDeferDeletion)
-	return dataset, err
+func (v *zfsVolume) IsSnapshot() bool {
+	return v.dataset.Type == zfs.DatasetSnapshot
 }

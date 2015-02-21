@@ -1,6 +1,7 @@
 package testutils
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"sync"
@@ -118,5 +119,17 @@ func (h *FakeHostEventStream) Err() error {
 }
 
 func (c *FakeHostClient) CreateVolume(providerId string) (*volume.Info, error) {
+	return nil, nil
+}
+
+func (c *FakeHostClient) CreateSnapshot(volumeID string) (*volume.Info, error) {
+	return nil, nil
+}
+
+func (c *FakeHostClient) PullSnapshot(receiveVolID string, sourceHostID string, sourceSnapID string) (*volume.Info, error) {
+	return nil, nil
+}
+
+func (c *FakeHostClient) SendSnapshot(snapID string, assumeHaves []json.RawMessage) (io.ReadCloser, error) {
 	return nil, nil
 }
