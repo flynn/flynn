@@ -76,7 +76,8 @@
         },
         "scheduler": {
           "cmd": ["scheduler"],
-          "omni": true
+          "omni": true,
+          "service": "flynn-controller-scheduler"
         },
         "deployer": {
           "cmd": ["deployer"]
@@ -103,7 +104,8 @@
     "action": "add-app",
     "from_step": "controller",
     "app": {
-      "name": "controller"
+      "name": "controller",
+      "strategy": "one-by-one"
     }
   },
   {

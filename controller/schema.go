@@ -144,7 +144,8 @@ $$ LANGUAGE plpgsql`,
     old_release_id uuid REFERENCES releases (release_id),
     new_release_id uuid NOT NULL REFERENCES releases (release_id),
     strategy deployment_strategy NOT NULL,
-	created_at timestamptz NOT NULL DEFAULT now(),
+    processes hstore,
+    created_at timestamptz NOT NULL DEFAULT now(),
     finished_at timestamptz)`,
 
 		`CREATE UNIQUE INDEX isolate_deploys ON deployments (app_id)

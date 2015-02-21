@@ -150,7 +150,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	t.Assert(err, c.IsNil)
 	var jobs []*ct.Job
 	for _, job := range list {
-		if job.Type == "web" {
+		if job.Type == "web" && job.State == "up" {
 			jobs = append(jobs, job)
 		}
 	}
