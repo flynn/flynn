@@ -152,6 +152,7 @@ func (s *HostSuite) TestVolumeCreation(t *c.C) {
 	vol, err := h.CreateVolume("default")
 	t.Assert(err, c.IsNil)
 	t.Assert(vol.ID, c.Not(c.Equals), "")
+	t.Assert(h.DestroyVolume(vol.ID), c.IsNil)
 }
 
 func (s *HostSuite) TestVolumeCreationFailsForNonexistentProvider(t *c.C) {
@@ -171,6 +172,9 @@ func (s *HostSuite) TestVolumePersistence(t *c.C) {
 	// create a volume!
 	vol, err := h.CreateVolume("default")
 	t.Assert(err, c.IsNil)
+	defer func() {
+		t.Assert(h.DestroyVolume(vol.ID), c.IsNil)
+	}()
 
 	// create first job
 	cmd, service, err := makeIshApp(cluster, h, s.discoverdClient(t), host.ContainerConfig{

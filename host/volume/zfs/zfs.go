@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	zfs "github.com/flynn/flynn/Godeps/_workspace/src/github.com/mistifyio/go-zfs"
 	"github.com/flynn/flynn/host/volume"
@@ -177,7 +178,15 @@ func (b *Provider) DestroyVolume(vol volume.Volume) error {
 		os.Remove(vol.Location())
 	}
 	if err := zvol.dataset.Destroy(zfs.DestroyForceUmount); err != nil {
-		return err
+		for i := 0; i < 5 && err != nil && IsDatasetBusyError(err); i++ {
+			// sometimes zfs will claim to be busy as if files are still open even when all container processes are dead.
+			// usually this goes away, so retry a few times.
+			time.Sleep(1 * time.Second)
+			err = zvol.dataset.Destroy(zfs.DestroyForceUmount)
+		}
+		if err != nil {
+			return err
+		}
 	}
 	os.Remove(zvol.basemount)
 	delete(b.volumes, vol.Info().ID)

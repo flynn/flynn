@@ -122,6 +122,10 @@ func (c *FakeHostClient) CreateVolume(providerId string) (*volume.Info, error) {
 	return nil, nil
 }
 
+func (c *FakeHostClient) DestroyVolume(volumeID string) error {
+	return nil
+}
+
 func (c *FakeHostClient) CreateSnapshot(volumeID string) (*volume.Info, error) {
 	return nil, nil
 }
