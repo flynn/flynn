@@ -3,6 +3,7 @@ package volume
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 )
 
 /*
@@ -13,7 +14,20 @@ import (
 	configured for their final storage location.
 */
 type Provider interface {
+	Kind() string
+
 	NewVolume() (Volume, error)
+	DestroyVolume(Volume) error
+	CreateSnapshot(Volume) (Volume, error)
+	ForkVolume(Volume) (Volume, error)
+
+	ListHaves(Volume) ([]json.RawMessage, error) // Report known data addresses; this can be given to `SendSnapshot` to attempt deduplicated/incrememntal transport.
+	SendSnapshot(vol Volume, haves []json.RawMessage, stream io.Writer) error
+	ReceiveSnapshot(Volume, io.Reader) (Volume, error) // Reads a filesystem state from the stream and applies it to the volume, replacing the current content.
+
+	MarshalGlobalState() (json.RawMessage, error)
+	MarshalVolumeState(volumeID string) (json.RawMessage, error)
+	RestoreVolumeState(volumeInfo *Info, data json.RawMessage) (Volume, error)
 }
 
 type ProviderSpec struct {

@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -45,7 +46,8 @@ options:
   --state=PATH           path to state file [default: /var/lib/flynn/host-state.bolt]
   --id=ID                host id
   --force                kill all containers booted by flynn-host before starting
-  --volpath=PATH         directory to create volumes in [default: /var/lib/flynn/host-volumes]
+  --legacy-volpath=PATH  directory to create legacy volumes in [default: /var/lib/flynn/host-volumes]
+  --volpath=PATH         directory to create volumes in [default: /var/lib/flynn/volumes]
   --backend=BACKEND      runner backend [default: libvirt-lxc]
   --meta=<KEY=VAL>...    key=value pair to add as metadata
   --bind=IP              bind containers to IP
@@ -72,6 +74,7 @@ Commands:
   log                        Get the logs of a job
   ps                         List jobs
   stop                       Stop running jobs
+  destroy-volumes            Destroys the local volume database
   upload-debug-info          Upload debug information to an anonymous gist
 
 See 'flynn-host help <command>' for more information on a specific command.
@@ -128,6 +131,7 @@ func runDaemon(args *docopt.Args) {
 	stateFile := args.String["--state"]
 	hostID := args.String["--id"]
 	force := args.Bool["--force"]
+	legacyVolPath := args.String["--legacyvolpath"]
 	volPath := args.String["--volpath"]
 	backendName := args.String["--backend"]
 	flynnInit := args.String["--flynn-init"]
@@ -156,30 +160,29 @@ func runDaemon(args *docopt.Args) {
 	var err error
 
 	// create volume manager
-	vman, err := volumemanager.New(func() (volume.Provider, error) {
-		return zfsVolume.NewProvider(&zfsVolume.ProviderConfig{
-			DatasetName: "flynn-default",
-			Make: &zfsVolume.MakeDev{
-				BackingFilename: "/var/lib/flynn/volumes/zfs/vdev/flynn-default-zpool.vdev",
-				Size:            int64(math.Pow(2, float64(30))),
-			},
-		})
-	})
+	vman, err := volumemanager.New(
+		filepath.Join(volPath, "volumes.bolt"),
+		func() (volume.Provider, error) {
+			return zfsVolume.NewProvider(&zfsVolume.ProviderConfig{
+				DatasetName: "flynn-default",
+				Make: &zfsVolume.MakeDev{
+					BackingFilename: filepath.Join(volPath, "zfs/vdev/flynn-default-zpool.vdev"),
+					Size:            int64(math.Pow(2, float64(30))),
+				},
+				WorkingDir: filepath.Join(volPath, "zfs"),
+			})
+		},
+	)
 	if err != nil {
 		shutdown.Fatal(err)
 	}
 
 	switch backendName {
 	case "libvirt-lxc":
-		backend, err = NewLibvirtLXCBackend(state, vman, volPath, "/tmp/flynn-host-logs", flynnInit)
+		backend, err = NewLibvirtLXCBackend(state, vman, legacyVolPath, "/tmp/flynn-host-logs", flynnInit)
 	default:
 		log.Fatalf("unknown backend %q", backendName)
 	}
-	if err != nil {
-		shutdown.Fatal(err)
-	}
-
-	router, err := serveHTTP(&Host{state: state, backend: backend}, &attachHandler{state: state, backend: backend}, vman)
 	if err != nil {
 		shutdown.Fatal(err)
 	}
@@ -256,6 +259,21 @@ func runDaemon(args *docopt.Args) {
 	}
 	shutdown.BeforeExit(func() { hb.Close() })
 
+	cluster, err := cluster.NewClient()
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+
+	router, err := serveHTTP(
+		&Host{state: state, backend: backend},
+		&attachHandler{state: state, backend: backend},
+		cluster,
+		vman,
+	)
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+
 	sampiAPI := sampi.NewHTTPAPI(sampi.NewCluster())
 	leaders := make(chan *discoverd.Instance)
 	leaderStream, err := disc.Service("flynn-host").Leaders(leaders)
@@ -281,11 +299,6 @@ func runDaemon(args *docopt.Args) {
 			}
 			// TODO: handle discoverd disconnection
 		}()
-	}
-
-	cluster, err := cluster.NewClient()
-	if err != nil {
-		shutdown.Fatal(err)
 	}
 
 	g.Log(grohl.Data{"at": "sampi_connected"})

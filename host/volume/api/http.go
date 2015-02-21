@@ -4,20 +4,28 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/host/volume/manager"
+	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 )
 
+const snapshotContentType = "application/vnd.zfs.snapshot-stream"
+
 type HTTPAPI struct {
-	vman *volumemanager.Manager
+	cluster *cluster.Client
+	vman    *volumemanager.Manager
 }
 
-func NewHTTPAPI(vman *volumemanager.Manager) *HTTPAPI {
-	return &HTTPAPI{vman: vman}
+func NewHTTPAPI(cluster *cluster.Client, vman *volumemanager.Manager) *HTTPAPI {
+	return &HTTPAPI{
+		cluster: cluster,
+		vman:    vman,
+	}
 }
 
 func (api *HTTPAPI) RegisterRoutes(r *httprouter.Router) {
@@ -25,13 +33,18 @@ func (api *HTTPAPI) RegisterRoutes(r *httprouter.Router) {
 	r.POST("/storage/providers/:provider_id/volumes", api.Create)
 	r.GET("/storage/volumes", api.List)
 	r.GET("/storage/volumes/:volume_id", api.Inspect)
+	r.DELETE("/storage/volumes/:volume_id", api.Destroy)
 	r.PUT("/storage/volumes/:volume_id/snapshot", api.Snapshot)
+	// takes host and volID parameters, triggers a send on the remote host and give it a list of snaps already here, and pipes it into recv
+	r.POST("/storage/volumes/:volume_id/pull_snapshot", api.Pull)
+	// responds with a snapshot stream binary.  only works on snapshots, takes 'haves' parameters, usually called by a node that's servicing a 'pull_snapshot' request
+	r.GET("/storage/volumes/:volume_id/send", api.Send)
 }
 
 func (api *HTTPAPI) CreateProvider(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	var provider volume.Provider
 	pspec := &volume.ProviderSpec{}
-	if err := json.NewDecoder(r.Body).Decode(&pspec); err != nil {
+	if err := httphelper.DecodeJSON(r, &pspec); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
@@ -109,6 +122,112 @@ func (api *HTTPAPI) Inspect(w http.ResponseWriter, r *http.Request, ps httproute
 	httphelper.JSON(w, 200, vol.Info())
 }
 
+func (api *HTTPAPI) Destroy(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	volumeID := ps.ByName("volume_id")
+	err := api.vman.DestroyVolume(volumeID)
+	if err != nil {
+		switch err {
+		case volumemanager.NoSuchVolume:
+			httphelper.Error(w, httphelper.JSONError{
+				Code:    httphelper.ObjectNotFoundError,
+				Message: fmt.Sprintf("No volume by id %q", volumeID),
+			})
+			return
+		default:
+			httphelper.Error(w, err)
+			return
+		}
+	}
+
+	w.WriteHeader(200)
+}
+
 func (api *HTTPAPI) Snapshot(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	// TODO
+	volumeID := ps.ByName("volume_id")
+	snap, err := api.vman.CreateSnapshot(volumeID)
+	if err != nil {
+		switch err {
+		case volumemanager.NoSuchVolume:
+			httphelper.Error(w, httphelper.JSONError{
+				Code:    httphelper.ObjectNotFoundError,
+				Message: fmt.Sprintf("No volume by id %q", volumeID),
+			})
+			return
+		default:
+			httphelper.Error(w, err)
+			return
+		}
+	}
+
+	httphelper.JSON(w, 200, snap.Info())
+}
+
+func (api *HTTPAPI) Pull(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	volumeID := ps.ByName("volume_id")
+
+	pull := &volume.PullCoordinate{}
+	if err := httphelper.DecodeJSON(r, &pull); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+
+	hostClient, err := api.cluster.DialHost(pull.HostID)
+	if err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+
+	haves, err := api.vman.ListHaves(volumeID)
+	if err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+
+	reader, err := hostClient.SendSnapshot(pull.SnapshotID, haves)
+	if err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+
+	snap, err := api.vman.ReceiveSnapshot(volumeID, reader)
+	if err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+
+	httphelper.JSON(w, 200, snap.Info())
+}
+
+func (api *HTTPAPI) Send(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	volumeID := ps.ByName("volume_id")
+
+	if !strings.Contains(r.Header.Get("Accept"), snapshotContentType) {
+		httphelper.Error(w, httphelper.JSONError{
+			Code:    httphelper.ValidationError,
+			Message: fmt.Sprintf("Must be prepared to accept a content type of %q", snapshotContentType),
+		})
+		return
+	}
+	w.Header().Set("Content-Type", snapshotContentType)
+
+	var haves []json.RawMessage
+	if err := httphelper.DecodeJSON(r, &haves); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+
+	err := api.vman.SendSnapshot(volumeID, haves, w)
+	if err != nil {
+		switch err {
+		case volumemanager.NoSuchVolume:
+			httphelper.Error(w, httphelper.JSONError{
+				Code:    httphelper.ObjectNotFoundError,
+				Message: fmt.Sprintf("No volume by id %q", volumeID),
+			})
+			return
+		default:
+			httphelper.Error(w, err)
+			return
+		}
+	}
 }
