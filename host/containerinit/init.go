@@ -33,6 +33,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/netlink"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/user"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kr/pty"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/health"
 	"github.com/flynn/flynn/host/types"
@@ -41,6 +42,8 @@ import (
 	"github.com/flynn/flynn/pkg/rpcplus/fdrpc"
 	"github.com/flynn/flynn/pkg/shutdown"
 )
+
+var logger log15.Logger
 
 type Config struct {
 	User      string
@@ -122,15 +125,18 @@ func (c *Client) GetPtyMaster() (*os.File, error) {
 	return os.NewFile(uintptr(fd.FD), "ptyMaster"), nil
 }
 
-func (c *Client) GetStdout() (*os.File, *os.File, error) {
+func (c *Client) GetStreams() (*os.File, *os.File, *os.File, error) {
 	var fds []fdrpc.FD
-	if err := c.c.Call("ContainerInit.GetStdout", struct{}{}, &fds); err != nil {
-		return nil, nil, err
+	if err := c.c.Call("ContainerInit.GetStreams", struct{}{}, &fds); err != nil {
+		return nil, nil, nil, err
 	}
-	if len(fds) != 2 {
-		return nil, nil, fmt.Errorf("containerinit: got %d fds, expected 2", len(fds))
+	if len(fds) != 3 {
+		return nil, nil, nil, fmt.Errorf("containerinit: got %d fds, expected 3", len(fds))
 	}
-	return os.NewFile(uintptr(fds[0].FD), "stdout"), os.NewFile(uintptr(fds[1].FD), "stderr"), nil
+	newFile := func(i int, name string) *os.File {
+		return os.NewFile(uintptr(fds[i].FD), name)
+	}
+	return newFile(0, "stdout"), newFile(1, "stderr"), newFile(2, "initLog"), nil
 }
 
 func (c *Client) GetStdin() (*os.File, error) {
@@ -149,11 +155,12 @@ func (c *Client) Signal(signal int) error {
 	return err
 }
 
-func newContainerInit(c *Config) *ContainerInit {
+func newContainerInit(c *Config, logFile *os.File) *ContainerInit {
 	return &ContainerInit{
 		resume:    make(chan struct{}),
 		streams:   make(map[chan StateChange]struct{}),
 		openStdin: c.OpenStdin,
+		logFile:   logFile,
 	}
 }
 
@@ -167,6 +174,7 @@ type ContainerInit struct {
 	stdin      *os.File
 	stdout     *os.File
 	stderr     *os.File
+	logFile    *os.File
 	ptyMaster  *os.File
 	openStdin  bool
 
@@ -215,10 +223,14 @@ func (c *ContainerInit) GetPtyMaster(arg struct{}, fd *fdrpc.FD) error {
 	return nil
 }
 
-func (c *ContainerInit) GetStdout(arg struct{}, fds *[]fdrpc.FD) error {
+func (c *ContainerInit) GetStreams(arg struct{}, fds *[]fdrpc.FD) error {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
-	*fds = []fdrpc.FD{{int(c.stdout.Fd())}, {int(c.stderr.Fd())}}
+	*fds = []fdrpc.FD{
+		{int(c.stdout.Fd())},
+		{int(c.stderr.Fd())},
+		{int(c.logFile.Fd())},
+	}
 	return nil
 }
 
@@ -305,6 +317,7 @@ var SocketPath = filepath.Join(SharedPath, "rpc.sock")
 
 func runRPCServer() {
 	os.Remove(SocketPath)
+	logger.Info("starting RPC server", "fn", "runRPCServer")
 	shutdown.Fatal(fdrpc.ListenAndServe(SocketPath))
 }
 
@@ -499,14 +512,18 @@ func monitor(port host.Port, container *ContainerInit, env map[string]string) (d
 }
 
 func babySit(process *os.Process) int {
+	log := logger.New("fn", "babySit")
+
 	// Forward all signals to the app
 	sigchan := make(chan os.Signal, 1)
 	sigutil.CatchAll(sigchan)
 	go func() {
 		for sig := range sigchan {
+			log.Info("received signal", "type", sig)
 			if sig == syscall.SIGCHLD {
 				continue
 			}
+			log.Info("forwarding signal to command", "type", sig)
 			process.Signal(sig)
 		}
 	}()
@@ -522,15 +539,20 @@ func babySit(process *os.Process) int {
 	}
 
 	if wstatus.Signaled() {
+		log.Info("command exited due to signal")
 		return 0
 	}
 	return wstatus.ExitStatus()
 }
 
 // Run as pid 1 and monitor the contained process to return its exit code.
-func containerInitApp(c *Config) error {
-	init := newContainerInit(c)
+func containerInitApp(c *Config, logFile *os.File) error {
+	log := logger.New("fn", "containerInitApp")
+
+	init := newContainerInit(c, logFile)
+	log.Info("registering RPC server")
 	if err := rpcplus.Register(init); err != nil {
+		log.Error("error registering RPC server", "err", err)
 		return err
 	}
 	init.mtx.Lock()
@@ -554,26 +576,33 @@ func containerInitApp(c *Config) error {
 	// either a pty or pipes.  The FDs for the controlling side of the
 	// pty/pipes will be passed to flynn-host later via a UNIX socket.
 	if c.TTY {
+		log.Info("creating PTY")
 		ptyMaster, ptySlave, err := pty.Open()
 		if err != nil {
+			log.Info("error creating PTY", "err", err)
 			return err
 		}
 		init.ptyMaster = ptyMaster
 		cmd.Stdout = ptySlave
 		cmd.Stderr = ptySlave
 		if c.OpenStdin {
+			log.Info("attaching stdin to PTY")
 			cmd.Stdin = ptySlave
 			cmd.SysProcAttr.Setctty = true
 		}
 	} else {
+		log.Info("getting stdout pipe")
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
+			log.Error("error getting stdout pipe", "err", err)
 			return err
 		}
 		init.stdout = stdout.(*os.File)
 
+		log.Info("getting stderr pipe")
 		stderr, err := cmd.StderrPipe()
 		if err != nil {
+			log.Error("error getting stderr pipe", "err", err)
 			return err
 		}
 		init.stderr = stderr.(*os.File)
@@ -582,8 +611,10 @@ func containerInitApp(c *Config) error {
 			// returns an io.WriteCloser with the underlying object
 			// being an *exec.closeOnce, neither of which provides
 			// a way to convert to an FD.
+			log.Info("creating stdin pipe")
 			pipeRead, pipeWrite, err := os.Pipe()
 			if err != nil {
+				log.Error("creating stdin pipe", "err", err)
 				return err
 			}
 			cmd.Stdin = pipeRead
@@ -595,23 +626,31 @@ func containerInitApp(c *Config) error {
 
 	// Wait for flynn-host to tell us to start
 	init.mtx.Unlock() // Allow calls
+	log.Info("waiting to be resumed")
 	<-init.resume
+	log.Info("resuming")
 	init.mtx.Lock()
 
 	if cmdErr != nil {
+		log.Error("command failed", "err", cmdErr)
 		init.changeState(StateFailed, cmdErr.Error(), -1)
 		init.exit(1)
 	}
 	// Container setup
+	log.Info("setting up the container")
 	if err := setupCommon(c); err != nil {
+		log.Error("error setting up the container", "err", err)
 		init.changeState(StateFailed, err.Error(), -1)
 		init.exit(1)
 	}
 	// Start the app
+	log.Info("starting the command")
 	if err := cmd.Start(); err != nil {
+		log.Error("error starting the command", "err", err)
 		init.changeState(StateFailed, err.Error(), -1)
 		init.exit(1)
 	}
+	log.Info("setting state to running")
 	init.process = cmd.Process
 	init.changeState(StateRunning, "", -1)
 
@@ -622,14 +661,16 @@ func containerInitApp(c *Config) error {
 		if port.Service == nil {
 			continue
 		}
+		log.Info("monitoring service", "port", port)
 		hb, err := monitor(port, init, c.Env)
 		if err != nil {
-			log.Printf("Error trying to monitor: %v", err)
+			log.Error("error monitoring service", "port", port, "err", err)
 			shutdown.Fatal(err)
 		}
 		hbs = append(hbs, hb)
 	}
 	exitCode := babySit(init.process)
+	log.Info("command exited", "status", exitCode)
 	init.mtx.Lock()
 	for _, hb := range hbs {
 		hb.Close()
@@ -637,6 +678,7 @@ func containerInitApp(c *Config) error {
 	init.changeState(StateExited, "", exitCode)
 	init.mtx.Unlock() // Allow calls
 
+	log.Info("exiting")
 	init.exit(exitCode)
 	return nil
 }
@@ -644,19 +686,26 @@ func containerInitApp(c *Config) error {
 // This code is run INSIDE the container and is responsible for setting
 // up the environment before running the actual process
 func Main() {
+	logRd, logWr, err := os.Pipe()
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+	logger = log15.New("app", "containerinit")
+	logger.SetHandler(log15.StreamHandler(logWr, log15.LogfmtFormat()))
+
 	config := &Config{}
 	data, err := ioutil.ReadFile("/.containerconfig")
 	if err != nil {
-		log.Fatalf("Unable to load config: %v", err)
+		shutdown.Fatal(err)
 	}
 	if err := json.Unmarshal(data, config); err != nil {
-		log.Fatalf("Unable to unmarshal config: %v", err)
+		shutdown.Fatal(err)
 	}
 
 	// Propagate the plugin-specific container env variable
 	config.Env["container"] = os.Getenv("container")
 
-	if err := containerInitApp(config); err != nil {
+	if err := containerInitApp(config, logRd); err != nil {
 		shutdown.Fatal(err)
 	}
 }

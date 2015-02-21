@@ -659,9 +659,9 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 
 	if !c.job.Config.TTY {
 		g.Log(grohl.Data{"at": "get_stdout"})
-		stdout, stderr, err := c.Client.GetStdout()
+		stdout, stderr, initLog, err := c.Client.GetStreams()
 		if err != nil {
-			g.Log(grohl.Data{"at": "get_stdout", "status": "error", "err": err.Error()})
+			g.Log(grohl.Data{"at": "get_streams", "status": "error", "err": err.Error()})
 			return err
 		}
 		log := c.l.openLog(c.job.ID)
@@ -669,6 +669,7 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 		// TODO: log errors from these
 		go log.Follow(1, stdout)
 		go log.Follow(2, stderr)
+		go log.Follow(3, initLog)
 	}
 
 	g.Log(grohl.Data{"at": "watch_changes"})
@@ -880,6 +881,8 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 			w = req.Stdout
 		case 2:
 			w = req.Stderr
+		case 3:
+			w = req.InitLog
 		}
 		if w == nil {
 			continue

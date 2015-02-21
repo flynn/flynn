@@ -219,6 +219,7 @@ const (
 	AttachFlagStdin
 	AttachFlagLogs
 	AttachFlagStream
+	AttachFlagInitLog
 )
 
 type JobStatus uint8

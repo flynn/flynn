@@ -15,9 +15,10 @@ type AttachRequest struct {
 
 	Attached chan struct{}
 
-	Stdout io.WriteCloser
-	Stderr io.WriteCloser
-	Stdin  io.Reader
+	Stdout  io.WriteCloser
+	Stderr  io.WriteCloser
+	InitLog io.WriteCloser
+	Stdin   io.Reader
 }
 
 type Backend interface {
