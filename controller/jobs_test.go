@@ -53,6 +53,25 @@ func (s *S) TestJobGet(c *C) {
 	c.Assert(job.Meta, DeepEquals, map[string]string{"some": "info"})
 }
 
+func (s *S) TestJobStateTransition(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "job-state-transition"})
+	release := s.createTestRelease(c, &ct.Release{})
+	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
+	job := s.createTestJob(c, &ct.Job{ID: "host0-job2", AppID: app.ID, ReleaseID: release.ID, Type: "web", State: "starting"})
+
+	job.State = "up"
+	c.Assert(s.c.PutJob(job), IsNil)
+
+	job.State = "starting"
+	c.Assert(s.c.PutJob(job), ErrorMatches, ".*invalid job state transition.*")
+
+	job.State = "down"
+	c.Assert(s.c.PutJob(job), IsNil)
+
+	job.State = "up"
+	c.Assert(s.c.PutJob(job), ErrorMatches, ".*invalid job state transition.*")
+}
+
 func newFakeLog(r io.Reader) *fakeLog {
 	return &fakeLog{r}
 }

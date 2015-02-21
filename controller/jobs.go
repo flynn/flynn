@@ -73,6 +73,9 @@ func (r *JobRepo) Add(job *ct.Job) error {
 	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" {
 		err = r.db.QueryRow("UPDATE job_cache SET state = $3, updated_at = now() WHERE job_id = $1 AND host_id = $2 RETURNING created_at, updated_at",
 			jobID, hostID, job.State).Scan(&job.CreatedAt, &job.UpdatedAt)
+		if e, ok := err.(*pq.Error); ok && e.Code.Name() == "check_violation" {
+			return ct.ValidationError{Field: "state", Message: e.Error()}
+		}
 	}
 	if err != nil {
 		return err

@@ -115,6 +115,19 @@ $$ LANGUAGE plpgsql`,
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (job_id, host_id)
 )`,
+		`CREATE FUNCTION check_job_state() RETURNS OPAQUE AS $$
+    BEGIN
+        IF NEW.state < OLD.state THEN
+	    RAISE EXCEPTION 'invalid job state transition: % -> %', OLD.state, NEW.state USING ERRCODE = 'check_violation';
+        ELSE
+	    RETURN NEW;
+        END IF;
+    END;
+$$ LANGUAGE plpgsql`,
+		`CREATE TRIGGER job_state_trigger
+    AFTER UPDATE ON job_cache
+    FOR EACH ROW EXECUTE PROCEDURE check_job_state()`,
+
 		`CREATE SEQUENCE job_event_ids`,
 		`CREATE TABLE job_events (
     event_id bigint PRIMARY KEY DEFAULT nextval('job_event_ids'),
