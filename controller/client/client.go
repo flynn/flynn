@@ -13,6 +13,7 @@ import (
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/pinned"
 	"github.com/flynn/flynn/pkg/stream"
@@ -279,16 +280,35 @@ func (c *Client) DeployAppRelease(appID, releaseID string) error {
 		return nil
 	}
 
-	events := make(chan *ct.DeploymentEvent)
-	stream, err := c.StreamDeployment(d.ID, events)
-	if err != nil {
+	// use a function to create the event stream so it can be reconnected
+	// if necessary (e.g. if the controller is being deployed)
+	var events chan *ct.DeploymentEvent
+	var stream stream.Stream
+	connectAttempts := attempt.Strategy{
+		Total: 10 * time.Second,
+		Delay: 100 * time.Millisecond,
+	}
+	connect := func() error {
+		events = make(chan *ct.DeploymentEvent)
+		return connectAttempts.Run(func() (err error) {
+			stream, err = c.StreamDeployment(d.ID, events)
+			return
+		})
+	}
+	if err := connect(); err != nil {
 		return err
 	}
 	defer stream.Close()
 outer:
 	for {
 		select {
-		case e := <-events:
+		case e, ok := <-events:
+			if !ok {
+				if err := connect(); err != nil {
+					return err
+				}
+				continue
+			}
 			switch e.Status {
 			case "complete":
 				break outer
