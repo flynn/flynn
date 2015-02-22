@@ -175,27 +175,6 @@ func (s *S) TestRecreateApp(c *C) {
 	c.Assert(app.Name, Equals, "recreate-app")
 }
 
-func (s *S) TestProtectedApp(c *C) {
-	app := s.createTestApp(c, &ct.App{Name: "protected-app", Protected: true})
-	release := s.createTestRelease(c, &ct.Release{
-		Processes: map[string]ct.ProcessType{"web": {}, "worker": {}},
-	})
-
-	f := &ct.Formation{AppID: app.ID, ReleaseID: release.ID}
-	for _, t := range []struct {
-		procs map[string]int
-		check Checker
-	}{
-		{nil, NotNil},
-		{map[string]int{"web": 1}, NotNil},
-		{map[string]int{"worker": 1, "web": 0}, NotNil},
-		{map[string]int{"worker": 1, "web": 1}, IsNil},
-	} {
-		f.Processes = t.procs
-		c.Assert(s.c.PutFormation(f), t.check)
-	}
-}
-
 func (s *S) createTestArtifact(c *C, in *ct.Artifact) *ct.Artifact {
 	if in.Type == "" {
 		in.Type = "docker"
