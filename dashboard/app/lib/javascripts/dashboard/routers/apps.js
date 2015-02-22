@@ -87,7 +87,7 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 
 	__getAppsProps: function (params) {
 		var appProps = this.__getAppProps(params);
-		var showProtected = params[0].protected === "true";
+		var showSystemApps = params[0].system === "true";
 		var defaultRouteDomain = Dashboard.config.default_route_domain;
 		var getAppPath = function (appId) {
 			var __params = Marbles.Utils.extend({}, params[0]);
@@ -95,14 +95,14 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 			return this.__getAppPath(appId, __params, "");
 		}.bind(this);
 		return {
-			showProtected: showProtected,
+			showSystemApps: showSystemApps,
 			defaultRouteDomain: defaultRouteDomain,
 			appProps: appProps,
 			appsListProps: {
 				selectedAppId: appProps.appId,
 				getAppPath: getAppPath,
 				defaultRouteDomain: defaultRouteDomain,
-				showProtected: showProtected,
+				showSystemApps: showSystemApps,
 			},
 			appsListHeaderProps: {
 				githubAuthed: !!Dashboard.githubClient

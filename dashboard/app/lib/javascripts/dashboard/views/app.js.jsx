@@ -8,6 +8,7 @@
 "use strict";
 
 var AppStore = Dashboard.Stores.App;
+var isSystemApp = AppStore.isSystemApp;
 
 Dashboard.Views.App = React.createClass({
 	displayName: "Views.App",
@@ -103,8 +104,8 @@ Dashboard.Views.App = React.createClass({
 	},
 
 	__getClusterPathParams: function () {
-		if (this.state.app && this.state.app.protected) {
-			return [{ protected: "true" }];
+		if (this.state.app && isSystemApp(this.state.app)) {
+			return [{ system: "true" }];
 		}
 		return null;
 	}

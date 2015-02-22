@@ -97,13 +97,12 @@ func (s *S) createTestApp(c *C, in *ct.App) *ct.App {
 
 func (s *S) TestCreateApp(c *C) {
 	for _, id := range []string{"", random.UUID()} {
-		app := s.createTestApp(c, &ct.App{ID: id, Protected: true, Meta: map[string]string{"foo": "bar"}})
+		app := s.createTestApp(c, &ct.App{ID: id, Meta: map[string]string{"foo": "bar"}})
 		c.Assert(app.Name, Not(Equals), "")
 		c.Assert(app.ID, Not(Equals), "")
 		if id != "" {
 			c.Assert(app.ID, Equals, id)
 		}
-		c.Assert(app.Protected, Equals, true)
 		c.Assert(app.Meta["foo"], Equals, "bar")
 
 		gotApp, err := s.c.GetApp(app.ID)
@@ -119,29 +118,33 @@ func (s *S) TestCreateApp(c *C) {
 	}
 }
 
+func (s *S) TestSystemApp(c *C) {
+	app := s.createTestApp(c, &ct.App{Meta: map[string]string{"flynn-system-app": "true"}})
+	c.Assert(app.System(), Equals, true)
+
+	app.Meta["flynn-system-app"] = "false"
+	c.Assert(s.c.UpdateApp(app), IsNil)
+	c.Assert(app.System(), Equals, false)
+
+	delete(app.Meta, "flynn-system-app")
+	c.Assert(s.c.UpdateApp(app), IsNil)
+	c.Assert(app.System(), Equals, false)
+}
+
 func (s *S) TestUpdateApp(c *C) {
 	meta := map[string]string{"foo": "bar"}
 	app := s.createTestApp(c, &ct.App{Name: "update-app", Meta: meta})
-	c.Assert(app.Protected, Equals, false)
 	c.Assert(app.Meta, DeepEquals, meta)
 
-	gotApp := &ct.App{ID: app.ID}
-	gotApp.Protected = true
-	c.Assert(s.c.UpdateApp(gotApp), IsNil)
-	c.Assert(gotApp.Protected, Equals, true)
-	c.Assert(gotApp.Meta, DeepEquals, meta)
-
+	app = &ct.App{ID: app.ID}
 	meta = map[string]string{"foo": "baz", "bar": "foo"}
-	gotApp.Meta = meta
-	gotApp.Protected = false
-	c.Assert(s.c.UpdateApp(gotApp), IsNil)
-	c.Assert(gotApp.Protected, Equals, false)
-	c.Assert(gotApp.Meta, DeepEquals, meta)
+	app.Meta = meta
+	c.Assert(s.c.UpdateApp(app), IsNil)
+	c.Assert(app.Meta, DeepEquals, meta)
 
-	gotApp, err := s.c.GetApp(app.ID)
+	app, err := s.c.GetApp(app.ID)
 	c.Assert(err, IsNil)
-	c.Assert(gotApp.Protected, Equals, false)
-	c.Assert(gotApp.Meta, DeepEquals, meta)
+	c.Assert(app.Meta, DeepEquals, meta)
 }
 
 func (s *S) TestDeleteApp(c *C) {

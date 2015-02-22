@@ -20,11 +20,15 @@ type ExpandedFormation struct {
 type App struct {
 	ID        string            `json:"id,omitempty"`
 	Name      string            `json:"name,omitempty"`
-	Protected bool              `json:"protected"`
 	Meta      map[string]string `json:"meta,omitempty"`
 	Strategy  string            `json:"strategy,omitempty"`
 	CreatedAt *time.Time        `json:"created_at,omitempty"`
 	UpdatedAt *time.Time        `json:"updated_at,omitempty"`
+}
+
+func (a *App) System() bool {
+	v, ok := a.Meta["flynn-system-app"]
+	return ok && v == "true"
 }
 
 type Release struct {

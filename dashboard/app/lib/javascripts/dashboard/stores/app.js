@@ -482,4 +482,8 @@ App.handleEvent = function (event) {
 };
 Dashboard.Dispatcher.register(App.handleEvent);
 
+App.isSystemApp = function (app) {
+	return app.meta && app.meta["flynn-system-app"] === "true";
+};
+
 })();
