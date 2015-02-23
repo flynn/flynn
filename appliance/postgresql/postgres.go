@@ -34,6 +34,7 @@ type Config struct {
 	ReplTimeout  time.Duration
 	Logger       log15.Logger
 	ExtWhitelist bool
+	SHMType      string
 }
 
 type Postgres struct {
@@ -56,6 +57,7 @@ type Postgres struct {
 	opTimeout    time.Duration
 	replTimeout  time.Duration
 	extWhitelist bool
+	shmType      string
 
 	// daemon is the postgres daemon command when running
 	daemon *exec.Cmd
@@ -86,6 +88,7 @@ func NewPostgres(c Config) state.Postgres {
 		opTimeout:      c.OpTimeout,
 		replTimeout:    c.ReplTimeout,
 		extWhitelist:   c.ExtWhitelist,
+		shmType:        c.SHMType,
 		events:         make(chan state.PostgresEvent, 1),
 		cancelSyncWait: func() {},
 	}
@@ -664,6 +667,7 @@ func (p *Postgres) writeConfig(d configData) error {
 	d.ID = p.id
 	d.Port = p.port
 	d.ExtWhitelist = p.extWhitelist
+	d.SHMType = p.shmType
 	f, err := os.Create(p.configPath())
 	if err != nil {
 		return err
@@ -725,6 +729,7 @@ type configData struct {
 
 	DisableFullPageWrites bool
 	ExtWhitelist          bool
+	SHMType               string
 }
 
 var configTemplate = template.Must(template.New("postgresql.conf").Parse(`
@@ -760,6 +765,10 @@ datestyle = 'iso, mdy'
 timezone = 'UTC'
 client_encoding = 'UTF8'
 default_text_search_config = 'pg_catalog.english'
+
+{{if .SHMType}}
+dynamic_shared_memory_type = '{{.SHMType}}'
+{{end}}
 
 {{if .ExtWhitelist}}
 local_preload_libraries = 'pgextwlist'
