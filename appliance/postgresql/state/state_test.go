@@ -24,9 +24,9 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kylelemons/godebug/pretty"
-	"github.com/flynn/flynn/appliance/postgresql2/simulator"
-	"github.com/flynn/flynn/appliance/postgresql2/state"
-	"github.com/flynn/flynn/appliance/postgresql2/xlog"
+	"github.com/flynn/flynn/appliance/postgresql/simulator"
+	"github.com/flynn/flynn/appliance/postgresql/state"
+	"github.com/flynn/flynn/appliance/postgresql/xlog"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/iotool"
 )

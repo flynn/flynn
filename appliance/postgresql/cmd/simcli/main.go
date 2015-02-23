@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/flynn/flynn/appliance/postgresql2/simulator"
+	"github.com/flynn/flynn/appliance/postgresql/simulator"
 	"github.com/tiborvass/uniline"
 )
 
