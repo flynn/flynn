@@ -35,12 +35,7 @@ func main() {
 	}
 
 	log.Info("connecting to postgres")
-	postgres.Wait("")
-	db, err := postgres.Open("", "")
-	if err != nil {
-		log.Error("error connecting to postgres", "err", err)
-		shutdown.Fatal()
-	}
+	db := postgres.Wait("", "")
 
 	log.Info("creating postgres connection pool")
 	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{

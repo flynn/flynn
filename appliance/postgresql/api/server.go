@@ -27,11 +27,7 @@ func init() {
 func main() {
 	defer shutdown.Exit()
 
-	username, password := postgres.Wait(serviceName)
-	db, err := postgres.Open(serviceName, fmt.Sprintf("dbname=postgres user=%s password=%s", username, password))
-	if err != nil {
-		shutdown.Fatal(err)
-	}
+	db := postgres.Wait(serviceName, fmt.Sprintf("dbname=postgres user=flynn password=%s", os.Getenv("PGPASSWORD")))
 
 	r := martini.NewRouter()
 	m := martini.New()
