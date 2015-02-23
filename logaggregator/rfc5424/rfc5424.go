@@ -2,7 +2,6 @@ package rfc5424
 
 import (
 	"bytes"
-	"errors"
 	"strconv"
 	"time"
 )
@@ -40,6 +39,15 @@ func Parse(buf []byte) (*Message, error) {
 	}
 
 	return msg, nil
+}
+
+type ParseError struct {
+	Cursor  int
+	Message string
+}
+
+func (p *ParseError) Error() string {
+	return "rfc5424: " + p.Message
 }
 
 const (
@@ -83,22 +91,22 @@ func parseHeader(buf []byte, cursor *int, msg *Message) error {
 
 func parsePriority(buf []byte, cursor *int, msg *Message) error {
 	if len(buf) < *cursor+3 {
-		return errors.New("invalid priority")
+		return &ParseError{*cursor, "invalid priority"}
 	}
 	if buf[*cursor] != priStart {
-		return errors.New("invalid priority")
+		return &ParseError{*cursor, "invalid priority"}
 	}
 	*cursor++
 	i := indexByteAfter(buf, priEnd, *cursor)
 	if i < 1 || i > 4 {
-		return errors.New("invalid priority")
+		return &ParseError{*cursor, "invalid priority: PRIVAL too long"}
 	}
 	prival, err := strconv.Atoi(string(buf[*cursor:i]))
 	if err != nil {
 		return err
 	}
 	if prival < 0 || prival > 191 {
-		return errors.New("invalid priority")
+		return &ParseError{*cursor, "invalid priority: PRIVAL outside range"}
 	}
 	msg.Facility = prival / 8
 	msg.Severity = prival % 8
@@ -109,10 +117,10 @@ func parsePriority(buf []byte, cursor *int, msg *Message) error {
 
 func parseVersion(buf []byte, cursor *int, msg *Message) error {
 	if len(buf) < *cursor+1 {
-		return errors.New("message ended before version was received")
+		return &ParseError{*cursor, "message ended before version was received"}
 	}
 	if buf[*cursor] != '1' || buf[*cursor+1] != ' ' {
-		return errors.New("unexpected syslog version")
+		return &ParseError{*cursor, "unexpected syslog version"}
 	}
 	msg.Version = 1
 	*cursor += 2
@@ -123,10 +131,10 @@ func parseTimestamp(buf []byte, cursor *int, msg *Message) error {
 	var err error
 	nextSpace := indexByteAfter(buf, ' ', *cursor)
 	if nextSpace < *cursor {
-		return errors.New("missing space")
+		return &ParseError{*cursor, "missing space"}
 	}
 	if nextSpace == *cursor {
-		return errors.New("missing timestamp")
+		return &ParseError{*cursor, "missing timestamp"}
 	}
 	msg.Timestamp, err = time.Parse(time.RFC3339Nano, string(buf[*cursor:nextSpace]))
 	if err != nil {
@@ -138,14 +146,14 @@ func parseTimestamp(buf []byte, cursor *int, msg *Message) error {
 
 func parseNextStringField(buf []byte, cursor *int) (string, error) {
 	if len(buf) < *cursor {
-		return "", errors.New("missing field")
+		return "", &ParseError{*cursor, "missing field"}
 	}
 	nextSpace := indexByteAfter(buf, ' ', *cursor)
 	if nextSpace < 0 {
-		return "", errors.New("missing space")
+		return "", &ParseError{*cursor, "missing space"}
 	}
 	if nextSpace == 1 {
-		return "", errors.New("missing value")
+		return "", &ParseError{*cursor, "missing value"}
 	}
 	res := string(buf[*cursor:nextSpace])
 	*cursor = nextSpace + 1
@@ -154,17 +162,17 @@ func parseNextStringField(buf []byte, cursor *int) (string, error) {
 
 func parseStructuredData(buf []byte, cursor *int, msg *Message) error {
 	if len(buf) < *cursor {
-		return errors.New("missing structured data field")
+		return &ParseError{*cursor, "missing structured data field"}
 	}
 	if buf[*cursor] == '-' {
 		if len(buf) < *cursor+1 || buf[*cursor+1] != ' ' {
-			return errors.New("invalid structured data")
+			return &ParseError{*cursor, "invalid structured data"}
 		}
 		*cursor++
 		msg.StructuredData = "-"
 		return nil
 	}
-	return errors.New("structured data is unsupported")
+	return &ParseError{*cursor, "structured data is unsupported"}
 }
 
 func indexByteAfter(buf []byte, c byte, after int) int {
