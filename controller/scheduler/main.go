@@ -16,6 +16,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -366,6 +367,28 @@ func (c *context) watchHost(id string, ready chan struct{}) {
 		ready <- struct{}{}
 	}
 
+	// Call PutJob in a goroutine so we don't block receiving job events whilst potentially
+	// making multiple requests to the controller (e.g. if the controller is down).
+	//
+	// Use a channel (rather than spawning a goroutine per event) so that events are delivered in order.
+	jobs := make(chan *ct.Job, 10)
+	go func() {
+		for job := range jobs {
+			putJobAttempts.Run(func() error {
+				if err := c.PutJob(job); err != nil {
+					g.Log(grohl.Data{"at": "put_job_error", "job.id": job.ID, "state": job.State, "err": err})
+					// ignore validation / not found errors
+					if httphelper.IsValidationError(err) || err == controller.ErrNotFound {
+						return nil
+					}
+					return err
+				}
+				g.Log(grohl.Data{"at": "put_job", "job.id": job.ID, "state": job.State})
+				return nil
+			})
+		}
+	}()
+
 	for event := range ch {
 		meta := event.Job.Job.Metadata
 		appID := meta["flynn-controller.app"]
@@ -385,18 +408,7 @@ func (c *context) watchHost(id string, ready chan struct{}) {
 			Meta:      jobMetaFromMetadata(meta),
 		}
 		g.Log(grohl.Data{"at": "event", "job.id": event.JobID, "event": event.Event})
-
-		// Call PutJob in a goroutine as it may be the controller which has died
-		go func(event *host.Event) {
-			putJobAttempts.Run(func() error {
-				if err := c.PutJob(job); err != nil {
-					g.Log(grohl.Data{"at": "error", "job.id": event.JobID, "event": event.Event, "err": err})
-					return err
-				}
-				g.Log(grohl.Data{"at": "put_job", "job.id": event.JobID, "event": event.Event})
-				return nil
-			})
-		}(event)
+		jobs <- job
 
 		// get a read lock on the mutex to ensure we are not currently
 		// syncing with the cluster
