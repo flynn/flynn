@@ -22,6 +22,7 @@ type Service interface {
 	Watch(events chan *Event) (stream.Stream, error)
 	GetMeta() (*ServiceMeta, error)
 	SetMeta(*ServiceMeta) error
+	SetLeader(string) error
 }
 
 var ErrTimedOut = errors.New("discoverd: timed out waiting for instances")
@@ -54,8 +55,25 @@ func (c *Client) Ping() error {
 	return c.c.Get("/ping", nil)
 }
 
-func (c *Client) AddService(name string) error {
-	return c.c.Put("/services/"+name, nil, nil)
+type LeaderType string
+
+const (
+	LeaderTypeManual LeaderType = "manual"
+	LeaderTypeOldest LeaderType = "oldest"
+)
+
+type ServiceConfig struct {
+	LeaderType LeaderType `json:"leader_type"`
+}
+
+func (c *Client) AddService(name string, conf *ServiceConfig) error {
+	if conf == nil {
+		conf = &ServiceConfig{}
+	}
+	if conf.LeaderType == "" {
+		conf.LeaderType = LeaderTypeOldest
+	}
+	return c.c.Put("/services/"+name, conf, nil)
 }
 
 func (c *Client) RemoveService(name string) error {
@@ -208,4 +226,8 @@ func (s *service) GetMeta() (*ServiceMeta, error) {
 
 func (s *service) SetMeta(m *ServiceMeta) error {
 	return s.client.c.Put(fmt.Sprintf("/services/%s/meta", s.name), m, m)
+}
+
+func (s *service) SetLeader(id string) error {
+	return s.client.c.Put(fmt.Sprintf("/services/%s/leader", s.name), &Instance{ID: id}, nil)
 }

@@ -90,8 +90,15 @@ func (b *etcdBackend) serviceKey(service string) string {
 	return path.Join(b.prefix, "services", service)
 }
 
-func (b *etcdBackend) AddService(service string) error {
-	_, err := b.etcd.CreateDir(b.serviceKey(service), 0)
+func (b *etcdBackend) AddService(service string, config *discoverd.ServiceConfig) error {
+	if config == nil {
+		config = DefaultServiceConfig
+	}
+	data, err := json.Marshal(config)
+	if err != nil {
+		return err
+	}
+	_, err = b.etcd.Create(path.Join(b.serviceKey(service), "config"), string(data), 0)
 	if isEtcdExists(err) {
 		return ServiceExistsError(service)
 	}
@@ -145,6 +152,11 @@ func (b *etcdBackend) SetServiceMeta(service string, meta *discoverd.ServiceMeta
 	}
 	meta.Index = res.Node.ModifiedIndex
 	return nil
+}
+
+func (b *etcdBackend) SetLeader(service, id string) error {
+	_, err := b.etcd.Set(path.Join(b.serviceKey(service), "leader"), id, 0)
+	return err
 }
 
 func (b *etcdBackend) AddInstance(service string, inst *discoverd.Instance) error {
@@ -239,8 +251,7 @@ func (b *etcdBackend) StartSync() error {
 
 					// ensure we have a key like:
 					// /foo/bar/services/a/instances/id,
-					// /foo/bar/services/a/meta,
-					// /foo/bar/services/a
+					// /foo/bar/services/a/meta, etc
 					slashes := strings.Count(res.Node.Key[len(keyPrefix):], "/")
 					if slashes < 1 || slashes > 3 {
 						continue
@@ -251,9 +262,13 @@ func (b *etcdBackend) StartSync() error {
 					case 1:
 						b.serviceEvent(serviceName, res)
 					case 2:
-						if path.Base(res.Node.Key) == "meta" {
+						switch path.Base(res.Node.Key) {
+						case "meta":
 							b.h.SetServiceMeta(serviceName, []byte(res.Node.Value), res.Node.ModifiedIndex)
-							continue
+						case "config":
+							b.serviceEvent(serviceName, res)
+						case "leader":
+							b.h.SetLeader(serviceName, res.Node.Value)
 						}
 					case 3:
 						b.instanceEvent(serviceName, res)
@@ -300,9 +315,14 @@ func (b *etcdBackend) instanceEvent(serviceName string, res *etcd.Response) {
 func (b *etcdBackend) serviceEvent(serviceName string, res *etcd.Response) {
 	if res.Action == "delete" {
 		b.h.RemoveService(serviceName)
-	} else {
-		b.h.AddService(serviceName)
+		return
 	}
+	config := &discoverd.ServiceConfig{}
+	if err := json.Unmarshal([]byte(res.Node.Value), config); err != nil {
+		log.Printf("Error decoding JSON for service config %s: %s", res.Node.Key, err)
+		return
+	}
+	b.h.AddService(serviceName, config)
 }
 
 func (b *etcdBackend) fullSync() (uint64, error) {
@@ -311,7 +331,7 @@ func (b *etcdBackend) fullSync() (uint64, error) {
 	if e, ok := err.(*etcd.EtcdError); ok && e.ErrorCode == 100 {
 		// key not found, remove existing services
 		for _, name := range b.h.ListServices() {
-			b.h.SetService(name, nil)
+			b.h.SetService(name, nil, nil)
 		}
 		return e.Index + 1, nil
 	}
@@ -325,30 +345,43 @@ func (b *etcdBackend) fullSync() (uint64, error) {
 		added[serviceName] = struct{}{}
 
 		instances := []*discoverd.Instance{}
+		var config *discoverd.ServiceConfig
+		var leaderID string
 		for _, n := range serviceNode.Nodes {
-			if path.Base(n.Key) == "meta" {
+			switch path.Base(n.Key) {
+			case "meta":
 				b.h.SetServiceMeta(serviceName, []byte(n.Value), n.ModifiedIndex)
-				continue
-			}
-			if path.Base(n.Key) != "instances" {
-				continue
-			}
-			for _, instNode := range n.Nodes {
-				inst := &discoverd.Instance{}
-				if err := json.Unmarshal([]byte(instNode.Value), inst); err != nil {
-					log.Printf("Error decoding JSON for instance %s: %s", instNode.Key, err)
-					continue
+			case "config":
+				config = &discoverd.ServiceConfig{}
+				if err := json.Unmarshal([]byte(n.Value), config); err != nil {
+					log.Printf("Error decoding JSON config for service %s: %s", n.Key, err)
 				}
-				inst.Index = instNode.CreatedIndex
-				instances = append(instances, inst)
+			case "leader":
+				leaderID = n.Value
+			case "instances":
+				for _, instNode := range n.Nodes {
+					inst := &discoverd.Instance{}
+					if err := json.Unmarshal([]byte(instNode.Value), inst); err != nil {
+						log.Printf("Error decoding JSON for instance %s: %s", instNode.Key, err)
+						continue
+					}
+					inst.Index = instNode.CreatedIndex
+					instances = append(instances, inst)
+				}
 			}
 		}
-		b.h.SetService(serviceName, instances)
+		if config == nil {
+			config = DefaultServiceConfig
+		}
+		b.h.SetService(serviceName, config, instances)
+		if leaderID != "" {
+			b.h.SetLeader(serviceName, leaderID)
+		}
 	}
 	// remove any services that weren't found in the response
 	for _, name := range b.h.ListServices() {
 		if _, ok := added[name]; !ok {
-			b.h.SetService(name, nil)
+			b.h.SetService(name, nil, nil)
 		}
 	}
 

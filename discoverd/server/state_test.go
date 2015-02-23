@@ -203,7 +203,7 @@ func (StateSuite) TestSetService(c *C) {
 
 	// + with service that doesn't exist
 	newData := []*discoverd.Instance{fakeInstance(), fakeInstance()}
-	state.SetService("a", newData)
+	state.SetService("a", DefaultServiceConfig, newData)
 	data := state.Get("a")
 	c.Assert(data, HasLen, 2)
 	assertHasInstance(c, data, newData...)
@@ -213,7 +213,7 @@ func (StateSuite) TestSetService(c *C) {
 	assertNoEvent(c, events)
 
 	// + with service that exists and nil new
-	state.SetService("a", nil)
+	state.SetService("a", DefaultServiceConfig, nil)
 	c.Assert(state.Get("a"), IsNil)
 	// make sure we get exactly two down events, one for each existing instance
 	down := receiveEvents(c, events, 2)
@@ -225,13 +225,13 @@ func (StateSuite) TestSetService(c *C) {
 	c.Assert(down[newData[1].ID][0].Instance, DeepEquals, newData[1])
 
 	// + with service that doesn't exist and zero-length new
-	state.SetService("a", []*discoverd.Instance{})
+	state.SetService("a", DefaultServiceConfig, []*discoverd.Instance{})
 	c.Assert(state.Get("a"), NotNil)
 	c.Assert(state.Get("a"), HasLen, 0)
 
 	// + one existing, one updated, one new, one deleted
 	initial := []*discoverd.Instance{fakeInstance(), fakeInstance(), fakeInstance()}
-	state.SetService("a", initial)
+	state.SetService("a", DefaultServiceConfig, initial)
 	// eat the three up events
 	receiveEvents(c, events, 3)
 
@@ -241,7 +241,7 @@ func (StateSuite) TestSetService(c *C) {
 	modified.Meta = map[string]string{"a": "b"}
 	added := fakeInstance()
 
-	state.SetService("a", []*discoverd.Instance{existing, &modified, added})
+	state.SetService("a", DefaultServiceConfig, []*discoverd.Instance{existing, &modified, added})
 	data = state.Get("a")
 	c.Assert(data, HasLen, 3)
 	assertHasInstance(c, data, existing, &modified, added)
@@ -271,7 +271,7 @@ func (StateSuite) TestLeaderElection(c *C) {
 
 	// nil for non-existent service
 	c.Assert(state.GetLeader("a"), IsNil)
-	state.AddService("a")
+	state.AddService("a", DefaultServiceConfig)
 	// nil for existent service with no instances
 	c.Assert(state.GetLeader("a"), IsNil)
 
@@ -306,14 +306,14 @@ func (StateSuite) TestLeaderElection(c *C) {
 	// set with same instance and another instance triggers no events
 	fourth := fakeInstance()
 	fourth.Index = 5
-	state.SetService("a", []*discoverd.Instance{fourth, third})
+	state.SetService("a", DefaultServiceConfig, []*discoverd.Instance{fourth, third})
 	assertNoEvent(c, events)
 	c.Assert(state.GetLeader("a"), DeepEquals, third)
 
 	// set with same instance and lower index selects a new leader
 	fifth := fakeInstance()
 	fifth.Index = 1
-	state.SetService("a", []*discoverd.Instance{third, fifth})
+	state.SetService("a", DefaultServiceConfig, []*discoverd.Instance{third, fifth})
 	assertEvent(c, events, "a", discoverd.EventKindLeader, fifth)
 	c.Assert(state.GetLeader("a"), DeepEquals, fifth)
 
@@ -322,7 +322,7 @@ func (StateSuite) TestLeaderElection(c *C) {
 	sixth.Index = 6
 	seventh := fakeInstance()
 	seventh.Index = 7
-	state.SetService("a", []*discoverd.Instance{sixth, seventh})
+	state.SetService("a", DefaultServiceConfig, []*discoverd.Instance{sixth, seventh})
 	assertEvent(c, events, "a", discoverd.EventKindLeader, sixth)
 	c.Assert(state.GetLeader("a"), DeepEquals, sixth)
 
@@ -526,7 +526,7 @@ func (StateSuite) TestAddRemoveService(c *C) {
 	state := NewState()
 
 	c.Assert(state.Get("a"), IsNil)
-	state.AddService("a")
+	state.AddService("a", DefaultServiceConfig)
 	c.Assert(state.Get("a"), NotNil)
 	c.Assert(state.Get("a"), HasLen, 0)
 
@@ -678,7 +678,7 @@ func (StateSuite) TestServiceMeta(c *C) {
 	c.Assert(state.GetServiceMeta("a"), IsNil)
 
 	// unset meta
-	state.AddService("a")
+	state.AddService("a", DefaultServiceConfig)
 	c.Assert(state.GetServiceMeta("a"), IsNil)
 
 	events := make(chan *discoverd.Event, 1)

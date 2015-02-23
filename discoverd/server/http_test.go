@@ -369,3 +369,69 @@ func (s *HTTPSuite) TestServiceMeta(c *C) {
 	c.Assert(err, FitsTypeOf, hh.JSONError{})
 	c.Assert(err.(hh.JSONError).Code, Equals, hh.PreconditionFailedError)
 }
+
+func (s *HTTPSuite) TestManualLeaderElection(c *C) {
+	// service with auto election should not support manual leader
+	err := s.client.Service("a").SetLeader("123")
+	c.Assert(err, NotNil)
+	c.Assert(err.(hh.JSONError).Code, Equals, hh.ValidationError)
+
+	// create service with manual config
+	err = s.client.AddService("b", &discoverd.ServiceConfig{LeaderType: discoverd.LeaderTypeManual})
+	c.Assert(err, IsNil)
+
+	// register instance
+	inst1 := fakeInstance()
+	hb1, err := s.client.RegisterInstance("b", inst1)
+	c.Assert(err, IsNil)
+	defer hb1.Close()
+
+	// no leader event when starting watch
+	events := make(chan *discoverd.Event, 2)
+	s.state.Subscribe("b", true, discoverd.EventKindUp|discoverd.EventKindDown|discoverd.EventKindLeader|discoverd.EventKindCurrent, events)
+	assertEvent(c, events, "b", discoverd.EventKindUp, inst1)
+	assertEvent(c, events, "b", discoverd.EventKindCurrent, nil)
+
+	// get leader should 404
+	srv := s.client.Service("b")
+	_, err = srv.Leader()
+	c.Assert(discoverd.IsNotFound(err), Equals, true)
+
+	// set leader
+	err = srv.SetLeader(inst1.ID)
+	c.Assert(err, IsNil)
+	leader, err := srv.Leader()
+	c.Assert(err, IsNil)
+	assertInstanceEqual(c, leader, inst1)
+	assertEvent(c, events, "b", discoverd.EventKindLeader, inst1)
+
+	// add another instance and set to leader
+	inst2 := fakeInstance()
+	hb2, err := s.client.RegisterInstance("b", inst2)
+	c.Assert(err, IsNil)
+	defer hb2.Close()
+	assertEvent(c, events, "b", discoverd.EventKindUp, inst2)
+
+	err = srv.SetLeader(inst2.ID)
+	c.Assert(err, IsNil)
+	assertEvent(c, events, "b", discoverd.EventKindLeader, inst2)
+	leader, err = srv.Leader()
+	c.Assert(err, IsNil)
+	assertInstanceEqual(c, leader, inst2)
+
+	// remove leader instance
+	hb2.Close()
+	assertEvent(c, events, "b", discoverd.EventKindDown, inst2)
+	// get leader should 404, no event
+	_, err = srv.Leader()
+	c.Assert(discoverd.IsNotFound(err), Equals, true)
+	assertNoEvent(c, events)
+
+	// set leader to instance 1
+	err = srv.SetLeader(inst1.ID)
+	c.Assert(err, IsNil)
+	assertEvent(c, events, "b", discoverd.EventKindLeader, inst1)
+	leader, err = srv.Leader()
+	c.Assert(err, IsNil)
+	assertInstanceEqual(c, leader, inst1)
+}

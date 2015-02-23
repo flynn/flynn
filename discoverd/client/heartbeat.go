@@ -27,7 +27,7 @@ type Heartbeater interface {
 }
 
 func (c *Client) maybeAddService(service string) error {
-	if err := c.AddService(service); err != nil {
+	if err := c.AddService(service, nil); err != nil {
 		if je, ok := err.(hh.JSONError); !ok || je.Code != hh.ObjectExistsError {
 			return err
 		}
