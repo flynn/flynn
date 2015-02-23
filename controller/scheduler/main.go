@@ -16,6 +16,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -376,6 +377,10 @@ func (c *context) watchHost(id string, ready chan struct{}) {
 			putJobAttempts.Run(func() error {
 				if err := c.PutJob(job); err != nil {
 					g.Log(grohl.Data{"at": "put_job_error", "job.id": job.ID, "state": job.State, "err": err})
+					// ignore validation / not found errors
+					if httphelper.IsValidationError(err) || err == controller.ErrNotFound {
+						return nil
+					}
 					return err
 				}
 				g.Log(grohl.Data{"at": "put_job", "job.id": job.ID, "state": job.State})

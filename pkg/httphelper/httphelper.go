@@ -43,6 +43,11 @@ type JSONError struct {
 	Detail  json.RawMessage `json:"detail,omitempty"`
 }
 
+func IsValidationError(err error) bool {
+	e, ok := err.(JSONError)
+	return ok && e.Code == ValidationError
+}
+
 var CORSAllowAllHandler = cors.Allow(&cors.Options{
 	AllowAllOrigins:  true,
 	AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
