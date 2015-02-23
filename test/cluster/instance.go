@@ -263,6 +263,14 @@ var sshAttempts = attempt.Strategy{
 }
 
 func (i *Instance) Run(command string, s *Streams) error {
+	return i.run(command, s, nil)
+}
+
+func (i *Instance) RunWithEnv(command string, s *Streams, env map[string]string) error {
+	return i.run(command, s, env)
+}
+
+func (i *Instance) run(command string, s *Streams, env map[string]string) error {
 	if s == nil {
 		s = &Streams{}
 	}
@@ -281,6 +289,9 @@ func (i *Instance) Run(command string, s *Streams) error {
 	sess.Stdin = s.Stdin
 	sess.Stdout = s.Stdout
 	sess.Stderr = s.Stderr
+	for k, v := range env {
+		sess.Setenv(k, v)
+	}
 	if err := sess.Run(command); err != nil {
 		return fmt.Errorf("failed to run command on %s: %s", i.IP, err)
 	}
