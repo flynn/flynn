@@ -1,11 +1,13 @@
 //= require ./route-link
 //= require ./external-link
+//= require ../stores/app
 
 (function () {
 
 "use strict";
 
 var RouteLink = Dashboard.Views.RouteLink;
+var isSystemApp = Dashboard.Stores.App.isSystemApp;
 
 Dashboard.Views.AppsList = React.createClass({
 	displayName: "Views.AppsList",
@@ -51,9 +53,9 @@ Dashboard.Views.AppsList = React.createClass({
 	__getState: function (props) {
 		var state = {};
 
-		var showProtected = props.showProtected;
+		var showSystemApps = props.showSystemApps;
 		state.apps = props.apps.filter(function (app) {
-			return !app.protected || showProtected;
+			return !isSystemApp(app) || showSystemApps;
 		});
 
 		return state;

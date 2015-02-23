@@ -101,7 +101,7 @@ func (c *Client) CreateApp(app *ct.App) error {
 	return c.Post("/apps", app, app)
 }
 
-// UpdateApp updates the protected flag, meta and update strategy using app.ID.
+// UpdateApp updates the meta and strategy using app.ID.
 func (c *Client) UpdateApp(app *ct.App) error {
 	if app.ID == "" {
 		return errors.New("controller: missing id")

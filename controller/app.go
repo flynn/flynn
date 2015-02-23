@@ -54,11 +54,11 @@ func (r *AppRepo) Add(data interface{}) error {
 		app.Strategy = "all-at-once"
 	}
 	meta := metaToHstore(app.Meta)
-	if err := r.db.QueryRow("INSERT INTO apps (app_id, name, protected, meta, strategy) VALUES ($1, $2, $3, $4, $5) RETURNING created_at, updated_at", app.ID, app.Name, app.Protected, meta, app.Strategy).Scan(&app.CreatedAt, &app.UpdatedAt); err != nil {
+	if err := r.db.QueryRow("INSERT INTO apps (app_id, name, meta, strategy) VALUES ($1, $2, $3, $4) RETURNING created_at, updated_at", app.ID, app.Name, meta, app.Strategy).Scan(&app.CreatedAt, &app.UpdatedAt); err != nil {
 		return err
 	}
 	app.ID = postgres.CleanUUID(app.ID)
-	if !app.Protected && r.defaultDomain != "" {
+	if !app.System() && r.defaultDomain != "" {
 		route := (&router.HTTPRoute{
 			Domain:  fmt.Sprintf("%s.%s", app.Name, r.defaultDomain),
 			Service: app.Name + "-web",
@@ -74,7 +74,7 @@ func (r *AppRepo) Add(data interface{}) error {
 func scanApp(s postgres.Scanner) (*ct.App, error) {
 	app := &ct.App{}
 	var meta hstore.Hstore
-	err := s.Scan(&app.ID, &app.Name, &app.Protected, &meta, &app.Strategy, &app.CreatedAt, &app.UpdatedAt)
+	err := s.Scan(&app.ID, &app.Name, &meta, &app.Strategy, &app.CreatedAt, &app.UpdatedAt)
 	if err == sql.ErrNoRows {
 		err = ErrNotFound
 	}
@@ -96,7 +96,7 @@ type rowQueryer interface {
 
 func selectApp(db rowQueryer, id string, update bool) (*ct.App, error) {
 	var row postgres.Scanner
-	query := "SELECT app_id, name, protected, meta, strategy, created_at, updated_at FROM apps WHERE deleted_at IS NULL AND "
+	query := "SELECT app_id, name, meta, strategy, created_at, updated_at FROM apps WHERE deleted_at IS NULL AND "
 	var suffix string
 	if update {
 		suffix = " FOR UPDATE"
@@ -135,19 +135,6 @@ func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, e
 			if _, err := tx.Exec("UPDATE apps SET strategy = $2, updated_at = now() WHERE app_id = $1", app.ID, strategy); err != nil {
 				tx.Rollback()
 				return nil, err
-			}
-		case "protected":
-			protected, ok := v.(bool)
-			if !ok {
-				tx.Rollback()
-				return nil, fmt.Errorf("controller: expected bool, got %T", v)
-			}
-			if app.Protected != protected {
-				if _, err := tx.Exec("UPDATE apps SET protected = $2, updated_at = now() WHERE app_id = $1", app.ID, protected); err != nil {
-					tx.Rollback()
-					return nil, err
-				}
-				app.Protected = protected
 			}
 		case "meta":
 			data, ok := v.(map[string]interface{})
@@ -210,7 +197,7 @@ func (r *AppRepo) Remove(id string) error {
 }
 
 func (r *AppRepo) List() (interface{}, error) {
-	rows, err := r.db.Query("SELECT app_id, name, protected, meta, strategy, created_at, updated_at FROM apps WHERE deleted_at IS NULL ORDER BY created_at DESC")
+	rows, err := r.db.Query("SELECT app_id, name, meta, strategy, created_at, updated_at FROM apps WHERE deleted_at IS NULL ORDER BY created_at DESC")
 	if err != nil {
 		return nil, err
 	}

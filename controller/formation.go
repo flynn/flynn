@@ -275,14 +275,6 @@ func (c *controllerAPI) PutFormation(ctx context.Context, w http.ResponseWriter,
 
 	formation.AppID = app.ID
 	formation.ReleaseID = release.ID
-	if app.Protected {
-		for typ := range release.Processes {
-			if formation.Processes[typ] == 0 {
-				respondWithError(w, ct.ValidationError{Message: "unable to scale to zero, app is protected"})
-				return
-			}
-		}
-	}
 
 	if err = schema.Validate(formation); err != nil {
 		respondWithError(w, err)

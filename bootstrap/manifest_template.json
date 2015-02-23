@@ -105,6 +105,7 @@
     "from_step": "controller",
     "app": {
       "name": "controller",
+      "meta": {"flynn-system-app": "true"},
       "strategy": "one-by-one"
     }
   },
@@ -114,7 +115,7 @@
     "from_step": "postgres",
     "app": {
       "name": "postgres",
-      "protected": true
+      "meta": {"flynn-system-app": "true"}
     }
   },
   {
@@ -140,7 +141,7 @@
     "action": "deploy-app",
     "app": {
       "name": "blobstore",
-      "protected": true
+      "meta": {"flynn-system-app": "true"}
     },
     "artifact": {
       "type": "docker",
@@ -163,7 +164,7 @@
     "action": "deploy-app",
     "app": {
       "name": "router",
-      "protected": true
+      "meta": {"flynn-system-app": "true"}
     },
     "artifact": {
       "type": "docker",
@@ -192,7 +193,7 @@
     "action": "deploy-app",
     "app": {
       "name": "gitreceive",
-      "protected": true
+      "meta": {"flynn-system-app": "true"}
     },
     "artifact": {
       "type": "docker",
@@ -262,7 +263,7 @@
     "action": "deploy-app",
     "app": {
       "name": "taffy",
-      "protected": true
+      "meta": {"flynn-system-app": "true"}
     },
     "artifact": {
       "type": "docker",
@@ -281,7 +282,7 @@
     "action": "deploy-app",
     "app": {
       "name": "dashboard",
-      "protected": true
+      "meta": {"flynn-system-app": "true"}
     },
     "artifact": {
       "type": "docker",

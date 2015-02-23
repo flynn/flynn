@@ -40,12 +40,7 @@ var Apps = Dashboard.Stores.Apps = Dashboard.Store.createClass({
 		return this.__getClient().getApps().then(function (args) {
 			var res = args[0];
 			this.setState({
-				apps: res.map(function (app) {
-					if (app.name === "controller") {
-						app.protected = true; // bug
-					}
-					return app;
-				}),
+				apps: res,
 			});
 		}.bind(this));
 	},
