@@ -40,6 +40,8 @@ func main() {
 		Password:     password,
 		Logger:       log.New("component", "postgres"),
 		ExtWhitelist: true,
+		// TODO(titanous) investigate this:
+		SHMType: "sysv", // the default on 9.4, 'posix' is not currently supported in our containers
 	})
 	dd := NewDiscoverd(discoverd.DefaultClient.Service(serviceName), log.New("component", "discoverd"))
 
