@@ -85,7 +85,6 @@ func main() {
 		}
 	}
 
-	postgres.Wait("")
 	db, err := postgres.Open("", "")
 	if err != nil {
 		shutdown.Fatal(err)
