@@ -96,15 +96,14 @@ You should install Flynn as above on every host that you want to be in the Flynn
 
 ### Start Flynn Layer 0
 
-First, ensure that the following ports are open externally on the firewalls for all
-nodes in the cluster:
+First, ensure that all network traffic is allowed between all nodes in the cluster (specifically
+all UDP and TCP packets). The following ports should also be open externally on the firewalls
+for all nodes in the cluster:
 
 * 80 (HTTP)
 * 443 (HTTPS)
 * 2222 (Git over SSH)
 * 3000 to 3500 (user defined TCP services)
-
-The nodes also need to be able to communicate with each other internally on all ports.
 
 The next step is to configure a Layer 0 cluster by starting the flynn-host daemon on all
 nodes. The daemon uses etcd for leader election, and etcd needs to be aware of all of the
