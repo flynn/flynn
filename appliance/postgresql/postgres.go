@@ -24,15 +24,16 @@ import (
 )
 
 type Config struct {
-	ID          string
-	Singleton   bool
-	Port        string
-	BinDir      string
-	DataDir     string
-	Password    string
-	OpTimeout   time.Duration
-	ReplTimeout time.Duration
-	Logger      log15.Logger
+	ID           string
+	Singleton    bool
+	Port         string
+	BinDir       string
+	DataDir      string
+	Password     string
+	OpTimeout    time.Duration
+	ReplTimeout  time.Duration
+	Logger       log15.Logger
+	ExtWhitelist bool
 }
 
 type Postgres struct {
@@ -45,15 +46,16 @@ type Postgres struct {
 	configApplied bool
 
 	// config options
-	id          string
-	log         log15.Logger
-	singleton   bool
-	port        string
-	binDir      string
-	dataDir     string
-	password    string
-	opTimeout   time.Duration
-	replTimeout time.Duration
+	id           string
+	log          log15.Logger
+	singleton    bool
+	port         string
+	binDir       string
+	dataDir      string
+	password     string
+	opTimeout    time.Duration
+	replTimeout  time.Duration
+	extWhitelist bool
 
 	// daemon is the postgres daemon command when running
 	daemon *exec.Cmd
@@ -83,11 +85,12 @@ func NewPostgres(c Config) state.Postgres {
 		password:       c.Password,
 		opTimeout:      c.OpTimeout,
 		replTimeout:    c.ReplTimeout,
+		extWhitelist:   c.ExtWhitelist,
 		events:         make(chan state.PostgresEvent, 1),
 		cancelSyncWait: func() {},
 	}
 	if p.log == nil {
-		p.log = log15.Root().New("app", "postgres", "id", p.id)
+		p.log = log15.New("app", "postgres", "id", p.id)
 	}
 	if p.port == "" {
 		p.port = "5432"
@@ -660,6 +663,7 @@ func (p *Postgres) runCmd(cmd *exec.Cmd) error {
 func (p *Postgres) writeConfig(d configData) error {
 	d.ID = p.id
 	d.Port = p.port
+	d.ExtWhitelist = p.extWhitelist
 	f, err := os.Create(p.configPath())
 	if err != nil {
 		return err
@@ -720,6 +724,7 @@ type configData struct {
 	ReadOnly bool
 
 	DisableFullPageWrites bool
+	ExtWhitelist          bool
 }
 
 var configTemplate = template.Must(template.New("postgresql.conf").Parse(`
@@ -755,6 +760,11 @@ datestyle = 'iso, mdy'
 timezone = 'UTC'
 client_encoding = 'UTF8'
 default_text_search_config = 'pg_catalog.english'
+
+{{if .ExtWhitelist}}
+local_preload_libraries = 'pgextwlist'
+extwlist.extensions = 'btree_gin,btree_gist,chkpass,citext,cube,dblink,dict_int,earthdistance,fuzzystrmatch,hstore,intarray,isn,ltree,pg_prewarm,pg_stat_statements,pg_trgm,pgcrypto,pgrowlocks,pgstattuple,plpgsql,plv8,postgis,postgis_topology,postgres_fdw,tablefunc,unaccent,uuid-ossp'
+{{end}}
 `[1:]))
 
 type recoveryData struct {
