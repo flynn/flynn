@@ -439,7 +439,16 @@ func (p *Peer) evalClusterState() {
 	// If there's no cluster state, check whether we should set up the cluster.
 	// If not, wait for something else to happen.
 	if p.clusterState == nil {
-		log.Debug("no cluster state")
+		log.Debug("no cluster state",
+			"peers", len(p.clusterPeers),
+			"self", p.self.ID,
+			"singleton", p.singleton,
+			"leader", len(p.clusterPeers) > 0 && p.clusterPeers[0].ID == p.self.ID,
+		)
+
+		if len(p.clusterPeers) == 0 {
+			return
+		}
 
 		if !p.pgSetup &&
 			p.clusterPeers[0].ID == p.self.ID &&
