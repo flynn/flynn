@@ -60,7 +60,7 @@ func (s *EtcdSuite) TestBasicSync(c *C) {
 	events := make(chan *discoverd.Event, 1)
 	s.state.Subscribe("a", false, discoverd.EventKindUp|discoverd.EventKindDown|discoverd.EventKindUpdate, events)
 
-	c.Assert(s.backend.AddService("a"), IsNil)
+	c.Assert(s.backend.AddService("a", nil), IsNil)
 	c.Assert(s.backend.StartSync(), IsNil)
 
 	s.testBasicSync(c, events)
@@ -72,7 +72,7 @@ func (s *EtcdSuite) testBasicSync(c *C, events chan *discoverd.Event) {
 	c.Assert(err, DeepEquals, NotFoundError{Service: "a", Instance: "b"})
 
 	// Create service, and use instance creation as write barrier
-	err = s.backend.AddService("new-service")
+	err = s.backend.AddService("new-service", nil)
 	c.Assert(err, IsNil)
 
 	// Create instance
@@ -106,7 +106,7 @@ func (s *EtcdSuite) TestLeaderElection(c *C) {
 	events := make(chan *discoverd.Event, 2)
 	s.state.Subscribe("a", false, discoverd.EventKindLeader|discoverd.EventKindUp, events)
 
-	c.Assert(s.backend.AddService("a"), IsNil)
+	c.Assert(s.backend.AddService("a", nil), IsNil)
 	first := fakeInstance()
 	c.Assert(s.backend.AddInstance("a", first), IsNil)
 
@@ -140,7 +140,7 @@ func (s *EtcdSuite) TestNoServiceSync(c *C) {
 	events := make(chan *discoverd.Event, 1)
 	s.state.Subscribe("a", false, discoverd.EventKindUp|discoverd.EventKindDown|discoverd.EventKindUpdate, events)
 
-	c.Assert(s.backend.AddService("a"), IsNil)
+	c.Assert(s.backend.AddService("a", nil), IsNil)
 	c.Assert(s.backend.StartSync(), IsNil)
 
 	assertEvent(c, events, "a", discoverd.EventKindDown, inst)
@@ -156,8 +156,8 @@ func (s *EtcdSuite) TestLocalDiffSync(c *C) {
 	added := fakeInstance()
 	missingService := fakeInstance()
 
-	s.state.AddService("existing")
-	s.state.AddService("deleted")
+	s.state.AddService("existing", DefaultServiceConfig)
+	s.state.AddService("deleted", DefaultServiceConfig)
 
 	s.state.AddInstance("a", existing)
 	s.state.AddInstance("a", updated)
@@ -168,9 +168,9 @@ func (s *EtcdSuite) TestLocalDiffSync(c *C) {
 
 	updated2 := *updated
 	updated2.Meta = map[string]string{"a": "b"}
-	c.Assert(s.backend.AddService("a"), IsNil)
-	c.Assert(s.backend.AddService("existing"), IsNil)
-	c.Assert(s.backend.AddService("new"), IsNil)
+	c.Assert(s.backend.AddService("a", nil), IsNil)
+	c.Assert(s.backend.AddService("existing", nil), IsNil)
+	c.Assert(s.backend.AddService("new", nil), IsNil)
 	c.Assert(s.backend.AddInstance("a", existing), IsNil)
 	c.Assert(s.backend.AddInstance("a", &updated2), IsNil)
 	c.Assert(s.backend.AddInstance("a", added), IsNil)
@@ -218,10 +218,10 @@ func (s *EtcdSuite) TestServiceAddRemove(c *C) {
 	err := s.backend.RemoveService("a")
 	c.Assert(err, DeepEquals, NotFoundError{Service: "a"})
 
-	err = s.backend.AddService("a")
+	err = s.backend.AddService("a", nil)
 	c.Assert(err, IsNil)
 
-	err = s.backend.AddService("a")
+	err = s.backend.AddService("a", nil)
 	c.Assert(err, DeepEquals, ServiceExistsError("a"))
 
 	err = s.backend.RemoveService("a")
@@ -232,7 +232,7 @@ func (s *EtcdSuite) TestServiceAddRemove(c *C) {
 }
 
 func (s *EtcdSuite) TestLeaderElectionCreatedIndex(c *C) {
-	c.Assert(s.backend.AddService("a"), IsNil)
+	c.Assert(s.backend.AddService("a", nil), IsNil)
 
 	inst1, inst2 := fakeInstance(), fakeInstance()
 	c.Assert(s.backend.AddInstance("a", inst1), IsNil)
@@ -250,7 +250,7 @@ func (s *EtcdSuite) TestSetMeta(c *C) {
 	events := make(chan *discoverd.Event, 1)
 	s.state.Subscribe("a", false, discoverd.EventKindServiceMeta, events)
 
-	c.Assert(s.backend.AddService("a"), IsNil)
+	c.Assert(s.backend.AddService("a", nil), IsNil)
 	c.Assert(s.backend.StartSync(), IsNil)
 
 	// with service that doesn't exist
@@ -283,4 +283,18 @@ func (s *EtcdSuite) TestSetMeta(c *C) {
 	err = s.backend.SetServiceMeta("a", meta)
 	c.Assert(err, FitsTypeOf, hh.JSONError{})
 	c.Assert(err.(hh.JSONError).Code, Equals, hh.PreconditionFailedError)
+}
+
+func (s *EtcdSuite) TestManualLeaderInitialSync(c *C) {
+	events := make(chan *discoverd.Event, 1)
+	s.state.Subscribe("a", false, discoverd.EventKindLeader, events)
+
+	c.Assert(s.backend.AddService("a", &discoverd.ServiceConfig{LeaderType: discoverd.LeaderTypeManual}), IsNil)
+	inst1, inst2 := fakeInstance(), fakeInstance()
+	c.Assert(s.backend.AddInstance("a", inst1), IsNil)
+	c.Assert(s.backend.AddInstance("a", inst2), IsNil)
+	c.Assert(s.backend.SetLeader("a", inst2.ID), IsNil)
+
+	c.Assert(s.backend.StartSync(), IsNil)
+	assertEvent(c, events, "a", discoverd.EventKindLeader, inst2)
 }

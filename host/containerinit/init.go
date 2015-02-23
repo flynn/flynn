@@ -419,7 +419,7 @@ func monitor(port host.Port, container *ContainerInit, env map[string]string) (d
 
 	if config.Create {
 		// TODO: maybe reuse maybeAddService() from the client
-		if err := client.AddService(config.Name); err != nil {
+		if err := client.AddService(config.Name, nil); err != nil {
 			if je, ok := err.(hh.JSONError); !ok || je.Code != hh.ObjectExistsError {
 				return nil, fmt.Errorf("something went wrong with discoverd: %s", err)
 			}

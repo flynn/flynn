@@ -23,7 +23,7 @@ var _ = Suite(&DNSSuite{})
 func (s *DNSSuite) SetUpTest(c *C) {
 	s.state = NewState()
 	s.srv = s.newServer(c, []string{"8.8.8.8", "8.8.4.4"})
-	s.state.AddService("a")
+	s.state.AddService("a", DefaultServiceConfig)
 }
 
 func (s *DNSSuite) newServer(c *C, recursors []string) *DNSServer {
@@ -388,9 +388,9 @@ func (s *DNSSuite) TestServiceLookup(c *C) {
 	for _, t := range tests {
 		if len(t.data) == 0 {
 			// nil deletes the service, so use an empty slice
-			s.state.SetService("a", []*discoverd.Instance{})
+			s.state.SetService("a", DefaultServiceConfig, []*discoverd.Instance{})
 		} else {
-			s.state.SetService("a", t.data)
+			s.state.SetService("a", DefaultServiceConfig, t.data)
 		}
 		client := &dns.Client{Net: t.net}
 		for q, addrs := range t.qs {

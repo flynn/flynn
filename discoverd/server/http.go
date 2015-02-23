@@ -15,14 +15,16 @@ import (
 
 type Datastore interface {
 	// Typically implemented by a Backend
-	AddService(service string) error
+	AddService(service string, config *discoverd.ServiceConfig) error
 	RemoveService(service string) error
 	AddInstance(service string, inst *discoverd.Instance) error
 	RemoveInstance(service, id string) error
 	SetServiceMeta(service string, meta *discoverd.ServiceMeta) error
+	SetLeader(service, id string) error
 
 	// Typically implemented by State
 	Get(service string) []*discoverd.Instance
+	GetConfig(service string) *discoverd.ServiceConfig
 	GetServiceMeta(service string) *discoverd.ServiceMeta
 	GetLeader(service string) *discoverd.Instance
 	Subscribe(service string, sendCurrent bool, kinds discoverd.EventKind, ch chan *discoverd.Event) stream.Stream
@@ -33,8 +35,8 @@ type basicDatastore struct {
 	Backend
 }
 
-func (d basicDatastore) AddService(service string) error {
-	return d.Backend.AddService(service)
+func (d basicDatastore) AddService(service string, config *discoverd.ServiceConfig) error {
+	return d.Backend.AddService(service, config)
 }
 
 func (d basicDatastore) RemoveService(service string) error {
@@ -51,6 +53,10 @@ func (d basicDatastore) RemoveInstance(service, id string) error {
 
 func (d basicDatastore) SetServiceMeta(service string, meta *discoverd.ServiceMeta) error {
 	return d.Backend.SetServiceMeta(service, meta)
+}
+
+func (d basicDatastore) SetLeader(service, id string) error {
+	return d.Backend.SetLeader(service, id)
 }
 
 func NewBasicDatastore(state *State, backend Backend) Datastore {
@@ -75,6 +81,7 @@ func NewHTTPHandler(ds Datastore) http.Handler {
 	router.DELETE("/services/:service/instances/:instance_id", api.RemoveInstance)
 	router.GET("/services/:service/instances", api.GetInstances)
 
+	router.PUT("/services/:service/leader", api.SetLeader)
 	router.GET("/services/:service/leader", api.GetLeader)
 
 	router.GET("/ping", func(http.ResponseWriter, *http.Request, httprouter.Params) {})
@@ -96,7 +103,14 @@ func (h *httpAPI) AddService(w http.ResponseWriter, r *http.Request, params http
 		jsonError(w, hh.ValidationError, err)
 		return
 	}
-	if err := h.Store.AddService(service); err != nil {
+
+	config := &discoverd.ServiceConfig{}
+	if err := hh.DecodeJSON(r, config); err != nil {
+		hh.Error(w, err)
+		return
+	}
+
+	if err := h.Store.AddService(service, config); err != nil {
 		if IsServiceExists(err) {
 			jsonError(w, hh.ObjectExistsError, err)
 		} else {
@@ -193,6 +207,26 @@ func (h *httpAPI) GetInstances(w http.ResponseWriter, r *http.Request, params ht
 		return
 	}
 	hh.JSON(w, 200, instances)
+}
+
+func (h *httpAPI) SetLeader(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	service := params.ByName("service")
+	config := h.Store.GetConfig(service)
+	if config == nil || config.LeaderType != discoverd.LeaderTypeManual {
+		jsonError(w, hh.ValidationError, errors.New("service leader election type is not manual"))
+		return
+	}
+
+	inst := &discoverd.Instance{}
+	if err := hh.DecodeJSON(r, inst); err != nil {
+		hh.Error(w, err)
+		return
+	}
+
+	if err := h.Store.SetLeader(service, inst.ID); err != nil {
+		hh.Error(w, err)
+		return
+	}
 }
 
 func (h *httpAPI) GetLeader(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
