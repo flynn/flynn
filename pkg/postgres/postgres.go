@@ -1,14 +1,17 @@
 package postgres
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
+	"github.com/flynn/flynn/appliance/postgresql/state"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/shutdown"
 )
@@ -21,7 +24,7 @@ func New(db *sql.DB, dsn string) *DB {
 	}
 }
 
-func Wait(service string) (string, string) {
+func Wait(service, dsn string) *DB {
 	if service == "" {
 		service = os.Getenv("FLYNN_POSTGRES")
 	}
@@ -30,16 +33,34 @@ func Wait(service string) (string, string) {
 	if err != nil {
 		shutdown.Fatal(err)
 	}
-	defer stream.Close()
+	// wait for service meta that has sync or singleton primary
 	for e := range events {
-		if e.Kind&(discoverd.EventKindUp|discoverd.EventKindUpdate) != 0 &&
-			e.Instance.Meta["up"] == "true" &&
-			e.Instance.Meta["username"] != "" &&
-			e.Instance.Meta["password"] != "" {
-			return e.Instance.Meta["username"], e.Instance.Meta["password"]
+		if e.Kind&discoverd.EventKindServiceMeta == 0 || e.ServiceMeta == nil || len(e.ServiceMeta.Data) == 0 {
+			continue
+		}
+		state := &state.State{}
+		json.Unmarshal(e.ServiceMeta.Data, state)
+		if state.Singleton || state.Sync != nil {
+			break
 		}
 	}
-	panic("discoverd disconnected before postgres came up")
+	stream.Close()
+	// TODO(titanous): handle discoverd disconnection
+
+	db, err := Open(service, dsn)
+	if err != nil {
+		panic(err)
+	}
+	for {
+		var readonly string
+		// wait until read-write transactions are allowed
+		if err := db.QueryRow("SHOW default_transaction_read_only").Scan(&readonly); err != nil || readonly == "on" {
+			time.Sleep(100 * time.Millisecond)
+			// TODO(titanous): add max wait here
+			continue
+		}
+		return db
+	}
 }
 
 func Open(service, dsn string) (*DB, error) {

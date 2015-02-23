@@ -50,11 +50,7 @@ func main() {
 		name.SetSeed(s)
 	}
 
-	postgres.Wait("")
-	db, err := postgres.Open("", "")
-	if err != nil {
-		shutdown.Fatal(err)
-	}
+	db := postgres.Wait("", "")
 
 	if err := migrateDB(db.DB); err != nil {
 		shutdown.Fatal(err)
