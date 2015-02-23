@@ -48,7 +48,7 @@ func Open(service, dsn string) (*DB, error) {
 	}
 	db := &DB{
 		dsnSuffix: dsn,
-		dsn:       fmt.Sprintf("host=leader.%s.discoverd %s", service, dsn),
+		dsn:       fmt.Sprintf("host=leader.%s.discoverd sslmode=disable %s", service, dsn),
 		addr:      fmt.Sprintf("leader.%s.discoverd", service),
 		stmts:     make(map[string]*sql.Stmt),
 	}
