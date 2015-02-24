@@ -92,13 +92,14 @@ export CURL_TIMEOUT=600
 
 ## Buildpack detection
 
+# Ordering here is in line number order from buildpacks.txt
 buildpacks=(${buildpack_root}/*)
 selected_buildpack=
 
 if [[ -n "${BUILDPACK_URL}" ]]; then
   echo_title "Fetching custom buildpack"
 
-  buildpack="${buildpack_root}/custom"
+  buildpack="${buildpack_root}/custom*"
   rm -rf "${buildpack}"
   /tmp/builder/install-buildpack \
     "${buildpack_root}" \
@@ -106,7 +107,8 @@ if [[ -n "${BUILDPACK_URL}" ]]; then
     custom \
     "${env_dir}" \
     &> /dev/null
-  selected_buildpack="${buildpack}"
+  buildpacks=($buildpack)
+  selected_buildpack=${buildpack[0]}
   buildpack_name=$(run_unprivileged ${buildpack}/bin/detect "${build_root}")
 else
   for buildpack in "${buildpacks[@]}"; do

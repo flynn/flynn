@@ -3,7 +3,7 @@ set -eo pipefail
 
 buildpacks_dir="$1"
 buildpack_url="$2"
-buildpack_name="$3"
+buildpack_order="$3"
 env_dir="$4"
 
 export_env_dir() {
@@ -22,11 +22,8 @@ export_env_dir() {
 #Only import proxy related environment variables to support 'git clone'
 export_env_dir "${env_dir}" '(HTTP_PROXY|HTTPS_PROXY|NO_PROXY)$'
 
-
-if [[ "${buildpack_name}" == "" ]]; then
-  buildpack_name="$(basename "${buildpack_url}")"
-  buildpack_name="${buildpack_name%.*}"
-fi
+buildpack_name="$(basename "${buildpack_url}")"
+buildpack_name="${buildpack_order}_${buildpack_name%.*}"
 
 mkdir -p "${buildpacks_dir}"
 pushd "${buildpacks_dir}" > /dev/null
