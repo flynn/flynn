@@ -149,9 +149,9 @@ Dashboard.Client = Marbles.Utils.createClass({
 		});
 	},
 
-	deleteAppRoute: function (appId, routeId) {
+	deleteAppRoute: function (appId, routeType, routeId) {
 		return this.performControllerRequest('DELETE', {
-			url: "/apps/"+ appId +"/routes/"+ routeId
+			url: "/apps/"+ appId +"/routes/"+ routeType +"/"+ routeId
 		});
 	},
 

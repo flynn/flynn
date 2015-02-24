@@ -45,7 +45,7 @@ Dashboard.Views.AppRoutes = React.createClass({
 							<li key={route.id || route.domain}>
 								<ExternalLink href={"http://"+ route.domain}>{route.domain}</ExternalLink>
 								{route.id ? (
-									<RouteLink path={getAppPath("/routes/:route/delete", {route: route.id, domain: route.domain})}>
+									<RouteLink path={getAppPath("/routes/:type/:route/delete", {route: route.id, type: route.type, domain: route.domain})}>
 										<i className="icn-trash" />
 									</RouteLink>
 								) : null}
