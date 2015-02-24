@@ -53,8 +53,8 @@ With a successful installation, you will have a single node Flynn cluster runnin
 and the final log line contains a `flynn cluster add` command. Paste that line from the console
 output into your terminal and execute it.
 
-Now you have Flynn installed and running, head over to the [Using Flynn](/docs/using-flynn) page for
-guides on deploying your applications to Flynn.
+Now you have Flynn installed and running, head over to the [Using Flynn](/docs)
+page for guides on deploying your applications to Flynn.
 
 ## Ubuntu 14.04 amd64
 
