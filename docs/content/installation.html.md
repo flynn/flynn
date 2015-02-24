@@ -53,7 +53,7 @@ With a successful installation, you will have a single node Flynn cluster runnin
 and the final log line contains a `flynn cluster add` command. Paste that line from the console
 output into your terminal and execute it.
 
-Now you have Flynn installed and running, head over to the [Using Flynn](/docs/using-flynn) page for
+Now you have Flynn installed and running, head over to the [Using Flynn](/docs) page for
 guides on deploying your applications to Flynn.
 
 ## Ubuntu 14.04 amd64
@@ -187,5 +187,5 @@ The Layer 1 bootstrapper will get all necessary services running using the Layer
 If you try these instructions and run into issues, please open an issue or pull
 request.
 
-Now you have Flynn installed and running, head over to the [Using Flynn](/docs/using-flynn)
+Now you have Flynn installed and running, head over to the [Using Flynn](/docs)
 page for guides on deploying your applications to Flynn.
