@@ -3,7 +3,7 @@ package ring
 import (
 	"sync"
 
-	"github.com/flynn/flynn/logaggregator/rfc5424"
+	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 )
 
 // Buffer is a ring buffer that holds rfc5424.Messages. The Buffer's entire
