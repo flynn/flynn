@@ -329,10 +329,18 @@ func (c *Cluster) setup() error {
 }
 
 func (c *Cluster) Run(command string, s *Streams) error {
+	return c.run(command, s, nil)
+}
+
+func (c *Cluster) RunWithEnv(command string, s *Streams, env map[string]string) error {
+	return c.run(command, s, env)
+}
+
+func (c *Cluster) run(command string, s *Streams, env map[string]string) error {
 	if len(c.Instances) == 0 {
 		return errors.New("no booted servers in cluster")
 	}
-	return c.Instances[0].Run(command, s)
+	return c.Instances[0].RunWithEnv(command, s, env)
 }
 
 func (c *Cluster) CLIConfig() (*config.Config, error) {

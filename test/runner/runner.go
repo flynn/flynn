@@ -164,10 +164,10 @@ func (r *Runner) start() error {
 	router.POST("/builds/:build/restart", r.restartBuild)
 	router.GET("/builds", r.getBuilds)
 	router.ServeFiles("/assets/*filepath", http.Dir(args.AssetsDir))
-	router.GET("/cluster/:key/:cluster", r.clusterAPI(r.getCluster))
-	router.POST("/cluster/:key/:cluster", r.clusterAPI(r.addHost))
-	router.DELETE("/cluster/:key/:cluster/:host", r.clusterAPI(r.removeHost))
-	router.GET("/cluster/:key/:cluster/dump-logs", r.clusterAPI(r.dumpLogs))
+	router.GET("/cluster/:cluster", r.clusterAPI(r.getCluster))
+	router.POST("/cluster/:cluster", r.clusterAPI(r.addHost))
+	router.DELETE("/cluster/:cluster/:host", r.clusterAPI(r.removeHost))
+	router.GET("/cluster/:cluster/dump-logs", r.clusterAPI(r.dumpLogs))
 
 	srv := &http.Server{
 		Addr:      args.ListenAddr,
@@ -208,7 +208,7 @@ cd ~/go/src/github.com/flynn/flynn/test
 
 cmd="bin/flynn-test \
   --flynnrc $HOME/.flynnrc \
-  --cluster-api https://{{ .Cluster.BridgeIP }}:{{ .ListenPort }}/cluster/{{ .AuthKey }}/{{ .Cluster.ID }} \
+  --cluster-api https://{{ .Cluster.BridgeIP }}:{{ .ListenPort }}/cluster/{{ .Cluster.ID }} \
   --cli $(pwd)/../cli/flynn-cli \
   --router-ip {{ .Cluster.RouterIP }} \
   --debug \
@@ -288,12 +288,12 @@ func (r *Runner) build(b *Build) (err error) {
 	}
 
 	var script bytes.Buffer
-	testRunScript.Execute(&script, map[string]interface{}{"Cluster": c, "ListenPort": listenPort, "AuthKey": r.authKey})
-	return c.Run(script.String(), &cluster.Streams{
+	testRunScript.Execute(&script, map[string]interface{}{"Cluster": c, "ListenPort": listenPort})
+	return c.RunWithEnv(script.String(), &cluster.Streams{
 		Stdin:  bytes.NewBuffer(config.Marshal()),
 		Stdout: out,
 		Stderr: out,
-	})
+	}, map[string]string{"TEST_RUNNER_AUTH_KEY": r.authKey})
 }
 
 var s3attempts = attempt.Strategy{
@@ -599,8 +599,8 @@ type clusterHandle func(*cluster.Cluster, http.ResponseWriter, url.Values, httpr
 
 func (r *Runner) clusterAPI(handle clusterHandle) httprouter.Handle {
 	return func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-		authKey := ps.ByName("key")
-		if len(authKey) != len(r.authKey) || subtle.ConstantTimeCompare([]byte(authKey), []byte(r.authKey)) != 1 {
+		_, authKey, ok := req.BasicAuth()
+		if !ok || len(authKey) != len(r.authKey) || subtle.ConstantTimeCompare([]byte(authKey), []byte(r.authKey)) != 1 {
 			w.WriteHeader(401)
 			return
 		}

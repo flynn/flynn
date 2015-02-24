@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/flynn/flynn/host/types"
@@ -22,11 +23,17 @@ type Client struct {
 var ErrNotFound = errors.New("testcluster: resource not found")
 
 func NewClient(endpoint string) (*Client, error) {
+	authKey := os.Getenv("TEST_RUNNER_AUTH_KEY")
+	if authKey == "" {
+		return nil, errors.New("missing TEST_RUNNER_AUTH_KEY environment variable")
+	}
+
 	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{ServerName: "ci.flynn.io"}}}
 	client := &Client{
 		Client: &httpclient.Client{
 			ErrNotFound: ErrNotFound,
 			URL:         endpoint,
+			Key:         authKey,
 			HTTP:        httpClient,
 		},
 	}
