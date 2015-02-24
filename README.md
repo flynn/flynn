@@ -33,11 +33,6 @@ anyone has already reported the issue.
 
 ## Getting Started
 
-### Managed cluster
-
-We have [a web dashboard](https://dashboard.flynn.io) for launching Flynn
-clusters on your Amazon Web Services account.
-
 ### Run your own cluster
 
 If you want to setup and run your own Flynn cluster (either locally, on dedicated
