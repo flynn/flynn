@@ -5,17 +5,27 @@
     "vars": ["CLUSTER_DOMAIN"]
   },
   {
+    "id": "pg-password",
+    "action": "gen-random"
+  },
+  {
     "id": "postgres",
     "app": {
       "name": "postgres"
     },
     "action": "run-app",
     "release": {
+      "env": {
+        "PGPASSWORD": "{{ (index .StepData \"pg-password\").Data }}"
+	  },
       "processes": {
         "postgres": {
           "ports": [{"port": 5432, "proto": "tcp"}],
           "data": true,
-          "cmd": ["postgres"]
+          "cmd": ["postgres"],
+          "env": {
+            "SINGLETON": "true"
+          }
         },
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],

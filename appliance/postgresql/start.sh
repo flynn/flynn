@@ -6,10 +6,7 @@ case $1 in
     shift
     exec sudo \
       -u postgres \
-      -H \
-      EXTERNAL_IP=${EXTERNAL_IP} \
-      PORT=${PORT} \
-      DISCOVERD=${DISCOVERD} \
+	  -E -H \
       /bin/flynn-postgres $*
     ;;
   api)

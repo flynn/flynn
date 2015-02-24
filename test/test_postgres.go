@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/pkg/exec"
@@ -16,7 +15,7 @@ var _ = c.ConcurrentSuite(&PostgresSuite{})
 
 // Check postgres config to avoid regressing on https://github.com/flynn/flynn/issues/101
 func (s *PostgresSuite) TestSSLRenegotiationLimit(t *c.C) {
-	instances, err := s.discoverdClient(t).Instances("pg", 5*time.Second)
+	pgRelease, err := s.controllerClient(t).GetAppRelease("postgres")
 	t.Assert(err, c.IsNil)
 
 	cmd := exec.Command(exec.DockerImage(imageURIs["postgresql"]),
@@ -24,10 +23,9 @@ func (s *PostgresSuite) TestSSLRenegotiationLimit(t *c.C) {
 	cmd.Entrypoint = []string{"psql"}
 	cmd.Env = map[string]string{
 		"PGDATABASE": "postgres",
-		"PGHOST":     instances[0].Host(),
-		"PGPORT":     instances[0].Port(),
-		"PGUSER":     instances[0].Meta["username"],
-		"PGPASSWORD": instances[0].Meta["password"],
+		"PGHOST":     "leader.pg.discoverd",
+		"PGUSER":     "flynn",
+		"PGPASSWORD": pgRelease.Env["PGPASSWORD"],
 	}
 
 	res, err := cmd.CombinedOutput()

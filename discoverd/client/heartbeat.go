@@ -54,17 +54,17 @@ func (c *Client) Register(service, addr string) (Heartbeater, error) {
 }
 
 func (c *Client) RegisterInstance(service string, inst *Instance) (Heartbeater, error) {
-	firstErr := make(chan error)
+	inst.Addr = expandAddr(inst.Addr)
+	if inst.Proto == "" {
+		inst.Proto = "tcp"
+	}
+	inst.ID = inst.id()
 	h := &heartbeater{
 		c:       c,
 		service: service,
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
 		inst:    inst.Clone(),
-	}
-	h.inst.Addr = expandAddr(h.inst.Addr)
-	if h.inst.Proto == "" {
-		h.inst.Proto = "tcp"
 	}
 	// add EnvInstanceMeta if present
 	for _, env := range os.Environ() {
@@ -77,6 +77,7 @@ func (c *Client) RegisterInstance(service string, inst *Instance) (Heartbeater, 
 		}
 		h.inst.Meta[kv[0]] = kv[1]
 	}
+	firstErr := make(chan error)
 	go h.run(firstErr)
 	return h, <-firstErr
 }
@@ -117,7 +118,6 @@ func (h *heartbeater) Addr() string {
 const heartbeatInterval = 5 * time.Second
 
 func (h *heartbeater) run(firstErr chan<- error) {
-	h.inst.ID = h.inst.id()
 	path := fmt.Sprintf("/services/%s/instances/%s", h.service, h.inst.ID)
 	register := func() error {
 		h.Lock()
