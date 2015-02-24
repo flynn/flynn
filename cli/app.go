@@ -88,7 +88,7 @@ func runCreate(args *docopt.Args, client *controller.Client) error {
 	app.Name = args.String["<name>"]
 	remote := args.String["--remote"]
 
-	if !args.Bool["--yes"] {
+	if inGitRepo() && !args.Bool["--yes"] {
 		// Test if remote name exists and prompt user
 		remotes, err := gitRemoteNames()
 		if err != nil {
@@ -112,7 +112,7 @@ func runCreate(args *docopt.Args, client *controller.Client) error {
 	}
 
 	// Register git remote
-	if remote != "" {
+	if inGitRepo() && remote != "" {
 		exec.Command("git", "remote", "remove", remote).Run()
 		exec.Command("git", "remote", "add", "--", remote, gitURLPre(clusterConf.GitHost)+app.Name+gitURLSuf).Run()
 	}
