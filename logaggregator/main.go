@@ -2,18 +2,15 @@ package main
 
 import (
 	"bufio"
-	"bytes"
-	"errors"
 	"flag"
-	"fmt"
 	"net"
 	"os"
-	"strconv"
 	"sync"
 
-	"github.com/flynn/flynn/logaggregator/rfc5424"
 	"github.com/flynn/flynn/logaggregator/ring"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/syslog/rfc5424"
+	"github.com/flynn/flynn/pkg/syslog/rfc6587"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 )
@@ -178,7 +175,7 @@ func (a *Aggregator) readLogsFromConn(conn net.Conn) {
 	}()
 
 	s := bufio.NewScanner(conn)
-	s.Split(rfc6587Split)
+	s.Split(rfc6587.Split)
 	for s.Scan() {
 		msg := s.Bytes()
 		// slice in msg could get modified on next Scan(), need to copy it
@@ -186,34 +183,4 @@ func (a *Aggregator) readLogsFromConn(conn net.Conn) {
 		copy(msgCopy, msg)
 		a.logc <- msgCopy
 	}
-}
-
-func rfc6587Split(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	if atEOF && len(data) == 0 {
-		return 0, nil, nil
-	}
-
-	i := bytes.IndexByte(data, ' ')
-	switch {
-	case i == 0:
-		return 0, nil, errors.New("expected MSG-LEN, got space")
-	case i > 5:
-		return 0, nil, errors.New("MSG-LEN was longer than 5 characters")
-	case i > 0:
-		msgLen := data[0:i]
-		length, err := strconv.Atoi(string(msgLen))
-		if err != nil {
-			return 0, nil, err
-		}
-		if length > 10000 {
-			return 0, nil, fmt.Errorf("maximum MSG-LEN is 10000, got %d", length)
-		}
-		end := length + i + 1
-		if len(data) >= end {
-			// Return frame without msg length
-			return end, data[i+1 : end], nil
-		}
-	}
-	// Request more data.
-	return 0, nil, nil
 }
