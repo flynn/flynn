@@ -148,10 +148,10 @@ Listening on 55006
 
 *See [here](/docs/cli#log) for more information on the `flynn log` command.*
 
-## Release
+## Redeploy
 
-New releases are created by committing changes to Git and pushing those changes
-to Flynn.
+Updating your application and publishing your changes is done by committing 
+changes to Git and pushing those changes to Flynn.
 
 Add the following line to the top of `web.js`:
 
@@ -280,3 +280,61 @@ $ flynn run bash
 ```
 
 *See [here](/docs/cli#run) for more information on the `flynn run` command.*
+
+
+## Release existing Docker images
+
+Releasing pre-built Docker images is possible by passing the image URL and image 
+id or tag, and optionally, the username/password for the registry to Flynn. Flynn
+supports both auth basic for self hosted private registries and private repositories
+on the official Docker Registry.
+
+First, you'll need to create a configuration file for your release. This file may 
+contain all relevant information such as which command to run,  which environment
+variables to set and which port to route. If 'port' is left out; the next available port
+will be assigned.
+
+The process in the container will need to bind to the port that is assigned to it. It 
+will be available under the $PORT environment variable.
+
+Your json file may look like this:
+
+```
+{
+    "processes": {
+        "env" {"FOO": "bar"},
+        "sshd": {
+            "cmd": ["/bin/bash", "-c", "echo starting sshd on port $PORT; /usr/sbin/sshd -D -p $PORT"],
+            "ports": [{"proto": "tcp", "port": 22222}]
+        }
+    }
+}
+```
+
+Now create the service placeholder on the flynn cluster.
+```
+$ flynn create sshd
+```
+
+And add the 'release'. Note that we add the tag to the URL, a tag, or image id is required. 
+We use -a to specify the service.
+
+```
+$ flynn -a sshd release add -f sshd.json https://registry.hub.docker.com/dhrp/sshd?tag=latest
+Created release 24c788b26ad54e97b2ab901a042a78c9.
+```
+
+And finally, to actually start the service we'll need to scale it to at least one instance.
+
+```
+$ flynn -a sshd scale sshd=1
+```
+
+Wait for the image to pull and start, then check it's status with:
+```
+$ flynn -a sshd ps
+
+# Connect
+$ ssh root@<hostname> -p 22222
+```
+
