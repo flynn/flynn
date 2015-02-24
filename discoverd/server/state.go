@@ -13,6 +13,10 @@ import (
 var ErrUnsetService = errors.New("discoverd: service name must not be empty")
 var ErrInvalidService = errors.New("discoverd: service must be lowercase alphanumeric plus dash")
 
+var DefaultServiceConfig = &discoverd.ServiceConfig{
+	LeaderType: discoverd.LeaderTypeOldest,
+}
+
 func ValidServiceName(service string) error {
 	if service == "" {
 		return ErrUnsetService
@@ -54,6 +58,8 @@ type service struct {
 	// instance ID -> instance
 	instances map[string]*discoverd.Instance
 
+	config *discoverd.ServiceConfig
+
 	meta      []byte
 	metaIndex uint64
 
@@ -65,7 +71,14 @@ type service struct {
 	notifyLeader bool
 }
 
+func (s *service) manualLeader() bool {
+	return s.config != nil && s.config.LeaderType == discoverd.LeaderTypeManual
+}
+
 func (s *service) maybeSetLeader(inst *discoverd.Instance) {
+	if s.manualLeader() {
+		return
+	}
 	if s.leaderIndex == 0 || s.leaderIndex > inst.Index {
 		s.notifyLeader = s.notifyLeader || inst.ID != s.leaderID
 		s.leaderID = inst.ID
@@ -74,6 +87,9 @@ func (s *service) maybeSetLeader(inst *discoverd.Instance) {
 }
 
 func (s *service) maybePickLeader() {
+	if s.manualLeader() {
+		return
+	}
 	for _, inst := range s.instances {
 		s.maybeSetLeader(inst)
 	}
@@ -100,6 +116,11 @@ func (s *service) RemoveInstance(id string) *discoverd.Instance {
 	return inst
 }
 
+func (s *service) SetLeader(id string) {
+	s.notifyLeader = s.leaderID != id
+	s.leaderID = id
+}
+
 func (s *service) SetInstances(data map[string]*discoverd.Instance) {
 	if _, ok := data[s.leaderID]; !ok {
 		// the current leader is not in the new set
@@ -108,6 +129,10 @@ func (s *service) SetInstances(data map[string]*discoverd.Instance) {
 	}
 	s.instances = data
 	s.maybePickLeader()
+}
+
+func (s *service) SetConfig(conf *discoverd.ServiceConfig) {
+	s.config = conf
 }
 
 func (s *service) BroadcastLeader() *discoverd.Instance {
@@ -132,12 +157,23 @@ func (s *service) Meta() *discoverd.ServiceMeta {
 	return &discoverd.ServiceMeta{Data: s.meta, Index: s.metaIndex}
 }
 
-func (s *State) AddService(name string) {
+func (s *service) Config() *discoverd.ServiceConfig {
+	if s == nil {
+		return nil
+	}
+	if s.config == nil {
+		return DefaultServiceConfig
+	}
+	return s.config
+}
+
+func (s *State) AddService(name string, config *discoverd.ServiceConfig) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	if _, ok := s.services[name]; !ok {
 		s.services[name] = newService()
 	}
+	s.services[name].SetConfig(config)
 }
 
 func (s *State) RemoveService(name string) {
@@ -242,7 +278,7 @@ func (s *State) GetServiceMeta(service string) *discoverd.ServiceMeta {
 	return s.services[service].Meta()
 }
 
-func (s *State) SetService(serviceName string, data []*discoverd.Instance) {
+func (s *State) SetService(serviceName string, config *discoverd.ServiceConfig, data []*discoverd.Instance) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -261,7 +297,9 @@ func (s *State) SetService(serviceName string, data []*discoverd.Instance) {
 		if !ok {
 			s.services[serviceName] = &service{}
 		}
-		s.services[serviceName].SetInstances(newData)
+		srv := s.services[serviceName]
+		srv.SetConfig(config)
+		srv.SetInstances(newData)
 	}
 	if !ok {
 		// Service doesn't currently exist, send updates for each instance
@@ -307,6 +345,19 @@ func (s *State) GetLeader(service string) *discoverd.Instance {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	return s.services[service].Leader()
+}
+
+func (s *State) SetLeader(service, id string) {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	s.services[service].SetLeader(id)
+	s.broadcastLeader(service)
+}
+
+func (s *State) GetConfig(service string) *discoverd.ServiceConfig {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	return s.services[service].Config()
 }
 
 func (s *State) Get(service string) []*discoverd.Instance {
