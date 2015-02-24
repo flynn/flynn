@@ -187,5 +187,5 @@ The Layer 1 bootstrapper will get all necessary services running using the Layer
 If you try these instructions and run into issues, please open an issue or pull
 request.
 
-Now you have Flynn installed and running, head over to the [Using Flynn](/docs/using-flynn)
+Now you have Flynn installed and running, head over to the [Using Flynn](/docs)
 page for guides on deploying your applications to Flynn.
