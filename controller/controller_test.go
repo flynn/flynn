@@ -22,7 +22,7 @@ import (
 )
 
 func init() {
-	schemaRoot, _ = filepath.Abs(filepath.Join("..", "website", "schema"))
+	schemaRoot, _ = filepath.Abs(filepath.Join("..", "schema"))
 }
 
 // Hook gocheck up to the "go test" runner
