@@ -63,6 +63,10 @@ cluster, you should boot at least 3 nodes to keep etcd efficient
 (see [here](https://github.com/coreos/etcd/blob/v0.4.6/Documentation/optimal-cluster-size.md) for
 an explanation).
 
+*NOTE: If you are installing on Linode, you need to use native kernels (rather than
+Linode kernels) for AUFS support, see [this guide](https://www.linode.com/docs/tools-reference/custom-kernels-distros/run-a-distributionsupplied-kernel-with-pvgrub)
+for instructions on how to switch.*
+
 ### Installation
 
 Download and run the Flynn installer script:
