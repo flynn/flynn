@@ -146,6 +146,8 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	t.Assert(err, c.IsNil)
 	release, err := s.controllerClient(t).GetAppRelease("controller")
 	t.Assert(err, c.IsNil)
+	formation, err := s.controllerClient(t).GetFormation(app.ID, release.ID)
+	t.Assert(err, c.IsNil)
 	list, err := s.controllerClient(t).JobList("controller")
 	t.Assert(err, c.IsNil)
 	var jobs []*ct.Job
@@ -165,11 +167,8 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	stream, err := s.controllerClient(t).StreamJobEvents("controller", 0, events)
 	t.Assert(err, c.IsNil)
 	debug(t, "scaling the controller up")
-	t.Assert(s.controllerClient(t).PutFormation(&ct.Formation{
-		AppID:     app.ID,
-		ReleaseID: release.ID,
-		Processes: map[string]int{"web": 3, "scheduler": 1},
-	}), c.IsNil)
+	formation.Processes["web"]++
+	t.Assert(s.controllerClient(t).PutFormation(formation), c.IsNil)
 	lastID, _ := waitForJobEvents(t, stream, events, jobEvents{"web": {"up": 1}})
 	stream.Close()
 
@@ -210,11 +209,8 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 
 	// scale back down
 	debug(t, "scaling the controller down")
-	t.Assert(s.controllerClient(t).PutFormation(&ct.Formation{
-		AppID:     app.ID,
-		ReleaseID: release.ID,
-		Processes: map[string]int{"web": 2, "scheduler": 1},
-	}), c.IsNil)
+	formation.Processes["web"]--
+	t.Assert(s.controllerClient(t).PutFormation(formation), c.IsNil)
 	waitForJobEvents(t, stream, events, jobEvents{"web": {"down": 1}})
 
 	// unset the suite's client so other tests use a new client
