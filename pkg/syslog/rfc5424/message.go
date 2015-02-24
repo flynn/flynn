@@ -19,12 +19,22 @@ type Message struct {
 	Msg            []byte
 }
 
+// NewMessage builds a new message from a copy of the header and message.
 func NewMessage(hdr *Header, msg []byte) *Message {
-	if hdr.Timestamp.IsZero() {
-		hdr.Timestamp = time.Now().UTC()
+	h := *hdr
+
+	if h.Timestamp.IsZero() {
+		h.Timestamp = time.Now().UTC()
 	}
 
-	return &Message{Header: *hdr, Msg: msg}
+	if h.Version == 0 {
+		h.Version = 1
+	}
+
+	m := make([]byte, len(msg))
+	copy(m, msg)
+
+	return &Message{Header: h, Msg: m}
 }
 
 var msgSep = []byte{' '}
