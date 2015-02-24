@@ -78,6 +78,12 @@ func (a *cliTestApp) sh(cmd string) *CmdResult {
 	return a.flynn("run", "sh", "-c", cmd)
 }
 
+func (s *CLISuite) TestCreateAppNoGit(t *c.C) {
+	dir := t.MkDir()
+	name := random.String(30)
+	t.Assert(flynn(t, dir, "create", name), Outputs, fmt.Sprintf("Created %s\n", name))
+}
+
 func testApp(s *CLISuite, t *c.C, remote string) {
 	app := s.newGitRepo(t, "")
 	name := random.String(30)

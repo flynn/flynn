@@ -13,6 +13,17 @@ import (
 	cfg "github.com/flynn/flynn/cli/config"
 )
 
+var gitRepo *bool
+
+func inGitRepo() bool {
+	if gitRepo != nil {
+		return *gitRepo
+	}
+	b := exec.Command("git", "rev-parse", "--git-dir").Run() == nil
+	gitRepo = &b
+	return b
+}
+
 const gitURLSuf = ".git"
 
 func gitURLPre(gitHost string) string {
