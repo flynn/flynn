@@ -41,7 +41,7 @@ hardware or using a cloud provider) take a look at the
 
 ### Deploying applications
 
-Check out the [Using Flynn](https://flynn.io/docs/using-flynn) guide for
+Check out the [Using Flynn](https://flynn.io/docs) guide for
 instructions on deploying and scaling applications.
 
 ## Components
