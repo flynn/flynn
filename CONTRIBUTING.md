@@ -9,7 +9,7 @@ Please familiarize yourself with the Contribution Guidelines and Project Roadmap
 There are many ways to help Flynn besides contributing code:
 
  - Fix bugs or file issues
- - Improve the [documentation](https://github.com/flynn/flynn.io) including this website
+ - Improve the [documentation](https://github.com/flynn/flynn.io)
 
 ## Contributing Code
 

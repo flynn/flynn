@@ -25,12 +25,12 @@ var _ = c.Suite(&ControllerSuite{})
 func (s *ControllerSuite) SetUpSuite(t *c.C) {
 	var schemaPaths []string
 	walkFn := func(path string, info os.FileInfo, err error) error {
-		if !info.IsDir() {
+		if !info.IsDir() && filepath.Ext(path) == ".json" {
 			schemaPaths = append(schemaPaths, path)
 		}
 		return nil
 	}
-	schemaRoot, err := filepath.Abs(filepath.Join("..", "website", "schema"))
+	schemaRoot, err := filepath.Abs(filepath.Join("..", "schema"))
 	t.Assert(err, c.IsNil)
 	t.Assert(filepath.Walk(schemaRoot, walkFn), c.IsNil)
 
