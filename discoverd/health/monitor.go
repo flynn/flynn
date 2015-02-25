@@ -29,6 +29,15 @@ const (
 	MonitorStatusDown
 )
 
+func (m MonitorStatus) String() string {
+	return map[MonitorStatus]string{
+		MonitorStatusUnknown: "unknown",
+		MonitorStatusCreated: "created",
+		MonitorStatusUp:      "up",
+		MonitorStatusDown:    "down",
+	}[m]
+}
+
 type MonitorEvent struct {
 	Status MonitorStatus
 	// If Status is MonitorStatusDown, Err is the last failure

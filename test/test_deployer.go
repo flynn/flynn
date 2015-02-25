@@ -56,6 +56,9 @@ func (s *DeployerSuite) createDeployment(t *c.C, process, strategy, service stri
 					t.Fatalf("service discovery stream closed unexpectedly")
 				}
 				if event.Kind == discoverd.EventKindUp {
+					if id, ok := event.Instance.Meta["FLYNN_RELEASE_ID"]; !ok || id != release.ID {
+						continue
+					}
 					debugf(t, "got %s service up event", service)
 					count++
 				}
