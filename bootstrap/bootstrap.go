@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -96,6 +97,10 @@ func Run(manifest []byte, ch chan<- *StepInfo, minHosts int) (err error) {
 			ch <- &StepInfo{StepAction: a, State: "error", Error: err.Error(), Err: err, Timestamp: time.Now().UTC()}
 		}
 	}()
+
+	if minHosts == 2 {
+		return errors.New("the minimum number of hosts for a multi-node cluster is 3, min-hosts=2 is invalid")
+	}
 
 	// Make sure we are connected to discoverd first
 	discoverdAttempts.Run(func() error {
