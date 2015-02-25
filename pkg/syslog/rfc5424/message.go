@@ -19,6 +19,14 @@ type Message struct {
 	Msg            []byte
 }
 
+func NewMessage(hdr *Header, msg []byte) *Message {
+	if hdr.Timestamp.IsZero() {
+		hdr.Timestamp = time.Now().UTC()
+	}
+
+	return &Message{Header: *hdr, Msg: msg}
+}
+
 var msgSep = []byte{' '}
 
 func (m Message) Bytes() []byte {
