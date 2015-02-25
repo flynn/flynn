@@ -32,31 +32,31 @@ func (s *S) TestBuffer(c *C) {
 	c.Assert(cap(res), Equals, 0)
 
 	// add a couple of elements
-	msg0 := &rfc5424.Message{Msg: "0"}
-	msg1 := &rfc5424.Message{Msg: "1"}
+	msg0 := &rfc5424.Message{Msg: []byte{'0'}}
+	msg1 := &rfc5424.Message{Msg: []byte{'1'}}
 	b.Add(msg0)
 	b.Add(msg1)
 
 	res = b.ReadAll()
 	c.Assert(res, HasLen, 2)
 	c.Assert(cap(res), Equals, 2)
-	c.Assert(res[0], Equals, msg0)
-	c.Assert(res[1], Equals, msg1)
+	c.Assert(res[0], DeepEquals, msg0)
+	c.Assert(res[1], DeepEquals, msg1)
 
 	// overfill the buffer by exactly one
 	for i := 2; i < DefaultBufferCapacity+1; i++ {
-		b.Add(&rfc5424.Message{Msg: strconv.Itoa(i)})
+		b.Add(&rfc5424.Message{Msg: []byte(strconv.Itoa(i))})
 	}
 	res = b.ReadAll()
 	c.Assert(res, HasLen, DefaultBufferCapacity)
 	c.Assert(cap(res), Equals, DefaultBufferCapacity)
 	c.Assert(res[0], Equals, msg1)
 	for i := 1; i < len(res); i++ {
-		c.Assert(res[i].Msg, Equals, strconv.Itoa(i+1))
+		c.Assert(string(res[i].Msg), Equals, strconv.Itoa(i+1))
 	}
 
 	// ensure that modifying an element in res doesn't modify original buffer
-	res[0] = &rfc5424.Message{Msg: "A replacement message"}
+	res[0] = &rfc5424.Message{Msg: []byte("A replacement message")}
 	c.Assert(b.messages[1], Equals, msg1)
 }
 
@@ -64,24 +64,24 @@ func (s *S) TestReadLastN(c *C) {
 	b := NewBuffer()
 
 	// add a couple of elements
-	msg0 := &rfc5424.Message{Msg: "0"}
-	msg1 := &rfc5424.Message{Msg: "1"}
+	msg0 := &rfc5424.Message{Msg: []byte{'0'}}
+	msg1 := &rfc5424.Message{Msg: []byte{'1'}}
 	b.Add(msg0)
 	b.Add(msg1)
 
 	res := b.ReadLastN(1)
 	c.Assert(res, HasLen, 1)
 	c.Assert(cap(res), Equals, 1)
-	c.Assert(res[0], Equals, msg1)
+	c.Assert(res[0], DeepEquals, msg1)
 
 	// overfill the buffer by exactly one
 	for i := 2; i < DefaultBufferCapacity+1; i++ {
-		b.Add(&rfc5424.Message{Msg: strconv.Itoa(i)})
+		b.Add(&rfc5424.Message{Msg: []byte(strconv.Itoa(i))})
 	}
 	res = b.ReadLastN(5)
 	c.Assert(res, HasLen, 5)
 	c.Assert(cap(res), Equals, 5)
 	for i := 0; i < 5; i++ {
-		c.Assert(res[i].Msg, Equals, strconv.Itoa(b.Capacity()-5+i))
+		c.Assert(string(res[i].Msg), Equals, strconv.Itoa(b.Capacity()-5+i))
 	}
 }
