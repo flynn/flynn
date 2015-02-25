@@ -2,179 +2,84 @@ package rfc5424
 
 import (
 	"bytes"
-	"strconv"
+	"fmt"
 	"time"
 )
-
-type Message struct {
-	Facility       int
-	Severity       int
-	Version        int
-	Timestamp      time.Time
-	Hostname       string
-	AppName        string
-	ProcID         string
-	MsgID          string
-	StructuredData string
-	Msg            string
-}
-
-func (m Message) PriVal() int {
-	return m.Facility*8 + m.Severity
-}
-
-func Parse(buf []byte) (*Message, error) {
-	cursor := 0
-	msg := &Message{}
-	if err := parseHeader(buf, &cursor, msg); err != nil {
-		return nil, err
-	}
-
-	if err := parseStructuredData(buf, &cursor, msg); err != nil {
-		return nil, err
-	}
-
-	if cursor < len(buf) {
-		msg.Msg = string(buf[cursor:])
-	}
-
-	return msg, nil
-}
-
-type ParseError struct {
-	Cursor  int
-	Message string
-}
-
-func (p *ParseError) Error() string {
-	return "rfc5424: " + p.Message
-}
 
 const (
 	priStart = '<'
 	priEnd   = '>'
 )
 
-// HEADER = PRI VERSION SP TIMESTAMP SP HOSTNAME SP APP-NAME SP PROCID SP MSGID
-func parseHeader(buf []byte, cursor *int, msg *Message) error {
-	var err error
-	if err = parsePriority(buf, cursor, msg); err != nil {
-		return err
-	}
+var nilValue = []byte{'-'}
 
-	if err = parseVersion(buf, cursor, msg); err != nil {
-		return err
-	}
-
-	if err = parseTimestamp(buf, cursor, msg); err != nil {
-		return err
-	}
-
-	if msg.Hostname, err = parseNextStringField(buf, cursor); err != nil {
-		return err
-	}
-
-	if msg.AppName, err = parseNextStringField(buf, cursor); err != nil {
-		return err
-	}
-
-	if msg.ProcID, err = parseNextStringField(buf, cursor); err != nil {
-		return err
-	}
-
-	if msg.MsgID, err = parseNextStringField(buf, cursor); err != nil {
-		return err
-	}
-
-	return nil
+type Message struct {
+	Header
+	StructuredData []byte
+	Msg            []byte
 }
 
-func parsePriority(buf []byte, cursor *int, msg *Message) error {
-	if len(buf) < *cursor+3 {
-		return &ParseError{*cursor, "invalid priority"}
-	}
-	if buf[*cursor] != priStart {
-		return &ParseError{*cursor, "invalid priority"}
-	}
-	*cursor++
-	i := indexByteAfter(buf, priEnd, *cursor)
-	if i < 1 || i > 4 {
-		return &ParseError{*cursor, "invalid priority: PRIVAL too long"}
-	}
-	prival, err := strconv.Atoi(string(buf[*cursor:i]))
-	if err != nil {
-		return err
-	}
-	if prival < 0 || prival > 191 {
-		return &ParseError{*cursor, "invalid priority: PRIVAL outside range"}
-	}
-	msg.Facility = prival / 8
-	msg.Severity = prival % 8
-	*cursor = i + 1
+var msgSep = []byte{' '}
 
-	return nil
+func (m Message) Bytes() []byte {
+	sd := m.StructuredData
+	if len(sd) == 0 {
+		sd = nilValue
+	}
+	if len(m.Msg) > 0 {
+		return bytes.Join([][]byte{m.Header.Bytes(), sd, m.Msg}, msgSep)
+	}
+	return bytes.Join([][]byte{m.Header.Bytes(), sd}, msgSep)
 }
 
-func parseVersion(buf []byte, cursor *int, msg *Message) error {
-	if len(buf) < *cursor+1 {
-		return &ParseError{*cursor, "message ended before version was received"}
-	}
-	if buf[*cursor] != '1' || buf[*cursor+1] != ' ' {
-		return &ParseError{*cursor, "unexpected syslog version"}
-	}
-	msg.Version = 1
-	*cursor += 2
-	return nil
+func (m Message) String() string {
+	return string(m.Bytes())
 }
 
-func parseTimestamp(buf []byte, cursor *int, msg *Message) error {
-	var err error
-	nextSpace := indexByteAfter(buf, ' ', *cursor)
-	if nextSpace < *cursor {
-		return &ParseError{*cursor, "missing space"}
-	}
-	if nextSpace == *cursor {
-		return &ParseError{*cursor, "missing timestamp"}
-	}
-	msg.Timestamp, err = time.Parse(time.RFC3339Nano, string(buf[*cursor:nextSpace]))
-	if err != nil {
-		return err
-	}
-	*cursor = nextSpace + 1
-	return nil
+type Header struct {
+	Facility  int
+	Severity  int
+	Version   int
+	Timestamp time.Time
+	Hostname  []byte
+	AppName   []byte
+	ProcID    []byte
+	MsgID     []byte
 }
 
-func parseNextStringField(buf []byte, cursor *int) (string, error) {
-	if len(buf) < *cursor {
-		return "", &ParseError{*cursor, "missing field"}
+func (h Header) Bytes() []byte {
+	hostname := h.Hostname
+	if len(hostname) == 0 {
+		hostname = nilValue
 	}
-	nextSpace := indexByteAfter(buf, ' ', *cursor)
-	if nextSpace < 0 {
-		return "", &ParseError{*cursor, "missing space"}
+
+	appName := h.AppName
+	if len(appName) == 0 {
+		appName = nilValue
 	}
-	if nextSpace == 1 {
-		return "", &ParseError{*cursor, "missing value"}
+
+	procID := h.ProcID
+	if len(procID) == 0 {
+		procID = nilValue
 	}
-	res := string(buf[*cursor:nextSpace])
-	*cursor = nextSpace + 1
-	return res, nil
+
+	msgID := h.MsgID
+	if len(msgID) == 0 {
+		msgID = nilValue
+	}
+
+	buf := &bytes.Buffer{}
+	fmt.Fprintf(buf, "<%d>%d %s %s %s %s %s",
+		h.PriVal(),
+		1,
+		h.Timestamp.Format(time.RFC3339Nano),
+		hostname,
+		appName,
+		procID,
+		msgID)
+	return buf.Bytes()
 }
 
-func parseStructuredData(buf []byte, cursor *int, msg *Message) error {
-	if len(buf) < *cursor {
-		return &ParseError{*cursor, "missing structured data field"}
-	}
-	if buf[*cursor] == '-' {
-		if len(buf) < *cursor+1 || buf[*cursor+1] != ' ' {
-			return &ParseError{*cursor, "invalid structured data"}
-		}
-		*cursor++
-		msg.StructuredData = "-"
-		return nil
-	}
-	return &ParseError{*cursor, "structured data is unsupported"}
-}
-
-func indexByteAfter(buf []byte, c byte, after int) int {
-	return bytes.IndexByte(buf[after:], c) + after
+func (h Header) PriVal() int {
+	return h.Facility*8 + h.Severity
 }

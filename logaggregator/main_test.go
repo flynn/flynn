@@ -81,8 +81,8 @@ func (s *LogAggregatorTestSuite) TestAggregatorBuffersMessages(c *C) {
 
 	msgs := s.a.ReadLastN("app", 0)
 	c.Assert(msgs, HasLen, 2)
-	c.Assert(msgs[0].ProcID, Equals, "web.1")
-	c.Assert(msgs[1].ProcID, Equals, "web.2")
+	c.Assert(string(msgs[0].ProcID), Equals, "web.1")
+	c.Assert(string(msgs[1].ProcID), Equals, "web.2")
 	s.a.Shutdown()
 }
 

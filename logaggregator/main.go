@@ -140,7 +140,7 @@ func (a *Aggregator) consumeLogs() {
 			log15.Error("rfc5424 parse error", "err", err)
 			continue
 		}
-		a.getBuffer(msg.AppName).Add(msg)
+		a.getBuffer(string(msg.AppName)).Add(msg)
 
 		if afterMessage != nil {
 			afterMessage()
