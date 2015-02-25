@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
@@ -16,6 +15,10 @@ func Bytes(m *rfc5424.Message) []byte {
 	msg := m.Bytes()
 	return bytes.Join([][]byte{[]byte(strconv.Itoa(len(msg))), msg}, []byte{' '})
 }
+
+// MaxMsgLen is the maximum allowed length of the entire syslog message
+// (excluding RFC6587 length-prefixed frame).
+const MaxMsgLen = 10100
 
 // Split is a bufio.SplitFunc that splits on RFC6587-framed syslog messages.
 func Split(data []byte, atEOF bool) (advance int, token []byte, err error) {
@@ -35,8 +38,8 @@ func Split(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		if err != nil {
 			return 0, nil, err
 		}
-		if length > 10000 {
-			return 0, nil, fmt.Errorf("maximum MSG-LEN is 10000, got %d", length)
+		if length > MaxMsgLen {
+			return 0, nil, fmt.Errorf("maximum MSG-LEN is %d, got %d", MaxMsgLen, length)
 		}
 		end := length + i + 1
 		if len(data) >= end {
