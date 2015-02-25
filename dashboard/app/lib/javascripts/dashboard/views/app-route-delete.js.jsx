@@ -50,7 +50,7 @@ Dashboard.Views.AppRouteDelete = React.createClass({
 		this.setState({
 			isDeleting: true
 		});
-		AppRouteDeleteActions.deleteAppRoute(this.props.appId, this.props.routeId);
+		AppRouteDeleteActions.deleteAppRoute(this.props.appId, this.props.routeType, this.props.routeId);
 	}
 });
 
