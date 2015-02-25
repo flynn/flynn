@@ -154,7 +154,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 			jobs = append(jobs, job)
 		}
 	}
-	t.Assert(jobs, c.HasLen, 1)
+	t.Assert(jobs, c.HasLen, 2)
 	hostID, jobID, _ := cluster.ParseJobID(jobs[0].ID)
 	t.Assert(hostID, c.Not(c.Equals), "")
 	t.Assert(jobID, c.Not(c.Equals), "")
@@ -168,7 +168,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	t.Assert(s.controllerClient(t).PutFormation(&ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
-		Processes: map[string]int{"web": 2, "scheduler": 1},
+		Processes: map[string]int{"web": 3, "scheduler": 1},
 	}), c.IsNil)
 	lastID, _ := waitForJobEvents(t, stream, events, jobEvents{"web": {"up": 1}})
 	stream.Close()
@@ -184,10 +184,10 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 		if err != nil {
 			return err
 		}
-		if len(addrs) != 2 {
-			return fmt.Errorf("expected 2 controller processes, got %d", len(addrs))
+		if len(addrs) != 3 {
+			return fmt.Errorf("expected 3 controller processes, got %d", len(addrs))
 		}
-		addr := addrs[1]
+		addr := addrs[2]
 		debug(t, "new controller address: ", addr)
 		client, err = controller.NewClient("http://"+addr, s.clusterConf(t).Key)
 		if err != nil {
@@ -213,7 +213,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	t.Assert(s.controllerClient(t).PutFormation(&ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
-		Processes: map[string]int{"web": 1, "scheduler": 1},
+		Processes: map[string]int{"web": 2, "scheduler": 1},
 	}), c.IsNil)
 	waitForJobEvents(t, stream, events, jobEvents{"web": {"down": 1}})
 

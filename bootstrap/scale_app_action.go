@@ -27,5 +27,11 @@ func (a *ScaleAppAction) Run(s *State) error {
 	a.Formation.AppID = data.App.ID
 	a.Formation.ReleaseID = data.Release.ID
 
+	for name, count := range a.Formation.Processes {
+		if s.Singleton && count > 1 {
+			a.Formation.Processes[name] = 1
+		}
+	}
+
 	return client.PutFormation(a.Formation)
 }

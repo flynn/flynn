@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 type State struct {
 	StepData  map[string]interface{}
 	Providers map[string]*ct.Provider
+	Singleton bool
 
 	clusterc    *cluster.Client
 	controllerc *controller.Client
@@ -108,6 +110,10 @@ func Run(manifest []byte, ch chan<- *StepInfo, minHosts int) (err error) {
 	state := &State{
 		StepData:  make(map[string]interface{}),
 		Providers: make(map[string]*ct.Provider),
+		Singleton: minHosts == 1,
+	}
+	if s := os.Getenv("SINGLETON"); s != "" {
+		state.Singleton = s == "true"
 	}
 
 	a = StepAction{ID: "online-hosts", Action: "check"}
