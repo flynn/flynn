@@ -211,12 +211,12 @@ func (s *service) Watch(events chan *Event) (stream.Stream, error) {
 }
 
 type ServiceMeta struct {
-	Data json.RawMessage
+	Data json.RawMessage `json:"data"`
 
 	// When calling SetMeta, Index is checked against the current index and the
 	// set only succeeds if the index is the same. A zero index means the meta
 	// does not currently exist.
-	Index uint64
+	Index uint64 `json:"index"`
 }
 
 func (s *service) GetMeta() (*ServiceMeta, error) {
