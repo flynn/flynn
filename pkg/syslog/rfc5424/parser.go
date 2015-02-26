@@ -6,23 +6,7 @@ import (
 	"time"
 )
 
-type Message struct {
-	Facility       int
-	Severity       int
-	Version        int
-	Timestamp      time.Time
-	Hostname       string
-	AppName        string
-	ProcID         string
-	MsgID          string
-	StructuredData string
-	Msg            string
-}
-
-func (m Message) PriVal() int {
-	return m.Facility*8 + m.Severity
-}
-
+// Parse parses RFC5424 syslog messages into a Message.
 func Parse(buf []byte) (*Message, error) {
 	cursor := 0
 	msg := &Message{}
@@ -35,12 +19,13 @@ func Parse(buf []byte) (*Message, error) {
 	}
 
 	if cursor < len(buf) {
-		msg.Msg = string(buf[cursor:])
+		msg.Msg = buf[cursor:]
 	}
 
 	return msg, nil
 }
 
+// ParseError will be returned when Parse encounters an error.
 type ParseError struct {
 	Cursor  int
 	Message string
@@ -49,11 +34,6 @@ type ParseError struct {
 func (p *ParseError) Error() string {
 	return "rfc5424: " + p.Message
 }
-
-const (
-	priStart = '<'
-	priEnd   = '>'
-)
 
 // HEADER = PRI VERSION SP TIMESTAMP SP HOSTNAME SP APP-NAME SP PROCID SP MSGID
 func parseHeader(buf []byte, cursor *int, msg *Message) error {
@@ -70,19 +50,19 @@ func parseHeader(buf []byte, cursor *int, msg *Message) error {
 		return err
 	}
 
-	if msg.Hostname, err = parseNextStringField(buf, cursor); err != nil {
+	if msg.Hostname, err = parseNextField(buf, cursor); err != nil {
 		return err
 	}
 
-	if msg.AppName, err = parseNextStringField(buf, cursor); err != nil {
+	if msg.AppName, err = parseNextField(buf, cursor); err != nil {
 		return err
 	}
 
-	if msg.ProcID, err = parseNextStringField(buf, cursor); err != nil {
+	if msg.ProcID, err = parseNextField(buf, cursor); err != nil {
 		return err
 	}
 
-	if msg.MsgID, err = parseNextStringField(buf, cursor); err != nil {
+	if msg.MsgID, err = parseNextField(buf, cursor); err != nil {
 		return err
 	}
 
@@ -144,18 +124,18 @@ func parseTimestamp(buf []byte, cursor *int, msg *Message) error {
 	return nil
 }
 
-func parseNextStringField(buf []byte, cursor *int) (string, error) {
+func parseNextField(buf []byte, cursor *int) ([]byte, error) {
 	if len(buf) < *cursor {
-		return "", &ParseError{*cursor, "missing field"}
+		return nil, &ParseError{*cursor, "missing field"}
 	}
 	nextSpace := indexByteAfter(buf, ' ', *cursor)
 	if nextSpace < 0 {
-		return "", &ParseError{*cursor, "missing space"}
+		return nil, &ParseError{*cursor, "missing space"}
 	}
 	if nextSpace == 1 {
-		return "", &ParseError{*cursor, "missing value"}
+		return nil, &ParseError{*cursor, "missing value"}
 	}
-	res := string(buf[*cursor:nextSpace])
+	res := buf[*cursor:nextSpace]
 	*cursor = nextSpace + 1
 	return res, nil
 }
@@ -169,7 +149,7 @@ func parseStructuredData(buf []byte, cursor *int, msg *Message) error {
 			return &ParseError{*cursor, "invalid structured data"}
 		}
 		*cursor++
-		msg.StructuredData = "-"
+		msg.StructuredData = nilValue
 		return nil
 	}
 	return &ParseError{*cursor, "structured data is unsupported"}
