@@ -31,10 +31,11 @@ func main() {
 	log.SetFlags(0)
 
 	usage := `
-usage: flynn [-a <app>] <command> [<args>...]
+usage: flynn [-a <app>] [-c <cluster>] <command> [<args>...]
 
 Options:
 	-a <app>
+	-c <cluster>
 	-h, --help
 
 Commands:
@@ -91,6 +92,11 @@ See 'flynn help <command>' for more information on a specific command.
 		return
 	} else if updater != nil {
 		defer updater.backgroundRun() // doesn't run if os.Exit is called
+	}
+
+	// Set the cluster config name
+	if args.String["-c"] != "" {
+		flagCluster = args.String["-c"]
 	}
 
 	flagApp = args.String["-a"]
@@ -221,6 +227,11 @@ func getCluster() (*cfg.Cluster, error) {
 	if len(config.Clusters) == 0 {
 		return nil, ErrNoClusters
 	}
+	// Get the default cluster
+	if flagCluster == "" {
+		flagCluster = config.Default
+	}
+	// Default cluster not set, pick the first one
 	if flagCluster == "" {
 		clusterConf = config.Clusters[0]
 		return clusterConf, nil

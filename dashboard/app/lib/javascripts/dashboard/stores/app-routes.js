@@ -41,7 +41,7 @@ var AppRoutes = Dashboard.Stores.AppRoutes = Dashboard.Store.createClass({
 			break;
 
 			case "APP_ROUTE_DELETE:DELETE_ROUTE":
-				this.__deleteAppRoute(event.routeId).then(function () {
+				this.__deleteAppRoute(event.routeType, event.routeId).then(function () {
 					return this.__fetchRoutes();
 				}.bind(this));
 			break;
@@ -60,10 +60,8 @@ var AppRoutes = Dashboard.Stores.AppRoutes = Dashboard.Store.createClass({
 	__createAppRoute: function (domain, appName) {
 		var data = {
 			type: "http",
-			config: {
-				domain: domain,
-				service: appName +"-web"
-			}
+			domain: domain,
+			service: appName +"-web"
 		};
 		return this.__getClient().createAppRoute(this.props.appId, data).then(function () {
 			Dashboard.Dispatcher.handleStoreEvent({
@@ -86,14 +84,15 @@ var AppRoutes = Dashboard.Stores.AppRoutes = Dashboard.Store.createClass({
 		}.bind(this));
 	},
 
-	__deleteAppRoute: function (routeId) {
+	__deleteAppRoute: function (routeType, routeId) {
 		var routes = this.state.routes.filter(function (route) {
 			return route.id !== routeId;
 		});
 		this.setState({
 			routes: routes
 		});
-		return this.__getClient().deleteAppRoute(this.props.appId, routeId).then(function () {
+
+		return this.__getClient().deleteAppRoute(this.props.appId, routeType, routeId).then(function () {
 			Dashboard.Dispatcher.handleStoreEvent({
 				name: "APP_ROUTES:DELETED",
 				appId: this.id.appId,

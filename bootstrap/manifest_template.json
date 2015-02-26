@@ -24,7 +24,7 @@
           "data": true,
           "cmd": ["postgres"],
           "env": {
-            "SINGLETON": "true"
+            "SINGLETON": "{{ .Singleton }}"
           }
         },
         "web": {
@@ -38,8 +38,8 @@
       "uri": "$image_repository?name=flynn/postgresql&id=$image_id[postgresql]"
     },
     "processes": {
-      "postgres": 1,
-      "web": 1
+      "postgres": 3,
+      "web": 2
     }
   },
   {
@@ -134,8 +134,8 @@
     "app_step": "controller-inception",
     "processes": {
       "scheduler": 1,
-      "deployer": 1,
-      "web": 1
+      "deployer": 2,
+      "web": 2
     }
   },
   {
@@ -165,7 +165,7 @@
       }
     },
     "processes": {
-      "web": 1
+      "web": 2
     },
     "resources": [{"name":"postgres", "url":"http://pg-api.discoverd/databases"}]
   },
@@ -230,7 +230,7 @@
       }
     },
     "processes": {
-      "app": 1
+      "app": 2
     }
   },
   {
@@ -326,7 +326,7 @@
       }
     },
     "processes": {
-      "web": 1
+      "web": 2
     }
   },
   {

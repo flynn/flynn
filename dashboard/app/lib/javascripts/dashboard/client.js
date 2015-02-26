@@ -149,9 +149,9 @@ Dashboard.Client = Marbles.Utils.createClass({
 		});
 	},
 
-	deleteAppRoute: function (appId, routeId) {
+	deleteAppRoute: function (appId, routeType, routeId) {
 		return this.performControllerRequest('DELETE', {
-			url: "/apps/"+ appId +"/routes/"+ routeId
+			url: "/apps/"+ appId +"/routes/"+ routeType +"/"+ routeId
 		});
 	},
 
@@ -209,6 +209,60 @@ Dashboard.Client = Marbles.Utils.createClass({
 				'Content-Type': 'application/json'
 			}
 		});
+	},
+
+	deployAppRelease: function (appId, releaseId) {
+		return this.performControllerRequest('POST', {
+			url: "/apps/"+ appId +"/deploy",
+			body: {id: releaseId},
+			headers: {
+				'Content-Type': 'application/json'
+			}
+		}).then(function (args) {
+			var res = args[0];
+			if (res.finished_at) {
+				return args;
+			}
+			return this.waitForDeployment(res.id).then(function () {
+				return args;
+			}, function (err) {
+				return Promise.reject([err]);
+			});
+		}.bind(this));
+	},
+
+	waitForDeployment: function (deploymentId) {
+		if ( !window.hasOwnProperty('EventSource') ) {
+			return Promise.reject('window.EventSource not defined');
+		}
+
+		var controllerKey = (Dashboard.config.user || {}).controller_key;
+		var url = this.endpoints.cluster_controller + "/deployments/"+ encodeURIComponent(deploymentId);
+		url = url + "?key="+ encodeURIComponent(controllerKey);
+		return new Promise(function (resolve, reject) {
+			var es = new window.EventSource(url, {withCredentials: true});
+
+			setTimeout(function () {
+				reject("Timed out waiting for deployment completion");
+				es.close();
+			}, 10000);
+
+			es.addEventListener("error", function (e) {
+				reject(e);
+				es.close();
+			});
+			es.addEventListener("complete", function () {
+				resolve();
+				es.close();
+			});
+			es.addEventListener("message", function (e) {
+				var data = JSON.parse(e.data);
+				if (data.status === "complete") {
+					resolve();
+					es.close();
+				}
+			});
+		}.bind(this));
 	},
 
 	createAppRelease: function (appId, data) {

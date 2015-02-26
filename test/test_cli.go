@@ -78,6 +78,12 @@ func (a *cliTestApp) sh(cmd string) *CmdResult {
 	return a.flynn("run", "sh", "-c", cmd)
 }
 
+func (s *CLISuite) TestCreateAppNoGit(t *c.C) {
+	dir := t.MkDir()
+	name := random.String(30)
+	t.Assert(flynn(t, dir, "create", name), Outputs, fmt.Sprintf("Created %s\n", name))
+}
+
 func testApp(s *CLISuite, t *c.C, remote string) {
 	app := s.newGitRepo(t, "")
 	name := random.String(30)
@@ -89,6 +95,7 @@ func testApp(s *CLISuite, t *c.C, remote string) {
 		t.Assert(app.flynn("create", "-r", remote, "-y", name), Outputs, fmt.Sprintf("Created %s\n", name))
 	}
 	t.Assert(app.flynn("apps"), OutputContains, name)
+	t.Assert(app.flynn("-c", "default", "apps"), OutputContains, name)
 	if remote == "" {
 		t.Assert(app.git("remote", "-v"), c.Not(OutputContains), flynnRemote)
 	} else {
@@ -97,6 +104,7 @@ func testApp(s *CLISuite, t *c.C, remote string) {
 
 	// make sure flynn components are listed
 	t.Assert(app.flynn("apps"), OutputContains, "router")
+	t.Assert(app.flynn("-c", "default", "apps"), OutputContains, "router")
 
 	// flynn delete
 	if remote == "flynn" {
@@ -483,14 +491,27 @@ func (s *CLISuite) TestCluster(t *c.C) {
 	// cluster add
 	t.Assert(flynn("cluster", "add", "-g", "test.example.com:2222", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "test", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
 	t.Assert(flynn("cluster"), OutputContains, "test")
+	t.Assert(flynn("cluster", "add", "-f", "-g", "test.example.com:2222", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "test", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
+	t.Assert(flynn("cluster"), OutputContains, "test")
+	t.Assert(flynn("cluster", "add", "-f", "-d", "-g", "test.example.com:2222", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "test", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
+	t.Assert(flynn("cluster"), OutputContains, "test")
 	// make sure the cluster is present in the config
 	cfg, err := config.ReadFile(file.Name())
 	t.Assert(err, c.IsNil)
+	t.Assert(cfg.Default, c.Equals, "test")
 	t.Assert(cfg.Clusters, c.HasLen, 1)
 	t.Assert(cfg.Clusters[0].Name, c.Equals, "test")
-	// overwriting should not work
+	// overwriting (without --force) should not work
 	t.Assert(flynn("cluster", "add", "test", "foo", "bar"), c.Not(Succeeds))
 	t.Assert(flynn("cluster"), OutputContains, "test")
+	t.Assert(flynn("cluster"), OutputContains, "(default)")
+	// change default cluster
+	t.Assert(flynn("cluster", "default", "test"), OutputContains, "\"test\" is now the default cluster.")
+	t.Assert(flynn("cluster", "default", "missing"), OutputContains, "Cluster \"missing\" not found.")
+	t.Assert(flynn("cluster", "default"), OutputContains, "test")
+	cfg, err = config.ReadFile(file.Name())
+	t.Assert(err, c.IsNil)
+	t.Assert(cfg.Default, c.Equals, "test")
 	// cluster remove
 	t.Assert(flynn("cluster", "remove", "test"), Succeeds)
 	t.Assert(flynn("cluster"), c.Not(OutputContains), "test")

@@ -7,15 +7,13 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
-	"github.com/flynn/flynn/pkg/attempt"
-	"github.com/flynn/flynn/pkg/stream"
 )
 
 type DeployerSuite struct {
 	Helper
 }
 
-var _ = c.Suite(&DeployerSuite{})
+var _ = c.ConcurrentSuite(&DeployerSuite{})
 
 func (s *DeployerSuite) createRelease(t *c.C, process, strategy string) (*ct.App, *ct.Release) {
 	app, release := s.createApp(t)
@@ -56,6 +54,9 @@ func (s *DeployerSuite) createDeployment(t *c.C, process, strategy, service stri
 					t.Fatalf("service discovery stream closed unexpectedly")
 				}
 				if event.Kind == discoverd.EventKindUp {
+					if id, ok := event.Instance.Meta["FLYNN_RELEASE_ID"]; !ok || id != release.ID {
+						continue
+					}
 					debugf(t, "got %s service up event", service)
 					count++
 				}
@@ -264,94 +265,6 @@ func (s *DeployerSuite) TestRollbackNoService(t *c.C) {
 	waitForDeploymentEvents(t, events, expected)
 
 	s.assertRolledBack(t, deployment, map[string]int{"printer": 2})
-}
-
-func (s *DeployerSuite) TestDeployController(t *c.C) {
-	if testCluster == nil {
-		t.Skip("cannot determine test cluster size")
-	}
-
-	// get the current controller release
-	client := s.controllerClient(t)
-	app, err := client.GetApp("controller")
-	t.Assert(err, c.IsNil)
-	release, err := client.GetAppRelease(app.ID)
-	t.Assert(err, c.IsNil)
-
-	// create a controller deployment
-	release.ID = ""
-	t.Assert(client.CreateRelease(release), c.IsNil)
-	deployment, err := client.CreateDeployment(app.ID, release.ID)
-	t.Assert(err, c.IsNil)
-
-	// use a function to create the event stream as a new stream will be needed
-	// after deploying the controller
-	var events chan *ct.DeploymentEvent
-	var eventStream stream.Stream
-	connectStream := func() {
-		events = make(chan *ct.DeploymentEvent)
-		err := attempt.Strategy{
-			Total: 10 * time.Second,
-			Delay: 500 * time.Millisecond,
-		}.Run(func() (err error) {
-			eventStream, err = client.StreamDeployment(deployment.ID, events)
-			return
-		})
-		t.Assert(err, c.IsNil)
-	}
-	connectStream()
-	defer eventStream.Close()
-
-	// wait for the deploy to complete (this doesn't wait for specific events
-	// due to the fact that when the deployer deploys itself, some events will
-	// not get sent)
-loop:
-	for {
-		select {
-		case e, ok := <-events:
-			if !ok {
-				// reconnect the stream as it may of been closed
-				// due to the controller being deployed
-				debug(t, "reconnecting deployment event stream")
-				connectStream()
-				continue
-			}
-			debugf(t, "got deployment event: %s %s", e.JobType, e.JobState)
-			switch e.Status {
-			case "complete":
-				break loop
-			case "failed":
-				t.Fatal("the deployment failed")
-			}
-		case <-time.After(20 * time.Second):
-			t.Fatal("timed out waiting for the deploy to complete")
-		}
-	}
-
-	// check the correct controller jobs are running
-	hosts, err := s.clusterClient(t).ListHosts()
-	t.Assert(err, c.IsNil)
-	actual := make(map[string]map[string]int)
-	for _, host := range hosts {
-		for _, job := range host.Jobs {
-			appID := job.Metadata["flynn-controller.app"]
-			if appID != app.ID {
-				continue
-			}
-			releaseID := job.Metadata["flynn-controller.release"]
-			if _, ok := actual[releaseID]; !ok {
-				actual[releaseID] = make(map[string]int)
-			}
-			typ := job.Metadata["flynn-controller.type"]
-			actual[releaseID][typ]++
-		}
-	}
-	expected := map[string]map[string]int{release.ID: {
-		"web":       1,
-		"deployer":  1,
-		"scheduler": testCluster.Size(),
-	}}
-	t.Assert(actual, c.DeepEquals, expected)
 }
 
 func (s *DeployerSuite) TestOmniProcess(t *c.C) {

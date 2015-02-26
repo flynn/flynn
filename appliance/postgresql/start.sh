@@ -3,10 +3,11 @@
 case $1 in
   postgres)
     chown -R postgres:postgres /data
+    chmod 0700 /data
     shift
     exec sudo \
       -u postgres \
-	  -E -H \
+      -E -H \
       /bin/flynn-postgres $*
     ;;
   api)

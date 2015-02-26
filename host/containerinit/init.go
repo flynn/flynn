@@ -413,14 +413,16 @@ func getCmdPath(c *Config) (string, error) {
 	return cmdPath, nil
 }
 
-func monitor(port host.Port, container *ContainerInit, env map[string]string) (discoverd.Heartbeater, error) {
+func monitor(port host.Port, container *ContainerInit, env map[string]string, log log15.Logger) (discoverd.Heartbeater, error) {
 	config := port.Service
 	client := discoverd.NewClientWithURL(env["DISCOVERD"])
 
 	if config.Create {
 		// TODO: maybe reuse maybeAddService() from the client
+		log.Info("creating service")
 		if err := client.AddService(config.Name, nil); err != nil {
 			if je, ok := err.(hh.JSONError); !ok || je.Code != hh.ObjectExistsError {
+				log.Error("error creating service", "err", err)
 				return nil, fmt.Errorf("something went wrong with discoverd: %s", err)
 			}
 		}
@@ -442,6 +444,7 @@ func monitor(port host.Port, container *ContainerInit, env map[string]string) (d
 
 	// no checker, but we still want to register a service
 	if config.Check == nil {
+		log.Info("registering instance", "instance", inst)
 		return client.RegisterInstance(config.Name, inst)
 	}
 
@@ -460,6 +463,7 @@ func monitor(port host.Port, container *ContainerInit, env map[string]string) (d
 		// unsupported checker type
 		return nil, fmt.Errorf("unsupported check type: %s", config.Check.Type)
 	}
+	log.Info("adding healthcheck", "type", config.Check.Type, "interval", config.Check.Interval, "threshold", config.Check.Threshold)
 	reg := health.Registration{
 		Registrar: client,
 		Service:   config.Name,
@@ -484,6 +488,7 @@ func monitor(port host.Port, container *ContainerInit, env map[string]string) (d
 
 			maybeKill := func() {
 				if lastStatus == health.MonitorStatusDown {
+					log.Warn("killing the job")
 					container.Signal(int(syscall.SIGKILL), &struct{}{})
 				}
 			}
@@ -497,6 +502,7 @@ func monitor(port host.Port, container *ContainerInit, env map[string]string) (d
 			}()
 
 			for e := range reg.Events {
+				log.Info("got health monitor event", "status", e.Status)
 				mtx.Lock()
 				lastStatus = e.Status
 				if !start {
@@ -661,10 +667,11 @@ func containerInitApp(c *Config, logFile *os.File) error {
 		if port.Service == nil {
 			continue
 		}
-		log.Info("monitoring service", "port", port)
-		hb, err := monitor(port, init, c.Env)
+		log = log.New("service", port.Service.Name, "port", port.Port, "proto", port.Proto)
+		log.Info("monitoring service")
+		hb, err := monitor(port, init, c.Env, log)
 		if err != nil {
-			log.Error("error monitoring service", "port", port, "err", err)
+			log.Error("error monitoring service", "err", err)
 			shutdown.Fatal(err)
 		}
 		hbs = append(hbs, hb)

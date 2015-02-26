@@ -109,6 +109,10 @@ func (a *RunAppAction) Run(s *State) error {
 		return err
 	}
 	for typ, count := range a.Processes {
+		if s.Singleton && count > 1 {
+			a.Processes[typ] = 1
+			count = 1
+		}
 		hosts, err := cc.ListHosts()
 		if err != nil {
 			return err

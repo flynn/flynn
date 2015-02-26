@@ -146,6 +146,8 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	t.Assert(err, c.IsNil)
 	release, err := s.controllerClient(t).GetAppRelease("controller")
 	t.Assert(err, c.IsNil)
+	formation, err := s.controllerClient(t).GetFormation(app.ID, release.ID)
+	t.Assert(err, c.IsNil)
 	list, err := s.controllerClient(t).JobList("controller")
 	t.Assert(err, c.IsNil)
 	var jobs []*ct.Job
@@ -154,7 +156,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 			jobs = append(jobs, job)
 		}
 	}
-	t.Assert(jobs, c.HasLen, 1)
+	t.Assert(jobs, c.HasLen, 2)
 	hostID, jobID, _ := cluster.ParseJobID(jobs[0].ID)
 	t.Assert(hostID, c.Not(c.Equals), "")
 	t.Assert(jobID, c.Not(c.Equals), "")
@@ -165,11 +167,8 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	stream, err := s.controllerClient(t).StreamJobEvents("controller", 0, events)
 	t.Assert(err, c.IsNil)
 	debug(t, "scaling the controller up")
-	t.Assert(s.controllerClient(t).PutFormation(&ct.Formation{
-		AppID:     app.ID,
-		ReleaseID: release.ID,
-		Processes: map[string]int{"web": 2, "scheduler": 1},
-	}), c.IsNil)
+	formation.Processes["web"]++
+	t.Assert(s.controllerClient(t).PutFormation(formation), c.IsNil)
 	lastID, _ := waitForJobEvents(t, stream, events, jobEvents{"web": {"up": 1}})
 	stream.Close()
 
@@ -184,10 +183,10 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 		if err != nil {
 			return err
 		}
-		if len(addrs) != 2 {
-			return fmt.Errorf("expected 2 controller processes, got %d", len(addrs))
+		if len(addrs) != 3 {
+			return fmt.Errorf("expected 3 controller processes, got %d", len(addrs))
 		}
-		addr := addrs[1]
+		addr := addrs[2]
 		debug(t, "new controller address: ", addr)
 		client, err = controller.NewClient("http://"+addr, s.clusterConf(t).Key)
 		if err != nil {
@@ -210,11 +209,8 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 
 	// scale back down
 	debug(t, "scaling the controller down")
-	t.Assert(s.controllerClient(t).PutFormation(&ct.Formation{
-		AppID:     app.ID,
-		ReleaseID: release.ID,
-		Processes: map[string]int{"web": 1, "scheduler": 1},
-	}), c.IsNil)
+	formation.Processes["web"]--
+	t.Assert(s.controllerClient(t).PutFormation(formation), c.IsNil)
 	waitForJobEvents(t, stream, events, jobEvents{"web": {"down": 1}})
 
 	// unset the suite's client so other tests use a new client
@@ -451,4 +447,92 @@ func (s *SchedulerSuite) TestTCPApp(t *c.C) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func (s *SchedulerSuite) TestDeployController(t *c.C) {
+	if testCluster == nil {
+		t.Skip("cannot determine test cluster size")
+	}
+
+	// get the current controller release
+	client := s.controllerClient(t)
+	app, err := client.GetApp("controller")
+	t.Assert(err, c.IsNil)
+	release, err := client.GetAppRelease(app.ID)
+	t.Assert(err, c.IsNil)
+
+	// create a controller deployment
+	release.ID = ""
+	t.Assert(client.CreateRelease(release), c.IsNil)
+	deployment, err := client.CreateDeployment(app.ID, release.ID)
+	t.Assert(err, c.IsNil)
+
+	// use a function to create the event stream as a new stream will be needed
+	// after deploying the controller
+	var events chan *ct.DeploymentEvent
+	var eventStream stream.Stream
+	connectStream := func() {
+		events = make(chan *ct.DeploymentEvent)
+		err := attempt.Strategy{
+			Total: 10 * time.Second,
+			Delay: 500 * time.Millisecond,
+		}.Run(func() (err error) {
+			eventStream, err = client.StreamDeployment(deployment.ID, events)
+			return
+		})
+		t.Assert(err, c.IsNil)
+	}
+	connectStream()
+	defer eventStream.Close()
+
+	// wait for the deploy to complete (this doesn't wait for specific events
+	// due to the fact that when the deployer deploys itself, some events will
+	// not get sent)
+loop:
+	for {
+		select {
+		case e, ok := <-events:
+			if !ok {
+				// reconnect the stream as it may of been closed
+				// due to the controller being deployed
+				debug(t, "reconnecting deployment event stream")
+				connectStream()
+				continue
+			}
+			debugf(t, "got deployment event: %s %s", e.JobType, e.JobState)
+			switch e.Status {
+			case "complete":
+				break loop
+			case "failed":
+				t.Fatal("the deployment failed")
+			}
+		case <-time.After(20 * time.Second):
+			t.Fatal("timed out waiting for the deploy to complete")
+		}
+	}
+
+	// check the correct controller jobs are running
+	hosts, err := s.clusterClient(t).ListHosts()
+	t.Assert(err, c.IsNil)
+	actual := make(map[string]map[string]int)
+	for _, host := range hosts {
+		for _, job := range host.Jobs {
+			appID := job.Metadata["flynn-controller.app"]
+			if appID != app.ID {
+				continue
+			}
+			releaseID := job.Metadata["flynn-controller.release"]
+			if _, ok := actual[releaseID]; !ok {
+				actual[releaseID] = make(map[string]int)
+			}
+			typ := job.Metadata["flynn-controller.type"]
+			actual[releaseID][typ]++
+		}
+	}
+	expected := map[string]map[string]int{release.ID: {
+		"web":       2,
+		"deployer":  2,
+		"scheduler": testCluster.Size(),
+	}}
+	t.Assert(actual, c.DeepEquals, expected)
 }

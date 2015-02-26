@@ -23,7 +23,7 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 		{ path: "apps/:id/logs", handler: "appLogs", secondary: true },
 		{ path: "apps/:id/delete", handler: "appDelete", secondary: true },
 		{ path: "apps/:id/routes/new", handler: "newAppRoute", secondary: true },
-		{ path: "apps/:id/routes/:route/delete", handler: "appRouteDelete", secondary: true },
+		{ path: "apps/:id/routes/:type/:route/delete", handler: "appRouteDelete", secondary: true },
 		{ path: "apps/:id/deploy/:owner/:repo/:branch/:sha", handler: "appDeployCommit", secondary: true }
 	],
 
@@ -211,6 +211,7 @@ Dashboard.routers.Apps = Marbles.Router.createClass({
 			{
 				appId: params.id,
 				routeId: params.route,
+				routeType: params.type,
 				domain: params.domain,
 				onHide: function () {
 					var path = this.__getAppPath(params.id, Marbles.QueryParams.replaceParams([Marbles.Utils.extend({}, params)], {route: null, domain:null})[0]);

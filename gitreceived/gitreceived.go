@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/tar"
 	"bytes"
 	"crypto/x509"
 	"encoding/pem"
@@ -11,6 +12,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,6 +22,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-shlex"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
+	"github.com/flynn/flynn/pkg/archiver"
 )
 
 const PrereceiveHookTmpl = `#!/bin/bash
@@ -31,6 +34,7 @@ done
 var prereceiveHook []byte
 
 var port = flag.String("p", "22", "port to listen on")
+var useBlobstore = flag.Bool("b", true, "use the blobstore for repo cache")
 var repoPath = flag.String("r", "/tmp/repos", "path to repo cache")
 var noAuth = flag.Bool("n", false, "disable client authentication")
 var keys = flag.String("k", "", "pem file containing private keys (read from SSH_PRIVATE_KEYS by default)")
@@ -197,13 +201,27 @@ func handleChannel(conn *ssh.ServerConn, newChan ssh.NewChannel) {
 				ch.Stderr().Write([]byte("Invalid repo.\n"))
 				return
 			}
-
-			if err := ensureCacheRepo(cmdargs[1]); err != nil {
+			tempDir := *repoPath
+			if *useBlobstore {
+				path, err := ioutil.TempDir("", "")
+				if err != nil {
+					fail("generateTempDir", err)
+					return
+				}
+				tempDir = path
+			}
+			if err := ensureCacheRepo(tempDir, cmdargs[1]); err != nil {
 				fail("ensureCacheRepo", err)
 				return
 			}
+			if *useBlobstore {
+				if err := restoreBlobstoreCache(tempDir, cmdargs[1]); err != nil {
+					fail("restoreBlobstoreCache", err)
+					return
+				}
+			}
 			cmd := exec.Command("git-shell", "-c", cmdargs[0]+" '"+cmdargs[1]+"'")
-			cmd.Dir = *repoPath
+			cmd.Dir = tempDir
 			cmd.Env = append(os.Environ(),
 				"RECEIVE_USER="+conn.User(),
 				"RECEIVE_REPO="+cmdargs[1],
@@ -223,8 +241,14 @@ func handleChannel(conn *ssh.ServerConn, newChan ssh.NewChannel) {
 				fail("exitStatus", err)
 				return
 			}
+			if *useBlobstore {
+				if err := uploadCache(tempDir, cmdargs[1]); err != nil {
+					fail("uploadCache", err)
+				}
+			}
 			if _, err := ch.SendRequest("exit-status", false, ssh.Marshal(&status)); err != nil {
 				fail("sendExit", err)
+				return
 			}
 			return
 		case "env":
@@ -302,11 +326,29 @@ func exitStatus(err error) (exitStatusMsg, error) {
 
 var cacheMtx sync.Mutex
 
-func ensureCacheRepo(path string) error {
+func restoreBlobstoreCache(tempDir, path string) error {
+	cachePath := tempDir + "/" + path
+
+	res, err := http.Get("http://blobstore.discoverd/cache/" + path + ".tar")
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode == 200 {
+		// cache hit
+		r := tar.NewReader(res.Body)
+		archiver.Untar(cachePath, r)
+	}
+	return nil
+}
+
+func ensureCacheRepo(tempDir, path string) error {
 	cacheMtx.Lock()
 	defer cacheMtx.Unlock()
 
-	cachePath := *repoPath + "/" + path
+	cachePath := tempDir + "/" + path
+
 	if _, err := os.Stat(cachePath); os.IsNotExist(err) {
 		os.MkdirAll(cachePath, 0755)
 		cmd := exec.Command("git", "init", "--bare")
@@ -315,6 +357,32 @@ func ensureCacheRepo(path string) error {
 		if err != nil {
 			return err
 		}
+		return ioutil.WriteFile(cachePath+"/hooks/pre-receive", prereceiveHook, 0755)
 	}
-	return ioutil.WriteFile(cachePath+"/hooks/pre-receive", prereceiveHook, 0755)
+	return nil
+}
+
+func uploadCache(tempDir, path string) error {
+	cachePath := tempDir + "/" + path
+
+	r, w := io.Pipe()
+	tw := tar.NewWriter(w)
+
+	errCh := make(chan error)
+	go func() {
+		err := archiver.Tar(cachePath, tw)
+		tw.Close()
+		w.Close()
+		errCh <- err
+	}()
+
+	// upload the tarball to the blobstore
+	req, err := http.NewRequest("PUT", "http://blobstore.discoverd/cache/"+path+".tar", r)
+	client := http.DefaultClient
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return <-errCh
 }

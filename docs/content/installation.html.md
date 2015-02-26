@@ -53,8 +53,8 @@ With a successful installation, you will have a single node Flynn cluster runnin
 and the final log line contains a `flynn cluster add` command. Paste that line from the console
 output into your terminal and execute it.
 
-Now you have Flynn installed and running, head over to the [Using Flynn](/docs/using-flynn) page for
-guides on deploying your applications to Flynn.
+Now you have Flynn installed and running, head over to the [Using Flynn](/docs)
+page for guides on deploying your applications to Flynn.
 
 ## Ubuntu 14.04 amd64
 
@@ -62,6 +62,10 @@ Before we get going with the installation, please note that if you plan on runni
 cluster, you should boot at least 3 nodes to keep etcd efficient
 (see [here](https://github.com/coreos/etcd/blob/v0.4.6/Documentation/optimal-cluster-size.md) for
 an explanation).
+
+*NOTE: If you are installing on Linode, you need to use native kernels (rather than
+Linode kernels) for AUFS support, see [this guide](https://www.linode.com/docs/tools-reference/custom-kernels-distros/run-a-distributionsupplied-kernel-with-pvgrub)
+for instructions on how to switch.*
 
 ### Installation
 
@@ -169,12 +173,13 @@ demo.localflynn.com.    A      192.168.84.44
 records, you can use [xip.io](http://xip.io) which provides wildcard DNS for
 any IP address.*
 
-Set `CLUSTER_DOMAIN` to the main domain name and start the bootstrap process:
+Set `CLUSTER_DOMAIN` to the main domain name and start the bootstrap process,
+specifying the number of hosts that are expected to be present.
 
 ```
 $ sudo \
     CLUSTER_DOMAIN=demo.localflynn.com \
-    flynn-host bootstrap /etc/flynn/bootstrap-manifest.json
+    flynn-host bootstrap --min-hosts=3 /etc/flynn/bootstrap-manifest.json
 ```
 
 *Note: You only need to run this on a single node in the cluster. It will
@@ -187,5 +192,5 @@ The Layer 1 bootstrapper will get all necessary services running using the Layer
 If you try these instructions and run into issues, please open an issue or pull
 request.
 
-Now you have Flynn installed and running, head over to the [Using Flynn](/docs/using-flynn)
+Now you have Flynn installed and running, head over to the [Using Flynn](/docs)
 page for guides on deploying your applications to Flynn.

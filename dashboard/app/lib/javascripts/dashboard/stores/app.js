@@ -210,19 +210,28 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 			return client.createRelease(release).then(function (args) {
 				var res = args[0];
 				var releaseId = res.id;
-				return client.createAppRelease(this.props.appId, {id: releaseId});
+				return client.deployAppRelease(this.props.appId, releaseId);
 			}.bind(this)).then(function () {
 				Dashboard.Dispatcher.handleStoreEvent({
 					name: "APP:RELEASE_CREATED",
 					appId: __appId
 				});
 			}.bind(this)).catch(function (args) {
-				var res = args[0];
-				var xhr = args[1];
+				var res, xhr, errorMsg;
+				if (args.length === 2) {
+					res = args[0];
+					xhr = args[1];
+					errorMsg = res.message || "Something went wrong ["+ xhr.status +"]";
+				} else {
+					errorMsg = "Someting went wrong";
+					if (typeof window.console.error === "function") {
+						window.console.error(args[0]);
+					}
+				}
 				Dashboard.Dispatcher.handleStoreEvent({
 					name: "APP:RELEASE_CREATE_FAILED",
 					appId: __appId,
-					errorMsg: res.message || "Something went wrong ["+ xhr.status +"]"
+					errorMsg: errorMsg
 				});
 			}.bind(this));
 		}.bind(this));

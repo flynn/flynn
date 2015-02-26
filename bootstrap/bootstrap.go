@@ -2,7 +2,9 @@ package bootstrap
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"time"
 
@@ -19,6 +21,7 @@ import (
 type State struct {
 	StepData  map[string]interface{}
 	Providers map[string]*ct.Provider
+	Singleton bool
 
 	clusterc    *cluster.Client
 	controllerc *controller.Client
@@ -95,6 +98,10 @@ func Run(manifest []byte, ch chan<- *StepInfo, minHosts int) (err error) {
 		}
 	}()
 
+	if minHosts == 2 {
+		return errors.New("the minimum number of hosts for a multi-node cluster is 3, min-hosts=2 is invalid")
+	}
+
 	// Make sure we are connected to discoverd first
 	discoverdAttempts.Run(func() error {
 		return discoverd.DefaultClient.Ping()
@@ -108,6 +115,10 @@ func Run(manifest []byte, ch chan<- *StepInfo, minHosts int) (err error) {
 	state := &State{
 		StepData:  make(map[string]interface{}),
 		Providers: make(map[string]*ct.Provider),
+		Singleton: minHosts == 1,
+	}
+	if s := os.Getenv("SINGLETON"); s != "" {
+		state.Singleton = s == "true"
 	}
 
 	a = StepAction{ID: "online-hosts", Action: "check"}
