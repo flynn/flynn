@@ -4,33 +4,56 @@ import (
 	"bufio"
 	"flag"
 	"net"
+	"net/http"
 	"os"
 	"sync"
 
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/logaggregator/ring"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 	"github.com/flynn/flynn/pkg/syslog/rfc6587"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kavu/go_reuseport"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 )
 
 func main() {
 	defer shutdown.Exit()
 
-	listenPort := os.Getenv("PORT")
-	if listenPort == "" {
-		listenPort = "5000"
+	apiPort := os.Getenv("PORT")
+	if apiPort == "" {
+		apiPort = "5000"
 	}
 
-	listenAddr := flag.String("listenaddr", ":"+listenPort, "syslog input listen address")
+	logAddr := flag.String("logaddr", ":3000", "syslog input listen address")
+	apiAddr := flag.String("apiaddr", ":"+apiPort, "api listen address")
+	flag.Parse()
 
-	a := NewAggregator(*listenAddr)
+	a := NewAggregator(*logAddr)
 	if err := a.Start(); err != nil {
 		shutdown.Fatal(err)
 	}
 	shutdown.BeforeExit(a.Shutdown)
-	select {}
+
+	listener, err := reuseport.NewReusablePortListener("tcp4", *apiAddr)
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+
+	services := map[string]string{
+		"flynn-logaggregator-api":    *apiAddr,
+		"flynn-logaggregator-syslog": *logAddr,
+	}
+	for service, addr := range services {
+		hb, err := discoverd.AddServiceAndRegister(service, addr)
+		if err != nil {
+			shutdown.Fatal(err)
+		}
+		shutdown.BeforeExit(func() { hb.Close() })
+	}
+
+	shutdown.Fatal(http.Serve(listener, apiHandler(a)))
 }
 
 // Aggregator is a log aggregation server that collects syslog messages.
@@ -53,7 +76,7 @@ type Aggregator struct {
 // NewAggregator creates a new unstarted Aggregator that will listen on addr.
 func NewAggregator(addr string) *Aggregator {
 	return &Aggregator{
-		Addr:         "127.0.0.1:0",
+		Addr:         addr,
 		buffers:      make(map[string]*ring.Buffer),
 		logc:         make(chan []byte),
 		numConsumers: 10,
@@ -101,10 +124,14 @@ func (a *Aggregator) Shutdown() {
 // ReadNLogs reads up to N logs from the log buffer with id. If n is 0, or if
 // there are fewer than n logs buffered, all buffered logs are returned.
 func (a *Aggregator) ReadLastN(id string, n int) []*rfc5424.Message {
-	if n == 0 {
-		return a.getBuffer(id).ReadAll()
+	buf := a.getBuffer(id)
+	if buf == nil {
+		return nil
 	}
-	return a.getBuffer(id).ReadLastN(n)
+	if n > 0 {
+		return buf.ReadLastN(n)
+	}
+	return buf.ReadAll()
 }
 
 func (a *Aggregator) accept() {
@@ -140,7 +167,7 @@ func (a *Aggregator) consumeLogs() {
 			log15.Error("rfc5424 parse error", "err", err)
 			continue
 		}
-		a.getBuffer(string(msg.AppName)).Add(msg)
+		a.getOrInitializeBuffer(string(msg.AppName)).Add(msg)
 
 		if afterMessage != nil {
 			afterMessage()
@@ -149,6 +176,14 @@ func (a *Aggregator) consumeLogs() {
 }
 
 func (a *Aggregator) getBuffer(id string) *ring.Buffer {
+	a.bmu.Lock()
+	defer a.bmu.Unlock()
+
+	buf, _ := a.buffers[id]
+	return buf
+}
+
+func (a *Aggregator) getOrInitializeBuffer(id string) *ring.Buffer {
 	a.bmu.Lock()
 	defer a.bmu.Unlock()
 
