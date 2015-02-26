@@ -91,8 +91,3 @@ func (a *AddAppAction) Run(s *State) error {
 
 	return nil
 }
-
-func (a *AddAppAction) Cleanup(s *State) error {
-	// TODO
-	return nil
-}

@@ -107,6 +107,11 @@ func (a *DeployAppAction) Run(s *State) error {
 		ReleaseID: a.Release.ID,
 		Processes: a.Processes,
 	}
+	for name, count := range formation.Processes {
+		if s.Singleton && count > 1 {
+			formation.Processes[name] = 1
+		}
+	}
 	if err := client.PutFormation(formation); err != nil {
 		return err
 	}

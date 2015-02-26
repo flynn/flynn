@@ -350,8 +350,8 @@ loop:
 		}
 	}
 	expected := map[string]map[string]int{release.ID: {
-		"web":       1,
-		"deployer":  1,
+		"web":       2,
+		"deployer":  2,
 		"scheduler": testCluster.Size(),
 	}}
 	t.Assert(actual, c.DeepEquals, expected)

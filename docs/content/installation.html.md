@@ -173,12 +173,13 @@ demo.localflynn.com.    A      192.168.84.44
 records, you can use [xip.io](http://xip.io) which provides wildcard DNS for
 any IP address.*
 
-Set `CLUSTER_DOMAIN` to the main domain name and start the bootstrap process:
+Set `CLUSTER_DOMAIN` to the main domain name and start the bootstrap process,
+specifying the number of hosts that are expected to be present.
 
 ```
 $ sudo \
     CLUSTER_DOMAIN=demo.localflynn.com \
-    flynn-host bootstrap /etc/flynn/bootstrap-manifest.json
+    flynn-host bootstrap --min-hosts=3 /etc/flynn/bootstrap-manifest.json
 ```
 
 *Note: You only need to run this on a single node in the cluster. It will
