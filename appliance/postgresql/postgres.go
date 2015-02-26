@@ -171,7 +171,7 @@ func (p *Postgres) Stop() error {
 	return p.stop()
 }
 
-func (p *Postgres) XLogPosition() (res xlog.Position, err error) {
+func (p *Postgres) XLogPosition() (xlog.Position, error) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
@@ -179,11 +179,13 @@ func (p *Postgres) XLogPosition() (res xlog.Position, err error) {
 		return "", errors.New("postgres is not running")
 	}
 
-	query := "SELECT pg_last_xlog_replay_location()"
+	fn := "pg_last_xlog_replay_location()"
 	if p.config.Role == state.RolePrimary {
-		query = "SELECT pg_current_xlog_location()"
+		fn = "pg_current_xlog_location()"
 	}
-	return res, p.db.QueryRow(query).Scan(&res)
+	var res string
+	err := p.db.QueryRow("SELECT " + fn).Scan(&res)
+	return xlog.Position(res), err
 }
 
 func (p *Postgres) Ready() <-chan state.PostgresEvent {

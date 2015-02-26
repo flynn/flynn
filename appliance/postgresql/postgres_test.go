@@ -8,6 +8,7 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/appliance/postgresql/state"
+	"github.com/flynn/flynn/appliance/postgresql/xlog"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/attempt"
 )
@@ -190,6 +191,13 @@ func (PostgresSuite) TestIntegration(c *C) {
 
 	// try to query primary until it comes up as read-write
 	waitReadWrite(c, node1Conn)
+
+	for _, n := range []state.Postgres{node1, node2} {
+		pos, err := n.XLogPosition()
+		c.Assert(err, IsNil)
+		c.Assert(pos, Not(Equals), "")
+		c.Assert(pos, Not(Equals), xlog.Zero)
+	}
 
 	// make sure the sync is listed as sync and remote_write is enabled
 	assertDownstream(c, node1Conn, 2)
