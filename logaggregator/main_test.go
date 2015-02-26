@@ -2,37 +2,45 @@ package main
 
 import (
 	"net"
+	"net/http/httptest"
 	"testing"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	"github.com/flynn/flynn/logaggregator/client"
 )
 
 // Hook gocheck up to the "go test" runner
 func Test(t *testing.T) { TestingT(t) }
 
 type LogAggregatorTestSuite struct {
-	a *Aggregator
+	agg    *Aggregator
+	api    *httptest.Server
+	client *client.Client
 }
 
 var _ = Suite(&LogAggregatorTestSuite{})
 
 func (s *LogAggregatorTestSuite) SetUpTest(c *C) {
-	s.a = NewAggregator("127.0.0.1:0")
-	err := s.a.Start()
+	s.agg = NewAggregator("127.0.0.1:0")
+	s.api = httptest.NewServer(apiHandler(s.agg))
+	err := s.agg.Start()
+	c.Assert(err, IsNil)
+	s.client, err = client.New(s.api.URL)
 	c.Assert(err, IsNil)
 }
 
 func (s *LogAggregatorTestSuite) TearDownTest(c *C) {
-	s.a.Shutdown()
+	s.api.Close()
+	s.agg.Shutdown()
 }
 
 func (s *LogAggregatorTestSuite) TestAggregatorListensOnAddr(c *C) {
-	ip, port, err := net.SplitHostPort(s.a.Addr)
+	ip, port, err := net.SplitHostPort(s.agg.Addr)
 	c.Assert(err, IsNil)
 	c.Assert(ip, Equals, "127.0.0.1")
 	c.Assert(port, Not(Equals), "0")
 
-	conn, err := net.Dial("tcp", s.a.Addr)
+	conn, err := net.Dial("tcp", s.agg.Addr)
 	c.Assert(err, IsNil)
 	defer conn.Close()
 }
@@ -43,15 +51,15 @@ const (
 )
 
 func (s *LogAggregatorTestSuite) TestAggregatorShutdown(c *C) {
-	conn, err := net.Dial("tcp", s.a.Addr)
+	conn, err := net.Dial("tcp", s.agg.Addr)
 	c.Assert(err, IsNil)
 	defer conn.Close()
 
 	conn.Write([]byte(sampleLogLine1))
-	s.a.Shutdown()
+	s.agg.Shutdown()
 
 	select {
-	case <-s.a.logc:
+	case <-s.agg.logc:
 	default:
 		c.Errorf("logc was not closed")
 	}
@@ -65,7 +73,7 @@ func (s *LogAggregatorTestSuite) TestAggregatorBuffersMessages(c *C) {
 	}
 	defer func() { afterMessage = nil }()
 
-	conn, err := net.Dial("tcp", s.a.Addr)
+	conn, err := net.Dial("tcp", s.agg.Addr)
 	c.Assert(err, IsNil)
 	defer conn.Close()
 
@@ -79,11 +87,11 @@ func (s *LogAggregatorTestSuite) TestAggregatorBuffersMessages(c *C) {
 		<-messageReceived // wait for messages to be received
 	}
 
-	msgs := s.a.ReadLastN("app", 0)
+	msgs := s.agg.ReadLastN("app", 0)
 	c.Assert(msgs, HasLen, 2)
 	c.Assert(string(msgs[0].ProcID), Equals, "web.1")
 	c.Assert(string(msgs[1].ProcID), Equals, "web.2")
-	s.a.Shutdown()
+	s.agg.Shutdown()
 }
 
 // TODO(bgentry): tests specifically for rfc6587Split()
