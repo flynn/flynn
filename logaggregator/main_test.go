@@ -57,12 +57,6 @@ func (s *LogAggregatorTestSuite) TestAggregatorShutdown(c *C) {
 
 	conn.Write([]byte(sampleLogLine1))
 	s.agg.Shutdown()
-
-	select {
-	case <-s.agg.logc:
-	default:
-		c.Errorf("logc was not closed")
-	}
 }
 
 func (s *LogAggregatorTestSuite) TestAggregatorBuffersMessages(c *C) {
