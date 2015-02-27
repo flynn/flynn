@@ -315,8 +315,8 @@ outer:
 			case "failed":
 				return e.Err()
 			}
-		case <-time.After(10 * time.Second):
-			return fmt.Errorf("Timed out waiting for deployment completion!")
+		case <-time.After(30 * time.Second):
+			return errors.New("timed out waiting for deployment completion")
 
 		}
 	}
