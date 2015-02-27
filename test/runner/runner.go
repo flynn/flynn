@@ -166,6 +166,7 @@ func (r *Runner) start() error {
 	router.ServeFiles("/assets/*filepath", http.Dir(args.AssetsDir))
 	router.GET("/cluster/:cluster", r.clusterAPI(r.getCluster))
 	router.POST("/cluster/:cluster", r.clusterAPI(r.addHost))
+	router.POST("/cluster/:cluster/release", r.clusterAPI(r.addReleaseHosts))
 	router.DELETE("/cluster/:cluster/:host", r.clusterAPI(r.removeHost))
 	router.GET("/cluster/:cluster/dump-logs", r.clusterAPI(r.dumpLogs))
 
@@ -278,7 +279,7 @@ func (r *Runner) build(b *Build) (err error) {
 		return fmt.Errorf("could not build flynn: %s", err)
 	}
 
-	if err := c.Boot(rootFS, 3, out, true); err != nil {
+	if _, err := c.Boot(3, out, true); err != nil {
 		return fmt.Errorf("could not boot cluster: %s", err)
 	}
 
@@ -631,6 +632,19 @@ func (r *Runner) addHost(c *cluster.Cluster, w http.ResponseWriter, q url.Values
 		return err
 	}
 	return json.NewEncoder(w).Encode(instance)
+}
+
+func (r *Runner) addReleaseHosts(c *cluster.Cluster, w http.ResponseWriter, q url.Values, ps httprouter.Params) error {
+	res, err := c.Boot(3, nil, true)
+	if err != nil {
+		return err
+	}
+	instance, err := c.AddVanillaHost(args.RootFS)
+	if err != nil {
+		return err
+	}
+	res.Instances = append(res.Instances, instance)
+	return json.NewEncoder(w).Encode(res)
 }
 
 func (r *Runner) removeHost(c *cluster.Cluster, w http.ResponseWriter, q url.Values, ps httprouter.Params) error {

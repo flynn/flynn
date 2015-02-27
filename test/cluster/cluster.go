@@ -146,12 +146,20 @@ func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool, runTests bool) (
 	if err := build.Shutdown(); err != nil {
 		return build.Drive("hda").FS, fmt.Errorf("error while stopping build instance: %s", err)
 	}
-	return build.Drive("hda").FS, nil
+	c.rootFS = build.Drive("hda").FS
+	return c.rootFS, nil
 }
 
-func (c *Cluster) Boot(rootFS string, count int, dumpLogs io.Writer, killOnFailure bool) (err error) {
+type BootResult struct {
+	ControllerDomain string
+	ControllerPin    string
+	ControllerKey    string
+	Instances        []*Instance
+}
+
+func (c *Cluster) Boot(count int, dumpLogs io.Writer, killOnFailure bool) (res *BootResult, err error) {
 	if err := c.setup(); err != nil {
-		return err
+		return nil, err
 	}
 
 	defer func() {
@@ -166,17 +174,22 @@ func (c *Cluster) Boot(rootFS string, count int, dumpLogs io.Writer, killOnFailu
 	}()
 
 	c.log("Booting", count, "VMs")
-	_, err = c.startVMs(rootFS, count, true, true)
+	var instances []*Instance
+	instances, err = c.startVMs(c.rootFS, count, true, true)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	c.log("Bootstrapping layer 1...")
-	if err := c.bootstrapLayer1(); err != nil {
-		return err
+	if err := c.bootstrapLayer1(instances); err != nil {
+		return nil, err
 	}
-	c.rootFS = rootFS
-	return nil
+	return &BootResult{
+		ControllerDomain: c.ControllerDomain(),
+		ControllerPin:    c.ControllerPin,
+		ControllerKey:    c.ControllerKey,
+		Instances:        instances,
+	}, nil
 }
 
 func (c *Cluster) BridgeIP() string {
@@ -286,8 +299,8 @@ func (c *Cluster) startVMs(rootFS string, count int, startFlynnHost, initial boo
 	if !startFlynnHost {
 		return instances, nil
 	}
-	peers := make([]string, 0, len(c.Instances))
-	for _, inst := range c.Instances {
+	peers := make([]string, 0, len(instances))
+	for _, inst := range instances {
 		if !inst.initial {
 			continue
 		}
@@ -487,8 +500,8 @@ type controllerCert struct {
 	Pin string `json:"pin"`
 }
 
-func (c *Cluster) bootstrapLayer1() error {
-	inst := c.Instances[0]
+func (c *Cluster) bootstrapLayer1(instances []*Instance) error {
+	inst := instances[0]
 	c.ClusterDomain = fmt.Sprintf("flynn-%s.local", random.String(16))
 	c.ControllerKey = random.String(16)
 	c.BackoffPeriod = 5 * time.Second
@@ -497,7 +510,7 @@ func (c *Cluster) bootstrapLayer1() error {
 	go func() {
 		command := fmt.Sprintf(
 			"DISCOVERD=%s:1111 CLUSTER_DOMAIN=%s CONTROLLER_KEY=%s BACKOFF_PERIOD=%fs flynn-host bootstrap --json --min-hosts=%d /etc/flynn-bootstrap.json",
-			inst.IP, c.ClusterDomain, c.ControllerKey, c.BackoffPeriod.Seconds(), len(c.Instances),
+			inst.IP, c.ClusterDomain, c.ControllerKey, c.BackoffPeriod.Seconds(), len(instances),
 		)
 		cmdErr = inst.Run(command, &Streams{Stdout: wr, Stderr: os.Stderr})
 		wr.Close()
