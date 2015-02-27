@@ -67,7 +67,7 @@ func (s *S) SetUpSuite(c *C) {
 	}
 
 	s.cc = tu.NewFakeCluster()
-	s.hc = handlerConfig{db: pg, cc: s.cc, sc: newFakeRouter(), pgxpool: pgxpool, key: authKey}
+	s.hc = handlerConfig{db: pg, cc: s.cc, rc: newFakeRouter(), pgxpool: pgxpool, key: authKey}
 	handler := appHandler(s.hc)
 	s.srv = httptest.NewServer(handler)
 	client, err := controller.NewClient(s.srv.URL, authKey)

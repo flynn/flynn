@@ -74,7 +74,7 @@ func main() {
 		shutdown.Fatal(err)
 	}
 
-	sc := routerc.New()
+	rc := routerc.New()
 
 	hb, err := discoverd.DefaultClient.AddServiceAndRegisterInstance("flynn-controller", &discoverd.Instance{
 		Addr:  addr,
@@ -91,14 +91,14 @@ func main() {
 		hb.Close()
 	})
 
-	handler := appHandler(handlerConfig{db: db, cc: cc, sc: sc, pgxpool: pgxpool, key: os.Getenv("AUTH_KEY")})
+	handler := appHandler(handlerConfig{db: db, cc: cc, rc: rc, pgxpool: pgxpool, key: os.Getenv("AUTH_KEY")})
 	shutdown.Fatal(http.ListenAndServe(addr, handler))
 }
 
 type handlerConfig struct {
 	db      *postgres.DB
 	cc      clusterClient
-	sc      routerc.Client
+	rc      routerc.Client
 	pgxpool *pgx.ConnPool
 	key     string
 }
@@ -135,7 +135,7 @@ func appHandler(c handlerConfig) http.Handler {
 	providerRepo := NewProviderRepo(c.db)
 	keyRepo := NewKeyRepo(c.db)
 	resourceRepo := NewResourceRepo(c.db)
-	appRepo := NewAppRepo(c.db, os.Getenv("DEFAULT_ROUTE_DOMAIN"), c.sc)
+	appRepo := NewAppRepo(c.db, os.Getenv("DEFAULT_ROUTE_DOMAIN"), c.rc)
 	artifactRepo := NewArtifactRepo(c.db)
 	releaseRepo := NewReleaseRepo(c.db)
 	jobRepo := NewJobRepo(c.db)
@@ -152,7 +152,7 @@ func appHandler(c handlerConfig) http.Handler {
 		resourceRepo:   resourceRepo,
 		deploymentRepo: deploymentRepo,
 		clusterClient:  c.cc,
-		routerc:        c.sc,
+		routerc:        c.rc,
 	}
 
 	httpRouter := httprouter.New()
