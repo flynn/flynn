@@ -67,6 +67,7 @@ func main() {
 		{"app_initial_release_get", e.getInitialAppRelease},
 		{"app_get", e.getApp},
 		{"app_list", e.listApps},
+		{"app_log", e.getAppLog},
 		{"app_update", e.updateApp},
 		{"app_resource_list", e.listAppResources},
 		{"route_create", e.createRoute},
@@ -207,6 +208,14 @@ func (e *generator) updateApp() {
 		},
 	}
 	e.client.UpdateApp(app)
+}
+
+func (e *generator) getAppLog() {
+	res, err := e.client.GetAppLogWithWait(e.resourceIds["app"], 0, false)
+	if err == nil {
+		defer res.Close()
+		io.Copy(ioutil.Discard, res)
+	}
 }
 
 func (e *generator) listAppResources() {
