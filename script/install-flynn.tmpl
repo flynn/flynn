@@ -2,7 +2,7 @@
 #
 # A script to install Flynn from a TUF repository.
 
-FLYNN_HOST_CHECKSUM="{{FLYNN-HOST-CHECKSUM}}"
+FLYNN_HOST_CHECKSUM="${FLYNN_HOST_CHECKSUM:="{{FLYNN-HOST-CHECKSUM}}"}"
 
 usage() {
   cat <<USAGE >&2
