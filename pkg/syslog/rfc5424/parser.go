@@ -137,6 +137,10 @@ func parseNextField(buf []byte, cursor *int) ([]byte, error) {
 	}
 	res := buf[*cursor:nextSpace]
 	*cursor = nextSpace + 1
+
+	if bytes.Equal(res, nilValue) {
+		return nil, nil
+	}
 	return res, nil
 }
 
@@ -145,11 +149,13 @@ func parseStructuredData(buf []byte, cursor *int, msg *Message) error {
 		return &ParseError{*cursor, "missing structured data field"}
 	}
 	if buf[*cursor] == '-' {
-		if len(buf) < *cursor+1 || buf[*cursor+1] != ' ' {
+		if len(buf) > *cursor+1 && buf[*cursor+1] != ' ' {
 			return &ParseError{*cursor, "invalid structured data"}
 		}
+		if len(buf) > *cursor+2 {
+			*cursor++
+		}
 		*cursor++
-		msg.StructuredData = nilValue
 		return nil
 	}
 	return &ParseError{*cursor, "structured data is unsupported"}
