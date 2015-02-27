@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"regexp"
+	"strconv"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
@@ -12,6 +14,7 @@ import (
 	"github.com/flynn/flynn/controller/name"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	logaggc "github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -245,4 +248,52 @@ func (c *controllerAPI) UpdateApp(ctx context.Context, rw http.ResponseWriter, r
 		return
 	}
 	httphelper.JSON(rw, 200, app)
+}
+
+func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	ctx, cancel := context.WithCancel(ctx)
+
+	// TODO(bgentry): support wait, filtering by fields like process type/ID.
+	// wait := req.FormValue("wait") == "true"
+
+	opts := logaggc.LogOpts{
+		Follow: req.FormValue("follow") == "true",
+	}
+
+	if strLines := req.FormValue("lines"); strLines != "" {
+		lines, err := strconv.Atoi(req.FormValue("lines"))
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		opts.Lines = &lines
+	}
+	rc, err := c.logaggc.GetLog(c.getApp(ctx).ID, &opts)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	if cn, ok := w.(http.CloseNotifier); ok {
+		go func() {
+			select {
+			case <-cn.CloseNotify():
+				rc.Close()
+			case <-ctx.Done():
+			}
+		}()
+	}
+	defer cancel()
+	defer rc.Close()
+
+	// TODO(bgentry): use SSE, distinguish between streams like JobLog.
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(200)
+	// Send headers right away if following
+	if wf, ok := w.(http.Flusher); ok && opts.Follow {
+		wf.Flush()
+	}
+
+	fw := httphelper.FlushWriter{Writer: w, Enabled: opts.Follow}
+	io.Copy(fw, rc)
 }
