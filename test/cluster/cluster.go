@@ -21,6 +21,13 @@ import (
 	"github.com/flynn/flynn/pkg/random"
 )
 
+type ClusterType uint8
+
+const (
+	ClusterTypeDefault ClusterType = iota
+	ClusterTypeRelease
+)
+
 type BootConfig struct {
 	User     string
 	Kernel   string
@@ -37,6 +44,9 @@ type Cluster struct {
 	ControllerPin string        `json:"controller_pin"`
 	ControllerKey string        `json:"controller_key"`
 	RouterIP      string        `json:"router_ip"`
+
+	defaultInstances []*Instance
+	releaseInstances []*Instance
 
 	discMtx sync.Mutex
 	disc    *discoverd.Client
@@ -146,12 +156,20 @@ func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool, runTests bool) (
 	if err := build.Shutdown(); err != nil {
 		return build.Drive("hda").FS, fmt.Errorf("error while stopping build instance: %s", err)
 	}
-	return build.Drive("hda").FS, nil
+	c.rootFS = build.Drive("hda").FS
+	return c.rootFS, nil
 }
 
-func (c *Cluster) Boot(rootFS string, count int, dumpLogs io.Writer, killOnFailure bool) (err error) {
+type BootResult struct {
+	ControllerDomain string
+	ControllerPin    string
+	ControllerKey    string
+	Instances        []*Instance
+}
+
+func (c *Cluster) Boot(typ ClusterType, count int, dumpLogs io.Writer, killOnFailure bool) (res *BootResult, err error) {
 	if err := c.setup(); err != nil {
-		return err
+		return nil, err
 	}
 
 	defer func() {
@@ -166,17 +184,34 @@ func (c *Cluster) Boot(rootFS string, count int, dumpLogs io.Writer, killOnFailu
 	}()
 
 	c.log("Booting", count, "VMs")
-	_, err = c.startVMs(rootFS, count, true, true)
+	instances, err := c.startVMs(c.rootFS, count, true)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	for _, inst := range instances {
+		if err := c.startFlynnHost(inst, instances); err != nil {
+			return nil, err
+		}
 	}
 
 	c.log("Bootstrapping layer 1...")
-	if err := c.bootstrapLayer1(); err != nil {
-		return err
+	if err := c.bootstrapLayer1(instances); err != nil {
+		return nil, err
 	}
-	c.rootFS = rootFS
-	return nil
+
+	switch typ {
+	case ClusterTypeDefault:
+		c.defaultInstances = append(c.defaultInstances, instances...)
+	case ClusterTypeRelease:
+		c.releaseInstances = append(c.releaseInstances, instances...)
+	}
+
+	return &BootResult{
+		ControllerDomain: c.ControllerDomain(),
+		ControllerPin:    c.ControllerPin,
+		ControllerKey:    c.ControllerKey,
+		Instances:        instances,
+	}, nil
 }
 
 func (c *Cluster) BridgeIP() string {
@@ -191,13 +226,21 @@ func (c *Cluster) AddHost() (*Instance, error) {
 		return nil, errors.New("cluster not yet booted")
 	}
 	c.log("Booting 1 VM")
-	instances, err := c.startVMs(c.rootFS, 1, true, false)
-	return instances[0], err
+	instances, err := c.startVMs(c.rootFS, 1, false)
+	if err != nil {
+		return nil, err
+	}
+	inst := instances[0]
+	if err := c.startFlynnHost(inst, c.defaultInstances); err != nil {
+		return nil, err
+	}
+	c.defaultInstances = append(c.defaultInstances, inst)
+	return inst, err
 }
 
 func (c *Cluster) AddVanillaHost(rootFS string) (*Instance, error) {
 	c.log("Booting 1 VM")
-	instances, err := c.startVMs(rootFS, 1, false, false)
+	instances, err := c.startVMs(rootFS, 1, false)
 	return instances[0], err
 }
 
@@ -250,12 +293,7 @@ func (c *Cluster) Size() int {
 	return len(c.Instances)
 }
 
-func (c *Cluster) startVMs(rootFS string, count int, startFlynnHost, initial bool) ([]*Instance, error) {
-	tmpl, ok := flynnHostScripts[c.bc.Backend]
-	if !ok {
-		return nil, fmt.Errorf("unknown host backend: %s", c.bc.Backend)
-	}
-
+func (c *Cluster) startVMs(rootFS string, count int, initial bool) ([]*Instance, error) {
 	uid, gid, err := lookupUser(c.bc.User)
 	if err != nil {
 		return nil, err
@@ -283,32 +321,31 @@ func (c *Cluster) startVMs(rootFS string, count int, startFlynnHost, initial boo
 		instances[i] = inst
 		c.Instances = append(c.Instances, inst)
 	}
-	if !startFlynnHost {
-		return instances, nil
+	return instances, nil
+}
+
+func (c *Cluster) startFlynnHost(inst *Instance, peerInstances []*Instance) error {
+	tmpl, ok := flynnHostScripts[c.bc.Backend]
+	if !ok {
+		return fmt.Errorf("unknown host backend: %s", c.bc.Backend)
 	}
-	peers := make([]string, 0, len(c.Instances))
-	for _, inst := range c.Instances {
+	peers := make([]string, 0, len(peerInstances))
+	for _, inst := range peerInstances {
 		if !inst.initial {
 			continue
 		}
 		peers = append(peers, fmt.Sprintf("%s=http://%s:2380", inst.ID, inst.IP))
 	}
-	for _, inst := range instances {
-		var script bytes.Buffer
-		data := hostScriptData{
-			ID:        inst.ID,
-			IP:        inst.IP,
-			Peers:     strings.Join(peers, ","),
-			EtcdProxy: !initial,
-		}
-		tmpl.Execute(&script, data)
-
-		c.logf("Starting flynn-host on %s [id: %s]\n", inst.IP, inst.ID)
-		if err := inst.Run("bash", &Streams{Stdin: &script, Stdout: c.out, Stderr: os.Stderr}); err != nil {
-			return nil, err
-		}
+	var script bytes.Buffer
+	data := hostScriptData{
+		ID:        inst.ID,
+		IP:        inst.IP,
+		Peers:     strings.Join(peers, ","),
+		EtcdProxy: !inst.initial,
 	}
-	return instances, nil
+	tmpl.Execute(&script, data)
+	c.logf("Starting flynn-host on %s [id: %s]\n", inst.IP, inst.ID)
+	return inst.Run("bash", &Streams{Stdin: &script, Stdout: c.out, Stderr: os.Stderr})
 }
 
 func (c *Cluster) setup() error {
@@ -487,8 +524,8 @@ type controllerCert struct {
 	Pin string `json:"pin"`
 }
 
-func (c *Cluster) bootstrapLayer1() error {
-	inst := c.Instances[0]
+func (c *Cluster) bootstrapLayer1(instances []*Instance) error {
+	inst := instances[0]
 	c.ClusterDomain = fmt.Sprintf("flynn-%s.local", random.String(16))
 	c.ControllerKey = random.String(16)
 	c.BackoffPeriod = 5 * time.Second
@@ -497,7 +534,7 @@ func (c *Cluster) bootstrapLayer1() error {
 	go func() {
 		command := fmt.Sprintf(
 			"DISCOVERD=%s:1111 CLUSTER_DOMAIN=%s CONTROLLER_KEY=%s BACKOFF_PERIOD=%fs flynn-host bootstrap --json --min-hosts=%d /etc/flynn-bootstrap.json",
-			inst.IP, c.ClusterDomain, c.ControllerKey, c.BackoffPeriod.Seconds(), len(c.Instances),
+			inst.IP, c.ClusterDomain, c.ControllerKey, c.BackoffPeriod.Seconds(), len(instances),
 		)
 		cmdErr = inst.Run(command, &Streams{Stdout: wr, Stderr: os.Stderr})
 		wr.Close()
