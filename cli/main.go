@@ -165,7 +165,7 @@ func runCommand(name string, args []string) (err error) {
 			if err != nil {
 				log.Fatalln("error decoding tls pin:", err)
 			}
-			client, err = controller.NewClientWithPin(cluster.URL, cluster.Key, pin)
+			client, err = controller.NewClientWithConfig(cluster.URL, cluster.Key, controller.Config{Pin: pin})
 		} else {
 			client, err = controller.NewClient(cluster.URL, cluster.Key)
 		}

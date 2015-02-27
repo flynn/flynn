@@ -2,6 +2,7 @@
 package controller
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -19,6 +20,11 @@ import (
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/router/types"
 )
+
+type Config struct {
+	Pin    []byte
+	Domain string
+}
 
 // Client is a client for the controller API.
 type Client struct {
@@ -59,8 +65,11 @@ func NewClientWithHTTP(uri, key string, httpClient *http.Client) (*Client, error
 	return newClient(key, u.String(), httpClient), nil
 }
 
-// NewClientWithPin acts like NewClient, but specifies a TLS pin.
-func NewClientWithPin(uri, key string, pin []byte) (*Client, error) {
+// NewClientWithConfig acts like NewClient, but supports custom configuration.
+func NewClientWithConfig(uri, key string, config Config) (*Client, error) {
+	if config.Pin == nil {
+		return NewClient(uri, key)
+	}
 	u, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
@@ -69,9 +78,13 @@ func NewClientWithPin(uri, key string, pin []byte) (*Client, error) {
 		u.Host += ":443"
 	}
 	u.Scheme = "http"
-	d := &pinned.Config{Pin: pin}
+	d := &pinned.Config{Pin: config.Pin}
+	if config.Domain != "" {
+		d.Config = &tls.Config{ServerName: config.Domain}
+	}
 	httpClient := &http.Client{Transport: &http.Transport{Dial: d.Dial}}
 	c := newClient(key, u.String(), httpClient)
+	c.Host = config.Domain
 	c.HijackDial = d.Dial
 	return c, nil
 }
