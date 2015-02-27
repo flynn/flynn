@@ -61,13 +61,10 @@ type Aggregator struct {
 	// Addr is the address (host:port) to listen on for incoming syslog messages.
 	Addr string
 
-	bmu          sync.Mutex // protects buffers
-	buffers      map[string]*ring.Buffer
-	listener     net.Listener
-	logc         chan []byte
-	numConsumers int
-	consumerwg   sync.WaitGroup
-	producerwg   sync.WaitGroup
+	bmu        sync.Mutex // protects buffers
+	buffers    map[string]*ring.Buffer
+	listener   net.Listener
+	producerwg sync.WaitGroup
 
 	once     sync.Once // protects the following:
 	shutdown chan struct{}
@@ -76,11 +73,9 @@ type Aggregator struct {
 // NewAggregator creates a new unstarted Aggregator that will listen on addr.
 func NewAggregator(addr string) *Aggregator {
 	return &Aggregator{
-		Addr:         addr,
-		buffers:      make(map[string]*ring.Buffer),
-		logc:         make(chan []byte),
-		numConsumers: 10,
-		shutdown:     make(chan struct{}),
+		Addr:     addr,
+		buffers:  make(map[string]*ring.Buffer),
+		shutdown: make(chan struct{}),
 	}
 }
 
@@ -92,14 +87,6 @@ func (a *Aggregator) Start() error {
 		return err
 	}
 	a.Addr = a.listener.Addr().String()
-
-	for i := 0; i < a.numConsumers; i++ {
-		a.consumerwg.Add(1)
-		go func() {
-			defer a.consumerwg.Done()
-			a.consumeLogs()
-		}()
-	}
 
 	a.producerwg.Add(1)
 	go func() {
@@ -116,8 +103,6 @@ func (a *Aggregator) Shutdown() {
 		close(a.shutdown)
 		a.listener.Close()
 		a.producerwg.Wait()
-		close(a.logc)
-		a.consumerwg.Wait()
 	})
 }
 
@@ -156,25 +141,6 @@ func (a *Aggregator) accept() {
 	}
 }
 
-// testing hook:
-var afterMessage func()
-
-func (a *Aggregator) consumeLogs() {
-	for line := range a.logc {
-		// TODO: forward message to follower aggregator
-		msg, err := rfc5424.Parse(line)
-		if err != nil {
-			log15.Error("rfc5424 parse error", "err", err)
-			continue
-		}
-		a.getOrInitializeBuffer(string(msg.AppName)).Add(msg)
-
-		if afterMessage != nil {
-			afterMessage()
-		}
-	}
-}
-
 func (a *Aggregator) getBuffer(id string) *ring.Buffer {
 	a.bmu.Lock()
 	defer a.bmu.Unlock()
@@ -195,6 +161,9 @@ func (a *Aggregator) getOrInitializeBuffer(id string) *ring.Buffer {
 	return buf
 }
 
+// testing hook:
+var afterMessage func()
+
 func (a *Aggregator) readLogsFromConn(conn net.Conn) {
 	defer conn.Close()
 
@@ -212,10 +181,20 @@ func (a *Aggregator) readLogsFromConn(conn net.Conn) {
 	s := bufio.NewScanner(conn)
 	s.Split(rfc6587.Split)
 	for s.Scan() {
-		msg := s.Bytes()
-		// slice in msg could get modified on next Scan(), need to copy it
-		msgCopy := make([]byte, len(msg))
-		copy(msgCopy, msg)
-		a.logc <- msgCopy
+		msgBytes := s.Bytes()
+		// slice in msgBytes could get modified on next Scan(), need to copy it
+		msgCopy := make([]byte, len(msgBytes))
+		copy(msgCopy, msgBytes)
+
+		msg, err := rfc5424.Parse(msgCopy)
+		if err != nil {
+			log15.Error("rfc5424 parse error", "err", err)
+			continue
+		}
+
+		a.getOrInitializeBuffer(string(msg.AppName)).Add(msg)
+		if afterMessage != nil {
+			afterMessage()
+		}
 	}
 }

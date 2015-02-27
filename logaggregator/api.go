@@ -48,7 +48,6 @@ func (a *aggregatorAPI) GetLog(ctx context.Context, w http.ResponseWriter, req *
 		}
 	}
 
-	// TODO(bgentry): sort here, or sort w/ heap in buffer...
 	w.WriteHeader(200)
 	messages := a.agg.ReadLastN(channelID, lines)
 	enc := json.NewEncoder(w)
