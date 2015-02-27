@@ -59,23 +59,23 @@ func (c *Client) RegisterInstance(service string, inst *Instance) (Heartbeater, 
 		inst.Proto = "tcp"
 	}
 	inst.ID = inst.id()
-	h := &heartbeater{
-		c:       c,
-		service: service,
-		stop:    make(chan struct{}),
-		done:    make(chan struct{}),
-		inst:    inst.Clone(),
-	}
 	// add EnvInstanceMeta if present
 	for _, env := range os.Environ() {
 		kv := strings.SplitN(env, "=", 2)
 		if _, ok := EnvInstanceMeta[kv[0]]; !ok {
 			continue
 		}
-		if h.inst.Meta == nil {
-			h.inst.Meta = make(map[string]string)
+		if inst.Meta == nil {
+			inst.Meta = make(map[string]string)
 		}
-		h.inst.Meta[kv[0]] = kv[1]
+		inst.Meta[kv[0]] = kv[1]
+	}
+	h := &heartbeater{
+		c:       c,
+		service: service,
+		stop:    make(chan struct{}),
+		done:    make(chan struct{}),
+		inst:    inst.Clone(),
 	}
 	firstErr := make(chan error)
 	go h.run(firstErr)
