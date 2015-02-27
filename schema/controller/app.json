@@ -10,7 +10,8 @@
     "schema/examples/controller/app_get#",
     "schema/examples/controller/app_list#",
     "schema/examples/controller/app_update#",
-    "schema/examples/controller/app_delete#"
+    "schema/examples/controller/app_delete#",
+    "schema/examples/controller/app_log#"
   ],
   "additionalProperties": false,
   "properties": {

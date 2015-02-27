@@ -64,6 +64,22 @@
 			"body": "{\"id\":\"7406a4d71a0c43d3ac4b39f006cb0342\",\"name\":\"my-app-1422557606845347930\",\"protected\":false,\"strategy\":\"all-at-once\",\"created_at\":\"2015-01-29T18:53:26.845896Z\",\"updated_at\":\"2015-01-29T18:53:26.845896Z\"}"
 		}
 	},
+	"app_log": {
+		"request": {
+			"method": "GET",
+			"url": "/apps/7406a4d71a0c43d3ac4b39f006cb0342/log?wait=true",
+			"headers": {
+				"Authorization": "Basic OnMzY3IzdA==",
+				"Content-Type": "application/json"
+			}
+		},
+		"response": {
+			"headers": {
+				"Content-Type": "text/plain"
+			},
+			"body": "{\"hostname\":\"my.flynn.local\",\"job_id\":\"flynn-cef74685c83b47889c69fa95451e75b3\",\"msg\":\"a log message\",\"process_type\":\"web\",\"source\":\"app\",\"stream\":\"stderr\",\"timestamp\":\"2009-11-10T23:00:00.123450Z\"}"
+		}
+	},
 	"app_initial_release_get": {
 		"request": {
 			"method": "GET",
