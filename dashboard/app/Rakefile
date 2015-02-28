@@ -1,8 +1,13 @@
 require 'bundler/setup'
 
+lib = File.expand_path('../lib', __FILE__)
+$LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
+
 require './config'
 require 'static-sprockets/tasks/assets'
 require 'static-sprockets/tasks/layout'
+require 'dashboard/installer_import'
+require 'fileutils'
 
 namespace :assets do
   task :clean do

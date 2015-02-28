@@ -1,0 +1,7 @@
+source 'https://rubygems.org'
+
+gem 'sprockets', :git => 'https://github.com/sstephenson/sprockets.git', :tag => 'v3.0.0.beta.8'
+gem 'es6-module-mapper', :git => 'https://github.com/jvatic/es6-module-mapper.git', :branch => 'master'
+gem 'react-jsx-sprockets', :git => 'https://github.com/jvatic/react-jsx-sprockets', :branch => 'master'
+gem 'marbles-js', :git => 'https://github.com/jvatic/marbles-js.git', :branch => 'es6-modules'
+gem 'rake'

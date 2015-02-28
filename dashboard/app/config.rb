@@ -3,10 +3,12 @@ require 'react-jsx-sprockets'
 require 'marbles-js'
 require 'flynn-dashboard-web-icons'
 require 'yajl'
+require 'dashboard/installer_import'
 
 StaticSprockets.sprockets_config do |environment|
   MarblesJS::Sprockets.setup(environment)
   FlynnDashboardWebIcons::Sprockets.setup(environment)
+  environment.append_path(File.join(Dashboard::InstallerImport::BASE_PATH, 'images'))
 end
 
 StaticSprockets.configure(
