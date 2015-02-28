@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/aws"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
@@ -13,9 +12,6 @@ import (
 )
 
 func init() {
-	validInstanceTypes := strings.Join(installer.ValidEC2InstanceTypes, ", ")
-	defaultInstanceType := installer.ValidEC2InstanceTypes[0]
-
 	register("install", runInstaller, fmt.Sprintf(`
 usage: flynn install <target> [-n <instances>] [-t <instance-type>] [--aws-access-key-id <key-id>] [--aws-secret-access-key <secret>] [--aws-region <region>]
 
@@ -24,7 +20,7 @@ Targets:
 
 Options:
   -n, --instances <instances>            Number of instances to launch [default: 1]
-  -t, --type <instance-type>             Type of instances to launch (%s) [default: %s]
+  -t, --type <instance-type>             Type of instances to launch [default: %s]
       --aws-access-key-id <key-id>       AWS access key ID. Defaults to $AWS_ACCESS_KEY_ID
       --aws-secret-access-key <secret>   AWS access key secret. Defaults to $AWS_SECRET_ACCESS_KEY
       --aws-region <region>              AWS region [default: us-east-1]
@@ -32,7 +28,7 @@ Options:
 Examples:
 
 	$ flynn install aws --aws-access-key-id=asdf --aws-secret-access-key=fdsa
-`, validInstanceTypes, defaultInstanceType))
+`, installer.DefaultInstanceType))
 }
 
 func runInstaller(args *docopt.Args) error {
