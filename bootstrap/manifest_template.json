@@ -23,6 +23,7 @@
           "ports": [{"port": 5432, "proto": "tcp"}],
           "data": true,
           "cmd": ["postgres"],
+          "service": "postgres",
           "env": {
             "SINGLETON": "{{ .Singleton }}"
           },
@@ -133,7 +134,8 @@
     "from_step": "postgres",
     "app": {
       "name": "postgres",
-      "meta": {"flynn-system-app": "true"}
+      "meta": {"flynn-system-app": "true"},
+      "strategy": "postgres"
     }
   },
   {
