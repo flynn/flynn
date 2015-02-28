@@ -32,7 +32,8 @@ type Event struct {
 	Description string
 }
 
-var ValidEC2InstanceTypes = []string{"m3.medium", "i2.2xlarge", "m3.xlarge", "m3.2xlarge"}
+var DisallowedEC2InstanceTypes = []string{"t1.micro", "t2.micro", "t2.small", "m1.small"}
+var DefaultInstanceType = "m3.medium"
 
 type Stack struct {
 	Region       string                  `json:"region,omitempty"`
@@ -74,7 +75,7 @@ func (s *Stack) setDefaults() {
 	}
 
 	if s.InstanceType == "" {
-		s.InstanceType = ValidEC2InstanceTypes[0]
+		s.InstanceType = DefaultInstanceType
 	}
 }
 
@@ -95,16 +96,12 @@ func (s *Stack) validateInputs() error {
 		return fmt.Errorf("You must specify 1 or 3+ instances, not 2")
 	}
 
-	if err := func() error {
-		for _, t := range ValidEC2InstanceTypes {
-			if s.InstanceType == t {
-				return nil
-			}
+	for _, t := range DisallowedEC2InstanceTypes {
+		if s.InstanceType == t {
+			return fmt.Errorf("Unsupported instance type %s", s.InstanceType)
 		}
-		return fmt.Errorf("Invalid instance type")
-	}(); err != nil {
-		return err
 	}
+
 	return nil
 }
 
@@ -329,9 +326,8 @@ func (s *Stack) createKeyPair() error {
 }
 
 type stackTemplateData struct {
-	Instances              []struct{}
-	ValidInstanceTypesJSON string
-	DefaultInstanceType    string
+	Instances           []struct{}
+	DefaultInstanceType string
 }
 
 func (s *Stack) createStack() error {
@@ -343,15 +339,10 @@ func (s *Stack) createStack() error {
 	s.DiscoveryToken = discoveryToken
 	s.persist()
 
-	validInstanceTypesBytes, err := json.Marshal(ValidEC2InstanceTypes)
-	if err != nil {
-		return err
-	}
 	var stackTemplateBuffer bytes.Buffer
 	err = stackTemplate.Execute(&stackTemplateBuffer, &stackTemplateData{
-		Instances:              make([]struct{}, s.NumInstances),
-		ValidInstanceTypesJSON: string(validInstanceTypesBytes),
-		DefaultInstanceType:    ValidEC2InstanceTypes[0],
+		Instances:           make([]struct{}, s.NumInstances),
+		DefaultInstanceType: DefaultInstanceType,
 	})
 	if err != nil {
 		return err

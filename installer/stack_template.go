@@ -21,7 +21,6 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
     },
     "InstanceType": {
       "Type": "String",
-      "AllowedValues": {{.ValidInstanceTypesJSON}},
       "ConstraintDescription": "Must be a valid EC2 instance type.",
       "Default": "{{.DefaultInstanceType}}",
       "Description": "EC2 instance type"
