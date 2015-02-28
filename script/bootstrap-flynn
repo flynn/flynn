@@ -14,14 +14,16 @@ OPTIONS:
   -b BACKEND    The job backend to use [default: `libvirt-lxc`]
   -d DOMAIN     The default domain to use [default: `dev.localflynn.com`]
   -i IP         The external IP address to bind to [default: the IP assigned to `eth0`]
+  -z            Don't destroy volumes
 USAGE
 }
 
 main() {
   local backend ip
   local domain="${CLUSTER_DOMAIN}"
+  local destroy_vols=true
 
-  while getopts 'hb:d:i:' opt; do
+  while getopts 'hb:d:i:z' opt; do
     case $opt in
       h)
         usage
@@ -30,6 +32,7 @@ main() {
       b) backend=${OPTARG} ;;
       d) domain=${OPTARG} ;;
       i) ip=${OPTARG} ;;
+      z) destroy_vols=false ;;
       ?)
         usage
         exit 1
@@ -54,6 +57,10 @@ main() {
 
   # kill flynn first
   "${ROOT}/script/kill-flynn" -b "${backend}"
+
+  if $destroy_vols; then
+    sudo "${ROOT}/host/bin/flynn-host" destroy-volumes --include-data
+  fi
 
   case "${backend}" in
     libvirt-lxc)
