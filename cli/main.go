@@ -40,6 +40,7 @@ Options:
 
 Commands:
 	help      show usage for a specific command
+	install   install flynn
 	cluster   manage clusters
 	create    create an app
 	delete    delete an app

@@ -40,7 +40,11 @@ type ServiceFunc func(name string) discoverd.Service
 // leader and return a Client. If services is nil, the default discoverd
 // client is used.
 func NewClientWithServices(services ServiceFunc) (*Client, error) {
-	client, err := newClient(services)
+	return NewClientWithHTTP(services, http.DefaultClient)
+}
+
+func NewClientWithHTTP(services ServiceFunc, hc *http.Client) (*Client, error) {
+	client, err := newClient(services, hc)
 	if err != nil {
 		return nil, err
 	}
@@ -50,14 +54,14 @@ func NewClientWithServices(services ServiceFunc) (*Client, error) {
 // ErrNotFound is returned when a resource is not found (HTTP status 404).
 var ErrNotFound = errors.New("cluster: resource not found")
 
-func newClient(services ServiceFunc) (*Client, error) {
+func newClient(services ServiceFunc, hc *http.Client) (*Client, error) {
 	if services == nil {
 		services = discoverd.NewService
 	}
 	s := services("flynn-host")
 	c := &httpclient.Client{
 		ErrNotFound: ErrNotFound,
-		HTTP:        http.DefaultClient,
+		HTTP:        hc,
 	}
 	return &Client{service: s, c: c, leaderChange: make(chan struct{})}, nil
 }

@@ -30,6 +30,26 @@
 			"Rev": "b9951d11774a62fbdfb340eeff70c1935d8e531e"
 		},
 		{
+			"ImportPath": "github.com/awslabs/aws-sdk-go/aws",
+			"Rev": "836c0f777155cb5570c6b8a4799cf64dc578e95f"
+		},
+		{
+			"ImportPath": "github.com/awslabs/aws-sdk-go/gen/cloudformation",
+			"Rev": "836c0f777155cb5570c6b8a4799cf64dc578e95f"
+		},
+		{
+			"ImportPath": "github.com/awslabs/aws-sdk-go/gen/ec2",
+			"Rev": "836c0f777155cb5570c6b8a4799cf64dc578e95f"
+		},
+		{
+			"ImportPath": "github.com/awslabs/aws-sdk-go/gen/endpoints",
+			"Rev": "836c0f777155cb5570c6b8a4799cf64dc578e95f"
+		},
+		{
+			"ImportPath": "github.com/awslabs/aws-sdk-go/gen/route53",
+			"Rev": "836c0f777155cb5570c6b8a4799cf64dc578e95f"
+		},
+		{
 			"ImportPath": "github.com/badgerodon/ioutil",
 			"Rev": "c3e849398f0ed2429b43c31edcc7f14174453237"
 		},
@@ -425,6 +445,10 @@
 		{
 			"ImportPath": "github.com/tent/canonical-json-go",
 			"Rev": "96e4ba3a7613a1216cbd1badca4efe382adea337"
+		},
+		{
+			"ImportPath": "github.com/vaughan0/go-ini",
+			"Rev": "a98ad7ee00ec53921f08832bc06ecf7fd600e6a1"
 		},
 		{
 			"ImportPath": "github.com/wadey/cryptorand",

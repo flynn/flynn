@@ -51,6 +51,18 @@ func NewClientWithURL(url string) *Client {
 	}
 }
 
+func NewClientWithHTTP(url string, hc *http.Client) *Client {
+	if url == "" {
+		url = "http://127.0.0.1:1111"
+	}
+	return &Client{
+		c: &httpclient.Client{
+			URL:  url,
+			HTTP: hc,
+		},
+	}
+}
+
 func (c *Client) Ping() error {
 	return c.c.Get("/ping", nil)
 }

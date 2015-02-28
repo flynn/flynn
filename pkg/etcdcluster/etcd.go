@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"path"
 	"strings"
@@ -95,4 +96,17 @@ func Discover(url string) ([]Member, error) {
 	}
 
 	return members, nil
+}
+
+func NewDiscoveryToken(size string) (string, error) {
+	res, err := http.Get("https://discovery.etcd.io/new?size=" + size)
+	if err != nil {
+		return "", err
+	}
+	if res.StatusCode != 200 {
+		return "", fmt.Errorf("error creating discovery token, got status %d", res.StatusCode)
+	}
+	defer res.Body.Close()
+	url, err := ioutil.ReadAll(res.Body)
+	return string(url), err
 }

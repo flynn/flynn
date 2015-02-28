@@ -5,9 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
-	"net/http"
 	"net/url"
 	"sort"
 	"strings"
@@ -36,7 +34,7 @@ func runInit(args *docopt.Args) error {
 	discoveryToken := args.String["--discovery"]
 	if n, ok := args.String["--init-discovery"]; ok {
 		var err error
-		discoveryToken, err = newDiscoveryToken(n)
+		discoveryToken, err = etcdcluster.NewDiscoveryToken(n)
 		if err != nil {
 			return err
 		}
@@ -140,19 +138,6 @@ func runInit(args *docopt.Args) error {
 	}
 
 	return c.WriteTo(args.String["--file"])
-}
-
-func newDiscoveryToken(size string) (string, error) {
-	res, err := http.Get("https://discovery.etcd.io/new?size=" + size)
-	if err != nil {
-		return "", err
-	}
-	if res.StatusCode != 200 {
-		return "", fmt.Errorf("error creating discovery token, got status %d", res.StatusCode)
-	}
-	defer res.Body.Close()
-	url, err := ioutil.ReadAll(res.Body)
-	return string(url), err
 }
 
 func peerName(ip string) string {
