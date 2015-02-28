@@ -81,6 +81,7 @@ func runInstaller(args *docopt.Args) error {
 	}
 
 	exitCode := 0
+outer:
 	for {
 		select {
 		case event := <-stack.EventChan:
@@ -89,9 +90,27 @@ func runInstaller(args *docopt.Args) error {
 			fmt.Printf("Oops, something went wrong: %s\n", err.Error())
 			exitCode = 1
 		case <-stack.Done:
-			os.Exit(exitCode)
+			if exitCode != 0 {
+				os.Exit(exitCode)
+			}
+			break outer
 		}
 	}
+
+	if err := readConfig(); err != nil {
+		return err
+	}
+	if err := config.Add(stack.ClusterConfig(), true); err != nil {
+		return err
+	}
+	config.SetDefault(stack.StackName)
+	if err := config.SaveTo(configPath()); err != nil {
+		return err
+	}
+
+	msg, _ := stack.DashboardLoginMsg()
+	fmt.Printf("\n\nThe cluster has been successfully deployed to AWS and configured locally.\n\n%s\n\n", msg)
+
 	return nil
 }
 
