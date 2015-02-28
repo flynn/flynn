@@ -22,6 +22,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/gen/ec2"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/gen/route53"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
+	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/pkg/etcdcluster"
 	"github.com/flynn/flynn/pkg/sshkeygen"
 	release "github.com/flynn/flynn/util/release"
@@ -114,6 +115,16 @@ func (s *Stack) ClusterAddCmd() (string, error) {
 	return fmt.Sprintf("flynn cluster add -g %[1]s:2222 -p %[2]s default https://controller.%[1]s %[3]s", s.Domain.Name, s.ControllerPin, s.ControllerKey), nil
 }
 
+func (s *Stack) ClusterConfig() *cfg.Cluster {
+	return &cfg.Cluster{
+		Name:    s.StackName,
+		URL:     "https://controller." + s.Domain.Name,
+		Key:     s.ControllerKey,
+		GitHost: fmt.Sprintf("%s:2222", s.Domain.Name),
+		TLSPin:  s.ControllerPin,
+	}
+}
+
 func (s *Stack) DashboardLoginMsg() (string, error) {
 	if s.DashboardLoginToken == "" || s.Domain == nil || s.Domain.Name == "" {
 		return "", fmt.Errorf("Not enough data present")
@@ -140,7 +151,7 @@ func (s *Stack) promptUseExistingStack(savedStack *Stack) bool {
 	}
 
 	if !s.YesNoPrompt(fmt.Sprintf("It appears you already have a cluster of this configuration (stack %s), would you like to continue?", s.StackName)) {
-		s.SendEvent(fmt.Sprintf("Install the flynn-cli (see https://cli.flynn.io for instructions) and paste the line below into a terminal window:\n\n%s\n\n%s", clusterAddCmd, dashboardMsg))
+		s.SendEvent(fmt.Sprintf("For reference, here are the configuration details:\n\n%s\n\n%s", clusterAddCmd, dashboardMsg))
 		return true
 	}
 	return false
@@ -710,9 +721,6 @@ func (s *Stack) bootstrap() error {
 	var loginTokenData struct {
 		Token string `json:"data"`
 	}
-	var logCompletionData struct {
-		Message string `json:"message"`
-	}
 	output := json.NewDecoder(stdout)
 	for {
 		var stepRaw json.RawMessage
@@ -748,9 +756,6 @@ func (s *Stack) bootstrap() error {
 				return err
 			}
 		case "log-complete":
-			if err := json.Unmarshal(*step.Data, &logCompletionData); err != nil {
-				return err
-			}
 			break
 		}
 	}
@@ -768,7 +773,7 @@ func (s *Stack) bootstrap() error {
 	if err := s.waitForDNS(); err != nil {
 		return err
 	}
-	s.SendEvent(logCompletionData.Message)
+
 	return nil
 }
 
