@@ -92,7 +92,7 @@ func main() {
 		} else {
 			defer os.RemoveAll(rootFS)
 		}
-		if err = c.Boot(rootFS, 3, nil, args.Kill); err != nil {
+		if _, err = c.Boot(3, nil, args.Kill); err != nil {
 			log.Println("could not boot cluster: ", err)
 			return
 		}
