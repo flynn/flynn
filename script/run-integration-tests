@@ -53,6 +53,9 @@ main() {
     exit 1
   fi
 
+  sudo mv /etc/resolv.conf{,.backup}
+  trap 'sudo mv /etc/resolv.conf{.backup,}' EXIT
+  echo "nameserver $(ifconfig flynnbr0 | grep -oP 'inet addr:\S+' | cut -d: -f2)" | sudo tee /etc/resolv.conf
   export FLYNNRC=/tmp/flynnrc
   "${flynn}" cluster remove default
   "${flynn}" ${cluster_add:6}

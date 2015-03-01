@@ -238,6 +238,23 @@ var testRunScript = template.Must(template.New("test-run").Parse(`
 #!/bin/bash
 set -e -x -o pipefail
 
+# Wait for the Flynn bridge interface to show up so we can use it as the
+# nameserver to resolve discoverd domains
+iface=flynnbr0
+start=$(date +%s)
+while true; do
+  ip=$(ifconfig ${iface} | grep -oP 'inet addr:\S+' | cut -d: -f2)
+  [[ -n "${ip}" ]] && break || sleep 0.2
+
+  elapsed=$(($(date +%s) - ${start}))
+  if [[ ${elapsed} -gt 60 ]]; then
+    echo "${iface} did not appear within 60 seconds"
+    exit 1
+  fi
+done
+
+echo "nameserver ${ip}" | sudo tee /etc/resolv.conf
+
 cat > ~/.flynnrc
 
 git config --global user.email "ci@flynn.io"
