@@ -25,6 +25,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/s3"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/tail"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/thoj/go-ircevent"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/iotool"
 	"github.com/flynn/flynn/pkg/random"
@@ -77,6 +78,7 @@ type Runner struct {
 	clusters    map[string]*cluster.Cluster
 	authKey     string
 	subnet      uint64
+	ircMsgs     chan string
 }
 
 var args *arg.Args
@@ -96,6 +98,7 @@ func main() {
 		networks: make(map[string]struct{}),
 		buildCh:  make(chan struct{}, maxConcurrentBuilds),
 		clusters: make(map[string]*cluster.Cluster),
+		ircMsgs:  make(chan string),
 	}
 	if err := runner.start(); err != nil {
 		shutdown.Fatal(err)
@@ -154,6 +157,7 @@ func (r *Runner) start() error {
 		log.Printf("could not build pending builds: %s", err)
 	}
 
+	go r.connectIRC()
 	go r.watchEvents()
 
 	router := httprouter.New()
@@ -181,6 +185,38 @@ func (r *Runner) start() error {
 	}
 
 	return nil
+}
+
+const (
+	ircServer = "irc.freenode.net:6697"
+	ircNick   = "flynn-ci"
+	ircRoom   = "#flynn"
+)
+
+func (r *Runner) connectIRC() {
+	conn := irc.IRC(ircNick, ircNick)
+	conn.UseTLS = true
+	conn.AddCallback("001", func(*irc.Event) {
+		conn.Join(ircRoom)
+	})
+	ready := make(chan struct{})
+	conn.AddCallback("JOIN", func(*irc.Event) {
+		close(ready)
+	})
+	for {
+		log.Printf("connecting to IRC server: %s", ircServer)
+		err := conn.Connect(ircServer)
+		if err == nil {
+			break
+		}
+		log.Printf("error connecting to IRC server: %s", err)
+		time.Sleep(time.Second)
+	}
+	go conn.Loop()
+	<-ready
+	for msg := range r.ircMsgs {
+		conn.Notice(ircRoom, msg)
+	}
 }
 
 func (r *Runner) watchEvents() {
@@ -229,7 +265,8 @@ func (r *Runner) build(b *Build) (err error) {
 	}
 	b.LogFile = logFile.Name()
 
-	r.updateStatus(b, "pending", fmt.Sprintf("https://ci.flynn.io/builds/%s", b.Id))
+	buildURL := "https://ci.flynn.io/builds/" + b.Id
+	r.updateStatus(b, "pending", buildURL)
 
 	<-r.buildCh
 	defer func() {
@@ -252,9 +289,11 @@ func (r *Runner) build(b *Build) (err error) {
 		if err == nil {
 			log.Printf("build %s passed!\n", b.Id)
 			r.updateStatus(b, "success", url)
+			r.ircMsgs <- fmt.Sprintf("PASS: %s %s", b.Description, buildURL)
 		} else {
 			log.Printf("build %s failed: %s\n", b.Id, err)
 			r.updateStatus(b, "failure", url)
+			r.ircMsgs <- fmt.Sprintf("FAIL: %s %s", b.Description, buildURL)
 		}
 	}()
 
