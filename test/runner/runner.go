@@ -199,9 +199,10 @@ func (r *Runner) connectIRC() {
 	conn.AddCallback("001", func(*irc.Event) {
 		conn.Join(ircRoom)
 	})
+	var once sync.Once
 	ready := make(chan struct{})
 	conn.AddCallback("JOIN", func(*irc.Event) {
-		close(ready)
+		once.Do(func() { close(ready) })
 	})
 	for {
 		log.Printf("connecting to IRC server: %s", ircServer)

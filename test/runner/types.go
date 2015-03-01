@@ -32,7 +32,7 @@ func (e *PushEvent) Commit() string {
 
 func (e *PushEvent) String() string {
 	return fmt.Sprintf(
-		"Push of %s[%s] by %s: %s => %s\n",
+		"Push of %s[%s] by %s: %s => %s",
 		e.Repo(),
 		e.Ref,
 		e.Pusher.Name,
@@ -59,7 +59,7 @@ func (e *PullRequestEvent) Commit() string {
 
 func (e *PullRequestEvent) String() string {
 	return fmt.Sprintf(
-		"Pull Request %d %s by %s\n",
+		"Pull Request %d %s by %s",
 		e.Number,
 		e.Action,
 		e.Sender.Login,
