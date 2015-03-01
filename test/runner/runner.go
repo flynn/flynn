@@ -612,6 +612,7 @@ func (r *Runner) clusterAPI(handle clusterHandle) httprouter.Handle {
 			return
 		}
 		if err := handle(c, w, req.URL.Query(), ps); err != nil {
+			log.Printf("clusterAPI err in %s %s: %s", req.Method, req.URL.Path, err)
 			http.Error(w, err.Error(), 500)
 		}
 	}
