@@ -37,10 +37,11 @@ const SIGWINCH syscall.Signal = 28
 
 func runRun(args *docopt.Args, client *controller.Client) error {
 	config := runConfig{
-		App:      mustApp(),
-		Detached: args.Bool["--detached"],
-		Release:  args.String["-r"],
-		Args:     append([]string{args.String["<command>"]}, args.All["<argument>"].([]string)...),
+		App:        mustApp(),
+		Detached:   args.Bool["--detached"],
+		Release:    args.String["-r"],
+		Args:       append([]string{args.String["<command>"]}, args.All["<argument>"].([]string)...),
+		ReleaseEnv: true,
 	}
 	if config.Release == "" {
 		release, err := client.GetAppRelease(config.App)
@@ -62,6 +63,7 @@ type runConfig struct {
 	App        string
 	Detached   bool
 	Release    string
+	ReleaseEnv bool
 	Entrypoint []string
 	Args       []string
 	Env        map[string]string
@@ -74,6 +76,7 @@ func runJob(client *controller.Client, config runConfig) error {
 		ReleaseID:  config.Release,
 		Entrypoint: config.Entrypoint,
 		Env:        config.Env,
+		ReleaseEnv: config.ReleaseEnv,
 	}
 	if req.TTY {
 		if req.Env == nil {

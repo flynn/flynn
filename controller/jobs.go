@@ -435,8 +435,10 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	attach := strings.Contains(req.Header.Get("Upgrade"), "flynn-attach/0")
 
 	env := make(map[string]string, len(release.Env)+len(newJob.Env))
-	for k, v := range release.Env {
-		env[k] = v
+	if newJob.ReleaseEnv {
+		for k, v := range release.Env {
+			env[k] = v
+		}
 	}
 	for k, v := range newJob.Env {
 		env[k] = v

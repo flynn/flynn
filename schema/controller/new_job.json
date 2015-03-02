@@ -34,6 +34,10 @@
     "tty_lines": {
       "description": "number of lines/rows in tty",
       "type": "integer"
+    },
+    "release_env": {
+      "description": "include the release environment",
+      "type": "boolean"
     }
   }
 }
