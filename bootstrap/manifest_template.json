@@ -276,6 +276,32 @@
     "status": 401
   },
   {
+    "id": "logaggregator",
+    "action": "deploy-app",
+    "app": {
+      "name": "logaggregator",
+      "meta": {"flynn-system-app": "true"}
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "$image_repository?name=flynn/logaggregator&id=$image_id[logaggregator]"
+    },
+    "release": {
+      "processes": {
+        "app": {
+          "cmd": ["-logaddr", ":514", "-apiaddr", ":80"],
+          "ports": [
+            {"port": 80, "proto": "tcp"},
+            {"port": 514, "proto": "tcp"}
+          ]
+        }
+      }
+    },
+    "processes": {
+      "app": 1
+    }
+  },
+  {
     "id": "taffy",
     "action": "deploy-app",
     "app": {
