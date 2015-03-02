@@ -7,4 +7,5 @@ var SystemApps = []string{
 	"router",
 	"gitreceive",
 	"controller",
+	"logaggregator",
 }
