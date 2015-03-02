@@ -128,6 +128,9 @@ func runEnvGet(args *docopt.Args, client *controller.Client) error {
 	if err == controller.ErrNotFound {
 		return errors.New("no app release found")
 	}
+	if err != nil {
+		return err
+	}
 
 	if _, ok := release.Processes[envProc]; envProc != "" && !ok {
 		return fmt.Errorf("process type %q not found in release %s", envProc, release.ID)
