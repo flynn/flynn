@@ -54,6 +54,7 @@ RUN echo 'deb http://archive.ubuntu.com/ubuntu trusty main' >/etc/apt/sources.li
       telnet \
       zip \
       zlib1g-dev \
-      pigz &&\
+      pigz \
+      freetds-dev &&\
 
     rm /etc/ssh/ssh_host_*
