@@ -25,7 +25,7 @@ func main() {
 		shutdown.Fatal(err)
 	}
 	shutdown.BeforeExit(a.Shutdown)
-	defer shutdown.Exit()
+	select {}
 }
 
 // Aggregator is a log aggregation server that collects syslog messages.
