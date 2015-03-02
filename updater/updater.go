@@ -14,6 +14,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/updater/types"
 )
 
 var slugbuilderURI, slugrunnerURI string
@@ -27,14 +28,6 @@ func main() {
 	if err := run(); err != nil {
 		os.Exit(1)
 	}
-}
-
-var systemApps = []string{
-	"blobstore",
-	"dashboard",
-	"router",
-	"gitreceive",
-	"controller",
 }
 
 func run() error {
@@ -61,8 +54,8 @@ func run() error {
 	}
 
 	log.Info("validating images")
-	uris := make(map[string]string, len(systemApps)+2)
-	for _, name := range append(systemApps, "slugbuilder", "slugrunner") {
+	uris := make(map[string]string, len(updater.SystemApps)+2)
+	for _, name := range append(updater.SystemApps, "slugbuilder", "slugrunner") {
 		image := "flynn/" + name
 		if name == "gitreceive" {
 			image = "flynn/receiver"
@@ -79,7 +72,7 @@ func run() error {
 	slugrunnerURI = uris["slugrunner"]
 
 	// deploy system apps in order first
-	for _, name := range systemApps {
+	for _, name := range updater.SystemApps {
 		log := log.New("name", name)
 		log.Info("starting deploy of system app")
 
@@ -151,23 +144,23 @@ func deployApp(client *controller.Client, app *ct.App, uri string, log log15.Log
 		}
 	}
 	skipDeploy := artifact.URI == uri
-	if app.Name == "gitreceive" {
-		// deploy the gitreceive app if builder / runner images have changed
+	// deploy the gitreceive / taffy apps if builder / runner images have changed
+	switch app.Name {
+	case "gitreceive":
 		proc, ok := release.Processes["app"]
 		if !ok {
 			e := "missing app process in gitreceive release"
 			log.Error(e)
 			return errors.New(e)
 		}
-		if proc.Env["SLUGBUILDER_IMAGE_URI"] != slugbuilderURI {
-			proc.Env["SLUGBUILDER_IMAGE_URI"] = slugbuilderURI
-			skipDeploy = false
-		}
-		if proc.Env["SLUGRUNNER_IMAGE_URI"] != slugrunnerURI {
-			proc.Env["SLUGRUNNER_IMAGE_URI"] = slugrunnerURI
+		if updateSlugURIs(proc.Env) {
 			skipDeploy = false
 		}
 		release.Processes["app"] = proc
+	case "taffy":
+		if updateSlugURIs(release.Env) {
+			skipDeploy = false
+		}
 	}
 	if skipDeploy {
 		return errDeploySkipped{"app is already using latest images"}
@@ -189,4 +182,17 @@ func deployApp(client *controller.Client, app *ct.App, uri string, log log15.Log
 		return err
 	}
 	return nil
+}
+
+func updateSlugURIs(env map[string]string) bool {
+	updated := false
+	if env["SLUGBUILDER_IMAGE_URI"] != slugbuilderURI {
+		env["SLUGBUILDER_IMAGE_URI"] = slugbuilderURI
+		updated = true
+	}
+	if env["SLUGRUNNER_IMAGE_URI"] != slugrunnerURI {
+		env["SLUGRUNNER_IMAGE_URI"] = slugrunnerURI
+		updated = true
+	}
+	return updated
 }
