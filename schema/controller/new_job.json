@@ -17,6 +17,9 @@
     "cmd": {
       "$ref": "/schema/controller/common#/definitions/cmd"
     },
+    "entrypoint": {
+      "$ref": "/schema/controller/common#/definitions/entrypoint"
+    },
     "env": {
       "$ref": "/schema/controller/common#/definitions/env"
     },

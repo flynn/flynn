@@ -14,10 +14,7 @@
       "$ref": "/schema/controller/common#/definitions/env"
     },
     "entrypoint": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
+      "$ref": "/schema/controller/common#/definitions/entrypoint"
     },
     "ports": {
       "type": "array",
