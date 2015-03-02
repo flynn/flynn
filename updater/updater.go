@@ -144,23 +144,23 @@ func deployApp(client *controller.Client, app *ct.App, uri string, log log15.Log
 		}
 	}
 	skipDeploy := artifact.URI == uri
-	if app.Name == "gitreceive" {
-		// deploy the gitreceive app if builder / runner images have changed
+	// deploy the gitreceive / taffy apps if builder / runner images have changed
+	switch app.Name {
+	case "gitreceive":
 		proc, ok := release.Processes["app"]
 		if !ok {
 			e := "missing app process in gitreceive release"
 			log.Error(e)
 			return errors.New(e)
 		}
-		if proc.Env["SLUGBUILDER_IMAGE_URI"] != slugbuilderURI {
-			proc.Env["SLUGBUILDER_IMAGE_URI"] = slugbuilderURI
-			skipDeploy = false
-		}
-		if proc.Env["SLUGRUNNER_IMAGE_URI"] != slugrunnerURI {
-			proc.Env["SLUGRUNNER_IMAGE_URI"] = slugrunnerURI
+		if updateSlugURIs(proc.Env) {
 			skipDeploy = false
 		}
 		release.Processes["app"] = proc
+	case "taffy":
+		if updateSlugURIs(release.Env) {
+			skipDeploy = false
+		}
 	}
 	if skipDeploy {
 		return errDeploySkipped{"app is already using latest images"}
@@ -182,4 +182,17 @@ func deployApp(client *controller.Client, app *ct.App, uri string, log log15.Log
 		return err
 	}
 	return nil
+}
+
+func updateSlugURIs(env map[string]string) bool {
+	updated := false
+	if env["SLUGBUILDER_IMAGE_URI"] != slugbuilderURI {
+		env["SLUGBUILDER_IMAGE_URI"] = slugbuilderURI
+		updated = true
+	}
+	if env["SLUGRUNNER_IMAGE_URI"] != slugrunnerURI {
+		env["SLUGRUNNER_IMAGE_URI"] = slugrunnerURI
+		updated = true
+	}
+	return updated
 }
