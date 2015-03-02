@@ -32,6 +32,7 @@ type Client struct {
 	ErrNotFound error
 	URL         string
 	Key         string
+	Host        string
 	HTTP        *http.Client
 	HijackDial  DialFunc
 }
@@ -68,6 +69,9 @@ func (c *Client) prepareReq(method, path string, header http.Header, in interfac
 	req.Header = header
 	if c.Key != "" {
 		req.SetBasicAuth("", c.Key)
+	}
+	if c.Host != "" {
+		req.Host = c.Host
 	}
 	return req, nil
 }

@@ -2,6 +2,7 @@
 package controller
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -13,11 +14,17 @@ import (
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/pinned"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/router/types"
 )
+
+type Config struct {
+	Pin    []byte
+	Domain string
+}
 
 // Client is a client for the controller API.
 type Client struct {
@@ -58,8 +65,11 @@ func NewClientWithHTTP(uri, key string, httpClient *http.Client) (*Client, error
 	return newClient(key, u.String(), httpClient), nil
 }
 
-// NewClientWithPin acts like NewClient, but specifies a TLS pin.
-func NewClientWithPin(uri, key string, pin []byte) (*Client, error) {
+// NewClientWithConfig acts like NewClient, but supports custom configuration.
+func NewClientWithConfig(uri, key string, config Config) (*Client, error) {
+	if config.Pin == nil {
+		return NewClient(uri, key)
+	}
 	u, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
@@ -68,9 +78,13 @@ func NewClientWithPin(uri, key string, pin []byte) (*Client, error) {
 		u.Host += ":443"
 	}
 	u.Scheme = "http"
-	d := &pinned.Config{Pin: pin}
+	d := &pinned.Config{Pin: config.Pin}
+	if config.Domain != "" {
+		d.Config = &tls.Config{ServerName: config.Domain}
+	}
 	httpClient := &http.Client{Transport: &http.Transport{Dial: d.Dial}}
 	c := newClient(key, u.String(), httpClient)
+	c.Host = config.Domain
 	c.HijackDial = d.Dial
 	return c, nil
 }
@@ -279,21 +293,43 @@ func (c *Client) DeployAppRelease(appID, releaseID string) error {
 		return nil
 	}
 
-	events := make(chan *ct.DeploymentEvent)
-	stream, err := c.StreamDeployment(d.ID, events)
-	if err != nil {
+	// use a function to create the event stream so it can be reconnected
+	// if necessary (e.g. if the controller is being deployed)
+	var events chan *ct.DeploymentEvent
+	var stream stream.Stream
+	connectAttempts := attempt.Strategy{
+		Total: 10 * time.Second,
+		Delay: 100 * time.Millisecond,
+	}
+	connect := func() error {
+		events = make(chan *ct.DeploymentEvent)
+		return connectAttempts.Run(func() (err error) {
+			stream, err = c.StreamDeployment(d.ID, events)
+			return
+		})
+	}
+	if err := connect(); err != nil {
 		return err
 	}
 	defer stream.Close()
 outer:
 	for {
 		select {
-		case e := <-events:
-			if e.Status == "complete" {
-				break outer
+		case e, ok := <-events:
+			if !ok {
+				if err := connect(); err != nil {
+					return err
+				}
+				continue
 			}
-		case <-time.After(10 * time.Second):
-			return fmt.Errorf("Timed out waiting for deployment completion!")
+			switch e.Status {
+			case "complete":
+				break outer
+			case "failed":
+				return e.Err()
+			}
+		case <-time.After(30 * time.Second):
+			return errors.New("timed out waiting for deployment completion")
 
 		}
 	}

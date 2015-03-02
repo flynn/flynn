@@ -69,7 +69,7 @@ func (h *Helper) controllerClient(t *c.C) *controller.Client {
 		conf := h.clusterConf(t)
 		pin, err := base64.StdEncoding.DecodeString(conf.TLSPin)
 		t.Assert(err, c.IsNil)
-		client, err := controller.NewClientWithPin(conf.URL, conf.Key, pin)
+		client, err := controller.NewClientWithConfig(conf.URL, conf.Key, controller.Config{Pin: pin})
 		t.Assert(err, c.IsNil)
 		h.controller = client
 	}

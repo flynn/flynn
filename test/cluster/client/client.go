@@ -80,6 +80,11 @@ func (c *Client) AddHost(ch chan *host.HostEvent, vanilla bool) (*tc.Instance, e
 	}
 }
 
+func (c *Client) AddReleaseHosts() (*tc.BootResult, error) {
+	var res tc.BootResult
+	return &res, c.Post("/release", nil, &res)
+}
+
 func (c *Client) RemoveHost(host *tc.Instance) error {
 	c.size--
 	return c.Delete("/" + host.ID)

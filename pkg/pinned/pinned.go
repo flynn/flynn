@@ -48,7 +48,9 @@ func (c *Config) Dial(network, addr string) (net.Conn, error) {
 		Wire: cn,
 	}
 
-	conf.ServerName, _, _ = net.SplitHostPort(addr)
+	if conf.ServerName == "" {
+		conf.ServerName, _, _ = net.SplitHostPort(addr)
+	}
 
 	if err = conn.Handshake(); err != nil {
 		conn.Close()

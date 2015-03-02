@@ -76,7 +76,13 @@ func main() {
 
 	sc := routerc.New()
 
-	hb, err := discoverd.AddServiceAndRegister("flynn-controller", addr)
+	hb, err := discoverd.DefaultClient.AddServiceAndRegisterInstance("flynn-controller", &discoverd.Instance{
+		Addr:  addr,
+		Proto: "http",
+		Meta: map[string]string{
+			"AUTH_KEY": os.Getenv("AUTH_KEY"),
+		},
+	})
 	if err != nil {
 		shutdown.Fatal(err)
 	}

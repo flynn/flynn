@@ -116,10 +116,12 @@ func (c *context) HandleJob(job *que.Job) (e error) {
 		// rollback failed deploy
 		if e != nil {
 			log.Warn("rolling back deployment due to error", "err", e)
+			errMsg := e.Error()
 			e = c.rollback(log, deployment, f)
 			events <- ct.DeploymentEvent{
 				ReleaseID: deployment.NewReleaseID,
 				Status:    "failed",
+				Error:     errMsg,
 			}
 		}
 	}()
