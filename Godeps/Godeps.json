@@ -447,6 +447,10 @@
 			"Rev": "96e4ba3a7613a1216cbd1badca4efe382adea337"
 		},
 		{
+			"ImportPath": "github.com/thoj/go-ircevent",
+			"Rev": "5e6704d8956eeba81a2cbac9ba73bd609da39d0f"
+		},
+		{
 			"ImportPath": "github.com/vaughan0/go-ini",
 			"Rev": "a98ad7ee00ec53921f08832bc06ecf7fd600e6a1"
 		},
