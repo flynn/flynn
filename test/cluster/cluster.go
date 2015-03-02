@@ -73,11 +73,11 @@ func (i instances) Get(id string) (*Instance, error) {
 	return nil, fmt.Errorf("no such host: %s", id)
 }
 
-func (c *Cluster) discoverdClient() *discoverd.Client {
+func (c *Cluster) discoverdClient(ip string) *discoverd.Client {
 	c.discMtx.Lock()
 	defer c.discMtx.Unlock()
 	if c.disc == nil {
-		c.disc = discoverd.NewClientWithURL(fmt.Sprintf("http://%s:1111", c.RouterIP))
+		c.disc = discoverd.NewClientWithURL(fmt.Sprintf("http://%s:1111", ip))
 	}
 	return c.disc
 }
@@ -257,8 +257,9 @@ func (c *Cluster) RemoveHost(id string) error {
 	// Specifically: Wait for router-api services to disappear to indicate host
 	// removal (rather than using StreamHostEvents), so that other
 	// tests won't try and connect to this host via service discovery.
+	ip := c.defaultInstances[0].IP
 	events := make(chan *discoverd.Event)
-	stream, err := c.discoverdClient().Service("router-api").Watch(events)
+	stream, err := c.discoverdClient(ip).Service("router-api").Watch(events)
 	if err != nil {
 		return err
 	}
