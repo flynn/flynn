@@ -14,6 +14,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/updater/types"
 )
 
 var slugbuilderURI, slugrunnerURI string
@@ -27,14 +28,6 @@ func main() {
 	if err := run(); err != nil {
 		os.Exit(1)
 	}
-}
-
-var systemApps = []string{
-	"blobstore",
-	"dashboard",
-	"router",
-	"gitreceive",
-	"controller",
 }
 
 func run() error {
@@ -61,8 +54,8 @@ func run() error {
 	}
 
 	log.Info("validating images")
-	uris := make(map[string]string, len(systemApps)+2)
-	for _, name := range append(systemApps, "slugbuilder", "slugrunner") {
+	uris := make(map[string]string, len(updater.SystemApps)+2)
+	for _, name := range append(updater.SystemApps, "slugbuilder", "slugrunner") {
 		image := "flynn/" + name
 		if name == "gitreceive" {
 			image = "flynn/receiver"
@@ -79,7 +72,7 @@ func run() error {
 	slugrunnerURI = uris["slugrunner"]
 
 	// deploy system apps in order first
-	for _, name := range systemApps {
+	for _, name := range updater.SystemApps {
 		log := log.New("name", name)
 		log.Info("starting deploy of system app")
 

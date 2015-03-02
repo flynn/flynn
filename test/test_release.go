@@ -14,6 +14,7 @@ import (
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/controller/client"
 	tc "github.com/flynn/flynn/test/cluster"
+	"github.com/flynn/flynn/updater/types"
 )
 
 type ReleaseSuite struct {
@@ -171,8 +172,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	t.Assert(err, c.IsNil)
 
 	// check system apps were deployed correctly
-	systemApps := []string{"blobstore", "dashboard", "router", "gitreceive", "controller"}
-	for _, app := range systemApps {
+	for _, app := range updater.SystemApps {
 		expected := fmt.Sprintf(`"finished deploy of system app" name=%s`, app)
 		if !strings.Contains(updateOutput.String(), expected) {
 			t.Fatalf(`expected update to deploy %s`, app)
