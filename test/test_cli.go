@@ -217,10 +217,22 @@ func (s *CLISuite) TestScale(t *c.C) {
 	t.Assert(scale, OutputContains, "crasher=0")
 	t.Assert(scale, OutputContains, "omni=0")
 
+	// scale should only affect specified processes
+	scale = app.flynn("scale", "printer=2")
+	t.Assert(scale, Succeeds)
+	t.Assert(scale, OutputContains, "printer: 1=>2")
+	t.Assert(scale, OutputContains, "scale completed")
+	scale = app.flynn("scale")
+	t.Assert(scale, Succeeds)
+	t.Assert(scale, OutputContains, "echoer=3")
+	t.Assert(scale, OutputContains, "printer=2")
+	t.Assert(scale, OutputContains, "crasher=0")
+	t.Assert(scale, OutputContains, "omni=0")
+
 	// unchanged processes shouldn't appear in output
 	scale = app.flynn("scale", "echoer=3", "printer=0")
 	t.Assert(scale, Succeeds)
-	t.Assert(scale, OutputContains, "printer: 1=>0")
+	t.Assert(scale, OutputContains, "printer: 2=>0")
 	t.Assert(scale, c.Not(OutputContains), "echoer")
 	t.Assert(scale, OutputContains, "scale completed")
 
