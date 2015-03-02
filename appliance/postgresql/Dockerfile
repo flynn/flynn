@@ -18,7 +18,8 @@ RUN apt-get update &&\
       postgresql-9.4-plv8 \
       postgresql-9.4-postgis &&\
     apt-get clean &&\
-    apt-get autoremove -y
+    apt-get autoremove -y &&\
+    echo "\set HISTFILE /dev/null" > /root/.psqlrc
 
 ADD bin/flynn-postgres /bin/flynn-postgres
 ADD bin/flynn-postgres-api /bin/flynn-postgres-api
