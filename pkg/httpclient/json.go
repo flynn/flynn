@@ -133,7 +133,13 @@ func (c *Client) Hijack(method, path string, header http.Header, in interface{})
 		return nil, err
 	}
 	if res.StatusCode != http.StatusSwitchingProtocols {
-		res.Body.Close()
+		defer res.Body.Close()
+		if strings.Contains(res.Header.Get("Content-Type"), "application/json") {
+			var jsonErr httphelper.JSONError
+			if err := json.NewDecoder(res.Body).Decode(&jsonErr); err == nil {
+				return nil, jsonErr
+			}
+		}
 		return nil, &url.Error{
 			Op:  req.Method,
 			URL: req.URL.String(),

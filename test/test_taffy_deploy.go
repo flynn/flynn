@@ -21,7 +21,8 @@ func (s *TaffyDeploySuite) deployWithTaffy(t *c.C, app *ct.App, github map[strin
 	t.Assert(err, c.IsNil)
 
 	rwc, err := client.RunJobAttached("taffy", &ct.NewJob{
-		ReleaseID: taffyRelease.ID,
+		ReleaseID:  taffyRelease.ID,
+		ReleaseEnv: true,
 		Cmd: []string{
 			app.Name,
 			github["clone_url"],

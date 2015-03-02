@@ -219,10 +219,11 @@ func (s *S) TestRunJobDetached(c *C) {
 
 	cmd := []string{"foo", "bar"}
 	req := &ct.NewJob{
-		ReleaseID: release.ID,
-		Cmd:       cmd,
-		Env:       map[string]string{"JOB": "true", "FOO": "baz"},
-		Meta:      map[string]string{"foo": "baz"},
+		ReleaseID:  release.ID,
+		ReleaseEnv: true,
+		Cmd:        cmd,
+		Env:        map[string]string{"JOB": "true", "FOO": "baz"},
+		Meta:       map[string]string{"foo": "baz"},
 	}
 	res, err := s.c.RunJobDetached(app.ID, req)
 	c.Assert(err, IsNil)
@@ -284,13 +285,14 @@ func (s *S) TestRunJobAttached(c *C) {
 	})
 
 	data := &ct.NewJob{
-		ReleaseID: release.ID,
-		Cmd:       []string{"foo", "bar"},
-		Env:       map[string]string{"JOB": "true", "FOO": "baz"},
-		Meta:      map[string]string{"foo": "baz"},
-		TTY:       true,
-		Columns:   10,
-		Lines:     20,
+		ReleaseID:  release.ID,
+		ReleaseEnv: true,
+		Cmd:        []string{"foo", "bar"},
+		Env:        map[string]string{"JOB": "true", "FOO": "baz"},
+		Meta:       map[string]string{"foo": "baz"},
+		TTY:        true,
+		Columns:    10,
+		Lines:      20,
 	}
 	rwc, err := s.c.RunJobAttached(app.ID, data)
 	c.Assert(err, IsNil)

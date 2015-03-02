@@ -13,7 +13,7 @@ import (
 func main() {
 	serviceName := os.Getenv("FLYNN_POSTGRES")
 	if serviceName == "" {
-		serviceName = "pg"
+		serviceName = "postgres"
 	}
 	singleton := os.Getenv("SINGLETON") == "true"
 	password := os.Getenv("PGPASSWORD")

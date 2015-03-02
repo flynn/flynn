@@ -17,6 +17,9 @@
     "cmd": {
       "$ref": "/schema/controller/common#/definitions/cmd"
     },
+    "entrypoint": {
+      "$ref": "/schema/controller/common#/definitions/entrypoint"
+    },
     "env": {
       "$ref": "/schema/controller/common#/definitions/env"
     },
@@ -34,6 +37,10 @@
     "tty_lines": {
       "description": "number of lines/rows in tty",
       "type": "integer"
+    },
+    "release_env": {
+      "description": "include the release environment",
+      "type": "boolean"
     }
   }
 }

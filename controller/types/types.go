@@ -103,6 +103,7 @@ func (e *JobEvent) IsDown() bool {
 
 type NewJob struct {
 	ReleaseID  string            `json:"release,omitempty"`
+	ReleaseEnv bool              `json:"release_env,omitempty"`
 	Cmd        []string          `json:"cmd,omitempty"`
 	Entrypoint []string          `json:"entrypoint,omitempty"`
 	Env        map[string]string `json:"env,omitempty"`

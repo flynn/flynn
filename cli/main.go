@@ -52,6 +52,7 @@ Commands:
 	run       run a job
 	env       manage env variables
 	route     manage routes
+	psql      open a postgres console
 	provider  manage resource providers
 	resource  provision a new resource
 	key       manage SSH public keys

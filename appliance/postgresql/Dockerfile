@@ -11,9 +11,15 @@ RUN apt-get update &&\
     curl -s https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - &&\
     sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" >> /etc/apt/sources.list.d/postgresql.list' &&\
     apt-get update &&\
-    apt-get install -y -q postgresql-9.4 postgresql-contrib-9.4 postgresql-9.4-pgextwlist &&\
+    apt-get install -y -q \
+      postgresql-9.4 \
+      postgresql-contrib-9.4 \
+      postgresql-9.4-pgextwlist \
+      postgresql-9.4-plv8 \
+      postgresql-9.4-postgis &&\
     apt-get clean &&\
-    apt-get autoremove -y
+    apt-get autoremove -y &&\
+    echo "\set HISTFILE /dev/null" > /root/.psqlrc
 
 ADD bin/flynn-postgres /bin/flynn-postgres
 ADD bin/flynn-postgres-api /bin/flynn-postgres-api

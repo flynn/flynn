@@ -27,6 +27,12 @@
         "type": "string"
       }
     },
+    "entrypoint": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "strategy": {
       "type": "string",
       "enum": ["all-at-once", "one-by-one"]

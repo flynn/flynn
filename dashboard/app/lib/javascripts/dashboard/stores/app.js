@@ -11,6 +11,7 @@ function createTaffyJob (client, taffyReleaseId, appID, appName, meta, appData) 
 	var sha = meta.sha;
 	return client.createTaffyJob({
 		release: taffyReleaseId,
+		release_env: true,
 		cmd: [appName, cloneURL, ref, sha],
 		meta: Marbles.Utils.extend({}, meta, {
 			app: appID,
