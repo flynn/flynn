@@ -36,43 +36,62 @@ Options:
 const SIGWINCH syscall.Signal = 28
 
 func runRun(args *docopt.Args, client *controller.Client) error {
-	runDetached := args.Bool["--detached"]
-	runRelease := args.String["-r"]
-
-	if runRelease == "" {
-		release, err := client.GetAppRelease(mustApp())
+	config := runConfig{
+		App:      mustApp(),
+		Detached: args.Bool["--detached"],
+		Release:  args.String["-r"],
+		Args:     append([]string{args.String["<command>"]}, args.All["<argument>"].([]string)...),
+	}
+	if config.Release == "" {
+		release, err := client.GetAppRelease(config.App)
 		if err == controller.ErrNotFound {
 			return errors.New("No app release, specify a release with -release")
 		}
 		if err != nil {
 			return err
 		}
-		runRelease = release.ID
+		config.Release = release.ID
 	}
+	if e := args.String["-e"]; e != "" {
+		config.Entrypoint = []string{e}
+	}
+	return runJob(client, config)
+}
+
+type runConfig struct {
+	App        string
+	Detached   bool
+	Release    string
+	Entrypoint []string
+	Args       []string
+	Env        map[string]string
+}
+
+func runJob(client *controller.Client, config runConfig) error {
 	req := &ct.NewJob{
-		Cmd:       append([]string{args.String["<command>"]}, args.All["<argument>"].([]string)...),
-		TTY:       term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()) && !runDetached,
-		ReleaseID: runRelease,
-	}
-	if args.String["-e"] != "" {
-		req.Entrypoint = []string{args.String["-e"]}
+		Cmd:        config.Args,
+		TTY:        term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()) && !config.Detached,
+		ReleaseID:  config.Release,
+		Entrypoint: config.Entrypoint,
+		Env:        config.Env,
 	}
 	if req.TTY {
+		if req.Env == nil {
+			req.Env = make(map[string]string)
+		}
 		ws, err := term.GetWinsize(os.Stdin.Fd())
 		if err != nil {
 			return err
 		}
 		req.Columns = int(ws.Width)
 		req.Lines = int(ws.Height)
-		req.Env = map[string]string{
-			"COLUMNS": strconv.Itoa(int(ws.Width)),
-			"LINES":   strconv.Itoa(int(ws.Height)),
-			"TERM":    os.Getenv("TERM"),
-		}
+		req.Env["COLUMNS"] = strconv.Itoa(int(ws.Width))
+		req.Env["LINES"] = strconv.Itoa(int(ws.Height))
+		req.Env["TERM"] = os.Getenv("TERM")
 	}
 
-	if runDetached {
-		job, err := client.RunJobDetached(mustApp(), req)
+	if config.Detached {
+		job, err := client.RunJobDetached(config.App, req)
 		if err != nil {
 			return err
 		}
@@ -80,7 +99,7 @@ func runRun(args *docopt.Args, client *controller.Client) error {
 		return nil
 	}
 
-	rwc, err := client.RunJobAttached(mustApp(), req)
+	rwc, err := client.RunJobAttached(config.App, req)
 	if err != nil {
 		return err
 	}
