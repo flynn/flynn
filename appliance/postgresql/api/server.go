@@ -19,7 +19,7 @@ var serviceHost string
 
 func init() {
 	if serviceName == "" {
-		serviceName = "pg"
+		serviceName = "postgres"
 	}
 	serviceHost = fmt.Sprintf("leader.%s.discoverd", serviceName)
 }
