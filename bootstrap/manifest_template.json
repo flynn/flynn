@@ -276,6 +276,28 @@
     "status": 401
   },
   {
+    "id": "logaggregator",
+    "action": "deploy-app",
+    "app": {
+      "name": "logaggregator",
+      "meta": {"flynn-system-app": "true"}
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "$image_repository?name=flynn/logaggregator&id=$image_id[logaggregator]"
+    },
+    "release": {
+      "processes": {
+        "app": {
+          "cmd": ["logaggregator", "-listenaddr", ":1514"]
+        }
+      }
+    },
+    "processes": {
+      "app": 1
+    }
+  },
+  {
     "id": "taffy",
     "action": "deploy-app",
     "app": {
