@@ -9,12 +9,16 @@ import (
 
 func init() {
 	register("psql", runPsql, `
-usage: flynn psql [-c <command>]
+usage: flynn psql [--] [<argument>...]
 
-Open a console to a Flynn postgres database.
+Open a console to a Flynn postgres database. Any valid arguments to psql may be
+provided.
 
-Options:
-	-c, --command <command>  SQL command to run
+Examples:
+
+    $ flynn psql
+
+    $ flynn psql -- -c "CREATE EXTENSION hstore"
 `)
 }
 
@@ -39,6 +43,7 @@ func runPsql(args *docopt.Args, client *controller.Client) error {
 		Release:    pgRelease.ID,
 		Entrypoint: []string{"psql"},
 		Env:        make(map[string]string, 4),
+		Args:       args.All["<argument>"].([]string),
 	}
 	for _, k := range []string{"PGHOST", "PGUSER", "PGPASSWORD", "PGDATABASE"} {
 		v := appRelease.Env[k]
@@ -46,9 +51,6 @@ func runPsql(args *docopt.Args, client *controller.Client) error {
 			return fmt.Errorf("missing %s in app environment", k)
 		}
 		config.Env[k] = v
-	}
-	if cmd := args.String["--command"]; cmd != "" {
-		config.Args = []string{"-c", cmd}
 	}
 
 	return runJob(client, config)
