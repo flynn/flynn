@@ -252,8 +252,7 @@ func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *
 
 	lines, _ := strconv.Atoi(req.FormValue("lines"))
 	follow := req.FormValue("follow") == "true"
-	// TODO(bgentry): support wait, filtering by fields like process type/ID.
-	// wait := req.FormValue("wait") == "true"
+	// TODO(bgentry): support filtering by fields like process type/ID.
 
 	rc, err := c.logaggc.GetLog(params.ByName("apps_id"), lines, follow)
 	if err != nil {

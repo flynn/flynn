@@ -294,17 +294,6 @@ func (c *Client) GetApp(appID string) (*ct.App, error) {
 // Otherwise, all available logs are returned. If follow is true, new log lines
 // are streamed after the buffered log.
 func (c *Client) GetAppLog(appID string, lines int, follow bool) (io.ReadCloser, error) {
-	return c.getAppLog(appID, lines, follow, false)
-}
-
-// GetAppLogWithWait is just like GetAppLog, except that it will wait for a
-// non-existent log stream to be created rather than simply returning empty
-// results.
-func (c *Client) GetAppLogWithWait(appID string, lines int, follow bool) (io.ReadCloser, error) {
-	return c.getAppLog(appID, lines, follow, true)
-}
-
-func (c *Client) getAppLog(appID string, lines int, follow, wait bool) (io.ReadCloser, error) {
 	path := fmt.Sprintf("/apps/%s/log", appID)
 	query := url.Values{}
 	if lines > 0 {
@@ -312,9 +301,6 @@ func (c *Client) getAppLog(appID string, lines int, follow, wait bool) (io.ReadC
 	}
 	if follow {
 		query.Add("follow", "true")
-	}
-	if wait {
-		query.Add("wait", "true")
 	}
 	if encodedQuery := query.Encode(); encodedQuery != "" {
 		path = fmt.Sprintf("%s?%s", path, encodedQuery)

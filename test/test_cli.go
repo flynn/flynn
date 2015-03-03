@@ -247,18 +247,19 @@ func (s *CLISuite) TestScale(t *c.C) {
 func (s *CLISuite) TestRun(t *c.C) {
 	app := s.newCliTestApp(t)
 
-	t.Assert(app.flynn("run", "echo", "hello"), Outputs, "hello\n")
+	// this still goes to the log stream because there's no TTY:
+	t.Assert(app.sh("echo hello"), Outputs, "hello\n")
 	// drain the events
 	app.waitFor(jobEvents{"": {"up": 1, "down": 1}})
 
-	detached := app.flynn("run", "-d", "echo", "hello")
+	detached := app.flynn("run", "-d", "echo", "world")
 	t.Assert(detached, Succeeds)
-	t.Assert(detached, c.Not(Outputs), "hello\n")
+	t.Assert(detached, c.Not(Outputs), "world\n")
 
 	id := strings.TrimSpace(detached.Output)
 	_, jobID := app.waitFor(jobEvents{"": {"up": 1, "down": 1}})
 	t.Assert(jobID, c.Equals, id)
-	t.Assert(app.flynn("log", id), Outputs, "hello\n")
+	t.Assert(app.flynn("log", "--raw-output"), Outputs, "hello\nworld\n")
 
 	// test stdin and stderr
 	streams := app.flynnCmd("run", "sh", "-c", "cat 1>&2")
@@ -405,21 +406,21 @@ func (s *CLISuite) TestResourceList(t *c.C) {
 
 func (s *CLISuite) TestLog(t *c.C) {
 	app := s.newCliTestApp(t)
-	t.Assert(app.sh("echo -n hello world"), Succeeds)
-	_, jobID := app.waitFor(jobEvents{"": {"up": 1, "down": 1}})
-	t.Assert(app.flynn("log", jobID), Outputs, "hello world")
+	t.Assert(app.flynn("run", "-d", "echo", "hello", "world"), Succeeds)
+	app.waitFor(jobEvents{"": {"up": 1, "down": 1}})
+	t.Assert(app.flynn("log", "--raw-output"), Outputs, "hello world\n")
 }
 
 func (s *CLISuite) TestLogStderr(t *c.C) {
 	app := s.newCliTestApp(t)
-	t.Assert(app.sh("echo -n hello; echo -n world >&2"), Succeeds)
-	_, jobID := app.waitFor(jobEvents{"": {"up": 1, "down": 1}})
+	t.Assert(app.flynn("run", "-d", "sh", "-c", "echo hello && echo world >&2"), Succeeds)
+	app.waitFor(jobEvents{"": {"up": 1, "down": 1}})
 	runLog := func(split bool) (stdout, stderr bytes.Buffer) {
-		args := []string{"log"}
+		args := []string{"log", "--raw-output"}
 		if split {
 			args = append(args, "--split-stderr")
 		}
-		args = append(args, jobID)
+		args = append(args)
 		log := app.flynnCmd(args...)
 		log.Stdout = &stdout
 		log.Stderr = &stderr
@@ -432,23 +433,18 @@ func (s *CLISuite) TestLogStderr(t *c.C) {
 	t.Assert(stdout.String(), Matches, "world")
 	t.Assert(stderr.String(), c.Equals, "")
 	stdout, stderr = runLog(true)
-	t.Assert(stdout.String(), c.Equals, "hello")
-	t.Assert(stderr.String(), c.Equals, "world")
+	t.Assert(stdout.String(), c.Equals, "hello\n")
+	t.Assert(stderr.String(), c.Equals, "world\n")
 }
 
 func (s *CLISuite) TestLogFollow(t *c.C) {
 	app := s.newCliTestApp(t)
 
 	var stderr bytes.Buffer
-	job := app.flynnCmd("run", "cat")
-	job.Stderr = &stderr
-	jobStdin, err := job.StdinPipe()
-	t.Assert(err, c.IsNil)
-	t.Assert(job.Start(), c.IsNil)
-	_, jobID := app.waitFor(jobEvents{"": {"up": 1}})
-	defer jobStdin.Close()
+	t.Assert(app.flynn("run", "-d", "sh", "-c", "sleep 2 && for i in 1 2 3 4 5; do echo \"line $i\"; done"), Succeeds)
+	app.waitFor(jobEvents{"": {"starting": 1}})
 
-	log := app.flynnCmd("log", "--follow", jobID)
+	log := app.flynnCmd("log", "--raw-output", "--follow")
 	logStdout, err := log.StdoutPipe()
 	t.Assert(err, c.IsNil)
 	t.Assert(log.Start(), c.IsNil)
@@ -484,9 +480,8 @@ func (s *CLISuite) TestLogFollow(t *c.C) {
 			return "", errors.New("timed out waiting for log output")
 		}
 	}
-	for i := 0; i < 5; i++ {
+	for i := 1; i < 6; i++ {
 		expected := fmt.Sprintf("line %d\n", i)
-		io.WriteString(jobStdin, expected)
 		actual, err := readline()
 		if err != nil {
 			t.Logf("STDERR = %q", stderr.String())
@@ -569,8 +564,8 @@ func (s *CLISuite) TestRelease(t *c.C) {
 	t.Assert(r.Processes, c.DeepEquals, release.Processes)
 
 	t.Assert(app.flynn("scale", "--no-wait", "env=1"), Succeeds)
-	_, jobID := app.waitFor(jobEvents{"env": {"up": 1}})
-	envLog := app.flynn("log", jobID)
+	app.waitFor(jobEvents{"env": {"up": 1}})
+	envLog := app.flynn("log")
 	t.Assert(envLog, Succeeds)
 	t.Assert(envLog, OutputContains, "GLOBAL=FOO")
 	t.Assert(envLog, OutputContains, "ENV_ONLY=BAZ")
