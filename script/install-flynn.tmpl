@@ -91,7 +91,7 @@ main() {
 
   info "downloading Flynn components"
   mkdir -p "/etc/flynn"
-  /usr/local/bin/flynn-host download \
+  run /usr/local/bin/flynn-host download \
     --repository "${repo_url}/tuf" \
     --tuf-db     "/etc/flynn/tuf.db" \
     --config-dir "/etc/flynn" \
