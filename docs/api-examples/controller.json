@@ -67,7 +67,7 @@
 	"app_log": {
 		"request": {
 			"method": "GET",
-			"url": "/apps/7406a4d71a0c43d3ac4b39f006cb0342/log?wait=true",
+			"url": "/apps/7406a4d71a0c43d3ac4b39f006cb0342/log?follow=true",
 			"headers": {
 				"Authorization": "Basic OnMzY3IzdA==",
 				"Content-Type": "application/json"

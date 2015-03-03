@@ -211,7 +211,7 @@ func (e *generator) updateApp() {
 }
 
 func (e *generator) getAppLog() {
-	res, err := e.client.GetAppLogWithWait(e.resourceIds["app"], 0, false)
+	res, err := e.client.GetAppLog(e.resourceIds["app"], 0, false)
 	if err == nil {
 		defer res.Close()
 		io.Copy(ioutil.Discard, res)

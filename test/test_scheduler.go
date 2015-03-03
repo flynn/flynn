@@ -60,9 +60,9 @@ func waitForJobEvents(t *c.C, stream stream.Stream, events chan *ct.JobEvent, ex
 				actual[event.Type] = make(map[string]int)
 			}
 			switch event.State {
-			case "up":
-				actual[event.Type]["up"] += 1
-			case "down", "crashed":
+			case "starting", "up", "down":
+				actual[event.Type][event.State] += 1
+			case "crashed":
 				actual[event.Type]["down"] += 1
 			default:
 				break inner

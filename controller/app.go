@@ -253,8 +253,7 @@ func (c *controllerAPI) UpdateApp(ctx context.Context, rw http.ResponseWriter, r
 func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	ctx, cancel := context.WithCancel(ctx)
 
-	// TODO(bgentry): support wait, filtering by fields like process type/ID.
-	// wait := req.FormValue("wait") == "true"
+	// TODO(bgentry): support filtering by fields like process type/ID.
 
 	opts := logaggc.LogOpts{
 		Follow: req.FormValue("follow") == "true",
