@@ -77,7 +77,11 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 		return nil
 	}
 
-	processes := make(map[string]int, len(typeCounts))
+	current := formation.Processes
+	processes := make(map[string]int, len(current)+len(typeCounts))
+	for k, v := range current {
+		processes[k] = v
+	}
 	for _, arg := range typeCounts {
 		i := strings.IndexRune(arg, '=')
 		if i < 0 {
@@ -89,8 +93,6 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 		}
 		processes[arg[:i]] = val
 	}
-
-	current := formation.Processes
 	formation.Processes = processes
 
 	if scalingComplete(current, processes) {
