@@ -12,6 +12,7 @@ RUN apt-get update &&\
     sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" >> /etc/apt/sources.list.d/postgresql.list' &&\
     apt-get update &&\
     apt-get install -y -q \
+      less \
       postgresql-9.4 \
       postgresql-contrib-9.4 \
       postgresql-9.4-pgextwlist \
