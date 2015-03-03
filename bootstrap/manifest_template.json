@@ -104,6 +104,11 @@
     "resources": [{"name":"postgres", "url":"http://postgres-api.discoverd/databases"}]
   },
   {
+    "id": "controller-cert",
+    "action": "gen-tls-cert",
+    "hosts": ["{{ getenv \"CLUSTER_DOMAIN\" }}", "*.{{ getenv \"CLUSTER_DOMAIN\" }}"]
+  },
+  {
     "id": "controller-wait",
     "action": "wait",
     "url": "http://flynn-controller.discoverd",
@@ -181,6 +186,10 @@
       "uri": "$image_repository?name=flynn/router&id=$image_id[router]"
     },
     "release": {
+      "env": {
+        "TLSCERT": "{{ (index .StepData \"controller-cert\").Cert }}",
+        "TLSKEY": "{{ (index .StepData \"controller-cert\").PrivateKey }}"
+      },
       "processes": {
         "app": {
           "host_network": true,
@@ -232,11 +241,6 @@
     "processes": {
       "app": 2
     }
-  },
-  {
-    "id": "controller-cert",
-    "action": "gen-tls-cert",
-    "hosts": ["{{ getenv \"CLUSTER_DOMAIN\" }}", "*.{{ getenv \"CLUSTER_DOMAIN\" }}"]
   },
   {
     "id": "router-wait",
