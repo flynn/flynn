@@ -13,17 +13,17 @@ import (
 
 func init() {
 	register("install", runInstaller, fmt.Sprintf(`
-usage: flynn install <target> [-n <instances>] [-t <instance-type>] [--aws-access-key-id <key-id>] [--aws-secret-access-key <secret>] [--aws-region <region>]
+usage: flynn install <target> [-n <instances>] [-t <instance-type>] [--aws-access-key-id=<key-id>] [--aws-secret-access-key=<secret>] [--aws-region=<region>]
 
 Targets:
 	aws  creates a flynn cluster on EC2
 
 Options:
   -n, --instances <instances>            Number of instances to launch [default: 1]
-  -t, --type <instance-type>             Type of instances to launch [default: %s]
-      --aws-access-key-id <key-id>       AWS access key ID. Defaults to $AWS_ACCESS_KEY_ID
-      --aws-secret-access-key <secret>   AWS access key secret. Defaults to $AWS_SECRET_ACCESS_KEY
-      --aws-region <region>              AWS region [default: us-east-1]
+  -t, --type=<instance-type>             Type of instances to launch [default: %s]
+      --aws-access-key-id=<key-id>       AWS access key ID. Defaults to $AWS_ACCESS_KEY_ID
+      --aws-secret-access-key=<secret>   AWS access key secret. Defaults to $AWS_SECRET_ACCESS_KEY
+      --aws-region=<region>              AWS region [default: us-east-1]
 
 Examples:
 
