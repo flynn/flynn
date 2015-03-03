@@ -289,7 +289,11 @@
     "release": {
       "processes": {
         "app": {
-          "cmd": ["logaggregator", "-listenaddr", ":1514"]
+          "cmd": ["logaggregator", "-logaddr", ":514", "-apiaddr", ":80"],
+          "ports": [
+            {"port": 80, "proto": "tcp"},
+            {"port": 514, "proto": "tcp"}
+          ]
         }
       }
     },
