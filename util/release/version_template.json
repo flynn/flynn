@@ -11,5 +11,6 @@
   "flynn/slugrunner": "$image_id[slugrunner]",
   "flynn/taffy": "$image_id[taffy]",
   "flynn/dashboard": "$image_id[dashboard]",
-  "flynn/updater": "$image_id[updater]"
+  "flynn/updater": "$image_id[updater]",
+  "flynn/logaggregator": "$image_id[logaggregator]"
 }
