@@ -31,8 +31,8 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
       "Default": "50"
     },
     "UserData": {
-        "Type": "String",
-        "Description": "The user data each instance is started with."
+      "Type": "String",
+      "Description": "The user data each instance is started with."
     }
   },
 
