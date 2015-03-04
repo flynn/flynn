@@ -42,8 +42,11 @@ func runPsql(args *docopt.Args, client *controller.Client) error {
 		App:        mustApp(),
 		Release:    pgRelease.ID,
 		Entrypoint: []string{"psql"},
-		Env:        make(map[string]string, 4),
-		Args:       args.All["<argument>"].([]string),
+		Env: map[string]string{
+			"PAGER": "less",
+			"LESS":  "--ignore-case --LONG-PROMPT --SILENT --tabs=4 --quit-if-one-screen --no-init --quit-at-eof",
+		},
+		Args: args.All["<argument>"].([]string),
 	}
 	for _, k := range []string{"PGHOST", "PGUSER", "PGPASSWORD", "PGDATABASE"} {
 		v := appRelease.Env[k]
