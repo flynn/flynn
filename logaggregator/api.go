@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/ctxhelper"
@@ -32,11 +33,26 @@ type aggregatorAPI struct {
 }
 
 func (a *aggregatorAPI) GetLog(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	ctx, cancel := context.WithCancel(ctx)
+	if cn, ok := w.(http.CloseNotifier); ok {
+		go func() {
+			select {
+			case <-cn.CloseNotify():
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+	}
+	defer cancel()
+
 	params, _ := ctxhelper.ParamsFromContext(ctx)
 	channelID := params.ByName("channel_id")
 	vals := req.URL.Query()
 
-	// TODO(bgentry): tail -f support
+	follow := false
+	if strFollow := vals.Get("follow"); strFollow == "true" {
+		follow = true
+	}
 
 	lines := 0
 	if strLines := vals.Get("lines"); strLines != "" {
@@ -49,11 +65,38 @@ func (a *aggregatorAPI) GetLog(ctx context.Context, w http.ResponseWriter, req *
 	}
 
 	w.WriteHeader(200)
-	messages := a.agg.ReadLastN(channelID, lines)
+
+	var msgc <-chan *rfc5424.Message
+	if follow {
+		msgc = a.agg.ReadLastNAndSubscribe(channelID, lines, ctx.Done())
+		go flushLoop(w.(http.Flusher), 50*time.Millisecond, ctx.Done())
+	} else {
+		msgc = a.agg.ReadLastN(channelID, lines, ctx.Done())
+	}
+
 	enc := json.NewEncoder(w)
-	for _, syslogMsg := range messages {
-		if err := enc.Encode(NewMessageFromSyslog(syslogMsg)); err != nil {
-			log15.Error("error writing msg", "err", err)
+	for {
+		select {
+		case syslogMsg := <-msgc:
+			if syslogMsg == nil { // channel is closed / done
+				return
+			}
+			if err := enc.Encode(NewMessageFromSyslog(syslogMsg)); err != nil {
+				log15.Error("error writing msg", "err", err)
+				return
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func flushLoop(f http.Flusher, interval time.Duration, done <-chan struct{}) {
+	for {
+		select {
+		case <-time.After(interval):
+			f.Flush()
+		case <-done:
 			return
 		}
 	}

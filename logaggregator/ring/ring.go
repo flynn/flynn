@@ -10,10 +10,13 @@ import (
 // contents can be read at once. Reading elements out of the buffer does not
 // clear them; messages merely get moved out of the buffer when they are
 // replaced by new messages.
+//
+// A Buffer also offers the ability to subscribe to new incoming messages.
 type Buffer struct {
+	mu       sync.RWMutex // protects all of the following:
 	messages []*rfc5424.Message
 	start    int
-	mu       sync.RWMutex
+	subs     map[chan *rfc5424.Message]struct{}
 }
 
 const DefaultBufferCapacity = 10000
@@ -22,6 +25,7 @@ const DefaultBufferCapacity = 10000
 func NewBuffer() *Buffer {
 	return &Buffer{
 		messages: make([]*rfc5424.Message, 0, DefaultBufferCapacity),
+		subs:     make(map[chan *rfc5424.Message]struct{}),
 	}
 }
 
@@ -41,6 +45,13 @@ func (b *Buffer) Add(m *rfc5424.Message) {
 
 		if b.start == cap(b.messages) {
 			b.start = 0
+		}
+	}
+
+	for msgc := range b.subs {
+		select {
+		case msgc <- m:
+		default: // chan is full, drop this message to it
 		}
 	}
 }
@@ -71,7 +82,11 @@ func (b *Buffer) ReadAll() []*rfc5424.Message {
 func (b *Buffer) ReadLastN(n int) []*rfc5424.Message {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
+	return b._readLastN(n)
+}
 
+// _readLastN expects b.mu to already be locked
+func (b *Buffer) _readLastN(n int) []*rfc5424.Message {
 	if n > len(b.messages) {
 		n = len(b.messages)
 	}
@@ -89,4 +104,53 @@ func (b *Buffer) ReadLastN(n int) []*rfc5424.Message {
 		copy(buf[copied:], b.messages[n-copied:(b.start-copied)])
 	}
 	return buf
+}
+
+// ReadLastNAndSubscribe returns buffered messages just like ReadLastN, and
+// also returns a channel that will stream new messages as they arrive.
+func (b *Buffer) ReadLastNAndSubscribe(n int) (
+	messages []*rfc5424.Message,
+	msgc <-chan *rfc5424.Message,
+	cancel func(),
+) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	messages = b._readLastN(n)
+	msgc, cancel = b._subscribe()
+	return
+}
+
+// Subscribe returns a channel that sends all future messages added to the
+// Buffer. The returned channel is buffered, and any attempts to send new
+// messages to the channel will drop messages if the channel is full.
+//
+// The returned func cancel must be called when the caller wants to stop
+// receiving messages.
+func (b *Buffer) Subscribe() (msgc <-chan *rfc5424.Message, cancel func()) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b._subscribe()
+}
+
+// _subscribe assumes b.mu is already locked
+func (b *Buffer) _subscribe() (<-chan *rfc5424.Message, func()) {
+	// Give each subscription chan a reasonable buffer size
+	msgc := make(chan *rfc5424.Message, 1000)
+	b.subs[msgc] = struct{}{}
+
+	var donce sync.Once
+	cancel := func() {
+		donce.Do(func() {
+			b.unsubscribe(msgc)
+			close(msgc)
+		})
+	}
+	return msgc, cancel
+}
+
+func (b *Buffer) unsubscribe(msgc chan *rfc5424.Message) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	delete(b.subs, msgc)
 }
