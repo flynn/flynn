@@ -616,13 +616,6 @@ func (c *Cluster) dumpLogs(w io.Writer) {
 		fmt.Fprintln(w)
 		return err
 	}
-	fallback := func() {
-		fmt.Fprintf(w, "\n*** Error getting job logs via flynn-host, falling back to tail log dump\n\n")
-		for _, inst := range c.Instances {
-			run(inst, "sudo bash -c 'tail -n +1 /tmp/flynn-host-logs/**/*.log'")
-		}
-	}
-
 	fmt.Fprint(w, "\n\n***** ***** ***** DUMPING ALL LOGS ***** ***** *****\n\n")
 	for _, inst := range c.Instances {
 		run(inst, "ps faux")
@@ -630,19 +623,34 @@ func (c *Cluster) dumpLogs(w io.Writer) {
 		run(inst, "cat /tmp/debug-info.log")
 	}
 
-	var out bytes.Buffer
-	if err := c.Run("flynn-host ps -a -q", &Streams{Stdout: &out, Stderr: w}); err != nil {
-		io.Copy(w, &out)
-		fallback()
-		return
-	}
+	printLogs := func(instances []*Instance) {
+		fallback := func() {
+			fmt.Fprintf(w, "\n*** Error getting job logs via flynn-host, falling back to tail log dump\n\n")
+			for _, inst := range instances {
+				run(inst, "sudo bash -c 'tail -n +1 /tmp/flynn-host-logs/**/*.log'")
+			}
+		}
 
-	ids := strings.Split(strings.TrimSpace(out.String()), "\n")
-	for _, id := range ids {
-		if err := run(c.Instances[0], fmt.Sprintf("flynn-host inspect %s", id)); err != nil {
+		run(instances[0], "flynn-host ps -a")
+
+		var out bytes.Buffer
+		if err := instances[0].Run("flynn-host ps -a -q", &Streams{Stdout: &out, Stderr: w}); err != nil {
+			io.Copy(w, &out)
 			fallback()
 			return
 		}
-		run(c.Instances[0], fmt.Sprintf("flynn-host log --init %s", id))
+
+		ids := strings.Split(strings.TrimSpace(out.String()), "\n")
+		for _, id := range ids {
+			if err := run(instances[0], fmt.Sprintf("flynn-host inspect %s", id)); err != nil {
+				fallback()
+				return
+			}
+			run(instances[0], fmt.Sprintf("flynn-host log --init %s", id))
+		}
+	}
+	printLogs(c.defaultInstances)
+	if len(c.releaseInstances) > 0 {
+		printLogs(c.releaseInstances)
 	}
 }
