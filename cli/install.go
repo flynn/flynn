@@ -13,7 +13,7 @@ import (
 
 func init() {
 	register("install", runInstaller, fmt.Sprintf(`
-usage: flynn install <target> [-n <instances>] [-t <instance-type>] [--aws-access-key-id=<key-id>] [--aws-secret-access-key=<secret>] [--aws-region=<region>]
+usage: flynn install <target> [-n <instances>] [-t <instance-type>] [--aws-access-key-id=<key-id>] [--aws-secret-access-key=<secret>] [--aws-region=<region>] [--vpc-cidr=<cidr>] [--subnet-cidr=<cidr>]
 
 Targets:
 	aws  creates a flynn cluster on EC2
@@ -24,6 +24,8 @@ Options:
                       --aws-access-key-id=<key-id>       AWS access key ID. Defaults to $AWS_ACCESS_KEY_ID
                       --aws-secret-access-key=<secret>   AWS access key secret. Defaults to $AWS_SECRET_ACCESS_KEY
                       --aws-region=<region>              AWS region [default: us-east-1]
+                      --vpc-cidr=<cidr>                  CIDR block to assign to the VPC. [default: 10.0.0.0/16]
+                      --subnet-cidr=<cidr>               CIDR block to assign to the subnet. [default: 10.0.0.0/21]
 
 Examples:
 
@@ -64,10 +66,22 @@ func runInstaller(args *docopt.Args) error {
 		}
 	}
 
+	vpcCidr := args.String["--vpc-cidr"]
+	if vpcCidr == "" {
+		vpcCidr = "10.0.0.0/21"
+	}
+
+	subnetCidr := args.String["--subnet-cidr"]
+	if subnetCidr == "" {
+		subnetCidr = "10.0.0.0/21"
+	}
+
 	stack := &installer.Stack{
 		NumInstances: instances,
 		InstanceType: instanceType,
 		Region:       region,
+		VpcCidr:      vpcCidr,
+		SubnetCidr:   subnetCidr,
 		Creds:        creds,
 		YesNoPrompt:  promptYesNo,
 		PromptInput:  promptInput,

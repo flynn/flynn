@@ -52,16 +52,17 @@ type Stack struct {
 	ErrChan   chan error    `json:"-"`
 	Done      chan struct{} `json:"-"`
 
-	ImageID    string                `json:"image_id,omitempty"`
-	StackID    string                `json:"stack_id,omitempty"`
-	StackName  string                `json:"stack_name,omitempty"`
-	Stack      *cloudformation.Stack `json:"-"`
-	SSHKey     *sshkeygen.SSHKey     `json:"-"`
-	SSHKeyName string                `json:"ssh_key_name,omitempty"`
-
-	DiscoveryToken string   `json:"discovery_token"`
-	InstanceIPs    []string `json:"instance_ips,omitempty"`
-	DNSZoneID      string   `json:"dns_zone_id,omitempty"`
+	ImageID        string                `json:"image_id,omitempty"`
+	StackID        string                `json:"stack_id,omitempty"`
+	StackName      string                `json:"stack_name,omitempty"`
+	Stack          *cloudformation.Stack `json:"-"`
+	SSHKey         *sshkeygen.SSHKey     `json:"-"`
+	SSHKeyName     string                `json:"ssh_key_name,omitempty"`
+	VpcCidr        string                `json:"vpc_cidr_block,omitempty"`
+	SubnetCidr     string                `json:"subnet_cidr_block,omitempty"`
+	DiscoveryToken string                `json:"discovery_token"`
+	InstanceIPs    []string              `json:"instance_ips,omitempty"`
+	DNSZoneID      string                `json:"dns_zone_id,omitempty"`
 
 	persistMutex sync.Mutex
 
@@ -369,6 +370,14 @@ func (s *Stack) createStack() error {
 		{
 			ParameterKey:   aws.String("InstanceType"),
 			ParameterValue: aws.String(s.InstanceType),
+		},
+		{
+			ParameterKey:   aws.String("VpcCidrBlock"),
+			ParameterValue: aws.String(s.VpcCidr),
+		},
+		{
+			ParameterKey:   aws.String("SubnetCidrBlock"),
+			ParameterValue: aws.String(s.SubnetCidr),
 		},
 	}
 
