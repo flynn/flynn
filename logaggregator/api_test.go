@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"time"
@@ -50,6 +53,67 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogBuffer(c *C) {
 	}
 	for _, test := range tests {
 		runtest(test.numLogs, test.expected)
+	}
+}
+
+func (s *LogAggregatorTestSuite) TestAPIGetLogFollow(c *C) {
+	appID := "test-app"
+	msg1 := newMessageForApp(appID, "web.1", "log message 1")
+	msg2 := newMessageForApp(appID, "web.2", "log message 2")
+	msg3 := newMessageForApp(appID, "web.1", "log message 3")
+	msg4 := newMessageForApp(appID, "web.2", "log message 4")
+
+	type line struct {
+		text string
+		err  error
+	}
+
+	buf := s.agg.getOrInitializeBuffer(appID)
+	buf.Add(msg1)
+	buf.Add(msg2)
+
+	logrc, err := s.client.GetLog(appID, 1, true)
+	c.Assert(err, IsNil)
+	defer logrc.Close()
+
+	buf.Add(msg3)
+	buf.Add(msg4)
+
+	// use a goroutine + channel so we can timeout the stdout read
+	lines := make(chan line)
+	go func() {
+		buf := bufio.NewReader(logrc)
+		for {
+			text, err := buf.ReadBytes('\n')
+			if err != nil {
+				if err != io.EOF {
+					lines <- line{"", err}
+				}
+				break
+			}
+			lines <- line{string(text), nil}
+		}
+	}()
+	readline := func() (string, error) {
+		select {
+		case l := <-lines:
+			if l.err != nil {
+				return "", fmt.Errorf("could not read log output: %s", l.err)
+			}
+			return l.text, nil
+		case <-time.After(1 * time.Second):
+			return "", errors.New("timed out waiting for log output")
+		}
+	}
+
+	expected := []string{marshalMessage(msg2), marshalMessage(msg3), marshalMessage(msg4)}
+	for _, want := range expected {
+		got, err := readline()
+		if err != nil {
+			c.Error(err)
+		}
+		c.Assert(err, IsNil)
+		c.Assert(got, Equals, want)
 	}
 }
 

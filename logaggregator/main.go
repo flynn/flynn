@@ -106,9 +106,30 @@ func (a *Aggregator) Shutdown() {
 	})
 }
 
-// ReadNLogs reads up to N logs from the log buffer with id. If n is 0, or if
+// ReadLastN reads up to N logs from the log buffer with id and sends them over
+// a channel. If n is 0, or if there are fewer than n logs buffered, all
+// buffered logs are returned. If a signal is sent on done, the returned
+// channel is closed and the goroutine exits.
+func (a *Aggregator) ReadLastN(id string, n int, done <-chan struct{}) <-chan *rfc5424.Message {
+	msgc := make(chan *rfc5424.Message)
+	go func() {
+		defer close(msgc)
+
+		messages := a.readLastN(id, n)
+		for _, syslogMsg := range messages {
+			select {
+			case msgc <- syslogMsg:
+			case <-done:
+				return
+			}
+		}
+	}()
+	return msgc
+}
+
+// readLastN reads up to N logs from the log buffer with id. If n is 0, or if
 // there are fewer than n logs buffered, all buffered logs are returned.
-func (a *Aggregator) ReadLastN(id string, n int) []*rfc5424.Message {
+func (a *Aggregator) readLastN(id string, n int) []*rfc5424.Message {
 	buf := a.getBuffer(id)
 	if buf == nil {
 		return nil
@@ -117,6 +138,45 @@ func (a *Aggregator) ReadLastN(id string, n int) []*rfc5424.Message {
 		return buf.ReadLastN(n)
 	}
 	return buf.ReadAll()
+}
+
+// ReadLastNAndSubscribe is like ReadLastN, except that after sending buffered
+// log lines, it also streams new lines as they arrive.
+func (a *Aggregator) ReadLastNAndSubscribe(id string, n int, done <-chan struct{}) <-chan *rfc5424.Message {
+	msgc := make(chan *rfc5424.Message)
+	go func() {
+		buf := a.getOrInitializeBuffer(id)
+		messages, subc, cancel := buf.ReadLastNAndSubscribe(n)
+		defer cancel()
+		defer close(msgc)
+
+		// range over messages, watch done
+		for _, msg := range messages {
+			select {
+			case <-done:
+				return
+			case msgc <- msg:
+			}
+		}
+
+		// select on subc, done, and cancel if done
+		for {
+			select {
+			case msg := <-subc:
+				if msgc == nil { // subc was closed
+					return
+				}
+				select {
+				case msgc <- msg:
+				case <-done:
+					return
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
+	return msgc
 }
 
 func (a *Aggregator) accept() {
