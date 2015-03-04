@@ -584,7 +584,9 @@ func (s *Stack) fetchStackOutputs() error {
 func (s *Stack) configureDNS() error {
 	// TODO(jvatic): Run directly after receiving zone create complete stack event
 	s.SendEvent("Configuring DNS")
-	r53 := route53.New(s.Creds, s.Region, nil)
+
+	// Set region to us-east-1, since any other region will fail for global services like Route53
+	r53 := route53.New(s.Creds, "us-east-1", nil)
 	res, err := r53.GetHostedZone(&route53.GetHostedZoneRequest{ID: aws.String(s.DNSZoneID)})
 	if err != nil {
 		return err
