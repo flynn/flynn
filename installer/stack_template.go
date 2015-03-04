@@ -33,6 +33,16 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
     "UserData": {
       "Type": "String",
       "Description": "The user data each instance is started with."
+    },
+    "VpcCidrBlock": {
+      "Type": "String",
+      "Description": "The CIDR block to use for the VPC",
+      "Default": "10.0.0.0/16"
+    },
+    "SubnetCidrBlock": {
+      "Type": "String",
+      "Description": "The CIDR block to use for the subnet",
+      "Default": "10.0.0.0/21"
     }
   },
 
@@ -40,7 +50,7 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
     "VPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
-        "CidrBlock": "10.0.0.0/16"
+        "CidrBlock": { "Ref": "VpcCidrBlock" }
       }
     },
 
@@ -76,7 +86,7 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
     "Subnet": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "CidrBlock": "10.0.0.0/21",
+        "CidrBlock": { "Ref": "SubnetCidrBlock" },
         "VpcId": { "Ref": "VPC" }
       }
     },
