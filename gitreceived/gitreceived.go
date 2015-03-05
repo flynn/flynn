@@ -38,6 +38,7 @@ var useBlobstore = flag.Bool("b", true, "use the blobstore for repo cache")
 var repoPath = flag.String("r", "/tmp/repos", "path to repo cache")
 var noAuth = flag.Bool("n", false, "disable client authentication")
 var keys = flag.String("k", "", "pem file containing private keys (read from SSH_PRIVATE_KEYS by default)")
+var cacheKeyHook = flag.String("cache-key-hook", "", "hook to run to determine the cache key (optional)")
 
 var authChecker = flag.String("auth-checker", "", "path to an executable that will check if the key is authorized")
 var receiver = flag.String("receiver", "", "path to an executable that will handle the push")
@@ -195,6 +196,21 @@ func handleChannel(conn *ssh.ServerConn, newChan ssh.NewChannel) {
 				ch.Stderr().Write([]byte("Invalid repo.\n"))
 				return
 			}
+
+			cacheKey := cmdargs[1]
+			if *cacheKeyHook != "" {
+				var result bytes.Buffer
+				var errout bytes.Buffer
+				cmd := exec.Command(*cacheKeyHook, cmdargs[0], cmdargs[1])
+				cmd.Stdout = &result
+				cmd.Stderr = &errout
+				if err := cmd.Run(); err != nil {
+					fail("cacheKeyHook", errors.New(errout.String()))
+					return
+				}
+				cacheKey = result.String()
+			}
+
 			tempDir := *repoPath
 			if *useBlobstore {
 				path, err := ioutil.TempDir("", "")
@@ -204,17 +220,17 @@ func handleChannel(conn *ssh.ServerConn, newChan ssh.NewChannel) {
 				}
 				tempDir = path
 			}
-			if err := ensureCacheRepo(tempDir, cmdargs[1]); err != nil {
+			if err := ensureCacheRepo(tempDir, cacheKey); err != nil {
 				fail("ensureCacheRepo", err)
 				return
 			}
 			if *useBlobstore {
-				if err := restoreBlobstoreCache(tempDir, cmdargs[1]); err != nil {
+				if err := restoreBlobstoreCache(tempDir, cacheKey); err != nil {
 					fail("restoreBlobstoreCache", err)
 					return
 				}
 			}
-			cmd := exec.Command("git-shell", "-c", cmdargs[0]+" '"+cmdargs[1]+"'")
+			cmd := exec.Command("git-shell", "-c", cmdargs[0]+" '"+cacheKey+"'")
 			cmd.Dir = tempDir
 			cmd.Env = append(os.Environ(),
 				"RECEIVE_USER="+conn.User(),
@@ -236,7 +252,7 @@ func handleChannel(conn *ssh.ServerConn, newChan ssh.NewChannel) {
 				return
 			}
 			if *useBlobstore {
-				if err := uploadCache(tempDir, cmdargs[1]); err != nil {
+				if err := uploadCache(tempDir, cacheKey); err != nil {
 					fail("uploadCache", err)
 				}
 			}
