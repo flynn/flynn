@@ -397,6 +397,12 @@ func (s *CLISuite) TestResource(t *c.C) {
 	t.Assert(app.sh("test -n $PGDATABASE"), Succeeds)
 }
 
+func (s *CLISuite) TestResourceList(t *c.C) {
+	app := s.newCliTestApp(t)
+	t.Assert(app.flynn("resource", "add", "postgres"), Succeeds)
+	t.Assert(app.flynn("resource").Output, Matches, `postgres`)
+}
+
 func (s *CLISuite) TestLog(t *c.C) {
 	app := s.newCliTestApp(t)
 	t.Assert(app.sh("echo -n hello world"), Succeeds)
