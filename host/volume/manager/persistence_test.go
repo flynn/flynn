@@ -75,15 +75,8 @@ func (s *PersistenceTests) TestPersistence(c *C) {
 	vol1, err := vman.NewVolume()
 	c.Assert(err, IsNil)
 
-	// make a named volume
-	vol2, err := vman.CreateOrGetNamedVolume("aname", "")
-	c.Assert(err, IsNil)
-
 	// assert existence of filesystems; emplace some data
 	f, err := os.Create(filepath.Join(vol1.Location(), "alpha"))
-	c.Assert(err, IsNil)
-	f.Close()
-	f, err = os.Create(filepath.Join(vol2.Location(), "beta"))
 	c.Assert(err, IsNil)
 	f.Close()
 
@@ -97,8 +90,6 @@ func (s *PersistenceTests) TestPersistence(c *C) {
 	// sanity check: assert the filesystems are gone
 	// note that the directories remain present after 'zpool export'
 	_, err = os.Stat(filepath.Join(vol1.Location(), "alpha"))
-	c.Assert(os.IsNotExist(err), Equals, true)
-	_, err = os.Stat(filepath.Join(vol2.Location(), "beta"))
 	c.Assert(os.IsNotExist(err), Equals, true)
 
 	// restore
@@ -115,24 +106,14 @@ func (s *PersistenceTests) TestPersistence(c *C) {
 	restoredVolumes := vman.Volumes()
 	c.Assert(restoredVolumes, HasLen, 2)
 	c.Assert(restoredVolumes[vol1.Info().ID], NotNil)
-	c.Assert(restoredVolumes[vol2.Info().ID], NotNil)
 
 	// switch to the new volume references; do a bunch of smell checks on those
 	vol1restored := restoredVolumes[vol1.Info().ID]
-	vol2restored := restoredVolumes[vol2.Info().ID]
 	c.Assert(vol1restored.Info(), DeepEquals, vol1.Info())
-	c.Assert(vol2restored.Info(), DeepEquals, vol2.Info())
 	c.Assert(vol1restored.Provider(), NotNil)
-	c.Assert(vol1restored.Provider(), Equals, vol2restored.Provider())
-
-	// assert named volumes
-	namedVolumes := vman.NamedVolumes()
-	c.Assert(namedVolumes, HasLen, 1)
-	c.Assert(namedVolumes["aname"], Equals, vol2.Info().ID)
 
 	// assert existences of filesystems and previous data
 	c.Assert(vol1restored.Location(), testutils.DirContains, []string{"alpha"})
-	c.Assert(vol2restored.Location(), testutils.DirContains, []string{"beta"})
 }
 
 // covers deletion persistence for a (named) volume
@@ -175,7 +156,7 @@ func (s *PersistenceTests) TestVolumeDeletion(c *C) {
 	c.Assert(err, IsNil)
 
 	// make a named volume
-	vol, err := vman.CreateOrGetNamedVolume("aname", "")
+	vol, err := vman.NewVolume()
 	c.Assert(err, IsNil)
 
 	// assert existence of filesystems; emplace some data
@@ -212,10 +193,6 @@ func (s *PersistenceTests) TestVolumeDeletion(c *C) {
 	// assert volumes gone
 	restoredVolumes := vman.Volumes()
 	c.Assert(restoredVolumes, HasLen, 0)
-
-	// assert named volumes gone
-	namedVolumes := vman.NamedVolumes()
-	c.Assert(namedVolumes, HasLen, 0)
 
 	// assert volume mount locations are gone
 	_, err = os.Stat(vol.Location())

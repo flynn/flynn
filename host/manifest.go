@@ -38,7 +38,7 @@ type ManifestData struct {
 	BridgeIP    string
 	Nameservers string
 	TCPPorts    []int
-	Volumes     map[string]string // maps 'mntpath'->'volName'
+	Volumes     map[string]struct{}
 	Env         map[string]string
 	Services    map[string]*ManifestData
 
@@ -60,11 +60,11 @@ func (m *ManifestData) TCPPort(id int) (int, error) {
 	return port, nil
 }
 
-func (m *ManifestData) Volume(volName string, mntPath string) string {
+func (m *ManifestData) Volume(mntPath string) string {
 	if m.Volumes == nil {
-		m.Volumes = make(map[string]string)
+		m.Volumes = make(map[string]struct{})
 	}
-	m.Volumes[mntPath] = volName
+	m.Volumes[mntPath] = struct{}{}
 	return mntPath
 }
 
@@ -198,8 +198,8 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 
 		// prepare named volumes
 		volumeBindings := make([]host.VolumeBinding, 0, len(data.Volumes))
-		for mntPath, volName := range data.Volumes {
-			vol, err := m.vman.CreateOrGetNamedVolume(volName, "")
+		for mntPath := range data.Volumes {
+			vol, err := m.vman.NewVolume()
 			if err != nil {
 				return err
 			}
