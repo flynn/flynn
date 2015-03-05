@@ -289,7 +289,7 @@
     "release": {
       "processes": {
         "app": {
-          "cmd": ["logaggregator", "-logaddr", ":514", "-apiaddr", ":80"],
+          "cmd": ["-logaddr", ":514", "-apiaddr", ":80"],
           "ports": [
             {"port": 80, "proto": "tcp"},
             {"port": 514, "proto": "tcp"}
