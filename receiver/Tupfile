@@ -1,5 +1,6 @@
 include_rules
 : |> !go |> flynn-receiver
 : |> !go ./key-check |> bin/flynn-key-check
+: |> !go ./cache-key |> bin/flynn-cache-key
 : $(ROOT)/gitreceived/gitreceived |> !cp |> bin/gitreceived
 : flynn-receiver bin/* |> !docker-layer1 |>
