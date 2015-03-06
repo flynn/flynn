@@ -103,11 +103,11 @@ func BuildFlynn(bc BootConfig, rootFS, commit string, merge bool, out io.Writer)
 }
 
 func (c *Cluster) log(a ...interface{}) (int, error) {
-	return fmt.Fprintln(c.out, a...)
+	return fmt.Fprintln(c.out, append([]interface{}{"++", time.Now().Format("15:04:05.000")}, a...)...)
 }
 
 func (c *Cluster) logf(f string, a ...interface{}) (int, error) {
-	return fmt.Fprintf(c.out, f, a...)
+	return fmt.Fprintf(c.out, strings.Join([]string{"++", time.Now().Format("15:04:05.000"), f}, " "), a...)
 }
 
 func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool, runTests bool) (string, error) {
