@@ -249,11 +249,15 @@ func (c *ContainerInit) GetStdin(arg struct{}, f *os.File) error {
 }
 
 func (c *ContainerInit) StreamState(arg struct{}, stream rpcplus.Stream) error {
+	log := logger.New("fn", "StreamState")
+	log.Info("starting to stream state")
+
 	ch := make(chan StateChange)
 	c.streamsMtx.Lock()
 	c.mtx.Lock()
 	select {
 	case stream.Send <- StateChange{State: c.state, Error: c.error, ExitStatus: c.exitStatus}:
+		log.Info("sent initial state")
 	case <-stream.Error:
 		c.mtx.Unlock()
 		c.streamsMtx.Unlock()
@@ -263,6 +267,7 @@ func (c *ContainerInit) StreamState(arg struct{}, stream rpcplus.Stream) error {
 	c.streams[ch] = struct{}{}
 	c.streamsMtx.Unlock()
 	defer func() {
+		log.Info("cleanup")
 		go func() {
 			// drain to prevent deadlock while removing the listener
 			for range ch {
@@ -274,9 +279,11 @@ func (c *ContainerInit) StreamState(arg struct{}, stream rpcplus.Stream) error {
 		close(ch)
 	}()
 
+	log.Info("waiting for state changes")
 	for {
 		select {
 		case change := <-ch:
+			log.Info("sending state change", "state", change.State, "err", change.Error, "exitStatus", change.ExitStatus)
 			select {
 			case stream.Send <- change:
 			case <-stream.Error:
@@ -290,6 +297,8 @@ func (c *ContainerInit) StreamState(arg struct{}, stream rpcplus.Stream) error {
 
 // Caller must hold lock
 func (c *ContainerInit) changeState(state State, err string, exitStatus int) {
+	logger.Info("changing state", "fn", "changeState", "state", state, "err", err, "exitStatus", exitStatus)
+
 	c.state = state
 	c.error = err
 	c.exitStatus = exitStatus
