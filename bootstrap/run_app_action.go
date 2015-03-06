@@ -119,7 +119,14 @@ func (a *RunAppAction) Run(s *State) error {
 		}
 		sort.Sort(schedutil.HostSlice(hosts))
 		for i := 0; i < count; i++ {
-			job, err := startJob(s, hosts[i%len(hosts)].ID, utils.JobConfig(a.ExpandedFormation, typ))
+			hostID := hosts[i%len(hosts)].ID
+			config := utils.JobConfig(a.ExpandedFormation, typ)
+			if a.ExpandedFormation.Release.Processes[typ].Data {
+				if err := utils.ProvisionVolume(cc, hostID, config); err != nil {
+					return err
+				}
+			}
+			job, err := startJob(s, hostID, config)
 			if err != nil {
 				return err
 			}

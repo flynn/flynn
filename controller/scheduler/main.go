@@ -797,6 +797,13 @@ func (f *Formation) start(typ string, hostID string) (job *Job, err error) {
 		h = sh[0].Host
 	}
 
+	// Provision a data volume on the host if needed.
+	if f.Release.Processes[typ].Data {
+		if err := utils.ProvisionVolume(f.c.clusterClient, h.ID, config); err != nil {
+			return nil, err
+		}
+	}
+
 	job = f.jobs.Add(typ, h.ID, config.ID)
 	job.Formation = f
 	f.c.jobs.Add(job)

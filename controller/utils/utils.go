@@ -47,8 +47,26 @@ func JobConfig(f *ct.ExpandedFormation, name string) *host.Job {
 		job.Config.Ports[i].Port = p.Port
 		job.Config.Ports[i].Service = p.Service
 	}
-	if t.Data {
-		job.Config.Mounts = []host.Mount{{Location: "/data", Writeable: true}}
-	}
 	return job
+}
+
+type HostDialer interface {
+	DialHost(id string) (cluster.Host, error)
+}
+
+func ProvisionVolume(c HostDialer, hostID string, job *host.Job) error {
+	h, err := c.DialHost(hostID)
+	if err != nil {
+		return err
+	}
+	vol, err := h.CreateVolume("default")
+	if err != nil {
+		return err
+	}
+	job.Config.Volumes = []host.VolumeBinding{{
+		Target:    "/data",
+		VolumeID:  vol.ID,
+		Writeable: true,
+	}}
+	return nil
 }
