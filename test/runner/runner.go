@@ -676,7 +676,7 @@ func (r *Runner) addHost(c *cluster.Cluster, w http.ResponseWriter, q url.Values
 }
 
 func (r *Runner) addReleaseHosts(c *cluster.Cluster, w http.ResponseWriter, q url.Values, ps httprouter.Params) error {
-	res, err := c.Boot(cluster.ClusterTypeRelease, 3, nil, true)
+	res, err := c.Boot(cluster.ClusterTypeRelease, 3, nil, false)
 	if err != nil {
 		return err
 	}
