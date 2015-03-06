@@ -60,7 +60,7 @@ func (s *LogAggregatorTestSuite) TestNewMessageFromSyslog(c *C) {
 		&rfc5424.Header{
 			Hostname:  []byte("a.b.flynn.local"),
 			ProcID:    []byte("web.flynn-abcd1234"),
-			Severity:  6,
+			MsgID:     []byte("ID1"),
 			Timestamp: timestamp,
 		},
 		[]byte("testing message"),
