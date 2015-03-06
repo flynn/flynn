@@ -707,6 +707,43 @@ func (StateSuite) TestServiceMeta(c *C) {
 	assertMetaEvent(c, events, "a", meta)
 }
 
+func (StateSuite) TestManualLeader(c *C) {
+	state := NewState()
+	config := &discoverd.ServiceConfig{LeaderType: discoverd.LeaderTypeManual}
+	state.AddService("a", config)
+
+	inst := fakeInstance()
+	inst.Index = 1
+	state.AddInstance("a", inst)
+	c.Assert(state.GetLeader("a"), IsNil)
+
+	events := make(chan *discoverd.Event, 1)
+	state.Subscribe("a", true, discoverd.EventKindLeader, events)
+	state.SetLeader("a", inst.ID)
+	assertEvent(c, events, "a", discoverd.EventKindLeader, inst)
+	assertInstanceEqual(c, state.GetLeader("a"), inst)
+
+	c.Log("remove")
+	state.RemoveInstance("a", inst.ID)
+	assertNoEvent(c, events)
+	c.Assert(state.GetLeader("a"), IsNil)
+
+	c.Log("add")
+	state.AddInstance("a", inst)
+	assertNoEvent(c, events)
+	assertInstanceEqual(c, state.GetLeader("a"), inst)
+
+	c.Log("set")
+	state.SetService("a", config, []*discoverd.Instance{})
+	assertNoEvent(c, events)
+	c.Assert(state.GetLeader("a"), IsNil)
+
+	c.Log("add")
+	state.AddInstance("a", inst)
+	assertNoEvent(c, events)
+	assertInstanceEqual(c, state.GetLeader("a"), inst)
+}
+
 func md5sum(data string) string {
 	digest := md5.Sum([]byte(data))
 	return hex.EncodeToString(digest[:])
