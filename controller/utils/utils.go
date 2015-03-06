@@ -37,6 +37,7 @@ func JobConfig(f *ct.ExpandedFormation, name string) *host.Job {
 			Env:         env,
 			HostNetwork: t.HostNetwork,
 		},
+		Resurrect: t.Resurrect,
 	}
 	if len(t.Entrypoint) > 0 {
 		job.Config.Entrypoint = t.Entrypoint

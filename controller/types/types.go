@@ -49,6 +49,7 @@ type ProcessType struct {
 	Omni        bool              `json:"omni,omitempty"` // omnipresent - present on all hosts
 	HostNetwork bool              `json:"host_network,omitempty"`
 	Service     string            `json:"service,omitempty"`
+	Resurrect   bool              `json:"resurrect,omitempty"`
 }
 
 type Port struct {
