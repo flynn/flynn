@@ -58,6 +58,9 @@ main() {
   # kill flynn first
   "${ROOT}/script/kill-flynn" -b "${backend}"
 
+  # delete the old state
+  sudo rm -f /tmp/flynn-host-state.bolt
+
   if $destroy_vols; then
     sudo "${ROOT}/host/bin/flynn-host" destroy-volumes --include-data
   fi
