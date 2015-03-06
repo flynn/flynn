@@ -182,10 +182,13 @@ func (s *State) persistenceDBClose() error {
 	return s.stateDB.Close()
 }
 
-func (s *State) AddJob(j *host.Job, ip string) {
+func (s *State) AddJob(j *host.Job, ip net.IP) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	job := &host.ActiveJob{Job: j, HostID: s.id, InternalIP: ip}
+	job := &host.ActiveJob{Job: j, HostID: s.id}
+	if len(ip) > 0 {
+		job.InternalIP = ip.String()
+	}
 	s.jobs[j.ID] = job
 	s.sendEvent(job, "create")
 	s.persist(j.ID)

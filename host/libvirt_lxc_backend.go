@@ -522,7 +522,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 		return err
 	}
 
-	l.state.AddJob(job, container.IP.String())
+	l.state.AddJob(job, container.IP)
 	domain := &lt.Domain{
 		Type:   "lxc",
 		Name:   job.ID,
