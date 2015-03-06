@@ -33,12 +33,8 @@ func runDownload(args *docopt.Args) error {
 		return fmt.Errorf("error creating root dir: %s", err)
 	}
 
-	// create a TUF client, initialize it if the DB doesn't exist and update it
+	// create a TUF client and update it
 	tufDB := args.String["--tuf-db"]
-	needsInit := false
-	if _, err := os.Stat(tufDB); os.IsNotExist(err) {
-		needsInit = true
-	}
 	local, err := tuf.FileLocalStore(tufDB)
 	if err != nil {
 		return err
@@ -48,12 +44,7 @@ func runDownload(args *docopt.Args) error {
 		return err
 	}
 	client := tuf.NewClient(local, remote)
-	if needsInit {
-		if err := client.Init(rootKeys, len(rootKeys)); err != nil {
-			return err
-		}
-	}
-	if _, err := client.Update(); err != nil && !tuf.IsLatestSnapshot(err) {
+	if err := updateTUFClient(client); err != nil {
 		return err
 	}
 
@@ -112,4 +103,20 @@ func downloadGzippedFile(client *tuf.Client, path, dir string) (string, error) {
 	defer gz.Close()
 	_, err = io.Copy(out, gz)
 	return dst, err
+}
+
+// updateTUFClient updates the given client, initializing and re-running the
+// update if ErrNoRootKeys is returned.
+func updateTUFClient(client *tuf.Client) error {
+	_, err := client.Update()
+	if err == nil || tuf.IsLatestSnapshot(err) {
+		return nil
+	}
+	if err == tuf.ErrNoRootKeys {
+		if err := client.Init(rootKeys, len(rootKeys)); err != nil {
+			return err
+		}
+		return updateTUFClient(client)
+	}
+	return err
 }
