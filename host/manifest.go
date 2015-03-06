@@ -34,7 +34,6 @@ func parseEnviron() map[string]string {
 
 type ManifestData struct {
 	ExternalIP  string
-	InternalIP  string
 	BridgeIP    string
 	Nameservers string
 	TCPPorts    []int
@@ -115,7 +114,6 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 
 		data := &ManifestData{
 			ExternalIP: m.externalAddr,
-			InternalIP: job.InternalIP,
 			Env:        job.Job.Config.Env,
 			Services:   serviceData,
 			readonly:   true,
@@ -247,8 +245,6 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 		}
 
 		m.state.SetManifestID(job.ID, service.ID)
-		activeJob := m.state.GetJob(job.ID)
-		data.InternalIP = activeJob.InternalIP
 		data.readonly = true
 		serviceData[service.ID] = data
 		return nil
