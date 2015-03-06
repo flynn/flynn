@@ -13,6 +13,10 @@ type Job struct {
 	Resources JobResources `json:"resources,omitempty"`
 
 	Config ContainerConfig `json:"config,omitempty"`
+
+	// If Resurrect is true, the host service will attempt to start the job when
+	// starting after stopping (via crash or shutdown) with the job running.
+	Resurrect bool `json:"resurrect,omitempty"`
 }
 
 func (j *Job) Dup() *Job {

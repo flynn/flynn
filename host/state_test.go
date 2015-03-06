@@ -28,7 +28,7 @@ func (S) TestStateHostID(c *C) {
 
 type MockBackend struct{}
 
-func (MockBackend) Run(*host.Job) error                             { return nil }
+func (MockBackend) Run(*host.Job, *RunConfig) error                 { return nil }
 func (MockBackend) Stop(string) error                               { return nil }
 func (MockBackend) Signal(string, int) error                        { return nil }
 func (MockBackend) ResizeTTY(id string, height, width uint16) error { return nil }

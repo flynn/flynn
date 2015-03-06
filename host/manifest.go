@@ -98,7 +98,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 
 	m.state.mtx.Lock()
 	for _, job := range m.state.jobs {
-		if job.ManifestID == "" || job.Status != host.StatusRunning {
+		if job.ManifestID == "" || job.Status != host.StatusRunning && job.Status != host.StatusStarting {
 			continue
 		}
 		var service *manifestService
@@ -202,8 +202,9 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 				return err
 			}
 			volumeBindings = append(volumeBindings, host.VolumeBinding{
-				Target:   mntPath,
-				VolumeID: vol.Info().ID,
+				Target:    mntPath,
+				VolumeID:  vol.Info().ID,
+				Writeable: true,
 			})
 		}
 
@@ -220,6 +221,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 				HostNetwork: true,
 				Volumes:     volumeBindings,
 			},
+			Resurrect: true,
 		}
 		if job.Config.Env == nil {
 			job.Config.Env = make(map[string]string)
@@ -240,11 +242,10 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 			job.Config.Ports = []host.Port{{Proto: "tcp"}}
 		}
 
-		if err := m.backend.Run(job); err != nil {
+		if err := m.backend.Run(job, &RunConfig{ManifestID: service.ID}); err != nil {
 			return err
 		}
 
-		m.state.SetManifestID(job.ID, service.ID)
 		data.readonly = true
 		serviceData[service.ID] = data
 		return nil

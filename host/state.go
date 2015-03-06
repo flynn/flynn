@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/boltdb/bolt"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/cluster"
 )
 
 // TODO: prune old jobs?
@@ -49,13 +52,15 @@ func NewState(id string, stateFilePath string) *State {
 	Restore prior state from the save location defined at construction time.
 	If the state save file is empty, nothing is loaded, and no error is returned.
 */
-func (s *State) Restore(backend Backend) error {
+func (s *State) Restore(backend Backend) (func() error, error) {
 	s.backend = backend
 
+	var resurrect []*host.ActiveJob
 	if err := s.stateDB.View(func(tx *bolt.Tx) error {
 		jobsBucket := tx.Bucket([]byte("jobs"))
 		backendJobsBucket := tx.Bucket([]byte("backend-jobs"))
 		backendGlobalBucket := tx.Bucket([]byte("backend-global"))
+		resurrectionBucket := tx.Bucket([]byte("resurrection-jobs"))
 
 		// restore jobs
 		if err := jobsBucket.ForEach(func(k, v []byte) error {
@@ -67,6 +72,7 @@ func (s *State) Restore(backend Backend) error {
 				s.containers[job.ContainerID] = job
 			}
 			s.jobs[string(k)] = job
+
 			return nil
 		}); err != nil {
 			return err
@@ -81,11 +87,94 @@ func (s *State) Restore(backend Backend) error {
 			return err
 		}
 		backendGlobalBlob := backendGlobalBucket.Get([]byte("backend"))
-		return backend.UnmarshalState(s.jobs, backendJobsBlobs, backendGlobalBlob)
+		if err := backend.UnmarshalState(s.jobs, backendJobsBlobs, backendGlobalBlob); err != nil {
+			return err
+		}
+
+		if resurrectionBucket == nil {
+			s.mtx.Lock()
+			for _, job := range s.jobs {
+				// if there was an unclean shutdown, we resurrect all jobs marked
+				// that were running at shutdown and are no longer running.
+				if job.Job.Resurrect && job.Status != host.StatusRunning {
+					resurrect = append(resurrect, job)
+				}
+			}
+			s.mtx.Unlock()
+		} else {
+			if err := resurrectionBucket.ForEach(func(k, v []byte) error {
+				job := &host.ActiveJob{}
+				if err := json.Unmarshal(v, job); err != nil {
+					return err
+				}
+				resurrect = append(resurrect, job)
+				return nil
+			}); err != nil {
+				return err
+			}
+			tx.DeleteBucket([]byte("resurrection-jobs"))
+		}
+		return nil
 	}); err != nil && err != io.EOF {
-		return fmt.Errorf("could not restore from host persistence db: %s", err)
+		return nil, fmt.Errorf("could not restore from host persistence db: %s", err)
 	}
-	return nil
+	resurrectJobs := func(manifest bool) error {
+		for _, job := range resurrect {
+			if manifest && job.ManifestID == "" || !manifest && job.ManifestID != "" {
+				continue
+			}
+			// generate a new job id, this is a new job
+			newID := cluster.RandomJobID("")
+			log.Printf("resurrecting %s (%s) as %s", job.Job.ID, job.ManifestID, newID)
+			job.Job.ID = newID
+			config := &RunConfig{
+				// TODO(titanous): Use jobs instead of ActiveJobs in
+				// resurrection bucket once ManifestID is gone.
+				ManifestID: job.ManifestID,
+				// TODO(titanous): Passing the IP is a hack, remove it once the
+				// postgres appliance doesn't use it to calculate its ID in the
+				// state machine.
+				IP: net.ParseIP(job.InternalIP),
+			}
+			if err := backend.Run(job.Job, config); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := resurrectJobs(true); err != nil {
+		return nil, err
+	}
+
+	return func() error { return resurrectJobs(false) }, nil
+}
+
+// MarkForResurrection is run during a clean shutdown and persists all running
+// jobs with the resurrection flag before they are terminated by
+// backend cleanup.
+func (s *State) MarkForResurrection() error {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	return s.stateDB.Update(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucket([]byte("resurrection-jobs"))
+		if err != nil {
+			return err
+		}
+
+		for _, job := range s.jobs {
+			if !job.Job.Resurrect || job.Status != host.StatusRunning {
+				continue
+			}
+			data, err := json.Marshal(job)
+			if err != nil {
+				continue
+			}
+			if err := bucket.Put([]byte(job.Job.ID), data); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (s *State) initializePersistence() {

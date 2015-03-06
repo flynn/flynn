@@ -337,17 +337,20 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 	return &NetworkInfo{BridgeAddr: l.bridgeAddr.String(), Nameservers: dnsConf.Servers}, nil
 }
 
-func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
+func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error) {
 	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "run", "job.id": job.ID})
 	g.Log(grohl.Data{"at": "start", "job.artifact.uri": job.Artifact.URI, "job.cmd": job.Config.Cmd})
 
+	if runConfig == nil {
+		runConfig = &RunConfig{}
+	}
 	container := &libvirtContainer{
 		l:    l,
 		job:  job,
 		done: make(chan struct{}),
 	}
 	if !job.Config.HostNetwork {
-		container.IP, err = ipallocator.RequestIP(l.bridgeNet, nil)
+		container.IP, err = ipallocator.RequestIP(l.bridgeNet, runConfig.IP)
 		if err != nil {
 			g.Log(grohl.Data{"at": "request_ip", "status": "error", "err": err})
 			return err
@@ -523,6 +526,9 @@ func (l *LibvirtLXCBackend) Run(job *host.Job) (err error) {
 	}
 
 	l.state.AddJob(job, container.IP)
+	if runConfig.ManifestID != "" {
+		l.state.SetManifestID(job.ID, runConfig.ManifestID)
+	}
 	domain := &lt.Domain{
 		Type:   "lxc",
 		Name:   job.ID,

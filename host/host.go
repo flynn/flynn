@@ -187,11 +187,17 @@ func runDaemon(args *docopt.Args) {
 		shutdown.Fatal(err)
 	}
 
-	if err := state.Restore(backend); err != nil {
+	resurrectLayer1, err := state.Restore(backend)
+	if err != nil {
 		shutdown.Fatal(err)
 	}
 
 	shutdown.BeforeExit(func() { backend.Cleanup() })
+	shutdown.BeforeExit(func() {
+		if err := state.MarkForResurrection(); err != nil {
+			log.Print("error marking for resurrection", err)
+		}
+	})
 
 	if force {
 		if err := backend.Cleanup(); err != nil {
@@ -312,6 +318,10 @@ func runDaemon(args *docopt.Args) {
 		h.Metadata[kv[0]] = kv[1]
 	}
 
+	if err := resurrectLayer1(); err != nil {
+		shutdown.Fatal(err)
+	}
+
 	for {
 		newLeader := cluster.NewLeaderSignal()
 
@@ -335,7 +345,7 @@ func runDaemon(args *docopt.Args) {
 				job.Config.Env["EXTERNAL_IP"] = externalAddr
 				job.Config.Env["DISCOVERD"] = discURL
 			}
-			if err := backend.Run(job); err != nil {
+			if err := backend.Run(job, nil); err != nil {
 				state.SetStatusFailed(job.ID, err)
 			}
 		}
