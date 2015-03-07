@@ -113,6 +113,11 @@ func (c *context) HandleJob(job *que.Job) (e error) {
 		log.Info("stopped watching deployment events")
 	}()
 	defer func() {
+		log.Info("marking the deployment as done")
+		if err := c.setDeploymentDone(deployment.ID); err != nil {
+			log.Error("error marking the deployment as done", "err", err)
+		}
+
 		// rollback failed deploy
 		if e != nil {
 			log.Warn("rolling back deployment due to error", "err", e)
@@ -134,10 +139,6 @@ func (c *context) HandleJob(job *que.Job) (e error) {
 	if err := c.client.SetAppRelease(deployment.AppID, deployment.NewReleaseID); err != nil {
 		log.Error("error setting the app release", "err", err)
 		return err
-	}
-	log.Info("marking the deployment as done")
-	if err := c.setDeploymentDone(deployment.ID); err != nil {
-		log.Error("error marking the deployment as done", "err", err)
 	}
 	// signal success
 	events <- ct.DeploymentEvent{
