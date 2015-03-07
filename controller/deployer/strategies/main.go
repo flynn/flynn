@@ -277,6 +277,9 @@ func (d *Deploy) waitForJobEvents(releaseID string, expected jobEvents, log log1
 	for {
 		select {
 		case event := <-d.serviceEvents:
+			if event.Kind != discoverd.EventKindUp {
+				continue
+			}
 			if id, ok := event.Instance.Meta["FLYNN_APP_ID"]; !ok || id != d.AppID {
 				continue
 			}
@@ -295,9 +298,7 @@ func (d *Deploy) waitForJobEvents(releaseID string, expected jobEvents, log log1
 				continue
 			}
 			log.Info("got service event", "job_id", jobID, "type", typ, "state", event.Kind)
-			if event.Kind == discoverd.EventKindUp {
-				handleEvent(jobID, typ, "up")
-			}
+			handleEvent(jobID, typ, "up")
 			if expected.Equals(actual) {
 				return nil
 			}
