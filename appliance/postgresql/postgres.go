@@ -576,12 +576,6 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance) {
 				log.Debug("flushed row incremented, resetting startTime")
 				startTime = time.Now().UTC()
 				lastFlushed = flushed
-			} else if cmp == 1 {
-				// Fail fast if the remote flushed location is greater than our
-				// current location. This means that we (the primary) is behind
-				// the sync and will never catch up.
-				log.Error("error checking replication status", "err", "sync xlog position is greater than the primary position")
-				return
 			}
 
 			if sent == flushed {
