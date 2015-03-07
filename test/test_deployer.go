@@ -265,6 +265,10 @@ func (s *DeployerSuite) TestRollbackNoService(t *c.C) {
 	waitForDeploymentEvents(t, events, expected)
 
 	s.assertRolledBack(t, deployment, map[string]int{"printer": 2})
+
+	// check a new deployment can be created
+	_, err = client.CreateDeployment(app.ID, release.ID)
+	t.Assert(err, c.IsNil)
 }
 
 func (s *DeployerSuite) TestOmniProcess(t *c.C) {

@@ -20,7 +20,9 @@ func allAtOnce(d *Deploy) error {
 				JobType:   typ,
 			}
 		}
-		expected[typ] = map[string]int{"up": total - existing}
+		if total > existing {
+			expected[typ] = map[string]int{"up": total - existing}
+		}
 	}
 	if expected.Count() > 0 {
 		log := log.New("release_id", d.NewReleaseID)
@@ -51,7 +53,9 @@ func allAtOnce(d *Deploy) error {
 				JobType:   typ,
 			}
 		}
-		expected[typ] = map[string]int{"down": existing}
+		if existing > 0 {
+			expected[typ] = map[string]int{"down": existing}
+		}
 	}
 	if expected.Count() > 0 {
 		log := log.New("release_id", d.OldReleaseID)
