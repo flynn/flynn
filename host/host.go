@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -167,7 +166,7 @@ func runDaemon(args *docopt.Args) {
 				DatasetName: "flynn-default",
 				Make: &zfsVolume.MakeDev{
 					BackingFilename: filepath.Join(volPath, "zfs/vdev/flynn-default-zpool.vdev"),
-					Size:            int64(math.Pow(2, float64(30))),
+					Size:            100000000000, // Provision a 100GB sparse file
 				},
 				WorkingDir: filepath.Join(volPath, "zfs"),
 			})
@@ -187,11 +186,17 @@ func runDaemon(args *docopt.Args) {
 		shutdown.Fatal(err)
 	}
 
-	if err := state.Restore(backend); err != nil {
+	resurrectLayer1, err := state.Restore(backend)
+	if err != nil {
 		shutdown.Fatal(err)
 	}
 
 	shutdown.BeforeExit(func() { backend.Cleanup() })
+	shutdown.BeforeExit(func() {
+		if err := state.MarkForResurrection(); err != nil {
+			log.Print("error marking for resurrection", err)
+		}
+	})
 
 	if force {
 		if err := backend.Cleanup(); err != nil {
@@ -312,6 +317,10 @@ func runDaemon(args *docopt.Args) {
 		h.Metadata[kv[0]] = kv[1]
 	}
 
+	if err := resurrectLayer1(); err != nil {
+		shutdown.Fatal(err)
+	}
+
 	for {
 		newLeader := cluster.NewLeaderSignal()
 
@@ -335,7 +344,7 @@ func runDaemon(args *docopt.Args) {
 				job.Config.Env["EXTERNAL_IP"] = externalAddr
 				job.Config.Env["DISCOVERD"] = discURL
 			}
-			if err := backend.Run(job); err != nil {
+			if err := backend.Run(job, nil); err != nil {
 				state.SetStatusFailed(job.ID, err)
 			}
 		}

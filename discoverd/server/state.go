@@ -77,6 +77,7 @@ func (s *service) manualLeader() bool {
 
 func (s *service) maybeSetLeader(inst *discoverd.Instance) {
 	if s.manualLeader() {
+		s.maybeNotifyManualLeader(inst)
 		return
 	}
 	if s.leaderIndex == 0 || s.leaderIndex > inst.Index {
@@ -87,12 +88,19 @@ func (s *service) maybeSetLeader(inst *discoverd.Instance) {
 }
 
 func (s *service) maybePickLeader() {
-	if s.manualLeader() {
-		return
-	}
 	for _, inst := range s.instances {
 		s.maybeSetLeader(inst)
 	}
+}
+
+func (s *service) maybeNotifyManualLeader(inst *discoverd.Instance) {
+	if inst.ID != s.leaderID || s.leaderIndex != 0 {
+		return
+	}
+	// if this is the leader and we haven't notified it, leaderIndex will be
+	// zero.
+	s.leaderIndex = inst.Index
+	s.notifyLeader = true
 }
 
 func (s *service) AddInstance(inst *discoverd.Instance) *discoverd.Instance {
@@ -108,7 +116,7 @@ func (s *service) RemoveInstance(id string) *discoverd.Instance {
 		return nil
 	}
 	delete(s.instances, id)
-	if inst.ID == s.leaderID {
+	if !s.manualLeader() && inst.ID == s.leaderID {
 		s.leaderID = ""
 		s.leaderIndex = 0
 		s.maybePickLeader()
@@ -117,15 +125,25 @@ func (s *service) RemoveInstance(id string) *discoverd.Instance {
 }
 
 func (s *service) SetLeader(id string) {
-	s.notifyLeader = s.leaderID != id
+	if s.leaderID == id {
+		return
+	}
 	s.leaderID = id
+	if inst, ok := s.instances[id]; ok {
+		s.leaderIndex = inst.Index
+		s.notifyLeader = true
+	} else {
+		s.leaderIndex = 0
+	}
 }
 
 func (s *service) SetInstances(data map[string]*discoverd.Instance) {
-	if _, ok := data[s.leaderID]; !ok {
-		// the current leader is not in the new set
-		s.leaderID = ""
-		s.leaderIndex = 0
+	if !s.manualLeader() {
+		if _, ok := data[s.leaderID]; !ok {
+			// the current leader is not in the new set
+			s.leaderID = ""
+			s.leaderIndex = 0
+		}
 	}
 	s.instances = data
 	s.maybePickLeader()

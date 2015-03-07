@@ -33,9 +33,6 @@ type Manager struct {
 	// `map[volume.Id]volume`
 	volumes map[string]volume.Volume
 
-	// `map[wellKnownName]volume.Id`
-	namedVolumes map[string]string
-
 	stateDB *bolt.DB
 }
 
@@ -49,11 +46,10 @@ func New(stateFilePath string, defProvFn func() (volume.Provider, error)) (*Mana
 		return nil, err
 	}
 	m := &Manager{
-		providers:    make(map[string]volume.Provider),
-		providerIDs:  make(map[volume.Provider]string),
-		volumes:      make(map[string]volume.Volume),
-		namedVolumes: make(map[string]string),
-		stateDB:      stateDB,
+		providers:   make(map[string]volume.Provider),
+		providerIDs: make(map[volume.Provider]string),
+		volumes:     make(map[string]volume.Volume),
+		stateDB:     stateDB,
 	}
 	if err := m.restore(); err != nil {
 		return nil, err
@@ -142,21 +138,8 @@ func (m *Manager) DestroyVolume(id string) error {
 		return err
 	}
 	delete(m.volumes, id)
-	// clean up named volumes
-	namesToRemove := make([]string, 0, 1)
-	for name, volID := range m.namedVolumes {
-		if volID == id {
-			namesToRemove = append(namesToRemove, name)
-			delete(m.namedVolumes, name)
-		}
-	}
 	// commit both changes
 	m.persist(func(tx *bolt.Tx) error {
-		for _, id := range namesToRemove {
-			if err := m.persistNamedVolume(tx, id); err != nil {
-				return err
-			}
-		}
 		return m.persistVolume(tx, vol)
 	})
 	return nil
@@ -252,7 +235,6 @@ func initializePersistence(stateFilePath string) (*bolt.DB, error) {
 		// idempotently create buckets.  (errors ignored because they're all compile-time impossible args checks.)
 		tx.CreateBucketIfNotExists([]byte("volumes"))
 		tx.CreateBucketIfNotExists([]byte("providers"))
-		tx.CreateBucketIfNotExists([]byte("namedVolumes"))
 		return nil
 	}); err != nil {
 		return nil, fmt.Errorf("could not initialize volume persistence db: %s", err)
@@ -267,7 +249,6 @@ func (m *Manager) restore() error {
 	if err := m.stateDB.View(func(tx *bolt.Tx) error {
 		volumesBucket := tx.Bucket([]byte("volumes"))
 		providersBucket := tx.Bucket([]byte("providers"))
-		namedVolumesBucket := tx.Bucket([]byte("namedVolumes"))
 
 		// restore volume info
 		// keep this in a temporary map until we can get providers to transform them into reality
@@ -316,14 +297,6 @@ func (m *Manager) restore() error {
 			// done
 			m.providers[id] = provider
 			m.providerIDs[provider] = id
-			return nil
-		}); err != nil {
-			return err
-		}
-
-		// restore named volumes mapping
-		if err := namedVolumesBucket.ForEach(func(k, v []byte) error {
-			m.namedVolumes[string(k)] = string(v)
 			return nil
 		}); err != nil {
 			return err
@@ -441,20 +414,6 @@ func (m *Manager) persistProvider(tx *bolt.Tx, id string) error {
 	return nil
 }
 
-func (m *Manager) persistNamedVolume(tx *bolt.Tx, name string) error {
-	namedVolumesBucket := tx.Bucket([]byte("namedVolumes"))
-	k := []byte(name)
-	volID, ok := m.namedVolumes[name]
-	if !ok {
-		return namedVolumesBucket.Delete(k)
-	}
-	err := namedVolumesBucket.Put(k, []byte(volID))
-	if err != nil {
-		return fmt.Errorf("could not persist namedVolume info to boltdb: %s", err)
-	}
-	return nil
-}
-
 /*
 	Proxies `volume.Provider` while making sure the manager remains
 	apprised of all volume lifecycle events.
@@ -472,34 +431,4 @@ func (p managerProviderProxy) NewVolume() (volume.Volume, error) {
 	p.m.volumes[v.Info().ID] = v
 	p.m.persist(func(tx *bolt.Tx) error { return p.m.persistVolume(tx, v) })
 	return v, err
-}
-
-func (m *Manager) NamedVolumes() map[string]string {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-	r := make(map[string]string)
-	for k, v := range m.namedVolumes {
-		r[k] = v
-	}
-	return r
-}
-
-/*
-	Gets a reference to a volume by name if that exists; if no volume is so named,
-	it is created using the named provider (the zero string can be used to invoke
-	the default provider).
-*/
-func (m *Manager) CreateOrGetNamedVolume(name string, providerID string) (volume.Volume, error) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-	if v, ok := m.namedVolumes[name]; ok {
-		return m.volumes[v], nil
-	}
-	v, err := m.newVolumeFromProviderLocked(providerID)
-	if err != nil {
-		return nil, err
-	}
-	m.namedVolumes[name] = v.Info().ID
-	m.persist(func(tx *bolt.Tx) error { return m.persistNamedVolume(tx, name) })
-	return v, nil
 }

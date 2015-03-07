@@ -34,11 +34,10 @@ func parseEnviron() map[string]string {
 
 type ManifestData struct {
 	ExternalIP  string
-	InternalIP  string
 	BridgeIP    string
 	Nameservers string
 	TCPPorts    []int
-	Volumes     map[string]string // maps 'mntpath'->'volName'
+	Volumes     map[string]struct{}
 	Env         map[string]string
 	Services    map[string]*ManifestData
 
@@ -60,11 +59,11 @@ func (m *ManifestData) TCPPort(id int) (int, error) {
 	return port, nil
 }
 
-func (m *ManifestData) Volume(volName string, mntPath string) string {
+func (m *ManifestData) Volume(mntPath string) string {
 	if m.Volumes == nil {
-		m.Volumes = make(map[string]string)
+		m.Volumes = make(map[string]struct{})
 	}
-	m.Volumes[mntPath] = volName
+	m.Volumes[mntPath] = struct{}{}
 	return mntPath
 }
 
@@ -99,7 +98,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 
 	m.state.mtx.Lock()
 	for _, job := range m.state.jobs {
-		if job.ManifestID == "" || job.Status != host.StatusRunning {
+		if job.ManifestID == "" || job.Status != host.StatusRunning && job.Status != host.StatusStarting {
 			continue
 		}
 		var service *manifestService
@@ -115,7 +114,6 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 
 		data := &ManifestData{
 			ExternalIP: m.externalAddr,
-			InternalIP: job.InternalIP,
 			Env:        job.Job.Config.Env,
 			Services:   serviceData,
 			readonly:   true,
@@ -198,14 +196,15 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 
 		// prepare named volumes
 		volumeBindings := make([]host.VolumeBinding, 0, len(data.Volumes))
-		for mntPath, volName := range data.Volumes {
-			vol, err := m.vman.CreateOrGetNamedVolume(volName, "")
+		for mntPath := range data.Volumes {
+			vol, err := m.vman.NewVolume()
 			if err != nil {
 				return err
 			}
 			volumeBindings = append(volumeBindings, host.VolumeBinding{
-				Target:   mntPath,
-				VolumeID: vol.Info().ID,
+				Target:    mntPath,
+				VolumeID:  vol.Info().ID,
+				Writeable: true,
 			})
 		}
 
@@ -222,6 +221,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 				HostNetwork: true,
 				Volumes:     volumeBindings,
 			},
+			Resurrect: true,
 		}
 		if job.Config.Env == nil {
 			job.Config.Env = make(map[string]string)
@@ -242,13 +242,10 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 			job.Config.Ports = []host.Port{{Proto: "tcp"}}
 		}
 
-		if err := m.backend.Run(job); err != nil {
+		if err := m.backend.Run(job, &RunConfig{ManifestID: service.ID}); err != nil {
 			return err
 		}
 
-		m.state.SetManifestID(job.ID, service.ID)
-		activeJob := m.state.GetJob(job.ID)
-		data.InternalIP = activeJob.InternalIP
 		data.readonly = true
 		serviceData[service.ID] = data
 		return nil

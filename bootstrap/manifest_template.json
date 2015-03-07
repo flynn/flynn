@@ -25,7 +25,8 @@
           "cmd": ["postgres"],
           "env": {
             "SINGLETON": "{{ .Singleton }}"
-          }
+          },
+		  "resurrect": true
         },
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
@@ -82,12 +83,14 @@
       "processes": {
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
-          "cmd": ["controller"]
+          "cmd": ["controller"],
+		  "resurrect": true
         },
         "scheduler": {
           "cmd": ["scheduler"],
           "omni": true,
-          "service": "flynn-controller-scheduler"
+          "service": "flynn-controller-scheduler",
+		  "resurrect": true
         },
         "deployer": {
           "cmd": ["deployer"]

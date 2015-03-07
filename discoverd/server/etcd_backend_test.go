@@ -298,3 +298,17 @@ func (s *EtcdSuite) TestManualLeaderInitialSync(c *C) {
 	c.Assert(s.backend.StartSync(), IsNil)
 	assertEvent(c, events, "a", discoverd.EventKindLeader, inst2)
 }
+
+func (s *EtcdSuite) TestManualLeaderInitialSyncDelayedRegister(c *C) {
+	events := make(chan *discoverd.Event, 1)
+	s.state.Subscribe("a", false, discoverd.EventKindLeader, events)
+
+	c.Assert(s.backend.AddService("a", &discoverd.ServiceConfig{LeaderType: discoverd.LeaderTypeManual}), IsNil)
+	inst1 := fakeInstance()
+	c.Assert(s.backend.SetLeader("a", inst1.ID), IsNil)
+
+	c.Assert(s.backend.StartSync(), IsNil)
+	c.Assert(s.backend.AddInstance("a", inst1), IsNil)
+	assertEvent(c, events, "a", discoverd.EventKindLeader, inst1)
+	assertInstanceEqual(c, s.state.GetLeader("a"), inst1)
+}
