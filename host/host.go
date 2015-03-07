@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -167,7 +166,7 @@ func runDaemon(args *docopt.Args) {
 				DatasetName: "flynn-default",
 				Make: &zfsVolume.MakeDev{
 					BackingFilename: filepath.Join(volPath, "zfs/vdev/flynn-default-zpool.vdev"),
-					Size:            int64(math.Pow(2, float64(30))),
+					Size:            100000000000, // Provision a 100GB sparse file
 				},
 				WorkingDir: filepath.Join(volPath, "zfs"),
 			})
