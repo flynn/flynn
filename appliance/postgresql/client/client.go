@@ -57,3 +57,7 @@ func (c *Client) Status() (*Status, error) {
 	res := &Status{}
 	return res, c.c.Get("/status", res)
 }
+
+func (c *Client) Stop() error {
+	return c.c.Post("/stop", nil, nil)
+}

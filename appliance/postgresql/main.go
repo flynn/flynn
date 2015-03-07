@@ -50,6 +50,6 @@ func main() {
 	shutdown.BeforeExit(func() { peer.Close() })
 
 	go peer.Run()
-	shutdown.Fatal(ServeHTTP(pg.(*Postgres), peer, log.New("component", "http")))
+	shutdown.Fatal(ServeHTTP(pg.(*Postgres), peer, hb, log.New("component", "http")))
 	// TODO(titanous): clean shutdown of postgres
 }

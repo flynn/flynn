@@ -16,6 +16,7 @@ package state
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -211,6 +212,8 @@ type Peer struct {
 	workDoneCh  chan struct{}
 	retryCh     chan struct{}
 	stopCh      chan struct{}
+
+	closeOnce sync.Once
 }
 
 func NewPeer(self *discoverd.Instance, singleton bool, d Discoverd, pg Postgres, log log15.Logger) *Peer {
@@ -283,8 +286,15 @@ func (p *Peer) Run() {
 	}
 }
 
+func (p *Peer) Stop() error {
+	p.Close()
+	return p.postgres.Stop()
+}
+
 func (p *Peer) Close() error {
-	close(p.stopCh)
+	p.closeOnce.Do(func() {
+		close(p.stopCh)
+	})
 	return nil
 }
 
