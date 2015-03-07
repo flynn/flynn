@@ -16,7 +16,6 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
-	logaggc "github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/testutils/postgres"
@@ -30,11 +29,11 @@ func init() {
 func Test(t *testing.T) { TestingT(t) }
 
 type S struct {
-	cc  *tu.FakeCluster
-	srv *httptest.Server
-	hc  handlerConfig
-	c   *controller.Client
-	fla *httptest.Server
+	cc   *tu.FakeCluster
+	srv  *httptest.Server
+	hc   handlerConfig
+	c    *controller.Client
+	flac *fakeLogAggregatorClient
 }
 
 var _ = Suite(&S{})
@@ -68,17 +67,12 @@ func (s *S) SetUpSuite(c *C) {
 		c.Fatal(err)
 	}
 
-	s.fla = newFakeLogAggregator()
-	lc, err := logaggc.New(s.fla.URL)
-	if err != nil {
-		c.Fatal(err)
-	}
-
+	s.flac = newFakeLogAggregatorClient()
 	s.cc = tu.NewFakeCluster()
 	s.hc = handlerConfig{
 		db:      pg,
 		cc:      s.cc,
-		lc:      *lc,
+		lc:      s.flac,
 		rc:      newFakeRouter(),
 		pgxpool: pgxpool,
 		key:     authKey,
@@ -88,10 +82,6 @@ func (s *S) SetUpSuite(c *C) {
 	client, err := controller.NewClient(s.srv.URL, authKey)
 	c.Assert(err, IsNil)
 	s.c = client
-}
-
-func (s *S) TearDownSuite(c *C) {
-	s.fla.Close()
 }
 
 func (s *S) TestBadAuth(c *C) {

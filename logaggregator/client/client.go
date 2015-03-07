@@ -12,17 +12,21 @@ import (
 	"github.com/flynn/flynn/pkg/httpclient"
 )
 
-type Client struct {
-	*httpclient.Client
-}
-
 // ErrNotFound is returned when a resource is not found (HTTP status 404).
 var ErrNotFound = errors.New("logaggregator: resource not found")
 
+type Client interface {
+	GetLog(channelID string, lines int, follow bool) (io.ReadCloser, error)
+}
+
+type client struct {
+	*httpclient.Client
+}
+
 // newClient creates a generic Client object, additional attributes must
 // be set by the caller
-func newClient(url string, http *http.Client) *Client {
-	c := &Client{
+func newClient(url string, http *http.Client) *client {
+	c := &client{
 		Client: &httpclient.Client{
 			ErrNotFound: ErrNotFound,
 			URL:         url,
@@ -33,12 +37,12 @@ func newClient(url string, http *http.Client) *Client {
 }
 
 // NewClient creates a new Client pointing at uri.
-func New(uri string) (*Client, error) {
+func New(uri string) (Client, error) {
 	return NewWithHTTP(uri, http.DefaultClient)
 }
 
 // NewClient creates a new Client pointing at uri with the specified http client.
-func NewWithHTTP(uri string, httpClient *http.Client) (*Client, error) {
+func NewWithHTTP(uri string, httpClient *http.Client) (Client, error) {
 	if uri == "" {
 		uri = "http://flynn-logaggregator-api.discoverd"
 	}
@@ -55,7 +59,7 @@ func NewWithHTTP(uri string, httpClient *http.Client) (*Client, error) {
 // If lines is above zero, the number of lines returned will be capped at that
 // value. Otherwise, all available logs are returned. If follow is true, new log
 // lines are streamed after the buffered log.
-func (c *Client) GetLog(channelID string, lines int, follow bool) (io.ReadCloser, error) {
+func (c *client) GetLog(channelID string, lines int, follow bool) (io.ReadCloser, error) {
 	path := fmt.Sprintf("/log/%s", channelID)
 	query := url.Values{}
 	if lines > 0 {

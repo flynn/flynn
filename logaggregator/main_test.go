@@ -20,7 +20,7 @@ func Test(t *testing.T) { TestingT(t) }
 type LogAggregatorTestSuite struct {
 	agg    *Aggregator
 	api    *httptest.Server
-	client *client.Client
+	client client.Client
 }
 
 var _ = Suite(&LogAggregatorTestSuite{})
