@@ -120,7 +120,7 @@ func (a *RunAppAction) Run(s *State) error {
 		sort.Sort(schedutil.HostSlice(hosts))
 		for i := 0; i < count; i++ {
 			hostID := hosts[i%len(hosts)].ID
-			config := utils.JobConfig(a.ExpandedFormation, typ)
+			config := utils.JobConfig(a.ExpandedFormation, typ, hostID)
 			if a.ExpandedFormation.Release.Processes[typ].Data {
 				if err := utils.ProvisionVolume(cc, hostID, config); err != nil {
 					return err
@@ -142,16 +142,9 @@ func startJob(s *State, hostID string, job *host.Job) (*Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	if hostID == "" {
-		hostID, err = randomHost(cc)
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	// TODO: filter by tags
 
-	job.ID = cluster.RandomJobID("")
 	data := &Job{HostID: hostID, JobID: job.ID}
 
 	hc, err := cc.DialHost(hostID)

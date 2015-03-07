@@ -6,7 +6,7 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 )
 
-func JobConfig(f *ct.ExpandedFormation, name string) *host.Job {
+func JobConfig(f *ct.ExpandedFormation, name, hostID string) *host.Job {
 	t := f.Release.Processes[name]
 	env := make(map[string]string, len(f.Release.Env)+len(t.Env)+4)
 	for k, v := range f.Release.Env {
@@ -19,7 +19,7 @@ func JobConfig(f *ct.ExpandedFormation, name string) *host.Job {
 	env["FLYNN_APP_ID"] = f.App.ID
 	env["FLYNN_RELEASE_ID"] = f.Release.ID
 	env["FLYNN_PROCESS_TYPE"] = name
-	env["FLYNN_JOB_ID"] = id
+	env["FLYNN_JOB_ID"] = hostID + "-" + id
 	job := &host.Job{
 		ID: id,
 		Metadata: map[string]string{
