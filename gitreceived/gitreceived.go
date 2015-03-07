@@ -39,36 +39,30 @@ var repoPath = flag.String("r", "/tmp/repos", "path to repo cache")
 var noAuth = flag.Bool("n", false, "disable client authentication")
 var keys = flag.String("k", "", "pem file containing private keys (read from SSH_PRIVATE_KEYS by default)")
 
-var authChecker []string
+var authChecker = flag.String("auth-checker", "", "path to an executable that will check if the key is authorized")
+var receiver = flag.String("receiver", "", "path to an executable that will handle the push")
 
 func init() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %v [options] <authchecker> <receiver>\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %v [options]\n\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 }
 
 func main() {
 	flag.Parse()
-	if flag.NArg() < 2 {
-		flag.Usage()
-		os.Exit(64)
+	if *authChecker == "" {
+		log.Fatalln("Missing authchecker command.")
+	}
+	if *receiver == "" {
+		log.Fatalln("Missing receiver command.")
 	}
 	var err error
-	authChecker, err = shlex.Split(flag.Arg(0))
-	if err != nil {
-		log.Fatalln("Unable to parse authchecker command:", err)
-	}
-
-	receiver, err := shlex.Split(flag.Arg(1))
-	if err != nil {
-		log.Fatalln("Unable to parse receiver command:", err)
-	}
-	receiver[0], err = filepath.Abs(receiver[0])
+	*receiver, err = filepath.Abs(*receiver)
 	if err != nil {
 		log.Fatalln("Invalid receiver path:", err)
 	}
-	prereceiveHook = []byte(strings.Replace(PrereceiveHookTmpl, "{{RECEIVER}}", strings.Join(receiver, " "), 1))
+	prereceiveHook = []byte(strings.Replace(PrereceiveHookTmpl, "{{RECEIVER}}", *receiver, 1))
 
 	var config *ssh.ServerConfig
 	if *noAuth {
@@ -262,8 +256,8 @@ func handleChannel(conn *ssh.ServerConn, newChan ssh.NewChannel) {
 var ErrUnauthorized = errors.New("gitreceive: user is unauthorized")
 
 func checkAuth(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-	status, err := exitStatus(exec.Command(authChecker[0],
-		append(authChecker[1:], conn.User(), string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(key))))...).Run())
+	status, err := exitStatus(exec.Command(*authChecker,
+		conn.User(), string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(key)))).Run())
 	if err != nil {
 		return nil, err
 	}
