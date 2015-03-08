@@ -9,7 +9,8 @@ main() {
     sleep 0.2
     elapsed=$(($(date +%s) - $start))
     if [[ $elapsed -gt 60 ]]; then
-      echo "++ $(timestamp) Docker not started after 60s, exiting"
+      echo "++ $(timestamp) Docker not started after 60s, dumping /var/log/upstart/docker.log"
+      sudo cat /var/log/upstart/docker.log
       exit 1
     fi
   done
