@@ -9,6 +9,7 @@ while true; do
   elapsed=$(($(date +%s) - $start))
   if [ $elapsed -gt 60 ]; then
     echo "$dnsaddr did not appear within 60 seconds"
+    exit 1
   fi
 done
 
