@@ -42,6 +42,8 @@ func (s *Router) Start() error {
 	return nil
 }
 
+var listenFunc = reuseport.NewReusablePortListener
+
 func main() {
 	defer shutdown.Exit()
 
@@ -137,7 +139,7 @@ func main() {
 		shutdown.Fatal(err)
 	}
 
-	listener, err := reuseport.NewReusablePortListener("tcp4", *apiAddr)
+	listener, err := listenFunc("tcp4", *apiAddr)
 	if err != nil {
 		shutdown.Fatal(err)
 	}
