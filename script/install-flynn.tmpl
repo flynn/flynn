@@ -98,6 +98,13 @@ main() {
     --bin-dir    "/usr/local/bin"
   ln -fs "/usr/local/bin/flynn-linux-amd64" "/usr/local/bin/flynn"
 
+  info "setting libvirt defaults"
+  if grep -q "^libvirt_uris=" /etc/default/libvirt-bin; then
+    sed "s|^libvirt_uris=.*|libvirt_uris='qemu:///system'|" -i /etc/default/libvirt-bin
+  else
+    echo "libvirt_uris='qemu:///system'" >> /etc/default/libvirt-bin
+  fi
+
   info "installing Upstart job"
   cp /etc/flynn/upstart.conf /etc/init/flynn-host.conf
   initctl reload-configuration

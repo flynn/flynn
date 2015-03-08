@@ -102,6 +102,7 @@ func (s *State) Restore(backend Backend) (func() error, error) {
 			}
 			s.mtx.Unlock()
 		} else {
+			defer tx.DeleteBucket([]byte("resurrection-jobs"))
 			if err := resurrectionBucket.ForEach(func(k, v []byte) error {
 				job := &host.ActiveJob{}
 				if err := json.Unmarshal(v, job); err != nil {
@@ -112,7 +113,6 @@ func (s *State) Restore(backend Backend) (func() error, error) {
 			}); err != nil {
 				return err
 			}
-			tx.DeleteBucket([]byte("resurrection-jobs"))
 		}
 		return nil
 	}); err != nil && err != io.EOF {
@@ -156,6 +156,7 @@ func (s *State) MarkForResurrection() error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	return s.stateDB.Update(func(tx *bolt.Tx) error {
+		tx.DeleteBucket([]byte("resurrection-jobs"))
 		bucket, err := tx.CreateBucket([]byte("resurrection-jobs"))
 		if err != nil {
 			return err

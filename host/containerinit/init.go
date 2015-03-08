@@ -40,7 +40,6 @@ import (
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/rpcplus"
 	"github.com/flynn/flynn/pkg/rpcplus/fdrpc"
-	"github.com/flynn/flynn/pkg/shutdown"
 )
 
 var logger log15.Logger
@@ -327,7 +326,8 @@ var SocketPath = filepath.Join(SharedPath, "rpc.sock")
 func runRPCServer() {
 	os.Remove(SocketPath)
 	logger.Info("starting RPC server", "fn", "runRPCServer")
-	shutdown.Fatal(fdrpc.ListenAndServe(SocketPath))
+	fdrpc.ListenAndServe(SocketPath)
+	os.Exit(70)
 }
 
 func setupHostname(c *Config) error {
@@ -681,7 +681,7 @@ func containerInitApp(c *Config, logFile *os.File) error {
 		hb, err := monitor(port, init, c.Env, log)
 		if err != nil {
 			log.Error("error monitoring service", "err", err)
-			shutdown.Fatal(err)
+			os.Exit(70)
 		}
 		hbs = append(hbs, hb)
 	}
@@ -704,7 +704,7 @@ func containerInitApp(c *Config, logFile *os.File) error {
 func Main() {
 	logRd, logWr, err := os.Pipe()
 	if err != nil {
-		shutdown.Fatal(err)
+		os.Exit(70)
 	}
 	logger = log15.New("app", "containerinit")
 	logger.SetHandler(log15.StreamHandler(logWr, log15.LogfmtFormat()))
@@ -712,16 +712,16 @@ func Main() {
 	config := &Config{}
 	data, err := ioutil.ReadFile("/.containerconfig")
 	if err != nil {
-		shutdown.Fatal(err)
+		os.Exit(70)
 	}
 	if err := json.Unmarshal(data, config); err != nil {
-		shutdown.Fatal(err)
+		os.Exit(70)
 	}
 
 	// Propagate the plugin-specific container env variable
 	config.Env["container"] = os.Getenv("container")
 
 	if err := containerInitApp(config, logRd); err != nil {
-		shutdown.Fatal(err)
+		os.Exit(70)
 	}
 }
