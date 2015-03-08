@@ -439,6 +439,7 @@ git config user.name "CI"
 git merge origin/master
 {{ end }}
 
+test/scripts/wait-for-docker
 make
 
 if [[ -f test/scripts/debug-info.sh ]]; then

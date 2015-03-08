@@ -55,6 +55,7 @@ src="${GOPATH}/src/github.com/flynn/flynn"
   sed "s/{{FLYNN-HOST-CHECKSUM}}/$(sha512sum host/bin/flynn-host.gz | cut -d " " -f 1)/g" script/install-flynn.tmpl > script/install-flynn
 
   # create new images
+  test/scripts/wait-for-docker
   for name in $(docker images | grep ^flynn | awk '{print $1}'); do
     docker build -t $name - < <(echo -e "FROM $name\nRUN /bin/true")
   done
