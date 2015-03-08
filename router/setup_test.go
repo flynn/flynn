@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ import (
 
 func init() {
 	testMode = true
+	listenFunc = net.Listen
 }
 
 type discoverdClient interface {
