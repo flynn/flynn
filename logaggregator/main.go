@@ -107,8 +107,8 @@ func (a *Aggregator) Shutdown() {
 }
 
 // ReadLastN reads up to N logs from the log buffer with id and sends them over
-// a channel. If n is 0, or if there are fewer than n logs buffered, all
-// buffered logs are returned. If a signal is sent on done, the returned
+// a channel. If n is less than 0, or if there are fewer than n logs buffered,
+// all buffered logs are returned. If a signal is sent on done, the returned
 // channel is closed and the goroutine exits.
 func (a *Aggregator) ReadLastN(id string, n int, done <-chan struct{}) <-chan *rfc5424.Message {
 	msgc := make(chan *rfc5424.Message)
@@ -127,14 +127,15 @@ func (a *Aggregator) ReadLastN(id string, n int, done <-chan struct{}) <-chan *r
 	return msgc
 }
 
-// readLastN reads up to N logs from the log buffer with id. If n is 0, or if
-// there are fewer than n logs buffered, all buffered logs are returned.
+// readLastN reads up to N logs from the log buffer with id. If n is less than
+// 0, or if there are fewer than n logs buffered, all buffered logs are
+// returned.
 func (a *Aggregator) readLastN(id string, n int) []*rfc5424.Message {
 	buf := a.getBuffer(id)
 	if buf == nil {
 		return nil
 	}
-	if n > 0 {
+	if n >= 0 {
 		return buf.ReadLastN(n)
 	}
 	return buf.ReadAll()

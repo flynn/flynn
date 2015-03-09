@@ -86,7 +86,7 @@ func (s *LogAggregatorTestSuite) TestAggregatorBuffersMessages(c *C) {
 		<-messageReceived // wait for messages to be received
 	}
 
-	msgc := s.agg.ReadLastN("app", 0, make(chan struct{}))
+	msgc := s.agg.ReadLastN("app", -1, make(chan struct{}))
 	timeout := time.After(2 * time.Second)
 	msgs := make([]*rfc5424.Message, 0)
 

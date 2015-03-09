@@ -296,7 +296,7 @@ func (c *Client) GetApp(appID string) (*ct.App, error) {
 func (c *Client) GetAppLog(appID string, lines int, follow bool) (io.ReadCloser, error) {
 	path := fmt.Sprintf("/apps/%s/log", appID)
 	query := url.Values{}
-	if lines > 0 {
+	if lines >= 0 {
 		query.Add("lines", strconv.Itoa(lines))
 	}
 	if follow {

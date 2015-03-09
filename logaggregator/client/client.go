@@ -62,7 +62,7 @@ func NewWithHTTP(uri string, httpClient *http.Client) (Client, error) {
 func (c *client) GetLog(channelID string, lines int, follow bool) (io.ReadCloser, error) {
 	path := fmt.Sprintf("/log/%s", channelID)
 	query := url.Values{}
-	if lines > 0 {
+	if lines >= 0 {
 		query.Add("lines", strconv.Itoa(lines))
 	}
 	if follow {

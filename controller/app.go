@@ -253,8 +253,21 @@ func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *
 	ctx, cancel := context.WithCancel(ctx)
 	params, _ := ctxhelper.ParamsFromContext(ctx)
 
-	lines, _ := strconv.Atoi(req.FormValue("lines"))
+	lines := -1 // default to all available lines
+	if strLines := req.FormValue("lines"); strLines != "" {
+		var err error
+		lines, err = strconv.Atoi(req.FormValue("lines"))
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+	}
 	follow := req.FormValue("follow") == "true"
+	if lines == 0 && !follow {
+		// this would be an empty response anyway, avoid hitting the aggregator
+		w.WriteHeader(200)
+		return
+	}
 	// TODO(bgentry): support filtering by fields like process type/ID.
 
 	rc, err := c.logaggc.GetLog(params.ByName("apps_id"), lines, follow)

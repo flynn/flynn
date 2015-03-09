@@ -54,7 +54,7 @@ func (a *aggregatorAPI) GetLog(ctx context.Context, w http.ResponseWriter, req *
 		follow = true
 	}
 
-	lines := 0
+	lines := -1 // default to all lines
 	if strLines := vals.Get("lines"); strLines != "" {
 		var err error
 		lines, err = strconv.Atoi(strLines)
