@@ -256,26 +256,20 @@ func (c *controllerAPI) UpdateApp(ctx context.Context, rw http.ResponseWriter, r
 func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	ctx, cancel := context.WithCancel(ctx)
 
-	lines := -1 // default to all available lines
+	opts := logaggc.LogOpts{
+		Follow: req.FormValue("follow") == "true",
+		JobID:  req.FormValue("job_id"),
+	}
+	if vals, ok := req.Form["process_type"]; ok && len(vals) > 0 {
+		opts.ProcessType = &vals[len(vals)-1]
+	}
 	if strLines := req.FormValue("lines"); strLines != "" {
-		var err error
-		lines, err = strconv.Atoi(req.FormValue("lines"))
+		lines, err := strconv.Atoi(req.FormValue("lines"))
 		if err != nil {
 			respondWithError(w, err)
 			return
 		}
-	}
-	follow := req.FormValue("follow") == "true"
-	if lines == 0 && !follow {
-		// this would be an empty response anyway, avoid hitting the aggregator
-		w.WriteHeader(200)
-		return
-	}
-
-	// TODO(bgentry): support filtering by fields like process type/ID.
-	opts := logaggc.LogOpts{
-		Follow: follow,
-		Lines:  &lines,
+		opts.Lines = &lines
 	}
 	rc, err := c.logaggc.GetLog(c.getApp(ctx).ID, &opts)
 	if err != nil {
