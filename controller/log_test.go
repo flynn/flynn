@@ -61,7 +61,7 @@ func (f *fakeLogAggregatorClient) GetLog(channelID string, options *logaggc.LogO
 
 	if options != nil {
 		opts := *options
-		if opts.Lines != nil {
+		if opts.Lines != nil && *opts.Lines >= 0 {
 			lines = *opts.Lines
 		}
 		follow = opts.Follow
@@ -96,7 +96,7 @@ func (f *fakeLogAggregatorClient) GetLog(channelID string, options *logaggc.LogO
 func (s *S) TestGetAppLog(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "get-app-log-test"})
 
-	rc, err := s.c.GetAppLog(app.Name, 0, false)
+	rc, err := s.c.GetAppLog(app.Name, -1, false)
 	c.Assert(err, IsNil)
 	defer rc.Close()
 
@@ -123,7 +123,7 @@ func (s *S) TestGetAppLogFollow(c *C) {
 	s.flac.subs[app.ID] = subc
 	defer func() { delete(s.flac.subs, app.ID) }()
 
-	rc, err := s.c.GetAppLog(app.Name, 0, true)
+	rc, err := s.c.GetAppLog(app.Name, -1, true)
 	c.Assert(err, IsNil)
 	defer rc.Close()
 

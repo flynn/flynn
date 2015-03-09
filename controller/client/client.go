@@ -289,14 +289,14 @@ func (c *Client) GetApp(appID string) (*ct.App, error) {
 	return app, c.Get(fmt.Sprintf("/apps/%s", appID), app)
 }
 
-// GetAppLog returns a ReadCloser log stream of the app with ID appID. If lines is
-// above zero, the number of lines returned will be capped at that value.
+// GetAppLog returns a ReadCloser log stream of the app with ID appID. If lines
+// is zero or above, the number of lines returned will be capped at that value.
 // Otherwise, all available logs are returned. If follow is true, new log lines
 // are streamed after the buffered log.
 func (c *Client) GetAppLog(appID string, lines int, follow bool) (io.ReadCloser, error) {
 	path := fmt.Sprintf("/apps/%s/log", appID)
 	query := url.Values{}
-	if lines > 0 {
+	if lines >= 0 {
 		query.Add("lines", strconv.Itoa(lines))
 	}
 	if follow {
