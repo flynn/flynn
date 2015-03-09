@@ -15,24 +15,42 @@ import (
 )
 
 func (s *LogAggregatorTestSuite) TestAPIGetLogWithNoResults(c *C) {
-	logrc, err := s.client.GetLog("id", -1, false)
+	logrc, err := s.client.GetLog("id", nil)
 	c.Assert(err, IsNil)
 	defer logrc.Close()
 
 	assertAllLogsEquals(c, logrc, "")
 }
 
+func strPtr(s string) *string { return &s }
+
+func intPtr(i int) *int { return &i }
+
 func (s *LogAggregatorTestSuite) TestAPIGetLogBuffer(c *C) {
 	appID := "test-app"
 	msg1 := newMessageForApp(appID, "web.1", "log message 1")
 	msg2 := newMessageForApp(appID, "web.2", "log message 2")
+	msg3 := newMessageForApp(appID, "worker.3", "log message 3")
+	msg4 := newMessageForApp(appID, "web.1", "log message 4")
+	msg5 := newMessageForApp(appID, ".5", "log message 5")
 	buf := s.agg.getOrInitializeBuffer(appID)
 	buf.Add(msg1)
 	buf.Add(msg2)
+	buf.Add(msg3)
+	buf.Add(msg4)
+	buf.Add(msg5)
 
-	runtest := func(numLogs int, expected string) {
-		c.Logf("numLogs=%d", numLogs)
-		logrc, err := s.client.GetLog(appID, numLogs, false)
+	runtest := func(opts client.LogOpts, expected string) {
+		numLines := -1
+		if opts.Lines != nil {
+			numLines = *opts.Lines
+		}
+		processType := "<nil>"
+		if opts.ProcessType != nil {
+			processType = *opts.ProcessType
+		}
+		c.Logf("Follow=%t Lines=%d JobID=%q ProcessType=%q", opts.Follow, numLines, opts.JobID, processType)
+		logrc, err := s.client.GetLog(appID, &opts)
 		c.Assert(err, IsNil)
 		defer logrc.Close()
 
@@ -40,24 +58,60 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogBuffer(c *C) {
 	}
 
 	tests := []struct {
-		numLogs  int
-		expected string
+		numLogs     *int
+		jobID       string
+		processType *string
+		expected    []*rfc5424.Message
 	}{
 		{
-			numLogs:  -1,
-			expected: marshalMessage(msg1) + marshalMessage(msg2),
+			numLogs:  intPtr(-1),
+			expected: []*rfc5424.Message{msg1, msg2, msg3, msg4, msg5},
 		},
 		{
-			numLogs:  0,
-			expected: "",
+			numLogs:  intPtr(0),
+			expected: nil,
 		},
 		{
-			numLogs:  1,
-			expected: marshalMessage(msg2),
+			numLogs:  intPtr(1),
+			expected: []*rfc5424.Message{msg5},
+		},
+		{
+			numLogs:  intPtr(1),
+			jobID:    "3",
+			expected: []*rfc5424.Message{msg3},
+		},
+		{
+			numLogs:  intPtr(-1),
+			jobID:    "1",
+			expected: []*rfc5424.Message{msg1, msg4},
+		},
+		{
+			numLogs:     intPtr(-1),
+			processType: strPtr("web"),
+			expected:    []*rfc5424.Message{msg1, msg2, msg4},
+		},
+		{
+			numLogs:     intPtr(-1),
+			processType: strPtr(""),
+			expected:    []*rfc5424.Message{msg5},
 		},
 	}
 	for _, test := range tests {
-		runtest(test.numLogs, test.expected)
+		opts := client.LogOpts{
+			Follow: false,
+			JobID:  test.jobID,
+		}
+		if test.processType != nil {
+			opts.ProcessType = test.processType
+		}
+		if test.numLogs != nil {
+			opts.Lines = test.numLogs
+		}
+		expected := ""
+		for _, msg := range test.expected {
+			expected += marshalMessage(msg)
+		}
+		runtest(opts, expected)
 	}
 }
 
@@ -77,7 +131,11 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogFollow(c *C) {
 	buf.Add(msg1)
 	buf.Add(msg2)
 
-	logrc, err := s.client.GetLog(appID, 1, true)
+	nlines := 1
+	logrc, err := s.client.GetLog(appID, &client.LogOpts{
+		Follow: true,
+		Lines:  &nlines,
+	})
 	c.Assert(err, IsNil)
 	defer logrc.Close()
 

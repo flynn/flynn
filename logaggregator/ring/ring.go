@@ -68,12 +68,31 @@ func (b *Buffer) Capacity() int {
 func (b *Buffer) ReadAll() []*rfc5424.Message {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
+	return b._readAll()
+}
 
+// _readAll expects b.mu to already be locked
+func (b *Buffer) _readAll() []*rfc5424.Message {
 	buf := make([]*rfc5424.Message, len(b.messages))
 	if n := copy(buf, b.messages[b.start:len(b.messages)]); n < len(b.messages) {
 		copy(buf[n:], b.messages[:b.start])
 	}
 	return buf
+}
+
+// ReadAllAndSubscribe returns all buffered messages just like ReadAll, and also
+// returns a channel that will stream new messages as they arrive.
+func (b *Buffer) ReadAllAndSubscribe() (
+	messages []*rfc5424.Message,
+	msgc <-chan *rfc5424.Message,
+	cancel func(),
+) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	messages = b._readAll()
+	msgc, cancel = b._subscribe()
+	return
 }
 
 // ReadLastN will return the most recent n messages from the Buffer, up to the

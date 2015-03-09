@@ -110,12 +110,25 @@ func (a *Aggregator) Shutdown() {
 // a channel. If n is less than 0, or if there are fewer than n logs buffered,
 // all buffered logs are returned. If a signal is sent on done, the returned
 // channel is closed and the goroutine exits.
-func (a *Aggregator) ReadLastN(id string, n int, done <-chan struct{}) <-chan *rfc5424.Message {
+func (a *Aggregator) ReadLastN(
+	id string,
+	n int,
+	filters []filter,
+	done <-chan struct{},
+) <-chan *rfc5424.Message {
 	msgc := make(chan *rfc5424.Message)
 	go func() {
 		defer close(msgc)
 
-		messages := a.readLastN(id, n)
+		var messages []*rfc5424.Message
+		if len(filters) == 0 {
+			messages = a.readLastN(id, n)
+		} else {
+			messages = filterMessages(a.readLastN(id, -1), filters)
+			if n > 0 && len(messages) > n {
+				messages = messages[len(messages)-n:]
+			}
+		}
 		for _, syslogMsg := range messages {
 			select {
 			case msgc <- syslogMsg:
@@ -143,11 +156,31 @@ func (a *Aggregator) readLastN(id string, n int) []*rfc5424.Message {
 
 // ReadLastNAndSubscribe is like ReadLastN, except that after sending buffered
 // log lines, it also streams new lines as they arrive.
-func (a *Aggregator) ReadLastNAndSubscribe(id string, n int, done <-chan struct{}) <-chan *rfc5424.Message {
+func (a *Aggregator) ReadLastNAndSubscribe(
+	id string,
+	n int,
+	filters []filter,
+	done <-chan struct{},
+) <-chan *rfc5424.Message {
 	msgc := make(chan *rfc5424.Message)
 	go func() {
 		buf := a.getOrInitializeBuffer(id)
-		messages, subc, cancel := buf.ReadLastNAndSubscribe(n)
+
+		var messages []*rfc5424.Message
+		var subc <-chan *rfc5424.Message
+		var cancel func()
+
+		if (len(filters) > 0 && n != 0) || n < 0 {
+			messages, subc, cancel = buf.ReadAllAndSubscribe()
+		} else {
+			messages, subc, cancel = buf.ReadLastNAndSubscribe(n)
+		}
+		if len(filters) > 0 {
+			messages = filterMessages(messages, filters)
+			if n > 0 && len(messages) > n {
+				messages = messages[len(messages)-n:]
+			}
+		}
 		defer cancel()
 		defer close(msgc)
 
@@ -166,6 +199,9 @@ func (a *Aggregator) ReadLastNAndSubscribe(id string, n int, done <-chan struct{
 			case msg := <-subc:
 				if msgc == nil { // subc was closed
 					return
+				}
+				if !allFiltersMatch(msg, filters) {
+					continue // skip this message if it doesn't match filters
 				}
 				select {
 				case msgc <- msg:
