@@ -16,6 +16,7 @@ import (
 	"github.com/flynn/flynn/controller/name"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	logaggc "github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -253,24 +254,23 @@ func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *
 	ctx, cancel := context.WithCancel(ctx)
 	params, _ := ctxhelper.ParamsFromContext(ctx)
 
-	lines := -1 // default to all available lines
+	opts := logaggc.LogOpts{
+		Follow: req.FormValue("follow") == "true",
+		JobID:  req.FormValue("job_id"),
+	}
+	if vals, ok := req.Form["process_type"]; ok && len(vals) > 0 {
+		opts.ProcessType = &vals[len(vals)-1]
+	}
 	if strLines := req.FormValue("lines"); strLines != "" {
-		var err error
-		lines, err = strconv.Atoi(req.FormValue("lines"))
+		lines, err := strconv.Atoi(req.FormValue("lines"))
 		if err != nil {
 			respondWithError(w, err)
 			return
 		}
+		opts.Lines = &lines
 	}
-	follow := req.FormValue("follow") == "true"
-	if lines == 0 && !follow {
-		// this would be an empty response anyway, avoid hitting the aggregator
-		w.WriteHeader(200)
-		return
-	}
-	// TODO(bgentry): support filtering by fields like process type/ID.
 
-	rc, err := c.logaggc.GetLog(params.ByName("apps_id"), lines, follow)
+	rc, err := c.logaggc.GetLog(params.ByName("apps_id"), &opts)
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -292,11 +292,11 @@ func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(200)
 		// Send headers right away if following
-		if wf, ok := w.(http.Flusher); ok && follow {
+		if wf, ok := w.(http.Flusher); ok && opts.Follow {
 			wf.Flush()
 		}
 
-		fw := httphelper.FlushWriter{Writer: w, Enabled: follow}
+		fw := httphelper.FlushWriter{Writer: w, Enabled: opts.Follow}
 		io.Copy(fw, rc)
 		return
 	}

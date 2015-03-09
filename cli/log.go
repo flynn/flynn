@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/flynn/flynn/controller/client"
+	ct "github.com/flynn/flynn/controller/types"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
@@ -15,16 +16,17 @@ import (
 
 func init() {
 	register("log", runLog, `
-usage: flynn log [options]
+usage: flynn log [-f] [-j <id>] [-n <lines>] [-r] [-s] [-t <type>]
 
 Stream log for an app.
 
 Options:
-	-f, --follow         stream new lines after printing log buffer
-	-j, --job <id>       filter logs to a specific job ID
-	-n, --number <lines> return at most n lines from the log buffer
-	-r, --raw-output     output raw log messages with no prefix
-	-s, --split-stderr   send stderr lines to stderr
+	-f, --follow               stream new lines after printing log buffer
+	-j, --job <id>             filter logs to a specific job ID
+	-n, --number <lines>       return at most n lines from the log buffer
+	-r, --raw-output           output raw log messages with no prefix
+	-s, --split-stderr         send stderr lines to stderr
+	-t, --process-type <type>  filter logs to a specific process type
 `)
 }
 
@@ -34,14 +36,21 @@ const rfc3339micro = "2006-01-02T15:04:05.000000Z07:00"
 
 func runLog(args *docopt.Args, client *controller.Client) error {
 	rawOutput := args.Bool["--raw-output"]
-	lines := 0
+	opts := ct.LogOpts{
+		Follow: args.Bool["--follow"],
+		JobID:  args.String["--job"],
+	}
+	if ptype, ok := args.String["--process-type"]; ok {
+		opts.ProcessType = &ptype
+	}
 	if strlines := args.String["--number"]; strlines != "" {
-		var err error
-		if lines, err = strconv.Atoi(strlines); err != nil {
+		lines, err := strconv.Atoi(strlines)
+		if err != nil {
 			return err
 		}
+		opts.Lines = &lines
 	}
-	rc, err := client.GetAppLog(mustApp(), lines, args.Bool["--follow"])
+	rc, err := client.GetAppLog(mustApp(), &opts)
 	if err != nil {
 		return err
 	}

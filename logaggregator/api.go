@@ -47,15 +47,14 @@ func (a *aggregatorAPI) GetLog(ctx context.Context, w http.ResponseWriter, req *
 
 	params, _ := ctxhelper.ParamsFromContext(ctx)
 	channelID := params.ByName("channel_id")
-	vals := req.URL.Query()
 
 	follow := false
-	if strFollow := vals.Get("follow"); strFollow == "true" {
+	if strFollow := req.FormValue("follow"); strFollow == "true" {
 		follow = true
 	}
 
 	lines := -1 // default to all lines
-	if strLines := vals.Get("lines"); strLines != "" {
+	if strLines := req.FormValue("lines"); strLines != "" {
 		var err error
 		lines, err = strconv.Atoi(strLines)
 		if err != nil || lines < 0 || lines > 10000 {
@@ -64,14 +63,23 @@ func (a *aggregatorAPI) GetLog(ctx context.Context, w http.ResponseWriter, req *
 		}
 	}
 
+	filters := make([]filter, 0)
+	if strJobID := req.FormValue("job_id"); strJobID != "" {
+		filters = append(filters, filterJobID{[]byte(strJobID)})
+	}
+	if processTypeVals, ok := req.Form["process_type"]; ok && len(processTypeVals) > 0 {
+		val := processTypeVals[len(processTypeVals)-1]
+		filters = append(filters, filterProcessType{[]byte(val)})
+	}
+
 	w.WriteHeader(200)
 
 	var msgc <-chan *rfc5424.Message
 	if follow {
-		msgc = a.agg.ReadLastNAndSubscribe(channelID, lines, ctx.Done())
+		msgc = a.agg.ReadLastNAndSubscribe(channelID, lines, filters, ctx.Done())
 		go flushLoop(w.(http.Flusher), 50*time.Millisecond, ctx.Done())
 	} else {
-		msgc = a.agg.ReadLastN(channelID, lines, ctx.Done())
+		msgc = a.agg.ReadLastN(channelID, lines, filters, ctx.Done())
 	}
 
 	enc := json.NewEncoder(w)
@@ -106,9 +114,9 @@ func NewMessageFromSyslog(m *rfc5424.Message) client.Message {
 	processType, jobID := splitProcID(m.ProcID)
 	return client.Message{
 		HostID:      string(m.Hostname),
-		JobID:       jobID,
+		JobID:       string(jobID),
 		Msg:         string(m.Msg),
-		ProcessType: processType,
+		ProcessType: string(processType),
 		// TODO(bgentry): source is always "app" for now, could be router in future
 		Source:    "app",
 		Stream:    streamFromMessage(m),
@@ -116,14 +124,15 @@ func NewMessageFromSyslog(m *rfc5424.Message) client.Message {
 	}
 }
 
-// TODO(bgentry): does this belong in the syslog package?
-func splitProcID(procID []byte) (processType, jobID string) {
-	split := bytes.Split(procID, []byte{'.'})
+var procIDsep = []byte{'.'}
+
+func splitProcID(procID []byte) (processType, jobID []byte) {
+	split := bytes.Split(procID, procIDsep)
 	if len(split) > 0 {
-		processType = string(split[0])
+		processType = split[0]
 	}
 	if len(split) > 1 {
-		jobID = string(split[1])
+		jobID = split[1]
 	}
 	return
 }

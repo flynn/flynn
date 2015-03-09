@@ -16,7 +16,7 @@ import (
 var ErrNotFound = errors.New("logaggregator: resource not found")
 
 type Client interface {
-	GetLog(channelID string, lines int, follow bool) (io.ReadCloser, error)
+	GetLog(channelID string, options *LogOpts) (io.ReadCloser, error)
 }
 
 type client struct {
@@ -59,14 +59,23 @@ func NewWithHTTP(uri string, httpClient *http.Client) (Client, error) {
 // If lines is above zero, the number of lines returned will be capped at that
 // value. Otherwise, all available logs are returned. If follow is true, new log
 // lines are streamed after the buffered log.
-func (c *client) GetLog(channelID string, lines int, follow bool) (io.ReadCloser, error) {
+func (c *client) GetLog(channelID string, options *LogOpts) (io.ReadCloser, error) {
 	path := fmt.Sprintf("/log/%s", channelID)
 	query := url.Values{}
-	if lines >= 0 {
-		query.Add("lines", strconv.Itoa(lines))
-	}
-	if follow {
-		query.Add("follow", "true")
+	if options != nil {
+		opts := *options
+		if opts.Follow {
+			query.Set("follow", "true")
+		}
+		if opts.JobID != "" {
+			query.Set("job_id", opts.JobID)
+		}
+		if opts.Lines != nil && *opts.Lines >= 0 {
+			query.Set("lines", strconv.Itoa(*opts.Lines))
+		}
+		if opts.ProcessType != nil {
+			query.Set("process_type", *opts.ProcessType)
+		}
 	}
 	if encodedQuery := query.Encode(); encodedQuery != "" {
 		path = fmt.Sprintf("%s?%s", path, encodedQuery)
@@ -76,6 +85,13 @@ func (c *client) GetLog(channelID string, lines int, follow bool) (io.ReadCloser
 		return nil, err
 	}
 	return res.Body, nil
+}
+
+type LogOpts struct {
+	Follow      bool
+	JobID       string
+	Lines       *int
+	ProcessType *string
 }
 
 // Message represents a single log message.

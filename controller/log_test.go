@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -18,6 +19,15 @@ import (
 )
 
 var sampleMessages = []logaggc.Message{
+	{
+		HostID:      "server1.flynn.local",
+		JobID:       "00000000000000000000000000000000",
+		Msg:         "a log message from a job with an empty type",
+		ProcessType: "",
+		Source:      "app",
+		Stream:      "stdout",
+		Timestamp:   time.Unix(1425688100, 000000000).UTC(),
+	},
 	{
 		HostID:      "server1.flynn.local",
 		JobID:       "11111111111111111111111111111111",
@@ -55,9 +65,26 @@ type fakeLogAggregatorClient struct {
 	subs map[string]<-chan *logaggc.Message
 }
 
-func (f *fakeLogAggregatorClient) GetLog(channelID string, lines int, follow bool) (io.ReadCloser, error) {
+func (f *fakeLogAggregatorClient) GetLog(channelID string, options *logaggc.LogOpts) (io.ReadCloser, error) {
 	buf := f.logs[channelID]
-	if lines == 0 || lines > len(buf) {
+	lines := len(buf)
+	follow := false
+	jobID, processType := "", ""
+	filterProcType := false
+
+	if options != nil {
+		opts := *options
+		if opts.Lines != nil {
+			lines = *opts.Lines
+		}
+		if opts.ProcessType != nil {
+			filterProcType = true
+			processType = *opts.ProcessType
+		}
+		follow = opts.Follow
+		jobID = opts.JobID
+	}
+	if lines > len(buf) {
 		lines = len(buf)
 	}
 	pr, pw := io.Pipe()
@@ -66,6 +93,12 @@ func (f *fakeLogAggregatorClient) GetLog(channelID string, lines int, follow boo
 	go func() {
 		defer pw.Close()
 		for i := 0 + (len(buf) - lines); i < len(buf); i++ {
+			if jobID != "" && jobID != buf[i].JobID {
+				continue
+			}
+			if filterProcType && processType != buf[i].ProcessType {
+				continue
+			}
 			if err := enc.Encode(buf[i]); err != nil {
 				pw.CloseWithError(err)
 				return
@@ -83,27 +116,70 @@ func (f *fakeLogAggregatorClient) GetLog(channelID string, lines int, follow boo
 	return pr, nil
 }
 
+func strPtr(s string) *string { return &s }
+
+func intPtr(i int) *int { return &i }
+
 func (s *S) TestGetAppLog(c *C) {
 	appName := "get-app-log-test"
 	s.createTestApp(c, &ct.App{Name: appName})
 
-	rc, err := s.c.GetAppLog(appName, 0, false)
-	c.Assert(err, IsNil)
-	defer rc.Close()
-
-	msgs := make([]logaggc.Message, 0)
-	dec := json.NewDecoder(rc)
-	for {
-		var msg logaggc.Message
-		err := dec.Decode(&msg)
-		if err == io.EOF {
-			break
-		}
-		c.Assert(err, IsNil)
-		msgs = append(msgs, msg)
+	tests := []struct {
+		opts     *ct.LogOpts
+		expected []logaggc.Message
+	}{
+		{
+			expected: sampleMessages,
+		},
+		{
+			opts:     &ct.LogOpts{Lines: intPtr(1)},
+			expected: sampleMessages[2:],
+		},
+		{
+			opts:     &ct.LogOpts{ProcessType: strPtr("web")},
+			expected: sampleMessages[1:2],
+		},
+		{
+			opts:     &ct.LogOpts{ProcessType: strPtr("")},
+			expected: sampleMessages[:1],
+		},
+		{
+			opts:     &ct.LogOpts{JobID: "11111111111111111111111111111111"},
+			expected: sampleMessages[1:2],
+		},
 	}
 
-	c.Assert(msgs, DeepEquals, sampleMessages)
+	for _, test := range tests {
+		opts := test.opts
+		if opts != nil {
+			numLines := ""
+			if opts.Lines != nil {
+				numLines = strconv.Itoa(*opts.Lines)
+			}
+			processType := "<nil>"
+			if opts.ProcessType != nil {
+				processType = *opts.ProcessType
+			}
+			c.Logf("Follow=%t Lines=%q JobID=%q ProcessType=%q", opts.Follow, numLines, opts.JobID, processType)
+		}
+		rc, err := s.c.GetAppLog(app.Name, opts)
+		c.Assert(err, IsNil)
+		defer rc.Close()
+
+		msgs := make([]logaggc.Message, 0)
+		dec := json.NewDecoder(rc)
+		for {
+			var msg logaggc.Message
+			err := dec.Decode(&msg)
+			if err == io.EOF {
+				break
+			}
+			c.Assert(err, IsNil)
+			msgs = append(msgs, msg)
+		}
+
+		c.Assert(msgs, DeepEquals, test.expected)
+	}
 }
 
 func (s *S) TestGetAppLogFollow(c *C) {
@@ -115,7 +191,10 @@ func (s *S) TestGetAppLogFollow(c *C) {
 	s.flac.subs[appName] = subc
 	defer func() { delete(s.flac.subs, appName) }()
 
-	rc, err := s.c.GetAppLog(appName, 0, true)
+	rc, err := s.c.GetAppLog(appName, &ct.LogOpts{
+		Lines:  nil,
+		Follow: true,
+	})
 	c.Assert(err, IsNil)
 	defer rc.Close()
 
@@ -135,7 +214,7 @@ func (s *S) TestGetAppLogFollow(c *C) {
 		c.Assert(scanner.Err(), IsNil)
 	}()
 
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 3; i++ {
 		select {
 		case msg := <-msgc:
 			c.Assert(*msg, DeepEquals, sampleMessages[i])
@@ -184,7 +263,9 @@ func (s *S) TestGetAppLogSSE(c *C) {
 	res.Body.Close()
 	c.Assert(err, IsNil)
 
-	expected := `data: {"event":"message","data":{"host_id":"server1.flynn.local","job_id":"11111111111111111111111111111111","msg":"a stdout log message","process_type":"web","source":"app","stream":"stdout","timestamp":"2015-03-07T00:30:01.111111111Z"}}` +
+	expected := `data: {"event":"message","data":{"host_id":"server1.flynn.local","job_id":"00000000000000000000000000000000","msg":"a log message from a job with an empty type","source":"app","stream":"stdout","timestamp":"2015-03-07T00:28:20Z"}}` +
+		"\n\n" +
+		`data: {"event":"message","data":{"host_id":"server1.flynn.local","job_id":"11111111111111111111111111111111","msg":"a stdout log message","process_type":"web","source":"app","stream":"stdout","timestamp":"2015-03-07T00:30:01.111111111Z"}}` +
 		"\n\n" +
 		`data: {"event":"message","data":{"host_id":"server2.flynn.local","job_id":"22222222222222222222222222222222","msg":"a stderr log message","process_type":"worker","source":"app","stream":"stderr","timestamp":"2015-03-07T00:35:21.222222222Z"}}` +
 		"\n\n" +
@@ -239,7 +320,9 @@ func (s *S) TestGetAppLogSSEFollow(c *C) {
 		}
 	}()
 
-	expected := `data: {"event":"message","data":{"host_id":"server1.flynn.local","job_id":"11111111111111111111111111111111","msg":"a stdout log message","process_type":"web","source":"app","stream":"stdout","timestamp":"2015-03-07T00:30:01.111111111Z"}}` +
+	expected := `data: {"event":"message","data":{"host_id":"server1.flynn.local","job_id":"00000000000000000000000000000000","msg":"a log message from a job with an empty type","source":"app","stream":"stdout","timestamp":"2015-03-07T00:28:20Z"}}` +
+		"\n\n" +
+		`data: {"event":"message","data":{"host_id":"server1.flynn.local","job_id":"11111111111111111111111111111111","msg":"a stdout log message","process_type":"web","source":"app","stream":"stdout","timestamp":"2015-03-07T00:30:01.111111111Z"}}` +
 		"\n\n" +
 		`data: {"event":"message","data":{"host_id":"server2.flynn.local","job_id":"22222222222222222222222222222222","msg":"a stderr log message","process_type":"worker","source":"app","stream":"stderr","timestamp":"2015-03-07T00:35:21.222222222Z"}}` +
 		"\n\n" +

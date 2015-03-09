@@ -411,6 +411,39 @@ func (s *CLISuite) TestLog(t *c.C) {
 	t.Assert(app.flynn("log", "--raw-output"), Outputs, "hello world\n")
 }
 
+func (s *CLISuite) TestLogFilter(t *c.C) {
+	app := s.newCliTestApp(t)
+	for i := 0; i < 2; i++ {
+		t.Assert(app.flynn("scale", "crasher=2"), Succeeds)
+		t.Assert(app.flynn("scale", "crasher=0"), Succeeds)
+	}
+	t.Assert(app.flynn("run", "-d", "echo", "hello", "world"), Succeeds)
+	_, jobID := app.waitFor(jobEvents{"": {"up": 1, "down": 1}})
+
+	tests := []struct {
+		args     []string
+		expected string
+	}{
+		{
+			args:     []string{"-j", jobID, "--raw-output"},
+			expected: "hello world\n",
+		},
+		{
+			args:     []string{"-t", "", "--raw-output"},
+			expected: "hello world\n",
+		},
+		{
+			args:     []string{"-t", "crasher", "--raw-output", "-n", "1"},
+			expected: "I like to crash\n",
+		},
+	}
+
+	for _, test := range tests {
+		args := append([]string{"log"}, test.args...)
+		t.Assert(app.flynn(args...), Outputs, test.expected)
+	}
+}
+
 func (s *CLISuite) TestLogStderr(t *c.C) {
 	app := s.newCliTestApp(t)
 	t.Assert(app.flynn("run", "-d", "sh", "-c", "echo hello && echo world >&2"), Succeeds)
