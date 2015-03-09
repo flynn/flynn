@@ -16,6 +16,7 @@ package state
 import (
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
@@ -175,6 +176,14 @@ type DiscoverdEvent struct {
 	State *DiscoverdState
 }
 
+type PeerInfo struct {
+	ID             string                `json:"id"`
+	Role           Role                  `json:"role"`
+	PgRetryPending *time.Time            `json:"pg_retry_pending,omitempty"`
+	State          *State                `json:"state"`
+	Peers          []*discoverd.Instance `json:"peers"`
+}
+
 type Peer struct {
 	// Configuration
 	self      *discoverd.Instance
@@ -186,20 +195,15 @@ type Peer struct {
 	postgres  Postgres
 
 	// Dynamic state
-	role          Role   // current role
-	generation    int    // last generation updated processed
-	updatingState *State // new state object
+	info          atomic.Value // *PeerInfo, replaced after each change
+	generation    int          // last generation updated processed
+	updatingState *State       // new state object
+	stateIndex    uint64       // last received cluster state index
 
-	clusterStateIndex uint64                // last received cluster state index
-	clusterState      *State                // last received cluster state
-	clusterPeers      []*discoverd.Instance // last received list of peers
-
-	pgOnline       *bool     // nil for unknown
-	pgSetup        bool      // whether db existed at start
-	pgRetryCount   int       // consecutive failed retries
-	pgApplied      *PgConfig // last configuration applied
-	pgRetryPending *time.Time
-	pgUpstream     *discoverd.Instance // upstream replication target
+	pgOnline   *bool               // nil for unknown
+	pgSetup    bool                // whether db existed at start
+	pgApplied  *PgConfig           // last configuration applied
+	pgUpstream *discoverd.Instance // upstream replication target
 
 	evalStateCh chan struct{}
 	applyConfCh chan struct{}
@@ -210,7 +214,7 @@ type Peer struct {
 }
 
 func NewPeer(self *discoverd.Instance, singleton bool, d Discoverd, pg Postgres, log log15.Logger) *Peer {
-	return &Peer{
+	p := &Peer{
 		self:        self,
 		singleton:   singleton,
 		postgres:    pg,
@@ -220,6 +224,8 @@ func NewPeer(self *discoverd.Instance, singleton bool, d Discoverd, pg Postgres,
 		applyConfCh: make(chan struct{}, 1),
 		stopCh:      make(chan struct{}),
 	}
+	p.info.Store(&PeerInfo{ID: self.ID})
+	return p
 }
 
 func (p *Peer) SetDebugChannels(restCh, retryCh chan struct{}) {
@@ -282,23 +288,36 @@ func (p *Peer) Close() error {
 	return nil
 }
 
-type PeerInfo struct {
-	ID             string                `json:"id"`
-	Role           Role                  `json:"role"`
-	PgRetryPending *time.Time            `json:"pg_retry_pending,omitempty"`
-	Updating       bool                  `json:"updating,omitempty"`
-	State          *State                `json:"state"`
-	Peers          []*discoverd.Instance `json:"peers"`
+func (p *Peer) Info() *PeerInfo {
+	return p.info.Load().(*PeerInfo)
 }
 
-func (p *Peer) Info() *PeerInfo {
-	return &PeerInfo{
-		ID:             p.self.ID,
-		Role:           p.role,
-		PgRetryPending: p.pgRetryPending,
-		State:          p.clusterState,
-		Peers:          p.clusterPeers,
-	}
+func (p *Peer) setInfo(info PeerInfo) {
+	p.info.Store(&info)
+}
+
+func (p *Peer) setState(state *State) {
+	info := *p.Info()
+	info.State = state
+	p.setInfo(info)
+}
+
+func (p *Peer) setPeers(peers []*discoverd.Instance) {
+	info := *p.Info()
+	info.Peers = peers
+	p.setInfo(info)
+}
+
+func (p *Peer) setRole(role Role) {
+	info := *p.Info()
+	info.Role = role
+	p.setInfo(info)
+}
+
+func (p *Peer) setPgRetryPending(t *time.Time) {
+	info := *p.Info()
+	info.PgRetryPending = t
+	p.setInfo(info)
 }
 
 func (p *Peer) handlePgInit(e PostgresEvent) {
@@ -310,7 +329,7 @@ func (p *Peer) handlePgInit(e PostgresEvent) {
 	p.pgOnline = &e.Online
 	p.pgSetup = e.Setup
 
-	if p.clusterPeers != nil {
+	if p.Info().Peers != nil {
 		p.evalClusterState()
 	}
 }
@@ -328,10 +347,10 @@ func (p *Peer) handleDiscoverdEvent(e *DiscoverdEvent) {
 
 func (p *Peer) handleDiscoverdInit(e *DiscoverdEvent) {
 	p.log.Info("discoverd init", "peers", len(e.Peers), "state", e.State.State != nil)
-	if p.clusterState != nil {
+	if p.Info().State != nil {
 		panic("received discoverd init after already initialized")
 	}
-	p.clusterPeers = e.Peers
+	p.setPeers(e.Peers)
 	p.decodeState(e)
 	if p.pgOnline != nil {
 		p.evalClusterState()
@@ -340,17 +359,18 @@ func (p *Peer) handleDiscoverdInit(e *DiscoverdEvent) {
 
 func (p *Peer) handleDiscoverdPeers(e *DiscoverdEvent) {
 	p.log.Info("discoverd peers", "peers", len(e.Peers))
-	if p.clusterPeers == nil {
+	info := *p.Info()
+	if info.Peers == nil {
 		panic("received discoverd peers before init")
 	}
-	p.clusterPeers = e.Peers
+	p.setPeers(e.Peers)
 	p.evalClusterState()
 }
 
 func (p *Peer) handleDiscoverdState(e *DiscoverdEvent) {
 	log := p.log.New("fn", "handleDiscoverdState", "index", e.State.Index)
 	log.Info("got discoverd state", "state", e.State.State != nil)
-	if p.clusterPeers == nil {
+	if p.Info().Peers == nil {
 		panic("received discoverd state before init")
 	}
 	if p.decodeState(e) {
@@ -361,9 +381,9 @@ func (p *Peer) handleDiscoverdState(e *DiscoverdEvent) {
 }
 
 func (p *Peer) decodeState(e *DiscoverdEvent) bool {
-	if e.State.Index > p.clusterStateIndex {
-		p.clusterStateIndex = e.State.Index
-		p.clusterState = e.State.State
+	if e.State.Index > p.stateIndex {
+		p.stateIndex = e.State.Index
+		p.setState(e.State.State)
 		return true
 	}
 	return false
@@ -438,23 +458,23 @@ func (p *Peer) evalClusterState() {
 
 	// If there's no cluster state, check whether we should set up the cluster.
 	// If not, wait for something else to happen.
-	if p.clusterState == nil {
+	if info := p.Info(); info.State == nil {
 		log.Debug("no cluster state",
-			"peers", len(p.clusterPeers),
+			"peers", len(info.Peers),
 			"self", p.self.ID,
 			"singleton", p.singleton,
-			"leader", len(p.clusterPeers) > 0 && p.clusterPeers[0].ID == p.self.ID,
+			"leader", len(info.Peers) > 0 && info.Peers[0].ID == p.self.ID,
 		)
 
-		if len(p.clusterPeers) == 0 {
+		if len(info.Peers) == 0 {
 			return
 		}
 
 		if !p.pgSetup &&
-			p.clusterPeers[0].ID == p.self.ID &&
-			(p.singleton || len(p.clusterPeers) > 1) {
+			info.Peers[0].ID == p.self.ID &&
+			(p.singleton || len(info.Peers) > 1) {
 			p.startInitialSetup()
-		} else if p.role != RoleUnassigned {
+		} else if info.Role != RoleUnassigned {
 			p.assumeUnassigned()
 		}
 
@@ -462,7 +482,7 @@ func (p *Peer) evalClusterState() {
 	}
 
 	// Bail out if we're configured for singleton mode but the cluster is not.
-	if p.singleton && !p.clusterState.Singleton {
+	if p.singleton && !p.Info().State.Singleton {
 		panic("configured for singleton mode but cluster found in normal mode")
 	}
 
@@ -472,11 +492,11 @@ func (p *Peer) evalClusterState() {
 	// evalClusterState() to deal with any other changes required. We update
 	// p.generation so that we know that we've handled the generation change
 	// already.
-	if p.generation != p.clusterState.Generation {
-		p.generation = p.clusterState.Generation
+	if p.generation != p.Info().State.Generation {
+		p.generation = p.Info().State.Generation
 
-		if p.role == RolePrimary {
-			if p.clusterState.Primary.ID != p.self.ID {
+		if p.Info().Role == RolePrimary {
+			if p.Info().State.Primary.ID != p.self.ID {
 				p.assumeDeposed()
 			}
 		} else {
@@ -488,14 +508,14 @@ func (p *Peer) evalClusterState() {
 
 	// Unassigned peers and async peers only need to watch their position in the
 	// async peer list and reconfigure themselves as needed
-	if p.role == RoleUnassigned {
+	if p.Info().Role == RoleUnassigned {
 		if i := p.whichAsync(); i != -1 {
 			p.assumeAsync(i)
 		}
 		return
 	}
 
-	if p.role == RoleAsync {
+	if p.Info().Role == RoleAsync {
 		if whichAsync := p.whichAsync(); whichAsync == -1 {
 			p.assumeUnassigned()
 		} else {
@@ -510,26 +530,26 @@ func (p *Peer) evalClusterState() {
 	// The synchronous peer needs to check the takeover condition, which is that
 	// the primary has disappeared and the sync's WAL has caught up enough to
 	// takeover as primary.
-	if p.role == RoleSync {
-		if !p.peerIsPresent(p.clusterState.Primary) {
-			p.startTakeover("primary gone", p.clusterState.InitWAL)
+	if p.Info().Role == RoleSync {
+		if !p.peerIsPresent(p.Info().State.Primary) {
+			p.startTakeover("primary gone", p.Info().State.InitWAL)
 		}
 		return
 	}
 
-	if p.role != RolePrimary {
-		panic(fmt.Sprintf("unexpected role %v", p.role))
+	if p.Info().Role != RolePrimary {
+		panic(fmt.Sprintf("unexpected role %v", p.Info().Role))
 	}
 
-	if p.clusterState.Freeze != nil {
+	if p.Info().State.Freeze != nil {
 		log.Info("cluster frozen, not making any changes")
 		return
 	}
 
-	if !p.singleton && p.clusterState.Singleton {
+	if !p.singleton && p.Info().State.Singleton {
 		log.Info("configured for normal mode but found cluster in singleton mode, transitioning cluster to normal mode")
-		if p.clusterState.Primary.ID != p.self.ID {
-			panic(fmt.Sprintf("unexpected cluster state, we should be the primary, but %s is", p.clusterState.Primary.ID))
+		if p.Info().State.Primary.ID != p.self.ID {
+			panic(fmt.Sprintf("unexpected cluster state, we should be the primary, but %s is", p.Info().State.Primary.ID))
 		}
 		p.startTransitionToNormalMode()
 		return
@@ -550,19 +570,19 @@ func (p *Peer) evalClusterState() {
 	// consider a takeover the next time around. If we update this to handle
 	// both operations at once, we can get rid of the goofy boolean returned by
 	// startTakeover.
-	if !p.peerIsPresent(p.clusterState.Sync) &&
-		p.startTakeover("sync gone", p.clusterState.InitWAL) {
+	if !p.peerIsPresent(p.Info().State.Sync) &&
+		p.startTakeover("sync gone", p.Info().State.InitWAL) {
 		return
 	}
 
-	presentPeers := make(map[string]struct{}, len(p.clusterPeers))
-	presentPeers[p.clusterState.Primary.ID] = struct{}{}
-	presentPeers[p.clusterState.Sync.ID] = struct{}{}
+	presentPeers := make(map[string]struct{}, len(p.Info().Peers))
+	presentPeers[p.Info().State.Primary.ID] = struct{}{}
+	presentPeers[p.Info().State.Sync.ID] = struct{}{}
 
-	newAsync := make([]*discoverd.Instance, 0, len(p.clusterPeers))
+	newAsync := make([]*discoverd.Instance, 0, len(p.Info().Peers))
 	changes := false
 
-	for _, a := range p.clusterState.Async {
+	for _, a := range p.Info().State.Async {
 		if p.peerIsPresent(a) {
 			presentPeers[a.ID] = struct{}{}
 			newAsync = append(newAsync, a)
@@ -573,11 +593,11 @@ func (p *Peer) evalClusterState() {
 	}
 
 	// Deposed peers should not be assigned as asyncs
-	for _, d := range p.clusterState.Deposed {
+	for _, d := range p.Info().State.Deposed {
 		presentPeers[d.ID] = struct{}{}
 	}
 
-	for _, peer := range p.clusterPeers {
+	for _, peer := range p.Info().Peers {
 		if _, ok := presentPeers[peer.ID]; ok {
 			continue
 		}
@@ -607,8 +627,9 @@ func (p *Peer) startInitialSetup() {
 		p.updatingState.Singleton = true
 		p.updatingState.Freeze = NewFreezeDetails("cluster started in singleton mode")
 	} else {
-		p.updatingState.Sync = p.clusterPeers[1]
-		p.updatingState.Async = p.clusterPeers[2:]
+		info := p.Info()
+		p.updatingState.Sync = info.Peers[1]
+		p.updatingState.Async = info.Peers[2:]
 	}
 	log := p.log.New("fn", "startInitialSetup")
 	log.Info("creating initial cluster state", "generation", 1)
@@ -618,7 +639,9 @@ func (p *Peer) startInitialSetup() {
 		p.evalLater(1 * time.Second)
 		return
 	} else {
-		p.clusterState = p.updatingState
+		info := *p.Info()
+		info.State = p.updatingState
+		p.setInfo(info)
 	}
 	p.updatingState = nil
 
@@ -627,21 +650,21 @@ func (p *Peer) startInitialSetup() {
 
 func (p *Peer) assumeUnassigned() {
 	p.log.Info("assuming unassigned role", "role", "unassigned", "fn", "assumeUnassigned")
-	p.role = RoleUnassigned
+	p.setRole(RoleUnassigned)
 	p.pgUpstream = nil
 	p.triggerApplyConfig()
 }
 
 func (p *Peer) assumeDeposed() {
 	p.log.Info("assuming deposed role", "role", "deposed", "fn", "assumeDeposed")
-	p.role = RoleDeposed
+	p.setRole(RoleDeposed)
 	p.pgUpstream = nil
 	p.triggerApplyConfig()
 }
 
 func (p *Peer) assumePrimary() {
 	p.log.Info("assuming primary role", "role", "primary", "fn", "assumePrimary")
-	p.role = RolePrimary
+	p.setRole(RolePrimary)
 	p.pgUpstream = nil
 
 	// It simplifies things to say that evalClusterState() only deals with one
@@ -667,8 +690,8 @@ func (p *Peer) assumeSync() {
 	}
 	p.log.Info("assuming sync role", "role", "sync", "fn", "assumeSync")
 
-	p.role = RoleSync
-	p.pgUpstream = p.clusterState.Primary
+	p.setRole(RoleSync)
+	p.pgUpstream = p.Info().State.Primary
 	// See assumePrimary()
 	p.evalClusterState()
 	p.triggerApplyConfig()
@@ -680,7 +703,7 @@ func (p *Peer) assumeAsync(i int) {
 	}
 	p.log.Info("assuming async role", "role", "async", "fn", "assumeAsync")
 
-	p.role = RoleAsync
+	p.setRole(RoleAsync)
 	p.pgUpstream = p.upstream(i)
 
 	// See assumePrimary(). We don't need to check the cluster state here
@@ -690,20 +713,20 @@ func (p *Peer) assumeAsync(i int) {
 }
 
 func (p *Peer) evalInitClusterState() {
-	if p.clusterState.Primary.ID == p.self.ID {
+	if p.Info().State.Primary.ID == p.self.ID {
 		p.assumePrimary()
 		return
 	}
-	if p.clusterState.Singleton {
+	if p.Info().State.Singleton {
 		p.assumeUnassigned()
 		return
 	}
-	if p.clusterState.Sync.ID == p.self.ID {
+	if p.Info().State.Sync.ID == p.self.ID {
 		p.assumeSync()
 		return
 	}
 
-	for _, d := range p.clusterState.Deposed {
+	for _, d := range p.Info().State.Deposed {
 		if p.self.ID == d.ID {
 			p.assumeDeposed()
 			return
@@ -724,7 +747,7 @@ func (p *Peer) startTakeover(reason string, minWAL xlog.Position) bool {
 
 	// Select the first present async peer to be the next sync
 	var newSync *discoverd.Instance
-	for _, a := range p.clusterState.Async {
+	for _, a := range p.Info().State.Async {
 		if p.peerIsPresent(a) {
 			newSync = a
 			break
@@ -736,16 +759,16 @@ func (p *Peer) startTakeover(reason string, minWAL xlog.Position) bool {
 	}
 
 	log.Debug("preparing for new generation")
-	newAsync := make([]*discoverd.Instance, 0, len(p.clusterState.Async))
-	for _, a := range p.clusterState.Async {
+	newAsync := make([]*discoverd.Instance, 0, len(p.Info().State.Async))
+	for _, a := range p.Info().State.Async {
 		if a.ID != newSync.ID && p.peerIsPresent(a) {
 			newAsync = append(newAsync, a)
 		}
 	}
 
-	newDeposed := append(make([]*discoverd.Instance, 0, len(p.clusterState.Deposed)+1), p.clusterState.Deposed...)
-	if p.clusterState.Primary.ID != p.self.ID {
-		newDeposed = append(newDeposed, p.clusterState.Primary)
+	newDeposed := append(make([]*discoverd.Instance, 0, len(p.Info().State.Deposed)+1), p.Info().State.Deposed...)
+	if p.Info().State.Primary.ID != p.self.ID {
+		newDeposed = append(newDeposed, p.Info().State.Primary)
 	}
 
 	p.startTakeoverWithPeer(reason, minWAL, &State{
@@ -769,11 +792,11 @@ func (p *Peer) startTakeoverWithPeer(reason string, minWAL xlog.Position, newSta
 	if p.updatingState != nil {
 		panic("startTakeoverWithPeer with non-nil updatingState")
 	}
-	newState.Generation = p.clusterState.Generation + 1
+	newState.Generation = p.Info().State.Generation + 1
 	newState.Primary = p.self
 	p.updatingState = newState
 
-	if p.updatingState.Primary.ID != p.clusterState.Primary.ID && len(p.updatingState.Deposed) == 0 {
+	if p.updatingState.Primary.ID != p.Info().State.Primary.ID && len(p.updatingState.Deposed) == 0 {
 		panic("startTakeoverWithPeer without deposing old primary")
 	}
 
@@ -800,7 +823,7 @@ func (p *Peer) startTakeoverWithPeer(reason string, minWAL xlog.Position, newSta
 		}
 	}()
 
-	if p.clusterState.Freeze != nil {
+	if p.Info().State.Freeze != nil {
 		return ErrClusterFrozen
 	}
 
@@ -833,10 +856,10 @@ func (p *Peer) startTakeoverWithPeer(reason string, minWAL xlog.Position, newSta
 		return err
 	}
 
-	p.clusterState = p.updatingState
+	p.setState(p.updatingState)
 	p.updatingState = nil
-	p.generation = p.clusterState.Generation
-	log.Info("declared new generation", "generation", p.clusterState.Generation)
+	p.generation = p.Info().State.Generation
+	log.Info("declared new generation", "generation", p.Info().State.Generation)
 
 	// assumePrimary() calls evalClusterState() to catch any
 	// changes we missed while we were updating.
@@ -849,14 +872,14 @@ func (p *Peer) startTakeoverWithPeer(reason string, minWAL xlog.Position, newSta
 // mode.
 func (p *Peer) startTransitionToNormalMode() {
 	log := p.log.New("fn", "startTransitionToNormalMode")
-	if p.clusterState.Primary.ID != p.self.ID || p.role != RolePrimary {
+	if p.Info().State.Primary.ID != p.self.ID || p.Info().Role != RolePrimary {
 		panic("startTransitionToNormalMode called when not primary")
 	}
 
 	// In the normal takeover case, we'd pick an async. In this case, we take
 	// any other peer because we know none of them has anything replicated.
 	var newSync *discoverd.Instance
-	for _, peer := range p.clusterPeers {
+	for _, peer := range p.Info().Peers {
 		if peer.ID != p.self.ID {
 			newSync = peer
 		}
@@ -865,8 +888,8 @@ func (p *Peer) startTransitionToNormalMode() {
 		log.Warn("would takeover but no peers present")
 		return
 	}
-	newAsync := make([]*discoverd.Instance, 0, len(p.clusterPeers))
-	for _, a := range p.clusterPeers {
+	newAsync := make([]*discoverd.Instance, 0, len(p.Info().Peers))
+	for _, a := range p.Info().Peers {
 		if a.ID != p.self.ID && a.ID != newSync.ID {
 			newAsync = append(newAsync, a)
 		}
@@ -885,19 +908,20 @@ func (p *Peer) startUpdateAsyncs(newAsync []*discoverd.Instance) {
 	}
 	log := p.log.New("fn", "startUpdateAsyncs")
 
+	state := p.Info().State
 	p.updatingState = &State{
-		Generation: p.clusterState.Generation,
-		Primary:    p.clusterState.Primary,
-		Sync:       p.clusterState.Sync,
+		Generation: state.Generation,
+		Primary:    state.Primary,
+		Sync:       state.Sync,
 		Async:      newAsync,
-		Deposed:    p.clusterState.Deposed,
-		InitWAL:    p.clusterState.InitWAL,
+		Deposed:    state.Deposed,
+		InitWAL:    state.InitWAL,
 	}
 	log.Info("updating list of asyncs")
 	if err := p.putClusterState(); err != nil {
 		log.Error("failed to update cluster state", "err", err)
 	} else {
-		p.clusterState = p.updatingState
+		p.setState(p.updatingState)
 	}
 	p.updatingState = nil
 
@@ -936,7 +960,7 @@ func (p *Peer) pgApplyConfig() (err error) {
 		// log an error and try again shortly.
 		log.Error("error applying pg config", "err", err)
 		t := TimeNow()
-		p.pgRetryPending = &t
+		p.setPgRetryPending(&t)
 		p.applyConfigLater(1 * time.Second)
 	}()
 
@@ -966,7 +990,7 @@ func (p *Peer) pgApplyConfig() (err error) {
 	}
 
 	log.Info("applied pg config")
-	p.pgRetryPending = nil
+	p.setPgRetryPending(nil)
 	p.pgApplied = config
 	online := config.Role != RoleNone
 	p.pgOnline = &online
@@ -978,21 +1002,22 @@ func (p *Peer) pgApplyConfig() (err error) {
 }
 
 func (p *Peer) pgConfig() *PgConfig {
-	switch p.role {
+	role := p.Info().Role
+	switch role {
 	case RolePrimary:
-		return &PgConfig{Role: p.role, Downstream: p.clusterState.Sync}
+		return &PgConfig{Role: role, Downstream: p.Info().State.Sync}
 	case RoleSync, RoleAsync:
-		return &PgConfig{Role: p.role, Upstream: p.pgUpstream}
+		return &PgConfig{Role: role, Upstream: p.pgUpstream}
 	case RoleUnassigned, RoleDeposed:
 		return &PgConfig{Role: RoleNone}
 	default:
-		panic(fmt.Sprintf("unexpected role %v", p.role))
+		panic(fmt.Sprintf("unexpected role %v", role))
 	}
 }
 
 // Determine our index in the async peer list. -1 means not present.
 func (p *Peer) whichAsync() int {
-	for i, a := range p.clusterState.Async {
+	for i, a := range p.Info().State.Async {
 		if p.self.ID == a.ID {
 			return i
 		}
@@ -1003,9 +1028,9 @@ func (p *Peer) whichAsync() int {
 // Return the upstream peer for a given one of the async peers
 func (p *Peer) upstream(whichAsync int) *discoverd.Instance {
 	if whichAsync == 0 {
-		return p.clusterState.Sync
+		return p.Info().State.Sync
 	}
-	return p.clusterState.Async[whichAsync-1]
+	return p.Info().State.Async[whichAsync-1]
 }
 
 // Returns true if the given other peer appears to be present in the most
@@ -1017,7 +1042,7 @@ func (p *Peer) peerIsPresent(other *discoverd.Instance) bool {
 	if other.ID == p.self.ID {
 		panic("peerIsPresent with self")
 	}
-	for _, p := range p.clusterPeers {
+	for _, p := range p.Info().Peers {
 		if p.ID == other.ID {
 			return true
 		}
@@ -1027,10 +1052,10 @@ func (p *Peer) peerIsPresent(other *discoverd.Instance) bool {
 }
 
 func (p *Peer) putClusterState() error {
-	s := &DiscoverdState{State: p.updatingState, Index: p.clusterStateIndex}
+	s := &DiscoverdState{State: p.updatingState, Index: p.stateIndex}
 	if err := p.discoverd.SetState(s); err != nil {
 		return err
 	}
-	p.clusterStateIndex = s.Index
+	p.stateIndex = s.Index
 	return nil
 }
