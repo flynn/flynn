@@ -57,6 +57,19 @@ func (s *GitDeploySuite) TestBuildCaching(t *c.C) {
 	t.Assert(push, OutputContains, "cached: 1")
 }
 
+func (s *GitDeploySuite) TestAppRecreation(t *c.C) {
+	r := s.newGitRepo(t, "empty")
+	t.Assert(r.flynn("create", "-y", "app-recreation"), Succeeds)
+	r.git("commit", "-m", "bump", "--allow-empty")
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+	t.Assert(r.flynn("delete", "-y"), Succeeds)
+
+	// recreate app and push again, it should work
+	t.Assert(r.flynn("create", "-y", "app-recreation"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+	t.Assert(r.flynn("delete", "-y"), Succeeds)
+}
+
 func (s *GitDeploySuite) TestGoBuildpack(t *c.C) {
 	s.runBuildpackTest(t, "go-flynn-example", []string{"postgres"})
 }
