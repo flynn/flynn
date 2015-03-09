@@ -50,12 +50,26 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
     "VPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
-        "CidrBlock": { "Ref": "VpcCidrBlock" }
+        "CidrBlock": { "Ref": "VpcCidrBlock" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Ref": "AWS::StackName" }
+          }
+        ]
       }
     },
 
     "Gateway": {
-      "Type": "AWS::EC2::InternetGateway"
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Ref": "AWS::StackName" }
+          }
+        ]
+      }
     },
 
     "GatewayAttachment": {
@@ -69,7 +83,13 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
     "GatewayRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": { "Ref": "VPC" }
+        "VpcId": { "Ref": "VPC" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Ref": "AWS::StackName" }
+          }
+        ]
       }
     },
 
@@ -87,7 +107,13 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "CidrBlock": { "Ref": "SubnetCidrBlock" },
-        "VpcId": { "Ref": "VPC" }
+        "VpcId": { "Ref": "VPC" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Ref": "AWS::StackName" }
+          }
+        ]
       }
     },
 
@@ -147,6 +173,12 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
             "ToPort": "-1",
             "CidrIp": "0.0.0.0/0"
           }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Ref": "AWS::StackName" }
+          }
         ]
       }
     },
@@ -180,7 +212,13 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
             ]
           }
         ],
-        "UserData": { "Ref": "UserData" }
+        "UserData": { "Ref": "UserData" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Ref": "AWS::StackName" }
+          }
+        ]
       }
     },
 
