@@ -15,7 +15,7 @@ import (
 )
 
 func (s *LogAggregatorTestSuite) TestAPIGetLogWithNoResults(c *C) {
-	logrc, err := s.client.GetLog("id", 0, false)
+	logrc, err := s.client.GetLog("id", -1, false)
 	c.Assert(err, IsNil)
 	defer logrc.Close()
 
@@ -31,6 +31,7 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogBuffer(c *C) {
 	buf.Add(msg2)
 
 	runtest := func(numLogs int, expected string) {
+		c.Logf("numLogs=%d", numLogs)
 		logrc, err := s.client.GetLog(appID, numLogs, false)
 		c.Assert(err, IsNil)
 		defer logrc.Close()
@@ -43,8 +44,12 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogBuffer(c *C) {
 		expected string
 	}{
 		{
-			numLogs:  0,
+			numLogs:  -1,
 			expected: marshalMessage(msg1) + marshalMessage(msg2),
+		},
+		{
+			numLogs:  0,
+			expected: "",
 		},
 		{
 			numLogs:  1,
