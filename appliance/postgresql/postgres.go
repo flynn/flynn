@@ -42,8 +42,8 @@ type Postgres struct {
 
 	events chan state.PostgresEvent
 
-	config        *state.PgConfig
-	running       bool
+	configVal     atomic.Value // *state.PgConfig
+	runningVal    atomic.Value // bool
 	configApplied bool
 
 	// config options
@@ -92,6 +92,8 @@ func NewPostgres(c Config) state.Postgres {
 		events:         make(chan state.PostgresEvent, 1),
 		cancelSyncWait: func() {},
 	}
+	p.setRunning(false)
+	p.setConfig(nil)
 	if p.log == nil {
 		p.log = log15.New("app", "postgres", "id", p.id)
 	}
@@ -117,6 +119,22 @@ func NewPostgres(c Config) state.Postgres {
 	return p
 }
 
+func (p *Postgres) running() bool {
+	return p.runningVal.Load().(bool)
+}
+
+func (p *Postgres) setRunning(running bool) {
+	p.runningVal.Store(running)
+}
+
+func (p *Postgres) config() *state.PgConfig {
+	return p.configVal.Load().(*state.PgConfig)
+}
+
+func (p *Postgres) setConfig(config *state.PgConfig) {
+	p.configVal.Store(config)
+}
+
 func (p *Postgres) Reconfigure(config *state.PgConfig) error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
@@ -135,8 +153,8 @@ func (p *Postgres) Reconfigure(config *state.PgConfig) error {
 		return fmt.Errorf("unknown role %v", config.Role)
 	}
 
-	if !p.running {
-		p.config = config
+	if !p.running() {
+		p.setConfig(config)
 		p.configApplied = false
 		return nil
 	}
@@ -148,13 +166,13 @@ func (p *Postgres) Start() error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	if p.running {
+	if p.running() {
 		return errors.New("postgres is already running")
 	}
-	if p.config == nil {
+	if p.config() == nil {
 		return errors.New("postgres is unconfigured")
 	}
-	if p.config.Role == state.RoleNone {
+	if p.config().Role == state.RoleNone {
 		return errors.New("start attempted with role 'none'")
 	}
 
@@ -165,7 +183,7 @@ func (p *Postgres) Stop() error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	if !p.running {
+	if !p.running() {
 		return errors.New("postgres is already stopped")
 	}
 	return p.stop()
@@ -175,12 +193,12 @@ func (p *Postgres) XLogPosition() (xlog.Position, error) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	if !p.running {
+	if !p.running() {
 		return "", errors.New("postgres is not running")
 	}
 
 	fn := "pg_last_xlog_replay_location()"
-	if p.config.Role == state.RolePrimary {
+	if p.config().Role == state.RolePrimary {
 		fn = "pg_current_xlog_location()"
 	}
 	var res string
@@ -195,7 +213,7 @@ func (p *Postgres) Ready() <-chan state.PostgresEvent {
 func (p *Postgres) reconfigure(config *state.PgConfig) (err error) {
 	defer func() {
 		if err == nil {
-			p.config = config
+			p.setConfig(config)
 			p.configApplied = true
 		}
 	}()
@@ -205,13 +223,13 @@ func (p *Postgres) reconfigure(config *state.PgConfig) (err error) {
 	}
 
 	// If we've already applied the same postgres config, we don't need to do anything
-	if p.configApplied && config != nil && p.config != nil && config.Equal(p.config) {
+	if p.configApplied && config != nil && p.config() != nil && config.Equal(p.config()) {
 		return nil
 	}
 
 	// If we're already running and it's just a change from async to sync with the same node, we don't need to restart
-	if p.configApplied && p.running && p.config != nil && config != nil &&
-		p.config.Role == state.RoleAsync && config.Role == state.RoleSync && config.Upstream.ID == p.config.Upstream.ID {
+	if p.configApplied && p.running() && p.config() != nil && config != nil &&
+		p.config().Role == state.RoleAsync && config.Role == state.RoleSync && config.Upstream.ID == p.config().Upstream.ID {
 		return nil
 	}
 
@@ -219,12 +237,12 @@ func (p *Postgres) reconfigure(config *state.PgConfig) (err error) {
 	p.cancelSyncWait()
 
 	// If we're already running and this is only a sync change, we just need to update the config.
-	if p.running && p.config != nil && config != nil && p.config.Role == state.RolePrimary && config.Role == state.RolePrimary {
+	if p.running() && p.config() != nil && config != nil && p.config().Role == state.RolePrimary && config.Role == state.RolePrimary {
 		return p.updateSync(config.Downstream)
 	}
 
 	if config == nil {
-		config = p.config
+		config = p.config()
 	}
 
 	if config.Role == state.RolePrimary {
@@ -240,7 +258,7 @@ func (p *Postgres) assumePrimary(downstream *discoverd.Instance) (err error) {
 		log = log.New("downstream", downstream.Addr)
 	}
 
-	if p.running && p.config.Role == state.RoleSync {
+	if p.running() && p.config().Role == state.RoleSync {
 		log.Info("promoting to primary")
 
 		if err := ioutil.WriteFile(p.triggerPath(), nil, 0655); err != nil {
@@ -255,8 +273,8 @@ func (p *Postgres) assumePrimary(downstream *discoverd.Instance) (err error) {
 
 	log.Info("starting as primary")
 
-	if p.running {
-		panic(fmt.Sprintf("unexpected state running role=%s", p.config.Role))
+	if p.running() {
+		panic(fmt.Sprintf("unexpected state running role=%s", p.config().Role))
 	}
 
 	if err := p.initDB(); err != nil {
@@ -327,7 +345,7 @@ func (p *Postgres) assumeStandby(upstream *discoverd.Instance) error {
 	// restarting:
 	// http://www.databasesoup.com/2014/05/remastering-without-restarting.html
 
-	if p.running {
+	if p.running() {
 		// if we are running, we can just restart with a new recovery.conf, postgres
 		// supports streaming remastering.
 		if err := p.stop(); err != nil {
@@ -407,7 +425,7 @@ func (p *Postgres) start() error {
 		return err
 	}
 	p.daemon = cmd
-	p.running = true
+	p.setRunning(true)
 
 	go func() {
 		err := cmd.Wait()
@@ -469,7 +487,7 @@ func (p *Postgres) stop() error {
 		case <-time.After(p.opTimeout):
 			return false
 		case <-p.daemonExit:
-			p.running = false
+			p.setRunning(false)
 			return true
 		}
 	}
