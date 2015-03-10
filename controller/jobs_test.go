@@ -1,16 +1,11 @@
 package main
 
 import (
-	"bytes"
-	"encoding/base64"
-	"fmt"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"strings"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/controller/client"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
@@ -93,116 +88,6 @@ func (s *S) TestKillJob(c *C) {
 
 	c.Assert(s.c.DeleteJob(app.ID, hostID+"-"+jobID), IsNil)
 	c.Assert(hc.IsStopped(jobID), Equals, true)
-}
-
-func (s *S) createLogTestApp(c *C, name string, stream io.Reader) (*ct.App, string, string) {
-	app := s.createTestApp(c, &ct.App{Name: name})
-	hostID, jobID := random.UUID(), random.UUID()
-	hc := tu.NewFakeHostClient(hostID)
-	hc.SetAttach(jobID, cluster.NewAttachClient(newFakeLog(stream)))
-	s.cc.SetHostClient(hostID, hc)
-	return app, hostID, jobID
-}
-
-func (s *S) TestJobLog(c *C) {
-	app, hostID, jobID := s.createLogTestApp(c, "joblog", strings.NewReader("foo"))
-
-	body, err := s.c.GetJobLog(app.ID, hostID+"-"+jobID, false)
-	c.Assert(err, IsNil)
-	var buf bytes.Buffer
-	_, err = buf.ReadFrom(body)
-	body.Close()
-	c.Assert(err, IsNil)
-
-	c.Assert(buf.String(), Equals, "foo")
-}
-
-func (s *S) TestJobLogWait(c *C) {
-	app := s.createTestApp(c, &ct.App{Name: "joblog-wait"})
-	hostID, jobID := random.UUID(), random.UUID()
-	hc := tu.NewFakeHostClient(hostID)
-	hc.SetAttachFunc(jobID, func(req *host.AttachReq, wait bool) (cluster.AttachClient, error) {
-		if !wait {
-			return nil, cluster.ErrWouldWait
-		}
-		return cluster.NewAttachClient(newFakeLog(strings.NewReader("foo"))), nil
-	})
-	s.cc.SetHostClient(hostID, hc)
-
-	res, err := s.c.GetJobLog(app.ID, hostID+"-"+jobID, false)
-	c.Assert(err, Equals, controller.ErrNotFound)
-
-	res, err = s.c.GetJobLogWithWait(app.ID, hostID+"-"+jobID, false)
-	c.Assert(err, IsNil)
-	var buf bytes.Buffer
-	_, err = buf.ReadFrom(res)
-	res.Close()
-	c.Assert(err, IsNil)
-
-	c.Assert(buf.String(), Equals, "foo")
-}
-
-func (s *S) TestJobLogTail(c *C) {
-	pipeR, pipeW := io.Pipe()
-	defer pipeW.Close()
-	app, hostID, jobID := s.createLogTestApp(c, "joblog-stream", pipeR)
-
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log?tail=true", s.srv.URL, app.ID, hostID, jobID), nil)
-	c.Assert(err, IsNil)
-	req.SetBasicAuth("", authKey)
-	res, err := http.DefaultClient.Do(req)
-	c.Assert(err, IsNil)
-	defer res.Body.Close()
-
-	data := []byte("test")
-	go pipeW.Write(data)
-	buf := make([]byte, 4)
-	_, err = res.Body.Read(buf)
-	c.Assert(err, IsNil)
-	c.Assert(buf, DeepEquals, data)
-}
-
-func (s *S) TestJobLogSSE(c *C) {
-	logData, err := base64.StdEncoding.DecodeString("AwIAAAANaGVsbG8gc3RkZXJyCgMBAAAADWhlbGxvIHN0ZG91dAoDAQAAABNMaXN0ZW5pbmcgb24gNTUwMTIKAwEAAAAAAwIAAAAA")
-	c.Assert(err, IsNil)
-	app, hostID, jobID := s.createLogTestApp(c, "joblog-sse", bytes.NewReader(logData))
-
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log", s.srv.URL, app.ID, hostID, jobID), nil)
-	c.Assert(err, IsNil)
-	req.SetBasicAuth("", authKey)
-	req.Header.Set("Accept", "text/event-stream")
-	res, err := http.DefaultClient.Do(req)
-	c.Assert(err, IsNil)
-
-	var buf bytes.Buffer
-	_, err = buf.ReadFrom(res.Body)
-	res.Body.Close()
-	c.Assert(err, IsNil)
-
-	expected := "data: {\"event\":\"stderr\",\"data\":\"hello stderr\\n\"}\n\ndata: {\"event\":\"stdout\",\"data\":\"hello stdout\\n\"}\n\ndata: {\"event\":\"stdout\",\"data\":\"Listening on 55012\\n\"}\n\ndata: {\"event\":\"eof\"}\n\n"
-
-	c.Assert(buf.String(), Equals, expected)
-}
-
-func (s *S) TestJobLogSSEStream(c *C) {
-	pipeR, pipeW := io.Pipe()
-	defer pipeW.Close()
-	app, hostID, jobID := s.createLogTestApp(c, "joblog-sse-stream", pipeR)
-
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/jobs/%s-%s/log?tail=true", s.srv.URL, app.ID, hostID, jobID), nil)
-	c.Assert(err, IsNil)
-	req.SetBasicAuth("", authKey)
-	req.Header.Set("Accept", "text/event-stream")
-	res, err := http.DefaultClient.Do(req)
-	c.Assert(err, IsNil)
-	defer res.Body.Close()
-
-	go pipeW.Write([]byte("\x03\x01\x00\x00\x00\x13Listening on 55012\n\x05\x00\x00\x00\x01"))
-	buf := &bytes.Buffer{}
-	buf.ReadFrom(res.Body)
-
-	expected := "data: {\"event\":\"stdout\",\"data\":\"Listening on 55012\\n\"}\n\ndata: {\"event\":\"exit\",\"data\":{\"status\":1}}\n\n"
-	c.Assert(buf.String(), Equals, expected)
 }
 
 func (s *S) TestRunJobDetached(c *C) {
