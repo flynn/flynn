@@ -252,7 +252,6 @@ func (c *controllerAPI) UpdateApp(ctx context.Context, rw http.ResponseWriter, r
 
 func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	ctx, cancel := context.WithCancel(ctx)
-	params, _ := ctxhelper.ParamsFromContext(ctx)
 
 	opts := logaggc.LogOpts{
 		Follow: req.FormValue("follow") == "true",
@@ -269,8 +268,7 @@ func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *
 		}
 		opts.Lines = &lines
 	}
-
-	rc, err := c.logaggc.GetLog(params.ByName("apps_id"), &opts)
+	rc, err := c.logaggc.GetLog(c.getApp(ctx).ID, &opts)
 	if err != nil {
 		respondWithError(w, err)
 		return

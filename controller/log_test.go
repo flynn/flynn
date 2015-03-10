@@ -50,12 +50,7 @@ var sampleMessages = []logaggc.Message{
 
 func newFakeLogAggregatorClient() *fakeLogAggregatorClient {
 	return &fakeLogAggregatorClient{
-		logs: map[string][]logaggc.Message{
-			"get-app-log-test":            sampleMessages,
-			"get-app-log-follow-test":     sampleMessages,
-			"get-app-log-sse-test":        sampleMessages,
-			"get-app-log-sse-follow-test": sampleMessages,
-		},
+		logs: make(map[string][]logaggc.Message),
 		subs: make(map[string]<-chan *logaggc.Message),
 	}
 }
@@ -66,7 +61,11 @@ type fakeLogAggregatorClient struct {
 }
 
 func (f *fakeLogAggregatorClient) GetLog(channelID string, options *logaggc.LogOpts) (io.ReadCloser, error) {
-	buf := f.logs[channelID]
+	buf, ok := f.logs[channelID]
+	if !ok {
+		buf = sampleMessages
+		f.logs[channelID] = buf
+	}
 	lines := len(buf)
 	follow := false
 	jobID, processType := "", ""
@@ -121,8 +120,7 @@ func strPtr(s string) *string { return &s }
 func intPtr(i int) *int { return &i }
 
 func (s *S) TestGetAppLog(c *C) {
-	appName := "get-app-log-test"
-	s.createTestApp(c, &ct.App{Name: appName})
+	app := s.createTestApp(c, &ct.App{Name: "get-app-log-test"})
 
 	tests := []struct {
 		opts     *ct.LogOpts
@@ -183,15 +181,14 @@ func (s *S) TestGetAppLog(c *C) {
 }
 
 func (s *S) TestGetAppLogFollow(c *C) {
-	appName := "get-app-log-follow-test"
-	s.createTestApp(c, &ct.App{Name: appName})
+	app := s.createTestApp(c, &ct.App{Name: "get-app-log-follow-test"})
 
 	subc := make(chan *logaggc.Message)
 	defer close(subc)
-	s.flac.subs[appName] = subc
-	defer func() { delete(s.flac.subs, appName) }()
+	s.flac.subs[app.ID] = subc
+	defer func() { delete(s.flac.subs, app.ID) }()
 
-	rc, err := s.c.GetAppLog(appName, &ct.LogOpts{
+	rc, err := s.c.GetAppLog(app.Name, &ct.LogOpts{
 		Lines:  nil,
 		Follow: true,
 	})
@@ -248,10 +245,9 @@ func (s *S) TestGetAppLogFollow(c *C) {
 }
 
 func (s *S) TestGetAppLogSSE(c *C) {
-	appName := "get-app-log-sse-test"
-	s.createTestApp(c, &ct.App{Name: appName})
+	app := s.createTestApp(c, &ct.App{Name: "get-app-log-sse-test"})
 
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/log", s.srv.URL, appName), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/log", s.srv.URL, app.Name), nil)
 	c.Assert(err, IsNil)
 	req.SetBasicAuth("", authKey)
 	req.Header.Set("Accept", "text/event-stream")
@@ -275,18 +271,17 @@ func (s *S) TestGetAppLogSSE(c *C) {
 }
 
 func (s *S) TestGetAppLogSSEFollow(c *C) {
-	appName := "get-app-log-sse-follow-test"
-	s.createTestApp(c, &ct.App{Name: appName})
+	app := s.createTestApp(c, &ct.App{Name: "get-app-log-sse-follow-test"})
 
 	done := make(chan struct{})
 	defer close(done)
 	subc := make(chan *logaggc.Message)
 	var closeSubc sync.Once
 	defer closeSubc.Do(func() { close(subc) })
-	s.flac.subs[appName] = subc
-	defer func() { delete(s.flac.subs, appName) }()
+	s.flac.subs[app.ID] = subc
+	defer func() { delete(s.flac.subs, app.ID) }()
 
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/log?follow=true", s.srv.URL, appName), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/apps/%s/log?follow=true", s.srv.URL, app.Name), nil)
 	c.Assert(err, IsNil)
 	req.SetBasicAuth("", authKey)
 	req.Header.Set("Accept", "text/event-stream")
