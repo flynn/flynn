@@ -38,7 +38,9 @@ type Config struct {
 }
 
 type Postgres struct {
-	db *pgx.ConnPool
+	// dbMtx is locked while db is being changed
+	dbMtx sync.RWMutex
+	db    *pgx.ConnPool
 
 	events chan state.PostgresEvent
 
@@ -135,6 +137,20 @@ func (p *Postgres) setConfig(config *state.PgConfig) {
 	p.configVal.Store(config)
 }
 
+func (p *Postgres) Info() (*pgmanager.PostgresInfo, error) {
+	res := &pgmanager.PostgresInfo{
+		Config:  p.config(),
+		Running: p.running(),
+	}
+	xlog, err := p.XLogPosition()
+	res.XLog = string(xlog)
+	if err != nil {
+		return res, err
+	}
+	res.Replicas, err = p.getReplicas()
+	return res, err
+}
+
 func (p *Postgres) Reconfigure(config *state.PgConfig) error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
@@ -190,10 +206,10 @@ func (p *Postgres) Stop() error {
 }
 
 func (p *Postgres) XLogPosition() (xlog.Position, error) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
+	p.dbMtx.RLock()
+	defer p.dbMtx.RUnlock()
 
-	if !p.running() {
+	if !p.running() || p.db == nil {
 		return "", errors.New("postgres is not running")
 	}
 
@@ -456,7 +472,9 @@ func (p *Postgres) start() error {
 				Port: uint16(port),
 			},
 		}
+		p.dbMtx.Lock()
 		p.db, err = pgx.NewConnPool(c)
+		p.dbMtx.Unlock()
 		if err == nil {
 			_, err = p.db.Exec("SELECT 1")
 			if err == nil {
@@ -647,6 +665,53 @@ WHERE application_name = $1`, name).Scan(&s, &f)
 	}
 	log.Debug("got replication status", "sent_location", sent, "flush_location", flushed)
 	return
+}
+
+func (p *Postgres) getReplicas() ([]*pgmanager.Replica, error) {
+	p.dbMtx.RLock()
+	defer p.dbMtx.RUnlock()
+	if !p.running() || p.db == nil {
+		return nil, nil
+	}
+
+	rows, err := p.db.Query(`
+SELECT application_name, client_addr, client_port, backend_start, state, sent_location, 
+       write_location, flush_location, replay_location, sync_state
+FROM pg_stat_replication`)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	var res []*pgmanager.Replica
+	for rows.Next() {
+		replica, err := scanReplica(rows)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, replica)
+	}
+	return res, nil
+}
+
+func scanReplica(row *pgx.Rows) (*pgmanager.Replica, error) {
+	var start pgx.NullTime
+	var id, addr, state, sentLoc, writeLoc, flushLoc, replayLoc, sync pgx.NullString
+	var port pgx.NullInt32
+	if err := row.Scan(&id, &addr, &port, &start, &state, &sentLoc, &writeLoc, &flushLoc, &replayLoc, &sync); err != nil {
+		return nil, err
+	}
+	return &pgmanager.Replica{
+		ID:             id.String,
+		Addr:           fmt.Sprintf("%s:%d", addr.String, port.Int32),
+		Start:          start.Time,
+		State:          state.String,
+		Sync:           sync.String == "sync",
+		SentLocation:   sentLoc.String,
+		WriteLocation:  writeLoc.String,
+		FlushLocation:  flushLoc.String,
+		ReplayLocation: replayLoc.String,
+	}, nil
 }
 
 // initDB initializes the postgres data directory for a new dDB. This can fail

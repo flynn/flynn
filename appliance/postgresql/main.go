@@ -48,6 +48,7 @@ func main() {
 	peer := state.NewPeer(inst, singleton, dd, pg, log.New("component", "peer"))
 	shutdown.BeforeExit(func() { peer.Close() })
 
-	peer.Run()
+	go peer.Run()
+	shutdown.Fatal(ServeHTTP(pg.(*Postgres), peer, log.New("component", "http")))
 	// TODO(titanous): clean shutdown of postgres
 }
