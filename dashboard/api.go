@@ -19,7 +19,7 @@ import (
 )
 
 type LoginInfo struct {
-	Token string `json:"token"`
+	Token string `json:"token" form:"token"`
 }
 
 func APIHandler(conf *Config) http.Handler {
@@ -40,7 +40,7 @@ func APIHandler(conf *Config) http.Handler {
 		httpInterfaceURL = "http" + strings.TrimPrefix(conf.InterfaceURL, "https")
 	}
 
-	m.Use(cors.Allow(&cors.Options{
+	m.Use(corsHandler(&cors.Options{
 		AllowOrigins:     []string{conf.InterfaceURL, httpInterfaceURL},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
 		AllowHeaders:     []string{"Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match"},
@@ -51,7 +51,7 @@ func APIHandler(conf *Config) http.Handler {
 
 	r.Group(conf.PathPrefix, func(r martini.Router) {
 		m.Use(reqHelperMiddleware)
-		r.Post("/user/sessions", binding.Json(LoginInfo{}), login)
+		r.Post("/user/sessions", binding.Bind(LoginInfo{}), login)
 		r.Delete("/user/session", logout)
 
 		r.Get("/config", getConfig)
@@ -63,6 +63,8 @@ func APIHandler(conf *Config) http.Handler {
 			Prefix: "/assets",
 		}))
 
+		r.Get("/ping", pingHandler)
+
 		r.Get("/.*", func(r render.Render) {
 			r.HTML(200, "dashboard", "")
 		})
@@ -71,10 +73,33 @@ func APIHandler(conf *Config) http.Handler {
 	return m
 }
 
+func corsHandler(corsOptions *cors.Options) http.HandlerFunc {
+	defaultCorsHandler := cors.Allow(corsOptions)
+	return func(w http.ResponseWriter, req *http.Request) {
+		origin := req.Header.Get("Origin")
+		if req.URL.Path == "/ping" && strings.HasPrefix(origin, "http://localhost:") {
+			cors.Allow(&cors.Options{
+				AllowOrigins:     []string{origin},
+				AllowMethods:     []string{"GET"},
+				AllowHeaders:     corsOptions.AllowHeaders,
+				ExposeHeaders:    corsOptions.ExposeHeaders,
+				AllowCredentials: corsOptions.AllowCredentials,
+				MaxAge:           corsOptions.MaxAge,
+			})(w, req)
+		} else {
+			defaultCorsHandler(w, req)
+		}
+	}
+}
+
 func requireUserMiddleware(rh RequestHelper) {
 	if !rh.IsAuthenticated() {
 		rh.WriteHeader(401)
 	}
+}
+
+func pingHandler(req *http.Request, w http.ResponseWriter, rh RequestHelper) {
+	rh.WriteHeader(200)
 }
 
 func login(req *http.Request, w http.ResponseWriter, info LoginInfo, rh RequestHelper, conf *Config) {
@@ -83,7 +108,11 @@ func login(req *http.Request, w http.ResponseWriter, info LoginInfo, rh RequestH
 		return
 	}
 	rh.SetAuthenticated()
-	rh.WriteHeader(200)
+	if strings.Contains(req.Header.Get("Content-Type"), "form-urlencoded") {
+		http.Redirect(w, req, conf.CookiePath, 302)
+	} else {
+		rh.WriteHeader(200)
+	}
 }
 
 func logout(req *http.Request, w http.ResponseWriter, rh RequestHelper) {
