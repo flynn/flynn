@@ -47,7 +47,7 @@ func NewClient(addr string) *Client {
 
 	return &Client{
 		c: &httpclient.Client{
-			URL:  fmt.Sprintf("http://%s:5433", addr),
+			URL:  fmt.Sprintf("http://%s:5433", host),
 			HTTP: http.DefaultClient,
 		},
 	}

@@ -17,6 +17,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
+	"github.com/flynn/flynn/appliance/postgresql/client"
 	"github.com/flynn/flynn/appliance/postgresql/state"
 	"github.com/flynn/flynn/appliance/postgresql/xlog"
 	"github.com/flynn/flynn/discoverd/client"
@@ -35,6 +36,7 @@ type Config struct {
 	Logger       log15.Logger
 	ExtWhitelist bool
 	SHMType      string
+	WaitUpstream bool
 }
 
 type Postgres struct {
@@ -60,6 +62,7 @@ type Postgres struct {
 	replTimeout  time.Duration
 	extWhitelist bool
 	shmType      string
+	waitUpstream bool
 
 	// daemon is the postgres daemon command when running
 	daemon *exec.Cmd
@@ -91,6 +94,7 @@ func NewPostgres(c Config) state.Postgres {
 		replTimeout:    c.ReplTimeout,
 		extWhitelist:   c.ExtWhitelist,
 		shmType:        c.SHMType,
+		waitUpstream:   c.WaitUpstream,
 		events:         make(chan state.PostgresEvent, 1),
 		cancelSyncWait: func() {},
 	}
@@ -368,6 +372,11 @@ func (p *Postgres) assumeStandby(upstream *discoverd.Instance) error {
 			return err
 		}
 	} else {
+		if p.waitUpstream {
+			if err := p.waitForUpstream(upstream); err != nil {
+				return err
+			}
+		}
 		log.Info("pulling basebackup")
 		// TODO(titanous): make this pluggable
 		err := p.runCmd(exec.Command(
@@ -397,6 +406,28 @@ func (p *Postgres) assumeStandby(upstream *discoverd.Instance) error {
 	}
 
 	return p.start()
+}
+
+func (p *Postgres) waitForUpstream(upstream *discoverd.Instance) error {
+	log := p.log.New("fn", "waitForUpstream", "upstream", upstream.Addr)
+	log.Info("waiting for upstream to come online")
+	client := pgmanager.NewClient(upstream.Addr)
+
+	start := time.Now()
+	for {
+		status, err := client.Status()
+		if err != nil {
+			log.Error("error getting upstream status", "err", err)
+		} else if status.Postgres.Running && status.Postgres.XLog != "" {
+			log.Info("upstream is online")
+			return nil
+		}
+		time.Sleep(checkInterval)
+		if time.Now().Sub(start) > p.opTimeout {
+			log.Error("upstream did not come online in time")
+			return errors.New("upstream is offline")
+		}
+	}
 }
 
 func (p *Postgres) updateSync(downstream *discoverd.Instance) error {
