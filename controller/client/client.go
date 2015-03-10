@@ -404,36 +404,6 @@ func (c *Client) StreamJobEvents(appID string, lastID int64, output chan<- *ct.J
 	return httpclient.Stream(res, output), nil
 }
 
-// GetJobLog returns a ReadCloser stream of the job with id of jobID, running
-// under appID. If tail is true, new log lines are streamed after the buffered
-// log.
-func (c *Client) GetJobLog(appID, jobID string, tail bool) (io.ReadCloser, error) {
-	path := fmt.Sprintf("/apps/%s/jobs/%s/log", appID, jobID)
-	if tail {
-		path += "?tail=true"
-	}
-	res, err := c.RawReq("GET", path, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	return res.Body, nil
-}
-
-// GetJobLogWithWait waits until the job is created, then returns a ReadCloser
-// stream of the job with id of jobID, running under appID. If tail is true,
-// new log lines are streamed after the buffered log.
-func (c *Client) GetJobLogWithWait(appID, jobID string, tail bool) (io.ReadCloser, error) {
-	path := fmt.Sprintf("/apps/%s/jobs/%s/log?wait=true", appID, jobID)
-	if tail {
-		path += "&tail=true"
-	}
-	res, err := c.RawReq("GET", path, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	return res.Body, nil
-}
-
 // RunJobAttached runs a new job under the specified app, attaching to the job
 // and returning a ReadWriteCloser stream, which can then be used for
 // communicating with the job.
