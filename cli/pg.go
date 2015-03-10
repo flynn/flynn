@@ -8,18 +8,26 @@ import (
 )
 
 func init() {
-	register("psql", runPsql, `
-usage: flynn psql [--] [<argument>...]
+	register("pg", runPg, `
+usage: flynn pg psql [--] [<argument>...]
 
-Open a console to a Flynn postgres database. Any valid arguments to psql may be
-provided.
+Commands:
+	psql     Open a console to a Flynn postgres database. Any valid arguments to psql may be provided.
 
 Examples:
 
-    $ flynn psql
+    $ flynn pg psql
 
-    $ flynn psql -- -c "CREATE EXTENSION hstore"
+    $ flynn pg psql -- -c "CREATE EXTENSION hstore"
 `)
+}
+
+func runPg(args *docopt.Args, client *controller.Client) error {
+	switch {
+	case args.Bool["psql"]:
+		return runPsql(args, client)
+	}
+	return nil
 }
 
 func runPsql(args *docopt.Args, client *controller.Client) error {

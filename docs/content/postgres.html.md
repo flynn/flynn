@@ -40,7 +40,7 @@ flynn env set DATABASE_URL=$(. <(flynn env); echo "postgres://$PGUSER:$PGPASSWOR
 
 ### Connecting to a console
 
-To connect to a `psql` console for the database, run `flynn psql`. This does not
+To connect to a `psql` console for the database, run `flynn pg psql`. This does not
 require the Postgres client to be installed locally or firewall/security
 changes, as it runs in a container on the Flynn cluster.
 
@@ -51,7 +51,7 @@ including hstore, PostGIS, and PLV8. To enable an extension, use `CREATE
 EXTENSION`:
 
 ```text
-$ flynn psql
+$ flynn pg psql
 psql (9.4.1)
 Type "help" for help.
 
