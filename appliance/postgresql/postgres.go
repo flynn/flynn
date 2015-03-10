@@ -17,6 +17,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
+	"github.com/flynn/flynn/appliance/postgresql/client"
 	"github.com/flynn/flynn/appliance/postgresql/state"
 	"github.com/flynn/flynn/appliance/postgresql/xlog"
 	"github.com/flynn/flynn/discoverd/client"
@@ -35,15 +36,18 @@ type Config struct {
 	Logger       log15.Logger
 	ExtWhitelist bool
 	SHMType      string
+	WaitUpstream bool
 }
 
 type Postgres struct {
-	db *pgx.ConnPool
+	// dbMtx is locked while db is being changed
+	dbMtx sync.RWMutex
+	db    *pgx.ConnPool
 
 	events chan state.PostgresEvent
 
-	config        *state.PgConfig
-	running       bool
+	configVal     atomic.Value // *state.PgConfig
+	runningVal    atomic.Value // bool
 	configApplied bool
 
 	// config options
@@ -58,6 +62,7 @@ type Postgres struct {
 	replTimeout  time.Duration
 	extWhitelist bool
 	shmType      string
+	waitUpstream bool
 
 	// daemon is the postgres daemon command when running
 	daemon *exec.Cmd
@@ -89,9 +94,12 @@ func NewPostgres(c Config) state.Postgres {
 		replTimeout:    c.ReplTimeout,
 		extWhitelist:   c.ExtWhitelist,
 		shmType:        c.SHMType,
+		waitUpstream:   c.WaitUpstream,
 		events:         make(chan state.PostgresEvent, 1),
 		cancelSyncWait: func() {},
 	}
+	p.setRunning(false)
+	p.setConfig(nil)
 	if p.log == nil {
 		p.log = log15.New("app", "postgres", "id", p.id)
 	}
@@ -117,6 +125,36 @@ func NewPostgres(c Config) state.Postgres {
 	return p
 }
 
+func (p *Postgres) running() bool {
+	return p.runningVal.Load().(bool)
+}
+
+func (p *Postgres) setRunning(running bool) {
+	p.runningVal.Store(running)
+}
+
+func (p *Postgres) config() *state.PgConfig {
+	return p.configVal.Load().(*state.PgConfig)
+}
+
+func (p *Postgres) setConfig(config *state.PgConfig) {
+	p.configVal.Store(config)
+}
+
+func (p *Postgres) Info() (*pgmanager.PostgresInfo, error) {
+	res := &pgmanager.PostgresInfo{
+		Config:  p.config(),
+		Running: p.running(),
+	}
+	xlog, err := p.XLogPosition()
+	res.XLog = string(xlog)
+	if err != nil {
+		return res, err
+	}
+	res.Replicas, err = p.getReplicas()
+	return res, err
+}
+
 func (p *Postgres) Reconfigure(config *state.PgConfig) error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
@@ -135,8 +173,8 @@ func (p *Postgres) Reconfigure(config *state.PgConfig) error {
 		return fmt.Errorf("unknown role %v", config.Role)
 	}
 
-	if !p.running {
-		p.config = config
+	if !p.running() {
+		p.setConfig(config)
 		p.configApplied = false
 		return nil
 	}
@@ -148,13 +186,13 @@ func (p *Postgres) Start() error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	if p.running {
+	if p.running() {
 		return errors.New("postgres is already running")
 	}
-	if p.config == nil {
+	if p.config() == nil {
 		return errors.New("postgres is unconfigured")
 	}
-	if p.config.Role == state.RoleNone {
+	if p.config().Role == state.RoleNone {
 		return errors.New("start attempted with role 'none'")
 	}
 
@@ -165,22 +203,22 @@ func (p *Postgres) Stop() error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	if !p.running {
+	if !p.running() {
 		return errors.New("postgres is already stopped")
 	}
 	return p.stop()
 }
 
 func (p *Postgres) XLogPosition() (xlog.Position, error) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
+	p.dbMtx.RLock()
+	defer p.dbMtx.RUnlock()
 
-	if !p.running {
+	if !p.running() || p.db == nil {
 		return "", errors.New("postgres is not running")
 	}
 
 	fn := "pg_last_xlog_replay_location()"
-	if p.config.Role == state.RolePrimary {
+	if p.config().Role == state.RolePrimary {
 		fn = "pg_current_xlog_location()"
 	}
 	var res string
@@ -195,7 +233,7 @@ func (p *Postgres) Ready() <-chan state.PostgresEvent {
 func (p *Postgres) reconfigure(config *state.PgConfig) (err error) {
 	defer func() {
 		if err == nil {
-			p.config = config
+			p.setConfig(config)
 			p.configApplied = true
 		}
 	}()
@@ -205,13 +243,13 @@ func (p *Postgres) reconfigure(config *state.PgConfig) (err error) {
 	}
 
 	// If we've already applied the same postgres config, we don't need to do anything
-	if p.configApplied && config != nil && p.config != nil && config.Equal(p.config) {
+	if p.configApplied && config != nil && p.config() != nil && config.Equal(p.config()) {
 		return nil
 	}
 
 	// If we're already running and it's just a change from async to sync with the same node, we don't need to restart
-	if p.configApplied && p.running && p.config != nil && config != nil &&
-		p.config.Role == state.RoleAsync && config.Role == state.RoleSync && config.Upstream.ID == p.config.Upstream.ID {
+	if p.configApplied && p.running() && p.config() != nil && config != nil &&
+		p.config().Role == state.RoleAsync && config.Role == state.RoleSync && config.Upstream.ID == p.config().Upstream.ID {
 		return nil
 	}
 
@@ -219,12 +257,12 @@ func (p *Postgres) reconfigure(config *state.PgConfig) (err error) {
 	p.cancelSyncWait()
 
 	// If we're already running and this is only a sync change, we just need to update the config.
-	if p.running && p.config != nil && config != nil && p.config.Role == state.RolePrimary && config.Role == state.RolePrimary {
+	if p.running() && p.config() != nil && config != nil && p.config().Role == state.RolePrimary && config.Role == state.RolePrimary {
 		return p.updateSync(config.Downstream)
 	}
 
 	if config == nil {
-		config = p.config
+		config = p.config()
 	}
 
 	if config.Role == state.RolePrimary {
@@ -240,7 +278,7 @@ func (p *Postgres) assumePrimary(downstream *discoverd.Instance) (err error) {
 		log = log.New("downstream", downstream.Addr)
 	}
 
-	if p.running && p.config.Role == state.RoleSync {
+	if p.running() && p.config().Role == state.RoleSync {
 		log.Info("promoting to primary")
 
 		if err := ioutil.WriteFile(p.triggerPath(), nil, 0655); err != nil {
@@ -255,8 +293,8 @@ func (p *Postgres) assumePrimary(downstream *discoverd.Instance) (err error) {
 
 	log.Info("starting as primary")
 
-	if p.running {
-		panic(fmt.Sprintf("unexpected state running role=%s", p.config.Role))
+	if p.running() {
+		panic(fmt.Sprintf("unexpected state running role=%s", p.config().Role))
 	}
 
 	if err := p.initDB(); err != nil {
@@ -327,13 +365,18 @@ func (p *Postgres) assumeStandby(upstream *discoverd.Instance) error {
 	// restarting:
 	// http://www.databasesoup.com/2014/05/remastering-without-restarting.html
 
-	if p.running {
+	if p.running() {
 		// if we are running, we can just restart with a new recovery.conf, postgres
 		// supports streaming remastering.
 		if err := p.stop(); err != nil {
 			return err
 		}
 	} else {
+		if p.waitUpstream {
+			if err := p.waitForUpstream(upstream); err != nil {
+				return err
+			}
+		}
 		log.Info("pulling basebackup")
 		// TODO(titanous): make this pluggable
 		err := p.runCmd(exec.Command(
@@ -363,6 +406,28 @@ func (p *Postgres) assumeStandby(upstream *discoverd.Instance) error {
 	}
 
 	return p.start()
+}
+
+func (p *Postgres) waitForUpstream(upstream *discoverd.Instance) error {
+	log := p.log.New("fn", "waitForUpstream", "upstream", upstream.Addr)
+	log.Info("waiting for upstream to come online")
+	client := pgmanager.NewClient(upstream.Addr)
+
+	start := time.Now()
+	for {
+		status, err := client.Status()
+		if err != nil {
+			log.Error("error getting upstream status", "err", err)
+		} else if status.Postgres.Running && status.Postgres.XLog != "" {
+			log.Info("upstream is online")
+			return nil
+		}
+		time.Sleep(checkInterval)
+		if time.Now().Sub(start) > p.opTimeout {
+			log.Error("upstream did not come online in time")
+			return errors.New("upstream is offline")
+		}
+	}
 }
 
 func (p *Postgres) updateSync(downstream *discoverd.Instance) error {
@@ -407,7 +472,7 @@ func (p *Postgres) start() error {
 		return err
 	}
 	p.daemon = cmd
-	p.running = true
+	p.setRunning(true)
 
 	go func() {
 		err := cmd.Wait()
@@ -438,7 +503,9 @@ func (p *Postgres) start() error {
 				Port: uint16(port),
 			},
 		}
+		p.dbMtx.Lock()
 		p.db, err = pgx.NewConnPool(c)
+		p.dbMtx.Unlock()
 		if err == nil {
 			_, err = p.db.Exec("SELECT 1")
 			if err == nil {
@@ -469,7 +536,7 @@ func (p *Postgres) stop() error {
 		case <-time.After(p.opTimeout):
 			return false
 		case <-p.daemonExit:
-			p.running = false
+			p.setRunning(false)
 			return true
 		}
 	}
@@ -629,6 +696,53 @@ WHERE application_name = $1`, name).Scan(&s, &f)
 	}
 	log.Debug("got replication status", "sent_location", sent, "flush_location", flushed)
 	return
+}
+
+func (p *Postgres) getReplicas() ([]*pgmanager.Replica, error) {
+	p.dbMtx.RLock()
+	defer p.dbMtx.RUnlock()
+	if !p.running() || p.db == nil {
+		return nil, nil
+	}
+
+	rows, err := p.db.Query(`
+SELECT application_name, client_addr, client_port, backend_start, state, sent_location, 
+       write_location, flush_location, replay_location, sync_state
+FROM pg_stat_replication`)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	var res []*pgmanager.Replica
+	for rows.Next() {
+		replica, err := scanReplica(rows)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, replica)
+	}
+	return res, nil
+}
+
+func scanReplica(row *pgx.Rows) (*pgmanager.Replica, error) {
+	var start pgx.NullTime
+	var id, addr, state, sentLoc, writeLoc, flushLoc, replayLoc, sync pgx.NullString
+	var port pgx.NullInt32
+	if err := row.Scan(&id, &addr, &port, &start, &state, &sentLoc, &writeLoc, &flushLoc, &replayLoc, &sync); err != nil {
+		return nil, err
+	}
+	return &pgmanager.Replica{
+		ID:             id.String,
+		Addr:           fmt.Sprintf("%s:%d", addr.String, port.Int32),
+		Start:          start.Time,
+		State:          state.String,
+		Sync:           sync.String == "sync",
+		SentLocation:   sentLoc.String,
+		WriteLocation:  writeLoc.String,
+		FlushLocation:  flushLoc.String,
+		ReplayLocation: replayLoc.String,
+	}, nil
 }
 
 // initDB initializes the postgres data directory for a new dDB. This can fail

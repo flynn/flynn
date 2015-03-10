@@ -40,6 +40,7 @@ func main() {
 		Password:     password,
 		Logger:       log.New("component", "postgres"),
 		ExtWhitelist: true,
+		WaitUpstream: true,
 		// TODO(titanous) investigate this:
 		SHMType: "sysv", // the default on 9.4, 'posix' is not currently supported in our containers
 	})
@@ -48,6 +49,7 @@ func main() {
 	peer := state.NewPeer(inst, singleton, dd, pg, log.New("component", "peer"))
 	shutdown.BeforeExit(func() { peer.Close() })
 
-	peer.Run()
+	go peer.Run()
+	shutdown.Fatal(ServeHTTP(pg.(*Postgres), peer, log.New("component", "http")))
 	// TODO(titanous): clean shutdown of postgres
 }
