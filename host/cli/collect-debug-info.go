@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/pkg/cluster"
 )
@@ -30,15 +31,22 @@ var debugCmds = [][]string{
 }
 
 func init() {
-	Register("upload-debug-info", runUploadDebugInfo, `
-usage: flynn-host upload-debug-info
+	Register("collect-debug-info", runCollectDebugInfo, `
+usage: flynn-host collect-debug-info [--tarball]
 
-Upload debug information to an anonymous gist`)
+Options:
+  --tarball	  Create a tarball instead of uploading to a gist
+
+Collect debug information into an anonymous gist or tarball`)
 }
 
-func runUploadDebugInfo() error {
+func runCollectDebugInfo(args *docopt.Args) error {
 	log := log15.New()
-	log.Info("uploading logs and debug information to a private, anonymous gist")
+	if args.Bool["--tarball"] {
+		log.Info("creating a tarball containing logs and debug information")
+	} else {
+		log.Info("uploading logs and debug information to a private, anonymous gist")
+	}
 	log.Info("this may take a while depending on the size of your logs")
 
 	gist := &Gist{
@@ -70,6 +78,16 @@ func runUploadDebugInfo() error {
 		debugOutput += fmt.Sprintln("===>", strings.Replace(strings.Join(cmd, " "), "\n", `\n`, -1), "\n", output)
 	}
 	gist.AddFile("0-debug-output.log", debugOutput)
+
+	if args.Bool["--tarball"] {
+		path, err := gist.CreateTarball()
+		if err != nil {
+			log.Error("error creating tarball", "err", err)
+			return err
+		}
+		log.Info(fmt.Sprintf("created tarball containing debug information at %s", path))
+		return nil
+	}
 
 	if err := gist.Upload(log); err != nil {
 		return err

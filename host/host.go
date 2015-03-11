@@ -76,7 +76,7 @@ Commands:
   ps                         List jobs
   stop                       Stop running jobs
   destroy-volumes            Destroys the local volume database
-  upload-debug-info          Upload debug information to an anonymous gist
+  collect-debug-info         Collect debug information into an anonymous gist or tarball
   version                    Show current version
 
 See 'flynn-host help <command>' for more information on a specific command.
@@ -121,6 +121,11 @@ See 'flynn-host help <command>' for more information on a specific command.
 	}
 
 	if err := cli.Run(cmd, cmdArgs); err != nil {
+		if err == cli.ErrInvalidCommand {
+			fmt.Printf("ERROR: %q is not a valid command\n\n", cmd)
+			fmt.Println(usage)
+			shutdown.ExitWithCode(1)
+		}
 		shutdown.Fatal(err)
 	}
 }

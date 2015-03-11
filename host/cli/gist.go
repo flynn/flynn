@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +11,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cheggaaa/pb"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
@@ -80,6 +84,48 @@ func (g *Gist) Upload(log log15.Logger) error {
 		return err
 	}
 	return nil
+}
+
+func (g *Gist) CreateTarball() (path string, err error) {
+	tmpDir, err := ioutil.TempDir("", "flynn-host-debug")
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		if err != nil {
+			os.RemoveAll(tmpDir)
+		}
+	}()
+	path = filepath.Join(tmpDir, "flynn-host-debug.tar.gz")
+	tmpFile, err := os.Create(path)
+	if err != nil {
+		return "", err
+	}
+	defer tmpFile.Close()
+	gz, err := gzip.NewWriterLevel(tmpFile, gzip.BestCompression)
+	if err != nil {
+		return "", err
+	}
+	defer gz.Close()
+	tarball := tar.NewWriter(gz)
+	for name, file := range g.Files {
+		hdr := &tar.Header{
+			Name:    name,
+			Mode:    0644,
+			ModTime: time.Now(),
+			Size:    int64(len(file.Content)),
+		}
+		if err := tarball.WriteHeader(hdr); err != nil {
+			return "", err
+		}
+		if _, err := tarball.Write([]byte(file.Content)); err != nil {
+			return "", err
+		}
+	}
+	if err := tarball.Close(); err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 type File struct {
