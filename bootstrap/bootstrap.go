@@ -183,7 +183,7 @@ loop:
 		case <-updates:
 			instances, err := service.Instances()
 			if err != nil {
-				if e, ok := err.(httphelper.JSONError); ok && e.Code == httphelper.ObjectNotFoundError {
+				if httphelper.IsObjectNotFoundError(err) {
 					continue
 				}
 				return err

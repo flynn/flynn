@@ -366,15 +366,13 @@ func (s *HTTPSuite) TestServiceMeta(c *C) {
 	meta.Index--
 	err = srv.SetMeta(meta)
 	c.Assert(err, NotNil)
-	c.Assert(err, FitsTypeOf, hh.JSONError{})
-	c.Assert(err.(hh.JSONError).Code, Equals, hh.PreconditionFailedError)
+	c.Assert(hh.IsPreconditionFailedError(err), Equals, true)
 }
 
 func (s *HTTPSuite) TestManualLeaderElection(c *C) {
 	// service with auto election should not support manual leader
 	err := s.client.Service("a").SetLeader("123")
-	c.Assert(err, NotNil)
-	c.Assert(err.(hh.JSONError).Code, Equals, hh.ValidationError)
+	c.Assert(hh.IsValidationError(err), Equals, true)
 
 	// create service with manual config
 	err = s.client.AddService("b", &discoverd.ServiceConfig{LeaderType: discoverd.LeaderTypeManual})

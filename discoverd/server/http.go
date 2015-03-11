@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 
@@ -93,14 +92,10 @@ type httpAPI struct {
 	Store Datastore
 }
 
-func jsonError(w http.ResponseWriter, code hh.ErrorCode, err error) {
-	hh.Error(w, hh.JSONError{Code: code, Message: err.Error()})
-}
-
 func (h *httpAPI) AddService(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	service := params.ByName("service")
 	if err := ValidServiceName(service); err != nil {
-		jsonError(w, hh.ValidationError, err)
+		hh.ValidationError(w, "", err.Error())
 		return
 	}
 
@@ -112,7 +107,7 @@ func (h *httpAPI) AddService(w http.ResponseWriter, r *http.Request, params http
 
 	if err := h.Store.AddService(service, config); err != nil {
 		if IsServiceExists(err) {
-			jsonError(w, hh.ObjectExistsError, err)
+			hh.ObjectExistsError(w, err.Error())
 		} else {
 			hh.Error(w, err)
 		}
@@ -123,12 +118,12 @@ func (h *httpAPI) AddService(w http.ResponseWriter, r *http.Request, params http
 func (h *httpAPI) RemoveService(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	service := params.ByName("service")
 	if err := ValidServiceName(service); err != nil {
-		jsonError(w, hh.ValidationError, err)
+		hh.ValidationError(w, "", err.Error())
 		return
 	}
 	if err := h.Store.RemoveService(params.ByName("service")); err != nil {
 		if IsNotFound(err) {
-			jsonError(w, hh.ObjectNotFoundError, err)
+			hh.ObjectNotFoundError(w, err.Error())
 		} else {
 			hh.Error(w, err)
 		}
@@ -145,7 +140,7 @@ func (h *httpAPI) SetServiceMeta(w http.ResponseWriter, r *http.Request, params 
 
 	if err := h.Store.SetServiceMeta(params.ByName("service"), meta); err != nil {
 		if IsNotFound(err) {
-			jsonError(w, hh.ObjectNotFoundError, err)
+			hh.ObjectNotFoundError(w, err.Error())
 		} else {
 			hh.Error(w, err)
 		}
@@ -158,7 +153,7 @@ func (h *httpAPI) SetServiceMeta(w http.ResponseWriter, r *http.Request, params 
 func (h *httpAPI) GetServiceMeta(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	meta := h.Store.GetServiceMeta(params.ByName("service"))
 	if meta == nil {
-		jsonError(w, hh.ObjectNotFoundError, errors.New("service meta not found"))
+		hh.ObjectNotFoundError(w, "service meta not found")
 		return
 	}
 	hh.JSON(w, 200, meta)
@@ -171,12 +166,12 @@ func (h *httpAPI) AddInstance(w http.ResponseWriter, r *http.Request, params htt
 		return
 	}
 	if err := inst.Valid(); err != nil {
-		jsonError(w, hh.ValidationError, err)
+		hh.ValidationError(w, "", err.Error())
 		return
 	}
 	if err := h.Store.AddInstance(params.ByName("service"), inst); err != nil {
 		if IsNotFound(err) {
-			jsonError(w, hh.ObjectNotFoundError, err)
+			hh.ObjectNotFoundError(w, err.Error())
 		} else {
 			hh.Error(w, err)
 		}
@@ -187,7 +182,7 @@ func (h *httpAPI) AddInstance(w http.ResponseWriter, r *http.Request, params htt
 func (h *httpAPI) RemoveInstance(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	if err := h.Store.RemoveInstance(params.ByName("service"), params.ByName("instance_id")); err != nil {
 		if IsNotFound(err) {
-			jsonError(w, hh.ObjectNotFoundError, err)
+			hh.ObjectNotFoundError(w, err.Error())
 		} else {
 			hh.Error(w, err)
 		}
@@ -203,7 +198,7 @@ func (h *httpAPI) GetInstances(w http.ResponseWriter, r *http.Request, params ht
 
 	instances := h.Store.Get(params.ByName("service"))
 	if instances == nil {
-		jsonError(w, hh.ObjectNotFoundError, errors.New("service not found"))
+		hh.ObjectNotFoundError(w, "service not found")
 		return
 	}
 	hh.JSON(w, 200, instances)
@@ -213,7 +208,7 @@ func (h *httpAPI) SetLeader(w http.ResponseWriter, r *http.Request, params httpr
 	service := params.ByName("service")
 	config := h.Store.GetConfig(service)
 	if config == nil || config.LeaderType != discoverd.LeaderTypeManual {
-		jsonError(w, hh.ValidationError, errors.New("service leader election type is not manual"))
+		hh.ValidationError(w, "", "service leader election type is not manual")
 		return
 	}
 
@@ -237,7 +232,7 @@ func (h *httpAPI) GetLeader(w http.ResponseWriter, r *http.Request, params httpr
 
 	leader := h.Store.GetLeader(params.ByName("service"))
 	if leader == nil {
-		jsonError(w, hh.ObjectNotFoundError, errors.New("no leader found"))
+		hh.ObjectNotFoundError(w, "no leader found")
 		return
 	}
 	hh.JSON(w, 200, leader)

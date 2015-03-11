@@ -128,23 +128,14 @@ func (b *etcdBackend) SetServiceMeta(service string, meta *discoverd.ServiceMeta
 	if meta.Index == 0 {
 		res, err = b.etcd.Create(key, string(meta.Data), 0)
 		if isEtcdExists(err) {
-			err = hh.JSONError{
-				Code:    hh.ObjectExistsError,
-				Message: fmt.Sprintf("Service metadata for %q already exists, use index=n to set", service),
-			}
+			err = hh.ObjectExistsErr(fmt.Sprintf("Service metadata for %q already exists, use index=n to set", service))
 		}
 	} else {
 		res, err = b.etcd.CompareAndSwap(key, string(meta.Data), 0, "", meta.Index)
 		if isEtcdNotFound(err) {
-			err = hh.JSONError{
-				Code:    hh.PreconditionFailedError,
-				Message: fmt.Sprintf("Service metadata for %q does not exist, use index=0 to set", service),
-			}
+			err = hh.PreconditionFailedErr(fmt.Sprintf("Service metadata for %q does not exist, use index=0 to set", service))
 		} else if isEtcdCompareFailed(err) {
-			err = hh.JSONError{
-				Code:    hh.PreconditionFailedError,
-				Message: fmt.Sprintf("Service metadata for %q exists, but wrong index provided", service),
-			}
+			err = hh.PreconditionFailedErr(fmt.Sprintf("Service metadata for %q exists, but wrong index provided", service))
 		}
 	}
 	if err != nil {

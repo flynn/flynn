@@ -259,8 +259,7 @@ func (s *EtcdSuite) TestSetMeta(c *C) {
 
 	// new with wrong index
 	err = s.backend.SetServiceMeta("a", &discoverd.ServiceMeta{Data: []byte("foo"), Index: 1})
-	c.Assert(err, FitsTypeOf, hh.JSONError{})
-	c.Assert(err.(hh.JSONError).Code, Equals, hh.PreconditionFailedError)
+	c.Assert(hh.IsPreconditionFailedError(err), Equals, true)
 
 	// new
 	meta := &discoverd.ServiceMeta{Data: []byte("foo"), Index: 0}
@@ -269,8 +268,7 @@ func (s *EtcdSuite) TestSetMeta(c *C) {
 
 	// index=0 set with existing
 	err = s.backend.SetServiceMeta("a", &discoverd.ServiceMeta{Data: []byte("foo"), Index: 0})
-	c.Assert(err, FitsTypeOf, hh.JSONError{})
-	c.Assert(err.(hh.JSONError).Code, Equals, hh.ObjectExistsError)
+	c.Assert(hh.IsObjectExistsError(err), Equals, true)
 
 	// set with existing, valid index
 	meta.Data = []byte("bar")
@@ -281,8 +279,7 @@ func (s *EtcdSuite) TestSetMeta(c *C) {
 	meta.Index--
 	meta.Data = []byte("baz")
 	err = s.backend.SetServiceMeta("a", meta)
-	c.Assert(err, FitsTypeOf, hh.JSONError{})
-	c.Assert(err.(hh.JSONError).Code, Equals, hh.PreconditionFailedError)
+	c.Assert(hh.IsPreconditionFailedError(err), Equals, true)
 }
 
 func (s *EtcdSuite) TestManualLeaderInitialSync(c *C) {
