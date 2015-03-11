@@ -5,6 +5,6 @@
 #
 # You may find it useful to add "source /vagrant/script/development-aliases" to ~/.bashrc
 
-alias flynn="/vagrant/cli/flynn-cli"
+alias flynn="/vagrant/cli/bin/flynn"
 alias flynn-host="/vagrant/host/bin/flynn-host"
 alias flynn-release="/vagrant/util/release/flynn-release"
