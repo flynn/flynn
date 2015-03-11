@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/boltdb/bolt"
-	"github.com/codegangsta/cli"
 	// "github.com/davecheney/profile"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/codegangsta/cli"
 )
 
 var branch, commit string

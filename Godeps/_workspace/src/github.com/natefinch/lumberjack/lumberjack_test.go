@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/BurntSushi/toml"
-	"gopkg.in/yaml.v1"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/yaml.v1"
 )
 
 // !!!NOTE!!!
