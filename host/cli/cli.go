@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"unicode"
@@ -29,6 +30,8 @@ func Register(cmd string, f interface{}, usage string) *command {
 
 var localAddr = "127.0.0.1:1113"
 
+var ErrInvalidCommand = errors.New("invalid command")
+
 func Run(name string, args []string) error {
 	argv := make([]string, 1, 1+len(args))
 	argv[0] = name
@@ -36,7 +39,7 @@ func Run(name string, args []string) error {
 
 	cmd, ok := commands[name]
 	if !ok {
-		return fmt.Errorf("%s is not a valid command", name)
+		return ErrInvalidCommand
 	}
 	parsedArgs, err := docopt.Parse(cmd.usage, argv, true, "", strings.Contains(cmd.usage, "[--]"))
 	if err != nil {

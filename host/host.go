@@ -121,6 +121,11 @@ See 'flynn-host help <command>' for more information on a specific command.
 	}
 
 	if err := cli.Run(cmd, cmdArgs); err != nil {
+		if err == cli.ErrInvalidCommand {
+			fmt.Printf("ERROR: %q is not a valid command\n\n", cmd)
+			fmt.Println(usage)
+			shutdown.ExitWithCode(1)
+		}
 		shutdown.Fatal(err)
 	}
 }
