@@ -22,6 +22,7 @@ import (
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/version"
 )
 
 // discoverdAttempts is the attempt strategy that is used to connect to discoverd.
@@ -57,10 +58,11 @@ options:
 func main() {
 	defer shutdown.Exit()
 
-	usage := `usage: flynn-host [-h|--help] <command> [<args>...]
+	usage := `usage: flynn-host [-h|--help] [--version] <command> [<args>...]
 
 Options:
   -h, --help                 Show this message
+  --version                  Show current version
 
 Commands:
   help                       Show usage for a specific command
@@ -80,7 +82,7 @@ Commands:
 See 'flynn-host help <command>' for more information on a specific command.
 `
 
-	args, _ := docopt.Parse(usage, nil, true, "", true)
+	args, _ := docopt.Parse(usage, nil, true, version.String(), true)
 	cmd := args.String["<command>"]
 	cmdArgs := args.All["<args>"].([]string)
 
