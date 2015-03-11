@@ -16,8 +16,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/bitbucket.org/kardianos/osext"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/inconshreveable/go-update"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kardianos/osext"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kr/binarydist"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -74,10 +74,6 @@ type Updater struct {
 func (u *Updater) backgroundRun() {
 	os.MkdirAll(u.dir, 0777)
 	if u.wantUpdate() {
-		if err := update.SanityCheck(); err != nil {
-			// fail
-			return
-		}
 		self, err := osext.Executable()
 		if err != nil {
 			// fail update, couldn't figure out path to self
@@ -146,7 +142,7 @@ func (u *Updater) update() error {
 	// it can't be renamed if a handle to the file is still open
 	old.Close()
 
-	err, errRecover := update.FromStream(bytes.NewBuffer(bin))
+	err, errRecover := update.New().FromStream(bytes.NewBuffer(bin))
 	if errRecover != nil {
 		return fmt.Errorf("update and recovery errors: %q %q", err, errRecover)
 	}
