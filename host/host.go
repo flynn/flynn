@@ -75,6 +75,7 @@ Commands:
   stop                       Stop running jobs
   destroy-volumes            Destroys the local volume database
   upload-debug-info          Upload debug information to an anonymous gist
+  version                    Show current version
 
 See 'flynn-host help <command>' for more information on a specific command.
 `
