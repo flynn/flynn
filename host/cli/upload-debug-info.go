@@ -44,7 +44,7 @@ func runUploadDebugInfo() error {
 	}
 
 	for name, filepath := range logs {
-		if err := gist.AddLocalFile(name, filepath); err != nil {
+		if err := gist.AddLocalFile(name, filepath); err != nil && !os.IsNotExist(err) {
 			log.Printf("error adding %s: %s", name, err)
 		}
 	}
