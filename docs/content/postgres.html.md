@@ -40,9 +40,47 @@ flynn env set DATABASE_URL=$(. <(flynn env); echo "postgres://$PGUSER:$PGPASSWOR
 
 ### Connecting to a console
 
-To connect to a `psql` console for the database, run `flynn psql`. This does not
+To connect to a `psql` console for the database, run `flynn pg psql`. This does not
 require the Postgres client to be installed locally or firewall/security
 changes, as it runs in a container on the Flynn cluster.
+
+### Dumping and restoring
+
+The Flynn CLI provides commands for exporting and restoring database dumps.
+
+`flynn pg dump` saves a complete copy of the database schema and data to a local file.
+
+```text
+$ flynn pg dump -f latest.dump
+60.34 MB 8.77 MB/s
+```
+
+The file can be used to restore the database with `flynn pg restore`. It
+may also be imported into a local Postgres database that is not managed by Flynn
+with `pg_restore`:
+
+```text
+$ pg_restore --clean --no-acl --no-owner -d mydb latest.dump
+```
+
+`flynn pg restore` loads a database dump from a local file into a Flynn Postgres
+database. Any existing tables and database objects will be dropped before they
+are recreated.
+
+```text
+$ flynn pg restore -f latest.dump
+62.29 MB / 62.29 MB [===================] 100.00 % 4.96 MB/s
+WARNING: errors ignored on restore: 4
+```
+
+This will generate some warnings, but they are generally safe to ignore.
+
+The restore command may also be used to restore a database dump from another non-Flynn
+Postgres database, use `pg_dump` to create a dump file:
+
+```text
+$ pg_dump --format=custom --no-acl --no-owner mydb > mydb.dump
+```
 
 ### Extensions
 
@@ -51,7 +89,7 @@ including hstore, PostGIS, and PLV8. To enable an extension, use `CREATE
 EXTENSION`:
 
 ```text
-$ flynn psql
+$ flynn pg psql
 psql (9.4.1)
 Type "help" for help.
 

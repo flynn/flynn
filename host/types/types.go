@@ -77,6 +77,7 @@ type ContainerConfig struct {
 	WorkingDir  string            `json:"working_dir,omitempty"`
 	Uid         int               `json:"uid,omitempty"`
 	HostNetwork bool              `json:"host_network,omitempty"`
+	DisableLog  bool              `json:"disable_log,omitempty"`
 }
 
 // Apply 'y' to 'x', returning a new structure.  'y' trumps.
