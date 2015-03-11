@@ -662,7 +662,7 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 	c.l.containers[c.job.ID] = c
 	c.l.containersMtx.Unlock()
 
-	if !c.job.Config.TTY {
+	if !c.job.Config.DisableLog && !c.job.Config.TTY {
 		g.Log(grohl.Data{"at": "get_stdout"})
 		stdout, stderr, initLog, err := c.Client.GetStreams()
 		if err != nil {
@@ -862,6 +862,32 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 			io.Copy(stdinPipe, req.Stdin)
 			stdinPipe.Close()
 		}()
+	}
+
+	if req.Job.Job.Config.DisableLog {
+		stdout, stderr, initLog, err := client.GetStreams()
+		if err != nil {
+			return err
+		}
+		if req.Attached != nil {
+			req.Attached <- struct{}{}
+		}
+		var wg sync.WaitGroup
+		cp := func(w io.Writer, r io.Reader) {
+			if w == nil {
+				w = ioutil.Discard
+			}
+			wg.Add(1)
+			go func() {
+				io.Copy(w, r)
+				wg.Done()
+			}()
+		}
+		cp(req.InitLog, initLog)
+		cp(req.Stdout, stdout)
+		cp(req.Stderr, stderr)
+		wg.Wait()
+		return io.EOF
 	}
 
 	if req.Attached != nil {

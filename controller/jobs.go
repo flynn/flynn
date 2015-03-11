@@ -459,10 +459,11 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 			URI:  artifact.URI,
 		},
 		Config: host.ContainerConfig{
-			Cmd:   newJob.Cmd,
-			Env:   env,
-			TTY:   newJob.TTY,
-			Stdin: attach,
+			Cmd:        newJob.Cmd,
+			Env:        env,
+			TTY:        newJob.TTY,
+			Stdin:      attach,
+			DisableLog: newJob.DisableLog,
 		},
 	}
 	if len(newJob.Entrypoint) > 0 {
