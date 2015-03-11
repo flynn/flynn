@@ -67,16 +67,30 @@ type runConfig struct {
 	Entrypoint []string
 	Args       []string
 	Env        map[string]string
+	Stdin      io.Reader
+	Stdout     io.Writer
+	Stderr     io.Writer
+	DisableLog bool
 }
 
 func runJob(client *controller.Client, config runConfig) error {
 	req := &ct.NewJob{
 		Cmd:        config.Args,
-		TTY:        term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()) && !config.Detached,
+		TTY:        config.Stdin == nil && config.Stdout == nil && term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()) && !config.Detached,
 		ReleaseID:  config.Release,
 		Entrypoint: config.Entrypoint,
 		Env:        config.Env,
 		ReleaseEnv: config.ReleaseEnv,
+		DisableLog: config.DisableLog,
+	}
+	if config.Stdin == nil {
+		config.Stdin = os.Stdin
+	}
+	if config.Stdout == nil {
+		config.Stdout = os.Stdout
+	}
+	if config.Stderr == nil {
+		config.Stderr = os.Stderr
 	}
 	if req.TTY {
 		if req.Env == nil {
@@ -141,7 +155,7 @@ func runJob(client *controller.Client, config runConfig) error {
 	}()
 
 	go func() {
-		io.Copy(attachClient, os.Stdin)
+		io.Copy(attachClient, config.Stdin)
 		attachClient.CloseWrite()
 	}()
 
@@ -149,7 +163,7 @@ func runJob(client *controller.Client, config runConfig) error {
 	shutdown.BeforeExit(func() {
 		<-childDone
 	})
-	exitStatus, err := attachClient.Receive(os.Stdout, os.Stderr)
+	exitStatus, err := attachClient.Receive(config.Stdout, config.Stderr)
 	close(childDone)
 	if err != nil {
 		return err
