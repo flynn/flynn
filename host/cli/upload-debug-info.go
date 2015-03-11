@@ -3,15 +3,15 @@ package cli
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/pkg/cluster"
 )
 
-var logs = map[string]string{
+var flynnHostLogs = map[string]string{
 	"upstart-flynn-host.log": "/var/log/upstart/flynn-host.log",
 	"tmp-flynn-host.log":     "/tmp/flynn-host.log",
 }
@@ -37,38 +37,45 @@ Upload debug information to an anonymous gist`)
 }
 
 func runUploadDebugInfo() error {
+	log := log15.New()
+	log.Info("uploading logs and debug information to a private, anonymous gist")
+	log.Info("this may take a while depending on the size of your logs")
+
 	gist := &Gist{
 		Description: "Flynn debug information",
 		Public:      false,
 		Files:       make(map[string]File),
 	}
 
-	for name, filepath := range logs {
+	log.Info("getting flynn-host logs")
+	for name, filepath := range flynnHostLogs {
 		if err := gist.AddLocalFile(name, filepath); err != nil && !os.IsNotExist(err) {
-			log.Printf("error adding %s: %s", name, err)
+			log.Error(fmt.Sprintf("error getting flynn-host log %q", filepath), "err", err)
 		}
 	}
 
+	log.Info("getting job logs")
 	if err := captureJobs(gist); err != nil {
-		log.Println(err)
+		log.Error("error getting job logs", "err", err)
 	}
 
+	log.Info("getting system information")
 	var debugOutput string
 	for _, cmd := range debugCmds {
 		output, err := captureCmd(cmd[0], cmd[1:]...)
 		if err != nil {
-			log.Printf("could not capture command '%s': %s", strings.Join(cmd, " "), err)
+			log.Error(fmt.Sprintf("error capturing output of %q", strings.Join(cmd, " ")), "err", err)
 			continue
 		}
 		debugOutput += fmt.Sprintln("===>", strings.Replace(strings.Join(cmd, " "), "\n", `\n`, -1), "\n", output)
 	}
 	gist.AddFile("0-debug-output.log", debugOutput)
 
-	if err := gist.Upload(); err != nil {
+	if err := gist.Upload(log); err != nil {
 		return err
 	}
 
-	log.Println("Debug information uploaded to:", gist.URL)
+	log.Info(fmt.Sprintf("debug information uploaded to: %s", gist.URL))
 	return nil
 }
 
