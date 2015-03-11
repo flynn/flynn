@@ -210,6 +210,21 @@ INFO[03-11|19:25:38] debug information uploaded to: https://gist.github.com/4737
 You can then post the gist in the `#flynn` IRC room when asking for assistance to make it easier for
 someone to help you.
 
+If you would rather not use the GitHub gist service, or your logs are too big to fit into a single gist,
+you can create a tarball of the information by specifying the `--tarball` flag:
+
+```
+$ flynn-host collect-debug-info --tarball
+INFO[03-11|19:28:58] creating a tarball containing logs and debug information
+INFO[03-11|19:28:58] this may take a while depending on the size of your logs
+INFO[03-11|19:28:58] getting flynn-host logs
+INFO[03-11|19:28:58] getting job logs
+INFO[03-11|19:28:58] getting system information
+INFO[03-11|19:28:59] created tarball containing debug information at /tmp/flynn-host-debug407848418/flynn-host-debug.tar.gz
+```
+
+You can then send this to a Flynn developer after speaking to them in IRC.
+
 ## Running tests
 
 Flynn has two types of tests:

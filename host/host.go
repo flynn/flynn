@@ -76,7 +76,7 @@ Commands:
   ps                         List jobs
   stop                       Stop running jobs
   destroy-volumes            Destroys the local volume database
-  collect-debug-info         Collect debug information into an anonymous gist
+  collect-debug-info         Collect debug information into an anonymous gist or tarball
   version                    Show current version
 
 See 'flynn-host help <command>' for more information on a specific command.
