@@ -37,7 +37,7 @@ func (s *S) TestCreateDeployment(c *C) {
 
 	// quickly recreating a deployment should error
 	_, err = s.c.CreateDeployment(app.ID, newRelease.ID)
-	c.Assert(err.(hh.JSONError).Code, Equals, hh.ValidationError)
+	c.Assert(hh.IsValidationError(err), Equals, true)
 	c.Assert(err.(hh.JSONError).Message, Equals, "Cannot create deploy, there is already one in progress for this app.")
 }
 

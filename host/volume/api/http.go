@@ -52,28 +52,19 @@ func (api *HTTPAPI) CreateProvider(w http.ResponseWriter, r *http.Request, ps ht
 		pspec.ID = random.UUID()
 	}
 	if pspec.Kind == "" {
-		httphelper.Error(w, httphelper.JSONError{
-			Code:    httphelper.ValidationError,
-			Message: fmt.Sprintf("volume provider 'kind' field must not be blank"),
-		})
+		httphelper.ValidationError(w, "kind", "must not be blank")
 		return
 	}
 	provider, err := volumemanager.NewProvider(pspec)
 	if err == volume.UnknownProviderKind {
-		httphelper.Error(w, httphelper.JSONError{
-			Code:    httphelper.ValidationError,
-			Message: fmt.Sprintf("volume provider kind %q is not known", pspec.Kind),
-		})
+		httphelper.ValidationError(w, "kind", fmt.Sprintf("%q is not known", pspec.Kind))
 		return
 	}
 
 	if err := api.vman.AddProvider(pspec.ID, provider); err != nil {
 		switch err {
 		case volumemanager.ProviderAlreadyExists:
-			httphelper.Error(w, httphelper.JSONError{
-				Code:    httphelper.ObjectExistsError,
-				Message: fmt.Sprintf("provider %q already exists", pspec.ID),
-			})
+			httphelper.ObjectExistsError(w, fmt.Sprintf("provider %q already exists", pspec.ID))
 			return
 		default:
 			httphelper.Error(w, err)
@@ -89,10 +80,7 @@ func (api *HTTPAPI) Create(w http.ResponseWriter, r *http.Request, ps httprouter
 
 	vol, err := api.vman.NewVolumeFromProvider(providerID)
 	if err == volumemanager.NoSuchProvider {
-		httphelper.Error(w, httphelper.JSONError{
-			Code:    httphelper.ObjectNotFoundError,
-			Message: fmt.Sprintf("No volume provider by id %q", providerID),
-		})
+		httphelper.ObjectNotFoundError(w, fmt.Sprintf("no volume provider with id %q", providerID))
 		return
 	}
 
@@ -112,10 +100,7 @@ func (api *HTTPAPI) Inspect(w http.ResponseWriter, r *http.Request, ps httproute
 	volumeID := ps.ByName("volume_id")
 	vol := api.vman.GetVolume(volumeID)
 	if vol == nil {
-		httphelper.Error(w, httphelper.JSONError{
-			Code:    httphelper.ObjectNotFoundError,
-			Message: fmt.Sprintf("No volume by id %q", volumeID),
-		})
+		httphelper.ObjectNotFoundError(w, fmt.Sprintf("no volume with id %q", volumeID))
 		return
 	}
 
@@ -128,10 +113,7 @@ func (api *HTTPAPI) Destroy(w http.ResponseWriter, r *http.Request, ps httproute
 	if err != nil {
 		switch err {
 		case volumemanager.NoSuchVolume:
-			httphelper.Error(w, httphelper.JSONError{
-				Code:    httphelper.ObjectNotFoundError,
-				Message: fmt.Sprintf("No volume by id %q", volumeID),
-			})
+			httphelper.ObjectNotFoundError(w, fmt.Sprintf("no volume with id %q", volumeID))
 			return
 		default:
 			httphelper.Error(w, err)
@@ -148,10 +130,7 @@ func (api *HTTPAPI) Snapshot(w http.ResponseWriter, r *http.Request, ps httprout
 	if err != nil {
 		switch err {
 		case volumemanager.NoSuchVolume:
-			httphelper.Error(w, httphelper.JSONError{
-				Code:    httphelper.ObjectNotFoundError,
-				Message: fmt.Sprintf("No volume by id %q", volumeID),
-			})
+			httphelper.ObjectNotFoundError(w, fmt.Sprintf("no volume with id %q", volumeID))
 			return
 		default:
 			httphelper.Error(w, err)
@@ -202,10 +181,7 @@ func (api *HTTPAPI) Send(w http.ResponseWriter, r *http.Request, ps httprouter.P
 	volumeID := ps.ByName("volume_id")
 
 	if !strings.Contains(r.Header.Get("Accept"), snapshotContentType) {
-		httphelper.Error(w, httphelper.JSONError{
-			Code:    httphelper.ValidationError,
-			Message: fmt.Sprintf("Must be prepared to accept a content type of %q", snapshotContentType),
-		})
+		httphelper.ValidationError(w, "", fmt.Sprintf("must be prepared to accept a content type of %q", snapshotContentType))
 		return
 	}
 	w.Header().Set("Content-Type", snapshotContentType)
@@ -220,10 +196,7 @@ func (api *HTTPAPI) Send(w http.ResponseWriter, r *http.Request, ps httprouter.P
 	if err != nil {
 		switch err {
 		case volumemanager.NoSuchVolume:
-			httphelper.Error(w, httphelper.JSONError{
-				Code:    httphelper.ObjectNotFoundError,
-				Message: fmt.Sprintf("No volume by id %q", volumeID),
-			})
+			httphelper.ObjectNotFoundError(w, fmt.Sprintf("no volume with id %q", volumeID))
 			return
 		default:
 			httphelper.Error(w, err)

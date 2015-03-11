@@ -72,6 +72,10 @@ func (c *FakeHostClient) StopJob(id string) error {
 	return nil
 }
 
+func (c *FakeHostClient) SignalJob(string, int) error {
+	return nil
+}
+
 func (c *FakeHostClient) IsStopped(id string) bool {
 	return c.stopped[id]
 }

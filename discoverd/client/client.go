@@ -97,8 +97,7 @@ func (c *Client) Service(name string) Service {
 }
 
 func IsNotFound(err error) bool {
-	je, ok := err.(hh.JSONError)
-	return ok && je.Code == hh.ObjectNotFoundError
+	return hh.IsObjectNotFoundError(err)
 }
 
 func (c *Client) Instances(service string, timeout time.Duration) ([]*Instance, error) {

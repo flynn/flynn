@@ -4,7 +4,6 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -107,16 +106,7 @@ type handlerConfig struct {
 func respondWithError(w http.ResponseWriter, err error) {
 	switch v := err.(type) {
 	case ct.ValidationError:
-		var detail []byte
-		if v.Field != "" {
-			detail, _ = json.Marshal(map[string]string{"field": v.Field})
-		}
-		err = httphelper.JSONError{
-			Code:    httphelper.ValidationError,
-			Message: fmt.Sprintf("%s %s", v.Field, v.Message),
-			Detail:  detail,
-		}
-		httphelper.Error(w, err)
+		httphelper.ValidationError(w, v.Field, v.Message)
 	default:
 		if err == ErrNotFound {
 			w.WriteHeader(404)

@@ -18,23 +18,23 @@ import (
 type ErrorCode string
 
 const (
-	NotFoundError           ErrorCode = "not_found"
-	ObjectNotFoundError     ErrorCode = "object_not_found"
-	ObjectExistsError       ErrorCode = "object_exists"
-	SyntaxError             ErrorCode = "syntax_error"
-	ValidationError         ErrorCode = "validation_error"
-	PreconditionFailedError ErrorCode = "precondition_failed"
-	UnknownError            ErrorCode = "unknown_error"
+	NotFoundErrorCode           ErrorCode = "not_found"
+	ObjectNotFoundErrorCode     ErrorCode = "object_not_found"
+	ObjectExistsErrorCode       ErrorCode = "object_exists"
+	SyntaxErrorCode             ErrorCode = "syntax_error"
+	ValidationErrorCode         ErrorCode = "validation_error"
+	PreconditionFailedErrorCode ErrorCode = "precondition_failed"
+	UnknownErrorCode            ErrorCode = "unknown_error"
 )
 
 var errorResponseCodes = map[ErrorCode]int{
-	NotFoundError:           404,
-	ObjectNotFoundError:     404,
-	ObjectExistsError:       409,
-	PreconditionFailedError: 412,
-	SyntaxError:             400,
-	ValidationError:         400,
-	UnknownError:            500,
+	NotFoundErrorCode:           404,
+	ObjectNotFoundErrorCode:     404,
+	ObjectExistsErrorCode:       409,
+	PreconditionFailedErrorCode: 412,
+	SyntaxErrorCode:             400,
+	ValidationErrorCode:         400,
+	UnknownErrorCode:            500,
 }
 
 type JSONError struct {
@@ -43,9 +43,25 @@ type JSONError struct {
 	Detail  json.RawMessage `json:"detail,omitempty"`
 }
 
-func IsValidationError(err error) bool {
+func isJSONErrorWithCode(err error, code ErrorCode) bool {
 	e, ok := err.(JSONError)
-	return ok && e.Code == ValidationError
+	return ok && e.Code == code
+}
+
+func IsObjectNotFoundError(err error) bool {
+	return isJSONErrorWithCode(err, ObjectNotFoundErrorCode)
+}
+
+func IsObjectExistsError(err error) bool {
+	return isJSONErrorWithCode(err, ObjectExistsErrorCode)
+}
+
+func IsPreconditionFailedError(err error) bool {
+	return isJSONErrorWithCode(err, PreconditionFailedErrorCode)
+}
+
+func IsValidationError(err error) bool {
+	return isJSONErrorWithCode(err, ValidationErrorCode)
 }
 
 var CORSAllowAllHandler = cors.Allow(&cors.Options{
@@ -117,7 +133,7 @@ func buildJSONError(err error) *JSONError {
 	switch v := err.(type) {
 	case *json.SyntaxError, *json.UnmarshalTypeError:
 		jsonError = &JSONError{
-			Code:    SyntaxError,
+			Code:    SyntaxErrorCode,
 			Message: "The provided JSON input is invalid",
 		}
 	case JSONError:
@@ -126,7 +142,7 @@ func buildJSONError(err error) *JSONError {
 		jsonError = v
 	default:
 		jsonError = &JSONError{
-			Code:    UnknownError,
+			Code:    UnknownErrorCode,
 			Message: "Something went wrong",
 		}
 	}
@@ -136,7 +152,7 @@ func buildJSONError(err error) *JSONError {
 func Error(w http.ResponseWriter, err error) {
 	if rw, ok := w.(*ResponseWriter); !ok || (ok && rw.Status() == 0) {
 		jsonError := buildJSONError(err)
-		if jsonError.Code == UnknownError {
+		if jsonError.Code == UnknownErrorCode {
 			logError(w, err)
 		}
 		responseCode, ok := errorResponseCodes[jsonError.Code]
@@ -147,6 +163,31 @@ func Error(w http.ResponseWriter, err error) {
 	} else {
 		logError(w, err)
 	}
+}
+
+func ObjectNotFoundError(w http.ResponseWriter, message string) {
+	Error(w, JSONError{Code: ObjectNotFoundErrorCode, Message: message})
+}
+
+func ObjectExistsErr(message string) error {
+	return JSONError{Code: ObjectExistsErrorCode, Message: message}
+}
+
+func ObjectExistsError(w http.ResponseWriter, message string) {
+	Error(w, ObjectExistsErr(message))
+}
+
+func PreconditionFailedErr(message string) error {
+	return JSONError{Code: PreconditionFailedErrorCode, Message: message}
+}
+
+func ValidationError(w http.ResponseWriter, field, message string) {
+	err := JSONError{Code: ValidationErrorCode, Message: message}
+	if field != "" {
+		err.Message = fmt.Sprintf("%s %s", field, message)
+		err.Detail, _ = json.Marshal(map[string]string{"field": field})
+	}
+	Error(w, err)
 }
 
 func JSON(w http.ResponseWriter, status int, v interface{}) {

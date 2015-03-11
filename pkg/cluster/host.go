@@ -27,6 +27,9 @@ type Host interface {
 	// StopJob stops a running job.
 	StopJob(id string) error
 
+	// SignalJob sends a signal to a running job.
+	SignalJob(id string, sig int) error
+
 	// StreamEvents about job state changes to ch. id may be "all" or a single
 	// job ID.
 	StreamEvents(id string, ch chan<- *host.Event) (stream.Stream, error)
@@ -94,6 +97,10 @@ func (c *hostClient) GetJob(id string) (*host.ActiveJob, error) {
 
 func (c *hostClient) StopJob(id string) error {
 	return c.c.Delete(fmt.Sprintf("/host/jobs/%s", id))
+}
+
+func (c *hostClient) SignalJob(id string, sig int) error {
+	return c.c.Put(fmt.Sprintf("/host/jobs/%s/signal/%d", id, sig), nil, nil)
 }
 
 func (c *hostClient) StreamEvents(id string, ch chan<- *host.Event) (stream.Stream, error) {

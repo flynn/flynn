@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
@@ -39,6 +40,14 @@ func (h *Host) StopJob(id string) error {
 	default:
 		return errors.New("host: job is already stopped")
 	}
+}
+
+func (h *Host) SignalJob(id string, sig int) error {
+	job := h.state.GetJob(id)
+	if job == nil {
+		return errors.New("host: unknown job")
+	}
+	return h.backend.Signal(id, sig)
 }
 
 func (h *Host) streamEvents(id string, w http.ResponseWriter) error {
@@ -80,6 +89,25 @@ func (h *jobAPI) GetJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 func (h *jobAPI) StopJob(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	id := ps.ByName("id")
 	if err := h.host.StopJob(id); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	w.WriteHeader(200)
+}
+
+func (h *jobAPI) SignalJob(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	sig := ps.ByName("signal")
+	if sig == "" {
+		httphelper.ValidationError(w, "sig", "must not be empty")
+		return
+	}
+	sigInt, err := strconv.Atoi(sig)
+	if err != nil {
+		httphelper.ValidationError(w, "sig", "must be an integer")
+		return
+	}
+	id := ps.ByName("id")
+	if err := h.host.SignalJob(id, sigInt); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
@@ -128,6 +156,7 @@ func (h *jobAPI) RegisterRoutes(r *httprouter.Router) error {
 	r.GET("/host/jobs", h.ListJobs)
 	r.GET("/host/jobs/:id", h.GetJob)
 	r.DELETE("/host/jobs/:id", h.StopJob)
+	r.PUT("/host/jobs/:id/signal/:signal", h.SignalJob)
 	r.POST("/host/pull-images", h.PullImages)
 	return nil
 }

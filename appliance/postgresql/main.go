@@ -21,7 +21,7 @@ func main() {
 	err := discoverd.DefaultClient.AddService(serviceName, &discoverd.ServiceConfig{
 		LeaderType: discoverd.LeaderTypeManual,
 	})
-	if je, ok := err.(httphelper.JSONError); err != nil && (!ok || je.Code != httphelper.ObjectExistsError) {
+	if err != nil && !httphelper.IsObjectExistsError(err) {
 		shutdown.Fatal(err)
 	}
 	inst := &discoverd.Instance{Addr: ":5432"}
