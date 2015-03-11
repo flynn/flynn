@@ -4,10 +4,14 @@
 
 package osext
 
-import "syscall"
+import (
+	"os"
+	"strconv"
+	"syscall"
+)
 
 func executable() (string, error) {
-	f, err := Open("/proc/" + itoa(Getpid()) + "/text")
+	f, err := os.Open("/proc/" + strconv.Itoa(os.Getpid()) + "/text")
 	if err != nil {
 		return "", err
 	}
