@@ -30,13 +30,13 @@ var debugCmds = [][]string{
 }
 
 func init() {
-	Register("upload-debug-info", runUploadDebugInfo, `
-usage: flynn-host upload-debug-info
+	Register("collect-debug-info", runCollectDebugInfo, `
+usage: flynn-host collect-debug-info
 
-Upload debug information to an anonymous gist`)
+Collect debug information into an anonymous gist`)
 }
 
-func runUploadDebugInfo() error {
+func runCollectDebugInfo() error {
 	log := log15.New()
 	log.Info("uploading logs and debug information to a private, anonymous gist")
 	log.Info("this may take a while depending on the size of your logs")

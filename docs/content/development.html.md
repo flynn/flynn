@@ -190,14 +190,21 @@ Assuming the app has name `example`:
 $ flynn-host ps | awk -F " {2,}" '$4=="example" {print $1}' | xargs flynn-host stop
 ```
 
-### upload logs and system information to a gist
+### upload logs and system information to a GitHub gist
 
 If you want to get help diagnosing issues on your system, run the following to upload some
-useful information to an anonymous gist:
+useful information to an anonymous GitHub gist:
 
 ```
-$ flynn-host upload-debug-info
-14:45:55.596680 upload-debug-info.go:69: Debug information uploaded to: https://gist.github.com/877117544439b0acaf0e
+$ flynn-host collect-debug-info
+INFO[03-11|19:25:29] uploading logs and debug information to a private, anonymous gist
+INFO[03-11|19:25:29] this may take a while depending on the size of your logs
+INFO[03-11|19:25:29] getting flynn-host logs
+INFO[03-11|19:25:29] getting job logs
+INFO[03-11|19:25:29] getting system information
+INFO[03-11|19:25:30] creating anonymous gist
+789.50 KB / 789.50 KB [=======================================================] 100.00 % 93.39 KB/s 8s
+INFO[03-11|19:25:38] debug information uploaded to: https://gist.github.com/47379bd4604442cac820
 ```
 
 You can then post the gist in the `#flynn` IRC room when asking for assistance to make it easier for
