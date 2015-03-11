@@ -192,7 +192,9 @@ func (RegisterSuite) TestRegister(c *C) {
 			if step.setMeta {
 				go func() {
 					call := <-metaChan
-					call.returnVal <- step.success
+					if call.returnVal != nil {
+						call.returnVal <- step.success
+					}
 				}()
 				// SetMeta needs to succeed every time, regardless of the situation
 				currentMeta["TEST"] = random.UUID()
