@@ -1,4 +1,0 @@
-include_rules
-
-: $(ROOT)/util/cedarish/<docker> |> ^ docker build dashboard-builder^ cat $(ROOT)/log/docker-cedarish.log > /dev/null && ./build.sh image | tee %o |> $(ROOT)/log/docker-dashboard-builder.log <docker>
-: $(ROOT)/log/docker-dashboard-builder.log |> ./build.sh app |> dashboard.tar

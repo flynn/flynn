@@ -22,7 +22,6 @@ type Config struct {
 	GithubToken        string
 	SessionStore       *sessions.CookieStore
 	AppName            string
-	StaticPath         string
 	CACert             []byte
 }
 
@@ -81,11 +80,6 @@ func LoadConfigFromEnv() *Config {
 	conf.AppName = os.Getenv("APP_NAME")
 	if conf.AppName == "" {
 		conf.AppName = "dashboard"
-	}
-
-	conf.StaticPath = os.Getenv("STATIC_PATH")
-	if conf.StaticPath == "" {
-		conf.StaticPath = "app/build"
 	}
 
 	conf.CACert = []byte(os.Getenv("CA_CERT"))

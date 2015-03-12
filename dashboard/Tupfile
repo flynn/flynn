@@ -1,3 +1,6 @@
 include_rules
-: |> !go |> bin/flynn-dashboard
-: bin/* app/dashboard.tar |> !docker-layer1 |>
+: $(ROOT)/util/cedarish/<docker> |> ^ docker build dashboard-builder^ cat $(ROOT)/log/docker-cedarish.log > /dev/null && $(ROOT)/util/rubyassetbuilder/build.sh image | tee %o |> $(ROOT)/log/docker-dashboard-builder.log <docker>
+: |> go build -o $(ROOT)/dashboard/bin/go-bindata $(ROOT)/Godeps/_workspace/src/github.com/jteeuwen/go-bindata/go-bindata |> $(ROOT)/dashboard/bin/go-bindata
+: $(ROOT)/log/docker-dashboard-builder.log $(ROOT)/dashboard/bin/go-bindata |> $(ROOT)/util/rubyassetbuilder/build.sh app |> bindata.go
+: bindata.go |> !go |> bin/flynn-dashboard
+: bin/* |> !docker-layer1 |>
