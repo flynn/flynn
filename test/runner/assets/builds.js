@@ -1,3 +1,5 @@
+window.builds = {}
+
 $(function() {
   var lastID
   var count     = 10
@@ -26,14 +28,22 @@ $(function() {
 
     $.getJSON("/builds/", params, function(builds) {
       _.each(builds, function(build) {
-	lastID = build.id
-	build.created_at = moment(build.created_at)
-	build.label_class = label_classes[build.state]
-	var row = template(build)
-	tableBody.append(row)
+        window.builds[build.id] = build
+        lastID = build.id
+        build.created_at = moment(build.created_at)
+        build.label_class = label_classes[build.state]
+        var row = template(build)
+        tableBody.append(row)
       })
     })
   }
 
   window.fetch()
 })
+
+function showExplainModal(id) {
+  var build    = window.builds[id]
+  var template = _.template($("#explain-template").html())
+  var modal    = template(build)
+  $(modal).appendTo("body").modal()
+}

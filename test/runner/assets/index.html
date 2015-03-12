@@ -27,6 +27,7 @@
             <th>Created</th>
             <th>Duration</th>
             <th>State</th>
+            <th>Reason</th>
             <th></th>
           </tr>
         </thead>
@@ -60,6 +61,17 @@
         </td>
         <td><span class="label <%= label_class %>"><%= state %></span></td>
         <td>
+          <% if(issue_link) { %>
+            <a href="<%= issue_link %>" class="btn btn-warning" target="_blank">
+              #<%= issue_link.split("/").pop() %>
+            </a>
+          <% } else if(reason) { %>
+            <span class="label label-reason"><%= reason %></span>
+          <% } else if(state == "failure") { %>
+            <a href="javascript:void(0)" class="btn btn-default" onclick="showExplainModal('<%= id %>')">Explain</a>
+          <% } %>
+        </td>
+        <td>
           <form action="/builds/<%= id %>/restart" method="POST">
             <button type="submit" class="btn btn-primary">
               <i class="fa fa-refresh"></i>
@@ -67,6 +79,43 @@
           </form>
         </td>
       </tr>
+    </script>
+
+    <script type="text/template" id="explain-template">
+      <div class="modal fade">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <form action="/builds/<%= id %>/explain" method="POST">
+              <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title">Explain Failure of <%= id %></h4>
+              </div>
+
+              <div class="modal-body">
+                <div class="radio">
+                  <label>
+                    <input type="radio" name="reason" value="expected">
+                    Expected build failure
+                  </label>
+                </div>
+
+                <div class="radio">
+                  <label>
+                    <input type="radio" name="reason" value="issue">
+                    Known GitHub issue
+                    <input type="text" name="issue-link" class="form-control" placeholder="GitHub issue link" width="100%">
+                  </label>
+                </div>
+              </div>
+
+              <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </script>
 
     <script src="//cdnjs.cloudflare.com/ajax/libs/underscore.js/1.6.0/underscore-min.js"></script>
