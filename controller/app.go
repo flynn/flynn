@@ -257,6 +257,14 @@ func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *
 		Follow: req.FormValue("follow") == "true",
 		JobID:  req.FormValue("job_id"),
 	}
+	if opts.JobID != "" {
+		// Temporary handling of combined JobID format. Logs are sent to aggregator
+		// without host- prefix. https://github.com/flynn/flynn/issues/1238
+		index := strings.LastIndex(opts.JobID, "-")
+		if len(opts.JobID) > index {
+			opts.JobID = opts.JobID[index+1:]
+		}
+	}
 	if vals, ok := req.Form["process_type"]; ok && len(vals) > 0 {
 		opts.ProcessType = &vals[len(vals)-1]
 	}
