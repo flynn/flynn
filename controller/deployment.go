@@ -189,7 +189,7 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 	}
 
 	if err := c.deploymentRepo.Add(deployment); err != nil {
-		if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" && e.Constraint == "isolate_deploys" {
+		if postgres.IsUniquenessError(err, "isolate_deploys") {
 			httphelper.ValidationError(w, "", "Cannot create deploy, there is already one in progress for this app.")
 			return
 		}

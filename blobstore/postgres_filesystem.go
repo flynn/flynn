@@ -49,7 +49,7 @@ func (p *PostgresFilesystem) Put(name string, r io.Reader, typ string) error {
 	var id oid.Oid
 create:
 	err = tx.QueryRow("INSERT INTO files (name, type) VALUES ($1, $2) RETURNING file_id", name, typ).Scan(&id)
-	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" {
+	if postgres.IsUniquenessError(err, "") {
 		tx.Rollback()
 		tx, err = p.db.Begin()
 		if err != nil {

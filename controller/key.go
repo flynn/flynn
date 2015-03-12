@@ -7,7 +7,6 @@ import (
 	"errors"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -38,7 +37,7 @@ func (r *KeyRepo) Add(data interface{}) error {
 	key.Comment = comment
 
 	err = r.db.QueryRow("INSERT INTO keys (fingerprint, key, comment) VALUES ($1, $2, $3) RETURNING created_at", key.ID, key.Key, key.Comment).Scan(&key.CreatedAt)
-	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" {
+	if postgres.IsUniquenessError(err, "") {
 		return nil
 	}
 	return err

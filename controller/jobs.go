@@ -70,7 +70,7 @@ func (r *JobRepo) Add(job *ct.Job) error {
 	// TODO: actually validate
 	err = r.db.QueryRow("INSERT INTO job_cache (job_id, host_id, app_id, release_id, process_type, state, meta) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING created_at, updated_at",
 		jobID, hostID, job.AppID, job.ReleaseID, job.Type, job.State, meta).Scan(&job.CreatedAt, &job.UpdatedAt)
-	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" {
+	if postgres.IsUniquenessError(err, "") {
 		err = r.db.QueryRow("UPDATE job_cache SET state = $3, updated_at = now() WHERE job_id = $1 AND host_id = $2 RETURNING created_at, updated_at",
 			jobID, hostID, job.State).Scan(&job.CreatedAt, &job.UpdatedAt)
 		if e, ok := err.(*pq.Error); ok && e.Code.Name() == "check_violation" {
@@ -83,7 +83,7 @@ func (r *JobRepo) Add(job *ct.Job) error {
 
 	// create a job event, ignoring possible duplications
 	err = r.db.Exec("INSERT INTO job_events (job_id, host_id, app_id, state) VALUES ($1, $2, $3, $4)", jobID, hostID, job.AppID, job.State)
-	if e, ok := err.(*pq.Error); !ok || e.Code.Name() != "unique_violation" {
+	if postgres.IsUniquenessError(err, "") {
 		return err
 	}
 	return nil

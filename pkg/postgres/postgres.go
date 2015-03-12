@@ -201,3 +201,10 @@ func CleanUUID(u string) string {
 func FormatUUID(s string) string {
 	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
 }
+
+func IsUniquenessError(err error, constraint string) bool {
+	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" {
+		return constraint == "" || constraint == e.Constraint
+	}
+	return false
+}

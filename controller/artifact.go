@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
@@ -30,7 +29,7 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 	}
 	err := r.db.QueryRow("INSERT INTO artifacts (artifact_id, type, uri) VALUES ($1, $2, $3) RETURNING created_at",
 		a.ID, a.Type, a.URI).Scan(&a.CreatedAt)
-	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" {
+	if postgres.IsUniquenessError(err, "") {
 		err = r.db.QueryRow("SELECT artifact_id, created_at FROM artifacts WHERE type = $1 AND uri = $2",
 			a.Type, a.URI).Scan(&a.ID, &a.CreatedAt)
 		if err != nil {

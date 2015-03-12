@@ -55,6 +55,9 @@ func (r *AppRepo) Add(data interface{}) error {
 	}
 	meta := metaToHstore(app.Meta)
 	if err := r.db.QueryRow("INSERT INTO apps (app_id, name, meta, strategy) VALUES ($1, $2, $3, $4) RETURNING created_at, updated_at", app.ID, app.Name, meta, app.Strategy).Scan(&app.CreatedAt, &app.UpdatedAt); err != nil {
+		if postgres.IsUniquenessError(err, "apps_name_idx") {
+			return httphelper.ObjectExistsErr(fmt.Sprintf("application %q already exists", app.Name))
+		}
 		return err
 	}
 	app.ID = postgres.CleanUUID(app.ID)
