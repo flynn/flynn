@@ -5,8 +5,9 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -22,15 +23,24 @@ type LoginInfo struct {
 	Token string `json:"token" form:"token"`
 }
 
+func AssetReader(path string) (io.ReadSeeker, time.Time, error) {
+	t := time.Time{}
+	data, err := Asset(path)
+	if err != nil {
+		return nil, t, err
+	}
+	if fi, err := AssetInfo(path); err != nil {
+		t = fi.ModTime()
+	}
+	return bytes.NewReader(data), t, nil
+}
+
 func APIHandler(conf *Config) http.Handler {
 	r := martini.NewRouter()
 	m := martini.New()
 	m.Use(martini.Logger())
 	m.Use(martini.Recovery())
-	m.Use(render.Renderer(render.Options{
-		Directory:  conf.StaticPath,
-		Extensions: []string{".html"},
-	}))
+	m.Use(render.Renderer(render.Options{}))
 	m.Action(r.Handle)
 
 	m.Map(conf)
@@ -59,15 +69,11 @@ func APIHandler(conf *Config) http.Handler {
 
 		r.Any("/assets/dashboard.*.js", serveDashboardJs)
 
-		r.Any("/assets.*", martini.Static(filepath.Join(conf.StaticPath, "assets"), martini.StaticOptions{
-			Prefix: "/assets",
-		}))
+		r.Any("/assets.*", serveAsset)
 
 		r.Get("/ping", pingHandler)
 
-		r.Get("/.*", func(r render.Render) {
-			r.HTML(200, "dashboard", "")
-		})
+		r.Get("/.*", serveTemplate)
 	})
 
 	return m
@@ -100,6 +106,33 @@ func requireUserMiddleware(rh RequestHelper) {
 
 func pingHandler(req *http.Request, w http.ResponseWriter, rh RequestHelper) {
 	rh.WriteHeader(200)
+}
+
+func serveStatic(w http.ResponseWriter, req *http.Request, path string) {
+	data, t, err := AssetReader(path)
+	if err != nil {
+		fmt.Println(err)
+		w.WriteHeader(404)
+		return
+	}
+
+	ext := filepath.Ext(path)
+	if mimeType := mime.TypeByExtension(ext); mimeType != "" {
+		w.Header().Add("Content-Type", mimeType)
+	}
+	if ext == ".html" {
+		w.Header().Add("Cache-Control", "max-age=0")
+	}
+
+	http.ServeContent(w, req, path, t, data)
+}
+
+func serveTemplate(w http.ResponseWriter, req *http.Request, rh RequestHelper, r render.Render, conf *Config) {
+	serveStatic(w, req, filepath.Join("app", "build", "dashboard.html"))
+}
+
+func serveAsset(w http.ResponseWriter, req *http.Request, rh RequestHelper, conf *Config) {
+	serveStatic(w, req, filepath.Join("app", "build", req.URL.Path))
 }
 
 func login(req *http.Request, w http.ResponseWriter, info LoginInfo, rh RequestHelper, conf *Config) {
@@ -176,17 +209,11 @@ type DashboardConfig struct {
 }
 
 func serveDashboardJs(res http.ResponseWriter, req *http.Request, conf *Config) {
-	file := filepath.Join(conf.StaticPath, "assets", filepath.Base(req.URL.Path))
-	f, err := os.Open(file)
+	path := filepath.Join("app", "build", "assets", filepath.Base(req.URL.Path))
+	data, t, err := AssetReader(path)
 	if err != nil {
 		fmt.Println(err)
 		res.WriteHeader(500)
-		return
-	}
-	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil {
-		fmt.Println(err)
 		return
 	}
 
@@ -200,7 +227,7 @@ func serveDashboardJs(res http.ResponseWriter, req *http.Request, conf *Config) 
 	})
 	jsConf.Write([]byte(";\n"))
 
-	r := ioutil.NewMultiReadSeeker(bytes.NewReader(jsConf.Bytes()), f)
+	r := ioutil.NewMultiReadSeeker(bytes.NewReader(jsConf.Bytes()), data)
 
-	http.ServeContent(res, req, file, fi.ModTime(), r)
+	http.ServeContent(res, req, path, t, r)
 }

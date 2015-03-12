@@ -378,6 +378,11 @@
 			"Rev": "1e92e5afe62cbf6fc9ef72aaf5d6522f0dd7ef4c"
 		},
 		{
+			"ImportPath": "github.com/jteeuwen/go-bindata",
+			"Comment": "v3.0.7-19-g040617c",
+			"Rev": "040617c5ef993d2d4a6630636bde1aa913e954b9"
+		},
+		{
 			"ImportPath": "github.com/julienschmidt/httprouter",
 			"Rev": "46807412fe50aaceb73bb57061c2230fd26a1640"
 		},
