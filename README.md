@@ -21,7 +21,7 @@ You can learn more about the project at the [Flynn website](https://flynn.io).
 
 ### Status
 
-Flynn is in active development and **currently unsuitable for production** use.
+Flynn is in active development.
 
 Users are encouraged to experiment with Flynn but should assume there are
 stability, security, and performance weaknesses throughout the project. This
