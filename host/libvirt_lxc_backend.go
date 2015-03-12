@@ -27,6 +27,7 @@ import (
 	"github.com/flynn/flynn/host/containerinit"
 	lt "github.com/flynn/flynn/host/libvirt"
 	"github.com/flynn/flynn/host/logbuf"
+	"github.com/flynn/flynn/host/logmux"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume/manager"
 	"github.com/flynn/flynn/pinkerton"
@@ -43,7 +44,7 @@ const (
 	imageRoot      = "/var/lib/docker"
 )
 
-func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, logPath, initPath string) (Backend, error) {
+func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, logPath, initPath string, mux *logmux.LogMux) (Backend, error) {
 	libvirtc, err := libvirt.NewVirConnection("lxc:///")
 	if err != nil {
 		return nil, err
@@ -65,6 +66,7 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, lo
 		logs:       make(map[string]*logbuf.Log),
 		containers: make(map[string]*libvirtContainer),
 		resolvConf: "/etc/resolv.conf",
+		mux:        mux,
 	}, nil
 }
 
@@ -84,6 +86,7 @@ type LibvirtLXCBackend struct {
 
 	logsMtx sync.Mutex
 	logs    map[string]*logbuf.Log
+	mux     *logmux.LogMux
 
 	containersMtx sync.RWMutex
 	containers    map[string]*libvirtContainer
@@ -669,11 +672,28 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 			g.Log(grohl.Data{"at": "get_streams", "status": "error", "err": err.Error()})
 			return err
 		}
+
 		log := c.l.openLog(c.job.ID)
 		defer log.Close()
-		// TODO: log errors from these
-		go log.Follow(1, stdout)
-		go log.Follow(2, stderr)
+
+		muxConfig := logmux.Config{
+			AppID:   c.job.Metadata["flynn-controller.app"],
+			HostID:  c.l.state.id,
+			JobType: c.job.Metadata["flynn-controller.type"],
+			JobID:   c.job.ID,
+		}
+
+		// TODO(benburkert): remove file logging once attach proto uses logaggregator
+		streams := []io.Reader{stdout, stderr}
+		for i, stream := range streams {
+			fd := i + 1
+			pr, pw := io.Pipe()
+			tr := io.TeeReader(stream, pw)
+
+			go log.Follow(fd, tr)
+			go c.l.mux.Follow(pr, fd, muxConfig)
+		}
+
 		go log.Follow(3, initLog)
 	}
 
