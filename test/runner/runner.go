@@ -250,7 +250,7 @@ cd ~/go/src/github.com/flynn/flynn/test
 cmd="bin/flynn-test \
   --flynnrc $HOME/.flynnrc \
   --cluster-api https://{{ .Cluster.BridgeIP }}:{{ .ListenPort }}/cluster/{{ .Cluster.ID }} \
-  --cli $(pwd)/../cli/flynn-cli \
+  --cli $(pwd)/../cli/bin/flynn \
   --router-ip {{ .Cluster.RouterIP }} \
   --debug \
   --dump-logs"

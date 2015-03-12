@@ -62,6 +62,11 @@
 			"Rev": "0464652af750701d218b6dd035f0217e407caf2d"
 		},
 		{
+			"ImportPath": "github.com/codegangsta/cli",
+			"Comment": "1.2.0-87-g8ce64f1",
+			"Rev": "8ce64f19ff08029a69d11b7615c9b591245450ad"
+		},
+		{
 			"ImportPath": "github.com/codegangsta/inject",
 			"Rev": "9aea7a2fa5b79ef7fc00f63a575e72df33b4e886"
 		},
@@ -369,8 +374,21 @@
 			"Rev": "6b1ef893dc11e0447abda6da20a5203481878dda"
 		},
 		{
+			"ImportPath": "github.com/inconshreveable/axiom",
+			"Rev": "3af8a9cc55c04561ff0cea699e20e82319142fc5"
+		},
+		{
 			"ImportPath": "github.com/inconshreveable/go-update",
 			"Rev": "68f5725818189545231c1fd8694793d45f2fc529"
+		},
+		{
+			"ImportPath": "github.com/inconshreveable/gonative",
+			"Comment": "0.2.0-10-g9ba0b45",
+			"Rev": "9ba0b451d901155f5b1169162362a0b178ce4dc1"
+		},
+		{
+			"ImportPath": "github.com/inconshreveable/mousetrap",
+			"Rev": "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75"
 		},
 		{
 			"ImportPath": "github.com/jackc/pgx",
@@ -498,6 +516,10 @@
 		{
 			"ImportPath": "gopkg.in/tomb.v1",
 			"Rev": "c131134a1947e9afd9cecfe11f4c6dff0732ae58"
+		},
+		{
+			"ImportPath": "gopkg.in/yaml.v1",
+			"Rev": "9f9df34309c04878acc86042b16630b0f696e1de"
 		}
 	]
 }

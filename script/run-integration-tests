@@ -40,7 +40,7 @@ main() {
     exit 1
   fi
 
-  local flynn="${ROOT}/cli/flynn-cli"
+  local flynn="${ROOT}/cli/bin/flynn"
 
   pushd "${ROOT}" >/dev/null
   make

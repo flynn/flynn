@@ -1,2 +1,0 @@
-include_rules
-: $(ROOT)/util/release/flynn-release |> !go |> flynn-cli

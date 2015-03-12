@@ -3,13 +3,10 @@ GIT_BRANCH=`git rev-parse --abbrev-ref HEAD`
 GIT_TAG=`git describe --tags --exact-match --match "v*" 2>/dev/null || echo "none"`
 GIT_DIRTY=`test -n "$(git status --porcelain)" && echo true || echo false`
 
-all:
+all: toolchain
 	@GIT_COMMIT=dev GIT_BRANCH=dev GIT_TAG=none GIT_DIRTY=false tup
 
-dev:
-	@echo 'dev is no longer a valid target, just run `make`'
-
-release:
+release: toolchain
 	@GIT_COMMIT=$(GIT_COMMIT) GIT_BRANCH=$(GIT_BRANCH) GIT_TAG=$(GIT_TAG) GIT_DIRTY=$(GIT_DIRTY) tup
 
 clean:
@@ -23,5 +20,14 @@ test-unit:
 
 test-integration:
 	script/run-integration-tests
+
+toolchain: util/_toolchain/go/bin/go
+
+util/_toolchain/go/bin/go: util/_toolchain/bin/gonative
+	cd util/_toolchain && rm -rf go && bin/gonative build -version=1.4.2
+
+util/_toolchain/bin/gonative: Godeps/_workspace/src/github.com/inconshreveable/gonative/*.go
+	go build -o util/_toolchain/bin/gonative github.com/flynn/flynn/Godeps/_workspace/src/github.com/inconshreveable/gonative
+
 
 .PHONY: all clean dev release test test-unit test-integration
