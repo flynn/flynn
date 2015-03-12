@@ -506,7 +506,7 @@ loop:
 			case "failed":
 				t.Fatal("the deployment failed")
 			}
-		case <-time.After(20 * time.Second):
+		case <-time.After(60 * time.Second):
 			t.Fatal("timed out waiting for the deploy to complete")
 		}
 	}
