@@ -6,3 +6,12 @@ p.more-btn {
   display: inline-block;
   padding: 9px 12px;
 }
+
+.label-reason {
+  background-color: #611BBD;
+}
+
+.modal label {
+  width: 100%;
+  padding: 10px 20px;
+}

@@ -52,6 +52,8 @@ type Build struct {
 	LogFile           string        `json:"log_file"`
 	Duration          time.Duration `json:"duration"`
 	DurationFormatted string        `json:"duration_formatted"`
+	Reason            string        `json:"reason"`
+	IssueLink         string        `json:"issue_link"`
 }
 
 func newBuild(commit, description string, merge bool) *Build {
@@ -166,6 +168,7 @@ func (r *Runner) start() error {
 	router.POST("/", r.handleEvent)
 	router.GET("/builds/:build", r.getBuildLog)
 	router.POST("/builds/:build/restart", r.restartBuild)
+	router.POST("/builds/:build/explain", r.explainBuild)
 	router.GET("/builds", r.getBuilds)
 	router.ServeFiles("/assets/*filepath", http.Dir(args.AssetsDir))
 	router.GET("/cluster/:cluster", r.clusterAPI(r.getCluster))
@@ -514,6 +517,29 @@ func (r *Runner) restartBuild(w http.ResponseWriter, req *http.Request, ps httpr
 	if build.State != "pending" {
 		b := newBuild(build.Commit, "Restart: "+build.Description, build.Merge)
 		go r.build(b)
+	}
+	http.Redirect(w, req, "/builds", 301)
+}
+
+func (r *Runner) explainBuild(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	id := ps.ByName("build")
+	build := &Build{}
+	if err := r.db.View(func(tx *bolt.Tx) error {
+		val := tx.Bucket(dbBucket).Get([]byte(id))
+		return json.Unmarshal(val, build)
+	}); err != nil {
+		http.Error(w, fmt.Sprintf("could not decode build %s: %s\n", id, err), 400)
+		return
+	}
+	build.Reason = req.FormValue("reason")
+	build.IssueLink = req.FormValue("issue-link")
+	if build.IssueLink != "" && !strings.HasPrefix(build.IssueLink, "https://github.com/flynn/flynn/issues/") {
+		http.Error(w, fmt.Sprintf("Invalid GitHub issue link: %q\n", build.IssueLink), 400)
+		return
+	}
+	if err := r.save(build); err != nil {
+		http.Error(w, fmt.Sprintf("error saving build: %s\n", err), 500)
+		return
 	}
 	http.Redirect(w, req, "/builds", 301)
 }
