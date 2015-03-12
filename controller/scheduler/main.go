@@ -763,8 +763,6 @@ func (f *Formation) restart(stoppedJob *Job) error {
 }
 
 func (f *Formation) start(typ string, hostID string) (job *Job, err error) {
-	config := f.jobConfig(typ)
-
 	hosts, err := f.c.ListHosts()
 	if err != nil {
 		return nil, err
@@ -796,6 +794,8 @@ func (f *Formation) start(typ string, hostID string) (job *Job, err error) {
 		sh.Sort()
 		h = sh[0].Host
 	}
+
+	config := f.jobConfig(typ, h.ID)
 
 	// Provision a data volume on the host if needed.
 	if f.Release.Processes[typ].Data {
@@ -872,12 +872,12 @@ func (f *Formation) remove(n int, name string, hostID string) {
 	}
 }
 
-func (f *Formation) jobConfig(name string) *host.Job {
+func (f *Formation) jobConfig(name string, hostID string) *host.Job {
 	return utils.JobConfig(&ct.ExpandedFormation{
 		App:      &ct.App{ID: f.AppID, Name: f.AppName},
 		Release:  f.Release,
 		Artifact: f.Artifact,
-	}, name)
+	}, name, hostID)
 }
 
 type sortHost struct {
