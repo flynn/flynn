@@ -26,11 +26,11 @@ $(function() {
 
     $.getJSON("/builds/", params, function(builds) {
       _.each(builds, function(build) {
-	lastID = build.id
-	build.created_at = moment(build.created_at)
-	build.label_class = label_classes[build.state]
-	var row = template(build)
-	tableBody.append(row)
+        lastID = build.id
+        build.created_at = moment(build.created_at)
+        build.label_class = label_classes[build.state]
+        var row = template(build)
+        tableBody.append(row)
       })
     })
   }
