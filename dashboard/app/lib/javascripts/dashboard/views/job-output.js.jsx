@@ -58,7 +58,9 @@ Dashboard.Views.JobOutput = React.createClass({
 	},
 
 	__handleStoreChange: function () {
-		this.setState(getJobOutputState(this.props));
+		if (this.isMounted()) {
+			this.setState(getJobOutputState(this.props));
+		}
 	}
 });
 

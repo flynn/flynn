@@ -53,7 +53,7 @@ Dashboard.Views.AppLogs = React.createClass({
 								return (
 									<li key={process.id} onClick={function () {
 										this.__handleProcessSelected(process);
-									}.bind(this)} className={this.state.selectedProcess === process ? "selected" : null}>
+									}.bind(this)} className={this.state.selectedProcess && this.state.selectedProcess.id === process.id ? "selected" : null}>
 										{process.type}
 										<span className={"state "+ process.state}>{process.state}</span>
 										<span className="float-right">
@@ -90,7 +90,7 @@ Dashboard.Views.AppLogs = React.createClass({
 											return;
 										}
 										this.__handleDeployProcessSelected(process);
-									}.bind(this)} className={this.state.selectedDeployProcess === process ? "selected" : null}>
+									}.bind(this)} className={this.state.selectedDeployProcess && this.state.selectedDeployProcess.id === process.id ? "selected" : null}>
 										{this.__deployProcessNameComponent(process)}
 										<span className={"state "+ process.state}>{this.__formatDeployProcessState(process.state)}</span>
 										<span className="float-right">
@@ -107,7 +107,7 @@ Dashboard.Views.AppLogs = React.createClass({
 					<section className="log-output">
 						{this.state.selectedDeployProcess ? (
 							<Dashboard.Views.JobOutput
-								appId={this.props.appId}
+								appId={"taffy"}
 								jobId={this.state.selectedDeployProcess.id} />
 						) : null}
 					</section>

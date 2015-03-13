@@ -63,13 +63,16 @@ function getJobOutputStoreId (props) {
 		return null;
 	}
 	return {
-		appId: props.appId,
+		appId: "taffy",
 		jobId: props.job.id
 	};
 }
 
 function getState (props, prevState, env, dbRequested) {
 	prevState = prevState || {};
+	if ( !env ) {
+		env = {};
+	}
 	var state = {
 		launching: prevState.launching,
 		env: env,

@@ -5,6 +5,16 @@
 
 "use strict";
 
+var padding = function (str, len) {
+	if (str.length === len) {
+		return str;
+	}
+	for (var i = str.length; i < len; i++) {
+		str += " ";
+	}
+	return str;
+};
+
 Dashboard.Views.CommandOutput = React.createClass({
 	displayName: "Views.CommandOutput",
 
@@ -27,7 +37,7 @@ Dashboard.Views.CommandOutput = React.createClass({
 	},
 
 	__formatOutputStream: function (outputStreamData) {
-		var data = outputStreamData.map(function (item) { return item.data; }).join("\n");
+		var data = outputStreamData.map(function (item) { return padding("["+ item.timestamp +"] ", 33)+ item.msg; }).join("\n");
 		data = data.replace(/\r\r/g, '\r')
 			.replace(/\033\[K\r/g, '\r')
 			.replace(/\[2K/g, '')
