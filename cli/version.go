@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/flynn/flynn/pkg/version"
 )
 
 func init() {
@@ -13,5 +15,5 @@ Show flynn version string.
 }
 
 func runVersion() {
-	fmt.Println(Version)
+	fmt.Println(version.String())
 }
