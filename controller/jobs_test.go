@@ -57,6 +57,9 @@ func (s *S) TestJobStateTransition(c *C) {
 	job.State = "up"
 	c.Assert(s.c.PutJob(job), IsNil)
 
+	// duplicates are ignored
+	c.Assert(s.c.PutJob(job), IsNil)
+
 	job.State = "starting"
 	c.Assert(s.c.PutJob(job), ErrorMatches, ".*invalid job state transition.*")
 
