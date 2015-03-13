@@ -26,6 +26,7 @@ type ClusterType uint8
 const (
 	ClusterTypeDefault ClusterType = iota
 	ClusterTypeRelease
+	ClusterTypeNone
 )
 
 type BootConfig struct {
@@ -184,7 +185,7 @@ func (c *Cluster) Boot(typ ClusterType, count int, dumpLogs io.Writer, killOnFai
 	}()
 
 	c.log("Booting", count, "VMs")
-	instances, err := c.startVMs(c.rootFS, count, true)
+	instances, err := c.startVMs(typ, c.rootFS, count, true)
 	if err != nil {
 		return nil, err
 	}
@@ -197,13 +198,6 @@ func (c *Cluster) Boot(typ ClusterType, count int, dumpLogs io.Writer, killOnFai
 	c.log("Bootstrapping layer 1...")
 	if err := c.bootstrapLayer1(instances); err != nil {
 		return nil, err
-	}
-
-	switch typ {
-	case ClusterTypeDefault:
-		c.defaultInstances = append(c.defaultInstances, instances...)
-	case ClusterTypeRelease:
-		c.releaseInstances = append(c.releaseInstances, instances...)
 	}
 
 	return &BootResult{
@@ -226,7 +220,7 @@ func (c *Cluster) AddHost() (*Instance, error) {
 		return nil, errors.New("cluster not yet booted")
 	}
 	c.log("Booting 1 VM")
-	instances, err := c.startVMs(c.rootFS, 1, false)
+	instances, err := c.startVMs(ClusterTypeDefault, c.rootFS, 1, false)
 	if err != nil {
 		return nil, err
 	}
@@ -234,13 +228,12 @@ func (c *Cluster) AddHost() (*Instance, error) {
 	if err := c.startFlynnHost(inst, c.defaultInstances); err != nil {
 		return nil, err
 	}
-	c.defaultInstances = append(c.defaultInstances, inst)
 	return inst, err
 }
 
 func (c *Cluster) AddVanillaHost(rootFS string) (*Instance, error) {
 	c.log("Booting 1 VM")
-	instances, err := c.startVMs(rootFS, 1, false)
+	instances, err := c.startVMs(ClusterTypeNone, rootFS, 1, false)
 	return instances[0], err
 }
 
@@ -294,7 +287,7 @@ func (c *Cluster) Size() int {
 	return len(c.Instances)
 }
 
-func (c *Cluster) startVMs(rootFS string, count int, initial bool) ([]*Instance, error) {
+func (c *Cluster) startVMs(typ ClusterType, rootFS string, count int, initial bool) ([]*Instance, error) {
 	uid, gid, err := lookupUser(c.bc.User)
 	if err != nil {
 		return nil, err
@@ -321,6 +314,12 @@ func (c *Cluster) startVMs(rootFS string, count int, initial bool) ([]*Instance,
 		inst.initial = initial
 		instances[i] = inst
 		c.Instances = append(c.Instances, inst)
+		switch typ {
+		case ClusterTypeDefault:
+			c.defaultInstances = append(c.defaultInstances, inst)
+		case ClusterTypeRelease:
+			c.releaseInstances = append(c.releaseInstances, inst)
+		}
 	}
 	return instances, nil
 }
