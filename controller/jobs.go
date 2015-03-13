@@ -84,9 +84,9 @@ func (r *JobRepo) Add(job *ct.Job) error {
 	// create a job event, ignoring possible duplications
 	err = r.db.Exec("INSERT INTO job_events (job_id, host_id, app_id, state) VALUES ($1, $2, $3, $4)", jobID, hostID, job.AppID, job.State)
 	if postgres.IsUniquenessError(err, "") {
-		return err
+		return nil
 	}
-	return nil
+	return err
 }
 
 func scanJob(s postgres.Scanner) (*ct.Job, error) {
