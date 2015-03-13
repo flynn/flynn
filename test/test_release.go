@@ -174,18 +174,21 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 
 	// check system apps were deployed correctly
 	for _, app := range updater.SystemApps {
+		image := "flynn/" + app
+		if app == "gitreceive" {
+			image = "flynn/receiver"
+		}
+		debugf(t, "checking new %s release is using image %s", app, versions[image])
 		expected := fmt.Sprintf(`"finished deploy of system app" name=%s`, app)
 		if !strings.Contains(updateOutput.String(), expected) {
 			t.Fatalf(`expected update to deploy %s`, app)
 		}
 		release, err := client.GetAppRelease(app)
 		t.Assert(err, c.IsNil)
+		debugf(t, "new %s release ID: %s", app, release.ID)
 		artifact, err := client.GetArtifact(release.ArtifactID)
 		t.Assert(err, c.IsNil)
-		image := "flynn/" + app
-		if app == "gitreceive" {
-			image = "flynn/receiver"
-		}
+		debugf(t, "new %s artifact: %+v", app, artifact)
 		uri, err := url.Parse(artifact.URI)
 		t.Assert(err, c.IsNil)
 		t.Assert(uri.Query().Get("id"), c.Equals, versions[image])
