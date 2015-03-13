@@ -289,6 +289,39 @@ func (c *Client) GetApp(appID string) (*ct.App, error) {
 	return app, c.Get(fmt.Sprintf("/apps/%s", appID), app)
 }
 
+// GetAppLog returns a ReadCloser log stream of the app with ID appID. If lines
+// is zero or above, the number of lines returned will be capped at that value.
+// Otherwise, all available logs are returned. If follow is true, new log lines
+// are streamed after the buffered log.
+func (c *Client) GetAppLog(appID string, options *ct.LogOpts) (io.ReadCloser, error) {
+	path := fmt.Sprintf("/apps/%s/log", appID)
+	if options != nil {
+		opts := *options
+		query := url.Values{}
+		if opts.Follow {
+			query.Set("follow", "true")
+		}
+		if opts.JobID != "" {
+			query.Set("job_id", opts.JobID)
+		}
+		if opts.Lines != nil {
+			query.Set("lines", strconv.Itoa(*opts.Lines))
+		}
+		if opts.ProcessType != nil {
+			query.Set("process_type", *opts.ProcessType)
+		}
+		if encodedQuery := query.Encode(); encodedQuery != "" {
+			path = fmt.Sprintf("%s?%s", path, encodedQuery)
+		}
+	}
+
+	res, err := c.RawReq("GET", path, nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return res.Body, nil
+}
+
 // GetDeployment returns a deployment queued on the deployer.
 func (c *Client) GetDeployment(deploymentID string) (*ct.Deployment, error) {
 	res := &ct.Deployment{}
@@ -369,36 +402,6 @@ func (c *Client) StreamJobEvents(appID string, lastID int64, output chan<- *ct.J
 		return nil, err
 	}
 	return httpclient.Stream(res, output), nil
-}
-
-// GetJobLog returns a ReadCloser stream of the job with id of jobID, running
-// under appID. If tail is true, new log lines are streamed after the buffered
-// log.
-func (c *Client) GetJobLog(appID, jobID string, tail bool) (io.ReadCloser, error) {
-	path := fmt.Sprintf("/apps/%s/jobs/%s/log", appID, jobID)
-	if tail {
-		path += "?tail=true"
-	}
-	res, err := c.RawReq("GET", path, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	return res.Body, nil
-}
-
-// GetJobLogWithWait waits until the job is created, then returns a ReadCloser
-// stream of the job with id of jobID, running under appID. If tail is true,
-// new log lines are streamed after the buffered log.
-func (c *Client) GetJobLogWithWait(appID, jobID string, tail bool) (io.ReadCloser, error) {
-	path := fmt.Sprintf("/apps/%s/jobs/%s/log?wait=true", appID, jobID)
-	if tail {
-		path += "&tail=true"
-	}
-	res, err := c.RawReq("GET", path, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	return res.Body, nil
 }
 
 // RunJobAttached runs a new job under the specified app, attaching to the job

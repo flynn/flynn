@@ -29,10 +29,11 @@ func init() {
 func Test(t *testing.T) { TestingT(t) }
 
 type S struct {
-	cc  *tu.FakeCluster
-	srv *httptest.Server
-	hc  handlerConfig
-	c   *controller.Client
+	cc   *tu.FakeCluster
+	srv  *httptest.Server
+	hc   handlerConfig
+	c    *controller.Client
+	flac *fakeLogAggregatorClient
 }
 
 var _ = Suite(&S{})
@@ -66,8 +67,16 @@ func (s *S) SetUpSuite(c *C) {
 		c.Fatal(err)
 	}
 
+	s.flac = newFakeLogAggregatorClient()
 	s.cc = tu.NewFakeCluster()
-	s.hc = handlerConfig{db: pg, cc: s.cc, sc: newFakeRouter(), pgxpool: pgxpool, key: authKey}
+	s.hc = handlerConfig{
+		db:      pg,
+		cc:      s.cc,
+		lc:      s.flac,
+		rc:      newFakeRouter(),
+		pgxpool: pgxpool,
+		key:     authKey,
+	}
 	handler := appHandler(s.hc)
 	s.srv = httptest.NewServer(handler)
 	client, err := controller.NewClient(s.srv.URL, authKey)

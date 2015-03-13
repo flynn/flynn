@@ -1,10 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
@@ -12,10 +16,12 @@ import (
 	"github.com/flynn/flynn/controller/name"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	logaggc "github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/sse"
 	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
 )
@@ -245,4 +251,106 @@ func (c *controllerAPI) UpdateApp(ctx context.Context, rw http.ResponseWriter, r
 		return
 	}
 	httphelper.JSON(rw, 200, app)
+}
+
+func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	ctx, cancel := context.WithCancel(ctx)
+
+	opts := logaggc.LogOpts{
+		Follow: req.FormValue("follow") == "true",
+		JobID:  req.FormValue("job_id"),
+	}
+	if opts.JobID != "" {
+		// Temporary handling of combined JobID format. Logs are sent to aggregator
+		// without host- prefix. https://github.com/flynn/flynn/issues/1238
+		index := strings.LastIndex(opts.JobID, "-")
+		if len(opts.JobID) > index {
+			opts.JobID = opts.JobID[index+1:]
+		}
+	}
+	if vals, ok := req.Form["process_type"]; ok && len(vals) > 0 {
+		opts.ProcessType = &vals[len(vals)-1]
+	}
+	if strLines := req.FormValue("lines"); strLines != "" {
+		lines, err := strconv.Atoi(req.FormValue("lines"))
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		opts.Lines = &lines
+	}
+	rc, err := c.logaggc.GetLog(c.getApp(ctx).ID, &opts)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	if cn, ok := w.(http.CloseNotifier); ok {
+		go func() {
+			select {
+			case <-cn.CloseNotify():
+				rc.Close()
+			case <-ctx.Done():
+			}
+		}()
+	}
+	defer cancel()
+	defer rc.Close()
+
+	if !strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(200)
+		// Send headers right away if following
+		if wf, ok := w.(http.Flusher); ok && opts.Follow {
+			wf.Flush()
+		}
+
+		fw := httphelper.FlushWriter{Writer: w, Enabled: opts.Follow}
+		io.Copy(fw, rc)
+		return
+	}
+
+	ch := make(chan *sseLogChunk)
+	l, _ := ctxhelper.LoggerFromContext(ctx)
+	s := sse.NewStream(w, ch, l)
+	defer s.Close()
+	s.Serve()
+
+	msgc := make(chan *json.RawMessage)
+	go func() {
+		defer close(msgc)
+		dec := json.NewDecoder(rc)
+		for {
+			var m json.RawMessage
+			if err := dec.Decode(&m); err != nil {
+				if err != io.EOF {
+					l.Error("decoding logagg stream", err)
+				}
+				return
+			}
+			msgc <- &m
+		}
+	}()
+
+	for {
+		select {
+		case m := <-msgc:
+			if m == nil {
+				ch <- &sseLogChunk{Event: "eof"}
+				return
+			}
+			// write to sse
+			select {
+			case ch <- &sseLogChunk{Event: "message", Data: *m}:
+			case <-s.Done:
+				return
+			case <-ctx.Done():
+				return
+			}
+		case <-s.Done:
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
 }

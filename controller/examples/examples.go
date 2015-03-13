@@ -67,6 +67,7 @@ func main() {
 		{"app_initial_release_get", e.getInitialAppRelease},
 		{"app_get", e.getApp},
 		{"app_list", e.listApps},
+		{"app_log", e.getAppLog},
 		{"app_update", e.updateApp},
 		{"app_resource_list", e.listAppResources},
 		{"route_create", e.createRoute},
@@ -86,7 +87,6 @@ func main() {
 		{"deployment_create", e.createDeployment},
 		{"formation_delete", e.deleteFormation},
 		{"job_run", e.runJob},
-		{"job_log", e.getJobLog},
 		{"job_list", e.listJobs},
 		{"job_update", e.updateJob},
 		{"job_delete", e.deleteJob},
@@ -207,6 +207,14 @@ func (e *generator) updateApp() {
 		},
 	}
 	e.client.UpdateApp(app)
+}
+
+func (e *generator) getAppLog() {
+	res, err := e.client.GetAppLog(e.resourceIds["app"], nil)
+	if err == nil {
+		defer res.Close()
+		io.Copy(ioutil.Discard, res)
+	}
 }
 
 func (e *generator) listAppResources() {
@@ -339,13 +347,6 @@ func (e *generator) updateJob() {
 		State:     "down",
 	}
 	e.client.PutJob(job)
-}
-
-func (e *generator) getJobLog() {
-	res, err := e.client.GetJobLogWithWait(e.resourceIds["app"], e.resourceIds["job"], false)
-	if err == nil {
-		io.Copy(ioutil.Discard, res)
-	}
 }
 
 func (e *generator) deleteJob() {

@@ -183,3 +183,10 @@ type ValidationError struct {
 func (v ValidationError) Error() string {
 	return fmt.Sprintf("validation error: %s %s", v.Field, v.Message)
 }
+
+type LogOpts struct {
+	Follow      bool
+	JobID       string
+	Lines       *int
+	ProcessType *string
+}
