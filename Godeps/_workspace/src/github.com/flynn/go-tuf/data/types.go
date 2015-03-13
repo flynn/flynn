@@ -102,9 +102,9 @@ func NewSnapshot() *Snapshot {
 type Hashes map[string]HexBytes
 
 type FileMeta struct {
-	Length int64           `json:"length"`
-	Hashes Hashes          `json:"hashes"`
-	Custom json.RawMessage `json:"custom,omitempty"`
+	Length int64            `json:"length"`
+	Hashes Hashes           `json:"hashes"`
+	Custom *json.RawMessage `json:"custom,omitempty"`
 }
 
 func (f FileMeta) HashAlgorithms() []string {

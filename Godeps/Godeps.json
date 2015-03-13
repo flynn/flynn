@@ -316,23 +316,23 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/client",
-			"Rev": "e897c1d45b1dd430b064bcc6874bc2c3922cd248"
+			"Rev": "8652ae8af61522e0ec526fd1f151d239335cdf1b"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/data",
-			"Rev": "e897c1d45b1dd430b064bcc6874bc2c3922cd248"
+			"Rev": "8652ae8af61522e0ec526fd1f151d239335cdf1b"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/keys",
-			"Rev": "e897c1d45b1dd430b064bcc6874bc2c3922cd248"
+			"Rev": "8652ae8af61522e0ec526fd1f151d239335cdf1b"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/signed",
-			"Rev": "e897c1d45b1dd430b064bcc6874bc2c3922cd248"
+			"Rev": "8652ae8af61522e0ec526fd1f151d239335cdf1b"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/util",
-			"Rev": "e897c1d45b1dd430b064bcc6874bc2c3922cd248"
+			"Rev": "8652ae8af61522e0ec526fd1f151d239335cdf1b"
 		},
 		{
 			"ImportPath": "github.com/flynn/pq",
