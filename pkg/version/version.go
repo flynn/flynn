@@ -5,7 +5,7 @@ import "fmt"
 var commit, branch, tag, dirty string
 
 func String() string {
-	if commit == "" {
+	if commit == "" || commit == "dev" {
 		return "dev"
 	}
 	if Tagged() {

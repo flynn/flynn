@@ -50,7 +50,7 @@ src="${GOPATH}/src/github.com/flynn/flynn"
   pushd "${src}" >/dev/null
   sed "s/{{TUF-ROOT-KEYS}}/$(tuf --dir test/release root-keys)/g" host/cli/root_keys.go.tmpl > host/cli/root_keys.go
   vpkg="github.com/flynn/flynn/pkg/version"
-  go build -o host/bin/flynn-host -ldflags="-X ${vpkg}.commit dev -X ${vpkg}.branch dev -X ${vpkg}.tag v20150131.0-test -X ${vpkg}.dirty false" ./host
+  go build -o host/bin/flynn-host -ldflags="-X ${vpkg}.commit notdev -X ${vpkg}.branch dev -X ${vpkg}.tag v20150131.0-test -X ${vpkg}.dirty false" ./host
   gzip -9 --keep --force host/bin/flynn-host
   sed "s/{{FLYNN-HOST-CHECKSUM}}/$(sha512sum host/bin/flynn-host.gz | cut -d " " -f 1)/g" script/install-flynn.tmpl > script/install-flynn
 
