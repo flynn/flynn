@@ -56,6 +56,11 @@ main() {
   echo deb http://ppa.launchpad.net/zfs-native/stable/ubuntu trusty main > /etc/apt/sources.list.d/zfs.list
   run apt-get update
 
+  # install linux-headers explicitly before ubuntu-zfs to avoid skipping
+  # building kernel modules due to absent kernel headers.
+  info "installing linux-headers"
+  run apt-get install -y "linux-headers-$(uname -r)"
+
   local packages=(
     "aufs-tools"
     "iptables"
