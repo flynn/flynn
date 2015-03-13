@@ -365,7 +365,24 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	artifact := data.(*ct.Artifact)
 	attach := strings.Contains(req.Header.Get("Upgrade"), "flynn-attach/0")
 
-	env := make(map[string]string, len(release.Env)+len(newJob.Env))
+	hosts, err := c.clusterClient.ListHosts()
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	if len(hosts) == 0 {
+		respondWithError(w, errors.New("no hosts found"))
+		return
+	}
+	hostID := schedutil.PickHost(hosts).ID
+
+	id := cluster.RandomJobID("")
+	app := c.getApp(ctx)
+	env := make(map[string]string, len(release.Env)+len(newJob.Env)+4)
+	env["FLYNN_APP_ID"] = app.ID
+	env["FLYNN_RELEASE_ID"] = release.ID
+	env["FLYNN_PROCESS_TYPE"] = ""
+	env["FLYNN_JOB_ID"] = hostID + "-" + id
 	if newJob.ReleaseEnv {
 		for k, v := range release.Env {
 			env[k] = v
@@ -378,12 +395,11 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	for k, v := range newJob.Meta {
 		metadata[k] = v
 	}
-	app := c.getApp(ctx)
 	metadata["flynn-controller.app"] = app.ID
 	metadata["flynn-controller.app_name"] = app.Name
 	metadata["flynn-controller.release"] = release.ID
 	job := &host.Job{
-		ID:       cluster.RandomJobID(""),
+		ID:       id,
 		Metadata: metadata,
 		Artifact: host.Artifact{
 			Type: artifact.Type,
@@ -400,18 +416,6 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	if len(newJob.Entrypoint) > 0 {
 		job.Config.Entrypoint = newJob.Entrypoint
 	}
-
-	hosts, err := c.clusterClient.ListHosts()
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
-	if len(hosts) == 0 {
-		respondWithError(w, errors.New("no hosts found"))
-		return
-	}
-
-	hostID := schedutil.PickHost(hosts).ID
 
 	var attachClient cluster.AttachClient
 	if attach {

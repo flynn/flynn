@@ -126,7 +126,15 @@ func (s *S) TestRunJobDetached(c *C) {
 		"foo": "baz",
 	})
 	c.Assert(job.Config.Cmd, DeepEquals, []string{"foo", "bar"})
-	c.Assert(job.Config.Env, DeepEquals, map[string]string{"FOO": "baz", "JOB": "true", "RELEASE": "true"})
+	c.Assert(job.Config.Env, DeepEquals, map[string]string{
+		"FLYNN_APP_ID":       app.ID,
+		"FLYNN_RELEASE_ID":   release.ID,
+		"FLYNN_PROCESS_TYPE": "",
+		"FLYNN_JOB_ID":       hostID + "-" + job.ID,
+		"FOO":                "baz",
+		"JOB":                "true",
+		"RELEASE":            "true",
+	})
 	c.Assert(job.Config.Stdin, Equals, false)
 }
 
@@ -199,6 +207,14 @@ func (s *S) TestRunJobAttached(c *C) {
 		"foo": "baz",
 	})
 	c.Assert(job.Config.Cmd, DeepEquals, []string{"foo", "bar"})
-	c.Assert(job.Config.Env, DeepEquals, map[string]string{"FOO": "baz", "JOB": "true", "RELEASE": "true"})
+	c.Assert(job.Config.Env, DeepEquals, map[string]string{
+		"FLYNN_APP_ID":       app.ID,
+		"FLYNN_RELEASE_ID":   release.ID,
+		"FLYNN_PROCESS_TYPE": "",
+		"FLYNN_JOB_ID":       hostID + "-" + job.ID,
+		"FOO":                "baz",
+		"JOB":                "true",
+		"RELEASE":            "true",
+	})
 	c.Assert(job.Config.Stdin, Equals, true)
 }
