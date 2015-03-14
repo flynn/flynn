@@ -1,0 +1,9 @@
+# Release helpers
+
+# next_release_version reads a release manifest via STDIN and returns the next
+# appropriate release version.
+next_release_version() {
+  local date=$(date +%Y%m%d)
+  local iteration=$(jq --raw-output '.versions[].version' | grep --quiet "${date}" | wc -l)
+  echo "${date}.${iteration}"
+}
