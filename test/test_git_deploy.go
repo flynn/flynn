@@ -111,17 +111,19 @@ func (s *GitDeploySuite) runBuildpackTest(t *c.C, name string, resources []strin
 
 	t.Assert(r.flynn("create", name), Outputs, fmt.Sprintf("Created %s\n", name))
 
-	for _, resource := range resources {
-		t.Assert(r.flynn("resource", "add", resource), Succeeds)
-	}
-
 	push := r.git("push", "flynn", "master")
 	t.Assert(push, Succeeds)
 	t.Assert(push, OutputContains, "Creating release")
 	t.Assert(push, OutputContains, "Application deployed")
+	t.Assert(push, OutputContains, "Added default web=1 formation")
 	t.Assert(push, OutputContains, "* [new branch]      master -> master")
 
-	t.Assert(r.flynn("scale", "web=1"), Succeeds)
+	// Although not adding the resource before the deploy will result in an
+	// initially crashing release, add it after the git push so that the
+	// initial release gets a default web=1 formation from the receiver.
+	for _, resource := range resources {
+		t.Assert(r.flynn("resource", "add", resource), Succeeds)
+	}
 
 	route := name + ".dev"
 	newRoute := r.flynn("route", "add", "http", route)
