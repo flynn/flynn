@@ -262,7 +262,8 @@ func (c *Cluster) RemoveHost(id string) error {
 	var cmd string
 	switch c.bc.Backend {
 	case "libvirt-lxc":
-		cmd = "sudo start-stop-daemon --stop --pidfile /var/run/flynn-host.pid --retry 15"
+		// manually kill containers after stopping flynn-host due to https://github.com/flynn/flynn/issues/1177
+		cmd = "sudo start-stop-daemon --stop --pidfile /var/run/flynn-host.pid --retry 15 && (virsh -c lxc:/// list --name | xargs -L 1 virsh -c lxc:/// destroy || true)"
 	}
 	if err := inst.Run(cmd, nil); err != nil {
 		return err
