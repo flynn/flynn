@@ -66,8 +66,7 @@ The [Flynn CLI](https://cli.flynn.io) includes an installer that will boot and
 configure a Flynn cluster on Amazon Web Services using CloudFormation. It
 automatically performs all of the steps required to install Flynn.
 
-Just run `flynn install aws` to start the installation. You may [optionally
-specify](/docs/cli#install) the region, instance type, and number of instances.
+Just run `flynn install` to start the installation.
 
 
 ## Ubuntu 14.04 amd64
