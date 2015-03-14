@@ -122,7 +122,7 @@ main() {
 
   info "determining version"
   local date=$(date +%Y%m%d)
-  local iteration=$(jq --raw-output '.versions[].version' <<< "${manifest}" | grep --quiet "${date}" | wc -l)
+  local iteration=$(jq --raw-output '.versions[].version' <<< "${manifest}" | grep "${date}" | wc -l)
   local version="${date}.${iteration}"
   info "using version ${version}"
 
