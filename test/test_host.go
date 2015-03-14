@@ -42,22 +42,30 @@ func (s *HostSuite) TestAttachFinishedInteractiveJob(t *c.C) {
 	// run a quick interactive job
 	cmd := exec.CommandUsingCluster(cluster, exec.DockerImage(imageURIs["test-apps"]), "/bin/true")
 	cmd.TTY = true
-	err := cmd.Run()
-	t.Assert(err, c.IsNil)
+	runErr := make(chan error)
+	go func() {
+		runErr <- cmd.Run()
+	}()
+	select {
+	case err := <-runErr:
+		t.Assert(err, c.IsNil)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for interactive job")
+	}
 
 	h, err := cluster.DialHost(cmd.HostID)
 	t.Assert(err, c.IsNil)
 
 	// Getting the logs for the job should fail, as it has none because it was
 	// interactive
-	done := make(chan struct{})
+	attachErr := make(chan error)
 	go func() {
 		_, err = h.Attach(&host.AttachReq{JobID: cmd.Job.ID, Flags: host.AttachFlagLogs}, false)
-		t.Assert(err, c.NotNil)
-		close(done)
+		attachErr <- err
 	}()
 	select {
-	case <-done:
+	case err := <-attachErr:
+		t.Assert(err, c.NotNil)
 	case <-time.After(time.Second):
 		t.Error("timed out waiting for attach")
 	}
