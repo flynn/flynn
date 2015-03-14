@@ -47,7 +47,7 @@ Examples:
 			}
 		}
 	}
-	$ flynn release add -f config.json https://registry.hub.docker.com/flynn/slugbuilder?id=15d72b7f573b
+	$ flynn release add -f config.json https://registry.hub.docker.com?name=flynn/slugbuilder&id=15d72b7f573b
 	Created release f55fde802170.
 `)
 }
