@@ -156,11 +156,13 @@ mv "${GOPATH}/bin/tuf-client" /usr/bin/tuf-client
 # allow the test runner to set TEST_RUNNER_AUTH_KEY
 echo AcceptEnv TEST_RUNNER_AUTH_KEY >> /etc/ssh/sshd_config
 
-# install Bats for running script unit tests
+# install Bats and jq for running script unit tests
 tmpdir=$(mktemp --directory)
 trap "rm -rf ${tmpdir}" EXIT
 git clone https://github.com/sstephenson/bats.git "${tmpdir}/bats"
 "${tmpdir}/bats/install.sh" "/usr/local"
+curl -sLo "/usr/local/bin/jq" "http://stedolan.github.io/jq/download/linux64/jq"
+chmod +x "/usr/local/bin/jq"
 
 # cleanup
 apt-get autoremove -y
