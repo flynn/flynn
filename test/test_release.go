@@ -103,14 +103,15 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 
 	// stream script output to t.Log
 	logReader, logWriter := io.Pipe()
+	defer logWriter.Close()
 	go func() {
 		buf := bufio.NewReader(logReader)
 		for {
 			line, err := buf.ReadString('\n')
-			debug(t, line[0:len(line)-1])
 			if err != nil {
 				return
 			}
+			debug(t, line[0:len(line)-1])
 		}
 	}()
 
