@@ -276,7 +276,7 @@ func runDaemon(args *docopt.Args) {
 	}
 	shutdown.BeforeExit(func() { hb.Close() })
 
-	if err := mux.Connect(disc, "flynn-logaggregator-syslog"); err != nil {
+	if err := mux.Connect(disc, "flynn-logaggregator"); err != nil {
 		shutdown.Fatal(err)
 	}
 	shutdown.BeforeExit(func() { mux.Close() })
