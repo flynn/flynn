@@ -156,6 +156,12 @@ mv "${GOPATH}/bin/tuf-client" /usr/bin/tuf-client
 # allow the test runner to set TEST_RUNNER_AUTH_KEY
 echo AcceptEnv TEST_RUNNER_AUTH_KEY >> /etc/ssh/sshd_config
 
+# install Bats for running script unit tests
+tmpdir=$(mktemp --directory)
+trap "rm -rf ${tmpdir}" EXIT
+git clone https://github.com/sstephenson/bats.git "${tmpdir}/bats"
+"${tmpdir}/bats/install.sh" "/usr/local"
+
 # cleanup
 apt-get autoremove -y
 apt-get clean
