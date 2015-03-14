@@ -13,6 +13,7 @@ import (
 type HTTPRemoteOptions struct {
 	MetadataPath string
 	TargetsPath  string
+	UserAgent    string
 }
 
 func HTTPRemoteStore(baseURL string, opts *HTTPRemoteOptions) (RemoteStore, error) {
@@ -20,7 +21,10 @@ func HTTPRemoteStore(baseURL string, opts *HTTPRemoteOptions) (RemoteStore, erro
 		return nil, ErrInvalidURL{baseURL}
 	}
 	if opts == nil {
-		opts = &HTTPRemoteOptions{TargetsPath: "targets"}
+		opts = &HTTPRemoteOptions{}
+	}
+	if opts.TargetsPath == "" {
+		opts.TargetsPath = "targets"
 	}
 	return &httpRemoteStore{baseURL, opts}, nil
 }
@@ -40,7 +44,14 @@ func (h *httpRemoteStore) GetTarget(name string) (io.ReadCloser, int64, error) {
 
 func (h *httpRemoteStore) get(s string) (io.ReadCloser, int64, error) {
 	u := h.url(s)
-	res, err := http.Get(u)
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	if h.opts.UserAgent != "" {
+		req.Header.Set("User-Agent", h.opts.UserAgent)
+	}
+	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, 0, err
 	}

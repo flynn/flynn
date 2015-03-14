@@ -28,18 +28,25 @@ main() {
   fi
 
   local tuf_dir=$1
-
   cd "${tuf_dir}"
+
   tuf clean
   cp "${ROOT}/host/bin/flynn-host.gz"                      "staged/targets/flynn-host.gz"
   gzip -9 --stdout "${ROOT}/host/bin/flynn-init"         > "staged/targets/flynn-init.gz"
-  gzip -9 --stdout "${ROOT}/cli/bin/flynn"               > "staged/targets/flynn-linux-amd64.gz"
   gzip -9 --stdout "${ROOT}/host/upstart.conf"           > "staged/targets/upstart.conf.gz"
   gzip -9 --stdout "${ROOT}/host/bin/manifest.json"      > "staged/targets/host-manifest.json.gz"
   gzip -9 --stdout "${ROOT}/bootstrap/bin/manifest.json" > "staged/targets/bootstrap-manifest.json.gz"
   gzip -9 --stdout "${ROOT}/version.json"                > "staged/targets/version.json.gz"
   "${ROOT}/util/release/flynn-release" export "${ROOT}/version.json" "staged/targets"
   tuf add
+
+  local version=$("${ROOT}/cli/bin/flynn" version)
+  for f in ${ROOT}/cli/bin/flynn-{linux,darwin}-{amd64,386}; do
+    local name="$(basename "${f}").gz"
+    gzip -9 --stdout "${f}" > "staged/targets/${name}"
+    tuf add --custom="{\"version\": \"${version}\"}" "${name}"
+  done
+
   tuf snapshot
   tuf timestamp
   tuf commit

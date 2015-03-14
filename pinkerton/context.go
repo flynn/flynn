@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"runtime"
 	"sync"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver"
@@ -20,6 +21,7 @@ import (
 	"github.com/flynn/flynn/pinkerton/registry"
 	"github.com/flynn/flynn/pinkerton/store"
 	"github.com/flynn/flynn/pkg/tufutil"
+	"github.com/flynn/flynn/pkg/version"
 )
 
 func init() {
@@ -174,7 +176,10 @@ func PullImages(tufDB, repository, driver, root string, progress chan<- layer.Pu
 	if err != nil {
 		return err
 	}
-	remote, err := tuf.HTTPRemoteStore(repository, nil)
+	opts := &tuf.HTTPRemoteOptions{
+		UserAgent: fmt.Sprintf("pinkerton/%s %s-%s pull", version.String(), runtime.GOOS, runtime.GOARCH),
+	}
+	remote, err := tuf.HTTPRemoteStore(repository, opts)
 	if err != nil {
 		return err
 	}

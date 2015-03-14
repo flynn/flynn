@@ -1,2 +1,3 @@
 cli
 bin/
+tuf.go
