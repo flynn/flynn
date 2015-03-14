@@ -9,6 +9,6 @@ new_release_manifest() {
 # appropriate release version.
 next_release_version() {
   local date=$(date +%Y%m%d)
-  local iteration=$(jq --raw-output '.versions[].version' | grep --quiet "${date}" | wc -l)
+  local iteration=$(jq --raw-output '.versions[].version' | grep "${date}" | wc -l)
   echo "${date}.${iteration}"
 }
