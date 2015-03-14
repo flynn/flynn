@@ -119,9 +119,8 @@ func (s *GitDeploySuite) runBuildpackTest(t *c.C, name string, resources []strin
 	t.Assert(push, Succeeds)
 	t.Assert(push, OutputContains, "Creating release")
 	t.Assert(push, OutputContains, "Application deployed")
+	t.Assert(push, OutputContains, "Added default web=1 formation")
 	t.Assert(push, OutputContains, "* [new branch]      master -> master")
-
-	t.Assert(r.flynn("scale", "web=1"), Succeeds)
 
 	route := name + ".dev"
 	newRoute := r.flynn("route", "add", "http", route)
