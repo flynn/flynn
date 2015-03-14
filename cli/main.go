@@ -48,12 +48,12 @@ Commands:
 	apps      list apps
 	ps        list jobs
 	kill      kill a job
-	log       get job log
+	log       get app log
 	scale     change formation
 	run       run a job
 	env       manage env variables
 	route     manage routes
-	psql      open a postgres console
+	pg        manage postgres database
 	provider  manage resource providers
 	resource  provision a new resource
 	key       manage SSH public keys
