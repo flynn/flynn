@@ -42,8 +42,16 @@ func (s *HostSuite) TestAttachFinishedInteractiveJob(t *c.C) {
 	// run a quick interactive job
 	cmd := exec.CommandUsingCluster(cluster, exec.DockerImage(imageURIs["test-apps"]), "/bin/true")
 	cmd.TTY = true
-	err := cmd.Run()
-	t.Assert(err, c.IsNil)
+	runErr := make(chan error)
+	go func() {
+		runErr <- cmd.Run()
+	}()
+	select {
+	case err := <-runErr:
+		t.Assert(err, c.IsNil)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for interactive job")
+	}
 
 	h, err := cluster.DialHost(cmd.HostID)
 	t.Assert(err, c.IsNil)
