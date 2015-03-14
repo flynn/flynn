@@ -29,7 +29,7 @@ function getJobOutputStoreId (props) {
 		return null;
 	}
 	return {
-		appId: props.appId,
+		appId: "taffy",
 		jobId: props.job.id
 	};
 }
