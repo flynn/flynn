@@ -9,7 +9,7 @@ Before starting, you should install the Flynn command-line interface by running
 this command:
 
 ```bash
-L=/usr/local/bin/flynn && curl -sL -A "`uname -sp`" https://cli.flynn.io/flynn.gz | zcat >$L && chmod +x $L
+L=/usr/local/bin/flynn && curl -sL -A "`uname -sp`" https://dl.flynn.io/cli | zcat >$L && chmod +x $L
 ```
 
 If you want to run Flynn on your local machine, the easiest way is to install the

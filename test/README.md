@@ -62,7 +62,7 @@ The tests interact with the VM cluster using the Flynn CLI, so you will need it 
 Download it into the current directory:
 
 ```text
-curl -sL -A "`uname -sp`" https://cli.flynn.io/flynn.gz | zcat >flynn
+curl -sL -A "`uname -sp`" https://dl.flynn.io/cli | zcat >flynn
 chmod +x flynn
 ```
 

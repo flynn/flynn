@@ -12,7 +12,7 @@ available.
 To install a pre-built binary release, run the following one-liner:
 
 ```bash
-L=/usr/local/bin/flynn && curl -sL -A "`uname -sp`" https://cli.flynn.io/flynn.gz | zcat >$L && chmod +x $L
+L=/usr/local/bin/flynn && curl -sL -A "`uname -sp`" https://dl.flynn.io/cli | zcat >$L && chmod +x $L
 ```
 
 ## Usage
