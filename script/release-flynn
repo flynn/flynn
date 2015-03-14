@@ -13,6 +13,7 @@ set -eo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
+source "${ROOT}/script/lib/release.sh"
 
 usage() {
   cat <<USAGE >&2
@@ -112,7 +113,7 @@ main() {
   info "getting flynn release manifest"
   local manifest="$(s3cmd --no-progress get "s3://${bucket}/release/manifest.json" - 2>/dev/null)"
   if [[ -z "${manifest}" ]]; then
-    manifest='{"versions":[]}'
+    manifest="$(new_release_manifest)"
   fi
 
   info "checking for existing release"
@@ -121,9 +122,7 @@ main() {
   fi
 
   info "determining version"
-  local date=$(date +%Y%m%d)
-  local iteration=$(jq --raw-output '.versions[].version' <<< "${manifest}" | grep --quiet "${date}" | wc -l)
-  local version="${date}.${iteration}"
+  local version="$(next_release_version <<< "${manifest}")"
   info "using version ${version}"
 
   info "releasing components"
