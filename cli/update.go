@@ -83,7 +83,11 @@ func (u *Updater) update() error {
 	if err != nil {
 		return err
 	}
-	remote, err := tuf.HTTPRemoteStore(u.repo, nil)
+	plat := fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH)
+	opts := &tuf.HTTPRemoteOptions{
+		UserAgent: fmt.Sprintf("flynn-cli/%s %s", version.String(), plat),
+	}
+	remote, err := tuf.HTTPRemoteStore(u.repo, opts)
 	if err != nil {
 		return err
 	}
@@ -96,7 +100,7 @@ func (u *Updater) update() error {
 		return err
 	}
 
-	name := fmt.Sprintf("/flynn-%s-%s.gz", runtime.GOOS, runtime.GOARCH)
+	name := fmt.Sprintf("/flynn-%s.gz", plat)
 	target, ok := targets[name]
 	if !ok {
 		return fmt.Errorf("missing %q in tuf targets", name)

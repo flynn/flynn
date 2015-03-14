@@ -41,7 +41,7 @@ func runUpdate(args *docopt.Args) error {
 		log.Error("error creating local TUF client", "err", err)
 		return err
 	}
-	remote, err := tuf.HTTPRemoteStore(args.String["--repository"], nil)
+	remote, err := tuf.HTTPRemoteStore(args.String["--repository"], tufHTTPOpts("updater"))
 	if err != nil {
 		log.Error("error creating remote TUF client", "err", err)
 		return err
