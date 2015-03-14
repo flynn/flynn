@@ -50,14 +50,14 @@ func (s *HostSuite) TestAttachFinishedInteractiveJob(t *c.C) {
 
 	// Getting the logs for the job should fail, as it has none because it was
 	// interactive
-	done := make(chan struct{})
+	attachErr := make(chan error)
 	go func() {
 		_, err = h.Attach(&host.AttachReq{JobID: cmd.Job.ID, Flags: host.AttachFlagLogs}, false)
-		t.Assert(err, c.NotNil)
-		close(done)
+		attachErr <- err
 	}()
 	select {
-	case <-done:
+	case err := <-attachErr:
+		t.Assert(err, c.NotNil)
 	case <-time.After(time.Second):
 		t.Error("timed out waiting for attach")
 	}
