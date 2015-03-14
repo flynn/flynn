@@ -47,6 +47,7 @@ type Stack struct {
 	ControllerPin       string  `json:"controller_pin,omitempty"`
 	DashboardLoginToken string  `json:"dashboard_login_token,omitempty"`
 	Domain              *Domain `json:"domain"`
+	CACert              string  `json:"ca_cert"`
 
 	EventChan chan *Event   `json:"-"`
 	ErrChan   chan error    `json:"-"`
@@ -77,6 +78,14 @@ func (s *Stack) setDefaults() {
 
 	if s.InstanceType == "" {
 		s.InstanceType = DefaultInstanceType
+	}
+
+	if s.VpcCidr == "" {
+		s.VpcCidr = "10.0.0.0/16"
+	}
+
+	if s.SubnetCidr == "" {
+		s.SubnetCidr = "10.0.0.0/21"
 	}
 }
 
@@ -135,21 +144,14 @@ func (s *Stack) promptUseExistingStack(savedStack *Stack) bool {
 		return false
 	}
 
-	clusterAddCmd, err := savedStack.ClusterAddCmd()
-	if err != nil {
-		return false
-	}
-	dashboardMsg, err := savedStack.DashboardLoginMsg()
-	if err != nil {
-		return false
-	}
-
 	if err := s.fetchStack(); err != nil {
 		return false
 	}
 
 	if !s.YesNoPrompt(fmt.Sprintf("It appears you already have a cluster of this configuration (stack %s), would you like to continue?", s.StackName)) {
-		s.SendEvent(fmt.Sprintf("For reference, here are the configuration details:\n\n%s\n\n%s", clusterAddCmd, dashboardMsg))
+		s.Domain = savedStack.Domain
+		s.DashboardLoginToken = savedStack.DashboardLoginToken
+		s.CACert = savedStack.CACert
 		return true
 	}
 	return false
@@ -554,7 +556,11 @@ func (s *Stack) fetchStack() error {
 	if len(res.Stacks) == 0 {
 		return errors.New("Stack does not exist")
 	}
-	s.Stack = &res.Stacks[0]
+	stack := &res.Stacks[0]
+	if strings.HasPrefix(*stack.StackStatus, "DELETE_") {
+		return fmt.Errorf("Stack in unusable state: %s", *stack.StackStatus)
+	}
+	s.Stack = stack
 	return nil
 }
 
@@ -717,11 +723,12 @@ func (s *Stack) bootstrap() error {
 	var keyData struct {
 		Key string `json:"data"`
 	}
-	var pinData struct {
-		Pin string `json:"pin"`
-	}
 	var loginTokenData struct {
 		Token string `json:"data"`
+	}
+	var controllerCertData struct {
+		Pin    string `json:"pin"`
+		CACert string `json:"ca_cert"`
 	}
 	output := json.NewDecoder(stdout)
 	for {
@@ -750,7 +757,7 @@ func (s *Stack) bootstrap() error {
 				return err
 			}
 		case "controller-cert":
-			if err := json.Unmarshal(*step.Data, &pinData); err != nil {
+			if err := json.Unmarshal(*step.Data, &controllerCertData); err != nil {
 				return err
 			}
 		case "dashboard-login-token":
@@ -761,12 +768,13 @@ func (s *Stack) bootstrap() error {
 			break
 		}
 	}
-	if keyData.Key == "" || pinData.Pin == "" {
+	if keyData.Key == "" || controllerCertData.Pin == "" {
 		return err
 	}
 
 	s.ControllerKey = keyData.Key
-	s.ControllerPin = pinData.Pin
+	s.ControllerPin = controllerCertData.Pin
+	s.CACert = controllerCertData.CACert
 	s.DashboardLoginToken = loginTokenData.Token
 
 	if err := sess.Wait(); err != nil {

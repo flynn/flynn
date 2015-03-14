@@ -52,16 +52,12 @@ Dashboard.routers.main = new (Marbles.Router.createClass({
 			Marbles.history.navigate("");
 			return;
 		}
-		var browserName = navigator.userAgent.match(/((?:Firefox|Chrome|Safari))\/\d+/);
-		browserName = browserName ? (browserName[1] || "").toLowerCase() : "unknown";
-		var osName = navigator.userAgent.match(/(?:OS X|Windows|Linux)/);
-		osName = osName ? osName[0].toLowerCase().replace(/\s+/g, '') : "unknown";
-		React.render(React.createElement(
-			Dashboard.Views.InstallCert, {
-				certURL: Dashboard.config.API_SERVER.replace("https", "http") + "/cert",
-				browserName: browserName,
-				osName: osName
-			}), Dashboard.el);
+		React.render(React.createElement("form", { onSubmit: function () { Marbles.history.navigate("/"); } },
+			React.createElement("section", { className: "panel" },
+				React.createElement(
+					Dashboard.Views.InstallCert, {
+						certURL: Dashboard.config.API_SERVER.replace("https", "http") + "/cert"
+					}))), Dashboard.el);
 	}
 
 }))();

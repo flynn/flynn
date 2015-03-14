@@ -1,0 +1,23 @@
+(function () {
+
+"use strict";
+
+var extend = Marbles.Utils.extend;
+
+var AssetPaths = Dashboard.config.ASSET_PATHS;
+
+<% require 'dashboard/installer_import' %>
+
+<%= Dashboard::InstallerImport.javascript('views/css/colors') %>
+
+<%= Dashboard::InstallerImport.javascript('views/css/button') %>
+
+<%= "var GreenBtnCSS = green;\n" %>
+
+<%= Dashboard::InstallerImport.javascript('views/css/user-agent') %>
+
+<%= Dashboard::InstallerImport.javascript('views/install-cert') %>
+
+<%= 'Dashboard.Views.InstallCert = InstallCert;' %>
+
+})();

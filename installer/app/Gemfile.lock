@@ -1,0 +1,54 @@
+GIT
+  remote: https://github.com/jvatic/es6-module-mapper.git
+  revision: 227387a091915b396e2e5ca2b5c00737c1e917cf
+  branch: master
+  specs:
+    es6-module-mapper (0.0.1)
+      sprockets (~> 3.0.0.beta)
+      yajl-ruby (~> 1.2)
+
+GIT
+  remote: https://github.com/jvatic/marbles-js.git
+  revision: 4cc85594eb6c5891272e46e6558936ff434eb340
+  branch: es6-modules
+  specs:
+    marbles-js (0.0.5)
+      es6-module-mapper
+
+GIT
+  remote: https://github.com/jvatic/react-jsx-sprockets
+  revision: 50418cb324889890190808b12e3017a5568d6cd8
+  branch: master
+  specs:
+    react-jsx-sprockets (0.2.1)
+      execjs (>= 1.2.9)
+      sprockets (>= 2.0.3)
+      tilt (>= 1.3.3)
+      yajl-ruby
+
+GIT
+  remote: https://github.com/sstephenson/sprockets.git
+  revision: c0c8b001aacb9af374053bae25c7aba33cc72ede
+  tag: v3.0.0.beta.8
+  specs:
+    sprockets (3.0.0.beta.8)
+      rack (~> 1.0)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    execjs (2.3.0)
+    rack (1.6.0)
+    rake (10.4.2)
+    tilt (2.0.1)
+    yajl-ruby (1.2.1)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  es6-module-mapper!
+  marbles-js!
+  rake
+  react-jsx-sprockets!
+  sprockets!

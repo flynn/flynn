@@ -1,0 +1,29 @@
+{
+  "bitwise": true,
+  "curly": true,
+  "eqeqeq": true,
+  "forin": true,
+  "freeze": true,
+  "immed": true,
+  "latedef": true,
+  "undef": true,
+  "unused": true,
+  "newcap": false,
+  "noarg": true,
+  "nonew": true,
+  "strict": false,
+  "trailing": false,
+	"funcscope": true,
+	"validthis": true,
+	"boss": true,
+	"esnext": true,
+	"globals": {
+		"React": false,
+		"Promise": false,
+		"EventSource": false,
+		"document": false,
+		"window": false,
+		"setTimeout": false,
+		"setInterval": false
+	}
+}
