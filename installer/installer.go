@@ -25,7 +25,7 @@ import (
 	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/pkg/etcdcluster"
 	"github.com/flynn/flynn/pkg/sshkeygen"
-	release "github.com/flynn/flynn/util/release"
+	"github.com/flynn/flynn/util/release/types"
 )
 
 type Event struct {
