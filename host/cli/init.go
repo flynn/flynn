@@ -33,6 +33,9 @@ options:
 func runInit(args *docopt.Args) error {
 	discoveryToken := args.String["--discovery"]
 	if n, ok := args.String["--init-discovery"]; ok {
+		if n == "1" {
+			return errors.New("There is no need for a discovery token when starting a single node cluster.")
+		}
 		var err error
 		discoveryToken, err = etcdcluster.NewDiscoveryToken(n)
 		if err != nil {
