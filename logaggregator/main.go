@@ -41,17 +41,11 @@ func main() {
 		shutdown.Fatal(err)
 	}
 
-	services := map[string]string{
-		"flynn-logaggregator-api":    *apiAddr,
-		"flynn-logaggregator-syslog": *logAddr,
+	hb, err := discoverd.AddServiceAndRegister("flynn-logaggregator", *logAddr)
+	if err != nil {
+		shutdown.Fatal(err)
 	}
-	for service, addr := range services {
-		hb, err := discoverd.AddServiceAndRegister(service, addr)
-		if err != nil {
-			shutdown.Fatal(err)
-		}
-		shutdown.BeforeExit(func() { hb.Close() })
-	}
+	shutdown.BeforeExit(func() { hb.Close() })
 
 	shutdown.Fatal(http.Serve(listener, apiHandler(a)))
 }

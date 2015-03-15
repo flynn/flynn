@@ -44,7 +44,7 @@ func New(uri string) (Client, error) {
 // NewClient creates a new Client pointing at uri with the specified http client.
 func NewWithHTTP(uri string, httpClient *http.Client) (Client, error) {
 	if uri == "" {
-		uri = "http://flynn-logaggregator-api.discoverd"
+		uri = "http://flynn-logaggregator.discoverd"
 	}
 	u, err := url.Parse(uri)
 	if err != nil {
