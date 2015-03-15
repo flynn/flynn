@@ -32,10 +32,11 @@ var debugCmds = [][]string{
 
 func init() {
 	Register("collect-debug-info", runCollectDebugInfo, `
-usage: flynn-host collect-debug-info [--tarball]
+usage: flynn-host collect-debug-info [options]
 
 Options:
-  --tarball	  Create a tarball instead of uploading to a gist
+  --tarball      Create a tarball instead of uploading to a gist
+  --include-env  Include sensitive environment variables
 
 Collect debug information into an anonymous gist or tarball`)
 }
@@ -63,7 +64,7 @@ func runCollectDebugInfo(args *docopt.Args) error {
 	}
 
 	log.Info("getting job logs")
-	if err := captureJobs(gist); err != nil {
+	if err := captureJobs(gist, args.Bool["--include-env"]); err != nil {
 		log.Error("error getting job logs", "err", err)
 	}
 
@@ -107,7 +108,7 @@ func captureCmd(name string, arg ...string) (string, error) {
 	return buf.String(), nil
 }
 
-func captureJobs(gist *Gist) error {
+func captureJobs(gist *Gist, env bool) error {
 	client, err := cluster.NewClient()
 	if err != nil {
 		return err
@@ -133,7 +134,7 @@ func captureJobs(gist *Gist) error {
 		name += job.Job.ID + ".log"
 
 		var content bytes.Buffer
-		printJobDesc(&job, &content)
+		printJobDesc(&job, &content, env)
 		fmt.Fprint(&content, "\n\n***** ***** ***** ***** ***** ***** ***** ***** ***** *****\n\n")
 		getLog(job.HostID, job.Job.ID, client, false, true, &content, &content)
 

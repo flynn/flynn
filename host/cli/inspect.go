@@ -14,9 +14,13 @@ import (
 
 func init() {
 	Register("inspect", runInspect, `
-usage: flynn-host inspect ID
+usage: flynn-host inspect [options] ID
 
-Get low-level information about a job.`)
+Get low-level information about a job.
+
+options:
+  --omit-env  don't include the job environment, which may be sensitive
+`)
 }
 
 func runInspect(args *docopt.Args, client *cluster.Client) error {
@@ -33,11 +37,11 @@ func runInspect(args *docopt.Args, client *cluster.Client) error {
 		return fmt.Errorf("no such job")
 	}
 
-	printJobDesc(job, os.Stdout)
+	printJobDesc(job, os.Stdout, !args.Bool["--omit-env"])
 	return nil
 }
 
-func printJobDesc(job *host.ActiveJob, out io.Writer) {
+func printJobDesc(job *host.ActiveJob, out io.Writer, env bool) {
 	w := tabwriter.NewWriter(out, 1, 2, 2, ' ', 0)
 	defer w.Flush()
 	listRec(w, "ID", clusterJobID(*job))
@@ -51,8 +55,10 @@ func printJobDesc(job *host.ActiveJob, out io.Writer) {
 	for k, v := range job.Job.Metadata {
 		listRec(w, k, v)
 	}
-	for k, v := range job.Job.Config.Env {
-		listRec(w, fmt.Sprintf("ENV[%s]", k), v)
+	if env {
+		for k, v := range job.Job.Config.Env {
+			listRec(w, fmt.Sprintf("ENV[%s]", k), v)
+		}
 	}
 }
 
