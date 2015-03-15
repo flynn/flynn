@@ -43,6 +43,7 @@ func runRun(args *docopt.Args, client *controller.Client) error {
 		Args:       append([]string{args.String["<command>"]}, args.All["<argument>"].([]string)...),
 		ReleaseEnv: true,
 	}
+	config.DisableLog = !config.Detached
 	if config.Release == "" {
 		release, err := client.GetAppRelease(config.App)
 		if err == controller.ErrNotFound {

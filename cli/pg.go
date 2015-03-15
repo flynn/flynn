@@ -109,7 +109,6 @@ func runPgDump(args *docopt.Args, client *controller.Client, config *runConfig) 
 	if !args.Bool["--quiet"] && term.IsTerminal(os.Stderr.Fd()) {
 		bar := pb.New(0)
 		bar.SetUnits(pb.U_BYTES)
-		bar.ShowBar = false
 		bar.ShowSpeed = true
 		bar.Output = os.Stderr
 		bar.Start()
@@ -138,13 +137,8 @@ func runPgRestore(args *docopt.Args, client *controller.Client, config *runConfi
 		config.Stdin = f
 	}
 	if !args.Bool["--quiet"] && term.IsTerminal(os.Stderr.Fd()) {
-		bar := pb.New(0)
+		bar := pb.New64(size)
 		bar.SetUnits(pb.U_BYTES)
-		if size > 0 {
-			bar.Total = size
-		} else {
-			bar.ShowBar = false
-		}
 		bar.ShowSpeed = true
 		bar.Output = os.Stderr
 		bar.Start()
