@@ -28,6 +28,7 @@ var debugCmds = [][]string{
 	{os.Args[0], "version"},
 	{"virsh", "-c", "lxc:///", "list"},
 	{"virsh", "-c", "lxc:///", "net-list"},
+	{"iptables", "-L", "-v", "-n", "--line-numbers"},
 }
 
 func init() {
