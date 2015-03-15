@@ -160,3 +160,13 @@ func (s *GitDeploySuite) runBuildpackTest(t *c.C, name string, resources []strin
 
 	t.Assert(r.flynn("scale", "web=0"), Succeeds)
 }
+
+func (s *GitDeploySuite) TestRunQuoting(t *c.C) {
+	r := s.newGitRepo(t, "empty")
+	t.Assert(r.flynn("create"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+
+	run := r.flynn("run", "bash", "-c", "echo 'foo bar'")
+	t.Assert(run, Succeeds)
+	t.Assert(run, Outputs, "foo bar\n")
+}
