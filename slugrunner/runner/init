@@ -51,7 +51,7 @@ case "$1" in
     fi
     ;;
   *)
-    command="$@"
+    printf -v command " %q" "$@"
     ;;
 esac
 
