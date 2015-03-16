@@ -121,24 +121,19 @@ func (m *LogMux) follow(r io.Reader, hdr *rfc5424.Header) {
 	defer m.producerwg.Done()
 
 	g := grohl.NewContext(grohl.Data{"at": "logmux_follow"})
-	bufr := bufio.NewReader(r)
+	s := bufio.NewScanner(r)
 
-	for {
-		line, _, err := bufr.ReadLine()
-		if err == io.EOF {
-			return
-		}
-		if err != nil {
-			g.Log(grohl.Data{"status": "error", "err": err.Error()})
-			return
-		}
-
-		msg := rfc5424.NewMessage(hdr, line)
+	for s.Scan() {
+		msg := rfc5424.NewMessage(hdr, s.Bytes())
 
 		select {
 		case m.logc <- msg:
 		default:
 			// throw away msg if logc buffer is full
 		}
+	}
+
+	if s.Err() != nil {
+		g.Log(grohl.Data{"status": "error", "err": s.Err()})
 	}
 }
