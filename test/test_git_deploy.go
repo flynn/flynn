@@ -36,6 +36,19 @@ func (s *GitDeploySuite) TestEnvDir(t *c.C) {
 	t.Assert(push, OutputContains, "bar")
 }
 
+func (s *GitDeploySuite) TestEmptyRelease(t *c.C) {
+	r := s.newGitRepo(t, "empty-release")
+	t.Assert(r.flynn("create"), Succeeds)
+	t.Assert(r.flynn("env", "set", "BUILDPACK_URL=https://github.com/kr/heroku-buildpack-inline"), Succeeds)
+
+	push := r.git("push", "flynn", "master")
+	t.Assert(push, Succeeds)
+
+	run := r.flynn("run", "echo", "foo")
+	t.Assert(run, Succeeds)
+	t.Assert(run, Outputs, "foo\n")
+}
+
 func (s *GitDeploySuite) TestBuildCaching(t *c.C) {
 	r := s.newGitRepo(t, "build-cache")
 	t.Assert(r.flynn("create"), Succeeds)
