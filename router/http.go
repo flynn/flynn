@@ -268,7 +268,7 @@ func (s *HTTPListener) listenAndServe() error {
 	var err error
 	s.listener, err = listenFunc("tcp4", s.Addr)
 	if err != nil {
-		return err
+		return listenErr{s.Addr, err}
 	}
 
 	server := &http.Server{
@@ -302,7 +302,7 @@ func (s *HTTPListener) listenAndServeTLS() error {
 
 	l, err := listenFunc("tcp4", s.TLSAddr)
 	if err != nil {
-		return err
+		return listenErr{s.Addr, err}
 	}
 	s.tlsListener = tls.NewListener(l, tlsConfig)
 

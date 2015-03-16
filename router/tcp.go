@@ -112,10 +112,11 @@ func (l *TCPListener) Start() error {
 
 	if l.startPort != 0 && l.endPort != 0 {
 		for i := l.startPort; i <= l.endPort; i++ {
-			listener, err := listenFunc("tcp4", fmt.Sprintf("%s:%d", l.IP, i))
+			addr := fmt.Sprintf("%s:%d", l.IP, i)
+			listener, err := listenFunc("tcp4", addr)
 			if err != nil {
 				l.Close()
-				return err
+				return listenErr{addr, err}
 			}
 			l.listeners[i] = listener
 		}
@@ -278,6 +279,9 @@ func (r *tcpRoute) Serve(started chan<- error) {
 	// TODO: close the listener while there are no backends available
 	if r.l == nil {
 		r.l, err = listenFunc("tcp4", r.addr)
+	}
+	if err != nil {
+		err = listenErr{r.addr, err}
 	}
 	started <- err
 	if err != nil {
