@@ -18,6 +18,12 @@ var padding = function (str, len) {
 Dashboard.Views.CommandOutput = React.createClass({
 	displayName: "Views.CommandOutput",
 
+	getDefaultProps: function () {
+		return {
+			showTimestamp: true
+		};
+	},
+
 	render: function () {
 		var data = this.__formatOutputStream(this.props.outputStreamData);
 		return (
@@ -37,7 +43,14 @@ Dashboard.Views.CommandOutput = React.createClass({
 	},
 
 	__formatOutputStream: function (outputStreamData) {
-		var data = outputStreamData.map(function (item) { return padding("["+ item.timestamp +"] ", 33)+ item.msg; }).join("\n");
+		var showTimestamp = this.props.showTimestamp;
+		var data = outputStreamData.map(function (item) {
+			var timestamp = "";
+			if (showTimestamp) {
+				timestamp = padding("["+ item.timestamp +"] ", 33);
+			}
+			return timestamp + item.msg;
+		}).join("\n");
 		data = data.replace(/\r\r/g, '\r')
 			.replace(/\033\[K\r/g, '\r')
 			.replace(/\[2K/g, '')

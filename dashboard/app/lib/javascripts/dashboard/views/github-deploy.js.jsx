@@ -168,7 +168,7 @@ Dashboard.Views.GithubDeploy = React.createClass({
 				<Dashboard.Views.EditEnv env={this.state.env} onChange={this.__handleEnvChange} />
 
 				{this.state.jobOutput ? (
-					<Dashboard.Views.CommandOutput outputStreamData={this.state.jobOutput} />
+					<Dashboard.Views.CommandOutput outputStreamData={this.state.jobOutput} showTimestamp={false} />
 				) : null}
 
 				{this.props.errorMsg ? (
