@@ -85,6 +85,7 @@ type manifestService struct {
 	Env        map[string]string `json:"env"`
 	ExposeEnv  []string          `json:"expose_env"`
 	TCPPorts   []string          `json:"tcp_ports"`
+	Data       bool              `json:"data"`
 }
 
 func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, error) {
@@ -142,6 +143,10 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 			ExternalIP:  m.externalAddr,
 			BridgeIP:    netInfo.BridgeAddr,
 			Nameservers: strings.Join(netInfo.Nameservers, ","),
+		}
+
+		if service.Data {
+			data.Volume("/data")
 		}
 
 		// Add explicit tcp ports to data.TCPPorts
