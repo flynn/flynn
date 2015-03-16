@@ -1,0 +1,25 @@
+{
+  "bitwise": true,
+  "curly": true,
+  "eqeqeq": true,
+  "forin": false,
+  "freeze": true,
+  "immed": true,
+  "latedef": true,
+  "undef": true,
+  "unused": true,
+  "newcap": false,
+  "noarg": true,
+  "nonew": true,
+  "strict": false,
+  "trailing": false,
+  "funcscope": true,
+  "validthis": true,
+  "boss": true,
+  "browser": false,
+  "globals": {
+    "casper": false,
+    "require": false,
+    "exports": true
+  }
+}
