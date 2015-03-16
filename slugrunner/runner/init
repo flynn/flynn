@@ -25,11 +25,13 @@ usermod --home $HOME nobody
 shopt -s nullglob
 mkdir -p .profile.d
 if [[ -s .release ]]; then
-  ruby -e "require 'yaml';
-    (YAML.load_file('.release')['config_vars'] || {}).each do |k, v|
-      puts \"#{k}=\${#{k}:-'#{v}'}\"
-    end" \
-    > .profile.d/config_vars
+  ruby -r yaml > .profile.d/config_vars <<-RUBY
+release = YAML.load_file('.release') || {}
+config = release['config_vars'] || {}
+config.each_pair do |k, v|
+  puts "#{k}=\${#{k}:-'#{v}'}"
+end
+RUBY
 fi
 for file in .profile.d/*; do
   source "${file}"
@@ -41,13 +43,9 @@ hash -r
 case "$1" in
   start)
     if [[ -f Procfile ]]; then
-      command="$(ruby -e "require 'yaml';
-        puts YAML.load_file('Procfile')['$2']"
-      )"
+      command=$(ruby -r yaml -e "puts YAML.load_file('Procfile')['$2']")
     else
-      command="$(ruby -e "require 'yaml';
-        puts (YAML.load_file('.release')['default_process_types'] || {})['$2']"
-      )"
+      command=$(ruby -r yaml -e "puts (YAML.load_file('.release') || {}).fetch('default_process_types', {})['$2']")
     fi
     ;;
   *)

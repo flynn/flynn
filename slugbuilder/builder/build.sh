@@ -148,20 +148,15 @@ run_unprivileged ${selected_buildpack}/bin/release \
 
 echo_title "Discovering process types"
 if [[ -f "${build_root}/Procfile" ]]; then
-  types=$(ruby -e "require 'yaml';
-    puts YAML.load_file('${build_root}/Procfile').keys().join(', ')
-  ")
+  types=$(ruby -r yaml -e "puts YAML.load_file('${build_root}/Procfile').keys.join(', ')")
   echo_normal "Procfile declares types -> ${types}"
 fi
 default_types=""
 if [[ -s "${build_root}/.release" ]]; then
-  default_types=$(ruby -e "require 'yaml';
-    puts (YAML.load_file('${build_root}/.release')['default_process_types'] ||
-          {}).keys.join(', ')
-  ")
-  [[ -n "${default_types}" ]] \
-  && echo_normal \
-    "Default process types for ${buildpack_name} -> ${default_types}"
+  default_types=$(ruby -r yaml -e "puts (YAML.load_file('${build_root}/.release') || {}).fetch('default_process_types', {}).keys.join(', ')")
+  if [[ -n "${default_types}" ]]; then
+    echo_normal "Default process types for ${buildpack_name} -> ${default_types}"
+  fi
 fi
 
 
