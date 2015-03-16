@@ -141,7 +141,7 @@ func main() {
 
 	listener, err := listenFunc("tcp4", *apiAddr)
 	if err != nil {
-		shutdown.Fatal(err)
+		shutdown.Fatal(listenErr{*apiAddr, err})
 	}
 
 	services := map[string]string{
@@ -157,4 +157,13 @@ func main() {
 	}
 
 	shutdown.Fatal(http.Serve(listener, apiHandler(&r)))
+}
+
+type listenErr struct {
+	Addr string
+	Err  error
+}
+
+func (e listenErr) Error() string {
+	return fmt.Sprintf("error binding to port (check if another service is listening on %s): %s", e.Addr, e.Err)
 }
