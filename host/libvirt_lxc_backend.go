@@ -686,12 +686,18 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 		// TODO(benburkert): remove file logging once attach proto uses logaggregator
 		streams := []io.Reader{stdout, stderr}
 		for i, stream := range streams {
-			fd := i + 1
-			pr, pw := io.Pipe()
-			tr := io.TeeReader(stream, pw)
+			bufr, bufw := io.Pipe()
+			muxr, muxw := io.Pipe()
+			go func(r io.Reader, pw1, pw2 *io.PipeWriter) {
+				mw := io.MultiWriter(pw1, pw2)
+				_, err := io.Copy(mw, r)
+				pw1.CloseWithError(err)
+				pw2.CloseWithError(err)
+			}(stream, bufw, muxw)
 
-			go log.Follow(fd, tr)
-			go c.l.mux.Follow(pr, fd, muxConfig)
+			fd := i + 1
+			go log.Follow(fd, bufr)
+			go c.l.mux.Follow(muxr, fd, muxConfig)
 		}
 
 		go log.Follow(3, initLog)

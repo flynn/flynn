@@ -57,13 +57,14 @@ func (c *serviceConn) Write(p []byte) (int, error) {
 	defer c.cond.L.Unlock()
 
 	for {
+		if c.closed {
+			return 0, errors.New("connection closed")
+		}
+
 		if c.Conn != nil {
 			n, err := c.Conn.Write(p)
 			if err == nil {
 				return n, nil
-			}
-			if c.closed {
-				return 0, errors.New("connection closed")
 			}
 
 			c.errc <- err

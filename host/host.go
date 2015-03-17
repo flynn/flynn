@@ -186,6 +186,7 @@ func runDaemon(args *docopt.Args) {
 	}
 
 	mux := logmux.New(1000)
+	shutdown.BeforeExit(func() { mux.Close() })
 
 	switch backendName {
 	case "libvirt-lxc":
@@ -279,7 +280,6 @@ func runDaemon(args *docopt.Args) {
 	if err := mux.Connect(disc, "flynn-logaggregator"); err != nil {
 		shutdown.Fatal(err)
 	}
-	shutdown.BeforeExit(func() { mux.Close() })
 
 	cluster, err := cluster.NewClient()
 	if err != nil {
