@@ -143,7 +143,7 @@ export default createClass({
 
 	launchAWS: function (inputs) {
 		var data = {
-			creds: inputs.cred,
+			creds: inputs.creds,
 			region: inputs.region,
 			instanceType: inputs.instanceType,
 			numInstances: inputs.numInstances
