@@ -541,11 +541,6 @@ func (p *Postgres) stop() error {
 		}
 	}
 
-	// Wait for all clients to terminate before shutting down cleanly
-	if tryExit(syscall.SIGTERM) {
-		return nil
-	}
-
 	// Forcefully disconnect all clients and shut down cleanly
 	if tryExit(syscall.SIGINT) {
 		return nil
