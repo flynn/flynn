@@ -145,8 +145,8 @@ export default createClass({
 		var data = {
 			creds: inputs.creds,
 			region: inputs.region,
-			instanceType: inputs.instanceType,
-			numInstances: inputs.numInstances
+			instance_type: inputs.instanceType,
+			num_instances: inputs.numInstances
 		};
 
 		if (inputs.vpcCidr) {
