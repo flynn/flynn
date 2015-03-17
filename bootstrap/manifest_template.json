@@ -17,7 +17,7 @@
     "release": {
       "env": {
         "PGPASSWORD": "{{ (index .StepData \"pg-password\").Data }}"
-	  },
+      },
       "processes": {
         "postgres": {
           "ports": [{"port": 5432, "proto": "tcp"}],
@@ -26,7 +26,7 @@
           "env": {
             "SINGLETON": "{{ .Singleton }}"
           },
-		  "resurrect": true
+          "resurrect": true
         },
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
@@ -84,13 +84,13 @@
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
           "cmd": ["controller"],
-		  "resurrect": true
+          "resurrect": true
         },
         "scheduler": {
           "cmd": ["scheduler"],
           "omni": true,
           "service": "flynn-controller-scheduler",
-		  "resurrect": true
+          "resurrect": true
         },
         "deployer": {
           "cmd": ["deployer"]
