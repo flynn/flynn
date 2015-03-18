@@ -268,10 +268,10 @@ func (s *httpInstaller) handleEvents() {
 			s.handleError(err)
 		case <-s.Stack.Done:
 			s.handleDone()
+			s.logger.Info(s.Stack.DashboardLoginMsg())
 			return
 		}
 	}
-	s.logger.Info(s.Stack.DashboardLoginMsg())
 }
 
 type httpAPI struct {
