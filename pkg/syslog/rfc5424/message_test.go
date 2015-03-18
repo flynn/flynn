@@ -48,7 +48,13 @@ func (s *S) TestNewMessage(c *C) {
 
 	for _, test := range table {
 		msg := NewMessage(&test.hdr, test.msg)
-
 		c.Assert(msg.String(), Equals, test.want)
+
+		data, err := msg.MarshalBinary()
+		c.Assert(err, IsNil)
+		msgCopy := &Message{}
+		err = msgCopy.UnmarshalBinary(data)
+		c.Assert(err, IsNil)
+		c.Assert(msgCopy, DeepEquals, msg)
 	}
 }
