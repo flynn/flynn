@@ -1,6 +1,6 @@
 # Flynn Demo Environment
 
-This repo contains a Vagrantfile that boots up Flynn layer 0 and then bootstraps
+This repo contains a Vagrantfile and Makefile that boots up Flynn layer 0 and then bootstraps
 Flynn layer 1.
 
 ## Usage

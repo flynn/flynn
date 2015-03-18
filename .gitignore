@@ -5,3 +5,4 @@ bin
 /version.json
 /log
 script/custom-vagrant
+demo/*.log
