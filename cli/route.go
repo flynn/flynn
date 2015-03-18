@@ -104,9 +104,6 @@ func runRouteAddTCP(args *docopt.Args, client *controller.Client) error {
 }
 
 func runRouteAddHTTP(args *docopt.Args, client *controller.Client) error {
-	var tlsCert []byte
-	var tlsKey []byte
-
 	service := args.String["--service"]
 	if service == "" {
 		service = mustApp() + "-web"
@@ -114,17 +111,20 @@ func runRouteAddHTTP(args *docopt.Args, client *controller.Client) error {
 
 	tlsCertPath := args.String["--tls-cert"]
 	tlsKeyPath := args.String["--tls-key"]
+	var tlsCert []byte
+	var tlsKey []byte
 	if tlsCertPath != "" && tlsKeyPath != "" {
 		var stdin []byte
-		var err error
 
 		if tlsCertPath == "-" || tlsKeyPath == "-" {
+			var err error
 			stdin, err = ioutil.ReadAll(os.Stdin)
 			if err != nil {
 				return fmt.Errorf("Failed to read from stdin: %s", err)
 			}
 		}
 
+		var err error
 		tlsCert, err = readPEM("CERTIFICATE", tlsCertPath, stdin)
 		if err != nil {
 			return fmt.Errorf("Failed to read TLS cert: %s", err)

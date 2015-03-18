@@ -37,19 +37,19 @@ func (p *ParseError) Error() string {
 
 // HEADER = PRI VERSION SP TIMESTAMP SP HOSTNAME SP APP-NAME SP PROCID SP MSGID
 func parseHeader(buf []byte, cursor *int, msg *Message) error {
+	if err := parsePriority(buf, cursor, msg); err != nil {
+		return err
+	}
+
+	if err := parseVersion(buf, cursor, msg); err != nil {
+		return err
+	}
+
+	if err := parseTimestamp(buf, cursor, msg); err != nil {
+		return err
+	}
+
 	var err error
-	if err = parsePriority(buf, cursor, msg); err != nil {
-		return err
-	}
-
-	if err = parseVersion(buf, cursor, msg); err != nil {
-		return err
-	}
-
-	if err = parseTimestamp(buf, cursor, msg); err != nil {
-		return err
-	}
-
 	if msg.Hostname, err = parseNextField(buf, cursor); err != nil {
 		return err
 	}
@@ -108,7 +108,6 @@ func parseVersion(buf []byte, cursor *int, msg *Message) error {
 }
 
 func parseTimestamp(buf []byte, cursor *int, msg *Message) error {
-	var err error
 	nextSpace := indexByteAfter(buf, ' ', *cursor)
 	if nextSpace < *cursor {
 		return &ParseError{*cursor, "missing space"}
@@ -116,6 +115,7 @@ func parseTimestamp(buf []byte, cursor *int, msg *Message) error {
 	if nextSpace == *cursor {
 		return &ParseError{*cursor, "missing timestamp"}
 	}
+	var err error
 	msg.Timestamp, err = time.Parse(time.RFC3339Nano, string(buf[*cursor:nextSpace]))
 	if err != nil {
 		return err

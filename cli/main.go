@@ -158,11 +158,11 @@ func runCommand(name string, args []string) (err error) {
 	switch f := cmd.f.(type) {
 	case func(*docopt.Args, *controller.Client) error:
 		// create client and run command
-		var client *controller.Client
 		cluster, err := getCluster()
 		if err != nil {
 			shutdown.Fatal(err)
 		}
+		var client *controller.Client
 		if cluster.TLSPin != "" {
 			pin, err := base64.StdEncoding.DecodeString(cluster.TLSPin)
 			if err != nil {

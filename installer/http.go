@@ -354,12 +354,12 @@ func (api *httpAPI) Asset(path string) (io.ReadSeeker, error) {
 }
 
 func (api *httpAPI) AssetManifest() (*assetManifest, error) {
-	var manifest *assetManifest
 	data, err := api.Asset(filepath.Join("app", "build", "manifest.json"))
 	if err != nil {
 		return nil, err
 	}
 	dec := json.NewDecoder(data)
+	var manifest *assetManifest
 	if err := dec.Decode(&manifest); err != nil {
 		return nil, err
 	}

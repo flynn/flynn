@@ -47,17 +47,18 @@ type VMDrive struct {
 }
 
 func (v *VMManager) NewInstance(c *VMConfig) (*Instance, error) {
-	var err error
 	inst := &Instance{ID: random.String(8), VMConfig: c}
 	if c.Kernel == "" {
 		c.Kernel = "vmlinuz"
 	}
 	if c.Out == nil {
+		var err error
 		c.Out, err = os.Create("flynn-" + inst.ID + ".log")
 		if err != nil {
 			return nil, err
 		}
 	}
+	var err error
 	inst.tap, err = v.taps.NewTap(c.User, c.Group)
 	if err != nil {
 		return nil, err
@@ -145,7 +146,6 @@ func (i *Instance) Start() error {
 	if i.Cores > 0 {
 		i.Args = append(i.Args, "-smp", strconv.Itoa(i.Cores))
 	}
-	var err error
 	for n, d := range i.Drives {
 		if d.COW {
 			fs, err := i.createCOW(d.FS, d.Temp)
@@ -161,6 +161,7 @@ func (i *Instance) Start() error {
 	i.cmd = exec.Command("sudo", append([]string{"-u", fmt.Sprintf("#%d", i.User), "-g", fmt.Sprintf("#%d", i.Group), "-H", "/usr/bin/qemu-system-x86_64"}, i.Args...)...)
 	i.cmd.Stdout = i.Out
 	i.cmd.Stderr = i.Out
+	var err error
 	if err = i.cmd.Start(); err != nil {
 		i.cleanup()
 	}

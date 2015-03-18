@@ -101,7 +101,6 @@ func (c *serverCodec) ReadRequestBody(x interface{}) error {
 var null = json.RawMessage([]byte("null"))
 
 func (c *serverCodec) WriteResponse(r *rpc.Response, x interface{}, last bool) error {
-	var resp serverResponse
 	c.mutex.Lock()
 	b, ok := c.pending[r.Seq]
 	if !ok {
@@ -117,6 +116,7 @@ func (c *serverCodec) WriteResponse(r *rpc.Response, x interface{}, last bool) e
 		// Invalid request so no id.  Use JSON null.
 		b = &null
 	}
+	var resp serverResponse
 	resp.Id = b
 	resp.Result = x
 	if r.Error == "" {

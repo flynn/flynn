@@ -104,12 +104,12 @@ type rowQueryer interface {
 }
 
 func selectApp(db rowQueryer, id string, update bool) (*ct.App, error) {
-	var row postgres.Scanner
 	query := "SELECT app_id, name, meta, strategy, created_at, updated_at FROM apps WHERE deleted_at IS NULL AND "
 	var suffix string
 	if update {
 		suffix = " FOR UPDATE"
 	}
+	var row postgres.Scanner
 	if idPattern.MatchString(id) {
 		row = db.QueryRow(query+"(app_id = $1 OR name = $2) LIMIT 1"+suffix, id, id)
 	} else {

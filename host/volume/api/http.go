@@ -42,7 +42,6 @@ func (api *HTTPAPI) RegisterRoutes(r *httprouter.Router) {
 }
 
 func (api *HTTPAPI) CreateProvider(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	var provider volume.Provider
 	pspec := &volume.ProviderSpec{}
 	if err := httphelper.DecodeJSON(r, &pspec); err != nil {
 		httphelper.Error(w, err)
@@ -55,6 +54,7 @@ func (api *HTTPAPI) CreateProvider(w http.ResponseWriter, r *http.Request, ps ht
 		httphelper.ValidationError(w, "kind", "must not be blank")
 		return
 	}
+	var provider volume.Provider
 	provider, err := volumemanager.NewProvider(pspec)
 	if err == volume.UnknownProviderKind {
 		httphelper.ValidationError(w, "kind", fmt.Sprintf("%q is not known", pspec.Kind))
