@@ -8,8 +8,8 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/user"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"text/tabwriter"
 	"unicode"
@@ -213,11 +213,8 @@ func readConfig() (err error) {
 }
 
 func homedir() string {
-	home := os.Getenv("HOME")
-	if home == "" && runtime.GOOS == "windows" {
-		return os.Getenv("%APPDATA%")
-	}
-	return home
+	user, _ := user.Current()
+	return user.HomeDir
 }
 
 var ErrNoClusters = errors.New("no clusters configured")
