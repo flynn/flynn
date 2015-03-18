@@ -395,8 +395,6 @@ func (m *methodType) NumCalls() (n uint) {
 	return n
 }
 
-var nilRes = []reflect.Value{reflect.Zero(typeOfError)}
-
 type call struct {
 	server  *Server
 	sending *sync.Mutex
