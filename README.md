@@ -90,13 +90,12 @@ development. Pull requests that do not address these priorities will not be
 accepted until Flynn is production ready.
 
 Please familiarize yourself with the [Contribution
-Guidelines](https://flynn.io/docs/contributing) and [Project
-Roadmap](https://flynn.io/docs/roadmap) before contributing.
+Guidelines](https://flynn.io/docs/contributing) before contributing.
 
 There are many ways to help Flynn besides contributing code:
 
  - Find bugs and file issues.
- - Improve the [documentation](/website) and website.
+ - Improve the [documentation](https://flynn.io/docs) and website.
 
 Learn more at [flynn.io](https://flynn.io).
 
