@@ -7,6 +7,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/router/proxy"
@@ -152,6 +153,8 @@ func (l *TCPListener) runSync(ctx context.Context, errc chan error) {
 			return
 		}
 		log.Printf("router: tcp sync error: %s", err)
+
+		time.Sleep(2 * time.Second)
 
 		l.doSync(ctx, errc)
 
