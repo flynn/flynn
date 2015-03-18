@@ -242,8 +242,6 @@ func getCluster() (*cfg.Cluster, error) {
 	return nil, fmt.Errorf("unknown cluster %q", flagCluster)
 }
 
-var appName string
-
 func app() (string, error) {
 	if flagApp != "" {
 		return flagApp, nil
