@@ -263,7 +263,6 @@ func streamDeploymentEvents(ctx context.Context, deploymentID string, w http.Res
 			ch <- e
 		}
 	}
-	return
 }
 
 func (r *DeploymentRepo) listEvents(deploymentID string, sinceID int64) ([]*ct.DeploymentEvent, error) {
