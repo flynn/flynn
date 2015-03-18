@@ -20,7 +20,7 @@ type PostgresInfo struct {
 type Replica struct {
 	ID             string    `json:"id"`
 	Addr           string    `json:"addr"`
-	Start          time.Time `json:'start"`
+	Start          time.Time `json:"start"`
 	State          string    `json:"state"`
 	Sync           bool      `json:"sync"`
 	SentLocation   string    `json:"sent_location"`
