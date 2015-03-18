@@ -124,6 +124,8 @@ func (s *HTTPListener) runSync(ctx context.Context, errc chan error) {
 		}
 		log.Printf("router: sync error: %s", err)
 
+		time.Sleep(2 * time.Second)
+
 		s.doSync(ctx, errc)
 
 		err = <-errc
