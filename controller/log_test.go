@@ -223,7 +223,7 @@ func (s *S) TestGetAppLogFollow(c *C) {
 
 	select {
 	case msg := <-msgc:
-		c.Fatalf("unexpected message received:", msg)
+		c.Fatal("unexpected message received: ", msg)
 	default:
 	}
 
