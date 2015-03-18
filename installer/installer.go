@@ -203,6 +203,10 @@ func (s *Stack) RunAWS() error {
 				s.SendError(err)
 			}
 		}
+
+		if err := s.configureCLI(); err != nil {
+			s.SendEvent(fmt.Sprintf("WARNING: Failed to configure CLI: %s", err))
+		}
 	}()
 	return nil
 }
@@ -784,6 +788,22 @@ func (s *Stack) bootstrap() error {
 		return err
 	}
 
+	return nil
+}
+
+func (s *Stack) configureCLI() error {
+	config, err := cfg.ReadFile(cfg.DefaultPath())
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := config.Add(s.ClusterConfig(), true); err != nil {
+		return err
+	}
+	config.SetDefault(s.StackName)
+	if err := config.SaveTo(cfg.DefaultPath()); err != nil {
+		return err
+	}
+	s.SendEvent("CLI configured locally")
 	return nil
 }
 

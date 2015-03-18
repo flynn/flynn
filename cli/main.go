@@ -8,8 +8,7 @@ import (
 	"io"
 	"log"
 	"os"
-	"path/filepath"
-	"runtime"
+	"os/user"
 	"strings"
 	"text/tabwriter"
 	"unicode"
@@ -194,11 +193,7 @@ var config *cfg.Config
 var clusterConf *cfg.Cluster
 
 func configPath() string {
-	p := os.Getenv("FLYNNRC")
-	if p == "" {
-		p = filepath.Join(homedir(), ".flynnrc")
-	}
-	return p
+	return cfg.DefaultPath()
 }
 
 func readConfig() (err error) {
@@ -213,11 +208,8 @@ func readConfig() (err error) {
 }
 
 func homedir() string {
-	home := os.Getenv("HOME")
-	if home == "" && runtime.GOOS == "windows" {
-		return os.Getenv("%APPDATA%")
-	}
-	return home
+	user, _ := user.Current()
+	return user.HomeDir
 }
 
 var ErrNoClusters = errors.New("no clusters configured")
