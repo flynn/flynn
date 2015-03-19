@@ -145,8 +145,6 @@ func (h *heartbeater) run(firstErr chan<- error) {
 	}
 }
 
-var externalIP = os.Getenv("EXTERNAL_IP")
-
 func expandAddr(addr string) string {
 	if addr[0] == ':' {
 		return os.Getenv("EXTERNAL_IP") + addr

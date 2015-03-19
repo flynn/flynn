@@ -226,11 +226,11 @@ func streamDeploymentEvents(ctx context.Context, deploymentID string, w http.Res
 	defer listener.Close()
 	listener.Listen("deployment_events:" + postgres.FormatUUID(deploymentID))
 
-	var currID int64
 	events, err := repo.listEvents(deploymentID, 0)
 	if err != nil {
 		return
 	}
+	var currID int64
 	for _, e := range events {
 		currID = e.ID
 		ch <- e
@@ -263,7 +263,6 @@ func streamDeploymentEvents(ctx context.Context, deploymentID string, w http.Res
 			ch <- e
 		}
 	}
-	return
 }
 
 func (r *DeploymentRepo) listEvents(deploymentID string, sinceID int64) ([]*ct.DeploymentEvent, error) {

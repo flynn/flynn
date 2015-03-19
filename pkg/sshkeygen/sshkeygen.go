@@ -19,12 +19,11 @@ type SSHKey struct {
 func Generate() (*SSHKey, error) {
 	data := &SSHKey{}
 
-	var pemBuf bytes.Buffer
-
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, err
 	}
+	var pemBuf bytes.Buffer
 	pem.Encode(&pemBuf, &pem.Block{
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(rsaKey),

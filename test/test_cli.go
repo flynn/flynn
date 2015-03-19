@@ -473,7 +473,6 @@ func (s *CLISuite) TestLogStderr(t *c.C) {
 func (s *CLISuite) TestLogFollow(t *c.C) {
 	app := s.newCliTestApp(t)
 
-	var stderr bytes.Buffer
 	t.Assert(app.flynn("run", "-d", "sh", "-c", "sleep 2 && for i in 1 2 3 4 5; do echo \"line $i\"; done"), Succeeds)
 	app.waitFor(jobEvents{"": {"starting": 1}})
 
@@ -513,6 +512,7 @@ func (s *CLISuite) TestLogFollow(t *c.C) {
 			return "", errors.New("timed out waiting for log output")
 		}
 	}
+	var stderr bytes.Buffer
 	for i := 1; i < 6; i++ {
 		expected := fmt.Sprintf("line %d\n", i)
 		actual, err := readline()

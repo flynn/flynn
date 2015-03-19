@@ -100,13 +100,14 @@ See 'flynn-host help <command>' for more information on a specific command.
 	if cmd == "daemon" {
 		// merge in args and env from config file, if available
 		var c *config.Config
-		var err error
 		if n := os.Getenv("FLYNN_HOST_CONFIG"); n != "" {
+			var err error
 			c, err = config.Open(n)
 			if err != nil {
 				log.Fatalf("error opening config file %s: %s", n, err)
 			}
 		} else {
+			var err error
 			c, err = config.Open(configFile)
 			if err != nil && !os.IsNotExist(err) {
 				log.Fatalf("error opening config file %s: %s", configFile, err)

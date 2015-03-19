@@ -217,6 +217,7 @@ func (c *Cmd) Start() error {
 		if c.Job.Config.Stdin {
 			req.Flags |= host.AttachFlagStdin
 		}
+		var err error
 		c.attachClient, err = c.host.Attach(req, true)
 		if err != nil {
 			c.close()
@@ -235,6 +236,7 @@ func (c *Cmd) Start() error {
 
 	if c.attachClient == nil {
 		c.eventChan = make(chan *host.Event)
+		var err error
 		c.eventStream, err = c.host.StreamEvents(c.Job.ID, c.eventChan)
 		if err != nil {
 			return err

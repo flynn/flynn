@@ -7,8 +7,6 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 )
 
-const service = "ping-service"
-
 func main() {
 	defer shutdown.Exit()
 

@@ -36,12 +36,11 @@ func (a *GenSSHKeyAction) Run(s *State) error {
 	data := &SSHKey{}
 	s.StepData[a.ID] = data
 
-	var pemBuf bytes.Buffer
-
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return err
 	}
+	var pemBuf bytes.Buffer
 	pem.Encode(&pemBuf, &pem.Block{
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(rsaKey),

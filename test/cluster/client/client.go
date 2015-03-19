@@ -55,11 +55,11 @@ func (c *Client) BackoffPeriod() time.Duration {
 }
 
 func (c *Client) AddHost(ch chan *host.HostEvent, vanilla bool) (*tc.Instance, error) {
-	var instance tc.Instance
 	path := ""
 	if vanilla {
 		path = "?vanilla=true"
 	}
+	var instance tc.Instance
 	if err := c.Post(path, nil, &instance); err != nil {
 		return nil, err
 	}

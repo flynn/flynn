@@ -73,7 +73,6 @@ func Validate(thing interface{}) error {
 		return errors.New(fmt.Sprintf("schema: Unknown resource: %T %v", thing, thing))
 	}
 
-	var validateData map[string]interface{}
 	var data []byte
 	var err error
 	if data, err = json.Marshal(thing); err != nil {
@@ -81,6 +80,7 @@ func Validate(thing interface{}) error {
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
+	var validateData map[string]interface{}
 	if err := decoder.Decode(&validateData); err != nil {
 		return err
 	}

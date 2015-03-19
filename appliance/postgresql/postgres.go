@@ -837,9 +837,8 @@ type configData struct {
 	Sync     string
 	ReadOnly bool
 
-	DisableFullPageWrites bool
-	ExtWhitelist          bool
-	SHMType               string
+	ExtWhitelist bool
+	SHMType      string
 }
 
 var configTemplate = template.Must(template.New("postgresql.conf").Parse(`
@@ -852,9 +851,6 @@ max_connections = 100
 shared_buffers = 32MB
 wal_level = hot_standby
 fsync = on
-{{if .DisableFullPageWrites}}
-full_page_writes = off # Not necessary on ZFS, see http://www.postgresql.org/docs/current/static/wal-reliability.html
-{{end}}
 max_wal_senders = 15
 wal_keep_segments = 1000
 synchronous_commit = remote_write

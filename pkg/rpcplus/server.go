@@ -395,8 +395,6 @@ func (m *methodType) NumCalls() (n uint) {
 	return n
 }
 
-var nilRes = []reflect.Value{reflect.Zero(typeOfError)}
-
 type call struct {
 	server  *Server
 	sending *sync.Mutex
@@ -416,11 +414,10 @@ func (s *service) call(c call) {
 	c.mtype.numCalls++
 	c.mtype.Unlock()
 	function := c.mtype.method.Func
-	var returnValues []reflect.Value
 
 	if !c.mtype.stream {
-
 		// Invoke the method, providing a new value for the reply.
+		var returnValues []reflect.Value
 		if c.mtype.TakesContext() {
 			returnValues = function.Call([]reflect.Value{s.rcvr, c.context, c.argv, c.replyv})
 		} else {
@@ -469,6 +466,7 @@ func (s *service) call(c call) {
 	}()
 
 	// Invoke the method, providing a new value for the reply.
+	var returnValues []reflect.Value
 	if c.mtype.TakesContext() {
 		returnValues = function.Call([]reflect.Value{s.rcvr, c.context, c.argv, stream})
 	} else {

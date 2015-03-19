@@ -9,8 +9,6 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 )
 
-const service = "echo-service"
-
 func main() {
 	defer shutdown.Exit()
 
