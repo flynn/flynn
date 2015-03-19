@@ -208,7 +208,7 @@ func handleChannel(conn *ssh.ServerConn, newChan ssh.NewChannel) {
 					fail("cacheKeyHook", errors.New(errout.String()))
 					return
 				}
-				cacheKey = result.String()
+				cacheKey = strings.TrimSpace(result.String())
 			}
 
 			tempDir := *repoPath
