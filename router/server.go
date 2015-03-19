@@ -42,6 +42,11 @@ func (s *Router) Start() error {
 	return nil
 }
 
+func (s *Router) Close() {
+	s.HTTP.Close()
+	s.TCP.Close()
+}
+
 var listenFunc = reuseport.NewReusablePortListener
 
 func main() {
@@ -138,6 +143,7 @@ func main() {
 	if err := r.Start(); err != nil {
 		shutdown.Fatal(err)
 	}
+	shutdown.BeforeExit(r.Close)
 
 	listener, err := listenFunc("tcp4", *apiAddr)
 	if err != nil {
