@@ -56,6 +56,16 @@ func (b *Buffer) Add(m *rfc5424.Message) {
 	}
 }
 
+// Clone returns a shallow copy of the Buffer.
+func (b *Buffer) Clone() *Buffer {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	return &Buffer{
+		messages: b._readAll(),
+	}
+}
+
 // Capacity returns the capicity of the Buffer.
 func (b *Buffer) Capacity() int {
 	return cap(b.messages)

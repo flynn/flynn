@@ -42,6 +42,7 @@ func (s *S) TestParse(c *C) {
 					Version:   1,
 					Timestamp: ts,
 				},
+				Msg: []byte{},
 			},
 		},
 	}

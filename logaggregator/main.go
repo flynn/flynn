@@ -10,6 +10,7 @@ import (
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/logaggregator/ring"
+	"github.com/flynn/flynn/logaggregator/snapshot"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 	"github.com/flynn/flynn/pkg/syslog/rfc6587"
@@ -28,9 +29,23 @@ func main() {
 
 	logAddr := flag.String("logaddr", ":3000", "syslog input listen address")
 	apiAddr := flag.String("apiaddr", ":"+apiPort, "api listen address")
+	snapshotPath := flag.String("snapshot", "", "snapshot path")
 	flag.Parse()
 
 	a := NewAggregator(*logAddr)
+
+	if *snapshotPath != "" {
+		if err := a.ReplaySnapshot(*snapshotPath); err != nil {
+			shutdown.Fatal(err)
+		}
+
+		shutdown.BeforeExit(func() {
+			if err := a.TakeSnapshot(*snapshotPath); err != nil {
+				log15.Error("snapshot error", "err", err)
+			}
+		})
+	}
+
 	if err := a.Start(); err != nil {
 		shutdown.Fatal(err)
 	}
@@ -60,17 +75,23 @@ type Aggregator struct {
 	listener   net.Listener
 	producerwg sync.WaitGroup
 
+	msgc chan *rfc5424.Message
+
 	once     sync.Once // protects the following:
 	shutdown chan struct{}
 }
 
 // NewAggregator creates a new unstarted Aggregator that will listen on addr.
 func NewAggregator(addr string) *Aggregator {
-	return &Aggregator{
+	a := &Aggregator{
 		Addr:     addr,
 		buffers:  make(map[string]*ring.Buffer),
 		shutdown: make(chan struct{}),
+		msgc:     make(chan *rfc5424.Message),
 	}
+
+	go a.run()
+	return a
 }
 
 // Start starts the Aggregator on Addr.
@@ -97,6 +118,7 @@ func (a *Aggregator) Shutdown() {
 		close(a.shutdown)
 		a.listener.Close()
 		a.producerwg.Wait()
+		close(a.msgc)
 	})
 }
 
@@ -132,6 +154,40 @@ func (a *Aggregator) ReadLastN(
 		}
 	}()
 	return msgc
+}
+
+func (a *Aggregator) TakeSnapshot(path string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// TODO(benburkert): restructure Aggregator & ring.Buffer to avoid nested locks
+	a.bmu.Lock()
+	bufs := make([][]*rfc5424.Message, 0, len(a.buffers))
+	for _, buf := range a.buffers {
+		bufs = append(bufs, buf.Clone().ReadAll())
+	}
+	a.bmu.Unlock()
+
+	return snapshot.Take(bufs, f)
+}
+
+func (a *Aggregator) ReplaySnapshot(path string) error {
+	f, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	s := snapshot.NewScanner(f)
+	for s.Scan() {
+		a.msgc <- s.Message
+	}
+	return s.Err()
 }
 
 // readLastN reads up to N logs from the log buffer with id. If n is less than
@@ -280,8 +336,14 @@ func (a *Aggregator) readLogsFromConn(conn net.Conn) {
 		msg, err := rfc5424.Parse(msgCopy)
 		if err != nil {
 			log15.Error("rfc5424 parse error", "err", err)
-			continue
+		} else {
+			a.msgc <- msg
 		}
+	}
+}
+
+func (a *Aggregator) run() {
+	for msg := range a.msgc {
 		a.getOrInitializeBuffer(string(msg.AppName)).Add(msg)
 		if afterMessage != nil {
 			afterMessage()

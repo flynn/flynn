@@ -8,21 +8,22 @@ import (
 
 // Parse parses RFC5424 syslog messages into a Message.
 func Parse(buf []byte) (*Message, error) {
-	cursor := 0
 	msg := &Message{}
+	return msg, parse(buf, msg)
+}
+
+func parse(buf []byte, msg *Message) error {
+	cursor := 0
 	if err := parseHeader(buf, &cursor, msg); err != nil {
-		return nil, err
+		return err
 	}
 
 	if err := parseStructuredData(buf, &cursor, msg); err != nil {
-		return nil, err
+		return err
 	}
 
-	if cursor < len(buf) {
-		msg.Msg = buf[cursor:]
-	}
-
-	return msg, nil
+	msg.Msg = buf[cursor:]
+	return nil
 }
 
 // ParseError will be returned when Parse encounters an error.
