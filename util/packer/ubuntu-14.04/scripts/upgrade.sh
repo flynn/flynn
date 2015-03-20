@@ -15,6 +15,11 @@ if [[ "${PACKER_BUILDER_TYPE}" == "virtualbox-ovf" ]]; then
   apt-get remove --purge -y virtualbox-guest-dkms virtualbox-guest-utils virtualbox-guest-x11
 fi
 
+apt-get install --install-recommends linux-generic-lts-utopic \
+  -y \
+  -o Dpkg::Options::="--force-confdef" \
+  -o Dpkg::Options::="--force-confold"
+
 apt-get autoremove -y
 
 apt-get dist-upgrade -y \
