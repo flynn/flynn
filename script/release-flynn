@@ -176,6 +176,7 @@ tag_release() {
   local version=$2
 
   curl \
+    --fail \
     --header "Content-Type: application/json" \
     --header "Authorization: token ${GITHUB_TOKEN}" \
     --data "{\"ref\":\"refs/tags/v${version}\",\"sha\":\"${commit}\"}" \
