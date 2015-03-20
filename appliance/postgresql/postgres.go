@@ -418,6 +418,10 @@ func (p *Postgres) assumeStandby(upstream, downstream *discoverd.Instance) error
 			log.Error("error pulling basebackup", "err", err)
 			return err
 		}
+		// the upstream could be performing a takeover, so we need to
+		// remove the trigger file if we have synced it across so we
+		// don't also start a takeover.
+		os.Remove(p.triggerPath())
 	}
 
 	if err := p.writeConfig(configData{ReadOnly: true}); err != nil {
