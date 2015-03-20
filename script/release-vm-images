@@ -33,7 +33,6 @@ source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
 source "${ROOT}/script/lib/util.sh"
 
-UBUNTU_BOX_NAME="ubuntu-trusty-20150204.1" # used in filenames for caching, bump at the same time as UBUNTU_BOX_URL
 UBUNTU_BOX_URL="http://cloud-images.ubuntu.com/vagrant/trusty/20150316/trusty-server-cloudimg-amd64-vagrant-disk1.box"
 UBUNTU_BOX_SHA="e71422e9fa0ae1a1e7a84a8afee5c6177ee7a84e077addfd329696d4c5b9a3c9"
 UBUNTU_USEAST_AMI="ami-6089d208" # us-east-1 | trusty | 14.04 LTS | amd64 | hvm:ebs-ssd | 20150305 | hvm
@@ -97,7 +96,7 @@ main() {
   local amis="$(cat "${dir}/amis.txt" 2>/dev/null)"
   local box=$(ls "${dir}"/*_virtualbox.box 2>/dev/null)
   if [[ -z "${box}" ]] || [[ -z "${amis}" ]]; then
-    local ubuntu_box="/tmp/${UBUNTU_BOX_NAME}.box"
+    local ubuntu_box="/tmp/ubuntu-${UBUNTU_BOX_SHA}.box"
     if [[ ! -f "${ubuntu_box}" ]]; then
       info "fetching base Ubuntu box"
       curl "${UBUNTU_BOX_URL}" > "${ubuntu_box}"
@@ -109,7 +108,7 @@ main() {
       fail "base Ubuntu box has incorrect checksum"
     fi
 
-    local ova_path="/tmp/${UBUNTU_BOX_NAME}.ova"
+    local ova_path="/tmp/ubuntu-${UBUNTU_BOX_SHA}.ova"
     if [[ ! -f "${ova_path}" ]]; then
       info "converting base Ubuntu box to OVA archive"
       tar --delete Vagrantfile < "${ubuntu_box}" > "${ova_path}"
