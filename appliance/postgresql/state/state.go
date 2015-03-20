@@ -121,20 +121,30 @@ type PgConfig struct {
 	Downstream *discoverd.Instance `json:"downstream"`
 }
 
+func peersEqual(a, b *discoverd.Instance) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.ID == b.ID
+
+}
+
 func (x *PgConfig) Equal(y *PgConfig) bool {
 	if x == nil || y == nil {
 		return x == y
 	}
 
-	peersEqual := func(a, b *discoverd.Instance) bool {
-		if a == nil || b == nil {
-			return a == b
-		}
-		return a.ID == b.ID
-
-	}
-
 	return x.Role == y.Role && peersEqual(x.Upstream, y.Upstream) && peersEqual(x.Downstream, y.Downstream)
+}
+
+func (x *PgConfig) IsNewDownstream(y *PgConfig) bool {
+	if x == nil || y == nil {
+		return false
+	}
+	if !peersEqual(x.Upstream, y.Upstream) {
+		return false
+	}
+	return y.Downstream != nil && !peersEqual(x.Downstream, y.Downstream)
 }
 
 type Postgres interface {
@@ -201,10 +211,11 @@ type Peer struct {
 	updatingState *State       // new state object
 	stateIndex    uint64       // last received cluster state index
 
-	pgOnline   *bool               // nil for unknown
-	pgSetup    bool                // whether db existed at start
-	pgApplied  *PgConfig           // last configuration applied
-	pgUpstream *discoverd.Instance // upstream replication target
+	pgOnline     *bool               // nil for unknown
+	pgSetup      bool                // whether db existed at start
+	pgApplied    *PgConfig           // last configuration applied
+	pgUpstream   *discoverd.Instance // upstream replication target
+	pgDownstream *discoverd.Instance // downstream replication target
 
 	evalStateCh chan struct{}
 	applyConfCh chan struct{}
@@ -530,7 +541,9 @@ func (p *Peer) evalClusterState() {
 			p.assumeUnassigned()
 		} else {
 			upstream := p.upstream(whichAsync)
-			if upstream.ID != p.pgUpstream.ID {
+			downstream := p.downstream(whichAsync)
+			if upstream.ID != p.pgUpstream.ID ||
+				downstream != nil && (p.pgDownstream == nil || downstream.ID != p.pgDownstream.ID) {
 				p.assumeAsync(whichAsync)
 			}
 		}
@@ -543,6 +556,8 @@ func (p *Peer) evalClusterState() {
 	if p.Info().Role == RoleSync {
 		if !p.peerIsPresent(p.Info().State.Primary) {
 			p.startTakeover("primary gone", p.Info().State.InitWAL)
+		} else if len(p.Info().State.Async) > 0 && (p.pgDownstream == nil || p.pgDownstream.ID != p.Info().State.Async[0].ID) {
+			p.assumeSync()
 		}
 		return
 	}
@@ -662,6 +677,7 @@ func (p *Peer) assumeUnassigned() {
 	p.log.Info("assuming unassigned role", "role", "unassigned", "fn", "assumeUnassigned")
 	p.setRole(RoleUnassigned)
 	p.pgUpstream = nil
+	p.pgDownstream = nil
 	p.triggerApplyConfig()
 }
 
@@ -669,6 +685,7 @@ func (p *Peer) assumeDeposed() {
 	p.log.Info("assuming deposed role", "role", "deposed", "fn", "assumeDeposed")
 	p.setRole(RoleDeposed)
 	p.pgUpstream = nil
+	p.pgDownstream = nil
 	p.triggerApplyConfig()
 }
 
@@ -676,6 +693,7 @@ func (p *Peer) assumePrimary() {
 	p.log.Info("assuming primary role", "role", "primary", "fn", "assumePrimary")
 	p.setRole(RolePrimary)
 	p.pgUpstream = nil
+	p.pgDownstream = p.Info().State.Sync
 
 	// It simplifies things to say that evalClusterState() only deals with one
 	// change at a time. Now that we've handled the change to become primary,
@@ -702,6 +720,9 @@ func (p *Peer) assumeSync() {
 
 	p.setRole(RoleSync)
 	p.pgUpstream = p.Info().State.Primary
+	if len(p.Info().State.Async) > 0 {
+		p.pgDownstream = p.Info().State.Async[0]
+	}
 	// See assumePrimary()
 	p.evalClusterState()
 	p.triggerApplyConfig()
@@ -715,6 +736,7 @@ func (p *Peer) assumeAsync(i int) {
 
 	p.setRole(RoleAsync)
 	p.pgUpstream = p.upstream(i)
+	p.pgDownstream = p.downstream(i)
 
 	// See assumePrimary(). We don't need to check the cluster state here
 	// because there's never more than one thing to do when becoming the async
@@ -1014,10 +1036,8 @@ func (p *Peer) pgApplyConfig() (err error) {
 func (p *Peer) pgConfig() *PgConfig {
 	role := p.Info().Role
 	switch role {
-	case RolePrimary:
-		return &PgConfig{Role: role, Downstream: p.Info().State.Sync}
-	case RoleSync, RoleAsync:
-		return &PgConfig{Role: role, Upstream: p.pgUpstream}
+	case RolePrimary, RoleSync, RoleAsync:
+		return &PgConfig{Role: role, Upstream: p.pgUpstream, Downstream: p.pgDownstream}
 	case RoleUnassigned, RoleDeposed:
 		return &PgConfig{Role: RoleNone}
 	default:
@@ -1041,6 +1061,15 @@ func (p *Peer) upstream(whichAsync int) *discoverd.Instance {
 		return p.Info().State.Sync
 	}
 	return p.Info().State.Async[whichAsync-1]
+}
+
+// Return the downstream peer for a given one of the async peers
+func (p *Peer) downstream(whichAsync int) *discoverd.Instance {
+	async := p.Info().State.Async
+	if whichAsync == len(async)-1 {
+		return nil
+	}
+	return async[whichAsync+1]
 }
 
 // Returns true if the given other peer appears to be present in the most

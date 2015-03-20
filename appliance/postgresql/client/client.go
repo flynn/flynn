@@ -1,20 +1,23 @@
 package pgmanager
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"time"
 
 	"github.com/flynn/flynn/appliance/postgresql/state"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/httpclient"
 )
 
 type PostgresInfo struct {
-	Config   *state.PgConfig `json:"config"`
-	Running  bool            `json:"running"`
-	XLog     string          `json:"xlog,omitempty"`
-	Replicas []*Replica      `json:"replicas,omitempty"`
+	Config           *state.PgConfig     `json:"config"`
+	Running          bool                `json:"running"`
+	SyncedDownstream *discoverd.Instance `json:"synced_downstream"`
+	XLog             string              `json:"xlog,omitempty"`
+	Replicas         []*Replica          `json:"replicas,omitempty"`
 }
 
 type Replica struct {
@@ -60,4 +63,20 @@ func (c *Client) Status() (*Status, error) {
 
 func (c *Client) Stop() error {
 	return c.c.Post("/stop", nil, nil)
+}
+
+func (c *Client) WaitForReplSync(downstream *discoverd.Instance, timeout time.Duration) error {
+	start := time.Now()
+	for {
+		status, err := c.Status()
+		if err != nil {
+			return err
+		} else if status.Postgres.SyncedDownstream != nil && status.Postgres.SyncedDownstream.ID == downstream.ID {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+		if time.Now().Sub(start) > timeout {
+			return errors.New("timed out waiting for replication sync")
+		}
+	}
 }

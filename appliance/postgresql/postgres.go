@@ -46,9 +46,10 @@ type Postgres struct {
 
 	events chan state.PostgresEvent
 
-	configVal     atomic.Value // *state.PgConfig
-	runningVal    atomic.Value // bool
-	configApplied bool
+	configVal           atomic.Value // *state.PgConfig
+	runningVal          atomic.Value // bool
+	syncedDownstreamVal atomic.Value // *discoverd.Instance
+	configApplied       bool
 
 	// config options
 	id           string
@@ -71,7 +72,7 @@ type Postgres struct {
 	// daemonExit is closed when the daemon exits
 	daemonExit chan struct{}
 
-	// cancelSyncWait cancels the goroutine that is waiting for the sync to
+	// cancelSyncWait cancels the goroutine that is waiting for the downstream to
 	// catch up, if running
 	cancelSyncWait func()
 
@@ -100,6 +101,7 @@ func NewPostgres(c Config) state.Postgres {
 	}
 	p.setRunning(false)
 	p.setConfig(nil)
+	p.setSyncedDownstream(nil)
 	if p.log == nil {
 		p.log = log15.New("app", "postgres", "id", p.id)
 	}
@@ -141,10 +143,19 @@ func (p *Postgres) setConfig(config *state.PgConfig) {
 	p.configVal.Store(config)
 }
 
+func (p *Postgres) syncedDownstream() *discoverd.Instance {
+	return p.syncedDownstreamVal.Load().(*discoverd.Instance)
+}
+
+func (p *Postgres) setSyncedDownstream(inst *discoverd.Instance) {
+	p.syncedDownstreamVal.Store(inst)
+}
+
 func (p *Postgres) Info() (*pgmanager.PostgresInfo, error) {
 	res := &pgmanager.PostgresInfo{
-		Config:  p.config(),
-		Running: p.running(),
+		Config:           p.config(),
+		Running:          p.running(),
+		SyncedDownstream: p.syncedDownstream(),
 	}
 	xlog, err := p.XLogPosition()
 	res.XLog = string(xlog)
@@ -231,6 +242,8 @@ func (p *Postgres) Ready() <-chan state.PostgresEvent {
 }
 
 func (p *Postgres) reconfigure(config *state.PgConfig) (err error) {
+	log := p.log.New("fn", "reconfigure")
+
 	defer func() {
 		if err == nil {
 			p.setConfig(config)
@@ -239,26 +252,37 @@ func (p *Postgres) reconfigure(config *state.PgConfig) (err error) {
 	}()
 
 	if config != nil && config.Role == state.RoleNone {
+		log.Info("nothing to do", "reason", "null role")
 		return nil
 	}
 
 	// If we've already applied the same postgres config, we don't need to do anything
 	if p.configApplied && config != nil && p.config() != nil && config.Equal(p.config()) {
+		log.Info("nothing to do", "reason", "config already applied")
 		return nil
 	}
 
 	// If we're already running and it's just a change from async to sync with the same node, we don't need to restart
 	if p.configApplied && p.running() && p.config() != nil && config != nil &&
 		p.config().Role == state.RoleAsync && config.Role == state.RoleSync && config.Upstream.ID == p.config().Upstream.ID {
+		log.Info("nothing to do", "reason", "becoming sync with same upstream")
 		return nil
 	}
 
-	// Make sure that we don't keep waiting for a sync to come up while reconfiguring
+	// Make sure that we don't keep waiting for replication sync while reconfiguring
 	p.cancelSyncWait()
+	p.setSyncedDownstream(nil)
 
 	// If we're already running and this is only a sync change, we just need to update the config.
 	if p.running() && p.config() != nil && config != nil && p.config().Role == state.RolePrimary && config.Role == state.RolePrimary {
 		return p.updateSync(config.Downstream)
+	}
+
+	// If we're already running and this is only a downstream change, just wait for the new downstream to catch up
+	if p.running() && p.config().IsNewDownstream(config) {
+		log.Info("downstream changed", "to", config.Downstream.Addr)
+		p.waitForSync(config.Downstream, false)
+		return
 	}
 
 	if config == nil {
@@ -269,7 +293,7 @@ func (p *Postgres) reconfigure(config *state.PgConfig) (err error) {
 		return p.assumePrimary(config.Downstream)
 	}
 
-	return p.assumeStandby(config.Upstream)
+	return p.assumeStandby(config.Upstream, config.Downstream)
 }
 
 func (p *Postgres) assumePrimary(downstream *discoverd.Instance) (err error) {
@@ -286,7 +310,7 @@ func (p *Postgres) assumePrimary(downstream *discoverd.Instance) (err error) {
 			return err
 		}
 
-		p.waitForSync(downstream)
+		p.waitForSync(downstream, true)
 
 		return nil
 	}
@@ -349,13 +373,13 @@ func (p *Postgres) assumePrimary(downstream *discoverd.Instance) (err error) {
 	}
 
 	if downstream != nil {
-		p.waitForSync(downstream)
+		p.waitForSync(downstream, true)
 	}
 
 	return nil
 }
 
-func (p *Postgres) assumeStandby(upstream *discoverd.Instance) error {
+func (p *Postgres) assumeStandby(upstream, downstream *discoverd.Instance) error {
 	log := p.log.New("fn", "assumeStandby", "upstream", upstream.Addr)
 	log.Info("starting up as standby")
 
@@ -405,7 +429,15 @@ func (p *Postgres) assumeStandby(upstream *discoverd.Instance) error {
 		return err
 	}
 
-	return p.start()
+	if err := p.start(); err != nil {
+		return err
+	}
+
+	if downstream != nil {
+		p.waitForSync(downstream, false)
+	}
+
+	return nil
 }
 
 func (p *Postgres) waitForUpstream(upstream *discoverd.Instance) error {
@@ -449,7 +481,7 @@ func (p *Postgres) updateSync(downstream *discoverd.Instance) error {
 		return err
 	}
 
-	p.waitForSync(downstream)
+	p.waitForSync(downstream, true)
 
 	return nil
 }
@@ -564,7 +596,7 @@ func (p *Postgres) sighup() error {
 	return p.daemon.Process.Signal(syscall.SIGHUP)
 }
 
-func (p *Postgres) waitForSync(inst *discoverd.Instance) {
+func (p *Postgres) waitForSync(inst *discoverd.Instance, enableWrites bool) {
 	stopCh := make(chan struct{})
 	doneCh := make(chan struct{})
 
@@ -607,7 +639,7 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance) {
 			}
 		}
 
-		log.Info("waiting for sync replication to catch up")
+		log.Info("waiting for downstream replication to catch up")
 
 		for {
 			if shouldStop() {
@@ -641,10 +673,11 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance) {
 			}
 
 			if sent == flushed {
-				log.Info("sync caught up")
+				log.Info("downstream caught up")
+				p.setSyncedDownstream(inst)
 				break
 			} else if elapsedTime > p.replTimeout {
-				log.Error("error checking replication status", "err", "sync unable to make forward progress")
+				log.Error("error checking replication status", "err", "downstream unable to make forward progress")
 				return
 			} else {
 				log.Debug("continuing replication check")
@@ -655,15 +688,17 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance) {
 			}
 		}
 
-		// sync caught up, enable write transactions
-		if err := p.writeConfig(configData{Sync: inst.ID}); err != nil {
-			log.Error("error writing postgres.conf", "err", err)
-			return
-		}
+		if enableWrites {
+			// sync caught up, enable write transactions
+			if err := p.writeConfig(configData{Sync: inst.ID}); err != nil {
+				log.Error("error writing postgres.conf", "err", err)
+				return
+			}
 
-		if err := p.sighup(); err != nil {
-			log.Error("error calling sighup")
-			return
+			if err := p.sighup(); err != nil {
+				log.Error("error calling sighup", "err", err)
+				return
+			}
 		}
 	}()
 }
