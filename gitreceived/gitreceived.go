@@ -208,7 +208,7 @@ func handleChannel(conn *ssh.ServerConn, newChan ssh.NewChannel) {
 					fail("cacheKeyHook", errors.New(errout.String()))
 					return
 				}
-				cacheKey = result.String()
+				cacheKey = strings.TrimSpace(result.String())
 			}
 
 			tempDir := *repoPath
@@ -336,10 +336,14 @@ func exitStatus(err error) (exitStatusMsg, error) {
 
 var cacheMtx sync.Mutex
 
-func restoreBlobstoreCache(tempDir, path string) error {
-	cachePath := tempDir + "/" + path
+func blobstoreCacheURL(cacheKey string) string {
+	return fmt.Sprintf("http://blobstore.discoverd/repos/%s.tar", cacheKey)
+}
 
-	res, err := http.Get("http://blobstore.discoverd/cache/" + path + ".tar")
+func restoreBlobstoreCache(tempDir, path string) error {
+	cachePath := filepath.Join(tempDir, path)
+
+	res, err := http.Get(blobstoreCacheURL(path))
 	if err != nil {
 		return err
 	}
@@ -357,8 +361,7 @@ func ensureCacheRepo(tempDir, path string) error {
 	cacheMtx.Lock()
 	defer cacheMtx.Unlock()
 
-	cachePath := tempDir + "/" + path
-
+	cachePath := filepath.Join(tempDir, path)
 	if _, err := os.Stat(cachePath); os.IsNotExist(err) {
 		os.MkdirAll(cachePath, 0755)
 		cmd := exec.Command("git", "init", "--bare")
@@ -367,13 +370,13 @@ func ensureCacheRepo(tempDir, path string) error {
 		if err != nil {
 			return err
 		}
-		return ioutil.WriteFile(cachePath+"/hooks/pre-receive", prereceiveHook, 0755)
+		return ioutil.WriteFile(filepath.Join(cachePath, "hooks", "pre-receive"), prereceiveHook, 0755)
 	}
 	return nil
 }
 
 func uploadCache(tempDir, path string) error {
-	cachePath := tempDir + "/" + path
+	cachePath := filepath.Join(tempDir, path)
 
 	r, w := io.Pipe()
 	tw := tar.NewWriter(w)
@@ -387,7 +390,7 @@ func uploadCache(tempDir, path string) error {
 	}()
 
 	// upload the tarball to the blobstore
-	req, err := http.NewRequest("PUT", "http://blobstore.discoverd/cache/"+path+".tar", r)
+	req, err := http.NewRequest("PUT", blobstoreCacheURL(path), r)
 	client := http.DefaultClient
 	resp, err := client.Do(req)
 	if err != nil {
