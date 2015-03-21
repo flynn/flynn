@@ -34,7 +34,7 @@ func (_ *SnapshotTestSuite) TestRoundtrip(c *C) {
 	r, w := io.Pipe()
 	errc := make(chan error)
 	go func() {
-		err := Take([][]*rfc5424.Message{want}, w)
+		err := WriteTo([][]*rfc5424.Message{want}, w)
 		w.Close()
 		errc <- err
 
