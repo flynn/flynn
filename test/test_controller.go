@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,7 +12,9 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/jsonschema"
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/pkg/exec"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 type ControllerSuite struct {
@@ -150,4 +153,40 @@ func (s *ControllerSuite) TestExampleOutput(t *c.C) {
 		}
 		t.Assert(errs, c.HasLen, 0, c.Commentf("%s validation errors: %v\ndata: %v\n", cacheKey, errs, string(jsonData)))
 	}
+}
+
+func (s *ControllerSuite) TestKeyRotation(t *c.C) {
+	cc := s.clusterConf(t)
+	oldKey := cc.Key
+	newKey := random.Hex(16)
+
+	// allow auth to API with old and new keys
+	set := flynn(t, "/", "-a", "controller", "env", "set", "-t", "web", fmt.Sprintf("AUTH_KEY=%s,%s", newKey, oldKey))
+	t.Assert(set, Succeeds)
+
+	// reconfigure components to use new key
+	for _, app := range []string{"gitreceive", "taffy", "dashboard"} {
+		set := flynn(t, "/", "-a", app, "env", "set", "CONTROLLER_KEY="+newKey)
+		t.Assert(set, Succeeds)
+	}
+
+	// write a new flynnrc
+	cc.Key = newKey
+	conf := &config.Config{}
+	err := conf.Add(cc, true)
+	t.Assert(err, c.IsNil)
+	err = conf.SaveTo(flynnrc)
+	t.Assert(err, c.IsNil)
+
+	// clear any cached configs
+	s.Helper.config = nil
+	s.Helper.controller = nil
+
+	// use new key for deployer+controller
+	set = flynn(t, "/", "-a", "controller", "env", "set", "AUTH_KEY="+newKey)
+	t.Assert(set, Succeeds)
+
+	// remove old key from API
+	set = flynn(t, "/", "-a", "controller", "env", "unset", "-t", "web", "AUTH_KEY")
+	t.Assert(set, Succeeds)
 }
