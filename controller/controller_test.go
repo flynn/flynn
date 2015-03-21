@@ -75,7 +75,7 @@ func (s *S) SetUpSuite(c *C) {
 		lc:      s.flac,
 		rc:      newFakeRouter(),
 		pgxpool: pgxpool,
-		key:     authKey,
+		keys:    []string{authKey},
 	}
 	handler := appHandler(s.hc)
 	s.srv = httptest.NewServer(handler)
