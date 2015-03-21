@@ -37,7 +37,7 @@ var typesPattern = regexp.MustCompile("types.* -> (.+)\n")
 const blobstoreURL = "http://blobstore.discoverd"
 
 func main() {
-	client, err := controller.NewClient("", os.Getenv("CONTROLLER_AUTH_KEY"))
+	client, err := controller.NewClient("", os.Getenv("CONTROLLER_KEY"))
 	if err != nil {
 		log.Fatalln("Unable to connect to controller:", err)
 	}
