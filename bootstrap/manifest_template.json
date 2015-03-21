@@ -298,7 +298,7 @@
     "release": {
       "processes": {
         "app": {
-          "cmd": ["-logaddr", ":514", "-apiaddr", ":80", "-snapshot", "/data/logaggregator.dat"],
+          "cmd": ["-logaddr", ":514", "-repaddr", ":1514", "-apiaddr", ":80", "-snapshot", "/data/logaggregator.dat"],
           "data": true,
           "ports": [
             {"port": 80, "proto": "tcp"},
