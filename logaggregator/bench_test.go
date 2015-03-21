@@ -6,14 +6,18 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 )
 
-func (*LogAggregatorTestSuite) BenchmarkReplaySnapshot(c *C) {
+func (s *LogAggregatorTestSuite) BenchmarkReplaySnapshot(c *C) {
 	fi, err := os.Stat("testdata/sample.dat")
 	c.Assert(err, IsNil)
 
 	c.SetBytes(fi.Size())
+	c.ResetTimer()
 	for i := 0; i < c.N; i++ {
-		a := NewAggregator("")
-		a.ReplaySnapshot("testdata/sample.dat")
+		srv := &Server{
+			Aggregator: NewAggregator(),
+		}
+
+		srv.LoadSnapshot("testdata/sample.dat")
 	}
 }
 
@@ -22,11 +26,14 @@ func (*LogAggregatorTestSuite) BenchmarkTakeSnapshot(c *C) {
 	c.Assert(err, IsNil)
 	c.SetBytes(fi.Size())
 
-	a := NewAggregator("")
-	a.ReplaySnapshot("testdata/sample.dat")
+	srv := &Server{
+		Aggregator: NewAggregator(),
+	}
+
+	srv.LoadSnapshot("testdata/sample.dat")
 
 	c.ResetTimer()
 	for i := 0; i < c.N; i++ {
-		a.TakeSnapshot("/dev/null")
+		srv.WriteSnapshot("/dev/null")
 	}
 }
