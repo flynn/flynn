@@ -71,6 +71,14 @@ func (b *Buffer) Capacity() int {
 	return cap(b.messages)
 }
 
+func (b *Buffer) Flush() {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	b.messages = make([]*rfc5424.Message, 0, DefaultBufferCapacity)
+	b.start = 0
+}
+
 // ReadAll returns a copied slice with the contents of the Buffer. It does not
 // modify the underlying buffer in any way. You are free to modify the
 // returned slice without affecting Buffer, though modifying the individual
