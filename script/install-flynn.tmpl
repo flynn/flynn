@@ -53,6 +53,7 @@ main() {
 
   info "adding zfs-native APT PPA"
   run apt-key adv --keyserver keyserver.ubuntu.com --recv E871F18B51E0147C77796AC81196BA81F6B0FC61
+  mkdir -p "/etc/apt/sources.list.d"
   echo deb http://ppa.launchpad.net/zfs-native/stable/ubuntu trusty main > /etc/apt/sources.list.d/zfs.list
   run apt-get update
 
