@@ -23,6 +23,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/gen/route53"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
 	cfg "github.com/flynn/flynn/cli/config"
+	"github.com/flynn/flynn/pkg/awsutil"
 	"github.com/flynn/flynn/pkg/etcdcluster"
 	"github.com/flynn/flynn/pkg/sshkeygen"
 	"github.com/flynn/flynn/util/release/types"
@@ -263,26 +264,48 @@ func (s *Stack) allocateDomain() error {
 	return nil
 }
 
+func (s *Stack) loadKeyPair(name string) error {
+	keypair, err := loadSSHKey(name)
+	if err != nil {
+		return err
+	}
+	fingerprint, err := awsutil.FingerprintImportedKey(keypair.PrivateKey)
+	if err != nil {
+		return err
+	}
+	res, err := s.ec2.DescribeKeyPairs(&ec2.DescribeKeyPairsRequest{
+		Filters: []ec2.Filter{
+			{
+				Name:   aws.String("fingerprint"),
+				Values: []string{fingerprint},
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if len(res.KeyPairs) == 0 {
+		return errors.New("No matching key found")
+	}
+	s.SSHKey = keypair
+	for _, p := range res.KeyPairs {
+		if *p.KeyName == name {
+			s.SSHKeyName = name
+			return nil
+		}
+	}
+	s.SSHKeyName = *res.KeyPairs[0].KeyName
+	return saveSSHKey(s.SSHKeyName, keypair)
+}
+
 func (s *Stack) createKeyPair() error {
 	keypairName := "flynn"
 	if s.SSHKeyName != "" {
 		keypairName = s.SSHKeyName
 	}
-	if keypair, err := loadSSHKey(keypairName); err == nil {
-		s.SSHKey = keypair
-		s.SSHKeyName = keypairName
-		res, err := s.ec2.DescribeKeyPairs(&ec2.DescribeKeyPairsRequest{
-			Filters: []ec2.Filter{{
-				Name:   aws.String("key-name"),
-				Values: []string{keypairName},
-			}},
-		})
-		if err == nil && len(res.KeyPairs) > 0 && *res.KeyPairs[0].KeyName == keypairName {
-			// key exists, we're good to go
-			// TODO(jvatic): verify key fingerprint
-			s.SendEvent(fmt.Sprintf("Using saved key pair (%s)", keypairName))
-			return nil
-		}
+	if err := s.loadKeyPair(keypairName); err == nil {
+		s.SendEvent(fmt.Sprintf("Using saved key pair (%s)", s.SSHKeyName))
+		return nil
 	}
 
 	s.SendEvent("Creating key pair")
