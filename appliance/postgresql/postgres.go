@@ -416,6 +416,11 @@ func (p *Postgres) assumeStandby(upstream, downstream *discoverd.Instance) error
 		))
 		if err != nil {
 			log.Error("error pulling basebackup", "err", err)
+			if files, err := ioutil.ReadDir("/data"); err == nil {
+				for _, file := range files {
+					os.RemoveAll(filepath.Join("/data", file.Name()))
+				}
+			}
 			return err
 		}
 		// the upstream could be performing a takeover, so we need to
