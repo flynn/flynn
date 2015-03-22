@@ -162,6 +162,10 @@ func (p *Postgres) Info() (*pgmanager.PostgresInfo, error) {
 	if err != nil {
 		return res, err
 	}
+	res.UserExists, err = p.userExists()
+	if err != nil {
+		return res, err
+	}
 	res.Replicas, err = p.getReplicas()
 	return res, err
 }
@@ -235,6 +239,18 @@ func (p *Postgres) XLogPosition() (xlog.Position, error) {
 	var res string
 	err := p.db.QueryRow("SELECT " + fn).Scan(&res)
 	return xlog.Position(res), err
+}
+
+func (p *Postgres) userExists() (bool, error) {
+	p.dbMtx.RLock()
+	defer p.dbMtx.RUnlock()
+
+	if !p.running() || p.db == nil {
+		return false, errors.New("postgres is not running")
+	}
+	var res pgx.NullInt32
+	err := p.db.QueryRow("SELECT 1 FROM pg_roles WHERE rolname='flynn'").Scan(&res)
+	return res.Valid, err
 }
 
 func (p *Postgres) Ready() <-chan state.PostgresEvent {
@@ -459,7 +475,7 @@ func (p *Postgres) waitForUpstream(upstream *discoverd.Instance) error {
 		status, err := client.Status()
 		if err != nil {
 			log.Error("error getting upstream status", "err", err)
-		} else if status.Postgres.Running && status.Postgres.XLog != "" {
+		} else if status.Postgres.Running && status.Postgres.XLog != "" && status.Postgres.UserExists {
 			log.Info("upstream is online")
 			return nil
 		}
