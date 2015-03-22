@@ -222,6 +222,12 @@
       "uri": "$image_repository?name=flynn/receiver&id=$image_id[receiver]"
     },
     "release": {
+      "env": {
+        "SSH_PRIVATE_KEYS": "{{ (index .StepData \"gitreceive-key\").PrivateKeys }}",
+        "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
+        "SLUGBUILDER_IMAGE_URI": "$image_repository?name=flynn/slugbuilder&id=$image_id[slugbuilder]",
+        "SLUGRUNNER_IMAGE_URI": "$image_repository?name=flynn/slugrunner&id=$image_id[slugrunner]"
+      },
       "processes": {
         "app": {
           "ports": [{
@@ -231,13 +237,7 @@
               "create": true,
               "check": {"type": "tcp"}
             }
-          }],
-          "env": {
-            "SSH_PRIVATE_KEYS": "{{ (index .StepData \"gitreceive-key\").PrivateKeys }}",
-            "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
-            "SLUGBUILDER_IMAGE_URI": "$image_repository?name=flynn/slugbuilder&id=$image_id[slugbuilder]",
-            "SLUGRUNNER_IMAGE_URI": "$image_repository?name=flynn/slugrunner&id=$image_id[slugrunner]"
-          }
+          }]
         }
       }
     },
