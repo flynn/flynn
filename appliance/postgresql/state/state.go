@@ -256,6 +256,10 @@ func (p *Peer) Run() {
 		case <-p.applyConfCh:
 			p.pgApplyConfig()
 			continue
+		// drain discoverdCh to avoid evaluating out-of-date state
+		case e := <-discoverdCh:
+			p.handleDiscoverdEvent(e)
+			continue
 		case <-p.stopCh:
 			return
 		default:
@@ -374,7 +378,7 @@ func (p *Peer) handleDiscoverdInit(e *DiscoverdEvent) {
 	p.setPeers(e.Peers)
 	p.decodeState(e)
 	if p.pgOnline != nil {
-		p.evalClusterState()
+		p.triggerEval()
 	}
 }
 
@@ -385,7 +389,7 @@ func (p *Peer) handleDiscoverdPeers(e *DiscoverdEvent) {
 		panic("received discoverd peers before init")
 	}
 	p.setPeers(e.Peers)
-	p.evalClusterState()
+	p.triggerEval()
 }
 
 func (p *Peer) handleDiscoverdState(e *DiscoverdEvent) {
@@ -395,7 +399,7 @@ func (p *Peer) handleDiscoverdState(e *DiscoverdEvent) {
 		panic("received discoverd state before init")
 	}
 	if p.decodeState(e) {
-		p.evalClusterState()
+		p.triggerEval()
 	} else {
 		log.Info("already have this state")
 	}
