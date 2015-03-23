@@ -272,8 +272,13 @@ func handleChannel(conn *ssh.ServerConn, newChan ssh.NewChannel) {
 var ErrUnauthorized = errors.New("gitreceive: user is unauthorized")
 
 func checkAuth(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-	status, err := exitStatus(exec.Command(*authChecker,
-		conn.User(), string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(key)))).Run())
+	cmd := exec.Command(*authChecker,
+		conn.User(),
+		string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(key))),
+	)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	status, err := exitStatus(cmd.Run())
 	if err != nil {
 		return nil, err
 	}

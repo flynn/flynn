@@ -10,7 +10,7 @@ import (
 func main() {
 	key := os.Args[2]
 
-	client, err := controller.NewClient("", os.Getenv("CONTROLLER_AUTH_KEY"))
+	client, err := controller.NewClient("", os.Getenv("CONTROLLER_KEY"))
 	if err != nil {
 		log.Fatalln("Unable to connect to controller:", err)
 	}

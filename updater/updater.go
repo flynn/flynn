@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"net/url"
@@ -146,18 +145,7 @@ func deployApp(client *controller.Client, app *ct.App, uri string, log log15.Log
 	skipDeploy := artifact.URI == uri
 	// deploy the gitreceive / taffy apps if builder / runner images have changed
 	switch app.Name {
-	case "gitreceive":
-		proc, ok := release.Processes["app"]
-		if !ok {
-			e := "missing app process in gitreceive release"
-			log.Error(e)
-			return errors.New(e)
-		}
-		if updateSlugURIs(proc.Env) {
-			skipDeploy = false
-		}
-		release.Processes["app"] = proc
-	case "taffy":
+	case "taffy", "gitreceive":
 		if updateSlugURIs(release.Env) {
 			skipDeploy = false
 		}

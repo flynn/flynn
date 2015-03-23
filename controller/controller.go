@@ -101,7 +101,7 @@ func main() {
 		lc:      lc,
 		rc:      rc,
 		pgxpool: pgxpool,
-		key:     os.Getenv("AUTH_KEY"),
+		keys:    strings.Split(os.Getenv("AUTH_KEY"), ","),
 	})
 	shutdown.Fatal(http.ListenAndServe(addr, handler))
 }
@@ -112,7 +112,7 @@ type handlerConfig struct {
 	lc      logaggc.Client
 	rc      routerc.Client
 	pgxpool *pgx.ConnPool
-	key     string
+	keys    []string
 }
 
 // NOTE: this is temporary until httphelper supports custom errors
@@ -200,10 +200,10 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.DELETE("/apps/:apps_id/routes/:routes_type/:routes_id", httphelper.WrapHandler(api.appLookup(api.DeleteRoute)))
 
 	return httphelper.ContextInjector("controller",
-		httphelper.NewRequestLogger(muxHandler(httpRouter, c.key)))
+		httphelper.NewRequestLogger(muxHandler(httpRouter, c.keys)))
 }
 
-func muxHandler(main http.Handler, authKey string) http.Handler {
+func muxHandler(main http.Handler, authKeys []string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		httphelper.CORSAllowAllHandler(w, r)
 		if r.URL.Path == "/ping" || r.Method == "OPTIONS" {
@@ -214,7 +214,14 @@ func muxHandler(main http.Handler, authKey string) http.Handler {
 		if password == "" && strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
 			password = r.URL.Query().Get("key")
 		}
-		if len(password) != len(authKey) || subtle.ConstantTimeCompare([]byte(password), []byte(authKey)) != 1 {
+		var authed bool
+		for _, k := range authKeys {
+			if len(password) == len(k) && subtle.ConstantTimeCompare([]byte(password), []byte(k)) == 1 {
+				authed = true
+				break
+			}
+		}
+		if !authed {
 			w.WriteHeader(401)
 			return
 		}

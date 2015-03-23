@@ -187,7 +187,7 @@ func (e *generator) createAppError() {
 func (e *generator) getInitialAppRelease() {
 	appRelease, err := e.client.GetAppRelease("gitreceive")
 	if err == nil {
-		e.resourceIds["SLUGRUNNER_IMAGE_URI"] = appRelease.Processes["app"].Env["SLUGRUNNER_IMAGE_URI"]
+		e.resourceIds["SLUGRUNNER_IMAGE_URI"] = appRelease.Env["SLUGRUNNER_IMAGE_URI"]
 	}
 }
 
