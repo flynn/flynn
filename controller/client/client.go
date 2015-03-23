@@ -92,20 +92,12 @@ func NewClientWithConfig(uri, key string, config Config) (*Client, error) {
 	if config.Pin == nil {
 		return NewClient(uri, key)
 	}
-	u, err := url.Parse(uri)
-	if err != nil {
-		return nil, err
-	}
-	if _, port, _ := net.SplitHostPort(u.Host); port == "" {
-		u.Host += ":443"
-	}
-	u.Scheme = "http"
 	d := &pinned.Config{Pin: config.Pin}
 	if config.Domain != "" {
 		d.Config = &tls.Config{ServerName: config.Domain}
 	}
-	httpClient := &http.Client{Transport: &http.Transport{Dial: d.Dial}}
-	c := newClient(key, u.String(), httpClient)
+	httpClient := &http.Client{Transport: &http.Transport{DialTLS: d.Dial}}
+	c := newClient(key, uri, httpClient)
 	c.Host = config.Domain
 	c.HijackDial = d.Dial
 	return c, nil
