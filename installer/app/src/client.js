@@ -68,6 +68,12 @@ var Client = {
 		}).then(handleResponse).catch(handleResponse);
 	},
 
+	abortInstall: function (installID) {
+		return this.performRequest('DELETE', {
+			url: '/install/'+ installID
+		});
+	},
+
 	sendPromptResponse: function (promptID, data) {
 		this.performRequest('POST', {
 			url: Config.endpoints.prompt.replace(':id', promptID),
@@ -140,6 +146,13 @@ var Client = {
 					Dispatcher.dispatch({
 						name: 'CA_CERT',
 						cert: data.description
+					});
+				break;
+
+				case 'error':
+					Dispatcher.dispatch({
+						name: 'INSTALL_ERROR',
+						message: data.description
 					});
 				break;
 

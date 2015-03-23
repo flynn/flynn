@@ -29,6 +29,10 @@ var MainRouter = Router.createClass({
 	handleEvent: function (event) {
 		var installID;
 		switch (event.name) {
+			case 'INSTALL_ABORT':
+				this.history.navigate('/', { replace: true });
+			break;
+
 			case 'INSTALL_EXISTS':
 				installID = this.history.pathParams[0].install_id;
 				if ( !event.exists && (!event.id || event.id === installID) ) {
