@@ -252,10 +252,6 @@ func (p *Peer) Run() {
 	postgresCh := p.postgres.Ready()
 	for {
 		select {
-		// try to run any pending configuration first
-		case <-p.applyConfCh:
-			p.pgApplyConfig()
-			continue
 		// drain discoverdCh to avoid evaluating out-of-date state
 		case e := <-discoverdCh:
 			p.handleDiscoverdEvent(e)
