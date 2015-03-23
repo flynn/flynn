@@ -81,7 +81,6 @@ type httpInstaller struct {
 	subscriptions []*httpInstallerSubscription
 	eventsMtx     sync.Mutex
 	events        []*httpEvent
-	err           error
 	done          bool
 	api           *httpAPI
 }
@@ -90,7 +89,6 @@ type httpInstallerSubscription struct {
 	EventIndex int
 	EventChan  chan *httpEvent
 	DoneChan   chan struct{}
-	ErrChan    chan error
 	done       bool
 }
 
@@ -105,13 +103,6 @@ func (sub *httpInstallerSubscription) sendEvents(s *httpInstaller) {
 		sub.EventIndex = index
 		sub.EventChan <- event
 	}
-}
-
-func (sub *httpInstallerSubscription) handleError(err error) {
-	if sub.done {
-		return
-	}
-	sub.ErrChan <- err
 }
 
 func (sub *httpInstallerSubscription) handleDone() {
@@ -184,7 +175,7 @@ func (s *httpInstaller) PromptInput(msg string) string {
 	return res.Input
 }
 
-func (s *httpInstaller) Subscribe(eventChan chan *httpEvent) (<-chan struct{}, <-chan error) {
+func (s *httpInstaller) Subscribe(eventChan chan *httpEvent) <-chan struct{} {
 	s.subscribeMtx.Lock()
 	defer s.subscribeMtx.Unlock()
 
@@ -192,14 +183,10 @@ func (s *httpInstaller) Subscribe(eventChan chan *httpEvent) (<-chan struct{}, <
 		EventIndex: -1,
 		EventChan:  eventChan,
 		DoneChan:   make(chan struct{}),
-		ErrChan:    make(chan error),
 	}
 
 	go func() {
 		subscription.sendEvents(s)
-		if s.err != nil {
-			subscription.handleError(s.err)
-		}
 		if s.done {
 			subscription.handleDone()
 		}
@@ -207,7 +194,7 @@ func (s *httpInstaller) Subscribe(eventChan chan *httpEvent) (<-chan struct{}, <
 
 	s.subscriptions = append(s.subscriptions, subscription)
 
-	return subscription.DoneChan, subscription.ErrChan
+	return subscription.DoneChan
 }
 
 func (s *httpInstaller) sendEvent(event *httpEvent) {
@@ -221,9 +208,10 @@ func (s *httpInstaller) sendEvent(event *httpEvent) {
 }
 
 func (s *httpInstaller) handleError(err error) {
-	for _, sub := range s.subscriptions {
-		go sub.handleError(err)
-	}
+	s.sendEvent(&httpEvent{
+		Type:        "error",
+		Description: err.Error(),
+	})
 }
 
 func (s *httpInstaller) handleDone() {
@@ -297,6 +285,7 @@ func ServeHTTP() error {
 	httpRouter.GET("/", api.ServeTemplate)
 	httpRouter.GET("/install", api.ServeTemplate)
 	httpRouter.GET("/install/:id", api.ServeTemplate)
+	httpRouter.DELETE("/install/:id", api.AbortInstallHandler)
 	httpRouter.POST("/install", api.InstallHandler)
 	httpRouter.GET("/events/:id", api.EventsHandler)
 	httpRouter.POST("/prompt/:id", api.PromptHandler)
@@ -418,6 +407,20 @@ func (api *httpAPI) InstallHandler(w http.ResponseWriter, req *http.Request, par
 	httphelper.JSON(w, 200, s)
 }
 
+func (api *httpAPI) AbortInstallHandler(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	api.InstallerStackMtx.Lock()
+	defer api.InstallerStackMtx.Unlock()
+	id := params.ByName("id")
+	s := api.InstallerStacks[id]
+	if s == nil {
+		w.WriteHeader(404)
+		return
+	}
+	// TODO(jvatic): Cleanup stack
+	delete(api.InstallerStacks, params.ByName("id"))
+	w.WriteHeader(200)
+}
+
 func (api *httpAPI) EventsHandler(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
 	api.InstallerStackMtx.Lock()
 	s := api.InstallerStacks[params.ByName("id")]
@@ -428,7 +431,7 @@ func (api *httpAPI) EventsHandler(w http.ResponseWriter, req *http.Request, para
 	}
 
 	eventChan := make(chan *httpEvent)
-	doneChan, errChan := s.Subscribe(eventChan)
+	doneChan := s.Subscribe(eventChan)
 
 	stream := sse.NewStream(w, eventChan, s.logger)
 	stream.Serve()
@@ -438,9 +441,6 @@ func (api *httpAPI) EventsHandler(w http.ResponseWriter, req *http.Request, para
 	go func() {
 		for {
 			select {
-			case err := <-errChan:
-				s.logger.Info(err.Error())
-				stream.Error(err)
 			case <-doneChan:
 				stream.Close()
 				return

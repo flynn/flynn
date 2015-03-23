@@ -31,12 +31,21 @@ export default createClass({
 			currentStep: 'configure',
 			completedSteps: [],
 
+			failed: false,
+			errorMessage: null,
+
 			prompt: null
 		};
 	},
 
 	handleEvent: function (event) {
 		switch (event.name) {
+			case 'INSTALL_ABORT':
+				Client.closeEventStream();
+				Client.abortInstall(this.state.installID);
+				this.setState(this.getInitialState());
+			break;
+
 			case 'LOAD_INSTALL':
 				if (this.state.installID !== event.id) {
 					this.setState({
@@ -131,6 +140,13 @@ export default createClass({
 					});
 					Client.checkCert(this.state.domain);
 				}
+			break;
+
+			case 'INSTALL_ERROR':
+				this.setState({
+					failed: true,
+					errorMessage: event.message
+				});
 			break;
 		}
 	},

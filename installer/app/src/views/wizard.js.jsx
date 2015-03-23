@@ -26,6 +26,18 @@ var Wizard = React.createClass({
 					<Dashboard state={state} />
 				) : null}
 
+				{state.failed ? (
+					<Modal visible={true} closable={false}>
+						<header>
+							<h2>Install failed</h2>
+						</header>
+
+						<p>{state.errorMessage}</p>
+
+						<button style={GreenBtnCSS} type="text" onClick={this.__handleAbortBtnClick}>Start over</button>
+					</Modal>
+				) : null}
+
 				{state.prompt ? (
 					<Modal visible={true} closable={false}>
 						<header>
@@ -59,6 +71,13 @@ var Wizard = React.createClass({
 
 	componentWillUnmount: function () {
 		this.props.dataStore.removeChangeListener(this.__handleDataChange);
+	},
+
+	__handleAbortBtnClick: function (e) {
+		e.preventDefault();
+		Dispatcher.dispatch({
+			name: 'INSTALL_ABORT'
+		});
 	},
 
 	__handleDataChange: function () {
