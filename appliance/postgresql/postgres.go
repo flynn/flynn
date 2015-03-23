@@ -465,6 +465,10 @@ func (p *Postgres) assumeStandby(upstream, downstream *discoverd.Instance) error
 	return nil
 }
 
+// upstreamTimeout is of the order of the discoverd heartbeat to prevent
+// waiting for an upstream which has gone down.
+var upstreamTimeout = 10 * time.Second
+
 func (p *Postgres) waitForUpstream(upstream *discoverd.Instance) error {
 	log := p.log.New("fn", "waitForUpstream", "upstream", upstream.Addr)
 	log.Info("waiting for upstream to come online")
@@ -480,7 +484,7 @@ func (p *Postgres) waitForUpstream(upstream *discoverd.Instance) error {
 			return nil
 		}
 		time.Sleep(checkInterval)
-		if time.Now().Sub(start) > p.opTimeout {
+		if time.Now().Sub(start) > upstreamTimeout {
 			log.Error("upstream did not come online in time")
 			return errors.New("upstream is offline")
 		}
