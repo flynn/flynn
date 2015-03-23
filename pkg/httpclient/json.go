@@ -118,7 +118,17 @@ func (c *Client) Hijack(method, path string, header http.Header, in interface{})
 	if dial == nil {
 		dial = net.Dial
 	}
-	conn, err := dial("tcp", uri.Host)
+
+	addr := uri.Host
+	if _, _, err := net.SplitHostPort(addr); err != nil { // host is missing port
+		port := "443"
+		if uri.Scheme == "http" {
+			port = "80"
+		}
+		addr = net.JoinHostPort(addr, port)
+	}
+
+	conn, err := dial("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
