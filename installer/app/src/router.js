@@ -32,15 +32,15 @@ var MainRouter = Router.createClass({
 			case 'INSTALL_EXISTS':
 				installID = this.history.pathParams[0].install_id;
 				if ( !event.exists && (!event.id || event.id === installID) ) {
-					this.history.navigate('/');
+					this.history.navigate('/', { replace: true });
 				} else if (event.exists && installID !== event.id) {
-					this.history.navigate('/install/'+ event.id);
+					this.history.navigate('/install/'+ event.id, { replace: true });
 				}
 			break;
 
 			case 'LAUNCH_INSTALL_SUCCESS':
 				installID = event.res.id;
-				this.history.navigate('/install/'+ installID);
+				this.history.navigate('/install/'+ installID, { replace: true });
 			break;
 		}
 	}
