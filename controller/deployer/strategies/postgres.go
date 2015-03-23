@@ -134,6 +134,15 @@ func postgres(d *Deploy) error {
 		}
 		return nil
 	}
+	waitForReadWrite := func(inst *discoverd.Instance) error {
+		log.Info("waiting for read-write", "inst", inst.Addr)
+		client := pgmanager.NewClient(inst.Addr)
+		if err := client.WaitForReadWrite(3 * time.Minute); err != nil {
+			log.Error("error waiting for read-write", "err", err)
+			return err
+		}
+		return nil
+	}
 
 	// asyncUpstream is the instance we will query for replication status
 	// of the new async, which will be the sync if there is only one
@@ -179,6 +188,9 @@ func postgres(d *Deploy) error {
 		return err
 	}
 	if err := waitForSync(newPrimary, newSync); err != nil {
+		return err
+	}
+	if err := waitForReadWrite(newPrimary); err != nil {
 		return err
 	}
 

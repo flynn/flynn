@@ -19,6 +19,7 @@ type PostgresInfo struct {
 	XLog             string              `json:"xlog,omitempty"`
 	UserExists       bool                `json:"user_exists,omitempty"`
 	Replicas         []*Replica          `json:"replicas,omitempty"`
+	ReadWrite        bool                `json:"read_write,omitempty"`
 }
 
 type Replica struct {
@@ -67,17 +68,31 @@ func (c *Client) Stop() error {
 }
 
 func (c *Client) WaitForReplSync(downstream *discoverd.Instance, timeout time.Duration) error {
+	return c.waitFor(func(status *Status) bool {
+		return status.Postgres.SyncedDownstream != nil && status.Postgres.SyncedDownstream.ID == downstream.ID
+	}, timeout)
+}
+
+func (c *Client) WaitForReadWrite(timeout time.Duration) error {
+	return c.waitFor(func(status *Status) bool {
+		return status.Postgres.ReadWrite
+	}, timeout)
+}
+
+var ErrTimeout = errors.New("timeout waiting for expected status")
+
+func (c *Client) waitFor(expected func(*Status) bool, timeout time.Duration) error {
 	start := time.Now()
 	for {
 		status, err := c.Status()
 		if err != nil {
 			return err
-		} else if status.Postgres.SyncedDownstream != nil && status.Postgres.SyncedDownstream.ID == downstream.ID {
+		} else if expected(status) {
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
 		if time.Now().Sub(start) > timeout {
-			return errors.New("timed out waiting for replication sync")
+			return ErrTimeout
 		}
 	}
 }

@@ -166,6 +166,10 @@ func (p *Postgres) Info() (*pgmanager.PostgresInfo, error) {
 	if err != nil {
 		return res, err
 	}
+	res.ReadWrite, err = p.isReadWrite()
+	if err != nil {
+		return res, err
+	}
 	res.Replicas, err = p.getReplicas()
 	return res, err
 }
@@ -251,6 +255,18 @@ func (p *Postgres) userExists() (bool, error) {
 	var res pgx.NullInt32
 	err := p.db.QueryRow("SELECT 1 FROM pg_roles WHERE rolname='flynn'").Scan(&res)
 	return res.Valid, err
+}
+
+func (p *Postgres) isReadWrite() (bool, error) {
+	p.dbMtx.RLock()
+	defer p.dbMtx.RUnlock()
+
+	if !p.running() || p.db == nil {
+		return false, errors.New("postgres is not running")
+	}
+	var res string
+	err := p.db.QueryRow("SHOW default_transaction_read_only").Scan(&res)
+	return res == "off", err
 }
 
 func (p *Postgres) Ready() <-chan state.PostgresEvent {
