@@ -238,8 +238,6 @@ var testRunScript = template.Must(template.New("test-run").Parse(`
 #!/bin/bash
 set -e -x -o pipefail
 
-echo {{ .Cluster.RouterIP }} {{ .Cluster.ClusterDomain }} {{ .Cluster.ControllerDomain }} | sudo tee -a /etc/hosts
-
 cat > ~/.flynnrc
 
 git config --global user.email "ci@flynn.io"
