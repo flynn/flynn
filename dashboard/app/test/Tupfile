@@ -1,0 +1,2 @@
+include_rules
+: ./main.js ./runner.sh |> docker build -t flynn/test-dashboard-app . |>
