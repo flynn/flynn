@@ -215,10 +215,27 @@ func (b *Provider) CreateSnapshot(vol volume.Volume) (volume.Volume, error) {
 	return snap, nil
 }
 
+func isMount(path string) (bool, error) {
+	pathStat, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	parentStat, err := os.Stat(filepath.Dir(path))
+	if err != nil {
+		return false, err
+	}
+	pathDev := pathStat.Sys().(*syscall.Stat_t).Dev
+	parentDev := parentStat.Sys().(*syscall.Stat_t).Dev
+	return pathDev != parentDev, nil
+}
+
 func (b *Provider) mountSnapshot(vol *zfsVolume) error {
 	// mount the snapshot (readonly)
 	// 'zfs mount' currently can't perform on snapshots; seealso https://github.com/zfsonlinux/zfs/issues/173
-	alreadyMounted, err := volume.IsMount(vol.basemount)
+	alreadyMounted, err := isMount(vol.basemount)
 	if err != nil {
 		return fmt.Errorf("could not mount snapshot: %s", err)
 	}
