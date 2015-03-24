@@ -77,34 +77,30 @@ func (a *aggregatorAPI) GetLog(ctx context.Context, w http.ResponseWriter, req *
 	var msgc <-chan *rfc5424.Message
 	if follow {
 		msgc = a.agg.ReadLastNAndSubscribe(channelID, lines, filters, ctx.Done())
-		go flushLoop(w.(http.Flusher), 50*time.Millisecond, ctx.Done())
 	} else {
 		msgc = a.agg.ReadLastN(channelID, lines, filters, ctx.Done())
 	}
+	writeMessages(ctx, w, msgc)
+}
+
+func writeMessages(ctx context.Context, w http.ResponseWriter, msgc <-chan *rfc5424.Message) {
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
 
 	enc := json.NewEncoder(w)
 	for {
 		select {
-		case syslogMsg := <-msgc:
-			if syslogMsg == nil { // channel is closed / done
+		case syslogMsg, ok := <-msgc:
+			if !ok { // channel is closed / done
 				return
 			}
 			if err := enc.Encode(NewMessageFromSyslog(syslogMsg)); err != nil {
 				log15.Error("error writing msg", "err", err)
 				return
 			}
+		case <-ticker.C:
+			w.(http.Flusher).Flush()
 		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func flushLoop(f http.Flusher, interval time.Duration, done <-chan struct{}) {
-	for {
-		select {
-		case <-time.After(interval):
-			f.Flush()
-		case <-done:
 			return
 		}
 	}
