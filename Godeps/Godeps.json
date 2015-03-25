@@ -464,6 +464,10 @@
 			"Rev": "ecf753e7c962639ab5a1fb46f7da627d4c0a04b8"
 		},
 		{
+			"ImportPath": "github.com/pkg/browser",
+			"Rev": "2e6fb17d7a7cb6a81837ee68158214d9098de905"
+		},
+		{
 			"ImportPath": "github.com/rnd42/go-jsonpointer",
 			"Rev": "0480215403db768c5bf6db30d82908043c58422c"
 		},
