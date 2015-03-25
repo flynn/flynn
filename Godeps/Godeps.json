@@ -46,7 +46,7 @@
 		},
 		{
 			"ImportPath": "github.com/badgerodon/ioutil",
-			"Rev": "c3e849398f0ed2429b43c31edcc7f14174453237"
+			"Rev": "b4d36b903b8b5353e41d0072358d59d722e76ae3"
 		},
 		{
 			"ImportPath": "github.com/bgentry/que-go",
