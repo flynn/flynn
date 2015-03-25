@@ -55,6 +55,8 @@ const (
 	sampleLogLine2 = "79 <40>1 2012-11-30T06:45:26+00:00 host app web.2 - - 25 yay this is a message!!!\n"
 )
 
+var nopFilter = Filter(make(filterSlice, 0))
+
 func (s *LogAggregatorTestSuite) TestAggregatorShutdown(c *C) {
 	conn, err := net.Dial("tcp", s.agg.Addr)
 	c.Assert(err, IsNil)
@@ -104,29 +106,24 @@ func (s *LogAggregatorTestSuite) TestAggregatorBuffersMessages(c *C) {
 
 	tests := []struct {
 		lines           int
-		filters         []filter
+		filter          Filter
 		expectedLen     int
 		expectedProcIDs []string
 	}{
 		{
 			lines:           -1,
-			filters:         nil,
 			expectedLen:     2,
 			expectedProcIDs: []string{"web.1", "web.2"},
 		},
 		{
-			lines: -1,
-			filters: []filter{
-				filterJobID{[]byte("1")},
-			},
+			lines:           -1,
+			filter:          filterJobID("1"),
 			expectedLen:     1,
 			expectedProcIDs: []string{"web.1"},
 		},
 		{
-			lines: 1,
-			filters: []filter{
-				filterJobID{[]byte("1")},
-			},
+			lines:           1,
+			filter:          filterJobID("1"),
 			expectedLen:     1,
 			expectedProcIDs: []string{"web.1"},
 		},
@@ -134,7 +131,13 @@ func (s *LogAggregatorTestSuite) TestAggregatorBuffersMessages(c *C) {
 
 	for _, test := range tests {
 		c.Logf("test: %+v", test)
-		msgc := s.agg.ReadLastN("app", test.lines, test.filters, make(chan struct{}))
+
+		filter := test.filter
+		if filter == nil {
+			filter = nopFilter
+		}
+
+		msgc := s.agg.ReadLastN("app", test.lines, filter, make(chan struct{}))
 		msgs := readAllMsgs(msgc)
 		c.Assert(msgs, HasLen, test.expectedLen)
 		for i, procID := range test.expectedProcIDs {
@@ -144,7 +147,7 @@ func (s *LogAggregatorTestSuite) TestAggregatorBuffersMessages(c *C) {
 }
 
 func (s *LogAggregatorTestSuite) TestAggregatorReadLastNAndSubscribe(c *C) {
-	runTest := func(lines int, filters []filter, expectedBefore, expectedSubMsgs, unexpectedSubMsgs []string) {
+	runTest := func(lines int, filter Filter, expectedBefore, expectedSubMsgs, unexpectedSubMsgs []string) {
 		// set up testing hook:
 		messageReceived := make(chan struct{})
 		afterMessage = func() {
@@ -168,7 +171,12 @@ func (s *LogAggregatorTestSuite) TestAggregatorReadLastNAndSubscribe(c *C) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		msgc := s.agg.ReadLastNAndSubscribe("app", lines, filters, ctx.Done())
+
+		if filter == nil {
+			filter = nopFilter
+		}
+
+		msgc := s.agg.ReadLastNAndSubscribe("app", lines, filter, ctx.Done())
 		timeout := time.After(5 * time.Second)
 
 		for _, expectedMsg := range expectedBefore {
@@ -215,7 +223,7 @@ func (s *LogAggregatorTestSuite) TestAggregatorReadLastNAndSubscribe(c *C) {
 
 	tests := []struct {
 		lines             int
-		filters           []filter
+		filter            Filter
 		expectedBefore    []string
 		expectedSubMsgs   []string
 		unexpectedSubMsgs []string
@@ -248,8 +256,8 @@ func (s *LogAggregatorTestSuite) TestAggregatorReadLastNAndSubscribe(c *C) {
 			},
 		},
 		{
-			lines:   -1,
-			filters: []filter{filterJobID{[]byte("2")}},
+			lines:  -1,
+			filter: filterJobID("2"),
 			expectedBefore: []string{
 				"25 yay this is a message!!!\n",
 			},
@@ -265,7 +273,7 @@ func (s *LogAggregatorTestSuite) TestAggregatorReadLastNAndSubscribe(c *C) {
 		},
 		{
 			lines:          0,
-			filters:        []filter{filterProcessType{[]byte("web")}},
+			filter:         filterProcessType("web"),
 			expectedBefore: []string{},
 			expectedSubMsgs: []string{
 				"60 <40>1 2012-11-30T07:12:53+00:00 host app web.2 - - message 2",
@@ -278,8 +286,8 @@ func (s *LogAggregatorTestSuite) TestAggregatorReadLastNAndSubscribe(c *C) {
 			},
 		},
 		{
-			lines:   1,
-			filters: []filter{filterJobID{[]byte("2")}},
+			lines:  1,
+			filter: filterJobID("2"),
 			expectedBefore: []string{
 				"25 yay this is a message!!!\n",
 			},
@@ -295,8 +303,8 @@ func (s *LogAggregatorTestSuite) TestAggregatorReadLastNAndSubscribe(c *C) {
 		},
 	}
 	for i, test := range tests {
-		c.Logf("testing num=%d lines=%d filters=%v", i, test.lines, test.filters)
-		runTest(test.lines, test.filters, test.expectedBefore, test.expectedSubMsgs, test.unexpectedSubMsgs)
+		c.Logf("testing num=%d lines=%d filter=%v", i, test.lines, test.filter)
+		runTest(test.lines, test.filter, test.expectedBefore, test.expectedSubMsgs, test.unexpectedSubMsgs)
 	}
 }
 

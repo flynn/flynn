@@ -68,10 +68,6 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogBuffer(c *C) {
 			expected: []*rfc5424.Message{msg1, msg2, msg3, msg4, msg5},
 		},
 		{
-			numLogs:  intPtr(0),
-			expected: nil,
-		},
-		{
 			numLogs:  intPtr(1),
 			expected: []*rfc5424.Message{msg5},
 		},

@@ -129,21 +129,17 @@ func (a *Aggregator) Shutdown() {
 func (a *Aggregator) ReadLastN(
 	id string,
 	n int,
-	filters []filter,
+	filter Filter,
 	done <-chan struct{},
 ) <-chan *rfc5424.Message {
 	msgc := make(chan *rfc5424.Message)
 	go func() {
 		defer close(msgc)
 
-		var messages []*rfc5424.Message
-		if len(filters) == 0 {
-			messages = a.readLastN(id, n)
-		} else {
-			messages = filterMessages(a.readLastN(id, -1), filters)
-			if n > 0 && len(messages) > n {
-				messages = messages[len(messages)-n:]
-			}
+		messages := filter.Filter(a.readLastN(id, -1))
+		if n > 0 && len(messages) > n {
+			messages = messages[len(messages)-n:]
+
 		}
 		for _, syslogMsg := range messages {
 			select {
@@ -209,7 +205,7 @@ func (a *Aggregator) readLastN(id string, n int) []*rfc5424.Message {
 func (a *Aggregator) ReadLastNAndSubscribe(
 	id string,
 	n int,
-	filters []filter,
+	filter Filter,
 	done <-chan struct{},
 ) <-chan *rfc5424.Message {
 	msgc := make(chan *rfc5424.Message)
@@ -220,13 +216,13 @@ func (a *Aggregator) ReadLastNAndSubscribe(
 		var subc <-chan *rfc5424.Message
 		var cancel func()
 
-		if (len(filters) > 0 && n != 0) || n < 0 {
+		if (filter != nil && n != 0) || n < 0 {
 			messages, subc, cancel = buf.ReadAllAndSubscribe()
 		} else {
 			messages, subc, cancel = buf.ReadLastNAndSubscribe(n)
 		}
-		if len(filters) > 0 {
-			messages = filterMessages(messages, filters)
+		if filter != nil {
+			messages = filter.Filter(messages)
 			if n > 0 && len(messages) > n {
 				messages = messages[len(messages)-n:]
 			}
@@ -250,7 +246,7 @@ func (a *Aggregator) ReadLastNAndSubscribe(
 				if msgc == nil { // subc was closed
 					return
 				}
-				if !allFiltersMatch(msg, filters) {
+				if !filter.Match(msg) {
 					continue // skip this message if it doesn't match filters
 				}
 				select {
