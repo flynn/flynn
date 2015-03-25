@@ -7,20 +7,16 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/user"
 	"path/filepath"
 
+	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/pkg/sshkeygen"
 )
 
 var keysDir, dataPath string
 
 func init() {
-	u, err := user.Current()
-	if err != nil {
-		panic(err)
-	}
-	dir := filepath.Join(u.HomeDir, ".flynn-installer")
+	dir := filepath.Join(config.Dir(), "installer")
 	keysDir = filepath.Join(dir, "keys")
 	dataPath = filepath.Join(dir, "data.json")
 }
