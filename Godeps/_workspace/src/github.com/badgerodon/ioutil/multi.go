@@ -31,16 +31,12 @@ func (this *MultiReadSeeker) Read(p []byte) (int, error) {
 			continue
 		}
 
-		fmt.Println("   with", component)
-		fmt.Println("seek to", offset)
 		_, err = component.Seek(offset, 0)
 		if err != nil {
 			return 0, err
 		}
 
-		fmt.Println("reading", len(p), "bytes")
 		n, err := component.Read(p)
-		fmt.Println("   read", n, "bytes")
 		this.offset += int64(n)
 		if n > 0 && err == io.EOF {
 			err = nil
