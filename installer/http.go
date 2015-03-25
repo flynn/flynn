@@ -4,12 +4,10 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -18,6 +16,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/aws"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/badgerodon/ioutil"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/pkg/browser"
 	log "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/pkg/cors"
 	"github.com/flynn/flynn/pkg/httphelper"
@@ -296,27 +295,9 @@ func ServeHTTP() error {
 		return err
 	}
 	addr := fmt.Sprintf("http://localhost:%d", l.Addr().(*net.TCPAddr).Port)
-	if err := api.OpenAddr(addr); err != nil {
-		fmt.Printf("Open %s in your browser to continue.\n", addr)
-	}
+	fmt.Printf("Open %s in your browser to continue.\n", addr)
+	browser.OpenURL(addr)
 	return http.Serve(l, api.CorsHandler(httpRouter, addr))
-}
-
-func (api *httpAPI) OpenAddr(addr string) error {
-	cmds := []string{
-		"open",
-		"xdg-open",
-		"firefox",
-		"google-chrome",
-	}
-	for _, cmdStr := range cmds {
-		if _, err := exec.LookPath(cmdStr); err == nil {
-			fmt.Printf("Opening %s...\n", addr)
-			exec.Command(cmdStr, addr).Start()
-			return nil
-		}
-	}
-	return errors.New(fmt.Sprintf("unable to open %s", addr))
 }
 
 func (api *httpAPI) CorsHandler(main http.Handler, addr string) http.Handler {
