@@ -1,4 +1,3 @@
-import Panel from './panel';
 import { green as GreenBtnCSS, disabled as BtnDisabledCSS } from './css/button';
 import AWSCredentialsPicker from './aws-credentials-picker';
 import AWSRegionPicker from './aws-region-picker';
@@ -11,47 +10,45 @@ import { extend } from 'marbles/utils';
 var InstallConfig = React.createClass({
 	render: function () {
 		return (
-			<Panel>
-				<form onSubmit={this.__handleSubmit}>
-					<AWSCredentialsPicker
-						onChange={this.__handleCredentialsChange} />
-					<br />
-					<br />
-					<AWSRegionPicker
-						value={this.state.region}
-						onChange={this.__handleRegionChange} />
-					<br />
-					<br />
-					<AWSInstanceTypePicker
-						value={this.state.instanceType}
-						onChange={this.__handleInstanceTypeChange} />
-					<br />
-					<br />
-					<label>
-						<div>Number of instances: </div>
-						<div style={{
-							width: 60
-							}}>
-							<IntegerPicker
-								minValue={1}
-								maxValue={5}
-								skipValues={[2]}
-								value={this.state.numInstances}
-								onChange={this.__handleNumInstancesChange} />
-						</div>
-					</label>
-					<br />
-					<br />
-					<AWSAdvancedOptions onChange={this.__handleAdvancedOptionsChange}/>
-					<br />
-					<br />
-					<button
-						type="submit"
-						style={extend({}, GreenBtnCSS,
-							this.state.launchBtnDisabled ? BtnDisabledCSS : {})}
-						disabled={this.state.launchBtnDisabled}>Launch</button>
-				</form>
-			</Panel>
+			<form onSubmit={this.__handleSubmit}>
+				<AWSCredentialsPicker
+					onChange={this.__handleCredentialsChange} />
+				<br />
+				<br />
+				<AWSRegionPicker
+					value={this.state.region}
+					onChange={this.__handleRegionChange} />
+				<br />
+				<br />
+				<AWSInstanceTypePicker
+					value={this.state.instanceType}
+					onChange={this.__handleInstanceTypeChange} />
+				<br />
+				<br />
+				<label>
+					<div>Number of instances: </div>
+					<div style={{
+						width: 60
+						}}>
+						<IntegerPicker
+							minValue={1}
+							maxValue={5}
+							skipValues={[2]}
+							value={this.state.numInstances}
+							onChange={this.__handleNumInstancesChange} />
+					</div>
+				</label>
+				<br />
+				<br />
+				<AWSAdvancedOptions onChange={this.__handleAdvancedOptionsChange}/>
+				<br />
+				<br />
+				<button
+					type="submit"
+					style={extend({}, GreenBtnCSS,
+						this.state.launchBtnDisabled ? BtnDisabledCSS : {})}
+					disabled={this.state.launchBtnDisabled}>Launch</button>
+			</form>
 		);
 	},
 

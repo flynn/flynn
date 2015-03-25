@@ -2,41 +2,43 @@ import InstallSteps from './install-steps';
 import AWSLauncher from './aws-launcher';
 import InstallProgress from './install-progress';
 import Dashboard from './dashboard';
+import Panel from './panel';
 import Modal from './modal';
 import Dispatcher from '../dispatcher';
-import { extend } from 'marbles/utils';
 import { default as BtnCSS, green as GreenBtnCSS } from './css/button';
+import UserAgent from './css/user-agent';
 
 var Wizard = React.createClass({
 	render: function () {
-		var state = this.props.dataStore.state;
+		var cluster = this.state.currentCluster;
+		if (cluster === null) {
+			return <div />;
+		}
+		var state = cluster.getInstallState();
 		return (
-			<div>
-				<InstallSteps state={state} />
+			<div style={{ height: '100%' }}>
+				<div style={{
+					display: UserAgent.isSafari() ? '-webkit-flex' : 'flex',
+					flexFlow: 'column',
+					WebkitFlexFlow: 'column',
+					height: '100%'
+				}}>
+					<InstallSteps state={state} style={{ height: 16 }} />
 
-				{state.currentStep === 'configure' ? (
-					<AWSLauncher state={state} />
-				) : null}
+					<Panel style={{ flexGrow: 1, WebkitFlexGrow: 1, height: '100%' }}>
+						{state.currentStep === 'configure' ? (
+							<AWSLauncher state={state} />
+						) : null}
 
-				{state.currentStep === 'install' ? (
-					<InstallProgress state={state} />
-				) : null}
+						{state.currentStep === 'install' ? (
+							<InstallProgress state={state} />
+						) : null}
 
-				{state.currentStep === 'dashboard' ? (
-					<Dashboard state={state} />
-				) : null}
-
-				{state.failed ? (
-					<Modal visible={true} closable={false}>
-						<header>
-							<h2>Install failed</h2>
-						</header>
-
-						<p>{state.errorMessage}</p>
-
-						<button style={GreenBtnCSS} type="text" onClick={this.__handleAbortBtnClick}>Start over</button>
-					</Modal>
-				) : null}
+						{state.currentStep === 'dashboard' ? (
+							<Dashboard state={state} clusterID={cluster.ID} />
+						) : null}
+					</Panel>
+				</div>
 
 				{state.prompt ? (
 					<Modal visible={true} closable={false}>
@@ -60,9 +62,21 @@ var Wizard = React.createClass({
 							</form>
 						)}
 					</Modal>
-				) : null}
+				) : (state.failed ? (
+					<Modal visible={true}>
+						<header>
+							<h2>Install failed</h2>
+						</header>
+
+						<p>{state.errorMessage}</p>
+					</Modal>
+				) : null)}
 			</div>
 		);
+	},
+
+	getInitialState: function () {
+		return this.props.dataStore.state;
 	},
 
 	componentDidMount: function () {
@@ -108,9 +122,9 @@ var Wizard = React.createClass({
 	__submitPromptResponse: function (data) {
 		Dispatcher.dispatch({
 			name: 'INSTALL_PROMPT_RESPONSE',
-			data: extend({}, data, {
-				id: this.state.prompt.id
-			})
+			clusterID: this.state.currentClusterID,
+			promptID: this.state.currentCluster.getInstallState().prompt.id,
+			data: data
 		});
 	}
 });

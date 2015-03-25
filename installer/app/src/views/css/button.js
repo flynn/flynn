@@ -21,10 +21,15 @@ var green = extend({}, buttonCSS, {
 	color: Colors.almostWhiteColor
 });
 
+var red = extend({}, buttonCSS, {
+	backgroundColor: Colors.redColor,
+	color: Colors.almostWhiteColor
+});
+
 var disabled = {
 	opacity: 0.6,
 	cursor: 'not-allowed'
 };
 
-export { green, disabled };
+export { green, red, disabled };
 export default buttonCSS;

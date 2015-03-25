@@ -1,5 +1,3 @@
-import Panel from './panel';
-
 var InstallProgress = React.createClass({
 	render: function () {
 		var eventNodes = [];
@@ -12,15 +10,13 @@ var InstallProgress = React.createClass({
 			);
 		}
 		return (
-			<Panel>
-					<pre ref="scrollable" style={{
-						width: '100%',
-						maxHeight: 500,
-						overflow: 'auto'
-					}}>
-					{eventNodes}
-				</pre>
-			</Panel>
+				<pre ref="scrollable" style={{
+					width: '100%',
+					maxHeight: 500,
+					overflow: 'auto'
+				}}>
+				{eventNodes}
+			</pre>
 		);
 	},
 
