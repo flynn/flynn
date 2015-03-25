@@ -29,6 +29,7 @@ var IntegerPicker = React.createClass({
 				MozUserSelect: 'none',
 
 				textAlign: 'center',
+				height: '100%',
 				marginTop: '0.65em',
 				paddingLeft: '0.35em',
 				paddingRight: '0.35em'
@@ -56,7 +57,8 @@ var IntegerPicker = React.createClass({
 				padding: '0.05em 0.25em',
 				cursor: 'default',
 				userSelect: 'none',
-				MozUserSelect: 'none'
+				MozUserSelect: 'none',
+				WebkitUserSelect: 'none'
 			}
 		};
 	},
