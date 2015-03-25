@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/BurntSushi/toml"
 )
@@ -25,18 +26,34 @@ type Config struct {
 	Clusters []*Cluster `toml:"cluster"`
 }
 
-// copied from cli/main.go
-func homedir() string {
-	user, _ := user.Current()
-	return user.HomeDir
+func HomeDir() string {
+	key := "HOME"
+	if runtime.GOOS == "windows" {
+		key = "USERPROFILE"
+	}
+	home := os.Getenv(key)
+	if home == "" {
+		user, _ := user.Current()
+		home = user.HomeDir
+	}
+	return home
+}
+
+func Dir() string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(os.Getenv("APPDATA"), "flynn")
+	}
+	return filepath.Join(HomeDir(), ".flynn")
 }
 
 func DefaultPath() string {
-	p := os.Getenv("FLYNNRC")
-	if p == "" {
-		p = filepath.Join(homedir(), ".flynnrc")
+	if p := os.Getenv("FLYNNRC"); p != "" {
+		return p
 	}
-	return p
+	if runtime.GOOS == "windows" {
+		return filepath.Join(Dir(), "flynnrc")
+	}
+	return filepath.Join(HomeDir(), ".flynnrc")
 }
 
 func ReadFile(path string) (*Config, error) {

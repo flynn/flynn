@@ -18,13 +18,14 @@ import (
 	tufdata "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/data"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/inconshreveable/go-update"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kardianos/osext"
+	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/version"
 )
 
 const upcktimePath = "cktime"
 
-var updateDir = filepath.Join(homedir(), ".flynn", "update")
+var updateDir = filepath.Join(cfg.Dir(), "update")
 var updater *Updater
 
 func runUpdate() error {

@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
+	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
 )
 
@@ -108,7 +109,7 @@ func findKeys(sshPubKeyPath string) ([]byte, error) {
 
 	var key []byte
 	for _, f := range []string{"id_rsa.pub", "id_dsa.pub"} {
-		key, err = sshReadPubKey(filepath.Join(homedir(), ".ssh", f))
+		key, err = sshReadPubKey(filepath.Join(cfg.HomeDir(), ".ssh", f))
 		if err == nil {
 			return key, nil
 		}

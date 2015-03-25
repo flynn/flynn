@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/user"
 	"strings"
 	"text/tabwriter"
 	"unicode"
@@ -205,11 +204,6 @@ func readConfig() (err error) {
 		err = nil
 	}
 	return
-}
-
-func homedir() string {
-	user, _ := user.Current()
-	return user.HomeDir
 }
 
 var ErrNoClusters = errors.New("no clusters configured")

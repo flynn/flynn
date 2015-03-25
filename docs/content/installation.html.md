@@ -5,11 +5,18 @@ layout: docs
 
 # Installation
 
-Before starting, you should install the Flynn command-line interface by running
-this command:
+Before starting, you should install the Flynn command-line interface.
 
-```bash
+On OS X and Linux, run this command in a terminal:
+
+```text
 L=/usr/local/bin/flynn && curl -sL -A "`uname -sp`" https://dl.flynn.io/cli | zcat >$L && chmod +x $L
+```
+
+On Windows, run this command in PowerShell:
+
+```text
+(New-Object Net.WebClient).DownloadString('https://dl.flynn.io/cli.ps1') | iex
 ```
 
 If you want to run Flynn on your local machine, the easiest way is to install the

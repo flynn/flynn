@@ -5,15 +5,22 @@ access to many functions related to deploying and managing applications.
 
 ## Installation
 
-Pre-built binaries are available for Mac OS X, Linux, and BSD. Once installed,
-these binaries will automatically update themselves when new releases are
-available.
+Pre-built binaries are available for Mac OS X, Linux, and Windows. Once
+installed, these binaries will automatically update themselves when new releases
+are available.
 
-To install a pre-built binary release, run the following one-liner:
+To install the latest release on OS X or Linux, run this command in a terminal:
 
-```bash
+```text
 L=/usr/local/bin/flynn && curl -sL -A "`uname -sp`" https://dl.flynn.io/cli | zcat >$L && chmod +x $L
 ```
+
+To install the latest release on Windows, run this command in PowerShell:
+
+```text
+(New-Object Net.WebClient).DownloadString('https://dl.flynn.io/cli.ps1') | iex
+```
+
 
 ## Usage
 
