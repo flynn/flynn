@@ -1,10 +1,11 @@
 import LinearGradient from './css/linear-gradient';
 import Colors from './css/colors';
+import UserAgent from './css/user-agent';
 import { extend } from 'marbles/utils';
 
 var PrettySelect = React.createClass({
 	getDefaultProps: function () {
-		return {
+		var props = {
 			wrapperCSS: extend({
 				border: '1px solid '+ Colors.grayBlueColor,
 				boxShadow: '0px 0px 1px'+ Colors.grayBlueColor,
@@ -35,17 +36,21 @@ var PrettySelect = React.createClass({
 				padding: '4px 8px',
 				paddingRight: 22,
 				background: 'transparent',
-				color: 'rgba(0,0,0,0)',
-				textShadow: '0 0 0 '+ Colors.darkerGrayBlueColor,
+				color: Colors.darkerGrayBlueColor,
 				border: 'none',
 				textOverflow: 'ellipsis',
 				textIndent: 0.1,
-				MozAppearance: 'radio-container',
+				MozAppearance: 'none',
 				WebkitAppearance: 'none',
 				boxShadow: 'inset 0px 0px 1px '+ Colors.grayBlueColor,
 				outline: 0
 			}
 		};
+		if (UserAgent.isFirefox()) {
+			props.selectCSS.textShadow = '0 0 0 '+ props.selectCSS.color;
+			props.selectCSS.color = 'rgba(0,0,0,0)';
+		}
+		return props;
 	},
 
 	render: function () {
