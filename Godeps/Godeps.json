@@ -442,6 +442,10 @@
 			"Rev": "043ae16291351db8465272edf465c9f388161627"
 		},
 		{
+			"ImportPath": "github.com/mattn/go-isatty",
+			"Rev": "6152ce208cfa13d58f065348a3312b4160fb98d1"
+		},
+		{
 			"ImportPath": "github.com/miekg/dns",
 			"Rev": "68de7327c02df3d7ae94703e88dd8c9a4f3052d9"
 		},
@@ -454,6 +458,10 @@
 			"ImportPath": "github.com/natefinch/lumberjack",
 			"Comment": "v1.0-12-gd28785c",
 			"Rev": "d28785c2f27cd682d872df46ccd8232843629f54"
+		},
+		{
+			"ImportPath": "github.com/olekukonko/ts",
+			"Rev": "ecf753e7c962639ab5a1fb46f7da627d4c0a04b8"
 		},
 		{
 			"ImportPath": "github.com/rnd42/go-jsonpointer",
