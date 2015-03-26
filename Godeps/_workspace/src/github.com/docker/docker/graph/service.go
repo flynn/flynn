@@ -111,7 +111,6 @@ func (s *TagStore) CmdGet(job *engine.Job) error {
 		res.SetJson("Author", img.Author)
 		res.Set("Os", img.OS)
 		res.Set("Architecture", img.Architecture)
-		res.Set("DockerVersion", img.DockerVersion)
 		res.SetJson("Id", img.ID)
 		res.SetJson("Parent", img.Parent)
 	}
@@ -142,7 +141,6 @@ func (s *TagStore) CmdLookup(job *engine.Job) error {
 		out.SetAuto("Created", image.Created)
 		out.SetJson("Container", image.Container)
 		out.SetJson("ContainerConfig", image.ContainerConfig)
-		out.Set("DockerVersion", image.DockerVersion)
 		out.SetJson("Author", image.Author)
 		out.SetJson("Config", image.Config)
 		out.Set("Architecture", image.Architecture)
