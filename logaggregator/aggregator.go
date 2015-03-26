@@ -90,26 +90,24 @@ func (a *Aggregator) ReadLastNAndSubscribe(
 	done <-chan struct{},
 ) <-chan *rfc5424.Message {
 	msgc := make(chan *rfc5424.Message)
+	buf := a.getOrInitializeBuffer(id)
+
+	var messages []*rfc5424.Message
+	var subc <-chan *rfc5424.Message
+	var cancel func()
+
+	messages, subc, cancel = buf.ReadAllAndSubscribe()
+
 	go func() {
-		buf := a.getOrInitializeBuffer(id)
+		defer cancel()
+		defer close(msgc)
 
-		var messages []*rfc5424.Message
-		var subc <-chan *rfc5424.Message
-		var cancel func()
-
-		if (filter != nil && n != 0) || n < 0 {
-			messages, subc, cancel = buf.ReadAllAndSubscribe()
-		} else {
-			messages, subc, cancel = buf.ReadLastNAndSubscribe(n)
-		}
 		if filter != nil {
 			messages = filter.Filter(messages)
 			if n > 0 && len(messages) > n {
 				messages = messages[len(messages)-n:]
 			}
 		}
-		defer cancel()
-		defer close(msgc)
 
 		// range over messages, watch done
 		for _, msg := range messages {
@@ -179,9 +177,6 @@ func (a *Aggregator) CopyBuffers() [][]*rfc5424.Message {
 	return buffers
 }
 
-// testing hook:
-var afterMessage func()
-
 func (a *Aggregator) getBuffer(id string) *ring.Buffer {
 	a.bmu.Lock()
 	defer a.bmu.Unlock()
@@ -209,13 +204,20 @@ func (a *Aggregator) run() {
 			if !ok {
 				return
 			}
+			a.feed(msg)
 
-			a.getOrInitializeBuffer(string(msg.AppName)).Add(msg)
-			if afterMessage != nil {
-				afterMessage()
-			}
 		case <-a.pausec:
 			a.pausec <- struct{}{}
 		}
+	}
+}
+
+// testing hook:
+var afterMessage func()
+
+func (a *Aggregator) feed(msg *rfc5424.Message) {
+	a.getOrInitializeBuffer(string(msg.AppName)).Add(msg)
+	if afterMessage != nil {
+		afterMessage()
 	}
 }

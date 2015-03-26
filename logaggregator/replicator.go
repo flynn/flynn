@@ -39,7 +39,7 @@ func (r *Replicator) Shutdown() {
 	r.wg.Wait()
 }
 
-func (r *Replicator) Register(cancelc <-chan bool) <-chan *rfc5424.Message {
+func (r *Replicator) Follow(cancelc <-chan bool) <-chan *rfc5424.Message {
 	msgc := make(chan *rfc5424.Message, 1000)
 
 	r.mu.Lock()

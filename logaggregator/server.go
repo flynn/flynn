@@ -230,7 +230,7 @@ func (s *Server) fillReplicationConn(conn net.Conn) {
 	// replication stream, then unpause the aggregator
 	unpause := s.Aggregator.Pause()
 	buffers := s.Aggregator.CopyBuffers()
-	msgc := s.Replicator.Register(conn.(connutil.CloseNotifier).CloseNotify())
+	msgc := s.Replicator.Follow(conn.(connutil.CloseNotifier).CloseNotify())
 	unpause()
 
 	if err := snapshot.StreamTo(buffers, msgc, conn); err != nil {
