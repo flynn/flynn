@@ -1,6 +1,11 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+$cluster_domain = ENV["CLUSTER_DOMAIN"] || "demo.localflynn.com"
+$flags_gui = ENV["FLAG_GUI"] || "false"
+$flag_update = ENV["FLAG_UPDATE"] || "false"
+$flag_bootstrap = ENV["FLAG_BOOTSTRAP"] || "true"
+
 # Fail if Vagrant version is too old
 begin
   Vagrant.require_version ">= 1.6.0"
@@ -22,15 +27,29 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
   config.vm.synced_folder ".", "/vagrant", disabled: true
 
-  config.vm.provision "shell", privileged: false, inline: <<SCRIPT
-    ## Uncomment these lines to update flynn before starting
-    # sudo apt-get update -qq
-    # sudo apt-get install -y flynn-host
-    # sudo flynn-host download /etc/flynn/version.json
+  # Show VM GUI as a visual reminder that the VM is running
+  if $flag_gui == "true"
+    config.vm.provider "virtualbox" do |v|
+      v.gui = true
+    end
+    config.vm.provider "vmware_fusion" do |v|
+      v.gui = true
+    end
+  end
 
-    sudo start flynn-host
-
-    CLUSTER_DOMAIN=demo.localflynn.com \
-    flynn-host bootstrap /etc/flynn/bootstrap-manifest.json 2>&1
-SCRIPT
+  # Provisioners
+  if $flag_update == "true"
+    config.vm.provision "shell", inline: <<-SCRIPT
+      apt-get update -qq
+      apt-get install -y flynn-host
+      flynn-host download /etc/flynn/version.json
+    SCRIPT
+  end
+  if $flag_bootstrap == "true"
+    config.vm.provision "shell", privileged: false, inline: <<-SCRIPT
+      sudo start flynn-host
+      CLUSTER_DOMAIN="#{$cluster_domain}" \
+        flynn-host bootstrap /etc/flynn/bootstrap-manifest.json 2>&1
+    SCRIPT
+  end
 end
