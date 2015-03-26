@@ -63,13 +63,13 @@ func (a *aggregatorAPI) GetLog(ctx context.Context, w http.ResponseWriter, req *
 		}
 	}
 
-	filters := make([]filter, 0)
-	if strJobID := req.FormValue("job_id"); strJobID != "" {
-		filters = append(filters, filterJobID{[]byte(strJobID)})
+	filters := make(filterSlice, 0)
+	if jobID := req.FormValue("job_id"); jobID != "" {
+		filters = append(filters, filterJobID(jobID))
 	}
 	if processTypeVals, ok := req.Form["process_type"]; ok && len(processTypeVals) > 0 {
 		val := processTypeVals[len(processTypeVals)-1]
-		filters = append(filters, filterProcessType{[]byte(val)})
+		filters = append(filters, filterProcessType(val))
 	}
 
 	w.WriteHeader(200)

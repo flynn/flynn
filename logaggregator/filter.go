@@ -6,43 +6,60 @@ import (
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 )
 
-type filter interface {
-	Match(m *rfc5424.Message) bool
+type Filter interface {
+	Match(*rfc5424.Message) bool
+	Filter([]*rfc5424.Message) []*rfc5424.Message
 }
 
-type filterJobID struct {
-	jobID []byte
+type filterFunc func(m *rfc5424.Message) bool
+
+func (f filterFunc) Filter(messages []*rfc5424.Message) []*rfc5424.Message {
+	msgs := make([]*rfc5424.Message, 0, len(messages))
+	for _, msg := range messages {
+		if f.Match(msg) {
+			msgs = append(msgs, msg)
+		}
+	}
+	return msgs
 }
 
-func (f filterJobID) Match(m *rfc5424.Message) bool {
-	_, jobID := splitProcID(m.ProcID)
-	return bytes.Equal(f.jobID, jobID)
+func (f filterFunc) Match(m *rfc5424.Message) bool {
+	return f(m)
 }
 
-type filterProcessType struct {
-	processType []byte
+func filterJobID(jobID string) filterFunc {
+	a := []byte(jobID)
+	return func(m *rfc5424.Message) bool {
+		_, b := splitProcID(m.ProcID)
+		return bytes.Equal(a, b)
+	}
 }
 
-func (f filterProcessType) Match(m *rfc5424.Message) bool {
-	procType, _ := splitProcID(m.ProcID)
-	return bytes.Equal(f.processType, procType)
+func filterProcessType(processType string) filterFunc {
+	a := []byte(processType)
+	return func(m *rfc5424.Message) bool {
+		b, _ := splitProcID(m.ProcID)
+		return bytes.Equal(a, b)
+	}
 }
 
-func allFiltersMatch(msg *rfc5424.Message, filters []filter) bool {
-	for _, filter := range filters {
-		if !filter.Match(msg) {
+type filterSlice []Filter
+
+func (s filterSlice) Filter(unfiltered []*rfc5424.Message) []*rfc5424.Message {
+	msgs := make([]*rfc5424.Message, 0, len(unfiltered))
+	for _, msg := range unfiltered {
+		if s.Match(msg) {
+			msgs = append(msgs, msg)
+		}
+	}
+	return msgs
+}
+
+func (s filterSlice) Match(m *rfc5424.Message) bool {
+	for _, filter := range s {
+		if !filter.Match(m) {
 			return false
 		}
 	}
 	return true
-}
-
-func filterMessages(unfiltered []*rfc5424.Message, filters []filter) []*rfc5424.Message {
-	messages := make([]*rfc5424.Message, 0, len(unfiltered))
-	for _, msg := range unfiltered {
-		if allFiltersMatch(msg, filters) {
-			messages = append(messages, msg)
-		}
-	}
-	return messages
 }
