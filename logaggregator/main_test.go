@@ -283,9 +283,12 @@ func (s *LogAggregatorTestSuite) TestAggregatorReadLastNAndSubscribe(c *C) {
 			},
 		},
 		{
-			lines:          0,
-			filter:         filterProcessType("web"),
-			expectedBefore: []string{},
+			lines:  0,
+			filter: filterProcessType("web"),
+			expectedBefore: []string{
+				"Starting process with command `bundle exec rackup config.ru -p 24405`",
+				"25 yay this is a message!!!\n",
+			},
 			expectedSubMsgs: []string{
 				"60 <40>1 2012-11-30T07:12:53+00:00 host app web.2 - - message 2",
 				"60 <40>1 2012-11-30T07:12:53+00:00 host app web.1 - - message 1",
