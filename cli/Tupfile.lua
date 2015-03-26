@@ -23,7 +23,7 @@ vpkg = "github.com/flynn/flynn/pkg/version"
 for i, os in ipairs({"darwin", "linux", "windows"}) do
   for j, arch in ipairs({"amd64", "386"}) do
     tup.rule({"../installer/bindata.go", "tuf.go"},
-             "^c go build %o^ GOOS="..os.." GOARCH="..arch.." ../util/_toolchain/go/bin/go build -o %o -ldflags=\"-X "..vpkg..".commit $GIT_COMMIT -X "..vpkg..".branch $GIT_BRANCH -X "..vpkg..".tag $GIT_TAG -X "..vpkg..".dirty $GIT_DIRTY\"",
+             "^c go build %o^ GOOS="..os.." GOARCH="..arch.." CGO_ENABLED=0 ../util/_toolchain/go/bin/go build -installsuffix nocgo -o %o -ldflags=\"-X "..vpkg..".commit $GIT_COMMIT -X "..vpkg..".branch $GIT_BRANCH -X "..vpkg..".tag $GIT_TAG -X "..vpkg..".dirty $GIT_DIRTY\"",
              {string.format("bin/flynn-%s-%s", os, arch)})
   end
 end
