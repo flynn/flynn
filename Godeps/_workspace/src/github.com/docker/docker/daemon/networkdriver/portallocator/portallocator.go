@@ -1,10 +1,24 @@
 package portallocator
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"sync"
+
+	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
+)
+
+const (
+	DefaultPortRangeStart = 49153
+	DefaultPortRangeEnd   = 65535
+)
+
+var (
+	beginPortRange = DefaultPortRangeStart
+	endPortRange   = DefaultPortRangeEnd
 )
 
 type portMap struct {
@@ -15,7 +29,7 @@ type portMap struct {
 func newPortMap() *portMap {
 	return &portMap{
 		p:    map[int]struct{}{},
-		last: EndPortRange,
+		last: endPortRange,
 	}
 }
 
@@ -30,22 +44,30 @@ func newProtoMap() protoMap {
 
 type ipMapping map[string]protoMap
 
-const (
-	BeginPortRange = 49153
-	EndPortRange   = 65535
-)
-
 var (
 	ErrAllPortsAllocated = errors.New("all ports are allocated")
 	ErrUnknownProtocol   = errors.New("unknown protocol")
 )
 
 var (
-	mutex sync.Mutex
-
 	defaultIP = net.ParseIP("0.0.0.0")
-	globalMap = ipMapping{}
+
+	DefaultPortAllocator = New()
+	RequestPort          = DefaultPortAllocator.RequestPort
+	ReleasePort          = DefaultPortAllocator.ReleasePort
+	ReleaseAll           = DefaultPortAllocator.ReleaseAll
 )
+
+type PortAllocator struct {
+	mutex sync.Mutex
+	ipMap ipMapping
+}
+
+func New() *PortAllocator {
+	return &PortAllocator{
+		ipMap: ipMapping{},
+	}
+}
 
 type ErrPortAlreadyAllocated struct {
 	ip   string
@@ -57,6 +79,32 @@ func NewErrPortAlreadyAllocated(ip string, port int) ErrPortAlreadyAllocated {
 		ip:   ip,
 		port: port,
 	}
+}
+
+func init() {
+	const portRangeKernelParam = "/proc/sys/net/ipv4/ip_local_port_range"
+	portRangeFallback := fmt.Sprintf("using fallback port range %d-%d", beginPortRange, endPortRange)
+
+	file, err := os.Open(portRangeKernelParam)
+	if err != nil {
+		log.Warnf("port allocator - %s due to error: %v", portRangeFallback, err)
+		return
+	}
+	var start, end int
+	n, err := fmt.Fscanf(bufio.NewReader(file), "%d\t%d", &start, &end)
+	if n != 2 || err != nil {
+		if err == nil {
+			err = fmt.Errorf("unexpected count of parsed numbers (%d)", n)
+		}
+		log.Errorf("port allocator - failed to parse system ephemeral port range from %s - %s: %v", portRangeKernelParam, portRangeFallback, err)
+		return
+	}
+	beginPortRange = start
+	endPortRange = end
+}
+
+func PortRange() (int, int) {
+	return beginPortRange, endPortRange
 }
 
 func (e ErrPortAlreadyAllocated) IP() string {
@@ -78,9 +126,9 @@ func (e ErrPortAlreadyAllocated) Error() string {
 // RequestPort requests new port from global ports pool for specified ip and proto.
 // If port is 0 it returns first free port. Otherwise it cheks port availability
 // in pool and return that port or error if port is already busy.
-func RequestPort(ip net.IP, proto string, port int) (int, error) {
-	mutex.Lock()
-	defer mutex.Unlock()
+func (p *PortAllocator) RequestPort(ip net.IP, proto string, port int) (int, error) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
 
 	if proto != "tcp" && proto != "udp" {
 		return 0, ErrUnknownProtocol
@@ -90,10 +138,10 @@ func RequestPort(ip net.IP, proto string, port int) (int, error) {
 		ip = defaultIP
 	}
 	ipstr := ip.String()
-	protomap, ok := globalMap[ipstr]
+	protomap, ok := p.ipMap[ipstr]
 	if !ok {
 		protomap = newProtoMap()
-		globalMap[ipstr] = protomap
+		p.ipMap[ipstr] = protomap
 	}
 	mapping := protomap[proto]
 	if port > 0 {
@@ -112,14 +160,14 @@ func RequestPort(ip net.IP, proto string, port int) (int, error) {
 }
 
 // ReleasePort releases port from global ports pool for specified ip and proto.
-func ReleasePort(ip net.IP, proto string, port int) error {
-	mutex.Lock()
-	defer mutex.Unlock()
+func (p *PortAllocator) ReleasePort(ip net.IP, proto string, port int) error {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
 
 	if ip == nil {
 		ip = defaultIP
 	}
-	protomap, ok := globalMap[ip.String()]
+	protomap, ok := p.ipMap[ip.String()]
 	if !ok {
 		return nil
 	}
@@ -128,19 +176,19 @@ func ReleasePort(ip net.IP, proto string, port int) error {
 }
 
 // ReleaseAll releases all ports for all ips.
-func ReleaseAll() error {
-	mutex.Lock()
-	globalMap = ipMapping{}
-	mutex.Unlock()
+func (p *PortAllocator) ReleaseAll() error {
+	p.mutex.Lock()
+	p.ipMap = ipMapping{}
+	p.mutex.Unlock()
 	return nil
 }
 
 func (pm *portMap) findPort() (int, error) {
 	port := pm.last
-	for i := 0; i <= EndPortRange-BeginPortRange; i++ {
+	for i := 0; i <= endPortRange-beginPortRange; i++ {
 		port++
-		if port > EndPortRange {
-			port = BeginPortRange
+		if port > endPortRange {
+			port = beginPortRange
 		}
 
 		if _, ok := pm.p[port]; !ok {

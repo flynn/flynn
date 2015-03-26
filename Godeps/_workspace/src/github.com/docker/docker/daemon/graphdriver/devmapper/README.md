@@ -28,6 +28,49 @@ containers. All base images are snapshots of this device and those
 images are then in turn used as snapshots for other images and
 eventually containers.
 
+### Information on `docker info`
+
+As of docker-1.4.1, `docker info` when using the `devicemapper` storage driver
+will display something like:
+
+	$ sudo docker info
+	[...]
+	Storage Driver: devicemapper
+	 Pool Name: docker-253:1-17538953-pool
+	 Pool Blocksize: 65.54 kB
+	 Data file: /dev/loop4
+	 Metadata file: /dev/loop4
+	 Data Space Used: 2.536 GB
+	 Data Space Total: 107.4 GB
+	 Data Space Available: 104.8 GB
+	 Metadata Space Used: 7.93 MB
+	 Metadata Space Total: 2.147 GB
+	 Metadata Space Available: 2.14 GB
+	 Udev Sync Supported: true
+	 Data loop file: /home/docker/devicemapper/devicemapper/data
+	 Metadata loop file: /home/docker/devicemapper/devicemapper/metadata
+	 Library Version: 1.02.82-git (2013-10-04)
+	[...]
+
+#### status items
+
+Each item in the indented section under `Storage Driver: devicemapper` are
+status information about the driver.
+ *  `Pool Name` name of the devicemapper pool for this driver.
+ *  `Pool Blocksize` tells the blocksize the thin pool was initialized with. This only changes on creation.
+ *  `Data file` blockdevice file used for the devicemapper data
+ *  `Metadata file` blockdevice file used for the devicemapper metadata
+ *  `Data Space Used` tells how much of `Data file` is currently used
+ *  `Data Space Total` tells max size the `Data file`
+ *  `Data Space Available` tells how much free space there is in the `Data file`. If you are using a loop device this will report the actual space available to the loop device on the underlying filesystem.
+ *  `Metadata Space Used` tells how much of `Metadata file` is currently used
+ *  `Metadata Space Total` tells max size the `Metadata file`
+ *  `Metadata Space Available` tells how much free space there is in the `Metadata file`. If you are using a loop device this will report the actual space available to the loop device on the underlying filesystem.
+ *  `Udev Sync Supported` tells whether devicemapper is able to sync with Udev. Should be `true`.
+ *  `Data loop file` file attached to `Data file`, if loopback device is used
+ *  `Metadata loop file` file attached to `Metadata file`, if loopback device is used
+ *  `Library Version` from the libdevmapper used
+
 ### options
 
 The devicemapper backend supports some options that you can specify
@@ -107,7 +150,7 @@ Here is the list of supported options:
     If using a block device for device mapper storage, ideally lvm2
     would be used to create/manage the thin-pool volume that is then
     handed to docker to exclusively create/manage the thin and thin
-    snapshot volumes needed for it's containers.  Managing the thin-pool
+    snapshot volumes needed for its containers.  Managing the thin-pool
     outside of docker makes for the most feature-rich method of having
     docker utilize device mapper thin provisioning as the backing
     storage for docker's containers.  lvm2-based thin-pool management
@@ -162,7 +205,7 @@ Here is the list of supported options:
 
     Enables or disables the use of blkdiscard when removing
     devicemapper devices. This is enabled by default (only) if using
-    loopback devices and is required to res-parsify the loopback file
+    loopback devices and is required to resparsify the loopback file
     on image/container removal.
 
     Disabling this on loopback can lead to *much* faster container

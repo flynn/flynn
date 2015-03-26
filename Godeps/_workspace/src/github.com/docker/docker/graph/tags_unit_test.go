@@ -15,8 +15,14 @@ import (
 )
 
 const (
-	testImageName = "myapp"
-	testImageID   = "1a2d3c4d4e5fa2d2a21acea242a5e2345d3aefc3e7dfa2a2a2a21a2a2ad2d234"
+	testOfficialImageName    = "myapp"
+	testOfficialImageID      = "1a2d3c4d4e5fa2d2a21acea242a5e2345d3aefc3e7dfa2a2a2a21a2a2ad2d234"
+	testOfficialImageIDShort = "1a2d3c4d4e5f"
+	testPrivateImageName     = "127.0.0.1:8000/privateapp"
+	testPrivateImageID       = "5bc255f8699e4ee89ac4469266c3d11515da88fdcbde45d7b069b636ff4efd81"
+	testPrivateImageIDShort  = "5bc255f8699e"
+	testPrivateImageDigest   = "sha256:bc8813ea7b3603864987522f02a76101c17ad122e1c46d790efc0fca78ca7bfb"
+	testPrivateImageTag      = "sometag"
 )
 
 func fakeTar() (io.Reader, error) {
@@ -53,19 +59,33 @@ func mkTestTagStore(root string, t *testing.T) *TagStore {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := NewTagStore(path.Join(root, "tags"), graph, nil, nil)
+	store, err := NewTagStore(path.Join(root, "tags"), graph, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	archive, err := fakeTar()
+	officialArchive, err := fakeTar()
 	if err != nil {
 		t.Fatal(err)
 	}
-	img := &image.Image{ID: testImageID}
-	if err := graph.Register(img, archive); err != nil {
+	img := &image.Image{ID: testOfficialImageID}
+	if err := graph.Register(img, officialArchive); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Set(testImageName, "", testImageID, false); err != nil {
+	if err := store.Set(testOfficialImageName, "", testOfficialImageID, false); err != nil {
+		t.Fatal(err)
+	}
+	privateArchive, err := fakeTar()
+	if err != nil {
+		t.Fatal(err)
+	}
+	img = &image.Image{ID: testPrivateImageID}
+	if err := graph.Register(img, privateArchive); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Set(testPrivateImageName, "", testPrivateImageID, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetDigest(testPrivateImageName, testPrivateImageDigest, testPrivateImageID); err != nil {
 		t.Fatal(err)
 	}
 	return store
@@ -80,39 +100,79 @@ func TestLookupImage(t *testing.T) {
 	store := mkTestTagStore(tmp, t)
 	defer store.graph.driver.Cleanup()
 
-	if img, err := store.LookupImage(testImageName); err != nil {
-		t.Fatal(err)
-	} else if img == nil {
-		t.Errorf("Expected 1 image, none found")
-	}
-	if img, err := store.LookupImage(testImageName + ":" + DEFAULTTAG); err != nil {
-		t.Fatal(err)
-	} else if img == nil {
-		t.Errorf("Expected 1 image, none found")
-	}
-
-	if img, err := store.LookupImage(testImageName + ":" + "fail"); err == nil {
-		t.Errorf("Expected error, none found")
-	} else if img != nil {
-		t.Errorf("Expected 0 image, 1 found")
-	}
-
-	if img, err := store.LookupImage("fail:fail"); err == nil {
-		t.Errorf("Expected error, none found")
-	} else if img != nil {
-		t.Errorf("Expected 0 image, 1 found")
+	officialLookups := []string{
+		testOfficialImageID,
+		testOfficialImageIDShort,
+		testOfficialImageName + ":" + testOfficialImageID,
+		testOfficialImageName + ":" + testOfficialImageIDShort,
+		testOfficialImageName,
+		testOfficialImageName + ":" + DEFAULTTAG,
+		"docker.io/" + testOfficialImageName,
+		"docker.io/" + testOfficialImageName + ":" + DEFAULTTAG,
+		"index.docker.io/" + testOfficialImageName,
+		"index.docker.io/" + testOfficialImageName + ":" + DEFAULTTAG,
+		"library/" + testOfficialImageName,
+		"library/" + testOfficialImageName + ":" + DEFAULTTAG,
+		"docker.io/library/" + testOfficialImageName,
+		"docker.io/library/" + testOfficialImageName + ":" + DEFAULTTAG,
+		"index.docker.io/library/" + testOfficialImageName,
+		"index.docker.io/library/" + testOfficialImageName + ":" + DEFAULTTAG,
 	}
 
-	if img, err := store.LookupImage(testImageID); err != nil {
-		t.Fatal(err)
-	} else if img == nil {
-		t.Errorf("Expected 1 image, none found")
+	privateLookups := []string{
+		testPrivateImageID,
+		testPrivateImageIDShort,
+		testPrivateImageName + ":" + testPrivateImageID,
+		testPrivateImageName + ":" + testPrivateImageIDShort,
+		testPrivateImageName,
+		testPrivateImageName + ":" + DEFAULTTAG,
 	}
 
-	if img, err := store.LookupImage(testImageName + ":" + testImageID); err != nil {
-		t.Fatal(err)
-	} else if img == nil {
-		t.Errorf("Expected 1 image, none found")
+	invalidLookups := []string{
+		testOfficialImageName + ":" + "fail",
+		"fail:fail",
+	}
+
+	digestLookups := []string{
+		testPrivateImageName + "@" + testPrivateImageDigest,
+	}
+
+	for _, name := range officialLookups {
+		if img, err := store.LookupImage(name); err != nil {
+			t.Errorf("Error looking up %s: %s", name, err)
+		} else if img == nil {
+			t.Errorf("Expected 1 image, none found: %s", name)
+		} else if img.ID != testOfficialImageID {
+			t.Errorf("Expected ID '%s' found '%s'", testOfficialImageID, img.ID)
+		}
+	}
+
+	for _, name := range privateLookups {
+		if img, err := store.LookupImage(name); err != nil {
+			t.Errorf("Error looking up %s: %s", name, err)
+		} else if img == nil {
+			t.Errorf("Expected 1 image, none found: %s", name)
+		} else if img.ID != testPrivateImageID {
+			t.Errorf("Expected ID '%s' found '%s'", testPrivateImageID, img.ID)
+		}
+	}
+
+	for _, name := range invalidLookups {
+		if img, err := store.LookupImage(name); err == nil {
+			t.Errorf("Expected error, none found: %s", name)
+		} else if img != nil {
+			t.Errorf("Expected 0 image, 1 found: %s", name)
+		}
+	}
+
+	for _, name := range digestLookups {
+		if img, err := store.LookupImage(name); err != nil {
+			t.Errorf("Error looking up %s: %s", name, err)
+		} else if img == nil {
+			t.Errorf("Expected 1 image, none found: %s", name)
+		} else if img.ID != testPrivateImageID {
+			t.Errorf("Expected ID '%s' found '%s'", testPrivateImageID, img.ID)
+		}
 	}
 }
 
@@ -134,17 +194,23 @@ func TestInvalidTagName(t *testing.T) {
 	}
 }
 
-func TestOfficialName(t *testing.T) {
-	names := map[string]bool{
-		"library/ubuntu":    true,
-		"nonlibrary/ubuntu": false,
-		"ubuntu":            true,
-		"other/library":     false,
+func TestValidateDigest(t *testing.T) {
+	tests := []struct {
+		input       string
+		expectError bool
+	}{
+		{"", true},
+		{"latest", true},
+		{"a:b", false},
+		{"aZ0124-.+:bY852-_.+=", false},
+		{"#$%#$^:$%^#$%", true},
 	}
-	for name, isOfficial := range names {
-		result := isOfficialName(name)
-		if result != isOfficial {
-			t.Errorf("Unexpected result for %s\n\tExpecting: %v\n\tActual: %v", name, isOfficial, result)
+
+	for i, test := range tests {
+		err := validateDigest(test.input)
+		gotError := err != nil
+		if e, a := test.expectError, gotError; e != a {
+			t.Errorf("%d: with input %s, expected error=%t, got %t: %s", i, test.input, test.expectError, gotError, err)
 		}
 	}
 }

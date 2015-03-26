@@ -1,108 +1,64 @@
 package registry
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net/url"
+	"net/http"
 	"strconv"
 
 	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/distribution/digest"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/registry/v2"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/utils"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/mux"
 )
 
-func newV2RegistryRouter() *mux.Router {
-	router := mux.NewRouter()
+const DockerDigestHeader = "Docker-Content-Digest"
 
-	v2Router := router.PathPrefix("/v2/").Subrouter()
-
-	// Version Info
-	v2Router.Path("/version").Name("version")
-
-	// Image Manifests
-	v2Router.Path("/manifest/{imagename:[a-z0-9-._/]+}/{tagname:[a-zA-Z0-9-._]+}").Name("manifests")
-
-	// List Image Tags
-	v2Router.Path("/tags/{imagename:[a-z0-9-._/]+}").Name("tags")
-
-	// Download a blob
-	v2Router.Path("/blob/{imagename:[a-z0-9-._/]+}/{sumtype:[a-z0-9._+-]+}/{sum:[a-fA-F0-9]{4,}}").Name("downloadBlob")
-
-	// Upload a blob
-	v2Router.Path("/blob/{imagename:[a-z0-9-._/]+}/{sumtype:[a-z0-9._+-]+}").Name("uploadBlob")
-
-	// Mounting a blob in an image
-	v2Router.Path("/mountblob/{imagename:[a-z0-9-._/]+}/{sumtype:[a-z0-9._+-]+}/{sum:[a-fA-F0-9]{4,}}").Name("mountBlob")
-
-	return router
+func getV2Builder(e *Endpoint) *v2.URLBuilder {
+	if e.URLBuilder == nil {
+		e.URLBuilder = v2.NewURLBuilder(e.URL)
+	}
+	return e.URLBuilder
 }
 
-// APIVersion2 /v2/
-var v2HTTPRoutes = newV2RegistryRouter()
-
-func getV2URL(e *Endpoint, routeName string, vars map[string]string) (*url.URL, error) {
-	route := v2HTTPRoutes.Get(routeName)
-	if route == nil {
-		return nil, fmt.Errorf("unknown regisry v2 route name: %q", routeName)
+func (r *Session) V2RegistryEndpoint(index *IndexInfo) (ep *Endpoint, err error) {
+	// TODO check if should use Mirror
+	if index.Official {
+		ep, err = newEndpoint(REGISTRYSERVER, true)
+		if err != nil {
+			return
+		}
+		err = validateEndpoint(ep)
+		if err != nil {
+			return
+		}
+	} else if r.indexEndpoint.String() == index.GetAuthConfigKey() {
+		ep = r.indexEndpoint
+	} else {
+		ep, err = NewEndpoint(index)
+		if err != nil {
+			return
+		}
 	}
 
-	varReplace := make([]string, 0, len(vars)*2)
-	for key, val := range vars {
-		varReplace = append(varReplace, key, val)
-	}
-
-	routePath, err := route.URLPath(varReplace...)
-	if err != nil {
-		return nil, fmt.Errorf("unable to make registry route %q with vars %v: %s", routeName, vars, err)
-	}
-	u, err := url.Parse(REGISTRYSERVER)
-	if err != nil {
-		return nil, fmt.Errorf("invalid registry url: %s", err)
-	}
-
-	return &url.URL{
-		Scheme: u.Scheme,
-		Host:   u.Host,
-		Path:   routePath.Path,
-	}, nil
+	ep.URLBuilder = v2.NewURLBuilder(ep.URL)
+	return
 }
 
-// V2 Provenance POC
-
-func (r *Session) GetV2Version(token []string) (*RegistryInfo, error) {
-	routeURL, err := getV2URL(r.indexEndpoint, "version", nil)
-	if err != nil {
-		return nil, err
+// GetV2Authorization gets the authorization needed to the given image
+// If readonly access is requested, then only the authorization may
+// only be used for Get operations.
+func (r *Session) GetV2Authorization(ep *Endpoint, imageName string, readOnly bool) (auth *RequestAuthorization, err error) {
+	scopes := []string{"pull"}
+	if !readOnly {
+		scopes = append(scopes, "push")
 	}
 
-	method := "GET"
-	log.Debugf("[registry] Calling %q %s", method, routeURL.String())
-
-	req, err := r.reqFactory.NewRequest(method, routeURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-	setTokenAuth(req, token)
-	res, _, err := r.doRequest(req)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		return nil, utils.NewHTTPRequestError(fmt.Sprintf("Server error: %d fetching Version", res.StatusCode), res)
-	}
-
-	decoder := json.NewDecoder(res.Body)
-	versionInfo := new(RegistryInfo)
-
-	err = decoder.Decode(versionInfo)
-	if err != nil {
-		return nil, fmt.Errorf("unable to decode GetV2Version JSON response: %s", err)
-	}
-
-	return versionInfo, nil
+	log.Debugf("Getting authorization for %s %s", imageName, scopes)
+	return NewRequestAuthorization(r.GetAuthConfig(true), ep, "repository", imageName, scopes), nil
 }
 
 //
@@ -112,104 +68,97 @@ func (r *Session) GetV2Version(token []string) (*RegistryInfo, error) {
 //  1.c) if anything else, err
 // 2) PUT the created/signed manifest
 //
-func (r *Session) GetV2ImageManifest(imageName, tagName string, token []string) ([]byte, error) {
-	vars := map[string]string{
-		"imagename": imageName,
-		"tagname":   tagName,
-	}
-
-	routeURL, err := getV2URL(r.indexEndpoint, "manifests", vars)
+func (r *Session) GetV2ImageManifest(ep *Endpoint, imageName, tagName string, auth *RequestAuthorization) ([]byte, string, error) {
+	routeURL, err := getV2Builder(ep).BuildManifestURL(imageName, tagName)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	method := "GET"
-	log.Debugf("[registry] Calling %q %s", method, routeURL.String())
+	log.Debugf("[registry] Calling %q %s", method, routeURL)
 
-	req, err := r.reqFactory.NewRequest(method, routeURL.String(), nil)
+	req, err := r.reqFactory.NewRequest(method, routeURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	setTokenAuth(req, token)
+	if err := auth.Authorize(req); err != nil {
+		return nil, "", err
+	}
 	res, _, err := r.doRequest(req)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
 		if res.StatusCode == 401 {
-			return nil, errLoginRequired
+			return nil, "", errLoginRequired
 		} else if res.StatusCode == 404 {
-			return nil, ErrDoesNotExist
+			return nil, "", ErrDoesNotExist
 		}
-		return nil, utils.NewHTTPRequestError(fmt.Sprintf("Server error: %d trying to fetch for %s:%s", res.StatusCode, imageName, tagName), res)
+		return nil, "", utils.NewHTTPRequestError(fmt.Sprintf("Server error: %d trying to fetch for %s:%s", res.StatusCode, imageName, tagName), res)
 	}
 
-	buf, err := ioutil.ReadAll(res.Body)
+	manifestBytes, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, fmt.Errorf("Error while reading the http response: %s", err)
+		return nil, "", fmt.Errorf("Error while reading the http response: %s", err)
 	}
-	return buf, nil
+
+	return manifestBytes, res.Header.Get(DockerDigestHeader), nil
 }
 
-// - Succeeded to mount for this image scope
-// - Failed with no error (So continue to Push the Blob)
+// - Succeeded to head image blob (already exists)
+// - Failed with no error (continue to Push the Blob)
 // - Failed with error
-func (r *Session) PostV2ImageMountBlob(imageName, sumType, sum string, token []string) (bool, error) {
-	vars := map[string]string{
-		"imagename": imageName,
-		"sumtype":   sumType,
-		"sum":       sum,
-	}
-
-	routeURL, err := getV2URL(r.indexEndpoint, "mountBlob", vars)
+func (r *Session) HeadV2ImageBlob(ep *Endpoint, imageName, sumType, sum string, auth *RequestAuthorization) (bool, error) {
+	routeURL, err := getV2Builder(ep).BuildBlobURL(imageName, sumType+":"+sum)
 	if err != nil {
 		return false, err
 	}
 
-	method := "POST"
-	log.Debugf("[registry] Calling %q %s", method, routeURL.String())
+	method := "HEAD"
+	log.Debugf("[registry] Calling %q %s", method, routeURL)
 
-	req, err := r.reqFactory.NewRequest(method, routeURL.String(), nil)
+	req, err := r.reqFactory.NewRequest(method, routeURL, nil)
 	if err != nil {
 		return false, err
 	}
-	setTokenAuth(req, token)
+	if err := auth.Authorize(req); err != nil {
+		return false, err
+	}
 	res, _, err := r.doRequest(req)
 	if err != nil {
 		return false, err
 	}
 	res.Body.Close() // close early, since we're not needing a body on this call .. yet?
-	switch res.StatusCode {
-	case 200:
+	switch {
+	case res.StatusCode >= 200 && res.StatusCode < 400:
 		// return something indicating no push needed
 		return true, nil
-	case 300:
+	case res.StatusCode == 401:
+		return false, errLoginRequired
+	case res.StatusCode == 404:
 		// return something indicating blob push needed
 		return false, nil
 	}
-	return false, fmt.Errorf("Failed to mount %q - %s:%s : %d", imageName, sumType, sum, res.StatusCode)
+
+	return false, utils.NewHTTPRequestError(fmt.Sprintf("Server error: %d trying head request for %s - %s:%s", res.StatusCode, imageName, sumType, sum), res)
 }
 
-func (r *Session) GetV2ImageBlob(imageName, sumType, sum string, blobWrtr io.Writer, token []string) error {
-	vars := map[string]string{
-		"imagename": imageName,
-		"sumtype":   sumType,
-		"sum":       sum,
-	}
-
-	routeURL, err := getV2URL(r.indexEndpoint, "downloadBlob", vars)
+func (r *Session) GetV2ImageBlob(ep *Endpoint, imageName, sumType, sum string, blobWrtr io.Writer, auth *RequestAuthorization) error {
+	routeURL, err := getV2Builder(ep).BuildBlobURL(imageName, sumType+":"+sum)
 	if err != nil {
 		return err
 	}
 
 	method := "GET"
-	log.Debugf("[registry] Calling %q %s", method, routeURL.String())
-	req, err := r.reqFactory.NewRequest(method, routeURL.String(), nil)
+	log.Debugf("[registry] Calling %q %s", method, routeURL)
+	req, err := r.reqFactory.NewRequest(method, routeURL, nil)
 	if err != nil {
 		return err
 	}
-	setTokenAuth(req, token)
+	if err := auth.Authorize(req); err != nil {
+		return err
+	}
 	res, _, err := r.doRequest(req)
 	if err != nil {
 		return err
@@ -226,25 +175,21 @@ func (r *Session) GetV2ImageBlob(imageName, sumType, sum string, blobWrtr io.Wri
 	return err
 }
 
-func (r *Session) GetV2ImageBlobReader(imageName, sumType, sum string, token []string) (io.ReadCloser, int64, error) {
-	vars := map[string]string{
-		"imagename": imageName,
-		"sumtype":   sumType,
-		"sum":       sum,
-	}
-
-	routeURL, err := getV2URL(r.indexEndpoint, "downloadBlob", vars)
+func (r *Session) GetV2ImageBlobReader(ep *Endpoint, imageName, sumType, sum string, auth *RequestAuthorization) (io.ReadCloser, int64, error) {
+	routeURL, err := getV2Builder(ep).BuildBlobURL(imageName, sumType+":"+sum)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	method := "GET"
-	log.Debugf("[registry] Calling %q %s", method, routeURL.String())
-	req, err := r.reqFactory.NewRequest(method, routeURL.String(), nil)
+	log.Debugf("[registry] Calling %q %s", method, routeURL)
+	req, err := r.reqFactory.NewRequest(method, routeURL, nil)
 	if err != nil {
 		return nil, 0, err
 	}
-	setTokenAuth(req, token)
+	if err := auth.Authorize(req); err != nil {
+		return nil, 0, err
+	}
 	res, _, err := r.doRequest(req)
 	if err != nil {
 		return nil, 0, err
@@ -253,7 +198,7 @@ func (r *Session) GetV2ImageBlobReader(imageName, sumType, sum string, token []s
 		if res.StatusCode == 401 {
 			return nil, 0, errLoginRequired
 		}
-		return nil, 0, utils.NewHTTPRequestError(fmt.Sprintf("Server error: %d trying to pull %s blob", res.StatusCode, imageName), res)
+		return nil, 0, utils.NewHTTPRequestError(fmt.Sprintf("Server error: %d trying to pull %s blob - %s:%s", res.StatusCode, imageName, sumType, sum), res)
 	}
 	lenStr := res.Header.Get("Content-Length")
 	l, err := strconv.ParseInt(lenStr, 10, 64)
@@ -267,105 +212,167 @@ func (r *Session) GetV2ImageBlobReader(imageName, sumType, sum string, token []s
 // Push the image to the server for storage.
 // 'layer' is an uncompressed reader of the blob to be pushed.
 // The server will generate it's own checksum calculation.
-func (r *Session) PutV2ImageBlob(imageName, sumType string, blobRdr io.Reader, token []string) (serverChecksum string, err error) {
-	vars := map[string]string{
-		"imagename": imageName,
-		"sumtype":   sumType,
-	}
-
-	routeURL, err := getV2URL(r.indexEndpoint, "uploadBlob", vars)
+func (r *Session) PutV2ImageBlob(ep *Endpoint, imageName, sumType, sumStr string, blobRdr io.Reader, auth *RequestAuthorization) error {
+	location, err := r.initiateBlobUpload(ep, imageName, auth)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	method := "PUT"
-	log.Debugf("[registry] Calling %q %s", method, routeURL.String())
-	req, err := r.reqFactory.NewRequest(method, routeURL.String(), blobRdr)
+	log.Debugf("[registry] Calling %q %s", method, location)
+	req, err := r.reqFactory.NewRequest(method, location, ioutil.NopCloser(blobRdr))
 	if err != nil {
-		return "", err
+		return err
 	}
-	setTokenAuth(req, token)
+	queryParams := req.URL.Query()
+	queryParams.Add("digest", sumType+":"+sumStr)
+	req.URL.RawQuery = queryParams.Encode()
+	if err := auth.Authorize(req); err != nil {
+		return err
+	}
 	res, _, err := r.doRequest(req)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer res.Body.Close()
-	if res.StatusCode != 201 {
-		if res.StatusCode == 401 {
-			return "", errLoginRequired
-		}
-		return "", utils.NewHTTPRequestError(fmt.Sprintf("Server error: %d trying to push %s blob", res.StatusCode, imageName), res)
-	}
 
-	type sumReturn struct {
-		Checksum string `json:"checksum"`
-	}
-
-	decoder := json.NewDecoder(res.Body)
-	var sumInfo sumReturn
-
-	err = decoder.Decode(&sumInfo)
-	if err != nil {
-		return "", fmt.Errorf("unable to decode PutV2ImageBlob JSON response: %s", err)
-	}
-
-	// XXX this is a json struct from the registry, with its checksum
-	return sumInfo.Checksum, nil
-}
-
-// Finally Push the (signed) manifest of the blobs we've just pushed
-func (r *Session) PutV2ImageManifest(imageName, tagName string, manifestRdr io.Reader, token []string) error {
-	vars := map[string]string{
-		"imagename": imageName,
-		"tagname":   tagName,
-	}
-
-	routeURL, err := getV2URL(r.indexEndpoint, "manifests", vars)
-	if err != nil {
-		return err
-	}
-
-	method := "PUT"
-	log.Debugf("[registry] Calling %q %s", method, routeURL.String())
-	req, err := r.reqFactory.NewRequest(method, routeURL.String(), manifestRdr)
-	if err != nil {
-		return err
-	}
-	setTokenAuth(req, token)
-	res, _, err := r.doRequest(req)
-	if err != nil {
-		return err
-	}
-	res.Body.Close()
 	if res.StatusCode != 201 {
 		if res.StatusCode == 401 {
 			return errLoginRequired
 		}
-		return utils.NewHTTPRequestError(fmt.Sprintf("Server error: %d trying to push %s:%s manifest", res.StatusCode, imageName, tagName), res)
+		errBody, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			return err
+		}
+		log.Debugf("Unexpected response from server: %q %#v", errBody, res.Header)
+		return utils.NewHTTPRequestError(fmt.Sprintf("Server error: %d trying to push %s blob - %s:%s", res.StatusCode, imageName, sumType, sumStr), res)
 	}
 
 	return nil
 }
 
-// Given a repository name, returns a json array of string tags
-func (r *Session) GetV2RemoteTags(imageName string, token []string) ([]string, error) {
-	vars := map[string]string{
-		"imagename": imageName,
+// initiateBlobUpload gets the blob upload location for the given image name.
+func (r *Session) initiateBlobUpload(ep *Endpoint, imageName string, auth *RequestAuthorization) (location string, err error) {
+	routeURL, err := getV2Builder(ep).BuildBlobUploadURL(imageName)
+	if err != nil {
+		return "", err
 	}
 
-	routeURL, err := getV2URL(r.indexEndpoint, "tags", vars)
+	log.Debugf("[registry] Calling %q %s", "POST", routeURL)
+	req, err := r.reqFactory.NewRequest("POST", routeURL, nil)
+	if err != nil {
+		return "", err
+	}
+
+	if err := auth.Authorize(req); err != nil {
+		return "", err
+	}
+	res, _, err := r.doRequest(req)
+	if err != nil {
+		return "", err
+	}
+
+	if res.StatusCode != http.StatusAccepted {
+		if res.StatusCode == http.StatusUnauthorized {
+			return "", errLoginRequired
+		}
+		if res.StatusCode == http.StatusNotFound {
+			return "", ErrDoesNotExist
+		}
+
+		errBody, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			return "", err
+		}
+
+		log.Debugf("Unexpected response from server: %q %#v", errBody, res.Header)
+		return "", utils.NewHTTPRequestError(fmt.Sprintf("Server error: unexpected %d response status trying to initiate upload of %s", res.StatusCode, imageName), res)
+	}
+
+	if location = res.Header.Get("Location"); location == "" {
+		return "", fmt.Errorf("registry did not return a Location header for resumable blob upload for image %s", imageName)
+	}
+
+	return
+}
+
+// Finally Push the (signed) manifest of the blobs we've just pushed
+func (r *Session) PutV2ImageManifest(ep *Endpoint, imageName, tagName string, signedManifest, rawManifest []byte, auth *RequestAuthorization) (digest.Digest, error) {
+	routeURL, err := getV2Builder(ep).BuildManifestURL(imageName, tagName)
+	if err != nil {
+		return "", err
+	}
+
+	method := "PUT"
+	log.Debugf("[registry] Calling %q %s", method, routeURL)
+	req, err := r.reqFactory.NewRequest(method, routeURL, bytes.NewReader(signedManifest))
+	if err != nil {
+		return "", err
+	}
+	if err := auth.Authorize(req); err != nil {
+		return "", err
+	}
+	res, _, err := r.doRequest(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+
+	// All 2xx and 3xx responses can be accepted for a put.
+	if res.StatusCode >= 400 {
+		if res.StatusCode == 401 {
+			return "", errLoginRequired
+		}
+		errBody, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			return "", err
+		}
+		log.Debugf("Unexpected response from server: %q %#v", errBody, res.Header)
+		return "", utils.NewHTTPRequestError(fmt.Sprintf("Server error: %d trying to push %s:%s manifest", res.StatusCode, imageName, tagName), res)
+	}
+
+	hdrDigest, err := digest.ParseDigest(res.Header.Get(DockerDigestHeader))
+	if err != nil {
+		return "", fmt.Errorf("invalid manifest digest from registry: %s", err)
+	}
+
+	dgstVerifier, err := digest.NewDigestVerifier(hdrDigest)
+	if err != nil {
+		return "", fmt.Errorf("invalid manifest digest from registry: %s", err)
+	}
+
+	dgstVerifier.Write(rawManifest)
+
+	if !dgstVerifier.Verified() {
+		computedDigest, _ := digest.FromBytes(rawManifest)
+		return "", fmt.Errorf("unable to verify manifest digest: registry has %q, computed %q", hdrDigest, computedDigest)
+	}
+
+	return hdrDigest, nil
+}
+
+type remoteTags struct {
+	Name string   `json:"name"`
+	Tags []string `json:"tags"`
+}
+
+// Given a repository name, returns a json array of string tags
+func (r *Session) GetV2RemoteTags(ep *Endpoint, imageName string, auth *RequestAuthorization) ([]string, error) {
+	routeURL, err := getV2Builder(ep).BuildTagsURL(imageName)
 	if err != nil {
 		return nil, err
 	}
 
 	method := "GET"
-	log.Debugf("[registry] Calling %q %s", method, routeURL.String())
+	log.Debugf("[registry] Calling %q %s", method, routeURL)
 
-	req, err := r.reqFactory.NewRequest(method, routeURL.String(), nil)
+	req, err := r.reqFactory.NewRequest(method, routeURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	setTokenAuth(req, token)
+	if err := auth.Authorize(req); err != nil {
+		return nil, err
+	}
 	res, _, err := r.doRequest(req)
 	if err != nil {
 		return nil, err
@@ -381,10 +388,10 @@ func (r *Session) GetV2RemoteTags(imageName string, token []string) ([]string, e
 	}
 
 	decoder := json.NewDecoder(res.Body)
-	var tags []string
-	err = decoder.Decode(&tags)
+	var remote remoteTags
+	err = decoder.Decode(&remote)
 	if err != nil {
 		return nil, fmt.Errorf("Error while decoding the http response: %s", err)
 	}
-	return tags, nil
+	return remote.Tags, nil
 }

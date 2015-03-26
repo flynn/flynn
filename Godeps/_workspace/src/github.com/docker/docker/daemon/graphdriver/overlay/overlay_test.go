@@ -1,9 +1,8 @@
 package overlay
 
 import (
-	"testing"
-
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver/graphtest"
+	"testing"
 )
 
 // This avoids creating a new driver for each test if all tests are run

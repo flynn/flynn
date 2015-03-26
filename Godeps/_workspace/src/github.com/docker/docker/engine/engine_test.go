@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/ioutils"
 )
 
 func TestRegister(t *testing.T) {
@@ -43,9 +45,9 @@ func TestJob(t *testing.T) {
 		t.Fatalf("job1.handler should be empty")
 	}
 
-	h := func(j *Job) Status {
+	h := func(j *Job) error {
 		j.Printf("%s\n", j.Name)
-		return 42
+		return nil
 	}
 
 	eng.Register("dummy2", h)
@@ -56,7 +58,7 @@ func TestJob(t *testing.T) {
 		t.Fatalf("job2.handler shouldn't be nil")
 	}
 
-	if job2.handler(job2) != 42 {
+	if job2.handler(job2) != nil {
 		t.Fatalf("handler dummy2 was not found in job2")
 	}
 }
@@ -74,7 +76,7 @@ func TestEngineShutdown(t *testing.T) {
 
 func TestEngineCommands(t *testing.T) {
 	eng := New()
-	handler := func(job *Job) Status { return StatusOK }
+	handler := func(job *Job) error { return nil }
 	eng.Register("foo", handler)
 	eng.Register("bar", handler)
 	eng.Register("echo", handler)
@@ -103,9 +105,9 @@ func TestParseJob(t *testing.T) {
 	eng := New()
 	// Verify that the resulting job calls to the right place
 	var called bool
-	eng.Register("echo", func(job *Job) Status {
+	eng.Register("echo", func(job *Job) error {
 		called = true
-		return StatusOK
+		return nil
 	})
 	input := "echo DEBUG=1 hello world VERBOSITY=42"
 	job, err := eng.ParseJob(input)
@@ -138,9 +140,9 @@ func TestParseJob(t *testing.T) {
 func TestCatchallEmptyName(t *testing.T) {
 	eng := New()
 	var called bool
-	eng.RegisterCatchall(func(job *Job) Status {
+	eng.RegisterCatchall(func(job *Job) error {
 		called = true
-		return StatusOK
+		return nil
 	})
 	err := eng.Job("").Run()
 	if err == nil {
@@ -148,5 +150,87 @@ func TestCatchallEmptyName(t *testing.T) {
 	}
 	if called {
 		t.Fatalf("Engine.Job(\"\").Run() should return an error")
+	}
+}
+
+// Ensure that a job within a job both using the same underlying standard
+// output writer does not close the output of the outer job when the inner
+// job's stdout is wrapped with a NopCloser. When not wrapped, it should
+// close the outer job's output.
+func TestNestedJobSharedOutput(t *testing.T) {
+	var (
+		outerHandler Handler
+		innerHandler Handler
+		wrapOutput   bool
+	)
+
+	outerHandler = func(job *Job) error {
+		job.Stdout.Write([]byte("outer1"))
+
+		innerJob := job.Eng.Job("innerJob")
+
+		if wrapOutput {
+			innerJob.Stdout.Add(ioutils.NopWriteCloser(job.Stdout))
+		} else {
+			innerJob.Stdout.Add(job.Stdout)
+		}
+
+		if err := innerJob.Run(); err != nil {
+			t.Fatal(err)
+		}
+
+		// If wrapOutput was *false* this write will do nothing.
+		// FIXME (jlhawn): It should cause an error to write to
+		// closed output.
+		job.Stdout.Write([]byte(" outer2"))
+
+		return nil
+	}
+
+	innerHandler = func(job *Job) error {
+		job.Stdout.Write([]byte(" inner"))
+
+		return nil
+	}
+
+	eng := New()
+	eng.Register("outerJob", outerHandler)
+	eng.Register("innerJob", innerHandler)
+
+	// wrapOutput starts *false* so the expected
+	// output of running the outer job will be:
+	//
+	//     "outer1 inner"
+	//
+	outBuf := new(bytes.Buffer)
+	outerJob := eng.Job("outerJob")
+	outerJob.Stdout.Add(outBuf)
+
+	if err := outerJob.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	expectedOutput := "outer1 inner"
+	if outBuf.String() != expectedOutput {
+		t.Fatalf("expected job output to be %q, got %q", expectedOutput, outBuf.String())
+	}
+
+	// Set wrapOutput to true so that the expected
+	// output of running the outer job will be:
+	//
+	//     "outer1 inner outer2"
+	//
+	wrapOutput = true
+	outBuf.Reset()
+	outerJob = eng.Job("outerJob")
+	outerJob.Stdout.Add(outBuf)
+
+	if err := outerJob.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	expectedOutput = "outer1 inner outer2"
+	if outBuf.String() != expectedOutput {
+		t.Fatalf("expected job output to be %q, got %q", expectedOutput, outBuf.String())
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"mime"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 
 	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
@@ -14,10 +14,12 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libtrust"
 )
 
+// Common constants for daemon and client.
 const (
-	APIVERSION        version.Version = "1.16"
-	DEFAULTHTTPHOST                   = "127.0.0.1"
-	DEFAULTUNIXSOCKET                 = "/var/run/docker.sock"
+	APIVERSION            version.Version = "1.18"                 // Current REST API version
+	DEFAULTHTTPHOST                       = "127.0.0.1"            // Default HTTP Host used if only port is provided to -H flag e.g. docker -d -H tcp://:8080
+	DEFAULTUNIXSOCKET                     = "/var/run/docker.sock" // Docker daemon by default always listens on the default unix socket
+	DefaultDockerfileName string          = "Dockerfile"           // Default filename with Docker commands, read by docker build
 )
 
 func ValidateHost(val string) (string, error) {
@@ -28,25 +30,82 @@ func ValidateHost(val string) (string, error) {
 	return host, nil
 }
 
-//TODO remove, used on < 1.5 in getContainersJSON
+// TODO remove, used on < 1.5 in getContainersJSON
 func DisplayablePorts(ports *engine.Table) string {
-	result := []string{}
-	ports.SetKey("PublicPort")
+	var (
+		result          = []string{}
+		hostMappings    = []string{}
+		firstInGroupMap map[string]int
+		lastInGroupMap  map[string]int
+	)
+	firstInGroupMap = make(map[string]int)
+	lastInGroupMap = make(map[string]int)
+	ports.SetKey("PrivatePort")
 	ports.Sort()
 	for _, port := range ports.Data {
-		if port.Get("IP") == "" {
-			result = append(result, fmt.Sprintf("%d/%s", port.GetInt("PrivatePort"), port.Get("Type")))
-		} else {
-			result = append(result, fmt.Sprintf("%s:%d->%d/%s", port.Get("IP"), port.GetInt("PublicPort"), port.GetInt("PrivatePort"), port.Get("Type")))
+		var (
+			current      = port.GetInt("PrivatePort")
+			portKey      = port.Get("Type")
+			firstInGroup int
+			lastInGroup  int
+		)
+		if port.Get("IP") != "" {
+			if port.GetInt("PublicPort") != current {
+				hostMappings = append(hostMappings, fmt.Sprintf("%s:%d->%d/%s", port.Get("IP"), port.GetInt("PublicPort"), port.GetInt("PrivatePort"), port.Get("Type")))
+				continue
+			}
+			portKey = fmt.Sprintf("%s/%s", port.Get("IP"), port.Get("Type"))
 		}
+		firstInGroup = firstInGroupMap[portKey]
+		lastInGroup = lastInGroupMap[portKey]
+
+		if firstInGroup == 0 {
+			firstInGroupMap[portKey] = current
+			lastInGroupMap[portKey] = current
+			continue
+		}
+
+		if current == (lastInGroup + 1) {
+			lastInGroupMap[portKey] = current
+			continue
+		}
+		result = append(result, FormGroup(portKey, firstInGroup, lastInGroup))
+		firstInGroupMap[portKey] = current
+		lastInGroupMap[portKey] = current
 	}
+	for portKey, firstInGroup := range firstInGroupMap {
+		result = append(result, FormGroup(portKey, firstInGroup, lastInGroupMap[portKey]))
+	}
+	result = append(result, hostMappings...)
 	return strings.Join(result, ", ")
+}
+
+func FormGroup(key string, start, last int) string {
+	var (
+		group     string
+		parts     = strings.Split(key, "/")
+		groupType = parts[0]
+		ip        = ""
+	)
+	if len(parts) > 1 {
+		ip = parts[0]
+		groupType = parts[1]
+	}
+	if start == last {
+		group = fmt.Sprintf("%d", start)
+	} else {
+		group = fmt.Sprintf("%d-%d", start, last)
+	}
+	if ip != "" {
+		group = fmt.Sprintf("%s:%s->%s", ip, group, group)
+	}
+	return fmt.Sprintf("%s/%s", group, groupType)
 }
 
 func MatchesContentType(contentType, expectedType string) bool {
 	mimetype, _, err := mime.ParseMediaType(contentType)
 	if err != nil {
-		log.Errorf("Error parsing media type: %s error: %s", contentType, err.Error())
+		log.Errorf("Error parsing media type: %s error: %v", contentType, err)
 	}
 	return err == nil && mimetype == expectedType
 }
@@ -54,7 +113,7 @@ func MatchesContentType(contentType, expectedType string) bool {
 // LoadOrCreateTrustKey attempts to load the libtrust key at the given path,
 // otherwise generates a new one
 func LoadOrCreateTrustKey(trustKeyPath string) (libtrust.PrivateKey, error) {
-	err := os.MkdirAll(path.Dir(trustKeyPath), 0700)
+	err := os.MkdirAll(filepath.Dir(trustKeyPath), 0700)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +127,7 @@ func LoadOrCreateTrustKey(trustKeyPath string) (libtrust.PrivateKey, error) {
 			return nil, fmt.Errorf("Error saving key file: %s", err)
 		}
 	} else if err != nil {
-		return nil, fmt.Errorf("Error loading key file: %s", err)
+		return nil, fmt.Errorf("Error loading key file %s: %s", trustKeyPath, err)
 	}
 	return trustKey, nil
 }

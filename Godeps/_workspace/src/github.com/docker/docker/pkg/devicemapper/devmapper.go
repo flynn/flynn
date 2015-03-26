@@ -319,10 +319,37 @@ func GetLibraryVersion() (string, error) {
 	return version, nil
 }
 
+// UdevSyncSupported returns whether device-mapper is able to sync with udev
+//
+// This is essential otherwise race conditions can arise where both udev and
+// device-mapper attempt to create and destroy devices.
+func UdevSyncSupported() bool {
+	return DmUdevGetSyncSupport() != 0
+}
+
+// UdevSetSyncSupport allows setting whether the udev sync should be enabled.
+// The return bool indicates the state of whether the sync is enabled.
+func UdevSetSyncSupport(enable bool) bool {
+	if enable {
+		DmUdevSetSyncSupport(1)
+	} else {
+		DmUdevSetSyncSupport(0)
+	}
+
+	return UdevSyncSupported()
+}
+
+// CookieSupported returns whether the version of device-mapper supports the
+// use of cookie's in the tasks.
+// This is largely a lower level call that other functions use.
+func CookieSupported() bool {
+	return DmCookieSupported() != 0
+}
+
 // Useful helper for cleanup
 func RemoveDevice(name string) error {
-	log.Debugf("[devmapper] RemoveDevice START")
-	defer log.Debugf("[devmapper] RemoveDevice END")
+	log.Debugf("[devmapper] RemoveDevice START(%s)", name)
+	defer log.Debugf("[devmapper] RemoveDevice END(%s)", name)
 	task, err := TaskCreateNamed(DeviceRemove, name)
 	if task == nil {
 		return err
@@ -559,9 +586,10 @@ func CreateDevice(poolName string, deviceId int) error {
 		// Caller wants to know about ErrDeviceIdExists so that it can try with a different device id.
 		if dmSawExist {
 			return ErrDeviceIdExists
-		} else {
-			return fmt.Errorf("Error running CreateDevice %s", err)
 		}
+
+		return fmt.Errorf("Error running CreateDevice %s", err)
+
 	}
 	return nil
 }
@@ -654,9 +682,10 @@ func CreateSnapDevice(poolName string, deviceId int, baseName string, baseDevice
 		// Caller wants to know about ErrDeviceIdExists so that it can try with a different device id.
 		if dmSawExist {
 			return ErrDeviceIdExists
-		} else {
-			return fmt.Errorf("Error running DeviceCreate (createSnapDevice) %s", err)
 		}
+
+		return fmt.Errorf("Error running DeviceCreate (createSnapDevice) %s", err)
+
 	}
 
 	if doSuspend {

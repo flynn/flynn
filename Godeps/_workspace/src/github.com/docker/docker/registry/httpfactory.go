@@ -3,7 +3,7 @@ package registry
 import (
 	"runtime"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/dockerversion"
+	"github.com/docker/docker/autogen/dockerversion"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/parsers/kernel"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/utils"
 )

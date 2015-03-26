@@ -2,9 +2,8 @@ package archive
 
 import (
 	"bytes"
-	"io/ioutil"
-
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/vendor/src/code.google.com/p/go/src/pkg/archive/tar"
+	"io/ioutil"
 )
 
 // Generate generates a new archive from the content provided

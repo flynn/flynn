@@ -1,9 +1,8 @@
 package fileutils
 
 import (
-	"path/filepath"
-
 	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
+	"path/filepath"
 )
 
 // Matches returns true if relFilePath matches any of the patterns

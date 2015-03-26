@@ -14,10 +14,10 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/homedir"
 	flag "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/mflag"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/registry"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libtrust"
 )
 
 type DockerCli struct {
@@ -27,7 +27,7 @@ type DockerCli struct {
 	in         io.ReadCloser
 	out        io.Writer
 	err        io.Writer
-	key        libtrust.PrivateKey
+	keyFile    string
 	tlsConfig  *tls.Config
 	scheme     string
 	// inFd holds file descriptor of the client's STDIN, if it's a valid file
@@ -75,30 +75,40 @@ func (cli *DockerCli) Cmd(args ...string) error {
 	if len(args) > 0 {
 		method, exists := cli.getMethod(args[0])
 		if !exists {
-			fmt.Println("Error: Command not found:", args[0])
-			return cli.CmdHelp()
+			fmt.Fprintf(cli.err, "docker: '%s' is not a docker command. See 'docker --help'.\n", args[0])
+			os.Exit(1)
 		}
 		return method(args[1:]...)
 	}
 	return cli.CmdHelp()
 }
 
-func (cli *DockerCli) Subcmd(name, signature, description string) *flag.FlagSet {
-	flags := flag.NewFlagSet(name, flag.ContinueOnError)
+func (cli *DockerCli) Subcmd(name, signature, description string, exitOnError bool) *flag.FlagSet {
+	var errorHandling flag.ErrorHandling
+	if exitOnError {
+		errorHandling = flag.ExitOnError
+	} else {
+		errorHandling = flag.ContinueOnError
+	}
+	flags := flag.NewFlagSet(name, errorHandling)
 	flags.Usage = func() {
 		options := ""
-		if flags.FlagCountUndeprecated() > 0 {
-			options = "[OPTIONS] "
+		if signature != "" {
+			signature = " " + signature
 		}
-		fmt.Fprintf(cli.err, "\nUsage: docker %s %s%s\n\n%s\n\n", name, options, signature, description)
+		if flags.FlagCountUndeprecated() > 0 {
+			options = " [OPTIONS]"
+		}
+		fmt.Fprintf(cli.out, "\nUsage: docker %s%s%s\n\n%s\n\n", name, options, signature, description)
+		flags.SetOutput(cli.out)
 		flags.PrintDefaults()
-		os.Exit(2)
+		os.Exit(0)
 	}
 	return flags
 }
 
 func (cli *DockerCli) LoadConfigFile() (err error) {
-	cli.configFile, err = registry.LoadConfig(os.Getenv("HOME"))
+	cli.configFile, err = registry.LoadConfig(homedir.Get())
 	if err != nil {
 		fmt.Fprintf(cli.err, "WARNING: %s\n", err)
 	}
@@ -115,7 +125,7 @@ func (cli *DockerCli) CheckTtyInput(attachStdin, ttyMode bool) error {
 	return nil
 }
 
-func NewDockerCli(in io.ReadCloser, out, err io.Writer, key libtrust.PrivateKey, proto, addr string, tlsConfig *tls.Config) *DockerCli {
+func NewDockerCli(in io.ReadCloser, out, err io.Writer, keyFile string, proto, addr string, tlsConfig *tls.Config) *DockerCli {
 	var (
 		inFd          uintptr
 		outFd         uintptr
@@ -127,19 +137,12 @@ func NewDockerCli(in io.ReadCloser, out, err io.Writer, key libtrust.PrivateKey,
 	if tlsConfig != nil {
 		scheme = "https"
 	}
-
 	if in != nil {
-		if file, ok := in.(*os.File); ok {
-			inFd = file.Fd()
-			isTerminalIn = term.IsTerminal(inFd)
-		}
+		inFd, isTerminalIn = term.GetFdInfo(in)
 	}
 
 	if out != nil {
-		if file, ok := out.(*os.File); ok {
-			outFd = file.Fd()
-			isTerminalOut = term.IsTerminal(outFd)
-		}
+		outFd, isTerminalOut = term.GetFdInfo(out)
 	}
 
 	if err == nil {
@@ -160,6 +163,7 @@ func NewDockerCli(in io.ReadCloser, out, err io.Writer, key libtrust.PrivateKey,
 			return net.DialTimeout(proto, addr, timeout)
 		}
 	} else {
+		tr.Proxy = http.ProxyFromEnvironment
 		tr.Dial = (&net.Dialer{Timeout: timeout}).Dial
 	}
 
@@ -169,7 +173,7 @@ func NewDockerCli(in io.ReadCloser, out, err io.Writer, key libtrust.PrivateKey,
 		in:            in,
 		out:           out,
 		err:           err,
-		key:           key,
+		keyFile:       keyFile,
 		inFd:          inFd,
 		outFd:         outFd,
 		isTerminalIn:  isTerminalIn,

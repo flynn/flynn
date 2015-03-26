@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
@@ -31,22 +32,19 @@ type Job struct {
 	Stderr  *Output
 	Stdin   *Input
 	handler Handler
-	status  Status
+	err     error
 	end     time.Time
 	closeIO bool
+
+	// When closed, the job has been cancelled.
+	// Note: not all jobs implement cancellation.
+	// See Job.Cancel() and Job.WaitCancelled()
+	cancelled  chan struct{}
+	cancelOnce sync.Once
 }
 
-type Status int
-
-const (
-	StatusOK       Status = 0
-	StatusErr      Status = 1
-	StatusNotFound Status = 127
-)
-
 // Run executes the job and blocks until the job completes.
-// If the job returns a failure status, an error is returned
-// which includes the status.
+// If the job fails it returns an error
 func (job *Job) Run() error {
 	if job.Eng.IsShutdown() && !job.GetenvBool("overrideShutdown") {
 		return fmt.Errorf("engine is shutdown")
@@ -71,16 +69,16 @@ func (job *Job) Run() error {
 	if job.Eng.Logging {
 		log.Infof("+job %s", job.CallString())
 		defer func() {
-			log.Infof("-job %s%s", job.CallString(), job.StatusString())
+			// what if err is nil?
+			log.Infof("-job %s%s", job.CallString(), job.err)
 		}()
 	}
 	var errorMessage = bytes.NewBuffer(nil)
 	job.Stderr.Add(errorMessage)
 	if job.handler == nil {
-		job.Errorf("%s: command not found", job.Name)
-		job.status = 127
+		job.err = fmt.Errorf("%s: command not found", job.Name)
 	} else {
-		job.status = job.handler(job)
+		job.err = job.handler(job)
 		job.end = time.Now()
 	}
 	if job.closeIO {
@@ -95,34 +93,12 @@ func (job *Job) Run() error {
 			return err
 		}
 	}
-	if job.status != 0 {
-		return fmt.Errorf("%s", Tail(errorMessage, 1))
-	}
 
-	return nil
+	return job.err
 }
 
 func (job *Job) CallString() string {
 	return fmt.Sprintf("%s(%s)", job.Name, strings.Join(job.Args, ", "))
-}
-
-func (job *Job) StatusString() string {
-	// If the job hasn't completed, status string is empty
-	if job.end.IsZero() {
-		return ""
-	}
-	var okerr string
-	if job.status == StatusOK {
-		okerr = "OK"
-	} else {
-		okerr = "ERR"
-	}
-	return fmt.Sprintf(" = %s (%d)", okerr, job.status)
-}
-
-// String returns a human-readable description of `job`
-func (job *Job) String() string {
-	return fmt.Sprintf("%s.%s%s", job.Eng, job.CallString(), job.StatusString())
 }
 
 func (job *Job) Env() *Env {
@@ -143,6 +119,14 @@ func (job *Job) GetenvBool(key string) (value bool) {
 
 func (job *Job) SetenvBool(key string, value bool) {
 	job.env.SetBool(key, value)
+}
+
+func (job *Job) GetenvTime(key string) (value time.Time, err error) {
+	return job.env.GetTime(key)
+}
+
+func (job *Job) SetenvTime(key string, value time.Time) {
+	job.env.SetTime(key, value)
 }
 
 func (job *Job) GetenvSubEnv(key string) *Env {
@@ -220,23 +204,18 @@ func (job *Job) Printf(format string, args ...interface{}) (n int, err error) {
 	return fmt.Fprintf(job.Stdout, format, args...)
 }
 
-func (job *Job) Errorf(format string, args ...interface{}) Status {
-	if format[len(format)-1] != '\n' {
-		format = format + "\n"
-	}
-	fmt.Fprintf(job.Stderr, format, args...)
-	return StatusErr
-}
-
-func (job *Job) Error(err error) Status {
-	fmt.Fprintf(job.Stderr, "%s\n", err)
-	return StatusErr
-}
-
-func (job *Job) StatusCode() int {
-	return int(job.status)
-}
-
 func (job *Job) SetCloseIO(val bool) {
 	job.closeIO = val
+}
+
+// When called, causes the Job.WaitCancelled channel to unblock.
+func (job *Job) Cancel() {
+	job.cancelOnce.Do(func() {
+		close(job.cancelled)
+	})
+}
+
+// Returns a channel which is closed ("never blocks") when the job is cancelled.
+func (job *Job) WaitCancelled() <-chan struct{} {
+	return job.cancelled
 }

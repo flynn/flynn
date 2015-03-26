@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/ioutils"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/utils"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/stringutils"
 )
 
 // Installer is a standard interface for objects which can "install" themselves
@@ -21,7 +21,7 @@ type Installer interface {
 	Install(*Engine) error
 }
 
-type Handler func(*Job) Status
+type Handler func(*Job) error
 
 var globalHandlers map[string]Handler
 
@@ -46,18 +46,19 @@ func unregister(name string) {
 // It acts as a store for *containers*, and allows manipulation of these
 // containers by executing *jobs*.
 type Engine struct {
-	handlers   map[string]Handler
-	catchall   Handler
-	hack       Hack // data for temporary hackery (see hack.go)
-	id         string
-	Stdout     io.Writer
-	Stderr     io.Writer
-	Stdin      io.Reader
-	Logging    bool
-	tasks      sync.WaitGroup
-	l          sync.RWMutex // lock for shutdown
-	shutdown   bool
-	onShutdown []func() // shutdown handlers
+	handlers     map[string]Handler
+	catchall     Handler
+	hack         Hack // data for temporary hackery (see hack.go)
+	id           string
+	Stdout       io.Writer
+	Stderr       io.Writer
+	Stdin        io.Reader
+	Logging      bool
+	tasks        sync.WaitGroup
+	l            sync.RWMutex // lock for shutdown
+	shutdownWait sync.WaitGroup
+	shutdown     bool
+	onShutdown   []func() // shutdown handlers
 }
 
 func (eng *Engine) Register(name string, handler Handler) error {
@@ -77,17 +78,17 @@ func (eng *Engine) RegisterCatchall(catchall Handler) {
 func New() *Engine {
 	eng := &Engine{
 		handlers: make(map[string]Handler),
-		id:       utils.RandomString(),
+		id:       stringutils.GenerateRandomString(),
 		Stdout:   os.Stdout,
 		Stderr:   os.Stderr,
 		Stdin:    os.Stdin,
 		Logging:  true,
 	}
-	eng.Register("commands", func(job *Job) Status {
+	eng.Register("commands", func(job *Job) error {
 		for _, name := range eng.commands() {
 			job.Printf("%s\n", name)
 		}
-		return StatusOK
+		return nil
 	})
 	// Copy existing global handlers
 	for k, v := range globalHandlers {
@@ -123,6 +124,8 @@ func (eng *Engine) Job(name string, args ...string) *Job {
 		Stderr:  NewOutput(),
 		env:     &Env{},
 		closeIO: true,
+
+		cancelled: make(chan struct{}),
 	}
 	if eng.Logging {
 		job.Stderr.Add(ioutils.NopWriteCloser(eng.Stderr))
@@ -143,6 +146,7 @@ func (eng *Engine) Job(name string, args ...string) *Job {
 func (eng *Engine) OnShutdown(h func()) {
 	eng.l.Lock()
 	eng.onShutdown = append(eng.onShutdown, h)
+	eng.shutdownWait.Add(1)
 	eng.l.Unlock()
 }
 
@@ -156,6 +160,7 @@ func (eng *Engine) Shutdown() {
 	eng.l.Lock()
 	if eng.shutdown {
 		eng.l.Unlock()
+		eng.shutdownWait.Wait()
 		return
 	}
 	eng.shutdown = true
@@ -180,17 +185,15 @@ func (eng *Engine) Shutdown() {
 
 	// Call shutdown handlers, if any.
 	// Timeout after 10 seconds.
-	var wg sync.WaitGroup
 	for _, h := range eng.onShutdown {
-		wg.Add(1)
 		go func(h func()) {
-			defer wg.Done()
 			h()
+			eng.shutdownWait.Done()
 		}(h)
 	}
 	done := make(chan struct{})
 	go func() {
-		wg.Wait()
+		eng.shutdownWait.Wait()
 		close(done)
 	}()
 	select {

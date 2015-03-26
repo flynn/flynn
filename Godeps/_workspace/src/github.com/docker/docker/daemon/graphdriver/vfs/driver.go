@@ -47,7 +47,7 @@ func (d *Driver) Create(id, parent string) error {
 	}
 	opts := []string{"level:s0"}
 	if _, mountLabel, err := label.InitLabels(opts); err == nil {
-		label.Relabel(dir, mountLabel, "")
+		label.SetFileLabel(dir, mountLabel)
 	}
 	if parent == "" {
 		return nil
@@ -83,9 +83,10 @@ func (d *Driver) Get(id, mountLabel string) (string, error) {
 	return dir, nil
 }
 
-func (d *Driver) Put(id string) {
+func (d *Driver) Put(id string) error {
 	// The vfs driver has no runtime resources (e.g. mounts)
 	// to clean up, so we don't need anything here
+	return nil
 }
 
 func (d *Driver) Exists(id string) bool {
