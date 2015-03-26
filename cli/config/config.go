@@ -6,11 +6,11 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"os/user"
 	"path/filepath"
 	"runtime"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/BurntSushi/toml"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/mitchellh/go-homedir"
 )
 
 type Cluster struct {
@@ -27,16 +27,11 @@ type Config struct {
 }
 
 func HomeDir() string {
-	key := "HOME"
-	if runtime.GOOS == "windows" {
-		key = "USERPROFILE"
+	dir, err := homedir.Dir()
+	if err != nil {
+		panic(err)
 	}
-	home := os.Getenv(key)
-	if home == "" {
-		user, _ := user.Current()
-		home = user.HomeDir
-	}
-	return home
+	return dir
 }
 
 func Dir() string {
