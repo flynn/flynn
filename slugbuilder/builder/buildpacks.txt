@@ -8,4 +8,4 @@ https://github.com/heroku/heroku-buildpack-gradle.git#47dc93f2
 https://github.com/heroku/heroku-buildpack-scala.git#ac5560bf
 https://github.com/heroku/heroku-buildpack-play.git#1cf304b4
 https://github.com/heroku/heroku-buildpack-php.git#f23729a3
-https://github.com/kr/heroku-buildpack-go.git#daef77e9
+https://github.com/heroku/heroku-buildpack-go.git#98f37cce
