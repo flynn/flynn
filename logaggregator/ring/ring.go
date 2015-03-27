@@ -1,6 +1,7 @@
 package ring
 
 import (
+	"errors"
 	"sync"
 
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
@@ -15,36 +16,45 @@ import (
 type Buffer struct {
 	mu       sync.RWMutex // protects all of the following:
 	messages []*rfc5424.Message
-	start    int
-	subs     map[chan *rfc5424.Message]struct{}
+	cursor   int
+	subs     map[chan<- *rfc5424.Message]struct{}
+	donec    chan struct{}
 }
 
 const DefaultBufferCapacity = 10000
 
 // NewBuffer returns an empty allocated Buffer with DefaultBufferCapacity.
 func NewBuffer() *Buffer {
+	return newBuffer(DefaultBufferCapacity)
+}
+
+func newBuffer(capacity int) *Buffer {
 	return &Buffer{
-		messages: make([]*rfc5424.Message, 0, DefaultBufferCapacity),
-		subs:     make(map[chan *rfc5424.Message]struct{}),
+		messages: make([]*rfc5424.Message, 0, capacity),
+		subs:     make(map[chan<- *rfc5424.Message]struct{}),
+		donec:    make(chan struct{}),
 	}
 }
 
 // Add adds an element to the Buffer. If the Buffer is already full, it replaces
 // an existing message.
-func (b *Buffer) Add(m *rfc5424.Message) {
+func (b *Buffer) Add(m *rfc5424.Message) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	if b.cursor == -1 {
+		return errors.New("buffer closed")
+	}
 	if len(b.messages) < cap(b.messages) {
 		// buffer not yet full
 		b.messages = append(b.messages, m)
 	} else {
-		// buffer already full, replace the value at start
-		b.messages[b.start] = m
-		b.start++
+		// buffer already full, replace the value at cursor
+		b.messages[b.cursor] = m
+		b.cursor++
 
-		if b.start == cap(b.messages) {
-			b.start = 0
+		if b.cursor == cap(b.messages) {
+			b.cursor = 0
 		}
 	}
 
@@ -54,140 +64,81 @@ func (b *Buffer) Add(m *rfc5424.Message) {
 		default: // chan is full, drop this message to it
 		}
 	}
+
+	return nil
 }
 
-// Clone returns a shallow copy of the Buffer.
-func (b *Buffer) Clone() *Buffer {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
+func (b *Buffer) Close() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
-	return &Buffer{
-		messages: b._readAll(),
-	}
+	b.messages = nil
+	b.cursor = -1
+	close(b.donec)
 }
 
-// Capacity returns the capicity of the Buffer.
-func (b *Buffer) Capacity() int {
-	return cap(b.messages)
-}
-
-func (b *Buffer) Flush() {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-
-	b.messages = make([]*rfc5424.Message, 0, DefaultBufferCapacity)
-	b.start = 0
-}
-
-// ReadAll returns a copied slice with the contents of the Buffer. It does not
+// Read returns a copied slice with the contents of the Buffer. It does not
 // modify the underlying buffer in any way. You are free to modify the
 // returned slice without affecting Buffer, though modifying the individual
 // elements in the result will also modify those elements in the Buffer.
-func (b *Buffer) ReadAll() []*rfc5424.Message {
+func (b *Buffer) Read() []*rfc5424.Message {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	return b._readAll()
+	return b.read()
 }
 
-// _readAll expects b.mu to already be locked
-func (b *Buffer) _readAll() []*rfc5424.Message {
-	buf := make([]*rfc5424.Message, len(b.messages))
-	if n := copy(buf, b.messages[b.start:len(b.messages)]); n < len(b.messages) {
-		copy(buf[n:], b.messages[:b.start])
-	}
-	return buf
-}
-
-// ReadAllAndSubscribe returns all buffered messages just like ReadAll, and also
+// ReadAndSubscribe returns all buffered messages just like Read, and also
 // returns a channel that will stream new messages as they arrive.
-func (b *Buffer) ReadAllAndSubscribe() (
-	messages []*rfc5424.Message,
-	msgc <-chan *rfc5424.Message,
-	cancel func(),
-) {
+func (b *Buffer) ReadAndSubscribe(msgc chan<- *rfc5424.Message, donec <-chan struct{}) []*rfc5424.Message {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	messages = b._readAll()
-	msgc, cancel = b._subscribe()
-	return
-}
-
-// ReadLastN will return the most recent n messages from the Buffer, up to the
-// length of the buffer. If n is larger than the Buffer length, a smaller number
-// will be returned. Panics if n < 0.
-func (b *Buffer) ReadLastN(n int) []*rfc5424.Message {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-	return b._readLastN(n)
-}
-
-// _readLastN expects b.mu to already be locked
-func (b *Buffer) _readLastN(n int) []*rfc5424.Message {
-	if n > len(b.messages) {
-		n = len(b.messages)
-	}
-
-	buf := make([]*rfc5424.Message, n)
-	copied := 0
-	if n > (b.start) {
-		start := b.start
-		if n < len(b.messages)-start {
-			start = len(b.messages) - n
-		}
-		copied = copy(buf, b.messages[start:])
-	}
-	if n > copied {
-		copy(buf[copied:], b.messages[n-copied:(b.start-copied)])
-	}
-	return buf
-}
-
-// ReadLastNAndSubscribe returns buffered messages just like ReadLastN, and
-// also returns a channel that will stream new messages as they arrive.
-func (b *Buffer) ReadLastNAndSubscribe(n int) (
-	messages []*rfc5424.Message,
-	msgc <-chan *rfc5424.Message,
-	cancel func(),
-) {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-
-	messages = b._readLastN(n)
-	msgc, cancel = b._subscribe()
-	return
+	b.subscribe(msgc, donec)
+	return b.read()
 }
 
 // Subscribe returns a channel that sends all future messages added to the
 // Buffer. The returned channel is buffered, and any attempts to send new
 // messages to the channel will drop messages if the channel is full.
 //
-// The returned func cancel must be called when the caller wants to stop
-// receiving messages.
-func (b *Buffer) Subscribe() (msgc <-chan *rfc5424.Message, cancel func()) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b._subscribe()
+// The caller closes the donec channel to stop receiving messages.
+func (b *Buffer) Subscribe(msgc chan<- *rfc5424.Message, donec <-chan struct{}) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	b.subscribe(msgc, donec)
+}
+
+// _read expects b.mu to already be locked
+func (b *Buffer) read() []*rfc5424.Message {
+	if b.cursor == -1 {
+		return nil
+	}
+
+	buf := make([]*rfc5424.Message, len(b.messages))
+	if b.cursor == 0 {
+		copy(buf, b.messages)
+	} else {
+		copy(buf, b.messages[b.cursor:])
+		copy(buf[len(b.messages)-b.cursor:], b.messages[:b.cursor])
+	}
+	return buf
 }
 
 // _subscribe assumes b.mu is already locked
-func (b *Buffer) _subscribe() (<-chan *rfc5424.Message, func()) {
-	// Give each subscription chan a reasonable buffer size
-	msgc := make(chan *rfc5424.Message, 1000)
+func (b *Buffer) subscribe(msgc chan<- *rfc5424.Message, donec <-chan struct{}) {
 	b.subs[msgc] = struct{}{}
 
-	var donce sync.Once
-	cancel := func() {
-		donce.Do(func() {
-			b.unsubscribe(msgc)
-			close(msgc)
-		})
-	}
-	return msgc, cancel
-}
+	go func() {
+		select {
+		case <-donec:
+		case <-b.donec:
+		}
 
-func (b *Buffer) unsubscribe(msgc chan *rfc5424.Message) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	delete(b.subs, msgc)
+		b.mu.RLock()
+		defer b.mu.RUnlock()
+
+		delete(b.subs, msgc)
+		close(msgc)
+	}()
 }
