@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/user"
 	"strconv"
 	"strings"
@@ -527,7 +528,7 @@ type controllerCert struct {
 
 func (c *Cluster) bootstrapLayer1(instances []*Instance) error {
 	inst := instances[0]
-	c.ClusterDomain = fmt.Sprintf("%s.xip.io", inst.IP)
+	c.ClusterDomain = fmt.Sprintf("flynn-%s.local", random.String(16))
 	c.ControllerKey = random.String(16)
 	c.BackoffPeriod = 5 * time.Second
 	rd, wr := io.Pipe()
@@ -573,8 +574,20 @@ func (c *Cluster) bootstrapLayer1(instances []*Instance) error {
 	if err != nil {
 		return fmt.Errorf("could not detect router ip: %s", err)
 	}
+	if err = setLocalDNS([]string{c.ClusterDomain, c.ControllerDomain()}, leader.Host()); err != nil {
+		return fmt.Errorf("could not set cluster DNS entries: %s", err)
+	}
 	c.RouterIP = leader.Host()
 	return nil
+}
+
+func setLocalDNS(domains []string, ip string) error {
+	command := fmt.Sprintf(
+		`grep -q "^%[1]s" /etc/hosts && sed "s/^%[1]s.*/%[1]s %s/" -i /etc/hosts || echo %[1]s %s >> /etc/hosts`,
+		ip, strings.Join(domains, " "),
+	)
+	cmd := exec.Command("bash", "-c", command)
+	return cmd.Run()
 }
 
 func lookupUser(name string) (int, int, error) {
