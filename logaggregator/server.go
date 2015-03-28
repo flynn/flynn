@@ -144,7 +144,7 @@ func (s *Server) WriteSnapshot(path string) error {
 	}
 	defer f.Close()
 
-	buffers := s.Aggregator.CopyBuffers()
+	buffers := s.Aggregator.ReadAll()
 	return snapshot.WriteTo(buffers, f)
 }
 
@@ -229,7 +229,7 @@ func (s *Server) fillReplicationConn(conn net.Conn) {
 	// pause the aggregator, shallow copy the aggregator's buffers, register a
 	// replication stream, then unpause the aggregator
 	unpause := s.Aggregator.Pause()
-	buffers := s.Aggregator.CopyBuffers()
+	buffers := s.Aggregator.ReadAll()
 	msgc := s.Replicator.Follow(conn.(connutil.CloseNotifier).CloseNotify())
 	unpause()
 
