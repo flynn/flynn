@@ -21,6 +21,7 @@ type Bridge struct {
 	iface  *net.Interface
 	ipAddr net.IP
 	ipNet  *net.IPNet
+	alloc  *ipallocator.IPAllocator
 }
 
 func (b *Bridge) IP() string {
@@ -60,7 +61,16 @@ func createBridge(name, network, natIface string) (*Bridge, error) {
 	if err := setupIPTables(name, natIface); err != nil {
 		return nil, err
 	}
-	return &Bridge{name, iface, ipAddr, ipNet}, nil
+
+	bridge := &Bridge{
+		name:   name,
+		iface:  iface,
+		ipAddr: ipAddr,
+		ipNet:  ipNet,
+		alloc:  ipallocator.New(),
+	}
+	bridge.alloc.RequestIP(ipNet, ipAddr)
+	return bridge, nil
 }
 
 func deleteBridge(bridge *Bridge) error {
@@ -186,7 +196,7 @@ func (t *Tap) Close() error {
 		return err
 	}
 	if t.IP != nil {
-		ipallocator.ReleaseIP(t.bridge.ipNet, t.IP)
+		t.bridge.alloc.ReleaseIP(t.bridge.ipNet, t.IP)
 	}
 	return nil
 }
@@ -219,7 +229,7 @@ func (t *TapManager) NewTap(uid, gid int) (*Tap, error) {
 	}
 
 	var err error
-	tap.IP, err = ipallocator.RequestIP(t.bridge.ipNet, nil)
+	tap.IP, err = t.bridge.alloc.RequestIP(t.bridge.ipNet, nil)
 	if err != nil {
 		tap.Close()
 		return nil, err

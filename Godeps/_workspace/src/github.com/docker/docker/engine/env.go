@@ -7,6 +7,9 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/utils"
 )
 
 type Env []string
@@ -65,6 +68,15 @@ func (env *Env) SetBool(key string, value bool) {
 	} else {
 		env.Set(key, "0")
 	}
+}
+
+func (env *Env) GetTime(key string) (time.Time, error) {
+	t, err := time.Parse(time.RFC3339Nano, env.Get(key))
+	return t, err
+}
+
+func (env *Env) SetTime(key string, t time.Time) {
+	env.Set(key, t.Format(time.RFC3339Nano))
 }
 
 func (env *Env) GetInt(key string) int {
@@ -177,7 +189,10 @@ func (decoder *Decoder) Decode() (*Env, error) {
 // is returned.
 func (env *Env) Decode(src io.Reader) error {
 	m := make(map[string]interface{})
-	if err := json.NewDecoder(src).Decode(&m); err != nil {
+	d := json.NewDecoder(src)
+	// We need this or we'll lose data when we decode int64 in json
+	d.UseNumber()
+	if err := d.Decode(&m); err != nil {
 		return err
 	}
 	for k, v := range m {
@@ -242,9 +257,10 @@ func (env *Env) Encode(dst io.Writer) error {
 	return nil
 }
 
-func (env *Env) WriteTo(dst io.Writer) (n int64, err error) {
-	// FIXME: return the number of bytes written to respect io.WriterTo
-	return 0, env.Encode(dst)
+func (env *Env) WriteTo(dst io.Writer) (int64, error) {
+	wc := utils.NewWriteCounter(dst)
+	err := env.Encode(wc)
+	return wc.Count, err
 }
 
 func (env *Env) Import(src interface{}) (err error) {

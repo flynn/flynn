@@ -15,10 +15,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/docker/docker/autogen/dockerversion"
 	"github.com/docker/docker/pkg/stdcopy"
 	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/api"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/dockerversion"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/engine"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/signal"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
@@ -66,7 +66,7 @@ func (cli *DockerCli) call(method, path string, data interface{}, passAuthInfo b
 	if passAuthInfo {
 		cli.LoadConfigFile()
 		// Resolve the Auth config relevant for this server
-		authConfig := cli.configFile.ResolveAuthConfig(registry.IndexServerAddress())
+		authConfig := cli.configFile.Configs[registry.IndexServerAddress()]
 		getHeaders := func(authConfig registry.AuthConfig) (map[string][]string, error) {
 			buf, err := json.Marshal(authConfig)
 			if err != nil {
@@ -89,7 +89,7 @@ func (cli *DockerCli) call(method, path string, data interface{}, passAuthInfo b
 	if data != nil {
 		req.Header.Set("Content-Type", "application/json")
 	} else if method == "POST" {
-		req.Header.Set("Content-Type", "plain/text")
+		req.Header.Set("Content-Type", "text/plain")
 	}
 	resp, err := cli.HTTPClient().Do(req)
 	if err != nil {
@@ -135,7 +135,7 @@ func (cli *DockerCli) streamHelper(method, path string, setRawTerminal bool, in 
 	req.URL.Host = cli.addr
 	req.URL.Scheme = cli.scheme
 	if method == "POST" {
-		req.Header.Set("Content-Type", "plain/text")
+		req.Header.Set("Content-Type", "text/plain")
 	}
 
 	if headers != nil {

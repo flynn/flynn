@@ -1,20 +1,22 @@
 package graph
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/engine"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/image"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/utils"
 )
 
-func (s *TagStore) CmdHistory(job *engine.Job) engine.Status {
+func (s *TagStore) CmdHistory(job *engine.Job) error {
 	if n := len(job.Args); n != 1 {
-		return job.Errorf("Usage: %s IMAGE", job.Name)
+		return fmt.Errorf("Usage: %s IMAGE", job.Name)
 	}
 	name := job.Args[0]
 	foundImage, err := s.LookupImage(name)
 	if err != nil {
-		return job.Error(err)
+		return err
 	}
 
 	lookupMap := make(map[string][]string)
@@ -24,7 +26,7 @@ func (s *TagStore) CmdHistory(job *engine.Job) engine.Status {
 			if _, exists := lookupMap[id]; !exists {
 				lookupMap[id] = []string{}
 			}
-			lookupMap[id] = append(lookupMap[id], name+":"+tag)
+			lookupMap[id] = append(lookupMap[id], utils.ImageReference(name, tag))
 		}
 	}
 
@@ -40,7 +42,7 @@ func (s *TagStore) CmdHistory(job *engine.Job) engine.Status {
 		return nil
 	})
 	if _, err := outs.WriteListTo(job.Stdout); err != nil {
-		return job.Error(err)
+		return err
 	}
-	return engine.StatusOK
+	return nil
 }

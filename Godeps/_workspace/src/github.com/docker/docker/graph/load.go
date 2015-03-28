@@ -4,7 +4,6 @@ package graph
 
 import (
 	"encoding/json"
-	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -19,37 +18,23 @@ import (
 
 // Loads a set of images into the repository. This is the complementary of ImageExport.
 // The input stream is an uncompressed tar ball containing images and metadata.
-func (s *TagStore) CmdLoad(job *engine.Job) engine.Status {
+func (s *TagStore) CmdLoad(job *engine.Job) error {
 	tmpImageDir, err := ioutil.TempDir("", "docker-import-")
 	if err != nil {
-		return job.Error(err)
+		return err
 	}
 	defer os.RemoveAll(tmpImageDir)
 
 	var (
-		repoTarFile = path.Join(tmpImageDir, "repo.tar")
-		repoDir     = path.Join(tmpImageDir, "repo")
+		repoDir = path.Join(tmpImageDir, "repo")
 	)
 
-	tarFile, err := os.Create(repoTarFile)
-	if err != nil {
-		return job.Error(err)
-	}
-	if _, err := io.Copy(tarFile, job.Stdin); err != nil {
-		return job.Error(err)
-	}
-	tarFile.Close()
-
-	repoFile, err := os.Open(repoTarFile)
-	if err != nil {
-		return job.Error(err)
-	}
 	if err := os.Mkdir(repoDir, os.ModeDir); err != nil {
-		return job.Error(err)
+		return err
 	}
 	images, err := s.graph.Map()
 	if err != nil {
-		return job.Error(err)
+		return err
 	}
 	excludes := make([]string, len(images))
 	i := 0
@@ -57,19 +42,19 @@ func (s *TagStore) CmdLoad(job *engine.Job) engine.Status {
 		excludes[i] = k
 		i++
 	}
-	if err := chrootarchive.Untar(repoFile, repoDir, &archive.TarOptions{Excludes: excludes}); err != nil {
-		return job.Error(err)
+	if err := chrootarchive.Untar(job.Stdin, repoDir, &archive.TarOptions{ExcludePatterns: excludes}); err != nil {
+		return err
 	}
 
 	dirs, err := ioutil.ReadDir(repoDir)
 	if err != nil {
-		return job.Error(err)
+		return err
 	}
 
 	for _, d := range dirs {
 		if d.IsDir() {
 			if err := s.recursiveLoad(job.Eng, d.Name(), tmpImageDir); err != nil {
-				return job.Error(err)
+				return err
 			}
 		}
 	}
@@ -78,21 +63,21 @@ func (s *TagStore) CmdLoad(job *engine.Job) engine.Status {
 	if err == nil {
 		repositories := map[string]Repository{}
 		if err := json.Unmarshal(repositoriesJson, &repositories); err != nil {
-			return job.Error(err)
+			return err
 		}
 
 		for imageName, tagMap := range repositories {
 			for tag, address := range tagMap {
 				if err := s.Set(imageName, tag, address, true); err != nil {
-					return job.Error(err)
+					return err
 				}
 			}
 		}
 	} else if !os.IsNotExist(err) {
-		return job.Error(err)
+		return err
 	}
 
-	return engine.StatusOK
+	return nil
 }
 
 func (s *TagStore) recursiveLoad(eng *engine.Engine, address, tmpImageDir string) error {
@@ -119,6 +104,20 @@ func (s *TagStore) recursiveLoad(eng *engine.Engine, address, tmpImageDir string
 			log.Debugf("Error validating ID: %s", err)
 			return err
 		}
+
+		// ensure no two downloads of the same layer happen at the same time
+		if c, err := s.poolAdd("pull", "layer:"+img.ID); err != nil {
+			if c != nil {
+				log.Debugf("Image (id: %s) load is already running, waiting: %v", img.ID, err)
+				<-c
+				return nil
+			}
+
+			return err
+		}
+
+		defer s.poolRemove("pull", "layer:"+img.ID)
+
 		if img.Parent != "" {
 			if !s.graph.Exists(img.Parent) {
 				if err := s.recursiveLoad(eng, img.Parent, tmpImageDir); err != nil {

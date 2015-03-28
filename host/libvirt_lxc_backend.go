@@ -67,6 +67,7 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, lo
 		containers: make(map[string]*libvirtContainer),
 		resolvConf: "/etc/resolv.conf",
 		mux:        mux,
+		ipalloc:    ipallocator.New(),
 	}, nil
 }
 
@@ -78,6 +79,7 @@ type LibvirtLXCBackend struct {
 	state     *State
 	vman      *volumemanager.Manager
 	pinkerton *pinkerton.Context
+	ipalloc   *ipallocator.IPAllocator
 
 	ifaceMTU   int
 	bridgeAddr net.IP
@@ -231,6 +233,7 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 	if l.ifaceMTU == 0 || l.bridgeAddr == nil || l.bridgeNet == nil {
 		return nil, fmt.Errorf("host: error parsing flannel config - %q", string(data))
 	}
+	l.ipalloc.RequestIP(l.bridgeNet, l.bridgeAddr)
 
 	err = netlink.CreateBridge(bridgeName, false)
 	bridgeExists := os.IsExist(err)
@@ -330,7 +333,7 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 	for i, container := range l.containers {
 		if !container.job.Config.HostNetwork {
 			var err error
-			l.containers[i].IP, err = ipallocator.RequestIP(l.bridgeNet, container.IP)
+			l.containers[i].IP, err = l.ipalloc.RequestIP(l.bridgeNet, container.IP)
 			if err != nil {
 				grohl.Log(grohl.Data{"fn": "ConfigureNetworking", "at": "request_ip", "status": "error", "err": err})
 			}
@@ -353,7 +356,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		done: make(chan struct{}),
 	}
 	if !job.Config.HostNetwork {
-		container.IP, err = ipallocator.RequestIP(l.bridgeNet, runConfig.IP)
+		container.IP, err = l.ipalloc.RequestIP(l.bridgeNet, runConfig.IP)
 		if err != nil {
 			g.Log(grohl.Data{"at": "request_ip", "status": "error", "err": err})
 			return err
@@ -769,7 +772,7 @@ func (c *libvirtContainer) cleanup() error {
 		}
 	}
 	if !c.job.Config.HostNetwork && c.l.bridgeNet != nil {
-		ipallocator.ReleaseIP(c.l.bridgeNet, c.IP)
+		c.l.ipalloc.ReleaseIP(c.l.bridgeNet, c.IP)
 	}
 	g.Log(grohl.Data{"at": "finish"})
 	return nil

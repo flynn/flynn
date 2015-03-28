@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"testing"
+	"time"
 
-	"github.com/docker/docker/pkg/testutils"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/stringutils"
 )
 
 func TestEnvLenZero(t *testing.T) {
@@ -77,6 +78,26 @@ func TestSetenv(t *testing.T) {
 	}
 }
 
+func TestDecodeEnv(t *testing.T) {
+	job := mkJob(t, "dummy")
+	type tmp struct {
+		Id1 int64
+		Id2 int64
+	}
+	body := []byte("{\"tags\":{\"Id1\":123, \"Id2\":1234567}}")
+	if err := job.DecodeEnv(bytes.NewBuffer(body)); err != nil {
+		t.Fatalf("DecodeEnv failed: %v", err)
+	}
+	mytag := tmp{}
+	if val := job.GetenvJson("tags", &mytag); val != nil {
+		t.Fatalf("GetenvJson returns incorrect value: %s", val)
+	}
+
+	if mytag.Id1 != 123 || mytag.Id2 != 1234567 {
+		t.Fatal("Get wrong values set by job.DecodeEnv")
+	}
+}
+
 func TestSetenvBool(t *testing.T) {
 	job := mkJob(t, "dummy")
 	job.SetenvBool("foo", true)
@@ -91,6 +112,27 @@ func TestSetenvBool(t *testing.T) {
 
 	if val := job.GetenvBool("nonexistent"); val {
 		t.Fatalf("GetenvBool returns incorrect value: %t", val)
+	}
+}
+
+func TestSetenvTime(t *testing.T) {
+	job := mkJob(t, "dummy")
+
+	now := time.Now()
+	job.SetenvTime("foo", now)
+	if val, err := job.GetenvTime("foo"); err != nil {
+		t.Fatalf("GetenvTime failed to parse: %v", err)
+	} else {
+		nowStr := now.Format(time.RFC3339)
+		valStr := val.Format(time.RFC3339)
+		if nowStr != valStr {
+			t.Fatalf("GetenvTime returns incorrect value: %s, Expected: %s", valStr, nowStr)
+		}
+	}
+
+	job.Setenv("bar", "Obviously I'm not a date")
+	if val, err := job.GetenvTime("bar"); err == nil {
+		t.Fatalf("GetenvTime was supposed to fail, instead returned: %s", val)
 	}
 }
 
@@ -163,7 +205,7 @@ func TestMultiMap(t *testing.T) {
 func testMap(l int) [][2]string {
 	res := make([][2]string, l)
 	for i := 0; i < l; i++ {
-		t := [2]string{testutils.RandomString(5), testutils.RandomString(20)}
+		t := [2]string{stringutils.GenerateRandomAsciiString(5), stringutils.GenerateRandomAsciiString(20)}
 		res[i] = t
 	}
 	return res

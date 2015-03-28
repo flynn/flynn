@@ -29,11 +29,11 @@ type (
 	ArchiveReader io.Reader
 	Compression   int
 	TarOptions    struct {
-		Includes    []string
-		Excludes    []string
-		Compression Compression
-		NoLchown    bool
-		Name        string
+		IncludeFiles    []string
+		ExcludePatterns []string
+		Compression     Compression
+		NoLchown        bool
+		Name            string
 	}
 
 	// Archiver allows the reuse of most utility functions of this package
@@ -100,7 +100,6 @@ func DecompressStream(archive io.Reader) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("[tar autodetect] n: %v", bs)
 
 	compression := DetectCompression(bs)
 	switch compression {
@@ -172,6 +171,21 @@ type tarAppender struct {
 	SeenFiles map[uint64]string
 }
 
+// canonicalTarName provides a platform-independent and consistent posix-style
+//path for files and directories to be archived regardless of the platform.
+func canonicalTarName(name string, isDir bool) (string, error) {
+	name, err := CanonicalTarNameForPath(name)
+	if err != nil {
+		return "", err
+	}
+
+	// suffix with '/' for directories
+	if isDir && !strings.HasSuffix(name, "/") {
+		name += "/"
+	}
+	return name, nil
+}
+
 func (ta *tarAppender) addTarFile(path, name string) error {
 	fi, err := os.Lstat(path)
 	if err != nil {
@@ -189,11 +203,12 @@ func (ta *tarAppender) addTarFile(path, name string) error {
 	if err != nil {
 		return err
 	}
+	hdr.Mode = int64(chmodTarEntry(os.FileMode(hdr.Mode)))
 
-	if fi.IsDir() && !strings.HasSuffix(name, "/") {
-		name = name + "/"
+	name, err = canonicalTarName(name, fi.IsDir())
+	if err != nil {
+		return fmt.Errorf("tar: cannot canonicalize path: %v", err)
 	}
-
 	hdr.Name = name
 
 	nlink, inode, err := setHeaderForSpecialDevice(hdr, ta, name, fi.Sys())
@@ -377,7 +392,7 @@ func escapeName(name string) string {
 }
 
 // TarWithOptions creates an archive from the directory at `path`, only including files whose relative
-// paths are included in `options.Includes` (if non-nil) or not in `options.Excludes`.
+// paths are included in `options.IncludeFiles` (if non-nil) or not in `options.ExcludePatterns`.
 func TarWithOptions(srcPath string, options *TarOptions) (io.ReadCloser, error) {
 	pipeReader, pipeWriter := io.Pipe()
 
@@ -400,12 +415,14 @@ func TarWithOptions(srcPath string, options *TarOptions) (io.ReadCloser, error) 
 		// mutating the filesystem and we can see transient errors
 		// from this
 
-		if options.Includes == nil {
-			options.Includes = []string{"."}
+		if options.IncludeFiles == nil {
+			options.IncludeFiles = []string{"."}
 		}
 
+		seen := make(map[string]bool)
+
 		var renamedRelFilePath string // For when tar.Options.Name is set
-		for _, include := range options.Includes {
+		for _, include := range options.IncludeFiles {
 			filepath.Walk(filepath.Join(srcPath, include), func(filePath string, f os.FileInfo, err error) error {
 				if err != nil {
 					log.Debugf("Tar: Can't stat file %s to tar: %s", srcPath, err)
@@ -419,10 +436,19 @@ func TarWithOptions(srcPath string, options *TarOptions) (io.ReadCloser, error) 
 					return nil
 				}
 
-				skip, err := fileutils.Matches(relFilePath, options.Excludes)
-				if err != nil {
-					log.Debugf("Error matching %s", relFilePath, err)
-					return err
+				skip := false
+
+				// If "include" is an exact match for the current file
+				// then even if there's an "excludePatterns" pattern that
+				// matches it, don't skip it. IOW, assume an explicit 'include'
+				// is asking for that file no matter what - which is true
+				// for some files, like .dockerignore and Dockerfile (sometimes)
+				if include != relFilePath {
+					skip, err = fileutils.Matches(relFilePath, options.ExcludePatterns)
+					if err != nil {
+						log.Debugf("Error matching %s", relFilePath, err)
+						return err
+					}
 				}
 
 				if skip {
@@ -431,6 +457,11 @@ func TarWithOptions(srcPath string, options *TarOptions) (io.ReadCloser, error) 
 					}
 					return nil
 				}
+
+				if seen[relFilePath] {
+					return nil
+				}
+				seen[relFilePath] = true
 
 				// Rename the base resource
 				if options.Name != "" && filePath == srcPath+"/"+filepath.Base(relFilePath) {
@@ -442,7 +473,7 @@ func TarWithOptions(srcPath string, options *TarOptions) (io.ReadCloser, error) 
 				}
 
 				if err := ta.addTarFile(filePath, relFilePath); err != nil {
-					log.Debugf("Can't add file %s to tar: %s", srcPath, err)
+					log.Debugf("Can't add file %s to tar: %s", filePath, err)
 				}
 				return nil
 			})
@@ -486,7 +517,7 @@ loop:
 		// This keeps "../" as-is, but normalizes "/../" to "/"
 		hdr.Name = filepath.Clean(hdr.Name)
 
-		for _, exclude := range options.Excludes {
+		for _, exclude := range options.ExcludePatterns {
 			if strings.HasPrefix(hdr.Name, exclude) {
 				continue loop
 			}
@@ -509,7 +540,7 @@ loop:
 		if err != nil {
 			return err
 		}
-		if strings.HasPrefix(rel, "..") {
+		if strings.HasPrefix(rel, "../") {
 			return breakoutError(fmt.Errorf("%q is outside of %q", hdr.Name, dest))
 		}
 
@@ -562,8 +593,8 @@ func Untar(archive io.Reader, dest string, options *TarOptions) error {
 	if options == nil {
 		options = &TarOptions{}
 	}
-	if options.Excludes == nil {
-		options.Excludes = []string{}
+	if options.ExcludePatterns == nil {
+		options.ExcludePatterns = []string{}
 	}
 	decompressedArchive, err := DecompressStream(archive)
 	if err != nil {
@@ -665,6 +696,8 @@ func (archiver *Archiver) CopyFileWithTar(src, dst string) (err error) {
 			return err
 		}
 		hdr.Name = filepath.Base(dst)
+		hdr.Mode = int64(chmodTarEntry(os.FileMode(hdr.Mode)))
+
 		tw := tar.NewWriter(w)
 		defer tw.Close()
 		if err := tw.WriteHeader(hdr); err != nil {
