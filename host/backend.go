@@ -34,8 +34,7 @@ type Backend interface {
 }
 
 type RunConfig struct {
-	IP         net.IP
-	ManifestID string
+	IP net.IP
 }
 
 type NetworkInfo struct {

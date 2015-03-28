@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -44,7 +43,6 @@ usage: flynn-host daemon [options] [--meta=<KEY=VAL>...]
 
 options:
   --external=IP          external IP of host
-  --manifest=PATH        path to manifest file [default: /etc/flynn/host-manifest.json]
   --state=PATH           path to state file [default: /var/lib/flynn/host-state.bolt]
   --id=ID                host id
   --force                kill all containers booted by flynn-host before starting
@@ -52,7 +50,6 @@ options:
   --volpath=PATH         directory to create volumes in [default: /var/lib/flynn/volumes]
   --backend=BACKEND      runner backend [default: libvirt-lxc]
   --meta=<KEY=VAL>...    key=value pair to add as metadata
-  --bind=IP              bind containers to IP
   --flynn-init=PATH      path to flynn-init binary [default: /usr/local/bin/flynn-init]
   --log-dir=DIR          directory to store job logs [default: /var/log/flynn]
 	`)
@@ -137,8 +134,6 @@ See 'flynn-host help <command>' for more information on a specific command.
 func runDaemon(args *docopt.Args) {
 	hostname, _ := os.Hostname()
 	externalAddr := args.String["--external"]
-	bindAddr := args.String["--bind"]
-	manifestFile := args.String["--manifest"]
 	stateFile := args.String["--state"]
 	hostID := args.String["--id"]
 	force := args.Bool["--force"]
@@ -213,8 +208,7 @@ func runDaemon(args *docopt.Args) {
 		shutdown.Fatal(err)
 	}
 
-	resurrectLayer1, err := state.Restore(backend)
-	if err != nil {
+	if err := state.Restore(backend); err != nil {
 		shutdown.Fatal(err)
 	}
 
@@ -231,46 +225,9 @@ func runDaemon(args *docopt.Args) {
 		}
 	}
 
-	runner := &manifestRunner{
-		env:          parseEnviron(),
-		externalAddr: externalAddr,
-		bindAddr:     bindAddr,
-		backend:      backend,
-		state:        state,
-		vman:         vman,
-	}
-
 	// connect to discoverd
 	discURL := os.Getenv("DISCOVERD")
 	var disc *discoverd.Client
-	if manifestFile != "" {
-		var r io.Reader
-		var f *os.File
-		if manifestFile == "-" {
-			r = os.Stdin
-		} else {
-			f, err = os.Open(manifestFile)
-			if err != nil {
-				shutdown.Fatal(err)
-			}
-			r = f
-		}
-		services, err := runner.runManifest(r)
-		if err != nil {
-			shutdown.Fatal(err)
-		}
-		if f != nil {
-			f.Close()
-		}
-
-		if d, ok := services["discoverd"]; ok {
-			discURL = fmt.Sprintf("http://%s:%d", d.ExternalIP, d.TCPPorts[0])
-			disc = discoverd.NewClientWithURL(discURL)
-			if err := discoverdAttempts.Run(disc.Ping); err != nil {
-				shutdown.Fatal(err)
-			}
-		}
-	}
 
 	if discURL == "" && externalAddr != "" {
 		discURL = fmt.Sprintf("http://%s:1111", externalAddr)
@@ -347,10 +304,6 @@ func runDaemon(args *docopt.Args) {
 	for _, s := range metadata {
 		kv := strings.SplitN(s, "=", 2)
 		h.Metadata[kv[0]] = kv[1]
-	}
-
-	if err := resurrectLayer1(); err != nil {
-		shutdown.Fatal(err)
 	}
 
 	for {

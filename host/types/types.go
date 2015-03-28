@@ -208,7 +208,6 @@ type ActiveJob struct {
 	EndedAt     time.Time `json:"ended_at,omitempty"`
 	ExitStatus  int       `json:"exit_status,omitempty"`
 	Error       *string   `json:"error,omitempty"`
-	ManifestID  string    `json:"manifest_id,omitempty"`
 }
 
 type AttachReq struct {

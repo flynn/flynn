@@ -34,7 +34,6 @@ main() {
   cp "${ROOT}/host/bin/flynn-host.gz"                      "staged/targets/flynn-host.gz"
   gzip -9 --stdout "${ROOT}/host/bin/flynn-init"         > "staged/targets/flynn-init.gz"
   gzip -9 --stdout "${ROOT}/host/upstart.conf"           > "staged/targets/upstart.conf.gz"
-  gzip -9 --stdout "${ROOT}/host/bin/manifest.json"      > "staged/targets/host-manifest.json.gz"
   gzip -9 --stdout "${ROOT}/bootstrap/bin/manifest.json" > "staged/targets/bootstrap-manifest.json.gz"
   gzip -9 --stdout "${ROOT}/version.json"                > "staged/targets/version.json.gz"
   "${ROOT}/util/release/flynn-release" export "${ROOT}/version.json" "staged/targets"

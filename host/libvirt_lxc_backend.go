@@ -565,9 +565,6 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	}
 
 	l.state.AddJob(job, container.IP)
-	if runConfig.ManifestID != "" {
-		l.state.SetManifestID(job.ID, runConfig.ManifestID)
-	}
 	domain := &lt.Domain{
 		Type:   "lxc",
 		Name:   job.ID,
