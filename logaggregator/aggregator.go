@@ -32,13 +32,7 @@ func NewAggregator() *Aggregator {
 	return a
 }
 
-// Shutdown shuts down the Aggregator gracefully by closing its listener,
-// and waiting for already-received logs to be processed.
-func (a *Aggregator) Shutdown() {
-	a.Flush()
-	close(a.msgc)
-}
-
+// Feed inserts a message in the aggregator.
 func (a *Aggregator) Feed(msg *rfc5424.Message) {
 	a.msgc <- msg
 }
@@ -54,16 +48,12 @@ func (a *Aggregator) Pause() func() {
 	}
 }
 
-func (a *Aggregator) Flush() {
-	a.bmu.Lock()
-	defer a.bmu.Unlock()
-
-	for k, buf := range a.buffers {
-		buf.Close()
-		delete(a.buffers, k)
-	}
+// Read returns the buffered messages for id.
+func (a *Aggregator) Read(id string) []*rfc5424.Message {
+	return a.getBuffer(id).Read()
 }
 
+// ReadAll returns all buffered messages.
 func (a *Aggregator) ReadAll() [][]*rfc5424.Message {
 	// TODO(benburkert): restructure Aggregator & ring.Buffer to avoid nested locks
 	a.bmu.Lock()
@@ -77,21 +67,42 @@ func (a *Aggregator) ReadAll() [][]*rfc5424.Message {
 	return buffers
 }
 
-func (a *Aggregator) getBuffer(id string) *ring.Buffer {
+// Read returns the buffered messages and adds a subscriber channel for id.
+func (a *Aggregator) ReadAndSubscribe(id string, msgc chan<- *rfc5424.Message, donec <-chan struct{}) []*rfc5424.Message {
+	return a.getBuffer(id).ReadAndSubscribe(msgc, donec)
+}
+
+// Reset clears all buffered data and closes subscribers.
+func (a *Aggregator) Reset() {
 	a.bmu.Lock()
 	defer a.bmu.Unlock()
 
-	buf, _ := a.buffers[id]
-	return buf
+	for k, buf := range a.buffers {
+		buf.Close()
+		delete(a.buffers, k)
+	}
 }
 
-func (a *Aggregator) getOrInitializeBuffer(id string) *ring.Buffer {
+// Shutdown stops the Aggregator, resets the buffers, and closes buffer
+// subscribers.
+func (a *Aggregator) Shutdown() {
+	a.Reset()
+	close(a.msgc)
+}
+
+// Read adds a subscriber channel for id.
+func (a *Aggregator) Subscribe(id string, msgc chan<- *rfc5424.Message, donec <-chan struct{}) {
+	a.getBuffer(id).Subscribe(msgc, donec)
+}
+
+func (a *Aggregator) getBuffer(id string) *ring.Buffer {
 	a.bmu.Lock()
 	defer a.bmu.Unlock()
 
 	if buf, ok := a.buffers[id]; ok {
 		return buf
 	}
+
 	buf := ring.NewBuffer()
 	a.buffers[id] = buf
 	return buf
@@ -113,7 +124,7 @@ func (a *Aggregator) run() {
 }
 
 func (a *Aggregator) feed(msg *rfc5424.Message) {
-	if err := a.getOrInitializeBuffer(string(msg.AppName)).Add(msg); err != nil {
+	if err := a.getBuffer(string(msg.AppName)).Add(msg); err != nil {
 		panic(err)
 	}
 }

@@ -287,7 +287,7 @@ func (s *Server) follow(addr string) (chan struct{}, error) {
 		return nil, err
 	}
 
-	s.Aggregator.Flush()
+	s.Aggregator.Reset()
 
 	unfollowc := make(chan struct{})
 	go func() {
