@@ -564,6 +564,11 @@ func (s *CLISuite) TestCluster(t *c.C) {
 	cfg, err = config.ReadFile(file.Name())
 	t.Assert(err, c.IsNil)
 	t.Assert(cfg.Clusters, c.HasLen, 0)
+	// cluster remove default and set next available
+	t.Assert(flynn("cluster", "add", "-d", "-g", "test.example.com:2222", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "test", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
+	t.Assert(flynn("cluster", "add", "-g", "next.example.com:2222", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "next", "https://controller.next.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
+	t.Assert(flynn("cluster", "remove", "test"), OutputContains, "Cluster \"test\" removed and \"next\" is now the default cluster.")
+	t.Assert(flynn("cluster", "default"), OutputContains, "next")
 }
 
 func (s *CLISuite) TestRelease(t *c.C) {

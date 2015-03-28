@@ -100,11 +100,19 @@ func runClusterRemove(args *docopt.Args) error {
 	name := args.String["<cluster-name>"]
 
 	if config.Remove(name) {
+		msg := fmt.Sprintf("Cluster %q removed.", name)
+
+		// Select next available cluster as default
+		if config.Default == name && len(config.Clusters) > 0 {
+			config.SetDefault(config.Clusters[0].Name)
+			msg = fmt.Sprintf("Cluster %q removed and %q is now the default cluster.", name, config.Default)
+		}
+
 		if err := config.SaveTo(configPath()); err != nil {
 			return err
 		}
 
-		log.Printf("Cluster %q removed.", name)
+		log.Printf(msg, name)
 	}
 
 	return nil
