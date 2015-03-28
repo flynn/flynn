@@ -100,6 +100,10 @@ func downloadGzippedFile(client *tuf.Client, path, dir string) (string, error) {
 	}
 	defer file.Close()
 	dst := filepath.Join(dir, path)
+
+	// unlink the destination file in case it is in use
+	os.Remove(dst)
+
 	out, err := os.Create(dst)
 	if err != nil {
 		return "", err
