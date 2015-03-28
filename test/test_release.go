@@ -145,9 +145,14 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 		}
 	}
 
+	// installing on an instance with Flynn running should not fail
+	script.Reset()
+	installScript.Execute(&script, blobstore)
+	t.Assert(buildHost.Run("sudo bash -ex", &tc.Streams{Stdin: &script, Stdout: logWriter, Stderr: logWriter}), c.IsNil)
+
 	// run a cluster update from the blobstore
 	updateHost := releaseCluster.Instances[1]
-	script = bytes.Buffer{}
+	script.Reset()
 	updateScript.Execute(&script, blobstore)
 	var updateOutput bytes.Buffer
 	out = io.MultiWriter(logWriter, &updateOutput)
