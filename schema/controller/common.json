@@ -35,7 +35,7 @@
     },
     "strategy": {
       "type": "string",
-      "enum": ["all-at-once", "one-by-one"]
+      "enum": ["all-at-once", "one-by-one", "postgres"]
     },
     "meta": {
       "description": "client-specified metadata",

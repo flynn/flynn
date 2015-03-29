@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -89,15 +90,15 @@ func connect(c *C, n int, db string) *pgx.Conn {
 	return conn
 }
 
-func pgConfig(role state.Role, n int) *state.PgConfig {
-	var inst *discoverd.Instance
-	if n > 0 {
-		inst = instance(n)
+func pgConfig(role state.Role, upstream, downstream int) *state.PgConfig {
+	c := &state.PgConfig{Role: role}
+	if upstream > 0 {
+		c.Upstream = instance(upstream)
 	}
-	if role == state.RolePrimary {
-		return &state.PgConfig{Role: role, Downstream: inst}
+	if downstream > 0 {
+		c.Downstream = instance(downstream)
 	}
-	return &state.PgConfig{Role: role, Upstream: inst}
+	return c
 }
 
 var queryAttempts = attempt.Strategy{
@@ -152,6 +153,27 @@ func waitReadWrite(c *C, conn *pgx.Conn) {
 	c.Assert(err, IsNil)
 }
 
+var syncAttempts = attempt.Strategy{
+	Min:   5,
+	Total: 30 * time.Second,
+	Delay: 200 * time.Millisecond,
+}
+
+func waitReplSync(c *C, pg state.Postgres, n int) {
+	id := fmt.Sprintf("node%d", n)
+	err := syncAttempts.Run(func() error {
+		info, err := pg.(*Postgres).Info()
+		if err != nil {
+			return err
+		}
+		if info.SyncedDownstream == nil || info.SyncedDownstream.ID != id {
+			return errors.New("downstream not synced")
+		}
+		return nil
+	})
+	c.Assert(err, IsNil, Commentf("up:%s down:%s", pg.(*Postgres).id, id))
+}
+
 func waitRecovered(c *C, conn *pgx.Conn) {
 	var recovery bool
 	err := queryAttempts.Run(func() error {
@@ -170,7 +192,7 @@ func waitRecovered(c *C, conn *pgx.Conn) {
 func (PostgresSuite) TestIntegration(c *C) {
 	// Start a primary
 	node1 := newPostgres(c, 1)
-	err := node1.Reconfigure(pgConfig(state.RolePrimary, 2))
+	err := node1.Reconfigure(pgConfig(state.RolePrimary, 0, 2))
 	c.Assert(err, IsNil)
 	c.Assert(node1.Start(), IsNil)
 	defer node1.Stop()
@@ -184,10 +206,13 @@ func (PostgresSuite) TestIntegration(c *C) {
 
 	// Start a sync
 	node2 := newPostgres(c, 2)
-	err = node2.Reconfigure(pgConfig(state.RoleSync, 1))
+	err = node2.Reconfigure(pgConfig(state.RoleSync, 1, 3))
 	c.Assert(err, IsNil)
 	c.Assert(node2.Start(), IsNil)
 	defer node2.Stop()
+
+	// check it catches up
+	waitReplSync(c, node1, 2)
 
 	// try to query primary until it comes up as read-write
 	waitReadWrite(c, node1Conn)
@@ -221,10 +246,13 @@ func (PostgresSuite) TestIntegration(c *C) {
 
 	// Start an async
 	node3 := newPostgres(c, 3)
-	err = node3.Reconfigure(pgConfig(state.RoleAsync, 2))
+	err = node3.Reconfigure(pgConfig(state.RoleAsync, 2, 4))
 	c.Assert(err, IsNil)
 	c.Assert(node3.Start(), IsNil)
 	defer node3.Stop()
+
+	// check it catches up
+	waitReplSync(c, node2, 3)
 
 	node3Conn := connect(c, 3, "postgres")
 	defer node3Conn.Close()
@@ -236,10 +264,13 @@ func (PostgresSuite) TestIntegration(c *C) {
 
 	// Start a second async
 	node4 := newPostgres(c, 4)
-	err = node4.Reconfigure(pgConfig(state.RoleAsync, 3))
+	err = node4.Reconfigure(pgConfig(state.RoleAsync, 3, 0))
 	c.Assert(err, IsNil)
 	c.Assert(node4.Start(), IsNil)
 	defer node4.Stop()
+
+	// check it catches up
+	waitReplSync(c, node3, 4)
 
 	node4Conn := connect(c, 4, "postgres")
 	defer node4Conn.Close()
@@ -251,13 +282,14 @@ func (PostgresSuite) TestIntegration(c *C) {
 
 	// promote node2 to primary
 	c.Assert(node1.Stop(), IsNil)
-	err = node2.Reconfigure(pgConfig(state.RolePrimary, 3))
+	err = node2.Reconfigure(pgConfig(state.RolePrimary, 0, 3))
 	c.Assert(err, IsNil)
-	err = node3.Reconfigure(pgConfig(state.RoleSync, 2))
+	err = node3.Reconfigure(pgConfig(state.RoleSync, 2, 4))
 	c.Assert(err, IsNil)
 
 	// wait for recovery and read-write transactions to come up
 	waitRecovered(c, node2Conn)
+	waitReplSync(c, node2, 3)
 	waitReadWrite(c, node2Conn)
 
 	// check replication of each node
@@ -272,12 +304,13 @@ func (PostgresSuite) TestIntegration(c *C) {
 
 	//  promote node3 to primary
 	c.Assert(node2.Stop(), IsNil)
-	err = node3.Reconfigure(pgConfig(state.RolePrimary, 4))
+	err = node3.Reconfigure(pgConfig(state.RolePrimary, 0, 4))
 	c.Assert(err, IsNil)
-	err = node4.Reconfigure(pgConfig(state.RoleSync, -1))
+	err = node4.Reconfigure(pgConfig(state.RoleSync, 3, 0))
 
 	// check replication
 	waitRecovered(c, node3Conn)
+	waitReplSync(c, node3, 4)
 	waitReadWrite(c, node3Conn)
 	assertDownstream(c, node3Conn, 4)
 	insertRow(c, node3Conn, 3)
@@ -286,25 +319,25 @@ func (PostgresSuite) TestIntegration(c *C) {
 func (PostgresSuite) TestRemoveNodes(c *C) {
 	// start a chain of four nodes
 	node1 := newPostgres(c, 1)
-	err := node1.Reconfigure(pgConfig(state.RolePrimary, 2))
+	err := node1.Reconfigure(pgConfig(state.RolePrimary, 0, 2))
 	c.Assert(err, IsNil)
 	c.Assert(node1.Start(), IsNil)
 	defer node1.Stop()
 
 	node2 := newPostgres(c, 2)
-	err = node2.Reconfigure(pgConfig(state.RoleSync, 1))
+	err = node2.Reconfigure(pgConfig(state.RoleSync, 1, 0))
 	c.Assert(err, IsNil)
 	c.Assert(node2.Start(), IsNil)
 	defer node2.Stop()
 
 	node3 := newPostgres(c, 3)
-	err = node3.Reconfigure(pgConfig(state.RoleAsync, 2))
+	err = node3.Reconfigure(pgConfig(state.RoleAsync, 2, 0))
 	c.Assert(err, IsNil)
 	c.Assert(node3.Start(), IsNil)
 	defer node3.Stop()
 
 	node4 := newPostgres(c, 4)
-	err = node4.Reconfigure(pgConfig(state.RoleAsync, 3))
+	err = node4.Reconfigure(pgConfig(state.RoleAsync, 3, 0))
 	c.Assert(err, IsNil)
 	c.Assert(node4.Start(), IsNil)
 	defer node4.Stop()
@@ -322,7 +355,7 @@ func (PostgresSuite) TestRemoveNodes(c *C) {
 	// remove first async
 	c.Assert(node3.Stop(), IsNil)
 	// reconfigure second async
-	err = node4.Reconfigure(pgConfig(state.RoleAsync, 2))
+	err = node4.Reconfigure(pgConfig(state.RoleAsync, 2, 0))
 	c.Assert(err, IsNil)
 	// run query
 	node4Conn = connect(c, 4, "postgres")
@@ -333,9 +366,9 @@ func (PostgresSuite) TestRemoveNodes(c *C) {
 
 	// remove sync and promote node4 to sync
 	c.Assert(node2.Stop(), IsNil)
-	err = node1.Reconfigure(pgConfig(state.RolePrimary, 4))
+	err = node1.Reconfigure(pgConfig(state.RolePrimary, 0, 4))
 	c.Assert(err, IsNil)
-	err = node4.Reconfigure(pgConfig(state.RoleSync, 1))
+	err = node4.Reconfigure(pgConfig(state.RoleSync, 1, 0))
 	c.Assert(err, IsNil)
 
 	waitReadWrite(c, node1Conn)

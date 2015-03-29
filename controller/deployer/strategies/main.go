@@ -32,6 +32,7 @@ type Deploy struct {
 	jobEvents       chan *ct.JobEvent
 	jobStream       stream.Stream
 	serviceEvents   chan *discoverd.Event
+	serviceMeta     *discoverd.ServiceMeta
 	useJobEvents    map[string]struct{}
 	logger          log15.Logger
 	oldReleaseState map[string]int
@@ -75,6 +76,7 @@ type PerformFunc func(d *Deploy) error
 var performFuncs = map[string]PerformFunc{
 	"all-at-once": allAtOnce,
 	"one-by-one":  oneByOne,
+	"postgres":    postgres,
 }
 
 func Perform(d *ct.Deployment, client *controller.Client, deployEvents chan<- ct.DeploymentEvent, logger log15.Logger) error {
@@ -150,6 +152,8 @@ func Perform(d *ct.Deployment, client *controller.Client, deployEvents chan<- ct
 				switch event.Kind {
 				case discoverd.EventKindCurrent:
 					break outer
+				case discoverd.EventKindServiceMeta:
+					deploy.serviceMeta = event.ServiceMeta
 				case discoverd.EventKindUp:
 					releaseID, ok := event.Instance.Meta["FLYNN_RELEASE_ID"]
 					if !ok {
@@ -277,6 +281,9 @@ func (d *Deploy) waitForJobEvents(releaseID string, expected jobEvents, log log1
 	for {
 		select {
 		case event := <-d.serviceEvents:
+			if event.Kind != discoverd.EventKindUp {
+				continue
+			}
 			if id, ok := event.Instance.Meta["FLYNN_APP_ID"]; !ok || id != d.AppID {
 				continue
 			}
@@ -295,9 +302,7 @@ func (d *Deploy) waitForJobEvents(releaseID string, expected jobEvents, log log1
 				continue
 			}
 			log.Info("got service event", "job_id", jobID, "type", typ, "state", event.Kind)
-			if event.Kind == discoverd.EventKindUp {
-				handleEvent(jobID, typ, "up")
-			}
+			handleEvent(jobID, typ, "up")
 			if expected.Equals(actual) {
 				return nil
 			}

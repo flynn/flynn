@@ -137,6 +137,16 @@ func TestBasic(t *testing.T) {
 		XLog:        xlog.Zero,
 		XLogWaiting: "0/0000000A",
 	}
+	pgSync2 := &simulator.PostgresInfo{
+		Config: &state.PgConfig{
+			Role:       state.RoleSync,
+			Upstream:   node(3, 2),
+			Downstream: node(2, 1),
+		},
+		Online:      true,
+		XLog:        xlog.Zero,
+		XLogWaiting: "0/0000000A",
+	}
 	pgPrimary := &simulator.PostgresInfo{
 		Config: &state.PgConfig{
 			Role:       state.RolePrimary,
@@ -250,7 +260,7 @@ func TestBasic(t *testing.T) {
 					Peers: peers,
 					State: gen2_1,
 				},
-				Postgres: pgSync,
+				Postgres: pgSync2,
 			},
 		},
 
@@ -267,7 +277,7 @@ func TestBasic(t *testing.T) {
 					Peers: []*discoverd.Instance{node(2, 1), node(1, 3)},
 					State: gen2_1,
 				},
-				Postgres: pgSync,
+				Postgres: pgSync2,
 			},
 		},
 		{Cmd: "addpeer node3"},
@@ -280,7 +290,7 @@ func TestBasic(t *testing.T) {
 					Peers: []*discoverd.Instance{node(2, 1), node(1, 3), node(3, 4)},
 					State: gen2_1,
 				},
-				Postgres: pgSync,
+				Postgres: pgSync2,
 			},
 		},
 
@@ -1219,8 +1229,9 @@ func TestStartSync(t *testing.T) {
 				Postgres: &simulator.PostgresInfo{
 					Online: true,
 					Config: &state.PgConfig{
-						Role:     state.RoleSync,
-						Upstream: node(3, 3),
+						Role:       state.RoleSync,
+						Upstream:   node(3, 3),
+						Downstream: node(2, 2),
 					},
 					XLog:        xlog.Zero,
 					XLogWaiting: xlog.Zero,
@@ -1499,8 +1510,9 @@ func TestStartUnassigned(t *testing.T) {
 				Postgres: &simulator.PostgresInfo{
 					Online: true,
 					Config: &state.PgConfig{
-						Role:     state.RoleSync,
-						Upstream: node(3, 3),
+						Role:       state.RoleSync,
+						Upstream:   node(3, 3),
+						Downstream: node(4, 4),
 					},
 					XLog:        xlog.Zero,
 					XLogWaiting: "0/0000000A",
@@ -1829,8 +1841,9 @@ func TestFreezeSync(t *testing.T) {
 	gen1pg := &simulator.PostgresInfo{
 		Online: true,
 		Config: &state.PgConfig{
-			Role:     state.RoleSync,
-			Upstream: node(2, 1),
+			Role:       state.RoleSync,
+			Upstream:   node(2, 1),
+			Downstream: node(3, 3),
 		},
 		XLog: "0/0000000A",
 	}
@@ -2098,8 +2111,9 @@ func TestRemovedSync(t *testing.T) {
 				Postgres: &simulator.PostgresInfo{
 					Online: true,
 					Config: &state.PgConfig{
-						Role:     state.RoleSync,
-						Upstream: node(2, 1),
+						Role:       state.RoleSync,
+						Upstream:   node(2, 1),
+						Downstream: node(3, 3),
 					},
 					XLog:        xlog.Zero,
 					XLogWaiting: xlog.Zero,
