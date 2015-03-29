@@ -8,4 +8,5 @@ var SystemApps = []string{
 	"gitreceive",
 	"controller",
 	"logaggregator",
+	"postgres",
 }

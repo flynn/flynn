@@ -58,6 +58,8 @@ func run() error {
 		image := "flynn/" + name
 		if name == "gitreceive" {
 			image = "flynn/receiver"
+		} else if name == "postgres" {
+			image = "flynn/postgresql"
 		}
 		uri, ok := images[image]
 		if !ok {
