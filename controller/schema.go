@@ -172,6 +172,7 @@ $$ LANGUAGE plpgsql`,
     status deployment_status NOT NULL DEFAULT 'running',
     job_type text,
     job_state text,
+    error text,
     created_at timestamptz NOT NULL DEFAULT now())`,
 
 		`CREATE FUNCTION notify_deployment_event() RETURNS TRIGGER AS $$

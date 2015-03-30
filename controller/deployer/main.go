@@ -176,6 +176,6 @@ func (c *context) createDeploymentEvent(e ct.DeploymentEvent) error {
 	if e.Status == "" {
 		e.Status = "running"
 	}
-	query := "INSERT INTO deployment_events (deployment_id, release_id, job_type, job_state, status) VALUES ($1, $2, $3, $4, $5)"
-	return c.db.Exec(query, e.DeploymentID, e.ReleaseID, e.JobType, e.JobState, e.Status)
+	query := "INSERT INTO deployment_events (deployment_id, release_id, job_type, job_state, status, error) VALUES ($1, $2, $3, $4, $5, $6)"
+	return c.db.Exec(query, e.DeploymentID, e.ReleaseID, e.JobType, e.JobState, e.Status, e.Error)
 }

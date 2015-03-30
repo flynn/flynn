@@ -67,14 +67,17 @@ func (s *S) TestStreamDeployment(c *C) {
 		if e.Status == "" {
 			e.Status = "running"
 		}
-		query := "INSERT INTO deployment_events (deployment_id, release_id, job_type, job_state, status) VALUES ($1, $2, $3, $4, $5)"
-		c.Assert(s.hc.db.Exec(query, e.DeploymentID, e.ReleaseID, e.JobType, e.JobState, e.Status), IsNil)
+		query := "INSERT INTO deployment_events (deployment_id, release_id, job_type, job_state, status, error) VALUES ($1, $2, $3, $4, $5, $6)"
+		c.Assert(s.hc.db.Exec(query, e.DeploymentID, e.ReleaseID, e.JobType, e.JobState, e.Status, e.Error), IsNil)
 	}
 	fmt.Println(newRelease.ID)
 	createDeploymentEvent(ct.DeploymentEvent{DeploymentID: d.ID, ReleaseID: newRelease.ID})
 
 	select {
-	case e := <-events:
+	case e, ok := <-events:
+		if !ok {
+			c.Fatal("unexpected close of event stream")
+		}
 		c.Assert(e.ReleaseID, Equals, newRelease.ID)
 	case <-time.After(time.Second):
 		c.Fatal("Timed out waiting for event")
