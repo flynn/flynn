@@ -266,7 +266,7 @@ func streamDeploymentEvents(ctx context.Context, deploymentID string, w http.Res
 }
 
 func (r *DeploymentRepo) listEvents(deploymentID string, sinceID int64) ([]*ct.DeploymentEvent, error) {
-	query := "SELECT event_id, deployment_id, release_id, job_type, job_state, status, created_at FROM deployment_events WHERE deployment_id = $1 AND event_id > $2"
+	query := "SELECT event_id, deployment_id, release_id, job_type, job_state, status, error, created_at FROM deployment_events WHERE deployment_id = $1 AND event_id > $2"
 	rows, err := r.db.Query(query, deploymentID, sinceID)
 	if err != nil {
 		return nil, err
@@ -284,13 +284,13 @@ func (r *DeploymentRepo) listEvents(deploymentID string, sinceID int64) ([]*ct.D
 }
 
 func (r *DeploymentRepo) getEvent(id int64) (*ct.DeploymentEvent, error) {
-	row := r.db.QueryRow("SELECT event_id, deployment_id, release_id, job_type, job_state, status, created_at FROM deployment_events WHERE event_id = $1", id)
+	row := r.db.QueryRow("SELECT event_id, deployment_id, release_id, job_type, job_state, status, error, created_at FROM deployment_events WHERE event_id = $1", id)
 	return scanDeploymentEvent(row)
 }
 
 func scanDeploymentEvent(s postgres.Scanner) (*ct.DeploymentEvent, error) {
 	event := &ct.DeploymentEvent{}
-	err := s.Scan(&event.ID, &event.DeploymentID, &event.ReleaseID, &event.JobType, &event.JobState, &event.Status, &event.CreatedAt)
+	err := s.Scan(&event.ID, &event.DeploymentID, &event.ReleaseID, &event.JobType, &event.JobState, &event.Status, &event.Error, &event.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			err = ErrNotFound
