@@ -13,6 +13,19 @@ import (
 	"github.com/flynn/flynn/pkg/stream"
 )
 
+type ErrSkipRollback struct {
+	Err string
+}
+
+func (e ErrSkipRollback) Error() string {
+	return e.Err
+}
+
+func IsSkipRollback(err error) bool {
+	_, ok := err.(ErrSkipRollback)
+	return ok
+}
+
 type UnknownStrategyError struct {
 	Strategy string
 }

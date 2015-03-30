@@ -12,9 +12,15 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 )
 
-func postgres(d *Deploy) error {
+func postgres(d *Deploy) (err error) {
 	log := d.logger.New("fn", "postgres")
 	log.Info("starting postgres deployment")
+
+	defer func() {
+		if err != nil {
+			err = ErrSkipRollback{err.Error()}
+		}
+	}()
 
 	loggedErr := func(e string) error {
 		log.Error(e)
@@ -171,7 +177,7 @@ func postgres(d *Deploy) error {
 	if err := stopInstance(state.Sync); err != nil {
 		return err
 	}
-	_, err := startInstance()
+	_, err = startInstance()
 	if err != nil {
 		return err
 	}
