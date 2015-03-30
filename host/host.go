@@ -15,7 +15,6 @@ import (
 	"github.com/flynn/flynn/host/cli"
 	"github.com/flynn/flynn/host/config"
 	"github.com/flynn/flynn/host/logmux"
-	"github.com/flynn/flynn/host/sampi"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/host/volume/manager"
@@ -39,7 +38,7 @@ func init() {
 	log.SetFlags(log.Lshortfile | log.Lmicroseconds)
 
 	cli.Register("daemon", runDaemon, `
-usage: flynn-host daemon [options] [--meta=<KEY=VAL>...]
+usage: flynn-host daemon [options]
 
 options:
   --external=IP          external IP of host
@@ -49,7 +48,6 @@ options:
   --legacy-volpath=PATH  directory to create legacy volumes in [default: /var/lib/flynn/host-volumes]
   --volpath=PATH         directory to create volumes in [default: /var/lib/flynn/volumes]
   --backend=BACKEND      runner backend [default: libvirt-lxc]
-  --meta=<KEY=VAL>...    key=value pair to add as metadata
   --flynn-init=PATH      path to flynn-init binary [default: /usr/local/bin/flynn-init]
   --log-dir=DIR          directory to store job logs [default: /var/log/flynn]
 	`)
@@ -142,11 +140,9 @@ func runDaemon(args *docopt.Args) {
 	backendName := args.String["--backend"]
 	flynnInit := args.String["--flynn-init"]
 	logDir := args.String["--log-dir"]
-	metadata := args.All["--meta"].([]string)
 
 	grohl.AddContext("app", "host")
 	grohl.Log(grohl.Data{"at": "start"})
-	g := grohl.NewContext(grohl.Data{"fn": "main"})
 
 	if hostID == "" {
 		hostID = strings.Replace(hostname, "-", "", -1)
@@ -232,8 +228,6 @@ func runDaemon(args *docopt.Args) {
 	if discURL == "" && externalAddr != "" {
 		discURL = fmt.Sprintf("http://%s:1111", externalAddr)
 	}
-	// HACK: use env as global for discoverd connection in sampic
-	os.Setenv("DISCOVERD", discURL)
 	if disc == nil {
 		disc = discoverd.NewClientWithURL(discURL)
 		if err := disc.Ping(); err != nil {
@@ -253,105 +247,27 @@ func runDaemon(args *docopt.Args) {
 		shutdown.Fatal(err)
 	}
 
-	cluster, err := cluster.NewClient()
-	if err != nil {
-		shutdown.Fatal(err)
-	}
-
-	router, err := serveHTTP(
+	var cluster *cluster.Client
+	if _, err := serveHTTP(
 		&Host{state: state, backend: backend},
 		&attachHandler{state: state, backend: backend},
 		cluster,
 		vman,
-	)
-	if err != nil {
+	); err != nil {
 		shutdown.Fatal(err)
 	}
 
-	sampiAPI := sampi.NewHTTPAPI(sampi.NewCluster())
-	leaders := make(chan *discoverd.Instance)
-	leaderStream, err := disc.Service("flynn-host").Leaders(leaders)
-	if err != nil {
-		shutdown.Fatal(err)
-	}
-	promote := func() {
-		g.Log(grohl.Data{"at": "sampi_leader"})
-		sampiAPI.RegisterRoutes(router)
-		leaderStream.Close()
-	}
-	leader := <-leaders
-	if leader.Addr == hb.Addr() {
-		promote()
-		// TODO: handle demotion
-	} else {
-		go func() {
-			for leader := range leaders {
-				if leader.Addr == hb.Addr() {
-					promote()
-					return
-				}
+	var jobs chan *host.Job
+	for job := range jobs {
+		if externalAddr != "" {
+			if job.Config.Env == nil {
+				job.Config.Env = make(map[string]string)
 			}
-			// TODO: handle discoverd disconnection
-		}()
-	}
-
-	g.Log(grohl.Data{"at": "sampi_connected"})
-
-	events := state.AddListener("all")
-	go syncScheduler(cluster, hostID, events)
-
-	h := &host.Host{ID: hostID, Metadata: make(map[string]string)}
-	for _, s := range metadata {
-		kv := strings.SplitN(s, "=", 2)
-		h.Metadata[kv[0]] = kv[1]
-	}
-
-	for {
-		newLeader := cluster.NewLeaderSignal()
-
-		h.Jobs = state.ClusterJobs()
-		jobs := make(chan *host.Job)
-		jobStream, err := cluster.RegisterHost(h, jobs)
-		if err != nil {
-			shutdown.Fatal(err)
+			job.Config.Env["EXTERNAL_IP"] = externalAddr
+			job.Config.Env["DISCOVERD"] = discURL
 		}
-		shutdown.BeforeExit(func() {
-			// close the connection that registers use with the cluster
-			// during shutdown; this unregisters us immediately.
-			jobStream.Close()
-		})
-		g.Log(grohl.Data{"at": "host_registered"})
-		for job := range jobs {
-			if externalAddr != "" {
-				if job.Config.Env == nil {
-					job.Config.Env = make(map[string]string)
-				}
-				job.Config.Env["EXTERNAL_IP"] = externalAddr
-				job.Config.Env["DISCOVERD"] = discURL
-			}
-			if err := backend.Run(job, nil); err != nil {
-				state.SetStatusFailed(job.ID, err)
-			}
-		}
-		g.Log(grohl.Data{"at": "sampi_disconnected", "err": jobStream.Err})
-
-		// if the process is shutting down, just block
-		if shutdown.IsActive() {
-			<-make(chan struct{})
-		}
-
-		<-newLeader
-	}
-}
-
-func syncScheduler(scheduler *cluster.Client, hostID string, events <-chan host.Event) {
-	for event := range events {
-		if event.Event != "stop" {
-			continue
-		}
-		grohl.Log(grohl.Data{"fn": "scheduler_event", "at": "remove_job", "job.id": event.JobID})
-		if err := scheduler.RemoveJob(hostID, event.JobID); err != nil {
-			grohl.Log(grohl.Data{"fn": "scheduler_event", "at": "remove_job", "status": "error", "err": err, "job.id": event.JobID})
+		if err := backend.Run(job, nil); err != nil {
+			state.SetStatusFailed(job.ID, err)
 		}
 	}
 }
