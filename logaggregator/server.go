@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/flynn/flynn/discoverd/client"
@@ -47,7 +49,14 @@ func NewServer(conf ServerConfig) (*Server, error) {
 		return nil, err
 	}
 
-	rl, err := net.Listen("tcp", conf.ReplicationAddr)
+	repAddr := conf.ReplicationAddr
+	if repAddr == "" {
+		if repAddr, err = replicationAddr(ll.Addr().String()); err != nil {
+			return nil, err
+		}
+	}
+
+	rl, err := net.Listen("tcp", repAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +290,12 @@ func (s *Server) monitorDiscoverd() {
 	}
 }
 
-func (s *Server) follow(addr string) (chan struct{}, error) {
+func (s *Server) follow(syslogAddr string) (chan struct{}, error) {
+	addr, err := replicationAddr(syslogAddr)
+	if err != nil {
+		return nil, err
+	}
+
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		return nil, err
@@ -306,4 +320,21 @@ func (s *Server) follow(addr string) (chan struct{}, error) {
 	}()
 
 	return unfollowc, nil
+}
+
+func replicationAddr(syslogAddr string) (string, error) {
+	host, sport, err := net.SplitHostPort(syslogAddr)
+	if err != nil {
+		return "", err
+	}
+	if host == "::" {
+		host = ""
+	}
+
+	port, err := strconv.Atoi(sport)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%s:%d", host, port+1000), nil
 }

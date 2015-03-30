@@ -46,16 +46,25 @@ func (s *LogAggregatorTestSuite) SetUpTest(c *C) {
 
 func testServer(c *C, dc *discoverd.Client) *Server {
 	srvConf := ServerConfig{
-		SyslogAddr:      ":0",
-		ReplicationAddr: ":0",
-		ApiAddr:         ":0",
-		ServiceName:     "test-flynn-logaggregator",
-		Discoverd:       dc,
+		SyslogAddr:  ":0",
+		ApiAddr:     ":0",
+		ServiceName: "test-flynn-logaggregator",
+		Discoverd:   dc,
 	}
 
 	srv, err := NewServer(srvConf)
 	c.Assert(err, IsNil)
 	return srv
+}
+
+func testClient(c *C, srv *Server) client.Client {
+	_, port, _ := net.SplitHostPort(srv.al.Addr().String())
+	url := "http://127.0.0.1:" + port + "/"
+
+	client, err := client.New(url)
+	c.Assert(err, IsNil)
+
+	return client
 }
 
 func (s *LogAggregatorTestSuite) TearDownTest(c *C) {
