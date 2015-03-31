@@ -49,7 +49,7 @@ frequent and secure so your cluster stays up-to-date.
 
 ### Our Tech
 
-We built most of Flynn from scratch, and choose the best tools available.
+We built most of Flynn from scratch, and chose the best tools available.
 
 Flynn is written almost entirely in Go. Go is one of the few languages designed
 with concurrency as a first class feature which makes it a great fit for all of
