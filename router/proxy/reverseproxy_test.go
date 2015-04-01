@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/pkg/connutil"
 )
 
 func TestServeConnClientGone(t *testing.T) {
 	control, conn := net.Pipe()
-	cnConn := CloseNotifyConn(conn)
+	cnConn := connutil.CloseNotifyConn(conn)
 
 	clientGone := false
 	dialer = dialerFunc(func(_, _ string) (net.Conn, error) {
