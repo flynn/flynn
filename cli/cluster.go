@@ -112,7 +112,7 @@ func runClusterRemove(args *docopt.Args) error {
 			return err
 		}
 
-		log.Printf(msg, name)
+		log.Print(msg)
 	}
 
 	return nil
