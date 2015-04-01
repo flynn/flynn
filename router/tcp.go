@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/pkg/connutil"
 	"github.com/flynn/flynn/router/proxy"
 	"github.com/flynn/flynn/router/types"
 )
@@ -328,5 +329,5 @@ type tcpService struct {
 }
 
 func (s *tcpService) ServeConn(conn net.Conn) {
-	s.rp.ServeConn(context.Background(), proxy.CloseNotifyConn(conn))
+	s.rp.ServeConn(context.Background(), connutil.CloseNotifyConn(conn))
 }
