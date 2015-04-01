@@ -79,12 +79,20 @@ func (a *WaitAction) Run(s *State) error {
 }
 
 func lookupDiscoverdURLHost(u *url.URL, timeout time.Duration) error {
-	if strings.HasSuffix(u.Host, ".discoverd") {
+	addr, port, serr := net.SplitHostPort(u.Host)
+	if serr != nil {
+		addr = u.Host
+	}
+	if strings.HasSuffix(addr, ".discoverd") {
 		instances, err := discoverd.GetInstances(strings.Split(u.Host, ".")[0], timeout)
 		if err != nil {
 			return err
 		}
 		u.Host = instances[0].Addr
+		if serr == nil {
+			ip, _, _ := net.SplitHostPort(instances[0].Addr)
+			u.Host = net.JoinHostPort(ip, port)
+		}
 	}
 	return nil
 }

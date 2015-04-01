@@ -73,7 +73,12 @@ func NewServer(conf ServerConfig) (*Server, error) {
 		return nil, err
 	}
 
-	hb, err := conf.Discoverd.AddServiceAndRegister(conf.ServiceName, ll.Addr().String())
+	_, lport, err := net.SplitHostPort(ll.Addr().String())
+	if err != nil {
+		return nil, err
+	}
+
+	hb, err := conf.Discoverd.AddServiceAndRegister(conf.ServiceName, ":"+lport)
 	if err != nil {
 		return nil, err
 	}
@@ -271,6 +276,10 @@ func (s *Server) monitorDiscoverd() {
 	for event := range s.eventc {
 		switch event.Kind {
 		case discoverd.EventKindLeader:
+			if event.Instance.Addr == leader.Addr {
+				break
+			}
+
 			if unfollowc != nil {
 				close(unfollowc)
 			}

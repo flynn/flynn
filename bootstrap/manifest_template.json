@@ -381,6 +381,12 @@
     "domain": "dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}"
   },
   {
+    "id": "logaggregator-wait",
+    "action": "wait",
+    "url": "http://flynn-logaggregator.discoverd:80",
+    "status": 404
+  },
+  {
     "id": "blobstore-wait",
     "action": "wait",
     "url": "http://blobstore.discoverd",
