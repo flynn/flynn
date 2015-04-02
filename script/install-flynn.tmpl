@@ -13,6 +13,7 @@ OPTIONS:
   -r, --repo URL        The TUF repository to download files from [default: https://dl.flynn.io]
   --clean               Install from a clean state (implies --remove) [DANGER: this will remove all associated data]
   --remove              Remove existing Flynn installation [DANGER: this will remove all associated data]
+  --yes                 Automatic yes to prompts
 USAGE
 }
 
@@ -29,6 +30,7 @@ main() {
 
   local install=true
   local remove=false
+  local assume_yes=false
   local repo_url
 
   while true; do
@@ -40,6 +42,10 @@ main() {
       --remove)
         remove=true
         install=false
+        shift
+        ;;
+      --yes)
+        assume_yes=true
         shift
         ;;
       -h | --help)
@@ -66,7 +72,7 @@ main() {
   fi
 
   if $remove; then
-    do_remove
+    do_remove $assume_yes
   fi
 
   if ! $install; then
@@ -151,17 +157,22 @@ is_ubuntu_trusty() {
 }
 
 do_remove() {
+  local assume_yes=$1
+
   warn "*** WARNING ***"
   warn "About to stop Flynn and remove all existing data"
-  warn "Are you sure this is what you want?"
-  echo -n "(yes/no): "
-  while read answer; do
-    case "${answer}" in
-      yes) break ;;
-      no)  exit ;;
-      *)   echo -n "Please type 'yes' or 'no': " ;;
-    esac
-  done
+
+  if ! $assume_yes; then
+    warn "Are you sure this is what you want?"
+    echo -n "(yes/no): "
+    while read answer; do
+      case "${answer}" in
+        yes) break ;;
+        no)  exit ;;
+        *)   echo -n "Please type 'yes' or 'no': " ;;
+      esac
+    done
+  fi
 
   info "stopping flynn-host daemon"
   local status="$(status flynn-host)"
