@@ -1,4 +1,6 @@
-package main
+// +build linux
+
+package backend
 
 import (
 	"bytes"
@@ -25,6 +27,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/miekg/dns"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/natefinch/lumberjack"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
+
 	"github.com/flynn/flynn/host/containerinit"
 	lt "github.com/flynn/flynn/host/libvirt"
 	"github.com/flynn/flynn/host/logbuf"
@@ -45,7 +48,11 @@ const (
 	imageRoot      = "/var/lib/docker"
 )
 
-func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, logPath, initPath string, mux *logmux.LogMux) (Backend, error) {
+func init() {
+	backends["libvirt-lxc"] = newLibvirtLXC
+}
+
+func newLibvirtLXC(state *State, vman *volumemanager.Manager, volPath, logPath, initPath string, mux *logmux.LogMux) (Backend, error) {
 	libvirtc, err := libvirt.NewVirConnection("lxc:///")
 	if err != nil {
 		return nil, err
@@ -56,7 +63,7 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, lo
 		return nil, err
 	}
 
-	return &LibvirtLXCBackend{
+	return &libvirtLXC{
 		LogPath:    logPath,
 		VolPath:    volPath,
 		InitPath:   initPath,
@@ -72,7 +79,7 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, lo
 	}, nil
 }
 
-type LibvirtLXCBackend struct {
+type libvirtLXC struct {
 	LogPath   string
 	InitPath  string
 	VolPath   string
@@ -99,7 +106,7 @@ type libvirtContainer struct {
 	RootPath string
 	IP       net.IP
 	job      *host.Job
-	l        *LibvirtLXCBackend
+	l        *libvirtLXC
 	done     chan struct{}
 	*containerinit.Client
 }
@@ -170,7 +177,7 @@ var networkConfigAttempts = attempt.Strategy{
 // ConfigureNetworking is called once during host startup and passed the
 // strategy and identifier of the networking coordinatior job. Currently the
 // only strategy implemented uses flannel.
-func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job string) (*NetworkInfo, error) {
+func (l *libvirtLXC) ConfigureNetworking(strategy NetworkStrategy, job string) (*NetworkInfo, error) {
 	if strategy != NetworkStrategyFlannel {
 		return nil, errors.New("host: unknown network strategy")
 	}
@@ -353,7 +360,7 @@ var libvirtAttempts = attempt.Strategy{
 	Delay: 200 * time.Millisecond,
 }
 
-func (l *LibvirtLXCBackend) withConnRetries(f func() error) error {
+func (l *libvirtLXC) withConnRetries(f func() error) error {
 	return libvirtAttempts.Run(func() error {
 		err := f()
 		if err != nil {
@@ -369,7 +376,7 @@ func (l *LibvirtLXCBackend) withConnRetries(f func() error) error {
 	})
 }
 
-func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error) {
+func (l *libvirtLXC) Run(job *host.Job, runConfig *RunConfig) (err error) {
 	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "run", "job.id": job.ID})
 	g.Log(grohl.Data{"at": "start", "job.artifact.uri": job.Artifact.URI, "job.cmd": job.Config.Cmd})
 
@@ -631,7 +638,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	return nil
 }
 
-func (l *LibvirtLXCBackend) openLog(id string) *logbuf.Log {
+func (l *libvirtLXC) openLog(id string) *logbuf.Log {
 	l.logsMtx.Lock()
 	defer l.logsMtx.Unlock()
 	if _, ok := l.logs[id]; !ok {
@@ -832,7 +839,7 @@ func (c *libvirtContainer) Stop() error {
 	return nil
 }
 
-func (l *LibvirtLXCBackend) Stop(id string) error {
+func (l *libvirtLXC) Stop(id string) error {
 	c, err := l.getContainer(id)
 	if err != nil {
 		return err
@@ -840,7 +847,7 @@ func (l *LibvirtLXCBackend) Stop(id string) error {
 	return c.Stop()
 }
 
-func (l *LibvirtLXCBackend) getContainer(id string) (*libvirtContainer, error) {
+func (l *libvirtLXC) getContainer(id string) (*libvirtContainer, error) {
 	l.containersMtx.RLock()
 	defer l.containersMtx.RUnlock()
 	c := l.containers[id]
@@ -850,7 +857,7 @@ func (l *LibvirtLXCBackend) getContainer(id string) (*libvirtContainer, error) {
 	return c, nil
 }
 
-func (l *LibvirtLXCBackend) ResizeTTY(id string, height, width uint16) error {
+func (l *libvirtLXC) ResizeTTY(id string, height, width uint16) error {
 	container, err := l.getContainer(id)
 	if err != nil {
 		return err
@@ -865,7 +872,7 @@ func (l *LibvirtLXCBackend) ResizeTTY(id string, height, width uint16) error {
 	return term.SetWinsize(pty.Fd(), &term.Winsize{Height: height, Width: width})
 }
 
-func (l *LibvirtLXCBackend) Signal(id string, sig int) error {
+func (l *libvirtLXC) Signal(id string, sig int) error {
 	container, err := l.getContainer(id)
 	if err != nil {
 		return err
@@ -873,7 +880,7 @@ func (l *LibvirtLXCBackend) Signal(id string, sig int) error {
 	return container.Signal(sig)
 }
 
-func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
+func (l *libvirtLXC) Attach(req *AttachRequest) (err error) {
 	client, err := l.getContainer(req.Job.Job.ID)
 	if err != nil && (req.Job.Job.Config.TTY || req.Stdin != nil) {
 		return err
@@ -986,7 +993,7 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 	return io.EOF
 }
 
-func (l *LibvirtLXCBackend) Cleanup() error {
+func (l *libvirtLXC) Cleanup() error {
 	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "Cleanup"})
 	l.containersMtx.Lock()
 	ids := make([]string, 0, len(l.containers))
@@ -1023,7 +1030,7 @@ func (l *LibvirtLXCBackend) Cleanup() error {
 	This may include reconnecting rpc systems and communicating with containers
 	(thus this may take a significant moment; it's not just deserializing).
 */
-func (l *LibvirtLXCBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jobBackendStates map[string][]byte, backendGlobalState []byte) error {
+func (l *libvirtLXC) UnmarshalState(jobs map[string]*host.ActiveJob, jobBackendStates map[string][]byte, backendGlobalState []byte) error {
 	containers := make(map[string]*libvirtContainer)
 	for k, v := range jobBackendStates {
 		container := &libvirtContainer{}
@@ -1062,7 +1069,7 @@ func (l *LibvirtLXCBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jobB
 	return nil
 }
 
-func (l *LibvirtLXCBackend) MarshalJobState(jobID string) ([]byte, error) {
+func (l *libvirtLXC) MarshalJobState(jobID string) ([]byte, error) {
 	l.containersMtx.RLock()
 	defer l.containersMtx.RUnlock()
 	if associatedState, exists := l.containers[jobID]; exists {
@@ -1071,7 +1078,7 @@ func (l *LibvirtLXCBackend) MarshalJobState(jobID string) ([]byte, error) {
 	return nil, nil
 }
 
-func (l *LibvirtLXCBackend) pinkertonPull(url string) ([]layer.PullInfo, error) {
+func (l *libvirtLXC) pinkertonPull(url string) ([]layer.PullInfo, error) {
 	var layers []layer.PullInfo
 	info := make(chan layer.PullInfo)
 	done := make(chan struct{})

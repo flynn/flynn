@@ -1,3 +1,5 @@
+// +build linux
+
 package containerinit
 
 // This package is originally from a fork of Docker and contains no code

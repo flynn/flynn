@@ -4,19 +4,19 @@ import (
 	"bufio"
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"sync"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
+	"github.com/flynn/flynn/host/backend"
 	"github.com/flynn/flynn/host/types"
 )
 
 type attachHandler struct {
-	state   *State
-	backend Backend
+	state   *backend.State
+	backend backend.Backend
 }
 
 func (h *attachHandler) ServeHTTP(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -71,7 +71,7 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 
 	attached := make(chan struct{})
 	failed := make(chan struct{})
-	opts := &AttachRequest{
+	opts := &backend.AttachRequest{
 		Job:      job,
 		Logs:     req.Flags&host.AttachFlagLogs != 0,
 		Stream:   req.Flags&host.AttachFlagStream != 0,
@@ -171,7 +171,7 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 
 	g.Log(grohl.Data{"at": "attach"})
 	if err := h.backend.Attach(opts); err != nil && err != io.EOF {
-		if exit, ok := err.(ExitError); ok {
+		if exit, ok := err.(backend.ExitError); ok {
 			writeMtx.Lock()
 			w.WriteByte(host.AttachExit)
 			binary.Write(w, binary.BigEndian, uint32(exit))
@@ -193,12 +193,6 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 		}
 	}
 	g.Log(grohl.Data{"at": "finish"})
-}
-
-type ExitError int
-
-func (e ExitError) Error() string {
-	return fmt.Sprintf("exit status %d", e)
 }
 
 type frameWriter struct {

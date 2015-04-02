@@ -11,6 +11,7 @@ import (
 	"text/template"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
+	"github.com/flynn/flynn/host/backend"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume/manager"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -71,8 +72,8 @@ type manifestRunner struct {
 	env          map[string]string
 	externalAddr string
 	bindAddr     string
-	backend      Backend
-	state        *State
+	backend      backend.Backend
+	state        *backend.State
 	vman         *volumemanager.Manager
 }
 
@@ -97,8 +98,8 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 
 	serviceData := make(map[string]*ManifestData, len(services))
 
-	m.state.mtx.Lock()
-	for _, job := range m.state.jobs {
+	m.state.Lock()
+	for _, job := range m.state.Jobs {
 		if job.ManifestID == "" || job.Status != host.StatusRunning && job.Status != host.StatusStarting {
 			continue
 		}
@@ -128,9 +129,9 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 		}
 		serviceData[service.ID] = data
 	}
-	m.state.mtx.Unlock()
+	m.state.Unlock()
 
-	var netInfo NetworkInfo
+	var netInfo backend.NetworkInfo
 
 	runService := func(service *manifestService) error {
 		if _, exists := serviceData[service.ID]; exists {
@@ -247,7 +248,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 			job.Config.Ports = []host.Port{{Proto: "tcp"}}
 		}
 
-		if err := m.backend.Run(job, &RunConfig{ManifestID: service.ID}); err != nil {
+		if err := m.backend.Run(job, &backend.RunConfig{ManifestID: service.ID}); err != nil {
 			return err
 		}
 
@@ -262,7 +263,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 		}
 		if service.ID == "flannel" {
 			var job *host.Job
-			for _, j := range m.state.jobs {
+			for _, j := range m.state.Jobs {
 				if j.ManifestID != service.ID {
 					continue
 				}
@@ -272,7 +273,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 			if job == nil {
 				return nil, fmt.Errorf("Could not find the flannel container!")
 			}
-			ni, err := m.backend.ConfigureNetworking(NetworkStrategyFlannel, job.ID)
+			ni, err := m.backend.ConfigureNetworking(backend.NetworkStrategyFlannel, job.ID)
 			if err != nil {
 				return nil, err
 			}

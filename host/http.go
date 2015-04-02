@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
+	"github.com/flynn/flynn/host/backend"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume/api"
 	"github.com/flynn/flynn/host/volume/manager"
@@ -22,8 +23,8 @@ import (
 )
 
 type Host struct {
-	state   *State
-	backend Backend
+	state   *backend.State
+	backend backend.Backend
 }
 
 func (h *Host) StopJob(id string) error {

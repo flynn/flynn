@@ -1,4 +1,4 @@
-package main
+package backend
 
 import (
 	"encoding/json"
@@ -21,8 +21,8 @@ import (
 type State struct {
 	id string
 
-	jobs map[string]*host.ActiveJob
-	mtx  sync.RWMutex
+	sync.RWMutex // protects Jobs
+	Jobs         map[string]*host.ActiveJob
 
 	containers map[string]*host.ActiveJob              // container ID -> job
 	listeners  map[string]map[chan host.Event]struct{} // job id -> listener list (ID "all" gets all events)
@@ -39,7 +39,7 @@ func NewState(id string, stateFilePath string) *State {
 	s := &State{
 		id:            id,
 		stateFilePath: stateFilePath,
-		jobs:          make(map[string]*host.ActiveJob),
+		Jobs:          make(map[string]*host.ActiveJob),
 		containers:    make(map[string]*host.ActiveJob),
 		listeners:     make(map[string]map[chan host.Event]struct{}),
 		attachers:     make(map[string]map[chan struct{}]struct{}),
@@ -71,7 +71,7 @@ func (s *State) Restore(backend Backend) (func() error, error) {
 			if job.ContainerID != "" {
 				s.containers[job.ContainerID] = job
 			}
-			s.jobs[string(k)] = job
+			s.Jobs[string(k)] = job
 
 			return nil
 		}); err != nil {
@@ -87,20 +87,20 @@ func (s *State) Restore(backend Backend) (func() error, error) {
 			return err
 		}
 		backendGlobalBlob := backendGlobalBucket.Get([]byte("backend"))
-		if err := backend.UnmarshalState(s.jobs, backendJobsBlobs, backendGlobalBlob); err != nil {
+		if err := backend.UnmarshalState(s.Jobs, backendJobsBlobs, backendGlobalBlob); err != nil {
 			return err
 		}
 
 		if resurrectionBucket == nil {
-			s.mtx.Lock()
-			for _, job := range s.jobs {
+			s.Lock()
+			for _, job := range s.Jobs {
 				// if there was an unclean shutdown, we resurrect all jobs marked
 				// that were running at shutdown and are no longer running.
 				if job.Job.Resurrect && job.Status != host.StatusRunning {
 					resurrect = append(resurrect, job)
 				}
 			}
-			s.mtx.Unlock()
+			s.Unlock()
 		} else {
 			defer tx.DeleteBucket([]byte("resurrection-jobs"))
 			if err := resurrectionBucket.ForEach(func(k, v []byte) error {
@@ -153,8 +153,8 @@ func (s *State) Restore(backend Backend) (func() error, error) {
 // jobs with the resurrection flag before they are terminated by
 // backend cleanup.
 func (s *State) MarkForResurrection() error {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	s.Lock()
+	defer s.Unlock()
 	return s.stateDB.Update(func(tx *bolt.Tx) error {
 		tx.DeleteBucket([]byte("resurrection-jobs"))
 		bucket, err := tx.CreateBucket([]byte("resurrection-jobs"))
@@ -162,7 +162,7 @@ func (s *State) MarkForResurrection() error {
 			return err
 		}
 
-		for _, job := range s.jobs {
+		for _, job := range s.Jobs {
 			if !job.Job.Resurrect || job.Status != host.StatusRunning {
 				continue
 			}
@@ -204,7 +204,7 @@ func (s *State) initializePersistence() {
 }
 
 func (s *State) persist(jobID string) {
-	// s.mtx.RLock() should already be covered by caller
+	// s.RLock() should already be covered by caller
 
 	if err := s.stateDB.Update(func(tx *bolt.Tx) error {
 		jobsBucket := tx.Bucket([]byte("jobs"))
@@ -212,8 +212,8 @@ func (s *State) persist(jobID string) {
 		backendGlobalBucket := tx.Bucket([]byte("backend-global"))
 
 		// serialize the changed job, and push it into jobs bucket
-		if _, exists := s.jobs[jobID]; exists {
-			b, err := json.Marshal(s.jobs[jobID])
+		if _, exists := s.Jobs[jobID]; exists {
+			b, err := json.Marshal(s.Jobs[jobID])
 			if err != nil {
 				return fmt.Errorf("failed to serialize job state: %s", err)
 			}
@@ -227,7 +227,7 @@ func (s *State) persist(jobID string) {
 
 		// save the opaque blob the backend provides regarding this job
 		if backend, ok := s.backend.(JobStateSaver); ok {
-			if _, exists := s.jobs[jobID]; exists {
+			if _, exists := s.Jobs[jobID]; exists {
 				backendState, err := backend.MarshalJobState(jobID)
 				if err != nil {
 					return fmt.Errorf("backend failed to serialize job state: %s", err)
@@ -273,21 +273,21 @@ func (s *State) persistenceDBClose() error {
 }
 
 func (s *State) AddJob(j *host.Job, ip net.IP) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	s.Lock()
+	defer s.Unlock()
 	job := &host.ActiveJob{Job: j, HostID: s.id}
 	if len(ip) > 0 {
 		job.InternalIP = ip.String()
 	}
-	s.jobs[j.ID] = job
+	s.Jobs[j.ID] = job
 	s.sendEvent(job, "create")
 	s.persist(j.ID)
 }
 
 func (s *State) GetJob(id string) *host.ActiveJob {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
-	job := s.jobs[id]
+	s.RLock()
+	defer s.RUnlock()
+	job := s.Jobs[id]
 	if job == nil {
 		return nil
 	}
@@ -296,53 +296,53 @@ func (s *State) GetJob(id string) *host.ActiveJob {
 }
 
 func (s *State) RemoveJob(jobID string) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	delete(s.jobs, jobID)
+	s.Lock()
+	defer s.Unlock()
+	delete(s.Jobs, jobID)
 	s.persist(jobID)
 }
 
 func (s *State) Get() map[string]host.ActiveJob {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
-	res := make(map[string]host.ActiveJob, len(s.jobs))
-	for k, v := range s.jobs {
+	s.RLock()
+	defer s.RUnlock()
+	res := make(map[string]host.ActiveJob, len(s.Jobs))
+	for k, v := range s.Jobs {
 		res[k] = *v
 	}
 	return res
 }
 
 func (s *State) ClusterJobs() []*host.Job {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
+	s.RLock()
+	defer s.RUnlock()
 
-	res := make([]*host.Job, 0, len(s.jobs))
-	for _, j := range s.jobs {
+	res := make([]*host.Job, 0, len(s.Jobs))
+	for _, j := range s.Jobs {
 		res = append(res, j.Job)
 	}
 	return res
 }
 
 func (s *State) SetContainerID(jobID, containerID string) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	s.jobs[jobID].ContainerID = containerID
-	s.containers[containerID] = s.jobs[jobID]
+	s.Lock()
+	defer s.Unlock()
+	s.Jobs[jobID].ContainerID = containerID
+	s.containers[containerID] = s.Jobs[jobID]
 	s.persist(jobID)
 }
 
 func (s *State) SetManifestID(jobID, manifestID string) {
-	s.mtx.Lock()
-	s.jobs[jobID].ManifestID = manifestID
-	s.mtx.Unlock()
+	s.Lock()
+	s.Jobs[jobID].ManifestID = manifestID
+	s.Unlock()
 	s.persist(jobID)
 }
 
 func (s *State) SetForceStop(jobID string) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	s.Lock()
+	defer s.Unlock()
 
-	job, ok := s.jobs[jobID]
+	job, ok := s.Jobs[jobID]
 	if !ok {
 		return
 	}
@@ -352,10 +352,10 @@ func (s *State) SetForceStop(jobID string) {
 }
 
 func (s *State) SetStatusRunning(jobID string) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	s.Lock()
+	defer s.Unlock()
 
-	job, ok := s.jobs[jobID]
+	job, ok := s.Jobs[jobID]
 	if !ok || job.Status != host.StatusStarting {
 		return
 	}
@@ -367,8 +367,8 @@ func (s *State) SetStatusRunning(jobID string) {
 }
 
 func (s *State) SetContainerStatusDone(containerID string, exitCode int) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	s.Lock()
+	defer s.Unlock()
 	job, ok := s.containers[containerID]
 	if !ok {
 		return
@@ -377,9 +377,9 @@ func (s *State) SetContainerStatusDone(containerID string, exitCode int) {
 }
 
 func (s *State) SetStatusDone(jobID string, exitCode int) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	job, ok := s.jobs[jobID]
+	s.Lock()
+	defer s.Unlock()
+	job, ok := s.Jobs[jobID]
 	if !ok {
 		fmt.Println("SKIP")
 		return
@@ -403,10 +403,10 @@ func (s *State) setStatusDone(job *host.ActiveJob, exitStatus int) {
 }
 
 func (s *State) SetStatusFailed(jobID string, err error) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	s.Lock()
+	defer s.Unlock()
 
-	job, ok := s.jobs[jobID]
+	job, ok := s.Jobs[jobID]
 	if !ok || job.Status == host.StatusDone || job.Status == host.StatusCrashed || job.Status == host.StatusFailed {
 		return
 	}
@@ -420,9 +420,9 @@ func (s *State) SetStatusFailed(jobID string, err error) {
 }
 
 func (s *State) AddAttacher(jobID string, ch chan struct{}) *host.ActiveJob {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	if job, ok := s.jobs[jobID]; ok {
+	s.Lock()
+	defer s.Unlock()
+	if job, ok := s.Jobs[jobID]; ok {
 		jobCopy := *job
 		return &jobCopy
 	}
@@ -434,8 +434,8 @@ func (s *State) AddAttacher(jobID string, ch chan struct{}) *host.ActiveJob {
 }
 
 func (s *State) RemoveAttacher(jobID string, ch chan struct{}) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	s.Lock()
+	defer s.Unlock()
 	if a, ok := s.attachers[jobID]; ok {
 		delete(a, ch)
 		if len(a) == 0 {
@@ -445,10 +445,10 @@ func (s *State) RemoveAttacher(jobID string, ch chan struct{}) {
 }
 
 func (s *State) WaitAttach(jobID string) {
-	s.mtx.Lock()
+	s.Lock()
 	a := s.attachers[jobID]
 	delete(s.attachers, jobID)
-	s.mtx.Unlock()
+	s.Unlock()
 	for ch := range a {
 		// signal attach
 		ch <- struct{}{}

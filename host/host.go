@@ -12,6 +12,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 	"github.com/flynn/flynn/discoverd/client"
+	be "github.com/flynn/flynn/host/backend"
 	"github.com/flynn/flynn/host/cli"
 	"github.com/flynn/flynn/host/config"
 	"github.com/flynn/flynn/host/logmux"
@@ -166,9 +167,7 @@ func runDaemon(args *docopt.Args) {
 		}
 	}
 
-	state := NewState(hostID, stateFile)
-	var backend Backend
-	var err error
+	state := be.NewState(hostID, stateFile)
 
 	// create volume manager
 	vman, err := volumemanager.New(
@@ -191,12 +190,7 @@ func runDaemon(args *docopt.Args) {
 	mux := logmux.New(1000)
 	shutdown.BeforeExit(func() { mux.Close() })
 
-	switch backendName {
-	case "libvirt-lxc":
-		backend, err = NewLibvirtLXCBackend(state, vman, legacyVolPath, logDir, flynnInit, mux)
-	default:
-		log.Fatalf("unknown backend %q", backendName)
-	}
+	backend, err := be.New(backendName, state, vman, legacyVolPath, logDir, flynnInit, mux)
 	if err != nil {
 		shutdown.Fatal(err)
 	}
