@@ -11,7 +11,9 @@ usage: $0 [options]
 OPTIONS:
   -h, --help            Show this message
   -r, --repo URL        The TUF repository to download files from [default: https://dl.flynn.io]
-  --clean               Remove existing Flynn installation [DANGER: this will remove all associated data]
+  --clean               Install from a clean state (implies --remove) [DANGER: this will remove all associated data]
+  --remove              Remove existing Flynn installation [DANGER: this will remove all associated data]
+  --yes                 Automatic yes to prompts
 USAGE
 }
 
@@ -26,13 +28,24 @@ main() {
 
   check_installed "curl" "sha512sum"
 
-  local clean=false
+  local install=true
+  local remove=false
+  local assume_yes=false
   local repo_url
 
   while true; do
     case "$1" in
       --clean)
-        clean=true
+        remove=true
+        shift
+        ;;
+      --remove)
+        remove=true
+        install=false
+        shift
+        ;;
+      --yes)
+        assume_yes=true
         shift
         ;;
       -h | --help)
@@ -58,8 +71,12 @@ main() {
     exit 1
   fi
 
-  if $clean; then
-    do_clean
+  if $remove; then
+    do_remove $assume_yes
+  fi
+
+  if ! $install; then
+    exit
   fi
 
   repo_url="${repo_url:="https://dl.flynn.io"}"
@@ -139,19 +156,25 @@ is_ubuntu_trusty() {
   grep "Ubuntu 14.04" "/etc/os-release" &>/dev/null
 }
 
-do_clean() {
-  warn "*** WARNING ***"
-  warn "You have requested a clean install which will stop Flynn and remove all existing data"
-  warn "Are you sure this is what you want?"
-  echo -n "(yes/no): "
-  while read answer; do
-    case "${answer}" in
-      yes) break ;;
-      no)  exit ;;
-      *)   echo -n "Please type 'yes' or 'no': " ;;
-    esac
-  done
+do_remove() {
+  local assume_yes=$1
 
+  warn "*** WARNING ***"
+  warn "About to stop Flynn and remove all existing data"
+
+  if ! $assume_yes; then
+    warn "Are you sure this is what you want?"
+    echo -n "(yes/no): "
+    while read answer; do
+      case "${answer}" in
+        yes) break ;;
+        no)  exit ;;
+        *)   echo -n "Please type 'yes' or 'no': " ;;
+      esac
+    done
+  fi
+
+  info "stopping flynn-host daemon"
   local status="$(status flynn-host)"
   if [[ "${status:0:16}" = "flynn-host start" ]]; then
     run stop flynn-host
@@ -166,7 +189,9 @@ do_clean() {
   for path in $(grep zfs /proc/mounts | cut -d ' ' -f2); do
     run sudo umount "${path}"
   done
-  run flynn-host destroy-volumes --include-data
+  if which flynn-host &>/dev/null; then
+    run flynn-host destroy-volumes --include-data
+  fi
   if zpool list | grep -q "flynn-default"; then
     run zpool destroy flynn-default
   fi
@@ -174,7 +199,7 @@ do_clean() {
   info "removing Flynn files and directories"
   run rm -rf /usr/local/bin/flynn* /var/lib/flynn /etc/flynn
 
-  info "clean successful"
+  info "Flynn successfully removed"
 }
 
 check_installed() {
