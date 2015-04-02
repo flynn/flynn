@@ -97,10 +97,9 @@ Dashboard.Views.AppEnv = React.createClass({
 
 	__handleSaveBtnClick: function (e) {
 		e.preventDefault();
-		var release = Marbles.Utils.extend({}, this.state.release, {
+		var release = {
 			env: this.state.env
-		});
-		delete release.id;
+		};
 		this.setState({
 			isSaving: true
 		});

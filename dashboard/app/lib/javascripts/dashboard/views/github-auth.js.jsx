@@ -121,7 +121,6 @@ Dashboard.Views.GithubAuth = React.createClass({
 				GITHUB_TOKEN: this.state.githubToken
 			})
 		});
-		delete release.id;
 		this.setState({
 			isSaving: true
 		});
