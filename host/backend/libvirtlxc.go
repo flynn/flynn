@@ -52,7 +52,7 @@ func init() {
 	backends["libvirt-lxc"] = newLibvirtLXC
 }
 
-func newLibvirtLXC(state *State, vman *volumemanager.Manager, volPath, logPath, initPath string, mux *logmux.LogMux) (Backend, error) {
+func newLibvirtLXC(config Config) (Backend, error) {
 	libvirtc, err := libvirt.NewVirConnection("lxc:///")
 	if err != nil {
 		return nil, err
@@ -64,17 +64,17 @@ func newLibvirtLXC(state *State, vman *volumemanager.Manager, volPath, logPath, 
 	}
 
 	return &libvirtLXC{
-		LogPath:    logPath,
-		VolPath:    volPath,
-		InitPath:   initPath,
+		LogPath:    config.LogPath,
+		VolPath:    config.VolPath,
+		InitPath:   config.InitPath,
+		state:      config.State,
+		vman:       config.Manager,
+		mux:        config.Mux,
 		libvirt:    libvirtc,
-		state:      state,
-		vman:       vman,
 		pinkerton:  pinkertonCtx,
 		logs:       make(map[string]*logbuf.Log),
 		containers: make(map[string]*libvirtContainer),
 		resolvConf: "/etc/resolv.conf",
-		mux:        mux,
 		ipalloc:    ipallocator.New(),
 	}, nil
 }

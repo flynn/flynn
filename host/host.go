@@ -190,7 +190,14 @@ func runDaemon(args *docopt.Args) {
 	mux := logmux.New(1000)
 	shutdown.BeforeExit(func() { mux.Close() })
 
-	backend, err := be.New(backendName, state, vman, legacyVolPath, logDir, flynnInit, mux)
+	backend, err := be.New(backendName, be.Config{
+		State:    state,
+		Manager:  vman,
+		VolPath:  legacyVolPath,
+		LogPath:  logDir,
+		InitPath: flynnInit,
+		Mux:      mux,
+	})
 	if err != nil {
 		shutdown.Fatal(err)
 	}
