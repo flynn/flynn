@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
+	"time"
 	"unicode"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
@@ -154,6 +155,9 @@ func runCommand(name string, args []string) (err error) {
 		return err
 	}
 
+	// Print execution time
+	defer elapsed(time.Now())
+
 	switch f := cmd.f.(type) {
 	case func(*docopt.Args, *controller.Client) error:
 		// create client and run command
@@ -186,6 +190,10 @@ func runCommand(name string, args []string) (err error) {
 	}
 
 	return fmt.Errorf("unexpected command type %T", cmd.f)
+}
+
+func elapsed(since time.Time) {
+	log.Printf("Executed in %v\n", time.Now().Sub(since))
 }
 
 var config *cfg.Config
