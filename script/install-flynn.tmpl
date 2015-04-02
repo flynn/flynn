@@ -9,9 +9,9 @@ usage() {
 usage: $0 [options]
 
 OPTIONS:
-  -h            Show this message
-  -r URL        The TUF repository to download files from [default: https://dl.flynn.io]
-  -v            Show verbose output
+  -h, --help            Show this message
+  -r, --repo URL        The TUF repository to download files from [default: https://dl.flynn.io]
+  --clean               Remove existing Flynn installation [DANGER: this will remove all associated data]
 USAGE
 }
 
@@ -26,27 +26,40 @@ main() {
 
   check_installed "curl" "sha512sum"
 
+  local clean=false
   local repo_url
 
-  while getopts 'hr:v' opt; do
-    case $opt in
-      h)
+  while true; do
+    case "$1" in
+      --clean)
+        clean=true
+        shift
+        ;;
+      -h | --help)
         usage
         exit 1
         ;;
-      r) repo_url=${OPTARG} ;;
-      v) VERBOSE=true ;;
-      ?)
-        usage
-        exit 1
+      -r | --repo)
+        if [[ -z "$2" ]]; then
+          usage
+          exit 1
+        fi
+        repo_url="$2"
+        shift 2
+        ;;
+      *)
+        break
         ;;
     esac
   done
-  shift $((${OPTIND} - 1))
 
   if [[ $# -ne 0 ]]; then
     usage
     exit 1
+  fi
+
+  if $clean; then
+    do_clean
   fi
 
   repo_url="${repo_url:="https://dl.flynn.io"}"
@@ -126,6 +139,44 @@ is_ubuntu_trusty() {
   grep "Ubuntu 14.04" "/etc/os-release" &>/dev/null
 }
 
+do_clean() {
+  warn "*** WARNING ***"
+  warn "You have requested a clean install which will stop Flynn and remove all existing data"
+  warn "Are you sure this is what you want?"
+  echo -n "(yes/no): "
+  while read answer; do
+    case "${answer}" in
+      yes) break ;;
+      no)  exit ;;
+      *)   echo -n "Please type 'yes' or 'no': " ;;
+    esac
+  done
+
+  local status="$(status flynn-host)"
+  if [[ "${status:0:16}" = "flynn-host start" ]]; then
+    run stop flynn-host
+  fi
+
+  info "killing old containers"
+  for name in $(virsh -c lxc:/// list --name); do
+    run virsh -c lxc:/// destroy "${name}"
+  done
+
+  info "destroying ZFS volumes"
+  for path in $(grep zfs /proc/mounts | cut -d ' ' -f2); do
+    run sudo umount "${path}"
+  done
+  run flynn-host destroy-volumes --include-data
+  if zpool list | grep -q "flynn-default"; then
+    run zpool destroy flynn-default
+  fi
+
+  info "removing Flynn files and directories"
+  run rm -rf /usr/local/bin/flynn* /var/lib/flynn /etc/flynn
+
+  info "clean successful"
+}
+
 check_installed() {
   local missing=()
 
@@ -158,6 +209,11 @@ timestamp() {
 info() {
   local msg=$1
   echo -e "\e[1;32m===> $(timestamp) ${msg}\e[0m"
+}
+
+warn() {
+  local msg=$1
+  echo -e "\e[1;33m===> $(timestamp) ${msg}\e[0m"
 }
 
 fail() {
