@@ -1,5 +1,3 @@
-// +build linux
-
 package containerinit
 
 // This package is originally from a fork of Docker and contains no code
@@ -337,7 +335,7 @@ func setupHostname(c *Config) error {
 	if hostname == "" {
 		return nil
 	}
-	return syscall.Sethostname([]byte(hostname))
+	return sethostname(hostname)
 }
 
 func setupNetworking(c *Config) error {
