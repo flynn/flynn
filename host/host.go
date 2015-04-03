@@ -53,6 +53,7 @@ options:
   --meta=<KEY=VAL>...    key=value pair to add as metadata
   --bind=IP              bind containers to IP
   --flynn-init=PATH      path to flynn-init binary [default: /usr/local/bin/flynn-init]
+  --log-dir              directory to store job logs [default: /var/log/flynn]
 	`)
 }
 
@@ -144,6 +145,7 @@ func runDaemon(args *docopt.Args) {
 	volPath := args.String["--volpath"]
 	backendName := args.String["--backend"]
 	flynnInit := args.String["--flynn-init"]
+	logDir := args.String["--log-dir"]
 	metadata := args.All["--meta"].([]string)
 
 	grohl.AddContext("app", "host")
@@ -191,7 +193,7 @@ func runDaemon(args *docopt.Args) {
 
 	switch backendName {
 	case "libvirt-lxc":
-		backend, err = NewLibvirtLXCBackend(state, vman, legacyVolPath, "/tmp/flynn-host-logs", flynnInit, mux)
+		backend, err = NewLibvirtLXCBackend(state, vman, legacyVolPath, logDir, flynnInit, mux)
 	default:
 		log.Fatalf("unknown backend %q", backendName)
 	}
