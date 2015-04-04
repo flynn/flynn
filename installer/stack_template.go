@@ -233,14 +233,17 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
       }
     },
 
+    {{end}}
+
     "DNSRecords": {
       "Type": "AWS::Route53::RecordSetGroup",
       "Properties": {
         "HostedZoneId": { "Ref": "DNSZone" },
         "RecordSets": [
+          {{range $i, $_ := .Instances}}
           {
             "Name": { "Fn::Join": [".", [{ "Ref": "ClusterDomain" }, ""]] },
-            "SetIdentifier": "frontend0",
+            "SetIdentifier": "frontend{{$i}}",
             "HealthCheckId": { "Ref": "Instance{{$i}}HealthCheck" },
             "Weight": 10,
             "Type": "A",
@@ -249,6 +252,7 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
             ],
             "TTL": "60"
           },
+          {{end}}
           {
             "Name": { "Fn::Join": [".", ["*", { "Ref": "ClusterDomain" }, ""]] },
             "Type": "CNAME",
@@ -260,8 +264,6 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
         ]
       }
     },
-
-    {{end}}
 
     "DNSZone": {
       "Type": "AWS::Route53::HostedZone",
