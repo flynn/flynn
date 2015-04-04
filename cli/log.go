@@ -22,11 +22,11 @@ Stream log for an app.
 
 Options:
 	-f, --follow               stream new lines after printing log buffer
-	-j, --job <id>             filter logs to a specific job ID
-	-n, --number <lines>       return at most n lines from the log buffer
+	-j, --job=<id>             filter logs to a specific job ID
+	-n, --number=<lines>       return at most n lines from the log buffer
 	-r, --raw-output           output raw log messages with no prefix
 	-s, --split-stderr         send stderr lines to stderr
-	-t, --process-type <type>  filter logs to a specific process type
+	-t, --process-type=<type>  filter logs to a specific process type
 `)
 }
 

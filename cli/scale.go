@@ -22,7 +22,7 @@ Ommitting the arguments will show the current scale.
 
 Options:
 	-n, --no-wait            don't wait for the scaling events to happen
-	-r, --release <release>  id of release to scale (defaults to current app release)
+	-r, --release=<release>  id of release to scale (defaults to current app release)
 
 Example:
 

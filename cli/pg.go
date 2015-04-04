@@ -18,7 +18,7 @@ usage: flynn pg psql [--] [<argument>...]
        flynn pg restore [-q] [-f <file>]
 
 Options:
-	-f, --file <file>  name of dump file
+	-f, --file=<file>  name of dump file
 	-q, --quiet        don't print progress
 
 Commands:

@@ -22,7 +22,7 @@ usage: flynn env [-t <proc>]
 Manage app environment variables.
 
 Options:
-	-t, --process-type <proc>  set or read env for specified process type
+	-t, --process-type=<proc>  set or read env for specified process type
 
 Commands:
 	With no arguments, shows a list of environment variables.

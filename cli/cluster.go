@@ -21,8 +21,8 @@ Manage clusters in the ~/.flynnrc configuration file.
 Options:
 	-f, --force               force add cluster
 	-d, --default             set as default cluster
-	-g, --git-host <githost>  git host (if host differs from api URL host)
-	-p, --tls-pin <tlspin>    SHA256 of the cluster's TLS cert (useful if it is self-signed)
+	-g, --git-host=<githost>  git host (if host differs from api URL host)
+	-p, --tls-pin=<tlspin>    SHA256 of the cluster's TLS cert (useful if it is self-signed)
 
 Commands:
 	With no arguments, shows a list of clusters.

@@ -24,9 +24,9 @@ usage: flynn route
 Manage routes for application.
 
 Options:
-	-s, --service <service>    service name to route domain to (defaults to APPNAME-web)
-	-c, --tls-cert <tls-cert>  path to PEM encoded certificate for TLS, - for stdin (http only)
-	-k, --tls-key <tls-key>    path to PEM encoded private key for TLS, - for stdin (http only)
+	-s, --service=<service>    service name to route domain to (defaults to APPNAME-web)
+	-c, --tls-cert=<tls-cert>  path to PEM encoded certificate for TLS, - for stdin (http only)
+	-k, --tls-key=<tls-key>    path to PEM encoded private key for TLS, - for stdin (http only)
 	--sticky                   enable cookie-based sticky routing (http only)
 
 Commands:
