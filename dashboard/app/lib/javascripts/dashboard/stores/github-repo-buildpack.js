@@ -21,6 +21,11 @@ var buildpackRules = [
 		url: "https://github.com/heroku/heroku-buildpack-multi"
 	},
 	{
+		name: 'staticfile',
+		match: buildpackMatchFn(/^Staticfile$/),
+		url: "https://github.com/cloudfoundry-incubator/staticfile-buildpack"
+	},
+	{
 		name: 'ruby',
 		match: buildpackMatchFn(/^Gemfile$/),
 		url: "https://github.com/heroku/heroku-buildpack-ruby",

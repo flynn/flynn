@@ -119,7 +119,15 @@ func (s *GitDeploySuite) TestPythonBuildpack(t *c.C) {
 	s.runBuildpackTest(t, "python-flynn-example", nil)
 }
 
+func (s *GitDeploySuite) TestStaticBuildpack(t *c.C) {
+	s.runBuildpackTestWithResponsePattern(t, "static-flynn-example", nil, `Hello, Flynn!`)
+}
+
 func (s *GitDeploySuite) runBuildpackTest(t *c.C, name string, resources []string) {
+	s.runBuildpackTestWithResponsePattern(t, name, resources, `Hello from Flynn on port \d+`)
+}
+
+func (s *GitDeploySuite) runBuildpackTestWithResponsePattern(t *c.C, name string, resources []string, pat string) {
 	r := s.newGitRepo(t, "https://github.com/flynn-examples/"+name)
 
 	t.Assert(r.flynn("create", name), Outputs, fmt.Sprintf("Created %s\n", name))
@@ -160,12 +168,12 @@ func (s *GitDeploySuite) runBuildpackTest(t *c.C, name string, resources []strin
 		if res.StatusCode != 200 {
 			return fmt.Errorf("Expected status 200, got %v", res.StatusCode)
 		}
-		m, err := regexp.MatchString(`Hello from Flynn on port \d+`, string(contents))
+		m, err := regexp.MatchString(pat, string(contents))
 		if err != nil {
 			return err
 		}
 		if !m {
-			return fmt.Errorf("Expected `Hello from Flynn on port \\d+`, got `%v`", string(contents))
+			return fmt.Errorf("Expected `%s`, got `%v`", pat, string(contents))
 		}
 		return nil
 	})
