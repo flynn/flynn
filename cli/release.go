@@ -19,7 +19,7 @@ Manage app releases.
 
 Options:
 	-t <type>          type of the release. Currently only 'docker' is supported. [default: docker]
-	-f, --file <file>  release configuration file
+	-f, --file=<file>  release configuration file
 
 Commands:
 	add   add a new release

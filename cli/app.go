@@ -22,7 +22,7 @@ If run from a git repository, a 'flynn' remote will be created or replaced that
 allows deploying the application via git.
 
 Options:
-	-r, --remote <remote>  Name of git remote to create, empty string for none. [default: flynn]
+	-r, --remote=<remote>  Name of git remote to create, empty string for none. [default: flynn]
 	-y, --yes              Skip the confirmation prompt if the git remote already exists.
 
 Examples:
@@ -40,7 +40,7 @@ If run from a git repository with a 'flynn' remote for the app, it will be
 removed.
 
 Options:
-	-r, --remote <remote>  Name of git remote to delete, empty string for none. [default: flynn]
+	-r, --remote=<remote>  Name of git remote to delete, empty string for none. [default: flynn]
 	-y, --yes              Skip the confirmation prompt.
 
 Examples:
