@@ -226,6 +226,7 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
       "Type": "AWS::Route53::HealthCheck",
       "Properties": {
         "HealthCheckConfig": {
+          "FullyQualifiedDomainName": { "Fn::Join": [".", ["controller", { "Ref": "ClusterDomain" }]] },
           "Type": "HTTP",
           "IPAddress": { "Fn::GetAtt": ["Instance{{$i}}", "PublicIp"] },
           "ResourcePath": "/ping"
