@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
@@ -15,22 +14,13 @@ import (
 	"github.com/flynn/flynn/host/cli"
 	"github.com/flynn/flynn/host/config"
 	"github.com/flynn/flynn/host/logmux"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/host/volume/manager"
 	zfsVolume "github.com/flynn/flynn/host/volume/zfs"
-	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/version"
 )
-
-// discoverdAttempts is the attempt strategy that is used to connect to discoverd.
-var discoverdAttempts = attempt.Strategy{
-	Min:   5,
-	Total: 10 * time.Minute,
-	Delay: 200 * time.Millisecond,
-}
 
 const configFile = "/etc/flynn/host.json"
 
@@ -248,26 +238,10 @@ func runDaemon(args *docopt.Args) {
 	}
 
 	var cluster *cluster.Client
-	if _, err := serveHTTP(
+	shutdown.Fatal(serveHTTP(
 		&Host{state: state, backend: backend},
 		&attachHandler{state: state, backend: backend},
 		cluster,
 		vman,
-	); err != nil {
-		shutdown.Fatal(err)
-	}
-
-	var jobs chan *host.Job
-	for job := range jobs {
-		if externalAddr != "" {
-			if job.Config.Env == nil {
-				job.Config.Env = make(map[string]string)
-			}
-			job.Config.Env["EXTERNAL_IP"] = externalAddr
-			job.Config.Env["DISCOVERD"] = discURL
-		}
-		if err := backend.Run(job, nil); err != nil {
-			state.SetStatusFailed(job.ID, err)
-		}
-	}
+	))
 }

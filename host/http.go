@@ -140,6 +140,25 @@ func (h *jobAPI) PullImages(w http.ResponseWriter, r *http.Request, ps httproute
 	stream.Wait()
 }
 
+func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	job := &host.Job{}
+	if err := httphelper.DecodeJSON(r, job); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	// TODO(titanous): validate UUID
+	job.ID = ps.ByName("id")
+
+	go func() {
+		// TODO(titanous): ratelimit this goroutine?
+		if err := backend.Run(job, nil); err != nil {
+			state.SetStatusFailed(job.ID, err)
+		}
+	}()
+
+	w.WriteHeader(http.StatusAccepted)
+}
+
 func extractTufDB(r *http.Request) (string, error) {
 	defer r.Body.Close()
 	tmp, err := ioutil.TempFile("", "tuf-db")
@@ -156,13 +175,14 @@ func extractTufDB(r *http.Request) (string, error) {
 func (h *jobAPI) RegisterRoutes(r *httprouter.Router) error {
 	r.GET("/host/jobs", h.ListJobs)
 	r.GET("/host/jobs/:id", h.GetJob)
+	r.PUT("/host/jobs/:id", h.AddJob)
 	r.DELETE("/host/jobs/:id", h.StopJob)
 	r.PUT("/host/jobs/:id/signal/:signal", h.SignalJob)
 	r.POST("/host/pull-images", h.PullImages)
 	return nil
 }
 
-func serveHTTP(host *Host, attach *attachHandler, clus *cluster.Client, vman *volumemanager.Manager) (*httprouter.Router, error) {
+func serveHTTP(host *Host, attach *attachHandler, clus *cluster.Client, vman *volumemanager.Manager) error {
 	l, err := net.Listen("tcp", ":1113")
 	if err != nil {
 		return nil, err
@@ -177,7 +197,5 @@ func serveHTTP(host *Host, attach *attachHandler, clus *cluster.Client, vman *vo
 	volAPI := volumeapi.NewHTTPAPI(clus, vman)
 	volAPI.RegisterRoutes(r)
 
-	go http.Serve(l, httphelper.ContextInjector("host", httphelper.NewRequestLogger(r)))
-
-	return r, nil
+	return http.Serve(l, httphelper.ContextInjector("host", httphelper.NewRequestLogger(r)))
 }
