@@ -117,6 +117,9 @@ func (a *RunAppAction) Run(s *State) error {
 		if err != nil {
 			return err
 		}
+		if len(hosts) == 0 {
+			return errors.New("bootstrap: no running hosts found")
+		}
 		sort.Sort(schedutil.HostSlice(hosts))
 		for i := 0; i < count; i++ {
 			hostID := hosts[i%len(hosts)].ID
