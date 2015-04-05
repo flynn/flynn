@@ -676,7 +676,7 @@ func instanceRunCmd(cmd string, sshConfig *ssh.ClientConfig, ipAddress string) (
 }
 
 func (s *Stack) uploadDebugInfo(sshConfig *ssh.ClientConfig, ipAddress string) {
-	cmd := "sudo flynn-host upload-debug-info"
+	cmd := "sudo flynn-host collect-debug-info"
 	stdout, stderr, _ := instanceRunCmd(cmd, sshConfig, ipAddress)
 	var buf bytes.Buffer
 	io.Copy(&buf, stdout)
