@@ -88,12 +88,14 @@ func (m *LogMux) Close() {
 
 	m.doneo.Do(func() { close(m.logc) })
 
-	select {
-	case <-m.donec:
-	case <-time.NewTimer(3 * time.Second).C:
-		// logs did not drain to logaggregator in 3 seconds, drain them to the local logger
-		close(m.sc.closec)
-		<-m.donec
+	if m.sc != nil {
+		select {
+		case <-m.donec:
+		case <-time.NewTimer(3 * time.Second).C:
+			// logs did not drain to logaggregator in 3 seconds, drain them to the local logger
+			close(m.sc.closec)
+			<-m.donec
+		}
 	}
 }
 
