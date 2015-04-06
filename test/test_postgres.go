@@ -64,24 +64,24 @@ func (s *PostgresSuite) TestDeployMultipleAsync(t *c.C) {
 		webJobs: 2,
 		expected: func(oldRelease, newRelease string) []expectedPgState {
 			return []expectedPgState{
-				// kill Async[0], new Async[2]
-				{Primary: oldRelease, Sync: oldRelease, Async: []string{oldRelease, oldRelease}},
+				// new Async[3], kill Async[0]
+				{Primary: oldRelease, Sync: oldRelease, Async: []string{oldRelease, oldRelease, oldRelease, newRelease}},
 				{Primary: oldRelease, Sync: oldRelease, Async: []string{oldRelease, oldRelease, newRelease}},
 
-				// kill Async[0], new Async[2]
-				{Primary: oldRelease, Sync: oldRelease, Async: []string{oldRelease, newRelease}},
+				// new Async[3], kill Async[0]
+				{Primary: oldRelease, Sync: oldRelease, Async: []string{oldRelease, oldRelease, newRelease, newRelease}},
 				{Primary: oldRelease, Sync: oldRelease, Async: []string{oldRelease, newRelease, newRelease}},
 
-				// kill Async[0], new Async[2]
-				{Primary: oldRelease, Sync: oldRelease, Async: []string{newRelease, newRelease}},
+				// new Async[3], kill Async[0]
+				{Primary: oldRelease, Sync: oldRelease, Async: []string{oldRelease, newRelease, newRelease, newRelease}},
 				{Primary: oldRelease, Sync: oldRelease, Async: []string{newRelease, newRelease, newRelease}},
 
-				// kill Sync, new Async[2]
-				{Primary: oldRelease, Sync: newRelease, Async: []string{newRelease, newRelease}},
+				// new Async[3], kill Sync
+				{Primary: oldRelease, Sync: oldRelease, Async: []string{newRelease, newRelease, newRelease, newRelease}},
 				{Primary: oldRelease, Sync: newRelease, Async: []string{newRelease, newRelease, newRelease}},
 
-				// kill Primary, new Async[2]
-				{Primary: newRelease, Sync: newRelease, Async: []string{newRelease, newRelease}},
+				// new Async[3], kill Primary
+				{Primary: oldRelease, Sync: newRelease, Async: []string{newRelease, newRelease, newRelease, newRelease}},
 				{Primary: newRelease, Sync: newRelease, Async: []string{newRelease, newRelease, newRelease}},
 			}
 		},
@@ -95,16 +95,16 @@ func (s *PostgresSuite) TestDeploySingleAsync(t *c.C) {
 		webJobs: 2,
 		expected: func(oldRelease, newRelease string) []expectedPgState {
 			return []expectedPgState{
-				// kill Async, new Async
-				{Primary: oldRelease, Sync: oldRelease, Async: []string{}},
+				// new Async[1], kill Async[0]
+				{Primary: oldRelease, Sync: oldRelease, Async: []string{oldRelease, newRelease}},
 				{Primary: oldRelease, Sync: oldRelease, Async: []string{newRelease}},
 
-				// kill Sync, new Async
-				{Primary: oldRelease, Sync: newRelease, Async: []string{}},
+				// new Async[1], kill Sync
+				{Primary: oldRelease, Sync: oldRelease, Async: []string{newRelease, newRelease}},
 				{Primary: oldRelease, Sync: newRelease, Async: []string{newRelease}},
 
-				// kill Primary, new Async
-				{Primary: newRelease, Sync: newRelease, Async: []string{}},
+				// new Async[1], kill Primary
+				{Primary: oldRelease, Sync: newRelease, Async: []string{newRelease, newRelease}},
 				{Primary: newRelease, Sync: newRelease, Async: []string{newRelease}},
 			}
 		},
