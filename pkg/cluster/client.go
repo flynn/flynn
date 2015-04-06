@@ -40,7 +40,8 @@ type ServiceFunc func(name string) discoverd.Service
 // leader and return a Client. If services is nil, the default discoverd
 // client is used.
 func NewClientWithServices(services ServiceFunc) (*Client, error) {
-	return NewClientWithHTTP(services, http.DefaultClient)
+	httpClient := &http.Client{Transport: &http.Transport{Dial: httpclient.RetryDial}}
+	return NewClientWithHTTP(services, httpClient)
 }
 
 func NewClientWithHTTP(services ServiceFunc, hc *http.Client) (*Client, error) {

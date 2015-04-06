@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -48,31 +47,10 @@ func newClient(key string, url string, http *http.Client) *Client {
 	return c
 }
 
-var defaultDialer = net.Dialer{
-	Timeout:   time.Second,
-	KeepAlive: 30 * time.Second,
-}
-
-var retryAttempts = attempt.Strategy{
-	Total: 30 * time.Second,
-	Delay: 500 * time.Millisecond,
-}
-
-func retryDial(network, addr string) (net.Conn, error) {
-	var conn net.Conn
-	if err := retryAttempts.Run(func() (err error) {
-		conn, err = defaultDialer.Dial(network, addr)
-		return
-	}); err != nil {
-		return nil, err
-	}
-	return conn, nil
-}
-
 // NewClient creates a new Client pointing at uri and using key for
 // authentication.
 func NewClient(uri, key string) (*Client, error) {
-	httpClient := &http.Client{Transport: &http.Transport{Dial: retryDial}}
+	httpClient := &http.Client{Transport: &http.Transport{Dial: httpclient.RetryDial}}
 	return NewClientWithHTTP(uri, key, httpClient)
 }
 
