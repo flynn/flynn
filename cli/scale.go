@@ -118,7 +118,7 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 	fmt.Printf("scaling %s\n\n", strings.Join(scale, ", "))
 
 	events := make(chan *ct.JobEvent)
-	stream, err := client.StreamJobEvents(app, 0, events)
+	stream, err := client.StreamJobEvents(app, events)
 	if err != nil {
 		return err
 	}

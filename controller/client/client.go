@@ -13,7 +13,6 @@ import (
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/pinned"
 	"github.com/flynn/flynn/pkg/stream"
@@ -303,8 +302,8 @@ func (c *Client) CreateDeployment(appID, releaseID string) (*ct.Deployment, erro
 	return deployment, c.Post(fmt.Sprintf("/apps/%s/deploy", appID), &ct.Release{ID: releaseID}, deployment)
 }
 
-func (c *Client) StreamDeployment(deploymentID string, output chan<- *ct.DeploymentEvent) (stream.Stream, error) {
-	return c.Stream("GET", fmt.Sprintf("/deployments/%s", deploymentID), nil, output)
+func (c *Client) StreamDeployment(deploymentID string, output chan *ct.DeploymentEvent) (stream.Stream, error) {
+	return c.ResumingStream("GET", fmt.Sprintf("/deployments/%s", deploymentID), output)
 }
 
 func (c *Client) DeployAppRelease(appID, releaseID string) error {
@@ -318,22 +317,9 @@ func (c *Client) DeployAppRelease(appID, releaseID string) error {
 		return nil
 	}
 
-	// use a function to create the event stream so it can be reconnected
-	// if necessary (e.g. if the controller is being deployed)
-	var events chan *ct.DeploymentEvent
-	var stream stream.Stream
-	connectAttempts := attempt.Strategy{
-		Total: 10 * time.Second,
-		Delay: 100 * time.Millisecond,
-	}
-	connect := func() error {
-		events = make(chan *ct.DeploymentEvent)
-		return connectAttempts.Run(func() (err error) {
-			stream, err = c.StreamDeployment(d.ID, events)
-			return
-		})
-	}
-	if err := connect(); err != nil {
+	events := make(chan *ct.DeploymentEvent)
+	stream, err := c.StreamDeployment(d.ID, events)
+	if err != nil {
 		return err
 	}
 	defer stream.Close()
@@ -342,10 +328,7 @@ outer:
 		select {
 		case e, ok := <-events:
 			if !ok {
-				if err := connect(); err != nil {
-					return err
-				}
-				continue
+				return errors.New("unexpected close of deployment event stream")
 			}
 			switch e.Status {
 			case "complete":
@@ -362,16 +345,8 @@ outer:
 }
 
 // StreamJobEvents streams job events to the output channel.
-func (c *Client) StreamJobEvents(appID string, lastID int64, output chan<- *ct.JobEvent) (stream.Stream, error) {
-	header := http.Header{
-		"Accept":        []string{"text/event-stream"},
-		"Last-Event-Id": []string{strconv.FormatInt(lastID, 10)},
-	}
-	res, err := c.RawReq("GET", fmt.Sprintf("/apps/%s/jobs", appID), header, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	return httpclient.Stream(res, output), nil
+func (c *Client) StreamJobEvents(appID string, output chan *ct.JobEvent) (stream.Stream, error) {
+	return c.ResumingStream("GET", fmt.Sprintf("/apps/%s/jobs", appID), output)
 }
 
 // RunJobAttached runs a new job under the specified app, attaching to the job

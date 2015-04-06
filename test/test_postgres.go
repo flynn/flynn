@@ -136,7 +136,7 @@ func (s *PostgresSuite) testDeploy(t *c.C, d *pgDeploy) {
 	t.Assert(err, c.IsNil)
 	defer discStream.Close()
 	jobEvents := make(chan *ct.JobEvent)
-	jobStream, err := client.StreamJobEvents(d.name, 0, jobEvents)
+	jobStream, err := client.StreamJobEvents(d.name, jobEvents)
 	t.Assert(err, c.IsNil)
 	defer jobStream.Close()
 	t.Assert(client.PutFormation(&ct.Formation{
@@ -287,7 +287,10 @@ func (s *PostgresSuite) testDeploy(t *c.C, d *pgDeploy) {
 loop:
 	for {
 		select {
-		case e := <-deployEvents:
+		case e, ok := <-deployEvents:
+			if !ok {
+				t.Fatal("unexpected close of deployment event stream")
+			}
 			switch e.Status {
 			case "complete":
 				break loop

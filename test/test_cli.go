@@ -38,7 +38,7 @@ func (s *CLISuite) flynn(t *c.C, args ...string) *CmdResult {
 func (s *CLISuite) newCliTestApp(t *c.C) *cliTestApp {
 	app, _ := s.createApp(t)
 	events := make(chan *ct.JobEvent)
-	stream, err := s.controllerClient(t).StreamJobEvents(app.Name, 0, events)
+	stream, err := s.controllerClient(t).StreamJobEvents(app.Name, events)
 	t.Assert(err, c.IsNil)
 	return &cliTestApp{
 		name:   app.Name,
@@ -65,7 +65,7 @@ func (a *cliTestApp) flynnCmd(args ...string) *exec.Cmd {
 	return flynnCmd("/", append([]string{"-a", a.name}, args...)...)
 }
 
-func (a *cliTestApp) waitFor(events jobEvents) (int64, string) {
+func (a *cliTestApp) waitFor(events jobEvents) string {
 	return waitForJobEvents(a.t, a.stream, a.events, events)
 }
 
@@ -197,7 +197,7 @@ func (s *CLISuite) TestScale(t *c.C) {
 	app := s.newCliTestApp(t)
 
 	scale := app.flynn("scale", "echoer=1")
-	_, jobID := app.waitFor(jobEvents{"echoer": {"up": 1}})
+	jobID := app.waitFor(jobEvents{"echoer": {"up": 1}})
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "scaling echoer: 0=>1")
 	t.Assert(scale, SuccessfulOutputContains, fmt.Sprintf("==> echoer %s up", jobID))
@@ -257,7 +257,7 @@ func (s *CLISuite) TestRun(t *c.C) {
 	t.Assert(detached, c.Not(Outputs), "world\n")
 
 	id := strings.TrimSpace(detached.Output)
-	_, jobID := app.waitFor(jobEvents{"": {"up": 1, "down": 1}})
+	jobID := app.waitFor(jobEvents{"": {"up": 1, "down": 1}})
 	t.Assert(jobID, c.Equals, id)
 	t.Assert(app.flynn("log", "--raw-output"), Outputs, "hello\nworld\n")
 
@@ -326,10 +326,10 @@ func (s *CLISuite) TestEnv(t *c.C) {
 func (s *CLISuite) TestKill(t *c.C) {
 	app := s.newCliTestApp(t)
 	t.Assert(app.flynn("scale", "--no-wait", "echoer=1"), Succeeds)
-	_, jobID := app.waitFor(jobEvents{"echoer": {"up": 1}})
+	jobID := app.waitFor(jobEvents{"echoer": {"up": 1}})
 
 	t.Assert(app.flynn("kill", jobID), Succeeds)
-	_, stoppedID := app.waitFor(jobEvents{"echoer": {"down": 1}})
+	stoppedID := app.waitFor(jobEvents{"echoer": {"down": 1}})
 	t.Assert(stoppedID, c.Equals, jobID)
 }
 
@@ -431,7 +431,7 @@ func (s *CLISuite) TestLogFilter(t *c.C) {
 		t.Assert(app.flynn("scale", "crasher=0"), Succeeds)
 	}
 	t.Assert(app.flynn("run", "-d", "echo", "hello", "world"), Succeeds)
-	_, jobID := app.waitFor(jobEvents{"": {"up": 1, "down": 1}})
+	jobID := app.waitFor(jobEvents{"": {"up": 1, "down": 1}})
 
 	tests := []struct {
 		args     []string

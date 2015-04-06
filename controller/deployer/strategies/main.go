@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -8,9 +9,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
-	"github.com/flynn/flynn/pkg/stream"
 )
 
 type ErrSkipRollback struct {
@@ -43,7 +42,6 @@ type Deploy struct {
 	client          *controller.Client
 	deployEvents    chan<- ct.DeploymentEvent
 	jobEvents       chan *ct.JobEvent
-	jobStream       stream.Stream
 	serviceEvents   chan *discoverd.Event
 	serviceMeta     *discoverd.ServiceMeta
 	useJobEvents    map[string]struct{}
@@ -51,32 +49,8 @@ type Deploy struct {
 	oldReleaseState map[string]int
 	newReleaseState map[string]int
 	knownJobStates  map[jobIDState]struct{}
-	lastEventID     int64
 	omni            map[string]struct{}
 	hostCount       int
-}
-
-var streamAttempts = attempt.Strategy{
-	Total: 10 * time.Second,
-	Delay: 500 * time.Millisecond,
-}
-
-func (d *Deploy) streamJobEvents() error {
-	events := make(chan *ct.JobEvent)
-	var stream stream.Stream
-	if err := streamAttempts.Run(func() (err error) {
-		stream, err = d.client.StreamJobEvents(d.AppID, d.lastEventID, events)
-		return
-	}); err != nil {
-		return err
-	}
-	d.jobEvents = events
-	d.jobStream = stream
-	return nil
-}
-
-func (d *Deploy) closeJobEventStream() error {
-	return d.jobStream.Close()
 }
 
 func (d *Deploy) isOmni(typ string) bool {
@@ -201,11 +175,13 @@ func Perform(d *ct.Deployment, client *controller.Client, deployEvents chan<- ct
 
 	if len(deploy.useJobEvents) > 0 {
 		log.Info("getting job event stream")
-		if err := deploy.streamJobEvents(); err != nil {
+		deploy.jobEvents = make(chan *ct.JobEvent)
+		stream, err := client.StreamJobEvents(d.AppID, deploy.jobEvents)
+		if err != nil {
 			log.Error("error getting job event stream", "err", err)
 			return err
 		}
-		defer deploy.closeJobEventStream()
+		defer stream.Close()
 
 		log.Info("getting current jobs")
 		jobs, err := client.JobList(d.AppID)
@@ -321,18 +297,11 @@ func (d *Deploy) waitForJobEvents(releaseID string, expected jobEvents, log log1
 			}
 		case event, ok := <-d.jobEvents:
 			if !ok {
-				// the stream could close when deploying the controller, so try to reconnect
-				log.Warn("reconnecting job event stream", "lastEventID", d.lastEventID)
-				if err := d.streamJobEvents(); err != nil {
-					log.Error("error reconnecting job event stream", "err", err)
-					return err
-				}
-				continue
+				return errors.New("unexpected close of job event stream")
 			}
 			if event.Job.ReleaseID != releaseID {
 				continue
 			}
-			d.lastEventID = event.ID
 
 			// if service discovery is being used for the job's type, ignore up events and fail
 			// the deployment if we get a down event when waiting for the job to come up.

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/flynn/flynn/pkg/httphelper"
@@ -176,6 +177,17 @@ func (c *Client) Hijack(method, path string, header http.Header, in interface{})
 // required channel, to which the output will be streamed.
 func (c *Client) Stream(method, path string, in, out interface{}) (stream.Stream, error) {
 	return c.StreamWithHeader(method, path, make(http.Header), in, out)
+}
+
+func (c *Client) ResumingStream(method, path string, ch interface{}) (stream.Stream, error) {
+	connect := func(lastID int64) (*http.Response, error) {
+		header := http.Header{
+			"Accept":        []string{"text/event-stream"},
+			"Last-Event-Id": []string{strconv.FormatInt(lastID, 10)},
+		}
+		return c.RawReq(method, path, header, nil, nil)
+	}
+	return ResumingStream(connect, ch)
 }
 
 func (c *Client) StreamWithHeader(method, path string, header http.Header, in, out interface{}) (stream.Stream, error) {
