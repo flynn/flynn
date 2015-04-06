@@ -111,6 +111,8 @@ type clusterClient interface {
 }
 
 type controllerClient interface {
+	AppList() ([]*ct.App, error)
+	JobList(string) ([]*ct.Job, error)
 	GetRelease(releaseID string) (*ct.Release, error)
 	GetArtifact(artifactID string) (*ct.Artifact, error)
 	GetFormation(appID, releaseID string) (*ct.Formation, error)
@@ -210,11 +212,51 @@ func (c *context) syncCluster() {
 			rectify[f] = struct{}{}
 		}
 	}
+	if err := c.syncJobStates(); err != nil {
+		// TODO: handle error
+	}
 	c.mtx.Unlock()
 
 	for f := range rectify {
 		go f.Rectify()
 	}
+}
+
+func (c *context) syncJobStates() error {
+	g := grohl.NewContext(grohl.Data{"fn": "syncJobStates"})
+	g.Log(grohl.Data{"at": "appList"})
+	apps, err := c.AppList()
+	if err != nil {
+		g.Log(grohl.Data{"at": "appList", "status": "error", "err": err})
+		return err
+	}
+	for _, app := range apps {
+		g.Log(grohl.Data{"at": "jobList", "app.id": app.ID})
+		jobs, err := c.JobList(app.ID)
+		if err != nil {
+			g.Log(grohl.Data{"at": "jobList", "app.id": app.ID, "status": "error", "err": err})
+			continue
+		}
+		for _, job := range jobs {
+			gg := g.New(grohl.Data{"job.id": job.ID, "app.id": app.ID, "state": job.State})
+			gg.Log(grohl.Data{"at": "checkState"})
+			if job.State != "up" {
+				continue
+			}
+			hostID, jobID, err := cluster.ParseJobID(job.ID)
+			if err != nil {
+				gg.Log(grohl.Data{"at": "parseJobID", "status": "error", "err": err})
+				continue
+			}
+			if j := c.jobs.Get(hostID, jobID); j != nil {
+				continue
+			}
+			job.State = "down"
+			gg.Log(grohl.Data{"at": "putJob", "state": "down"})
+			go c.PutJob(job)
+		}
+	}
+	return nil
 }
 
 func (c *context) watchFormations() {
