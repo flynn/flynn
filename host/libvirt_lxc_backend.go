@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -313,21 +314,25 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 		return nil, err
 	}
 
-	// Write a resolv.conf to be bind-mounted into containers pointing at the
-	// future discoverd DNS listener
-	if err := os.MkdirAll("/etc/flynn", 0755); err != nil {
-		return nil, err
-	}
-	if err := ioutil.WriteFile("/etc/flynn/resolv.conf", []byte(fmt.Sprintf("nameserver %s\n", l.bridgeAddr.String())), 0644); err != nil {
-		return nil, err
-	}
-	l.resolvConf = "/etc/flynn/resolv.conf"
-
 	// Read DNS config, discoverd uses the nameservers
 	dnsConf, err := dns.ClientConfigFromFile("/etc/resolv.conf")
 	if err != nil {
 		return nil, err
 	}
+
+	// Write a resolv.conf to be bind-mounted into containers pointing at the
+	// future discoverd DNS listener
+	if err := os.MkdirAll("/etc/flynn", 0755); err != nil {
+		return nil, err
+	}
+	var resolvSearch string
+	if len(dnsConf.Search) > 0 {
+		resolvSearch = fmt.Sprintf("search %s\n", strings.Join(dnsConf.Search, " "))
+	}
+	if err := ioutil.WriteFile("/etc/flynn/resolv.conf", []byte(fmt.Sprintf("%snameserver %s\n", resolvSearch, l.bridgeAddr.String())), 0644); err != nil {
+		return nil, err
+	}
+	l.resolvConf = "/etc/flynn/resolv.conf"
 
 	// Allocate IPs for running jobs
 	for i, container := range l.containers {
