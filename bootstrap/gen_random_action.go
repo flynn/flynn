@@ -1,11 +1,17 @@
 package bootstrap
 
-import "github.com/flynn/flynn/pkg/random"
+import (
+	"encoding/base64"
+	"fmt"
+
+	"github.com/flynn/flynn/pkg/random"
+)
 
 type GenRandomAction struct {
-	ID     string `json:"id"`
-	Length int    `json:"length"`
-	Data   string `json:"data"`
+	ID       string `json:"id"`
+	Length   int    `json:"length"`
+	Data     string `json:"data"`
+	Encoding string `json:"encoding"`
 
 	ControllerKey bool `json:"controller_key"`
 }
@@ -28,7 +34,16 @@ func (a *GenRandomAction) Run(s *State) error {
 	}
 	data := interpolate(s, a.Data)
 	if data == "" {
-		data = random.Hex(a.Length)
+		switch a.Encoding {
+		case "", "hex":
+			data = random.Hex(a.Length)
+		case "base64":
+			data = base64.StdEncoding.EncodeToString(random.Bytes(a.Length))
+		case "base64safe":
+			data = random.Base64(a.Length)
+		default:
+			return fmt.Errorf("bootstrap: unknown random type: %q", a.Encoding)
+		}
 	}
 	s.StepData[a.ID] = &RandomData{Data: data}
 	if a.ControllerKey {
