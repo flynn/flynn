@@ -44,4 +44,4 @@ Flynn reserves the right to review all uses of our Marks by others and to conduc
 
 For further information or guidelines regarding proper use of our Marks please [contact Flynn’s Legal Department](mailto:legal@flynn.io).
 
-Based on http://www.docker.com/trademark_guidelines/. Used with permission.
+Based on https://www.docker.com/legal/trademark_guidelines/. Used with permission.
