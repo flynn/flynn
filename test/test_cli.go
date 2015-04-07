@@ -360,10 +360,23 @@ func (s *CLISuite) TestRoute(t *c.C) {
 
 	// flynn route add http
 	route := random.String(32) + ".dev"
-	newRoute := app.flynn("route", "add", "http", route)
+	newRoute := app.flynn("route", "add", "http", "--sticky", route)
 	t.Assert(newRoute, Succeeds)
 	routeID := strings.TrimSpace(newRoute.Output)
 	assertRouteContains(routeID, true)
+
+	// ensure sticky flag is set
+	routes, err := s.controllerClient(t).RouteList(app.name)
+	t.Assert(err, c.IsNil)
+	var found bool
+	for _, r := range routes {
+		if fmt.Sprintf("%s/%s", r.Type, r.ID) != routeID {
+			continue
+		}
+		t.Assert(r.Sticky, c.Equals, true)
+		found = true
+	}
+	t.Assert(found, c.Equals, true, c.Commentf("didn't find route"))
 
 	// flynn route remove
 	t.Assert(app.flynn("route", "remove", routeID), Succeeds)
