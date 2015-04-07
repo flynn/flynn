@@ -64,6 +64,12 @@
     "length": 10
   },
   {
+    "id": "router-sticky-key",
+    "action": "gen-random",
+	"length": 32,
+	"encoding": "base64"
+  },
+  {
     "id": "postgres-wait",
     "action": "wait",
     "url": "http://postgres-api.discoverd/ping"
@@ -193,7 +199,8 @@
     "release": {
       "env": {
         "TLSCERT": "{{ (index .StepData \"controller-cert\").Cert }}",
-        "TLSKEY": "{{ (index .StepData \"controller-cert\").PrivateKey }}"
+        "TLSKEY": "{{ (index .StepData \"controller-cert\").PrivateKey }}",
+        "COOKIE_KEY": "{{ (index .StepData \"router-sticky-key\").Data }}"
       },
       "processes": {
         "app": {

@@ -62,9 +62,15 @@ func main() {
 		if err != nil {
 			shutdown.Fatal("error decoding COOKIE_KEY:", err)
 		}
+		if len(res) != 32 {
+			shutdown.Fatal(fmt.Sprintf("decoded %d bytes from COOKIE_KEY, expected 32", len(res)))
+		}
 		var k [32]byte
 		copy(k[:], res)
 		cookieKey = &k
+	}
+	if cookieKey == nil {
+		shutdown.Fatal("Missing random 32 byte base64-encoded COOKIE_KEY")
 	}
 
 	httpAddr := flag.String("httpaddr", ":8080", "http listen address")
