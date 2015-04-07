@@ -142,7 +142,7 @@ func runRouteAddHTTP(args *docopt.Args, client *controller.Client) error {
 		Domain:  args.String["<domain>"],
 		TLSCert: string(tlsCert),
 		TLSKey:  string(tlsKey),
-		Sticky:  args.Bool["sticky"],
+		Sticky:  args.Bool["--sticky"],
 	}
 	route := hr.ToRoute()
 	if err := client.CreateRoute(mustApp(), route); err != nil {
