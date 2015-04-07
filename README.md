@@ -99,4 +99,4 @@ There are many ways to help Flynn besides contributing code:
 
 Learn more at [flynn.io](https://flynn.io).
 
-Flynn is a [trademark](https://flynn.io/docs/trademark-guidelines) of Prime Directive, Inc.
+Flynn® is a [trademark](https://flynn.io/docs/trademark-guidelines) of Prime Directive, Inc.
