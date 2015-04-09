@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -211,30 +212,27 @@ func runDaemon(args *docopt.Args) {
 		}
 	}
 
-	// connect to discoverd
-	discURL := os.Getenv("DISCOVERD")
-	var disc *discoverd.Client
+	discoverdConfigured := false
+	connectDiscoverd := func(url string) error {
+		if discoverdConfigured {
+			return errors.New("host: discoverd is already configured")
+		}
+		disc := discoverd.NewClientWithURL(url)
+		// TODO: use attempts to connect
+		hb, err := disc.AddServiceAndRegisterInstance("flynn-host", &discoverd.Instance{
+			Addr: externalAddr + ":1113",
+			Meta: map[string]string{"id": hostID},
+		})
+		if err != nil {
+			return err
+		}
+		shutdown.BeforeExit(func() { hb.Close() })
 
-	if discURL == "" && externalAddr != "" {
-		discURL = fmt.Sprintf("http://%s:1111", externalAddr)
-	}
-	if disc == nil {
-		disc = discoverd.NewClientWithURL(discURL)
-		if err := disc.Ping(); err != nil {
+		if err := mux.Connect(disc, "flynn-logaggregator"); err != nil {
 			shutdown.Fatal(err)
 		}
-	}
-	hb, err := disc.AddServiceAndRegisterInstance("flynn-host", &discoverd.Instance{
-		Addr: externalAddr + ":1113",
-		Meta: map[string]string{"id": hostID},
-	})
-	if err != nil {
-		shutdown.Fatal(err)
-	}
-	shutdown.BeforeExit(func() { hb.Close() })
-
-	if err := mux.Connect(disc, "flynn-logaggregator"); err != nil {
-		shutdown.Fatal(err)
+		discoverdConfigured = true
+		backend.SetDefaultEnv("DISCOVERD", url)
 	}
 
 	var cluster *cluster.Client
@@ -243,5 +241,6 @@ func runDaemon(args *docopt.Args) {
 		&attachHandler{state: state, backend: backend},
 		cluster,
 		vman,
+		connectDiscoverd,
 	))
 }

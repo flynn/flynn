@@ -59,6 +59,8 @@ func (h *Host) streamEvents(id string, w http.ResponseWriter) error {
 
 type jobAPI struct {
 	host *Host
+
+	connectDiscoverd func(string) error
 }
 
 func (h *jobAPI) ListJobs(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -156,7 +158,22 @@ func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 		}
 	}()
 
-	w.WriteHeader(http.StatusAccepted)
+	// TODO(titanous): return 201 Accepted
+	httphelper.JSON(w, 200, struct{}{})
+}
+
+func (h *jobAPI) ConfigureDiscoverd(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	var config struct {
+		URL string `json:"url"`
+	}
+	if err := httphelper.DecodeJSON(r, &config); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	if err := h.connectDiscoverd(config.URL); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
 }
 
 func extractTufDB(r *http.Request) (string, error) {
@@ -179,10 +196,11 @@ func (h *jobAPI) RegisterRoutes(r *httprouter.Router) error {
 	r.DELETE("/host/jobs/:id", h.StopJob)
 	r.PUT("/host/jobs/:id/signal/:signal", h.SignalJob)
 	r.POST("/host/pull-images", h.PullImages)
+	r.PUT("/host/discoverd", h.ConfigureDiscoverd)
 	return nil
 }
 
-func serveHTTP(host *Host, attach *attachHandler, clus *cluster.Client, vman *volumemanager.Manager) error {
+func serveHTTP(host *Host, attach *attachHandler, clus *cluster.Client, vman *volumemanager.Manager, connectDiscoverd func(string) error) error {
 	l, err := net.Listen("tcp", ":1113")
 	if err != nil {
 		return nil, err
@@ -192,7 +210,7 @@ func serveHTTP(host *Host, attach *attachHandler, clus *cluster.Client, vman *vo
 
 	r.POST("/attach", attach.ServeHTTP)
 
-	jobAPI := &jobAPI{host}
+	jobAPI := &jobAPI{host, connectDiscoverd}
 	jobAPI.RegisterRoutes(r)
 	volAPI := volumeapi.NewHTTPAPI(clus, vman)
 	volAPI.RegisterRoutes(r)

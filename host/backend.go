@@ -31,6 +31,7 @@ type Backend interface {
 	Cleanup() error
 	UnmarshalState(map[string]*host.ActiveJob, map[string][]byte, []byte) error
 	ConfigureNetworking(strategy NetworkStrategy, job string) (*NetworkInfo, error)
+	SetDefaultEnv(k, v string)
 }
 
 type RunConfig struct {

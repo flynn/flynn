@@ -67,6 +67,7 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, lo
 		pinkerton:  pinkertonCtx,
 		logs:       make(map[string]*logbuf.Log),
 		containers: make(map[string]*libvirtContainer),
+		defaultEnv: make(map[string]string),
 		resolvConf: "/etc/resolv.conf",
 		mux:        mux,
 		ipalloc:    ipallocator.New(),
@@ -94,6 +95,9 @@ type LibvirtLXCBackend struct {
 
 	containersMtx sync.RWMutex
 	containers    map[string]*libvirtContainer
+
+	envMtx     sync.RWMutex
+	defaultEnv map[string]string
 }
 
 type libvirtContainer struct {
@@ -375,6 +379,12 @@ func (l *LibvirtLXCBackend) withConnRetries(f func() error) error {
 	})
 }
 
+func (l *LibvirtLXCBackend) SetDefaultEnv(k, v string) {
+	l.envMtx.Lock()
+	defer l.envMtx.Unlock()
+	l.defaultEnv[k] = v
+}
+
 func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error) {
 	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "run", "job.id": job.ID})
 	g.Log(grohl.Data{"at": "start", "job.artifact.uri": job.Artifact.URI, "job.cmd": job.Config.Cmd})
@@ -548,17 +558,20 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	}
 
 	g.Log(grohl.Data{"at": "write_config"})
+	l.envMtx.RLock()
 	err = writeContainerConfig(filepath.Join(rootPath, ".containerconfig"), config,
 		map[string]string{
 			"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 			"TERM": "xterm",
 			"HOME": "/",
 		},
+		l.defaultEnv,
 		job.Config.Env,
 		map[string]string{
 			"HOSTNAME": job.ID,
 		},
 	)
+	l.envMtx.RUnlock()
 	if err != nil {
 		g.Log(grohl.Data{"at": "write_config", "status": "error", "err": err})
 		return err
