@@ -66,8 +66,6 @@ GEM
     json (1.8.1)
     mimetype-fu (0.1.2)
     multi_json (1.10.1)
-    puma (2.9.0)
-      rack (>= 1.1, < 2.0)
     rack (1.5.2)
     rack-mount (0.8.3)
       rack (>= 1.0.0)
@@ -95,7 +93,6 @@ DEPENDENCIES
   flynn-dashboard-web-icons!
   marbles-js!
   mimetype-fu
-  puma
   rack-putty!
   rake
   react-jsx-sprockets!
