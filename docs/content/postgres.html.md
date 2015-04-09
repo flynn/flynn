@@ -35,7 +35,7 @@ If your application expects a `DATABASE_URL` environment variable, you can
 create one by combining the `PG*` variables:
 
 ```text
-flynn env set DATABASE_URL=$(. <(flynn env); echo "postgres://$PGUSER:$PGPASSWORD@$PGHOST:5432/$PGDATABASE")
+flynn env set DATABASE_URL=$(export $(flynn env | xargs); echo "postgres://$PGUSER:$PGPASSWORD@$PGHOST:5432/$PGDATABASE")
 ```
 
 ### Connecting to a console
