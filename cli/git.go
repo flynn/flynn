@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -122,8 +121,6 @@ type multipleRemotesError []string
 func (remotes multipleRemotesError) Error() string {
 	return "error: Multiple apps listed in git remotes, please specify one with the global -a option to disambiguate.\n\nAvailable Flynn remotes:\n" + strings.Join(remotes, "\n")
 }
-
-var errMultipleFlynnRemotes = errors.New("multiple apps in git remotes")
 
 func appFromGitRemote(remote string) (*remoteApp, error) {
 	if remote != "" {
