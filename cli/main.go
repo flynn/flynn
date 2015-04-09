@@ -263,7 +263,8 @@ func app() (string, error) {
 func mustApp() string {
 	name, err := app()
 	if err != nil {
-		shutdown.Fatal(err)
+		log.Println(err)
+		shutdown.ExitWithCode(1)
 	}
 	return name
 }
