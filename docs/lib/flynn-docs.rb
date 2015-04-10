@@ -18,6 +18,11 @@ module FlynnDocs
     Yajl::Parser.parse(File.read(path))
   end
 
+  def self.api_examples_preface(name)
+    path = File.join(dir, 'api-examples', "#{name}.md")
+    File.exists?(path) ? File.read(path) : ''
+  end
+
   def self.manifest
     @manifest ||= Dir[File.join(content_dir, '**', '*')].reject do |path|
       File.directory?(path)
