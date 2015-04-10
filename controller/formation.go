@@ -52,11 +52,30 @@ func procsHstore(m map[string]int) hstore.Hstore {
 		res.Map[k] = sql.NullString{String: strconv.Itoa(v), Valid: true}
 	}
 	return res
+}
 
+func (r *FormationRepo) validateFormProcs(f *ct.Formation) error {
+	release, err := r.releases.Get(f.ReleaseID)
+	if err != nil {
+		return err
+	}
+	rel := release.(*ct.Release)
+	invalid := make([]string, 0, len(f.Processes))
+	for k := range f.Processes {
+		if _, ok := rel.Processes[k]; !ok {
+			invalid = append(invalid, k)
+		}
+	}
+	if len(invalid) > 0 {
+		return ct.ValidationError{Message: fmt.Sprintf("Requested formation includes process types that do not exist in release. Invalid process types: [%s]", strings.Join(invalid, ", "))}
+	}
+	return nil
 }
 
 func (r *FormationRepo) Add(f *ct.Formation) error {
-	// TODO: actually validate
+	if err := r.validateFormProcs(f); err != nil {
+		return err
+	}
 	procs := procsHstore(f.Processes)
 	err := r.db.QueryRow("INSERT INTO formations (app_id, release_id, processes) VALUES ($1, $2, $3) RETURNING created_at, updated_at",
 		f.AppID, f.ReleaseID, procs).Scan(&f.CreatedAt, &f.UpdatedAt)
