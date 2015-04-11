@@ -9,4 +9,4 @@ exec /bin/etcd -data-dir=/data \
                -listen-client-urls=http://0.0.0.0:${PORT_0} \
                -initial-advertise-peer-urls=http://${EXTERNAL_IP}:${PORT_1} \
                -listen-peer-urls=http://0.0.0.0:${PORT_1} \
-               "${initial}"
+               ${initial}
