@@ -118,6 +118,7 @@ func (h *jobAPI) PullImages(w http.ResponseWriter, r *http.Request, ps httproute
 	tufDB, err := extractTufDB(r)
 	if err != nil {
 		httphelper.Error(w, err)
+		return
 	}
 	defer os.Remove(tufDB)
 
