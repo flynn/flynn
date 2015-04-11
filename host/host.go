@@ -53,7 +53,7 @@ options:
   --meta=<KEY=VAL>...    key=value pair to add as metadata
   --bind=IP              bind containers to IP
   --flynn-init=PATH      path to flynn-init binary [default: /usr/local/bin/flynn-init]
-  --log-dir              directory to store job logs [default: /var/log/flynn]
+  --log-dir=DIR          directory to store job logs [default: /var/log/flynn]
 	`)
 }
 
