@@ -13,15 +13,18 @@
     padding: 0;
     list-style: none;
 
-    height: 41px;
+    min-height: 41px;
 
     display: -webkit-flex;
     display: flex;
     flex-flow: row;
     -webkit-flex-flow: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
 
     > li {
       margin-right: 1rem;
+      margin-top: 0.5rem;
 
       display: -webkit-flex;
       display: flex;
