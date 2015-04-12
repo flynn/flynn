@@ -33,6 +33,7 @@ WITH RECURSIVE job AS (
     FROM que_jobs AS j
     WHERE queue = $1::text
     AND run_at <= now()
+    AND locked_until <= now()
     ORDER BY priority, run_at, job_id
     LIMIT 1
   ) AS t1
@@ -44,6 +45,7 @@ WITH RECURSIVE job AS (
         FROM que_jobs AS j
         WHERE queue = $1::text
         AND run_at <= now()
+        AND locked_until <= now()
         AND (priority, run_at, job_id) > (job.priority, job.run_at, job.job_id)
         ORDER BY priority, run_at, job_id
         LIMIT 1
@@ -54,7 +56,7 @@ WITH RECURSIVE job AS (
     ) AS t1
   )
 )
-SELECT queue, priority, run_at, job_id, job_class, args, error_count
+SELECT queue, priority, run_at, job_id, job_class, args, error_count, locked_until
 FROM job
 WHERE locked
 LIMIT 1
@@ -67,10 +69,11 @@ SELECT pg_advisory_unlock($1)
 	sqlCheckJob = `
 SELECT true AS exists
 FROM   que_jobs
-WHERE  queue    = $1::text
-AND    priority = $2::smallint
-AND    run_at   = $3::timestamptz
-AND    job_id   = $4::bigint
+WHERE  queue          = $1::text
+AND    priority       = $2::smallint
+AND    run_at         = $3::timestamptz
+AND    job_id         = $4::bigint
+AND    locked_until   = $5::timestamptz
 `
 
 	sqlSetError = `
@@ -82,6 +85,15 @@ WHERE queue     = $4::text
 AND   priority  = $5::smallint
 AND   run_at    = $6::timestamptz
 AND   job_id    = $7::bigint
+`
+
+	sqlSetLock = `
+UPDATE que_jobs
+SET locked_until = now() + $1::bigint * '1 second'::interval
+WHERE queue      = $2::text
+AND   priority   = $3::smallint
+AND   run_at     = $4::timestamptz
+AND   job_id     = $5::bigint
 `
 
 	sqlInsertJob = `

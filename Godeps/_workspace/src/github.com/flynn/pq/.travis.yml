@@ -42,6 +42,7 @@ env:
     - PQGOSSLTESTS=1
     - PQSSLCERTTEST_PATH=$PWD/certs
   matrix:
+    - PGVERSION=9.4
     - PGVERSION=9.3
     - PGVERSION=9.2
 

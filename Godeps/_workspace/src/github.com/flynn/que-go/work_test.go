@@ -217,7 +217,6 @@ func TestLockJobAdvisoryRace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.pool.Release(unusedConn)
 
 	// We use two jobs: the first one is concurrently deleted, and the second
 	// one is returned by LockJob after recovering from the race condition.
@@ -360,6 +359,18 @@ func TestLockJobAdvisoryRace(t *testing.T) {
 
 	// synchronization point
 	lockJobBackendIDChan <- ourBackendID
+
+	// release the unused connection once the locked job has acquired the
+	// other connection so it can be used by the job's LockedUntil goroutine.
+	go func() {
+		for {
+			if c.pool.Stat().AvailableConnections == 0 {
+				c.pool.Release(unusedConn)
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}()
 
 	job, err := c.LockJob("")
 	if err != nil {
@@ -631,4 +642,53 @@ func TestJobError(t *testing.T) {
 	if total != available {
 		t.Errorf("want available=total, got available=%d total=%d", available, total)
 	}
+}
+
+func TestJobDisconnect(t *testing.T) {
+	c := openTestClient(t)
+	defer truncateAndClose(c.pool)
+
+	if err := c.Enqueue(&Job{Type: "MyJob"}); err != nil {
+		t.Fatal(err)
+	}
+
+	j1, err := c.LockJob("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer j1.Done()
+
+	// kill the job's connection, which will drop the advisory lock
+	conn := j1.Conn()
+	if conn == nil {
+		t.Fatal("job has no connection")
+	}
+	var ok bool
+	if err := c.pool.QueryRow("SELECT pg_terminate_backend($1)", conn.Pid).Scan(&ok); err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("want pg_terminate_backend=true, got false")
+	}
+
+	// make sure the job is still locked
+	j2, err := c.LockJob("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j2 != nil {
+		defer j2.Done()
+		t.Fatalf("wanted no job, got %+v", j2)
+	}
+
+	// finish the job, and check it can be locked again
+	j1.Done()
+	j3, err := c.LockJob("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j3 == nil {
+		t.Fatal("job was not found")
+	}
+	j3.Done()
 }
