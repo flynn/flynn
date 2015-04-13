@@ -15,6 +15,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flynn/flynn/pkg/ctxhelper"
+	"github.com/flynn/flynn/router/reqlog"
+
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 )
 
@@ -73,7 +76,7 @@ func NewReverseProxy(bf BackendListFunc, stickyKey *[32]byte, sticky bool) *Reve
 }
 
 // ServeHTTP implements http.Handler.
-func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+func (p *ReverseProxy) ServeHTTP(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
 	transport := p.transport
 	if transport == nil {
 		panic("router: nil transport for proxy")
@@ -82,7 +85,7 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	outreq := prepareRequest(req)
 
 	if isConnectionUpgrade(req.Header) {
-		p.serveUpgrade(rw, outreq)
+		p.serveUpgrade(ctx, rw, outreq)
 		return
 	}
 
@@ -94,6 +97,9 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	defer res.Body.Close()
+
+	rl, _ := reqlog.FromContext(ctx)
+	rl.Finish = time.Now()
 
 	prepareResponseHeaders(res)
 	p.writeResponse(rw, res)
@@ -129,7 +135,7 @@ func (p *ReverseProxy) ServeConn(ctx context.Context, dconn net.Conn) {
 	joinConns(uconn, dconn)
 }
 
-func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, req *http.Request) {
+func (p *ReverseProxy) serveUpgrade(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
 	transport := p.transport
 	if transport == nil {
 		panic("router: nil transport for proxy")
@@ -160,10 +166,22 @@ func (p *ReverseProxy) serveUpgrade(rw http.ResponseWriter, req *http.Request) {
 	}
 	defer dconn.Close()
 
+	// We need to log separately for this path since it won't return until the
+	// conns finish.
+	rl, _ := reqlog.FromContext(ctx)
+	rl.Finish = time.Now()
+	res.Body = &countingReadCloser{ReadCloser: res.Body}
+
 	if err := res.Write(dconn); err != nil {
 		p.logf("router: proxy error: %v", err)
 		return
 	}
+
+	rl.BodyBytes = res.Body.(*countingReadCloser).count
+	if logger, ok := ctxhelper.LoggerFromContext(ctx); ok {
+		rl.WriteTo(logger)
+	}
+
 	joinConns(uconn, &streamConn{bufrw.Reader, dconn})
 }
 
