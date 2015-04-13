@@ -135,6 +135,7 @@ func (s *LibvirtLXCSuite) TearDownSuite(c *C) {
 	err = zpool.Destroy()
 	c.Assert(err, IsNil)
 }
+
 func (s *LibvirtLXCSuite) TestLibvirtContainerDevices(c *C) {
 	dirs := map[string]deviceSlice{
 		"/dev": deviceSlice{
@@ -196,6 +197,42 @@ func (s *LibvirtLXCSuite) TestLibvirtContainerDevices(c *C) {
 			wantPath := filepath.Join(dir, want.Name)
 			if !names[want.Name] {
 				c.Errorf("missing device %q", wantPath)
+			}
+		}
+	}
+}
+
+func (s *LibvirtLXCSuite) TestLibvirtContainerNamespaces(c *C) {
+	dirs := map[string]deviceSlice{
+		"/proc/self/ns": deviceSlice{
+			device{Name: "ipc", Mode: "lrwxrwxrwx", LinkTo: "ipc"},
+			device{Name: "mnt", Mode: "lrwxrwxrwx", LinkTo: "mnt"},
+			device{Name: "net", Mode: "lrwxrwxrwx", LinkTo: "net"},
+			device{Name: "pid", Mode: "lrwxrwxrwx", LinkTo: "pid"},
+			device{Name: "user", Mode: "lrwxrwxrwx", LinkTo: "user"},
+			device{Name: "uts", Mode: "lrwxrwxrwx", LinkTo: "uts"},
+		},
+	}
+
+	for dir, wants := range dirs {
+		names := map[string]bool{}
+		gots, err := listDevices(dir, s.tty)
+		c.Assert(err, IsNil)
+
+		for _, got := range gots {
+			names[got.Name] = true
+			gotPath := filepath.Join(dir, got.Name)
+
+			want, ok := wants.get(got.Name)
+			if !ok {
+				c.Errorf("unexpected device %q", gotPath)
+				continue
+			}
+			if got.Mode != want.Mode {
+				c.Errorf("want %q mode %s, got %s", gotPath, want.Mode, got.Mode)
+			}
+			if !strings.HasPrefix(got.LinkTo, want.LinkTo+":") {
+				c.Errorf("want %q link to %s inode, got %s", gotPath, want.LinkTo, got.LinkTo)
 			}
 		}
 	}
