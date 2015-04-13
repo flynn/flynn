@@ -208,6 +208,13 @@ func streamDeploymentEvents(ctx context.Context, deploymentID string, w http.Res
 	ch := make(chan *ct.DeploymentEvent)
 	s := sse.NewStream(w, ch, l)
 	s.Serve()
+	defer func() {
+		if err == nil {
+			s.Close()
+		} else {
+			s.CloseWithError(err)
+		}
+	}()
 
 	connected := make(chan struct{})
 	done := make(chan struct{})
