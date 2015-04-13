@@ -251,7 +251,7 @@ func (s *httpInstaller) handleEvents() {
 				Description: event.Description,
 			})
 		case err := <-s.Stack.ErrChan:
-			s.logger.Info(err.Error())
+			s.logger.Error(err.Error())
 			s.handleError(err)
 		case <-s.Stack.Done:
 			s.handleDone()
