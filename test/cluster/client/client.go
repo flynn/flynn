@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"time"
@@ -88,13 +87,4 @@ func (c *Client) AddReleaseHosts() (*tc.BootResult, error) {
 func (c *Client) RemoveHost(host *tc.Instance) error {
 	c.size--
 	return c.Delete("/" + host.ID)
-}
-
-func (c *Client) DumpLogs(out io.Writer) error {
-	res, err := c.RawReq("GET", "/dump-logs", nil, nil, nil)
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(out, res.Body)
-	return err
 }

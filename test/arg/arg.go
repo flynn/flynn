@@ -15,7 +15,6 @@ type Args struct {
 	Build       bool
 	Debug       bool
 	Stream      bool
-	DumpLogs    bool
 	Kill        bool
 	BuildRootFS bool
 	DBPath      string
@@ -50,7 +49,6 @@ func Parse() *Args {
 	flag.BoolVar(&args.Build, "build", true, "build Flynn")
 	flag.BoolVar(&args.Debug, "debug", false, "enable debug output")
 	flag.BoolVar(&args.Stream, "stream", false, "stream debug output (implies --debug)")
-	flag.BoolVar(&args.DumpLogs, "dump-logs", false, "dump logs on error")
 	flag.BoolVar(&args.Kill, "kill", true, "kill the cluster after running the tests")
 	flag.BoolVar(&args.BuildRootFS, "build-rootfs", false, "just build the rootfs (leaving it behind for future use) without running tests")
 	flag.BoolVar(&args.Gist, "gist", false, "upload debug info to a gist")
