@@ -15,6 +15,9 @@ import (
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	zfs "github.com/flynn/flynn/Godeps/_workspace/src/github.com/mistifyio/go-zfs"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/syndtr/gocapability/capability"
+	"github.com/mitchellh/go-ps"
+
 	"github.com/flynn/flynn/host/logmux"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
@@ -238,6 +241,109 @@ func (s *LibvirtLXCSuite) TestLibvirtContainerNamespaces(c *C) {
 	}
 }
 
+func (s *LibvirtLXCSuite) TestLibvirtCapabilities(c *C) {
+	tests := map[capability.CapType]struct {
+		Empty, Full bool
+
+		Enabled, Disabled []capability.Cap
+	}{
+		capability.EFFECTIVE:   {Full: true},
+		capability.PERMITTED:   {Full: true},
+		capability.INHERITABLE: {Empty: true},
+		capability.BOUNDING: {
+			Enabled: []capability.Cap{
+				capability.CAP_CHOWN,
+				capability.CAP_DAC_OVERRIDE,
+				capability.CAP_DAC_READ_SEARCH,
+				capability.CAP_FOWNER,
+				capability.CAP_FSETID,
+				capability.CAP_KILL,
+				capability.CAP_SETGID,
+				capability.CAP_SETUID,
+				capability.CAP_SETPCAP,
+				capability.CAP_LINUX_IMMUTABLE,
+				capability.CAP_NET_BIND_SERVICE,
+				capability.CAP_NET_BROADCAST,
+				capability.CAP_NET_ADMIN,
+				capability.CAP_NET_RAW,
+				capability.CAP_IPC_LOCK,
+				capability.CAP_IPC_OWNER,
+				capability.CAP_SYS_RAWIO,
+				capability.CAP_SYS_CHROOT,
+				capability.CAP_SYS_PTRACE,
+				capability.CAP_SYS_PACCT,
+				capability.CAP_SYS_ADMIN,
+				capability.CAP_SYS_BOOT,
+				capability.CAP_SYS_NICE,
+				capability.CAP_SYS_RESOURCE,
+				capability.CAP_SYS_TTY_CONFIG,
+				capability.CAP_LEASE,
+				capability.CAP_AUDIT_WRITE,
+				capability.CAP_SETFCAP,
+				capability.CAP_MAC_OVERRIDE,
+				capability.CAP_SYSLOG,
+				capability.CAP_WAKE_ALARM,
+				capability.CAP_BLOCK_SUSPEND,
+				capability.CAP_AUDIT_READ,
+			},
+			Disabled: []capability.Cap{
+				capability.CAP_SYS_MODULE,
+				capability.CAP_SYS_TIME,
+				capability.CAP_MKNOD,
+				capability.CAP_MAC_ADMIN,
+			},
+		},
+	}
+
+	caps := s.lxcContainerCaps(c)
+	fmt.Printf("caps=%s\n", caps)
+	for capType, want := range tests {
+		if want.Full {
+			if !caps.Full(capType) {
+				c.Errorf("want %s=\"full\", got %s", capType, caps.StringCap(capType))
+			}
+		} else if want.Empty {
+			if !caps.Empty(capType) {
+				c.Errorf("want %s=\"empty\", got %s", capType, caps.StringCap(capType))
+			}
+		} else {
+			for _, ecap := range want.Enabled {
+				if !caps.Get(capType, ecap) {
+					c.Errorf("missing cap %s=%q", capType, ecap)
+				}
+			}
+			for _, dcap := range want.Disabled {
+				if caps.Get(capType, dcap) {
+					c.Errorf("extra cap %s=%q", capType, dcap)
+				}
+			}
+		}
+	}
+}
+
+func (s *LibvirtLXCSuite) lxcContainerCaps(c *C) capability.Capabilities {
+	container, ok := s.backend.(*libvirtLXC).containers[s.id]
+	if !ok {
+		c.Fatalf("missing container for job %s", s.id)
+	}
+
+	// libvirt_lxc process
+	procs, err := childrenOf(int(container.pid))
+	c.Assert(err, IsNil)
+	c.Assert(len(procs), Equals, 1)
+
+	// containerinit process
+	procs, err = childrenOf(procs[0].Pid())
+	c.Assert(err, IsNil)
+	c.Assert(len(procs), Equals, 1)
+
+	shPid := procs[0].Pid()
+	caps, err := capability.NewPid(shPid)
+	c.Assert(err, IsNil)
+
+	return caps
+}
+
 func listDevices(dir string, tty io.ReadWriter) (deviceSlice, error) {
 	devices := deviceSlice{}
 	bufr := bufio.NewReader(tty)
@@ -320,4 +426,19 @@ func (s deviceSlice) get(name string) (device, bool) {
 		}
 	}
 	return device{}, false
+}
+
+func childrenOf(pid int) ([]ps.Process, error) {
+	allProcs, err := ps.Processes()
+	if err != nil {
+		return nil, err
+	}
+
+	procs := []ps.Process{}
+	for _, proc := range allProcs {
+		if proc.PPid() == pid {
+			procs = append(procs, proc)
+		}
+	}
+	return procs, nil
 }
