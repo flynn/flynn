@@ -621,7 +621,7 @@ func (c *Cluster) dumpLogs(w io.Writer) {
 		run(inst, "ps faux")
 		run(inst, "cat /tmp/flynn-host.log")
 		run(inst, "cat /tmp/debug-info.log")
-		run(inst, "cat /var/log/libvirt/libvirtd.log")
+		run(inst, "sudo cat /var/log/libvirt/libvirtd.log")
 	}
 
 	printLogs := func(instances []*Instance) {
