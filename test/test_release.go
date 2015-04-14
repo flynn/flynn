@@ -91,9 +91,11 @@ bash -e /tmp/install-flynn -r "http://{{ .Blobstore }}"
 `))
 
 var updateScript = template.Must(template.New("update-script").Parse(`
+timeout --signal=QUIT --kill-after=10 10m bash -ex <<-SCRIPT
 cd ~/go/src/github.com/flynn/flynn
 tuf --dir test/release root-keys | tuf-client init --store /tmp/tuf.db http://{{ .Blobstore }}/tuf
 flynn-host update --repository http://{{ .Blobstore }}/tuf --tuf-db /tmp/tuf.db
+SCRIPT
 `))
 
 func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
