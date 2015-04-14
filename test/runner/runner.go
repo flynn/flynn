@@ -175,7 +175,6 @@ func (r *Runner) start() error {
 	router.POST("/cluster/:cluster", r.clusterAPI(r.addHost))
 	router.POST("/cluster/:cluster/release", r.clusterAPI(r.addReleaseHosts))
 	router.DELETE("/cluster/:cluster/:host", r.clusterAPI(r.removeHost))
-	router.GET("/cluster/:cluster/dump-logs", r.clusterAPI(r.dumpLogs))
 
 	srv := &http.Server{
 		Addr:      args.ListenAddr,
@@ -269,8 +268,7 @@ cmd="bin/flynn-test \
   --cluster-api https://{{ .Cluster.BridgeIP }}:{{ .ListenPort }}/cluster/{{ .Cluster.ID }} \
   --cli $(pwd)/../cli/bin/flynn \
   --router-ip {{ .Cluster.RouterIP }} \
-  --debug \
-  --dump-logs"
+  --debug"
 
 timeout --signal=QUIT --kill-after=10 20m $cmd
 `[1:]))
@@ -350,11 +348,15 @@ func (r *Runner) build(b *Build) (err error) {
 
 	var script bytes.Buffer
 	testRunScript.Execute(&script, map[string]interface{}{"Cluster": c, "ListenPort": listenPort})
-	return c.RunWithEnv(script.String(), &cluster.Streams{
+	err = c.RunWithEnv(script.String(), &cluster.Streams{
 		Stdin:  bytes.NewBuffer(config.Marshal()),
 		Stdout: out,
 		Stderr: out,
 	}, map[string]string{"TEST_RUNNER_AUTH_KEY": r.authKey})
+	if err != nil {
+		c.DumpLogs(out)
+	}
+	return err
 }
 
 var s3attempts = attempt.Strategy{
@@ -737,11 +739,6 @@ func (r *Runner) removeHost(c *cluster.Cluster, w http.ResponseWriter, q url.Val
 		return err
 	}
 	w.WriteHeader(200)
-	return nil
-}
-
-func (r *Runner) dumpLogs(c *cluster.Cluster, w http.ResponseWriter, q url.Values, ps httprouter.Params) error {
-	c.DumpLogs(w)
 	return nil
 }
 
