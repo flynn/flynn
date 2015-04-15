@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -382,6 +383,45 @@ func (s *LibvirtLXCSuite) TestLibvirtCgroups(c *C) {
 		if _, ok := seenGroups[name]; !ok {
 			c.Errorf("unexepected cgroup %q", name)
 		}
+	}
+}
+
+func (s *LibvirtLXCSuite) TestLibvirtEnv(c *C) {
+	want := sort.StringSlice{
+		fmt.Sprintf("HOSTNAME=%s", s.id),
+		"HOME=/",
+		"TERM=xterm",
+		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+		"PWD=/",
+		"container=lxc-libvirt",
+	}
+	want.Sort()
+
+	got, err := s.containerEnv()
+	c.Assert(err, IsNil)
+
+	gotSlice := sort.StringSlice(got)
+	gotSlice.Sort()
+
+	c.Assert(want, DeepEquals, gotSlice)
+}
+
+func (s *LibvirtLXCSuite) containerEnv() ([]string, error) {
+	bufr := bufio.NewReader(s.tty)
+
+	fmt.Fprintf(s.tty, "/bin/strings /proc/self/environ ; echo EOF\n")
+
+	env := []string{}
+	for {
+		line, err := bufr.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+		if line == "EOF\n" {
+			return env, nil
+		}
+
+		env = append(env, strings.TrimSpace(line))
 	}
 }
 
