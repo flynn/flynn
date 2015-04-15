@@ -139,7 +139,7 @@ func (s *LibvirtLXCSuite) TearDownSuite(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *LibvirtLXCSuite) TestLibvirtContainerDevices(c *C) {
+func (s *LibvirtLXCSuite) TestLibvirtDevices(c *C) {
 	dirs := map[string]deviceSlice{
 		"/dev": deviceSlice{
 			// block devices
@@ -205,7 +205,7 @@ func (s *LibvirtLXCSuite) TestLibvirtContainerDevices(c *C) {
 	}
 }
 
-func (s *LibvirtLXCSuite) TestLibvirtContainerNamespaces(c *C) {
+func (s *LibvirtLXCSuite) TestLibvirtNamespaces(c *C) {
 	dirs := map[string]deviceSlice{
 		"/proc/self/ns": deviceSlice{
 			device{Name: "ipc", Mode: "lrwxrwxrwx", LinkTo: "ipc"},
@@ -242,7 +242,7 @@ func (s *LibvirtLXCSuite) TestLibvirtContainerNamespaces(c *C) {
 }
 
 func (s *LibvirtLXCSuite) TestLibvirtCapabilities(c *C) {
-	tests := map[capability.CapType]struct {
+	table := map[capability.CapType]struct {
 		Empty, Full bool
 
 		Enabled, Disabled []capability.Cap
@@ -296,8 +296,7 @@ func (s *LibvirtLXCSuite) TestLibvirtCapabilities(c *C) {
 	}
 
 	caps := s.lxcContainerCaps(c)
-	fmt.Printf("caps=%s\n", caps)
-	for capType, want := range tests {
+	for capType, want := range table {
 		if want.Full {
 			if !caps.Full(capType) {
 				c.Errorf("want %s=\"full\", got %s", capType, caps.StringCap(capType))
@@ -317,6 +316,71 @@ func (s *LibvirtLXCSuite) TestLibvirtCapabilities(c *C) {
 					c.Errorf("extra cap %s=%q", capType, dcap)
 				}
 			}
+		}
+	}
+}
+
+func (s *LibvirtLXCSuite) TestLibvirtCgroups(c *C) {
+	type properties map[string]interface{}
+
+	tests := []struct {
+		Group       string
+		Controllers map[string]properties
+	}{
+		{
+			Group: fmt.Sprintf("/machine/%s.libvirt-lxc", s.id),
+			Controllers: map[string]properties{
+				"memory": properties{
+					"memory.limit_in_bytes": "1073741824", // 1GB
+				},
+				// defaults
+				"cpuset":  nil,
+				"cpu":     nil,
+				"cpuacct": nil,
+				"devices": nil,
+				"freezer": nil,
+				"blkio":   nil,
+			},
+		},
+		{
+			Group: "/",
+			Controllers: map[string]properties{
+				"net_cls":    nil,
+				"perf_event": nil,
+			},
+		},
+	}
+
+	table, err := s.cgroupTable()
+	c.Assert(err, IsNil)
+
+	byGroup := map[string][]string{}
+	for _, cgroup := range table {
+		byGroup[cgroup.Group] = append(byGroup[cgroup.Group], cgroup.Controllers...)
+	}
+
+	seenGroups := map[string]bool{}
+	for _, want := range tests {
+		seenGroups[want.Group] = true
+
+		_, ok := byGroup[want.Group]
+		if !ok {
+			c.Errorf("missing cgroup %q", want.Group)
+			continue
+		}
+
+		for controller, properties := range want.Controllers {
+			for key, wantVal := range properties {
+				gotVal, err := cgroupProperty(want.Group, controller, key)
+				c.Assert(err, IsNil)
+				c.Assert(wantVal, Equals, gotVal)
+			}
+		}
+	}
+
+	for name := range byGroup {
+		if _, ok := seenGroups[name]; !ok {
+			c.Errorf("unexepected cgroup %q", name)
 		}
 	}
 }
@@ -342,6 +406,44 @@ func (s *LibvirtLXCSuite) lxcContainerCaps(c *C) capability.Capabilities {
 	c.Assert(err, IsNil)
 
 	return caps
+}
+
+func (s *LibvirtLXCSuite) cgroupTable() ([]cgroupEntry, error) {
+	bufr := bufio.NewReader(s.tty)
+
+	fmt.Fprintf(s.tty, "cat /proc/self/cgroup ; echo EOF\n")
+
+	cgroups := []cgroupEntry{}
+	for {
+		line, err := bufr.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+		if line == "EOF\n" {
+			return cgroups, nil
+		}
+
+		parts := strings.Split(line, ":")
+		if len(parts) != 3 {
+			return nil, fmt.Errorf("unexpected /proc/self/cgroup line: %q", line)
+		}
+
+		cgroups = append(cgroups, cgroupEntry{
+			ID:          parts[0],
+			Controllers: strings.Split(parts[1], ","),
+			Group:       strings.TrimSpace(parts[2]),
+		})
+	}
+}
+
+type cgroupEntry struct {
+	ID, Group   string
+	Controllers []string
+}
+
+func cgroupProperty(group, controller, property string) (string, error) {
+	val, err := ioutil.ReadFile(filepath.Join("/sys/fs/cgroup", controller, group, property))
+	return strings.TrimSpace(string(val)), err
 }
 
 func listDevices(dir string, tty io.ReadWriter) (deviceSlice, error) {
