@@ -32,8 +32,7 @@ func (s *GitDeploySuite) TestEnvDir(t *c.C) {
 	t.Assert(r.flynn("env", "set", "FOO=bar", "BUILDPACK_URL=https://github.com/kr/heroku-buildpack-inline"), Succeeds)
 
 	push := r.git("push", "flynn", "master")
-	t.Assert(push, Succeeds)
-	t.Assert(push, OutputContains, "bar")
+	t.Assert(push, SuccessfulOutputContains, "bar")
 }
 
 func (s *GitDeploySuite) TestEmptyRelease(t *c.C) {
@@ -61,13 +60,11 @@ func (s *GitDeploySuite) TestBuildCaching(t *c.C) {
 
 	r.git("commit", "-m", "bump", "--allow-empty")
 	push = r.git("push", "flynn", "master")
-	t.Assert(push, Succeeds)
-	t.Assert(push, OutputContains, "cached: 0")
+	t.Assert(push, SuccessfulOutputContains, "cached: 0")
 
 	r.git("commit", "-m", "bump", "--allow-empty")
 	push = r.git("push", "flynn", "master")
-	t.Assert(push, Succeeds)
-	t.Assert(push, OutputContains, "cached: 1")
+	t.Assert(push, SuccessfulOutputContains, "cached: 1")
 }
 
 func (s *GitDeploySuite) TestAppRecreation(t *c.C) {
@@ -133,10 +130,9 @@ func (s *GitDeploySuite) runBuildpackTestWithResponsePattern(t *c.C, name string
 	}
 
 	push := r.git("push", "flynn", "master")
-	t.Assert(push, Succeeds)
-	t.Assert(push, OutputContains, "Creating release")
-	t.Assert(push, OutputContains, "Application deployed")
-	t.Assert(push, OutputContains, "* [new branch]      master -> master")
+	t.Assert(push, SuccessfulOutputContains, "Creating release")
+	t.Assert(push, SuccessfulOutputContains, "Application deployed")
+	t.Assert(push, SuccessfulOutputContains, "* [new branch]      master -> master")
 
 	t.Assert(r.flynn("scale", "web=1"), Succeeds)
 

@@ -94,17 +94,17 @@ func testApp(s *CLISuite, t *c.C, remote string) {
 	} else {
 		t.Assert(app.flynn("create", "-r", remote, "-y", name), Outputs, fmt.Sprintf("Created %s\n", name))
 	}
-	t.Assert(app.flynn("apps"), OutputContains, name)
-	t.Assert(app.flynn("-c", "default", "apps"), OutputContains, name)
+	t.Assert(app.flynn("apps"), SuccessfulOutputContains, name)
+	t.Assert(app.flynn("-c", "default", "apps"), SuccessfulOutputContains, name)
 	if remote == "" {
-		t.Assert(app.git("remote", "-v"), c.Not(OutputContains), flynnRemote)
+		t.Assert(app.git("remote", "-v"), c.Not(SuccessfulOutputContains), flynnRemote)
 	} else {
-		t.Assert(app.git("remote", "-v"), OutputContains, flynnRemote)
+		t.Assert(app.git("remote", "-v"), SuccessfulOutputContains, flynnRemote)
 	}
 
 	// make sure flynn components are listed
-	t.Assert(app.flynn("apps"), OutputContains, "router")
-	t.Assert(app.flynn("-c", "default", "apps"), OutputContains, "router")
+	t.Assert(app.flynn("apps"), SuccessfulOutputContains, "router")
+	t.Assert(app.flynn("-c", "default", "apps"), SuccessfulOutputContains, "router")
 
 	// flynn delete
 	if remote == "flynn" {
@@ -116,7 +116,7 @@ func testApp(s *CLISuite, t *c.C, remote string) {
 			t.Assert(app.flynn("delete", "--yes", "-r", remote), Succeeds)
 		}
 	}
-	t.Assert(app.git("remote", "-v"), c.Not(OutputContains), flynnRemote)
+	t.Assert(app.git("remote", "-v"), c.Not(SuccessfulOutputContains), flynnRemote)
 }
 
 func (s *CLISuite) TestApp(t *c.C) {
@@ -157,13 +157,13 @@ func (s *CLISuite) TestKey(t *c.C) {
 	digest := md5.Sum(pubKey.Marshal())
 	fingerprint := formatKeyID(hex.EncodeToString(digest[:]))
 
-	t.Assert(app.flynn("key"), OutputContains, fingerprint)
+	t.Assert(app.flynn("key"), SuccessfulOutputContains, fingerprint)
 
 	t.Assert(app.git("commit", "--allow-empty", "-m", "should succeed"), Succeeds)
 	t.Assert(app.git("push", "flynn", "master"), Succeeds)
 
 	t.Assert(app.flynn("key", "remove", fingerprint), Succeeds)
-	t.Assert(app.flynn("key"), c.Not(OutputContains), fingerprint)
+	t.Assert(app.flynn("key"), c.Not(SuccessfulOutputContains), fingerprint)
 
 	t.Assert(app.git("commit", "--allow-empty", "-m", "should fail"), Succeeds)
 	t.Assert(app.git("push", "flynn", "master"), c.Not(Succeeds))
@@ -199,48 +199,48 @@ func (s *CLISuite) TestScale(t *c.C) {
 	scale := app.flynn("scale", "echoer=1")
 	_, jobID := app.waitFor(jobEvents{"echoer": {"up": 1}})
 	t.Assert(scale, Succeeds)
-	t.Assert(scale, OutputContains, "scaling echoer: 0=>1")
-	t.Assert(scale, OutputContains, fmt.Sprintf("==> echoer %s up", jobID))
-	t.Assert(scale, OutputContains, "scale completed")
+	t.Assert(scale, SuccessfulOutputContains, "scaling echoer: 0=>1")
+	t.Assert(scale, SuccessfulOutputContains, fmt.Sprintf("==> echoer %s up", jobID))
+	t.Assert(scale, SuccessfulOutputContains, "scale completed")
 
 	scale = app.flynn("scale", "echoer=3", "printer=1")
 	t.Assert(scale, Succeeds)
-	t.Assert(scale, OutputContains, "echoer: 1=>3")
-	t.Assert(scale, OutputContains, "printer: 0=>1")
-	t.Assert(scale, OutputContains, "scale completed")
+	t.Assert(scale, SuccessfulOutputContains, "echoer: 1=>3")
+	t.Assert(scale, SuccessfulOutputContains, "printer: 0=>1")
+	t.Assert(scale, SuccessfulOutputContains, "scale completed")
 
 	// no args should show current scale
 	scale = app.flynn("scale")
 	t.Assert(scale, Succeeds)
-	t.Assert(scale, OutputContains, "echoer=3")
-	t.Assert(scale, OutputContains, "printer=1")
-	t.Assert(scale, OutputContains, "crasher=0")
-	t.Assert(scale, OutputContains, "omni=0")
+	t.Assert(scale, SuccessfulOutputContains, "echoer=3")
+	t.Assert(scale, SuccessfulOutputContains, "printer=1")
+	t.Assert(scale, SuccessfulOutputContains, "crasher=0")
+	t.Assert(scale, SuccessfulOutputContains, "omni=0")
 
 	// scale should only affect specified processes
 	scale = app.flynn("scale", "printer=2")
 	t.Assert(scale, Succeeds)
-	t.Assert(scale, OutputContains, "printer: 1=>2")
-	t.Assert(scale, OutputContains, "scale completed")
+	t.Assert(scale, SuccessfulOutputContains, "printer: 1=>2")
+	t.Assert(scale, SuccessfulOutputContains, "scale completed")
 	scale = app.flynn("scale")
 	t.Assert(scale, Succeeds)
-	t.Assert(scale, OutputContains, "echoer=3")
-	t.Assert(scale, OutputContains, "printer=2")
-	t.Assert(scale, OutputContains, "crasher=0")
-	t.Assert(scale, OutputContains, "omni=0")
+	t.Assert(scale, SuccessfulOutputContains, "echoer=3")
+	t.Assert(scale, SuccessfulOutputContains, "printer=2")
+	t.Assert(scale, SuccessfulOutputContains, "crasher=0")
+	t.Assert(scale, SuccessfulOutputContains, "omni=0")
 
 	// unchanged processes shouldn't appear in output
 	scale = app.flynn("scale", "echoer=3", "printer=0")
 	t.Assert(scale, Succeeds)
-	t.Assert(scale, OutputContains, "printer: 2=>0")
-	t.Assert(scale, c.Not(OutputContains), "echoer")
-	t.Assert(scale, OutputContains, "scale completed")
+	t.Assert(scale, SuccessfulOutputContains, "printer: 2=>0")
+	t.Assert(scale, c.Not(SuccessfulOutputContains), "echoer")
+	t.Assert(scale, SuccessfulOutputContains, "scale completed")
 
 	// --no-wait should not wait for scaling to complete
 	scale = app.flynn("scale", "--no-wait", "echoer=0")
 	t.Assert(scale, Succeeds)
-	t.Assert(scale, OutputContains, "scaling echoer: 3=>0")
-	t.Assert(scale, c.Not(OutputContains), "scale completed")
+	t.Assert(scale, SuccessfulOutputContains, "scaling echoer: 3=>0")
+	t.Assert(scale, c.Not(SuccessfulOutputContains), "scale completed")
 	app.waitFor(jobEvents{"echoer": {"down": 3}})
 }
 
@@ -315,7 +315,7 @@ func (s *CLISuite) TestRunSignal(t *c.C) {
 func (s *CLISuite) TestEnv(t *c.C) {
 	app := s.newCliTestApp(t)
 	t.Assert(app.flynn("env", "set", "ENV_TEST=var", "SECOND_VAL=2"), Succeeds)
-	t.Assert(app.flynn("env"), OutputContains, "ENV_TEST=var\nSECOND_VAL=2")
+	t.Assert(app.flynn("env"), SuccessfulOutputContains, "ENV_TEST=var\nSECOND_VAL=2")
 	t.Assert(app.flynn("env", "get", "ENV_TEST"), Outputs, "var\n")
 	// test that containers do contain the ENV var
 	t.Assert(app.sh("echo $ENV_TEST"), Outputs, "var\n")
@@ -352,9 +352,9 @@ func (s *CLISuite) TestRoute(t *c.C) {
 			return errors.New("unexpected output")
 		})
 		if contained {
-			t.Assert(res, OutputContains, str)
+			t.Assert(res, SuccessfulOutputContains, str)
 		} else {
-			t.Assert(res, c.Not(OutputContains), str)
+			t.Assert(res, c.Not(SuccessfulOutputContains), str)
 		}
 	}
 
@@ -394,7 +394,7 @@ func (s *CLISuite) TestRoute(t *c.C) {
 }
 
 func (s *CLISuite) TestProvider(t *c.C) {
-	t.Assert(s.flynn(t, "provider"), OutputContains, "postgres")
+	t.Assert(s.flynn(t, "provider"), SuccessfulOutputContains, "postgres")
 }
 
 func (s *CLISuite) TestResource(t *c.C) {
@@ -549,11 +549,11 @@ func (s *CLISuite) TestCluster(t *c.C) {
 
 	// cluster add
 	t.Assert(flynn("cluster", "add", "-g", "test.example.com:2222", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "test", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
-	t.Assert(flynn("cluster"), OutputContains, "test")
+	t.Assert(flynn("cluster"), SuccessfulOutputContains, "test")
 	t.Assert(flynn("cluster", "add", "-f", "-g", "test.example.com:2222", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "test", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
-	t.Assert(flynn("cluster"), OutputContains, "test")
+	t.Assert(flynn("cluster"), SuccessfulOutputContains, "test")
 	t.Assert(flynn("cluster", "add", "-f", "-d", "-g", "test.example.com:2222", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "test", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
-	t.Assert(flynn("cluster"), OutputContains, "test")
+	t.Assert(flynn("cluster"), SuccessfulOutputContains, "test")
 	// make sure the cluster is present in the config
 	cfg, err := config.ReadFile(file.Name())
 	t.Assert(err, c.IsNil)
@@ -562,26 +562,26 @@ func (s *CLISuite) TestCluster(t *c.C) {
 	t.Assert(cfg.Clusters[0].Name, c.Equals, "test")
 	// overwriting (without --force) should not work
 	t.Assert(flynn("cluster", "add", "test", "foo", "bar"), c.Not(Succeeds))
-	t.Assert(flynn("cluster"), OutputContains, "test")
-	t.Assert(flynn("cluster"), OutputContains, "(default)")
+	t.Assert(flynn("cluster"), SuccessfulOutputContains, "test")
+	t.Assert(flynn("cluster"), SuccessfulOutputContains, "(default)")
 	// change default cluster
-	t.Assert(flynn("cluster", "default", "test"), OutputContains, "\"test\" is now the default cluster.")
-	t.Assert(flynn("cluster", "default", "missing"), OutputContains, "Cluster \"missing\" not found.")
-	t.Assert(flynn("cluster", "default"), OutputContains, "test")
+	t.Assert(flynn("cluster", "default", "test"), SuccessfulOutputContains, "\"test\" is now the default cluster.")
+	t.Assert(flynn("cluster", "default", "missing"), OutputContains, "Cluster \"missing\" does not exist and cannot be set as default.")
+	t.Assert(flynn("cluster", "default"), SuccessfulOutputContains, "test")
 	cfg, err = config.ReadFile(file.Name())
 	t.Assert(err, c.IsNil)
 	t.Assert(cfg.Default, c.Equals, "test")
 	// cluster remove
 	t.Assert(flynn("cluster", "remove", "test"), Succeeds)
-	t.Assert(flynn("cluster"), c.Not(OutputContains), "test")
+	t.Assert(flynn("cluster"), c.Not(SuccessfulOutputContains), "test")
 	cfg, err = config.ReadFile(file.Name())
 	t.Assert(err, c.IsNil)
 	t.Assert(cfg.Clusters, c.HasLen, 0)
 	// cluster remove default and set next available
 	t.Assert(flynn("cluster", "add", "-d", "-g", "test.example.com:2222", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "test", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
 	t.Assert(flynn("cluster", "add", "-g", "next.example.com:2222", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "next", "https://controller.next.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
-	t.Assert(flynn("cluster", "remove", "test"), OutputContains, "Cluster \"test\" removed and \"next\" is now the default cluster.")
-	t.Assert(flynn("cluster", "default"), OutputContains, "next")
+	t.Assert(flynn("cluster", "remove", "test"), SuccessfulOutputContains, "Cluster \"test\" removed and \"next\" is now the default cluster.")
+	t.Assert(flynn("cluster", "default"), SuccessfulOutputContains, "next")
 }
 
 func (s *CLISuite) TestRelease(t *c.C) {
@@ -618,7 +618,7 @@ func (s *CLISuite) TestRelease(t *c.C) {
 	app.waitFor(jobEvents{"env": {"up": 1}})
 	envLog := app.flynn("log")
 	t.Assert(envLog, Succeeds)
-	t.Assert(envLog, OutputContains, "GLOBAL=FOO")
-	t.Assert(envLog, OutputContains, "ENV_ONLY=BAZ")
-	t.Assert(envLog, c.Not(OutputContains), "ECHOER_ONLY=BAR")
+	t.Assert(envLog, SuccessfulOutputContains, "GLOBAL=FOO")
+	t.Assert(envLog, SuccessfulOutputContains, "ENV_ONLY=BAZ")
+	t.Assert(envLog, c.Not(SuccessfulOutputContains), "ECHOER_ONLY=BAR")
 }

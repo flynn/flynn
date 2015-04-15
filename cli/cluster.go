@@ -127,8 +127,7 @@ func runClusterDefault(args *docopt.Args) error {
 	}
 
 	if !config.SetDefault(name) {
-		log.Printf("Cluster %q not found.", name)
-		return nil
+		return fmt.Errorf("Cluster %q does not exist and cannot be set as default.", name)
 	}
 	if err := config.SaveTo(configPath()); err != nil {
 		return err

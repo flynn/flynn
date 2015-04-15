@@ -34,7 +34,6 @@ func (s *GitreceiveSuite) TestRepoCaching(t *c.C) {
 
 	r.git("commit", "-m", "bump", "--allow-empty")
 	push = r.git("push", "flynn", "master", "--progress")
-	t.Assert(push, Succeeds)
 	// should only contain one object
-	t.Assert(push, OutputContains, "Counting objects: 1, done.")
+	t.Assert(push, SuccessfulOutputContains, "Counting objects: 1, done.")
 }
