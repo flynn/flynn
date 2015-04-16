@@ -348,6 +348,27 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 	return &NetworkInfo{BridgeAddr: l.bridgeAddr.String(), Nameservers: dnsConf.Servers}, nil
 }
 
+var libvirtAttempts = attempt.Strategy{
+	Total: 10 * time.Second,
+	Delay: 200 * time.Millisecond,
+}
+
+func (l *LibvirtLXCBackend) withConnRetries(f func() error) error {
+	return libvirtAttempts.Run(func() error {
+		err := f()
+		if err != nil {
+			if alive, err := l.libvirt.IsAlive(); err != nil || !alive {
+				conn, connErr := libvirt.NewVirConnection("lxc:///")
+				if connErr != nil {
+					return connErr
+				}
+				l.libvirt = conn
+			}
+		}
+		return err
+	})
+}
+
 func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error) {
 	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "run", "job.id": job.ID})
 	g.Log(grohl.Data{"at": "start", "job.artifact.uri": job.Artifact.URI, "job.cmd": job.Config.Cmd})
@@ -568,15 +589,20 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		}}
 	}
 
+	// attempt to run libvirt commands multiple times in case the libvirt daemon is
+	// temporarily unavailable (e.g. it has restarted, which sometimes happens in CI)
 	g.Log(grohl.Data{"at": "define_domain"})
-	vd, err := l.libvirt.DomainDefineXML(string(domain.XML()))
-	if err != nil {
+	var vd libvirt.VirDomain
+	if err := l.withConnRetries(func() (err error) {
+		vd, err = l.libvirt.DomainDefineXML(string(domain.XML()))
+		return
+	}); err != nil {
 		g.Log(grohl.Data{"at": "define_domain", "status": "error", "err": err})
 		return err
 	}
 
 	g.Log(grohl.Data{"at": "create_domain"})
-	if err := vd.Create(); err != nil {
+	if err := l.withConnRetries(vd.Create); err != nil {
 		g.Log(grohl.Data{"at": "create_domain", "status": "error", "err": err})
 		return err
 	}
