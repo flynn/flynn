@@ -174,6 +174,8 @@ func (s *HostSuite) TestVolumeCreationFailsForNonexistentProvider(t *c.C) {
 }
 
 func (s *HostSuite) TestVolumePersistence(t *c.C) {
+	t.Skip("test intermittently fails due to host bind mount leaks, see https://github.com/flynn/flynn/issues/1125")
+
 	// most of the volume tests (snapshotting, quotas, etc) are unit tests under their own package.
 	// these tests exist to cover the last mile where volumes are bind-mounted into containers.
 
