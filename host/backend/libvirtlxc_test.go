@@ -406,6 +406,74 @@ func (s *LibvirtLXCSuite) TestLibvirtEnv(c *C) {
 	c.Assert(want, DeepEquals, gotSlice)
 }
 
+func (s *LibvirtLXCSuite) TestLibvirtMounts(c *C) {
+	tests := []mount{
+		{"devfs", "/dev", "tmpfs", []string{"rw", "mode=755"}},
+		{"devpts", "/dev/pts", "devpts", []string{"rw", "mode=620", "ptmxmode=666"}},
+		{"sysfs", "/sys", "sysfs", []string{"ro"}},
+		{"proc", "/proc", "proc", []string{"rw"}},
+		{"proc", "/proc/sys", "proc", []string{"ro"}},
+		{"securityfs", "/sys/kernel/security", "securityfs", []string{"ro"}},
+	}
+
+	gots, err := s.containerMounts()
+	c.Assert(err, IsNil)
+
+	for _, want := range tests {
+		var got mount
+		for i := range gots {
+			if gots[i].Path == want.Path {
+				got = gots[i]
+				break
+			}
+		}
+		if got.Path == "" {
+			c.Errorf("missing mount %v", want)
+			continue
+		}
+
+		c.Assert(want.Dev, Equals, got.Dev)
+		c.Assert(want.Type, Equals, got.Type)
+
+		sort.Strings(got.Ops)
+		for _, op := range want.Ops {
+			if sort.SearchStrings(got.Ops, op) == len(got.Ops) {
+				c.Errorf("missing op %q", op)
+			}
+		}
+	}
+}
+
+type mount struct {
+	Dev, Path, Type string
+	Ops             []string
+}
+
+func (s *LibvirtLXCSuite) containerMounts() ([]mount, error) {
+	bufr := bufio.NewReader(s.tty)
+
+	fmt.Fprintf(s.tty, "cat /proc/self/mounts ; echo EOF\n")
+
+	mounts := []mount{}
+	for {
+		line, err := bufr.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+		if line == "EOF\n" {
+			return mounts, nil
+		}
+
+		parts := strings.Fields(line)
+		mounts = append(mounts, mount{
+			Dev:  parts[0],
+			Path: parts[1],
+			Type: parts[2],
+			Ops:  strings.Split(parts[3], ","),
+		})
+	}
+}
+
 func (s *LibvirtLXCSuite) containerEnv() ([]string, error) {
 	bufr := bufio.NewReader(s.tty)
 
