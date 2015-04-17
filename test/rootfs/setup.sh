@@ -100,21 +100,6 @@ echo deb https://get.docker.com/ubuntu docker main \
 apt-get update
 apt-get install -y lxc-docker aufs-tools apparmor
 
-# patch Docker Upstart conf - see https://github.com/docker/docker/pull/11945
-patch /etc/init/docker.conf <<PATCH
---- docker.conf
-+++ docker.conf
-@@ -49,7 +49,7 @@
- 	fi
- 	if ! printf "%s" "\$DOCKER_OPTS" | grep -qE -e '-H|--host'; then
- 		while ! [ -e /var/run/docker.sock ]; do
--			initctl status \$UPSTART_JOB | grep -q "stop/" && exit 1
-+			initctl status \$UPSTART_JOB | grep -qE "(stop|respawn)/" && exit 1
- 			echo "Waiting for /var/run/docker.sock"
- 			sleep 0.1
- 		done
-PATCH
-
 # install flynn build dependencies: tup
 apt-get install -y software-properties-common
 apt-add-repository 'deb http://ppa.launchpad.net/titanous/tup/ubuntu trusty main'
