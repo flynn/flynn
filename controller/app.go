@@ -179,13 +179,11 @@ func (r *AppRepo) Remove(id string) error {
 		return err
 	}
 
-	if !idPattern.MatchString(id) {
-		app, err := selectApp(r.db, id, false)
-		if err != nil {
-			return err
-		}
-		id = app.ID
+	app, err := selectApp(r.db, id, false)
+	if err != nil {
+		return err
 	}
+	id = app.ID
 	_, err = tx.Exec("UPDATE apps SET deleted_at = now() WHERE app_id = $1 AND deleted_at IS NULL", id)
 	if err != nil {
 		tx.Rollback()
