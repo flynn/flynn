@@ -259,6 +259,13 @@ func streamJobs(ctx context.Context, req *http.Request, w http.ResponseWriter, a
 	l, _ := ctxhelper.LoggerFromContext(ctx)
 	s := sse.NewStream(w, ch, l)
 	s.Serve()
+	defer func() {
+		if err == nil {
+			s.Close()
+		} else {
+			s.CloseWithError(err)
+		}
+	}()
 
 	connected := make(chan struct{})
 	done := make(chan struct{})
