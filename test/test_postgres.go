@@ -23,8 +23,7 @@ var _ = c.ConcurrentSuite(&PostgresSuite{})
 // Check postgres config to avoid regressing on https://github.com/flynn/flynn/issues/101
 func (s *PostgresSuite) TestSSLRenegotiationLimit(t *c.C) {
 	query := flynn(t, "/", "-a", "controller", "pg", "psql", "--", "-c", "SHOW ssl_renegotiation_limit")
-	t.Assert(query, Succeeds)
-	t.Assert(query, OutputContains, "ssl_renegotiation_limit \n-------------------------\n 0\n(1 row)")
+	t.Assert(query, SuccessfulOutputContains, "ssl_renegotiation_limit \n-------------------------\n 0\n(1 row)")
 }
 
 func (s *PostgresSuite) TestDumpRestore(t *c.C) {
@@ -43,8 +42,7 @@ func (s *PostgresSuite) TestDumpRestore(t *c.C) {
 	r.flynn("pg", "restore", "-f", file)
 
 	query := r.flynn("pg", "psql", "--", "-c", "SELECT * FROM foos")
-	t.Assert(query, Succeeds)
-	t.Assert(query, OutputContains, "foobar")
+	t.Assert(query, SuccessfulOutputContains, "foobar")
 }
 
 type pgDeploy struct {

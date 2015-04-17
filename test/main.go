@@ -316,9 +316,6 @@ func checkCmdResult(params []interface{}, names []string) (ok bool, msg, s strin
 		msg = "output must be a []byte or string"
 		return
 	}
-	if res.Err != nil {
-		return false, "", "", nil
-	}
 	ok = true
 	return
 }
@@ -359,6 +356,29 @@ func (succeedsChecker) Check(params []interface{}, names []string) (bool, string
 		return false, "result must be a *CmdResult"
 	}
 	return res.Err == nil, ""
+}
+
+var SuccessfulOutputContains check.Checker = successfulOutputContainsChecker{
+	&check.CheckerInfo{
+		Name:   "SuccessfulOutputContains",
+		Params: []string{"result", "contains"},
+	},
+	Succeeds,
+	OutputContains,
+}
+
+type successfulOutputContainsChecker struct {
+	*check.CheckerInfo
+	succeeds       check.Checker
+	outputContains check.Checker
+}
+
+func (s successfulOutputContainsChecker) Check(params []interface{}, names []string) (bool, string) {
+	ok, res := s.succeeds.Check(params, names)
+	if ok {
+		return s.outputContains.Check(params, names)
+	}
+	return ok, res
 }
 
 type matchesChecker struct {
