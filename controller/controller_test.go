@@ -173,6 +173,36 @@ func (s *S) TestDeleteApp(c *C) {
 	}
 }
 
+func (s *S) TestDeleteAppUUIDName(c *C) {
+	for _, useName := range []bool{false, true} {
+		app := s.createTestApp(c, &ct.App{Name: random.UUID()})
+
+		var appID string
+		if useName {
+			appID = app.Name
+		} else {
+			appID = app.ID
+		}
+		c.Assert(s.c.DeleteApp(appID), IsNil)
+
+		_, err := s.c.GetApp(appID)
+		c.Assert(err, Equals, controller.ErrNotFound)
+	}
+}
+
+func (s *S) TestDeleteNonExistentApp(c *C) {
+	for _, useUUID := range []bool{false, true} {
+		var appID string
+
+		if useUUID {
+			appID = "foobar"
+		} else {
+			appID = random.UUID()
+		}
+		c.Assert(s.c.DeleteApp(appID), Equals, controller.ErrNotFound)
+	}
+}
+
 func (s *S) TestRecreateApp(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "recreate-app"})
 
