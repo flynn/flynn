@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
@@ -257,7 +256,8 @@ func streamJobs(ctx context.Context, req *http.Request, w http.ResponseWriter, a
 
 	ch := make(chan *ct.JobEvent)
 	l, _ := ctxhelper.LoggerFromContext(ctx)
-	s := sse.NewStream(w, ch, l)
+	log := l.New("fn", "streamJobs", "app_id", app.ID)
+	s := sse.NewStream(w, ch, log)
 	s.Serve()
 	defer func() {
 		if err == nil {
@@ -267,28 +267,11 @@ func streamJobs(ctx context.Context, req *http.Request, w http.ResponseWriter, a
 		}
 	}()
 
-	connected := make(chan struct{})
-	done := make(chan struct{})
-	listenEvent := func(ev pq.ListenerEventType, listenErr error) {
-		switch ev {
-		case pq.ListenerEventConnected:
-			close(connected)
-		case pq.ListenerEventDisconnected:
-			if done != nil {
-				close(done)
-				done = nil
-			}
-		case pq.ListenerEventConnectionAttemptFailed:
-			err = listenErr
-			if done != nil {
-				close(done)
-				done = nil
-			}
-		}
+	listener, err := repo.db.Listen("job_events:"+postgres.FormatUUID(app.ID), log)
+	if err != nil {
+		return err
 	}
-	listener := pq.NewListener(repo.db.DSN(), 10*time.Second, time.Minute, listenEvent)
 	defer listener.Close()
-	listener.Listen("job_events:" + postgres.FormatUUID(app.ID))
 
 	var currID int64
 	if lastID > 0 || count > 0 {
@@ -304,19 +287,14 @@ func streamJobs(ctx context.Context, req *http.Request, w http.ResponseWriter, a
 		}
 	}
 
-	select {
-	case <-done:
-		return
-	case <-connected:
-	}
-
 	for {
 		select {
 		case <-s.Done:
 			return
-		case <-done:
-			return
-		case n := <-listener.Notify:
+		case n, ok := <-listener.Notify:
+			if !ok {
+				return listener.Err
+			}
 			id, err := strconv.ParseInt(n.Extra, 10, 64)
 			if err != nil {
 				return err

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/ctxhelper"
@@ -191,22 +191,16 @@ func (r *FormationRepo) expandFormation(formation *ct.Formation) (*ct.ExpandedFo
 }
 
 func (r *FormationRepo) startListener() error {
-	// TODO: get connection string from somewhere
-	listenerEvent := func(ev pq.ListenerEventType, err error) {
-		if err != nil {
-			fmt.Println("LISTENER error:", err)
-		}
-		// TODO: handle errors
-	}
-	listener := pq.NewListener(r.db.DSN(), 10*time.Second, time.Minute, listenerEvent)
-	if err := listener.Listen("formations"); err != nil {
+	log := log15.New("component", "controller", "fn", "FormationRepo.startListener")
+	listener, err := r.db.Listen("formations", log)
+	if err != nil {
 		return err
 	}
 	go func() {
 		for {
 			select {
 			case n, ok := <-listener.Notify:
-				if !ok || n == nil {
+				if !ok {
 					r.unsubscribeAll()
 					return
 				}
@@ -241,6 +235,7 @@ func (r *FormationRepo) Subscribe(ch chan *ct.ExpandedFormation, stopCh <-chan s
 	r.subMtx.Unlock()
 	if startListener {
 		if err := r.startListener(); err != nil {
+			r.Unsubscribe(ch)
 			return err
 		}
 	}

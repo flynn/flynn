@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
@@ -200,9 +199,6 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 	httphelper.JSON(w, 200, deployment)
 }
 
-// Deployment events
-
-// TODO: share with controller streamJobs
 func streamDeploymentEvents(ctx context.Context, req *http.Request, w http.ResponseWriter, deploymentID string, repo *DeploymentRepo) (err error) {
 	var lastID int64
 	if req.Header.Get("Last-Event-Id") != "" {
@@ -213,8 +209,9 @@ func streamDeploymentEvents(ctx context.Context, req *http.Request, w http.Respo
 	}
 
 	l, _ := ctxhelper.LoggerFromContext(ctx)
+	log := l.New("fn", "streamDeploymentEvents", "id", deploymentID)
 	ch := make(chan *ct.DeploymentEvent)
-	s := sse.NewStream(w, ch, l)
+	s := sse.NewStream(w, ch, log)
 	s.Serve()
 	defer func() {
 		if err == nil {
@@ -224,22 +221,11 @@ func streamDeploymentEvents(ctx context.Context, req *http.Request, w http.Respo
 		}
 	}()
 
-	connected := make(chan struct{})
-	done := make(chan struct{})
-	listenEvent := func(ev pq.ListenerEventType, listenErr error) {
-		switch ev {
-		case pq.ListenerEventConnected:
-			close(connected)
-		case pq.ListenerEventDisconnected:
-			close(done)
-		case pq.ListenerEventConnectionAttemptFailed:
-			err = listenErr
-			close(done)
-		}
+	listener, err := repo.db.Listen("deployment_events:"+postgres.FormatUUID(deploymentID), log)
+	if err != nil {
+		return err
 	}
-	listener := pq.NewListener(repo.db.DSN(), 10*time.Second, time.Minute, listenEvent)
 	defer listener.Close()
-	listener.Listen("deployment_events:" + postgres.FormatUUID(deploymentID))
 
 	events, err := repo.listEvents(deploymentID, lastID)
 	if err != nil {
@@ -251,19 +237,14 @@ func streamDeploymentEvents(ctx context.Context, req *http.Request, w http.Respo
 		ch <- e
 	}
 
-	select {
-	case <-done:
-		return
-	case <-connected:
-	}
-
 	for {
 		select {
 		case <-s.Done:
 			return
-		case <-done:
-			return
-		case n := <-listener.Notify:
+		case n, ok := <-listener.Notify:
+			if !ok {
+				return listener.Err
+			}
 			id, err := strconv.ParseInt(n.Extra, 10, 64)
 			if err != nil {
 				return err
