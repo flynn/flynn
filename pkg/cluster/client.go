@@ -11,6 +11,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -40,7 +41,7 @@ type ServiceFunc func(name string) discoverd.Service
 // leader and return a Client. If services is nil, the default discoverd
 // client is used.
 func NewClientWithServices(services ServiceFunc) (*Client, error) {
-	httpClient := &http.Client{Transport: &http.Transport{Dial: httpclient.RetryDial}}
+	httpClient := &http.Client{Transport: &http.Transport{Dial: dialer.Retry.Dial}}
 	return NewClientWithHTTP(services, httpClient)
 }
 

@@ -13,8 +13,13 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/appliance/postgresql/state"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/shutdown"
 )
+
+func init() {
+	pq.DefaultDialer = dialer.Retry
+}
 
 func New(db *sql.DB, dsn string) *DB {
 	return &DB{

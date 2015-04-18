@@ -13,6 +13,7 @@ import (
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/pkg/pinned"
 	"github.com/flynn/flynn/pkg/stream"
@@ -49,7 +50,7 @@ func newClient(key string, url string, http *http.Client) *Client {
 // NewClient creates a new Client pointing at uri and using key for
 // authentication.
 func NewClient(uri, key string) (*Client, error) {
-	httpClient := &http.Client{Transport: &http.Transport{Dial: httpclient.RetryDial}}
+	httpClient := &http.Client{Transport: &http.Transport{Dial: dialer.Retry.Dial}}
 	return NewClientWithHTTP(uri, key, httpClient)
 }
 

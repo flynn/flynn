@@ -22,6 +22,7 @@ import (
 	logaggc "github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/ctxhelper"
+	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -60,6 +61,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	pgxcfg.Dial = dialer.Retry.Dial
+
 	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
 		ConnConfig:   pgxcfg,
 		AfterConnect: que.PrepareStatements,
