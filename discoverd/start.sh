@@ -17,4 +17,5 @@ done
 exec /bin/discoverd -http-addr=:${PORT_0} \
                     -dns-addr=${ip}:${PORT_1} \
                     -recursors=${DNS_RECURSORS} \
-                    -etcd=${ETCD_ADDRS}
+                    -etcd=${ETCD_ADDRS} \
+					-notify="http://${ip}:1113/host/discoverd"
