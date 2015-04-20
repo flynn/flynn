@@ -82,6 +82,7 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 	for k, v := range current {
 		processes[k] = v
 	}
+	invalid := make([]string, 0, len(release.Processes))
 	for _, arg := range typeCounts {
 		i := strings.IndexRune(arg, '=')
 		if i < 0 {
@@ -91,7 +92,15 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 		if err != nil {
 			fmt.Println(commands["scale"].usage)
 		}
-		processes[arg[:i]] = val
+		processType := arg[:i]
+		if _, ok := release.Processes[processType]; ok {
+			processes[processType] = val
+		} else {
+			invalid = append(invalid, fmt.Sprintf("%q", processType))
+		}
+	}
+	if len(invalid) > 0 {
+		return errors.New(fmt.Sprintf("ERROR: Unknown process types: %s", strings.Join(invalid, ", ")))
 	}
 	formation.Processes = processes
 
