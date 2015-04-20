@@ -15,6 +15,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/pinned"
 	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/router/types"
@@ -421,4 +422,30 @@ func (c *Client) DeleteKey(id string) error {
 func (c *Client) ProviderList() ([]*ct.Provider, error) {
 	var providers []*ct.Provider
 	return providers, c.Get("/providers", &providers)
+}
+
+func (c *Client) Put(path string, in, out interface{}) error {
+	return c.send("PUT", path, in, out)
+}
+
+func (c *Client) Post(path string, in, out interface{}) error {
+	return c.send("POST", path, in, out)
+}
+
+func (c *Client) Get(path string, out interface{}) error {
+	return c.send("GET", path, nil, out)
+}
+
+func (c *Client) Delete(path string) error {
+	return c.send("DELETE", path, nil, nil)
+}
+
+func (c *Client) send(method, path string, in, out interface{}) (err error) {
+	for startTime := time.Now(); time.Since(startTime) < 10*time.Second; time.Sleep(100 * time.Millisecond) {
+		err = c.Send(method, path, in, out)
+		if !httphelper.IsRetryableError(err) {
+			break
+		}
+	}
+	return
 }
