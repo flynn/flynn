@@ -21,7 +21,7 @@ func (s *DeployerSuite) createRelease(t *c.C, process, strategy string) (*ct.App
 	s.controllerClient(t).UpdateApp(app)
 
 	jobStream := make(chan *ct.JobEvent)
-	scale, err := s.controllerClient(t).StreamJobEvents(app.Name, 0, jobStream)
+	scale, err := s.controllerClient(t).StreamJobEvents(app.Name, jobStream)
 	t.Assert(err, c.IsNil)
 	defer scale.Close()
 
@@ -84,7 +84,10 @@ func waitForDeploymentEvents(t *c.C, stream chan *ct.DeploymentEvent, expected [
 loop:
 	for {
 		select {
-		case e := <-stream:
+		case e, ok := <-stream:
+			if !ok {
+				t.Fatal("unexpected close of deployment event stream")
+			}
 			actual = append(actual, e)
 			if e.Status == "complete" || e.Status == "failed" {
 				debugf(t, "got deployment event: %s", e.Status)
@@ -282,7 +285,7 @@ func (s *DeployerSuite) TestOmniProcess(t *c.C) {
 	client := s.controllerClient(t)
 	app, release := s.createApp(t)
 	jEvents := make(chan *ct.JobEvent)
-	jobStream, err := client.StreamJobEvents(app.Name, 0, jEvents)
+	jobStream, err := client.StreamJobEvents(app.Name, jEvents)
 	t.Assert(err, c.IsNil)
 	defer jobStream.Close()
 	t.Assert(client.PutFormation(&ct.Formation{

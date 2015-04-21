@@ -1,15 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"net"
 	"strings"
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -43,7 +40,7 @@ func jobEventsEqual(expected, actual jobEvents) bool {
 
 type jobEvents map[string]map[string]int
 
-func waitForJobEvents(t *c.C, stream stream.Stream, events chan *ct.JobEvent, expected jobEvents) (lastID int64, jobID string) {
+func waitForJobEvents(t *c.C, stream stream.Stream, events chan *ct.JobEvent, expected jobEvents) (jobID string) {
 	debugf(t, "waiting for job events: %v", expected)
 	actual := make(jobEvents)
 	for {
@@ -54,7 +51,6 @@ func waitForJobEvents(t *c.C, stream stream.Stream, events chan *ct.JobEvent, ex
 				t.Fatalf("job event stream closed: %s", stream.Err())
 			}
 			debugf(t, "got job event: %s %s %s", event.Type, event.JobID, event.State)
-			lastID = event.ID
 			jobID = event.JobID
 			if _, ok := actual[event.Type]; !ok {
 				actual[event.Type] = make(map[string]int)
@@ -98,7 +94,7 @@ func (s *SchedulerSuite) TestScale(t *c.C) {
 	app, release := s.createApp(t)
 
 	events := make(chan *ct.JobEvent)
-	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, 0, events)
+	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, events)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 
@@ -162,41 +158,15 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	t.Assert(jobID, c.Not(c.Equals), "")
 	debugf(t, "current controller app[%s] host[%s] job[%s]", app.ID, hostID, jobID)
 
-	// start a second controller and wait for it to come up
+	// start another controller and wait for it to come up
 	events := make(chan *ct.JobEvent)
-	stream, err := s.controllerClient(t).StreamJobEvents("controller", 0, events)
+	stream, err := s.controllerClient(t).StreamJobEvents("controller", events)
 	t.Assert(err, c.IsNil)
+	defer stream.Close()
 	debug(t, "scaling the controller up")
 	formation.Processes["web"]++
 	t.Assert(s.controllerClient(t).PutFormation(formation), c.IsNil)
-	lastID, _ := waitForJobEvents(t, stream, events, jobEvents{"web": {"up": 1}})
-	stream.Close()
-
-	// get direct client for new controller
-	var client *controller.Client
-	attempts := attempt.Strategy{
-		Total: 10 * time.Second,
-		Delay: 500 * time.Millisecond,
-	}
-	t.Assert(attempts.Run(func() (err error) {
-		addrs, err := s.discoverdClient(t).Service("flynn-controller").Addrs()
-		if err != nil {
-			return err
-		}
-		if len(addrs) != 3 {
-			return fmt.Errorf("expected 3 controller processes, got %d", len(addrs))
-		}
-		addr := addrs[2]
-		debug(t, "new controller address: ", addr)
-		client, err = controller.NewClient("http://"+addr, s.clusterConf(t).Key)
-		if err != nil {
-			return err
-		}
-		events = make(chan *ct.JobEvent)
-		stream, err = client.StreamJobEvents("controller", lastID, events)
-		return
-	}), c.IsNil)
-	defer stream.Close()
+	waitForJobEvents(t, stream, events, jobEvents{"web": {"up": 1}})
 
 	// kill the first controller and check the scheduler brings it back online
 	cc, err := cluster.NewClientWithServices(s.discoverdClient(t).Service)
@@ -221,7 +191,7 @@ func (s *SchedulerSuite) TestJobMeta(t *c.C) {
 	app, release := s.createApp(t)
 
 	events := make(chan *ct.JobEvent)
-	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, 0, events)
+	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, events)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 
@@ -248,7 +218,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	app, release := s.createApp(t)
 
 	events := make(chan *ct.JobEvent)
-	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, 0, events)
+	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, events)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 
@@ -315,7 +285,7 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 	app, release := s.createApp(t)
 
 	events := make(chan *ct.JobEvent)
-	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, 0, events)
+	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, events)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 
@@ -380,7 +350,7 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 	app, release := s.createApp(t)
 
 	events := make(chan *ct.JobEvent)
-	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, 0, events)
+	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, events)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 
@@ -389,7 +359,7 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 		ReleaseID: release.ID,
 		Processes: map[string]int{"printer": 1},
 	}), c.IsNil)
-	_, id := waitForJobEvents(t, stream, events, jobEvents{"printer": {"up": 1}})
+	id := waitForJobEvents(t, stream, events, jobEvents{"printer": {"up": 1}})
 
 	// First restart: scheduled immediately
 	s.stopJob(t, id)
@@ -467,22 +437,9 @@ func (s *SchedulerSuite) TestDeployController(t *c.C) {
 	deployment, err := client.CreateDeployment(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 
-	// use a function to create the event stream as a new stream will be needed
-	// after deploying the controller
-	var events chan *ct.DeploymentEvent
-	var eventStream stream.Stream
-	connectStream := func() {
-		events = make(chan *ct.DeploymentEvent)
-		err := attempt.Strategy{
-			Total: 10 * time.Second,
-			Delay: 500 * time.Millisecond,
-		}.Run(func() (err error) {
-			eventStream, err = client.StreamDeployment(deployment.ID, events)
-			return
-		})
-		t.Assert(err, c.IsNil)
-	}
-	connectStream()
+	events := make(chan *ct.DeploymentEvent)
+	eventStream, err := client.StreamDeployment(deployment.ID, events)
+	t.Assert(err, c.IsNil)
 	defer eventStream.Close()
 
 	// wait for the deploy to complete (this doesn't wait for specific events
@@ -493,11 +450,7 @@ loop:
 		select {
 		case e, ok := <-events:
 			if !ok {
-				// reconnect the stream as it may of been closed
-				// due to the controller being deployed
-				debug(t, "reconnecting deployment event stream")
-				connectStream()
-				continue
+				t.Fatal("unexpected close of deployment event stream")
 			}
 			debugf(t, "got deployment event: %s %s", e.JobType, e.JobState)
 			switch e.Status {
