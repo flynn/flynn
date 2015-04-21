@@ -112,6 +112,10 @@ type libvirtContainer struct {
 	*containerinit.Client
 }
 
+func (c *libvirtContainer) Pid() uint {
+	return c.pid
+}
+
 type dockerImageConfig struct {
 	User       string
 	Env        []string

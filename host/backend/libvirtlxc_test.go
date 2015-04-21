@@ -3,7 +3,6 @@
 package backend
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -11,13 +10,11 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	zfs "github.com/flynn/flynn/Godeps/_workspace/src/github.com/mistifyio/go-zfs"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/syndtr/gocapability/capability"
-	"github.com/mitchellh/go-ps"
 
 	"github.com/flynn/flynn/host/logmux"
 	"github.com/flynn/flynn/host/types"
@@ -28,10 +25,11 @@ import (
 )
 
 type LibvirtLXCSuite struct {
+	ContainerSuite
+
 	id, runDir string
 	backend    Backend
 	job        *host.Job
-	tty        io.ReadWriteCloser
 }
 
 var _ = Suite(&LibvirtLXCSuite{})
@@ -123,6 +121,10 @@ func (s *LibvirtLXCSuite) SetUpSuite(c *C) {
 	<-attached
 	close(attached)
 	close(attachWait)
+
+	var ok bool
+	s.container, ok = s.backend.(*libvirtLXC).containers[s.id]
+	c.Assert(ok, Equals, true)
 }
 
 func (s *LibvirtLXCSuite) TearDownSuite(c *C) {
@@ -141,7 +143,7 @@ func (s *LibvirtLXCSuite) TearDownSuite(c *C) {
 }
 
 func (s *LibvirtLXCSuite) TestLibvirtDevices(c *C) {
-	dirs := map[string]deviceSlice{
+	table := map[string]deviceSlice{
 		"/dev": deviceSlice{
 			// block devices
 			device{Name: "zero", Mode: "crw-rw-rw-", Major: 1},
@@ -172,20 +174,17 @@ func (s *LibvirtLXCSuite) TestLibvirtDevices(c *C) {
 		},
 	}
 
-	for dir, wants := range dirs {
-		names := map[string]bool{}
-		gots, err := listDevices(dir, s.tty)
+	for dir, wantDevs := range table {
+		seenDevs := map[string]bool{}
+		gotDevs, err := s.containerDevices(dir)
 		c.Assert(err, IsNil)
 
-		for _, got := range gots {
-			names[got.Name] = true
+		for _, got := range gotDevs {
+			seenDevs[got.Name] = true
 			gotPath := filepath.Join(dir, got.Name)
 
-			want, ok := wants.get(got.Name)
-			if !ok {
-				c.Errorf("unexpected device %q", gotPath)
-				continue
-			}
+			want, ok := wantDevs.get(got.Name)
+			c.Assert(ok, Equals, true)
 			if got.Mode != want.Mode {
 				c.Errorf("want %q mode %s, got %s", gotPath, want.Mode, got.Mode)
 			}
@@ -197,17 +196,16 @@ func (s *LibvirtLXCSuite) TestLibvirtDevices(c *C) {
 			}
 		}
 
-		for _, want := range wants {
-			wantPath := filepath.Join(dir, want.Name)
-			if !names[want.Name] {
-				c.Errorf("missing device %q", wantPath)
+		for _, want := range wantDevs {
+			if !seenDevs[want.Name] {
+				c.Errorf("missing device %q", filepath.Join(dir, want.Name))
 			}
 		}
 	}
 }
 
 func (s *LibvirtLXCSuite) TestLibvirtNamespaces(c *C) {
-	dirs := map[string]deviceSlice{
+	table := map[string]deviceSlice{
 		"/proc/self/ns": deviceSlice{
 			device{Name: "ipc", Mode: "lrwxrwxrwx", LinkTo: "ipc"},
 			device{Name: "mnt", Mode: "lrwxrwxrwx", LinkTo: "mnt"},
@@ -218,16 +216,16 @@ func (s *LibvirtLXCSuite) TestLibvirtNamespaces(c *C) {
 		},
 	}
 
-	for dir, wants := range dirs {
-		names := map[string]bool{}
-		gots, err := listDevices(dir, s.tty)
+	for dir, wantDevs := range table {
+		seenDevs := map[string]bool{}
+		gotDevs, err := s.containerDevices(dir)
 		c.Assert(err, IsNil)
 
-		for _, got := range gots {
-			names[got.Name] = true
+		for _, got := range gotDevs {
+			seenDevs[got.Name] = true
 			gotPath := filepath.Join(dir, got.Name)
 
-			want, ok := wants.get(got.Name)
+			want, ok := wantDevs.get(got.Name)
 			if !ok {
 				c.Errorf("unexpected device %q", gotPath)
 				continue
@@ -237,6 +235,12 @@ func (s *LibvirtLXCSuite) TestLibvirtNamespaces(c *C) {
 			}
 			if !strings.HasPrefix(got.LinkTo, want.LinkTo+":") {
 				c.Errorf("want %q link to %s inode, got %s", gotPath, want.LinkTo, got.LinkTo)
+			}
+		}
+
+		for _, want := range wantDevs {
+			if !seenDevs[want.Name] {
+				c.Errorf("missing device %q", filepath.Join(dir, want.Name))
 			}
 		}
 	}
@@ -296,7 +300,9 @@ func (s *LibvirtLXCSuite) TestLibvirtCapabilities(c *C) {
 		},
 	}
 
-	caps := s.lxcContainerCaps(c)
+	caps, err := s.containerCapabilities()
+	c.Assert(err, IsNil)
+
 	for capType, want := range table {
 		if want.Full {
 			if !caps.Full(capType) {
@@ -322,66 +328,48 @@ func (s *LibvirtLXCSuite) TestLibvirtCapabilities(c *C) {
 }
 
 func (s *LibvirtLXCSuite) TestLibvirtCgroups(c *C) {
-	type properties map[string]interface{}
+	type properties map[string]string
+	type controllers map[string]properties
 
-	tests := []struct {
-		Group       string
-		Controllers map[string]properties
-	}{
-		{
-			Group: fmt.Sprintf("/machine/%s.libvirt-lxc", s.id),
-			Controllers: map[string]properties{
-				"memory": properties{
-					"memory.limit_in_bytes": "1073741824", // 1GB
-				},
-				// defaults
-				"cpuset":  nil,
-				"cpu":     nil,
-				"cpuacct": nil,
-				"devices": nil,
-				"freezer": nil,
-				"blkio":   nil,
+	tests := map[string]controllers{
+		fmt.Sprintf("/machine/%s.libvirt-lxc", s.id): controllers{
+			"memory": properties{
+				"memory.limit_in_bytes": "1073741824", // 1GB
 			},
+			// defaults
+			"cpuset":  nil,
+			"cpu":     nil,
+			"cpuacct": nil,
+			"devices": nil,
+			"freezer": nil,
+			"blkio":   nil,
 		},
-		{
-			Group: "/",
-			Controllers: map[string]properties{
-				"net_cls":    nil,
-				"perf_event": nil,
-			},
+		"/": controllers{
+			"net_cls":    nil,
+			"perf_event": nil,
 		},
 	}
 
-	table, err := s.cgroupTable()
+	cgroups, err := s.containerCgroups()
 	c.Assert(err, IsNil)
 
 	byGroup := map[string][]string{}
-	for _, cgroup := range table {
-		byGroup[cgroup.Group] = append(byGroup[cgroup.Group], cgroup.Controllers...)
+	for group, controllers := range cgroups {
+		byGroup[group] = append(byGroup[group], controllers...)
 	}
 
-	seenGroups := map[string]bool{}
-	for _, want := range tests {
-		seenGroups[want.Group] = true
-
-		_, ok := byGroup[want.Group]
-		if !ok {
-			c.Errorf("missing cgroup %q", want.Group)
+	for group, controllers := range tests {
+		if _, ok := byGroup[group]; !ok {
+			c.Errorf("missing cgroup %q", group)
 			continue
 		}
 
-		for controller, properties := range want.Controllers {
-			for key, wantVal := range properties {
-				gotVal, err := cgroupProperty(want.Group, controller, key)
+		for controller, properties := range controllers {
+			for property, want := range properties {
+				got, err := cgroupProperty(group, controller, property)
 				c.Assert(err, IsNil)
-				c.Assert(wantVal, Equals, gotVal)
+				c.Assert(want, Equals, got)
 			}
-		}
-	}
-
-	for name := range byGroup {
-		if _, ok := seenGroups[name]; !ok {
-			c.Errorf("unexepected cgroup %q", name)
 		}
 	}
 }
@@ -407,248 +395,60 @@ func (s *LibvirtLXCSuite) TestLibvirtEnv(c *C) {
 }
 
 func (s *LibvirtLXCSuite) TestLibvirtMounts(c *C) {
-	tests := []mount{
+	table := []mount{
 		{"devfs", "/dev", "tmpfs", []string{"rw", "mode=755"}},
 		{"devpts", "/dev/pts", "devpts", []string{"rw", "mode=620", "ptmxmode=666"}},
 		{"sysfs", "/sys", "sysfs", []string{"ro"}},
 		{"proc", "/proc", "proc", []string{"rw"}},
 		{"proc", "/proc/sys", "proc", []string{"ro"}},
 		{"securityfs", "/sys/kernel/security", "securityfs", []string{"ro"}},
+		{"cgroup", "/sys/fs/cgroup/cpu", "cgroup", []string{"rw", "cpu"}},
+		{"cgroup", "/sys/fs/cgroup/cpuacct", "cgroup", []string{"rw", "cpuacct"}},
+		{"cgroup", "/sys/fs/cgroup/cpuset", "cgroup", []string{"rw", "cpuset"}},
+		{"cgroup", "/sys/fs/cgroup/memory", "cgroup", []string{"rw", "memory"}},
+		{"cgroup", "/sys/fs/cgroup/devices", "cgroup", []string{"rw", "devices"}},
+		{"cgroup", "/sys/fs/cgroup/freezer", "cgroup", []string{"rw", "freezer"}},
+		{"cgroup", "/sys/fs/cgroup/blkio", "cgroup", []string{"rw", "blkio"}},
+		{"cgroup", "/sys/fs/cgroup/net_cls", "cgroup", []string{"rw", "net_cls"}},
+		{"cgroup", "/sys/fs/cgroup/perf_event", "cgroup", []string{"rw", "perf_event"}},
 	}
 
-	gots, err := s.containerMounts()
+	mounts, err := s.containerMounts()
 	c.Assert(err, IsNil)
 
-	for _, want := range tests {
-		var got mount
-		for i := range gots {
-			if gots[i].Path == want.Path {
-				got = gots[i]
-				break
-			}
-		}
-		if got.Path == "" {
-			c.Errorf("missing mount %v", want)
+	for _, want := range table {
+		got, ok := mounts.get(want.Path)
+		if !ok {
+			c.Errorf("missing container mount %q", want.Path)
 			continue
 		}
 
-		c.Assert(want.Dev, Equals, got.Dev)
-		c.Assert(want.Type, Equals, got.Type)
+		if want.Dev != got.Dev {
+			c.Errorf("want %q mount device %q, got %q", want.Path, want.Dev, got.Dev)
+		}
+		if want.Type != got.Type {
+			c.Errorf("want %q mount type %q, got %q", want.Path, want.Type, got.Type)
+		}
 
-		sort.Strings(got.Ops)
 		for _, op := range want.Ops {
-			if sort.SearchStrings(got.Ops, op) == len(got.Ops) {
-				c.Errorf("missing op %q", op)
+			if !got.HasOp(op) {
+				c.Errorf("missing %q mount op %q", want.Path, op)
 			}
 		}
 	}
 }
 
-type mount struct {
-	Dev, Path, Type string
-	Ops             []string
-}
-
-func (s *LibvirtLXCSuite) containerMounts() ([]mount, error) {
-	bufr := bufio.NewReader(s.tty)
-
-	fmt.Fprintf(s.tty, "cat /proc/self/mounts ; echo EOF\n")
-
-	mounts := []mount{}
-	for {
-		line, err := bufr.ReadString('\n')
-		if err != nil {
-			return nil, err
-		}
-		if line == "EOF\n" {
-			return mounts, nil
-		}
-
-		parts := strings.Fields(line)
-		mounts = append(mounts, mount{
-			Dev:  parts[0],
-			Path: parts[1],
-			Type: parts[2],
-			Ops:  strings.Split(parts[3], ","),
-		})
-	}
-}
-
-func (s *LibvirtLXCSuite) containerEnv() ([]string, error) {
-	bufr := bufio.NewReader(s.tty)
-
-	fmt.Fprintf(s.tty, "/bin/strings /proc/self/environ ; echo EOF\n")
-
-	env := []string{}
-	for {
-		line, err := bufr.ReadString('\n')
-		if err != nil {
-			return nil, err
-		}
-		if line == "EOF\n" {
-			return env, nil
-		}
-
-		env = append(env, strings.TrimSpace(line))
-	}
-}
-
-func (s *LibvirtLXCSuite) lxcContainerCaps(c *C) capability.Capabilities {
-	container, ok := s.backend.(*libvirtLXC).containers[s.id]
-	if !ok {
-		c.Fatalf("missing container for job %s", s.id)
+func (s *LibvirtLXCSuite) TestLibvirtMeminfo(c *C) {
+	table := map[string]string{
+		"MemTotal":  "1017468 kB", // 1GB
+		"SwapTotal": "0 kB",
 	}
 
-	// libvirt_lxc process
-	procs, err := childrenOf(int(container.pid))
-	c.Assert(err, IsNil)
-	c.Assert(len(procs), Equals, 1)
-
-	// containerinit process
-	procs, err = childrenOf(procs[0].Pid())
-	c.Assert(err, IsNil)
-	c.Assert(len(procs), Equals, 1)
-
-	shPid := procs[0].Pid()
-	caps, err := capability.NewPid(shPid)
+	meminfo, err := s.containerMeminfo()
 	c.Assert(err, IsNil)
 
-	return caps
-}
-
-func (s *LibvirtLXCSuite) cgroupTable() ([]cgroupEntry, error) {
-	bufr := bufio.NewReader(s.tty)
-
-	fmt.Fprintf(s.tty, "cat /proc/self/cgroup ; echo EOF\n")
-
-	cgroups := []cgroupEntry{}
-	for {
-		line, err := bufr.ReadString('\n')
-		if err != nil {
-			return nil, err
-		}
-		if line == "EOF\n" {
-			return cgroups, nil
-		}
-
-		parts := strings.Split(line, ":")
-		if len(parts) != 3 {
-			return nil, fmt.Errorf("unexpected /proc/self/cgroup line: %q", line)
-		}
-
-		cgroups = append(cgroups, cgroupEntry{
-			ID:          parts[0],
-			Controllers: strings.Split(parts[1], ","),
-			Group:       strings.TrimSpace(parts[2]),
-		})
+	for key, want := range table {
+		got := meminfo[key]
+		c.Assert(want, Equals, got)
 	}
-}
-
-type cgroupEntry struct {
-	ID, Group   string
-	Controllers []string
-}
-
-func cgroupProperty(group, controller, property string) (string, error) {
-	val, err := ioutil.ReadFile(filepath.Join("/sys/fs/cgroup", controller, group, property))
-	return strings.TrimSpace(string(val)), err
-}
-
-func listDevices(dir string, tty io.ReadWriter) (deviceSlice, error) {
-	devices := deviceSlice{}
-	bufr := bufio.NewReader(tty)
-
-	fmt.Fprintf(tty, "ls -l %s ; echo EOF\n", dir)
-
-	// read "total 0"
-	if _, err := bufr.ReadString('\n'); err != nil {
-		return nil, err
-	}
-
-	for {
-		line, err := bufr.ReadString('\n')
-		if err != nil {
-			return nil, err
-		}
-		if line[0] == 'd' {
-			// skip directories
-			continue
-		}
-		if line == "EOF\n" {
-			return devices, nil
-		}
-
-		dev, err := parseDevice(string(line))
-		if err != nil {
-			return nil, err
-		}
-		devices = append(devices, dev)
-	}
-}
-
-type device struct {
-	Name   string
-	Mode   string
-	Major  int
-	LinkTo string
-	Pipe   bool
-}
-
-func parseDevice(line string) (device, error) {
-	var (
-		name   string
-		major  int
-		linkTo string
-		err    error
-		pipe   bool
-	)
-
-	parts := strings.Fields(line)
-	if line[0] == 'c' {
-		major, err = strconv.Atoi(strings.TrimRight(parts[4], ","))
-		name = parts[9]
-	} else {
-		name = parts[8]
-	}
-
-	if len(parts) >= 11 {
-		linkTo = parts[10]
-		if strings.Contains(linkTo, "pipe:[") {
-			pipe, linkTo = true, ""
-		}
-	}
-
-	return device{
-		Name:   name,
-		Mode:   parts[0],
-		Major:  major,
-		LinkTo: linkTo,
-		Pipe:   pipe,
-	}, err
-}
-
-type deviceSlice []device
-
-func (s deviceSlice) get(name string) (device, bool) {
-	for _, d := range s {
-		if d.Name == name {
-			return d, true
-		}
-	}
-	return device{}, false
-}
-
-func childrenOf(pid int) ([]ps.Process, error) {
-	allProcs, err := ps.Processes()
-	if err != nil {
-		return nil, err
-	}
-
-	procs := []ps.Process{}
-	for _, proc := range allProcs {
-		if proc.PPid() == pid {
-			procs = append(procs, proc)
-		}
-	}
-	return procs, nil
 }
