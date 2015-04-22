@@ -185,15 +185,18 @@ func postgres(d *Deploy) (err error) {
 		return err
 	}
 
+	// wait for the new Sync to catch the new Primary *before* killing the
+	// old Primary to avoid pg_basebackup exiting due to an upstream takeover
+	if err := waitForSync(newPrimary, newSync); err != nil {
+		return err
+	}
+
 	log.Info("replacing the Primary node")
 	_, err = startInstance()
 	if err != nil {
 		return err
 	}
 	if err := stopInstance(state.Primary); err != nil {
-		return err
-	}
-	if err := waitForSync(newPrimary, newSync); err != nil {
 		return err
 	}
 	if err := waitForReadWrite(newPrimary); err != nil {
