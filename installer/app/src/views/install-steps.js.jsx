@@ -12,18 +12,16 @@ var InstallSteps = React.createClass({
 	render: function () {
 		var steps = this.state.steps;
 		var currentStep = this.state.currentStep;
-		var completedSteps = this.state.completedSteps;
 		return (
-			<ul className="install-steps">
+			<ul className="install-steps" style={this.props.style || {}}>
 				{steps.map(function (step) {
-					var complete = completedSteps.indexOf(step.id) !== -1;
 					var active = currentStep === step.id;
 					return (
 						<Step
 							key={step.label}
 							label={step.label}
 							active={active}
-							complete={complete} />
+							complete={step.complete} />
 					);
 				}.bind(this))}
 			</ul>
