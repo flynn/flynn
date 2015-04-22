@@ -207,6 +207,7 @@ type ActiveJob struct {
 	ExitStatus  int       `json:"exit_status,omitempty"`
 	Error       *string   `json:"error,omitempty"`
 	ManifestID  string    `json:"manifest_id,omitempty"`
+	Pid         uint      `json:"pid,omitempty"`
 }
 
 type AttachReq struct {

@@ -4,147 +4,27 @@ package backend
 
 import (
 	"fmt"
-	"io"
-	"io/ioutil"
-	"math"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	zfs "github.com/flynn/flynn/Godeps/_workspace/src/github.com/mistifyio/go-zfs"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/syndtr/gocapability/capability"
-
-	"github.com/flynn/flynn/host/logmux"
-	"github.com/flynn/flynn/host/types"
-	"github.com/flynn/flynn/host/volume"
-	"github.com/flynn/flynn/host/volume/manager"
-	zfsVolume "github.com/flynn/flynn/host/volume/zfs"
-	"github.com/flynn/flynn/pkg/random"
 )
 
 type LibvirtLXCSuite struct {
 	ContainerSuite
-
-	id, runDir string
-	backend    Backend
-	job        *host.Job
 }
 
 var _ = Suite(&LibvirtLXCSuite{})
 
 func (s *LibvirtLXCSuite) SetUpSuite(c *C) {
-	if os.Getuid() != 0 {
-		c.Skip("backend tests must be run as root")
-	}
-
-	var err error
-	s.id = random.String(12)
-
-	s.runDir, err = ioutil.TempDir("", fmt.Sprintf("flynn-test-%s.", s.id))
-	c.Assert(err, IsNil)
-
-	vdevFile := filepath.Join(s.runDir, fmt.Sprintf("flynn-test-zpool-%s.vdev", s.id))
-
-	vman, err := volumemanager.New(
-		filepath.Join(s.runDir, "volumes.bolt"),
-		func() (volume.Provider, error) {
-			return zfsVolume.NewProvider(&zfsVolume.ProviderConfig{
-				DatasetName: fmt.Sprintf("flynn-test-zpool-%s", s.id),
-				Make: &zfsVolume.MakeDev{
-					BackingFilename: vdevFile,
-					Size:            int64(math.Pow(2, float64(30))),
-				},
-				WorkingDir: filepath.Join(s.runDir, "zfs"),
-			})
-		})
-	c.Assert(err, IsNil)
-
-	pwd, err := os.Getwd()
-	c.Assert(err, IsNil)
-
-	state := NewState("test-host", filepath.Join(s.runDir, "host-state.bolt"))
-
-	s.backend, err = New("libvirt-lxc", Config{
-		State:    state,
-		Manager:  vman,
-		VolPath:  filepath.Join(s.runDir, "host-volumes"),
-		LogPath:  filepath.Join(s.runDir, "host-logs"),
-		InitPath: filepath.Join(pwd, "../bin/flynn-init"),
-		Mux:      logmux.New(1000),
-	})
-	c.Assert(err, IsNil)
-
-	s.job = &host.Job{
-		ID: s.id,
-		Artifact: host.Artifact{
-			URI: "https://registry.hub.docker.com?name=flynn/busybox&id=184af8860f22e7a87f1416bb12a32b20d0d2c142f719653d87809a6122b04663",
-		},
-		Config: host.ContainerConfig{
-			Entrypoint:  []string{"/bin/sh", "-"},
-			HostNetwork: true,
-			Stdin:       true,
-		},
-	}
-
-	attachWait := make(chan struct{})
-	state.AddAttacher(s.job.ID, attachWait)
-
-	err = s.backend.Run(s.job, nil)
-	c.Assert(err, IsNil)
-
-	stdinr, stdinw := io.Pipe()
-	stdoutr, stdoutw := io.Pipe()
-
-	s.tty = struct {
-		io.WriteCloser
-		io.Reader
-	}{stdinw, stdoutr}
-
-	<-attachWait
-	job := state.GetJob(s.job.ID)
-
-	attached := make(chan struct{})
-	attachReq := &AttachRequest{
-		Job:      job,
-		Height:   80,
-		Width:    80,
-		Logs:     false,
-		Stream:   true,
-		Attached: attached,
-		Stdin:    stdinr,
-		Stdout:   stdoutw,
-	}
-
-	go s.backend.Attach(attachReq)
-	<-attached
-	close(attached)
-	close(attachWait)
-
-	var ok bool
-	s.container, ok = s.backend.(*libvirtLXC).containers[s.id]
-	c.Assert(ok, Equals, true)
+	s.setup(c, "libvirt-lxc")
 }
 
-func (s *LibvirtLXCSuite) TearDownSuite(c *C) {
-	if os.Getuid() != 0 {
-		return
-	}
-
-	c.Assert(s.backend.Stop(s.job.ID), IsNil)
-	c.Assert(s.backend.Cleanup(), IsNil)
-
-	zpool, err := zfs.GetZpool(fmt.Sprintf("flynn-test-zpool-%s", s.id))
-	c.Assert(err, IsNil)
-
-	err = zpool.Destroy()
-	c.Assert(err, IsNil)
-}
-
-func (s *LibvirtLXCSuite) TestLibvirtDevices(c *C) {
+func (s *LibvirtLXCSuite) TestDevices(c *C) {
 	table := map[string]deviceSlice{
-		"/dev": deviceSlice{
+		"/dev": {
 			// block devices
 			device{Name: "zero", Mode: "crw-rw-rw-", Major: 1},
 			device{Name: "null", Mode: "crw-rw-rw-", Major: 1},
@@ -162,11 +42,11 @@ func (s *LibvirtLXCSuite) TestLibvirtDevices(c *C) {
 			device{Name: "console", Mode: "lrwxrwxrwx", LinkTo: "/dev/pts/0"},
 			device{Name: "tty1", Mode: "lrwxrwxrwx", LinkTo: "/dev/pts/0"},
 		},
-		"/dev/pts": deviceSlice{
+		"/dev/pts": {
 			device{Name: "ptmx", Mode: "crw-rw-rw-", Major: 5},
 			device{Name: "0", Mode: "crw--w----", Major: 136}, // console
 		},
-		"/proc/self/fd": deviceSlice{
+		"/proc/self/fd": {
 			device{Name: "0", Mode: "lr-x------", Pipe: true}, // stdin
 			device{Name: "1", Mode: "l-wx------", Pipe: true}, // stdout
 			device{Name: "2", Mode: "l-wx------", Pipe: true}, // stderr
@@ -204,9 +84,9 @@ func (s *LibvirtLXCSuite) TestLibvirtDevices(c *C) {
 	}
 }
 
-func (s *LibvirtLXCSuite) TestLibvirtNamespaces(c *C) {
+func (s *LibvirtLXCSuite) TestNamespaces(c *C) {
 	table := map[string]deviceSlice{
-		"/proc/self/ns": deviceSlice{
+		"/proc/self/ns": {
 			device{Name: "ipc", Mode: "lrwxrwxrwx", LinkTo: "ipc"},
 			device{Name: "mnt", Mode: "lrwxrwxrwx", LinkTo: "mnt"},
 			device{Name: "net", Mode: "lrwxrwxrwx", LinkTo: "net"},
@@ -246,7 +126,7 @@ func (s *LibvirtLXCSuite) TestLibvirtNamespaces(c *C) {
 	}
 }
 
-func (s *LibvirtLXCSuite) TestLibvirtCapabilities(c *C) {
+func (s *LibvirtLXCSuite) TestCapabilities(c *C) {
 	table := map[capability.CapType]struct {
 		Empty, Full bool
 
@@ -327,12 +207,12 @@ func (s *LibvirtLXCSuite) TestLibvirtCapabilities(c *C) {
 	}
 }
 
-func (s *LibvirtLXCSuite) TestLibvirtCgroups(c *C) {
+func (s *LibvirtLXCSuite) TestCgroups(c *C) {
 	type properties map[string]string
 	type controllers map[string]properties
 
 	tests := map[string]controllers{
-		fmt.Sprintf("/machine/%s.libvirt-lxc", s.id): controllers{
+		fmt.Sprintf("/machine/%s.libvirt-lxc", s.id): {
 			"memory": properties{
 				"memory.limit_in_bytes": "1073741824", // 1GB
 			},
@@ -344,7 +224,7 @@ func (s *LibvirtLXCSuite) TestLibvirtCgroups(c *C) {
 			"freezer": nil,
 			"blkio":   nil,
 		},
-		"/": controllers{
+		"/": {
 			"net_cls":    nil,
 			"perf_event": nil,
 		},
@@ -374,7 +254,7 @@ func (s *LibvirtLXCSuite) TestLibvirtCgroups(c *C) {
 	}
 }
 
-func (s *LibvirtLXCSuite) TestLibvirtEnv(c *C) {
+func (s *LibvirtLXCSuite) TestEnv(c *C) {
 	want := sort.StringSlice{
 		fmt.Sprintf("HOSTNAME=%s", s.id),
 		"HOME=/",
@@ -394,7 +274,7 @@ func (s *LibvirtLXCSuite) TestLibvirtEnv(c *C) {
 	c.Assert(want, DeepEquals, gotSlice)
 }
 
-func (s *LibvirtLXCSuite) TestLibvirtMounts(c *C) {
+func (s *LibvirtLXCSuite) TestMounts(c *C) {
 	table := []mount{
 		{"devfs", "/dev", "tmpfs", []string{"rw", "mode=755"}},
 		{"devpts", "/dev/pts", "devpts", []string{"rw", "mode=620", "ptmxmode=666"}},
@@ -438,7 +318,7 @@ func (s *LibvirtLXCSuite) TestLibvirtMounts(c *C) {
 	}
 }
 
-func (s *LibvirtLXCSuite) TestLibvirtMeminfo(c *C) {
+func (s *LibvirtLXCSuite) TestMeminfo(c *C) {
 	table := map[string]string{
 		"MemTotal":  "1017468 kB", // 1GB
 		"SwapTotal": "0 kB",

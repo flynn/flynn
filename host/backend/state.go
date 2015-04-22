@@ -272,10 +272,10 @@ func (s *State) persistenceDBClose() error {
 	return s.stateDB.Close()
 }
 
-func (s *State) AddJob(j *host.Job, ip net.IP) {
+func (s *State) AddJob(j *host.Job, ip net.IP, pid uint) {
 	s.Lock()
 	defer s.Unlock()
-	job := &host.ActiveJob{Job: j, HostID: s.id}
+	job := &host.ActiveJob{Job: j, HostID: s.id, Pid: pid}
 	if len(ip) > 0 {
 		job.InternalIP = ip.String()
 	}

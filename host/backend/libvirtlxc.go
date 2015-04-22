@@ -569,7 +569,7 @@ func (l *libvirtLXC) Run(job *host.Job, runConfig *RunConfig) (err error) {
 		return err
 	}
 
-	l.state.AddJob(job, container.IP)
+	l.state.AddJob(job, container.IP, container.pid)
 	if runConfig.ManifestID != "" {
 		l.state.SetManifestID(job.ID, runConfig.ManifestID)
 	}

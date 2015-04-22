@@ -55,10 +55,6 @@ type Backend interface {
 	ConfigureNetworking(strategy NetworkStrategy, job string) (*NetworkInfo, error)
 }
 
-type Container interface {
-	Pid() uint
-}
-
 type RunConfig struct {
 	IP         net.IP
 	ManifestID string
