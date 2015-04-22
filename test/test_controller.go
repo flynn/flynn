@@ -215,7 +215,7 @@ func (s *ControllerSuite) TestResourceLimitsReleaseJob(t *c.C) {
 	client := s.controllerClient(t)
 	app, release := s.createApp(t)
 
-	watcher, err := client.WatchJobEvents(app.ID)
+	watcher, err := client.WatchJobEvents(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 	defer watcher.Close()
 

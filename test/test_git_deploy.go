@@ -130,15 +130,17 @@ func (s *GitDeploySuite) runBuildpackTestWithResponsePattern(t *c.C, name string
 		t.Assert(r.flynn("resource", "add", resource), Succeeds)
 	}
 
-	watcher, err := s.controllerClient(t).WatchJobEvents(name)
+	watcher, err := s.controllerClient(t).WatchJobEvents(name, "")
 	t.Assert(err, c.IsNil)
 	defer watcher.Close()
 
 	push := r.git("push", "flynn", "master")
 	t.Assert(push, SuccessfulOutputContains, "Creating release")
 	t.Assert(push, SuccessfulOutputContains, "Application deployed")
-	t.Assert(push, SuccessfulOutputContains, "Added default web=1 formation")
+	t.Assert(push, SuccessfulOutputContains, "Waiting for web job to start...")
 	t.Assert(push, SuccessfulOutputContains, "* [new branch]      master -> master")
+	t.Assert(push, c.Not(OutputContains), "timed out waiting for scale")
+	t.Assert(push, SuccessfulOutputContains, "=====> Default web formation scaled to 1")
 
 	watcher.WaitFor(ct.JobEvents{"web": {"up": 1}}, scaleTimeout, nil)
 

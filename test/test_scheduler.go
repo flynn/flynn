@@ -55,7 +55,7 @@ func (s *SchedulerSuite) TestScale(t *c.C) {
 		{"printer": 1},
 	}
 
-	watcher, err := s.controllerClient(t).WatchJobEvents(app.ID)
+	watcher, err := s.controllerClient(t).WatchJobEvents(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 	defer watcher.Close()
 
@@ -95,7 +95,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	debugf(t, "current controller app[%s] host[%s] job[%s]", app.ID, hostID, jobID)
 
 	// start another controller and wait for it to come up
-	watcher, err := s.controllerClient(t).WatchJobEvents("controller")
+	watcher, err := s.controllerClient(t).WatchJobEvents("controller", release.ID)
 	t.Assert(err, c.IsNil)
 	defer watcher.Close()
 	debug(t, "scaling the controller up")
@@ -128,7 +128,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 func (s *SchedulerSuite) TestJobMeta(t *c.C) {
 	app, release := s.createApp(t)
 
-	watcher, err := s.controllerClient(t).WatchJobEvents(app.ID)
+	watcher, err := s.controllerClient(t).WatchJobEvents(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 	defer watcher.Close()
 
@@ -155,7 +155,7 @@ func (s *SchedulerSuite) TestJobMeta(t *c.C) {
 func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	app, release := s.createApp(t)
 
-	watcher, err := s.controllerClient(t).WatchJobEvents(app.ID)
+	watcher, err := s.controllerClient(t).WatchJobEvents(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 	defer watcher.Close()
 
@@ -225,7 +225,7 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 
 	app, release := s.createApp(t)
 
-	watcher, err := s.controllerClient(t).WatchJobEvents(app.ID)
+	watcher, err := s.controllerClient(t).WatchJobEvents(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 	defer watcher.Close()
 
@@ -271,7 +271,7 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 
 	app, release := s.createApp(t)
 
-	watcher, err := s.controllerClient(t).WatchJobEvents(app.ID)
+	watcher, err := s.controllerClient(t).WatchJobEvents(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 	defer watcher.Close()
 

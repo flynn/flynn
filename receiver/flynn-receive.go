@@ -35,6 +35,7 @@ func init() {
 var typesPattern = regexp.MustCompile("types.* -> (.+)\n")
 
 const blobstoreURL = "http://blobstore.discoverd"
+const scaleTimeout = 20 * time.Second
 
 func main() {
 	client, err := controller.NewClient("", os.Getenv("CONTROLLER_KEY"))
@@ -137,11 +138,31 @@ func main() {
 			ReleaseID: release.ID,
 			Processes: map[string]int{"web": 1},
 		}
+
+		watcher, err := client.WatchJobEvents(app.ID, release.ID)
+		if err != nil {
+			log.Fatalln("Error streaming job events", err)
+			return
+		}
+		defer watcher.Close()
+
 		if err := client.PutFormation(formation); err != nil {
 			log.Fatalln("Error putting formation:", err)
 		}
+		fmt.Println("=====> Waiting for web job to start...")
 
-		fmt.Println("=====> Added default web=1 formation")
+		err = watcher.WaitFor(ct.JobEvents{"web": {"up": 1}}, scaleTimeout, func(e *ct.JobEvent) error {
+			switch e.Job.State {
+			case "up":
+				fmt.Println("=====> Default web formation scaled to 1")
+			case "down", "crashed":
+				return fmt.Errorf("Failed to scale web process type")
+			}
+			return nil
+		})
+		if err != nil {
+			log.Fatalln(err.Error())
+		}
 	}
 }
 

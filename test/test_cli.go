@@ -37,8 +37,8 @@ func (s *CLISuite) flynn(t *c.C, args ...string) *CmdResult {
 }
 
 func (s *CLISuite) newCliTestApp(t *c.C) *cliTestApp {
-	app, _ := s.createApp(t)
-	watcher, err := s.controllerClient(t).WatchJobEvents(app.Name)
+	app, release := s.createApp(t)
+	watcher, err := s.controllerClient(t).WatchJobEvents(app.Name, release.ID)
 	t.Assert(err, c.IsNil)
 	return &cliTestApp{
 		name:    app.Name,

@@ -118,7 +118,7 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 	fmt.Printf("scaling %s\n\n", strings.Join(scale, ", "))
 
 	expected := client.ExpectedScalingEvents(current, processes, release.Processes, 1)
-	watcher, err := client.WatchJobEvents(app)
+	watcher, err := client.WatchJobEvents(app, release.ID)
 	if err != nil {
 		return err
 	}
