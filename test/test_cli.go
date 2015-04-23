@@ -18,12 +18,12 @@ import (
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
 	"github.com/flynn/flynn/cli/config"
+	cc "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
-	"github.com/flynn/flynn/pkg/stream"
 )
 
 type CLISuite struct {
@@ -38,24 +38,21 @@ func (s *CLISuite) flynn(t *c.C, args ...string) *CmdResult {
 
 func (s *CLISuite) newCliTestApp(t *c.C) *cliTestApp {
 	app, _ := s.createApp(t)
-	events := make(chan *ct.JobEvent)
-	stream, err := s.controllerClient(t).StreamJobEvents(app.Name, events)
+	watcher, err := s.controllerClient(t).WatchJobEvents(app.Name)
 	t.Assert(err, c.IsNil)
 	return &cliTestApp{
-		name:   app.Name,
-		stream: stream,
-		events: events,
-		disc:   s.discoverdClient(t),
-		t:      t,
+		name:    app.Name,
+		disc:    s.discoverdClient(t),
+		t:       t,
+		watcher: watcher,
 	}
 }
 
 type cliTestApp struct {
-	name   string
-	stream stream.Stream
-	events chan *ct.JobEvent
-	disc   *discoverd.Client
-	t      *c.C
+	name    string
+	watcher *cc.JobWatcher
+	disc    *discoverd.Client
+	t       *c.C
 }
 
 func (a *cliTestApp) flynn(args ...string) *CmdResult {
@@ -66,8 +63,18 @@ func (a *cliTestApp) flynnCmd(args ...string) *exec.Cmd {
 	return flynnCmd("/", append([]string{"-a", a.name}, args...)...)
 }
 
-func (a *cliTestApp) waitFor(events jobEvents) string {
-	return waitForJobEvents(a.t, a.stream, a.events, events)
+func (a *cliTestApp) waitFor(events ct.JobEvents) string {
+	var id string
+	idSetter := func(e *ct.JobEvent) error {
+		id = e.JobID
+		return nil
+	}
+
+	err := a.watcher.WaitFor(events, scaleTimeout, idSetter)
+	if err != nil {
+		return err.Error()
+	}
+	return id
 }
 
 func (a *cliTestApp) waitForService(name string) {
@@ -190,7 +197,9 @@ func (s *CLISuite) TestPs(t *c.C) {
 	for _, j := range jobs {
 		t.Assert(j, Matches, "echoer")
 	}
-	t.Assert(app.flynn("scale", "echoer=0"), Succeeds)
+	scale := app.flynn("scale", "echoer=0")
+	app.waitFor(ct.JobEvents{"echoer": {"down": 3}})
+	t.Assert(scale, Succeeds)
 	t.Assert(ps(), c.HasLen, 0)
 }
 
@@ -198,13 +207,14 @@ func (s *CLISuite) TestScale(t *c.C) {
 	app := s.newCliTestApp(t)
 
 	scale := app.flynn("scale", "echoer=1")
-	jobID := app.waitFor(jobEvents{"echoer": {"up": 1}})
+	jobID := app.waitFor(ct.JobEvents{"echoer": {"up": 1}})
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "scaling echoer: 0=>1")
 	t.Assert(scale, SuccessfulOutputContains, fmt.Sprintf("==> echoer %s up", jobID))
 	t.Assert(scale, SuccessfulOutputContains, "scale completed")
 
 	scale = app.flynn("scale", "echoer=3", "printer=1")
+	app.waitFor(ct.JobEvents{"echoer": {"up": 2}, "printer": {"up": 1}})
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "echoer: 1=>3")
 	t.Assert(scale, SuccessfulOutputContains, "printer: 0=>1")
@@ -220,6 +230,7 @@ func (s *CLISuite) TestScale(t *c.C) {
 
 	// scale should only affect specified processes
 	scale = app.flynn("scale", "printer=2")
+	app.waitFor(ct.JobEvents{"printer": {"up": 1}})
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "printer: 1=>2")
 	t.Assert(scale, SuccessfulOutputContains, "scale completed")
@@ -232,17 +243,18 @@ func (s *CLISuite) TestScale(t *c.C) {
 
 	// unchanged processes shouldn't appear in output
 	scale = app.flynn("scale", "echoer=3", "printer=0")
+	app.waitFor(ct.JobEvents{"printer": {"down": 2}})
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "printer: 2=>0")
-	t.Assert(scale, c.Not(SuccessfulOutputContains), "echoer")
+	t.Assert(scale, c.Not(OutputContains), "echoer")
 	t.Assert(scale, SuccessfulOutputContains, "scale completed")
 
 	// --no-wait should not wait for scaling to complete
 	scale = app.flynn("scale", "--no-wait", "echoer=0")
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "scaling echoer: 3=>0")
-	t.Assert(scale, c.Not(SuccessfulOutputContains), "scale completed")
-	app.waitFor(jobEvents{"echoer": {"down": 3}})
+	t.Assert(scale, c.Not(OutputContains), "scale completed")
+	app.waitFor(ct.JobEvents{"echoer": {"down": 3}})
 }
 
 func (s *CLISuite) TestRun(t *c.C) {
@@ -251,14 +263,14 @@ func (s *CLISuite) TestRun(t *c.C) {
 	// this still goes to the log stream because there's no TTY:
 	t.Assert(app.sh("echo hello"), Outputs, "hello\n")
 	// drain the events
-	app.waitFor(jobEvents{"": {"up": 1, "down": 1}})
+	app.waitFor(ct.JobEvents{"": {"up": 1, "down": 1}})
 
 	detached := app.flynn("run", "-d", "echo", "world")
 	t.Assert(detached, Succeeds)
 	t.Assert(detached, c.Not(Outputs), "world\n")
 
 	id := strings.TrimSpace(detached.Output)
-	jobID := app.waitFor(jobEvents{"": {"up": 1, "down": 1}})
+	jobID := app.waitFor(ct.JobEvents{"": {"up": 1, "down": 1}})
 	t.Assert(jobID, c.Equals, id)
 	t.Assert(app.flynn("log", "--raw-output"), Outputs, "hello\nworld\n")
 
@@ -327,10 +339,10 @@ func (s *CLISuite) TestEnv(t *c.C) {
 func (s *CLISuite) TestKill(t *c.C) {
 	app := s.newCliTestApp(t)
 	t.Assert(app.flynn("scale", "--no-wait", "echoer=1"), Succeeds)
-	jobID := app.waitFor(jobEvents{"echoer": {"up": 1}})
+	jobID := app.waitFor(ct.JobEvents{"echoer": {"up": 1}})
 
 	t.Assert(app.flynn("kill", jobID), Succeeds)
-	stoppedID := app.waitFor(jobEvents{"echoer": {"down": 1}})
+	stoppedID := app.waitFor(ct.JobEvents{"echoer": {"down": 1}})
 	t.Assert(stoppedID, c.Equals, jobID)
 }
 
@@ -421,7 +433,7 @@ func (s *CLISuite) TestResourceList(t *c.C) {
 func (s *CLISuite) TestLog(t *c.C) {
 	app := s.newCliTestApp(t)
 	t.Assert(app.flynn("run", "-d", "echo", "hello", "world"), Succeeds)
-	app.waitFor(jobEvents{"": {"up": 1, "down": 1}})
+	app.waitFor(ct.JobEvents{"": {"up": 1, "down": 1}})
 	t.Assert(app.flynn("log", "--raw-output"), Outputs, "hello world\n")
 }
 
@@ -432,7 +444,7 @@ func (s *CLISuite) TestLogFilter(t *c.C) {
 		t.Assert(app.flynn("scale", "crasher=0"), Succeeds)
 	}
 	t.Assert(app.flynn("run", "-d", "echo", "hello", "world"), Succeeds)
-	jobID := app.waitFor(jobEvents{"": {"up": 1, "down": 1}})
+	jobID := app.waitFor(ct.JobEvents{"": {"up": 1, "down": 1}})
 
 	tests := []struct {
 		args     []string
@@ -461,7 +473,7 @@ func (s *CLISuite) TestLogFilter(t *c.C) {
 func (s *CLISuite) TestLogStderr(t *c.C) {
 	app := s.newCliTestApp(t)
 	t.Assert(app.flynn("run", "-d", "sh", "-c", "echo hello && echo world >&2"), Succeeds)
-	app.waitFor(jobEvents{"": {"up": 1, "down": 1}})
+	app.waitFor(ct.JobEvents{"": {"up": 1, "down": 1}})
 	runLog := func(split bool) (stdout, stderr bytes.Buffer) {
 		args := []string{"log", "--raw-output"}
 		if split {
@@ -488,7 +500,7 @@ func (s *CLISuite) TestLogFollow(t *c.C) {
 	app := s.newCliTestApp(t)
 
 	t.Assert(app.flynn("run", "-d", "sh", "-c", "sleep 2 && for i in 1 2 3 4 5; do echo \"line $i\"; done"), Succeeds)
-	app.waitFor(jobEvents{"": {"starting": 1}})
+	app.waitFor(ct.JobEvents{"": {"starting": 1}})
 
 	log := app.flynnCmd("log", "--raw-output", "--follow")
 	logStdout, err := log.StdoutPipe()
@@ -623,7 +635,7 @@ func (s *CLISuite) TestRelease(t *c.C) {
 	t.Assert(scaleCmd, c.Not(Succeeds))
 	t.Assert(scaleCmd, OutputContains, "ERROR: Unknown process types: \"foo\"")
 	scaleCmd = app.flynn("scale", "--no-wait", "env=1")
-	app.waitFor(jobEvents{"env": {"up": 1}})
+	app.waitFor(ct.JobEvents{"env": {"up": 1}})
 	envLog := app.flynn("log")
 	t.Assert(envLog, Succeeds)
 	t.Assert(envLog, SuccessfulOutputContains, "GLOBAL=FOO")

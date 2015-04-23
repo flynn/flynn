@@ -95,13 +95,13 @@ func (s *HealthcheckSuite) TestKillDown(t *c.C) {
 		Create: true,
 		Check:  &host.HealthCheck{Type: "tcp", KillDown: true, StartTimeout: 2 * time.Second},
 	})
-	events := make(chan *ct.JobEvent)
-	stream, err := s.controllerClient(t).StreamJobEvents(app.ID, events)
+	watcher, err := s.controllerClient(t).WatchJobEvents(app.ID)
 	t.Assert(err, c.IsNil)
-	defer stream.Close()
+	defer watcher.Close()
 
 	t.Assert(flynn(t, "/", "-a", app.Name, "scale", "printer=1"), Succeeds)
 	// make sure we get a killdown event in the first 10-30s and the job marked
 	// as failed
-	waitForJobEvents(t, stream, events, jobEvents{"printer": {"down": 1}})
+	err = watcher.WaitFor(ct.JobEvents{"printer": {"down": 1}}, scaleTimeout, nil)
+	t.Assert(err, c.IsNil)
 }

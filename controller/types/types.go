@@ -104,6 +104,8 @@ func (e *JobEvent) IsDown() bool {
 	return e.State == "failed" || e.State == "crashed" || e.State == "down"
 }
 
+type JobEvents map[string]map[string]int
+
 type NewJob struct {
 	ReleaseID  string             `json:"release,omitempty"`
 	ReleaseEnv bool               `json:"release_env,omitempty"`

@@ -20,10 +20,9 @@ func (s *DeployerSuite) createRelease(t *c.C, process, strategy string) (*ct.App
 	app.Strategy = strategy
 	s.controllerClient(t).UpdateApp(app)
 
-	jobStream := make(chan *ct.JobEvent)
-	scale, err := s.controllerClient(t).StreamJobEvents(app.Name, jobStream)
+	watcher, err := s.controllerClient(t).WatchJobEvents(app.Name)
 	t.Assert(err, c.IsNil)
-	defer scale.Close()
+	defer watcher.Close()
 
 	t.Assert(s.controllerClient(t).PutFormation(&ct.Formation{
 		AppID:     app.ID,
@@ -31,7 +30,8 @@ func (s *DeployerSuite) createRelease(t *c.C, process, strategy string) (*ct.App
 		Processes: map[string]int{process: 2},
 	}), c.IsNil)
 
-	waitForJobEvents(t, scale, jobStream, jobEvents{process: {"up": 2}})
+	err = watcher.WaitFor(ct.JobEvents{process: {"up": 2}}, scaleTimeout, nil)
+	t.Assert(err, c.IsNil)
 
 	return app, release
 }
@@ -284,16 +284,18 @@ func (s *DeployerSuite) TestOmniProcess(t *c.C) {
 	totalJobs := omniScale * testCluster.Size()
 	client := s.controllerClient(t)
 	app, release := s.createApp(t)
-	jEvents := make(chan *ct.JobEvent)
-	jobStream, err := client.StreamJobEvents(app.Name, jEvents)
+
+	watcher, err := client.WatchJobEvents(app.Name)
 	t.Assert(err, c.IsNil)
-	defer jobStream.Close()
+	defer watcher.Close()
+
 	t.Assert(client.PutFormation(&ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
 		Processes: map[string]int{"omni": omniScale},
 	}), c.IsNil)
-	waitForJobEvents(t, jobStream, jEvents, jobEvents{"omni": {"up": totalJobs}})
+	err = watcher.WaitFor(ct.JobEvents{"omni": {"up": totalJobs}}, scaleTimeout, nil)
+	t.Assert(err, c.IsNil)
 
 	// deploy using all-at-once and check we get the correct events
 	app.Strategy = "all-at-once"

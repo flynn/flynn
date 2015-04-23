@@ -215,17 +215,21 @@ func (s *ControllerSuite) TestResourceLimitsReleaseJob(t *c.C) {
 	client := s.controllerClient(t)
 	app, release := s.createApp(t)
 
-	events := make(chan *ct.JobEvent)
-	stream, err := client.StreamJobEvents(app.ID, events)
+	watcher, err := client.WatchJobEvents(app.ID)
 	t.Assert(err, c.IsNil)
-	defer stream.Close()
+	defer watcher.Close()
 
 	t.Assert(client.PutFormation(&ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
 		Processes: map[string]int{"resources": 1},
 	}), c.IsNil)
-	jobID := waitForJobEvents(t, stream, events, jobEvents{"resources": {"up": 1, "down": 1}})
+	var jobID string
+	err = watcher.WaitFor(ct.JobEvents{"resources": {"up": 1, "down": 1}}, scaleTimeout, func(e *ct.JobEvent) error {
+		jobID = e.JobID
+		return nil
+	})
+	t.Assert(err, c.IsNil)
 	log := flynn(t, "/", "-a", app.Name, "log", "--job", jobID, "--raw-output")
 
 	assertResourceLimits(t, log.Output)
