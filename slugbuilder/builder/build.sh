@@ -52,6 +52,11 @@ run_unprivileged() {
   setuidgid nobody $@
 }
 
+# run curl silently and retry upto 3 times
+curl() {
+  $(which curl) --silent --retry 3 $@
+}
+
 cd ${app_dir}
 
 ## Load source from STDIN
@@ -67,7 +72,7 @@ if [[ -f "${env_cookie}" ]]; then
 fi
 
 if [[ -n "${BUILD_CACHE_URL}" ]]; then
-  curl --silent "${BUILD_CACHE_URL}" | tar --extract --gunzip --directory "${cache_root}" &>/dev/null || true
+  curl "${BUILD_CACHE_URL}" | tar --extract --gunzip --directory "${cache_root}" &>/dev/null || true
 fi
 
 # In heroku, there are two separate directories, and some
@@ -186,7 +191,7 @@ if [[ "${slug_file}" != "-" ]]; then
   echo_title "Compiled slug size is ${slug_size}"
 
   if [[ ${put_url} ]]; then
-    curl -0 -s -o /dev/null -X PUT -T ${slug_file} "${put_url}"
+    curl -0 -o /dev/null -X PUT -T ${slug_file} "${put_url}"
   fi
 fi
 
@@ -197,7 +202,6 @@ if [[ -n "${BUILD_CACHE_URL}" ]]; then
     --use-compress-program=pigz \
     . \
   | curl \
-    --silent \
     --output /dev/null \
     --request PUT \
     --upload-file - \
