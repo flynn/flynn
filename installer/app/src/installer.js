@@ -3,6 +3,7 @@ import History from 'marbles/history';
 import Dispatcher from './dispatcher';
 import MainStore from './main-store';
 import MainComponent from './views/main';
+import Client from './client';
 
 var dataStore = new MainStore();
 dataStore.registerWithDispatcher(Dispatcher);
@@ -11,8 +12,9 @@ var history = new History();
 history.register(new MainRouter());
 
 export default {
-	run: function (el) {
+	run: function (el, modalEl) {
 		this.el = el;
+		this.modalEl = modalEl;
 		this.dispatcherIndex = Dispatcher.register(this.__handleEvent.bind(this));
 
 		this.dataStore = dataStore;
@@ -21,15 +23,28 @@ export default {
 			context: this,
 			dispatcher: Dispatcher
 		});
+
+		Client.openEventStream();
 	},
 
 	render: function (component, props, children) {
 		props.key = 'content';
 		var contentComponent = React.createElement(component, props, children);
 		React.render(
-			React.createElement(MainComponent, {}, [contentComponent]),
+			React.createElement(MainComponent, { dataStore: this.dataStore }, [contentComponent]),
 			this.el
 		);
+	},
+
+	renderModal: function (component, props, children) {
+		React.render(
+			React.createElement(component, props, children),
+			this.modalEl
+		);
+	},
+
+	unRenderModal: function () {
+		React.unmountComponentAtNode(this.modalEl);
 	},
 
 	__handleEvent: function (event) {

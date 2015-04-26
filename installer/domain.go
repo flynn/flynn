@@ -3,6 +3,7 @@ package installer
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/flynn/flynn/pkg/httpclient"
 )
@@ -13,9 +14,11 @@ func AllocateDomain() (*Domain, error) {
 }
 
 type Domain struct {
-	Name  string `json:"domain"`
-	Token string `json:"token"`
-	c     *httpclient.Client
+	ClusterID string     `json:"-"`
+	Name      string     `json:"domain"`
+	Token     string     `json:"token"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	c         *httpclient.Client
 }
 
 func (d *Domain) client() *httpclient.Client {

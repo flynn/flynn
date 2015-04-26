@@ -12,6 +12,7 @@ var htmlTemplate = template.Must(template.New("installer.html").Parse(`
 
 <body>
   <div id="main"></div>
+  <div id="modal"></div>
 
   <script type="application/javascript" src="/assets/{{.ReactJSPath}}"></script>
   <script type="application/javascript" src="/assets/{{.ApplicationJSPath}}"></script>

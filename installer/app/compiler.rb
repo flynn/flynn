@@ -52,6 +52,9 @@ module Installer
     Dir[File.join(input_dir, 'images', '*.png')].each do |path|
       asset_names.push(File.join('images', File.basename(path)))
     end
+    Dir[File.join(vendor_dir, 'fonts', '*')].each do |path|
+      asset_names.push(File.join('fonts', File.basename(path)))
+    end
 
     manifest.compile(asset_names)
   end

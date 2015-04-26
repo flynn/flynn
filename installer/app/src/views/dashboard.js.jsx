@@ -1,16 +1,18 @@
-import Panel from './panel';
 import InstallCert from './install-cert';
 import Dispatcher from '../dispatcher';
+import { green as GreenBtnCSS } from './css/button';
 
 var InstallProgress = React.createClass({
 	render: function () {
 		return (
-			<Panel>
-				<form ref="form" method="POST" action={"https://dashboard."+ this.state.domain +"/user/sessions"} onSubmit={this.__handleFormSubmit}>
-					<input type="hidden" name="token" value={this.state.dashboardLoginToken} />
-					<InstallCert certURL={"data:application/x-x509-ca-cert;base64,"+ this.state.cert} />
-				</form>
-			</Panel>
+			<form ref="form" method="POST" action={"https://dashboard."+ this.state.domainName +"/user/sessions"} onSubmit={this.__handleFormSubmit}>
+				<input type="hidden" name="token" value={this.state.dashboardLoginToken} />
+				{this.state.certVerified ? (
+					<button type="submit" style={GreenBtnCSS}>Go to Dashboard</button>
+				) : (
+					<InstallCert certURL={"data:application/x-x509-ca-cert;base64,"+ this.state.caCert} />
+				)}
+			</form>
 		);
 	},
 
@@ -19,11 +21,7 @@ var InstallProgress = React.createClass({
 	},
 
 	componentDidMount: function () {
-		if (this.state.certVerified) {
-			this.refs.form.getDOMNode().submit();
-		} else {
-			window.addEventListener("focus", this.__handleWindowFocus, false);
-		}
+		window.addEventListener("focus", this.__handleWindowFocus, false);
 	},
 
 	componentWillUnmount: function () {
@@ -34,27 +32,27 @@ var InstallProgress = React.createClass({
 		this.setState(this.__getState());
 	},
 
-	componentDidUpdate: function () {
-		if (this.state.certVerified) {
-			this.refs.form.getDOMNode().submit();
-		}
-	},
-
 	__getState: function () {
 		return this.props.state;
 	},
 
 	__handleWindowFocus: function () {
 		Dispatcher.dispatch({
-			name: 'CHECK_CERT'
+			name: 'CHECK_CERT',
+			clusterID: this.props.clusterID,
+			domainName: this.state.domainName
 		});
 	},
 
 	__handleFormSubmit: function (e) {
-		e.preventDefault();
-		Dispatcher.dispatch({
-			name: 'CHECK_CERT'
-		});
+		if ( !this.state.certVerified ) {
+			e.preventDefault();
+			Dispatcher.dispatch({
+				name: 'CHECK_CERT',
+				clusterID: this.props.clusterID,
+				domainName: this.state.domainName
+			});
+		}
 	}
 });
 export default InstallProgress;

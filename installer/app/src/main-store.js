@@ -1,6 +1,9 @@
-import { extend, createClass } from 'marbles/utils';
+import { createClass } from 'marbles/utils';
 import State from 'marbles/state';
 import Client from './client';
+import Cluster from './cluster';
+
+var newCluster = new Cluster({id: 'new'});
 
 export default createClass({
 	mixins: [State],
@@ -10,173 +13,145 @@ export default createClass({
 	},
 
 	willInitialize: function () {
+		this.__handleClusterChanged = this.__handleClusterChanged.bind(this);
 		this.state = this.getInitialState();
 		this.__changeListeners = [];
 	},
 
 	getInitialState: function () {
 		return {
-			installEvents: [],
-			installID: null,
-			domain: null,
-			dashboardLoginToken: null,
-			cert: null,
-			certVerified: false,
-
-			steps: [
-				{ id: 'configure', label: 'Configure' },
-				{ id: 'install', label: 'Install' },
-				{ id: 'dashboard', label: 'Dashboard' }
-			],
-			currentStep: 'configure',
-			completedSteps: [],
-
-			failed: false,
-			errorMessage: null,
-
-			prompt: null
+			clusters: [],
+			currentClusterID: null,
+			currentCluster: newCluster
 		};
 	},
 
 	handleEvent: function (event) {
+		var cluster;
 		switch (event.name) {
-			case 'INSTALL_ABORT':
-				Client.closeEventStream();
-				Client.abortInstall(this.state.installID);
-				this.setState(this.getInitialState());
-			break;
-
-			case 'LOAD_INSTALL':
-				if (this.state.installID !== event.id) {
-					this.setState({
-						installID: event.id,
-						completedSteps: ['configure'],
-						currentStep: 'install'
-					});
-					Client.closeEventStream();
-					Client.openEventStream(event.id);
-				}
-				Client.checkInstallExists(event.id);
-			break;
-
-			case 'INSTALL_EXISTS':
-				if ( !event.exists && (!this.state.installID || event.id === this.state.installID) ) {
-					Client.closeEventStream();
-					this.setState(this.getInitialState());
-				}
-			break;
-
 			case 'LAUNCH_AWS':
 				this.launchAWS(event);
 			break;
 
-			case 'LAUNCH_INSTALL_SUCCESS':
-				this.setState({
-					installID: event.res.id
-				});
-				Client.closeEventStream();
-				Client.openEventStream(event.res.id);
+			case 'NEW_CLUSTER':
+				this.__addCluster(event.cluster);
 			break;
 
-			case 'LAUNCH_INSTALL_FAILURE':
+			case 'CURRENT_CLUSTER':
+				this.setState({
+					currentClusterID: event.clusterID,
+					currentCluster: event.clusterID === null ? newCluster : this.__findCluster(event.clusterID)
+				});
+			break;
+
+			case 'CONFIRM_CLUSTER_DELETE':
+				Client.deleteCluster(event.clusterID);
+			break;
+
+			case 'LAUNCH_CLUSTER_FAILURE':
 				window.console.error(event);
 			break;
 
-			case 'INSTALL_PROMPT_REQUESTED':
-				this.setState({
-					prompt: event.data
-				});
-			break;
-
-			case 'INSTALL_PROMPT_RESOLVED':
-				if (this.state.prompt && this.state.prompt.id === event.data.id) {
-					this.setState({
-						prompt: null
-					});
-				}
-			break;
-
 			case 'INSTALL_PROMPT_RESPONSE':
-				Client.sendPromptResponse(event.data.id, event.data);
-			break;
-
-			case 'DOMAIN':
-				this.setState({
-					domain: event.domain
-				});
-			break;
-
-			case 'DASHBOARD_LOGIN_TOKEN':
-				this.setState({
-					dashboardLoginToken: event.token
-				});
-			break;
-
-			case 'CA_CERT':
-				this.setState({
-					cert: event.cert
-				});
+				Client.sendPromptResponse(event.clusterID, event.promptID, event.data);
 			break;
 
 			case 'CHECK_CERT':
-				Client.checkCert(this.state.domain);
-			break;
-
-			case 'CERT_VERIFIED':
-				this.setState({
-					certVerified: true
-				});
-			break;
-
-			case 'INSTALL_EVENT':
-				this.handleInstallEvent(event.data);
-			break;
-
-			case 'INSTALL_DONE':
-				if (this.state.cert && this.state.domain && this.state.dashboardLoginToken) {
-					this.setState({
-						completedSteps: ['configure', 'install'],
-						currentStep: 'dashboard'
-					});
-					Client.checkCert(this.state.domain);
+				cluster = this.__findCluster(event.clusterID);
+				if (cluster) {
+					Client.checkCert(event.domainName).then(function () {
+						cluster.handleEvent({
+							name: 'CERT_VERIFIED'
+						});
+					}.bind(this));
 				}
 			break;
 
-			case 'INSTALL_ERROR':
-				this.setState({
-					failed: true,
-					errorMessage: event.message
-				});
+			default:
+				if (event.name === "CLUSTER_STATE" && event.state === "deleted") {
+					this.__removeCluster(event.clusterID);
+				}
+
+				cluster = this.__findCluster(event.clusterID);
+				if (cluster) {
+					cluster.handleEvent(event);
+				}
 			break;
 		}
 	},
 
-	handleInstallEvent: function (data) {
-		this.setState({
-			installEvents: this.state.installEvents.concat([data])
-		});
-	},
-
 	launchAWS: function (inputs) {
-		var data = {
-			creds: inputs.creds,
-			region: inputs.region,
-			instance_type: inputs.instanceType,
-			num_instances: inputs.numInstances
-		};
+		var cluster = new Cluster({});
+		cluster.creds = inputs.creds;
+		cluster.region = inputs.region;
+		cluster.instanceType = inputs.instanceType;
+		cluster.numInstances = inputs.numInstances;
 
 		if (inputs.vpcCidr) {
-			data.vpc_cidr = inputs.vpcCidr;
+			cluster.vpcCidr = inputs.vpcCidr;
 		}
 
 		if (inputs.subnetCidr) {
-			data.subnet_cidr = inputs.subnetCidr;
+			cluster.subnetCidr = inputs.subnetCidr;
 		}
 
-		this.setState(extend({}, this.getInitialState(), {
-			completedSteps: ['configure'],
-			currentStep: 'install'
-		}));
-		Client.launchInstall(data);
+		Client.launchCluster(cluster.toJSON());
+	},
+
+	__addCluster: function (cluster) {
+		var index = this.__findClusterIndex(cluster.ID);
+		if (index !== -1) {
+			console.warn('cluster '+ cluster.ID +' already added!');
+			return;
+		}
+		var clusters = [cluster].concat(this.state.clusters);
+		var newState = {
+			clusters: clusters
+		};
+		if (cluster.ID === this.state.currentClusterID) {
+			newState.currentCluster = cluster;
+		}
+		this.setState(newState);
+		cluster.addChangeListener(this.__handleClusterChanged);
+	},
+
+	__findClusterIndex: function (clusterID) {
+		var clusters = this.state.clusters;
+		for (var i = 0, len = clusters.length; i < len; i++) {
+			if (clusters[i].ID === clusterID) {
+				return i;
+			}
+		}
+		return -1;
+	},
+
+	__findCluster: function (clusterID) {
+		var index = this.__findClusterIndex(clusterID);
+		if (index === -1) {
+			return null;
+		} else {
+			return this.state.clusters[index];
+		}
+	},
+
+	__removeCluster: function (clusterID) {
+		var index = this.__findClusterIndex(clusterID);
+		if (index === -1) {
+			return;
+		}
+		var clusters = this.state.clusters;
+		var cluster = clusters[index];
+		clusters = clusters.slice(0, index).concat(clusters.slice(index+1));
+		cluster.removeChangeListener(this.__handleClusterChanged);
+		this.setState({
+			clusters: clusters
+		});
+	},
+
+	__handleClusterChanged: function () {
+		// TODO: handle rapid fire change in chunks
+		this.setState({
+			clusters: this.state.clusters
+		});
 	}
 });

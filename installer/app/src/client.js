@@ -3,6 +3,7 @@ import JSONMiddleware from 'marbles/http/middleware/serialize_json';
 import { extend } from 'marbles/utils';
 import Dispatcher from './dispatcher';
 import Config from './config';
+import Cluster from './cluster';
 
 var Client = {
 	performRequest: function (method, args) {
@@ -28,55 +29,38 @@ var Client = {
 		});
 	},
 
-	launchInstall: function (data) {
+	launchCluster: function (data) {
 		this.performRequest('POST', {
-			url: Config.endpoints.install,
+			url: Config.endpoints.clusters,
 			body: data,
 			headers: {
 				'Content-Type': 'application/json'
 			}
 		}).then(function (args) {
 			Dispatcher.dispatch({
-				name: 'LAUNCH_INSTALL_SUCCESS',
+				name: 'LAUNCH_CLUSTER_SUCCESS',
+				clusterID: args[0].id,
 				res: args[0],
 				xhr: args[1]
 			});
 		}).catch(function (args) {
 			Dispatcher.dispatch({
-				name: 'LAUNCH_INSTALL_FAILURE',
+				name: 'LAUNCH_CLUSTER_FAILURE',
 				res: args[0],
 				xhr: args[1]
 			});
 		});
 	},
 
-	checkInstallExists: function (installID) {
-		var handleResponse = function (args) {
-			var res = args[0];
-			var xhr = args[1];
-			Dispatcher.dispatch({
-				name: 'INSTALL_EXISTS',
-				exists: xhr.status === 200,
-				id: res.id
-			});
-		};
-		this.performRequest('GET', {
-			url: '/install/'+ installID,
-			headers: {
-				'Accept': 'application/json'
-			}
-		}).then(handleResponse).catch(handleResponse);
-	},
-
-	abortInstall: function (installID) {
+	deleteCluster: function (clusterID) {
 		return this.performRequest('DELETE', {
-			url: '/install/'+ installID
+			url: Config.endpoints.cluster.replace(':id', clusterID)
 		});
 	},
 
-	sendPromptResponse: function (promptID, data) {
+	sendPromptResponse: function (clusterID, promptID, data) {
 		this.performRequest('POST', {
-			url: Config.endpoints.prompt.replace(':id', promptID),
+			url: Config.endpoints.prompt.replace(':id', clusterID).replace(':prompt_id', promptID),
 			body: data,
 			headers: {
 				'Content-Type': 'application/json'
@@ -85,82 +69,80 @@ var Client = {
 	},
 
 	checkCert: function (clusterDomain) {
-		this.performRequest("GET", {
+		return this.performRequest("GET", {
 			url: "https://dashboard."+ clusterDomain +"/ping"
-		}).then(function () {
-			Dispatcher.dispatch({
-				name: "CERT_VERIFIED"
-			});
 		});
 	},
 
-	openEventStream: function (installID) {
+	openEventStream: function () {
 		if (this.__es && this.__es.readyState !== 2) {
 			return false;
 		}
-		var url = Config.endpoints.events.replace(':id', installID);
-		var es = this.__es = new EventSource(url);
+		var retryConnection = function () {
+			var attempts = this.__retryEventStreamAttempts || 0;
+			if (attempts < 3) {
+				this.__retryEventStreamAttempts = attempts + 1;
+				this.openEventStream();
+			}
+		}.bind(this);
+		var es = this.__es = new EventSource(Config.endpoints.events);
 		es.addEventListener('error', function (e) {
 			window.console.error('event stream error: ', e);
 			es.close();
+			retryConnection();
 		}, false);
 		es.addEventListener('message', function (e) {
 			var data = JSON.parse(e.data);
+			var event = {};
+			if (data.cluster_id !== undefined) {
+				event.clusterID = data.cluster_id;
+			}
 			switch (data.type) {
+				case 'new_cluster':
+					event.name = 'NEW_CLUSTER';
+					event.cluster = new Cluster(data.cluster);
+				break;
+
+				case 'cluster_state':
+					event.name = 'CLUSTER_STATE';
+					event.state = data.description;
+				break;
+
 				case 'prompt':
+					event.prompt = data.prompt;
 					if (data.prompt.resolved) {
-						Dispatcher.dispatch({
-							name: 'INSTALL_PROMPT_RESOLVED',
-							data: data.prompt
-						});
+						event.name = 'INSTALL_PROMPT_RESOLVED';
 					} else {
-						Dispatcher.dispatch({
-							name: 'INSTALL_PROMPT_REQUESTED',
-							data: data.prompt
-						});
+						event.name = 'INSTALL_PROMPT_REQUESTED';
 					}
 				break;
 
-				case 'done':
-					Dispatcher.dispatch({
-						name: 'INSTALL_DONE'
-					});
-					es.close();
-				break;
-
-				case 'domain':
-					Dispatcher.dispatch({
-						name: 'DOMAIN',
-						domain: data.description
-					});
-				break;
-
-				case 'dashboard_login_token':
-					Dispatcher.dispatch({
-						name: 'DASHBOARD_LOGIN_TOKEN',
-						token: data.description
-					});
-				break;
-
-				case 'ca_cert':
-					Dispatcher.dispatch({
-						name: 'CA_CERT',
-						cert: data.description
-					});
+				case 'install_done':
+					event.name = 'INSTALL_DONE';
+					event.cluster = data.cluster;
 				break;
 
 				case 'error':
-					Dispatcher.dispatch({
-						name: 'INSTALL_ERROR',
-						message: data.description
-					});
+					event.name = 'INSTALL_ERROR';
+					event.message = data.description;
+				break;
+
+				case 'log':
+					event.name = 'LOG';
+					event.data = data;
 				break;
 
 				default:
-					Dispatcher.dispatch({
-						name: 'INSTALL_EVENT',
-						data: data
-					});
+					event.name = 'DEFAULT_EVENT';
+					event.data = data;
+			}
+			Dispatcher.dispatch(event);
+			if (data.type === 'install_done') {
+				Dispatcher.dispatch({
+					name: 'CHECK_CERT',
+					clusterID: event.clusterID,
+					domainName: data.cluster.domain.domain
+				});
 			}
 		}, false);
 		return true;

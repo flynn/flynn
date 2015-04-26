@@ -58,6 +58,10 @@
 			"Rev": "aa66506030b376f848667d84d2596faa8a7099ea"
 		},
 		{
+			"ImportPath": "github.com/camlistore/lock",
+			"Rev": "ae27720f340952636b826119b58130b9c1a847a0"
+		},
+		{
 			"ImportPath": "github.com/cheggaaa/pb",
 			"Rev": "0464652af750701d218b6dd035f0217e407caf2d"
 		},
@@ -93,6 +97,38 @@
 		{
 			"ImportPath": "github.com/cupcake/jsonschema",
 			"Rev": "9ed24dff3f2f097c8c35cc8ca31ba550a0397abc"
+		},
+		{
+			"ImportPath": "github.com/cznic/bufs",
+			"Rev": "3dcccbd7064a1689f9c093a988ea11ac00e21f51"
+		},
+		{
+			"ImportPath": "github.com/cznic/exp/lldb",
+			"Rev": "9b0e4be12fbdb7b843e0a658a04c35d160371789"
+		},
+		{
+			"ImportPath": "github.com/cznic/fileutil",
+			"Rev": "21ae57c9dce724a15e88bd9cd46d5668f3e880a5"
+		},
+		{
+			"ImportPath": "github.com/cznic/mathutil",
+			"Rev": "f9551431b78e71ee24939a1e9d8f49f43898b5cd"
+		},
+		{
+			"ImportPath": "github.com/cznic/ql",
+			"Rev": "db35cbdf3760c7cd3dd1ebfbb17e498b92531b63"
+		},
+		{
+			"ImportPath": "github.com/cznic/sortutil",
+			"Rev": "d4401851b4c370f979b842fa1e45e0b3b718b391"
+		},
+		{
+			"ImportPath": "github.com/cznic/strutil",
+			"Rev": "97bc31f80ac4c9fa9c5dc5fea74c383858988ea2"
+		},
+		{
+			"ImportPath": "github.com/cznic/zappy",
+			"Rev": "47331054e4f96186e3ff772877c0443909368a45"
 		},
 		{
 			"ImportPath": "github.com/dgryski/go-skip32",
