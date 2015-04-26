@@ -2,7 +2,6 @@ package installer
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,7 +9,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/aws"
@@ -20,7 +18,6 @@ import (
 	log "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/pkg/cors"
 	"github.com/flynn/flynn/pkg/httphelper"
-	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/sse"
 )
 
@@ -43,9 +40,9 @@ type jsonInput struct {
 	Creds        jsonInputCreds `json:"creds"`
 	Region       string         `json:"region"`
 	InstanceType string         `json:"instance_type"`
-	NumInstances int            `json:"num_instances"`
-	VpcCidr      string         `json:"vpc_cidr,omitempty"`
-	SubnetCidr   string         `json:"subnet_cidr,omitempty"`
+	NumInstances int64          `json:"num_instances"`
+	VpcCIDR      string         `json:"vpc_cidr,omitempty"`
+	SubnetCIDR   string         `json:"subnet_cidr,omitempty"`
 }
 
 type jsonInputCreds struct {
@@ -53,245 +50,44 @@ type jsonInputCreds struct {
 	SecretAccessKey string `json:"secret_access_key"`
 }
 
-type httpPrompt struct {
-	ID       string `json:"id"`
-	Type     string `json:"type,omitempty"`
-	Message  string `json:"message,omitempty"`
-	Yes      bool   `json:"yes,omitempty"`
-	Input    string `json:"input,omitempty"`
-	Resolved bool   `json:"resolved,omitempty"`
-	resChan  chan *httpPrompt
-	api      *httpAPI
-}
-
-type httpEvent struct {
-	Type        string      `json:"type"`
-	Description string      `json:"description,omitempty"`
-	Prompt      *httpPrompt `json:"prompt,omitempty"`
-}
-
-type httpInstaller struct {
-	ID            string           `json:"id"`
-	Stack         *Stack           `json:"-"`
-	PromptOutChan chan *httpPrompt `json:"-"`
-	PromptInChan  chan *httpPrompt `json:"-"`
-	logger        log.Logger
-	subscribeMtx  sync.Mutex
-	subscriptions []*httpInstallerSubscription
-	eventsMtx     sync.Mutex
-	events        []*httpEvent
-	done          bool
-	api           *httpAPI
-}
-
-type httpInstallerSubscription struct {
-	EventIndex int
-	EventChan  chan *httpEvent
-	DoneChan   chan struct{}
-	done       bool
-}
-
-func (sub *httpInstallerSubscription) sendEvents(s *httpInstaller) {
-	if sub.done {
-		return
-	}
-	for index, event := range s.events {
-		if index <= sub.EventIndex {
-			continue
-		}
-		sub.EventIndex = index
-		sub.EventChan <- event
-	}
-}
-
-func (sub *httpInstallerSubscription) handleDone() {
-	if sub.done {
-		return
-	}
-	sub.done = true
-	close(sub.DoneChan)
-}
-
-func (prompt *httpPrompt) Resolve(res *httpPrompt) {
-	prompt.api.InstallerPromptsMtx.Lock()
-	delete(prompt.api.InstallerPrompts, prompt.ID)
-	prompt.api.InstallerPromptsMtx.Unlock()
-	prompt.Resolved = true
-	prompt.resChan <- res
-}
-
-func (s *httpInstaller) YesNoPrompt(msg string) bool {
-	prompt := &httpPrompt{
-		ID:      random.Hex(16),
-		Type:    "yes_no",
-		Message: msg,
-		resChan: make(chan *httpPrompt),
-		api:     s.api,
-	}
-	prompt.api.InstallerPromptsMtx.Lock()
-	prompt.api.InstallerPrompts[prompt.ID] = prompt
-	prompt.api.InstallerPromptsMtx.Unlock()
-
-	s.sendEvent(&httpEvent{
-		Type:   "prompt",
-		Prompt: prompt,
-	})
-
-	res := <-prompt.resChan
-
-	s.sendEvent(&httpEvent{
-		Type:   "prompt",
-		Prompt: prompt,
-	})
-
-	return res.Yes
-}
-
-func (s *httpInstaller) PromptInput(msg string) string {
-	prompt := &httpPrompt{
-		ID:      random.Hex(16),
-		Type:    "input",
-		Message: msg,
-		resChan: make(chan *httpPrompt),
-		api:     s.api,
-	}
-	s.api.InstallerPromptsMtx.Lock()
-	s.api.InstallerPrompts[prompt.ID] = prompt
-	s.api.InstallerPromptsMtx.Unlock()
-
-	s.sendEvent(&httpEvent{
-		Type:   "prompt",
-		Prompt: prompt,
-	})
-
-	res := <-prompt.resChan
-
-	s.sendEvent(&httpEvent{
-		Type:   "prompt",
-		Prompt: prompt,
-	})
-
-	return res.Input
-}
-
-func (s *httpInstaller) Subscribe(eventChan chan *httpEvent) <-chan struct{} {
-	s.subscribeMtx.Lock()
-	defer s.subscribeMtx.Unlock()
-
-	subscription := &httpInstallerSubscription{
-		EventIndex: -1,
-		EventChan:  eventChan,
-		DoneChan:   make(chan struct{}),
-	}
-
-	go func() {
-		subscription.sendEvents(s)
-		if s.done {
-			subscription.handleDone()
-		}
-	}()
-
-	s.subscriptions = append(s.subscriptions, subscription)
-
-	return subscription.DoneChan
-}
-
-func (s *httpInstaller) sendEvent(event *httpEvent) {
-	s.eventsMtx.Lock()
-	s.events = append(s.events, event)
-	s.eventsMtx.Unlock()
-
-	for _, sub := range s.subscriptions {
-		go sub.sendEvents(s)
-	}
-}
-
-func (s *httpInstaller) handleError(err error) {
-	s.sendEvent(&httpEvent{
-		Type:        "error",
-		Description: err.Error(),
-	})
-}
-
-func (s *httpInstaller) handleDone() {
-	if s.Stack.Domain != nil {
-		s.sendEvent(&httpEvent{
-			Type:        "domain",
-			Description: s.Stack.Domain.Name,
-		})
-	}
-	if s.Stack.DashboardLoginToken != "" {
-		s.sendEvent(&httpEvent{
-			Type:        "dashboard_login_token",
-			Description: s.Stack.DashboardLoginToken,
-		})
-	}
-	if s.Stack.CACert != "" {
-		s.sendEvent(&httpEvent{
-			Type:        "ca_cert",
-			Description: base64.URLEncoding.EncodeToString([]byte(s.Stack.CACert)),
-		})
-	}
-	s.sendEvent(&httpEvent{
-		Type: "done",
-	})
-
-	for _, sub := range s.subscriptions {
-		go sub.handleDone()
-	}
-}
-
-func (s *httpInstaller) handleEvents() {
-	for {
-		select {
-		case event := <-s.Stack.EventChan:
-			s.logger.Info(event.Description)
-			s.sendEvent(&httpEvent{
-				Type:        "status",
-				Description: event.Description,
-			})
-		case err := <-s.Stack.ErrChan:
-			s.logger.Error(err.Error())
-			s.handleError(err)
-		case <-s.Stack.Done:
-			s.handleDone()
-			msg, err := s.Stack.DashboardLoginMsg()
-			if err != nil {
-				panic(err)
-			}
-			s.logger.Info(msg)
-			return
-		}
-	}
-}
-
 type httpAPI struct {
-	InstallerPrompts    map[string]*httpPrompt
-	InstallerPromptsMtx sync.Mutex
-	InstallerStacks     map[string]*httpInstaller
-	InstallerStackMtx   sync.Mutex
-	AWSEnvCreds         aws.CredentialsProvider
+	AWSEnvCreds  aws.CredentialsProvider
+	Installer    *Installer
+	logger       log.Logger
+	clientConfig installerJSConfig
 }
 
 func ServeHTTP() error {
+	logger := log.New()
+	installer := NewInstaller(logger)
+
 	api := &httpAPI{
-		InstallerPrompts: make(map[string]*httpPrompt),
-		InstallerStacks:  make(map[string]*httpInstaller),
+		Installer: installer,
+		logger:    logger,
+		clientConfig: installerJSConfig{
+			Endpoints: map[string]string{
+				"clusters": "/clusters",
+				"cluster":  "/clusters/:id",
+				"events":   "/events",
+				"prompt":   "/clusters/:id/prompts/:prompt_id",
+			},
+		},
 	}
 
 	if creds, err := aws.EnvCreds(); err == nil {
 		api.AWSEnvCreds = creds
 	}
+	api.clientConfig.HasAWSEnvCredentials = api.AWSEnvCreds != nil
 
 	httpRouter := httprouter.New()
 
 	httpRouter.GET("/", api.ServeTemplate)
-	httpRouter.GET("/install", api.ServeTemplate)
-	httpRouter.GET("/install/:id", api.ServeTemplate)
-	httpRouter.DELETE("/install/:id", api.AbortInstallHandler)
-	httpRouter.POST("/install", api.InstallHandler)
-	httpRouter.GET("/events/:id", api.EventsHandler)
-	httpRouter.POST("/prompt/:id", api.PromptHandler)
+	httpRouter.GET("/clusters/:id", api.ServeTemplate)
+	httpRouter.GET("/clusters/:id/delete", api.ServeTemplate)
+	httpRouter.DELETE("/clusters/:id", api.DeleteCluster)
+	httpRouter.POST("/clusters", api.LaunchCluster)
+	httpRouter.GET("/events", api.Events)
+	httpRouter.POST("/clusters/:id/prompts/:prompt_id", api.Prompt)
 	httpRouter.GET("/assets/*assetPath", api.ServeAsset)
 
 	l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -340,24 +136,20 @@ func (api *httpAPI) AssetManifest() (*assetManifest, error) {
 	return manifest, nil
 }
 
-func (api *httpAPI) InstallHandler(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+func (api *httpAPI) LaunchCluster(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
 	var input *jsonInput
 	if err := httphelper.DecodeJSON(req, &input); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
-	api.InstallerStackMtx.Lock()
-	defer api.InstallerStackMtx.Unlock()
 
-	if len(api.InstallerStacks) > 0 {
-		httphelper.ObjectExistsError(w, "install already started")
-		return
-	}
-
-	var id = random.Hex(16)
 	var creds aws.CredentialsProvider
+	var credentialID string
+	var credentialSecret string
 	if input.Creds.AccessKeyID != "" && input.Creds.SecretAccessKey != "" {
 		creds = aws.Creds(input.Creds.AccessKeyID, input.Creds.SecretAccessKey, "")
+		credentialID = input.Creds.AccessKeyID
+		credentialSecret = input.Creds.SecretAccessKey
 	} else {
 		var err error
 		creds, err = aws.EnvCreds()
@@ -365,87 +157,69 @@ func (api *httpAPI) InstallHandler(w http.ResponseWriter, req *http.Request, par
 			httphelper.ValidationError(w, "", err.Error())
 			return
 		}
+		credentialID = "aws_env"
 	}
-	s := &httpInstaller{
-		ID:            id,
-		PromptOutChan: make(chan *httpPrompt),
-		PromptInChan:  make(chan *httpPrompt),
-		logger:        log.New(),
-		api:           api,
-	}
-	s.Stack = &Stack{
-		Creds:        creds,
+	api.Installer.SaveAWSCredentials(credentialID, credentialSecret)
+	c := &AWSCluster{
+		StackName:    fmt.Sprintf("flynn-%d", time.Now().Unix()),
 		Region:       input.Region,
 		InstanceType: input.InstanceType,
-		NumInstances: input.NumInstances,
-		VpcCidr:      input.VpcCidr,
-		SubnetCidr:   input.SubnetCidr,
-		PromptInput:  s.PromptInput,
-		YesNoPrompt:  s.YesNoPrompt,
+		VpcCIDR:      input.VpcCIDR,
+		SubnetCIDR:   input.SubnetCIDR,
+		creds:        creds,
 	}
-	if err := s.Stack.RunAWS(); err != nil {
+	c.base = &BaseCluster{
+		ID:           c.StackName,
+		State:        "starting",
+		CredentialID: credentialID,
+		NumInstances: input.NumInstances,
+		installer:    api.Installer,
+	}
+	if err := api.Installer.LaunchCluster(c); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
-	api.InstallerStacks[id] = s
-	go s.handleEvents()
-	httphelper.JSON(w, 200, s)
+	httphelper.JSON(w, 200, c.base)
 }
 
-func (api *httpAPI) AbortInstallHandler(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	api.InstallerStackMtx.Lock()
-	defer api.InstallerStackMtx.Unlock()
-	id := params.ByName("id")
-	s := api.InstallerStacks[id]
-	if s == nil {
-		w.WriteHeader(404)
+func (api *httpAPI) DeleteCluster(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	if err := api.Installer.DeleteCluster(params.ByName("id")); err != nil {
+		if err == ClusterNotFoundError {
+			httphelper.ObjectNotFoundError(w, err.Error())
+			return
+		}
+		httphelper.Error(w, err)
 		return
 	}
-	// TODO(jvatic): Cleanup stack
-	delete(api.InstallerStacks, params.ByName("id"))
 	w.WriteHeader(200)
 }
 
-func (api *httpAPI) EventsHandler(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	api.InstallerStackMtx.Lock()
-	s := api.InstallerStacks[params.ByName("id")]
-	api.InstallerStackMtx.Unlock()
-	if s == nil {
-		httphelper.ObjectNotFoundError(w, "install instance not found")
-		return
-	}
+func (api *httpAPI) Events(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	eventChan := make(chan *Event)
+	lastEventID := req.Header.Get("Last-Event-ID")
+	api.Installer.Subscribe(eventChan, lastEventID)
 
-	eventChan := make(chan *httpEvent)
-	doneChan := s.Subscribe(eventChan)
-
-	stream := sse.NewStream(w, eventChan, s.logger)
+	stream := sse.NewStream(w, eventChan, api.logger)
 	stream.Serve()
 
-	s.logger.Info(fmt.Sprintf("streaming events for %s", s.ID))
-
-	go func() {
-		for {
-			select {
-			case <-doneChan:
-				stream.Close()
-				return
-			}
-		}
-	}()
+	api.logger.Debug("streaming events")
 
 	stream.Wait()
 }
 
-func (api *httpAPI) PromptHandler(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	api.InstallerPromptsMtx.Lock()
-	prompt := api.InstallerPrompts[params.ByName("id")]
-	api.InstallerPromptsMtx.Unlock()
-	if prompt == nil {
+func (api *httpAPI) Prompt(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	s, err := api.Installer.FindCluster(params.ByName("id"))
+	if err != nil {
+		httphelper.ObjectNotFoundError(w, "cluster not found")
+		return
+	}
+	prompt, err := s.findPrompt(params.ByName("prompt_id"))
+	if err != nil {
 		httphelper.ObjectNotFoundError(w, "prompt not found")
 		return
 	}
 
-	var input *httpPrompt
+	var input *Prompt
 	if err := httphelper.DecodeJSON(req, &input); err != nil {
 		httphelper.Error(w, err)
 		return
@@ -458,21 +232,14 @@ func (api *httpAPI) ServeApplicationJS(w http.ResponseWriter, req *http.Request,
 	path := filepath.Join("app", "build", params.ByName("assetPath"))
 	data, err := api.Asset(path)
 	if err != nil {
-		fmt.Println(err)
-		w.WriteHeader(500)
+		httphelper.Error(w, err)
+		api.logger.Debug(err.Error())
 		return
 	}
 
 	var jsConf bytes.Buffer
 	jsConf.Write([]byte("window.InstallerConfig = "))
-	json.NewEncoder(&jsConf).Encode(installerJSConfig{
-		Endpoints: map[string]string{
-			"install": "/install",
-			"events":  "/events/:id",
-			"prompt":  "/prompt/:id",
-		},
-		HasAWSEnvCredentials: api.AWSEnvCreds != nil,
-	})
+	json.NewEncoder(&jsConf).Encode(api.clientConfig)
 	jsConf.Write([]byte(";\n"))
 
 	r := ioutil.NewMultiReadSeeker(bytes.NewReader(jsConf.Bytes()), data)
@@ -481,7 +248,7 @@ func (api *httpAPI) ServeApplicationJS(w http.ResponseWriter, req *http.Request,
 }
 
 func (api *httpAPI) ServeAsset(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	if strings.HasPrefix(params.ByName("assetPath"), "/application-") {
+	if strings.HasPrefix(params.ByName("assetPath"), "/application-") && strings.HasSuffix(params.ByName("assetPath"), ".js") {
 		api.ServeApplicationJS(w, req, params)
 	} else {
 		path := filepath.Join("app", "build", params.ByName("assetPath"))
@@ -496,17 +263,9 @@ func (api *httpAPI) ServeAsset(w http.ResponseWriter, req *http.Request, params 
 
 func (api *httpAPI) ServeTemplate(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
 	if req.Header.Get("Accept") == "application/json" {
-		api.InstallerStackMtx.Lock()
-		s := api.InstallerStacks[params.ByName("id")]
-		if s == nil && len(api.InstallerStacks) > 0 {
-			for id := range api.InstallerStacks {
-				s = api.InstallerStacks[id]
-				break
-			}
-		}
-		api.InstallerStackMtx.Unlock()
-		if s == nil {
-			w.WriteHeader(404)
+		s, err := api.Installer.FindCluster(params.ByName("id"))
+		if err != nil {
+			httphelper.ObjectNotFoundError(w, err.Error())
 			return
 		}
 		httphelper.JSON(w, 200, s)
@@ -515,8 +274,8 @@ func (api *httpAPI) ServeTemplate(w http.ResponseWriter, req *http.Request, para
 
 	manifest, err := api.AssetManifest()
 	if err != nil {
-		fmt.Println(err)
-		w.WriteHeader(500)
+		httphelper.Error(w, err)
+		api.logger.Debug(err.Error())
 		return
 	}
 
@@ -529,8 +288,8 @@ func (api *httpAPI) ServeTemplate(w http.ResponseWriter, req *http.Request, para
 		ReactJSPath:        manifest.Assets["react.js"],
 	})
 	if err != nil {
-		w.WriteHeader(500)
-		fmt.Println(err)
+		httphelper.Error(w, err)
+		api.logger.Debug(err.Error())
 		return
 	}
 }

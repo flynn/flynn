@@ -2,58 +2,42 @@ package installer
 
 import (
 	"crypto/x509"
-	"encoding/json"
+	"database/sql"
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
+	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/cznic/ql/driver"
 	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/pkg/sshkeygen"
 )
 
-var keysDir, dataPath string
+var keysDir, dbPath string
 
 func init() {
 	dir := filepath.Join(config.Dir(), "installer")
 	keysDir = filepath.Join(dir, "keys")
-	dataPath = filepath.Join(dir, "data.json")
+	dbPath = filepath.Join(dir, "data.db")
 }
 
-func (s *Stack) load() error {
-	s.persistMutex.Lock()
-	defer s.persistMutex.Unlock()
+func (i *Installer) openDB() error {
+	i.dbMtx.Lock()
+	defer i.dbMtx.Unlock()
 
-	file, err := os.Open(dataPath)
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
+		return err
+	}
+	db, err := sql.Open("ql", dbPath)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
-	dec := json.NewDecoder(file)
-	if err := dec.Decode(&s); err != nil {
+	i.db = db
+	if err := db.Ping(); err != nil {
 		return err
 	}
-	return nil
-}
-
-func (s *Stack) persist() error {
-	s.persistMutex.Lock()
-	defer s.persistMutex.Unlock()
-
-	if err := os.MkdirAll(filepath.Dir(dataPath), 0755); err != nil {
-		return err
-	}
-	file, err := os.Create(dataPath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	enc := json.NewEncoder(file)
-	if err := enc.Encode(s); err != nil {
-		return err
-	}
-	return nil
+	return i.migrateDB()
 }
 
 func saveSSHKey(name string, key *sshkeygen.SSHKey) error {
