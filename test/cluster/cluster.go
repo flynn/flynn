@@ -459,7 +459,7 @@ type buildData struct {
 func buildFlynn(inst *Instance, commit string, merge bool, out io.Writer) error {
 	var b bytes.Buffer
 	flynnBuildScript.Execute(&b, buildData{commit, merge})
-	return inst.Run("bash", &Streams{Stdin: &b, Stdout: out, Stderr: out})
+	return inst.RunWithTimeout("bash", &Streams{Stdin: &b, Stdout: out, Stderr: out}, 30*time.Minute)
 }
 
 var flynnUnitTestScript = `

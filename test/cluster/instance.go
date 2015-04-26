@@ -264,14 +264,18 @@ var sshAttempts = attempt.Strategy{
 }
 
 func (i *Instance) Run(command string, s *Streams) error {
-	return i.run(command, s, nil)
+	return i.run(command, s, nil, nil)
 }
 
 func (i *Instance) RunWithEnv(command string, s *Streams, env map[string]string) error {
-	return i.run(command, s, env)
+	return i.run(command, s, env, nil)
 }
 
-func (i *Instance) run(command string, s *Streams, env map[string]string) error {
+func (i *Instance) RunWithTimeout(command string, s *Streams, timeout time.Duration) error {
+	return i.run(command, s, nil, &timeout)
+}
+
+func (i *Instance) run(command string, s *Streams, env map[string]string, timeout *time.Duration) (err error) {
 	if s == nil {
 		s = &Streams{}
 	}
@@ -293,10 +297,24 @@ func (i *Instance) run(command string, s *Streams, env map[string]string) error 
 	for k, v := range env {
 		sess.Setenv(k, v)
 	}
-	if err := sess.Run(command); err != nil {
-		return fmt.Errorf("failed to run command on %s: %s", i.IP, err)
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("failed to run command on %s: %s", i.IP, err)
+		}
+	}()
+	if timeout == nil {
+		return sess.Run(command)
 	}
-	return nil
+	runErr := make(chan error)
+	go func() {
+		runErr <- sess.Run(command)
+	}()
+	select {
+	case err = <-runErr:
+		return err
+	case <-time.After(*timeout):
+		return errors.New("command timed out")
+	}
 }
 
 func (i *Instance) Drive(name string) *VMDrive {
