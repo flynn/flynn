@@ -127,7 +127,7 @@ func (c *Cluster) BuildFlynn(rootFS, commit string, merge bool, runTests bool) (
 		Kernel: c.bc.Kernel,
 		User:   uid,
 		Group:  gid,
-		Memory: "2048",
+		Memory: "4096",
 		Cores:  8,
 		Drives: map[string]*VMDrive{
 			"hda": {FS: rootFS, COW: true, Temp: false},
