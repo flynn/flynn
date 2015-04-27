@@ -115,7 +115,10 @@ func (h *heartbeater) Addr() string {
 	return h.inst.Addr
 }
 
-const heartbeatInterval = 5 * time.Second
+const (
+	heartbeatInterval        = 5 * time.Second
+	heartbeatFailingInterval = 200 * time.Millisecond
+)
 
 func (h *heartbeater) run(firstErr chan<- error) {
 	path := fmt.Sprintf("/services/%s/instances/%s", h.service, h.inst.ID)
@@ -130,13 +133,16 @@ func (h *heartbeater) run(firstErr chan<- error) {
 	if err != nil {
 		return
 	}
-	ticker := time.NewTicker(heartbeatInterval)
+	timer := time.NewTimer(heartbeatInterval)
 	for {
 		select {
-		case <-ticker.C:
+		case <-timer.C:
 			if err := register(); err != nil {
 				log.Printf("discoverd: heartbeat %s (%s) failed: %s", h.service, h.inst.Addr, err)
+				timer.Reset(heartbeatFailingInterval)
+				break
 			}
+			timer.Reset(heartbeatInterval)
 		case <-h.stop:
 			h.c.c.Delete(path)
 			close(h.done)
