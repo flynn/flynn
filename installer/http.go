@@ -36,20 +36,6 @@ type installerJSConfig struct {
 	HasAWSEnvCredentials bool              `json:"has_aws_env_credentials"`
 }
 
-type jsonInput struct {
-	Creds        jsonInputCreds `json:"creds"`
-	Region       string         `json:"region"`
-	InstanceType string         `json:"instance_type"`
-	NumInstances int64          `json:"num_instances"`
-	VpcCIDR      string         `json:"vpc_cidr,omitempty"`
-	SubnetCIDR   string         `json:"subnet_cidr,omitempty"`
-}
-
-type jsonInputCreds struct {
-	AccessKeyID     string `json:"access_key_id"`
-	SecretAccessKey string `json:"secret_access_key"`
-}
-
 type httpAPI struct {
 	AWSEnvCreds  aws.CredentialsProvider
 	Installer    *Installer
@@ -66,10 +52,12 @@ func ServeHTTP() error {
 		logger:    logger,
 		clientConfig: installerJSConfig{
 			Endpoints: map[string]string{
-				"clusters": "/clusters",
-				"cluster":  "/clusters/:id",
-				"events":   "/events",
-				"prompt":   "/clusters/:id/prompts/:prompt_id",
+				"clusters":    "/clusters",
+				"cluster":     "/clusters/:id",
+				"events":      "/events",
+				"prompt":      "/clusters/:id/prompts/:prompt_id",
+				"credentials": "/credentials",
+				"regions":     "/regions",
 			},
 		},
 	}
@@ -82,6 +70,8 @@ func ServeHTTP() error {
 	httpRouter := httprouter.New()
 
 	httpRouter.GET("/", api.ServeTemplate)
+	httpRouter.GET("/credentials", api.ServeTemplate)
+	httpRouter.GET("/credentials/:id", api.ServeTemplate)
 	httpRouter.GET("/clusters/:id", api.ServeTemplate)
 	httpRouter.GET("/clusters/:id/delete", api.ServeTemplate)
 	httpRouter.DELETE("/clusters/:id", api.DeleteCluster)
@@ -89,6 +79,9 @@ func ServeHTTP() error {
 	httpRouter.GET("/events", api.Events)
 	httpRouter.POST("/clusters/:id/prompts/:prompt_id", api.Prompt)
 	httpRouter.GET("/assets/*assetPath", api.ServeAsset)
+	httpRouter.POST("/credentials", api.NewCredential)
+	httpRouter.DELETE("/credentials/:type/:id", api.DeleteCredential)
+	httpRouter.GET("/regions", api.GetCloudRegions)
 
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -137,49 +130,74 @@ func (api *httpAPI) AssetManifest() (*assetManifest, error) {
 }
 
 func (api *httpAPI) LaunchCluster(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	var input *jsonInput
-	if err := httphelper.DecodeJSON(req, &input); err != nil {
+
+	var inputJSON bytes.Buffer
+	if _, err := inputJSON.ReadFrom(req.Body); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
 
-	var creds aws.CredentialsProvider
-	var credentialID string
-	var credentialSecret string
-	if input.Creds.AccessKeyID != "" && input.Creds.SecretAccessKey != "" {
-		creds = aws.Creds(input.Creds.AccessKeyID, input.Creds.SecretAccessKey, "")
-		credentialID = input.Creds.AccessKeyID
-		credentialSecret = input.Creds.SecretAccessKey
-	} else {
-		var err error
-		creds, err = aws.EnvCreds()
-		if err != nil {
-			httphelper.ValidationError(w, "", err.Error())
-			return
-		}
-		credentialID = "aws_env"
+	decodeJSON := func(dst interface{}) error {
+		return json.Unmarshal(inputJSON.Bytes(), dst)
 	}
-	api.Installer.SaveAWSCredentials(credentialID, credentialSecret)
-	c := &AWSCluster{
-		StackName:    fmt.Sprintf("flynn-%d", time.Now().Unix()),
-		Region:       input.Region,
-		InstanceType: input.InstanceType,
-		VpcCIDR:      input.VpcCIDR,
-		SubnetCIDR:   input.SubnetCIDR,
-		creds:        creds,
-	}
-	c.base = &BaseCluster{
-		ID:           c.StackName,
-		State:        "starting",
-		CredentialID: credentialID,
-		NumInstances: input.NumInstances,
-		installer:    api.Installer,
-	}
-	if err := api.Installer.LaunchCluster(c); err != nil {
+
+	var base *BaseCluster
+	if err := decodeJSON(&base); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
-	httphelper.JSON(w, 200, c.base)
+
+	if base.CredentialID == "" {
+		httphelper.ValidationError(w, "credential_id", "Missing credential id")
+		return
+	}
+
+	var creds *Credential
+	if base.Type == "aws" && base.CredentialID == "aws_env" {
+		creds = &Credential{
+			ID: base.CredentialID,
+		}
+	} else {
+		var err error
+		creds, err = api.Installer.FindCredentials(base.CredentialID)
+		if err != nil {
+			httphelper.ValidationError(w, "credential_id", "Invalid credential id")
+			return
+		}
+	}
+
+	var cluster Cluster
+	switch base.Type {
+	case "aws":
+		cluster = &AWSCluster{}
+	case "digital_ocean":
+		cluster = &DigitalOceanCluster{}
+	default:
+		httphelper.ValidationError(w, "type", fmt.Sprintf("Invalid type \"%s\"", base.Type))
+		return
+	}
+
+	base.ID = fmt.Sprintf("flynn-%d", time.Now().Unix())
+	base.State = "starting"
+	base.installer = api.Installer
+
+	if err := decodeJSON(&cluster); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+
+	cluster.SetBase(base)
+
+	if err := cluster.SetCreds(creds); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+
+	if err := api.Installer.LaunchCluster(cluster); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, base)
 }
 
 func (api *httpAPI) DeleteCluster(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
@@ -197,18 +215,13 @@ func (api *httpAPI) DeleteCluster(w http.ResponseWriter, req *http.Request, para
 func (api *httpAPI) Events(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
 	eventChan := make(chan *Event)
 	lastEventID := req.Header.Get("Last-Event-ID")
-	api.Installer.Subscribe(eventChan, lastEventID)
-
-	stream := sse.NewStream(w, eventChan, api.logger)
-	stream.Serve()
-
-	api.logger.Debug("streaming events")
-
-	stream.Wait()
+	sub := api.Installer.Subscribe(eventChan, lastEventID)
+	defer api.Installer.Unsubscribe(sub)
+	sse.ServeStream(w, eventChan, api.logger)
 }
 
 func (api *httpAPI) Prompt(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	s, err := api.Installer.FindCluster(params.ByName("id"))
+	s, err := api.Installer.FindBaseCluster(params.ByName("id"))
 	if err != nil {
 		httphelper.ObjectNotFoundError(w, "cluster not found")
 		return
@@ -226,6 +239,52 @@ func (api *httpAPI) Prompt(w http.ResponseWriter, req *http.Request, params http
 	}
 	prompt.Resolve(input)
 	w.WriteHeader(200)
+}
+
+func (api *httpAPI) NewCredential(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	creds := &Credential{}
+	if err := httphelper.DecodeJSON(req, &creds); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	if err := api.Installer.SaveCredentials(creds); err != nil {
+		if err == credentialExistsError {
+			httphelper.ObjectExistsError(w, err.Error())
+			return
+		}
+		httphelper.Error(w, err)
+		return
+	}
+	w.WriteHeader(200)
+}
+
+func (api *httpAPI) DeleteCredential(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	if err := api.Installer.DeleteCredentials(params.ByName("id")); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	w.WriteHeader(200)
+}
+
+func (api *httpAPI) GetCloudRegions(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	params := req.URL.Query()
+	cloud := params.Get("cloud")
+	if cloud != "digital_ocean" {
+		httphelper.ObjectNotFoundError(w, "")
+		return
+	}
+	credentialID := params.Get("credential_id")
+	creds, err := api.Installer.FindCredentials(credentialID)
+	if err != nil {
+		httphelper.ValidationError(w, "credential_id", "Invalid credential id")
+		return
+	}
+	res, err := api.Installer.ListDigitalOceanRegions(creds)
+	if err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, res)
 }
 
 func (api *httpAPI) ServeApplicationJS(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
@@ -263,7 +322,7 @@ func (api *httpAPI) ServeAsset(w http.ResponseWriter, req *http.Request, params 
 
 func (api *httpAPI) ServeTemplate(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
 	if req.Header.Get("Accept") == "application/json" {
-		s, err := api.Installer.FindCluster(params.ByName("id"))
+		s, err := api.Installer.FindBaseCluster(params.ByName("id"))
 		if err != nil {
 			httphelper.ObjectNotFoundError(w, err.Error())
 			return

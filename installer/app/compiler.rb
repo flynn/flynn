@@ -49,7 +49,7 @@ module Installer
     )
 
     asset_names = %w[application.js application.css react.js]
-    Dir[File.join(input_dir, 'images', '*.png')].each do |path|
+    Dir[File.join(input_dir, 'images', '*')].each do |path|
       asset_names.push(File.join('images', File.basename(path)))
     end
     Dir[File.join(vendor_dir, 'fonts', '*')].each do |path|

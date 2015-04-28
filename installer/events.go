@@ -1,6 +1,7 @@
 package installer
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"strconv"
@@ -26,32 +27,92 @@ type Subscription struct {
 	EventChan   chan *Event
 	DoneChan    chan struct{}
 
+	isLocked      bool
 	sendEventsMtx sync.Mutex
 }
 
 func (sub *Subscription) SendEvents(i *Installer) {
+	if sub.isLocked {
+		return
+	}
+	sub.isLocked = true
 	sub.sendEventsMtx.Lock()
 	defer sub.sendEventsMtx.Unlock()
+	sub.isLocked = false
 	for _, event := range i.GetEventsSince(sub.LastEventID) {
 		sub.LastEventID = event.ID
 		sub.EventChan <- event
 	}
 }
 
-func (i *Installer) Subscribe(eventChan chan *Event, lastEventID string) {
-	i.subscribeMtx.Lock()
-	defer i.subscribeMtx.Unlock()
-
+func (i *Installer) Subscribe(eventChan chan *Event, lastEventID string) *Subscription {
 	subscription := &Subscription{
 		LastEventID: lastEventID,
 		EventChan:   eventChan,
 	}
 
+	go subscription.SendEvents(i)
+
 	go func() {
-		subscription.SendEvents(i)
+		i.subscribeMtx.Lock()
+		defer i.subscribeMtx.Unlock()
+		i.subscriptions = append(i.subscriptions, subscription)
 	}()
 
-	i.subscriptions = append(i.subscriptions, subscription)
+	return subscription
+}
+
+func (i *Installer) Unsubscribe(sub *Subscription) {
+	i.subscribeMtx.Lock()
+	defer i.subscribeMtx.Unlock()
+
+	subscriptions := make([]*Subscription, 0, len(i.subscriptions))
+	for _, s := range i.subscriptions {
+		if sub != s {
+			subscriptions = append(subscriptions, s)
+		}
+	}
+	i.subscriptions = subscriptions
+}
+
+func (i *Installer) processEvent(event *Event) bool {
+	var err error
+	if event.Type == "log" {
+		if c, err := i.FindBaseCluster(event.ClusterID); err != nil || (err == nil && c.State == "running") {
+			return false
+		}
+	}
+	if event.Type == "new_cluster" || event.Type == "install_done" {
+		event.Cluster, err = i.FindBaseCluster(event.ClusterID)
+		if err != nil {
+			i.logger.Debug(fmt.Sprintf("GetEventsSince Error finding cluster %s: %s", event.ClusterID, err.Error()))
+			return false
+		}
+	}
+	switch event.ResourceType {
+	case "":
+	case "prompt":
+		p := &Prompt{}
+		if err := i.db.QueryRow(`SELECT ID, Type, Message, Yes, Input, Resolved FROM prompts WHERE ID == $1 AND DeletedAt IS NULL`, event.ResourceID).Scan(&p.ID, &p.Type, &p.Message, &p.Yes, &p.Input, &p.Resolved); err != nil {
+			i.logger.Debug(fmt.Sprintf("GetEventsSince Prompt Scan Error: %s", err.Error()))
+			return false
+		}
+		event.Resource = p
+	case "credential":
+		if event.Type == "new_credential" {
+			creds := &Credential{}
+			if err := i.db.QueryRow(`SELECT Type, Name, ID FROM credentials WHERE ID == $1 AND DeletedAt IS NULL`, event.ResourceID).Scan(&creds.Type, &creds.Name, &creds.ID); err != nil {
+				if err != sql.ErrNoRows {
+					i.logger.Debug(fmt.Sprintf("GetEventsSince Credential Scan Error: %s", err.Error()))
+				}
+				return false
+			}
+			event.Resource = creds
+		}
+	default:
+		i.logger.Debug(fmt.Sprintf("GetEventsSince unsupported ResourceType \"%s\"", event.ResourceType))
+	}
+	return true
 }
 
 func (i *Installer) GetEventsSince(eventID string) []*Event {
@@ -65,39 +126,40 @@ func (i *Installer) GetEventsSince(eventID string) []*Event {
 			ts = time.Unix(0, nano)
 		}
 	}
-	rows, err := i.db.Query(`SELECT ID, ClusterID, PromptID, Type, Timestamp, Description FROM events WHERE Timestamp > $1 AND DeletedAt IS NULL ORDER BY Timestamp`, ts)
-	if err != nil {
-		i.logger.Debug(fmt.Sprintf("GetEventsSince SQL Error: %s", err.Error()))
-		return events
+
+	priority := []string{"new_cluster", "new_credential", "cluster_state", "install_done", "prompt"}
+	for _, eventType := range priority {
+		for _, e := range i.events {
+			if !e.Timestamp.After(ts) {
+				continue
+			}
+			if e.Type == eventType {
+				i.processEvent(e)
+				events = append(events, e)
+			}
+		}
 	}
-	for rows.Next() {
-		event := &Event{}
-		if err := rows.Scan(&event.ID, &event.ClusterID, &event.PromptID, &event.Type, &event.Timestamp, &event.Description); err != nil {
-			i.logger.Debug(fmt.Sprintf("GetEventsSince Scan Error: %s", err.Error()))
+
+	isStringIn := func(str string, strs []string) bool {
+		for _, s := range strs {
+			if str == s {
+				return true
+			}
+		}
+		return false
+	}
+
+	for _, e := range i.events {
+		if !e.Timestamp.After(ts) {
 			continue
 		}
-		if event.Type == "log" {
-			if c, err := i.FindCluster(event.ClusterID); err != nil || (err == nil && c.State == "running") {
-				continue
-			}
+		if isStringIn(e.Type, priority) {
+			continue
 		}
-		if event.Type == "new_cluster" || event.Type == "install_done" {
-			event.Cluster, err = i.FindCluster(event.ClusterID)
-			if err != nil {
-				i.logger.Debug(fmt.Sprintf("GetEventsSince Error finding cluster %s: %s", event.ClusterID, err.Error()))
-				continue
-			}
-		}
-		if event.PromptID != "" {
-			p := &Prompt{}
-			if err := i.db.QueryRow(`SELECT ID, Type, Message, Yes, Input, Resolved FROM prompts WHERE ID == $1 AND DeletedAt IS NULL`, event.PromptID).Scan(&p.ID, &p.Type, &p.Message, &p.Yes, &p.Input, &p.Resolved); err != nil {
-				i.logger.Debug(fmt.Sprintf("GetEventsSince Prompt Scan Error: %s", err.Error()))
-				continue
-			}
-			event.Prompt = p
-		}
-		events = append(events, event)
+		i.processEvent(e)
+		events = append(events, e)
 	}
+
 	return events
 }
 
@@ -106,11 +168,13 @@ func (i *Installer) SendEvent(event *Event) {
 	event.ID = fmt.Sprintf("event-%d", event.Timestamp.UnixNano())
 
 	if event.Type == "prompt" {
-		if event.Prompt == nil {
+		prompt, ok := event.Resource.(*Prompt)
+		if !ok || prompt == nil {
 			i.logger.Debug(fmt.Sprintf("SendEvent Error: Invalid prompt event: %v", event))
 			return
 		}
-		event.PromptID = event.Prompt.ID
+		event.ResourceType = "prompt"
+		event.ResourceID = prompt.ID
 	}
 
 	if event.Type == "error" {
@@ -121,8 +185,12 @@ func (i *Installer) SendEvent(event *Event) {
 
 	err := i.dbInsertItem("events", event)
 	if err != nil {
-		i.logger.Debug(err.Error())
+		i.logger.Debug(fmt.Sprintf("SendEvent dbInsertItem error: %s", err.Error()))
 	}
+
+	i.eventsMtx.Lock()
+	i.events = append(i.events, event)
+	i.eventsMtx.Unlock()
 
 	for _, sub := range i.subscriptions {
 		go sub.SendEvents(i)
@@ -146,7 +214,7 @@ func (c *BaseCluster) sendPrompt(prompt *Prompt) *Prompt {
 	c.sendEvent(&Event{
 		Type:      "prompt",
 		ClusterID: c.ID,
-		Prompt:    prompt,
+		Resource:  prompt,
 	})
 
 	res := <-prompt.resChan
@@ -162,7 +230,7 @@ func (c *BaseCluster) sendPrompt(prompt *Prompt) *Prompt {
 	c.sendEvent(&Event{
 		Type:      "prompt",
 		ClusterID: c.ID,
-		Prompt:    prompt,
+		Resource:  prompt,
 	})
 
 	return res
@@ -179,10 +247,11 @@ func (i *Installer) dbInsertItem(tableName string, item interface{}) error {
 	i.dbMtx.Lock()
 	defer i.dbMtx.Unlock()
 
-	fields, err := ql.Marshal(item)
+	fields, err := i.dbMarshalItem(tableName, item)
 	if err != nil {
 		return err
 	}
+
 	vStr := make([]string, 0, len(fields))
 	for idx := range fields {
 		vStr = append(vStr, fmt.Sprintf("$%d", idx+1))

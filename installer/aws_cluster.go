@@ -25,8 +25,43 @@ var DisallowedEC2InstanceTypes = []string{"t1.micro", "t2.micro", "t2.small", "m
 var DefaultInstanceType = "m3.medium"
 var StackNotFoundError = errors.New("Stack does not exist")
 
+func (c *AWSCluster) Type() string {
+	return "aws"
+}
+
 func (c *AWSCluster) Base() *BaseCluster {
 	return c.base
+}
+
+func (c *AWSCluster) SetBase(base *BaseCluster) {
+	c.base = base
+}
+
+func (c *AWSCluster) FindCredentials() (aws.CredentialsProvider, error) {
+	if c.base.CredentialID == "aws_env" {
+		return aws.EnvCreds()
+	}
+	cred, err := c.base.FindCredentials()
+	if err != nil {
+		return nil, err
+	}
+	return aws.Creds(cred.ID, cred.Secret, ""), nil
+}
+
+func (c *AWSCluster) SetCreds(creds *Credential) error {
+	if creds == nil || creds.ID == "aws_env" {
+		c.base.CredentialID = "aws_env"
+		awsCreds, err := aws.EnvCreds()
+		if err != nil {
+			return err
+		}
+		c.creds = awsCreds
+		return nil
+	}
+	c.base.credential = creds
+	c.base.CredentialID = creds.ID
+	c.creds = aws.Creds(creds.ID, creds.Secret, "")
+	return nil
 }
 
 func (c *AWSCluster) wrapRequest(runRequest func() error) error {
@@ -60,6 +95,12 @@ func (c *AWSCluster) saveField(field string, value interface{}) error {
 }
 
 func (c *AWSCluster) SetDefaultsAndValidate() error {
+	c.ClusterID = c.base.ID
+
+	if c.StackName == "" {
+		c.StackName = c.base.ID
+	}
+
 	if c.InstanceType == "" {
 		c.InstanceType = DefaultInstanceType
 	}
@@ -75,6 +116,8 @@ func (c *AWSCluster) SetDefaultsAndValidate() error {
 	if err := c.validateInputs(); err != nil {
 		return err
 	}
+
+	c.base.SSHUsername = "ubuntu"
 
 	if err := c.base.SetDefaultsAndValidate(); err != nil {
 		return err

@@ -8,16 +8,26 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/gen/cloudformation"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/gen/ec2"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cznic/ql"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/digitalocean/godo"
 	"github.com/flynn/flynn/pkg/sshkeygen"
 )
 
 type Cluster interface {
 	Base() *BaseCluster
+	SetDefaultsAndValidate() error
+	Run()
+	Delete()
+	Type() string
+	SetBase(*BaseCluster)
+	SetCreds(*Credential) error
 }
 
-type credential struct {
-	ID     string `json:"id" ql:"index xID"`
-	Secret string `json:"secret"`
+type Credential struct {
+	ID        string     `json:"id" ql:"index xID"`
+	Secret    string     `json:"secret"`
+	Name      string     `json:"name"`
+	Type      string     `json:"type"` // enum(aws, digital_ocean)
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
 type AWSCluster struct {
@@ -39,9 +49,29 @@ type AWSCluster struct {
 	ec2   *ec2.EC2
 }
 
+type DigitalOceanCluster struct {
+	ClusterID      string     `json:"cluster_id" ql:"index xCluster"`
+	Region         string     `json:"region"`
+	Size           string     `json:"size"`
+	KeyFingerprint string     `json:"key_fingerprint"`
+	DropletIDs     []int64    `json:"droplet_ids" ql:"-"`
+	DeletedAt      *time.Time `json:"deleted_at,omitempty"`
+
+	base                 *BaseCluster
+	client               *godo.Client
+	startScript          string
+	iptablesConfigScript string
+}
+
+type DigitalOceanDroplet struct {
+	ClusterID string     `json:"cluster_id" ql:"index xCluster"`
+	ID        int64      `json:"id"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+}
+
 type BaseCluster struct {
 	ID                  string            `json:"id" ql:"index xID"`
-	CredentialID        string            `json:"-"`
+	CredentialID        string            `json:"credential_id"`
 	Type                string            `json:"type"`                    // enum(aws)
 	State               string            `json:"state" ql:"index xState"` // enum(starting, error, running, deleting)
 	Name                string            `json:"name" ql:"-"`
@@ -53,13 +83,12 @@ type BaseCluster struct {
 	CACert              string            `json:"ca_cert"`
 	SSHKey              *sshkeygen.SSHKey `json:"-" ql:"-"`
 	SSHKeyName          string            `json:"ssh_key_name,omitempty"`
-	VpcCIDR             string            `json:"vpc_cidr_block,omitempty"`
-	SubnetCIDR          string            `json:"subnet_cidr_block,omitempty"`
+	SSHUsername         string            `json:"-" ql:"-"`
 	DiscoveryToken      string            `json:"discovery_token"`
 	InstanceIPs         []string          `json:"instance_ips,omitempty" ql:"-"`
-	DNSZoneID           string            `json:"dns_zone_id,omitempty"`
 	DeletedAt           *time.Time        `json:"deleted_at,omitempty"`
 
+	credential    *Credential
 	installer     *Installer
 	pendingPrompt *Prompt
 	done          bool
@@ -72,15 +101,16 @@ type InstanceIPs struct {
 }
 
 type Event struct {
-	ID          string       `json:"id" ql:"index xID"`
-	Timestamp   time.Time    `json:"timestamp"`
-	Type        string       `json:"type"`
-	ClusterID   string       `json:"cluster_id",omitempty`
-	PromptID    string       `json:"-"`
-	Description string       `json:"description,omitempty"`
-	Prompt      *Prompt      `json:"prompt,omitempty" ql:"-"`
-	Cluster     *BaseCluster `json:"cluster,omitempty" ql:"-"`
-	DeletedAt   *time.Time   `json:"deleted_at,omitempty"`
+	ID           string       `json:"id" ql:"index xID"`
+	Timestamp    time.Time    `json:"timestamp"`
+	Type         string       `json:"type"`
+	ClusterID    string       `json:"cluster_id,omitempty"`
+	Cluster      *BaseCluster `json:"cluster,omitempty" ql:"-"`
+	ResourceType string       `json:"resource_type,omitempty"`
+	ResourceID   string       `json:"resource_id,omitempty"`
+	Resource     interface{}  `json:"resource,omitempty" ql:"-"`
+	Description  string       `json:"description,omitempty"`
+	DeletedAt    *time.Time   `json:"deleted_at,omitempty"`
 }
 
 type Prompt struct {
@@ -141,7 +171,7 @@ func (i *Installer) updatedbColumns(in interface{}, t string) error {
 
 	for _, c := range remove {
 		if _, err := tx.Exec(fmt.Sprintf(`
-      ALTER TABLE %s DROP %s
+      ALTER TABLE %s DROP COLUMN %s
     `, t, c)); err != nil {
 			tx.Rollback()
 			return err
@@ -160,15 +190,76 @@ func (i *Installer) updatedbColumns(in interface{}, t string) error {
 	return tx.Commit()
 }
 
+// Event PromptID -> ResourceType + ResourceID
+func (i *Installer) runMigration1() error {
+	rows, err := i.db.Query("SELECT * FROM events LIMIT 0")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	columns, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+
+	for _, c := range columns {
+		if c == "ResourceType" || c == "ResourceID" {
+			return nil
+		}
+	}
+
+	tx, err := i.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(`
+    ALTER TABLE events ADD ResourceType string;
+    ALTER TABLE events ADD ResourceID string;
+    UPDATE events SET ResourceType = "", ResourceID = "";
+    DELETE FROM credentials WHERE ID == "aws_env";
+  `); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	for _, c := range columns {
+		if c == "PromptID" {
+			if _, err := tx.Exec(`UPDATE events SET ResourceType = "prompt", ResourceID = PromptID WHERE PromptID != ""`); err != nil {
+				tx.Rollback()
+				return err
+			}
+			break
+		}
+	}
+	return tx.Commit()
+}
+
+// Cleanup events for deleted clusters
+func (i *Installer) runMigration2() error {
+	tx, err := i.db.Begin()
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+		UPDATE events SET DeletedAt = now() WHERE ClusterID IN (SELECT ID FROM clusters WHERE DeletedAt IS NOT NULL)
+	`); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (i *Installer) migrateDB() error {
 	schemaInterfaces := map[interface{}]string{
-		(*credential)(nil):  "credentials",
-		(*BaseCluster)(nil): "clusters",
-		(*AWSCluster)(nil):  "aws_clusters",
-		(*Event)(nil):       "events",
-		(*Prompt)(nil):      "prompts",
-		(*InstanceIPs)(nil): "instances",
-		(*Domain)(nil):      "domains",
+		(*Credential)(nil):          "credentials",
+		(*BaseCluster)(nil):         "clusters",
+		(*AWSCluster)(nil):          "aws_clusters",
+		(*DigitalOceanCluster)(nil): "digital_ocean_clusters",
+		(*DigitalOceanDroplet)(nil): "digital_ocean_droplets",
+		(*Event)(nil):               "events",
+		(*Prompt)(nil):              "prompts",
+		(*InstanceIPs)(nil):         "instances",
+		(*Domain)(nil):              "domains",
 	}
 
 	tx, err := i.db.Begin()
@@ -189,10 +280,27 @@ func (i *Installer) migrateDB() error {
 		return err
 	}
 
+	if err := i.runMigration1(); err != nil {
+		return err
+	}
+
+	if err := i.runMigration2(); err != nil {
+		return err
+	}
+
 	for item, tableName := range schemaInterfaces {
 		if err := i.updatedbColumns(item, tableName); err != nil {
 			return err
 		}
 	}
+
+	if err := i.txExec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS CredentialsIdx1 ON credentials (ID);
+		CREATE INDEX IF NOT EXISTS EventsIdx1 ON events (Type);
+		CREATE INDEX IF NOT EXISTS DomainsIdx1 ON domains (ClusterID);
+	`); err != nil {
+		return err
+	}
+
 	return nil
 }
