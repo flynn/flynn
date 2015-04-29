@@ -88,7 +88,7 @@ Dashboard.config.fetch = function () {
 
 	Marbles.HTTP({
 		method: 'GET',
-		url: Dashboard.config.API_SERVER + "/config",
+		url: Dashboard.config.API_SERVER.replace(/^https?:/, window.location.protocol) + "/config",
 		middleware: [
 			Marbles.HTTP.Middleware.WithCredentials,
 			Marbles.HTTP.Middleware.SerializeJSON

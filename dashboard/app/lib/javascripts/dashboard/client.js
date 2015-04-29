@@ -97,6 +97,15 @@ Dashboard.Client = Marbles.Utils.createClass({
 		});
 	},
 
+	ping: function (endpoint, protocol) {
+		endpoint = window.location.host.replace("dashboard", endpoint);
+		endpoint = protocol + "://" + endpoint + "/ping";
+
+		return this.performRequest('GET', {
+			url: endpoint
+		});
+	},
+
 	getApps: function () {
 		return this.performControllerRequest('GET', {
 			url: "/apps"
