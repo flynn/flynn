@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/ctxhelper"
@@ -30,7 +30,7 @@ type FormationRepo struct {
 	releases  *ReleaseRepo
 	artifacts *ArtifactRepo
 
-	subscriptions map[chan<- *ct.ExpandedFormation]struct{}
+	subscriptions map[chan *ct.ExpandedFormation]struct{}
 	stopListener  chan struct{}
 	subMtx        sync.RWMutex
 }
@@ -41,7 +41,7 @@ func NewFormationRepo(db *postgres.DB, appRepo *AppRepo, releaseRepo *ReleaseRep
 		apps:          appRepo,
 		releases:      releaseRepo,
 		artifacts:     artifactRepo,
-		subscriptions: make(map[chan<- *ct.ExpandedFormation]struct{}),
+		subscriptions: make(map[chan *ct.ExpandedFormation]struct{}),
 		stopListener:  make(chan struct{}),
 	}
 }
@@ -191,21 +191,19 @@ func (r *FormationRepo) expandFormation(formation *ct.Formation) (*ct.ExpandedFo
 }
 
 func (r *FormationRepo) startListener() error {
-	// TODO: get connection string from somewhere
-	listenerEvent := func(ev pq.ListenerEventType, err error) {
-		if err != nil {
-			fmt.Println("LISTENER error:", err)
-		}
-		// TODO: handle errors
-	}
-	listener := pq.NewListener(r.db.DSN(), 10*time.Second, time.Minute, listenerEvent)
-	if err := listener.Listen("formations"); err != nil {
+	log := log15.New("component", "controller", "fn", "FormationRepo.startListener")
+	listener, err := r.db.Listen("formations", log)
+	if err != nil {
 		return err
 	}
 	go func() {
 		for {
 			select {
-			case n := <-listener.Notify:
+			case n, ok := <-listener.Notify:
+				if !ok {
+					r.unsubscribeAll()
+					return
+				}
 				ids := strings.SplitN(n.Extra, ":", 2)
 				go r.publish(ids[0], ids[1])
 			case <-r.stopListener:
@@ -217,7 +215,17 @@ func (r *FormationRepo) startListener() error {
 	return nil
 }
 
-func (r *FormationRepo) Subscribe(ch chan<- *ct.ExpandedFormation, stopCh <-chan struct{}, since time.Time) error {
+func (r *FormationRepo) unsubscribeAll() {
+	r.subMtx.Lock()
+	defer r.subMtx.Unlock()
+
+	for ch := range r.subscriptions {
+		r.unsubscribeLocked(ch)
+		close(ch)
+	}
+}
+
+func (r *FormationRepo) Subscribe(ch chan *ct.ExpandedFormation, stopCh <-chan struct{}, since time.Time) error {
 	var startListener bool
 	r.subMtx.Lock()
 	if len(r.subscriptions) == 0 {
@@ -227,6 +235,7 @@ func (r *FormationRepo) Subscribe(ch chan<- *ct.ExpandedFormation, stopCh <-chan
 	r.subMtx.Unlock()
 	if startListener {
 		if err := r.startListener(); err != nil {
+			r.Unsubscribe(ch)
 			return err
 		}
 	}
@@ -234,7 +243,7 @@ func (r *FormationRepo) Subscribe(ch chan<- *ct.ExpandedFormation, stopCh <-chan
 	return nil
 }
 
-func (r *FormationRepo) sendUpdatedSince(ch chan<- *ct.ExpandedFormation, stopCh <-chan struct{}, since time.Time) error {
+func (r *FormationRepo) sendUpdatedSince(ch chan *ct.ExpandedFormation, stopCh <-chan struct{}, since time.Time) error {
 	rows, err := r.db.Query("SELECT app_id, release_id, processes, created_at, updated_at FROM formations WHERE updated_at >= $1 ORDER BY updated_at DESC", since)
 	if err != nil {
 		return err
@@ -262,6 +271,10 @@ func (r *FormationRepo) sendUpdatedSince(ch chan<- *ct.ExpandedFormation, stopCh
 func (r *FormationRepo) Unsubscribe(ch chan *ct.ExpandedFormation) {
 	r.subMtx.Lock()
 	defer r.subMtx.Unlock()
+	r.unsubscribeLocked(ch)
+}
+
+func (r *FormationRepo) unsubscribeLocked(ch chan *ct.ExpandedFormation) {
 	go func() {
 		// drain to prevent deadlock while removing the listener
 		for range ch {
@@ -269,7 +282,10 @@ func (r *FormationRepo) Unsubscribe(ch chan *ct.ExpandedFormation) {
 	}()
 	delete(r.subscriptions, ch)
 	if len(r.subscriptions) == 0 {
-		r.stopListener <- struct{}{}
+		select {
+		case r.stopListener <- struct{}{}:
+		default:
+		}
 	}
 }
 

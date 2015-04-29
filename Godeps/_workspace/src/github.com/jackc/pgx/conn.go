@@ -14,10 +14,13 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
+
+type DialFunc func(network, addr string) (net.Conn, error)
 
 // ConnConfig contains all the options used to establish a connection.
 type ConnConfig struct {
@@ -28,6 +31,7 @@ type ConnConfig struct {
 	Password  string
 	TLSConfig *tls.Config // config for TLS connection -- nil disables TLS
 	Logger    Logger
+	Dial      DialFunc
 }
 
 // Conn is a PostgreSQL connection handle. It is not safe for concurrent usage.
@@ -121,29 +125,25 @@ func Connect(config ConnConfig) (c *Conn, err error) {
 		c.logger.Debug("Using default connection config", "Port", c.config.Port)
 	}
 
+	network := "tcp"
+	address := fmt.Sprintf("%s:%d", c.config.Host, c.config.Port)
 	// See if host is a valid path, if yes connect with a socket
-	_, err = os.Stat(c.config.Host)
-	if err == nil {
+	if _, err := os.Stat(c.config.Host); err == nil {
 		// For backward compatibility accept socket file paths -- but directories are now preferred
-		socket := c.config.Host
-		if !strings.Contains(socket, "/.s.PGSQL.") {
-			socket = filepath.Join(socket, ".s.PGSQL.") + strconv.FormatInt(int64(c.config.Port), 10)
+		network = "unix"
+		address = c.config.Host
+		if !strings.Contains(address, "/.s.PGSQL.") {
+			address = filepath.Join(address, ".s.PGSQL.") + strconv.FormatInt(int64(c.config.Port), 10)
 		}
-
-		c.logger.Info(fmt.Sprintf("Dialing PostgreSQL server at socket: %s", socket))
-		c.conn, err = net.Dial("unix", socket)
-		if err != nil {
-			c.logger.Error(fmt.Sprintf("Connection failed: %v", err))
-			return nil, err
-		}
-	} else {
-		c.logger.Info(fmt.Sprintf("Dialing PostgreSQL server at host: %s:%d", c.config.Host, c.config.Port))
-		d := net.Dialer{KeepAlive: 5 * time.Minute}
-		c.conn, err = d.Dial("tcp", fmt.Sprintf("%s:%d", c.config.Host, c.config.Port))
-		if err != nil {
-			c.logger.Error(fmt.Sprintf("Connection failed: %v", err))
-			return nil, err
-		}
+	}
+	if c.config.Dial == nil {
+		c.config.Dial = (&net.Dialer{KeepAlive: 5 * time.Minute}).Dial
+	}
+	c.logger.Info(fmt.Sprintf("Dialing PostgreSQL server at %s address: %s", network, address))
+	c.conn, err = c.config.Dial(network, address)
+	if err != nil {
+		c.logger.Error(fmt.Sprintf("Connection failed: %v", err))
+		return nil, err
 	}
 	defer func() {
 		if c != nil && err != nil {
@@ -282,6 +282,38 @@ func ParseURI(uri string) (ConnConfig, error) {
 	return cp, nil
 }
 
+var dsn_regexp = regexp.MustCompile(`([a-z]+)=((?:"[^"]+")|(?:[^ ]+))`)
+
+// ParseDSN parses a database DSN (data source name) into a ConnConfig
+//
+// e.g. ParseDSN("user=username password=password host=1.2.3.4 port=5432 dbname=mydb")
+func ParseDSN(s string) (ConnConfig, error) {
+	var cp ConnConfig
+
+	m := dsn_regexp.FindAllStringSubmatch(s, -1)
+
+	for _, b := range m {
+		switch b[1] {
+		case "user":
+			cp.User = b[2]
+		case "password":
+			cp.Password = b[2]
+		case "host":
+			cp.Host = b[2]
+		case "port":
+			if p, err := strconv.ParseUint(b[2], 10, 16); err != nil {
+				return cp, err
+			} else {
+				cp.Port = uint16(p)
+			}
+		case "dbname":
+			cp.Database = b[2]
+		}
+	}
+
+	return cp, nil
+}
+
 // Prepare creates a prepared statement with name and sql. sql can contain placeholders
 // for bound parameters. These placeholders are referenced positional as $1, $2, etc.
 func (c *Conn) Prepare(name, sql string) (ps *PreparedStatement, err error) {
@@ -327,6 +359,9 @@ func (c *Conn) Prepare(name, sql string) (ps *PreparedStatement, err error) {
 		case parseComplete:
 		case parameterDescription:
 			ps.ParameterOids = c.rxParameterDescription(r)
+			if len(ps.ParameterOids) > 65535 && softErr == nil {
+				softErr = fmt.Errorf("PostgreSQL supports maximum of 65535 parameters, received %d", len(ps.ParameterOids))
+			}
 		case rowDescription:
 			ps.FieldDescriptions = c.rxRowDescription(r)
 			for i := range ps.FieldDescriptions {
@@ -337,7 +372,11 @@ func (c *Conn) Prepare(name, sql string) (ps *PreparedStatement, err error) {
 		case noData:
 		case readyForQuery:
 			c.rxReadyForQuery(r)
-			c.preparedStatements[name] = ps
+
+			if softErr == nil {
+				c.preparedStatements[name] = ps
+			}
+
 			return ps, softErr
 		default:
 			if e := c.processContextFreeMsg(t, r); e != nil && softErr == nil {
@@ -550,7 +589,7 @@ func (c *Conn) sendPreparedQuery(ps *PreparedStatement, arguments ...interface{}
 			wbuf.WriteInt16(TextFormatCode)
 		default:
 			switch oid {
-			case BoolOid, ByteaOid, Int2Oid, Int4Oid, Int8Oid, Float4Oid, Float8Oid, TimestampTzOid, TimestampTzArrayOid, TimestampArrayOid, BoolArrayOid, Int2ArrayOid, Int4ArrayOid, Int8ArrayOid, Float4ArrayOid, Float8ArrayOid, TextArrayOid, VarcharArrayOid, OidOid:
+			case BoolOid, ByteaOid, Int2Oid, Int4Oid, Int8Oid, Float4Oid, Float8Oid, TimestampTzOid, TimestampTzArrayOid, TimestampOid, TimestampArrayOid, BoolArrayOid, Int2ArrayOid, Int4ArrayOid, Int8ArrayOid, Float4ArrayOid, Float8ArrayOid, TextArrayOid, VarcharArrayOid, OidOid:
 				wbuf.WriteInt16(BinaryFormatCode)
 			default:
 				wbuf.WriteInt16(TextFormatCode)
@@ -820,10 +859,17 @@ func (c *Conn) rxRowDescription(r *msgReader) (fields []FieldDescription) {
 }
 
 func (c *Conn) rxParameterDescription(r *msgReader) (parameters []Oid) {
-	parameterCount := r.readInt16()
+	// Internally, PostgreSQL supports greater than 64k parameters to a prepared
+	// statement. But the parameter description uses a 16-bit integer for the
+	// count of parameters. If there are more than 64K parameters, this count is
+	// wrong. So read the count, ignore it, and compute the proper value from
+	// the size of the message.
+	r.readInt16()
+	parameterCount := r.msgBytesRemaining / 4
+
 	parameters = make([]Oid, 0, parameterCount)
 
-	for i := int16(0); i < parameterCount; i++ {
+	for i := int32(0); i < parameterCount; i++ {
 		parameters = append(parameters, r.readOid())
 	}
 	return

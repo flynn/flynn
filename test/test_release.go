@@ -185,6 +185,8 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 		image := "flynn/" + app
 		if app == "gitreceive" {
 			image = "flynn/receiver"
+		} else if app == "postgres" {
+			image = "flynn/postgresql"
 		}
 		debugf(t, "checking new %s release is using image %s", app, versions[image])
 		expected := fmt.Sprintf(`"finished deploy of system app" name=%s`, app)

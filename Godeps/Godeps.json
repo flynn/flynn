@@ -49,10 +49,6 @@
 			"Rev": "b4d36b903b8b5353e41d0072358d59d722e76ae3"
 		},
 		{
-			"ImportPath": "github.com/bgentry/que-go",
-			"Rev": "4ad3cf5c7e0aa6382d5a437deed9951efbe5d2fa"
-		},
-		{
 			"ImportPath": "github.com/boltdb/bolt",
 			"Comment": "v1.0",
 			"Rev": "aa66506030b376f848667d84d2596faa8a7099ea"
@@ -407,7 +403,11 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/pq",
-			"Rev": "29bc57434aa700fa80bc713bd85d3fe1d0cd4fc0"
+			"Rev": "34b669d7dd7ed9051866cb5c14b7b02106537f81"
+		},
+		{
+			"ImportPath": "github.com/flynn/que-go",
+			"Rev": "0eec73db4297e5241c7a7b3bc743b9e10a2d2115"
 		},
 		{
 			"ImportPath": "github.com/flynn/tail",
@@ -462,14 +462,14 @@
 			"Rev": "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75"
 		},
 		{
-			"ImportPath": "github.com/jackc/pgx",
-			"Comment": "v2.4.0-34-g1e92e5a",
-			"Rev": "1e92e5afe62cbf6fc9ef72aaf5d6522f0dd7ef4c"
-		},
-		{
 			"ImportPath": "github.com/jteeuwen/go-bindata",
 			"Comment": "v3.0.7-19-g040617c",
 			"Rev": "040617c5ef993d2d4a6630636bde1aa913e954b9"
+		},
+		{
+			"ImportPath": "github.com/jackc/pgx",
+			"Comment": "v2.5.0-1-g784d12c",
+			"Rev": "784d12cbbcfc11c637d8f7931dd87a3f236e5c4d"
 		},
 		{
 			"ImportPath": "github.com/julienschmidt/httprouter",

@@ -25,9 +25,9 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/oid"
 )
 
-// Common error types
 var (
-	ErrNotSupported              = errors.New("pq: Unsupported command")
+	ErrNotSupported = // Common error types
+	errors.New("pq: Unsupported command")
 	ErrInFailedTransaction       = errors.New("pq: Could not complete operation in a failed transaction")
 	ErrSSLNotSupported           = errors.New("pq: SSL is not enabled on the server")
 	ErrSSLKeyHasWorldPermissions = errors.New("pq: Private key file has group or world access. Permissions should be u=rw (0600) or less.")
@@ -72,6 +72,7 @@ func (s transactionStatus) String() string {
 	default:
 		errorf("unknown transactionStatus %d", s)
 	}
+
 	panic("not reached")
 }
 
@@ -80,12 +81,14 @@ type Dialer interface {
 	DialTimeout(network, address string, timeout time.Duration) (net.Conn, error)
 }
 
-type defaultDialer struct{}
+var DefaultDialer Dialer = simpleDialer{}
 
-func (d defaultDialer) Dial(ntw, addr string) (net.Conn, error) {
+type simpleDialer struct{}
+
+func (d simpleDialer) Dial(ntw, addr string) (net.Conn, error) {
 	return net.Dial(ntw, addr)
 }
-func (d defaultDialer) DialTimeout(ntw, addr string, timeout time.Duration) (net.Conn, error) {
+func (d simpleDialer) DialTimeout(ntw, addr string, timeout time.Duration) (net.Conn, error) {
 	return net.DialTimeout(ntw, addr, timeout)
 }
 
@@ -115,7 +118,7 @@ func (c *conn) writeBuf(b byte) *writeBuf {
 }
 
 func Open(name string) (_ driver.Conn, err error) {
-	return DialOpen(defaultDialer{}, name)
+	return DialOpen(DefaultDialer, name)
 }
 
 func DialOpen(d Dialer, name string) (_ driver.Conn, err error) {
@@ -493,7 +496,6 @@ func (cn *conn) simpleExec(q string) (res driver.Result, commandTag string, err 
 			errorf("unknown response for simple query: %q", t)
 		}
 	}
-	panic("not reached")
 }
 
 func (cn *conn) simpleQuery(q string) (res driver.Rows, err error) {
@@ -546,7 +548,6 @@ func (cn *conn) simpleQuery(q string) (res driver.Rows, err error) {
 			errorf("unknown response for simple query: %q", t)
 		}
 	}
-	panic("not reached")
 }
 
 func (cn *conn) prepareTo(q, stmtName string) (_ *stmt, err error) {
@@ -590,8 +591,6 @@ func (cn *conn) prepareTo(q, stmtName string) (_ *stmt, err error) {
 			errorf("unexpected describe rows response: %q", t)
 		}
 	}
-
-	panic("not reached")
 }
 
 func (cn *conn) Prepare(q string) (_ driver.Stmt, err error) {
@@ -769,8 +768,6 @@ func (cn *conn) recv() (t byte, r *readBuf) {
 			return
 		}
 	}
-
-	panic("not reached")
 }
 
 // recv1Buf is exactly equivalent to recv1, except it uses a buffer supplied by
@@ -791,8 +788,6 @@ func (cn *conn) recv1Buf(r *readBuf) byte {
 			return t
 		}
 	}
-
-	panic("not reached")
 }
 
 // recv1 receives a message from the backend, panicking if an error occurs
@@ -886,7 +881,7 @@ func (cn *conn) setupSSLClientCertificates(tlsConf *tls.Config, o values) {
 	sslkey := o.Get("sslkey")
 	sslcert := o.Get("sslcert")
 	if sslkey != "" && sslcert != "" {
-		// If the user has set a sslkey and sslcert, they *must* exist.
+		// If the user has set an sslkey and sslcert, they *must* exist.
 		missingOk = false
 	} else {
 		// Automatically load certificates from ~/.postgresql.
@@ -903,7 +898,7 @@ func (cn *conn) setupSSLClientCertificates(tlsConf *tls.Config, o values) {
 		missingOk = true
 	}
 
-	// Check that both files exist, and report the error or stop depending on
+	// Check that both files exist, and report the error or stop, depending on
 	// which behaviour we want.  Note that we don't do any more extensive
 	// checks than this (such as checking that the paths aren't directories);
 	// LoadX509KeyPair() will take care of the rest.
@@ -950,7 +945,7 @@ func (cn *conn) setupSSLCA(tlsConf *tls.Config, o values) {
 	}
 }
 
-// isDriverSetting returns true iff a setting is purely for the configuring the
+// isDriverSetting returns true iff a setting is purely for configuring the
 // driver's options and should not be sent to the server in the connection
 // startup packet.
 func isDriverSetting(key string) bool {
@@ -969,7 +964,6 @@ func isDriverSetting(key string) bool {
 	default:
 		return false
 	}
-	panic("not reached")
 }
 
 func (cn *conn) startup(o values) {
@@ -1126,8 +1120,6 @@ func (st *stmt) Exec(v []driver.Value) (res driver.Result, err error) {
 			errorf("unknown exec response: %q", t)
 		}
 	}
-
-	panic("not reached")
 }
 
 func (st *stmt) exec(v []driver.Value) {
@@ -1289,7 +1281,6 @@ func (rs *rows) Close() error {
 			return err
 		}
 	}
-	panic("not reached")
 }
 
 func (rs *rows) Columns() []string {
@@ -1339,8 +1330,6 @@ func (rs *rows) Next(dest []driver.Value) (err error) {
 			errorf("unexpected message after execute: %q", t)
 		}
 	}
-
-	panic("not reached")
 }
 
 // QuoteIdentifier quotes an "identifier" (e.g. a table or a column name) to be

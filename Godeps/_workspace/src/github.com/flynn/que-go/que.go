@@ -41,10 +41,18 @@ type Job struct {
 	// failed. It is ignored on job creation.
 	LastError pgx.NullString
 
-	mu      sync.Mutex
-	deleted bool
-	pool    *pgx.ConnPool
-	conn    *pgx.Conn
+	// LockedUntil is the time that this job is locked until, and is bumped
+	// in a goroutine whilst the job is being worked to avoid a disconnection
+	// from the database causing another worker to lock the job whilst we are
+	// still working it.
+	LockedUntil time.Time
+
+	mu       sync.Mutex
+	deleted  bool
+	pool     *pgx.ConnPool
+	conn     *pgx.Conn
+	release  chan struct{}
+	unlocked chan struct{}
 }
 
 // Conn returns the pgx connection that this job is locked to. You may initiate
@@ -91,6 +99,8 @@ func (j *Job) Done() {
 		return
 	}
 
+	j.unlock()
+
 	var ok bool
 	// Swallow this error because we don't want an unlock failure to cause work to
 	// stop.
@@ -116,6 +126,36 @@ func (j *Job) Error(msg string) error {
 		return err
 	}
 	return nil
+}
+
+// lock creates a goroutine to bump LockedUntil by 10 seconds every 3 seconds.
+func (j *Job) lock() {
+	j.setLockedUntil(10)
+	go func() {
+		for {
+			select {
+			case <-j.release:
+				j.setLockedUntil(0)
+				close(j.unlocked)
+				return
+			case <-time.After(3 * time.Second):
+				// TODO: if we can't bump the lock, stop working the job
+				j.setLockedUntil(10)
+			}
+		}
+	}()
+}
+
+// unlock signals to the lock goroutine to stop bumping LockedUntil, and waits for it to exit.
+func (j *Job) unlock() {
+	close(j.release)
+	<-j.unlocked
+}
+
+func (j *Job) setLockedUntil(secs int) {
+	if _, err := j.pool.Exec("que_set_lock", secs, j.Queue, j.Priority, j.RunAt, j.ID); err != nil {
+		// TODO: handle error
+	}
 }
 
 // Client is a Que client that can add jobs to the queue and remove jobs from
@@ -225,7 +265,12 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 		return nil, err
 	}
 
-	j := Job{pool: c.pool, conn: conn}
+	j := Job{
+		pool:     c.pool,
+		conn:     conn,
+		release:  make(chan struct{}),
+		unlocked: make(chan struct{}),
+	}
 
 	for i := 0; i < maxLockJobAttempts; i++ {
 		err = conn.QueryRow("que_lock_job", queue).Scan(
@@ -236,6 +281,7 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 			&j.Type,
 			&j.Args,
 			&j.ErrorCount,
+			&j.LockedUntil,
 		)
 		if err != nil {
 			c.pool.Release(conn)
@@ -258,8 +304,9 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 		// I'm not sure how to reliably commit a transaction that deletes
 		// the job in a separate thread between lock_job and check_job.
 		var ok bool
-		err = conn.QueryRow("que_check_job", j.Queue, j.Priority, j.RunAt, j.ID).Scan(&ok)
+		err = conn.QueryRow("que_check_job", j.Queue, j.Priority, j.RunAt, j.ID, j.LockedUntil).Scan(&ok)
 		if err == nil {
+			j.lock()
 			return &j, nil
 		} else if err == pgx.ErrNoRows {
 			// Encountered job race condition; start over from the beginning.
@@ -285,6 +332,7 @@ var preparedStatements = map[string]string{
 	"que_lock_job":    sqlLockJob,
 	"que_set_error":   sqlSetError,
 	"que_unlock_job":  sqlUnlockJob,
+	"que_set_lock":    sqlSetLock,
 }
 
 func PrepareStatements(conn *pgx.Conn) error {

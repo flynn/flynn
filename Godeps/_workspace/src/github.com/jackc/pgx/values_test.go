@@ -130,6 +130,8 @@ func TestNullX(t *testing.T) {
 		{"select $1::bool", []interface{}{pgx.NullBool{Bool: true, Valid: false}}, []interface{}{&actual.b}, allTypes{b: pgx.NullBool{Bool: false, Valid: false}}},
 		{"select $1::timestamptz", []interface{}{pgx.NullTime{Time: time.Unix(123, 5000), Valid: true}}, []interface{}{&actual.t}, allTypes{t: pgx.NullTime{Time: time.Unix(123, 5000), Valid: true}}},
 		{"select $1::timestamptz", []interface{}{pgx.NullTime{Time: time.Unix(123, 5000), Valid: false}}, []interface{}{&actual.t}, allTypes{t: pgx.NullTime{Time: time.Time{}, Valid: false}}},
+		{"select $1::timestamp", []interface{}{pgx.NullTime{Time: time.Unix(123, 5000), Valid: true}}, []interface{}{&actual.t}, allTypes{t: pgx.NullTime{Time: time.Unix(123, 5000), Valid: true}}},
+		{"select $1::timestamp", []interface{}{pgx.NullTime{Time: time.Unix(123, 5000), Valid: false}}, []interface{}{&actual.t}, allTypes{t: pgx.NullTime{Time: time.Time{}, Valid: false}}},
 		{"select 42::int4, $1::float8", []interface{}{pgx.NullFloat64{Float64: 1.23, Valid: true}}, []interface{}{&actual.i32, &actual.f64}, allTypes{i32: pgx.NullInt32{Int32: 42, Valid: true}, f64: pgx.NullFloat64{Float64: 1.23, Valid: true}}},
 	}
 
@@ -219,6 +221,84 @@ func TestArrayDecoding(t *testing.T) {
 		tt.assert(t, tt.query, tt.scan)
 		ensureConnValid(t, conn)
 	}
+}
+
+type shortScanner struct{}
+
+func (*shortScanner) Scan(r *pgx.ValueReader) error {
+	r.ReadByte()
+	return nil
+}
+
+func TestShortScanner(t *testing.T) {
+	t.Parallel()
+
+	conn := mustConnect(t, *defaultConnConfig)
+	defer closeConn(t, conn)
+
+	rows, err := conn.Query("select 'ab', 'cd' union select 'cd', 'ef'")
+	if err != nil {
+		t.Error(err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var s1, s2 shortScanner
+		err = rows.Scan(&s1, &s2)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+
+	ensureConnValid(t, conn)
+}
+
+func TestEmptyArrayDecoding(t *testing.T) {
+	t.Parallel()
+
+	conn := mustConnect(t, *defaultConnConfig)
+	defer closeConn(t, conn)
+
+	var val []string
+
+	err := conn.QueryRow("select array[]::text[]").Scan(&val)
+	if err != nil {
+		t.Errorf(`error reading array: %v`, err)
+	}
+	if len(val) != 0 {
+		t.Errorf("Expected 0 values, got %d", len(val))
+	}
+
+	var n, m int32
+
+	err = conn.QueryRow("select 1::integer, array[]::text[], 42::integer").Scan(&n, &val, &m)
+	if err != nil {
+		t.Errorf(`error reading array: %v`, err)
+	}
+	if len(val) != 0 {
+		t.Errorf("Expected 0 values, got %d", len(val))
+	}
+	if n != 1 {
+		t.Errorf("Expected n to be 1, but it was %d", n)
+	}
+	if m != 42 {
+		t.Errorf("Expected n to be 42, but it was %d", n)
+	}
+
+	rows, err := conn.Query("select 1::integer, array['test']::text[] union select 2::integer, array[]::text[] union select 3::integer, array['test']::text[]")
+	if err != nil {
+		t.Errorf(`error retrieving rows with array: %v`, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		err = rows.Scan(&n, &val)
+		if err != nil {
+			t.Errorf(`error reading array: %v`, err)
+		}
+	}
+
+	ensureConnValid(t, conn)
 }
 
 func TestNullXMismatch(t *testing.T) {

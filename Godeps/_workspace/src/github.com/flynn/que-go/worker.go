@@ -1,9 +1,11 @@
 package que
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -36,6 +38,16 @@ type Worker struct {
 	ch   chan struct{}
 }
 
+var defaultWakeInterval = 5 * time.Second
+
+func init() {
+	if v := os.Getenv("QUE_WAKE_INTERVAL"); v != "" {
+		if newInt, err := strconv.Atoi(v); err == nil {
+			defaultWakeInterval = time.Duration(newInt) * time.Second
+		}
+	}
+}
+
 // NewWorker returns a Worker that fetches Jobs from the Client and executes
 // them using WorkMap. If the type of Job is not registered in the WorkMap, it's
 // considered an error and the job is re-enqueued with a backoff.
@@ -46,14 +58,8 @@ type Worker struct {
 // these settings can be changed on the returned Worker before it is started
 // with Work().
 func NewWorker(c *Client, m WorkMap) *Worker {
-	interval := 5
-	if v := os.Getenv("QUE_WAKE_INTERVAL"); v != "" {
-		if newInt, err := strconv.Atoi(v); err == nil {
-			interval = newInt
-		}
-	}
 	return &Worker{
-		Interval: time.Duration(interval) * time.Second,
+		Interval: defaultWakeInterval,
 		Queue:    os.Getenv("QUE_QUEUE"),
 		c:        c,
 		m:        m,
@@ -89,12 +95,15 @@ func (w *Worker) WorkOne() (didWork bool) {
 		return // no job was available
 	}
 	defer j.Done()
+	defer recoverPanic(j)
 
 	didWork = true
 
 	wf, ok := w.m[j.Type]
 	if !ok {
-		if err = j.Error(fmt.Sprintf("unknown job type: %q", j.Type)); err != nil {
+		msg := fmt.Sprintf("unknown job type: %q", j.Type)
+		log.Println(msg)
+		if err = j.Error(msg); err != nil {
 			log.Printf("attempting to save error on job %d: %v", j.ID, err)
 		}
 		return
@@ -130,6 +139,26 @@ func (w *Worker) Shutdown() {
 	close(w.ch)
 }
 
+// recoverPanic tries to handle panics in job execution.
+// A stacktrace is stored into Job last_error.
+func recoverPanic(j *Job) {
+	if r := recover(); r != nil {
+		// record an error on the job with panic message and stacktrace
+		stackBuf := make([]byte, 1024)
+		n := runtime.Stack(stackBuf, false)
+
+		buf := &bytes.Buffer{}
+		fmt.Fprintf(buf, "%v\n", r)
+		fmt.Fprintln(buf, string(stackBuf[:n]))
+		fmt.Fprintln(buf, "[...]")
+		stacktrace := buf.String()
+		log.Printf("event=panic job_id=%d job_type=%s\n%s", j.ID, j.Type, stacktrace)
+		if err := j.Error(stacktrace); err != nil {
+			log.Printf("attempting to save error on job %d: %v", j.ID, err)
+		}
+	}
+}
+
 // WorkerPool is a pool of Workers, each working jobs from the queue Queue
 // at the specified Interval using the WorkMap.
 type WorkerPool struct {
@@ -146,9 +175,10 @@ type WorkerPool struct {
 // NewWorkerPool creates a new WorkerPool with count workers using the Client c.
 func NewWorkerPool(c *Client, wm WorkMap, count int) *WorkerPool {
 	return &WorkerPool{
-		c:       c,
-		WorkMap: wm,
-		workers: make([]*Worker, count),
+		c:        c,
+		WorkMap:  wm,
+		Interval: defaultWakeInterval,
+		workers:  make([]*Worker, count),
 	}
 }
 

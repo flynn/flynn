@@ -124,6 +124,11 @@ func postgres(d *Deploy) (err error) {
 		} else if newSync == nil {
 			newSync = inst
 		}
+		d.deployEvents <- ct.DeploymentEvent{
+			ReleaseID: d.NewReleaseID,
+			JobState:  "up",
+			JobType:   "postgres",
+		}
 		return inst, nil
 	}
 	waitForSync := func(upstream, downstream *discoverd.Instance) error {
@@ -132,11 +137,6 @@ func postgres(d *Deploy) (err error) {
 		if err := client.WaitForReplSync(downstream, 3*time.Minute); err != nil {
 			log.Error("error waiting for replication sync", "err", err)
 			return err
-		}
-		d.deployEvents <- ct.DeploymentEvent{
-			ReleaseID: d.NewReleaseID,
-			JobState:  "up",
-			JobType:   "postgres",
 		}
 		return nil
 	}
@@ -159,11 +159,11 @@ func postgres(d *Deploy) (err error) {
 	}
 	for i := 0; i < len(state.Async); i++ {
 		log.Info("replacing an Async node")
-		if err := stopInstance(state.Async[i]); err != nil {
-			return err
-		}
 		newInst, err := startInstance()
 		if err != nil {
+			return err
+		}
+		if err := stopInstance(state.Async[i]); err != nil {
 			return err
 		}
 		if err := waitForSync(asyncUpstream, newInst); err != nil {
@@ -174,26 +174,29 @@ func postgres(d *Deploy) (err error) {
 	}
 
 	log.Info("replacing the Sync node")
-	if err := stopInstance(state.Sync); err != nil {
-		return err
-	}
 	_, err = startInstance()
 	if err != nil {
+		return err
+	}
+	if err := stopInstance(state.Sync); err != nil {
 		return err
 	}
 	if err := waitForSync(state.Primary, newPrimary); err != nil {
 		return err
 	}
 
-	log.Info("replacing the Primary node")
-	if err := stopInstance(state.Primary); err != nil {
+	// wait for the new Sync to catch the new Primary *before* killing the
+	// old Primary to avoid pg_basebackup exiting due to an upstream takeover
+	if err := waitForSync(newPrimary, newSync); err != nil {
 		return err
 	}
+
+	log.Info("replacing the Primary node")
 	_, err = startInstance()
 	if err != nil {
 		return err
 	}
-	if err := waitForSync(newPrimary, newSync); err != nil {
+	if err := stopInstance(state.Primary); err != nil {
 		return err
 	}
 	if err := waitForReadWrite(newPrimary); err != nil {

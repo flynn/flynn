@@ -5,12 +5,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/bgentry/que-go"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/controller/deployer/strategies"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
 )
@@ -171,7 +172,7 @@ func (c *context) rollback(l log15.Logger, deployment *ct.Deployment, original *
 }
 
 func (c *context) setDeploymentDone(id string) error {
-	return c.db.Exec("UPDATE deployments SET finished_at = now() WHERE deployment_id = $1", id)
+	return c.execWithRetries("UPDATE deployments SET finished_at = now() WHERE deployment_id = $1", id)
 }
 
 func (c *context) createDeploymentEvent(e ct.DeploymentEvent) error {
@@ -179,5 +180,17 @@ func (c *context) createDeploymentEvent(e ct.DeploymentEvent) error {
 		e.Status = "running"
 	}
 	query := "INSERT INTO deployment_events (deployment_id, release_id, job_type, job_state, status, error) VALUES ($1, $2, $3, $4, $5, $6)"
-	return c.db.Exec(query, e.DeploymentID, e.ReleaseID, e.JobType, e.JobState, e.Status, e.Error)
+	return c.execWithRetries(query, e.DeploymentID, e.ReleaseID, e.JobType, e.JobState, e.Status, e.Error)
+}
+
+var execAttempts = attempt.Strategy{
+	Total: 10 * time.Second,
+	Delay: 100 * time.Millisecond,
+}
+
+// Retry db queries in case postgres has been deployed
+func (c *context) execWithRetries(query string, args ...interface{}) error {
+	return execAttempts.Run(func() error {
+		return c.db.Exec(query, args...)
+	})
 }

@@ -11,7 +11,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/bgentry/que-go"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
@@ -22,6 +22,7 @@ import (
 	logaggc "github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/ctxhelper"
+	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -60,6 +61,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	pgxcfg.Dial = dialer.Retry.Dial
+
 	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
 		ConnConfig:   pgxcfg,
 		AfterConnect: que.PrepareStatements,

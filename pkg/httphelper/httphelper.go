@@ -8,6 +8,9 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql/driver"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/pkg/cors"
@@ -41,6 +44,7 @@ type JSONError struct {
 	Code    ErrorCode       `json:"code"`
 	Message string          `json:"message"`
 	Detail  json.RawMessage `json:"detail,omitempty"`
+	Retry   bool            `json:"retry"`
 }
 
 func isJSONErrorWithCode(err error, code ErrorCode) bool {
@@ -62,6 +66,12 @@ func IsPreconditionFailedError(err error) bool {
 
 func IsValidationError(err error) bool {
 	return isJSONErrorWithCode(err, ValidationErrorCode)
+}
+
+// IsRetryableError indicates whether a HTTP request can be safely retried.
+func IsRetryableError(err error) bool {
+	e, ok := err.(JSONError)
+	return ok && e.Retry
 }
 
 var CORSAllowAllHandler = cors.Allow(&cors.Options{
@@ -128,22 +138,35 @@ func logError(w http.ResponseWriter, err error) {
 	}
 }
 
+// buildJSONError returns an appropriate API error to send to clients based
+// on the given internal error.
+//
+// We consider all postgres errors as retry-able as they usually occur when
+// postgres is read-only (for example during a system update). Data related
+// postgres errors should in general not be retried (because a retry will
+// likely result in the same error), but it is expected that such errors are
+// caught and a validation error returned to the client rather than the
+// postgres error.
 func buildJSONError(err error) *JSONError {
-	var jsonError *JSONError
+	jsonError := &JSONError{
+		Code:    UnknownErrorCode,
+		Message: "Something went wrong",
+	}
 	switch v := err.(type) {
 	case *json.SyntaxError, *json.UnmarshalTypeError:
 		jsonError = &JSONError{
 			Code:    SyntaxErrorCode,
 			Message: "The provided JSON input is invalid",
 		}
+	case *pq.Error:
+		jsonError.Retry = true
 	case JSONError:
 		jsonError = &v
 	case *JSONError:
 		jsonError = v
 	default:
-		jsonError = &JSONError{
-			Code:    UnknownErrorCode,
-			Message: "Something went wrong",
+		if err == driver.ErrBadConn || err == pgx.ErrDeadConn {
+			jsonError.Retry = true
 		}
 	}
 	return jsonError
