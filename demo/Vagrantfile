@@ -27,6 +27,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
   config.vm.synced_folder ".", "/vagrant", disabled: true
 
+  config.vm.provider "virtualbox" do |v|
+    v.memory = ENV["VAGRANT_MEMORY"] || 2048
+    v.cpus = ENV["VAGRANT_CPUS"] || 2
+  end
+
   # Show VM GUI as a visual reminder that the VM is running
   if $flag_gui == "true"
     config.vm.provider "virtualbox" do |v|

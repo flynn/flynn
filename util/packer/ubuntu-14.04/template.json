@@ -42,7 +42,8 @@
       "ssh_username": "vagrant",
       "ssh_wait_timeout": "20m",
       "vboxmanage": [
-        ["modifyvm", "{{ .Name }}", "--memory", "1024"]
+        ["modifyvm", "{{ .Name }}", "--memory", "4096"],
+        ["modifyvm", "{{ .Name }}", "--cpus", "4"]
       ],
       "virtualbox_version_file": ".vbox_version",
       "vm_name": "flynn-base"

@@ -32,8 +32,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # VAGRANT_MEMORY          - instance memory, in MB
   # VAGRANT_CPUS            - instance virtual CPUs
   config.vm.provider "virtualbox" do |v, override|
-    v.memory = ENV["VAGRANT_MEMORY"] || 1024
-    v.cpus = ENV["VAGRANT_CPUS"] || 2
+    v.memory = ENV["VAGRANT_MEMORY"] || 4096
+    v.cpus = ENV["VAGRANT_CPUS"] || 4
 
     # RFC 5737 TEST-NET-1 used to avoid DNS rebind protection
     override.vm.network "private_network", ip: "192.0.2.100"
