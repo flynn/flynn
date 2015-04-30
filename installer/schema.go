@@ -1,6 +1,7 @@
 package installer
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/aws"
@@ -94,6 +95,71 @@ type Prompt struct {
 	cluster   *BaseCluster
 }
 
+func (i *Installer) updatedbColumns(in interface{}, t string) error {
+	s, err := ql.StructSchema(in)
+	if err != nil {
+		return err
+	}
+	rows, err := i.db.Query(fmt.Sprintf("SELECT * FROM %s LIMIT 0", t))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var add []string
+	var remove []string
+
+	dbColumns, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+
+	fields := make(map[string]ql.Type, len(s.Fields))
+	for _, f := range s.Fields {
+		fields[f.Name] = f.Type
+	}
+
+	dbFieldMap := make(map[string]bool, len(dbColumns))
+	for _, c := range dbColumns {
+		if _, ok := fields[c]; !ok {
+			remove = append(remove, c)
+			continue
+		}
+		dbFieldMap[c] = true
+	}
+
+	for c := range fields {
+		if _, ok := dbFieldMap[c]; !ok {
+			add = append(add, c)
+		}
+	}
+
+	tx, err := i.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	for _, c := range remove {
+		if _, err := tx.Exec(fmt.Sprintf(`
+      ALTER TABLE %s DROP %s
+    `, t, c)); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	for _, c := range add {
+		if _, err := tx.Exec(fmt.Sprintf(`
+      ALTER TABLE %s ADD %s %s
+    `, t, c, fields[c])); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
 func (i *Installer) migrateDB() error {
 	schemaInterfaces := map[interface{}]string{
 		(*credential)(nil):  "credentials",
@@ -119,5 +185,14 @@ func (i *Installer) migrateDB() error {
 			return err
 		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	for item, tableName := range schemaInterfaces {
+		if err := i.updatedbColumns(item, tableName); err != nil {
+			return err
+		}
+	}
+	return nil
 }
