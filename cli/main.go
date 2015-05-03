@@ -218,22 +218,23 @@ func getCluster() (*cfg.Cluster, error) {
 	if len(config.Clusters) == 0 {
 		return nil, ErrNoClusters
 	}
+	name := flagCluster
 	// Get the default cluster
-	if flagCluster == "" {
-		flagCluster = config.Default
+	if name == "" {
+		name = config.Default
 	}
 	// Default cluster not set, pick the first one
-	if flagCluster == "" {
+	if name == "" {
 		clusterConf = config.Clusters[0]
 		return clusterConf, nil
 	}
 	for _, s := range config.Clusters {
-		if s.Name == flagCluster {
+		if s.Name == name {
 			clusterConf = s
 			return s, nil
 		}
 	}
-	return nil, fmt.Errorf("unknown cluster %q", flagCluster)
+	return nil, fmt.Errorf("unknown cluster %q", name)
 }
 
 func app() (string, error) {
