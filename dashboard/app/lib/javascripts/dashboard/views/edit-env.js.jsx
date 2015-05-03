@@ -140,9 +140,7 @@ var AppEnv = React.createClass({
 	handleNameChange: function () {
 		var newName = this.refs.name.getDOMNode().value;
 		this.setState({name: newName});
-		if (this.state.value) {
-			this.propagateChange(newName, this.state.value);
-		}
+		this.propagateChange(newName, this.state.value || "");
 	},
 
 	handleValueChange: function () {
@@ -165,7 +163,7 @@ var AppEnv = React.createClass({
 		var oldName = this.props.name;
 		var oldValue = this.props.value;
 
-		if ( !oldName && (!newName || !newValue) ) {
+		if ( !oldName && !newName) {
 			return;
 		}
 
