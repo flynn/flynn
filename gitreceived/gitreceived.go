@@ -218,6 +218,7 @@ func handleChannel(conn *ssh.ServerConn, newChan ssh.NewChannel) {
 					fail("generateTempDir", err)
 					return
 				}
+				defer os.RemoveAll(path)
 				tempDir = path
 			}
 			if err := ensureCacheRepo(tempDir, cacheKey); err != nil {
