@@ -52,7 +52,7 @@ var AWSCredentialsPicker = React.createClass({
 							<div>Secret Access Key: </div>
 							<input
 								ref="secret"
-								type="text"
+								type="password"
 								style={this.props.inputCSS}
 								placeholder="AWS_SECRET_ACCESS_KEY"
 								onChange={this.__handleChange} />
