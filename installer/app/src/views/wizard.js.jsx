@@ -25,7 +25,7 @@ var Wizard = React.createClass({
 				}}>
 					<InstallSteps state={state} style={{ height: 16 }} />
 
-					<Panel style={{ flexGrow: 1, WebkitFlexGrow: 1, height: '100%' }}>
+					<Panel style={{ flexGrow: 1, WebkitFlexGrow: 1 }}>
 						{state.currentStep === 'configure' ? (
 							<AWSLauncher state={state} />
 						) : null}
