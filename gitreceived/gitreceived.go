@@ -218,6 +218,7 @@ func handleChannel(conn *ssh.ServerConn, newChan ssh.NewChannel) {
 					fail("generateTempDir", err)
 					return
 				}
+				defer os.RemoveAll(path)
 				tempDir = path
 			}
 			if err := ensureCacheRepo(tempDir, cacheKey); err != nil {
@@ -357,7 +358,7 @@ func restoreBlobstoreCache(tempDir, path string) error {
 	if res.StatusCode == 200 {
 		// cache hit
 		r := tar.NewReader(res.Body)
-		archiver.Untar(cachePath, r)
+		return archiver.Untar(cachePath, r)
 	}
 	return nil
 }
