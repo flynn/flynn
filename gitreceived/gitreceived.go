@@ -358,7 +358,7 @@ func restoreBlobstoreCache(tempDir, path string) error {
 	if res.StatusCode == 200 {
 		// cache hit
 		r := tar.NewReader(res.Body)
-		archiver.Untar(cachePath, r)
+		return archiver.Untar(cachePath, r)
 	}
 	return nil
 }
