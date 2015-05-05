@@ -28,6 +28,7 @@ const (
 	SyntaxErrorCode             ErrorCode = "syntax_error"
 	ValidationErrorCode         ErrorCode = "validation_error"
 	PreconditionFailedErrorCode ErrorCode = "precondition_failed"
+	UnauthorizedErrorCode       ErrorCode = "unauthorized"
 	UnknownErrorCode            ErrorCode = "unknown_error"
 )
 
@@ -39,6 +40,7 @@ var errorResponseCodes = map[ErrorCode]int{
 	PreconditionFailedErrorCode: 412,
 	SyntaxErrorCode:             400,
 	ValidationErrorCode:         400,
+	UnauthorizedErrorCode:       401,
 	UnknownErrorCode:            500,
 }
 
