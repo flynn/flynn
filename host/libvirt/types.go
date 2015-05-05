@@ -14,7 +14,6 @@ type Domain struct {
 	IDMap *IDMap `xml:"idmap,omitempty"`
 
 	Memory UnitInt `xml:"memory"`
-	VCPU   int     `xml:"vcpu"`
 
 	OnPoweroff string `xml:"on_poweroff,omitempty"`
 	OnReboot   string `xml:"on_reboot,omitempty"`

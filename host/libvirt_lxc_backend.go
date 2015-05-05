@@ -565,7 +565,6 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		Type:   "lxc",
 		Name:   job.ID,
 		Memory: lt.UnitInt{Value: 1, Unit: "GiB"},
-		VCPU:   1,
 		OS: lt.OS{
 			Type: lt.OSType{Value: "exe"},
 			Init: "/.containerinit",
