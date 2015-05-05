@@ -36,6 +36,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/health"
+	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/rpcplus"
@@ -54,6 +55,7 @@ type Config struct {
 	Env       map[string]string
 	Args      []string
 	Ports     []host.Port
+	Resources resource.Resources
 }
 
 const SharedPath = "/.container-shared"
@@ -399,28 +401,28 @@ func setupCommon(c *Config, log log15.Logger) error {
 		return err
 	}
 
-	setupLimits(log)
+	setupLimits(c, log)
 
 	return nil
 }
 
 const RLIMIT_NPROC = 6
 
-func setupLimits(log log15.Logger) {
-	type rlimit struct {
-		resource int
-		value    uint64
-	}
-
-	for _, r := range []rlimit{
-		// bump max fds to 10k
-		{syscall.RLIMIT_NOFILE, 10000},
-		// drop max processes to 256
-		{RLIMIT_NPROC, 256},
-	} {
-		if err := syscall.Setrlimit(r.resource, &syscall.Rlimit{Max: r.value, Cur: r.value}); err != nil {
+func setupLimits(c *Config, log log15.Logger) {
+	setrlimit := func(resource int, soft, hard int64) {
+		if err := syscall.Setrlimit(resource, &syscall.Rlimit{Max: uint64(hard), Cur: uint64(soft)}); err != nil {
 			log.Error("error setting rlimit", "err", err)
 		}
+	}
+
+	if spec, ok := c.Resources[resource.TypeMaxFD]; ok && spec.Limit != nil && spec.Request != nil {
+		log.Info(fmt.Sprintf("setting max fd limit to %d / %d", *spec.Request, *spec.Limit))
+		setrlimit(syscall.RLIMIT_NOFILE, *spec.Request, *spec.Limit)
+	}
+
+	if spec, ok := c.Resources[resource.TypeMaxProcs]; ok && spec.Limit != nil && spec.Request != nil {
+		log.Info(fmt.Sprintf("setting max processes limit to %d / %d", *spec.Request, *spec.Limit))
+		setrlimit(RLIMIT_NPROC, *spec.Request, *spec.Limit)
 	}
 }
 

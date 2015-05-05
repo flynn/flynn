@@ -50,6 +50,10 @@
       "additionalProperties": {
         "type": "string"
       }
+    },
+    "resources": {
+      "description": "resource request and limits",
+      "type": "object"
     }
   }
 }

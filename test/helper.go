@@ -6,16 +6,20 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/units"
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/typeconv"
 	tc "github.com/flynn/flynn/test/cluster"
 )
 
@@ -118,6 +122,31 @@ func (h *Helper) sshKeys(t *c.C) *sshData {
 	return h.ssh
 }
 
+const (
+	resourceMem      int64 = 256 * units.MiB
+	resourceMaxFD    int64 = 1024
+	resourceMaxProcs int64 = 512
+	resourceCmd            = "cat /sys/fs/cgroup/memory/memory.limit_in_bytes; ulimit -n; ulimit -p"
+)
+
+func testResources() resource.Resources {
+	r := resource.Resources{
+		resource.TypeMemory:   resource.Spec{Limit: typeconv.Int64Ptr(resourceMem)},
+		resource.TypeMaxFD:    resource.Spec{Limit: typeconv.Int64Ptr(resourceMaxFD)},
+		resource.TypeMaxProcs: resource.Spec{Limit: typeconv.Int64Ptr(resourceMaxProcs)},
+	}
+	resource.SetDefaults(&r)
+	return r
+}
+
+func assertResourceLimits(t *c.C, out string) {
+	limits := strings.Split(strings.TrimSpace(out), "\n")
+	t.Assert(limits, c.HasLen, 3)
+	t.Assert(limits[0], c.Equals, strconv.FormatInt(resourceMem, 10))
+	t.Assert(limits[1], c.Equals, strconv.FormatInt(resourceMaxFD, 10))
+	t.Assert(limits[2], c.Equals, strconv.FormatInt(resourceMaxProcs, 10))
+}
+
 func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 	client := h.controllerClient(t)
 
@@ -155,6 +184,10 @@ func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 			"omni": {
 				Cmd:  []string{"sh", "-c", "while true; do echo I am everywhere; sleep 1; done"},
 				Omni: true,
+			},
+			"resources": {
+				Cmd:       []string{"sh", "-c", resourceCmd},
+				Resources: testResources(),
 			},
 		},
 	}

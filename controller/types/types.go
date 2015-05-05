@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 )
 
@@ -41,15 +42,16 @@ type Release struct {
 }
 
 type ProcessType struct {
-	Cmd         []string          `json:"cmd,omitempty"`
-	Entrypoint  []string          `json:"entrypoint,omitempty"`
-	Env         map[string]string `json:"env,omitempty"`
-	Ports       []Port            `json:"ports,omitempty"`
-	Data        bool              `json:"data,omitempty"`
-	Omni        bool              `json:"omni,omitempty"` // omnipresent - present on all hosts
-	HostNetwork bool              `json:"host_network,omitempty"`
-	Service     string            `json:"service,omitempty"`
-	Resurrect   bool              `json:"resurrect,omitempty"`
+	Cmd         []string           `json:"cmd,omitempty"`
+	Entrypoint  []string           `json:"entrypoint,omitempty"`
+	Env         map[string]string  `json:"env,omitempty"`
+	Ports       []Port             `json:"ports,omitempty"`
+	Data        bool               `json:"data,omitempty"`
+	Omni        bool               `json:"omni,omitempty"` // omnipresent - present on all hosts
+	HostNetwork bool               `json:"host_network,omitempty"`
+	Service     string             `json:"service,omitempty"`
+	Resurrect   bool               `json:"resurrect,omitempty"`
+	Resources   resource.Resources `json:"resources,omitempty"`
 }
 
 type Port struct {
@@ -103,16 +105,17 @@ func (e *JobEvent) IsDown() bool {
 }
 
 type NewJob struct {
-	ReleaseID  string            `json:"release,omitempty"`
-	ReleaseEnv bool              `json:"release_env,omitempty"`
-	Cmd        []string          `json:"cmd,omitempty"`
-	Entrypoint []string          `json:"entrypoint,omitempty"`
-	Env        map[string]string `json:"env,omitempty"`
-	Meta       map[string]string `json:"meta,omitempty"`
-	TTY        bool              `json:"tty,omitempty"`
-	Columns    int               `json:"tty_columns,omitempty"`
-	Lines      int               `json:"tty_lines,omitempty"`
-	DisableLog bool              `json:"disable_log,omitempty"`
+	ReleaseID  string             `json:"release,omitempty"`
+	ReleaseEnv bool               `json:"release_env,omitempty"`
+	Cmd        []string           `json:"cmd,omitempty"`
+	Entrypoint []string           `json:"entrypoint,omitempty"`
+	Env        map[string]string  `json:"env,omitempty"`
+	Meta       map[string]string  `json:"meta,omitempty"`
+	TTY        bool               `json:"tty,omitempty"`
+	Columns    int                `json:"tty_columns,omitempty"`
+	Lines      int                `json:"tty_lines,omitempty"`
+	DisableLog bool               `json:"disable_log,omitempty"`
+	Resources  resource.Resources `json:"resources,omitempty"`
 }
 
 type Deployment struct {

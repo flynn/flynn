@@ -2,6 +2,8 @@ package host
 
 import (
 	"time"
+
+	"github.com/flynn/flynn/host/resource"
 )
 
 type Job struct {
@@ -9,8 +11,8 @@ type Job struct {
 
 	Metadata map[string]string `json:"metadata,omitempty"`
 
-	Artifact  Artifact     `json:"artifact,omitempty"`
-	Resources JobResources `json:"resources,omitempty"`
+	Artifact  Artifact           `json:"artifact,omitempty"`
+	Resources resource.Resources `json:"resources,omitempty"`
 
 	Config ContainerConfig `json:"config,omitempty"`
 
