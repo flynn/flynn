@@ -1,4 +1,4 @@
-package main
+package backend
 
 import (
 	"path/filepath"
@@ -19,7 +19,7 @@ func (S) TestStateHostID(c *C) {
 	hostID := "abc123"
 	state := NewState(hostID, filepath.Join(workdir, "host-state-db"))
 	defer state.persistenceDBClose()
-	state.AddJob(&host.Job{ID: "a"}, nil)
+	state.AddJob(&host.Job{ID: "a"}, nil, 0)
 	job := state.GetJob("a")
 	if job.HostID != hostID {
 		c.Errorf("expected job.HostID to equal %s, got %s", hostID, job.HostID)
@@ -43,7 +43,7 @@ func (S) TestStatePersistRestore(c *C) {
 	workdir := c.MkDir()
 	hostID := "abc123"
 	state := NewState(hostID, filepath.Join(workdir, "host-state-db"))
-	state.AddJob(&host.Job{ID: "a"}, nil)
+	state.AddJob(&host.Job{ID: "a"}, nil, 0)
 	state.persistenceDBClose()
 
 	// exercise the restore path.  failures will panic.

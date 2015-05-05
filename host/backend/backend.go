@@ -1,11 +1,23 @@
-package main
+package backend
 
 import (
+	"fmt"
 	"io"
 	"net"
 
+	"github.com/flynn/flynn/host/logmux"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/host/volume/manager"
 )
+
+var backends = map[string]func(Config) (Backend, error){}
+
+func New(backendName string, config Config) (Backend, error) {
+	if fn := backends[backendName]; fn != nil {
+		return fn(config)
+	}
+	return nil, fmt.Errorf("unknown backend %q", backendName)
+}
 
 type AttachRequest struct {
 	Job    *host.ActiveJob
@@ -20,6 +32,16 @@ type AttachRequest struct {
 	Stderr  io.WriteCloser
 	InitLog io.WriteCloser
 	Stdin   io.Reader
+}
+
+type Config struct {
+	State *State
+
+	Manager *volumemanager.Manager
+
+	Mux *logmux.LogMux
+
+	VolPath, LogPath, InitPath string
 }
 
 type Backend interface {
@@ -56,3 +78,9 @@ type NetworkStrategy int
 const (
 	NetworkStrategyFlannel NetworkStrategy = iota
 )
+
+type ExitError int
+
+func (e ExitError) Error() string {
+	return fmt.Sprintf("exit status %d", e)
+}

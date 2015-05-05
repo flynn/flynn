@@ -335,7 +335,7 @@ func setupHostname(c *Config) error {
 	if hostname == "" {
 		return nil
 	}
-	return syscall.Sethostname([]byte(hostname))
+	return sethostname(hostname)
 }
 
 func setupNetworking(c *Config) error {
