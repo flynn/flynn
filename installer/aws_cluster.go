@@ -101,9 +101,7 @@ func (c *AWSCluster) validateInputs() error {
 
 func (c *AWSCluster) Run() {
 	go func() {
-		defer func() {
-			c.base.handleDone()
-		}()
+		defer c.base.handleDone()
 
 		steps := []func() error{
 			c.createKeyPair,
@@ -205,10 +203,15 @@ func (c *AWSCluster) createKeyPair() error {
 		return nil
 	}
 
-	c.base.SendLog("Creating key pair")
-	keypair, err := sshkeygen.Generate()
-	if err != nil {
-		return err
+	keypair, err := loadSSHKey(keypairName)
+	if err == nil {
+		c.base.SendLog("Importing key pair")
+	} else {
+		c.base.SendLog("Creating key pair")
+		keypair, err = sshkeygen.Generate()
+		if err != nil {
+			return err
+		}
 	}
 
 	enc := base64.StdEncoding
