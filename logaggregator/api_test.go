@@ -12,6 +12,7 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
+	"github.com/flynn/flynn/pkg/typeconv"
 )
 
 func (s *LogAggregatorTestSuite) TestAPIGetLogWithNoResults(c *C) {
@@ -21,10 +22,6 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogWithNoResults(c *C) {
 
 	assertAllLogsEquals(c, logrc, "")
 }
-
-func strPtr(s string) *string { return &s }
-
-func intPtr(i int) *int { return &i }
 
 func (s *LogAggregatorTestSuite) TestAPIGetLogBuffer(c *C) {
 	appID := "test-app"
@@ -64,31 +61,31 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogBuffer(c *C) {
 		expected    []*rfc5424.Message
 	}{
 		{
-			numLogs:  intPtr(-1),
+			numLogs:  typeconv.IntPtr(-1),
 			expected: []*rfc5424.Message{msg1, msg2, msg3, msg4, msg5},
 		},
 		{
-			numLogs:  intPtr(1),
+			numLogs:  typeconv.IntPtr(1),
 			expected: []*rfc5424.Message{msg5},
 		},
 		{
-			numLogs:  intPtr(1),
+			numLogs:  typeconv.IntPtr(1),
 			jobID:    "3",
 			expected: []*rfc5424.Message{msg3},
 		},
 		{
-			numLogs:  intPtr(-1),
+			numLogs:  typeconv.IntPtr(-1),
 			jobID:    "1",
 			expected: []*rfc5424.Message{msg1, msg4},
 		},
 		{
-			numLogs:     intPtr(-1),
-			processType: strPtr("web"),
+			numLogs:     typeconv.IntPtr(-1),
+			processType: typeconv.StringPtr("web"),
 			expected:    []*rfc5424.Message{msg1, msg2, msg4},
 		},
 		{
-			numLogs:     intPtr(-1),
-			processType: strPtr(""),
+			numLogs:     typeconv.IntPtr(-1),
+			processType: typeconv.StringPtr(""),
 			expected:    []*rfc5424.Message{msg5},
 		},
 	}
