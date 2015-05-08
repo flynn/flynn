@@ -470,7 +470,8 @@ App.createFromGithub = function (client, meta, appData) {
 		meta: meta
 	};
 
-	var appId, appName, databaseEnv;
+	var appId, appName
+	var databaseEnv = {};
 
 	function createDatabase () {
 		return client.createAppDatabase({ apps: [appId] }).then(function (args) {
@@ -521,7 +522,7 @@ App.createFromGithub = function (client, meta, appData) {
 		if (appData.dbRequested) {
 			return createDatabase();
 		} else {
-			return getTaffyRelease();
+			return createRelease();
 		}
 	}).catch(function (args) {
 		if (args instanceof Error) {
