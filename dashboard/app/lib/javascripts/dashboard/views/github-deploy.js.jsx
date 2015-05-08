@@ -96,7 +96,7 @@ function getState (props, prevState, env, dbRequested) {
 	}
 	state.buildpackStoreId = nextBuildpackStoreId;
 	state.buildpack = BuildpackStore.getState(state.buildpackStoreId);
-	if (state.buildpack.unknown) {
+	if (state.buildpack.unknown && !state.env.BUILDPACK_URL) {
 		state.env.BUILDPACK_URL = "";
 	}
 
