@@ -298,7 +298,7 @@
     "release": {
       "processes": {
         "app": {
-          "cmd": ["-logaddr", ":514", "-apiaddr", ":80", "-snapshot", "/data/logaggregator.dat"],
+          "cmd": ["-logaddr", ":514", "-repaddr", ":1514", "-apiaddr", ":80", "-snapshot", "/data/logaggregator.dat"],
           "data": true,
           "ports": [
             {"port": 80, "proto": "tcp"},
@@ -308,7 +308,7 @@
       }
     },
     "processes": {
-      "app": 1
+      "app": 2
     }
   },
   {
@@ -379,6 +379,12 @@
     "type": "http",
     "service": "dashboard-web",
     "domain": "dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}"
+  },
+  {
+    "id": "logaggregator-wait",
+    "action": "wait",
+    "url": "http://flynn-logaggregator.discoverd:80",
+    "status": 404
   },
   {
     "id": "blobstore-wait",

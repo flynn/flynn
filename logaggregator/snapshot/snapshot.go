@@ -7,16 +7,35 @@ import (
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 )
 
-// Take writes a snapshot of the buffers to the writer. The partitioning of
+// WriteTo writes a snapshot of the buffers to the writer. The partitioning of
 // messages is not retained. The writer is left open.
-func Take(buffers [][]*rfc5424.Message, w io.Writer) error {
+func WriteTo(buffers [][]*rfc5424.Message, w io.Writer) error {
 	enc := gob.NewEncoder(w)
+	return writeTo(buffers, enc)
+}
 
+func writeTo(buffers [][]*rfc5424.Message, enc *gob.Encoder) error {
 	for _, buf := range buffers {
 		for _, msg := range buf {
 			if err := enc.Encode(msg); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+// StreamTo writes a snapshot of the buffers to the writer, then writes
+// messages from the channel to the writer. The writer is left open.
+func StreamTo(buffers [][]*rfc5424.Message, msgc <-chan *rfc5424.Message, w io.Writer) error {
+	enc := gob.NewEncoder(w)
+	if err := writeTo(buffers, enc); err != nil {
+		return err
+	}
+
+	for msg := range msgc {
+		if err := enc.Encode(msg); err != nil {
+			return err
 		}
 	}
 	return nil
