@@ -180,7 +180,7 @@ const sample = `
 			("Heisenberg", 33),
 			("Robinson", 34),
 			("Smith", 34),
-			("John", NULL),
+			("Williams", NULL),
 		;
      COMMIT;
 `
@@ -191,6 +191,10 @@ const sample = `
 // guarantees not to panic on recoverable errors and return an error instead.
 // Test errors are not returned but reported to t.
 func test(t *testing.T, s testDB) (panicked error) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
 	defer func() {
 		if e := recover(); e != nil {
 			switch x := e.(type) {
@@ -267,6 +271,27 @@ func test(t *testing.T, s testDB) (panicked error) {
 			continue
 		}
 
+		s1 := list.String()
+		list1, err := Compile(s1)
+		if err != nil {
+			t.Errorf("recreated source does not compile: %v\n---- orig\n%s\n---- recreated\n%s", err, q, s1)
+			if *oFastFail {
+				return
+			}
+
+			continue
+		}
+
+		s2 := list1.String()
+		if g, e := s2, s1; g != e {
+			t.Errorf("recreated source is not idempotent\n---- orig\n%s\n---- recreated1\n%s\n---- recreated2\n%s", q, s1, s2)
+			if *oFastFail {
+				return
+			}
+
+			continue
+		}
+
 		tctx := NewRWCtx()
 		if !func() (ok bool) {
 			defer func() {
@@ -276,7 +301,7 @@ func test(t *testing.T, s testDB) (panicked error) {
 				}
 
 				for _, tab := range nfo.Tables {
-					if _, _, err = db.Run(NewRWCtx(), fmt.Sprintf(`
+					if _, _, err = db.run(NewRWCtx(), fmt.Sprintf(`
 						BEGIN TRANSACTION;
 							DROP table %s;
 						COMMIT;
