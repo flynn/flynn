@@ -166,25 +166,20 @@ fi
 
 
 ## Produce slug
+tar_args=("-C ${build_root}" "-cf ${slug_file}")
 
+# Allow $build_root/.slugignore to be excluded
 if [[ -f "${build_root}/.slugignore" ]]; then
-  tar \
-    --exclude='.git' \
-    --use-compress-program=pigz \
-    -X "${build_root}/.slugignore" \
-    -C ${build_root} \
-    -cf ${slug_file} \
-    . \
-    | cat
-else
-  tar \
-    --exclude='.git' \
-    --use-compress-program=pigz \
-    -C ${build_root} \
-    -cf ${slug_file} \
-    . \
-    | cat
+  tar_args+=("-X ${build_root}/.slugignore")
 fi
+
+# If env SLUG_INCLUDE_GIT, don't strip .git directories
+if [[ ! -s "${env_dir}/SLUG_INCLUDE_GIT" ]]; then
+  tar_args+=("--exclude='.git'")
+fi
+
+# Build slug
+tar ${tar_args[@]} . | cat
 
 if [[ "${slug_file}" != "-" ]]; then
   slug_size=$(du -Sh "${slug_file}" | cut -f1)
