@@ -5,8 +5,7 @@ import MainStore from './main-store';
 import MainComponent from './views/main';
 import Client from './client';
 
-var dataStore = new MainStore();
-dataStore.registerWithDispatcher(Dispatcher);
+var dataStore = new MainStore(Dispatcher);
 
 var history = new History();
 history.register(new MainRouter());

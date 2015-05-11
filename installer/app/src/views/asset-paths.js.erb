@@ -16,6 +16,9 @@ var AssetPaths = <%= Yajl::Encoder.encode([
 	"windows-cert-5.png",
 	"windows-cert-6.png",
 	"windows-cert-7.png",
+
+	"aws-logo.png",
+	"digitalocean-logo.png",
 ].inject({}) { |m, name|
   m[name] = asset_path('images/'+ name).sub(/\A\./, '/assets')
   m

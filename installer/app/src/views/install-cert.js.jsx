@@ -1,6 +1,6 @@
 import UserAgent from './css/user-agent';
 import { green as GreenBtnCSS } from './css/button';
-import AssetPaths from './install-cert-asset-paths';
+import AssetPaths from './asset-paths';
 
 var firefoxImgInfo = {
 	width: 600,

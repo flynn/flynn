@@ -1,6 +1,7 @@
 package installer
 
 import (
+	"bufio"
 	"bytes"
 	"database/sql"
 	"encoding/base64"
@@ -17,6 +18,10 @@ import (
 	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/pkg/etcdcluster"
 )
+
+func (c *BaseCluster) FindCredentials() (*Credential, error) {
+	return c.installer.FindCredentials(c.CredentialID)
+}
 
 func (c *BaseCluster) saveField(field string, value interface{}) error {
 	c.installer.dbMtx.Lock()
@@ -55,6 +60,14 @@ func (c *BaseCluster) setState(state string) {
 	if err := c.saveField("State", state); err != nil {
 		c.installer.logger.Debug(fmt.Sprintf("Error saving cluster State: %s", err.Error()))
 	}
+	if c.State == "running" {
+		if err := c.installer.txExec(`
+			UPDATE events SET DeletedAt = now() WHERE Type == "log" AND ClusterID == $1;
+		`, c.ID); err != nil {
+			c.installer.logger.Debug(fmt.Sprintf("Error updating events: %s", err.Error()))
+		}
+		c.installer.removeClusterLogEvents(c.ID)
+	}
 	c.sendEvent(&Event{
 		ClusterID:   c.ID,
 		Type:        "cluster_state",
@@ -72,7 +85,7 @@ func (c *BaseCluster) MarkDeleted() (err error) {
 		return
 	}
 
-	if _, err = tx.Exec(`UPDATE prompts SET DeletedAt = now() WHERE ID IN (SELECT PromptID FROM events WHERE ClusterID == $1)`, c.ID); err != nil {
+	if _, err = tx.Exec(`UPDATE prompts SET DeletedAt = now() WHERE ID IN (SELECT ResourceID FROM events WHERE ClusterID == $1 AND ResourceType == "prompt")`, c.ID); err != nil {
 		tx.Rollback()
 		return
 	}
@@ -101,6 +114,17 @@ func (c *BaseCluster) MarkDeleted() (err error) {
 		tx.Rollback()
 		return
 	}
+
+	if _, err = tx.Exec(`UPDATE digital_ocean_clusters SET DeletedAt = now() WHERE ClusterID == $1`, c.ID); err != nil {
+		tx.Rollback()
+		return
+	}
+
+	if _, err = tx.Exec(`UPDATE digital_ocean_droplets SET DeletedAt = now() WHERE ClusterID == $1`, c.ID); err != nil {
+		tx.Rollback()
+		return
+	}
+
 	c.installer.ClusterDeleted(c.ID)
 	err = tx.Commit()
 	return
@@ -165,41 +189,62 @@ func (c *BaseCluster) allocateDomain() error {
 	return c.saveDomain()
 }
 
-func instanceRunCmd(cmd string, sshConfig *ssh.ClientConfig, ipAddress string) (stdout, stderr io.Reader, err error) {
-	var sshConn *ssh.Client
-	sshConn, err = ssh.Dial("tcp", ipAddress+":22", sshConfig)
+func (c *BaseCluster) instanceRunCmd(cmd string, sshConfig *ssh.ClientConfig, ipAddress string) error {
+	c.SendLog(fmt.Sprintf("Running `%s` on %s", cmd, ipAddress))
+
+	sshConn, err := ssh.Dial("tcp", ipAddress+":22", sshConfig)
 	if err != nil {
-		return
+		return err
 	}
 	defer sshConn.Close()
 
 	sess, err := sshConn.NewSession()
 	if err != nil {
-		return
+		return err
 	}
-	stdout, err = sess.StdoutPipe()
+	stdout, err := sess.StdoutPipe()
 	if err != nil {
-		return
+		return err
 	}
-	stderr, err = sess.StderrPipe()
+	stderr, err := sess.StderrPipe()
 	if err != nil {
-		return
+		return err
 	}
 	if err = sess.Start(cmd); err != nil {
-		return
+		return err
 	}
 
-	err = sess.Wait()
-	return
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			c.SendLog(scanner.Text())
+		}
+	}()
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			c.SendLog(scanner.Text())
+		}
+	}()
+
+	return sess.Wait()
 }
 
 func (c *BaseCluster) uploadDebugInfo(sshConfig *ssh.ClientConfig, ipAddress string) {
 	cmd := "sudo flynn-host collect-debug-info"
-	stdout, stderr, _ := instanceRunCmd(cmd, sshConfig, ipAddress)
-	var buf bytes.Buffer
-	io.Copy(&buf, stdout)
-	io.Copy(&buf, stderr)
-	c.SendLog(fmt.Sprintf("`%s` output for %s: %s", cmd, ipAddress, buf.String()))
+	c.instanceRunCmd(cmd, sshConfig, ipAddress)
+}
+
+func (c *BaseCluster) sshConfig() (*ssh.ClientConfig, error) {
+	signer, err := ssh.NewSignerFromKey(c.SSHKey.PrivateKey)
+	if err != nil {
+		return nil, err
+	}
+	sshConfig := &ssh.ClientConfig{
+		User: c.SSHUsername,
+		Auth: []ssh.AuthMethod{ssh.PublicKeys(signer)},
+	}
+	return sshConfig, nil
 }
 
 type stepInfo struct {
@@ -221,13 +266,9 @@ func (c *BaseCluster) bootstrap() error {
 	// bootstrap only needs to run on one instance
 	ipAddress := c.InstanceIPs[0]
 
-	signer, err := ssh.NewSignerFromKey(c.SSHKey.PrivateKey)
+	sshConfig, err := c.sshConfig()
 	if err != nil {
-		return err
-	}
-	sshConfig := &ssh.ClientConfig{
-		User: "ubuntu",
-		Auth: []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		return nil
 	}
 
 	attempts := 0
@@ -373,6 +414,16 @@ func (c *BaseCluster) configureCLI() error {
 	return nil
 }
 
+func (c *BaseCluster) genIPTablesConfigScript() (string, error) {
+	var data struct {
+		InstanceIPs []string
+	}
+	data.InstanceIPs = c.InstanceIPs
+	var buf bytes.Buffer
+	err := iptablesConfigScript.Execute(&buf, data)
+	return buf.String(), err
+}
+
 func (c *BaseCluster) genStartScript(nodes int64) (string, string, error) {
 	var data struct {
 		DiscoveryToken string
@@ -389,6 +440,21 @@ func (c *BaseCluster) genStartScript(nodes int64) (string, string, error) {
 
 	return buf.String(), data.DiscoveryToken, err
 }
+
+var iptablesConfigScript = template.Must(template.New("iptables.sh").Parse(`
+apt-get install -y iptables-persistent
+{{ range $i, $ip := .InstanceIPs }}
+iptables -A FORWARD -s {{$ip}} -j ACCEPT
+{{ end }}
+iptables -A FORWARD -i eth0 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -A FORWARD -i eth0 -p tcp --dport 80 -j ACCEPT
+iptables -A FORWARD -i eth0 -p tcp --dport 443 -j ACCEPT
+iptables -A FORWARD -i eth0 -p tcp --dport 22 -j ACCEPT
+iptables -A FORWARD -i eth0 -p tcp --dport 2222 -j ACCEPT
+iptables -A FORWARD -i eth0 -p icmp --icmp-type echo-request -j ACCEPT
+iptables -A FORWARD -i eth0 -j DROP
+/etc/init.d/iptables-persistent save
+`[1:]))
 
 var startScript = template.Must(template.New("start.sh").Parse(`
 #!/bin/sh

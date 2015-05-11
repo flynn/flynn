@@ -24,9 +24,11 @@ const (
 	NotFoundErrorCode           ErrorCode = "not_found"
 	ObjectNotFoundErrorCode     ErrorCode = "object_not_found"
 	ObjectExistsErrorCode       ErrorCode = "object_exists"
+	ConflictErrorCode           ErrorCode = "conflict"
 	SyntaxErrorCode             ErrorCode = "syntax_error"
 	ValidationErrorCode         ErrorCode = "validation_error"
 	PreconditionFailedErrorCode ErrorCode = "precondition_failed"
+	UnauthorizedErrorCode       ErrorCode = "unauthorized"
 	UnknownErrorCode            ErrorCode = "unknown_error"
 )
 
@@ -34,9 +36,11 @@ var errorResponseCodes = map[ErrorCode]int{
 	NotFoundErrorCode:           404,
 	ObjectNotFoundErrorCode:     404,
 	ObjectExistsErrorCode:       409,
+	ConflictErrorCode:           409,
 	PreconditionFailedErrorCode: 412,
 	SyntaxErrorCode:             400,
 	ValidationErrorCode:         400,
+	UnauthorizedErrorCode:       401,
 	UnknownErrorCode:            500,
 }
 

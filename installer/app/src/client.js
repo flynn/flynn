@@ -29,6 +29,61 @@ var Client = {
 		});
 	},
 
+	createCredential: function (data) {
+		return this.performRequest('POST', {
+			url: Config.endpoints.credentials,
+			body: data,
+			headers: {
+				'Content-Type': 'application/json'
+			}
+		}).catch(function (args) {
+			var res = args[0];
+			Dispatcher.dispatch({
+				name: "CREATE_CREDENTIAL_ERROR",
+				err: res
+			});
+			return Promise.reject(args);
+		});
+	},
+
+	deleteCredential: function (type, id) {
+		return this.performRequest('DELETE', {
+			url: Config.endpoints.credentials +'/'+ encodeURIComponent(type) +'/'+ encodeURIComponent(id),
+		}).catch(function (args) {
+			var res = args[0];
+			Dispatcher.dispatch({
+				name: "DELETE_CREDENTIAL_ERROR",
+				err: res
+			});
+			return Promise.reject(args);
+		});
+	},
+
+	listCloudRegions: function (cloud, credentialID) {
+		return this.performRequest('GET', {
+			url: Config.endpoints.regions,
+			params: [{
+				cloud: cloud,
+				credential_id: credentialID
+			}]
+		}).then(function (args) {
+			var res = args[0];
+			Dispatcher.dispatch({
+				name: 'CLOUD_REGIONS',
+				cloud: cloud,
+				credentialID: credentialID,
+				regions: res
+			});
+		}).catch(function () {
+			Dispatcher.dispatch({
+				name: 'CLOUD_REGIONS',
+				cloud: cloud,
+				credentialID: credentialID,
+				regions: []
+			});
+		});
+	},
+
 	launchCluster: function (data) {
 		this.performRequest('POST', {
 			url: Config.endpoints.clusters,
@@ -103,14 +158,24 @@ var Client = {
 					event.cluster = new Cluster(data.cluster);
 				break;
 
+				case 'new_credential':
+					event.name = 'NEW_CREDENTIAL';
+					event.credential = data.resource;
+				break;
+
+				case 'delete_credential':
+					event.name = 'CREDENTIAL_DELETED';
+					event.id = data.resource_id;
+				break;
+
 				case 'cluster_state':
 					event.name = 'CLUSTER_STATE';
 					event.state = data.description;
 				break;
 
 				case 'prompt':
-					event.prompt = data.prompt;
-					if (data.prompt.resolved) {
+					event.prompt = data.resource;
+					if (data.resource.resolved) {
 						event.name = 'INSTALL_PROMPT_RESOLVED';
 					} else {
 						event.name = 'INSTALL_PROMPT_REQUESTED';
