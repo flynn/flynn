@@ -29,6 +29,7 @@ import (
 	lt "github.com/flynn/flynn/host/libvirt"
 	"github.com/flynn/flynn/host/logbuf"
 	"github.com/flynn/flynn/host/logmux"
+	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume/manager"
 	"github.com/flynn/flynn/pinkerton"
@@ -512,6 +513,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		TTY:       job.Config.TTY,
 		OpenStdin: job.Config.Stdin,
 		WorkDir:   job.Config.WorkingDir,
+		Resources: job.Resources,
 	}
 	if !job.Config.HostNetwork {
 		config.IP = container.IP.String() + "/24"
@@ -579,6 +581,9 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		},
 		OnPoweroff: "preserve",
 		OnCrash:    "preserve",
+	}
+	if spec, ok := job.Resources[resource.TypeMemory]; ok && spec.Limit != nil {
+		domain.Memory = lt.UnitInt{Value: *spec.Limit, Unit: "bytes"}
 	}
 
 	if !job.Config.HostNetwork {

@@ -45,6 +45,9 @@
     "disable_log": {
       "description": "don't copy stdout/stdin to log stream",
       "type": "boolean"
+    },
+    "resources": {
+      "$ref": "/schema/controller/common#/definitions/resources"
     }
   }
 }

@@ -9,6 +9,7 @@ import (
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
+	hostresource "github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/random"
@@ -124,6 +125,7 @@ func (a *RunAppAction) Run(s *State) error {
 		for i := 0; i < count; i++ {
 			hostID := hosts[i%len(hosts)].ID
 			config := utils.JobConfig(a.ExpandedFormation, typ, hostID)
+			hostresource.SetDefaults(&config.Resources)
 			if a.ExpandedFormation.Release.Processes[typ].Data {
 				if err := utils.ProvisionVolume(cc, hostID, config); err != nil {
 					return err

@@ -259,3 +259,29 @@ func (s *HostSuite) TestSignalJob(t *c.C) {
 	// check the output
 	t.Assert(out.String(), c.Equals, "got signal: terminated")
 }
+
+func (s *HostSuite) TestResourceLimits(t *c.C) {
+	cmd := exec.JobUsingCluster(
+		s.clusterClient(t),
+		exec.DockerImage(imageURIs["test-apps"]),
+		&host.Job{
+			Config:    host.ContainerConfig{Cmd: []string{"sh", "-c", resourceCmd}},
+			Resources: testResources(),
+		},
+	)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+
+	runErr := make(chan error)
+	go func() {
+		runErr <- cmd.Run()
+	}()
+	select {
+	case err := <-runErr:
+		t.Assert(err, c.IsNil)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for resource limits job")
+	}
+
+	assertResourceLimits(t, out.String())
+}

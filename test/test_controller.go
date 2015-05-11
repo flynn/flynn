@@ -13,6 +13,8 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/jsonschema"
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/cli/config"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -189,4 +191,42 @@ func (s *ControllerSuite) TestKeyRotation(t *c.C) {
 	// remove old key from API
 	set = flynn(t, "/", "-a", "controller", "env", "unset", "-t", "web", "AUTH_KEY")
 	t.Assert(set, Succeeds)
+}
+
+func (s *ControllerSuite) TestResourceLimitsOneOffJob(t *c.C) {
+	app, release := s.createApp(t)
+
+	rwc, err := s.controllerClient(t).RunJobAttached(app.ID, &ct.NewJob{
+		ReleaseID: release.ID,
+		Cmd:       []string{"sh", "-c", resourceCmd},
+		Resources: testResources(),
+	})
+	t.Assert(err, c.IsNil)
+	attachClient := cluster.NewAttachClient(rwc)
+	var out bytes.Buffer
+	exit, err := attachClient.Receive(&out, &out)
+	t.Assert(exit, c.Equals, 0)
+	t.Assert(err, c.IsNil)
+
+	assertResourceLimits(t, out.String())
+}
+
+func (s *ControllerSuite) TestResourceLimitsReleaseJob(t *c.C) {
+	client := s.controllerClient(t)
+	app, release := s.createApp(t)
+
+	events := make(chan *ct.JobEvent)
+	stream, err := client.StreamJobEvents(app.ID, events)
+	t.Assert(err, c.IsNil)
+	defer stream.Close()
+
+	t.Assert(client.PutFormation(&ct.Formation{
+		AppID:     app.ID,
+		ReleaseID: release.ID,
+		Processes: map[string]int{"resources": 1},
+	}), c.IsNil)
+	jobID := waitForJobEvents(t, stream, events, jobEvents{"resources": {"up": 1, "down": 1}})
+	log := flynn(t, "/", "-a", app.Name, "log", "--job", jobID, "--raw-output")
+
+	assertResourceLimits(t, log.Output)
 }

@@ -14,6 +14,7 @@ import (
 
 	ct "github.com/flynn/flynn/controller/types"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
+	"github.com/flynn/flynn/pkg/typeconv"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 )
@@ -116,10 +117,6 @@ func (f *fakeLogAggregatorClient) GetLog(channelID string, options *logaggc.LogO
 	return pr, nil
 }
 
-func strPtr(s string) *string { return &s }
-
-func intPtr(i int) *int { return &i }
-
 func (s *S) TestGetAppLog(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "get-app-log-test"})
 
@@ -131,15 +128,15 @@ func (s *S) TestGetAppLog(c *C) {
 			expected: sampleMessages,
 		},
 		{
-			opts:     &ct.LogOpts{Lines: intPtr(1)},
+			opts:     &ct.LogOpts{Lines: typeconv.IntPtr(1)},
 			expected: sampleMessages[2:],
 		},
 		{
-			opts:     &ct.LogOpts{ProcessType: strPtr("web")},
+			opts:     &ct.LogOpts{ProcessType: typeconv.StringPtr("web")},
 			expected: sampleMessages[1:2],
 		},
 		{
-			opts:     &ct.LogOpts{ProcessType: strPtr("")},
+			opts:     &ct.LogOpts{ProcessType: typeconv.StringPtr("")},
 			expected: sampleMessages[:1],
 		},
 		{

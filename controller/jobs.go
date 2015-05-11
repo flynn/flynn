@@ -397,6 +397,7 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 			Stdin:      attach,
 			DisableLog: newJob.DisableLog,
 		},
+		Resources: newJob.Resources,
 	}
 	if len(newJob.Entrypoint) > 0 {
 		job.Config.Entrypoint = newJob.Entrypoint

@@ -51,7 +51,7 @@ type IDMapping struct {
 }
 
 type UnitInt struct {
-	Value int    `xml:",chardata"`
+	Value int64  `xml:",chardata"`
 	Unit  string `xml:"unit,attr,omitempty"`
 }
 

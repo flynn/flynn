@@ -11,6 +11,7 @@ import (
 	"text/template"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
+	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume/manager"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -227,6 +228,7 @@ func (m *manifestRunner) runManifest(r io.Reader) (map[string]*ManifestData, err
 				Volumes:     volumeBindings,
 			},
 			Resurrect: true,
+			Resources: resource.Defaults(),
 		}
 		if job.Config.Env == nil {
 			job.Config.Env = make(map[string]string)

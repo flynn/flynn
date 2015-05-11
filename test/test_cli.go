@@ -20,6 +20,7 @@ import (
 	"github.com/flynn/flynn/cli/config"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/stream"
@@ -600,6 +601,10 @@ func (s *CLISuite) TestRelease(t *c.C) {
 	}`)
 	release := &ct.Release{}
 	t.Assert(json.Unmarshal(releaseJSON, &release), c.IsNil)
+	for typ, proc := range release.Processes {
+		resource.SetDefaults(&proc.Resources)
+		release.Processes[typ] = proc
+	}
 
 	file, err := ioutil.TempFile("", "")
 	t.Assert(err, c.IsNil)
