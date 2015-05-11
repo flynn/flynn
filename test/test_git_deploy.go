@@ -8,6 +8,7 @@ import (
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/attempt"
 )
 
@@ -129,18 +130,23 @@ func (s *GitDeploySuite) runBuildpackTestWithResponsePattern(t *c.C, name string
 		t.Assert(r.flynn("resource", "add", resource), Succeeds)
 	}
 
+	events := make(chan *ct.JobEvent)
+	stream, err := s.controllerClient(t).StreamJobEvents(name, events)
+	t.Assert(err, c.IsNil)
+
 	push := r.git("push", "flynn", "master")
 	t.Assert(push, SuccessfulOutputContains, "Creating release")
 	t.Assert(push, SuccessfulOutputContains, "Application deployed")
+	t.Assert(push, SuccessfulOutputContains, "Added default web=1 formation")
 	t.Assert(push, SuccessfulOutputContains, "* [new branch]      master -> master")
 
-	t.Assert(r.flynn("scale", "web=1"), Succeeds)
+	waitForJobEvents(t, stream, events, jobEvents{"web": {"up": 1}})
 
 	route := name + ".dev"
 	newRoute := r.flynn("route", "add", "http", route)
 	t.Assert(newRoute, Succeeds)
 
-	err := Attempts.Run(func() error {
+	err = Attempts.Run(func() error {
 		// Make HTTP requests
 		client := &http.Client{}
 		req, err := http.NewRequest("GET", "http://"+routerIP, nil)

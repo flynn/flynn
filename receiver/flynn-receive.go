@@ -131,9 +131,7 @@ func main() {
 
 	fmt.Println("=====> Application deployed")
 
-	// If the app is new and the web process type exists,
-	// it should scale to one process after the release is created.
-	if _, ok := procs["web"]; ok && prevRelease.ID == "" {
+	if needsDefaultScale(app.ID, prevRelease.ID, procs, client) {
 		formation := &ct.Formation{
 			AppID:     app.ID,
 			ReleaseID: release.ID,
@@ -145,6 +143,20 @@ func main() {
 
 		fmt.Println("=====> Added default web=1 formation")
 	}
+}
+
+// needsDefaultScale indicates whether a release needs a default scale based on
+// whether it has a web process type and either has no previous release or no
+// previous scale.
+func needsDefaultScale(appID, prevReleaseID string, procs map[string]ct.ProcessType, client *controller.Client) bool {
+	if _, ok := procs["web"]; !ok {
+		return false
+	}
+	if prevReleaseID == "" {
+		return true
+	}
+	_, err := client.GetFormation(appID, prevReleaseID)
+	return err == controller.ErrNotFound
 }
 
 func appendEnvDir(stdin io.Reader, pipe io.WriteCloser, env map[string]string) {
