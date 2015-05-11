@@ -188,6 +188,11 @@ func (c *Cmd) Start() error {
 			},
 			Metadata: c.Meta,
 		}
+		// if attaching to stdout / stderr, avoid round tripping the
+		// streams via on-disk log files.
+		if c.Stdout != nil || c.Stderr != nil {
+			c.Job.Config.DisableLog = true
+		}
 	} else {
 		c.Job.Artifact = c.Artifact
 	}
