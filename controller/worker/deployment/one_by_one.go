@@ -1,4 +1,4 @@
-package strategy
+package deployment
 
 import (
 	"fmt"
@@ -6,8 +6,8 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-func oneByOne(d *Deploy) error {
-	log := d.logger.New("fn", "oneByOne")
+func (d *DeployJob) deployOneByOne() error {
+	log := d.logger.New("fn", "deployOneByOne")
 	log.Info("starting one-by-one deployment")
 
 	oldScale := make(map[string]int, len(d.oldReleaseState))

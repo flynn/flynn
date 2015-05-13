@@ -1,4 +1,4 @@
-package strategy
+package deployment
 
 import (
 	"encoding/json"
@@ -12,8 +12,8 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 )
 
-func postgres(d *Deploy) (err error) {
-	log := d.logger.New("fn", "postgres")
+func (d *DeployJob) deployPostgres() (err error) {
+	log := d.logger.New("fn", "deployPostgres")
 	log.Info("starting postgres deployment")
 
 	defer func() {
@@ -236,5 +236,5 @@ loop:
 	}
 
 	// do a one-by-one deploy for the other process types
-	return oneByOne(d)
+	return d.deployOneByOne()
 }

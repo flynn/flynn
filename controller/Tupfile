@@ -1,7 +1,7 @@
 include_rules
 : |> !go |> bin/flynn-controller
 : |> !go ./scheduler |> bin/flynn-scheduler
-: |> !go ./deployer |> bin/flynn-deployer
+: |> !go ./worker |> bin/flynn-worker
 : foreach $(ROOT)/schema/*.json |> !cp |> bin/jsonschema/%g.json
 : foreach $(ROOT)/schema/controller/*.json |> !cp |> bin/jsonschema/controller/%g.json
 : foreach $(ROOT)/schema/router/*.json |> !cp |> bin/jsonschema/router/%g.json

@@ -99,8 +99,8 @@
           "service": "flynn-controller-scheduler",
           "resurrect": true
         },
-        "deployer": {
-          "cmd": ["deployer"]
+        "worker": {
+          "cmd": ["worker"]
         }
       }
     },
@@ -150,7 +150,7 @@
     "app_step": "controller-inception",
     "processes": {
       "scheduler": 1,
-      "deployer": 2,
+      "worker": 2,
       "web": 2
     }
   },
