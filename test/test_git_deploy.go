@@ -130,9 +130,9 @@ func (s *GitDeploySuite) runBuildpackTestWithResponsePattern(t *c.C, name string
 		t.Assert(r.flynn("resource", "add", resource), Succeeds)
 	}
 
-	events := make(chan *ct.JobEvent)
-	stream, err := s.controllerClient(t).StreamJobEvents(name, events)
+	watcher, err := s.controllerClient(t).WatchJobEvents(name)
 	t.Assert(err, c.IsNil)
+	defer watcher.Close()
 
 	push := r.git("push", "flynn", "master")
 	t.Assert(push, SuccessfulOutputContains, "Creating release")
@@ -140,7 +140,7 @@ func (s *GitDeploySuite) runBuildpackTestWithResponsePattern(t *c.C, name string
 	t.Assert(push, SuccessfulOutputContains, "Added default web=1 formation")
 	t.Assert(push, SuccessfulOutputContains, "* [new branch]      master -> master")
 
-	waitForJobEvents(t, stream, events, jobEvents{"web": {"up": 1}})
+	watcher.WaitFor(ct.JobEvents{"web": {"up": 1}}, scaleTimeout, nil)
 
 	route := name + ".dev"
 	newRoute := r.flynn("route", "add", "http", route)

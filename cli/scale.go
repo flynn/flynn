@@ -117,12 +117,12 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 	}
 	fmt.Printf("scaling %s\n\n", strings.Join(scale, ", "))
 
-	events := make(chan *ct.JobEvent)
-	stream, err := client.StreamJobEvents(app, events)
+	expected := client.ExpectedScalingEvents(current, processes, release.Processes, 1)
+	watcher, err := client.WatchJobEvents(app)
 	if err != nil {
 		return err
 	}
-	defer stream.Close()
+	defer watcher.Close()
 
 	err = client.PutFormation(formation)
 	if err != nil || args.Bool["--no-wait"] {
@@ -130,35 +130,16 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 	}
 
 	start := time.Now()
-loop:
-	for {
-		select {
-		case e, ok := <-events:
-			if !ok {
-				if err := stream.Err(); err != nil {
-					return err
-				}
-				return fmt.Errorf("event stream unexpectedly ended")
-			}
-			// ignore one-off jobs or starting events
-			if e.Job.State == "starting" || e.Job.Type == "" {
-				continue loop
-			}
-			fmt.Printf("%s ==> %s %s %s\n", time.Now().Format("15:04:05.000"), e.Job.Type, e.JobID, e.Job.State)
-			switch e.Job.State {
-			case "up":
-				current[e.Job.Type]++
-			case "down", "crashed":
-				current[e.Job.Type]--
-			}
-			if scalingComplete(current, processes) {
-				fmt.Printf("\nscale completed in %s\n", time.Since(start))
-				return nil
-			}
-		case <-time.After(scaleTimeout):
-			return fmt.Errorf("timed out waiting for scale events")
-		}
+	err = watcher.WaitFor(expected, scaleTimeout, func(e *ct.JobEvent) error {
+		fmt.Printf("%s ==> %s %s %s\n", time.Now().Format("15:04:05.000"), e.Job.Type, e.JobID, e.Job.State)
+		return nil
+	})
+
+	if err != nil {
+		return err
 	}
+	fmt.Printf("\nscale completed in %s\n", time.Since(start))
+	return nil
 }
 
 func determineRelease(client *controller.Client, releaseID, app string) (*ct.Release, error) {

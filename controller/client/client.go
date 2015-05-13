@@ -31,6 +31,79 @@ type Client struct {
 	*httpclient.Client
 }
 
+type JobWatcher struct {
+	events chan *ct.JobEvent
+	stream stream.Stream
+}
+
+func newJobWatcher(events chan *ct.JobEvent, stream stream.Stream) *JobWatcher {
+	w := &JobWatcher{
+		events: events,
+		stream: stream,
+	}
+	return w
+}
+
+func jobEventsEqual(expected, actual ct.JobEvents) bool {
+	for typ, events := range expected {
+		diff, ok := actual[typ]
+		if !ok {
+			if len(events) == 0 {
+				continue
+			}
+			return false
+		}
+		for state, count := range events {
+			actualCount, ok := diff[state]
+			if !ok || actualCount != count {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (w *JobWatcher) WaitFor(expected ct.JobEvents, timeout time.Duration, callback func(*ct.JobEvent) error) error {
+	actual := make(ct.JobEvents)
+	for {
+		select {
+		case e, ok := <-w.events:
+			if !ok {
+				if err := w.stream.Err(); err != nil {
+					return err
+				}
+				return fmt.Errorf("Event stream unexpectedly ended")
+			}
+			if _, ok := actual[e.Type]; !ok {
+				actual[e.Type] = make(map[string]int)
+			}
+			switch e.State {
+			case "crashed":
+				actual[e.Type]["down"] += 1
+			case "starting", "up", "down":
+				fallthrough
+			default:
+				actual[e.Type][e.State] += 1
+			}
+			if callback != nil {
+				err := callback(e)
+				if err != nil {
+					return err
+				}
+			}
+			if jobEventsEqual(expected, actual) {
+				return nil
+			}
+		case <-time.After(timeout):
+			return fmt.Errorf("Timed out waiting for job events. Waited %d seconds.\nexpected: %v\nactual: %v", timeout, expected, actual)
+		}
+	}
+}
+
+func (w *JobWatcher) Close() error {
+	return w.stream.Close()
+}
+
 // ErrNotFound is returned when a resource is not found (HTTP status 404).
 var ErrNotFound = errors.New("controller: resource not found")
 
@@ -349,6 +422,36 @@ outer:
 // StreamJobEvents streams job events to the output channel.
 func (c *Client) StreamJobEvents(appID string, output chan *ct.JobEvent) (stream.Stream, error) {
 	return c.ResumingStream("GET", fmt.Sprintf("/apps/%s/jobs", appID), output)
+}
+
+func (c *Client) WatchJobEvents(appID string) (*JobWatcher, error) {
+	events := make(chan *ct.JobEvent)
+	stream, err := c.StreamJobEvents(appID, events)
+	if err != nil {
+		return nil, err
+	}
+	return newJobWatcher(events, stream), nil
+}
+
+func (c *Client) ExpectedScalingEvents(actual, expected map[string]int, releaseProcesses map[string]ct.ProcessType, clusterSize int) ct.JobEvents {
+	events := make(ct.JobEvents, len(expected))
+	for typ, count := range expected {
+		diff := count
+		val, ok := actual[typ]
+		if ok {
+			diff = count - val
+		}
+		proc, ok := releaseProcesses[typ]
+		if ok && proc.Omni {
+			diff *= clusterSize
+		}
+		if diff > 0 {
+			events[typ] = map[string]int{"up": diff}
+		} else if count < 0 {
+			events[typ] = map[string]int{"down": -diff}
+		}
+	}
+	return events
 }
 
 // RunJobAttached runs a new job under the specified app, attaching to the job
