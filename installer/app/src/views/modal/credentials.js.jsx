@@ -80,7 +80,7 @@ var Credentials = React.createClass({
 					{cloud === 'aws' ? (
 						<div>
 							<input ref="key_id" type="text" placeholder="AWS_ACCESS_KEY_ID" />
-							<input ref="key" type="password" placeholder="AWS_ACCESS_KEY_ID" />
+							<input ref="key" type="password" placeholder="AWS_SECRET_ACCESS_KEY" />
 						</div>
 					) : null}
 
