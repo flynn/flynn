@@ -122,6 +122,14 @@ func (i *Installer) SaveCredentials(creds *Credential) error {
 	if err := i.txExec(`
 		INSERT INTO credentials (ID, Secret, Name, Type) VALUES ($1, $2, $3, $4);
   `, creds.ID, creds.Secret, creds.Name, creds.Type); err != nil {
+		if strings.Contains(err.Error(), "duplicate value") {
+			if err := i.txExec(`
+				UPDATE credentials SET Secret = $2, Name = $3, Type = $4, DeletedAt = NULL WHERE ID == $1 AND DeletedAt IS NOT NULL
+			`, creds.ID, creds.Secret, creds.Name, creds.Type); err != nil {
+				return err
+			}
+			return nil
+		}
 		return err
 	}
 	go i.SendEvent(&Event{
@@ -164,7 +172,7 @@ func (i *Installer) DeleteCredentials(id string) error {
 
 func (i *Installer) FindCredentials(id string) (*Credential, error) {
 	creds := &Credential{}
-	if err := i.db.QueryRow(`SELECT ID, Secret, Name, Type FROM credentials WHERE ID == $1 LIMIT 1`, id).Scan(&creds.ID, &creds.Secret, &creds.Name, &creds.Type); err != nil {
+	if err := i.db.QueryRow(`SELECT ID, Secret, Name, Type FROM credentials WHERE ID == $1 AND DeletedAt IS NULL LIMIT 1`, id).Scan(&creds.ID, &creds.Secret, &creds.Name, &creds.Type); err != nil {
 		return nil, err
 	}
 	return creds, nil
