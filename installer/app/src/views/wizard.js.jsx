@@ -43,7 +43,7 @@ var Wizard = React.createClass({
 									onChange={this.__handleCredentialsChange}>
 									<option value="new">New</option>
 									{state.selectedCloud === 'aws' && Config.has_aws_env_credentials ? (
-										<option value="aws_env">Use AWS Env vars</option>
+										<option value="aws_env">Use AWS Env vars ({Config.aws_env_credentials_id})</option>
 									) : null}
 								</CredentialsPicker>
 							) : (
