@@ -17,12 +17,12 @@ window.Dashboard = {
 	errServiceUnavailable: new Error("Service is unavailable."),
 
 	run: function () {
-		var self = this, loadURL, resolveWaitForNav;
-		this.waitForNav = new Promise(function(resolve, reject) {
+		var resolveWaitForNav;
+		this.waitForNav = new Promise(function(resolve) {
 			resolveWaitForNav = resolve;
 		});
 
-		loadURL = function() {
+		var loadURL = function() {
 			resolveWaitForNav();
 			Marbles.history.loadURL();
 		};
@@ -51,6 +51,7 @@ window.Dashboard = {
 			trigger: false
 		});
 
+		this.__setCurrentParams();
 		if (this.config.INSTALL_CERT) {
 			this.__isCertInstalled().then(loadURL);
 		} else {
@@ -74,7 +75,14 @@ window.Dashboard = {
 
 	__redirectToLogin: function () {
 		var redirectPath = Marbles.history.path ? '?redirect='+ encodeURIComponent(Marbles.history.path) : '';
-		Marbles.history.navigate('login'+ redirectPath);
+		var loginParams = {};
+		var currentParams = this.__currentParams[0];
+		if (currentParams.token) {
+			loginParams.token = currentParams.token;
+		}
+		Marbles.history.navigate('login'+ redirectPath, {
+			params: [loginParams]
+		});
 	},
 
 	__catchInsecurePingResponse: function(httpsArgs) {
@@ -91,10 +99,10 @@ window.Dashboard = {
 			return Promise.reject(self.errCertNotInstalled);
 		};
 		handleError = function (httpArgs) {
-			var httpXhr = httpArgs[1];
-			if (httpArgs.length === 1) {
-				return httpArgs;
+			if (!Array.isArray(httpArgs)) {
+				return Promise.reject(httpArgs);
 			}
+			var httpXhr = httpArgs[1];
 
 			if (httpXhr.status === 0) {
 				// https is failing as well...service is unavailable
@@ -153,7 +161,6 @@ window.Dashboard = {
 	},
 
 	__isCertInstalled: function() {
-		var self = this;
 		if (window.location.protocol === "https:") {
 			return this.client.ping("controller", "https").catch(this.__catchSecurePingResponse.bind(this));
 		} else {
@@ -163,10 +170,15 @@ window.Dashboard = {
 		}
 	},
 
+	__setCurrentParams: function () {
+		this.__currentParams = Marbles.QueryParams.deserializeParams(window.location.search);
+	},
+
 	__handleEvent: function (event) {
 		if (event.source === "Marbles.History") {
 			switch (event.name) {
 				case "handler:before":
+					this.__setCurrentParams();
 					this.__handleHandlerBeforeEvent(event);
 				break;
 
@@ -210,7 +222,15 @@ window.Dashboard = {
 			break;
 
 			case "HTTPS_CERT_MISSING":
-				Marbles.history.navigate("installcert", {force: true});
+				var params = {};
+				var currentParams = this.__currentParams[0];
+				if (currentParams.token) {
+					params.token = currentParams.token;
+				}
+				Marbles.history.navigate("installcert", {
+					force: true,
+					params: [params]
+				});
 			break;
 
 			case "SERVICE_UNAVAILABLE":
