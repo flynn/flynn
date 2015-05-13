@@ -41,8 +41,9 @@ var Wizard = React.createClass({
 									credentials={state.credentials}
 									value={state.credentialID}
 									onChange={this.__handleCredentialsChange}>
+									<option value="new">New</option>
 									{state.selectedCloud === 'aws' && Config.has_aws_env_credentials ? (
-										<option value="aws_env">Use AWS Env vars</option>
+										<option value="aws_env">Use AWS Env vars ({Config.aws_env_credentials_id})</option>
 									) : null}
 								</CredentialsPicker>
 							) : (
@@ -123,11 +124,23 @@ var Wizard = React.createClass({
 	},
 
 	__handleCredentialsChange: function (credentialID) {
-		Dispatcher.dispatch({
-			name: 'SELECT_CREDENTIAL',
-			credentialID: credentialID,
-			clusterID: this.state.currentCluster.ID
-		});
+		if (credentialID === 'new') {
+			Dispatcher.dispatch({
+				name: 'NAVIGATE',
+				path: '/credentials',
+				options: {
+					params: [{
+						cloud: this.state.currentCluster.getInstallState().selectedCloud
+					}]
+				}
+			});
+		} else {
+			Dispatcher.dispatch({
+				name: 'SELECT_CREDENTIAL',
+				credentialID: credentialID,
+				clusterID: this.state.currentCluster.ID
+			});
+		}
 	},
 
 	__handleFailedModalHide: function () {

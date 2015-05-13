@@ -34,6 +34,7 @@ type htmlTemplateData struct {
 type installerJSConfig struct {
 	Endpoints            map[string]string `json:"endpoints"`
 	HasAWSEnvCredentials bool              `json:"has_aws_env_credentials"`
+	AWSEnvCredentialsID  string            `json:"aws_env_credentials_id,omitempty"`
 }
 
 type httpAPI struct {
@@ -64,8 +65,11 @@ func ServeHTTP() error {
 
 	if creds, err := aws.EnvCreds(); err == nil {
 		api.AWSEnvCreds = creds
+		if c, err := creds.Credentials(); err == nil {
+			api.clientConfig.HasAWSEnvCredentials = true
+			api.clientConfig.AWSEnvCredentialsID = c.AccessKeyID
+		}
 	}
-	api.clientConfig.HasAWSEnvCredentials = api.AWSEnvCreds != nil
 
 	httpRouter := httprouter.New()
 

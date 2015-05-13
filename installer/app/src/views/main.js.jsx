@@ -33,20 +33,11 @@ var Main = React.createClass({
 	},
 
 	render: function () {
-		var cluster = this.props.dataStore.state.currentCluster;
-		var clusterState = cluster.getInstallState();
-		var credentialsRouteParams = {
-			cloud: clusterState.selectedCloud
-		};
 		return (
 			<div id={this.state.styleEl.id}>
 				<div>
 					<Panel style={{ height: '100%', position: 'relative', paddingBottom: 80 }}>
 						<Clusters dataStore={this.props.dataStore} />
-						<RouteLink
-							path='/credentials'
-							params={[credentialsRouteParams]}
-							id={this.state.credsBtnStyleEl.id}>Credentials</RouteLink>
 					</Panel>
 				</div>
 
