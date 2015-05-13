@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
@@ -174,11 +175,22 @@ func runDaemon(args *docopt.Args) {
 	vman, err := volumemanager.New(
 		filepath.Join(volPath, "volumes.bolt"),
 		func() (volume.Provider, error) {
+			// use a zpool backing file size of either 70% of the device on which
+			// volumes will reside, or 100GB if that can't be determined.
+			var size int64
+			var dev syscall.Statfs_t
+			if err := syscall.Statfs(volPath, &dev); err == nil {
+				size = (dev.Bsize * int64(dev.Blocks) * 7) / 10
+			} else {
+				size = 100000000000
+			}
+			g.Log(grohl.Data{"at": "zpool_size", "size": size})
+
 			return zfsVolume.NewProvider(&zfsVolume.ProviderConfig{
 				DatasetName: "flynn-default",
 				Make: &zfsVolume.MakeDev{
 					BackingFilename: filepath.Join(volPath, "zfs/vdev/flynn-default-zpool.vdev"),
-					Size:            100000000000, // Provision a 100GB sparse file
+					Size:            size,
 				},
 				WorkingDir: filepath.Join(volPath, "zfs"),
 			})
