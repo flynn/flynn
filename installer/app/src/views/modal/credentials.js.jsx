@@ -1,6 +1,7 @@
 import Modal from '../modal';
 import Dispatcher from '../../dispatcher';
 import PrettySelect from '../pretty-select';
+import ExternalLink from '../external-link';
 import Sheet from '../css/sheet';
 import Colors from '../css/colors';
 import { green as GreenBtnCSS, disabled as DisabledBtnCSS } from '../css/button';
@@ -73,6 +74,18 @@ var Credentials = React.createClass({
 								</div>
 							);
 						})
+					) : null}
+
+					{cloud === 'aws' ? (
+						<p>
+							<ExternalLink href="https://docs.aws.amazon.com/general/latest/gr/getting-aws-sec-creds.html">How Do I Get Security Credentials?</ExternalLink>
+						</p>
+					) : null}
+
+					{cloud === 'digital_ocean' ? (
+						<p>
+							<ExternalLink href="https://cloud.digitalocean.com/settings/tokens/new">Generate new token</ExternalLink>
+						</p>
 					) : null}
 
 					<input ref="name" type="text" placeholder="Account name" />
