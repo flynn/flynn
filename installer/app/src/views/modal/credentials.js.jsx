@@ -180,6 +180,11 @@ var Credentials = React.createClass({
 				type: this.props.cloud
 			}
 		});
+		Dispatcher.dispatch({
+			name: 'SELECT_CREDENTIAL',
+			credentialID: id,
+			clusterID: 'new'
+		});
 		this.refs.name.getDOMNode().value = '';
 		if (this.props.cloud !== 'digital_ocean') {
 			this.refs.key_id.getDOMNode().value = '';
