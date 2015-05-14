@@ -2,13 +2,12 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -28,17 +27,11 @@ func main() {
 	defer shutdown.Exit()
 
 	db := postgres.Wait(serviceName, fmt.Sprintf("dbname=postgres user=flynn password=%s", os.Getenv("PGPASSWORD")))
+	api := &pgAPI{db}
 
-	r := martini.NewRouter()
-	m := martini.New()
-	m.Use(martini.Logger())
-	m.Use(martini.Recovery())
-	m.Use(render.Renderer())
-	m.Action(r.Handle)
-	m.Map(db)
-
-	r.Post("/databases", createDatabase)
-	r.Get("/ping", ping)
+	router := httprouter.New()
+	router.POST("/databases", api.createDatabase)
+	router.GET("/ping", api.ping)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -52,7 +45,8 @@ func main() {
 	}
 	shutdown.BeforeExit(func() { hb.Close() })
 
-	shutdown.Fatal(http.ListenAndServe(addr, m))
+	handler := httphelper.ContextInjector(serviceName+"-api", httphelper.NewRequestLogger(router))
+	shutdown.Fatal(http.ListenAndServe(addr, handler))
 }
 
 type resource struct {
@@ -60,22 +54,24 @@ type resource struct {
 	Env map[string]string `json:"env"`
 }
 
-func createDatabase(db *postgres.DB, r render.Render) {
+type pgAPI struct {
+	db *postgres.DB
+}
+
+func (p *pgAPI) createDatabase(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	username, password, database := random.Hex(16), random.Hex(16), random.Hex(16)
 
-	if err := db.Exec(fmt.Sprintf(`CREATE USER "%s" WITH PASSWORD '%s'`, username, password)); err != nil {
-		log.Println(err)
-		r.JSON(500, struct{}{})
+	if err := p.db.Exec(fmt.Sprintf(`CREATE USER "%s" WITH PASSWORD '%s'`, username, password)); err != nil {
+		httphelper.Error(w, err)
 		return
 	}
-	if err := db.Exec(fmt.Sprintf(`CREATE DATABASE "%s" WITH OWNER = "%s"`, database, username)); err != nil {
-		db.Exec(fmt.Sprintf(`DROP USER "%s"`, username))
-		log.Println(err)
-		r.JSON(500, struct{}{})
+	if err := p.db.Exec(fmt.Sprintf(`CREATE DATABASE "%s" WITH OWNER = "%s"`, database, username)); err != nil {
+		p.db.Exec(fmt.Sprintf(`DROP USER "%s"`, username))
+		httphelper.Error(w, err)
 		return
 	}
 
-	r.JSON(200, &resource{
+	httphelper.JSON(w, 200, &resource{
 		ID: fmt.Sprintf("/databases/%s:%s", username, database),
 		Env: map[string]string{
 			"FLYNN_POSTGRES": serviceName,
@@ -87,10 +83,9 @@ func createDatabase(db *postgres.DB, r render.Render) {
 	})
 }
 
-func ping(db *postgres.DB, w http.ResponseWriter) {
-	if err := db.Exec("SELECT 1"); err != nil {
-		log.Println(err)
-		w.WriteHeader(500)
+func (p *pgAPI) ping(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	if err := p.db.Exec("SELECT 1"); err != nil {
+		httphelper.Error(w, err)
 		return
 	}
 	w.WriteHeader(200)
