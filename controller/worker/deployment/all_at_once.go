@@ -1,9 +1,9 @@
-package strategy
+package deployment
 
 import ct "github.com/flynn/flynn/controller/types"
 
-func allAtOnce(d *Deploy) error {
-	log := d.logger.New("fn", "allAtOnce")
+func (d *DeployJob) deployAllAtOnce() error {
+	log := d.logger.New("fn", "deployAllAtOnce")
 	log.Info("starting all-at-once deployment")
 
 	expected := make(jobEvents)

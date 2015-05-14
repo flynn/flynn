@@ -1,4 +1,4 @@
-package strategy
+package deployment
 
 import (
 	"errors"
@@ -12,32 +12,11 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 )
 
-type ErrSkipRollback struct {
-	Err string
-}
-
-func (e ErrSkipRollback) Error() string {
-	return e.Err
-}
-
-func IsSkipRollback(err error) bool {
-	_, ok := err.(ErrSkipRollback)
-	return ok
-}
-
-type UnknownStrategyError struct {
-	Strategy string
-}
-
-func (e UnknownStrategyError) Error() string {
-	return fmt.Sprintf("deployer: unknown strategy %q", e.Strategy)
-}
-
 type jobIDState struct {
 	jobID, state string
 }
 
-type Deploy struct {
+type DeployJob struct {
 	*ct.Deployment
 	client          *controller.Client
 	deployEvents    chan<- ct.DeploymentEvent
@@ -53,41 +32,27 @@ type Deploy struct {
 	hostCount       int
 }
 
-func (d *Deploy) isOmni(typ string) bool {
+func (d *DeployJob) isOmni(typ string) bool {
 	_, ok := d.omni[typ]
 	return ok
 }
 
-type PerformFunc func(d *Deploy) error
-
-var performFuncs = map[string]PerformFunc{
-	"all-at-once": allAtOnce,
-	"one-by-one":  oneByOne,
-	"postgres":    postgres,
-}
-
-func Perform(d *ct.Deployment, client *controller.Client, deployEvents chan<- ct.DeploymentEvent, logger log15.Logger) error {
-	log := logger.New("fn", "Perform", "deployment_id", d.ID, "app_id", d.AppID)
+func (d *DeployJob) Perform() error {
+	log := d.logger.New("fn", "Perform", "deployment_id", d.ID, "app_id", d.AppID)
 
 	log.Info("validating deployment strategy")
-	performFunc, ok := performFuncs[d.Strategy]
-	if !ok {
+	var deployFunc func() error
+	switch d.Strategy {
+	case "one-by-one":
+		deployFunc = d.deployOneByOne
+	case "all-at-once":
+		deployFunc = d.deployAllAtOnce
+	case "postgres":
+		deployFunc = d.deployPostgres
+	default:
 		err := UnknownStrategyError{d.Strategy}
 		log.Error("error validating deployment strategy", "err", err)
 		return err
-	}
-
-	deploy := &Deploy{
-		Deployment:      d,
-		client:          client,
-		deployEvents:    deployEvents,
-		serviceEvents:   make(chan *discoverd.Event),
-		useJobEvents:    make(map[string]struct{}),
-		logger:          logger.New("deployment_id", d.ID, "app_id", d.AppID),
-		oldReleaseState: make(map[string]int, len(d.Processes)),
-		newReleaseState: make(map[string]int, len(d.Processes)),
-		knownJobStates:  make(map[jobIDState]struct{}),
-		omni:            make(map[string]struct{}),
 	}
 
 	log.Info("determining cluster size")
@@ -101,21 +66,21 @@ func Perform(d *ct.Deployment, client *controller.Client, deployEvents chan<- ct
 		log.Error("error listing cluster hosts", "err", err)
 		return err
 	}
-	deploy.hostCount = len(hosts)
+	d.hostCount = len(hosts)
 
 	log.Info("determining release services and deployment state")
-	release, err := client.GetRelease(d.NewReleaseID)
+	release, err := d.client.GetRelease(d.NewReleaseID)
 	if err != nil {
 		log.Error("error getting new release", "release_id", d.NewReleaseID, "err", err)
 		return err
 	}
 	for typ, proc := range release.Processes {
 		if proc.Omni {
-			deploy.omni[typ] = struct{}{}
+			d.omni[typ] = struct{}{}
 		}
 		if proc.Service == "" {
 			log.Info(fmt.Sprintf("using job events for %s process type, no service defined", typ))
-			deploy.useJobEvents[typ] = struct{}{}
+			d.useJobEvents[typ] = struct{}{}
 			continue
 		}
 
@@ -140,7 +105,7 @@ func Perform(d *ct.Deployment, client *controller.Client, deployEvents chan<- ct
 				case discoverd.EventKindCurrent:
 					break outer
 				case discoverd.EventKindServiceMeta:
-					deploy.serviceMeta = event.ServiceMeta
+					d.serviceMeta = event.ServiceMeta
 				case discoverd.EventKindUp:
 					releaseID, ok := event.Instance.Meta["FLYNN_RELEASE_ID"]
 					if !ok {
@@ -148,9 +113,9 @@ func Perform(d *ct.Deployment, client *controller.Client, deployEvents chan<- ct
 					}
 					switch releaseID {
 					case d.OldReleaseID:
-						deploy.oldReleaseState[typ]++
+						d.oldReleaseState[typ]++
 					case d.NewReleaseID:
-						deploy.newReleaseState[typ]++
+						d.newReleaseState[typ]++
 					}
 				}
 			case <-time.After(5 * time.Second):
@@ -168,15 +133,15 @@ func Perform(d *ct.Deployment, client *controller.Client, deployEvents chan<- ct
 					// dropped. handle that case
 					return
 				}
-				deploy.serviceEvents <- event
+				d.serviceEvents <- event
 			}
 		}()
 	}
 
-	if len(deploy.useJobEvents) > 0 {
+	if len(d.useJobEvents) > 0 {
 		log.Info("getting job event stream")
-		deploy.jobEvents = make(chan *ct.JobEvent)
-		stream, err := client.StreamJobEvents(d.AppID, deploy.jobEvents)
+		d.jobEvents = make(chan *ct.JobEvent)
+		stream, err := d.client.StreamJobEvents(d.AppID, d.jobEvents)
 		if err != nil {
 			log.Error("error getting job event stream", "err", err)
 			return err
@@ -184,7 +149,7 @@ func Perform(d *ct.Deployment, client *controller.Client, deployEvents chan<- ct
 		defer stream.Close()
 
 		log.Info("getting current jobs")
-		jobs, err := client.JobList(d.AppID)
+		jobs, err := d.client.JobList(d.AppID)
 		if err != nil {
 			log.Error("error getting current jobs", "err", err)
 			return err
@@ -193,30 +158,30 @@ func Perform(d *ct.Deployment, client *controller.Client, deployEvents chan<- ct
 			if job.State != "up" {
 				continue
 			}
-			if _, ok := deploy.useJobEvents[job.Type]; !ok {
+			if _, ok := d.useJobEvents[job.Type]; !ok {
 				continue
 			}
 
 			// track the jobs so we can drop any events received between
 			// connecting the job stream and getting the list of jobs
-			deploy.knownJobStates[jobIDState{job.ID, "up"}] = struct{}{}
+			d.knownJobStates[jobIDState{job.ID, "up"}] = struct{}{}
 
 			switch job.ReleaseID {
 			case d.OldReleaseID:
-				deploy.oldReleaseState[job.Type]++
+				d.oldReleaseState[job.Type]++
 			case d.NewReleaseID:
-				deploy.newReleaseState[job.Type]++
+				d.newReleaseState[job.Type]++
 			}
 		}
 	}
 
 	log.Info(
 		"determined deployment state",
-		"original", deploy.Processes,
-		"old_release", deploy.oldReleaseState,
-		"new_release", deploy.newReleaseState,
+		"original", d.Processes,
+		"old_release", d.oldReleaseState,
+		"new_release", d.newReleaseState,
 	)
-	return performFunc(deploy)
+	return deployFunc()
 }
 
 type jobEvents map[string]map[string]int
@@ -246,7 +211,7 @@ func (j jobEvents) Equals(other jobEvents) bool {
 	return true
 }
 
-func (d *Deploy) waitForJobEvents(releaseID string, expected jobEvents, log log15.Logger) error {
+func (d *DeployJob) waitForJobEvents(releaseID string, expected jobEvents, log log15.Logger) error {
 	actual := make(jobEvents)
 
 	handleEvent := func(jobID, typ, state string) {

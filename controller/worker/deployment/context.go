@@ -1,78 +1,31 @@
-package main
+package deployment
 
 import (
 	"encoding/json"
-	"os"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/controller/client"
-	"github.com/flynn/flynn/controller/deployer/strategies"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/postgres"
-	"github.com/flynn/flynn/pkg/shutdown"
 )
 
 type context struct {
 	db     *postgres.DB
 	client *controller.Client
+	logger log15.Logger
 }
 
-const workerCount = 10
-
-var logger = log15.New("app", "deployer")
-
-func main() {
-	log := logger.New("fn", "main")
-
-	log.Info("creating controller client")
-	client, err := controller.NewClient("", os.Getenv("AUTH_KEY"))
-	if err != nil {
-		log.Error("error creating controller client", "err", err)
-		shutdown.Fatal()
-	}
-
-	log.Info("connecting to postgres")
-	db := postgres.Wait("", "")
-
-	log.Info("creating postgres connection pool")
-	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
-		ConnConfig: pgx.ConnConfig{
-			Host:     os.Getenv("PGHOST"),
-			User:     os.Getenv("PGUSER"),
-			Password: os.Getenv("PGPASSWORD"),
-			Database: os.Getenv("PGDATABASE"),
-		},
-		AfterConnect:   que.PrepareStatements,
-		MaxConnections: workerCount,
-	})
-	if err != nil {
-		log.Error("error creating postgres connection pool", "err", err)
-		shutdown.Fatal()
-	}
-	shutdown.BeforeExit(func() { pgxpool.Close() })
-
-	ctx := context{db: db, client: client}
-	workers := que.NewWorkerPool(
-		que.NewClient(pgxpool),
-		que.WorkMap{"deployment": ctx.HandleJob},
-		workerCount,
-	)
-	workers.Interval = 5 * time.Second
-
-	log.Info("starting workers", "count", workerCount, "interval", workers.Interval)
-	go workers.Start()
-	shutdown.BeforeExit(func() { workers.Shutdown() })
-
-	<-make(chan bool) // block and keep running
+func JobHandler(db *postgres.DB, client *controller.Client, logger log15.Logger) func(*que.Job) error {
+	return (&context{db, client, logger}).HandleDeployment
 }
 
-func (c *context) HandleJob(job *que.Job) (e error) {
-	log := logger.New("fn", "HandleJob")
-	log.Info("handling job", "id", job.ID, "error_count", job.ErrorCount)
+func (c *context) HandleDeployment(job *que.Job) (e error) {
+	log := c.logger.New("fn", "HandleDeployment")
+	log.Info("handling deployment", "job_id", job.ID, "error_count", job.ErrorCount)
 
 	var args ct.DeployID
 	if err := json.Unmarshal(job.Args, &args); err != nil {
@@ -122,7 +75,7 @@ func (c *context) HandleJob(job *que.Job) (e error) {
 		// rollback failed deploy
 		if e != nil {
 			errMsg := e.Error()
-			if !strategy.IsSkipRollback(e) {
+			if !IsSkipRollback(e) {
 				log.Warn("rolling back deployment due to error", "err", e)
 				e = c.rollback(log, deployment, f)
 			}
@@ -133,8 +86,22 @@ func (c *context) HandleJob(job *que.Job) (e error) {
 			}
 		}
 	}()
+
+	j := &DeployJob{
+		Deployment:      deployment,
+		client:          c.client,
+		deployEvents:    events,
+		serviceEvents:   make(chan *discoverd.Event),
+		useJobEvents:    make(map[string]struct{}),
+		logger:          c.logger,
+		oldReleaseState: make(map[string]int, len(deployment.Processes)),
+		newReleaseState: make(map[string]int, len(deployment.Processes)),
+		knownJobStates:  make(map[jobIDState]struct{}),
+		omni:            make(map[string]struct{}),
+	}
+
 	log.Info("performing deployment")
-	if err := strategy.Perform(deployment, c.client, events, logger); err != nil {
+	if err := j.Perform(); err != nil {
 		log.Error("error performing deployment", "err", err)
 		return err
 	}
