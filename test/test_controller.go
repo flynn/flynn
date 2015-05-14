@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/jsonschema"
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
@@ -233,4 +235,62 @@ func (s *ControllerSuite) TestResourceLimitsReleaseJob(t *c.C) {
 	log := flynn(t, "/", "-a", app.Name, "log", "--job", jobID, "--raw-output")
 
 	assertResourceLimits(t, log.Output)
+}
+
+func (s *ControllerSuite) TestAppDeletion(t *c.C) {
+	app := "app-deletion-" + random.String(8)
+	client := s.controllerClient(t)
+
+	// create and push app
+	r := s.newGitRepo(t, "http")
+	t.Assert(r.flynn("create", app), Succeeds)
+	t.Assert(r.flynn("key", "add", r.ssh.Pub), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+
+	// wait for it to start
+	service := app + "-web"
+	_, err := s.discoverdClient(t).Instances(service, 10*time.Second)
+	t.Assert(err, c.IsNil)
+
+	// create some routes
+	routes := []string{"foo.example.com", "bar.example.com"}
+	for _, route := range routes {
+		t.Assert(r.flynn("route", "add", "http", route), Succeeds)
+	}
+	routeList, err := client.RouteList(app)
+	t.Assert(err, c.IsNil)
+	numRoutes := len(routes) + 1 // includes default app route
+	t.Assert(routeList, c.HasLen, numRoutes)
+
+	assertRouteStatus := func(route string, status int) {
+		req, err := http.NewRequest("GET", "http://"+routerIP, nil)
+		t.Assert(err, c.IsNil)
+		req.Host = route
+		res, err := http.DefaultClient.Do(req)
+		t.Assert(err, c.IsNil)
+		t.Assert(res.StatusCode, c.Equals, status)
+	}
+	for _, route := range routes {
+		assertRouteStatus(route, 200)
+	}
+
+	// provision resources
+	t.Assert(r.flynn("resource", "add", "postgres"), Succeeds)
+	resources, err := client.AppResourceList(app)
+	t.Assert(err, c.IsNil)
+	numResources := 1
+	t.Assert(resources, c.HasLen, numResources)
+
+	// delete app
+	cmd := r.flynn("delete", "--yes")
+	t.Assert(cmd, Succeeds)
+
+	// check route cleanup
+	t.Assert(cmd, OutputContains, fmt.Sprintf("removed %d routes", numRoutes))
+	for _, route := range routes {
+		assertRouteStatus(route, 404)
+	}
+
+	// check resource cleanup
+	t.Assert(cmd, OutputContains, fmt.Sprintf("deprovisioned %d resources", numResources))
 }

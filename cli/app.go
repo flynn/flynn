@@ -113,7 +113,8 @@ func runDelete(args *docopt.Args, client *controller.Client) error {
 		}
 	}
 
-	if err := client.DeleteApp(appName); err != nil {
+	res, err := client.DeleteApp(appName)
+	if err != nil {
 		return err
 	}
 
@@ -125,7 +126,8 @@ func runDelete(args *docopt.Args, client *controller.Client) error {
 		}
 	}
 
-	log.Printf("Deleted %s", appName)
+	log.Printf("Deleted %s (removed %d routes, deprovisioned %d resources)",
+		appName, len(res.DeletedRoutes), len(res.DeletedResources))
 	return nil
 }
 

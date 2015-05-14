@@ -167,9 +167,10 @@ func (s *S) TestDeleteApp(c *C) {
 		} else {
 			appID = app.ID
 		}
-		c.Assert(s.c.DeleteApp(appID), IsNil)
+		_, err := s.c.DeleteApp(appID)
+		c.Assert(err, IsNil)
 
-		_, err := s.c.GetApp(appID)
+		_, err = s.c.GetApp(appID)
 		c.Assert(err, Equals, controller.ErrNotFound)
 	}
 }
@@ -184,9 +185,10 @@ func (s *S) TestDeleteAppUUIDName(c *C) {
 		} else {
 			appID = app.ID
 		}
-		c.Assert(s.c.DeleteApp(appID), IsNil)
+		_, err := s.c.DeleteApp(appID)
+		c.Assert(err, IsNil)
 
-		_, err := s.c.GetApp(appID)
+		_, err = s.c.GetApp(appID)
 		c.Assert(err, Equals, controller.ErrNotFound)
 	}
 }
@@ -200,7 +202,8 @@ func (s *S) TestDeleteNonExistentApp(c *C) {
 		} else {
 			appID = random.UUID()
 		}
-		c.Assert(s.c.DeleteApp(appID), Equals, controller.ErrNotFound)
+		_, err := s.c.DeleteApp(appID)
+		c.Assert(err, Equals, controller.ErrNotFound)
 	}
 }
 
@@ -211,7 +214,8 @@ func (s *S) TestRecreateApp(c *C) {
 	c.Assert(s.c.CreateApp(&ct.App{Name: "recreate-app"}), Not(IsNil)) // TODO: This should probably be a 4xx error
 
 	// Delete the original
-	c.Assert(s.c.DeleteApp(app.ID), IsNil)
+	_, err := s.c.DeleteApp(app.ID)
+	c.Assert(err, IsNil)
 
 	// Create the same key
 	app = s.createTestApp(c, &ct.App{Name: "recreate-app"})

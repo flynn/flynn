@@ -197,8 +197,34 @@ func (c *Client) UpdateApp(app *ct.App) error {
 }
 
 // DeleteApp deletes an app.
-func (c *Client) DeleteApp(appID string) error {
-	return c.Delete(fmt.Sprintf("/apps/%s", appID))
+func (c *Client) DeleteApp(appID string) (*ct.AppDeletion, error) {
+	events := make(chan *ct.AppEvent)
+	stream, err := c.ResumingStream("GET", fmt.Sprintf("/apps/%s/events?object_type=%s", appID, ct.EventTypeAppDeletion), events)
+	if err != nil {
+		return nil, err
+	}
+	defer stream.Close()
+
+	if err := c.Delete(fmt.Sprintf("/apps/%s", appID)); err != nil {
+		return nil, err
+	}
+
+	select {
+	case event, ok := <-events:
+		if !ok {
+			return nil, stream.Err()
+		}
+		var e ct.AppDeletionEvent
+		if err := json.Unmarshal(event.Data, &e); err != nil {
+			return nil, err
+		}
+		if e.Error != "" {
+			return nil, errors.New(e.Error)
+		}
+		return e.AppDeletion, nil
+	case <-time.After(60 * time.Second):
+		return nil, errors.New("timed out waiting for app deletion")
+	}
 }
 
 // CreateProvider creates a new provider.
