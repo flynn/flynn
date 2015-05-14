@@ -42,6 +42,28 @@ func migrateDB(db *sql.DB) error {
 )`,
 		`CREATE UNIQUE INDEX ON apps (name) WHERE deleted_at IS NULL`,
 
+		`CREATE SEQUENCE app_event_ids`,
+		`CREATE TYPE app_event_type AS ENUM ('deployment', 'job', 'scale')`,
+		`CREATE TABLE app_events (
+    event_id    bigint         PRIMARY KEY DEFAULT nextval('app_event_ids'),
+    app_id      uuid           NOT NULL REFERENCES apps (app_id),
+    object_type app_event_type NOT NULL,
+    object_id   text           NOT NULL,
+    unique_id   text,
+    data        text,
+    created_at  timestamptz    NOT NULL DEFAULT now()
+)`,
+		`CREATE UNIQUE INDEX ON app_events (unique_id)`,
+		`CREATE FUNCTION notify_app_event() RETURNS TRIGGER AS $$
+    BEGIN
+	PERFORM pg_notify('app_events:' || NEW.app_id, NEW.event_id || '');
+	RETURN NULL;
+    END;
+$$ LANGUAGE plpgsql`,
+		`CREATE TRIGGER notify_app_event
+    AFTER INSERT ON app_events
+    FOR EACH ROW EXECUTE PROCEDURE notify_app_event()`,
+
 		`CREATE TABLE formations (
     app_id uuid NOT NULL REFERENCES apps (app_id),
     release_id uuid NOT NULL REFERENCES releases (release_id),
@@ -55,6 +77,7 @@ func migrateDB(db *sql.DB) error {
 		`CREATE FUNCTION notify_formation() RETURNS TRIGGER AS $$
     BEGIN
         PERFORM pg_notify('formations', NEW.app_id || ':' || NEW.release_id);
+        INSERT INTO app_events (app_id, object_id, object_type, data) VALUES(NEW.app_id, NEW.app_id || ':' || NEW.release_id, 'scale', hstore_to_json(NEW.processes));
         RETURN NULL;
     END;
 $$ LANGUAGE plpgsql`,
@@ -127,28 +150,6 @@ $$ LANGUAGE plpgsql`,
     AFTER UPDATE ON job_cache
     FOR EACH ROW EXECUTE PROCEDURE check_job_state()`,
 
-		`CREATE SEQUENCE job_event_ids`,
-		`CREATE TABLE job_events (
-    event_id bigint PRIMARY KEY DEFAULT nextval('job_event_ids'),
-    job_id text NOT NULL,
-    host_id text NOT NULL,
-    app_id uuid NOT NULL REFERENCES apps (app_id),
-    state job_state NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    FOREIGN KEY (job_id, host_id) REFERENCES job_cache (job_id, host_id)
-)`,
-		`CREATE UNIQUE INDEX ON job_events (job_id, host_id, app_id, state)`,
-		`CREATE FUNCTION notify_job_event() RETURNS TRIGGER AS $$
-    BEGIN
-    PERFORM pg_notify('job_events:' || NEW.app_id, NEW.event_id || '');
-        RETURN NULL;
-    END;
-$$ LANGUAGE plpgsql`,
-
-		`CREATE TRIGGER notify_job_event
-    AFTER INSERT ON job_events
-    FOR EACH ROW EXECUTE PROCEDURE notify_job_event()`,
-
 		`CREATE SEQUENCE name_ids MAXVALUE 4294967295`,
 		`CREATE TABLE deployments (
     deployment_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -162,29 +163,6 @@ $$ LANGUAGE plpgsql`,
 
 		`CREATE UNIQUE INDEX isolate_deploys ON deployments (app_id)
     WHERE finished_at is NULL`,
-
-		`CREATE SEQUENCE deployment_event_ids`,
-		`CREATE TYPE deployment_status AS ENUM ('running', 'complete', 'failed')`,
-		`CREATE TABLE deployment_events (
-    event_id bigint PRIMARY KEY DEFAULT nextval('deployment_event_ids'),
-    deployment_id uuid NOT NULL REFERENCES deployments (deployment_id),
-    release_id uuid NOT NULL REFERENCES releases (release_id),
-    status deployment_status NOT NULL DEFAULT 'running',
-    job_type text,
-    job_state text,
-    error text,
-    created_at timestamptz NOT NULL DEFAULT now())`,
-
-		`CREATE FUNCTION notify_deployment_event() RETURNS TRIGGER AS $$
-    BEGIN
-    PERFORM pg_notify('deployment_events:' || NEW.deployment_id, NEW.event_id || '');
-    RETURN NULL;
-    END;
-$$ LANGUAGE plpgsql`,
-
-		`CREATE TRIGGER notify_deployment_event
-    AFTER INSERT ON deployment_events
-    FOR EACH ROW EXECUTE PROCEDURE notify_deployment_event()`,
 	)
 	m.Add(2,
 		`CREATE TABLE que_jobs (

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
@@ -19,7 +18,6 @@ import (
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
-	"github.com/flynn/flynn/pkg/sse"
 )
 
 type DeploymentRepo struct {
@@ -116,12 +114,6 @@ func (c *controllerAPI) GetDeployment(ctx context.Context, w http.ResponseWriter
 		respondWithError(w, err)
 		return
 	}
-	if strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
-		if err := streamDeploymentEvents(ctx, req, w, deployment.ID, c.deploymentRepo); err != nil {
-			respondWithError(w, err)
-		}
-		return
-	}
 	httphelper.JSON(w, 200, deployment)
 }
 
@@ -197,103 +189,4 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 	}
 
 	httphelper.JSON(w, 200, deployment)
-}
-
-func streamDeploymentEvents(ctx context.Context, req *http.Request, w http.ResponseWriter, deploymentID string, repo *DeploymentRepo) (err error) {
-	var lastID int64
-	if req.Header.Get("Last-Event-Id") != "" {
-		lastID, err = strconv.ParseInt(req.Header.Get("Last-Event-Id"), 10, 64)
-		if err != nil {
-			return ct.ValidationError{Field: "Last-Event-Id", Message: "is invalid"}
-		}
-	}
-
-	l, _ := ctxhelper.LoggerFromContext(ctx)
-	log := l.New("fn", "streamDeploymentEvents", "id", deploymentID)
-	ch := make(chan *ct.DeploymentEvent)
-	s := sse.NewStream(w, ch, log)
-	s.Serve()
-	defer func() {
-		if err == nil {
-			s.Close()
-		} else {
-			s.CloseWithError(err)
-		}
-	}()
-
-	listener, err := repo.db.Listen("deployment_events:"+postgres.FormatUUID(deploymentID), log)
-	if err != nil {
-		return err
-	}
-	defer listener.Close()
-
-	events, err := repo.listEvents(deploymentID, lastID)
-	if err != nil {
-		return
-	}
-	var currID int64
-	for _, e := range events {
-		currID = e.ID
-		ch <- e
-	}
-
-	for {
-		select {
-		case <-s.Done:
-			return
-		case n, ok := <-listener.Notify:
-			if !ok {
-				return listener.Err
-			}
-			id, err := strconv.ParseInt(n.Extra, 10, 64)
-			if err != nil {
-				return err
-			}
-			if id <= currID {
-				continue
-			}
-			e, err := repo.getEvent(id)
-			if err != nil {
-				return err
-			}
-			ch <- e
-		}
-	}
-}
-
-func (r *DeploymentRepo) listEvents(deploymentID string, sinceID int64) ([]*ct.DeploymentEvent, error) {
-	query := "SELECT event_id, deployment_id, release_id, job_type, job_state, status, error, created_at FROM deployment_events WHERE deployment_id = $1 AND event_id > $2"
-	rows, err := r.db.Query(query, deploymentID, sinceID)
-	if err != nil {
-		return nil, err
-	}
-	var events []*ct.DeploymentEvent
-	for rows.Next() {
-		event, err := scanDeploymentEvent(rows)
-		if err != nil {
-			rows.Close()
-			return nil, err
-		}
-		events = append(events, event)
-	}
-	return events, nil
-}
-
-func (r *DeploymentRepo) getEvent(id int64) (*ct.DeploymentEvent, error) {
-	row := r.db.QueryRow("SELECT event_id, deployment_id, release_id, job_type, job_state, status, error, created_at FROM deployment_events WHERE event_id = $1", id)
-	return scanDeploymentEvent(row)
-}
-
-func scanDeploymentEvent(s postgres.Scanner) (*ct.DeploymentEvent, error) {
-	event := &ct.DeploymentEvent{}
-	err := s.Scan(&event.ID, &event.DeploymentID, &event.ReleaseID, &event.JobType, &event.JobState, &event.Status, &event.Error, &event.CreatedAt)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			err = ErrNotFound
-		}
-		return nil, err
-	}
-	event.DeploymentID = postgres.CleanUUID(event.DeploymentID)
-	event.ReleaseID = postgres.CleanUUID(event.ReleaseID)
-	return event, nil
 }

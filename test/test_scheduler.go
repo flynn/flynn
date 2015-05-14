@@ -368,7 +368,7 @@ func (s *SchedulerSuite) TestDeployController(t *c.C) {
 	t.Assert(err, c.IsNil)
 
 	events := make(chan *ct.DeploymentEvent)
-	eventStream, err := client.StreamDeployment(deployment.ID, events)
+	eventStream, err := client.StreamDeployment(deployment, events)
 	t.Assert(err, c.IsNil)
 	defer eventStream.Close()
 

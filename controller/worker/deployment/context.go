@@ -59,6 +59,7 @@ func (c *context) HandleDeployment(job *que.Job) (e error) {
 		log.Info("watching deployment events")
 		for ev := range events {
 			log.Info("received deployment event", "status", ev.Status, "type", ev.JobType, "state", ev.JobState)
+			ev.AppID = deployment.AppID
 			ev.DeploymentID = deployment.ID
 			if err := c.createDeploymentEvent(ev); err != nil {
 				log.Error("error creating deployment event record", "err", err)
@@ -146,8 +147,12 @@ func (c *context) createDeploymentEvent(e ct.DeploymentEvent) error {
 	if e.Status == "" {
 		e.Status = "running"
 	}
-	query := "INSERT INTO deployment_events (deployment_id, release_id, job_type, job_state, status, error) VALUES ($1, $2, $3, $4, $5, $6)"
-	return c.execWithRetries(query, e.DeploymentID, e.ReleaseID, e.JobType, e.JobState, e.Status, e.Error)
+	data, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	query := "INSERT INTO app_events (app_id, object_id, object_type, data) VALUES ($1, $2, $3, $4)"
+	return c.execWithRetries(query, e.AppID, e.DeploymentID, string(ct.EventTypeDeployment), data)
 }
 
 var execAttempts = attempt.Strategy{

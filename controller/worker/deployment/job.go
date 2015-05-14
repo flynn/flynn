@@ -264,7 +264,7 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected jobEvents, log l
 			if !ok {
 				return errors.New("unexpected close of job event stream")
 			}
-			if event.Job.ReleaseID != releaseID {
+			if event.ReleaseID != releaseID {
 				continue
 			}
 

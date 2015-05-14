@@ -242,7 +242,7 @@ func (s *PostgresSuite) testDeploy(t *c.C, d *pgDeploy) {
 	deployment, err := client.CreateDeployment(app.ID, newRelease)
 	t.Assert(err, c.IsNil)
 	deployEvents := make(chan *ct.DeploymentEvent)
-	deployStream, err := client.StreamDeployment(deployment.ID, deployEvents)
+	deployStream, err := client.StreamDeployment(deployment, deployEvents)
 	t.Assert(err, c.IsNil)
 	defer deployStream.Close()
 

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/flynn/flynn/host/resource"
@@ -95,9 +94,11 @@ type Job struct {
 }
 
 type JobEvent struct {
-	Job
-	ID    int64  `json:"id"`
-	JobID string `json:"job_id,omitempty"`
+	JobID     string `json:"job_id,omitempty"`
+	AppID     string `json:"app,omitempty"`
+	ReleaseID string `json:"release,omitempty"`
+	Type      string `json:"type,omitempty"`
+	State     string `json:"state,omitempty"`
 }
 
 func (e *JobEvent) IsDown() bool {
@@ -136,18 +137,13 @@ type DeployID struct {
 }
 
 type DeploymentEvent struct {
-	ID           int64      `json:"id"`
-	DeploymentID string     `json:"deployment"`
-	ReleaseID    string     `json:"release"`
-	Status       string     `json:"status"`
-	JobType      string     `json:"job_type"`
-	JobState     string     `json:"job_state"`
-	CreatedAt    *time.Time `json:"created_at"`
-	Error        string     `json:"error"`
-}
-
-func (e *DeploymentEvent) EventID() string {
-	return strconv.FormatInt(e.ID, 10)
+	AppID        string `json:"app,omitempty"`
+	DeploymentID string `json:"deployment,omitempty"`
+	ReleaseID    string `json:"release,omitempty"`
+	Status       string `json:"status,omitempty"`
+	JobType      string `json:"job_type,omitempty"`
+	JobState     string `json:"job_state,omitempty"`
+	Error        string `json:"error,omitempty"`
 }
 
 func (e *DeploymentEvent) Err() error {
@@ -194,4 +190,21 @@ type LogOpts struct {
 	JobID       string
 	Lines       *int
 	ProcessType *string
+}
+
+type EventType string
+
+const (
+	EventTypeDeployment EventType = "deployment"
+	EventTypeJob        EventType = "job"
+	EventTypeScale      EventType = "scale"
+)
+
+type AppEvent struct {
+	ID         int64           `json:"id,omitempty"`
+	AppID      string          `json:"app,omitempty"`
+	ObjectType EventType       `json:"object_type,omitempty"`
+	ObjectID   string          `json:"object_id,omitempty"`
+	Data       json.RawMessage `json:"data,omitempty"`
+	CreatedAt  *time.Time      `json:"created_at,omitempty"`
 }

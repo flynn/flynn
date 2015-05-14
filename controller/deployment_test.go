@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -61,7 +62,7 @@ func (s *S) TestStreamDeployment(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(d.ID, Not(Equals), "")
 	events := make(chan *ct.DeploymentEvent)
-	stream, err := s.c.StreamDeployment(d.ID, events)
+	stream, err := s.c.StreamDeployment(d, events)
 	c.Assert(err, IsNil)
 	defer stream.Close()
 
@@ -71,8 +72,10 @@ func (s *S) TestStreamDeployment(c *C) {
 		if e.Status == "" {
 			e.Status = "running"
 		}
-		query := "INSERT INTO deployment_events (deployment_id, release_id, job_type, job_state, status, error) VALUES ($1, $2, $3, $4, $5, $6)"
-		c.Assert(s.hc.db.Exec(query, e.DeploymentID, e.ReleaseID, e.JobType, e.JobState, e.Status, e.Error), IsNil)
+		data, err := json.Marshal(e)
+		c.Assert(err, IsNil)
+		query := "INSERT INTO app_events (app_id, object_id, object_type, data) VALUES ($1, $2, $3, $4)"
+		c.Assert(s.hc.db.Exec(query, app.ID, e.DeploymentID, string(ct.EventTypeDeployment), data), IsNil)
 	}
 	fmt.Println(newRelease.ID)
 	createDeploymentEvent(ct.DeploymentEvent{DeploymentID: d.ID, ReleaseID: newRelease.ID})

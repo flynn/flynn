@@ -172,6 +172,7 @@ func appHandler(c handlerConfig) http.Handler {
 
 	httpRouter.POST("/apps/:apps_id", httphelper.WrapHandler(api.UpdateApp))
 	httpRouter.GET("/apps/:apps_id/log", httphelper.WrapHandler(api.appLookup(api.AppLog)))
+	httpRouter.GET("/apps/:apps_id/events", httphelper.WrapHandler(api.appLookup(api.AppEvents)))
 
 	httpRouter.PUT("/apps/:apps_id/formations/:releases_id", httphelper.WrapHandler(api.appLookup(api.PutFormation)))
 	httpRouter.GET("/apps/:apps_id/formations/:releases_id", httphelper.WrapHandler(api.appLookup(api.GetFormation)))
