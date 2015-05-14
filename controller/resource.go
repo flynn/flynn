@@ -158,6 +158,24 @@ func (r *ResourceRepo) AppList(appID string) ([]*ct.Resource, error) {
 	return resourceList(rows)
 }
 
+func (r *ResourceRepo) Remove(id string) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec("UPDATE resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL", id)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	_, err = tx.Exec("UPDATE app_resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL", id)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
 func (c *controllerAPI) ProvisionResource(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	p, err := c.getProvider(ctx)
 	if err != nil {
@@ -263,6 +281,35 @@ func (c *controllerAPI) PutResource(ctx context.Context, w http.ResponseWriter, 
 		return
 	}
 	httphelper.JSON(w, 200, &resource)
+}
+
+func (c *controllerAPI) DeleteResource(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+	id := params.ByName("resources_id")
+
+	p, err := c.getProvider(ctx)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	res, err := c.resourceRepo.Get(id)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	if err := resource.Deprovision(p.URL, res.ExternalID); err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	if err := c.resourceRepo.Remove(id); err != nil {
+		respondWithError(w, err)
+		return
+	}
+
+	w.WriteHeader(200)
 }
 
 func (c *controllerAPI) GetAppResources(ctx context.Context, w http.ResponseWriter, req *http.Request) {

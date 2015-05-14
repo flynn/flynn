@@ -250,6 +250,11 @@ func (c *Client) PutResource(resource *ct.Resource) error {
 	return c.Put(fmt.Sprintf("/providers/%s/resources/%s", resource.ProviderID, resource.ID), resource, resource)
 }
 
+// DeleteResource deprovisions and deletes the resource identified by resourceID under providerID.
+func (c *Client) DeleteResource(providerID, resourceID string) error {
+	return c.Delete(fmt.Sprintf("/providers/%s/resources/%s", providerID, resourceID))
+}
+
 // PutFormation updates an existing formation.
 func (c *Client) PutFormation(formation *ct.Formation) error {
 	if formation.AppID == "" || formation.ReleaseID == "" {

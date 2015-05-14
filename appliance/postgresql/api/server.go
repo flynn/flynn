@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/pkg/shutdown"
 )
 
@@ -31,6 +33,7 @@ func main() {
 
 	router := httprouter.New()
 	router.POST("/databases", api.createDatabase)
+	router.DELETE("/databases", api.dropDatabase)
 	router.GET("/ping", api.ping)
 
 	port := os.Getenv("PORT")
@@ -47,11 +50,6 @@ func main() {
 
 	handler := httphelper.ContextInjector(serviceName+"-api", httphelper.NewRequestLogger(router))
 	shutdown.Fatal(http.ListenAndServe(addr, handler))
-}
-
-type resource struct {
-	ID  string            `json:"id"`
-	Env map[string]string `json:"env"`
 }
 
 type pgAPI struct {
@@ -71,7 +69,7 @@ func (p *pgAPI) createDatabase(w http.ResponseWriter, req *http.Request, _ httpr
 		return
 	}
 
-	httphelper.JSON(w, 200, &resource{
+	httphelper.JSON(w, 200, resource.Resource{
 		ID: fmt.Sprintf("/databases/%s:%s", username, database),
 		Env: map[string]string{
 			"FLYNN_POSTGRES": serviceName,
@@ -81,6 +79,26 @@ func (p *pgAPI) createDatabase(w http.ResponseWriter, req *http.Request, _ httpr
 			"PGDATABASE":     database,
 		},
 	})
+}
+
+func (p *pgAPI) dropDatabase(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	id := strings.SplitN(strings.TrimPrefix(req.FormValue("id"), "/databases/"), ":", 2)
+	if len(id) != 2 || id[1] == "" {
+		httphelper.ValidationError(w, "id", "is invalid")
+		return
+	}
+
+	if err := p.db.Exec(fmt.Sprintf(`DROP DATABASE "%s"`, id[1])); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+
+	if err := p.db.Exec(fmt.Sprintf(`DROP USER "%s"`, id[0])); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+
+	w.WriteHeader(200)
 }
 
 func (p *pgAPI) ping(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
