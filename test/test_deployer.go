@@ -20,7 +20,7 @@ func (s *DeployerSuite) createRelease(t *c.C, process, strategy string) (*ct.App
 	app.Strategy = strategy
 	s.controllerClient(t).UpdateApp(app)
 
-	watcher, err := s.controllerClient(t).WatchJobEvents(app.Name)
+	watcher, err := s.controllerClient(t).WatchJobEvents(app.Name, release.ID)
 	t.Assert(err, c.IsNil)
 	defer watcher.Close()
 
@@ -285,7 +285,7 @@ func (s *DeployerSuite) TestOmniProcess(t *c.C) {
 	client := s.controllerClient(t)
 	app, release := s.createApp(t)
 
-	watcher, err := client.WatchJobEvents(app.Name)
+	watcher, err := client.WatchJobEvents(app.Name, release.ID)
 	t.Assert(err, c.IsNil)
 	defer watcher.Close()
 

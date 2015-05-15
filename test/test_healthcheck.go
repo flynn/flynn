@@ -90,12 +90,12 @@ func (s *HealthcheckSuite) TestFailure(t *c.C) {
 
 func (s *HealthcheckSuite) TestKillDown(t *c.C) {
 	// start an app that is failing checks /w killdown
-	app, _ := s.createAppWithService(t, "printer", &host.Service{
+	app, release := s.createAppWithService(t, "printer", &host.Service{
 		Name:   "healthcheck-killdown",
 		Create: true,
 		Check:  &host.HealthCheck{Type: "tcp", KillDown: true, StartTimeout: 2 * time.Second},
 	})
-	watcher, err := s.controllerClient(t).WatchJobEvents(app.ID)
+	watcher, err := s.controllerClient(t).WatchJobEvents(app.ID, release.ID)
 	t.Assert(err, c.IsNil)
 	defer watcher.Close()
 

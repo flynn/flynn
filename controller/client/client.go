@@ -32,14 +32,16 @@ type Client struct {
 }
 
 type JobWatcher struct {
-	events chan *ct.JobEvent
-	stream stream.Stream
+	events    chan *ct.JobEvent
+	stream    stream.Stream
+	releaseID string
 }
 
-func newJobWatcher(events chan *ct.JobEvent, stream stream.Stream) *JobWatcher {
+func newJobWatcher(events chan *ct.JobEvent, stream stream.Stream, releaseID string) *JobWatcher {
 	w := &JobWatcher{
-		events: events,
-		stream: stream,
+		events:    events,
+		stream:    stream,
+		releaseID: releaseID,
 	}
 	return w
 }
@@ -76,6 +78,9 @@ func (w *JobWatcher) WaitFor(expected ct.JobEvents, timeout time.Duration, callb
 			}
 			if _, ok := actual[e.Type]; !ok {
 				actual[e.Type] = make(map[string]int)
+			}
+			if w.releaseID != "" && w.releaseID != e.ReleaseID {
+				continue
 			}
 			switch e.State {
 			case "crashed":
@@ -424,13 +429,13 @@ func (c *Client) StreamJobEvents(appID string, output chan *ct.JobEvent) (stream
 	return c.ResumingStream("GET", fmt.Sprintf("/apps/%s/jobs", appID), output)
 }
 
-func (c *Client) WatchJobEvents(appID string) (*JobWatcher, error) {
+func (c *Client) WatchJobEvents(appID, releaseID string) (*JobWatcher, error) {
 	events := make(chan *ct.JobEvent)
 	stream, err := c.StreamJobEvents(appID, events)
 	if err != nil {
 		return nil, err
 	}
-	return newJobWatcher(events, stream), nil
+	return newJobWatcher(events, stream, releaseID), nil
 }
 
 func (c *Client) ExpectedScalingEvents(actual, expected map[string]int, releaseProcesses map[string]ct.ProcessType, clusterSize int) ct.JobEvents {
