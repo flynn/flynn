@@ -309,6 +309,11 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 		defaultNet.Destroy()
 	}
 
+	// enable IP forwarding
+	if err := ioutil.WriteFile("/proc/sys/net/ipv4/ip_forward", []byte("1\n"), 0644); err != nil {
+		return nil, err
+	}
+
 	// Set up iptables for outbound traffic masquerading from containers to the
 	// rest of the network.
 	if err := iptables.EnableOutboundNAT(bridgeName, l.bridgeNet.String()); err != nil {
