@@ -166,6 +166,7 @@ Login.instances = {};
 	"getValueLink",
 	"getValue",
 	"getValidation",
+	"setValue",
 	"isValid",
 	"performLogin",
 	"isPersisting",
