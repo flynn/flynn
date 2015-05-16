@@ -167,11 +167,14 @@ do_remove() {
     echo -n "(yes/no): "
     while read answer; do
       case "${answer}" in
-        yes) break ;;
-        no)  exit ;;
+        yes) assume_yes=true; break ;;
+        no)  break ;;
         *)   echo -n "Please type 'yes' or 'no': " ;;
       esac
     done
+    if ! $assume_yes; then
+      exit
+    fi
   fi
 
   info "stopping flynn-host daemon"
