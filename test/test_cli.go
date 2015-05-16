@@ -70,10 +70,7 @@ func (a *cliTestApp) waitFor(events ct.JobEvents) string {
 		return nil
 	}
 
-	err := a.watcher.WaitFor(events, scaleTimeout, idSetter)
-	if err != nil {
-		return err.Error()
-	}
+	a.t.Assert(a.watcher.WaitFor(events, scaleTimeout, idSetter), c.IsNil)
 	return id
 }
 
@@ -197,28 +194,37 @@ func (s *CLISuite) TestPs(t *c.C) {
 	for _, j := range jobs {
 		t.Assert(j, Matches, "echoer")
 	}
-	scale := app.flynn("scale", "echoer=0")
-	app.waitFor(ct.JobEvents{"echoer": {"down": 3}})
-	t.Assert(scale, Succeeds)
+	t.Assert(app.flynn("scale", "echoer=0"), Succeeds)
 	t.Assert(ps(), c.HasLen, 0)
 }
 
 func (s *CLISuite) TestScale(t *c.C) {
 	app := s.newCliTestApp(t)
 
+	assertEventOutput := func(scale *CmdResult, events ct.JobEvents) {
+		var actual []*ct.JobEvent
+		f := func(e *ct.JobEvent) error {
+			actual = append(actual, e)
+			return nil
+		}
+		t.Assert(app.watcher.WaitFor(events, scaleTimeout, f), c.IsNil)
+		for _, e := range actual {
+			t.Assert(scale, OutputContains, fmt.Sprintf("==> %s %s %s", e.Type, e.JobID, e.State))
+		}
+	}
+
 	scale := app.flynn("scale", "echoer=1")
-	jobID := app.waitFor(ct.JobEvents{"echoer": {"up": 1}})
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "scaling echoer: 0=>1")
-	t.Assert(scale, SuccessfulOutputContains, fmt.Sprintf("==> echoer %s up", jobID))
 	t.Assert(scale, SuccessfulOutputContains, "scale completed")
+	assertEventOutput(scale, ct.JobEvents{"echoer": {"up": 1}})
 
 	scale = app.flynn("scale", "echoer=3", "printer=1")
-	app.waitFor(ct.JobEvents{"echoer": {"up": 2}, "printer": {"up": 1}})
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "echoer: 1=>3")
 	t.Assert(scale, SuccessfulOutputContains, "printer: 0=>1")
 	t.Assert(scale, SuccessfulOutputContains, "scale completed")
+	assertEventOutput(scale, ct.JobEvents{"echoer": {"up": 2}, "printer": {"up": 1}})
 
 	// no args should show current scale
 	scale = app.flynn("scale")
@@ -230,10 +236,10 @@ func (s *CLISuite) TestScale(t *c.C) {
 
 	// scale should only affect specified processes
 	scale = app.flynn("scale", "printer=2")
-	app.waitFor(ct.JobEvents{"printer": {"up": 1}})
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "printer: 1=>2")
 	t.Assert(scale, SuccessfulOutputContains, "scale completed")
+	assertEventOutput(scale, ct.JobEvents{"printer": {"up": 1}})
 	scale = app.flynn("scale")
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "echoer=3")
@@ -243,18 +249,17 @@ func (s *CLISuite) TestScale(t *c.C) {
 
 	// unchanged processes shouldn't appear in output
 	scale = app.flynn("scale", "echoer=3", "printer=0")
-	app.waitFor(ct.JobEvents{"printer": {"down": 2}})
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "printer: 2=>0")
 	t.Assert(scale, c.Not(OutputContains), "echoer")
 	t.Assert(scale, SuccessfulOutputContains, "scale completed")
+	assertEventOutput(scale, ct.JobEvents{"printer": {"down": 2}})
 
 	// --no-wait should not wait for scaling to complete
 	scale = app.flynn("scale", "--no-wait", "echoer=0")
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "scaling echoer: 3=>0")
 	t.Assert(scale, c.Not(OutputContains), "scale completed")
-	app.waitFor(ct.JobEvents{"echoer": {"down": 3}})
 }
 
 func (s *CLISuite) TestRun(t *c.C) {
@@ -633,9 +638,15 @@ func (s *CLISuite) TestRelease(t *c.C) {
 
 	scaleCmd := app.flynn("scale", "--no-wait", "env=1", "foo=1")
 	t.Assert(scaleCmd, c.Not(Succeeds))
-	t.Assert(scaleCmd, OutputContains, "ERROR: Unknown process types: \"foo\"")
+	t.Assert(scaleCmd, OutputContains, "ERROR: unknown process types: \"foo\"")
+
+	// create a job watcher for the new release
+	watcher, err := s.controllerClient(t).WatchJobEvents(app.name, r.ID)
+	t.Assert(err, c.IsNil)
+	defer watcher.Close()
+
 	scaleCmd = app.flynn("scale", "--no-wait", "env=1")
-	app.waitFor(ct.JobEvents{"env": {"up": 1}})
+	t.Assert(watcher.WaitFor(ct.JobEvents{"env": {"up": 1}}, scaleTimeout, nil), c.IsNil)
 	envLog := app.flynn("log")
 	t.Assert(envLog, Succeeds)
 	t.Assert(envLog, SuccessfulOutputContains, "GLOBAL=FOO")

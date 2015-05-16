@@ -452,7 +452,7 @@ func (c *Client) ExpectedScalingEvents(actual, expected map[string]int, releaseP
 		}
 		if diff > 0 {
 			events[typ] = map[string]int{"up": diff}
-		} else if count < 0 {
+		} else if diff < 0 {
 			events[typ] = map[string]int{"down": -diff}
 		}
 	}

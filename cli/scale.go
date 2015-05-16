@@ -86,11 +86,13 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 	for _, arg := range typeCounts {
 		i := strings.IndexRune(arg, '=')
 		if i < 0 {
-			fmt.Println(commands["scale"].usage)
+			return fmt.Errorf("ERROR: scale args must be of the form <typ>=<qty>")
 		}
 		val, err := strconv.Atoi(arg[i+1:])
 		if err != nil {
-			fmt.Println(commands["scale"].usage)
+			return fmt.Errorf("ERROR: could not parse quantity in %q", arg)
+		} else if val < 0 {
+			return fmt.Errorf("ERROR: process quantities cannot be negative in %q", arg)
 		}
 		processType := arg[:i]
 		if _, ok := release.Processes[processType]; ok {
@@ -100,7 +102,7 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 		}
 	}
 	if len(invalid) > 0 {
-		return errors.New(fmt.Sprintf("ERROR: Unknown process types: %s", strings.Join(invalid, ", ")))
+		return fmt.Errorf("ERROR: unknown process types: %s", strings.Join(invalid, ", "))
 	}
 	formation.Processes = processes
 
