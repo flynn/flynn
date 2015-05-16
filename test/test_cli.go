@@ -70,10 +70,7 @@ func (a *cliTestApp) waitFor(events ct.JobEvents) string {
 		return nil
 	}
 
-	err := a.watcher.WaitFor(events, scaleTimeout, idSetter)
-	if err != nil {
-		return err.Error()
-	}
+	a.t.Assert(a.watcher.WaitFor(events, scaleTimeout, idSetter), c.IsNil)
 	return id
 }
 
