@@ -639,8 +639,14 @@ func (s *CLISuite) TestRelease(t *c.C) {
 	scaleCmd := app.flynn("scale", "--no-wait", "env=1", "foo=1")
 	t.Assert(scaleCmd, c.Not(Succeeds))
 	t.Assert(scaleCmd, OutputContains, "ERROR: unknown process types: \"foo\"")
+
+	// create a job watcher for the new release
+	watcher, err := s.controllerClient(t).WatchJobEvents(app.name, r.ID)
+	t.Assert(err, c.IsNil)
+	defer watcher.Close()
+
 	scaleCmd = app.flynn("scale", "--no-wait", "env=1")
-	app.waitFor(ct.JobEvents{"env": {"up": 1}})
+	t.Assert(watcher.WaitFor(ct.JobEvents{"env": {"up": 1}}, scaleTimeout, nil), c.IsNil)
 	envLog := app.flynn("log")
 	t.Assert(envLog, Succeeds)
 	t.Assert(envLog, SuccessfulOutputContains, "GLOBAL=FOO")
