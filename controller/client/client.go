@@ -100,7 +100,7 @@ func (w *JobWatcher) WaitFor(expected ct.JobEvents, timeout time.Duration, callb
 				return nil
 			}
 		case <-time.After(timeout):
-			return fmt.Errorf("Timed out waiting for job events. Waited %d seconds.\nexpected: %v\nactual: %v", timeout, expected, actual)
+			return fmt.Errorf("Timed out waiting for job events. Waited %.f seconds.\nexpected: %v\nactual: %v", timeout.Seconds(), expected, actual)
 		}
 	}
 }
