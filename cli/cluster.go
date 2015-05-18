@@ -122,7 +122,15 @@ func runClusterDefault(args *docopt.Args) error {
 	name := args.String["<cluster-name>"]
 
 	if name == "" {
-		log.Printf("%q is default cluster.", config.Default)
+		w := tabWriter()
+		defer w.Flush()
+		listRec(w, "NAME", "URL")
+		for _, s := range config.Clusters {
+			if s.Name == config.Default {
+				listRec(w, s.Name, s.URL, "(default)")
+				break
+			}
+		}
 		return nil
 	}
 
