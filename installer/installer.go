@@ -128,9 +128,13 @@ func (i *Installer) SaveCredentials(creds *Credential) error {
 			`, creds.ID, creds.Secret, creds.Name, creds.Type); err != nil {
 				return err
 			}
-			return nil
+			if err := i.txExec(`UPDATE events SET DeletedAt = now() WHERE ResourceType == "credential" AND ResourceID == $1`, creds.ID); err != nil {
+				return err
+			}
+			i.removeCredentialEvents(creds.ID)
+		} else {
+			return err
 		}
-		return err
 	}
 	go i.SendEvent(&Event{
 		Type:         "new_credential",
