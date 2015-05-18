@@ -56,7 +56,7 @@ func migrateDB(db *sql.DB) error {
 		`CREATE UNIQUE INDEX ON app_events (unique_id)`,
 		`CREATE FUNCTION notify_app_event() RETURNS TRIGGER AS $$
     BEGIN
-	PERFORM pg_notify('app_events:' || NEW.app_id, NEW.event_id || '');
+	PERFORM pg_notify('app_events', NEW.event_id || ':' || NEW.app_id);
 	RETURN NULL;
     END;
 $$ LANGUAGE plpgsql`,

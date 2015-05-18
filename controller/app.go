@@ -409,13 +409,26 @@ func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *
 	}
 }
 
+func (c *controllerAPI) maybeStartEventListener() error {
+	c.eventListenerMtx.Lock()
+	defer c.eventListenerMtx.Unlock()
+	if c.eventListener != nil && !c.eventListener.IsClosed() {
+		return nil
+	}
+	c.eventListener = newEventListener(c.appRepo)
+	return c.eventListener.Listen()
+}
+
 func (c *controllerAPI) AppEvents(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	if err := streamAppEvents(ctx, w, req, c.getApp(ctx), c.appRepo); err != nil {
+	if err := c.maybeStartEventListener(); err != nil {
+		respondWithError(w, err)
+	}
+	if err := streamAppEvents(ctx, w, req, c.eventListener, c.getApp(ctx), c.appRepo); err != nil {
 		respondWithError(w, err)
 	}
 }
 
-func streamAppEvents(ctx context.Context, w http.ResponseWriter, req *http.Request, app *ct.App, repo *AppRepo) (err error) {
+func streamAppEvents(ctx context.Context, w http.ResponseWriter, req *http.Request, eventListener *EventListener, app *ct.App, repo *AppRepo) (err error) {
 	var lastID int64
 	if req.Header.Get("Last-Event-Id") != "" {
 		lastID, err = strconv.ParseInt(req.Header.Get("Last-Event-Id"), 10, 64)
@@ -449,21 +462,21 @@ func streamAppEvents(ctx context.Context, w http.ResponseWriter, req *http.Reque
 		}
 	}()
 
-	listener, err := repo.db.Listen("app_events:"+postgres.FormatUUID(app.ID), log)
+	sub, err := eventListener.Subscribe(app.ID, objectType, objectID)
 	if err != nil {
 		return err
 	}
-	defer listener.Close()
+	defer sub.Close()
 
 	var currID int64
 	if past == "true" || lastID > 0 {
-		events, err := repo.ListEvents(app.ID, objectType, objectID, lastID, count)
+		list, err := repo.ListEvents(app.ID, objectType, objectID, lastID, count)
 		if err != nil {
 			return err
 		}
 		// events are in ID DESC order, so iterate in reverse
-		for i := len(events) - 1; i >= 0; i-- {
-			e := events[i]
+		for i := len(list) - 1; i >= 0; i-- {
+			e := list[i]
 			ch <- e
 			currID = e.ID
 		}
@@ -473,25 +486,14 @@ func streamAppEvents(ctx context.Context, w http.ResponseWriter, req *http.Reque
 		select {
 		case <-s.Done:
 			return
-		case n, ok := <-listener.Notify:
+		case event, ok := <-sub.Events:
 			if !ok {
-				return listener.Err
+				return sub.Err
 			}
-			id, err := strconv.ParseInt(n.Extra, 10, 64)
-			if err != nil {
-				return err
-			}
-			if id <= currID {
+			if event.ID <= currID {
 				continue
 			}
-			e, err := repo.GetEvent(id)
-			if err != nil {
-				return err
-			}
-			if objectType != "" && objectType != string(e.ObjectType) {
-				continue
-			}
-			ch <- e
+			ch <- event
 		}
 	}
 }

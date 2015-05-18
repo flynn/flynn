@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
@@ -245,6 +246,9 @@ type controllerAPI struct {
 	clusterClient  clusterClient
 	logaggc        logaggc.Client
 	routerc        routerc.Client
+
+	eventListener    *EventListener
+	eventListenerMtx sync.Mutex
 }
 
 func (c *controllerAPI) getApp(ctx context.Context) *ct.App {
