@@ -46,6 +46,7 @@ func RunEtcdServer(t TestingT) (string, func()) {
 		cmd := exec.Command("etcd",
 			"--data-dir", dataDir,
 			"--listen-client-urls", "http://127.0.0.1:"+port,
+			"--advertise-client-urls", "http://127.0.0.1:"+port,
 			"--listen-peer-urls", "http://127.0.0.1:"+clusterPort,
 			"--initial-advertise-peer-urls", "http://127.0.0.1:"+clusterPort,
 			"--initial-cluster", "default=http://127.0.0.1:"+clusterPort,
