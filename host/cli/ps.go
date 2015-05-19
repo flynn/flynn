@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -46,6 +47,9 @@ func jobList(client *cluster.Client, all bool) (sortJobs, error) {
 	hosts, err := client.ListHosts()
 	if err != nil {
 		return nil, fmt.Errorf("could not list hosts: %s", err)
+	}
+	if len(hosts) == 0 {
+		return nil, errors.New("no hosts found")
 	}
 
 	var jobs []host.ActiveJob
