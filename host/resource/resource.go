@@ -1,6 +1,9 @@
 package resource
 
 import (
+	"fmt"
+	"strconv"
+
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/units"
 	"github.com/flynn/flynn/pkg/typeconv"
 )
@@ -61,4 +64,44 @@ func SetDefaults(r *Resources) {
 		}
 		(*r)[typ] = spec
 	}
+}
+
+func ToType(s string) (Type, bool) {
+	for typ := range defaults {
+		if string(typ) == s {
+			return typ, true
+		}
+	}
+	return Type(""), false
+}
+
+func ParseLimit(typ Type, s string) (int64, error) {
+	switch typ {
+	case TypeMemory:
+		return units.RAMInBytes(s)
+	default:
+		return units.FromHumanSize(s)
+	}
+}
+
+func FormatLimit(typ Type, limit int64) string {
+	switch typ {
+	case TypeMemory:
+		return byteSize(limit)
+	default:
+		return strconv.FormatInt(limit, 10)
+	}
+}
+
+var byteUnits = []string{"B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"}
+
+func byteSize(limit int64) string {
+	i := 0
+	unit := 1024.0
+	size := float64(limit)
+	for size >= unit {
+		size = size / unit
+		i++
+	}
+	return fmt.Sprintf("%.4g%s", size, byteUnits[i])
 }
