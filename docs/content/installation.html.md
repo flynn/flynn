@@ -10,7 +10,7 @@ Before starting, you should install the Flynn command-line interface.
 On OS X and Linux, run this command in a terminal:
 
 ```text
-L=/usr/local/bin/flynn && curl -sL -A "`uname -sp`" https://dl.flynn.io/cli | zcat >$L && chmod +x $L
+L=/usr/local/bin/flynn && curl -sSL -A "`uname -sp`" https://dl.flynn.io/cli | zcat >$L && chmod +x $L
 ```
 
 On Windows, run this command in PowerShell:
