@@ -12,7 +12,7 @@ are available.
 To install the latest release on OS X or Linux, run this command in a terminal:
 
 ```text
-L=/usr/local/bin/flynn && curl -sL -A "`uname -sp`" https://dl.flynn.io/cli | zcat >$L && chmod +x $L
+L=/usr/local/bin/flynn && curl -sSL -A "`uname -sp`" https://dl.flynn.io/cli | zcat >$L && chmod +x $L
 ```
 
 To install the latest release on Windows, run this command in PowerShell:
