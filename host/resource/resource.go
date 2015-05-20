@@ -35,9 +35,8 @@ const (
 )
 
 var defaults = Resources{
-	TypeMemory:   {Request: typeconv.Int64Ptr(1 * units.GiB), Limit: typeconv.Int64Ptr(1 * units.GiB)},
-	TypeMaxFD:    {Request: typeconv.Int64Ptr(10000), Limit: typeconv.Int64Ptr(10000)},
-	TypeMaxProcs: {Request: typeconv.Int64Ptr(256), Limit: typeconv.Int64Ptr(256)},
+	TypeMemory: {Request: typeconv.Int64Ptr(1 * units.GiB), Limit: typeconv.Int64Ptr(1 * units.GiB)},
+	TypeMaxFD:  {Request: typeconv.Int64Ptr(10000), Limit: typeconv.Int64Ptr(10000)},
 }
 
 type Resources map[Type]Spec
