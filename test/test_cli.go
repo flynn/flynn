@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -652,4 +653,35 @@ func (s *CLISuite) TestRelease(t *c.C) {
 	t.Assert(envLog, SuccessfulOutputContains, "GLOBAL=FOO")
 	t.Assert(envLog, SuccessfulOutputContains, "ENV_ONLY=BAZ")
 	t.Assert(envLog, c.Not(SuccessfulOutputContains), "ECHOER_ONLY=BAR")
+}
+
+func (s *CLISuite) TestLimits(t *c.C) {
+	app := s.newCliTestApp(t)
+	t.Assert(app.flynn("limit", "set", "resources", "memory=512MB", "max_fd=12k"), Succeeds)
+
+	release, err := s.controller.GetAppRelease(app.name)
+	t.Assert(err, c.IsNil)
+	proc, ok := release.Processes["resources"]
+	if !ok {
+		t.Fatal("missing resources process type")
+	}
+	r := proc.Resources
+	t.Assert(*r[resource.TypeMemory].Limit, c.Equals, int64(536870912))
+	t.Assert(*r[resource.TypeMaxFD].Limit, c.Equals, int64(12000))
+
+	cmd := app.flynn("limit", "-t", "resources")
+	t.Assert(cmd, Succeeds)
+	t.Assert(cmd, OutputContains, "memory=512MB")
+	t.Assert(cmd, OutputContains, "max_fd=12000")
+}
+
+func (s *CLISuite) TestRunLimits(t *c.C) {
+	app := s.newCliTestApp(t)
+	cmd := app.flynn("run", "sh", "-c", resourceCmd)
+	t.Assert(cmd, Succeeds)
+	defaults := resource.Defaults()
+	limits := strings.Split(strings.TrimSpace(cmd.Output), "\n")
+	t.Assert(limits, c.HasLen, 2)
+	t.Assert(limits[0], c.Equals, strconv.FormatInt(*defaults[resource.TypeMemory].Limit, 10))
+	t.Assert(limits[1], c.Equals, strconv.FormatInt(*defaults[resource.TypeMaxFD].Limit, 10))
 }

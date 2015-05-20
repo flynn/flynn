@@ -16,6 +16,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/ctxhelper"
@@ -399,6 +400,7 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		},
 		Resources: newJob.Resources,
 	}
+	resource.SetDefaults(&job.Resources)
 	if len(newJob.Entrypoint) > 0 {
 		job.Config.Entrypoint = newJob.Entrypoint
 	}
