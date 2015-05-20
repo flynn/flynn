@@ -3,11 +3,13 @@ package controller
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -382,8 +384,27 @@ func (c *Client) CreateDeployment(appID, releaseID string) (*ct.Deployment, erro
 	return deployment, c.Post(fmt.Sprintf("/apps/%s/deploy", appID), &ct.Release{ID: releaseID}, deployment)
 }
 
-func (c *Client) StreamDeployment(deploymentID string, output chan *ct.DeploymentEvent) (stream.Stream, error) {
-	return c.ResumingStream("GET", fmt.Sprintf("/deployments/%s", deploymentID), output)
+func convertAppEvents(appEvents chan *ct.AppEvent, outputCh interface{}) {
+	outValue := reflect.ValueOf(outputCh)
+	msgType := outValue.Type().Elem().Elem()
+	defer outValue.Close()
+	for {
+		a, ok := <-appEvents
+		if !ok {
+			return
+		}
+		e := reflect.New(msgType)
+		if err := json.Unmarshal(a.Data, e.Interface()); err != nil {
+			return
+		}
+		outValue.Send(e)
+	}
+}
+
+func (c *Client) StreamDeployment(d *ct.Deployment, output chan *ct.DeploymentEvent) (stream.Stream, error) {
+	appEvents := make(chan *ct.AppEvent)
+	go convertAppEvents(appEvents, output)
+	return c.ResumingStream("GET", fmt.Sprintf("/apps/%s/events?object_type=%s&object_id=%s&past=true", d.AppID, ct.EventTypeDeployment, d.ID), appEvents)
 }
 
 func (c *Client) DeployAppRelease(appID, releaseID string) error {
@@ -398,7 +419,7 @@ func (c *Client) DeployAppRelease(appID, releaseID string) error {
 	}
 
 	events := make(chan *ct.DeploymentEvent)
-	stream, err := c.StreamDeployment(d.ID, events)
+	stream, err := c.StreamDeployment(d, events)
 	if err != nil {
 		return err
 	}
@@ -426,7 +447,9 @@ outer:
 
 // StreamJobEvents streams job events to the output channel.
 func (c *Client) StreamJobEvents(appID string, output chan *ct.JobEvent) (stream.Stream, error) {
-	return c.ResumingStream("GET", fmt.Sprintf("/apps/%s/jobs", appID), output)
+	appEvents := make(chan *ct.AppEvent)
+	go convertAppEvents(appEvents, output)
+	return c.ResumingStream("GET", fmt.Sprintf("/apps/%s/events?object_type=%s", appID, ct.EventTypeJob), appEvents)
 }
 
 func (c *Client) WatchJobEvents(appID, releaseID string) (*JobWatcher, error) {

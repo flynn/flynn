@@ -220,6 +220,62 @@ func (r *AppRepo) List() (interface{}, error) {
 	return apps, rows.Err()
 }
 
+func (r *AppRepo) ListEvents(appID, typ, objectID string, sinceID int64, count int) ([]*ct.AppEvent, error) {
+	query := "SELECT event_id, app_id, object_id, object_type, data, created_at FROM app_events WHERE app_id = $1 AND event_id > $2"
+	args := []interface{}{appID, sinceID}
+	n := 3
+	if typ != "" {
+		query += fmt.Sprintf(" AND object_type = $%d", n)
+		n++
+		args = append(args, typ)
+	}
+	if objectID != "" {
+		query += fmt.Sprintf(" AND object_id = $%d", n)
+		args = append(args, objectID)
+	}
+	query += " ORDER BY event_id DESC"
+	if count > 0 {
+		query += fmt.Sprintf(" LIMIT $%d", n)
+		args = append(args, count)
+	}
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	var events []*ct.AppEvent
+	for rows.Next() {
+		event, err := scanAppEvent(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		events = append(events, event)
+	}
+	return events, nil
+}
+
+func (r *AppRepo) GetEvent(id int64) (*ct.AppEvent, error) {
+	row := r.db.QueryRow("SELECT event_id, app_id, object_id, object_type, data, created_at FROM app_events WHERE event_id = $1", id)
+	return scanAppEvent(row)
+}
+
+func scanAppEvent(s postgres.Scanner) (*ct.AppEvent, error) {
+	var event ct.AppEvent
+	var typ string
+	var data []byte
+	err := s.Scan(&event.ID, &event.AppID, &event.ObjectID, &typ, &data, &event.CreatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			err = ErrNotFound
+		}
+		return nil, err
+	}
+	event.AppID = postgres.CleanUUID(event.AppID)
+	event.ObjectType = ct.EventType(typ)
+	event.Data = json.RawMessage(data)
+	return &event, nil
+}
+
 func (r *AppRepo) SetRelease(appID string, releaseID string) error {
 	return r.db.Exec("UPDATE apps SET release_id = $2, updated_at = now() WHERE app_id = $1", appID, releaseID)
 }
@@ -349,6 +405,95 @@ func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *
 			return
 		case <-ctx.Done():
 			return
+		}
+	}
+}
+
+func (c *controllerAPI) maybeStartEventListener() error {
+	c.eventListenerMtx.Lock()
+	defer c.eventListenerMtx.Unlock()
+	if c.eventListener != nil && !c.eventListener.IsClosed() {
+		return nil
+	}
+	c.eventListener = newEventListener(c.appRepo)
+	return c.eventListener.Listen()
+}
+
+func (c *controllerAPI) AppEvents(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	if err := c.maybeStartEventListener(); err != nil {
+		respondWithError(w, err)
+	}
+	if err := streamAppEvents(ctx, w, req, c.eventListener, c.getApp(ctx), c.appRepo); err != nil {
+		respondWithError(w, err)
+	}
+}
+
+func streamAppEvents(ctx context.Context, w http.ResponseWriter, req *http.Request, eventListener *EventListener, app *ct.App, repo *AppRepo) (err error) {
+	var lastID int64
+	if req.Header.Get("Last-Event-Id") != "" {
+		lastID, err = strconv.ParseInt(req.Header.Get("Last-Event-Id"), 10, 64)
+		if err != nil {
+			return ct.ValidationError{Field: "Last-Event-Id", Message: "is invalid"}
+		}
+	}
+
+	var count int
+	if req.FormValue("count") != "" {
+		count, err = strconv.Atoi(req.FormValue("count"))
+		if err != nil {
+			return ct.ValidationError{Field: "count", Message: "is invalid"}
+		}
+	}
+
+	objectType := req.FormValue("object_type")
+	objectID := req.FormValue("object_id")
+	past := req.FormValue("past")
+
+	l, _ := ctxhelper.LoggerFromContext(ctx)
+	log := l.New("fn", "AppEvents", "object_type", objectType, "object_id", objectID)
+	ch := make(chan *ct.AppEvent)
+	s := sse.NewStream(w, ch, log)
+	s.Serve()
+	defer func() {
+		if err == nil {
+			s.Close()
+		} else {
+			s.CloseWithError(err)
+		}
+	}()
+
+	sub, err := eventListener.Subscribe(app.ID, objectType, objectID)
+	if err != nil {
+		return err
+	}
+	defer sub.Close()
+
+	var currID int64
+	if past == "true" || lastID > 0 {
+		list, err := repo.ListEvents(app.ID, objectType, objectID, lastID, count)
+		if err != nil {
+			return err
+		}
+		// events are in ID DESC order, so iterate in reverse
+		for i := len(list) - 1; i >= 0; i-- {
+			e := list[i]
+			ch <- e
+			currID = e.ID
+		}
+	}
+
+	for {
+		select {
+		case <-s.Done:
+			return
+		case event, ok := <-sub.Events:
+			if !ok {
+				return sub.Err
+			}
+			if event.ID <= currID {
+				continue
+			}
+			ch <- event
 		}
 	}
 }

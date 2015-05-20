@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
@@ -23,7 +22,6 @@ import (
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/schedutil"
-	"github.com/flynn/flynn/pkg/sse"
 )
 
 /* SSE Logger */
@@ -82,7 +80,19 @@ func (r *JobRepo) Add(job *ct.Job) error {
 	}
 
 	// create a job event, ignoring possible duplications
-	err = r.db.Exec("INSERT INTO job_events (job_id, host_id, app_id, state) VALUES ($1, $2, $3, $4)", jobID, hostID, job.AppID, job.State)
+	e := ct.JobEvent{
+		JobID:     job.ID,
+		AppID:     job.AppID,
+		ReleaseID: job.ReleaseID,
+		Type:      job.Type,
+		State:     job.State,
+	}
+	uniqueID := strings.Join([]string{e.JobID, e.State}, "|")
+	data, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	err = r.db.Exec("INSERT INTO app_events (app_id, object_id, unique_id, object_type, data) VALUES ($1, $2, $3, $4, $5)", e.AppID, e.JobID, uniqueID, string(ct.EventTypeJob), data)
 	if postgres.IsUniquenessError(err, "") {
 		return nil
 	}
@@ -127,48 +137,6 @@ func (r *JobRepo) List(appID string) ([]*ct.Job, error) {
 	return jobs, nil
 }
 
-func (r *JobRepo) listEvents(appID string, sinceID int64, count int) ([]*ct.JobEvent, error) {
-	query := "SELECT event_id, concat(job_events.host_id, '-', job_events.job_id), job_events.app_id, job_cache.release_id, job_cache.process_type, job_events.state, job_events.created_at FROM job_events INNER JOIN job_cache ON job_events.job_id = job_cache.job_id AND job_events.host_id = job_cache.host_id WHERE job_events.app_id = $1 AND event_id > $2 ORDER BY event_id DESC"
-	args := []interface{}{appID, sinceID}
-	if count > 0 {
-		query += " LIMIT $3"
-		args = append(args, count)
-	}
-	rows, err := r.db.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	var events []*ct.JobEvent
-	for rows.Next() {
-		event, err := scanJobEvent(rows)
-		if err != nil {
-			rows.Close()
-			return nil, err
-		}
-		events = append(events, event)
-	}
-	return events, nil
-}
-
-func (r *JobRepo) getEvent(eventID int64) (*ct.JobEvent, error) {
-	row := r.db.QueryRow("SELECT event_id, concat(job_events.host_id, '-', job_events.job_id), job_events.app_id, job_cache.release_id, job_cache.process_type, job_events.state, job_events.created_at FROM job_events INNER JOIN job_cache ON job_events.job_id = job_cache.job_id AND job_events.host_id = job_cache.host_id WHERE job_events.event_id = $1", eventID)
-	return scanJobEvent(row)
-}
-
-func scanJobEvent(s postgres.Scanner) (*ct.JobEvent, error) {
-	event := &ct.JobEvent{}
-	err := s.Scan(&event.ID, &event.JobID, &event.AppID, &event.ReleaseID, &event.Type, &event.State, &event.CreatedAt)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			err = ErrNotFound
-		}
-		return nil, err
-	}
-	event.AppID = postgres.CleanUUID(event.AppID)
-	event.ReleaseID = postgres.CleanUUID(event.ReleaseID)
-	return event, nil
-}
-
 type clusterClient interface {
 	ListHosts() ([]host.Host, error)
 	DialHost(string) (cluster.Host, error)
@@ -192,12 +160,6 @@ func (c *controllerAPI) connectHost(ctx context.Context) (cluster.Host, string, 
 
 func (c *controllerAPI) ListJobs(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	app := c.getApp(ctx)
-	if strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
-		if err := streamJobs(ctx, req, w, app, c.jobRepo); err != nil {
-			respondWithError(w, err)
-		}
-		return
-	}
 	list, err := c.jobRepo.List(app.ID)
 	if err != nil {
 		respondWithError(w, err)
@@ -237,79 +199,6 @@ func (c *controllerAPI) PutJob(ctx context.Context, w http.ResponseWriter, req *
 		return
 	}
 	httphelper.JSON(w, 200, &job)
-}
-
-func streamJobs(ctx context.Context, req *http.Request, w http.ResponseWriter, app *ct.App, repo *JobRepo) (err error) {
-	var lastID int64
-	if req.Header.Get("Last-Event-Id") != "" {
-		lastID, err = strconv.ParseInt(req.Header.Get("Last-Event-Id"), 10, 64)
-		if err != nil {
-			return ct.ValidationError{Field: "Last-Event-Id", Message: "is invalid"}
-		}
-	}
-	var count int
-	if req.FormValue("count") != "" {
-		count, err = strconv.Atoi(req.FormValue("count"))
-		if err != nil {
-			return ct.ValidationError{Field: "count", Message: "is invalid"}
-		}
-	}
-
-	ch := make(chan *ct.JobEvent)
-	l, _ := ctxhelper.LoggerFromContext(ctx)
-	log := l.New("fn", "streamJobs", "app_id", app.ID)
-	s := sse.NewStream(w, ch, log)
-	s.Serve()
-	defer func() {
-		if err == nil {
-			s.Close()
-		} else {
-			s.CloseWithError(err)
-		}
-	}()
-
-	listener, err := repo.db.Listen("job_events:"+postgres.FormatUUID(app.ID), log)
-	if err != nil {
-		return err
-	}
-	defer listener.Close()
-
-	var currID int64
-	if lastID > 0 || count > 0 {
-		events, err := repo.listEvents(app.ID, lastID, count)
-		if err != nil {
-			return err
-		}
-		// events are in ID DESC order, so iterate in reverse
-		for i := len(events) - 1; i >= 0; i-- {
-			e := events[i]
-			ch <- e
-			currID = e.ID
-		}
-	}
-
-	for {
-		select {
-		case <-s.Done:
-			return
-		case n, ok := <-listener.Notify:
-			if !ok {
-				return listener.Err
-			}
-			id, err := strconv.ParseInt(n.Extra, 10, 64)
-			if err != nil {
-				return err
-			}
-			if id <= currID {
-				continue
-			}
-			e, err := repo.getEvent(id)
-			if err != nil {
-				return err
-			}
-			ch <- e
-		}
-	}
 }
 
 func (c *controllerAPI) KillJob(ctx context.Context, w http.ResponseWriter, req *http.Request) {
