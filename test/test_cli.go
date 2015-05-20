@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -672,4 +673,15 @@ func (s *CLISuite) TestLimits(t *c.C) {
 	t.Assert(cmd, Succeeds)
 	t.Assert(cmd, OutputContains, "memory=512MB")
 	t.Assert(cmd, OutputContains, "max_fd=12000")
+}
+
+func (s *CLISuite) TestRunLimits(t *c.C) {
+	app := s.newCliTestApp(t)
+	cmd := app.flynn("run", "sh", "-c", resourceCmd)
+	t.Assert(cmd, Succeeds)
+	defaults := resource.Defaults()
+	limits := strings.Split(strings.TrimSpace(cmd.Output), "\n")
+	t.Assert(limits, c.HasLen, 2)
+	t.Assert(limits[0], c.Equals, strconv.FormatInt(*defaults[resource.TypeMemory].Limit, 10))
+	t.Assert(limits[1], c.Equals, strconv.FormatInt(*defaults[resource.TypeMaxFD].Limit, 10))
 }
