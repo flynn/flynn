@@ -38,14 +38,14 @@ func (S) TestSetDefaultsNil(c *C) {
 func (S) TestSetDefaultsEmpty(c *C) {
 	r := make(Resources)
 	SetDefaults(&r)
-	assertDefault(c, r, TypeMemory, TypeMaxFD, TypeMaxProcs)
+	assertDefault(c, r, TypeMemory, TypeMaxFD)
 }
 
 func (S) TestSetDefaultsRequest(c *C) {
 	// not specifying Request should default it to the value of Limit
 	r := Resources{TypeMemory: Spec{Limit: typeconv.Int64Ptr(512 * units.MiB)}}
 	SetDefaults(&r)
-	assertDefault(c, r, TypeMaxFD, TypeMaxProcs)
+	assertDefault(c, r, TypeMaxFD)
 	mem, ok := r[TypeMemory]
 	if !ok {
 		c.Fatal("memory resource not set")

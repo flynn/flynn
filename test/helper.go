@@ -123,17 +123,15 @@ func (h *Helper) sshKeys(t *c.C) *sshData {
 }
 
 const (
-	resourceMem      int64 = 256 * units.MiB
-	resourceMaxFD    int64 = 1024
-	resourceMaxProcs int64 = 512
-	resourceCmd            = "cat /sys/fs/cgroup/memory/memory.limit_in_bytes; ulimit -n; ulimit -p"
+	resourceMem   int64 = 256 * units.MiB
+	resourceMaxFD int64 = 1024
+	resourceCmd         = "cat /sys/fs/cgroup/memory/memory.limit_in_bytes; ulimit -n"
 )
 
 func testResources() resource.Resources {
 	r := resource.Resources{
-		resource.TypeMemory:   resource.Spec{Limit: typeconv.Int64Ptr(resourceMem)},
-		resource.TypeMaxFD:    resource.Spec{Limit: typeconv.Int64Ptr(resourceMaxFD)},
-		resource.TypeMaxProcs: resource.Spec{Limit: typeconv.Int64Ptr(resourceMaxProcs)},
+		resource.TypeMemory: resource.Spec{Limit: typeconv.Int64Ptr(resourceMem)},
+		resource.TypeMaxFD:  resource.Spec{Limit: typeconv.Int64Ptr(resourceMaxFD)},
 	}
 	resource.SetDefaults(&r)
 	return r
@@ -141,10 +139,9 @@ func testResources() resource.Resources {
 
 func assertResourceLimits(t *c.C, out string) {
 	limits := strings.Split(strings.TrimSpace(out), "\n")
-	t.Assert(limits, c.HasLen, 3)
+	t.Assert(limits, c.HasLen, 2)
 	t.Assert(limits[0], c.Equals, strconv.FormatInt(resourceMem, 10))
 	t.Assert(limits[1], c.Equals, strconv.FormatInt(resourceMaxFD, 10))
-	t.Assert(limits[2], c.Equals, strconv.FormatInt(resourceMaxProcs, 10))
 }
 
 func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
