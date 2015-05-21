@@ -85,7 +85,7 @@ var connectAttempts = attempt.Strategy{
 	Delay: 100 * time.Millisecond,
 }
 
-func ResumingStream(connect func(int64) (*http.Response, error), outputCh interface{}) (stream.Stream, error) {
+func ResumingStream(connect func(int64) (*http.Response, error, bool), outputCh interface{}) (stream.Stream, error) {
 	stream := stream.New()
 	firstErr := make(chan error)
 	go func() {
@@ -96,10 +96,21 @@ func ResumingStream(connect func(int64) (*http.Response, error), outputCh interf
 		defer outValue.Close()
 		for {
 			var res *http.Response
+			// nonRetryableErr will be set if a connection attempt should not
+			// be retried (for example if a 404 is returned).
+			var nonRetryableErr error
 			err := connectAttempts.Run(func() (err error) {
-				res, err = connect(lastID)
+				var retry bool
+				res, err, retry = connect(lastID)
+				if !retry {
+					nonRetryableErr = err
+					return nil
+				}
 				return
 			})
+			if nonRetryableErr != nil {
+				err = nonRetryableErr
+			}
 			once.Do(func() { firstErr <- err })
 			if err != nil {
 				stream.Error = err
