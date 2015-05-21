@@ -416,6 +416,10 @@
 			"Rev": "c7a634160b148092106181edebb3aec36f9795e1"
 		},
 		{
+			"ImportPath": "github.com/flynn/oauth2",
+			"Rev": "bad31004a6cc4ac89e7219ba28642459a9fa2d6c"
+		},
+		{
 			"ImportPath": "github.com/flynn/pq",
 			"Rev": "34b669d7dd7ed9051866cb5c14b7b02106537f81"
 		},
