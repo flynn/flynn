@@ -187,11 +187,15 @@ func (w *WorkerPool) Start() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	// add a small delay between starting successive workers to minimise
+	// the time between any worker checking for a job.
+	delay := w.Interval / time.Duration(len(w.workers))
+
 	for i := range w.workers {
 		w.workers[i] = NewWorker(w.c, w.WorkMap)
 		w.workers[i].Interval = w.Interval
 		w.workers[i].Queue = w.Queue
-		go w.workers[i].Work()
+		time.AfterFunc(delay*time.Duration(i), w.workers[i].Work)
 	}
 }
 

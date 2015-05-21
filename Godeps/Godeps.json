@@ -421,7 +421,7 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/que-go",
-			"Rev": "0eec73db4297e5241c7a7b3bc743b9e10a2d2115"
+			"Rev": "629ca30f198815dfb72814e5a09ac6611c01d66d"
 		},
 		{
 			"ImportPath": "github.com/flynn/tail",
