@@ -125,25 +125,29 @@ func (s *S) TestRunJobDetached(c *C) {
 	c.Assert(res.Type, Equals, "")
 	c.Assert(res.Cmd, DeepEquals, cmd)
 
-	job := host.Jobs[0]
-	c.Assert(res.ID, Equals, job.ID)
-	c.Assert(job.Metadata, DeepEquals, map[string]string{
-		"flynn-controller.app":      app.ID,
-		"flynn-controller.app_name": app.Name,
-		"flynn-controller.release":  release.ID,
-		"foo": "baz",
-	})
-	c.Assert(job.Config.Cmd, DeepEquals, []string{"foo", "bar"})
-	c.Assert(job.Config.Env, DeepEquals, map[string]string{
-		"FLYNN_APP_ID":       app.ID,
-		"FLYNN_RELEASE_ID":   release.ID,
-		"FLYNN_PROCESS_TYPE": "",
-		"FLYNN_JOB_ID":       job.ID,
-		"FOO":                "baz",
-		"JOB":                "true",
-		"RELEASE":            "true",
-	})
-	c.Assert(job.Config.Stdin, Equals, false)
+	jobs, err := host.ListJobs()
+	c.Assert(err, IsNil)
+	for _, j := range jobs {
+		job := j.Job
+		c.Assert(res.ID, Equals, job.ID)
+		c.Assert(job.Metadata, DeepEquals, map[string]string{
+			"flynn-controller.app":      app.ID,
+			"flynn-controller.app_name": app.Name,
+			"flynn-controller.release":  release.ID,
+			"foo": "baz",
+		})
+		c.Assert(job.Config.Cmd, DeepEquals, []string{"foo", "bar"})
+		c.Assert(job.Config.Env, DeepEquals, map[string]string{
+			"FLYNN_APP_ID":       app.ID,
+			"FLYNN_RELEASE_ID":   release.ID,
+			"FLYNN_PROCESS_TYPE": "",
+			"FLYNN_JOB_ID":       job.ID,
+			"FOO":                "baz",
+			"JOB":                "true",
+			"RELEASE":            "true",
+		})
+		c.Assert(job.Config.Stdin, Equals, false)
+	}
 }
 
 func (s *S) TestRunJobAttached(c *C) {
@@ -204,23 +208,27 @@ func (s *S) TestRunJobAttached(c *C) {
 	c.Assert(string(stdout), Equals, "test out")
 	rwc.Close()
 
-	job := hc.Jobs[0]
-	c.Assert(job.ID, Equals, jobID)
-	c.Assert(job.Metadata, DeepEquals, map[string]string{
-		"flynn-controller.app":      app.ID,
-		"flynn-controller.app_name": app.Name,
-		"flynn-controller.release":  release.ID,
-		"foo": "baz",
-	})
-	c.Assert(job.Config.Cmd, DeepEquals, []string{"foo", "bar"})
-	c.Assert(job.Config.Env, DeepEquals, map[string]string{
-		"FLYNN_APP_ID":       app.ID,
-		"FLYNN_RELEASE_ID":   release.ID,
-		"FLYNN_PROCESS_TYPE": "",
-		"FLYNN_JOB_ID":       job.ID,
-		"FOO":                "baz",
-		"JOB":                "true",
-		"RELEASE":            "true",
-	})
-	c.Assert(job.Config.Stdin, Equals, true)
+	jobs, err := hc.ListJobs()
+	c.Assert(err, IsNil)
+	for _, j := range jobs {
+		job := j.Job
+		c.Assert(job.ID, Equals, jobID)
+		c.Assert(job.Metadata, DeepEquals, map[string]string{
+			"flynn-controller.app":      app.ID,
+			"flynn-controller.app_name": app.Name,
+			"flynn-controller.release":  release.ID,
+			"foo": "baz",
+		})
+		c.Assert(job.Config.Cmd, DeepEquals, []string{"foo", "bar"})
+		c.Assert(job.Config.Env, DeepEquals, map[string]string{
+			"FLYNN_APP_ID":       app.ID,
+			"FLYNN_RELEASE_ID":   release.ID,
+			"FLYNN_PROCESS_TYPE": "",
+			"FLYNN_JOB_ID":       job.ID,
+			"FOO":                "baz",
+			"JOB":                "true",
+			"RELEASE":            "true",
+		})
+		c.Assert(job.Config.Stdin, Equals, true)
+	}
 }
