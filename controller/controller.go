@@ -19,6 +19,7 @@ import (
 	"github.com/flynn/flynn/controller/name"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/discoverd/client"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -107,7 +108,7 @@ func main() {
 
 type handlerConfig struct {
 	db      *postgres.DB
-	cc      clusterClient
+	cc      utils.ClusterClient
 	lc      logaggc.Client
 	rc      routerc.Client
 	pgxpool *pgx.ConnPool
@@ -243,7 +244,7 @@ type controllerAPI struct {
 	jobRepo        *JobRepo
 	resourceRepo   *ResourceRepo
 	deploymentRepo *DeploymentRepo
-	clusterClient  clusterClient
+	clusterClient  utils.ClusterClient
 	logaggc        logaggc.Client
 	routerc        routerc.Client
 	que            *que.Client
