@@ -183,7 +183,7 @@ func streamRouterEvents(rc routerc.Client, db *postgres.DB, doneCh chan struct{}
 
 type handlerConfig struct {
 	db      *postgres.DB
-	cc      clusterClient
+	cc      utils.ClusterClient
 	lc      logaggc.Client
 	rc      routerc.Client
 	pgxpool *pgx.ConnPool
@@ -333,7 +333,7 @@ type controllerAPI struct {
 	resourceRepo   *ResourceRepo
 	deploymentRepo *DeploymentRepo
 	eventRepo      *EventRepo
-	clusterClient  clusterClient
+	clusterClient  utils.ClusterClient
 	logaggc        logaggc.Client
 	routerc        routerc.Client
 	que            *que.Client
