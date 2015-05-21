@@ -15,6 +15,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/jsonschema"
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/cli/config"
+	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
@@ -237,8 +238,85 @@ func (s *ControllerSuite) TestResourceLimitsReleaseJob(t *c.C) {
 	assertResourceLimits(t, log.Output)
 }
 
-func (s *ControllerSuite) TestAppDeletion(t *c.C) {
-	app := "app-deletion-" + random.String(8)
+func (s *ControllerSuite) TestAppDelete(t *c.C) {
+	client := s.controllerClient(t)
+
+	type test struct {
+		desc    string
+		name    string
+		create  bool
+		useName bool
+		delErr  error
+	}
+
+	for _, s := range []test{
+		{
+			desc:    "delete existing app by name",
+			name:    "app-delete-" + random.String(8),
+			create:  true,
+			useName: true,
+			delErr:  nil,
+		},
+		{
+			desc:    "delete existing app by id",
+			name:    "app-delete-" + random.String(8),
+			create:  true,
+			useName: false,
+			delErr:  nil,
+		},
+		{
+			desc:    "delete existing UUID app by name",
+			name:    random.UUID(),
+			create:  true,
+			useName: true,
+			delErr:  nil,
+		},
+		{
+			desc:    "delete existing UUID app by id",
+			name:    random.UUID(),
+			create:  true,
+			useName: false,
+			delErr:  nil,
+		},
+		{
+			desc:    "delete non-existent app",
+			name:    "i-dont-exist",
+			create:  false,
+			useName: true,
+			delErr:  controller.ErrNotFound,
+		},
+		{
+			desc:    "delete non-existent UUID app",
+			name:    random.UUID(),
+			create:  false,
+			useName: true,
+			delErr:  controller.ErrNotFound,
+		},
+	} {
+		debugf(t, "TestAppDelete: %s", s.desc)
+
+		app := &ct.App{Name: s.name}
+		if s.create {
+			t.Assert(client.CreateApp(app), c.IsNil)
+		}
+
+		appID := app.ID
+		if s.useName {
+			appID = app.Name
+		}
+
+		_, err := client.DeleteApp(appID)
+		t.Assert(err, c.Equals, s.delErr)
+
+		if s.delErr == nil {
+			_, err = client.GetApp(appID)
+			t.Assert(err, c.Equals, controller.ErrNotFound)
+		}
+	}
+}
+
+func (s *ControllerSuite) TestAppDeleteCleanup(t *c.C) {
+	app := "app-delete-cleanup-" + random.String(8)
 	client := s.controllerClient(t)
 
 	// create and push app
@@ -293,4 +371,10 @@ func (s *ControllerSuite) TestAppDeletion(t *c.C) {
 
 	// check resource cleanup
 	t.Assert(cmd, OutputContains, fmt.Sprintf("deprovisioned %d resources", numResources))
+
+	// check creating and pushing same app name succeeds
+	t.Assert(os.RemoveAll(r.dir), c.IsNil)
+	r = s.newGitRepo(t, "http")
+	t.Assert(r.flynn("create", app), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
 }
