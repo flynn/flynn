@@ -168,6 +168,9 @@ for all nodes in the cluster:
 * 2222 (Git over SSH)
 * 3000 to 3500 (user defined TCP services)
 
+**Note:** A firewall with this configuration is _required_ to prevent external
+access to internal management APIs.
+
 The next step is to configure a Layer 0 cluster by starting the flynn-host daemon on all
 nodes. The daemon uses etcd for leader election, and etcd needs to be aware of all of the
 other nodes for it to function correctly.
