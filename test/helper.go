@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -251,9 +252,13 @@ func (h *Helper) newGitRepo(t *c.C, nameOrURL string) *gitRepo {
 	if strings.HasPrefix(nameOrURL, "https://") {
 		t.Assert(run(t, exec.Command("git", "clone", nameOrURL, dir)), Succeeds)
 		return r
+	} else if nameOrURL != "" {
+		t.Assert(run(t, exec.Command("cp", "-r", filepath.Join("apps", nameOrURL), dir)), Succeeds)
+	} else {
+		t.Assert(os.Mkdir(dir, 0755), c.IsNil)
+		t.Assert(ioutil.WriteFile(filepath.Join(dir, "file.txt"), []byte("app"), 0644), c.IsNil)
 	}
 
-	t.Assert(run(t, exec.Command("cp", "-r", filepath.Join("apps", nameOrURL), dir)), Succeeds)
 	t.Assert(r.git("init"), Succeeds)
 	t.Assert(r.git("add", "."), Succeeds)
 	t.Assert(r.git("commit", "-am", "init"), Succeeds)

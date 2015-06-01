@@ -139,6 +139,7 @@ func appHandler(c handlerConfig) http.Handler {
 		shutdown.Fatal(err)
 	}
 
+	q := que.NewClient(c.pgxpool)
 	providerRepo := NewProviderRepo(c.db)
 	keyRepo := NewKeyRepo(c.db)
 	resourceRepo := NewResourceRepo(c.db)
@@ -161,6 +162,7 @@ func appHandler(c handlerConfig) http.Handler {
 		clusterClient:  c.cc,
 		logaggc:        c.lc,
 		routerc:        c.rc,
+		que:            q,
 	}
 
 	httpRouter := httprouter.New()
@@ -174,6 +176,7 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.POST("/apps/:apps_id", httphelper.WrapHandler(api.UpdateApp))
 	httpRouter.GET("/apps/:apps_id/log", httphelper.WrapHandler(api.appLookup(api.AppLog)))
 	httpRouter.GET("/apps/:apps_id/events", httphelper.WrapHandler(api.appLookup(api.AppEvents)))
+	httpRouter.DELETE("/apps/:apps_id", httphelper.WrapHandler(api.appLookup(api.DeleteApp)))
 
 	httpRouter.PUT("/apps/:apps_id/formations/:releases_id", httphelper.WrapHandler(api.appLookup(api.PutFormation)))
 	httpRouter.GET("/apps/:apps_id/formations/:releases_id", httphelper.WrapHandler(api.appLookup(api.GetFormation)))
@@ -197,6 +200,7 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.GET("/providers/:providers_id/resources", httphelper.WrapHandler(api.GetProviderResources))
 	httpRouter.GET("/providers/:providers_id/resources/:resources_id", httphelper.WrapHandler(api.GetResource))
 	httpRouter.PUT("/providers/:providers_id/resources/:resources_id", httphelper.WrapHandler(api.PutResource))
+	httpRouter.DELETE("/providers/:providers_id/resources/:resources_id", httphelper.WrapHandler(api.DeleteResource))
 	httpRouter.GET("/apps/:apps_id/resources", httphelper.WrapHandler(api.appLookup(api.GetAppResources)))
 
 	httpRouter.POST("/apps/:apps_id/routes", httphelper.WrapHandler(api.appLookup(api.CreateRoute)))
@@ -246,6 +250,7 @@ type controllerAPI struct {
 	clusterClient  clusterClient
 	logaggc        logaggc.Client
 	routerc        routerc.Client
+	que            *que.Client
 
 	eventListener    *EventListener
 	eventListenerMtx sync.Mutex

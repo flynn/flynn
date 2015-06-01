@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 )
 
 type Resource struct {
@@ -27,4 +28,21 @@ func Provision(uri string, config []byte) (*Resource, error) {
 		return nil, err
 	}
 	return resource, nil
+}
+
+func Deprovision(uri, id string) error {
+	path := fmt.Sprintf("%s?id=%s", uri, url.QueryEscape(id))
+	req, err := http.NewRequest("DELETE", path, nil)
+	if err != nil {
+		return err
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	res.Body.Close()
+	if res.StatusCode != 200 {
+		return fmt.Errorf("resource: unexpected status code %d", res.StatusCode)
+	}
+	return nil
 }

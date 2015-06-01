@@ -180,12 +180,13 @@ func (c *Client) Stream(method, path string, in, out interface{}) (stream.Stream
 }
 
 func (c *Client) ResumingStream(method, path string, ch interface{}) (stream.Stream, error) {
-	connect := func(lastID int64) (*http.Response, error) {
+	connect := func(lastID int64) (*http.Response, error, bool) {
 		header := http.Header{
 			"Accept":        []string{"text/event-stream"},
 			"Last-Event-Id": []string{strconv.FormatInt(lastID, 10)},
 		}
-		return c.RawReq(method, path, header, nil, nil)
+		res, err := c.RawReq(method, path, header, nil, nil)
+		return res, err, err != c.ErrNotFound
 	}
 	return ResumingStream(connect, ch)
 }

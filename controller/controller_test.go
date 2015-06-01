@@ -157,67 +157,6 @@ func (s *S) TestUpdateApp(c *C) {
 	c.Assert(app.Meta, DeepEquals, meta)
 }
 
-func (s *S) TestDeleteApp(c *C) {
-	for i, useName := range []bool{false, true} {
-		app := s.createTestApp(c, &ct.App{Name: fmt.Sprintf("delete-app-%d", i)})
-
-		var appID string
-		if useName {
-			appID = app.Name
-		} else {
-			appID = app.ID
-		}
-		c.Assert(s.c.DeleteApp(appID), IsNil)
-
-		_, err := s.c.GetApp(appID)
-		c.Assert(err, Equals, controller.ErrNotFound)
-	}
-}
-
-func (s *S) TestDeleteAppUUIDName(c *C) {
-	for _, useName := range []bool{false, true} {
-		app := s.createTestApp(c, &ct.App{Name: random.UUID()})
-
-		var appID string
-		if useName {
-			appID = app.Name
-		} else {
-			appID = app.ID
-		}
-		c.Assert(s.c.DeleteApp(appID), IsNil)
-
-		_, err := s.c.GetApp(appID)
-		c.Assert(err, Equals, controller.ErrNotFound)
-	}
-}
-
-func (s *S) TestDeleteNonExistentApp(c *C) {
-	for _, useUUID := range []bool{false, true} {
-		var appID string
-
-		if useUUID {
-			appID = "foobar"
-		} else {
-			appID = random.UUID()
-		}
-		c.Assert(s.c.DeleteApp(appID), Equals, controller.ErrNotFound)
-	}
-}
-
-func (s *S) TestRecreateApp(c *C) {
-	app := s.createTestApp(c, &ct.App{Name: "recreate-app"})
-
-	// Post a duplicate
-	c.Assert(s.c.CreateApp(&ct.App{Name: "recreate-app"}), Not(IsNil)) // TODO: This should probably be a 4xx error
-
-	// Delete the original
-	c.Assert(s.c.DeleteApp(app.ID), IsNil)
-
-	// Create the same key
-	app = s.createTestApp(c, &ct.App{Name: "recreate-app"})
-	c.Assert(app.Name, Equals, "recreate-app")
-}
-
 func (s *S) createTestArtifact(c *C, in *ct.Artifact) *ct.Artifact {
 	if in.Type == "" {
 		in.Type = "docker"

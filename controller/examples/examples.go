@@ -245,7 +245,9 @@ func (e *generator) deleteRoute() {
 }
 
 func (e *generator) deleteApp() {
-	e.client.DeleteApp(e.resourceIds["app"])
+	// call Delete rather than DeleteApp as the latter uses the app stream
+	// to watch app_deletion events.
+	e.client.Delete(fmt.Sprintf("/apps/%s", e.resourceIds["app"]))
 }
 
 func (e *generator) createArtifact() {

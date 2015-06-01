@@ -4,15 +4,18 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/jsonschema"
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/cli/config"
+	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
@@ -233,4 +236,145 @@ func (s *ControllerSuite) TestResourceLimitsReleaseJob(t *c.C) {
 	log := flynn(t, "/", "-a", app.Name, "log", "--job", jobID, "--raw-output")
 
 	assertResourceLimits(t, log.Output)
+}
+
+func (s *ControllerSuite) TestAppDelete(t *c.C) {
+	client := s.controllerClient(t)
+
+	type test struct {
+		desc    string
+		name    string
+		create  bool
+		useName bool
+		delErr  error
+	}
+
+	for _, s := range []test{
+		{
+			desc:    "delete existing app by name",
+			name:    "app-delete-" + random.String(8),
+			create:  true,
+			useName: true,
+			delErr:  nil,
+		},
+		{
+			desc:    "delete existing app by id",
+			name:    "app-delete-" + random.String(8),
+			create:  true,
+			useName: false,
+			delErr:  nil,
+		},
+		{
+			desc:    "delete existing UUID app by name",
+			name:    random.UUID(),
+			create:  true,
+			useName: true,
+			delErr:  nil,
+		},
+		{
+			desc:    "delete existing UUID app by id",
+			name:    random.UUID(),
+			create:  true,
+			useName: false,
+			delErr:  nil,
+		},
+		{
+			desc:    "delete non-existent app",
+			name:    "i-dont-exist",
+			create:  false,
+			useName: true,
+			delErr:  controller.ErrNotFound,
+		},
+		{
+			desc:    "delete non-existent UUID app",
+			name:    random.UUID(),
+			create:  false,
+			useName: true,
+			delErr:  controller.ErrNotFound,
+		},
+	} {
+		debugf(t, "TestAppDelete: %s", s.desc)
+
+		app := &ct.App{Name: s.name}
+		if s.create {
+			t.Assert(client.CreateApp(app), c.IsNil)
+		}
+
+		appID := app.ID
+		if s.useName {
+			appID = app.Name
+		}
+
+		_, err := client.DeleteApp(appID)
+		t.Assert(err, c.Equals, s.delErr)
+
+		if s.delErr == nil {
+			_, err = client.GetApp(appID)
+			t.Assert(err, c.Equals, controller.ErrNotFound)
+		}
+	}
+}
+
+func (s *ControllerSuite) TestAppDeleteCleanup(t *c.C) {
+	app := "app-delete-cleanup-" + random.String(8)
+	client := s.controllerClient(t)
+
+	// create and push app
+	r := s.newGitRepo(t, "http")
+	t.Assert(r.flynn("create", app), Succeeds)
+	t.Assert(r.flynn("key", "add", r.ssh.Pub), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+
+	// wait for it to start
+	service := app + "-web"
+	_, err := s.discoverdClient(t).Instances(service, 10*time.Second)
+	t.Assert(err, c.IsNil)
+
+	// create some routes
+	routes := []string{"foo.example.com", "bar.example.com"}
+	for _, route := range routes {
+		t.Assert(r.flynn("route", "add", "http", route), Succeeds)
+	}
+	routeList, err := client.RouteList(app)
+	t.Assert(err, c.IsNil)
+	numRoutes := len(routes) + 1 // includes default app route
+	t.Assert(routeList, c.HasLen, numRoutes)
+
+	assertRouteStatus := func(route string, status int) {
+		req, err := http.NewRequest("GET", "http://"+routerIP, nil)
+		t.Assert(err, c.IsNil)
+		req.Host = route
+		res, err := http.DefaultClient.Do(req)
+		t.Assert(err, c.IsNil)
+		t.Assert(res.StatusCode, c.Equals, status)
+	}
+	for _, route := range routes {
+		assertRouteStatus(route, 200)
+	}
+
+	// provision resources
+	t.Assert(r.flynn("resource", "add", "postgres"), Succeeds)
+	resources, err := client.AppResourceList(app)
+	t.Assert(err, c.IsNil)
+	numResources := 1
+	t.Assert(resources, c.HasLen, numResources)
+
+	// delete app
+	cmd := r.flynn("delete", "--yes")
+	t.Assert(cmd, Succeeds)
+
+	// check route cleanup
+	t.Assert(cmd, OutputContains, fmt.Sprintf("removed %d routes", numRoutes))
+	for _, route := range routes {
+		assertRouteStatus(route, 404)
+	}
+
+	// check resource cleanup
+	t.Assert(cmd, OutputContains, fmt.Sprintf("deprovisioned %d resources", numResources))
+
+	// check creating and pushing same app name succeeds
+	t.Assert(os.RemoveAll(r.dir), c.IsNil)
+	r = s.newGitRepo(t, "http")
+	t.Assert(r.flynn("create", app), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
 }

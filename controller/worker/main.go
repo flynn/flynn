@@ -8,6 +8,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/controller/client"
+	"github.com/flynn/flynn/controller/worker/app_deletion"
 	"github.com/flynn/flynn/controller/worker/deployment"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -50,7 +51,8 @@ func main() {
 	workers := que.NewWorkerPool(
 		que.NewClient(pgxpool),
 		que.WorkMap{
-			"deployment": deployment.JobHandler(db, client, logger),
+			"deployment":   deployment.JobHandler(db, client, logger),
+			"app_deletion": app_deletion.JobHandler(db, client, logger),
 		},
 		workerCount,
 	)

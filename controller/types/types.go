@@ -8,6 +8,7 @@ import (
 
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/router/types"
 )
 
 type ExpandedFormation struct {
@@ -195,9 +196,10 @@ type LogOpts struct {
 type EventType string
 
 const (
-	EventTypeDeployment EventType = "deployment"
-	EventTypeJob        EventType = "job"
-	EventTypeScale      EventType = "scale"
+	EventTypeAppDeletion EventType = "app_deletion"
+	EventTypeDeployment  EventType = "deployment"
+	EventTypeJob         EventType = "job"
+	EventTypeScale       EventType = "scale"
 )
 
 type AppEvent struct {
@@ -207,4 +209,15 @@ type AppEvent struct {
 	ObjectID   string          `json:"object_id,omitempty"`
 	Data       json.RawMessage `json:"data,omitempty"`
 	CreatedAt  *time.Time      `json:"created_at,omitempty"`
+}
+
+type AppDeletion struct {
+	AppID            string          `json:"app"`
+	DeletedRoutes    []*router.Route `json:"deleted_routes"`
+	DeletedResources []*Resource     `json:"deleted_resources"`
+}
+
+type AppDeletionEvent struct {
+	AppDeletion *AppDeletion `json:"app_deletion"`
+	Error       string       `json:"error"`
 }
