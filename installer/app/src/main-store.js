@@ -46,6 +46,10 @@ export default createClass({
 				this.launchDigitalOcean(event);
 			break;
 
+			case 'LAUNCH_AZURE':
+				this.launchAzure(event);
+			break;
+
 			case 'NEW_CLUSTER':
 				this.__addCluster(event.cluster);
 				if (this.__pendingCurrentClusterID === event.cluster.ID) {
@@ -142,13 +146,23 @@ export default createClass({
 				newCluster.handleEvent(extend({}, event, {clusterID: 'new'}));
 			break;
 
-			case 'SELECTED_CREDENTIAL_ID_CHANGE':
+			case 'LIST_CLOUD_REGIONS':
 				(this.__createCredPromise || Promise.resolve(null)).then(function () {
 					Client.listCloudRegions(event.cloud, event.credentialID);
 				});
 			break;
 
+			case 'LIST_AZURE_SUBSCRIPTIONS':
+				(this.__createCredPromise || Promise.resolve(null)).then(function () {
+					Client.listAzureSubscriptions(event.credentialID);
+				});
+			break;
+
 			case 'CLOUD_REGIONS':
+				newCluster.handleEvent(extend({}, event, {clusterID: 'new'}));
+			break;
+
+			case 'AZURE_SUBSCRIPTIONS':
 				newCluster.handleEvent(extend({}, event, {clusterID: 'new'}));
 			break;
 
@@ -187,6 +201,19 @@ export default createClass({
 		cluster.region = state.selectedRegionSlug;
 		cluster.size = state.selectedSizeSlug;
 		cluster.numInstances = state.numInstances;
+
+		Client.launchCluster(cluster.toJSON());
+	},
+
+	launchAzure: function () {
+		var state = newCluster.getInstallState();
+		var cluster = new Cluster({});
+		cluster.type = 'azure';
+		cluster.credentialID = state.credentialID;
+		cluster.region = state.selectedRegionSlug;
+		cluster.size = state.selectedSizeSlug;
+		cluster.numInstances = state.numInstances;
+		cluster.subscriptionID = state.azureSubscriptionID;
 
 		Client.launchCluster(cluster.toJSON());
 	},

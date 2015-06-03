@@ -375,10 +375,6 @@ func (c *BaseCluster) bootstrap() error {
 	if err := sess.Wait(); err != nil {
 		return err
 	}
-	if err := c.waitForDNS(); err != nil {
-		return err
-	}
-
 	return nil
 }
 

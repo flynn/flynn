@@ -88,6 +88,7 @@ func (c *DigitalOceanCluster) Run() {
 			c.configureDomain,
 			c.installFlynn,
 			c.bootstrap,
+			c.base.waitForDNS,
 		}
 
 		for _, step := range steps {

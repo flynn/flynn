@@ -13,9 +13,11 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/aws"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/badgerodon/ioutil"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/oauth2"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/pkg/browser"
 	log "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
+	"github.com/flynn/flynn/pkg/azure"
 	"github.com/flynn/flynn/pkg/cors"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/sse"
@@ -53,12 +55,13 @@ func ServeHTTP() error {
 		logger:    logger,
 		clientConfig: installerJSConfig{
 			Endpoints: map[string]string{
-				"clusters":    "/clusters",
-				"cluster":     "/clusters/:id",
-				"events":      "/events",
-				"prompt":      "/clusters/:id/prompts/:prompt_id",
-				"credentials": "/credentials",
-				"regions":     "/regions",
+				"clusters":           "/clusters",
+				"cluster":            "/clusters/:id",
+				"events":             "/events",
+				"prompt":             "/clusters/:id/prompts/:prompt_id",
+				"credentials":        "/credentials",
+				"regions":            "/regions",
+				"azureSubscriptions": "/azure/subscriptions",
 			},
 		},
 	}
@@ -78,6 +81,7 @@ func ServeHTTP() error {
 	httpRouter.GET("/credentials/:id", api.ServeTemplate)
 	httpRouter.GET("/clusters/:id", api.ServeTemplate)
 	httpRouter.GET("/clusters/:id/delete", api.ServeTemplate)
+	httpRouter.GET("/oauth/azure", api.ServeTemplate)
 	httpRouter.DELETE("/clusters/:id", api.DeleteCluster)
 	httpRouter.POST("/clusters", api.LaunchCluster)
 	httpRouter.GET("/events", api.Events)
@@ -86,6 +90,7 @@ func ServeHTTP() error {
 	httpRouter.POST("/credentials", api.NewCredential)
 	httpRouter.DELETE("/credentials/:type/:id", api.DeleteCredential)
 	httpRouter.GET("/regions", api.GetCloudRegions)
+	httpRouter.GET("/azure/subscriptions", api.GetAzureSubscriptions)
 
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -176,6 +181,8 @@ func (api *httpAPI) LaunchCluster(w http.ResponseWriter, req *http.Request, para
 		cluster = &AWSCluster{}
 	case "digital_ocean":
 		cluster = &DigitalOceanCluster{}
+	case "azure":
+		cluster = &AzureCluster{}
 	default:
 		httphelper.ValidationError(w, "type", fmt.Sprintf("Invalid type \"%s\"", base.Type))
 		return
@@ -251,6 +258,25 @@ func (api *httpAPI) NewCredential(w http.ResponseWriter, req *http.Request, para
 		httphelper.Error(w, err)
 		return
 	}
+	if creds.Type == "azure" {
+		oauthCreds := make([]*OAuthCredential, 0, 2)
+		for _, resource := range []string{azure.JSONAPIResource, azure.XMLAPIResource} {
+			token, err := azure.OAuth2Config(creds.ID, resource).Exchange(oauth2.NoContext, creds.Secret)
+			if err != nil {
+				httphelper.Error(w, err)
+				return
+			}
+			oauthCreds = append(oauthCreds, &OAuthCredential{
+				ClientID:     creds.ID,
+				AccessToken:  token.AccessToken,
+				RefreshToken: token.RefreshToken,
+				ExpiresAt:    &token.Expiry,
+				Scope:        resource,
+			})
+		}
+		creds.Secret = ""
+		creds.OAuthCreds = oauthCreds
+	}
 	if err := api.Installer.SaveCredentials(creds); err != nil {
 		if err == credentialExistsError {
 			httphelper.ObjectExistsError(w, err.Error())
@@ -273,7 +299,7 @@ func (api *httpAPI) DeleteCredential(w http.ResponseWriter, req *http.Request, p
 func (api *httpAPI) GetCloudRegions(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	params := req.URL.Query()
 	cloud := params.Get("cloud")
-	if cloud != "digital_ocean" {
+	if cloud != "digital_ocean" && cloud != "azure" {
 		httphelper.ObjectNotFoundError(w, "")
 		return
 	}
@@ -283,7 +309,30 @@ func (api *httpAPI) GetCloudRegions(w http.ResponseWriter, req *http.Request, _ 
 		httphelper.ValidationError(w, "credential_id", "Invalid credential id")
 		return
 	}
-	res, err := api.Installer.ListDigitalOceanRegions(creds)
+	var res interface{}
+	switch cloud {
+	case "digital_ocean":
+		res, err = api.Installer.ListDigitalOceanRegions(creds)
+	case "azure":
+		res, err = api.Installer.ListAzureRegions(creds)
+	}
+	if err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, res)
+}
+
+func (api *httpAPI) GetAzureSubscriptions(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	params := req.URL.Query()
+	credentialID := params.Get("credential_id")
+	creds, err := api.Installer.FindCredentials(credentialID)
+	if err != nil {
+		httphelper.ValidationError(w, "credential_id", "Invalid credential id")
+		return
+	}
+	client := api.Installer.azureClient(creds)
+	res, err := client.ListSubscriptions()
 	if err != nil {
 		httphelper.Error(w, err)
 		return

@@ -19,6 +19,21 @@ var AssetPaths = <%= Yajl::Encoder.encode([
 
 	"aws-logo.png",
 	"digitalocean-logo.png",
+	"azure-logo.png",
+
+	"azure-app-0.png",
+	"azure-app-1.png",
+	"azure-app-2.png",
+	"azure-app-2-2.png",
+	"azure-app-3.png",
+	"azure-app-4.png",
+	"azure-app-5.png",
+	"azure-app-6.png",
+	"azure-app-7.png",
+	"azure-app-8.png",
+	"azure-app-9.png",
+	"azure-app-10.png",
+	"azure-app-11.png",
 ].inject({}) { |m, name|
   m[name] = asset_path('images/'+ name).sub(/\A\./, '/assets')
   m

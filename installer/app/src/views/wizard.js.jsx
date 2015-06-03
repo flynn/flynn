@@ -5,6 +5,7 @@ import CredentialsPicker from './credentials-picker';
 import RouteLink from './route-link';
 import AWSLauncher from './aws-launcher';
 import DigitalOceanLauncher from './digital-ocean-launcher';
+import AzureLauncher from './azure-launcher';
 import InstallProgress from './install-progress';
 import Dashboard from './dashboard';
 import Panel from './panel';
@@ -56,6 +57,10 @@ var Wizard = React.createClass({
 
 						{state.currentStep === 'configure' && state.selectedCloud === 'digital_ocean' && state.credentialID ? (
 							<DigitalOceanLauncher state={state} />
+						) : null}
+
+						{state.currentStep === 'configure' && state.selectedCloud === 'azure' && state.credentialID ? (
+							<AzureLauncher state={state} />
 						) : null}
 
 						{state.currentStep === 'install' ? (

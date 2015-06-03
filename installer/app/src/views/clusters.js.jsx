@@ -40,7 +40,7 @@ var Clusters = React.createClass({
 										</span>
 									) : null}
 
-									{installState.currentStep === 'install' && !installState.failed ? (
+									{installState.currentStep === 'install' && (installState.deleting || !installState.failed) ? (
 										<span>
 											<span className="fa fa-cog fa-spin" />
 											&nbsp;
