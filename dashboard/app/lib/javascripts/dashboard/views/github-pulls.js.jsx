@@ -39,12 +39,11 @@ Dashboard.Views.GithubPulls = React.createClass({
 	render: function () {
 		var PullRequest = this.props.pullRequestComponent || Dashboard.Views.GithubPull;
 		var pullRequestProps = this.props.pullRequestProps || {};
-		var handlePageEvent = this.__handlePageEvent;
 
 		return (
 			<section className="github-pulls">
 				<ScrollPagination
-					ref="scrollPagination"
+					manager={this.props.scrollPaginationManager}
 					hasPrevPage={this.state.pullsHasPrevPage}
 					hasNextPage={this.state.pullsHasNextPage}
 					unloadPage={GithubPullsActions.unloadPageId.bind(null, this.state.pullsStoreId)}
@@ -59,8 +58,8 @@ Dashboard.Views.GithubPulls = React.createClass({
 						return (
 							<ScrollPagination.Page
 								key={page.id}
+								manager={this.props.scrollPaginationManager}
 								id={page.id}
-								onPageEvent={handlePageEvent}
 								component='ul'>
 
 								{page.pulls.map(function (pull) {
@@ -79,6 +78,12 @@ Dashboard.Views.GithubPulls = React.createClass({
 				</ScrollPagination>
 			</section>
 		);
+	},
+
+	getDefaultProps: function () {
+		return {
+			scrollPaginationManager: new ScrollPagination.Manager()
+		};
 	},
 
 	getInitialState: function () {
@@ -105,10 +110,6 @@ Dashboard.Views.GithubPulls = React.createClass({
 
 	__handleStoreChange: function (props) {
 		this.setState(getState(props || this.props));
-	},
-
-	__handlePageEvent: function (pageId, event) {
-		this.refs.scrollPagination.handlePageEvent(pageId, event);
 	}
 });
 

@@ -30,6 +30,7 @@ var ScrollPagination = window.ScrollPagination = React.createClass({
 	componentWillMount: function () {
 		this.__pages = {};
 		this.__pageIds = [];
+		this.props.manager.registerPageEventHandler(this.handlePageEvent);
 	},
 
 	componentDidMount: function () {
@@ -78,16 +79,6 @@ var ScrollPagination = window.ScrollPagination = React.createClass({
 					id: pageId,
 					height: event.height
 				};
-			break;
-
-			case "update":
-				pages[pageId] = {
-					id: pageId,
-					height: event.height
-				};
-			break;
-
-			case "unmount":
 			break;
 		}
 		this.__pages = pages;
@@ -304,11 +295,31 @@ ScrollPagination.Page = React.createClass({
 
 	__determineHeight: function () {
 		var height = this.__height = this.getDOMNode().offsetHeight;
-		this.props.onPageEvent(this.props.id, {
+		this.props.manager.dispatchPageEvent(this.props.id, {
 			name: "mount",
 			height: height
 		});
 	}
 });
+
+var Manager = function () {
+	this.pendingEvents = [];
+	this.pageEventHandler = null;
+};
+Manager.prototype.registerPageEventHandler = function (callback) {
+	this.pageEventHandler = callback;
+	this.pendingEvents.forEach(function (args) {
+		this.dispatchPageEvent.apply(this, args);
+	}.bind(this));
+	this.pendingEvents = [];
+};
+Manager.prototype.dispatchPageEvent = function (pageId, event) {
+	if (this.pageEventHandler === null) {
+		this.pendingEvents.push([pageId, event]);
+		return;
+	}
+	this.pageEventHandler(pageId, event);
+};
+ScrollPagination.Manager = Manager;
 
 })();
