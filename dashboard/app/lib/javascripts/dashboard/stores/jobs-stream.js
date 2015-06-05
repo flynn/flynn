@@ -16,7 +16,12 @@ var JobsStream = Dashboard.Stores.JobsStream = Dashboard.Store.createClass({
 		this.props = {
 			appId: this.id.appId,
 		};
-		this.url = Dashboard.config.endpoints.cluster_controller + "/apps/"+ this.props.appId +"/jobs?key="+ encodeURIComponent(Dashboard.config.user.controller_key);
+		this.url = Dashboard.config.endpoints.cluster_controller +'/apps/'+ this.props.appId +'/events';
+		this.url = this.url + Marbles.QueryParams.serializeParams([{
+			key: Dashboard.config.user.controller_key,
+			object_type: 'job',
+			past: 'true'
+		}]);
 	},
 
 	didBecomeActive: function () {
@@ -47,7 +52,8 @@ var JobsStream = Dashboard.Stores.JobsStream = Dashboard.Store.createClass({
 			this.__eventSource = null;
 		});
 		eventSource.addEventListener("message", function (e) {
-			var evnt = JSON.parse(e.data || "");
+			var res = JSON.parse(e.data || "");
+			var evnt = res.data;
 			Dashboard.Dispatcher.handleAppEvent({
 				name: "JOB_STATE_CHANGE",
 				appId: this.props.appId,
