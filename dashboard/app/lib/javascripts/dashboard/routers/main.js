@@ -36,7 +36,6 @@ Dashboard.routers.main = new (Marbles.Router.createClass({
 		}
 
 		var performRedirect = function () {
-			React.unmountComponentAtNode(Dashboard.config.containerEl);
 			Marbles.history.navigate(decodeURIComponent(redirectPath));
 		};
 

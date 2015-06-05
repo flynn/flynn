@@ -56,7 +56,6 @@ Dashboard.Views.GithubCommitSelector = React.createClass({
 	displayName: "Views.GithubCommitSelector",
 
 	render: function () {
-		var handlePageEvent = this.__handlePageEvent;
 		var Commit = this.props.commitComponent || Dashboard.Views.GithubCommit;
 
 		var deployedSha = this.props.deployedSha;
@@ -66,7 +65,7 @@ Dashboard.Views.GithubCommitSelector = React.createClass({
 		return (
 			<section className="github-commits">
 				<ScrollPagination
-					ref="scrollPagination"
+					manager={this.props.scrollPaginationManager}
 					hasPrevPage={this.state.commitsHasPrevPage}
 					hasNextPage={this.state.commitsHasNextPage}
 					unloadPage={GithubCommitsActions.unloadPageId.bind(null, this.state.commitsStoreId)}
@@ -81,8 +80,8 @@ Dashboard.Views.GithubCommitSelector = React.createClass({
 						return (
 							<ScrollPagination.Page
 								key={page.id}
+								manager={this.props.scrollPaginationManager}
 								id={page.id}
-								onPageEvent={handlePageEvent}
 								component='ul'>
 
 								{page.commits.map(function (commit) {
@@ -104,6 +103,12 @@ Dashboard.Views.GithubCommitSelector = React.createClass({
 				</ScrollPagination>
 			</section>
 		);
+	},
+
+	getDefaultProps: function () {
+		return {
+			scrollPaginationManager: new ScrollPagination.Manager()
+		};
 	},
 
 	getInitialState: function () {
@@ -140,10 +145,6 @@ Dashboard.Views.GithubCommitSelector = React.createClass({
 
 	__handleStoreChange: function (props) {
 		this.setState(getState(props || this.props, this.state));
-	},
-
-	__handlePageEvent: function (pageId, event) {
-		this.refs.scrollPagination.handlePageEvent(pageId, event);
 	},
 
 	__handleCommitSelected: function (commit) {

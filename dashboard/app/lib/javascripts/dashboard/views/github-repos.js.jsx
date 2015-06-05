@@ -52,15 +52,13 @@ Dashboard.Views.GithubRepos = React.createClass({
 	displayName: "Views.GithubRepos",
 
 	render: function () {
-		var handlePageEvent = this.__handlePageEvent;
-
 		return (
 			<div>
 				<Types selectedType={this.props.selectedType} selectedSource={this.props.selectedSource} />
 
 				<ScrollPagination
-					ref="scrollPagination"
 					key={this.state.reposStoreId}
+					manager={this.props.scrollPaginationManager}
 					hasPrevPage={this.state.reposHasPrevPage}
 					hasNextPage={this.state.reposHasNextPage}
 					unloadPage={GithubReposActions.unloadPageId.bind(null, this.state.reposStoreId)}
@@ -71,9 +69,9 @@ Dashboard.Views.GithubRepos = React.createClass({
 						return (
 							<ScrollPagination.Page
 								key={page.id}
+								manager={this.props.scrollPaginationManager}
 								id={page.id}
 								className="github-repos"
-								onPageEvent={handlePageEvent}
 								component='ul'>
 
 								{page.repos.map(function (repo) {
@@ -94,6 +92,12 @@ Dashboard.Views.GithubRepos = React.createClass({
 				</ScrollPagination>
 			</div>
 		);
+	},
+
+	getDefaultProps: function () {
+		return {
+			scrollPaginationManager: new ScrollPagination.Manager()
+		};
 	},
 
 	getInitialState: function () {
