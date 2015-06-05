@@ -232,7 +232,7 @@ Dashboard.Client = Marbles.Utils.createClass({
 			if (res.finished_at) {
 				return args;
 			}
-			return this.waitForDeployment(res.id).then(function () {
+			return this.waitForDeployment(appId, res.id).then(function () {
 				return args;
 			}, function (err) {
 				return Promise.reject([err]);
@@ -240,14 +240,19 @@ Dashboard.Client = Marbles.Utils.createClass({
 		}.bind(this));
 	},
 
-	waitForDeployment: function (deploymentId) {
+	waitForDeployment: function (appId, deploymentId) {
 		if ( !window.hasOwnProperty('EventSource') ) {
 			return Promise.reject('window.EventSource not defined');
 		}
 
 		var controllerKey = (Dashboard.config.user || {}).controller_key;
-		var url = this.endpoints.cluster_controller + "/deployments/"+ encodeURIComponent(deploymentId);
-		url = url + "?key="+ encodeURIComponent(controllerKey);
+		var url = this.endpoints.cluster_controller +'/apps/'+ encodeURIComponent(appId) +'/events';
+		url = url + Marbles.QueryParams.serializeParams([{
+			key: controllerKey,
+			object_type: 'deployment',
+			object_id: deploymentId,
+			past: 'true'
+		}]);
 		return new Promise(function (resolve, reject) {
 			var es = new window.EventSource(url, {withCredentials: true});
 
@@ -265,8 +270,8 @@ Dashboard.Client = Marbles.Utils.createClass({
 				es.close();
 			});
 			es.addEventListener("message", function (e) {
-				var data = JSON.parse(e.data);
-				if (data.status === "complete") {
+				var res = JSON.parse(e.data);
+				if (res.data.status === "complete") {
 					resolve();
 					es.close();
 				}
