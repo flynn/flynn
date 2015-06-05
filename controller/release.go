@@ -84,12 +84,8 @@ func (r *ReleaseRepo) Get(id string) (interface{}, error) {
 	return scanRelease(row)
 }
 
-func (r *ReleaseRepo) List() (interface{}, error) {
-	rows, err := r.db.Query("SELECT release_id, artifact_id, data, created_at FROM releases WHERE deleted_at IS NULL ORDER BY created_at DESC")
-	if err != nil {
-		return nil, err
-	}
-	releases := []*ct.Release{}
+func releaseList(rows *sql.Rows) ([]*ct.Release, error) {
+	var releases []*ct.Release
 	for rows.Next() {
 		release, err := scanRelease(rows)
 		if err != nil {
@@ -101,8 +97,33 @@ func (r *ReleaseRepo) List() (interface{}, error) {
 	return releases, rows.Err()
 }
 
+func (r *ReleaseRepo) List() (interface{}, error) {
+	rows, err := r.db.Query("SELECT release_id, artifact_id, data, created_at FROM releases WHERE deleted_at IS NULL ORDER BY created_at DESC")
+	if err != nil {
+		return nil, err
+	}
+	return releaseList(rows)
+}
+
+func (r *ReleaseRepo) AppList(appID string) ([]*ct.Release, error) {
+	rows, err := r.db.Query(`SELECT DISTINCT(r.release_id), r.artifact_id, r.data, r.created_at FROM releases r JOIN formations f USING (release_id) WHERE f.app_id = $1 AND r.deleted_at IS NULL ORDER BY r.created_at DESC`, appID)
+	if err != nil {
+		return nil, err
+	}
+	return releaseList(rows)
+}
+
 type releaseID struct {
 	ID string `json:"id"`
+}
+
+func (c *controllerAPI) GetAppReleases(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	list, err := c.releaseRepo.AppList(c.getApp(ctx).ID)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, list)
 }
 
 func (c *controllerAPI) SetAppRelease(ctx context.Context, w http.ResponseWriter, req *http.Request) {

@@ -563,6 +563,12 @@ func (c *Client) ReleaseList() ([]*ct.Release, error) {
 	return releases, c.Get("/releases", &releases)
 }
 
+// AppReleaseList returns a list of all releases under appID.
+func (c *Client) AppReleaseList(appID string) ([]*ct.Release, error) {
+	var releases []*ct.Release
+	return releases, c.Get(fmt.Sprintf("/apps/%s/releases", appID), &releases)
+}
+
 // CreateKey uploads pubKey as the ssh public key.
 func (c *Client) CreateKey(pubKey string) (*ct.Key, error) {
 	key := &ct.Key{}

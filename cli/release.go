@@ -8,7 +8,9 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
+	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/units"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
@@ -16,7 +18,8 @@ import (
 
 func init() {
 	register("release", runRelease, `
-usage: flynn release add [-t <type>] [-f <file>] <uri>
+usage: flynn release
+       flynn release add [-t <type>] [-f <file>] <uri>
        flynn release show [<id>]
 
 Manage app releases.
@@ -26,6 +29,8 @@ Options:
 	-f, --file=<file>  release configuration file
 
 Commands:
+	With no arguments, shows a list of releases associated with the app.
+
 	add   add a new release
 
 		Create a new release from a Docker image.
@@ -58,6 +63,10 @@ Examples:
 	$ flynn release add -f config.json https://registry.hub.docker.com?name=flynn/slugbuilder&id=15d72b7f573b
 	Created release 427537e78be4417fae2e24d11bc993eb.
 
+	$ flynn release
+	ID                                Created
+	427537e78be4417fae2e24d11bc993eb  11 seconds ago
+
 	$ flynn release show
 	ID:             427537e78be4417fae2e24d11bc993eb
 	Artifact:       docker+https://registry.hub.docker.com?name=flynn/slugbuilder&id=15d72b7f573b
@@ -78,7 +87,22 @@ func runRelease(args *docopt.Args, client *controller.Client) error {
 			return fmt.Errorf("Release type %s not supported.", args.String["-t"])
 		}
 	}
-	return fmt.Errorf("Top-level command not implemented.")
+	return runReleaseList(client)
+}
+
+func runReleaseList(client *controller.Client) error {
+	list, err := client.AppReleaseList(mustApp())
+	if err != nil {
+		return err
+	}
+	w := tabwriter.NewWriter(os.Stdout, 1, 2, 2, ' ', 0)
+	defer w.Flush()
+	listRec(w, "ID", "Created")
+	for _, r := range list {
+		createdAt := units.HumanDuration(time.Now().UTC().Sub(*r.CreatedAt)) + " ago"
+		listRec(w, r.ID, createdAt)
+	}
+	return nil
 }
 
 func runReleaseShow(args *docopt.Args, client *controller.Client) error {

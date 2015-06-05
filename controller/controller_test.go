@@ -356,6 +356,33 @@ func (s *S) TestReleaseList(c *C) {
 	c.Assert(list[0].ID, Not(Equals), "")
 }
 
+func (s *S) TestAppReleaseList(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "app-release-list"})
+
+	// create 2 releases with formations
+	releases := make([]*ct.Release, 2)
+	for i := 0; i < 2; i++ {
+		r := s.createTestRelease(c, &ct.Release{})
+		releases[i] = r
+		s.createTestFormation(c, &ct.Formation{ReleaseID: r.ID, AppID: app.ID})
+	}
+
+	// create a release with no formation
+	s.createTestRelease(c, &ct.Release{})
+
+	// create a release for a different app
+	r := s.createTestRelease(c, &ct.Release{})
+	a := s.createTestApp(c, &ct.App{})
+	s.createTestFormation(c, &ct.Formation{ReleaseID: r.ID, AppID: a.ID})
+
+	// check only the first two releases are returned, and in descending order
+	list, err := s.c.AppReleaseList(app.ID)
+	c.Assert(err, IsNil)
+	c.Assert(list, HasLen, len(releases))
+	c.Assert(list[0], DeepEquals, releases[1])
+	c.Assert(list[1], DeepEquals, releases[0])
+}
+
 func (s *S) TestKeyList(c *C) {
 	s.createTestKey(c, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCqE9AJti/17eigkIhA7+6TF9rdTVxjPv80UxIT6ELaNPHegqib5m94Wab4UoZAGtBPLKJs9o8LRO3H29X5q5eXCU5mwx4qQhcMEYkILWj0Y1T39Xi2RI3jiWcTsphAAYmy+uT2Nt740OK1FaQxfdzYx4cjsjtb8L82e35BkJE2TdjXWkeHxZWDZxMlZXme56jTNsqB2OuC0gfbAbrjSCkolvK1RJbBZSSBgKQrYXiyYjjLfcw2O0ZAKPBeS8ckVf6PO8s/+azZzJZ0Kl7YGHYEX3xRi6sJS0gsI4Y6+sddT1zT5kh0Bg3C8cKnZ1NiVXLH0pPKz68PhjWhwpOVUehD")
 
