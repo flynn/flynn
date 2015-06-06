@@ -1,15 +1,7 @@
-//= require ../actions/app-route-new
-//= require Modal
+import Modal from 'Modal';
+import NewAppRouteActions from '../actions/app-route-new';
 
-(function () {
-
-"use strict";
-
-var NewAppRouteActions = Dashboard.Actions.NewAppRoute;
-
-var Modal = window.Modal;
-
-Dashboard.Views.NewAppRoute = React.createClass({
+var NewAppRoute = React.createClass({
 	displayName: "Views.NewAppRoute",
 
 	render: function () {
@@ -74,4 +66,4 @@ Dashboard.Views.NewAppRoute = React.createClass({
 	}
 });
 
-})();
+export default NewAppRoute;

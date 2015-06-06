@@ -1,11 +1,6 @@
-//= require ../stores/job-output
-//= require ./command-output
-
-(function () {
-
-"use strict";
-
-var JobOutputStore = Dashboard.Stores.JobOutput;
+import { assertEqual } from 'marbles/utils';
+import JobOutputStore from '../stores/job-output';
+import CommandOutput from './command-output';
 
 function getJobOutputStoreId (props) {
 	return {
@@ -26,12 +21,12 @@ function getJobOutputState (props) {
 	return state;
 }
 
-Dashboard.Views.JobOutput = React.createClass({
+var JobOutput = React.createClass({
 	displayName: "Views.JobOutput",
 
 	render: function () {
 		return (
-			<Dashboard.Views.CommandOutput
+			<CommandOutput
 				outputStreamData={this.state.streamError ? [this.state.streamError] : this.state.output} />
 		);
 	},
@@ -47,7 +42,7 @@ Dashboard.Views.JobOutput = React.createClass({
 	componentWillReceiveProps: function (props) {
 		var oldJobOutputStoreId = this.state.jobOutputStoreId;
 		var newJobOutputStoreId = getJobOutputStoreId(props);
-		if ( !Marbles.Utils.assertEqual(oldJobOutputStoreId, newJobOutputStoreId) ) {
+		if ( !assertEqual(oldJobOutputStoreId, newJobOutputStoreId) ) {
 			JobOutputStore.removeChangeListener(oldJobOutputStoreId, this.__handleStoreChange);
 			JobOutputStore.addChangeListener(newJobOutputStoreId, this.__handleStoreChange);
 		}
@@ -64,4 +59,4 @@ Dashboard.Views.JobOutput = React.createClass({
 	}
 });
 
-})();
+export default JobOutput;

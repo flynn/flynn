@@ -1,8 +1,4 @@
-(function () {
-
-"use strict";
-
-Dashboard.Views.IntegerPicker = React.createClass({
+var IntegerPicker = React.createClass({
 	displayName: "Views.IntegerPicker",
 
 	render: function () {
@@ -64,4 +60,4 @@ Dashboard.Views.IntegerPicker = React.createClass({
 	}
 });
 
-})();
+export default IntegerPicker;

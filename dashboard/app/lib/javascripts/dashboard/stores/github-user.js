@@ -1,9 +1,7 @@
-//= require ../store
+import Store from '../store';
+import Config from '../config';
 
-(function () {
-"use strict";
-
-Dashboard.Stores.GithubUser = Dashboard.Store.createClass({
+var GithubUser = Store.createClass({
 	displayName: "Stores.GithubUser",
 
 	getState: function () {
@@ -21,7 +19,7 @@ Dashboard.Stores.GithubUser = Dashboard.Store.createClass({
 	},
 
 	__fetchUser: function () {
-		Dashboard.githubClient.getUser().then(function (args) {
+		Config.githubClient.getUser().then(function (args) {
 			var res = args[0];
 			this.setState({
 				user: this.__rewriteJSON(res)
@@ -39,4 +37,4 @@ Dashboard.Stores.GithubUser = Dashboard.Store.createClass({
 
 });
 
-})();
+export default GithubUser;

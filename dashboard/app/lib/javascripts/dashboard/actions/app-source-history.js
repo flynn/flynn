@@ -1,12 +1,6 @@
-//= require ../dispatcher
+import Dispatcher from '../dispatcher';
 
-(function () {
-
-"use strict";
-
-var Dispatcher = Dashboard.Dispatcher;
-
-Dashboard.Actions.AppSourceHistory = {
+var AppSourceHistory = {
 	confirmDeployCommit: function (appId, ownerLogin, repoName, branchName, sha) {
 		Dispatcher.handleViewAction({
 			name: "APP_SOURCE_HISTORY:CONFIRM_DEPLOY_COMMIT",
@@ -33,4 +27,4 @@ Dashboard.Actions.AppSourceHistory = {
 	}
 };
 
-})();
+export default AppSourceHistory;

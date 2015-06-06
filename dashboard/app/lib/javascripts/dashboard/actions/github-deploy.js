@@ -1,12 +1,6 @@
-//= require ../dispatcher
+import Dispatcher from '../dispatcher';
 
-(function () {
-
-"use strict";
-
-var Dispatcher = Dashboard.Dispatcher;
-
-Dashboard.Actions.GithubDeploy = {
+var GithubDeploy = {
 	launchFromCommit: function (repo, branchName, commit, appData) {
 		Dispatcher.handleViewAction({
 			name: "GITHUB_DEPLOY:LAUNCH_FROM_COMMIT",
@@ -27,4 +21,4 @@ Dashboard.Actions.GithubDeploy = {
 	}
 };
 
-})();
+export default GithubDeploy;

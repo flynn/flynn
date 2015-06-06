@@ -1,12 +1,6 @@
-//= require ../dispatcher
+import Dispatcher from '../dispatcher';
 
-(function () {
-
-"use strict";
-
-var Dispatcher = Dashboard.Dispatcher;
-
-Dashboard.Actions.Nav = {
+var Nav = {
 	handleAuthBtnClick: function () {
 		Dispatcher.handleViewAction({
 			name: "AUTH_BTN_CLICK"
@@ -14,4 +8,4 @@ Dashboard.Actions.Nav = {
 	}
 };
 
-})();
+export default Nav;

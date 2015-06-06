@@ -1,15 +1,11 @@
-//= require ./route-link
-//= require ./external-link
-//= require ../stores/app
+import { pathWithParams } from 'marbles/history';
+import { assertEqual } from 'marbles/utils';
+import AppStore from '../stores/app';
+import RouteLink from './route-link';
 
-(function () {
+var isSystemApp = AppStore.isSystemApp;
 
-"use strict";
-
-var RouteLink = Dashboard.Views.RouteLink;
-var isSystemApp = Dashboard.Stores.App.isSystemApp;
-
-Dashboard.Views.AppsList = React.createClass({
+var AppsList = React.createClass({
 	displayName: "Views.AppsList",
 
 	render: function () {
@@ -22,7 +18,7 @@ Dashboard.Views.AppsList = React.createClass({
 			<ul className="apps-list">
 				{apps.map(function (app) {
 					return (
-						<li key={app.id} className={Marbles.Utils.assertEqual(app.id, selectedAppId) ? "selected" : ""}>
+						<li key={app.id} className={assertEqual(app.id, selectedAppId) ? "selected" : ""}>
 							<RouteLink path={getAppPath(app.id)}>
 								{app.name}
 							</RouteLink>
@@ -37,7 +33,7 @@ Dashboard.Views.AppsList = React.createClass({
 		return {
 			apps: [],
 			getAppPath: function (appId) {
-				return Marbles.history.pathWithParams("/apps/:id", [{ id: appId }]);
+				return pathWithParams("/apps/:id", [{ id: appId }]);
 			}
 		};
 	},
@@ -62,4 +58,4 @@ Dashboard.Views.AppsList = React.createClass({
 	}
 });
 
-})();
+export default AppsList;

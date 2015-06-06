@@ -1,7 +1,4 @@
-(function () {
-"use strict";
-
-Dashboard.Views.Helpers.findScrollParent = function (el) {
+var findScrollParent = function (el) {
 	var ref = el;
 	while (ref) {
 		switch (window.getComputedStyle(ref).overflow) {
@@ -15,4 +12,4 @@ Dashboard.Views.Helpers.findScrollParent = function (el) {
 	return window;
 };
 
-})();
+export default findScrollParent;

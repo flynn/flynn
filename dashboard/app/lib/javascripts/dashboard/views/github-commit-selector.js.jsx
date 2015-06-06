@@ -1,19 +1,8 @@
-//= require ../stores/github-commits
-//= require ../actions/github-commits
-//= require ./helpers/findScrollParent
-//= require ./external-link
-//= require ./timestamp
-//= require ./github-commit
-//= require ScrollPagination
-
-(function () {
-
-"use strict";
-
-var GithubCommitsStore = Dashboard.Stores.GithubCommits;
-var GithubCommitsActions = Dashboard.Actions.GithubCommits;
-
-var ScrollPagination = window.ScrollPagination;
+import { assertEqual } from 'marbles/utils';
+import ScrollPagination from 'ScrollPagination';
+import GithubCommitsStore from '../stores/github-commits';
+import GithubCommitsActions from '../actions/github-commits';
+import GithubCommit from './github-commit';
 
 function getCommitsStoreId (props) {
 	var id = {
@@ -52,11 +41,11 @@ function getState (props, prevState) {
 	return state;
 }
 
-Dashboard.Views.GithubCommitSelector = React.createClass({
+var GithubCommitSelector = React.createClass({
 	displayName: "Views.GithubCommitSelector",
 
 	render: function () {
-		var Commit = this.props.commitComponent || Dashboard.Views.GithubCommit;
+		var Commit = this.props.commitComponent || GithubCommit;
 
 		var deployedSha = this.props.deployedSha;
 		var selectedSha = this.props.selectedSha;
@@ -132,7 +121,7 @@ Dashboard.Views.GithubCommitSelector = React.createClass({
 	componentWillReceiveProps: function (props) {
 		var oldCommitsStoreId = this.state.commitsStoreId;
 		var newCommitsStoreId = getCommitsStoreId(props);
-		if ( !Marbles.Utils.assertEqual(oldCommitsStoreId, newCommitsStoreId) ) {
+		if ( !assertEqual(oldCommitsStoreId, newCommitsStoreId) ) {
 			GithubCommitsStore.removeChangeListener(oldCommitsStoreId, this.__handleStoreChange);
 			GithubCommitsStore.addChangeListener(newCommitsStoreId, this.__handleStoreChange);
 			this.__handleStoreChange(props);
@@ -152,4 +141,4 @@ Dashboard.Views.GithubCommitSelector = React.createClass({
 	}
 });
 
-})();
+export default GithubCommitSelector;

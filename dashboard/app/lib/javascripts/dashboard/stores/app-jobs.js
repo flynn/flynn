@@ -1,13 +1,9 @@
-//= require ../store
-//= require ./jobs-stream
+import Store from '../store';
+import JobsStream from './jobs-stream';
+import Dispatcher from '../dispatcher';
+import Config from '../config';
 
-(function () {
-
-"use strict";
-
-var JobsStream = Dashboard.Stores.JobsStream;
-
-var AppJobs = Dashboard.Stores.AppJobs = Dashboard.Store.createClass({
+var AppJobs = Store.createClass({
 	displayName: "Stores.AppJobs",
 
 	getState: function () {
@@ -86,7 +82,7 @@ var AppJobs = Dashboard.Stores.AppJobs = Dashboard.Store.createClass({
 	__handleJobsStreamChange: function () {},
 
 	__getClient: function () {
-		return Dashboard.client;
+		return Config.client;
 	}
 
 });
@@ -95,6 +91,6 @@ AppJobs.isValidId = function (id) {
 	return !!id.appId;
 };
 
-AppJobs.registerWithDispatcher(Dashboard.Dispatcher);
+AppJobs.registerWithDispatcher(Dispatcher);
 
-})();
+export default AppJobs;

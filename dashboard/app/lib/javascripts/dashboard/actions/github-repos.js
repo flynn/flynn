@@ -1,12 +1,6 @@
-//= require ../dispatcher
+import Dispatcher from '../dispatcher';
 
-(function () {
-
-"use strict";
-
-var Dispatcher = Dashboard.Dispatcher;
-
-Dashboard.Actions.GithubRepos = {
+var GithubRepos = {
 	unloadPageId: function (storeId, pageId) {
 		Dispatcher.handleViewAction({
 			name: "GITHUB_REPOS:UNLAOD_PAGE_ID",
@@ -30,4 +24,4 @@ Dashboard.Actions.GithubRepos = {
 	}
 };
 
-})();
+export default GithubRepos;

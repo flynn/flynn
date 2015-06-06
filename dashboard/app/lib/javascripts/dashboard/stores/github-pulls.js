@@ -1,10 +1,11 @@
-//= require ../store
-//= require ./github-pull
+import QueryParams from 'marbles/query_params';
+import LinkHeader from 'marbles/http/link_header';
+import Store from '../store';
+import Config from '../config';
+import Dispatcher from '../dispatcher';
+import { rewriteGithubPullJSON } from './github-pull-json';
 
-(function () {
-"use strict";
-
-var GithubPulls = Dashboard.Stores.GithubPulls = Dashboard.Store.createClass({
+var GithubPulls = Store.createClass({
 	displayName: "Stores.GithubPulls",
 
 	getState: function () {
@@ -90,12 +91,12 @@ var GithubPulls = Dashboard.Stores.GithubPulls = Dashboard.Store.createClass({
 	},
 
 	__fetchPulls: function (options) {
-		var params = Marbles.QueryParams.replaceParams.apply(null, [[{
+		var params = QueryParams.replaceParams.apply(null, [[{
 			sort: "updated",
 			direction: "desc"
 		}]].concat(options.params || [{}]));
 
-		Dashboard.githubClient.getPulls(this.props.ownerLogin, this.props.repoName, params).then(function (args) {
+		Config.githubClient.getPulls(this.props.ownerLogin, this.props.repoName, params).then(function (args) {
 			var res = args[0];
 			var xhr = args[1];
 
@@ -110,10 +111,10 @@ var GithubPulls = Dashboard.Stores.GithubPulls = Dashboard.Store.createClass({
 				if (link === null) {
 					return null;
 				}
-				return Marbles.QueryParams.deserializeParams(link.href.split("?")[1]);
+				return QueryParams.deserializeParams(link.href.split("?")[1]);
 			};
 
-			var links = Marbles.HTTP.LinkHeader.parse(xhr.getResponseHeader("Link") || "");
+			var links = LinkHeader.parse(xhr.getResponseHeader("Link") || "");
 			var prevParams = parseLinkParams("prev", links);
 			var nextParams = parseLinkParams("next", links);
 
@@ -203,11 +204,13 @@ var GithubPulls = Dashboard.Stores.GithubPulls = Dashboard.Store.createClass({
 		this.setState({
 			pages: pages
 		});
+	},
+
+	__rewriteJSON: function (pullJSON) {
+		return rewriteGithubPullJSON(pullJSON);
 	}
 
 });
-
-GithubPulls.prototype.__rewriteJSON = Dashboard.Stores.GithubPull.prototype.__rewriteJSON;
 
 GithubPulls.findPull = function (owner, repo, number) {
 	var instances = this.__instances;
@@ -239,6 +242,6 @@ GithubPulls.isValidId = function (id) {
 	return id.ownerLogin && id.name;
 };
 
-Dashboard.Stores.GithubPulls.registerWithDispatcher(Dashboard.Dispatcher);
+GithubPulls.registerWithDispatcher(Dispatcher);
 
-})();
+export default GithubPulls;

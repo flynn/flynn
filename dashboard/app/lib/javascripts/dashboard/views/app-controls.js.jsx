@@ -1,15 +1,9 @@
-//= require ./app-processes
-//= require ./app-resources
-//= require ./app-routes
-//= require ./route-link
+import AppProcesses from './app-processes';
+import AppResources from './app-resources';
+import AppRoutes from './app-routes';
+import RouteLink from './route-link';
 
-(function () {
-
-"use strict";
-
-var RouteLink = Dashboard.Views.RouteLink;
-
-Dashboard.Views.AppControls = React.createClass({
+var AppControls = React.createClass({
 	displayName: "Views.AppControls",
 
 	render: function () {
@@ -35,7 +29,7 @@ Dashboard.Views.AppControls = React.createClass({
 					</RouteLink>
 
 					{formation ? (
-						<Dashboard.Views.AppProcesses appId={this.props.appId} formation={formation} />
+						<AppProcesses appId={this.props.appId} formation={formation} />
 					) : (
 						<section className="app-processes">
 							&nbsp;
@@ -48,10 +42,10 @@ Dashboard.Views.AppControls = React.createClass({
 				</section>
 
 				<section>
-					<Dashboard.Views.AppResources
+					<AppResources
 						appId={this.props.appId} />
 
-					<Dashboard.Views.AppRoutes
+					<AppRoutes
 						appId={this.props.appId}
 						getAppPath={this.props.getAppPath} />
 				</section>
@@ -60,4 +54,4 @@ Dashboard.Views.AppControls = React.createClass({
 	}
 });
 
-})();
+export default AppControls;

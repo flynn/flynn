@@ -1,14 +1,7 @@
-//= require ./input
-//= require ./models/login
+import LoginModel from './models/login';
+import Input from './input';
 
-(function () {
-
-"use strict";
-
-var Input = Dashboard.Views.Input;
-var LoginModel = Dashboard.Views.Models.Login;
-
-Dashboard.Views.Login = React.createClass({
+var Login = React.createClass({
 	displayName: "Views.Login",
 
 	componentDidMount: function () {
@@ -51,4 +44,4 @@ Dashboard.Views.Login = React.createClass({
 	}
 });
 
-})();
+export default Login;

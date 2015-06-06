@@ -1,16 +1,8 @@
-//= require ../stores/github-pulls
-//= require ../actions/github-pulls
-//= require ./github-pull
-//= require ScrollPagination
-
-(function () {
-
-"use strict";
-
-var GithubPullsStore = Dashboard.Stores.GithubPulls;
-var GithubPullsActions = Dashboard.Actions.GithubPulls;
-
-var ScrollPagination = window.ScrollPagination;
+import { assertEqual, extend } from 'marbles/utils';
+import ScrollPagination from 'ScrollPagination';
+import GithubPullsStore from '../stores/github-pulls';
+import GithubPullsActions from '../actions/github-pulls';
+import GithubPull from './github-pull';
 
 function getPullsStoreId (props) {
 	return {
@@ -33,11 +25,11 @@ function getState (props) {
 	return state;
 }
 
-Dashboard.Views.GithubPulls = React.createClass({
+var GithubPulls = React.createClass({
 	displayName: "Views.GithubPulls",
 
 	render: function () {
-		var PullRequest = this.props.pullRequestComponent || Dashboard.Views.GithubPull;
+		var PullRequest = this.props.pullRequestComponent || GithubPull;
 		var pullRequestProps = this.props.pullRequestProps || {};
 
 		return (
@@ -65,10 +57,10 @@ Dashboard.Views.GithubPulls = React.createClass({
 								{page.pulls.map(function (pull) {
 									return (
 										<li key={pull.id}>
-											{PullRequest(Marbles.Utils.extend({
-												pull: pull,
-												pullStoreId: this.state.pullsStoreId
-											}, pullRequestProps))}
+											<PullRequest
+												pull={pull}
+												pullStoreId={this.state.pullsStoreId}
+												{...pullRequestProps} />
 										</li>
 									);
 								}, this)}
@@ -97,7 +89,7 @@ Dashboard.Views.GithubPulls = React.createClass({
 	componentWillReceiveProps: function (props) {
 		var oldPullsStoreId = this.state.pullsStoreId;
 		var newPullsStoreId = getPullsStoreId(props);
-		if ( !Marbles.Utils.assertEqual(oldPullsStoreId, newPullsStoreId) ) {
+		if ( !assertEqual(oldPullsStoreId, newPullsStoreId) ) {
 			GithubPullsStore.removeChangeListener(oldPullsStoreId, this.__handleStoreChange);
 			GithubPullsStore.addChangeListener(newPullsStoreId, this.__handleStoreChange);
 			this.__handleStoreChange(props);
@@ -113,4 +105,4 @@ Dashboard.Views.GithubPulls = React.createClass({
 	}
 });
 
-})();
+export default GithubPulls;

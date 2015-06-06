@@ -1,32 +1,26 @@
-//= require ../stores/apps
-//= require ./apps-list-header
-//= require ./apps-list
-//= require ./route-link
-//= require ./app
+import { extend } from 'marbles/utils';
+import AppsStore from '../stores/apps';
+import AppsListHeader from './apps-list-header';
+import AppsList from './apps-list';
+import App from './app';
 
-(function () {
-
-"use strict";
-
-var AppsStore = Dashboard.Stores.Apps;
-
-Dashboard.Views.Apps = React.createClass({
+var Apps = React.createClass({
 	displayName: "Views.Apps",
 
 	render: function () {
 		return (
 			<section className="panel-row full-height">
 				<section className="panel full-height apps-list-panel">
-					{React.createElement(Dashboard.Views.AppsListHeader, this.props.appsListHeaderProps || {})}
+					{React.createElement(AppsListHeader, this.props.appsListHeaderProps || {})}
 
-					{React.createElement(Dashboard.Views.AppsList, Marbles.Utils.extend({}, this.props.appsListProps, {
+					{React.createElement(AppsList, extend({}, this.props.appsListProps, {
 						apps: this.state.apps
 					}))}
 				</section>
 
 				<section className="panel app-panel">
 					{this.props.appProps.appId ? (
-						React.createElement(Dashboard.Views.App, Marbles.Utils.extend({}, this.props.appProps, { ref: "appComponent" }))
+						React.createElement(App, extend({}, this.props.appProps, { ref: "appComponent" }))
 					) : (
 						<p className="placeholder">No app selected</p>
 					)}
@@ -67,4 +61,4 @@ Dashboard.Views.Apps = React.createClass({
 	}
 });
 
-})();
+export default Apps;

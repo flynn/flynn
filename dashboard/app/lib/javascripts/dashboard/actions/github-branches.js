@@ -1,12 +1,6 @@
-//= require ../dispatcher
+import Dispatcher from '../dispatcher';
 
-(function () {
-
-"use strict";
-
-var Dispatcher = Dashboard.Dispatcher;
-
-Dashboard.Actions.GithubBranches = {
+var GithubBranches = {
 	branchSelected: function (storeId, branchName) {
 		Dispatcher.handleViewAction({
 			name: "GITHUB_BRANCH_SELECTOR:BRANCH_SELECTED",
@@ -16,4 +10,4 @@ Dashboard.Actions.GithubBranches = {
 	}
 };
 
-})();
+export default GithubBranches;

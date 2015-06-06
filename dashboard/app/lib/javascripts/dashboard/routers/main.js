@@ -1,15 +1,11 @@
-//= require ../views/apps
-//= require ../views/login
-//= require ../views/models/login
-//= require ../views/install-cert
+import Router from 'marbles/router';
+import { extend } from 'marbles/utils';
+import Config from '../config';
+import LoginModel from '../views/models/login';
+import LoginComponent from '../views/login';
+import InstallCertComponent from '../views/install-cert';
 
-(function () {
-
-"use strict";
-
-var LoginModel = Dashboard.Views.Models.Login;
-
-Dashboard.routers.main = new (Marbles.Router.createClass({
+var MainRouter = Router.createClass({
 	displayName: "routers.main",
 
 	routes: [
@@ -20,7 +16,7 @@ Dashboard.routers.main = new (Marbles.Router.createClass({
 
 	root: function (params) {
 		delete params[0].token;
-		Marbles.history.navigate("/apps", {
+		this.history.navigate("/apps", {
 			replace: true,
 			params: params
 		});
@@ -36,10 +32,10 @@ Dashboard.routers.main = new (Marbles.Router.createClass({
 		}
 
 		var performRedirect = function () {
-			Marbles.history.navigate(decodeURIComponent(redirectPath));
-		};
+			this.history.navigate(decodeURIComponent(redirectPath));
+		}.bind(this);
 
-		if (Dashboard.config.authenticated) {
+		if (Config.authenticated) {
 			performRedirect();
 			return;
 		}
@@ -49,36 +45,36 @@ Dashboard.routers.main = new (Marbles.Router.createClass({
 			LoginModel.performLogin().then(function () {
 				performRedirect();
 			}).catch(function () {
-				var paramsWithoutToken = [Marbles.Utils.extend({}, params[0], { token: null })];
+				var paramsWithoutToken = [extend({}, params[0], { token: null })];
 				this.login(paramsWithoutToken);
 			}.bind(this));
 		} else {
 			React.render(React.createElement(
-				Dashboard.Views.Login, {
+				LoginComponent, {
 						onSuccess: performRedirect
-					}), Dashboard.el);
+					}), this.context.el);
 		}
 	},
 
 	installCert: function (params) {
 		if (window.location.protocol === "https:") {
-			Marbles.history.navigate("", {params: params});
+			this.history.navigate("", {params: params});
 			return;
 		}
 		var handleSubmit = function (e) {
 			e.preventDefault();
-			Dashboard.__isCertInstalled().then(function () {
-				Marbles.history.navigate("/login", {params: params});
-			});
-		};
+			this.context.__isCertInstalled().then(function () {
+				this.history.navigate("/login", {params: params});
+			}.bind(this));
+		}.bind(this);
 		React.render(React.createElement("form", { onSubmit: handleSubmit},
 			React.createElement("section", { className: "panel" },
 				React.createElement(
-					Dashboard.Views.InstallCert, {
-						certURL: Dashboard.config.API_SERVER.replace("https", "http") + "/cert"
-					}))), Dashboard.el);
+					InstallCertComponent, {
+						certURL: Config.API_SERVER.replace("https", "http") + "/cert"
+					}))), this.context.el);
 	}
 
-}))();
+});
 
-})();
+export default MainRouter;

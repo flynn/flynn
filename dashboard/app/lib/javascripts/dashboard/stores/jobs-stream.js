@@ -1,11 +1,9 @@
-//= require ../store
-//= require ../dispatcher
+import QueryParams from 'marbles/query_params';
+import Store from '../store';
+import Config from '../config';
+import Dispatcher from '../dispatcher';
 
-(function () {
-
-"use strict";
-
-var JobsStream = Dashboard.Stores.JobsStream = Dashboard.Store.createClass({
+var JobsStream = Store.createClass({
 	displayName: "Stores.JobOutput",
 
 	getState: function () {
@@ -16,9 +14,9 @@ var JobsStream = Dashboard.Stores.JobsStream = Dashboard.Store.createClass({
 		this.props = {
 			appId: this.id.appId,
 		};
-		this.url = Dashboard.config.endpoints.cluster_controller +'/apps/'+ this.props.appId +'/events';
-		this.url = this.url + Marbles.QueryParams.serializeParams([{
-			key: Dashboard.config.user.controller_key,
+		this.url = Config.endpoints.cluster_controller +'/apps/'+ this.props.appId +'/events';
+		this.url = this.url + QueryParams.serializeParams([{
+			key: Config.user.controller_key,
 			object_type: 'job',
 			past: 'true'
 		}]);
@@ -54,7 +52,7 @@ var JobsStream = Dashboard.Stores.JobsStream = Dashboard.Store.createClass({
 		eventSource.addEventListener("message", function (e) {
 			var res = JSON.parse(e.data || "");
 			var evnt = res.data;
-			Dashboard.Dispatcher.handleAppEvent({
+			Dispatcher.handleAppEvent({
 				name: "JOB_STATE_CHANGE",
 				appId: this.props.appId,
 				jobId: evnt.job_id,
@@ -71,4 +69,4 @@ JobsStream.isValidId = function (id) {
 	return id.appId;
 };
 
-})();
+export default JobsStream;

@@ -11,17 +11,15 @@
   "newcap": false,
   "noarg": true,
   "nonew": true,
-  "strict": true,
+  "strict": false,
   "trailing": false,
-	"funcscope": true,
-	"validthis": true,
-	"boss": true,
+  "funcscope": true,
+  "validthis": true,
+  "boss": true,
   "browser": true,
-	"globals": {
-		"Dashboard": true,
-		"Marbles": true,
-		"React": true,
-		"Promise": true,
-		"moment": true
-	}
+  "esnext": true,
+  "globals": {
+    "React": true,
+    "moment": true
+  }
 }

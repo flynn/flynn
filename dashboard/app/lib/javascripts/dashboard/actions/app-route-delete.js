@@ -1,12 +1,6 @@
-//= require ../dispatcher
+import Dispatcher from '../dispatcher';
 
-(function () {
-
-"use strict";
-
-var Dispatcher = Dashboard.Dispatcher;
-
-Dashboard.Actions.AppRouteDelete = {
+var AppRouteDelete = {
 	deleteAppRoute: function (appId, routeType, routeId) {
 		Dispatcher.handleViewAction({
 			name: "APP_ROUTE_DELETE:DELETE_ROUTE",
@@ -19,4 +13,4 @@ Dashboard.Actions.AppRouteDelete = {
 	}
 };
 
-})();
+export default AppRouteDelete;

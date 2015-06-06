@@ -1,14 +1,10 @@
-//= require ../store
-//= require ./jobs-stream
-//= require ../dispatcher
+import { extend } from 'marbles/utils';
+import Store from '../store';
+import Dispatcher from '../dispatcher';
+import Config from '../config';
+import JobsStream from './jobs-stream';
 
-(function () {
-
-"use strict";
-
-var JobsStream = Dashboard.Stores.JobsStream;
-
-var JobOutput = Dashboard.Stores.JobOutput = Dashboard.Store.createClass({
+var JobOutput = Store.createClass({
 	displayName: "Stores.JobOutput",
 
 	getState: function () {
@@ -20,7 +16,7 @@ var JobOutput = Dashboard.Stores.JobOutput = Dashboard.Store.createClass({
 			appId: this.id.appId,
 			jobId: this.id.jobId
 		};
-		this.url = Dashboard.config.endpoints.cluster_controller + "/apps/"+ this.props.appId +"/log?job_id="+ this.props.jobId +"&follow=true&key="+ encodeURIComponent(Dashboard.config.user.controller_key);
+		this.url = Config.endpoints.cluster_controller + "/apps/"+ this.props.appId +"/log?job_id="+ this.props.jobId +"&follow=true&key="+ encodeURIComponent(Config.user.controller_key);
 	},
 
 	didBecomeActive: function () {
@@ -49,34 +45,6 @@ var JobOutput = Dashboard.Stores.JobOutput = Dashboard.Store.createClass({
 		};
 	},
 
-	setStateWithDelay: function (newState) {
-		this.willUpdate();
-		var state = this.state;
-		Object.keys(newState).forEach(function (key) {
-			state[key] = newState[key];
-		});
-		this.handleChangeWithDelay();
-	},
-
-	handleChangeWithDelay: function () {
-		clearTimeout(this.__handleChangeTimeout);
-		this.__handleChangeTimeout = setTimeout(function () {
-			this.handleChangeDelayed();
-		}.bind(this), 2);
-		if ( !this.__handleChangeMaxTimeout ) {
-			this.__handleChangeMaxTimeout = setTimeout(function () {
-				this.handleChangeDelayed();
-			}.bind(this), 10);
-		}
-	},
-
-	handleChangeDelayed: function () {
-		clearTimeout(this.__handleChangeMaxTimeout);
-		clearTimeout(this.__handleChangeTimeout);
-		this.handleChange();
-		this.didUpdate();
-	},
-
 	handleEvent: function (event) {
 		if (event.name === "JOB_STATE_CHANGE" && event.jobId === this.props.jobId) {
 			if (event.state === "down") {
@@ -99,7 +67,7 @@ var JobOutput = Dashboard.Stores.JobOutput = Dashboard.Store.createClass({
 			return;
 		}
 
-		this.setState(Marbles.Utils.extend(this.getInitialState(), {open: true}));
+		this.setState(extend(this.getInitialState(), {open: true}));
 
 		var url = this.url;
 		var eventSource;
@@ -160,6 +128,6 @@ JobOutput.isValidId = function (id) {
 	return id.appId && id.jobId;
 };
 
-JobOutput.registerWithDispatcher(Dashboard.Dispatcher);
+JobOutput.registerWithDispatcher(Dispatcher);
 
-})();
+export default JobOutput;

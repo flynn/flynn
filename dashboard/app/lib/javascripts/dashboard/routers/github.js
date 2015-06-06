@@ -1,12 +1,13 @@
-//= require ../views/github-auth
-//= require ../views/github
-//= require ../views/github-deploy
+import { pathWithParams } from 'marbles/history';
+import Router from 'marbles/router';
+import QueryParams from 'marbles/query_params';
+import Dispatcher from '../dispatcher';
+import GithubAuthComponent from '../views/github-auth';
+import GithubComponent from '../views/github';
+import GithubDeployComponent from '../views/github-deploy';
+import Config from '../config';
 
-(function () {
-
-"use strict";
-
-Dashboard.routers.Github = Marbles.Router.createClass({
+var GithubRouter = Router.createClass({
 	displayName: "routers.github",
 
 	routes: [
@@ -15,9 +16,13 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 		{ path: "github/deploy", handler: "deploy", secondary: true },
 	],
 
+	willInitialize: function () {
+		this.dispatcherIndex = Dispatcher.register(this.handleEvent.bind(this));
+	},
+
 	beforeHandler: function (event) {
 		// ensure github authorization
-		if ( !Dashboard.githubClient ) {
+		if ( !Config.githubClient ) {
 			if (event.handler.opts.githubAuth === false) {
 				return;
 			}
@@ -28,27 +33,27 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 			window.localStorage.removeItem("github:path");
 			if (redirect) {
 				event.abort();
-				Marbles.history.navigate(redirect, {replace: true, force: true});
+				this.history.navigate(redirect, {replace: true, force: true});
 			}
 		}
 	},
 
 	auth: function () {
-		if (Dashboard.githubClient) {
-			Marbles.history.navigate("/github", { replace: true, force: true });
+		if (Config.githubClient) {
+			this.history.navigate("/github", { replace: true, force: true });
 			return;
 		}
 
 		var props = {
-			appName: Dashboard.config.APP_NAME
+			appName: Config.APP_NAME
 		};
-		var view = Dashboard.primaryView;
+		var view = this.context.primaryView;
 		if (view && view.constructor.displayName === "Views.GithubAuth" && view.isMounted()) {
 			view.setProps(props);
 		} else {
-			view = Dashboard.primaryView = React.render(React.createElement(
-				Dashboard.Views.GithubAuth, props),
-				Dashboard.el
+			view = this.context.primaryView = React.render(React.createElement(
+				GithubAuthComponent, props),
+				this.context.el
 			);
 		}
 	},
@@ -70,20 +75,20 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 			getClusterPath: this.__getClusterPath.bind(this, params),
 			getGoBackToClusterText: this.__getGoBackToClusterText.bind(this, params)
 		};
-		var view = Dashboard.primaryView;
+		var view = this.context.primaryView;
 		if (view && view.constructor.displayName === "Views.Github" && view.isMounted()) {
 			view.setProps(props);
 		} else {
-			view = Dashboard.primaryView = React.render(React.createElement(
-				Dashboard.Views.Github, props),
-				Dashboard.el);
+			view = this.context.primaryView = React.render(React.createElement(
+				GithubComponent, props),
+				this.context.el);
 			}
 	},
 
 	deploy: function (params) {
 		params = params[0];
-		var prevPath = Marbles.history.prevPath;
-		if (prevPath === Marbles.history.path) {
+		var prevPath = this.history.prevPath;
+		if (prevPath === this.history.path) {
 			prevPath = null;
 		}
 		var githubParams = [{
@@ -97,10 +102,10 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 		if (prevPath) {
 			prevPathParts = prevPath.split("?");
 			if (prevPathParts[0] === "github") {
-				githubParams = Marbles.QueryParams.deserializeParams(prevPathParts[1]);
+				githubParams = QueryParams.deserializeParams(prevPathParts[1]);
 			}
 		}
-		var githubPath = Marbles.history.pathWithParams("/github", githubParams);
+		var githubPath = pathWithParams("/github", githubParams);
 
 		var props = this.__getDeployProps(params);
 		if (params.base_owner && params.base_repo) {
@@ -108,14 +113,14 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 			props.baseRepo = params.base_repo;
 		}
 		props.onHide = function () {
-			Marbles.history.navigate(prevPath || githubPath);
-		};
+			this.history.navigate(prevPath || githubPath);
+		}.bind(this);
 		props.dismissError = function () {
 			view.setProps({ errorMsg: null });
 		};
-		var view = Dashboard.secondaryView = React.render(React.createElement(
-			Dashboard.Views.GithubDeploy, props),
-			Dashboard.secondaryEl
+		var view = this.context.secondaryView = React.render(React.createElement(
+			GithubDeployComponent, props),
+			this.context.secondaryEl
 		);
 
 		if ( !prevPath ) {
@@ -134,8 +139,8 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 	},
 
 	__redirectToGithub: function (opts) {
-		window.localStorage.setItem("github:path", Marbles.history.path);
-		Marbles.history.navigate("/github/auth", opts || {});
+		window.localStorage.setItem("github:path", this.history.path);
+		this.history.navigate("/github/auth", opts || {});
 	},
 
 	handleEvent: function (event) {
@@ -181,18 +186,18 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 	},
 
 	__handleBranchSelected: function (event) {
-		var path = Marbles.history.getPath();
+		var path = this.history.getPath();
 		var pathParts = path.split("?");
-		var handler = Marbles.history.getHandler(pathParts[0]);
+		var handler = this.history.getHandler(pathParts[0]);
 		var params = [{}];
 		if (handler.name === "github") {
-			params = Marbles.QueryParams.deserializeParams(pathParts[1] || "");
+			params = QueryParams.deserializeParams(pathParts[1] || "");
 		}
 		if (params[0].repo === event.storeId.repoName && params[0].owner === event.storeId.ownerLogin) {
-			params = Marbles.QueryParams.replaceParams(params, {
+			params = QueryParams.replaceParams(params, {
 				branch: event.branchName
 			});
-			Marbles.history.navigate(Marbles.history.pathWithParams("/github", params));
+			this.history.navigate(pathWithParams("/github", params));
 		}
 	},
 
@@ -203,7 +208,7 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 		deployParams.repo = storeId.repoName;
 		deployParams.sha = event.sha;
 		deployParams.branch = storeId.branch;
-		Marbles.history.navigate(Marbles.history.pathWithParams("/github/deploy", [deployParams]));
+		this.history.navigate(pathWithParams("/github/deploy", [deployParams]));
 	},
 
 	__handleLaunchPull: function (event, deployParams) {
@@ -217,11 +222,11 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 		deployParams.sha = head.sha;
 		deployParams.branch = head.ref;
 		deployParams.pull = event.pull.number;
-		Marbles.history.navigate(Marbles.history.pathWithParams("/github/deploy", [deployParams]));
+		this.history.navigate(pathWithParams("/github/deploy", [deployParams]));
 	},
 
 	__handleDatabaseCreated: function (event) {
-		var view = Dashboard.secondaryView;
+		var view = this.context.secondaryView;
 		if (view && view.constructor.displayName === "Views.GithubDeploy" && view.isMounted() && view.state.name === event.appName) {
 			view.setProps({
 				env: event.env
@@ -230,7 +235,7 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 	},
 
 	__handleJobCreated: function (event) {
-		var view = Dashboard.secondaryView;
+		var view = this.context.secondaryView;
 		if (view && view.constructor.displayName === "Views.GithubDeploy" && view.isMounted() && view.state.name === event.appName) {
 			view.setProps({
 				getAppPath: this.__getAppPath.bind(this, event.appId),
@@ -241,7 +246,7 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 	},
 
 	__handleAppCreateFailed: function (event) {
-		var view = Dashboard.secondaryView;
+		var view = this.context.secondaryView;
 		if (view && view.constructor.displayName === "Views.GithubDeploy" && view.isMounted() && view.state.name === event.appName) {
 			view.setProps({
 				errorMsg: event.errorMsg
@@ -255,13 +260,13 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 			delete this.__waitForGithubAuthResolve;
 			delete this.__waitForGithubAuthPromise;
 		}
-		if ( !authenticated && Marbles.history.path.match(/^github/) ) {
+		if ( !authenticated && this.history.path.match(/^github/) ) {
 			this.__redirectToGithub();
 		}
 	},
 
 	__waitForGithubAuth: function () {
-		if (Dashboard.githubClient) {
+		if (Config.githubClient) {
 			return Promise.resolve();
 		} else {
 			this.__waitForGithubAuthPromise = this.__waitForGithubAuthPromise || new Promise(function (resolve) {
@@ -272,7 +277,7 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 	},
 
 	__handleReleaseCreateFailed: function (event) {
-		var view = Dashboard.primaryView;
+		var view = this.context.primaryView;
 		if (view && view.constructor.displayName === "Views.GithubAuth" && view.isMounted() && view.props.appName === event.appId) {
 			view.setProps({
 				errorMsg: event.errorMsg
@@ -281,10 +286,10 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 	},
 
 	__handleReleaseCreated: function (event) {
-		var view = Dashboard.primaryView;
+		var view = this.context.primaryView;
 		if (view && view.constructor.displayName === "Views.GithubAuth" && view.isMounted() && view.props.appName === event.appId) {
 			// GitHub token saved and loaded, navigate to main GitHub view
-			Marbles.history.navigate("/github", { replace: true, force: true });
+			this.history.navigate("/github", { replace: true, force: true });
 		}
 	},
 
@@ -301,4 +306,4 @@ Dashboard.routers.Github = Marbles.Router.createClass({
 	}
 });
 
-})();
+export default GithubRouter;

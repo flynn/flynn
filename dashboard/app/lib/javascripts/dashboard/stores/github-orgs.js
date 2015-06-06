@@ -1,9 +1,7 @@
-//= require ../store
+import Store from '../store';
+import Config from '../config';
 
-(function () {
-"use strict";
-
-Dashboard.Stores.GithubOrgs = Dashboard.Store.createClass({
+var GithubOrgs = Store.createClass({
 	displayName: "Stores.GithubOrgs",
 
 	getState: function () {
@@ -21,7 +19,7 @@ Dashboard.Stores.GithubOrgs = Dashboard.Store.createClass({
 	},
 
 	__fetchOrgs: function () {
-		Dashboard.githubClient.getOrgs().then(function (args) {
+		Config.githubClient.getOrgs().then(function (args) {
 			var res = args[0];
 			this.setState({
 				orgs: res.map(this.__rewriteJSON)
@@ -38,4 +36,4 @@ Dashboard.Stores.GithubOrgs = Dashboard.Store.createClass({
 	}
 });
 
-})();
+export default GithubOrgs;

@@ -1,20 +1,10 @@
-//= require ../stores/app-jobs
-//= require ../stores/taffy-jobs
-//= require ./job-output
-//= require ./external-link
-//= require ./timestamp
-//= require Modal
-
-(function () {
-
-"use strict";
-
-var AppJobsStore = Dashboard.Stores.AppJobs;
-var TaffyJobsStore = Dashboard.Stores.TaffyJobs;
-
-var ExternalLink = Dashboard.Views.ExternalLink;
-var Timestamp = Dashboard.Views.Timestamp;
-var Modal = window.Modal;
+import { assertEqual } from 'marbles/utils';
+import Modal from 'Modal';
+import AppJobsStore from '../stores/app-jobs';
+import TaffyJobsStore from '../stores/taffy-jobs';
+import JobOutput from './job-output';
+import ExternalLink from './external-link';
+import Timestamp from './timestamp';
 
 function getAppJobsStoreId (props) {
 	return {
@@ -36,7 +26,7 @@ function getState (props) {
 	return state;
 }
 
-Dashboard.Views.AppLogs = React.createClass({
+var AppLogs = React.createClass({
 	displayName: "Views.AppLogs",
 
 	render: function () {
@@ -69,7 +59,7 @@ Dashboard.Views.AppLogs = React.createClass({
 
 					<section className="log-output">
 						{this.state.selectedProcess ? (
-							<Dashboard.Views.JobOutput
+							<JobOutput
 								appId={this.props.appId}
 								jobId={this.state.selectedProcess.id} />
 						) : null}
@@ -106,7 +96,7 @@ Dashboard.Views.AppLogs = React.createClass({
 
 					<section className="log-output">
 						{this.state.selectedDeployProcess ? (
-							<Dashboard.Views.JobOutput
+							<JobOutput
 								appId={"taffy"}
 								jobId={this.state.selectedDeployProcess.id} />
 						) : null}
@@ -128,7 +118,7 @@ Dashboard.Views.AppLogs = React.createClass({
 	componentWillReceiveProps: function (nextProps) {
 		var prevAppJobsStoreId = this.state.appJobsStoreId;
 		var nextAppJobsStoreId = getAppJobsStoreId(nextProps);
-		if ( !Marbles.Utils.assertEqual(prevAppJobsStoreId, nextAppJobsStoreId) ) {
+		if ( !assertEqual(prevAppJobsStoreId, nextAppJobsStoreId) ) {
 			AppJobsStore.removeChangeListener(prevAppJobsStoreId, this.__handleStoreChange);
 			AppJobsStore.addChangeListener(nextAppJobsStoreId, this.__handleStoreChange);
 			this.__handleStoreChange(nextProps);
@@ -180,4 +170,4 @@ Dashboard.Views.AppLogs = React.createClass({
 	}
 });
 
-})();
+export default AppLogs;

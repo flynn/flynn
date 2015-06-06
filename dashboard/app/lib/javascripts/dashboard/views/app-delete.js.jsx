@@ -1,16 +1,7 @@
-//= require ../stores/app
-//= require ../actions/app-delete
-//= require Modal
-
-(function () {
-
-"use strict";
-
-var AppStore = Dashboard.Stores.App;
-
-var AppDeleteActions = Dashboard.Actions.AppDelete;
-
-var Modal = window.Modal;
+import { assertEqual } from 'marbles/utils';
+import Modal from 'Modal';
+import AppStore from '../stores/app';
+import AppDeleteActions from '../actions/app-delete';
 
 function getAppStoreId (props) {
 	return {
@@ -31,7 +22,7 @@ function getState (props, prevState) {
 	return state;
 }
 
-Dashboard.Views.AppDelete = React.createClass({
+var AppDelete = React.createClass({
 	displayName: "Views.AppDelete",
 
 	render: function () {
@@ -60,7 +51,7 @@ Dashboard.Views.AppDelete = React.createClass({
 	componentWillReceiveProps: function (nextProps) {
 		var prevAppStoreId = this.state.appStoreId;
 		var nextAppStoreId = getAppStoreId(nextProps);
-		if ( !Marbles.Utils.assertEqual(prevAppStoreId, nextAppStoreId) ) {
+		if ( !assertEqual(prevAppStoreId, nextAppStoreId) ) {
 			AppStore.removeChangeListener(prevAppStoreId, this.__handleStoreChange);
 			AppStore.addChangeListener(nextAppStoreId, this.__handleStoreChange);
 			this.__handleStoreChange(nextProps);
@@ -84,4 +75,4 @@ Dashboard.Views.AppDelete = React.createClass({
 	}
 });
 
-})();
+export default AppDelete;

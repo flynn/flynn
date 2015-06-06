@@ -1,16 +1,12 @@
-//= require ./route-link
+import RouteLink from './route-link';
 
-(function () {
-
-"use strict";
-
-Dashboard.Views.AppsListHeader = React.createClass({
+var AppsListHeader = React.createClass({
 	displayName: "Views.AppsListHeader",
 
 	render: function () {
 		return (
 			<section className="clearfix">
-				<Dashboard.Views.RouteLink
+				<RouteLink
 					className="btn-green float-right"
 					path="/github">
 						{this.props.githubAuthed ? (
@@ -21,10 +17,10 @@ Dashboard.Views.AppsListHeader = React.createClass({
 								Connect with Github
 							</span>
 						)}
-				</Dashboard.Views.RouteLink>
+				</RouteLink>
 			</section>
 		);
 	}
 });
 
-})();
+export default AppsListHeader;

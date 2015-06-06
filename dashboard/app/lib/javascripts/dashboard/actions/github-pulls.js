@@ -1,12 +1,6 @@
-//= require ../dispatcher
+import Dispatcher from '../dispatcher';
 
-(function () {
-
-"use strict";
-
-var Dispatcher = Dashboard.Dispatcher;
-
-Dashboard.Actions.GithubPulls = {
+var GithubPulls = {
 	unloadPageId: function (storeId, pageId) {
 		Dispatcher.handleViewAction({
 			name: "GITHUB_PULLS:UNLAOD_PAGE_ID",
@@ -38,4 +32,4 @@ Dashboard.Actions.GithubPulls = {
 	}
 };
 
-})();
+export default GithubPulls;

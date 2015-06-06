@@ -1,9 +1,7 @@
-//= require ../store
-//= require ../dispatcher
-//= require ../client
-
-(function () {
-"use strict";
+import { extend } from 'marbles/utils';
+import Store from '../store';
+import Config from '../config';
+import Dispatcher from '../dispatcher';
 
 function createTaffyJob (client, taffyReleaseId, appID, appName, meta, appData) {
 	var cloneURL = meta.clone_url;
@@ -13,11 +11,11 @@ function createTaffyJob (client, taffyReleaseId, appID, appName, meta, appData) 
 		release: taffyReleaseId,
 		release_env: true,
 		cmd: [appName, cloneURL, ref, sha],
-		meta: Marbles.Utils.extend({}, meta, {
+		meta: extend({}, meta, {
 			app: appID,
 		})
 	}).then(function (args) {
-		Dashboard.Dispatcher.handleStoreEvent({
+		Dispatcher.handleStoreEvent({
 			name: "APP:JOB_CREATED",
 			appId: appID,
 			appName: appName,
@@ -54,7 +52,7 @@ var objectDiff = function (oldEnv, newEnv) {
 };
 
 var applyObjectDiff = function (diff, env) {
-	var newEnv = Marbles.Utils.extend({}, env);
+	var newEnv = extend({}, env);
 	diff.forEach(function (item) {
 		switch (item.op) {
 			case "replace":
@@ -75,7 +73,7 @@ var applyObjectDiff = function (diff, env) {
 	return newEnv;
 };
 
-var App = Dashboard.Stores.App = Dashboard.Store.createClass({
+var App = Store.createClass({
 	displayName: "Stores.App",
 
 	getState: function () {
@@ -117,7 +115,7 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 				this.__withoutChangeEvents(function () {
 					return this.__fetchAppRelease();
 				}.bind(this)).then(function () {
-					var release = Marbles.Utils.extend({}, this.state.release, event.release);
+					var release = extend({}, this.state.release, event.release);
 					var envDiff = objectDiff(changedRelease.env, event.release.env);
 					release.env = applyObjectDiff(envDiff, this.state.release.env);
 					delete release.id;
@@ -277,7 +275,7 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 				var releaseId = res.id;
 				return client.deployAppRelease(this.props.appId, releaseId);
 			}.bind(this)).then(function () {
-				Dashboard.Dispatcher.handleStoreEvent({
+				Dispatcher.handleStoreEvent({
 					name: "APP:RELEASE_CREATED",
 					appId: __appId
 				});
@@ -293,7 +291,7 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 						window.console.error(args[0]);
 					}
 				}
-				Dashboard.Dispatcher.handleStoreEvent({
+				Dispatcher.handleStoreEvent({
 					name: "APP:RELEASE_CREATE_FAILED",
 					appId: __appId,
 					errorMsg: errorMsg
@@ -316,7 +314,7 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 	__deleteApp: function () {
 		var __appId = this.id.appId;
 		return App.getClient.call(this).deleteApp(this.props.appId).then(function (args) {
-			Dashboard.Dispatcher.handleStoreEvent({
+			Dispatcher.handleStoreEvent({
 				name: "APP:DELETED",
 				appId: __appId
 			});
@@ -331,7 +329,7 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 		var app, meta, release, artifactId;
 
 		function createRelease () {
-			return client.createRelease(Marbles.Utils.extend({}, release, {
+			return client.createRelease(extend({}, release, {
 				id: null,
 				artifact: artifactId
 			})).then(function (args) {
@@ -358,7 +356,7 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 		return Promise.all([this.__getApp(), this.__getAppRelease(), this.__formationLock]).then(function (__args) {
 			app = __args[0];
 			release = __args[1];
-			meta = Marbles.Utils.extend({}, app.meta, {
+			meta = extend({}, app.meta, {
 				ref: branchName,
 				sha: sha
 			});
@@ -372,7 +370,7 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 			});
 		}).catch(function (args) {
 			if (args instanceof Error) {
-				Dashboard.Dispatcher.handleStoreEvent({
+				Dispatcher.handleStoreEvent({
 					name: "APP:DEPLOY_FAILED",
 					appId: __appId,
 					errorMsg: "Something went wrong"
@@ -380,7 +378,7 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 			} else {
 				var res = args[0];
 				var xhr = args[1];
-				Dashboard.Dispatcher.handleStoreEvent({
+				Dispatcher.handleStoreEvent({
 					name: "APP:DEPLOY_FAILED",
 					appId: __appId,
 					errorMsg: res.message || "Something went wrong ["+ xhr.status +"]"
@@ -388,26 +386,26 @@ var App = Dashboard.Stores.App = Dashboard.Store.createClass({
 			}
 			return Promise.reject(args);
 		}).then(function () {
-			Dashboard.Dispatcher.handleStoreEvent({
+			Dispatcher.handleStoreEvent({
 				name: "APP:DEPLOY_SUCCESS",
 				appId: __appId
 			});
 			this.setState({
-				app: Marbles.Utils.extend({}, app, { meta: meta })
+				app: extend({}, app, { meta: meta })
 			});
 		}.bind(this));
 	}
 });
 
 App.getClient = function () {
-	return Dashboard.client;
+	return Config.client;
 };
 
 App.isValidId = function (id) {
 	return !!id.appId;
 };
 
-App.dispatcherIndex = App.registerWithDispatcher(Dashboard.Dispatcher);
+App.dispatcherIndex = App.registerWithDispatcher(Dispatcher);
 
 App.findOrFetch = function (appId) {
 	var instances = this.__instances;
@@ -470,18 +468,18 @@ App.createFromGithub = function (client, meta, appData) {
 		meta: meta
 	};
 
-	var appId, appName
+	var appId, appName;
 	var databaseEnv = {};
 
 	function createDatabase () {
 		return client.createAppDatabase({ apps: [appId] }).then(function (args) {
 			var res = args[0];
 			databaseEnv = res.env;
-			Dashboard.Dispatcher.handleStoreEvent({
+			Dispatcher.handleStoreEvent({
 				name: "APP:DATABASE_CREATED",
 				appId: appId,
 				appName: appName,
-				env: Marbles.Utils.extend({}, appData.env, databaseEnv)
+				env: extend({}, appData.env, databaseEnv)
 			});
 			return createRelease();
 		});
@@ -489,7 +487,7 @@ App.createFromGithub = function (client, meta, appData) {
 
 	function createRelease () {
 		return client.createRelease({
-			env: Marbles.Utils.extend({}, appData.env, databaseEnv)
+			env: extend({}, appData.env, databaseEnv)
 		}).then(function (args) {
 			var res = args[0];
 			return createAppRelease(res.id);
@@ -515,7 +513,7 @@ App.createFromGithub = function (client, meta, appData) {
 		var res = args[0];
 		appId = res.id;
 		appName = res.name;
-		Dashboard.Dispatcher.handleStoreEvent({
+		Dispatcher.handleStoreEvent({
 			name: "APP:CREATED",
 			app: res
 		});
@@ -526,7 +524,7 @@ App.createFromGithub = function (client, meta, appData) {
 		}
 	}).catch(function (args) {
 		if (args instanceof Error) {
-			Dashboard.Dispatcher.handleStoreEvent({
+			Dispatcher.handleStoreEvent({
 				name: "APP:CREATE_FAILED",
 				appName: data.name,
 				errorMsg: "Something went wrong"
@@ -535,7 +533,7 @@ App.createFromGithub = function (client, meta, appData) {
 		} else {
 			var res = args[0];
 			var xhr = args[1];
-			Dashboard.Dispatcher.handleStoreEvent({
+			Dispatcher.handleStoreEvent({
 				name: "APP:CREATE_FAILED",
 				appName: data.name,
 				errorMsg: res.message || "Something went wrong ["+ xhr.status +"]"
@@ -555,10 +553,10 @@ App.handleEvent = function (event) {
 		break;
 	}
 };
-Dashboard.Dispatcher.register(App.handleEvent);
+Dispatcher.register(App.handleEvent);
 
 App.isSystemApp = function (app) {
 	return app.meta && app.meta["flynn-system-app"] === "true";
 };
 
-})();
+export default App;

@@ -1,15 +1,7 @@
-//= require ../stores/app-routes
-//= require ./external-link
-//= require ./route-link
-
-(function () {
-
-"use strict";
-
-var AppRoutesStore = Dashboard.Stores.AppRoutes;
-
-var ExternalLink = Dashboard.Views.ExternalLink;
-var RouteLink = Dashboard.Views.RouteLink;
+import { assertEqual } from 'marbles/utils';
+import AppRoutesStore from '../stores/app-routes';
+import ExternalLink from './external-link';
+import RouteLink from './route-link';
 
 function getAppRoutesStoreId (props) {
 	return {
@@ -28,7 +20,7 @@ function getState (props) {
 	return state;
 }
 
-Dashboard.Views.AppRoutes = React.createClass({
+var AppRoutes = React.createClass({
 	displayName: "Views.AppRoutes",
 
 	render: function () {
@@ -72,7 +64,7 @@ Dashboard.Views.AppRoutes = React.createClass({
 	componentWillReceiveProps: function (nextProps) {
 		var prevAppRoutesStoreId = this.state.appStoreId;
 		var nextAppRoutesStoreId = getAppRoutesStoreId(nextProps);
-		if ( !Marbles.Utils.assertEqual(prevAppRoutesStoreId, nextAppRoutesStoreId) ) {
+		if ( !assertEqual(prevAppRoutesStoreId, nextAppRoutesStoreId) ) {
 			AppRoutesStore.removeChangeListener(prevAppRoutesStoreId, this.__handleStoreChange);
 			AppRoutesStore.addChangeListener(nextAppRoutesStoreId, this.__handleStoreChange);
 			this.__handleStoreChange(nextProps);
@@ -88,4 +80,4 @@ Dashboard.Views.AppRoutes = React.createClass({
 	}
 });
 
-})();
+export default AppRoutes;

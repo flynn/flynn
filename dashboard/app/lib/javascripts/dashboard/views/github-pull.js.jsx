@@ -1,14 +1,8 @@
-//= require ./external-link
-//= require ./timestamp
+import QueryParams from 'marbles/query_params';
+import Timestamp from './timestamp';
+import ExternalLink from './external-link';
 
-(function () {
-
-"use strict";
-
-var ExternalLink = Dashboard.Views.ExternalLink;
-var Timestamp = Dashboard.Views.Timestamp;
-
-Dashboard.Views.GithubPull = React.createClass({
+var GithubPull = React.createClass({
 	displayName: "Views.GithubPull",
 
 	render: function () {
@@ -19,11 +13,11 @@ Dashboard.Views.GithubPull = React.createClass({
 		var userAvatarURLParts;
 		if (userAvatarURL) {
 			userAvatarURLParts = userAvatarURL.split("?");
-			userAvatarURLParams = Marbles.QueryParams.deserializeParams(userAvatarURLParts[1] || "");
-			userAvatarURLParams = Marbles.QueryParams.replaceParams(userAvatarURLParams, {
+			userAvatarURLParams = QueryParams.deserializeParams(userAvatarURLParts[1] || "");
+			userAvatarURLParams = QueryParams.replaceParams(userAvatarURLParams, {
 				size: 50
 			});
-			userAvatarURL = userAvatarURLParts[0] + Marbles.QueryParams.serializeParams(userAvatarURLParams);
+			userAvatarURL = userAvatarURLParts[0] + QueryParams.serializeParams(userAvatarURLParams);
 		}
 
 		return (
@@ -57,4 +51,4 @@ Dashboard.Views.GithubPull = React.createClass({
 	}
 });
 
-})();
+export default GithubPull;

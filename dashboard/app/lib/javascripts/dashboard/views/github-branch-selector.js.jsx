@@ -1,12 +1,6 @@
-//= require ../stores/github-branches
-//= require ../actions/github-branches
-
-(function () {
-
-"use strict";
-
-var GithubBranchesStore = Dashboard.Stores.GithubBranches;
-var GithubBranchesActions = Dashboard.Actions.GithubBranches;
+import { assertEqual } from 'marbles/utils';
+import GithubBranchesStore from '../stores/github-branches';
+import GithubBranchesActions from '../actions/github-branches';
 
 function getBranchesStoreId(props) {
 	return {
@@ -26,7 +20,7 @@ function getState(props) {
 	return state;
 }
 
-Dashboard.Views.GithubBranchSelector = React.createClass({
+var GithubBranchSelector = React.createClass({
 	displayName: "Views.GithubBranchSelector",
 
 	render: function () {
@@ -69,7 +63,7 @@ Dashboard.Views.GithubBranchSelector = React.createClass({
 	componentWillReceiveProps: function (props) {
 		var oldBranchesStoreId = this.state.branchesStoreId;
 		var newBranchesStoreId = getBranchesStoreId(props);
-		if ( !Marbles.Utils.assertEqual(oldBranchesStoreId, newBranchesStoreId) ) {
+		if ( !assertEqual(oldBranchesStoreId, newBranchesStoreId) ) {
 			GithubBranchesStore.removeChangeListener(oldBranchesStoreId, this.__handleStoreChange);
 			this.__handleStoreChange();
 			GithubBranchesStore.addChangeListener(newBranchesStoreId, this.__handleStoreChange);
@@ -97,4 +91,4 @@ Dashboard.Views.GithubBranchSelector = React.createClass({
 	}
 });
 
-})();
+export default GithubBranchSelector;
