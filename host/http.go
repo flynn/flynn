@@ -143,6 +143,10 @@ func (h *jobAPI) PullImages(w http.ResponseWriter, r *http.Request, ps httproute
 }
 
 func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	if shutdown.IsActive() {
+		httphelper.JSON(w, 500, struct{}{})
+	}
+
 	job := &host.Job{}
 	if err := httphelper.DecodeJSON(r, job); err != nil {
 		httphelper.Error(w, err)
@@ -205,6 +209,7 @@ func serveHTTP(host *Host, attach *attachHandler, clus *cluster.Client, vman *vo
 	if err != nil {
 		return nil, err
 	}
+	shutdown.BeforeExit(func() { l.Close() })
 
 	r := httprouter.New()
 
