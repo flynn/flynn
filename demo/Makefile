@@ -75,10 +75,7 @@ token:
 
 # Open dashboard in browser
 dashboard:
-	@echo Login token:
-	@$(MAKE) token
-	@sleep 1 # Allow user to see token output before browser opens
-	@open http://dashboard.${CLUSTER_DOMAIN}
+	@open http://dashboard.${CLUSTER_DOMAIN}?token=${$(MAKE) token}
 
 # Run a command in the VM via SSH
 ssh-cmd:
