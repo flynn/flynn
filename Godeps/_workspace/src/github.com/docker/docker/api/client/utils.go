@@ -15,10 +15,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/docker/docker/autogen/dockerversion"
 	"github.com/docker/docker/pkg/stdcopy"
 	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/api"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/autogen/dockerversion"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/engine"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/signal"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"

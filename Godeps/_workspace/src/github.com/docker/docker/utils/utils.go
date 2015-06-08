@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/autogen/dockerversion"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/archive"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/fileutils"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/ioutils"
@@ -89,7 +90,27 @@ func dockerInitSha1(target string) string {
 }
 
 func isValidDockerInitPath(target string, selfPath string) bool { // target and selfPath should be absolute (InitPath and SelfPath already do this)
-	return true
+	if target == "" {
+		return false
+	}
+	if dockerversion.IAMSTATIC == "true" {
+		if selfPath == "" {
+			return false
+		}
+		if target == selfPath {
+			return true
+		}
+		targetFileInfo, err := os.Lstat(target)
+		if err != nil {
+			return false
+		}
+		selfPathFileInfo, err := os.Lstat(selfPath)
+		if err != nil {
+			return false
+		}
+		return os.SameFile(targetFileInfo, selfPathFileInfo)
+	}
+	return dockerversion.INITSHA1 != "" && dockerInitSha1(target) == dockerversion.INITSHA1
 }
 
 // Figure out the path of our dockerinit (which may be SelfPath())
@@ -101,6 +122,7 @@ func DockerInitPath(localCopy string) string {
 	}
 	var possibleInits = []string{
 		localCopy,
+		dockerversion.INITPATH,
 		filepath.Join(filepath.Dir(selfPath), "dockerinit"),
 
 		// FHS 3.0 Draft: "/usr/libexec includes internal binaries that are not intended to be executed directly by users or shell scripts. Applications may use a single subdirectory under /usr/libexec."

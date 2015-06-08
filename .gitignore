@@ -7,3 +7,5 @@ bin
 script/custom-vagrant
 demo/*.log
 util/_toolchain/**
+*.swp
+*.test

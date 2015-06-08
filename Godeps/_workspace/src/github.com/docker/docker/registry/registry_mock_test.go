@@ -15,9 +15,10 @@ import (
 	"testing"
 	"time"
 
-	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/opts"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/mux"
+
+	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
 )
 
 var (

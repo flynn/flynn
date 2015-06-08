@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/docker/docker/autogen/dockerversion"
 	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/api"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/autogen/dockerversion"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/engine"
 	flag "github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/mflag"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/utils"

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/autogen/dockerversion"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/daemon/graphdriver"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/image"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/archive"
@@ -117,13 +118,14 @@ func (graph *Graph) Get(name string) (*image.Image, error) {
 // Create creates a new image and registers it in the graph.
 func (graph *Graph) Create(layerData archive.ArchiveReader, containerID, containerImage, comment, author string, containerConfig, config *runconfig.Config) (*image.Image, error) {
 	img := &image.Image{
-		ID:           stringid.GenerateRandomID(),
-		Comment:      comment,
-		Created:      time.Now().UTC(),
-		Author:       author,
-		Config:       config,
-		Architecture: runtime.GOARCH,
-		OS:           runtime.GOOS,
+		ID:            stringid.GenerateRandomID(),
+		Comment:       comment,
+		Created:       time.Now().UTC(),
+		DockerVersion: dockerversion.VERSION,
+		Author:        author,
+		Config:        config,
+		Architecture:  runtime.GOARCH,
+		OS:            runtime.GOOS,
 	}
 
 	if containerID != "" {

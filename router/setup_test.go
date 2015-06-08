@@ -53,13 +53,11 @@ func (d *discoverdWrapper) Cleanup() {
 }
 
 func setup(t etcdrunner.TestingT) (*discoverdWrapper, func()) {
-	etcdAddr, killEtcd := etcdrunner.RunEtcdServer(t)
-	dc, killDiscoverd := testutil.BootDiscoverd(t, "", etcdAddr)
+	dc, killDiscoverd := testutil.BootDiscoverd(t, "", "")
 	dw := &discoverdWrapper{discoverdClient: dc}
 
 	return dw, func() {
 		killDiscoverd()
-		killEtcd()
 	}
 }
 

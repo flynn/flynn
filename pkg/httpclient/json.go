@@ -43,7 +43,7 @@ func ToJSON(v interface{}) (io.Reader, error) {
 	return bytes.NewBuffer(data), err
 }
 
-func (c *Client) prepareReq(method, path string, header http.Header, in interface{}) (*http.Request, error) {
+func (c *Client) prepareReq(method, rawurl string, header http.Header, in interface{}) (*http.Request, error) {
 	var payload io.Reader
 	switch v := in.(type) {
 	case io.Reader:
@@ -57,7 +57,7 @@ func (c *Client) prepareReq(method, path string, header http.Header, in interfac
 		}
 	}
 
-	req, err := http.NewRequest(method, c.URL+path, payload)
+	req, err := http.NewRequest(method, rawurl, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,24 @@ func (c *Client) prepareReq(method, path string, header http.Header, in interfac
 }
 
 func (c *Client) RawReq(method, path string, header http.Header, in, out interface{}) (*http.Response, error) {
-	req, err := c.prepareReq(method, path, header, in)
+	rawurl := c.URL + path
+
+	for {
+		resp, err := c.rawReq(method, rawurl, header, in, out)
+
+		// If this is a redirect then update the URL and try again.
+		if resp != nil && resp.StatusCode == http.StatusTemporaryRedirect {
+			resp.Body.Close()
+			rawurl = resp.Header.Get("Location")
+			continue
+		}
+
+		return resp, err
+	}
+}
+
+func (c *Client) rawReq(method, rawurl string, header http.Header, in, out interface{}) (*http.Response, error) {
+	req, err := c.prepareReq(method, rawurl, header, in)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +117,7 @@ func (c *Client) RawReq(method, path string, header http.Header, in, out interfa
 		return res, &url.Error{
 			Op:  req.Method,
 			URL: req.URL.String(),
-			Err: fmt.Errorf("httpclient: unexpected status %d", res.StatusCode),
+			Err: fmt.Errorf("httpclient: raw req: unexpected status %d", res.StatusCode),
 		}
 	}
 	if out != nil {
@@ -134,7 +151,7 @@ func (c *Client) Hijack(method, path string, header http.Header, in interface{})
 		return nil, err
 	}
 	clientconn := httputil.NewClientConn(conn, nil)
-	req, err := c.prepareReq(method, path, header, in)
+	req, err := c.prepareReq(method, c.URL+path, header, in)
 	if err != nil {
 		return nil, err
 	}

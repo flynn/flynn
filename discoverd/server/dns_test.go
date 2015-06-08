@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"strconv"
@@ -14,23 +16,24 @@ import (
 )
 
 type DNSSuite struct {
-	state *State
 	srv   *DNSServer
+	store DNSServerStore
 }
 
 var _ = Suite(&DNSSuite{})
 
 func (s *DNSSuite) SetUpTest(c *C) {
-	s.state = NewState()
 	s.srv = s.newServer(c, []string{"8.8.8.8", "8.8.4.4"})
-	s.state.AddService("a", DefaultServiceConfig)
+	s.srv.Store = &s.store
+	s.store.InstancesFn = func(service string) ([]*discoverd.Instance, error) { return nil, nil }
+	s.store.ServiceLeaderFn = func(service string) (*discoverd.Instance, error) { return nil, nil }
 }
 
 func (s *DNSSuite) newServer(c *C, recursors []string) *DNSServer {
 	srv := &DNSServer{
 		UDPAddr:   "127.0.0.1:0",
 		TCPAddr:   "127.0.0.1:0",
-		Store:     s.state,
+		Store:     &s.store,
 		Recursors: recursors,
 	}
 	c.Assert(srv.ListenAndServe(), IsNil)
@@ -386,12 +389,18 @@ func (s *DNSSuite) TestServiceLookup(c *C) {
 	}
 
 	for _, t := range tests {
-		if len(t.data) == 0 {
-			// nil deletes the service, so use an empty slice
-			s.state.SetService("a", DefaultServiceConfig, []*discoverd.Instance{})
-		} else {
-			s.state.SetService("a", DefaultServiceConfig, t.data)
+		// Mock the call to Instances to return t.data.
+		s.store.InstancesFn = func(service string) ([]*discoverd.Instance, error) {
+			if service == "a" {
+				if len(t.data) == 0 {
+					return []*discoverd.Instance{}, nil
+				} else {
+					return t.data, nil
+				}
+			}
+			return nil, nil
 		}
+
 		client := &dns.Client{Net: t.net}
 		for q, addrs := range t.qs {
 			c.Logf("+ %s: %s - %s - %s", t.domain, t.net, t.name, dns.TypeToString[q])
@@ -574,7 +583,9 @@ func fakeStaticInstance(proto, ip string, port uint16) (*discoverd.Instance, tes
 		Addr:  net.JoinHostPort(ip, strconv.Itoa(int(port))),
 		Index: atomic.AddUint64(&dnsIndex, 1),
 	}
-	inst.ID = md5sum(inst.Proto + "-" + inst.Addr)
+
+	digest := md5.Sum([]byte(inst.Proto + "-" + inst.Addr))
+	inst.ID = hex.EncodeToString(digest[:])
 	netIP := net.ParseIP(ip)
 	return inst, testAddr{netIP, port, inst.ID}
 }
@@ -583,4 +594,18 @@ type testAddr struct {
 	IP   net.IP
 	Port uint16
 	ID   string
+}
+
+// DNSServerStore represents a mock implementation of DNSServer.Store.
+type DNSServerStore struct {
+	InstancesFn     func(service string) ([]*discoverd.Instance, error)
+	ServiceLeaderFn func(service string) (*discoverd.Instance, error)
+}
+
+func (s *DNSServerStore) Instances(service string) ([]*discoverd.Instance, error) {
+	return s.InstancesFn(service)
+}
+
+func (s *DNSServerStore) ServiceLeader(service string) (*discoverd.Instance, error) {
+	return s.ServiceLeaderFn(service)
 }
