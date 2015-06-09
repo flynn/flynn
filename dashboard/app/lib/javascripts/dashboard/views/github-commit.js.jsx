@@ -1,16 +1,9 @@
-//= require ./external-link
-//= require ./timestamp
-//= require ./helpers/findScrollParent
+import QueryParams from 'marbles/query_params';
+import Timestamp from './timestamp';
+import ExternalLink from './external-link';
+import findScrollParent from './helpers/findScrollParent';
 
-(function () {
-
-"use strict";
-
-var ExternalLink = Dashboard.Views.ExternalLink;
-var Timestamp = Dashboard.Views.Timestamp;
-var findScrollParent = Dashboard.Views.Helpers.findScrollParent;
-
-Dashboard.Views.GithubCommit = React.createClass({
+var GithubCommit = React.createClass({
 	displayName: "Views.GithubCommit",
 
 	scrollIntoView: function () {
@@ -35,11 +28,11 @@ Dashboard.Views.GithubCommit = React.createClass({
 		var authorAvatarURLParts;
 		if (authorAvatarURL) {
 			authorAvatarURLParts = authorAvatarURL.split("?");
-			authorAvatarURLParams = Marbles.QueryParams.deserializeParams(authorAvatarURLParts[1] || "");
-			authorAvatarURLParams = Marbles.QueryParams.replaceParams(authorAvatarURLParams, {
+			authorAvatarURLParams = QueryParams.deserializeParams(authorAvatarURLParts[1] || "");
+			authorAvatarURLParams = QueryParams.replaceParams(authorAvatarURLParams, {
 				size: 50
 			});
-			authorAvatarURL = authorAvatarURLParts[0] + Marbles.QueryParams.serializeParams(authorAvatarURLParams);
+			authorAvatarURL = authorAvatarURLParts[0] + QueryParams.serializeParams(authorAvatarURLParams);
 		}
 
 		return (
@@ -81,4 +74,4 @@ Dashboard.Views.GithubCommit = React.createClass({
 	}
 });
 
-})();
+export default GithubCommit;

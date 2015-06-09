@@ -1,6 +1,3 @@
-(function () {
-"use strict";
-
 var findScrollParent = function (el) {
 	var ref = el;
 	while (ref) {
@@ -15,7 +12,7 @@ var findScrollParent = function (el) {
 	return window;
 };
 
-var ScrollPagination = window.ScrollPagination = React.createClass({
+var ScrollPagination = React.createClass({
 	displayName: "ScrollPagination",
 
 	getDefaultProps: function () {
@@ -322,4 +319,4 @@ Manager.prototype.dispatchPageEvent = function (pageId, event) {
 };
 ScrollPagination.Manager = Manager;
 
-})();
+export default ScrollPagination;

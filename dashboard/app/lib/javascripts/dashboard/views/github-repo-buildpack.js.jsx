@@ -1,16 +1,8 @@
-/** @jsx React.DOM */
-//= require ../stores/github-repo-buildpack
-//= require ./external-link
+import { assertEqual } from 'marbles/utils';
+import BuildpackStore from '../stores/github-repo-buildpack';
+import ExternalLink from './external-link';
 
-(function () {
-
-"use strict";
-
-var BuildpackStore = Dashboard.Stores.GithubRepoBuildpack;
-
-var ExternalLink = Dashboard.Views.ExternalLink;
-
-Dashboard.Views.GithubRepoBuildpack = React.createClass({
+var GithubRepoBuildpack = React.createClass({
 	displayName: "Views.GithubRepoBuildpack",
 
 	render: function () {
@@ -46,7 +38,7 @@ Dashboard.Views.GithubRepoBuildpack = React.createClass({
 	componentWillReceiveProps: function (props) {
 		var oldBuildpackStoreId = this.state.buildpackStoreId;
 		var newBuildpackStoreId = this.__getBuildpackStoreId(props);
-		if ( !Marbles.Utils.assertEqual(oldBuildpackStoreId, newBuildpackStoreId) ) {
+		if ( !assertEqual(oldBuildpackStoreId, newBuildpackStoreId) ) {
 			BuildpackStore.removeChangeListener(oldBuildpackStoreId, this.__handleStoreChange);
 			this.__handleStoreChange(props);
 			BuildpackStore.addChangeListener(newBuildpackStoreId, this.__handleStoreChange);
@@ -87,4 +79,4 @@ Dashboard.Views.GithubRepoBuildpack = React.createClass({
 	}
 });
 
-})();
+export default GithubRepoBuildpack;

@@ -1,20 +1,10 @@
-//= require ../stores/github-commit
-//= require ../stores/job-output
-//= require ../actions/app-deploy-commit
-//= require ./github-commit
-//= require ./command-output
-//= require Modal
-
-(function () {
-
-"use strict";
-
-var GithubCommitStore = Dashboard.Stores.GithubCommit;
-var JobOutputStore = Dashboard.Stores.JobOutput;
-
-var AppDeployCommitActions = Dashboard.Actions.AppDeployCommit;
-
-var Modal = window.Modal;
+import { assertEqual, extend } from 'marbles/utils';
+import Modal from 'Modal';
+import GithubCommitStore from '../stores/github-commit';
+import JobOutputStore from '../stores/job-output';
+import AppDeployCommitActions from '../actions/app-deploy-commit';
+import GithubCommit from './github-commit';
+import CommandOutput from './command-output';
 
 function getCommitStoreId (props) {
 	return {
@@ -69,7 +59,7 @@ function getState (props, prevState) {
 	return state;
 }
 
-Dashboard.Views.AppDeployCommit = React.createClass({
+var AppDeployCommit = React.createClass({
 	displayName: "Views.AppDeployCommit",
 
 	render: function () {
@@ -83,11 +73,11 @@ Dashboard.Views.AppDeployCommit = React.createClass({
 					</header>
 
 					{commit ? (
-						<Dashboard.Views.GithubCommit commit={commit} />
+						<GithubCommit commit={commit} />
 					) : null}
 
 					{this.state.jobOutput ? (
-						<Dashboard.Views.CommandOutput outputStreamData={this.state.jobOutput} showTimestamp={false} />
+						<CommandOutput outputStreamData={this.state.jobOutput} showTimestamp={false} />
 					) : null}
 
 					{this.props.errorMsg ? (
@@ -109,7 +99,7 @@ Dashboard.Views.AppDeployCommit = React.createClass({
 	},
 
 	getInitialState: function () {
-		return Marbles.Utils.extend(getState(this.props));
+		return extend(getState(this.props));
 	},
 
 	componentDidMount: function () {
@@ -128,14 +118,14 @@ Dashboard.Views.AppDeployCommit = React.createClass({
 
 		var prevCommitStoreId = this.state.commitStoreId;
 		var nextCommitStoreId = getCommitStoreId(props);
-		if ( !Marbles.Utils.assertEqual(prevCommitStoreId, nextCommitStoreId) ) {
+		if ( !assertEqual(prevCommitStoreId, nextCommitStoreId) ) {
 			GithubCommitStore.removeChangeListener(prevCommitStoreId, this.__handleStoreChange);
 			GithubCommitStore.addChangeListener(nextCommitStoreId, this.__handleStoreChange);
 			didChange = true;
 		}
 		var prevJobOutputStoreId = this.state.jobOutputStoreId;
 		var nextJobOutputStoreId = getJobOutputStoreId(props);
-		if ( !Marbles.Utils.assertEqual(prevJobOutputStoreId, nextJobOutputStoreId) ) {
+		if ( !assertEqual(prevJobOutputStoreId, nextJobOutputStoreId) ) {
 			if (prevJobOutputStoreId) {
 				JobOutputStore.removeChangeListener(prevJobOutputStoreId, this.__handleStoreChange);
 			}
@@ -181,4 +171,4 @@ Dashboard.Views.AppDeployCommit = React.createClass({
 	}
 });
 
-})();
+export default AppDeployCommit;

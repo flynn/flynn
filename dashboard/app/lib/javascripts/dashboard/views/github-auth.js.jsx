@@ -1,20 +1,12 @@
-//= require ../stores/app
-//= require ../actions/app-auth
-//= require ./route-link
-//= require ./external-link
+import { assertEqual, extend } from 'marbles/utils';
+import QueryParams from 'marbles/query_params';
+import Config from '../config';
+import AppStore from '../stores/app';
+import AppAuthActions from '../actions/app-auth';
+import RouteLink from './route-link';
+import ExternalLink from './external-link';
 
-(function () {
-
-"use strict";
-
-var AppStore = Dashboard.Stores.App;
-
-var AppAuthActions = Dashboard.Actions.AppAuth;
-
-var RouteLink = Dashboard.Views.RouteLink;
-var ExternalLink = Dashboard.Views.ExternalLink;
-
-Dashboard.Views.GithubAuth = React.createClass({
+var GithubAuth = React.createClass({
 	displayName: "Views.GithubAuth",
 
 	render: function () {
@@ -39,7 +31,7 @@ Dashboard.Views.GithubAuth = React.createClass({
 
 						<ol>
 							<li>
-								<ExternalLink href={"https://github.com/settings/tokens/new"+ Marbles.QueryParams.serializeParams([{
+								<ExternalLink href={"https://github.com/settings/tokens/new"+ QueryParams.serializeParams([{
 										scopes: "repo,read:org,read:public_key",
 										description: "Flynn Dashboard"
 									}])} className="btn-green connect-with-github" onClick={this.__handleGenerateTokenBtnClick}>
@@ -50,7 +42,7 @@ Dashboard.Views.GithubAuth = React.createClass({
 								<p>Click the button above to request the token from GitHub. The name and permissions should already be completed for you, just like the screen shot below.</p>
 
 								<div>
-									<img id="github-token-gen" src={Dashboard.config.ASSET_PATHS['github-token-gen.png']} alt="Generate Token" />
+									<img id="github-token-gen" src={Config.ASSET_PATHS['github-token-gen.png']} alt="Generate Token" />
 								</div>
 							</li>
 
@@ -67,7 +59,7 @@ Dashboard.Views.GithubAuth = React.createClass({
 								</button>
 
 								<div>
-									<img id="github-token-copy" src={Dashboard.config.ASSET_PATHS['github-token-copy.png']} alt="Copy Token" />
+									<img id="github-token-copy" src={Config.ASSET_PATHS['github-token-copy.png']} alt="Copy Token" />
 								</div>
 							</li>
 						</ol>
@@ -78,7 +70,7 @@ Dashboard.Views.GithubAuth = React.createClass({
 	},
 
 	getInitialState: function () {
-		return Marbles.Utils.extend(this.__getState(this.props), {
+		return extend(this.__getState(this.props), {
 			githubToken: "",
 			submitDisabled: true
 		});
@@ -91,7 +83,7 @@ Dashboard.Views.GithubAuth = React.createClass({
 	componentWillReceiveProps: function (nextProps) {
 		var prevAppStoreId = this.state.appStoreId;
 		var nextAppStoreId = this.__getAppStoreId(nextProps);
-		if ( !Marbles.Utils.assertEqual(prevAppStoreId, nextAppStoreId) ) {
+		if ( !assertEqual(prevAppStoreId, nextAppStoreId) ) {
 			AppStore.removeChangeListener(prevAppStoreId, this.__handleStoreChange);
 			AppStore.addChangeListener(nextAppStoreId, this.__handleStoreChange);
 			this.__handleStoreChange(nextProps);
@@ -116,8 +108,8 @@ Dashboard.Views.GithubAuth = React.createClass({
 
 	__handleSubmit: function (e) {
 		e.preventDefault();
-		var release = Marbles.Utils.extend({}, this.state.release, {
-			env: Marbles.Utils.extend({}, this.state.release.env, {
+		var release = extend({}, this.state.release, {
+			env: extend({}, this.state.release.env, {
 				GITHUB_TOKEN: this.state.githubToken
 			})
 		});
@@ -151,7 +143,7 @@ Dashboard.Views.GithubAuth = React.createClass({
 		state.app = appState.app;
 		state.release = appState.release;
 		if (state.release) {
-			state.env = Marbles.Utils.extend({}, state.release.env);
+			state.env = extend({}, state.release.env);
 		}
 
 		return state;
@@ -159,4 +151,4 @@ Dashboard.Views.GithubAuth = React.createClass({
 
 });
 
-})();
+export default GithubAuth;

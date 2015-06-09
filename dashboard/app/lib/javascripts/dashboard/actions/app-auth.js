@@ -1,14 +1,10 @@
-//= require ../dispatcher
+import Dispatcher from '../dispatcher';
+import Config from '../config';
 
-(function () {
-
-"use strict";
-
-var Dispatcher = Dashboard.Dispatcher;
-
-Dashboard.Actions.AppAuth = {
+var AppAuth = {
 	setGithubToken: function (token) {
-		Dashboard.config.setGithubToken(token);
+		// TODO(jvatic): Use Dispatcher for this
+		Config.setGithubToken(token);
 	},
 
 	createRelease: function (storeId, release) {
@@ -20,4 +16,4 @@ Dashboard.Actions.AppAuth = {
 	}
 };
 
-})();
+export default AppAuth;

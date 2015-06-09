@@ -1,4 +1,6 @@
-Marbles.Utils.extend(Dashboard.config, {
+import { extend } from 'marbles/utils';
+
+var StaticConfig = extend({
   APP_NAME: <%= Yajl::Encoder.encode(ENV['APP_NAME'] || '') %>,
   API_SERVER: <%= Yajl::Encoder.encode(ENV['API_SERVER'] || '') %>,
   PATH_PREFIX: <%= Yajl::Encoder.encode(ENV['PATH_PREFIX'] || '') %>,
@@ -27,3 +29,4 @@ Marbles.Utils.extend(Dashboard.config, {
   ).inject({}) { |memo, name| memo[name] = "/assets/"+ asset_path(name).sub(/\A\.\//, ''); memo }) %>
 }, window.DashboardConfig || {});
 
+export default StaticConfig;

@@ -1,14 +1,15 @@
-//= require ./dispatcher
-(function () {
-"use strict";
+import { createClass, extend } from 'marbles/utils';
+import HTTP from 'marbles/http';
+import SerializeJSONMiddleware from 'marbles/http/middleware/serialize_json';
+import Dispatcher from './dispatcher';
 
-Dashboard.GithubClient = Marbles.Utils.createClass({
+var GithubClient = createClass({
 	displayName: "GithubClient",
 
 	mixins: [{
 		ctor: {
 			middleware: [
-				Marbles.HTTP.Middleware.SerializeJSON
+				SerializeJSONMiddleware
 			]
 		}
 	}],
@@ -40,10 +41,10 @@ Dashboard.GithubClient = Marbles.Utils.createClass({
 			}.bind(this)
 		}]);
 
-		return Marbles.HTTP(Marbles.Utils.extend({
+		return HTTP(extend({
 			method: method,
 			middleware: [].concat(this.constructor.middleware).concat(middleware),
-			headers: Marbles.Utils.extend({
+			headers: extend({
 				Accept: 'application/json'
 			}, args.headers || {}),
 			url: "https://api.github.com" + path
@@ -55,7 +56,7 @@ Dashboard.GithubClient = Marbles.Utils.createClass({
 					resolve([res, xhr]);
 				} else {
 					if (xhr.status === 401) {
-						Dashboard.Dispatcher.handleAppEvent({
+						Dispatcher.handleAppEvent({
 							name: "GITHUB_AUTH_CHANGE",
 							authenticated: false
 						});
@@ -95,7 +96,7 @@ Dashboard.GithubClient = Marbles.Utils.createClass({
 
 	getOrgRepos: function (params) {
 		params = [].concat(params);
-		params[0] = Marbles.Utils.extend({}, params[0]);
+		params[0] = extend({}, params[0]);
 		var org = params[0].org;
 		delete params[0].org;
 		return this.performRequest('GET', '/orgs/'+ encodeURIComponent(org) +'/repos', {params: params});
@@ -133,4 +134,4 @@ Dashboard.GithubClient = Marbles.Utils.createClass({
 	}
 });
 
-})();
+export default GithubClient;

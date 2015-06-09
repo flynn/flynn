@@ -1,7 +1,5 @@
-//= require ../store
-
-(function () {
-"use strict";
+import Store from '../store';
+import Config from '../config';
 
 function buildpackMatchFn(pattern) {
 	return function (paths) {
@@ -93,7 +91,7 @@ var buildpackRules = [
 	}
 ];
 
-var GithubRepoBuildpack = Dashboard.Stores.GithubRepoBuildpack = Dashboard.Store.createClass({
+var GithubRepoBuildpack = Store.createClass({
 	displayName: "Stores.GithubRepoBuildpack",
 
 	getState: function () {
@@ -125,7 +123,7 @@ var GithubRepoBuildpack = Dashboard.Stores.GithubRepoBuildpack = Dashboard.Store
 	},
 
 	__detectBuildpack: function () {
-		return Dashboard.githubClient.getRepoTree(this.props.ownerLogin, this.props.repoName, this.props.ref, [{ recursive: 1 }]).then(function (args) {
+		return Config.githubClient.getRepoTree(this.props.ownerLogin, this.props.repoName, this.props.ref, [{ recursive: 1 }]).then(function (args) {
 			var buildpack = this.__findBuildpack(args[0].tree.map(function (item) {
 				return item.path;
 			}));
@@ -160,4 +158,4 @@ GithubRepoBuildpack.isValidId = function (id) {
 	return id.ownerLogin && id.repoName && id.ref;
 };
 
-})();
+export default GithubRepoBuildpack;

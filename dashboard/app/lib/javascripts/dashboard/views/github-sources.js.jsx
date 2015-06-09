@@ -1,19 +1,10 @@
-//= require ../stores/github-user
-//= require ../stores/github-orgs
-//= require ./helpers/getPath
-//= require ./route-link
-
-(function () {
-
-"use strict";
-
-var GithubUserStore = Dashboard.Stores.GithubUser;
-var GithubOrgsStore = Dashboard.Stores.GithubOrgs;
+import GithubUserStore from '../stores/github-user';
+import GithubOrgsStore from '../stores/github-orgs';
+import getPath from './helpers/getPath';
+import RouteLink from './route-link';
 
 var orgsStoreId = "default";
 var userStoreId = "default";
-
-var getPath = Dashboard.Views.Helpers.getPath;
 
 function getState() {
 	var state = {};
@@ -24,7 +15,21 @@ function getState() {
 	return state;
 }
 
-Dashboard.Views.GithubSources = React.createClass({
+var Source = React.createClass({
+	displayName: "Views.GithubSources - Source",
+
+	render: function () {
+		var source = this.props.source;
+		return (
+			<RouteLink path={this.props.path}>
+				<img src={source.avatarURL + "&size=50"} title={source.name ? source.name +" ("+ source.login +")" : source.login} />
+			</RouteLink>
+		);
+	}
+
+});
+
+var GithubSources = React.createClass({
 	displayName: "Views.GithubSources",
 
 	render: function () {
@@ -69,18 +74,4 @@ Dashboard.Views.GithubSources = React.createClass({
 	}
 });
 
-var Source = React.createClass({
-	displayName: "Views.GithubSources - Source",
-
-	render: function () {
-		var source = this.props.source;
-		return (
-			<Dashboard.Views.RouteLink path={this.props.path}>
-				<img src={source.avatarURL + "&size=50"} title={source.name ? source.name +" ("+ source.login +")" : source.login} />
-			</Dashboard.Views.RouteLink>
-		);
-	}
-
-});
-
-})();
+export default GithubSources;

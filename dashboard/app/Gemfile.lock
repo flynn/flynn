@@ -6,49 +6,26 @@ GIT
     flynn-dashboard-web-icons (0.0.1)
 
 GIT
-  remote: git://github.com/jvaill/sprockets.git
-  revision: 6327a13e77609991509c8cf3d3c1e571f6a4b23d
-  branch: master
-  specs:
-    sprockets (2.9.2)
-      hike (~> 1.2)
-      multi_json (~> 1.0)
-      rack (~> 1.0)
-      tilt (~> 1.1, != 1.3.0)
-
-GIT
-  remote: git://github.com/jvatic/marbles-js.git
-  revision: e11f4b306d0bddac25a768fcee1a3092bfa12700
-  branch: master
-  specs:
-    marbles-js (0.0.5)
-
-GIT
-  remote: git://github.com/jvatic/react-jsx-sprockets.git
-  revision: d109a47a24b6c17e0284081115f7fdfbb168a732
-  branch: master
-  specs:
-    react-jsx-sprockets (0.2.1)
-      execjs (>= 1.2.9)
-      sprockets (>= 2.0.3)
-      tilt (>= 1.3.3)
-      yajl-ruby
-
-GIT
   remote: git://github.com/jvatic/static-sprockets.git
-  revision: a06f4250fab47924b3adada8f6b5d70ff6226264
+  revision: 80ff2ad17e5a14e6e5797b4df05d162d079eea8f
   branch: master
   specs:
     static-sprockets (0.0.2)
       mimetype-fu
-      rack (~> 1.0)
+      rack
       rack-putty (= 0.0.1)
       sass
-      sprockets (~> 2.0)
-      sprockets-helpers
+      sprockets
       sprockets-rainpress
-      sprockets-sass
       uglifier
+
+GIT
+  remote: git://github.com/rails/sprockets.git
+  revision: 09a7f56fe403700301467d3b14ee08e3aa713643
+  tag: v3.2.0
+  specs:
+    sprockets (3.2.0)
+      rack (~> 1.0)
 
 GIT
   remote: git://github.com/tent/rack-putty.git
@@ -58,44 +35,66 @@ GIT
     rack-putty (0.0.1)
       rack-mount (~> 0.8.3)
 
+GIT
+  remote: https://github.com/jvatic/es6-module-mapper.git
+  revision: 513978c86df3785f5d37aa0cee4ec5c0fc980ced
+  branch: master
+  specs:
+    es6-module-mapper (0.0.1)
+      sprockets (~> 3.2)
+      yajl-ruby (~> 1.2)
+
+GIT
+  remote: https://github.com/jvatic/marbles-js.git
+  revision: 50fe2ed6d530d9b695b98a775dcc28ec7c9478bc
+  branch: es6-modules
+  specs:
+    marbles-js (0.0.5)
+      es6-module-mapper
+
+GIT
+  remote: https://github.com/jvatic/react-jsx-sprockets
+  revision: 50418cb324889890190808b12e3017a5568d6cd8
+  branch: master
+  specs:
+    react-jsx-sprockets (0.2.1)
+      execjs (>= 1.2.9)
+      sprockets (>= 2.0.3)
+      tilt (>= 1.3.3)
+      yajl-ruby
+
 GEM
   remote: https://rubygems.org/
   specs:
-    execjs (2.2.1)
-    hike (1.2.3)
-    json (1.8.1)
+    execjs (2.5.2)
+    json (1.8.3)
     mimetype-fu (0.1.2)
-    multi_json (1.10.1)
-    rack (1.5.2)
+    rack (1.6.1)
     rack-mount (0.8.3)
       rack (>= 1.0.0)
     rainpress (1.0)
-    rake (10.3.2)
-    sass (3.4.5)
-    sprockets-helpers (1.1.0)
-      sprockets (~> 2.0)
+    rake (10.4.2)
+    sass (3.4.14)
     sprockets-rainpress (0.0.1)
       rainpress
       sprockets
-    sprockets-sass (1.2.0)
-      sprockets (~> 2.0)
-      tilt (~> 1.1)
-    tilt (1.4.1)
-    uglifier (2.5.3)
+    tilt (2.0.1)
+    uglifier (2.7.1)
       execjs (>= 0.3.0)
       json (>= 1.8.0)
-    yajl-ruby (1.2.0)
+    yajl-ruby (1.2.1)
 
 PLATFORMS
   ruby
 
 DEPENDENCIES
+  es6-module-mapper!
   flynn-dashboard-web-icons!
   marbles-js!
   mimetype-fu
   rack-putty!
   rake
   react-jsx-sprockets!
-  sprockets (~> 2.0)!
+  sprockets!
   static-sprockets!
   yajl-ruby

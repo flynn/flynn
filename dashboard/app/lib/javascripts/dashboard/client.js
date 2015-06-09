@@ -1,15 +1,19 @@
-(function () {
+import { createClass, extend } from 'marbles/utils';
+import HTTP from 'marbles/http';
+import SerializeJSONMiddleware from 'marbles/http/middleware/serialize_json';
+import WithCredentialsMiddleware from 'marbles/http/middleware/with_credentials';
+import BasicAuthMiddleware from 'marbles/http/middleware/basic_auth';
+import QueryParams from 'marbles/query_params';
+import Config from './config';
 
-"use strict";
-
-Dashboard.Client = Marbles.Utils.createClass({
+var Client = createClass({
 	displayName: "Client",
 
 	mixins: [{
 		ctor: {
 			middleware: [
-				Marbles.HTTP.Middleware.SerializeJSON,
-				Marbles.HTTP.Middleware.WithCredentials
+				SerializeJSONMiddleware,
+				WithCredentialsMiddleware
 			]
 		}
 	}],
@@ -38,7 +42,7 @@ Dashboard.Client = Marbles.Utils.createClass({
 		var middleware = args.middleware || [];
 		delete args.middleware;
 
-		return Marbles.HTTP(Marbles.Utils.extend({
+		return HTTP(extend({
 			method: method,
 			middleware: [].concat(this.constructor.middleware).concat(middleware),
 		}, args)).then(function (args) {
@@ -52,7 +56,7 @@ Dashboard.Client = Marbles.Utils.createClass({
 					resolve([res, xhr]);
 				} else {
 					if (xhr.status === 401) {
-						Dashboard.config.fetch();
+						Config.fetch();
 					}
 
 					reject([res, xhr]);
@@ -62,10 +66,10 @@ Dashboard.Client = Marbles.Utils.createClass({
 	},
 
 	performControllerRequest: function (method, args) {
-		var controllerKey = (Dashboard.config.user || {}).controller_key;
-		return this.performRequest(method, Marbles.Utils.extend({}, args, {
+		var controllerKey = (Config.user || {}).controller_key;
+		return this.performRequest(method, extend({}, args, {
 			middleware: [
-				Marbles.HTTP.Middleware.BasicAuth("", controllerKey)
+				BasicAuthMiddleware("", controllerKey)
 			],
 			url: this.endpoints.cluster_controller + args.url
 		}));
@@ -81,7 +85,7 @@ Dashboard.Client = Marbles.Utils.createClass({
 				'Content-Type': 'application/json'
 			}
 		}).then(function (args) {
-			return Dashboard.config.fetch().then(function () {
+			return Config.fetch().then(function () {
 				return args;
 			});
 		});
@@ -91,7 +95,7 @@ Dashboard.Client = Marbles.Utils.createClass({
 		return this.performRequest('DELETE', {
 			url: this.endpoints.logout
 		}).then(function (args) {
-			return Dashboard.config.fetch().then(function () {
+			return Config.fetch().then(function () {
 				return args;
 			});
 		});
@@ -245,9 +249,9 @@ Dashboard.Client = Marbles.Utils.createClass({
 			return Promise.reject('window.EventSource not defined');
 		}
 
-		var controllerKey = (Dashboard.config.user || {}).controller_key;
+		var controllerKey = (Config.user || {}).controller_key;
 		var url = this.endpoints.cluster_controller +'/apps/'+ encodeURIComponent(appId) +'/events';
-		url = url + Marbles.QueryParams.serializeParams([{
+		url = url + QueryParams.serializeParams([{
 			key: controllerKey,
 			object_type: 'deployment',
 			object_id: deploymentId,
@@ -317,4 +321,4 @@ Dashboard.Client = Marbles.Utils.createClass({
 	},
 });
 
-})();
+export default Client;

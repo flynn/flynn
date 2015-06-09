@@ -1,10 +1,5 @@
-//= require ../stores/app-resources
-
-(function () {
-
-"use strict";
-
-var AppResourcesStore = Dashboard.Stores.AppResources;
+import { assertEqual } from 'marbles/utils';
+import AppResourcesStore from '../stores/app-resources';
 
 function getAppResourcesStoreId (props) {
 	return {
@@ -24,7 +19,7 @@ function getState (props) {
 	return state;
 }
 
-Dashboard.Views.AppResources = React.createClass({
+var AppResources = React.createClass({
 	displayName: "Views.AppResources",
 
 	render: function () {
@@ -62,7 +57,7 @@ Dashboard.Views.AppResources = React.createClass({
 	componentWillReceiveProps: function (nextProps) {
 		var prevAppResourcesStoreId = this.state.appResourcesStoreId;
 		var nextAppResourcesStoreId = getAppResourcesStoreId(nextProps);
-		if ( !Marbles.Utils.assertEqual(prevAppResourcesStoreId, nextAppResourcesStoreId) ) {
+		if ( !assertEqual(prevAppResourcesStoreId, nextAppResourcesStoreId) ) {
 			AppResourcesStore.removeChangeListener(prevAppResourcesStoreId, this.__handleStoreChange);
 			AppResourcesStore.addChangeListener(nextAppResourcesStoreId, this.__handleStoreChange);
 			this.__handleStoreChange(nextProps);
@@ -78,4 +73,4 @@ Dashboard.Views.AppResources = React.createClass({
 	}
 });
 
-})();
+export default AppResources;

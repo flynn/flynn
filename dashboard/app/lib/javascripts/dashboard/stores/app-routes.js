@@ -1,11 +1,10 @@
-//= require ../store
-//= require ./app
+import State from 'marbles/state';
+import Store from '../store';
+import Config from '../config';
+import Dispatcher from '../dispatcher';
+import App from './app';
 
-(function () {
-
-"use strict";
-
-var AppRoutes = Dashboard.Stores.AppRoutes = Dashboard.Store.createClass({
+var AppRoutes = Store.createClass({
 	displayName: "Stores.AppRoutes",
 
 	getState: function () {
@@ -33,7 +32,7 @@ var AppRoutes = Dashboard.Stores.AppRoutes = Dashboard.Store.createClass({
 	handleEvent: function (event) {
 		switch (event.name) {
 			case "NEW_APP_ROUTE:CREATE_ROUTE":
-				Dashboard.Stores.App.findOrFetch(this.id.appId).then(function (app) {
+				App.findOrFetch(this.id.appId).then(function (app) {
 					return this.__createAppRoute(event.domain, app.name);
 				}.bind(this)).then(function () {
 					return this.__fetchRoutes();
@@ -64,7 +63,7 @@ var AppRoutes = Dashboard.Stores.AppRoutes = Dashboard.Store.createClass({
 			service: appName +"-web"
 		};
 		return this.__getClient().createAppRoute(this.props.appId, data).then(function () {
-			Dashboard.Dispatcher.handleStoreEvent({
+			Dispatcher.handleStoreEvent({
 				name: "APP_ROUTES:CREATED",
 				appId: this.id.appId
 			});
@@ -74,7 +73,7 @@ var AppRoutes = Dashboard.Stores.AppRoutes = Dashboard.Store.createClass({
 			} else {
 				var res = args[0];
 				var xhr = args[1];
-				Dashboard.Dispatcher.handleStoreEvent({
+				Dispatcher.handleStoreEvent({
 					name: "APP_ROUTES:CREATE_FAILED",
 					appId: this.props.appId,
 					errorMsg: res.message || "Something went wrong ["+ xhr.status +"]"
@@ -93,7 +92,7 @@ var AppRoutes = Dashboard.Stores.AppRoutes = Dashboard.Store.createClass({
 		});
 
 		return this.__getClient().deleteAppRoute(this.props.appId, routeType, routeId).then(function () {
-			Dashboard.Dispatcher.handleStoreEvent({
+			Dispatcher.handleStoreEvent({
 				name: "APP_ROUTES:DELETED",
 				appId: this.id.appId,
 				routeId: routeId
@@ -104,7 +103,7 @@ var AppRoutes = Dashboard.Stores.AppRoutes = Dashboard.Store.createClass({
 			} else {
 				var res = args[0];
 				var xhr = args[1];
-				Dashboard.Dispatcher.handleStoreEvent({
+				Dispatcher.handleStoreEvent({
 					name: "APP_ROUTES:DELETE_FAILED",
 					appId: this.props.appId,
 					routeId: routeId,
@@ -116,15 +115,15 @@ var AppRoutes = Dashboard.Stores.AppRoutes = Dashboard.Store.createClass({
 	},
 
 	__getClient: function () {
-		return Dashboard.client;
+		return Config.client;
 	}
 
-}, Marbles.State);
+}, State);
 
 AppRoutes.isValidId = function (id) {
 	return !!id.appId;
 };
 
-AppRoutes.registerWithDispatcher(Dashboard.Dispatcher);
+AppRoutes.registerWithDispatcher(Dispatcher);
 
-})();
+export default AppRoutes;

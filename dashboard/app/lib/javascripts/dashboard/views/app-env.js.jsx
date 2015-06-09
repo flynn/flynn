@@ -1,17 +1,8 @@
-//= require ../stores/app
-//= require ../actions/app-env
-//= require ./edit-env
-//= require Modal
-
-(function () {
-
-"use strict";
-
-var AppStore = Dashboard.Stores.App;
-
-var AppEnvActions = Dashboard.Actions.AppEnv;
-
-var Modal = window.Modal;
+import { assertEqual, extend } from 'marbles/utils';
+import Modal from 'Modal';
+import AppStore from '../stores/app';
+import AppEnvActions from '../actions/app-env';
+import EditEnv from './edit-env';
 
 function getAppStoreId (props) {
 	return {
@@ -30,8 +21,8 @@ function getState (props, prevState) {
 	state.app = appState.app;
 	state.release = appState.release;
 
-	if (state.release && ( !prevState.release || !Marbles.Utils.assertEqual(prevState.release, state.release) )) {
-		state.env = Marbles.Utils.extend({}, state.release.env);
+	if (state.release && ( !prevState.release || !assertEqual(prevState.release, state.release) )) {
+		state.env = extend({}, state.release.env);
 		state.hasChanges = false;
 		state.isSaving = false;
 	}
@@ -39,7 +30,7 @@ function getState (props, prevState) {
 	return state;
 }
 
-Dashboard.Views.AppEnv = React.createClass({
+var AppEnv = React.createClass({
 	displayName: "Views.AppEnv",
 
 	render: function () {
@@ -53,7 +44,7 @@ Dashboard.Views.AppEnv = React.createClass({
 					</header>
 					{env ? (
 						<div>
-							<Dashboard.Views.EditEnv env={env} onChange={this.__handleEnvChange} />
+							<EditEnv env={env} onChange={this.__handleEnvChange} />
 							<button className="save-btn" onClick={this.__handleSaveBtnClick} disabled={ !this.state.hasChanges || this.state.isSaving }>{this.state.isSaving ? "Please wait..." : "Save"}</button>
 						</div>
 					) : null}
@@ -73,7 +64,7 @@ Dashboard.Views.AppEnv = React.createClass({
 	componentWillReceiveProps: function (nextProps) {
 		var prevAppStoreId = this.state.appStoreId;
 		var nextAppStoreId = getAppStoreId(nextProps);
-		if ( !Marbles.Utils.assertEqual(prevAppStoreId, nextAppStoreId) ) {
+		if ( !assertEqual(prevAppStoreId, nextAppStoreId) ) {
 			AppStore.removeChangeListener(prevAppStoreId, this.__handleStoreChange);
 			AppStore.addChangeListener(nextAppStoreId, this.__handleStoreChange);
 			this.__handleStoreChange(nextProps);
@@ -91,7 +82,7 @@ Dashboard.Views.AppEnv = React.createClass({
 	__handleEnvChange: function (env) {
 		this.setState({
 			env: env,
-			hasChanges: !Marbles.Utils.assertEqual(env, this.state.release.env)
+			hasChanges: !assertEqual(env, this.state.release.env)
 		});
 	},
 
@@ -107,4 +98,4 @@ Dashboard.Views.AppEnv = React.createClass({
 	}
 });
 
-})();
+export default AppEnv;

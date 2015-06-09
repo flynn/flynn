@@ -1,24 +1,12 @@
-//= require ../stores/github-user
-//= require ../stores/github-repos
-//= require ../actions/github-repos
-//= require ./helpers/getPath
-//= require ./route-link
-//= require ScrollPagination
-
-(function () {
-
-"use strict";
-
-var ScrollPagination = window.ScrollPagination;
-
-var GithubUserStore = Dashboard.Stores.GithubUser;
-var GithubReposStore = Dashboard.Stores.GithubRepos;
-
-var GithubReposActions = Dashboard.Actions.GithubRepos;
+import { assertEqual } from 'marbles/utils';
+import ScrollPagination from 'ScrollPagination';
+import GithubUserStore from '../stores/github-user';
+import GithubReposStore from '../stores/github-repos';
+import GithubReposActions from '../actions/github-repos';
+import getPath from './helpers/getPath';
+import RouteLink from './route-link';
 
 var userStoreId = "default";
-
-var getPath = Dashboard.Views.Helpers.getPath;
 
 function getRepoStoreId(props) {
 	return {
@@ -48,7 +36,60 @@ function getTypesState() {
 	return state;
 }
 
-Dashboard.Views.GithubRepos = React.createClass({
+var Types = React.createClass({
+	displayName: "Views.GithubRepos - Types",
+
+	render: function () {
+		var user = this.state.user;
+		return (
+			<section className="github-repo-types">
+				<ul>
+					<li className={this.props.selectedType === null ? "selected" : null}>
+						<RouteLink path={getPath([{ type: null }])}>
+							{this.props.selectedSource || (user ? user.login : "")}
+						</RouteLink>
+					</li>
+
+					{this.props.selectedSource ? null : (
+						<li className={this.props.selectedType === "star" ? "selected" : null}>
+							<RouteLink path={getPath([{ type: "star" }])}>
+								starred
+							</RouteLink>
+						</li>
+					)}
+
+					<li className={this.props.selectedType === "fork" ? "selected" : null}>
+						<RouteLink path={getPath([{ type: "fork" }])}>
+							forked
+						</RouteLink>
+					</li>
+				</ul>
+			</section>
+		);
+	},
+
+	getInitialState: function () {
+		return getTypesState(this.props);
+	},
+
+	componentDidMount: function () {
+		GithubUserStore.addChangeListener(userStoreId, this.__handleStoreChange);
+	},
+
+	componentWillReceiveProps: function (props) {
+		this.setState(getTypesState(props));
+	},
+
+	componentWillUnmount: function () {
+		GithubUserStore.removeChangeListener(userStoreId, this.__handleStoreChange);
+	},
+
+	__handleStoreChange: function () {
+		this.setState(getTypesState(this.props));
+	}
+});
+
+var GithubRepos = React.createClass({
 	displayName: "Views.GithubRepos",
 
 	render: function () {
@@ -77,12 +118,12 @@ Dashboard.Views.GithubRepos = React.createClass({
 								{page.repos.map(function (repo) {
 									return (
 										<li key={repo.id}>
-											<Dashboard.Views.RouteLink path={getPath([{ repo: repo.name, owner: repo.ownerLogin, branch: repo.defaultBranch }])}>
+											<RouteLink path={getPath([{ repo: repo.name, owner: repo.ownerLogin, branch: repo.defaultBranch }])}>
 												<h2>
 													{repo.name} <small>{repo.language}</small>
 												</h2>
 												<p>{repo.description}</p>
-											</Dashboard.Views.RouteLink>
+											</RouteLink>
 										</li>
 									);
 								}, this)}
@@ -111,7 +152,7 @@ Dashboard.Views.GithubRepos = React.createClass({
 	componentWillReceiveProps: function (props) {
 		var oldRepoStoreId = this.state.reposStoreId;
 		var newRepoStoreId = getRepoStoreId(props);
-		if ( !Marbles.Utils.assertEqual(oldRepoStoreId, newRepoStoreId) ) {
+		if ( !assertEqual(oldRepoStoreId, newRepoStoreId) ) {
 			GithubReposStore.removeChangeListener(oldRepoStoreId, this.__handleStoreChange);
 			GithubReposStore.addChangeListener(newRepoStoreId, this.__handleStoreChange);
 		}
@@ -131,57 +172,4 @@ Dashboard.Views.GithubRepos = React.createClass({
 	}
 });
 
-var Types = React.createClass({
-	displayName: "Views.GithubRepos - Types",
-
-	render: function () {
-		var user = this.state.user;
-		return (
-			<section className="github-repo-types">
-				<ul>
-					<li className={this.props.selectedType === null ? "selected" : null}>
-						<Dashboard.Views.RouteLink path={getPath([{ type: null }])}>
-							{this.props.selectedSource || (user ? user.login : "")}
-						</Dashboard.Views.RouteLink>
-					</li>
-
-					{this.props.selectedSource ? null : (
-						<li className={this.props.selectedType === "star" ? "selected" : null}>
-							<Dashboard.Views.RouteLink path={getPath([{ type: "star" }])}>
-								starred
-							</Dashboard.Views.RouteLink>
-						</li>
-					)}
-
-					<li className={this.props.selectedType === "fork" ? "selected" : null}>
-						<Dashboard.Views.RouteLink path={getPath([{ type: "fork" }])}>
-							forked
-						</Dashboard.Views.RouteLink>
-					</li>
-				</ul>
-			</section>
-		);
-	},
-
-	getInitialState: function () {
-		return getTypesState(this.props);
-	},
-
-	componentDidMount: function () {
-		GithubUserStore.addChangeListener(userStoreId, this.__handleStoreChange);
-	},
-
-	componentWillReceiveProps: function (props) {
-		this.setState(getTypesState(props));
-	},
-
-	componentWillUnmount: function () {
-		GithubUserStore.removeChangeListener(userStoreId, this.__handleStoreChange);
-	},
-
-	__handleStoreChange: function () {
-		this.setState(getTypesState(this.props));
-	}
-});
-
-})();
+export default GithubRepos;

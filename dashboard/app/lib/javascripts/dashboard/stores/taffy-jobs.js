@@ -1,11 +1,8 @@
-//= require ../store
-//= require ./app-jobs
+import Store from '../store';
+import Dispatcher from '../dispatcher';
+import AppJobs from './app-jobs';
 
-(function () {
-
-"use strict";
-
-var TaffyJobs = Dashboard.Stores.TaffyJobs = Dashboard.Store.createClass({
+var TaffyJobs = Store.createClass({
 	displayName: "Stores.TaffyJobs",
 
 	getStateForApp: function (appId) {
@@ -23,15 +20,15 @@ var TaffyJobs = Dashboard.Stores.TaffyJobs = Dashboard.Store.createClass({
 	}
 });
 
-TaffyJobs.prototype.handleEvent      = Dashboard.Stores.AppJobs.prototype.handleEvent;
-TaffyJobs.prototype.__fetchJobs      = Dashboard.Stores.AppJobs.prototype.__fetchJobs;
-TaffyJobs.prototype.__watchAppJobs   = Dashboard.Stores.AppJobs.prototype.__watchAppJobs;
-TaffyJobs.prototype.__unwatchAppJobs = Dashboard.Stores.AppJobs.prototype.__unwatchAppJobs;
-TaffyJobs.prototype.__getClient      = Dashboard.Stores.AppJobs.prototype.__getClient;
-TaffyJobs.prototype.getInitialState  = Dashboard.Stores.AppJobs.prototype.getInitialState;
-TaffyJobs.prototype.didInitialize    = Dashboard.Stores.AppJobs.prototype.didInitialize;
-TaffyJobs.prototype.didBecomeActive  = Dashboard.Stores.AppJobs.prototype.didBecomeActive;
+TaffyJobs.prototype.handleEvent      = AppJobs.prototype.handleEvent;
+TaffyJobs.prototype.__fetchJobs      = AppJobs.prototype.__fetchJobs;
+TaffyJobs.prototype.__watchAppJobs   = AppJobs.prototype.__watchAppJobs;
+TaffyJobs.prototype.__unwatchAppJobs = AppJobs.prototype.__unwatchAppJobs;
+TaffyJobs.prototype.__getClient      = AppJobs.prototype.__getClient;
+TaffyJobs.prototype.getInitialState  = AppJobs.prototype.getInitialState;
+TaffyJobs.prototype.didInitialize    = AppJobs.prototype.didInitialize;
+TaffyJobs.prototype.didBecomeActive  = AppJobs.prototype.didBecomeActive;
 
-TaffyJobs.registerWithDispatcher(Dashboard.Dispatcher);
+TaffyJobs.registerWithDispatcher(Dispatcher);
 
-})();
+export default TaffyJobs;

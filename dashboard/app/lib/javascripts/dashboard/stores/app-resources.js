@@ -1,10 +1,9 @@
-//= require ../store
+import State from 'marbles/state';
+import Store from '../store';
+import Dispatcher from '../dispatcher';
+import Config from '../config';
 
-(function () {
-
-"use strict";
-
-var AppResources = Dashboard.Stores.AppResources = Dashboard.Store.createClass({
+var AppResources = Store.createClass({
 	displayName: "Stores.AppResources",
 
 	getState: function () {
@@ -47,15 +46,15 @@ var AppResources = Dashboard.Stores.AppResources = Dashboard.Store.createClass({
 	},
 
 	__getClient: function () {
-		return Dashboard.client;
+		return Config.client;
 	}
 
-}, Marbles.State);
+}, State);
 
 AppResources.isValidId = function (id) {
 	return !!id.appId;
 };
 
-AppResources.registerWithDispatcher(Dashboard.Dispatcher);
+AppResources.registerWithDispatcher(Dispatcher);
 
-})();
+export default AppResources;

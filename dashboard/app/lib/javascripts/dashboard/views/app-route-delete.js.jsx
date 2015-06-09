@@ -1,15 +1,7 @@
-//= require ../actions/app-route-delete
-//= require Modal
+import Modal from 'Modal';
+import AppRouteDeleteActions from '../actions/app-route-delete';
 
-(function () {
-
-"use strict";
-
-var AppRouteDeleteActions = Dashboard.Actions.AppRouteDelete;
-
-var Modal = window.Modal;
-
-Dashboard.Views.AppRouteDelete = React.createClass({
+var AppRouteDelete = React.createClass({
 	displayName: "Views.AppRouteDelete",
 
 	render: function () {
@@ -54,4 +46,4 @@ Dashboard.Views.AppRouteDelete = React.createClass({
 	}
 });
 
-})();
+export default AppRouteDelete;

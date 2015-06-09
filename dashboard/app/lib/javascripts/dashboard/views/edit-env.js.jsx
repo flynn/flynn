@@ -1,8 +1,4 @@
-(function () {
-
-"use strict";
-
-Dashboard.Views.EditEnv = React.createClass({
+var EditEnv = React.createClass({
 	displayName: "Views.EditEnv",
 
 	render: function () {
@@ -177,4 +173,4 @@ var AppEnv = React.createClass({
 	}
 });
 
-})();
+export default EditEnv;

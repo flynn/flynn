@@ -1,9 +1,9 @@
-//= require ../store
+import Store from '../store';
+import Config from '../config';
+import { rewriteGithubCommitJSON } from './github-commit-json';
+import GithubCommits from './github-commits';
 
-(function () {
-"use strict";
-
-var GithubCommit = Dashboard.Stores.GithubCommit = Dashboard.Store.createClass({
+var GithubCommit = Store.createClass({
 	displayName: "Stores.GithubCommit",
 
 	getState: function () {
@@ -33,7 +33,7 @@ var GithubCommit = Dashboard.Stores.GithubCommit = Dashboard.Store.createClass({
 	},
 
 	__fetchCommit: function () {
-		var commit = Dashboard.Stores.GithubCommits.findCommit(this.props.ownerLogin, this.props.repoName, this.props.sha);
+		var commit = GithubCommits.findCommit(this.props.ownerLogin, this.props.repoName, this.props.sha);
 		if (commit) {
 			this.setState({
 				commit: commit
@@ -41,7 +41,7 @@ var GithubCommit = Dashboard.Stores.GithubCommit = Dashboard.Store.createClass({
 			return Promise.resolve(commit);
 		}
 
-		return Dashboard.githubClient.getCommit(this.props.ownerLogin, this.props.repoName, this.props.sha).then(function (args) {
+		return Config.githubClient.getCommit(this.props.ownerLogin, this.props.repoName, this.props.sha).then(function (args) {
 			var res = args[0];
 			var commit = this.__rewriteJSON(res);
 			this.setState({
@@ -52,23 +52,7 @@ var GithubCommit = Dashboard.Stores.GithubCommit = Dashboard.Store.createClass({
 	},
 
 	__rewriteJSON: function (commitJSON) {
-		var committer = commitJSON.committer || commitJSON.commit.committer;
-		var author = commitJSON.author || commitJSON.commit.author;
-		return {
-			committer: {
-				avatarURL: committer.avatar_url,
-				name: commitJSON.commit.committer.name
-			},
-			author: {
-				avatarURL: author.avatar_url,
-				name: commitJSON.commit.author.name
-			},
-			committedAt: Date.parse(commitJSON.commit.committer.date),
-			createdAt: Date.parse(commitJSON.commit.author.date),
-			sha: commitJSON.sha,
-			message: commitJSON.commit.message,
-			githubURL: commitJSON.html_url
-		};
+		return rewriteGithubCommitJSON(commitJSON);
 	}
 });
 
@@ -76,4 +60,4 @@ GithubCommit.isValidId = function (id) {
 	return id.ownerLogin && id.repoName && id.sha;
 };
 
-})();
+export default GithubCommit;

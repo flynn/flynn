@@ -1,16 +1,13 @@
-//= require ../stores/app
-//= require ./app-controls
-//= require ./app-source-history
-//= require ./service-unavailable
+import { assertEqual } from 'marbles/utils';
+import Config from '../config';
+import AppStore from '../stores/app';
+import AppSourceHistory from './app-source-history';
+import AppControls from './app-controls';
+import ServiceUnavailable from './service-unavailable';
 
-(function () {
-
-"use strict";
-
-var AppStore = Dashboard.Stores.App;
 var isSystemApp = AppStore.isSystemApp;
 
-Dashboard.Views.App = React.createClass({
+var App = React.createClass({
 	displayName: "Views.App",
 
 	render: function () {
@@ -19,7 +16,7 @@ Dashboard.Views.App = React.createClass({
 		return (
 			<section>
 				{ !app && this.state.serviceUnavailable ? (
-					<Dashboard.Views.ServiceUnavailable status={503} />
+					<ServiceUnavailable status={503} />
 				) : null }
 
 				{ !app && this.state.notFound ? (
@@ -31,7 +28,7 @@ Dashboard.Views.App = React.createClass({
 				<section className="flex-row">
 					{app ? (
 						<section className="col app-controls-container">
-							<Dashboard.Views.AppControls
+							<AppControls
 								headerComponent={this.props.appControlsHeaderComponent}
 								appId={this.props.appId}
 								app={app}
@@ -40,9 +37,9 @@ Dashboard.Views.App = React.createClass({
 						</section>
 					) : null}
 
-					{app && app.meta && app.meta.type === "github" && Dashboard.githubClient ? (
+					{app && app.meta && app.meta.type === "github" && Config.githubClient ? (
 						<section className="col">
-							<Dashboard.Views.AppSourceHistory
+							<AppSourceHistory
 								appId={this.props.appId}
 								app={app}
 								selectedBranchName={this.props.selectedBranchName}
@@ -68,7 +65,7 @@ Dashboard.Views.App = React.createClass({
 	componentWillReceiveProps: function (nextProps) {
 		var prevAppStoreId = this.state.appStoreId;
 		var nextAppStoreId = this.__getAppStoreId(nextProps);
-		if ( !Marbles.Utils.assertEqual(prevAppStoreId, nextAppStoreId) ) {
+		if ( !assertEqual(prevAppStoreId, nextAppStoreId) ) {
 			AppStore.removeChangeListener(prevAppStoreId, this.__handleStoreChange);
 			AppStore.addChangeListener(nextAppStoreId, this.__handleStoreChange);
 			this.__handleStoreChange(nextProps);
@@ -111,4 +108,4 @@ Dashboard.Views.App = React.createClass({
 	}
 });
 
-})();
+export default App;

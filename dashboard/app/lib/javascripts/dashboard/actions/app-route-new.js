@@ -1,12 +1,6 @@
-//= require ../dispatcher
+import Dispatcher from '../dispatcher';
 
-(function () {
-
-"use strict";
-
-var Dispatcher = Dashboard.Dispatcher;
-
-Dashboard.Actions.NewAppRoute = {
+var NewAppRoute = {
 	createAppRoute: function (appId, domain) {
 		Dispatcher.handleViewAction({
 			name: "NEW_APP_ROUTE:CREATE_ROUTE",
@@ -18,4 +12,4 @@ Dashboard.Actions.NewAppRoute = {
 	}
 };
 
-})();
+export default NewAppRoute;

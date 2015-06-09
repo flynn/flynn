@@ -1,9 +1,9 @@
 @import "normalize";
 @import "sourcesanspro";
-@import "mixins";
-@import "nav";
 @import "Modal";
 @import "flynn-dashboard-web-icons";
+@import "./mixins";
+@import "./nav";
 @import "./main";
 @import "./login";
 @import "./headings";

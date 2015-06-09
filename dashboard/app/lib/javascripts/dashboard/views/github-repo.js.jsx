@@ -1,26 +1,15 @@
-//= require ../stores/github-repo
-//= require ../actions/github-commits
-//= require ../actions/github-pulls
-//= require ./github-pulls
-//= require ./github-branch-selector
-//= require ./github-repo-buildpack
-//= require ./github-commit-selector
-//= require ./github-commit
-//= require ./github-pull
-//= require ./helpers/getPath
-//= require ./route-link
-
-(function () {
-
-"use strict";
-
-var GithubRepoStore = Dashboard.Stores.GithubRepo;
-
-var GithubCommitsActions = Dashboard.Actions.GithubCommits;
-var GithubPullsActions = Dashboard.Actions.GithubPulls;
-
-var getPath = Dashboard.Views.Helpers.getPath;
-var RouteLink = Dashboard.Views.RouteLink;
+import { assertEqual } from 'marbles/utils';
+import GithubRepoStore from '../stores/github-repo';
+import GithubCommitsActions from '../actions/github-commits';
+import GithubPullsActions from '../actions/github-pulls';
+import getPath from './helpers/getPath';
+import RouteLink from './route-link';
+import GithubPull from './github-pull';
+import GithubCommit from './github-commit';
+import GithubCommitSelector from './github-commit-selector';
+import GithubRepoBuildpack from './github-repo-buildpack';
+import GithubBranchSelector from './github-branch-selector';
+import GithubPulls from './github-pulls';
 
 function getRepoStoreId (props) {
 	return {
@@ -39,7 +28,45 @@ function getState (props) {
 	return state;
 }
 
-Dashboard.Views.GithubRepo = React.createClass({
+var Commit = React.createClass({
+	displayName: "Views.GithubRepo Commit",
+
+	render: function () {
+		return (
+			<GithubCommit commit={this.props.commit}>
+				<div className="launch-btn-container">
+					<button className="launch-btn" onClick={this.__handleLaunchBtnClick}>Launch</button>
+				</div>
+			</GithubCommit>
+		);
+	},
+
+	__handleLaunchBtnClick: function (e) {
+		e.preventDefault();
+		GithubCommitsActions.launchCommit(this.props.commitsStoreId, this.props.commit.sha);
+	}
+});
+
+var PullRequest = React.createClass({
+	displayName: "Views.GithubRepo PullRequest",
+
+	render: function () {
+		return (
+			<GithubPull pull={this.props.pull}>
+				<div className="launch-btn-container">
+					<button className="launch-btn" onClick={this.__handleLaunchBtnClick}>Launch</button>
+				</div>
+			</GithubPull>
+		);
+	},
+
+	__handleLaunchBtnClick: function (e) {
+		e.preventDefault();
+		GithubPullsActions.launchPull(this.props.pullsStoreId, this.props.pull);
+	}
+});
+
+var GithubRepo = React.createClass({
 	displayName: "Views.GithubRepo",
 
 	render: function () {
@@ -75,20 +102,20 @@ Dashboard.Views.GithubRepo = React.createClass({
 
 				{selectedPanel === "commits" ? (
 					<div>
-						<Dashboard.Views.GithubBranchSelector
+						<GithubBranchSelector
 							ownerLogin={this.props.ownerLogin}
 							repoName={this.props.name}
 							selectedBranchName={selectedBranchName}
 							defaultBranchName={repo ? repo.defaultBranch : null}/>
 
-						<Dashboard.Views.GithubRepoBuildpack
+						<GithubRepoBuildpack
 							ownerLogin={this.props.ownerLogin}
 							repoName={this.props.name}
 							selectedBranchName={selectedBranchName}
 							defaultBranchName={repo ? repo.defaultBranch : null}/>
 
 						{repo ? (
-							<Dashboard.Views.GithubCommitSelector
+							<GithubCommitSelector
 								ownerLogin={this.props.ownerLogin}
 								repoName={this.props.name}
 								selectedBranchName={selectedBranchName}
@@ -99,7 +126,7 @@ Dashboard.Views.GithubRepo = React.createClass({
 				) : null}
 
 				{selectedPanel === "pulls" ? (
-					<Dashboard.Views.GithubPulls
+					<GithubPulls
 						ownerLogin={this.props.ownerLogin}
 						repoName={this.props.name}
 						pullRequestComponent={PullRequest}/>
@@ -119,7 +146,7 @@ Dashboard.Views.GithubRepo = React.createClass({
 	componentWillReceiveProps: function (props) {
 		var oldRepoStoreId = this.state.repoStoreId;
 		var newRepoStoreId = getRepoStoreId(props);
-		if ( !Marbles.Utils.assertEqual(oldRepoStoreId, newRepoStoreId) ) {
+		if ( !assertEqual(oldRepoStoreId, newRepoStoreId) ) {
 			GithubRepoStore.removeChangeListener(oldRepoStoreId, this.__handleStoreChange);
 			GithubRepoStore.addChangeListener(newRepoStoreId, this.__handleStoreChange);
 			this.__handleStoreChange(props);
@@ -135,42 +162,4 @@ Dashboard.Views.GithubRepo = React.createClass({
 	},
 });
 
-var Commit = React.createClass({
-	displayName: "Views.GithubRepo Commit",
-
-	render: function () {
-		return (
-			<Dashboard.Views.GithubCommit commit={this.props.commit}>
-				<div className="launch-btn-container">
-					<button className="launch-btn" onClick={this.__handleLaunchBtnClick}>Launch</button>
-				</div>
-			</Dashboard.Views.GithubCommit>
-		);
-	},
-
-	__handleLaunchBtnClick: function (e) {
-		e.preventDefault();
-		GithubCommitsActions.launchCommit(this.props.commitsStoreId, this.props.commit.sha);
-	}
-});
-
-var PullRequest = React.createClass({
-	displayName: "Views.GithubRepo PullRequest",
-
-	render: function () {
-		return (
-			<Dashboard.Views.GithubPull pull={this.props.pull}>
-				<div className="launch-btn-container">
-					<button className="launch-btn" onClick={this.__handleLaunchBtnClick}>Launch</button>
-				</div>
-			</Dashboard.Views.GithubPull>
-		);
-	},
-
-	__handleLaunchBtnClick: function (e) {
-		e.preventDefault();
-		GithubPullsActions.launchPull(this.props.pullsStoreId, this.props.pull);
-	}
-});
-
-})();
+export default GithubRepo;

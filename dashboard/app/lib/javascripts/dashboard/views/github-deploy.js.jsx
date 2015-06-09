@@ -1,31 +1,17 @@
-//= require ../stores/github-commit
-//= require ../stores/github-pull
-//= require ../stores/github-repo-buildpack
-//= require ../stores/app
-//= require ../stores/job-output
-//= require ../actions/github-deploy
-//= require ./github-commit
-//= require ./github-pull
-//= require ./github-repo-buildpack
-//= require ./edit-env
-//= require ./command-output
-//= require ./route-link
-//= require Modal
-
-(function () {
-
-"use strict";
-
-var GithubRepoStore = Dashboard.Stores.GithubRepo;
-var GithubCommitStore = Dashboard.Stores.GithubCommit;
-var GithubPullStore = Dashboard.Stores.GithubPull;
-var BuildpackStore = Dashboard.Stores.GithubRepoBuildpack;
-var JobOutputStore = Dashboard.Stores.JobOutput;
-
-var GithubDeployActions = Dashboard.Actions.GithubDeploy;
-
-var RouteLink = Dashboard.Views.RouteLink;
-var Modal = window.Modal;
+import { assertEqual, extend } from 'marbles/utils';
+import Modal from 'Modal';
+import GithubRepoStore from '../stores/github-repo';
+import GithubCommitStore from '../stores/github-commit';
+import GithubPullStore from '../stores/github-pull';
+import BuildpackStore from '../stores/github-repo-buildpack';
+import JobOutputStore from '../stores/job-output';
+import GithubDeployActions from '../actions/github-deploy';
+import RouteLink from './route-link';
+import CommandOutput from './command-output';
+import EditEnv from './edit-env';
+import GithubCommit from './github-commit';
+import GithubPull from './github-pull';
+import GithubRepoBuildpack from './github-repo-buildpack';
 
 function getRepoStoreId (props) {
 	return {
@@ -90,7 +76,7 @@ function getState (props, prevState, env, dbRequested) {
 
 	var prevBuildpackStoreId = prevState.buildpackStoreId;
 	var nextBuildpackStoreId = getBuildpackStoreId(props, state.commit, state.pull);
-	if ( !Marbles.Utils.assertEqual(prevBuildpackStoreId, nextBuildpackStoreId) ) {
+	if ( !assertEqual(prevBuildpackStoreId, nextBuildpackStoreId) ) {
 		BuildpackStore.removeChangeListener(prevBuildpackStoreId, this.__handleStoreChange);
 		BuildpackStore.addChangeListener(nextBuildpackStoreId, this.__handleStoreChange);
 	}
@@ -128,7 +114,7 @@ function getState (props, prevState, env, dbRequested) {
 	return state;
 }
 
-Dashboard.Views.GithubDeploy = React.createClass({
+var GithubDeploy = React.createClass({
 	displayName: "Views.GithubDeploy",
 
 	render: function () {
@@ -142,12 +128,12 @@ Dashboard.Views.GithubDeploy = React.createClass({
 						{this.props.ownerLogin +"/"+ this.props.repoName +":"+ this.props.branchName}
 					</h2>
 					{commit ? (
-						<Dashboard.Views.GithubCommit commit={commit} />
+						<GithubCommit commit={commit} />
 					) : (pull ? (
-						<Dashboard.Views.GithubPull pull={pull} />
+						<GithubPull pull={pull} />
 					) : null)}
 
-					<Dashboard.Views.GithubRepoBuildpack
+					<GithubRepoBuildpack
 						ownerLogin={this.props.ownerLogin}
 						repoName={this.props.repoName}
 						selectedBranchName={this.state.buildpackStoreId.ref} />
@@ -165,10 +151,10 @@ Dashboard.Views.GithubDeploy = React.createClass({
 					<input type="checkbox" checked={this.state.db} onChange={this.__handleDbChange} />
 				</label>
 
-				<Dashboard.Views.EditEnv env={this.state.env} onChange={this.__handleEnvChange} />
+				<EditEnv env={this.state.env} onChange={this.__handleEnvChange} />
 
 				{this.state.jobOutput ? (
-					<Dashboard.Views.CommandOutput outputStreamData={this.state.jobOutput} showTimestamp={false} />
+					<CommandOutput outputStreamData={this.state.jobOutput} showTimestamp={false} />
 				) : null}
 
 				{this.props.errorMsg ? (
@@ -227,7 +213,7 @@ Dashboard.Views.GithubDeploy = React.createClass({
 
 		var prevRepoStoreId = this.state.repoStoreId;
 		var nextRepoStoreId = getRepoStoreId(props);
-		if ( !Marbles.Utils.assertEqual(prevRepoStoreId, nextRepoStoreId) ) {
+		if ( !assertEqual(prevRepoStoreId, nextRepoStoreId) ) {
 			GithubRepoStore.addChangeListener(prevRepoStoreId, this.__handleStoreChange);
 			GithubRepoStore.removeChangeListener(nextRepoStoreId, this.__handleStoreChange);
 			didChange = true;
@@ -236,7 +222,7 @@ Dashboard.Views.GithubDeploy = React.createClass({
 		if (this.state.commitStoreId) {
 			var prevCommitStoreId = this.state.commitStoreId;
 			var nextCommitStoreId = getCommitStoreId(props);
-			if ( !Marbles.Utils.assertEqual(prevCommitStoreId, nextCommitStoreId) ) {
+			if ( !assertEqual(prevCommitStoreId, nextCommitStoreId) ) {
 				GithubCommitStore.removeChangeListener(prevCommitStoreId, this.__handleStoreChange);
 				GithubCommitStore.addChangeListener(nextCommitStoreId, this.__handleStoreChange);
 				didChange = true;
@@ -246,7 +232,7 @@ Dashboard.Views.GithubDeploy = React.createClass({
 		if (this.state.pullStoreId) {
 			var prevPullStoreId = this.state.pullStoreId;
 			var nextPullStoreId = getPullStoreId(props);
-			if ( !Marbles.Utils.assertEqual(prevPullStoreId, nextPullStoreId) ) {
+			if ( !assertEqual(prevPullStoreId, nextPullStoreId) ) {
 				GithubPullStore.removeChangeListener(prevPullStoreId, this.__handleStoreChange);
 				GithubPullStore.addChangeListener(nextPullStoreId, this.__handleStoreChange);
 				didChange = true;
@@ -255,7 +241,7 @@ Dashboard.Views.GithubDeploy = React.createClass({
 
 		var prevJobOutputStoreId = this.state.jobOutputStoreId;
 		var nextJobOutputStoreId = getJobOutputStoreId(props);
-		if ( !Marbles.Utils.assertEqual(prevJobOutputStoreId, nextJobOutputStoreId) ) {
+		if ( !assertEqual(prevJobOutputStoreId, nextJobOutputStoreId) ) {
 			if (prevJobOutputStoreId) {
 				JobOutputStore.removeChangeListener(prevJobOutputStoreId, this.__handleStoreChange);
 			}
@@ -310,7 +296,7 @@ Dashboard.Views.GithubDeploy = React.createClass({
 
 	__handleLaunchBtnClick: function (e) {
 		e.preventDefault();
-		var appData = Marbles.Utils.extend({
+		var appData = extend({
 			name: this.state.name,
 			dbRequested: this.state.db,
 			env: this.state.env
@@ -336,4 +322,4 @@ Dashboard.Views.GithubDeploy = React.createClass({
 	}
 });
 
-})();
+export default GithubDeploy;

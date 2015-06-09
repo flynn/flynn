@@ -1,12 +1,6 @@
-//= require ../dispatcher
+import Dispatcher from '../dispatcher';
 
-(function () {
-
-"use strict";
-
-var Dispatcher = Dashboard.Dispatcher;
-
-Dashboard.Actions.AppProcesses = {
+var AppProcesses = {
 	createFormation: function (appId, formation) {
 		Dispatcher.handleViewAction({
 			name: "APP_PROCESSES:CREATE_FORMATION",
@@ -18,4 +12,4 @@ Dashboard.Actions.AppProcesses = {
 	}
 };
 
-})();
+export default AppProcesses;

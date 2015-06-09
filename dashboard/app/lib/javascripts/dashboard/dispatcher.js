@@ -1,25 +1,24 @@
-(function () {
+import BaseDispatcher from 'marbles/dispatcher';
+import { extend } from 'marbles/utils';
 
-"use strict";
-
-Dashboard.Dispatcher = Marbles.Utils.extend({
+var Dispatcher = extend({
 	handleViewAction: function (action) {
-		this.dispatch(Marbles.Utils.extend({
+		this.dispatch(extend({
 			source: "VIEW_ACTION"
 		}, action));
 	},
 
 	handleStoreEvent: function (event) {
-		this.dispatch(Marbles.Utils.extend({
+		this.dispatch(extend({
 			source: "STORE_EVENT"
 		}, event));
 	},
 
 	handleAppEvent: function (event) {
-		this.dispatch(Marbles.Utils.extend({
+		this.dispatch(extend({
 			source: "APP_EVENT"
 		}, event));
 	}
-}, Marbles.Dispatcher);
+}, BaseDispatcher);
 
-})();
+export default Dispatcher;

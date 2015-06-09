@@ -1,8 +1,4 @@
-(function () {
-
-"use strict";
-
-Dashboard.Views.Input = React.createClass({
+var Input = React.createClass({
 	displayName: "Views.Input",
 
 	getInitialState: function () {
@@ -79,4 +75,4 @@ Dashboard.Views.Input = React.createClass({
 	}
 });
 
-})();
+export default Input;

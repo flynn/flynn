@@ -1,11 +1,9 @@
-//= require ../store
-//= require ../dispatcher
+import State from 'marbles/state';
+import Store from '../store';
+import Config from '../config';
+import Dispatcher from '../dispatcher';
 
-(function () {
-
-"use strict";
-
-var Apps = Dashboard.Stores.Apps = Dashboard.Store.createClass({
+var Apps = Store.createClass({
 	displayName: "Stores.Apps",
 
 	getState: function () {
@@ -62,11 +60,11 @@ var Apps = Dashboard.Stores.Apps = Dashboard.Store.createClass({
 	},
 
 	__getClient: function () {
-		return Dashboard.client;
+		return Config.client;
 	}
 
-}, Marbles.State);
+}, State);
 
-Apps.registerWithDispatcher(Dashboard.Dispatcher);
+Apps.registerWithDispatcher(Dispatcher);
 
-})();
+export default Apps;

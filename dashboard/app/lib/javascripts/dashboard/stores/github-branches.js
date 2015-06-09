@@ -1,9 +1,9 @@
-//= require ../store
+import QueryParams from 'marbles/query_params';
+import LinkHeader from 'marbles/http/link_header';
+import Store from '../store';
+import Config from '../config';
 
-(function () {
-"use strict";
-
-var GithubBranches = Dashboard.Stores.GithubBranches = Dashboard.Store.createClass({
+var GithubBranches = Store.createClass({
 	displayName: "Stores.GithubBranches",
 
 	getState: function () {
@@ -28,7 +28,7 @@ var GithubBranches = Dashboard.Stores.GithubBranches = Dashboard.Store.createCla
 		options = options || {};
 		var params = options.params || [{}];
 
-		Dashboard.githubClient.getBranches(this.props.ownerLogin, this.props.repoName, params).then(function (args) {
+		Config.githubClient.getBranches(this.props.ownerLogin, this.props.repoName, params).then(function (args) {
 			var res = args[0];
 			var xhr = args[1];
 
@@ -43,10 +43,10 @@ var GithubBranches = Dashboard.Stores.GithubBranches = Dashboard.Store.createCla
 				if (link === null) {
 					return null;
 				}
-				return Marbles.QueryParams.deserializeParams(link.href.split("?")[1]);
+				return QueryParams.deserializeParams(link.href.split("?")[1]);
 			};
 
-			var links = Marbles.HTTP.LinkHeader.parse(xhr.getResponseHeader("Link") || "");
+			var links = LinkHeader.parse(xhr.getResponseHeader("Link") || "");
 			var nextParams = parseLinkParams("next", links);
 
 			this.setState({
@@ -68,4 +68,4 @@ GithubBranches.isValidId = function (id) {
 	return id.ownerLogin && id.repoName;
 };
 
-})();
+export default GithubBranches;

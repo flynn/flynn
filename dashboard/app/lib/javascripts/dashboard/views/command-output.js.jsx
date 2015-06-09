@@ -1,9 +1,5 @@
-//= require_self
 //= require ansiparse
-
-(function () {
-
-"use strict";
+// TODO(jvaitc): Update ansiparse to strict mode / module
 
 var padding = function (str, len) {
 	if (str.length === len) {
@@ -15,7 +11,7 @@ var padding = function (str, len) {
 	return str;
 };
 
-Dashboard.Views.CommandOutput = React.createClass({
+var CommandOutput = React.createClass({
 	displayName: "Views.CommandOutput",
 
 	getDefaultProps: function () {
@@ -62,4 +58,4 @@ Dashboard.Views.CommandOutput = React.createClass({
 
 });
 
-})();
+export default CommandOutput;

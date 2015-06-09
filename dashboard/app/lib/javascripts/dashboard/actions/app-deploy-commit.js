@@ -1,12 +1,6 @@
-//= require ../dispatcher
+import Dispatcher from '../dispatcher';
 
-(function () {
-
-"use strict";
-
-var Dispatcher = Dashboard.Dispatcher;
-
-Dashboard.Actions.AppDeployCommit = {
+var AppDeployCommit = {
 	deployCommit: function (appId, ownerLogin, repoName, branchName, sha) {
 		Dispatcher.handleViewAction({
 			name: "APP_DEPLOY_COMMIT:DEPLOY_COMMIT",
@@ -21,4 +15,4 @@ Dashboard.Actions.AppDeployCommit = {
 	}
 };
 
-})();
+export default AppDeployCommit;

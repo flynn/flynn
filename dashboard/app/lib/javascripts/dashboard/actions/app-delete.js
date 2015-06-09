@@ -1,12 +1,6 @@
-//= require ../dispatcher
+import Dispatcher from '../dispatcher';
 
-(function () {
-
-"use strict";
-
-var Dispatcher = Dashboard.Dispatcher;
-
-Dashboard.Actions.AppDelete = {
+var AppDelete = {
 	deleteApp: function (appId) {
 		Dispatcher.handleViewAction({
 			name: "APP_DELETE:DELETE_APP",
@@ -17,4 +11,4 @@ Dashboard.Actions.AppDelete = {
 	}
 };
 
-})();
+export default AppDelete;

@@ -1,22 +1,39 @@
-(function () {
+import { extend } from 'marbles/utils';
+import History from 'marbles/history';
+import QueryParams from 'marbles/query_params';
+import MainRouter from './routers/main';
+import AppsRouter from './routers/apps';
+import GithubRouter from './routers/github';
+import Dispatcher from './dispatcher';
+import Config from './config';
+import Client from './client';
+import GithubClient from './github-client';
+import ServiceUnavailableComponent from './views/service-unavailable';
+import NavComponent from './views/nav';
 
-"use strict";
+var Dashboard = function () {
+	var history = this.history = new History();
 
-window.Dashboard = {
-	Stores: {},
-	Views: {
-		Models: {},
-		Helpers: {}
-	},
-	Actions: {},
-	routers: {},
-	config: {},
+	this.dispatcherIndex = Dispatcher.register(this.__handleEvent.bind(this));
 
-	waitForRouteHandler: Promise.resolve(),
+	history.register(new MainRouter({ context: this }));
+	history.register(new AppsRouter({ context: this }));
+	history.register(new GithubRouter({ context: this }));
+};
+Dashboard.run = function () {
+	var dashboard = new Dashboard();
+	dashboard.run();
+};
+extend(Dashboard.prototype, {
 	errCertNotInstalled: new Error("HTTPS certificate is not trusted."),
 	errServiceUnavailable: new Error("Service is unavailable."),
 
 	run: function () {
+		Config.fetch().catch(
+				function(){}); // suppress SERVICE_UNAVAILABLE error
+	},
+
+	ready: function () {
 		var resolveWaitForNav;
 		this.waitForNav = new Promise(function(resolve) {
 			resolveWaitForNav = resolve;
@@ -24,20 +41,22 @@ window.Dashboard = {
 
 		var loadURL = function() {
 			resolveWaitForNav();
-			Marbles.history.loadURL();
-		};
+			this.history.loadURL();
+		}.bind(this);
 
-		if ( Marbles.history && Marbles.history.started ) {
-			throw new Error("Marbles.history already started!");
+		if ( this.history.started ) {
+			throw new Error("history already started!");
 		}
 
-		this.client = new this.Client(this.config.endpoints);
-
-		if (this.config.user && this.config.user.auths.github) {
-			Dashboard.githubClient = new this.GithubClient(
-				this.config.user.auths.github.access_token
+		// TODO(jvatic): Move these into ./config.js
+		Config.client = new Client(Config.endpoints);
+		if (Config.user && Config.user.auths.github) {
+			Config.githubClient = new GithubClient(
+				Config.user.auths.github.access_token
 			);
 		}
+
+		Config.history = this.history;
 
 		this.navEl = document.getElementById("nav");
 		this.el = document.getElementById("main");
@@ -45,14 +64,14 @@ window.Dashboard = {
 
 		this.__secondary = false;
 
-		Marbles.History.start({
-			root: (this.config.PATH_PREFIX || '') + '/',
+		this.history.start({
+			root: (Config.PATH_PREFIX || '') + '/',
 			dispatcher: this.Dispatcher,
 			trigger: false
 		});
 
 		this.__setCurrentParams();
-		if (this.config.INSTALL_CERT) {
+		if (Config.INSTALL_CERT) {
 			this.__isCertInstalled().then(loadURL);
 		} else {
 			loadURL();
@@ -60,13 +79,13 @@ window.Dashboard = {
 	},
 
 	__renderNavComponent: function () {
-		this.nav = React.render(React.createElement(this.Views.Nav, {
-				authenticated: this.config.authenticated
+		this.nav = React.render(React.createElement(NavComponent, {
+				authenticated: Config.authenticated
 			}), this.navEl);
 	},
 
 	__isLoginPath: function (path) {
-		path = path || Marbles.history.path;
+		path = path || this.history.path;
 		if ( path === "" ) {
 			return false;
 		}
@@ -74,30 +93,30 @@ window.Dashboard = {
 	},
 
 	__redirectToLogin: function () {
-		var redirectPath = Marbles.history.path ? '?redirect='+ encodeURIComponent(Marbles.history.path) : '';
+		var redirectPath = this.history.path ? '?redirect='+ encodeURIComponent(this.history.path) : '';
 		var loginParams = {};
 		var currentParams = this.__currentParams[0];
 		if (currentParams.token) {
 			loginParams.token = currentParams.token;
 		}
-		Marbles.history.navigate('login'+ redirectPath, {
+		this.history.navigate('login'+ redirectPath, {
 			params: [loginParams]
 		});
 	},
 
 	__catchInsecurePingResponse: function(httpsArgs) {
-		var httpsXhr = httpsArgs[1], self = this,
+		var httpsXhr = httpsArgs[1],
 			handleSuccess, handleError;
 
 		handleSuccess = function (httpArgs) {
 			var httpXhr = httpArgs[1];
 			// https did not work but http did...something is wrong with the cert
-			self.Dispatcher.handleAppEvent({
+			Dispatcher.handleAppEvent({
 				name: "HTTPS_CERT_MISSING",
 				status: httpXhr.status
 			});
-			return Promise.reject(self.errCertNotInstalled);
-		};
+			return Promise.reject(this.errCertNotInstalled);
+		}.bind(this);
 		handleError = function (httpArgs) {
 			if (!Array.isArray(httpArgs)) {
 				return Promise.reject(httpArgs);
@@ -106,27 +125,27 @@ window.Dashboard = {
 
 			if (httpXhr.status === 0) {
 				// https is failing as well...service is unavailable
-				self.Dispatcher.handleAppEvent({
+				Dispatcher.handleAppEvent({
 					name: "SERVICE_UNAVAILABLE",
 					status: httpXhr.status
 				});
-				return Promise.reject(self.errServiceUnavailable);
+				return Promise.reject(this.errServiceUnavailable);
 			}
 			// https did not work but http did without a network error
 			// => missing ssl exception for controller
-			self.Dispatcher.handleAppEvent({
+			Dispatcher.handleAppEvent({
 				name: "HTTPS_CERT_MISSING",
 				status: httpXhr.status
 			});
-			return Promise.reject(self.errCertNotInstalled);
-		};
+			return Promise.reject(this.errCertNotInstalled);
+		}.bind(this);
 
 		if (httpsXhr.status === 0) {
 			// https is unavailable, let's see if http works
-			return self.client.ping("controller", "http").then(handleSuccess).catch(handleError);
+			return Config.client.ping("controller", "http").then(handleSuccess).catch(handleError);
 		}
 		// an error code other than 0
-		self.Dispatcher.handleAppEvent({
+		Dispatcher.handleAppEvent({
 			name: "SERVICE_UNAVAILABLE",
 			status: httpsXhr.status
 		});
@@ -162,16 +181,16 @@ window.Dashboard = {
 
 	__isCertInstalled: function() {
 		if (window.location.protocol === "https:") {
-			return this.client.ping("controller", "https").catch(this.__catchSecurePingResponse.bind(this));
+			return Config.client.ping("controller", "https").catch(this.__catchSecurePingResponse.bind(this));
 		} else {
-			return this.client.ping("controller", "https")
+			return Config.client.ping("controller", "https")
 				.then(this.__successPingResponse.bind(this))
 				.catch(this.__catchInsecurePingResponse.bind(this));
 		}
 	},
 
 	__setCurrentParams: function () {
-		this.__currentParams = Marbles.QueryParams.deserializeParams(window.location.search);
+		this.__currentParams = QueryParams.deserializeParams(window.location.search);
 	},
 
 	__handleEvent: function (event) {
@@ -190,8 +209,8 @@ window.Dashboard = {
 		}
 
 		if (event.name === "AUTH_BTN_CLICK") {
-			if (Dashboard.config.authenticated) {
-				this.client.logout();
+			if (Config.authenticated) {
+				Config.client.logout();
 			} else if ( !this.__isLoginPath() ) {
 				this.__redirectToLogin();
 			}
@@ -227,7 +246,7 @@ window.Dashboard = {
 				if (currentParams.token) {
 					params.token = currentParams.token;
 				}
-				Marbles.history.navigate("installcert", {
+				this.history.navigate("installcert", {
 					force: true,
 					params: [params]
 				});
@@ -243,7 +262,7 @@ window.Dashboard = {
 		var started = this.__started || false;
 		if ( !started ) {
 			this.__started = true;
-			this.run();
+			this.ready();
 		}
 	},
 
@@ -251,48 +270,47 @@ window.Dashboard = {
 		this.__renderNavComponent();
 
 		if ( !authenticated && !this.__isLoginPath() ) {
-			var currentHandler = Marbles.history.getHandler(),
-				self = this;
+			var currentHandler = this.history.getHandler();
 			if (currentHandler && currentHandler.opts.auth === false) {
 				// Don't redirect to login from page not requiring auth
 				return;
 			}
 
 			this.waitForNav.then(function() {
-				self.__redirectToLogin();
-			});
+				this.__redirectToLogin();
+			}.bind(this));
 		}
 	},
 
 	__handleGithubAuthChange: function (authenticated) {
 		if (authenticated) {
-			if ( !Dashboard.githubClient ) {
-				var githubAuth = this.config.user.auths.github;
-				Dashboard.githubClient = new this.GithubClient(
+			if ( !Config.githubClient ) {
+				var githubAuth = Config.user.auths.github;
+				Config.githubClient = new GithubClient(
 					githubAuth.access_token
 				);
 			}
 		} else {
-			Dashboard.githubClient = null;
+			Config.githubClient = null;
 		}
 	},
 
 	__handleServiceUnavailable: function (status) {
 		React.render(
-			React.createElement(this.Views.ServiceUnavailable, { status: status }),
+			React.createElement(ServiceUnavailableComponent, { status: status }),
 			document.getElementById('main')
 		);
 	},
 
 	__handleHandlerBeforeEvent: function (event) {
-		this.waitForRouteHandler = new Promise(function (rs) {
+		Config.waitForRouteHandler = new Promise(function (rs) {
 			this.__waitForRouteHandlerResolve = rs;
 		}.bind(this));
 
 		this.__renderNavComponent();
 
 		// prevent route handlers requiring auth from being called when app is not authenticated
-		if ( !this.config.authenticated && event.handler.opts.auth !== false ) {
+		if ( !Config.authenticated && event.handler.opts.auth !== false ) {
 			event.abort();
 			return;
 		}
@@ -306,7 +324,7 @@ window.Dashboard = {
 		var path = event.path;
 
 		// don't reset view if only params changed
-		var prevPath = Marbles.history.prevPath || "";
+		var prevPath = this.history.prevPath || "";
 		if (path.split('?')[0] === prevPath.split('?')[0]) {
 			if (event.handler.opts.paramChangeScrollReset !== false) {
 				// reset scroll position
@@ -337,9 +355,9 @@ window.Dashboard = {
 	__handleHandlerAfterEvent: function () {
 		if (this.__waitForRouteHandlerResolve) {
 			this.__waitForRouteHandlerResolve();
-			this.waitForRouteHandler = Promise.resolve();
+			Config.waitForRouteHandler = Promise.resolve();
 		}
 	}
-};
+});
 
-})();
+export default Dashboard;

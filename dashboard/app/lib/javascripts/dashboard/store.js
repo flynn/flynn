@@ -1,17 +1,18 @@
-(function () {
-	"use strict";
+import BaseStore from 'marbles/store';
+import Config from './config';
 
-	Dashboard.Store = Marbles.Store.createClass({
-		displayName: "Dashboard.Store",
+var Store = BaseStore.createClass({
+	displayName: "Dashboard.Store",
 
-		didBecomeInactive: function () {
-			return Dashboard.waitForRouteHandler.then(function () {
-				if (this.__changeListeners.length === 0) {
-					this.constructor.discardInstance(this);
-				} else {
-					return Promise.reject();
-				}
-			}.bind(this));
-		}
-	});
-})();
+	didBecomeInactive: function () {
+		return Config.waitForRouteHandler.then(function () {
+			if (this.__changeListeners.length === 0) {
+				this.constructor.discardInstance(this);
+			} else {
+				return Promise.reject();
+			}
+		}.bind(this));
+	}
+});
+
+export default Store;

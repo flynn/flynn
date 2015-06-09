@@ -1,10 +1,11 @@
-//= require ../store
-//= require ./github-commit
+import QueryParams from 'marbles/query_params';
+import LinkHeader from 'marbles/http/link_header';
+import Store from '../store';
+import Config from '../config';
+import Dispatcher from '../dispatcher';
+import { rewriteGithubCommitJSON } from './github-commit-json';
 
-(function () {
-"use strict";
-
-var GithubCommits = Dashboard.Stores.GithubCommits = Dashboard.Store.createClass({
+var GithubCommits = Store.createClass({
 	displayName: "Stores.GithubCommits",
 
 	getState: function () {
@@ -100,7 +101,7 @@ var GithubCommits = Dashboard.Stores.GithubCommits = Dashboard.Store.createClass
 	},
 
 	__fetchCommits: function (options) {
-		var params = Marbles.QueryParams.replaceParams.apply(null, [[{
+		var params = QueryParams.replaceParams.apply(null, [[{
 			sha: this.props.branch
 		}]].concat(options.params || [{}]));
 
@@ -117,17 +118,17 @@ var GithubCommits = Dashboard.Stores.GithubCommits = Dashboard.Store.createClass
 			if (link === null) {
 				return null;
 			}
-			return Marbles.QueryParams.deserializeParams(link.href.split("?")[1]);
+			return QueryParams.deserializeParams(link.href.split("?")[1]);
 		};
 
-		var client = Dashboard.githubClient;
+		var client = Config.githubClient;
 		var pages = [];
 		var fetchCommits = function (ownerLogin, repoName, params) {
 			return client.getCommits(ownerLogin, repoName, params).then(function (args) {
 				var res = args[0];
 				var xhr = args[1];
 
-				var links = Marbles.HTTP.LinkHeader.parse(xhr.getResponseHeader("Link") || "");
+				var links = LinkHeader.parse(xhr.getResponseHeader("Link") || "");
 				var prevParams = parseLinkParams("prev", links);
 				var nextParams = parseLinkParams("next", links);
 
@@ -204,11 +205,13 @@ var GithubCommits = Dashboard.Stores.GithubCommits = Dashboard.Store.createClass
 			prevPageParams: prevParams,
 			nextPageParams: nextParams
 		});
+	},
+
+	__rewriteJSON: function (commitJSON) {
+		return rewriteGithubCommitJSON(commitJSON);
 	}
 
 });
-
-GithubCommits.prototype.__rewriteJSON = Dashboard.Stores.GithubCommit.prototype.__rewriteJSON;
 
 GithubCommits.findCommit = function (owner, repo, sha) {
 	var instances = this.__instances;
@@ -240,6 +243,6 @@ GithubCommits.isValidId = function (id) {
 	return id.ownerLogin && id.repoName && id.branch;
 };
 
-GithubCommits.registerWithDispatcher(Dashboard.Dispatcher);
+GithubCommits.registerWithDispatcher(Dispatcher);
 
-})();
+export default GithubCommits;

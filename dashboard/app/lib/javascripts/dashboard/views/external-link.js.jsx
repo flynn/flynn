@@ -1,8 +1,6 @@
-(function () {
+import { extend } from 'marbles/utils';
 
-"use strict";
-
-Dashboard.Views.ExternalLink = React.createClass({
+var ExternalLink = React.createClass({
 	displayName: "Views.ExternalLink",
 
 	handleClick: function (e) {
@@ -17,11 +15,11 @@ Dashboard.Views.ExternalLink = React.createClass({
 	},
 
 	render: function () {
-		var props = Marbles.Utils.extend({}, this.props);
+		var props = extend({}, this.props);
 		props.onClick = this.handleClick;
 		delete props.children;
 		return React.createElement('a', props, this.props.children);
 	}
 });
 
-})();
+export default ExternalLink;

@@ -1,6 +1,6 @@
-(function () {
-
-"use strict";
+import { createClass } from 'marbles/utils';
+import State from 'marbles/state';
+import Config from '../../config';
 
 function parseKeypath(keypath) {
 	var parts = keypath.split(".");
@@ -16,10 +16,10 @@ function parseKeypath(keypath) {
 	return keys;
 }
 
-var Login = Dashboard.Views.Models.Login = Marbles.Utils.createClass({
+var Login = createClass({
 	displayName: "Models.Login",
 
-	mixins: [Marbles.State, {
+	mixins: [State, {
 		ctor: {
 			validationRequiredKeypaths: ["token"],
 
@@ -140,7 +140,7 @@ var Login = Dashboard.Views.Models.Login = Marbles.Utils.createClass({
 	performLogin: function () {
 		this.__persisting = true;
 		var attrs = this.state.attrs;
-		return Dashboard.client.login(attrs.token).then(function () {
+		return Config.client.login(attrs.token).then(function () {
 			this.__persisting = false;
 			this.setState({});
 		}.bind(this), function (err) {
@@ -180,4 +180,4 @@ Login.instances = {};
 	};
 });
 
-})();
+export default Login;

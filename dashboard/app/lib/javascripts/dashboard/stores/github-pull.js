@@ -1,10 +1,11 @@
-//= require ../dispatcher
-//= require ../store
+import Store from '../store';
+import Config from '../config';
+import Dispatcher from '../dispatcher';
+import { rewriteGithubPullJSON } from './github-pull-json';
+import GithubCommit from './github-commit';
+import GithubPulls from './github-pulls';
 
-(function () {
-"use strict";
-
-var GithubPull = Dashboard.Stores.GithubPull = Dashboard.Store.createClass({
+var GithubPull = Store.createClass({
 	displayName: "Stores.GithubPull",
 
 	getState: function () {
@@ -35,7 +36,7 @@ var GithubPull = Dashboard.Stores.GithubPull = Dashboard.Store.createClass({
 	},
 
 	__fetchPull: function () {
-		var pull = Dashboard.Stores.GithubPulls.findPull(this.props.ownerLogin, this.props.repoName, this.props.number);
+		var pull = GithubPulls.findPull(this.props.ownerLogin, this.props.repoName, this.props.number);
 		if (pull) {
 			this.setState({
 				pull: pull
@@ -43,7 +44,7 @@ var GithubPull = Dashboard.Stores.GithubPull = Dashboard.Store.createClass({
 			return Promise.resolve(pull);
 		}
 
-		return Dashboard.githubClient.getPull(this.props.ownerLogin, this.props.repoName, this.props.number).then(function (args) {
+		return Config.githubClient.getPull(this.props.ownerLogin, this.props.repoName, this.props.number).then(function (args) {
 			var res = args[0];
 			var pull = this.__rewriteJSON(res);
 			this.setState({
@@ -54,40 +55,7 @@ var GithubPull = Dashboard.Stores.GithubPull = Dashboard.Store.createClass({
 	},
 
 	__rewriteJSON: function (pullJSON) {
-		var stripHTML = function (str) {
-			var tmp = document.createElement("div");
-			tmp.innerHTML = str;
-			return tmp.textContent || tmp.innerText;
-		};
-		return {
-			id: pullJSON.id,
-			number: pullJSON.number,
-			title: pullJSON.title,
-			body: stripHTML(pullJSON.body),
-			url: pullJSON.html_url,
-			createdAt: pullJSON.created_at,
-			updatedAt: pullJSON.updated_at,
-			user: {
-				login: pullJSON.user.login,
-				avatarURL: pullJSON.user.avatar_url
-			},
-			head: {
-				label: pullJSON.head.label,
-				ref: pullJSON.head.ref,
-				sha: pullJSON.head.sha,
-				name: pullJSON.head.repo.name,
-				ownerLogin: pullJSON.head.repo.owner.login,
-				fullName: pullJSON.head.repo.full_name
-			},
-			base: {
-				label: pullJSON.base.label,
-				ref: pullJSON.base.ref,
-				sha: pullJSON.base.sha,
-				name: pullJSON.base.repo.name,
-				ownerLogin: pullJSON.base.repo.owner.login,
-				fullName: pullJSON.base.repo.full_name
-			}
-		};
+		return rewriteGithubPullJSON(pullJSON);
 	},
 
 	__merge: function () {
@@ -107,7 +75,7 @@ var GithubPull = Dashboard.Stores.GithubPull = Dashboard.Store.createClass({
 			mergeJob: job
 		});
 
-		var client = Dashboard.githubClient;
+		var client = Config.githubClient;
 
 		client.mergePull(
 			base.ownerLogin,
@@ -122,13 +90,13 @@ var GithubPull = Dashboard.Stores.GithubPull = Dashboard.Store.createClass({
 				mergeJob: job
 			});
 
-			Dashboard.Dispatcher.handleStoreEvent({
+			Dispatcher.handleStoreEvent({
 				name: "GITHUB_PULL:MERGED",
 				pull: pull,
 				mergeCommitSha: res.sha
 			});
 
-			return Dashboard.Stores.GithubCommit.getCommit({
+			return GithubCommit.getCommit({
 				ownerLogin: base.ownerLogin,
 				repoName: base.name,
 				sha: res.sha
@@ -152,7 +120,7 @@ var GithubPull = Dashboard.Stores.GithubPull = Dashboard.Store.createClass({
 				mergeJob: job
 			});
 
-			Dashboard.Dispatcher.handleStoreEvent({
+			Dispatcher.handleStoreEvent({
 				name: "GITHUB_PULL:MERGE_FAILURE",
 				pull: pull,
 				errorMsg: job.errorMsg
@@ -165,6 +133,6 @@ GithubPull.isValidId = function (id) {
 	return id.ownerLogin && id.repoName && id.number;
 };
 
-GithubPull.registerWithDispatcher(Dashboard.Dispatcher);
+GithubPull.registerWithDispatcher(Dispatcher);
 
-})();
+export default GithubPull;

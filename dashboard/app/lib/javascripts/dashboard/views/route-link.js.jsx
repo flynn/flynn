@@ -1,8 +1,8 @@
-(function () {
+import { extend } from 'marbles/utils';
+import { pathWithParams } from 'marbles/history';
+import Config from '../config';
 
-"use strict";
-
-Dashboard.Views.RouteLink = React.createClass({
+var RouteLink = React.createClass({
 	displayName: "Views.RouteLink",
 
 	getInitialState: function () {
@@ -35,22 +35,22 @@ Dashboard.Views.RouteLink = React.createClass({
 		if (this.props.params) {
 			options.params = this.props.params;
 		}
-		Marbles.history.navigate(this.props.path, options);
+		Config.history.navigate(this.props.path, options);
 	},
 
 	__setHrefFromPath: function (path, params) {
 		var href;
-		path = Marbles.history.pathWithParams(path, params || [{}]);
-		if (Dashboard.config.PATH_PREFIX === null) {
+		path = pathWithParams(path, params || [{}]);
+		if (Config.PATH_PREFIX === null) {
 			href = path;
 		} else {
-			href = Dashboard.config.PATH_PREFIX + path;
+			href = Config.PATH_PREFIX + path;
 		}
 		this.setState({ href: href });
 	},
 
 	render: function () {
-		var props = Marbles.Utils.extend({}, this.props);
+		var props = extend({}, this.props);
 		props.href = this.state.href;
 		props.onClick = this.handleClick;
 		delete props.children;
@@ -60,4 +60,4 @@ Dashboard.Views.RouteLink = React.createClass({
 	},
 });
 
-})();
+export default RouteLink;
