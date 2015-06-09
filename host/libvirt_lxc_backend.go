@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -401,6 +402,10 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	}()
 
 	g.Log(grohl.Data{"at": "pull_image"})
+	if err := isValidImageUri(job.Artifact.URI); err != nil {
+		g.Log(grohl.Data{"at": "pull_image", "status": "error", "err": err})
+		return err
+	}
 	layers, err := l.pinkertonPull(job.Artifact.URI)
 	if err != nil {
 		g.Log(grohl.Data{"at": "pull_image", "status": "error", "err": err})
@@ -1133,6 +1138,27 @@ func bindMount(src, dest string, writeable, private bool) error {
 		if err := syscall.Mount("", dest, "none", uintptr(syscall.MS_PRIVATE), ""); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func isValidImageUri(rawurl string) (err error) {
+	uri, err := url.Parse(rawurl)
+	if err != nil {
+		return err
+	}
+	q := uri.Query()
+	if q.Get("tag") != "" {
+		err = fmt.Errorf(`"tag" parameter in artifact URI "%s" is not supported.`, rawurl)
+		return err
+	}
+	if q.Get("id") == "" {
+		err = fmt.Errorf(`artifact URI "%s" is missing id parameter.`, rawurl)
+		return err
+	}
+	if q.Get("name") == "" {
+		err = fmt.Errorf(`artifact URI "%s" is missing name parameter.`, rawurl)
+		return err
 	}
 	return nil
 }
