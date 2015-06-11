@@ -178,7 +178,7 @@ var Client = {
 			switch (data.type) {
 				case 'new_cluster':
 					event.name = 'NEW_CLUSTER';
-					event.cluster = new Cluster(data.cluster);
+					event.cluster = Cluster.newOfType(data.cluster.type, data.cluster);
 				break;
 
 				case 'new_credential':

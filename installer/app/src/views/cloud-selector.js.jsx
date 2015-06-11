@@ -55,14 +55,13 @@ var CloudSelector = React.createClass({
 	},
 
 	render: function () {
-		var state = this.props.state;
 		return (
 			<div>
 				<div id={this.state.styleEl.id}>
 					{cloudIDs.map(function (cloud) {
 						return (
 							<Panel key={cloud} style={{padding: 0}} title={cloudNames[cloud]}>
-								<PrettyRadio name='cloud' value={cloud} checked={state.selectedCloud === cloud} onChange={this.__handleCloudChange}>
+								<PrettyRadio name='cloud' value={cloud} checked={this.props.selectedCloud === cloud} onChange={this.__handleCloudChange}>
 									<div data-img-con>
 										<img src={AssetPaths[cloud.replace('_', '')+'-logo.png']} alt={cloudNames[cloud]} />
 									</div>
@@ -80,8 +79,11 @@ var CloudSelector = React.createClass({
 	},
 
 	__handleCloudChange: function (e) {
+		e.stopPropagation();
 		var cloud = e.target.value;
-		this.props.onChange(cloud);
+		setTimeout(function () { // prevent invariant error
+			this.props.onChange(cloud);
+		}.bind(this), 0);
 	}
 });
 export default CloudSelector;

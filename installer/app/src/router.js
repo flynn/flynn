@@ -21,17 +21,18 @@ var MainRouter = Router.createClass({
 
 	beforeHandler: function (event) {
 		var clusterID = event.params[0].cluster_id || null;
-		if (event.context.dataStore.state.currentClusterID !== clusterID) {
+		var state = event.context.dataStore.state;
+		if (state.currentClusterID !== clusterID) {
 			Dispatcher.dispatch({
 				name: 'CURRENT_CLUSTER',
 				clusterID: clusterID
 			});
 		}
 
-		var cloudID = event.params[0].cloud || null;
+		var cloudID = event.params[0].cloud || 'aws';
 		if (this.history.getHandler(this.history.path).name === 'landingPage') {
-			var currentCluster = event.context.dataStore.state.currentCluster;
-			if (currentCluster && currentCluster.ID === 'new' && currentCluster.getInstallState().selectedCloud !== cloudID) {
+			var currentCluster = state.currentCluster;
+			if (currentCluster && currentCluster.attrs.ID === 'new' && state.currentCloudSlug !== cloudID) {
 				Dispatcher.dispatch({
 					name: 'SELECT_CLOUD',
 					cloud: cloudID,

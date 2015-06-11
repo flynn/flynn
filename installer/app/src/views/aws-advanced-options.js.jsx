@@ -14,6 +14,7 @@ var AWSAdvancedOptions = React.createClass({
 							<input
 								type="text"
 								placeholder="10.0.0.0/16"
+								value={this.props.vpcCidr}
 								onChange={this.__handleVpcCidrChange} />
 						</label>
 						<br />
@@ -23,6 +24,7 @@ var AWSAdvancedOptions = React.createClass({
 							<input
 								type="text"
 								placeholder="10.0.0.0/21"
+								value={this.props.subnetCidr}
 								onChange={this.__handleSubnetCidrChange} />
 						</label>
 					</div>
