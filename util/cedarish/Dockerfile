@@ -49,6 +49,7 @@ RUN echo 'deb http://archive.ubuntu.com/ubuntu trusty main' >/etc/apt/sources.li
       ruby \
       ruby-dev \
       socat \
+      stunnel \
       syslinux \
       tar \
       telnet \
