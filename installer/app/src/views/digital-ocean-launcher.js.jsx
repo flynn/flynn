@@ -116,7 +116,7 @@ var InstallConfig = React.createClass({
 		var slug = e.target.value;
 		Dispatcher.dispatch({
 			name: 'SELECT_REGION',
-			slug: slug,
+			region: slug,
 			clusterID: 'new'
 		});
 	},
@@ -141,7 +141,7 @@ var InstallConfig = React.createClass({
 	__handleSubmit: function (e) {
 		e.preventDefault();
 		Dispatcher.dispatch({
-			name: 'LAUNCH_DIGITAL_OCEAN'
+			name: 'LAUNCH_CLUSTER'
 		});
 	}
 });

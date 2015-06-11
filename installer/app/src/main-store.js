@@ -4,7 +4,8 @@ import Client from './client';
 import Cluster from './cluster';
 import Dispatcher from './dispatcher';
 
-var newCluster = new Cluster({id: 'new'});
+var DEFAULT_CLOUD = 'aws';
+var newCluster = Cluster.newOfType(DEFAULT_CLOUD, {id: 'new'});
 
 export default createClass({
 	mixins: [State],
@@ -38,24 +39,28 @@ export default createClass({
 	handleEvent: function (event) {
 		var cluster;
 		switch (event.name) {
-			case 'LAUNCH_AWS':
-				this.launchAWS(event);
+			case 'SELECT_CLOUD':
+				if (newCluster.constructor.type !== event.cloud) {
+					newCluster.removeChangeListener(this.__handleClusterChanged);
+					newCluster = Cluster.newOfType(event.cloud, {id: 'new', credentials: newCluster.state.__allCredentials});
+					newCluster.addChangeListener(this.__handleClusterChanged);
+					this.setState({
+						currentCloudSlug: event.cloud,
+						currentCluster: newCluster
+					});
+				}
 			break;
 
-			case 'LAUNCH_DIGITAL_OCEAN':
-				this.launchDigitalOcean(event);
-			break;
-
-			case 'LAUNCH_AZURE':
-				this.launchAzure(event);
+			case 'LAUNCH_CLUSTER':
+				Client.launchCluster(newCluster.toJSON());
 			break;
 
 			case 'NEW_CLUSTER':
 				this.__addCluster(event.cluster);
-				if (this.__pendingCurrentClusterID === event.cluster.ID) {
+				if (this.__pendingCurrentClusterID === event.cluster.attrs.ID) {
 					this.__pendingCurrentClusterID = null;
 					this.setState({
-						currentClusterID: event.cluster.ID,
+						currentClusterID: event.cluster.attrs.ID,
 						currentCluster: event.cluster,
 						currentCloudSlug: event.cluster.type
 					});
@@ -136,7 +141,7 @@ export default createClass({
 					Client.checkCert(event.domainName).then(function () {
 						cluster.handleEvent({
 							name: 'CERT_VERIFIED',
-							clusterID: cluster.ID
+							clusterID: cluster.attrs.ID
 						});
 					}.bind(this));
 				}
@@ -172,50 +177,6 @@ export default createClass({
 				}
 			break;
 		}
-	},
-
-	launchAWS: function (inputs) {
-		var cluster = new Cluster({});
-		cluster.type = 'aws';
-		cluster.credentialID = newCluster.getInstallState().credentialID;
-		cluster.region = inputs.region;
-		cluster.instanceType = inputs.instanceType;
-		cluster.numInstances = inputs.numInstances;
-
-		if (inputs.vpcCidr) {
-			cluster.vpcCidr = inputs.vpcCidr;
-		}
-
-		if (inputs.subnetCidr) {
-			cluster.subnetCidr = inputs.subnetCidr;
-		}
-
-		Client.launchCluster(cluster.toJSON());
-	},
-
-	launchDigitalOcean: function () {
-		var state = newCluster.getInstallState();
-		var cluster = new Cluster({});
-		cluster.type = 'digital_ocean';
-		cluster.credentialID = state.credentialID;
-		cluster.region = state.selectedRegionSlug;
-		cluster.size = state.selectedSizeSlug;
-		cluster.numInstances = state.numInstances;
-
-		Client.launchCluster(cluster.toJSON());
-	},
-
-	launchAzure: function () {
-		var state = newCluster.getInstallState();
-		var cluster = new Cluster({});
-		cluster.type = 'azure';
-		cluster.credentialID = state.credentialID;
-		cluster.region = state.selectedRegionSlug;
-		cluster.size = state.selectedSizeSlug;
-		cluster.numInstances = state.numInstances;
-		cluster.subscriptionID = state.azureSubscriptionID;
-
-		Client.launchCluster(cluster.toJSON());
 	},
 
 	__addError: function (type, err) {
@@ -277,16 +238,16 @@ export default createClass({
 	},
 
 	__addCluster: function (cluster) {
-		var index = this.__findClusterIndex(cluster.ID);
+		var index = this.__findClusterIndex(cluster.attrs.ID);
 		if (index !== -1) {
-			console.warn('cluster '+ cluster.ID +' already added!');
+			console.warn('cluster '+ cluster.attrs.ID +' already added!');
 			return;
 		}
 		var clusters = [cluster].concat(this.state.clusters);
 		var newState = {
 			clusters: clusters
 		};
-		if (cluster.ID === this.state.currentClusterID) {
+		if (cluster.attrs.ID === this.state.currentClusterID) {
 			newState.currentCluster = cluster;
 		}
 		this.setState(newState);
@@ -296,7 +257,7 @@ export default createClass({
 	__findClusterIndex: function (clusterID) {
 		var clusters = this.state.clusters;
 		for (var i = 0, len = clusters.length; i < len; i++) {
-			if (clusters[i].ID === clusterID) {
+			if (clusters[i].attrs.ID === clusterID) {
 				return i;
 			}
 		}

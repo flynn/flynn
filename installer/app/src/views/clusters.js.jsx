@@ -13,13 +13,13 @@ var Clusters = React.createClass({
 					<ListItem selected={currentClusterID === null} path="/" params={[{cloud: this.state.currentCloudSlug}]}>New</ListItem>
 
 					{clusters.map(function (cluster) {
-						var installState = cluster.getInstallState();
+						var installState = cluster.state;
 						return (
 							<ListItem
-								key={cluster.ID}
-								selected={currentClusterID === cluster.ID}
+								key={cluster.attrs.ID}
+								selected={currentClusterID === cluster.attrs.ID}
 								path={'/clusters/:id'}
-								params={[{ id: cluster.ID }]}
+								params={[{ id: cluster.attrs.ID }]}
 								style={{
 									selectors: [
 										['> a', {
@@ -31,7 +31,7 @@ var Clusters = React.createClass({
 								<div style={{
 									flexGrow: 1,
 									WebkitFlexGrow: 1
-								}}>{cluster.name}</div>
+								}}>{cluster.attrs.name}</div>
 								<div>
 									{installState.prompt !== null ? (
 										<span>
@@ -89,15 +89,15 @@ var Clusters = React.createClass({
 	},
 
 	__handleClusterDeleteBtnClick: function (cluster) {
-		if (cluster.getInstallState().deleting) {
+		if (cluster.state.deleting) {
 			Dispatcher.dispatch({
 				name: 'CONFIRM_CLUSTER_DELETE',
-				clusterID: cluster.ID
+				clusterID: cluster.attrs.ID
 			});
 		} else {
 			Dispatcher.dispatch({
 				name: 'CLUSTER_DELETE',
-				clusterID: cluster.ID
+				clusterID: cluster.attrs.ID
 			});
 		}
 	}
