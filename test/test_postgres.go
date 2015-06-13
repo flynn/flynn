@@ -246,7 +246,10 @@ func (s *PostgresSuite) testDeploy(t *c.C, d *pgDeploy) {
 	t.Assert(err, c.IsNil)
 	defer deployStream.Close()
 
-	assertNextState := func(expected expectedPgState) {
+	// assertNextState checks that the next state received is in the remaining states
+	// that were expected, so handles the fact that some states don't happen, but the
+	// states that do happen are expected and in-order.
+	assertNextState := func(remaining []expectedPgState) int {
 		var state state.State
 		select {
 		case s := <-stateCh:
@@ -258,29 +261,47 @@ func (s *PostgresSuite) testDeploy(t *c.C, d *pgDeploy) {
 		if state.Primary == nil {
 			t.Fatal("no primary configured")
 		}
-		if state.Primary.Meta["FLYNN_RELEASE_ID"] != expected.Primary {
-			t.Fatal("primary has incorrect release")
+		log := func(format string, v ...interface{}) {
+			debugf(t, "skipping expected state: %s", fmt.Sprintf(format, v...))
 		}
-		if expected.Sync == "" {
-			return
-		}
-		if state.Sync == nil {
-			t.Fatal("no sync configured")
-		}
-		if state.Sync.Meta["FLYNN_RELEASE_ID"] != expected.Sync {
-			t.Fatal("sync has incorrect release")
-		}
-		if expected.Async == nil {
-			return
-		}
-		if len(state.Async) != len(expected.Async) {
-			t.Fatalf("expected %d asyncs, got %d", len(expected.Async), len(state.Async))
-		}
-		for i, release := range expected.Async {
-			if state.Async[i].Meta["FLYNN_RELEASE_ID"] != release {
-				t.Fatalf("async[%d] has incorrect release", i)
+	outer:
+		for i, expected := range remaining {
+			if state.Primary.Meta["FLYNN_RELEASE_ID"] != expected.Primary {
+				log("primary has incorrect release")
+				continue
 			}
+			if state.Sync == nil {
+				if expected.Sync == "" {
+					return i
+				}
+				log("state has no sync node")
+				continue
+			}
+			if state.Sync.Meta["FLYNN_RELEASE_ID"] != expected.Sync {
+				log("sync has incorrect release")
+				continue
+			}
+			if state.Async == nil {
+				if expected.Async == nil {
+					return i
+				}
+				log("state has no async nodes")
+				continue
+			}
+			if len(state.Async) != len(expected.Async) {
+				log("expected %d asyncs, got %d", len(expected.Async), len(state.Async))
+				continue
+			}
+			for i, release := range expected.Async {
+				if state.Async[i].Meta["FLYNN_RELEASE_ID"] != release {
+					log("async[%d] has incorrect release", i)
+					continue outer
+				}
+			}
+			return i
 		}
+		t.Fatal("unexpected pg state")
+		return -1
 	}
 	expected := d.expected(oldRelease, newRelease)
 	var expectedIndex, newWebJobs int
@@ -303,8 +324,8 @@ loop:
 			}
 			switch e.JobType {
 			case "postgres":
-				assertNextState(expected[expectedIndex])
-				expectedIndex++
+				skipped := assertNextState(expected[expectedIndex:])
+				expectedIndex += 1 + skipped
 			case "web":
 				if e.JobState == "up" && e.ReleaseID == newRelease {
 					newWebJobs++
