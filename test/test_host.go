@@ -26,13 +26,11 @@ var _ = c.ConcurrentSuite(&HostSuite{})
 
 func (s *HostSuite) TestAttachNonExistentJob(t *c.C) {
 	cluster := s.clusterClient(t)
-	hosts, err := cluster.ListHosts()
+	hosts, err := cluster.Hosts()
 	t.Assert(err, c.IsNil)
 
-	h := s.hostClient(t, hosts[0].ID)
-
 	// Attaching to a non-existent job should error
-	_, err = h.Attach(&host.AttachReq{JobID: "none", Flags: host.AttachFlagLogs}, false)
+	_, err = hosts[0].Attach(&host.AttachReq{JobID: "none", Flags: host.AttachFlagLogs}, false)
 	t.Assert(err, c.NotNil)
 }
 
@@ -53,7 +51,7 @@ func (s *HostSuite) TestAttachFinishedInteractiveJob(t *c.C) {
 		t.Fatal("timed out waiting for interactive job")
 	}
 
-	h, err := cluster.DialHost(cmd.HostID)
+	h, err := cluster.Host(cmd.HostID)
 	t.Assert(err, c.IsNil)
 
 	// Getting the logs for the job should fail, as it has none because it was
@@ -91,7 +89,7 @@ func (s *HostSuite) TestExecCrashingJob(t *c.C) {
 
 	User will want to defer cmd.Kill() to clean up.
 */
-func makeIshApp(cluster *cluster.Client, h cluster.Host, dc *discoverd.Client, extraConfig host.ContainerConfig) (*exec.Cmd, *discoverd.Instance, error) {
+func makeIshApp(cluster *cluster.Client, h *cluster.Host, dc *discoverd.Client, extraConfig host.ContainerConfig) (*exec.Cmd, *discoverd.Instance, error) {
 	// pick a unique string to use as service name so this works with concurrent tests.
 	serviceName := "ish-service-" + random.String(6)
 
@@ -224,15 +222,15 @@ func (s *HostSuite) TestSignalJob(t *c.C) {
 	cluster := s.clusterClient(t)
 
 	// pick a host to run the job on
-	hosts, err := cluster.ListHosts()
+	hosts, err := cluster.Hosts()
 	t.Assert(err, c.IsNil)
-	hostID := schedutil.PickHost(hosts).ID
+	client := schedutil.PickHost(hosts)
 
 	// start a signal-service job
 	cmd := exec.JobUsingCluster(cluster, exec.DockerImage(imageURIs["test-apps"]), &host.Job{
 		Config: host.ContainerConfig{Cmd: []string{"/bin/signal"}},
 	})
-	cmd.HostID = hostID
+	cmd.HostID = client.ID()
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	t.Assert(cmd.Start(), c.IsNil)
@@ -240,8 +238,6 @@ func (s *HostSuite) TestSignalJob(t *c.C) {
 	t.Assert(err, c.IsNil)
 
 	// send the job a signal
-	client, err := cluster.DialHost(hostID)
-	t.Assert(err, c.IsNil)
 	t.Assert(client.SignalJob(cmd.Job.ID, int(syscall.SIGTERM)), c.IsNil)
 
 	// wait for the job to exit

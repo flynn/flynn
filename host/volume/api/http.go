@@ -150,7 +150,7 @@ func (api *HTTPAPI) Pull(w http.ResponseWriter, r *http.Request, ps httprouter.P
 		return
 	}
 
-	hostClient, err := api.cluster.DialHost(pull.HostID)
+	hostClient, err := api.cluster.Host(pull.HostID)
 	if err != nil {
 		httphelper.Error(w, err)
 		return

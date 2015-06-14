@@ -35,7 +35,7 @@ func runLog(args *docopt.Args, client *cluster.Client) error {
 }
 
 func getLog(hostID, jobID string, client *cluster.Client, follow, init bool, stdout, stderr io.Writer) error {
-	hostClient, err := client.DialHost(hostID)
+	hostClient, err := client.Host(hostID)
 	if err != nil {
 		return fmt.Errorf("could not connect to host %s: %s", hostID, err)
 	}

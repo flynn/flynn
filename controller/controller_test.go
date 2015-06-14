@@ -85,6 +85,10 @@ func (s *S) SetUpSuite(c *C) {
 	s.c = client
 }
 
+func (s *S) SetUpTest(c *C) {
+	s.cc.SetHosts(make(map[string]*tu.FakeHostClient))
+}
+
 func (s *S) TestBadAuth(c *C) {
 	res, err := http.Get(s.srv.URL + "/apps")
 	c.Assert(err, IsNil)

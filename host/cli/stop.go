@@ -17,7 +17,7 @@ Stop running jobs`)
 
 func runStop(args *docopt.Args, client *cluster.Client) error {
 	success := true
-	clients := make(map[string]cluster.Host)
+	clients := make(map[string]*cluster.Host)
 	for _, id := range args.All["ID"].([]string) {
 		hostID, jobID, err := cluster.ParseJobID(id)
 		if err != nil {
@@ -28,7 +28,7 @@ func runStop(args *docopt.Args, client *cluster.Client) error {
 		hostClient, ok := clients[hostID]
 		if !ok {
 			var err error
-			hostClient, err = client.DialHost(hostID)
+			hostClient, err = client.Host(hostID)
 			if err != nil {
 				fmt.Printf("could not connect to host %s: %s\n", hostID, err)
 				success = false

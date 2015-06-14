@@ -63,12 +63,8 @@ func runUpdate(args *docopt.Args) error {
 	}
 
 	log.Info("getting host list")
-	clusterClient, err := cluster.NewClient()
-	if err != nil {
-		log.Error("error creating cluster client", "err", err)
-		return err
-	}
-	hosts, err := clusterClient.ListHosts()
+	clusterClient := cluster.NewClient()
+	hosts, err := clusterClient.Hosts()
 	if err != nil {
 		log.Error("error getting host list", "err", err)
 		return err
@@ -82,16 +78,10 @@ func runUpdate(args *docopt.Args) error {
 	var imageMtx sync.Mutex
 	hostErrs := make(chan error)
 	for _, h := range hosts {
-		go func(hostID string) {
-			log := log.New("host", hostID)
+		go func(host *cluster.Host) {
+			log := log.New("host", host.ID())
 
 			log.Info("connecting to host")
-			host, err := clusterClient.DialHost(hostID)
-			if err != nil {
-				log.Error("error connecting to host", "err", err)
-				hostErrs <- err
-				return
-			}
 
 			log.Info("pulling images")
 			ch := make(chan *layer.PullInfo)
@@ -119,16 +109,16 @@ func runUpdate(args *docopt.Args) error {
 				imageMtx.Unlock()
 			}
 			hostErrs <- stream.Err()
-		}(h.ID)
+		}(h)
 	}
 	var hostErr error
 	for _, h := range hosts {
 		if err := <-hostErrs; err != nil {
-			log.Error("error pulling images", "host", h.ID, "err", err)
+			log.Error("error pulling images", "host", h.ID(), "err", err)
 			hostErr = err
 			continue
 		}
-		log.Info("images pulled successfully", "host", h.ID)
+		log.Info("images pulled successfully", "host", h.ID())
 	}
 	if hostErr != nil {
 		return hostErr

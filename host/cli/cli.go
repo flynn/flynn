@@ -48,11 +48,7 @@ func Run(name string, args []string) error {
 
 	switch f := cmd.f.(type) {
 	case func(*docopt.Args, *cluster.Client) error:
-		client, err := cluster.NewClient()
-		if err != nil {
-			return err
-		}
-		return f(parsedArgs, client)
+		return f(parsedArgs, cluster.NewClient())
 	case func(*docopt.Args):
 		f(parsedArgs)
 		return nil

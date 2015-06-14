@@ -56,12 +56,7 @@ func (d *DeployJob) Perform() error {
 	}
 
 	log.Info("determining cluster size")
-	c, err := cluster.NewClient()
-	if err != nil {
-		log.Error("error connecting to cluster", "err", err)
-		return err
-	}
-	hosts, err := c.ListHosts()
+	hosts, err := cluster.NewClient().Hosts()
 	if err != nil {
 		log.Error("error listing cluster hosts", "err", err)
 		return err

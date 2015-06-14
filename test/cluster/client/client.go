@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/httpclient"
 	tc "github.com/flynn/flynn/test/cluster"
 )
@@ -53,7 +53,7 @@ func (c *Client) BackoffPeriod() time.Duration {
 	return c.cluster.BackoffPeriod
 }
 
-func (c *Client) AddHost(ch chan *host.HostEvent, vanilla bool) (*tc.Instance, error) {
+func (c *Client) AddHost(ch chan *cluster.Host, vanilla bool) (*tc.Instance, error) {
 	path := ""
 	if vanilla {
 		path = "?vanilla=true"
@@ -68,8 +68,8 @@ func (c *Client) AddHost(ch chan *host.HostEvent, vanilla bool) (*tc.Instance, e
 	}
 	for {
 		select {
-		case event := <-ch:
-			if event.HostID == instance.ID {
+		case h := <-ch:
+			if h.ID() == instance.ID {
 				c.size++
 				return &instance, nil
 			}
