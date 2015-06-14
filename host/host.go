@@ -1,9 +1,10 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
-	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/bootstrap/discovery"
 	"github.com/flynn/flynn/host/cli"
 	"github.com/flynn/flynn/host/config"
 	"github.com/flynn/flynn/host/logmux"
@@ -32,7 +33,7 @@ func init() {
 usage: flynn-host daemon [options]
 
 options:
-  --external=IP          external IP of host
+  --external-ip=IP       external IP of host
   --state=PATH           path to state file [default: /var/lib/flynn/host-state.bolt]
   --id=ID                host id
   --force                kill all containers booted by flynn-host before starting
@@ -41,6 +42,8 @@ options:
   --backend=BACKEND      runner backend [default: libvirt-lxc]
   --flynn-init=PATH      path to flynn-init binary [default: /usr/local/bin/flynn-init]
   --log-dir=DIR          directory to store job logs [default: /var/log/flynn]
+  --discovery=TOKEN      join cluster with discovery token
+  --peer-ips=IPLIST      join existing cluster using IPs
 	`)
 }
 
@@ -122,7 +125,7 @@ See 'flynn-host help <command>' for more information on a specific command.
 
 func runDaemon(args *docopt.Args) {
 	hostname, _ := os.Hostname()
-	externalAddr := args.String["--external"]
+	externalAddr := args.String["--external-ip"]
 	stateFile := args.String["--state"]
 	hostID := args.String["--id"]
 	force := args.Bool["--force"]
@@ -131,9 +134,12 @@ func runDaemon(args *docopt.Args) {
 	backendName := args.String["--backend"]
 	flynnInit := args.String["--flynn-init"]
 	logDir := args.String["--log-dir"]
+	discoveryToken := args.String["--discovery"]
+	peerIPs := strings.Split(args.String["--peer-ips"], ",")
 
 	grohl.AddContext("app", "host")
 	grohl.Log(grohl.Data{"at": "start"})
+	g := grohl.NewContext(grohl.Data{"fn": "main"})
 
 	if hostID == "" {
 		hostID = strings.Replace(hostname, "-", "", -1)
@@ -147,6 +153,21 @@ func runDaemon(args *docopt.Args) {
 		if err != nil {
 			shutdown.Fatal(err)
 		}
+	}
+
+	publishAddr := externalAddr + ":1113"
+	if discoveryToken != "" {
+		// TODO: retry
+		discoveryID, err := discovery.RegisterInstance(discovery.Info{
+			ClusterURL:  discoveryToken,
+			InstanceURL: "http://" + publishAddr,
+			Name:        hostID,
+		})
+		if err != nil {
+			g.Log(grohl.Data{"at": "register_discovery", "status": "error", "err": err.Error()})
+			shutdown.Fatal(err)
+		}
+		g.Log(grohl.Data{"at": "register_discovery", "id": discoveryID})
 	}
 
 	state := NewState(hostID, stateFile)
@@ -194,11 +215,12 @@ func runDaemon(args *docopt.Args) {
 	if err != nil {
 		shutdown.Fatal(err)
 	}
+	backend.SetDefaultEnv("EXTERNAL_IP", externalAddr)
 
-	if err := state.Restore(backend); err != nil {
+	resurrect, err := state.Restore(backend)
+	if err != nil {
 		shutdown.Fatal(err)
 	}
-
 	shutdown.BeforeExit(func() { backend.Cleanup() })
 	shutdown.BeforeExit(func() {
 		if err := state.MarkForResurrection(); err != nil {
@@ -206,41 +228,51 @@ func runDaemon(args *docopt.Args) {
 		}
 	})
 
+	discoverdManager := NewDiscoverdManager(backend, mux, hostID, publishAddr)
+	if err := serveHTTP(
+		&Host{
+			id:      hostID,
+			url:     "http://" + publishAddr,
+			state:   state,
+			backend: backend,
+		},
+		&attachHandler{state: state, backend: backend},
+		cluster.NewClient(),
+		vman,
+		discoverdManager.ConnectLocal,
+	); err != nil {
+		shutdown.Fatal(err)
+	}
+
 	if force {
 		if err := backend.Cleanup(); err != nil {
 			shutdown.Fatal(err)
 		}
 	}
 
-	discoverdConfigured := false
-	connectDiscoverd := func(url string) error {
-		if discoverdConfigured {
-			return errors.New("host: discoverd is already configured")
-		}
-		disc := discoverd.NewClientWithURL(url)
-		// TODO: use attempts to connect
-		hb, err := disc.AddServiceAndRegisterInstance("flynn-host", &discoverd.Instance{
-			Addr: externalAddr + ":1113",
-			Meta: map[string]string{"id": hostID},
-		})
+	if discoveryToken != "" {
+		instances, err := discovery.GetCluster(discoveryToken)
 		if err != nil {
-			return err
-		}
-		shutdown.BeforeExit(func() { hb.Close() })
-
-		if err := mux.Connect(disc, "flynn-logaggregator"); err != nil {
+			// TODO(titanous): retry?
 			shutdown.Fatal(err)
 		}
-		discoverdConfigured = true
-		backend.SetDefaultEnv("DISCOVERD", url)
+		peerIPs = make([]string, 0, len(instances))
+		for _, inst := range instances {
+			u, err := url.Parse(inst.URL)
+			if err != nil {
+				continue
+			}
+			ip, _, err := net.SplitHostPort(u.Host)
+			if err != nil || ip == externalAddr {
+				continue
+			}
+			peerIPs = append(peerIPs, ip)
+		}
+	}
+	if err := discoverdManager.ConnectPeer(peerIPs); err != nil {
+		// No peers have working discoverd, so resurrect any available jobs
+		resurrect()
 	}
 
-	var cluster *cluster.Client
-	shutdown.Fatal(serveHTTP(
-		&Host{state: state, backend: backend},
-		&attachHandler{state: state, backend: backend},
-		cluster,
-		vman,
-		connectDiscoverd,
-	))
+	<-make(chan struct{})
 }

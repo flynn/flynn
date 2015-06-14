@@ -3,5 +3,4 @@ include_rules
 : cli/root_keys.go |> !cgo |> bin/flynn-host
 : bin/flynn-host |> gzip -9 --keep bin/flynn-host |> bin/flynn-host.gz
 : |> !go ./flynn-init |> bin/flynn-init
-: | $(ROOT)/<layer0> |> ^ LAYER 0^ cat $(ROOT)/log/docker-layer0/* > %o |> $(ROOT)/log/docker-layer0.log
 : bin/flynn-host.gz $(ROOT)/script/install-flynn.tmpl |> sed "s/{{FLYNN-HOST-CHECKSUM}}/\$(sha512sum bin/flynn-host.gz | cut -d " " -f 1)/g" $(ROOT)/script/install-flynn.tmpl > %o |> $(ROOT)/script/install-flynn

@@ -257,3 +257,20 @@ const (
 	AttachExit
 	AttachResize
 )
+
+type NetworkConfig struct {
+	Subnet    string   `json:"subnet"`
+	MTU       int      `json:"mtu"`
+	Resolvers []string `json:"resolvers"`
+}
+
+type DiscoverdConfig struct {
+	URL string `json:"url"`
+}
+
+type HostStatus struct {
+	ID        string           `json:"id"`
+	URL       string           `json:"url"`
+	Discoverd *DiscoverdConfig `json:"discoverd,omitempty"`
+	Network   *NetworkConfig   `json:"network,omitempty"`
+}

@@ -52,7 +52,7 @@ func NewState(id string, stateFilePath string) *State {
 	Restore prior state from the save location defined at construction time.
 	If the state save file is empty, nothing is loaded, and no error is returned.
 */
-func (s *State) Restore(backend Backend) error {
+func (s *State) Restore(backend Backend) (func(), error) {
 	s.backend = backend
 
 	var resurrect []*host.ActiveJob
@@ -116,28 +116,32 @@ func (s *State) Restore(backend Backend) error {
 		}
 		return nil
 	}); err != nil && err != io.EOF {
-		return fmt.Errorf("could not restore from host persistence db: %s", err)
+		return nil, fmt.Errorf("could not restore from host persistence db: %s", err)
 	}
 
-	for _, job := range resurrect {
-		// generate a new job id, this is a new job
-		newID := cluster.RandomJobID("")
-		log.Printf("resurrecting %s as %s", job.Job.ID, newID)
-		job.Job.ID = newID
-		config := &RunConfig{
-			// TODO(titanous): Use Job instead of ActiveJob in
-			// resurrection bucket once InternalIP is not used.
-			// TODO(titanous): Passing the IP is a hack, remove it once the
-			// postgres appliance doesn't use it to calculate its ID in the
-			// state machine.
-			IP: net.ParseIP(job.InternalIP),
+	return func() {
+		var wg sync.WaitGroup
+		wg.Add(len(resurrect))
+		for _, job := range resurrect {
+			go func(job *host.ActiveJob) {
+				// generate a new job id, this is a new job
+				newID := cluster.RandomJobID("")
+				log.Printf("resurrecting %s as %s", job.Job.ID, newID)
+				job.Job.ID = newID
+				config := &RunConfig{
+					// TODO(titanous): Use Job instead of ActiveJob in
+					// resurrection bucket once InternalIP is not used.
+					// TODO(titanous): Passing the IP is a hack, remove it once the
+					// postgres appliance doesn't use it to calculate its ID in the
+					// state machine.
+					IP: net.ParseIP(job.InternalIP),
+				}
+				backend.Run(job.Job, config)
+				wg.Done()
+			}(job)
 		}
-		if err := backend.Run(job.Job, config); err != nil {
-			return err
-		}
-	}
-
-	return nil
+		wg.Wait()
+	}, nil
 }
 
 // MarkForResurrection is run during a clean shutdown and persists all running

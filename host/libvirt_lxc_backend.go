@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -58,19 +57,21 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, lo
 	}
 
 	return &LibvirtLXCBackend{
-		LogPath:    logPath,
-		VolPath:    volPath,
-		InitPath:   initPath,
-		libvirt:    libvirtc,
-		state:      state,
-		vman:       vman,
-		pinkerton:  pinkertonCtx,
-		logs:       make(map[string]*logbuf.Log),
-		containers: make(map[string]*libvirtContainer),
-		defaultEnv: make(map[string]string),
-		resolvConf: "/etc/resolv.conf",
-		mux:        mux,
-		ipalloc:    ipallocator.New(),
+		LogPath:             logPath,
+		VolPath:             volPath,
+		InitPath:            initPath,
+		libvirt:             libvirtc,
+		state:               state,
+		vman:                vman,
+		pinkerton:           pinkertonCtx,
+		logs:                make(map[string]*logbuf.Log),
+		containers:          make(map[string]*libvirtContainer),
+		defaultEnv:          make(map[string]string),
+		resolvConf:          "/etc/resolv.conf",
+		mux:                 mux,
+		ipalloc:             ipallocator.New(),
+		discoverdConfigured: make(chan struct{}),
+		networkConfigured:   make(chan struct{}),
 	}, nil
 }
 
@@ -98,6 +99,9 @@ type LibvirtLXCBackend struct {
 
 	envMtx     sync.RWMutex
 	defaultEnv map[string]string
+
+	discoverdConfigured chan struct{}
+	networkConfigured   chan struct{}
 }
 
 type libvirtContainer struct {
@@ -175,81 +179,23 @@ var networkConfigAttempts = attempt.Strategy{
 // ConfigureNetworking is called once during host startup and passed the
 // strategy and identifier of the networking coordinatior job. Currently the
 // only strategy implemented uses flannel.
-func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job string) (*NetworkInfo, error) {
-	if strategy != NetworkStrategyFlannel {
-		return nil, errors.New("host: unknown network strategy")
-	}
-
-	// wait for the job to start
-	func() {
-		events := l.state.AddListener(job)
-		defer l.state.RemoveListener(job, events)
-
-		job := l.state.GetJob(job)
-		if job.Status != host.StatusStarting {
-			return
-		}
-
-		// job is already created, so the next event will be running, crashed, or failed
-		evt := <-events
-		switch evt.Event {
-		case "start", "stop", "error":
-		default:
-			panic(fmt.Sprintf("unexpected job event %q", evt.Event))
-		}
-	}()
-
-	container, err := l.getContainer(job)
+func (l *LibvirtLXCBackend) ConfigureNetworking(config *host.NetworkConfig) error {
+	var err error
+	l.bridgeAddr, l.bridgeNet, err = net.ParseCIDR(config.Subnet)
 	if err != nil {
-		return nil, err
-	}
-
-	path := filepath.Join(container.RootPath, "/run/flannel/subnet.env")
-	var data []byte
-	err = networkConfigAttempts.Run(func() error {
-		select {
-		case <-container.done:
-			return errors.New("host: networking container unexpectedly gone")
-		default:
-		}
-
-		var err error
-		data, err = ioutil.ReadFile(path)
 		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	for _, line := range bytes.Split(data, []byte("\n")) {
-		if bytes.HasPrefix(line, []byte("FLANNEL_MTU=")) {
-			l.ifaceMTU, err = strconv.Atoi(string(line[12:]))
-			if err != nil {
-				return nil, fmt.Errorf("host: error parsing mtu %q - %s", string(line), err)
-			}
-		}
-		if bytes.HasPrefix(line, []byte("FLANNEL_SUBNET=")) {
-			l.bridgeAddr, l.bridgeNet, err = net.ParseCIDR(string(line[15:]))
-			if err != nil {
-				return nil, fmt.Errorf("host: error parsing subnet %q - %s", string(line), err)
-			}
-		}
-	}
-
-	if l.ifaceMTU == 0 || l.bridgeAddr == nil || l.bridgeNet == nil {
-		return nil, fmt.Errorf("host: error parsing flannel config - %q", string(data))
 	}
 	l.ipalloc.RequestIP(l.bridgeNet, l.bridgeAddr)
 
 	err = netlink.CreateBridge(bridgeName, false)
 	bridgeExists := os.IsExist(err)
 	if err != nil && !bridgeExists {
-		return nil, err
+		return err
 	}
 
 	bridge, err := net.InterfaceByName(bridgeName)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if !bridgeExists {
 		// We need to explicitly assign the MAC address to avoid it changing to a lower value
@@ -257,12 +203,12 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 		b := random.Bytes(5)
 		bridgeMAC := fmt.Sprintf("fe:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4])
 		if err := netlink.NetworkSetMacAddress(bridge, bridgeMAC); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	currAddrs, err := bridge.Addrs()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	setIP := true
 	for _, addr := range currAddrs {
@@ -271,17 +217,17 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 			setIP = false
 		} else {
 			if err := netlink.NetworkLinkDelIp(bridge, ip, net); err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
 	if setIP {
 		if err := netlink.NetworkLinkAddIp(bridge, l.bridgeAddr, l.bridgeNet); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	if err := netlink.NetworkLinkUp(bridge); err != nil {
-		return nil, err
+		return err
 	}
 
 	network, err := l.libvirt.LookupNetworkByName(libvirtNetName)
@@ -294,16 +240,16 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 		}
 		network, err = l.libvirt.NetworkDefineXML(string(networkConfig.XML()))
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 	active, err := network.IsActive()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if !active {
 		if err := network.Create(); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	if defaultNet, err := l.libvirt.LookupNetworkByName("default"); err == nil {
@@ -315,32 +261,33 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 
 	// enable IP forwarding
 	if err := ioutil.WriteFile("/proc/sys/net/ipv4/ip_forward", []byte("1\n"), 0644); err != nil {
-		return nil, err
+		return err
 	}
 
 	// Set up iptables for outbound traffic masquerading from containers to the
 	// rest of the network.
 	if err := iptables.EnableOutboundNAT(bridgeName, l.bridgeNet.String()); err != nil {
-		return nil, err
+		return err
 	}
 
 	// Read DNS config, discoverd uses the nameservers
 	dnsConf, err := dns.ClientConfigFromFile("/etc/resolv.conf")
 	if err != nil {
-		return nil, err
+		return err
 	}
+	config.Resolvers = dnsConf.Servers
 
 	// Write a resolv.conf to be bind-mounted into containers pointing at the
 	// future discoverd DNS listener
 	if err := os.MkdirAll("/etc/flynn", 0755); err != nil {
-		return nil, err
+		return err
 	}
 	var resolvSearch string
 	if len(dnsConf.Search) > 0 {
 		resolvSearch = fmt.Sprintf("search %s\n", strings.Join(dnsConf.Search, " "))
 	}
 	if err := ioutil.WriteFile("/etc/flynn/resolv.conf", []byte(fmt.Sprintf("%snameserver %s\n", resolvSearch, l.bridgeAddr.String())), 0644); err != nil {
-		return nil, err
+		return err
 	}
 	l.resolvConf = "/etc/flynn/resolv.conf"
 
@@ -355,7 +302,9 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(strategy NetworkStrategy, job st
 		}
 	}
 
-	return &NetworkInfo{BridgeAddr: l.bridgeAddr.String(), Nameservers: dnsConf.Servers}, nil
+	close(l.networkConfigured)
+
+	return nil
 }
 
 var libvirtAttempts = attempt.Strategy{
@@ -381,13 +330,23 @@ func (l *LibvirtLXCBackend) withConnRetries(f func() error) error {
 
 func (l *LibvirtLXCBackend) SetDefaultEnv(k, v string) {
 	l.envMtx.Lock()
-	defer l.envMtx.Unlock()
 	l.defaultEnv[k] = v
+	l.envMtx.Unlock()
+	if k == "DISCOVERD" {
+		close(l.discoverdConfigured)
+	}
 }
 
 func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error) {
 	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "run", "job.id": job.ID})
 	g.Log(grohl.Data{"at": "start", "job.artifact.uri": job.Artifact.URI, "job.cmd": job.Config.Cmd})
+
+	if !job.Config.HostNetwork {
+		<-l.networkConfigured
+	}
+	if _, ok := job.Config.Env["DISCOVERD"]; !ok {
+		<-l.discoverdConfigured
+	}
 
 	if runConfig == nil {
 		runConfig = &RunConfig{}

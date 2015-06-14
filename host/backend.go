@@ -30,17 +30,12 @@ type Backend interface {
 	Attach(*AttachRequest) error
 	Cleanup() error
 	UnmarshalState(map[string]*host.ActiveJob, map[string][]byte, []byte) error
-	ConfigureNetworking(strategy NetworkStrategy, job string) (*NetworkInfo, error)
+	ConfigureNetworking(config *host.NetworkConfig) error
 	SetDefaultEnv(k, v string)
 }
 
 type RunConfig struct {
 	IP net.IP
-}
-
-type NetworkInfo struct {
-	BridgeAddr  string
-	Nameservers []string
 }
 
 type JobStateSaver interface {
@@ -50,9 +45,3 @@ type JobStateSaver interface {
 type StateSaver interface {
 	MarshalGlobalState() ([]byte, error)
 }
-
-type NetworkStrategy int
-
-const (
-	NetworkStrategyFlannel NetworkStrategy = iota
-)
