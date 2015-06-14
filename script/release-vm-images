@@ -33,9 +33,9 @@ source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
 source "${ROOT}/script/lib/util.sh"
 
-UBUNTU_BOX_URL="https://cloud-images.ubuntu.com/vagrant/trusty/20150408/trusty-server-cloudimg-amd64-vagrant-disk1.box"
-UBUNTU_BOX_SHA="01a1d2ece2238222c69e904adbaaa2ae6e2a1ba71a6ac120ad15dc11fd065c4b"
-UBUNTU_USEAST_AMI="ami-e4b68a8c" # us-east-1 | trusty | 14.04 LTS | amd64 | hvm:ebs-ssd | 20150408.1 | hvm
+UBUNTU_BOX_URL="https://cloud-images.ubuntu.com/vagrant/trusty/20150611/trusty-server-cloudimg-amd64-vagrant-disk1.box"
+UBUNTU_BOX_SHA="d9615654c5ea16b66d1fec1b9dbd4a9f3aeafd0bd59ac497040638f8789b3885"
+UBUNTU_USEAST_AMI="ami-3b6a8050" # us-east-1 | trusty | 14.04 LTS | amd64 | hvm:ebs-ssd | 20150609 | hvm
 
 usage() {
   cat <<USAGE >&2
