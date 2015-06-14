@@ -1,5 +1,5 @@
 https://github.com/heroku/heroku-buildpack-multi.git#26fa21ac
-https://github.com/cloudfoundry/staticfile-buildpack.git#ac23fd76
+https://github.com/flynn/staticfile-buildpack.git#712bd179
 https://github.com/heroku/heroku-buildpack-ruby.git#4b493f80
 https://github.com/heroku/heroku-buildpack-nodejs.git#d8fbb5b0
 https://github.com/heroku/heroku-buildpack-clojure.git#473e9908
