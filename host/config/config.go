@@ -5,7 +5,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"strings"
 )
 
 func Open(file string) (*Config, error) {
@@ -32,22 +31,6 @@ type Config struct {
 
 func New() *Config {
 	return &Config{Env: make(map[string]string)}
-}
-
-func (c *Config) DeleteArgs(names ...string) {
-	for _, n := range names {
-		for i, arg := range c.Args {
-			if strings.HasPrefix(arg, "--"+n) {
-				c.Args = append(c.Args[:i], c.Args[i+1:]...)
-			}
-		}
-	}
-}
-
-func (c *Config) DeleteEnvs(names ...string) {
-	for _, n := range names {
-		delete(c.Env, n)
-	}
 }
 
 func (c *Config) WriteTo(name string) error {
