@@ -31,9 +31,9 @@ pushd "${buildpacks_dir}" > /dev/null
 IFS='#' read url treeish <<< "${buildpack_url}"
 
 if [[ "${treeish}" == "" ]]; then
-  git clone --depth=1 "${url}" "${buildpack_name}"
+  git clone --recursive --depth=1 "${url}" "${buildpack_name}"
 else
-  git clone "${url}" "${buildpack_name}"
+  git clone --recursive "${url}" "${buildpack_name}"
   pushd ${buildpack_name} > /dev/null
   git checkout -q "${treeish}"
   rm -rf .git
