@@ -1,11 +1,11 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
@@ -42,11 +42,7 @@ func main() {
 	if err != nil {
 		shutdown.Fatal(err)
 	}
-	cl, err := cluster.NewClient()
-	if err != nil {
-		shutdown.Fatal(err)
-	}
-	c := newContext(cc, cl)
+	c := newContext(cc, cluster.NewClient())
 
 	c.watchHosts()
 
@@ -104,10 +100,9 @@ type context struct {
 }
 
 type clusterClient interface {
-	ListHosts() ([]host.Host, error)
-	AddJobs(jobs map[string][]*host.Job) (map[string]host.Host, error)
-	DialHost(id string) (cluster.Host, error)
-	StreamHostEvents(ch chan<- *host.HostEvent) (stream.Stream, error)
+	Hosts() ([]*cluster.Host, error)
+	Host(string) (*cluster.Host, error)
+	StreamHosts(chan *cluster.Host) (stream.Stream, error)
 }
 
 type controllerClient interface {
@@ -138,24 +133,30 @@ func (c *context) syncCluster() {
 	releases := make(map[string]*ct.Release)
 	rectify := make(map[*Formation]struct{})
 
-	hosts, err := c.ListHosts()
+	hosts, err := c.Hosts()
 	if err != nil {
 		// TODO: log/handle error
 	}
 
 	c.mtx.Lock()
 	for _, h := range hosts {
-		for _, job := range h.Jobs {
+		jobs, err := h.ListJobs()
+		if err != nil {
+			// TODO: log/handle error
+			continue
+		}
+		for _, j := range jobs {
+			job := j.Job
 			appID := job.Metadata["flynn-controller.app"]
 			appName := job.Metadata["flynn-controller.app_name"]
 			releaseID := job.Metadata["flynn-controller.release"]
 			jobType := job.Metadata["flynn-controller.type"]
-			gg := g.New(grohl.Data{"host.id": h.ID, "job.id": job.ID, "app.id": appID, "release.id": releaseID, "type": jobType})
+			gg := g.New(grohl.Data{"host.id": h.ID(), "job.id": job.ID, "app.id": appID, "release.id": releaseID, "type": jobType})
 
 			if appID == "" || releaseID == "" {
 				continue
 			}
-			if job := c.jobs.Get(h.ID, job.ID); job != nil {
+			if job := c.jobs.Get(h.ID(), job.ID); job != nil {
 				continue
 			}
 
@@ -199,14 +200,14 @@ func (c *context) syncCluster() {
 
 			gg.Log(grohl.Data{"at": "addJob"})
 			go c.PutJob(&ct.Job{
-				ID:        h.ID + "-" + job.ID,
+				ID:        h.ID() + "-" + job.ID,
 				AppID:     appID,
 				ReleaseID: releaseID,
 				Type:      jobType,
 				State:     "up",
 				Meta:      jobMetaFromMetadata(job.Metadata),
 			})
-			j := f.jobs.Add(jobType, h.ID, job.ID)
+			j := f.jobs.Add(jobType, h.ID(), job.ID)
 			j.Formation = f
 			c.jobs.Add(j)
 			rectify[f] = struct{}{}
@@ -317,19 +318,20 @@ func (c *context) watchFormations() {
 }
 
 func (c *context) watchHosts() {
-	hosts, err := c.ListHosts()
-	if err != nil {
-		// TODO: log/handle error
-	}
-
+	ready := make(chan struct{})
 	go func() { // watch for new hosts
-		ch := make(chan *host.HostEvent)
-		c.StreamHostEvents(ch)
-		for event := range ch {
-			if event.Event != "add" {
+		ch := make(chan *cluster.Host)
+		_, err := c.StreamHosts(ch)
+		if err != nil {
+			panic(err)
+		}
+		for h := range ch {
+			if h == nil {
+				close(ready)
 				continue
 			}
-			go c.watchHost(event.HostID, nil)
+
+			go c.watchHost(h, nil)
 
 			c.omniMtx.RLock()
 			for f := range c.omni {
@@ -339,14 +341,7 @@ func (c *context) watchHosts() {
 		}
 	}()
 
-	ready := make(chan struct{}, len(hosts))
-	for _, h := range hosts {
-		go c.watchHost(h.ID, ready)
-	}
-	for range hosts {
-		<-ready
-	}
-
+	<-ready
 }
 
 var putJobAttempts = attempt.Strategy{
@@ -376,30 +371,18 @@ var dialHostAttempts = attempt.Strategy{
 	Delay: 200 * time.Millisecond,
 }
 
-func (c *context) watchHost(id string, ready chan struct{}) {
-	if !c.hosts.Add(id) {
+func (c *context) watchHost(h *cluster.Host, ready chan struct{}) {
+	if !c.hosts.Add(h.ID()) {
 		if ready != nil {
 			ready <- struct{}{}
 		}
 		return
 	}
-	defer c.hosts.Remove(id)
+	defer c.hosts.Remove(h.ID())
 
-	g := grohl.NewContext(grohl.Data{"fn": "watchHost", "host.id": id})
+	g := grohl.NewContext(grohl.Data{"fn": "watchHost", "host.id": h.ID()})
 
-	var h cluster.Host
-	if err := dialHostAttempts.Run(func() (err error) {
-		h, err = c.DialHost(id)
-		return
-	}); err != nil {
-		// assume the host is down and give up
-		g.Log(grohl.Data{"at": "dial_host_error", "host.id": id, "err": err})
-		if ready != nil {
-			ready <- struct{}{}
-		}
-		return
-	}
-	c.hosts.Set(id, h)
+	c.hosts.Set(h.ID(), h)
 
 	g.Log(grohl.Data{"at": "start"})
 
@@ -442,7 +425,7 @@ func (c *context) watchHost(id string, ready chan struct{}) {
 		}
 
 		job := &ct.Job{
-			ID:        id + "-" + event.JobID,
+			ID:        h.ID() + "-" + event.JobID,
 			AppID:     appID,
 			ReleaseID: releaseID,
 			Type:      jobType,
@@ -455,7 +438,7 @@ func (c *context) watchHost(id string, ready chan struct{}) {
 		// get a read lock on the mutex to ensure we are not currently
 		// syncing with the cluster
 		c.mtx.RLock()
-		j := c.jobs.Get(id, event.JobID)
+		j := c.jobs.Get(h.ID(), event.JobID)
 		c.mtx.RUnlock()
 		if j == nil {
 			continue
@@ -467,10 +450,10 @@ func (c *context) watchHost(id string, ready chan struct{}) {
 		}
 		g.Log(grohl.Data{"at": "remove", "job.id": event.JobID, "event": event.Event})
 
-		c.jobs.Remove(id, event.JobID)
+		c.jobs.Remove(h.ID(), event.JobID)
 		go func(event *host.Event) {
 			c.mtx.RLock()
-			j.Formation.RestartJob(jobType, id, event.JobID)
+			j.Formation.RestartJob(jobType, h.ID(), event.JobID)
 			c.mtx.RUnlock()
 		}(event)
 	}
@@ -478,12 +461,15 @@ func (c *context) watchHost(id string, ready chan struct{}) {
 }
 
 func newHostClients() *hostClients {
-	return &hostClients{hosts: make(map[string]cluster.Host)}
+	h := &hostClients{hosts: make(map[string]*cluster.Host)}
+	h.hostList.Store([]*cluster.Host{})
+	return h
 }
 
 type hostClients struct {
-	hosts map[string]cluster.Host
-	mtx   sync.RWMutex
+	hosts    map[string]*cluster.Host
+	hostList atomic.Value // immutable []*cluster.Host
+	mtx      sync.RWMutex
 }
 
 func (h *hostClients) Add(id string) bool {
@@ -496,22 +482,36 @@ func (h *hostClients) Add(id string) bool {
 	return true
 }
 
-func (h *hostClients) Set(id string, client cluster.Host) {
+func (h *hostClients) Set(id string, client *cluster.Host) {
 	h.mtx.Lock()
 	h.hosts[id] = client
+	h.updateHostList()
 	h.mtx.Unlock()
 }
 
 func (h *hostClients) Remove(id string) {
 	h.mtx.Lock()
 	delete(h.hosts, id)
+	h.updateHostList()
 	h.mtx.Unlock()
 }
 
-func (h *hostClients) Get(id string) cluster.Host {
+func (h *hostClients) Get(id string) *cluster.Host {
 	h.mtx.RLock()
 	defer h.mtx.RUnlock()
 	return h.hosts[id]
+}
+
+func (h *hostClients) List() []*cluster.Host {
+	return h.hostList.Load().([]*cluster.Host)
+}
+
+func (h *hostClients) updateHostList() {
+	hosts := make([]*cluster.Host, 0, len(h.hosts))
+	for _, host := range h.hosts {
+		hosts = append(hosts, host)
+	}
+	h.hostList.Store(hosts)
 }
 
 func newJobMap() *jobMap {
@@ -712,16 +712,9 @@ func (f *Formation) RestartJob(typ, hostID, jobID string) {
 func (f *Formation) rectify() {
 	g := grohl.NewContext(grohl.Data{"fn": "rectify", "app.id": f.AppID, "release.id": f.Release.ID})
 
-	var hosts []host.Host
+	var hosts []*cluster.Host
 	if _, ok := f.c.omni[f]; ok {
-		var err error
-		hosts, err = f.c.ListHosts()
-		if err != nil {
-			return
-		}
-		if len(hosts) == 0 {
-			// TODO: log/handle error
-		}
+		hosts = f.c.hosts.List()
 	}
 	// update job counts
 	for t, expected := range f.Processes {
@@ -729,13 +722,10 @@ func (f *Formation) rectify() {
 			// get job counts per host
 			hostCounts := make(map[string]int, len(hosts))
 			for _, h := range hosts {
-				hostCounts[h.ID] = 0
-				for _, job := range h.Jobs {
-					if f.jobType(job) != t {
-						continue
-					}
-					hostCounts[h.ID]++
-				}
+				hostCounts[h.ID()] = 0
+			}
+			for k := range f.jobs[t] {
+				hostCounts[k.hostID]++
 			}
 			// update per host
 			for hostID, actual := range hostCounts {
@@ -805,55 +795,39 @@ func (f *Formation) restart(stoppedJob *Job) error {
 }
 
 func (f *Formation) start(typ string, hostID string) (job *Job, err error) {
-	hosts, err := f.c.ListHosts()
-	if err != nil {
-		return nil, err
-	}
-	if len(hosts) == 0 {
-		return nil, errors.New("scheduler: no online hosts")
-	}
-
-	var h host.Host
-	if hostID != "" {
-		for _, host := range hosts {
-			if hostID == host.ID {
-				h = host
-				break
-			}
-		}
-	} else {
+	if hostID == "" {
+		hosts := f.c.hosts.List()
 		sh := make(sortHosts, 0, len(hosts))
 		for _, host := range hosts {
-			var count int
-			for _, job := range h.Jobs {
-				if f.jobType(job) != typ {
-					continue
+			count := 0
+			for k := range f.jobs[typ] {
+				if k.hostID == host.ID() {
+					count++
 				}
-				count++
 			}
-			sh = append(sh, sortHost{host, count})
+			sh = append(sh, sortHost{host.ID(), count})
 		}
 		sh.Sort()
-		h = sh[0].Host
+		hostID = sh[0].HostID
 	}
+	h := f.c.hosts.Get(hostID)
 
-	config := f.jobConfig(typ, h.ID)
+	config := f.jobConfig(typ, h.ID())
 
 	// Provision a data volume on the host if needed.
 	if f.Release.Processes[typ].Data {
-		if err := utils.ProvisionVolume(f.c.clusterClient, h.ID, config); err != nil {
+		if err := utils.ProvisionVolume(h, config); err != nil {
 			return nil, err
 		}
 	}
 
-	job = f.jobs.Add(typ, h.ID, config.ID)
+	job = f.jobs.Add(typ, h.ID(), config.ID)
 	job.Formation = f
 	f.c.jobs.Add(job)
 
-	_, err = f.c.AddJobs(map[string][]*host.Job{h.ID: {config}})
-	if err != nil {
+	if err := h.AddJob(config); err != nil {
 		f.jobs.Remove(job)
-		f.c.jobs.Remove(config.ID, h.ID)
+		f.c.jobs.Remove(config.ID, h.ID())
 		return nil, err
 	}
 	return job, nil
@@ -923,8 +897,8 @@ func (f *Formation) jobConfig(name string, hostID string) *host.Job {
 }
 
 type sortHost struct {
-	Host host.Host
-	Jobs int
+	HostID string
+	Jobs   int
 }
 
 type sortHosts []sortHost
@@ -935,7 +909,7 @@ func (h sortHosts) Sort()         { sort.Sort(h) }
 
 func (h sortHosts) Less(i, j int) bool {
 	if h[i].Jobs == h[j].Jobs {
-		return len(h[i].Host.Jobs) < len(h[j].Host.Jobs)
+		return h[i].HostID < h[j].HostID
 	}
 	return h[i].Jobs < h[j].Jobs
 }
