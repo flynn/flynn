@@ -5,6 +5,93 @@
     "vars": ["CLUSTER_DOMAIN"]
   },
   {
+    "id": "etcd",
+    "app": {
+      "name": "etcd"
+    },
+    "action": "run-app",
+    "release": {
+      "env": {
+        "ETCD_INITIAL_CLUSTER_STATE": "new",
+        "ETCD_INITIAL_CLUSTER": "{{ range $ip := .SortedHostIPs }}{{ md5sum $ip }}=http://{{ $ip }}:2380,{{ end }}",
+        "DISCOVERD": "none"
+      },
+      "processes": {
+        "app": {
+          "ports": [{"port": 2379, "proto": "tcp"}, {"port": 2380, "proto": "tcp"}],
+          "data": true,
+          "resurrect": true,
+          "host_network": true,
+          "omni": true
+        }
+      }
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "$image_repository?name=flynn/etcd&id=$image_id[etcd]"
+    },
+    "processes": {
+      "app": 1
+    }
+  },
+  {
+    "id": "flannel",
+    "app": {
+      "name": "flannel"
+    },
+    "action": "run-app",
+    "release": {
+      "env": {
+        "DISCOVERD": "none"
+      },
+      "processes": {
+        "app": {
+          "resurrect": true,
+          "host_network": true,
+          "omni": true
+        }
+      }
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "$image_repository?name=flynn/flannel&id=$image_id[flannel]"
+    },
+    "processes": {
+      "app": 1
+    }
+  },
+  {
+    "id": "discoverd",
+    "app": {
+      "name": "discoverd"
+    },
+    "action": "run-app",
+    "release": {
+      "env": {
+        "DISCOVERD": "none"
+      },
+      "processes": {
+        "app": {
+          "ports": [{"port": 1111, "proto": "tcp"}, {"port": 53, "proto": "tcp"}],
+          "resurrect": true,
+          "host_network": true,
+          "omni": true
+        }
+      }
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "$image_repository?name=flynn/discoverd&id=$image_id[discoverd]"
+    },
+    "processes": {
+      "app": 1
+    }
+  },
+  {
+    "id": "wait-hosts",
+    "action": "wait-hosts"
+  },
+  {
     "id": "pg-password",
     "action": "gen-random"
   },
@@ -66,8 +153,8 @@
   {
     "id": "router-sticky-key",
     "action": "gen-random",
-	"length": 32,
-	"encoding": "base64"
+    "length": 32,
+    "encoding": "base64"
   },
   {
     "id": "postgres-wait",
@@ -142,6 +229,36 @@
       "name": "postgres",
       "meta": {"flynn-system-app": "true"},
       "strategy": "postgres"
+    }
+  },
+  {
+    "id": "etcd-app",
+    "action": "add-app",
+    "from_step": "etcd",
+    "app": {
+      "name": "etcd",
+      "meta": {"flynn-system-app": "true"},
+      "strategy": "one-by-one"
+    }
+  },
+  {
+    "id": "flannel-app",
+    "action": "add-app",
+    "from_step": "flannel",
+    "app": {
+      "name": "flannel",
+      "meta": {"flynn-system-app": "true"},
+      "strategy": "one-by-one"
+    }
+  },
+  {
+    "id": "discoverd-app",
+    "action": "add-app",
+    "from_step": "discoverd",
+    "app": {
+      "name": "discoverd",
+      "meta": {"flynn-system-app": "true"},
+      "strategy": "one-by-one"
     }
   },
   {

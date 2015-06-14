@@ -16,11 +16,13 @@ import (
 
 func init() {
 	Register("bootstrap", runBootstrap, `
-usage: flynn-host bootstrap [--min-hosts=<min>] [--json] [<manifest>]
+usage: flynn-host bootstrap [options] [<manifest>]
 
 Options:
-  -n, --min-hosts=<min>  minimum number of hosts required to be online [default: 1]
-  --json                 format log output as json
+  -n, --min-hosts=MIN  minimum number of hosts required to be online [default: 1]
+  --json               format log output as json
+  --discovery=TOKEN    use discovery token to connect to cluster
+  --peer-ips=IPLIST    use IP address list to connect to cluster
 
 Bootstrap layer 1 using the provided manifest`)
 }
@@ -52,6 +54,11 @@ func runBootstrap(args *docopt.Args) {
 		log.Fatalln("Error reading manifest:", err)
 	}
 
+	var ips []string
+	if ipList := args.String["--peer-ips"]; ipList != "" {
+		ips = strings.Split(ipList, ",")
+	}
+
 	ch := make(chan *bootstrap.StepInfo)
 	done := make(chan struct{})
 	go func() {
@@ -62,7 +69,7 @@ func runBootstrap(args *docopt.Args) {
 	}()
 
 	minHosts, _ := strconv.Atoi(args.String["--min-hosts"])
-	err = bootstrap.Run(manifest, ch, minHosts)
+	err = bootstrap.Run(manifest, ch, args.String["--discovery"], ips, minHosts)
 	<-done
 	if err != nil {
 		os.Exit(1)

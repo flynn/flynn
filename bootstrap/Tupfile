@@ -1,3 +1,3 @@
 include_rules
-: | $(ROOT)/<layer1> |> ^ LAYER 1^ cat $(ROOT)/log/docker-layer1/* > %o |> $(ROOT)/log/docker-layer1.log
-: $(ROOT)/util/release/flynn-release $(ROOT)/log/docker-layer1.log |> ^ bootstrap_manifest.json^ cat $(ROOT)/log/docker-layer1.log > /dev/null && $(ROOT)/util/release/flynn-release manifest --output=%o --image-repository=@(IMAGE_REPOSITORY) manifest_template.json |> bin/manifest.json <manifest>
+: | $(ROOT)/<bootstrapped> |> ^ BOOTSTRAPPED^ cat $(ROOT)/log/docker-bootstrapped/* > %o |> $(ROOT)/log/docker-bootstrapped.log
+: $(ROOT)/util/release/flynn-release $(ROOT)/log/docker-bootstrapped.log |> ^ bootstrap_manifest.json^ cat $(ROOT)/log/docker-bootstrapped.log > /dev/null && $(ROOT)/util/release/flynn-release manifest --output=%o --image-repository=@(IMAGE_REPOSITORY) manifest_template.json |> bin/manifest.json <manifest>

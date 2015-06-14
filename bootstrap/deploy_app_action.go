@@ -1,11 +1,6 @@
 package bootstrap
 
 import (
-	"bytes"
-	"log"
-	"os"
-	"text/template"
-
 	ct "github.com/flynn/flynn/controller/types"
 )
 
@@ -19,20 +14,6 @@ type DeployAppAction struct {
 
 func init() {
 	Register("deploy-app", &DeployAppAction{})
-}
-
-func interpolate(s *State, arg string) string {
-	t, err := template.New("arg").Funcs(template.FuncMap{"getenv": os.Getenv}).Parse(arg)
-	if err != nil {
-		log.Printf("Ignoring error parsing %q as template: %s", arg, err)
-		return arg
-	}
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, s); err != nil {
-		log.Printf("Ignoring error executing %q as template: %s", arg, err)
-		return arg
-	}
-	return buf.String()
 }
 
 func interpolateRelease(s *State, r *ct.Release) {
