@@ -49,7 +49,7 @@ func (s *HostSuite) TestAttachFinishedInteractiveJob(t *c.C) {
 	select {
 	case err := <-runErr:
 		t.Assert(err, c.IsNil)
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("timed out waiting for interactive job")
 	}
 
