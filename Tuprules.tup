@@ -11,8 +11,7 @@ ROOT = $(TUP_CWD)
 !go = |> ^c go build %o^ CGO_ENABLED=0 $(ROOT)/util/_toolchain/go/bin/go build -installsuffix nocgo -o %o -ldflags="-X $(VPKG).commit $GIT_COMMIT -X $(VPKG).branch $GIT_BRANCH -X $(VPKG).tag $GIT_TAG -X $(VPKG).dirty $GIT_DIRTY" -tags="$GO_BUILD_TAGS" |>
 !cgo = |> ^c go build %o^ $(ROOT)/util/_toolchain/go/bin/go build -o %o -ldflags="-X $(VPKG).commit $GIT_COMMIT -X $(VPKG).branch $GIT_BRANCH -X $(VPKG).tag $GIT_TAG -X $(VPKG).dirty $GIT_DIRTY" -tags="$GO_BUILD_TAGS" |>
 !docker = |> ^ docker build %d^ docker build -t flynn/%d . | tee %o |> $(ROOT)/log/docker-%d.log <docker>
-!docker-layer0 = |> ^ docker build %d^ docker build -t flynn/%d . | tee %o |> $(ROOT)/log/docker-layer0/%d.log $(ROOT)/<layer0>
-!docker-layer1 = |> ^ docker build %d^ docker build -t flynn/%d . | tee %o |> $(ROOT)/log/docker-layer1/%d.log $(ROOT)/<layer1>
-!docker-cedarish = |> ^ docker build %d^ cat $(ROOT)/log/docker-cedarish.log > /dev/null && docker build -t flynn/%d . | tee %o |> $(ROOT)/log/docker-layer1/%d.log $(ROOT)/<layer1>
+!docker-bootstrapped = |> ^ docker build %d^ docker build -t flynn/%d . | tee %o |> $(ROOT)/log/docker-bootstrapped/%d.log $(ROOT)/<bootstrapped>
+!docker-cedarish = |> ^ docker build %d^ cat $(ROOT)/log/docker-cedarish.log > /dev/null && docker build -t flynn/%d . | tee %o |> $(ROOT)/log/docker-bootstrapped/%d.log $(ROOT)/<bootstrapped>
 !cp = |> cp %f %o |>
 !manifest = | $(ROOT)/util/release/flynn-release |> $(ROOT)/util/release/flynn-release manifest --output=%o --image-repository=@(IMAGE_REPOSITORY) manifest_template.json |> bin/manifest.json
