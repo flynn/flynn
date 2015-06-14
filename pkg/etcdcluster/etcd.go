@@ -4,20 +4,18 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
-	"path"
-	"strings"
+	"time"
 )
 
 type Client struct {
 	URLs []string
 }
 
-func (c *Client) AddMember(url string) error {
+func (c *Client) AddMember(url string) (*Member, error) {
 	data, err := json.Marshal(map[string][]string{"peerURLs": {url}})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, url := range c.URLs {
 		var res *http.Response
@@ -25,20 +23,52 @@ func (c *Client) AddMember(url string) error {
 		if err != nil {
 			continue
 		}
-		res.Body.Close()
 		if res.StatusCode != 201 && res.StatusCode != 409 {
-			return fmt.Errorf("etcd: unexpected status %d adding member", res.StatusCode)
+			res.Body.Close()
+			return nil, fmt.Errorf("etcd: unexpected status %d adding member", res.StatusCode)
+		}
+		member := &Member{}
+		json.NewDecoder(res.Body).Decode(member)
+		res.Body.Close()
+		return member, nil
+	}
+	return nil, err
+}
+
+func (c *Client) RemoveMember(id string) error {
+	var err error
+	for _, url := range c.URLs {
+		var req *http.Request
+		req, err = http.NewRequest("DELETE", fmt.Sprintf("%s/v2/members/%s", url, id), nil)
+		if err != nil {
+			continue
+		}
+		var res *http.Response
+		res, err = http.DefaultClient.Do(req)
+		if err != nil {
+			continue
+		}
+		res.Body.Close()
+		if res.StatusCode != 204 && res.StatusCode != 200 {
+			return fmt.Errorf("etcd: unexpected status %d removing member", res.StatusCode)
 		}
 		return nil
 	}
 	return err
 }
 
+var timeoutClient = &http.Client{Timeout: 1 * time.Second}
+
 func (c *Client) GetMembers() ([]Member, error) {
 	var err error
 	for _, url := range c.URLs {
+		var req *http.Request
+		req, err = http.NewRequest("GET", url+"/v2/members", nil)
+		if err != nil {
+			continue
+		}
 		var res *http.Response
-		res, err = http.Get(url + "/v2/members")
+		res, err = timeoutClient.Do(req)
 		if err != nil {
 			continue
 		}
@@ -60,53 +90,4 @@ type Member struct {
 	Name       string   `json:"name"`
 	PeerURLs   []string `json:"peerURLs"`
 	ClientURLs []string `json:"clientURLs"`
-}
-
-func Discover(url string) ([]Member, error) {
-	res, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		return nil, fmt.Errorf("etcd: unexpected status %d during discovery", res.StatusCode)
-	}
-
-	var data struct {
-		Node struct {
-			Nodes []struct {
-				Key   string `json:"key"`
-				Value string `json:"value"`
-			} `json:"nodes"`
-		} `json:"node"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&data); err != nil {
-		return nil, err
-	}
-
-	members := make([]Member, len(data.Node.Nodes))
-	for i, n := range data.Node.Nodes {
-		nameAddr := strings.SplitN(n.Value, "=", 2)
-		if len(nameAddr) != 2 {
-			return nil, fmt.Errorf("etcd: malformed value %q during discovery", n.Value)
-		}
-		members[i].Name = nameAddr[0]
-		members[i].PeerURLs = []string{nameAddr[1]}
-		members[i].ID = path.Base(n.Key)
-	}
-
-	return members, nil
-}
-
-func NewDiscoveryToken(size string) (string, error) {
-	res, err := http.Get("https://discovery.etcd.io/new?size=" + size)
-	if err != nil {
-		return "", err
-	}
-	if res.StatusCode != 200 {
-		return "", fmt.Errorf("error creating discovery token, got status %d", res.StatusCode)
-	}
-	defer res.Body.Close()
-	url, err := ioutil.ReadAll(res.Body)
-	return string(url), err
 }
