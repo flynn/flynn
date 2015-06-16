@@ -68,7 +68,13 @@ func (c *Client) AddHost(ch chan *cluster.Host, vanilla bool) (*tc.Instance, err
 	}
 	for {
 		select {
-		case h := <-ch:
+		case h, ok := <-ch:
+			if !ok {
+				return nil, fmt.Errorf("unexpected host stream close")
+			}
+			if h == nil {
+				continue
+			}
 			if h.ID() == instance.ID {
 				c.size++
 				return &instance, nil
