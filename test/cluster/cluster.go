@@ -446,6 +446,7 @@ if [[ -f test/scripts/debug-info.sh ]]; then
 fi
 
 sudo cp host/bin/flynn-* /usr/local/bin
+sudo cp bootstrap/bin/manifest.json /etc/flynn-bootstrap.json
 `[1:]))
 
 type buildData struct {
@@ -499,8 +500,7 @@ sudo start-stop-daemon \
   flynn-host \
   daemon \
   --id {{ .ID }} \
-  --manifest /etc/flynn-host.json \
-  --external {{ .IP }} \
+  --external-ip {{ .IP }} \
   --force \
   --backend libvirt-lxc \
   --peer-ips {{ .Peers }} \
