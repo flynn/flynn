@@ -33,8 +33,8 @@ source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
 source "${ROOT}/script/lib/util.sh"
 
-UBUNTU_BOX_URL="https://cloud-images.ubuntu.com/vagrant/trusty/20150611/trusty-server-cloudimg-amd64-vagrant-disk1.box"
-UBUNTU_BOX_SHA="d9615654c5ea16b66d1fec1b9dbd4a9f3aeafd0bd59ac497040638f8789b3885"
+UBUNTU_BOX_URL="https://cloud-images.ubuntu.com/vagrant/trusty/20150610/trusty-server-cloudimg-amd64-vagrant-disk1.box"
+UBUNTU_BOX_SHA="5174904851577f6423444fe477b3fae01944f8592fabd48f0ba7291d7e645d99"
 UBUNTU_USEAST_AMI="ami-3b6a8050" # us-east-1 | trusty | 14.04 LTS | amd64 | hvm:ebs-ssd | 20150609 | hvm
 
 usage() {
