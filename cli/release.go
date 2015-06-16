@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/url"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -14,19 +15,21 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pinkerton/registry"
 )
 
 func init() {
 	register("release", runRelease, `
 usage: flynn release
-       flynn release add [-t <type>] [-f <file>] <uri>
+       flynn release add [-t <type>] [-f <file>] [--no-validate] <uri>
        flynn release show [<id>]
 
 Manage app releases.
 
 Options:
-	-t <type>          type of the release. Currently only 'docker' is supported. [default: docker]
-	-f, --file=<file>  release configuration file
+	-t <type>              type of the release. Currently only 'docker' is supported. [default: docker]
+	-f, --file=<file>      release configuration file
+	--no-validate          don't validate the image URI
 
 Commands:
 	With no arguments, shows a list of releases associated with the app.
@@ -61,6 +64,7 @@ Examples:
 		}
 	}
 	$ flynn release add -f config.json https://registry.hub.docker.com?name=flynn/slugbuilder&id=15d72b7f573b
+	Validating Docker image URI.
 	Created release 427537e78be4417fae2e24d11bc993eb.
 
 	$ flynn release
@@ -152,10 +156,20 @@ func runReleaseAddDocker(args *docopt.Args, client *controller.Client) error {
 		}
 	}
 
+	uri := args.String["<uri>"]
 	artifact := &ct.Artifact{
 		Type: "docker",
-		URI:  args.String["<uri>"],
+		URI:  uri,
 	}
+
+	if !args.Bool["--no-validate"] {
+		canonicalURI, err := canonicalizeDockerURI(uri)
+		if err != nil {
+			return err
+		}
+		artifact.URI = canonicalURI
+	}
+
 	if err := client.CreateArtifact(artifact); err != nil {
 		return err
 	}
@@ -172,4 +186,28 @@ func runReleaseAddDocker(args *docopt.Args, client *controller.Client) error {
 	log.Printf("Created release %s.", release.ID)
 
 	return nil
+}
+
+func canonicalizeDockerURI(rawurl string) (string, error) {
+	log.Println("Validating Docker image URI.")
+	u, err := url.Parse(rawurl)
+	if err != nil {
+		return "", err
+	}
+	q := u.Query()
+	ref, err := registry.NewRef(rawurl)
+	if err != nil {
+		return "", err
+	}
+	image, err := registry.NewDockerSession(ref).GetImage()
+	if err != nil {
+		return "", err
+	}
+	q.Set("id", image.ID)
+	if tag := q.Get("tag"); tag != "" {
+		q.Del("tag")
+		log.Printf("Resolved tag %s => %s", tag, u.String())
+	}
+	u.RawQuery = q.Encode()
+	return u.String(), nil
 }
