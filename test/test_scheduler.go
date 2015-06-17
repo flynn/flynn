@@ -7,6 +7,7 @@ import (
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 )
 
@@ -397,10 +398,13 @@ loop:
 	hosts, err := s.clusterClient(t).Hosts()
 	t.Assert(err, c.IsNil)
 	actual := make(map[string]map[string]int)
-	for _, host := range hosts {
-		jobs, err := host.ListJobs()
+	for _, h := range hosts {
+		jobs, err := h.ListJobs()
 		t.Assert(err, c.IsNil)
 		for _, job := range jobs {
+			if job.Status != host.StatusRunning {
+				continue
+			}
 			appID := job.Job.Metadata["flynn-controller.app"]
 			if appID != app.ID {
 				continue
