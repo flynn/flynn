@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -811,6 +812,9 @@ func (f *Formation) start(typ string, hostID string) (job *Job, err error) {
 		hostID = sh[0].HostID
 	}
 	h := f.c.hosts.Get(hostID)
+	if h == nil {
+		return nil, fmt.Errorf("unknown host %q", hostID)
+	}
 
 	config := f.jobConfig(typ, h.ID())
 
