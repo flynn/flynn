@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/host/types"
@@ -18,12 +19,15 @@ import (
 	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/httphelper"
+	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/sse"
 )
 
 type Host struct {
 	state   *State
 	backend Backend
+	id      string
+	url     string
 }
 
 func (h *Host) StopJob(id string) error {
@@ -59,6 +63,11 @@ func (h *Host) streamEvents(id string, w http.ResponseWriter) error {
 
 type jobAPI struct {
 	host *Host
+
+	connectDiscoverd func(string) error
+
+	statusMtx sync.RWMutex
+	status    *host.HostStatus
 }
 
 func (h *jobAPI) ListJobs(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -140,6 +149,74 @@ func (h *jobAPI) PullImages(w http.ResponseWriter, r *http.Request, ps httproute
 	stream.Wait()
 }
 
+func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	if shutdown.IsActive() {
+		httphelper.JSON(w, 500, struct{}{})
+		return
+	}
+
+	job := &host.Job{}
+	if err := httphelper.DecodeJSON(r, job); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	// TODO(titanous): validate UUID
+	job.ID = ps.ByName("id")
+
+	go func() {
+		// TODO(titanous): ratelimit this goroutine?
+		if err := h.host.backend.Run(job, nil); err != nil {
+			h.host.state.SetStatusFailed(job.ID, err)
+		}
+	}()
+
+	// TODO(titanous): return 201 Accepted
+	httphelper.JSON(w, 200, struct{}{})
+}
+
+func (h *jobAPI) ConfigureDiscoverd(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	var config struct {
+		URL string `json:"url"`
+	}
+	if err := httphelper.DecodeJSON(r, &config); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+
+	go func() {
+		if err := h.connectDiscoverd(config.URL); err != nil {
+			shutdown.Fatal(err)
+		}
+
+		h.statusMtx.Lock()
+		h.status.Discoverd = &host.DiscoverdConfig{URL: config.URL}
+		h.statusMtx.Unlock()
+	}()
+}
+
+func (h *jobAPI) ConfigureNetworking(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	config := &host.NetworkConfig{}
+	if err := httphelper.DecodeJSON(r, config); err != nil {
+		shutdown.Fatal(err)
+	}
+
+	go func() {
+		if err := h.host.backend.ConfigureNetworking(config); err != nil {
+			shutdown.Fatal(err)
+		}
+
+		h.statusMtx.Lock()
+		h.status.Network = config
+		h.statusMtx.Unlock()
+	}()
+}
+
+func (h *jobAPI) GetStatus(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	h.statusMtx.RLock()
+	defer h.statusMtx.RUnlock()
+	httphelper.JSON(w, 200, &h.status)
+}
+
 func extractTufDB(r *http.Request) (string, error) {
 	defer r.Body.Close()
 	tmp, err := ioutil.TempFile("", "tuf-db")
@@ -156,28 +233,37 @@ func extractTufDB(r *http.Request) (string, error) {
 func (h *jobAPI) RegisterRoutes(r *httprouter.Router) error {
 	r.GET("/host/jobs", h.ListJobs)
 	r.GET("/host/jobs/:id", h.GetJob)
+	r.PUT("/host/jobs/:id", h.AddJob)
 	r.DELETE("/host/jobs/:id", h.StopJob)
 	r.PUT("/host/jobs/:id/signal/:signal", h.SignalJob)
 	r.POST("/host/pull-images", h.PullImages)
+	r.POST("/host/discoverd", h.ConfigureDiscoverd)
+	r.POST("/host/network", h.ConfigureNetworking)
+	r.GET("/host/status", h.GetStatus)
 	return nil
 }
 
-func serveHTTP(host *Host, attach *attachHandler, clus *cluster.Client, vman *volumemanager.Manager) (*httprouter.Router, error) {
+func serveHTTP(h *Host, attach *attachHandler, clus *cluster.Client, vman *volumemanager.Manager, connectDiscoverd func(string) error) error {
 	l, err := net.Listen("tcp", ":1113")
 	if err != nil {
-		return nil, err
+		return err
 	}
+	shutdown.BeforeExit(func() { l.Close() })
 
 	r := httprouter.New()
 
 	r.POST("/attach", attach.ServeHTTP)
 
-	jobAPI := &jobAPI{host}
+	jobAPI := &jobAPI{
+		host:             h,
+		connectDiscoverd: connectDiscoverd,
+		status:           &host.HostStatus{ID: h.id, URL: h.url},
+	}
 	jobAPI.RegisterRoutes(r)
 	volAPI := volumeapi.NewHTTPAPI(clus, vman)
 	volAPI.RegisterRoutes(r)
 
 	go http.Serve(l, httphelper.ContextInjector("host", httphelper.NewRequestLogger(r)))
 
-	return r, nil
+	return nil
 }

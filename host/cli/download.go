@@ -65,7 +65,7 @@ func runDownload(args *docopt.Args) error {
 	if err := os.MkdirAll(args.String["--config-dir"], 0755); err != nil {
 		return fmt.Errorf("error creating config dir: %s", err)
 	}
-	for _, path := range []string{"/upstart.conf", "/host-manifest.json", "/bootstrap-manifest.json"} {
+	for _, path := range []string{"/upstart.conf", "/bootstrap-manifest.json"} {
 		if _, err := downloadGzippedFile(client, path, args.String["--config-dir"]); err != nil {
 			return err
 		}

@@ -3,4 +3,4 @@ include_rules
 : |> !go ./key-check |> bin/flynn-key-check
 : |> !go ./cache-key |> bin/flynn-cache-key
 : $(ROOT)/gitreceived/gitreceived |> !cp |> bin/gitreceived
-: flynn-receiver bin/* |> !docker-layer1 |>
+: flynn-receiver bin/* |> !docker-bootstrapped |>

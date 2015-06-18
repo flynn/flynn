@@ -28,7 +28,7 @@ func runInspect(args *docopt.Args, client *cluster.Client) error {
 	if err != nil {
 		return err
 	}
-	hostClient, err := client.DialHost(hostID)
+	hostClient, err := client.Host(hostID)
 	if err != nil {
 		return fmt.Errorf("could not connect to host %s: %s", hostID, err)
 	}

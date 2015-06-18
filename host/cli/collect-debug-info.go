@@ -112,10 +112,7 @@ func captureCmd(name string, arg ...string) (string, error) {
 }
 
 func captureJobs(gist *Gist, env bool) error {
-	client, err := cluster.NewClient()
-	if err != nil {
-		return err
-	}
+	client := cluster.NewClient()
 
 	jobs, err := jobList(client, true)
 	if err != nil {

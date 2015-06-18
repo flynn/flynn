@@ -2,37 +2,27 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
-	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/bootstrap/discovery"
 	"github.com/flynn/flynn/host/cli"
 	"github.com/flynn/flynn/host/config"
 	"github.com/flynn/flynn/host/logmux"
-	"github.com/flynn/flynn/host/sampi"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/host/volume/manager"
 	zfsVolume "github.com/flynn/flynn/host/volume/zfs"
-	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/version"
 )
-
-// discoverdAttempts is the attempt strategy that is used to connect to discoverd.
-var discoverdAttempts = attempt.Strategy{
-	Min:   5,
-	Total: 10 * time.Minute,
-	Delay: 200 * time.Millisecond,
-}
 
 const configFile = "/etc/flynn/host.json"
 
@@ -40,21 +30,20 @@ func init() {
 	log.SetFlags(log.Lshortfile | log.Lmicroseconds)
 
 	cli.Register("daemon", runDaemon, `
-usage: flynn-host daemon [options] [--meta=<KEY=VAL>...]
+usage: flynn-host daemon [options]
 
 options:
-  --external=IP          external IP of host
-  --manifest=PATH        path to manifest file [default: /etc/flynn/host-manifest.json]
+  --external-ip=IP       external IP of host
   --state=PATH           path to state file [default: /var/lib/flynn/host-state.bolt]
   --id=ID                host id
   --force                kill all containers booted by flynn-host before starting
   --legacy-volpath=PATH  directory to create legacy volumes in [default: /var/lib/flynn/host-volumes]
   --volpath=PATH         directory to create volumes in [default: /var/lib/flynn/volumes]
   --backend=BACKEND      runner backend [default: libvirt-lxc]
-  --meta=<KEY=VAL>...    key=value pair to add as metadata
-  --bind=IP              bind containers to IP
   --flynn-init=PATH      path to flynn-init binary [default: /usr/local/bin/flynn-init]
   --log-dir=DIR          directory to store job logs [default: /var/log/flynn]
+  --discovery=TOKEN      join cluster with discovery token
+  --peer-ips=IPLIST      join existing cluster using IPs
 	`)
 }
 
@@ -136,9 +125,7 @@ See 'flynn-host help <command>' for more information on a specific command.
 
 func runDaemon(args *docopt.Args) {
 	hostname, _ := os.Hostname()
-	externalAddr := args.String["--external"]
-	bindAddr := args.String["--bind"]
-	manifestFile := args.String["--manifest"]
+	externalAddr := args.String["--external-ip"]
 	stateFile := args.String["--state"]
 	hostID := args.String["--id"]
 	force := args.Bool["--force"]
@@ -147,7 +134,8 @@ func runDaemon(args *docopt.Args) {
 	backendName := args.String["--backend"]
 	flynnInit := args.String["--flynn-init"]
 	logDir := args.String["--log-dir"]
-	metadata := args.All["--meta"].([]string)
+	discoveryToken := args.String["--discovery"]
+	peerIPs := strings.Split(args.String["--peer-ips"], ",")
 
 	grohl.AddContext("app", "host")
 	grohl.Log(grohl.Data{"at": "start"})
@@ -165,6 +153,21 @@ func runDaemon(args *docopt.Args) {
 		if err != nil {
 			shutdown.Fatal(err)
 		}
+	}
+
+	publishAddr := externalAddr + ":1113"
+	if discoveryToken != "" {
+		// TODO: retry
+		discoveryID, err := discovery.RegisterInstance(discovery.Info{
+			ClusterURL:  discoveryToken,
+			InstanceURL: "http://" + publishAddr,
+			Name:        hostID,
+		})
+		if err != nil {
+			g.Log(grohl.Data{"at": "register_discovery", "status": "error", "err": err.Error()})
+			shutdown.Fatal(err)
+		}
+		g.Log(grohl.Data{"at": "register_discovery", "id": discoveryID})
 	}
 
 	state := NewState(hostID, stateFile)
@@ -212,12 +215,12 @@ func runDaemon(args *docopt.Args) {
 	if err != nil {
 		shutdown.Fatal(err)
 	}
+	backend.SetDefaultEnv("EXTERNAL_IP", externalAddr)
 
-	resurrectLayer1, err := state.Restore(backend)
+	resurrect, err := state.Restore(backend)
 	if err != nil {
 		shutdown.Fatal(err)
 	}
-
 	shutdown.BeforeExit(func() { backend.Cleanup() })
 	shutdown.BeforeExit(func() {
 		if err := state.MarkForResurrection(); err != nil {
@@ -225,180 +228,51 @@ func runDaemon(args *docopt.Args) {
 		}
 	})
 
+	discoverdManager := NewDiscoverdManager(backend, mux, hostID, publishAddr)
+	if err := serveHTTP(
+		&Host{
+			id:      hostID,
+			url:     "http://" + publishAddr,
+			state:   state,
+			backend: backend,
+		},
+		&attachHandler{state: state, backend: backend},
+		cluster.NewClient(),
+		vman,
+		discoverdManager.ConnectLocal,
+	); err != nil {
+		shutdown.Fatal(err)
+	}
+
 	if force {
 		if err := backend.Cleanup(); err != nil {
 			shutdown.Fatal(err)
 		}
 	}
 
-	runner := &manifestRunner{
-		env:          parseEnviron(),
-		externalAddr: externalAddr,
-		bindAddr:     bindAddr,
-		backend:      backend,
-		state:        state,
-		vman:         vman,
-	}
-
-	// connect to discoverd
-	discURL := os.Getenv("DISCOVERD")
-	var disc *discoverd.Client
-	if manifestFile != "" {
-		var r io.Reader
-		var f *os.File
-		if manifestFile == "-" {
-			r = os.Stdin
-		} else {
-			f, err = os.Open(manifestFile)
+	if discoveryToken != "" {
+		instances, err := discovery.GetCluster(discoveryToken)
+		if err != nil {
+			// TODO(titanous): retry?
+			shutdown.Fatal(err)
+		}
+		peerIPs = make([]string, 0, len(instances))
+		for _, inst := range instances {
+			u, err := url.Parse(inst.URL)
 			if err != nil {
-				shutdown.Fatal(err)
+				continue
 			}
-			r = f
-		}
-		services, err := runner.runManifest(r)
-		if err != nil {
-			shutdown.Fatal(err)
-		}
-		if f != nil {
-			f.Close()
-		}
-
-		if d, ok := services["discoverd"]; ok {
-			discURL = fmt.Sprintf("http://%s:%d", d.ExternalIP, d.TCPPorts[0])
-			disc = discoverd.NewClientWithURL(discURL)
-			if err := discoverdAttempts.Run(disc.Ping); err != nil {
-				shutdown.Fatal(err)
+			ip, _, err := net.SplitHostPort(u.Host)
+			if err != nil || ip == externalAddr {
+				continue
 			}
+			peerIPs = append(peerIPs, ip)
 		}
 	}
-
-	if discURL == "" && externalAddr != "" {
-		discURL = fmt.Sprintf("http://%s:1111", externalAddr)
-	}
-	// HACK: use env as global for discoverd connection in sampic
-	os.Setenv("DISCOVERD", discURL)
-	if disc == nil {
-		disc = discoverd.NewClientWithURL(discURL)
-		if err := disc.Ping(); err != nil {
-			shutdown.Fatal(err)
-		}
-	}
-	hb, err := disc.AddServiceAndRegisterInstance("flynn-host", &discoverd.Instance{
-		Addr: externalAddr + ":1113",
-		Meta: map[string]string{"id": hostID},
-	})
-	if err != nil {
-		shutdown.Fatal(err)
-	}
-	shutdown.BeforeExit(func() { hb.Close() })
-
-	if err := mux.Connect(disc, "flynn-logaggregator"); err != nil {
-		shutdown.Fatal(err)
+	if err := discoverdManager.ConnectPeer(peerIPs); err != nil {
+		// No peers have working discoverd, so resurrect any available jobs
+		resurrect()
 	}
 
-	cluster, err := cluster.NewClient()
-	if err != nil {
-		shutdown.Fatal(err)
-	}
-
-	router, err := serveHTTP(
-		&Host{state: state, backend: backend},
-		&attachHandler{state: state, backend: backend},
-		cluster,
-		vman,
-	)
-	if err != nil {
-		shutdown.Fatal(err)
-	}
-
-	sampiAPI := sampi.NewHTTPAPI(sampi.NewCluster())
-	leaders := make(chan *discoverd.Instance)
-	leaderStream, err := disc.Service("flynn-host").Leaders(leaders)
-	if err != nil {
-		shutdown.Fatal(err)
-	}
-	promote := func() {
-		g.Log(grohl.Data{"at": "sampi_leader"})
-		sampiAPI.RegisterRoutes(router)
-		leaderStream.Close()
-	}
-	leader := <-leaders
-	if leader.Addr == hb.Addr() {
-		promote()
-		// TODO: handle demotion
-	} else {
-		go func() {
-			for leader := range leaders {
-				if leader.Addr == hb.Addr() {
-					promote()
-					return
-				}
-			}
-			// TODO: handle discoverd disconnection
-		}()
-	}
-
-	g.Log(grohl.Data{"at": "sampi_connected"})
-
-	events := state.AddListener("all")
-	go syncScheduler(cluster, hostID, events)
-
-	h := &host.Host{ID: hostID, Metadata: make(map[string]string)}
-	for _, s := range metadata {
-		kv := strings.SplitN(s, "=", 2)
-		h.Metadata[kv[0]] = kv[1]
-	}
-
-	if err := resurrectLayer1(); err != nil {
-		shutdown.Fatal(err)
-	}
-
-	for {
-		newLeader := cluster.NewLeaderSignal()
-
-		h.Jobs = state.ClusterJobs()
-		jobs := make(chan *host.Job)
-		jobStream, err := cluster.RegisterHost(h, jobs)
-		if err != nil {
-			shutdown.Fatal(err)
-		}
-		shutdown.BeforeExit(func() {
-			// close the connection that registers use with the cluster
-			// during shutdown; this unregisters us immediately.
-			jobStream.Close()
-		})
-		g.Log(grohl.Data{"at": "host_registered"})
-		for job := range jobs {
-			if externalAddr != "" {
-				if job.Config.Env == nil {
-					job.Config.Env = make(map[string]string)
-				}
-				job.Config.Env["EXTERNAL_IP"] = externalAddr
-				job.Config.Env["DISCOVERD"] = discURL
-			}
-			if err := backend.Run(job, nil); err != nil {
-				state.SetStatusFailed(job.ID, err)
-			}
-		}
-		g.Log(grohl.Data{"at": "sampi_disconnected", "err": jobStream.Err})
-
-		// if the process is shutting down, just block
-		if shutdown.IsActive() {
-			<-make(chan struct{})
-		}
-
-		<-newLeader
-	}
-}
-
-func syncScheduler(scheduler *cluster.Client, hostID string, events <-chan host.Event) {
-	for event := range events {
-		if event.Event != "stop" {
-			continue
-		}
-		grohl.Log(grohl.Data{"fn": "scheduler_event", "at": "remove_job", "job.id": event.JobID})
-		if err := scheduler.RemoveJob(hostID, event.JobID); err != nil {
-			grohl.Log(grohl.Data{"fn": "scheduler_event", "at": "remove_job", "status": "error", "err": err, "job.id": event.JobID})
-		}
-	}
+	<-make(chan struct{})
 }

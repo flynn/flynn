@@ -5,4 +5,4 @@ include_rules
 : foreach $(ROOT)/schema/*.json |> !cp |> bin/jsonschema/%g.json
 : foreach $(ROOT)/schema/controller/*.json |> !cp |> bin/jsonschema/controller/%g.json
 : foreach $(ROOT)/schema/router/*.json |> !cp |> bin/jsonschema/router/%g.json
-: bin/* bin/jsonschema/*.json bin/jsonschema/controller/*.json bin/jsonschema/router/*.json examples/flynn-controller-examples |> !docker-layer1 |>
+: bin/* bin/jsonschema/*.json bin/jsonschema/controller/*.json bin/jsonschema/router/*.json examples/flynn-controller-examples |> !docker-bootstrapped |>

@@ -38,7 +38,7 @@ type Helper struct {
 	disc    *discoverd.Client
 
 	hostsMtx sync.Mutex
-	hosts    map[string]cluster.Host
+	hosts    map[string]*cluster.Host
 
 	sshMtx sync.Mutex
 	ssh    *sshData
@@ -60,9 +60,7 @@ func (h *Helper) clusterClient(t *c.C) *cluster.Client {
 	h.clusterMtx.Lock()
 	defer h.clusterMtx.Unlock()
 	if h.cluster == nil {
-		client, err := cluster.NewClientWithServices(h.discoverdClient(t).Service)
-		t.Assert(err, c.IsNil)
-		h.cluster = client
+		h.cluster = cluster.NewClientWithServices(h.discoverdClient(t).Service)
 	}
 	return h.cluster
 }
@@ -90,26 +88,26 @@ func (h *Helper) discoverdClient(t *c.C) *discoverd.Client {
 	return h.disc
 }
 
-func (h *Helper) hostClient(t *c.C, hostID string) cluster.Host {
+func (h *Helper) hostClient(t *c.C, hostID string) *cluster.Host {
 	h.hostsMtx.Lock()
 	defer h.hostsMtx.Unlock()
 	if h.hosts == nil {
-		h.hosts = make(map[string]cluster.Host)
+		h.hosts = make(map[string]*cluster.Host)
 	}
 	if client, ok := h.hosts[hostID]; ok {
 		return client
 	}
-	client, err := h.clusterClient(t).DialHost(hostID)
+	client, err := h.clusterClient(t).Host(hostID)
 	t.Assert(err, c.IsNil)
 	h.hosts[hostID] = client
 	return client
 }
 
-func (h *Helper) anyHostClient(t *c.C) cluster.Host {
+func (h *Helper) anyHostClient(t *c.C) *cluster.Host {
 	cluster := h.clusterClient(t)
-	hosts, err := cluster.ListHosts()
+	hosts, err := cluster.Hosts()
 	t.Assert(err, c.IsNil)
-	return h.hostClient(t, hosts[0].ID)
+	return hosts[0]
 }
 
 func (h *Helper) sshKeys(t *c.C) *sshData {
@@ -212,8 +210,8 @@ func (h *Helper) addVanillaHost(t *c.C) *tc.Instance {
 func (h *Helper) addHosts(t *c.C, count int, vanilla bool) []*tc.Instance {
 	debugf(t, "adding %d hosts", count)
 
-	ch := make(chan *host.HostEvent)
-	stream, err := h.clusterClient(t).StreamHostEvents(ch)
+	ch := make(chan *cluster.Host)
+	stream, err := h.clusterClient(t).StreamHosts(ch)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 

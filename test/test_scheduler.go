@@ -7,6 +7,7 @@ import (
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 )
 
@@ -105,9 +106,8 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	t.Assert(err, c.IsNil)
 
 	// kill the first controller and check the scheduler brings it back online
-	cc, err := cluster.NewClientWithServices(s.discoverdClient(t).Service)
-	t.Assert(err, c.IsNil)
-	hc, err := cc.DialHost(hostID)
+	cc := cluster.NewClientWithServices(s.discoverdClient(t).Service)
+	hc, err := cc.Host(hostID)
 	t.Assert(err, c.IsNil)
 	debug(t, "stopping job ", jobID)
 	t.Assert(hc.StopJob(jobID), c.IsNil)
@@ -389,26 +389,31 @@ loop:
 			case "failed":
 				t.Fatal("the deployment failed")
 			}
-		case <-time.After(60 * time.Second):
+		case <-time.After(2 * time.Minute):
 			t.Fatal("timed out waiting for the deploy to complete")
 		}
 	}
 
 	// check the correct controller jobs are running
-	hosts, err := s.clusterClient(t).ListHosts()
+	hosts, err := s.clusterClient(t).Hosts()
 	t.Assert(err, c.IsNil)
 	actual := make(map[string]map[string]int)
-	for _, host := range hosts {
-		for _, job := range host.Jobs {
-			appID := job.Metadata["flynn-controller.app"]
+	for _, h := range hosts {
+		jobs, err := h.ListJobs()
+		t.Assert(err, c.IsNil)
+		for _, job := range jobs {
+			if job.Status != host.StatusRunning {
+				continue
+			}
+			appID := job.Job.Metadata["flynn-controller.app"]
 			if appID != app.ID {
 				continue
 			}
-			releaseID := job.Metadata["flynn-controller.release"]
+			releaseID := job.Job.Metadata["flynn-controller.release"]
 			if _, ok := actual[releaseID]; !ok {
 				actual[releaseID] = make(map[string]int)
 			}
-			typ := job.Metadata["flynn-controller.type"]
+			typ := job.Job.Metadata["flynn-controller.type"]
 			actual[releaseID][typ]++
 		}
 	}

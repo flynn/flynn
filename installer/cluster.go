@@ -10,13 +10,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"text/template"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
+	"github.com/flynn/flynn/bootstrap/discovery"
 	cfg "github.com/flynn/flynn/cli/config"
-	"github.com/flynn/flynn/pkg/etcdcluster"
 )
 
 func (c *BaseCluster) FindCredentials() (*Credential, error) {
@@ -429,7 +428,7 @@ func (c *BaseCluster) genStartScript(nodes int64) (string, string, error) {
 		DiscoveryToken string
 	}
 	var err error
-	data.DiscoveryToken, err = etcdcluster.NewDiscoveryToken(strconv.FormatInt(nodes, 10))
+	data.DiscoveryToken, err = discovery.NewToken()
 	if err != nil {
 		return "", "", err
 	}

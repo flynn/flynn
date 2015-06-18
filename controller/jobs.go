@@ -15,13 +15,14 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
-	"github.com/flynn/flynn/pkg/schedutil"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 /* SSE Logger */
@@ -137,13 +138,32 @@ func (r *JobRepo) List(appID string) ([]*ct.Job, error) {
 	return jobs, nil
 }
 
-type clusterClient interface {
-	ListHosts() ([]host.Host, error)
-	DialHost(string) (cluster.Host, error)
-	AddJobs(map[string][]*host.Job) (map[string]host.Host, error)
+type clusterClientWrapper struct {
+	*cluster.Client
 }
 
-func (c *controllerAPI) connectHost(ctx context.Context) (cluster.Host, string, error) {
+func (c clusterClientWrapper) Host(id string) (utils.HostClient, error) {
+	return c.Client.Host(id)
+}
+
+func (c clusterClientWrapper) Hosts() ([]utils.HostClient, error) {
+	hosts, err := c.Client.Hosts()
+	if err != nil {
+		return nil, err
+	}
+	res := make([]utils.HostClient, len(hosts))
+	for i, h := range hosts {
+		res[i] = h
+	}
+	return res, nil
+}
+
+type clusterClient interface {
+	Host(string) (utils.HostClient, error)
+	Hosts() ([]utils.HostClient, error)
+}
+
+func (c *controllerAPI) connectHost(ctx context.Context) (utils.HostClient, string, error) {
 	params, _ := ctxhelper.ParamsFromContext(ctx)
 	hostID, jobID, err := cluster.ParseJobID(params.ByName("jobs_id"))
 	if err != nil {
@@ -151,11 +171,8 @@ func (c *controllerAPI) connectHost(ctx context.Context) (cluster.Host, string, 
 		return nil, jobID, err
 	}
 
-	client, err := c.clusterClient.DialHost(hostID)
-	if err != nil {
-		return nil, jobID, err
-	}
-	return client, jobID, nil
+	host, err := c.clusterClient.Host(hostID)
+	return host, jobID, err
 }
 
 func (c *controllerAPI) ListJobs(ctx context.Context, w http.ResponseWriter, req *http.Request) {
@@ -240,7 +257,7 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	artifact := data.(*ct.Artifact)
 	attach := strings.Contains(req.Header.Get("Upgrade"), "flynn-attach/0")
 
-	hosts, err := c.clusterClient.ListHosts()
+	hosts, err := c.clusterClient.Hosts()
 	if err != nil {
 		respondWithError(w, err)
 		return
@@ -249,7 +266,7 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		respondWithError(w, errors.New("no hosts found"))
 		return
 	}
-	hostID := schedutil.PickHost(hosts).ID
+	client := hosts[random.Math.Intn(len(hosts))]
 
 	id := cluster.RandomJobID("")
 	app := c.getApp(ctx)
@@ -257,7 +274,7 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	env["FLYNN_APP_ID"] = app.ID
 	env["FLYNN_RELEASE_ID"] = release.ID
 	env["FLYNN_PROCESS_TYPE"] = ""
-	env["FLYNN_JOB_ID"] = hostID + "-" + id
+	env["FLYNN_JOB_ID"] = client.ID() + "-" + id
 	if newJob.ReleaseEnv {
 		for k, v := range release.Env {
 			env[k] = v
@@ -302,11 +319,6 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 			Height: uint16(newJob.Lines),
 			Width:  uint16(newJob.Columns),
 		}
-		client, err := c.clusterClient.DialHost(hostID)
-		if err != nil {
-			respondWithError(w, fmt.Errorf("host connect failed: %s", err.Error()))
-			return
-		}
 		attachClient, err = client.Attach(attachReq, true)
 		if err != nil {
 			respondWithError(w, fmt.Errorf("attach failed: %s", err.Error()))
@@ -315,8 +327,7 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		defer attachClient.Close()
 	}
 
-	_, err = c.clusterClient.AddJobs(map[string][]*host.Job{hostID: {job}})
-	if err != nil {
+	if err := client.AddJob(job); err != nil {
 		respondWithError(w, fmt.Errorf("schedule failed: %s", err.Error()))
 		return
 	}
@@ -348,7 +359,7 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		return
 	} else {
 		httphelper.JSON(w, 200, &ct.Job{
-			ID:        hostID + "-" + job.ID,
+			ID:        client.ID() + "-" + job.ID,
 			ReleaseID: newJob.ReleaseID,
 			Cmd:       newJob.Cmd,
 		})

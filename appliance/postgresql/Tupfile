@@ -1,4 +1,4 @@
 include_rules
 : |> !go |> bin/flynn-postgres
 : |> !go ./api |> bin/flynn-postgres-api
-: bin/* |> !docker-layer1 |>
+: bin/* |> !docker-bootstrapped |>

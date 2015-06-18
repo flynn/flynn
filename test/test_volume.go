@@ -13,24 +13,21 @@ type VolumeSuite struct {
 var _ = c.Suite(&VolumeSuite{})
 
 func (s *VolumeSuite) TestVolumeTransmitAPI(t *c.C) {
-	hosts, err := s.clusterClient(t).ListHosts()
+	hosts, err := s.clusterClient(t).Hosts()
 	t.Assert(err, c.IsNil)
-	h0 := s.hostClient(t, hosts[0].ID)
-	s.doVolumeTransmitAPI(h0, h0, t)
+	s.doVolumeTransmitAPI(hosts[0], hosts[0], t)
 }
 
 func (s *VolumeSuite) TestInterhostVolumeTransmitAPI(t *c.C) {
-	hosts, err := s.clusterClient(t).ListHosts()
+	hosts, err := s.clusterClient(t).Hosts()
 	t.Assert(err, c.IsNil)
 	if len(hosts) < 2 {
 		t.Skip("need multiple hosts for this test")
 	}
-	h0 := s.hostClient(t, hosts[0].ID)
-	h1 := s.hostClient(t, hosts[1].ID)
-	s.doVolumeTransmitAPI(h0, h1, t)
+	s.doVolumeTransmitAPI(hosts[0], hosts[1], t)
 }
 
-func (s *VolumeSuite) doVolumeTransmitAPI(h0, h1 cluster.Host, t *c.C) {
+func (s *VolumeSuite) doVolumeTransmitAPI(h0, h1 *cluster.Host, t *c.C) {
 	clus := s.clusterClient(t)
 
 	// create a volume!

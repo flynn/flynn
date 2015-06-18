@@ -6,4 +6,4 @@ include_rules
 : foreach $(ROOT)/installer/app/src/views/css/*.js |> !cp |> ./app/lib/installer/views/css/%g.js
 : ./app/lib/installer/images/* ./app/lib/installer/views/* ./app/lib/installer/views/css/* $(ROOT)/log/docker-dashboard-builder.log $(ROOT)/dashboard/bin/go-bindata |> $(ROOT)/util/rubyassetbuilder/build.sh app dashboard |> bindata.go
 : bindata.go |> !go |> bin/flynn-dashboard
-: bin/* |> !docker-layer1 |>
+: bin/* |> !docker-bootstrapped |>

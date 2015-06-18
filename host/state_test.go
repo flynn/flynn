@@ -34,10 +34,11 @@ func (MockBackend) Signal(string, int) error                        { return nil
 func (MockBackend) ResizeTTY(id string, height, width uint16) error { return nil }
 func (MockBackend) Attach(*AttachRequest) error                     { return nil }
 func (MockBackend) Cleanup() error                                  { return nil }
+func (MockBackend) SetDefaultEnv(k, v string)                       {}
 func (MockBackend) UnmarshalState(map[string]*host.ActiveJob, map[string][]byte, []byte) error {
 	return nil
 }
-func (MockBackend) ConfigureNetworking(NetworkStrategy, string) (*NetworkInfo, error) { return nil, nil }
+func (MockBackend) ConfigureNetworking(*host.NetworkConfig) error { return nil }
 
 func (S) TestStatePersistRestore(c *C) {
 	workdir := c.MkDir()

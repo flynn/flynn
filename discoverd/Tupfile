@@ -1,3 +1,4 @@
 include_rules
 : |> !go |> bin/discoverd
-: bin/* |> !docker-layer0 |>
+: |> !go ./runner |> bin/discoverd-wrapper
+: bin/* |> !docker-bootstrapped |>

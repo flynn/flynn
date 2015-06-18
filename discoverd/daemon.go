@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -21,6 +24,7 @@ func main() {
 	dnsAddr := flag.String("dns-addr", ":53", "address to service DNS from")
 	resolvers := flag.String("recursors", "8.8.8.8,8.8.4.4", "upstream recursive DNS servers")
 	etcdAddrs := flag.String("etcd", "http://127.0.0.1:2379", "etcd servers (comma separated)")
+	notify := flag.String("notify", "", "url to send webhook to after starting listener")
 	flag.Parse()
 
 	etcdClient := etcd.NewClient(strings.Split(*etcdAddrs, ","))
@@ -61,10 +65,32 @@ func main() {
 		log.Fatalf("Failed to start DNS server: %s", err)
 	}
 
-	l, err := net.Listen("tcp", *httpAddr)
+	l, err := net.Listen("tcp4", *httpAddr)
 	if err != nil {
 		log.Fatalf("Failed to start HTTP listener: %s", err)
 	}
 	log.Printf("discoverd listening for HTTP on %s and DNS on %s", *httpAddr, *dnsAddr)
+
+	if *notify != "" {
+		addr := l.Addr().String()
+		host, port, _ := net.SplitHostPort(addr)
+		if host == "0.0.0.0" {
+			// try to get real address from dns addr
+			if dnsHost, _, _ := net.SplitHostPort(*dnsAddr); dnsHost != "" {
+				addr = net.JoinHostPort(dnsHost, port)
+			}
+		}
+		data := struct {
+			URL string `json:"url"`
+		}{fmt.Sprintf("http://%s", addr)}
+		payload, _ := json.Marshal(data)
+		res, err := http.Post(*notify, "application/json", bytes.NewReader(payload))
+		if err != nil {
+			log.Printf("failed to notify: %s", err)
+		} else {
+			res.Body.Close()
+		}
+	}
+
 	http.Serve(l, server.NewHTTPHandler(server.NewBasicDatastore(state, backend)))
 }

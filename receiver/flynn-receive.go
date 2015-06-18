@@ -20,16 +20,10 @@ import (
 	"github.com/flynn/flynn/pkg/random"
 )
 
-var clusterc *cluster.Client
+var clusterc = cluster.NewClient()
 
 func init() {
 	log.SetFlags(0)
-
-	var err error
-	clusterc, err = cluster.NewClient()
-	if err != nil {
-		log.Fatalln("Error connecting to cluster leader:", err)
-	}
 }
 
 var typesPattern = regexp.MustCompile("types.* -> (.+)\n")

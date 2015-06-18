@@ -73,11 +73,6 @@ func main() {
 	}
 	shutdown.BeforeExit(func() { pgxpool.Close() })
 
-	cc, err := cluster.NewClient()
-	if err != nil {
-		shutdown.Fatal(err)
-	}
-
 	lc, err := logaggc.New("")
 	if err != nil {
 		shutdown.Fatal(err)
@@ -101,7 +96,7 @@ func main() {
 
 	handler := appHandler(handlerConfig{
 		db:      db,
-		cc:      cc,
+		cc:      clusterClientWrapper{cluster.NewClient()},
 		lc:      lc,
 		rc:      rc,
 		pgxpool: pgxpool,

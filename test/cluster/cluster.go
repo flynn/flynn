@@ -335,14 +335,13 @@ func (c *Cluster) startFlynnHost(inst *Instance, peerInstances []*Instance) erro
 		if !inst.initial {
 			continue
 		}
-		peers = append(peers, fmt.Sprintf("%s=http://%s:2380", inst.ID, inst.IP))
+		peers = append(peers, inst.IP)
 	}
 	var script bytes.Buffer
 	data := hostScriptData{
-		ID:        inst.ID,
-		IP:        inst.IP,
-		Peers:     strings.Join(peers, ","),
-		EtcdProxy: !inst.initial,
+		ID:    inst.ID,
+		IP:    inst.IP,
+		Peers: strings.Join(peers, ","),
 	}
 	tmpl.Execute(&script, data)
 	c.logf("Starting flynn-host on %s [id: %s]\n", inst.IP, inst.ID)
@@ -447,8 +446,6 @@ if [[ -f test/scripts/debug-info.sh ]]; then
 fi
 
 sudo cp host/bin/flynn-* /usr/local/bin
-sudo cp host/bin/manifest.json /etc/flynn-host.json
-sudo cp bootstrap/bin/manifest.json /etc/flynn-bootstrap.json
 `[1:]))
 
 type buildData struct {
@@ -480,10 +477,9 @@ func runUnitTests(inst *Instance, out io.Writer) error {
 }
 
 type hostScriptData struct {
-	ID        string
-	IP        string
-	Peers     string
-	EtcdProxy bool
+	ID    string
+	IP    string
+	Peers string
 }
 
 var flynnHostScripts = map[string]*template.Template{
@@ -500,10 +496,6 @@ sudo start-stop-daemon \
   --pidfile /var/run/flynn-host.pid \
   --exec /usr/bin/env \
   -- \
-  ETCD_NAME={{ .ID }} \
-  ETCD_INITIAL_CLUSTER={{ .Peers }} \
-  ETCD_INITIAL_CLUSTER_STATE=new \
-  {{ if .EtcdProxy }} ETCD_PROXY=on {{ end }} \
   flynn-host \
   daemon \
   --id {{ .ID }} \
@@ -511,6 +503,7 @@ sudo start-stop-daemon \
   --external {{ .IP }} \
   --force \
   --backend libvirt-lxc \
+  --peer-ips {{ .Peers }} \
   &>/tmp/flynn-host.log
 `[1:])),
 }
@@ -532,11 +525,17 @@ func (c *Cluster) bootstrapLayer1(instances []*Instance) error {
 	c.ControllerKey = random.String(16)
 	c.BackoffPeriod = 5 * time.Second
 	rd, wr := io.Pipe()
+
+	ips := make([]string, len(instances))
+	for i, inst := range instances {
+		ips[i] = inst.IP
+	}
+
 	var cmdErr error
 	go func() {
 		command := fmt.Sprintf(
-			"DISCOVERD=%s:1111 CLUSTER_DOMAIN=%s CONTROLLER_KEY=%s BACKOFF_PERIOD=%fs flynn-host bootstrap --json --min-hosts=%d /etc/flynn-bootstrap.json",
-			inst.IP, c.ClusterDomain, c.ControllerKey, c.BackoffPeriod.Seconds(), len(instances),
+			"CLUSTER_DOMAIN=%s CONTROLLER_KEY=%s BACKOFF_PERIOD=%fs flynn-host bootstrap --json --min-hosts=%d --peer-ips=%s /etc/flynn-bootstrap.json",
+			c.ClusterDomain, c.ControllerKey, c.BackoffPeriod.Seconds(), len(instances), strings.Join(ips, ","),
 		)
 		cmdErr = inst.Run(command, &Streams{Stdout: wr, Stderr: os.Stderr})
 		wr.Close()

@@ -87,7 +87,7 @@ func (s *S) TestKillJob(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "killjob"})
 	hostID, jobID := random.UUID(), random.UUID()
 	hc := tu.NewFakeHostClient(hostID)
-	s.cc.SetHostClient(hostID, hc)
+	s.cc.AddHost(hc)
 
 	c.Assert(s.c.DeleteJob(app.ID, hostID+"-"+jobID), IsNil)
 	c.Assert(hc.IsStopped(jobID), Equals, true)
@@ -97,7 +97,8 @@ func (s *S) TestRunJobDetached(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "run-detached"})
 
 	hostID := random.UUID()
-	s.cc.SetHosts(map[string]host.Host{hostID: {ID: hostID}})
+	host := tu.NewFakeHostClient(hostID)
+	s.cc.AddHost(host)
 
 	artifact := s.createTestArtifact(c, &ct.Artifact{Type: "docker", URI: "docker://foo/bar"})
 	release := s.createTestRelease(c, &ct.Release{
@@ -120,7 +121,7 @@ func (s *S) TestRunJobDetached(c *C) {
 	c.Assert(res.Type, Equals, "")
 	c.Assert(res.Cmd, DeepEquals, cmd)
 
-	job := s.cc.GetHost(hostID).Jobs[0]
+	job := host.Jobs[0]
 	c.Assert(res.ID, Equals, hostID+"-"+job.ID)
 	c.Assert(job.Metadata, DeepEquals, map[string]string{
 		"flynn-controller.app":      app.ID,
@@ -145,6 +146,7 @@ func (s *S) TestRunJobAttached(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "run-attached"})
 	hostID := random.UUID()
 	hc := tu.NewFakeHostClient(hostID)
+	s.cc.AddHost(hc)
 
 	done := make(chan struct{})
 	var jobID string
@@ -170,9 +172,6 @@ func (s *S) TestRunJobAttached(c *C) {
 			io.WriteCloser
 		}{strings.NewReader("test out"), pipeW}), nil
 	})
-
-	s.cc.SetHostClient(hostID, hc)
-	s.cc.SetHosts(map[string]host.Host{hostID: {ID: hostID}})
 
 	artifact := s.createTestArtifact(c, &ct.Artifact{Type: "docker", URI: "docker://foo/bar"})
 	release := s.createTestRelease(c, &ct.Release{
@@ -201,7 +200,7 @@ func (s *S) TestRunJobAttached(c *C) {
 	c.Assert(string(stdout), Equals, "test out")
 	rwc.Close()
 
-	job := s.cc.GetHost(hostID).Jobs[0]
+	job := hc.Jobs[0]
 	c.Assert(job.ID, Equals, jobID)
 	c.Assert(job.Metadata, DeepEquals, map[string]string{
 		"flynn-controller.app":      app.ID,

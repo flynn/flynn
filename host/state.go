@@ -52,7 +52,7 @@ func NewState(id string, stateFilePath string) *State {
 	Restore prior state from the save location defined at construction time.
 	If the state save file is empty, nothing is loaded, and no error is returned.
 */
-func (s *State) Restore(backend Backend) (func() error, error) {
+func (s *State) Restore(backend Backend) (func(), error) {
 	s.backend = backend
 
 	var resurrect []*host.ActiveJob
@@ -118,35 +118,30 @@ func (s *State) Restore(backend Backend) (func() error, error) {
 	}); err != nil && err != io.EOF {
 		return nil, fmt.Errorf("could not restore from host persistence db: %s", err)
 	}
-	resurrectJobs := func(manifest bool) error {
-		for _, job := range resurrect {
-			if manifest && job.ManifestID == "" || !manifest && job.ManifestID != "" {
-				continue
-			}
-			// generate a new job id, this is a new job
-			newID := cluster.RandomJobID("")
-			log.Printf("resurrecting %s (%s) as %s", job.Job.ID, job.ManifestID, newID)
-			job.Job.ID = newID
-			config := &RunConfig{
-				// TODO(titanous): Use jobs instead of ActiveJobs in
-				// resurrection bucket once ManifestID is gone.
-				ManifestID: job.ManifestID,
-				// TODO(titanous): Passing the IP is a hack, remove it once the
-				// postgres appliance doesn't use it to calculate its ID in the
-				// state machine.
-				IP: net.ParseIP(job.InternalIP),
-			}
-			if err := backend.Run(job.Job, config); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	if err := resurrectJobs(true); err != nil {
-		return nil, err
-	}
 
-	return func() error { return resurrectJobs(false) }, nil
+	return func() {
+		var wg sync.WaitGroup
+		wg.Add(len(resurrect))
+		for _, job := range resurrect {
+			go func(job *host.ActiveJob) {
+				// generate a new job id, this is a new job
+				newID := cluster.RandomJobID("")
+				log.Printf("resurrecting %s as %s", job.Job.ID, newID)
+				job.Job.ID = newID
+				config := &RunConfig{
+					// TODO(titanous): Use Job instead of ActiveJob in
+					// resurrection bucket once InternalIP is not used.
+					// TODO(titanous): Passing the IP is a hack, remove it once the
+					// postgres appliance doesn't use it to calculate its ID in the
+					// state machine.
+					IP: net.ParseIP(job.InternalIP),
+				}
+				backend.Run(job.Job, config)
+				wg.Done()
+			}(job)
+		}
+		wg.Wait()
+	}, nil
 }
 
 // MarkForResurrection is run during a clean shutdown and persists all running
@@ -328,13 +323,6 @@ func (s *State) SetContainerID(jobID, containerID string) {
 	defer s.mtx.Unlock()
 	s.jobs[jobID].ContainerID = containerID
 	s.containers[containerID] = s.jobs[jobID]
-	s.persist(jobID)
-}
-
-func (s *State) SetManifestID(jobID, manifestID string) {
-	s.mtx.Lock()
-	s.jobs[jobID].ManifestID = manifestID
-	s.mtx.Unlock()
 	s.persist(jobID)
 }
 
