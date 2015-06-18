@@ -56,7 +56,6 @@ func (d *DiscoverdManager) ConnectLocal(url string) error {
 		return errors.New("host: discoverd is already configured")
 	}
 	disc := discoverd.NewClientWithURL(url)
-	// TODO: use attempts to connect
 	hb, err := disc.AddServiceAndRegisterInstance("flynn-host", d.inst)
 	if err != nil {
 		return err
