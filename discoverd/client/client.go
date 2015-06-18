@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/stream"
@@ -45,8 +46,10 @@ func NewClientWithURL(url string) *Client {
 	}
 	return &Client{
 		c: &httpclient.Client{
-			URL:  url,
-			HTTP: http.DefaultClient,
+			URL: url,
+			HTTP: &http.Client{
+				Transport: &http.Transport{Dial: dialer.Retry.Dial},
+			},
 		},
 	}
 }
