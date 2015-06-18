@@ -65,6 +65,8 @@ type jobAPI struct {
 	host *Host
 
 	connectDiscoverd func(string) error
+	discoverdOnce    sync.Once
+	networkOnce      sync.Once
 
 	statusMtx sync.RWMutex
 	status    *host.HostStatus
@@ -183,7 +185,7 @@ func (h *jobAPI) ConfigureDiscoverd(w http.ResponseWriter, r *http.Request, _ ht
 		return
 	}
 
-	go func() {
+	go h.discoverdOnce.Do(func() {
 		if err := h.connectDiscoverd(config.URL); err != nil {
 			shutdown.Fatal(err)
 		}
@@ -191,7 +193,7 @@ func (h *jobAPI) ConfigureDiscoverd(w http.ResponseWriter, r *http.Request, _ ht
 		h.statusMtx.Lock()
 		h.status.Discoverd = &host.DiscoverdConfig{URL: config.URL}
 		h.statusMtx.Unlock()
-	}()
+	})
 }
 
 func (h *jobAPI) ConfigureNetworking(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -200,7 +202,7 @@ func (h *jobAPI) ConfigureNetworking(w http.ResponseWriter, r *http.Request, _ h
 		shutdown.Fatal(err)
 	}
 
-	go func() {
+	go h.networkOnce.Do(func() {
 		if err := h.host.backend.ConfigureNetworking(config); err != nil {
 			shutdown.Fatal(err)
 		}
@@ -208,7 +210,7 @@ func (h *jobAPI) ConfigureNetworking(w http.ResponseWriter, r *http.Request, _ h
 		h.statusMtx.Lock()
 		h.status.Network = config
 		h.statusMtx.Unlock()
-	}()
+	})
 }
 
 func (h *jobAPI) GetStatus(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
