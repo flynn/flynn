@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"text/tabwriter"
+	"text/template"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/units"
@@ -17,7 +18,7 @@ import (
 
 func init() {
 	Register("ps", runPs, `
-usage: flynn-host ps [-a|--all] [-q|--quiet]
+usage: flynn-host ps [-a|--all] [-q|--quiet] [-f <format>]
 
 List jobs`)
 }
@@ -35,6 +36,18 @@ func runPs(args *docopt.Args, client *cluster.Client) error {
 	}
 	if args.Bool["-q"] || args.Bool["--quiet"] {
 		for _, job := range jobs {
+			if format := args.String["<format>"]; format != "" {
+				tmpl, err := template.New("format").Funcs(template.FuncMap{
+					"metadata": func(key string) string { return job.Job.Metadata[key] },
+				}).Parse(format + "\n")
+				if err != nil {
+					return err
+				}
+				if err := tmpl.Execute(os.Stdout, job); err != nil {
+					return err
+				}
+				continue
+			}
 			fmt.Println(clusterJobID(job))
 		}
 		return nil
