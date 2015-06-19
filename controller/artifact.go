@@ -27,17 +27,39 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 	if a.URI == "" {
 		return ct.ValidationError{"uri", "must not be empty"}
 	}
-	err := r.db.QueryRow("INSERT INTO artifacts (artifact_id, type, uri) VALUES ($1, $2, $3) RETURNING created_at",
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	err = tx.QueryRow("INSERT INTO artifacts (artifact_id, type, uri) VALUES ($1, $2, $3) RETURNING created_at",
 		a.ID, a.Type, a.URI).Scan(&a.CreatedAt)
 	if postgres.IsUniquenessError(err, "") {
-		err = r.db.QueryRow("SELECT artifact_id, created_at FROM artifacts WHERE type = $1 AND uri = $2",
-			a.Type, a.URI).Scan(&a.ID, &a.CreatedAt)
+		tx.Rollback()
+		tx, err = r.db.Begin()
 		if err != nil {
 			return err
 		}
+		err = tx.QueryRow("SELECT artifact_id, created_at FROM artifacts WHERE type = $1 AND uri = $2",
+			a.Type, a.URI).Scan(&a.ID, &a.CreatedAt)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	} else if err == nil {
+		a.ID = postgres.CleanUUID(a.ID)
+		if err := createEvent(tx.Exec, &ct.Event{
+			ObjectID:   a.ID,
+			ObjectType: ct.EventTypeArtifact,
+		}, a); err != nil {
+			tx.Rollback()
+			return err
+		}
 	}
-	a.ID = postgres.CleanUUID(a.ID)
-	return err
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 func scanArtifact(s postgres.Scanner) (*ct.Artifact, error) {

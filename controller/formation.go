@@ -76,17 +76,35 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 	if err := r.validateFormProcs(f); err != nil {
 		return err
 	}
-	procs := procsHstore(f.Processes)
-	err := r.db.QueryRow("INSERT INTO formations (app_id, release_id, processes) VALUES ($1, $2, $3) RETURNING created_at, updated_at",
-		f.AppID, f.ReleaseID, procs).Scan(&f.CreatedAt, &f.UpdatedAt)
-	if postgres.IsUniquenessError(err, "") {
-		err = r.db.QueryRow("UPDATE formations SET processes = $3, updated_at = now(), deleted_at = NULL WHERE app_id = $1 AND release_id = $2 RETURNING created_at, updated_at",
-			f.AppID, f.ReleaseID, procs).Scan(&f.CreatedAt, &f.UpdatedAt)
-	}
+	tx, err := r.db.Begin()
 	if err != nil {
 		return err
 	}
-	return nil
+	procs := procsHstore(f.Processes)
+	err = tx.QueryRow("INSERT INTO formations (app_id, release_id, processes) VALUES ($1, $2, $3) RETURNING created_at, updated_at",
+		f.AppID, f.ReleaseID, procs).Scan(&f.CreatedAt, &f.UpdatedAt)
+	if postgres.IsUniquenessError(err, "") {
+		tx.Rollback()
+		tx, err = r.db.Begin()
+		if err != nil {
+			return err
+		}
+		err = tx.QueryRow("UPDATE formations SET processes = $3, updated_at = now(), deleted_at = NULL WHERE app_id = $1 AND release_id = $2 RETURNING created_at, updated_at",
+			f.AppID, f.ReleaseID, procs).Scan(&f.CreatedAt, &f.UpdatedAt)
+	}
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := createEvent(tx.Exec, &ct.Event{
+		AppID:      f.AppID,
+		ObjectID:   f.AppID + ":" + f.ReleaseID,
+		ObjectType: ct.EventTypeScale,
+	}, f.Processes); err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 func scanFormation(s postgres.Scanner) (*ct.Formation, error) {
@@ -134,11 +152,24 @@ func (r *FormationRepo) List(appID string) ([]*ct.Formation, error) {
 }
 
 func (r *FormationRepo) Remove(appID, releaseID string) error {
-	err := r.db.Exec("UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now() WHERE app_id = $1 AND release_id = $2", appID, releaseID)
+	tx, err := r.db.Begin()
 	if err != nil {
 		return err
 	}
-	return nil
+	_, err = tx.Exec("UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now() WHERE app_id = $1 AND release_id = $2", appID, releaseID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := createEvent(tx.Exec, &ct.Event{
+		AppID:      appID,
+		ObjectID:   appID + ":" + releaseID,
+		ObjectType: ct.EventTypeScale,
+	}, nil); err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 func (r *FormationRepo) publish(appID, releaseID string) {

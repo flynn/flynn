@@ -58,7 +58,16 @@ func (rr *ResourceRepo) Add(r *ct.Resource) error {
 		}
 		r.Apps[i] = postgres.CleanUUID(r.Apps[i])
 	}
-	r.ID = postgres.CleanUUID(r.ID)
+	for _, appID := range r.Apps {
+		if err := createEvent(tx.Exec, &ct.Event{
+			AppID:      appID,
+			ObjectID:   r.ID,
+			ObjectType: ct.EventTypeResource,
+		}, r); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
 	return tx.Commit()
 }
 
@@ -158,20 +167,30 @@ func (r *ResourceRepo) AppList(appID string) ([]*ct.Resource, error) {
 	return resourceList(rows)
 }
 
-func (r *ResourceRepo) Remove(id string) error {
-	tx, err := r.db.Begin()
+func (rr *ResourceRepo) Remove(r *ct.Resource) error {
+	tx, err := rr.db.Begin()
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec("UPDATE resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL", id)
+	_, err = tx.Exec("UPDATE resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL", r.ID)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
-	_, err = tx.Exec("UPDATE app_resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL", id)
+	_, err = tx.Exec("UPDATE app_resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL", r.ID)
 	if err != nil {
 		tx.Rollback()
 		return err
+	}
+	for _, appID := range r.Apps {
+		if err := createEvent(tx.Exec, &ct.Event{
+			AppID:      appID,
+			ObjectID:   r.ID,
+			ObjectType: ct.EventTypeResourceDeletion,
+		}, r); err != nil {
+			tx.Rollback()
+			return err
+		}
 	}
 	return tx.Commit()
 }
@@ -304,7 +323,7 @@ func (c *controllerAPI) DeleteResource(ctx context.Context, w http.ResponseWrite
 		return
 	}
 
-	if err := c.resourceRepo.Remove(id); err != nil {
+	if err := c.resourceRepo.Remove(res); err != nil {
 		respondWithError(w, err)
 		return
 	}

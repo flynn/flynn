@@ -24,6 +24,7 @@ type App struct {
 	Name      string            `json:"name,omitempty"`
 	Meta      map[string]string `json:"meta,omitempty"`
 	Strategy  string            `json:"strategy,omitempty"`
+	ReleaseID string            `json:"release_id,omitempty"`
 	CreatedAt *time.Time        `json:"created_at,omitempty"`
 	UpdatedAt *time.Time        `json:"updated_at,omitempty"`
 }
@@ -196,17 +197,28 @@ type LogOpts struct {
 type EventType string
 
 const (
-	EventTypeAppDeletion EventType = "app_deletion"
-	EventTypeDeployment  EventType = "deployment"
-	EventTypeJob         EventType = "job"
-	EventTypeScale       EventType = "scale"
+	EventTypeApp              EventType = "app"
+	EventTypeAppDeletion      EventType = "app_deletion"
+	EventTypeDeployment       EventType = "deployment"
+	EventTypeJob              EventType = "job"
+	EventTypeScale            EventType = "scale"
+	EventTypeRelease          EventType = "release"
+	EventTypeArtifact         EventType = "artifact"
+	EventTypeProvider         EventType = "provider"
+	EventTypeResource         EventType = "resource"
+	EventTypeResourceDeletion EventType = "resource_deletion"
+	EventTypeKey              EventType = "key"
+	EventTypeKeyDeletion      EventType = "key_deletion"
+	EventTypeRoute            EventType = "route"
+	EventTypeRouteDeletion    EventType = "route_deletion"
 )
 
-type AppEvent struct {
+type Event struct {
 	ID         int64           `json:"id,omitempty"`
 	AppID      string          `json:"app,omitempty"`
 	ObjectType EventType       `json:"object_type,omitempty"`
 	ObjectID   string          `json:"object_id,omitempty"`
+	UniqueID   string          `json:"-"`
 	Data       json.RawMessage `json:"data,omitempty"`
 	CreatedAt  *time.Time      `json:"created_at,omitempty"`
 }

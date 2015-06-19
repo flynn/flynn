@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
@@ -74,10 +73,9 @@ func (s *S) TestStreamDeployment(c *C) {
 		}
 		data, err := json.Marshal(e)
 		c.Assert(err, IsNil)
-		query := "INSERT INTO app_events (app_id, object_id, object_type, data) VALUES ($1, $2, $3, $4)"
+		query := "INSERT INTO events (app_id, object_id, object_type, data) VALUES ($1, $2, $3, $4)"
 		c.Assert(s.hc.db.Exec(query, app.ID, e.DeploymentID, string(ct.EventTypeDeployment), data), IsNil)
 	}
-	fmt.Println(newRelease.ID)
 	createDeploymentEvent(ct.DeploymentEvent{DeploymentID: d.ID, ReleaseID: newRelease.ID})
 
 	select {

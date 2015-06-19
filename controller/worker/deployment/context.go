@@ -151,7 +151,7 @@ func (c *context) createDeploymentEvent(e ct.DeploymentEvent) error {
 	if err != nil {
 		return err
 	}
-	query := "INSERT INTO app_events (app_id, object_id, object_type, data) VALUES ($1, $2, $3, $4)"
+	query := "INSERT INTO events (app_id, object_id, object_type, data) VALUES ($1, $2, $3, $4)"
 	return c.execWithRetries(query, e.AppID, e.DeploymentID, string(ct.EventTypeDeployment), data)
 }
 

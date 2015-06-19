@@ -13,9 +13,13 @@ import (
 	"github.com/flynn/flynn/pkg/random"
 )
 
-func (s *S) provisionTestResource(c *C, name string, apps []string) (*ct.Resource, *ct.Provider) {
+func (s *S) provisionTestResourceWithServer(c *C, name string, apps []string) (*ct.Resource, *ct.Provider, *httptest.Server) {
 	data := []byte(`{"foo":"bar"}`)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == "DELETE" {
+			w.WriteHeader(200)
+			return
+		}
 		c.Assert(req.URL.Path, Equals, "/things")
 		in, err := ioutil.ReadAll(req.Body)
 		c.Assert(err, IsNil)
@@ -23,13 +27,18 @@ func (s *S) provisionTestResource(c *C, name string, apps []string) (*ct.Resourc
 		w.Write([]byte(fmt.Sprintf(`{"id":"/things/%s","env":{"foo":"baz"}}`, name)))
 	})
 	srv := httptest.NewServer(handler)
-	defer srv.Close()
 
 	p := &ct.Provider{URL: fmt.Sprintf("http://%s/things", srv.Listener.Addr()), Name: name}
 	c.Assert(s.c.CreateProvider(p), IsNil)
 	conf := json.RawMessage(data)
 	out, err := s.c.ProvisionResource(&ct.ResourceReq{ProviderID: p.ID, Config: &conf, Apps: apps})
 	c.Assert(err, IsNil)
+	return out, p, srv
+}
+
+func (s *S) provisionTestResource(c *C, name string, apps []string) (*ct.Resource, *ct.Provider) {
+	out, p, srv := s.provisionTestResourceWithServer(c, name, apps)
+	srv.Close()
 	return out, p
 }
 

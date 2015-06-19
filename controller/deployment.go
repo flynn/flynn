@@ -171,7 +171,7 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 	}
 	if procCount == 0 {
 		// immediately set app release
-		if err := c.appRepo.SetRelease(app.ID, release.ID); err != nil {
+		if err := c.appRepo.SetRelease(app, release.ID); err != nil {
 			respondWithError(w, err)
 			return
 		}
