@@ -598,7 +598,11 @@ func (r *Runner) restartBuild(w http.ResponseWriter, req *http.Request, ps httpr
 		return
 	}
 	if build.State != "pending" {
-		b := newBuild(build.Commit, "Restart: "+build.Description, build.Merge)
+		desc := build.Description
+		if !strings.HasPrefix(desc, "Restart: ") {
+			desc = "Restart: " + desc
+		}
+		b := newBuild(build.Commit, desc, build.Merge)
 		go r.build(b)
 	}
 	http.Redirect(w, req, "/builds", 301)
