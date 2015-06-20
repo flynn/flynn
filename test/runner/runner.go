@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/subtle"
 	"encoding/json"
@@ -9,6 +10,8 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"mime"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
@@ -30,6 +33,7 @@ import (
 	"github.com/flynn/flynn/pkg/iotool"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/sse"
 	"github.com/flynn/flynn/pkg/tlsconfig"
 	"github.com/flynn/flynn/test/arg"
 	"github.com/flynn/flynn/test/buildlog"
@@ -55,6 +59,10 @@ type Build struct {
 	DurationFormatted string        `json:"duration_formatted"`
 	Reason            string        `json:"reason"`
 	IssueLink         string        `json:"issue_link"`
+}
+
+func (b *Build) Finished() bool {
+	return b.State != "pending"
 }
 
 func newBuild(commit, description string, merge bool) *Build {
@@ -480,6 +488,49 @@ func (r *Runner) getBuilds(w http.ResponseWriter, req *http.Request, ps httprout
 	json.NewEncoder(w).Encode(builds)
 }
 
+type logLine struct {
+	Filename string `json:"filename"`
+	Text     string `json:"text"`
+}
+
+func serveBuildLogStream(b *Build, w http.ResponseWriter) error {
+	res, err := http.Get(b.LogUrl)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status %d getting build log", res.StatusCode)
+	}
+	_, params, err := mime.ParseMediaType(res.Header.Get("Content-Type"))
+	if err != nil {
+		return err
+	}
+	ch := make(chan *logLine)
+	stream := sse.NewStream(w, ch, nil)
+	stream.Serve()
+	go func() {
+		mr := multipart.NewReader(res.Body, params["boundary"])
+		for {
+			p, err := mr.NextPart()
+			if err != nil {
+				stream.CloseWithError(err)
+				return
+			}
+			s := bufio.NewScanner(p)
+			for s.Scan() {
+				ch <- &logLine{p.FileName(), s.Text()}
+			}
+			if err := s.Err(); err != nil {
+				stream.CloseWithError(err)
+				return
+			}
+		}
+	}()
+	stream.Wait()
+	return nil
+}
+
 func (r *Runner) getBuildLog(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 	id := ps.ByName("build")
 	b := &Build{}
@@ -493,8 +544,14 @@ func (r *Runner) getBuildLog(w http.ResponseWriter, req *http.Request, ps httpro
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	if b.LogFile == "" {
-		http.Redirect(w, req, b.LogUrl, http.StatusMovedPermanently)
+	if b.Finished() {
+		if strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
+			if err := serveBuildLogStream(b, w); err != nil {
+				http.Error(w, err.Error(), 500)
+			}
+			return
+		}
+		http.ServeFile(w, req, path.Join(args.AssetsDir, "build-log.html"))
 		return
 	}
 	t, err := tail.TailFile(b.LogFile, tail.Config{Follow: true, MustExist: true})

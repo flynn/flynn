@@ -44,11 +44,7 @@
     <script type="text/template" id="row-template">
       <tr>
         <td>
-          <% if(log_url) { %>
-            <a href="<%= log_url %>"><%= commit.substring(0, 7) %></a>
-          <% } else { %>
-            <a href="/builds/<%= id %>.log"><%= commit.substring(0, 7) %></a>
-          <% } %>
+          <a href="/builds/<%= id %>"><%= commit.substring(0, 7) %></a>
         </td>
         <td><%= description %></td>
         <td><%= created_at.fromNow() %> (<%= created_at.format("lll") %>)</td>
