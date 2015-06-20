@@ -52,6 +52,10 @@ type pgDeploy struct {
 	expected func(string, string) []expectedPgState
 }
 
+func (p *pgDeploy) expectedAsyncs() int {
+	return p.pgJobs - 2
+}
+
 type expectedPgState struct {
 	Primary, Sync string
 	Async         []string
@@ -251,12 +255,24 @@ func (s *PostgresSuite) testDeploy(t *c.C, d *pgDeploy) {
 	// states that do happen are expected and in-order.
 	assertNextState := func(remaining []expectedPgState) int {
 		var state state.State
-		select {
-		case s := <-stateCh:
-			t.Assert(s.err, c.IsNil)
-			state = *s.state
-		case <-time.After(60 * time.Second):
-			t.Fatal("timed out waiting for postgres cluster state")
+	loop:
+		for {
+			select {
+			case s := <-stateCh:
+				t.Assert(s.err, c.IsNil)
+				if len(s.state.Async) < d.expectedAsyncs() {
+					// we shouldn't usually receive states with less asyncs than
+					// expected, but they can occur as an intermediate state between
+					// two expected states (e.g. when a sync does a takeover at the
+					// same time as a new async is started) so just ignore them.
+					debug(t, "ignoring state with too few asyncs")
+					continue
+				}
+				state = *s.state
+				break loop
+			case <-time.After(60 * time.Second):
+				t.Fatal("timed out waiting for postgres cluster state")
+			}
 		}
 		if state.Primary == nil {
 			t.Fatal("no primary configured")
