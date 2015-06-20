@@ -161,6 +161,28 @@ func (s *S) TestUpdateApp(c *C) {
 	c.Assert(app.Meta, DeepEquals, meta)
 }
 
+func (s *S) TestUpdateAppMeta(c *C) {
+	meta := map[string]string{"foo": "bar"}
+	app := s.createTestApp(c, &ct.App{Name: "update-app-meta", Meta: meta})
+	c.Assert(app.Meta, DeepEquals, meta)
+
+	app = &ct.App{ID: app.ID}
+	meta = map[string]string{"foo": "baz", "bar": "foo"}
+	app.Meta = meta
+	c.Assert(s.c.UpdateAppMeta(app), IsNil)
+	c.Assert(app.Meta, DeepEquals, meta)
+
+	app = &ct.App{ID: app.ID}
+	meta = map[string]string(nil)
+	app.Meta = meta
+	c.Assert(s.c.UpdateAppMeta(app), IsNil)
+	c.Assert(app.Meta, DeepEquals, meta)
+
+	app, err := s.c.GetApp(app.ID)
+	c.Assert(err, IsNil)
+	c.Assert(app.Meta, DeepEquals, meta)
+}
+
 func (s *S) createTestArtifact(c *C, in *ct.Artifact) *ct.Artifact {
 	if in.Type == "" {
 		in.Type = "docker"

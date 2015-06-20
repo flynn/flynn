@@ -278,6 +278,32 @@ func (c *controllerAPI) UpdateApp(ctx context.Context, rw http.ResponseWriter, r
 	httphelper.JSON(rw, 200, app)
 }
 
+func (c *controllerAPI) UpdateAppMeta(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+
+	var data appUpdate
+	if err := httphelper.DecodeJSON(req, &data); err != nil {
+		respondWithError(rw, err)
+		return
+	}
+
+	if err := schema.Validate(data); err != nil {
+		respondWithError(rw, err)
+		return
+	}
+
+	if data["meta"] == nil {
+		data["meta"] = make(map[string]interface{})
+	}
+
+	app, err := c.appRepo.Update(params.ByName("apps_id"), data)
+	if err != nil {
+		respondWithError(rw, err)
+		return
+	}
+	httphelper.JSON(rw, 200, app)
+}
+
 func (c *controllerAPI) DeleteApp(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	args, err := json.Marshal(c.getApp(ctx))
 	if err != nil {

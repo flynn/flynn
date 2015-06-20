@@ -343,6 +343,17 @@ func (s *CLISuite) TestEnv(t *c.C) {
 	t.Assert(app.sh("echo $ENV_TEST"), Outputs, "\n")
 }
 
+func (s *CLISuite) TestMeta(t *c.C) {
+	app := s.newCliTestApp(t)
+	t.Assert(app.flynn("meta", "set", "META_TEST=var", "SECOND_VAL=2"), Succeeds)
+	t.Assert(app.flynn("meta").Output, Matches, `META_TEST *var`)
+	t.Assert(app.flynn("meta").Output, Matches, `SECOND_VAL *2`)
+	// test that unset can remove all meta tags
+	t.Assert(app.flynn("meta", "unset", "META_TEST", "SECOND_VAL"), Succeeds)
+	t.Assert(app.flynn("meta").Output, c.Not(Matches), `META_TEST *var`)
+	t.Assert(app.flynn("meta").Output, c.Not(Matches), `SECOND_VAL *2`)
+}
+
 func (s *CLISuite) TestKill(t *c.C) {
 	app := s.newCliTestApp(t)
 	t.Assert(app.flynn("scale", "--no-wait", "echoer=1"), Succeeds)

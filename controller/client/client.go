@@ -196,6 +196,14 @@ func (c *Client) UpdateApp(app *ct.App) error {
 	return c.Post(fmt.Sprintf("/apps/%s", app.ID), app, app)
 }
 
+// UpdateAppMeta updates the meta using app.ID, allowing empty meta to be set explicitly.
+func (c *Client) UpdateAppMeta(app *ct.App) error {
+	if app.ID == "" {
+		return errors.New("controller: missing id")
+	}
+	return c.Post(fmt.Sprintf("/apps/%s/meta", app.ID), app, app)
+}
+
 // DeleteApp deletes an app.
 func (c *Client) DeleteApp(appID string) (*ct.AppDeletion, error) {
 	events := make(chan *ct.AppEvent)

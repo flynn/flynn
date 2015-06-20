@@ -204,6 +204,8 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.GET("/apps/:apps_id/routes/:routes_type/:routes_id", httphelper.WrapHandler(api.appLookup(api.GetRoute)))
 	httpRouter.DELETE("/apps/:apps_id/routes/:routes_type/:routes_id", httphelper.WrapHandler(api.appLookup(api.DeleteRoute)))
 
+	httpRouter.POST("/apps/:apps_id/meta", httphelper.WrapHandler(api.appLookup(api.UpdateAppMeta)))
+
 	return httphelper.ContextInjector("controller",
 		httphelper.NewRequestLogger(muxHandler(httpRouter, c.keys)))
 }
