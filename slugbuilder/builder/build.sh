@@ -191,7 +191,7 @@ if [[ "${slug_file}" != "-" ]]; then
   echo_title "Compiled slug size is ${slug_size}"
 
   if [[ ${put_url} ]]; then
-    curl -0 -o /dev/null -X PUT -T ${slug_file} "${put_url}"
+    curl -0 -o "$(mktemp)" -X PUT -T ${slug_file} "${put_url}"
   fi
 fi
 
@@ -202,7 +202,7 @@ if [[ -n "${BUILD_CACHE_URL}" ]]; then
     --use-compress-program=pigz \
     . \
   | curl \
-    --output /dev/null \
+    --output "$(mktemp)" \
     --request PUT \
     --upload-file - \
     "${BUILD_CACHE_URL}"
