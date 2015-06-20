@@ -506,7 +506,7 @@ func (s *CLISuite) TestLogFollow(t *c.C) {
 	app := s.newCliTestApp(t)
 
 	t.Assert(app.flynn("run", "-d", "sh", "-c", "sleep 2 && for i in 1 2 3 4 5; do echo \"line $i\"; done"), Succeeds)
-	app.waitFor(ct.JobEvents{"": {"starting": 1}})
+	app.waitFor(ct.JobEvents{"": {"up": 1}})
 
 	log := app.flynnCmd("log", "--raw-output", "--follow")
 	logStdout, err := log.StdoutPipe()
