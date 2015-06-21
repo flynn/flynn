@@ -220,10 +220,6 @@ func (s *service) Leaders(leaders chan *Instance) (stream.Stream, error) {
 	return stream, nil
 }
 
-func (s *service) Watch(events chan *Event) (stream.Stream, error) {
-	return s.client.c.Stream("GET", fmt.Sprintf("/services/%s", s.name), nil, events)
-}
-
 type ServiceMeta struct {
 	Data json.RawMessage `json:"data"`
 
