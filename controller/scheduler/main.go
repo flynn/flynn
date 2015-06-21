@@ -147,6 +147,9 @@ func (c *context) syncCluster() {
 			continue
 		}
 		for _, j := range jobs {
+			if j.Status != host.StatusStarting && j.Status != host.StatusRunning {
+				continue
+			}
 			job := j.Job
 			appID := job.Metadata["flynn-controller.app"]
 			appName := job.Metadata["flynn-controller.app_name"]
