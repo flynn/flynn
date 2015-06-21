@@ -340,6 +340,10 @@ loop:
 			}
 			switch e.JobType {
 			case "postgres":
+				// move on if we have seen all the expected events
+				if expectedIndex >= len(expected) {
+					continue
+				}
 				skipped := assertNextState(expected[expectedIndex:])
 				expectedIndex += 1 + skipped
 			case "web":
