@@ -261,7 +261,7 @@ func (api *httpAPI) NewCredential(w http.ResponseWriter, req *http.Request, para
 	if creds.Type == "azure" {
 		oauthCreds := make([]*OAuthCredential, 0, 2)
 		for _, resource := range []string{azure.JSONAPIResource, azure.XMLAPIResource} {
-			token, err := azure.OAuth2Config(creds.ID, resource).Exchange(oauth2.NoContext, creds.Secret)
+			token, err := azure.OAuth2Config(creds.ID, creds.Endpoint, resource).Exchange(oauth2.NoContext, creds.Secret)
 			if err != nil {
 				httphelper.Error(w, err)
 				return

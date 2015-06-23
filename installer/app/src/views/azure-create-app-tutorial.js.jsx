@@ -61,7 +61,7 @@ var AzureCreateAppTutorial = React.createClass({
 						width: 659,
 						height: 102
 					}}/>
-					<p>Click on the applications tab and the "ADD" button at the bottom</p>
+					<p>Click the "ADD" button at the bottom</p>
 				</li>
 
 				<li>
@@ -138,6 +138,18 @@ var AzureCreateAppTutorial = React.createClass({
 						height: 93
 					}}/>
 					<p>Click the "Save" button</p>
+				</li>
+
+				<li>
+					<img src={AssetPaths["azure-app-12.png"]}  style={{
+						width: 659,
+						height: 372
+					}}/>
+					<label>
+						<p>Click on the back arrow button to go back to the "APPLICATIONS" tab click and the "ENDPOINTS" button at the bottom</p>
+						<p>Copy your OAuth 2.0 Token Endpoint into the input below</p>
+						<input name="endpoint" type="text" placeholder="https://login.microsoftonline.com/{your-uid}/oauth2/token?api-version=1.0" />
+					</label>
 				</li>
 			</ol>
 		);

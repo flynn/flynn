@@ -34,6 +34,7 @@ var AssetPaths = <%= Yajl::Encoder.encode([
 	"azure-app-9.png",
 	"azure-app-10.png",
 	"azure-app-11.png",
+	"azure-app-12.png",
 ].inject({}) { |m, name|
   m[name] = asset_path('images/'+ name).sub(/\A\./, '/assets')
   m

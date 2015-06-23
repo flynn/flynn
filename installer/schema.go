@@ -27,7 +27,8 @@ type Credential struct {
 	ID         string             `json:"id" ql:"index xID"`
 	Secret     string             `json:"secret"`
 	Name       string             `json:"name"`
-	Type       string             `json:"type"` // enum(aws, digital_ocean, azure)
+	Type       string             `json:"type"`     // enum(aws, digital_ocean, azure)
+	Endpoint   string             `json:"endpoint"` // token endpoint
 	OAuthCreds []*OAuthCredential `json:"oauth_creds,omitempty" ql:"-"`
 	DeletedAt  *time.Time         `json:"deleted_at,omitempty"`
 }

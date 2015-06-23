@@ -76,14 +76,17 @@ var MainRouter = Router.createClass({
 	oauthAzureCallback: function (params) {
 		var clientID = window.localStorage.getItem("azureClientID");
 		var name = window.localStorage.getItem("azureCredName");
+		var endpoint = window.localStorage.getItem("azureEndpoint");
 		window.localStorage.removeItem("azureClientID");
 		window.localStorage.removeItem("azureCredName");
+		window.localStorage.removeItem("azureEndpoint");
 		Dispatcher.dispatch({
 			name: 'CREATE_CREDENTIAL',
 			data: {
 				name: name,
 				id: clientID,
 				secret: params[0].code,
+				endpoint: endpoint,
 				type: 'azure'
 			}
 		});
@@ -154,12 +157,14 @@ var MainRouter = Router.createClass({
 			break;
 
 			case 'AZURE_OAUTH_AUTHORIZE':
+				window.localStorage.setItem("azureEndpoint", event.endpoint);
 				window.localStorage.setItem("azureClientID", event.clientID);
 				window.localStorage.setItem("azureCredName", event.credName);
-				var authorizeURL = 'https://login.windows.net/common/oauth2/authorize';
-				authorizeURL = authorizeURL + QueryParams.serializeParams([{
+				var authorizeURL = event.endpoint.substring(0, event.endpoint.length - 21) + 'authorize';
+					authorizeURL += QueryParams.serializeParams([{
 					client_id: event.clientID,
-					response_type: 'code'
+					response_type: 'code',
+					resource: 'https://management.core.windows.net'
 				}]);
 				window.location.href = authorizeURL;
 			break;

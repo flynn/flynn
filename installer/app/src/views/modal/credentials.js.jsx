@@ -185,9 +185,18 @@ var Credentials = React.createClass({
 			clientIDNode.focus();
 			return;
 		}
+		
+		var endpointNode = e.target.querySelector('[name=endpoint]');
+		var endpoint = endpointNode.value.trim();
+		if (endpoint === '') {
+			endpointNode.focus();
+			return;
+		}
+
 		Dispatcher.dispatch({
 			name: 'AZURE_OAUTH_AUTHORIZE',
 			clientID: clientID,
+			endpoint: endpoint,
 			credName: ''
 		});
 	},

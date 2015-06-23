@@ -27,9 +27,9 @@ func (i *Installer) azureClient(creds *Credential) *azure.Client {
 		}
 		switch oc.Scope {
 		case azure.JSONAPIResource:
-			azureJSONOAuthClient = azure.OAuth2Config(oc.ClientID, oc.Scope).Client(ctx, token)
+			azureJSONOAuthClient = azure.OAuth2Config(oc.ClientID, creds.Endpoint, oc.Scope).Client(ctx, token)
 		case azure.XMLAPIResource:
-			azureXMLOAuthClient = azure.OAuth2Config(oc.ClientID, oc.Scope).Client(ctx, token)
+			azureXMLOAuthClient = azure.OAuth2Config(oc.ClientID, creds.Endpoint, oc.Scope).Client(ctx, token)
 		}
 	}
 	return azure.NewClient(azureJSONOAuthClient, azureXMLOAuthClient)
