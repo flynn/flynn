@@ -180,24 +180,20 @@ using a [discovery
 token](https://coreos.com/docs/cluster-management/setup/etcd-cluster-discovery/).
 `flynn-host init` is a tool that handles generating and configuring the token.
 
-On the first node, create a new token with the `--init-discovery=3` flag,
-replacing `3` with the total number of nodes that will be started. The minimum
-multi-node cluster size is three, and this command does not need to be run if
-you are only starting a single node.
+On the first node, create a new token with the `--init-discovery` flag. The
+minimum multi-node cluster size is three, and this command does not need to be
+run if you are only starting a single node.
 
 ```
-$ sudo flynn-host init --init-discovery=3
-https://discovery.etcd.io/ac4581ec13a1d4baee9f9c78cf06a8c0
+$ sudo flynn-host init --init-discovery
+https://discovery.flynn.io/clusters/53e8402e-030f-4861-95ba-d5b5a91b5902
 ```
 
 On the rest of the nodes, configure the generated discovery token:
 
 ```
-$ sudo flynn-host init --discovery https://discovery.etcd.io/ac4581ec13a1d4baee9f9c78cf06a8c0
+$ sudo flynn-host init --discovery https://discovery.flynn.io/clusters/53e8402e-030f-4861-95ba-d5b5a91b5902
 ```
-
-**Note:** a new token must be used every time you restart all nodes in the
-cluster.
 
 Then, start the daemon by running:
 
@@ -236,12 +232,15 @@ records, you can use [xip.io](http://xip.io) which provides wildcard DNS for
 any IP address.*
 
 Set `CLUSTER_DOMAIN` to the main domain name and start the bootstrap process,
-specifying the number of hosts that are expected to be present.
+specifying the number of hosts that are expected to be present and the discovery
+token if you created one.
 
 ```
 $ sudo \
     CLUSTER_DOMAIN=demo.localflynn.com \
-    flynn-host bootstrap --min-hosts=3 /etc/flynn/bootstrap-manifest.json
+    flynn-host bootstrap \
+    --min-hosts 3 \
+    --discovery https://discovery.flynn.io/clusters/53e8402e-030f-4861-95ba-d5b5a91b5902
 ```
 
 *Note: You only need to run this on a single node in the cluster. It will
