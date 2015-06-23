@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -16,14 +15,13 @@ import (
 )
 
 const (
-	jsonAPIVersion   = "2015-01-01"
-	xmlAPIVersion    = "2014-10-01"
-	tokenExchangeURL = "https://login.windows.net/common/oauth2/token"
-	JSONAPIResource  = "https://management.azure.com/"
-	XMLAPIResource   = "https://management.core.windows.net/"
+	jsonAPIVersion  = "2015-01-01"
+	xmlAPIVersion   = "2014-10-01"
+	JSONAPIResource = "https://management.azure.com/"
+	XMLAPIResource  = "https://management.core.windows.net/"
 )
 
-func OAuth2Config(clientID, resource string) *oauth2.Config {
+func OAuth2Config(clientID, tokenExchangeURL, resource string) *oauth2.Config {
 	return &oauth2.Config{
 		ClientID: clientID,
 		Endpoint: oauth2.Endpoint{
@@ -33,17 +31,6 @@ func OAuth2Config(clientID, resource string) *oauth2.Config {
 			"resource": {resource},
 		},
 	}
-}
-
-func tokenURL(resource string) string {
-	u, err := url.Parse(tokenExchangeURL)
-	if err != nil {
-		log.Fatal(err)
-	}
-	q := u.Query()
-	q.Add("resource", resource)
-	u.RawQuery = q.Encode()
-	return u.String()
 }
 
 func NewClient(jsonClient, xmlClient *http.Client) *Client {
