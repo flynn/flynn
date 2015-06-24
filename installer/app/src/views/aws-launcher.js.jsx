@@ -8,18 +8,24 @@ import { extend } from 'marbles/utils';
 
 var InstallConfig = React.createClass({
 	render: function () {
+		var clusterState = this.props.state;
+
+		var launchBtnDisabled = clusterState.currentStep !== 'configure';
+		launchBtnDisabled = launchBtnDisabled || !clusterState.credentialID;
+		launchBtnDisabled = launchBtnDisabled || !clusterState.selectedRegionSlug;
+
 		return (
 			<form onSubmit={this.__handleSubmit}>
 				<div>
 					<br />
 					<br />
 					<AWSRegionPicker
-						value={this.state.region}
+						value={clusterState.selectedRegionSlug}
 						onChange={this.__handleRegionChange} />
 					<br />
 					<br />
 					<AWSInstanceTypePicker
-						value={this.state.instanceType}
+						value={clusterState.selectedInstanceType}
 						onChange={this.__handleInstanceTypeChange} />
 					<br />
 					<br />
@@ -32,67 +38,56 @@ var InstallConfig = React.createClass({
 								minValue={1}
 								maxValue={5}
 								skipValues={[2]}
-								value={this.state.numInstances}
+								value={clusterState.numInstances}
 								onChange={this.__handleNumInstancesChange} />
 						</div>
 					</label>
 					<br />
 					<br />
-					<AWSAdvancedOptions onChange={this.__handleAdvancedOptionsChange}/>
+					<AWSAdvancedOptions
+						vpcCidr={clusterState.vpcCidr}
+						subnetCidr={clusterState.subnetCidr}
+						onChange={this.__handleAdvancedOptionsChange}/>
 					<br />
 					<br />
 					<button
 						type="submit"
-						style={extend({}, GreenBtnCSS,
-							this.state.launchBtnDisabled ? BtnDisabledCSS : {})}
-						disabled={this.state.launchBtnDisabled}>Launch</button>
+						style={extend({}, GreenBtnCSS, launchBtnDisabled ? BtnDisabledCSS : {})}
+						disabled={launchBtnDisabled}>Launch</button>
 				</div>
 			</form>
 		);
 	},
 
-	getInitialState: function () {
-		return this.__getState();
-	},
-
-	componentWillReceiveProps: function () {
-		this.setState(this.__getState());
-	},
-
-	__getState: function () {
-		var state = this.props.state;
-		return {
-			credentialID: state.credentialID,
-			region: 'us-east-1',
-			instanceType: 'm3.medium',
-			numInstances: 1,
-			advancedOptionsKeys: [],
-			launchBtnDisabled: state.currentStep !== 'configure'
-		};
-	},
-
 	__handleRegionChange: function (region) {
-		this.setState({
-			region: region
+		Dispatcher.dispatch({
+			name: 'SELECT_REGION',
+			region: region,
+			clusterID: 'new'
 		});
 	},
 
 	__handleInstanceTypeChange: function (instanceType) {
-		this.setState({
-			instanceType: instanceType
+		Dispatcher.dispatch({
+			name: 'SELECT_AWS_INSTANCE_TYPE',
+			instanceType: instanceType,
+			clusterID: 'new'
 		});
 	},
 
 	__handleNumInstancesChange: function (numInstances) {
-		this.setState({
-			numInstances: numInstances
+		Dispatcher.dispatch({
+			name: 'SELECT_NUM_INSTANCES',
+			numInstances: numInstances,
+			clusterID: 'new'
 		});
 	},
 
 	__handleAdvancedOptionsChange: function (values) {
-		this.setState(extend({}, values, {
-			advancedOptionsKeys: Object.keys(values)
-		}));
+		Dispatcher.dispatch(extend({
+			name: 'SET_AWS_OPTIONS',
+			clusterID: 'new'
+		}, values));
 	},
 
 	__handleSubmit: function (e) {
@@ -100,16 +95,9 @@ var InstallConfig = React.createClass({
 		this.setState({
 			launchBtnDisabled: true
 		});
-		var advancedOptions = {};
-		this.state.advancedOptionsKeys.forEach(function (key) {
-			advancedOptions[key] = this.state[key];
-		}.bind(this));
-		Dispatcher.dispatch(extend({
-			name: 'LAUNCH_AWS',
-			region: this.state.region,
-			instanceType: this.state.instanceType,
-			numInstances: this.state.numInstances
-		}, advancedOptions));
+		Dispatcher.dispatch({
+			name: 'LAUNCH_CLUSTER',
+		});
 	}
 });
 export default InstallConfig;

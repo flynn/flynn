@@ -20,7 +20,7 @@ var Wizard = React.createClass({
 		if (cluster === null) {
 			return <div />;
 		}
-		var state = cluster.getInstallState();
+		var state = cluster.state;
 		return (
 			<div style={{ height: '100%' }}>
 				<div style={{
@@ -30,7 +30,7 @@ var Wizard = React.createClass({
 					height: '100%'
 				}}>
 					{state.currentStep === 'configure' ? (
-						<CloudSelector state={state} onChange={this.__handleCloudChange} />
+						<CloudSelector selectedCloud={this.state.currentCloudSlug} onChange={this.__handleCloudChange} />
 					) : null}
 
 					<InstallSteps state={state} style={{ height: 16 }} />
@@ -68,7 +68,7 @@ var Wizard = React.createClass({
 						) : null}
 
 						{state.currentStep === 'dashboard' ? (
-							<Dashboard state={state} clusterID={cluster.ID} />
+							<Dashboard state={state} clusterID={cluster.attrs.ID} />
 						) : null}
 					</Panel>
 				</div>
@@ -124,7 +124,7 @@ var Wizard = React.createClass({
 		Dispatcher.dispatch({
 			name: 'SELECT_CLOUD',
 			cloud: cloud,
-			clusterID: this.state.currentCluster.ID
+			clusterID: this.state.currentCluster.attrs.ID
 		});
 	},
 
@@ -135,7 +135,7 @@ var Wizard = React.createClass({
 				path: '/credentials',
 				options: {
 					params: [{
-						cloud: this.state.currentCluster.getInstallState().selectedCloud
+						cloud: this.state.currentCluster.state.selectedCloud
 					}]
 				}
 			});
@@ -143,7 +143,7 @@ var Wizard = React.createClass({
 			Dispatcher.dispatch({
 				name: 'SELECT_CREDENTIAL',
 				credentialID: credentialID,
-				clusterID: this.state.currentCluster.ID
+				clusterID: this.state.currentCluster.attrs.ID
 			});
 		}
 	},
@@ -151,7 +151,7 @@ var Wizard = React.createClass({
 	__handleFailedModalHide: function () {
 		Dispatcher.dispatch({
 			name: 'INSTALL_ERROR_DISMISS',
-			clusterID: this.state.currentCluster.ID
+			clusterID: this.state.currentCluster.attrs.ID
 		});
 	},
 
@@ -191,7 +191,7 @@ var Wizard = React.createClass({
 		Dispatcher.dispatch({
 			name: 'INSTALL_PROMPT_RESPONSE',
 			clusterID: this.state.currentClusterID,
-			promptID: this.state.currentCluster.getInstallState().prompt.id,
+			promptID: this.state.currentCluster.state.prompt.id,
 			data: data
 		});
 	}
