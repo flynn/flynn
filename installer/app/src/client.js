@@ -60,12 +60,13 @@ var Client = {
 	},
 
 	listCloudRegions: function (cloud, credentialID) {
+		var params = {
+			cloud: cloud,
+			credential_id: credentialID
+		};
 		return this.performRequest('GET', {
 			url: Config.endpoints.regions,
-			params: [{
-				cloud: cloud,
-				credential_id: credentialID
-			}]
+			params: [params]
 		}).then(function (args) {
 			var res = args[0];
 			Dispatcher.dispatch({
@@ -80,6 +81,28 @@ var Client = {
 				cloud: cloud,
 				credentialID: credentialID,
 				regions: []
+			});
+		});
+	},
+
+	listAzureSubscriptions: function (credentialID) {
+		return this.performRequest('GET', {
+			url: Config.endpoints.azureSubscriptions,
+			params: [{
+				credential_id: credentialID
+			}]
+		}).then(function (args) {
+			var res = args[0];
+			Dispatcher.dispatch({
+				name: 'AZURE_SUBSCRIPTIONS',
+				credentialID: credentialID,
+				subscriptions: res
+			});
+		}).catch(function () {
+			Dispatcher.dispatch({
+				name: 'AZURE_SUBSCRIPTIONS',
+				credentialID: credentialID,
+				subscriptions: []
 			});
 		});
 	},

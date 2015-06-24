@@ -119,17 +119,41 @@ func (i *Installer) SaveCredentials(creds *Credential) error {
 	if _, err := i.FindCredentials(creds.ID); err == nil {
 		return credentialExistsError
 	}
-	if err := i.txExec(`
+	tx, err := i.db.Begin()
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
 		INSERT INTO credentials (ID, Secret, Name, Type) VALUES ($1, $2, $3, $4);
   `, creds.ID, creds.Secret, creds.Name, creds.Type); err != nil {
 		if strings.Contains(err.Error(), "duplicate value") {
-			if err := i.txExec(`
+			if _, err := tx.Exec(`
 				UPDATE credentials SET Secret = $2, Name = $3, Type = $4, DeletedAt = NULL WHERE ID == $1 AND DeletedAt IS NOT NULL
 			`, creds.ID, creds.Secret, creds.Name, creds.Type); err != nil {
+				tx.Rollback()
 				return err
 			}
-			return nil
+			if _, err := tx.Exec(`UPDATE events SET DeletedAt = now() WHERE ResourceType == "credential" AND ResourceID == $1`, creds.ID); err != nil {
+				tx.Rollback()
+				return err
+			}
+			i.removeCredentialEvents(creds.ID)
+		} else {
+			tx.Rollback()
+			return err
 		}
+	}
+	if creds.Type == "azure" {
+		for _, oc := range creds.OAuthCreds {
+			if _, err := tx.Exec(`
+				INSERT INTO oauth_credentials (ClientID, AccessToken, RefreshToken, ExpiresAt, Scope) VALUES ($1, $2, $3, $4, $5);
+			`, oc.ClientID, oc.AccessToken, oc.RefreshToken, oc.ExpiresAt, oc.Scope); err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+	}
+	if err := tx.Commit(); err != nil {
 		return err
 	}
 	go i.SendEvent(&Event{
@@ -158,6 +182,9 @@ func (i *Installer) DeleteCredentials(id string) error {
 	if err := i.txExec(`UPDATE credentials SET DeletedAt = now() WHERE ID == $1`, id); err != nil {
 		return err
 	}
+	if err := i.txExec(`UPDATE oauth_credentials SET DeletedAt = now() WHERE ClientID == $1`, id); err != nil {
+		return err
+	}
 	if err := i.txExec(`UPDATE events SET DeletedAt = now() WHERE ResourceType == "credential" AND ResourceID == $1`, id); err != nil {
 		return err
 	}
@@ -174,6 +201,25 @@ func (i *Installer) FindCredentials(id string) (*Credential, error) {
 	creds := &Credential{}
 	if err := i.db.QueryRow(`SELECT ID, Secret, Name, Type FROM credentials WHERE ID == $1 AND DeletedAt IS NULL LIMIT 1`, id).Scan(&creds.ID, &creds.Secret, &creds.Name, &creds.Type); err != nil {
 		return nil, err
+	}
+	if creds.Type == "azure" {
+		oauthCreds := make([]*OAuthCredential, 0, 2)
+		rows, err := i.db.Query(`SELECT AccessToken, RefreshToken, ExpiresAt, Scope FROM oauth_credentials WHERE ClientID == $1`, creds.ID)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			oc := &OAuthCredential{ClientID: creds.ID}
+			if err := rows.Scan(&oc.AccessToken, &oc.RefreshToken, &oc.ExpiresAt, &oc.Scope); err != nil {
+				return nil, err
+			}
+			oauthCreds = append(oauthCreds, oc)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		creds.OAuthCreds = oauthCreds
 	}
 	return creds, nil
 }
@@ -221,6 +267,26 @@ func (i *Installer) ListDigitalOceanRegions(creds *Credential) (interface{}, err
 		}
 	}
 	return res, err
+}
+
+func (i *Installer) ListAzureRegions(creds *Credential) (interface{}, error) {
+	type azureLocation struct {
+		Name string `json:"name"`
+		Slug string `json:"slug"`
+	}
+	client := i.azureClient(creds)
+	res, err := client.ListLocations("Microsoft.Compute", "virtualMachines")
+	if err != nil {
+		return nil, err
+	}
+	locs := make([]azureLocation, 0, len(res))
+	for _, l := range res {
+		locs = append(locs, azureLocation{
+			Name: l,
+			Slug: l,
+		})
+	}
+	return locs, nil
 }
 
 func (i *Installer) dbMarshalItem(tableName string, item interface{}) ([]interface{}, error) {
@@ -362,6 +428,8 @@ func (i *Installer) FindCluster(id string) (Cluster, error) {
 		return i.FindAWSCluster(id)
 	case "digital_ocean":
 		return i.FindDigitalOceanCluster(id)
+	case "azure":
+		return i.FindAzureCluster(id)
 	default:
 		return nil, fmt.Errorf("Invalid cluster type: %s", base.Type)
 	}
@@ -407,6 +475,37 @@ func (i *Installer) FindDigitalOceanCluster(id string) (*DigitalOceanCluster, er
 		dropletIDs = append(dropletIDs, id)
 	}
 	cluster.DropletIDs = dropletIDs
+
+	cluster.SetCreds(base.credential)
+
+	return cluster, nil
+}
+
+func (i *Installer) FindAzureCluster(id string) (*AzureCluster, error) {
+	i.clustersMtx.RLock()
+	for _, c := range i.clusters {
+		if cluster, ok := c.(*AzureCluster); ok {
+			if cluster.ClusterID == id {
+				i.clustersMtx.RUnlock()
+				return cluster, nil
+			}
+		}
+	}
+	i.clustersMtx.RUnlock()
+
+	base, err := i.FindBaseCluster(id)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster := &AzureCluster{
+		ClusterID: base.ID,
+		base:      base,
+	}
+
+	if err := i.db.QueryRow(`SELECT SubscriptionID, Region, Size FROM azure_clusters WHERE ClusterID == $1 AND DeletedAt IS NULL LIMIT 1`, cluster.ClusterID).Scan(&cluster.SubscriptionID, &cluster.Region, &cluster.Size); err != nil {
+		return nil, err
+	}
 
 	cluster.SetCreds(base.credential)
 

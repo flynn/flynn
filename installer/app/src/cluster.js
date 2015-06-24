@@ -34,9 +34,11 @@ var Cluster = createClass({
 			errorDismissed: false,
 			__credentials: [],
 			regions: [],
-			selectedRegionSlug: 'nyc3',
-			selectedSizeSlug: '2gb',
+			selectedRegionSlug: null,
+			selectedSizeSlug: null,
 			numInstances: 1,
+			azureSubscriptionID: null,
+			azureSubscriptions: []
 		};
 		var state = {
 			inProgress: false,
@@ -65,8 +67,29 @@ var Cluster = createClass({
 			selectedSizeSlug: attrs.selectedSizeSlug || prevState.selectedSizeSlug,
 			numInstances: attrs.num_instances || prevState.numInstances,
 
+			azureSubscriptionID: attrs.azureSubscriptionID || prevState.azureSubscriptionID,
+			azureSubscriptions: attrs.azureSubscriptions || prevState.azureSubscriptions,
+
 			prompt: prevState.prompt
 		};
+
+		if (state.selectedCloud === 'digital_ocean') {
+			if (state.selectedRegionSlug === null) {
+				state.selectedRegionSlug = 'nyc3';
+			}
+			if (state.selectedSizeSlug === null) {
+				state.selectedSizeSlug = '2gb';
+			}
+		}
+
+		if (state.selectedCloud === 'azure') {
+			if (state.selectedRegionSlug === null) {
+				state.selectedRegionSlug = 'East US';
+			}
+			if (state.selectedSizeSlug === null) {
+				state.selectedSizeSlug = 'Standard_D1';
+			}
+		}
 
 		if (state.selectedRegionSlug === null && state.regions.length > 0) {
 			state.selectedRegionSlug = state.regions[0].slug;
@@ -102,6 +125,10 @@ var Cluster = createClass({
 
 		if (state.credentialID === null && state.credentials.length > 0) {
 			state.credentialID = state.credentials[0].id;
+		}
+
+		if (state.azureSubscriptionID === null && state.azureSubscriptions.length > 0) {
+			state.azureSubscriptionID = state.azureSubscriptions[0].id;
 		}
 
 		switch (attrs.state) {
@@ -159,7 +186,19 @@ var Cluster = createClass({
 		var prevCredentialID = this.__installState.state.credentialID;
 		if (newState.credentialID !== prevCredentialID && newState.selectedCloud === 'digital_ocean') {
 			Dispatcher.dispatch({
-				name: 'SELECTED_CREDENTIAL_ID_CHANGE',
+				name: 'LIST_CLOUD_REGIONS',
+				credentialID: newState.credentialID,
+				cloud: newState.selectedCloud
+			});
+		} else if (newState.credentialID !== prevCredentialID && newState.selectedCloud === 'azure') {
+			Dispatcher.dispatch({
+				name: 'LIST_AZURE_SUBSCRIPTIONS',
+				credentialID: newState.credentialID
+			});
+		}
+		if (newState.credentialID !== prevCredentialID && newState.selectedCloud === 'azure') {
+			Dispatcher.dispatch({
+				name: 'LIST_CLOUD_REGIONS',
 				credentialID: newState.credentialID,
 				cloud: newState.selectedCloud
 			});
@@ -193,6 +232,8 @@ var Cluster = createClass({
 		if (event.clusterID !== this.ID) {
 			return;
 		}
+
+		var state;
 
 		switch (event.name) {
 			case 'LOG':
@@ -260,8 +301,18 @@ var Cluster = createClass({
 				}));
 			break;
 
+			case 'AZURE_SUBSCRIPTIONS':
+				state = this.getInstallState();
+				if (state.credentialID !== event.credentialID || state.selectedCloud !== 'azure') {
+					return;
+				}
+				this.__setInstallState(this.__computeInstallState({
+					azureSubscriptions: event.subscriptions
+				}));
+			break;
+
 			case 'CLOUD_REGIONS':
-				var state = this.getInstallState();
+				state = this.getInstallState();
 				if (state.credentialID !== event.credentialID || state.selectedCloud !== event.cloud) {
 					return;
 				}
@@ -269,6 +320,12 @@ var Cluster = createClass({
 					regions: event.regions.sort(function (a, b) {
 						return a.name.localeCompare(b.name);
 					})
+				}));
+			break;
+
+			case 'SELECT_AZURE_SUBSCRIPTION':
+				this.__setInstallState(this.__computeInstallState({
+					azureSubscriptionID: event.subscriptionID
 				}));
 			break;
 
@@ -316,7 +373,8 @@ Cluster.jsonFields = {
 	ca_cert: 'caCert',
 	vpc_cidr: 'vpcCidr',
 	subnetCidr: 'subnetCidr',
-	credential_id: 'credentialID'
+	credential_id: 'credentialID',
+	subscription_id: 'subscriptionID'
 };
 
 export default Cluster;

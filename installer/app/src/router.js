@@ -3,6 +3,7 @@ import WizardComponent from './views/wizard';
 import ClusterDeleteComponent from './views/modal/cluster-delete';
 import CredentialsComponent from './views/modal/credentials';
 import Dispatcher from './dispatcher';
+import QueryParams from 'marbles/query_params';
 
 var MainRouter = Router.createClass({
 	routes: [
@@ -10,7 +11,8 @@ var MainRouter = Router.createClass({
 		{ path: '/clusters/:cluster_id', handler: 'landingPage' },
 		{ path: '/clusters/:cluster_id/delete', handler: 'landingPage', modalHandler: 'clusterDeleteModal' },
 		{ path: '/credentials', handler: 'landingPage', modalHandler: 'credentialsModal' },
-		{ path: '/credentials/new', handler: 'landingPage', modalHandler: 'credentialsModal' }
+		{ path: '/credentials/new', handler: 'landingPage', modalHandler: 'credentialsModal' },
+		{ path: '/oauth/azure', handler: 'oauthAzureCallback' }
 	],
 
 	willInitialize: function () {
@@ -66,9 +68,38 @@ var MainRouter = Router.createClass({
 	credentialsModal: function (params, opts, context) {
 		var props = {
 			dataStore: context.dataStore,
-			cloud: params[0].cloud === 'digital_ocean' ? 'digital_ocean' : 'aws'
+			cloud: params[0].cloud || 'aws'
 		};
 		context.renderModal(CredentialsComponent, props);
+	},
+
+	oauthAzureCallback: function (params) {
+		var clientID = window.localStorage.getItem("azureClientID");
+		var name = window.localStorage.getItem("azureCredName");
+		var endpoint = window.localStorage.getItem("azureEndpoint");
+		window.localStorage.removeItem("azureClientID");
+		window.localStorage.removeItem("azureCredName");
+		window.localStorage.removeItem("azureEndpoint");
+		Dispatcher.dispatch({
+			name: 'CREATE_CREDENTIAL',
+			data: {
+				name: name,
+				id: clientID,
+				secret: params[0].code,
+				endpoint: endpoint,
+				type: 'azure'
+			}
+		});
+		Dispatcher.dispatch({
+			name: 'SELECT_CREDENTIAL',
+			credentialID: clientID,
+			clusterID: 'new'
+		});
+		this.history.navigate('', {
+			params: [{
+				cloud: 'azure'
+			}]
+		});
 	},
 
 	handleEvent: function (event) {
@@ -123,6 +154,19 @@ var MainRouter = Router.createClass({
 						cloud: event.cloud
 					}]
 				});
+			break;
+
+			case 'AZURE_OAUTH_AUTHORIZE':
+				window.localStorage.setItem("azureEndpoint", event.endpoint);
+				window.localStorage.setItem("azureClientID", event.clientID);
+				window.localStorage.setItem("azureCredName", event.credName);
+				var authorizeURL = event.endpoint.substring(0, event.endpoint.length - 21) + 'authorize';
+					authorizeURL += QueryParams.serializeParams([{
+					client_id: event.clientID,
+					response_type: 'code',
+					resource: 'https://management.core.windows.net'
+				}]);
+				window.location.href = authorizeURL;
 			break;
 		}
 	}

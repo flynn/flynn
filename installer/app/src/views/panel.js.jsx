@@ -14,8 +14,11 @@ var Panel = React.createClass({
 	},
 
 	render: function () {
+		var props = extend({}, this.props);
+		delete props.style;
+		delete props.baseCSS;
 		return (
-			<section style={extend({}, this.props.baseCSS, this.props.style || {})}>
+			<section style={extend({}, this.props.baseCSS, this.props.style || {})} {...props}>
 				{this.props.children}
 			</section>
 		);

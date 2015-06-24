@@ -5,10 +5,11 @@ import Sheet from './css/sheet';
 
 var cloudNames = {
 	aws: 'AWS',
-	digital_ocean: 'DigitalOcean'
+	digital_ocean: 'DigitalOcean',
+	azure: 'Azure'
 };
 
-var cloudIDs = ['aws', 'digital_ocean'];
+var cloudIDs = ['aws', 'digital_ocean', 'azure'];
 
 var CloudSelector = React.createClass({
 	getInitialState: function () {
@@ -16,6 +17,8 @@ var CloudSelector = React.createClass({
 			display: 'flex',
 			textAlign: 'center',
 			marginBottom: '1rem',
+			overflowY: 'hidden',
+			overflowX: 'auto',
 			selectors: [
 				['> * ', {
 					flexGrow: 1,
@@ -28,8 +31,17 @@ var CloudSelector = React.createClass({
 					]
 				}],
 
+				['[data-img-con]', {
+					display: 'table',
+					margin: '0 auto',
+					marginBottom: '0.25rem'
+				}],
+
 				['img', {
-					height: '100px'
+					display: 'table-cell',
+					maxWidth: '100%',
+					maxHeight: '100px',
+					width: '100%'
 				}],
 
 				['> * + *', {
@@ -49,9 +61,11 @@ var CloudSelector = React.createClass({
 				<div id={this.state.styleEl.id}>
 					{cloudIDs.map(function (cloud) {
 						return (
-							<Panel key={cloud} style={{padding: 0}}>
+							<Panel key={cloud} style={{padding: 0}} title={cloudNames[cloud]}>
 								<PrettyRadio name='cloud' value={cloud} checked={state.selectedCloud === cloud} onChange={this.__handleCloudChange}>
-									<img src={AssetPaths[cloud.replace('_', '')+'-logo.png']} alt={cloudNames[cloud]} />
+									<div data-img-con>
+										<img src={AssetPaths[cloud.replace('_', '')+'-logo.png']} alt={cloudNames[cloud]} />
+									</div>
 								</PrettyRadio>
 							</Panel>
 						);

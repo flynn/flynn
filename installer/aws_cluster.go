@@ -154,6 +154,7 @@ func (c *AWSCluster) Run() {
 			c.fetchStackOutputs,
 			c.configureDNS,
 			c.bootstrap,
+			c.base.waitForDNS,
 		}
 
 		for _, step := range steps {

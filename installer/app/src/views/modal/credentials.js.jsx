@@ -2,9 +2,11 @@ import Modal from '../modal';
 import Dispatcher from '../../dispatcher';
 import PrettySelect from '../pretty-select';
 import ExternalLink from '../external-link';
+import AzureCreateAppTutorial from '../azure-create-app-tutorial';
 import Sheet from '../css/sheet';
 import Colors from '../css/colors';
 import { green as GreenBtnCSS, disabled as DisabledBtnCSS } from '../css/button';
+import { extend } from 'marbles/utils';
 
 var Credentials = React.createClass({
 	getDefaultProps: function () {
@@ -63,6 +65,7 @@ var Credentials = React.createClass({
 				<PrettySelect onChange={this.__handleCloudChange} value={cloud}>
 					<option value="aws">AWS</option>
 					<option value="digital_ocean">Digital Ocean</option>
+					<option value="azure">Azure</option>
 				</PrettySelect>
 
 				<form onSubmit={this.__handleSubmit} id={this.props.formStyleEl.id}>
@@ -88,7 +91,11 @@ var Credentials = React.createClass({
 						</p>
 					) : null}
 
-					<input ref="name" type="text" placeholder="Account name" />
+					{cloud === 'azure' ? (
+						<AzureCreateAppTutorial />
+					) : (
+						<input ref="name" type="text" placeholder="Account name" />
+					)}
 
 					{cloud === 'aws' ? (
 						<div>
@@ -103,7 +110,11 @@ var Credentials = React.createClass({
 						</div>
 					) : null}
 
-					<button type="submit">Save</button>
+					{cloud === 'azure' ? (
+						<button type="submit">Continue</button>
+					) : (
+						<button type="submit">Save</button>
+					)}
 				</form>
 
 				<ul id={this.props.listStyleEl.id}>
@@ -159,15 +170,45 @@ var Credentials = React.createClass({
 	},
 
 	__getState: function () {
-		return this.props.dataStore.state;
+		return extend({}, this.props.dataStore.state, {
+		});
 	},
 
 	__handleDataChange: function () {
 		this.setState(this.__getState());
 	},
 
+	__handleAzureSubmit: function (e) {
+		var clientIDNode = e.target.querySelector('[name=client_id]');
+		var clientID = clientIDNode.value.trim();
+		if (clientID === '') {
+			clientIDNode.focus();
+			return;
+		}
+		
+		var endpointNode = e.target.querySelector('[name=endpoint]');
+		var endpoint = endpointNode.value.trim();
+		if (endpoint === '') {
+			endpointNode.focus();
+			return;
+		}
+
+		Dispatcher.dispatch({
+			name: 'AZURE_OAUTH_AUTHORIZE',
+			clientID: clientID,
+			endpoint: endpoint,
+			credName: ''
+		});
+	},
+
 	__handleSubmit: function (e) {
 		e.preventDefault();
+		if (this.props.cloud === 'azure') {
+			this.__handleAzureSubmit(e);
+			return;
+		}
+
+		var name = this.refs.name.getDOMNode().value.trim();
 		var id;
 		if (this.props.cloud === 'digital_ocean') {
 			id = 'access-token-'+ Date.now();
@@ -178,7 +219,6 @@ var Credentials = React.createClass({
 				return;
 			}
 		}
-		var name = this.refs.name.getDOMNode().value.trim();
 		var secret = this.refs.key.getDOMNode().value.trim();
 		if (secret === '') {
 			this.refs.key.getDOMNode().focus();
@@ -198,11 +238,11 @@ var Credentials = React.createClass({
 			credentialID: id,
 			clusterID: 'new'
 		});
-		this.refs.name.getDOMNode().value = '';
 		if (this.props.cloud !== 'digital_ocean') {
 			this.refs.key_id.getDOMNode().value = '';
 		}
 		this.refs.key.getDOMNode().value = '';
+		this.refs.name.getDOMNode().value = '';
 		this.refs.name.getDOMNode().focus();
 	},
 

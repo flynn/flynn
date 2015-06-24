@@ -9,6 +9,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/gen/ec2"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cznic/ql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/digitalocean/godo"
+	"github.com/flynn/flynn/pkg/azure"
 	"github.com/flynn/flynn/pkg/sshkeygen"
 )
 
@@ -23,11 +24,22 @@ type Cluster interface {
 }
 
 type Credential struct {
-	ID        string     `json:"id" ql:"index xID"`
-	Secret    string     `json:"secret"`
-	Name      string     `json:"name"`
-	Type      string     `json:"type"` // enum(aws, digital_ocean)
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	ID         string             `json:"id" ql:"index xID"`
+	Secret     string             `json:"secret"`
+	Name       string             `json:"name"`
+	Type       string             `json:"type"`     // enum(aws, digital_ocean, azure)
+	Endpoint   string             `json:"endpoint"` // token endpoint
+	OAuthCreds []*OAuthCredential `json:"oauth_creds,omitempty" ql:"-"`
+	DeletedAt  *time.Time         `json:"deleted_at,omitempty"`
+}
+
+type OAuthCredential struct {
+	ClientID     string     `json:"client_id"` // ClientID == Credential.ID
+	AccessToken  string     `json:"access_token"`
+	RefreshToken string     `json:"refresh_token"`
+	ExpiresAt    *time.Time `json:"expires_at"`
+	Scope        string     `json:"scope"`
+	DeletedAt    *time.Time `json:"deleted_at,omitempty"`
 }
 
 type AWSCluster struct {
@@ -63,6 +75,18 @@ type DigitalOceanCluster struct {
 	iptablesConfigScript string
 }
 
+type AzureCluster struct {
+	ClusterID      string     `json:"cluster_id" ql:"index xCluster"`
+	SubscriptionID string     `json:"subscription_id"`
+	Region         string     `json:"region"`
+	Size           string     `json:"size"`
+	DeletedAt      *time.Time `json:"deleted_at,omitempty"`
+
+	base        *BaseCluster
+	client      *azure.Client
+	startScript string
+}
+
 type DigitalOceanDroplet struct {
 	ClusterID string     `json:"cluster_id" ql:"index xCluster"`
 	ID        int64      `json:"id"`
@@ -72,7 +96,7 @@ type DigitalOceanDroplet struct {
 type BaseCluster struct {
 	ID                  string            `json:"id" ql:"index xID"`
 	CredentialID        string            `json:"credential_id"`
-	Type                string            `json:"type"`                    // enum(aws)
+	Type                string            `json:"type"`                    // enum(aws, digital_ocean, azure)
 	State               string            `json:"state" ql:"index xState"` // enum(starting, error, running, deleting)
 	Name                string            `json:"name" ql:"-"`
 	NumInstances        int64             `json:"num_instances"`
@@ -252,10 +276,12 @@ func (i *Installer) runMigration2() error {
 func (i *Installer) migrateDB() error {
 	schemaInterfaces := map[interface{}]string{
 		(*Credential)(nil):          "credentials",
+		(*OAuthCredential)(nil):     "oauth_credentials",
 		(*BaseCluster)(nil):         "clusters",
 		(*AWSCluster)(nil):          "aws_clusters",
 		(*DigitalOceanCluster)(nil): "digital_ocean_clusters",
 		(*DigitalOceanDroplet)(nil): "digital_ocean_droplets",
+		(*AzureCluster)(nil):        "azure_clusters",
 		(*Event)(nil):               "events",
 		(*Prompt)(nil):              "prompts",
 		(*InstanceIPs)(nil):         "instances",

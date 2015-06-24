@@ -53,6 +53,17 @@ func (d *Domain) Configure(nameservers []string) error {
 	return err
 }
 
+func (d *Domain) ConfigureIPAddresses(ips []string) error {
+	data := struct {
+		IPAddresses []string `json:"ip_addresses"`
+	}{ips}
+	res, err := d.client().RawReq("PUT", d.path(), d.authHeader(), data, nil)
+	if err == nil {
+		res.Body.Close()
+	}
+	return err
+}
+
 func (d *Domain) Status() (string, error) {
 	var res struct {
 		Status string
