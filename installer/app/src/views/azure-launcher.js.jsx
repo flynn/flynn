@@ -74,7 +74,7 @@ var InstallConfig = React.createClass({
 				</label>
 
 				<label>
-					<span>Size: (See <ExternalLink href="https://msdn.microsoft.com/en-us/library/azure/dn197896.aspx">here</ExternalLink> for details)</span>
+					<span>Size: (See <ExternalLink href="https://azure.microsoft.com/en-us/documentation/articles/virtual-machines-size-specs/">here</ExternalLink> for details)</span>
 					<PrettySelect value={clusterState.selectedSizeSlug} onChange={this.__handleSizeChange}>
 						{sizes.map(function (size) {
 							return (
