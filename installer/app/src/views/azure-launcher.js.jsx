@@ -36,7 +36,7 @@ var InstallConfig = React.createClass({
 
 	render: function () {
 		var clusterState = this.props.state;
-		var sizes = ["Basic_A0","Basic_A1","Basic_A2","Basic_A3","Basic_A4","Standard_D1","Standard_D11","Standard_D12","Standard_D13","Standard_D14","Standard_D2","Standard_D3","Standard_D4"];
+		var sizes = ["Standard_D1","Standard_D11","Standard_D12","Standard_D13","Standard_D14","Standard_D2","Standard_D3","Standard_D4"];
 
 		var subscriptions = clusterState.azureSubscriptions;
 
