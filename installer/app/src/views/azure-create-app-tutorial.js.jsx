@@ -143,7 +143,7 @@ var AzureCreateAppTutorial = React.createClass({
 				<li>
 					<img src={AssetPaths["azure-app-12.png"]}  style={{
 						width: 659,
-						height: 372
+						height: 486
 					}}/>
 					<label>
 						<p>Click on the back arrow button to go back to the "APPLICATIONS" tab click and the "ENDPOINTS" button at the bottom</p>
