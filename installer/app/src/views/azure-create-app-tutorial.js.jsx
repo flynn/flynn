@@ -4,164 +4,261 @@ import Colors from './css/colors';
 import Sheet from './css/sheet';
 import InputSelection from './input-selection';
 
+var tutorialSlides = [''];
+
+tutorialSlides.push(
+    <div id="tutorial-01">
+        <img src={AssetPaths["azure-1.gif"]} style={{
+                width: 699,
+                height: 378
+            }} /> 
+        <p><a href="https://manage.windowsazure.com">Sign into the Azure Management Portal</a> and select the "Active Directory" navigation item on the left.</p>
+    </div>
+);
+
+tutorialSlides.push(
+    <div id="tutorial-02">
+        <img src={AssetPaths["azure-2.gif"]} style={{
+                width: 699,
+                height: 378
+            }} />
+        <p>Click on "Default Directory" (or the one you want to use) and select the "Applications" navigation tab.</p>
+    </div>
+);
+
+tutorialSlides.push(
+    <div id="tutorial-03">
+    <img src={AssetPaths["azure-3.gif"]} style={{
+                width: 699,
+                height: 378
+            }} />
+        <p>Click the "Add" button at the bottom and select "Add an application my organization is developing". For the name, choose "flynn-installer" (or something else), then select "Native Client Application".</p>
+    </div>
+);
+
+tutorialSlides.push(
+    <div id="tutorial-04">
+    <img src={AssetPaths["azure-4.gif"]} style={{
+                width: 699,
+                height: 378
+            }} />
+        <p>As Redirect URI, use the value below, and create the application by hitting the checkmark in the lower right.</p>
+    </div>
+);
+
+tutorialSlides.push(
+    <div id="tutorial-05">
+    <img src={AssetPaths["azure-5.gif"]} style={{
+                width: 699,
+                height: 378
+            }} />
+        <p>Click the "Configure" tab and copy the "Client ID" into the input field below.</p>
+    </div>
+);
+
+tutorialSlides.push(
+    <div id="tutorial-06">
+        <img src={AssetPaths["azure-6.gif"]} style={{
+                width: 699,
+                height: 402
+            }} />
+        <p>Next, we need to allow the created app to control your Azure account. Scroll to the bottom of the configuration page and click the green "Add application" button. In the popup, select the "Windows Azure Service Management API" and click the checkmark in the lower right.</p>
+    </div>
+);
+
+tutorialSlides.push(
+    <div id="tutorial-07">
+        <img src={AssetPaths["azure-7.gif"]} style={{
+                width: 699,
+                height: 402
+            }} />
+        <p>Click the "Delegated Permissions" dropdown and check "Access Azure Service Management". Then, save the configuration.</p>
+    </div>
+);
+
+tutorialSlides.push(
+    <div id="tutorial-08">
+        <img src={AssetPaths["azure-8.gif"]} style={{
+                width: 699,
+                height: 472
+            }} />
+        <p>Click on the back arrow button to go back to the "APPLICATIONS" tab and click and the "ENDPOINTS" button at the bottom. Then, copy your OAuth 2.0 Token Endpoint into the input below.</p>
+    </div>
+);
+
+tutorialSlides.push(
+    <div id="tutorial-09">
+        <img src={AssetPaths["azure-done.png"]} style={{
+                width: 699,
+                height: 256
+            }} />
+        <p>You now created an appliation able to control your Azure resources - one that this Flynn installer can use. You can connect this installer and your new app by clicking "Authenticate" below - lets install Flynn!</p>
+    </div>
+);
+
 var AzureCreateAppTutorial = React.createClass({
-	getInitialState: function () {
-		var styleEl = Sheet.createElement({
-			marginTop: '1rem',
-			selectors: [
-				['> li > img', {
-					verticalAlign: 'text-top',
-					border: '1px solid '+ Colors.almostBlackColor
-				}],
-				['input[data-selectable]', {
-					backgroundColor: 'transparent',
-					border: 'none',
-					color: 'inherit',
-					textAlign: 'center',
-					padding: 0
-				}]
-			]
-		});
+    getInitialState: function () {
+        var styleEl = Sheet.createElement({
+            marginTop: '1rem',
+            selectors: [
+                ['> li > img', {
+                    verticalAlign: 'text-top',
+                    border: '1px solid #333'
+                }],
+                ['input[data-selectable]', {
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    color: 'inherit',
+                    textAlign: 'center',
+                    padding: 0
+                }],
+                ['input', {
+                    margin: '0 0 5px 0'
+                }]
+            ]
+        });
 
-		return {
-			styleEl: styleEl
-		};
-	},
+        return {
+            styleEl: styleEl,
+            tutorialSlide: null
+        };
+    },
 
-	render: function () {
-		var redirectURI = window.location.protocol + '//'+ window.location.host + '/oauth/azure';
-		return (
-			<ol id={this.state.styleEl.id}>
-				<li>
-					<ExternalLink href="https://manage.windowsazure.com">Sign into the Azure management portal</ExternalLink>
-				</li>
+    render: function () {
+        var redirectURI = window.location.protocol + '//'+ window.location.host + '/oauth/azure';
+        var inputStyles = this.__getInputStyles();
+        var state = this.state;
+        var pagination = {};
+        var intro;
+        var tutorialSlide;
 
-				<li>
-					<img src={AssetPaths["azure-app-0.png"]} style={{
-						width: 300,
-						height: 219
-					}} />
-					<p>Click on the "ACTIVE DIRECTORY" navigation item on the left</p>
-				</li>
+        intro = (
+            <div id="azure-tutorial-intro">
+                <p>To use the installer, you first need to create an Azure application able to control your resources on Flynns behalf.</p>
+                <button onClick={this.__handleAdvanceTutorialClick}>Walk me through it</button><br />
+                <button onClick={this.__skipTutorial}>Skip tutorial</button>
+            </div>
+        );
 
-				<li>
-					<img src={AssetPaths["azure-app-1.png"]}  style={{
-						width: 300,
-						height: 238
-					}}/>
-					<p>Click on "Default Directory"</p>
-				</li>
+        intro = (state.tutorialSlide || state.skipTutorial) ? null : intro;
+        tutorialSlide = (state.tutorialSlide) ? tutorialSlides[state.tutorialSlide] : null;
 
-				<li>
-					<img src={AssetPaths["azure-app-2.png"]}  style={{
-						width: 300,
-						height: 355
-					}}/>
-					<img src={AssetPaths["azure-app-2-2.png"]}  style={{
-						width: 659,
-						height: 102
-					}}/>
-					<p>Click the "ADD" button at the bottom</p>
-				</li>
+        if (state.tutorialSlide || state.skipTutorial) {
+            pagination.prev = (state.skipTutorial && !state.tutorialSlide) ? <button id="azureTutPrev" onClick={this.__skipTutorial}>Back</button> : '';
+            pagination.prev = (state.tutorialSlide > 1) ? <button id="azureTutPrev" onClick={this.__handleGoBackTutorialClick}>Back</button> : pagination.prev;
+            pagination.next = (state.tutorialSlide < 9) ? <button id="azureTutNext" onClick={this.__handleAdvanceTutorialClick}>Next</button> : '';
+            pagination.submit = (state.skipTutorial || state.tutorialSlide === 9) ? <button type="submit" style={{margin: "0 0 0 503px"}}>Authenticate</button> : '';
+        }
 
-				<li>
-					<img src={AssetPaths["azure-app-3.png"]}  style={{
-						width: 659,
-						height: 498
-					}}/>
-					<p>Click "Add an application my organization is developing"</p>
-				</li>
+        return (
+            <div id={this.state.styleEl.id}>
+                {intro}
+                {tutorialSlide}
 
-				<li>
-					<img src={AssetPaths["azure-app-4.png"]}  style={{
-						width: 659,
-						height: 471
-					}}/>
-					<p>Give the application a name such as "flynn-installer"</p>
-					<p>Select the "NATIVE CLIENT APPLICATION" option</p>
-					<p>Click the arrow in the bottom right of the modal to continue</p>
-				</li>
+                <div id="azure-tutorial-inputs">
+                    <label htmlFor="redirectURI" style={inputStyles.redirectURI}>Redirect URI</label>
+                    <input ref="redirectURI" name="redirectURI" type="text" value={redirectURI} onClick={this.__handleRedirectURIInputClick}  style={inputStyles.redirectURI} />
+                    <label htmlFor="client_id" style={inputStyles.clientId}>App Client ID</label>
+                    <input ref="client_id" name="client_id" type="text" placeholder="ab7c1052-1fe7-4642-91f6-065c94de25d4" style={inputStyles.clientId} />
+                    <label htmlFor="endpoint" style={inputStyles.endpoint}>OAuth 2.0 Token Endpoint</label>
+                    <input ref="endpoint" name="endpoint" type="text" placeholder="https://login.microsoftonline.com/{your-uid}/oauth2/token?api-version=1.0" style={inputStyles.endpoint} />
+                </div>
 
-				<li>
-					<img src={AssetPaths["azure-app-5.png"]}  style={{
-						width: 659,
-						height: 471
-					}}/>
-					<p>Set "<input type="text" value={redirectURI} data-selectable onClick={this.__handleRedirectURIInputClick} style={{
-							width: Math.ceil(((redirectURI.length * 16) / 2) - 22) + 'px'
-						}} />" as the "REDIRECT URI"</p>
-					<p>Click the checkmark in the bottom right to continue</p>
-				</li>
+                {pagination.prev} {pagination.next} {pagination.submit}
+            </div>
+        );
+    },
 
-				<li>
-					<img src={AssetPaths["azure-app-6.png"]}  style={{
-						width: 659,
-						height: 278
-					}}/>
-					<label>
-						<p>Click the "CONFIGURE" tab</p>
-						<p>Copy the "CLIENT ID" into the input below</p>
-						<input name="client_id" type="text" placeholder="CLIENT ID" />
-					</label>
-				</li>
+    componentDidMount: function () {
+        this.state.styleEl.commit();
+    },
 
-				<li>
-					<img src={AssetPaths["azure-app-7.png"]}  style={{
-						width: 659,
-						height: 155
-					}}/>
-					<p>Scroll to the bottom of the configuration page</p>
-					<p>Click the green "Add application" button</p>
-				</li>
+    /**
+     * Modifies the state's `tutorialSlide` variable, advancing in the tutorial's walkthrough.
+     */
+    __handleAdvanceTutorialClick: function () {
+        var state = this.state;
 
-				<li>
-					<img src={AssetPaths["azure-app-9.png"]}  style={{
-						width: 659,
-						height: 415
-					}}/>
-					<p>Click the "Windows Azure Service ..." option</p>
-					<p>Click the checkmark in the bottom right to continue</p>
-				</li>
+        console.log(this.refs);
 
-				<li>
-					<img src={AssetPaths["azure-app-10.png"]}  style={{
-						width: 659,
-						height: 169
-					}}/>
-					<p>Click the "Delegated Permissions" dropdown</p>
-					<p>Check "Access Azure Service Management"</p>
-				</li>
+        // Validate Inputs
+        if (state.tutorialSlide === 5 && this.refs.client_id.getDOMNode().value === '') {
+            this.refs.client_id.getDOMNode().focus();
+            return;
+        } else if (state.tutorialSlide === 8 && this.refs.client_id.getDOMNode().value === '') {
+            this.refs.client_id.getDOMNode().focus();
+            return;
+        }
 
-				<li>
-					<img src={AssetPaths["azure-app-11.png"]}  style={{
-						width: 659,
-						height: 93
-					}}/>
-					<p>Click the "Save" button</p>
-				</li>
+        if (!state.tutorialSlide || state.tutorialSlide >= tutorialSlides.length) {
+            state.tutorialSlide = 1;
+        } else {
+            state.tutorialSlide = state.tutorialSlide + 1;
+        }
 
-				<li>
-					<img src={AssetPaths["azure-app-12.png"]}  style={{
-						width: 659,
-						height: 486
-					}}/>
-					<label>
-						<p>Click on the back arrow button to go back to the "APPLICATIONS" tab click and the "ENDPOINTS" button at the bottom</p>
-						<p>Copy your OAuth 2.0 Token Endpoint into the input below</p>
-						<input name="endpoint" type="text" placeholder="https://login.microsoftonline.com/{your-uid}/oauth2/token?api-version=1.0" />
-					</label>
-				</li>
-			</ol>
-		);
-	},
+        state.showRedirectURI = (state.tutorialSlide === 4);
+        state.showClientIDInput = (state.tutorialSlide === 5);
+        state.showEndpointInput = (state.tutorialSlide === 8);
+        state.done = (state.tutorialSlide === tutorialSlides.length || state.skipTutorial);
 
-	componentDidMount: function () {
-		this.state.styleEl.commit();
-	},
+        this.setState(state);
+    },
 
-	__handleRedirectURIInputClick: function (e) {
-		InputSelection.selectAll(e.target);
-	}
+    /**
+     * Modifies the state's `tutorialSlide` variable, stepping back in the tutorial's walkthrough.
+     */
+    __handleGoBackTutorialClick: function () {
+        var state = this.state;
+
+        state.tutorialSlide = state.tutorialSlide - 1;
+
+        state.showRedirectURI = (state.tutorialSlide === 4);
+        state.showClientIDInput = (state.tutorialSlide === 5);
+        state.showEndpointInput = (state.tutorialSlide === 8);
+
+        this.setState(state);
+    },
+
+    /**
+     * Select's the current's input contents for easier copying.
+     * @param  {event} e
+     */
+    __handleRedirectURIInputClick: function (e) {
+        InputSelection.selectAll(e.target);
+    },
+
+    /**
+     * Returns the styles the individual input fields, depending on whether or not they should
+     * be visible or not.
+     * @return {object} A on object with three keys (redirectURI, clientID, endpoint) with styles
+     */
+    __getInputStyles: function () {
+        var state = this.state,
+            redirectURI = (state.skipTutorial || state.showRedirectURI) ? {} : {display: 'none', visibility: 'collapse'},
+            clientId = (state.skipTutorial || state.showClientIDInput) ? {} : {display: 'none', visibility: 'collapse'},
+            endpoint = (state.skipTutorial || state.showEndpointInput) ? {} : {display: 'none', visibility: 'collapse'};
+
+        return {
+            redirectURI: redirectURI,
+            clientId: clientId,
+            endpoint: endpoint
+        };
+    },
+
+    /**
+     * Skips the tutorial. The tutorial is already skipped and this method is called again, it
+     * resets the tutorial.
+     */
+    __skipTutorial: function () {
+        if (this.state.skipTutorial) {
+            return this.setState({skipTutorial: null});
+        } else {
+            this.setState({
+                skipTutorial: true,
+                tutorialSlide: undefined
+            });
+        }
+    }
 });
 
 export default AzureCreateAppTutorial;

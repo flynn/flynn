@@ -110,11 +110,9 @@ var Credentials = React.createClass({
 						</div>
 					) : null}
 
-					{cloud === 'azure' ? (
-						<button type="submit">Continue</button>
-					) : (
+					{cloud !== 'azure' ? (
 						<button type="submit">Save</button>
-					)}
+					) : null}
 				</form>
 
 				<ul id={this.props.listStyleEl.id}>
