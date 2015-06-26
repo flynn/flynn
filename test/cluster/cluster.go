@@ -17,8 +17,8 @@ import (
 
 	"github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/pkg/iotool"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/test/buildlog"
 )
 
 type ClusterType uint8
@@ -168,15 +168,15 @@ type BootResult struct {
 	Instances        []*Instance
 }
 
-func (c *Cluster) Boot(typ ClusterType, count int, dumpLogs io.Writer, killOnFailure bool) (res *BootResult, err error) {
+func (c *Cluster) Boot(typ ClusterType, count int, buildLog *buildlog.Log, killOnFailure bool) (res *BootResult, err error) {
 	if err := c.setup(); err != nil {
 		return nil, err
 	}
 
 	defer func() {
 		if err != nil {
-			if dumpLogs != nil && len(c.Instances) > 0 {
-				c.DumpLogs(dumpLogs)
+			if buildLog != nil && len(c.Instances) > 0 {
+				c.DumpLogs(buildLog)
 			}
 			if killOnFailure {
 				c.Shutdown()
@@ -599,58 +599,67 @@ func lookupUser(name string) (int, int, error) {
 	return uid, gid, nil
 }
 
-func (c *Cluster) DumpLogs(w io.Writer) {
-	tw := iotool.NewTimeoutWriter(w, 60*time.Second)
-	c.dumpLogs(tw)
-	tw.Finished()
-}
-
-func (c *Cluster) dumpLogs(w io.Writer) {
-	streams := &Streams{Stdout: w, Stderr: w}
-	run := func(inst *Instance, cmd string) error {
-		fmt.Fprint(w, "\n\n***** ***** ***** ***** ***** ***** ***** ***** ***** *****\n\n")
-		fmt.Fprintln(w, "HostID:", inst.ID, "-", cmd)
-		fmt.Fprintln(w)
-		err := inst.Run(cmd, streams)
-		fmt.Fprintln(w)
-		return err
+func (c *Cluster) DumpLogs(buildLog *buildlog.Log) {
+	run := func(log string, inst *Instance, cmds ...string) error {
+		out, err := buildLog.NewFileWithTimeout(log, 60*time.Second)
+		if err != nil {
+			return err
+		}
+		for _, cmd := range cmds {
+			fmt.Fprintln(out, "HostID:", inst.ID, "-", cmd)
+			fmt.Fprintln(out)
+			err := inst.Run(cmd, &Streams{Stdout: out, Stderr: out})
+			fmt.Fprintln(out)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	}
-	fmt.Fprint(w, "\n\n***** ***** ***** DUMPING ALL LOGS ***** ***** *****\n\n")
 	for _, inst := range c.Instances {
-		run(inst, "ps faux")
-		run(inst, "cat /tmp/flynn-host.log")
-		run(inst, "cat /tmp/debug-info.log")
-		run(inst, "sudo cat /var/log/libvirt/libvirtd.log")
+		run(
+			fmt.Sprintf("host-logs-%s.log", inst.ID),
+			inst,
+			"ps faux",
+			"cat /tmp/flynn-host.log",
+			"cat /tmp/debug-info.log",
+			"sudo cat /var/log/libvirt/libvirtd.log",
+		)
 	}
 
-	printLogs := func(instances []*Instance) {
+	printLogs := func(typ string, instances []*Instance) {
 		fallback := func() {
-			fmt.Fprintf(w, "\n*** Error getting job logs via flynn-host, falling back to tail log dump\n\n")
 			for _, inst := range instances {
-				run(inst, "sudo bash -c 'tail -n +1 /var/log/flynn/**/*.log'")
+				run(fmt.Sprintf("%s-fallback-%s.log", typ, inst.ID), inst, "sudo bash -c 'tail -n +1 /var/log/flynn/**/*.log'")
 			}
 		}
 
-		run(instances[0], "flynn-host ps -a")
+		run(fmt.Sprintf("%s-jobs.log", typ), instances[0], "flynn-host ps -a")
 
 		var out bytes.Buffer
-		if err := instances[0].Run("flynn-host ps -a -q", &Streams{Stdout: &out, Stderr: w}); err != nil {
-			io.Copy(w, &out)
+		cmd := `flynn-host ps -aqf '{{ metadata "flynn-controller.app_name" }}-{{ metadata "flynn-controller.type" }}-{{ .HostID }}-{{ .Job.ID }}'`
+		if err := instances[0].Run(cmd, &Streams{Stdout: &out, Stderr: &out}); err != nil {
 			fallback()
 			return
 		}
 
-		ids := strings.Split(strings.TrimSpace(out.String()), "\n")
-		for _, id := range ids {
-			if err := run(instances[0], fmt.Sprintf("flynn-host inspect %s", id)); err != nil {
+		jobs := strings.Split(strings.TrimSpace(out.String()), "\n")
+		for _, job := range jobs {
+			fields := strings.SplitN(job, "-", 3)
+			cmds := []string{
+				fmt.Sprintf("flynn-host inspect %s", fields[2]),
+				fmt.Sprintf("flynn-host log --init %s", fields[2]),
+			}
+			if err := run(fmt.Sprintf("%s-%s.log", typ, job), instances[0], cmds...); err != nil {
 				fallback()
 				return
 			}
-			run(instances[0], fmt.Sprintf("flynn-host log --init %s", id))
 		}
 	}
-	printLogs(c.defaultInstances)
+	if len(c.defaultInstances) > 0 {
+		printLogs("default", c.defaultInstances)
+	}
 	if len(c.releaseInstances) > 0 {
-		printLogs(c.releaseInstances)
+		printLogs("release", c.releaseInstances)
 	}
 }

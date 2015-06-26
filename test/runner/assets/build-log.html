@@ -1,0 +1,33 @@
+<html>
+  <head>
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/assets/style.css">
+    <title>Flynn CI Build</title>
+  </head>
+
+  <body>
+    <div class="container-fluid">
+      <div class="row">
+        <div id="list">
+        </div>
+        <div id="logs">
+        </div>
+      </div>
+    </div>
+
+    <script type="text/template" id="list-template">
+      <a href="#<%= name %>"><%= filename %></a>
+    </script>
+
+    <script type="text/template" id="logs-template">
+      <div id="<%= name %>">
+        <pre><code></code></pre>
+      </div>
+    </script>
+
+    <script src="//cdnjs.cloudflare.com/ajax/libs/underscore.js/1.6.0/underscore-min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+    <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
+    <script src="/assets/build-log.js"></script>
+  </body>
+</html>

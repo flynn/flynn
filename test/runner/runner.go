@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/subtle"
 	"encoding/json"
@@ -9,6 +10,8 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"mime"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
@@ -30,8 +33,10 @@ import (
 	"github.com/flynn/flynn/pkg/iotool"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/sse"
 	"github.com/flynn/flynn/pkg/tlsconfig"
 	"github.com/flynn/flynn/test/arg"
+	"github.com/flynn/flynn/test/buildlog"
 	"github.com/flynn/flynn/test/cluster"
 )
 
@@ -54,6 +59,10 @@ type Build struct {
 	DurationFormatted string        `json:"duration_formatted"`
 	Reason            string        `json:"reason"`
 	IssueLink         string        `json:"issue_link"`
+}
+
+func (b *Build) Finished() bool {
+	return b.State != "pending"
 }
 
 func newBuild(commit, description string, merge bool) *Build {
@@ -284,6 +293,12 @@ func (r *Runner) build(b *Build) (err error) {
 	}
 	b.LogFile = logFile.Name()
 
+	buildLog := buildlog.NewLog(logFile)
+	mainLog, err := buildLog.NewFile("build.log")
+	if err != nil {
+		return err
+	}
+
 	buildURL := "https://ci.flynn.io/builds/" + b.Id
 	r.updateStatus(b, "pending", buildURL)
 
@@ -293,15 +308,19 @@ func (r *Runner) build(b *Build) (err error) {
 	}()
 
 	start := time.Now()
-	fmt.Fprintf(logFile, "Starting build of %s at %s\n", b.Commit, start.Format(time.RFC822))
+	fmt.Fprintf(mainLog, "Starting build of %s at %s\n", b.Commit, start.Format(time.RFC822))
+	var c *cluster.Cluster
 	defer func() {
 		b.Duration = time.Since(start)
 		b.DurationFormatted = formatDuration(b.Duration)
-		fmt.Fprintf(logFile, "build finished in %s\n", b.DurationFormatted)
+		fmt.Fprintf(mainLog, "build finished in %s\n", b.DurationFormatted)
 		if err != nil {
-			fmt.Fprintf(logFile, "build error: %s\n", err)
+			fmt.Fprintf(mainLog, "build error: %s\n", err)
+			fmt.Fprintln(mainLog, "DUMPING LOGS")
+			c.DumpLogs(buildLog)
 		}
-		url := r.uploadToS3(logFile, b)
+		buildLog.Close()
+		url := r.uploadToS3(logFile, b, buildLog.Boundary())
 		logFile.Close()
 		os.RemoveAll(b.LogFile)
 		b.LogFile = ""
@@ -318,12 +337,12 @@ func (r *Runner) build(b *Build) (err error) {
 
 	log.Printf("building %s\n", b.Commit)
 
-	out := &iotool.SafeWriter{W: io.MultiWriter(os.Stdout, logFile)}
+	out := &iotool.SafeWriter{W: io.MultiWriter(os.Stdout, mainLog)}
 	bc := r.bc
 	bc.Network = r.allocateNet()
 	defer r.releaseNet(bc.Network)
 
-	c := cluster.New(bc, out)
+	c = cluster.New(bc, out)
 	log.Println("created cluster with ID", c.ID)
 	r.clusters[c.ID] = c
 	defer func() {
@@ -337,7 +356,7 @@ func (r *Runner) build(b *Build) (err error) {
 		return fmt.Errorf("could not build flynn: %s", err)
 	}
 
-	if _, err := c.Boot(cluster.ClusterTypeDefault, 3, out, true); err != nil {
+	if _, err := c.Boot(cluster.ClusterTypeDefault, 3, buildLog, false); err != nil {
 		return fmt.Errorf("could not boot cluster: %s", err)
 	}
 
@@ -348,15 +367,11 @@ func (r *Runner) build(b *Build) (err error) {
 
 	var script bytes.Buffer
 	testRunScript.Execute(&script, map[string]interface{}{"Cluster": c, "ListenPort": listenPort})
-	err = c.RunWithEnv(script.String(), &cluster.Streams{
+	return c.RunWithEnv(script.String(), &cluster.Streams{
 		Stdin:  bytes.NewBuffer(config.Marshal()),
 		Stdout: out,
 		Stderr: out,
 	}, map[string]string{"TEST_RUNNER_AUTH_KEY": r.authKey})
-	if err != nil {
-		c.DumpLogs(out)
-	}
-	return err
 }
 
 var s3attempts = attempt.Strategy{
@@ -365,7 +380,7 @@ var s3attempts = attempt.Strategy{
 	Delay: time.Second,
 }
 
-func (r *Runner) uploadToS3(file *os.File, b *Build) string {
+func (r *Runner) uploadToS3(file *os.File, b *Build, boundary string) string {
 	name := fmt.Sprintf("%s-build-%s-%s.txt", b.Id, b.Commit, time.Now().Format("2006-01-02-15-04-05"))
 	url := fmt.Sprintf("https://s3.amazonaws.com/%s/%s", logBucket, name)
 
@@ -382,7 +397,7 @@ func (r *Runner) uploadToS3(file *os.File, b *Build) string {
 
 	log.Printf("uploading build log to S3: %s\n", url)
 	if err := s3attempts.Run(func() error {
-		return r.s3Bucket.PutReader(name, file, stat.Size(), textPlain, "public-read")
+		return r.s3Bucket.PutReader(name, file, stat.Size(), "multipart/mixed; boundary="+boundary, "public-read")
 	}); err != nil {
 		log.Printf("failed to upload build output to S3: %s\n", err)
 	}
@@ -473,6 +488,49 @@ func (r *Runner) getBuilds(w http.ResponseWriter, req *http.Request, ps httprout
 	json.NewEncoder(w).Encode(builds)
 }
 
+type logLine struct {
+	Filename string `json:"filename"`
+	Text     string `json:"text"`
+}
+
+func serveBuildLogStream(b *Build, w http.ResponseWriter) error {
+	res, err := http.Get(b.LogUrl)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status %d getting build log", res.StatusCode)
+	}
+	_, params, err := mime.ParseMediaType(res.Header.Get("Content-Type"))
+	if err != nil {
+		return err
+	}
+	ch := make(chan *logLine)
+	stream := sse.NewStream(w, ch, nil)
+	stream.Serve()
+	go func() {
+		mr := multipart.NewReader(res.Body, params["boundary"])
+		for {
+			p, err := mr.NextPart()
+			if err != nil {
+				stream.CloseWithError(err)
+				return
+			}
+			s := bufio.NewScanner(p)
+			for s.Scan() {
+				ch <- &logLine{p.FileName(), s.Text()}
+			}
+			if err := s.Err(); err != nil {
+				stream.CloseWithError(err)
+				return
+			}
+		}
+	}()
+	stream.Wait()
+	return nil
+}
+
 func (r *Runner) getBuildLog(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 	id := ps.ByName("build")
 	b := &Build{}
@@ -486,8 +544,14 @@ func (r *Runner) getBuildLog(w http.ResponseWriter, req *http.Request, ps httpro
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	if b.LogFile == "" {
-		http.Redirect(w, req, b.LogUrl, http.StatusMovedPermanently)
+	if b.Finished() {
+		if strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
+			if err := serveBuildLogStream(b, w); err != nil {
+				http.Error(w, err.Error(), 500)
+			}
+			return
+		}
+		http.ServeFile(w, req, path.Join(args.AssetsDir, "build-log.html"))
 		return
 	}
 	t, err := tail.TailFile(b.LogFile, tail.Config{Follow: true, MustExist: true})
@@ -534,7 +598,11 @@ func (r *Runner) restartBuild(w http.ResponseWriter, req *http.Request, ps httpr
 		return
 	}
 	if build.State != "pending" {
-		b := newBuild(build.Commit, "Restart: "+build.Description, build.Merge)
+		desc := build.Description
+		if !strings.HasPrefix(desc, "Restart: ") {
+			desc = "Restart: " + desc
+		}
+		b := newBuild(build.Commit, desc, build.Merge)
 		go r.build(b)
 	}
 	http.Redirect(w, req, "/builds", 301)
