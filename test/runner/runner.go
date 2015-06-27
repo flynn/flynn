@@ -319,6 +319,7 @@ func (r *Runner) build(b *Build) (err error) {
 			fmt.Fprintln(mainLog, "DUMPING LOGS")
 			c.DumpLogs(buildLog)
 		}
+		c.Shutdown()
 		buildLog.Close()
 		url := r.uploadToS3(logFile, b, buildLog.Boundary())
 		logFile.Close()
@@ -347,7 +348,6 @@ func (r *Runner) build(b *Build) (err error) {
 	r.clusters[c.ID] = c
 	defer func() {
 		delete(r.clusters, c.ID)
-		c.Shutdown()
 	}()
 
 	rootFS, err := c.BuildFlynn(r.rootFS, b.Commit, b.Merge, true)
