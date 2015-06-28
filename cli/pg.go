@@ -9,6 +9,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
+	ct "github.com/flynn/flynn/controller/types"
 )
 
 func init() {
@@ -39,7 +40,7 @@ Examples:
 }
 
 func runPg(args *docopt.Args, client *controller.Client) error {
-	config, err := getPgRunConfig(client)
+	config, err := getAppPgRunConfig(client)
 	if err != nil {
 		return err
 	}
@@ -54,12 +55,15 @@ func runPg(args *docopt.Args, client *controller.Client) error {
 	return nil
 }
 
-func getPgRunConfig(client *controller.Client) (*runConfig, error) {
+func getAppPgRunConfig(client *controller.Client) (*runConfig, error) {
 	appRelease, err := client.GetAppRelease(mustApp())
 	if err != nil {
 		return nil, fmt.Errorf("error getting app release: %s", err)
 	}
+	return getPgRunConfig(client, appRelease)
+}
 
+func getPgRunConfig(client *controller.Client, appRelease *ct.Release) (*runConfig, error) {
 	pgApp := appRelease.Env["FLYNN_POSTGRES"]
 	if pgApp == "" {
 		return nil, fmt.Errorf("No postgres database found. Provision one with `flynn resource add postgres`")
@@ -75,6 +79,7 @@ func getPgRunConfig(client *controller.Client) (*runConfig, error) {
 		Release:    pgRelease.ID,
 		Env:        make(map[string]string),
 		DisableLog: true,
+		Exit:       true,
 	}
 	for _, k := range []string{"PGHOST", "PGUSER", "PGPASSWORD", "PGDATABASE"} {
 		v := appRelease.Env[k]
@@ -95,8 +100,6 @@ func runPsql(args *docopt.Args, client *controller.Client, config *runConfig) er
 }
 
 func runPgDump(args *docopt.Args, client *controller.Client, config *runConfig) error {
-	config.Entrypoint = []string{"pg_dump"}
-	config.Args = []string{"--format=custom", "--no-owner", "--no-acl"}
 	config.Stdout = os.Stdout
 	if filename := args.String["--file"]; filename != "" {
 		f, err := os.Create(filename)
@@ -116,12 +119,16 @@ func runPgDump(args *docopt.Args, client *controller.Client, config *runConfig) 
 		defer bar.Finish()
 		config.Stdout = io.MultiWriter(config.Stdout, bar)
 	}
+	return pgDump(client, config)
+}
+
+func pgDump(client *controller.Client, config *runConfig) error {
+	config.Entrypoint = []string{"pg_dump"}
+	config.Args = []string{"--format=custom", "--no-owner", "--no-acl"}
 	return runJob(client, *config)
 }
 
 func runPgRestore(args *docopt.Args, client *controller.Client, config *runConfig) error {
-	config.Entrypoint = []string{"pg_restore"}
-	config.Args = []string{"-d", config.Env["PGDATABASE"], "--clean", "--no-owner", "--no-acl"}
 	config.Stdin = os.Stdin
 	var size int64
 	if filename := args.String["--file"]; filename != "" {
@@ -151,5 +158,16 @@ func runPgRestore(args *docopt.Args, client *controller.Client, config *runConfi
 		defer bar.Finish()
 		config.Stdin = bar.NewProxyReader(config.Stdin)
 	}
-	return runJob(client, *config)
+	return pgRestore(client, config)
+}
+
+func pgRestore(client *controller.Client, config *runConfig) error {
+	config.Entrypoint = []string{"pg_restore"}
+	config.Args = []string{"-d", config.Env["PGDATABASE"], "--clean", "--if-exists", "--no-owner", "--no-acl"}
+	err := runJob(client, *config)
+	if exit, ok := err.(RunExitError); ok && exit == 1 {
+		// pg_restore exits with zero if there are warnings
+		return nil
+	}
+	return err
 }

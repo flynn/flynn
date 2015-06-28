@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -684,4 +685,36 @@ func (s *CLISuite) TestRunLimits(t *c.C) {
 	t.Assert(limits, c.HasLen, 2)
 	t.Assert(limits[0], c.Equals, strconv.FormatInt(*defaults[resource.TypeMemory].Limit, 10))
 	t.Assert(limits[1], c.Equals, strconv.FormatInt(*defaults[resource.TypeMaxFD].Limit, 10))
+}
+
+func (s *CLISuite) TestExportImport(t *c.C) {
+	srcApp := "app-export" + random.String(8)
+	dstApp := "app-import" + random.String(8)
+
+	// create and push app+db
+	r := s.newGitRepo(t, "http")
+	t.Assert(r.flynn("create", srcApp), Succeeds)
+	t.Assert(r.flynn("key", "add", r.ssh.Pub), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+	t.Assert(r.flynn("resource", "add", "postgres"), Succeeds)
+	t.Assert(r.flynn("pg", "psql", "--", "-c",
+		"CREATE table foos (data text); INSERT INTO foos (data) VALUES ('foobar')"), Succeeds)
+
+	// export app
+	file := filepath.Join(t.MkDir(), "export.tar")
+	t.Assert(r.flynn("export", "-f", file), Succeeds)
+
+	// remove db table from source app
+	t.Assert(r.flynn("pg", "psql", "--", "-c", "DROP TABLE foos"), Succeeds)
+
+	// import app
+	t.Assert(r.flynn("import", "--name", dstApp, "--file", file), Succeeds)
+
+	// test db was imported
+	query := r.flynn("-a", dstApp, "pg", "psql", "--", "-c", "SELECT * FROM foos")
+	t.Assert(query, SuccessfulOutputContains, "foobar")
+
+	// wait for it to start
+	_, err := s.discoverdClient(t).Instances(dstApp+"-web", 10*time.Second)
+	t.Assert(err, c.IsNil)
 }
