@@ -181,8 +181,9 @@ func handleChannel(conn *ssh.ServerConn, newChan ssh.NewChannel) {
 			if req.WantReply {
 				req.Reply(true, nil)
 			}
-			cmdline := string(req.Payload[4:])
-			cmdargs, err := shlex.Split(cmdline)
+			var cmdline struct{ Value string }
+			ssh.Unmarshal(req.Payload, &cmdline)
+			cmdargs, err := shlex.Split(cmdline.Value)
 			if err != nil || len(cmdargs) != 2 {
 				ch.Stderr().Write([]byte("Invalid arguments.\n"))
 				return
