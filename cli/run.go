@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -42,6 +43,7 @@ func runRun(args *docopt.Args, client *controller.Client) error {
 		Release:    args.String["-r"],
 		Args:       append([]string{args.String["<command>"]}, args.All["<argument>"].([]string)...),
 		ReleaseEnv: true,
+		Exit:       true,
 	}
 	if config.Release == "" {
 		release, err := client.GetAppRelease(config.App)
@@ -71,6 +73,7 @@ type runConfig struct {
 	Stdout     io.Writer
 	Stderr     io.Writer
 	DisableLog bool
+	Exit       bool
 }
 
 func runJob(client *controller.Client, config runConfig) error {
@@ -171,7 +174,17 @@ func runJob(client *controller.Client, config runConfig) error {
 	if req.TTY {
 		term.RestoreTerminal(os.Stdin.Fd(), termState)
 	}
-	shutdown.ExitWithCode(exitStatus)
+	if config.Exit {
+		shutdown.ExitWithCode(exitStatus)
+	}
+	if exitStatus != 0 {
+		return RunExitError(exitStatus)
+	}
+	return nil
+}
 
-	panic("unreached")
+type RunExitError int
+
+func (e RunExitError) Error() string {
+	return fmt.Sprintf("remote job exited with status %d", e)
 }
