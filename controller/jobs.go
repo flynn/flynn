@@ -55,23 +55,18 @@ func NewJobRepo(db *postgres.DB) *JobRepo {
 }
 
 func (r *JobRepo) Get(id string) (*ct.Job, error) {
-	row := r.db.QueryRow("SELECT concat(host_id, '-', job_id), app_id, release_id, process_type, state, meta, created_at, updated_at FROM job_cache WHERE concat(host_id, '-', job_id) = $1", id)
+	row := r.db.QueryRow("SELECT job_id, app_id, release_id, process_type, state, meta, created_at, updated_at FROM job_cache WHERE job_id = $1", id)
 	return scanJob(row)
 }
 
 func (r *JobRepo) Add(job *ct.Job) error {
-	hostID, jobID, err := cluster.ParseJobID(job.ID)
-	if err != nil {
-		log.Printf("Unable to parse hostID from %q", job.ID)
-		return ErrNotFound
-	}
 	meta := metaToHstore(job.Meta)
 	// TODO: actually validate
-	err = r.db.QueryRow("INSERT INTO job_cache (job_id, host_id, app_id, release_id, process_type, state, meta) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING created_at, updated_at",
-		jobID, hostID, job.AppID, job.ReleaseID, job.Type, job.State, meta).Scan(&job.CreatedAt, &job.UpdatedAt)
+	err := r.db.QueryRow("INSERT INTO job_cache (job_id, app_id, release_id, process_type, state, meta) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at, updated_at",
+		job.ID, job.AppID, job.ReleaseID, job.Type, job.State, meta).Scan(&job.CreatedAt, &job.UpdatedAt)
 	if postgres.IsUniquenessError(err, "") {
-		err = r.db.QueryRow("UPDATE job_cache SET state = $3, updated_at = now() WHERE job_id = $1 AND host_id = $2 RETURNING created_at, updated_at",
-			jobID, hostID, job.State).Scan(&job.CreatedAt, &job.UpdatedAt)
+		err = r.db.QueryRow("UPDATE job_cache SET state = $2, updated_at = now() WHERE job_id = $1 RETURNING created_at, updated_at",
+			job.ID, job.State).Scan(&job.CreatedAt, &job.UpdatedAt)
 		if e, ok := err.(*pq.Error); ok && e.Code.Name() == "check_violation" {
 			return ct.ValidationError{Field: "state", Message: e.Error()}
 		}
@@ -122,7 +117,7 @@ func scanJob(s postgres.Scanner) (*ct.Job, error) {
 }
 
 func (r *JobRepo) List(appID string) ([]*ct.Job, error) {
-	rows, err := r.db.Query("SELECT concat(host_id, '-', job_id), app_id, release_id, process_type, state, meta, created_at, updated_at FROM job_cache WHERE app_id = $1 ORDER BY created_at DESC", appID)
+	rows, err := r.db.Query("SELECT job_id, app_id, release_id, process_type, state, meta, created_at, updated_at FROM job_cache WHERE app_id = $1 ORDER BY created_at DESC", appID)
 	if err != nil {
 		return nil, err
 	}
@@ -165,9 +160,10 @@ type clusterClient interface {
 
 func (c *controllerAPI) connectHost(ctx context.Context) (utils.HostClient, string, error) {
 	params, _ := ctxhelper.ParamsFromContext(ctx)
-	hostID, jobID, err := cluster.ParseJobID(params.ByName("jobs_id"))
+	jobID := params.ByName("jobs_id")
+	hostID, err := cluster.ExtractHostID(jobID)
 	if err != nil {
-		log.Printf("Unable to parse hostID from %q", params.ByName("jobs_id"))
+		log.Printf("Unable to parse hostID from %q", jobID)
 		return nil, jobID, err
 	}
 
@@ -268,13 +264,13 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	}
 	client := hosts[random.Math.Intn(len(hosts))]
 
-	id := cluster.RandomJobID("")
+	id := cluster.GenerateJobID(client.ID())
 	app := c.getApp(ctx)
 	env := make(map[string]string, len(release.Env)+len(newJob.Env)+4)
 	env["FLYNN_APP_ID"] = app.ID
 	env["FLYNN_RELEASE_ID"] = release.ID
 	env["FLYNN_PROCESS_TYPE"] = ""
-	env["FLYNN_JOB_ID"] = client.ID() + "-" + id
+	env["FLYNN_JOB_ID"] = id
 	if newJob.ReleaseEnv {
 		for k, v := range release.Env {
 			env[k] = v
@@ -359,7 +355,7 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		return
 	} else {
 		httphelper.JSON(w, 200, &ct.Job{
-			ID:        client.ID() + "-" + job.ID,
+			ID:        job.ID,
 			ReleaseID: newJob.ReleaseID,
 			Cmd:       newJob.Cmd,
 		})

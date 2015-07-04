@@ -126,16 +126,14 @@ $$ LANGUAGE plpgsql`,
 
 		`CREATE TYPE job_state AS ENUM ('starting', 'up', 'down', 'crashed', 'failed')`,
 		`CREATE TABLE job_cache (
-    job_id text NOT NULL,
-    host_id text NOT NULL,
+    job_id text PRIMARY KEY,
     app_id uuid NOT NULL REFERENCES apps (app_id),
     release_id uuid NOT NULL REFERENCES releases (release_id),
     process_type text,
     state job_state NOT NULL,
     meta hstore,
     created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (job_id, host_id)
+    updated_at timestamptz NOT NULL DEFAULT now()
 )`,
 		`CREATE FUNCTION check_job_state() RETURNS OPAQUE AS $$
     BEGIN

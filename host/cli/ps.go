@@ -48,7 +48,7 @@ func runPs(args *docopt.Args, client *cluster.Client) error {
 				}
 				continue
 			}
-			fmt.Println(clusterJobID(job))
+			fmt.Println(job.Job.ID)
 		}
 		return nil
 	}
@@ -105,15 +105,11 @@ func printJobs(jobs sortJobs, out io.Writer) {
 		}
 
 		listRec(w,
-			clusterJobID(job),
+			job.Job.ID,
 			job.Status,
 			started,
 			job.Job.Metadata["flynn-controller.app_name"],
 			job.Job.Metadata["flynn-controller.type"],
 		)
 	}
-}
-
-func clusterJobID(job host.ActiveJob) string {
-	return job.HostID + "-" + job.Job.ID
 }

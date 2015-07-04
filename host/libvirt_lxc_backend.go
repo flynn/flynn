@@ -34,7 +34,6 @@ import (
 	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pkg/attempt"
-	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -427,7 +426,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 			return err
 		}
 		if m.Target == "" {
-			m.Target = filepath.Join(l.VolPath, cluster.RandomJobID(""))
+			m.Target = filepath.Join(l.VolPath, random.UUID())
 			job.Config.Mounts[i].Target = m.Target
 			if err := os.MkdirAll(m.Target, 0755); err != nil {
 				g.Log(grohl.Data{"at": "mkdir_vol", "dir": m.Target, "status": "error", "err": err})

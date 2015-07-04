@@ -15,11 +15,11 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string) *host.Job {
 	for k, v := range t.Env {
 		env[k] = v
 	}
-	id := cluster.RandomJobID("")
+	id := cluster.GenerateJobID(hostID)
 	env["FLYNN_APP_ID"] = f.App.ID
 	env["FLYNN_RELEASE_ID"] = f.Release.ID
 	env["FLYNN_PROCESS_TYPE"] = name
-	env["FLYNN_JOB_ID"] = hostID + "-" + id
+	env["FLYNN_JOB_ID"] = id
 	job := &host.Job{
 		ID: id,
 		Metadata: map[string]string{

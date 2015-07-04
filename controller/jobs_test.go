@@ -85,11 +85,12 @@ func (l *fakeLog) Write([]byte) (int, error) {
 
 func (s *S) TestKillJob(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "killjob"})
-	hostID, jobID := random.UUID(), random.UUID()
+	hostID := random.UUID()
+	jobID := cluster.GenerateJobID(hostID)
 	hc := tu.NewFakeHostClient(hostID)
 	s.cc.AddHost(hc)
 
-	c.Assert(s.c.DeleteJob(app.ID, hostID+"-"+jobID), IsNil)
+	c.Assert(s.c.DeleteJob(app.ID, jobID), IsNil)
 	c.Assert(hc.IsStopped(jobID), Equals, true)
 }
 
@@ -122,7 +123,7 @@ func (s *S) TestRunJobDetached(c *C) {
 	c.Assert(res.Cmd, DeepEquals, cmd)
 
 	job := host.Jobs[0]
-	c.Assert(res.ID, Equals, hostID+"-"+job.ID)
+	c.Assert(res.ID, Equals, job.ID)
 	c.Assert(job.Metadata, DeepEquals, map[string]string{
 		"flynn-controller.app":      app.ID,
 		"flynn-controller.app_name": app.Name,
@@ -134,7 +135,7 @@ func (s *S) TestRunJobDetached(c *C) {
 		"FLYNN_APP_ID":       app.ID,
 		"FLYNN_RELEASE_ID":   release.ID,
 		"FLYNN_PROCESS_TYPE": "",
-		"FLYNN_JOB_ID":       hostID + "-" + job.ID,
+		"FLYNN_JOB_ID":       job.ID,
 		"FOO":                "baz",
 		"JOB":                "true",
 		"RELEASE":            "true",
@@ -213,7 +214,7 @@ func (s *S) TestRunJobAttached(c *C) {
 		"FLYNN_APP_ID":       app.ID,
 		"FLYNN_RELEASE_ID":   release.ID,
 		"FLYNN_PROCESS_TYPE": "",
-		"FLYNN_JOB_ID":       hostID + "-" + job.ID,
+		"FLYNN_JOB_ID":       job.ID,
 		"FOO":                "baz",
 		"JOB":                "true",
 		"RELEASE":            "true",

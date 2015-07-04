@@ -90,9 +90,9 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 		}
 	}
 	t.Assert(jobs, c.HasLen, 2)
-	hostID, jobID, _ := cluster.ParseJobID(jobs[0].ID)
+	jobID := jobs[0].ID
+	hostID, _ := cluster.ExtractHostID(jobID)
 	t.Assert(hostID, c.Not(c.Equals), "")
-	t.Assert(jobID, c.Not(c.Equals), "")
 	debugf(t, "current controller app[%s] host[%s] job[%s]", app.ID, hostID, jobID)
 
 	// start another controller and wait for it to come up

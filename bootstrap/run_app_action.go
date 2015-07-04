@@ -36,12 +36,6 @@ type RunAppState struct {
 	*ct.ExpandedFormation
 	Providers []*ct.Provider       `json:"providers"`
 	Resources []*resource.Resource `json:"resources"`
-	Jobs      []Job                `json:"jobs"`
-}
-
-type Job struct {
-	HostID string `json:"host_id"`
-	JobID  string `json:"job_id"`
 }
 
 func (a *RunAppAction) Run(s *State) error {
@@ -121,25 +115,21 @@ func (a *RunAppAction) Run(s *State) error {
 					return err
 				}
 			}
-			job, err := startJob(s, host, config)
-			if err != nil {
+			if err := startJob(s, host, config); err != nil {
 				return err
 			}
-			as.Jobs = append(as.Jobs, *job)
 		}
 	}
 
 	return nil
 }
 
-func startJob(s *State, hc *cluster.Host, job *host.Job) (*Job, error) {
-	data := &Job{HostID: hc.ID(), JobID: job.ID}
-
+func startJob(s *State, hc *cluster.Host, job *host.Job) error {
 	jobStatus := make(chan error)
 	events := make(chan *host.Event)
-	stream, err := hc.StreamEvents(data.JobID, events)
+	stream, err := hc.StreamEvents(job.ID, events)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	go func() {
 		defer stream.Close()
@@ -149,7 +139,7 @@ func startJob(s *State, hc *cluster.Host, job *host.Job) (*Job, error) {
 				jobStatus <- nil
 				return
 			case "error":
-				job, err := hc.GetJob(data.JobID)
+				job, err := hc.GetJob(job.ID)
 				if err != nil {
 					jobStatus <- err
 					return
@@ -167,8 +157,8 @@ func startJob(s *State, hc *cluster.Host, job *host.Job) (*Job, error) {
 	}()
 
 	if err := hc.AddJob(job); err != nil {
-		return nil, err
+		return err
 	}
 
-	return data, <-jobStatus
+	return <-jobStatus
 }
