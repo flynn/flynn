@@ -108,7 +108,7 @@ page for guides on deploying your applications to Flynn.
 
 ## AWS
 
-The [Flynn CLI](https://cli.flynn.io) includes an installer that will boot and
+The [Flynn CLI](/docs/cli) includes an installer that will boot and
 configure a Flynn cluster on Amazon Web Services using CloudFormation. It
 automatically performs all of the steps required to install Flynn.
 
