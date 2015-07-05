@@ -19,7 +19,7 @@ func runStop(args *docopt.Args, client *cluster.Client) error {
 	success := true
 	clients := make(map[string]*cluster.Host)
 	for _, id := range args.All["ID"].([]string) {
-		hostID, jobID, err := cluster.ParseJobID(id)
+		hostID, err := cluster.ExtractHostID(id)
 		if err != nil {
 			fmt.Printf("could not parse %s: %s", id, err)
 			success = false
@@ -36,12 +36,12 @@ func runStop(args *docopt.Args, client *cluster.Client) error {
 			}
 			clients[hostID] = hostClient
 		}
-		if err := hostClient.StopJob(jobID); err != nil {
-			fmt.Printf("could not stop job %s: %s\n", jobID, err)
+		if err := hostClient.StopJob(id); err != nil {
+			fmt.Printf("could not stop job %s: %s\n", id, err)
 			success = false
 			continue
 		}
-		fmt.Println(jobID, "stopped")
+		fmt.Println(id, "stopped")
 	}
 	if !success {
 		return errors.New("could not stop all jobs")

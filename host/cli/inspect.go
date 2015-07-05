@@ -24,7 +24,8 @@ options:
 }
 
 func runInspect(args *docopt.Args, client *cluster.Client) error {
-	hostID, jobID, err := cluster.ParseJobID(args.String["ID"])
+	jobID := args.String["ID"]
+	hostID, err := cluster.ExtractHostID(jobID)
 	if err != nil {
 		return err
 	}
@@ -44,7 +45,7 @@ func runInspect(args *docopt.Args, client *cluster.Client) error {
 func printJobDesc(job *host.ActiveJob, out io.Writer, env bool) {
 	w := tabwriter.NewWriter(out, 1, 2, 2, ' ', 0)
 	defer w.Flush()
-	listRec(w, "ID", clusterJobID(*job))
+	listRec(w, "ID", job.Job.ID)
 	listRec(w, "Entrypoint", strings.Join(job.Job.Config.Entrypoint, " "))
 	listRec(w, "Cmd", strings.Join(job.Job.Config.Cmd, " "))
 	listRec(w, "Status", job.Status)

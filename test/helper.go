@@ -194,9 +194,9 @@ func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 
 func (h *Helper) stopJob(t *c.C, id string) {
 	debugf(t, "stopping job %s", id)
-	hostID, jobID, _ := cluster.ParseJobID(id)
+	hostID, _ := cluster.ExtractHostID(id)
 	hc := h.hostClient(t, hostID)
-	t.Assert(hc.StopJob(jobID), c.IsNil)
+	t.Assert(hc.StopJob(id), c.IsNil)
 }
 
 func (h *Helper) addHost(t *c.C) *tc.Instance {

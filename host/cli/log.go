@@ -19,7 +19,8 @@ Get the logs of a job`)
 }
 
 func runLog(args *docopt.Args, client *cluster.Client) error {
-	hostID, jobID, err := cluster.ParseJobID(args.String["ID"])
+	jobID := args.String["ID"]
+	hostID, err := cluster.ExtractHostID(jobID)
 	if err != nil {
 		return err
 	}

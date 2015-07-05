@@ -204,7 +204,7 @@ func (c *context) syncCluster() {
 
 			gg.Log(grohl.Data{"at": "addJob"})
 			go c.PutJob(&ct.Job{
-				ID:        h.ID() + "-" + job.ID,
+				ID:        job.ID,
 				AppID:     appID,
 				ReleaseID: releaseID,
 				Type:      jobType,
@@ -248,12 +248,12 @@ func (c *context) syncJobStates() error {
 			if job.State != "up" {
 				continue
 			}
-			hostID, jobID, err := cluster.ParseJobID(job.ID)
+			hostID, err := cluster.ExtractHostID(job.ID)
 			if err != nil {
-				gg.Log(grohl.Data{"at": "parseJobID", "status": "error", "err": err})
+				gg.Log(grohl.Data{"at": "jobHostID", "status": "error", "err": err})
 				continue
 			}
-			if j := c.jobs.Get(hostID, jobID); j != nil {
+			if j := c.jobs.Get(hostID, job.ID); j != nil {
 				continue
 			}
 			job.State = "down"
@@ -429,7 +429,7 @@ func (c *context) watchHost(h *cluster.Host, ready chan struct{}) {
 		}
 
 		job := &ct.Job{
-			ID:        h.ID() + "-" + event.JobID,
+			ID:        event.JobID,
 			AppID:     appID,
 			ReleaseID: releaseID,
 			Type:      jobType,
