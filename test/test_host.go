@@ -14,6 +14,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
+	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/schedutil"
 )
@@ -23,6 +24,16 @@ type HostSuite struct {
 }
 
 var _ = c.ConcurrentSuite(&HostSuite{})
+
+func (s *HostSuite) TestGetNonExistentJob(t *c.C) {
+	cluster := s.clusterClient(t)
+	hosts, err := cluster.Hosts()
+	t.Assert(err, c.IsNil)
+
+	// Getting a non-existent job should error
+	_, err = hosts[0].GetJob("i-dont-exist")
+	t.Assert(hh.IsObjectNotFoundError(err), c.Equals, true)
+}
 
 func (s *HostSuite) TestAttachNonExistentJob(t *c.C) {
 	cluster := s.clusterClient(t)
