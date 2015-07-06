@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
@@ -58,6 +59,28 @@ func (c *Host) GetStatus() (*host.HostStatus, error) {
 	var res host.HostStatus
 	err := c.c.Get("/host/status", &res)
 	return &res, err
+}
+
+func WaitForHostStatus(desired func(*host.HostStatus) bool) (*host.HostStatus, error) {
+	const waitMax = time.Minute
+	const waitInterval = 500 * time.Millisecond
+	h := NewHost("", "http://127.0.0.1:1113", nil)
+	timeout := time.After(waitMax)
+	for {
+		status, err := h.GetStatus()
+		if err == nil && desired(status) {
+			return status, nil
+		}
+		select {
+		case <-timeout:
+			if err == nil {
+				return nil, fmt.Errorf("desired host status not reached after %s", waitMax)
+			}
+			return nil, fmt.Errorf("timed out getting host status: %s", err)
+		default:
+			time.Sleep(waitInterval)
+		}
+	}
 }
 
 // ListJobs lists the jobs running on the host.

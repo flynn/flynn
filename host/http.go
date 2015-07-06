@@ -185,21 +185,24 @@ func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 func (h *jobAPI) ConfigureDiscoverd(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var config struct {
 		URL string `json:"url"`
+		DNS string `json:"dns"`
 	}
 	if err := httphelper.DecodeJSON(r, &config); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
 
-	go h.discoverdOnce.Do(func() {
-		if err := h.connectDiscoverd(config.URL); err != nil {
-			shutdown.Fatal(err)
-		}
+	h.statusMtx.Lock()
+	h.status.Discoverd = &host.DiscoverdConfig{URL: config.URL}
+	h.statusMtx.Unlock()
 
-		h.statusMtx.Lock()
-		h.status.Discoverd = &host.DiscoverdConfig{URL: config.URL}
-		h.statusMtx.Unlock()
-	})
+	if config.URL != "" && config.DNS != "" {
+		go h.discoverdOnce.Do(func() {
+			if err := h.connectDiscoverd(config.URL); err != nil {
+				shutdown.Fatal(err)
+			}
+		})
+	}
 }
 
 func (h *jobAPI) ConfigureNetworking(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
