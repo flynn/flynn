@@ -637,7 +637,7 @@ func (c *Cluster) DumpLogs(buildLog *buildlog.Log) {
 		run(fmt.Sprintf("%s-jobs.log", typ), instances[0], "flynn-host ps -a")
 
 		var out bytes.Buffer
-		cmd := `flynn-host ps -aqf '{{ metadata "flynn-controller.app_name" }}-{{ metadata "flynn-controller.type" }}-{{ .HostID }}-{{ .Job.ID }}'`
+		cmd := `flynn-host ps -aqf '{{ metadata "flynn-controller.app_name" }}-{{ metadata "flynn-controller.type" }}-{{ .Job.ID }}'`
 		if err := instances[0].Run(cmd, &Streams{Stdout: &out, Stderr: &out}); err != nil {
 			fallback()
 			return

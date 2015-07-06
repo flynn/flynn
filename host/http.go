@@ -30,10 +30,12 @@ type Host struct {
 	url     string
 }
 
+var ErrNotFound = errors.New("host: unknown job")
+
 func (h *Host) StopJob(id string) error {
 	job := h.state.GetJob(id)
 	if job == nil {
-		return errors.New("host: unknown job")
+		return ErrNotFound
 	}
 	switch job.Status {
 	case host.StatusStarting:
@@ -49,7 +51,7 @@ func (h *Host) StopJob(id string) error {
 func (h *Host) SignalJob(id string, sig int) error {
 	job := h.state.GetJob(id)
 	if job == nil {
-		return errors.New("host: unknown job")
+		return ErrNotFound
 	}
 	return h.backend.Signal(id, sig)
 }
@@ -94,6 +96,10 @@ func (h *jobAPI) GetJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 		return
 	}
 	job := h.host.state.GetJob(id)
+	if job == nil {
+		httphelper.ObjectNotFoundError(w, ErrNotFound.Error())
+		return
+	}
 	httphelper.JSON(w, 200, job)
 }
 
