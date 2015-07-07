@@ -37,7 +37,6 @@ options:
   --state=PATH           path to state file [default: /var/lib/flynn/host-state.bolt]
   --id=ID                host id
   --force                kill all containers booted by flynn-host before starting
-  --legacy-volpath=PATH  directory to create legacy volumes in [default: /var/lib/flynn/host-volumes]
   --volpath=PATH         directory to create volumes in [default: /var/lib/flynn/volumes]
   --backend=BACKEND      runner backend [default: libvirt-lxc]
   --flynn-init=PATH      path to flynn-init binary [default: /usr/local/bin/flynn-init]
@@ -129,7 +128,6 @@ func runDaemon(args *docopt.Args) {
 	stateFile := args.String["--state"]
 	hostID := args.String["--id"]
 	force := args.Bool["--force"]
-	legacyVolPath := args.String["--legacyvolpath"]
 	volPath := args.String["--volpath"]
 	backendName := args.String["--backend"]
 	flynnInit := args.String["--flynn-init"]
@@ -208,7 +206,7 @@ func runDaemon(args *docopt.Args) {
 
 	switch backendName {
 	case "libvirt-lxc":
-		backend, err = NewLibvirtLXCBackend(state, vman, legacyVolPath, logDir, flynnInit, mux)
+		backend, err = NewLibvirtLXCBackend(state, vman, logDir, flynnInit, mux)
 	default:
 		log.Fatalf("unknown backend %q", backendName)
 	}
