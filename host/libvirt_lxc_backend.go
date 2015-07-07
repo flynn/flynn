@@ -44,7 +44,7 @@ const (
 	imageRoot      = "/var/lib/docker"
 )
 
-func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, logPath, initPath string, mux *logmux.LogMux) (Backend, error) {
+func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, logPath, initPath string, mux *logmux.LogMux) (Backend, error) {
 	libvirtc, err := libvirt.NewVirConnection("lxc:///")
 	if err != nil {
 		return nil, err
@@ -57,7 +57,6 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, lo
 
 	return &LibvirtLXCBackend{
 		LogPath:             logPath,
-		VolPath:             volPath,
 		InitPath:            initPath,
 		libvirt:             libvirtc,
 		state:               state,
@@ -77,7 +76,6 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, volPath, lo
 type LibvirtLXCBackend struct {
 	LogPath   string
 	InitPath  string
-	VolPath   string
 	libvirt   libvirt.VirConnection
 	state     *State
 	vman      *volumemanager.Manager
@@ -420,18 +418,13 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		g.Log(grohl.Data{"at": "mkdir", "dir": ".container-shared", "status": "error", "err": err})
 		return err
 	}
-	for i, m := range job.Config.Mounts {
+	for _, m := range job.Config.Mounts {
 		if err := os.MkdirAll(filepath.Join(rootPath, m.Location), 0755); err != nil {
 			g.Log(grohl.Data{"at": "mkdir_mount", "dir": m.Location, "status": "error", "err": err})
 			return err
 		}
 		if m.Target == "" {
-			m.Target = filepath.Join(l.VolPath, random.UUID())
-			job.Config.Mounts[i].Target = m.Target
-			if err := os.MkdirAll(m.Target, 0755); err != nil {
-				g.Log(grohl.Data{"at": "mkdir_vol", "dir": m.Target, "status": "error", "err": err})
-				return err
-			}
+			return errors.New("host: invalid empty mount target")
 		}
 		if err := bindMount(m.Target, filepath.Join(rootPath, m.Location), m.Writeable, true); err != nil {
 			g.Log(grohl.Data{"at": "mount", "target": m.Target, "location": m.Location, "status": "error", "err": err})
