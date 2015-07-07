@@ -1,8 +1,11 @@
 package utils
 
 import (
+	"strings"
+
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/cluster"
 )
 
@@ -52,7 +55,7 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string) *host.Job {
 	return job
 }
 
-func ProvisionVolume(h *cluster.Host, job *host.Job) error {
+func ProvisionVolume(h VolumeCreator, job *host.Job) error {
 	vol, err := h.CreateVolume("default")
 	if err != nil {
 		return err
@@ -65,9 +68,47 @@ func ProvisionVolume(h *cluster.Host, job *host.Job) error {
 	return nil
 }
 
+func JobMetaFromMetadata(metadata map[string]string) map[string]string {
+	jobMeta := make(map[string]string, len(metadata))
+	for k, v := range metadata {
+		if strings.HasPrefix(k, "flynn-controller.") {
+			continue
+		}
+		jobMeta[k] = v
+	}
+	return jobMeta
+}
+
+type FormationKey struct {
+	AppID, ReleaseID string
+}
+
+func NewFormationKey(appID, releaseID string) FormationKey {
+	return FormationKey{AppID: appID, ReleaseID: releaseID}
+}
+
+type VolumeCreator interface {
+	CreateVolume(string) (*volume.Info, error)
+}
+
 type HostClient interface {
+	VolumeCreator
 	ID() string
 	AddJob(*host.Job) error
+	GetJob(id string) (*host.ActiveJob, error)
 	Attach(*host.AttachReq, bool) (cluster.AttachClient, error)
 	StopJob(string) error
+	ListJobs() (map[string]host.ActiveJob, error)
+}
+
+type ClusterClient interface {
+	Host(string) (HostClient, error)
+	Hosts() ([]HostClient, error)
+}
+
+type ControllerClient interface {
+	GetRelease(releaseID string) (*ct.Release, error)
+	GetArtifact(artifactID string) (*ct.Artifact, error)
+	GetFormation(appID, releaseID string) (*ct.Formation, error)
+	PutJob(*ct.Job) error
 }
