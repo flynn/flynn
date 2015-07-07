@@ -46,6 +46,18 @@ var listenPort string
 
 const textPlain = "text/plain; charset=utf-8"
 
+type BuildVersion string
+
+const (
+	// BuildVersion1 represents builds which store raw logs in S3, so users
+	// are redirected to S3 when viewing logs.
+	BuildVersion1 BuildVersion = "v1"
+
+	// BuildVersion2 represents builds which store logs in multipart format
+	// in S3, so are compatible with the scrolling logs page.
+	BuildVersion2 BuildVersion = "v2"
+)
+
 type Build struct {
 	Id                string        `json:"id"`
 	CreatedAt         *time.Time    `json:"created_at"`
@@ -59,6 +71,7 @@ type Build struct {
 	DurationFormatted string        `json:"duration_formatted"`
 	Reason            string        `json:"reason"`
 	IssueLink         string        `json:"issue_link"`
+	Version           BuildVersion  `json:"version"`
 }
 
 func (b *Build) Finished() bool {
@@ -73,6 +86,7 @@ func newBuild(commit, description string, merge bool) *Build {
 		Commit:      commit,
 		Description: description,
 		Merge:       merge,
+		Version:     BuildVersion2,
 	}
 }
 
@@ -545,6 +559,10 @@ func (r *Runner) getBuildLog(w http.ResponseWriter, req *http.Request, ps httpro
 		return
 	}
 	if b.Finished() {
+		if b.Version == BuildVersion1 {
+			http.Redirect(w, req, b.LogUrl, http.StatusMovedPermanently)
+			return
+		}
 		if strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
 			if err := serveBuildLogStream(b, w); err != nil {
 				http.Error(w, err.Error(), 500)
