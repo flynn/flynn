@@ -74,6 +74,10 @@ type Build struct {
 	Version           BuildVersion  `json:"version"`
 }
 
+func (b *Build) URL() string {
+	return "https://ci.flynn.io/builds/" + b.ID
+}
+
 func (b *Build) Finished() bool {
 	return b.State != "pending"
 }
@@ -313,8 +317,7 @@ func (r *Runner) build(b *Build) (err error) {
 		return err
 	}
 
-	buildURL := "https://ci.flynn.io/builds/" + b.Id
-	r.updateStatus(b, "pending", buildURL)
+	r.updateStatus(b, "pending")
 
 	<-r.buildCh
 	defer func() {
@@ -335,18 +338,18 @@ func (r *Runner) build(b *Build) (err error) {
 		}
 		c.Shutdown()
 		buildLog.Close()
-		url := r.uploadToS3(logFile, b, buildLog.Boundary())
+		b.LogURL = r.uploadToS3(logFile, b, buildLog.Boundary())
 		logFile.Close()
 		os.RemoveAll(b.LogFile)
 		b.LogFile = ""
 		if err == nil {
 			log.Printf("build %s passed!\n", b.ID)
-			r.updateStatus(b, "success", url)
-			r.ircMsgs <- fmt.Sprintf("PASS: %s %s", b.Description, buildURL)
+			r.updateStatus(b, "success")
+			r.ircMsgs <- fmt.Sprintf("PASS: %s %s", b.Description, b.URL())
 		} else {
 			log.Printf("build %s failed: %s\n", b.ID, err)
-			r.updateStatus(b, "failure", url)
-			r.ircMsgs <- fmt.Sprintf("FAIL: %s %s", b.Description, buildURL)
+			r.updateStatus(b, "failure")
+			r.ircMsgs <- fmt.Sprintf("FAIL: %s %s", b.Description, b.URL())
 		}
 	}()
 
@@ -672,12 +675,11 @@ var descriptions = map[string]string{
 	"failure": "The Flynn CI build failed",
 }
 
-func (r *Runner) updateStatus(b *Build, state, targetURL string) {
+func (r *Runner) updateStatus(b *Build, state string) {
 	go func() {
 		log.Printf("updateStatus: %s %s\n", state, b.Commit)
 
 		b.State = state
-		b.LogURL = targetURL
 		if err := r.save(b); err != nil {
 			log.Printf("updateStatus: could not save build: %s", err)
 		}
@@ -685,7 +687,7 @@ func (r *Runner) updateStatus(b *Build, state, targetURL string) {
 		url := fmt.Sprintf("https://api.github.com/repos/flynn/flynn/statuses/%s", b.Commit)
 		status := Status{
 			State:       state,
-			TargetURL:   targetURL,
+			TargetURL:   b.URL(),
 			Description: descriptions[state],
 			Context:     "continuous-integration/flynn",
 		}
