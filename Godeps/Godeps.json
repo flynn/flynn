@@ -746,19 +746,6 @@
 			"Rev": "6b1ef893dc11e0447abda6da20a5203481878dda"
 		},
 		{
-			"ImportPath": "github.com/inconshreveable/axiom",
-			"Rev": "89cf457954c8a5520c9281059ae4e5a8121eae7f"
-		},
-		{
-			"ImportPath": "github.com/inconshreveable/gonative",
-			"Comment": "0.2.0-25-ga874c9d",
-			"Rev": "a874c9da0e7707cff978972a3929171ac15a19e3"
-		},
-		{
-			"ImportPath": "github.com/inconshreveable/mousetrap",
-			"Rev": "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75"
-		},
-		{
 			"ImportPath": "github.com/jackc/pgx",
 			"Comment": "v2.8.1-2-g04e9fbc",
 			"Rev": "04e9fbcc55fe2865bdef4d96f18042f214ada36f"
