@@ -155,7 +155,7 @@ func runDaemon(args *docopt.Args) {
 		}
 	}
 
-	publishAddr := externalIP + ":1113"
+	publishAddr := net.JoinHostPort(externalIP, "1113")
 	if discoveryToken != "" {
 		// TODO: retry
 		discoveryID, err := discovery.RegisterInstance(discovery.Info{
