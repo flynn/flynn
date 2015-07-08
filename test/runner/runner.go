@@ -59,19 +59,23 @@ const (
 )
 
 type Build struct {
-	Id                string        `json:"id"`
+	ID                string        `json:"id"`
 	CreatedAt         *time.Time    `json:"created_at"`
 	Commit            string        `json:"commit"`
 	Merge             bool          `json:"merge"`
 	State             string        `json:"state"`
 	Description       string        `json:"description"`
-	LogUrl            string        `json:"log_url"`
+	LogURL            string        `json:"log_url"`
 	LogFile           string        `json:"log_file"`
 	Duration          time.Duration `json:"duration"`
 	DurationFormatted string        `json:"duration_formatted"`
 	Reason            string        `json:"reason"`
 	IssueLink         string        `json:"issue_link"`
 	Version           BuildVersion  `json:"version"`
+}
+
+func (b *Build) URL() string {
+	return "https://ci.flynn.io/builds/" + b.ID
 }
 
 func (b *Build) Finished() bool {
@@ -81,7 +85,7 @@ func (b *Build) Finished() bool {
 func newBuild(commit, description string, merge bool) *Build {
 	now := time.Now()
 	return &Build{
-		Id:          now.Format("20060102150405") + "-" + random.String(8),
+		ID:          now.Format("20060102150405") + "-" + random.String(8),
 		CreatedAt:   &now,
 		Commit:      commit,
 		Description: description,
@@ -313,8 +317,7 @@ func (r *Runner) build(b *Build) (err error) {
 		return err
 	}
 
-	buildURL := "https://ci.flynn.io/builds/" + b.Id
-	r.updateStatus(b, "pending", buildURL)
+	r.updateStatus(b, "pending")
 
 	<-r.buildCh
 	defer func() {
@@ -335,18 +338,18 @@ func (r *Runner) build(b *Build) (err error) {
 		}
 		c.Shutdown()
 		buildLog.Close()
-		url := r.uploadToS3(logFile, b, buildLog.Boundary())
+		b.LogURL = r.uploadToS3(logFile, b, buildLog.Boundary())
 		logFile.Close()
 		os.RemoveAll(b.LogFile)
 		b.LogFile = ""
 		if err == nil {
-			log.Printf("build %s passed!\n", b.Id)
-			r.updateStatus(b, "success", url)
-			r.ircMsgs <- fmt.Sprintf("PASS: %s %s", b.Description, buildURL)
+			log.Printf("build %s passed!\n", b.ID)
+			r.updateStatus(b, "success")
+			r.ircMsgs <- fmt.Sprintf("PASS: %s %s", b.Description, b.URL())
 		} else {
-			log.Printf("build %s failed: %s\n", b.Id, err)
-			r.updateStatus(b, "failure", url)
-			r.ircMsgs <- fmt.Sprintf("FAIL: %s %s", b.Description, buildURL)
+			log.Printf("build %s failed: %s\n", b.ID, err)
+			r.updateStatus(b, "failure")
+			r.ircMsgs <- fmt.Sprintf("FAIL: %s %s", b.Description, b.URL())
 		}
 	}()
 
@@ -395,7 +398,7 @@ var s3attempts = attempt.Strategy{
 }
 
 func (r *Runner) uploadToS3(file *os.File, b *Build, boundary string) string {
-	name := fmt.Sprintf("%s-build-%s-%s.txt", b.Id, b.Commit, time.Now().Format("2006-01-02-15-04-05"))
+	name := fmt.Sprintf("%s-build-%s-%s.txt", b.ID, b.Commit, time.Now().Format("2006-01-02-15-04-05"))
 	url := fmt.Sprintf("https://s3.amazonaws.com/%s/%s", logBucket, name)
 
 	if _, err := file.Seek(0, os.SEEK_SET); err != nil {
@@ -508,7 +511,7 @@ type logLine struct {
 }
 
 func serveBuildLogStream(b *Build, w http.ResponseWriter) error {
-	res, err := http.Get(b.LogUrl)
+	res, err := http.Get(b.LogURL)
 	if err != nil {
 		return err
 	}
@@ -560,7 +563,7 @@ func (r *Runner) getBuildLog(w http.ResponseWriter, req *http.Request, ps httpro
 	}
 	if b.Finished() {
 		if b.Version == BuildVersion1 {
-			http.Redirect(w, req, b.LogUrl, http.StatusMovedPermanently)
+			http.Redirect(w, req, b.LogURL, http.StatusMovedPermanently)
 			return
 		}
 		if strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
@@ -661,7 +664,7 @@ func needsBuild(event Event) bool {
 
 type Status struct {
 	State       string `json:"state"`
-	TargetUrl   string `json:"target_url,omitempty"`
+	TargetURL   string `json:"target_url,omitempty"`
 	Description string `json:"description,omitempty"`
 	Context     string `json:"context,omitempty"`
 }
@@ -672,12 +675,11 @@ var descriptions = map[string]string{
 	"failure": "The Flynn CI build failed",
 }
 
-func (r *Runner) updateStatus(b *Build, state, targetUrl string) {
+func (r *Runner) updateStatus(b *Build, state string) {
 	go func() {
 		log.Printf("updateStatus: %s %s\n", state, b.Commit)
 
 		b.State = state
-		b.LogUrl = targetUrl
 		if err := r.save(b); err != nil {
 			log.Printf("updateStatus: could not save build: %s", err)
 		}
@@ -685,7 +687,7 @@ func (r *Runner) updateStatus(b *Build, state, targetUrl string) {
 		url := fmt.Sprintf("https://api.github.com/repos/flynn/flynn/statuses/%s", b.Commit)
 		status := Status{
 			State:       state,
-			TargetUrl:   targetUrl,
+			TargetURL:   b.URL(),
 			Description: descriptions[state],
 			Context:     "continuous-integration/flynn",
 		}
@@ -763,7 +765,7 @@ func (r *Runner) save(b *Build) error {
 		if err != nil {
 			return err
 		}
-		return tx.Bucket(dbBucket).Put([]byte(b.Id), val)
+		return tx.Bucket(dbBucket).Put([]byte(b.ID), val)
 	})
 }
 
