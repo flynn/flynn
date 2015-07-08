@@ -9,8 +9,10 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,6 +37,7 @@ import (
 	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/iptables"
+	"github.com/flynn/flynn/pkg/mounts"
 	"github.com/flynn/flynn/pkg/random"
 )
 
@@ -42,9 +45,10 @@ const (
 	libvirtNetName = "flynn"
 	bridgeName     = "flynnbr0"
 	imageRoot      = "/var/lib/docker"
+	flynnRoot      = "/var/lib/flynn"
 )
 
-func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, logPath, initPath string, mux *logmux.LogMux) (Backend, error) {
+func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, logPath, initPath, umountPath string, mux *logmux.LogMux) (Backend, error) {
 	libvirtc, err := libvirt.NewVirConnection("lxc:///")
 	if err != nil {
 		return nil, err
@@ -58,6 +62,7 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, logPath, in
 	return &LibvirtLXCBackend{
 		LogPath:             logPath,
 		InitPath:            initPath,
+		UmountPath:          umountPath,
 		libvirt:             libvirtc,
 		state:               state,
 		vman:                vman,
@@ -74,13 +79,14 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, logPath, in
 }
 
 type LibvirtLXCBackend struct {
-	LogPath   string
-	InitPath  string
-	libvirt   libvirt.VirConnection
-	state     *State
-	vman      *volumemanager.Manager
-	pinkerton *pinkerton.Context
-	ipalloc   *ipallocator.IPAllocator
+	LogPath    string
+	InitPath   string
+	UmountPath string
+	libvirt    libvirt.VirConnection
+	state      *State
+	vman       *volumemanager.Manager
+	pinkerton  *pinkerton.Context
+	ipalloc    *ipallocator.IPAllocator
 
 	ifaceMTU   int
 	bridgeAddr net.IP
@@ -103,6 +109,7 @@ type LibvirtLXCBackend struct {
 
 type libvirtContainer struct {
 	RootPath string
+	domain   *lt.Domain
 	IP       net.IP
 	job      *host.Job
 	l        *LibvirtLXCBackend
@@ -589,8 +596,8 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		g.Log(grohl.Data{"at": "get_domain_xml", "status": "error", "err": err})
 		return err
 	}
-	domain = &lt.Domain{}
-	if err := xml.Unmarshal([]byte(domainXML), domain); err != nil {
+	container.domain = &lt.Domain{}
+	if err := xml.Unmarshal([]byte(domainXML), container.domain); err != nil {
 		g.Log(grohl.Data{"at": "unmarshal_domain_xml", "status": "error", "err": err})
 		return err
 	}
@@ -610,6 +617,32 @@ func (l *LibvirtLXCBackend) openLog(id string) *logbuf.Log {
 	}
 	// TODO: do reference counting and remove logs that are not in use from memory
 	return l.logs[id]
+}
+
+func (c *libvirtContainer) cleanupMounts(pid int) error {
+	list, err := mounts.ParseFile(fmt.Sprintf("/proc/%d/mounts", pid))
+	if err != nil {
+		return err
+	}
+	sort.Sort(mounts.ByDepth(list))
+
+	args := make([]string, 1, len(list)+1)
+	args[0] = strconv.Itoa(pid)
+	for _, m := range list {
+		if strings.HasPrefix(m.Mountpoint, imageRoot) || strings.HasPrefix(m.Mountpoint, flynnRoot) {
+			args = append(args, m.Mountpoint)
+		}
+	}
+
+	out, err := exec.Command(c.l.UmountPath, args...).CombinedOutput()
+	if err != nil {
+		desc := err.Error()
+		if len(out) > 0 {
+			desc = string(out)
+		}
+		return fmt.Errorf("host: error running nsumount %d: %s", pid, desc)
+	}
+	return nil
 }
 
 func (c *libvirtContainer) watch(ready chan<- error) error {
@@ -664,6 +697,17 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 		return err
 	}
 	defer c.Client.Close()
+
+	go func() {
+		// Workaround for mounts leaking into the libvirt_lxc supervisor process,
+		// see https://github.com/flynn/flynn/issues/1125 for details. Remove
+		// nsumount from the tree when deleting.
+		g.Log(grohl.Data{"at": "cleanup_mounts", "status": "start"})
+		if err := c.cleanupMounts(c.domain.ID); err != nil {
+			g.Log(grohl.Data{"at": "cleanup_mounts", "status": "error", "err": err})
+		}
+		g.Log(grohl.Data{"at": "cleanup_mounts", "status": "finish"})
+	}()
 
 	c.l.containersMtx.Lock()
 	c.l.containers[c.job.ID] = c

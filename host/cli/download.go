@@ -75,7 +75,7 @@ func runDownload(args *docopt.Args) error {
 	if err := os.MkdirAll(args.String["--bin-dir"], 0755); err != nil {
 		return fmt.Errorf("error creating bin dir: %s", err)
 	}
-	for _, path := range []string{"/flynn-linux-amd64", "/flynn-init"} {
+	for _, path := range []string{"/flynn-linux-amd64", "/flynn-init", "/flynn-nsumount"} {
 		dst, err := downloadGzippedFile(client, path, args.String["--bin-dir"])
 		if err != nil {
 			return err
