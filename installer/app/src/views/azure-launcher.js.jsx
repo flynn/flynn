@@ -52,7 +52,7 @@ var InstallConfig = React.createClass({
 		return (
 			<form id={this.state.styleEl.id} onSubmit={this.__handleSubmit}>
 				<label>
-					<span>Subscriptoin:</span>
+					<span>Subscription:</span>
 					<PrettySelect value={clusterState.azureSubscriptionID} onChange={this.__handleSubscriptionChange}>
 						{subscriptions.map(function (subscription) {
 							return (
