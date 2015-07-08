@@ -452,21 +452,8 @@
 			"Rev": "6b1ef893dc11e0447abda6da20a5203481878dda"
 		},
 		{
-			"ImportPath": "github.com/inconshreveable/axiom",
-			"Rev": "3af8a9cc55c04561ff0cea699e20e82319142fc5"
-		},
-		{
 			"ImportPath": "github.com/inconshreveable/go-update",
 			"Rev": "68f5725818189545231c1fd8694793d45f2fc529"
-		},
-		{
-			"ImportPath": "github.com/inconshreveable/gonative",
-			"Comment": "0.2.0-12-g2013c28",
-			"Rev": "2013c28499ba031ea01f64e3daa556f35f694bb0"
-		},
-		{
-			"ImportPath": "github.com/inconshreveable/mousetrap",
-			"Rev": "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75"
 		},
 		{
 			"ImportPath": "github.com/jteeuwen/go-bindata",

@@ -22,14 +22,7 @@ test-unit:
 test-integration:
 	script/run-integration-tests
 
-toolchain: util/_toolchain/go/bin/go
-
-util/_toolchain/go/bin/go: util/_toolchain/bin/gonative
-	cd util/_toolchain && rm -rf go && bin/gonative build -version=1.4.3 && ls | grep -v "^\(bin\|go\)$$" | xargs --no-run-if-empty rm -r
-
-
-util/_toolchain/bin/gonative: Godeps/_workspace/src/github.com/inconshreveable/gonative/*.go
-	go build -o util/_toolchain/bin/gonative github.com/flynn/flynn/Godeps/_workspace/src/github.com/inconshreveable/gonative
-
+toolchain:
+	@cd util/_toolchain && ./build.sh
 
 .PHONY: all clean dev release test test-unit test-integration
