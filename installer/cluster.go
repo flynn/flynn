@@ -296,7 +296,7 @@ func (c *BaseCluster) bootstrap() error {
 		return err
 	}
 	sess.Stderr = os.Stderr
-	if err := sess.Start(fmt.Sprintf("CLUSTER_DOMAIN=%s flynn-host bootstrap --json", c.Domain.Name)); err != nil {
+	if err := sess.Start(fmt.Sprintf("CLUSTER_DOMAIN=%s flynn-host bootstrap --min-hosts=%d --discovery=%s --json", c.Domain.Name, c.NumInstances, c.DiscoveryToken)); err != nil {
 		c.uploadDebugInfo(sshConfig, ipAddress)
 		return err
 	}
