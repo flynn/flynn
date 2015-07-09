@@ -96,16 +96,16 @@ func (ts *TestSuite) TestInitialClusterSync(c *C) {
 func (ts *TestSuite) TestFormationChange(c *C) {
 	app := &ct.App{ID: random.UUID(), Name: "test-formation-change"}
 	s := createTestScheduler(app.ID, map[string]int{"web": 1})
-	release, err := s.GetRelease(testReleaseID)
-	c.Assert(err, IsNil)
-	artifact, err := s.GetArtifact(release.ArtifactID)
-	c.Assert(err, IsNil)
-
 	events := make(chan Event, 1)
 	stream := s.Subscribe(events)
 	defer stream.Close()
 	go s.Run()
 	defer s.Stop()
+
+	release, err := s.GetRelease(testReleaseID)
+	c.Assert(err, IsNil)
+	artifact, err := s.GetArtifact(release.ArtifactID)
+	c.Assert(err, IsNil)
 
 	s.formationChange <- &ct.ExpandedFormation{
 		App:       app,
