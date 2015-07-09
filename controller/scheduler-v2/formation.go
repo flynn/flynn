@@ -51,3 +51,138 @@ func (f *Formation) Update(procs map[string]int) map[string]int {
 	f.Processes = procs
 	return diff
 }
+
+type formationJobs map[utils.FormationKey]map[string][]*Job
+
+func NewFormationJobs(jobs map[string]*Job) formationJobs {
+	fj := make(formationJobs)
+	for _, job := range jobs {
+		fj.AddJob(job)
+	}
+	return fj
+}
+
+func (fc formationJobs) AddJob(j *Job) {
+	key := j.Formation.key()
+	_, ok := fc[key]
+	if !ok {
+		fc[key] = make(map[string][]*Job)
+	}
+	fc[key][j.Type] = append(fc[key][j.Type], j)
+}
+
+type pendingJobs map[utils.FormationKey]map[string]map[string]int
+
+func CopyPendingJobs(pending pendingJobs) pendingJobs {
+	copied := make(pendingJobs)
+	for key, form := range pending {
+		copied[key] = make(map[string]map[string]int)
+		for typ, hosts := range form {
+			copied[key][typ] = make(map[string]int)
+			for hostID, numJobs := range hosts {
+				copied[key][typ][hostID] = numJobs
+			}
+		}
+	}
+	return copied
+}
+
+func MergePendingJobs(pending1, pending2 pendingJobs) pendingJobs {
+	copied := CopyPendingJobs(pending1)
+
+	for key, form := range pending2 {
+		if _, ok := copied[key]; !ok {
+			copied[key] = make(map[string]map[string]int)
+		}
+		for typ, hosts := range form {
+			if _, ok := copied[key][typ]; !ok {
+				copied[key][typ] = make(map[string]int)
+			}
+			for hostID, numJobs := range hosts {
+				copied[key][typ][hostID] += numJobs
+			}
+		}
+	}
+	return copied
+}
+
+func NewPendingJobs(jobs map[string]*Job, pending pendingJobs) pendingJobs {
+	fjc := CopyPendingJobs(pending)
+
+	for _, job := range jobs {
+		fjc.AddJob(job)
+	}
+	return fjc
+}
+
+func (fc pendingJobs) AddJob(j *Job) {
+	key := j.Formation.key()
+	if _, ok := fc[key]; !ok {
+		fc[key] = make(map[string]map[string]int)
+	}
+	if _, ok := fc[key][j.Type]; !ok {
+		fc[key][j.Type] = make(map[string]int)
+	}
+	fc[key][j.Type][j.HostID] += 1
+}
+
+func (fc pendingJobs) RemoveJob(j *Job) {
+	key := j.Formation.key()
+	if _, ok := fc[key]; !ok {
+		fc[key] = make(map[string]map[string]int)
+	}
+	if _, ok := fc[key][j.Type]; !ok {
+		fc[key][j.Type] = make(map[string]int)
+	}
+	fc[key][j.Type][j.HostID] -= 1
+}
+
+func (fc pendingJobs) GetProcesses(key utils.FormationKey) map[string]int {
+	procs := make(map[string]int)
+	for typ, hosts := range fc[key] {
+		for _, numJobs := range hosts {
+			procs[typ] += numJobs
+		}
+	}
+	return procs
+}
+
+func (fc pendingJobs) GetHostJobCounts(key utils.FormationKey, typ string) map[string]int {
+	counts := make(map[string]int)
+	hosts, ok := fc[key][typ]
+	if !ok {
+		return counts
+	}
+	for h, count := range hosts {
+		counts[h] += count
+	}
+	return counts
+}
+
+func (fc pendingJobs) hasPendingJobs(j *Job) bool {
+	if j == nil || j.Formation == nil {
+		return false
+	}
+	key := j.Formation.key()
+	if _, ok := fc[key]; !ok {
+		return false
+	}
+	if _, ok := fc[key][j.Type]; !ok {
+		return false
+	}
+	return true
+}
+
+func (fc pendingJobs) HasStarts(j *Job) bool {
+	if fc.hasPendingJobs(j) {
+		return fc[j.Formation.key()][j.Type][j.HostID] > 0
+	}
+	return false
+}
+
+func (fc pendingJobs) HasStops(j *Job) bool {
+	if fc.hasPendingJobs(j) {
+		return fc[j.Formation.key()][j.Type][j.HostID] < 0
+	}
+	return false
+}

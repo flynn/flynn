@@ -15,6 +15,7 @@ import (
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -22,6 +23,7 @@ import (
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 /* SSE Logger */
@@ -141,6 +143,41 @@ func (c clusterClientWrapper) Hosts() ([]utils.HostClient, error) {
 	return res, nil
 }
 
+func (c clusterClientWrapper) StreamHostEvents(ch chan *discoverd.Event) (stream.Stream, error) {
+	hostChan := make(chan *discoverd.Event)
+	stream, err := c.Client.StreamHostEvents(hostChan)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		for {
+			h, ok := <-hostChan
+			if !ok {
+				close(ch)
+				return
+			}
+			ch <- h
+		}
+	}()
+	return &clusterStream{
+		ch:           ch,
+		parentStream: stream,
+	}, nil
+}
+
+type clusterStream struct {
+	ch           chan *discoverd.Event
+	parentStream stream.Stream
+}
+
+func (cs *clusterStream) Close() error {
+	return cs.parentStream.Close()
+}
+
+func (cs *clusterStream) Err() error {
+	return cs.parentStream.Err()
+}
+
 func (c *controllerAPI) connectHost(ctx context.Context) (utils.HostClient, string, error) {
 	params, _ := ctxhelper.ParamsFromContext(ctx)
 	jobID := params.ByName("jobs_id")
@@ -205,6 +242,9 @@ func (c *controllerAPI) KillJob(ctx context.Context, w http.ResponseWriter, req 
 	}
 
 	if err = client.StopJob(jobID); err != nil {
+		if _, ok := err.(ct.NotFoundError); ok {
+			err = ErrNotFound
+		}
 		respondWithError(w, err)
 		return
 	}
