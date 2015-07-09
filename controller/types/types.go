@@ -180,6 +180,14 @@ func (v ValidationError) Error() string {
 	return fmt.Sprintf("validation error: %s %s", v.Field, v.Message)
 }
 
+type NotFoundError struct {
+	Resource string `json:"field"`
+}
+
+func (n NotFoundError) Error() string {
+	return fmt.Sprintf("resource not found: %s", n.Resource)
+}
+
 type LogOpts struct {
 	Follow      bool
 	JobID       string
