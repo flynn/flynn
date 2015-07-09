@@ -211,12 +211,14 @@ func (s *Scheduler) FormationChange(ef *ct.ExpandedFormation) (err error) {
 	}()
 
 	f := s.formations.Get(ef.App.ID, ef.Release.ID)
+	var diff map[string]int
 	if f == nil {
 		log.Info("creating new formation")
 		f = s.formations.Add(NewFormation(ef))
+		diff = f.Processes
+	} else {
+		diff = f.Update(ef.Processes)
 	}
-	// TODO: Update won't work for new formations!
-	diff := f.Update(ef.Processes)
 	for typ, n := range diff {
 		if n > 0 {
 			for i := 0; i < n; i++ {
