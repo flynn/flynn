@@ -44,7 +44,7 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Sched
 		listeners:        make(map[chan Event]struct{}),
 		stop:             make(chan struct{}),
 		formations:       make(Formations),
-		formationChange:  make(chan *ct.ExpandedFormation, 1),
+		formationChange:  make(chan *ct.ExpandedFormation, eventBufferSize),
 		jobRequests:      make(chan *JobRequest, eventBufferSize),
 		validJobStatuses: map[host.JobStatus]bool{
 			host.StatusStarting: true,
@@ -101,6 +101,8 @@ func (s *Scheduler) Sync() (err error) {
 		s.sendEvent(NewEvent(EventTypeClusterSync, err, nil))
 	}()
 
+	s.SyncFormations()
+
 	log.Info("getting host list")
 	hosts, err := s.Hosts()
 	if err != nil {
@@ -109,6 +111,11 @@ func (s *Scheduler) Sync() (err error) {
 	}
 	log.Info(fmt.Sprintf("got %d hosts", len(hosts)))
 
+	unSyncedJobs := make(map[string]*Job)
+	for k, v := range s.jobs {
+		unSyncedJobs[k] = v
+	}
+	fc := NewFormationCounts(s.formations)
 	for _, h := range hosts {
 		log = log.New("host.id", h.ID())
 		log.Info("getting jobs list")
@@ -133,8 +140,10 @@ func (s *Scheduler) Sync() (err error) {
 					log.Info("skipping due to lack of appID or releaseID")
 					continue
 				}
-				if _, ok := s.jobs[job.ID]; ok {
+				if j, ok := s.jobs[job.ID]; ok {
 					log.Info("skipping known job")
+					delete(unSyncedJobs, job.ID)
+					fc.AddJob(j)
 					continue
 				}
 
@@ -145,12 +154,69 @@ func (s *Scheduler) Sync() (err error) {
 					continue
 				}
 				log.Info("adding job")
-				s.AddJob(NewJob(f, jobType, h.ID(), job.ID), appName, utils.JobMetaFromMetadata(job.Metadata))
+				j := NewJob(f, jobType, h.ID(), job.ID)
+				s.AddJob(j, appName, utils.JobMetaFromMetadata(job.Metadata))
+				fc.AddJob(j)
 			}
 		}
 	}
-	// TODO rectify formations
-	return
+	for jobID := range unSyncedJobs {
+		delete(s.jobs, jobID)
+	}
+	return s.rectifyFormations(fc)
+}
+
+func (s *Scheduler) SyncFormations() (err error) {
+	log := s.log.New("fn", "SyncFormations")
+
+	log.Info("getting formations")
+
+	if len(s.formations) == 0 {
+		log.Info("getting apps")
+		apps, err := s.AppList()
+		if err != nil {
+			return err
+		}
+		for _, app := range apps {
+			fs, err := s.FormationList(app.ID)
+			if err != nil {
+				return err
+			}
+			for _, f := range fs {
+				form, err := s.getFormation(app.ID, app.Name, f.ReleaseID)
+				if err != nil {
+					return err
+				}
+				s.formations[form.key()] = form
+			}
+		}
+	}
+	return err
+}
+
+func (s *Scheduler) rectifyFormations(fc formationCounts) (err error) {
+	for fKey, formation := range s.formations {
+		for typ, count := range formation.Processes {
+			diff := count - fc[fKey][typ]
+
+			if diff > 0 {
+				for i := 0; i < diff; i++ {
+					s.jobRequests <- NewJobRequest(formation, JobRequestTypeUp, typ, "", "")
+				}
+			} else if diff < 0 {
+				for i := 0; i < -diff; i++ {
+					s.jobRequests <- NewJobRequest(formation, JobRequestTypeDown, typ, "", "")
+				}
+			}
+			delete(fc[fKey], typ)
+		}
+		if len(fc[fKey]) == 0 {
+			delete(fc, fKey)
+		} else {
+			err = fmt.Errorf("Unknown job type in formation %v", fc[fKey])
+		}
+	}
+	return err
 }
 
 func (s *Scheduler) getFormation(appID, appName, releaseID string) (*Formation, error) {
@@ -229,7 +295,6 @@ func (s *Scheduler) FormationChange(ef *ct.ExpandedFormation) (err error) {
 				s.jobRequests <- NewJobRequest(f, JobRequestTypeDown, typ, "", "")
 			}
 		}
-
 	}
 	return nil
 }
@@ -299,6 +364,7 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 		}
 		s.sendEvent(NewEvent(EventTypeJobStop, err, nil))
 	}()
+	//FIXME: HostID and JobID are most likely empty right now
 	host, err := s.Host(req.HostID)
 	if err != nil {
 		return err
