@@ -706,6 +706,10 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 		if err := c.cleanupMounts(c.domain.ID); err != nil {
 			g.Log(grohl.Data{"at": "cleanup_mounts", "status": "error", "err": err})
 		}
+
+		// The bind mounts are copied when we spin up the container, we don't
+		// need them in the root mount namespace any more.
+		c.unbindMounts()
 		g.Log(grohl.Data{"at": "cleanup_mounts", "status": "finish"})
 	}()
 
@@ -793,8 +797,8 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 	return nil
 }
 
-func (c *libvirtContainer) cleanup() error {
-	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "cleanup", "job.id": c.job.ID})
+func (c *libvirtContainer) unbindMounts() {
+	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "unbind_mounts", "job.id": c.job.ID})
 	g.Log(grohl.Data{"at": "start"})
 
 	if err := syscall.Unmount(filepath.Join(c.RootPath, ".containerinit"), 0); err != nil {
@@ -802,9 +806,6 @@ func (c *libvirtContainer) cleanup() error {
 	}
 	if err := syscall.Unmount(filepath.Join(c.RootPath, "etc/resolv.conf"), 0); err != nil {
 		g.Log(grohl.Data{"at": "unmount", "file": "resolv.conf", "status": "error", "err": err})
-	}
-	if err := c.l.pinkerton.Cleanup(c.job.ID); err != nil {
-		g.Log(grohl.Data{"at": "pinkerton", "status": "error", "err": err})
 	}
 	for _, m := range c.job.Config.Mounts {
 		if err := syscall.Unmount(filepath.Join(c.RootPath, m.Location), 0); err != nil {
@@ -815,6 +816,18 @@ func (c *libvirtContainer) cleanup() error {
 		if err := syscall.Unmount(filepath.Join(c.RootPath, v.Target), 0); err != nil {
 			g.Log(grohl.Data{"at": "unmount", "target": v.Target, "volumeID": v.VolumeID, "status": "error", "err": err})
 		}
+	}
+
+	g.Log(grohl.Data{"at": "finish"})
+}
+
+func (c *libvirtContainer) cleanup() error {
+	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "cleanup", "job.id": c.job.ID})
+	g.Log(grohl.Data{"at": "start"})
+
+	c.unbindMounts()
+	if err := c.l.pinkerton.Cleanup(c.job.ID); err != nil {
+		g.Log(grohl.Data{"at": "pinkerton", "status": "error", "err": err})
 	}
 	if !c.job.Config.HostNetwork && c.l.bridgeNet != nil {
 		c.l.ipalloc.ReleaseIP(c.l.bridgeNet, c.IP)
