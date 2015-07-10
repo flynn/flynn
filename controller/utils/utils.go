@@ -110,5 +110,7 @@ type ControllerClient interface {
 	GetRelease(releaseID string) (*ct.Release, error)
 	GetArtifact(artifactID string) (*ct.Artifact, error)
 	GetFormation(appID, releaseID string) (*ct.Formation, error)
+	AppList() ([]*ct.App, error)
+	FormationList(appID string) ([]*ct.Formation, error)
 	PutJob(*ct.Job) error
 }
