@@ -8,7 +8,7 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	. "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/host/types"
+	//"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/random"
 )
 
@@ -19,31 +19,15 @@ type TestSuite struct{}
 var _ = Suite(&TestSuite{})
 
 const (
-	testHostID    = "host-1"
-	testReleaseID = "release-1"
+	testHostID     = "host-1"
+	testArtifactId = "artifact-1"
+	testReleaseID  = "release-1"
 )
 
 func createTestScheduler(appID string, processes map[string]int) *Scheduler {
-	artifact := &ct.Artifact{ID: "artifact-1"}
+	artifact := &ct.Artifact{ID: testArtifactId}
 	release := NewRelease(testReleaseID, artifact, processes)
 	h := NewFakeHostClient(testHostID)
-	for typ, count := range processes {
-		for i := 0; i < count; i++ {
-			jobID := random.UUID()
-			h.AddJob(&host.Job{
-				ID: jobID,
-				Metadata: map[string]string{
-					"flynn-controller.app":     appID,
-					"flynn-controller.release": release.ID,
-					"flynn-controller.type":    typ,
-				},
-				Artifact: host.Artifact{
-					Type: artifact.Type,
-					URI:  artifact.URI,
-				},
-			})
-		}
-	}
 	cluster := NewFakeCluster()
 	cluster.SetHosts(map[string]*FakeHostClient{h.ID(): h})
 	cc := NewFakeControllerClient(appID, release, artifact, processes)
@@ -58,13 +42,13 @@ func waitForEvent(events chan Event, typ EventType) (Event, error) {
 			if !ok {
 				return nil, fmt.Errorf("unexpected close of scheduler event stream")
 			}
-			if err := event.Err(); err != nil {
-				return nil, fmt.Errorf("unexpected event error: %s", err)
-			}
 			if event.Type() == typ {
+				if err := event.Err(); err != nil {
+					return nil, fmt.Errorf("unexpected event error: %s", err)
+				}
 				return event, nil
 			}
-		case <-time.After(time.Second):
+		case <-time.After(2 * time.Second):
 			return nil, fmt.Errorf("timed out waiting for %s event", typ)
 		}
 	}
@@ -73,17 +57,28 @@ func waitForEvent(events chan Event, typ EventType) (Event, error) {
 func (ts *TestSuite) TestInitialClusterSync(c *C) {
 	s := createTestScheduler("testApp", map[string]int{"web": 1})
 
-	events := make(chan Event)
+	events := make(chan Event, eventBufferSize)
 	stream := s.Subscribe(events)
+	defer s.Stop()
 	defer stream.Close()
 	go s.Run()
-	defer s.Stop()
 
 	// wait for a cluster sync event
 	_, err := waitForEvent(events, EventTypeClusterSync)
 	c.Assert(err, IsNil)
 
-	// check the scheduler has the job
+	// Ensure that the scheduler initializes the formation correctly and starts its jobs
+	e, err := waitForEvent(events, EventTypeJobStart)
+	c.Assert(err, IsNil)
+	event, ok := e.(*JobStartEvent)
+	c.Assert(ok, Equals, true)
+	c.Assert(event.Job, NotNil)
+	job := event.Job
+	c.Assert(job.Type, Equals, "web")
+	c.Assert(job.AppID, Equals, "testApp")
+	c.Assert(job.ReleaseID, Equals, testReleaseID)
+
+	// Query the scheduler for the same job
 	jobs := s.Jobs()
 	c.Assert(jobs, HasLen, 1)
 	for _, job := range jobs {
@@ -95,12 +90,12 @@ func (ts *TestSuite) TestInitialClusterSync(c *C) {
 
 func (ts *TestSuite) TestFormationChange(c *C) {
 	app := &ct.App{ID: random.UUID(), Name: "test-formation-change"}
-	s := createTestScheduler(app.ID, map[string]int{"web": 1})
-	events := make(chan Event, 1)
+	s := createTestScheduler(app.ID, map[string]int{"web": 0})
+	events := make(chan Event, eventBufferSize)
 	stream := s.Subscribe(events)
+	defer s.Stop()
 	defer stream.Close()
 	go s.Run()
-	defer s.Stop()
 
 	release, err := s.GetRelease(testReleaseID)
 	c.Assert(err, IsNil)
