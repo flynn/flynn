@@ -87,6 +87,7 @@ export HOME="${app_dir}"
 usermod --home $HOME nobody
 export REQUEST_ID="flynn-build"
 export STACK=cedar-14
+export CF_STACK=cflinuxfs2
 
 # Fix for https://github.com/flynn/flynn/issues/85
 export CURL_CONNECT_TIMEOUT=30
