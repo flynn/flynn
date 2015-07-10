@@ -68,7 +68,7 @@ echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/no-languages
 # update packages
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install --install-recommends linux-generic-lts-utopic \
+apt-get install --install-recommends linux-generic-lts-vivid \
   -y \
   -o Dpkg::Options::="--force-confdef" \
   -o Dpkg::Options::="--force-confold"
