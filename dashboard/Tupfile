@@ -1,7 +1,7 @@
 include_rules
 : $(ROOT)/util/cedarish/<docker> |> ^ docker build dashboard-builder^ cat $(ROOT)/log/docker-cedarish.log > /dev/null && $(ROOT)/util/assetbuilder/build.sh image dashboard | tee %o |> $(ROOT)/log/docker-dashboard-builder.log <docker>
-: |> go build -o $(ROOT)/dashboard/bin/go-bindata $(ROOT)/Godeps/_workspace/src/github.com/jteeuwen/go-bindata/go-bindata |> $(ROOT)/dashboard/bin/go-bindata
-: |> go build -o $(ROOT)/dashboard/app/compiler $(ROOT)/dashboard/app |> $(ROOT)/dashboard/app/compiler
+: |> $(GO) build -o $(ROOT)/dashboard/bin/go-bindata $(ROOT)/Godeps/_workspace/src/github.com/jteeuwen/go-bindata/go-bindata |> $(ROOT)/dashboard/bin/go-bindata
+: |> $(GO) build -o $(ROOT)/dashboard/app/compiler $(ROOT)/dashboard/app |> $(ROOT)/dashboard/app/compiler
 : foreach $(ROOT)/installer/app/src/images/*.png |> !cp |> ./app/lib/installer/images/%g.png
 : foreach $(ROOT)/installer/app/src/views/*.js.jsx |> !cp |> ./app/lib/installer/views/%g.js.jsx
 : foreach $(ROOT)/installer/app/src/views/css/*.js |> !cp |> ./app/lib/installer/views/css/%g.js
