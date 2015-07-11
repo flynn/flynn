@@ -21,8 +21,9 @@ const eventBufferSize = 1000
 // EventSubscriber receives app events from the EventListener loop and maintains
 // it's own loop to forward those events to the Events channel.
 type EventSubscriber struct {
-	Events chan *ct.AppEvent
-	Err    error
+	Events  chan *ct.AppEvent
+	Err     error
+	errOnce sync.Once
 
 	l          *EventListener
 	queue      chan *ct.AppEvent
@@ -46,7 +47,8 @@ func (e *EventSubscriber) Notify(event *ct.AppEvent) {
 	select {
 	case e.queue <- event:
 	default:
-		e.CloseWithError(ErrEventBufferOverflow)
+		// Run in a goroutine to avoid deadlock with Notify
+		go e.CloseWithError(ErrEventBufferOverflow)
 	}
 }
 
@@ -71,7 +73,7 @@ func (e *EventSubscriber) Close() {
 
 // CloseWithError sets the Err field and then closes the subscriber.
 func (e *EventSubscriber) CloseWithError(err error) {
-	e.Err = err
+	e.errOnce.Do(func() { e.Err = err })
 	e.Close()
 }
 
@@ -170,11 +172,10 @@ func (e *EventListener) Listen() error {
 // Notify notifies all sbscribers of the given event.
 func (e *EventListener) Notify(event *ct.AppEvent) {
 	e.subMtx.RLock()
-	subscribers := e.subscribers
-	e.subMtx.RUnlock()
-	if subs, ok := subscribers[event.AppID]; ok {
+	defer e.subMtx.RUnlock()
+	if subs, ok := e.subscribers[event.AppID]; ok {
 		for sub := range subs {
-			sub.Notify(event)
+			go sub.Notify(event)
 		}
 	}
 }
@@ -198,11 +199,11 @@ func (e *EventListener) IsClosed() bool {
 func (e *EventListener) CloseWithError(err error) {
 	e.SetClosed()
 	e.subMtx.RLock()
+	defer e.subMtx.RUnlock()
 	subscribers := e.subscribers
-	e.subMtx.RUnlock()
 	for _, subs := range subscribers {
 		for sub := range subs {
-			sub.CloseWithError(err)
+			go sub.CloseWithError(err)
 		}
 	}
 }
