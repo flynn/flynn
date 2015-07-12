@@ -40,6 +40,7 @@ options:
   --volpath=PATH         directory to create volumes in [default: /var/lib/flynn/volumes]
   --backend=BACKEND      runner backend [default: libvirt-lxc]
   --flynn-init=PATH      path to flynn-init binary [default: /usr/local/bin/flynn-init]
+  --nsumount=PATH        path to flynn-nsumount binary [default: /usr/local/bin/flynn-nsumount]
   --log-dir=DIR          directory to store job logs [default: /var/log/flynn]
   --discovery=TOKEN      join cluster with discovery token
   --peer-ips=IPLIST      join existing cluster using IPs
@@ -131,6 +132,7 @@ func runDaemon(args *docopt.Args) {
 	volPath := args.String["--volpath"]
 	backendName := args.String["--backend"]
 	flynnInit := args.String["--flynn-init"]
+	nsumount := args.String["--nsumount"]
 	logDir := args.String["--log-dir"]
 	discoveryToken := args.String["--discovery"]
 	peerIPs := strings.Split(args.String["--peer-ips"], ",")
@@ -206,7 +208,7 @@ func runDaemon(args *docopt.Args) {
 
 	switch backendName {
 	case "libvirt-lxc":
-		backend, err = NewLibvirtLXCBackend(state, vman, logDir, flynnInit, mux)
+		backend, err = NewLibvirtLXCBackend(state, vman, logDir, flynnInit, nsumount, mux)
 	default:
 		log.Fatalf("unknown backend %q", backendName)
 	}

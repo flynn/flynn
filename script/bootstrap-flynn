@@ -97,6 +97,7 @@ boot_libvirt_lxc() {
     --backend libvirt-lxc \
     --state /tmp/flynn-host-state.bolt \
     --flynn-init "${host_dir}/bin/flynn-init" \
+    --nsumount "${host_dir}/bin/flynn-nsumount" \
     &>"${log}"
 
   info "bootstrapping Flynn"
