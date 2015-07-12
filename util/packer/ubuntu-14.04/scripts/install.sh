@@ -35,6 +35,7 @@ main() {
   install_packages
   install_flynn
   disable_docker_auto_restart
+  install_go
   apt_cleanup
 
   if vagrant_build; then
@@ -204,6 +205,13 @@ install_flynn() {
 
 disable_docker_auto_restart() {
   sed -i 's/^#DOCKER_OPTS=.*/DOCKER_OPTS="-r=false"/' /etc/default/docker
+}
+
+install_go() {
+  cd /tmp
+  wget j.mp/godeb
+  tar xvzf godeb
+  ./godeb install 1.4.2
 }
 
 apt_cleanup() {
