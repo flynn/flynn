@@ -4,13 +4,11 @@ tup.export("GIT_BRANCH")
 tup.export("GIT_TAG")
 tup.export("GIT_DIRTY")
 
-goenv = "GOROOT=`readlink -f ../util/_toolchain/go`"
-
 tup.rule({"../util/rubyassetbuilder/*", "../util/cedarish/<docker>"},
           "^ docker build installer-builder^ cat ../log/docker-cedarish.log > /dev/null && ../util/rubyassetbuilder/build.sh image installer | tee %o",
           {"../log/docker-installer-builder.log", "<docker>"})
 
-tup.rule(goenv.." ../util/_toolchain/go/bin/go build -o ../installer/bin/go-bindata ../Godeps/_workspace/src/github.com/jteeuwen/go-bindata/go-bindata",
+tup.rule("go build -o ../installer/bin/go-bindata ../Godeps/_workspace/src/github.com/jteeuwen/go-bindata/go-bindata",
           {"../installer/bin/go-bindata"})
 
 tup.rule({"../installer/bin/go-bindata", "../log/docker-installer-builder.log"},
@@ -25,7 +23,7 @@ vpkg = "github.com/flynn/flynn/pkg/version"
 for i, os in ipairs({"darwin", "linux", "windows"}) do
   for j, arch in ipairs({"amd64", "386"}) do
     tup.rule({"../installer/bindata.go", "tuf.go"},
-             "^c go build %o^ "..goenv.." GOOS="..os.." GOARCH="..arch.." CGO_ENABLED=0  ../util/_toolchain/go/bin/go build -installsuffix nocgo -o %o -ldflags=\"-X "..vpkg..".commit=$GIT_COMMIT -X "..vpkg..".branch=$GIT_BRANCH -X "..vpkg..".tag=$GIT_TAG -X "..vpkg..".dirty=$GIT_DIRTY\"",
+             "^c go build %o^ GOOS="..os.." GOARCH="..arch.." CGO_ENABLED=0 ../util/_toolchain/go/bin/go build -installsuffix nocgo -o %o -ldflags=\"-X "..vpkg..".commit $GIT_COMMIT -X "..vpkg..".branch $GIT_BRANCH -X "..vpkg..".tag $GIT_TAG -X "..vpkg..".dirty $GIT_DIRTY\"",
              {string.format("bin/flynn-%s-%s", os, arch)})
   end
 end

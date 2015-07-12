@@ -6,4 +6,4 @@ bin
 /log
 script/custom-vagrant
 demo/*.log
-util/_toolchain/go
+util/_toolchain/**
