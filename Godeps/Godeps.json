@@ -467,10 +467,10 @@
 			"Rev": "6b1ef893dc11e0447abda6da20a5203481878dda"
 		},
 		{
+		{
 			"ImportPath": "github.com/inconshreveable/go-update",
 			"Rev": "68f5725818189545231c1fd8694793d45f2fc529"
 		},
-		{
 			"ImportPath": "github.com/jteeuwen/go-bindata",
 			"Comment": "v3.0.7-19-g040617c",
 			"Rev": "040617c5ef993d2d4a6630636bde1aa913e954b9"
