@@ -366,8 +366,8 @@ func (s *State) GetLeader(service string) *discoverd.Instance {
 }
 
 func (s *State) SetLeader(service, id string) {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
 	s.services[service].SetLeader(id)
 	s.broadcastLeader(service)
 }
