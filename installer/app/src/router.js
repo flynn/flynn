@@ -161,7 +161,7 @@ var MainRouter = Router.createClass({
 				window.localStorage.setItem("azureEndpoint", event.endpoint);
 				window.localStorage.setItem("azureClientID", event.clientID);
 				window.localStorage.setItem("azureCredName", event.credName);
-				var authorizeURL = event.endpoint.substring(0, event.endpoint.length - 21) + 'authorize';
+				var authorizeURL = event.endpoint.replace(/\/token.*$/, '') + '/authorize';
 					authorizeURL += QueryParams.serializeParams([{
 					client_id: event.clientID,
 					response_type: 'code',
