@@ -97,7 +97,6 @@ func (d *DiscoverdManager) ConnectPeer(ips []string) error {
 			// TODO: log error
 			continue
 		}
-		break
 		d.mtx.Lock()
 		if d.local != nil {
 			hb.Close()
@@ -105,6 +104,7 @@ func (d *DiscoverdManager) ConnectPeer(ips []string) error {
 			d.peer = hb
 		}
 		d.mtx.Unlock()
+		break
 	}
 	return err
 }
