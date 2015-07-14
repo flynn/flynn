@@ -135,7 +135,11 @@ func runDaemon(args *docopt.Args) {
 	nsumount := args.String["--nsumount"]
 	logDir := args.String["--log-dir"]
 	discoveryToken := args.String["--discovery"]
-	peerIPs := strings.Split(args.String["--peer-ips"], ",")
+
+	var peerIPs []string
+	if args.String["--peer-ips"] != "" {
+		peerIPs = strings.Split(args.String["--peer-ips"], ",")
+	}
 
 	grohl.AddContext("app", "host")
 	grohl.Log(grohl.Data{"at": "start"})
