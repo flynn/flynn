@@ -113,11 +113,12 @@ func (d *discoverdServiceCache) Addrs() []string {
 // This method is only used by the test suite
 func (d *discoverdServiceCache) watch(current bool) chan *discoverd.Event {
 	d.Lock()
-	d.watchCh = make(chan *discoverd.Event)
+	watchCh := make(chan *discoverd.Event)
+	d.watchCh = watchCh
 	go func() {
 		if current {
 			for addr := range d.addrs {
-				d.watchCh <- &discoverd.Event{
+				watchCh <- &discoverd.Event{
 					Kind:     discoverd.EventKindUp,
 					Instance: &discoverd.Instance{Addr: addr},
 				}
@@ -125,7 +126,7 @@ func (d *discoverdServiceCache) watch(current bool) chan *discoverd.Event {
 		}
 		d.Unlock()
 	}()
-	return d.watchCh
+	return watchCh
 }
 
 func (d *discoverdServiceCache) unwatch(ch chan *discoverd.Event) {
