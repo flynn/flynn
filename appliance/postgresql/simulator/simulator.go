@@ -291,8 +291,6 @@ func (s *Simulator) RmPeer(args []string) {
 			s.discoverd.SetClusterState(cs)
 		}
 	}
-
-	s.jsonDump(s.discoverd.Peers())
 }
 
 func (s *Simulator) Bootstrap(args []string) {
