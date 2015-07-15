@@ -25,13 +25,8 @@ func NewRequestLogger(handler http.Handler) http.Handler {
 		if len(clientIPs) > 0 {
 			clientIP = strings.TrimSpace(clientIPs[len(clientIPs)-1])
 		}
-		var err error
 		if clientIP == "" {
-			clientIP, _, err = net.SplitHostPort(req.RemoteAddr)
-			if err != nil {
-				Error(w, err)
-				return
-			}
+			clientIP, _, _ = net.SplitHostPort(req.RemoteAddr)
 		}
 
 		logger.Info("request started", "method", req.Method, "path", req.URL.Path, "client_ip", clientIP)
