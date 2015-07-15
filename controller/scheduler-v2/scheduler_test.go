@@ -8,7 +8,6 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	. "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
-	//"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/random"
 )
 
@@ -19,18 +18,27 @@ type TestSuite struct{}
 var _ = Suite(&TestSuite{})
 
 const (
+	testAppID      = "app-1"
 	testHostID     = "host-1"
 	testArtifactId = "artifact-1"
 	testReleaseID  = "release-1"
+	testJobType    = "web"
+	testJobCount   = 1
 )
 
-func createTestScheduler(appID string, processes map[string]int) *Scheduler {
+func createTestScheduler() *Scheduler {
+	app := &ct.App{ID: testAppID, Name: testAppID}
 	artifact := &ct.Artifact{ID: testArtifactId}
+	processes := map[string]int{testJobType: testJobCount}
 	release := NewRelease(testReleaseID, artifact, processes)
 	h := NewFakeHostClient(testHostID)
 	cluster := NewFakeCluster()
 	cluster.SetHosts(map[string]*FakeHostClient{h.ID(): h})
-	cc := NewFakeControllerClient(appID, release, artifact, processes)
+	cc := NewFakeControllerClient()
+	cc.CreateApp(app)
+	cc.CreateArtifact(artifact)
+	cc.CreateRelease(release)
+	cc.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
 
 	return NewScheduler(cluster, cc)
 }
@@ -55,7 +63,7 @@ func waitForEvent(events chan Event, typ EventType) (Event, error) {
 }
 
 func (ts *TestSuite) TestInitialClusterSync(c *C) {
-	s := createTestScheduler("testApp", map[string]int{"web": 1})
+	s := createTestScheduler()
 
 	events := make(chan Event, eventBufferSize)
 	stream := s.Subscribe(events)
@@ -74,34 +82,36 @@ func (ts *TestSuite) TestInitialClusterSync(c *C) {
 	c.Assert(ok, Equals, true)
 	c.Assert(event.Job, NotNil)
 	job := event.Job
-	c.Assert(job.Type, Equals, "web")
-	c.Assert(job.AppID, Equals, "testApp")
+	c.Assert(job.Type, Equals, testJobType)
+	c.Assert(job.AppID, Equals, testAppID)
 	c.Assert(job.ReleaseID, Equals, testReleaseID)
 
 	// Query the scheduler for the same job
 	jobs := s.Jobs()
 	c.Assert(jobs, HasLen, 1)
 	for _, job := range jobs {
-		c.Assert(job.Type, Equals, "web")
+		c.Assert(job.Type, Equals, testJobType)
 		c.Assert(job.HostID, Equals, testHostID)
-		c.Assert(job.AppID, Equals, "testApp")
+		c.Assert(job.AppID, Equals, testAppID)
 	}
 }
 
 func (ts *TestSuite) TestFormationChange(c *C) {
-	app := &ct.App{ID: random.UUID(), Name: "test-formation-change"}
-	s := createTestScheduler(app.ID, map[string]int{"web": 0})
+	s := createTestScheduler()
 	events := make(chan Event, eventBufferSize)
 	stream := s.Subscribe(events)
 	defer s.Stop()
 	defer stream.Close()
 	go s.Run()
 
+	app, err := s.GetApp(testAppID)
+	c.Assert(err, IsNil)
 	release, err := s.GetRelease(testReleaseID)
 	c.Assert(err, IsNil)
 	artifact, err := s.GetArtifact(release.ArtifactID)
 	c.Assert(err, IsNil)
 
+	// Test scaling an existing formation
 	s.formationChange <- &ct.ExpandedFormation{
 		App:       app,
 		Release:   release,
@@ -113,11 +123,38 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	c.Assert(err, IsNil)
 	e, err := waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
+	job := checkJobStartEvent(c, e)
+	c.Assert(job.Type, Equals, testJobType)
+	c.Assert(job.AppID, Equals, app.ID)
+	c.Assert(job.ReleaseID, Equals, testReleaseID)
+
+	// Test creating a new formation
+	artifact = &ct.Artifact{ID: random.UUID()}
+	processes := map[string]int{testJobType: testJobCount}
+	release = NewRelease(random.UUID(), artifact, processes)
+	s.CreateArtifact(artifact)
+	s.CreateRelease(release)
+	c.Assert(len(s.formations), Equals, 1)
+	s.formationChange <- &ct.ExpandedFormation{
+		App:       app,
+		Release:   release,
+		Artifact:  artifact,
+		Processes: processes,
+	}
+	_, err = waitForEvent(events, EventTypeFormationChange)
+	c.Assert(err, IsNil)
+	c.Assert(len(s.formations), Equals, 2)
+	e, err = waitForEvent(events, EventTypeJobStart)
+	c.Assert(err, IsNil)
+	job = checkJobStartEvent(c, e)
+	c.Assert(job.Type, Equals, testJobType)
+	c.Assert(job.AppID, Equals, app.ID)
+	c.Assert(job.ReleaseID, Equals, release.ID)
+}
+
+func checkJobStartEvent(c *C, e Event) *Job {
 	event, ok := e.(*JobStartEvent)
 	c.Assert(ok, Equals, true)
 	c.Assert(event.Job, NotNil)
-	job := event.Job
-	c.Assert(job.Type, Equals, "web")
-	c.Assert(job.AppID, Equals, app.ID)
-	c.Assert(job.ReleaseID, Equals, testReleaseID)
+	return event.Job
 }

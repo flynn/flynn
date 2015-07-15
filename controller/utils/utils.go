@@ -112,9 +112,14 @@ type ClusterClient interface {
 }
 
 type ControllerClient interface {
+	GetApp(appID string) (*ct.App, error)
 	GetRelease(releaseID string) (*ct.Release, error)
 	GetArtifact(artifactID string) (*ct.Artifact, error)
 	GetFormation(appID, releaseID string) (*ct.Formation, error)
+	CreateApp(app *ct.App) error
+	CreateRelease(release *ct.Release) error
+	CreateArtifact(artifact *ct.Artifact) error
+	PutFormation(formation *ct.Formation) error
 	AppList() ([]*ct.App, error)
 	FormationList(appID string) ([]*ct.Formation, error)
 	PutJob(*ct.Job) error
