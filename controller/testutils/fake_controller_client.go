@@ -10,25 +10,16 @@ type FakeControllerClient struct {
 	artifacts  map[string]*ct.Artifact
 	formations map[string]map[string]*ct.Formation
 	jobs       map[string]*ct.Job
-	apps       []*ct.App
+	apps       map[string]*ct.App
 }
 
-func NewFakeControllerClient(appID string, release *ct.Release, artifact *ct.Artifact, processes map[string]int) *FakeControllerClient {
+func NewFakeControllerClient() *FakeControllerClient {
 	return &FakeControllerClient{
-		releases:  map[string]*ct.Release{release.ID: release},
-		artifacts: map[string]*ct.Artifact{artifact.ID: artifact},
-		formations: map[string]map[string]*ct.Formation{
-			appID: {
-				release.ID: {AppID: appID, ReleaseID: release.ID, Processes: processes},
-			},
-		},
-		apps: []*ct.App{
-			{
-				ID:   appID,
-				Name: appID,
-			},
-		},
-		jobs: make(map[string]*ct.Job),
+		releases:   make(map[string]*ct.Release),
+		artifacts:  make(map[string]*ct.Artifact),
+		formations: make(map[string]map[string]*ct.Formation),
+		apps:       make(map[string]*ct.App),
+		jobs:       make(map[string]*ct.Job),
 	}
 }
 
@@ -55,8 +46,45 @@ func (c *FakeControllerClient) GetFormation(appID, releaseID string) (*ct.Format
 	return nil, controller.ErrNotFound
 }
 
+func (c *FakeControllerClient) GetApp(appID string) (*ct.App, error) {
+	if app, ok := c.apps[appID]; ok {
+		return app, nil
+	}
+	return nil, controller.ErrNotFound
+}
+
+func (c *FakeControllerClient) CreateApp(app *ct.App) error {
+	c.apps[app.ID] = app
+	return nil
+}
+
+func (c *FakeControllerClient) CreateRelease(release *ct.Release) error {
+	c.releases[release.ID] = release
+	return nil
+}
+
+func (c *FakeControllerClient) CreateArtifact(artifact *ct.Artifact) error {
+	c.artifacts[artifact.ID] = artifact
+	return nil
+}
+
+func (c *FakeControllerClient) PutFormation(formation *ct.Formation) error {
+	releases, ok := c.formations[formation.AppID]
+	if !ok {
+		releases = make(map[string]*ct.Formation)
+		c.formations[formation.AppID] = releases
+	}
+	releases[formation.ReleaseID] = formation
+
+	return nil
+}
+
 func (c *FakeControllerClient) AppList() ([]*ct.App, error) {
-	return c.apps, nil
+	apps := make([]*ct.App, 0, len(c.apps))
+	for _, app := range c.apps {
+		apps = append(apps, app)
+	}
+	return apps, nil
 }
 
 func (c *FakeControllerClient) FormationList(appID string) ([]*ct.Formation, error) {
