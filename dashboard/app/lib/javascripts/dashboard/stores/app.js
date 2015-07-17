@@ -26,53 +26,6 @@ function createTaffyJob (client, taffyReleaseId, appID, appName, meta, appData) 
 	});
 }
 
-var objectDiff = function (oldEnv, newEnv) {
-	var diff = [];
-	for (var k in newEnv) {
-		if ( !newEnv.hasOwnProperty(k) ) {
-			continue;
-		}
-		if (oldEnv.hasOwnProperty(k)) {
-			if (oldEnv[k] !== newEnv[k]) {
-				diff.push({op: "replace", key: k, value: newEnv[k]});
-			}
-		} else {
-			diff.push({op: "add", key: k, value: newEnv[k]});
-		}
-	}
-	for (k in oldEnv) {
-		if ( !oldEnv.hasOwnProperty(k) ) {
-			continue;
-		}
-		if ( !newEnv.hasOwnProperty(k) ) {
-			diff.push({op: "remove", key: k});
-		}
-	}
-	return diff;
-};
-
-var applyObjectDiff = function (diff, env) {
-	var newEnv = extend({}, env);
-	diff.forEach(function (item) {
-		switch (item.op) {
-			case "replace":
-				newEnv[item.key] = item.value;
-			break;
-
-			case "add":
-				newEnv[item.key] = item.value;
-			break;
-
-			case "remove":
-				if (newEnv.hasOwnProperty(item.key)) {
-					delete newEnv[item.key];
-				}
-			break;
-		}
-	});
-	return newEnv;
-};
-
 var App = Store.createClass({
 	displayName: "Stores.App",
 
@@ -99,30 +52,74 @@ var App = Store.createClass({
 
 	didBecomeActive: function () {
 		this.__fetchApp();
-		this.__fetchAppRelease().then(this.__fetchAppFormation.bind(this)).catch(function (args) {
-			// ignore 404 errors
-			if (args && args[1] && args[1].status === 404) {
-				return;
-			}
-			return Promise.reject(args);
+		Dispatcher.dispatch({
+			name: 'GET_APP_RELEASE',
+			appID: this.props.appId,
 		});
+	},
+
+	didBecomeInactive: function () {
+		this.constructor.discardInstance(this);
 	},
 
 	handleEvent: function (event) {
 		switch (event.name) {
-			case "APP_ENV:CREATE_RELEASE":
-				var changedRelease = this.state.release;
-				this.__withoutChangeEvents(function () {
-					return this.__fetchAppRelease();
-				}.bind(this)).then(function () {
-					var release = extend({}, this.state.release, event.release);
-					var envDiff = objectDiff(changedRelease.env, event.release.env);
-					release.env = applyObjectDiff(envDiff, this.state.release.env);
-					delete release.id;
-					return this.__createRelease(release).then(function () {
-						return this.__fetchAppRelease().then(this.__fetchAppFormation.bind(this));
-					}.bind(this));
-				}.bind(this));
+			case 'APP':
+				if (event.app === this.props.appId) {
+					this.setState({
+						app: event.data
+					});
+				}
+			break;
+
+			case 'APP_RELEASE':
+				if (event.app === this.props.appId) {
+					this.setState({
+						formation: this.state.formation === null ? null : extend({}, this.state.formation, {
+							release: event.data.id
+						}),
+						app: extend({}, this.state.app, {
+							release_id: event.data.id
+						}),
+						release: event.data
+					});
+					if ((this.state.formation || {}).release !== event.data.id) {
+						Dispatcher.dispatch({
+							name: 'GET_APP_FORMATION',
+							appID: this.props.appId,
+							releaseID: event.data.id
+						});
+					}
+				}
+			break;
+
+			case 'APP_FORMATION':
+				if (event.app === this.props.appId && event.data.release === this.state.release.id) {
+					this.setState({
+						formation: event.data
+					});
+				}
+			break;
+
+			case 'SCALE':
+				var releaseID = event.object_id.split(':')[1];
+				if (event.app === this.props.appId && event.data !== null) {
+					this.setState({
+						formation: extend({}, this.state.formation, {
+							release: releaseID,
+							processes: event.data || {}
+						})
+					});
+				}
+			break;
+
+			case 'DEPLOYMENT':
+				if ((this.release || {}).id === event.data.release && event.data.status === 'failed') {
+					Dispatcher.dispatch({
+						name: 'GET_APP_RELEASE',
+						appID: this.props.appId,
+					});
+				}
 			break;
 
 			case "APP_PROCESSES:CREATE_FORMATION":
@@ -131,10 +128,6 @@ var App = Store.createClass({
 
 			case "APP_DELETE:DELETE_APP":
 				this.__deleteApp();
-			break;
-
-			case "APP_DEPLOY_COMMIT:DEPLOY_COMMIT":
-				this.__deployCommit(event.ownerLogin, event.repoName, event.branchName, event.sha);
 			break;
 		}
 	},
@@ -153,16 +146,6 @@ var App = Store.createClass({
 		} else {
 			return this.__fetchApp();
 		}
-	},
-
-	__getAppRelease: function () {
-		return this.__releaseLock.then(function () {
-			if (this.state.release) {
-				return Promise.resolve(this.state.release);
-			} else {
-				return this.__fetchAppRelease();
-			}
-		}.bind(this));
 	},
 
 	__fetchApp: function () {
@@ -191,115 +174,6 @@ var App = Store.createClass({
 		}.bind(this));
 	},
 
-	__fetchAppRelease: function () {
-		var releaseLockResolve;
-		this.__releaseLock = new Promise(function (resolve) {
-			releaseLockResolve = function (isError, args) {
-				resolve();
-				if (isError) {
-					return Promise.reject(args);
-				} else {
-					return Promise.resolve(args);
-				}
-			}.bind(this);
-		}.bind(this));
-
-		return App.getClient.call(this).getAppRelease(this.props.appId).then(function (args) {
-			var res = args[0];
-			this.setState({
-				release: res
-			});
-			return res;
-		}.bind(this)).then(releaseLockResolve.bind(null, false), releaseLockResolve.bind(null, true));
-	},
-
-	__fetchAppFormation: function () {
-		var formationLockResolve;
-		this.__formationLock = new Promise(function (resolve) {
-			formationLockResolve = function (isError, args) {
-				resolve();
-				if (isError) {
-					return Promise.reject(args);
-				} else {
-					return Promise.resolve(args);
-				}
-			}.bind(this);
-		}.bind(this));
-
-		function buildProcesses (release) {
-			var processes = {};
-			Object.keys(release.processes).sort().forEach(function (k) {
-				processes[k] = 0;
-			});
-			return processes;
-		}
-
-		return App.getClient.call(this).getAppFormation(this.props.appId, this.state.release.id).then(function (args) {
-			var res = args[0];
-			if ( !res.processes ) {
-				res.processes = buildProcesses(this.state.release);
-			}
-			this.setState({
-				formation: res
-			});
-			return res;
-		}.bind(this), function (args) {
-			if (args instanceof Error) {
-				return Promise.reject(args);
-			}
-			var xhr = args[1];
-			var release = this.state.release;
-			var formation = {
-				app: this.props.appId,
-				release: release.id,
-				processes: {}
-			};
-			if (xhr.status === 404) {
-				formation.processes = buildProcesses(release);
-				this.setState({
-					formation: formation
-				});
-				return formation;
-			} else {
-				return Promise.reject(args);
-			}
-		}.bind(this)).then(formationLockResolve.bind(null, false), formationLockResolve.bind(null, true));
-	},
-
-	__createRelease: function (release) {
-		var client = App.getClient.call(this);
-		var __appId = this.id.appId;
-		return this.__releaseLock.then(function () {
-			return client.createRelease(release).then(function (args) {
-				var res = args[0];
-				var releaseId = res.id;
-				return client.deployAppRelease(this.props.appId, releaseId);
-			}.bind(this)).then(function () {
-				Dispatcher.handleStoreEvent({
-					name: "APP:RELEASE_CREATED",
-					appId: __appId
-				});
-			}.bind(this)).catch(function (args) {
-				var res, xhr, errorMsg;
-				if (args.length === 2) {
-					res = args[0];
-					xhr = args[1];
-					errorMsg = res.message || "Something went wrong ["+ xhr.status +"]";
-				} else {
-					errorMsg = "Someting went wrong";
-					if (typeof window.console.error === "function") {
-						window.console.error(args[0]);
-					}
-				}
-				Dispatcher.handleStoreEvent({
-					name: "APP:RELEASE_CREATE_FAILED",
-					appId: __appId,
-					errorMsg: errorMsg
-				});
-			}.bind(this));
-		}.bind(this));
-	},
-
 	__createAppFormation: function (formation) {
 		return this.__formationLock.then(function () {
 			return App.getClient.call(this).createAppFormation(formation.app, formation).then(function (args) {
@@ -320,80 +194,6 @@ var App = Store.createClass({
 			});
 			return args;
 		});
-	},
-
-	__deployCommit: function (ownerLogin, repoName, branchName, sha) {
-		var client = App.getClient.call(this);
-		var appId = this.props.appId;
-		var __appId = this.id.appId;
-		var app, meta, release, artifactId;
-
-		function createRelease () {
-			return client.createRelease(extend({}, release, {
-				id: null,
-				artifact: artifactId
-			})).then(function (args) {
-				var res = args[0];
-				return createAppRelease(res.id);
-			});
-		}
-
-		function createAppRelease (releaseId) {
-			return client.createAppRelease(appId, {
-				id: releaseId
-			}).then(function () {
-				return getTaffyRelease();
-			});
-		}
-
-		function getTaffyRelease () {
-			return client.getTaffyRelease().then(function (args) {
-				var res = args[0];
-				return createTaffyJob(client, res.id, __appId, app.name, meta);
-			});
-		}
-
-		return Promise.all([this.__getApp(), this.__getAppRelease(), this.__formationLock]).then(function (__args) {
-			app = __args[0];
-			release = __args[1];
-			meta = extend({}, app.meta, {
-				ref: branchName,
-				sha: sha
-			});
-
-			return createRelease().then(function () {
-				var data = {
-					name: app.name,
-					meta: meta
-				};
-				return client.updateApp(appId, data);
-			});
-		}).catch(function (args) {
-			if (args instanceof Error) {
-				Dispatcher.handleStoreEvent({
-					name: "APP:DEPLOY_FAILED",
-					appId: __appId,
-					errorMsg: "Something went wrong"
-				});
-			} else {
-				var res = args[0];
-				var xhr = args[1];
-				Dispatcher.handleStoreEvent({
-					name: "APP:DEPLOY_FAILED",
-					appId: __appId,
-					errorMsg: res.message || "Something went wrong ["+ xhr.status +"]"
-				});
-			}
-			return Promise.reject(args);
-		}).then(function () {
-			Dispatcher.handleStoreEvent({
-				name: "APP:DEPLOY_SUCCESS",
-				appId: __appId
-			});
-			this.setState({
-				app: extend({}, app, { meta: meta })
-			});
-		}.bind(this));
 	}
 });
 

@@ -117,9 +117,8 @@ var JobOutput = Store.createClass({
 		JobsStream.removeChangeListener({ appId: this.props.appId }, this.__handleJobsStreamChange);
 	},
 
-	// We don't care about change events,
-	// but have a listener setup to regulate when
-	// the jobs stream is open
+	// We don't care about change events, but have a listener setup to ensure the
+	// jobs stream is open (i.e. so we can get the JOB_STATE_CHANGE event from it)
 	__handleJobsStreamChange: function () {}
 
 });

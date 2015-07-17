@@ -24,12 +24,12 @@ var Apps = Store.createClass({
 
 	handleEvent: function (event) {
 		switch (event.name) {
-			case "APP:CREATED":
-				this.__handleAppCreated(event.app);
+			case 'APP':
+				this.__addOrReplaceApp(event.data);
 			break;
 
-			case "APP:DELETED":
-				this.__handleAppDeleted(event.appId);
+			case 'APP_DELETED':
+				this.__handleAppDeleted(event.app);
 			break;
 		}
 	},
@@ -41,6 +41,26 @@ var Apps = Store.createClass({
 				apps: res,
 			});
 		}.bind(this));
+	},
+
+	__addOrReplaceApp: function (app) {
+		var apps = [];
+		var appFound = false;
+		this.state.apps.forEach(function (a) {
+			if (a.id === app.id) {
+				appFound = true;
+				apps.push(app);
+			} else {
+				apps.push(a);
+			}
+		});
+		if ( !appFound ) {
+			this.__handleAppCreated(app);
+		} else {
+			this.setState({
+				apps: apps
+			});
+		}
 	},
 
 	__handleAppCreated: function (app) {

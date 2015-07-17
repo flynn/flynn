@@ -117,4 +117,12 @@ Config.setGithubToken = function (token) {
 	});
 };
 
+Config.setClient = function (client) {
+	Config.client = client;
+};
+
+Config.setGithubClient = function (client) {
+	Config.githubClient = client;
+};
+
 export default Config;

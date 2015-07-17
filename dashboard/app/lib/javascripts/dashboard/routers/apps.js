@@ -2,6 +2,7 @@ import Router from 'marbles/router';
 import { extend, assertEqual } from 'marbles/utils';
 import { pathWithParams } from 'marbles/history';
 import QueryParams from 'marbles/query_params';
+import State from 'marbles/state';
 import Dispatcher from '../dispatcher';
 import Config from '../config';
 import GithubPullsStore from '../stores/github-pulls';
@@ -18,17 +19,21 @@ import AppLogsComponent from '../views/app-logs';
 var AppsRouter = Router.createClass({
 	routes: [
 		{ path: "apps", handler: "apps" },
-		{ path: "apps/:id", handler: "app", paramChangeScrollReset: false },
-		{ path: "apps/:id/env", handler: "appEnv", secondary: true },
-		{ path: "apps/:id/logs", handler: "appLogs", secondary: true },
-		{ path: "apps/:id/delete", handler: "appDelete", secondary: true },
-		{ path: "apps/:id/routes/new", handler: "newAppRoute", secondary: true },
-		{ path: "apps/:id/routes/:type/:route/delete", handler: "appRouteDelete", secondary: true },
-		{ path: "apps/:id/deploy/:owner/:repo/:branch/:sha", handler: "appDeployCommit", secondary: true }
+		{ path: "apps/:id", handler: "app", paramChangeScrollReset: false, app: true },
+		{ path: "apps/:id/env", handler: "appEnv", secondary: true, app: true },
+		{ path: "apps/:id/logs", handler: "appLogs", secondary: true, app: true },
+		{ path: "apps/:id/delete", handler: "appDelete", secondary: true, app: true },
+		{ path: "apps/:id/routes/new", handler: "newAppRoute", secondary: true, app: true },
+		{ path: "apps/:id/routes/:type/:route/delete", handler: "appRouteDelete", secondary: true, app: true },
+		{ path: "apps/:id/deploy/:owner/:repo/:branch/:sha", handler: "appDeployCommit", secondary: true, app: true }
 	],
+
+	mixins: [State],
 
 	willInitialize: function () {
 		this.dispatcherIndex = Dispatcher.register(this.handleEvent.bind(this));
+		this.state = {};
+		this.__changeListeners = []; // always empty
 	},
 
 	beforeHandlerUnlaod: function (event) {
@@ -190,11 +195,16 @@ var AppsRouter = Router.createClass({
 	},
 
 	newAppRoute: function (params) {
+		this.setState({
+			creatingRoute: true
+		});
+
 		params = params[0];
 
 		this.context.secondaryView = React.render(React.createElement(
 			NewAppRouteComponent,
 			{
+				key: Date.now(),
 				appId: params.id,
 				onHide: function () {
 					this.history.navigate(this.__getAppPath(params.id, params));
@@ -208,11 +218,16 @@ var AppsRouter = Router.createClass({
 	},
 
 	appRouteDelete: function (params) {
+		this.setState({
+			deletingRoute: true
+		});
+
 		params = params[0];
 
 		this.context.secondaryView = React.render(React.createElement(
 			AppRouteDeleteComponent,
 			{
+				key: params.id + params.route,
 				appId: params.id,
 				routeId: params.route,
 				routeType: params.type,
@@ -230,6 +245,10 @@ var AppsRouter = Router.createClass({
 	},
 
 	appDeployCommit: function (params) {
+		this.setState({
+			deployCommitView: true
+		});
+
 		params = params[0];
 
 		this.context.secondaryView = React.render(React.createElement(
@@ -254,28 +273,52 @@ var AppsRouter = Router.createClass({
 
 	handleEvent: function (event) {
 		switch (event.name) {
-			case "APP:RELEASE_CREATED":
-				this.__handleReleaseCreated(event);
+			case 'handler:before':
+				// reset state between routes
+				this.state = {};
+				if (event.handler.opts.app === true) {
+					this.state.appID = event.params[0].id;
+				}
 			break;
 
-			case "APP:DELETED":
-				this.__handleAppDeleted(event);
+			case 'APP_DELETED':
+				if (this.state.appID === event.app) {
+					this.history.navigate("");
+				}
 			break;
 
-			case "APP_ROUTES:CREATED":
-				this.__handleAppRouteCreated(event);
+			case 'CREATE_APP_ROUTE':
+				if (this.state.creatingRoute === true) {
+					this.setState({
+						routeDomain: event.data.domain
+					});
+				}
 			break;
 
-			case "APP_ROUTES:CREATE_FAILED":
-				this.__handleAppRouteCreateFailure(event);
+			case 'ROUTE':
+				if (this.state.creatingRoute === true && event.data.domain === this.state.routeDomain) {
+					this.__navigateToApp(event.app);
+				}
 			break;
 
-			case "APP_ROUTES:DELETED":
-				this.__handleAppRouteDeleted(event);
+			case 'DELETE_APP_ROUTE':
+				if (this.state.deletingRoute === true) {
+					this.setState({
+						routeID: event.routeID
+					});
+				}
 			break;
 
-			case "APP_ROUTES:DELETE_FAILED":
-				this.__handleAppRouteDeleteFailure(event);
+			case 'DELETE_APP_ROUTE_FAILED':
+				if (this.state.deletingRoute === true && event.routeID === this.state.routeID && event.status === 404) {
+					this.__navigateToApp(event.appID, {route: null, domain: null});
+				}
+			break;
+
+			case 'ROUTE_DELETED':
+				if (this.state.deletingRoute === true && event.data.id === this.state.routeID) {
+					this.__navigateToApp(event.app, {route: null, domain: null});
+				}
 			break;
 
 			case "GITHUB_BRANCH_SELECTOR:BRANCH_SELECTED":
@@ -290,67 +333,9 @@ var AppsRouter = Router.createClass({
 				this.__handleConfirmDeployCommit(event);
 			break;
 
-			case "APP:JOB_CREATED":
-				this.__handleJobCreated(event);
-			break;
-
-			case "APP:DEPLOY_FAILED":
-				this.__handleDeployFailure(event);
-			break;
-
 			case "GITHUB_PULL:MERGED":
 				this.__handleGithubPullMerged(event);
 			break;
-		}
-	},
-
-	__handleReleaseCreated: function (event) {
-		// exit app env view when successfully saved
-		var view = this.context.secondaryView;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.AppEnv" && assertEqual(view.props.appId, event.appId) && view.state.isSaving) {
-			this.__navigateToApp(event);
-		}
-	},
-
-	__handleAppDeleted: function (event) {
-		// exit app delete view when successfully deleted
-		var view = this.context.secondaryView;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.AppDelete" && assertEqual(view.props.appId, event.appId) && view.state.isDeleting) {
-			this.history.navigate("");
-		}
-	},
-
-	__handleAppRouteCreated: function (event) {
-		// exit app rotue delete view when successfully deleted
-		var view = this.context.secondaryView;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.NewAppRoute" && assertEqual(view.props.appId, event.appId) && view.state.isCreating) {
-			this.__navigateToApp(event);
-		}
-	},
-
-	__handleAppRouteCreateFailure: function (event) {
-		var view = this.context.secondaryView;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.AppRouteDelete" && assertEqual(view.props.appId, event.appId) && view.state.isDeleting) {
-			view.setProps({
-				errorMsg: event.errorMsg
-			});
-		}
-	},
-
-	__handleAppRouteDeleted: function (event) {
-		// exit app rotue delete view when successfully deleted
-		var view = this.context.secondaryView;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.AppRouteDelete" && assertEqual(view.props.appId, event.appId) && view.props.routeId === event.routeId && view.state.isDeleting) {
-			this.__navigateToApp(event, {route: null, domain: null});
-		}
-	},
-
-	__handleAppRouteDeleteFailure: function (event) {
-		var view = this.context.secondaryView;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.AppRouteDelete" && assertEqual(view.props.appId, event.appId) && view.props.routeId === event.routeId && view.state.isDeleting) {
-			view.setProps({
-				errorMsg: event.errorMsg
-			});
 		}
 	},
 
@@ -393,33 +378,14 @@ var AppsRouter = Router.createClass({
 	},
 
 	__handleConfirmDeployCommit: function (event) {
-		var view = this.context.primaryView;
-		var appId = event.storeId ? event.storeId.appId : null;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.Apps" && view.props.appProps.appId === appId) {
-			this.history.navigate(this.__getAppPath(appId, {
+		var appID = event.storeId ? event.storeId.appId : null;
+		if (this.state.appID === appID) {
+			this.history.navigate(this.__getAppPath(appID, {
 				owner: event.ownerLogin,
 				repo: event.repoName,
 				branch: event.branchName,
 				sha: event.sha
 			}, "/deploy/:owner/:repo/:branch/:sha"));
-		}
-	},
-
-	__handleJobCreated: function (event) {
-		var view = this.context.secondaryView;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.AppDeployCommit" && assertEqual(view.props.appId, event.appId)) {
-			view.setProps({
-				job: event.job
-			});
-		}
-	},
-
-	__handleDeployFailure: function (event) {
-		var view = this.context.secondaryView;
-		if (view && view.isMounted() && view.constructor.displayName === "Views.AppDeployCommit" && assertEqual(view.props.appId, event.appId)) {
-			view.setProps({
-				errorMsg: event.errorMsg
-			});
 		}
 	},
 
@@ -447,8 +413,8 @@ var AppsRouter = Router.createClass({
 		return "/apps";
 	},
 
-	__navigateToApp: function (event, __params) {
-		this.history.navigate(this.__getAppPath(event.appId, __params));
+	__navigateToApp: function (appID, __params) {
+		this.history.navigate(this.__getAppPath(appID, __params));
 	}
 
 });

@@ -1,17 +1,24 @@
+import { extend } from 'marbles/utils';
+
 var EditEnv = React.createClass({
 	displayName: "Views.EditEnv",
 
 	render: function () {
 		var nRemoved = this.state.nRemoved;
+		var newEnv = [{ isNew: true }];
+		if (this.props.disabled) {
+			newEnv = [];
+		}
 		return (
 			<ul className="edit-env">
-				{this.state.env.concat([{ isNew: true }]).map(function (env, i) {
+				{this.state.env.concat(newEnv).map(function (env, i) {
 					return (
 						<li key={nRemoved + i}>
 							<AppEnv
 								index={env.isNew ? null : i}
 								name={env.key}
 								value={env.value}
+								disabled={this.props.disabled}
 								onChange={this.handleEnvChange} />
 						</li>
 					);
@@ -36,19 +43,21 @@ var EditEnv = React.createClass({
 	},
 
 	__setEnv: function (env) {
-		var __env = [];
+		var nextEnv = [];
 		for (var k in env) {
 			if (env.hasOwnProperty(k)) {
-				__env.push({
+				nextEnv.push({
 					key: k,
 					value: env[k]
 				});
 			}
 		}
-		this.setState({env: __env});
+		this.setState({
+			env: nextEnv
+		});
 	},
 
-	handleEnvChange: function (index, oldName, newName, newValue) {
+	__envForChange: function (index, oldName, newName, newValue) {
 		var env = [].concat(this.state.env);
 		var nRemoved = this.state.nRemoved;
 
@@ -79,13 +88,20 @@ var EditEnv = React.createClass({
 			}
 		}
 
-		__env = {};
+		return [env, nRemoved];
+	},
+
+	handleEnvChange: function (index, oldName, newName, newValue) {
+		var tmp = this.__envForChange(index, oldName, newName, newValue);
+		var env = tmp[0], nRemoved = tmp[1];
+
+		var __env = {};
 		env.forEach(function (i) {
 			__env[i.key] = i.value;
 		});
 
 		this.setState({ env: env, nRemoved: nRemoved });
-		this.props.onChange(__env);
+		setTimeout(function () { this.props.onChange(__env) }.bind(this), 0);
 	}
 });
 
@@ -134,12 +150,18 @@ var AppEnv = React.createClass({
 	},
 
 	handleNameChange: function () {
+		if (this.props.disabled) {
+			return null;
+		}
 		var newName = this.refs.name.getDOMNode().value;
 		this.setState({name: newName});
 		this.propagateChange(newName, this.state.value || "");
 	},
 
 	handleValueChange: function () {
+		if (this.props.disabled) {
+			return null;
+		}
 		var newValue = this.refs.value.getDOMNode().value;
 		this.setState({value: newValue});
 		if (this.state.name) {
@@ -148,10 +170,16 @@ var AppEnv = React.createClass({
 	},
 
 	handleNameBlur: function () {
+		if (this.props.disabled) {
+			return null;
+		}
 		this.propagateChange(this.state.name, this.state.value);
 	},
 
 	handleValueBlur: function () {
+		if (this.props.disabled) {
+			return null;
+		}
 		this.propagateChange(this.state.name, this.state.value);
 	},
 

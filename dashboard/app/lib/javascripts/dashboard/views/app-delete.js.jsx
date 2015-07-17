@@ -1,7 +1,7 @@
 import { assertEqual } from 'marbles/utils';
 import Modal from 'Modal';
 import AppStore from '../stores/app';
-import AppDeleteActions from '../actions/app-delete';
+import Dispatcher from 'dashboard/dispatcher';
 
 function getAppStoreId (props) {
 	return {
@@ -71,7 +71,10 @@ var AppDelete = React.createClass({
 		this.setState({
 			isDeleting: true
 		});
-		AppDeleteActions.deleteApp(this.props.appId);
+		Dispatcher.dispatch({
+			name: 'DELETE_APP',
+			appID: this.props.appId
+		});
 	}
 });
 

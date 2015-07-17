@@ -2,7 +2,6 @@ import State from 'marbles/state';
 import Store from '../store';
 import Config from '../config';
 import Dispatcher from '../dispatcher';
-import App from './app';
 
 var AppRoutes = Store.createClass({
 	displayName: "Stores.AppRoutes",
@@ -31,20 +30,46 @@ var AppRoutes = Store.createClass({
 
 	handleEvent: function (event) {
 		switch (event.name) {
-			case "NEW_APP_ROUTE:CREATE_ROUTE":
-				App.findOrFetch(this.id.appId).then(function (app) {
-					return this.__createAppRoute(event.domain, app.name);
-				}.bind(this)).then(function () {
-					return this.__fetchRoutes();
-				}.bind(this));
+			case 'ROUTE':
+				if (event.app === this.props.appId) {
+					this.__addOrReplaceRoute(event.data);
+				}
 			break;
 
-			case "APP_ROUTE_DELETE:DELETE_ROUTE":
-				this.__deleteAppRoute(event.routeType, event.routeId).then(function () {
-					return this.__fetchRoutes();
-				}.bind(this));
+			case 'ROUTE_DELETED':
+				if (event.app === this.props.appId) {
+					this.__removeRoute(event.object_id);
+				}
 			break;
 		}
+	},
+
+	__addOrReplaceRoute: function (route) {
+		var routes = [];
+		var routeFound = false;
+		this.state.routes.forEach(function (r) {
+			if (r.id === route.id) {
+				routeFound = true;
+				routes.push(route);
+			} else {
+				routes.push(r);
+			}
+		});
+		if ( !routeFound ) {
+			routes.push(route);
+		}
+		this.setState({
+			routes: routes
+		});
+	},
+
+	__removeRoute: function (routeID) {
+		var routes = this.state.routes.filter(function (r) {
+			return r.id !== routeID;
+		});
+		this.setState({
+			routes: routes
+		});
 	},
 
 	__fetchRoutes: function () {
@@ -53,64 +78,6 @@ var AppRoutes = Store.createClass({
 			this.setState({
 				routes: res
 			});
-		}.bind(this));
-	},
-
-	__createAppRoute: function (domain, appName) {
-		var data = {
-			type: "http",
-			domain: domain,
-			service: appName +"-web"
-		};
-		return this.__getClient().createAppRoute(this.props.appId, data).then(function () {
-			Dispatcher.handleStoreEvent({
-				name: "APP_ROUTES:CREATED",
-				appId: this.id.appId
-			});
-		}.bind(this)).catch(function (args) {
-			if (args instanceof Error) {
-				throw args;
-			} else {
-				var res = args[0];
-				var xhr = args[1];
-				Dispatcher.handleStoreEvent({
-					name: "APP_ROUTES:CREATE_FAILED",
-					appId: this.props.appId,
-					errorMsg: res.message || "Something went wrong ["+ xhr.status +"]"
-				});
-				return null;
-			}
-		}.bind(this));
-	},
-
-	__deleteAppRoute: function (routeType, routeId) {
-		var routes = this.state.routes.filter(function (route) {
-			return route.id !== routeId;
-		});
-		this.setState({
-			routes: routes
-		});
-
-		return this.__getClient().deleteAppRoute(this.props.appId, routeType, routeId).then(function () {
-			Dispatcher.handleStoreEvent({
-				name: "APP_ROUTES:DELETED",
-				appId: this.id.appId,
-				routeId: routeId
-			});
-		}.bind(this)).catch(function (args) {
-			if (args instanceof Error) {
-				throw args;
-			} else {
-				var res = args[0];
-				var xhr = args[1];
-				Dispatcher.handleStoreEvent({
-					name: "APP_ROUTES:DELETE_FAILED",
-					appId: this.props.appId,
-					routeId: routeId,
-					errorMsg: res.message || "Something went wrong ["+ xhr.status +"]"
-				});
-				return null;
-			}
 		}.bind(this));
 	},
 

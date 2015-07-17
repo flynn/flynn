@@ -5,13 +5,21 @@ import GithubCommitStore from '../stores/github-commit';
 import GithubPullStore from '../stores/github-pull';
 import BuildpackStore from '../stores/github-repo-buildpack';
 import JobOutputStore from '../stores/job-output';
-import GithubDeployActions from '../actions/github-deploy';
+import { AppDeployStore, DEFAULT_ID as appDeployStoreID } from 'dashboard/stores/app-deploy';
 import RouteLink from './route-link';
 import CommandOutput from './command-output';
 import EditEnv from './edit-env';
 import GithubCommit from './github-commit';
 import GithubPull from './github-pull';
 import GithubRepoBuildpack from './github-repo-buildpack';
+import Dispatcher from 'dashboard/dispatcher';
+
+function getDeployStoreId (props) {
+	return {
+		appID: props.appID,
+		sha: props.sha
+	};
+};
 
 function getRepoStoreId (props) {
 	return {
@@ -44,27 +52,55 @@ function getBuildpackStoreId (props, commit, pull) {
 	};
 }
 
-function getJobOutputStoreId (props) {
-	if ( !props.job ) {
-		return null;
-	}
-	return {
-		appId: "taffy",
-		jobId: props.job.id
-	};
-}
-
-function getState (props, prevState, env, dbRequested) {
+function getState (props, prevState, dbRequested) {
 	prevState = prevState || {};
-	if ( !env ) {
-		env = {};
-	}
 	var state = {
 		launching: prevState.launching,
-		env: env,
+		deleting: prevState.deleting,
+		env: prevState.env || {},
 		name: prevState.name,
-		db: dbRequested
+		db: dbRequested === undefined ? prevState.db : dbRequested
 	};
+
+	state.deployStoreId = getDeployStoreId(props);
+	var deployState = AppDeployStore.getState(state.deployStoreId);
+	state.launching = deployState.launching;
+	state.launchSuccess = deployState.launchSuccess;
+	state.launchFailed = deployState.launchFailed;
+	state.launchErrorMsg = deployState.launchErrorMsg;
+	if (deployState.release !== null) {
+		state.env = deployState.release.env || {};
+	}
+	if (state.env.hasOwnProperty('PGDATABASE')) {
+		state.db = true;
+	} else if (deployState.release !== null) {
+		state.db = false;
+	}
+
+	state.jobOutputStoreId = null;
+	if (deployState.taffyJob !== null) {
+		state.jobOutputStoreId = {
+			appId: 'taffy',
+			jobId: deployState.taffyJob.id
+		};
+	}
+	var prevJobOutputStoreId = prevState.jobOutputStoreId;
+	var nextJobOutputStoreId = state.jobOutputStoreId;
+	if ( !assertEqual(prevJobOutputStoreId, nextJobOutputStoreId) ) {
+		if (prevJobOutputStoreId) {
+			JobOutputStore.removeChangeListener(prevJobOutputStoreId, this.__handleStoreChange);
+		}
+		if (nextJobOutputStoreId !== null) {
+			JobOutputStore.addChangeListener(nextJobOutputStoreId, this.__handleStoreChange);
+		}
+	}
+
+	var jobOutputState;
+	if (state.jobOutputStoreId !== null) {
+		jobOutputState = JobOutputStore.getState(state.jobOutputStoreId);
+		state.jobOutput = jobOutputState.output;
+		state.jobError = jobOutputState.streamError;
+	}
 
 	if (props.pullNumber) {
 		state.pullStoreId = getPullStoreId(props);
@@ -89,27 +125,7 @@ function getState (props, prevState, env, dbRequested) {
 	state.repoStoreId = getRepoStoreId(props);
 	state.repo = GithubRepoStore.getState(state.repoStoreId).repo;
 
-	var jobOutputState;
-	if (props.job) {
-		state.jobOutputStoreId = getJobOutputStoreId(props);
-		jobOutputState = JobOutputStore.getState(state.jobOutputStoreId);
-		state.jobOutput = jobOutputState.output;
-		state.jobError = jobOutputState.streamError;
-
-		if (jobOutputState.open === false) {
-			state.launching = false;
-		} else {
-			state.launching = true;
-		}
-	}
-
-	state.launchComplete = props.appId && !state.launching && !state.jobError && !props.errorMsg;
-	state.launchDisabled = props.launchDisabled || !!(!state.repo || !(state.commit || state.pull) || state.launching);
-
-	if (props.errorMsg) {
-		state.launchDisabled = false;
-		state.launching = false;
-	}
+	state.launchDisabled = props.launchDisabled || !!(!state.repo || !(state.commit || state.pull) || state.launching || state.deleting);
 
 	return state;
 }
@@ -148,10 +164,17 @@ var GithubDeploy = React.createClass({
 
 				<label>
 					<span className="name">Postgres</span>
-					<input type="checkbox" checked={this.state.db} onChange={this.__handleDbChange} />
+					<input
+						type="checkbox"
+						disabled={this.state.launching || this.state.deleting || this.state.launchSuccess || this.state.launchFailed}
+						checked={this.state.db}
+						onChange={this.__handleDbChange} />
 				</label>
 
-				<EditEnv env={this.state.env} onChange={this.__handleEnvChange} />
+				<EditEnv
+					disabled={this.state.launching || this.state.deleting || this.state.launchSuccess || this.state.launchFailed}
+					env={this.state.env}
+					onChange={this.__handleEnvChange} />
 
 				{this.state.jobOutput ? (
 					<CommandOutput outputStreamData={this.state.jobOutput} showTimestamp={false} />
@@ -161,14 +184,18 @@ var GithubDeploy = React.createClass({
 					<div className="alert-error">{this.props.errorMsg}</div>
 				) : null}
 
-				{this.state.jobError ? (
-					<div className="alert-error">{this.state.jobError}</div>
+				{this.state.launchErrorMsg !== null ? (
+					<div className="alert-error">{this.state.launchErrorMsg}</div>
 				) : null}
 
-				{this.state.launchComplete ? (
+				{this.state.launchSuccess === true ? (
 					<RouteLink className="launch-btn" path={this.props.getAppPath()}>Continue</RouteLink>
 				) : (
-					<button className="launch-btn" disabled={this.state.launchDisabled} onClick={this.__handleLaunchBtnClick}>{this.state.launching ? "Launching..." : "Launch app"}</button>
+					(this.state.launchFailed === true ? (
+						<button className="delete-btn" disabled={this.state.launchDisabled} onClick={this.__handleDeleteBtnClick}>{this.state.deleting ? "Deleting..." : "Launch failed. Delete app"}</button>
+					) : (
+						<button className="launch-btn" disabled={this.state.launchDisabled} onClick={this.__handleLaunchBtnClick}>{this.state.launching ? "Launching..." : "Launch app"}</button>
+					))
 				)}
 			</Modal>
 		);
@@ -183,6 +210,7 @@ var GithubDeploy = React.createClass({
 	},
 
 	componentDidMount: function () {
+		AppDeployStore.addChangeListener(this.state.deployStoreId, this.__handleStoreChange);
 		GithubRepoStore.addChangeListener(this.state.repoStoreId, this.__handleStoreChange);
 		if (this.state.commitStoreId) {
 			GithubCommitStore.addChangeListener(this.state.commitStoreId, this.__handleStoreChange);
@@ -193,7 +221,7 @@ var GithubDeploy = React.createClass({
 		if (this.state.buildpackStoreId) {
 			BuildpackStore.addChangeListener(this.state.buildpackStoreId, this.__handleStoreChange);
 		}
-		if (this.state.jobOutputStoreId) {
+		if (this.state.jobOutputStoreId !== null) {
 			JobOutputStore.addChangeListener(this.state.jobOutputStoreId, this.__handleStoreChange);
 		}
 	},
@@ -201,13 +229,15 @@ var GithubDeploy = React.createClass({
 	componentWillReceiveProps: function (props) {
 		var didChange = false;
 
-		var env = this.state.env;
-		if (props.env) {
+		if (props.errorMsg) {
 			didChange = true;
-			env = props.env;
 		}
 
-		if (props.errorMsg) {
+		var prevDeployStoreId = this.state.deployStoreId;
+		var nextDeployStoreId = getDeployStoreId(props);
+		if ( !assertEqual(prevDeployStoreId, nextDeployStoreId) ) {
+			AppDeployStore.removeChangeListener(prevDeployStoreId, this.__handleStoreChange);
+			AppDeployStore.addChangeListener(nextDeployStoreId, this.__handleStoreChange);
 			didChange = true;
 		}
 
@@ -239,24 +269,13 @@ var GithubDeploy = React.createClass({
 			}
 		}
 
-		var prevJobOutputStoreId = this.state.jobOutputStoreId;
-		var nextJobOutputStoreId = getJobOutputStoreId(props);
-		if ( !assertEqual(prevJobOutputStoreId, nextJobOutputStoreId) ) {
-			if (prevJobOutputStoreId) {
-				JobOutputStore.removeChangeListener(prevJobOutputStoreId, this.__handleStoreChange);
-			}
-			if (nextJobOutputStoreId) {
-				JobOutputStore.addChangeListener(nextJobOutputStoreId, this.__handleStoreChange);
-			}
-			didChange = true;
-		}
-
 		if (didChange) {
-			this.__handleStoreChange(props, env);
+			this.__handleStoreChange(props);
 		}
 	},
 
 	componentWillUnmount: function () {
+		AppDeployStore.removeChangeListener(this.state.deployStoreId, this.__handleStoreChange);
 		GithubRepoStore.removeChangeListener(this.state.repoStoreId, this.__handleStoreChange);
 		if (this.state.commitStoreId) {
 			GithubCommitStore.removeChangeListener(this.state.commitStoreId, this.__handleStoreChange);
@@ -267,13 +286,15 @@ var GithubDeploy = React.createClass({
 		if (this.state.buildpackStoreId) {
 			BuildpackStore.removeChangeListener(this.state.buildpackStoreId, this.__handleStoreChange);
 		}
-		if (this.state.jobOutputStoreId) {
+		if (this.state.jobOutputStoreId !== null) {
 			JobOutputStore.removeChangeListener(this.state.jobOutputStoreId, this.__handleStoreChange);
 		}
 	},
 
-	__handleStoreChange: function (props, env, dbRequested) {
-		this.setState(getState.call(this, props || this.props, this.state, env || this.state.env, dbRequested !== undefined ? dbRequested : this.state.db));
+	__handleStoreChange: function (props, dbRequested) {
+		if (this.isMounted()) {
+			this.setState(getState.call(this, props || this.props, this.state, dbRequested !== undefined ? dbRequested : this.state.db));
+		}
 	},
 
 	__handleNameChange: function (e) {
@@ -285,12 +306,24 @@ var GithubDeploy = React.createClass({
 
 	__handleDbChange: function (e) {
 		var db = e.target.checked;
-		this.__handleStoreChange(this.props, null, db);
+		this.__handleStoreChange(this.props, db);
 	},
 
 	__handleEnvChange: function (env) {
 		this.setState({
 			env: env
+		});
+	},
+
+	__handleDeleteBtnClick: function (e) {
+		e.preventDefault();
+		Dispatcher.dispatch({
+			name: 'DELETE_APP',
+			appID: this.props.appID
+		});
+		this.setState({
+			deleting: true,
+			launchDisabled: true
 		});
 	},
 
@@ -309,9 +342,22 @@ var GithubDeploy = React.createClass({
 			launchDisabled: true
 		});
 		if (this.state.pull) {
-			GithubDeployActions.launchFromPull(this.state.repo, this.state.pull, appData);
+			Dispatcher.dispatch({
+				name: 'DEPLOY_APP',
+				source: 'GH_PULL',
+				repo: this.state.repo,
+				pull: this.state.pull,
+				appData: appData
+			});
 		} else {
-			GithubDeployActions.launchFromCommit(this.state.repo, this.props.branchName, this.state.commit, appData);
+			Dispatcher.dispatch({
+				name: 'DEPLOY_APP',
+				source: 'GH_COMMIT',
+				repo: this.state.repo,
+				branchName: this.props.branchName,
+				commit: this.state.commit,
+				appData: appData
+			});
 		}
 	},
 

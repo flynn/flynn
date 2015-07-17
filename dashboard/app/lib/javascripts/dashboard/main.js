@@ -10,6 +10,7 @@ import Client from './client';
 import GithubClient from './github-client';
 import ServiceUnavailableComponent from './views/service-unavailable';
 import NavComponent from './views/nav';
+import Actions from './actions'; // jshint ignore:line
 
 var Dashboard = function () {
 	var history = this.history = new History();
@@ -49,12 +50,14 @@ extend(Dashboard.prototype, {
 		}
 
 		// TODO(jvatic): Move these into ./config.js
-		Config.client = new Client(Config.endpoints);
+		Config.setClient(new Client(Config.endpoints));
 		if (Config.user && Config.user.auths.github) {
-			Config.githubClient = new GithubClient(
+			Config.setGithubClient(new GithubClient(
 				Config.user.auths.github.access_token
-			);
+			));
 		}
+
+		Config.client.openEventStream();
 
 		Config.history = this.history;
 
@@ -341,8 +344,13 @@ extend(Dashboard.prototype, {
 		// unmount main view / reset scroll position
 		if ( !event.handler.opts.secondary ) {
 			window.scrollTo(0,0);
-			this.primaryView = null;
-			React.unmountComponentAtNode(this.el);
+
+			// don't reset view when navigating in/out app modals
+			var appsPathRegexp = /^apps\/[^\/]+/;
+			if ((path.match(appsPathRegexp) || [1])[0] !== (prevPath.match(appsPathRegexp) || [2])[0]) {
+				this.primaryView = null;
+				React.unmountComponentAtNode(this.el);
+			}
 		}
 
 		// unmount secondary view
