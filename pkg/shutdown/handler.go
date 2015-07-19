@@ -48,6 +48,10 @@ func Fatal(v ...interface{}) {
 	h.exit(errors.New(fmt.Sprint(v...)), 1, recover())
 }
 
+func Fatalf(format string, v ...interface{}) {
+	h.exit(errors.New(fmt.Sprintf(format, v...)), 1, recover())
+}
+
 func (h *handler) wait() {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, os.Signal(syscall.SIGTERM))
