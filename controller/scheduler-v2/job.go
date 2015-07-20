@@ -3,6 +3,8 @@ package main
 import (
 	"sync"
 	"time"
+
+	ct "github.com/flynn/flynn/controller/types"
 )
 
 type JobRequestType string
@@ -51,5 +53,17 @@ func NewJob(f *Formation, typ, hostID, id string) *Job {
 		HostID:    hostID,
 		JobID:     id,
 		Formation: f,
+	}
+}
+
+// TODO refactor `state` to JobStatus type and consolidate statuses across scheduler/controller/host
+func controllerJobFromSchedulerJob(job *Job, state string, metadata map[string]string) *ct.Job {
+	return &ct.Job{
+		ID:        job.JobID,
+		AppID:     job.AppID,
+		ReleaseID: job.ReleaseID,
+		Type:      job.Type,
+		State:     state,
+		Meta:      metadata,
 	}
 }
