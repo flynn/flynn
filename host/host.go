@@ -182,11 +182,15 @@ func runDaemon(args *docopt.Args) {
 	}
 
 	state := NewState(hostID, stateFile)
+	if err := state.OpenDB(); err != nil {
+		shutdown.Fatal(err)
+	}
+	shutdown.BeforeExit(func() { state.CloseDB() })
 	var backend Backend
 	var err error
 
 	// create volume manager
-	vman, err := volumemanager.New(
+	vman := volumemanager.New(
 		filepath.Join(volPath, "volumes.bolt"),
 		func() (volume.Provider, error) {
 			// use a zpool backing file size of either 70% of the device on which
@@ -210,9 +214,10 @@ func runDaemon(args *docopt.Args) {
 			})
 		},
 	)
-	if err != nil {
+	if err := vman.OpenDB(); err != nil {
 		shutdown.Fatal(err)
 	}
+	shutdown.BeforeExit(func() { vman.CloseDB() })
 
 	mux := logmux.New(1000)
 	shutdown.BeforeExit(func() { mux.Close() })

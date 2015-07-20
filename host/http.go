@@ -38,6 +38,11 @@ type Host struct {
 var ErrNotFound = errors.New("host: unknown job")
 
 func (h *Host) StopJob(id string) error {
+	if err := h.state.Acquire(); err != nil {
+		return err
+	}
+	defer h.state.Release()
+
 	job := h.state.GetJob(id)
 	if job == nil {
 		return ErrNotFound
@@ -97,6 +102,7 @@ func (h *jobAPI) GetJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 		}
 		return
 	}
+
 	job := h.host.state.GetJob(id)
 	if job == nil {
 		httphelper.ObjectNotFoundError(w, ErrNotFound.Error())
@@ -173,9 +179,16 @@ func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 	// TODO(titanous): validate UUID
 	job.ID = ps.ByName("id")
 
+	if err := h.host.state.Acquire(); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+
 	go func() {
 		// TODO(titanous): ratelimit this goroutine?
-		if err := h.host.backend.Run(job, nil); err != nil {
+		err := h.host.backend.Run(job, nil)
+		h.host.state.Release()
+		if err != nil {
 			h.host.state.SetStatusFailed(job.ID, err)
 		}
 	}()

@@ -33,39 +33,99 @@ type Manager struct {
 	// `map[volume.Id]volume`
 	volumes map[string]volume.Volume
 
-	stateDB *bolt.DB
+	dbPath string
+	db     *bolt.DB
+	dbMtx  sync.RWMutex
+
+	defaultProvider func() (volume.Provider, error)
 }
 
 var NoSuchProvider = errors.New("no such provider")
 var ProviderAlreadyExists = errors.New("that provider id already exists")
 var NoSuchVolume = errors.New("no such volume")
 
-func New(stateFilePath string, defProvFn func() (volume.Provider, error)) (*Manager, error) {
-	stateDB, err := initializePersistence(stateFilePath)
+func New(dbPath string, defaultProvider func() (volume.Provider, error)) *Manager {
+	return &Manager{
+		providers:       make(map[string]volume.Provider),
+		providerIDs:     make(map[volume.Provider]string),
+		volumes:         make(map[string]volume.Volume),
+		dbPath:          dbPath,
+		defaultProvider: defaultProvider,
+	}
+}
+
+var ErrDBClosed = errors.New("volume persistence db is closed")
+
+// OpenDB opens and initialises the persistence DB, if not already open.
+func (m *Manager) OpenDB() error {
+	if m.dbPath == "" {
+		return nil
+	}
+	m.dbMtx.Lock()
+	defer m.dbMtx.Unlock()
+	// open/initialize db
+	if err := os.MkdirAll(filepath.Dir(m.dbPath), 0755); err != nil {
+		return fmt.Errorf("could not mkdir for volume persistence db: %s", err)
+	}
+	db, err := bolt.Open(m.dbPath, 0600, &bolt.Options{Timeout: 5 * time.Second})
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("could not open volume persistence db: %s", err)
 	}
-	m := &Manager{
-		providers:   make(map[string]volume.Provider),
-		providerIDs: make(map[volume.Provider]string),
-		volumes:     make(map[string]volume.Volume),
-		stateDB:     stateDB,
+	if err := db.Update(func(tx *bolt.Tx) error {
+		// idempotently create buckets.  (errors ignored because they're all compile-time impossible args checks.)
+		tx.CreateBucketIfNotExists([]byte("volumes"))
+		tx.CreateBucketIfNotExists([]byte("providers"))
+		return nil
+	}); err != nil {
+		return fmt.Errorf("could not initialize volume persistence db: %s", err)
 	}
+	m.db = db
 	if err := m.restore(); err != nil {
-		return nil, err
+		return err
 	}
-	if _, ok := m.providers["default"]; !ok {
-		p, err := defProvFn()
-		if err != nil {
-			return nil, fmt.Errorf("could not initialize default provider: %s", err)
-		}
-		if p != nil {
-			if err := m.AddProvider("default", p); err != nil {
-				panic(err)
-			}
-		}
+	return m.maybeInitDefaultProvider()
+}
+
+// CloseDB closes the persistence DB.
+//
+// The DB mutex is locked to protect m.db, but also prevents closing the
+// DB when it could still be needed to service API requests (see LockDB).
+func (m *Manager) CloseDB() error {
+	m.dbMtx.Lock()
+	defer m.dbMtx.Unlock()
+	if m.db == nil {
+		return nil
 	}
-	return m, nil
+	if err := m.db.Close(); err != nil {
+		return err
+	}
+	m.db = nil
+	return nil
+}
+
+// LockDB acquires a read lock on the DB mutex so that it cannot be closed
+// until the caller has finished performing actions which will lead to changes
+// being persisted to the DB.
+//
+// For example, creating a volume first delegates to the provider to create the
+// volume and then persists to the DB, but if the DB is closed in that time
+// then the volume state will be lost.
+//
+// ErrDBClosed is returned if the DB is already closed so API requests will
+// fail before any actions are performed.
+func (m *Manager) LockDB() error {
+	m.dbMtx.RLock()
+	if m.db == nil {
+		m.dbMtx.RUnlock()
+		return ErrDBClosed
+	}
+	return nil
+}
+
+// UnlockDB releases a read lock on the DB mutex, previously acquired by a call
+// to LockDB.
+func (m *Manager) UnlockDB() {
+	m.dbMtx.RUnlock()
 }
 
 func (m *Manager) AddProvider(id string, p volume.Provider) error {
@@ -74,10 +134,18 @@ func (m *Manager) AddProvider(id string, p volume.Provider) error {
 	if _, ok := m.providers[id]; ok {
 		return ProviderAlreadyExists
 	}
+	if err := m.LockDB(); err != nil {
+		return err
+	}
+	defer m.UnlockDB()
+	m.addProviderLocked(id, p)
+	return nil
+}
+
+func (m *Manager) addProviderLocked(id string, p volume.Provider) {
 	m.providers[id] = p
 	m.providerIDs[p] = id
 	m.persist(func(tx *bolt.Tx) error { return m.persistProvider(tx, id) })
-	return nil
 }
 
 func (m *Manager) Volumes() map[string]volume.Volume {
@@ -134,6 +202,10 @@ func (m *Manager) DestroyVolume(id string) error {
 	if vol == nil {
 		return NoSuchVolume
 	}
+	if err := m.LockDB(); err != nil {
+		return err
+	}
+	defer m.UnlockDB()
 	if err := vol.Provider().DestroyVolume(vol); err != nil {
 		return err
 	}
@@ -152,6 +224,10 @@ func (m *Manager) CreateSnapshot(id string) (volume.Volume, error) {
 	if vol == nil {
 		return nil, NoSuchVolume
 	}
+	if err := m.LockDB(); err != nil {
+		return nil, err
+	}
+	defer m.UnlockDB()
 	snap, err := vol.Provider().CreateSnapshot(vol)
 	if err != nil {
 		return nil, err
@@ -168,6 +244,10 @@ func (m *Manager) ForkVolume(id string) (volume.Volume, error) {
 	if vol == nil {
 		return nil, NoSuchVolume
 	}
+	if err := m.LockDB(); err != nil {
+		return nil, err
+	}
+	defer m.UnlockDB()
 	vol2, err := vol.Provider().ForkVolume(vol)
 	if err != nil {
 		return nil, err
@@ -207,6 +287,10 @@ func (m *Manager) ReceiveSnapshot(id string, stream io.Reader) (volume.Volume, e
 	if vol == nil {
 		return nil, NoSuchVolume
 	}
+	if err := m.LockDB(); err != nil {
+		return nil, err
+	}
+	defer m.UnlockDB()
 	m.mutex.Unlock() // don't lock the manager for the duration of the recv operation.
 	snap, err := vol.Provider().ReceiveSnapshot(vol, stream)
 	if err != nil {
@@ -219,34 +303,8 @@ func (m *Manager) ReceiveSnapshot(id string, stream io.Reader) (volume.Volume, e
 	return snap, nil
 }
 
-func initializePersistence(stateFilePath string) (*bolt.DB, error) {
-	if stateFilePath == "" {
-		return nil, nil
-	}
-	// open/initialize db
-	if err := os.MkdirAll(filepath.Dir(stateFilePath), 0755); err != nil {
-		return nil, fmt.Errorf("could not mkdir for volume persistence db: %s", err)
-	}
-	stateDB, err := bolt.Open(stateFilePath, 0600, &bolt.Options{Timeout: 5 * time.Second})
-	if err != nil {
-		return nil, fmt.Errorf("could not open volume persistence db: %s", err)
-	}
-	if err := stateDB.Update(func(tx *bolt.Tx) error {
-		// idempotently create buckets.  (errors ignored because they're all compile-time impossible args checks.)
-		tx.CreateBucketIfNotExists([]byte("volumes"))
-		tx.CreateBucketIfNotExists([]byte("providers"))
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("could not initialize volume persistence db: %s", err)
-	}
-	return stateDB, nil
-}
-
 func (m *Manager) restore() error {
-	if m.stateDB == nil {
-		return nil
-	}
-	if err := m.stateDB.View(func(tx *bolt.Tx) error {
+	if err := m.db.View(func(tx *bolt.Tx) error {
 		volumesBucket := tx.Bucket([]byte("volumes"))
 		providersBucket := tx.Bucket([]byte("providers"))
 
@@ -309,26 +367,30 @@ func (m *Manager) restore() error {
 	return nil
 }
 
+func (m *Manager) maybeInitDefaultProvider() error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	if _, ok := m.providers["default"]; ok {
+		return nil
+	}
+	p, err := m.defaultProvider()
+	if err != nil {
+		return fmt.Errorf("could not initialize default provider: %s", err)
+	}
+	if p != nil {
+		m.addProviderLocked("default", p)
+	}
+	return nil
+}
+
 func (m *Manager) persist(fn func(*bolt.Tx) error) {
 	// maintenance note: db update calls should generally immediately follow
 	// the matching in-memory map updates, *and be under the same mutex*.
-	if m.stateDB == nil {
-		return
-	}
-	if err := m.stateDB.Update(func(tx *bolt.Tx) error {
+	if err := m.db.Update(func(tx *bolt.Tx) error {
 		return fn(tx)
 	}); err != nil {
 		panic(fmt.Errorf("could not commit volume persistence update: %s", err))
 	}
-}
-
-/*
-	Close the DB that persists the volume state.
-	This is not called in typical flow because there's no need to release this file descriptor,
-	but it is needed in testing so that bolt releases locks such that the file can be reopened.
-*/
-func (m *Manager) PersistenceDBClose() error {
-	return m.stateDB.Close()
 }
 
 func (m *Manager) getProviderBucket(tx *bolt.Tx, providerID string) (*bolt.Bucket, error) {
@@ -424,6 +486,10 @@ type managerProviderProxy struct {
 }
 
 func (p managerProviderProxy) NewVolume() (volume.Volume, error) {
+	if err := p.m.LockDB(); err != nil {
+		return nil, err
+	}
+	defer p.m.UnlockDB()
 	v, err := p.Provider.NewVolume()
 	if err != nil {
 		return v, err
