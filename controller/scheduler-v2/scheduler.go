@@ -62,6 +62,9 @@ func (s *Scheduler) Run() error {
 	log.Info("starting scheduler loop")
 	defer log.Info("exiting scheduler loop")
 
+	jobSync := time.Tick(30 * time.Second)
+	formationSync := time.Tick(time.Minute)
+
 	for {
 		// first, check if we should stop or process pending job events
 		select {
@@ -73,16 +76,18 @@ func (s *Scheduler) Run() error {
 		default:
 		}
 
-		log.Info("starting cluster sync")
-		if err := s.Sync(); err != nil {
-			log.Error("error performing cluster sync", "err", err)
-			continue
-		}
-
-		log.Info("starting watching events")
+		// next, handle sync and formation change events
 		select {
 		case <-s.stop:
 			return nil
+		case <-jobSync:
+			log.Info("starting cluster sync")
+			if err := s.SyncJobs(); err != nil {
+				log.Error("error performing cluster sync", "err", err)
+				continue
+			}
+		case <-formationSync:
+			s.SyncFormations()
 		case fc := <-s.formationChange:
 			if err := s.FormationChange(fc); err != nil {
 				log.Error("error performing formation change", "err", err)
@@ -94,7 +99,7 @@ func (s *Scheduler) Run() error {
 	return nil
 }
 
-func (s *Scheduler) Sync() (err error) {
+func (s *Scheduler) SyncJobs() (err error) {
 	log := s.log.New("fn", "Sync")
 
 	defer func() {
@@ -115,7 +120,7 @@ func (s *Scheduler) Sync() (err error) {
 	for k, v := range s.jobs {
 		unSyncedJobs[k] = v
 	}
-	fc := NewFormationCounts(s.formations)
+	fc := make(formationJobs)
 	for _, h := range hosts {
 		log = log.New("host.id", h.ID())
 		log.Info("getting jobs list")
@@ -194,7 +199,7 @@ func (s *Scheduler) SyncFormations() (err error) {
 	return err
 }
 
-func (s *Scheduler) rectifyFormations(fc formationCounts) (err error) {
+func (s *Scheduler) rectifyFormations(fc formationJobs) (err error) {
 	for fKey, formation := range s.formations {
 		for typ, count := range formation.Processes {
 			diff := count - fc[fKey][typ]
@@ -521,17 +526,5 @@ func NewEvent(typ EventType, err error, data interface{}) Event {
 		return &JobStartEvent{Event: &DefaultEvent{err: err, typ: typ}, Job: job}
 	default:
 		return &DefaultEvent{err: err, typ: typ}
-	}
-}
-
-// TODO refactor `state` to JobStatus type and consolidate statuses across scheduler/controller/host
-func controllerJobFromSchedulerJob(job *Job, state string, metadata map[string]string) *ct.Job {
-	return &ct.Job{
-		ID:        job.JobID,
-		AppID:     job.AppID,
-		ReleaseID: job.ReleaseID,
-		Type:      job.Type,
-		State:     state,
-		Meta:      metadata,
 	}
 }
