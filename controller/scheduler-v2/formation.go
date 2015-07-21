@@ -52,9 +52,9 @@ func (f *Formation) Update(procs map[string]int) map[string]int {
 	return diff
 }
 
-type formationJobs map[utils.FormationKey]map[string]int
+type formationProcesses map[utils.FormationKey]map[string]int
 
-func (fc formationJobs) AddJob(j *Job) {
+func (fc formationProcesses) AddJob(j *Job) {
 	key := j.Formation.key()
 	f, ok := fc[key]
 	if !ok {
