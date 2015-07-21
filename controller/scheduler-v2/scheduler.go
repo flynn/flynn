@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
 	"sync"
 	"time"
 
@@ -29,6 +30,10 @@ type Scheduler struct {
 	stop     chan struct{}
 	stopOnce sync.Once
 
+	jobSync       chan struct{}
+	formationSync chan struct{}
+	rectifyJobs   chan struct{}
+
 	formationChange chan *ct.ExpandedFormation
 	jobRequests     chan *JobRequest
 
@@ -42,8 +47,11 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Sched
 		log:              log15.New("component", "scheduler"),
 		jobs:             make(map[string]*Job),
 		listeners:        make(map[chan Event]struct{}),
-		stop:             make(chan struct{}),
 		formations:       make(Formations),
+		stop:             make(chan struct{}),
+		jobSync:          make(chan struct{}, eventBufferSize),
+		formationSync:    make(chan struct{}, eventBufferSize),
+		rectifyJobs:      make(chan struct{}, eventBufferSize),
 		formationChange:  make(chan *ct.ExpandedFormation, eventBufferSize),
 		jobRequests:      make(chan *JobRequest, eventBufferSize),
 		validJobStatuses: map[host.JobStatus]bool{
@@ -62,37 +70,65 @@ func (s *Scheduler) Run() error {
 	log.Info("starting scheduler loop")
 	defer log.Info("exiting scheduler loop")
 
-	jobSync := time.Tick(30 * time.Second)
-	formationSync := time.Tick(time.Minute)
+	jobTicker := time.Tick(30 * time.Second)
+	formationTicker := time.Tick(time.Minute)
+	go func() {
+		for {
+			select {
+			case <-jobTicker:
+				s.jobSync <- struct{}{}
+			case <-formationTicker:
+				s.formationSync <- struct{}{}
+			}
+		}
+	}()
+	s.jobSync <- struct{}{}
+	s.formationSync <- struct{}{}
 
 	for {
-		// first, check if we should stop or process pending job events
 		select {
 		case <-s.stop:
 			return nil
+		default:
+		}
+		select {
 		case req := <-s.jobRequests:
 			s.HandleJobRequest(req)
 			continue
 		default:
 		}
-
-		// next, handle sync and formation change events
 		select {
-		case <-s.stop:
-			return nil
-		case <-jobSync:
-			log.Info("starting cluster sync")
-			if err := s.SyncJobs(); err != nil {
-				log.Error("error performing cluster sync", "err", err)
-				continue
+		case <-s.rectifyJobs:
+			if err := s.RectifyJobs(); err != nil {
+				log.Error("error rectifying jobs", "err", err)
 			}
-		case <-formationSync:
-			s.SyncFormations()
+			continue
+		default:
+		}
+		select {
 		case fc := <-s.formationChange:
 			if err := s.FormationChange(fc); err != nil {
 				log.Error("error performing formation change", "err", err)
-				continue
+				s.formationSync <- struct{}{}
 			}
+			continue
+		default:
+		}
+		select {
+		case <-s.formationSync:
+			log.Info("starting formation sync")
+			s.SyncFormations()
+			continue
+		default:
+		}
+		select {
+		case <-s.jobSync:
+			log.Info("starting cluster sync")
+			if err := s.SyncJobs(); err != nil {
+				log.Error("error performing cluster sync", "err", err)
+				s.formationSync <- struct{}{}
+			}
+			continue
 		case <-time.After(time.Second):
 		}
 	}
@@ -106,7 +142,7 @@ func (s *Scheduler) SyncJobs() (err error) {
 		s.sendEvent(NewEvent(EventTypeClusterSync, err, nil))
 	}()
 
-	s.SyncFormations()
+	drainChannel(s.jobSync)
 
 	log.Info("getting host list")
 	hosts, err := s.Hosts()
@@ -116,11 +152,10 @@ func (s *Scheduler) SyncJobs() (err error) {
 	}
 	log.Info(fmt.Sprintf("got %d hosts", len(hosts)))
 
-	unSyncedJobs := make(map[string]*Job)
+	inactiveJobs := make(map[string]*Job)
 	for k, v := range s.jobs {
-		unSyncedJobs[k] = v
+		inactiveJobs[k] = v
 	}
-	fc := make(formationJobs)
 	for _, h := range hosts {
 		log = log.New("host.id", h.ID())
 		log.Info("getting jobs list")
@@ -145,39 +180,47 @@ func (s *Scheduler) SyncJobs() (err error) {
 					log.Info("skipping due to lack of appID or releaseID")
 					continue
 				}
-				if j, ok := s.jobs[job.ID]; ok {
+				if _, ok := s.jobs[job.ID]; ok {
 					log.Info("skipping known job")
-					delete(unSyncedJobs, job.ID)
-					fc.AddJob(j)
+					delete(inactiveJobs, job.ID)
 					continue
 				}
 
 				log.Info("getting formation")
-				f, err := s.getFormation(appID, appName, releaseID)
-				if err != nil {
-					log.Error("error getting formation", "err", err)
+				f := s.formations.Get(appID, releaseID)
+				if f == nil {
+					err = fmt.Errorf("no such formation obtained")
 					continue
 				}
 				log.Info("adding job")
 				j := NewJob(f, jobType, h.ID(), job.ID)
 				s.AddJob(j, appName, utils.JobMetaFromMetadata(job.Metadata))
-				fc.AddJob(j)
 			}
 		}
 	}
-	for jobID := range unSyncedJobs {
+	if err != nil {
+		return err
+	}
+
+	// Any jobs left in inactiveJobs no longer exist on the cluster
+	for jobID := range inactiveJobs {
 		delete(s.jobs, jobID)
 	}
-	return s.rectifyFormations(fc)
+	s.rectifyJobs <- struct{}{}
+
+	return nil
 }
 
 func (s *Scheduler) SyncFormations() (err error) {
 	log := s.log.New("fn", "SyncFormations")
 
+	defer s.sendEvent(NewEvent(EventTypeFormationSync, err, nil))
+
+	drainChannel(s.formationSync)
+
 	log.Info("getting formations")
 
 	if len(s.formations) == 0 {
-		log.Info("getting apps")
 		apps, err := s.AppList()
 		if err != nil {
 			return err
@@ -188,87 +231,109 @@ func (s *Scheduler) SyncFormations() (err error) {
 				return err
 			}
 			for _, f := range fs {
-				form, err := s.getFormation(app.ID, app.Name, f.ReleaseID)
-				if err != nil {
-					return err
-				}
-				s.formations[form.key()] = form
+				err = s.updateFormation(f, app.Name)
 			}
 		}
 	}
 	return err
 }
 
-func (s *Scheduler) rectifyFormations(fc formationJobs) (err error) {
-	for fKey, formation := range s.formations {
-		for typ, count := range formation.Processes {
-			diff := count - fc[fKey][typ]
+func (s *Scheduler) RectifyJobs() (err error) {
+	log := s.log.New("fn", "RectifyJobs")
 
-			if diff > 0 {
-				for i := 0; i < diff; i++ {
-					s.jobRequests <- NewJobRequest(formation, JobRequestTypeUp, typ, "", "")
-				}
-			} else if diff < 0 {
-				for i := 0; i < -diff; i++ {
-					s.jobRequests <- NewJobRequest(formation, JobRequestTypeDown, typ, "", "")
-				}
+	defer s.sendEvent(NewEvent(EventTypeRectifyJobs, err, nil))
+
+	drainChannel(s.rectifyJobs)
+
+	fj := make(formationProcesses)
+	for _, job := range s.jobs {
+		fj.AddJob(job)
+	}
+
+	for fKey, processes := range fj {
+		localFormation, ok := s.formations[fKey]
+
+		if !ok {
+			err = fmt.Errorf("Job exists without formation")
+			continue
+		}
+
+		localProcesses := localFormation.Processes
+
+		if eq := reflect.DeepEqual(processes, localProcesses); !eq {
+			log.Info("rectifying processes", "formation.key", fKey, "scheduler.formation.Processes", localProcesses, "cluster.formation.Processes", processes)
+			localFormation.Processes = processes
+
+			s.formationChange <- &ct.ExpandedFormation{
+				App:       localFormation.App,
+				Release:   localFormation.Release,
+				Artifact:  localFormation.Artifact,
+				Processes: localProcesses,
+				UpdatedAt: time.Now(),
 			}
-			delete(fc[fKey], typ)
 		}
-		if len(fc[fKey]) == 0 {
-			delete(fc, fKey)
-		} else {
-			err = fmt.Errorf("Unknown job type in formation %v", fc[fKey])
+	}
+
+	for fKey, localFormation := range s.formations {
+		if _, ok := fj[fKey]; !ok {
+			processes := localFormation.Processes
+
+			localFormation.Processes = make(map[string]int)
+
+			s.formationChange <- &ct.ExpandedFormation{
+				App:       localFormation.App,
+				Release:   localFormation.Release,
+				Artifact:  localFormation.Artifact,
+				Processes: processes,
+				UpdatedAt: time.Now(),
+			}
 		}
+	}
+
+	if err != nil {
+		s.formationSync <- struct{}{}
 	}
 	return err
 }
 
-func (s *Scheduler) getFormation(appID, appName, releaseID string) (*Formation, error) {
+func (s *Scheduler) updateFormation(controllerFormation *ct.Formation, appName string) error {
 	log := s.log.New("fn", "getFormation")
 
-	artifacts := make(map[string]*ct.Artifact)
-	releases := make(map[string]*ct.Release)
+	appID := controllerFormation.AppID
+	releaseID := controllerFormation.ReleaseID
 
-	f := s.formations.Get(appID, releaseID)
-	if f == nil {
-		release := releases[releaseID]
-		var err error
-		if release == nil {
-			release, err = s.GetRelease(releaseID)
-			if err != nil {
-				log.Error("error getting release", "err", err)
-				return nil, err
-			}
-			releases[release.ID] = release
+	localFormation := s.formations.Get(appID, releaseID)
+
+	if localFormation != nil {
+		s.formationChange <- &ct.ExpandedFormation{
+			App:       localFormation.App,
+			Release:   localFormation.Release,
+			Artifact:  localFormation.Artifact,
+			Processes: controllerFormation.Processes,
+			UpdatedAt: time.Now(),
 		}
-
-		artifact := artifacts[release.ArtifactID]
-		if artifact == nil {
-			artifact, err = s.GetArtifact(release.ArtifactID)
-			if err != nil {
-				log.Error("error getting artifact", "err", err)
-				return nil, err
-			}
-			artifacts[artifact.ID] = artifact
-		}
-
-		formation, err := s.GetFormation(appID, releaseID)
+	} else {
+		release, err := s.GetRelease(releaseID)
 		if err != nil {
-			log.Error("error getting formation", "err", err)
-			return nil, err
+			log.Error("error getting release", "err", err)
+			return err
 		}
 
-		f = NewFormation(&ct.ExpandedFormation{
+		artifact, err := s.GetArtifact(release.ArtifactID)
+		if err != nil {
+			log.Error("error getting artifact", "err", err)
+			return err
+		}
+
+		s.formationChange <- &ct.ExpandedFormation{
 			App:       &ct.App{ID: appID, Name: appName},
 			Release:   release,
 			Artifact:  artifact,
-			Processes: formation.Processes,
-		})
-		log.Info("adding formation")
-		f = s.formations.Add(f)
+			Processes: controllerFormation.Processes,
+			UpdatedAt: time.Now(),
+		}
 	}
-	return f, nil
+	return nil
 }
 
 func (s *Scheduler) FormationChange(ef *ct.ExpandedFormation) (err error) {
@@ -463,6 +528,16 @@ func (s *Scheduler) Jobs() map[string]*Job {
 	return jobs
 }
 
+func drainChannel(ch chan struct{}) {
+	for {
+		select {
+		case <-ch:
+		default:
+			return
+		}
+	}
+}
+
 type Stream struct {
 	s      *Scheduler
 	events chan Event
@@ -493,7 +568,9 @@ type EventType string
 const (
 	EventTypeDefault         EventType = "default"
 	EventTypeClusterSync     EventType = "cluster-sync"
+	EventTypeFormationSync   EventType = "formation-sync"
 	EventTypeFormationChange EventType = "formation-change"
+	EventTypeRectifyJobs     EventType = "rectify-jobs"
 	EventTypeJobStart        EventType = "start-job"
 	EventTypeJobStop         EventType = "stop-job"
 )
