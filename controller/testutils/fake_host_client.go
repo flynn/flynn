@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
@@ -43,7 +44,7 @@ func (c *FakeHostClient) ListJobs() (map[string]host.ActiveJob, error) {
 }
 
 func (c *FakeHostClient) AddJob(job *host.Job) error {
-	c.Jobs[job.ID] = host.ActiveJob{Job: job, HostID: c.hostID}
+	c.Jobs[job.ID] = host.ActiveJob{Job: job, HostID: c.hostID, StartedAt: time.Now()}
 	return nil
 }
 
@@ -57,6 +58,7 @@ func (c *FakeHostClient) GetJob(id string) (*host.ActiveJob, error) {
 
 func (c *FakeHostClient) StopJob(id string) error {
 	c.stopped[id] = true
+	delete(c.Jobs, id)
 	return nil
 }
 

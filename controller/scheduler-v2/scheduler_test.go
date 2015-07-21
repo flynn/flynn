@@ -76,11 +76,11 @@ func (ts *TestSuite) TestInitialClusterSync(c *C) {
 	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeFormationChange)
 	c.Assert(err, IsNil)
-	e, err := waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeClusterSync)
 	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeRectifyJobs)
+	c.Assert(err, IsNil)
+	e, err := waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
 
 	event, ok := e.(*JobStartEvent)
@@ -109,6 +109,9 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	defer stream.Close()
 	go s.Run()
 
+	_, err := waitForEvent(events, EventTypeJobStart)
+	c.Assert(err, IsNil)
+
 	app, err := s.GetApp(testAppID)
 	c.Assert(err, IsNil)
 	release, err := s.GetRelease(testReleaseID)
@@ -116,7 +119,7 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	artifact, err := s.GetArtifact(release.ArtifactID)
 	c.Assert(err, IsNil)
 
-	// Test scaling an existing formation
+	// Test scaling up an existing formation
 	s.formationChange <- &ct.ExpandedFormation{
 		App:       app,
 		Release:   release,
@@ -132,6 +135,23 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	c.Assert(job.Type, Equals, testJobType)
 	c.Assert(job.AppID, Equals, app.ID)
 	c.Assert(job.ReleaseID, Equals, testReleaseID)
+	jobs := s.Jobs()
+	c.Assert(jobs, HasLen, 2)
+
+	// Test scaling down an existing formation
+	s.formationChange <- &ct.ExpandedFormation{
+		App:       app,
+		Release:   release,
+		Artifact:  artifact,
+		Processes: map[string]int{"web": 1},
+	}
+
+	_, err = waitForEvent(events, EventTypeFormationChange)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeJobStop)
+	c.Assert(err, IsNil)
+	jobs = s.Jobs()
+	c.Assert(jobs, HasLen, 1)
 
 	// Test creating a new formation
 	artifact = &ct.Artifact{ID: random.UUID()}
@@ -155,6 +175,70 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	c.Assert(job.Type, Equals, testJobType)
 	c.Assert(job.AppID, Equals, app.ID)
 	c.Assert(job.ReleaseID, Equals, release.ID)
+}
+
+func (ts *TestSuite) TestRectifyJobs(c *C) {
+	s := createTestScheduler()
+	events := make(chan Event, eventBufferSize)
+	stream := s.Subscribe(events)
+	defer s.Stop()
+	defer stream.Close()
+	go s.Run()
+
+	// wait for the formation to cascade to the scheduler
+	_, err := waitForEvent(events, EventTypeFormationSync)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeFormationChange)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeRectifyJobs)
+	c.Assert(err, IsNil)
+
+	form := s.formations.Get(testAppID, testReleaseID)
+	host, err := s.Host(testHostID)
+	request := NewJobRequest(form, JobRequestTypeUp, testJobType, "", "")
+	config := jobConfig(request, testHostID)
+	host.AddJob(config)
+	s.jobSync <- struct{}{}
+
+	_, err = waitForEvent(events, EventTypeClusterSync)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeRectifyJobs)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeJobStop)
+	c.Assert(err, IsNil)
+	jobs := s.Jobs()
+	c.Assert(jobs, HasLen, 1)
+
+	for _, j := range jobs {
+		c.Assert(j.JobID, Not(Equals), config.ID)
+	}
+
+	app := &ct.App{ID: "test-app-2", Name: "test-app-2"}
+	artifact := &ct.Artifact{ID: "test-artifact-2"}
+	processes := map[string]int{testJobType: testJobCount}
+	release := NewRelease("test-release-2", artifact, processes)
+	form = NewFormation(&ct.ExpandedFormation{App: app, Release: release, Artifact: artifact, Processes: processes})
+	request = NewJobRequest(form, JobRequestTypeUp, testJobType, "", "")
+	config = jobConfig(request, testHostID)
+	host.AddJob(config)
+	s.CreateApp(app)
+	s.CreateArtifact(artifact)
+	s.CreateRelease(release)
+	s.jobSync <- struct{}{}
+
+	_, err = waitForEvent(events, EventTypeClusterSync)
+	c.Assert(err, Not(IsNil))
+	_, err = waitForEvent(events, EventTypeFormationSync)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeFormationChange)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeRectifyJobs)
+	c.Assert(err, IsNil)
+	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
+	s.formationSync <- struct{}{}
+	_, err = waitForEvent(events, EventTypeFormationSync)
+	c.Assert(err, IsNil)
+
 }
 
 func checkJobStartEvent(c *C, e Event) *Job {
