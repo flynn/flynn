@@ -417,7 +417,18 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		return err
 	}
 
-	if err := writeHostname(filepath.Join(rootPath, "etc/hosts"), job.ID); err != nil {
+	jobIDParts := strings.SplitN(job.ID, "-", 2)
+	var hostname string
+	if len(jobIDParts) == 1 {
+		hostname = jobIDParts[0]
+	} else {
+		hostname = jobIDParts[1]
+	}
+	if len(hostname) > 64 {
+		hostname = hostname[:64]
+	}
+
+	if err := writeHostname(filepath.Join(rootPath, "etc/hosts"), hostname); err != nil {
 		g.Log(grohl.Data{"at": "write_hosts", "status": "error", "err": err})
 		return err
 	}
@@ -526,7 +537,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		l.defaultEnv,
 		job.Config.Env,
 		map[string]string{
-			"HOSTNAME": job.ID,
+			"HOSTNAME": hostname,
 		},
 	)
 	l.envMtx.RUnlock()
