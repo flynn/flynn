@@ -21,7 +21,7 @@ type JobRequest struct {
 
 func NewJobRequest(f *Formation, requestType JobRequestType, typ, hostID, jobID string) *JobRequest {
 	return &JobRequest{
-		Job:         NewJob(f, typ, hostID, jobID),
+		Job:         NewJob(f, typ, hostID, jobID, time.Time{}),
 		RequestType: requestType,
 	}
 }
@@ -45,7 +45,7 @@ type Job struct {
 	startedAt time.Time
 }
 
-func NewJob(f *Formation, typ, hostID, id string) *Job {
+func NewJob(f *Formation, typ, hostID, id string, startedAt time.Time) *Job {
 	return &Job{
 		Type:      typ,
 		AppID:     f.App.ID,
@@ -53,6 +53,7 @@ func NewJob(f *Formation, typ, hostID, id string) *Job {
 		HostID:    hostID,
 		JobID:     id,
 		Formation: f,
+		startedAt: startedAt,
 	}
 }
 
