@@ -125,7 +125,7 @@ See 'flynn-host help <command>' for more information on a specific command.
 
 func runDaemon(args *docopt.Args) {
 	hostname, _ := os.Hostname()
-	externalAddr := args.String["--external-ip"]
+	externalIP := args.String["--external-ip"]
 	stateFile := args.String["--state"]
 	hostID := args.String["--id"]
 	force := args.Bool["--force"]
@@ -135,7 +135,11 @@ func runDaemon(args *docopt.Args) {
 	nsumount := args.String["--nsumount"]
 	logDir := args.String["--log-dir"]
 	discoveryToken := args.String["--discovery"]
-	peerIPs := strings.Split(args.String["--peer-ips"], ",")
+
+	var peerIPs []string
+	if args.String["--peer-ips"] != "" {
+		peerIPs = strings.Split(args.String["--peer-ips"], ",")
+	}
 
 	grohl.AddContext("app", "host")
 	grohl.Log(grohl.Data{"at": "start"})
@@ -147,15 +151,15 @@ func runDaemon(args *docopt.Args) {
 	if strings.Contains(hostID, "-") {
 		shutdown.Fatal("host id must not contain dashes")
 	}
-	if externalAddr == "" {
+	if externalIP == "" {
 		var err error
-		externalAddr, err = config.DefaultExternalIP()
+		externalIP, err = config.DefaultExternalIP()
 		if err != nil {
 			shutdown.Fatal(err)
 		}
 	}
 
-	publishAddr := externalAddr + ":1113"
+	publishAddr := net.JoinHostPort(externalIP, "1113")
 	if discoveryToken != "" {
 		// TODO: retry
 		discoveryID, err := discovery.RegisterInstance(discovery.Info{
@@ -215,7 +219,7 @@ func runDaemon(args *docopt.Args) {
 	if err != nil {
 		shutdown.Fatal(err)
 	}
-	backend.SetDefaultEnv("EXTERNAL_IP", externalAddr)
+	backend.SetDefaultEnv("EXTERNAL_IP", externalIP)
 
 	resurrect, err := state.Restore(backend)
 	if err != nil {
@@ -263,7 +267,7 @@ func runDaemon(args *docopt.Args) {
 				continue
 			}
 			ip, _, err := net.SplitHostPort(u.Host)
-			if err != nil || ip == externalAddr {
+			if err != nil || ip == externalIP {
 				continue
 			}
 			peerIPs = append(peerIPs, ip)

@@ -62,15 +62,21 @@ main() {
 
   cd "${ROOT}/test"
 
-  test_args="--concurrency 1 --flynnrc ${FLYNNRC} --cli ${flynn} --debug"
+  local args=(
+    "--concurrency 1"
+    "--flynnrc ${FLYNNRC}"
+    "--cli ${flynn}"
+    "--debug"
+  )
+
   if [[ -n "${filter}" ]]; then
-    test_args="${test_args} --run ${filter}"
+    args+=("--run ${filter}")
   fi
   if $stream; then
-    test_args="${test_args} --stream"
+    args+=("--stream")
   fi
 
-  bin/flynn-test ${test_args}
+  bin/flynn-test ${args[@]}
 }
 
 main $@

@@ -71,11 +71,7 @@ func RegisterInstance(info Info) (string, error) {
 		return "", err
 	}
 	if res.StatusCode != http.StatusCreated && res.StatusCode != http.StatusConflict {
-		return "", &url.Error{
-			Op:  "POST",
-			URL: uri,
-			Err: fmt.Errorf("unexpected status %d", res.StatusCode),
-		}
+		return "", urlError("POST", uri, res.StatusCode)
 	}
 	if err := json.NewDecoder(res.Body).Decode(&data); err != nil {
 		return "", err
@@ -90,7 +86,7 @@ func GetCluster(uri string) ([]*Instance, error) {
 		return nil, err
 	}
 	if res.StatusCode != 200 {
-		return nil, urlError(uri, res.StatusCode)
+		return nil, urlError("GET", uri, res.StatusCode)
 	}
 	defer res.Body.Close()
 
@@ -117,7 +113,7 @@ func NewToken() (string, error) {
 		return "", err
 	}
 	if res.StatusCode != http.StatusCreated {
-		return "", urlError(uri, res.StatusCode)
+		return "", urlError("POST", uri, res.StatusCode)
 	}
 
 	base, err := url.Parse(uri)
@@ -132,9 +128,9 @@ func NewToken() (string, error) {
 	return base.ResolveReference(cluster).String(), nil
 }
 
-func urlError(uri string, status int) error {
+func urlError(method, uri string, status int) error {
 	return &url.Error{
-		Op:  "GET",
+		Op:  method,
 		URL: uri,
 		Err: fmt.Errorf("unexpected status %d", status),
 	}

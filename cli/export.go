@@ -157,7 +157,7 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 		}
 		go func() {
 			if err := runJob(client, config); err != nil {
-				shutdown.Fatal(fmt.Sprintf("error retrieving slug: %s", err))
+				shutdown.Fatalf("error retrieving slug: %s", err)
 			}
 		}()
 		res, err := http.ReadResponse(bufio.NewReader(reqR), nil)

@@ -60,10 +60,10 @@ func main() {
 	if key := os.Getenv("COOKIE_KEY"); key != "" {
 		res, err := base64.StdEncoding.DecodeString(key)
 		if err != nil {
-			shutdown.Fatal("error decoding COOKIE_KEY:", err)
+			shutdown.Fatalf("error decoding COOKIE_KEY: %s", err)
 		}
 		if len(res) != 32 {
-			shutdown.Fatal(fmt.Sprintf("decoded %d bytes from COOKIE_KEY, expected 32", len(res)))
+			shutdown.Fatalf("decoded %d bytes from COOKIE_KEY, expected 32", len(res))
 		}
 		var k [32]byte
 		copy(k[:], res)
