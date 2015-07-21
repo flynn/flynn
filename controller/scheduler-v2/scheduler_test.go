@@ -80,6 +80,8 @@ func (ts *TestSuite) TestInitialClusterSync(c *C) {
 	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeClusterSync)
 	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeRectifyJobs)
+	c.Assert(err, IsNil)
 
 	event, ok := e.(*JobStartEvent)
 	c.Assert(ok, Equals, true)
