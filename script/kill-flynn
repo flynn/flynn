@@ -61,6 +61,9 @@ kill_libvirt_lxc() {
     --retry 15 \
     --exec "${flynn_host}"
 
+  # force kill any remaining containers
+  virsh -c lxc:/// list --name | xargs -L 1 virsh -c lxc:/// destroy || true
+
   info "done!"
 }
 
