@@ -182,7 +182,7 @@ func (s *Scheduler) SyncJobs() (err error) {
 					continue
 				}
 				log.Info("adding job")
-				j := NewJob(f, jobType, h.ID(), job.ID)
+				j := NewJob(f, jobType, h.ID(), job.ID, activeJob.StartedAt)
 				s.AddJob(j, appName, utils.JobMetaFromMetadata(job.Metadata))
 			}
 		}
@@ -197,7 +197,7 @@ func (s *Scheduler) SyncJobs() (err error) {
 	}
 	s.rectifyJobs <- struct{}{}
 
-	return nil
+	return err
 }
 
 func (s *Scheduler) SyncFormations() (err error) {
@@ -234,10 +234,7 @@ func (s *Scheduler) RectifyJobs() (err error) {
 
 	drainChannel(s.rectifyJobs)
 
-	fj := make(formationJobs)
-	for _, job := range s.jobs {
-		fj.AddJob(job)
-	}
+	fj := NewFormationJobs(s.jobs)
 
 	for fKey := range fj {
 		schedulerFormation, ok := s.formations[fKey]
@@ -406,7 +403,7 @@ func (s *Scheduler) startJob(req *JobRequest) (err error) {
 		return err
 	}
 	job, err = s.AddJob(
-		NewJob(req.Job.Formation, req.Type, host.ID(), config.ID),
+		NewJob(req.Job.Formation, req.Type, host.ID(), config.ID, time.Now()),
 		req.Job.Formation.App.Name,
 		utils.JobMetaFromMetadata(config.Metadata),
 	)
@@ -425,15 +422,38 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 		}
 		s.sendEvent(NewEvent(EventTypeJobStop, err, nil))
 	}()
-	//FIXME: HostID and JobID are most likely empty right now
-	host, err := s.Host(req.HostID)
+	var job *Job
+	if req.JobID == "" {
+		formJobs := NewFormationJobs(s.jobs)
+		formJob := formJobs[utils.FormationKey{AppID: req.AppID, ReleaseID: req.ReleaseID}]
+		typJobs := formJob[req.Type]
+
+		if len(typJobs) == 0 {
+			return fmt.Errorf("No running jobs of type %q", req.Type)
+		}
+		job = typJobs[0]
+		startedAt := job.startedAt
+		for _, j := range typJobs {
+			if j.startedAt.After(startedAt) {
+				job = j
+				startedAt = j.startedAt
+			}
+		}
+	} else {
+		var ok bool
+		job, ok = s.jobs[req.JobID]
+		if !ok {
+			return fmt.Errorf("Could not stop job with ID %q", req.JobID)
+		}
+	}
+	host, err := s.Host(job.HostID)
 	if err != nil {
 		return err
 	}
-	if err := host.StopJob(req.JobID); err != nil {
+	if err := host.StopJob(job.JobID); err != nil {
 		return err
 	}
-	s.RemoveJob(req.JobID)
+	s.RemoveJob(job.JobID)
 	return nil
 }
 
