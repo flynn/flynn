@@ -175,3 +175,8 @@ func (c *Host) PullImages(repository, driver, root string, tufDB io.Reader, ch c
 func (c *Host) ResourceCheck(request host.ResourceCheck) error {
 	return c.c.Post("/host/resource-check", request, nil)
 }
+
+func (c *Host) Update(name string, args ...string) (pid int, err error) {
+	cmd := &host.Command{Path: name, Args: args}
+	return cmd.PID, c.c.Post("/host/update", cmd, cmd)
+}

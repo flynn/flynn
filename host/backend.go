@@ -45,3 +45,18 @@ type JobStateSaver interface {
 type StateSaver interface {
 	MarshalGlobalState() ([]byte, error)
 }
+
+// MockBackend is used when testing flynn-host without the need to actually run jobs
+type MockBackend struct{}
+
+func (MockBackend) Run(*host.Job, *RunConfig) error                 { return nil }
+func (MockBackend) Stop(string) error                               { return nil }
+func (MockBackend) Signal(string, int) error                        { return nil }
+func (MockBackend) ResizeTTY(id string, height, width uint16) error { return nil }
+func (MockBackend) Attach(*AttachRequest) error                     { return nil }
+func (MockBackend) Cleanup([]string) error                          { return nil }
+func (MockBackend) SetDefaultEnv(k, v string)                       {}
+func (MockBackend) ConfigureNetworking(*host.NetworkConfig) error   { return nil }
+func (MockBackend) UnmarshalState(map[string]*host.ActiveJob, map[string][]byte, []byte) error {
+	return nil
+}

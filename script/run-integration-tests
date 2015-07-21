@@ -61,6 +61,7 @@ main() {
   fi
 
   local flynn="${ROOT}/cli/bin/flynn"
+  local flynn_host="${ROOT}/host/bin/flynn-host"
 
   pushd "${ROOT}" >/dev/null
   make
@@ -88,6 +89,7 @@ main() {
     "--concurrency 1"
     "--flynnrc ${FLYNNRC}"
     "--cli ${flynn}"
+    "--flynn-host ${flynn_host}"
     "--debug"
   )
 

@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -20,7 +23,6 @@ import (
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/host/volume/manager"
 	zfsVolume "github.com/flynn/flynn/host/volume/zfs"
-	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/version"
 )
@@ -34,12 +36,14 @@ func init() {
 usage: flynn-host daemon [options]
 
 options:
+  --http-port=PORT       HTTP port [default: 1113]
   --external-ip=IP       external IP of host
   --listen-ip=IP         bind host network services to this IP
   --state=PATH           path to state file [default: /var/lib/flynn/host-state.bolt]
   --id=ID                host id
   --force                kill all containers booted by flynn-host before starting
   --volpath=PATH         directory to create volumes in [default: /var/lib/flynn/volumes]
+  --vol-provider=VOL     volume provider [default: zfs]
   --backend=BACKEND      runner backend [default: libvirt-lxc]
   --flynn-init=PATH      path to flynn-init binary [default: /usr/local/bin/flynn-init]
   --nsumount=PATH        path to flynn-nsumount binary [default: /usr/local/bin/flynn-nsumount]
@@ -130,12 +134,14 @@ See 'flynn-host help <command>' for more information on a specific command.
 
 func runDaemon(args *docopt.Args) {
 	hostname, _ := os.Hostname()
+	httpPort := args.String["--http-port"]
 	externalIP := args.String["--external-ip"]
 	listenIP := args.String["--listen-ip"]
 	stateFile := args.String["--state"]
 	hostID := args.String["--id"]
 	force := args.Bool["--force"]
 	volPath := args.String["--volpath"]
+	volProvider := args.String["--vol-provider"]
 	backendName := args.String["--backend"]
 	flynnInit := args.String["--flynn-init"]
 	nsumount := args.String["--nsumount"]
@@ -166,7 +172,7 @@ func runDaemon(args *docopt.Args) {
 		}
 	}
 
-	publishAddr := net.JoinHostPort(externalIP, "1113")
+	publishAddr := net.JoinHostPort(externalIP, httpPort)
 	if discoveryToken != "" {
 		// TODO: retry
 		discoveryID, err := discovery.RegisterInstance(discovery.Info{
@@ -182,17 +188,13 @@ func runDaemon(args *docopt.Args) {
 	}
 
 	state := NewState(hostID, stateFile)
-	if err := state.OpenDB(); err != nil {
-		shutdown.Fatal(err)
-	}
 	shutdown.BeforeExit(func() { state.CloseDB() })
-	var backend Backend
-	var err error
 
 	// create volume manager
-	vman := volumemanager.New(
-		filepath.Join(volPath, "volumes.bolt"),
-		func() (volume.Provider, error) {
+	var newVolProvider func() (volume.Provider, error)
+	switch volProvider {
+	case "zfs":
+		newVolProvider = func() (volume.Provider, error) {
 			// use a zpool backing file size of either 70% of the device on which
 			// volumes will reside, or 100GB if that can't be determined.
 			var size int64
@@ -212,19 +214,28 @@ func runDaemon(args *docopt.Args) {
 				},
 				WorkingDir: filepath.Join(volPath, "zfs"),
 			})
-		},
-	)
-	if err := vman.OpenDB(); err != nil {
-		shutdown.Fatal(err)
+		}
+	case "mock":
+		newVolProvider = func() (volume.Provider, error) { return nil, nil }
+	default:
+		shutdown.Fatalf("unknown volume provider: %q", volProvider)
 	}
+	vman := volumemanager.New(
+		filepath.Join(volPath, "volumes.bolt"),
+		newVolProvider,
+	)
 	shutdown.BeforeExit(func() { vman.CloseDB() })
 
 	mux := logmux.New(1000)
 	shutdown.BeforeExit(func() { mux.Close() })
 
+	var backend Backend
+	var err error
 	switch backendName {
 	case "libvirt-lxc":
 		backend, err = NewLibvirtLXCBackend(state, vman, logDir, bridgeName, flynnInit, nsumount, mux)
+	case "mock":
+		backend = MockBackend{}
 	default:
 		log.Fatalf("unknown backend %q", backendName)
 	}
@@ -237,11 +248,49 @@ func runDaemon(args *docopt.Args) {
 	discoverdManager := NewDiscoverdManager(backend, mux, hostID, publishAddr)
 	publishURL := "http://" + publishAddr
 	host := &Host{
-		id:      hostID,
-		url:     publishURL,
-		state:   state,
-		backend: backend,
-		status:  &host.HostStatus{ID: hostID, URL: publishURL},
+		id:               hostID,
+		url:              publishURL,
+		status:           &host.HostStatus{ID: hostID, PID: os.Getpid(), URL: publishURL},
+		state:            state,
+		backend:          backend,
+		vman:             vman,
+		connectDiscoverd: discoverdManager.ConnectLocal,
+	}
+
+	// restore the host status if set in the environment
+	if statusEnv := os.Getenv("FLYNN_HOST_STATUS"); statusEnv != "" {
+		if err := json.Unmarshal([]byte(statusEnv), &host.status); err != nil {
+			shutdown.Fatal(err)
+		}
+		host.status.PID = os.Getpid()
+	}
+
+	l, err := newHTTPListener(net.JoinHostPort(listenIP, httpPort))
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+	host.listener = l
+	shutdown.BeforeExit(func() { host.Close() })
+
+	// if we have a control socket FD, wait for a "resume" message before
+	// opening state DBs and serving requests.
+	var controlFD int
+	if fdEnv := os.Getenv("FLYNN_CONTROL_FD"); fdEnv != "" {
+		controlFD, err = strconv.Atoi(fdEnv)
+		if err != nil {
+			shutdown.Fatal(err)
+		}
+		msg := make([]byte, len(ControlMsgResume))
+		if _, err := syscall.Read(controlFD, msg); err != nil {
+			shutdown.Fatalf("error reading from parent control socket: %s", err)
+		}
+		if !bytes.Equal(msg, ControlMsgResume) {
+			shutdown.Fatalf("unexpected resume message from parent: %s", msg)
+		}
+	}
+
+	if err := host.OpenDBs(); err != nil {
+		shutdown.Fatal(err)
 	}
 
 	// stopJobs stops all jobs, leaving discoverd until the end so other
@@ -279,15 +328,26 @@ func runDaemon(args *docopt.Args) {
 		}
 	})
 
-	if err := serveHTTP(
-		host,
-		net.JoinHostPort(listenIP, "1113"),
-		&attachHandler{state: state, backend: backend},
-		cluster.NewClient(),
-		vman,
-		discoverdManager.ConnectLocal,
-	); err != nil {
-		shutdown.Fatal(err)
+	// configure network and discoverd if config set in host status
+	if config := host.status.Network; config != nil {
+		if err := backend.ConfigureNetworking(config); err != nil {
+			shutdown.Fatal(err)
+		}
+	}
+	if config := host.status.Discoverd; config != nil && config.URL != "" {
+		if err := host.connectDiscoverd(config.URL); err != nil {
+			shutdown.Fatal(err)
+		}
+	}
+
+	host.ServeHTTP()
+
+	if controlFD > 0 {
+		// now that we are serving requests, send an "ok" message to the parent
+		if _, err := syscall.Write(controlFD, ControlMsgOK); err != nil {
+			shutdown.Fatalf("error writing to parent control socket: %s", err)
+		}
+		syscall.Close(controlFD)
 	}
 
 	if force {
