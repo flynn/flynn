@@ -49,7 +49,7 @@ func (c *context) HandleDeployment(job *que.Job) (e error) {
 	log.Info("getting old formation")
 	f, err := c.client.GetFormation(deployment.AppID, deployment.OldReleaseID)
 	if err != nil {
-		log.Error("error getting old formation", "err", err)
+		log.Error("error getting old formation", "release_id", deployment.OldReleaseID, "err", err)
 		return err
 	}
 
