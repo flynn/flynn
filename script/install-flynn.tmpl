@@ -33,6 +33,8 @@ main() {
   local assume_yes=false
   local repo_url
 
+  export DEBIAN_FRONTEND=noninteractive
+
   while true; do
     case "$1" in
       --clean)
