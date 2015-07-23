@@ -175,7 +175,7 @@ func (e *EventListener) Notify(event *ct.AppEvent) {
 	defer e.subMtx.RUnlock()
 	if subs, ok := e.subscribers[event.AppID]; ok {
 		for sub := range subs {
-			go sub.Notify(event)
+			sub.Notify(event)
 		}
 	}
 }
