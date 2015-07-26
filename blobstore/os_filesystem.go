@@ -4,6 +4,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/flynn/flynn/pkg/status"
 )
 
 type osFile struct {
@@ -55,4 +57,8 @@ func (s *OSFilesystem) Delete(name string) error {
 
 func (s *OSFilesystem) path(name string) string {
 	return filepath.Join(s.root, name)
+}
+
+func (*OSFilesystem) Status() status.Status {
+	return status.Healthy
 }
