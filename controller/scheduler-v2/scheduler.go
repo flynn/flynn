@@ -48,9 +48,9 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Sched
 		listeners:        make(map[chan Event]struct{}),
 		formations:       make(Formations),
 		stop:             make(chan interface{}),
-		jobSync:          make(chan interface{}, eventBufferSize),
-		formationSync:    make(chan interface{}, eventBufferSize),
-		rectifyJobs:      make(chan interface{}, eventBufferSize),
+		jobSync:          make(chan interface{}, 1),
+		formationSync:    make(chan interface{}, 1),
+		rectifyJobs:      make(chan interface{}, 1),
 		formationChange:  make(chan interface{}, eventBufferSize),
 		jobRequests:      make(chan interface{}, eventBufferSize),
 		validJobStatuses: map[host.JobStatus]bool{
@@ -71,51 +71,35 @@ func (s *Scheduler) Run() error {
 
 	jobTicker := time.Tick(30 * time.Second)
 	formationTicker := time.Tick(time.Minute)
+	formationTimeout := time.After(time.Second)
 	go func() {
 		for {
 			select {
 			case <-jobTicker:
-				s.jobSync <- struct{}{}
+				triggerChan(s.jobSync)
 			case <-formationTicker:
-				s.formationSync <- struct{}{}
+				triggerChan(s.formationSync)
+			case <-formationTimeout:
+				triggerChan(s.formationSync)
 			}
 		}
 	}()
-	s.jobSync <- struct{}{}
-	s.formationSync <- struct{}{}
-
-	chanList := []*chanHandler{
-		{
-			channel: s.jobRequests,
-			handler: s.jobRequestHandler,
-		}, {
-			channel: s.rectifyJobs,
-			handler: s.rectifyJobsHandler,
-		}, {
-			channel: s.formationChange,
-			handler: s.formationChangeHandler,
-		}, {
-			channel: s.formationSync,
-			handler: s.formationSyncHandler,
-		}, {
-			channel: s.jobSync,
-			handler: s.jobSyncHandler,
-		},
-	}
+	triggerChan(s.jobSync)
 
 	for {
-		if s.handleChan(&chanHandler{s.stop, nil}) {
-			break
-		}
-		handled := false
-		for _, chHandler := range chanList {
-			handled = s.handleChan(chHandler)
-			if handled {
-				break
-			}
-		}
-		if !handled {
-			<-time.After(time.Second)
+		select {
+		case <-s.stop:
+			return nil
+		case req := <-s.jobRequests:
+			s.jobRequestHandler(req)
+		case <-s.rectifyJobs:
+			s.RectifyJobs()
+		case ef := <-s.formationChange:
+			s.formationChangeHandler(ef)
+		case <-s.formationSync:
+			s.SyncFormations()
+		case <-s.jobSync:
+			s.SyncJobs()
 		}
 	}
 	return nil
@@ -126,12 +110,7 @@ func (s *Scheduler) SyncJobs() (err error) {
 
 	defer func() {
 		s.sendEvent(NewEvent(EventTypeClusterSync, err, nil))
-		if err != nil {
-			s.formationSync <- struct{}{}
-		}
 	}()
-
-	drainChannel(s.jobSync)
 
 	fLog.Info("getting host list")
 	hosts, err := s.Hosts()
@@ -178,8 +157,17 @@ func (s *Scheduler) SyncJobs() (err error) {
 				log.Info("getting formation")
 				f := s.formations.Get(appID, releaseID)
 				if f == nil {
-					err = fmt.Errorf("No such formation obtained")
-					continue
+					var cf *ct.Formation
+					cf, err = s.GetFormation(appID, releaseID)
+					if cf == nil {
+						err = fmt.Errorf("Job found with unknown formation")
+						continue
+					}
+					f, err = s.updateFormation(cf)
+					if f == nil {
+						err = fmt.Errorf("Unable to update formation")
+						continue
+					}
 				}
 				log.Info("adding job")
 				j := NewJob(f, jobType, h.ID(), job.ID, activeJob.StartedAt)
@@ -187,15 +175,12 @@ func (s *Scheduler) SyncJobs() (err error) {
 			}
 		}
 	}
-	if err != nil {
-		return err
-	}
 
 	// Any jobs left in inactiveJobs no longer exist on the cluster
 	for jobID := range inactiveJobs {
 		delete(s.jobs, jobID)
 	}
-	s.rectifyJobs <- struct{}{}
+	triggerChan(s.rectifyJobs)
 
 	return err
 }
@@ -204,8 +189,6 @@ func (s *Scheduler) SyncFormations() (err error) {
 	log := s.log.New("fn", "SyncFormations")
 
 	defer s.sendEvent(NewEvent(EventTypeFormationSync, err, nil))
-
-	drainChannel(s.formationSync)
 
 	log.Info("getting formations")
 	apps, err := s.AppList()
@@ -218,9 +201,10 @@ func (s *Scheduler) SyncFormations() (err error) {
 			return err
 		}
 		for _, f := range fs {
-			err = s.updateFormation(f, app.Name)
+			_, err = s.updateFormation(f)
 		}
 	}
+	triggerChan(s.rectifyJobs)
 	return err
 }
 
@@ -229,16 +213,18 @@ func (s *Scheduler) RectifyJobs() (err error) {
 
 	defer s.sendEvent(NewEvent(EventTypeRectifyJobs, err, nil))
 
-	drainChannel(s.rectifyJobs)
-
 	fj := NewFormationJobs(s.jobs)
 
 	for fKey := range fj {
 		schedulerFormation, ok := s.formations[fKey]
 
 		if !ok {
-			err = fmt.Errorf("Job exists without formation")
-			continue
+			cf, err := s.GetFormation(fKey.AppID, fKey.ReleaseID)
+			if err != nil {
+				log.Error("Job exists without formation")
+				continue
+			}
+			schedulerFormation, err = s.updateFormation(cf)
 		}
 
 		schedulerProcs := schedulerFormation.Processes
@@ -260,9 +246,6 @@ func (s *Scheduler) RectifyJobs() (err error) {
 		}
 	}
 
-	if err != nil {
-		s.formationSync <- struct{}{}
-	}
 	return err
 }
 
@@ -281,21 +264,10 @@ func (s *Scheduler) sendDiffRequests(f *Formation, diff map[string]int) {
 }
 
 func (s *Scheduler) FormationChange(ef *ct.ExpandedFormation) (err error) {
-	log := s.log.New("fn", "FormationChange")
+	defer s.sendEvent(NewEvent(EventTypeFormationChange, err, nil))
 
-	defer func() {
-		s.sendEvent(NewEvent(EventTypeFormationChange, err, nil))
-	}()
-
-	f := s.formations.Get(ef.App.ID, ef.Release.ID)
-	if f == nil {
-		log.Info("creating new formation")
-		s.formations.Add(NewFormation(ef))
-		s.jobSync <- struct{}{}
-	} else {
-		f.Processes = ef.Processes
-		s.rectifyJobs <- struct{}{}
-	}
+	s.changeFormation(ef)
+	triggerChan(s.rectifyJobs)
 
 	return nil
 }
@@ -318,7 +290,17 @@ func (s *Scheduler) HandleJobRequest(req *JobRequest) (err error) {
 	return
 }
 
-func (s *Scheduler) updateFormation(controllerFormation *ct.Formation, appName string) error {
+func (s *Scheduler) changeFormation(ef *ct.ExpandedFormation) *Formation {
+	f := s.formations.Get(ef.App.ID, ef.Release.ID)
+	if f == nil {
+		f = s.formations.Add(NewFormation(ef))
+	} else {
+		f.Processes = ef.Processes
+	}
+	return f
+}
+
+func (s *Scheduler) updateFormation(controllerFormation *ct.Formation) (*Formation, error) {
 	log := s.log.New("fn", "getFormation")
 
 	appID := controllerFormation.AppID
@@ -327,38 +309,42 @@ func (s *Scheduler) updateFormation(controllerFormation *ct.Formation, appName s
 	localFormation := s.formations.Get(appID, releaseID)
 
 	if localFormation != nil {
-		log.Info("Requesting formation update", "app.id", appID, "release.id", releaseID, "formation.processes", controllerFormation.Processes)
-		s.formationChange <- &ct.ExpandedFormation{
+		log.Info("Updating formation", "app.id", appID, "release.id", releaseID, "formation.processes", controllerFormation.Processes)
+		return s.changeFormation(&ct.ExpandedFormation{
 			App:       localFormation.App,
 			Release:   localFormation.Release,
 			Artifact:  localFormation.Artifact,
 			Processes: controllerFormation.Processes,
 			UpdatedAt: time.Now(),
-		}
+		}), nil
 	} else {
+		app, err := s.GetApp(appID)
+		if err != nil {
+			log.Error("error getting app", "err", err)
+			return nil, err
+		}
+
 		release, err := s.GetRelease(releaseID)
 		if err != nil {
 			log.Error("error getting release", "err", err)
-			return err
+			return nil, err
 		}
 
 		artifact, err := s.GetArtifact(release.ArtifactID)
 		if err != nil {
 			log.Error("error getting artifact", "err", err)
-			return err
+			return nil, err
 		}
 
-		log.Info("Requesting new formation", "app.id", appID, "release.id", releaseID, "formation.processes", controllerFormation.Processes)
-
-		s.formationChange <- &ct.ExpandedFormation{
-			App:       &ct.App{ID: appID, Name: appName},
+		log.Info("Creating new formation", "app.id", appID, "release.id", releaseID, "formation.processes", controllerFormation.Processes)
+		return s.changeFormation(&ct.ExpandedFormation{
+			App:       app,
 			Release:   release,
 			Artifact:  artifact,
 			Processes: controllerFormation.Processes,
 			UpdatedAt: time.Now(),
-		}
+		}), nil
 	}
-	return nil
 }
 
 func (s *Scheduler) startJob(req *JobRequest) (err error) {
@@ -526,21 +512,12 @@ func (s *Scheduler) Jobs() map[string]*Job {
 }
 
 // Channel handlers
-type chanHandler struct {
-	channel chan interface{}
-	handler func(interface{}) error
-}
-
 func (s *Scheduler) jobRequestHandler(i interface{}) error {
 	req, ok := i.(*JobRequest)
 	if !ok {
 		return fmt.Errorf("Failed to cast to JobRequest")
 	}
 	return s.HandleJobRequest(req)
-}
-
-func (s *Scheduler) rectifyJobsHandler(i interface{}) error {
-	return s.RectifyJobs()
 }
 
 func (s *Scheduler) formationChangeHandler(i interface{}) error {
@@ -551,37 +528,10 @@ func (s *Scheduler) formationChangeHandler(i interface{}) error {
 	return s.FormationChange(fc)
 }
 
-func (s *Scheduler) formationSyncHandler(i interface{}) error {
-	return s.SyncFormations()
-}
-
-func (s *Scheduler) jobSyncHandler(i interface{}) error {
-	return s.SyncJobs()
-}
-
-func (s *Scheduler) handleChan(chHandler *chanHandler) bool {
-	log := s.log.New("fn", "handleChan")
-
+func triggerChan(ch chan interface{}) {
 	select {
-	case test := <-chHandler.channel:
-		if chHandler.handler != nil {
-			if err := chHandler.handler(test); err != nil {
-				log.Error("error performing task", "err", err)
-			}
-		}
-		return true
+	case ch <- struct{}{}:
 	default:
-		return false
-	}
-}
-
-func drainChannel(ch chan interface{}) {
-	for {
-		select {
-		case <-ch:
-		default:
-			return
-		}
 	}
 }
 
