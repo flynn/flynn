@@ -72,11 +72,7 @@ func (ts *TestSuite) TestInitialClusterSync(c *C) {
 	go s.Run()
 
 	// wait for a cluster sync event
-	_, err := waitForEvent(events, EventTypeFormationSync)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeFormationChange)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeClusterSync)
+	_, err := waitForEvent(events, EventTypeClusterSync)
 	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeRectifyJobs)
 	c.Assert(err, IsNil)
@@ -188,8 +184,6 @@ func (ts *TestSuite) TestRectifyJobs(c *C) {
 	// wait for the formation to cascade to the scheduler
 	_, err := waitForEvent(events, EventTypeFormationSync)
 	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeFormationChange)
-	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeRectifyJobs)
 	c.Assert(err, IsNil)
 
@@ -228,15 +222,11 @@ func (ts *TestSuite) TestRectifyJobs(c *C) {
 
 	_, err = waitForEvent(events, EventTypeClusterSync)
 	c.Assert(err, Not(IsNil))
-	_, err = waitForEvent(events, EventTypeFormationSync)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeFormationChange)
-	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeRectifyJobs)
 	c.Assert(err, IsNil)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
-	s.formationSync <- struct{}{}
-	_, err = waitForEvent(events, EventTypeFormationSync)
+	s.jobSync <- struct{}{}
+	_, err = waitForEvent(events, EventTypeClusterSync)
 	c.Assert(err, IsNil)
 
 }
