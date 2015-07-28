@@ -1,100 +1,13 @@
-GIT
-  remote: git://github.com/flynn/flynn-dashboard-web-icons.git
-  revision: a03e56dbe3dd6f073a7ab212ae0912a355a85ab0
-  branch: master
-  specs:
-    flynn-dashboard-web-icons (0.0.1)
-
-GIT
-  remote: git://github.com/jvatic/static-sprockets.git
-  revision: 80ff2ad17e5a14e6e5797b4df05d162d079eea8f
-  branch: master
-  specs:
-    static-sprockets (0.0.2)
-      mimetype-fu
-      rack
-      rack-putty (= 0.0.1)
-      sass
-      sprockets
-      sprockets-rainpress
-      uglifier
-
-GIT
-  remote: git://github.com/rails/sprockets.git
-  revision: 09a7f56fe403700301467d3b14ee08e3aa713643
-  tag: v3.2.0
-  specs:
-    sprockets (3.2.0)
-      rack (~> 1.0)
-
-GIT
-  remote: git://github.com/tent/rack-putty.git
-  revision: ebb5a62dc895ce0b73fa6cd3dda330226f42beb9
-  branch: master
-  specs:
-    rack-putty (0.0.1)
-      rack-mount (~> 0.8.3)
-
-GIT
-  remote: https://github.com/jvatic/es6-module-mapper.git
-  revision: 513978c86df3785f5d37aa0cee4ec5c0fc980ced
-  branch: master
-  specs:
-    es6-module-mapper (0.0.1)
-      sprockets (~> 3.2)
-      yajl-ruby (~> 1.2)
-
-GIT
-  remote: https://github.com/jvatic/marbles-js.git
-  revision: 50fe2ed6d530d9b695b98a775dcc28ec7c9478bc
-  branch: es6-modules
-  specs:
-    marbles-js (0.0.5)
-      es6-module-mapper
-
-GIT
-  remote: https://github.com/jvatic/react-jsx-sprockets
-  revision: 50418cb324889890190808b12e3017a5568d6cd8
-  branch: master
-  specs:
-    react-jsx-sprockets (0.2.1)
-      execjs (>= 1.2.9)
-      sprockets (>= 2.0.3)
-      tilt (>= 1.3.3)
-      yajl-ruby
-
 GEM
   remote: https://rubygems.org/
   specs:
-    execjs (2.5.2)
-    json (1.8.3)
-    mimetype-fu (0.1.2)
-    rack (1.6.1)
-    rack-mount (0.8.3)
-      rack (>= 1.0.0)
-    rainpress (1.0)
-    rake (10.4.2)
-    sass (3.4.14)
-    sprockets-rainpress (0.0.1)
-      rainpress
-      sprockets
-    tilt (2.0.1)
-    uglifier (2.7.1)
-      execjs (>= 0.3.0)
-      json (>= 1.8.0)
     yajl-ruby (1.2.1)
 
 PLATFORMS
   ruby
 
 DEPENDENCIES
-  es6-module-mapper!
-  flynn-dashboard-web-icons!
-  marbles-js!
-  mimetype-fu
-  rack-putty!
-  rake
-  react-jsx-sprockets!
-  sprockets!
-  static-sprockets!
   yajl-ruby
+
+BUNDLED WITH
+   1.10.5

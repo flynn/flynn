@@ -1,3 +1,4 @@
+<% require 'yajl' %>
 var AssetPaths = <%= Yajl::Encoder.encode([
 	"windows-firefox-cert-1.png",
 	"linux-firefox-cert-1.png",
@@ -31,7 +32,7 @@ var AssetPaths = <%= Yajl::Encoder.encode([
 	"azure-8.gif",
 	"azure-done.png",
 ].inject({}) { |m, name|
-  m[name] = asset_path('images/'+ name).sub(/\A\./, '/assets')
+  m[name] = asset_path('images/'+ name).sub(/\A\.?\/?/, '/assets/')
   m
 }, pretty: true) %>;
 export default AssetPaths;

@@ -4,10 +4,11 @@
  */
 /* FONT PATH
  * -------------------------- */
+
 @font-face {
   font-family: 'FontAwesome';
-  src: url('<%= asset_path('fonts/fontawesome-webfont.eot') %>?v=4.3.0');
-  src: url('<%= asset_path('fonts/fontawesome-webfont.eot') %>?#iefix&v=4.3.0') format('embedded-opentype'), url('<%= asset_path('fonts/fontawesome-webfont.woff2') %>?v=4.3.0') format('woff2'), url('<%= asset_path('fonts/fontawesome-webfont.woff') %>?v=4.3.0') format('woff'), url('<%= asset_path('fonts/fontawesome-webfont.ttf') %>?v=4.3.0') format('truetype'), url('<%= asset_path('fonts/fontawesome-webfont.svg') %>?v=4.3.0#fontawesomeregular') format('svg');
+  src: asset-url('fonts/fontawesome-webfont.eot?v=4.3.0');
+  src: asset-url('fonts/fontawesome-webfont.eot?#iefix&v=4.3.0') format('embedded-opentype'), asset-url('fonts/fontawesome-webfont.woff2?v=4.3.0') format('woff2'), asset-url('fonts/fontawesome-webfont.woff?v=4.3.0') format('woff'), asset-url('fonts/fontawesome-webfont.ttf?v=4.3.0') format('truetype'), asset-url('fonts/fontawesome-webfont.svg?v=4.3.0#fontawesomeregular') format('svg');
   font-weight: normal;
   font-style: normal;
 }

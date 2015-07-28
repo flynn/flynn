@@ -3,7 +3,7 @@ import Config from '../config';
 
 var AssetPaths = Config.ASSET_PATHS;
 
-<% require 'dashboard/installer_import' %>
+<% require './lib/dashboard/installer_import.rb' %>
 
 <%= Dashboard::InstallerImport.javascript('views/css/colors') %>
 

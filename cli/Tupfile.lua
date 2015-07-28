@@ -4,15 +4,18 @@ tup.export("GIT_BRANCH")
 tup.export("GIT_TAG")
 tup.export("GIT_DIRTY")
 
-tup.rule({"../util/rubyassetbuilder/*", "../util/cedarish/<docker>"},
-          "^ docker build installer-builder^ cat ../log/docker-cedarish.log > /dev/null && ../util/rubyassetbuilder/build.sh image installer | tee %o",
+tup.rule({"../util/assetbuilder/*", "../util/cedarish/<docker>"},
+          "^ docker build installer-builder^ cat ../log/docker-cedarish.log > /dev/null && ../util/assetbuilder/build.sh image installer | tee %o",
           {"../log/docker-installer-builder.log", "<docker>"})
 
 tup.rule("go build -o ../installer/bin/go-bindata ../Godeps/_workspace/src/github.com/jteeuwen/go-bindata/go-bindata",
           {"../installer/bin/go-bindata"})
 
-tup.rule({"../installer/bin/go-bindata", "../log/docker-installer-builder.log"},
-          "../util/rubyassetbuilder/build.sh app installer",
+tup.rule("go build -o ../installer/app/compiler ../installer/app",
+          {"../installer/app/compiler"})
+
+tup.rule({"../installer/bin/go-bindata", "../installer/app/compiler", "../log/docker-installer-builder.log"},
+          "../util/assetbuilder/build.sh app installer",
           {"../installer/bindata.go"})
 
 tup.rule({"tuf.go.tmpl"},

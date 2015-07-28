@@ -1,4 +1,5 @@
 import { extend } from 'marbles/utils';
+<% require 'yajl' %>
 
 var StaticConfig = extend({
   APP_NAME: <%= Yajl::Encoder.encode(ENV['APP_NAME'] || '') %>,

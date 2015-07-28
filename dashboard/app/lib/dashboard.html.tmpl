@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Flynn Dashboard</title>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+
+    <link href="{{assetPath "dashboard.css"}}" rel="stylesheet" />
+  </head>
+
+  <body>
+    <section id="nav">
+    </section>
+
+    <div id="main">
+    </div>
+
+    <div id="secondary">
+    </div>
+
+    <script type="application/javascript" src="{{if .Development}}{{assetPath "react.dev.js"}}{{else}}{{assetPath "react.js"}}{{end}}"></script>
+    <script type="application/javascript" src="{{assetPath "moment.js"}}"></script>
+    <script type="application/javascript" src="{{assetPath "es6promise.js"}}"></script>
+    <script type="application/javascript" src="{{assetPath "dashboard.js"}}"></script>
+  </body>
+</html>
