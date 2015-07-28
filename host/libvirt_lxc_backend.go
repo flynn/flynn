@@ -109,7 +109,7 @@ type LibvirtLXCBackend struct {
 
 type libvirtContainer struct {
 	RootPath string
-	domain   *lt.Domain
+	Domain   *lt.Domain
 	IP       net.IP
 	job      *host.Job
 	l        *LibvirtLXCBackend
@@ -609,8 +609,8 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		g.Log(grohl.Data{"at": "get_domain_xml", "status": "error", "err": err})
 		return err
 	}
-	container.domain = &lt.Domain{}
-	if err := xml.Unmarshal([]byte(domainXML), container.domain); err != nil {
+	container.Domain = &lt.Domain{}
+	if err := xml.Unmarshal([]byte(domainXML), container.Domain); err != nil {
 		g.Log(grohl.Data{"at": "unmarshal_domain_xml", "status": "error", "err": err})
 		return err
 	}
@@ -716,7 +716,7 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 		// see https://github.com/flynn/flynn/issues/1125 for details. Remove
 		// nsumount from the tree when deleting.
 		g.Log(grohl.Data{"at": "cleanup_mounts", "status": "start"})
-		if err := c.cleanupMounts(c.domain.ID); err != nil {
+		if err := c.cleanupMounts(c.Domain.ID); err != nil {
 			g.Log(grohl.Data{"at": "cleanup_mounts", "status": "error", "err": err})
 		}
 
