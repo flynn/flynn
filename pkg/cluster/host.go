@@ -114,12 +114,12 @@ func (c *Host) SignalJob(id string, sig int) error {
 
 // StreamEvents about job state changes to ch. id may be "all" or a single
 // job ID.
-func (c *Host) StreamEvents(id string, ch chan<- *host.Event) (stream.Stream, error) {
+func (c *Host) StreamEvents(id string, ch chan *host.Event) (stream.Stream, error) {
 	r := fmt.Sprintf("/host/jobs/%s", id)
 	if id == "all" {
 		r = "/host/jobs"
 	}
-	return c.c.Stream("GET", r, nil, ch)
+	return c.c.ResumingStream("GET", r, ch)
 }
 
 // CreateVolume a new volume, returning its ID.
