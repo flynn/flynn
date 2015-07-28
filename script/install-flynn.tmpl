@@ -113,30 +113,25 @@ main() {
   info "downloading flynn-host binary to tmp dir"
   local tmp="$(mktemp --directory)"
   trap "rm -rf ${tmp}" EXIT
+  cd "${tmp}"
   if ! curl -fsSL -o "${tmp}/flynn-host.gz" "${repo_url}/tuf/targets/${FLYNN_HOST_CHECKSUM}.flynn-host.gz"; then
     fail "failed to download flynn-host binary from ${repo_url}"
   fi
 
   info "verifying flynn-host binary checksum"
-  pushd "${tmp}" >/dev/null
   if ! echo "${FLYNN_HOST_CHECKSUM} *flynn-host.gz" | sha512sum --check --status; then
     fail "failed to verify flynn-host binary checksum!"
   fi
-  popd >/dev/null
-
-  info "moving verified flynn-host binary to /usr/local/bin"
-  run gunzip "${tmp}/flynn-host.gz"
-  run mv "${tmp}/flynn-host" "/usr/local/bin/flynn-host"
-  run chmod +x "/usr/local/bin/flynn-host"
+  run gunzip "flynn-host.gz"
+  run chmod +x "flynn-host"
 
   info "downloading Flynn components"
   mkdir -p "/etc/flynn"
-  run /usr/local/bin/flynn-host download \
+  run ./flynn-host download \
     --repository "${repo_url}/tuf" \
     --tuf-db     "/etc/flynn/tuf.db" \
     --config-dir "/etc/flynn" \
     --bin-dir    "/usr/local/bin"
-  ln -fs "/usr/local/bin/flynn-linux-amd64" "/usr/local/bin/flynn"
 
   info "setting libvirt defaults"
   if grep -q "^libvirt_uris=" /etc/default/libvirt-bin; then

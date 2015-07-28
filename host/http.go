@@ -11,13 +11,16 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
+	"github.com/flynn/flynn/host/downloader"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume/api"
 	"github.com/flynn/flynn/host/volume/manager"
@@ -27,6 +30,7 @@ import (
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/sse"
+	"github.com/flynn/flynn/pkg/version"
 )
 
 var (
@@ -181,6 +185,48 @@ func (h *jobAPI) PullImages(w http.ResponseWriter, r *http.Request, ps httproute
 	}
 
 	stream.Wait()
+}
+
+func (h *jobAPI) PullBinariesAndConfig(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	tufDB, err := extractTufDB(r)
+	if err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	defer os.Remove(tufDB)
+
+	query := r.URL.Query()
+	local, err := tuf.FileLocalStore(tufDB)
+	if err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	opts := &tuf.HTTPRemoteOptions{
+		UserAgent: fmt.Sprintf("flynn-host/%s %s-%s pull", version.String(), runtime.GOOS, runtime.GOARCH),
+	}
+	remote, err := tuf.HTTPRemoteStore(query.Get("repository"), opts)
+	if err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	client := tuf.NewClient(local, remote)
+
+	paths, err := downloader.DownloadBinaries(client, query.Get("bin-dir"))
+	if err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+
+	configs, err := downloader.DownloadConfig(client, query.Get("config-dir"))
+	if err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	for k, v := range configs {
+		paths[k] = v
+	}
+
+	httphelper.JSON(w, 200, paths)
 }
 
 func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -340,7 +386,8 @@ func (h *jobAPI) RegisterRoutes(r *httprouter.Router) error {
 	r.PUT("/host/jobs/:id", h.AddJob)
 	r.DELETE("/host/jobs/:id", h.StopJob)
 	r.PUT("/host/jobs/:id/signal/:signal", h.SignalJob)
-	r.POST("/host/pull-images", h.PullImages)
+	r.POST("/host/pull/images", h.PullImages)
+	r.POST("/host/pull/binaries", h.PullBinariesAndConfig)
 	r.POST("/host/discoverd", h.ConfigureDiscoverd)
 	r.POST("/host/network", h.ConfigureNetworking)
 	r.GET("/host/status", h.GetStatus)

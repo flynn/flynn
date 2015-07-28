@@ -168,8 +168,23 @@ func (c *Host) SendSnapshot(snapID string, assumeHaves []json.RawMessage) (io.Re
 // PullImages pulls images from a TUF repository using the local TUF file in tufDB
 func (c *Host) PullImages(repository, driver, root string, tufDB io.Reader, ch chan<- *layer.PullInfo) (stream.Stream, error) {
 	header := http.Header{"Content-Type": {"application/octet-stream"}}
-	path := fmt.Sprintf("/host/pull-images?repository=%s&driver=%s&root=%s", repository, driver, root)
+	query := make(url.Values)
+	query.Set("repository", repository)
+	query.Set("driver", driver)
+	query.Set("root", root)
+	path := "/host/pull/images?" + query.Encode()
 	return c.c.StreamWithHeader("POST", path, header, tufDB, ch)
+}
+
+// PullBinariesAndConfig pulls binaries and config from a TUF repository using the local TUF file in tufDB
+func (c *Host) PullBinariesAndConfig(repository, binDir, configDir string, tufDB io.Reader) (map[string]string, error) {
+	query := make(url.Values)
+	query.Set("repository", repository)
+	query.Set("bin-dir", binDir)
+	query.Set("config-dir", configDir)
+	path := "/host/pull/binaries?" + query.Encode()
+	var paths map[string]string
+	return paths, c.c.Post(path, tufDB, &paths)
 }
 
 func (c *Host) ResourceCheck(request host.ResourceCheck) error {
