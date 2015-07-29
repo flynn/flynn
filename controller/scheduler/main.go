@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -801,6 +802,9 @@ func (f *Formation) restart(stoppedJob *Job) error {
 func (f *Formation) start(typ string, hostID string) (job *Job, err error) {
 	if hostID == "" {
 		hosts := f.c.hosts.List()
+		if len(hosts) == 0 {
+			return nil, errors.New("no hosts found")
+		}
 		sh := make(sortHosts, 0, len(hosts))
 		for _, host := range hosts {
 			count := 0
