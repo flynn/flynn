@@ -224,7 +224,12 @@ func (d *pgDataStore) Sync(ctx context.Context, h SyncHandler, startc chan<- str
 		case err = <-errc:
 			return err
 		case <-ctx.Done():
-			<-idc
+			// wait for startListener to finish (it will either
+			// close idc or send an error on errc)
+			select {
+			case <-idc:
+			case <-errc:
+			}
 			return nil
 		}
 	}
