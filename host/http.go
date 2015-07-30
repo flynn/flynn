@@ -28,6 +28,9 @@ type Host struct {
 	backend Backend
 	id      string
 	url     string
+
+	statusMtx sync.RWMutex
+	status    *host.HostStatus
 }
 
 var ErrNotFound = errors.New("host: unknown job")
@@ -69,9 +72,6 @@ type jobAPI struct {
 	connectDiscoverd func(string) error
 	discoverdOnce    sync.Once
 	networkOnce      sync.Once
-
-	statusMtx sync.RWMutex
-	status    *host.HostStatus
 }
 
 func (h *jobAPI) ListJobs(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -183,18 +183,15 @@ func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 }
 
 func (h *jobAPI) ConfigureDiscoverd(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	var config struct {
-		URL string `json:"url"`
-		DNS string `json:"dns"`
-	}
+	var config host.DiscoverdConfig
 	if err := httphelper.DecodeJSON(r, &config); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
 
-	h.statusMtx.Lock()
-	h.status.Discoverd = &host.DiscoverdConfig{URL: config.URL}
-	h.statusMtx.Unlock()
+	h.host.statusMtx.Lock()
+	h.host.status.Discoverd = &config
+	h.host.statusMtx.Unlock()
 
 	if config.URL != "" && config.DNS != "" {
 		go h.discoverdOnce.Do(func() {
@@ -216,16 +213,16 @@ func (h *jobAPI) ConfigureNetworking(w http.ResponseWriter, r *http.Request, _ h
 			shutdown.Fatal(err)
 		}
 
-		h.statusMtx.Lock()
-		h.status.Network = config
-		h.statusMtx.Unlock()
+		h.host.statusMtx.Lock()
+		h.host.status.Network = config
+		h.host.statusMtx.Unlock()
 	})
 }
 
 func (h *jobAPI) GetStatus(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	h.statusMtx.RLock()
-	defer h.statusMtx.RUnlock()
-	httphelper.JSON(w, 200, &h.status)
+	h.host.statusMtx.RLock()
+	defer h.host.statusMtx.RUnlock()
+	httphelper.JSON(w, 200, &h.host.status)
 }
 
 func extractTufDB(r *http.Request) (string, error) {
@@ -268,7 +265,6 @@ func serveHTTP(h *Host, attach *attachHandler, clus *cluster.Client, vman *volum
 	jobAPI := &jobAPI{
 		host:             h,
 		connectDiscoverd: connectDiscoverd,
-		status:           &host.HostStatus{ID: h.id, URL: h.url},
 	}
 	jobAPI.RegisterRoutes(r)
 	volAPI := volumeapi.NewHTTPAPI(clus, vman)

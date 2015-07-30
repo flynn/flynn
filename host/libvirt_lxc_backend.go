@@ -1024,11 +1024,22 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 	return io.EOF
 }
 
-func (l *LibvirtLXCBackend) Cleanup() error {
+func (l *LibvirtLXCBackend) Cleanup(except []string) error {
 	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "Cleanup"})
+	shouldSkip := func(id string) bool {
+		for _, s := range except {
+			if id == s {
+				return true
+			}
+		}
+		return false
+	}
 	l.containersMtx.Lock()
 	ids := make([]string, 0, len(l.containers))
 	for id := range l.containers {
+		if shouldSkip(id) {
+			continue
+		}
 		ids = append(ids, id)
 	}
 	l.containersMtx.Unlock()

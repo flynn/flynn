@@ -28,7 +28,7 @@ type Backend interface {
 	Signal(string, int) error
 	ResizeTTY(id string, height, width uint16) error
 	Attach(*AttachRequest) error
-	Cleanup() error
+	Cleanup([]string) error
 	UnmarshalState(map[string]*host.ActiveJob, map[string][]byte, []byte) error
 	ConfigureNetworking(config *host.NetworkConfig) error
 	SetDefaultEnv(k, v string)
