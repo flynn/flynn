@@ -335,10 +335,8 @@ func (d *pgDataStore) scanRoute(route *router.Route, s scannable) error {
 const sqlUnlisten = `UNLISTEN %s`
 
 func unlistenAndRelease(pool *pgx.ConnPool, conn *pgx.Conn, channel string) {
-	_, err := conn.Exec(fmt.Sprintf(sqlUnlisten, channel))
-	if err != nil {
+	if _, err := conn.Exec(fmt.Sprintf(sqlUnlisten, channel)); err != nil {
 		conn.Close()
-		return
 	}
 	pool.Release(conn)
 }
