@@ -15,7 +15,6 @@ import (
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 	"github.com/flynn/flynn/pkg/syslog/rfc6587"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kavu/go_reuseport"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 )
 
@@ -51,7 +50,7 @@ func main() {
 	}
 	shutdown.BeforeExit(a.Shutdown)
 
-	listener, err := reuseport.NewReusablePortListener("tcp4", *apiAddr)
+	listener, err := net.Listen("tcp4", *apiAddr)
 	if err != nil {
 		shutdown.Fatal(err)
 	}
