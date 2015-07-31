@@ -12,6 +12,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 const eventBufferSize int = 1000
@@ -473,7 +474,7 @@ func (s *Scheduler) Stop() error {
 	return nil
 }
 
-func (s *Scheduler) Subscribe(events chan Event) *Stream {
+func (s *Scheduler) Subscribe(events chan Event) stream.Stream {
 	s.log.Info("adding subscriber", "fn", "Subscribe")
 	s.listenMtx.Lock()
 	defer s.listenMtx.Unlock()
@@ -542,6 +543,10 @@ type Stream struct {
 
 func (s *Stream) Close() error {
 	s.s.Unsubscribe(s.events)
+	return nil
+}
+
+func (s *Stream) Err() error {
 	return nil
 }
 
