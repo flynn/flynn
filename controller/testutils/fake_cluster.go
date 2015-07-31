@@ -1,9 +1,11 @@
 package testutils
 
 import (
+	"errors"
 	"sync"
 
 	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 func NewFakeCluster() *FakeCluster {
@@ -11,8 +13,9 @@ func NewFakeCluster() *FakeCluster {
 }
 
 type FakeCluster struct {
-	hosts map[string]*FakeHostClient
-	mtx   sync.RWMutex
+	hosts        map[string]*FakeHostClient
+	mtx          sync.RWMutex
+	hostChannels map[chan utils.HostClient]struct{}
 }
 
 func (c *FakeCluster) Hosts() ([]utils.HostClient, error) {
@@ -25,6 +28,18 @@ func (c *FakeCluster) Hosts() ([]utils.HostClient, error) {
 	return hosts, nil
 }
 
+func (c *FakeCluster) StreamHosts(ch chan utils.HostClient) (stream.Stream, error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
+	if _, ok := c.hostChannels[ch]; ok {
+		return nil, errors.New("Already streaming that channel")
+	}
+	c.hostChannels[ch] = struct{}{}
+
+	return &ClusterStream{cluster: c, ch: ch}, nil
+}
+
 func (c *FakeCluster) Host(id string) (utils.HostClient, error) {
 	c.mtx.RLock()
 	defer c.mtx.RUnlock()
@@ -32,10 +47,31 @@ func (c *FakeCluster) Host(id string) (utils.HostClient, error) {
 }
 
 func (c *FakeCluster) SetHosts(h map[string]*FakeHostClient) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
 	c.hosts = h
 }
 
 func (c *FakeCluster) AddHost(h *FakeHostClient) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
 	h.cluster = c
 	c.hosts[h.ID()] = h
+}
+
+type ClusterStream struct {
+	cluster *FakeCluster
+	ch      chan utils.HostClient
+}
+
+func (c *ClusterStream) Close() error {
+	c.cluster.mtx.Lock()
+	defer c.cluster.mtx.Unlock()
+	delete(c.cluster.hostChannels, c.ch)
+	close(c.ch)
+	return nil
+}
+
+func (c *ClusterStream) Err() error {
+	return nil
 }
