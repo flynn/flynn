@@ -1,6 +1,7 @@
 package testutils
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 func NewFakeHostClient(hostID string) *FakeHostClient {
@@ -21,12 +23,13 @@ func NewFakeHostClient(hostID string) *FakeHostClient {
 }
 
 type FakeHostClient struct {
-	hostID  string
-	stopped map[string]bool
-	attach  map[string]attachFunc
-	Jobs    map[string]host.ActiveJob
-	cluster *FakeCluster
-	volumes map[string]*volume.Info
+	hostID        string
+	stopped       map[string]bool
+	attach        map[string]attachFunc
+	Jobs          map[string]host.ActiveJob
+	cluster       *FakeCluster
+	volumes       map[string]*volume.Info
+	eventChannels map[chan<- *host.Event]struct{}
 }
 
 func (c *FakeHostClient) ID() string { return c.hostID }
@@ -83,4 +86,28 @@ func (c *FakeHostClient) CreateVolume(providerID string) (*volume.Info, error) {
 	return volume, nil
 }
 
+func (c *FakeHostClient) StreamEvents(id string, ch chan<- *host.Event) (stream.Stream, error) {
+	if _, ok := c.eventChannels[ch]; ok {
+		return nil, errors.New("Already streaming that channel")
+	}
+	c.eventChannels[ch] = struct{}{}
+
+	return &HostStream{host: c, ch: ch}, nil
+}
+
 type attachFunc func(req *host.AttachReq, wait bool) (cluster.AttachClient, error)
+
+type HostStream struct {
+	host *FakeHostClient
+	ch   chan<- *host.Event
+}
+
+func (h *HostStream) Close() error {
+	delete(h.host.eventChannels, h.ch)
+	close(h.ch)
+	return nil
+}
+
+func (h *HostStream) Err() error {
+	return nil
+}
