@@ -10,6 +10,7 @@ import (
 	"github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
+	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
@@ -21,6 +22,7 @@ func apiHandler(agg *Aggregator) http.Handler {
 	api := aggregatorAPI{agg: agg}
 	r := httprouter.New()
 
+	r.Handler("GET", status.Path, status.HealthyHandler)
 	r.GET("/log/:channel_id", httphelper.WrapHandler(api.GetLog))
 	return httphelper.ContextInjector(
 		"logaggregator-api",
