@@ -17,6 +17,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
 	"github.com/flynn/flynn/pkg/cors"
+	"github.com/flynn/flynn/pkg/status"
 )
 
 type LoginInfo struct {
@@ -58,6 +59,8 @@ func APIHandler(conf *Config) http.Handler {
 		AllowCredentials: true,
 		MaxAge:           time.Hour,
 	}))
+
+	r.Get(status.Path, status.HealthyHandler)
 
 	r.Group(conf.PathPrefix, func(r martini.Router) {
 		m.Use(reqHelperMiddleware)
