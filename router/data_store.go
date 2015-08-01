@@ -224,7 +224,12 @@ func (d *pgDataStore) Sync(ctx context.Context, h SyncHandler, startc chan<- str
 		case err = <-errc:
 			return err
 		case <-ctx.Done():
-			<-idc
+			// wait for startListener to finish (it will either
+			// close idc or send an error on errc)
+			select {
+			case <-idc:
+			case <-errc:
+			}
 			return nil
 		}
 	}
@@ -335,10 +340,8 @@ func (d *pgDataStore) scanRoute(route *router.Route, s scannable) error {
 const sqlUnlisten = `UNLISTEN %s`
 
 func unlistenAndRelease(pool *pgx.ConnPool, conn *pgx.Conn, channel string) {
-	_, err := conn.Exec(fmt.Sprintf(sqlUnlisten, channel))
-	if err != nil {
+	if _, err := conn.Exec(fmt.Sprintf(sqlUnlisten, channel)); err != nil {
 		conn.Close()
-		return
 	}
 	pool.Release(conn)
 }

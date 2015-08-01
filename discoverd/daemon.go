@@ -124,13 +124,8 @@ func waitForHostNetwork() (*host.HostStatus, error) {
 	})
 }
 
-type Status struct {
-	URL string `json:"url"`
-	DNS string `json:"dns"`
-}
-
 var (
-	status    Status
+	status    = host.DiscoverdConfig{JobID: os.Getenv("FLYNN_JOB_ID")}
 	statusMtx sync.Mutex
 )
 

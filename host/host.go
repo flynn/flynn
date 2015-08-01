@@ -16,6 +16,7 @@ import (
 	"github.com/flynn/flynn/host/cli"
 	"github.com/flynn/flynn/host/config"
 	"github.com/flynn/flynn/host/logmux"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/host/volume/manager"
 	zfsVolume "github.com/flynn/flynn/host/volume/zfs"
@@ -221,11 +222,40 @@ func runDaemon(args *docopt.Args) {
 	}
 	backend.SetDefaultEnv("EXTERNAL_IP", externalIP)
 
+	publishURL := "http://" + publishAddr
+	host := &Host{
+		id:      hostID,
+		url:     publishURL,
+		state:   state,
+		backend: backend,
+		status:  &host.HostStatus{ID: hostID, URL: publishURL},
+	}
+
+	// stopJobs stops all jobs, leaving discoverd until the end so other
+	// jobs can unregister themselves on shutdown.
+	stopJobs := func() (err error) {
+		var except []string
+		host.statusMtx.RLock()
+		if host.status.Discoverd != nil && host.status.Discoverd.JobID != "" {
+			except = []string{host.status.Discoverd.JobID}
+		}
+		host.statusMtx.RUnlock()
+		if err := backend.Cleanup(except); err != nil {
+			return err
+		}
+		for _, id := range except {
+			if e := backend.Stop(id); e != nil {
+				err = e
+			}
+		}
+		return
+	}
+
 	resurrect, err := state.Restore(backend)
 	if err != nil {
 		shutdown.Fatal(err)
 	}
-	shutdown.BeforeExit(func() { backend.Cleanup() })
+	shutdown.BeforeExit(func() { stopJobs() })
 	shutdown.BeforeExit(func() {
 		if err := state.MarkForResurrection(); err != nil {
 			log.Print("error marking for resurrection", err)
@@ -234,12 +264,7 @@ func runDaemon(args *docopt.Args) {
 
 	discoverdManager := NewDiscoverdManager(backend, mux, hostID, publishAddr)
 	if err := serveHTTP(
-		&Host{
-			id:      hostID,
-			url:     "http://" + publishAddr,
-			state:   state,
-			backend: backend,
-		},
+		host,
 		&attachHandler{state: state, backend: backend},
 		cluster.NewClient(),
 		vman,
@@ -249,7 +274,7 @@ func runDaemon(args *docopt.Args) {
 	}
 
 	if force {
-		if err := backend.Cleanup(); err != nil {
+		if err := stopJobs(); err != nil {
 			shutdown.Fatal(err)
 		}
 	}

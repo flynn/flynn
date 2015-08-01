@@ -265,7 +265,9 @@ type NetworkConfig struct {
 }
 
 type DiscoverdConfig struct {
-	URL string `json:"url"`
+	JobID string `json:"job_id"`
+	URL   string `json:"url"`
+	DNS   string `json:"dns"`
 }
 
 type HostStatus struct {
