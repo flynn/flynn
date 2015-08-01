@@ -138,6 +138,10 @@ func (s *dockerSession) get(path string, out interface{}) (*http.Response, error
 		if out != nil {
 			defer res.Body.Close()
 		}
+		if res.StatusCode == 404 {
+			err = fmt.Errorf("registry: image not found")
+			continue
+		}
 		if res.StatusCode != 200 {
 			err = fmt.Errorf("registry: unexpected status %d", res.StatusCode)
 			continue
