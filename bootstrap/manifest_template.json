@@ -184,6 +184,7 @@
           "cmd": ["scheduler"],
           "omni": true,
           "service": "flynn-controller-scheduler",
+          "ports": [{ "proto": "tcp" }],
           "resurrect": true
         },
         "worker": {

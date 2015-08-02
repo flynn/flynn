@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"sort"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/stream"
 )
 
@@ -30,6 +32,8 @@ func main() {
 
 	grohl.AddContext("app", "controller-scheduler")
 	grohl.Log(grohl.Data{"at": "start"})
+
+	go startHTTPServer()
 
 	if period := os.Getenv("BACKOFF_PERIOD"); period != "" {
 		var err error
@@ -76,6 +80,11 @@ func main() {
 
 	// TODO: periodic full cluster sync for anti-entropy
 	c.watchFormations()
+}
+
+func startHTTPServer() {
+	status.AddHandler(status.HealthyHandler)
+	shutdown.Fatal(http.ListenAndServe(":"+os.Getenv("PORT"), nil))
 }
 
 func newContext(cc controllerClient, cl clusterClient) *context {
