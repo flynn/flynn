@@ -279,3 +279,10 @@ type HostStatus struct {
 	Discoverd *DiscoverdConfig `json:"discoverd,omitempty"`
 	Network   *NetworkConfig   `json:"network,omitempty"`
 }
+
+const (
+	JobEventCreate string = "create"
+	JobEventStart  string = "start"
+	JobEventStop   string = "stop"
+	JobEventError  string = "error"
+)

@@ -92,6 +92,14 @@ func (c *FakeHostClient) StreamEvents(id string, ch chan<- *host.Event) (stream.
 	}
 	c.eventChannels[ch] = struct{}{}
 
+	for _, j := range c.Jobs {
+		ch <- &host.Event{
+			Event: host.JobEventStart,
+			JobID: j.Job.ID,
+			Job:   &j,
+		}
+	}
+
 	return &HostStream{host: c, ch: ch}, nil
 }
 
