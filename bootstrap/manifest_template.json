@@ -188,7 +188,8 @@
           "resurrect": true
         },
         "worker": {
-          "cmd": ["worker"]
+          "cmd": ["worker"],
+          "ports": [{ "proto": "tcp" }]
         }
       }
     },
