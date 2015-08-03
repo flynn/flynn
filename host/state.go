@@ -275,7 +275,7 @@ func (s *State) AddJob(j *host.Job, ip net.IP) {
 		job.InternalIP = ip.String()
 	}
 	s.jobs[j.ID] = job
-	s.sendEvent(job, "create")
+	s.sendEvent(job, host.JobEventCreate)
 	s.persist(j.ID)
 }
 
@@ -350,7 +350,7 @@ func (s *State) SetStatusRunning(jobID string) {
 
 	job.StartedAt = time.Now().UTC()
 	job.Status = host.StatusRunning
-	s.sendEvent(job, "start")
+	s.sendEvent(job, host.JobEventStart)
 	s.persist(jobID)
 }
 
@@ -386,7 +386,7 @@ func (s *State) setStatusDone(job *host.ActiveJob, exitStatus int) {
 	} else {
 		job.Status = host.StatusCrashed
 	}
-	s.sendEvent(job, "stop")
+	s.sendEvent(job, host.JobEventStop)
 	s.persist(job.Job.ID)
 }
 
@@ -402,7 +402,7 @@ func (s *State) SetStatusFailed(jobID string, err error) {
 	job.EndedAt = time.Now().UTC()
 	errStr := err.Error()
 	job.Error = &errStr
-	s.sendEvent(job, "error")
+	s.sendEvent(job, host.JobEventError)
 	s.persist(jobID)
 	go s.WaitAttach(jobID)
 }

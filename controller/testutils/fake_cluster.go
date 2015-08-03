@@ -37,6 +37,10 @@ func (c *FakeCluster) StreamHosts(ch chan utils.HostClient) (stream.Stream, erro
 	}
 	c.hostChannels[ch] = struct{}{}
 
+	for _, h := range c.hosts {
+		ch <- h
+	}
+
 	return &ClusterStream{cluster: c, ch: ch}, nil
 }
 
@@ -57,6 +61,10 @@ func (c *FakeCluster) AddHost(h *FakeHostClient) {
 	defer c.mtx.Unlock()
 	h.cluster = c
 	c.hosts[h.ID()] = h
+
+	for ch := range c.hostChannels {
+		ch <- h
+	}
 }
 
 type ClusterStream struct {
