@@ -9,7 +9,10 @@ import (
 )
 
 func NewFakeCluster() *FakeCluster {
-	return &FakeCluster{hosts: make(map[string]*FakeHostClient)}
+	return &FakeCluster{
+		hosts:        make(map[string]*FakeHostClient),
+		hostChannels: make(map[chan utils.HostClient]struct{}),
+	}
 }
 
 type FakeCluster struct {

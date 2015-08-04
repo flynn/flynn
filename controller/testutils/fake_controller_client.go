@@ -1,25 +1,30 @@
 package testutils
 
 import (
+	"time"
+
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 type FakeControllerClient struct {
-	releases   map[string]*ct.Release
-	artifacts  map[string]*ct.Artifact
-	formations map[string]map[string]*ct.Formation
-	jobs       map[string]*ct.Job
-	apps       map[string]*ct.App
+	releases         map[string]*ct.Release
+	artifacts        map[string]*ct.Artifact
+	formations       map[string]map[string]*ct.Formation
+	formationStreams map[chan<- *ct.ExpandedFormation]struct{}
+	jobs             map[string]*ct.Job
+	apps             map[string]*ct.App
 }
 
 func NewFakeControllerClient() *FakeControllerClient {
 	return &FakeControllerClient{
-		releases:   make(map[string]*ct.Release),
-		artifacts:  make(map[string]*ct.Artifact),
-		formations: make(map[string]map[string]*ct.Formation),
-		apps:       make(map[string]*ct.App),
-		jobs:       make(map[string]*ct.Job),
+		releases:         make(map[string]*ct.Release),
+		artifacts:        make(map[string]*ct.Artifact),
+		formations:       make(map[string]map[string]*ct.Formation),
+		formationStreams: make(map[chan<- *ct.ExpandedFormation]struct{}),
+		apps:             make(map[string]*ct.App),
+		jobs:             make(map[string]*ct.Job),
 	}
 }
 
@@ -76,6 +81,10 @@ func (c *FakeControllerClient) PutFormation(formation *ct.Formation) error {
 	}
 	releases[formation.ReleaseID] = formation
 
+	for ch := range c.formationStreams {
+		ch <- c.expandedFormationFromFormation(formation)
+	}
+
 	return nil
 }
 
@@ -98,6 +107,19 @@ func (c *FakeControllerClient) FormationList(appID string) ([]*ct.Formation, err
 	return nil, controller.ErrNotFound
 }
 
+func (c *FakeControllerClient) StreamFormations(since time.Time, ch chan<- *ct.ExpandedFormation) (stream.Stream, error) {
+
+	for _, releases := range c.formations {
+		for _, f := range releases {
+			ch <- c.expandedFormationFromFormation(f)
+		}
+	}
+	return &FormationStream{
+		cc: c,
+		ch: ch,
+	}, nil
+}
+
 func (c *FakeControllerClient) PutJob(job *ct.Job) error {
 	c.jobs[job.ID] = job
 	return nil
@@ -114,4 +136,32 @@ func NewRelease(id string, artifact *ct.Artifact, processes map[string]int) *ct.
 		ArtifactID: artifact.ID,
 		Processes:  processTypes,
 	}
+}
+
+func (c *FakeControllerClient) expandedFormationFromFormation(f *ct.Formation) *ct.ExpandedFormation {
+	app, _ := c.GetApp(f.AppID)
+	release, _ := c.GetRelease(f.ReleaseID)
+	artifact, _ := c.GetArtifact(release.ArtifactID)
+	return &ct.ExpandedFormation{
+		App:       app,
+		Release:   release,
+		Artifact:  artifact,
+		Processes: f.Processes,
+		UpdatedAt: time.Now(),
+	}
+}
+
+type FormationStream struct {
+	cc *FakeControllerClient
+	ch chan<- *ct.ExpandedFormation
+}
+
+func (fs *FormationStream) Close() error {
+	delete(fs.cc.formationStreams, fs.ch)
+	close(fs.ch)
+	return nil
+}
+
+func (fs *FormationStream) Err() error {
+	return nil
 }

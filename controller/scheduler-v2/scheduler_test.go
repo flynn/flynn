@@ -72,9 +72,7 @@ func (ts *TestSuite) TestInitialClusterSync(c *C) {
 	go s.Run()
 
 	// wait for a cluster sync event
-	_, err := waitForEvent(events, EventTypeClusterSync)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeRectifyJobs)
+	_, err := waitForEvent(events, EventTypeRectifyJobs)
 	c.Assert(err, IsNil)
 	e, err := waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
@@ -192,10 +190,7 @@ func (ts *TestSuite) TestRectifyJobs(c *C) {
 	request := NewJobRequest(form, JobRequestTypeUp, testJobType, "", "")
 	config := jobConfig(request, testHostID)
 	host.AddJob(config)
-	s.jobSync <- struct{}{}
 
-	_, err = waitForEvent(events, EventTypeClusterSync)
-	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeRectifyJobs)
 	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeJobStop)
@@ -218,14 +213,10 @@ func (ts *TestSuite) TestRectifyJobs(c *C) {
 	s.CreateApp(app)
 	s.CreateArtifact(artifact)
 	s.CreateRelease(release)
-	s.jobSync <- struct{}{}
 
-	_, err = waitForEvent(events, EventTypeClusterSync)
-	c.Assert(err, Not(IsNil))
 	_, err = waitForEvent(events, EventTypeRectifyJobs)
 	c.Assert(err, IsNil)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
-	s.jobSync <- struct{}{}
 	_, err = waitForEvent(events, EventTypeClusterSync)
 	c.Assert(err, IsNil)
 

@@ -23,7 +23,10 @@ type Scheduler struct {
 	log        log15.Logger
 	formations Formations
 
-	jobs map[string]*Job
+	hosts map[string]utils.HostClient
+	jobs  map[string]*Job
+
+	hostEvents chan *host.Event
 
 	listeners map[chan Event]struct{}
 	listenMtx sync.RWMutex
@@ -31,10 +34,8 @@ type Scheduler struct {
 	stop     chan interface{}
 	stopOnce sync.Once
 
-	jobSync         chan interface{}
-	formationSync   chan interface{}
 	rectifyJobs     chan interface{}
-	formationChange chan interface{}
+	formationChange chan *ct.ExpandedFormation
 	jobRequests     chan interface{}
 
 	validJobStatuses map[host.JobStatus]bool
@@ -45,14 +46,14 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Sched
 		ControllerClient: cc,
 		ClusterClient:    cluster,
 		log:              log15.New("component", "scheduler"),
+		hosts:            make(map[string]utils.HostClient),
 		jobs:             make(map[string]*Job),
+		hostEvents:       make(chan *host.Event, eventBufferSize),
 		listeners:        make(map[chan Event]struct{}),
 		formations:       make(Formations),
 		stop:             make(chan interface{}),
-		jobSync:          make(chan interface{}, 1),
-		formationSync:    make(chan interface{}, 1),
 		rectifyJobs:      make(chan interface{}, 1),
-		formationChange:  make(chan interface{}, eventBufferSize),
+		formationChange:  make(chan *ct.ExpandedFormation, eventBufferSize),
 		jobRequests:      make(chan interface{}, eventBufferSize),
 		validJobStatuses: map[host.JobStatus]bool{
 			host.StatusStarting: true,
@@ -72,60 +73,146 @@ func (s *Scheduler) Run() error {
 
 	jobTicker := time.Tick(30 * time.Second)
 	formationTicker := time.Tick(time.Minute)
-	formationTimeout := time.After(time.Second)
-	go func() {
-		for {
-			select {
-			case <-jobTicker:
-				triggerChan(s.jobSync)
-			case <-formationTicker:
-				triggerChan(s.formationSync)
-			case <-formationTimeout:
-				triggerChan(s.formationSync)
-			}
-		}
-	}()
-	triggerChan(s.jobSync)
+	hostTicker := time.Tick(5 * time.Minute)
+
+	hostChan := make(chan utils.HostClient, eventBufferSize)
+	stream, err := s.StreamHosts(hostChan)
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+
+	stream, err = s.StreamFormations(time.Now(), s.formationChange)
 
 	for {
+		// First handle events reconciling our state with the cluster
 		select {
 		case <-s.stop:
 			return nil
+		case h := <-hostChan:
+			s.followHost(h)
+			continue
+		case he := <-s.hostEvents:
+			s.handleHostEvent(he)
+			continue
+		case <-time.After(time.Second):
+		}
+
+		// Then handle events that could mutate the cluster
+		select {
 		case req := <-s.jobRequests:
 			s.jobRequestHandler(req)
 		case <-s.rectifyJobs:
 			s.RectifyJobs()
 		case ef := <-s.formationChange:
-			s.formationChangeHandler(ef)
-		case <-s.formationSync:
+			s.FormationChange(ef)
+		case <-hostTicker:
+			s.SyncHosts()
+		case <-formationTicker:
 			s.SyncFormations()
-		case <-s.jobSync:
+		case <-jobTicker:
 			s.SyncJobs()
+		default:
 		}
 	}
 	return nil
 }
 
-func (s *Scheduler) SyncJobs() (err error) {
-	fLog := s.log.New("fn", "Sync")
+func (s *Scheduler) followHost(h utils.HostClient) {
+	log := s.log.New("fn", "followHost")
+	_, ok := s.hosts[h.ID()]
+	if !ok {
+		log.Info("Following host", "host.id", h.ID())
+		s.hosts[h.ID()] = h
+		h.StreamEvents("all", s.hostEvents)
+		triggerChan(s.rectifyJobs)
+	}
+}
+
+func (s *Scheduler) handleHostEvent(he *host.Event) (err error) {
+	log := s.log.New("fn", "handleHostEvent")
 
 	defer func() {
-		s.sendEvent(NewEvent(EventTypeClusterSync, err, nil))
+		if err != nil {
+			log.Error("error handling host event", "err", err)
+		}
 	}()
 
-	fLog.Info("getting host list")
+	log.Info("Handling job event", "job.event.type", he.Event)
+	job, err := s.handleActiveJob(he.Job)
+
+	switch he.Event {
+	case host.JobEventCreate:
+	case host.JobEventStart:
+		s.sendEvent(NewEvent(EventTypeJobStart, err, job))
+	case host.JobEventStop:
+		s.sendEvent(NewEvent(EventTypeJobStop, err, nil))
+	case host.JobEventError:
+	}
+
+	return err
+}
+
+func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) (*Job, error) {
+	job := activeJob.Job
+	appID := job.Metadata["flynn-controller.app"]
+	appName := job.Metadata["flynn-controller.app_name"]
+	releaseID := job.Metadata["flynn-controller.release"]
+	jobType := job.Metadata["flynn-controller.type"]
+
+	log := s.log.New("fn", "handleActiveJob", "job.id", job.ID, "app.id", appID, "release.id", releaseID, "type", jobType)
+
+	if appID == "" || releaseID == "" {
+		return nil, errors.New("skipping due to lack of appID or releaseID")
+	}
+	j, ok := s.jobs[job.ID]
+	if !ok {
+		log.Info("getting formation")
+		f := s.formations.Get(appID, releaseID)
+		if f == nil {
+			var cf *ct.Formation
+			cf, err := s.GetFormation(appID, releaseID)
+			if err != nil || cf == nil {
+				return nil, errors.New("Job found with unknown formation")
+			}
+			f, err = s.updateFormation(cf)
+			if err != nil || f == nil {
+				return nil, errors.New("Unable to update formation")
+			}
+		}
+		j = NewJob(f, jobType, activeJob.HostID, job.ID, activeJob.StartedAt)
+	}
+	log.Info("saving job")
+	s.SaveJob(j, appName, activeJob.Status, utils.JobMetaFromMetadata(job.Metadata))
+	triggerChan(s.rectifyJobs)
+	return j, nil
+}
+
+func (s *Scheduler) SyncHosts() (err error) {
+	log := s.log.New("fn", "SyncHosts")
+
+	defer s.sendEvent(NewEvent(EventTypeHostSync, err, nil))
+
+	log.Info("getting host list")
 	hosts, err := s.Hosts()
 	if err != nil {
-		fLog.Error("error getting host list", "err", err)
+		log.Error("error getting host list", "err", err)
 		return err
 	}
-	fLog.Info(fmt.Sprintf("got %d hosts", len(hosts)))
-
-	inactiveJobs := make(map[string]*Job)
-	for k, v := range s.jobs {
-		inactiveJobs[k] = v
-	}
 	for _, h := range hosts {
+		s.followHost(h)
+	}
+	log.Info(fmt.Sprintf("got %d hosts", len(hosts)))
+	return err
+}
+
+func (s *Scheduler) SyncJobs() (err error) {
+	fLog := s.log.New("fn", "SyncJobs")
+
+	defer s.sendEvent(NewEvent(EventTypeClusterSync, err, nil))
+
+	newSchedulerJobs := make(map[string]*Job)
+	for _, h := range s.hosts {
 		hLog := fLog.New("host.id", h.ID())
 		hLog.Info("getting jobs list")
 		var activeJobs map[string]host.ActiveJob
@@ -136,51 +223,14 @@ func (s *Scheduler) SyncJobs() (err error) {
 		}
 		hLog.Info("active jobs", "count", len(activeJobs))
 		for _, activeJob := range activeJobs {
-			if s.validJobStatuses[activeJob.Status] {
-				job := activeJob.Job
-				appID := job.Metadata["flynn-controller.app"]
-				appName := job.Metadata["flynn-controller.app_name"]
-				releaseID := job.Metadata["flynn-controller.release"]
-				jobType := job.Metadata["flynn-controller.type"]
-
-				log := hLog.New("job.id", job.ID, "app.id", appID, "release.id", releaseID, "type", jobType)
-
-				if appID == "" || releaseID == "" {
-					log.Info("skipping due to lack of appID or releaseID")
-					continue
-				}
-				if _, ok := s.jobs[job.ID]; ok {
-					log.Info("skipping known job")
-					delete(inactiveJobs, job.ID)
-					continue
-				}
-
-				log.Info("getting formation")
-				f := s.formations.Get(appID, releaseID)
-				if f == nil {
-					var cf *ct.Formation
-					cf, err = s.GetFormation(appID, releaseID)
-					if cf == nil {
-						err = fmt.Errorf("Job found with unknown formation")
-						continue
-					}
-					f, err = s.updateFormation(cf)
-					if f == nil {
-						err = fmt.Errorf("Unable to update formation")
-						continue
-					}
-				}
-				log.Info("adding job")
-				j := NewJob(f, jobType, h.ID(), job.ID, activeJob.StartedAt)
-				s.AddJob(j, appName, utils.JobMetaFromMetadata(job.Metadata))
+			s.handleActiveJob(&activeJob)
+			if j, ok := s.jobs[activeJob.Job.ID]; ok {
+				newSchedulerJobs[j.JobID] = s.jobs[j.JobID]
 			}
 		}
 	}
 
-	// Any jobs left in inactiveJobs no longer exist on the cluster
-	for jobID := range inactiveJobs {
-		delete(s.jobs, jobID)
-	}
+	s.jobs = newSchedulerJobs
 	triggerChan(s.rectifyJobs)
 
 	return err
@@ -350,12 +400,10 @@ func (s *Scheduler) updateFormation(controllerFormation *ct.Formation) (*Formati
 
 func (s *Scheduler) startJob(req *JobRequest) (err error) {
 	log := s.log.New("fn", "startJob")
-	var job *Job
 	defer func() {
 		if err != nil {
 			log.Error("error starting job", "err", err)
 		}
-		s.sendEvent(NewEvent(EventTypeJobStart, err, job))
 	}()
 
 	host, err := s.findBestHost(req.Type, req.HostID)
@@ -375,15 +423,7 @@ func (s *Scheduler) startJob(req *JobRequest) (err error) {
 	if err := host.AddJob(config); err != nil {
 		return err
 	}
-	job, err = s.AddJob(
-		NewJob(req.Job.Formation, req.Type, host.ID(), config.ID, time.Now()),
-		req.Job.Formation.App.Name,
-		utils.JobMetaFromMetadata(config.Metadata),
-	)
-	if err != nil {
-		return err
-	}
-	log.Info("started job", "host.id", job.HostID, "job.type", job.Type, "job.id", job.JobID)
+	log.Info("started job", "host.id", host.ID(), "job.type", req.Type, "job.id", config.ID)
 	return err
 }
 
@@ -393,7 +433,6 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 		if err != nil {
 			log.Error("error stopping job", "err", err)
 		}
-		s.sendEvent(NewEvent(EventTypeJobStop, err, nil))
 	}()
 	var job *Job
 	if req.JobID == "" {
@@ -426,7 +465,6 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 	if err := host.StopJob(job.JobID); err != nil {
 		return err
 	}
-	s.RemoveJob(job.JobID)
 	return nil
 }
 
@@ -489,19 +527,21 @@ func (s *Scheduler) Unsubscribe(events chan Event) {
 	delete(s.listeners, events)
 }
 
-func (s *Scheduler) AddJob(job *Job, appName string, metadata map[string]string) (*Job, error) {
-	s.jobs[job.JobID] = job
-	s.PutJob(controllerJobFromSchedulerJob(job, "up", metadata))
-	return job, nil
-}
-
-func (s *Scheduler) RemoveJob(jobID string) {
-	job, ok := s.jobs[jobID]
-	if !ok {
-		return
+func (s *Scheduler) SaveJob(job *Job, appName string, status host.JobStatus, metadata map[string]string) (*Job, error) {
+	controllerState := "down"
+	switch status {
+	case host.StatusStarting:
+		fallthrough
+	case host.StatusRunning:
+		s.jobs[job.JobID] = job
+		controllerState = "up"
+	default:
+		if _, ok := s.jobs[job.JobID]; ok {
+			delete(s.jobs, job.JobID)
+		}
 	}
-	s.PutJob(controllerJobFromSchedulerJob(job, "down", make(map[string]string)))
-	delete(s.jobs, jobID)
+	s.PutJob(controllerJobFromSchedulerJob(job, controllerState, metadata))
+	return job, nil
 }
 
 func (s *Scheduler) Jobs() map[string]*Job {
@@ -519,14 +559,6 @@ func (s *Scheduler) jobRequestHandler(i interface{}) error {
 		return fmt.Errorf("Failed to cast to JobRequest")
 	}
 	return s.HandleJobRequest(req)
-}
-
-func (s *Scheduler) formationChangeHandler(i interface{}) error {
-	fc, ok := i.(*ct.ExpandedFormation)
-	if !ok {
-		return fmt.Errorf("Failed to cast to ExpandedFormation")
-	}
-	return s.FormationChange(fc)
 }
 
 func triggerChan(ch chan interface{}) {
@@ -570,6 +602,7 @@ type EventType string
 const (
 	EventTypeDefault         EventType = "default"
 	EventTypeClusterSync     EventType = "cluster-sync"
+	EventTypeHostSync        EventType = "host-sync"
 	EventTypeFormationSync   EventType = "formation-sync"
 	EventTypeFormationChange EventType = "formation-change"
 	EventTypeRectifyJobs     EventType = "rectify-jobs"
