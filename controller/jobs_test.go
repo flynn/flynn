@@ -94,7 +94,8 @@ func (s *S) TestKillJob(c *C) {
 	hc := tu.NewFakeHostClient(hostID)
 	s.cc.AddHost(hc)
 
-	c.Assert(s.c.DeleteJob(app.ID, jobID), IsNil)
+	err := s.c.DeleteJob(app.ID, jobID)
+	c.Assert(err, ErrorMatches, "controller: resource not found")
 	c.Assert(hc.IsStopped(jobID), Equals, true)
 }
 
