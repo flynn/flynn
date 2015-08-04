@@ -3,6 +3,12 @@
 load "helper"
 load_lib "release.sh"
 
+# override date so that it's predictable in tests.
+DATE="20150301"
+date() {
+  echo "${DATE}"
+}
+
 @test "next_release_version with empty manifest" {
   run next_release_version <<< "$(new_release_manifest)"
   assert_success
