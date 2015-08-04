@@ -26,6 +26,7 @@ set -eo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
+source "${ROOT}/script/lib/tuf.sh"
 
 usage() {
   cat <<USAGE >&2
@@ -125,10 +126,7 @@ main() {
   popd >/dev/null
 
   info "downloading existing TUF metadata"
-  mkdir -p "${tuf_dir}/repository"
-  for role in "root" "targets" "snapshot" "timestamp"; do
-    s3cmd get --force "s3://${bucket}/tuf/${role}.json" "${tuf_dir}/repository/${role}.json"
-  done
+  download_tuf_metadata "${tuf_dir}" "${bucket}"
 
   info "adding components to the TUF repository"
   "${src}/script/export-components" "${tuf_dir}"
