@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -79,12 +80,12 @@ func (c *FakeHostClient) StopJob(id string) error {
 		case host.StatusRunning:
 			job.Status = host.StatusDone
 		default:
-			return fmt.Errorf("host: job %q is already stopped", id)
+			return nil
 		}
 		c.Jobs[id] = job
 		return c.stop(id)
 	} else {
-		return fmt.Errorf("Job with id %q does not exist", id)
+		return ct.NotFoundError{Resource: id}
 	}
 }
 
