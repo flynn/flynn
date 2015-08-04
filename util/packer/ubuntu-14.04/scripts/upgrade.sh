@@ -15,7 +15,7 @@ if [[ "${PACKER_BUILDER_TYPE}" == "virtualbox-ovf" ]]; then
   apt-get remove --purge -y virtualbox-guest-dkms virtualbox-guest-utils virtualbox-guest-x11
 fi
 
-apt-get install --install-recommends linux-generic-lts-vivid \
+apt-get install --install-recommends linux-generic-lts-vivid linux-image-generic-lts-vivid \
   -y \
   -o Dpkg::Options::="--force-confdef" \
   -o Dpkg::Options::="--force-confold"
