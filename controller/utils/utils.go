@@ -124,7 +124,7 @@ type ControllerClient interface {
 	CreateRelease(release *ct.Release) error
 	CreateArtifact(artifact *ct.Artifact) error
 	PutFormation(formation *ct.Formation) error
-	StreamFormations(since time.Time, ch chan<- *ct.ExpandedFormation) (stream.Stream, error)
+	StreamFormations(since *time.Time, ch chan<- *ct.ExpandedFormation) (stream.Stream, error)
 	AppList() ([]*ct.App, error)
 	FormationList(appID string) ([]*ct.Formation, error)
 	PutJob(*ct.Job) error
