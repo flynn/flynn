@@ -133,12 +133,7 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	c.Assert(jobs, HasLen, 2)
 
 	// Test scaling down an existing formation
-	s.formationChange <- &ct.ExpandedFormation{
-		App:       app,
-		Release:   release,
-		Artifact:  artifact,
-		Processes: map[string]int{"web": 1},
-	}
+	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 1}})
 
 	_, err = waitForEvent(events, EventTypeFormationChange)
 	c.Assert(err, IsNil)
@@ -154,12 +149,7 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	s.CreateArtifact(artifact)
 	s.CreateRelease(release)
 	c.Assert(len(s.formations), Equals, 1)
-	s.formationChange <- &ct.ExpandedFormation{
-		App:       app,
-		Release:   release,
-		Artifact:  artifact,
-		Processes: processes,
-	}
+	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
 	_, err = waitForEvent(events, EventTypeFormationChange)
 	c.Assert(err, IsNil)
 	c.Assert(len(s.formations), Equals, 2)
@@ -180,9 +170,9 @@ func (ts *TestSuite) TestRectifyJobs(c *C) {
 	go s.Run()
 
 	// wait for the formation to cascade to the scheduler
-	_, err := waitForEvent(events, EventTypeFormationSync)
+	_, err := waitForEvent(events, EventTypeRectifyJobs)
 	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeRectifyJobs)
+	_, err = waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
 
 	form := s.formations.Get(testAppID, testReleaseID)
@@ -213,12 +203,19 @@ func (ts *TestSuite) TestRectifyJobs(c *C) {
 	s.CreateApp(app)
 	s.CreateArtifact(artifact)
 	s.CreateRelease(release)
-
 	_, err = waitForEvent(events, EventTypeRectifyJobs)
 	c.Assert(err, IsNil)
+
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
+	s.SyncJobs()
 	_, err = waitForEvent(events, EventTypeClusterSync)
 	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeFormationChange)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeRectifyJobs)
+	c.Assert(err, IsNil)
+	jobs = s.Jobs()
+	c.Assert(jobs, HasLen, 2)
 
 }
 
