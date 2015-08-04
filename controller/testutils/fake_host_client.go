@@ -14,11 +14,12 @@ import (
 
 func NewFakeHostClient(hostID string) *FakeHostClient {
 	return &FakeHostClient{
-		hostID:  hostID,
-		stopped: make(map[string]bool),
-		attach:  make(map[string]attachFunc),
-		volumes: make(map[string]*volume.Info),
-		Jobs:    make(map[string]host.ActiveJob),
+		hostID:        hostID,
+		stopped:       make(map[string]bool),
+		attach:        make(map[string]attachFunc),
+		volumes:       make(map[string]*volume.Info),
+		Jobs:          make(map[string]host.ActiveJob),
+		eventChannels: make(map[chan<- *host.Event]struct{}),
 	}
 }
 
@@ -47,7 +48,16 @@ func (c *FakeHostClient) ListJobs() (map[string]host.ActiveJob, error) {
 }
 
 func (c *FakeHostClient) AddJob(job *host.Job) error {
-	c.Jobs[job.ID] = host.ActiveJob{Job: job, HostID: c.hostID, StartedAt: time.Now()}
+	j := host.ActiveJob{Job: job, HostID: c.hostID, StartedAt: time.Now()}
+	c.Jobs[job.ID] = j
+
+	for ch := range c.eventChannels {
+		ch <- &host.Event{
+			Event: host.JobEventStart,
+			JobID: job.ID,
+			Job:   &j,
+		}
+	}
 	return nil
 }
 
@@ -61,8 +71,20 @@ func (c *FakeHostClient) GetJob(id string) (*host.ActiveJob, error) {
 
 func (c *FakeHostClient) StopJob(id string) error {
 	c.stopped[id] = true
-	delete(c.Jobs, id)
-	return nil
+	job, ok := c.Jobs[id]
+	if ok {
+		delete(c.Jobs, id)
+		for ch := range c.eventChannels {
+			ch <- &host.Event{
+				Event: host.JobEventStop,
+				JobID: id,
+				Job:   &job,
+			}
+		}
+		return nil
+	} else {
+		return fmt.Errorf("Job with id %q does not exist", id)
+	}
 }
 
 func (c *FakeHostClient) IsStopped(id string) bool {
