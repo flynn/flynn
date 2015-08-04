@@ -12,6 +12,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/stream"
 )
 
@@ -31,14 +32,15 @@ type Scheduler struct {
 	listeners map[chan Event]struct{}
 	listenMtx sync.RWMutex
 
-	stop     chan interface{}
-	stopOnce sync.Once
+	stop        chan interface{}
+	stopPutJobs chan interface{}
+	stopOnce    sync.Once
 
 	rectifyJobs     chan interface{}
+	hostChange      chan utils.HostClient
 	formationChange chan *ct.ExpandedFormation
 	jobRequests     chan interface{}
-
-	validJobStatuses map[host.JobStatus]bool
+	putJobs         chan *ct.Job
 }
 
 func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Scheduler {
@@ -52,13 +54,12 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Sched
 		listeners:        make(map[chan Event]struct{}),
 		formations:       make(Formations),
 		stop:             make(chan interface{}),
+		stopPutJobs:      make(chan interface{}),
 		rectifyJobs:      make(chan interface{}, 1),
 		formationChange:  make(chan *ct.ExpandedFormation, eventBufferSize),
+		hostChange:       make(chan utils.HostClient, eventBufferSize),
 		jobRequests:      make(chan interface{}, eventBufferSize),
-		validJobStatuses: map[host.JobStatus]bool{
-			host.StatusStarting: true,
-			host.StatusRunning:  true,
-		},
+		putJobs:          make(chan *ct.Job, eventBufferSize),
 	}
 }
 
@@ -75,27 +76,32 @@ func (s *Scheduler) Run() error {
 	formationTicker := time.Tick(time.Minute)
 	hostTicker := time.Tick(5 * time.Minute)
 
-	hostChan := make(chan utils.HostClient, eventBufferSize)
-	stream, err := s.StreamHosts(hostChan)
+	stream, err := s.StreamHosts(s.hostChange)
 	if err != nil {
-		return err
+		return fmt.Errorf("Unable to stream hosts. Error: %v", err)
 	}
 	defer stream.Close()
 
-	stream, err = s.StreamFormations(time.Now(), s.formationChange)
+	stream, err = s.StreamFormations(nil, s.formationChange)
+	if err != nil {
+		return fmt.Errorf("Unable to stream formations. Error: %v", err)
+	}
+	defer stream.Close()
+
+	go s.RunPutJobs()
 
 	for {
 		// First handle events reconciling our state with the cluster
 		select {
 		case <-s.stop:
 			return nil
-		case h := <-hostChan:
+		case h := <-s.hostChange:
 			s.followHost(h)
 			continue
 		case he := <-s.hostEvents:
 			s.handleHostEvent(he)
 			continue
-		case <-time.After(time.Second):
+		case <-time.After(50 * time.Millisecond):
 		}
 
 		// Then handle events that could mutate the cluster
@@ -182,7 +188,6 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) (*Job, error) {
 		}
 		j = NewJob(f, jobType, activeJob.HostID, job.ID, activeJob.StartedAt)
 	}
-	log.Info("saving job")
 	s.SaveJob(j, appName, activeJob.Status, utils.JobMetaFromMetadata(job.Metadata))
 	triggerChan(s.rectifyJobs)
 	return j, nil
@@ -298,6 +303,20 @@ func (s *Scheduler) RectifyJobs() (err error) {
 	}
 
 	return err
+}
+
+func (s *Scheduler) RunPutJobs() {
+	strategy := attempt.Strategy{Delay: 100 * time.Millisecond, Total: time.Minute}
+	for {
+		select {
+		case job := <-s.putJobs:
+			strategy.Run(func() error {
+				return s.PutJob(job)
+			})
+		case <-s.stopPutJobs:
+			return
+		}
+	}
 }
 
 func (s *Scheduler) sendDiffRequests(f *Formation, diff map[string]int) {
@@ -508,7 +527,10 @@ func (s *Scheduler) hostJobCounts(typ string) map[string]int {
 
 func (s *Scheduler) Stop() error {
 	s.log.Info("stopping scheduler loop", "fn", "Stop")
-	s.stopOnce.Do(func() { close(s.stop) })
+	s.stopOnce.Do(func() {
+		close(s.stop)
+		close(s.stopPutJobs)
+	})
 	return nil
 }
 
@@ -528,6 +550,7 @@ func (s *Scheduler) Unsubscribe(events chan Event) {
 }
 
 func (s *Scheduler) SaveJob(job *Job, appName string, status host.JobStatus, metadata map[string]string) (*Job, error) {
+	s.log.Info("Saving job", "job.id", job.JobID, "job.status", status)
 	controllerState := "down"
 	switch status {
 	case host.StatusStarting:
@@ -536,20 +559,14 @@ func (s *Scheduler) SaveJob(job *Job, appName string, status host.JobStatus, met
 		s.jobs[job.JobID] = job
 		controllerState = "up"
 	default:
-		if _, ok := s.jobs[job.JobID]; ok {
-			delete(s.jobs, job.JobID)
-		}
+		delete(s.jobs, job.JobID)
 	}
-	s.PutJob(controllerJobFromSchedulerJob(job, controllerState, metadata))
+	s.putJobs <- controllerJobFromSchedulerJob(job, controllerState, metadata)
 	return job, nil
 }
 
 func (s *Scheduler) Jobs() map[string]*Job {
-	jobs := make(map[string]*Job)
-	for id, job := range s.jobs {
-		jobs[id] = job
-	}
-	return jobs
+	return s.jobs
 }
 
 // Channel handlers
