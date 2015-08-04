@@ -222,6 +222,7 @@ func runDaemon(args *docopt.Args) {
 	}
 	backend.SetDefaultEnv("EXTERNAL_IP", externalIP)
 
+	discoverdManager := NewDiscoverdManager(backend, mux, hostID, publishAddr)
 	publishURL := "http://" + publishAddr
 	host := &Host{
 		id:      hostID,
@@ -255,14 +256,17 @@ func runDaemon(args *docopt.Args) {
 	if err != nil {
 		shutdown.Fatal(err)
 	}
-	shutdown.BeforeExit(func() { stopJobs() })
+	shutdown.BeforeExit(func() {
+		// close discoverd before stopping jobs so we can unregister first
+		discoverdManager.Close()
+		stopJobs()
+	})
 	shutdown.BeforeExit(func() {
 		if err := state.MarkForResurrection(); err != nil {
 			log.Print("error marking for resurrection", err)
 		}
 	})
 
-	discoverdManager := NewDiscoverdManager(backend, mux, hostID, publishAddr)
 	if err := serveHTTP(
 		host,
 		&attachHandler{state: state, backend: backend},

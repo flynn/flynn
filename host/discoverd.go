@@ -11,7 +11,7 @@ import (
 )
 
 func NewDiscoverdManager(backend Backend, mux *logmux.LogMux, hostID, publishAddr string) *DiscoverdManager {
-	d := &DiscoverdManager{
+	return &DiscoverdManager{
 		backend: backend,
 		mux:     mux,
 		inst: &discoverd.Instance{
@@ -19,8 +19,6 @@ func NewDiscoverdManager(backend Backend, mux *logmux.LogMux, hostID, publishAdd
 			Meta: map[string]string{"id": hostID},
 		},
 	}
-	shutdown.BeforeExit(d.Close)
-	return d
 }
 
 type DiscoverdManager struct {
