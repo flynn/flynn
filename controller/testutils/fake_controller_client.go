@@ -1,6 +1,7 @@
 package testutils
 
 import (
+	"errors"
 	"time"
 
 	"github.com/flynn/flynn/controller/client"
@@ -107,13 +108,17 @@ func (c *FakeControllerClient) FormationList(appID string) ([]*ct.Formation, err
 	return nil, controller.ErrNotFound
 }
 
-func (c *FakeControllerClient) StreamFormations(since time.Time, ch chan<- *ct.ExpandedFormation) (stream.Stream, error) {
+func (c *FakeControllerClient) StreamFormations(since *time.Time, ch chan<- *ct.ExpandedFormation) (stream.Stream, error) {
+	if _, ok := c.formationStreams[ch]; ok {
+		return nil, errors.New("Already streaming to that channel")
+	}
 
 	for _, releases := range c.formations {
 		for _, f := range releases {
 			ch <- c.expandedFormationFromFormation(f)
 		}
 	}
+	c.formationStreams[ch] = struct{}{}
 	return &FormationStream{
 		cc: c,
 		ch: ch,

@@ -73,18 +73,32 @@ func (c *FakeHostClient) StopJob(id string) error {
 	c.stopped[id] = true
 	job, ok := c.Jobs[id]
 	if ok {
-		delete(c.Jobs, id)
-		for ch := range c.eventChannels {
-			ch <- &host.Event{
-				Event: host.JobEventStop,
-				JobID: id,
-				Job:   &job,
-			}
+		switch job.Status {
+		case host.StatusStarting:
+			job.Status = host.StatusFailed
+		case host.StatusRunning:
+			job.Status = host.StatusDone
+		default:
+			return fmt.Errorf("host: job %q is already stopped", id)
 		}
-		return nil
+		c.Jobs[id] = job
+		return c.stop(id)
 	} else {
 		return fmt.Errorf("Job with id %q does not exist", id)
 	}
+}
+
+func (c *FakeHostClient) stop(id string) error {
+	job := c.Jobs[id]
+	delete(c.Jobs, id)
+	for ch := range c.eventChannels {
+		ch <- &host.Event{
+			Event: host.JobEventStop,
+			JobID: id,
+			Job:   &job,
+		}
+	}
+	return nil
 }
 
 func (c *FakeHostClient) IsStopped(id string) bool {
