@@ -22,6 +22,7 @@ import (
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 /* SSE Logger */
@@ -139,6 +140,42 @@ func (c clusterClientWrapper) Hosts() ([]utils.HostClient, error) {
 		res[i] = h
 	}
 	return res, nil
+}
+
+func (c clusterClientWrapper) StreamHosts(ch chan utils.HostClient) (stream.Stream, error) {
+	hostChan := make(chan *cluster.Host)
+	stream, err := c.Client.StreamHosts(hostChan)
+	if err == nil {
+		go func() {
+			for {
+				select {
+				case h, ok := <-hostChan:
+					if !ok {
+						return
+					}
+					ch <- h
+				}
+			}
+		}()
+	}
+	return &clusterStream{
+		ch:           ch,
+		parentStream: stream,
+	}, err
+}
+
+type clusterStream struct {
+	ch           chan utils.HostClient
+	parentStream stream.Stream
+}
+
+func (cs *clusterStream) Close() error {
+	close(cs.ch)
+	return cs.parentStream.Close()
+}
+
+func (cs *clusterStream) Err() error {
+	return cs.parentStream.Err()
 }
 
 func (c *controllerAPI) connectHost(ctx context.Context) (utils.HostClient, string, error) {
