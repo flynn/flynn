@@ -242,6 +242,9 @@ func (c *controllerAPI) KillJob(ctx context.Context, w http.ResponseWriter, req 
 	}
 
 	if err = client.StopJob(jobID); err != nil {
+		if _, ok := err.(ct.NotFoundError); ok {
+			err = ErrNotFound
+		}
 		respondWithError(w, err)
 		return
 	}
