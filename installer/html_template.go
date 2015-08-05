@@ -7,6 +7,8 @@ var htmlTemplate = template.Must(template.New("installer.html").Parse(`
 <html>
 <head>
   <title>Flynn Installer</title>
+  <link rel="stylesheet" type="text/css" href="/assets/{{.NormalizeCSSPath}}" />
+  <link rel="stylesheet" type="text/css" href="/assets/{{.FontAwesomeCSSPath}}" />
   <link rel="stylesheet" type="text/css" href="/assets/{{.ApplicationCSSPath}}" />
 </head>
 

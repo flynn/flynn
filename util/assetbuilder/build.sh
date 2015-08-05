@@ -50,7 +50,7 @@ image() {
   local target
   target=$1
 
-  cp ${ROOT}/util/rubyassetbuilder/Dockerfile ${ROOT}/${target}/app/Gemfile* "${tmpdir}"
+  cp ${ROOT}/util/assetbuilder/Dockerfile ${ROOT}/${target}/app/Gemfile* "${tmpdir}"
   docker build --tag flynn/${target}-builder "${tmpdir}"
 }
 
@@ -66,10 +66,10 @@ app() {
   docker run \
     --volume "${tmpdir}:/build" \
     --workdir /build \
-    --user $(id -u) \
     flynn/${target}-builder \
-    bash -c "cp --recursive /app/.bundle . && cp --recursive /app/vendor/bundle vendor/ && bundle exec rake compile"
+    bash -c "cp --recursive /app/.bundle . && cp --recursive /app/vendor/bundle vendor/ && ./compiler && chown -R $(id -u):$(id -g) ."
 
+  rm -f app # {target}/app/compiler.go -> {target}/app/app binary
   mkdir app
   mv build app
   cd ${ROOT}/${target}

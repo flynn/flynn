@@ -29,6 +29,8 @@ type assetManifest struct {
 
 type htmlTemplateData struct {
 	ApplicationJSPath  string
+	NormalizeCSSPath   string
+	FontAwesomeCSSPath string
 	ApplicationCSSPath string
 	ReactJSPath        string
 }
@@ -396,6 +398,8 @@ func (api *httpAPI) ServeTemplate(w http.ResponseWriter, req *http.Request, para
 
 	err = htmlTemplate.Execute(w, &htmlTemplateData{
 		ApplicationJSPath:  manifest.Assets["application.js"],
+		NormalizeCSSPath:   manifest.Assets["normalize.css"],
+		FontAwesomeCSSPath: manifest.Assets["font-awesome.css"],
 		ApplicationCSSPath: manifest.Assets["application.css"],
 		ReactJSPath:        manifest.Assets["react.js"],
 	})

@@ -1,4 +1,7 @@
 build
+app
+compiler
 .sass-cache
 dashboard.tar
 lib/installer
+.gitrepos
