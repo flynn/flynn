@@ -23,6 +23,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-shlex"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
 	"github.com/flynn/flynn/pkg/archiver"
+	"github.com/flynn/flynn/pkg/status"
 )
 
 const PrereceiveHookTmpl = `#!/bin/bash
@@ -33,7 +34,8 @@ done
 
 var prereceiveHook []byte
 
-var port = flag.String("p", "22", "port to listen on")
+var port = flag.String("p", "22", "port to listen for SSH on")
+var httpPort = flag.String("http-port", "5000", "port to listen for HTTP on")
 var useBlobstore = flag.Bool("b", true, "use the blobstore for repo cache")
 var repoPath = flag.String("r", "/tmp/repos", "path to repo cache")
 var noAuth = flag.Bool("n", false, "disable client authentication")
@@ -93,6 +95,7 @@ func main() {
 	if err != nil {
 		log.Fatalln("Failed to listen for connections:", err)
 	}
+	go startHTTPServer()
 	for {
 		// SSH connections just house multiplexed connections
 		conn, err := listener.Accept()
@@ -102,6 +105,14 @@ func main() {
 		}
 		go handleConn(conn, config)
 	}
+}
+
+func startHTTPServer() {
+	if p := os.Getenv("PORT_1"); p != "" && *httpPort == "5000" {
+		*httpPort = p
+	}
+	status.AddHandler(status.HealthyHandler)
+	log.Fatal(http.ListenAndServe(":"+*httpPort, nil))
 }
 
 func parseKeys(conf *ssh.ServerConfig, pemData []byte) error {
