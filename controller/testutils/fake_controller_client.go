@@ -6,6 +6,7 @@ import (
 
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/pkg/stream"
 )
 
@@ -83,7 +84,10 @@ func (c *FakeControllerClient) PutFormation(formation *ct.Formation) error {
 	releases[formation.ReleaseID] = formation
 
 	for ch := range c.formationStreams {
-		ch <- c.expandedFormationFromFormation(formation)
+		ef, err := utils.ExpandedFormationFromFormation(c, formation)
+		if err == nil {
+			ch <- ef
+		}
 	}
 
 	return nil
@@ -115,7 +119,10 @@ func (c *FakeControllerClient) StreamFormations(since *time.Time, ch chan<- *ct.
 
 	for _, releases := range c.formations {
 		for _, f := range releases {
-			ch <- c.expandedFormationFromFormation(f)
+			ef, err := utils.ExpandedFormationFromFormation(c, f)
+			if err == nil {
+				ch <- ef
+			}
 		}
 	}
 	c.formationStreams[ch] = struct{}{}
@@ -140,19 +147,6 @@ func NewRelease(id string, artifact *ct.Artifact, processes map[string]int) *ct.
 		ID:         id,
 		ArtifactID: artifact.ID,
 		Processes:  processTypes,
-	}
-}
-
-func (c *FakeControllerClient) expandedFormationFromFormation(f *ct.Formation) *ct.ExpandedFormation {
-	app, _ := c.GetApp(f.AppID)
-	release, _ := c.GetRelease(f.ReleaseID)
-	artifact, _ := c.GetArtifact(release.ArtifactID)
-	return &ct.ExpandedFormation{
-		App:       app,
-		Release:   release,
-		Artifact:  artifact,
-		Processes: f.Processes,
-		UpdatedAt: time.Now(),
 	}
 }
 
