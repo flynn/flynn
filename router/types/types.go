@@ -144,5 +144,12 @@ func (r TCPRoute) ToRoute() *Route {
 type Event struct {
 	Event string
 	ID    string
+	Route *Route
 	Error error
+}
+
+type StreamEvent struct {
+	Event string `json:"event"`
+	Route *Route `json:"route,omitempty"`
+	Error error  `json:"error,omitempty"`
 }

@@ -9,7 +9,9 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/pkg/pprof"
+	"github.com/flynn/flynn/pkg/sse"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/router/types"
 )
@@ -31,6 +33,7 @@ func apiHandler(rtr *Router) http.Handler {
 	r.Get("/routes", getRoutes)
 	r.Get("/routes/:route_type/:id", getRoute)
 	r.Delete("/routes/:route_type/:id", deleteRoute)
+	r.Get("/events", streamEvents)
 	r.Any("/debug/**", pprof.Handler.ServeHTTP)
 	return m
 }
@@ -154,4 +157,34 @@ func deleteRoute(params martini.Params, router *Router, r render.Render) {
 	}
 
 	r.JSON(200, "unknown error")
+}
+
+func streamEvents(params martini.Params, rtr *Router, w http.ResponseWriter) {
+	httpListener := listenerFor(rtr, "http")
+	tcpListener := listenerFor(rtr, "tcp")
+
+	log := log15.New("component", "router")
+	httpEvents := make(chan *router.Event)
+	tcpEvents := make(chan *router.Event)
+	sseEvents := make(chan *router.StreamEvent)
+	go httpListener.Watch(httpEvents)
+	go tcpListener.Watch(tcpEvents)
+	defer httpListener.Unwatch(httpEvents)
+	defer tcpListener.Unwatch(tcpEvents)
+	sendEvents := func(events chan *router.Event) {
+		for {
+			e, ok := <-events
+			if !ok {
+				return
+			}
+			sseEvents <- &router.StreamEvent{
+				Event: e.Event,
+				Route: e.Route,
+				Error: e.Error,
+			}
+		}
+	}
+	go sendEvents(httpEvents)
+	go sendEvents(tcpEvents)
+	sse.ServeStream(w, sseEvents, log)
 }

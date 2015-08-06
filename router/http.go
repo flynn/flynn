@@ -240,7 +240,7 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 	h.l.routes[data.ID] = r
 	h.l.domains[strings.ToLower(r.Domain)] = r
 
-	go h.l.wm.Send(&router.Event{Event: "set", ID: r.Domain})
+	go h.l.wm.Send(&router.Event{Event: "set", ID: r.Domain, Route: r.ToRoute()})
 	return nil
 }
 
@@ -263,7 +263,7 @@ func (h *httpSyncHandler) Remove(id string) error {
 
 	delete(h.l.routes, id)
 	delete(h.l.domains, r.Domain)
-	go h.l.wm.Send(&router.Event{Event: "remove", ID: id})
+	go h.l.wm.Send(&router.Event{Event: "remove", ID: id, Route: r.ToRoute()})
 	return nil
 }
 

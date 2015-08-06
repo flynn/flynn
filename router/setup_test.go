@@ -120,23 +120,18 @@ func waitForEvent(c *C, w Watcher, event string, id string) func() *router.Event
 	w.Watch(ch)
 	return func() *router.Event {
 		defer w.Unwatch(ch)
-		start := time.Now()
 		for {
-			timeout := waitTimeout - time.Now().Sub(start)
-			if timeout <= 0 {
-				break
-			}
+			timeout := time.After(waitTimeout)
 			select {
 			case e := <-ch:
 				if e.Event == event && (id == "" || e.ID == id) {
 					return e
 				}
-			case <-time.After(timeout):
-				break
+			case <-timeout:
+				c.Fatalf("timeout exceeded waiting for %s %s", event, id)
+				return nil
 			}
 		}
-		c.Fatalf("timeout exceeded waiting for %s %s", event, id)
-		return nil
 	}
 }
 
