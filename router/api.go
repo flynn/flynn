@@ -10,6 +10,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
 	"github.com/flynn/flynn/pkg/pprof"
+	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -22,6 +23,8 @@ func apiHandler(rtr *Router) http.Handler {
 	m.Use(render.Renderer())
 	m.Action(r.Handle)
 	m.Map(rtr)
+
+	r.Get(status.Path, status.SimpleHandler(rtr.HTTP.Ping).ServeHTTP)
 
 	r.Post("/routes", binding.Bind(router.Route{}), createRoute)
 	r.Put("/routes/:route_type/:id", binding.Bind(router.Route{}), updateRoute)
