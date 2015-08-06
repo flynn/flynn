@@ -32,14 +32,16 @@ type Scheduler struct {
 	listeners map[chan Event]struct{}
 	listenMtx sync.RWMutex
 
-	stop        chan interface{}
-	stopPutJobs chan interface{}
-	stopOnce    sync.Once
+	stop     chan interface{}
+	stopOnce sync.Once
 
 	rectifyJobs     chan interface{}
+	syncHosts       chan interface{}
+	syncJobs        chan interface{}
+	syncFormations  chan interface{}
 	hostChange      chan utils.HostClient
 	formationChange chan *ct.ExpandedFormation
-	jobRequests     chan interface{}
+	jobRequests     chan *JobRequest
 	putJobs         chan *ct.Job
 }
 
@@ -54,11 +56,13 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Sched
 		listeners:        make(map[chan Event]struct{}),
 		formations:       make(Formations),
 		stop:             make(chan interface{}),
-		stopPutJobs:      make(chan interface{}),
 		rectifyJobs:      make(chan interface{}, 1),
+		syncHosts:        make(chan interface{}, 1),
+		syncJobs:         make(chan interface{}, 1),
+		syncFormations:   make(chan interface{}, 1),
 		formationChange:  make(chan *ct.ExpandedFormation, eventBufferSize),
 		hostChange:       make(chan utils.HostClient, eventBufferSize),
-		jobRequests:      make(chan interface{}, eventBufferSize),
+		jobRequests:      make(chan *JobRequest, eventBufferSize),
 		putJobs:          make(chan *ct.Job, eventBufferSize),
 	}
 }
@@ -72,9 +76,9 @@ func (s *Scheduler) Run() error {
 	log.Info("starting scheduler loop")
 	defer log.Info("exiting scheduler loop")
 
-	jobTicker := time.Tick(30 * time.Second)
-	formationTicker := time.Tick(time.Minute)
-	hostTicker := time.Tick(5 * time.Minute)
+	tickChannel(s.syncJobs, 30*time.Second)
+	tickChannel(s.syncFormations, time.Minute)
+	tickChannel(s.syncHosts, 5*time.Minute)
 
 	stream, err := s.StreamHosts(s.hostChange)
 	if err != nil {
@@ -107,16 +111,16 @@ func (s *Scheduler) Run() error {
 		// Then handle events that could mutate the cluster
 		select {
 		case req := <-s.jobRequests:
-			s.jobRequestHandler(req)
+			s.HandleJobRequest(req)
 		case <-s.rectifyJobs:
 			s.RectifyJobs()
 		case ef := <-s.formationChange:
 			s.FormationChange(ef)
-		case <-hostTicker:
+		case <-s.syncHosts:
 			s.SyncHosts()
-		case <-formationTicker:
+		case <-s.syncFormations:
 			s.SyncFormations()
-		case <-jobTicker:
+		case <-s.syncJobs:
 			s.SyncJobs()
 		default:
 		}
@@ -131,7 +135,7 @@ func (s *Scheduler) followHost(h utils.HostClient) {
 		log.Info("Following host", "host.id", h.ID())
 		s.hosts[h.ID()] = h
 		h.StreamEvents("all", s.hostEvents)
-		triggerChan(s.rectifyJobs)
+		triggerChan(s.syncFormations)
 	}
 }
 
@@ -309,12 +313,13 @@ func (s *Scheduler) RunPutJobs() {
 	strategy := attempt.Strategy{Delay: 100 * time.Millisecond, Total: time.Minute}
 	for {
 		select {
-		case job := <-s.putJobs:
+		case job, ok := <-s.putJobs:
+			if !ok {
+				return
+			}
 			strategy.Run(func() error {
 				return s.PutJob(job)
 			})
-		case <-s.stopPutJobs:
-			return
 		}
 	}
 }
@@ -378,43 +383,28 @@ func (s *Scheduler) updateFormation(controllerFormation *ct.Formation) (*Formati
 
 	localFormation := s.formations.Get(appID, releaseID)
 
+	var ef *ct.ExpandedFormation
+	var err error
+
 	if localFormation != nil {
 		log.Info("Updating formation", "app.id", appID, "release.id", releaseID, "formation.processes", controllerFormation.Processes)
-		return s.changeFormation(&ct.ExpandedFormation{
+		ef = &ct.ExpandedFormation{
 			App:       localFormation.App,
 			Release:   localFormation.Release,
 			Artifact:  localFormation.Artifact,
 			Processes: controllerFormation.Processes,
 			UpdatedAt: time.Now(),
-		}), nil
+		}
 	} else {
-		app, err := s.GetApp(appID)
-		if err != nil {
-			log.Error("error getting app", "err", err)
-			return nil, err
-		}
-
-		release, err := s.GetRelease(releaseID)
-		if err != nil {
-			log.Error("error getting release", "err", err)
-			return nil, err
-		}
-
-		artifact, err := s.GetArtifact(release.ArtifactID)
-		if err != nil {
-			log.Error("error getting artifact", "err", err)
-			return nil, err
-		}
-
 		log.Info("Creating new formation", "app.id", appID, "release.id", releaseID, "formation.processes", controllerFormation.Processes)
-		return s.changeFormation(&ct.ExpandedFormation{
-			App:       app,
-			Release:   release,
-			Artifact:  artifact,
-			Processes: controllerFormation.Processes,
-			UpdatedAt: time.Now(),
-		}), nil
+		ef, err = utils.ExpandedFormationFromFormation(s, controllerFormation)
+		if err != nil {
+			return nil, err
+		}
+		ef.UpdatedAt = time.Now()
 	}
+	s.expandOmni(ef)
+	return s.changeFormation(ef), nil
 }
 
 func (s *Scheduler) startJob(req *JobRequest) (err error) {
@@ -529,7 +519,6 @@ func (s *Scheduler) Stop() error {
 	s.log.Info("stopping scheduler loop", "fn", "Stop")
 	s.stopOnce.Do(func() {
 		close(s.stop)
-		close(s.stopPutJobs)
 	})
 	return nil
 }
@@ -569,13 +558,27 @@ func (s *Scheduler) Jobs() map[string]*Job {
 	return s.jobs
 }
 
-// Channel handlers
-func (s *Scheduler) jobRequestHandler(i interface{}) error {
-	req, ok := i.(*JobRequest)
-	if !ok {
-		return fmt.Errorf("Failed to cast to JobRequest")
+func (s *Scheduler) expandOmni(ef *ct.ExpandedFormation) {
+	release := ef.Release
+
+	for typ, pt := range release.Processes {
+		if pt.Omni {
+			ef.Processes[typ] *= len(s.hosts)
+		}
 	}
-	return s.HandleJobRequest(req)
+}
+
+func tickChannel(ch chan interface{}, d time.Duration) {
+	ticker := time.Tick(d)
+
+	go func() {
+		for {
+			select {
+			case <-ticker:
+				triggerChan(ch)
+			}
+		}
+	}()
 }
 
 func triggerChan(ch chan interface{}) {
