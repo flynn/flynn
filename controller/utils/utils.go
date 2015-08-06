@@ -94,6 +94,35 @@ func NewFormationKey(appID, releaseID string) FormationKey {
 	return FormationKey{AppID: appID, ReleaseID: releaseID}
 }
 
+func ExpandedFormationFromFormation(c ControllerClient, f *ct.Formation) (*ct.ExpandedFormation, error) {
+	app, err := c.GetApp(f.AppID)
+	if err != nil {
+		return nil, fmt.Errorf("Error getting app. Error: %v", err)
+	}
+
+	release, err := c.GetRelease(f.ReleaseID)
+	if err != nil {
+		return nil, fmt.Errorf("Error getting release. Error: %v", err)
+	}
+
+	artifact, err := c.GetArtifact(release.ArtifactID)
+	if err != nil {
+		return nil, fmt.Errorf("Error getting artifact. Error: %v", err)
+	}
+
+	ef := &ct.ExpandedFormation{
+		App:       app,
+		Release:   release,
+		Artifact:  artifact,
+		Processes: f.Processes,
+		UpdatedAt: time.Now(),
+	}
+	if f.UpdatedAt != nil {
+		ef.UpdatedAt = *f.UpdatedAt
+	}
+	return ef, nil
+}
+
 type VolumeCreator interface {
 	CreateVolume(string) (*volume.Info, error)
 }
