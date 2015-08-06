@@ -9,6 +9,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/sse"
+	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/stream"
 )
 
@@ -20,6 +21,7 @@ type Datastore interface {
 	RemoveInstance(service, id string) error
 	SetServiceMeta(service string, meta *discoverd.ServiceMeta) error
 	SetLeader(service, id string) error
+	Ping() error
 
 	// Typically implemented by State
 	Get(service string) []*discoverd.Instance
@@ -32,6 +34,10 @@ type Datastore interface {
 type basicDatastore struct {
 	*State
 	Backend
+}
+
+func (d basicDatastore) Ping() error {
+	return d.Backend.Ping()
 }
 
 func (d basicDatastore) AddService(service string, config *discoverd.ServiceConfig) error {
@@ -68,6 +74,8 @@ func NewHTTPHandler(ds Datastore) http.Handler {
 	api := &httpAPI{
 		Store: ds,
 	}
+
+	router.Handler("GET", status.Path, status.SimpleHandler(ds.Ping))
 
 	router.PUT("/services/:service", api.AddService)
 	router.DELETE("/services/:service", api.RemoveService)
