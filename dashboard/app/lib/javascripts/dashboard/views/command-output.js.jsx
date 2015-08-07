@@ -1,6 +1,3 @@
-//= require ansiparse
-// TODO(jvaitc): Update ansiparse to strict mode / module
-
 var padding = function (str, len) {
 	if (str.length === len) {
 		return str;
