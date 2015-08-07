@@ -56,6 +56,7 @@ func main() {
 			"dashboard.js",
 			"dashboard-*.js",
 			"dashboard.scss",
+			"ansiparse.js",
 			"moment.js",
 			"es6promise.js",
 			"react.js",
