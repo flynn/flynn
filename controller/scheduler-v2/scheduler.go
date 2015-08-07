@@ -417,6 +417,7 @@ func (s *Scheduler) startJob(req *JobRequest) (err error) {
 
 	host, err := s.findBestHost(req.Type, req.HostID)
 	if err != nil {
+		s.jobRequests <- req
 		return err
 	}
 
@@ -469,6 +470,8 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 	}
 	host, err := s.Host(job.HostID)
 	if err != nil {
+		req.JobID = job.JobID
+		s.jobRequests <- req
 		return err
 	}
 	if err := host.StopJob(job.JobID); err != nil {
