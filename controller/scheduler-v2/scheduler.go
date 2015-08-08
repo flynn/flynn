@@ -21,11 +21,14 @@ const eventBufferSize int = 1000
 type Scheduler struct {
 	utils.ControllerClient
 	utils.ClusterClient
-	log        log15.Logger
-	formations Formations
+	log log15.Logger
 
-	hosts map[string]utils.HostClient
-	jobs  map[string]*Job
+	isLeader  bool
+	leaderMtx sync.RWMutex
+
+	formations Formations
+	hosts      map[string]utils.HostClient
+	jobs       map[string]*Job
 
 	hostEvents chan *host.Event
 
@@ -49,12 +52,13 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Sched
 	return &Scheduler{
 		ControllerClient: cc,
 		ClusterClient:    cluster,
+		isLeader:         false,
 		log:              log15.New("component", "scheduler"),
 		hosts:            make(map[string]utils.HostClient),
 		jobs:             make(map[string]*Job),
+		formations:       make(Formations),
 		hostEvents:       make(chan *host.Event, eventBufferSize),
 		listeners:        make(map[chan Event]struct{}),
-		formations:       make(Formations),
 		stop:             make(chan interface{}),
 		rectifyJobs:      make(chan interface{}, 1),
 		syncHosts:        make(chan interface{}, 1),
@@ -105,17 +109,14 @@ func (s *Scheduler) Run() error {
 		case he := <-s.hostEvents:
 			s.handleHostEvent(he)
 			continue
+		case ef := <-s.formationChange:
+			s.FormationChange(ef)
+			continue
 		case <-time.After(50 * time.Millisecond):
 		}
 
-		// Then handle events that could mutate the cluster
+		// Then handle entropy minimizing sync events
 		select {
-		case req := <-s.jobRequests:
-			s.HandleJobRequest(req)
-		case <-s.rectifyJobs:
-			s.RectifyJobs()
-		case ef := <-s.formationChange:
-			s.FormationChange(ef)
 		case <-s.syncHosts:
 			s.SyncHosts()
 		case <-s.syncFormations:
@@ -124,77 +125,19 @@ func (s *Scheduler) Run() error {
 			s.SyncJobs()
 		default:
 		}
+
+		// Then handle events that could mutate the cluster
+		if s.isLeader {
+			select {
+			case req := <-s.jobRequests:
+				s.HandleJobRequest(req)
+			case <-s.rectifyJobs:
+				s.RectifyJobs()
+			default:
+			}
+		}
 	}
 	return nil
-}
-
-func (s *Scheduler) followHost(h utils.HostClient) {
-	log := s.log.New("fn", "followHost")
-	_, ok := s.hosts[h.ID()]
-	if !ok {
-		log.Info("Following host", "host.id", h.ID())
-		s.hosts[h.ID()] = h
-		h.StreamEvents("all", s.hostEvents)
-		triggerChan(s.syncFormations)
-	}
-}
-
-func (s *Scheduler) handleHostEvent(he *host.Event) (err error) {
-	log := s.log.New("fn", "handleHostEvent")
-
-	defer func() {
-		if err != nil {
-			log.Error("error handling host event", "err", err)
-		}
-	}()
-
-	log.Info("Handling job event", "job.event.type", he.Event)
-	job, err := s.handleActiveJob(he.Job)
-
-	switch he.Event {
-	case host.JobEventCreate:
-	case host.JobEventStart:
-		s.sendEvent(NewEvent(EventTypeJobStart, err, job))
-	case host.JobEventStop:
-		s.sendEvent(NewEvent(EventTypeJobStop, err, nil))
-	case host.JobEventError:
-	}
-
-	return err
-}
-
-func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) (*Job, error) {
-	job := activeJob.Job
-	appID := job.Metadata["flynn-controller.app"]
-	appName := job.Metadata["flynn-controller.app_name"]
-	releaseID := job.Metadata["flynn-controller.release"]
-	jobType := job.Metadata["flynn-controller.type"]
-
-	log := s.log.New("fn", "handleActiveJob", "job.id", job.ID, "app.id", appID, "release.id", releaseID, "type", jobType)
-
-	if appID == "" || releaseID == "" {
-		return nil, errors.New("skipping due to lack of appID or releaseID")
-	}
-	j, ok := s.jobs[job.ID]
-	if !ok {
-		log.Info("getting formation")
-		f := s.formations.Get(appID, releaseID)
-		if f == nil {
-			var cf *ct.Formation
-			cf, err := s.GetFormation(appID, releaseID)
-			if err != nil || cf == nil {
-				return nil, errors.New("Job found with unknown formation")
-			}
-			f, err = s.updateFormation(cf)
-			if err != nil || f == nil {
-				return nil, errors.New("Unable to update formation")
-			}
-		}
-		j = NewJob(f, jobType, activeJob.HostID, job.ID, activeJob.StartedAt)
-	}
-	s.SaveJob(j, appName, activeJob.Status, utils.JobMetaFromMetadata(job.Metadata))
-	triggerChan(s.rectifyJobs)
-	return j, nil
 }
 
 func (s *Scheduler) SyncHosts() (err error) {
@@ -269,9 +212,19 @@ func (s *Scheduler) SyncFormations() (err error) {
 }
 
 func (s *Scheduler) RectifyJobs() (err error) {
-	log := s.log.New("fn", "RectifyJobs")
+	s.leaderMtx.RLock()
+	defer s.leaderMtx.RUnlock()
+	if !s.isLeader {
+		return errors.New("This scheduler is not the leader")
+	}
 
-	defer s.sendEvent(NewEvent(EventTypeRectifyJobs, err, nil))
+	log := s.log.New("fn", "RectifyJobs")
+	defer func() {
+		if err != nil {
+			log.Error("error rectifying jobs", "err", err)
+		}
+		s.sendEvent(NewEvent(EventTypeRectifyJobs, err, nil))
+	}()
 
 	fj := NewFormationJobs(s.jobs)
 
@@ -309,6 +262,40 @@ func (s *Scheduler) RectifyJobs() (err error) {
 	return err
 }
 
+func (s *Scheduler) FormationChange(ef *ct.ExpandedFormation) (err error) {
+	defer s.sendEvent(NewEvent(EventTypeFormationChange, err, nil))
+
+	s.changeFormation(ef)
+	triggerChan(s.rectifyJobs)
+
+	return nil
+}
+
+func (s *Scheduler) HandleJobRequest(req *JobRequest) (err error) {
+	s.leaderMtx.RLock()
+	defer s.leaderMtx.RUnlock()
+	if !s.isLeader {
+		return errors.New("This scheduler is not the leader")
+	}
+
+	log := s.log.New("fn", "HandleJobRequest")
+	defer func() {
+		if err != nil {
+			log.Error("error handling job request", "err", err)
+		}
+	}()
+
+	switch req.RequestType {
+	case JobRequestTypeUp:
+		err = s.startJob(req)
+	case JobRequestTypeDown:
+		err = s.stopJob(req)
+	default:
+		err = fmt.Errorf("unknown job request type: %s", req.RequestType)
+	}
+	return
+}
+
 func (s *Scheduler) RunPutJobs() {
 	strategy := attempt.Strategy{Delay: 100 * time.Millisecond, Total: time.Minute}
 	for {
@@ -322,6 +309,12 @@ func (s *Scheduler) RunPutJobs() {
 			})
 		}
 	}
+}
+
+func (s *Scheduler) SetLeader(isLeader bool) {
+	s.leaderMtx.Lock()
+	defer s.leaderMtx.Unlock()
+	s.isLeader = isLeader
 }
 
 func (s *Scheduler) sendDiffRequests(f *Formation, diff map[string]int) {
@@ -338,31 +331,73 @@ func (s *Scheduler) sendDiffRequests(f *Formation, diff map[string]int) {
 	}
 }
 
-func (s *Scheduler) FormationChange(ef *ct.ExpandedFormation) (err error) {
-	defer s.sendEvent(NewEvent(EventTypeFormationChange, err, nil))
-
-	s.changeFormation(ef)
-	triggerChan(s.rectifyJobs)
-
-	return nil
+func (s *Scheduler) followHost(h utils.HostClient) {
+	log := s.log.New("fn", "followHost")
+	_, ok := s.hosts[h.ID()]
+	if !ok {
+		log.Info("Following host", "host.id", h.ID())
+		s.hosts[h.ID()] = h
+		h.StreamEvents("all", s.hostEvents)
+		triggerChan(s.syncFormations)
+	}
 }
 
-func (s *Scheduler) HandleJobRequest(req *JobRequest) (err error) {
-	log := s.log.New("fn", "HandleJobRequest")
+func (s *Scheduler) handleHostEvent(he *host.Event) (err error) {
+	log := s.log.New("fn", "handleHostEvent")
+
 	defer func() {
 		if err != nil {
-			log.Error("error handling job request", "err", err)
+			log.Error("error handling host event", "err", err)
 		}
 	}()
-	switch req.RequestType {
-	case JobRequestTypeUp:
-		err = s.startJob(req)
-	case JobRequestTypeDown:
-		err = s.stopJob(req)
-	default:
-		err = fmt.Errorf("unknown job request type: %s", req.RequestType)
+
+	log.Info("Handling job event", "job.event.type", he.Event)
+	job, err := s.handleActiveJob(he.Job)
+
+	switch he.Event {
+	case host.JobEventCreate:
+	case host.JobEventStart:
+		s.sendEvent(NewEvent(EventTypeJobStart, err, job))
+	case host.JobEventStop:
+		s.sendEvent(NewEvent(EventTypeJobStop, err, nil))
+	case host.JobEventError:
 	}
-	return
+
+	return err
+}
+
+func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) (*Job, error) {
+	job := activeJob.Job
+	appID := job.Metadata["flynn-controller.app"]
+	appName := job.Metadata["flynn-controller.app_name"]
+	releaseID := job.Metadata["flynn-controller.release"]
+	jobType := job.Metadata["flynn-controller.type"]
+
+	log := s.log.New("fn", "handleActiveJob", "job.id", job.ID, "app.id", appID, "release.id", releaseID, "type", jobType)
+
+	if appID == "" || releaseID == "" {
+		return nil, errors.New("skipping due to lack of appID or releaseID")
+	}
+	j, ok := s.jobs[job.ID]
+	if !ok {
+		log.Info("getting formation")
+		f := s.formations.Get(appID, releaseID)
+		if f == nil {
+			var cf *ct.Formation
+			cf, err := s.GetFormation(appID, releaseID)
+			if err != nil || cf == nil {
+				return nil, errors.New("Job found with unknown formation")
+			}
+			f, err = s.updateFormation(cf)
+			if err != nil || f == nil {
+				return nil, errors.New("Unable to update formation")
+			}
+		}
+		j = NewJob(f, jobType, activeJob.HostID, job.ID, activeJob.StartedAt)
+	}
+	s.SaveJob(j, appName, activeJob.Status, utils.JobMetaFromMetadata(job.Metadata))
+	triggerChan(s.rectifyJobs)
+	return j, nil
 }
 
 func (s *Scheduler) changeFormation(ef *ct.ExpandedFormation) *Formation {

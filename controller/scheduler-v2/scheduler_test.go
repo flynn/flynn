@@ -39,8 +39,10 @@ func createTestScheduler() *Scheduler {
 	cc.CreateArtifact(artifact)
 	cc.CreateRelease(release)
 	cc.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
+	s := NewScheduler(cluster, cc)
+	s.SetLeader(true)
 
-	return NewScheduler(cluster, cc)
+	return s
 }
 
 func waitForEvent(events chan Event, typ EventType) (Event, error) {
