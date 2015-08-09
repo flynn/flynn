@@ -90,6 +90,14 @@ func (b *etcdBackend) serviceKey(service string) string {
 	return path.Join(b.prefix, "services", service)
 }
 
+func (b *etcdBackend) Ping() error {
+	_, err := b.etcd.Get("/ping-nonexistent", false, false)
+	if isEtcdNotFound(err) {
+		err = nil
+	}
+	return err
+}
+
 func (b *etcdBackend) AddService(service string, config *discoverd.ServiceConfig) error {
 	if config == nil {
 		config = DefaultServiceConfig

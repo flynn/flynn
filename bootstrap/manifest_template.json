@@ -184,10 +184,12 @@
           "cmd": ["scheduler"],
           "omni": true,
           "service": "flynn-controller-scheduler",
+          "ports": [{ "proto": "tcp" }],
           "resurrect": true
         },
         "worker": {
-          "cmd": ["worker"]
+          "cmd": ["worker"],
+          "ports": [{ "proto": "tcp" }]
         }
       }
     },
@@ -356,14 +358,24 @@
       },
       "processes": {
         "app": {
-          "ports": [{
-            "proto": "tcp",
-            "service": {
-              "name": "gitreceive",
-              "create": true,
-              "check": {"type": "tcp"}
+          "ports": [
+            {
+              "proto": "tcp",
+              "service": {
+                "name": "gitreceive",
+                "create": true,
+                "check": {"type": "tcp"}
+              }
+            },
+            {
+              "proto": "tcp",
+              "service": {
+                "name": "gitreceive-http",
+                "create": true,
+                "check": {"type": "tcp"}
+              }
             }
-          }]
+          ]
         }
       }
     },

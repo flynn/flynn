@@ -13,6 +13,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/status"
 )
 
 var (
@@ -43,6 +44,7 @@ type Filesystem interface {
 	Open(name string) (File, error)
 	Put(name string, r io.Reader, typ string) error
 	Delete(name string) error
+	Status() status.Status
 }
 
 var ErrNotFound = errors.New("file not found")
@@ -120,5 +122,9 @@ func main() {
 	}
 
 	log.Println("Blobstore serving files on " + addr + " from " + storageDesc)
-	shutdown.Fatal(http.ListenAndServe(addr, handler(fs)))
+
+	http.Handle("/", handler(fs))
+	status.AddHandler(fs.Status)
+
+	shutdown.Fatal(http.ListenAndServe(addr, nil))
 }

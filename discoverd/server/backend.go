@@ -11,6 +11,7 @@ type Backend interface {
 	SetLeader(service, id string) error
 	StartSync() error
 	Close() error
+	Ping() error
 }
 
 type SyncHandler interface {

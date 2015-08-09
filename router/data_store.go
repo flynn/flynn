@@ -19,11 +19,13 @@ type DataStore interface {
 	List() ([]*router.Route, error)
 	Remove(id string) error
 	Sync(ctx context.Context, h SyncHandler, startc chan<- struct{}) error
+	Ping() error
 }
 
 type DataStoreReader interface {
 	Get(id string) (*router.Route, error)
 	List() ([]*router.Route, error)
+	Ping() error
 }
 
 type SyncHandler interface {
@@ -63,6 +65,11 @@ func NewPostgresDataStore(routeType string, pgx *pgx.ConnPool) *pgDataStore {
 		routeType: routeType,
 		tableName: tableName,
 	}
+}
+
+func (d *pgDataStore) Ping() error {
+	_, err := d.pgx.Exec("SELECT 1")
+	return err
 }
 
 const sqlAddRouteHTTP = `

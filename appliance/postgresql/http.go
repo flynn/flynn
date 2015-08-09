@@ -9,6 +9,7 @@ import (
 	"github.com/flynn/flynn/appliance/postgresql/state"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/httphelper"
+	"github.com/flynn/flynn/pkg/status"
 )
 
 func ServeHTTP(pg *Postgres, peer *state.Peer, hb discoverd.Heartbeater, log log15.Logger) error {
@@ -19,6 +20,7 @@ func ServeHTTP(pg *Postgres, peer *state.Peer, hb discoverd.Heartbeater, log log
 		log:  log,
 	}
 	r := httprouter.New()
+	r.Handler("GET", status.Path, status.Handler(api.GetHealthStatus))
 	r.GET("/status", api.GetStatus)
 	r.POST("/stop", api.Stop)
 	return http.ListenAndServe(":5433", r)
@@ -29,6 +31,28 @@ type HTTP struct {
 	peer *state.Peer
 	hb   discoverd.Heartbeater
 	log  log15.Logger
+}
+
+func (h *HTTP) GetHealthStatus() status.Status {
+	info := h.peer.Info()
+	if info.State == nil || info.PgRetryPending != nil ||
+		(info.Role != state.RolePrimary && info.Role != state.RoleSync && info.Role != state.RoleAsync) {
+		return status.Unhealthy
+	}
+	pg, err := h.pg.Info()
+	if err != nil || !pg.Running || !pg.UserExists {
+		return status.Unhealthy
+	}
+	if info.Role == state.RolePrimary {
+		if !pg.ReadWrite {
+			return status.Unhealthy
+		}
+		if !info.State.Singleton && (pg.SyncedDownstream == nil || info.State.Sync == nil || info.State.Sync.ID != pg.SyncedDownstream.ID) {
+			return status.Unhealthy
+		}
+	}
+
+	return status.Healthy
 }
 
 func (h *HTTP) GetStatus(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {

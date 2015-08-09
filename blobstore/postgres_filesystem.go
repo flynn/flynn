@@ -10,6 +10,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/oid"
 	"github.com/flynn/flynn/pkg/postgres"
+	"github.com/flynn/flynn/pkg/status"
 )
 
 func NewPostgresFilesystem(db *sql.DB) (Filesystem, error) {
@@ -38,6 +39,13 @@ $$ LANGUAGE plpgsql;`,
 
 type PostgresFilesystem struct {
 	db *sql.DB
+}
+
+func (p *PostgresFilesystem) Status() status.Status {
+	if _, err := p.db.Exec("SELECT 1"); err != nil {
+		return status.Unhealthy
+	}
+	return status.Healthy
 }
 
 func (p *PostgresFilesystem) Put(name string, r io.Reader, typ string) error {

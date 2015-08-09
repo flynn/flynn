@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/http"
 	"os"
 	"time"
 
@@ -10,8 +11,10 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	"github.com/flynn/flynn/controller/worker/app_deletion"
 	"github.com/flynn/flynn/controller/worker/deployment"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/status"
 )
 
 const workerCount = 10
@@ -47,6 +50,23 @@ func main() {
 		shutdown.Fatal()
 	}
 	shutdown.BeforeExit(func() { pgxpool.Close() })
+
+	go func() {
+		status.AddHandler(func() status.Status {
+			_, err := pgxpool.Exec("SELECT 1")
+			if err != nil {
+				return status.Unhealthy
+			}
+			return status.Healthy
+		})
+		addr := ":" + os.Getenv("PORT")
+		hb, err := discoverd.AddServiceAndRegister("flynn-controller-worker", addr)
+		if err != nil {
+			shutdown.Fatal(err)
+		}
+		shutdown.BeforeExit(func() { hb.Close() })
+		shutdown.Fatal(http.ListenAndServe(addr, nil))
+	}()
 
 	workers := que.NewWorkerPool(
 		que.NewClient(pgxpool),
