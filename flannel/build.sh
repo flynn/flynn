@@ -2,7 +2,7 @@
 
 set -eo pipefail
 
-commit=e096282d63d1ca8c3d9b6e689da6a7d2b8ea0740
+commit=1d748d62859b74aa1fb441c14393845704f85c8b
 dir=flannel-${commit}
 tmpdir=$(mktemp --directory)
 
