@@ -85,6 +85,10 @@ func (a *cliTestApp) sh(cmd string) *CmdResult {
 	return a.flynn("run", "sh", "-c", cmd)
 }
 
+func (a *cliTestApp) cleanup() {
+	a.watcher.Close()
+}
+
 func (s *CLISuite) TestCreateAppNoGit(t *c.C) {
 	dir := t.MkDir()
 	name := random.String(30)
@@ -180,6 +184,7 @@ func (s *CLISuite) TestKey(t *c.C) {
 
 func (s *CLISuite) TestPs(t *c.C) {
 	app := s.newCliTestApp(t)
+	defer app.cleanup()
 	ps := func() []string {
 		out := app.flynn("ps")
 		t.Assert(out, Succeeds)
@@ -202,6 +207,7 @@ func (s *CLISuite) TestPs(t *c.C) {
 
 func (s *CLISuite) TestScale(t *c.C) {
 	app := s.newCliTestApp(t)
+	defer app.cleanup()
 
 	assertEventOutput := func(scale *CmdResult, events ct.JobEvents) {
 		var actual []*ct.JobEvent
@@ -266,6 +272,7 @@ func (s *CLISuite) TestScale(t *c.C) {
 
 func (s *CLISuite) TestRun(t *c.C) {
 	app := s.newCliTestApp(t)
+	defer app.cleanup()
 
 	// this still goes to the log stream because there's no TTY:
 	t.Assert(app.sh("echo hello"), Outputs, "hello\n")
@@ -310,6 +317,7 @@ func (s *CLISuite) TestRun(t *c.C) {
 
 func (s *CLISuite) TestRunSignal(t *c.C) {
 	app := s.newCliTestApp(t)
+	defer app.cleanup()
 	wait := func(cmd *exec.Cmd) error {
 		done := make(chan error)
 		go func() {
@@ -334,6 +342,7 @@ func (s *CLISuite) TestRunSignal(t *c.C) {
 
 func (s *CLISuite) TestEnv(t *c.C) {
 	app := s.newCliTestApp(t)
+	defer app.cleanup()
 	t.Assert(app.flynn("env", "set", "ENV_TEST=var", "SECOND_VAL=2"), Succeeds)
 	t.Assert(app.flynn("env"), SuccessfulOutputContains, "ENV_TEST=var\nSECOND_VAL=2")
 	t.Assert(app.flynn("env", "get", "ENV_TEST"), Outputs, "var\n")
@@ -345,6 +354,7 @@ func (s *CLISuite) TestEnv(t *c.C) {
 
 func (s *CLISuite) TestMeta(t *c.C) {
 	app := s.newCliTestApp(t)
+	defer app.cleanup()
 	t.Assert(app.flynn("meta", "set", "META_TEST=var", "SECOND_VAL=2"), Succeeds)
 	t.Assert(app.flynn("meta").Output, Matches, `META_TEST *var`)
 	t.Assert(app.flynn("meta").Output, Matches, `SECOND_VAL *2`)
@@ -356,6 +366,7 @@ func (s *CLISuite) TestMeta(t *c.C) {
 
 func (s *CLISuite) TestKill(t *c.C) {
 	app := s.newCliTestApp(t)
+	defer app.cleanup()
 	t.Assert(app.flynn("scale", "--no-wait", "echoer=1"), Succeeds)
 	jobID := app.waitFor(ct.JobEvents{"echoer": {"up": 1}})
 
@@ -366,6 +377,7 @@ func (s *CLISuite) TestKill(t *c.C) {
 
 func (s *CLISuite) TestRoute(t *c.C) {
 	app := s.newCliTestApp(t)
+	defer app.cleanup()
 
 	// The router API does not currently give us a "read your own writes"
 	// guarantee, so we must retry a few times if we don't get the expected
@@ -430,6 +442,7 @@ func (s *CLISuite) TestProvider(t *c.C) {
 
 func (s *CLISuite) TestResource(t *c.C) {
 	app := s.newCliTestApp(t)
+	defer app.cleanup()
 	t.Assert(app.flynn("resource", "add", "postgres").Output, Matches, `Created resource \w+ and release \w+.`)
 
 	res, err := s.controllerClient(t).AppResourceList(app.name)
@@ -444,12 +457,14 @@ func (s *CLISuite) TestResource(t *c.C) {
 
 func (s *CLISuite) TestResourceList(t *c.C) {
 	app := s.newCliTestApp(t)
+	defer app.cleanup()
 	t.Assert(app.flynn("resource", "add", "postgres"), Succeeds)
 	t.Assert(app.flynn("resource").Output, Matches, `postgres`)
 }
 
 func (s *CLISuite) TestLog(t *c.C) {
 	app := s.newCliTestApp(t)
+	defer app.cleanup()
 	t.Assert(app.flynn("run", "-d", "echo", "hello", "world"), Succeeds)
 	app.waitFor(ct.JobEvents{"": {"up": 1, "down": 1}})
 	t.Assert(app.flynn("log", "--raw-output"), Outputs, "hello world\n")
@@ -457,6 +472,7 @@ func (s *CLISuite) TestLog(t *c.C) {
 
 func (s *CLISuite) TestLogFilter(t *c.C) {
 	app := s.newCliTestApp(t)
+	defer app.cleanup()
 	for i := 0; i < 2; i++ {
 		t.Assert(app.flynn("scale", "crasher=2"), Succeeds)
 		t.Assert(app.flynn("scale", "crasher=0"), Succeeds)
@@ -490,6 +506,7 @@ func (s *CLISuite) TestLogFilter(t *c.C) {
 
 func (s *CLISuite) TestLogStderr(t *c.C) {
 	app := s.newCliTestApp(t)
+	defer app.cleanup()
 	t.Assert(app.flynn("run", "-d", "sh", "-c", "echo hello && echo world >&2"), Succeeds)
 	app.waitFor(ct.JobEvents{"": {"up": 1, "down": 1}})
 	runLog := func(split bool) (stdout, stderr bytes.Buffer) {
@@ -516,6 +533,7 @@ func (s *CLISuite) TestLogStderr(t *c.C) {
 
 func (s *CLISuite) TestLogFollow(t *c.C) {
 	app := s.newCliTestApp(t)
+	defer app.cleanup()
 
 	t.Assert(app.flynn("run", "-d", "sh", "-c", "sleep 2 && for i in 1 2 3 4 5; do echo \"line $i\"; done"), Succeeds)
 	app.waitFor(ct.JobEvents{"": {"up": 1}})
@@ -642,6 +660,7 @@ func (s *CLISuite) TestRelease(t *c.C) {
 	file.Close()
 
 	app := s.newCliTestApp(t)
+	defer app.cleanup()
 	t.Assert(app.flynn("release", "add", "-f", file.Name(), imageURIs["test-apps"]), Succeeds)
 
 	r, err := s.controller.GetAppRelease(app.name)
@@ -669,6 +688,7 @@ func (s *CLISuite) TestRelease(t *c.C) {
 
 func (s *CLISuite) TestLimits(t *c.C) {
 	app := s.newCliTestApp(t)
+	defer app.cleanup()
 	t.Assert(app.flynn("limit", "set", "resources", "memory=512MB", "max_fd=12k"), Succeeds)
 
 	release, err := s.controller.GetAppRelease(app.name)
@@ -689,6 +709,7 @@ func (s *CLISuite) TestLimits(t *c.C) {
 
 func (s *CLISuite) TestRunLimits(t *c.C) {
 	app := s.newCliTestApp(t)
+	defer app.cleanup()
 	cmd := app.flynn("run", "sh", "-c", resourceCmd)
 	t.Assert(cmd, Succeeds)
 	defaults := resource.Defaults()
