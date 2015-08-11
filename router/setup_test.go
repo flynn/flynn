@@ -11,6 +11,7 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
+	"github.com/flynn/flynn/discoverd/cache"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
@@ -19,7 +20,7 @@ import (
 )
 
 func init() {
-	testMode = true
+	cache.TestMode = true
 	listenFunc = net.Listen
 }
 
@@ -146,24 +147,30 @@ func discoverdRegisterTCP(c *C, l *TCPListener, addr string) func() {
 func discoverdRegisterTCPService(c *C, l *TCPListener, name, addr string) func() {
 	dc := l.discoverd.(discoverdClient)
 	sc := l.services[name].sc
-	return discoverdRegister(c, dc, sc.(*discoverdServiceCache), name, addr)
+	return discoverdRegister(c, dc, sc.(serviceCache), name, addr)
 }
 
 func discoverdRegisterHTTP(c *C, l *HTTPListener, addr string) func() {
 	return discoverdRegisterHTTPService(c, l, "test", addr)
 }
 
+type serviceCache interface {
+	cache.ServiceCache
+	Watch(bool) chan *discoverd.Event
+	Unwatch(chan *discoverd.Event)
+}
+
 func discoverdRegisterHTTPService(c *C, l *HTTPListener, name, addr string) func() {
 	dc := l.discoverd.(discoverdClient)
 	sc := l.services[name].sc
-	return discoverdRegister(c, dc, sc.(*discoverdServiceCache), name, addr)
+	return discoverdRegister(c, dc, sc.(serviceCache), name, addr)
 }
 
-func discoverdRegister(c *C, dc discoverdClient, sc *discoverdServiceCache, name, addr string) func() {
+func discoverdRegister(c *C, dc discoverdClient, sc serviceCache, name, addr string) func() {
 	done := make(chan struct{})
 	go func() {
-		events := sc.watch(true)
-		defer sc.unwatch(events)
+		events := sc.Watch(true)
+		defer sc.Unwatch(events)
 		for event := range events {
 			if event.Kind == discoverd.EventKindUp && event.Instance.Addr == addr {
 				close(done)
@@ -181,13 +188,13 @@ func discoverdRegister(c *C, dc discoverdClient, sc *discoverdServiceCache, name
 	return discoverdUnregisterFunc(c, hb, sc)
 }
 
-func discoverdUnregisterFunc(c *C, hb discoverd.Heartbeater, sc *discoverdServiceCache) func() {
+func discoverdUnregisterFunc(c *C, hb discoverd.Heartbeater, sc serviceCache) func() {
 	return func() {
 		done := make(chan struct{})
 		started := make(chan struct{})
 		go func() {
-			events := sc.watch(false)
-			defer sc.unwatch(events)
+			events := sc.Watch(false)
+			defer sc.Unwatch(events)
 			close(started)
 			for event := range events {
 				if event.Kind == discoverd.EventKindDown && event.Instance.Addr == hb.Addr() {

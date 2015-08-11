@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/discoverd/cache"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/random"
@@ -223,7 +224,7 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 		service = nil
 	}
 	if service == nil {
-		sc, err := NewDiscoverdServiceCache(h.l.discoverd.Service(r.Service))
+		sc, err := cache.New(h.l.discoverd.Service(r.Service))
 		if err != nil {
 			return err
 		}
@@ -379,7 +380,7 @@ type httpRoute struct {
 // A service definition: name, and set of backends.
 type httpService struct {
 	name string
-	sc   DiscoverdServiceCache
+	sc   cache.ServiceCache
 	refs int
 
 	rp *proxy.ReverseProxy
