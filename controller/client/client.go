@@ -137,7 +137,7 @@ func NewClient(uri, key string) (*Client, error) {
 
 func NewClientWithHTTP(uri, key string, httpClient *http.Client) (*Client, error) {
 	if uri == "" {
-		uri = "http://flynn-controller.discoverd"
+		uri = "http://controller.discoverd"
 	}
 	u, err := url.Parse(uri)
 	if err != nil {

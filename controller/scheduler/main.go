@@ -53,14 +53,14 @@ func main() {
 	c.watchHosts()
 
 	grohl.Log(grohl.Data{"at": "leaderwait"})
-	hb, err := discoverd.AddServiceAndRegister("flynn-controller-scheduler", ":"+os.Getenv("PORT"))
+	hb, err := discoverd.AddServiceAndRegister("controller-scheduler", ":"+os.Getenv("PORT"))
 	if err != nil {
 		shutdown.Fatal(err)
 	}
 	shutdown.BeforeExit(func() { hb.Close() })
 
 	leaders := make(chan *discoverd.Instance)
-	stream, err := discoverd.NewService("flynn-controller-scheduler").Leaders(leaders)
+	stream, err := discoverd.NewService("controller-scheduler").Leaders(leaders)
 	if err != nil {
 		shutdown.Fatal(err)
 	}

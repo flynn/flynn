@@ -41,7 +41,7 @@ func run() error {
 		return err
 	}
 
-	instances, err := discoverd.GetInstances("flynn-controller", 10*time.Second)
+	instances, err := discoverd.GetInstances("controller", 10*time.Second)
 	if err != nil {
 		log.Error("error looking up controller in service discovery", "err", err)
 		return err
