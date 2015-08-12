@@ -477,7 +477,9 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	}
 	for i, p := range job.Config.Ports {
 		if p.Proto != "tcp" && p.Proto != "udp" {
-			return fmt.Errorf("unknown port proto %q", p.Proto)
+			err := fmt.Errorf("unknown port proto %q", p.Proto)
+			g.Log(grohl.Data{"at": "alloc_port", "proto": p.Proto, "status": "error", "err": err})
+			return err
 		}
 
 		if p.Port == 0 {
