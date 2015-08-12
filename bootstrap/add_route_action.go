@@ -33,18 +33,17 @@ func (a *AddRouteAction) Run(s *State) error {
 	if err != nil {
 		return err
 	}
-	if a.CertStep != "" {
-		if a.Route.Type != "http" {
-			return fmt.Errorf("bootstrap: invalid cert_step option for non-http route")
-		}
-		cert, err := getCertStep(s, a.CertStep)
-		if err != nil {
-			return err
-		}
+	if a.Route.Type == "http" {
 		route := a.Route.HTTPRoute()
 		route.Domain = interpolate(s, route.Domain)
-		route.TLSCert = cert.Cert
-		route.TLSKey = cert.PrivateKey
+		if a.CertStep != "" {
+			cert, err := getCertStep(s, a.CertStep)
+			if err != nil {
+				return err
+			}
+			route.TLSCert = cert.Cert
+			route.TLSKey = cert.PrivateKey
+		}
 		a.Route = route.ToRoute()
 	}
 
