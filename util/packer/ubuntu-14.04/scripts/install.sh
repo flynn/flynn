@@ -143,9 +143,9 @@ create_groups() {
 
 add_apt_sources() {
   # docker
-  apt-key adv --keyserver keyserver.ubuntu.com \
-    --recv 36A1D7869245C8950F966E92D8576A8BA88D21E9
-  echo deb https://get.docker.com/ubuntu docker main \
+  apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 \
+    --recv 58118E89F3A912897C070ADBF76221572C52609D
+  echo deb https://apt.dockerproject.org/repo ubuntu-trusty main \
     > /etc/apt/sources.list.d/docker.list
 
   # tup
@@ -175,7 +175,7 @@ install_packages() {
     "libvirt-bin"
     "libvirt-dev"
     "linux-image-extra-$(uname -r)"
-    "lxc-docker"
+    "docker-engine"
     "make"
     "mercurial"
     "tup"
