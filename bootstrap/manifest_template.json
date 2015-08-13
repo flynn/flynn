@@ -46,6 +46,7 @@
       },
       "processes": {
         "app": {
+          "ports": [{"port": 5002, "proto": "tcp"}],
           "resurrect": true,
           "host_network": true,
           "omni": true
