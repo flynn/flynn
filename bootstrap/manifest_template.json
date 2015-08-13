@@ -511,6 +511,43 @@
     "domain": "dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}"
   },
   {
+    "id": "status",
+    "action": "deploy-app",
+    "app": {
+      "name": "status",
+      "meta": {"flynn-system-app": "true"}
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "$image_repository?name=flynn/status&id=$image_id[status]"
+    },
+    "release": {
+      "processes": {
+        "web": {
+          "ports": [{
+            "port": 80,
+            "proto": "tcp",
+            "service": {
+              "name": "status-web",
+              "create": true
+            }
+          }]
+        }
+      }
+    },
+    "processes": {
+      "web": 2
+    }
+  },
+  {
+    "id": "status-route",
+    "action": "add-route",
+    "app_step": "status",
+    "type": "http",
+    "service": "status-web",
+    "domain": "status.{{ getenv \"CLUSTER_DOMAIN\" }}"
+  },
+  {
     "id": "blobstore-wait",
     "action": "wait",
     "url": "http://blobstore.discoverd",
@@ -520,6 +557,11 @@
     "id": "gitreceive-wait",
     "action": "wait",
     "url": "tcp://gitreceive.discoverd"
+  },
+  {
+    "id": "status-wait",
+    "action": "wait",
+    "url": "http://status-web.discoverd"
   },
   {
     "id": "log-complete",

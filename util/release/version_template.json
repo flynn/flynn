@@ -12,5 +12,6 @@
   "flynn/taffy": "$image_id[taffy]",
   "flynn/dashboard": "$image_id[dashboard]",
   "flynn/updater": "$image_id[updater]",
-  "flynn/logaggregator": "$image_id[logaggregator]"
+  "flynn/logaggregator": "$image_id[logaggregator]",
+  "flynn/status": "$image_id[status]"
 }
