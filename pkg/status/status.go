@@ -42,8 +42,12 @@ type Status struct {
 	Detail *json.RawMessage `json:"detail,omitempty"`
 }
 
-func New(code Code, detail interface{}) (Status, error) {
-	s := Status{Status: code}
+func New(healthy bool, detail interface{}) (Status, error) {
+	var s Status
+	s.Status = CodeHealthy
+	if !healthy {
+		s.Status = CodeUnhealthy
+	}
 	if detail != nil {
 		res, err := json.Marshal(detail)
 		if err != nil {

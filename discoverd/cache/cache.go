@@ -1,4 +1,4 @@
-package main
+package cache
 
 import (
 	"sync"
@@ -9,22 +9,22 @@ import (
 	"github.com/flynn/flynn/pkg/stream"
 )
 
-var testMode = false
+var TestMode = false
 
-type DiscoverdServiceCache interface {
+type ServiceCache interface {
 	Addrs() []string
 	Close() error
 }
 
-func NewDiscoverdServiceCache(s discoverd.Service) (DiscoverdServiceCache, error) {
-	d := &discoverdServiceCache{
+func New(s discoverd.Service) (ServiceCache, error) {
+	d := &serviceCache{
 		addrs: make(map[string]struct{}),
 		stop:  make(chan struct{}),
 	}
 	return d, d.start(s)
 }
 
-type discoverdServiceCache struct {
+type serviceCache struct {
 	stream stream.Stream
 
 	sync.RWMutex
@@ -41,7 +41,7 @@ var connectAttempts = attempt.Strategy{
 	Delay: 500 * time.Millisecond,
 }
 
-func (d *discoverdServiceCache) start(s discoverd.Service) (err error) {
+func (d *serviceCache) start(s discoverd.Service) (err error) {
 	// use a function to create the watcher so we can reconnect if it closes
 	// unexpectedly (ideally the discoverd client would use a ResumingStream
 	// but service events do not yet support it).
@@ -82,7 +82,7 @@ func (d *discoverdServiceCache) start(s discoverd.Service) (err error) {
 				case discoverd.EventKindCurrent:
 					once.Do(func() { current <- nil })
 				}
-				if testMode {
+				if TestMode {
 					d.Lock()
 					if d.watchCh != nil {
 						d.watchCh <- event
@@ -95,12 +95,12 @@ func (d *discoverdServiceCache) start(s discoverd.Service) (err error) {
 	return <-current
 }
 
-func (d *discoverdServiceCache) Close() error {
+func (d *serviceCache) Close() error {
 	close(d.stop)
 	return d.stream.Close()
 }
 
-func (d *discoverdServiceCache) Addrs() []string {
+func (d *serviceCache) Addrs() []string {
 	d.RLock()
 	defer d.RUnlock()
 	res := make([]string, 0, len(d.addrs))
@@ -111,7 +111,7 @@ func (d *discoverdServiceCache) Addrs() []string {
 }
 
 // This method is only used by the test suite
-func (d *discoverdServiceCache) watch(current bool) chan *discoverd.Event {
+func (d *serviceCache) Watch(current bool) chan *discoverd.Event {
 	d.Lock()
 	watchCh := make(chan *discoverd.Event)
 	d.watchCh = watchCh
@@ -129,7 +129,7 @@ func (d *discoverdServiceCache) watch(current bool) chan *discoverd.Event {
 	return watchCh
 }
 
-func (d *discoverdServiceCache) unwatch(ch chan *discoverd.Event) {
+func (d *serviceCache) Unwatch(ch chan *discoverd.Event) {
 	go func() {
 		for range ch {
 		}

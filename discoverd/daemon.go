@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/coreos/go-etcd/etcd"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/server"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
@@ -96,14 +97,17 @@ func main() {
 	}
 	log.Printf("discoverd listening for HTTP on %s", *httpAddr)
 
-	if *notify != "" {
-		addr := l.Addr().String()
-		host, port, _ := net.SplitHostPort(addr)
-		if host == "0.0.0.0" {
-			addr = net.JoinHostPort(os.Getenv("EXTERNAL_IP"), port)
-		}
-		notifyWebhook(*notify, fmt.Sprintf("http://%s", addr), *dnsAddr)
+	addr := l.Addr().String()
+	host, port, _ := net.SplitHostPort(addr)
+	if host == "0.0.0.0" {
+		addr = net.JoinHostPort(os.Getenv("EXTERNAL_IP"), port)
 	}
+	url := fmt.Sprintf("http://%s", addr)
+	if *notify != "" {
+		notifyWebhook(*notify, url, *dnsAddr)
+	}
+
+	go discoverd.NewClientWithURL(url).AddServiceAndRegister("discoverd", addr)
 
 	http.Serve(l, server.NewHTTPHandler(server.NewBasicDatastore(state, backend)))
 }

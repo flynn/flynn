@@ -43,7 +43,7 @@ func (s *State) ControllerClient() (*controller.Client, error) {
 		if err != nil {
 			return nil, err
 		}
-		instances, err := disc.Instances("flynn-controller", time.Second)
+		instances, err := disc.Instances("controller", time.Second)
 		if err != nil {
 			return nil, err
 		}

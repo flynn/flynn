@@ -60,7 +60,7 @@ func APIHandler(conf *Config) http.Handler {
 		MaxAge:           time.Hour,
 	}))
 
-	r.Get(status.Path, status.HealthyHandler)
+	r.Get(status.Path, status.HealthyHandler.ServeHTTP)
 
 	r.Group(conf.PathPrefix, func(r martini.Router) {
 		m.Use(reqHelperMiddleware)

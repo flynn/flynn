@@ -80,6 +80,7 @@ func main() {
 			flanneld,
 			"-discoverd-url=" + status.Discoverd.URL,
 			"-iface=" + os.Getenv("EXTERNAL_IP"),
+			"-http-port=" + os.Getenv("PORT"),
 			fmt.Sprintf("-notify-url=http://%s:1113/host/network", os.Getenv("EXTERNAL_IP")),
 		},
 		os.Environ(),

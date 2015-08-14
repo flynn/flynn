@@ -60,7 +60,7 @@ func main() {
 			return status.Healthy
 		})
 		addr := ":" + os.Getenv("PORT")
-		hb, err := discoverd.AddServiceAndRegister("flynn-controller-worker", addr)
+		hb, err := discoverd.AddServiceAndRegister("controller-worker", addr)
 		if err != nil {
 			shutdown.Fatal(err)
 		}

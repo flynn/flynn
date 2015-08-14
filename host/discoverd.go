@@ -71,7 +71,7 @@ func (d *DiscoverdManager) ConnectLocal(url string) error {
 	d.backend.SetDefaultEnv("DISCOVERD", url)
 
 	go func() {
-		if err := d.mux.Connect(disc, "flynn-logaggregator"); err != nil {
+		if err := d.mux.Connect(disc, "logaggregator"); err != nil {
 			shutdown.Fatal(err)
 		}
 	}()

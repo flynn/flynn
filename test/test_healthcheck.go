@@ -1,12 +1,15 @@
 package main
 
 import (
+	"encoding/json"
+	"net/http"
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/status"
 )
 
 type HealthcheckSuite struct {
@@ -104,4 +107,31 @@ func (s *HealthcheckSuite) TestKillDown(t *c.C) {
 	// as failed
 	err = watcher.WaitFor(ct.JobEvents{"printer": {"down": 1}}, scaleTimeout, nil)
 	t.Assert(err, c.IsNil)
+}
+
+func (s *HealthcheckSuite) TestStatus(t *c.C) {
+	routes, err := s.controllerClient(t).RouteList("status")
+	t.Assert(err, c.IsNil)
+	t.Assert(routes, c.HasLen, 1)
+
+	req, _ := http.NewRequest("GET", "http://"+routerIP, nil)
+	req.Host = routes[0].HTTPRoute().Domain
+	res, err := http.DefaultClient.Do(req)
+	t.Assert(err, c.IsNil)
+	defer res.Body.Close()
+
+	var data struct {
+		Data struct {
+			Status status.Code
+			Detail map[string]status.Status
+		}
+	}
+	err = json.NewDecoder(res.Body).Decode(&data)
+	t.Assert(err, c.IsNil)
+
+	t.Assert(data.Data.Status, c.Equals, status.CodeHealthy)
+	t.Assert(data.Data.Detail, c.HasLen, 11)
+	for name, s := range data.Data.Detail {
+		t.Assert(s.Status, c.Equals, status.CodeHealthy, c.Commentf("name = %s", name))
+	}
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/discoverd/cache"
 	"github.com/flynn/flynn/router/proxy"
 	"github.com/flynn/flynn/router/types"
 )
@@ -212,7 +213,7 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 		service = nil
 	}
 	if service == nil {
-		sc, err := NewDiscoverdServiceCache(h.l.discoverd.Service(r.Service))
+		sc, err := cache.New(h.l.discoverd.Service(r.Service))
 		if err != nil {
 			return err
 		}
@@ -321,7 +322,7 @@ func (r *tcpRoute) Close() {
 
 type tcpService struct {
 	name string
-	sc   DiscoverdServiceCache
+	sc   cache.ServiceCache
 	refs int
 
 	rp *proxy.ReverseProxy

@@ -55,7 +55,7 @@ func main() {
 		shutdown.Fatal(err)
 	}
 
-	hb, err := discoverd.AddServiceAndRegister("flynn-logaggregator", *logAddr)
+	hb, err := discoverd.AddServiceAndRegister("logaggregator", *logAddr)
 	if err != nil {
 		shutdown.Fatal(err)
 	}

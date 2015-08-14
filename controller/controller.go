@@ -80,7 +80,7 @@ func main() {
 	}
 	rc := routerc.New()
 
-	hb, err := discoverd.DefaultClient.AddServiceAndRegisterInstance("flynn-controller", &discoverd.Instance{
+	hb, err := discoverd.DefaultClient.AddServiceAndRegisterInstance("controller", &discoverd.Instance{
 		Addr:  addr,
 		Proto: "http",
 		Meta: map[string]string{
