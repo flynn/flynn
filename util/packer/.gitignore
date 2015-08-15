@@ -1,3 +1,5 @@
 packer_cache
 *.box
 *.ova
+base_*
+output-*

@@ -31,14 +31,15 @@
 #   export AWS_DEFAULT_REGION=us-east-1
 
 set -eo pipefail
+shopt -s nullglob
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "${ROOT}/script/lib/ui.sh"
 source "${ROOT}/script/lib/aws.sh"
 source "${ROOT}/script/lib/util.sh"
 
-UBUNTU_BOX_URL="https://cloud-images.ubuntu.com/vagrant/trusty/20150610/trusty-server-cloudimg-amd64-vagrant-disk1.box"
-UBUNTU_BOX_SHA="5174904851577f6423444fe477b3fae01944f8592fabd48f0ba7291d7e645d99"
+UBUNTU_ISO_URL="http://releases.ubuntu.com/trusty/ubuntu-14.04.3-server-amd64.iso"
+UBUNTU_ISO_SHA="a3b345908a826e262f4ea1afeb357fd09ec0558cf34e6c9112cead4bb55ccdfb"
 
 usage() {
   cat <<USAGE >&2
@@ -50,6 +51,8 @@ OPTIONS:
   -b BUCKET     The S3 bucket to upload vagrant images to [default: 'flynn']
   -d DOMAIN     The CloudFront domain [default: 'dl.flynn.io']
   -r DIR        Resume the release using DIR
+  -c CACHE      Directory to cache base VM images [default: '/tmp']
+  -a AWSREGION  AWS region to use to build the AMI [default: 'us-east-1']
 
 Requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set
 USAGE
@@ -57,9 +60,10 @@ USAGE
 
 main() {
   local bucket dir domain
+  local cache="/tmp"
   local keep=false
 
-  while getopts "hkb:d:r:" opt; do
+  while getopts "hkb:d:r:c:a:" opt; do
     case $opt in
       h)
         usage
@@ -73,6 +77,15 @@ main() {
         if [[ ! -d "${dir}" ]]; then
           fail "No such directory: ${dir}"
         fi
+        ;;
+      c)
+        cache=${OPTARG}
+        if [[ ! -d "${cache}" ]]; then
+          fail "No such directory: ${cache}"
+        fi
+        ;;
+      a)
+        AWS_DEFAULT_REGION=${OPTARG}
         ;;
       ?)
         usage
@@ -96,30 +109,62 @@ main() {
   bucket=${bucket:-"flynn"}
   dir="${dir:-$(mktemp -d)}"
   domain="${domain:-"dl.flynn.io"}"
+  builders=("vmware" "virtualbox")
 
   info "using base dir: ${dir}"
 
+  info "checking for stage1 targets"
+  local stage1_targets=()
+  for builder in ${builders[@]}; do
+    if [[ ! -d "${dir}/base_${builder}_${UBUNTU_ISO_SHA}" ]]; then
+      stage1_targets+=("${builder}-iso")
+    fi
+  done
+
+  if [[ ${#stage1_targets[@]} -eq 0 ]]; then
+    info "all stage1 targets already built"
+  else
+    local stage1_builders=$(join , "${stage1_targets[@]}")
+    info "building stage1 targets for ${stage1_builders}"
+    pushd "${ROOT}/util/packer/ubuntu-14.04" >/dev/null
+    local output=$(packer build \
+      -only="${stage1_builders}" \
+      -var "headless=true" \
+      -var "output_dir=${cache}" \
+      -var "iso_url=${UBUNTU_ISO_URL}" \
+      -var "iso_sha=${UBUNTU_ISO_SHA}" \
+      stage1.json | parse_packer)
+    popd >/dev/null
+  fi
+
   local amis="$(cat "${dir}/amis.txt" 2>/dev/null)"
-  local box=$(ls "${dir}"/*_virtualbox.box 2>/dev/null)
-  if [[ -z "${box}" ]] || [[ -z "${amis}" ]]; then
-    local ubuntu_box="/tmp/ubuntu-${UBUNTU_BOX_SHA}.box"
-    if [[ ! -f "${ubuntu_box}" ]]; then
-      info "fetching base Ubuntu box"
-      curl "${UBUNTU_BOX_URL}" > "${ubuntu_box}"
-    fi
 
-    info "validating base Ubuntu box"
-    if [[ "$(sha256 "${ubuntu_box}")" != "${UBUNTU_BOX_SHA}" ]]; then
-      rm -f "${ubuntu_box}"
-      fail "base Ubuntu box has incorrect checksum"
+  info "checking for stage2 targets"
+  local boxes=()
+  local stage2_targets=()
+  for builder in ${builders[@]}; do
+    local box="${dir}/flynn-base_${version}_${builder}.box"
+    if [[ -f ${box} ]]; then
+      boxes+=(${box})
+    else
+      case $builder in
+        vmware)
+          stage2_targets+=("vmware-vmx")
+          ;;
+        virtualbox)
+          stage2_targets+=("virtualbox-ovf")
+          ;;
+      esac
     fi
+  done
 
-    local ova_path="/tmp/ubuntu-${UBUNTU_BOX_SHA}.ova"
-    if [[ ! -f "${ova_path}" ]]; then
-      info "converting base Ubuntu box to OVA archive"
-      tar --delete Vagrantfile < "${ubuntu_box}" > "${ova_path}"
-    fi
+  if [[ -z "${amis}" ]]; then
+    stage2_targets+=("amazon-ebs")
+  fi
 
+  if [[ ${#stage2_targets[@]} -eq 0 ]]; then
+    info "all stage2 targets already built"
+  else
     info "getting latest ami id"
     ami_id=$(latest_ami)
     if [[ -z "${ami_id}" ]]; then
@@ -127,18 +172,21 @@ main() {
     fi
     info "ami build will use ${ami_id} as source"
 
-    info "building VirtualBox and EC2 images"
+    local stage2_builders=$(join , "${stage2_targets[@]}")
+    info "building stage2 targets for ${stage2_builders}"
     pushd "${ROOT}/util/packer/ubuntu-14.04" >/dev/null
     local output=$(packer build \
       -machine-readable \
-      -only="amazon-ebs,virtualbox-ovf" \
+      -only="${stage2_builders}" \
       -var "headless=true" \
+      -var "input_dir=${cache}" \
       -var "output_dir=${dir}" \
-      -var "ova_path=${ova_path}" \
+      -var "iso_sha=${UBUNTU_ISO_SHA}" \
       -var "flynn_repository=https://${domain}" \
       -var "source_ami=${ami_id}" \
+      -var "aws_region=${AWS_DEFAULT_REGION}" \
       -var "version=${version}" \
-      template.json | parse_packer)
+      stage2.json | parse_packer)
     popd >/dev/null
 
     info "parsing build output"
@@ -146,8 +194,8 @@ main() {
       IFS="|" read builder artifacts <<< "${line}"
 
       case "${builder}" in
-        virtualbox-ovf)
-          box="${artifacts}"
+        virtualbox-ovf | vmware-vmx)
+          boxes+=("${artifacts}")
           ;;
         amazon-ebs)
           amis="${artifacts}"
@@ -155,25 +203,8 @@ main() {
       esac
     done <<< "${output}"
 
-    if [[ -z "${box}" ]] || [[ -z "${amis}" ]]; then
-      fail "failed to parse build output"
-    fi
-
     echo -n "${amis}" > "${dir}/amis.txt"
   fi
-
-  local box_name="$(basename "${box}")"
-  if ! s3cmd info "s3://${bucket}/vagrant/boxes/${box_name}" &>/dev/null; then
-    info "uploading ${box_name} to s3://${bucket}/vagrant/boxes"
-    s3cmd put --acl-public --no-preserve "${box}" "s3://${bucket}/vagrant/boxes/"
-  fi
-
-  info "calculating SHA256 checksum of ${box_name}"
-  checksum=$(sha256 "${box}")
-  if [[ ${#checksum} -ne 64 ]]; then
-    fail "invalid checksum generated: '${checksum}'"
-  fi
-  info "checksum is ${checksum}"
 
   info "fetching current vagrant manifest"
   local manifest="$(s3cmd \
@@ -182,16 +213,37 @@ main() {
   if [[ -z "${manifest}" ]]; then
     manifest='{"name":"flynn-base"}'
   fi
-
-  info "updating vagrant manifest"
   mkdir -p "${dir}/manifests/vagrant"
-  "${ROOT}/util/release/flynn-release" vagrant \
-    "https://${domain}/vagrant/boxes/${box_name}" \
-    "${checksum}" \
-    "${version}" \
-    "virtualbox" \
-    <<< "${manifest}" \
-    > "${dir}/manifests/vagrant/flynn-base.json"
+  cat > "${dir}/manifests/vagrant/flynn-base.json" <<< "${manifest}"
+
+  for box in ${boxes[@]}; do
+    local box_name="$(basename "${box}")"
+    local box_verstr="${box_name##*_}"
+    local provider="${box_verstr%.*}"
+
+    if ! s3cmd info "s3://${bucket}/vagrant/boxes/${box_name}" &>/dev/null; then
+      info "uploading ${box_name} to s3://${bucket}/vagrant/boxes"
+      s3cmd put --acl-public --no-preserve "${box}" "s3://${bucket}/vagrant/boxes/"
+    fi
+
+    info "calculating SHA256 checksum of ${box_name}"
+    checksum=$(sha256 "${box}")
+    if [[ ${#checksum} -ne 64 ]]; then
+      fail "invalid checksum generated: '${checksum}'"
+    fi
+    info "checksum is ${checksum}"
+
+
+    info "updating vagrant manifest"
+    "${ROOT}/util/release/flynn-release" vagrant \
+      "https://${domain}/vagrant/boxes/${box_name}" \
+      "${checksum}" \
+      "${version}" \
+      "${provider}" \
+      <<< "${manifest}" \
+      > "${dir}/manifests/vagrant/flynn-base.json"
+    manifest=$(cat "${dir}/manifests/vagrant/flynn-base.json")
+  done
 
   info "fetching current EC2 manifest"
   local manifest="$(s3cmd \
@@ -240,6 +292,9 @@ parse_packer() {
         if [[ "${target}" == "virtualbox-ovf" ]] \
           && [[ "${data:0:9}" == "0,file,0," ]]; then
           echo "virtualbox-ovf|${data:9}"
+        elif [[ "${target}" == "vmware-vmx" ]] \
+          && [[ "${data:0:9}" == "0,file,0," ]]; then
+          echo "vmware-vmx|${data:9}"
         elif [[ "${target}" == "amazon-ebs" ]] \
           && [[ "${data:0:5}" == "0,id," ]]; then
           echo "amazon-ebs|${data:5}"
