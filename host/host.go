@@ -245,6 +245,7 @@ func runDaemon(args *docopt.Args) {
 	backend.SetDefaultEnv("EXTERNAL_IP", externalIP)
 	backend.SetDefaultEnv("LISTEN_IP", listenIP)
 
+	var buffers host.LogBuffers
 	discoverdManager := NewDiscoverdManager(backend, mux, hostID, publishAddr)
 	publishURL := "http://" + publishAddr
 	host := &Host{
@@ -287,6 +288,9 @@ func runDaemon(args *docopt.Args) {
 		if !bytes.Equal(msg, ControlMsgResume) {
 			shutdown.Fatalf("unexpected resume message from parent: %s", msg)
 		}
+		if err := json.NewDecoder(&controlSock{controlFD}).Decode(&buffers); err != nil {
+			shutdown.Fatalf("error decoding log buffers from parent control socket: %s", err)
+		}
 	}
 
 	if err := host.OpenDBs(); err != nil {
@@ -313,7 +317,7 @@ func runDaemon(args *docopt.Args) {
 		return
 	}
 
-	resurrect, err := state.Restore(backend)
+	resurrect, err := state.Restore(backend, buffers)
 	if err != nil {
 		shutdown.Fatal(err)
 	}

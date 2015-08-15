@@ -424,6 +424,14 @@ func (h *Host) CloseDBs() error {
 	return h.vman.CloseDB()
 }
 
+func (h *Host) OpenLogs(buffers host.LogBuffers) error {
+	return h.backend.OpenLogs(buffers)
+}
+
+func (h *Host) CloseLogs() (host.LogBuffers, error) {
+	return h.backend.CloseLogs()
+}
+
 func (h *Host) Close() error {
 	if h.listener != nil {
 		return h.listener.Close()
@@ -453,6 +461,9 @@ func newHTTPListener(addr string) (net.Listener, error) {
 // syncronisation is required to manage opening and closing them, which is done
 // using a control socket.
 //
+// Any partial log lines read by the parent are also passed to the child to
+// avoid dropping logs or sending partial logs over two lines.
+//
 // An outline of the process:
 //
 // * parent receives a request to exec a new daemon
@@ -462,13 +473,13 @@ func newHTTPListener(addr string) (net.Listener, error) {
 // * parent starts a child process, passing the API listener as FD 3, and a
 //   control socket as FD 4
 //
-// * parent closes its API listener FD and state DBs
+// * parent closes its API listener FD, state DBs and log followers.
 //
 // * parent signals the child to resume by sending "resume" message to control
-//   socket
+//   socket, followed by any partial log buffers.
 //
-// * child receives resume request, opens state DBs and starts serving API
-//   requests
+// * child receives resume request, opens state DBs, seeds the log followers
+//   with the partial buffers and starts serving API requests
 //
 // * child signals parent it is now serving requests by sending "ok" message to
 //   control socket
@@ -498,10 +509,19 @@ func (h *Host) Update(cmd *host.Command) error {
 		return err
 	}
 
+	// stop following logs
+	buffers, err := h.CloseLogs()
+	if err != nil {
+		return err
+	}
+
 	// signal the child to resume
-	if resumeErr := child.Resume(); resumeErr != nil {
+	if resumeErr := child.Resume(buffers); resumeErr != nil {
 		// the child failed to resume, kill it and resume ourselves
 		child.Kill()
+		if err := h.OpenLogs(buffers); err != nil {
+			return err
+		}
 		l, err := net.FileListener(file)
 		if err != nil {
 			return err
@@ -580,10 +600,26 @@ type Child struct {
 	sock int
 }
 
+// controlSock is a wrapper around an fd returned from socketpair(2)
+type controlSock struct {
+	fd int
+}
+
+func (s *controlSock) Read(p []byte) (int, error) {
+	return syscall.Read(s.fd, p)
+}
+
 // Resume writes ControlMsgResume to the control socket and waits for a
 // ControlMsgOK response
-func (c *Child) Resume() error {
-	if _, err := syscall.Write(c.sock, ControlMsgResume); err != nil {
+func (c *Child) Resume(buffers host.LogBuffers) error {
+	if buffers == nil {
+		buffers = host.LogBuffers{}
+	}
+	data, err := json.Marshal(buffers)
+	if err != nil {
+		return err
+	}
+	if _, err := syscall.Write(c.sock, append(ControlMsgResume, data...)); err != nil {
 		return err
 	}
 	msg := make([]byte, len(ControlMsgOK))

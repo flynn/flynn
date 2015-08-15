@@ -297,3 +297,7 @@ type Command struct {
 	Args []string `json:"args"`
 	PID  int      `json:"pid"`
 }
+
+type LogBuffers map[string]LogBuffer
+
+type LogBuffer map[string]string

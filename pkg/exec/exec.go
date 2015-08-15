@@ -110,6 +110,13 @@ func JobUsingCluster(c ClusterClient, artifact host.Artifact, job *host.Job) *Cm
 	return command
 }
 
+func JobUsingHost(h *cluster.Host, artifact host.Artifact, job *host.Job) *Cmd {
+	command := Job(artifact, job)
+	command.HostID = h.ID()
+	command.host = h
+	return command
+}
+
 func (c *Cmd) StdinPipe() (io.WriteCloser, error) {
 	if c.Stdin != nil || c.stdinPipe != nil {
 		return nil, errors.New("exec: Stdin already set")
@@ -153,7 +160,7 @@ func (c *Cmd) Start() error {
 	}
 	c.done = make(chan struct{})
 	c.started = true
-	if c.cluster == nil {
+	if c.host == nil && c.cluster == nil {
 		var err error
 		c.cluster = cluster.NewClient()
 		if err != nil {

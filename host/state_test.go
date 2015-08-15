@@ -40,7 +40,7 @@ func (S) TestStatePersistRestore(c *C) {
 	state = NewState(hostID, filepath.Join(workdir, "host-state-db"))
 	c.Assert(state.OpenDB(), IsNil)
 	defer state.CloseDB()
-	state.Restore(&MockBackend{})
+	state.Restore(&MockBackend{}, nil)
 
 	// check we actually got job data back
 	job := state.GetJob("a")

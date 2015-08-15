@@ -241,7 +241,10 @@ func (s *HostSuite) TestSignalJob(t *c.C) {
 
 	// start a signal-service job
 	cmd := exec.JobUsingCluster(cluster, exec.DockerImage(imageURIs["test-apps"]), &host.Job{
-		Config: host.ContainerConfig{Cmd: []string{"/bin/signal"}},
+		Config: host.ContainerConfig{
+			Cmd:        []string{"/bin/signal"},
+			DisableLog: true,
+		},
 	})
 	cmd.HostID = client.ID()
 	var out bytes.Buffer

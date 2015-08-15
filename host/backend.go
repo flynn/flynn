@@ -29,9 +29,11 @@ type Backend interface {
 	ResizeTTY(id string, height, width uint16) error
 	Attach(*AttachRequest) error
 	Cleanup([]string) error
-	UnmarshalState(map[string]*host.ActiveJob, map[string][]byte, []byte) error
+	UnmarshalState(map[string]*host.ActiveJob, map[string][]byte, []byte, host.LogBuffers) error
 	ConfigureNetworking(config *host.NetworkConfig) error
 	SetDefaultEnv(k, v string)
+	OpenLogs(host.LogBuffers) error
+	CloseLogs() (host.LogBuffers, error)
 }
 
 type RunConfig struct {
@@ -57,6 +59,8 @@ func (MockBackend) Attach(*AttachRequest) error                     { return nil
 func (MockBackend) Cleanup([]string) error                          { return nil }
 func (MockBackend) SetDefaultEnv(k, v string)                       {}
 func (MockBackend) ConfigureNetworking(*host.NetworkConfig) error   { return nil }
-func (MockBackend) UnmarshalState(map[string]*host.ActiveJob, map[string][]byte, []byte) error {
+func (MockBackend) OpenLogs(host.LogBuffers) error                  { return nil }
+func (MockBackend) CloseLogs() (host.LogBuffers, error)             { return nil, nil }
+func (MockBackend) UnmarshalState(map[string]*host.ActiveJob, map[string][]byte, []byte, host.LogBuffers) error {
 	return nil
 }
