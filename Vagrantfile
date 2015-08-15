@@ -39,6 +39,14 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     override.vm.network "private_network", ip: "192.0.2.100"
   end
 
+  config.vm.provider "vmware_fusion" do |v, override|
+    v.vmx["memsize"] = ENV["VAGRANT_MEMORY"] || 4096
+    v.vmx["numvcpus"] = ENV["VAGRANT_CPUS"] || 4
+
+    # RFC 5737 TEST-NET-1 used to avoid DNS rebind protection
+    override.vm.network "private_network", ip: "192.0.2.100"
+  end
+
   # AWS_ACCESS_KEY_ID       - AWS IAM public ID
   # AWS_SECRET_ACCESS_KEY   - AWS IAM secret key
   # AWS_SESSION_TOKEN       - AWS IAM role session token
