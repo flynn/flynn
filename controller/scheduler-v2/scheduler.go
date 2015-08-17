@@ -23,8 +23,8 @@ type Scheduler struct {
 	utils.ClusterClient
 	log log15.Logger
 
-	isLeader  bool
-	leaderMtx sync.RWMutex
+	isLeader     bool
+	changeLeader chan bool
 
 	formations Formations
 	hosts      map[string]utils.HostClient
@@ -53,6 +53,7 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Sched
 		ControllerClient: cc,
 		ClusterClient:    cluster,
 		isLeader:         false,
+		changeLeader:     make(chan bool),
 		log:              log15.New("component", "scheduler"),
 		hosts:            make(map[string]utils.HostClient),
 		jobs:             make(map[string]*Job),
@@ -103,6 +104,8 @@ func (s *Scheduler) Run() error {
 		select {
 		case <-s.stop:
 			return nil
+		case isLeader := <-s.changeLeader:
+			s.isLeader = isLeader
 		case h := <-s.hostChange:
 			s.followHost(h)
 			continue
@@ -143,7 +146,9 @@ func (s *Scheduler) Run() error {
 func (s *Scheduler) SyncHosts() (err error) {
 	log := s.log.New("fn", "SyncHosts")
 
-	defer s.sendEvent(NewEvent(EventTypeHostSync, err, nil))
+	defer func() {
+		s.sendEvent(NewEvent(EventTypeHostSync, err, nil))
+	}()
 
 	log.Info("getting host list")
 	hosts, err := s.Hosts()
@@ -161,7 +166,9 @@ func (s *Scheduler) SyncHosts() (err error) {
 func (s *Scheduler) SyncJobs() (err error) {
 	fLog := s.log.New("fn", "SyncJobs")
 
-	defer s.sendEvent(NewEvent(EventTypeClusterSync, err, nil))
+	defer func() {
+		s.sendEvent(NewEvent(EventTypeClusterSync, err, nil))
+	}()
 
 	newSchedulerJobs := make(map[string]*Job)
 	for _, h := range s.hosts {
@@ -191,7 +198,9 @@ func (s *Scheduler) SyncJobs() (err error) {
 func (s *Scheduler) SyncFormations() (err error) {
 	log := s.log.New("fn", "SyncFormations")
 
-	defer s.sendEvent(NewEvent(EventTypeFormationSync, err, nil))
+	defer func() {
+		s.sendEvent(NewEvent(EventTypeFormationSync, err, nil))
+	}()
 
 	log.Info("getting formations")
 	apps, err := s.AppList()
@@ -212,8 +221,6 @@ func (s *Scheduler) SyncFormations() (err error) {
 }
 
 func (s *Scheduler) RectifyJobs() (err error) {
-	s.leaderMtx.RLock()
-	defer s.leaderMtx.RUnlock()
 	if !s.isLeader {
 		return errors.New("This scheduler is not the leader")
 	}
@@ -263,7 +270,9 @@ func (s *Scheduler) RectifyJobs() (err error) {
 }
 
 func (s *Scheduler) FormationChange(ef *ct.ExpandedFormation) (err error) {
-	defer s.sendEvent(NewEvent(EventTypeFormationChange, err, nil))
+	defer func() {
+		s.sendEvent(NewEvent(EventTypeFormationChange, err, nil))
+	}()
 
 	s.changeFormation(ef)
 	triggerChan(s.rectifyJobs)
@@ -272,8 +281,6 @@ func (s *Scheduler) FormationChange(ef *ct.ExpandedFormation) (err error) {
 }
 
 func (s *Scheduler) HandleJobRequest(req *JobRequest) (err error) {
-	s.leaderMtx.RLock()
-	defer s.leaderMtx.RUnlock()
 	if !s.isLeader {
 		return errors.New("This scheduler is not the leader")
 	}
@@ -299,22 +306,18 @@ func (s *Scheduler) HandleJobRequest(req *JobRequest) (err error) {
 func (s *Scheduler) RunPutJobs() {
 	strategy := attempt.Strategy{Delay: 100 * time.Millisecond, Total: time.Minute}
 	for {
-		select {
-		case job, ok := <-s.putJobs:
-			if !ok {
-				return
-			}
-			strategy.Run(func() error {
-				return s.PutJob(job)
-			})
+		job, ok := <-s.putJobs
+		if !ok {
+			return
 		}
+		strategy.Run(func() error {
+			return s.PutJob(job)
+		})
 	}
 }
 
-func (s *Scheduler) SetLeader(isLeader bool) {
-	s.leaderMtx.Lock()
-	defer s.leaderMtx.Unlock()
-	s.isLeader = isLeader
+func (s *Scheduler) ChangeLeader(isLeader bool) {
+	s.changeLeader <- isLeader
 }
 
 func (s *Scheduler) sendDiffRequests(f *Formation, diff map[string]int) {
@@ -557,6 +560,7 @@ func (s *Scheduler) Stop() error {
 	s.log.Info("stopping scheduler loop", "fn", "Stop")
 	s.stopOnce.Do(func() {
 		close(s.stop)
+		close(s.putJobs)
 	})
 	return nil
 }
@@ -610,11 +614,8 @@ func tickChannel(ch chan interface{}, d time.Duration) {
 	ticker := time.Tick(d)
 
 	go func() {
-		for {
-			select {
-			case <-ticker:
-				triggerChan(ch)
-			}
+		for range ticker {
+			triggerChan(ch)
 		}
 	}()
 }
