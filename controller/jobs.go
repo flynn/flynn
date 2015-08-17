@@ -145,23 +145,23 @@ func (c clusterClientWrapper) Hosts() ([]utils.HostClient, error) {
 func (c clusterClientWrapper) StreamHosts(ch chan utils.HostClient) (stream.Stream, error) {
 	hostChan := make(chan *cluster.Host)
 	stream, err := c.Client.StreamHosts(hostChan)
-	if err == nil {
-		go func() {
-			for {
-				select {
-				case h, ok := <-hostChan:
-					if !ok {
-						return
-					}
-					ch <- h
-				}
-			}
-		}()
+	if err != nil {
+		return nil, err
 	}
+	go func() {
+		for {
+			h, ok := <-hostChan
+			if !ok {
+				close(ch)
+				return
+			}
+			ch <- h
+		}
+	}()
 	return &clusterStream{
 		ch:           ch,
 		parentStream: stream,
-	}, err
+	}, nil
 }
 
 type clusterStream struct {
@@ -170,7 +170,6 @@ type clusterStream struct {
 }
 
 func (cs *clusterStream) Close() error {
-	close(cs.ch)
 	return cs.parentStream.Close()
 }
 
