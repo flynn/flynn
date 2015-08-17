@@ -9,6 +9,7 @@ import (
 	. "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/stream"
 )
 
 func Test(t *testing.T) { TestingT(t) }
@@ -40,9 +41,31 @@ func createTestScheduler() *Scheduler {
 	cc.CreateRelease(release)
 	cc.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
 	s := NewScheduler(cluster, cc)
-	s.SetLeader(true)
 
 	return s
+}
+
+func runTestScheduler(events chan Event, isLeader bool) *TestScheduler {
+	s := createTestScheduler()
+
+	stream := s.Subscribe(events)
+	go s.Run()
+	s.ChangeLeader(isLeader)
+
+	return &TestScheduler{
+		scheduler: s,
+		stream:    stream,
+	}
+}
+
+type TestScheduler struct {
+	scheduler *Scheduler
+	stream    stream.Stream
+}
+
+func (s *TestScheduler) Stop() {
+	s.scheduler.Stop()
+	s.stream.Close()
 }
 
 func waitForEvent(events chan Event, typ EventType) (Event, error) {
@@ -65,13 +88,10 @@ func waitForEvent(events chan Event, typ EventType) (Event, error) {
 }
 
 func (ts *TestSuite) TestInitialClusterSync(c *C) {
-	s := createTestScheduler()
-
 	events := make(chan Event, eventBufferSize)
-	stream := s.Subscribe(events)
-	defer s.Stop()
-	defer stream.Close()
-	go s.Run()
+	sched := runTestScheduler(events, true)
+	defer sched.Stop()
+	s := sched.scheduler
 
 	// wait for a cluster sync event
 	_, err := waitForEvent(events, EventTypeRectifyJobs)
@@ -98,12 +118,10 @@ func (ts *TestSuite) TestInitialClusterSync(c *C) {
 }
 
 func (ts *TestSuite) TestFormationChange(c *C) {
-	s := createTestScheduler()
 	events := make(chan Event, eventBufferSize)
-	stream := s.Subscribe(events)
-	defer s.Stop()
-	defer stream.Close()
-	go s.Run()
+	sched := runTestScheduler(events, true)
+	defer sched.Stop()
+	s := sched.scheduler
 
 	_, err := waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
@@ -164,12 +182,10 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 }
 
 func (ts *TestSuite) TestRectifyJobs(c *C) {
-	s := createTestScheduler()
 	events := make(chan Event, eventBufferSize)
-	stream := s.Subscribe(events)
-	defer s.Stop()
-	defer stream.Close()
-	go s.Run()
+	sched := runTestScheduler(events, true)
+	defer sched.Stop()
+	s := sched.scheduler
 
 	// wait for the formation to cascade to the scheduler
 	_, err := waitForEvent(events, EventTypeRectifyJobs)
