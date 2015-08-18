@@ -274,9 +274,13 @@ func (s *CLISuite) TestRun(t *c.C) {
 	app := s.newCliTestApp(t)
 	defer app.cleanup()
 
-	// this still goes to the log stream because there's no TTY:
-	t.Assert(app.sh("echo hello"), Outputs, "hello\n")
+	// this shouldn't be logged
+	t.Assert(app.sh("echo foo"), Outputs, "foo\n")
 	// drain the events
+	app.waitFor(ct.JobEvents{"": {"up": 1, "down": 1}})
+
+	// this should be logged due to the --enable-log flag
+	t.Assert(app.flynn("run", "--enable-log", "echo", "hello"), Outputs, "hello\n")
 	app.waitFor(ct.JobEvents{"": {"up": 1, "down": 1}})
 
 	detached := app.flynn("run", "-d", "echo", "world")
