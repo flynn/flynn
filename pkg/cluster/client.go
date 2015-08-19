@@ -76,24 +76,6 @@ func (c *Client) Hosts() ([]*Host, error) {
 	return hosts, nil
 }
 
-func (c *Client) StreamHosts(ch chan *Host) (stream.Stream, error) {
-	events := make(chan *discoverd.Event)
-	stream, err := c.s.Watch(events)
-	if err != nil {
-		return nil, err
-	}
-	go func() {
-		for e := range events {
-			if e.Kind == discoverd.EventKindCurrent {
-				// sentinel to indicate that we are now current
-				ch <- nil
-				continue
-			}
-			if e.Kind != discoverd.EventKindUp {
-				continue
-			}
-			ch <- NewHost(e.Instance.Meta["id"], e.Instance.Addr, c.h)
-		}
-	}()
-	return stream, nil
+func (c *Client) StreamHostEvents(ch chan *discoverd.Event) (stream.Stream, error) {
+	return c.s.Watch(ch)
 }

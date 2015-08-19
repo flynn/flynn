@@ -193,8 +193,8 @@ func (h *Helper) addVanillaHost(t *c.C) *tc.Instance {
 func (h *Helper) addHosts(t *c.C, count int, vanilla bool) []*tc.Instance {
 	debugf(t, "adding %d hosts", count)
 
-	ch := make(chan *cluster.Host)
-	stream, err := h.clusterClient(t).StreamHosts(ch)
+	ch := make(chan *discoverd.Event)
+	stream, err := h.clusterClient(t).StreamHostEvents(ch)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 

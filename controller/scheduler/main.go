@@ -113,7 +113,7 @@ type context struct {
 type clusterClient interface {
 	Hosts() ([]*cluster.Host, error)
 	Host(string) (*cluster.Host, error)
-	StreamHosts(chan *cluster.Host) (stream.Stream, error)
+	StreamHostEvents(chan *discoverd.Event) (stream.Stream, error)
 }
 
 type controllerClient interface {
@@ -334,24 +334,40 @@ func (c *context) watchFormations() {
 func (c *context) watchHosts() {
 	ready := make(chan struct{})
 	go func() { // watch for new hosts
-		ch := make(chan *cluster.Host)
-		_, err := c.StreamHosts(ch)
+		ch := make(chan *discoverd.Event)
+		_, err := c.StreamHostEvents(ch)
 		if err != nil {
 			panic(err)
 		}
-		for h := range ch {
-			if h == nil {
+
+		// maintain stop channels per host which are closed if we
+		// receive a down event
+		stopChs := make(map[string]chan struct{})
+
+		for e := range ch {
+			switch e.Kind {
+			case discoverd.EventKindCurrent:
 				close(ready)
 				continue
-			}
+			case discoverd.EventKindUp:
+				hostID := e.Instance.Meta["id"]
+				host, _ := c.Host(hostID)
+				stop := make(chan struct{})
+				stopChs[hostID] = stop
+				go c.watchHost(host, nil, stop)
 
-			go c.watchHost(h, nil)
-
-			c.omniMtx.RLock()
-			for f := range c.omni {
-				go f.Rectify()
+				c.omniMtx.RLock()
+				for f := range c.omni {
+					go f.Rectify()
+				}
+				c.omniMtx.RUnlock()
+			case discoverd.EventKindDown:
+				hostID := e.Instance.Meta["id"]
+				if stop, ok := stopChs[hostID]; ok {
+					close(stop)
+					delete(stopChs, hostID)
+				}
 			}
-			c.omniMtx.RUnlock()
 		}
 	}()
 
@@ -385,7 +401,7 @@ var dialHostAttempts = attempt.Strategy{
 	Delay: 200 * time.Millisecond,
 }
 
-func (c *context) watchHost(h *cluster.Host, ready chan struct{}) {
+func (c *context) watchHost(h *cluster.Host, ready chan struct{}, stop chan struct{}) {
 	if !c.hosts.Add(h.ID()) {
 		if ready != nil {
 			ready <- struct{}{}
@@ -401,7 +417,14 @@ func (c *context) watchHost(h *cluster.Host, ready chan struct{}) {
 	g.Log(grohl.Data{"at": "start"})
 
 	ch := make(chan *host.Event)
-	h.StreamEvents("all", ch)
+	stream, err := h.StreamEvents("all", ch)
+	if err != nil {
+		panic(err)
+	}
+	go func() {
+		<-stop
+		stream.Close()
+	}()
 	if ready != nil {
 		ready <- struct{}{}
 	}
