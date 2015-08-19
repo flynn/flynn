@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 
 	"github.com/flynn/flynn/discoverd/client"
@@ -69,6 +70,9 @@ func (d *DiscoverdManager) ConnectLocal(url string) error {
 	d.backend.SetDefaultEnv("DISCOVERD", url)
 
 	go func() {
+		// give logmux a discoverd client which doesn't use a retry
+		// dialer (it has its own reconnect logic)
+		disc = discoverd.NewClientWithHTTP(url, http.DefaultClient)
 		if err := d.mux.Connect(disc, "logaggregator"); err != nil {
 			shutdown.Fatal(err)
 		}
