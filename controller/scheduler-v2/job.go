@@ -1,7 +1,6 @@
 package main
 
 import (
-	"sync"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
@@ -21,7 +20,7 @@ type JobRequest struct {
 
 func NewJobRequest(f *Formation, requestType JobRequestType, typ, hostID, jobID string) *JobRequest {
 	return &JobRequest{
-		Job:         NewJob(f, typ, hostID, jobID, time.Time{}),
+		Job:         NewJob(f, typ, hostID, jobID, time.Now()),
 		RequestType: requestType,
 	}
 }
@@ -40,8 +39,6 @@ type Job struct {
 	Formation *Formation
 
 	restarts  int
-	timer     *time.Timer
-	timerMtx  sync.Mutex
 	startedAt time.Time
 }
 
