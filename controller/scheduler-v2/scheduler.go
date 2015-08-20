@@ -26,9 +26,9 @@ type Scheduler struct {
 	isLeader     bool
 	changeLeader chan bool
 
-	formations Formations
-	hosts      map[string]utils.HostClient
-	jobs       map[string]*Job
+	formations  Formations
+	hostStreams map[string]stream.Stream
+	jobs        map[string]*Job
 
 	hostEvents chan *host.Event
 
@@ -39,7 +39,6 @@ type Scheduler struct {
 	stopOnce sync.Once
 
 	rectifyJobs     chan interface{}
-	syncHosts       chan interface{}
 	syncJobs        chan interface{}
 	syncFormations  chan interface{}
 	hostChange      chan utils.HostClient
@@ -55,14 +54,13 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Sched
 		isLeader:         false,
 		changeLeader:     make(chan bool),
 		log:              log15.New("component", "scheduler"),
-		hosts:            make(map[string]utils.HostClient),
+		hostStreams:      make(map[string]stream.Stream),
 		jobs:             make(map[string]*Job),
 		formations:       make(Formations),
 		hostEvents:       make(chan *host.Event, eventBufferSize),
 		listeners:        make(map[chan Event]struct{}),
 		stop:             make(chan interface{}),
 		rectifyJobs:      make(chan interface{}, 1),
-		syncHosts:        make(chan interface{}, 1),
 		syncJobs:         make(chan interface{}, 1),
 		syncFormations:   make(chan interface{}, 1),
 		formationChange:  make(chan *ct.ExpandedFormation, eventBufferSize),
@@ -83,7 +81,6 @@ func (s *Scheduler) Run() error {
 
 	tickChannel(s.syncJobs, 30*time.Second)
 	tickChannel(s.syncFormations, time.Minute)
-	tickChannel(s.syncHosts, 5*time.Minute)
 
 	stream, err := s.StreamHosts(s.hostChange)
 	if err != nil {
@@ -100,7 +97,20 @@ func (s *Scheduler) Run() error {
 	go s.RunPutJobs()
 
 	for {
-		// First handle events reconciling our state with the cluster
+		// Handle events that could mutate the cluster
+		if s.isLeader {
+			select {
+			case req := <-s.jobRequests:
+				s.HandleJobRequest(req)
+				continue
+			case <-s.rectifyJobs:
+				s.RectifyJobs()
+				continue
+			default:
+			}
+		}
+
+		// handle events reconciling our state with the cluster
 		select {
 		case <-s.stop:
 			return nil
@@ -108,59 +118,21 @@ func (s *Scheduler) Run() error {
 			s.isLeader = isLeader
 		case h := <-s.hostChange:
 			s.followHost(h)
-			continue
 		case he := <-s.hostEvents:
 			s.handleHostEvent(he)
-			continue
 		case ef := <-s.formationChange:
 			s.FormationChange(ef)
-			continue
-		case <-time.After(50 * time.Millisecond):
-		}
-
-		// Then handle entropy minimizing sync events
-		select {
-		case <-s.syncHosts:
-			s.SyncHosts()
 		case <-s.syncFormations:
 			s.SyncFormations()
 		case <-s.syncJobs:
 			s.SyncJobs()
-		default:
-		}
-
-		// Then handle events that could mutate the cluster
-		if s.isLeader {
-			select {
-			case req := <-s.jobRequests:
-				s.HandleJobRequest(req)
-			case <-s.rectifyJobs:
-				s.RectifyJobs()
-			default:
-			}
+		case <-time.After(50 * time.Millisecond):
+			// block so that
+			//	1) mutate events are given a chance to happen
+			//  2) we don't spin hot
 		}
 	}
 	return nil
-}
-
-func (s *Scheduler) SyncHosts() (err error) {
-	log := s.log.New("fn", "SyncHosts")
-
-	defer func() {
-		s.sendEvent(NewEvent(EventTypeHostSync, err, nil))
-	}()
-
-	log.Info("getting host list")
-	hosts, err := s.Hosts()
-	if err != nil {
-		log.Error("error getting host list", "err", err)
-		return err
-	}
-	for _, h := range hosts {
-		s.followHost(h)
-	}
-	log.Info(fmt.Sprintf("got %d hosts", len(hosts)))
-	return err
 }
 
 func (s *Scheduler) SyncJobs() (err error) {
@@ -171,7 +143,11 @@ func (s *Scheduler) SyncJobs() (err error) {
 	}()
 
 	newSchedulerJobs := make(map[string]*Job)
-	for _, h := range s.hosts {
+	hosts, err := s.getHosts()
+	if err != nil {
+		return errors.New("Unable to query hosts")
+	}
+	for _, h := range hosts {
 		hLog := fLog.New("host.id", h.ID())
 		hLog.Info("getting jobs list")
 		var activeJobs map[string]host.ActiveJob
@@ -336,11 +312,33 @@ func (s *Scheduler) sendDiffRequests(f *Formation, diff map[string]int) {
 
 func (s *Scheduler) followHost(h utils.HostClient) {
 	log := s.log.New("fn", "followHost")
-	_, ok := s.hosts[h.ID()]
+	_, ok := s.hostStreams[h.ID()]
 	if !ok {
 		log.Info("Following host", "host.id", h.ID())
-		s.hosts[h.ID()] = h
-		h.StreamEvents("all", s.hostEvents)
+		hostEvents := make(chan *host.Event)
+		stream, err := h.StreamEvents("all", hostEvents)
+		if err == nil {
+			s.hostStreams[h.ID()] = stream
+			triggerChan(s.syncFormations)
+
+			go func() {
+				for e := range hostEvents {
+					s.hostEvents <- e
+				}
+			}()
+		} else {
+			log.Error("Error following host", "host.id", h.ID())
+		}
+	}
+}
+
+func (s *Scheduler) unfollowHost(id string) {
+	log := s.log.New("fn", "followHost")
+	stream, ok := s.hostStreams[id]
+	if ok {
+		log.Info("Unfollowing host", "host.id", id)
+		stream.Close()
+		delete(s.hostStreams, id)
 		triggerChan(s.syncFormations)
 	}
 }
@@ -508,6 +506,7 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 	}
 	host, err := s.Host(job.HostID)
 	if err != nil {
+		s.unfollowHost(host.ID())
 		req.JobID = job.JobID
 		s.jobRequests <- req
 		return err
@@ -523,7 +522,7 @@ func jobConfig(req *JobRequest, hostID string) *host.Job {
 }
 
 func (s *Scheduler) findBestHost(typ, hostID string) (utils.HostClient, error) {
-	hosts, err := s.Hosts()
+	hosts, err := s.getHosts()
 	if err != nil {
 		return nil, err
 	}
@@ -543,6 +542,28 @@ func (s *Scheduler) findBestHost(typ, hostID string) (utils.HostClient, error) {
 		}
 	}
 	return s.Host(hostID)
+}
+
+func (s *Scheduler) getHosts() ([]utils.HostClient, error) {
+	hosts, err := s.Hosts()
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Ensure that we're only following hosts that we can discover
+	knownHosts := make(map[string]struct{})
+	for id := range s.hostStreams {
+		knownHosts[id] = struct{}{}
+	}
+	for _, h := range hosts {
+		delete(knownHosts, h.ID())
+		s.followHost(h)
+	}
+	for id := range knownHosts {
+		s.unfollowHost(id)
+	}
+	return hosts, nil
 }
 
 func (s *Scheduler) hostJobCounts(typ string) map[string]int {
@@ -605,7 +626,7 @@ func (s *Scheduler) expandOmni(ef *ct.ExpandedFormation) {
 
 	for typ, pt := range release.Processes {
 		if pt.Omni {
-			ef.Processes[typ] *= len(s.hosts)
+			ef.Processes[typ] *= len(s.hostStreams)
 		}
 	}
 }
