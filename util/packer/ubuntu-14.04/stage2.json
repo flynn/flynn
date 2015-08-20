@@ -7,7 +7,9 @@
     "flynn_repository": "https://dl.flynn.io",
     "source_ami": "ami-9a562df2",
     "aws_region": "us-east-1",
-    "version": ""
+    "version": "",
+    "vm_mem": "4096",
+    "vm_vcpus": "4"
   },
   "builders": [
     {
@@ -20,8 +22,8 @@
       "ssh_username": "vagrant",
       "ssh_wait_timeout": "20m",
       "vboxmanage": [
-        ["modifyvm", "{{ .Name }}", "--memory", "4096"],
-        ["modifyvm", "{{ .Name }}", "--cpus", "4"]
+        ["modifyvm", "{{ .Name }}", "--memory", "{{ user `vm_mem` }}"],
+        ["modifyvm", "{{ .Name }}", "--cpus", "{{ user `vm_vcpus` }}"]
       ],
       "virtualbox_version_file": ".vbox_version",
       "vm_name": "flynn-base"
@@ -35,8 +37,8 @@
       "ssh_username": "vagrant",
       "ssh_wait_timeout": "20m",
       "vmx_data": {
-        "memsize": "4096",
-        "numvcpus": "4"
+        "memsize": "{{ user `vm_mem` }}",
+        "numvcpus": "{{ user `vm_vcpus` }}"
       },
       "vm_name": "flynn-base"
     },

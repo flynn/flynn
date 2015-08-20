@@ -53,6 +53,8 @@ OPTIONS:
   -r DIR        Resume the release using DIR
   -c CACHE      Directory to cache base VM images [default: '/tmp']
   -a AWSREGION  AWS region to use to build the AMI [default: 'us-east-1']
+  -m MEMORY     Memory to allocate to each virtual machine
+  -v VCPUS      VCPUs to allocate to each virtual machine
 
 Requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set
 USAGE
@@ -62,6 +64,8 @@ main() {
   local bucket dir domain
   local cache="/tmp"
   local keep=false
+  local vm_mem="4096"
+  local vm_vcpus="4"
 
   while getopts "hkb:d:r:c:a:" opt; do
     case $opt in
@@ -72,6 +76,9 @@ main() {
       k) keep=true ;;
       b) bucket=${OPTARG} ;;
       d) domain=${OPTARG} ;;
+      a) AWS_DEFAULT_REGION=${OPTARG} ;;
+      m) vm_mem=${OPTARG} ;;
+      v) vm_vpus=${OPTARG} ;;
       r)
         dir=${OPTARG}
         if [[ ! -d "${dir}" ]]; then
@@ -83,9 +90,6 @@ main() {
         if [[ ! -d "${cache}" ]]; then
           fail "No such directory: ${cache}"
         fi
-        ;;
-      a)
-        AWS_DEFAULT_REGION=${OPTARG}
         ;;
       ?)
         usage
@@ -133,6 +137,8 @@ main() {
       -var "output_dir=${cache}" \
       -var "iso_url=${UBUNTU_ISO_URL}" \
       -var "iso_sha=${UBUNTU_ISO_SHA}" \
+      -var "mem=${vm_mem}" \
+      -var "vcpus=${vm_vcpus}" \
       stage1.json | parse_packer)
     popd >/dev/null
   fi

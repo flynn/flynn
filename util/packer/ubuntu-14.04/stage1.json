@@ -3,7 +3,9 @@
     "headless": "false",
     "output_dir": ".",
     "iso_url": "http://releases.ubuntu.com/trusty/ubuntu-14.04.3-server-amd64.iso",
-    "iso_sha": "a3b345908a826e262f4ea1afeb357fd09ec0558cf34e6c9112cead4bb55ccdfb"
+    "iso_sha": "a3b345908a826e262f4ea1afeb357fd09ec0558cf34e6c9112cead4bb55ccdfb",
+    "vm_mem": "4096",
+    "vm_vcpus": "4"
   },
   "builders": [
     {
@@ -32,6 +34,10 @@
       "vmdk_name": "disk",
       "disk_type_id": "0",
       "vm_name": "flynn-base",
+      "vmx_data": {
+        "memsize": "{{ user `vm_mem` }}",
+        "numvcpus": "{{ user `vm_vcpus` }}"
+      },
       "output_directory": "{{ user `output_dir` }}/base_vmware_{{ user `iso_sha` }}"
     },
     {
@@ -58,6 +64,10 @@
       "ssh_wait_timeout": "20m",
       "vm_name": "flynn-base",
       "hard_drive_interface": "sata",
+      "vboxmanage": [
+        ["modifyvm", "{{ .Name }}", "--memory", "{{ user `vm_mem` }}"],
+        ["modifyvm", "{{ .Name }}", "--cpus", "{{ user `vm_vcpus` }}"]
+      ],
       "output_directory": "{{ user `output_dir` }}/base_virtualbox_{{ user `iso_sha` }}"
     }
   ]
