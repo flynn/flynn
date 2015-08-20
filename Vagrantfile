@@ -76,6 +76,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     aws.iam_instance_profile_arn = ENV["FLYNN_AWS_IAM_ARN"]
     added_tags = Hash[ String( ENV["FLYNN_AWS_TAGS"] ).split(",").map {|kv| kv.split("=")} ]
     aws.tags = { "Name" => 'flynn-vagrant' }.merge(added_tags)
+    aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.DeleteOnTermination' => true }]
 
     override.vm.box_version = nil
     override.vm.box_url = "https://github.com/mitchellh/vagrant-aws/raw/master/dummy.box"
