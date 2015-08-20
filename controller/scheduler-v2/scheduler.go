@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"reflect"
 	"sync"
 	"time"
@@ -23,12 +24,14 @@ type Scheduler struct {
 	utils.ClusterClient
 	log log15.Logger
 
-	isLeader     bool
-	changeLeader chan bool
+	isLeader      bool
+	changeLeader  chan bool
+	backoffPeriod time.Duration
 
 	formations  Formations
 	hostStreams map[string]stream.Stream
 	jobs        map[string]*Job
+	pendingJobs map[*JobRequest]struct{}
 
 	hostEvents chan *host.Event
 
@@ -53,9 +56,11 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Sched
 		ClusterClient:    cluster,
 		isLeader:         false,
 		changeLeader:     make(chan bool),
+		backoffPeriod:    getBackoffPeriod(),
 		log:              log15.New("component", "scheduler"),
 		hostStreams:      make(map[string]stream.Stream),
 		jobs:             make(map[string]*Job),
+		pendingJobs:      make(map[*JobRequest]struct{}),
 		formations:       make(Formations),
 		hostEvents:       make(chan *host.Event, eventBufferSize),
 		listeners:        make(map[chan Event]struct{}),
@@ -113,6 +118,7 @@ func (s *Scheduler) Run() error {
 		// handle events reconciling our state with the cluster
 		select {
 		case <-s.stop:
+			close(s.putJobs)
 			return nil
 		case isLeader := <-s.changeLeader:
 			s.isLeader = isLeader
@@ -209,7 +215,7 @@ func (s *Scheduler) RectifyJobs() (err error) {
 		s.sendEvent(NewEvent(EventTypeRectifyJobs, err, nil))
 	}()
 
-	fj := NewFormationJobs(s.jobs)
+	fj := NewFormationJobs(s.jobs, s.pendingJobs)
 
 	for fKey := range fj {
 		schedulerFormation, ok := s.formations[fKey]
@@ -257,6 +263,8 @@ func (s *Scheduler) FormationChange(ef *ct.ExpandedFormation) (err error) {
 }
 
 func (s *Scheduler) HandleJobRequest(req *JobRequest) (err error) {
+	// Ensure that we've cleared this request from pendingJobs
+	delete(s.pendingJobs, req)
 	if !s.isLeader {
 		return errors.New("This scheduler is not the leader")
 	}
@@ -276,7 +284,7 @@ func (s *Scheduler) HandleJobRequest(req *JobRequest) (err error) {
 	default:
 		err = fmt.Errorf("unknown job request type: %s", req.RequestType)
 	}
-	return
+	return err
 }
 
 func (s *Scheduler) RunPutJobs() {
@@ -445,15 +453,16 @@ func (s *Scheduler) updateFormation(controllerFormation *ct.Formation) (*Formati
 
 func (s *Scheduler) startJob(req *JobRequest) (err error) {
 	log := s.log.New("fn", "startJob")
+	log.Info("starting job", "job.type", req.Type, "job.startedAt", req.startedAt, "job.restarts", req.restarts)
 	defer func() {
 		if err != nil {
+			s.scheduleJobRequest(req)
 			log.Error("error starting job", "err", err)
 		}
 	}()
 
 	host, err := s.findBestHost(req.Type, req.HostID)
 	if err != nil {
-		s.jobRequests <- req
 		return err
 	}
 
@@ -470,7 +479,7 @@ func (s *Scheduler) startJob(req *JobRequest) (err error) {
 		return err
 	}
 	log.Info("started job", "host.id", host.ID(), "job.type", req.Type, "job.id", config.ID)
-	return err
+	return nil
 }
 
 func (s *Scheduler) stopJob(req *JobRequest) (err error) {
@@ -482,7 +491,7 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 	}()
 	var job *Job
 	if req.JobID == "" {
-		formJobs := NewFormationJobs(s.jobs)
+		formJobs := NewFormationJobs(s.jobs, s.pendingJobs)
 		formJob := formJobs[utils.FormationKey{AppID: req.AppID, ReleaseID: req.ReleaseID}]
 		typJobs := formJob[req.Type]
 
@@ -501,14 +510,13 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 		var ok bool
 		job, ok = s.jobs[req.JobID]
 		if !ok {
-			return fmt.Errorf("Could not stop job with ID %q", req.JobID)
+			return fmt.Errorf("No running job with ID %q", req.JobID)
 		}
 	}
 	host, err := s.Host(job.HostID)
 	if err != nil {
 		s.unfollowHost(host.ID())
-		req.JobID = job.JobID
-		s.jobRequests <- req
+		triggerChan(s.syncJobs)
 		return err
 	}
 	if err := host.StopJob(job.JobID); err != nil {
@@ -581,7 +589,6 @@ func (s *Scheduler) Stop() error {
 	s.log.Info("stopping scheduler loop", "fn", "Stop")
 	s.stopOnce.Do(func() {
 		close(s.stop)
-		close(s.putJobs)
 	})
 	return nil
 }
@@ -629,6 +636,28 @@ func (s *Scheduler) expandOmni(ef *ct.ExpandedFormation) {
 			ef.Processes[typ] *= len(s.hostStreams)
 		}
 	}
+}
+
+func (s *Scheduler) scheduleJobRequest(req *JobRequest) {
+	backoff := s.getBackoffDuration(req.startedAt.Add(-1 * time.Second))
+	req.startedAt = time.Now()
+	req.restarts += 1
+	s.pendingJobs[req] = struct{}{}
+	time.AfterFunc(backoff, func() {
+		s.jobRequests <- req
+	})
+}
+
+func (s *Scheduler) getBackoffDuration(startedAt time.Time) time.Duration {
+	lastDelay := time.Now().Sub(startedAt)
+
+	newDelay := lastDelay * 2
+
+	if newDelay > s.backoffPeriod {
+		return s.backoffPeriod
+	}
+
+	return newDelay
 }
 
 func tickChannel(ch chan interface{}, d time.Duration) {
@@ -719,4 +748,17 @@ func NewEvent(typ EventType, err error, data interface{}) Event {
 	default:
 		return &DefaultEvent{err: err, typ: typ}
 	}
+}
+
+func getBackoffPeriod() time.Duration {
+	backoffPeriod := 10 * time.Minute
+
+	if period := os.Getenv("BACKOFF_PERIOD"); period != "" {
+		p, err := time.ParseDuration(period)
+		if err == nil {
+			backoffPeriod = p
+		}
+	}
+
+	return backoffPeriod
 }

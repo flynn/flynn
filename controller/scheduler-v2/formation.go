@@ -54,10 +54,16 @@ func (f *Formation) Update(procs map[string]int) map[string]int {
 
 type formationJobs map[utils.FormationKey]map[string][]*Job
 
-func NewFormationJobs(jobs map[string]*Job) formationJobs {
+func NewFormationJobs(jobs map[string]*Job, requests map[*JobRequest]struct{}) formationJobs {
 	fj := make(formationJobs)
 	for _, job := range jobs {
 		fj.AddJob(job)
+	}
+
+	for req := range requests {
+		if req.RequestType == JobRequestTypeUp {
+			fj.AddJob(req.Job)
+		}
 	}
 	return fj
 }
