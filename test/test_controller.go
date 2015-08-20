@@ -378,3 +378,59 @@ func (s *ControllerSuite) TestAppDeleteCleanup(t *c.C) {
 	t.Assert(r.flynn("create", app), Succeeds)
 	t.Assert(r.git("push", "flynn", "master"), Succeeds)
 }
+
+func (s *ControllerSuite) TestRouteEvents(t *c.C) {
+	app := "app-route-events-" + random.String(8)
+	client := s.controllerClient(t)
+
+	// stream events
+	events := make(chan *ct.Event)
+	stream, err := client.StreamEvents(controller.StreamEventsOptions{
+		AppID:       app,
+		ObjectTypes: []ct.EventType{ct.EventTypeRoute, ct.EventTypeRouteDeletion},
+	}, events)
+	t.Assert(err, c.IsNil)
+	defer stream.Close()
+
+	assertEventType := func(typ ct.EventType) {
+		select {
+		case event, ok := <-events:
+			t.Assert(ok, c.Equals, true)
+			t.Assert(event.ObjectType, c.Equals, typ, c.Commentf("event: %#v", event))
+		case <-time.After(30 * time.Second):
+			t.Assert(true, c.Equals, false, c.Commentf("timed out waiting for %s event", string(typ)))
+		}
+	}
+
+	// create and push app
+	r := s.newGitRepo(t, "http")
+	t.Assert(r.flynn("create", app), Succeeds)
+	t.Assert(r.flynn("key", "add", r.ssh.Pub), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+
+	// wait for it to start
+	service := app + "-web"
+	_, err = s.discoverdClient(t).Instances(service, 10*time.Second)
+	t.Assert(err, c.IsNil)
+
+	// default app route
+	assertEventType(ct.EventTypeRoute)
+
+	// create some routes
+	routes := []string{"baz.example.com"}
+	for _, route := range routes {
+		t.Assert(r.flynn("route", "add", "http", route), Succeeds)
+		assertEventType(ct.EventTypeRoute)
+	}
+	routeList, err := client.RouteList(app)
+	t.Assert(err, c.IsNil)
+	numRoutes := len(routes) + 1 // includes default app route
+	t.Assert(routeList, c.HasLen, numRoutes)
+
+	// delete app
+	cmd := r.flynn("delete", "--yes")
+	t.Assert(cmd, Succeeds)
+
+	// check route deletion event
+	assertEventType(ct.EventTypeRouteDeletion)
+}

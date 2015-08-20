@@ -88,7 +88,7 @@ func (r *JobRepo) Add(job *ct.Job) error {
 	if err != nil {
 		return err
 	}
-	err = r.db.Exec("INSERT INTO app_events (app_id, object_id, unique_id, object_type, data) VALUES ($1, $2, $3, $4, $5)", e.AppID, e.JobID, uniqueID, string(ct.EventTypeJob), data)
+	err = r.db.Exec("INSERT INTO events (app_id, object_id, unique_id, object_type, data) VALUES ($1, $2, $3, $4, $5)", e.AppID, e.JobID, uniqueID, string(ct.EventTypeJob), data)
 	if postgres.IsUniquenessError(err, "") {
 		return nil
 	}

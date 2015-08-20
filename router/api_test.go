@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http/httptest"
+	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
@@ -147,4 +148,74 @@ func (s *S) TestAPIListRoutes(c *C) {
 	c.Assert(routes, HasLen, 2)
 	c.Assert(routes[1].ID, Equals, r1.ID)
 	c.Assert(routes[0].ID, Equals, r3.ID)
+}
+
+func (s *S) TestStreamEvents(c *C) {
+	srv := s.newTestAPIServer(c)
+	client := srv.Client
+	defer srv.Close()
+
+	l := srv.listeners[0].(*HTTPListener)
+	tcpl := srv.listeners[1].(*TCPListener)
+
+	events := make(chan *router.StreamEvent)
+	stream, err := client.StreamEvents(events)
+	c.Assert(err, IsNil)
+	defer stream.Close()
+
+	r := addHTTPRoute(c, l)
+	select {
+	case e, ok := <-events:
+		if !ok {
+			c.Fatal("unexpected close of event stream")
+		}
+		c.Assert(e.Event, Equals, "set")
+		c.Assert(e.Route.ID, Equals, r.ID)
+		c.Assert(e.Route.Type, Equals, "http")
+		c.Assert(e.Error, IsNil)
+	case <-time.After(10 * time.Second):
+		c.Fatal("Timed out waiting for set event")
+	}
+
+	removeRoute(c, l, r.ID)
+	select {
+	case e, ok := <-events:
+		if !ok {
+			c.Fatal("unexpected close of event stream")
+		}
+		c.Assert(e.Event, Equals, "remove")
+		c.Assert(e.Route.ID, Equals, r.ID)
+		c.Assert(e.Route.Type, Equals, "http")
+		c.Assert(e.Error, IsNil)
+	case <-time.After(10 * time.Second):
+		c.Fatal("Timed out waiting for remove event")
+	}
+
+	tcpr := addTCPRoute(c, tcpl, 46000)
+	select {
+	case e, ok := <-events:
+		if !ok {
+			c.Fatal("unexpected close of event stream")
+		}
+		c.Assert(e.Event, Equals, "set")
+		c.Assert(e.Route.ID, Equals, tcpr.ID)
+		c.Assert(e.Route.Type, Equals, "tcp")
+		c.Assert(e.Error, IsNil)
+	case <-time.After(10 * time.Second):
+		c.Fatal("Timed out waiting for set event")
+	}
+
+	removeRoute(c, tcpl, tcpr.ID)
+	select {
+	case e, ok := <-events:
+		if !ok {
+			c.Fatal("unexpected close of event stream")
+		}
+		c.Assert(e.Event, Equals, "remove")
+		c.Assert(e.Route.ID, Equals, tcpr.ID)
+		c.Assert(e.Route.Type, Equals, "tcp")
+		c.Assert(e.Error, IsNil)
+	case <-time.After(10 * time.Second):
+		c.Fatal("Timed out waiting for remove event")
+	}
 }

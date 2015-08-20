@@ -241,7 +241,7 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 	h.l.routes[data.ID] = r
 	h.l.ports[r.Port] = r
 
-	go h.l.wm.Send(&router.Event{Event: "set", ID: data.ID})
+	go h.l.wm.Send(&router.Event{Event: "set", ID: data.ID, Route: r.ToRoute()})
 	return nil
 }
 
@@ -265,7 +265,7 @@ func (h *tcpSyncHandler) Remove(id string) error {
 
 	delete(h.l.routes, id)
 	delete(h.l.ports, r.Port)
-	go h.l.wm.Send(&router.Event{Event: "remove", ID: id})
+	go h.l.wm.Send(&router.Event{Event: "remove", ID: id, Route: r.ToRoute()})
 	return nil
 }
 

@@ -1,17 +1,21 @@
 package main
 
 import (
+	"crypto/md5"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
@@ -80,6 +84,14 @@ func main() {
 	}
 	rc := routerc.New()
 
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+	go func() {
+		if err := streamRouterEvents(rc, db, doneCh); err != nil {
+			shutdown.Fatal(err)
+		}
+	}()
+
 	hb, err := discoverd.DefaultClient.AddServiceAndRegisterInstance("controller", &discoverd.Instance{
 		Addr:  addr,
 		Proto: "http",
@@ -104,6 +116,55 @@ func main() {
 		keys:    strings.Split(os.Getenv("AUTH_KEY"), ","),
 	})
 	shutdown.Fatal(http.ListenAndServe(addr, handler))
+}
+
+func wrapDBExec(dbExec func(string, ...interface{}) error) func(string, ...interface{}) (sql.Result, error) {
+	return func(q string, args ...interface{}) (sql.Result, error) {
+		return nil, dbExec(q, args...)
+	}
+}
+
+func streamRouterEvents(rc routerc.Client, db *postgres.DB, doneCh chan struct{}) error {
+	events := make(chan *router.StreamEvent)
+	s, err := rc.StreamEvents(events)
+	if err != nil {
+		return err
+	}
+	go func() {
+		for {
+			e, ok := <-events
+			if !ok {
+				return
+			}
+			route := e.Route
+			route.ID = postgres.CleanUUID(route.ID)
+			var appID string
+			if strings.HasPrefix(route.ParentRef, routeParentRefPrefix) {
+				appID = strings.TrimPrefix(route.ParentRef, routeParentRefPrefix)
+			}
+			eventType := ct.EventTypeRoute
+			if e.Event == "remove" {
+				eventType = ct.EventTypeRouteDeletion
+			}
+			hash := md5.New()
+			io.WriteString(hash, appID)
+			io.WriteString(hash, string(eventType))
+			io.WriteString(hash, route.ID)
+			io.WriteString(hash, route.CreatedAt.String())
+			io.WriteString(hash, route.UpdatedAt.String())
+			uniqueID := fmt.Sprintf("%x", hash.Sum(nil))
+			if err := createEvent(wrapDBExec(db.Exec), &ct.Event{
+				AppID:      appID,
+				ObjectID:   route.ID,
+				ObjectType: eventType,
+				UniqueID:   uniqueID,
+			}, route); err != nil {
+				log.Println(err)
+			}
+		}
+	}()
+	_, _ = <-doneCh
+	return s.Close()
 }
 
 type handlerConfig struct {
@@ -145,6 +206,7 @@ func appHandler(c handlerConfig) http.Handler {
 	jobRepo := NewJobRepo(c.db)
 	formationRepo := NewFormationRepo(c.db, appRepo, releaseRepo, artifactRepo)
 	deploymentRepo := NewDeploymentRepo(c.db, c.pgxpool)
+	eventRepo := NewEventRepo(c.db)
 
 	api := controllerAPI{
 		appRepo:        appRepo,
@@ -155,6 +217,7 @@ func appHandler(c handlerConfig) http.Handler {
 		jobRepo:        jobRepo,
 		resourceRepo:   resourceRepo,
 		deploymentRepo: deploymentRepo,
+		eventRepo:      eventRepo,
 		clusterClient:  c.cc,
 		logaggc:        c.lc,
 		routerc:        c.rc,
@@ -178,7 +241,6 @@ func appHandler(c handlerConfig) http.Handler {
 
 	httpRouter.POST("/apps/:apps_id", httphelper.WrapHandler(api.UpdateApp))
 	httpRouter.GET("/apps/:apps_id/log", httphelper.WrapHandler(api.appLookup(api.AppLog)))
-	httpRouter.GET("/apps/:apps_id/events", httphelper.WrapHandler(api.appLookup(api.AppEvents)))
 	httpRouter.DELETE("/apps/:apps_id", httphelper.WrapHandler(api.appLookup(api.DeleteApp)))
 
 	httpRouter.PUT("/apps/:apps_id/formations/:releases_id", httphelper.WrapHandler(api.appLookup(api.PutFormation)))
@@ -213,6 +275,8 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.DELETE("/apps/:apps_id/routes/:routes_type/:routes_id", httphelper.WrapHandler(api.appLookup(api.DeleteRoute)))
 
 	httpRouter.POST("/apps/:apps_id/meta", httphelper.WrapHandler(api.appLookup(api.UpdateAppMeta)))
+
+	httpRouter.GET("/events", httphelper.WrapHandler(api.Events))
 
 	return httphelper.ContextInjector("controller",
 		httphelper.NewRequestLogger(muxHandler(httpRouter, c.keys)))
@@ -253,6 +317,7 @@ type controllerAPI struct {
 	jobRepo        *JobRepo
 	resourceRepo   *ResourceRepo
 	deploymentRepo *DeploymentRepo
+	eventRepo      *EventRepo
 	clusterClient  clusterClient
 	logaggc        logaggc.Client
 	routerc        routerc.Client
@@ -264,6 +329,13 @@ type controllerAPI struct {
 
 func (c *controllerAPI) getApp(ctx context.Context) *ct.App {
 	return ctx.Value("app").(*ct.App)
+}
+
+func (c *controllerAPI) maybeGetApp(ctx context.Context) *ct.App {
+	if app, ok := ctx.Value("app").(*ct.App); ok {
+		return app
+	}
+	return nil
 }
 
 func (c *controllerAPI) getRelease(ctx context.Context) (*ct.Release, error) {
@@ -297,8 +369,10 @@ func (c *controllerAPI) appLookup(handler httphelper.HandlerFunc) httphelper.Han
 	}
 }
 
+const routeParentRefPrefix = "controller/apps/"
+
 func routeParentRef(appID string) string {
-	return "controller/apps/" + appID
+	return routeParentRefPrefix + appID
 }
 
 func (c *controllerAPI) getRoute(ctx context.Context) (*router.Route, error) {
@@ -311,6 +385,40 @@ func (c *controllerAPI) getRoute(ctx context.Context) (*router.Route, error) {
 		return nil, err
 	}
 	return route, err
+}
+
+func createEvent(dbExec func(string, ...interface{}) (sql.Result, error), e *ct.Event, data interface{}) error {
+	encodedData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	args := []interface{}{e.ObjectID, string(e.ObjectType), encodedData}
+	fields := []string{"object_id", "object_type", "data"}
+	if e.AppID != "" {
+		fields = append(fields, "app_id")
+		args = append(args, e.AppID)
+	}
+	if e.UniqueID != "" {
+		fields = append(fields, "unique_id")
+		args = append(args, e.UniqueID)
+	}
+	query := "INSERT INTO events ("
+	for i, n := range fields {
+		if i > 0 {
+			query += ","
+		}
+		query += n
+	}
+	query += ") VALUES ("
+	for i := range fields {
+		if i > 0 {
+			query += ","
+		}
+		query += fmt.Sprintf("$%d", i+1)
+	}
+	query += ")"
+	_, err = dbExec(query, args...)
+	return err
 }
 
 func parseBasicAuth(h http.Header) (username, password string, err error) {

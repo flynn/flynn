@@ -35,6 +35,9 @@
     "strategy": {
       "$ref": "/schema/controller/common#/definitions/strategy"
     },
+    "release_id": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
     "created_at": {
       "$ref": "/schema/controller/common#/definitions/created_at"
     },

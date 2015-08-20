@@ -69,14 +69,32 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 		artifactID = &release.ArtifactID
 	}
 
-	err = r.db.QueryRow("INSERT INTO releases (release_id, artifact_id, data) VALUES ($1, $2, $3) RETURNING created_at",
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	err = tx.QueryRow("INSERT INTO releases (release_id, artifact_id, data) VALUES ($1, $2, $3) RETURNING created_at",
 		release.ID, artifactID, data).Scan(&release.CreatedAt)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
 
 	release.ID = postgres.CleanUUID(release.ID)
 	if release.ArtifactID != "" {
 		release.ArtifactID = postgres.CleanUUID(release.ArtifactID)
 	}
-	return err
+
+	if err := createEvent(tx.Exec, &ct.Event{
+		ObjectID:   release.ID,
+		ObjectType: ct.EventTypeRelease,
+	}, release); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (r *ReleaseRepo) Get(id string) (interface{}, error) {
@@ -151,7 +169,7 @@ func (c *controllerAPI) SetAppRelease(ctx context.Context, w http.ResponseWriter
 	}
 
 	app := c.getApp(ctx)
-	c.appRepo.SetRelease(app.ID, release.ID)
+	c.appRepo.SetRelease(app, release.ID)
 	httphelper.JSON(w, 200, release)
 }
 

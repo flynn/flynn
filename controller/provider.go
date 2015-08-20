@@ -25,9 +25,24 @@ func (r *ProviderRepo) Add(data interface{}) error {
 		return errors.New("controler: url must not be blank")
 	}
 	// TODO: validate url
-	err := r.db.QueryRow("INSERT INTO providers (name, url) VALUES ($1, $2) RETURNING provider_id, created_at, updated_at", p.Name, p.URL).Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	err = tx.QueryRow("INSERT INTO providers (name, url) VALUES ($1, $2) RETURNING provider_id, created_at, updated_at", p.Name, p.URL).Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
 	p.ID = postgres.CleanUUID(p.ID)
-	return err
+	if err := createEvent(tx.Exec, &ct.Event{
+		ObjectID:   p.ID,
+		ObjectType: ct.EventTypeProvider,
+	}, p); err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 func scanProvider(s postgres.Scanner) (*ct.Provider, error) {

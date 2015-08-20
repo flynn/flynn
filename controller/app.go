@@ -44,9 +44,14 @@ var appNamePattern = regexp.MustCompile(`^[a-z\d]+(-[a-z\d]+)*$`)
 
 func (r *AppRepo) Add(data interface{}) error {
 	app := data.(*ct.App)
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
 	if app.Name == "" {
 		var nameID uint32
-		if err := r.db.QueryRow("SELECT nextval('name_ids')").Scan(&nameID); err != nil {
+		if err := tx.QueryRow("SELECT nextval('name_ids')").Scan(&nameID); err != nil {
+			tx.Rollback()
 			return err
 		}
 		app.Name = name.Get(nameID)
@@ -61,20 +66,33 @@ func (r *AppRepo) Add(data interface{}) error {
 		app.Strategy = "all-at-once"
 	}
 	meta := metaToHstore(app.Meta)
-	if err := r.db.QueryRow("INSERT INTO apps (app_id, name, meta, strategy) VALUES ($1, $2, $3, $4) RETURNING created_at, updated_at", app.ID, app.Name, meta, app.Strategy).Scan(&app.CreatedAt, &app.UpdatedAt); err != nil {
+	if err := tx.QueryRow("INSERT INTO apps (app_id, name, meta, strategy) VALUES ($1, $2, $3, $4) RETURNING created_at, updated_at", app.ID, app.Name, meta, app.Strategy).Scan(&app.CreatedAt, &app.UpdatedAt); err != nil {
+		tx.Rollback()
 		if postgres.IsUniquenessError(err, "apps_name_idx") {
 			return httphelper.ObjectExistsErr(fmt.Sprintf("application %q already exists", app.Name))
 		}
 		return err
 	}
 	app.ID = postgres.CleanUUID(app.ID)
+
+	if err := createEvent(tx.Exec, &ct.Event{
+		AppID:      app.ID,
+		ObjectID:   app.ID,
+		ObjectType: ct.EventTypeApp,
+	}, app); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
 	if !app.System() && r.defaultDomain != "" {
 		route := (&router.HTTPRoute{
 			Domain:  fmt.Sprintf("%s.%s", app.Name, r.defaultDomain),
 			Service: app.Name + "-web",
 		}).ToRoute()
-		route.ParentRef = routeParentRef(app.ID)
-		if err := r.router.CreateRoute(route); err != nil {
+		if err := createRoute(r.db, r.router, app.ID, route); err != nil {
 			log.Printf("Error creating default route for %s: %s", app.Name, err)
 		}
 	}
@@ -84,9 +102,13 @@ func (r *AppRepo) Add(data interface{}) error {
 func scanApp(s postgres.Scanner) (*ct.App, error) {
 	app := &ct.App{}
 	var meta hstore.Hstore
-	err := s.Scan(&app.ID, &app.Name, &meta, &app.Strategy, &app.CreatedAt, &app.UpdatedAt)
+	var releaseID *string
+	err := s.Scan(&app.ID, &app.Name, &meta, &app.Strategy, &releaseID, &app.CreatedAt, &app.UpdatedAt)
 	if err == sql.ErrNoRows {
 		err = ErrNotFound
+	}
+	if releaseID != nil {
+		app.ReleaseID = postgres.CleanUUID(*releaseID)
 	}
 	if len(meta.Map) > 0 {
 		app.Meta = make(map[string]string, len(meta.Map))
@@ -105,7 +127,7 @@ type rowQueryer interface {
 }
 
 func selectApp(db rowQueryer, id string, update bool) (*ct.App, error) {
-	query := "SELECT app_id, name, meta, strategy, created_at, updated_at FROM apps WHERE deleted_at IS NULL AND "
+	query := "SELECT app_id, name, meta, strategy, release_id, created_at, updated_at FROM apps WHERE deleted_at IS NULL AND "
 	var suffix string
 	if update {
 		suffix = " FOR UPDATE"
@@ -142,7 +164,8 @@ func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, e
 				tx.Rollback()
 				return nil, fmt.Errorf("controller: expected string, got %T", v)
 			}
-			if _, err := tx.Exec("UPDATE apps SET strategy = $2, updated_at = now() WHERE app_id = $1", app.ID, strategy); err != nil {
+			app.Strategy = strategy
+			if _, err := tx.Exec("UPDATE apps SET strategy = $2, updated_at = now() WHERE app_id = $1", app.ID, app.Strategy); err != nil {
 				tx.Rollback()
 				return nil, err
 			}
@@ -171,11 +194,20 @@ func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, e
 		}
 	}
 
+	if err := createEvent(tx.Exec, &ct.Event{
+		AppID:      app.ID,
+		ObjectID:   app.ID,
+		ObjectType: ct.EventTypeApp,
+	}, app); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
 	return app, tx.Commit()
 }
 
 func (r *AppRepo) List() (interface{}, error) {
-	rows, err := r.db.Query("SELECT app_id, name, meta, strategy, created_at, updated_at FROM apps WHERE deleted_at IS NULL ORDER BY created_at DESC")
+	rows, err := r.db.Query("SELECT app_id, name, meta, strategy, release_id, created_at, updated_at FROM apps WHERE deleted_at IS NULL ORDER BY created_at DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -191,64 +223,25 @@ func (r *AppRepo) List() (interface{}, error) {
 	return apps, rows.Err()
 }
 
-func (r *AppRepo) ListEvents(appID, typ, objectID string, sinceID int64, count int) ([]*ct.AppEvent, error) {
-	query := "SELECT event_id, app_id, object_id, object_type, data, created_at FROM app_events WHERE app_id = $1 AND event_id > $2"
-	args := []interface{}{appID, sinceID}
-	n := 3
-	if typ != "" {
-		query += fmt.Sprintf(" AND object_type = $%d", n)
-		n++
-		args = append(args, typ)
-	}
-	if objectID != "" {
-		query += fmt.Sprintf(" AND object_id = $%d", n)
-		args = append(args, objectID)
-	}
-	query += " ORDER BY event_id DESC"
-	if count > 0 {
-		query += fmt.Sprintf(" LIMIT $%d", n)
-		args = append(args, count)
-	}
-	rows, err := r.db.Query(query, args...)
+func (r *AppRepo) SetRelease(app *ct.App, releaseID string) error {
+	tx, err := r.db.Begin()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	var events []*ct.AppEvent
-	for rows.Next() {
-		event, err := scanAppEvent(rows)
-		if err != nil {
-			rows.Close()
-			return nil, err
-		}
-		events = append(events, event)
+	app.ReleaseID = releaseID
+	if _, err := tx.Exec("UPDATE apps SET release_id = $2, updated_at = now() WHERE app_id = $1", app.ID, app.ReleaseID); err != nil {
+		tx.Rollback()
+		return err
 	}
-	return events, nil
-}
-
-func (r *AppRepo) GetEvent(id int64) (*ct.AppEvent, error) {
-	row := r.db.QueryRow("SELECT event_id, app_id, object_id, object_type, data, created_at FROM app_events WHERE event_id = $1", id)
-	return scanAppEvent(row)
-}
-
-func scanAppEvent(s postgres.Scanner) (*ct.AppEvent, error) {
-	var event ct.AppEvent
-	var typ string
-	var data []byte
-	err := s.Scan(&event.ID, &event.AppID, &event.ObjectID, &typ, &data, &event.CreatedAt)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			err = ErrNotFound
-		}
-		return nil, err
+	if err := createEvent(tx.Exec, &ct.Event{
+		AppID:      app.ID,
+		ObjectID:   app.ID,
+		ObjectType: ct.EventTypeApp,
+	}, app); err != nil {
+		tx.Rollback()
+		return err
 	}
-	event.AppID = postgres.CleanUUID(event.AppID)
-	event.ObjectType = ct.EventType(typ)
-	event.Data = json.RawMessage(data)
-	return &event, nil
-}
-
-func (r *AppRepo) SetRelease(appID string, releaseID string) error {
-	return r.db.Exec("UPDATE apps SET release_id = $2, updated_at = now() WHERE app_id = $1", appID, releaseID)
+	return tx.Commit()
 }
 
 func (r *AppRepo) GetRelease(id string) (*ct.Release, error) {
@@ -409,95 +402,6 @@ func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *
 			return
 		case <-ctx.Done():
 			return
-		}
-	}
-}
-
-func (c *controllerAPI) maybeStartEventListener() error {
-	c.eventListenerMtx.Lock()
-	defer c.eventListenerMtx.Unlock()
-	if c.eventListener != nil && !c.eventListener.IsClosed() {
-		return nil
-	}
-	c.eventListener = newEventListener(c.appRepo)
-	return c.eventListener.Listen()
-}
-
-func (c *controllerAPI) AppEvents(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	if err := c.maybeStartEventListener(); err != nil {
-		respondWithError(w, err)
-	}
-	if err := streamAppEvents(ctx, w, req, c.eventListener, c.getApp(ctx), c.appRepo); err != nil {
-		respondWithError(w, err)
-	}
-}
-
-func streamAppEvents(ctx context.Context, w http.ResponseWriter, req *http.Request, eventListener *EventListener, app *ct.App, repo *AppRepo) (err error) {
-	var lastID int64
-	if req.Header.Get("Last-Event-Id") != "" {
-		lastID, err = strconv.ParseInt(req.Header.Get("Last-Event-Id"), 10, 64)
-		if err != nil {
-			return ct.ValidationError{Field: "Last-Event-Id", Message: "is invalid"}
-		}
-	}
-
-	var count int
-	if req.FormValue("count") != "" {
-		count, err = strconv.Atoi(req.FormValue("count"))
-		if err != nil {
-			return ct.ValidationError{Field: "count", Message: "is invalid"}
-		}
-	}
-
-	objectType := req.FormValue("object_type")
-	objectID := req.FormValue("object_id")
-	past := req.FormValue("past")
-
-	l, _ := ctxhelper.LoggerFromContext(ctx)
-	log := l.New("fn", "AppEvents", "object_type", objectType, "object_id", objectID)
-	ch := make(chan *ct.AppEvent)
-	s := sse.NewStream(w, ch, log)
-	s.Serve()
-	defer func() {
-		if err == nil {
-			s.Close()
-		} else {
-			s.CloseWithError(err)
-		}
-	}()
-
-	sub, err := eventListener.Subscribe(app.ID, objectType, objectID)
-	if err != nil {
-		return err
-	}
-	defer sub.Close()
-
-	var currID int64
-	if past == "true" || lastID > 0 {
-		list, err := repo.ListEvents(app.ID, objectType, objectID, lastID, count)
-		if err != nil {
-			return err
-		}
-		// events are in ID DESC order, so iterate in reverse
-		for i := len(list) - 1; i >= 0; i-- {
-			e := list[i]
-			ch <- e
-			currID = e.ID
-		}
-	}
-
-	for {
-		select {
-		case <-s.Done:
-			return
-		case event, ok := <-sub.Events:
-			if !ok {
-				return sub.Err
-			}
-			if event.ID <= currID {
-				continue
-			}
-			ch <- event
 		}
 	}
 }

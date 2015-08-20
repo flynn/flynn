@@ -10,6 +10,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/stream"
 	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
 )
@@ -17,6 +18,11 @@ import (
 func newFakeRouter() routerc.Client {
 	return &fakeRouter{routes: make(map[string]*router.Route)}
 }
+
+type fakeStream struct{}
+
+func (s *fakeStream) Close() error { return nil }
+func (s *fakeStream) Err() error   { return nil }
 
 type fakeRouter struct {
 	mtx    sync.RWMutex
@@ -56,6 +62,10 @@ func (r *fakeRouter) GetRoute(routeType, id string) (*router.Route, error) {
 }
 
 func (r *fakeRouter) UpdateRoute(*router.Route) error { return nil }
+
+func (r *fakeRouter) StreamEvents(output chan *router.StreamEvent) (stream.Stream, error) {
+	return &fakeStream{}, nil
+}
 
 type sortedRoutes []*router.Route
 

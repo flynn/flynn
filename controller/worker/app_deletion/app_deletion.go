@@ -133,6 +133,6 @@ func (c *context) createEvent(a *ct.AppDeletion, err error) error {
 	if err != nil {
 		return err
 	}
-	query := "INSERT INTO app_events (app_id, object_id, object_type, data) VALUES ($1, $2, $3, $4)"
+	query := "INSERT INTO events (app_id, object_id, object_type, data) VALUES ($1, $2, $3, $4)"
 	return c.db.Exec(query, a.AppID, a.AppID, string(ct.EventTypeAppDeletion), data)
 }

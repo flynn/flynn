@@ -8,6 +8,7 @@ import (
 	"net/url"
 
 	"github.com/flynn/flynn/pkg/httpclient"
+	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -60,6 +61,7 @@ type Client interface {
 	// ListRoutes returns a list of routes. If parentRef is not empty, routes
 	// are filtered by the reference (ex: "controller/apps/myapp").
 	ListRoutes(parentRef string) ([]*router.Route, error)
+	StreamEvents(output chan *router.StreamEvent) (stream.Stream, error)
 }
 
 func (c *client) CreateRoute(r *router.Route) error {
@@ -90,4 +92,8 @@ func (c *client) ListRoutes(parentRef string) ([]*router.Route, error) {
 	var res []*router.Route
 	err := c.Get(path, &res)
 	return res, err
+}
+
+func (c *client) StreamEvents(output chan *router.StreamEvent) (stream.Stream, error) {
+	return c.ResumingStream("GET", "/events", output)
 }
