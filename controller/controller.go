@@ -331,13 +331,6 @@ func (c *controllerAPI) getApp(ctx context.Context) *ct.App {
 	return ctx.Value("app").(*ct.App)
 }
 
-func (c *controllerAPI) maybeGetApp(ctx context.Context) *ct.App {
-	if app, ok := ctx.Value("app").(*ct.App); ok {
-		return app
-	}
-	return nil
-}
-
 func (c *controllerAPI) getRelease(ctx context.Context) (*ct.Release, error) {
 	params, _ := ctxhelper.ParamsFromContext(ctx)
 	data, err := c.releaseRepo.Get(params.ByName("releases_id"))
