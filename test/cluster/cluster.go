@@ -537,7 +537,7 @@ func (c *Cluster) bootstrapLayer1(instances []*Instance) error {
 			"CLUSTER_DOMAIN=%s CONTROLLER_KEY=%s BACKOFF_PERIOD=%fs flynn-host bootstrap --json --min-hosts=%d --peer-ips=%s /etc/flynn-bootstrap.json",
 			c.ClusterDomain, c.ControllerKey, c.BackoffPeriod.Seconds(), len(instances), strings.Join(ips, ","),
 		)
-		cmdErr = inst.Run(command, &Streams{Stdout: wr, Stderr: os.Stderr})
+		cmdErr = inst.Run(command, &Streams{Stdout: wr, Stderr: c.out})
 		wr.Close()
 	}()
 
