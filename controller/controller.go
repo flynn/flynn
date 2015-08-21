@@ -125,6 +125,21 @@ func wrapDBExec(dbExec func(string, ...interface{}) error) func(string, ...inter
 }
 
 func streamRouterEvents(rc routerc.Client, db *postgres.DB, doneCh chan struct{}) error {
+	// wait for router to come up
+	{
+		events := make(chan *discoverd.Event)
+		stream, err := discoverd.NewService("router-api").Watch(events)
+		if err != nil {
+			return err
+		}
+		for e := range events {
+			if e.Kind == discoverd.EventKindUp {
+				break
+			}
+		}
+		stream.Close()
+	}
+
 	events := make(chan *router.StreamEvent)
 	s, err := rc.StreamEvents(events)
 	if err != nil {
