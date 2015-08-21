@@ -32,6 +32,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     v.cpus = ENV["VAGRANT_CPUS"] || 2
   end
 
+  config.vm.provider "vmware_fusion" do |v|
+    v.vmx["memsize"] = ENV["VAGRANT_MEMORY"] || 2048
+    v.vmx["numvcpus"] = ENV["VAGRANT_CPUS"] || 2
+  end
+
   # Show VM GUI as a visual reminder that the VM is running
   if $flag_gui == "true"
     config.vm.provider "virtualbox" do |v|
