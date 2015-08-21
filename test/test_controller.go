@@ -383,11 +383,23 @@ func (s *ControllerSuite) TestRouteEvents(t *c.C) {
 	app := "app-route-events-" + random.String(8)
 	client := s.controllerClient(t)
 
+	// create and push app
+	r := s.newGitRepo(t, "http")
+	t.Assert(r.flynn("create", app), Succeeds)
+	t.Assert(r.flynn("key", "add", r.ssh.Pub), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+
+	// wait for it to start
+	service := app + "-web"
+	_, err := s.discoverdClient(t).Instances(service, 10*time.Second)
+	t.Assert(err, c.IsNil)
+
 	// stream events
 	events := make(chan *ct.Event)
 	stream, err := client.StreamEvents(controller.StreamEventsOptions{
 		AppID:       app,
 		ObjectTypes: []ct.EventType{ct.EventTypeRoute, ct.EventTypeRouteDeletion},
+		Past:        true,
 	}, events)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
@@ -401,17 +413,6 @@ func (s *ControllerSuite) TestRouteEvents(t *c.C) {
 			t.Assert(true, c.Equals, false, c.Commentf("timed out waiting for %s event", string(typ)))
 		}
 	}
-
-	// create and push app
-	r := s.newGitRepo(t, "http")
-	t.Assert(r.flynn("create", app), Succeeds)
-	t.Assert(r.flynn("key", "add", r.ssh.Pub), Succeeds)
-	t.Assert(r.git("push", "flynn", "master"), Succeeds)
-
-	// wait for it to start
-	service := app + "-web"
-	_, err = s.discoverdClient(t).Instances(service, 10*time.Second)
-	t.Assert(err, c.IsNil)
 
 	// default app route
 	assertEventType(ct.EventTypeRoute)
@@ -433,4 +434,62 @@ func (s *ControllerSuite) TestRouteEvents(t *c.C) {
 
 	// check route deletion event
 	assertEventType(ct.EventTypeRouteDeletion)
+}
+
+// TestAppEvents checks that streaming events for an app only receives events
+// for that particular app.
+func (s *ControllerSuite) TestAppEvents(t *c.C) {
+	client := s.controllerClient(t)
+	app1, release1 := s.createApp(t)
+	app2, release2 := s.createApp(t)
+
+	// stream events for app1
+	events := make(chan *ct.JobEvent)
+	stream, err := client.StreamJobEvents(app1.ID, events)
+	t.Assert(err, c.IsNil)
+	defer stream.Close()
+
+	runJob := func(appID, releaseID string) {
+		rwc, err := client.RunJobAttached(appID, &ct.NewJob{
+			ReleaseID:  releaseID,
+			Cmd:        []string{"/bin/true"},
+			DisableLog: true,
+		})
+		t.Assert(err, c.IsNil)
+		rwc.Close()
+	}
+
+	// generate events for app2 and wait for them
+	watcher, err := client.WatchJobEvents(app2.ID, release2.ID)
+	t.Assert(err, c.IsNil)
+	defer watcher.Close()
+	runJob(app2.ID, release2.ID)
+	t.Assert(watcher.WaitFor(
+		ct.JobEvents{"": {"up": 1, "down": 1}},
+		10*time.Second,
+		func(e *ct.JobEvent) error {
+			debugf(t, "got %s job event for app2", e.State)
+			return nil
+		},
+	), c.IsNil)
+
+	// generate events for app1
+	runJob(app1.ID, release1.ID)
+
+	// check the stream only gets events for app1
+	for {
+		select {
+		case e, ok := <-events:
+			if !ok {
+				t.Fatal("unexpected close of job event stream")
+			}
+			t.Assert(e.AppID, c.Equals, app1.ID)
+			debugf(t, "got %s job event for app1", e.State)
+			if e.State == "down" {
+				return
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("timed out waiting for job events for app1")
+		}
+	}
 }

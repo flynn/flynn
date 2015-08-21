@@ -111,7 +111,16 @@ func (c *controllerAPI) Events(ctx context.Context, w http.ResponseWriter, req *
 	if err := c.maybeStartEventListener(); err != nil {
 		respondWithError(w, err)
 	}
-	if err := streamEvents(ctx, w, req, c.eventListener, c.maybeGetApp(ctx), c.eventRepo); err != nil {
+	var app *ct.App
+	if appID := req.FormValue("app_id"); appID != "" {
+		data, err := c.appRepo.Get(appID)
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		app = data.(*ct.App)
+	}
+	if err := streamEvents(ctx, w, req, c.eventListener, app, c.eventRepo); err != nil {
 		respondWithError(w, err)
 	}
 }
