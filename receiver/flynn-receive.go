@@ -59,6 +59,12 @@ func main() {
 	cmd := exec.Command(exec.DockerImage(os.Getenv("SLUGBUILDER_IMAGE_URI")), slugURL)
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
+	cmd.Meta = map[string]string{
+		"flynn-controller.app":      app.ID,
+		"flynn-controller.app_name": app.Name,
+		"flynn-controller.release":  prevRelease.ID,
+		"flynn-controller.type":     "slugbuilder",
+	}
 	if len(prevRelease.Env) > 0 {
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
