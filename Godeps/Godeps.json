@@ -200,11 +200,6 @@
 			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
 		},
 		{
-			"ImportPath": "github.com/docker/docker/pkg/devicemapper",
-			"Comment": "v1.4.1-2039-ge589dc7",
-			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
-		},
-		{
 			"ImportPath": "github.com/docker/docker/pkg/directory",
 			"Comment": "v1.4.1-2039-ge589dc7",
 			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"

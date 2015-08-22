@@ -119,7 +119,6 @@ apt-get install -y \
   tup \
   fuse \
   build-essential \
-  libdevmapper-dev \
   ubuntu-zfs \
   btrfs-tools \
   libvirt-dev \
