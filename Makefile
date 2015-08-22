@@ -3,9 +3,11 @@ GIT_BRANCH=`git rev-parse --abbrev-ref HEAD`
 # NOTE: the `git tag` command is filtered through `grep .` so it returns non-zero when empty
 GIT_TAG=`git tag --list "v*" --sort "v:refname" --points-at HEAD 2>/dev/null | tail -n 1 | grep . || echo "none"`
 GIT_DIRTY=`test -n "$(git status --porcelain)" && echo true || echo false`
+GIT_DEV=GIT_COMMIT=dev GIT_BRANCH=dev GIT_TAG=none GIT_DIRTY=false
+GO_ENV=GOROOT=`readlink -f util/_toolchain/go`
 
 all: toolchain
-	@GIT_COMMIT=dev GIT_BRANCH=dev GIT_TAG=none GIT_DIRTY=false tup
+	@$(GIT_DEV) $(GO_ENV) tup
 
 release: toolchain
 	@GIT_COMMIT=$(GIT_COMMIT) GIT_BRANCH=$(GIT_BRANCH) GIT_TAG=$(GIT_TAG) GIT_DIRTY=$(GIT_DIRTY) tup
@@ -16,8 +18,8 @@ clean:
 test: test-unit test-integration
 
 test-unit:
-	@GIT_COMMIT=dev GIT_BRANCH=dev GIT_TAG=none GIT_DIRTY=false tup appliance/etcd discoverd
-	@GOROOT=`readlink -f util/_toolchain/go` util/_toolchain/go/bin/go test ./...
+	@$(GIT_DEV) tup appliance/etcd discoverd
+	@$(GO_ENV) util/_toolchain/go/bin/go test ./...
 
 test-integration:
 	script/run-integration-tests
