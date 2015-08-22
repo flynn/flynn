@@ -83,14 +83,25 @@ func (s *S) TestParse(c *C) {
 				Msg:            []byte("message body"),
 			},
 		},
+
+		{
+			msg: "<0>1",
+		},
 	}
 
-	for _, test := range table {
+	for i, test := range table {
+		ctx := Commentf("i = %d", i)
 		msg, err := Parse([]byte(test.msg))
+		if test.want == nil {
+			if err == nil {
+				c.Error("expected error but didn't get one", ctx)
+			}
+			continue
+		}
 		if err != nil {
-			c.Error(err)
+			c.Error(err, ctx)
 		}
 
-		c.Assert(msg, DeepEquals, test.want)
+		c.Assert(msg, DeepEquals, test.want, ctx)
 	}
 }

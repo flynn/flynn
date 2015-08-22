@@ -97,7 +97,7 @@ func parsePriority(buf []byte, cursor *int, msg *Message) error {
 }
 
 func parseVersion(buf []byte, cursor *int, msg *Message) error {
-	if len(buf) < *cursor+1 {
+	if len(buf) < *cursor+2 {
 		return &ParseError{*cursor, "message ended before version was received"}
 	}
 	if buf[*cursor] != '1' || buf[*cursor+1] != ' ' {
