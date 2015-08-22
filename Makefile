@@ -17,16 +17,16 @@ clean:
 
 test: test-unit test-integration
 
-test-unit-deps:
-	@$(GIT_DEV) $(GO_ENV) tup appliance/etcd discoverd
+test-unit-deps: toolchain
+	@$(GIT_DEV) $(GO_ENV) tup discoverd host/cli/root_keys.go installer/bindata.go dashboard/bindata.go
 
 test-unit: test-unit-deps
-	@$(GO_ENV) PATH=${PWD}/appliance/etcd/bin:${PWD}/discoverd/bin:${PATH} util/_toolchain/go/bin/go test -race -cover ./...
+	@$(GO_ENV) PATH=${PWD}/discoverd/bin:${PATH} util/_toolchain/go/bin/go test -race -cover ./...
 
 test-unit-root: test-unit
 	@$(GO_ENV) util/_toolchain/go/bin/go test -race -cover ./host/volume/zfs
 
-test-integration:
+test-integration: toolchain
 	script/run-integration-tests
 
 toolchain:
