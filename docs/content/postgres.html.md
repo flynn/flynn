@@ -119,6 +119,7 @@ This is a complete list of the extensions that are available:
 | pg\_stat\_statements | 1.2     | track execution statistics of all SQL statements executed           |
 | pg\_trgm             | 1.1     | text similarity measurement and index searching based on trigrams   |
 | pgcrypto             | 1.1     | cryptographic functions                                             |
+| pgrouting            | 2.0     | pgRouting Extension                                                 |
 | pgrowlocks           | 1.1     | show row-level locking information                                  |
 | pgstattuple          | 1.2     | show tuple-level statistics                                         |
 | plpgsql              | 1.0     | PL/pgSQL procedural language                                        |
