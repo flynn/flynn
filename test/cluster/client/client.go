@@ -75,10 +75,8 @@ func (c *Client) AddHost(ch chan *discoverd.Event, vanilla bool) (*tc.Instance, 
 			if e.Kind != discoverd.EventKindUp {
 				continue
 			}
-			if e.Instance.Meta["id"] == instance.ID {
-				c.size++
-				return &instance, nil
-			}
+			c.size++
+			return &instance, nil
 		case <-time.After(60 * time.Second):
 			return nil, fmt.Errorf("timed out waiting for new host")
 		}
