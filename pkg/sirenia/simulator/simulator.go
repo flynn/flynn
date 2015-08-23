@@ -500,7 +500,7 @@ func (d *discoverdSimulator) NewClient(inst *discoverd.Instance) *discoverdSimul
 	c := &discoverdSimulatorClient{
 		d:      d,
 		inst:   inst,
-		events: make(chan *state.DiscoverdEvent),
+		events: make(chan *state.DiscoverdEvent, 10),
 	}
 	d.clients = append(d.clients, c)
 	return c
@@ -524,7 +524,7 @@ func (d *discoverdSimulator) PeerJoined(inst *discoverd.Instance) {
 	inst = inst.Clone()
 	d.peers = append(d.peers, inst)
 	for _, c := range d.clients {
-		go c.notifyPeersChanged()
+		c.notifyPeersChanged()
 	}
 }
 
@@ -545,7 +545,7 @@ func (d *discoverdSimulator) PeerRemoved(name string) {
 		return
 	}
 	for _, c := range d.clients {
-		go c.notifyPeersChanged()
+		c.notifyPeersChanged()
 	}
 }
 
@@ -560,14 +560,17 @@ func (d *discoverdSimulator) SetClusterState(s *state.DiscoverdState) {
 	d.state.State = s.State.Clone()
 	s.Index = d.state.Index
 	for _, c := range d.clients {
-		go c.notifyStateChanged()
+		c.notifyStateChanged()
 	}
 }
 
 func (d *discoverdSimulator) ClusterState() *state.DiscoverdState {
 	d.Lock()
 	defer d.Unlock()
+	return d._clusterState()
+}
 
+func (d *discoverdSimulator) _clusterState() *state.DiscoverdState {
 	return &state.DiscoverdState{
 		Index: d.state.Index,
 		State: d.state.State.Clone(),
@@ -577,7 +580,10 @@ func (d *discoverdSimulator) ClusterState() *state.DiscoverdState {
 func (d *discoverdSimulator) Peers() []*discoverd.Instance {
 	d.Lock()
 	defer d.Unlock()
+	return d._peers()
+}
 
+func (d *discoverdSimulator) _peers() []*discoverd.Instance {
 	res := make([]*discoverd.Instance, len(d.peers))
 	copy(res, d.peers)
 	return res
@@ -610,7 +616,7 @@ func (d *discoverdSimulatorClient) notifyPeersChanged() {
 	}
 	d.events <- &state.DiscoverdEvent{
 		Kind:  state.DiscoverdEventPeers,
-		Peers: d.d.Peers(),
+		Peers: d.d._peers(),
 	}
 }
 
@@ -623,7 +629,7 @@ func (d *discoverdSimulatorClient) notifyStateChanged() {
 	}
 	d.events <- &state.DiscoverdEvent{
 		Kind:  state.DiscoverdEventState,
-		State: d.d.ClusterState(),
+		State: d.d._clusterState(),
 	}
 }
 
