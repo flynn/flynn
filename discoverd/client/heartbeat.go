@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	hh "github.com/flynn/flynn/pkg/httphelper"
@@ -24,6 +25,7 @@ type Heartbeater interface {
 	SetMeta(map[string]string) error
 	Close() error
 	Addr() string
+	SetClient(*Client)
 }
 
 func (c *Client) maybeAddService(service string) error {
@@ -70,20 +72,26 @@ func (c *Client) RegisterInstance(service string, inst *Instance) (Heartbeater, 
 		}
 		inst.Meta[kv[0]] = kv[1]
 	}
-	h := &heartbeater{
-		c:       c,
-		service: service,
-		stop:    make(chan struct{}),
-		done:    make(chan struct{}),
-		inst:    inst.Clone(),
-	}
+	h := newHeartbeater(c, service, inst)
 	firstErr := make(chan error)
 	go h.run(firstErr)
 	return h, <-firstErr
 }
 
+func newHeartbeater(c *Client, service string, inst *Instance) *heartbeater {
+	h := &heartbeater{
+		service: service,
+		stop:    make(chan struct{}),
+		done:    make(chan struct{}),
+		inst:    inst.Clone(),
+	}
+	h.c.Store(c)
+	return h
+}
+
 type heartbeater struct {
-	c    *Client
+	c atomic.Value // *Client
+
 	stop chan struct{}
 	done chan struct{}
 
@@ -91,16 +99,15 @@ type heartbeater struct {
 	sync.Mutex
 	inst *Instance
 
-	service string
-	closed  bool
+	service   string
+	closeOnce sync.Once
 }
 
 func (h *heartbeater) Close() error {
-	if !h.closed {
+	h.closeOnce.Do(func() {
 		close(h.stop)
-		h.closed = true
 		<-h.done
-	}
+	})
 	return nil
 }
 
@@ -108,11 +115,19 @@ func (h *heartbeater) SetMeta(meta map[string]string) error {
 	h.Lock()
 	defer h.Unlock()
 	h.inst.Meta = meta
-	return h.c.c.Put(fmt.Sprintf("/services/%s/instances/%s", h.service, h.inst.ID), h.inst, nil)
+	return h.client().c.Put(fmt.Sprintf("/services/%s/instances/%s", h.service, h.inst.ID), h.inst, nil)
 }
 
 func (h *heartbeater) Addr() string {
 	return h.inst.Addr
+}
+
+func (h *heartbeater) SetClient(c *Client) {
+	h.c.Store(c)
+}
+
+func (h *heartbeater) client() *Client {
+	return h.c.Load().(*Client)
 }
 
 const (
@@ -125,7 +140,7 @@ func (h *heartbeater) run(firstErr chan<- error) {
 	register := func() error {
 		h.Lock()
 		defer h.Unlock()
-		return h.c.c.Put(path, h.inst, nil)
+		return h.client().c.Put(path, h.inst, nil)
 	}
 
 	err := register()
@@ -144,7 +159,7 @@ func (h *heartbeater) run(firstErr chan<- error) {
 			}
 			timer.Reset(heartbeatInterval)
 		case <-h.stop:
-			h.c.c.Delete(path)
+			h.client().c.Delete(path)
 			close(h.done)
 			return
 		}

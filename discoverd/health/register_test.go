@@ -29,6 +29,7 @@ type FakeHeartbeat struct {
 func (f FakeHeartbeat) SetMeta(meta map[string]string) error { return f.setMetaFn(meta) }
 func (f FakeHeartbeat) Close() error                         { return f.closeFn() }
 func (f FakeHeartbeat) Addr() string                         { return f.addrFn() }
+func (f FakeHeartbeat) SetClient(*discoverd.Client)          {}
 
 func init() {
 	registerErrWait = time.Millisecond
