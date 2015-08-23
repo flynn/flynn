@@ -915,8 +915,18 @@ func (l *LibvirtLXCBackend) Signal(id string, sig int) error {
 
 func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 	client, err := l.getContainer(req.Job.Job.ID)
-	if err != nil && (req.Job.Job.Config.TTY || req.Stdin != nil) {
-		return err
+	if err != nil {
+		if req.Job.Job.Config.TTY || req.Stdin != nil {
+			return err
+		}
+
+		// if the container has exited and logging was disabled, return EOF
+		if req.Job.Job.Config.DisableLog {
+			if req.Attached != nil {
+				req.Attached <- struct{}{}
+			}
+			return io.EOF
+		}
 	}
 
 	defer func() {
