@@ -97,7 +97,7 @@ func parsePriority(buf []byte, cursor *int, msg *Message) error {
 }
 
 func parseVersion(buf []byte, cursor *int, msg *Message) error {
-	if len(buf) < *cursor+1 {
+	if len(buf) < *cursor+2 {
 		return &ParseError{*cursor, "message ended before version was received"}
 	}
 	if buf[*cursor] != '1' || buf[*cursor+1] != ' ' {
@@ -149,7 +149,7 @@ func parseStructuredData(buf []byte, cursor *int, msg *Message) error {
 	if len(buf) < *cursor {
 		return &ParseError{*cursor, "missing structured data field"}
 	}
-	if buf[*cursor] == '-' {
+	if c := buf[*cursor]; c == '-' {
 		if len(buf) > *cursor+1 && buf[*cursor+1] != ' ' {
 			return &ParseError{*cursor, "invalid structured data"}
 		}
@@ -158,8 +158,27 @@ func parseStructuredData(buf []byte, cursor *int, msg *Message) error {
 		}
 		*cursor++
 		return nil
+	} else if c != '[' {
+		return &ParseError{*cursor, "invalid structured data"}
 	}
-	return &ParseError{*cursor, "structured data is unsupported"}
+
+	// find the end of the field
+	end := *cursor
+	for {
+		end = indexByteAfter(buf, ']', end+1)
+		if end == -1 {
+			return &ParseError{*cursor, "invalid structured data"}
+		}
+		if buf[end-1] != '\\' {
+			if len(buf) < end+2 || buf[end+1] != ' ' {
+				return &ParseError{*cursor, "invalid structured data"}
+			}
+			break
+		}
+	}
+	msg.StructuredData = buf[*cursor : end+1]
+	*cursor = end + 2
+	return nil
 }
 
 func indexByteAfter(buf []byte, c byte, after int) int {
