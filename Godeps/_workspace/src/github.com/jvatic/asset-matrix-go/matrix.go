@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -33,6 +34,7 @@ type Matrix struct {
 }
 
 type Manifest struct {
+	mtx    sync.Mutex
 	Assets map[string]string `json:"assets"`
 }
 
@@ -186,7 +188,7 @@ func installNpmPackages(names []string) error {
 }
 
 func (m *Matrix) installDeps() error {
-	return installNpmPackages([]string{"recast", "es6-promise", "node-sass", "react-tools"})
+	return installNpmPackages([]string{"recast@0.10.30", "es6-promise@3.0.2", "node-sass@3.2.0", "react-tools@0.13.3"})
 }
 
 func (m *Matrix) createTempfiles() error {
@@ -299,20 +301,25 @@ func (m *Matrix) findAsset(key string) (Asset, error) {
 }
 
 func (m *Matrix) compileTree(tree []Asset) error {
-	readers := make([]io.Reader, len(tree))
-	errChan := make(chan error)
+	type result struct {
+		io.Reader
+		error
+	}
+	results := make(chan result)
 	compileAsset := func(i int, a Asset) {
 		r, err := a.Compile()
-		readers[i] = r
-		errChan <- err
+		results <- result{r, err}
 	}
 	for i, a := range tree {
 		go compileAsset(i, a)
 	}
-	for _ = range tree {
-		if err := <-errChan; err != nil {
-			return err
+	readers := make([]io.Reader, len(tree))
+	for i := range tree {
+		res := <-results
+		if res.error != nil {
+			return res.error
 		}
+		readers[i] = res.Reader
 	}
 	outputPath := tree[len(tree)-1].OutputPath()
 	manifestKey := outputPath
@@ -327,7 +334,9 @@ func (m *Matrix) compileTree(tree []Asset) error {
 	if err != nil {
 		return err
 	}
+	m.Manifest.mtx.Lock()
 	m.Manifest.Assets[manifestKey] = manifestVal
+	m.Manifest.mtx.Unlock()
 	log.Printf("Writing %s", outputPath)
 	defer file.Close()
 	var offset int64
