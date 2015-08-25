@@ -79,6 +79,11 @@ func main() {
 	if buildpackURL, ok := prevRelease.Env["BUILDPACK_URL"]; ok {
 		cmd.Env["BUILDPACK_URL"] = buildpackURL
 	}
+	for _, k := range []string{"SSH_CLIENT_KEY", "SSH_CLIENT_HOSTS"} {
+		if v := os.Getenv(k); v != "" {
+			cmd.Env[k] = v
+		}
+	}
 
 	if err := cmd.Run(); err != nil {
 		log.Fatalln("Build failed:", err)
