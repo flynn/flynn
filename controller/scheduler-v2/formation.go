@@ -54,16 +54,10 @@ func (f *Formation) Update(procs map[string]int) map[string]int {
 
 type formationJobs map[utils.FormationKey]map[string][]*Job
 
-func NewFormationJobs(jobs map[string]*Job, requests map[*JobRequest]struct{}) formationJobs {
+func NewFormationJobs(jobs map[string]*Job) formationJobs {
 	fj := make(formationJobs)
 	for _, job := range jobs {
 		fj.AddJob(job)
-	}
-
-	for req := range requests {
-		if req.RequestType == JobRequestTypeUp {
-			fj.AddJob(req.Job)
-		}
 	}
 	return fj
 }
@@ -77,12 +71,85 @@ func (fc formationJobs) AddJob(j *Job) {
 	fc[key][j.Type] = append(fc[key][j.Type], j)
 }
 
-func (fc formationJobs) GetProcesses(key utils.FormationKey) map[string]int {
-	procs := make(map[string]int)
+type pendingJobs map[utils.FormationKey]map[string]int
 
-	for typ, jobs := range fc[key] {
-		procs[typ] = len(jobs)
+func CopyPendingJobs(pending pendingJobs) pendingJobs {
+	copied := make(pendingJobs)
+	for key, form := range pending {
+		copied[key] = make(map[string]int)
+		for typ, numJobs := range form {
+			copied[key][typ] = numJobs
+		}
 	}
+	return copied
+}
 
-	return procs
+func MergePendingJobs(pending1, pending2 pendingJobs) pendingJobs {
+	copied := CopyPendingJobs(pending1)
+
+	for key, form := range pending2 {
+		if _, ok := copied[key]; !ok {
+			copied[key] = make(map[string]int)
+		}
+		for typ, numJobs := range form {
+			copied[key][typ] += numJobs
+		}
+	}
+	return copied
+}
+
+func NewPendingJobs(jobs map[string]*Job, pending pendingJobs) pendingJobs {
+	fjc := CopyPendingJobs(pending)
+
+	for _, job := range jobs {
+		fjc.AddJob(job)
+	}
+	return fjc
+}
+
+func (fc pendingJobs) AddJob(j *Job) {
+	key := j.Formation.key()
+	_, ok := fc[key]
+	if !ok {
+		fc[key] = make(map[string]int)
+	}
+	fc[key][j.Type] += 1
+}
+
+func (fc pendingJobs) RemoveJob(j *Job) {
+	key := j.Formation.key()
+	_, ok := fc[key]
+	if !ok {
+		fc[key] = make(map[string]int)
+	}
+	fc[key][j.Type] -= 1
+}
+
+func (fc pendingJobs) GetProcesses(key utils.FormationKey) map[string]int {
+	return fc[key]
+}
+
+func (fc pendingJobs) hasPendingJobs(j *Job) bool {
+	if j == nil || j.Formation == nil {
+		return false
+	}
+	key := j.Formation.key()
+	if _, ok := fc[key]; !ok {
+		return false
+	}
+	return true
+}
+
+func (fc pendingJobs) HasStarts(j *Job) bool {
+	if fc.hasPendingJobs(j) {
+		return fc[j.Formation.key()][j.Type] > 0
+	}
+	return false
+}
+
+func (fc pendingJobs) HasStops(j *Job) bool {
+	if fc.hasPendingJobs(j) {
+		return fc[j.Formation.key()][j.Type] < 0
+	}
+	return false
 }
