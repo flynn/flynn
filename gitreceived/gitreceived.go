@@ -27,8 +27,14 @@ import (
 )
 
 const PrereceiveHookTmpl = `#!/bin/bash
-set -eo pipefail; while read oldrev newrev refname; do
-[[ $refname = "refs/heads/master" ]] && git archive $newrev | {{RECEIVER}} "$RECEIVE_REPO" "$newrev" | sed -$([[ $(uname) == "Darwin" ]] && echo l || echo u) "s/^/"$'\e[1G\e[K'"/"
+set -eo pipefail;
+git-archive-all() {
+	git checkout --quiet $1
+	git submodule --quiet update --init --recursive
+	tar --create --exclude-vcs .
+}
+while read oldrev newrev refname; do
+	[[ $refname = "refs/heads/master" ]] && git-archive-all $newrev | {{RECEIVER}} "$RECEIVE_REPO" "$newrev" | sed -u "s/^/"$'\e[1G\e[K'"/"
 done
 `
 
@@ -382,13 +388,13 @@ func ensureCacheRepo(tempDir, path string) error {
 	cachePath := filepath.Join(tempDir, path)
 	if _, err := os.Stat(cachePath); os.IsNotExist(err) {
 		os.MkdirAll(cachePath, 0755)
-		cmd := exec.Command("git", "init", "--bare")
+		cmd := exec.Command("git", "init")
 		cmd.Dir = cachePath
 		err = cmd.Run()
 		if err != nil {
 			return err
 		}
-		return ioutil.WriteFile(filepath.Join(cachePath, "hooks", "pre-receive"), prereceiveHook, 0755)
+		return ioutil.WriteFile(filepath.Join(cachePath, ".git", "hooks", "pre-receive"), prereceiveHook, 0755)
 	}
 	return nil
 }

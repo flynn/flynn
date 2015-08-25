@@ -191,3 +191,12 @@ func (s *GitDeploySuite) TestRunQuoting(t *c.C) {
 	t.Assert(run, Succeeds)
 	t.Assert(run, Outputs, "foo bar\n")
 }
+
+func (s *GitDeploySuite) TestGitSubmodules(t *c.C) {
+	r := s.newGitRepo(t, "empty")
+	t.Assert(r.git("submodule", "add", "https://github.com/flynn-examples/go-flynn-example.git"), Succeeds)
+	t.Assert(r.git("commit", "-m", "Add Submodule"), Succeeds)
+	t.Assert(r.flynn("create"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+	t.Assert(r.flynn("run", "ls", "go-flynn-example"), SuccessfulOutputContains, "main.go")
+}
