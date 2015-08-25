@@ -87,18 +87,18 @@ func waitForEvent(events chan Event, typ EventType) (Event, error) {
 	}
 }
 
-func (ts *TestSuite) TestInitialClusterSync(c *C) {
+func (ts *TestSuite) TestSingleJobStart(c *C) {
 	events := make(chan Event, eventBufferSize)
 	sched := runTestScheduler(events, true)
 	defer sched.Stop()
 	s := sched.scheduler
 
-	// wait for a cluster sync event
+	// wait for a rectify jobs event
+	s.log.Info("Waiting for a rectify jobs event")
 	_, err := waitForEvent(events, EventTypeRectifyJobs)
 	c.Assert(err, IsNil)
 	e, err := waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
-
 	event, ok := e.(*JobStartEvent)
 	c.Assert(ok, Equals, true)
 	c.Assert(event.Job, NotNil)
@@ -108,6 +108,7 @@ func (ts *TestSuite) TestInitialClusterSync(c *C) {
 	c.Assert(job.ReleaseID, Equals, testReleaseID)
 
 	// Query the scheduler for the same job
+	s.log.Info("Verify that the scheduler has the same job")
 	jobs := s.Jobs()
 	c.Assert(jobs, HasLen, 1)
 	for _, job := range jobs {
@@ -134,13 +135,8 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	c.Assert(err, IsNil)
 
 	// Test scaling up an existing formation
-	s.formationChange <- &ct.ExpandedFormation{
-		App:       app,
-		Release:   release,
-		Artifact:  artifact,
-		Processes: map[string]int{"web": 2},
-	}
-
+	s.log.Info("Test scaling up an existing formation. Wait for formation change and job start")
+	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 2}})
 	_, err = waitForEvent(events, EventTypeFormationChange)
 	c.Assert(err, IsNil)
 	e, err := waitForEvent(events, EventTypeJobStart)
@@ -153,8 +149,8 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	c.Assert(jobs, HasLen, 2)
 
 	// Test scaling down an existing formation
+	s.log.Info("Test scaling down an existing formation. Wait for formation change and job stop")
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 1}})
-
 	_, err = waitForEvent(events, EventTypeFormationChange)
 	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeJobStop)
@@ -163,6 +159,7 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	c.Assert(jobs, HasLen, 1)
 
 	// Test creating a new formation
+	s.log.Info("Test creating a new formation. Wait for formation change and job start")
 	artifact = &ct.Artifact{ID: random.UUID()}
 	processes := map[string]int{testJobType: testJobCount}
 	release = NewRelease(random.UUID(), artifact, processes)
@@ -192,24 +189,34 @@ func (ts *TestSuite) TestRectifyJobs(c *C) {
 	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
+	jobs := s.Jobs()
+	c.Assert(jobs, HasLen, 1)
 
+	// Create an extra job on a host and wait for it to start
+	s.log.Info("Test creating an extra job on the host. Wait for job start in scheduler")
 	form := s.formations.Get(testAppID, testReleaseID)
 	host, err := s.Host(testHostID)
 	request := NewJobRequest(form, JobRequestTypeUp, testJobType, "", "")
 	config := jobConfig(request, testHostID)
 	host.AddJob(config)
+	_, err = waitForEvent(events, EventTypeJobStart)
+	c.Assert(err, IsNil)
+	jobs = s.Jobs()
+	c.Assert(jobs, HasLen, 2)
 
+	// Verify that the scheduler stops the extra job
+	s.log.Info("Verify that the scheduler stops the extra job")
 	_, err = waitForEvent(events, EventTypeRectifyJobs)
 	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeJobStop)
 	c.Assert(err, IsNil)
-	jobs := s.Jobs()
+	jobs = s.Jobs()
 	c.Assert(jobs, HasLen, 1)
+	_, ok := jobs[config.ID]
+	c.Assert(ok, Equals, false)
 
-	for _, j := range jobs {
-		c.Assert(j.JobID, Not(Equals), config.ID)
-	}
-
+	// Create a new app, artifact, release, and associated formation
+	s.log.Info("Create a new app, artifact, release, and associated formation")
 	app := &ct.App{ID: "test-app-2", Name: "test-app-2"}
 	artifact := &ct.Artifact{ID: "test-artifact-2"}
 	processes := map[string]int{testJobType: testJobCount}
@@ -217,20 +224,18 @@ func (ts *TestSuite) TestRectifyJobs(c *C) {
 	form = NewFormation(&ct.ExpandedFormation{App: app, Release: release, Artifact: artifact, Processes: processes})
 	request = NewJobRequest(form, JobRequestTypeUp, testJobType, "", "")
 	config = jobConfig(request, testHostID)
+	// Add the job to the host without adding the formation. Expected error.
+	s.log.Info("Create a new job on the host without adding the formation to the controller. Wait for job start, expect error.")
 	host.AddJob(config)
+	_, err = waitForEvent(events, EventTypeJobStart)
+	c.Assert(err, Not(IsNil))
+
+	s.log.Info("Add the formation to the controller. Wait for formation change.")
 	s.CreateApp(app)
 	s.CreateArtifact(artifact)
 	s.CreateRelease(release)
-	_, err = waitForEvent(events, EventTypeRectifyJobs)
-	c.Assert(err, IsNil)
-
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
-	s.SyncJobs()
-	_, err = waitForEvent(events, EventTypeClusterSync)
-	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeFormationChange)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeRectifyJobs)
 	c.Assert(err, IsNil)
 	jobs = s.Jobs()
 	c.Assert(jobs, HasLen, 2)
