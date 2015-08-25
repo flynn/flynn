@@ -1,4 +1,4 @@
-package ring
+package buffer
 
 import (
 	"fmt"
@@ -20,25 +20,11 @@ var _ = Suite(&S{})
 func (s *S) SetUpTest(c *C) {
 	hdr := &rfc5424.Header{}
 
-	s.data = make([]*rfc5424.Message, DefaultBufferCapacity*2)
+	s.data = make([]*rfc5424.Message, DefaultCapacity*2)
 	for i := 0; i < len(s.data); i++ {
 		line := []byte(fmt.Sprintf("line %d\n", i))
 		s.data[i] = rfc5424.NewMessage(hdr, line)
 	}
-}
-
-func (s *S) TestNewBuffer(c *C) {
-	b := NewBuffer()
-	c.Assert(b.messages, HasLen, 0)
-	c.Assert(cap(b.messages), Equals, DefaultBufferCapacity)
-	c.Assert(b.cursor, Equals, 0)
-}
-
-func (s *S) TestBufferClose(c *C) {
-	b := NewBuffer()
-	b.Close()
-	c.Assert(b.messages, IsNil)
-	c.Assert(b.cursor, Equals, -1)
 }
 
 func (s *S) TestRead(c *C) {
@@ -60,9 +46,9 @@ func (s *S) TestRead(c *C) {
 		},
 		// large overflow
 		{
-			cap:  DefaultBufferCapacity,
+			cap:  DefaultCapacity,
 			data: append(s.data, s.data...),
-			want: s.data[DefaultBufferCapacity:],
+			want: s.data[DefaultCapacity:],
 		},
 	}
 

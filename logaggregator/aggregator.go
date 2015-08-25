@@ -4,7 +4,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/flynn/flynn/logaggregator/ring"
+	"github.com/flynn/flynn/logaggregator/buffer"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 )
 
@@ -13,7 +13,7 @@ var errBufferFull = errors.New("feed buffer full")
 // Aggregator is a log aggregation server that collects syslog messages.
 type Aggregator struct {
 	bmu     sync.Mutex // protects buffers
-	buffers map[string]*ring.Buffer
+	buffers map[string]*buffer.Buffer
 
 	msgc chan *rfc5424.Message
 
@@ -24,7 +24,7 @@ type Aggregator struct {
 // NewAggregator creates a new running Aggregator.
 func NewAggregator() *Aggregator {
 	a := &Aggregator{
-		buffers: make(map[string]*ring.Buffer),
+		buffers: make(map[string]*buffer.Buffer),
 		msgc:    make(chan *rfc5424.Message, 1000),
 		pausec:  make(chan struct{}),
 	}
@@ -95,7 +95,7 @@ func (a *Aggregator) Subscribe(id string, msgc chan<- *rfc5424.Message, donec <-
 	a.getBuffer(id).Subscribe(msgc, donec)
 }
 
-func (a *Aggregator) getBuffer(id string) *ring.Buffer {
+func (a *Aggregator) getBuffer(id string) *buffer.Buffer {
 	a.bmu.Lock()
 	defer a.bmu.Unlock()
 
@@ -103,7 +103,7 @@ func (a *Aggregator) getBuffer(id string) *ring.Buffer {
 		return buf
 	}
 
-	buf := ring.NewBuffer()
+	buf := buffer.NewBuffer()
 	a.buffers[id] = buf
 	return buf
 }
