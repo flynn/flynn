@@ -1,6 +1,7 @@
 package host
 
 import (
+	"errors"
 	"time"
 
 	"github.com/flynn/flynn/host/resource"
@@ -209,6 +210,8 @@ type ActiveJob struct {
 	ExitStatus  int       `json:"exit_status,omitempty"`
 	Error       *string   `json:"error,omitempty"`
 }
+
+var ErrJobNotRunning = errors.New("host: job not running")
 
 type AttachReq struct {
 	JobID  string     `json:"job_id,omitempty"`

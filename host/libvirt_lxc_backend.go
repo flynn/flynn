@@ -917,7 +917,7 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 	client, err := l.getContainer(req.Job.Job.ID)
 	if err != nil {
 		if req.Job.Job.Config.TTY || req.Stdin != nil {
-			return err
+			return host.ErrJobNotRunning
 		}
 
 		// if the container has exited and logging was disabled, return EOF

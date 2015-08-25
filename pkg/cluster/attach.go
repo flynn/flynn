@@ -46,7 +46,11 @@ func (c *Host) Attach(req *host.AttachReq, wait bool) (AttachClient, error) {
 			if len(errBytes) >= 4 {
 				errBytes = errBytes[4:]
 			}
-			return errors.New(string(errBytes))
+			errMsg := string(errBytes)
+			if errMsg == host.ErrJobNotRunning.Error() {
+				return host.ErrJobNotRunning
+			}
+			return errors.New(errMsg)
 		default:
 			rwc.Close()
 			return fmt.Errorf("cluster: unknown attach state: %d", attachState)
