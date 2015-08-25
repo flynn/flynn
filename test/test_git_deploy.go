@@ -254,3 +254,12 @@ func (s *GitDeploySuite) TestPrivateSSHKeyClone(t *c.C) {
 	push := r.git("push", "flynn", "master")
 	t.Assert(push, Succeeds)
 }
+
+// TestConfigDir ensures we don't regress on a bug where uploaded repos were
+// being checked out into the bare git repo, which would fail if the repo
+// contained a config directory because the bare repo had a config file in it.
+func (s *GitDeploySuite) TestConfigDir(t *c.C) {
+	r := s.newGitRepo(t, "config-dir")
+	t.Assert(r.flynn("create"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+}
