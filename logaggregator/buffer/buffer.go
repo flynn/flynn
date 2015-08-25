@@ -1,4 +1,4 @@
-package ring
+package buffer
 
 import (
 	"errors"
@@ -7,55 +7,64 @@ import (
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 )
 
-// Buffer is a ring buffer that holds rfc5424.Messages. The Buffer's entire
+// Buffer is a linked list that holds rfc5424.Messages. The Buffer's entire
 // contents can be read at once. Reading elements out of the buffer does not
-// clear them; messages merely get moved out of the buffer when they are
+// clear them; messages merely get removed from the buffer when they are
 // replaced by new messages.
 //
 // A Buffer also offers the ability to subscribe to new incoming messages.
 type Buffer struct {
 	mu       sync.RWMutex // protects all of the following:
-	messages []*rfc5424.Message
-	cursor   int
+	head     *message
+	tail     *message
+	length   int
+	capacity int
 	subs     map[chan<- *rfc5424.Message]struct{}
 	donec    chan struct{}
 }
 
-const DefaultBufferCapacity = 10000
+type message struct {
+	next *message
+	rfc5424.Message
+}
 
-// NewBuffer returns an empty allocated Buffer with DefaultBufferCapacity.
+const DefaultCapacity = 10000
+
+// NewBuffer returns an empty allocated Buffer with DefaultCapacity.
 func NewBuffer() *Buffer {
-	return newBuffer(DefaultBufferCapacity)
+	return newBuffer(DefaultCapacity)
 }
 
 func newBuffer(capacity int) *Buffer {
 	return &Buffer{
-		messages: make([]*rfc5424.Message, 0, capacity),
+		capacity: capacity,
 		subs:     make(map[chan<- *rfc5424.Message]struct{}),
 		donec:    make(chan struct{}),
 	}
 }
 
-// Add adds an element to the Buffer. If the Buffer is already full, it replaces
+// Add adds an element to the Buffer. If the Buffer is already full, it removes
 // an existing message.
 func (b *Buffer) Add(m *rfc5424.Message) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if b.cursor == -1 {
+	if b.length == -1 {
 		return errors.New("buffer closed")
 	}
-	if len(b.messages) < cap(b.messages) {
-		// buffer not yet full
-		b.messages = append(b.messages, m)
+	if b.head == nil {
+		b.head = &message{Message: *m}
+		b.tail = b.head
 	} else {
-		// buffer already full, replace the value at cursor
-		b.messages[b.cursor] = m
-		b.cursor++
-
-		if b.cursor == cap(b.messages) {
-			b.cursor = 0
-		}
+		b.tail.next = &message{Message: *m}
+		b.tail = b.tail.next
+	}
+	if b.length < b.capacity {
+		// buffer not yet full
+		b.length++
+	} else {
+		// at capacity, remove head
+		b.head = b.head.next
 	}
 
 	for msgc := range b.subs {
@@ -72,8 +81,9 @@ func (b *Buffer) Close() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	b.messages = nil
-	b.cursor = -1
+	b.head = nil
+	b.tail = nil
+	b.length = -1
 	close(b.donec)
 }
 
@@ -111,16 +121,15 @@ func (b *Buffer) Subscribe(msgc chan<- *rfc5424.Message, donec <-chan struct{}) 
 
 // _read expects b.mu to already be locked
 func (b *Buffer) read() []*rfc5424.Message {
-	if b.cursor == -1 {
+	if b.length == -1 {
 		return nil
 	}
 
-	buf := make([]*rfc5424.Message, len(b.messages))
-	if b.cursor == 0 {
-		copy(buf, b.messages)
-	} else {
-		copy(buf, b.messages[b.cursor:])
-		copy(buf[len(b.messages)-b.cursor:], b.messages[:b.cursor])
+	buf := make([]*rfc5424.Message, 0, b.length)
+	msg := b.head
+	for msg != nil {
+		buf = append(buf, &msg.Message)
+		msg = msg.next
 	}
 	return buf
 }
