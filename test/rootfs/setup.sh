@@ -128,6 +128,9 @@ apt-get install -y \
 
 # install flynn test dependencies: postgres
 # (normally this is used via an appliance; this is for unit tests)
+apt-get -qy --fix-missing --force-yes install language-pack-en
+update-locale LANG=en_US.UTF-8 LANGUAGE=en_US.UTF-8 LC_ALL=en_US.UTF-8
+dpkg-reconfigure locales
 curl -s https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
 echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" >> /etc/apt/sources.list.d/postgresql.list
 apt-get update
