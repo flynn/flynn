@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-func Tar(dir string, w *tar.Writer) error {
+func Tar(dir string, w *tar.Writer, filter func(string) bool) error {
 	if err := filepath.Walk(dir, func(path string, file os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -25,6 +25,9 @@ func Tar(dir string, w *tar.Writer) error {
 		fpath, err := filepath.Rel(dir, path)
 		if err != nil {
 			return err
+		}
+		if filter != nil && !filter(fpath) {
+			return nil
 		}
 		hdr := &tar.Header{
 			Name:    fpath,

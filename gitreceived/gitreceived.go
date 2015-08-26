@@ -31,7 +31,7 @@ set -eo pipefail;
 git-archive-all() {
 	GIT_DIR="$(pwd)"
 	cd ..
-	git checkout --quiet $1
+	git checkout --force --quiet $1
 	git submodule --quiet update --init --recursive
 	tar --create --exclude-vcs .
 }
@@ -409,7 +409,7 @@ func uploadCache(tempDir, path string) error {
 
 	errCh := make(chan error)
 	go func() {
-		err := archiver.Tar(cachePath, tw)
+		err := archiver.Tar(cachePath, tw, func(n string) bool { return strings.Contains(n, ".git/") })
 		tw.Close()
 		w.Close()
 		errCh <- err
