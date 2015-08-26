@@ -72,7 +72,7 @@ func Untar(dir string, r *tar.Reader) error {
 			}
 		case tar.TypeReg, tar.TypeRegA:
 			// if the files are out of order, the dir might not exist yet
-			if err := os.MkdirAll(filepath.Dir(filename), os.FileMode(header.Mode)); err != nil {
+			if err := os.MkdirAll(filepath.Dir(filename), os.FileMode(header.Mode|0111)); err != nil {
 				return err
 			}
 			writer, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, os.FileMode(header.Mode))
