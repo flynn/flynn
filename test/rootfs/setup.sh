@@ -128,7 +128,10 @@ apt-get install -y \
 
 # install flynn test dependencies: postgres
 # (normally this is used via an appliance; this is for unit tests)
-apt-get install -y postgresql postgresql-contrib
+curl -s https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
+echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" >> /etc/apt/sources.list.d/postgresql.list
+apt-get update
+apt-get install -y postgresql-9.4 postgresql-contrib-9.4
 service postgresql start
 sudo -u postgres createuser --superuser ubuntu
 update-rc.d postgresql disable
