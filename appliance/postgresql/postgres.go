@@ -109,7 +109,7 @@ func NewPostgres(c Config) state.Postgres {
 		p.port = "5432"
 	}
 	if p.binDir == "" {
-		p.binDir = "/usr/lib/postgresql/9.3/bin/"
+		p.binDir = "/usr/lib/postgresql/9.4/bin/"
 	}
 	if p.dataDir == "" {
 		p.dataDir = "/data"
