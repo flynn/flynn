@@ -54,6 +54,7 @@ func migrateDB(db *sql.DB) error {
     created_at  timestamptz    NOT NULL DEFAULT now()
 )`,
 
+		`CREATE INDEX ON events (object_type)`,
 		`CREATE UNIQUE INDEX ON events (unique_id)`,
 		`CREATE FUNCTION notify_event() RETURNS TRIGGER AS $$
     BEGIN

@@ -99,17 +99,57 @@ func (r *DeploymentRepo) Add(data interface{}) (*ct.Deployment, error) {
 }
 
 func (r *DeploymentRepo) Get(id string) (*ct.Deployment, error) {
-	query := "SELECT deployment_id, app_id, old_release_id, new_release_id, strategy, processes, created_at, finished_at FROM deployments WHERE deployment_id = $1"
+	query := `WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
+              SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
+                     strategy, e1.data->>'status' AS status,
+                     processes, d.created_at, d.finished_at
+              FROM deployments d
+              LEFT JOIN deployment_events e1 ON d.deployment_id = e1.object_id::uuid
+              LEFT OUTER JOIN deployment_events e2 ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
+              WHERE e2.created_at IS NULL AND d.deployment_id = $1`
 	row := r.db.QueryRow(query, id)
 	return scanDeployment(row)
+}
+
+func (r *DeploymentRepo) List(appID string) ([]*ct.Deployment, error) {
+	query := `WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
+              SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
+                     strategy, e1.data->>'status' AS status,
+                     processes, d.created_at, d.finished_at
+              FROM deployments d
+              LEFT JOIN deployment_events e1 ON d.deployment_id = e1.object_id::uuid
+              LEFT OUTER JOIN deployment_events e2 ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
+              WHERE e2.created_at IS NULL AND d.app_id = $1 ORDER BY d.created_at DESC`
+	rows, err := r.db.Query(query, appID)
+	if err != nil {
+		return nil, err
+	}
+	var deployments []*ct.Deployment
+	for rows.Next() {
+		deployment, err := scanDeployment(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		deployments = append(deployments, deployment)
+	}
+	return deployments, rows.Err()
 }
 
 func scanDeployment(s postgres.Scanner) (*ct.Deployment, error) {
 	d := &ct.Deployment{}
 	var procs hstore.Hstore
-	err := s.Scan(&d.ID, &d.AppID, &d.OldReleaseID, &d.NewReleaseID, &d.Strategy, &procs, &d.CreatedAt, &d.FinishedAt)
+	var oldReleaseID *string
+	var status *string
+	err := s.Scan(&d.ID, &d.AppID, &oldReleaseID, &d.NewReleaseID, &d.Strategy, &status, &procs, &d.CreatedAt, &d.FinishedAt)
 	if err == sql.ErrNoRows {
 		err = ErrNotFound
+	}
+	if oldReleaseID != nil {
+		d.OldReleaseID = *oldReleaseID
+	}
+	if status != nil {
+		d.Status = *status
 	}
 	d.Processes = make(map[string]int, len(procs.Map))
 	for k, v := range procs.Map {
@@ -204,6 +244,16 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 	}
 
 	httphelper.JSON(w, 200, d)
+}
+
+func (c *controllerAPI) ListDeployments(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	app := c.getApp(ctx)
+	list, err := c.deploymentRepo.List(app.ID)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, list)
 }
 
 func createDeploymentEvent(dbExec func(string, ...interface{}) (sql.Result, error), d *ct.Deployment, status string) error {

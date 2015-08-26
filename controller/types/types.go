@@ -121,6 +121,7 @@ type Deployment struct {
 	OldReleaseID string         `json:"old_release,omitempty"`
 	NewReleaseID string         `json:"new_release,omitempty"`
 	Strategy     string         `json:"strategy,omitempty"`
+	Status       string         `json:"status,omitempty"`
 	Processes    map[string]int `json:"processes,omitempty"`
 	CreatedAt    *time.Time     `json:"created_at,omitempty"`
 	FinishedAt   *time.Time     `json:"finished_at,omitempty"`

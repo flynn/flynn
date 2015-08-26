@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"reflect"
 	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
@@ -87,4 +88,67 @@ func (s *S) TestStreamDeployment(c *C) {
 	case <-time.After(time.Second):
 		c.Fatal("Timed out waiting for event")
 	}
+}
+
+func (s *S) TestGetDeployment(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "get-deployment"})
+	release := s.createTestRelease(c, &ct.Release{
+		Processes: map[string]ct.ProcessType{"web": {}},
+	})
+	c.Assert(s.c.PutFormation(&ct.Formation{
+		AppID:     app.ID,
+		ReleaseID: release.ID,
+		Processes: map[string]int{"web": 1},
+	}), IsNil)
+
+	// deploy initial release
+	d, err := s.c.CreateDeployment(app.ID, release.ID)
+	c.Assert(err, IsNil)
+	c.Assert(d.Status, Equals, "complete")
+	newRelease := s.createTestRelease(c, &ct.Release{})
+
+	// create a second deployment
+	d, err = s.c.CreateDeployment(app.ID, newRelease.ID)
+	c.Assert(err, IsNil)
+	c.Assert(d.Status, Equals, "pending")
+
+	// test we can retrieve it
+	deployment, err := s.c.GetDeployment(d.ID)
+	c.Assert(err, IsNil)
+	c.Assert(deployment.ID, Equals, d.ID)
+	c.Assert(deployment.AppID, Equals, app.ID)
+	c.Assert(deployment.OldReleaseID, Equals, release.ID)
+	c.Assert(deployment.NewReleaseID, Equals, newRelease.ID)
+	c.Assert(deployment.Status, Equals, d.Status)
+	c.Assert(reflect.DeepEqual(deployment.Processes, map[string]int{"web": 1}), Equals, true)
+}
+
+func (s *S) TestDeploymentList(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "list-deployment"})
+	release := s.createTestRelease(c, &ct.Release{
+		Processes: map[string]ct.ProcessType{"web": {}},
+	})
+	c.Assert(s.c.PutFormation(&ct.Formation{
+		AppID:     app.ID,
+		ReleaseID: release.ID,
+		Processes: map[string]int{"web": 1},
+	}), IsNil)
+
+	// deploy initial release
+	initial, err := s.c.CreateDeployment(app.ID, release.ID)
+	c.Assert(err, IsNil)
+	c.Assert(initial.Status, Equals, "complete")
+	newRelease := s.createTestRelease(c, &ct.Release{})
+
+	// create a second deployment
+	second, err := s.c.CreateDeployment(app.ID, newRelease.ID)
+	c.Assert(second.Status, Equals, "pending")
+	c.Assert(err, IsNil)
+
+	// test we get back both the initial release and the new deployment
+	deployments, err := s.c.DeploymentList(app.ID)
+	c.Assert(err, IsNil)
+	c.Assert(deployments, HasLen, 2)
+	c.Assert(deployments[1].ID, Equals, initial.ID)
+	c.Assert(deployments[0].ID, Equals, second.ID)
 }
