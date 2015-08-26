@@ -29,6 +29,8 @@ import (
 const PrereceiveHookTmpl = `#!/bin/bash
 set -eo pipefail;
 git-archive-all() {
+	GIT_DIR="$(pwd)"
+	cd ..
 	git checkout --quiet $1
 	git submodule --quiet update --init --recursive
 	tar --create --exclude-vcs .
