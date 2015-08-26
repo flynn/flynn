@@ -216,7 +216,7 @@ func (c *Client) DeleteApp(appID string) (*ct.AppDeletion, error) {
 	}
 	defer stream.Close()
 
-	if err := c.Delete(fmt.Sprintf("/apps/%s", appID)); err != nil {
+	if err := c.Delete(fmt.Sprintf("/apps/%s", appID), nil); err != nil {
 		return nil, err
 	}
 
@@ -288,8 +288,10 @@ func (c *Client) PutResource(resource *ct.Resource) error {
 }
 
 // DeleteResource deprovisions and deletes the resource identified by resourceID under providerID.
-func (c *Client) DeleteResource(providerID, resourceID string) error {
-	return c.Delete(fmt.Sprintf("/providers/%s/resources/%s", providerID, resourceID))
+func (c *Client) DeleteResource(providerID, resourceID string) (*ct.Resource, error) {
+	res := &ct.Resource{}
+	err := c.Delete(fmt.Sprintf("/providers/%s/resources/%s", providerID, resourceID), res)
+	return res, err
 }
 
 // PutFormation updates an existing formation.
@@ -310,7 +312,7 @@ func (c *Client) PutJob(job *ct.Job) error {
 
 // DeleteJob kills a specific job id under the specified app.
 func (c *Client) DeleteJob(appID, jobID string) error {
-	return c.Delete(fmt.Sprintf("/apps/%s/jobs/%s", appID, jobID))
+	return c.Delete(fmt.Sprintf("/apps/%s/jobs/%s", appID, jobID), nil)
 }
 
 // SetAppRelease sets the specified release as the current release for an app.
@@ -343,7 +345,7 @@ func (c *Client) CreateRoute(appID string, route *router.Route) error {
 
 // DeleteRoute deletes a route under the specified app.
 func (c *Client) DeleteRoute(appID string, routeID string) error {
-	return c.Delete(fmt.Sprintf("/apps/%s/routes/%s", appID, routeID))
+	return c.Delete(fmt.Sprintf("/apps/%s/routes/%s", appID, routeID), nil)
 }
 
 // GetFormation returns details for the specified formation under app and
@@ -361,7 +363,7 @@ func (c *Client) FormationList(appID string) ([]*ct.Formation, error) {
 
 // DeleteFormation deletes the formation matching appID and releaseID.
 func (c *Client) DeleteFormation(appID, releaseID string) error {
-	return c.Delete(fmt.Sprintf("/apps/%s/formations/%s", appID, releaseID))
+	return c.Delete(fmt.Sprintf("/apps/%s/formations/%s", appID, releaseID), nil)
 }
 
 // GetRelease returns details for the specified release.
@@ -635,7 +637,7 @@ func (c *Client) GetKey(keyID string) (*ct.Key, error) {
 
 // DeleteKey deletes a key with the specified id.
 func (c *Client) DeleteKey(id string) error {
-	return c.Delete("/keys/" + strings.Replace(id, ":", "", -1))
+	return c.Delete("/keys/"+strings.Replace(id, ":", "", -1), nil)
 }
 
 // ProviderList returns a list of all providers.
@@ -656,8 +658,8 @@ func (c *Client) Get(path string, out interface{}) error {
 	return c.send("GET", path, nil, out)
 }
 
-func (c *Client) Delete(path string) error {
-	return c.send("DELETE", path, nil, nil)
+func (c *Client) Delete(path string, out interface{}) error {
+	return c.send("DELETE", path, nil, out)
 }
 
 func (c *Client) send(method, path string, in, out interface{}) (err error) {

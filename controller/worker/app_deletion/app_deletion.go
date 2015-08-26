@@ -65,7 +65,7 @@ func (c *context) HandleAppDeletion(job *que.Job) (err error) {
 			continue
 		}
 		log.Info("deleting resource", "provider_id", resource.ProviderID, "resource_id", resource.ID)
-		if err := c.client.DeleteResource(resource.ProviderID, resource.ID); err != nil {
+		if _, err := c.client.DeleteResource(resource.ProviderID, resource.ID); err != nil {
 			log.Error("error deleting resource", "provider_id", resource.ProviderID, "resource_id", resource.ID, "err", err)
 			return err
 		}
