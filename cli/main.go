@@ -9,8 +9,10 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
+	"time"
 	"unicode"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/units"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
@@ -270,6 +272,13 @@ func mustApp() string {
 
 func tabWriter() *tabwriter.Writer {
 	return tabwriter.NewWriter(os.Stdout, 1, 2, 2, ' ', 0)
+}
+
+func humanTime(ts *time.Time) string {
+	if ts == nil || ts.IsZero() {
+		return ""
+	}
+	return units.HumanDuration(time.Now().UTC().Sub(*ts)) + " ago"
 }
 
 func listRec(w io.Writer, a ...interface{}) {
