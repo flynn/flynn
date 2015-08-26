@@ -23,7 +23,7 @@ func migrateDB(db *sql.DB) error {
 		`CREATE TABLE releases (
     release_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     artifact_id uuid REFERENCES artifacts (artifact_id),
-    data text NOT NULL,
+    data jsonb NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     deleted_at timestamptz
 )`,
@@ -50,7 +50,7 @@ func migrateDB(db *sql.DB) error {
     object_type event_type NOT NULL,
     object_id   text           NOT NULL,
     unique_id   text,
-    data        text,
+    data        jsonb,
     created_at  timestamptz    NOT NULL DEFAULT now()
 )`,
 
