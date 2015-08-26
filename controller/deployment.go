@@ -30,7 +30,7 @@ func NewDeploymentRepo(db *postgres.DB, pgxpool *pgx.ConnPool) *DeploymentRepo {
 	return &DeploymentRepo{db: db, q: q}
 }
 
-func (r *DeploymentRepo) Add(data interface{}) error {
+func (r *DeploymentRepo) Add(data interface{}) (*ct.Deployment, error) {
 	d := data.(*ct.Deployment)
 	if d.ID == "" {
 		d.ID = random.UUID()
@@ -42,29 +42,47 @@ func (r *DeploymentRepo) Add(data interface{}) error {
 	procs := procsHstore(d.Processes)
 	tx, err := r.db.Begin()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	query := "INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, processes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at"
 	if err := tx.QueryRow(query, d.ID, d.AppID, oldReleaseID, d.NewReleaseID, d.Strategy, procs).Scan(&d.CreatedAt); err != nil {
 		tx.Rollback()
-		return err
+		return nil, err
 	}
 
 	// fake initial deployment
 	if d.FinishedAt != nil {
 		if _, err := tx.Exec("UPDATE deployments SET finished_at = $2 WHERE deployment_id = $1", d.ID, d.FinishedAt); err != nil {
 			tx.Rollback()
-			return err
+			return nil, err
 		}
-		return tx.Commit()
+		if err = createDeploymentEvent(tx.Exec, d, "complete"); err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+		d.Status = "complete"
+		return d, tx.Commit()
 	}
 	if err := tx.Commit(); err != nil {
-		return err
+		return nil, err
 	}
 
 	args, err := json.Marshal(ct.DeployID{ID: d.ID})
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	tx, err = r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	if err = createDeploymentEvent(tx.Exec, d, "pending"); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+	d.Status = "pending"
+	if err = tx.Commit(); err != nil {
+		return nil, err
 	}
 
 	// Delete the deployment if we get an error so the client can retry.
@@ -75,9 +93,9 @@ func (r *DeploymentRepo) Add(data interface{}) error {
 	if err := r.q.Enqueue(job); err != nil {
 		logger.New("fn", "DeploymentRepo.Add").Warn("error enqueueing deployment job", "err", err)
 		r.db.Exec("DELETE FROM deployments WHERE deployment_id = $1", d.ID)
-		return err
+		return nil, err
 	}
-	return nil
+	return d, err
 }
 
 func (r *DeploymentRepo) Get(id string) (*ct.Deployment, error) {
@@ -175,7 +193,8 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 		deployment.FinishedAt = &now
 	}
 
-	if err := c.deploymentRepo.Add(deployment); err != nil {
+	d, err := c.deploymentRepo.Add(deployment)
+	if err != nil {
 		if postgres.IsUniquenessError(err, "isolate_deploys") {
 			httphelper.ValidationError(w, "", "Cannot create deploy, there is already one in progress for this app.")
 			return
@@ -184,5 +203,22 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 		return
 	}
 
-	httphelper.JSON(w, 200, deployment)
+	httphelper.JSON(w, 200, d)
+}
+
+func createDeploymentEvent(dbExec func(string, ...interface{}) (sql.Result, error), d *ct.Deployment, status string) error {
+	e := ct.DeploymentEvent{
+		AppID:        d.AppID,
+		DeploymentID: d.ID,
+		ReleaseID:    d.NewReleaseID,
+		Status:       status,
+	}
+	if err := createEvent(dbExec, &ct.Event{
+		AppID:      d.AppID,
+		ObjectID:   d.ID,
+		ObjectType: ct.EventTypeDeployment,
+	}, e); err != nil {
+		return err
+	}
+	return nil
 }

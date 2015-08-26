@@ -123,6 +123,7 @@ func (s *DeployerSuite) TestOneByOneStrategy(t *c.C) {
 	oldReleaseID := deployment.OldReleaseID
 
 	expected := []*ct.DeploymentEvent{
+		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "pending"},
 		{ReleaseID: releaseID, JobType: "printer", JobState: "starting", Status: "running"},
 		{ReleaseID: releaseID, JobType: "printer", JobState: "up", Status: "running"},
 		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "stopping", Status: "running"},
@@ -146,6 +147,7 @@ func (s *DeployerSuite) TestAllAtOnceStrategy(t *c.C) {
 	oldReleaseID := deployment.OldReleaseID
 
 	expected := []*ct.DeploymentEvent{
+		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "pending"},
 		{ReleaseID: releaseID, JobType: "printer", JobState: "starting", Status: "running"},
 		{ReleaseID: releaseID, JobType: "printer", JobState: "starting", Status: "running"},
 		{ReleaseID: releaseID, JobType: "printer", JobState: "up", Status: "running"},
@@ -169,6 +171,7 @@ func (s *DeployerSuite) TestServiceEvents(t *c.C) {
 	oldReleaseID := deployment.OldReleaseID
 
 	expected := []*ct.DeploymentEvent{
+		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "pending"},
 		{ReleaseID: releaseID, JobType: "echoer", JobState: "starting", Status: "running"},
 		{ReleaseID: releaseID, JobType: "echoer", JobState: "starting", Status: "running"},
 		{ReleaseID: releaseID, JobType: "echoer", JobState: "up", Status: "running"},
@@ -218,6 +221,7 @@ func (s *DeployerSuite) TestRollbackFailedJob(t *c.C) {
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 	expected := []*ct.DeploymentEvent{
+		{ReleaseID: release.ID, JobType: "", JobState: "", Status: "pending"},
 		{ReleaseID: release.ID, JobType: "printer", JobState: "starting", Status: "running"},
 		{ReleaseID: release.ID, JobType: "printer", JobState: "starting", Status: "running"},
 		{ReleaseID: release.ID, JobType: "printer", JobState: "failed", Status: "running"},
@@ -263,6 +267,7 @@ func (s *DeployerSuite) TestRollbackNoService(t *c.C) {
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 	expected := []*ct.DeploymentEvent{
+		{ReleaseID: release.ID, JobType: "", JobState: "", Status: "pending"},
 		{ReleaseID: release.ID, JobType: "printer", JobState: "starting", Status: "running"},
 		{ReleaseID: release.ID, JobType: "printer", JobState: "starting", Status: "running"},
 		{ReleaseID: release.ID, JobType: "printer", JobState: "down", Status: "running"},
@@ -323,6 +328,7 @@ func (s *DeployerSuite) TestOmniProcess(t *c.C) {
 			expected = append(expected, event)
 		}
 	}
+	expected = append(expected, &ct.DeploymentEvent{ReleaseID: deployment.NewReleaseID, Status: "pending"})
 	appendEvents(deployment.NewReleaseID, "starting", totalJobs)
 	appendEvents(deployment.NewReleaseID, "up", totalJobs)
 	appendEvents(deployment.OldReleaseID, "stopping", totalJobs)
@@ -341,6 +347,7 @@ func (s *DeployerSuite) TestOmniProcess(t *c.C) {
 	stream, err = client.StreamDeployment(deployment, events)
 	t.Assert(err, c.IsNil)
 	expected = make([]*ct.DeploymentEvent, 0, 4*totalJobs+1)
+	expected = append(expected, &ct.DeploymentEvent{ReleaseID: deployment.NewReleaseID, Status: "pending"})
 	appendEvents(deployment.NewReleaseID, "starting", testCluster.Size())
 	appendEvents(deployment.NewReleaseID, "up", testCluster.Size())
 	appendEvents(deployment.OldReleaseID, "stopping", testCluster.Size())
