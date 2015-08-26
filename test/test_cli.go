@@ -466,6 +466,29 @@ func (s *CLISuite) TestResourceList(t *c.C) {
 	t.Assert(app.flynn("resource").Output, Matches, `postgres`)
 }
 
+func (s *CLISuite) TestResourceRemove(t *c.C) {
+	app := s.newCliTestApp(t)
+	defer app.cleanup()
+
+	add := app.flynn("resource", "add", "postgres")
+	t.Assert(add, Succeeds)
+	t.Assert(app.flynn("resource").Output, Matches, "postgres")
+	t.Assert(app.flynn("env").Output, Matches, "FLYNN_POSTGRES")
+	id := strings.Split(add.Output, " ")[2]
+
+	// change one of the env vars provided by the resource
+	t.Assert(app.flynn("env", "set", "PGUSER=testuser"), Succeeds)
+
+	remove := app.flynn("resource", "remove", "postgres", id)
+	t.Assert(remove, Succeeds)
+
+	t.Assert(app.flynn("resource").Output, c.Not(Matches), "postgres")
+	// test that unmodified vars are removed
+	t.Assert(app.flynn("env").Output, c.Not(Matches), "FLYNN_POSTGRES")
+	// but that modifed ones are retained
+	t.Assert(app.flynn("env", "get", "PGUSER").Output, Matches, "testuser")
+}
+
 func (s *CLISuite) TestLog(t *c.C) {
 	app := s.newCliTestApp(t)
 	defer app.cleanup()
