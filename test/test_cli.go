@@ -780,3 +780,14 @@ func (s *CLISuite) TestRemote(t *c.C) {
 	// ensure the custom remote exists
 	t.Assert(r.git("remote", "show", customRemote), Succeeds)
 }
+
+func (s *CLISuite) TestDeploy(t *c.C) {
+	// create and push app
+	r := s.newGitRepo(t, "http")
+	t.Assert(r.flynn("create", "deploy-"+random.String(8)), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+
+	deploy := r.flynn("deployment")
+	t.Assert(deploy, Succeeds)
+	t.Assert(deploy.Output, Matches, "complete")
+}

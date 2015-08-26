@@ -39,28 +39,29 @@ Options:
 	-h, --help
 
 Commands:
-	help      show usage for a specific command
-	install   install flynn
-	cluster   manage clusters
-	create    create an app
-	delete    delete an app
-	apps      list apps
-	ps        list jobs
-	kill      kill a job
-	log       get app log
-	scale     change formation
-	run       run a job
-	env       manage env variables
-	meta      manage app metadata
-	route     manage routes
-	pg        manage postgres database
-	provider  manage resource providers
-	remote    manage git remotes
-	resource  provision a new resource
-	release   add a docker image release
-	export    export app data
-	import    create app from exported data
-	version   show flynn version
+	help        show usage for a specific command
+	install     install flynn
+	cluster     manage clusters
+	create      create an app
+	delete      delete an app
+	apps        list apps
+	ps          list jobs
+	kill        kill a job
+	log         get app log
+	scale       change formation
+	run         run a job
+	env         manage env variables
+	meta        manage app metadata
+	route       manage routes
+	pg          manage postgres database
+	provider    manage resource providers
+	remote      manage git remotes
+	resource    provision a new resource
+	release     add a docker image release
+	deployment  list deployments
+	export      export app data
+	import      create app from exported data
+	version     show flynn version
 
 See 'flynn help <command>' for more information on a specific command.
 `[1:]
