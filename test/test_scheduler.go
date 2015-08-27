@@ -89,7 +89,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 			jobs = append(jobs, job)
 		}
 	}
-	t.Assert(jobs, c.HasLen, 2)
+	t.Assert(jobs, c.HasLen, formation.Processes["web"])
 	jobID := jobs[0].ID
 	hostID, _ := cluster.ExtractHostID(jobID)
 	t.Assert(hostID, c.Not(c.Equals), "")
