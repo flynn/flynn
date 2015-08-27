@@ -38,7 +38,7 @@ type Job struct {
 
 	Formation *Formation
 
-	restarts  int
+	restarts  uint
 	startedAt time.Time
 }
 

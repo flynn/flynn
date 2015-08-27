@@ -283,6 +283,7 @@ func (s *Scheduler) HandleJobRequest(req *JobRequest) (err error) {
 		if err != nil {
 			log.Error("error handling job request", "err", err)
 		}
+		s.sendEvent(NewEvent(EventTypeJobRequest, err, req))
 	}()
 
 	switch req.RequestType {
@@ -660,7 +661,7 @@ func (s *Scheduler) expandOmni(ef *ct.ExpandedFormation) {
 }
 
 func (s *Scheduler) scheduleJobRequest(req *JobRequest) {
-	backoff := s.getBackoffDuration(req.startedAt.Add(-1 * time.Second))
+	backoff := s.getBackoffDuration(req.restarts)
 	req.startedAt = time.Now()
 	req.restarts += 1
 	s.pendingStarts.AddJob(req.Job)
@@ -669,16 +670,17 @@ func (s *Scheduler) scheduleJobRequest(req *JobRequest) {
 	})
 }
 
-func (s *Scheduler) getBackoffDuration(startedAt time.Time) time.Duration {
-	lastDelay := time.Now().Sub(startedAt)
-
-	newDelay := lastDelay * 2
-
-	if newDelay > s.backoffPeriod {
+func (s *Scheduler) getBackoffDuration(restarts uint) time.Duration {
+	// Overflow guard
+	if restarts > 30 {
 		return s.backoffPeriod
 	}
+	delay := time.Duration(1<<restarts) * time.Second
 
-	return newDelay
+	if delay > s.backoffPeriod {
+		return s.backoffPeriod
+	}
+	return delay
 }
 
 func (s *Scheduler) handleJobStart(job *Job) {
@@ -755,6 +757,7 @@ const (
 	EventTypeRectifyJobs     EventType = "rectify-jobs"
 	EventTypeJobStart        EventType = "start-job"
 	EventTypeJobStop         EventType = "stop-job"
+	EventTypeJobRequest      EventType = "request-job"
 )
 
 type DefaultEvent struct {
@@ -780,11 +783,19 @@ type LeaderChangeEvent struct {
 	IsLeader bool
 }
 
+type JobRequestEvent struct {
+	Event
+	Request *JobRequest
+}
+
 func NewEvent(typ EventType, err error, data interface{}) Event {
 	switch typ {
 	case EventTypeJobStart:
 		job, _ := data.(*Job)
 		return &JobStartEvent{Event: &DefaultEvent{err: err, typ: typ}, Job: job}
+	case EventTypeJobRequest:
+		req, _ := data.(*JobRequest)
+		return &JobRequestEvent{Event: &DefaultEvent{err: err, typ: typ}, Request: req}
 	case EventTypeLeaderChange:
 		isLeader, _ := data.(bool)
 		return &LeaderChangeEvent{Event: &DefaultEvent{err: err, typ: typ}, IsLeader: isLeader}

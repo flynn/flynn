@@ -75,7 +75,7 @@ func waitDurationForEvent(events chan Event, typ EventType, duration time.Durati
 			}
 			if event.Type() == typ {
 				if err := event.Err(); err != nil {
-					return nil, fmt.Errorf("unexpected event error: %s", err)
+					return event, fmt.Errorf("unexpected event error: %s", err)
 				}
 				return event, nil
 			}
@@ -262,12 +262,18 @@ func (ts *TestSuite) TestNoHosts(c *C) {
 	// wait for the formation to cascade to the scheduler
 	_, err := waitForEvent(events, EventTypeRectifyJobs)
 	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, Not(IsNil))
-	_, err = waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, Not(IsNil))
-	_, err = waitDurationForEvent(events, EventTypeJobStart, 5*time.Second)
-	c.Assert(err, Not(IsNil))
+	evt, err := waitForEvent(events, EventTypeJobRequest)
+	c.Assert(err.Error(), Equals, "unexpected event error: no hosts found")
+	req := checkJobRequestEvent(c, evt)
+	c.Assert(req.restarts, Equals, uint(1))
+	evt, err = waitDurationForEvent(events, EventTypeJobRequest, 1*time.Second+50*time.Millisecond)
+	c.Assert(err.Error(), Equals, "unexpected event error: no hosts found")
+	req = checkJobRequestEvent(c, evt)
+	c.Assert(req.restarts, Equals, uint(2))
+	evt, err = waitDurationForEvent(events, EventTypeJobRequest, 2*time.Second+50*time.Millisecond)
+	c.Assert(err.Error(), Equals, "unexpected event error: no hosts found")
+	req = checkJobRequestEvent(c, evt)
+	c.Assert(req.restarts, Equals, uint(3))
 }
 
 func checkJobStartEvent(c *C, e Event) *Job {
@@ -275,4 +281,11 @@ func checkJobStartEvent(c *C, e Event) *Job {
 	c.Assert(ok, Equals, true)
 	c.Assert(event.Job, NotNil)
 	return event.Job
+}
+
+func checkJobRequestEvent(c *C, e Event) *JobRequest {
+	event, ok := e.(*JobRequestEvent)
+	c.Assert(ok, Equals, true)
+	c.Assert(event.Request, NotNil)
+	return event.Request
 }
