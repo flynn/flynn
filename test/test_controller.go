@@ -228,8 +228,8 @@ func (s *ControllerSuite) TestResourceLimitsReleaseJob(t *c.C) {
 		Processes: map[string]int{"resources": 1},
 	}), c.IsNil)
 	var jobID string
-	err = watcher.WaitFor(ct.JobEvents{"resources": {"up": 1, "down": 1}}, scaleTimeout, func(e *ct.JobEvent) error {
-		jobID = e.JobID
+	err = watcher.WaitFor(ct.JobEvents{"resources": {"up": 1, "down": 1}}, scaleTimeout, func(e *ct.Job) error {
+		jobID = e.ID
 		return nil
 	})
 	t.Assert(err, c.IsNil)
@@ -444,7 +444,7 @@ func (s *ControllerSuite) TestAppEvents(t *c.C) {
 	app2, release2 := s.createApp(t)
 
 	// stream events for app1
-	events := make(chan *ct.JobEvent)
+	events := make(chan *ct.Job)
 	stream, err := client.StreamJobEvents(app1.ID, events)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
@@ -467,7 +467,7 @@ func (s *ControllerSuite) TestAppEvents(t *c.C) {
 	t.Assert(watcher.WaitFor(
 		ct.JobEvents{"": {"up": 1, "down": 1}},
 		10*time.Second,
-		func(e *ct.JobEvent) error {
+		func(e *ct.Job) error {
 			debugf(t, "got %s job event for app2", e.State)
 			return nil
 		},

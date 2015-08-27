@@ -281,8 +281,8 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 		Processes: map[string]int{"printer": 1},
 	}), c.IsNil)
 	var id string
-	var assignId = func(e *ct.JobEvent) error {
-		id = e.JobID
+	var assignId = func(e *ct.Job) error {
+		id = e.ID
 		return nil
 	}
 	err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, scaleTimeout, assignId)

@@ -139,7 +139,7 @@ func (s *PostgresSuite) testDeploy(t *c.C, d *pgDeploy) {
 	discStream, err := s.discoverdClient(t).Service(d.name).Watch(discEvents)
 	t.Assert(err, c.IsNil)
 	defer discStream.Close()
-	jobEvents := make(chan *ct.JobEvent)
+	jobEvents := make(chan *ct.Job)
 	jobStream, err := client.StreamJobEvents(d.name, jobEvents)
 	t.Assert(err, c.IsNil)
 	defer jobStream.Close()
@@ -213,7 +213,7 @@ func (s *PostgresSuite) testDeploy(t *c.C, d *pgDeploy) {
 			if !ok {
 				t.Fatalf("job event stream closed: %s", jobStream.Err())
 			}
-			debugf(t, "got job event: %s %s %s", e.Type, e.JobID, e.State)
+			debugf(t, "got job event: %s %s %s", e.Type, e.ID, e.State)
 			if e.Type == "web" && e.State == "up" {
 				webJobs++
 			}

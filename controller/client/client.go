@@ -34,12 +34,12 @@ type Client struct {
 }
 
 type JobWatcher struct {
-	events    chan *ct.JobEvent
+	events    chan *ct.Job
 	stream    stream.Stream
 	releaseID string
 }
 
-func newJobWatcher(events chan *ct.JobEvent, stream stream.Stream, releaseID string) *JobWatcher {
+func newJobWatcher(events chan *ct.Job, stream stream.Stream, releaseID string) *JobWatcher {
 	w := &JobWatcher{
 		events:    events,
 		stream:    stream,
@@ -67,7 +67,7 @@ func jobEventsEqual(expected, actual ct.JobEvents) bool {
 	return true
 }
 
-func (w *JobWatcher) WaitFor(expected ct.JobEvents, timeout time.Duration, callback func(*ct.JobEvent) error) error {
+func (w *JobWatcher) WaitFor(expected ct.JobEvents, timeout time.Duration, callback func(*ct.Job) error) error {
 	actual := make(ct.JobEvents)
 	for {
 		select {
@@ -493,7 +493,7 @@ outer:
 }
 
 // StreamJobEvents streams job events to the output channel.
-func (c *Client) StreamJobEvents(appID string, output chan *ct.JobEvent) (stream.Stream, error) {
+func (c *Client) StreamJobEvents(appID string, output chan *ct.Job) (stream.Stream, error) {
 	appEvents := make(chan *ct.Event)
 	go convertEvents(appEvents, output)
 	return c.StreamEvents(StreamEventsOptions{
@@ -503,7 +503,7 @@ func (c *Client) StreamJobEvents(appID string, output chan *ct.JobEvent) (stream
 }
 
 func (c *Client) WatchJobEvents(appID, releaseID string) (*JobWatcher, error) {
-	events := make(chan *ct.JobEvent)
+	events := make(chan *ct.Job)
 	stream, err := c.StreamJobEvents(appID, events)
 	if err != nil {
 		return nil, err

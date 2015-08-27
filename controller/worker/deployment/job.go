@@ -20,7 +20,7 @@ type DeployJob struct {
 	*ct.Deployment
 	client          *controller.Client
 	deployEvents    chan<- ct.DeploymentEvent
-	jobEvents       chan *ct.JobEvent
+	jobEvents       chan *ct.Job
 	serviceEvents   chan *discoverd.Event
 	serviceMeta     *discoverd.ServiceMeta
 	useJobEvents    map[string]struct{}
@@ -135,7 +135,7 @@ func (d *DeployJob) Perform() error {
 
 	if len(d.useJobEvents) > 0 {
 		log.Info("getting job event stream")
-		d.jobEvents = make(chan *ct.JobEvent)
+		d.jobEvents = make(chan *ct.Job)
 		stream, err := d.client.StreamJobEvents(d.AppID, d.jobEvents)
 		if err != nil {
 			log.Error("error getting job event stream", "err", err)
@@ -270,22 +270,22 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected jobEvents, log l
 					continue
 				}
 				if expected[event.Type]["up"] > 0 && event.IsDown() {
-					handleEvent(event.JobID, event.Type, "down")
+					handleEvent(event.ID, event.Type, "down")
 					return fmt.Errorf("%s process type failed to start, got %s job event", event.Type, event.State)
 				}
 			}
 
-			log.Info("got job event", "job_id", event.JobID, "type", event.Type, "state", event.State)
+			log.Info("got job event", "job_id", event.ID, "type", event.Type, "state", event.State)
 			if _, ok := actual[event.Type]; !ok {
 				actual[event.Type] = make(map[string]int)
 			}
 			switch event.State {
 			case "up":
-				handleEvent(event.JobID, event.Type, "up")
+				handleEvent(event.ID, event.Type, "up")
 			case "down", "crashed":
-				handleEvent(event.JobID, event.Type, "down")
+				handleEvent(event.ID, event.Type, "down")
 			case "failed":
-				handleEvent(event.JobID, event.Type, "failed")
+				handleEvent(event.ID, event.Type, "failed")
 				return fmt.Errorf("deployer: %s job failed to start", event.Type)
 			}
 			if expected.Equals(actual) {

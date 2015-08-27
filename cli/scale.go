@@ -132,8 +132,8 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 	}
 
 	start := time.Now()
-	err = watcher.WaitFor(expected, scaleTimeout, func(e *ct.JobEvent) error {
-		fmt.Printf("%s ==> %s %s %s\n", time.Now().Format("15:04:05.000"), e.Type, e.JobID, e.State)
+	err = watcher.WaitFor(expected, scaleTimeout, func(e *ct.Job) error {
+		fmt.Printf("%s ==> %s %s %s\n", time.Now().Format("15:04:05.000"), e.Type, e.ID, e.State)
 		return nil
 	})
 

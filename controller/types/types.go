@@ -95,15 +95,7 @@ type Job struct {
 	UpdatedAt *time.Time        `json:"updated_at,omitempty"`
 }
 
-type JobEvent struct {
-	JobID     string `json:"job_id,omitempty"`
-	AppID     string `json:"app,omitempty"`
-	ReleaseID string `json:"release,omitempty"`
-	Type      string `json:"type,omitempty"`
-	State     string `json:"state,omitempty"`
-}
-
-func (e *JobEvent) IsDown() bool {
+func (e *Job) IsDown() bool {
 	return e.State == "failed" || e.State == "crashed" || e.State == "down"
 }
 

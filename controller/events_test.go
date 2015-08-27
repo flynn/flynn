@@ -57,16 +57,10 @@ func (s *S) TestEvents(c *C) {
 				if !ok {
 					c.Fatalf("unexpected close of event stream: %s", sub.Err)
 				}
-				var jobEvent ct.JobEvent
+				var jobEvent ct.Job
 				c.Assert(json.Unmarshal(e.Data, &jobEvent), IsNil)
 				job := expected[index]
-				c.Assert(jobEvent, DeepEquals, ct.JobEvent{
-					JobID:     job.ID,
-					AppID:     job.AppID,
-					ReleaseID: job.ReleaseID,
-					Type:      job.Type,
-					State:     job.State,
-				})
+				c.Assert(jobEvent, DeepEquals, *job)
 				index += 1
 				if index == len(expected) {
 					return
