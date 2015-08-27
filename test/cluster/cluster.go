@@ -643,6 +643,8 @@ func (c *Cluster) DumpLogs(buildLog *buildlog.Log) {
 			return
 		}
 
+		// only fallback if all `flynn-host log` commands fail
+		shouldFallback := true
 		jobs := strings.Split(strings.TrimSpace(out.String()), "\n")
 		for _, job := range jobs {
 			fields := strings.Split(job, "-")
@@ -652,9 +654,12 @@ func (c *Cluster) DumpLogs(buildLog *buildlog.Log) {
 				fmt.Sprintf("flynn-host log --init %s", jobID),
 			}
 			if err := run(fmt.Sprintf("%s-%s.log", typ, job), instances[0], cmds...); err != nil {
-				fallback()
-				return
+				continue
 			}
+			shouldFallback = false
+		}
+		if shouldFallback {
+			fallback()
 		}
 	}
 	if len(c.defaultInstances) > 0 {
