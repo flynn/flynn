@@ -11,3 +11,6 @@ if [[ -n "${i}" ]]; then
 else
   echo 0 > "${file}"
 fi
+
+# Ensure there are no regressions for #1757, directories missing the +x bit
+mkdir $1/foo/bar || exit 1

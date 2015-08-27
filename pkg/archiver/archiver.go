@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-func Tar(dir string, w *tar.Writer) error {
+func Tar(dir string, w *tar.Writer, filter func(string) bool) error {
 	if err := filepath.Walk(dir, func(path string, file os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -25,6 +25,9 @@ func Tar(dir string, w *tar.Writer) error {
 		fpath, err := filepath.Rel(dir, path)
 		if err != nil {
 			return err
+		}
+		if filter != nil && !filter(fpath) {
+			return nil
 		}
 		hdr := &tar.Header{
 			Name:    fpath,
@@ -69,7 +72,7 @@ func Untar(dir string, r *tar.Reader) error {
 			}
 		case tar.TypeReg, tar.TypeRegA:
 			// if the files are out of order, the dir might not exist yet
-			if err := os.MkdirAll(filepath.Dir(filename), os.FileMode(header.Mode)); err != nil {
+			if err := os.MkdirAll(filepath.Dir(filename), os.FileMode(header.Mode|0111)); err != nil {
 				return err
 			}
 			writer, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, os.FileMode(header.Mode))
