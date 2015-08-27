@@ -8,6 +8,7 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	. "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -27,14 +28,11 @@ const (
 	testJobCount   = 1
 )
 
-func createTestScheduler() *Scheduler {
+func createTestScheduler(cluster utils.ClusterClient) *Scheduler {
 	app := &ct.App{ID: testAppID, Name: testAppID}
 	artifact := &ct.Artifact{ID: testArtifactId}
 	processes := map[string]int{testJobType: testJobCount}
 	release := NewRelease(testReleaseID, artifact, processes)
-	h := NewFakeHostClient(testHostID)
-	cluster := NewFakeCluster()
-	cluster.SetHosts(map[string]*FakeHostClient{h.ID(): h})
 	cc := NewFakeControllerClient()
 	cc.CreateApp(app)
 	cc.CreateArtifact(artifact)
@@ -45,8 +43,8 @@ func createTestScheduler() *Scheduler {
 	return s
 }
 
-func runTestScheduler(events chan Event, isLeader bool) *TestScheduler {
-	s := createTestScheduler()
+func runTestScheduler(cluster utils.ClusterClient, events chan Event, isLeader bool) *TestScheduler {
+	s := createTestScheduler(cluster)
 
 	stream := s.Subscribe(events)
 	go s.Run()
@@ -68,7 +66,7 @@ func (s *TestScheduler) Stop() {
 	s.stream.Close()
 }
 
-func waitForEvent(events chan Event, typ EventType) (Event, error) {
+func waitDurationForEvent(events chan Event, typ EventType, duration time.Duration) (Event, error) {
 	for {
 		select {
 		case event, ok := <-events:
@@ -81,15 +79,22 @@ func waitForEvent(events chan Event, typ EventType) (Event, error) {
 				}
 				return event, nil
 			}
-		case <-time.After(2 * time.Second):
+		case <-time.After(duration):
 			return nil, fmt.Errorf("timed out waiting for %s event", typ)
 		}
 	}
 }
 
+func waitForEvent(events chan Event, typ EventType) (Event, error) {
+	return waitDurationForEvent(events, typ, 2*time.Second)
+}
+
 func (ts *TestSuite) TestSingleJobStart(c *C) {
+	h := NewFakeHostClient(testHostID)
+	cluster := NewFakeCluster()
+	cluster.SetHosts(map[string]*FakeHostClient{h.ID(): h})
 	events := make(chan Event, eventBufferSize)
-	sched := runTestScheduler(events, true)
+	sched := runTestScheduler(cluster, events, true)
 	defer sched.Stop()
 	s := sched.scheduler
 
@@ -119,8 +124,11 @@ func (ts *TestSuite) TestSingleJobStart(c *C) {
 }
 
 func (ts *TestSuite) TestFormationChange(c *C) {
+	h := NewFakeHostClient(testHostID)
+	cluster := NewFakeCluster()
+	cluster.SetHosts(map[string]*FakeHostClient{h.ID(): h})
 	events := make(chan Event, eventBufferSize)
-	sched := runTestScheduler(events, true)
+	sched := runTestScheduler(cluster, events, true)
 	defer sched.Stop()
 	s := sched.scheduler
 
@@ -179,8 +187,11 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 }
 
 func (ts *TestSuite) TestRectifyJobs(c *C) {
+	h := NewFakeHostClient(testHostID)
+	cluster := NewFakeCluster()
+	cluster.SetHosts(map[string]*FakeHostClient{h.ID(): h})
 	events := make(chan Event, eventBufferSize)
-	sched := runTestScheduler(events, true)
+	sched := runTestScheduler(cluster, events, true)
 	defer sched.Stop()
 	s := sched.scheduler
 
@@ -239,7 +250,24 @@ func (ts *TestSuite) TestRectifyJobs(c *C) {
 	c.Assert(err, IsNil)
 	jobs = s.Jobs()
 	c.Assert(jobs, HasLen, 2)
+}
 
+func (ts *TestSuite) TestNoHosts(c *C) {
+	cluster := NewFakeCluster()
+	events := make(chan Event, eventBufferSize)
+	sched := runTestScheduler(cluster, events, true)
+	defer sched.Stop()
+	//s := sched.scheduler
+
+	// wait for the formation to cascade to the scheduler
+	_, err := waitForEvent(events, EventTypeRectifyJobs)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeJobStart)
+	c.Assert(err, Not(IsNil))
+	_, err = waitForEvent(events, EventTypeJobStart)
+	c.Assert(err, Not(IsNil))
+	_, err = waitDurationForEvent(events, EventTypeJobStart, 5*time.Second)
+	c.Assert(err, Not(IsNil))
 }
 
 func checkJobStartEvent(c *C, e Event) *Job {
