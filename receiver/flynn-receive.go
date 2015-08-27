@@ -156,7 +156,7 @@ func main() {
 		}
 		fmt.Println("=====> Waiting for web job to start...")
 
-		err = watcher.WaitFor(ct.JobEvents{"web": {"up": 1}}, scaleTimeout, func(e *ct.JobEvent) error {
+		err = watcher.WaitFor(ct.JobEvents{"web": {"up": 1}}, scaleTimeout, func(e *ct.Job) error {
 			switch e.State {
 			case "up":
 				fmt.Println("=====> Default web formation scaled to 1")

@@ -76,19 +76,12 @@ func (r *JobRepo) Add(job *ct.Job) error {
 	}
 
 	// create a job event, ignoring possible duplications
-	e := ct.JobEvent{
-		JobID:     job.ID,
-		AppID:     job.AppID,
-		ReleaseID: job.ReleaseID,
-		Type:      job.Type,
-		State:     job.State,
-	}
-	uniqueID := strings.Join([]string{e.JobID, e.State}, "|")
-	data, err := json.Marshal(e)
+	uniqueID := strings.Join([]string{job.ID, job.State}, "|")
+	data, err := json.Marshal(job)
 	if err != nil {
 		return err
 	}
-	err = r.db.Exec("INSERT INTO events (app_id, object_id, unique_id, object_type, data) VALUES ($1, $2, $3, $4, $5)", e.AppID, e.JobID, uniqueID, string(ct.EventTypeJob), data)
+	err = r.db.Exec("INSERT INTO events (app_id, object_id, unique_id, object_type, data) VALUES ($1, $2, $3, $4, $5)", job.AppID, job.ID, uniqueID, string(ct.EventTypeJob), data)
 	if postgres.IsUniquenessError(err, "") {
 		return nil
 	}

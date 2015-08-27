@@ -223,7 +223,7 @@ loop:
 			if !ok {
 				return loggedErr("unexpected close of job event stream")
 			}
-			log.Info("got job event", "job_id", event.JobID, "type", event.Type, "state", event.State)
+			log.Info("got job event", "job_id", event.ID, "type", event.Type, "state", event.State)
 			if event.State == "down" && event.Type == "postgres" && event.ReleaseID == d.OldReleaseID {
 				actual++
 				if actual == d.Processes["postgres"] {

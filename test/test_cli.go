@@ -67,8 +67,8 @@ func (a *cliTestApp) flynnCmd(args ...string) *exec.Cmd {
 
 func (a *cliTestApp) waitFor(events ct.JobEvents) string {
 	var id string
-	idSetter := func(e *ct.JobEvent) error {
-		id = e.JobID
+	idSetter := func(e *ct.Job) error {
+		id = e.ID
 		return nil
 	}
 
@@ -210,14 +210,14 @@ func (s *CLISuite) TestScale(t *c.C) {
 	defer app.cleanup()
 
 	assertEventOutput := func(scale *CmdResult, events ct.JobEvents) {
-		var actual []*ct.JobEvent
-		f := func(e *ct.JobEvent) error {
+		var actual []*ct.Job
+		f := func(e *ct.Job) error {
 			actual = append(actual, e)
 			return nil
 		}
 		t.Assert(app.watcher.WaitFor(events, scaleTimeout, f), c.IsNil)
 		for _, e := range actual {
-			t.Assert(scale, OutputContains, fmt.Sprintf("==> %s %s %s", e.Type, e.JobID, e.State))
+			t.Assert(scale, OutputContains, fmt.Sprintf("==> %s %s %s", e.Type, e.ID, e.State))
 		}
 	}
 
