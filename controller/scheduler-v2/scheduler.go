@@ -103,18 +103,28 @@ func (s *Scheduler) Run() error {
 
 	go s.RunPutJobs()
 
+	err = nil
 	for {
+		if err != nil {
+			log.Error("An error occurred", "error", err)
+			err = nil
+		}
+		select {
+		case isLeader := <-s.changeLeader:
+			s.HandleLeaderChange(isLeader)
+			continue
+		default:
+		}
+
 		// Handle events that could mutate the cluster
-		if s.isLeader {
-			select {
-			case req := <-s.jobRequests:
-				s.HandleJobRequest(req)
-				continue
-			case <-s.rectifyJobs:
-				s.RectifyJobs()
-				continue
-			default:
-			}
+		select {
+		case req := <-s.jobRequests:
+			err = s.HandleJobRequest(req)
+			continue
+		case <-s.rectifyJobs:
+			err = s.RectifyJobs()
+			continue
+		default:
 		}
 
 		// handle events reconciling our state with the cluster
@@ -122,18 +132,16 @@ func (s *Scheduler) Run() error {
 		case <-s.stop:
 			close(s.putJobs)
 			return nil
-		case isLeader := <-s.changeLeader:
-			s.isLeader = isLeader
 		case h := <-s.hostChange:
-			s.followHost(h)
+			err = s.followHost(h)
 		case he := <-s.hostEvents:
-			s.HandleHostEvent(he)
+			err = s.HandleHostEvent(he)
 		case ef := <-s.formationChange:
-			s.FormationChange(ef)
+			err = s.FormationChange(ef)
 		case <-s.syncFormations:
-			s.SyncFormations()
+			err = s.SyncFormations()
 		case <-s.syncJobs:
-			s.SyncJobs()
+			err = s.SyncJobs()
 		case <-time.After(50 * time.Millisecond):
 			// block so that
 			//	1) mutate events are given a chance to happen
@@ -206,7 +214,7 @@ func (s *Scheduler) SyncFormations() (err error) {
 
 func (s *Scheduler) RectifyJobs() (err error) {
 	if !s.isLeader {
-		return errors.New("This scheduler is not the leader")
+		return errors.New("RectifyJobs(): this scheduler is not the leader")
 	}
 
 	log := s.log.New("fn", "RectifyJobs")
@@ -267,7 +275,7 @@ func (s *Scheduler) FormationChange(ef *ct.ExpandedFormation) (err error) {
 func (s *Scheduler) HandleJobRequest(req *JobRequest) (err error) {
 	// Ensure that we've cleared this request from pendingJobs
 	if !s.isLeader {
-		return errors.New("This scheduler is not the leader")
+		return errors.New("HandleJobRequest(req): this scheduler is not the leader")
 	}
 
 	log := s.log.New("fn", "HandleJobRequest")
@@ -305,6 +313,11 @@ func (s *Scheduler) ChangeLeader(isLeader bool) {
 	s.changeLeader <- isLeader
 }
 
+func (s *Scheduler) HandleLeaderChange(isLeader bool) {
+	s.isLeader = isLeader
+	s.sendEvent(NewEvent(EventTypeLeaderChange, nil, isLeader))
+}
+
 func (s *Scheduler) sendDiffRequests(f *Formation, diff map[string]int) {
 	for typ, n := range diff {
 		if n > 0 {
@@ -323,7 +336,7 @@ func (s *Scheduler) sendDiffRequests(f *Formation, diff map[string]int) {
 	}
 }
 
-func (s *Scheduler) followHost(h utils.HostClient) {
+func (s *Scheduler) followHost(h utils.HostClient) error {
 	log := s.log.New("fn", "followHost")
 	_, ok := s.hostStreams[h.ID()]
 	if !ok {
@@ -340,9 +353,12 @@ func (s *Scheduler) followHost(h utils.HostClient) {
 				}
 			}()
 		} else {
-			log.Error("Error following host", "host.id", h.ID())
+			return fmt.Errorf("Error following host with id %q", h.ID())
 		}
+	} else {
+		return fmt.Errorf("Unable to stream from host with id %q", h.ID())
 	}
+	return nil
 }
 
 func (s *Scheduler) unfollowHost(id string) {
@@ -715,7 +731,7 @@ func (s *Stream) Err() error {
 func (s *Scheduler) sendEvent(event Event) {
 	s.listenMtx.RLock()
 	defer s.listenMtx.RUnlock()
-	s.log.Info("sending event to listeners", "event.type", event.Type(), "listeners.count", len(s.listeners))
+	s.log.Info("sending event to listeners", "event.type", event.Type(), "event.error", event.Err(), "listeners.count", len(s.listeners))
 	for ch := range s.listeners {
 		// TODO: handle slow listeners
 		ch <- event
@@ -731,6 +747,7 @@ type EventType string
 
 const (
 	EventTypeDefault         EventType = "default"
+	EventTypeLeaderChange    EventType = "leader-change"
 	EventTypeClusterSync     EventType = "cluster-sync"
 	EventTypeHostSync        EventType = "host-sync"
 	EventTypeFormationSync   EventType = "formation-sync"
@@ -758,14 +775,19 @@ type JobStartEvent struct {
 	Job *Job
 }
 
+type LeaderChangeEvent struct {
+	Event
+	IsLeader bool
+}
+
 func NewEvent(typ EventType, err error, data interface{}) Event {
 	switch typ {
 	case EventTypeJobStart:
-		job, ok := data.(*Job)
-		if !ok {
-			job = nil
-		}
+		job, _ := data.(*Job)
 		return &JobStartEvent{Event: &DefaultEvent{err: err, typ: typ}, Job: job}
+	case EventTypeLeaderChange:
+		isLeader, _ := data.(bool)
+		return &LeaderChangeEvent{Event: &DefaultEvent{err: err, typ: typ}, IsLeader: isLeader}
 	default:
 		return &DefaultEvent{err: err, typ: typ}
 	}
