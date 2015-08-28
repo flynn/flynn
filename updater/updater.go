@@ -56,9 +56,7 @@ func run() error {
 	uris := make(map[string]string, len(updater.SystemApps)+2)
 	for _, name := range append(updater.SystemApps, "slugbuilder", "slugrunner") {
 		image := "flynn/" + name
-		if name == "gitreceive" {
-			image = "flynn/receiver"
-		} else if name == "postgres" {
+		if name == "postgres" {
 			image = "flynn/postgresql"
 		}
 		uri, ok := images[image]

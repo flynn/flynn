@@ -345,7 +345,7 @@
     },
     "artifact": {
       "type": "docker",
-      "uri": "$image_repository?name=flynn/receiver&id=$image_id[receiver]"
+      "uri": "$image_repository?name=flynn/gitreceive&id=$image_id[gitreceive]"
     },
     "release": {
       "env": {

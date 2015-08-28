@@ -183,9 +183,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	// check system apps were deployed correctly
 	for _, app := range updater.SystemApps {
 		image := "flynn/" + app
-		if app == "gitreceive" {
-			image = "flynn/receiver"
-		} else if app == "postgres" {
+		if app == "postgres" {
 			image = "flynn/postgresql"
 		}
 		debugf(t, "checking new %s release is using image %s", app, versions[image])

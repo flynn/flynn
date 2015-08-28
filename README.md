@@ -65,11 +65,9 @@ the Layer 0 API.
 **[controller](/controller)** Provides management and scheduling of applications
 running on Flynn via an HTTP API.
 
-**[gitreceived](/gitreceived)** An SSH server made specifically for accepting git pushes.
+**[gitreceive](/gitreceive)** An HTTP server made specifically for accepting and deploying git pushes.
 
 **[postgresql](/appliance/postgresql)** Flynn [PostgreSQL](http://www.postgresql.org/) database appliance.
-
-**[receiver](/receiver)** Flynn's git deployer.
 
 **[router](/router)** Flynn's TCP/HTTP router/load balancer.
 

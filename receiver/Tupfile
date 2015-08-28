@@ -1,4 +1,0 @@
-include_rules
-: |> !go |> flynn-receiver
-: $(ROOT)/gitreceived/gitreceived |> !cp |> bin/gitreceived
-: flynn-receiver bin/* |> !docker-bootstrapped |>
