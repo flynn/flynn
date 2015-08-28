@@ -252,12 +252,11 @@ func (ts *TestSuite) TestRectifyJobs(c *C) {
 	c.Assert(jobs, HasLen, 2)
 }
 
-func (ts *TestSuite) TestNoHosts(c *C) {
+func (ts *TestSuite) TestExponentialBackoffNoHosts(c *C) {
 	cluster := NewFakeCluster()
 	events := make(chan Event, eventBufferSize)
 	sched := runTestScheduler(cluster, events, true)
 	defer sched.Stop()
-	//s := sched.scheduler
 
 	// wait for the formation to cascade to the scheduler
 	_, err := waitForEvent(events, EventTypeRectifyJobs)
@@ -274,6 +273,57 @@ func (ts *TestSuite) TestNoHosts(c *C) {
 	c.Assert(err.Error(), Equals, "unexpected event error: no hosts found")
 	req = checkJobRequestEvent(c, evt)
 	c.Assert(req.restarts, Equals, uint(3))
+}
+
+func (ts *TestSuite) TestMultipleHosts(c *C) {
+	h := NewFakeHostClient(testHostID)
+	h2 := NewFakeHostClient("host-2")
+	hosts := map[string]*FakeHostClient{
+		h.ID():  h,
+		h2.ID(): h2,
+	}
+	cluster := NewFakeCluster()
+	cluster.SetHosts(hosts)
+	events := make(chan Event, eventBufferSize)
+	sched := runTestScheduler(cluster, events, true)
+	defer sched.Stop()
+	s := sched.scheduler
+	_, err := waitForEvent(events, EventTypeJobStart)
+	c.Assert(err, IsNil)
+
+	hostJobs, err := h.ListJobs()
+	c.Assert(err, IsNil)
+	host1Jobs := len(hostJobs)
+	hostJobs, err = h2.ListJobs()
+	c.Assert(err, IsNil)
+	host2Jobs := len(hostJobs)
+
+	// Create a new app, artifact, release, and associated formation
+	s.log.Info("Create a new app, artifact, release, and associated formation")
+	app := &ct.App{ID: "test-app-2", Name: "test-app-2"}
+	artifact := &ct.Artifact{ID: "test-artifact-2"}
+	processes := map[string]int{testJobType: 1}
+	release := NewReleaseOmni("test-release-2", artifact, processes, true)
+	s.log.Info("Add the formation to the controller. Wait for formation change.")
+	s.CreateApp(app)
+	s.CreateArtifact(artifact)
+	s.CreateRelease(release)
+	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
+	_, err = waitForEvent(events, EventTypeFormationChange)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeJobStart)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeJobStart)
+	c.Assert(err, IsNil)
+	jobs := s.Jobs()
+	c.Assert(jobs, HasLen, 3)
+
+	hostJobs, err = h.ListJobs()
+	c.Assert(err, IsNil)
+	c.Assert(len(hostJobs), Equals, host1Jobs+1)
+	hostJobs, err = h2.ListJobs()
+	c.Assert(err, IsNil)
+	c.Assert(len(hostJobs), Equals, host2Jobs+1)
 }
 
 func checkJobStartEvent(c *C, e Event) *Job {

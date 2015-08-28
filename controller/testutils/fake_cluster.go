@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/flynn/flynn/controller/utils"
@@ -50,7 +51,11 @@ func (c *FakeCluster) StreamHosts(ch chan utils.HostClient) (stream.Stream, erro
 func (c *FakeCluster) Host(id string) (utils.HostClient, error) {
 	c.mtx.RLock()
 	defer c.mtx.RUnlock()
-	return c.hosts[id], nil
+	host, ok := c.hosts[id]
+	if !ok {
+		return nil, fmt.Errorf("Host with id %q not found", id)
+	}
+	return host, nil
 }
 
 func (c *FakeCluster) SetHosts(h map[string]*FakeHostClient) {
