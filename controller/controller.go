@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/md5"
 	"crypto/subtle"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -304,7 +303,7 @@ func muxHandler(main http.Handler, authKeys []string) http.Handler {
 			w.WriteHeader(200)
 			return
 		}
-		_, password, _ := parseBasicAuth(r.Header)
+		_, password, _ := utils.ParseBasicAuth(r.Header)
 		if password == "" && strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
 			password = r.URL.Query().Get("key")
 		}
@@ -429,25 +428,3 @@ func createEvent(dbExec func(string, ...interface{}) (sql.Result, error), e *ct.
 	return err
 }
 
-func parseBasicAuth(h http.Header) (username, password string, err error) {
-	s := strings.SplitN(h.Get("Authorization"), " ", 2)
-
-	if len(s) != 2 {
-		return "", "", errors.New("failed to parse authentication string ")
-	}
-	if s[0] != "Basic" {
-		return "", "", fmt.Errorf("authorization scheme is %v, not Basic ", s[0])
-	}
-
-	c, err := base64.StdEncoding.DecodeString(s[1])
-	if err != nil {
-		return "", "", errors.New("failed to parse base64 basic credentials")
-	}
-
-	s = strings.SplitN(string(c), ":", 2)
-	if len(s) != 2 {
-		return "", "", errors.New("failed to parse basic credentials")
-	}
-
-	return s[0], s[1], nil
-}
