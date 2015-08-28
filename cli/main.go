@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -55,7 +54,6 @@ Commands:
 	pg        manage postgres database
 	provider  manage resource providers
 	resource  provision a new resource
-	key       manage SSH public keys
 	release   add a docker image release
 	export    export app data
 	import    create app from exported data
@@ -164,16 +162,7 @@ func runCommand(name string, args []string) (err error) {
 		if err != nil {
 			shutdown.Fatal(err)
 		}
-		var client *controller.Client
-		if cluster.TLSPin != "" {
-			pin, err := base64.StdEncoding.DecodeString(cluster.TLSPin)
-			if err != nil {
-				log.Fatalln("error decoding tls pin:", err)
-			}
-			client, err = controller.NewClientWithConfig(cluster.URL, cluster.Key, controller.Config{Pin: pin})
-		} else {
-			client, err = controller.NewClient(cluster.URL, cluster.Key)
-		}
+		client, err := cluster.Client()
 		if err != nil {
 			shutdown.Fatal(err)
 		}

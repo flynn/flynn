@@ -22,8 +22,6 @@ type GitDeploySuite struct {
 var _ = c.ConcurrentSuite(&GitDeploySuite{})
 
 func (s *GitDeploySuite) SetUpSuite(t *c.C) {
-	t.Assert(flynn(t, "/", "key", "add", s.sshKeys(t).Pub), Succeeds)
-
 	// Unencrypted SSH private key for the flynn-test GitHub account, used in TestPrivateSSHKeyClone.
 	// Omits header/footer to avoid any GitHub auto-revoke key crawlers
 	sshKey := `MIIEpAIBAAKCAQEA2UnQ/17TfzQRt4HInuP1SYz/tSNaCGO3NDIPLydVu8mmxuKT

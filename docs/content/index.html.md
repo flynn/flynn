@@ -14,17 +14,6 @@ the case if you installed the demo environment). If you are using your own
 domain, substitute `demo.localflynn.com` with whatever you set `CLUSTER_DOMAIN`
 to during the bootstrap process.
 
-## Add SSH key
-
-Before deploying to Flynn, you need to add your public SSH key:
-
-```
-$ flynn key add
-Key dd:31:2c:07:33:fb:93:32:2b:cc:fa:87:a4:0f:00:34 added.
-```
-
-*See [here](/docs/cli#key) for more information on the `flynn key` command.*
-
 ## Deploy
 
 We will deploy a Node.js example application which starts a minimal HTTP server.
@@ -47,8 +36,8 @@ The above command should have added a `flynn` Git remote:
 
 ```
 $ git remote -v
-flynn   ssh://git@demo.localflynn.com:2222/example.git (push)
-flynn   ssh://git@demo.localflynn.com:2222/example.git (fetch)
+flynn   https://git.demo.localflynn.com/example.git (push)
+flynn   https://git.demo.localflynn.com/example.git (fetch)
 origin  https://github.com/flynn/nodejs-flynn-example.git (fetch)
 origin  https://github.com/flynn/nodejs-flynn-example.git (push)
 ```
@@ -73,7 +62,7 @@ $ git push flynn master
 -----> Creating release...
 =====> Application deployed
 =====> Added default web=1 formation
-To ssh://git@demo.localflynn.com:2222/example.git
+To https://git.demo.localflynn.com/example.git
  * [new branch]      master -> master
 ```
 

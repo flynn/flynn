@@ -3,8 +3,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"crypto/md5"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,7 +16,6 @@ import (
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
 	"github.com/flynn/flynn/cli/config"
 	cc "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
@@ -98,7 +95,7 @@ func (s *CLISuite) TestCreateAppNoGit(t *c.C) {
 func testApp(s *CLISuite, t *c.C, remote string) {
 	app := s.newGitRepo(t, "")
 	name := random.String(30)
-	flynnRemote := fmt.Sprintf("%s\tssh://git@%s/%s.git (push)", remote, s.clusterConf(t).GitHost, name)
+	flynnRemote := fmt.Sprintf("%s\thttps://git.%s/%s.git (push)", remote, s.clusterConf(t).Domain, name)
 
 	if remote == "flynn" {
 		t.Assert(app.flynn("create", "-y", name), Outputs, fmt.Sprintf("Created %s\n", name))
@@ -152,34 +149,6 @@ func formatKeyID(s string) string {
 		}
 	}
 	return string(buf)
-}
-
-func (s *CLISuite) TestKey(t *c.C) {
-	app := s.newGitRepo(t, "empty")
-	t.Assert(app.flynn("create"), Succeeds)
-
-	t.Assert(app.flynn("key", "add", s.sshKeys(t).Pub), Succeeds)
-
-	// calculate fingerprint
-	data, err := ioutil.ReadFile(s.sshKeys(t).Pub)
-	t.Assert(err, c.IsNil)
-	pubKey, _, _, _, err := ssh.ParseAuthorizedKey(data)
-	t.Assert(err, c.IsNil)
-	digest := md5.Sum(pubKey.Marshal())
-	fingerprint := formatKeyID(hex.EncodeToString(digest[:]))
-
-	t.Assert(app.flynn("key"), SuccessfulOutputContains, fingerprint)
-
-	t.Assert(app.git("commit", "--allow-empty", "-m", "should succeed"), Succeeds)
-	t.Assert(app.git("push", "flynn", "master"), Succeeds)
-
-	t.Assert(app.flynn("key", "remove", fingerprint), Succeeds)
-	t.Assert(app.flynn("key"), c.Not(SuccessfulOutputContains), fingerprint)
-
-	t.Assert(app.git("commit", "--allow-empty", "-m", "should fail"), Succeeds)
-	t.Assert(app.git("push", "flynn", "master"), c.Not(Succeeds))
-
-	t.Assert(app.flynn("delete", "--yes"), Succeeds)
 }
 
 func (s *CLISuite) TestPs(t *c.C) {
@@ -760,7 +729,6 @@ func (s *CLISuite) TestExportImport(t *c.C) {
 	// create and push app+db
 	r := s.newGitRepo(t, "http")
 	t.Assert(r.flynn("create", srcApp), Succeeds)
-	t.Assert(r.flynn("key", "add", r.ssh.Pub), Succeeds)
 	t.Assert(r.git("push", "flynn", "master"), Succeeds)
 	t.Assert(r.flynn("resource", "add", "postgres"), Succeeds)
 	t.Assert(r.flynn("pg", "psql", "--", "-c",

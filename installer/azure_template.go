@@ -131,23 +131,9 @@ var azureTemplate = template.Must(template.New("azure_template.json").Funcs(temp
             }
           },
           {
-            "name": "GIT",
-            "properties": {
-              "description": "Allows git over SSH traffic",
-              "protocol": "Tcp",
-              "sourcePortRange": "*",
-              "destinationPortRange": "2222",
-              "sourceAddressPrefix": "*",
-              "destinationAddressPrefix": "*",
-              "access": "Allow",
-              "priority": 104,
-              "direction": "Inbound"
-            }
-          },
-          {
             "name": "OtherTCP",
             "properties": {
-              "description": "Allows user defined TCP services",
+              "description": "Allows user-defined TCP services",
               "protocol": "Tcp",
               "sourcePortRange": "*",
               "destinationPortRange": "3000-3500",

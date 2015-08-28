@@ -337,10 +337,6 @@
     "resources": [{"name":"postgres", "url":"http://postgres-api.discoverd/databases"}]
   },
   {
-    "id": "gitreceive-key",
-    "action": "gen-ssh-key"
-  },
-  {
     "id": "gitreceive",
     "action": "deploy-app",
     "app": {
@@ -353,7 +349,6 @@
     },
     "release": {
       "env": {
-        "SSH_PRIVATE_KEYS": "{{ (index .StepData \"gitreceive-key\").PrivateKeys }}",
         "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
         "SLUGBUILDER_IMAGE_URI": "$image_repository?name=flynn/slugbuilder&id=$image_id[slugbuilder]",
         "SLUGRUNNER_IMAGE_URI": "$image_repository?name=flynn/slugrunner&id=$image_id[slugrunner]"
@@ -365,16 +360,7 @@
               "proto": "tcp",
               "service": {
                 "name": "gitreceive",
-                "create": true,
-                "check": {"type": "tcp"}
-              }
-            },
-            {
-              "proto": "tcp",
-              "service": {
-                "name": "gitreceive-http",
-                "create": true,
-                "check": {"type": "tcp"}
+                "create": true
               }
             }
           ]
@@ -395,9 +381,10 @@
     "id": "gitreceive-route",
     "action": "add-route",
     "app_step": "gitreceive",
-    "type": "tcp",
+    "cert_step": "controller-cert",
+    "type": "http",
     "service": "gitreceive",
-    "port": 2222
+    "domain": "git.{{ getenv \"CLUSTER_DOMAIN\" }}"
   },
   {
     "id": "controller-route",
@@ -567,6 +554,6 @@
   {
     "id": "log-complete",
     "action": "log",
-    "output": "\n\nFlynn bootstrapping complete. Install the Flynn CLI (see https://flynn.io/docs/cli for instructions) and paste the line below into a terminal window:\n\nflynn cluster add -g {{ getenv \"CLUSTER_DOMAIN\" }}:2222 -p {{ (index .StepData \"controller-cert\").Pin }} default https://controller.{{ getenv \"CLUSTER_DOMAIN\" }} {{ (index .StepData \"controller-key\").Data }}\n\nThe built-in dashboard can be accessed at http://dashboard.{{ getenv \"CLUSTER_DOMAIN\" }} and your login token is {{ (index .StepData \"dashboard-login-token\").Data }}"
+    "output": "\n\nFlynn bootstrapping complete. Install the Flynn CLI (see https://flynn.io/docs/cli for instructions) and paste the line below into a terminal window:\n\nflynn cluster add -p {{ (index .StepData \"controller-cert\").Pin }} default {{ getenv \"CLUSTER_DOMAIN\" }} {{ (index .StepData \"controller-key\").Data }}\n\nThe built-in dashboard can be accessed at http://dashboard.{{ getenv \"CLUSTER_DOMAIN\" }} and your login token is {{ (index .StepData \"dashboard-login-token\").Data }}"
   }
 ]

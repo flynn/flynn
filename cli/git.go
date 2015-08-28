@@ -4,11 +4,15 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kardianos/osext"
 	cfg "github.com/flynn/flynn/cli/config"
 )
 
@@ -23,10 +27,24 @@ func inGitRepo() bool {
 	return b
 }
 
-const gitURLSuf = ".git"
+const gitURLSuffix = ".git"
 
-func gitURLPre(gitHost string) string {
+func gitURL(conf *cfg.Cluster, app string) string {
+	var prefix string
+	if conf.Domain != "" {
+		prefix = gitHTTPURLPre(conf.Domain)
+	} else if conf.GitHost != "" {
+		prefix = gitSSHURLPre(conf.GitHost)
+	}
+	return prefix + app + gitURLSuffix
+}
+
+func gitSSHURLPre(gitHost string) string {
 	return "ssh://git@" + gitHost + "/"
+}
+
+func gitHTTPURLPre(domain string) string {
+	return fmt.Sprintf("https://git.%s/", domain)
 }
 
 func mapOutput(out []byte, sep, term string) map[string]string {
@@ -80,8 +98,18 @@ func appFromGitURL(remote string) *remoteApp {
 		if flagCluster != "" && s.Name != flagCluster {
 			continue
 		}
-		if strings.HasPrefix(remote, gitURLPre(s.GitHost)) && strings.HasSuffix(remote, gitURLSuf) {
-			return &remoteApp{s, remote[len(gitURLPre(s.GitHost)) : len(remote)-len(gitURLSuf)]}
+
+		var prefix string
+		if s.Domain != "" {
+			prefix = gitHTTPURLPre(s.Domain)
+		} else if s.GitHost != "" {
+			prefix = gitSSHURLPre(s.GitHost)
+		} else {
+			continue
+		}
+
+		if strings.HasPrefix(remote, prefix) && strings.HasSuffix(remote, gitURLSuffix) {
+			return &remoteApp{s, remote[len(prefix) : len(remote)-len(gitURLSuffix)]}
 		}
 	}
 	return nil
@@ -170,4 +198,82 @@ func isNotFound(err error) bool {
 		}
 	}
 	return false
+}
+
+func caCertDir() string {
+	return filepath.Join(cfg.Dir(), "ca-certs")
+}
+
+func gitConfig(args ...string) error {
+	args = append([]string{"config", "--global"}, args...)
+	cmd := exec.Command("git", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error %q running %q: %q", err, strings.Join(cmd.Args, " "), out)
+	}
+	return nil
+}
+
+func writeGlobalGitConfig(domain, caFile string) error {
+	if err := gitConfig(fmt.Sprintf("http.https://git.%s.sslCAInfo", domain), caFile); err != nil {
+		return err
+	}
+	self, err := osext.Executable()
+	if err != nil {
+		return err
+	}
+	if err := gitConfig(fmt.Sprintf("credential.https://git.%s.helper", domain), self+" git-credentials"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func removeGlobalGitConfig(domain string) {
+	for _, k := range []string{
+		fmt.Sprintf("http.https://git.%s", domain),
+		fmt.Sprintf("credential.https://git.%s", domain),
+	} {
+		gitConfig("--remove-section", k)
+	}
+}
+
+func init() {
+	register("git-credentials", runGitCredentials, "usage: flynn git-credentials <operation>")
+}
+
+func runGitCredentials(args *docopt.Args) error {
+	if args.String["<operation>"] != "get" {
+		return nil
+	}
+
+	detailBytes, _ := ioutil.ReadAll(os.Stdin)
+	details := make(map[string]string)
+	for _, l := range bytes.Split(detailBytes, []byte("\n")) {
+		kv := bytes.SplitN(l, []byte("="), 2)
+		if len(kv) == 2 {
+			details[string(kv[0])] = string(kv[1])
+		}
+	}
+
+	if details["protocol"] != "https" {
+		return nil
+	}
+	if err := readConfig(); err != nil {
+		return nil
+	}
+
+	var cluster *cfg.Cluster
+	domain := strings.TrimPrefix(details["host"], "git.")
+	for _, c := range config.Clusters {
+		if c.Domain == domain {
+			cluster = c
+			break
+		}
+	}
+	if cluster == nil {
+		return nil
+	}
+
+	fmt.Printf("protocol=https\nusername=user\nhost=%s\npassword=%s\n", details["host"], cluster.Key)
+	return nil
 }
