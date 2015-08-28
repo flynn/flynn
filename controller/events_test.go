@@ -99,22 +99,40 @@ func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 		Meta: newMeta,
 	}), IsNil)
 
-	eventAssertions := []func(*ct.App){
-		func(a *ct.App) {
+	assertAppEvent := func(e *ct.Event) *ct.App {
+		var eventApp *ct.App
+		c.Assert(json.Unmarshal(e.Data, &eventApp), IsNil)
+		c.Assert(e.AppID, Equals, app.ID)
+		c.Assert(e.ObjectType, Equals, ct.EventTypeApp)
+		c.Assert(e.ObjectID, Equals, app.ID)
+		c.Assert(eventApp, NotNil)
+		c.Assert(eventApp.ID, Equals, app.ID)
+		return eventApp
+	}
+
+	eventAssertions := []func(*ct.Event){
+		func(e *ct.Event) {
+			a := assertAppEvent(e)
 			c.Assert(a.ReleaseID, Equals, app.ReleaseID)
 			c.Assert(a.Strategy, Equals, app.Strategy)
 			c.Assert(a.Meta, DeepEquals, app.Meta)
 		},
-		func(a *ct.App) {
-			c.Assert(a.ReleaseID, Equals, release.ID)
-			c.Assert(a.Strategy, Equals, app.Strategy)
-			c.Assert(a.Meta, DeepEquals, app.Meta)
+		func(e *ct.Event) {
+			var eventRelease *ct.Release
+			c.Assert(json.Unmarshal(e.Data, &eventRelease), IsNil)
+			c.Assert(e.AppID, Equals, app.ID)
+			c.Assert(e.ObjectType, Equals, ct.EventTypeAppRelease)
+			c.Assert(e.ObjectID, Equals, release.ID)
+			c.Assert(eventRelease, NotNil)
+			c.Assert(eventRelease.ID, Equals, release.ID)
 		},
-		func(a *ct.App) {
+		func(e *ct.Event) {
+			a := assertAppEvent(e)
 			c.Assert(a.Strategy, Equals, newStrategy)
 			c.Assert(a.Meta, DeepEquals, app.Meta)
 		},
-		func(a *ct.App) {
+		func(e *ct.Event) {
+			a := assertAppEvent(e)
 			c.Assert(a.Strategy, Equals, newStrategy)
 			c.Assert(a.Meta, DeepEquals, newMeta)
 		},
@@ -126,14 +144,7 @@ func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 			if !ok {
 				c.Fatal("unexpected close of event stream")
 			}
-			var eventApp *ct.App
-			c.Assert(json.Unmarshal(e.Data, &eventApp), IsNil)
-			c.Assert(e.AppID, Equals, app.ID)
-			c.Assert(e.ObjectType, Equals, ct.EventTypeApp)
-			c.Assert(e.ObjectID, Equals, app.ID)
-			c.Assert(eventApp, NotNil)
-			c.Assert(eventApp.ID, Equals, app.ID)
-			fn(eventApp)
+			fn(e)
 		case <-time.After(10 * time.Second):
 			c.Fatalf("Timed out waiting for event %d", i)
 		}

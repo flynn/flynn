@@ -43,7 +43,7 @@ func migrateDB(db *sql.DB) error {
 		`CREATE UNIQUE INDEX ON apps (name) WHERE deleted_at IS NULL`,
 
 		`CREATE SEQUENCE event_ids`,
-		`CREATE TYPE event_type AS ENUM ('app_deletion', 'app', 'deployment', 'job', 'scale', 'release', 'artifact', 'provider', 'resource', 'resource_deletion', 'key', 'key_deletion', 'route', 'route_deletion')`,
+		`CREATE TYPE event_type AS ENUM ('app_deletion', 'app', 'app_release', 'deployment', 'job', 'scale', 'release', 'artifact', 'provider', 'resource', 'resource_deletion', 'key', 'key_deletion', 'route', 'route_deletion')`,
 		`CREATE TABLE events (
     event_id    bigint         PRIMARY KEY DEFAULT nextval('event_ids'),
     app_id      uuid           REFERENCES apps (app_id),
