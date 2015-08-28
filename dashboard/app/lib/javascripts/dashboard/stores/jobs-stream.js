@@ -14,9 +14,10 @@ var JobsStream = Store.createClass({
 		this.props = {
 			appId: this.id.appId,
 		};
-		this.url = Config.endpoints.cluster_controller +'/apps/'+ this.props.appId +'/events';
+		this.url = Config.endpoints.cluster_controller +'/events';
 		this.url = this.url + QueryParams.serializeParams([{
 			key: Config.user.controller_key,
+			app_id: this.props.appId,
 			object_types: 'job',
 			past: 'true'
 		}]);
