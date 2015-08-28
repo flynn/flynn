@@ -22,7 +22,7 @@ func (r *ProviderRepo) Add(data interface{}) error {
 		return errors.New("controller: name must not be blank")
 	}
 	if p.URL == "" {
-		return errors.New("controler: url must not be blank")
+		return errors.New("controller: url must not be blank")
 	}
 	// TODO: validate url
 	tx, err := r.db.Begin()
