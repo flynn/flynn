@@ -138,9 +138,16 @@ func (c *FakeControllerClient) PutJob(job *ct.Job) error {
 }
 
 func NewRelease(id string, artifact *ct.Artifact, processes map[string]int) *ct.Release {
+	return NewReleaseOmni(id, artifact, processes, false)
+}
+
+func NewReleaseOmni(id string, artifact *ct.Artifact, processes map[string]int, omni bool) *ct.Release {
 	processTypes := make(map[string]ct.ProcessType, len(processes))
 	for t := range processes {
-		processTypes[t] = ct.ProcessType{Cmd: []string{"start", t}}
+		processTypes[t] = ct.ProcessType{
+			Cmd:  []string{"start", t},
+			Omni: omni,
+		}
 	}
 
 	return &ct.Release{
