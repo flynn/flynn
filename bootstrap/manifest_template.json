@@ -163,6 +163,11 @@
     "url": "http://postgres-api.discoverd/ping"
   },
   {
+    "id": "controller-cert",
+    "action": "gen-tls-cert",
+    "hosts": ["{{ getenv \"CLUSTER_DOMAIN\" }}", "*.{{ getenv \"CLUSTER_DOMAIN\" }}"]
+  },
+  {
     "id": "controller",
     "action": "run-app",
     "app": {
@@ -173,7 +178,8 @@
         "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
         "BACKOFF_PERIOD": "{{ getenv \"BACKOFF_PERIOD\" }}",
         "DEFAULT_ROUTE_DOMAIN": "{{ getenv \"CLUSTER_DOMAIN\" }}",
-        "NAME_SEED": "{{ (index .StepData \"name-seed\").Data }}"
+        "NAME_SEED": "{{ (index .StepData \"name-seed\").Data }}",
+        "CA_CERT": "{{ (index .StepData \"controller-cert\").CACert }}"
       },
       "processes": {
         "web": {
@@ -202,11 +208,6 @@
       "web": 1
     },
     "resources": [{"name":"postgres", "url":"http://postgres-api.discoverd/databases"}]
-  },
-  {
-    "id": "controller-cert",
-    "action": "gen-tls-cert",
-    "hosts": ["{{ getenv \"CLUSTER_DOMAIN\" }}", "*.{{ getenv \"CLUSTER_DOMAIN\" }}"]
   },
   {
     "id": "controller-wait",

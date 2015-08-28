@@ -22,6 +22,7 @@ import (
 	"github.com/flynn/flynn/controller/name"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/discoverd/client"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -236,6 +237,7 @@ func appHandler(c handlerConfig) http.Handler {
 		logaggc:        c.lc,
 		routerc:        c.rc,
 		que:            q,
+		caCert:         []byte(os.Getenv("CA_CERT")),
 	}
 
 	httpRouter := httprouter.New()
@@ -252,6 +254,8 @@ func appHandler(c handlerConfig) http.Handler {
 		}
 		return status.Healthy
 	}))
+
+	httpRouter.GET("/ca-cert", httphelper.WrapHandler(api.GetCACert))
 
 	httpRouter.POST("/apps/:apps_id", httphelper.WrapHandler(api.UpdateApp))
 	httpRouter.GET("/apps/:apps_id/log", httphelper.WrapHandler(api.appLookup(api.AppLog)))
@@ -336,6 +340,7 @@ type controllerAPI struct {
 	logaggc        logaggc.Client
 	routerc        routerc.Client
 	que            *que.Client
+	caCert         []byte
 
 	eventListener    *EventListener
 	eventListenerMtx sync.Mutex
@@ -428,3 +433,7 @@ func createEvent(dbExec func(string, ...interface{}) (sql.Result, error), e *ct.
 	return err
 }
 
+func (c *controllerAPI) GetCACert(_ context.Context, w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/x-x509-ca-cert")
+	w.Write(c.caCert)
+}
