@@ -250,9 +250,10 @@ var Client = createClass({
 		}
 
 		var controllerKey = (Config.user || {}).controller_key;
-		var url = this.endpoints.cluster_controller +'/apps/'+ encodeURIComponent(appId) +'/events';
+		var url = this.endpoints.cluster_controller +'/events';
 		url = url + QueryParams.serializeParams([{
 			key: controllerKey,
+			app_id: appId,
 			object_types: 'deployment',
 			object_id: deploymentId,
 			past: 'true'
