@@ -191,6 +191,7 @@ type EventType string
 const (
 	EventTypeApp              EventType = "app"
 	EventTypeAppDeletion      EventType = "app_deletion"
+	EventTypeAppRelease       EventType = "app_release"
 	EventTypeDeployment       EventType = "deployment"
 	EventTypeJob              EventType = "job"
 	EventTypeScale            EventType = "scale"

@@ -228,6 +228,11 @@ func (r *AppRepo) SetRelease(app *ct.App, releaseID string) error {
 	if err != nil {
 		return err
 	}
+	var release *ct.Release
+	row := tx.QueryRow("SELECT release_id, artifact_id, data, created_at FROM releases WHERE release_id = $1 AND deleted_at IS NULL", releaseID)
+	if release, err = scanRelease(row); err != nil {
+		return err
+	}
 	app.ReleaseID = releaseID
 	if _, err := tx.Exec("UPDATE apps SET release_id = $2, updated_at = now() WHERE app_id = $1", app.ID, app.ReleaseID); err != nil {
 		tx.Rollback()
@@ -235,9 +240,9 @@ func (r *AppRepo) SetRelease(app *ct.App, releaseID string) error {
 	}
 	if err := createEvent(tx.Exec, &ct.Event{
 		AppID:      app.ID,
-		ObjectID:   app.ID,
-		ObjectType: ct.EventTypeApp,
-	}, app); err != nil {
+		ObjectID:   release.ID,
+		ObjectType: ct.EventTypeAppRelease,
+	}, release); err != nil {
 		tx.Rollback()
 		return err
 	}
