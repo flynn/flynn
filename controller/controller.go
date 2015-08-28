@@ -213,7 +213,6 @@ func appHandler(c handlerConfig) http.Handler {
 
 	q := que.NewClient(c.pgxpool)
 	providerRepo := NewProviderRepo(c.db)
-	keyRepo := NewKeyRepo(c.db)
 	resourceRepo := NewResourceRepo(c.db)
 	appRepo := NewAppRepo(c.db, os.Getenv("DEFAULT_ROUTE_DOMAIN"), c.rc)
 	artifactRepo := NewArtifactRepo(c.db)
@@ -246,7 +245,6 @@ func appHandler(c handlerConfig) http.Handler {
 	crud(httpRouter, "releases", ct.Release{}, releaseRepo)
 	crud(httpRouter, "providers", ct.Provider{}, providerRepo)
 	crud(httpRouter, "artifacts", ct.Artifact{}, artifactRepo)
-	crud(httpRouter, "keys", ct.Key{}, keyRepo)
 
 	httpRouter.Handler("GET", status.Path, status.Handler(func() status.Status {
 		if err := c.db.Exec("SELECT 1"); err != nil {
