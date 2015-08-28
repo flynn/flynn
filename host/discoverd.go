@@ -3,7 +3,9 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
+	"sync/atomic"
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/logmux"
@@ -19,7 +21,7 @@ func NewDiscoverdManager(backend Backend, mux *logmux.LogMux, hostID, publishAdd
 			Meta: map[string]string{"id": hostID},
 		},
 	}
-	shutdown.BeforeExit(d.Close)
+	d.local.Store(false)
 	return d
 }
 
@@ -28,49 +30,55 @@ type DiscoverdManager struct {
 	mux     *logmux.LogMux
 	inst    *discoverd.Instance
 	mtx     sync.Mutex
-	local   discoverd.Heartbeater
-	peer    discoverd.Heartbeater
+	hb      discoverd.Heartbeater
+	local   atomic.Value // bool
 }
 
 func (d *DiscoverdManager) Close() {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
-	if d.local != nil {
-		d.local.Close()
-		d.local = nil
-	}
-	if d.peer != nil {
-		d.peer.Close()
-		d.peer = nil
+	if d.hb != nil {
+		d.hb.Close()
+		d.hb = nil
 	}
 }
 
 func (d *DiscoverdManager) localConnected() bool {
+	return d.local.Load().(bool)
+}
+
+func (d *DiscoverdManager) heartbeat(url string) error {
+	disc := discoverd.NewClientWithURL(url)
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
-	return d.local != nil
+	if d.hb != nil {
+		d.hb.SetClient(disc)
+		return nil
+	}
+	hb, err := disc.AddServiceAndRegisterInstance("flynn-host", d.inst)
+	if err != nil {
+		return err
+	}
+	d.hb = hb
+	return nil
 }
 
 func (d *DiscoverdManager) ConnectLocal(url string) error {
 	if d.localConnected() {
 		return errors.New("host: discoverd is already configured")
 	}
-	disc := discoverd.NewClientWithURL(url)
-	hb, err := disc.AddServiceAndRegisterInstance("flynn-host", d.inst)
-	if err != nil {
+
+	if err := d.heartbeat(url); err != nil {
 		return err
 	}
-
-	d.mtx.Lock()
-	if d.peer != nil {
-		d.peer.Close()
-	}
-	d.local = hb
-	d.mtx.Unlock()
+	d.local.Store(true)
 
 	d.backend.SetDefaultEnv("DISCOVERD", url)
 
 	go func() {
+		// give logmux a discoverd client which doesn't use a retry
+		// dialer (it has its own reconnect logic)
+		disc := discoverd.NewClientWithHTTP(url, http.DefaultClient)
 		if err := d.mux.Connect(disc, "logaggregator"); err != nil {
 			shutdown.Fatal(err)
 		}
@@ -90,20 +98,11 @@ func (d *DiscoverdManager) ConnectPeer(ips []string) error {
 	var err error
 	for _, ip := range ips {
 		// TODO: log attempt
-		disc := discoverd.NewClientWithURL(fmt.Sprintf("http://%s:1111", ip))
-		var hb discoverd.Heartbeater
-		hb, err = disc.AddServiceAndRegisterInstance("flynn-host", d.inst)
-		if err != nil {
+		url := fmt.Sprintf("http://%s:1111", ip)
+		if err = d.heartbeat(url); err != nil {
 			// TODO: log error
 			continue
 		}
-		d.mtx.Lock()
-		if d.local != nil {
-			hb.Close()
-		} else {
-			d.peer = hb
-		}
-		d.mtx.Unlock()
 		break
 	}
 	return err

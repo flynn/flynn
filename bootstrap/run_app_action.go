@@ -133,24 +133,30 @@ func startJob(s *State, hc *cluster.Host, job *host.Job) error {
 	}
 	go func() {
 		defer stream.Close()
-		for e := range events {
-			switch e.Event {
-			case "start", "stop":
-				jobStatus <- nil
-				return
-			case "error":
-				job, err := hc.GetJob(job.ID)
-				if err != nil {
-					jobStatus <- err
+		for {
+			select {
+			case e := <-events:
+				switch e.Event {
+				case "start", "stop":
+					jobStatus <- nil
 					return
-				}
-				if job.Error == nil {
-					jobStatus <- fmt.Errorf("bootstrap: unknown error from host")
+				case "error":
+					job, err := hc.GetJob(job.ID)
+					if err != nil {
+						jobStatus <- err
+						return
+					}
+					if job.Error == nil {
+						jobStatus <- fmt.Errorf("bootstrap: unknown error from host")
+						return
+					}
+					jobStatus <- fmt.Errorf("bootstrap: host error while launching job: %q", *job.Error)
 					return
+				default:
 				}
-				jobStatus <- fmt.Errorf("bootstrap: host error while launching job: %q", *job.Error)
+			case <-time.After(10 * time.Second):
+				jobStatus <- errors.New("bootstrap: timed out waiting for job event")
 				return
-			default:
 			}
 		}
 		jobStatus <- fmt.Errorf("bootstrap: host job stream disconnected unexpectedly: %q", stream.Err())

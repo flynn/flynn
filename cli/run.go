@@ -21,14 +21,15 @@ import (
 
 func init() {
 	cmd := register("run", runRun, `
-usage: flynn run [-d] [-r <release>] [-e <entrypoint>] [--] <command> [<argument>...]
+usage: flynn run [-d] [-r <release>] [-e <entrypoint>] [-l] [--] <command> [<argument>...]
 
 Run a job.
 
 Options:
-	-d, --detached   run job without connecting io streams
-	-r <release>     id of release to run (defaults to current app release)
-	-e <entrypoint>  overwrite the default entrypoint of the release's image
+	-d, --detached    run job without connecting io streams (implies --enable-log)
+	-r <release>      id of release to run (defaults to current app release)
+	-e <entrypoint>   overwrite the default entrypoint of the release's image
+	-l, --enable-log  send output to log streams
 `)
 	cmd.optsFirst = true
 }
@@ -44,6 +45,7 @@ func runRun(args *docopt.Args, client *controller.Client) error {
 		Args:       append([]string{args.String["<command>"]}, args.All["<argument>"].([]string)...),
 		ReleaseEnv: true,
 		Exit:       true,
+		DisableLog: !args.Bool["--detached"] && !args.Bool["--enable-log"],
 	}
 	if config.Release == "" {
 		release, err := client.GetAppRelease(config.App)

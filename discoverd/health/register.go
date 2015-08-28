@@ -119,3 +119,9 @@ func (h *heartbeater) Close() error {
 	h.Unlock()
 	return nil
 }
+
+func (h *heartbeater) SetClient(c *discoverd.Client) {
+	h.Lock()
+	defer h.Unlock()
+	h.hb.SetClient(c)
+}
