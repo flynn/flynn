@@ -431,6 +431,7 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) (j *Job, err erro
 }
 
 func (s *Scheduler) changeFormation(ef *ct.ExpandedFormation) *Formation {
+	s.expandOmni(ef)
 	f := s.formations.Get(ef.App.ID, ef.Release.ID)
 	if f == nil {
 		f = s.formations.Add(NewFormation(ef))
@@ -441,7 +442,7 @@ func (s *Scheduler) changeFormation(ef *ct.ExpandedFormation) *Formation {
 }
 
 func (s *Scheduler) updateFormation(controllerFormation *ct.Formation) (*Formation, error) {
-	log := s.log.New("fn", "getFormation")
+	log := s.log.New("fn", "updateFormation")
 
 	appID := controllerFormation.AppID
 	releaseID := controllerFormation.ReleaseID
@@ -468,7 +469,6 @@ func (s *Scheduler) updateFormation(controllerFormation *ct.Formation) (*Formati
 		}
 		ef.UpdatedAt = time.Now()
 	}
-	s.expandOmni(ef)
 	return s.changeFormation(ef), nil
 }
 
@@ -483,7 +483,7 @@ func (s *Scheduler) startJob(req *JobRequest) (err error) {
 		}
 	}()
 
-	host, err := s.findBestHost(req.Type, req.HostID)
+	host, err := s.findBestHost(req.Formation, req.Type, req.HostID)
 	if err != nil {
 		return err
 	}
@@ -551,7 +551,7 @@ func jobConfig(req *JobRequest, hostID string) *host.Job {
 	return utils.JobConfig(req.Job.Formation.ExpandedFormation, req.Type, hostID)
 }
 
-func (s *Scheduler) findBestHost(typ, hostID string) (utils.HostClient, error) {
+func (s *Scheduler) findBestHost(formation *Formation, typ, hostID string) (utils.HostClient, error) {
 	hosts, err := s.getHosts()
 	if err != nil {
 		return nil, err
@@ -561,15 +561,16 @@ func (s *Scheduler) findBestHost(typ, hostID string) (utils.HostClient, error) {
 	}
 
 	if hostID == "" {
-		counts := s.hostJobCounts(typ)
+		counts := s.hostJobCounts(formation, typ)
 		var minCount int = math.MaxInt32
 		for _, host := range hosts {
-			count := counts[host.ID()]
-			if count < minCount {
+			count, ok := counts[host.ID()]
+			if !ok || count < minCount {
 				minCount = count
 				hostID = host.ID()
 			}
 		}
+		s.log.Info("Finding best host.", "host", hostID, "counts", counts)
 	}
 	return s.Host(hostID)
 }
@@ -596,10 +597,11 @@ func (s *Scheduler) getHosts() ([]utils.HostClient, error) {
 	return hosts, nil
 }
 
-func (s *Scheduler) hostJobCounts(typ string) map[string]int {
+func (s *Scheduler) hostJobCounts(formation *Formation, typ string) map[string]int {
 	counts := make(map[string]int)
+	key := formation.key()
 	for _, job := range s.jobs {
-		if job.Type != typ {
+		if job.Formation.key() != key || job.Type != typ {
 			continue
 		}
 		counts[job.HostID]++
