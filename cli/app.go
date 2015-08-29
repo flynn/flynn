@@ -97,7 +97,7 @@ func runCreate(args *docopt.Args, client *controller.Client) error {
 	// Register git remote
 	if inGitRepo() && remote != "" {
 		exec.Command("git", "remote", "remove", remote).Run()
-		exec.Command("git", "remote", "add", "--", remote, gitURLPre(clusterConf.GitHost)+app.Name+gitURLSuf).Run()
+		exec.Command("git", "remote", "add", "--", remote, gitURL(clusterConf, app.Name)).Run()
 	}
 	log.Printf("Created %s", app.Name)
 	return nil

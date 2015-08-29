@@ -47,6 +47,10 @@ Examples:
 }
 
 func runKey(args *docopt.Args, client *controller.Client) error {
+	if clusterConf.Domain != "" {
+		return errors.New("flynn key is deprecated, there is no need to upload SSH keys")
+	}
+
 	if args.Bool["add"] {
 		return runKeyAdd(args, client)
 	} else if args.Bool["remove"] {

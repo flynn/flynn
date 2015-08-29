@@ -1,6 +1,13 @@
 package utils
 
 import (
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"net/http"
+	"regexp"
+	"strings"
+
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -70,4 +77,29 @@ type HostClient interface {
 	AddJob(*host.Job) error
 	Attach(*host.AttachReq, bool) (cluster.AttachClient, error)
 	StopJob(string) error
+}
+
+var AppNamePattern = regexp.MustCompile(`^[a-z\d]+(-[a-z\d]+)*$`)
+
+func ParseBasicAuth(h http.Header) (username, password string, err error) {
+	s := strings.SplitN(h.Get("Authorization"), " ", 2)
+
+	if len(s) != 2 {
+		return "", "", errors.New("failed to parse authentication string")
+	}
+	if s[0] != "Basic" {
+		return "", "", fmt.Errorf("authorization scheme is %v, not Basic", s[0])
+	}
+
+	c, err := base64.StdEncoding.DecodeString(s[1])
+	if err != nil {
+		return "", "", errors.New("failed to parse base64 basic credentials")
+	}
+
+	s = strings.SplitN(string(c), ":", 2)
+	if len(s) != 2 {
+		return "", "", errors.New("failed to parse basic credentials")
+	}
+
+	return s[0], s[1], nil
 }

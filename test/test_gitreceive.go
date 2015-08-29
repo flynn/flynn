@@ -12,10 +12,6 @@ type GitreceiveSuite struct {
 
 var _ = c.Suite(&GitreceiveSuite{})
 
-func (s *GitreceiveSuite) SetUpSuite(t *c.C) {
-	t.Assert(flynn(t, "/", "key", "add", s.sshKeys(t).Pub), Succeeds)
-}
-
 func (s *GitreceiveSuite) TestRepoCaching(t *c.C) {
 	r := s.newGitRepo(t, "empty")
 	t.Assert(r.flynn("create"), Succeeds)

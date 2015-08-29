@@ -2,10 +2,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -14,23 +10,15 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/fsouza/go-dockerclient"
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/test/arg"
 	"github.com/flynn/flynn/test/cluster"
 	"github.com/flynn/flynn/test/cluster/client"
 )
-
-var sshWrapper = template.Must(template.New("ssh").Parse(`
-#!/bin/bash
-
-ssh -o LogLevel=FATAL -o IdentitiesOnly=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i {{.SSHKey}} "$@"
-`[1:]))
 
 var args *arg.Args
 var flynnrc string
@@ -139,66 +127,6 @@ func lookupImageURIs() error {
 		imageURIs[name] = fmt.Sprintf("https://example.com?name=%s&id=%s", fullName, image.ID)
 	}
 	return nil
-}
-
-type sshData struct {
-	Key     string
-	Pub     string
-	Env     []string
-	Cleanup func()
-}
-
-func genSSHKey() (*sshData, error) {
-	keyFile, err := ioutil.TempFile("", "")
-	if err != nil {
-		return nil, err
-
-	}
-	defer keyFile.Close()
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, err
-	}
-	pem.Encode(keyFile, &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(rsaKey),
-	})
-
-	pubFile, err := ioutil.TempFile("", "")
-	if err != nil {
-		return nil, err
-	}
-	defer pubFile.Close()
-	rsaPubKey, err := ssh.NewPublicKey(&rsaKey.PublicKey)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := pubFile.Write(ssh.MarshalAuthorizedKey(rsaPubKey)); err != nil {
-		return nil, err
-	}
-
-	wrapperFile, err := ioutil.TempFile("", "")
-	if err != nil {
-		return nil, err
-	}
-	defer wrapperFile.Close()
-	if err := sshWrapper.Execute(wrapperFile, map[string]string{"SSHKey": keyFile.Name()}); err != nil {
-		return nil, err
-	}
-	if err := wrapperFile.Chmod(0700); err != nil {
-		return nil, err
-	}
-
-	return &sshData{
-		Key: keyFile.Name(),
-		Pub: pubFile.Name(),
-		Env: []string{"GIT_SSH=" + wrapperFile.Name()},
-		Cleanup: func() {
-			os.RemoveAll(keyFile.Name())
-			os.RemoveAll(pubFile.Name())
-			os.RemoveAll(wrapperFile.Name())
-		},
-	}, nil
 }
 
 func createFlynnrc(c *cluster.Cluster) error {

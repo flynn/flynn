@@ -17,6 +17,7 @@ import (
 	"github.com/flynn/flynn/controller/name"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
@@ -40,8 +41,6 @@ func NewAppRepo(db *postgres.DB, defaultDomain string, router routerc.Client) *A
 	return &AppRepo{db: db, defaultDomain: defaultDomain, router: router}
 }
 
-var appNamePattern = regexp.MustCompile(`^[a-z\d]+(-[a-z\d]+)*$`)
-
 func (r *AppRepo) Add(data interface{}) error {
 	app := data.(*ct.App)
 	tx, err := r.db.Begin()
@@ -56,7 +55,7 @@ func (r *AppRepo) Add(data interface{}) error {
 		}
 		app.Name = name.Get(nameID)
 	}
-	if len(app.Name) > 100 || !appNamePattern.MatchString(app.Name) {
+	if len(app.Name) > 100 || !utils.AppNamePattern.MatchString(app.Name) {
 		return ct.ValidationError{Field: "name", Message: "is invalid"}
 	}
 	if app.ID == "" {

@@ -157,16 +157,15 @@ func (c *BaseCluster) StackAddCmd() (string, error) {
 	if c.ControllerKey == "" || c.ControllerPin == "" || c.Domain == nil || c.Domain.Name == "" {
 		return "", fmt.Errorf("Not enough data present")
 	}
-	return fmt.Sprintf("flynn cluster add -g %[1]s:2222 -p %[2]s default https://controller.%[1]s %[3]s", c.Domain.Name, c.ControllerPin, c.ControllerKey), nil
+	return fmt.Sprintf("flynn cluster add -p %s default %s %s", c.ControllerPin, c.Domain.Name, c.ControllerKey), nil
 }
 
 func (c *BaseCluster) ClusterConfig() *cfg.Cluster {
 	return &cfg.Cluster{
-		Name:    c.Name,
-		URL:     "https://controller." + c.Domain.Name,
-		Key:     c.ControllerKey,
-		GitHost: fmt.Sprintf("%s:2222", c.Domain.Name),
-		TLSPin:  c.ControllerPin,
+		Name:   c.Name,
+		Domain: c.Domain.Name,
+		Key:    c.ControllerKey,
+		TLSPin: c.ControllerPin,
 	}
 }
 
@@ -445,7 +444,6 @@ iptables -A FORWARD -i eth0 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 iptables -A FORWARD -i eth0 -p tcp --dport 80 -j ACCEPT
 iptables -A FORWARD -i eth0 -p tcp --dport 443 -j ACCEPT
 iptables -A FORWARD -i eth0 -p tcp --dport 22 -j ACCEPT
-iptables -A FORWARD -i eth0 -p tcp --dport 2222 -j ACCEPT
 iptables -A FORWARD -i eth0 -p icmp --icmp-type echo-request -j ACCEPT
 iptables -A FORWARD -i eth0 -j DROP
 /etc/init.d/iptables-persistent save

@@ -63,6 +63,10 @@ func (c *Cluster) ControllerDomain() string {
 	return "controller." + c.ClusterDomain
 }
 
+func (c *Cluster) GitDomain() string {
+	return "git." + c.ClusterDomain
+}
+
 type instances []*Instance
 
 func (i instances) Get(id string) (*Instance, error) {
@@ -383,11 +387,10 @@ func (c *Cluster) run(command string, s *Streams, env map[string]string) error {
 func (c *Cluster) CLIConfig() (*config.Config, error) {
 	conf := &config.Config{}
 	s := &config.Cluster{
-		Name:    "default",
-		URL:     "https://" + c.ControllerDomain(),
-		Key:     c.ControllerKey,
-		GitHost: c.ClusterDomain + ":2222",
-		TLSPin:  c.ControllerPin,
+		Name:   "default",
+		URL:    c.ClusterDomain,
+		Key:    c.ControllerKey,
+		TLSPin: c.ControllerPin,
 	}
 	if err := conf.Add(s, true /*force*/); err != nil {
 		return nil, err
@@ -573,7 +576,7 @@ func (c *Cluster) bootstrapLayer1(instances []*Instance) error {
 	if err != nil {
 		return fmt.Errorf("could not detect router ip: %s", err)
 	}
-	if err = setLocalDNS([]string{c.ClusterDomain, c.ControllerDomain()}, leader.Host()); err != nil {
+	if err = setLocalDNS([]string{c.ClusterDomain, c.ControllerDomain(), c.GitDomain()}, leader.Host()); err != nil {
 		return fmt.Errorf("could not set cluster DNS entries: %s", err)
 	}
 	c.RouterIP = leader.Host()

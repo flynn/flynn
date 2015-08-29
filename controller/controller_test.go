@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
@@ -227,12 +226,6 @@ func (s *S) createTestRelease(c *C, in *ct.Release) *ct.Release {
 	return in
 }
 
-func (s *S) createTestKey(c *C, in string) *ct.Key {
-	key, err := s.c.CreateKey(in)
-	c.Assert(err, IsNil)
-	return key
-}
-
 func (s *S) TestCreateRelease(c *C) {
 	for _, id := range []string{"", random.UUID()} {
 		out := s.createTestRelease(c, &ct.Release{ID: id})
@@ -310,58 +303,6 @@ func (s *S) TestDeleteFormation(c *C) {
 	}
 }
 
-func (s *S) TestCreateKey(c *C) {
-	in := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC5r1JfsAYIFi86KBa7C5nqKo+BLMJk29+5GsjelgBnCmn4J/QxOrVtovNcntoRLUCRwoHEMHzs3Tc6+PdswIxpX1l3YC78kgdJe6LVb962xUgP6xuxauBNRO7tnh9aPGyLbjl9j7qZAcn2/ansG1GBVoX1GSB58iBsVDH18DdVzlGwrR4OeNLmRQj8kuJEuKOoKEkW55CektcXjV08K3QSQID7aRNHgDpGGgp6XDi0GhIMsuDUGHAdPGZnqYZlxuUFaCW2hK6i1UkwnQCCEv/9IUFl2/aqVep2iX/ynrIaIsNKm16o0ooZ1gCHJEuUKRPUXhZUXqkRXqqHd3a4CUhH jonathan@titanous.com"
-	out := s.createTestKey(c, in)
-
-	c.Assert(out.ID, Equals, "7ab054ff4a2009fadc67e1f8b380dbee")
-	c.Assert(out.Key, Equals, in[:strings.LastIndex(in, " ")])
-	c.Assert(out.Comment, Equals, "jonathan@titanous.com")
-
-	gotKey, err := s.c.GetKey(out.ID)
-	c.Assert(err, IsNil)
-	c.Assert(gotKey, DeepEquals, out)
-
-	_, err = s.c.GetKey(out.ID + "fail")
-	c.Assert(err, Equals, controller.ErrNotFound)
-}
-
-func (s *S) TestDeleteKey(c *C) {
-	key := s.createTestKey(c, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDJv/RsyRxiSAh7cU236LOCZ3vD9PO87Fi32QbojQxuGDotmk65fN6WUuL7DQjzUnWkFRu4w/svmb+9MuYK0L2b4Kc1rKXBYaytzWqGtv2VaAFObth40AlNr0V26hcTcBNQQPa23Z8LwQNgELn2b/o2CK+Pie1UbE5lHg8R+pm03cI7fYPB0jA6LIS+IVKHslVhjzxtN49xm9W0DiCxouHZEl+Fd5asgtg10HN7CV5l2+ZFyrPAkxkQrzWpkUMgfvU+xFamyczzBKMT0fTYo+TUM3w3w3njJvqXdHjo3anrUF65rSFxfeNkXoe/NQDdvWu+XBfEypWv25hlQv91JI0N")
-
-	c.Assert(s.c.DeleteKey(key.ID), IsNil)
-
-	_, err := s.c.GetKey(key.ID)
-	c.Assert(err, Equals, controller.ErrNotFound)
-}
-
-func (s *S) TestRecreateKey(c *C) {
-	key := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC3I4gHed4RioRMoJTFdVYp9S6QhHUtMe2cdQAmaN5lVuAaEe9GmJ/wtD4pd7sCpw9daCVOD/WWKCDunrwiEwMNzZKPFQPRfrGAgpCdweD+mk62n/DuaeKJFcfB4C/iLqUrYQ9q0QNnokchI4Ts/CaWoesJOQsbtxDwxcaOlYA/Yq/nY/RA3aK0ZfZqngrOjNRuvhnNFeCF94w2CwwX9ley+PtL0LSWOK2F9D/VEAoRMY89av6WQEoho3vLH7PIOP4OKdla7ezxP9nU14MN4PSv2yUS15mZ14SkA3EF+xmO0QXYUcUi4v5UxkBpoRYNAh32KMMD70pXPRCmWvZ5pRrH lewis@lmars.net"
-
-	originalKey := s.createTestKey(c, key)
-	c.Assert(originalKey.ID, Equals, "0c0432006c63fc965ef6946fb67ab559")
-	c.Assert(originalKey.Key, Equals, key[:strings.LastIndex(key, " ")])
-	c.Assert(originalKey.Comment, Equals, "lewis@lmars.net")
-
-	// Post a duplicate
-	_, err := s.c.CreateKey(key)
-	c.Assert(err, IsNil)
-
-	// Check there is still only one key
-	list, err := s.c.KeyList()
-	c.Assert(err, IsNil)
-	c.Assert(list, HasLen, 1)
-
-	// Delete the original
-	c.Assert(s.c.DeleteKey(originalKey.ID), IsNil)
-
-	// Create the same key
-	newKey := s.createTestKey(c, key)
-	c.Assert(newKey.ID, Equals, "0c0432006c63fc965ef6946fb67ab559")
-	c.Assert(newKey.Key, Equals, key[:strings.LastIndex(key, " ")])
-	c.Assert(newKey.Comment, Equals, "lewis@lmars.net")
-}
-
 func (s *S) TestAppList(c *C) {
 	s.createTestApp(c, &ct.App{Name: "list-test"})
 
@@ -407,24 +348,6 @@ func (s *S) TestAppReleaseList(c *C) {
 	c.Assert(list, HasLen, len(releases))
 	c.Assert(list[0], DeepEquals, releases[1])
 	c.Assert(list[1], DeepEquals, releases[0])
-}
-
-func (s *S) TestKeyList(c *C) {
-	s.createTestKey(c, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCqE9AJti/17eigkIhA7+6TF9rdTVxjPv80UxIT6ELaNPHegqib5m94Wab4UoZAGtBPLKJs9o8LRO3H29X5q5eXCU5mwx4qQhcMEYkILWj0Y1T39Xi2RI3jiWcTsphAAYmy+uT2Nt740OK1FaQxfdzYx4cjsjtb8L82e35BkJE2TdjXWkeHxZWDZxMlZXme56jTNsqB2OuC0gfbAbrjSCkolvK1RJbBZSSBgKQrYXiyYjjLfcw2O0ZAKPBeS8ckVf6PO8s/+azZzJZ0Kl7YGHYEX3xRi6sJS0gsI4Y6+sddT1zT5kh0Bg3C8cKnZ1NiVXLH0pPKz68PhjWhwpOVUehD")
-
-	list, err := s.c.KeyList()
-	c.Assert(err, IsNil)
-
-	c.Assert(len(list) > 0, Equals, true)
-	c.Assert(list[0].ID, Not(Equals), "")
-
-	for _, k := range list {
-		c.Assert(s.c.DeleteKey(k.ID), IsNil)
-	}
-
-	list, err = s.c.KeyList()
-	c.Assert(err, IsNil)
-	c.Assert(list, HasLen, 0)
 }
 
 func (s *S) TestArtifactList(c *C) {

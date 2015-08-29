@@ -3,16 +3,21 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	cfg "github.com/flynn/flynn/cli/config"
+	"github.com/flynn/flynn/controller/client"
 )
 
 func init() {
 	register("cluster", runCluster, `
 usage: flynn cluster
-       flynn cluster add [-f] [-d] [-g <githost>] [-p <tlspin>] <cluster-name> <url> <key>
+       flynn cluster add [-f] [-d] [-g <githost>] [-p <tlspin>] <cluster-name> <domain> <key>
        flynn cluster remove <cluster-name>
        flynn cluster default [<cluster-name>]
 
@@ -21,7 +26,7 @@ Manage clusters in the ~/.flynnrc configuration file.
 Options:
 	-f, --force               force add cluster
 	-d, --default             set as default cluster
-	-g, --git-host=<githost>  git host (if host differs from api URL host)
+	-g, --git-host=<githost>  git host (legacy SSH only)
 	-p, --tls-pin=<tlspin>    SHA256 of the cluster's TLS cert (useful if it is self-signed)
 
 Commands:
@@ -33,7 +38,7 @@ Commands:
 
 Examples:
 
-	$ flynn cluster add -g dev.localflynn.com:2222 -p KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs= default https://controller.dev.localflynn.com e09dc5301d72be755a3d666f617c4600
+	$ flynn cluster add -p KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs= default dev.localflynn.com e09dc5301d72be755a3d666f617c4600
 	Cluster "default" added.
 `)
 }
@@ -54,13 +59,18 @@ func runCluster(args *docopt.Args) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	listRec(w, "NAME", "URL")
+	listRec(w, "NAME", "DOMAIN")
 	for _, s := range config.Clusters {
-		if s.Name == config.Default {
-			listRec(w, s.Name, s.URL, "(default)")
+		data := []interface{}{s.Name}
+		if s.URL != "" {
+			data = append(data, s.URL, "(legacy git)")
 		} else {
-			listRec(w, s.Name, s.URL)
+			data = append(data, s.Domain)
 		}
+		if s.Name == config.Default {
+			data = append(data, "(default)")
+		}
+		listRec(w, data...)
 	}
 	return nil
 }
@@ -68,10 +78,14 @@ func runCluster(args *docopt.Args) error {
 func runClusterAdd(args *docopt.Args) error {
 	s := &cfg.Cluster{
 		Name:    args.String["<cluster-name>"],
-		URL:     args.String["<url>"],
 		Key:     args.String["<key>"],
 		GitHost: args.String["--git-host"],
 		TLSPin:  args.String["--tls-pin"],
+	}
+	if domain := args.String["<domain>"]; strings.HasPrefix(domain, "https://") {
+		s.URL = domain
+	} else {
+		s.Domain = domain
 	}
 
 	if err := config.Add(s, args.Bool["--force"]); err != nil {
@@ -82,6 +96,20 @@ func runClusterAdd(args *docopt.Args) error {
 
 	if setDefault && !config.SetDefault(s.Name) {
 		return errors.New(fmt.Sprintf("Cluster %q does not exist and cannot be set as default.", s.Name))
+	}
+
+	if s.Domain != "" {
+		client, err := s.Client()
+		if err != nil {
+			return err
+		}
+		caPath, err := writeCACert(client, s.Name)
+		if err != nil {
+			return fmt.Errorf("Error writing CA certificate: %s", err)
+		}
+		if err := writeGlobalGitConfig(s.Domain, caPath); err != nil {
+			return err
+		}
 	}
 
 	if err := config.SaveTo(configPath()); err != nil {
@@ -96,10 +124,28 @@ func runClusterAdd(args *docopt.Args) error {
 	return nil
 }
 
+func writeCACert(c *controller.Client, name string) (string, error) {
+	res, err := c.RawReq("GET", "/ca-cert", nil, nil, nil)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+	if err := os.MkdirAll(caCertDir(), 0755); err != nil {
+		return "", err
+	}
+	dest, err := os.Create(filepath.Join(caCertDir(), name+".pem"))
+	if err != nil {
+		return "", err
+	}
+	defer dest.Close()
+	_, err = io.Copy(dest, res.Body)
+	return dest.Name(), err
+}
+
 func runClusterRemove(args *docopt.Args) error {
 	name := args.String["<cluster-name>"]
 
-	if config.Remove(name) {
+	if c := config.Remove(name); c != nil {
 		msg := fmt.Sprintf("Cluster %q removed.", name)
 
 		// Select next available cluster as default
@@ -110,6 +156,10 @@ func runClusterRemove(args *docopt.Args) error {
 
 		if err := config.SaveTo(configPath()); err != nil {
 			return err
+		}
+
+		if c.Domain != "" {
+			removeGlobalGitConfig(c.Domain)
 		}
 
 		log.Print(msg)

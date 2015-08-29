@@ -76,7 +76,7 @@ var services = []Service{
 	{Name: "dashboard", ReqFn: RandomReqFn("dashboard-web")},
 	{Name: "discoverd"},
 	{Name: "flannel"},
-	{Name: "gitreceive", ReqFn: RandomReqFn("gitreceive-http")},
+	{Name: "gitreceive", ReqFn: RandomReqFn("gitreceive")},
 	{Name: "logaggregator", ReqFn: LeaderReqFn("logaggregator", "80")},
 	{Name: "postgres", ReqFn: LeaderReqFn("postgres", "5433")},
 	{Name: "router", ReqFn: RandomReqFn("router-api")},

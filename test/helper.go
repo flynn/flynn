@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -39,9 +38,6 @@ type Helper struct {
 
 	hostsMtx sync.Mutex
 	hosts    map[string]*cluster.Host
-
-	sshMtx sync.Mutex
-	ssh    *sshData
 }
 
 func (h *Helper) clusterConf(t *c.C) *config.Cluster {
@@ -70,11 +66,9 @@ func (h *Helper) controllerClient(t *c.C) *controller.Client {
 	defer h.controllerMtx.Unlock()
 	if h.controller == nil {
 		conf := h.clusterConf(t)
-		pin, err := base64.StdEncoding.DecodeString(conf.TLSPin)
+		var err error
+		h.controller, err = conf.Client()
 		t.Assert(err, c.IsNil)
-		client, err := controller.NewClientWithConfig(conf.URL, conf.Key, controller.Config{Pin: pin})
-		t.Assert(err, c.IsNil)
-		h.controller = client
 	}
 	return h.controller
 }
@@ -108,17 +102,6 @@ func (h *Helper) anyHostClient(t *c.C) *cluster.Host {
 	hosts, err := cluster.Hosts()
 	t.Assert(err, c.IsNil)
 	return hosts[0]
-}
-
-func (h *Helper) sshKeys(t *c.C) *sshData {
-	h.sshMtx.Lock()
-	defer h.sshMtx.Unlock()
-	if h.ssh == nil {
-		var err error
-		h.ssh, err = genSSHKey()
-		t.Assert(err, c.IsNil)
-	}
-	return h.ssh
 }
 
 const (
@@ -239,13 +222,12 @@ func (h *Helper) removeHosts(t *c.C, hosts []*tc.Instance) {
 
 type gitRepo struct {
 	dir string
-	ssh *sshData
 	t   *c.C
 }
 
 func (h *Helper) newGitRepo(t *c.C, nameOrURL string) *gitRepo {
 	dir := filepath.Join(t.MkDir(), "repo")
-	r := &gitRepo{dir, h.sshKeys(t), t}
+	r := &gitRepo{dir, t}
 
 	if strings.HasPrefix(nameOrURL, "https://") {
 		t.Assert(run(t, exec.Command("git", "clone", nameOrURL, dir)), Succeeds)
@@ -269,19 +251,6 @@ func (r *gitRepo) flynn(args ...string) *CmdResult {
 
 func (r *gitRepo) git(args ...string) *CmdResult {
 	cmd := exec.Command("git", args...)
-	cmd.Env = append(os.Environ(), r.ssh.Env...)
 	cmd.Dir = r.dir
 	return run(r.t, cmd)
-}
-
-func (h *Helper) TearDownSuite(t *c.C) {
-	h.cleanup()
-}
-
-func (h *Helper) cleanup() {
-	h.sshMtx.Lock()
-	if h.ssh != nil {
-		h.ssh.Cleanup()
-	}
-	h.sshMtx.Unlock()
 }

@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"net/url"
@@ -11,14 +12,40 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/BurntSushi/toml"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/mitchellh/go-homedir"
+	"github.com/flynn/flynn/controller/client"
 )
 
 type Cluster struct {
-	Name    string `json:"name"`
+	Name   string `json:"name"`
+	Domain string `json:"domain"`
+	Key    string `json:"key"`
+	TLSPin string `json:"tls_pin"`
+
+	// GitHost and URL are legacy config options for clusters that are using git
+	// over SSH, they should be removed at some point in the near future.
 	GitHost string `json:"git_host"`
 	URL     string `json:"url"`
-	Key     string `json:"key"`
-	TLSPin  string `json:"tls_pin"`
+}
+
+func (c *Cluster) Client() (*controller.Client, error) {
+	url := c.URL
+	if url == "" {
+		url = "https://controller." + c.Domain
+	}
+
+	var client *controller.Client
+	var err error
+	if c.TLSPin != "" {
+		pin, err := base64.StdEncoding.DecodeString(c.TLSPin)
+		if err != nil {
+			return nil, fmt.Errorf("error decoding tls pin: %s", err)
+		}
+		client, err = controller.NewClientWithConfig(url, c.Key, controller.Config{Pin: pin})
+	} else {
+		client, err = controller.NewClient(url, c.Key)
+	}
+
+	return client, err
 }
 
 type Config struct {
@@ -69,7 +96,7 @@ func (c *Config) Marshal() []byte {
 }
 
 func (c *Config) Add(s *Cluster, force bool) error {
-	if s.GitHost == "" {
+	if s.Domain == "" && s.GitHost == "" {
 		u, err := url.Parse(s.URL)
 		if err != nil {
 			return err
@@ -91,6 +118,8 @@ func (c *Config) Add(s *Cluster, force bool) error {
 			msg = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.URL)
 		case existing.GitHost == s.GitHost:
 			msg = fmt.Sprintf("A cluster with the git host %q already exists in ~/.flynnrc", s.GitHost)
+		case s.Domain != "" && existing.Domain == s.Domain:
+			msg = fmt.Sprintf("A cluster with the domain %q already exists in ~/.flynnrc", s.Domain)
 		}
 
 		// The new cluster config match with existing one
@@ -110,15 +139,15 @@ func (c *Config) Add(s *Cluster, force bool) error {
 	return nil
 }
 
-func (c *Config) Remove(name string) bool {
+func (c *Config) Remove(name string) *Cluster {
 	for i, s := range c.Clusters {
 		if s.Name != name {
 			continue
 		}
 		c.Clusters = append(c.Clusters[:i], c.Clusters[i+1:]...)
-		return true
+		return s
 	}
-	return false
+	return nil
 }
 
 func (c *Config) SetDefault(name string) bool {

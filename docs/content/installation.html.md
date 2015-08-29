@@ -64,7 +64,6 @@ $ make dashboard
 
 $ vagrant up
 # Follow the instructions output by vagrant up, then...
-$ flynn key add
 $ flynn -a dashboard env get LOGIN_TOKEN
 # Copy the login token
 # Open the dashboard in a browser
@@ -165,8 +164,7 @@ for all nodes in the cluster:
 
 * 80 (HTTP)
 * 443 (HTTPS)
-* 2222 (Git over SSH)
-* 3000 to 3500 (user defined TCP services)
+* 3000 to 3500 (user-defined TCP services, optional)
 
 **Note:** A firewall with this configuration is _required_ to prevent external
 access to internal management APIs.

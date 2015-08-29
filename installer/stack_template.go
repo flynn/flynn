@@ -133,12 +133,6 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
-            "FromPort": "2222",
-            "ToPort": "2222",
-            "CidrIp": "0.0.0.0/0"
-          },
-          {
-            "IpProtocol": "tcp",
             "FromPort": "22",
             "ToPort": "22",
             "CidrIp": "0.0.0.0/0"

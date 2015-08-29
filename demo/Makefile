@@ -21,7 +21,6 @@ VAGRANT_ENV := CLUSTER_DOMAIN="${CLUSTER_DOMAIN}" SSH_AUTH_SOCK="" FLAG_BOOTSTRA
 init: update
 	@$(MAKE) up
 	@$(MAKE) bootstrap
-	flynn -c ${CLUSTER} key add
 	@printf "\nFlynn is now running in the VM.\nOpen dashboard: make dashboard\n\n"
 
 # Install flynn cli on host

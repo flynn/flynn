@@ -322,7 +322,6 @@ func (s *ControllerSuite) TestAppDeleteCleanup(t *c.C) {
 	// create and push app
 	r := s.newGitRepo(t, "http")
 	t.Assert(r.flynn("create", app), Succeeds)
-	t.Assert(r.flynn("key", "add", r.ssh.Pub), Succeeds)
 	t.Assert(r.git("push", "flynn", "master"), Succeeds)
 
 	// wait for it to start
@@ -386,7 +385,6 @@ func (s *ControllerSuite) TestRouteEvents(t *c.C) {
 	// create and push app
 	r := s.newGitRepo(t, "http")
 	t.Assert(r.flynn("create", app), Succeeds)
-	t.Assert(r.flynn("key", "add", r.ssh.Pub), Succeeds)
 	t.Assert(r.git("push", "flynn", "master"), Succeeds)
 
 	// wait for it to start

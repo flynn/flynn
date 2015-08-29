@@ -163,6 +163,11 @@
     "url": "http://postgres-api.discoverd/ping"
   },
   {
+    "id": "controller-cert",
+    "action": "gen-tls-cert",
+    "hosts": ["{{ getenv \"CLUSTER_DOMAIN\" }}", "*.{{ getenv \"CLUSTER_DOMAIN\" }}"]
+  },
+  {
     "id": "controller",
     "action": "run-app",
     "app": {
@@ -173,7 +178,8 @@
         "AUTH_KEY": "{{ (index .StepData \"controller-key\").Data }}",
         "BACKOFF_PERIOD": "{{ getenv \"BACKOFF_PERIOD\" }}",
         "DEFAULT_ROUTE_DOMAIN": "{{ getenv \"CLUSTER_DOMAIN\" }}",
-        "NAME_SEED": "{{ (index .StepData \"name-seed\").Data }}"
+        "NAME_SEED": "{{ (index .StepData \"name-seed\").Data }}",
+        "CA_CERT": "{{ (index .StepData \"controller-cert\").CACert }}"
       },
       "processes": {
         "web": {
@@ -202,11 +208,6 @@
       "web": 1
     },
     "resources": [{"name":"postgres", "url":"http://postgres-api.discoverd/databases"}]
-  },
-  {
-    "id": "controller-cert",
-    "action": "gen-tls-cert",
-    "hosts": ["{{ getenv \"CLUSTER_DOMAIN\" }}", "*.{{ getenv \"CLUSTER_DOMAIN\" }}"]
   },
   {
     "id": "controller-wait",
@@ -336,10 +337,6 @@
     "resources": [{"name":"postgres", "url":"http://postgres-api.discoverd/databases"}]
   },
   {
-    "id": "gitreceive-key",
-    "action": "gen-ssh-key"
-  },
-  {
     "id": "gitreceive",
     "action": "deploy-app",
     "app": {
@@ -348,11 +345,10 @@
     },
     "artifact": {
       "type": "docker",
-      "uri": "$image_repository?name=flynn/receiver&id=$image_id[receiver]"
+      "uri": "$image_repository?name=flynn/gitreceive&id=$image_id[gitreceive]"
     },
     "release": {
       "env": {
-        "SSH_PRIVATE_KEYS": "{{ (index .StepData \"gitreceive-key\").PrivateKeys }}",
         "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
         "SLUGBUILDER_IMAGE_URI": "$image_repository?name=flynn/slugbuilder&id=$image_id[slugbuilder]",
         "SLUGRUNNER_IMAGE_URI": "$image_repository?name=flynn/slugrunner&id=$image_id[slugrunner]"
@@ -364,16 +360,7 @@
               "proto": "tcp",
               "service": {
                 "name": "gitreceive",
-                "create": true,
-                "check": {"type": "tcp"}
-              }
-            },
-            {
-              "proto": "tcp",
-              "service": {
-                "name": "gitreceive-http",
-                "create": true,
-                "check": {"type": "tcp"}
+                "create": true
               }
             }
           ]
@@ -394,9 +381,10 @@
     "id": "gitreceive-route",
     "action": "add-route",
     "app_step": "gitreceive",
-    "type": "tcp",
+    "cert_step": "controller-cert",
+    "type": "http",
     "service": "gitreceive",
-    "port": 2222
+    "domain": "git.{{ getenv \"CLUSTER_DOMAIN\" }}"
   },
   {
     "id": "controller-route",
@@ -566,6 +554,6 @@
   {
     "id": "log-complete",
     "action": "log",
-    "output": "\n\nFlynn bootstrapping complete. Install the Flynn CLI (see https://flynn.io/docs/cli for instructions) and paste the line below into a terminal window:\n\nflynn cluster add -g {{ getenv \"CLUSTER_DOMAIN\" }}:2222 -p {{ (index .StepData \"controller-cert\").Pin }} default https://controller.{{ getenv \"CLUSTER_DOMAIN\" }} {{ (index .StepData \"controller-key\").Data }}\n\nThe built-in dashboard can be accessed at http://dashboard.{{ getenv \"CLUSTER_DOMAIN\" }} and your login token is {{ (index .StepData \"dashboard-login-token\").Data }}"
+    "output": "\n\nFlynn bootstrapping complete. Install the Flynn CLI (see https://flynn.io/docs/cli for instructions) and paste the line below into a terminal window:\n\nflynn cluster add -p {{ (index .StepData \"controller-cert\").Pin }} default {{ getenv \"CLUSTER_DOMAIN\" }} {{ (index .StepData \"controller-key\").Data }}\n\nThe built-in dashboard can be accessed at http://dashboard.{{ getenv \"CLUSTER_DOMAIN\" }} and your login token is {{ (index .StepData \"dashboard-login-token\").Data }}"
   }
 ]

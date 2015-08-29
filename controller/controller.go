@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/md5"
 	"crypto/subtle"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -23,6 +22,7 @@ import (
 	"github.com/flynn/flynn/controller/name"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/discoverd/client"
 	logaggc "github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -213,7 +213,6 @@ func appHandler(c handlerConfig) http.Handler {
 
 	q := que.NewClient(c.pgxpool)
 	providerRepo := NewProviderRepo(c.db)
-	keyRepo := NewKeyRepo(c.db)
 	resourceRepo := NewResourceRepo(c.db)
 	appRepo := NewAppRepo(c.db, os.Getenv("DEFAULT_ROUTE_DOMAIN"), c.rc)
 	artifactRepo := NewArtifactRepo(c.db)
@@ -237,6 +236,7 @@ func appHandler(c handlerConfig) http.Handler {
 		logaggc:        c.lc,
 		routerc:        c.rc,
 		que:            q,
+		caCert:         []byte(os.Getenv("CA_CERT")),
 	}
 
 	httpRouter := httprouter.New()
@@ -245,7 +245,6 @@ func appHandler(c handlerConfig) http.Handler {
 	crud(httpRouter, "releases", ct.Release{}, releaseRepo)
 	crud(httpRouter, "providers", ct.Provider{}, providerRepo)
 	crud(httpRouter, "artifacts", ct.Artifact{}, artifactRepo)
-	crud(httpRouter, "keys", ct.Key{}, keyRepo)
 
 	httpRouter.Handler("GET", status.Path, status.Handler(func() status.Status {
 		if err := c.db.Exec("SELECT 1"); err != nil {
@@ -253,6 +252,8 @@ func appHandler(c handlerConfig) http.Handler {
 		}
 		return status.Healthy
 	}))
+
+	httpRouter.GET("/ca-cert", httphelper.WrapHandler(api.GetCACert))
 
 	httpRouter.POST("/apps/:apps_id", httphelper.WrapHandler(api.UpdateApp))
 	httpRouter.GET("/apps/:apps_id/log", httphelper.WrapHandler(api.appLookup(api.AppLog)))
@@ -304,7 +305,7 @@ func muxHandler(main http.Handler, authKeys []string) http.Handler {
 			w.WriteHeader(200)
 			return
 		}
-		_, password, _ := parseBasicAuth(r.Header)
+		_, password, _ := utils.ParseBasicAuth(r.Header)
 		if password == "" && strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
 			password = r.URL.Query().Get("key")
 		}
@@ -337,6 +338,7 @@ type controllerAPI struct {
 	logaggc        logaggc.Client
 	routerc        routerc.Client
 	que            *que.Client
+	caCert         []byte
 
 	eventListener    *EventListener
 	eventListenerMtx sync.Mutex
@@ -429,25 +431,7 @@ func createEvent(dbExec func(string, ...interface{}) (sql.Result, error), e *ct.
 	return err
 }
 
-func parseBasicAuth(h http.Header) (username, password string, err error) {
-	s := strings.SplitN(h.Get("Authorization"), " ", 2)
-
-	if len(s) != 2 {
-		return "", "", errors.New("failed to parse authentication string ")
-	}
-	if s[0] != "Basic" {
-		return "", "", fmt.Errorf("authorization scheme is %v, not Basic ", s[0])
-	}
-
-	c, err := base64.StdEncoding.DecodeString(s[1])
-	if err != nil {
-		return "", "", errors.New("failed to parse base64 basic credentials")
-	}
-
-	s = strings.SplitN(string(c), ":", 2)
-	if len(s) != 2 {
-		return "", "", errors.New("failed to parse basic credentials")
-	}
-
-	return s[0], s[1], nil
+func (c *controllerAPI) GetCACert(_ context.Context, w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/x-x509-ca-cert")
+	w.Write(c.caCert)
 }

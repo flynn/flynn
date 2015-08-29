@@ -58,10 +58,6 @@ func main() {
 		// Run provider_create first so that discoverd service has time to
 		// propagate
 		{"provider_create", e.createProvider},
-		{"key_create", e.createKey},
-		{"key_get", e.getKey},
-		{"key_list", e.listKeys},
-		{"key_delete", e.deleteKey},
 		{"app_create_error", e.createAppError},
 		{"app_create", e.createApp},
 		{"app_initial_release_get", e.getInitialAppRelease},
@@ -138,32 +134,6 @@ func (e *generator) listenAndServe(l *log.Logger) {
 	})
 
 	http.ListenAndServe(":"+e.conf.ourPort, nil)
-}
-
-func generatePublicKey() (string, error) {
-	key := `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDPI19fkFmPNg3MGqJorFTbetPJjxlhLDUJFALYe5DyqW0lAnb2R7XvXzj+kRX9LkwOeQjf6nM4bcXbd/H3YPlMDc9JfDuSGlwvo0X8KUQ6PopgyfQ15GA+8YDgwYcBJowIXqAc52GVNnBUeoZzBKvNnsVjAw6KkTPS0aZ6KBZadtYx+Y1fJJBoygh/gtPZ/MQry3XQRvbKPa0iU34Wcx8pXx5QVFLHvyORczQlEVyq5qa5DT86CRR/wC4yH32hkNGalGXY7sZg0j4EY4AeD2yCcmsp7hTt4Ql4gRp3r04ye4DZ7epdXW2tp2vJ3IVn+l6BSNooBIfoD7ZdkUVce51z some-comment`
-	return key, nil
-}
-
-func (e *generator) createKey() {
-	pubKey, err := generatePublicKey()
-	key, err := e.client.CreateKey(pubKey)
-	if err != nil {
-		log.Fatal(err)
-	}
-	e.resourceIds["key"] = key.ID
-}
-
-func (e *generator) getKey() {
-	e.client.GetKey(e.resourceIds["key"])
-}
-
-func (e *generator) listKeys() {
-	e.client.KeyList()
-}
-
-func (e *generator) deleteKey() {
-	e.client.DeleteKey(e.resourceIds["key"])
 }
 
 func (e *generator) createApp() {
