@@ -442,6 +442,13 @@ func (s *CLISuite) TestRoute(t *c.C) {
 
 func (s *CLISuite) TestProvider(t *c.C) {
 	t.Assert(s.flynn(t, "provider"), SuccessfulOutputContains, "postgres")
+
+	// flynn provider add
+	testProvider := "test-provider" + random.String(8)
+	testProviderUrl := "http://testprovider.discoverd"
+	cmd := s.flynn(t, "provider", "add", testProvider, testProviderUrl)
+	t.Assert(cmd, Outputs, fmt.Sprintf("Created provider %s.\n", testProvider))
+	t.Assert(s.flynn(t, "provider"), SuccessfulOutputContains, testProvider)
 }
 
 func (s *CLISuite) TestResource(t *c.C) {
