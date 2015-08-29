@@ -283,12 +283,14 @@ done
 
 echo "nameserver ${ip}" | sudo tee /etc/resolv.conf
 
-cat > ~/.flynnrc
+cd ~/go/src/github.com/flynn/flynn
+
+cli/bin/flynn cluster add -p {{ .Config.TLSPin }} default {{ .Config.Domain }} {{ .Config.Key }}
 
 git config --global user.email "ci@flynn.io"
 git config --global user.name "CI"
 
-cd ~/go/src/github.com/flynn/flynn/test
+cd test
 
 cmd="bin/flynn-test \
   --flynnrc $HOME/.flynnrc \
@@ -383,9 +385,8 @@ func (r *Runner) build(b *Build) (err error) {
 	}
 
 	var script bytes.Buffer
-	testRunScript.Execute(&script, map[string]interface{}{"Cluster": c, "ListenPort": listenPort})
+	testRunScript.Execute(&script, map[string]interface{}{"Cluster": c, "Config": config.Clusters[0], "ListenPort": listenPort})
 	return c.RunWithEnv(script.String(), &cluster.Streams{
-		Stdin:  bytes.NewBuffer(config.Marshal()),
 		Stdout: out,
 		Stderr: out,
 	}, map[string]string{"TEST_RUNNER_AUTH_KEY": r.authKey})
