@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"net/url"
 	"os"
@@ -14,7 +13,7 @@ import (
 	"syscall"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/bootstrap/discovery"
 	"github.com/flynn/flynn/host/cli"
 	"github.com/flynn/flynn/host/config"
@@ -29,9 +28,9 @@ import (
 
 const configFile = "/etc/flynn/host.json"
 
-func init() {
-	log.SetFlags(log.Lshortfile | log.Lmicroseconds)
+var logger = log15.New("app", "host", "pid", os.Getpid())
 
+func init() {
 	cli.Register("daemon", runDaemon, `
 usage: flynn-host daemon [options]
 
@@ -104,13 +103,13 @@ See 'flynn-host help <command>' for more information on a specific command.
 			var err error
 			c, err = config.Open(n)
 			if err != nil {
-				log.Fatalf("error opening config file %s: %s", n, err)
+				shutdown.Fatalf("error opening config file %s: %s", n, err)
 			}
 		} else {
 			var err error
 			c, err = config.Open(configFile)
 			if err != nil && !os.IsNotExist(err) {
-				log.Fatalf("error opening config file %s: %s", configFile, err)
+				shutdown.Fatalf("error opening config file %s: %s", configFile, err)
 			}
 			if c == nil {
 				c = &config.Config{}
@@ -154,49 +153,55 @@ func runDaemon(args *docopt.Args) {
 		peerIPs = strings.Split(args.String["--peer-ips"], ",")
 	}
 
-	grohl.AddContext("app", "host")
-	grohl.Log(grohl.Data{"at": "start"})
-	g := grohl.NewContext(grohl.Data{"fn": "main"})
-
 	if hostID == "" {
 		hostID = strings.Replace(hostname, "-", "", -1)
 	}
+
+	log := logger.New("fn", "runDaemon", "host.id", hostID)
+	log.Info("starting daemon")
+
+	log.Info("validating host ID")
 	if strings.Contains(hostID, "-") {
 		shutdown.Fatal("host id must not contain dashes")
 	}
 	if externalIP == "" {
+		log.Info("detecting external IP")
 		var err error
 		externalIP, err = config.DefaultExternalIP()
 		if err != nil {
+			log.Error("error detecting external IP", "err", err)
 			shutdown.Fatal(err)
 		}
+		log.Info("using external IP " + externalIP)
 	}
 
 	publishAddr := net.JoinHostPort(externalIP, httpPort)
 	if discoveryToken != "" {
 		// TODO: retry
+		log.Info("registering with cluster discovery service", "token", discoveryToken, "addr", publishAddr, "name", hostID)
 		discoveryID, err := discovery.RegisterInstance(discovery.Info{
 			ClusterURL:  discoveryToken,
 			InstanceURL: "http://" + publishAddr,
 			Name:        hostID,
 		})
 		if err != nil {
-			g.Log(grohl.Data{"at": "register_discovery", "status": "error", "err": err.Error()})
+			log.Error("error registering with cluster discovery service", "err", err)
 			shutdown.Fatal(err)
 		}
-		g.Log(grohl.Data{"at": "register_discovery", "id": discoveryID})
+		log.Info("registered with cluster discovery service", "id", discoveryID)
 	}
 
 	state := NewState(hostID, stateFile)
 	shutdown.BeforeExit(func() { state.CloseDB() })
 
-	// create volume manager
+	log.Info("initializing volume manager", "provider", volProvider)
 	var newVolProvider func() (volume.Provider, error)
 	switch volProvider {
 	case "zfs":
 		newVolProvider = func() (volume.Provider, error) {
 			// use a zpool backing file size of either 70% of the device on which
 			// volumes will reside, or 100GB if that can't be determined.
+			log.Info("determining ZFS zpool size")
 			var size int64
 			var dev syscall.Statfs_t
 			if err := syscall.Statfs(volPath, &dev); err == nil {
@@ -204,7 +209,7 @@ func runDaemon(args *docopt.Args) {
 			} else {
 				size = 100000000000
 			}
-			g.Log(grohl.Data{"at": "zpool_size", "size": size})
+			log.Info(fmt.Sprintf("using ZFS zpool size %d", size))
 
 			return zfsVolume.NewProvider(&zfsVolume.ProviderConfig{
 				DatasetName: "flynn-default",
@@ -226,9 +231,12 @@ func runDaemon(args *docopt.Args) {
 	)
 	shutdown.BeforeExit(func() { vman.CloseDB() })
 
-	mux := logmux.New(1000)
+	muxSize := 1000
+	log.Info("creating logmux buffer", "size", muxSize)
+	mux := logmux.New(muxSize)
 	shutdown.BeforeExit(func() { mux.Close() })
 
+	log.Info("initializing job backend", "type", backendName)
 	var backend Backend
 	var err error
 	switch backendName {
@@ -237,7 +245,7 @@ func runDaemon(args *docopt.Args) {
 	case "mock":
 		backend = MockBackend{}
 	default:
-		log.Fatalf("unknown backend %q", backendName)
+		shutdown.Fatalf("unknown backend %q", backendName)
 	}
 	if err != nil {
 		shutdown.Fatal(err)
@@ -256,18 +264,25 @@ func runDaemon(args *docopt.Args) {
 		backend:          backend,
 		vman:             vman,
 		connectDiscoverd: discoverdManager.ConnectLocal,
+		log:              logger.New("host.id", hostID),
 	}
 
 	// restore the host status if set in the environment
 	if statusEnv := os.Getenv("FLYNN_HOST_STATUS"); statusEnv != "" {
+		log.Info("restoring host status from parent")
 		if err := json.Unmarshal([]byte(statusEnv), &host.status); err != nil {
+			log.Error("error restoring host status from parent", "err", err)
 			shutdown.Fatal(err)
 		}
-		host.status.PID = os.Getpid()
+		pid := os.Getpid()
+		log.Info("setting status PID", "pid", pid)
+		host.status.PID = pid
 	}
 
+	log.Info("creating HTTP listener")
 	l, err := newHTTPListener(net.JoinHostPort(listenIP, httpPort))
 	if err != nil {
+		log.Error("error creating HTTP listener", "err", err)
 		shutdown.Fatal(err)
 	}
 	host.listener = l
@@ -277,23 +292,36 @@ func runDaemon(args *docopt.Args) {
 	// opening state DBs and serving requests.
 	var controlFD int
 	if fdEnv := os.Getenv("FLYNN_CONTROL_FD"); fdEnv != "" {
+		log.Info("parsing control socket file descriptor")
 		controlFD, err = strconv.Atoi(fdEnv)
 		if err != nil {
+			log.Error("error parsing control socket file descriptor", "err", err)
 			shutdown.Fatal(err)
 		}
+
+		log.Info("waiting for resume message from parent")
 		msg := make([]byte, len(ControlMsgResume))
 		if _, err := syscall.Read(controlFD, msg); err != nil {
-			shutdown.Fatalf("error reading from parent control socket: %s", err)
+			log.Error("error waiting for resume message from parent", "err", err)
+			shutdown.Fatal(err)
 		}
+
+		log.Info("validating resume message")
 		if !bytes.Equal(msg, ControlMsgResume) {
-			shutdown.Fatalf("unexpected resume message from parent: %s", msg)
+			log.Error(fmt.Sprintf("unexpected resume message from parent: %v", msg))
+			shutdown.ExitWithCode(1)
 		}
+
+		log.Info("receiving log buffers from parent")
 		if err := json.NewDecoder(&controlSock{controlFD}).Decode(&buffers); err != nil {
-			shutdown.Fatalf("error decoding log buffers from parent control socket: %s", err)
+			log.Error("error receiving log buffers from parent", "err", err)
+			shutdown.Fatal(err)
 		}
 	}
 
+	log.Info("opening state databases")
 	if err := host.OpenDBs(); err != nil {
+		log.Error("error opening state databases", "err", err)
 		shutdown.Fatal(err)
 	}
 
@@ -306,64 +334,89 @@ func runDaemon(args *docopt.Args) {
 			except = []string{host.status.Discoverd.JobID}
 		}
 		host.statusMtx.RUnlock()
+		log.Info("stopping all jobs except discoverd")
 		if err := backend.Cleanup(except); err != nil {
+			log.Error("error stopping all jobs except discoverd", "err", err)
 			return err
 		}
 		for _, id := range except {
+			log.Info("stopping discoverd")
 			if e := backend.Stop(id); e != nil {
+				log.Error("error stopping discoverd", "err", err)
 				err = e
 			}
 		}
 		return
 	}
 
+	log.Info("restoring state")
 	resurrect, err := state.Restore(backend, buffers)
 	if err != nil {
+		log.Error("error restoring state", "err", err)
 		shutdown.Fatal(err)
 	}
 	shutdown.BeforeExit(func() {
 		// close discoverd before stopping jobs so we can unregister first
-		discoverdManager.Close()
+		log.Info("unregistering with service discovery")
+		if err := discoverdManager.Close(); err != nil {
+			log.Error("error unregistering with service discovery", "err", err)
+		}
 		stopJobs()
 	})
 	shutdown.BeforeExit(func() {
+		log.Info("marking jobs for resurrection")
 		if err := state.MarkForResurrection(); err != nil {
-			log.Print("error marking for resurrection", err)
+			log.Error("error marking jobs for resurrection", "err", err)
 		}
 	})
 
 	// configure network and discoverd if config set in host status
 	if config := host.status.Network; config != nil {
+		log.Info("configuring network", "subnet", config.Subnet, "mtu", config.MTU, "resolvers", config.Resolvers)
 		if err := backend.ConfigureNetworking(config); err != nil {
+			log.Error("error configuring network", "err", err)
 			shutdown.Fatal(err)
 		}
 	}
 	if config := host.status.Discoverd; config != nil && config.URL != "" {
+		log.Info("connecting to service discovery", "url", config.URL)
 		if err := host.connectDiscoverd(config.URL); err != nil {
+			log.Error("error connecting to service discovery", "err", err)
 			shutdown.Fatal(err)
 		}
 	}
 
+	log.Info("serving HTTP requests")
 	host.ServeHTTP()
 
 	if controlFD > 0 {
 		// now that we are serving requests, send an "ok" message to the parent
+		log.Info("sending ok message to parent")
 		if _, err := syscall.Write(controlFD, ControlMsgOK); err != nil {
-			shutdown.Fatalf("error writing to parent control socket: %s", err)
+			log.Error("error sending ok message to parent", "err", err)
+			shutdown.Fatal(err)
 		}
-		syscall.Close(controlFD)
+
+		log.Info("closing control socket")
+		if err := syscall.Close(controlFD); err != nil {
+			log.Error("error closing control socket", "err", err)
+		}
 	}
 
 	if force {
+		log.Info("forcibly stopping existing jobs")
 		if err := stopJobs(); err != nil {
+			log.Error("error forcibly stopping existing jobs", "err", err)
 			shutdown.Fatal(err)
 		}
 	}
 
 	if discoveryToken != "" {
+		log.Info("getting cluster peer IPs")
 		instances, err := discovery.GetCluster(discoveryToken)
 		if err != nil {
 			// TODO(titanous): retry?
+			log.Error("error getting discovery cluster", "err", err)
 			shutdown.Fatal(err)
 		}
 		peerIPs = make([]string, 0, len(instances))
@@ -378,11 +431,14 @@ func runDaemon(args *docopt.Args) {
 			}
 			peerIPs = append(peerIPs, ip)
 		}
+		log.Info("got cluster peer IPs", "peers", peerIPs)
 	}
+	log.Info("connecting to cluster peers")
 	if err := discoverdManager.ConnectPeer(peerIPs); err != nil {
-		// No peers have working discoverd, so resurrect any available jobs
+		log.Info("no cluster peers available, resurrecting jobs")
 		resurrect()
 	}
 
+	log.Info("blocking main goroutine")
 	<-make(chan struct{})
 }

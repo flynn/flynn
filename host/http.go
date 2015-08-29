@@ -20,6 +20,7 @@ import (
 
 	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/host/downloader"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/host/volume/api"
@@ -59,36 +60,52 @@ type Host struct {
 	networkOnce      sync.Once
 
 	listener net.Listener
+
+	log log15.Logger
 }
 
 var ErrNotFound = errors.New("host: unknown job")
 
 func (h *Host) StopJob(id string) error {
+	log := h.log.New("fn", "StopJob", "job.id", id)
+
+	log.Info("acquiring state database")
 	if err := h.state.Acquire(); err != nil {
+		log.Error("error acquiring state database", "err", err)
 		return err
 	}
 	defer h.state.Release()
 
+	log.Info("getting job")
 	job := h.state.GetJob(id)
 	if job == nil {
+		log.Warn("job not found")
 		return ErrNotFound
 	}
 	switch job.Status {
 	case host.StatusStarting:
+		log.Info("job status is starting, marking it as stopped")
 		h.state.SetForceStop(id)
 		return nil
 	case host.StatusRunning:
+		log.Info("stopping job")
 		return h.backend.Stop(id)
 	default:
+		log.Warn("job already stopped")
 		return errors.New("host: job is already stopped")
 	}
 }
 
 func (h *Host) SignalJob(id string, sig int) error {
+	log := h.log.New("fn", "SignalJob", "job.id", id, "sig", sig)
+
+	log.Info("getting job")
 	job := h.state.GetJob(id)
 	if job == nil {
+		log.Warn("job not found")
 		return ErrNotFound
 	}
+	log.Info("signalling job")
 	return h.backend.Signal(id, sig)
 }
 
@@ -117,16 +134,21 @@ func (h *jobAPI) ListJobs(w http.ResponseWriter, r *http.Request, ps httprouter.
 
 func (h *jobAPI) GetJob(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	id := ps.ByName("id")
+	log := h.host.log.New("fn", "GetJob", "job.id", id)
 
 	if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+		log.Info("streaming job events")
 		if err := h.host.streamEvents(id, w); err != nil {
+			log.Error("error streaming job events", "err", err)
 			httphelper.Error(w, err)
 		}
 		return
 	}
 
+	log.Info("getting job")
 	job := h.host.state.GetJob(id)
 	if job == nil {
+		log.Warn("job not found")
 		httphelper.ObjectNotFoundError(w, ErrNotFound.Error())
 		return
 	}
@@ -162,8 +184,12 @@ func (h *jobAPI) SignalJob(w http.ResponseWriter, r *http.Request, ps httprouter
 }
 
 func (h *jobAPI) PullImages(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	log := h.host.log.New("fn", "PullImages")
+
+	log.Info("extracting TUF database")
 	tufDB, err := extractTufDB(r)
 	if err != nil {
+		log.Error("error extracting TUF database", "err", err)
 		httphelper.Error(w, err)
 		return
 	}
@@ -173,6 +199,7 @@ func (h *jobAPI) PullImages(w http.ResponseWriter, r *http.Request, ps httproute
 	stream := sse.NewStream(w, info, nil)
 	go stream.Serve()
 
+	log.Info("pulling images")
 	if err := pinkerton.PullImages(
 		tufDB,
 		r.URL.Query().Get("repository"),
@@ -180,6 +207,7 @@ func (h *jobAPI) PullImages(w http.ResponseWriter, r *http.Request, ps httproute
 		r.URL.Query().Get("root"),
 		info,
 	); err != nil {
+		log.Error("error pulling images", "err", err)
 		stream.CloseWithError(err)
 		return
 	}
@@ -188,37 +216,50 @@ func (h *jobAPI) PullImages(w http.ResponseWriter, r *http.Request, ps httproute
 }
 
 func (h *jobAPI) PullBinariesAndConfig(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	log := h.host.log.New("fn", "PullBinariesAndConfig")
+
+	log.Info("extracting TUF database")
 	tufDB, err := extractTufDB(r)
 	if err != nil {
+		log.Error("error extracting TUF database", "err", err)
 		httphelper.Error(w, err)
 		return
 	}
 	defer os.Remove(tufDB)
 
 	query := r.URL.Query()
+
+	log.Info("creating local TUF store")
 	local, err := tuf.FileLocalStore(tufDB)
 	if err != nil {
+		log.Error("error creating local TUF store", "err", err)
 		httphelper.Error(w, err)
 		return
 	}
 	opts := &tuf.HTTPRemoteOptions{
 		UserAgent: fmt.Sprintf("flynn-host/%s %s-%s pull", version.String(), runtime.GOOS, runtime.GOARCH),
 	}
+	log.Info("creating remote TUF store")
 	remote, err := tuf.HTTPRemoteStore(query.Get("repository"), opts)
 	if err != nil {
+		log.Error("error creating remote TUF store", "err", err)
 		httphelper.Error(w, err)
 		return
 	}
 	client := tuf.NewClient(local, remote)
 
+	log.Info("downloading binaries")
 	paths, err := downloader.DownloadBinaries(client, query.Get("bin-dir"))
 	if err != nil {
+		log.Error("error downloading binaries", "err", err)
 		httphelper.Error(w, err)
 		return
 	}
 
+	log.Info("downloading config")
 	configs, err := downloader.DownloadConfig(client, query.Get("config-dir"))
 	if err != nil {
+		log.Error("error downloading config", "err", err)
 		httphelper.Error(w, err)
 		return
 	}
@@ -230,29 +271,39 @@ func (h *jobAPI) PullBinariesAndConfig(w http.ResponseWriter, r *http.Request, p
 }
 
 func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	// TODO(titanous): validate UUID
+	id := ps.ByName("id")
+
+	log := h.host.log.New("fn", "AddJob", "job.id", id)
+
 	if shutdown.IsActive() {
+		log.Warn("refusing to start job due to active shutdown")
 		httphelper.JSON(w, 500, struct{}{})
 		return
 	}
 
-	job := &host.Job{}
+	log.Info("decoding job")
+	job := &host.Job{ID: id}
 	if err := httphelper.DecodeJSON(r, job); err != nil {
+		log.Error("error decoding job", "err", err)
 		httphelper.Error(w, err)
 		return
 	}
-	// TODO(titanous): validate UUID
-	job.ID = ps.ByName("id")
 
+	log.Info("acquiring state database")
 	if err := h.host.state.Acquire(); err != nil {
+		log.Error("error acquiring state database", "err", err)
 		httphelper.Error(w, err)
 		return
 	}
 
 	go func() {
 		// TODO(titanous): ratelimit this goroutine?
+		log.Info("running job")
 		err := h.host.backend.Run(job, nil)
 		h.host.state.Release()
 		if err != nil {
+			log.Error("error running job", "err", err)
 			h.host.state.SetStatusFailed(job.ID, err)
 		}
 	}()
@@ -262,11 +313,16 @@ func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 }
 
 func (h *jobAPI) ConfigureDiscoverd(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	log := h.host.log.New("fn", "ConfigureDiscoverd")
+
+	log.Info("decoding config")
 	var config host.DiscoverdConfig
 	if err := httphelper.DecodeJSON(r, &config); err != nil {
+		log.Error("error decoding config", "err", err)
 		httphelper.Error(w, err)
 		return
 	}
+	log.Info("config decoded", "url", config.URL, "dns", config.DNS)
 
 	h.host.statusMtx.Lock()
 	h.host.status.Discoverd = &config
@@ -274,7 +330,9 @@ func (h *jobAPI) ConfigureDiscoverd(w http.ResponseWriter, r *http.Request, _ ht
 
 	if config.URL != "" && config.DNS != "" {
 		go h.host.discoverdOnce.Do(func() {
+			log.Info("connecting to service discovery", "url", config.URL)
 			if err := h.host.connectDiscoverd(config.URL); err != nil {
+				log.Error("error connecting to service discovery", "err", err)
 				shutdown.Fatal(err)
 			}
 		})
@@ -282,8 +340,12 @@ func (h *jobAPI) ConfigureDiscoverd(w http.ResponseWriter, r *http.Request, _ ht
 }
 
 func (h *jobAPI) ConfigureNetworking(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	log := h.host.log.New("fn", "ConfigureNetworking")
+
+	log.Info("decoding config")
 	config := &host.NetworkConfig{}
 	if err := httphelper.DecodeJSON(r, config); err != nil {
+		log.Error("error decoding config", "err", err)
 		shutdown.Fatal(err)
 	}
 
@@ -291,7 +353,9 @@ func (h *jobAPI) ConfigureNetworking(w http.ResponseWriter, r *http.Request, _ h
 	// network coordinator requires the bridge to be created (e.g.
 	// when using flannel with the "alloc" backend)
 	h.host.networkOnce.Do(func() {
+		log.Info("configuring network", "subnet", config.Subnet, "mtu", config.MTU, "resolvers", config.Resolvers)
 		if err := h.host.backend.ConfigureNetworking(config); err != nil {
+			log.Error("error configuring network", "err", err)
 			shutdown.Fatal(err)
 		}
 
@@ -349,12 +413,17 @@ func (h *jobAPI) ResourceCheck(w http.ResponseWriter, r *http.Request, _ httprou
 }
 
 func (h *jobAPI) Update(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	log := h.host.log.New("fn", "Update")
+
+	log.Info("decoding command")
 	var cmd host.Command
 	if err := httphelper.DecodeJSON(req, &cmd); err != nil {
+		log.Error("error decoding command", "err", err)
 		httphelper.Error(w, err)
 		return
 	}
 
+	log.Info("updating host")
 	err := h.host.Update(&cmd)
 	if err != nil {
 		httphelper.Error(w, err)
@@ -364,7 +433,11 @@ func (h *jobAPI) Update(w http.ResponseWriter, req *http.Request, _ httprouter.P
 	// send an ok response and then shutdown after 1s to give the response
 	// chance to reach the client.
 	httphelper.JSON(w, http.StatusOK, cmd)
-	time.AfterFunc(time.Second, func() { os.Exit(0) })
+	log.Info("shutting down in 1s")
+	time.AfterFunc(time.Second, func() {
+		log.Info("exiting")
+		os.Exit(0)
+	})
 }
 
 func extractTufDB(r *http.Request) (string, error) {
@@ -487,50 +560,75 @@ func newHTTPListener(addr string) (net.Listener, error) {
 // * parent sends response to client and shuts down seconds later
 //
 func (h *Host) Update(cmd *host.Command) error {
+	log := h.log.New("fn", "Update")
+
 	// dup the listener so we can close the current listener but still be
 	// able continue serving requests if the child exits by using the dup'd
 	// listener.
+	log.Info("duplicating HTTP listener")
 	file, err := h.listener.(*net.TCPListener).File()
 	if err != nil {
+		log.Error("error duplicating HTTP listener", "err", err)
 		return err
 	}
 	defer file.Close()
 
 	// exec a child, passing the listener and control socket as extra files
+	log.Info("creating child process")
 	child, err := h.exec(cmd, file)
 	if err != nil {
+		log.Error("error creating child process", "err", err)
 		return err
 	}
 	defer child.CloseSock()
 
 	// close our listener and state DBs
+	log.Info("closing HTTP listener")
 	h.listener.Close()
+	log.Info("closing state databases")
 	if err := h.CloseDBs(); err != nil {
+		log.Error("error closing state databases", "err", err)
 		return err
 	}
 
-	// stop following logs
+	log.Info("closing logs")
 	buffers, err := h.CloseLogs()
 	if err != nil {
+		log.Error("error closing logs", "err", err)
 		return err
 	}
 
-	// signal the child to resume
+	log.Info("resuming child process")
 	if resumeErr := child.Resume(buffers); resumeErr != nil {
+		log.Error("error resuming child process", "err", resumeErr)
+
 		// the child failed to resume, kill it and resume ourselves
+		log.Info("killing child process")
 		child.Kill()
+
+		log.Info("reopening logs")
 		if err := h.OpenLogs(buffers); err != nil {
+			log.Error("error reopening logs", "err", err)
 			return err
 		}
+
+		log.Error("recreating HTTP listener")
 		l, err := net.FileListener(file)
 		if err != nil {
+			log.Error("error recreating HTTP listener", "err", err)
 			return err
 		}
 		h.listener = l
+
+		log.Info("reopening state databases")
 		if err := h.OpenDBs(); err != nil {
+			log.Error("error reopening state databases", "err", err)
 			return err
 		}
+
+		log.Info("serving HTTP requests")
 		h.ServeHTTP()
+
 		return resumeErr
 	}
 
