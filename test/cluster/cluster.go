@@ -388,7 +388,7 @@ func (c *Cluster) CLIConfig() (*config.Config, error) {
 	conf := &config.Config{}
 	s := &config.Cluster{
 		Name:   "default",
-		URL:    c.ClusterDomain,
+		Domain: c.ClusterDomain,
 		Key:    c.ControllerKey,
 		TLSPin: c.ControllerPin,
 	}
