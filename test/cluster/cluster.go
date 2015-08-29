@@ -442,6 +442,12 @@ git merge origin/master
 {{ end }}
 
 test/scripts/wait-for-docker
+
+# pull flynn/busybox before building to avoid the following Docker error when
+# building images from scratch concurrently:
+# "could not find image: no such id: flynn/busybox"
+docker pull flynn/busybox
+
 make
 
 if [[ -f test/scripts/debug-info.sh ]]; then
