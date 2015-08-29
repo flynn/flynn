@@ -12,19 +12,24 @@ func init() {
 	register("resource", runResource, `
 usage: flynn resource
        flynn resource add <provider>
+       flynn resource remove <provider> <resource>
 
 Manage resources for the app.
 
 Commands:
-	With no arguments, shows a list of resources.
+       With no arguments, shows a list of resources.
 
-	add   provisions a new resource for the app using <provider>.
+       add     provisions a new resource for the app using <provider>.
+       remove  removes the existing <resource> provided by <provider>.
 `)
 }
 
 func runResource(args *docopt.Args, client *controller.Client) error {
 	if args.Bool["add"] {
 		return runResourceAdd(args, client)
+	}
+	if args.Bool["remove"] {
+		return runResourceRemove(args, client)
 	}
 
 	resources, err := client.AppResourceList(mustApp())
@@ -69,6 +74,39 @@ func runResourceAdd(args *docopt.Args, client *controller.Client) error {
 	}
 
 	log.Printf("Created resource %s and release %s.", res.ID, releaseID)
+
+	return nil
+}
+
+func runResourceRemove(args *docopt.Args, client *controller.Client) error {
+	provider := args.String["<provider>"]
+	resource := args.String["<resource>"]
+
+	res, err := client.DeleteResource(provider, resource)
+	if err != nil {
+		return err
+	}
+
+	release, err := client.GetAppRelease(mustApp())
+	if err != nil {
+		return err
+	}
+
+	// Unset all the keys associated with this resource
+	env := make(map[string]*string)
+	for k := range res.Env {
+		// Only unset the key if it hasn't been modified
+		if release.Env[k] == res.Env[k] {
+			env[k] = nil
+		}
+	}
+
+	releaseID, err := setEnv(client, "", env)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Deleted resource %s, created release %s.", res.ID, releaseID)
 
 	return nil
 }

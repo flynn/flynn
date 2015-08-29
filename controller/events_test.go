@@ -301,7 +301,8 @@ func (s *S) TestStreamResourceEvents(c *C) {
 		c.Fatal("Timed out waiting for resource event")
 	}
 
-	c.Assert(s.c.DeleteResource(provider.ID, resource.ID), IsNil)
+	_, err = s.c.DeleteResource(provider.ID, resource.ID)
+	c.Assert(err, IsNil)
 
 	select {
 	case e, ok := <-events:

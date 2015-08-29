@@ -328,7 +328,7 @@ func (c *controllerAPI) DeleteResource(ctx context.Context, w http.ResponseWrite
 		return
 	}
 
-	w.WriteHeader(200)
+	httphelper.JSON(w, 200, res)
 }
 
 func (c *controllerAPI) GetAppResources(ctx context.Context, w http.ResponseWriter, req *http.Request) {
