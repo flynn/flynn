@@ -53,6 +53,7 @@ Commands:
 	route     manage routes
 	pg        manage postgres database
 	provider  manage resource providers
+	remote    manage git remotes
 	resource  provision a new resource
 	release   add a docker image release
 	export    export app data
