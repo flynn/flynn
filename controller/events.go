@@ -90,7 +90,7 @@ func scanEvent(s postgres.Scanner) (*ct.Event, error) {
 		return nil, err
 	}
 	if appID != nil {
-		event.AppID = postgres.CleanUUID(*appID)
+		event.AppID = *appID
 	}
 	event.ObjectType = ct.EventType(typ)
 	event.Data = json.RawMessage(data)

@@ -152,7 +152,6 @@ func streamRouterEvents(rc routerc.Client, db *postgres.DB, doneCh chan struct{}
 				return
 			}
 			route := e.Route
-			route.ID = postgres.CleanUUID(route.ID)
 			var appID string
 			if strings.HasPrefix(route.ParentRef, routeParentRefPrefix) {
 				appID = strings.TrimPrefix(route.ParentRef, routeParentRefPrefix)

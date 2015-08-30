@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -197,14 +196,6 @@ func (f rowErrFixer) Scan(args ...interface{}) error {
 		err = sql.ErrNoRows
 	}
 	return err
-}
-
-func CleanUUID(u string) string {
-	return strings.Replace(u, "-", "", -1)
-}
-
-func FormatUUID(s string) string {
-	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
 }
 
 func IsUniquenessError(err error, constraint string) bool {

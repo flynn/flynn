@@ -124,8 +124,6 @@ func scanFormation(s postgres.Scanner) (*ct.Formation, error) {
 			f.Processes[k] = n
 		}
 	}
-	f.AppID = postgres.CleanUUID(f.AppID)
-	f.ReleaseID = postgres.CleanUUID(f.ReleaseID)
 	return f, nil
 }
 
@@ -199,7 +197,7 @@ func (r *FormationRepo) publish(appID, releaseID string) {
 func (r *FormationRepo) expandFormation(formation *ct.Formation) (*ct.ExpandedFormation, error) {
 	app, err := r.apps.Get(formation.AppID)
 	if err == ErrNotFound {
-		app = &ct.App{ID: postgres.CleanUUID(formation.AppID)}
+		app = &ct.App{ID: formation.AppID}
 	} else if err != nil {
 		return nil, err
 	}

@@ -31,6 +31,8 @@ type CLISuite struct {
 
 var _ = c.ConcurrentSuite(&CLISuite{})
 
+const UUIDRegex = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+
 func (s *CLISuite) flynn(t *c.C, args ...string) *CmdResult {
 	return flynn(t, "/", args...)
 }
@@ -423,7 +425,8 @@ func (s *CLISuite) TestProvider(t *c.C) {
 func (s *CLISuite) TestResource(t *c.C) {
 	app := s.newCliTestApp(t)
 	defer app.cleanup()
-	t.Assert(app.flynn("resource", "add", "postgres").Output, Matches, `Created resource \w+ and release \w+.`)
+	matchExp := fmt.Sprintf("Created resource %s and release %s.", UUIDRegex, UUIDRegex)
+	t.Assert(app.flynn("resource", "add", "postgres").Output, Matches, matchExp)
 
 	res, err := s.controllerClient(t).AppResourceList(app.name)
 	t.Assert(err, c.IsNil)

@@ -20,6 +20,8 @@ import (
 	"github.com/flynn/flynn/router/types"
 )
 
+const UUIDRegex = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+
 var httpClient = newHTTPClient("example.com")
 
 // borrowed from net/http/httptest/server.go
@@ -279,7 +281,7 @@ func httpHeaderTestHandler(c *C, ip, port string) http.Handler {
 		c.Assert(req.Header["X-Forwarded-Proto"][0], Equals, "http")
 		c.Assert(len(req.Header["X-Request-Start"][0]), Equals, 13)
 		c.Assert(req.Header["X-Forwarded-For"][0], Equals, ip)
-		c.Assert(len(req.Header["X-Request-Id"][0]), Equals, 32)
+		c.Assert(req.Header["X-Request-Id"][0], Matches, UUIDRegex)
 		w.Write([]byte("1"))
 	})
 }

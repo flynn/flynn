@@ -78,6 +78,10 @@ type fakeLog struct {
 	io.Reader
 }
 
+func fakeHostID() string {
+	return random.Hex(16)
+}
+
 func (l *fakeLog) Close() error { return nil }
 func (l *fakeLog) Write([]byte) (int, error) {
 	return 0, io.ErrUnexpectedEOF
@@ -85,7 +89,7 @@ func (l *fakeLog) Write([]byte) (int, error) {
 
 func (s *S) TestKillJob(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "killjob"})
-	hostID := random.UUID()
+	hostID := fakeHostID()
 	jobID := cluster.GenerateJobID(hostID)
 	hc := tu.NewFakeHostClient(hostID)
 	s.cc.AddHost(hc)
@@ -96,8 +100,7 @@ func (s *S) TestKillJob(c *C) {
 
 func (s *S) TestRunJobDetached(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "run-detached"})
-
-	hostID := random.UUID()
+	hostID := fakeHostID()
 	host := tu.NewFakeHostClient(hostID)
 	s.cc.AddHost(host)
 
@@ -145,7 +148,7 @@ func (s *S) TestRunJobDetached(c *C) {
 
 func (s *S) TestRunJobAttached(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "run-attached"})
-	hostID := random.UUID()
+	hostID := fakeHostID()
 	hc := tu.NewFakeHostClient(hostID)
 	s.cc.AddHost(hc)
 

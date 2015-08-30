@@ -104,8 +104,6 @@ func scanJob(s postgres.Scanner) (*ct.Job, error) {
 			job.Meta[k] = v.String
 		}
 	}
-	job.AppID = postgres.CleanUUID(job.AppID)
-	job.ReleaseID = postgres.CleanUUID(job.ReleaseID)
 	return job, nil
 }
 

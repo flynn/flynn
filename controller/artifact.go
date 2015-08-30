@@ -46,7 +46,6 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 			return err
 		}
 	} else if err == nil {
-		a.ID = postgres.CleanUUID(a.ID)
 		if err := createEvent(tx.Exec, &ct.Event{
 			ObjectID:   a.ID,
 			ObjectType: ct.EventTypeArtifact,
@@ -68,7 +67,6 @@ func scanArtifact(s postgres.Scanner) (*ct.Artifact, error) {
 	if err == sql.ErrNoRows {
 		err = ErrNotFound
 	}
-	artifact.ID = postgres.CleanUUID(artifact.ID)
 	return artifact, err
 }
 
