@@ -171,7 +171,6 @@ install_packages() {
     "curl"
     "git"
     "iptables"
-    "libdevmapper-dev"
     "libvirt-bin"
     "libvirt-dev"
     "linux-image-extra-$(uname -r)"
