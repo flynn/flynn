@@ -102,6 +102,18 @@ func (c *FakeHostClient) stop(id string) error {
 	return nil
 }
 
+func (c *FakeHostClient) CrashJob(id string) error {
+	c.stopped[id] = true
+	job, ok := c.Jobs[id]
+	if ok {
+		job.Status = host.StatusCrashed
+		c.Jobs[id] = job
+		return c.stop(id)
+	} else {
+		return ct.NotFoundError{Resource: id}
+	}
+}
+
 func (c *FakeHostClient) IsStopped(id string) bool {
 	return c.stopped[id]
 }

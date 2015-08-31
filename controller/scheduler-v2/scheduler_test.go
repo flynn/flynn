@@ -277,7 +277,6 @@ func (ts *TestSuite) TestExponentialBackoffNoHosts(c *C) {
 
 func (ts *TestSuite) TestMultipleHosts(c *C) {
 	h := NewFakeHostClient(testHostID)
-	h2 := NewFakeHostClient("host-2")
 	hosts := map[string]*FakeHostClient{
 		h.ID(): h,
 	}
@@ -292,12 +291,14 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 	c.Assert(err, IsNil)
 
 	s.log.Info("Add a host to the cluster, then create a new app, artifact, release, and associated formation.")
+	h2 := NewFakeHostClient("host-2")
 	cluster.AddHost(h2)
+	hosts[h2.ID()] = h2
 	app := &ct.App{ID: "test-app-2", Name: "test-app-2"}
 	artifact := &ct.Artifact{ID: "test-artifact-2"}
 	processes := map[string]int{testJobType: 1}
 	release := NewReleaseOmni("test-release-2", artifact, processes, true)
-	s.log.Info("Add the formation to the controller. Wait for formation change and start for jobs on both hosts.")
+	s.log.Info("Add the formation to the controller. Wait for formation change and job start on both hosts.")
 	s.CreateApp(app)
 	s.CreateArtifact(artifact)
 	s.CreateRelease(release)
@@ -328,6 +329,39 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 	hostJobs, err = h3.ListJobs()
 	c.Assert(err, IsNil)
 	c.Assert(len(hostJobs), Equals, 1)
+
+	s.log.Info("Crash one of the omni jobs, and wait for it to restart")
+	for id := range hostJobs {
+		h3.CrashJob(id)
+	}
+	hostJobs, err = h3.ListJobs()
+	c.Assert(err, IsNil)
+	c.Assert(len(hostJobs), Equals, 0)
+	_, err = waitForEvent(events, EventTypeJobStop)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeJobRequest)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeJobStart)
+	c.Assert(err, IsNil)
+	hostJobs, err = h3.ListJobs()
+	c.Assert(err, IsNil)
+	c.Assert(len(hostJobs), Equals, 1)
+
+	s.log.Info("Remove one of the hosts. Ensure the cluster recovers correctly", "hosts", hosts)
+	cluster.SetHosts(hosts)
+	triggerChan(s.syncJobs)
+	_, err = waitForEvent(events, EventTypeClusterSync)
+	jobs = s.Jobs()
+	c.Assert(jobs, HasLen, 3)
+	hostJobs, err = h.ListJobs()
+	c.Assert(err, IsNil)
+	c.Assert(len(hostJobs), Equals, 2)
+	hostJobs, err = h2.ListJobs()
+	c.Assert(err, IsNil)
+	c.Assert(len(hostJobs), Equals, 1)
+}
+
+func (ts *TestSuite) TestRemovingHost(c *C) {
 }
 
 func checkJobStartEvent(c *C, e Event) *Job {
