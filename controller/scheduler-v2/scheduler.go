@@ -357,7 +357,7 @@ func (s *Scheduler) followHost(h utils.HostClient) error {
 			return fmt.Errorf("Error following host with id %q", h.ID())
 		}
 	} else {
-		return fmt.Errorf("Unable to stream from host with id %q", h.ID())
+		return fmt.Errorf("Already following host with id %q", h.ID())
 	}
 	return nil
 }
