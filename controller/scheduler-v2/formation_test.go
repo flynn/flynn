@@ -2,7 +2,9 @@ package main
 
 import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	. "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
+	utils "github.com/flynn/flynn/controller/utils"
 )
 
 func (TestSuite) TestFormationUpdate(c *C) {
@@ -67,4 +69,67 @@ func (TestSuite) TestFormationUpdate(c *C) {
 		c.Assert(diff, DeepEquals, t.diff, Commentf(t.desc))
 		c.Assert(formation.Processes, DeepEquals, t.requested, Commentf(t.desc))
 	}
+}
+
+func (*TestSuite) TestPendingJobs(c *C) {
+	app := &ct.App{ID: "test-app", Name: "test-app"}
+	artifact := &ct.Artifact{ID: "test-artifact"}
+	processes := map[string]int{"web": 3}
+	release := NewRelease("test-release", artifact, processes)
+	form := NewFormation(&ct.ExpandedFormation{App: app, Release: release, Artifact: artifact, Processes: processes})
+	key := utils.FormationKey{app.ID, release.ID}
+	j := &Job{
+		JobID:     "test-job",
+		AppID:     "test-app",
+		ReleaseID: "test-release",
+		HostID:    "host-3",
+		Type:      "web",
+		Formation: form,
+	}
+	jobs := map[string]*Job{
+		j.JobID: j,
+	}
+	pj1 := pendingJobs{
+		key: {
+			"web": {
+				"host-1": 1,
+			},
+		},
+	}
+	pj2 := pendingJobs{
+		key: {
+			"web": {
+				"":       1,
+				"host-2": -1,
+			},
+		},
+	}
+	procs := pj2.GetProcesses(key)
+	c.Assert(procs["web"], Equals, 0)
+	hostJobs := pj2.GetHostJobCounts(key, "web")
+	c.Assert(hostJobs, DeepEquals, map[string]int{"": 1, "host-2": -1})
+	procs = pj1.GetProcesses(key)
+	c.Assert(procs["web"], Equals, 1)
+	hostJobs = pj1.GetHostJobCounts(key, "web")
+	c.Assert(hostJobs, DeepEquals, map[string]int{"host-1": 1})
+	pj := NewPendingJobs(jobs, MergePendingJobs(pj1, pj2))
+	procs = pj.GetProcesses(key)
+	c.Assert(procs["web"], Equals, 2)
+	c.Assert(pj.HasStarts(j), Equals, true)
+	c.Assert(pj.HasStops(j), Equals, false)
+	hostJobs = pj.GetHostJobCounts(key, "web")
+	c.Assert(hostJobs, DeepEquals, map[string]int{"": 1, "host-1": 1, "host-2": -1, "host-3": 1})
+	pj.RemoveJob(j)
+	c.Assert(pj.HasStarts(j), Equals, false)
+	procs = pj.GetProcesses(key)
+	c.Assert(procs["web"], Equals, 1)
+	hostJobs = pj.GetHostJobCounts(key, "web")
+	c.Assert(hostJobs, DeepEquals, map[string]int{"": 1, "host-1": 1, "host-2": -1, "host-3": 0})
+	pj.RemoveJob(j)
+	c.Assert(pj.HasStarts(j), Equals, false)
+	c.Assert(pj.HasStops(j), Equals, true)
+	j.HostID = ""
+	c.Assert(pj.HasStarts(j), Equals, true)
+	hostJobs = pj.GetHostJobCounts(key, "web")
+	c.Assert(hostJobs, DeepEquals, map[string]int{"": 1, "host-1": 1, "host-2": -1, "host-3": -1})
 }

@@ -253,7 +253,7 @@ func (s *Scheduler) RectifyJobs() (err error) {
 
 	for fKey, schedulerFormation := range s.formations {
 		if _, ok := fj[fKey]; !ok {
-			log.Info("Re-asserting processes", "formation.key", fKey, "formation.processes", schedulerFormation.Processes, "formation.jobs", fj)
+			log.Info("Re-asserting processes", "formation.key", fKey, "formation.processes", schedulerFormation.Processes, "formation.jobs", fj, "jobs.starting", s.pendingStarts, "jobs.stopping", s.pendingStops)
 			s.sendDiffRequests(schedulerFormation, schedulerFormation.Processes)
 		}
 	}
@@ -500,6 +500,9 @@ func (s *Scheduler) startJob(req *JobRequest) (err error) {
 	if err := host.AddJob(config); err != nil {
 		return err
 	}
+	s.pendingStarts.RemoveJob(req.Job)
+	req.HostID = host.ID()
+	s.pendingStarts.AddJob(req.Job)
 	log.Info("requested job start from host", "host.id", host.ID(), "job.type", req.Type, "job.id", config.ID)
 	return nil
 }
@@ -543,6 +546,9 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 	if err := host.StopJob(job.JobID); err != nil {
 		return err
 	}
+	s.pendingStops.AddJob(req.Job)
+	req.HostID = host.ID()
+	s.pendingStops.RemoveJob(req.Job)
 	log.Info("requested job stop from host", "host.id", host.ID(), "job.type", req.Type, "job.id", job.JobID)
 	return nil
 }
@@ -561,7 +567,8 @@ func (s *Scheduler) findBestHost(formation *Formation, typ, hostID string) (util
 	}
 
 	if hostID == "" {
-		counts := s.hostJobCounts(formation, typ)
+		fj := NewPendingJobs(s.jobs, MergePendingJobs(s.pendingStarts, s.pendingStops))
+		counts := fj.GetHostJobCounts(formation.key(), typ)
 		var minCount int = math.MaxInt32
 		for _, host := range hosts {
 			count, ok := counts[host.ID()]
@@ -595,18 +602,6 @@ func (s *Scheduler) getHosts() ([]utils.HostClient, error) {
 		s.unfollowHost(id)
 	}
 	return hosts, nil
-}
-
-func (s *Scheduler) hostJobCounts(formation *Formation, typ string) map[string]int {
-	counts := make(map[string]int)
-	key := formation.key()
-	for _, job := range s.jobs {
-		if job.Formation.key() != key || job.Type != typ {
-			continue
-		}
-		counts[job.HostID]++
-	}
-	return counts
 }
 
 func (s *Scheduler) Stop() error {
