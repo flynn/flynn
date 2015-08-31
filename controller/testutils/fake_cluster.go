@@ -61,7 +61,10 @@ func (c *FakeCluster) Host(id string) (utils.HostClient, error) {
 func (c *FakeCluster) SetHosts(h map[string]*FakeHostClient) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
-	c.hosts = h
+	c.hosts = make(map[string]*FakeHostClient)
+	for id, h := range h {
+		c.hosts[id] = h
+	}
 }
 
 func (c *FakeCluster) AddHost(h *FakeHostClient) {
