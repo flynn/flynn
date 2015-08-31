@@ -80,6 +80,10 @@ func (j *Job) Delete() error {
 	}
 
 	_, err := j.conn.Exec("que_destroy_job", j.Queue, j.Priority, j.RunAt, j.ID)
+	// retry using a fresh connection if the job's connection is dead
+	if err == pgx.ErrDeadConn {
+		_, err = j.pool.Exec("que_destroy_job", j.Queue, j.Priority, j.RunAt, j.ID)
+	}
 	if err != nil {
 		return err
 	}
