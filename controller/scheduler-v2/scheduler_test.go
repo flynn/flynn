@@ -304,7 +304,7 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 	artifact := &ct.Artifact{ID: "test-artifact-2"}
 	processes := map[string]int{testJobType: 1}
 	release := NewReleaseOmni("test-release-2", artifact, processes, true)
-	s.log.Info("Add the formation to the controller. Wait for formation change.")
+	s.log.Info("Add the formation to the controller. Wait for formation change and start for jobs on both hosts.")
 	s.CreateApp(app)
 	s.CreateArtifact(artifact)
 	s.CreateRelease(release)
