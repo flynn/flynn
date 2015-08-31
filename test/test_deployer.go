@@ -61,6 +61,9 @@ func (s *DeployerSuite) createDeployment(t *c.C, process, strategy, service stri
 					count++
 				}
 				if count == 2 {
+					// although the services are up, give them a few more seconds
+					// to make sure the deployer will also see them as up.
+					time.Sleep(5 * time.Second)
 					break loop
 				}
 			case <-time.After(10 * time.Second):
