@@ -637,7 +637,7 @@ func (c *Cluster) DumpLogs(buildLog *buildlog.Log) {
 	}
 
 	printLogs := func(typ string, instances []*Instance) {
-		fallback := func() {
+		fallback := func(instances []*Instance) {
 			for _, inst := range instances {
 				run(fmt.Sprintf("%s-fallback-%s.log", typ, inst.ID), inst, "sudo bash -c 'tail -n +1 /var/log/flynn/**/*.log'")
 			}
@@ -648,7 +648,7 @@ func (c *Cluster) DumpLogs(buildLog *buildlog.Log) {
 		var out bytes.Buffer
 		cmd := `flynn-host ps -aqf '{{ metadata "flynn-controller.app_name" }}-{{ metadata "flynn-controller.type" }}-{{ .Job.ID }}'`
 		if err := instances[0].Run(cmd, &Streams{Stdout: &out, Stderr: &out}); err != nil {
-			fallback()
+			fallback(instances)
 			return
 		}
 
@@ -668,7 +668,19 @@ func (c *Cluster) DumpLogs(buildLog *buildlog.Log) {
 			shouldFallback = false
 		}
 		if shouldFallback {
-			fallback()
+			fallback(instances)
+		}
+
+		// run the fallback on any stopped instances as their logs will
+		// not appear in `flynn-host ps`
+		stoppedInstances := make([]*Instance, 0, len(instances))
+		for _, inst := range instances {
+			if err := inst.Run("sudo kill -0 $(cat /var/run/flynn-host.pid)", nil); err != nil {
+				stoppedInstances = append(stoppedInstances, inst)
+			}
+		}
+		if len(stoppedInstances) > 0 {
+			fallback(stoppedInstances)
 		}
 	}
 	if len(c.defaultInstances) > 0 {
