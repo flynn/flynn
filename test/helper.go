@@ -193,14 +193,17 @@ func (h *Helper) addVanillaHost(t *c.C) *tc.Instance {
 func (h *Helper) addHosts(t *c.C, count int, vanilla bool) []*tc.Instance {
 	debugf(t, "adding %d hosts", count)
 
-	ch := make(chan *cluster.Host)
-	stream, err := h.clusterClient(t).StreamHosts(ch)
+	// wait for the router-api to start on the host (rather than using
+	// StreamHostEvents) as we wait for router-api when removing the
+	// host (so that could fail if the router-api never starts).
+	events := make(chan *discoverd.Event)
+	stream, err := h.discoverdClient(t).Service("router-api").Watch(events)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 
 	hosts := make([]*tc.Instance, count)
 	for i := 0; i < count; i++ {
-		host, err := testCluster.AddHost(ch, vanilla)
+		host, err := testCluster.AddHost(events, vanilla)
 		t.Assert(err, c.IsNil)
 		debugf(t, "host added: %s", host.ID)
 		hosts[i] = host
