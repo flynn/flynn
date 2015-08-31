@@ -48,6 +48,10 @@ func (d *DeployJob) deployPostgres() (err error) {
 	if 2+len(state.Async) != d.Processes["postgres"] {
 		return loggedErr(fmt.Sprintf("pg cluster in unhealthy state (too few asyncs)"))
 	}
+	if processesEqual(d.newReleaseState, d.Processes) {
+		log.Info("deployment already completed, nothing to do")
+		return nil
+	}
 	if d.newReleaseState["postgres"] > 0 {
 		return loggedErr("pg cluster in unexpected state")
 	}
@@ -237,4 +241,16 @@ loop:
 
 	// do a one-by-one deploy for the other process types
 	return d.deployOneByOne()
+}
+
+func processesEqual(a map[string]int, b map[string]int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for typ, countA := range a {
+		if countB, ok := b[typ]; !ok || countA != countB {
+			return false
+		}
+	}
+	return true
 }
