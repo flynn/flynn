@@ -110,11 +110,16 @@ func ExpandedFormationFromFormation(c ControllerClient, f *ct.Formation) (*ct.Ex
 		return nil, fmt.Errorf("Error getting artifact. Error: %v", err)
 	}
 
+	procs := make(map[string]int)
+	for typ, count := range f.Processes {
+		procs[typ] = count
+	}
+
 	ef := &ct.ExpandedFormation{
 		App:       app,
 		Release:   release,
 		Artifact:  artifact,
-		Processes: f.Processes,
+		Processes: procs,
 		UpdatedAt: time.Now(),
 	}
 	if f.UpdatedAt != nil {
