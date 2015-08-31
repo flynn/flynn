@@ -442,32 +442,9 @@ func (s *Scheduler) changeFormation(ef *ct.ExpandedFormation) *Formation {
 }
 
 func (s *Scheduler) updateFormation(controllerFormation *ct.Formation) (*Formation, error) {
-	log := s.log.New("fn", "updateFormation")
-
-	appID := controllerFormation.AppID
-	releaseID := controllerFormation.ReleaseID
-
-	localFormation := s.formations.Get(appID, releaseID)
-
-	var ef *ct.ExpandedFormation
-	var err error
-
-	if localFormation != nil {
-		log.Info("Updating formation", "app.id", appID, "release.id", releaseID, "formation.processes", controllerFormation.Processes)
-		ef = &ct.ExpandedFormation{
-			App:       localFormation.App,
-			Release:   localFormation.Release,
-			Artifact:  localFormation.Artifact,
-			Processes: controllerFormation.Processes,
-			UpdatedAt: time.Now(),
-		}
-	} else {
-		log.Info("Creating new formation", "app.id", appID, "release.id", releaseID, "formation.processes", controllerFormation.Processes)
-		ef, err = utils.ExpandedFormationFromFormation(s, controllerFormation)
-		if err != nil {
-			return nil, err
-		}
-		ef.UpdatedAt = time.Now()
+	ef, err := utils.ExpandedFormationFromFormation(s, controllerFormation)
+	if err != nil {
+		return nil, err
 	}
 	return s.changeFormation(ef), nil
 }
