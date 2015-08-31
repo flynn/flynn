@@ -659,8 +659,8 @@ func (c *Cluster) DumpLogs(buildLog *buildlog.Log) {
 			fields := strings.Split(job, "-")
 			jobID := strings.Join(fields[len(fields)-2:], "-")
 			cmds := []string{
-				fmt.Sprintf("flynn-host inspect %s", jobID),
-				fmt.Sprintf("flynn-host log --init %s", jobID),
+				fmt.Sprintf("timeout 10s flynn-host inspect %s", jobID),
+				fmt.Sprintf("timeout 10s flynn-host log --init %s", jobID),
 			}
 			if err := run(fmt.Sprintf("%s-%s.log", typ, job), instances[0], cmds...); err != nil {
 				continue
