@@ -279,8 +279,7 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 	h := NewFakeHostClient(testHostID)
 	h2 := NewFakeHostClient("host-2")
 	hosts := map[string]*FakeHostClient{
-		h.ID():  h,
-		h2.ID(): h2,
+		h.ID(): h,
 	}
 	cluster := NewFakeCluster()
 	cluster.SetHosts(hosts)
@@ -288,18 +287,12 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 	sched := runTestScheduler(cluster, events, true)
 	defer sched.Stop()
 	s := sched.scheduler
+	s.log.Info("Initialize the cluster with 1 host and wait for a job to start on it.")
 	_, err := waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
 
-	hostJobs, err := h.ListJobs()
-	c.Assert(err, IsNil)
-	host1Jobs := len(hostJobs)
-	hostJobs, err = h2.ListJobs()
-	c.Assert(err, IsNil)
-	host2Jobs := len(hostJobs)
-
-	// Create a new app, artifact, release, and associated formation
-	s.log.Info("Create a new app, artifact, release, and associated formation")
+	s.log.Info("Add a host to the cluster, then create a new app, artifact, release, and associated formation.")
+	cluster.AddHost(h2)
 	app := &ct.App{ID: "test-app-2", Name: "test-app-2"}
 	artifact := &ct.Artifact{ID: "test-artifact-2"}
 	processes := map[string]int{testJobType: 1}
@@ -318,12 +311,23 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 	jobs := s.Jobs()
 	c.Assert(jobs, HasLen, 3)
 
-	hostJobs, err = h.ListJobs()
+	hostJobs, err := h.ListJobs()
 	c.Assert(err, IsNil)
-	c.Assert(len(hostJobs), Equals, host1Jobs+1)
+	c.Assert(len(hostJobs), Equals, 2)
 	hostJobs, err = h2.ListJobs()
 	c.Assert(err, IsNil)
-	c.Assert(len(hostJobs), Equals, host2Jobs+1)
+	c.Assert(len(hostJobs), Equals, 1)
+
+	h3 := NewFakeHostClient("host-3")
+	s.log.Info("Add a host, wait for omni job start on that host.")
+	cluster.AddHost(h3)
+	_, err = waitForEvent(events, EventTypeJobStart)
+	c.Assert(err, IsNil)
+	jobs = s.Jobs()
+	c.Assert(jobs, HasLen, 4)
+	hostJobs, err = h3.ListJobs()
+	c.Assert(err, IsNil)
+	c.Assert(len(hostJobs), Equals, 1)
 }
 
 func checkJobStartEvent(c *C, e Event) *Job {
