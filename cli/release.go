@@ -18,13 +18,14 @@ import (
 
 func init() {
 	register("release", runRelease, `
-usage: flynn release
+usage: flynn release [-q|--quiet]
        flynn release add [-t <type>] [-f <file>] <uri>
        flynn release show [<id>]
 
 Manage app releases.
 
 Options:
+	-q, --quiet        only print release IDs
 	-t <type>          type of the release. Currently only 'docker' is supported. [default: docker]
 	-f, --file=<file>  release configuration file
 
@@ -87,14 +88,22 @@ func runRelease(args *docopt.Args, client *controller.Client) error {
 			return fmt.Errorf("Release type %s not supported.", args.String["-t"])
 		}
 	}
-	return runReleaseList(client)
+	return runReleaseList(args, client)
 }
 
-func runReleaseList(client *controller.Client) error {
+func runReleaseList(args *docopt.Args, client *controller.Client) error {
 	list, err := client.AppReleaseList(mustApp())
 	if err != nil {
 		return err
 	}
+
+	if args.Bool["--quiet"] {
+		for _, r := range list {
+			fmt.Println(r.ID)
+		}
+		return nil
+	}
+
 	w := tabwriter.NewWriter(os.Stdout, 1, 2, 2, ' ', 0)
 	defer w.Flush()
 	listRec(w, "ID", "Created")
