@@ -3,12 +3,16 @@ package server
 import (
 	"container/list"
 	"errors"
+	"fmt"
 	"sort"
 	"sync"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/stream"
 )
+
+var logger = log15.New("component", "discoverd")
 
 var ErrUnsetService = errors.New("discoverd: service name must not be empty")
 var ErrInvalidService = errors.New("discoverd: service must be lowercase alphanumeric plus dash")
@@ -534,6 +538,8 @@ func (s *State) Subscribe(service string, sendCurrent bool, kinds discoverd.Even
 var ErrSendBlocked = errors.New("discoverd: channel send failed due to blocked receiver")
 
 func (s *State) broadcast(event *discoverd.Event) {
+	logBroadcast(event)
+
 	s.subscribersMtx.Lock()
 	defer s.subscribersMtx.Unlock()
 
@@ -558,6 +564,24 @@ func (s *State) broadcast(event *discoverd.Event) {
 			go sub.Close()
 		}
 	}
+}
+
+func logBroadcast(event *discoverd.Event) {
+	log := logger.New("fn", "broadcast")
+	ctx := []interface{}{
+		"event", event.Kind,
+		"service", event.Service,
+	}
+	if event.Instance != nil {
+		ctx = append(ctx, []interface{}{
+			"instance.id", event.Instance.ID,
+			"instance.addr", event.Instance.Addr,
+		}...)
+	}
+	if event.ServiceMeta != nil {
+		ctx = append(ctx, []interface{}{"service_meta.index", event.ServiceMeta.Index}...)
+	}
+	log.Info(fmt.Sprintf("broadcasting %s event", event.Kind), ctx...)
 }
 
 type sortInstances []*discoverd.Instance
