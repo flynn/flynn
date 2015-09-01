@@ -646,7 +646,7 @@ func (c *Cluster) DumpLogs(buildLog *buildlog.Log) {
 		run(fmt.Sprintf("%s-jobs.log", typ), instances[0], "flynn-host ps -a")
 
 		var out bytes.Buffer
-		cmd := `flynn-host ps -aqf '{{ metadata "flynn-controller.app_name" }}-{{ metadata "flynn-controller.type" }}-{{ .Job.ID }}'`
+		cmd := `flynn-host ps -aqf '{{ metadata "flynn-controller.app_name" }}:{{ metadata "flynn-controller.type" }}:{{ .Job.ID }}'`
 		if err := instances[0].Run(cmd, &Streams{Stdout: &out, Stderr: &out}); err != nil {
 			fallback(instances)
 			return
@@ -656,8 +656,8 @@ func (c *Cluster) DumpLogs(buildLog *buildlog.Log) {
 		shouldFallback := true
 		jobs := strings.Split(strings.TrimSpace(out.String()), "\n")
 		for _, job := range jobs {
-			fields := strings.Split(job, "-")
-			jobID := strings.Join(fields[len(fields)-2:], "-")
+			fields := strings.Split(job, ":")
+			jobID := fields[2]
 			cmds := []string{
 				fmt.Sprintf("timeout 10s flynn-host inspect %s", jobID),
 				fmt.Sprintf("timeout 10s flynn-host log --init %s", jobID),
