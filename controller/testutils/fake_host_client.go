@@ -135,7 +135,7 @@ func (c *FakeHostClient) CreateVolume(providerID string) (*volume.Info, error) {
 	return volume, nil
 }
 
-func (c *FakeHostClient) StreamEvents(id string, ch chan<- *host.Event) (stream.Stream, error) {
+func (c *FakeHostClient) StreamEvents(id string, ch chan *host.Event) (stream.Stream, error) {
 	if _, ok := c.eventChannels[ch]; ok {
 		return nil, errors.New("Already streaming that channel")
 	}

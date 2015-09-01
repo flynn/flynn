@@ -349,8 +349,10 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 
 	s.log.Info("Remove one of the hosts. Ensure the cluster recovers correctly", "hosts", hosts)
 	cluster.SetHosts(hosts)
-	triggerChan(s.syncJobs)
-	_, err = waitForEvent(events, EventTypeClusterSync)
+	_, err = waitForEvent(events, EventTypeFormationSync)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeRectifyJobs)
+	c.Assert(err, IsNil)
 	jobs = s.Jobs()
 	c.Assert(jobs, HasLen, 3)
 	hostJobs, err = h.ListJobs()
@@ -359,6 +361,20 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 	hostJobs, err = h2.ListJobs()
 	c.Assert(err, IsNil)
 	c.Assert(len(hostJobs), Equals, 1)
+
+	s.log.Info("Remove another host. Ensure the cluster recovers correctly", "hosts", hosts)
+	cluster.RemoveHost(testHostID)
+	_, err = waitForEvent(events, EventTypeFormationSync)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeRectifyJobs)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeJobStart)
+	c.Assert(err, IsNil)
+	jobs = s.Jobs()
+	c.Assert(jobs, HasLen, 2)
+	hostJobs, err = h2.ListJobs()
+	c.Assert(err, IsNil)
+	c.Assert(len(hostJobs), Equals, 2)
 }
 
 func checkJobStartEvent(c *C, e Event) *Job {
