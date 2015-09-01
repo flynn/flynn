@@ -112,6 +112,7 @@ func typeFields(t reflect.Type) []field {
 				// Record found field and index sequence.
 				if name != "" || !sf.Anonymous || ft.Kind() != reflect.Struct {
 					tagged := name != ""
+					name, _ = getOptions(name)
 					if name == "" {
 						name = sf.Name
 					}

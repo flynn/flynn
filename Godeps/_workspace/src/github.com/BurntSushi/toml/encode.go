@@ -343,6 +343,14 @@ func (enc *Encoder) eStruct(key Key, rv reflect.Value) {
 			if keyName == "" {
 				keyName = sft.Name
 			}
+
+			keyName, opts := getOptions(keyName)
+			if _, ok := opts["omitempty"]; ok && isEmpty(sf) {
+				continue
+			} else if _, ok := opts["omitzero"]; ok && isZero(sf) {
+				continue
+			}
+
 			enc.encode(key.add(keyName), sf)
 		}
 	}
@@ -431,6 +439,53 @@ func tomlArrayType(rv reflect.Value) tomlType {
 		}
 	}
 	return firstType
+}
+
+func getOptions(keyName string) (string, map[string]struct{}) {
+	opts := make(map[string]struct{})
+	ss := strings.Split(keyName, ",")
+	name := ss[0]
+	if len(ss) > 1 {
+		for _, opt := range ss {
+			opts[opt] = struct{}{}
+		}
+	}
+
+	return name, opts
+}
+
+func isZero(rv reflect.Value) bool {
+	switch rv.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if rv.Int() == 0 {
+			return true
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if rv.Uint() == 0 {
+			return true
+		}
+	case reflect.Float32, reflect.Float64:
+		if rv.Float() == 0.0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isEmpty(rv reflect.Value) bool {
+	switch rv.Kind() {
+	case reflect.String:
+		if len(strings.TrimSpace(rv.String())) == 0 {
+			return true
+		}
+	case reflect.Array, reflect.Slice, reflect.Map:
+		if rv.Len() == 0 {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (enc *Encoder) newline() {

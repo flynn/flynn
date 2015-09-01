@@ -195,6 +195,11 @@ func readConfig() (err error) {
 	if os.IsNotExist(err) {
 		err = nil
 	}
+	if config.Upgrade() {
+		if err := config.SaveTo(configPath()); err != nil {
+			return fmt.Errorf("Error saving upgraded config: %s", err)
+		}
+	}
 	return
 }
 

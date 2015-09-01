@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"net"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -16,36 +14,36 @@ import (
 )
 
 type Cluster struct {
-	Name   string `json:"name"`
-	Domain string `json:"domain"`
-	Key    string `json:"key"`
-	TLSPin string `json:"tls_pin"`
+	Name          string `json:"name"`
+	Key           string `json:"key"`
+	TLSPin        string `json:"tls_pin" toml:"TLSPin,omitempty"`
+	ControllerURL string `json:"controller_url"`
+	GitURL        string `json:"git_url"`
 
 	// GitHost and URL are legacy config options for clusters that are using git
 	// over SSH, they should be removed at some point in the near future.
-	GitHost string `json:"git_host"`
-	URL     string `json:"url"`
+	GitHost string `json:"git_host" toml:"GitHost,omitempty"`
+	URL     string `json:"url" toml:"URL,omitempty"`
+
+	// Domain was a short-lived option, replaced by ControllerURL and GitURL, it
+	// should be removed along with the above.
+	Domain string `json:"domain" toml:"Domain,omitempty"`
 }
 
 func (c *Cluster) Client() (*controller.Client, error) {
-	url := c.URL
-	if url == "" {
-		url = "https://controller." + c.Domain
-	}
-
-	var client *controller.Client
-	var err error
+	var pin []byte
 	if c.TLSPin != "" {
-		pin, err := base64.StdEncoding.DecodeString(c.TLSPin)
+		var err error
+		pin, err = base64.StdEncoding.DecodeString(c.TLSPin)
 		if err != nil {
 			return nil, fmt.Errorf("error decoding tls pin: %s", err)
 		}
-		client, err = controller.NewClientWithConfig(url, c.Key, controller.Config{Pin: pin})
-	} else {
-		client, err = controller.NewClient(url, c.Key)
 	}
+	return controller.NewClientWithConfig(c.ControllerURL, c.Key, controller.Config{Pin: pin})
+}
 
-	return client, err
+func (c *Cluster) SSHGit() bool {
+	return c.GitHost != ""
 }
 
 type Config struct {
@@ -96,30 +94,18 @@ func (c *Config) Marshal() []byte {
 }
 
 func (c *Config) Add(s *Cluster, force bool) error {
-	if s.Domain == "" && s.GitHost == "" {
-		u, err := url.Parse(s.URL)
-		if err != nil {
-			return err
-		}
-		if host, _, err := net.SplitHostPort(u.Host); err == nil {
-			s.GitHost = host
-		} else {
-			s.GitHost = u.Host
-		}
-	}
-
 	for i, existing := range c.Clusters {
 		msg := ""
 
 		switch {
 		case existing.Name == s.Name:
 			msg = fmt.Sprintf("Cluster %q already exists in ~/.flynnrc", s.Name)
-		case existing.URL == s.URL:
-			msg = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.URL)
-		case existing.GitHost == s.GitHost:
+		case existing.GitURL != "" && existing.GitURL == s.GitURL:
+			msg = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.GitURL)
+		case existing.ControllerURL == s.ControllerURL:
+			msg = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.ControllerURL)
+		case existing.GitHost != "" && existing.GitHost == s.GitHost:
 			msg = fmt.Sprintf("A cluster with the git host %q already exists in ~/.flynnrc", s.GitHost)
-		case s.Domain != "" && existing.Domain == s.Domain:
-			msg = fmt.Sprintf("A cluster with the domain %q already exists in ~/.flynnrc", s.Domain)
 		}
 
 		// The new cluster config match with existing one
@@ -137,6 +123,23 @@ func (c *Config) Add(s *Cluster, force bool) error {
 	c.Clusters = append(c.Clusters, s)
 
 	return nil
+}
+
+func (c *Config) Upgrade() (changed bool) {
+	for _, cluster := range c.Clusters {
+		if cluster.URL != "" {
+			cluster.ControllerURL = cluster.URL
+			cluster.URL = ""
+			changed = true
+		}
+		if cluster.Domain != "" {
+			cluster.ControllerURL = "https://controller." + cluster.Domain
+			cluster.GitURL = "https://git." + cluster.Domain
+			cluster.Domain = ""
+			changed = true
+		}
+	}
+	return changed
 }
 
 func (c *Config) Remove(name string) *Cluster {

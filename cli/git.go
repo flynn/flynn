@@ -30,10 +30,8 @@ func inGitRepo() bool {
 const gitURLSuffix = ".git"
 
 func gitURL(conf *cfg.Cluster, app string) string {
-	var prefix string
-	if conf.Domain != "" {
-		prefix = gitHTTPURLPre(conf.Domain)
-	} else if conf.GitHost != "" {
+	prefix := gitHTTPURLPre(conf.GitURL)
+	if conf.SSHGit() {
 		prefix = gitSSHURLPre(conf.GitHost)
 	}
 	return prefix + app + gitURLSuffix
@@ -43,8 +41,8 @@ func gitSSHURLPre(gitHost string) string {
 	return "ssh://git@" + gitHost + "/"
 }
 
-func gitHTTPURLPre(domain string) string {
-	return fmt.Sprintf("https://git.%s/", domain)
+func gitHTTPURLPre(url string) string {
+	return url + "/"
 }
 
 func mapOutput(out []byte, sep, term string) map[string]string {
@@ -99,13 +97,9 @@ func appFromGitURL(remote string) *remoteApp {
 			continue
 		}
 
-		var prefix string
-		if s.Domain != "" {
-			prefix = gitHTTPURLPre(s.Domain)
-		} else if s.GitHost != "" {
+		prefix := gitHTTPURLPre(s.GitURL)
+		if s.SSHGit() {
 			prefix = gitSSHURLPre(s.GitHost)
-		} else {
-			continue
 		}
 
 		if strings.HasPrefix(remote, prefix) && strings.HasSuffix(remote, gitURLSuffix) {
@@ -214,24 +208,24 @@ func gitConfig(args ...string) error {
 	return nil
 }
 
-func writeGlobalGitConfig(domain, caFile string) error {
-	if err := gitConfig(fmt.Sprintf("http.https://git.%s.sslCAInfo", domain), caFile); err != nil {
+func writeGlobalGitConfig(gitURL, caFile string) error {
+	if err := gitConfig(fmt.Sprintf("http.%s.sslCAInfo", gitURL), caFile); err != nil {
 		return err
 	}
 	self, err := osext.Executable()
 	if err != nil {
 		return err
 	}
-	if err := gitConfig(fmt.Sprintf("credential.https://git.%s.helper", domain), self+" git-credentials"); err != nil {
+	if err := gitConfig(fmt.Sprintf("credential.%s.helper", gitURL), self+" git-credentials"); err != nil {
 		return err
 	}
 	return nil
 }
 
-func removeGlobalGitConfig(domain string) {
+func removeGlobalGitConfig(gitURL string) {
 	for _, k := range []string{
-		fmt.Sprintf("http.https://git.%s", domain),
-		fmt.Sprintf("credential.https://git.%s", domain),
+		fmt.Sprintf("http.%s", gitURL),
+		fmt.Sprintf("credential.%s", gitURL),
 	} {
 		gitConfig("--remove-section", k)
 	}
@@ -263,9 +257,9 @@ func runGitCredentials(args *docopt.Args) error {
 	}
 
 	var cluster *cfg.Cluster
-	domain := strings.TrimPrefix(details["host"], "git.")
+	url := "https://" + details["host"]
 	for _, c := range config.Clusters {
-		if c.Domain == domain {
+		if c.GitURL == url {
 			cluster = c
 			break
 		}
