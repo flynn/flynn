@@ -95,7 +95,7 @@ func (s *CLISuite) TestCreateAppNoGit(t *c.C) {
 func testApp(s *CLISuite, t *c.C, remote string) {
 	app := s.newGitRepo(t, "")
 	name := random.String(30)
-	flynnRemote := fmt.Sprintf("%s\thttps://git.%s/%s.git (push)", remote, s.clusterConf(t).Domain, name)
+	flynnRemote := fmt.Sprintf("%s\t%s/%s.git (push)", remote, s.clusterConf(t).GitURL, name)
 
 	if remote == "flynn" {
 		t.Assert(app.flynn("create", "-y", name), Outputs, fmt.Sprintf("Created %s\n", name))
