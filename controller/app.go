@@ -72,7 +72,6 @@ func (r *AppRepo) Add(data interface{}) error {
 		}
 		return err
 	}
-	app.ID = postgres.CleanUUID(app.ID)
 
 	if err := createEvent(tx.Exec, &ct.Event{
 		AppID:      app.ID,
@@ -107,7 +106,7 @@ func scanApp(s postgres.Scanner) (*ct.App, error) {
 		err = ErrNotFound
 	}
 	if releaseID != nil {
-		app.ReleaseID = postgres.CleanUUID(*releaseID)
+		app.ReleaseID = *releaseID
 	}
 	if len(meta.Map) > 0 {
 		app.Meta = make(map[string]string, len(meta.Map))
@@ -115,7 +114,6 @@ func scanApp(s postgres.Scanner) (*ct.App, error) {
 			app.Meta[k] = v.String
 		}
 	}
-	app.ID = postgres.CleanUUID(app.ID)
 	return app, err
 }
 

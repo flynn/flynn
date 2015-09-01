@@ -37,8 +37,6 @@ func scanRelease(s postgres.Scanner) (*ct.Release, error) {
 	if artifactID != nil {
 		release.ArtifactID = *artifactID
 	}
-	release.ID = postgres.CleanUUID(release.ID)
-	release.ArtifactID = postgres.CleanUUID(release.ArtifactID)
 	err = json.Unmarshal(data, release)
 	return release, err
 }
@@ -79,11 +77,6 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 	if err != nil {
 		tx.Rollback()
 		return err
-	}
-
-	release.ID = postgres.CleanUUID(release.ID)
-	if release.ArtifactID != "" {
-		release.ArtifactID = postgres.CleanUUID(release.ArtifactID)
 	}
 
 	if err := createEvent(tx.Exec, &ct.Event{

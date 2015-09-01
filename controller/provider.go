@@ -34,7 +34,6 @@ func (r *ProviderRepo) Add(data interface{}) error {
 		tx.Rollback()
 		return err
 	}
-	p.ID = postgres.CleanUUID(p.ID)
 	if err := createEvent(tx.Exec, &ct.Event{
 		ObjectID:   p.ID,
 		ObjectType: ct.EventTypeProvider,
@@ -51,7 +50,6 @@ func scanProvider(s postgres.Scanner) (*ct.Provider, error) {
 	if err == sql.ErrNoRows {
 		err = ErrNotFound
 	}
-	p.ID = postgres.CleanUUID(p.ID)
 	return p, err
 }
 

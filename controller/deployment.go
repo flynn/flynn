@@ -49,10 +49,6 @@ func (r *DeploymentRepo) Add(data interface{}) error {
 		tx.Rollback()
 		return err
 	}
-	d.ID = postgres.CleanUUID(d.ID)
-	d.AppID = postgres.CleanUUID(d.AppID)
-	d.OldReleaseID = postgres.CleanUUID(d.OldReleaseID)
-	d.NewReleaseID = postgres.CleanUUID(d.NewReleaseID)
 
 	// fake initial deployment
 	if d.FinishedAt != nil {
@@ -100,10 +96,6 @@ func scanDeployment(s postgres.Scanner) (*ct.Deployment, error) {
 			d.Processes[k] = n
 		}
 	}
-	d.ID = postgres.CleanUUID(d.ID)
-	d.AppID = postgres.CleanUUID(d.AppID)
-	d.OldReleaseID = postgres.CleanUUID(d.OldReleaseID)
-	d.NewReleaseID = postgres.CleanUUID(d.NewReleaseID)
 	return d, err
 }
 

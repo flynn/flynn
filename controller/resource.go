@@ -56,7 +56,6 @@ func (rr *ResourceRepo) Add(r *ct.Resource) error {
 			tx.Rollback()
 			return err
 		}
-		r.Apps[i] = postgres.CleanUUID(r.Apps[i])
 	}
 	for _, appID := range r.Apps {
 		if err := createEvent(tx.Exec, &ct.Event{
@@ -94,17 +93,12 @@ func scanResource(s postgres.Scanner) (*ct.Resource, error) {
 	if err == sql.ErrNoRows {
 		err = ErrNotFound
 	}
-	r.ID = postgres.CleanUUID(r.ID)
-	r.ProviderID = postgres.CleanUUID(r.ProviderID)
 	r.Env = make(map[string]string, len(env.Map))
 	for k, v := range env.Map {
 		r.Env[k] = v.String
 	}
 	if appIDs != "" {
 		r.Apps = split(appIDs[1:len(appIDs)-1], ",")
-	}
-	for i, id := range r.Apps {
-		r.Apps[i] = postgres.CleanUUID(id)
 	}
 	return r, err
 }

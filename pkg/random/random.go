@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"io"
 	mathrand "math/rand"
 	"strings"
@@ -40,5 +41,5 @@ func UUID() string {
 	id[6] |= 0x40 // set version to 4 (random uuid)
 	id[8] &= 0x3F // clear variant
 	id[8] |= 0x80 // set to IETF variant
-	return hex.EncodeToString(id)
+	return fmt.Sprintf("%x-%x-%x-%x-%x", id[0:4], id[4:6], id[6:8], id[8:10], id[10:])
 }
