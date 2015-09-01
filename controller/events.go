@@ -11,7 +11,6 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -337,7 +336,7 @@ func (e *EventListener) Unsubscribe(s *EventSubscriber) {
 // Listen creates a postgres listener for events and starts a goroutine to
 // forward the events to subscribers.
 func (e *EventListener) Listen() error {
-	log := log15.New("component", "controller", "fn", "EventListener.Listen")
+	log := logger.New("fn", "EventListener.Listen")
 	listener, err := e.eventRepo.db.Listen("events", log)
 	if err != nil {
 		e.SetClosed()

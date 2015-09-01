@@ -19,6 +19,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/controller/name"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
@@ -35,6 +36,8 @@ import (
 	routerc "github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
 )
+
+var logger = log15.New("component", "controller")
 
 var ErrNotFound = errors.New("controller: resource not found")
 
