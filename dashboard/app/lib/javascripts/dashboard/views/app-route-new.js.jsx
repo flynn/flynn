@@ -1,5 +1,7 @@
+import { extend } from 'marbles/utils';
 import Modal from 'Modal';
-import NewAppRouteActions from '../actions/app-route-new';
+import Dispatcher from 'dashboard/dispatcher';
+import NewAppRouteStore from 'dashboard/stores/app-route-new';
 
 var NewAppRoute = React.createClass({
 	displayName: "Views.NewAppRoute",
@@ -15,13 +17,18 @@ var NewAppRoute = React.createClass({
 					<form onSubmit={this.__handleFormSubmit}>
 						<div className="alert-info">Remember to change your DNS</div>
 
-						{this.props.errorMsg ? (
-							<div className="alert-error">{this.props.errorMsg}</div>
+						{this.state.errorMsg ? (
+							<div className="alert-error">{this.state.errorMsg}</div>
 						) : null}
 
 						<label>
 							<div className="name">Domain</div>
-							<input type="text" ref="domain" value={this.state.domain} onChange={this.__handleDomainChange} />
+							<input
+								type="text"
+								ref="domain"
+								value={this.state.domain}
+								disabled={this.state.isCreating === true}
+								onChange={this.__handleDomainChange} />
 						</label>
 
 						<button type="submit" className="create-btn" disabled={ !this.state.domain || this.state.isCreating }>{this.state.isCreating ? "Please wait..." : "Add Domain"}</button>
@@ -32,22 +39,36 @@ var NewAppRoute = React.createClass({
 	},
 
 	getInitialState: function () {
-		return {
-			isCreating: false,
-			domain: null
-		};
+		return this.__getState(this.props);
 	},
 
 	componentDidMount: function () {
+		NewAppRouteStore.addChangeListener(this.__getStoreID(this.props), this.__handleStoreChange);
 		this.refs.domain.getDOMNode().focus();
 	},
 
-	componentWillReceiveProps: function (nextProps) {
-		if (nextProps.errorMsg) {
-			this.setState({
-				isCreating: false
-			});
+	componentWillUnmount: function () {
+		NewAppRouteStore.removeChangeListener(this.__getStoreID(this.props), this.__handleStoreChange);
+	},
+
+	__handleStoreChange: function () {
+		if (this.isMounted()) {
+			this.setState(this.__getState(this.props));
 		}
+	},
+
+	__getStoreID: function (props) {
+			return {
+				appID: this.props.appId
+			};
+		},
+
+	__getState: function (props) {
+		var prevState = this.state || {};
+		var state = extend({
+			domain: prevState.domain || null
+		}, NewAppRouteStore.getState(this.__getStoreID(props)));
+		return state;
 	},
 
 	__handleDomainChange: function (e) {
@@ -59,11 +80,14 @@ var NewAppRoute = React.createClass({
 
 	__handleFormSubmit: function (e) {
 		e.preventDefault();
-		this.setState({
-			isCreating: true
+		Dispatcher.dispatch({
+			name: 'CREATE_APP_ROUTE',
+			appID: this.props.appId,
+			data: {
+				domain: this.state.domain
+			}
 		});
-		NewAppRouteActions.createAppRoute(this.props.appId, this.state.domain);
-	}
+	},
 });
 
 export default NewAppRoute;

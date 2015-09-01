@@ -1,7 +1,8 @@
-build
-app
-compiler
+/build
+/app
+/compiler
 .sass-cache
-dashboard.tar
-lib/installer
-.gitrepos
+/dashboard.tar
+/lib/installer
+/.gitrepos
+/node_modules

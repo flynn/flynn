@@ -1,5 +1,6 @@
 import Modal from 'Modal';
-import AppRouteDeleteActions from '../actions/app-route-delete';
+import Dispatcher from 'dashboard/dispatcher';
+import AppRouteDeleteStore from 'dashboard/stores/app-route-delete';
 
 var AppRouteDelete = React.createClass({
 	displayName: "Views.AppRouteDelete",
@@ -13,8 +14,8 @@ var AppRouteDelete = React.createClass({
 						<h1>Delete route{domain ? " ("+ domain +")": ""}?</h1>
 					</header>
 
-					{this.props.errorMsg ? (
-						<div className="alert-error">{this.props.errorMsg}</div>
+					{this.state.errorMsg ? (
+						<div className="alert-error">{this.state.errorMsg}</div>
 					) : null}
 
 					<button className="delete-btn" disabled={this.state.isDeleting} onClick={this.__handleDeleteBtnClick}>{this.state.isDeleting ? "Please wait..." : "Delete"}</button>
@@ -24,25 +25,42 @@ var AppRouteDelete = React.createClass({
 	},
 
 	getInitialState: function () {
-		return {
-			isDeleting: false
-		};
+		return this.__getState(this.props);
 	},
 
-	componentWillReceiveProps: function (nextProps) {
-		if (nextProps.errorMsg) {
-			this.setState({
-				isDeleting: false
-			});
-		}
+	componentDidMount: function () {
+		AppRouteDeleteStore.addChangeListener(this.__getStoreID(this.props), this.__handleStoreChange);
+	},
+
+	componentWillUnmount: function () {
+		AppRouteDeleteStore.removeChangeListener(this.__getStoreID(this.props), this.__handleStoreChange);
 	},
 
 	__handleDeleteBtnClick: function (e) {
 		e.preventDefault();
-		this.setState({
-			isDeleting: true
+		Dispatcher.dispatch({
+			name: 'DELETE_APP_ROUTE',
+			appID: this.props.appId,
+			routeType: this.props.routeType,
+			routeID: this.props.routeId
 		});
-		AppRouteDeleteActions.deleteAppRoute(this.props.appId, this.props.routeType, this.props.routeId);
+	},
+
+	__handleStoreChange: function () {
+		if (this.isMounted()) {
+			this.setState(this.__getState(this.props));
+		}
+	},
+
+	__getStoreID: function (props) {
+			return {
+				appID: this.props.appId,
+				routeID: this.props.routeId
+			};
+		},
+
+	__getState: function (props) {
+		return AppRouteDeleteStore.getState(this.__getStoreID(props));
 	}
 });
 

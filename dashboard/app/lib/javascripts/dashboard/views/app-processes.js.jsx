@@ -51,7 +51,7 @@ var AppProcesses = React.createClass({
 
 	getInitialState: function () {
 		return {
-			processes: this.props.formation.processes, // initial value
+			processes: this.props.formation.processes || {}, // initial value
 			hasChanges: false,
 			isSaving: false,
 			showSaveConfirmModal: false
@@ -61,7 +61,7 @@ var AppProcesses = React.createClass({
 	componentWillReceiveProps: function (nextProps) {
 		if ( !assertEqual(nextProps.formation, this.props.formation) ) {
 			this.setState({
-				processes: nextProps.formation.processes,
+				processes: nextProps.formation.processes || {},
 				hasChanges: false,
 				isSaving: false,
 				showSaveConfirmModal: false
@@ -70,7 +70,7 @@ var AppProcesses = React.createClass({
 	},
 
 	__handleProcessChange: function (k, n) {
-		var originalProcesses = this.props.formation.processes;
+		var originalProcesses = this.props.formation.processes || {};
 		var processes = extend({}, this.state.processes);
 		processes[k] = n;
 		this.setState({

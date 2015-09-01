@@ -196,6 +196,7 @@ var AppSourceHistory = React.createClass({
 
 				{selectedTab === "commits" ? (
 					<GithubCommitSelector
+						key={app.release_id}
 						ownerLogin={ownerLogin}
 						repoName={repoName}
 						selectedBranchName={selectedBranchName}

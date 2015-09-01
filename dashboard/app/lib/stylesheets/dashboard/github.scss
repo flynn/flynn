@@ -236,6 +236,11 @@
     @extend %btn-block;
   }
 
+  .delete-btn {
+    @extend %btn-red;
+    @extend %btn-block;
+  }
+
   .alert-error {
     margin-top: 1rem;
   }

@@ -1,7 +1,8 @@
 import { assertEqual, extend } from 'marbles/utils';
+import { objectDiff, applyObjectDiff } from 'dashboard/utils';
 import Modal from 'Modal';
 import AppStore from '../stores/app';
-import AppEnvActions from '../actions/app-env';
+import Dispatcher from 'dashboard/dispatcher';
 import EditEnv from './edit-env';
 
 function getAppStoreId (props) {
@@ -14,16 +15,18 @@ function getState (props, prevState) {
 	prevState = prevState || {};
 	var state = {
 		appStoreId: getAppStoreId(props),
-		env: prevState.env
+		env: prevState.env,
+		envDiff: prevState.envDiff || []
 	};
 
 	var appState = AppStore.getState(state.appStoreId);
 	state.app = appState.app;
 	state.release = appState.release;
 
-	if (state.release && ( !prevState.release || !assertEqual(prevState.release, state.release) )) {
-		state.env = extend({}, state.release.env);
-		state.hasChanges = false;
+	if (state.release && !assertEqual(prevState.release, state.release)) {
+		state.env = applyObjectDiff(state.envDiff, extend({}, state.release.env));
+		state.hasChanges = !assertEqual(state.release.env, state.env);
+		state.envDiff = [];
 		state.isSaving = false;
 	}
 
@@ -80,21 +83,25 @@ var AppEnv = React.createClass({
 	},
 
 	__handleEnvChange: function (env) {
+		var diff = objectDiff(this.state.release.env, env);
 		this.setState({
 			env: env,
-			hasChanges: !assertEqual(env, this.state.release.env)
+			envDiff: diff,
+			hasChanges: diff.length > 0
 		});
 	},
 
 	__handleSaveBtnClick: function (e) {
 		e.preventDefault();
-		var release = {
-			env: this.state.env
-		};
 		this.setState({
 			isSaving: true
 		});
-		AppEnvActions.createRelease(this.state.appStoreId, release);
+		Dispatcher.dispatch({
+			name: 'UPDATE_APP_ENV',
+			appID: this.props.appId,
+			prevRelease: this.state.release,
+			data: this.state.env
+		});
 	}
 });
 

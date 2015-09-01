@@ -1,5 +1,6 @@
 import { pathWithParams } from 'marbles/history';
 import Router from 'marbles/router';
+import State from 'marbles/state';
 import QueryParams from 'marbles/query_params';
 import Dispatcher from '../dispatcher';
 import GithubAuthComponent from '../views/github-auth';
@@ -14,10 +15,15 @@ var GithubRouter = Router.createClass({
 		{ path: "github/auth", handler: "auth", githubAuth: false },
 		{ path: "github", handler: "github" },
 		{ path: "github/deploy", handler: "deploy", secondary: true },
+		{ path: "github/deploy/:appID", handler: "deploy", secondary: true },
 	],
+
+	mixins: [State],
 
 	willInitialize: function () {
 		this.dispatcherIndex = Dispatcher.register(this.handleEvent.bind(this));
+		this.state = {};
+		this.__changeListeners = []; // always empty
 	},
 
 	beforeHandler: function (event) {
@@ -87,23 +93,12 @@ var GithubRouter = Router.createClass({
 
 	deploy: function (params) {
 		params = params[0];
-		var prevPath = this.history.prevPath;
-		if (prevPath === this.history.path) {
-			prevPath = null;
-		}
 		var githubParams = [{
 			owner: params.base_owner || params.owner,
 			repo: params.base_repo || params.repo
 		}];
 		if (params.pull) {
 			githubParams[0].repo_panel = "pulls";
-		}
-		var prevPathParts;
-		if (prevPath) {
-			prevPathParts = prevPath.split("?");
-			if (prevPathParts[0] === "github") {
-				githubParams = QueryParams.deserializeParams(prevPathParts[1]);
-			}
 		}
 		var githubPath = pathWithParams("/github", githubParams);
 
@@ -113,19 +108,24 @@ var GithubRouter = Router.createClass({
 			props.baseRepo = params.base_repo;
 		}
 		props.onHide = function () {
-			this.history.navigate(prevPath || githubPath);
+			this.history.navigate(githubPath);
 		}.bind(this);
 		props.dismissError = function () {
 			view.setProps({ errorMsg: null });
 		};
+		props.appID = params.appID || null;
+		props.getAppPath = this.__getAppPath.bind(this, props.appID);
+		props.key = props.appID;
 		var view = this.context.secondaryView = React.render(React.createElement(
 			GithubDeployComponent, props),
 			this.context.secondaryEl
 		);
 
-		if ( !prevPath ) {
-			this.github(githubParams);
-		}
+		this.setState({
+			appID: params.appID || null
+		});
+
+		this.github(githubParams);
 	},
 
 	__getDeployProps: function (params) {
@@ -145,6 +145,30 @@ var GithubRouter = Router.createClass({
 
 	handleEvent: function (event) {
 		switch (event.name) {
+			case 'handler:before':
+				// reset state between routes
+				this.state = {};
+			break;
+
+			case 'DEPLOY_APP':
+				this.setState({
+					deployAppName: event.appData.name,
+				});
+			break;
+
+			case 'APP':
+				if (event.data.name === this.state.deployAppName && !this.history.pathParams[0].hasOwnProperty('appID')) {
+					this.history.navigate(pathWithParams("/github/deploy/:appID", QueryParams.replaceParams(this.history.pathParams, { appID: event.data.id })));
+				}
+			break;
+
+			case 'DELETE_APP':
+				// Don't wait for app to be deleting before reacting to deletion
+				if (this.state.appID !== null && this.state.appID === event.appID) {
+					this.history.navigate(pathWithParams("/github/deploy", QueryParams.replaceParams(this.history.pathParams, { appID: null })));
+				}
+			break;
+
 			case "GITHUB_BRANCH_SELECTOR:BRANCH_SELECTED":
 				this.__handleBranchSelected(event);
 			break;
@@ -155,14 +179,6 @@ var GithubRouter = Router.createClass({
 
 			case "GITHUB_PULLS:LAUNCH_PULL":
 				this.__handleLaunchPull(event);
-			break;
-
-			case "APP:DATABASE_CREATED":
-				this.__handleDatabaseCreated(event);
-			break;
-
-			case "APP:JOB_CREATED":
-				this.__handleJobCreated(event);
 			break;
 
 			case "APP:CREATE_FAILED":
@@ -223,26 +239,6 @@ var GithubRouter = Router.createClass({
 		deployParams.branch = head.ref;
 		deployParams.pull = event.pull.number;
 		this.history.navigate(pathWithParams("/github/deploy", [deployParams]));
-	},
-
-	__handleDatabaseCreated: function (event) {
-		var view = this.context.secondaryView;
-		if (view && view.constructor.displayName === "Views.GithubDeploy" && view.isMounted() && view.state.name === event.appName) {
-			view.setProps({
-				env: event.env
-			});
-		}
-	},
-
-	__handleJobCreated: function (event) {
-		var view = this.context.secondaryView;
-		if (view && view.constructor.displayName === "Views.GithubDeploy" && view.isMounted() && view.state.name === event.appName) {
-			view.setProps({
-				getAppPath: this.__getAppPath.bind(this, event.appId),
-				appId: event.appId,
-				job: event.job
-			});
-		}
 	},
 
 	__handleAppCreateFailed: function (event) {

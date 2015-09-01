@@ -1,7 +1,6 @@
 import State from 'marbles/state';
 import Store from '../store';
 import Dispatcher from '../dispatcher';
-import Config from '../config';
 
 var AppResources = Store.createClass({
 	displayName: "Stores.AppResources",
@@ -19,7 +18,10 @@ var AppResources = Store.createClass({
 	didInitialize: function () {},
 
 	didBecomeActive: function () {
-		this.__fetchResources();
+		Dispatcher.dispatch({
+			name: 'GET_APP_RESOURCES',
+			appID: this.props.appId
+		});
 	},
 
 	getInitialState: function () {
@@ -29,24 +31,26 @@ var AppResources = Store.createClass({
 		};
 	},
 
-	handleEvent: function () {
-	},
+	handleEvent: function (event) {
+		switch (event.name) {
+			case 'RESOURCE':
+				if (event.app === this.props.appId) {
+					this.setStateWithDelay({
+						resources: this.state.resources.filter(function (r) {
+							return r.id !== event.object_id;
+						}).concat([event.data])
+					});
+				}
+			break;
 
-	__fetchResources: function () {
-		return this.__getClient().getAppResources(this.props.appId).then(function (args) {
-			var res = args[0];
-			if (res === "null") {
-				res = [];
-			}
-			this.setState({
-				resources: res || [],
-				fetched: true
-			});
-		}.bind(this));
-	},
-
-	__getClient: function () {
-		return Config.client;
+			case 'APP_RESOURCES_FETCHED':
+				if (event.appID === this.props.appId) {
+					this.setStateWithDelay({
+						fetched: true
+					});
+				}
+			break;
+		}
 	}
 
 }, State);

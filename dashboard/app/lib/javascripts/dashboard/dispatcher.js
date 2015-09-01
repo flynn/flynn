@@ -18,6 +18,12 @@ var Dispatcher = extend({
 		this.dispatch(extend({
 			source: "APP_EVENT"
 		}, event));
+	},
+
+	handleServerEvent: function (event) {
+		this.dispatch(extend({}, event, {
+			name: event.object_type.replace('deletion', 'deleted').toUpperCase()
+		}));
 	}
 }, BaseDispatcher);
 

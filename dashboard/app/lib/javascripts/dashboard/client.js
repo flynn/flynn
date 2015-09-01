@@ -5,6 +5,7 @@ import WithCredentialsMiddleware from 'marbles/http/middleware/with_credentials'
 import BasicAuthMiddleware from 'marbles/http/middleware/basic_auth';
 import QueryParams from 'marbles/query_params';
 import Config from './config';
+import Dispatcher from './dispatcher';
 
 var Client = createClass({
 	displayName: "Client",
@@ -21,6 +22,9 @@ var Client = createClass({
 	willInitialize: function (endpoints) {
 		this.endpoints = endpoints;
 		this.__cachedResponses = {};
+
+		this.__waitForEventFns = [];
+		Dispatcher.register(this.__handleEvent.bind(this));
 	},
 
 	performRequest: function (method, args) {
@@ -159,12 +163,28 @@ var Client = createClass({
 			headers: {
 				'Content-Type': 'application/json'
 			}
+		}).catch(function (args) {
+			var xhr = args[1];
+			Dispatcher.dispatch({
+				name: 'CREATE_APP_ROUTE_FAILED',
+				appID: appId,
+				routeDomain: data.domain,
+				status: xhr.status
+			});
 		});
 	},
 
 	deleteAppRoute: function (appId, routeType, routeId) {
 		return this.performControllerRequest('DELETE', {
 			url: "/apps/"+ appId +"/routes/"+ routeType +"/"+ routeId
+		}).catch(function (args) {
+			var xhr = args[1];
+			Dispatcher.dispatch({
+				name: 'DELETE_APP_ROUTE_FAILED',
+				appID: appId,
+				routeID: routeId,
+				status: xhr.status,
+			});
 		});
 	},
 
@@ -284,6 +304,60 @@ var Client = createClass({
 		}.bind(this));
 	},
 
+	openEventStream: function (retryCount) {
+		if ( !window.hasOwnProperty('EventSource') ) {
+			return Promise.reject('window.EventSource not defined');
+		}
+
+		var controllerKey = (Config.user || {}).controller_key;
+		var url = this.endpoints.cluster_controller +'/events';
+		url = url + QueryParams.serializeParams([{
+			key: controllerKey
+		}]);
+		var open = false;
+		var retryTimeout = null;
+		var taffyAppID = null;
+		var waitForTaffy = new Promise(function (resolve) {
+			resolve(this.getApp('taffy').then(function (args) {
+				var res = args[0];
+				taffyAppID = res.id;
+			}));
+		}.bind(this));
+		return new Promise(function (resolve, reject) {
+			var es = new window.EventSource(url, {withCredentials: true});
+			var handleError = function (e) {
+				if ( !open && (!retryCount || retryCount < 3) ) {
+					clearTimeout(retryTimeout);
+					retryTimeout = setTimeout(function () {
+						this.openEventStream((retryCount || 0) + 1);
+					}.bind(this), 300);
+				} else {
+					reject(e);
+				}
+			}.bind(this);
+			es.addEventListener("open", function () {
+				open = true;
+			});
+			es.addEventListener("error", function (e) {
+				es.close();
+				handleError(e);
+			});
+			es.addEventListener("complete", function () {
+				resolve();
+				es.close();
+			});
+			es.addEventListener("message", function (e) {
+				waitForTaffy.then(function () {
+					var res = JSON.parse(e.data);
+					if (res.app === taffyAppID) {
+						res.taffy = true;
+					}
+					Dispatcher.handleServerEvent(res);
+				});
+			});
+		}.bind(this));
+	},
+
 	createAppRelease: function (appId, data) {
 		return this.performControllerRequest('PUT', {
 			url: "/apps/"+ appId +"/release",
@@ -319,6 +393,112 @@ var Client = createClass({
 				'Content-Type': 'application/json'
 			}
 		});
+	},
+
+	__waitForEvent: function (fn) {
+		var resolve;
+		var promise = new Promise(function (rs) {
+			resolve = rs;
+		});
+		this.__waitForEventFns.push([fn, resolve]);
+		return promise;
+	},
+
+	__waitForEventWithTimeout: function (fn) {
+		return Promise.race([this.__waitForEvent(fn), new Promise(function (resolve, reject) {
+			setTimeout(reject, 500);
+		})]);
+	},
+
+	__handleEvent: function (event) {
+		var waitForEventFns = [];
+		this.__waitForEventFns.forEach(function (i) {
+			if (i[0](event) === true) {
+				i[1]();
+			} else {
+				waitForEventFns.push(i);
+			}
+		});
+		this.__waitForEventFns = waitForEventFns;
+
+		switch (event.name) {
+			case 'GET_DEPLOY_APP_JOB':
+				// Ensure JOB event fires for app deploy
+				// e.g. page reloaded so event won't be coming through the event stream
+				this.__waitForEventWithTimeout(function (e) {
+					return e.taffy === true && e.name === 'JOB' && (e.data.meta || {}).app === event.appID;
+				}).catch(function () {
+					return this.getAppJobs('taffy').then(function (args) {
+						var res = args[0];
+						var job = null;
+						for (var i = 0, len = res.length; i < len; i++) {
+							if ((res[i].meta || {}).app === event.appID) {
+								job = res[i];
+								break;
+							}
+						}
+						if (job !== null) {
+							Dispatcher.dispatch({
+								name: 'JOB',
+								taffy: true,
+								data: job
+							});
+						} else {
+							return Promise.reject(null);
+						}
+					});
+				}.bind(this));
+			break;
+
+			case 'GET_APP_RELEASE':
+				this.__waitForEventWithTimeout(function (e) {
+					return e.app === event.appID && e.object_type === 'app_release';
+				}).catch(function () {
+					this.getAppRelease(event.appID).then(function (args) {
+						var res = args[0];
+						Dispatcher.dispatch({
+							name: 'APP_RELEASE',
+							app: event.appID,
+							object_type: 'app_release',
+							object_id: res.id,
+							data: res
+						});
+					});
+				}.bind(this));
+			break;
+
+			case 'GET_APP_FORMATION':
+				this.getAppFormation(event.appID, event.releaseID).then(function (args) {
+					var res = args[0];
+					Dispatcher.dispatch({
+						name: 'APP_FORMATION',
+						app: event.appID,
+						objet_type: 'formation',
+						object_id: res.id,
+						data: res
+					});
+				});
+			break;
+
+			case 'GET_APP_RESOURCES':
+				this.getAppResources(event.appID).then(function (args) {
+					var resources = args[0];
+					resources.forEach(function (r) {
+						Dispatcher.dispatch({
+							name: 'RESOURCE',
+							app: event.appID,
+							object_type: 'resources',
+							object_id: r.id,
+							data: r
+						});
+					});
+					Dispatcher.dispatch({
+						name: 'APP_RESOURCES_FETCHED',
+						appID: event.appID
+					});
+				});
+			break;
+		}
 	},
 });
 
