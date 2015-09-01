@@ -66,11 +66,15 @@ func (r *DeploymentRepo) Add(data interface{}) error {
 	if err != nil {
 		return err
 	}
-	// TODO: wrap all of this in a transaction once we move to pgx
-	if err := r.q.Enqueue(&que.Job{
-		Type: "deployment",
-		Args: args,
-	}); err != nil {
+
+	// Delete the deployment if we get an error so the client can retry.
+	//
+	// TODO: wrap all of this in a transaction and drop the delete once we
+	//       move to pgx
+	job := &que.Job{Type: "deployment", Args: args}
+	if err := r.q.Enqueue(job); err != nil {
+		logger.New("fn", "DeploymentRepo.Add").Warn("error enqueueing deployment job", "err", err)
+		r.db.Exec("DELETE FROM deployments WHERE deployment_id = $1", d.ID)
 		return err
 	}
 	return nil

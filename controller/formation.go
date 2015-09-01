@@ -11,7 +11,6 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/ctxhelper"
@@ -220,7 +219,7 @@ func (r *FormationRepo) expandFormation(formation *ct.Formation) (*ct.ExpandedFo
 }
 
 func (r *FormationRepo) startListener() error {
-	log := log15.New("component", "controller", "fn", "FormationRepo.startListener")
+	log := logger.New("fn", "FormationRepo.startListener")
 	listener, err := r.db.Listen("formations", log)
 	if err != nil {
 		return err
