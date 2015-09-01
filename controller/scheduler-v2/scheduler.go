@@ -110,38 +110,47 @@ func (s *Scheduler) Run() error {
 			err = nil
 		}
 		select {
+		case <-s.stop:
+			close(s.putJobs)
+			return nil
 		case isLeader := <-s.changeLeader:
 			s.HandleLeaderChange(isLeader)
 			continue
 		default:
 		}
 
-		// Handle events that could mutate the cluster
+		// Handle events that reconcile scheduler state with the cluster
 		select {
 		case req := <-s.jobRequests:
 			err = s.HandleJobRequest(req)
 			continue
-		case <-s.rectifyJobs:
-			err = s.RectifyJobs()
+		case h := <-s.hostChange:
+			err = s.followHost(h)
+			continue
+		case he := <-s.hostEvents:
+			err = s.HandleHostEvent(he)
+			continue
+		case ef := <-s.formationChange:
+			err = s.FormationChange(ef)
 			continue
 		default:
 		}
 
-		// handle events reconciling our state with the cluster
+		// Handle sync events
 		select {
-		case <-s.stop:
-			close(s.putJobs)
-			return nil
-		case h := <-s.hostChange:
-			err = s.followHost(h)
-		case he := <-s.hostEvents:
-			err = s.HandleHostEvent(he)
-		case ef := <-s.formationChange:
-			err = s.FormationChange(ef)
 		case <-s.syncFormations:
 			err = s.SyncFormations()
+			continue
 		case <-s.syncJobs:
 			err = s.SyncJobs()
+			continue
+		default:
+		}
+
+		// Finally, handle triggering cluster changes
+		select {
+		case <-s.rectifyJobs:
+			err = s.RectifyJobs()
 		case <-time.After(50 * time.Millisecond):
 			// block so that
 			//	1) mutate events are given a chance to happen
@@ -363,7 +372,7 @@ func (s *Scheduler) followHost(h utils.HostClient) error {
 }
 
 func (s *Scheduler) unfollowHost(id string) {
-	log := s.log.New("fn", "followHost")
+	log := s.log.New("fn", "unfollowHost")
 	stream, ok := s.hostStreams[id]
 	if ok {
 		log.Info("Unfollowing host", "host.id", id)
