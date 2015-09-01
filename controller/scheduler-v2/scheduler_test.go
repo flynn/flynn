@@ -377,6 +377,67 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 	c.Assert(len(hostJobs), Equals, 2)
 }
 
+func (ts *TestSuite) TestMultipleSchedulers(c *C) {
+	// Set up cluster and both schedulers
+	h := NewFakeHostClient(testHostID)
+	hosts := map[string]*FakeHostClient{
+		h.ID(): h,
+	}
+	cluster := NewFakeCluster()
+	cluster.SetHosts(hosts)
+	events1 := make(chan Event, eventBufferSize)
+	sched1 := runTestScheduler(cluster, events1, false)
+	defer sched1.Stop()
+	s1 := sched1.scheduler
+	events2 := make(chan Event, eventBufferSize)
+	sched2 := runTestScheduler(cluster, events2, false)
+	defer sched2.Stop()
+	s2 := sched2.scheduler
+	_, err := waitDurationForEvent(events1, EventTypeJobStart, 1*time.Second)
+	c.Assert(err, Not(IsNil))
+	_, err = waitDurationForEvent(events2, EventTypeJobStart, 1*time.Second)
+	c.Assert(err, Not(IsNil))
+
+	// Make S1 the leader, wait for jobs to start
+	s1.ChangeLeader(true)
+	_, err = waitForEvent(events1, EventTypeJobStart)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events2, EventTypeJobStart)
+	c.Assert(err, IsNil)
+	jobs := s1.Jobs()
+	c.Assert(jobs, HasLen, 1)
+	jobs = s2.Jobs()
+	c.Assert(jobs, HasLen, 1)
+
+	s1.ChangeLeader(false)
+
+	app, err := s2.GetApp(testAppID)
+	c.Assert(err, IsNil)
+	release, err := s2.GetRelease(testReleaseID)
+	c.Assert(err, IsNil)
+
+	// Test scaling up an existing formation
+	form := &ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 2}}
+	s2.log.Info("Test scaling up an existing formation. Wait for formation change and job start")
+	s1.PutFormation(form)
+	s2.PutFormation(form)
+	_, err = waitForEvent(events1, EventTypeFormationChange)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events2, EventTypeFormationChange)
+	c.Assert(err, IsNil)
+	_, err = waitDurationForEvent(events2, EventTypeJobStart, 1*time.Second)
+	c.Assert(err, Not(IsNil))
+	_, err = waitDurationForEvent(events1, EventTypeJobStart, 1*time.Second)
+	c.Assert(err, Not(IsNil))
+
+	s2.ChangeLeader(true)
+
+	_, err = waitForEvent(events2, EventTypeJobStart)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events1, EventTypeJobStart)
+	c.Assert(err, IsNil)
+}
+
 func checkJobStartEvent(c *C, e Event) *Job {
 	event, ok := e.(*JobStartEvent)
 	c.Assert(ok, Equals, true)
