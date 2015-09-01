@@ -12,6 +12,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/stream"
@@ -45,7 +46,7 @@ type Scheduler struct {
 	rectifyJobs     chan interface{}
 	syncJobs        chan interface{}
 	syncFormations  chan interface{}
-	hostChange      chan utils.HostClient
+	hostChange      chan *discoverd.Event
 	formationChange chan *ct.ExpandedFormation
 	jobRequests     chan *JobRequest
 	putJobs         chan *ct.Job
@@ -71,7 +72,7 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Sched
 		syncJobs:         make(chan interface{}, 1),
 		syncFormations:   make(chan interface{}, 1),
 		formationChange:  make(chan *ct.ExpandedFormation, eventBufferSize),
-		hostChange:       make(chan utils.HostClient, eventBufferSize),
+		hostChange:       make(chan *discoverd.Event, eventBufferSize),
 		jobRequests:      make(chan *JobRequest, eventBufferSize),
 		putJobs:          make(chan *ct.Job, eventBufferSize),
 	}
@@ -89,7 +90,7 @@ func (s *Scheduler) Run() error {
 	tickChannel(s.syncJobs, 30*time.Second)
 	tickChannel(s.syncFormations, time.Minute)
 
-	stream, err := s.StreamHosts(s.hostChange)
+	stream, err := s.StreamHostEvents(s.hostChange)
 	if err != nil {
 		return fmt.Errorf("Unable to stream hosts. Error: %v", err)
 	}
@@ -124,8 +125,8 @@ func (s *Scheduler) Run() error {
 		case req := <-s.jobRequests:
 			err = s.HandleJobRequest(req)
 			continue
-		case h := <-s.hostChange:
-			err = s.followHost(h)
+		case e := <-s.hostChange:
+			err = s.HandleHostChange(e)
 			continue
 		case he := <-s.hostEvents:
 			err = s.HandleHostEvent(he)
@@ -234,6 +235,7 @@ func (s *Scheduler) RectifyJobs() (err error) {
 		s.sendEvent(NewEvent(EventTypeRectifyJobs, err, nil))
 	}()
 
+	log.Info("Existing jobs", "jobs", s.jobs)
 	fj := NewPendingJobs(s.jobs, MergePendingJobs(s.pendingStarts, s.pendingStops))
 
 	for fKey := range fj {
@@ -325,6 +327,9 @@ func (s *Scheduler) ChangeLeader(isLeader bool) {
 
 func (s *Scheduler) HandleLeaderChange(isLeader bool) {
 	s.isLeader = isLeader
+	if isLeader {
+		triggerChan(s.rectifyJobs)
+	}
 	s.sendEvent(NewEvent(EventTypeLeaderChange, nil, isLeader))
 }
 
@@ -358,7 +363,11 @@ func (s *Scheduler) followHost(h utils.HostClient) error {
 			triggerChan(s.syncFormations)
 
 			go func() {
-				for e := range hostEvents {
+				for {
+					e, ok := <-hostEvents
+					if !ok {
+						return
+					}
 					s.hostEvents <- e
 				}
 			}()
@@ -371,15 +380,41 @@ func (s *Scheduler) followHost(h utils.HostClient) error {
 	return nil
 }
 
-func (s *Scheduler) unfollowHost(id string) {
+func (s *Scheduler) unfollowHost(id string) error {
 	log := s.log.New("fn", "unfollowHost")
 	stream, ok := s.hostStreams[id]
 	if ok {
 		log.Info("Unfollowing host", "host.id", id)
+		for jobID, job := range s.jobs {
+			if job.HostID == id {
+				delete(s.jobs, jobID)
+			}
+		}
 		stream.Close()
 		delete(s.hostStreams, id)
 		triggerChan(s.syncFormations)
+		return nil
+	} else {
+		return fmt.Errorf("Not currently following host with ID %q", id)
 	}
+}
+
+func (s *Scheduler) HandleHostChange(e *discoverd.Event) (err error) {
+	defer func() {
+		s.sendEvent(NewEvent(EventTypeHostChange, err, nil))
+	}()
+	hostID := e.Instance.Meta["id"]
+	switch e.Kind {
+	case discoverd.EventKindUp:
+		h, err := s.Host(hostID)
+		if err != nil {
+			return err
+		}
+		return s.followHost(h)
+	case discoverd.EventKindDown:
+		return s.unfollowHost(hostID)
+	}
+	return nil
 }
 
 func (s *Scheduler) HandleHostEvent(he *host.Event) (err error) {
@@ -526,7 +561,7 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 	}
 	host, err := s.Host(job.HostID)
 	if err != nil {
-		s.unfollowHost(host.ID())
+		s.unfollowHost(job.HostID)
 		return err
 	}
 	if err := host.StopJob(job.JobID); err != nil {
@@ -734,13 +769,13 @@ const (
 	EventTypeDefault         EventType = "default"
 	EventTypeLeaderChange    EventType = "leader-change"
 	EventTypeClusterSync     EventType = "cluster-sync"
-	EventTypeHostSync        EventType = "host-sync"
 	EventTypeFormationSync   EventType = "formation-sync"
 	EventTypeFormationChange EventType = "formation-change"
 	EventTypeRectifyJobs     EventType = "rectify-jobs"
 	EventTypeJobStart        EventType = "start-job"
 	EventTypeJobStop         EventType = "stop-job"
 	EventTypeJobRequest      EventType = "request-job"
+	EventTypeHostChange      EventType = "host-change"
 )
 
 type DefaultEvent struct {

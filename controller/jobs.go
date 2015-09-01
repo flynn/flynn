@@ -15,6 +15,7 @@ import (
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
@@ -142,9 +143,9 @@ func (c clusterClientWrapper) Hosts() ([]utils.HostClient, error) {
 	return res, nil
 }
 
-func (c clusterClientWrapper) StreamHosts(ch chan utils.HostClient) (stream.Stream, error) {
-	hostChan := make(chan *cluster.Host)
-	stream, err := c.Client.StreamHosts(hostChan)
+func (c clusterClientWrapper) StreamHostEvents(ch chan *discoverd.Event) (stream.Stream, error) {
+	hostChan := make(chan *discoverd.Event)
+	stream, err := c.Client.StreamHostEvents(hostChan)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +166,7 @@ func (c clusterClientWrapper) StreamHosts(ch chan utils.HostClient) (stream.Stre
 }
 
 type clusterStream struct {
-	ch           chan utils.HostClient
+	ch           chan *discoverd.Event
 	parentStream stream.Stream
 }
 
