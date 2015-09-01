@@ -6,20 +6,21 @@ import (
 	"sync"
 
 	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/stream"
 )
 
 func NewFakeCluster() *FakeCluster {
 	return &FakeCluster{
 		hosts:        make(map[string]*FakeHostClient),
-		hostChannels: make(map[chan utils.HostClient]struct{}),
+		hostChannels: make(map[chan *discoverd.Event]struct{}),
 	}
 }
 
 type FakeCluster struct {
 	hosts        map[string]*FakeHostClient
 	mtx          sync.RWMutex
-	hostChannels map[chan utils.HostClient]struct{}
+	hostChannels map[chan *discoverd.Event]struct{}
 }
 
 func (c *FakeCluster) Hosts() ([]utils.HostClient, error) {
@@ -32,7 +33,7 @@ func (c *FakeCluster) Hosts() ([]utils.HostClient, error) {
 	return hosts, nil
 }
 
-func (c *FakeCluster) StreamHosts(ch chan utils.HostClient) (stream.Stream, error) {
+func (c *FakeCluster) StreamHostEvents(ch chan *discoverd.Event) (stream.Stream, error) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
 
@@ -41,8 +42,8 @@ func (c *FakeCluster) StreamHosts(ch chan utils.HostClient) (stream.Stream, erro
 	}
 	c.hostChannels[ch] = struct{}{}
 
-	for _, h := range c.hosts {
-		ch <- h
+	for id := range c.hosts {
+		ch <- createDiscoverdEvent(id, discoverd.EventKindUp)
 	}
 
 	return &ClusterStream{cluster: c, ch: ch}, nil
@@ -61,26 +62,64 @@ func (c *FakeCluster) Host(id string) (utils.HostClient, error) {
 func (c *FakeCluster) SetHosts(h map[string]*FakeHostClient) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
+	oldHosts := c.hosts
 	c.hosts = make(map[string]*FakeHostClient)
 	for id, h := range h {
-		c.hosts[id] = h
+		if _, ok := oldHosts[id]; ok {
+			delete(oldHosts, id)
+			c.hosts[id] = h
+		} else {
+			c.addHost(h)
+		}
+	}
+	for id := range oldHosts {
+		c.removeHost(id)
 	}
 }
 
 func (c *FakeCluster) AddHost(h *FakeHostClient) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
+	c.addHost(h)
+}
+
+func (c *FakeCluster) addHost(h *FakeHostClient) {
 	h.cluster = c
 	c.hosts[h.ID()] = h
 
 	for ch := range c.hostChannels {
-		ch <- h
+		ch <- createDiscoverdEvent(h.ID(), discoverd.EventKindUp)
+	}
+}
+
+func (c *FakeCluster) RemoveHost(hostID string) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+	c.removeHost(hostID)
+}
+
+func (c *FakeCluster) removeHost(hostID string) {
+	delete(c.hosts, hostID)
+
+	for ch := range c.hostChannels {
+		ch <- createDiscoverdEvent(hostID, discoverd.EventKindDown)
+	}
+}
+
+func createDiscoverdEvent(hostID string, k discoverd.EventKind) *discoverd.Event {
+	return &discoverd.Event{
+		Kind: k,
+		Instance: &discoverd.Instance{
+			Meta: map[string]string{
+				"id": hostID,
+			},
+		},
 	}
 }
 
 type ClusterStream struct {
 	cluster *FakeCluster
-	ch      chan utils.HostClient
+	ch      chan *discoverd.Event
 }
 
 func (c *ClusterStream) Close() error {
