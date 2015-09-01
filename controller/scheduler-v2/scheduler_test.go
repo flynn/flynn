@@ -361,9 +361,6 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 	c.Assert(len(hostJobs), Equals, 1)
 }
 
-func (ts *TestSuite) TestRemovingHost(c *C) {
-}
-
 func checkJobStartEvent(c *C, e Event) *Job {
 	event, ok := e.(*JobStartEvent)
 	c.Assert(ok, Equals, true)
