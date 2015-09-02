@@ -22,6 +22,10 @@
     "new_release": {
       "$ref": "/schema/controller/common#/definitions/id"
     },
+    "status": {
+        "type": "string",
+        "enum": ["pending", "running", "complete", "failed"]
+    },
     "strategy": {
       "$ref": "/schema/controller/common#/definitions/strategy"
     },

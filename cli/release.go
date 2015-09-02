@@ -8,9 +8,7 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
-	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/units"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
@@ -108,8 +106,7 @@ func runReleaseList(args *docopt.Args, client *controller.Client) error {
 	defer w.Flush()
 	listRec(w, "ID", "Created")
 	for _, r := range list {
-		createdAt := units.HumanDuration(time.Now().UTC().Sub(*r.CreatedAt)) + " ago"
-		listRec(w, r.ID, createdAt)
+		listRec(w, r.ID, humanTime(r.CreatedAt))
 	}
 	return nil
 }

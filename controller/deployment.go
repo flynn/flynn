@@ -30,7 +30,7 @@ func NewDeploymentRepo(db *postgres.DB, pgxpool *pgx.ConnPool) *DeploymentRepo {
 	return &DeploymentRepo{db: db, q: q}
 }
 
-func (r *DeploymentRepo) Add(data interface{}) error {
+func (r *DeploymentRepo) Add(data interface{}) (*ct.Deployment, error) {
 	d := data.(*ct.Deployment)
 	if d.ID == "" {
 		d.ID = random.UUID()
@@ -42,29 +42,47 @@ func (r *DeploymentRepo) Add(data interface{}) error {
 	procs := procsHstore(d.Processes)
 	tx, err := r.db.Begin()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	query := "INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, processes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at"
 	if err := tx.QueryRow(query, d.ID, d.AppID, oldReleaseID, d.NewReleaseID, d.Strategy, procs).Scan(&d.CreatedAt); err != nil {
 		tx.Rollback()
-		return err
+		return nil, err
 	}
 
 	// fake initial deployment
 	if d.FinishedAt != nil {
 		if _, err := tx.Exec("UPDATE deployments SET finished_at = $2 WHERE deployment_id = $1", d.ID, d.FinishedAt); err != nil {
 			tx.Rollback()
-			return err
+			return nil, err
 		}
-		return tx.Commit()
+		if err = createDeploymentEvent(tx.Exec, d, "complete"); err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+		d.Status = "complete"
+		return d, tx.Commit()
 	}
 	if err := tx.Commit(); err != nil {
-		return err
+		return nil, err
 	}
 
 	args, err := json.Marshal(ct.DeployID{ID: d.ID})
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	tx, err = r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	if err = createDeploymentEvent(tx.Exec, d, "pending"); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+	d.Status = "pending"
+	if err = tx.Commit(); err != nil {
+		return nil, err
 	}
 
 	// Delete the deployment if we get an error so the client can retry.
@@ -75,23 +93,63 @@ func (r *DeploymentRepo) Add(data interface{}) error {
 	if err := r.q.Enqueue(job); err != nil {
 		logger.New("fn", "DeploymentRepo.Add").Warn("error enqueueing deployment job", "err", err)
 		r.db.Exec("DELETE FROM deployments WHERE deployment_id = $1", d.ID)
-		return err
+		return nil, err
 	}
-	return nil
+	return d, err
 }
 
 func (r *DeploymentRepo) Get(id string) (*ct.Deployment, error) {
-	query := "SELECT deployment_id, app_id, old_release_id, new_release_id, strategy, processes, created_at, finished_at FROM deployments WHERE deployment_id = $1"
+	query := `WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
+              SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
+                     strategy, e1.data->>'status' AS status,
+                     processes, d.created_at, d.finished_at
+              FROM deployments d
+              LEFT JOIN deployment_events e1 ON d.deployment_id = e1.object_id::uuid
+              LEFT OUTER JOIN deployment_events e2 ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
+              WHERE e2.created_at IS NULL AND d.deployment_id = $1`
 	row := r.db.QueryRow(query, id)
 	return scanDeployment(row)
+}
+
+func (r *DeploymentRepo) List(appID string) ([]*ct.Deployment, error) {
+	query := `WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
+              SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
+                     strategy, e1.data->>'status' AS status,
+                     processes, d.created_at, d.finished_at
+              FROM deployments d
+              LEFT JOIN deployment_events e1 ON d.deployment_id = e1.object_id::uuid
+              LEFT OUTER JOIN deployment_events e2 ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
+              WHERE e2.created_at IS NULL AND d.app_id = $1 ORDER BY d.created_at DESC`
+	rows, err := r.db.Query(query, appID)
+	if err != nil {
+		return nil, err
+	}
+	var deployments []*ct.Deployment
+	for rows.Next() {
+		deployment, err := scanDeployment(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		deployments = append(deployments, deployment)
+	}
+	return deployments, rows.Err()
 }
 
 func scanDeployment(s postgres.Scanner) (*ct.Deployment, error) {
 	d := &ct.Deployment{}
 	var procs hstore.Hstore
-	err := s.Scan(&d.ID, &d.AppID, &d.OldReleaseID, &d.NewReleaseID, &d.Strategy, &procs, &d.CreatedAt, &d.FinishedAt)
+	var oldReleaseID *string
+	var status *string
+	err := s.Scan(&d.ID, &d.AppID, &oldReleaseID, &d.NewReleaseID, &d.Strategy, &status, &procs, &d.CreatedAt, &d.FinishedAt)
 	if err == sql.ErrNoRows {
 		err = ErrNotFound
+	}
+	if oldReleaseID != nil {
+		d.OldReleaseID = *oldReleaseID
+	}
+	if status != nil {
+		d.Status = *status
 	}
 	d.Processes = make(map[string]int, len(procs.Map))
 	for k, v := range procs.Map {
@@ -175,7 +233,8 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 		deployment.FinishedAt = &now
 	}
 
-	if err := c.deploymentRepo.Add(deployment); err != nil {
+	d, err := c.deploymentRepo.Add(deployment)
+	if err != nil {
 		if postgres.IsUniquenessError(err, "isolate_deploys") {
 			httphelper.ValidationError(w, "", "Cannot create deploy, there is already one in progress for this app.")
 			return
@@ -184,5 +243,32 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 		return
 	}
 
-	httphelper.JSON(w, 200, deployment)
+	httphelper.JSON(w, 200, d)
+}
+
+func (c *controllerAPI) ListDeployments(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	app := c.getApp(ctx)
+	list, err := c.deploymentRepo.List(app.ID)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, list)
+}
+
+func createDeploymentEvent(dbExec func(string, ...interface{}) (sql.Result, error), d *ct.Deployment, status string) error {
+	e := ct.DeploymentEvent{
+		AppID:        d.AppID,
+		DeploymentID: d.ID,
+		ReleaseID:    d.NewReleaseID,
+		Status:       status,
+	}
+	if err := createEvent(dbExec, &ct.Event{
+		AppID:      d.AppID,
+		ObjectID:   d.ID,
+		ObjectType: ct.EventTypeDeployment,
+	}, e); err != nil {
+		return err
+	}
+	return nil
 }

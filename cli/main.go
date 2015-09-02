@@ -9,8 +9,10 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
+	"time"
 	"unicode"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/units"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
@@ -37,28 +39,29 @@ Options:
 	-h, --help
 
 Commands:
-	help      show usage for a specific command
-	install   install flynn
-	cluster   manage clusters
-	create    create an app
-	delete    delete an app
-	apps      list apps
-	ps        list jobs
-	kill      kill a job
-	log       get app log
-	scale     change formation
-	run       run a job
-	env       manage env variables
-	meta      manage app metadata
-	route     manage routes
-	pg        manage postgres database
-	provider  manage resource providers
-	remote    manage git remotes
-	resource  provision a new resource
-	release   add a docker image release
-	export    export app data
-	import    create app from exported data
-	version   show flynn version
+	help        show usage for a specific command
+	install     install flynn
+	cluster     manage clusters
+	create      create an app
+	delete      delete an app
+	apps        list apps
+	ps          list jobs
+	kill        kill a job
+	log         get app log
+	scale       change formation
+	run         run a job
+	env         manage env variables
+	meta        manage app metadata
+	route       manage routes
+	pg          manage postgres database
+	provider    manage resource providers
+	remote      manage git remotes
+	resource    provision a new resource
+	release     add a docker image release
+	deployment  list deployments
+	export      export app data
+	import      create app from exported data
+	version     show flynn version
 
 See 'flynn help <command>' for more information on a specific command.
 `[1:]
@@ -270,6 +273,13 @@ func mustApp() string {
 
 func tabWriter() *tabwriter.Writer {
 	return tabwriter.NewWriter(os.Stdout, 1, 2, 2, ' ', 0)
+}
+
+func humanTime(ts *time.Time) string {
+	if ts == nil || ts.IsZero() {
+		return ""
+	}
+	return units.HumanDuration(time.Now().UTC().Sub(*ts)) + " ago"
 }
 
 func listRec(w io.Writer, a ...interface{}) {

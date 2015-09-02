@@ -428,6 +428,12 @@ func (c *Client) CreateDeployment(appID, releaseID string) (*ct.Deployment, erro
 	return deployment, c.Post(fmt.Sprintf("/apps/%s/deploy", appID), &ct.Release{ID: releaseID}, deployment)
 }
 
+// DeploymentList returns a list of all deployments.
+func (c *Client) DeploymentList(appID string) ([]*ct.Deployment, error) {
+	var deployments []*ct.Deployment
+	return deployments, c.Get(fmt.Sprintf("/apps/%s/deployments", appID), &deployments)
+}
+
 func convertEvents(appEvents chan *ct.Event, outputCh interface{}) {
 	outValue := reflect.ValueOf(outputCh)
 	msgType := outValue.Type().Elem().Elem()
