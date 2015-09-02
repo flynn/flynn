@@ -344,7 +344,7 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 			release.Env[k] = v
 		}
 
-		config, err := getPgRunConfig(client, release)
+		config, err := getPgRunConfig(client, app.ID, release)
 		if err != nil {
 			return fmt.Errorf("error getting postgres config: %s", err)
 		}
@@ -402,7 +402,7 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 
 	if uploadSlug {
 		config := runConfig{
-			App:        mustApp(),
+			App:        app.ID,
 			Release:    release.ID,
 			DisableLog: true,
 			Entrypoint: []string{"curl"},

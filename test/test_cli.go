@@ -744,6 +744,9 @@ func (s *CLISuite) TestExportImport(t *c.C) {
 	// remove db table from source app
 	t.Assert(r.flynn("pg", "psql", "--", "-c", "DROP TABLE foos"), Succeeds)
 
+	// remove the git remote
+	t.Assert(r.git("remote", "remove", "flynn"), Succeeds)
+
 	// import app
 	t.Assert(r.flynn("import", "--name", dstApp, "--file", file), Succeeds)
 
