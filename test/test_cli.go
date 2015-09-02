@@ -755,3 +755,10 @@ func (s *CLISuite) TestExportImport(t *c.C) {
 	_, err := s.discoverdClient(t).Instances(dstApp+"-web", 10*time.Second)
 	t.Assert(err, c.IsNil)
 }
+
+func (s *CLISuite) TestDeploy(t *c.C) {
+	// create and push app
+	r := s.newGitRepo(t, "http")
+	t.Assert(r.flynn("create", "deploy-"+random.String(8)), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+}
