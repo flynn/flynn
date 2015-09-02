@@ -755,3 +755,28 @@ func (s *CLISuite) TestExportImport(t *c.C) {
 	_, err := s.discoverdClient(t).Instances(dstApp+"-web", 10*time.Second)
 	t.Assert(err, c.IsNil)
 }
+
+func (s *CLISuite) TestRemote(t *c.C) {
+	remoteApp := "remote-" + random.String(8)
+	customRemote := random.String(8)
+
+	r := s.newGitRepo(t, "http")
+	// create app without remote
+	t.Assert(r.flynn("create", remoteApp, "--remote", `""`), Succeeds)
+
+	// ensure no remotes exist
+	t.Assert(r.git("remote").Output, c.Equals, "\"\"\n")
+	// create the default remote
+	t.Assert(r.flynn("-a", remoteApp, "remote", "add"), Succeeds)
+	// ensure the default remote exists
+	t.Assert(r.git("remote", "show", "flynn"), Succeeds)
+	// now delete it
+	t.Assert(r.git("remote", "rm", "flynn"), Succeeds)
+
+	// ensure no remotes exist
+	t.Assert(r.git("remote").Output, c.Equals, "\"\"\n")
+	// create a custom remote
+	t.Assert(r.flynn("-a", remoteApp, "remote", "add", customRemote), Succeeds)
+	// ensure the custom remote exists
+	t.Assert(r.git("remote", "show", customRemote), Succeeds)
+}
