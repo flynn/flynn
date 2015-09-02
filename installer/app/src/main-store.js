@@ -127,10 +127,6 @@ export default createClass({
 				Client.deleteCluster(event.clusterID);
 			break;
 
-			case 'LAUNCH_CLUSTER_FAILURE':
-				window.console.error(event);
-			break;
-
 			case 'INSTALL_PROMPT_RESPONSE':
 				Client.sendPromptResponse(event.clusterID, event.promptID, event.data);
 			break;

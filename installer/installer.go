@@ -2,6 +2,7 @@ package installer
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -403,11 +404,13 @@ func (i *Installer) FindBaseCluster(id string) (*BaseCluster, error) {
 	}
 	c.InstanceIPs = instanceIPs
 
-	credential, err := c.FindCredentials()
-	if err != nil {
-		return nil, err
+	if c.Type != "ssh" {
+		credential, err := c.FindCredentials()
+		if err != nil {
+			return nil, err
+		}
+		c.credential = credential
 	}
-	c.credential = credential
 
 	return c, nil
 }
@@ -434,6 +437,8 @@ func (i *Installer) FindCluster(id string) (Cluster, error) {
 		return i.FindDigitalOceanCluster(id)
 	case "azure":
 		return i.FindAzureCluster(id)
+	case "ssh":
+		return i.FindSSHCluster(id)
 	default:
 		return nil, fmt.Errorf("Invalid cluster type: %s", base.Type)
 	}
@@ -512,6 +517,39 @@ func (i *Installer) FindAzureCluster(id string) (*AzureCluster, error) {
 	}
 
 	cluster.SetCreds(base.credential)
+
+	return cluster, nil
+}
+
+func (i *Installer) FindSSHCluster(id string) (*SSHCluster, error) {
+	i.clustersMtx.RLock()
+	for _, c := range i.clusters {
+		if cluster, ok := c.(*SSHCluster); ok {
+			if cluster.ClusterID == id {
+				i.clustersMtx.RUnlock()
+				return cluster, nil
+			}
+		}
+	}
+	i.clustersMtx.RUnlock()
+
+	base, err := i.FindBaseCluster(id)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster := &SSHCluster{
+		ClusterID: base.ID,
+		base:      base,
+	}
+
+	if err := i.db.QueryRow(`SELECT SSHLogin, TargetsJSON FROM ssh_clusters WHERE ClusterID == $1 AND DeletedAt IS NULL LIMIT 1`, cluster.ClusterID).Scan(&cluster.SSHLogin, &cluster.TargetsJSON); err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal([]byte(cluster.TargetsJSON), &cluster.Targets); err != nil {
+		return nil, err
+	}
 
 	return cluster, nil
 }

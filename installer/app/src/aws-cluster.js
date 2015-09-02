@@ -56,7 +56,10 @@ var AWSCluster = BaseCluster.createClass('aws', {
 	},
 
 	handleEvent: function (event) {
+		var __super = this.constructor.__super__.handleEvent.bind(this, event);
+
 		if (event.clusterID !== this.attrs.ID) {
+			__super();
 			return;
 		}
 
@@ -77,7 +80,7 @@ var AWSCluster = BaseCluster.createClass('aws', {
 			break;
 
 			default:
-				this.constructor.__super__.handleEvent.call(this, event);
+				__super();
 		}
 	}
 });

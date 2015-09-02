@@ -52,13 +52,16 @@ var DigitalOceanCluster = BaseCluster.createClass('digital_ocean', {
 	},
 
 	handleEvent: function (event) {
+		var __super = this.constructor.__super__.handleEvent.bind(this, event);
+
 		if (event.clusterID !== this.attrs.ID) {
+			__super();
 			return;
 		}
 
 		switch (event.name) {
 			default:
-				this.constructor.__super__.handleEvent.call(this, event);
+				__super();
 		}
 	}
 });

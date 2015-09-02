@@ -158,7 +158,7 @@ func (api *httpAPI) LaunchCluster(w http.ResponseWriter, req *http.Request, para
 		return
 	}
 
-	if base.CredentialID == "" {
+	if base.CredentialID == "" && base.Type != "ssh" {
 		httphelper.ValidationError(w, "credential_id", "Missing credential id")
 		return
 	}
@@ -168,7 +168,7 @@ func (api *httpAPI) LaunchCluster(w http.ResponseWriter, req *http.Request, para
 		creds = &Credential{
 			ID: base.CredentialID,
 		}
-	} else {
+	} else if base.Type != "ssh" {
 		var err error
 		creds, err = api.Installer.FindCredentials(base.CredentialID)
 		if err != nil {
@@ -185,6 +185,8 @@ func (api *httpAPI) LaunchCluster(w http.ResponseWriter, req *http.Request, para
 		cluster = &DigitalOceanCluster{}
 	case "azure":
 		cluster = &AzureCluster{}
+	case "ssh":
+		cluster = &SSHCluster{}
 	default:
 		httphelper.ValidationError(w, "type", fmt.Sprintf("Invalid type \"%s\"", base.Type))
 		return

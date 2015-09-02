@@ -33,7 +33,6 @@ var BaseCluster = createClass({
 			prompt: null,
 			deleting: false,
 			failed: false,
-			errorDismissed: false,
 			regions: [],
 			numInstances: 1,
 			credentials: [],
@@ -47,7 +46,6 @@ var BaseCluster = createClass({
 			inProgress: false,
 			deleting: prevState.deleting,
 			failed: prevState.failed,
-			errorDismissed: prevState.errorDismissed,
 			logEvents: prevState.logEvents,
 			steps: [
 				{ id: 'configure', label: 'Configure', complete: false },
@@ -70,6 +68,8 @@ var BaseCluster = createClass({
 			selectedRegion: null,
 
 			prompt: prevState.prompt,
+
+			errorMessage: attrs.hasOwnProperty('errorMessage') ? attrs.errorMessage : prevState.errorMessage,
 
 			__allCredentials: attrs.credentials || prevState.__allCredentials
 		};
@@ -113,16 +113,14 @@ var BaseCluster = createClass({
 
 			case 'error':
 				state.failed = true;
-				state.currentStep = 'install';
+				if (this.attrs.ID !== 'new') {
+					state.currentStep = 'install';
+				}
 			break;
 
 			case 'running':
 				state.currentStep = 'dashboard';
 			break;
-		}
-
-		if (attrs.errorDismissed) {
-			state.errorDismissed = true;
 		}
 
 		var complete = true;
@@ -162,6 +160,12 @@ var BaseCluster = createClass({
 	},
 
 	handleEvent: function (event) {
+		if (event.name === 'LAUNCH_CLUSTER' && this.attrs.ID === 'new') {
+			this.setState(this.__computeState({
+				errorMessage: null
+			}));
+		}
+
 		if (event.clusterID !== this.attrs.ID) {
 			return;
 		}
@@ -169,6 +173,13 @@ var BaseCluster = createClass({
 		var state;
 
 		switch (event.name) {
+			case 'LAUNCH_CLUSTER_FAILURE':
+				this.setState(this.__computeState({
+					state: 'error',
+					errorMessage: event.res.message || ('Something went wrong ('+ event.xhr.status +')')
+				}));
+			break;
+
 			case 'LOG':
 				this.__addLog(event.data);
 			break;
@@ -177,12 +188,6 @@ var BaseCluster = createClass({
 				this.__addLog({
 					description: 'Error: '+ event.message
 				});
-			break;
-
-			case 'INSTALL_ERROR_DISMISS':
-				this.setState(
-					this.__computeState({state: 'error', errorDismissed: true})
-				);
 			break;
 
 			case 'CLUSTER_STATE':
