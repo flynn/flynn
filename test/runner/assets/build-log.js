@@ -88,7 +88,7 @@ $(function() {
     var listItem;
     var file;
     var line = JSON.parse(e.data);
-    line.name = line.filename.slice(0, -4);
+    line.name = line.filename.slice(0, -4).replace(/:/g, "-");
 
     if (files.hasOwnProperty(line.filename)) {
       file = files[line.filename];
