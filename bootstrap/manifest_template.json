@@ -285,7 +285,7 @@
   },
   {
     "id": "blobstore",
-    "action": "deploy-app",
+    "action": "create-app",
     "app": {
       "name": "blobstore",
       "meta": {"flynn-system-app": "true"}
@@ -308,7 +308,7 @@
   },
   {
     "id": "router",
-    "action": "deploy-app",
+    "action": "create-app",
     "app": {
       "name": "router",
       "meta": {"flynn-system-app": "true"}
@@ -338,7 +338,7 @@
   },
   {
     "id": "gitreceive",
-    "action": "deploy-app",
+    "action": "create-app",
     "app": {
       "name": "gitreceive",
       "meta": {"flynn-system-app": "true"}
@@ -404,7 +404,7 @@
   },
   {
     "id": "logaggregator",
-    "action": "deploy-app",
+    "action": "create-app",
     "app": {
       "name": "logaggregator",
       "meta": {"flynn-system-app": "true"}
@@ -431,7 +431,7 @@
   },
   {
     "id": "taffy",
-    "action": "deploy-app",
+    "action": "create-app",
     "app": {
       "name": "taffy",
       "meta": {"flynn-system-app": "true"}
@@ -450,7 +450,7 @@
   },
   {
     "id": "dashboard",
-    "action": "deploy-app",
+    "action": "create-app",
     "app": {
       "name": "dashboard",
       "meta": {"flynn-system-app": "true"}
@@ -500,7 +500,7 @@
   },
   {
     "id": "status",
-    "action": "deploy-app",
+    "action": "create-app",
     "app": {
       "name": "status",
       "meta": {"flynn-system-app": "true"}

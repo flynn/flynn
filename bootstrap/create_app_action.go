@@ -4,7 +4,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-type DeployAppAction struct {
+type CreateAppAction struct {
 	ID string `json:"id"`
 
 	*ct.ExpandedFormation
@@ -13,7 +13,7 @@ type DeployAppAction struct {
 }
 
 func init() {
-	Register("deploy-app", &DeployAppAction{})
+	Register("create-app", &CreateAppAction{})
 }
 
 func interpolateRelease(s *State, r *ct.Release) {
@@ -30,7 +30,7 @@ func interpolateRelease(s *State, r *ct.Release) {
 	}
 }
 
-func (a *DeployAppAction) Run(s *State) error {
+func (a *CreateAppAction) Run(s *State) error {
 	as := &AppState{
 		ExpandedFormation: &ct.ExpandedFormation{},
 		Resources:         make([]*ct.Resource, 0, len(a.Resources)),
@@ -98,5 +98,5 @@ func (a *DeployAppAction) Run(s *State) error {
 	}
 	as.Formation = formation
 
-	return client.DeployAppRelease(a.App.ID, a.Release.ID)
+	return client.SetAppRelease(a.App.ID, a.Release.ID)
 }
