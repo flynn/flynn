@@ -60,10 +60,10 @@ func getAppPgRunConfig(client *controller.Client) (*runConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting app release: %s", err)
 	}
-	return getPgRunConfig(client, appRelease)
+	return getPgRunConfig(client, mustApp(), appRelease)
 }
 
-func getPgRunConfig(client *controller.Client, appRelease *ct.Release) (*runConfig, error) {
+func getPgRunConfig(client *controller.Client, app string, appRelease *ct.Release) (*runConfig, error) {
 	pgApp := appRelease.Env["FLYNN_POSTGRES"]
 	if pgApp == "" {
 		return nil, fmt.Errorf("No postgres database found. Provision one with `flynn resource add postgres`")
@@ -75,7 +75,7 @@ func getPgRunConfig(client *controller.Client, appRelease *ct.Release) (*runConf
 	}
 
 	config := &runConfig{
-		App:        mustApp(),
+		App:        app,
 		Release:    pgRelease.ID,
 		Env:        make(map[string]string),
 		DisableLog: true,
