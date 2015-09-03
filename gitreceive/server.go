@@ -119,7 +119,11 @@ func (h *gitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer os.RemoveAll(repoPath)
 	if g.rpc == "git-receive-pack" {
-		defer uploadRepo(repoPath, app.ID)
+		defer func() {
+			if err := uploadRepo(repoPath, app.ID); err != nil {
+				logError(w, "uploadRepo", err)
+			}
+		}()
 	}
 
 	g.handleFunc(gitEnv{App: app.ID}, g.rpc, repoPath, w, r)
@@ -322,8 +326,7 @@ func prepareRepo(cacheKey string) (string, error) {
 		return "", fmt.Errorf("unexpected error %d retrieving cached repo", res.StatusCode)
 	}
 
-	r := tar.NewReader(res.Body)
-	if err := archiver.Untar(path, r); err != nil {
+	if err := archiver.Untar(path, tar.NewReader(res.Body)); err != nil {
 		return "", err
 	}
 	if err := writeRepoHook(path); err != nil {
@@ -352,20 +355,18 @@ func uploadRepo(path, cacheKey string) error {
 
 	errCh := make(chan error)
 	go func() {
-		err := archiver.Tar(path, tw, func(n string) bool { return strings.Contains(n, ".git/") })
+		err := archiver.Tar(path, tw, func(n string) bool { return strings.HasSuffix(n, ".git") || strings.Contains(n, ".git/") })
 		tw.Close()
 		w.Close()
 		errCh <- err
 	}()
 
 	// upload the tarball to the blobstore
-	req, err := http.NewRequest("PUT", blobstoreCacheURL(cacheKey), r)
-	client := http.DefaultClient
-	resp, err := client.Do(req)
-	if err != nil {
+	req, _ := http.NewRequest("PUT", blobstoreCacheURL(cacheKey), r)
+	resp, err := http.DefaultClient.Do(req)
+	if err := <-errCh; err != nil {
 		return err
 	}
 	resp.Body.Close()
-
-	return <-errCh
+	return err
 }
