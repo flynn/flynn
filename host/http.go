@@ -602,28 +602,29 @@ func (h *Host) Update(cmd *host.Command) error {
 	if resumeErr := child.Resume(buffers); resumeErr != nil {
 		log.Error("error resuming child process", "err", resumeErr)
 
-		// the child failed to resume, kill it and resume ourselves
+		// The child failed to resume, kill it and resume ourselves.
+		//
+		// If anything fails here, exit rather than returning an error
+		// so a new host process can be started (rather than this
+		// process sitting around not serving requests).
 		log.Info("killing child process")
 		child.Kill()
 
 		log.Info("reopening logs")
 		if err := h.OpenLogs(buffers); err != nil {
-			log.Error("error reopening logs", "err", err)
-			return err
+			shutdown.Fatalf("error reopening logs after failed update: %s", err)
 		}
 
 		log.Error("recreating HTTP listener")
 		l, err := net.FileListener(file)
 		if err != nil {
-			log.Error("error recreating HTTP listener", "err", err)
-			return err
+			shutdown.Fatalf("error recreating HTTP listener after failed update: %s", err)
 		}
 		h.listener = l
 
 		log.Info("reopening state databases")
 		if err := h.OpenDBs(); err != nil {
-			log.Error("error reopening state databases", "err", err)
-			return err
+			shutdown.Fatalf("error reopening state databases after failed update: %s", err)
 		}
 
 		log.Info("serving HTTP requests")
