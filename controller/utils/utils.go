@@ -165,6 +165,34 @@ type ControllerClient interface {
 	PutJob(*ct.Job) error
 }
 
+func ClusterClientWrapper(c *cluster.Client) clusterClientWrapper {
+	return clusterClientWrapper{c}
+}
+
+type clusterClientWrapper struct {
+	*cluster.Client
+}
+
+func (c clusterClientWrapper) Host(id string) (HostClient, error) {
+	return c.Client.Host(id)
+}
+
+func (c clusterClientWrapper) Hosts() ([]HostClient, error) {
+	hosts, err := c.Client.Hosts()
+	if err != nil {
+		return nil, err
+	}
+	res := make([]HostClient, len(hosts))
+	for i, h := range hosts {
+		res[i] = h
+	}
+	return res, nil
+}
+
+func (c clusterClientWrapper) StreamHostEvents(ch chan *discoverd.Event) (stream.Stream, error) {
+	return c.Client.StreamHostEvents(ch)
+}
+
 var AppNamePattern = regexp.MustCompile(`^[a-z\d]+(-[a-z\d]+)*$`)
 
 func ParseBasicAuth(h http.Header) (username, password string, err error) {
