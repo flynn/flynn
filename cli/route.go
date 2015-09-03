@@ -18,7 +18,7 @@ func init() {
 	register("route", runRoute, `
 usage: flynn route
        flynn route add http [-s <service>] [-c <tls-cert> -k <tls-key>] [--sticky] <domain>
-       flynn route add tcp [-s <service>]
+       flynn route add tcp [-s <service>] [-p <port>]
        flynn route remove <id>
 
 Manage routes for application.
@@ -28,6 +28,7 @@ Options:
 	-c, --tls-cert=<tls-cert>  path to PEM encoded certificate for TLS, - for stdin (http only)
 	-k, --tls-key=<tls-key>    path to PEM encoded private key for TLS, - for stdin (http only)
 	--sticky                   enable cookie-based sticky routing (http only)
+	-p, --port=<port>          port to accept traffic on (tcp only)
 
 Commands:
 	With no arguments, shows a list of routes.
@@ -93,7 +94,16 @@ func runRouteAddTCP(args *docopt.Args, client *controller.Client) error {
 		service = mustApp() + "-web"
 	}
 
-	hr := &router.TCPRoute{Service: service}
+	port := 0
+	if args.String["--port"] != "" {
+		p, err := strconv.Atoi(args.String["--port"])
+		if err != nil {
+			return err
+		}
+		port = p
+	}
+
+	hr := &router.TCPRoute{Service: service, Port: port}
 	r := hr.ToRoute()
 	if err := client.CreateRoute(mustApp(), r); err != nil {
 		return err
