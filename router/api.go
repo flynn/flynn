@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/pprof"
 	"github.com/flynn/flynn/pkg/sse"
 	"github.com/flynn/flynn/pkg/status"
@@ -45,7 +47,22 @@ func createRoute(req *http.Request, route router.Route, router *Router, r render
 		return
 	}
 
-	if err := l.AddRoute(&route); err != nil {
+	err := l.AddRoute(&route)
+	if err != nil {
+		if err == ErrConflict {
+			rjson, err := json.Marshal(&route)
+			if err != nil {
+				log.Println(err)
+				r.JSON(500, "unknown error")
+				return
+			}
+			r.JSON(409, httphelper.JSONError{
+				Code:    httphelper.ConflictErrorCode,
+				Message: "Duplicate route",
+				Detail:  rjson,
+			})
+			return
+		}
 		log.Println(err)
 		r.JSON(500, "unknown error")
 		return

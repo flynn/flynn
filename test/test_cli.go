@@ -383,6 +383,11 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	routeID := strings.TrimSpace(newRoute.Output)
 	assertRouteContains(routeID, true)
 
+	// duplicate http route
+	dupRoute := app.flynn("route", "add", "http", "--sticky", route)
+	t.Assert(dupRoute, c.Not(Succeeds))
+	t.Assert(dupRoute.Output, c.Equals, "conflict: Duplicate route\n")
+
 	// ensure sticky flag is set
 	routes, err := s.controllerClient(t).RouteList(app.name)
 	t.Assert(err, c.IsNil)

@@ -103,6 +103,35 @@ func (s *S) TestAPIAddHTTPRoute(c *C) {
 	c.Assert(err, Equals, client.ErrNotFound)
 }
 
+func (s *S) TestAPIAddDuplicateRoute(c *C) {
+	srv := s.newTestAPIServer(c)
+	defer srv.Close()
+
+	// first create route
+	r := router.HTTPRoute{Domain: "example.com", Service: "test"}.ToRoute()
+	err := srv.CreateRoute(r)
+	c.Assert(err, IsNil)
+
+	// ensure we got back what we expect
+	route := r.HTTPRoute()
+	c.Assert(route.ID, Not(Equals), "")
+	c.Assert(route.CreatedAt, Not(IsNil))
+	c.Assert(route.UpdatedAt, Not(IsNil))
+	c.Assert(route.Service, Equals, "test")
+	c.Assert(route.Domain, Equals, "example.com")
+
+	// attempt to create the same route again, ensure fails with conflict
+	err = srv.CreateRoute(r)
+	c.Assert(err, Not(IsNil))
+	c.Assert(err.Error(), Equals, "conflict: Duplicate route")
+
+	// delete the route
+	err = srv.DeleteRoute("http", route.ID)
+	c.Assert(err, IsNil)
+	_, err = srv.GetRoute("http", route.ID)
+	c.Assert(err, Equals, client.ErrNotFound)
+}
+
 func (s *S) TestAPISetHTTPRoute(c *C) {
 	srv := s.newTestAPIServer(c)
 	defer srv.Close()
