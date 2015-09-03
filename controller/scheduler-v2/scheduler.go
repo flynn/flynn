@@ -10,11 +10,14 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
+	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/stream"
 )
 
@@ -79,7 +82,16 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Sched
 }
 
 func main() {
-	return
+	clusterClient := utils.ClusterClientWrapper(cluster.NewClient())
+	controllerClient, err := controller.NewClient("", os.Getenv("AUTH_KEY"))
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+	s := NewScheduler(clusterClient, controllerClient)
+	if err := s.Run(); err != nil {
+		shutdown.Fatal(err)
+	}
+	shutdown.Exit()
 }
 
 func (s *Scheduler) Run() error {
