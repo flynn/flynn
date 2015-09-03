@@ -2,9 +2,15 @@ package archiver
 
 import (
 	"archive/tar"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+)
+
+const (
+	c_ISDIR = 040000  // Directory
+	c_ISREG = 0100000 // Regular file
 )
 
 func Tar(dir string, w *tar.Writer, filter func(string) bool) error {
@@ -12,6 +18,35 @@ func Tar(dir string, w *tar.Writer, filter func(string) bool) error {
 		if err != nil {
 			return err
 		}
+		fpath, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		if filter != nil && !filter(fpath) {
+			return nil
+		}
+
+		hdr := &tar.Header{
+			Name:    fpath,
+			Mode:    int64(file.Mode().Perm()),
+			ModTime: file.ModTime(),
+		}
+		if file.IsDir() {
+			hdr.Name += "/"
+			hdr.Typeflag = tar.TypeDir
+			hdr.Mode |= c_ISDIR
+		} else if file.Mode().IsRegular() {
+			hdr.Size = file.Size()
+			hdr.Typeflag = tar.TypeReg
+			hdr.Mode |= c_ISREG
+		} else {
+			return nil
+		}
+
+		if err := w.WriteHeader(hdr); err != nil {
+			return fmt.Errorf("archiver: error writing %s: %s", fpath, err)
+		}
+
 		if file.IsDir() {
 			return nil
 		}
@@ -22,26 +57,8 @@ func Tar(dir string, w *tar.Writer, filter func(string) bool) error {
 		}
 		defer f.Close()
 
-		fpath, err := filepath.Rel(dir, path)
-		if err != nil {
-			return err
-		}
-		if filter != nil && !filter(fpath) {
-			return nil
-		}
-		hdr := &tar.Header{
-			Name:    fpath,
-			Size:    file.Size(),
-			Mode:    int64(file.Mode()),
-			ModTime: file.ModTime(),
-		}
-
-		if err := w.WriteHeader(hdr); err != nil {
-			return err
-		}
-
-		if _, err = io.Copy(w, f); err != nil {
-			return err
+		if _, err := io.Copy(w, f); err != nil {
+			fmt.Errorf("archiver: error copying %s: %s", fpath, err)
 		}
 		return nil
 	}); err != nil {
