@@ -1,9 +1,13 @@
 package main
 
 import (
+	"crypto/rand"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"time"
 
@@ -195,4 +199,25 @@ func (s *GitDeploySuite) TestConfigDir(t *c.C) {
 	r := s.newGitRepo(t, "config-dir")
 	t.Assert(r.flynn("create"), Succeeds)
 	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+}
+
+// TestLargeRepo ensures that there is no regression for https://github.com/flynn/flynn/issues/1799
+func (s *GitDeploySuite) TestLargeRepo(t *c.C) {
+	r := s.newGitRepo(t, "")
+
+	// write 5MiB of random data to a file in 10KiB chunks
+	dest, err := os.Create(filepath.Join(r.dir, "random"))
+	t.Assert(err, c.IsNil)
+	buf := make([]byte, 102400)
+	for i := 0; i < 512; i++ {
+		io.ReadFull(rand.Reader, buf)
+		dest.Write(buf)
+	}
+	dest.Close()
+
+	// push the repo
+	t.Assert(r.git("add", "random"), Succeeds)
+	t.Assert(r.git("commit", "-m", "data"), Succeeds)
+	t.Assert(r.flynn("create"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), OutputContains, "Unable to select a buildpack")
 }
