@@ -406,6 +406,13 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	routeID = strings.Split(tcpRoute.Output, " ")[0]
 	assertRouteContains(routeID, true)
 
+	// flynn route add tcp --port
+	portRoute := app.flynn("route", "add", "tcp", "--port", "9999")
+	t.Assert(portRoute, Succeeds)
+	routeID = strings.Split(portRoute.Output, " ")[0]
+	port := strings.Split(portRoute.Output, " ")[4]
+	t.Assert(port, c.Equals, "9999\n")
+
 	// flynn route remove
 	t.Assert(app.flynn("route", "remove", routeID), Succeeds)
 	assertRouteContains(routeID, false)
