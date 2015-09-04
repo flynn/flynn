@@ -88,6 +88,20 @@ func main() {
 		shutdown.Fatal(err)
 	}
 	s := NewScheduler(clusterClient, controllerClient)
+
+	hb, err := discoverd.AddServiceAndRegister("controller-scheduler", ":"+os.Getenv("PORT"))
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+	shutdown.BeforeExit(func() { hb.Close() })
+	leaders := make(chan *discoverd.Instance)
+	stream, err := discoverd.NewService("controller-scheduler").Leaders(leaders)
+	shutdown.BeforeExit(func() { stream.Close() })
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+	go s.handleLeaderStream(leaders, hb.Addr())
+
 	if err := s.Run(); err != nil {
 		shutdown.Fatal(err)
 	}
@@ -247,7 +261,6 @@ func (s *Scheduler) RectifyJobs() (err error) {
 		s.sendEvent(NewEvent(EventTypeRectifyJobs, err, nil))
 	}()
 
-	log.Info("Existing jobs", "jobs", s.jobs)
 	fj := NewPendingJobs(s.jobs, MergePendingJobs(s.pendingStarts, s.pendingStops))
 
 	for fKey := range fj {
@@ -266,7 +279,7 @@ func (s *Scheduler) RectifyJobs() (err error) {
 		clusterProcs := fj.GetProcesses(fKey)
 
 		if eq := reflect.DeepEqual(clusterProcs, schedulerProcs); !eq {
-			log.Info("Updating processes", "formation.processes", schedulerProcs, "cluster.processes", clusterProcs)
+			log.Debug("Updating processes", "formation.processes", schedulerProcs, "cluster.processes", clusterProcs)
 			schedulerFormation.Processes = clusterProcs
 
 			diff := schedulerFormation.Update(schedulerProcs)
@@ -276,7 +289,7 @@ func (s *Scheduler) RectifyJobs() (err error) {
 
 	for fKey, schedulerFormation := range s.formations {
 		if _, ok := fj[fKey]; !ok {
-			log.Info("Re-asserting processes", "formation.key", fKey, "formation.processes", schedulerFormation.Processes, "formation.jobs", fj, "jobs.starting", s.pendingStarts, "jobs.stopping", s.pendingStops)
+			log.Debug("Re-asserting processes", "formation.key", fKey, "formation.processes", schedulerFormation.Processes, "formation.jobs", fj, "jobs.starting", s.pendingStarts, "jobs.stopping", s.pendingStops)
 			s.sendDiffRequests(schedulerFormation, schedulerFormation.Processes)
 		}
 	}
@@ -289,7 +302,10 @@ func (s *Scheduler) FormationChange(ef *ct.ExpandedFormation) (err error) {
 		s.sendEvent(NewEvent(EventTypeFormationChange, err, nil))
 	}()
 
-	s.changeFormation(ef)
+	_, err = s.changeFormation(ef)
+	if err != nil {
+		return err
+	}
 	triggerChan(s.syncJobs)
 
 	return nil
@@ -415,15 +431,16 @@ func (s *Scheduler) HandleHostChange(e *discoverd.Event) (err error) {
 	defer func() {
 		s.sendEvent(NewEvent(EventTypeHostChange, err, nil))
 	}()
-	hostID := e.Instance.Meta["id"]
 	switch e.Kind {
 	case discoverd.EventKindUp:
+		hostID := e.Instance.Meta["id"]
 		h, err := s.Host(hostID)
 		if err != nil {
 			return err
 		}
 		return s.followHost(h)
 	case discoverd.EventKindDown:
+		hostID := e.Instance.Meta["id"]
 		return s.unfollowHost(hostID)
 	}
 	return nil
@@ -486,7 +503,10 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) (j *Job, err erro
 	return j, nil
 }
 
-func (s *Scheduler) changeFormation(ef *ct.ExpandedFormation) *Formation {
+func (s *Scheduler) changeFormation(ef *ct.ExpandedFormation) (*Formation, error) {
+	if ef.App == nil || ef.Release == nil {
+		return nil, fmt.Errorf("Formation given without app (%v), or release (%v)", ef.App, ef.Release)
+	}
 	s.expandOmni(ef)
 	f := s.formations.Get(ef.App.ID, ef.Release.ID)
 	if f == nil {
@@ -494,7 +514,7 @@ func (s *Scheduler) changeFormation(ef *ct.ExpandedFormation) *Formation {
 	} else {
 		f.Processes = ef.Processes
 	}
-	return f
+	return f, nil
 }
 
 func (s *Scheduler) updateFormation(controllerFormation *ct.Formation) (*Formation, error) {
@@ -502,7 +522,7 @@ func (s *Scheduler) updateFormation(controllerFormation *ct.Formation) (*Formati
 	if err != nil {
 		return nil, err
 	}
-	return s.changeFormation(ef), nil
+	return s.changeFormation(ef)
 }
 
 func (s *Scheduler) startJob(req *JobRequest) (err error) {
@@ -727,6 +747,12 @@ func (s *Scheduler) handleJobStop(job *Job) {
 		s.pendingStops.AddJob(job)
 	}
 	delete(s.jobs, job.JobID)
+}
+
+func (s *Scheduler) handleLeaderStream(leaders chan *discoverd.Instance, thisSchedulerAddr string) {
+	for leader := range leaders {
+		s.ChangeLeader(leader.Addr == thisSchedulerAddr)
+	}
 }
 
 func tickChannel(ch chan interface{}, d time.Duration) {
