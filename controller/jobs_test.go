@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	controller "github.com/flynn/flynn/controller/client"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
@@ -95,7 +96,7 @@ func (s *S) TestKillJob(c *C) {
 	s.cc.AddHost(hc)
 
 	err := s.c.DeleteJob(app.ID, jobID)
-	c.Assert(err, ErrorMatches, "controller: resource not found")
+	c.Assert(err, Equals, controller.ErrNotFound)
 	c.Assert(hc.IsStopped(jobID), Equals, true)
 }
 
