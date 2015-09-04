@@ -31,7 +31,7 @@ func NewFormation(ef *ct.ExpandedFormation) *Formation {
 }
 
 func (f *Formation) key() utils.FormationKey {
-	return utils.FormationKey{f.App.ID, f.Release.ID}
+	return utils.FormationKey{AppID: f.App.ID, ReleaseID: f.Release.ID}
 }
 
 // Update stores the new processes and returns the diff from the previous
@@ -39,11 +39,17 @@ func (f *Formation) key() utils.FormationKey {
 func (f *Formation) Update(procs map[string]int) map[string]int {
 	diff := make(map[string]int)
 	for typ, requested := range procs {
+		if typ == "" {
+			continue
+		}
 		current := f.Processes[typ]
 		diff[typ] = requested - current
 	}
 
 	for typ, current := range f.Processes {
+		if typ == "" {
+			continue
+		}
 		if _, ok := procs[typ]; !ok {
 			diff[typ] = -current
 		}
@@ -71,14 +77,16 @@ func (fc formationJobs) AddJob(j *Job) {
 	fc[key][j.Type] = append(fc[key][j.Type], j)
 }
 
-type pendingJobs map[utils.FormationKey]map[string]map[string]int
+type typePendingJobs map[string]int
+type formPendingJobs map[string]typePendingJobs
+type pendingJobs map[utils.FormationKey]formPendingJobs
 
-func CopyPendingJobs(pending pendingJobs) pendingJobs {
-	copied := make(pendingJobs)
-	for key, form := range pending {
-		copied[key] = make(map[string]map[string]int)
+func (pj pendingJobs) Clone() pendingJobs {
+	copied := make(pendingJobs, len(pj))
+	for key, form := range pj {
+		copied[key] = make(formPendingJobs, len(form))
 		for typ, hosts := range form {
-			copied[key][typ] = make(map[string]int)
+			copied[key][typ] = make(typePendingJobs, len(hosts))
 			for hostID, numJobs := range hosts {
 				copied[key][typ][hostID] = numJobs
 			}
@@ -87,27 +95,24 @@ func CopyPendingJobs(pending pendingJobs) pendingJobs {
 	return copied
 }
 
-func MergePendingJobs(pending1, pending2 pendingJobs) pendingJobs {
-	copied := CopyPendingJobs(pending1)
-
-	for key, form := range pending2 {
-		if _, ok := copied[key]; !ok {
-			copied[key] = make(map[string]map[string]int)
+func (pj pendingJobs) Update(other pendingJobs) {
+	for key, form := range other {
+		if _, ok := pj[key]; !ok {
+			pj[key] = make(formPendingJobs, len(form))
 		}
 		for typ, hosts := range form {
-			if _, ok := copied[key][typ]; !ok {
-				copied[key][typ] = make(map[string]int)
+			if _, ok := pj[key][typ]; !ok {
+				pj[key][typ] = make(typePendingJobs, len(hosts))
 			}
 			for hostID, numJobs := range hosts {
-				copied[key][typ][hostID] += numJobs
+				pj[key][typ][hostID] += numJobs
 			}
 		}
 	}
-	return copied
 }
 
-func NewPendingJobs(jobs map[string]*Job, pending pendingJobs) pendingJobs {
-	fjc := CopyPendingJobs(pending)
+func NewPendingJobs(jobs map[string]*Job) pendingJobs {
+	fjc := make(pendingJobs)
 
 	for _, job := range jobs {
 		fjc.AddJob(job)
@@ -118,10 +123,10 @@ func NewPendingJobs(jobs map[string]*Job, pending pendingJobs) pendingJobs {
 func (fc pendingJobs) AddJob(j *Job) {
 	key := j.Formation.key()
 	if _, ok := fc[key]; !ok {
-		fc[key] = make(map[string]map[string]int)
+		fc[key] = make(formPendingJobs)
 	}
 	if _, ok := fc[key][j.Type]; !ok {
-		fc[key][j.Type] = make(map[string]int)
+		fc[key][j.Type] = make(typePendingJobs)
 	}
 	fc[key][j.Type][j.HostID] += 1
 }
@@ -129,10 +134,10 @@ func (fc pendingJobs) AddJob(j *Job) {
 func (fc pendingJobs) RemoveJob(j *Job) {
 	key := j.Formation.key()
 	if _, ok := fc[key]; !ok {
-		fc[key] = make(map[string]map[string]int)
+		fc[key] = make(formPendingJobs)
 	}
 	if _, ok := fc[key][j.Type]; !ok {
-		fc[key][j.Type] = make(map[string]int)
+		fc[key][j.Type] = make(typePendingJobs)
 	}
 	fc[key][j.Type][j.HostID] -= 1
 }
@@ -142,6 +147,9 @@ func (fc pendingJobs) GetProcesses(key utils.FormationKey) map[string]int {
 	for typ, hosts := range fc[key] {
 		for _, numJobs := range hosts {
 			procs[typ] += numJobs
+			if procs[typ] == 0 {
+				delete(procs, typ)
+			}
 		}
 	}
 	return procs
