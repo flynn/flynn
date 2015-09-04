@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"os"
 	"reflect"
 	"sync"
@@ -18,6 +19,7 @@ import (
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/stream"
 )
 
@@ -100,6 +102,7 @@ func main() {
 		shutdown.Fatal(err)
 	}
 	go s.handleLeaderStream(leaders, hb.Addr())
+	go s.startHTTPServer(os.Getenv("PORT"))
 
 	if err := s.Run(); err != nil {
 		shutdown.Fatal(err)
@@ -755,6 +758,15 @@ func (s *Scheduler) handleJobStop(job *Job) {
 func (s *Scheduler) handleLeaderStream(leaders chan *discoverd.Instance, thisSchedulerAddr string) {
 	for leader := range leaders {
 		s.ChangeLeader(leader.Addr == thisSchedulerAddr)
+	}
+}
+
+func (s *Scheduler) startHTTPServer(port string) {
+	status.AddHandler(status.HealthyHandler)
+	err := http.ListenAndServe(":"+port, nil)
+	if err != nil {
+		s.log.Error("An error occurred in the health check server", "error", err)
+		s.Stop()
 	}
 }
 
