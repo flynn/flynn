@@ -1,4 +1,4 @@
-FROM flynn/busybox
+FROM busybox
 
 ADD bin/flynn-controller /bin/flynn-controller
 ADD bin/flynn-scheduler /bin/flynn-scheduler

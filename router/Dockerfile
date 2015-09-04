@@ -1,4 +1,4 @@
-FROM flynn/busybox
+FROM busybox
 
 ADD ./bin/flynn-router /bin/flynn-router
 
