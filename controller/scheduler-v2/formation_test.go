@@ -4,7 +4,7 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	. "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
-	utils "github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/controller/utils"
 )
 
 func (TestSuite) TestFormationUpdate(c *C) {
@@ -112,7 +112,9 @@ func (*TestSuite) TestPendingJobs(c *C) {
 	c.Assert(procs["web"], Equals, 1)
 	hostJobs = pj1.GetHostJobCounts(key, "web")
 	c.Assert(hostJobs, DeepEquals, map[string]int{"host-1": 1})
-	pj := NewPendingJobs(jobs, MergePendingJobs(pj1, pj2))
+	pj := NewPendingJobs(jobs)
+	pj.Update(pj1)
+	pj.Update(pj2)
 	procs = pj.GetProcesses(key)
 	c.Assert(procs["web"], Equals, 2)
 	c.Assert(pj.HasStarts(j), Equals, true)
