@@ -59,7 +59,6 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Sched
 	return &Scheduler{
 		ControllerClient: cc,
 		ClusterClient:    cluster,
-		isLeader:         false,
 		changeLeader:     make(chan bool),
 		backoffPeriod:    getBackoffPeriod(),
 		log:              log15.New("component", "scheduler"),
@@ -261,7 +260,9 @@ func (s *Scheduler) RectifyJobs() (err error) {
 		s.sendEvent(NewEvent(EventTypeRectifyJobs, err, nil))
 	}()
 
-	fj := NewPendingJobs(s.jobs, MergePendingJobs(s.pendingStarts, s.pendingStops))
+	fj := NewPendingJobs(s.jobs)
+	fj.Update(s.pendingStarts)
+	fj.Update(s.pendingStops)
 
 	for fKey := range fj {
 		schedulerFormation, ok := s.formations[fKey]
@@ -620,7 +621,9 @@ func (s *Scheduler) findBestHost(formation *Formation, typ, hostID string) (util
 	}
 
 	if hostID == "" {
-		fj := NewPendingJobs(s.jobs, MergePendingJobs(s.pendingStarts, s.pendingStops))
+		fj := NewPendingJobs(s.jobs)
+		fj.Update(s.pendingStarts)
+		fj.Update(s.pendingStops)
 		counts := fj.GetHostJobCounts(formation.key(), typ)
 		var minCount int = math.MaxInt32
 		for _, host := range hosts {
