@@ -144,7 +144,7 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 
 	// Test scaling up an existing formation
 	s.log.Info("Test scaling up an existing formation. Wait for formation change and job start")
-	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 2}})
+	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 4}})
 	_, err = waitForEvent(events, EventTypeFormationChange)
 	c.Assert(err, IsNil)
 	e, err := waitForEvent(events, EventTypeJobStart)
@@ -153,13 +153,21 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	c.Assert(job.Type, Equals, testJobType)
 	c.Assert(job.AppID, Equals, app.ID)
 	c.Assert(job.ReleaseID, Equals, testReleaseID)
+	_, err = waitForEvent(events, EventTypeJobStart)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeJobStart)
+	c.Assert(err, IsNil)
 	jobs := s.Jobs()
-	c.Assert(jobs, HasLen, 2)
+	c.Assert(jobs, HasLen, 4)
 
 	// Test scaling down an existing formation
 	s.log.Info("Test scaling down an existing formation. Wait for formation change and job stop")
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 1}})
 	_, err = waitForEvent(events, EventTypeFormationChange)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeJobStop)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeJobStop)
 	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeJobStop)
 	c.Assert(err, IsNil)
