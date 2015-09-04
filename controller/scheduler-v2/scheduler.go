@@ -180,7 +180,7 @@ func (s *Scheduler) Run() error {
 		select {
 		case <-s.rectifyJobs:
 			err = s.RectifyJobs()
-		case <-time.After(50 * time.Millisecond):
+		case <-time.After(10 * time.Millisecond):
 			// block so that
 			//	1) mutate events are given a chance to happen
 			//  2) we don't spin hot
@@ -292,8 +292,8 @@ func (s *Scheduler) RectifyJobs() (err error) {
 	}
 
 	for fKey, schedulerFormation := range s.formations {
-		if _, ok := fj[fKey]; !ok {
-			log.Debug("Re-asserting processes", "formation.key", fKey, "formation.processes", schedulerFormation.Processes, "formation.jobs", fj, "jobs.starting", s.pendingStarts, "jobs.stopping", s.pendingStops)
+		if _, ok := fj[fKey]; !ok && len(schedulerFormation.Processes) > 0 {
+			log.Debug("Re-asserting processes", "formation.key", fKey, "formation.processes", schedulerFormation.Processes)
 			s.sendDiffRequests(schedulerFormation, schedulerFormation.Processes)
 		}
 	}
@@ -310,6 +310,8 @@ func (s *Scheduler) FormationChange(ef *ct.ExpandedFormation) (err error) {
 	if err != nil {
 		return err
 	}
+	// Trigger sync jobs in case we've ignored an existing job because we
+	// didn't know about the formation.
 	triggerChan(s.syncJobs)
 
 	return nil
@@ -435,16 +437,21 @@ func (s *Scheduler) HandleHostChange(e *discoverd.Event) (err error) {
 	defer func() {
 		s.sendEvent(NewEvent(EventTypeHostChange, err, nil))
 	}()
+	if e == nil || e.Instance == nil || e.Instance.Meta == nil {
+		return fmt.Errorf("Invalid data in host change event: %v", e)
+	}
+	hostID, ok := e.Instance.Meta["id"]
+	if !ok {
+		return fmt.Errorf("No hostID specified in host change event: %v", e)
+	}
 	switch e.Kind {
 	case discoverd.EventKindUp:
-		hostID := e.Instance.Meta["id"]
 		h, err := s.Host(hostID)
 		if err != nil {
 			return err
 		}
 		return s.followHost(h)
 	case discoverd.EventKindDown:
-		hostID := e.Instance.Meta["id"]
 		return s.unfollowHost(hostID)
 	}
 	return nil
@@ -573,6 +580,7 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 	}()
 	var job *Job
 	if req.JobID == "" {
+		// TODO here is where we fix the shitty job stopping bug
 		formJobs := NewFormationJobs(s.jobs)
 		formJob := formJobs[utils.FormationKey{AppID: req.AppID, ReleaseID: req.ReleaseID}]
 		typJobs := formJob[req.Type]
@@ -710,7 +718,7 @@ func (s *Scheduler) expandOmni(ef *ct.ExpandedFormation) {
 	release := ef.Release
 
 	for typ, pt := range release.Processes {
-		if pt.Omni {
+		if pt.Omni && ef.Processes != nil && ef.Processes[typ] > 0 {
 			ef.Processes[typ] *= len(s.hostStreams)
 		}
 	}
