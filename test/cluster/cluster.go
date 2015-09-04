@@ -443,10 +443,10 @@ git merge origin/master
 
 test/scripts/wait-for-docker
 
-# pull flynn/busybox before building to avoid the following Docker error when
+# pull busybox before building to avoid the following Docker error when
 # building images from scratch concurrently:
-# "could not find image: no such id: flynn/busybox"
-docker pull flynn/busybox
+# "could not find image: no such id: busybox"
+docker pull busybox
 
 make
 

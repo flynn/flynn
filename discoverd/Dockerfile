@@ -1,4 +1,4 @@
-FROM flynn/busybox
+FROM busybox
 
 ADD ./bin/discoverd /bin/discoverd
 ADD start.sh /bin/start-discoverd

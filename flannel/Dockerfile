@@ -1,4 +1,4 @@
-FROM flynn/busybox
+FROM busybox
 
 ADD bin/flanneld /bin/flanneld
 ADD bin/flannel-wrapper /bin/flannel-wrapper
