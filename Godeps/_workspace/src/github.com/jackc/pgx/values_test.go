@@ -1,8 +1,9 @@
 package pgx_test
 
 import (
-	"fmt"
+	"encoding/json"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
+	"net"
 	"reflect"
 	"strings"
 	"testing"
@@ -14,13 +15,6 @@ func TestDateTranscode(t *testing.T) {
 
 	conn := mustConnect(t, *defaultConnConfig)
 	defer closeConn(t, conn)
-
-	mustPrepare(t, conn, "testTranscode", "select $1::date")
-	defer func() {
-		if err := conn.Deallocate("testTranscode"); err != nil {
-			t.Fatalf("Unable to deallocate prepared statement: %v", err)
-		}
-	}()
 
 	dates := []time.Time{
 		time.Date(1990, 1, 1, 0, 0, 0, 0, time.Local),
@@ -35,17 +29,7 @@ func TestDateTranscode(t *testing.T) {
 	for _, actualDate := range dates {
 		var d time.Time
 
-		// Test text format
 		err := conn.QueryRow("select $1::date", actualDate).Scan(&d)
-		if err != nil {
-			t.Fatalf("Unexpected failure on QueryRow Scan: %v", err)
-		}
-		if !actualDate.Equal(d) {
-			t.Errorf("Did not transcode date successfully: %v is not %v", d, actualDate)
-		}
-
-		// Test binary format
-		err = conn.QueryRow("testTranscode", actualDate).Scan(&d)
 		if err != nil {
 			t.Fatalf("Unexpected failure on QueryRow Scan: %v", err)
 		}
@@ -73,19 +57,183 @@ func TestTimestampTzTranscode(t *testing.T) {
 		t.Errorf("Did not transcode time successfully: %v is not %v", outputTime, inputTime)
 	}
 
-	mustPrepare(t, conn, "testTranscode", "select $1::timestamptz")
-	defer func() {
-		if err := conn.Deallocate("testTranscode"); err != nil {
-			t.Fatalf("Unable to deallocate prepared statement: %v", err)
-		}
-	}()
-
-	err = conn.QueryRow("testTranscode", inputTime).Scan(&outputTime)
+	err = conn.QueryRow("select $1::timestamptz", inputTime).Scan(&outputTime)
 	if err != nil {
 		t.Fatalf("QueryRow Scan failed: %v", err)
 	}
 	if !inputTime.Equal(outputTime) {
 		t.Errorf("Did not transcode time successfully: %v is not %v", outputTime, inputTime)
+	}
+}
+
+func TestJsonAndJsonbTranscode(t *testing.T) {
+	t.Parallel()
+
+	conn := mustConnect(t, *defaultConnConfig)
+	defer closeConn(t, conn)
+
+	for _, oid := range []pgx.Oid{pgx.JsonOid, pgx.JsonbOid} {
+		if _, ok := conn.PgTypes[oid]; !ok {
+			return // No JSON/JSONB type -- must be running against old PostgreSQL
+		}
+		typename := conn.PgTypes[oid].Name
+
+		testJsonSingleLevelStringMap(t, conn, typename)
+		testJsonNestedMap(t, conn, typename)
+		testJsonStringArray(t, conn, typename)
+		testJsonInt64Array(t, conn, typename)
+		testJsonInt16ArrayFailureDueToOverflow(t, conn, typename)
+		testJsonStruct(t, conn, typename)
+	}
+}
+
+func testJsonSingleLevelStringMap(t *testing.T, conn *pgx.Conn, typename string) {
+	input := map[string]string{"key": "value"}
+	var output map[string]string
+	err := conn.QueryRow("select $1::"+typename, input).Scan(&output)
+	if err != nil {
+		t.Errorf("%s: QueryRow Scan failed: %v", typename, err)
+		return
+	}
+
+	if !reflect.DeepEqual(input, output) {
+		t.Errorf("%s: Did not transcode map[string]string successfully: %v is not %v", typename, input, output)
+		return
+	}
+}
+
+func testJsonNestedMap(t *testing.T, conn *pgx.Conn, typename string) {
+	input := map[string]interface{}{
+		"name":      "Uncanny",
+		"stats":     map[string]interface{}{"hp": float64(107), "maxhp": float64(150)},
+		"inventory": []interface{}{"phone", "key"},
+	}
+	var output map[string]interface{}
+	err := conn.QueryRow("select $1::"+typename, input).Scan(&output)
+	if err != nil {
+		t.Errorf("%s: QueryRow Scan failed: %v", typename, err)
+		return
+	}
+
+	if !reflect.DeepEqual(input, output) {
+		t.Errorf("%s: Did not transcode map[string]interface{} successfully: %v is not %v", typename, input, output)
+		return
+	}
+}
+
+func testJsonStringArray(t *testing.T, conn *pgx.Conn, typename string) {
+	input := []string{"foo", "bar", "baz"}
+	var output []string
+	err := conn.QueryRow("select $1::"+typename, input).Scan(&output)
+	if err != nil {
+		t.Errorf("%s: QueryRow Scan failed: %v", typename, err)
+	}
+
+	if !reflect.DeepEqual(input, output) {
+		t.Errorf("%s: Did not transcode []string successfully: %v is not %v", typename, input, output)
+	}
+}
+
+func testJsonInt64Array(t *testing.T, conn *pgx.Conn, typename string) {
+	input := []int64{1, 2, 234432}
+	var output []int64
+	err := conn.QueryRow("select $1::"+typename, input).Scan(&output)
+	if err != nil {
+		t.Errorf("%s: QueryRow Scan failed: %v", typename, err)
+	}
+
+	if !reflect.DeepEqual(input, output) {
+		t.Errorf("%s: Did not transcode []int64 successfully: %v is not %v", typename, input, output)
+	}
+}
+
+func testJsonInt16ArrayFailureDueToOverflow(t *testing.T, conn *pgx.Conn, typename string) {
+	input := []int{1, 2, 234432}
+	var output []int16
+	err := conn.QueryRow("select $1::"+typename, input).Scan(&output)
+	if _, ok := err.(*json.UnmarshalTypeError); !ok {
+		t.Errorf("%s: Expected *json.UnmarkalTypeError, but got %v", typename, err)
+	}
+}
+
+func testJsonStruct(t *testing.T, conn *pgx.Conn, typename string) {
+	type person struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}
+
+	input := person{
+		Name: "John",
+		Age:  42,
+	}
+
+	var output person
+
+	err := conn.QueryRow("select $1::"+typename, input).Scan(&output)
+	if err != nil {
+		t.Errorf("%s: QueryRow Scan failed: %v", typename, err)
+	}
+
+	if !reflect.DeepEqual(input, output) {
+		t.Errorf("%s: Did not transcode struct successfully: %v is not %v", typename, input, output)
+	}
+}
+
+func mustParseCIDR(t *testing.T, s string) net.IPNet {
+	_, ipnet, err := net.ParseCIDR(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return *ipnet
+}
+
+func TestInetCidrTranscode(t *testing.T) {
+	t.Parallel()
+
+	conn := mustConnect(t, *defaultConnConfig)
+	defer closeConn(t, conn)
+
+	tests := []struct {
+		sql   string
+		value net.IPNet
+	}{
+		{"select $1::inet", mustParseCIDR(t, "0.0.0.0/32")},
+		{"select $1::inet", mustParseCIDR(t, "127.0.0.1/32")},
+		{"select $1::inet", mustParseCIDR(t, "12.34.56.0/32")},
+		{"select $1::inet", mustParseCIDR(t, "192.168.1.0/24")},
+		{"select $1::inet", mustParseCIDR(t, "255.0.0.0/8")},
+		{"select $1::inet", mustParseCIDR(t, "255.255.255.255/32")},
+		{"select $1::inet", mustParseCIDR(t, "::/128")},
+		{"select $1::inet", mustParseCIDR(t, "::/0")},
+		{"select $1::inet", mustParseCIDR(t, "::1/128")},
+		{"select $1::inet", mustParseCIDR(t, "2607:f8b0:4009:80b::200e/128")},
+		{"select $1::cidr", mustParseCIDR(t, "0.0.0.0/32")},
+		{"select $1::cidr", mustParseCIDR(t, "127.0.0.1/32")},
+		{"select $1::cidr", mustParseCIDR(t, "12.34.56.0/32")},
+		{"select $1::cidr", mustParseCIDR(t, "192.168.1.0/24")},
+		{"select $1::cidr", mustParseCIDR(t, "255.0.0.0/8")},
+		{"select $1::cidr", mustParseCIDR(t, "255.255.255.255/32")},
+		{"select $1::cidr", mustParseCIDR(t, "::/128")},
+		{"select $1::cidr", mustParseCIDR(t, "::/0")},
+		{"select $1::cidr", mustParseCIDR(t, "::1/128")},
+		{"select $1::cidr", mustParseCIDR(t, "2607:f8b0:4009:80b::200e/128")},
+	}
+
+	for i, tt := range tests {
+		var actual net.IPNet
+
+		err := conn.QueryRow(tt.sql, tt.value).Scan(&actual)
+		if err != nil {
+			t.Errorf("%d. Unexpected failure: %v (sql -> %v, value -> %v)", i, err, tt.sql, tt.value)
+			continue
+		}
+
+		if actual.String() != tt.value.String() {
+			t.Errorf("%d. Expected %v, got %v (sql -> %v)", i, tt.value, actual, tt.sql)
+		}
+
+		ensureConnValid(t, conn)
 	}
 }
 
@@ -136,23 +284,18 @@ func TestNullX(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		psName := fmt.Sprintf("success%d", i)
-		mustPrepare(t, conn, psName, tt.sql)
+		actual = zero
 
-		for _, sql := range []string{tt.sql, psName} {
-			actual = zero
-
-			err := conn.QueryRow(sql, tt.queryArgs...).Scan(tt.scanArgs...)
-			if err != nil {
-				t.Errorf("%d. Unexpected failure: %v (sql -> %v, queryArgs -> %v)", i, err, sql, tt.queryArgs)
-			}
-
-			if actual != tt.expected {
-				t.Errorf("%d. Expected %v, got %v (sql -> %v, queryArgs -> %v)", i, tt.expected, actual, sql, tt.queryArgs)
-			}
-
-			ensureConnValid(t, conn)
+		err := conn.QueryRow(tt.sql, tt.queryArgs...).Scan(tt.scanArgs...)
+		if err != nil {
+			t.Errorf("%d. Unexpected failure: %v (sql -> %v, queryArgs -> %v)", i, err, tt.sql, tt.queryArgs)
 		}
+
+		if actual != tt.expected {
+			t.Errorf("%d. Expected %v, got %v (sql -> %v, queryArgs -> %v)", i, tt.expected, actual, tt.sql, tt.queryArgs)
+		}
+
+		ensureConnValid(t, conn)
 	}
 }
 
@@ -211,12 +354,9 @@ func TestArrayDecoding(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		psName := fmt.Sprintf("ps%d", i)
-		mustPrepare(t, conn, psName, tt.sql)
-
-		err := conn.QueryRow(psName, tt.query).Scan(tt.scan)
+		err := conn.QueryRow(tt.sql, tt.query).Scan(tt.scan)
 		if err != nil {
-			t.Errorf(`error reading array: %v`, err)
+			t.Errorf(`%d. error reading array: %v`, i, err)
 		}
 		tt.assert(t, tt.query, tt.scan)
 		ensureConnValid(t, conn)
@@ -337,12 +477,9 @@ func TestNullXMismatch(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		psName := fmt.Sprintf("ps%d", i)
-		mustPrepare(t, conn, psName, tt.sql)
-
 		actual = zero
 
-		err := conn.QueryRow(psName, tt.queryArgs...).Scan(tt.scanArgs...)
+		err := conn.QueryRow(tt.sql, tt.queryArgs...).Scan(tt.scanArgs...)
 		if err == nil || !strings.Contains(err.Error(), tt.err) {
 			t.Errorf(`%d. Expected error to contain "%s", but it didn't: %v`, i, tt.err, err)
 		}

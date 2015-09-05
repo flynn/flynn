@@ -2,8 +2,10 @@ package pgx
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -18,8 +20,11 @@ const (
 	Int4Oid             = 23
 	TextOid             = 25
 	OidOid              = 26
+	JsonOid             = 114
+	CidrOid             = 650
 	Float4Oid           = 700
 	Float8Oid           = 701
+	InetOid             = 869
 	BoolArrayOid        = 1000
 	Int2ArrayOid        = 1005
 	Int4ArrayOid        = 1007
@@ -34,6 +39,7 @@ const (
 	TimestampArrayOid   = 1115
 	TimestampTzOid      = 1184
 	TimestampTzArrayOid = 1185
+	JsonbOid            = 3802
 )
 
 // PostgreSQL format codes
@@ -50,28 +56,31 @@ const (
 var DefaultTypeFormats map[string]int16
 
 func init() {
-	DefaultTypeFormats = make(map[string]int16)
-	DefaultTypeFormats["_float4"] = BinaryFormatCode
-	DefaultTypeFormats["_float8"] = BinaryFormatCode
-	DefaultTypeFormats["_bool"] = BinaryFormatCode
-	DefaultTypeFormats["_int2"] = BinaryFormatCode
-	DefaultTypeFormats["_int4"] = BinaryFormatCode
-	DefaultTypeFormats["_int8"] = BinaryFormatCode
-	DefaultTypeFormats["_text"] = BinaryFormatCode
-	DefaultTypeFormats["_varchar"] = BinaryFormatCode
-	DefaultTypeFormats["_timestamp"] = BinaryFormatCode
-	DefaultTypeFormats["_timestamptz"] = BinaryFormatCode
-	DefaultTypeFormats["bool"] = BinaryFormatCode
-	DefaultTypeFormats["bytea"] = BinaryFormatCode
-	DefaultTypeFormats["date"] = BinaryFormatCode
-	DefaultTypeFormats["float4"] = BinaryFormatCode
-	DefaultTypeFormats["float8"] = BinaryFormatCode
-	DefaultTypeFormats["int2"] = BinaryFormatCode
-	DefaultTypeFormats["int4"] = BinaryFormatCode
-	DefaultTypeFormats["int8"] = BinaryFormatCode
-	DefaultTypeFormats["oid"] = BinaryFormatCode
-	DefaultTypeFormats["timestamp"] = BinaryFormatCode
-	DefaultTypeFormats["timestamptz"] = BinaryFormatCode
+	DefaultTypeFormats = map[string]int16{
+		"_bool":        BinaryFormatCode,
+		"_float4":      BinaryFormatCode,
+		"_float8":      BinaryFormatCode,
+		"_int2":        BinaryFormatCode,
+		"_int4":        BinaryFormatCode,
+		"_int8":        BinaryFormatCode,
+		"_text":        BinaryFormatCode,
+		"_timestamp":   BinaryFormatCode,
+		"_timestamptz": BinaryFormatCode,
+		"_varchar":     BinaryFormatCode,
+		"bool":         BinaryFormatCode,
+		"bytea":        BinaryFormatCode,
+		"cidr":         BinaryFormatCode,
+		"date":         BinaryFormatCode,
+		"float4":       BinaryFormatCode,
+		"float8":       BinaryFormatCode,
+		"inet":         BinaryFormatCode,
+		"int2":         BinaryFormatCode,
+		"int4":         BinaryFormatCode,
+		"int8":         BinaryFormatCode,
+		"oid":          BinaryFormatCode,
+		"timestamp":    BinaryFormatCode,
+		"timestamptz":  BinaryFormatCode,
+	}
 }
 
 type SerializationError string
@@ -989,6 +998,32 @@ func encodeBytea(w *WriteBuf, value interface{}) error {
 	return nil
 }
 
+func decodeJson(vr *ValueReader, d interface{}) error {
+	if vr.Len() == -1 {
+		return nil
+	}
+
+	if vr.Type().DataType != JsonOid && vr.Type().DataType != JsonbOid {
+		vr.Fatal(ProtocolError(fmt.Sprintf("Cannot decode oid %v into json", vr.Type().DataType)))
+	}
+
+	bytes := vr.ReadBytes(vr.Len())
+	err := json.Unmarshal(bytes, d)
+	if err != nil {
+		vr.Fatal(err)
+	}
+	return err
+}
+
+func encodeJson(w *WriteBuf, value interface{}) error {
+	s, err := json.Marshal(value)
+	if err != nil {
+		fmt.Errorf("Failed to encode json from type: %T", value)
+	}
+
+	return encodeText(w, s)
+}
+
 func decodeDate(vr *ValueReader) time.Time {
 	var zeroTime time.Time
 
@@ -1089,6 +1124,7 @@ func decodeTimestamp(vr *ValueReader) time.Time {
 
 	if vr.Len() != 8 {
 		vr.Fatal(ProtocolError(fmt.Sprintf("Received an invalid size for an timestamp: %d", vr.Len())))
+		return zeroTime
 	}
 
 	microsecSinceY2K := vr.ReadInt64()
@@ -1098,6 +1134,76 @@ func decodeTimestamp(vr *ValueReader) time.Time {
 
 func encodeTimestamp(w *WriteBuf, value interface{}) error {
 	return encodeTimestampTz(w, value)
+}
+
+func decodeInet(vr *ValueReader) net.IPNet {
+	var zero net.IPNet
+
+	if vr.Len() == -1 {
+		vr.Fatal(ProtocolError("Cannot decode null into net.IPNet"))
+		return zero
+	}
+
+	if vr.Type().FormatCode != BinaryFormatCode {
+		vr.Fatal(ProtocolError(fmt.Sprintf("Unknown field description format code: %v", vr.Type().FormatCode)))
+		return zero
+	}
+
+	pgType := vr.Type()
+	if vr.Len() != 8 && vr.Len() != 20 {
+		vr.Fatal(ProtocolError(fmt.Sprintf("Received an invalid size for a %s: %d", pgType.Name, vr.Len())))
+		return zero
+	}
+
+	if pgType.DataType != InetOid && pgType.DataType != CidrOid {
+		vr.Fatal(ProtocolError(fmt.Sprintf("Cannot decode oid %v into %s", pgType.DataType, pgType.Name)))
+		return zero
+	}
+
+	vr.ReadByte() // ignore family
+	bits := vr.ReadByte()
+	vr.ReadByte() // ignore is_cidr
+	addressLength := vr.ReadByte()
+
+	var ipnet net.IPNet
+	ipnet.IP = vr.ReadBytes(int32(addressLength))
+	ipnet.Mask = net.CIDRMask(int(bits), int(addressLength)*8)
+
+	return ipnet
+}
+
+func encodeInet(w *WriteBuf, value interface{}) error {
+	var ipnet net.IPNet
+
+	switch value := value.(type) {
+	case net.IPNet:
+		ipnet = value
+	default:
+		return fmt.Errorf("Expected net.IPNet, received %T %v", value, value)
+	}
+
+	var size int32
+	var family byte
+	switch len(ipnet.IP) {
+	case net.IPv4len:
+		size = 8
+		family = w.conn.pgsql_af_inet
+	case net.IPv6len:
+		size = 20
+		family = w.conn.pgsql_af_inet6
+	default:
+		return fmt.Errorf("Unexpected IP length: %v", len(ipnet.IP))
+	}
+
+	w.WriteInt32(size)
+	w.WriteByte(family)
+	ones, _ := ipnet.Mask.Size()
+	w.WriteByte(byte(ones))
+	w.WriteByte(0) // is_cidr is ignored on server
+	w.WriteByte(byte(len(ipnet.IP)))
+	w.WriteBytes(ipnet.IP)
+
+	return nil
 }
 
 func decode1dArrayHeader(vr *ValueReader) (length int32, err error) {
