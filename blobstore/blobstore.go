@@ -110,6 +110,7 @@ func main() {
 		if err != nil {
 			shutdown.Fatal(err)
 		}
+		db.Close() // not used once pgx is connected
 		storageDesc = "Postgres"
 	}
 
