@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/name"
@@ -64,7 +63,10 @@ func (r *AppRepo) Add(data interface{}) error {
 	if app.Strategy == "" {
 		app.Strategy = "all-at-once"
 	}
-	meta := metaToHstore(app.Meta)
+	meta, err := json.Marshal(app.Meta)
+	if err != nil {
+		return err
+	}
 	if err := tx.QueryRow("INSERT INTO apps (app_id, name, meta, strategy) VALUES ($1, $2, $3, $4) RETURNING created_at, updated_at", app.ID, app.Name, meta, app.Strategy).Scan(&app.CreatedAt, &app.UpdatedAt); err != nil {
 		tx.Rollback()
 		if postgres.IsUniquenessError(err, "apps_name_idx") {
@@ -99,20 +101,19 @@ func (r *AppRepo) Add(data interface{}) error {
 
 func scanApp(s postgres.Scanner) (*ct.App, error) {
 	app := &ct.App{}
-	var meta hstore.Hstore
+	var meta []byte
 	var releaseID *string
 	err := s.Scan(&app.ID, &app.Name, &meta, &app.Strategy, &releaseID, &app.CreatedAt, &app.UpdatedAt)
 	if err == sql.ErrNoRows {
-		err = ErrNotFound
+		return nil, ErrNotFound
+	} else if err != nil {
+		return nil, err
 	}
 	if releaseID != nil {
 		app.ReleaseID = *releaseID
 	}
-	if len(meta.Map) > 0 {
-		app.Meta = make(map[string]string, len(meta.Map))
-		for k, v := range meta.Map {
-			app.Meta[k] = v.String
-		}
+	if len(meta) > 0 {
+		err = json.Unmarshal(meta, &app.Meta)
 	}
 	return app, err
 }
@@ -172,8 +173,6 @@ func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, e
 				tx.Rollback()
 				return nil, fmt.Errorf("controller: expected map[string]interface{}, got %T", v)
 			}
-			var meta hstore.Hstore
-			meta.Map = make(map[string]sql.NullString, len(data))
 			app.Meta = make(map[string]string, len(data))
 			for k, v := range data {
 				s, ok := v.(string)
@@ -181,8 +180,12 @@ func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, e
 					tx.Rollback()
 					return nil, fmt.Errorf("controller: expected string, got %T", v)
 				}
-				meta.Map[k] = sql.NullString{String: s, Valid: true}
 				app.Meta[k] = s
+			}
+			meta, err := json.Marshal(app.Meta)
+			if err != nil {
+				tx.Rollback()
+				return nil, err
 			}
 			if _, err := tx.Exec("UPDATE apps SET meta = $2, updated_at = now() WHERE app_id = $1", app.ID, meta); err != nil {
 				tx.Rollback()

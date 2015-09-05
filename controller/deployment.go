@@ -4,11 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
@@ -39,7 +37,10 @@ func (r *DeploymentRepo) Add(data interface{}) (*ct.Deployment, error) {
 	if d.OldReleaseID != "" {
 		oldReleaseID = &d.OldReleaseID
 	}
-	procs := procsHstore(d.Processes)
+	procs, err := json.Marshal(d.Processes)
+	if err != nil {
+		return nil, err
+	}
 	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, err
@@ -138,12 +139,14 @@ func (r *DeploymentRepo) List(appID string) ([]*ct.Deployment, error) {
 
 func scanDeployment(s postgres.Scanner) (*ct.Deployment, error) {
 	d := &ct.Deployment{}
-	var procs hstore.Hstore
+	var procs []byte
 	var oldReleaseID *string
 	var status *string
 	err := s.Scan(&d.ID, &d.AppID, &oldReleaseID, &d.NewReleaseID, &d.Strategy, &status, &procs, &d.CreatedAt, &d.FinishedAt)
 	if err == sql.ErrNoRows {
-		err = ErrNotFound
+		return nil, ErrNotFound
+	} else if err != nil {
+		return nil, err
 	}
 	if oldReleaseID != nil {
 		d.OldReleaseID = *oldReleaseID
@@ -151,13 +154,7 @@ func scanDeployment(s postgres.Scanner) (*ct.Deployment, error) {
 	if status != nil {
 		d.Status = *status
 	}
-	d.Processes = make(map[string]int, len(procs.Map))
-	for k, v := range procs.Map {
-		n, _ := strconv.Atoi(v.String)
-		if n > 0 {
-			d.Processes[k] = n
-		}
-	}
+	err = json.Unmarshal(procs, &d.Processes)
 	return d, err
 }
 
