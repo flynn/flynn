@@ -282,7 +282,7 @@ func (s *Scheduler) RectifyJobs() (err error) {
 		schedulerProcs := schedulerFormation.Processes
 		clusterProcs := fj.GetProcesses(fKey)
 
-		if eq := reflect.DeepEqual(clusterProcs, schedulerProcs); !eq {
+		if eq := reflect.DeepEqual(clusterProcs, schedulerProcs); (len(clusterProcs) != 0 || len(schedulerProcs) != 0) && !eq {
 			log.Debug("Updating processes", "formation.processes", schedulerProcs, "cluster.processes", clusterProcs)
 			schedulerFormation.Processes = clusterProcs
 

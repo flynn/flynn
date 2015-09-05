@@ -71,14 +71,16 @@ func (fc formationJobs) AddJob(j *Job) {
 	fc[key][j.Type] = append(fc[key][j.Type], j)
 }
 
-type pendingJobs map[utils.FormationKey]map[string]map[string]int
+type typePendingJobs map[string]int
+type formPendingJobs map[string]typePendingJobs
+type pendingJobs map[utils.FormationKey]formPendingJobs
 
 func (pj pendingJobs) Clone() pendingJobs {
 	copied := make(pendingJobs, len(pj))
 	for key, form := range pj {
-		copied[key] = make(map[string]map[string]int, len(form))
+		copied[key] = make(formPendingJobs, len(form))
 		for typ, hosts := range form {
-			copied[key][typ] = make(map[string]int, len(hosts))
+			copied[key][typ] = make(typePendingJobs, len(hosts))
 			for hostID, numJobs := range hosts {
 				copied[key][typ][hostID] = numJobs
 			}
@@ -90,11 +92,11 @@ func (pj pendingJobs) Clone() pendingJobs {
 func (pj pendingJobs) Update(other pendingJobs) {
 	for key, form := range other {
 		if _, ok := pj[key]; !ok {
-			pj[key] = make(map[string]map[string]int, len(form))
+			pj[key] = make(formPendingJobs, len(form))
 		}
 		for typ, hosts := range form {
 			if _, ok := pj[key][typ]; !ok {
-				pj[key][typ] = make(map[string]int, len(hosts))
+				pj[key][typ] = make(typePendingJobs, len(hosts))
 			}
 			for hostID, numJobs := range hosts {
 				pj[key][typ][hostID] += numJobs
@@ -115,10 +117,10 @@ func NewPendingJobs(jobs map[string]*Job) pendingJobs {
 func (fc pendingJobs) AddJob(j *Job) {
 	key := j.Formation.key()
 	if _, ok := fc[key]; !ok {
-		fc[key] = make(map[string]map[string]int)
+		fc[key] = make(formPendingJobs)
 	}
 	if _, ok := fc[key][j.Type]; !ok {
-		fc[key][j.Type] = make(map[string]int)
+		fc[key][j.Type] = make(typePendingJobs)
 	}
 	fc[key][j.Type][j.HostID] += 1
 }
@@ -126,10 +128,10 @@ func (fc pendingJobs) AddJob(j *Job) {
 func (fc pendingJobs) RemoveJob(j *Job) {
 	key := j.Formation.key()
 	if _, ok := fc[key]; !ok {
-		fc[key] = make(map[string]map[string]int)
+		fc[key] = make(formPendingJobs)
 	}
 	if _, ok := fc[key][j.Type]; !ok {
-		fc[key][j.Type] = make(map[string]int)
+		fc[key][j.Type] = make(typePendingJobs)
 	}
 	fc[key][j.Type][j.HostID] -= 1
 }
@@ -138,7 +140,9 @@ func (fc pendingJobs) GetProcesses(key utils.FormationKey) map[string]int {
 	procs := make(map[string]int)
 	for typ, hosts := range fc[key] {
 		for _, numJobs := range hosts {
-			procs[typ] += numJobs
+			if numJobs != 0 {
+				procs[typ] += numJobs
+			}
 		}
 	}
 	return procs
