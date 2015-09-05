@@ -4,14 +4,16 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"io"
+	"os"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/oid"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/status"
 )
+
+const UniqueViolation = "23505"
 
 func NewPostgresFilesystem(db *sql.DB) (Filesystem, error) {
 	m := postgres.NewMigrations()
@@ -34,11 +36,24 @@ $$ LANGUAGE plpgsql;`,
     AFTER DELETE ON files
     FOR EACH ROW EXECUTE PROCEDURE delete_file();`,
 	)
-	return &PostgresFilesystem{db: db}, m.Migrate(db)
+	// TODO(jpg) reuse pkg/postgres connection when converted
+	connConf := pgx.ConnConfig{
+		Host:     os.Getenv("PGHOST"),
+		User:     os.Getenv("PGUSER"),
+		Password: os.Getenv("PGPASSWORD"),
+		Database: os.Getenv("PGDATABASE"),
+	}
+	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
+		ConnConfig: connConf,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &PostgresFilesystem{db: pgxpool}, m.Migrate(db)
 }
 
 type PostgresFilesystem struct {
-	db *sql.DB
+	db *pgx.ConnPool
 }
 
 func (p *PostgresFilesystem) Status() status.Status {
@@ -54,10 +69,10 @@ func (p *PostgresFilesystem) Put(name string, r io.Reader, typ string) error {
 		return err
 	}
 
-	var id oid.Oid
+	var id pgx.Oid
 create:
 	err = tx.QueryRow("INSERT INTO files (name, type) VALUES ($1, $2) RETURNING file_id", name, typ).Scan(&id)
-	if postgres.IsUniquenessError(err, "") {
+	if e, ok := err.(pgx.PgError); ok && e.Code == UniqueViolation {
 		tx.Rollback()
 		tx, err = p.db.Begin()
 		if err != nil {
@@ -77,12 +92,12 @@ create:
 		return err
 	}
 
-	lo, err := pq.NewLargeObjects(tx)
+	lo, err := tx.LargeObjects()
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
-	obj, err := lo.Open(id, pq.LargeObjectModeWrite)
+	obj, err := lo.Open(id, pgx.LargeObjectModeWrite)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -121,18 +136,18 @@ func (p *PostgresFilesystem) Open(name string) (File, error) {
 		name).Scan(&f.id, &f.size, &f.typ, &f.etag, &f.mtime)
 	if err != nil {
 		tx.Rollback()
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			err = ErrNotFound
 		}
 		return nil, err
 	}
 
-	lo, err := pq.NewLargeObjects(tx)
+	lo, err := tx.LargeObjects()
 	if err != nil {
 		tx.Rollback()
 		return nil, err
 	}
-	f.LargeObject, err = lo.Open(f.id, pq.LargeObjectModeRead)
+	f.LargeObject, err = lo.Open(f.id, pgx.LargeObjectModeRead)
 	if err != nil {
 		tx.Rollback()
 		return nil, err
@@ -143,14 +158,14 @@ func (p *PostgresFilesystem) Open(name string) (File, error) {
 }
 
 type pgFile struct {
-	*pq.LargeObject
-	id    oid.Oid
+	*pgx.LargeObject
+	id    pgx.Oid
 	size  int64
 	typ   string
 	etag  string
 	mtime time.Time
 
-	tx *sql.Tx
+	tx *pgx.Tx
 }
 
 func (f *pgFile) Size() int64        { return f.size }

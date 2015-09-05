@@ -10,7 +10,7 @@ import (
 	"github.com/flynn/flynn/router/types"
 )
 
-const UniqueConstraintViolation = "23505"
+const UniqueViolation = "23505"
 
 var ErrNotFound = errors.New("router: route not found")
 var ErrConflict = errors.New("router: duplicate route")
@@ -106,7 +106,7 @@ func (d *pgDataStore) Add(r *router.Route) (err error) {
 		).Scan(&r.ID, &r.CreatedAt, &r.UpdatedAt)
 	}
 	r.Type = d.routeType
-	if e, ok := err.(pgx.PgError); ok && e.Code == UniqueConstraintViolation {
+	if e, ok := err.(pgx.PgError); ok && e.Code == UniqueViolation {
 		err = ErrConflict
 	}
 	return err
