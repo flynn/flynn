@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"sort"
 	"sync"
 	"time"
 
@@ -580,21 +581,23 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 	}()
 	var job *Job
 	if req.JobID == "" {
-		// TODO here is where we fix the shitty job stopping bug
+		// TODO this is a terrible solution. We need to actually store the jobs that are pending stops.
+		// Proposed solution: create s.stopped and use that to track stopped jobs. Treat a job as stopped
+		// as soon as the request is executed.
+		formationKey := utils.FormationKey{AppID: req.AppID, ReleaseID: req.ReleaseID}
 		formJobs := NewFormationJobs(s.jobs)
-		formJob := formJobs[utils.FormationKey{AppID: req.AppID, ReleaseID: req.ReleaseID}]
-		typJobs := formJob[req.Type]
-
+		formJob := formJobs[formationKey]
+		typJobs := jobsByStartTime(formJob[req.Type])
 		if len(typJobs) == 0 {
 			return fmt.Errorf("No running jobs of type %q", req.Type)
 		}
-		job = typJobs[0]
-		startedAt := job.startedAt
-		for _, j := range typJobs {
-			if j.startedAt.After(startedAt) {
-				job = j
-				startedAt = j.startedAt
-			}
+		sort.Sort(typJobs)
+
+		typProcs := -s.pendingStops[formationKey][req.Type][""]
+		if typProcs > 0 && typProcs <= len(typJobs) {
+			job = typJobs[typProcs-1]
+		} else {
+			return fmt.Errorf("Unable to stop the job; there are more stops pending than there are jobs. Job count: %v, pending stops: %v", len(typJobs), typProcs)
 		}
 	} else {
 		var ok bool
