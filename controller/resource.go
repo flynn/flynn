@@ -1,11 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
@@ -32,10 +32,14 @@ func (rr *ResourceRepo) Add(r *ct.Resource) error {
 	if err != nil {
 		return err
 	}
+	env, err := json.Marshal(r.Env)
+	if err != nil {
+		return err
+	}
 	err = tx.QueryRow(`INSERT INTO resources (resource_id, provider_id, external_id, env)
 					   VALUES ($1, $2, $3, $4)
 					   RETURNING created_at`,
-		r.ID, r.ProviderID, r.ExternalID, envHstore(r.Env)).Scan(&r.CreatedAt)
+		r.ID, r.ProviderID, r.ExternalID, env).Scan(&r.CreatedAt)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -70,14 +74,6 @@ func (rr *ResourceRepo) Add(r *ct.Resource) error {
 	return tx.Commit()
 }
 
-func envHstore(m map[string]string) hstore.Hstore {
-	res := hstore.Hstore{Map: make(map[string]sql.NullString, len(m))}
-	for k, v := range m {
-		res.Map[k] = sql.NullString{String: v, Valid: true}
-	}
-	return res
-}
-
 func split(s string, sep string) []string {
 	if s == "" {
 		return nil
@@ -87,15 +83,16 @@ func split(s string, sep string) []string {
 
 func scanResource(s postgres.Scanner) (*ct.Resource, error) {
 	r := &ct.Resource{}
-	var env hstore.Hstore
+	var env []byte
 	var appIDs string
 	err := s.Scan(&r.ID, &r.ProviderID, &r.ExternalID, &env, &appIDs, &r.CreatedAt)
 	if err == sql.ErrNoRows {
-		err = ErrNotFound
+		return nil, ErrNotFound
+	} else if err != nil {
+		return nil, err
 	}
-	r.Env = make(map[string]string, len(env.Map))
-	for k, v := range env.Map {
-		r.Env[k] = v.String
+	if len(env) > 0 {
+		err = json.Unmarshal(env, &r.Env)
 	}
 	if appIDs != "" {
 		r.Apps = split(appIDs[1:len(appIDs)-1], ",")

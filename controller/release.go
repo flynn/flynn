@@ -37,7 +37,7 @@ func scanRelease(s postgres.Scanner) (*ct.Release, error) {
 	if artifactID != nil {
 		release.ArtifactID = *artifactID
 	}
-	err = json.Unmarshal(data, release)
+	err = json.Unmarshal(data, &release)
 	return release, err
 }
 

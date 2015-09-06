@@ -1,15 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
@@ -45,14 +44,6 @@ func NewFormationRepo(db *postgres.DB, appRepo *AppRepo, releaseRepo *ReleaseRep
 	}
 }
 
-func procsHstore(m map[string]int) hstore.Hstore {
-	res := hstore.Hstore{Map: make(map[string]sql.NullString, len(m))}
-	for k, v := range m {
-		res.Map[k] = sql.NullString{String: strconv.Itoa(v), Valid: true}
-	}
-	return res
-}
-
 func (r *FormationRepo) validateFormProcs(f *ct.Formation) error {
 	release, err := r.releases.Get(f.ReleaseID)
 	if err != nil {
@@ -79,7 +70,10 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 	if err != nil {
 		return err
 	}
-	procs := procsHstore(f.Processes)
+	procs, err := json.Marshal(f.Processes)
+	if err != nil {
+		return err
+	}
 	err = tx.QueryRow("INSERT INTO formations (app_id, release_id, processes) VALUES ($1, $2, $3) RETURNING created_at, updated_at",
 		f.AppID, f.ReleaseID, procs).Scan(&f.CreatedAt, &f.UpdatedAt)
 	if postgres.IsUniquenessError(err, "") {
@@ -108,7 +102,7 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 
 func scanFormation(s postgres.Scanner) (*ct.Formation, error) {
 	f := &ct.Formation{}
-	var procs hstore.Hstore
+	var procs []byte
 	err := s.Scan(&f.AppID, &f.ReleaseID, &procs, &f.CreatedAt, &f.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -116,14 +110,10 @@ func scanFormation(s postgres.Scanner) (*ct.Formation, error) {
 		}
 		return nil, err
 	}
-	f.Processes = make(map[string]int, len(procs.Map))
-	for k, v := range procs.Map {
-		n, _ := strconv.Atoi(v.String)
-		if n > 0 {
-			f.Processes[k] = n
-		}
+	if len(procs) > 0 {
+		err = json.Unmarshal(procs, &f.Processes)
 	}
-	return f, nil
+	return f, err
 }
 
 func (r *FormationRepo) Get(appID, releaseID string) (*ct.Formation, error) {

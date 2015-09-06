@@ -11,7 +11,6 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq/hstore"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
@@ -60,9 +59,12 @@ func (r *JobRepo) Get(id string) (*ct.Job, error) {
 }
 
 func (r *JobRepo) Add(job *ct.Job) error {
-	meta := metaToHstore(job.Meta)
+	meta, err := json.Marshal(job.Meta)
+	if err != nil {
+		return err
+	}
 	// TODO: actually validate
-	err := r.db.QueryRow("INSERT INTO job_cache (job_id, app_id, release_id, process_type, state, meta) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at, updated_at",
+	err = r.db.QueryRow("INSERT INTO job_cache (job_id, app_id, release_id, process_type, state, meta) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at, updated_at",
 		job.ID, job.AppID, job.ReleaseID, job.Type, job.State, meta).Scan(&job.CreatedAt, &job.UpdatedAt)
 	if postgres.IsUniquenessError(err, "") {
 		err = r.db.QueryRow("UPDATE job_cache SET state = $2, updated_at = now() WHERE job_id = $1 RETURNING created_at, updated_at",
@@ -90,7 +92,7 @@ func (r *JobRepo) Add(job *ct.Job) error {
 
 func scanJob(s postgres.Scanner) (*ct.Job, error) {
 	job := &ct.Job{}
-	var meta hstore.Hstore
+	var meta []byte
 	err := s.Scan(&job.ID, &job.AppID, &job.ReleaseID, &job.Type, &job.State, &meta, &job.CreatedAt, &job.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -98,12 +100,7 @@ func scanJob(s postgres.Scanner) (*ct.Job, error) {
 		}
 		return nil, err
 	}
-	if len(meta.Map) > 0 {
-		job.Meta = make(map[string]string, len(meta.Map))
-		for k, v := range meta.Map {
-			job.Meta[k] = v.String
-		}
-	}
+	err = json.Unmarshal(meta, &job.Meta)
 	return job, nil
 }
 
