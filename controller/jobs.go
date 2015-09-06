@@ -9,8 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
@@ -59,18 +58,14 @@ func (r *JobRepo) Get(id string) (*ct.Job, error) {
 }
 
 func (r *JobRepo) Add(job *ct.Job) error {
-	meta, err := json.Marshal(job.Meta)
-	if err != nil {
-		return err
-	}
 	// TODO: actually validate
-	err = r.db.QueryRow("INSERT INTO job_cache (job_id, app_id, release_id, process_type, state, meta) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at, updated_at",
-		job.ID, job.AppID, job.ReleaseID, job.Type, job.State, meta).Scan(&job.CreatedAt, &job.UpdatedAt)
+	err := r.db.QueryRow("INSERT INTO job_cache (job_id, app_id, release_id, process_type, state, meta) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at, updated_at",
+		job.ID, job.AppID, job.ReleaseID, job.Type, job.State, job.Meta).Scan(&job.CreatedAt, &job.UpdatedAt)
 	if postgres.IsUniquenessError(err, "") {
 		err = r.db.QueryRow("UPDATE job_cache SET state = $2, updated_at = now() WHERE job_id = $1 RETURNING created_at, updated_at",
 			job.ID, job.State).Scan(&job.CreatedAt, &job.UpdatedAt)
-		if e, ok := err.(*pq.Error); ok && e.Code.Name() == "check_violation" {
-			return ct.ValidationError{Field: "state", Message: e.Error()}
+		if postgres.IsCheckViolation(err) {
+			return ct.ValidationError{Field: "state", Message: err.Error()}
 		}
 	}
 	if err != nil {
@@ -79,11 +74,7 @@ func (r *JobRepo) Add(job *ct.Job) error {
 
 	// create a job event, ignoring possible duplications
 	uniqueID := strings.Join([]string{job.ID, job.State}, "|")
-	data, err := json.Marshal(job)
-	if err != nil {
-		return err
-	}
-	err = r.db.Exec("INSERT INTO events (app_id, object_id, unique_id, object_type, data) VALUES ($1, $2, $3, $4, $5)", job.AppID, job.ID, uniqueID, string(ct.EventTypeJob), data)
+	err = r.db.Exec("INSERT INTO events (app_id, object_id, unique_id, object_type, data) VALUES ($1, $2, $3, $4, $5)", job.AppID, job.ID, uniqueID, string(ct.EventTypeJob), job)
 	if postgres.IsUniquenessError(err, "") {
 		return nil
 	}
@@ -92,15 +83,13 @@ func (r *JobRepo) Add(job *ct.Job) error {
 
 func scanJob(s postgres.Scanner) (*ct.Job, error) {
 	job := &ct.Job{}
-	var meta []byte
-	err := s.Scan(&job.ID, &job.AppID, &job.ReleaseID, &job.Type, &job.State, &meta, &job.CreatedAt, &job.UpdatedAt)
+	err := s.Scan(&job.ID, &job.AppID, &job.ReleaseID, &job.Type, &job.State, &job.Meta, &job.CreatedAt, &job.UpdatedAt)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			err = ErrNotFound
 		}
 		return nil, err
 	}
-	err = json.Unmarshal(meta, &job.Meta)
 	return job, nil
 }
 

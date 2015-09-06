@@ -3,7 +3,7 @@ package main
 import (
 	"errors"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
 )
@@ -47,7 +47,7 @@ func (r *ProviderRepo) Add(data interface{}) error {
 func scanProvider(s postgres.Scanner) (*ct.Provider, error) {
 	p := &ct.Provider{}
 	err := s.Scan(&p.ID, &p.Name, &p.URL, &p.CreatedAt, &p.UpdatedAt)
-	if err == sql.ErrNoRows {
+	if err == pgx.ErrNoRows {
 		err = ErrNotFound
 	}
 	return p, err

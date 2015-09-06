@@ -8,9 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strconv"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kavu/go_reuseport"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/discoverd/client"
@@ -113,40 +111,14 @@ func main() {
 	log := logger.New("fn", "main")
 
 	log.Info("connecting to postgres")
-	db, err := postgres.Open("", "")
-	if err != nil {
-		log.Error("error connecting to postgres", "err", err)
-		shutdown.Fatal(err)
-	}
+	db := postgres.Wait(nil, nil)
+
 	log.Info("running DB migrations")
-	if err := migrateDB(db.DB); err != nil {
-		log.Error("error running DB migrations", "err", err)
+	if err := migrateDB(db); err != nil {
 		shutdown.Fatal(err)
 	}
 
-	var pgport int
-	if port := os.Getenv("PGPORT"); port != "" {
-		var err error
-		if pgport, err = strconv.Atoi(port); err != nil {
-			shutdown.Fatal(err)
-		}
-	}
-
-	log.Info("creating postgres connection pool")
-	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
-		ConnConfig: pgx.ConnConfig{
-			Host:     os.Getenv("PGHOST"),
-			Port:     uint16(pgport),
-			Database: os.Getenv("PGDATABASE"),
-			User:     os.Getenv("PGUSER"),
-			Password: os.Getenv("PGPASSWORD"),
-		},
-	})
-	if err != nil {
-		log.Error("error creating postgres connection pool", "err", err)
-		shutdown.Fatal(err)
-	}
-	shutdown.BeforeExit(func() { pgxpool.Close() })
+	shutdown.BeforeExit(func() { db.Close() })
 
 	httpAddr := net.JoinHostPort(os.Getenv("LISTEN_IP"), *httpPort)
 	httpsAddr := net.JoinHostPort(os.Getenv("LISTEN_IP"), *httpsPort)
@@ -155,7 +127,7 @@ func main() {
 			IP:        *tcpIP,
 			startPort: *tcpRangeStart,
 			endPort:   *tcpRangeEnd,
-			ds:        NewPostgresDataStore("tcp", pgxpool),
+			ds:        NewPostgresDataStore("tcp", db.ConnPool),
 			discoverd: discoverd.DefaultClient,
 		},
 		HTTP: &HTTPListener{
@@ -163,7 +135,7 @@ func main() {
 			TLSAddr:   httpsAddr,
 			cookieKey: cookieKey,
 			keypair:   keypair,
-			ds:        NewPostgresDataStore("http", pgxpool),
+			ds:        NewPostgresDataStore("http", db.ConnPool),
 			discoverd: discoverd.DefaultClient,
 		},
 	}

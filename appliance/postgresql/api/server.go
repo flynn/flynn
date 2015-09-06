@@ -28,7 +28,12 @@ func init() {
 func main() {
 	defer shutdown.Exit()
 
-	db := postgres.Wait(serviceName, fmt.Sprintf("dbname=postgres user=flynn password=%s", os.Getenv("PGPASSWORD")))
+	db := postgres.Wait(&postgres.Conf{
+		Service:  serviceName,
+		User:     "flynn",
+		Password: os.Getenv("PGPASSWORD"),
+		Database: "postgres",
+	}, nil)
 	api := &pgAPI{db}
 
 	router := httprouter.New()

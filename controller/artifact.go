@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
@@ -64,7 +64,7 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 func scanArtifact(s postgres.Scanner) (*ct.Artifact, error) {
 	artifact := &ct.Artifact{}
 	err := s.Scan(&artifact.ID, &artifact.Type, &artifact.URI, &artifact.CreatedAt)
-	if err == sql.ErrNoRows {
+	if err == pgx.ErrNoRows {
 		err = ErrNotFound
 	}
 	return artifact, err

@@ -1,11 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
@@ -32,14 +31,10 @@ func (rr *ResourceRepo) Add(r *ct.Resource) error {
 	if err != nil {
 		return err
 	}
-	env, err := json.Marshal(r.Env)
-	if err != nil {
-		return err
-	}
 	err = tx.QueryRow(`INSERT INTO resources (resource_id, provider_id, external_id, env)
 					   VALUES ($1, $2, $3, $4)
 					   RETURNING created_at`,
-		r.ID, r.ProviderID, r.ExternalID, env).Scan(&r.CreatedAt)
+		r.ID, r.ProviderID, r.ExternalID, r.Env).Scan(&r.CreatedAt)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -83,16 +78,12 @@ func split(s string, sep string) []string {
 
 func scanResource(s postgres.Scanner) (*ct.Resource, error) {
 	r := &ct.Resource{}
-	var env []byte
 	var appIDs string
-	err := s.Scan(&r.ID, &r.ProviderID, &r.ExternalID, &env, &appIDs, &r.CreatedAt)
-	if err == sql.ErrNoRows {
+	err := s.Scan(&r.ID, &r.ProviderID, &r.ExternalID, &r.Env, &appIDs, &r.CreatedAt)
+	if err == pgx.ErrNoRows {
 		return nil, ErrNotFound
 	} else if err != nil {
 		return nil, err
-	}
-	if len(env) > 0 {
-		err = json.Unmarshal(env, &r.Env)
 	}
 	if appIDs != "" {
 		r.Apps = split(appIDs[1:len(appIDs)-1], ",")
@@ -128,7 +119,7 @@ func (r *ResourceRepo) ProviderList(providerID string) ([]*ct.Resource, error) {
 	return resourceList(rows)
 }
 
-func resourceList(rows *sql.Rows) ([]*ct.Resource, error) {
+func resourceList(rows *pgx.Rows) ([]*ct.Resource, error) {
 	var resources []*ct.Resource
 	for rows.Next() {
 		resource, err := scanResource(rows)
@@ -163,12 +154,12 @@ func (rr *ResourceRepo) Remove(r *ct.Resource) error {
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec("UPDATE resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL", r.ID)
+	err = tx.Exec("UPDATE resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL", r.ID)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
-	_, err = tx.Exec("UPDATE app_resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL", r.ID)
+	err = tx.Exec("UPDATE app_resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL", r.ID)
 	if err != nil {
 		tx.Rollback()
 		return err

@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 )
 
 func SetupPostgres(dbname string) error {
@@ -18,10 +17,16 @@ func SetupPostgres(dbname string) error {
 		os.Setenv("PGSSLMODE", "disable")
 	}
 
-	db, err := sql.Open("postgres", "dbname=postgres")
+	connConfig := pgx.ConnConfig{
+		Host:     "/var/run/postgresql",
+		Database: "postgres",
+	}
+
+	db, err := pgx.Connect(connConfig)
 	if err != nil {
 		return err
 	}
+
 	defer db.Close()
 	if _, err := db.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbname)); err != nil {
 		return err

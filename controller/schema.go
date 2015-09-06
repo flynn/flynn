@@ -1,11 +1,10 @@
 package main
 
 import (
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/pkg/postgres"
 )
 
-func migrateDB(db *sql.DB) error {
+func migrateDB(db *postgres.DB) error {
 	m := postgres.NewMigrations()
 	m.Add(1,
 		`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`,
@@ -22,8 +21,9 @@ func migrateDB(db *sql.DB) error {
 		`CREATE TABLE releases (
     release_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     artifact_id uuid REFERENCES artifacts (artifact_id),
-    data jsonb NOT NULL,
     meta jsonb,
+    env jsonb,
+    processes jsonb,
     created_at timestamptz NOT NULL DEFAULT now(),
     deleted_at timestamptz
 )`,

@@ -1,11 +1,10 @@
 package main
 
 import (
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/pkg/postgres"
 )
 
-func migrateDB(db *sql.DB) error {
+func migrateDB(db *postgres.DB) error {
 	m := postgres.NewMigrations()
 	m.Add(1,
 		`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`,

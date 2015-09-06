@@ -1,14 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
@@ -70,10 +69,6 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 	if err != nil {
 		return err
 	}
-	procs, err := json.Marshal(f.Processes)
-	if err != nil {
-		return err
-	}
 	scale := &ct.Scale{
 		Processes: f.Processes,
 		ReleaseID: f.ReleaseID,
@@ -83,7 +78,7 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 		scale.PrevProcesses = prevFormation.Processes
 	}
 	err = tx.QueryRow("INSERT INTO formations (app_id, release_id, processes) VALUES ($1, $2, $3) RETURNING created_at, updated_at",
-		f.AppID, f.ReleaseID, procs).Scan(&f.CreatedAt, &f.UpdatedAt)
+		f.AppID, f.ReleaseID, f.Processes).Scan(&f.CreatedAt, &f.UpdatedAt)
 	if postgres.IsUniquenessError(err, "") {
 		tx.Rollback()
 		tx, err = r.db.Begin()
@@ -91,7 +86,7 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 			return err
 		}
 		err = tx.QueryRow("UPDATE formations SET processes = $3, updated_at = now(), deleted_at = NULL WHERE app_id = $1 AND release_id = $2 RETURNING created_at, updated_at",
-			f.AppID, f.ReleaseID, procs).Scan(&f.CreatedAt, &f.UpdatedAt)
+			f.AppID, f.ReleaseID, f.Processes).Scan(&f.CreatedAt, &f.UpdatedAt)
 	}
 	if err != nil {
 		tx.Rollback()
@@ -110,16 +105,12 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 
 func scanFormation(s postgres.Scanner) (*ct.Formation, error) {
 	f := &ct.Formation{}
-	var procs []byte
-	err := s.Scan(&f.AppID, &f.ReleaseID, &procs, &f.CreatedAt, &f.UpdatedAt)
+	err := s.Scan(&f.AppID, &f.ReleaseID, &f.Processes, &f.CreatedAt, &f.UpdatedAt)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			err = ErrNotFound
 		}
 		return nil, err
-	}
-	if len(procs) > 0 {
-		err = json.Unmarshal(procs, &f.Processes)
 	}
 	return f, err
 }
@@ -158,7 +149,7 @@ func (r *FormationRepo) Remove(appID, releaseID string) error {
 	if prevFormation != nil {
 		scale.PrevProcesses = prevFormation.Processes
 	}
-	_, err = tx.Exec("UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now() WHERE app_id = $1 AND release_id = $2", appID, releaseID)
+	err = tx.Exec("UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now() WHERE app_id = $1 AND release_id = $2", appID, releaseID)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -237,7 +228,7 @@ func (r *FormationRepo) startListener() error {
 					r.unsubscribeAll()
 					return
 				}
-				ids := strings.SplitN(n.Extra, ":", 2)
+				ids := strings.SplitN(n.Payload, ":", 2)
 				go r.publish(ids[0], ids[1])
 			case <-r.stopListener:
 				listener.Close()

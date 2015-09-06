@@ -8,8 +8,6 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql/driver"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
@@ -162,14 +160,14 @@ func buildJSONError(err error) *JSONError {
 			Code:    SyntaxErrorCode,
 			Message: "The provided JSON input is invalid",
 		}
-	case *pq.Error:
+	case *pgx.PgError:
 		jsonError.Retry = true
 	case JSONError:
 		jsonError = &v
 	case *JSONError:
 		jsonError = v
 	default:
-		if err == driver.ErrBadConn || err == pgx.ErrDeadConn {
+		if err == pgx.ErrDeadConn {
 			jsonError.Retry = true
 		}
 	}

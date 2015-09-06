@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"reflect"
 	"time"
 
@@ -72,10 +71,9 @@ func (s *S) TestStreamDeployment(c *C) {
 		if e.Status == "" {
 			e.Status = "running"
 		}
-		data, err := json.Marshal(e)
 		c.Assert(err, IsNil)
 		query := "INSERT INTO events (app_id, object_id, object_type, data) VALUES ($1, $2, $3, $4)"
-		c.Assert(s.hc.db.Exec(query, app.ID, e.DeploymentID, string(ct.EventTypeDeployment), data), IsNil)
+		c.Assert(s.hc.db.Exec(query, app.ID, e.DeploymentID, string(ct.EventTypeDeployment), e), IsNil)
 	}
 	createDeploymentEvent(ct.DeploymentEvent{DeploymentID: d.ID, ReleaseID: newRelease.ID})
 
