@@ -39,11 +39,17 @@ func (f *Formation) key() utils.FormationKey {
 func (f *Formation) Update(procs map[string]int) map[string]int {
 	diff := make(map[string]int)
 	for typ, requested := range procs {
+		if typ == "" {
+			continue
+		}
 		current := f.Processes[typ]
 		diff[typ] = requested - current
 	}
 
 	for typ, current := range f.Processes {
+		if typ == "" {
+			continue
+		}
 		if _, ok := procs[typ]; !ok {
 			diff[typ] = -current
 		}
@@ -140,8 +146,9 @@ func (fc pendingJobs) GetProcesses(key utils.FormationKey) map[string]int {
 	procs := make(map[string]int)
 	for typ, hosts := range fc[key] {
 		for _, numJobs := range hosts {
-			if numJobs != 0 {
-				procs[typ] += numJobs
+			procs[typ] += numJobs
+			if procs[typ] == 0 {
+				delete(procs, typ)
 			}
 		}
 	}
