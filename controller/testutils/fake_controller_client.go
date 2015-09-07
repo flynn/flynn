@@ -84,7 +84,7 @@ func (c *FakeControllerClient) PutFormation(formation *ct.Formation) error {
 	releases[formation.ReleaseID] = formation
 
 	for ch := range c.formationStreams {
-		ef, err := utils.ExpandedFormationFromFormation(c, formation)
+		ef, err := utils.ExpandFormation(c, formation)
 		if err == nil {
 			ch <- ef
 		}
@@ -119,7 +119,7 @@ func (c *FakeControllerClient) StreamFormations(since *time.Time, ch chan<- *ct.
 
 	for _, releases := range c.formations {
 		for _, f := range releases {
-			ef, err := utils.ExpandedFormationFromFormation(c, f)
+			ef, err := utils.ExpandFormation(c, f)
 			if err == nil {
 				ch <- ef
 			}
