@@ -99,8 +99,8 @@ func (ts *TestSuite) TestSingleJobStart(c *C) {
 	s := sched.scheduler
 
 	// wait for a rectify jobs event
-	s.log.Info("Waiting for a rectify jobs event")
-	_, err := waitForEvent(events, EventTypeRectifyJobs)
+	c.Log("Waiting for a rectify jobs event")
+	_, err := waitForEvent(events, EventTypeRectify)
 	c.Assert(err, IsNil)
 	e, err := waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
@@ -113,7 +113,7 @@ func (ts *TestSuite) TestSingleJobStart(c *C) {
 	c.Assert(job.ReleaseID, Equals, testReleaseID)
 
 	// Query the scheduler for the same job
-	s.log.Info("Verify that the scheduler has the same job")
+	c.Log("Verify that the scheduler has the same job")
 	jobs := s.Jobs()
 	c.Assert(jobs, HasLen, 1)
 	for _, job := range jobs {
@@ -143,7 +143,7 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	c.Assert(err, IsNil)
 
 	// Test scaling up an existing formation
-	s.log.Info("Test scaling up an existing formation. Wait for formation change and job start")
+	c.Log("Test scaling up an existing formation. Wait for formation change and job start")
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 4}})
 	_, err = waitForEvent(events, EventTypeFormationChange)
 	c.Assert(err, IsNil)
@@ -161,7 +161,7 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	c.Assert(jobs, HasLen, 4)
 
 	// Test scaling down an existing formation
-	s.log.Info("Test scaling down an existing formation. Wait for formation change and job stop")
+	c.Log("Test scaling down an existing formation. Wait for formation change and job stop")
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 1}})
 	_, err = waitForEvent(events, EventTypeFormationChange)
 	c.Assert(err, IsNil)
@@ -175,7 +175,7 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	c.Assert(jobs, HasLen, 1)
 
 	// Test creating a new formation
-	s.log.Info("Test creating a new formation. Wait for formation change and job start")
+	c.Log("Test creating a new formation. Wait for formation change and job start")
 	artifact = &ct.Artifact{ID: random.UUID()}
 	processes := map[string]int{testJobType: testJobCount}
 	release = NewRelease(random.UUID(), artifact, processes)
@@ -194,7 +194,7 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	c.Assert(job.ReleaseID, Equals, release.ID)
 }
 
-func (ts *TestSuite) TestRectifyJobs(c *C) {
+func (ts *TestSuite) TestRectify(c *C) {
 	h := NewFakeHostClient(testHostID)
 	cluster := NewFakeCluster()
 	cluster.SetHosts(map[string]*FakeHostClient{h.ID(): h})
@@ -204,7 +204,7 @@ func (ts *TestSuite) TestRectifyJobs(c *C) {
 	s := sched.scheduler
 
 	// wait for the formation to cascade to the scheduler
-	_, err := waitForEvent(events, EventTypeRectifyJobs)
+	_, err := waitForEvent(events, EventTypeRectify)
 	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
@@ -212,7 +212,7 @@ func (ts *TestSuite) TestRectifyJobs(c *C) {
 	c.Assert(jobs, HasLen, 1)
 
 	// Create an extra job on a host and wait for it to start
-	s.log.Info("Test creating an extra job on the host. Wait for job start in scheduler")
+	c.Log("Test creating an extra job on the host. Wait for job start in scheduler")
 	form := s.formations.Get(testAppID, testReleaseID)
 	host, err := s.Host(testHostID)
 	request := NewJobRequest(form, JobRequestTypeUp, testJobType, "", "")
@@ -224,8 +224,8 @@ func (ts *TestSuite) TestRectifyJobs(c *C) {
 	c.Assert(jobs, HasLen, 2)
 
 	// Verify that the scheduler stops the extra job
-	s.log.Info("Verify that the scheduler stops the extra job")
-	_, err = waitForEvent(events, EventTypeRectifyJobs)
+	c.Log("Verify that the scheduler stops the extra job")
+	_, err = waitForEvent(events, EventTypeRectify)
 	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeJobStop)
 	c.Assert(err, IsNil)
@@ -235,7 +235,7 @@ func (ts *TestSuite) TestRectifyJobs(c *C) {
 	c.Assert(ok, Equals, false)
 
 	// Create a new app, artifact, release, and associated formation
-	s.log.Info("Create a new app, artifact, release, and associated formation")
+	c.Log("Create a new app, artifact, release, and associated formation")
 	app := &ct.App{ID: "test-app-2", Name: "test-app-2"}
 	artifact := &ct.Artifact{ID: "test-artifact-2"}
 	processes := map[string]int{testJobType: testJobCount}
@@ -244,12 +244,12 @@ func (ts *TestSuite) TestRectifyJobs(c *C) {
 	request = NewJobRequest(form, JobRequestTypeUp, testJobType, "", "")
 	config = jobConfig(request, testHostID)
 	// Add the job to the host without adding the formation. Expected error.
-	s.log.Info("Create a new job on the host without adding the formation to the controller. Wait for job start, expect error.")
+	c.Log("Create a new job on the host without adding the formation to the controller. Wait for job start, expect error.")
 	host.AddJob(config)
 	_, err = waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, Not(IsNil))
 
-	s.log.Info("Add the formation to the controller. Wait for formation change.")
+	c.Log("Add the formation to the controller. Wait for formation change.")
 	s.CreateApp(app)
 	s.CreateArtifact(artifact)
 	s.CreateRelease(release)
@@ -267,7 +267,7 @@ func (ts *TestSuite) TestExponentialBackoffNoHosts(c *C) {
 	defer sched.Stop()
 
 	// wait for the formation to cascade to the scheduler
-	_, err := waitForEvent(events, EventTypeRectifyJobs)
+	_, err := waitForEvent(events, EventTypeRectify)
 	c.Assert(err, IsNil)
 	evt, err := waitForEvent(events, EventTypeJobRequest)
 	c.Assert(err.Error(), Equals, "unexpected event error: no hosts found")
@@ -294,11 +294,11 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 	sched := runTestScheduler(cluster, events, true)
 	defer sched.Stop()
 	s := sched.scheduler
-	s.log.Info("Initialize the cluster with 1 host and wait for a job to start on it.")
+	c.Log("Initialize the cluster with 1 host and wait for a job to start on it.")
 	_, err := waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
 
-	s.log.Info("Add a host to the cluster, then create a new app, artifact, release, and associated formation.")
+	c.Log("Add a host to the cluster, then create a new app, artifact, release, and associated formation.")
 	h2 := NewFakeHostClient("host-2")
 	cluster.AddHost(h2)
 	hosts[h2.ID()] = h2
@@ -306,7 +306,7 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 	artifact := &ct.Artifact{ID: "test-artifact-2"}
 	processes := map[string]int{testJobType: 1}
 	release := NewReleaseOmni("test-release-2", artifact, processes, true)
-	s.log.Info("Add the formation to the controller. Wait for formation change and job start on both hosts.")
+	c.Log("Add the formation to the controller. Wait for formation change and job start on both hosts.")
 	s.CreateApp(app)
 	s.CreateArtifact(artifact)
 	s.CreateRelease(release)
@@ -328,7 +328,7 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 	c.Assert(len(hostJobs), Equals, 1)
 
 	h3 := NewFakeHostClient("host-3")
-	s.log.Info("Add a host, wait for omni job start on that host.")
+	c.Log("Add a host, wait for omni job start on that host.")
 	cluster.AddHost(h3)
 	_, err = waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
@@ -338,7 +338,7 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(len(hostJobs), Equals, 1)
 
-	s.log.Info("Crash one of the omni jobs, and wait for it to restart")
+	c.Log("Crash one of the omni jobs, and wait for it to restart")
 	for id := range hostJobs {
 		h3.CrashJob(id)
 	}
@@ -355,11 +355,11 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(len(hostJobs), Equals, 1)
 
-	s.log.Info("Remove one of the hosts. Ensure the cluster recovers correctly", "hosts", hosts)
+	c.Logf("Remove one of the hosts. Ensure the cluster recovers correctly (hosts=%v)", hosts)
 	cluster.SetHosts(hosts)
 	_, err = waitForEvent(events, EventTypeFormationSync)
 	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeRectifyJobs)
+	_, err = waitForEvent(events, EventTypeRectify)
 	c.Assert(err, IsNil)
 	jobs = s.Jobs()
 	c.Assert(jobs, HasLen, 3)
@@ -370,11 +370,11 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(len(hostJobs), Equals, 1)
 
-	s.log.Info("Remove another host. Ensure the cluster recovers correctly", "hosts", hosts)
+	c.Logf("Remove another host. Ensure the cluster recovers correctly (hosts=%v)", hosts)
 	cluster.RemoveHost(testHostID)
 	_, err = waitForEvent(events, EventTypeFormationSync)
 	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeRectifyJobs)
+	_, err = waitForEvent(events, EventTypeRectify)
 	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
@@ -426,7 +426,7 @@ func (ts *TestSuite) TestMultipleSchedulers(c *C) {
 
 	// Test scaling up an existing formation
 	form := &ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 2}}
-	s2.log.Info("Test scaling up an existing formation. Wait for formation change and job start")
+	c.Log("Test scaling up an existing formation. Wait for formation change and job start")
 	s1.PutFormation(form)
 	s2.PutFormation(form)
 	_, err = waitForEvent(events1, EventTypeFormationChange)
