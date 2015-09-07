@@ -46,12 +46,12 @@ type Scheduler struct {
 	listeners map[chan Event]struct{}
 	listenMtx sync.RWMutex
 
-	stop     chan interface{}
+	stop     chan struct{}
 	stopOnce sync.Once
 
-	rectifyJobs     chan interface{}
-	syncJobs        chan interface{}
-	syncFormations  chan interface{}
+	rectifyJobs     chan struct{}
+	syncJobs        chan struct{}
+	syncFormations  chan struct{}
 	hostChange      chan *discoverd.Event
 	formationChange chan *ct.ExpandedFormation
 	jobRequests     chan *JobRequest
@@ -72,10 +72,10 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Sched
 		formations:       make(Formations),
 		hostEvents:       make(chan *host.Event, eventBufferSize),
 		listeners:        make(map[chan Event]struct{}),
-		stop:             make(chan interface{}),
-		rectifyJobs:      make(chan interface{}, 1),
-		syncJobs:         make(chan interface{}, 1),
-		syncFormations:   make(chan interface{}, 1),
+		stop:             make(chan struct{}),
+		rectifyJobs:      make(chan struct{}, 1),
+		syncJobs:         make(chan struct{}, 1),
+		syncFormations:   make(chan struct{}, 1),
 		formationChange:  make(chan *ct.ExpandedFormation, eventBufferSize),
 		hostChange:       make(chan *discoverd.Event, eventBufferSize),
 		jobRequests:      make(chan *JobRequest, eventBufferSize),
@@ -781,7 +781,7 @@ func (s *Scheduler) startHTTPServer(port string) {
 	}
 }
 
-func tickChannel(ch chan interface{}, d time.Duration) {
+func tickChannel(ch chan struct{}, d time.Duration) {
 	ticker := time.Tick(d)
 
 	go func() {
@@ -791,7 +791,7 @@ func tickChannel(ch chan interface{}, d time.Duration) {
 	}()
 }
 
-func triggerChan(ch chan interface{}) {
+func triggerChan(ch chan struct{}) {
 	select {
 	case ch <- struct{}{}:
 	default:
