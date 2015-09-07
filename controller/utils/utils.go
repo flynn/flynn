@@ -95,20 +95,20 @@ func NewFormationKey(appID, releaseID string) FormationKey {
 	return FormationKey{AppID: appID, ReleaseID: releaseID}
 }
 
-func ExpandedFormationFromFormation(c ControllerClient, f *ct.Formation) (*ct.ExpandedFormation, error) {
+func ExpandFormation(c ControllerClient, f *ct.Formation) (*ct.ExpandedFormation, error) {
 	app, err := c.GetApp(f.AppID)
 	if err != nil {
-		return nil, fmt.Errorf("Error getting app. Error: %v", err)
+		return nil, fmt.Errorf("error getting app: %s", err)
 	}
 
 	release, err := c.GetRelease(f.ReleaseID)
 	if err != nil {
-		return nil, fmt.Errorf("Error getting release. Error: %v", err)
+		return nil, fmt.Errorf("error getting release: %s", err)
 	}
 
 	artifact, err := c.GetArtifact(release.ArtifactID)
 	if err != nil {
-		return nil, fmt.Errorf("Error getting artifact. Error: %v", err)
+		return nil, fmt.Errorf("error getting artifact: %s", err)
 	}
 
 	procs := make(map[string]int)
