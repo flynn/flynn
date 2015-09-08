@@ -104,10 +104,7 @@ func (ts *TestSuite) TestSingleJobStart(c *C) {
 	c.Assert(err, IsNil)
 	e, err := waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
-	event, ok := e.(*JobStartEvent)
-	c.Assert(ok, Equals, true)
-	c.Assert(event.Job, NotNil)
-	job := event.Job
+	job := checkJobEvent(c, e)
 	c.Assert(job.Type, Equals, testJobType)
 	c.Assert(job.AppID, Equals, testAppID)
 	c.Assert(job.ReleaseID, Equals, testReleaseID)
@@ -149,7 +146,7 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	c.Assert(err, IsNil)
 	e, err := waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
-	job := checkJobStartEvent(c, e)
+	job := checkJobEvent(c, e)
 	c.Assert(job.Type, Equals, testJobType)
 	c.Assert(job.AppID, Equals, app.ID)
 	c.Assert(job.ReleaseID, Equals, testReleaseID)
@@ -188,7 +185,7 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	c.Assert(len(s.formations), Equals, 2)
 	e, err = waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
-	job = checkJobStartEvent(c, e)
+	job = checkJobEvent(c, e)
 	c.Assert(job.Type, Equals, testJobType)
 	c.Assert(job.AppID, Equals, app.ID)
 	c.Assert(job.ReleaseID, Equals, release.ID)
@@ -206,9 +203,11 @@ func (ts *TestSuite) TestRectify(c *C) {
 	// wait for the formation to cascade to the scheduler
 	_, err := waitForEvent(events, EventTypeRectify)
 	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeJobStart)
+	e, err := waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
-	jobs := s.Jobs()
+	job := checkJobEvent(c, e)
+	jobs := make(map[string]*Job)
+	jobs[job.JobID] = job
 	c.Assert(jobs, HasLen, 1)
 
 	// Create an extra job on a host and wait for it to start
@@ -218,21 +217,22 @@ func (ts *TestSuite) TestRectify(c *C) {
 	request := NewJobRequest(form, JobRequestTypeUp, testJobType, "", "")
 	config := jobConfig(request, testHostID)
 	host.AddJob(config)
-	_, err = waitForEvent(events, EventTypeJobStart)
+	e, err = waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
-	jobs = s.Jobs()
+	job = checkJobEvent(c, e)
+	jobs[job.JobID] = job
 	c.Assert(jobs, HasLen, 2)
 
 	// Verify that the scheduler stops the extra job
 	c.Log("Verify that the scheduler stops the extra job")
 	_, err = waitForEvent(events, EventTypeRectify)
 	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeJobStop)
+	e, err = waitForEvent(events, EventTypeJobStop)
 	c.Assert(err, IsNil)
-	jobs = s.Jobs()
+	job = checkJobEvent(c, e)
+	c.Assert(job.JobID, Equals, config.ID)
+	delete(jobs, job.JobID)
 	c.Assert(jobs, HasLen, 1)
-	_, ok := jobs[config.ID]
-	c.Assert(ok, Equals, false)
 
 	// Create a new app, artifact, release, and associated formation
 	c.Log("Create a new app, artifact, release, and associated formation")
@@ -269,13 +269,9 @@ func (ts *TestSuite) TestExponentialBackoffNoHosts(c *C) {
 	// wait for the formation to cascade to the scheduler
 	_, err := waitForEvent(events, EventTypeRectify)
 	c.Assert(err, IsNil)
-	evt, err := waitForEvent(events, EventTypeJobRequest)
+	evt, err := waitDurationForEvent(events, EventTypeJobRequest, 1*time.Second+50*time.Millisecond)
 	c.Assert(err.Error(), Equals, "unexpected event error: no hosts found")
 	req := checkJobRequestEvent(c, evt)
-	c.Assert(req.restarts, Equals, uint(1))
-	evt, err = waitDurationForEvent(events, EventTypeJobRequest, 1*time.Second+50*time.Millisecond)
-	c.Assert(err.Error(), Equals, "unexpected event error: no hosts found")
-	req = checkJobRequestEvent(c, evt)
 	c.Assert(req.restarts, Equals, uint(2))
 	evt, err = waitDurationForEvent(events, EventTypeJobRequest, 2*time.Second+50*time.Millisecond)
 	c.Assert(err.Error(), Equals, "unexpected event error: no hosts found")
@@ -346,8 +342,6 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(len(hostJobs), Equals, 0)
 	_, err = waitForEvent(events, EventTypeJobStop)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeJobRequest)
 	c.Assert(err, IsNil)
 	_, err = waitForEvent(events, EventTypeJobStart)
 	c.Assert(err, IsNil)
@@ -446,8 +440,8 @@ func (ts *TestSuite) TestMultipleSchedulers(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func checkJobStartEvent(c *C, e Event) *Job {
-	event, ok := e.(*JobStartEvent)
+func checkJobEvent(c *C, e Event) *Job {
+	event, ok := e.(*JobEvent)
 	c.Assert(ok, Equals, true)
 	c.Assert(event.Job, NotNil)
 	return event.Job

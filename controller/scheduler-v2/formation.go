@@ -167,7 +167,7 @@ func (fc pendingJobs) GetHostJobCounts(key utils.FormationKey, typ string) map[s
 	return counts
 }
 
-func (fc pendingJobs) hasPendingJobs(j *Job) bool {
+func (fc pendingJobs) HasStarts(j *Job) bool {
 	if j == nil || j.Formation == nil {
 		return false
 	}
@@ -178,19 +178,5 @@ func (fc pendingJobs) hasPendingJobs(j *Job) bool {
 	if _, ok := fc[key][j.Type]; !ok {
 		return false
 	}
-	return true
-}
-
-func (fc pendingJobs) HasStarts(j *Job) bool {
-	if fc.hasPendingJobs(j) {
-		return fc[j.Formation.key()][j.Type][j.HostID] > 0
-	}
-	return false
-}
-
-func (fc pendingJobs) HasStops(j *Job) bool {
-	if fc.hasPendingJobs(j) {
-		return fc[j.Formation.key()][j.Type][j.HostID] < 0
-	}
-	return false
+	return fc[j.Formation.key()][j.Type][j.HostID] > 0
 }
