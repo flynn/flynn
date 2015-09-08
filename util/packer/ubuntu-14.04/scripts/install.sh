@@ -138,7 +138,8 @@ enable_cgroups() {
 create_groups() {
   groupadd docker
   groupadd fuse || true
-  usermod -a -G docker,fuse "${SUDO_USER}"
+  groupadd libvirtd || true
+  usermod -a -G docker,fuse,libvirtd "${SUDO_USER}"
 }
 
 add_apt_sources() {
