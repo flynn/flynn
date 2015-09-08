@@ -118,7 +118,6 @@ func (*TestSuite) TestPendingJobs(c *C) {
 	procs = pj.GetProcesses(key)
 	c.Assert(procs["web"], Equals, 2)
 	c.Assert(pj.HasStarts(j), Equals, true)
-	c.Assert(pj.HasStops(j), Equals, false)
 	hostJobs = pj.GetHostJobCounts(key, "web")
 	c.Assert(hostJobs, DeepEquals, map[string]int{"": 1, "host-1": 1, "host-2": -1, "host-3": 1})
 	pj.RemoveJob(j)
@@ -129,7 +128,6 @@ func (*TestSuite) TestPendingJobs(c *C) {
 	c.Assert(hostJobs, DeepEquals, map[string]int{"": 1, "host-1": 1, "host-2": -1, "host-3": 0})
 	pj.RemoveJob(j)
 	c.Assert(pj.HasStarts(j), Equals, false)
-	c.Assert(pj.HasStops(j), Equals, true)
 	j.HostID = ""
 	c.Assert(pj.HasStarts(j), Equals, true)
 	hostJobs = pj.GetHostJobCounts(key, "web")
