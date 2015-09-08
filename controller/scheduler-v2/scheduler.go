@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"reflect"
-	"sort"
 	"sync"
 	"time"
 
@@ -39,8 +38,8 @@ type Scheduler struct {
 	formations    Formations
 	hostStreams   map[string]stream.Stream
 	jobs          map[string]*Job
+	stoppedJobs   map[string]*Job
 	pendingStarts pendingJobs
-	pendingStops  pendingJobs
 
 	jobEvents chan *host.Event
 
@@ -67,8 +66,8 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Sched
 		backoffPeriod:    getBackoffPeriod(),
 		hostStreams:      make(map[string]stream.Stream),
 		jobs:             make(map[string]*Job),
+		stoppedJobs:      make(map[string]*Job),
 		pendingStarts:    make(pendingJobs),
-		pendingStops:     make(pendingJobs),
 		formations:       make(Formations),
 		jobEvents:        make(chan *host.Event, eventBufferSize),
 		listeners:        make(map[chan Event]struct{}),
@@ -290,22 +289,21 @@ func (s *Scheduler) Rectify() {
 
 	pending := NewPendingJobs(s.jobs)
 	pending.Update(s.pendingStarts)
-	pending.Update(s.pendingStops)
 
 	for key := range pending {
-		log = log.New("app.id", key.AppID, "release.id", key.ReleaseID)
-		log.Info("rectifying formation")
+		formationLog := log.New("app.id", key.AppID, "release.id", key.ReleaseID)
+		formationLog.Info("rectifying formation")
 		formation, ok := s.formations[key]
 		if !ok {
-			log.Info("unknown formation, getting from the controller")
+			formationLog.Info("unknown formation, getting from the controller")
 			cf, err := s.GetFormation(key.AppID, key.ReleaseID)
 			if err != nil {
-				log.Error("error getting formation", "err", err)
+				formationLog.Error("error getting formation", "err", err)
 				continue
 			}
 			formation, err = s.updateFormation(cf)
 			if err != nil {
-				log.Error("error updating formation", "err", err)
+				formationLog.Error("error updating formation", "err", err)
 				continue
 			}
 		}
@@ -314,13 +312,13 @@ func (s *Scheduler) Rectify() {
 		actual := pending.GetProcesses(key)
 
 		if len(actual) == 0 && len(expected) == 0 || reflect.DeepEqual(actual, expected) {
-			log.Info("formation in correct state")
+			formationLog.Info("formation in correct state", "expected", expected, "actual", actual)
 			continue
 		}
 		// TODO: make this formation.Diff(actual)?
 		formation.Processes = actual
 		diff := formation.Update(expected)
-		log.Info("formation in incorrect state", "expected", expected, "actual", actual, "diff", diff)
+		formationLog.Info("formation in incorrect state", "expected", expected, "actual", actual, "diff", diff)
 		s.sendDiffRequests(formation, diff)
 	}
 
@@ -339,7 +337,13 @@ func (s *Scheduler) HandleFormationChange(ef *ct.ExpandedFormation) {
 		s.sendEvent(NewEvent(EventTypeFormationChange, err, nil))
 	}()
 
-	log := logger.New("fn", "HandleFormationChange", "app.id", ef.App.ID, "release.id", ef.Release.ID)
+	log := logger.New("fn", "HandleFormationChange")
+	if ef.App != nil {
+		log = log.New("app.id", ef.App.ID)
+	}
+	if ef.Release != nil {
+		log = log.New("release.id", ef.Release.ID)
+	}
 	log.Info("handling formation change")
 	_, err = s.changeFormation(ef)
 	if err != nil {
@@ -354,8 +358,6 @@ func (s *Scheduler) HandleFormationChange(ef *ct.ExpandedFormation) {
 
 func (s *Scheduler) HandleJobRequest(req *JobRequest) {
 	log := logger.New("fn", "HandleJobRequest", "req.id", req.JobID, "req.type", req.RequestType)
-
-	// Ensure that we've cleared this request from pendingJobs
 
 	if !s.isLeader {
 		log.Warn("ignoring job request as not service leader")
@@ -373,9 +375,10 @@ func (s *Scheduler) HandleJobRequest(req *JobRequest) {
 	log.Info("handling job request")
 	switch req.RequestType {
 	case JobRequestTypeUp:
+		// startJob sets the HostID on the request if successful
+		s.pendingStarts.RemoveJob(req.Job)
 		err = s.startJob(req)
-	case JobRequestTypeDown:
-		err = s.stopJob(req)
+		s.pendingStarts.AddJob(req.Job)
 	default:
 		err = fmt.Errorf("unknown job request type: %s", req.RequestType)
 	}
@@ -391,13 +394,13 @@ func (s *Scheduler) RunPutJobs() {
 			log.Info("stopping job persistence loop")
 			return
 		}
-		log = log.New("job.id", job.ID, "job.state", job.State)
-		log.Info("persisting job")
+		jobLog := log.New("job.id", job.ID, "job.state", job.State)
+		jobLog.Info("persisting job")
 		err := strategy.Run(func() error {
 			return s.PutJob(job)
 		})
 		if err != nil {
-			log.Error("error persisting job", "err", err)
+			jobLog.Error("error persisting job", "err", err)
 		}
 	}
 }
@@ -426,15 +429,16 @@ func (s *Scheduler) sendDiffRequests(f *Formation, diff map[string]int) {
 			log.Info(fmt.Sprintf("requesting %d new job(s) of type %s", n, typ))
 			for i := 0; i < n; i++ {
 				req := NewJobRequest(f, JobRequestTypeUp, typ, "", "")
+				s.startJob(req)
+				// startJob sets the HostID on the request if successful,
+				// otherwise the HostID will be blank
 				s.pendingStarts.AddJob(req.Job)
-				s.jobRequests <- req
 			}
 		} else if n < 0 {
 			log.Info(fmt.Sprintf("requesting removal of %d job(s) of type %s", -n, typ))
 			for i := 0; i < -n; i++ {
 				req := NewJobRequest(f, JobRequestTypeDown, typ, "", "")
-				s.pendingStops.RemoveJob(req.Job)
-				s.jobRequests <- req
+				s.stopJob(req)
 			}
 		}
 	}
@@ -497,6 +501,8 @@ func (s *Scheduler) unfollowHost(id string) {
 func (s *Scheduler) HandleHostEvent(e *discoverd.Event) {
 	log := logger.New("fn", "HandleHostEvent")
 
+	// Sometimes events are missing e.Instance or e.Instance.Meta,
+	// in which case we can get a panic by not checking it first
 	if e == nil || e.Instance == nil || e.Instance.Meta == nil {
 		log.Error(fmt.Sprintf("ignoring invalid host event: %+v", e))
 		return
@@ -544,7 +550,7 @@ func (s *Scheduler) HandleJobEvent(e *host.Event) {
 	case host.JobEventStart:
 		s.sendEvent(NewEvent(EventTypeJobStart, err, job))
 	case host.JobEventStop:
-		s.sendEvent(NewEvent(EventTypeJobStop, err, nil))
+		s.sendEvent(NewEvent(EventTypeJobStop, err, job))
 	}
 
 	if err == nil {
@@ -568,22 +574,24 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) (*Job, error) {
 
 	j, ok := s.jobs[job.ID]
 	if !ok {
-		log.Info("job is new, looking up formation")
-		f := s.formations.Get(appID, releaseID)
-		if f == nil {
-			log.Info("job is from new formation, getting formation from controller")
-			cf, err := s.GetFormation(appID, releaseID)
-			if err != nil {
-				log.Error("error getting formation", "err", err)
-				return nil, err
+		if j, ok = s.stoppedJobs[job.ID]; !ok {
+			log.Info("job is new, looking up formation")
+			f := s.formations.Get(appID, releaseID)
+			if f == nil {
+				log.Info("job is from new formation, getting formation from controller")
+				cf, err := s.GetFormation(appID, releaseID)
+				if err != nil {
+					log.Error("error getting formation", "err", err)
+					return nil, err
+				}
+				f, err = s.updateFormation(cf)
+				if err != nil {
+					log.Error("error updating formation", "err", err)
+					return nil, err
+				}
 			}
-			f, err = s.updateFormation(cf)
-			if err != nil {
-				log.Error("error updating formation", "err", err)
-				return nil, err
-			}
+			j = NewJob(f, jobType, activeJob.HostID, job.ID, activeJob.StartedAt)
 		}
-		j = NewJob(f, jobType, activeJob.HostID, job.ID, activeJob.StartedAt)
 	}
 	s.SaveJob(j, appName, activeJob.Status, utils.JobMetaFromMetadata(job.Metadata))
 	return j, nil
@@ -629,7 +637,6 @@ func (s *Scheduler) startJob(req *JobRequest) (err error) {
 	log.Info("starting job")
 	defer func() {
 		if err != nil {
-			s.pendingStarts.RemoveJob(req.Job)
 			s.scheduleJobRequest(req)
 			log.Error("error starting job", "err", err)
 		}
@@ -658,9 +665,7 @@ func (s *Scheduler) startJob(req *JobRequest) (err error) {
 		log.Error("error requesting host to add job", "err", err)
 		return err
 	}
-	s.pendingStarts.RemoveJob(req.Job)
 	req.HostID = host.ID()
-	s.pendingStarts.AddJob(req.Job)
 	return nil
 }
 
@@ -675,27 +680,19 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 
 	var job *Job
 	if req.JobID == "" {
-		// TODO this is a terrible solution. We need to actually store the jobs that are pending stops.
-		// Proposed solution: create s.stopped and use that to track stopped jobs. Treat a job as stopped
-		// as soon as the request is executed.
-		log.Info("no job ID, stopping most recent job")
 		formationKey := utils.FormationKey{AppID: req.AppID, ReleaseID: req.ReleaseID}
 		formJobs := NewFormationJobs(s.jobs)
-		formJob := formJobs[formationKey]
-		typJobs := jobsByStartTime(formJob[req.Type])
+		typJobs := formJobs[formationKey][req.Type]
 		if len(typJobs) == 0 {
 			e := fmt.Sprintf("no %s jobs running", req.Type)
 			log.Error(e)
 			return errors.New(e)
 		}
-		sort.Sort(typJobs)
-
-		// TODO: log what is happening here
-		typProcs := -s.pendingStops[formationKey][req.Type][""]
-		if typProcs > 0 && typProcs <= len(typJobs) {
-			job = typJobs[typProcs-1]
-		} else {
-			return fmt.Errorf("Unable to stop the job; there are more stops pending than there are jobs. Job count: %v, pending stops: %v", len(typJobs), typProcs)
+		job = typJobs[0]
+		for _, j := range typJobs {
+			if j.startedAt.After(job.startedAt) {
+				job = j
+			}
 		}
 	} else {
 		var ok bool
@@ -720,9 +717,8 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 		log.Error("error requesting host to stop job", "err", err)
 		return err
 	}
-	s.pendingStops.AddJob(req.Job)
-	req.HostID = host.ID()
-	s.pendingStops.RemoveJob(req.Job)
+	s.stoppedJobs[job.JobID] = job
+	delete(s.jobs, job.JobID)
 	return nil
 }
 
@@ -751,7 +747,6 @@ func (s *Scheduler) findBestHost(formation *Formation, typ, hostID string) (util
 
 	pending := NewPendingJobs(s.jobs)
 	pending.Update(s.pendingStarts)
-	pending.Update(s.pendingStops)
 	counts := pending.GetHostJobCounts(formation.key(), typ)
 	var minCount int = math.MaxInt32
 	for _, host := range hosts {
@@ -819,14 +814,19 @@ func (s *Scheduler) SaveJob(job *Job, appName string, status host.JobStatus, met
 		s.handleJobStart(job)
 		controllerState = "up"
 	default:
-		s.handleJobStop(job)
+		delete(s.jobs, job.JobID)
+		delete(s.stoppedJobs, job.JobID)
 	}
 	s.putJobs <- controllerJobFromSchedulerJob(job, controllerState, metadata)
 	return job, nil
 }
 
 func (s *Scheduler) Jobs() map[string]*Job {
-	return s.jobs
+	jobs := make(map[string]*Job)
+	for id, j := range s.jobs {
+		jobs[id] = j
+	}
+	return jobs
 }
 
 func (s *Scheduler) expandOmni(ef *ct.ExpandedFormation) {
@@ -841,9 +841,7 @@ func (s *Scheduler) expandOmni(ef *ct.ExpandedFormation) {
 
 func (s *Scheduler) scheduleJobRequest(req *JobRequest) {
 	backoff := s.getBackoffDuration(req.restarts)
-	req.startedAt = time.Now()
 	req.restarts += 1
-	s.pendingStarts.AddJob(req.Job)
 	time.AfterFunc(backoff, func() {
 		s.jobRequests <- req
 	})
@@ -870,16 +868,6 @@ func (s *Scheduler) handleJobStart(job *Job) {
 		s.pendingStarts.RemoveJob(job)
 	}
 	s.jobs[job.JobID] = job
-}
-
-func (s *Scheduler) handleJobStop(job *Job) {
-	log := logger.New("fn", "handleJobStop", "job.id", job.JobID)
-	log.Info("removing job from in-memory state")
-	_, ok := s.jobs[job.JobID]
-	if s.isLeader && ok && s.pendingStops.HasStops(job) {
-		s.pendingStops.AddJob(job)
-	}
-	delete(s.jobs, job.JobID)
 }
 
 func (s *Scheduler) handleLeaderStream(leaders chan *discoverd.Instance, selfAddr string) {
@@ -1006,7 +994,7 @@ func (de *DefaultEvent) Type() EventType {
 	return de.typ
 }
 
-type JobStartEvent struct {
+type JobEvent struct {
 	Event
 	Job *Job
 }
@@ -1023,9 +1011,11 @@ type JobRequestEvent struct {
 
 func NewEvent(typ EventType, err error, data interface{}) Event {
 	switch typ {
+	case EventTypeJobStop:
+		fallthrough
 	case EventTypeJobStart:
 		job, _ := data.(*Job)
-		return &JobStartEvent{Event: &DefaultEvent{err: err, typ: typ}, Job: job}
+		return &JobEvent{Event: &DefaultEvent{err: err, typ: typ}, Job: job}
 	case EventTypeJobRequest:
 		req, _ := data.(*JobRequest)
 		return &JobRequestEvent{Event: &DefaultEvent{err: err, typ: typ}, Request: req}
