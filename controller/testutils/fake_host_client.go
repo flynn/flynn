@@ -3,6 +3,7 @@ package testutils
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
@@ -32,6 +33,7 @@ type FakeHostClient struct {
 	cluster       *FakeCluster
 	volumes       map[string]*volume.Info
 	eventChannels map[chan<- *host.Event]struct{}
+	jobsMtx       sync.RWMutex
 }
 
 func (c *FakeHostClient) ID() string { return c.hostID }
@@ -45,10 +47,18 @@ func (c *FakeHostClient) Attach(req *host.AttachReq, wait bool) (cluster.AttachC
 }
 
 func (c *FakeHostClient) ListJobs() (map[string]host.ActiveJob, error) {
-	return c.Jobs, nil
+	c.jobsMtx.RLock()
+	defer c.jobsMtx.RUnlock()
+	jobs := make(map[string]host.ActiveJob)
+	for id, j := range c.Jobs {
+		jobs[id] = j
+	}
+	return jobs, nil
 }
 
 func (c *FakeHostClient) AddJob(job *host.Job) error {
+	c.jobsMtx.Lock()
+	defer c.jobsMtx.Unlock()
 	j := host.ActiveJob{Job: job, HostID: c.hostID, StartedAt: time.Now()}
 	c.Jobs[job.ID] = j
 
@@ -63,6 +73,8 @@ func (c *FakeHostClient) AddJob(job *host.Job) error {
 }
 
 func (c *FakeHostClient) GetJob(id string) (*host.ActiveJob, error) {
+	c.jobsMtx.RLock()
+	defer c.jobsMtx.RUnlock()
 	job, ok := c.Jobs[id]
 	if !ok {
 		return nil, fmt.Errorf("unable to find job with ID %q", id)
@@ -71,6 +83,8 @@ func (c *FakeHostClient) GetJob(id string) (*host.ActiveJob, error) {
 }
 
 func (c *FakeHostClient) StopJob(id string) error {
+	c.jobsMtx.Lock()
+	defer c.jobsMtx.Unlock()
 	c.stopped[id] = true
 	job, ok := c.Jobs[id]
 	if ok {
@@ -103,6 +117,8 @@ func (c *FakeHostClient) stop(id string) error {
 }
 
 func (c *FakeHostClient) CrashJob(id string) error {
+	c.jobsMtx.Lock()
+	defer c.jobsMtx.Unlock()
 	c.stopped[id] = true
 	job, ok := c.Jobs[id]
 	if ok {
@@ -115,6 +131,8 @@ func (c *FakeHostClient) CrashJob(id string) error {
 }
 
 func (c *FakeHostClient) IsStopped(id string) bool {
+	c.jobsMtx.RLock()
+	defer c.jobsMtx.RUnlock()
 	return c.stopped[id]
 }
 
