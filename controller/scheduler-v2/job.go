@@ -65,9 +65,3 @@ func controllerJobFromSchedulerJob(job *Job, state string, metadata map[string]s
 		Meta:      metadata,
 	}
 }
-
-type jobsByStartTime []*Job
-
-func (a jobsByStartTime) Len() int           { return len(a) }
-func (a jobsByStartTime) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a jobsByStartTime) Less(i, j int) bool { return a[i].startedAt.Before(a[j].startedAt) }
