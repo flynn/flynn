@@ -877,8 +877,12 @@ func (s *Scheduler) getHosts() ([]utils.HostClient, error) {
 
 	// Ensure that we're only following hosts that we can discover
 	knownHosts := make(map[string]struct{})
-	for id := range s.hostStreams {
-		knownHosts[id] = struct{}{}
+	for id, hostStream := range s.hostStreams {
+		if hostStream.Err() == nil {
+			knownHosts[id] = struct{}{}
+		} else {
+			s.unfollowHost(id)
+		}
 	}
 	for _, h := range hosts {
 		delete(knownHosts, h.ID())
