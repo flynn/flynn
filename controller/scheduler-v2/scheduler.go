@@ -675,29 +675,35 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) (*Job, error) {
 	log := logger.New("fn", "handleActiveJob", "job.id", job.ID, "app.id", appID, "release.id", releaseID, "job.type", jobType)
 	log.Info("handling active job")
 
-	j, ok := s.jobs[job.ID]
+	var j *Job
+	var ok bool
+	var err error
+	defer func() {
+		s.SaveJob(j, appName, activeJob.Status, utils.JobMetaFromMetadata(job.Metadata))
+	}()
+	j, ok = s.jobs[job.ID]
 	if !ok {
+		var f *Formation
 		if j, ok = s.stoppedJobs[job.ID]; !ok {
 			log.Info("job is new, looking up formation")
-			f := s.formations.Get(appID, releaseID)
+			f = s.formations.Get(appID, releaseID)
 			if f == nil {
 				log.Info("job is from new formation, getting formation from controller")
-				cf, err := s.GetFormation(appID, releaseID)
-				if err != nil {
+				var cf *ct.Formation
+				cf, err = s.GetFormation(appID, releaseID)
+				if err == nil {
+					f, err = s.updateFormation(cf)
+					if err != nil {
+						log.Error("error updating formation", "err", err)
+					}
+				} else {
 					log.Error("error getting formation", "err", err)
-					return nil, err
-				}
-				f, err = s.updateFormation(cf)
-				if err != nil {
-					log.Error("error updating formation", "err", err)
-					return nil, err
 				}
 			}
-			j = NewJob(f, jobType, activeJob.HostID, job.ID, activeJob.StartedAt)
 		}
+		j = NewJob(f, appID, releaseID, jobType, activeJob.HostID, job.ID, activeJob.StartedAt)
 	}
-	s.SaveJob(j, appName, activeJob.Status, utils.JobMetaFromMetadata(job.Metadata))
-	return j, nil
+	return j, err
 }
 
 func (s *Scheduler) changeFormation(ef *ct.ExpandedFormation) (*Formation, error) {
@@ -921,6 +927,9 @@ func (s *Scheduler) SaveJob(job *Job, appName string, status host.JobStatus, met
 	case host.StatusRunning:
 		s.handleJobStart(job)
 		controllerState = "up"
+	case host.StatusCrashed:
+		controllerState = "crashed"
+		fallthrough
 	default:
 		delete(s.jobs, job.JobID)
 		delete(s.stoppedJobs, job.JobID)
@@ -972,6 +981,9 @@ func (s *Scheduler) getBackoffDuration(restarts uint) time.Duration {
 func (s *Scheduler) handleJobStart(job *Job) {
 	log := logger.New("fn", "handleJobStart", "job.id", job.JobID)
 	log.Info("adding job to in-memory state")
+	if job.Formation == nil {
+		return
+	}
 	_, ok := s.jobs[job.JobID]
 	if s.isLeader && !ok && s.pendingStarts.HasStarts(job) {
 		s.pendingStarts.RemoveJob(job)
