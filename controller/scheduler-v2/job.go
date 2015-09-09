@@ -4,7 +4,7 @@ import (
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
-	host "github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/host/types"
 )
 
 type JobRequestType string
