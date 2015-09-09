@@ -23,7 +23,10 @@ import (
 	"github.com/flynn/flynn/pkg/stream"
 )
 
-const eventBufferSize int = 1000
+const (
+	eventBufferSize int = 1000
+	serviceName         = "controller-scheduler"
+)
 
 var logger = log15.New("component", "scheduler")
 
@@ -95,23 +98,16 @@ func main() {
 	s := NewScheduler(clusterClient, controllerClient)
 
 	log.Info("registering with service discovery")
-	hb, err := discoverd.AddServiceAndRegister("controller-scheduler", ":"+os.Getenv("PORT"))
+	hb, err := discoverd.AddServiceAndRegister(serviceName, ":"+os.Getenv("PORT"))
 	if err != nil {
 		log.Error("error registering with service discovery", "err", err)
 		shutdown.Fatal(err)
 	}
 	shutdown.BeforeExit(func() { hb.Close() })
 
-	log.Info("watching service discovery leaders")
-	leaders := make(chan *discoverd.Instance)
-	// TODO: reconect this stream on error
-	stream, err := discoverd.NewService("controller-scheduler").Leaders(leaders)
-	if err != nil {
-		log.Error("error watching service discovery leaders", "err", err)
+	if err := watchServiceLeaders(s, hb.Addr()); err != nil {
 		shutdown.Fatal(err)
 	}
-	shutdown.BeforeExit(func() { stream.Close() })
-	go s.handleLeaderStream(leaders, hb.Addr())
 
 	go s.startHTTPServer(os.Getenv("PORT"))
 
@@ -121,31 +117,143 @@ func main() {
 	shutdown.Exit()
 }
 
+func watchServiceLeaders(s *Scheduler, selfAddr string) error {
+	log := logger.New("fn", "watchServiceLeaders", "self.addr", selfAddr)
+
+	service := discoverd.NewService(serviceName)
+	var leaders chan *discoverd.Instance
+	var stream stream.Stream
+	connect := func() (err error) {
+		log.Info("connecting service leader stream")
+		leaders = make(chan *discoverd.Instance)
+		stream, err = service.Leaders(leaders)
+		if err != nil {
+			log.Error("error connecting service leader stream", "err", err)
+		}
+		return
+	}
+	if err := connect(); err != nil {
+		return err
+	}
+
+	go func() {
+	outer:
+		for {
+			for leader := range leaders {
+				log.Info("received leader event", "leader.addr", leader.Addr)
+				s.ChangeLeader(leader.Addr == selfAddr)
+			}
+			log.Warn("service leader stream disconnected", "err", stream.Err())
+			for {
+				if err := connect(); err == nil {
+					continue outer
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}()
+
+	return nil
+}
+
+func (s *Scheduler) streamFormationEvents() error {
+	log := logger.New("fn", "streamFormationEvents")
+
+	var events chan *ct.ExpandedFormation
+	var stream stream.Stream
+	var since *time.Time
+	connect := func() (err error) {
+		log.Info("connecting formation event stream")
+		events = make(chan *ct.ExpandedFormation, eventBufferSize)
+		stream, err = s.StreamFormations(since, events)
+		if err != nil {
+			log.Error("error connecting formation event stream", "err", err)
+		}
+		return
+	}
+	if err := connect(); err != nil {
+		return err
+	}
+
+	go func() {
+	outer:
+		for {
+			for formation := range events {
+				if formation.App == nil {
+					// sentinel
+					continue
+				}
+				since = &formation.UpdatedAt
+				s.formationEvents <- formation
+			}
+			log.Warn("formation event stream disconnected", "err", stream.Err())
+			for {
+				if err := connect(); err == nil {
+					continue outer
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}()
+
+	return nil
+}
+
+func (s *Scheduler) streamHostEvents() error {
+	log := logger.New("fn", "streamHostEvents")
+
+	var events chan *discoverd.Event
+	var stream stream.Stream
+	connect := func() (err error) {
+		log.Info("connecting host event stream")
+		events = make(chan *discoverd.Event, eventBufferSize)
+		stream, err = s.StreamHostEvents(events)
+		if err != nil {
+			log.Error("error connecting host event stream", "err", err)
+		}
+		return
+	}
+	if err := connect(); err != nil {
+		return err
+	}
+
+	go func() {
+	outer:
+		for {
+			for event := range events {
+				if event.Kind != discoverd.EventKindUp && event.Kind != discoverd.EventKindDown {
+					continue
+				}
+				s.hostEvents <- event
+			}
+			log.Warn("host event stream disconnected", "err", stream.Err())
+			for {
+				if err := connect(); err == nil {
+					continue outer
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}()
+
+	return nil
+}
+
 func (s *Scheduler) Run() error {
 	log := logger.New("fn", "Run")
 	log.Info("starting scheduler loop")
 	defer log.Info("scheduler loop exited")
 
+	if err := s.streamHostEvents(); err != nil {
+		return err
+	}
+
+	if err := s.streamFormationEvents(); err != nil {
+		return err
+	}
+
 	s.tickSyncJobs(30 * time.Second)
 	s.tickSyncFormations(time.Minute)
-
-	log.Info("creating host event stream")
-	// TODO: reconnect this stream
-	stream, err := s.StreamHostEvents(s.hostEvents)
-	if err != nil {
-		log.Error("error creating host event stream", "err", err)
-		return err
-	}
-	defer stream.Close()
-
-	log.Info("creating formation event stream")
-	// TODO: reconnect this stream
-	stream, err = s.StreamFormations(nil, s.formationEvents)
-	if err != nil {
-		log.Error("error creating formation event stream", "err", err)
-		return err
-	}
-	defer stream.Close()
 
 	go s.RunPutJobs()
 
@@ -868,14 +976,6 @@ func (s *Scheduler) handleJobStart(job *Job) {
 		s.pendingStarts.RemoveJob(job)
 	}
 	s.jobs[job.JobID] = job
-}
-
-func (s *Scheduler) handleLeaderStream(leaders chan *discoverd.Instance, selfAddr string) {
-	log := logger.New("fn", "handleLeaderStream")
-	for leader := range leaders {
-		log.Info("received leader event", "leader.addr", leader.Addr, "self.addr", selfAddr)
-		s.ChangeLeader(leader.Addr == selfAddr)
-	}
 }
 
 func (s *Scheduler) startHTTPServer(port string) {
