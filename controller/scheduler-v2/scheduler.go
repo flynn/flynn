@@ -49,6 +49,7 @@ type Scheduler struct {
 	listeners map[chan Event]struct{}
 	listenMtx sync.RWMutex
 
+	ready    bool
 	stop     chan struct{}
 	stopOnce sync.Once
 
@@ -221,7 +222,7 @@ func (s *Scheduler) streamHostEvents() error {
 	outer:
 		for {
 			for event := range events {
-				if event.Kind != discoverd.EventKindUp && event.Kind != discoverd.EventKindDown {
+				if event.Kind != discoverd.EventKindUp && event.Kind != discoverd.EventKindDown && event.Kind != discoverd.EventKindCurrent {
 					continue
 				}
 				s.hostEvents <- event
@@ -277,7 +278,10 @@ func (s *Scheduler) Run() error {
 		case e := <-s.hostEvents:
 			s.HandleHostEvent(e)
 			continue
-		case e := <-s.jobEvents:
+		case e, ok := <-s.jobEvents:
+			if !ok {
+				return errors.New("job events channel closed prematurely")
+			}
 			s.HandleJobEvent(e)
 			continue
 		case f := <-s.formationEvents:
@@ -300,6 +304,9 @@ func (s *Scheduler) Run() error {
 		// Finally, handle triggering cluster changes
 		select {
 		case <-s.rectify:
+			if !s.ready {
+				continue
+			}
 			s.Rectify()
 		case <-time.After(10 * time.Millisecond):
 			// block so that
@@ -325,15 +332,15 @@ func (s *Scheduler) SyncJobs() {
 
 	newJobs := make(map[string]*Job)
 	for _, h := range hosts {
-		log = log.New("host.id", h.ID())
+		hostLog := log.New("host.id", h.ID())
 
-		log.Info(fmt.Sprintf("getting jobs for host %s", h.ID()))
+		hostLog.Info(fmt.Sprintf("getting jobs for host %s", h.ID()))
 		activeJobs, err := h.ListJobs()
 		if err != nil {
-			log.Error("error getting jobs list", "err", err)
+			hostLog.Error("error getting jobs list", "err", err)
 			continue
 		}
-		log.Info(fmt.Sprintf("got %d active job(s) for host %s", len(activeJobs), h.ID()))
+		hostLog.Info(fmt.Sprintf("got %d active job(s) for host %s", len(activeJobs), h.ID()))
 
 		for _, job := range activeJobs {
 			s.handleActiveJob(&job)
@@ -362,20 +369,20 @@ func (s *Scheduler) SyncFormations() {
 	}
 
 	for _, app := range apps {
-		log = log.New("app.id", app.ID)
+		appLog := log.New("app.id", app.ID)
 
-		log.Info(fmt.Sprintf("getting formations for %s app", app.Name))
+		appLog.Info(fmt.Sprintf("getting formations for %s app", app.Name))
 		fs, err := s.FormationList(app.ID)
 		if err != nil {
-			log.Error("error getting formations", "err", err)
+			appLog.Error("error getting formations", "err", err)
 			continue
 		}
-		log.Info(fmt.Sprintf("got %d formation(s) for %s app", len(fs), app.Name))
+		appLog.Info(fmt.Sprintf("got %d formation(s) for %s app", len(fs), app.Name))
 
 		for _, f := range fs {
-			log.Info("updating formation", "release.id", f.ReleaseID)
+			appLog.Info("updating formation", "release.id", f.ReleaseID)
 			if _, err := s.updateFormation(f); err != nil {
-				log.Error("error updating formation", "release.id", f.ReleaseID, "err", err)
+				appLog.Error("error updating formation", "release.id", f.ReleaseID, "err", err)
 			}
 		}
 	}
@@ -432,8 +439,8 @@ func (s *Scheduler) Rectify() {
 
 	for key, formation := range s.formations {
 		if _, ok := pending[key]; !ok && len(formation.Processes) > 0 {
-			log = log.New("app.id", key.AppID, "release.id", key.ReleaseID)
-			log.Info("formation in incorrect state", "expected", formation.Processes, "actual", nil, "diff", formation.Processes)
+			formationLog := log.New("app.id", key.AppID, "release.id", key.ReleaseID)
+			formationLog.Info("formation in incorrect state", "expected", formation.Processes, "actual", nil, "diff", formation.Processes)
 			s.sendDiffRequests(formation, formation.Processes)
 		}
 	}
@@ -446,11 +453,9 @@ func (s *Scheduler) HandleFormationChange(ef *ct.ExpandedFormation) {
 	}()
 
 	log := logger.New("fn", "HandleFormationChange")
-	if ef.App != nil {
-		log = log.New("app.id", ef.App.ID)
-	}
-	if ef.Release != nil {
-		log = log.New("release.id", ef.Release.ID)
+	if ef == nil || ef.App == nil || ef.Release == nil {
+		log.Error("invalid formation")
+		return
 	}
 	log.Info("handling formation change")
 	_, err = s.changeFormation(ef)
@@ -459,9 +464,7 @@ func (s *Scheduler) HandleFormationChange(ef *ct.ExpandedFormation) {
 		return
 	}
 
-	// Trigger sync jobs in case we've ignored an existing job because we
-	// didn't know about the formation.
-	s.triggerSyncJobs()
+	s.triggerRectify()
 }
 
 func (s *Scheduler) HandleJobRequest(req *JobRequest) {
@@ -607,21 +610,7 @@ func (s *Scheduler) unfollowHost(id string) {
 }
 
 func (s *Scheduler) HandleHostEvent(e *discoverd.Event) {
-	log := logger.New("fn", "HandleHostEvent")
-
-	// Sometimes events are missing e.Instance or e.Instance.Meta,
-	// in which case we can get a panic by not checking it first
-	if e == nil || e.Instance == nil || e.Instance.Meta == nil {
-		log.Error(fmt.Sprintf("ignoring invalid host event: %+v", e))
-		return
-	}
-	hostID, ok := e.Instance.Meta["id"]
-	if !ok {
-		log.Warn("ignoring host event due to missing ID in service metadata")
-		return
-	}
-
-	log = log.New("host.id", hostID, "event.type", e.Kind)
+	log := logger.New("fn", "HandleHostEvent", "event.type", e.Kind)
 	log.Info("handling host event")
 
 	var err error
@@ -630,18 +619,24 @@ func (s *Scheduler) HandleHostEvent(e *discoverd.Event) {
 	}()
 
 	switch e.Kind {
+	case discoverd.EventKindCurrent:
+		log.Info("hosts are current, scheduler can begin work")
+		s.ready = true
+		s.triggerSyncJobs()
 	case discoverd.EventKindUp:
+		log = log.New("host.id", e.Instance.Meta["id"])
 		log.Info("host is up, starting job event stream")
 		var h utils.HostClient
-		h, err = s.Host(hostID)
+		h, err = s.Host(e.Instance.Meta["id"])
 		if err != nil {
 			log.Error("error creating host client", "err", err)
 			return
 		}
 		s.followHost(h)
 	case discoverd.EventKindDown:
+		log = log.New("host.id", e.Instance.Meta["id"])
 		log.Info("host is down, stopping job event stream")
-		s.unfollowHost(hostID)
+		s.unfollowHost(e.Instance.Meta["id"])
 	}
 }
 
