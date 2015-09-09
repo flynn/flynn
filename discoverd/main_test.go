@@ -42,6 +42,15 @@ func TestMain_ParseFlags(t *testing.T) {
 	}
 }
 
+// Ensure a slice of hostports can have their ports updated.
+func TestSetPortSlice(t *testing.T) {
+	if a, err := main.SetPortSlice([]string{"host0:123", "host1:456", "host2:789"}, ":1000"); err != nil {
+		t.Fatal(err)
+	} else if !reflect.DeepEqual(a, []string{"host0:1000", "host1:1000", "host2:1000"}) {
+		t.Fatalf("unexpected value: %+v", a)
+	}
+}
+
 // Main represents a test wrapper for main.Main.
 type Main struct {
 	*main.Main

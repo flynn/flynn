@@ -92,10 +92,16 @@ func (m *Main) Run(args ...string) error {
 		fmt.Fprintln(m.Stderr, "advertised address not in peer set, joining as proxy")
 	}
 
+	// Create a slice of peers with their HTTP address set instead.
+	httpPeers, err := SetPortSlice(opt.Peers, opt.HTTPAddr)
+	if err != nil {
+		return fmt.Errorf("set port slice: %s", err)
+	}
+
 	// If we have a DNS address, start a DNS server right away, otherwise
 	// wait for the host network to come up and then start a DNS server.
 	if opt.DNSAddr != "" {
-		if err := m.openDNSServer(opt.DNSAddr, opt.Recursors, opt.Peers); err != nil {
+		if err := m.openDNSServer(opt.DNSAddr, opt.Recursors, httpPeers); err != nil {
 			return fmt.Errorf("Failed to start DNS server: %s", err)
 		}
 		m.logger.Printf("discoverd listening for DNS on %s", opt.DNSAddr)
@@ -116,7 +122,7 @@ func (m *Main) Run(args ...string) error {
 			}
 			addr := net.JoinHostPort(ip.String(), "53")
 
-			if err := m.openDNSServer(addr, status.Network.Resolvers, opt.Peers); err != nil {
+			if err := m.openDNSServer(addr, status.Network.Resolvers, httpPeers); err != nil {
 				log.Fatalf("Failed to start DNS server: %s", err)
 			}
 			m.logger.Printf("discoverd listening for DNS on %s", opt.DNSAddr)
@@ -372,4 +378,26 @@ func TrimSpaceSlice(a []string) []string {
 		other = append(other, s)
 	}
 	return other
+}
+
+// SetPortSlice sets the ports for a slice of hosts.
+func SetPortSlice(peers []string, addr string) ([]string, error) {
+	// Retrieve the port from addr.
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+
+	// Merge the port with the peer hosts into a new slice.
+	other := make([]string, len(peers))
+	for i, peer := range peers {
+		host, _, err := net.SplitHostPort(peer)
+		if err != nil {
+			return nil, err
+		}
+
+		other[i] = net.JoinHostPort(host, port)
+	}
+
+	return other, nil
 }
