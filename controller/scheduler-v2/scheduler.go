@@ -18,6 +18,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/stream"
@@ -498,7 +499,7 @@ func (s *Scheduler) HandleJobRequest(req *JobRequest) {
 func (s *Scheduler) RunPutJobs() {
 	log := logger.New("fn", "RunPutJobs")
 	log.Info("starting job persistence loop")
-	strategy := attempt.Strategy{Delay: 100 * time.Millisecond, Total: time.Second}
+	strategy := attempt.Strategy{Delay: 100 * time.Millisecond, Total: time.Minute}
 	for {
 		job, ok := <-s.putJobs
 		if !ok {
@@ -507,9 +508,9 @@ func (s *Scheduler) RunPutJobs() {
 		}
 		jobLog := log.New("job.id", job.ID, "job.state", job.State)
 		jobLog.Info("persisting job")
-		err := strategy.Run(func() error {
+		err := strategy.RunWithValidator(func() error {
 			return s.PutJob(job)
-		})
+		}, httphelper.IsRetryableError)
 		if err != nil {
 			jobLog.Error("error persisting job", "err", err)
 		}
@@ -929,7 +930,7 @@ func (s *Scheduler) SaveJob(job *Job, appName string, status host.JobStatus, met
 		delete(s.jobs, job.JobID)
 		delete(s.stoppedJobs, job.JobID)
 	}
-	log.Info("Queuing job for persistence")
+	log.Info("queuing job for persistence")
 	s.putJobs <- controllerJobFromSchedulerJob(job, jobState(status), metadata)
 	return job, nil
 }
