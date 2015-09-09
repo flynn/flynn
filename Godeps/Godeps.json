@@ -30,6 +30,10 @@
 			"Rev": "b9951d11774a62fbdfb340eeff70c1935d8e531e"
 		},
 		{
+			"ImportPath": "github.com/armon/go-metrics",
+			"Rev": "b2d95e5291cdbc26997d1301a5e467ecbb240e25"
+		},
+		{
 			"ImportPath": "github.com/awslabs/aws-sdk-go/aws",
 			"Rev": "836c0f777155cb5570c6b8a4799cf64dc578e95f"
 		},
@@ -74,11 +78,6 @@
 		{
 			"ImportPath": "github.com/codegangsta/inject",
 			"Rev": "9aea7a2fa5b79ef7fc00f63a575e72df33b4e886"
-		},
-		{
-			"ImportPath": "github.com/coreos/go-etcd/etcd",
-			"Comment": "v0.2.0-rc1-114-g7745cfd",
-			"Rev": "7745cfd7f8e619cc9e6be450238e6253a57a227f"
 		},
 		{
 			"ImportPath": "github.com/cupcake/goamz/aws",
@@ -151,6 +150,11 @@
 		},
 		{
 			"ImportPath": "github.com/docker/docker/api",
+			"Comment": "v1.4.1-2039-ge589dc7",
+			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
+		},
+		{
+			"ImportPath": "github.com/docker/docker/autogen/dockerversion",
 			"Comment": "v1.4.1-2039-ge589dc7",
 			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
 		},
@@ -457,6 +461,18 @@
 			"Rev": "aa5e036e6c44aec69a32eb41097001978b29ad31"
 		},
 		{
+			"ImportPath": "github.com/hashicorp/go-msgpack/codec",
+			"Rev": "fa3f63826f7c23912c15263591e65d54d080b458"
+		},
+		{
+			"ImportPath": "github.com/hashicorp/raft",
+			"Rev": "9dabbbab966c04a0b6efed3cff6960299fed0642"
+		},
+		{
+			"ImportPath": "github.com/hashicorp/raft-boltdb",
+			"Rev": "d1e82c1ec3f15ee991f7cc7ffd5b67ff6f5bbaee"
+		},
+		{
 			"ImportPath": "github.com/howeyc/fsnotify",
 			"Comment": "v0.9.0-11-g6b1ef89",
 			"Rev": "6b1ef893dc11e0447abda6da20a5203481878dda"
@@ -477,11 +493,6 @@
 		{
 			"ImportPath": "github.com/inconshreveable/mousetrap",
 			"Rev": "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75"
-		},
-		{
-			"ImportPath": "github.com/jteeuwen/go-bindata",
-			"Comment": "v3.0.7-19-g040617c",
-			"Rev": "040617c5ef993d2d4a6630636bde1aa913e954b9"
 		},
 		{
 			"ImportPath": "github.com/jackc/pgx",

@@ -9,9 +9,10 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/vendor/src/code.google.com/p/go/src/pkg/archive/tar"
+
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/pools"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/system"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/vendor/src/code.google.com/p/go/src/pkg/archive/tar"
 )
 
 func UnpackLayer(dest string, layer ArchiveReader) (size int64, err error) {

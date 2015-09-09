@@ -21,6 +21,9 @@ import (
 	"crypto/x509"
 
 	"code.google.com/p/go.net/websocket"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/user"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/mux"
+
 	"github.com/docker/docker/pkg/listenbuffer"
 	"github.com/docker/docker/pkg/stdcopy"
 	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
@@ -32,8 +35,6 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/version"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/registry"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/utils"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/user"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/mux"
 )
 
 var (

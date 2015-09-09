@@ -69,11 +69,13 @@
     "action": "run-app",
     "release": {
       "env": {
+        "DISCOVERD_PEERS": "{{ range $ip := .SortedHostIPs }}{{ $ip }}:1110,{{ end }}",
         "DISCOVERD": "none"
       },
       "processes": {
         "app": {
-          "ports": [{"port": 1111, "proto": "tcp"}, {"port": 53, "proto": "tcp"}],
+          "ports": [{"port": 1110, "proto": "tcp"}, {"port": 1111, "proto": "tcp"}, {"port": 53, "proto": "tcp"}],
+          "data": true,
           "resurrect": true,
           "host_network": true,
           "omni": true

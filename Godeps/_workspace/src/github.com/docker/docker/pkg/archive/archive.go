@@ -16,12 +16,13 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/vendor/src/code.google.com/p/go/src/pkg/archive/tar"
+
 	log "github.com/flynn/flynn/Godeps/_workspace/src/github.com/Sirupsen/logrus"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/fileutils"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/pools"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/promise"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/system"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/vendor/src/code.google.com/p/go/src/pkg/archive/tar"
 )
 
 type (

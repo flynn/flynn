@@ -13,7 +13,6 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
-	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 	"github.com/flynn/flynn/pkg/syslog/rfc6587"
 )
@@ -29,13 +28,11 @@ type S struct {
 var _ = Suite(&S{})
 
 func (s *S) SetUpSuite(c *C) {
-	etcdAddr, killEtcd := etcdrunner.RunEtcdServer(c)
-	discd, killDiscoverd := testutil.BootDiscoverd(c, "", etcdAddr)
+	discd, killDiscoverd := testutil.BootDiscoverd(c, "", "")
 
 	s.discd = discd
 	s.cleanup = func() {
 		killDiscoverd()
-		killEtcd()
 	}
 }
 

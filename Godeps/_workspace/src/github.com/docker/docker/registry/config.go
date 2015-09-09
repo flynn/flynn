@@ -14,8 +14,8 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/utils"
 )
 
-type // Options holds command line options.
-Options struct {
+// Options holds command line options.
+type Options struct {
 	Mirrors            opts.ListOpts
 	InsecureRegistries opts.ListOpts
 }

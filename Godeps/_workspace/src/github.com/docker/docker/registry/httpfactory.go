@@ -3,6 +3,7 @@ package registry
 import (
 	"runtime"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/autogen/dockerversion"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/parsers/kernel"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/utils"
 )
@@ -10,7 +11,9 @@ import (
 func HTTPRequestFactory(metaHeaders map[string][]string) *utils.HTTPRequestFactory {
 	// FIXME: this replicates the 'info' job.
 	httpVersion := make([]utils.VersionInfo, 0, 4)
+	httpVersion = append(httpVersion, &simpleVersionInfo{"docker", dockerversion.VERSION})
 	httpVersion = append(httpVersion, &simpleVersionInfo{"go", runtime.Version()})
+	httpVersion = append(httpVersion, &simpleVersionInfo{"git-commit", dockerversion.GITCOMMIT})
 	if kernelVersion, err := kernel.GetKernelVersion(); err == nil {
 		httpVersion = append(httpVersion, &simpleVersionInfo{"kernel", kernelVersion.String()})
 	}

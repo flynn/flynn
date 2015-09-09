@@ -14,8 +14,8 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/utils"
 )
 
-var lookupIP = // for mocking in unit tests
-net.LookupIP
+// for mocking in unit tests
+var lookupIP = net.LookupIP
 
 // scans string for api version in the URL path. returns the trimmed address, if version found, string and API version.
 func scanForAPIVersion(address string) (string, APIVersion) {
