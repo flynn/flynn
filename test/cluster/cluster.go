@@ -250,18 +250,6 @@ func (c *Cluster) RemoveHost(id string) error {
 	}
 	c.log("removing host", id)
 
-	// Clean shutdown requires waiting for that host to unadvertise on discoverd.
-	// Specifically: Wait for router-api services to disappear to indicate host
-	// removal (rather than using StreamHostEvents), so that other
-	// tests won't try and connect to this host via service discovery.
-	ip := c.defaultInstances[0].IP
-	events := make(chan *discoverd.Event)
-	stream, err := c.discoverdClient(ip).Service("router-api").Watch(events)
-	if err != nil {
-		return err
-	}
-	defer stream.Close()
-
 	// ssh into the host and tell the flynn-host daemon to stop
 	var cmd string
 	switch c.bc.Backend {
@@ -269,23 +257,7 @@ func (c *Cluster) RemoveHost(id string) error {
 		// manually kill containers after stopping flynn-host due to https://github.com/flynn/flynn/issues/1177
 		cmd = "sudo start-stop-daemon --stop --pidfile /var/run/flynn-host.pid --retry 15 && (virsh -c lxc:/// list --name | xargs -L 1 virsh -c lxc:/// destroy || true)"
 	}
-	if err := inst.Run(cmd, nil); err != nil {
-		return err
-	}
-
-loop:
-	for {
-		select {
-		case event := <-events:
-			if event.Kind == discoverd.EventKindDown {
-				break loop
-			}
-		case <-time.After(20 * time.Second):
-			return fmt.Errorf("timed out waiting for host removal")
-		}
-	}
-
-	return nil
+	return inst.Run(cmd, nil)
 }
 
 func (c *Cluster) Size() int {

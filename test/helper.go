@@ -217,8 +217,18 @@ func (h *Helper) removeHost(t *c.C, host *tc.Instance) {
 
 func (h *Helper) removeHosts(t *c.C, hosts []*tc.Instance) {
 	debugf(t, "removing %d hosts", len(hosts))
+
+	// Clean shutdown requires waiting for that host to unadvertise on discoverd.
+	// Specifically: Wait for router-api services to disappear to indicate host
+	// removal (rather than using StreamHostEvents), so that other
+	// tests won't try and connect to this host via service discovery.
+	events := make(chan *discoverd.Event)
+	stream, err := h.discoverdClient(t).Service("router-api").Watch(events)
+	t.Assert(err, c.IsNil)
+	defer stream.Close()
+
 	for _, host := range hosts {
-		t.Assert(testCluster.RemoveHost(host), c.IsNil)
+		t.Assert(testCluster.RemoveHost(events, host), c.IsNil)
 		debugf(t, "host removed: %s", host.ID)
 	}
 }
