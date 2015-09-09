@@ -256,6 +256,10 @@ func (ts *TestSuite) TestRectify(c *C) {
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
 	_, err = waitForEvent(events, EventTypeFormationChange)
 	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeRectify)
+	c.Assert(err, IsNil)
+	_, err = waitForEvent(events, EventTypeJobStart)
+	c.Assert(err, IsNil)
 	jobs = s.Jobs()
 	c.Assert(jobs, HasLen, 2)
 }
