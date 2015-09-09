@@ -1,32 +1,50 @@
 package main
 
 import (
+	"errors"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/host/types"
 )
 
 type JobRequestType string
+type JobState string
 
 const (
 	JobRequestTypeUp   JobRequestType = "up"
 	JobRequestTypeDown JobRequestType = "down"
+	JobStateUp                        = "running"
+	JobStateStopped                   = "stopped"
+	JobStateCrashed                   = "crashed"
+	JobStateRequesting                = "requesting"
+	JobStateNew                       = "new"
 )
 
 type JobRequest struct {
 	*Job
 	RequestType JobRequestType
+	attempts    uint
 }
 
 func NewJobRequest(f *Formation, requestType JobRequestType, typ, hostID, jobID string) *JobRequest {
 	return &JobRequest{
-		Job:         NewJob(f, typ, hostID, jobID, time.Now()),
+		Job:         NewJob(f, f.App.ID, f.Release.ID, typ, hostID, jobID),
 		RequestType: requestType,
 	}
 }
 
 func (r *JobRequest) needsVolume() bool {
 	return r.Job.Formation.Release.Processes[r.Type].Data
+}
+
+func (r *JobRequest) Clone() *JobRequest {
+	return &JobRequest{
+		Job:         r.Job.Clone(),
+		RequestType: r.RequestType,
+		attempts:    r.attempts,
+	}
 }
 
 type Job struct {
@@ -40,18 +58,90 @@ type Job struct {
 
 	restarts  uint
 	startedAt time.Time
+	state     JobState
 }
 
-func NewJob(f *Formation, typ, hostID, id string, startedAt time.Time) *Job {
+func NewJob(f *Formation, appID, releaseID, typ, hostID, id string) *Job {
 	return &Job{
 		Type:      typ,
-		AppID:     f.App.ID,
-		ReleaseID: f.Release.ID,
+		AppID:     appID,
+		ReleaseID: releaseID,
 		HostID:    hostID,
 		JobID:     id,
 		Formation: f,
-		startedAt: startedAt,
+		startedAt: time.Now(),
+		state:     JobStateNew,
 	}
+}
+
+func (j *Job) Clone() *Job {
+	// Shallow copy
+	cloned := *j
+	return &cloned
+}
+
+func (j *Job) IsScheduled() bool {
+	return j.state != JobStateStopped
+}
+
+type Jobs map[string]*Job
+
+func (js Jobs) GetStoppableJobs(key utils.FormationKey, typ string) []*Job {
+	formTypeJobs := make([]*Job, 0, len(js))
+	for _, j := range js {
+		if j.IsScheduled() && j.Formation != nil && j.Formation.key() == key && j.Type == typ {
+			formTypeJobs = append(formTypeJobs, j)
+		}
+	}
+	return formTypeJobs
+}
+
+func (js Jobs) GetHostJobCounts(key utils.FormationKey, typ string) map[string]int {
+	counts := make(map[string]int)
+
+	for _, j := range js {
+		if j.IsScheduled() && j.Formation != nil && j.Formation.key() == key && j.Type == typ {
+			counts[j.HostID]++
+		}
+	}
+	return counts
+}
+
+func (js Jobs) GetProcesses(key utils.FormationKey) Processes {
+	procs := make(Processes)
+	for _, j := range js {
+		if j.IsScheduled() && j.Formation != nil && j.Formation.key() == key {
+			procs[j.Type]++
+		}
+	}
+	return procs
+}
+
+func (js Jobs) AddJob(j *Job) *Job {
+	j = j.Clone()
+	js[j.JobID] = j
+	return j
+}
+
+func (js Jobs) StopJob(id string) error {
+	return js.setState(id, JobStateStopped)
+}
+
+func (js Jobs) CrashJob(id string) error {
+	return js.setState(id, JobStateCrashed)
+}
+
+func (js Jobs) RunJob(id string) error {
+	return js.setState(id, JobStateUp)
+}
+
+func (js Jobs) setState(id string, state JobState) error {
+	j, ok := js[id]
+	if ok {
+		j.state = state
+		return nil
+	}
+	return errors.New("job not found")
 }
 
 // TODO refactor `state` to JobStatus type and consolidate statuses across scheduler/controller/host
@@ -63,5 +153,22 @@ func controllerJobFromSchedulerJob(job *Job, state string, metadata map[string]s
 		Type:      job.Type,
 		State:     state,
 		Meta:      metadata,
+	}
+}
+
+func jobState(status host.JobStatus) string {
+	switch status {
+	case host.StatusStarting:
+		return "starting"
+	case host.StatusRunning:
+		return "up"
+	case host.StatusDone:
+		return "down"
+	case host.StatusCrashed:
+		return "crashed"
+	case host.StatusFailed:
+		return "failed"
+	default:
+		return ""
 	}
 }

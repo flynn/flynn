@@ -262,10 +262,12 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 }
 
 func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
-	if testCluster == nil {
-		t.Skip("cannot determine scheduler backoff period")
+	var backoffPeriod time.Duration
+	if testCluster != nil {
+		backoffPeriod = testCluster.BackoffPeriod()
+	} else {
+		backoffPeriod = time.Second
 	}
-	backoffPeriod := testCluster.BackoffPeriod()
 	startTimeout := 20 * time.Second
 	debugf(t, "job restart backoff period: %s", backoffPeriod)
 
@@ -278,39 +280,28 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 	t.Assert(s.controllerClient(t).PutFormation(&ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
-		Processes: map[string]int{"printer": 1},
+		Processes: map[string]int{"crasher": 1},
 	}), c.IsNil)
 	var id string
 	var assignId = func(e *ct.Job) error {
 		id = e.ID
 		return nil
 	}
-	err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, scaleTimeout, assignId)
+	err = watcher.WaitFor(ct.JobEvents{"crasher": {"up": 1}}, scaleTimeout, assignId)
 
-	// First restart: scheduled immediately
-	s.stopJob(t, id)
-	err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, startTimeout, assignId)
-	t.Assert(err, c.IsNil)
+	waitForRestart := func(duration time.Duration) {
+		start := time.Now()
+		s.stopJob(t, id)
+		err = watcher.WaitFor(ct.JobEvents{"crasher": {"up": 1}}, duration+startTimeout, assignId)
+		t.Assert(err, c.IsNil)
+		t.Assert(time.Now().Sub(start) > duration, c.Equals, true)
+	}
 
-	// Second restart after 1 * backoffPeriod
-	start := time.Now()
-	s.stopJob(t, id)
-	err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, backoffPeriod+startTimeout, assignId)
-	t.Assert(err, c.IsNil)
-	t.Assert(time.Now().Sub(start) > backoffPeriod, c.Equals, true)
-
-	// Third restart after 2 * backoffPeriod
-	start = time.Now()
-	s.stopJob(t, id)
-	err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, 2*backoffPeriod+startTimeout, assignId)
-	t.Assert(err, c.IsNil)
-	t.Assert(time.Now().Sub(start) > 2*backoffPeriod, c.Equals, true)
-
-	// After backoffPeriod has elapsed: scheduled immediately
+	waitForRestart(0)
+	waitForRestart(backoffPeriod)
+	waitForRestart(2 * backoffPeriod)
 	time.Sleep(backoffPeriod)
-	s.stopJob(t, id)
-	err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, startTimeout, assignId)
-	t.Assert(err, c.IsNil)
+	waitForRestart(0)
 }
 
 func (s *SchedulerSuite) TestTCPApp(t *c.C) {
