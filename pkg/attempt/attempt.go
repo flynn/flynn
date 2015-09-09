@@ -21,10 +21,14 @@ type Attempt struct {
 }
 
 func (s Strategy) Run(f func() error) error {
+	return s.RunWithValidator(f, func(error) bool { return true })
+}
+
+func (s Strategy) RunWithValidator(f func() error, retry func(error) bool) error {
 	var err error
 	for a := s.Start(); a.Next(); {
 		err = f()
-		if err == nil {
+		if err == nil || !retry(err) {
 			break
 		}
 	}
