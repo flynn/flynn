@@ -9,6 +9,7 @@ import (
 	. "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -38,38 +39,88 @@ func createTestScheduler(cluster utils.ClusterClient) *Scheduler {
 	cc.CreateArtifact(artifact)
 	cc.CreateRelease(release)
 	cc.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
-	s := NewScheduler(cluster, cc)
-
-	return s
+	return NewScheduler(cluster, cc)
 }
 
-func runTestScheduler(cluster utils.ClusterClient, events chan Event, isLeader bool) *TestScheduler {
+func newTestHosts() map[string]*FakeHostClient {
+	return map[string]*FakeHostClient{
+		testHostID: NewFakeHostClient(testHostID),
+	}
+}
+
+func newTestCluster(hosts map[string]*FakeHostClient) *FakeCluster {
+	cluster := NewFakeCluster()
+	if hosts == nil {
+		hosts = newTestHosts()
+	}
+	cluster.SetHosts(hosts)
+	return cluster
+}
+
+func runTestScheduler(c *C, cluster utils.ClusterClient, isLeader bool) *TestScheduler {
+	if cluster == nil {
+		cluster = newTestCluster(nil)
+	}
 	s := createTestScheduler(cluster)
 
+	events := make(chan Event, eventBufferSize)
 	stream := s.Subscribe(events)
 	go s.Run()
 	s.ChangeLeader(isLeader)
 
-	return &TestScheduler{
-		scheduler: s,
-		stream:    stream,
-	}
+	return &TestScheduler{s, c, events, stream}
 }
 
 type TestScheduler struct {
-	scheduler *Scheduler
-	stream    stream.Stream
+	*Scheduler
+	c      *C
+	events chan Event
+	stream stream.Stream
 }
 
 func (s *TestScheduler) Stop() {
-	s.scheduler.Stop()
+	s.Scheduler.Stop()
 	s.stream.Close()
 }
 
-func waitDurationForEvent(events chan Event, typ EventType, duration time.Duration) (Event, error) {
+func (s *TestScheduler) waitRectify() {
+	_, err := s.waitForEvent(EventTypeRectify)
+	s.c.Assert(err, IsNil)
+}
+
+func (s *TestScheduler) waitFormationChange() {
+	_, err := s.waitForEvent(EventTypeFormationChange)
+	s.c.Assert(err, IsNil)
+}
+
+func (s *TestScheduler) waitFormationSync() {
+	_, err := s.waitForEvent(EventTypeFormationSync)
+	s.c.Assert(err, IsNil)
+}
+
+func (s *TestScheduler) waitJobStart() *Job {
+	return s.waitJobEvent(EventTypeJobStart)
+}
+
+func (s *TestScheduler) waitJobStop() *Job {
+	return s.waitJobEvent(EventTypeJobStop)
+}
+
+func (s *TestScheduler) waitJobEvent(typ EventType) *Job {
+	event, err := s.waitForEvent(typ)
+	s.c.Assert(err, IsNil)
+	e, ok := event.(*JobEvent)
+	if !ok {
+		s.c.Fatalf("expected JobEvent, got %T", e)
+	}
+	s.c.Assert(e.Job, NotNil)
+	return e.Job
+}
+
+func (s *TestScheduler) waitDurationForEvent(typ EventType, duration time.Duration) (Event, error) {
 	for {
 		select {
-		case event, ok := <-events:
+		case event, ok := <-s.events:
 			if !ok {
 				return nil, fmt.Errorf("unexpected close of scheduler event stream")
 			}
@@ -85,26 +136,18 @@ func waitDurationForEvent(events chan Event, typ EventType, duration time.Durati
 	}
 }
 
-func waitForEvent(events chan Event, typ EventType) (Event, error) {
-	return waitDurationForEvent(events, typ, 2*time.Second)
+func (s *TestScheduler) waitForEvent(typ EventType) (Event, error) {
+	return s.waitDurationForEvent(typ, 2*time.Second)
 }
 
-func (ts *TestSuite) TestSingleJobStart(c *C) {
-	h := NewFakeHostClient(testHostID)
-	cluster := NewFakeCluster()
-	cluster.SetHosts(map[string]*FakeHostClient{h.ID(): h})
-	events := make(chan Event, eventBufferSize)
-	sched := runTestScheduler(cluster, events, true)
-	defer sched.Stop()
-	s := sched.scheduler
+func (TestSuite) TestSingleJobStart(c *C) {
+	s := runTestScheduler(c, nil, true)
+	defer s.Stop()
 
 	// wait for a rectify jobs event
 	c.Log("Waiting for a rectify jobs event")
-	_, err := waitForEvent(events, EventTypeRectify)
-	c.Assert(err, IsNil)
-	e, err := waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, IsNil)
-	job := checkJobEvent(c, e)
+	s.waitRectify()
+	job := s.waitJobStart()
 	c.Assert(job.Type, Equals, testJobType)
 	c.Assert(job.AppID, Equals, testAppID)
 	c.Assert(job.ReleaseID, Equals, testReleaseID)
@@ -120,17 +163,11 @@ func (ts *TestSuite) TestSingleJobStart(c *C) {
 	}
 }
 
-func (ts *TestSuite) TestFormationChange(c *C) {
-	h := NewFakeHostClient(testHostID)
-	cluster := NewFakeCluster()
-	cluster.SetHosts(map[string]*FakeHostClient{h.ID(): h})
-	events := make(chan Event, eventBufferSize)
-	sched := runTestScheduler(cluster, events, true)
-	defer sched.Stop()
-	s := sched.scheduler
+func (TestSuite) TestFormationChange(c *C) {
+	s := runTestScheduler(c, nil, true)
+	defer s.Stop()
 
-	_, err := waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, IsNil)
+	s.waitJobStart()
 
 	app, err := s.GetApp(testAppID)
 	c.Assert(err, IsNil)
@@ -142,34 +179,23 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	// Test scaling up an existing formation
 	c.Log("Test scaling up an existing formation. Wait for formation change and job start")
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 4}})
-	_, err = waitForEvent(events, EventTypeFormationChange)
-	c.Assert(err, IsNil)
-	e, err := waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, IsNil)
-	job := checkJobEvent(c, e)
-	c.Assert(job.Type, Equals, testJobType)
-	c.Assert(job.AppID, Equals, app.ID)
-	c.Assert(job.ReleaseID, Equals, testReleaseID)
-	_, err = waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, IsNil)
-	jobs := s.Jobs()
-	c.Assert(jobs, HasLen, 4)
+	s.waitFormationChange()
+	for i := 0; i < 3; i++ {
+		job := s.waitJobStart()
+		c.Assert(job.Type, Equals, testJobType)
+		c.Assert(job.AppID, Equals, app.ID)
+		c.Assert(job.ReleaseID, Equals, testReleaseID)
+	}
+	c.Assert(s.Jobs(), HasLen, 4)
 
 	// Test scaling down an existing formation
 	c.Log("Test scaling down an existing formation. Wait for formation change and job stop")
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 1}})
-	_, err = waitForEvent(events, EventTypeFormationChange)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeJobStop)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeJobStop)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeJobStop)
-	c.Assert(err, IsNil)
-	jobs = s.Jobs()
-	c.Assert(jobs, HasLen, 1)
+	s.waitFormationChange()
+	for i := 0; i < 3; i++ {
+		s.waitJobStop()
+	}
+	c.Assert(s.Jobs(), HasLen, 1)
 
 	// Test creating a new formation
 	c.Log("Test creating a new formation. Wait for formation change and job start")
@@ -180,32 +206,21 @@ func (ts *TestSuite) TestFormationChange(c *C) {
 	s.CreateRelease(release)
 	c.Assert(len(s.formations), Equals, 1)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
-	_, err = waitForEvent(events, EventTypeFormationChange)
-	c.Assert(err, IsNil)
+	s.waitFormationChange()
 	c.Assert(len(s.formations), Equals, 2)
-	e, err = waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, IsNil)
-	job = checkJobEvent(c, e)
+	job := s.waitJobStart()
 	c.Assert(job.Type, Equals, testJobType)
 	c.Assert(job.AppID, Equals, app.ID)
 	c.Assert(job.ReleaseID, Equals, release.ID)
 }
 
-func (ts *TestSuite) TestRectify(c *C) {
-	h := NewFakeHostClient(testHostID)
-	cluster := NewFakeCluster()
-	cluster.SetHosts(map[string]*FakeHostClient{h.ID(): h})
-	events := make(chan Event, eventBufferSize)
-	sched := runTestScheduler(cluster, events, true)
-	defer sched.Stop()
-	s := sched.scheduler
+func (TestSuite) TestRectify(c *C) {
+	s := runTestScheduler(c, nil, true)
+	defer s.Stop()
 
 	// wait for the formation to cascade to the scheduler
-	_, err := waitForEvent(events, EventTypeRectify)
-	c.Assert(err, IsNil)
-	e, err := waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, IsNil)
-	job := checkJobEvent(c, e)
+	s.waitRectify()
+	job := s.waitJobStart()
 	jobs := make(map[string]*Job)
 	jobs[job.JobID] = job
 	c.Assert(jobs, HasLen, 1)
@@ -217,19 +232,14 @@ func (ts *TestSuite) TestRectify(c *C) {
 	request := NewJobRequest(form, JobRequestTypeUp, testJobType, "", "")
 	config := jobConfig(request, testHostID)
 	host.AddJob(config)
-	e, err = waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, IsNil)
-	job = checkJobEvent(c, e)
+	job = s.waitJobStart()
 	jobs[job.JobID] = job
 	c.Assert(jobs, HasLen, 2)
 
 	// Verify that the scheduler stops the extra job
 	c.Log("Verify that the scheduler stops the extra job")
-	_, err = waitForEvent(events, EventTypeRectify)
-	c.Assert(err, IsNil)
-	e, err = waitForEvent(events, EventTypeJobStop)
-	c.Assert(err, IsNil)
-	job = checkJobEvent(c, e)
+	s.waitRectify()
+	job = s.waitJobStop()
 	c.Assert(job.JobID, Equals, config.ID)
 	delete(jobs, job.JobID)
 	c.Assert(jobs, HasLen, 1)
@@ -246,7 +256,7 @@ func (ts *TestSuite) TestRectify(c *C) {
 	// Add the job to the host without adding the formation. Expected error.
 	c.Log("Create a new job on the host without adding the formation to the controller. Wait for job start, expect error.")
 	host.AddJob(config)
-	_, err = waitForEvent(events, EventTypeJobStart)
+	_, err = s.waitForEvent(EventTypeJobStart)
 	c.Assert(err, Not(IsNil))
 
 	c.Log("Add the formation to the controller. Wait for formation change.")
@@ -254,49 +264,41 @@ func (ts *TestSuite) TestRectify(c *C) {
 	s.CreateArtifact(artifact)
 	s.CreateRelease(release)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
-	_, err = waitForEvent(events, EventTypeFormationChange)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeRectify)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, IsNil)
-	jobs = s.Jobs()
-	c.Assert(jobs, HasLen, 2)
+	s.waitFormationChange()
+	s.waitRectify()
+	s.waitJobStart()
+	c.Assert(s.Jobs(), HasLen, 2)
 }
 
-func (ts *TestSuite) TestExponentialBackoffNoHosts(c *C) {
-	cluster := NewFakeCluster()
-	events := make(chan Event, eventBufferSize)
-	sched := runTestScheduler(cluster, events, true)
-	defer sched.Stop()
+func (TestSuite) TestExponentialBackoffNoHosts(c *C) {
+	s := runTestScheduler(c, NewFakeCluster(), true)
+	defer s.Stop()
+
+	waitRestarts := func(duration time.Duration, expected uint) {
+		event, err := s.waitDurationForEvent(EventTypeJobRequest, duration)
+		c.Assert(err.Error(), Equals, "unexpected event error: no hosts found")
+		e, ok := event.(*JobRequestEvent)
+		if !ok {
+			c.Fatalf("expected JobRequestEvent, got %T", event)
+		}
+		c.Assert(e.Request, NotNil)
+		c.Assert(e.Request.restarts, Equals, expected)
+	}
 
 	// wait for the formation to cascade to the scheduler
-	_, err := waitForEvent(events, EventTypeRectify)
-	c.Assert(err, IsNil)
-	evt, err := waitDurationForEvent(events, EventTypeJobRequest, 1*time.Second+50*time.Millisecond)
-	c.Assert(err.Error(), Equals, "unexpected event error: no hosts found")
-	req := checkJobRequestEvent(c, evt)
-	c.Assert(req.restarts, Equals, uint(2))
-	evt, err = waitDurationForEvent(events, EventTypeJobRequest, 2*time.Second+50*time.Millisecond)
-	c.Assert(err.Error(), Equals, "unexpected event error: no hosts found")
-	req = checkJobRequestEvent(c, evt)
-	c.Assert(req.restarts, Equals, uint(3))
+	s.waitRectify()
+	waitRestarts(1*time.Second+50*time.Millisecond, 2)
+	waitRestarts(2*time.Second+50*time.Millisecond, 3)
 }
 
-func (ts *TestSuite) TestMultipleHosts(c *C) {
-	h := NewFakeHostClient(testHostID)
-	hosts := map[string]*FakeHostClient{
-		h.ID(): h,
-	}
-	cluster := NewFakeCluster()
-	cluster.SetHosts(hosts)
-	events := make(chan Event, eventBufferSize)
-	sched := runTestScheduler(cluster, events, true)
-	defer sched.Stop()
-	s := sched.scheduler
+func (TestSuite) TestMultipleHosts(c *C) {
+	hosts := newTestHosts()
+	cluster := newTestCluster(hosts)
+	s := runTestScheduler(c, cluster, true)
+	defer s.Stop()
+
 	c.Log("Initialize the cluster with 1 host and wait for a job to start on it.")
-	_, err := waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, IsNil)
+	s.waitJobStart()
 
 	c.Log("Add a host to the cluster, then create a new app, artifact, release, and associated formation.")
 	h2 := NewFakeHostClient("host-2")
@@ -311,109 +313,73 @@ func (ts *TestSuite) TestMultipleHosts(c *C) {
 	s.CreateArtifact(artifact)
 	s.CreateRelease(release)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
-	_, err = waitForEvent(events, EventTypeFormationChange)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, IsNil)
-	jobs := s.Jobs()
-	c.Assert(jobs, HasLen, 3)
+	s.waitFormationChange()
+	s.waitJobStart()
+	s.waitJobStart()
+	c.Assert(s.Jobs(), HasLen, 3)
 
-	hostJobs, err := h.ListJobs()
-	c.Assert(err, IsNil)
-	c.Assert(len(hostJobs), Equals, 2)
-	hostJobs, err = h2.ListJobs()
-	c.Assert(err, IsNil)
-	c.Assert(len(hostJobs), Equals, 1)
+	assertJobCount := func(host *FakeHostClient, expected int) map[string]host.ActiveJob {
+		jobs, err := host.ListJobs()
+		c.Assert(err, IsNil)
+		c.Assert(jobs, HasLen, expected)
+		return jobs
+	}
+	h1 := hosts[testHostID]
+	assertJobCount(h1, 2)
+	assertJobCount(h2, 1)
 
 	h3 := NewFakeHostClient("host-3")
 	c.Log("Add a host, wait for omni job start on that host.")
 	cluster.AddHost(h3)
-	_, err = waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, IsNil)
-	jobs = s.Jobs()
-	c.Assert(jobs, HasLen, 4)
-	hostJobs, err = h3.ListJobs()
-	c.Assert(err, IsNil)
-	c.Assert(len(hostJobs), Equals, 1)
+	s.waitJobStart()
+	c.Assert(s.Jobs(), HasLen, 4)
+	jobs := assertJobCount(h3, 1)
 
 	c.Log("Crash one of the omni jobs, and wait for it to restart")
-	for id := range hostJobs {
+	for id := range jobs {
 		h3.CrashJob(id)
 	}
-	hostJobs, err = h3.ListJobs()
-	c.Assert(err, IsNil)
-	c.Assert(len(hostJobs), Equals, 0)
-	_, err = waitForEvent(events, EventTypeJobStop)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, IsNil)
-	hostJobs, err = h3.ListJobs()
-	c.Assert(err, IsNil)
-	c.Assert(len(hostJobs), Equals, 1)
+	assertJobCount(h3, 0)
+	s.waitJobStop()
+	s.waitJobStart()
+	assertJobCount(h3, 1)
 
 	c.Logf("Remove one of the hosts. Ensure the cluster recovers correctly (hosts=%v)", hosts)
 	cluster.SetHosts(hosts)
-	_, err = waitForEvent(events, EventTypeFormationSync)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeRectify)
-	c.Assert(err, IsNil)
-	jobs = s.Jobs()
-	c.Assert(jobs, HasLen, 3)
-	hostJobs, err = h.ListJobs()
-	c.Assert(err, IsNil)
-	c.Assert(len(hostJobs), Equals, 2)
-	hostJobs, err = h2.ListJobs()
-	c.Assert(err, IsNil)
-	c.Assert(len(hostJobs), Equals, 1)
+	s.waitFormationSync()
+	s.waitRectify()
+	c.Assert(s.Jobs(), HasLen, 3)
+	assertJobCount(h1, 2)
+	assertJobCount(h2, 1)
 
 	c.Logf("Remove another host. Ensure the cluster recovers correctly (hosts=%v)", hosts)
 	cluster.RemoveHost(testHostID)
-	_, err = waitForEvent(events, EventTypeFormationSync)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeRectify)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events, EventTypeJobStart)
-	c.Assert(err, IsNil)
-	jobs = s.Jobs()
-	c.Assert(jobs, HasLen, 2)
-	hostJobs, err = h2.ListJobs()
-	c.Assert(err, IsNil)
-	c.Assert(len(hostJobs), Equals, 2)
+	s.waitFormationSync()
+	s.waitRectify()
+	s.waitJobStart()
+	c.Assert(s.Jobs(), HasLen, 2)
+	assertJobCount(h2, 2)
 }
 
-func (ts *TestSuite) TestMultipleSchedulers(c *C) {
+func (TestSuite) TestMultipleSchedulers(c *C) {
 	// Set up cluster and both schedulers
-	h := NewFakeHostClient(testHostID)
-	hosts := map[string]*FakeHostClient{
-		h.ID(): h,
-	}
-	cluster := NewFakeCluster()
-	cluster.SetHosts(hosts)
-	events1 := make(chan Event, eventBufferSize)
-	sched1 := runTestScheduler(cluster, events1, false)
-	defer sched1.Stop()
-	s1 := sched1.scheduler
-	events2 := make(chan Event, eventBufferSize)
-	sched2 := runTestScheduler(cluster, events2, false)
-	defer sched2.Stop()
-	s2 := sched2.scheduler
-	_, err := waitDurationForEvent(events1, EventTypeJobStart, 1*time.Second)
+	cluster := newTestCluster(nil)
+	s1 := runTestScheduler(c, cluster, false)
+	defer s1.Stop()
+	s2 := runTestScheduler(c, cluster, false)
+	defer s2.Stop()
+
+	_, err := s1.waitDurationForEvent(EventTypeJobStart, 1*time.Second)
 	c.Assert(err, Not(IsNil))
-	_, err = waitDurationForEvent(events2, EventTypeJobStart, 1*time.Second)
+	_, err = s2.waitDurationForEvent(EventTypeJobStart, 1*time.Second)
 	c.Assert(err, Not(IsNil))
 
 	// Make S1 the leader, wait for jobs to start
 	s1.ChangeLeader(true)
-	_, err = waitForEvent(events1, EventTypeJobStart)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events2, EventTypeJobStart)
-	c.Assert(err, IsNil)
-	jobs := s1.Jobs()
-	c.Assert(jobs, HasLen, 1)
-	jobs = s2.Jobs()
-	c.Assert(jobs, HasLen, 1)
+	s1.waitJobStart()
+	s2.waitJobStart()
+	c.Assert(s1.Jobs(), HasLen, 1)
+	c.Assert(s2.Jobs(), HasLen, 1)
 
 	s1.ChangeLeader(false)
 
@@ -423,37 +389,18 @@ func (ts *TestSuite) TestMultipleSchedulers(c *C) {
 	c.Assert(err, IsNil)
 
 	// Test scaling up an existing formation
-	form := &ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 2}}
+	formation := &ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: map[string]int{"web": 2}}
 	c.Log("Test scaling up an existing formation. Wait for formation change and job start")
-	s1.PutFormation(form)
-	s2.PutFormation(form)
-	_, err = waitForEvent(events1, EventTypeFormationChange)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events2, EventTypeFormationChange)
-	c.Assert(err, IsNil)
-	_, err = waitDurationForEvent(events2, EventTypeJobStart, 1*time.Second)
+	s1.PutFormation(formation)
+	s2.PutFormation(formation)
+	s1.waitFormationChange()
+	s2.waitFormationChange()
+	_, err = s2.waitDurationForEvent(EventTypeJobStart, 1*time.Second)
 	c.Assert(err, Not(IsNil))
-	_, err = waitDurationForEvent(events1, EventTypeJobStart, 1*time.Second)
+	_, err = s1.waitDurationForEvent(EventTypeJobStart, 1*time.Second)
 	c.Assert(err, Not(IsNil))
 
 	s2.ChangeLeader(true)
-
-	_, err = waitForEvent(events2, EventTypeJobStart)
-	c.Assert(err, IsNil)
-	_, err = waitForEvent(events1, EventTypeJobStart)
-	c.Assert(err, IsNil)
-}
-
-func checkJobEvent(c *C, e Event) *Job {
-	event, ok := e.(*JobEvent)
-	c.Assert(ok, Equals, true)
-	c.Assert(event.Job, NotNil)
-	return event.Job
-}
-
-func checkJobRequestEvent(c *C, e Event) *JobRequest {
-	event, ok := e.(*JobRequestEvent)
-	c.Assert(ok, Equals, true)
-	c.Assert(event.Request, NotNil)
-	return event.Request
+	s2.waitJobStart()
+	s1.waitJobStart()
 }
