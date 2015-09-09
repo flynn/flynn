@@ -920,22 +920,17 @@ func (s *Scheduler) Unsubscribe(events chan Event) {
 
 func (s *Scheduler) SaveJob(job *Job, appName string, status host.JobStatus, metadata map[string]string) (*Job, error) {
 	log := logger.New("fn", "SaveJob", "job.id", job.JobID, "app.id", job.AppID, "app.name", appName, "release.id", job.ReleaseID, "job.type", job.Type)
-	controllerState := "down"
 	switch status {
 	case host.StatusStarting:
 		fallthrough
 	case host.StatusRunning:
 		s.handleJobStart(job)
-		controllerState = "up"
-	case host.StatusCrashed:
-		controllerState = "crashed"
-		fallthrough
 	default:
 		delete(s.jobs, job.JobID)
 		delete(s.stoppedJobs, job.JobID)
 	}
 	log.Info("Queuing job for persistence")
-	s.putJobs <- controllerJobFromSchedulerJob(job, controllerState, metadata)
+	s.putJobs <- controllerJobFromSchedulerJob(job, jobState(status), metadata)
 	return job, nil
 }
 
