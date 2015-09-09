@@ -4,6 +4,7 @@ import (
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
+	host "github.com/flynn/flynn/host/types"
 )
 
 type JobRequestType string
@@ -63,5 +64,22 @@ func controllerJobFromSchedulerJob(job *Job, state string, metadata map[string]s
 		Type:      job.Type,
 		State:     state,
 		Meta:      metadata,
+	}
+}
+
+func jobState(status host.JobStatus) string {
+	switch status {
+	case host.StatusStarting:
+		return "starting"
+	case host.StatusRunning:
+		return "up"
+	case host.StatusDone:
+		return "down"
+	case host.StatusCrashed:
+		return "crashed"
+	case host.StatusFailed:
+		return "failed"
+	default:
+		return ""
 	}
 }
