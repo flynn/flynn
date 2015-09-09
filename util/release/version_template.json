@@ -1,5 +1,4 @@
 {
-  "flynn/etcd": "$image_id[etcd]",
   "flynn/flannel": "$image_id[flannel]",
   "flynn/discoverd": "$image_id[discoverd]",
   "flynn/postgresql": "$image_id[postgresql]",

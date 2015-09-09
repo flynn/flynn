@@ -5,12 +5,12 @@ import (
 	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
+	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/router/client"
 	"github.com/flynn/flynn/router/types"
 )
 
-func (s *S) newTestAPIServer(t etcdrunner.TestingT) *testAPIServer {
+func (s *S) newTestAPIServer(t testutil.TestingT) *testAPIServer {
 	httpListener := s.newHTTPListener(t)
 	tcpListener := s.newTCPListener(t)
 	r := &Router{

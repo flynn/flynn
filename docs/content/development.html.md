@@ -95,8 +95,8 @@ $ script/bootstrap-flynn
 This will do the following:
 
 * stop the `flynn-host` daemon and any running Flynn services
-* start the `flynn-host` daemon, which will in turn start etcd and discoverd
-* run the Flynn bootstrapper, which will start all the Flynn Layer 1 services
+* start the `flynn-host` daemon
+* run the Flynn bootstrapper, which will start all of the Flynn services
 
 If you want to boot Flynn using a different job backend, or an external IP other
 than that of the `eth0` device, the script provides some options for doing so.

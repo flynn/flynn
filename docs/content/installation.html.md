@@ -117,9 +117,7 @@ Just run `flynn install` to start the installation.
 ## Ubuntu 14.04 amd64
 
 Before we get going with the installation, please note that if you plan on running a multi-node
-cluster, you should boot at least 3 nodes to keep etcd efficient
-(see [here](https://github.com/coreos/etcd/blob/v0.4.6/Documentation/optimal-cluster-size.md) for
-an explanation).
+cluster, you should boot at least 3 nodes for cluster stability.
 
 *NOTE: If you are installing on Linode, you need to use native kernels (rather than
 Linode kernels) for AUFS support, see [this guide](https://www.linode.com/docs/tools-reference/custom-kernels-distros/run-a-distributionsupplied-kernel-with-pvgrub)
@@ -169,14 +167,13 @@ for all nodes in the cluster:
 **Note:** A firewall with this configuration is _required_ to prevent external
 access to internal management APIs.
 
-The next step is to configure a Layer 0 cluster by starting the flynn-host daemon on all
-nodes. The daemon uses etcd for leader election, and etcd needs to be aware of all of the
-other nodes for it to function correctly.
+The next step is to configure a Layer 0 cluster by starting the flynn-host
+daemon on all nodes. The daemon uses Raft for leader election, and it needs to
+be aware of all of the other nodes for it to function correctly.
 
-If you are starting more than one node, the etcd cluster should be configured
-using a [discovery
-token](https://coreos.com/docs/cluster-management/setup/etcd-cluster-discovery/).
-`flynn-host init` is a tool that handles generating and configuring the token.
+If you are starting more than one node, the cluster should be configured using
+a discovery token.  `flynn-host init` is a tool that handles generating and
+configuring the token.
 
 On the first node, create a new token with the `--init-discovery` flag. The
 minimum multi-node cluster size is three, and this command does not need to be

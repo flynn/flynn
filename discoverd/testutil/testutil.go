@@ -1,17 +1,21 @@
 package testutil
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"sync"
 	"time"
 
 	"github.com/flynn/flynn/discoverd/client"
-	. "github.com/flynn/flynn/discoverd/testutil/etcdrunner"
+	"github.com/flynn/flynn/pkg/attempt"
 )
 
 func RunDiscoverdServer(t TestingT, raftPort, httpPort string) (string, func()) {
@@ -139,4 +143,41 @@ func waitForLeader(t TestingT, host string, timeout time.Duration) error {
 		// Otherwise log message that we're still waiting.
 		t.Log("waiting for leader: status=", resp.StatusCode)
 	}
+}
+
+func RandomPort() (string, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", err
+	}
+	_, port, _ := net.SplitHostPort(l.Addr().String())
+	l.Close()
+	return port, err
+}
+
+func LogOutput(name string, rs ...io.Reader) {
+	var wg sync.WaitGroup
+	wg.Add(len(rs))
+	for _, r := range rs {
+		go func(r io.Reader) {
+			scanner := bufio.NewScanner(r)
+			for scanner.Scan() {
+				log.Println(name+":", scanner.Text())
+			}
+			wg.Done()
+		}(r)
+	}
+	wg.Wait()
+}
+
+type TestingT interface {
+	Fatal(...interface{})
+	Fatalf(string, ...interface{})
+	Log(...interface{})
+}
+
+var Attempts = attempt.Strategy{
+	Min:   5,
+	Total: 5 * time.Second,
+	Delay: 200 * time.Millisecond,
 }

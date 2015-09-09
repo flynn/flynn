@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
+	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -47,7 +47,7 @@ func (s *TCPTestServer) Close() error { return s.l.Close() }
 
 const firstTCPPort, lastTCPPort = 10001, 10010
 
-func (s *S) newTCPListener(t etcdrunner.TestingT) *TCPListener {
+func (s *S) newTCPListener(t testutil.TestingT) *TCPListener {
 	l := &TCPListener{
 		IP:        "127.0.0.1",
 		startPort: firstTCPPort,

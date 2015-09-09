@@ -8,7 +8,6 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
-	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
 )
 
 // Hook gocheck up to the "go test" runner
@@ -21,10 +20,10 @@ var _ = Suite(&ClientSuite{})
 func (s *ClientSuite) TestWatchReconnect(c *C) {
 	c.Skip("fix discoverd watch reconnect") // FIXME(benbjohnson)
 
-	raftPort, err := etcdrunner.RandomPort()
+	raftPort, err := testutil.RandomPort()
 	c.Assert(err, IsNil)
 
-	httpPort, err := etcdrunner.RandomPort()
+	httpPort, err := testutil.RandomPort()
 	c.Assert(err, IsNil)
 
 	// clientA is used to register services and instances, and remains connected

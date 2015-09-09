@@ -14,7 +14,6 @@ import (
 	"github.com/flynn/flynn/discoverd/cache"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
-	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
 	"github.com/flynn/flynn/pkg/testutils/postgres"
 	"github.com/flynn/flynn/router/types"
 )
@@ -52,7 +51,7 @@ func (d *discoverdWrapper) Cleanup() {
 	d.hbs = nil
 }
 
-func setup(t etcdrunner.TestingT) (*discoverdWrapper, func()) {
+func setup(t testutil.TestingT) (*discoverdWrapper, func()) {
 	dc, killDiscoverd := testutil.BootDiscoverd(t, "", "")
 	dw := &discoverdWrapper{discoverdClient: dc}
 

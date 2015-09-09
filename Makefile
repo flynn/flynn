@@ -15,7 +15,7 @@ clean:
 test: test-unit test-integration
 
 test-unit:
-	@GIT_COMMIT=dev GIT_BRANCH=dev GIT_TAG=none GIT_DIRTY=false tup appliance/etcd discoverd
+	@GIT_COMMIT=dev GIT_BRANCH=dev GIT_TAG=none GIT_DIRTY=false tup discoverd
 	go test ./...
 
 test-integration:

@@ -1,4 +1,0 @@
-include_rules
-: |> ./build.sh |> bin/etcd bin/etcdctl
-: |> !go |> bin/etcd-wrapper
-: bin/* |> !docker-bootstrapped |>
