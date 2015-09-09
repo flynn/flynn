@@ -45,6 +45,7 @@ func (c *FakeCluster) StreamHostEvents(ch chan *discoverd.Event) (stream.Stream,
 	for id := range c.hosts {
 		ch <- createDiscoverdEvent(id, discoverd.EventKindUp)
 	}
+	ch <- createDiscoverdEvent("", discoverd.EventKindCurrent)
 
 	return &ClusterStream{cluster: c, ch: ch}, nil
 }
