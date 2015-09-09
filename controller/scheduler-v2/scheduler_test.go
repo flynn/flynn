@@ -270,11 +270,11 @@ func (TestSuite) TestRectify(c *C) {
 	c.Assert(s.Jobs(), HasLen, 2)
 }
 
-func (TestSuite) TestExponentialBackoffNoHosts(c *C) {
+func (TestSuite) TestJobRequestRestarts(c *C) {
 	s := runTestScheduler(c, NewFakeCluster(), true)
 	defer s.Stop()
 
-	waitRestarts := func(duration time.Duration, expected uint) {
+	waitRestarts := func(duration time.Duration) {
 		event, err := s.waitDurationForEvent(EventTypeJobRequest, duration)
 		c.Assert(err.Error(), Equals, "unexpected event error: no hosts found")
 		e, ok := event.(*JobRequestEvent)
@@ -282,13 +282,13 @@ func (TestSuite) TestExponentialBackoffNoHosts(c *C) {
 			c.Fatalf("expected JobRequestEvent, got %T", event)
 		}
 		c.Assert(e.Request, NotNil)
-		c.Assert(e.Request.restarts, Equals, expected)
 	}
 
 	// wait for the formation to cascade to the scheduler
 	s.waitRectify()
-	waitRestarts(1*time.Second+50*time.Millisecond, 2)
-	waitRestarts(2*time.Second+50*time.Millisecond, 3)
+	waitRestarts(550 * time.Millisecond)
+	waitRestarts(550 * time.Millisecond)
+	waitRestarts(550 * time.Millisecond)
 }
 
 func (TestSuite) TestMultipleHosts(c *C) {
@@ -343,6 +343,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitJobStop()
 	s.waitJobStart()
 	assertJobCount(h3, 1)
+	c.Assert(s.Jobs(), HasLen, 4)
 
 	c.Logf("Remove one of the hosts. Ensure the cluster recovers correctly (hosts=%v)", hosts)
 	cluster.SetHosts(hosts)
