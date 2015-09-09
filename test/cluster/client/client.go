@@ -3,7 +3,6 @@ package testcluster
 import (
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -70,7 +69,7 @@ func (c *Client) AddHost(ch chan *discoverd.Event, vanilla bool) (*tc.Instance, 
 		select {
 		case e, ok := <-ch:
 			if !ok {
-				return nil, fmt.Errorf("unexpected host stream close")
+				return nil, errors.New("channel closed unexpectedly")
 			}
 			if e.Kind != discoverd.EventKindUp {
 				continue
@@ -78,7 +77,7 @@ func (c *Client) AddHost(ch chan *discoverd.Event, vanilla bool) (*tc.Instance, 
 			c.size++
 			return &instance, nil
 		case <-time.After(60 * time.Second):
-			return nil, fmt.Errorf("timed out waiting for new host")
+			return nil, errors.New("timed out waiting for new host")
 		}
 	}
 }
@@ -88,7 +87,23 @@ func (c *Client) AddReleaseHosts() (*tc.BootResult, error) {
 	return &res, c.Post("/release", nil, &res)
 }
 
-func (c *Client) RemoveHost(host *tc.Instance) error {
-	c.size--
-	return c.Delete("/" + host.ID)
+func (c *Client) RemoveHost(ch chan *discoverd.Event, host *tc.Instance) error {
+	if err := c.Delete("/" + host.ID); err != nil {
+		return err
+	}
+	for {
+		select {
+		case e, ok := <-ch:
+			if !ok {
+				return errors.New("channel closed unexpectedly")
+			}
+			if e.Kind != discoverd.EventKindDown {
+				continue
+			}
+			c.size--
+			return nil
+		case <-time.After(60 * time.Second):
+			return errors.New("timed out waiting for host removal")
+		}
+	}
 }
