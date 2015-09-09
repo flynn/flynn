@@ -498,7 +498,7 @@ func (s *Scheduler) HandleJobRequest(req *JobRequest) {
 func (s *Scheduler) RunPutJobs() {
 	log := logger.New("fn", "RunPutJobs")
 	log.Info("starting job persistence loop")
-	strategy := attempt.Strategy{Delay: 100 * time.Millisecond, Total: time.Minute}
+	strategy := attempt.Strategy{Delay: 100 * time.Millisecond, Total: time.Second}
 	for {
 		job, ok := <-s.putJobs
 		if !ok {
@@ -913,6 +913,7 @@ func (s *Scheduler) Unsubscribe(events chan Event) {
 }
 
 func (s *Scheduler) SaveJob(job *Job, appName string, status host.JobStatus, metadata map[string]string) (*Job, error) {
+	log := logger.New("fn", "SaveJob", "job.id", job.JobID, "app.id", job.AppID, "app.name", appName, "release.id", job.ReleaseID, "job.type", job.Type)
 	controllerState := "down"
 	switch status {
 	case host.StatusStarting:
@@ -924,6 +925,7 @@ func (s *Scheduler) SaveJob(job *Job, appName string, status host.JobStatus, met
 		delete(s.jobs, job.JobID)
 		delete(s.stoppedJobs, job.JobID)
 	}
+	log.Info("Queuing job for persistence")
 	s.putJobs <- controllerJobFromSchedulerJob(job, controllerState, metadata)
 	return job, nil
 }
