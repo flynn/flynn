@@ -35,9 +35,10 @@ type Scheduler struct {
 	utils.ControllerClient
 	utils.ClusterClient
 
-	isLeader      bool
-	changeLeader  chan bool
-	backoffPeriod time.Duration
+	isLeader         bool
+	changeLeader     chan bool
+	backoffPeriod    time.Duration
+	maxBackoffPeriod time.Duration
 
 	formations    Formations
 	hostStreams   map[string]stream.Stream
@@ -64,7 +65,7 @@ type Scheduler struct {
 }
 
 func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Scheduler {
-	return &Scheduler{
+	s := &Scheduler{
 		ControllerClient: cc,
 		ClusterClient:    cluster,
 		changeLeader:     make(chan bool),
@@ -85,6 +86,8 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Sched
 		jobRequests:      make(chan *JobRequest, eventBufferSize),
 		putJobs:          make(chan *ct.Job, eventBufferSize),
 	}
+	s.maxBackoffPeriod = 10 * s.backoffPeriod
+	return s
 }
 
 func main() {
@@ -964,12 +967,12 @@ func (s *Scheduler) scheduleJobRequest(req *JobRequest) {
 func (s *Scheduler) getBackoffDuration(restarts uint) time.Duration {
 	// Overflow guard
 	if restarts > 30 {
-		return s.backoffPeriod
+		return s.maxBackoffPeriod
 	}
-	delay := time.Duration(1<<restarts) * time.Second
+	delay := time.Duration(1<<restarts) * s.backoffPeriod
 
-	if delay > s.backoffPeriod {
-		return s.backoffPeriod
+	if delay > s.maxBackoffPeriod {
+		return s.maxBackoffPeriod
 	}
 	return delay
 }
@@ -1137,7 +1140,7 @@ func NewEvent(typ EventType, err error, data interface{}) Event {
 }
 
 func getBackoffPeriod() time.Duration {
-	backoffPeriod := 10 * time.Minute
+	backoffPeriod := time.Second
 
 	if period := os.Getenv("BACKOFF_PERIOD"); period != "" {
 		p, err := time.ParseDuration(period)
