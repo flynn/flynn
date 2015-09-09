@@ -15,7 +15,7 @@ import (
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/websocket"
-	"github.com/flynn/flynn/discoverd/testutil/etcdrunner"
+	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/router/types"
 )
@@ -73,7 +73,7 @@ func newHTTPClient(serverName string) *http.Client {
 	}
 }
 
-func (s *S) newHTTPListener(t etcdrunner.TestingT) *HTTPListener {
+func (s *S) newHTTPListener(t testutil.TestingT) *HTTPListener {
 	pair, err := tls.X509KeyPair(localhostCert, localhostKey)
 	if err != nil {
 		t.Fatal(err)

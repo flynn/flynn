@@ -6,8 +6,8 @@ Router is the Flynn HTTP/TCP cluster router. It relies on [service
 discovery](/discoverd) to keep track of what backends are up and acts as
 a standard reverse proxy with random load balancing. HTTP domains and TCP ports
 are provisioned via a HTTP API. Only two pieces of data are required: the domain
-name and the service name. etcd is used as a pluggable persistence backend so
-that all instances of router get the same configuration.
+name and the service name. PostgreSQL is used as a pluggable persistence backend
+so that all instances of router get the same configuration.
 
 ### Benefits over HAProxy/nginx
 
