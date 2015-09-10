@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/units"
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
@@ -200,6 +201,22 @@ func (h *Helper) addHosts(t *c.C, count int, vanilla bool) []*tc.Instance {
 	stream, err := h.discoverdClient(t).Service("router-api").Watch(events)
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
+
+	// wait for the current state
+loop:
+	for {
+		select {
+		case e, ok := <-events:
+			if !ok {
+				t.Fatal("event stream closed unexpectedly")
+			}
+			if e.Kind == discoverd.EventKindCurrent {
+				break loop
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("timed out waiting for current service state")
+		}
+	}
 
 	hosts := make([]*tc.Instance, count)
 	for i := 0; i < count; i++ {
