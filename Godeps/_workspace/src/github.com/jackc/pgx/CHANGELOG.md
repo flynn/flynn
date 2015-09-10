@@ -1,5 +1,9 @@
 # Master
 
+* Encode from net.IP to inet and cidr
+* Generalize encoding pointer to string to any PostgreSQL type
+* Add UUID encoding from pointer to string (Joseph Glanville)
+* Add null mapping to pointer to pointer (Jonathan Rudenberg)
 * Add JSON and JSONB type support (Joseph Glanville)
 
 # 2.6.0 (September 3, 2015)
@@ -24,7 +28,7 @@
 * Remove unused text format scanners
 * Return error when too many parameters on Prepare
 * Add Travis CI integration (Jonathan Rudenberg)
-* Large object support (Blake Gentry)
+* Large object support (Jonathan Rudenberg)
 * Fix reading null byte arrays (Karl Seguin)
 * Add timestamptz[] support
 * Add timestamp[] support (Karl Seguin)
