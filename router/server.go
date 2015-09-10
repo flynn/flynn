@@ -11,11 +11,14 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kavu/go_reuseport"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/router/types"
 )
+
+var logger = log15.New("app", "router")
 
 type Listener interface {
 	Start() error
@@ -33,10 +36,15 @@ type Router struct {
 }
 
 func (s *Router) Start() error {
+	log := logger.New("fn", "Start")
+	log.Info("starting HTTP listener")
 	if err := s.HTTP.Start(); err != nil {
+		log.Error("error starting HTTP listener", "err", err)
 		return err
 	}
+	log.Info("starting TCP listener")
 	if err := s.TCP.Start(); err != nil {
+		log.Error("error starting TCP listener", "err", err)
 		return err
 	}
 	return nil
@@ -98,11 +106,17 @@ func main() {
 		}
 	}
 
+	log := logger.New("fn", "main")
+
+	log.Info("connecting to postgres")
 	db, err := postgres.Open("", "")
 	if err != nil {
+		log.Error("error connecting to postgres", "err", err)
 		shutdown.Fatal(err)
 	}
+	log.Info("running DB migrations")
 	if err := migrateDB(db.DB); err != nil {
+		log.Error("error running DB migrations", "err", err)
 		shutdown.Fatal(err)
 	}
 
@@ -114,6 +128,7 @@ func main() {
 		}
 	}
 
+	log.Info("creating postgres connection pool")
 	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
 		ConnConfig: pgx.ConnConfig{
 			Host:     os.Getenv("PGHOST"),
@@ -124,6 +139,7 @@ func main() {
 		},
 	})
 	if err != nil {
+		log.Error("error creating postgres connection pool", "err", err)
 		shutdown.Fatal(err)
 	}
 	shutdown.BeforeExit(func() { pgxpool.Close() })
@@ -151,8 +167,10 @@ func main() {
 	}
 	shutdown.BeforeExit(r.Close)
 
+	log.Info("starting API listener")
 	listener, err := listenFunc("tcp4", *apiAddr)
 	if err != nil {
+		log.Error("error starting API listener", "err", err)
 		shutdown.Fatal(listenErr{*apiAddr, err})
 	}
 
@@ -161,13 +179,16 @@ func main() {
 		"router-http": *httpAddr,
 	}
 	for service, addr := range services {
+		log.Info("registering service", "name", service, "addr", addr)
 		hb, err := discoverd.AddServiceAndRegister(service, addr)
 		if err != nil {
+			log.Error("error registering service", "name", service, "addr", addr, "err", err)
 			shutdown.Fatal(err)
 		}
 		shutdown.BeforeExit(func() { hb.Close() })
 	}
 
+	log.Info("serving API requests")
 	shutdown.Fatal(http.Serve(listener, apiHandler(&r)))
 }
 

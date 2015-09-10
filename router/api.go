@@ -10,7 +10,6 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
-	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/pprof"
 	"github.com/flynn/flynn/pkg/sse"
@@ -180,7 +179,6 @@ func streamEvents(params martini.Params, rtr *Router, w http.ResponseWriter) {
 	httpListener := listenerFor(rtr, "http")
 	tcpListener := listenerFor(rtr, "tcp")
 
-	log := log15.New("component", "router")
 	httpEvents := make(chan *router.Event)
 	tcpEvents := make(chan *router.Event)
 	sseEvents := make(chan *router.StreamEvent)
@@ -203,5 +201,5 @@ func streamEvents(params martini.Params, rtr *Router, w http.ResponseWriter) {
 	}
 	go sendEvents(httpEvents)
 	go sendEvents(tcpEvents)
-	sse.ServeStream(w, sseEvents, log)
+	sse.ServeStream(w, sseEvents, logger)
 }
