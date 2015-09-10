@@ -7,12 +7,10 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"syscall"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kardianos/osext"
 	cfg "github.com/flynn/flynn/cli/config"
 )
 
@@ -192,43 +190,6 @@ func isNotFound(err error) bool {
 		}
 	}
 	return false
-}
-
-func caCertDir() string {
-	return filepath.Join(cfg.Dir(), "ca-certs")
-}
-
-func gitConfig(args ...string) error {
-	args = append([]string{"config", "--global"}, args...)
-	cmd := exec.Command("git", args...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("error %q running %q: %q", err, strings.Join(cmd.Args, " "), out)
-	}
-	return nil
-}
-
-func writeGlobalGitConfig(gitURL, caFile string) error {
-	if err := gitConfig(fmt.Sprintf("http.%s.sslCAInfo", gitURL), caFile); err != nil {
-		return err
-	}
-	self, err := osext.Executable()
-	if err != nil {
-		return err
-	}
-	if err := gitConfig(fmt.Sprintf("credential.%s.helper", gitURL), self+" git-credentials"); err != nil {
-		return err
-	}
-	return nil
-}
-
-func removeGlobalGitConfig(gitURL string) {
-	for _, k := range []string{
-		fmt.Sprintf("http.%s", gitURL),
-		fmt.Sprintf("credential.%s", gitURL),
-	} {
-		gitConfig("--remove-section", k)
-	}
 }
 
 func init() {
