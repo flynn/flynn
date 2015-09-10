@@ -259,6 +259,13 @@ func (s *Scheduler) Run() error {
 	go s.RunPutJobs()
 
 	for {
+		// prioritise leader events so no action is taken when demoted
+		select {
+		case isLeader := <-s.changeLeader:
+			s.HandleLeaderChange(isLeader)
+		default:
+		}
+
 		select {
 		case <-s.stop:
 			log.Info("stopping scheduler loop")
@@ -266,52 +273,22 @@ func (s *Scheduler) Run() error {
 			return nil
 		case isLeader := <-s.changeLeader:
 			s.HandleLeaderChange(isLeader)
-			continue
-		default:
-		}
-
-		// Handle events that reconcile scheduler state with the cluster
-		select {
 		case req := <-s.jobRequests:
 			s.HandleJobRequest(req)
-			continue
 		case e := <-s.hostEvents:
 			s.HandleHostEvent(e)
-			continue
-		case e, ok := <-s.jobEvents:
-			if !ok {
-				return errors.New("job events channel closed prematurely")
-			}
+		case e := <-s.jobEvents:
 			s.HandleJobEvent(e)
-			continue
 		case f := <-s.formationEvents:
 			s.HandleFormationChange(f)
-			continue
-		default:
-		}
-
-		// Handle sync events
-		select {
 		case <-s.syncFormations:
 			s.SyncFormations()
-			continue
 		case <-s.syncJobs:
 			s.SyncJobs()
-			continue
-		default:
-		}
-
-		// Finally, handle triggering cluster changes
-		select {
 		case <-s.rectify:
-			if !s.ready {
-				continue
+			if s.ready {
+				s.Rectify()
 			}
-			s.Rectify()
-		case <-time.After(10 * time.Millisecond):
-			// block so that
-			//	1) mutate events are given a chance to happen
-			//  2) we don't spin hot
 		}
 	}
 	return nil
