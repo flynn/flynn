@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
@@ -113,7 +111,7 @@ func runClusterAdd(args *docopt.Args) error {
 		if err != nil {
 			return fmt.Errorf("Error writing CA certificate: %s", err)
 		}
-		if err := writeGlobalGitConfig(s.GitURL, caPath); err != nil {
+		if err := cfg.WriteGlobalGitConfig(s.GitURL, caPath); err != nil {
 			return err
 		}
 	}
@@ -136,10 +134,7 @@ func writeCACert(c *controller.Client, name string) (string, error) {
 		return "", err
 	}
 	defer res.Body.Close()
-	if err := os.MkdirAll(caCertDir(), 0755); err != nil {
-		return "", err
-	}
-	dest, err := os.Create(filepath.Join(caCertDir(), name+".pem"))
+	dest, err := cfg.CACertFile(name)
 	if err != nil {
 		return "", err
 	}
@@ -165,7 +160,7 @@ func runClusterRemove(args *docopt.Args) error {
 		}
 
 		if !c.SSHGit() {
-			removeGlobalGitConfig(c.GitURL)
+			cfg.RemoveGlobalGitConfig(c.GitURL)
 		}
 
 		log.Print(msg)

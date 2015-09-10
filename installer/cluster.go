@@ -162,10 +162,11 @@ func (c *BaseCluster) StackAddCmd() (string, error) {
 
 func (c *BaseCluster) ClusterConfig() *cfg.Cluster {
 	return &cfg.Cluster{
-		Name:   c.Name,
-		Domain: c.Domain.Name,
-		Key:    c.ControllerKey,
-		TLSPin: c.ControllerPin,
+		Name:          c.Name,
+		ControllerURL: "https://controller." + c.Domain.Name,
+		GitURL:        "https://git." + c.Domain.Name,
+		Key:           c.ControllerKey,
+		TLSPin:        c.ControllerPin,
 	}
 }
 
@@ -397,13 +398,28 @@ func (c *BaseCluster) configureCLI() error {
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	if err := config.Add(c.ClusterConfig(), true); err != nil {
+	cluster := c.ClusterConfig()
+	if err := config.Add(cluster, true); err != nil {
 		return err
 	}
 	config.SetDefault(c.Name)
 	if err := config.SaveTo(cfg.DefaultPath()); err != nil {
 		return err
 	}
+
+	caFile, err := cfg.CACertFile(cluster.Name)
+	if err != nil {
+		return err
+	}
+	defer caFile.Close()
+	if _, err := caFile.Write([]byte(c.CACert)); err != nil {
+		return err
+	}
+
+	if err := cfg.WriteGlobalGitConfig(cluster.GitURL, caFile.Name()); err != nil {
+		return err
+	}
+
 	c.SendLog("CLI configured locally")
 	return nil
 }
