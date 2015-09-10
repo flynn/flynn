@@ -39,6 +39,7 @@ const (
 	TimestampArrayOid   = 1115
 	TimestampTzOid      = 1184
 	TimestampTzArrayOid = 1185
+	UuidOid             = 2950
 	JsonbOid            = 3802
 )
 
@@ -386,9 +387,10 @@ func (n NullBool) Encode(w *WriteBuf, oid Oid) error {
 	return encodeBool(w, n.Bool)
 }
 
-// NullTime represents an bigint that may be null. NullTime implements the
+// NullTime represents an time.Time that may be null. NullTime implements the
 // Scanner and Encoder interfaces so it may be used both as an argument to
-// Query[Row] and a destination for Scan.
+// Query[Row] and a destination for Scan. It corresponds with the PostgreSQL
+// types timestamptz, timestamp, and date.
 //
 // If Valid is false then the value is NULL.
 type NullTime struct {
@@ -398,7 +400,7 @@ type NullTime struct {
 
 func (n *NullTime) Scan(vr *ValueReader) error {
 	oid := vr.Type().DataType
-	if oid != TimestampTzOid && oid != TimestampOid {
+	if oid != TimestampTzOid && oid != TimestampOid && oid != DateOid {
 		return SerializationError(fmt.Sprintf("NullTime.Scan cannot decode OID %d", vr.Type().DataType))
 	}
 
@@ -408,10 +410,13 @@ func (n *NullTime) Scan(vr *ValueReader) error {
 	}
 
 	n.Valid = true
-	if oid == TimestampTzOid {
+	switch oid {
+	case TimestampTzOid:
 		n.Time = decodeTimestampTz(vr)
-	} else {
+	case TimestampOid:
 		n.Time = decodeTimestamp(vr)
+	case DateOid:
+		n.Time = decodeDate(vr)
 	}
 
 	return vr.Err()
@@ -420,7 +425,7 @@ func (n *NullTime) Scan(vr *ValueReader) error {
 func (n NullTime) FormatCode() int16 { return BinaryFormatCode }
 
 func (n NullTime) Encode(w *WriteBuf, oid Oid) error {
-	if oid != TimestampTzOid && oid != TimestampOid {
+	if oid != TimestampTzOid && oid != TimestampOid && oid != DateOid {
 		return SerializationError(fmt.Sprintf("NullTime.Encode cannot encode into OID %d", oid))
 	}
 
@@ -429,10 +434,15 @@ func (n NullTime) Encode(w *WriteBuf, oid Oid) error {
 		return nil
 	}
 
-	if oid == TimestampTzOid {
+	switch oid {
+	case TimestampTzOid:
 		return encodeTimestampTz(w, n.Time)
-	} else {
+	case TimestampOid:
 		return encodeTimestamp(w, n.Time)
+	case DateOid:
+		return encodeDate(w, n.Time)
+	default:
+		panic("unreachable")
 	}
 }
 
@@ -1055,8 +1065,16 @@ func encodeDate(w *WriteBuf, value interface{}) error {
 		return fmt.Errorf("Expected time.Time, received %T", value)
 	}
 
-	s := t.Format("2006-01-02")
-	return encodeText(w, s)
+	tUnix := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC).Unix()
+	dateEpoch := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
+
+	secSinceDateEpoch := tUnix - dateEpoch
+	daysSinceDateEpoch := secSinceDateEpoch / 86400
+
+	w.WriteInt32(4)
+	w.WriteInt32(int32(daysSinceDateEpoch))
+
+	return nil
 }
 
 const microsecFromUnixEpochToY2K = 946684800 * 1000000
@@ -1178,6 +1196,10 @@ func encodeInet(w *WriteBuf, value interface{}) error {
 	switch value := value.(type) {
 	case net.IPNet:
 		ipnet = value
+	case net.IP:
+		ipnet.IP = value
+		bitCount := len(value) * 8
+		ipnet.Mask = net.CIDRMask(bitCount, bitCount)
 	default:
 		return fmt.Errorf("Expected net.IPNet, received %T %v", value, value)
 	}

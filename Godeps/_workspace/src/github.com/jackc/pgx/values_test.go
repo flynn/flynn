@@ -17,6 +17,12 @@ func TestDateTranscode(t *testing.T) {
 	defer closeConn(t, conn)
 
 	dates := []time.Time{
+		time.Date(1, 1, 1, 0, 0, 0, 0, time.Local),
+		time.Date(1000, 1, 1, 0, 0, 0, 0, time.Local),
+		time.Date(1600, 1, 1, 0, 0, 0, 0, time.Local),
+		time.Date(1700, 1, 1, 0, 0, 0, 0, time.Local),
+		time.Date(1800, 1, 1, 0, 0, 0, 0, time.Local),
+		time.Date(1900, 1, 1, 0, 0, 0, 0, time.Local),
 		time.Date(1990, 1, 1, 0, 0, 0, 0, time.Local),
 		time.Date(1999, 12, 31, 0, 0, 0, 0, time.Local),
 		time.Date(2000, 1, 1, 0, 0, 0, 0, time.Local),
@@ -24,6 +30,11 @@ func TestDateTranscode(t *testing.T) {
 		time.Date(2004, 2, 29, 0, 0, 0, 0, time.Local),
 		time.Date(2013, 7, 4, 0, 0, 0, 0, time.Local),
 		time.Date(2013, 12, 25, 0, 0, 0, 0, time.Local),
+		time.Date(2029, 1, 1, 0, 0, 0, 0, time.Local),
+		time.Date(2081, 1, 1, 0, 0, 0, 0, time.Local),
+		time.Date(2096, 2, 29, 0, 0, 0, 0, time.Local),
+		time.Date(2550, 1, 1, 0, 0, 0, 0, time.Local),
+		time.Date(9999, 12, 31, 0, 0, 0, 0, time.Local),
 	}
 
 	for _, actualDate := range dates {
@@ -188,6 +199,32 @@ func mustParseCIDR(t *testing.T, s string) net.IPNet {
 	return *ipnet
 }
 
+func TestStringToNotTextTypeTranscode(t *testing.T) {
+	t.Parallel()
+
+	conn := mustConnect(t, *defaultConnConfig)
+	defer closeConn(t, conn)
+
+	input := "01086ee0-4963-4e35-9116-30c173a8d0bd"
+
+	var output string
+	err := conn.QueryRow("select $1::uuid", input).Scan(&output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if input != output {
+		t.Errorf("uuid: Did not transcode string successfully: %s is not %s", input, output)
+	}
+
+	err = conn.QueryRow("select $1::uuid", &input).Scan(&output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if input != output {
+		t.Errorf("uuid: Did not transcode pointer to string successfully: %s is not %s", input, output)
+	}
+}
+
 func TestInetCidrTranscode(t *testing.T) {
 	t.Parallel()
 
@@ -230,6 +267,48 @@ func TestInetCidrTranscode(t *testing.T) {
 		}
 
 		if actual.String() != tt.value.String() {
+			t.Errorf("%d. Expected %v, got %v (sql -> %v)", i, tt.value, actual, tt.sql)
+		}
+
+		ensureConnValid(t, conn)
+	}
+}
+
+func TestInetCidrTranscodeWithJustIP(t *testing.T) {
+	t.Parallel()
+
+	conn := mustConnect(t, *defaultConnConfig)
+	defer closeConn(t, conn)
+
+	tests := []struct {
+		sql   string
+		value string
+	}{
+		{"select $1::inet", "0.0.0.0/32"},
+		{"select $1::inet", "127.0.0.1/32"},
+		{"select $1::inet", "12.34.56.0/32"},
+		{"select $1::inet", "255.255.255.255/32"},
+		{"select $1::inet", "::/128"},
+		{"select $1::inet", "2607:f8b0:4009:80b::200e/128"},
+		{"select $1::cidr", "0.0.0.0/32"},
+		{"select $1::cidr", "127.0.0.1/32"},
+		{"select $1::cidr", "12.34.56.0/32"},
+		{"select $1::cidr", "255.255.255.255/32"},
+		{"select $1::cidr", "::/128"},
+		{"select $1::cidr", "2607:f8b0:4009:80b::200e/128"},
+	}
+
+	for i, tt := range tests {
+		expected := mustParseCIDR(t, tt.value)
+		var actual net.IPNet
+
+		err := conn.QueryRow(tt.sql, expected.IP).Scan(&actual)
+		if err != nil {
+			t.Errorf("%d. Unexpected failure: %v (sql -> %v, value -> %v)", i, err, tt.sql, tt.value)
+			continue
+		}
+
+		if actual.String() != expected.String() {
 			t.Errorf("%d. Expected %v, got %v (sql -> %v)", i, tt.value, actual, tt.sql)
 		}
 
@@ -280,6 +359,8 @@ func TestNullX(t *testing.T) {
 		{"select $1::timestamptz", []interface{}{pgx.NullTime{Time: time.Unix(123, 5000), Valid: false}}, []interface{}{&actual.t}, allTypes{t: pgx.NullTime{Time: time.Time{}, Valid: false}}},
 		{"select $1::timestamp", []interface{}{pgx.NullTime{Time: time.Unix(123, 5000), Valid: true}}, []interface{}{&actual.t}, allTypes{t: pgx.NullTime{Time: time.Unix(123, 5000), Valid: true}}},
 		{"select $1::timestamp", []interface{}{pgx.NullTime{Time: time.Unix(123, 5000), Valid: false}}, []interface{}{&actual.t}, allTypes{t: pgx.NullTime{Time: time.Time{}, Valid: false}}},
+		{"select $1::date", []interface{}{pgx.NullTime{Time: time.Date(1990, 1, 1, 0, 0, 0, 0, time.Local), Valid: true}}, []interface{}{&actual.t}, allTypes{t: pgx.NullTime{Time: time.Date(1990, 1, 1, 0, 0, 0, 0, time.Local), Valid: true}}},
+		{"select $1::date", []interface{}{pgx.NullTime{Time: time.Date(1990, 1, 1, 0, 0, 0, 0, time.Local), Valid: false}}, []interface{}{&actual.t}, allTypes{t: pgx.NullTime{Time: time.Time{}, Valid: false}}},
 		{"select 42::int4, $1::float8", []interface{}{pgx.NullFloat64{Float64: 1.23, Valid: true}}, []interface{}{&actual.i32, &actual.f64}, allTypes{i32: pgx.NullInt32{Int32: 42, Valid: true}, f64: pgx.NullFloat64{Float64: 1.23, Valid: true}}},
 	}
 
@@ -473,7 +554,7 @@ func TestNullXMismatch(t *testing.T) {
 		{"select $1::date", []interface{}{pgx.NullFloat32{Float32: 1.23, Valid: true}}, []interface{}{&actual.f32}, "cannot encode into OID 1082"},
 		{"select $1::date", []interface{}{pgx.NullFloat64{Float64: 1.23, Valid: true}}, []interface{}{&actual.f64}, "cannot encode into OID 1082"},
 		{"select $1::date", []interface{}{pgx.NullBool{Bool: true, Valid: true}}, []interface{}{&actual.b}, "cannot encode into OID 1082"},
-		{"select $1::date", []interface{}{pgx.NullTime{Time: time.Unix(123, 5000), Valid: true}}, []interface{}{&actual.t}, "cannot encode into OID 1082"},
+		{"select $1::int4", []interface{}{pgx.NullTime{Time: time.Unix(123, 5000), Valid: true}}, []interface{}{&actual.t}, "cannot encode into OID 23"},
 	}
 
 	for i, tt := range tests {
@@ -485,5 +566,103 @@ func TestNullXMismatch(t *testing.T) {
 		}
 
 		ensureConnValid(t, conn)
+	}
+}
+
+func TestPointerPointer(t *testing.T) {
+	t.Parallel()
+
+	conn := mustConnect(t, *defaultConnConfig)
+	defer closeConn(t, conn)
+
+	type allTypes struct {
+		s   *string
+		i16 *int16
+		i32 *int32
+		i64 *int64
+		f32 *float32
+		f64 *float64
+		b   *bool
+		t   *time.Time
+	}
+
+	var actual, zero, expected allTypes
+
+	{
+		s := "foo"
+		expected.s = &s
+		i16 := int16(1)
+		expected.i16 = &i16
+		i32 := int32(1)
+		expected.i32 = &i32
+		i64 := int64(1)
+		expected.i64 = &i64
+		f32 := float32(1.23)
+		expected.f32 = &f32
+		f64 := float64(1.23)
+		expected.f64 = &f64
+		b := true
+		expected.b = &b
+		t := time.Unix(123, 5000)
+		expected.t = &t
+	}
+
+	tests := []struct {
+		sql       string
+		queryArgs []interface{}
+		scanArgs  []interface{}
+		expected  allTypes
+	}{
+		{"select $1::text", []interface{}{expected.s}, []interface{}{&actual.s}, allTypes{s: expected.s}},
+		{"select $1::text", []interface{}{zero.s}, []interface{}{&actual.s}, allTypes{}},
+		{"select $1::int2", []interface{}{expected.i16}, []interface{}{&actual.i16}, allTypes{i16: expected.i16}},
+		{"select $1::int2", []interface{}{zero.i16}, []interface{}{&actual.i16}, allTypes{}},
+		{"select $1::int4", []interface{}{expected.i32}, []interface{}{&actual.i32}, allTypes{i32: expected.i32}},
+		{"select $1::int4", []interface{}{zero.i32}, []interface{}{&actual.i32}, allTypes{}},
+		{"select $1::int8", []interface{}{expected.i64}, []interface{}{&actual.i64}, allTypes{i64: expected.i64}},
+		{"select $1::int8", []interface{}{zero.i64}, []interface{}{&actual.i64}, allTypes{}},
+		{"select $1::float4", []interface{}{expected.f32}, []interface{}{&actual.f32}, allTypes{f32: expected.f32}},
+		{"select $1::float4", []interface{}{zero.f32}, []interface{}{&actual.f32}, allTypes{}},
+		{"select $1::float8", []interface{}{expected.f64}, []interface{}{&actual.f64}, allTypes{f64: expected.f64}},
+		{"select $1::float8", []interface{}{zero.f64}, []interface{}{&actual.f64}, allTypes{}},
+		{"select $1::bool", []interface{}{expected.b}, []interface{}{&actual.b}, allTypes{b: expected.b}},
+		{"select $1::bool", []interface{}{zero.b}, []interface{}{&actual.b}, allTypes{}},
+		{"select $1::timestamptz", []interface{}{expected.t}, []interface{}{&actual.t}, allTypes{t: expected.t}},
+		{"select $1::timestamptz", []interface{}{zero.t}, []interface{}{&actual.t}, allTypes{}},
+		{"select $1::timestamp", []interface{}{expected.t}, []interface{}{&actual.t}, allTypes{t: expected.t}},
+		{"select $1::timestamp", []interface{}{zero.t}, []interface{}{&actual.t}, allTypes{}},
+	}
+
+	for i, tt := range tests {
+		actual = zero
+
+		err := conn.QueryRow(tt.sql, tt.queryArgs...).Scan(tt.scanArgs...)
+		if err != nil {
+			t.Errorf("%d. Unexpected failure: %v (sql -> %v, queryArgs -> %v)", i, err, tt.sql, tt.queryArgs)
+		}
+
+		if !reflect.DeepEqual(actual, tt.expected) {
+			t.Errorf("%d. Expected %v, got %v (sql -> %v, queryArgs -> %v)", i, tt.expected, actual, tt.sql, tt.queryArgs)
+		}
+
+		ensureConnValid(t, conn)
+	}
+}
+
+func TestPointerPointerNonZero(t *testing.T) {
+	t.Parallel()
+
+	conn := mustConnect(t, *defaultConnConfig)
+	defer closeConn(t, conn)
+
+	f := "foo"
+	dest := &f
+
+	err := conn.QueryRow("select $1::text", nil).Scan(&dest)
+	if err != nil {
+		t.Errorf("Unexpected failure scanning: %v", err)
+	}
+	if dest != nil {
+		t.Errorf("Expected dest to be nil, got %#v", dest)
 	}
 }

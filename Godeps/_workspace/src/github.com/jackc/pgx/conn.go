@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -727,11 +728,11 @@ func (c *Conn) sendPreparedQuery(ps *PreparedStatement, arguments ...interface{}
 		switch arg := arguments[i].(type) {
 		case Encoder:
 			wbuf.WriteInt16(arg.FormatCode())
-		case string:
+		case string, *string:
 			wbuf.WriteInt16(TextFormatCode)
 		default:
 			switch oid {
-			case BoolOid, ByteaOid, Int2Oid, Int4Oid, Int8Oid, Float4Oid, Float8Oid, TimestampTzOid, TimestampTzArrayOid, TimestampOid, TimestampArrayOid, BoolArrayOid, Int2ArrayOid, Int4ArrayOid, Int8ArrayOid, Float4ArrayOid, Float8ArrayOid, TextArrayOid, VarcharArrayOid, OidOid, InetOid, CidrOid:
+			case BoolOid, ByteaOid, Int2Oid, Int4Oid, Int8Oid, Float4Oid, Float8Oid, TimestampTzOid, TimestampTzArrayOid, TimestampOid, TimestampArrayOid, DateOid, BoolArrayOid, Int2ArrayOid, Int4ArrayOid, Int8ArrayOid, Float4ArrayOid, Float8ArrayOid, TextArrayOid, VarcharArrayOid, OidOid, InetOid, CidrOid:
 				wbuf.WriteInt16(BinaryFormatCode)
 			default:
 				wbuf.WriteInt16(TextFormatCode)
@@ -752,6 +753,14 @@ func (c *Conn) sendPreparedQuery(ps *PreparedStatement, arguments ...interface{}
 		case string:
 			err = encodeText(wbuf, arguments[i])
 		default:
+			if v := reflect.ValueOf(arguments[i]); v.Kind() == reflect.Ptr {
+				if v.IsNil() {
+					wbuf.WriteInt32(-1)
+					continue
+				} else {
+					arguments[i] = v.Elem().Interface()
+				}
+			}
 			switch oid {
 			case BoolOid:
 				err = encodeBool(wbuf, arguments[i])
@@ -802,7 +811,11 @@ func (c *Conn) sendPreparedQuery(ps *PreparedStatement, arguments ...interface{}
 			case JsonOid, JsonbOid:
 				err = encodeJson(wbuf, arguments[i])
 			default:
-				return SerializationError(fmt.Sprintf("Cannot encode %T into oid %v - %T must implement Encoder or be converted to a string", arg, oid, arg))
+				if s, ok := arguments[i].(string); ok {
+					err = encodeText(wbuf, s)
+				} else {
+					return SerializationError(fmt.Sprintf("Cannot encode %T into oid %v - %T must implement Encoder or be converted to a string", arg, oid, arg))
+				}
 			}
 		}
 		if err != nil {
