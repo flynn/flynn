@@ -83,15 +83,15 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Sched
 	s := &Scheduler{
 		ControllerClient: cc,
 		ClusterClient:    cluster,
-		changeLeader:     make(chan bool),
 		backoffPeriod:    getBackoffPeriod(),
 		hostStreams:      make(map[string]stream.Stream),
 		jobs:             make(map[string]*Job),
 		stoppedJobs:      make(map[string]*Job),
 		pendingStarts:    make(pendingJobs),
 		formations:       make(Formations),
-		jobEvents:        make(chan *host.Event, eventBufferSize),
 		listeners:        make(map[chan Event]struct{}),
+		changeLeader:     make(chan bool),
+		jobEvents:        make(chan *host.Event, eventBufferSize),
 		stop:             make(chan struct{}),
 		rectify:          make(chan struct{}, 1),
 		syncJobs:         make(chan struct{}, 1),
@@ -320,17 +320,35 @@ func (s *Scheduler) Run() error {
 		default:
 		}
 
-		// Finally, handle triggering cluster changes
+		// Finally, handle triggering cluster changes.
+		// Re-select on all the channels so we don't have to sleep nor spin
 		select {
 		case <-s.rectify:
 			if !s.ready {
 				continue
 			}
 			s.Rectify()
-		case <-time.After(10 * time.Millisecond):
-			// block so that
-			//	1) mutate events are given a chance to happen
-			//  2) we don't spin hot
+		case <-s.stop:
+			log.Info("stopping scheduler loop")
+			close(s.putJobs)
+			return nil
+		case isLeader := <-s.changeLeader:
+			s.HandleLeaderChange(isLeader)
+		case req := <-s.jobRequests:
+			s.HandleJobRequest(req)
+		case e := <-s.hostEvents:
+			s.HandleHostEvent(e)
+		case e, ok := <-s.jobEvents:
+			if !ok {
+				return errors.New("job events channel closed prematurely")
+			}
+			s.HandleJobEvent(e)
+		case f := <-s.formationEvents:
+			s.HandleFormationChange(f)
+		case <-s.syncFormations:
+			s.SyncFormations()
+		case <-s.syncJobs:
+			s.SyncJobs()
 		}
 	}
 	return nil
