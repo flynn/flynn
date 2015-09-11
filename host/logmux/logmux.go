@@ -2,9 +2,12 @@ package logmux
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
@@ -29,6 +32,8 @@ type LogMux struct {
 
 	doneo sync.Once
 	donec chan struct{}
+
+	msgSeq uint32
 }
 
 // New returns an instance of LogMux ready to follow io.Reader producers. The
@@ -125,8 +130,18 @@ func (m *LogMux) follow(r io.Reader, hdr *rfc5424.Header) {
 	g := grohl.NewContext(grohl.Data{"at": "logmux_follow"})
 	s := bufio.NewScanner(r)
 
+	seqBuf := make([]byte, 10)
+	sd := &rfc5424.StructuredData{
+		ID:     []byte("flynn"),
+		Params: []rfc5424.StructuredDataParam{{Name: []byte("seq")}},
+	}
+
 	for s.Scan() {
 		msg := rfc5424.NewMessage(hdr, s.Bytes())
+		sd.Params[0].Value = strconv.AppendUint(seqBuf[:0], uint64(atomic.AddUint32(&m.msgSeq, 1)), 10)
+		var sdBuf bytes.Buffer
+		sd.Encode(&sdBuf)
+		msg.StructuredData = sdBuf.Bytes()
 
 		select {
 		case m.logc <- msg:
