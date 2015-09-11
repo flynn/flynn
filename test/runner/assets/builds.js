@@ -47,3 +47,10 @@ function showExplainModal(id) {
   var modal    = template(build)
   $(modal).appendTo("body").modal()
 }
+
+function showFailureModal(id) {
+  var build    = window.builds[id]
+  var template = _.template($("#failure-template").html())
+  var modal    = template(build)
+  $(modal).appendTo("body").modal()
+}

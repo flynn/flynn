@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -72,6 +73,7 @@ type Build struct {
 	Reason            string        `json:"reason"`
 	IssueLink         string        `json:"issue_link"`
 	Version           BuildVersion  `json:"version"`
+	Failures          []string      `json:"failures"`
 }
 
 func (b *Build) URL() string {
@@ -306,6 +308,10 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%dm%02ds", d/time.Minute, d%time.Minute/time.Second)
 }
 
+// failPattern matches failed test output like:
+// 19:53:03.590 FAIL: test_scheduler.go:221: SchedulerSuite.TestOmniJobs
+var failPattern = regexp.MustCompile(`^\d{2}:\d{2}:\d{2}\.\d{3} FAIL: (?:\S+) (\S+)$`)
+
 func (r *Runner) build(b *Build) (err error) {
 	logFile, err := ioutil.TempFile("", "build-log")
 	if err != nil {
@@ -329,7 +335,16 @@ func (r *Runner) build(b *Build) (err error) {
 	start := time.Now()
 	fmt.Fprintf(mainLog, "Starting build of %s at %s\n", b.Commit, start.Format(time.RFC822))
 	var c *cluster.Cluster
+	var failureBuf bytes.Buffer
 	defer func() {
+		// parse the failures
+		s := bufio.NewScanner(&failureBuf)
+		for s.Scan() {
+			if match := failPattern.FindSubmatch(s.Bytes()); match != nil {
+				b.Failures = append(b.Failures, string(match[1]))
+			}
+		}
+
 		b.Duration = time.Since(start)
 		b.DurationFormatted = formatDuration(b.Duration)
 		fmt.Fprintf(mainLog, "build finished in %s\n", b.DurationFormatted)
@@ -357,7 +372,7 @@ func (r *Runner) build(b *Build) (err error) {
 
 	log.Printf("building %s\n", b.Commit)
 
-	out := &iotool.SafeWriter{W: io.MultiWriter(os.Stdout, mainLog)}
+	out := &iotool.SafeWriter{W: io.MultiWriter(os.Stdout, mainLog, &failureBuf)}
 	bc := r.bc
 	bc.Network = r.allocateNet()
 	defer r.releaseNet(bc.Network)
