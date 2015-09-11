@@ -17,11 +17,12 @@ const (
 type JobRequest struct {
 	*Job
 	RequestType JobRequestType
+	attempts    uint
 }
 
 func NewJobRequest(f *Formation, requestType JobRequestType, typ, hostID, jobID string) *JobRequest {
 	return &JobRequest{
-		Job:         NewJob(f, f.App.ID, f.Release.ID, typ, hostID, jobID, time.Now()),
+		Job:         NewJob(f, f.App.ID, f.Release.ID, typ, hostID, jobID),
 		RequestType: requestType,
 	}
 }
@@ -43,7 +44,7 @@ type Job struct {
 	startedAt time.Time
 }
 
-func NewJob(f *Formation, appID, releaseID, typ, hostID, id string, startedAt time.Time) *Job {
+func NewJob(f *Formation, appID, releaseID, typ, hostID, id string) *Job {
 	return &Job{
 		Type:      typ,
 		AppID:     appID,
@@ -51,7 +52,7 @@ func NewJob(f *Formation, appID, releaseID, typ, hostID, id string, startedAt ti
 		HostID:    hostID,
 		JobID:     id,
 		Formation: f,
-		startedAt: startedAt,
+		startedAt: time.Now(),
 	}
 }
 
