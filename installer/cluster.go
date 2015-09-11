@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
+	"strings"
 	"text/template"
 	"time"
 
@@ -124,6 +126,11 @@ func (c *BaseCluster) MarkDeleted() (err error) {
 		return
 	}
 
+	if _, err = tx.Exec(`UPDATE ssh_clusters SET DeletedAt = now() WHERE ClusterID == $1`, c.ID); err != nil {
+		tx.Rollback()
+		return
+	}
+
 	c.installer.ClusterDeleted(c.ID)
 	err = tx.Commit()
 	return
@@ -134,6 +141,7 @@ func (c *BaseCluster) SetDefaultsAndValidate() error {
 		c.NumInstances = 1
 	}
 	c.InstanceIPs = make([]string, 0, c.NumInstances)
+	c.passwordCache = make(map[string]string)
 	return c.validateInputs()
 }
 
@@ -189,15 +197,24 @@ func (c *BaseCluster) allocateDomain() error {
 }
 
 func (c *BaseCluster) instanceRunCmd(cmd string, sshConfig *ssh.ClientConfig, ipAddress string) error {
-	c.SendLog(fmt.Sprintf("Running `%s` on %s", cmd, ipAddress))
-
 	sshConn, err := ssh.Dial("tcp", ipAddress+":22", sshConfig)
 	if err != nil {
 		return err
 	}
 	defer sshConn.Close()
+	return c.instanceRunCmdWithClient(cmd, sshConn, sshConfig.User, ipAddress)
+}
+
+func (c *BaseCluster) instanceRunCmdWithClient(cmd string, sshConn *ssh.Client, user, ipAddress string) error {
+	c.SendLog(fmt.Sprintf("Running `%s` on %s", cmd, ipAddress))
+	sudoPrompt := "<SUDO_PROMPT>"
+	cmd = strings.Replace(cmd, "sudo ", fmt.Sprintf("sudo -S --prompt='%s\n' ", sudoPrompt), -1)
 
 	sess, err := sshConn.NewSession()
+	if err != nil {
+		return err
+	}
+	stdin, err := sess.StdinPipe()
 	if err != nil {
 		return err
 	}
@@ -213,28 +230,85 @@ func (c *BaseCluster) instanceRunCmd(cmd string, sshConfig *ssh.ClientConfig, ip
 		return err
 	}
 
+	doneChan := make(chan struct{})
+	defer close(doneChan)
+
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
+			select {
+			case _, _ = <-doneChan:
+				return
+			default:
+			}
+
 			c.SendLog(scanner.Text())
 		}
 	}()
 	go func() {
+		passwordPrompt := func(msg string, useCache bool) {
+			c.passwordPromptMtx.Lock()
+			var password string
+			var ok bool
+			if useCache {
+				password, ok = c.passwordCache[ipAddress]
+			}
+			if !ok || password == "" {
+				password = c.PromptProtectedInput(msg)
+				c.passwordCache[ipAddress] = password
+			} else {
+				c.SendLog("Using cached password")
+			}
+			if _, err := fmt.Fprintf(stdin, "%s\n", password); err != nil {
+				c.SendLog(err.Error())
+			}
+			c.passwordPromptMtx.Unlock()
+		}
+
 		scanner := bufio.NewScanner(stderr)
+		var prevLine string
 		for scanner.Scan() {
-			c.SendLog(scanner.Text())
+			select {
+			case _, _ = <-doneChan:
+				return
+			default:
+			}
+
+			line := scanner.Text()
+			c.SendLog(line)
+
+			msg := fmt.Sprintf("Please enter your sudo password for %s@%s", user, ipAddress)
+			if prevLine == sudoPrompt && line == "Sorry, try again." {
+				passwordPrompt(fmt.Sprintf("%s\n%s", line, msg), false)
+			} else if line == sudoPrompt {
+				passwordPrompt(msg, true)
+			}
+			prevLine = line
 		}
 	}()
 
 	return sess.Wait()
 }
 
-func (c *BaseCluster) uploadDebugInfo(sshConfig *ssh.ClientConfig, ipAddress string) {
+func (c *BaseCluster) uploadDebugInfo(t *TargetServer) {
 	cmd := "sudo flynn-host collect-debug-info"
-	c.instanceRunCmd(cmd, sshConfig, ipAddress)
+	if t.SSHClient == nil {
+		var err error
+		t.SSHClient, err = ssh.Dial("tcp", net.JoinHostPort(t.IP, t.Port), t.SSHConfig)
+		if err != nil {
+			c.SendLog(fmt.Sprintf("Error connecting to %s:%s: %s", t.IP, t.Port, err))
+			return
+		}
+	}
+	if err := c.instanceRunCmdWithClient(cmd, t.SSHClient, t.User, t.IP); err != nil {
+		c.SendLog(fmt.Sprintf("Error running %s: %s", cmd, err))
+	}
 }
 
 func (c *BaseCluster) sshConfig() (*ssh.ClientConfig, error) {
+	if c.SSHKey == nil {
+		return nil, errors.New("No SSHKey found")
+	}
 	signer, err := ssh.NewSignerFromKey(c.SSHKey.PrivateKey)
 	if err != nil {
 		return nil, err
@@ -256,38 +330,50 @@ type stepInfo struct {
 }
 
 func (c *BaseCluster) bootstrap() error {
-	c.SendLog("Running bootstrap")
-
-	if c.SSHKey == nil {
-		return errors.New("No SSHKey found")
-	}
-
 	// bootstrap only needs to run on one instance
 	ipAddress := c.InstanceIPs[0]
 
 	sshConfig, err := c.sshConfig()
 	if err != nil {
-		return nil
+		return err
 	}
 
-	attempts := 0
-	maxAttempts := 3
-	var sshConn *ssh.Client
-	for {
-		sshConn, err = ssh.Dial("tcp", ipAddress+":22", sshConfig)
-		if err != nil {
-			if attempts < maxAttempts {
-				attempts += 1
-				time.Sleep(time.Second)
-				continue
+	target := &TargetServer{
+		User:      c.SSHUsername,
+		IP:        ipAddress,
+		Port:      "22",
+		SSHConfig: sshConfig,
+	}
+	defer func() {
+		target.SSHClient.Close()
+	}()
+
+	return c.bootstrapTarget(target)
+}
+
+func (c *BaseCluster) bootstrapTarget(t *TargetServer) error {
+	c.SendLog("Running bootstrap")
+
+	if t.SSHClient == nil {
+		attempts := 0
+		maxAttempts := 3
+		for {
+			var err error
+			t.SSHClient, err = ssh.Dial("tcp", net.JoinHostPort(t.IP, t.Port), t.SSHConfig)
+			if err != nil {
+				if attempts < maxAttempts {
+					attempts += 1
+					c.SendLog(err.Error())
+					time.Sleep(time.Second)
+					continue
+				}
+				return err
 			}
-			return err
+			break
 		}
-		break
 	}
-	defer sshConn.Close()
 
-	sess, err := sshConn.NewSession()
+	sess, err := t.SSHClient.NewSession()
 	if err != nil {
 		return err
 	}
@@ -297,7 +383,7 @@ func (c *BaseCluster) bootstrap() error {
 	}
 	sess.Stderr = os.Stderr
 	if err := sess.Start(fmt.Sprintf("CLUSTER_DOMAIN=%s flynn-host bootstrap --min-hosts=%d --discovery=%s --json", c.Domain.Name, c.NumInstances, c.DiscoveryToken)); err != nil {
-		c.uploadDebugInfo(sshConfig, ipAddress)
+		c.uploadDebugInfo(t)
 		return err
 	}
 
@@ -325,7 +411,7 @@ func (c *BaseCluster) bootstrap() error {
 			return err
 		}
 		if step.State == "error" {
-			c.uploadDebugInfo(sshConfig, ipAddress)
+			c.uploadDebugInfo(t)
 			return fmt.Errorf("bootstrap: %s %s error: %s", step.ID, step.Action, step.Error)
 		}
 		c.SendLog(fmt.Sprintf("%s: %s", step.ID, step.State))

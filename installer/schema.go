@@ -2,6 +2,7 @@ package installer
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/aws"
@@ -9,7 +10,9 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/gen/ec2"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cznic/ql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/digitalocean/godo"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
 	"github.com/flynn/flynn/pkg/azure"
+	"github.com/flynn/flynn/pkg/knownhosts"
 	"github.com/flynn/flynn/pkg/sshkeygen"
 )
 
@@ -24,7 +27,7 @@ type Cluster interface {
 }
 
 type Credential struct {
-	ID         string             `json:"id" ql:"index xID"`
+	ID         string             `json:"id"`
 	Secret     string             `json:"secret"`
 	Name       string             `json:"name"`
 	Type       string             `json:"type"`     // enum(aws, digital_ocean, azure)
@@ -93,8 +96,28 @@ type DigitalOceanDroplet struct {
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
+type TargetServer struct {
+	IP        string            `json:"ip"`
+	Port      string            `json:"port"`
+	User      string            `json:"user"`
+	SSHConfig *ssh.ClientConfig `json:"-"`
+	SSHClient *ssh.Client       `json:"-"`
+}
+
+type SSHCluster struct {
+	ClusterID   string          `json:"cluster_id" ql:"index xCluster"`
+	DeletedAt   *time.Time      `json:"deleted_at,omitempty"`
+	SSHLogin    string          `json:"ssh_login"`
+	Targets     []*TargetServer `json:"targets" ql:"-"`
+	TargetsJSON string          `json:"-"`
+
+	base       *BaseCluster
+	sshAuth    []ssh.AuthMethod
+	knownHosts *knownhosts.KnownHosts
+}
+
 type BaseCluster struct {
-	ID                  string            `json:"id" ql:"index xID"`
+	ID                  string            `json:"id"`
 	CredentialID        string            `json:"credential_id"`
 	Type                string            `json:"type"`                    // enum(aws, digital_ocean, azure)
 	State               string            `json:"state" ql:"index xState"` // enum(starting, error, running, deleting)
@@ -112,10 +135,12 @@ type BaseCluster struct {
 	InstanceIPs         []string          `json:"instance_ips,omitempty" ql:"-"`
 	DeletedAt           *time.Time        `json:"deleted_at,omitempty"`
 
-	credential    *Credential
-	installer     *Installer
-	pendingPrompt *Prompt
-	done          bool
+	credential        *Credential
+	installer         *Installer
+	pendingPrompt     *Prompt
+	done              bool
+	passwordPromptMtx sync.Mutex
+	passwordCache     map[string]string
 }
 
 type InstanceIPs struct {
@@ -125,7 +150,7 @@ type InstanceIPs struct {
 }
 
 type Event struct {
-	ID           string       `json:"id" ql:"index xID"`
+	ID           string       `json:"id"`
 	Timestamp    time.Time    `json:"timestamp"`
 	Type         string       `json:"type"`
 	ClusterID    string       `json:"cluster_id,omitempty"`
@@ -282,6 +307,7 @@ func (i *Installer) migrateDB() error {
 		(*DigitalOceanCluster)(nil): "digital_ocean_clusters",
 		(*DigitalOceanDroplet)(nil): "digital_ocean_droplets",
 		(*AzureCluster)(nil):        "azure_clusters",
+		(*SSHCluster)(nil):          "ssh_clusters",
 		(*Event)(nil):               "events",
 		(*Prompt)(nil):              "prompts",
 		(*InstanceIPs)(nil):         "instances",

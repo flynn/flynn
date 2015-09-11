@@ -65,7 +65,10 @@ var AzureCluster = BaseCluster.createClass('azure', {
 	},
 
 	handleEvent: function (event) {
+		var __super = this.constructor.__super__.handleEvent.bind(this, event);
+
 		if (event.clusterID !== this.attrs.ID) {
+			__super();
 			return;
 		}
 
@@ -88,7 +91,7 @@ var AzureCluster = BaseCluster.createClass('azure', {
 			break;
 
 			default:
-				this.constructor.__super__.handleEvent.call(this, event);
+				__super();
 		}
 	}
 });

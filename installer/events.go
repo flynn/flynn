@@ -2,6 +2,7 @@ package installer
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -219,12 +220,13 @@ func (c *BaseCluster) sendPrompt(prompt *Prompt) *Prompt {
 
 	res := <-prompt.resChan
 	prompt.Resolved = true
-	prompt.Yes = res.Yes
-	prompt.Input = res.Input
-
 	if err := c.dbUpdatePrompt(prompt); err != nil {
 		c.installer.logger.Debug(fmt.Sprintf("sendPrompt db update error: %s", err.Error()))
-		return res
+	}
+	prompt.Yes = res.Yes
+	prompt.Input = res.Input
+	if err := c.dbUpdatePrompt(prompt); err != nil {
+		c.installer.logger.Debug(fmt.Sprintf("sendPrompt db update error: %s", err.Error()))
 	}
 
 	c.sendEvent(&Event{
@@ -265,25 +267,57 @@ func (i *Installer) dbInsertItem(tableName string, item interface{}) error {
 	return i.txExec(list.String(), fields...)
 }
 
-func (c *BaseCluster) YesNoPrompt(msg string) bool {
+func (c *BaseCluster) prompt(typ, msg string) *Prompt {
+	if c.State != "starting" {
+		return &Prompt{}
+	}
 	res := c.sendPrompt(&Prompt{
 		ID:      random.Hex(16),
-		Type:    "yes_no",
+		Type:    typ,
 		Message: msg,
 		resChan: make(chan *Prompt),
 		cluster: c,
 	})
+	return res
+}
+
+func (c *BaseCluster) YesNoPrompt(msg string) bool {
+	res := c.prompt("yes_no", msg)
 	return res.Yes
 }
 
+type Choice struct {
+	Message string         `json:"message"`
+	Options []ChoiceOption `json:"options"`
+}
+
+type ChoiceOption struct {
+	Type  int    `json:"type"`
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+func (c *BaseCluster) ChoicePrompt(choice Choice) (string, error) {
+	data, err := json.Marshal(choice)
+	if err != nil {
+		return "", err
+	}
+	res := c.prompt("choice", string(data))
+	return res.Input, nil
+}
+
 func (c *BaseCluster) PromptInput(msg string) string {
-	res := c.sendPrompt(&Prompt{
-		ID:      random.Hex(16),
-		Type:    "input",
-		Message: msg,
-		resChan: make(chan *Prompt),
-		cluster: c,
-	})
+	res := c.prompt("input", msg)
+	return res.Input
+}
+
+func (c *BaseCluster) PromptProtectedInput(msg string) string {
+	res := c.prompt("protected_input", msg)
+	return res.Input
+}
+
+func (c *BaseCluster) PromptFileInput(msg string) string {
+	res := c.prompt("file", msg)
 	return res.Input
 }
 

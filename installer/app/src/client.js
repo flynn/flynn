@@ -124,6 +124,7 @@ var Client = {
 		}).catch(function (args) {
 			Dispatcher.dispatch({
 				name: 'LAUNCH_CLUSTER_FAILURE',
+				clusterID: 'new',
 				res: args[0],
 				xhr: args[1]
 			});
@@ -177,8 +178,10 @@ var Client = {
 			}
 			switch (data.type) {
 				case 'new_cluster':
-					event.name = 'NEW_CLUSTER';
-					event.cluster = Cluster.newOfType(data.cluster.type, data.cluster);
+					if (data.cluster) {
+						event.name = 'NEW_CLUSTER';
+						event.cluster = Cluster.newOfType(data.cluster.type, data.cluster);
+					}
 				break;
 
 				case 'new_credential':
@@ -202,6 +205,11 @@ var Client = {
 						event.name = 'INSTALL_PROMPT_RESOLVED';
 					} else {
 						event.name = 'INSTALL_PROMPT_REQUESTED';
+						if (event.prompt.type === 'choice') {
+							var choice = JSON.parse(event.prompt.message);
+							event.prompt.message = choice.message;
+							event.prompt.options = choice.options;
+						}
 					}
 				break;
 

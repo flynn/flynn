@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/oauth2"
-	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/crypto/ssh"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/pkg/azure"
 	"github.com/flynn/flynn/pkg/sshkeygen"
@@ -236,66 +235,24 @@ func (c *AzureCluster) configureDNS() error {
 }
 
 func (c *AzureCluster) installFlynn() error {
-	c.base.SendLog("Installing flynn")
-
-	startScript, discoveryToken, err := c.base.genStartScript(c.base.NumInstances)
-	if err != nil {
-		return err
-	}
-	c.base.DiscoveryToken = discoveryToken
-	if err := c.base.saveField("DiscoveryToken", discoveryToken); err != nil {
-		return err
-	}
-	c.startScript = startScript
-
 	sshConfig, err := c.base.sshConfig()
 	if err != nil {
 		return err
 	}
-
-	instanceIPs := c.base.InstanceIPs
-	errChan := make(chan error, len(instanceIPs))
-	ops := []func(*ssh.ClientConfig, string) error{
-		c.instanceInstallFlynn,
-		c.instanceStartFlynn,
-	}
-	for _, op := range ops {
-		for _, ipAddress := range instanceIPs {
-			go func(ipAddress string) {
-				errChan <- op(sshConfig, ipAddress)
-			}(ipAddress)
-		}
-		for range instanceIPs {
-			if err := <-errChan; err != nil {
-				return err
-			}
+	targets := make([]*TargetServer, len(c.base.InstanceIPs))
+	for i, ip := range c.base.InstanceIPs {
+		targets[i] = &TargetServer{
+			IP:        ip,
+			Port:      "22",
+			User:      sshConfig.User,
+			SSHConfig: sshConfig,
 		}
 	}
-	return nil
-}
-
-func (c *AzureCluster) instanceInstallFlynn(sshConfig *ssh.ClientConfig, ipAddress string) error {
-	attemptsRemaining := 3
-	for {
-		c.base.SendLog(fmt.Sprintf("Installing flynn on %s", ipAddress))
-		cmd := "curl -fsSL -o /tmp/install-flynn https://dl.flynn.io/install-flynn && sudo bash /tmp/install-flynn"
-		err := c.base.instanceRunCmd(cmd, sshConfig, ipAddress)
-		if err != nil {
-			if attemptsRemaining > 0 {
-				attemptsRemaining--
-				time.Sleep(10 * time.Second)
-				continue
-			}
-			return err
-		}
-		return nil
+	bareCluster := &BareCluster{
+		Base:    c.base,
+		Targets: targets,
 	}
-}
-
-func (c *AzureCluster) instanceStartFlynn(sshConfig *ssh.ClientConfig, ipAddress string) error {
-	c.base.SendLog(fmt.Sprintf("Starting flynn on %s", ipAddress))
-	cmd := fmt.Sprintf(`echo "%s" | base64 -d | sudo bash`, c.startScript)
-	return c.base.instanceRunCmd(cmd, sshConfig, ipAddress)
+	return bareCluster.InstallFlynn()
 }
 
 func (c *AzureCluster) bootstrap() error {

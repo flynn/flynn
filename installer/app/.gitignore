@@ -1,4 +1,5 @@
-build
-app
-compiler
-.gitrepos
+/build
+/app
+/compiler
+/.gitrepos
+/node_modules

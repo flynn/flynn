@@ -6,10 +6,11 @@ import Sheet from './css/sheet';
 var cloudNames = {
 	aws: 'AWS',
 	digital_ocean: 'DigitalOcean',
-	azure: 'Azure'
+	azure: 'Azure',
+	ssh: 'SSH'
 };
 
-var cloudIDs = ['aws', 'digital_ocean', 'azure'];
+var cloudIDs = ['aws', 'digital_ocean', 'azure', 'ssh'];
 
 var CloudSelector = React.createClass({
 	getInitialState: function () {
@@ -41,7 +42,8 @@ var CloudSelector = React.createClass({
 					display: 'table-cell',
 					maxWidth: '100%',
 					maxHeight: '100px',
-					width: '100%'
+					width: '100%',
+					verticalAlign: 'middle'
 				}],
 
 				['> * + *', {

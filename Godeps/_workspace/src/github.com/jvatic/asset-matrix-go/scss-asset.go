@@ -98,62 +98,65 @@ func (a *SCSSAsset) Compile() (io.Reader, error) {
 	errChan := make(chan error)
 	go func() {
 		s := bufio.NewScanner(stdout)
+		isOutput := false
 		for s.Scan() {
-			line := s.Text()
-			if line == "<data>" {
-				stdin.Write([]byte(t.Name() + "\n"))
-			} else if line == "<assetRoot>" {
-				stdin.Write([]byte(a.r.Path + "\n"))
-			} else if strings.HasPrefix(line, "<assetPath>:") {
-				name := strings.TrimPrefix(line, "<assetPath>:")
-				if strings.HasPrefix(name, ".") {
-					name, err = filepath.Rel(a.r.Path, filepath.Join(filepath.Dir(a.p), name))
+			if isOutput {
+				if _, err := buf.Write(s.Bytes()); err != nil {
+					errChan <- err
+				}
+			} else {
+				line := s.Text()
+				if line == "<data>" {
+					stdin.Write([]byte(t.Name() + "\n"))
+				} else if line == "<assetRoot>" {
+					stdin.Write([]byte(a.r.Path + "\n"))
+				} else if strings.HasPrefix(line, "<assetPath>:") {
+					name := strings.TrimPrefix(line, "<assetPath>:")
+					if strings.HasPrefix(name, ".") {
+						name, err = filepath.Rel(a.r.Path, filepath.Join(filepath.Dir(a.p), name))
+						if err != nil {
+							errChan <- err
+							return
+						}
+					}
+					var ia Asset
+					if filepath.Ext(name) != "" {
+						ia, err = a.findAsset(name)
+					} else {
+						ia, err = a.findAsset(name + ".scss")
+						if err == AssetNotFoundError {
+							ia, err = a.findAsset(name + ".css")
+						}
+					}
 					if err != nil {
 						errChan <- err
 						return
 					}
-				}
-				var ia Asset
-				if filepath.Ext(name) != "" {
-					ia, err = a.findAsset(name)
-				} else {
-					ia, err = a.findAsset(name + ".scss")
-					if err == AssetNotFoundError {
-						ia, err = a.findAsset(name + ".css")
+					if _, err := stdin.Write([]byte(ia.Path() + "\n")); err != nil {
+						errChan <- err
+						return
 					}
+				} else if strings.HasPrefix(line, "<assetOutputPath>:") {
+					ia, err := a.findAsset(strings.Split(strings.Split(strings.TrimPrefix(line, "<assetOutputPath>:"), "?")[0], "#")[0])
+					if err != nil {
+						errChan <- err
+						return
+					}
+					_p, err := ia.RelPath()
+					if err != nil {
+						log.Fatal(err)
+					}
+					_p = strings.TrimSuffix(_p, filepath.Ext(_p)) + "-" + a.r.cacheBreaker + filepath.Ext(_p)
+					if _, err := stdin.Write([]byte(_p + "\n")); err != nil {
+						errChan <- err
+						return
+					}
+				} else if line == "<output>" {
+					isOutput = true
 				}
-				if err != nil {
-					errChan <- err
-					return
-				}
-				if _, err := stdin.Write([]byte(ia.Path() + "\n")); err != nil {
-					errChan <- err
-					return
-				}
-			} else if strings.HasPrefix(line, "<assetOutputPath>:") {
-				ia, err := a.findAsset(strings.Split(strings.Split(strings.TrimPrefix(line, "<assetOutputPath>:"), "?")[0], "#")[0])
-				if err != nil {
-					errChan <- err
-					return
-				}
-				_p, err := ia.RelPath()
-				if err != nil {
-					log.Fatal(err)
-				}
-				_p = strings.TrimSuffix(_p, filepath.Ext(_p)) + "-" + a.r.cacheBreaker + filepath.Ext(_p)
-				if _, err := stdin.Write([]byte(_p + "\n")); err != nil {
-					errChan <- err
-					return
-				}
-			} else if line == "<output>" {
-				break
 			}
 		}
-		if _, err := io.Copy(&buf, stdout); err != nil {
-			errChan <- s.Err()
-		} else {
-			errChan <- s.Err()
-		}
+		errChan <- s.Err()
 	}()
 
 	if err := cmd.Start(); err != nil {
