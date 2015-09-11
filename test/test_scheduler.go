@@ -219,7 +219,6 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 }
 
 func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
-	t.Skip("skipping due to router startup hang: https://github.com/flynn/flynn/issues/1855")
 	if testCluster == nil {
 		t.Skip("cannot boot new hosts")
 	}
