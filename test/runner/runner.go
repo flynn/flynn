@@ -366,7 +366,7 @@ func (r *Runner) build(b *Build) (err error) {
 		} else {
 			log.Printf("build %s failed: %s\n", b.ID, err)
 			r.updateStatus(b, "failure")
-			r.ircMsgs <- fmt.Sprintf("FAIL: %s %s", b.Description, b.URL())
+			r.ircMsgs <- fmt.Sprintf("FAIL: [%d failure(s)] %s %s", len(b.Failures), b.Description, b.URL())
 		}
 	}()
 
