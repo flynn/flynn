@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
@@ -29,7 +30,7 @@ type JobRequest struct {
 
 func NewJobRequest(f *Formation, requestType JobRequestType, typ, hostID, jobID string) *JobRequest {
 	return &JobRequest{
-		Job:         NewJob(f, f.App.ID, f.Release.ID, typ, hostID, jobID, JobStateRequesting),
+		Job:         NewJob(f, f.App.ID, f.Release.ID, typ, hostID, jobID),
 		RequestType: requestType,
 	}
 }
@@ -60,7 +61,7 @@ type Job struct {
 	state     JobState
 }
 
-func NewJob(f *Formation, appID, releaseID, typ, hostID, id string, state JobState) *Job {
+func NewJob(f *Formation, appID, releaseID, typ, hostID, id string) *Job {
 	return &Job{
 		Type:      typ,
 		AppID:     appID,
@@ -69,7 +70,7 @@ func NewJob(f *Formation, appID, releaseID, typ, hostID, id string, state JobSta
 		JobID:     id,
 		Formation: f,
 		startedAt: time.Now(),
-		state:     state,
+		state:     JobStateNew,
 	}
 }
 
@@ -85,7 +86,7 @@ func (j *Job) IsScheduled() bool {
 
 type Jobs map[string]*Job
 
-func (js Jobs) GetFormationJobs(key utils.FormationKey, typ string) []*Job {
+func (js Jobs) GetStoppableJobs(key utils.FormationKey, typ string) []*Job {
 	formTypeJobs := make([]*Job, 0, len(js))
 	for _, j := range js {
 		if j.IsScheduled() && j.Formation != nil && j.Formation.key() == key && j.Type == typ {
@@ -114,6 +115,33 @@ func (js Jobs) GetProcesses(key utils.FormationKey) Processes {
 		}
 	}
 	return procs
+}
+
+func (js Jobs) AddJob(j *Job) *Job {
+	j = j.Clone()
+	js[j.JobID] = j
+	return j
+}
+
+func (js Jobs) StopJob(id string) error {
+	return js.setState(id, JobStateStopped)
+}
+
+func (js Jobs) CrashJob(id string) error {
+	return js.setState(id, JobStateCrashed)
+}
+
+func (js Jobs) RunJob(id string) error {
+	return js.setState(id, JobStateUp)
+}
+
+func (js Jobs) setState(id string, state JobState) error {
+	j, ok := js[id]
+	if ok {
+		j.state = state
+		return nil
+	}
+	return errors.New("job not found")
 }
 
 // TODO refactor `state` to JobStatus type and consolidate statuses across scheduler/controller/host
