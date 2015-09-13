@@ -293,10 +293,7 @@ func (s *Scheduler) Run() error {
 		case e := <-s.hostEvents:
 			s.HandleHostEvent(e)
 			continue
-		case e, ok := <-s.jobEvents:
-			if !ok {
-				return errors.New("job events channel closed prematurely")
-			}
+		case e := <-s.jobEvents:
 			s.HandleJobEvent(e)
 			continue
 		case f := <-s.formationEvents:
@@ -334,10 +331,7 @@ func (s *Scheduler) Run() error {
 			s.HandleJobRequest(req)
 		case e := <-s.hostEvents:
 			s.HandleHostEvent(e)
-		case e, ok := <-s.jobEvents:
-			if !ok {
-				return errors.New("job events channel closed prematurely")
-			}
+		case e := <-s.jobEvents:
 			s.HandleJobEvent(e)
 		case f := <-s.formationEvents:
 			s.HandleFormationChange(f)
