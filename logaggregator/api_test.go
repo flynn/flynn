@@ -232,13 +232,15 @@ func assertAllLogsEquals(c *C, r io.Reader, expected string) {
 }
 
 func newMessageForApp(appname, procID, msg string) *rfc5424.Message {
-	return rfc5424.NewMessage(
+	m := rfc5424.NewMessage(
 		&rfc5424.Header{
 			AppName: []byte(appname),
 			ProcID:  []byte(procID),
 		},
 		[]byte(msg),
 	)
+	m.StructuredData = []byte(`[flynn seq="1"]`)
+	return m
 }
 
 func marshalMessage(m *rfc5424.Message) string {

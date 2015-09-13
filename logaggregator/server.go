@@ -10,12 +10,13 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/logaggregator/snapshot"
-	"github.com/flynn/flynn/pkg/syslog/rfc5424"
+	"github.com/flynn/flynn/logaggregator/utils"
 	"github.com/flynn/flynn/pkg/syslog/rfc6587"
 )
 
 type Server struct {
 	*Aggregator
+	Cursors *HostCursors
 
 	ll, al net.Listener   // syslog and api listeners
 	lwg    sync.WaitGroup // syslog wait group
@@ -53,15 +54,17 @@ func NewServer(conf ServerConfig) (*Server, error) {
 	}
 
 	a := NewAggregator()
+	c := NewHostCursors()
 
 	return &Server{
 		Aggregator: a,
+		Cursors:    c,
 
 		ll: ll,
 		al: al,
 		hb: hb,
 
-		api:      apiHandler(a),
+		api:      apiHandler(a, c),
 		shutdown: make(chan struct{}),
 	}, nil
 }
@@ -101,6 +104,11 @@ func (s *Server) LoadSnapshot(path string) error {
 
 	sc := snapshot.NewScanner(f)
 	for sc.Scan() {
+		cursor, err := utils.ParseHostCursor(sc.Message)
+		if err != nil {
+			return err
+		}
+		s.Cursors.Update(string(sc.Message.Hostname), cursor)
 		s.Aggregator.Feed(sc.Message)
 	}
 	return sc.Err()
@@ -162,11 +170,42 @@ func (s *Server) drainSyslogConn(conn net.Conn) {
 		msgCopy := make([]byte, len(msgBytes))
 		copy(msgCopy, msgBytes)
 
-		msg, err := rfc5424.Parse(msgCopy)
+		msg, cursor, err := utils.ParseMessage(msgCopy)
 		if err != nil {
 			log15.Error("rfc5424 parse error", "err", err)
 		} else {
+			s.Cursors.Update(string(msg.Hostname), cursor)
 			s.Aggregator.Feed(msg)
 		}
 	}
+}
+
+func NewHostCursors() *HostCursors {
+	return &HostCursors{Data: make(map[string]*utils.HostCursor)}
+}
+
+// HostCursors are used to keep track of what messages a host has sent when
+// resuming log streaming to a new server or after an interruption .
+type HostCursors struct {
+	mtx  sync.Mutex
+	Data map[string]*utils.HostCursor
+}
+
+func (h *HostCursors) Update(id string, other *utils.HostCursor) {
+	h.mtx.Lock()
+	defer h.mtx.Unlock()
+	curr, ok := h.Data[id]
+	if !ok || other.After(*curr) {
+		h.Data[id] = other
+	}
+}
+
+func (h *HostCursors) Get() map[string]*utils.HostCursor {
+	h.mtx.Lock()
+	defer h.mtx.Unlock()
+	res := make(map[string]*utils.HostCursor, len(h.Data))
+	for k, v := range h.Data {
+		res[k] = v
+	}
+	return res
 }

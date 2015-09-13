@@ -258,6 +258,7 @@ func buildTestData(n int, hdr *rfc5424.Header) []*rfc5424.Message {
 	for i := range data {
 		line := []byte(fmt.Sprintf("line %d\n", i))
 		msg := rfc5424.NewMessage(hdr, line)
+		msg.StructuredData = []byte(fmt.Sprintf(`[flynn seq="%d"]`, i))
 
 		data[i] = msg
 	}
