@@ -24,7 +24,7 @@ func (fs Formations) Add(f *Formation) *Formation {
 
 type Processes map[string]int
 
-func (p Processes) IsEqual(other Processes) bool {
+func (p Processes) Equals(other Processes) bool {
 	for typ, count := range p {
 		if other[typ] != count {
 			return false
