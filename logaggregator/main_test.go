@@ -17,7 +17,7 @@ type LogAggregatorTestSuite struct {
 	srv    *Server
 	agg    *Aggregator
 	api    *httptest.Server
-	client client.Client
+	client *client.Client
 }
 
 var _ = Suite(&LogAggregatorTestSuite{})
@@ -44,7 +44,7 @@ func testServer(c *C) *Server {
 	return srv
 }
 
-func testClient(c *C, srv *Server) client.Client {
+func testClient(c *C, srv *Server) *client.Client {
 	_, port, _ := net.SplitHostPort(srv.al.Addr().String())
 	url := "http://127.0.0.1:" + port + "/"
 

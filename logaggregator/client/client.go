@@ -15,34 +15,29 @@ import (
 // ErrNotFound is returned when a resource is not found (HTTP status 404).
 var ErrNotFound = errors.New("logaggregator: resource not found")
 
-type Client interface {
-	GetLog(channelID string, options *LogOpts) (io.ReadCloser, error)
-}
-
-type client struct {
+type Client struct {
 	*httpclient.Client
 }
 
 // newClient creates a generic Client object, additional attributes must
 // be set by the caller
-func newClient(url string, http *http.Client) *client {
-	c := &client{
+func newClient(url string, http *http.Client) *Client {
+	return &Client{
 		Client: &httpclient.Client{
 			ErrNotFound: ErrNotFound,
 			URL:         url,
 			HTTP:        http,
 		},
 	}
-	return c
 }
 
 // NewClient creates a new Client pointing at uri.
-func New(uri string) (Client, error) {
+func New(uri string) (*Client, error) {
 	return NewWithHTTP(uri, http.DefaultClient)
 }
 
 // NewClient creates a new Client pointing at uri with the specified http client.
-func NewWithHTTP(uri string, httpClient *http.Client) (Client, error) {
+func NewWithHTTP(uri string, httpClient *http.Client) (*Client, error) {
 	if uri == "" {
 		uri = "http://logaggregator.discoverd"
 	}
@@ -59,7 +54,7 @@ func NewWithHTTP(uri string, httpClient *http.Client) (Client, error) {
 // If lines is above zero, the number of lines returned will be capped at that
 // value. Otherwise, all available logs are returned. If follow is true, new log
 // lines are streamed after the buffered log.
-func (c *client) GetLog(channelID string, options *LogOpts) (io.ReadCloser, error) {
+func (c *Client) GetLog(channelID string, options *LogOpts) (io.ReadCloser, error) {
 	path := fmt.Sprintf("/log/%s", channelID)
 	query := url.Values{}
 	if options != nil {
