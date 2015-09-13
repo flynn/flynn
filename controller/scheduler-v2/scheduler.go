@@ -457,6 +457,8 @@ func (s *Scheduler) HandleFormationChange(ef *ct.ExpandedFormation) {
 		log.Error("invalid formation")
 		return
 	}
+
+	log = log.New("app.id", ef.App.ID, "release.id", ef.Release.ID)
 	log.Info("handling formation change")
 	_, err = s.changeFormation(ef)
 	if err != nil {
