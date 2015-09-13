@@ -434,7 +434,7 @@ func (s *Scheduler) Rectify() {
 		expected := formation.GetProcesses()
 		actual := s.jobs.GetProcesses(key)
 
-		if expected.IsEqual(actual) {
+		if expected.Equals(actual) {
 			formationLog.Info("formation in correct state", "expected", expected, "actual", actual)
 			continue
 		}
