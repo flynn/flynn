@@ -29,7 +29,35 @@ const (
 	testJobCount   = 1
 )
 
-func createTestScheduler(cluster utils.ClusterClient) *Scheduler {
+func newFakeDiscoverd(firstLeader bool) *fakeDiscoverd {
+	return &fakeDiscoverd{
+		firstLeader: firstLeader,
+		leader:      make(chan bool, 1),
+	}
+}
+
+type fakeDiscoverd struct {
+	firstLeader bool
+	leader      chan bool
+}
+
+func (d *fakeDiscoverd) Register() (bool, error) {
+	return d.firstLeader, nil
+}
+
+func (d *fakeDiscoverd) LeaderCh() chan bool {
+	return d.leader
+}
+
+func (d *fakeDiscoverd) promote() {
+	d.leader <- true
+}
+
+func (d *fakeDiscoverd) demote() {
+	d.leader <- false
+}
+
+func createTestScheduler(cluster utils.ClusterClient, discoverd Discoverd) *Scheduler {
 	app := &ct.App{ID: testAppID, Name: testAppID}
 	artifact := &ct.Artifact{ID: testArtifactId}
 	processes := map[string]int{testJobType: testJobCount}
@@ -39,7 +67,7 @@ func createTestScheduler(cluster utils.ClusterClient) *Scheduler {
 	cc.CreateArtifact(artifact)
 	cc.CreateRelease(release)
 	cc.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
-	return NewScheduler(cluster, cc)
+	return NewScheduler(cluster, cc, discoverd)
 }
 
 func newTestHosts() map[string]*FakeHostClient {
@@ -61,21 +89,22 @@ func runTestScheduler(c *C, cluster utils.ClusterClient, isLeader bool) *TestSch
 	if cluster == nil {
 		cluster = newTestCluster(nil)
 	}
-	s := createTestScheduler(cluster)
+	discoverd := newFakeDiscoverd(isLeader)
+	s := createTestScheduler(cluster, discoverd)
 
 	events := make(chan Event, eventBufferSize)
 	stream := s.Subscribe(events)
 	go s.Run()
-	s.ChangeLeader(isLeader)
 
-	return &TestScheduler{s, c, events, stream}
+	return &TestScheduler{s, c, events, stream, discoverd}
 }
 
 type TestScheduler struct {
 	*Scheduler
-	c      *C
-	events chan Event
-	stream stream.Stream
+	c         *C
+	events    chan Event
+	stream    stream.Stream
+	discoverd *fakeDiscoverd
 }
 
 func (s *TestScheduler) Stop() {
@@ -376,13 +405,13 @@ func (TestSuite) TestMultipleSchedulers(c *C) {
 	c.Assert(err, Not(IsNil))
 
 	// Make S1 the leader, wait for jobs to start
-	s1.ChangeLeader(true)
+	s1.discoverd.promote()
 	s1.waitJobStart()
 	s2.waitJobStart()
 	c.Assert(s1.Jobs(), HasLen, 1)
 	c.Assert(s2.Jobs(), HasLen, 1)
 
-	s1.ChangeLeader(false)
+	s1.discoverd.demote()
 
 	app, err := s2.GetApp(testAppID)
 	c.Assert(err, IsNil)
@@ -401,7 +430,7 @@ func (TestSuite) TestMultipleSchedulers(c *C) {
 	_, err = s1.waitDurationForEvent(EventTypeJobStart, 1*time.Second)
 	c.Assert(err, Not(IsNil))
 
-	s2.ChangeLeader(true)
+	s2.discoverd.promote()
 	s2.waitJobStart()
 	s1.waitJobStart()
 }
