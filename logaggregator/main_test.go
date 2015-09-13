@@ -44,6 +44,16 @@ func testServer(c *C) *Server {
 	return srv
 }
 
+func testClient(c *C, srv *Server) client.Client {
+	_, port, _ := net.SplitHostPort(srv.al.Addr().String())
+	url := "http://127.0.0.1:" + port + "/"
+
+	client, err := client.New(url)
+	c.Assert(err, IsNil)
+
+	return client
+}
+
 func (s *LogAggregatorTestSuite) TearDownTest(c *C) {
 	s.api.Close()
 	s.srv.Shutdown()
