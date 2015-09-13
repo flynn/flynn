@@ -1103,7 +1103,9 @@ func (s *Stream) Err() error {
 func (s *Scheduler) sendEvent(event Event) {
 	s.listenMtx.RLock()
 	defer s.listenMtx.RUnlock()
-	logger.Info(fmt.Sprintf("sending %s event to %d listener(s)", event.Type(), len(s.listeners)), "event", event.Type(), "err", event.Err())
+	if len(s.listeners) > 0 {
+		logger.Info(fmt.Sprintf("sending %s event to %d listener(s)", event.Type(), len(s.listeners)), "event", event.Type(), "err", event.Err())
+	}
 	for ch := range s.listeners {
 		// drop the event if the listener is too slow to avoid blocking the main loop
 		select {
