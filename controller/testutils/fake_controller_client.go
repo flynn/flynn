@@ -125,6 +125,8 @@ func (c *FakeControllerClient) StreamFormations(since *time.Time, ch chan<- *ct.
 			}
 		}
 	}
+	ch <- &ct.ExpandedFormation{}
+
 	c.formationStreams[ch] = struct{}{}
 	return &FormationStream{
 		cc: c,
