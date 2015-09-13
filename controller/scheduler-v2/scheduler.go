@@ -28,7 +28,6 @@ import (
 
 const (
 	eventBufferSize    int           = 1000
-	serviceName                      = "controller-scheduler"
 	maxJobAttempts     uint          = 30
 	jobAttemptInterval time.Duration = 500 * time.Millisecond
 )
@@ -50,8 +49,9 @@ type Scheduler struct {
 	utils.ControllerClient
 	utils.ClusterClient
 
-	isLeader         bool
-	changeLeader     chan bool
+	discoverd Discoverd
+	isLeader  bool
+
 	backoffPeriod    time.Duration
 	maxBackoffPeriod time.Duration
 
@@ -64,7 +64,6 @@ type Scheduler struct {
 	listeners map[chan Event]struct{}
 	listenMtx sync.RWMutex
 
-	ready    bool
 	stop     chan struct{}
 	stopOnce sync.Once
 
@@ -77,16 +76,16 @@ type Scheduler struct {
 	putJobs         chan *ct.Job
 }
 
-func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient) *Scheduler {
+func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc Discoverd) *Scheduler {
 	s := &Scheduler{
 		ControllerClient: cc,
 		ClusterClient:    cluster,
+		discoverd:        disc,
 		backoffPeriod:    getBackoffPeriod(),
 		hostStreams:      make(map[string]stream.Stream),
 		jobs:             make(map[string]*Job),
 		formations:       make(Formations),
 		listeners:        make(map[chan Event]struct{}),
-		changeLeader:     make(chan bool),
 		jobEvents:        make(chan *host.Event, eventBufferSize),
 		stop:             make(chan struct{}),
 		rectify:          make(chan struct{}, 1),
@@ -111,19 +110,7 @@ func main() {
 		log.Error("error creating controller client", "err", err)
 		shutdown.Fatal(err)
 	}
-	s := NewScheduler(clusterClient, controllerClient)
-
-	log.Info("registering with service discovery")
-	hb, err := discoverd.AddServiceAndRegister(serviceName, ":"+os.Getenv("PORT"))
-	if err != nil {
-		log.Error("error registering with service discovery", "err", err)
-		shutdown.Fatal(err)
-	}
-	shutdown.BeforeExit(func() { hb.Close() })
-
-	if err := watchServiceLeaders(s, hb.Addr()); err != nil {
-		shutdown.Fatal(err)
-	}
+	s := NewScheduler(clusterClient, controllerClient, newDiscoverdWrapper())
 
 	go s.startHTTPServer(os.Getenv("PORT"))
 
@@ -131,45 +118,6 @@ func main() {
 		shutdown.Fatal(err)
 	}
 	shutdown.Exit()
-}
-
-func watchServiceLeaders(s *Scheduler, selfAddr string) error {
-	log := fnLogger("self.addr", selfAddr)
-
-	service := discoverd.NewService(serviceName)
-	var leaders chan *discoverd.Instance
-	var stream stream.Stream
-	connect := func() (err error) {
-		log.Info("connecting service leader stream")
-		leaders = make(chan *discoverd.Instance)
-		stream, err = service.Leaders(leaders)
-		if err != nil {
-			log.Error("error connecting service leader stream", "err", err)
-		}
-		return
-	}
-	if err := connect(); err != nil {
-		return err
-	}
-
-	go func() {
-	outer:
-		for {
-			for leader := range leaders {
-				log.Info("received leader event", "leader.addr", leader.Addr)
-				s.ChangeLeader(leader.Addr == selfAddr)
-			}
-			log.Warn("service leader stream disconnected", "err", stream.Err())
-			for {
-				if err := connect(); err == nil {
-					continue outer
-				}
-				time.Sleep(100 * time.Millisecond)
-			}
-		}
-	}()
-
-	return nil
 }
 
 func (s *Scheduler) streamFormationEvents() error {
@@ -191,15 +139,29 @@ func (s *Scheduler) streamFormationEvents() error {
 		return err
 	}
 
+	current := make(chan struct{})
 	go func() {
+		var isCurrent bool
 	outer:
 		for {
 			for formation := range events {
+				// an empty formation indicates we now have the
+				// current list of formations.
 				if formation.App == nil {
-					// sentinel
+					if !isCurrent {
+						isCurrent = true
+						close(current)
+					}
 					continue
 				}
 				since = &formation.UpdatedAt
+				// if we are not current, explicitly handle the event
+				// so that the scheduler has the current list of
+				// formations before starting the main loop.
+				if !isCurrent {
+					s.HandleFormationChange(formation)
+					continue
+				}
 				s.formationEvents <- formation
 			}
 			log.Warn("formation event stream disconnected", "err", stream.Err())
@@ -212,7 +174,12 @@ func (s *Scheduler) streamFormationEvents() error {
 		}
 	}()
 
-	return nil
+	select {
+	case <-current:
+		return nil
+	case <-time.After(30 * time.Second):
+		return errors.New("timed out waiting for current formation list")
+	}
 }
 
 func (s *Scheduler) streamHostEvents() error {
@@ -233,14 +200,28 @@ func (s *Scheduler) streamHostEvents() error {
 		return err
 	}
 
+	current := make(chan struct{})
 	go func() {
+		var isCurrent bool
 	outer:
 		for {
 			for event := range events {
-				if event.Kind != discoverd.EventKindUp && event.Kind != discoverd.EventKindDown && event.Kind != discoverd.EventKindCurrent {
-					continue
+				switch event.Kind {
+				case discoverd.EventKindCurrent:
+					if !isCurrent {
+						isCurrent = true
+						close(current)
+					}
+				case discoverd.EventKindUp, discoverd.EventKindDown:
+					// if we are not current, explicitly handle the event
+					// so that the scheduler is streaming job events from
+					// all current hosts before starting the main loop.
+					if !isCurrent {
+						s.HandleHostEvent(event)
+						continue
+					}
+					s.hostEvents <- event
 				}
-				s.hostEvents <- event
 			}
 			log.Warn("host event stream disconnected", "err", stream.Err())
 			for {
@@ -252,7 +233,12 @@ func (s *Scheduler) streamHostEvents() error {
 		}
 	}()
 
-	return nil
+	select {
+	case <-current:
+		return nil
+	case <-time.After(30 * time.Second):
+		return errors.New("timed out waiting for current host list")
+	}
 }
 
 func (s *Scheduler) Run() error {
@@ -260,9 +246,20 @@ func (s *Scheduler) Run() error {
 	log.Info("starting scheduler loop")
 	defer log.Info("scheduler loop exited")
 
+	// stream host events (which will start watching job events on
+	// all current hosts before returning) *before* registering in
+	// service discovery so that there is always at least one scheduler
+	// watching all job events, even during a deployment.
 	if err := s.streamHostEvents(); err != nil {
 		return err
 	}
+
+	var err error
+	s.isLeader, err = s.discoverd.Register()
+	if err != nil {
+		return err
+	}
+	leaderCh := s.discoverd.LeaderCh()
 
 	if err := s.streamFormationEvents(); err != nil {
 		return err
@@ -279,7 +276,7 @@ func (s *Scheduler) Run() error {
 			log.Info("stopping scheduler loop")
 			close(s.putJobs)
 			return nil
-		case isLeader := <-s.changeLeader:
+		case isLeader := <-leaderCh:
 			s.HandleLeaderChange(isLeader)
 			continue
 		default:
@@ -317,15 +314,12 @@ func (s *Scheduler) Run() error {
 		// Re-select on all the channels so we don't have to sleep nor spin
 		select {
 		case <-s.rectify:
-			if !s.ready {
-				continue
-			}
 			s.Rectify()
 		case <-s.stop:
 			log.Info("stopping scheduler loop")
 			close(s.putJobs)
 			return nil
-		case isLeader := <-s.changeLeader:
+		case isLeader := <-leaderCh:
 			s.HandleLeaderChange(isLeader)
 		case req := <-s.jobRequests:
 			s.HandleJobRequest(req)
@@ -523,10 +517,6 @@ func (s *Scheduler) RunPutJobs() {
 	}
 }
 
-func (s *Scheduler) ChangeLeader(isLeader bool) {
-	s.changeLeader <- isLeader
-}
-
 func (s *Scheduler) HandleLeaderChange(isLeader bool) {
 	log := fnLogger()
 	s.isLeader = isLeader
@@ -574,6 +564,19 @@ func (s *Scheduler) followHost(h utils.HostClient) {
 		log.Error("error streaming job events", "err", err)
 		return
 	}
+
+	log.Info("getting active jobs")
+	jobs, err := h.ListJobs()
+	if err != nil {
+		log.Error("error getting active jobs", "err", err)
+		return
+	}
+	log.Info(fmt.Sprintf("got %d active job(s) for host %s", len(jobs), h.ID()))
+
+	for _, job := range jobs {
+		s.handleActiveJob(&job)
+	}
+
 	s.hostStreams[h.ID()] = stream
 
 	s.triggerSyncFormations()
@@ -620,10 +623,6 @@ func (s *Scheduler) HandleHostEvent(e *discoverd.Event) {
 	}()
 
 	switch e.Kind {
-	case discoverd.EventKindCurrent:
-		log.Info("hosts are current, scheduler can begin work")
-		s.ready = true
-		s.triggerSyncJobs()
 	case discoverd.EventKindUp:
 		log = log.New("host.id", e.Instance.Meta["id"])
 		log.Info("host is up, starting job event stream")
