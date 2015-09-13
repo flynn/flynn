@@ -562,14 +562,12 @@ func (s *Scheduler) sendDiffRequests(f *Formation, diff Processes) {
 }
 
 func (s *Scheduler) followHost(h utils.HostClient) {
-	_, ok := s.hostStreams[h.ID()]
-	if ok {
+	if _, ok := s.hostStreams[h.ID()]; ok {
 		return
 	}
 
 	log := fnLogger("host.id", h.ID())
 	log.Info("streaming job events")
-	// TODO: reconnect this stream, stopping only if unfollowHost is called
 	events := make(chan *host.Event)
 	stream, err := h.StreamEvents("all", events)
 	if err != nil {
@@ -581,14 +579,11 @@ func (s *Scheduler) followHost(h utils.HostClient) {
 	s.triggerSyncFormations()
 
 	go func() {
-		for {
-			e, ok := <-events
-			if !ok {
-				log.Error("job event stream closed unexpectedly")
-				return
-			}
+		for e := range events {
 			s.jobEvents <- e
 		}
+		// TODO: reconnect this stream unless unfollowHost was called
+		log.Error("job event stream closed unexpectedly")
 	}()
 }
 
