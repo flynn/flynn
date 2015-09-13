@@ -935,7 +935,7 @@ func (s *Scheduler) SaveJob(job *Job, appName string, status host.JobStatus, met
 	log := fnLogger("job.id", job.JobID, "app.id", job.AppID, "app.name", appName, "release.id", job.ReleaseID, "job.type", job.Type, "job.status", status)
 	log.Info("queuing job for persistence")
 	s.putJobs <- controllerJobFromSchedulerJob(job, jobState(status), metadata)
-	if job.Formation == nil {
+	if job.Formation == nil || job.Type == "" {
 		return
 	}
 	switch status {
