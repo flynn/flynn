@@ -113,7 +113,7 @@ func (s *Server) WriteSnapshot(path string) error {
 	}
 	defer f.Close()
 
-	buffers := s.Aggregator.CopyBuffers()
+	buffers := s.Aggregator.ReadAll()
 	return snapshot.WriteTo(buffers, f)
 }
 
