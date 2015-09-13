@@ -15,11 +15,12 @@ type JobState string
 const (
 	JobRequestTypeUp   JobRequestType = "up"
 	JobRequestTypeDown JobRequestType = "down"
-	JobStateUp                        = "running"
-	JobStateStopped                   = "stopped"
-	JobStateCrashed                   = "crashed"
-	JobStateRequesting                = "requesting"
-	JobStateNew                       = "new"
+	JobStateStarting   JobState       = "starting"
+	JobStateRunning    JobState       = "running"
+	JobStateStopped    JobState       = "stopped"
+	JobStateCrashed    JobState       = "crashed"
+	JobStateRequesting JobState       = "requesting"
+	JobStateNew        JobState       = "new"
 )
 
 type JobRequest struct {
@@ -80,8 +81,21 @@ func (j *Job) Clone() *Job {
 	return &cloned
 }
 
-func (j *Job) IsScheduled() bool {
-	return j.state != JobStateStopped
+//
+func (j *Job) IsStopped() bool {
+	return j.state == JobStateStopped
+}
+
+func (j *Job) IsRunning() bool {
+	return j.state == JobStateStarting || j.state == JobStateRunning
+}
+
+func (j *Job) IsSchedulable() bool {
+	return j.Formation != nil && j.Type != ""
+}
+
+func (j *Job) IsInFormation(key utils.FormationKey) bool {
+	return !j.IsStopped() && j.Formation != nil && j.Formation.key() == key
 }
 
 type Jobs map[string]*Job
@@ -89,7 +103,7 @@ type Jobs map[string]*Job
 func (js Jobs) GetStoppableJobs(key utils.FormationKey, typ string) []*Job {
 	formTypeJobs := make([]*Job, 0, len(js))
 	for _, j := range js {
-		if j.IsScheduled() && j.Formation != nil && j.Formation.key() == key && j.Type == typ {
+		if j.IsInFormation(key) && j.IsRunning() && j.Type == typ {
 			formTypeJobs = append(formTypeJobs, j)
 		}
 	}
@@ -100,7 +114,7 @@ func (js Jobs) GetHostJobCounts(key utils.FormationKey, typ string) map[string]i
 	counts := make(map[string]int)
 
 	for _, j := range js {
-		if j.IsScheduled() && j.Formation != nil && j.Formation.key() == key && j.Type == typ {
+		if j.IsInFormation(key) && j.Type == typ {
 			counts[j.HostID]++
 		}
 	}
@@ -110,7 +124,7 @@ func (js Jobs) GetHostJobCounts(key utils.FormationKey, typ string) map[string]i
 func (js Jobs) GetProcesses(key utils.FormationKey) Processes {
 	procs := make(Processes)
 	for _, j := range js {
-		if j.IsScheduled() && j.Formation != nil && j.Formation.key() == key {
+		if j.IsInFormation(key) {
 			procs[j.Type]++
 		}
 	}
@@ -123,21 +137,13 @@ func (js Jobs) AddJob(j *Job) *Job {
 	return j
 }
 
-func (js Jobs) StopJob(id string) error {
-	return js.setState(id, JobStateStopped)
-}
-
-func (js Jobs) CrashJob(id string) error {
-	return js.setState(id, JobStateCrashed)
-}
-
-func (js Jobs) RunJob(id string) error {
-	return js.setState(id, JobStateUp)
-}
-
-func (js Jobs) setState(id string, state JobState) error {
+func (js Jobs) IsJobInState(id string, state JobState) bool {
 	j, ok := js[id]
-	if ok {
+	return ok && j.state == state
+}
+
+func (js Jobs) SetState(id string, state JobState) error {
+	if j, ok := js[id]; ok {
 		j.state = state
 		return nil
 	}

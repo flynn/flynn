@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -59,6 +59,11 @@ func (d *discoverdWrapper) Register() (bool, error) {
 	outer:
 		for {
 			for leader := range leaders {
+				if leader == nil {
+					// This should never happen, but it has happened, so a nil check is necessary
+					log.Error("received nil leader event")
+					continue
+				}
 				log.Info("received leader event", "leader.addr", leader.Addr)
 				d.leader <- leader.Addr == selfAddr
 			}
