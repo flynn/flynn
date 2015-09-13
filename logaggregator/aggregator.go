@@ -35,110 +35,8 @@ func NewAggregator() *Aggregator {
 // Shutdown shuts down the Aggregator gracefully by closing its listener,
 // and waiting for already-received logs to be processed.
 func (a *Aggregator) Shutdown() {
+	a.Flush()
 	close(a.msgc)
-}
-
-// ReadLastN reads up to N logs from the log buffer with id and sends them over
-// a channel. If n is less than 0, or if there are fewer than n logs buffered,
-// all buffered logs are returned. If a signal is sent on done, the returned
-// channel is closed and the goroutine exits.
-func (a *Aggregator) ReadLastN(
-	id string,
-	n int,
-	filter Filter,
-	done <-chan struct{},
-) <-chan *rfc5424.Message {
-	msgc := make(chan *rfc5424.Message)
-	go func() {
-		defer close(msgc)
-
-		messages := filter.Filter(a.readLastN(id, -1))
-		if n > 0 && len(messages) > n {
-			messages = messages[len(messages)-n:]
-		}
-		for _, syslogMsg := range messages {
-			select {
-			case msgc <- syslogMsg:
-			case <-done:
-				return
-			}
-		}
-	}()
-	return msgc
-}
-
-// readLastN reads up to N logs from the log buffer with id. If n is less than
-// 0, or if there are fewer than n logs buffered, all buffered logs are
-// returned.
-func (a *Aggregator) readLastN(id string, n int) []*rfc5424.Message {
-	buf := a.getBuffer(id)
-	if buf == nil {
-		return nil
-	}
-	if n >= 0 {
-		return buf.ReadLastN(n)
-	}
-	return buf.ReadAll()
-}
-
-// ReadLastNAndSubscribe is like ReadLastN, except that after sending buffered
-// log lines, it also streams new lines as they arrive.
-func (a *Aggregator) ReadLastNAndSubscribe(
-	id string,
-	n int,
-	filter Filter,
-	done <-chan struct{},
-) <-chan *rfc5424.Message {
-	msgc := make(chan *rfc5424.Message)
-	buf := a.getOrInitializeBuffer(id)
-
-	var messages []*rfc5424.Message
-	var subc <-chan *rfc5424.Message
-	var cancel func()
-
-	messages, subc, cancel = buf.ReadAllAndSubscribe()
-
-	go func() {
-		defer cancel()
-		defer close(msgc)
-
-		if filter != nil {
-			messages = filter.Filter(messages)
-			if n > 0 && len(messages) > n {
-				messages = messages[len(messages)-n:]
-			}
-		}
-
-		// range over messages, watch done
-		for _, msg := range messages {
-			select {
-			case <-done:
-				return
-			case msgc <- msg:
-			}
-		}
-
-		// select on subc, done, and cancel if done
-		for {
-			select {
-			case msg := <-subc:
-				if msgc == nil { // subc was closed
-					return
-				}
-				if !filter.Match(msg) {
-					continue // skip this message if it doesn't match filters
-				}
-				select {
-				case msgc <- msg:
-				case <-done:
-					return
-				}
-			case <-done:
-				return
-			}
-		}
-	}()
-	return msgc
 }
 
 func (a *Aggregator) Feed(msg *rfc5424.Message) {
@@ -160,19 +58,21 @@ func (a *Aggregator) Flush() {
 	a.bmu.Lock()
 	defer a.bmu.Unlock()
 
-	for _, buf := range a.buffers {
-		buf.Flush()
+	for k, buf := range a.buffers {
+		buf.Close()
+		delete(a.buffers, k)
 	}
 }
 
-func (a *Aggregator) CopyBuffers() [][]*rfc5424.Message {
+func (a *Aggregator) ReadAll() [][]*rfc5424.Message {
 	// TODO(benburkert): restructure Aggregator & ring.Buffer to avoid nested locks
 	a.bmu.Lock()
+	defer a.bmu.Unlock()
+
 	buffers := make([][]*rfc5424.Message, 0, len(a.buffers))
 	for _, buf := range a.buffers {
-		buffers = append(buffers, buf.Clone().ReadAll())
+		buffers = append(buffers, buf.Read())
 	}
-	a.bmu.Unlock()
 
 	return buffers
 }
@@ -212,12 +112,8 @@ func (a *Aggregator) run() {
 	}
 }
 
-// testing hook:
-var afterMessage func()
-
 func (a *Aggregator) feed(msg *rfc5424.Message) {
-	a.getOrInitializeBuffer(string(msg.AppName)).Add(msg)
-	if afterMessage != nil {
-		afterMessage()
+	if err := a.getOrInitializeBuffer(string(msg.AppName)).Add(msg); err != nil {
+		panic(err)
 	}
 }
