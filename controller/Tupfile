@@ -1,6 +1,6 @@
 include_rules
 : |> !go |> bin/flynn-controller
-: |> !go ./scheduler-v2 |> bin/flynn-scheduler
+: |> !go ./scheduler |> bin/flynn-scheduler
 : |> !go ./worker |> bin/flynn-worker
 : foreach $(ROOT)/schema/*.json |> !cp |> bin/jsonschema/%g.json
 : foreach $(ROOT)/schema/controller/*.json |> !cp |> bin/jsonschema/controller/%g.json
