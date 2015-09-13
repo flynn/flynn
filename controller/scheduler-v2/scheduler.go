@@ -52,8 +52,7 @@ type Scheduler struct {
 	discoverd Discoverd
 	isLeader  bool
 
-	backoffPeriod    time.Duration
-	maxBackoffPeriod time.Duration
+	backoffPeriod time.Duration
 
 	formations  Formations
 	hostStreams map[string]stream.Stream
@@ -96,7 +95,6 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 		jobRequests:      make(chan *JobRequest, eventBufferSize),
 		putJobs:          make(chan *ct.Job, eventBufferSize),
 	}
-	s.maxBackoffPeriod = 10 * s.backoffPeriod
 	return s
 }
 
@@ -702,6 +700,7 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) (*Job, error) {
 		}
 		j.Formation = f
 	}
+	j.startedAt = activeJob.StartedAt
 	s.SaveJob(j, appName, activeJob.Status, utils.JobMetaFromMetadata(job.Metadata))
 	return j, err
 }
@@ -974,10 +973,6 @@ func (s *Scheduler) scheduleJobStart(job *Job) error {
 		job.restarts = 0
 	}
 	backoff := s.getBackoffDuration(job.restarts)
-	if backoff == s.maxBackoffPeriod {
-		log.Warn("reached maximum backoff period, allowing job to stay crashed")
-		return errors.New("maximum backoff period reached")
-	}
 	job.restarts += 1
 	log.Info("scheduling job request", "attempts", job.restarts)
 	time.AfterFunc(backoff, func() {
@@ -987,17 +982,12 @@ func (s *Scheduler) scheduleJobStart(job *Job) error {
 }
 
 func (s *Scheduler) getBackoffDuration(restarts uint) time.Duration {
-	// Overflow guard
-	if restarts > 30 {
-		return s.maxBackoffPeriod
+	multiplier := 32 // max multiplier
+	if restarts < 6 {
+		// 2^(restarts - 1), or 0 if restarts == 0
+		multiplier = (1 << restarts) >> 1
 	}
-	// s.backoffPeriod * 2^(restarts - 1)
-	delay := s.backoffPeriod * time.Duration((1<<restarts)>>1)
-
-	if delay > s.maxBackoffPeriod {
-		return s.maxBackoffPeriod
-	}
-	return delay
+	return s.backoffPeriod * time.Duration(multiplier)
 }
 
 func (s *Scheduler) handleJobStart(job *Job) {
@@ -1178,7 +1168,7 @@ func NewEvent(typ EventType, err error, data interface{}) Event {
 }
 
 func getBackoffPeriod() time.Duration {
-	backoffPeriod := time.Second
+	backoffPeriod := 10 * time.Minute
 
 	if period := os.Getenv("BACKOFF_PERIOD"); period != "" {
 		p, err := time.ParseDuration(period)
