@@ -124,7 +124,7 @@ func NewMessageFromSyslog(m *rfc5424.Message) client.Message {
 		ProcessType: string(processType),
 		// TODO(bgentry): source is always "app" for now, could be router in future
 		Source:    "app",
-		Stream:    streamFromMessage(m),
+		Stream:    streamName(m.MsgID),
 		Timestamp: m.Timestamp,
 	}
 }
@@ -142,8 +142,8 @@ func splitProcID(procID []byte) (processType, jobID []byte) {
 	return
 }
 
-func streamFromMessage(m *rfc5424.Message) string {
-	switch string(m.MsgID) {
+func streamName(msgID []byte) string {
+	switch string(msgID) {
 	case "ID1":
 		return "stdout"
 	case "ID2":
