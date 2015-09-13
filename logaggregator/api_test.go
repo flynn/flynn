@@ -30,12 +30,12 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogBuffer(c *C) {
 	msg3 := newMessageForApp(appID, "worker.3", "log message 3")
 	msg4 := newMessageForApp(appID, "web.1", "log message 4")
 	msg5 := newMessageForApp(appID, ".5", "log message 5")
-	buf := s.agg.getOrInitializeBuffer(appID)
-	buf.Add(msg1)
-	buf.Add(msg2)
-	buf.Add(msg3)
-	buf.Add(msg4)
-	buf.Add(msg5)
+
+	s.agg.feed(msg1)
+	s.agg.feed(msg2)
+	s.agg.feed(msg3)
+	s.agg.feed(msg4)
+	s.agg.feed(msg5)
 
 	runtest := func(opts client.LogOpts, expected string) {
 		numLines := -1
@@ -120,9 +120,8 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogFollow(c *C) {
 		err  error
 	}
 
-	buf := s.agg.getOrInitializeBuffer(appID)
-	buf.Add(msg1)
-	buf.Add(msg2)
+	s.agg.feed(msg1)
+	s.agg.feed(msg2)
 
 	nlines := 1
 	logrc, err := s.client.GetLog(appID, &client.LogOpts{
@@ -132,8 +131,8 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogFollow(c *C) {
 	c.Assert(err, IsNil)
 	defer logrc.Close()
 
-	buf.Add(msg3)
-	buf.Add(msg4)
+	s.agg.feed(msg3)
+	s.agg.feed(msg4)
 
 	// use a goroutine + channel so we can timeout the stdout read
 	lines := make(chan line)
