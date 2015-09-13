@@ -112,9 +112,15 @@ func (s *TestScheduler) Stop() {
 	s.stream.Close()
 }
 
-func (s *TestScheduler) waitRectify() {
-	_, err := s.waitForEvent(EventTypeRectify)
+func (s *TestScheduler) waitRectify() utils.FormationKey {
+	event, err := s.waitForEvent(EventTypeRectify)
 	s.c.Assert(err, IsNil)
+	e, ok := event.(*RectifyEvent)
+	if !ok {
+		s.c.Fatalf("expected RectifyEvent, got %T", e)
+	}
+	s.c.Assert(e.FormationKey, NotNil)
+	return e.FormationKey
 }
 
 func (s *TestScheduler) waitFormationChange() {
@@ -174,8 +180,6 @@ func (TestSuite) TestSingleJobStart(c *C) {
 	defer s.Stop()
 
 	// wait for a rectify jobs event
-	c.Log("Waiting for a rectify jobs event")
-	s.waitRectify()
 	job := s.waitJobStart()
 	c.Assert(job.Type, Equals, testJobType)
 	c.Assert(job.AppID, Equals, testAppID)
@@ -248,11 +252,12 @@ func (TestSuite) TestRectify(c *C) {
 	defer s.Stop()
 
 	// wait for the formation to cascade to the scheduler
-	s.waitRectify()
+	key := s.waitRectify()
 	job := s.waitJobStart()
 	jobs := make(map[string]*Job)
 	jobs[job.JobID] = job
 	c.Assert(jobs, HasLen, 1)
+	c.Assert(job.Formation.key(), Equals, key)
 
 	// Create an extra job on a host and wait for it to start
 	c.Log("Test creating an extra job on the host. Wait for job start in scheduler")
@@ -294,7 +299,6 @@ func (TestSuite) TestRectify(c *C) {
 	s.CreateRelease(release)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
 	s.waitFormationChange()
-	s.waitRectify()
 	s.waitJobStart()
 	c.Assert(s.Jobs(), HasLen, 2)
 }
@@ -314,7 +318,6 @@ func (TestSuite) TestJobRequestRestarts(c *C) {
 	}
 
 	// wait for the formation to cascade to the scheduler
-	s.waitRectify()
 	waitRestarts(550 * time.Millisecond)
 	waitRestarts(550 * time.Millisecond)
 	waitRestarts(550 * time.Millisecond)

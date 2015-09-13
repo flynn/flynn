@@ -99,6 +99,8 @@ main() {
     args+=("--router-ip=198.51.100.1")
   fi
 
+  export BACKOFF_PERIOD="5s"
+
   bin/flynn-test ${args[@]}
 }
 

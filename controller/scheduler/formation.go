@@ -43,7 +43,9 @@ type Formation struct {
 }
 
 func NewFormation(ef *ct.ExpandedFormation) *Formation {
-	return &Formation{ef}
+	return &Formation{
+		ExpandedFormation: ef,
+	}
 }
 
 func (f *Formation) GetProcesses() Processes {
@@ -76,4 +78,13 @@ func (f *Formation) Update(procs Processes) Processes {
 	}
 	f.Processes = procs
 	return diff
+}
+
+func (f *Formation) IsEmpty() bool {
+	for _, count := range f.Processes {
+		if count > 0 {
+			return false
+		}
+	}
+	return true
 }
