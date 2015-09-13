@@ -48,20 +48,20 @@ func (i *Iterator) readLastN(agg *Aggregator) []*rfc5424.Message {
 	if agg == nil {
 		panic("agg is nil")
 	}
-	messages := agg.getOrInitializeBuffer(i.id).Read()
+	messages := agg.Read(i.id)
 	return i.reverseFilter(messages)
 }
 
 func (i *Iterator) subscribe(agg *Aggregator) <-chan *rfc5424.Message {
 	msgc := make(chan *rfc5424.Message, 1000)
-	agg.getOrInitializeBuffer(i.id).Subscribe(msgc, i.donec)
+	agg.Subscribe(i.id, msgc, i.donec)
 
 	return i.filterChan(msgc)
 }
 
 func (i *Iterator) readAndSubscribe(agg *Aggregator) ([]*rfc5424.Message, <-chan *rfc5424.Message) {
 	msgc := make(chan *rfc5424.Message, 1000)
-	messages := agg.getOrInitializeBuffer(i.id).ReadAndSubscribe(msgc, i.donec)
+	messages := agg.ReadAndSubscribe(i.id, msgc, i.donec)
 	return i.reverseFilter(messages), i.filterChan(msgc)
 }
 
