@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/flynn/flynn/logaggregator/utils"
 	"github.com/flynn/flynn/pkg/httpclient"
 )
 
@@ -107,4 +108,9 @@ type Message struct {
 	Stream string `json:"stream,omitempty"`
 	// Timestamp is the time that this log line was emitted.
 	Timestamp time.Time `json:"timestamp,omitempty"`
+}
+
+func (c *Client) GetCursors() (map[string]utils.HostCursor, error) {
+	var res map[string]utils.HostCursor
+	return res, c.Get("/cursors", &res)
 }

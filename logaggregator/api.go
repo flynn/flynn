@@ -18,12 +18,13 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 )
 
-func apiHandler(agg *Aggregator) http.Handler {
-	api := aggregatorAPI{agg: agg}
+func apiHandler(agg *Aggregator, cursors *HostCursors) http.Handler {
+	api := aggregatorAPI{agg, cursors}
 	r := httprouter.New()
 
 	r.Handler("GET", status.Path, status.HealthyHandler)
 	r.GET("/log/:channel_id", httphelper.WrapHandler(api.GetLog))
+	r.GET("/cursors", httphelper.WrapHandler(api.GetCursors))
 	return httphelper.ContextInjector(
 		"logaggregator-api",
 		httphelper.NewRequestLogger(r),
@@ -31,7 +32,12 @@ func apiHandler(agg *Aggregator) http.Handler {
 }
 
 type aggregatorAPI struct {
-	agg *Aggregator
+	agg     *Aggregator
+	cursors *HostCursors
+}
+
+func (a *aggregatorAPI) GetCursors(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	httphelper.JSON(w, 200, a.cursors.Get())
 }
 
 func (a *aggregatorAPI) GetLog(ctx context.Context, w http.ResponseWriter, req *http.Request) {
