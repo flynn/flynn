@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/controller/client"
+	"github.com/flynn/flynn/controller/schema"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
 	hh "github.com/flynn/flynn/pkg/httphelper"
@@ -66,7 +66,7 @@ func (s *S) SetUpSuite(c *C) {
 			Host:     "/var/run/postgresql",
 			Database: dbname,
 		},
-		AfterConnect: que.PrepareStatements,
+		AfterConnect: schema.PrepareStatements,
 	})
 	if err != nil {
 		c.Fatal(err)

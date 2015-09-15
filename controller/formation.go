@@ -77,16 +77,14 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 	if prevFormation != nil {
 		scale.PrevProcesses = prevFormation.Processes
 	}
-	err = tx.QueryRow("INSERT INTO formations (app_id, release_id, processes) VALUES ($1, $2, $3) RETURNING created_at, updated_at",
-		f.AppID, f.ReleaseID, f.Processes).Scan(&f.CreatedAt, &f.UpdatedAt)
+	err = tx.QueryRow("formation_insert", f.AppID, f.ReleaseID, f.Processes).Scan(&f.CreatedAt, &f.UpdatedAt)
 	if postgres.IsUniquenessError(err, "") {
 		tx.Rollback()
 		tx, err = r.db.Begin()
 		if err != nil {
 			return err
 		}
-		err = tx.QueryRow("UPDATE formations SET processes = $3, updated_at = now(), deleted_at = NULL WHERE app_id = $1 AND release_id = $2 RETURNING created_at, updated_at",
-			f.AppID, f.ReleaseID, f.Processes).Scan(&f.CreatedAt, &f.UpdatedAt)
+		err = tx.QueryRow("formation_update", f.AppID, f.ReleaseID, f.Processes).Scan(&f.CreatedAt, &f.UpdatedAt)
 	}
 	if err != nil {
 		tx.Rollback()
@@ -116,12 +114,12 @@ func scanFormation(s postgres.Scanner) (*ct.Formation, error) {
 }
 
 func (r *FormationRepo) Get(appID, releaseID string) (*ct.Formation, error) {
-	row := r.db.QueryRow("SELECT app_id, release_id, processes, created_at, updated_at FROM formations WHERE app_id = $1 AND release_id = $2 AND deleted_at IS NULL", appID, releaseID)
+	row := r.db.QueryRow("formation_select", appID, releaseID)
 	return scanFormation(row)
 }
 
 func (r *FormationRepo) List(appID string) ([]*ct.Formation, error) {
-	rows, err := r.db.Query("SELECT app_id, release_id, processes, created_at, updated_at FROM formations WHERE app_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC", appID)
+	rows, err := r.db.Query("formation_list_by_app", appID)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +147,7 @@ func (r *FormationRepo) Remove(appID, releaseID string) error {
 	if prevFormation != nil {
 		scale.PrevProcesses = prevFormation.Processes
 	}
-	err = tx.Exec("UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now() WHERE app_id = $1 AND release_id = $2", appID, releaseID)
+	err = tx.Exec("formation_delete", appID, releaseID)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -269,7 +267,7 @@ func (r *FormationRepo) Subscribe(ch chan *ct.ExpandedFormation, stopCh <-chan s
 }
 
 func (r *FormationRepo) sendUpdatedSince(ch chan *ct.ExpandedFormation, stopCh <-chan struct{}, since time.Time) error {
-	rows, err := r.db.Query("SELECT app_id, release_id, processes, created_at, updated_at FROM formations WHERE updated_at >= $1 ORDER BY updated_at DESC", since)
+	rows, err := r.db.Query("formation_list_since", since)
 	if err != nil {
 		return err
 	}

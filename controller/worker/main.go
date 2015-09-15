@@ -8,6 +8,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/controller/client"
+	"github.com/flynn/flynn/controller/schema"
 	"github.com/flynn/flynn/controller/worker/app_deletion"
 	"github.com/flynn/flynn/controller/worker/deployment"
 	"github.com/flynn/flynn/discoverd/client"
@@ -31,7 +32,7 @@ func main() {
 	}
 
 	log.Info("connecting to postgres")
-	db := postgres.Wait(nil, que.PrepareStatements)
+	db := postgres.Wait(nil, schema.PrepareStatements)
 
 	shutdown.BeforeExit(func() { db.Close() })
 

@@ -66,8 +66,7 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 		return err
 	}
 
-	err = tx.QueryRow("INSERT INTO releases (release_id, artifact_id, env, processes, meta) VALUES ($1, $2, $3, $4, $5) RETURNING created_at",
-		release.ID, artifactID, release.Env, release.Processes, release.Meta).Scan(&release.CreatedAt)
+	err = tx.QueryRow("release_insert", release.ID, artifactID, release.Env, release.Processes, release.Meta).Scan(&release.CreatedAt)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -85,7 +84,7 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 }
 
 func (r *ReleaseRepo) Get(id string) (interface{}, error) {
-	row := r.db.QueryRow("SELECT release_id, artifact_id, env, processes, meta, created_at FROM releases WHERE release_id = $1 AND deleted_at IS NULL", id)
+	row := r.db.QueryRow("release_select", id)
 	return scanRelease(row)
 }
 
@@ -103,7 +102,7 @@ func releaseList(rows *pgx.Rows) ([]*ct.Release, error) {
 }
 
 func (r *ReleaseRepo) List() (interface{}, error) {
-	rows, err := r.db.Query("SELECT release_id, artifact_id, env, processes, meta, created_at FROM releases WHERE deleted_at IS NULL ORDER BY created_at DESC")
+	rows, err := r.db.Query("release_list")
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +110,7 @@ func (r *ReleaseRepo) List() (interface{}, error) {
 }
 
 func (r *ReleaseRepo) AppList(appID string) ([]*ct.Release, error) {
-	rows, err := r.db.Query(`SELECT DISTINCT(r.release_id), r.artifact_id, r.env, r.processes, r.meta, r.created_at FROM releases r JOIN formations f USING (release_id) WHERE f.app_id = $1 AND r.deleted_at IS NULL ORDER BY r.created_at DESC`, appID)
+	rows, err := r.db.Query(`release_app_list`, appID)
 	if err != nil {
 		return nil, err
 	}

@@ -40,15 +40,14 @@ func (r *DeploymentRepo) Add(data interface{}) (*ct.Deployment, error) {
 	if err != nil {
 		return nil, err
 	}
-	query := "INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, processes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at"
-	if err := tx.QueryRow(query, d.ID, d.AppID, oldReleaseID, d.NewReleaseID, d.Strategy, d.Processes).Scan(&d.CreatedAt); err != nil {
+	if err := tx.QueryRow("deployment_insert", d.ID, d.AppID, oldReleaseID, d.NewReleaseID, d.Strategy, d.Processes).Scan(&d.CreatedAt); err != nil {
 		tx.Rollback()
 		return nil, err
 	}
 
 	// fake initial deployment
 	if d.FinishedAt != nil {
-		if err := tx.Exec("UPDATE deployments SET finished_at = $2 WHERE deployment_id = $1", d.ID, d.FinishedAt); err != nil {
+		if err := tx.Exec("deployment_update_finished_at", d.ID, d.FinishedAt); err != nil {
 			tx.Rollback()
 			return nil, err
 		}
@@ -88,35 +87,19 @@ func (r *DeploymentRepo) Add(data interface{}) (*ct.Deployment, error) {
 	job := &que.Job{Type: "deployment", Args: args}
 	if err := r.q.Enqueue(job); err != nil {
 		logger.New("fn", "DeploymentRepo.Add").Warn("error enqueueing deployment job", "err", err)
-		r.db.Exec("DELETE FROM deployments WHERE deployment_id = $1", d.ID)
+		r.db.Exec("deployment_delete", d.ID)
 		return nil, err
 	}
 	return d, err
 }
 
 func (r *DeploymentRepo) Get(id string) (*ct.Deployment, error) {
-	query := `WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
-              SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
-                     strategy, e1.data->>'status' AS status,
-                     processes, d.created_at, d.finished_at
-              FROM deployments d
-              LEFT JOIN deployment_events e1 ON d.deployment_id = e1.object_id::uuid
-              LEFT OUTER JOIN deployment_events e2 ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
-              WHERE e2.created_at IS NULL AND d.deployment_id = $1`
-	row := r.db.QueryRow(query, id)
+	row := r.db.QueryRow("deployment_select", id)
 	return scanDeployment(row)
 }
 
 func (r *DeploymentRepo) List(appID string) ([]*ct.Deployment, error) {
-	query := `WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
-              SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
-                     strategy, e1.data->>'status' AS status,
-                     processes, d.created_at, d.finished_at
-              FROM deployments d
-              LEFT JOIN deployment_events e1 ON d.deployment_id = e1.object_id::uuid
-              LEFT OUTER JOIN deployment_events e2 ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
-              WHERE e2.created_at IS NULL AND d.app_id = $1 ORDER BY d.created_at DESC`
-	rows, err := r.db.Query(query, appID)
+	rows, err := r.db.Query("deployment_list", appID)
 	if err != nil {
 		return nil, err
 	}

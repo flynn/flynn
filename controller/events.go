@@ -90,7 +90,7 @@ func (r *EventRepo) ListEvents(appID string, objectTypes []string, objectID stri
 }
 
 func (r *EventRepo) GetEvent(id int64) (*ct.Event, error) {
-	row := r.db.QueryRow("SELECT event_id, app_id, object_id, object_type, data, created_at FROM events WHERE event_id = $1", id)
+	row := r.db.QueryRow("event_select", id)
 	return scanEvent(row)
 }
 

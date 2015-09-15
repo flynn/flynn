@@ -29,7 +29,7 @@ func (r *ProviderRepo) Add(data interface{}) error {
 	if err != nil {
 		return err
 	}
-	err = tx.QueryRow("INSERT INTO providers (name, url) VALUES ($1, $2) RETURNING provider_id, created_at, updated_at", p.Name, p.URL).Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
+	err = tx.QueryRow("provider_insert", p.Name, p.URL).Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -55,17 +55,16 @@ func scanProvider(s postgres.Scanner) (*ct.Provider, error) {
 
 func (r *ProviderRepo) Get(id string) (interface{}, error) {
 	var row postgres.Scanner
-	query := "SELECT provider_id, name, url, created_at, updated_at FROM providers WHERE deleted_at IS NULL AND "
 	if idPattern.MatchString(id) {
-		row = r.db.QueryRow(query+"(provider_id = $1 OR name = $2) LIMIT 1", id, id)
+		row = r.db.QueryRow("provider_select_by_name_or_id", id, id)
 	} else {
-		row = r.db.QueryRow(query+"name = $1", id)
+		row = r.db.QueryRow("provider_select_by_name", id)
 	}
 	return scanProvider(row)
 }
 
 func (r *ProviderRepo) List() (interface{}, error) {
-	rows, err := r.db.Query("SELECT provider_id, name, url, created_at, updated_at FROM providers WHERE deleted_at IS NULL ORDER BY created_at DESC")
+	rows, err := r.db.Query("provider_list")
 	if err != nil {
 		return nil, err
 	}

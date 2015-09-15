@@ -48,7 +48,7 @@ func (r *AppRepo) Add(data interface{}) error {
 	}
 	if app.Name == "" {
 		var nameID int64
-		if err := tx.QueryRow("SELECT nextval('name_ids')").Scan(&nameID); err != nil {
+		if err := tx.QueryRow("app_next_name_id").Scan(&nameID); err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -64,7 +64,7 @@ func (r *AppRepo) Add(data interface{}) error {
 	if app.Strategy == "" {
 		app.Strategy = "all-at-once"
 	}
-	if err := tx.QueryRow("INSERT INTO apps (app_id, name, meta, strategy) VALUES ($1, $2, $3, $4) RETURNING created_at, updated_at", app.ID, app.Name, app.Meta, app.Strategy).Scan(&app.CreatedAt, &app.UpdatedAt); err != nil {
+	if err := tx.QueryRow("app_insert", app.ID, app.Name, app.Meta, app.Strategy).Scan(&app.CreatedAt, &app.UpdatedAt); err != nil {
 		tx.Rollback()
 		if postgres.IsUniquenessError(err, "apps_name_idx") {
 			return httphelper.ObjectExistsErr(fmt.Sprintf("application %q already exists", app.Name))
@@ -118,16 +118,15 @@ type rowQueryer interface {
 }
 
 func selectApp(db rowQueryer, id string, update bool) (*ct.App, error) {
-	query := "SELECT app_id, name, meta, strategy, release_id, created_at, updated_at FROM apps WHERE deleted_at IS NULL AND "
 	var suffix string
 	if update {
-		suffix = " FOR UPDATE"
+		suffix = "_for_update"
 	}
 	var row postgres.Scanner
 	if idPattern.MatchString(id) {
-		row = db.QueryRow(query+"(app_id = $1 OR name = $2) LIMIT 1"+suffix, id, id)
+		row = db.QueryRow("app_select_by_name_or_id"+suffix, id, id)
 	} else {
-		row = db.QueryRow(query+"name = $1"+suffix, id)
+		row = db.QueryRow("app_select_by_name"+suffix, id)
 	}
 	return scanApp(row)
 }
@@ -156,7 +155,7 @@ func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, e
 				return nil, fmt.Errorf("controller: expected string, got %T", v)
 			}
 			app.Strategy = strategy
-			if err := tx.Exec("UPDATE apps SET strategy = $2, updated_at = now() WHERE app_id = $1", app.ID, app.Strategy); err != nil {
+			if err := tx.Exec("app_update_strategy", app.ID, app.Strategy); err != nil {
 				tx.Rollback()
 				return nil, err
 			}
@@ -175,7 +174,7 @@ func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, e
 				}
 				app.Meta[k] = s
 			}
-			if err := tx.Exec("UPDATE apps SET meta = $2, updated_at = now() WHERE app_id = $1", app.ID, app.Meta); err != nil {
+			if err := tx.Exec("app_update_meta", app.ID, app.Meta); err != nil {
 				tx.Rollback()
 				return nil, err
 			}
@@ -195,7 +194,7 @@ func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, e
 }
 
 func (r *AppRepo) List() (interface{}, error) {
-	rows, err := r.db.Query("SELECT app_id, name, meta, strategy, release_id, created_at, updated_at FROM apps WHERE deleted_at IS NULL ORDER BY created_at DESC")
+	rows, err := r.db.Query("app_list")
 	if err != nil {
 		return nil, err
 	}
@@ -219,15 +218,15 @@ func (r *AppRepo) SetRelease(app *ct.App, releaseID string) error {
 	var release *ct.Release
 	var prevRelease *ct.Release
 	if app.ReleaseID != "" {
-		row := tx.QueryRow("SELECT release_id, artifact_id, env, processes, meta, created_at FROM releases WHERE release_id = $1 AND deleted_at IS NULL", app.ReleaseID)
+		row := tx.QueryRow("release_select", app.ReleaseID)
 		prevRelease, _ = scanRelease(row)
 	}
-	row := tx.QueryRow("SELECT release_id, artifact_id, env, processes, meta, created_at FROM releases WHERE release_id = $1 AND deleted_at IS NULL", releaseID)
+	row := tx.QueryRow("release_select", releaseID)
 	if release, err = scanRelease(row); err != nil {
 		return err
 	}
 	app.ReleaseID = releaseID
-	if err := tx.Exec("UPDATE apps SET release_id = $2, updated_at = now() WHERE app_id = $1", app.ID, app.ReleaseID); err != nil {
+	if err := tx.Exec("app_update_release", app.ID, app.ReleaseID); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -246,7 +245,7 @@ func (r *AppRepo) SetRelease(app *ct.App, releaseID string) error {
 }
 
 func (r *AppRepo) GetRelease(id string) (*ct.Release, error) {
-	row := r.db.QueryRow("SELECT r.release_id, r.artifact_id, r.env, r.processes, r.meta, r.created_at FROM apps a JOIN releases r USING (release_id) WHERE a.app_id = $1", id)
+	row := r.db.QueryRow("app_get_release", id)
 	return scanRelease(row)
 }
 

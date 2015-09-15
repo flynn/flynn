@@ -64,7 +64,7 @@ func main() {
 
 	// Reconnect, preparing statements now that schema is migrated
 	db.Close()
-	db = postgres.Wait(nil, que.PrepareStatements)
+	db = postgres.Wait(nil, schema.PrepareStatements)
 
 	shutdown.BeforeExit(func() { db.Close() })
 

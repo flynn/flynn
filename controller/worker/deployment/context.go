@@ -154,8 +154,7 @@ func (c *context) createDeploymentEvent(e ct.DeploymentEvent) error {
 	if e.Status == "" {
 		e.Status = "running"
 	}
-	query := "INSERT INTO events (app_id, object_id, object_type, data) VALUES ($1, $2, $3, $4)"
-	return c.execWithRetries(query, e.AppID, e.DeploymentID, string(ct.EventTypeDeployment), e)
+	return c.execWithRetries("event_insert", e.AppID, e.DeploymentID, string(ct.EventTypeDeployment), e)
 }
 
 var execAttempts = attempt.Strategy{

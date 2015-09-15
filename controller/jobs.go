@@ -53,17 +53,15 @@ func NewJobRepo(db *postgres.DB) *JobRepo {
 }
 
 func (r *JobRepo) Get(id string) (*ct.Job, error) {
-	row := r.db.QueryRow("SELECT job_id, app_id, release_id, process_type, state, meta, created_at, updated_at FROM job_cache WHERE job_id = $1", id)
+	row := r.db.QueryRow("job_select", id)
 	return scanJob(row)
 }
 
 func (r *JobRepo) Add(job *ct.Job) error {
 	// TODO: actually validate
-	err := r.db.QueryRow("INSERT INTO job_cache (job_id, app_id, release_id, process_type, state, meta) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at, updated_at",
-		job.ID, job.AppID, job.ReleaseID, job.Type, job.State, job.Meta).Scan(&job.CreatedAt, &job.UpdatedAt)
+	err := r.db.QueryRow("job_insert", job.ID, job.AppID, job.ReleaseID, job.Type, job.State, job.Meta).Scan(&job.CreatedAt, &job.UpdatedAt)
 	if postgres.IsUniquenessError(err, "") {
-		err = r.db.QueryRow("UPDATE job_cache SET state = $2, updated_at = now() WHERE job_id = $1 RETURNING created_at, updated_at",
-			job.ID, job.State).Scan(&job.CreatedAt, &job.UpdatedAt)
+		err = r.db.QueryRow("job_update", job.ID, job.State).Scan(&job.CreatedAt, &job.UpdatedAt)
 		if postgres.IsCheckViolation(err) {
 			return ct.ValidationError{Field: "state", Message: err.Error()}
 		}
@@ -74,7 +72,7 @@ func (r *JobRepo) Add(job *ct.Job) error {
 
 	// create a job event, ignoring possible duplications
 	uniqueID := strings.Join([]string{job.ID, job.State}, "|")
-	err = r.db.Exec("INSERT INTO events (app_id, object_id, unique_id, object_type, data) VALUES ($1, $2, $3, $4, $5)", job.AppID, job.ID, uniqueID, string(ct.EventTypeJob), job)
+	err = r.db.Exec("event_insert_unique", job.AppID, job.ID, uniqueID, string(ct.EventTypeJob), job)
 	if postgres.IsUniquenessError(err, "") {
 		return nil
 	}
@@ -94,7 +92,7 @@ func scanJob(s postgres.Scanner) (*ct.Job, error) {
 }
 
 func (r *JobRepo) List(appID string) ([]*ct.Job, error) {
-	rows, err := r.db.Query("SELECT job_id, app_id, release_id, process_type, state, meta, created_at, updated_at FROM job_cache WHERE app_id = $1 ORDER BY created_at DESC", appID)
+	rows, err := r.db.Query("job_list", appID)
 	if err != nil {
 		return nil, err
 	}
