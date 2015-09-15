@@ -701,10 +701,14 @@ func (r *Runner) updateStatus(b *Build, state string) {
 		}
 
 		url := fmt.Sprintf("https://api.github.com/repos/flynn/flynn/statuses/%s", b.Commit)
+		description := descriptions[state]
+		if len(b.Failures) > 0 {
+			description += fmt.Sprintf(" [%d failure(s)]", len(b.Failures))
+		}
 		status := Status{
 			State:       state,
 			TargetURL:   b.URL(),
-			Description: descriptions[state],
+			Description: description,
 			Context:     "continuous-integration/flynn",
 		}
 		body := &bytes.Buffer{}
