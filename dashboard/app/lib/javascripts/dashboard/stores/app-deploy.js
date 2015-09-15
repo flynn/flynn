@@ -73,6 +73,14 @@ var AppDeploy = Store.createClass({
 					});
 				}
 			break;
+
+			case 'UPDATE_APP_ENV_FAILED':
+				if (event.appID === this.props.appID) {
+					this.setState({
+						launchErrorMsg: event.errorMsg
+					});
+				}
+			break;
 		}
 	}
 });

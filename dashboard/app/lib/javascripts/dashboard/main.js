@@ -289,12 +289,12 @@ extend(Dashboard.prototype, {
 		if (authenticated) {
 			if ( !Config.githubClient ) {
 				var githubAuth = Config.user.auths.github;
-				Config.githubClient = new GithubClient(
+				Config.setGithubClient(new GithubClient(
 					githubAuth.access_token
-				);
+				));
 			}
 		} else {
-			Config.githubClient = null;
+			Config.setGithubClient(null);
 		}
 	},
 

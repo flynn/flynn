@@ -336,6 +336,10 @@ var AppsRouter = Router.createClass({
 			case "GITHUB_PULL:MERGED":
 				this.__handleGithubPullMerged(event);
 			break;
+
+			case "GITHUB_AUTH_CHANGE":
+				this.history.navigate(this.history.path, { force: true, replace: true });
+			break;
 		}
 	},
 

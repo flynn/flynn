@@ -110,11 +110,21 @@ Config.fetch = function () {
 };
 
 Config.setGithubToken = function (token) {
-	Config.user.auths.github = { access_token: token };
-	Dispatcher.handleAppEvent({
-		name: "GITHUB_AUTH_CHANGE",
-		authenticated: true
-	});
+	if (token) {
+		Config.githubAuthenticated = true;
+		Config.user.auths.github = { access_token: token };
+		Dispatcher.handleAppEvent({
+			name: "GITHUB_AUTH_CHANGE",
+			authenticated: true
+		});
+	} else {
+		Config.githubAuthenticated = false;
+		Config.user.auths.github = null;
+		Dispatcher.handleAppEvent({
+			name: "GITHUB_AUTH_CHANGE",
+			authenticated: false
+		});
+	}
 };
 
 Config.setClient = function (client) {
@@ -123,6 +133,10 @@ Config.setClient = function (client) {
 
 Config.setGithubClient = function (client) {
 	Config.githubClient = client;
+};
+
+Config.setDashboardAppID = function (appID) {
+	Config.dashboardAppID = appID;
 };
 
 export default Config;

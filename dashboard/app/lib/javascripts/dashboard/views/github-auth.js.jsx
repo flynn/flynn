@@ -1,8 +1,9 @@
 import { assertEqual, extend } from 'marbles/utils';
 import QueryParams from 'marbles/query_params';
 import Config from '../config';
-import AppStore from '../stores/app';
-import AppAuthActions from '../actions/app-auth';
+import AppStore from 'dashboard/stores/app';
+import AppDeployStore from 'dashboard/stores/app';
+import Dispatcher from 'dashboard/dispatcher';
 import RouteLink from './route-link';
 import ExternalLink from './external-link';
 
@@ -21,9 +22,9 @@ var GithubAuth = React.createClass({
 
 				<section className="panel github-auth">
 					<form onSubmit={this.__handleSubmit}>
-						{this.state.notFound || this.props.errorMsg ? (
+						{this.state.notFound || this.state.errorMsg ? (
 							<div className="alert-error">
-								{this.state.notFound ? "Error: App not found: "+ this.props.appName : this.props.errorMsg}
+								{this.state.notFound ? "Error: App not found: "+ this.props.appName : this.state.errorMsg}
 							</div>
 						) : null}
 
@@ -78,20 +79,33 @@ var GithubAuth = React.createClass({
 
 	componentDidMount: function () {
 		AppStore.addChangeListener(this.state.appStoreId, this.__handleStoreChange);
+		AppDeployStore.addChangeListener(this.state.appDeployStoreId, this.__handleStoreChange);
 	},
 
 	componentWillReceiveProps: function (nextProps) {
+		var changed = false;
 		var prevAppStoreId = this.state.appStoreId;
 		var nextAppStoreId = this.__getAppStoreId(nextProps);
 		if ( !assertEqual(prevAppStoreId, nextAppStoreId) ) {
 			AppStore.removeChangeListener(prevAppStoreId, this.__handleStoreChange);
 			AppStore.addChangeListener(nextAppStoreId, this.__handleStoreChange);
+			changed = true;
+		}
+		var prevAppDeployStoreId = this.state.appDeployStoreId;
+		var nextAppDeployStoreId = this.__getAppDeployStoreId(nextProps);
+		if ( !assertEqual(prevAppDeployStoreId, nextAppDeployStoreId) ) {
+			AppDeployStore.removeChangeListener(prevAppDeployStoreId, this.__handleStoreChange);
+			AppDeployStore.addChangeListener(nextAppDeployStoreId, this.__handleStoreChange);
+			changed = true;
+		}
+		if (changed) {
 			this.__handleStoreChange(nextProps);
 		}
 	},
 
 	componentWillUnmount: function () {
 		AppStore.removeChangeListener(this.state.appStoreId, this.__handleStoreChange);
+		AppDeployStore.removeChangeListener(this.state.appDeployStoreId, this.__handleStoreChange);
 	},
 
 	__handleGenerateTokenBtnClick: function () {
@@ -108,16 +122,18 @@ var GithubAuth = React.createClass({
 
 	__handleSubmit: function (e) {
 		e.preventDefault();
-		var release = extend({}, this.state.release, {
-			env: extend({}, this.state.release.env, {
-				GITHUB_TOKEN: this.state.githubToken
-			})
+		var env = extend({}, this.state.release.env, {
+			GITHUB_TOKEN: this.state.githubToken
 		});
 		this.setState({
 			isSaving: true
 		});
-		AppAuthActions.setGithubToken(this.state.githubToken);
-		AppAuthActions.createRelease(this.state.appStoreId, release);
+		Dispatcher.dispatch({
+			name: 'UPDATE_APP_ENV',
+			appID: this.state.app.id,
+			prevRelease: this.state.release,
+			data: env
+		});
 	},
 
 	__handleStoreChange: function (props) {
@@ -130,12 +146,19 @@ var GithubAuth = React.createClass({
 		};
 	},
 
+	__getAppDeployStoreId: function (props) {
+		return {
+			appID: props.appName
+		};
+	},
+
 	__getState: function (props, prevState) {
 		prevState = prevState || {};
 		var state = {
 			appStoreId: this.__getAppStoreId(props),
+			appDeployStoreId: this.__getAppDeployStoreId(props),
 			githubToken: prevState.githubToken,
-			submitDisabled: prevState.submitDisabled
+			submitDisabled: prevState.submitDisabled,
 		};
 
 		var appState = AppStore.getState(state.appStoreId);
@@ -145,6 +168,9 @@ var GithubAuth = React.createClass({
 		if (state.release) {
 			state.env = extend({}, state.release.env);
 		}
+
+		var appDeployState = AppDeployStore.getState(state.appDeployStoreId);
+		state.errorMsg = AppDeployStore.launchErrorMsg;
 
 		return state;
 	}
