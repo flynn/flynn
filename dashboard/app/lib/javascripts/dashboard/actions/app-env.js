@@ -10,11 +10,29 @@ var updateAppEnv = function (appID, changedRelease, env) {
 		var envDiff = objectDiff(changedRelease.env || {}, env);
 		release.env = applyObjectDiff(envDiff, release.env);
 		delete release.id;
+		delete release.created_at;
 		
 		return client.createRelease(release);
 	}).then(function (args) {
 		var release = args[0];
 		return client.deployAppRelease(appID, release.id);
+	}).then(function () {
+		if (appID === Config.dashboardAppID || appID === 'dashboard') {
+			Config.setGithubToken(env.GITHUB_TOKEN);
+		}
+	}).catch(function (args) {
+		var message = 'Something went wrong.';
+		if (Array.isArray(args)) {
+			message = args[0].message;
+		} else if (typeof args === 'string') {
+			message = args;
+		}
+		Dispatcher.dispatch({
+			name: 'UPDATE_APP_ENV_FAILED',
+			appID: appID,
+			errorMsg: args[0].message || ''
+		});
+		return Promise.reject(args);
 	});
 };
 

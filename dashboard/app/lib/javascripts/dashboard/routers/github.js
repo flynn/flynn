@@ -188,16 +188,6 @@ var GithubRouter = Router.createClass({
 			case "GITHUB_AUTH_CHANGE":
 				this.__handleGithubAuthChange(event.authenticated);
 			break;
-
-			case "APP:RELEASE_CREATE_FAILED":
-				this.__handleReleaseCreateFailed(event);
-			break;
-
-			case "APP:RELEASE_CREATED":
-				this.__waitForGithubAuth().then(function () {
-					this.__handleReleaseCreated(event);
-				}.bind(this));
-			break;
 		}
 	},
 
@@ -251,40 +241,7 @@ var GithubRouter = Router.createClass({
 	},
 
 	__handleGithubAuthChange: function (authenticated) {
-		if (authenticated && this.__waitForGithubAuthResolve) {
-			this.__waitForGithubAuthResolve();
-			delete this.__waitForGithubAuthResolve;
-			delete this.__waitForGithubAuthPromise;
-		}
-		if ( !authenticated && this.history.path.match(/^github/) ) {
-			this.__redirectToGithub();
-		}
-	},
-
-	__waitForGithubAuth: function () {
-		if (Config.githubClient) {
-			return Promise.resolve();
-		} else {
-			this.__waitForGithubAuthPromise = this.__waitForGithubAuthPromise || new Promise(function (resolve) {
-				this.__waitForGithubAuthResolve = resolve;
-			}.bind(this));
-			return this.__waitForGithubAuthPromise;
-		}
-	},
-
-	__handleReleaseCreateFailed: function (event) {
-		var view = this.context.primaryView;
-		if (view && view.constructor.displayName === "Views.GithubAuth" && view.isMounted() && view.props.appName === event.appId) {
-			view.setProps({
-				errorMsg: event.errorMsg
-			});
-		}
-	},
-
-	__handleReleaseCreated: function (event) {
-		var view = this.context.primaryView;
-		if (view && view.constructor.displayName === "Views.GithubAuth" && view.isMounted() && view.props.appName === event.appId) {
-			// GitHub token saved and loaded, navigate to main GitHub view
+		if (authenticated && this.history.getHandler().name === 'auth') {
 			this.history.navigate("/github", { replace: true, force: true });
 		}
 	},

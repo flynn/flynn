@@ -128,6 +128,9 @@ var App = Store.createClass({
 	__fetchApp: function () {
 		return App.getClient.call(this).getApp(this.props.appId).then(function (args) {
 			var res = args[0];
+			if (res.name === 'dashboard') {
+				Config.setDashboardAppID(res.id);
+			}
 			this.setState({
 				app: res
 			});
