@@ -69,7 +69,7 @@ extend(Dashboard.prototype, {
 
 		this.history.start({
 			root: (Config.PATH_PREFIX || '') + '/',
-			dispatcher: this.Dispatcher,
+			dispatcher: Dispatcher,
 			trigger: false
 		});
 
@@ -160,7 +160,7 @@ extend(Dashboard.prototype, {
 		if (xhr.status === 0) {
 			// We were not able to access the controller due to a network error (ssl, timeout)
 			// In order to understand what's happening, we have to switch to http.
-			this.Dispatcher.handleAppEvent({
+			Dispatcher.handleAppEvent({
 				name: "CONTROLLER_UNREACHABLE_FROM_HTTPS",
 				status: xhr.status
 			});
@@ -168,7 +168,7 @@ extend(Dashboard.prototype, {
 		}
 
 		// an error code other than 0
-		this.Dispatcher.handleAppEvent({
+		Dispatcher.handleAppEvent({
 			name: "SERVICE_UNAVAILABLE",
 			status: xhr.status
 		});
