@@ -280,7 +280,9 @@ extend(Dashboard.prototype, {
 			}
 
 			this.waitForNav.then(function() {
-				this.__redirectToLogin();
+				if ( !this.__isLoginPath() ) {
+					this.__redirectToLogin();
+				}
 			}.bind(this));
 		}
 	},
@@ -306,17 +308,20 @@ extend(Dashboard.prototype, {
 	},
 
 	__handleHandlerBeforeEvent: function (event) {
+		// prevent route handlers requiring auth from being called when app is not authenticated
+		if ( !Config.authenticated && event.handler.opts.auth !== false ) {
+			event.abort();
+			if ( !this.__isLoginPath() ) {
+				this.__redirectToLogin();
+			}
+			return;
+		}
+
 		Config.waitForRouteHandler = new Promise(function (rs) {
 			this.__waitForRouteHandlerResolve = rs;
 		}.bind(this));
 
 		this.__renderNavComponent();
-
-		// prevent route handlers requiring auth from being called when app is not authenticated
-		if ( !Config.authenticated && event.handler.opts.auth !== false ) {
-			event.abort();
-			return;
-		}
 
 		if (event.handler.opts.secondary) {
 			// view is rendered in a modal
