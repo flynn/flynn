@@ -57,8 +57,6 @@ extend(Dashboard.prototype, {
 			));
 		}
 
-		Config.client.openEventStream();
-
 		Config.history = this.history;
 
 		this.navEl = document.getElementById("nav");
@@ -272,7 +270,9 @@ extend(Dashboard.prototype, {
 	__handleAuthChange: function (authenticated) {
 		this.__renderNavComponent();
 
-		if ( !authenticated && !this.__isLoginPath() ) {
+		if (authenticated) {
+			Config.client.openEventStream();
+		} else if ( !this.__isLoginPath() ) {
 			var currentHandler = this.history.getHandler();
 			if (currentHandler && currentHandler.opts.auth === false) {
 				// Don't redirect to login from page not requiring auth
