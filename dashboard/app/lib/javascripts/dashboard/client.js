@@ -309,6 +309,11 @@ var Client = createClass({
 			return Promise.reject('window.EventSource not defined');
 		}
 
+		if (this.__eventStream && this.__eventStream.readyState === 1) {
+			// Already open
+			return Promise.resolve();
+		}
+
 		var controllerKey = (Config.user || {}).controller_key;
 		var url = this.endpoints.cluster_controller +'/events';
 		url = url + QueryParams.serializeParams([{
@@ -325,6 +330,7 @@ var Client = createClass({
 		}.bind(this));
 		return new Promise(function (resolve, reject) {
 			var es = new window.EventSource(url, {withCredentials: true});
+			this.__eventStream = es;
 			var handleError = function (e) {
 				if ( !open && (!retryCount || retryCount < 3) ) {
 					clearTimeout(retryTimeout);
