@@ -67,7 +67,7 @@ app() {
     --volume "${tmpdir}:/build" \
     --workdir /build \
     flynn/${target}-builder \
-    bash -c "cp --recursive /app/.bundle . && cp --recursive /app/vendor/bundle vendor/ && ./compiler && chown -R $(id -u):$(id -g) ."
+    bash -c "cp --recursive /app/.bundle . && cp --recursive /app/vendor/bundle vendor/ && cp --recursive /app/node_modules . && ./compiler && chown -R $(id -u):$(id -g) ."
 
   rm -f app # {target}/app/compiler.go -> {target}/app/app binary
   mkdir app
