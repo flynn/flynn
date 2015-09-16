@@ -22,6 +22,8 @@ if (UserAgent.isWindows()) {
 	};
 }
 
+var certFilename = 'flynn-ca.cert';
+
 var FirefoxSteps = React.createClass({
 	render: function () {
 		var imgInfo = firefoxImgInfo;
@@ -59,19 +61,50 @@ var KeychainOSXSteps = React.createClass({
 			<ol>
 				<li>
 					<p>
-						<a href={this.props.certURL}>Click here</a> to download the certificate.
+						<a href={this.props.certURL} download={certFilename}>Click here</a> to download the certificate.
 					</p>
 				</li>
 
 				<li>
-					<p>Open the downloaded certificate and click "Always Trust":</p>
+					<p>Open the downloaded certificate.</p>
+					<p>
+						<img
+							src={AssetPaths['osx-cert-1.png']}
+							alt="Open the certificate with the Keychain app"
+							style={{
+								width: 400,
+								height: 225
+							}}/>
+					</p>
 					<p>
 						<img
 							src={AssetPaths['osx-cert-2.png']}
-							alt="Install certificate in Keychain app"
+							alt=""
 							style={{
-								width: 410,
-								height: 400
+								width: 600,
+								height: 380
+							}}/>
+					</p>
+				</li>
+
+				<li>
+					<p>Double click the certificate, select "Always Trust", then close the dialog.</p>
+					<p>
+						<img
+							src={AssetPaths['osx-cert-3.png']}
+							alt=""
+							style={{
+								width: 400,
+								height: 337
+							}}/>
+					</p>
+					<p>
+						<img
+							src={AssetPaths['osx-cert-4.png']}
+							alt=""
+							style={{
+								width: 300,
+								height: 157
 							}}/>
 					</p>
 				</li>
@@ -90,7 +123,7 @@ var ChromeLinuxSteps = React.createClass({
 			<ol>
 				<li>
 					<p>
-						<a href={this.props.certURL}>Click here</a> to download the certificate.
+						<a href={this.props.certURL} download={certFilename}>Click here</a> to download the certificate.
 					</p>
 				</li>
 
@@ -172,7 +205,7 @@ var ChromeWindowsSteps = React.createClass({
 			<ol>
 				<li>
 					<p>
-						<a href={this.props.certURL}>Click here</a> to download the certificate.
+						<a href={this.props.certURL} download={certFilename}>Click here</a> to download the certificate.
 					</p>
 				</li>
 
@@ -282,7 +315,7 @@ var UnknownBrowserSteps = React.createClass({
 			<ol>
 				<li>
 					<p>
-						<a href={this.props.certURL}>Click here</a> to download the certificate.
+						<a href={this.props.certURL} download={certFilename}>Click here</a> to download the certificate.
 					</p>
 				</li>
 
