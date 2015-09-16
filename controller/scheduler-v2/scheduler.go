@@ -102,13 +102,16 @@ func main() {
 	log := fnLogger()
 
 	log.Info("creating cluster and controller clients")
-	clusterClient := utils.ClusterClientWrapper(cluster.NewClient())
+	hc := &http.Client{Timeout: 5 * time.Second}
+	cc := cluster.NewClientWithHTTP(nil, hc)
+	clusterClient := utils.ClusterClientWrapper(cc)
 	controllerClient, err := controller.NewClient("", os.Getenv("AUTH_KEY"))
 	if err != nil {
 		log.Error("error creating controller client", "err", err)
 		shutdown.Fatal(err)
 	}
 	s := NewScheduler(clusterClient, controllerClient, newDiscoverdWrapper())
+	log.Info("started scheduler", "backoffPeriod", s.backoffPeriod)
 
 	go s.startHTTPServer(os.Getenv("PORT"))
 

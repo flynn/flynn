@@ -2,6 +2,7 @@ package main
 
 import (
 	"net"
+	"os"
 	"strings"
 	"time"
 
@@ -262,11 +263,16 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 }
 
 func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
+	// To run this test on local, set BACKOFF_PERIOD on the flynn host machine
 	var backoffPeriod time.Duration
-	if testCluster != nil {
-		backoffPeriod = testCluster.BackoffPeriod()
+	var err error
+	if testCluster == nil {
+		backoffPeriod, err = time.ParseDuration(os.Getenv("BACKOFF_PERIOD"))
+		if err != nil {
+			t.Skip("cannot determine backoff period")
+		}
 	} else {
-		backoffPeriod = time.Second
+		backoffPeriod = testCluster.BackoffPeriod()
 	}
 	startTimeout := 20 * time.Second
 	debugf(t, "job restart backoff period: %s", backoffPeriod)
@@ -280,19 +286,20 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 	t.Assert(s.controllerClient(t).PutFormation(&ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
-		Processes: map[string]int{"crasher": 1},
+		Processes: map[string]int{"printer": 1},
 	}), c.IsNil)
 	var id string
 	var assignId = func(e *ct.Job) error {
 		id = e.ID
 		return nil
 	}
-	err = watcher.WaitFor(ct.JobEvents{"crasher": {"up": 1}}, scaleTimeout, assignId)
+	err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, scaleTimeout, assignId)
 
 	waitForRestart := func(duration time.Duration) {
 		start := time.Now()
+		debugf(t, "stopping job: %s", id)
 		s.stopJob(t, id)
-		err = watcher.WaitFor(ct.JobEvents{"crasher": {"up": 1}}, duration+startTimeout, assignId)
+		err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, duration+startTimeout, assignId)
 		t.Assert(err, c.IsNil)
 		t.Assert(time.Now().Sub(start) > duration, c.Equals, true)
 	}
