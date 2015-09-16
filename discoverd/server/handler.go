@@ -127,10 +127,13 @@ func (h *Handler) serveDeleteService(w http.ResponseWriter, r *http.Request, par
 
 // serveGetService streams service events to the client.
 func (h *Handler) serveGetService(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
-	if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
-		h.serveStream(w, params, discoverd.EventKindAll)
-		return
-	}
+	// This should only return a stream if the Accept header is
+	// text/event-stream (and return a 406 otherwise), but we
+	// always return a stream due to Go's http.Client not
+	// maintaining headers through a redirect.
+	//
+	// See https://github.com/flynn/flynn/issues/1880
+	h.serveStream(w, params, discoverd.EventKindAll)
 }
 
 // serveServiceMeta sets the metadata for a service.
