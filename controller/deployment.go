@@ -76,18 +76,13 @@ func (r *DeploymentRepo) Add(data interface{}) (*ct.Deployment, error) {
 		return nil, err
 	}
 	d.Status = "pending"
-	if err = tx.Commit(); err != nil {
+
+	job := &que.Job{Type: "deployment", Args: args}
+	if err := r.q.EnqueueInTx(job, tx.Tx); err != nil {
+		tx.Rollback()
 		return nil, err
 	}
-
-	// Delete the deployment if we get an error so the client can retry.
-	//
-	// TODO: wrap all of this in a transaction and drop the delete once we
-	//       move to pgx
-	job := &que.Job{Type: "deployment", Args: args}
-	if err := r.q.Enqueue(job); err != nil {
-		logger.New("fn", "DeploymentRepo.Add").Warn("error enqueueing deployment job", "err", err)
-		r.db.Exec("deployment_delete", d.ID)
+	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
 	return d, err
