@@ -528,10 +528,7 @@ type StreamEventsOptions struct {
 }
 
 func (c *Client) StreamEvents(opts StreamEventsOptions, output chan *ct.Event) (stream.Stream, error) {
-	path, err := url.Parse("/events")
-	if err != nil {
-		return nil, err
-	}
+	path, _ := url.Parse("/events")
 	q := path.Query()
 	if opts.AppID != "" {
 		q.Set("app_id", opts.AppID)
@@ -554,6 +551,55 @@ func (c *Client) StreamEvents(opts StreamEventsOptions, output chan *ct.Event) (
 	}
 	path.RawQuery = q.Encode()
 	return c.ResumingStream("GET", path.String(), output)
+}
+
+type ListEventsOptions struct {
+	AppID       string
+	ObjectTypes []ct.EventType
+	ObjectID    string
+	BeforeID    *int64
+	SinceID     *int64
+	Count       int
+}
+
+func (c *Client) ListEvents(opts ListEventsOptions) ([]*ct.Event, error) {
+	var events []*ct.Event
+	path, err := url.Parse("/events")
+	if err != nil {
+		return nil, err
+	}
+	q := path.Query()
+	if opts.AppID != "" {
+		q.Set("app_id", opts.AppID)
+	}
+	if opts.BeforeID != nil {
+		q.Set("before_id", strconv.FormatInt(*opts.BeforeID, 10))
+	}
+	if opts.SinceID != nil {
+		q.Set("since_id", strconv.FormatInt(*opts.SinceID, 10))
+	}
+	if len(opts.ObjectTypes) > 0 {
+		types := make([]string, len(opts.ObjectTypes))
+		for i, t := range opts.ObjectTypes {
+			types[i] = string(t)
+		}
+		q.Set("object_types", strings.Join(types, ","))
+	}
+	if opts.ObjectID != "" {
+		q.Set("object_id", opts.ObjectID)
+	}
+	if opts.Count > 0 {
+		q.Set("count", strconv.Itoa(opts.Count))
+	}
+	path.RawQuery = q.Encode()
+	h := make(http.Header)
+	h.Set("Accept", "application/json")
+	res, err := c.RawReq("GET", path.String(), h, nil, &events)
+	if err != nil {
+		return nil, err
+	}
+	res.Body.Close()
+	return events, nil
 }
 
 func (c *Client) ExpectedScalingEvents(actual, expected map[string]int, releaseProcesses map[string]ct.ProcessType, clusterSize int) ct.JobEvents {
