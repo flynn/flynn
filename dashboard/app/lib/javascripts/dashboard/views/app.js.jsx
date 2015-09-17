@@ -3,6 +3,7 @@ import Config from '../config';
 import AppStore from '../stores/app';
 import AppSourceHistory from './app-source-history';
 import AppControls from './app-controls';
+import AppHistory from './app-history';
 import ServiceUnavailable from './service-unavailable';
 
 var isSystemApp = AppStore.isSystemApp;
@@ -49,17 +50,25 @@ var App = React.createClass({
 						</section>
 					) : null}
 
-					{app && app.meta && app.meta.type === "github" && Config.githubClient ? (
-						<section className="col">
-							<AppSourceHistory
-								appId={this.props.appId}
-								app={app}
-								selectedBranchName={this.props.selectedBranchName}
-								selectedSha={this.props.selectedSha}
-								selectedTab={this.props.selectedTab}
-								getAppPath={this.props.getAppPath} />
+					<section className="col">
+						<section>
+							<AppHistory
+								key={this.props.appId}
+								appID={this.props.appId} />
 						</section>
-					) : null}
+
+						{app && app.meta && app.meta.type === "github" && Config.githubClient ? (
+							<section>
+								<AppSourceHistory
+									appId={this.props.appId}
+									app={app}
+									selectedBranchName={this.props.selectedBranchName}
+									selectedSha={this.props.selectedSha}
+									selectedTab={this.props.selectedTab}
+									getAppPath={this.props.getAppPath} />
+							</section>
+						) : null}
+					</section>
 				</section>
 
 			</section>
