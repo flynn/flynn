@@ -15,7 +15,8 @@ type JobState string
 const (
 	JobRequestTypeUp   JobRequestType = "up"
 	JobRequestTypeDown JobRequestType = "down"
-	JobStateUp                        = "running"
+	JobStateStarting                  = "starting"
+	JobStateRunning                   = "running"
 	JobStateStopped                   = "stopped"
 	JobStateCrashed                   = "crashed"
 	JobStateRequesting                = "requesting"
@@ -84,6 +85,14 @@ func (j *Job) IsScheduled() bool {
 	return j.state != JobStateStopped
 }
 
+func (j *Job) IsRunning() bool {
+	return j.state == JobStateStarting || j.state == JobStateRunning
+}
+
+func (j *Job) IsSchedulable() bool {
+	return j.Formation != nil && j.Type != ""
+}
+
 type Jobs map[string]*Job
 
 func (js Jobs) GetStoppableJobs(key utils.FormationKey, typ string) []*Job {
@@ -123,19 +132,15 @@ func (js Jobs) AddJob(j *Job) *Job {
 	return j
 }
 
-func (js Jobs) StopJob(id string) error {
-	return js.setState(id, JobStateStopped)
+func (js Jobs) IsJobInState(id string, state JobState) bool {
+	j, ok := js[id]
+	if ok {
+		return j.state == state
+	}
+	return false
 }
 
-func (js Jobs) CrashJob(id string) error {
-	return js.setState(id, JobStateCrashed)
-}
-
-func (js Jobs) RunJob(id string) error {
-	return js.setState(id, JobStateUp)
-}
-
-func (js Jobs) setState(id string, state JobState) error {
+func (js Jobs) SetState(id string, state JobState) error {
 	j, ok := js[id]
 	if ok {
 		j.state = state

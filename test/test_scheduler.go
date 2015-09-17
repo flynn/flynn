@@ -294,6 +294,7 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 		return nil
 	}
 	err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, scaleTimeout, assignId)
+	t.Assert(err, c.IsNil)
 
 	waitForRestart := func(duration time.Duration) {
 		start := time.Now()
