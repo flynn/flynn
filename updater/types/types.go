@@ -9,4 +9,5 @@ var SystemApps = []string{
 	"controller",
 	"logaggregator",
 	"postgres",
+	"status",
 }
