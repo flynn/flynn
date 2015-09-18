@@ -56,15 +56,21 @@ var deployFromGithub = function (meta, appData) {
 		});
 	}
 
+	function updateApp() {
+		return client.getApp(appData.id).then(function (args) {
+			var res = args[0];
+			meta = extend({}, res.meta, meta);
+			return client.updateApp(res.id, {
+				meta: meta
+			});
+		});
+	}
+
 	function updateOrCreateApp() {
 		if (appData.hasOwnProperty('id')) {
-			return client.getApp(appData.id).then(function (args) {
-				var res = args[0];
-				meta = extend({}, res.meta, meta);
-				return client.updateApp(res.id, {
-					meta: meta
-				});
-			});
+			return client.getAppRelease(appData.id).then(function (args) {
+				appData.env = args[0].env;
+			}).then(updateApp);
 		} else {
 			return client.createApp({
 				name: appData.name,
