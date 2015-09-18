@@ -524,6 +524,7 @@ type StreamEventsOptions struct {
 	ObjectTypes []ct.EventType
 	ObjectID    string
 	Past        bool
+	Count       int
 }
 
 func (c *Client) StreamEvents(opts StreamEventsOptions, output chan *ct.Event) (stream.Stream, error) {
@@ -547,6 +548,9 @@ func (c *Client) StreamEvents(opts StreamEventsOptions, output chan *ct.Event) (
 	}
 	if opts.ObjectID != "" {
 		q.Set("object_id", opts.ObjectID)
+	}
+	if opts.Count > 0 {
+		q.Set("count", strconv.Itoa(opts.Count))
 	}
 	path.RawQuery = q.Encode()
 	return c.ResumingStream("GET", path.String(), output)
