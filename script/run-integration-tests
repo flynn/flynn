@@ -8,32 +8,52 @@ usage() {
   cat <<USAGE >&2
 usage: $0 [options]
 
+Boot a Flynn cluster and run integration tests.
+
 OPTIONS:
-  -h            Show this message
-  -f FILTER     Regular expression selecting which tests and/or suites to run
-  -s            Stream debug output
+  -h, --help               Show this message
+  -s, --size=SIZE          Cluster size [default: 1]
+  -f, --filter=FILTER      Regular expression selecting which tests and/or suites to run
+  -s, --stream             Stream debug output
 USAGE
 }
 
 main() {
+  local size="1"
   local filter
   local stream=false
 
-  while getopts 'hf:s' opt; do
-    case "${opt}" in
-      h)
+  while true; do
+    case "$1" in
+      -h | --help)
         usage
-        exit 1
+        exit 0
         ;;
-      f) filter="${OPTARG}" ;;
-      s) stream=true ;;
-      ?)
-        usage
-        exit 1
+      -s | --size)
+        if [[ -z "$2" ]]; then
+          usage
+          exit 1
+        fi
+        size="$2"
+        shift 2
+        ;;
+      -f | --filter)
+        if [[ -z "$2" ]]; then
+          usage
+          exit 1
+        fi
+        filter="$2"
+        shift 2
+        ;;
+      -s | --stream)
+        stream=true
+        shift
+        ;;
+      *)
+        break
         ;;
     esac
   done
-  shift $((${OPTIND} - 1))
 
   if [[ $# -ne 0 ]]; then
     usage
@@ -46,7 +66,7 @@ main() {
   make
   popd >/dev/null
 
-  cluster_add=$("${ROOT}/script/bootstrap-flynn" &> >(tee /dev/stderr) | tail -3 | head -1)
+  cluster_add=$("${ROOT}/script/bootstrap-flynn" --size "${size}" &> >(tee /dev/stderr) | tail -3 | head -1)
 
   if [[ "${cluster_add:0:17}" != "flynn cluster add" ]]; then
     echo Bootstrap failed >&2
@@ -74,6 +94,9 @@ main() {
   fi
   if $stream; then
     args+=("--stream")
+  fi
+  if [[ "${size}" -gt "1" ]]; then
+    args+=("--router-ip=198.51.100.1")
   fi
 
   bin/flynn-test ${args[@]}
