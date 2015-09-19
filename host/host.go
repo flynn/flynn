@@ -35,6 +35,7 @@ usage: flynn-host daemon [options]
 
 options:
   --external-ip=IP       external IP of host
+  --listen-ip=IP         bind host network services to this IP
   --state=PATH           path to state file [default: /var/lib/flynn/host-state.bolt]
   --id=ID                host id
   --force                kill all containers booted by flynn-host before starting
@@ -45,6 +46,7 @@ options:
   --log-dir=DIR          directory to store job logs [default: /var/log/flynn]
   --discovery=TOKEN      join cluster with discovery token
   --peer-ips=IPLIST      join existing cluster using IPs
+  --bridge-name=NAME     network bridge name [default: flynnbr0]
 	`)
 }
 
@@ -127,6 +129,7 @@ See 'flynn-host help <command>' for more information on a specific command.
 func runDaemon(args *docopt.Args) {
 	hostname, _ := os.Hostname()
 	externalIP := args.String["--external-ip"]
+	listenIP := args.String["--listen-ip"]
 	stateFile := args.String["--state"]
 	hostID := args.String["--id"]
 	force := args.Bool["--force"]
@@ -136,6 +139,7 @@ func runDaemon(args *docopt.Args) {
 	nsumount := args.String["--nsumount"]
 	logDir := args.String["--log-dir"]
 	discoveryToken := args.String["--discovery"]
+	bridgeName := args.String["--bridge-name"]
 
 	var peerIPs []string
 	if args.String["--peer-ips"] != "" {
@@ -213,7 +217,7 @@ func runDaemon(args *docopt.Args) {
 
 	switch backendName {
 	case "libvirt-lxc":
-		backend, err = NewLibvirtLXCBackend(state, vman, logDir, flynnInit, nsumount, mux)
+		backend, err = NewLibvirtLXCBackend(state, vman, logDir, bridgeName, flynnInit, nsumount, mux)
 	default:
 		log.Fatalf("unknown backend %q", backendName)
 	}
@@ -221,6 +225,7 @@ func runDaemon(args *docopt.Args) {
 		shutdown.Fatal(err)
 	}
 	backend.SetDefaultEnv("EXTERNAL_IP", externalIP)
+	backend.SetDefaultEnv("LISTEN_IP", listenIP)
 
 	discoverdManager := NewDiscoverdManager(backend, mux, hostID, publishAddr)
 	publishURL := "http://" + publishAddr
@@ -269,6 +274,7 @@ func runDaemon(args *docopt.Args) {
 
 	if err := serveHTTP(
 		host,
+		net.JoinHostPort(listenIP, "1113"),
 		&attachHandler{state: state, backend: backend},
 		cluster.NewClient(),
 		vman,

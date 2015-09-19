@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -60,10 +61,6 @@ var listenFunc = reuseport.NewReusablePortListener
 func main() {
 	defer shutdown.Exit()
 
-	apiPort := os.Getenv("PORT")
-	if apiPort == "" {
-		apiPort = "5000"
-	}
 	var cookieKey *[32]byte
 	if key := os.Getenv("COOKIE_KEY"); key != "" {
 		res, err := base64.StdEncoding.DecodeString(key)
@@ -81,15 +78,22 @@ func main() {
 		shutdown.Fatal("Missing random 32 byte base64-encoded COOKIE_KEY")
 	}
 
-	httpAddr := flag.String("httpaddr", ":8080", "http listen address")
-	httpsAddr := flag.String("httpsaddr", ":4433", "https listen address")
-	tcpIP := flag.String("tcpip", "", "tcp router listen ip")
+	httpPort := flag.String("http-port", "8080", "http listen port")
+	httpsPort := flag.String("https-port", "4433", "https listen port")
+	tcpIP := flag.String("tcp-ip", os.Getenv("LISTEN_IP"), "tcp router listen ip")
 	tcpRangeStart := flag.Int("tcp-range-start", 3000, "tcp port range start")
 	tcpRangeEnd := flag.Int("tcp-range-end", 3500, "tcp port range end")
-	certFile := flag.String("tlscert", "", "TLS (SSL) cert file in pem format")
-	keyFile := flag.String("tlskey", "", "TLS (SSL) key file in pem format")
-	apiAddr := flag.String("apiaddr", ":"+apiPort, "api listen address")
+	certFile := flag.String("tls-cert", "", "TLS (SSL) cert file in pem format")
+	keyFile := flag.String("tls-key", "", "TLS (SSL) key file in pem format")
+	apiPort := flag.String("api-port", "", "api listen port")
 	flag.Parse()
+
+	if *apiPort == "" {
+		*apiPort = os.Getenv("PORT")
+		if *apiPort == "" {
+			*apiPort = "5000"
+		}
+	}
 
 	keypair := tls.Certificate{}
 	var err error
@@ -144,6 +148,8 @@ func main() {
 	}
 	shutdown.BeforeExit(func() { pgxpool.Close() })
 
+	httpAddr := net.JoinHostPort(os.Getenv("LISTEN_IP"), *httpPort)
+	httpsAddr := net.JoinHostPort(os.Getenv("LISTEN_IP"), *httpsPort)
 	r := Router{
 		TCP: &TCPListener{
 			IP:        *tcpIP,
@@ -153,8 +159,8 @@ func main() {
 			discoverd: discoverd.DefaultClient,
 		},
 		HTTP: &HTTPListener{
-			Addr:      *httpAddr,
-			TLSAddr:   *httpsAddr,
+			Addr:      httpAddr,
+			TLSAddr:   httpsAddr,
 			cookieKey: cookieKey,
 			keypair:   keypair,
 			ds:        NewPostgresDataStore("http", pgxpool),
@@ -167,16 +173,17 @@ func main() {
 	}
 	shutdown.BeforeExit(r.Close)
 
+	apiAddr := net.JoinHostPort(os.Getenv("LISTEN_IP"), *apiPort)
 	log.Info("starting API listener")
-	listener, err := listenFunc("tcp4", *apiAddr)
+	listener, err := listenFunc("tcp4", apiAddr)
 	if err != nil {
 		log.Error("error starting API listener", "err", err)
-		shutdown.Fatal(listenErr{*apiAddr, err})
+		shutdown.Fatal(listenErr{apiAddr, err})
 	}
 
 	services := map[string]string{
-		"router-api":  *apiAddr,
-		"router-http": *httpAddr,
+		"router-api":  apiAddr,
+		"router-http": httpAddr,
 	}
 	for service, addr := range services {
 		log.Info("registering service", "name", service, "addr", addr)

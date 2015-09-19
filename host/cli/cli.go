@@ -28,8 +28,6 @@ func Register(cmd string, f interface{}, usage string) *command {
 	return c
 }
 
-var localAddr = "127.0.0.1:1113"
-
 var ErrInvalidCommand = errors.New("invalid command")
 
 func Run(name string, args []string) error {

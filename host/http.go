@@ -208,7 +208,10 @@ func (h *jobAPI) ConfigureNetworking(w http.ResponseWriter, r *http.Request, _ h
 		shutdown.Fatal(err)
 	}
 
-	go h.networkOnce.Do(func() {
+	// configure the network before returning a response in case the
+	// network coordinator requires the bridge to be created (e.g.
+	// when using flannel with the "alloc" backend)
+	h.networkOnce.Do(func() {
 		if err := h.host.backend.ConfigureNetworking(config); err != nil {
 			shutdown.Fatal(err)
 		}
@@ -251,8 +254,8 @@ func (h *jobAPI) RegisterRoutes(r *httprouter.Router) error {
 	return nil
 }
 
-func serveHTTP(h *Host, attach *attachHandler, clus *cluster.Client, vman *volumemanager.Manager, connectDiscoverd func(string) error) error {
-	l, err := net.Listen("tcp", ":1113")
+func serveHTTP(h *Host, addr string, attach *attachHandler, clus *cluster.Client, vman *volumemanager.Manager, connectDiscoverd func(string) error) error {
+	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
 	}

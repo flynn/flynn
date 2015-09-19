@@ -42,13 +42,11 @@ import (
 )
 
 const (
-	libvirtNetName = "flynn"
-	bridgeName     = "flynnbr0"
-	imageRoot      = "/var/lib/docker"
-	flynnRoot      = "/var/lib/flynn"
+	imageRoot = "/var/lib/docker"
+	flynnRoot = "/var/lib/flynn"
 )
 
-func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, logPath, initPath, umountPath string, mux *logmux.LogMux) (Backend, error) {
+func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, logPath, bridgeName, initPath, umountPath string, mux *logmux.LogMux) (Backend, error) {
 	libvirtc, err := libvirt.NewVirConnection("lxc:///")
 	if err != nil {
 		return nil, err
@@ -73,6 +71,7 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, logPath, in
 		resolvConf:          "/etc/resolv.conf",
 		mux:                 mux,
 		ipalloc:             ipallocator.New(),
+		bridgeName:          bridgeName,
 		discoverdConfigured: make(chan struct{}),
 		networkConfigured:   make(chan struct{}),
 	}, nil
@@ -89,6 +88,7 @@ type LibvirtLXCBackend struct {
 	ipalloc    *ipallocator.IPAllocator
 
 	ifaceMTU   int
+	bridgeName string
 	bridgeAddr net.IP
 	bridgeNet  *net.IPNet
 	resolvConf string
@@ -191,13 +191,13 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(config *host.NetworkConfig) erro
 	}
 	l.ipalloc.RequestIP(l.bridgeNet, l.bridgeAddr)
 
-	err = netlink.CreateBridge(bridgeName, false)
+	err = netlink.CreateBridge(l.bridgeName, false)
 	bridgeExists := os.IsExist(err)
 	if err != nil && !bridgeExists {
 		return err
 	}
 
-	bridge, err := net.InterfaceByName(bridgeName)
+	bridge, err := net.InterfaceByName(l.bridgeName)
 	if err != nil {
 		return err
 	}
@@ -234,12 +234,12 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(config *host.NetworkConfig) erro
 		return err
 	}
 
-	network, err := l.libvirt.LookupNetworkByName(libvirtNetName)
+	network, err := l.libvirt.LookupNetworkByName(l.bridgeName)
 	if err != nil {
 		// network doesn't exist
 		networkConfig := &lt.Network{
-			Name:    libvirtNetName,
-			Bridge:  lt.Bridge{Name: bridgeName},
+			Name:    l.bridgeName,
+			Bridge:  lt.Bridge{Name: l.bridgeName},
 			Forward: lt.Forward{Mode: "bridge"},
 		}
 		network, err = l.libvirt.NetworkDefineXML(string(networkConfig.XML()))
@@ -270,7 +270,7 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(config *host.NetworkConfig) erro
 
 	// Set up iptables for outbound traffic masquerading from containers to the
 	// rest of the network.
-	if err := iptables.EnableOutboundNAT(bridgeName, l.bridgeNet.String()); err != nil {
+	if err := iptables.EnableOutboundNAT(l.bridgeName, l.bridgeNet.String()); err != nil {
 		return err
 	}
 
@@ -575,7 +575,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	if !job.Config.HostNetwork {
 		domain.Devices.Interfaces = []lt.Interface{{
 			Type:   "network",
-			Source: lt.InterfaceSrc{Network: libvirtNetName},
+			Source: lt.InterfaceSrc{Network: l.bridgeName},
 		}}
 	}
 
