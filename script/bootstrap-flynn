@@ -9,99 +9,156 @@ usage() {
   cat <<USAGE >&2
 usage: $0 [options]
 
+Boot a Flynn cluster.
+
+Use the --size flag to boot a multi-node cluster, which will create a virtual
+network interface for each node and bind all host network services to that
+interface (i.e. flynn-host, discoverd, flannel and router)
+
 OPTIONS:
-  -h            Show this message
-  -b BACKEND    The job backend to use [default: `libvirt-lxc`]
-  -d DOMAIN     The default domain to use [default: `dev.localflynn.com`]
-  -i IP         The external IP address to bind to [default: the IP assigned to `eth0`]
-  -z            Don't destroy volumes
+  -h, --help               Show this message
+  -s, --size=SIZE          Cluster size [default: 1]
+  -d, --domain=DOMAIN      The default domain to use [default: `dev.localflynn.com`]
+  -z, --no-destroy-vols    Don't destroy volumes
 USAGE
 }
 
 main() {
-  local backend ip
-  local domain="${CLUSTER_DOMAIN}"
+  local size="1"
+  local domain="${CLUSTER_DOMAIN:="dev.localflynn.com"}"
   local destroy_vols=true
 
-  while getopts 'hb:d:i:z' opt; do
-    case $opt in
-      h)
+  while true; do
+    case "$1" in
+      -h | --help)
         usage
-        exit 1
+        exit 0
         ;;
-      b) backend=${OPTARG} ;;
-      d) domain=${OPTARG} ;;
-      i) ip=${OPTARG} ;;
-      z) destroy_vols=false ;;
-      ?)
-        usage
-        exit 1
+      -s | --size)
+        if [[ -z "$2" ]]; then
+          usage
+          exit 1
+        fi
+        size="$2"
+        shift 2
+        ;;
+      -d | --domain)
+        if [[ -z "$2" ]]; then
+          usage
+          exit 1
+        fi
+        domain="$2"
+        shift 2
+        ;;
+      -z | --no-destroy-vols)
+        destroy_vols=false
+        shift
+        ;;
+      *)
+        break
         ;;
     esac
   done
-  shift $((${OPTIND} - 1))
 
   if [[ $# -ne 0 ]]; then
     usage
     exit 1
   fi
 
-  backend=${backend:-"libvirt-lxc"}
-  domain="${domain:="dev.localflynn.com"}"
-  ip=${ip:-$(/sbin/ifconfig eth0 \
-    | grep -oP 'inet addr:\S+' \
-    | cut -d: -f2)}
-
-  export DISCOVERD="${ip}:1111"
   export CLUSTER_DOMAIN="${domain}"
 
   # kill flynn first
-  "${ROOT}/script/kill-flynn" -b "${backend}"
+  "${ROOT}/script/kill-flynn"
 
-  # delete the old state
-  sudo rm -f /tmp/flynn-host-state.bolt
-
-  if $destroy_vols; then
-    sudo "${ROOT}/host/bin/flynn-host" destroy-volumes --include-data
-  fi
-
-  case "${backend}" in
-    libvirt-lxc)
-      boot_libvirt_lxc $ip
-      ;;
-    *)
-      usage
-      exit 1
-      ;;
-  esac
-}
-
-boot_libvirt_lxc() {
-  local ip=$1
   local host_dir="${ROOT}/host"
   local bootstrap_dir="${ROOT}/bootstrap"
 
-  local log="/tmp/flynn-host-$(date +%Y-%m-%dT%H-%M-%S.%N).log"
-  ln -nfs "${log}" /tmp/flynn-host.log
-  info "starting flynn-host (libvirt-lxc backend)"
-  info "forwarding daemon output to ${log}"
+  local ips=()
+  if [[ "${size}" -eq "1" ]]; then
+    info "starting single node cluster"
+    local external_ip="$(ifconfig eth0 | grep -oP 'inet addr:\S+' | cut -d: -f2)"
+    start_flynn_host
+  else
+    info "starting ${size} node cluster"
+
+    # don't create unnecessary vxlan devices
+    export FLANNEL_BACKEND="alloc"
+
+    for index in $(seq 0 $((size - 1))); do
+      # An RFC 5737 TEST-NET-2 IP
+      local external_ip="198.51.100.$(($index + 1))"
+      local listen_ip="${external_ip}"
+
+      info "starting flynn-host using IP ${external_ip}"
+      sudo ifconfig "eth0:${index}" "${external_ip}"
+      start_flynn_host "${index}"
+    done
+  fi
+
+  info "bootstrapping Flynn"
+  export DISCOVERD="${ips[0]}:1111"
+  "${host_dir}/bin/flynn-host" \
+    bootstrap \
+    --min-hosts="${size}" \
+    --peer-ips="$(join "," ${ips[@]})" \
+    "${bootstrap_dir}/bin/manifest.json"
+}
+
+start_flynn_host() {
+  local index=$1
+
+  # if index is not set (i.e. a single node cluster), use non-namespaced names
+  if [[ -z "${index}" ]]; then
+    local id="host"
+    local state="/tmp/flynn-host-state.bolt"
+    local pidfile="/tmp/flynn-host.pid"
+    local bridge_name="flynnbr0"
+    local vol_path="/var/lib/flynn/volumes"
+    local log="/tmp/flynn-host-$(date +%Y-%m-%dT%H-%M-%S.%N).log"
+    ln -nfs "${log}" "/tmp/flynn-host.log"
+  else
+    local id="host${index}"
+    local state="/tmp/flynn-host-state-${index}.bolt"
+    local pidfile="/tmp/flynn-host-${index}.pid"
+    local bridge_name="flynnbr${index}"
+    local vol_path="/var/lib/flynn/volumes-${index}"
+    local log="/tmp/flynn-host-${index}-$(date +%Y-%m-%dT%H-%M-%S.%N).log"
+    ln -nfs "${log}" "/tmp/flynn-host-${index}.log"
+  fi
+
+  # delete the old state
+  sudo rm -f "${state}"
+
+  if $destroy_vols; then
+    sudo "${ROOT}/host/bin/flynn-host" destroy-volumes --volpath="${vol_path}" --include-data
+  fi
+
   sudo start-stop-daemon \
     --start \
     --background \
     --no-close \
+    --pidfile "${pidfile}" \
     --exec "${host_dir}/bin/flynn-host" \
     -- \
     daemon \
-    --external ${ip} \
+    --id "${id}" \
+    --external-ip "${external_ip}" \
+    --listen-ip "${listen_ip}" \
+    --bridge-name "${bridge_name}" \
     --force \
-    --backend libvirt-lxc \
-    --state /tmp/flynn-host-state.bolt \
+    --state "${state}" \
+    --volpath "${vol_path}" \
     --flynn-init "${host_dir}/bin/flynn-init" \
     --nsumount "${host_dir}/bin/flynn-nsumount" \
     &>"${log}"
 
-  info "bootstrapping Flynn"
-  "${host_dir}/bin/flynn-host" bootstrap "${bootstrap_dir}/bin/manifest.json"
+  ips+=("${external_ip}")
+}
+
+join() {
+  local IFS="$1"
+  shift
+  echo "$*"
 }
 
 main $@
