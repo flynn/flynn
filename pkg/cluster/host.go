@@ -61,10 +61,10 @@ func (c *Host) GetStatus() (*host.HostStatus, error) {
 	return &res, err
 }
 
-func WaitForHostStatus(desired func(*host.HostStatus) bool) (*host.HostStatus, error) {
+func WaitForHostStatus(hostIP string, desired func(*host.HostStatus) bool) (*host.HostStatus, error) {
 	const waitMax = time.Minute
 	const waitInterval = 500 * time.Millisecond
-	h := NewHost("", "http://127.0.0.1:1113", nil)
+	h := NewHost("", fmt.Sprintf("http://%s:1113", hostIP), nil)
 	timeout := time.After(waitMax)
 	for {
 		status, err := h.GetStatus()

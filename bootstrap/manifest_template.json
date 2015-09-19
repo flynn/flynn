@@ -12,7 +12,8 @@
     "action": "run-app",
     "release": {
       "env": {
-        "DISCOVERD": "none"
+        "DISCOVERD": "none",
+        "BACKEND": "{{ getenv \"FLANNEL_BACKEND\" }}"
       },
       "processes": {
         "app": {
@@ -288,7 +289,7 @@
       "processes": {
         "app": {
           "host_network": true,
-          "cmd": ["-httpaddr", ":80", "-httpsaddr", ":443", "-tcp-range-start", "3000", "-tcp-range-end", "3500"],
+          "cmd": ["-http-port", "80", "-https-port", "443", "-tcp-range-start", "3000", "-tcp-range-end", "3500"],
           "omni": true
         }
       }

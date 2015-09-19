@@ -39,6 +39,9 @@ const serviceName = "flannel"
 func main() {
 	var config Config
 	config.Backend.Type = "vxlan"
+	if backend := os.Getenv("BACKEND"); backend != "" {
+		config.Backend.Type = backend
+	}
 	flag.StringVar(&config.Network, "network", "100.100.0.0/16", "container network")
 	flag.StringVar(&config.SubnetMin, "subnet-min", "", "container network min subnet")
 	flag.StringVar(&config.SubnetMax, "subnet-max", "", "container network max subnet")
@@ -48,7 +51,7 @@ func main() {
 	flag.Parse()
 
 	// wait for discoverd to come up
-	status, err := cluster.WaitForHostStatus(func(status *host.HostStatus) bool {
+	status, err := cluster.WaitForHostStatus(os.Getenv("EXTERNAL_IP"), func(status *host.HostStatus) bool {
 		return status.Discoverd != nil && status.Discoverd.URL != ""
 	})
 	if err != nil {

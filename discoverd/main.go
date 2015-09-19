@@ -108,7 +108,7 @@ func (m *Main) Run(args ...string) error {
 	} else if opt.WaitNetDNS {
 		go func() {
 			// Wait for the host network.
-			status, err := cluster.WaitForHostStatus(func(status *host.HostStatus) bool {
+			status, err := cluster.WaitForHostStatus(os.Getenv("EXTERNAL_IP"), func(status *host.HostStatus) bool {
 				return status.Network != nil && status.Network.Subnet != ""
 			})
 			if err != nil {
