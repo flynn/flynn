@@ -492,10 +492,6 @@
 			"Rev": "ccfcd0245381f0c94c68f50626665eed3c6b726a"
 		},
 		{
-			"ImportPath": "github.com/kavu/go_reuseport",
-			"Rev": "014200e60fbd2172d2b14c5703b62657f826eaa9"
-		},
-		{
 			"ImportPath": "github.com/kr/binarydist",
 			"Rev": "9955b0ab8708602d411341e55fffd7e0700f86bd"
 		},
@@ -570,6 +566,10 @@
 		{
 			"ImportPath": "github.com/thoj/go-ircevent",
 			"Rev": "5e6704d8956eeba81a2cbac9ba73bd609da39d0f"
+		},
+		{
+			"ImportPath": "github.com/vanillahsu/go_reuseport",
+			"Rev": "087e013b0a0c193ca9b1bb21f453b74aa9b31138"
 		},
 		{
 			"ImportPath": "github.com/vaughan0/go-ini",
