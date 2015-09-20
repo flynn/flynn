@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/vanillahsu/go_reuseport"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/server"
 	"github.com/flynn/flynn/host/types"
@@ -247,7 +248,7 @@ func (m *Main) openDNSServer(addr string, recursors, peers []string) error {
 // The store must already be open.
 func (m *Main) openHTTPServer(addr string, peers []string) error {
 	// Open HTTP API.
-	ln, err := net.Listen("tcp4", addr)
+	ln, err := reuseport.NewReusablePortListener("tcp4", addr)
 	if err != nil {
 		return err
 	}
