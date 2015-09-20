@@ -288,6 +288,7 @@
       },
       "processes": {
         "app": {
+          "ports": [{"port": 4000, "proto": "tcp"}],
           "host_network": true,
           "cmd": ["-http-port", "80", "-https-port", "443", "-tcp-range-start", "3000", "-tcp-range-end", "3500"],
           "omni": true

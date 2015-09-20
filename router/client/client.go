@@ -35,7 +35,7 @@ func NewWithHTTP(http *http.Client) Client {
 func newRouterClient() *client {
 	return &client{Client: &httpclient.Client{
 		ErrNotFound: ErrNotFound,
-		URL:         "http://router-api.discoverd:5000",
+		URL:         "http://router-api.discoverd:4000",
 		HTTP:        http.DefaultClient,
 	}}
 }
