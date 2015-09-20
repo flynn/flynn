@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/miekg/dns"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/vanillahsu/go_reuseport"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -52,15 +53,11 @@ func (srv *DNSServer) ListenAndServe() error {
 	done := func() { errors <- nil }
 
 	if srv.UDPAddr != "" {
-		addr, err := net.ResolveUDPAddr("udp", srv.UDPAddr)
+		l, err := reuseport.NewReusablePortPacketConn("udp4", srv.UDPAddr)
 		if err != nil {
 			return err
 		}
-		l, err := net.ListenUDP("udp", addr)
-		if err != nil {
-			return err
-		}
-		srv.UDPAddr = l.LocalAddr().String()
+		srv.UDPAddr = l.(*net.UDPConn).LocalAddr().String()
 		server := &dns.Server{
 			Net:               "udp",
 			PacketConn:        l,
