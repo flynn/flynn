@@ -230,7 +230,7 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected jobEvents, log l
 	for {
 		select {
 		case event := <-d.serviceEvents:
-			if event.Kind != discoverd.EventKindUp {
+			if event.Kind != discoverd.EventKindUp && event.Kind != discoverd.EventKindUpdate {
 				continue
 			}
 			if id, ok := event.Instance.Meta["FLYNN_APP_ID"]; !ok || id != d.AppID {
