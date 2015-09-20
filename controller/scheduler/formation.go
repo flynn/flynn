@@ -1,6 +1,8 @@
 package main
 
 import (
+	"reflect"
+
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 )
@@ -22,6 +24,23 @@ func (fs Formations) Add(f *Formation) *Formation {
 	return f
 }
 
+func (fs Formations) TriggerRectify(key utils.FormationKey) {
+	if f, ok := fs[key]; ok {
+		select {
+		case f.ch <- key:
+		default:
+		}
+	}
+}
+
+func (fs Formations) CaseHandlers(handler func(interface{}) error) CaseHandlers {
+	cases := make(CaseHandlers, 0, len(fs))
+	for _, f := range fs {
+		cases = append(cases, f.CaseHandler(handler))
+	}
+	return cases
+}
+
 type Processes map[string]int
 
 func (p Processes) Equals(other Processes) bool {
@@ -40,10 +59,14 @@ func (p Processes) Equals(other Processes) bool {
 
 type Formation struct {
 	*ct.ExpandedFormation
+	ch chan utils.FormationKey
 }
 
 func NewFormation(ef *ct.ExpandedFormation) *Formation {
-	return &Formation{ef}
+	return &Formation{
+		ExpandedFormation: ef,
+		ch:                make(chan utils.FormationKey, 1),
+	}
 }
 
 func (f *Formation) GetProcesses() Processes {
@@ -52,6 +75,16 @@ func (f *Formation) GetProcesses() Processes {
 
 func (f *Formation) key() utils.FormationKey {
 	return utils.FormationKey{AppID: f.App.ID, ReleaseID: f.Release.ID}
+}
+
+func (f *Formation) CaseHandler(handler func(interface{}) error) CaseHandler {
+	return CaseHandler{
+		sc: reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(f.ch),
+		},
+		handler: handler,
+	}
 }
 
 // Update stores the new processes and returns the diff from the previous

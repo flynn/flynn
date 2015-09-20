@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -73,6 +74,8 @@ type Scheduler struct {
 	formationEvents chan *ct.ExpandedFormation
 	jobRequests     chan *JobRequest
 	putJobs         chan *ct.Job
+
+	caseHandlers CaseHandlers
 }
 
 func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc Discoverd) *Scheduler {
@@ -260,6 +263,55 @@ func (s *Scheduler) Run() error {
 	}
 	leaderCh := s.discoverd.LeaderCh()
 
+	channels := map[reflect.Value]func(interface{}) error{
+		reflect.ValueOf(s.stop): func(interface{}) error {
+			return errors.New("stopped")
+		},
+		reflect.ValueOf(leaderCh): func(i interface{}) error {
+			isLeader := i.(bool)
+			s.HandleLeaderChange(isLeader)
+			return nil
+		},
+		reflect.ValueOf(s.jobRequests): func(i interface{}) error {
+			req := i.(*JobRequest)
+			s.HandleJobRequest(req)
+			return nil
+		},
+		reflect.ValueOf(s.hostEvents): func(i interface{}) error {
+			e := i.(*discoverd.Event)
+			s.HandleHostEvent(e)
+			return nil
+		},
+		reflect.ValueOf(s.jobEvents): func(i interface{}) error {
+			e := i.(*host.Event)
+			s.HandleJobEvent(e)
+			return nil
+		},
+		reflect.ValueOf(s.formationEvents): func(i interface{}) error {
+			e := i.(*ct.ExpandedFormation)
+			s.HandleFormationChange(e)
+			return nil
+		},
+		reflect.ValueOf(s.syncFormations): func(interface{}) error {
+			s.SyncFormations()
+			return nil
+		},
+		reflect.ValueOf(s.syncJobs): func(interface{}) error {
+			s.SyncJobs()
+			return nil
+		},
+	}
+	s.caseHandlers = make(CaseHandlers, 0, len(channels))
+	for c, h := range channels {
+		s.caseHandlers = append(s.caseHandlers, CaseHandler{
+			sc: reflect.SelectCase{
+				Dir:  reflect.SelectRecv,
+				Chan: c,
+			},
+			handler: h,
+		})
+	}
+
 	if err := s.streamFormationEvents(); err != nil {
 		return err
 	}
@@ -311,27 +363,12 @@ func (s *Scheduler) Run() error {
 
 		// Finally, handle triggering cluster changes.
 		// Re-select on all the channels so we don't have to sleep nor spin
-		select {
-		case key := <-s.rectify:
-			s.RectifyFormation(key)
-		case <-s.stop:
+		ch := s.rectifyCaseHandlers()
+		err := ch.SelectAndHandle()
+		if err != nil {
 			log.Info("stopping scheduler loop")
 			close(s.putJobs)
 			return nil
-		case isLeader := <-leaderCh:
-			s.HandleLeaderChange(isLeader)
-		case req := <-s.jobRequests:
-			s.HandleJobRequest(req)
-		case e := <-s.hostEvents:
-			s.HandleHostEvent(e)
-		case e := <-s.jobEvents:
-			s.HandleJobEvent(e)
-		case f := <-s.formationEvents:
-			s.HandleFormationChange(f)
-		case <-s.syncFormations:
-			s.SyncFormations()
-		case <-s.syncJobs:
-			s.SyncJobs()
 		}
 	}
 	return nil
@@ -409,6 +446,12 @@ func (s *Scheduler) SyncFormations() {
 			}
 		}
 	}
+}
+
+func (s *Scheduler) HandleRectify(i interface{}) error {
+	key := i.(utils.FormationKey)
+	s.RectifyFormation(key)
+	return nil
 }
 
 func (s *Scheduler) RectifyFormation(key utils.FormationKey) {
@@ -578,6 +621,7 @@ func (s *Scheduler) unfollowHost(id string) {
 		if job.HostID == id {
 			log.Info("removing job", "job.id", jobID)
 			s.handleJobStop(job)
+			s.triggerRectify(job.Formation.key())
 		}
 	}
 
@@ -714,7 +758,7 @@ func (s *Scheduler) changeFormation(ef *ct.ExpandedFormation) (f *Formation, err
 
 func (s *Scheduler) triggerRectify(key utils.FormationKey) {
 	logger.Info("triggering rectify", "key", key)
-	s.rectify <- key
+	s.formations.TriggerRectify(key)
 }
 
 func (s *Scheduler) updateFormation(f *ct.Formation) (*Formation, error) {
@@ -1072,6 +1116,41 @@ func (s *Scheduler) triggerSyncFormations() {
 	case s.syncFormations <- struct{}{}:
 	default:
 	}
+}
+
+func (s *Scheduler) rectifyCaseHandlers() CaseHandlers {
+	cases := make(CaseHandlers, 0, len(s.caseHandlers)+len(s.formations))
+	cases = append(cases, s.caseHandlers...)
+	cases = append(cases, s.formations.CaseHandlers(s.HandleRectify)...)
+	return cases
+}
+
+type CaseHandler struct {
+	sc      reflect.SelectCase
+	handler func(interface{}) error
+}
+
+type CaseHandlers []CaseHandler
+
+func (cs CaseHandlers) SelectAndHandle() error {
+	cases := make([]reflect.SelectCase, 0, len(cs))
+	for _, c := range cs {
+		cases = append(cases, c.sc)
+	}
+
+	chosen, recv, _ := reflect.Select(cases)
+	return cs.handle(chosen, recv.Interface())
+}
+
+func (cs CaseHandlers) handle(i int, data interface{}) error {
+	if i >= len(cs) {
+		return errors.New("Index out of bounds")
+	}
+	c := cs[i]
+	if c.handler != nil {
+		return cs[i].handler(data)
+	}
+	return nil
 }
 
 type Stream struct {
