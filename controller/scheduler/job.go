@@ -103,7 +103,7 @@ type Jobs map[string]*Job
 func (js Jobs) GetStoppableJobs(key utils.FormationKey, typ string) []*Job {
 	formTypeJobs := make([]*Job, 0, len(js))
 	for _, j := range js {
-		if j.IsInFormation(key) && j.Type == typ {
+		if j.IsInFormation(key) && j.IsRunning() && j.Type == typ {
 			formTypeJobs = append(formTypeJobs, j)
 		}
 	}

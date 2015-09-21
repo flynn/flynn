@@ -106,7 +106,7 @@ func main() {
 	log.Info("creating cluster and controller clients")
 	hc := &http.Client{Timeout: 5 * time.Second}
 	clusterClient := utils.ClusterClientWrapper(cluster.NewClientWithHTTP(nil, hc))
-	controllerClient, err := controller.NewClientWithHTTP("", os.Getenv("AUTH_KEY"), hc)
+	controllerClient, err := controller.NewClient("", os.Getenv("AUTH_KEY"))
 	if err != nil {
 		log.Error("error creating controller client", "err", err)
 		shutdown.Fatal(err)
@@ -409,11 +409,9 @@ func (s *Scheduler) SyncJobs() {
 
 	for id, j := range s.jobs {
 		if _, ok := knownJobs[id]; !ok && j.IsRunning() {
-			s.handleJobStop(j)
+			s.jobs.SetState(j.JobID, JobStateStopped)
 		}
 	}
-
-	s.rectifyAll()
 }
 
 func (s *Scheduler) SyncFormations() {
@@ -620,7 +618,7 @@ func (s *Scheduler) unfollowHost(id string) {
 	for jobID, job := range s.jobs {
 		if job.HostID == id {
 			log.Info("removing job", "job.id", jobID)
-			s.handleJobStop(job)
+			s.jobs.SetState(job.JobID, JobStateStopped)
 			s.triggerRectify(job.Formation.key())
 		}
 	}
@@ -673,10 +671,6 @@ func (s *Scheduler) HandleJobEvent(e *host.Event) {
 		s.sendEvent(EventTypeJobStart, err, job)
 	case host.JobEventStop:
 		s.sendEvent(EventTypeJobStop, err, job)
-	}
-
-	if err == nil {
-		s.rectifyAll()
 	}
 }
 
@@ -773,8 +767,8 @@ func (s *Scheduler) updateFormation(f *ct.Formation) (*Formation, error) {
 func (s *Scheduler) startJob(req *JobRequest) (err error) {
 	log := fnLogger("job.type", req.Type)
 	log.Info("starting job", "job.restarts", req.restarts, "request.attempts", req.attempts)
+	s.jobs.SetState(req.JobID, JobStateStopped)
 	// Copy on Write
-	s.handleJobStop(req.Job)
 	newReq := req.Clone()
 	newReq.HostID = ""
 	newReq.JobID = random.UUID()
@@ -859,9 +853,9 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 			return errors.New(e)
 		}
 	}
-	job = s.handleJobStop(job)
+	s.jobs.SetState(job.JobID, JobStateStopped)
 	if job.HostID != "" {
-		log.Info("getting host client")
+		log.Info("getting host client", "host.id", job.HostID)
 		host, err := s.Host(job.HostID)
 		if err != nil {
 			log.Error("error getting host client", "err", err)
@@ -980,7 +974,7 @@ func (s *Scheduler) SaveJob(job *Job, appName string, status host.JobStatus, met
 		s.handleJobEvent(job, JobStateRunning)
 	default:
 		if job.IsStopped() {
-			s.handleJobStop(job)
+			s.handleJobEvent(job, JobStateStopped)
 		} else {
 			s.handleJobCrash(job)
 		}
@@ -989,6 +983,9 @@ func (s *Scheduler) SaveJob(job *Job, appName string, status host.JobStatus, met
 		log := fnLogger("job.id", job.JobID, "app.id", job.AppID, "app.name", appName, "release.id", job.ReleaseID, "job.type", job.Type, "job.status", status)
 		log.Info("queuing job for persistence")
 		s.putJobs <- controllerJobFromSchedulerJob(job, jobState(status), metadata)
+		if job.IsSchedulable() {
+			s.triggerRectify(job.Formation.key())
+		}
 		return true
 	}
 	return false
@@ -1015,7 +1012,7 @@ func (s *Scheduler) scheduleJobStart(job *Job) error {
 	}
 	backoff := s.getBackoffDuration(job.restarts)
 	job.restarts += 1
-	log.Info("scheduling job request", "attempts", job.restarts)
+	log.Info("scheduling job request", "attempts", job.restarts, "delay", backoff)
 	time.AfterFunc(backoff, func() {
 		s.jobRequests <- &JobRequest{Job: job, RequestType: JobRequestTypeUp}
 	})
@@ -1053,14 +1050,6 @@ func (s *Scheduler) handleJobCrash(job *Job) {
 			s.jobs.SetState(job.JobID, JobStateStopped)
 		}
 	}
-}
-
-func (s *Scheduler) handleJobStop(job *Job) *Job {
-	j := s.handleJobEvent(job, JobStateStopped)
-	if j != nil {
-		return j
-	}
-	return job
 }
 
 func (s *Scheduler) startHTTPServer(port string) {
