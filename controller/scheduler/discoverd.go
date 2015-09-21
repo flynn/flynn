@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/flynn/flynn/discoverd/client"
+	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/stream"
 )
