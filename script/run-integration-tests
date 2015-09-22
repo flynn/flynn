@@ -12,7 +12,7 @@ Boot a Flynn cluster and run integration tests.
 
 OPTIONS:
   -h, --help               Show this message
-  -s, --size=SIZE          Cluster size [default: 1]
+  -n, --size=SIZE          Cluster size [default: 1]
   -f, --filter=FILTER      Regular expression selecting which tests and/or suites to run
   -s, --stream             Stream debug output
 USAGE
@@ -29,7 +29,7 @@ main() {
         usage
         exit 0
         ;;
-      -s | --size)
+      -n | --size)
         if [[ -z "$2" ]]; then
           usage
           exit 1
