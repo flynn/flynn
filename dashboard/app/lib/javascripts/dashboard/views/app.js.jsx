@@ -13,18 +13,30 @@ var App = React.createClass({
 	render: function () {
 		var app = this.state.app;
 
+		if ( !app && this.state.serviceUnavailable ) {
+			return (
+				<section>
+					<section className="flex-row">
+						<ServiceUnavailable status={503} />;
+					</section>
+				</section>
+			);
+		}
+
+		if ( !app && this.state.notFound ) {
+			return (
+				<section>
+					<section className="flex-row">
+						<div>
+							<h1>Not found</h1>
+						</div>
+					</section>
+				</section>
+			);
+		}
+
 		return (
 			<section>
-				{ !app && this.state.serviceUnavailable ? (
-					<ServiceUnavailable status={503} />
-				) : null }
-
-				{ !app && this.state.notFound ? (
-					<div>
-						<h1>Not found</h1>
-					</div>
-				) : null }
-
 				<section className="flex-row">
 					{app ? (
 						<section className="col app-controls-container">
