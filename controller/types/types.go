@@ -217,6 +217,11 @@ type Event struct {
 	CreatedAt  *time.Time      `json:"created_at,omitempty"`
 }
 
+type AppRelease struct {
+	PrevRelease *Release `json:"prev_release,omitempty"`
+	Release     *Release `json:"release"`
+}
+
 type AppDeletion struct {
 	AppID            string          `json:"app"`
 	DeletedRoutes    []*router.Route `json:"deleted_routes"`

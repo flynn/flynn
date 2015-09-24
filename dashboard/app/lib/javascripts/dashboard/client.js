@@ -467,7 +467,9 @@ var Client = createClass({
 							app: event.appID,
 							object_type: 'app_release',
 							object_id: res.id,
-							data: res
+							data: {
+								release: res
+							}
 						});
 					});
 				}.bind(this));

@@ -53,18 +53,18 @@ var App = Store.createClass({
 				if (event.app === this.props.appId) {
 					this.setState({
 						formation: this.state.formation === null ? null : extend({}, this.state.formation, {
-							release: event.data.id
-						}),
-						app: extend({}, this.state.app, {
 							release: event.object_id
 						}),
-						release: event.data
+						app: extend({}, this.state.app, {
+							release_id: event.object_id
+						}),
+						release: event.data.release
 					});
-					if ((this.state.formation || {}).release !== event.data.id) {
+					if ((this.state.formation || {}).release !== event.object_id) {
 						Dispatcher.dispatch({
 							name: 'GET_APP_FORMATION',
 							appID: this.props.appId,
-							releaseID: event.data.id
+							releaseID: event.object_id
 						});
 					}
 				}

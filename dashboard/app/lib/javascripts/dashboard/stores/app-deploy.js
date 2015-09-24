@@ -69,7 +69,7 @@ var AppDeploy = Store.createClass({
 			case 'APP_RELEASE':
 				if (event.app === this.props.appID) {
 					this.setState({
-						release: event.data
+						release: event.data.release
 					});
 				}
 			break;

@@ -77,6 +77,7 @@ func (s *S) TestEvents(c *C) {
 
 func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 	release := s.createTestRelease(c, &ct.Release{})
+	nextRelease := s.createTestRelease(c, &ct.Release{})
 
 	events := make(chan *ct.Event)
 	stream, err := s.c.StreamEvents(cc.StreamEventsOptions{}, events)
@@ -99,6 +100,8 @@ func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 		Meta: newMeta,
 	}), IsNil)
 
+	c.Assert(s.c.SetAppRelease(app.ID, nextRelease.ID), IsNil)
+
 	assertAppEvent := func(e *ct.Event) *ct.App {
 		var eventApp *ct.App
 		c.Assert(json.Unmarshal(e.Data, &eventApp), IsNil)
@@ -118,13 +121,14 @@ func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 			c.Assert(a.Meta, DeepEquals, app.Meta)
 		},
 		func(e *ct.Event) {
-			var eventRelease *ct.Release
+			var eventRelease *ct.AppRelease
 			c.Assert(json.Unmarshal(e.Data, &eventRelease), IsNil)
 			c.Assert(e.AppID, Equals, app.ID)
 			c.Assert(e.ObjectType, Equals, ct.EventTypeAppRelease)
 			c.Assert(e.ObjectID, Equals, release.ID)
 			c.Assert(eventRelease, NotNil)
-			c.Assert(eventRelease.ID, Equals, release.ID)
+			c.Assert(eventRelease.Release, NotNil)
+			c.Assert(eventRelease.Release.ID, Equals, release.ID)
 		},
 		func(e *ct.Event) {
 			a := assertAppEvent(e)
@@ -135,6 +139,18 @@ func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 			a := assertAppEvent(e)
 			c.Assert(a.Strategy, Equals, newStrategy)
 			c.Assert(a.Meta, DeepEquals, newMeta)
+		},
+		func(e *ct.Event) {
+			var eventRelease *ct.AppRelease
+			c.Assert(json.Unmarshal(e.Data, &eventRelease), IsNil)
+			c.Assert(e.AppID, Equals, app.ID)
+			c.Assert(e.ObjectType, Equals, ct.EventTypeAppRelease)
+			c.Assert(e.ObjectID, Equals, nextRelease.ID)
+			c.Assert(eventRelease, NotNil)
+			c.Assert(eventRelease.Release, NotNil)
+			c.Assert(eventRelease.Release.ID, Equals, nextRelease.ID)
+			c.Assert(eventRelease.PrevRelease, NotNil)
+			c.Assert(eventRelease.PrevRelease.ID, Equals, release.ID)
 		},
 	}
 
@@ -364,13 +380,14 @@ func (s *S) TestListEvents(c *C) {
 			c.Assert(a.Meta, DeepEquals, app.Meta)
 		},
 		func(e *ct.Event) {
-			var eventRelease *ct.Release
+			var eventRelease *ct.AppRelease
 			c.Assert(json.Unmarshal(e.Data, &eventRelease), IsNil)
 			c.Assert(e.AppID, Equals, app.ID)
 			c.Assert(e.ObjectType, Equals, ct.EventTypeAppRelease)
 			c.Assert(e.ObjectID, Equals, release.ID)
 			c.Assert(eventRelease, NotNil)
-			c.Assert(eventRelease.ID, Equals, release.ID)
+			c.Assert(eventRelease.Release, NotNil)
+			c.Assert(eventRelease.Release.ID, Equals, release.ID)
 		},
 		func(e *ct.Event) {
 			a := assertAppEvent(e)
