@@ -289,8 +289,9 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 		Processes: map[string]int{"printer": 1},
 	}), c.IsNil)
 	var id string
-	var assignId = func(e *ct.Job) error {
-		id = e.ID
+	var assignId = func(j *ct.Job) error {
+		debugf(t, "got job event: %s %s", j.ID, j.State)
+		id = j.ID
 		return nil
 	}
 	err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, scaleTimeout, assignId)
@@ -298,16 +299,20 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 
 	waitForRestart := func(duration time.Duration) {
 		start := time.Now()
-		debugf(t, "stopping job: %s", id)
 		s.stopJob(t, id)
+		debugf(t, "expecting new job to start in %s", duration)
 		err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, duration+startTimeout, assignId)
 		t.Assert(err, c.IsNil)
-		t.Assert(time.Now().Sub(start) > duration, c.Equals, true)
+		actual := time.Now().Sub(start)
+		if actual < duration {
+			t.Fatalf("expected new job to start after %s but started after %s", duration, actual)
+		}
 	}
 
 	waitForRestart(0)
 	waitForRestart(backoffPeriod)
 	waitForRestart(2 * backoffPeriod)
+	debug(t, "waiting for backoff period to expire")
 	time.Sleep(backoffPeriod)
 	waitForRestart(0)
 }
