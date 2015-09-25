@@ -1,8 +1,6 @@
 package main
 
 import (
-	"reflect"
-
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 )
@@ -24,27 +22,6 @@ func (fs Formations) Add(f *Formation) *Formation {
 	return f
 }
 
-func (fs Formations) TriggerRectify(key utils.FormationKey) {
-	if f, ok := fs[key]; ok {
-		select {
-		case f.ch <- key:
-		default:
-		}
-	}
-}
-
-func (fs Formations) CaseHandlers() CaseHandlers {
-	cases := make(CaseHandlers, 0, len(fs))
-	for _, f := range fs {
-		cases = append(cases, f.CaseHandler)
-	}
-	return cases
-}
-
-func (fs Formations) Remove(key utils.FormationKey) {
-	delete(fs, key)
-}
-
 type Processes map[string]int
 
 func (p Processes) Equals(other Processes) bool {
@@ -63,22 +40,11 @@ func (p Processes) Equals(other Processes) bool {
 
 type Formation struct {
 	*ct.ExpandedFormation
-	ch          chan utils.FormationKey
-	CaseHandler CaseHandler
 }
 
-func NewFormation(ef *ct.ExpandedFormation, handler func(interface{}) error) *Formation {
-	ch := make(chan utils.FormationKey, 1)
+func NewFormation(ef *ct.ExpandedFormation) *Formation {
 	return &Formation{
 		ExpandedFormation: ef,
-		ch:                ch,
-		CaseHandler: CaseHandler{
-			sc: reflect.SelectCase{
-				Dir:  reflect.SelectRecv,
-				Chan: reflect.ValueOf(ch),
-			},
-			handler: handler,
-		},
 	}
 }
 
