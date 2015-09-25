@@ -463,6 +463,10 @@ func (c *Client) StreamDeployment(d *ct.Deployment, output chan *ct.DeploymentEv
 }
 
 func (c *Client) DeployAppRelease(appID, releaseID string) error {
+	return c.DeployAppReleaseWithTimeout(appID, releaseID, 30*time.Second)
+}
+
+func (c *Client) DeployAppReleaseWithTimeout(appID, releaseID string, timeout time.Duration) error {
 	d, err := c.CreateDeployment(appID, releaseID)
 	if err != nil {
 		return err
@@ -492,7 +496,7 @@ outer:
 			case "failed":
 				return e.Err()
 			}
-		case <-time.After(30 * time.Second):
+		case <-time.After(timeout):
 			return errors.New("timed out waiting for deployment completion")
 
 		}
