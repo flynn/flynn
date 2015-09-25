@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/flynn/flynn",
-	"GoVersion": "go1.4.2",
+	"GoVersion": "go1.4.3",
 	"Packages": [
 		"./..."
 	],
@@ -487,8 +487,8 @@
 		},
 		{
 			"ImportPath": "github.com/inconshreveable/gonative",
-			"Comment": "0.2.0-10-g9ba0b45",
-			"Rev": "9ba0b451d901155f5b1169162362a0b178ce4dc1"
+			"Comment": "0.2.0-12-g2013c28",
+			"Rev": "2013c28499ba031ea01f64e3daa556f35f694bb0"
 		},
 		{
 			"ImportPath": "github.com/inconshreveable/mousetrap",

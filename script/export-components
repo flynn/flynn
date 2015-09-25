@@ -41,7 +41,7 @@ main() {
   tuf add
 
   local version=$("${ROOT}/cli/bin/flynn" version)
-  for f in ${ROOT}/cli/bin/flynn-{linux,darwin,windows}-{amd64,386}; do
+  for f in ${ROOT}/cli/bin/flynn-{linux-amd64,linux-386,darwin-amd64,freebsd-amd64,windows-amd64,windows-386}; do
     local name="$(basename "${f}").gz"
     gzip -9 --stdout "${f}" > "staged/targets/${name}"
     tuf add --custom="{\"version\": \"${version}\"}" "${name}"

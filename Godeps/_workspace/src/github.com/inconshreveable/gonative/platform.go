@@ -18,16 +18,17 @@ var srcPlatform = Platform{"", ""}
 var defaultPlatforms = []Platform{
 	Platform{"linux", "386"},
 	Platform{"linux", "amd64"},
-	Platform{"darwin", "386"},
+	Platform{"freebsd", "amd64"},
 	Platform{"darwin", "amd64"},
 	Platform{"windows", "386"},
 	Platform{"windows", "amd64"},
 }
 
 const (
-	oldDistURL         = "https://go.googlecode.com/files/go%s.%s.tar.gz"
-	distURL            = "https://storage.googleapis.com/golang/go%s.%s.tar.gz"
-	lastOldDistVersion = "1.2.1"
+	oldDistURL           = "https://go.googlecode.com/files/go%s.%s.tar.gz"
+	distURL              = "https://storage.googleapis.com/golang/go%s.%s.tar.gz"
+	lastOldDistVersion   = "1.2.1"
+	lastOldDarwinVersion = "1.4.2"
 )
 
 type Platform struct {
@@ -98,7 +99,7 @@ func (p *Platform) distURL(version string) string {
 	distString := p.OS + "-" + p.Arch
 	// special cases
 	switch {
-	case p.OS == "darwin":
+	case p.OS == "darwin" && version <= lastOldDarwinVersion:
 		distString += "-osx10.8"
 	case p.OS == "" && p.Arch == "":
 		distString = "src"
@@ -137,6 +138,16 @@ func download(lg log15.Logger, rd io.Reader, name string, checksum string) (*os.
 }
 
 var checksums = map[string]string{
+	"https://storage.googleapis.com/golang/go1.4.3.src.tar.gz":                     "486db10dc571a55c8d795365070f66d343458c48",
+	"https://storage.googleapis.com/golang/go1.4.3.darwin-amd64.tar.gz":            "945666c36b42bf859d98775c4f02f807a5bdb6b0",
+	"https://storage.googleapis.com/golang/go1.4.3.darwin-amd64.pkg":               "3d91a21e3217370b80ca26e89a994e8199d583e7",
+	"https://storage.googleapis.com/golang/go1.4.3.freebsd-amd64.tar.gz":           "573217c097f78143ea7c54212445c31944750144",
+	"https://storage.googleapis.com/golang/go1.4.3.linux-386.tar.gz":               "405777725abe566989cdb436d2efeb2667be670f",
+	"https://storage.googleapis.com/golang/go1.4.3.linux-amd64.tar.gz":             "332b64236d30a8805fc8dd8b3a269915b4c507fe",
+	"https://storage.googleapis.com/golang/go1.4.3.windows-386.zip":                "77ec9b61c1e1bf475463c62c36c395ba9d69aa9e",
+	"https://storage.googleapis.com/golang/go1.4.3.windows-386.msi":                "cad793895b258929ee796ef9ea77855626740ecd",
+	"https://storage.googleapis.com/golang/go1.4.3.windows-amd64.zip":              "821a6773adadd7409380addc4791771f2b057fa0",
+	"https://storage.googleapis.com/golang/go1.4.3.windows-amd64.msi":              "5e7c6cb012cbf09242b040b84b78b5e52d980337",
 	"https://storage.googleapis.com/golang/go1.4.2.src.tar.gz":                     "460caac03379f746c473814a65223397e9c9a2f6",
 	"https://storage.googleapis.com/golang/go1.4.2.darwin-386-osx10.6.tar.gz":      "fb3e6b30f4e1b1be47bbb98d79dd53da8dec24ec",
 	"https://storage.googleapis.com/golang/go1.4.2.darwin-386-osx10.8.tar.gz":      "65f5610fdb38febd869aeffbd426c83b650bb408",
