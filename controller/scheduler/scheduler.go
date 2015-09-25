@@ -823,7 +823,7 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 			return errors.New(e)
 		}
 	}
-	s.jobs.SetState(job.JobID, JobStateStopped)
+	s.jobs.SetState(job.JobID, JobStateStopping)
 	if job.HostID != "" {
 		log.Info("getting host client", "host.id", job.HostID)
 		host, err := s.Host(job.HostID)

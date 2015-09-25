@@ -17,6 +17,7 @@ const (
 	JobRequestTypeDown JobRequestType = "down"
 	JobStateStarting   JobState       = "starting"
 	JobStateRunning    JobState       = "running"
+	JobStateStopping   JobState       = "stopping"
 	JobStateStopped    JobState       = "stopped"
 	JobStateCrashed    JobState       = "crashed"
 	JobStateRequesting JobState       = "requesting"
@@ -83,7 +84,7 @@ func (j *Job) Clone() *Job {
 
 //
 func (j *Job) IsStopped() bool {
-	return j.state == JobStateStopped
+	return j.state == JobStateStopping || j.state == JobStateStopped
 }
 
 func (j *Job) IsRunning() bool {
