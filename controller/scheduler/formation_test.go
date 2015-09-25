@@ -62,7 +62,7 @@ func (TestSuite) TestFormationUpdate(c *C) {
 			diff:      Processes{"web": -2, "worker": -1, "clock": 2},
 		},
 	} {
-		formation := NewFormation(&ct.ExpandedFormation{Processes: t.initial})
+		formation := NewFormation(&ct.ExpandedFormation{Processes: t.initial}, func(interface{}) error { return nil })
 		diff := formation.Update(t.requested)
 		c.Assert(diff, DeepEquals, t.diff, Commentf(t.desc))
 		c.Assert(formation.GetProcesses(), DeepEquals, t.requested, Commentf(t.desc))

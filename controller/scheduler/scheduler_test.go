@@ -284,7 +284,7 @@ func (TestSuite) TestRectify(c *C) {
 	artifact := &ct.Artifact{ID: "test-artifact-2"}
 	processes := map[string]int{testJobType: testJobCount}
 	release := NewRelease("test-release-2", artifact, processes)
-	form = NewFormation(&ct.ExpandedFormation{App: app, Release: release, Artifact: artifact, Processes: processes})
+	form = NewFormation(&ct.ExpandedFormation{App: app, Release: release, Artifact: artifact, Processes: processes}, s.HandleRectify)
 	request = NewJobRequest(form, JobRequestTypeUp, testJobType, "", "")
 	config = jobConfig(request, testHostID)
 	// Add the job to the host without adding the formation. Expected error.
