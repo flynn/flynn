@@ -217,6 +217,12 @@ type Event struct {
 	CreatedAt  *time.Time      `json:"created_at,omitempty"`
 }
 
+type Scale struct {
+	PrevProcesses map[string]int `json:"prev_processes,omitempty"`
+	Processes     map[string]int `json:"processes"`
+	ReleaseID     string         `json:"release"`
+}
+
 type AppRelease struct {
 	PrevRelease *Release `json:"prev_release,omitempty"`
 	Release     *Release `json:"release"`

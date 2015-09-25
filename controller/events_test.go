@@ -231,12 +231,36 @@ func (s *S) TestStreamFormationEvents(c *C) {
 		if !ok {
 			c.Fatal("unexpected close of event stream")
 		}
-		var eventProcesses map[string]int
-		c.Assert(json.Unmarshal(e.Data, &eventProcesses), IsNil)
+		var scale *ct.Scale
+		c.Assert(json.Unmarshal(e.Data, &scale), IsNil)
 		c.Assert(e.AppID, Equals, app.ID)
 		c.Assert(e.ObjectType, Equals, ct.EventTypeScale)
 		c.Assert(e.ObjectID, Equals, strings.Join([]string{app.ID, release.ID}, ":"))
-		c.Assert(eventProcesses, DeepEquals, formation.Processes)
+		c.Assert(scale, NotNil)
+		c.Assert(scale.Processes, DeepEquals, formation.Processes)
+	case <-time.After(10 * time.Second):
+		c.Fatal("Timed out waiting for scale event")
+	}
+
+	nextFormation := s.createTestFormation(c, &ct.Formation{
+		AppID:     app.ID,
+		ReleaseID: release.ID,
+		Processes: map[string]int{"foo": 2},
+	})
+
+	select {
+	case e, ok := <-events:
+		if !ok {
+			c.Fatal("unexpected close of event stream")
+		}
+		var scale *ct.Scale
+		c.Assert(json.Unmarshal(e.Data, &scale), IsNil)
+		c.Assert(e.AppID, Equals, app.ID)
+		c.Assert(e.ObjectType, Equals, ct.EventTypeScale)
+		c.Assert(e.ObjectID, Equals, strings.Join([]string{app.ID, release.ID}, ":"))
+		c.Assert(scale, NotNil)
+		c.Assert(scale.Processes, DeepEquals, nextFormation.Processes)
+		c.Assert(scale.PrevProcesses, DeepEquals, formation.Processes)
 	case <-time.After(10 * time.Second):
 		c.Fatal("Timed out waiting for scale event")
 	}
@@ -248,12 +272,14 @@ func (s *S) TestStreamFormationEvents(c *C) {
 		if !ok {
 			c.Fatal("unexpected close of event stream")
 		}
-		var eventProcesses map[string]int
-		c.Assert(json.Unmarshal(e.Data, &eventProcesses), IsNil)
+		var scale *ct.Scale
+		c.Assert(json.Unmarshal(e.Data, &scale), IsNil)
 		c.Assert(e.AppID, Equals, app.ID)
 		c.Assert(e.ObjectType, Equals, ct.EventTypeScale)
 		c.Assert(e.ObjectID, Equals, strings.Join([]string{app.ID, release.ID}, ":"))
-		c.Assert(eventProcesses, IsNil)
+		c.Assert(scale, NotNil)
+		c.Assert(scale.Processes, IsNil)
+		c.Assert(scale.PrevProcesses, DeepEquals, nextFormation.Processes)
 	case <-time.After(10 * time.Second):
 		c.Fatal("Timed out waiting for scale event")
 	}

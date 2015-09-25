@@ -79,12 +79,11 @@ var App = Store.createClass({
 			break;
 
 			case 'SCALE':
-				var releaseID = event.object_id.split(':')[1];
-				if (event.app === this.props.appId && event.data !== null) {
+				if (event.app === this.props.appId && event.data.processes !== null) {
 					this.setState({
 						formation: extend({}, this.state.formation, {
-							release: releaseID,
-							processes: event.data || {}
+							release: event.data.release,
+							processes: event.data.processes || {}
 						})
 					});
 				}
