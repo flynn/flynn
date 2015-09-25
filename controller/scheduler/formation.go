@@ -38,6 +38,15 @@ func (p Processes) Equals(other Processes) bool {
 	return true
 }
 
+func (p Processes) IsEmpty() bool {
+	for _, count := range p {
+		if count != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 type Formation struct {
 	*ct.ExpandedFormation
 }
