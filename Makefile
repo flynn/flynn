@@ -24,7 +24,7 @@ test-integration:
 toolchain: util/_toolchain/go/bin/go
 
 util/_toolchain/go/bin/go: util/_toolchain/bin/gonative
-	cd util/_toolchain && rm -rf go && bin/gonative build -version=1.4.2 && ls | grep -v "^\(bin\|go\)$$" | xargs --no-run-if-empty rm -r
+	cd util/_toolchain && rm -rf go && bin/gonative build -version=1.4.3 && ls | grep -v "^\(bin\|go\)$$" | xargs --no-run-if-empty rm -r
 
 
 util/_toolchain/bin/gonative: Godeps/_workspace/src/github.com/inconshreveable/gonative/*.go
