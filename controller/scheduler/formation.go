@@ -33,12 +33,16 @@ func (fs Formations) TriggerRectify(key utils.FormationKey) {
 	}
 }
 
-func (fs Formations) CaseHandlers(handler func(interface{}) error) CaseHandlers {
+func (fs Formations) CaseHandlers() CaseHandlers {
 	cases := make(CaseHandlers, 0, len(fs))
 	for _, f := range fs {
-		cases = append(cases, f.CaseHandler(handler))
+		cases = append(cases, f.CaseHandler)
 	}
 	return cases
+}
+
+func (fs Formations) Remove(key utils.FormationKey) {
+	delete(fs, key)
 }
 
 type Processes map[string]int
@@ -59,13 +63,22 @@ func (p Processes) Equals(other Processes) bool {
 
 type Formation struct {
 	*ct.ExpandedFormation
-	ch chan utils.FormationKey
+	ch          chan utils.FormationKey
+	CaseHandler CaseHandler
 }
 
-func NewFormation(ef *ct.ExpandedFormation) *Formation {
+func NewFormation(ef *ct.ExpandedFormation, handler func(interface{}) error) *Formation {
+	ch := make(chan utils.FormationKey, 1)
 	return &Formation{
 		ExpandedFormation: ef,
-		ch:                make(chan utils.FormationKey, 1),
+		ch:                ch,
+		CaseHandler: CaseHandler{
+			sc: reflect.SelectCase{
+				Dir:  reflect.SelectRecv,
+				Chan: reflect.ValueOf(ch),
+			},
+			handler: handler,
+		},
 	}
 }
 
@@ -75,16 +88,6 @@ func (f *Formation) GetProcesses() Processes {
 
 func (f *Formation) key() utils.FormationKey {
 	return utils.FormationKey{AppID: f.App.ID, ReleaseID: f.Release.ID}
-}
-
-func (f *Formation) CaseHandler(handler func(interface{}) error) CaseHandler {
-	return CaseHandler{
-		sc: reflect.SelectCase{
-			Dir:  reflect.SelectRecv,
-			Chan: reflect.ValueOf(f.ch),
-		},
-		handler: handler,
-	}
 }
 
 // Update stores the new processes and returns the diff from the previous
@@ -109,4 +112,13 @@ func (f *Formation) Update(procs Processes) Processes {
 	}
 	f.Processes = procs
 	return diff
+}
+
+func (f *Formation) IsEmpty() bool {
+	for _, count := range f.Processes {
+		if count > 0 {
+			return false
+		}
+	}
+	return true
 }

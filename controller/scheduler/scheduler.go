@@ -453,19 +453,23 @@ func (s *Scheduler) HandleRectify(i interface{}) error {
 }
 
 func (s *Scheduler) RectifyFormation(key utils.FormationKey) {
+	log := fnLogger("app.id", key.AppID, "release.id", key.ReleaseID)
+	formation := s.formations[key]
+	if formation.IsEmpty() {
+		log.Info("removing empty formation from memory")
+		s.formations.Remove(key)
+	}
 	if !s.isLeader {
 		return
 	}
 
 	defer s.sendEvent(EventTypeRectify, nil, key)
 
-	formation := s.formations[key]
 	expected := formation.GetProcesses()
 	actual := s.jobs.GetProcesses(key)
 	if expected.Equals(actual) {
 		return
 	}
-	log := fnLogger("app.id", key.AppID, "release.id", key.ReleaseID)
 	log.Info("rectifying formation")
 
 	formation.Processes = actual
@@ -737,7 +741,7 @@ func (s *Scheduler) changeFormation(ef *ct.ExpandedFormation) (f *Formation, err
 	f = s.formations.Get(ef.App.ID, ef.Release.ID)
 	if f == nil {
 		log.Info("adding new formation", "processes", ef.Processes)
-		f = s.formations.Add(NewFormation(ef))
+		f = s.formations.Add(NewFormation(ef, s.HandleRectify))
 	} else {
 		if f.GetProcesses().Equals(ef.Processes) {
 			return f, nil
@@ -760,8 +764,7 @@ func (s *Scheduler) updateFormation(f *ct.Formation) (*Formation, error) {
 	if err != nil {
 		return nil, err
 	}
-	form, err := s.changeFormation(ef)
-	return form, err
+	return s.changeFormation(ef)
 }
 
 func (s *Scheduler) startJob(req *JobRequest) (err error) {
@@ -1110,7 +1113,7 @@ func (s *Scheduler) triggerSyncFormations() {
 func (s *Scheduler) rectifyCaseHandlers() CaseHandlers {
 	cases := make(CaseHandlers, 0, len(s.caseHandlers)+len(s.formations))
 	cases = append(cases, s.caseHandlers...)
-	cases = append(cases, s.formations.CaseHandlers(s.HandleRectify)...)
+	cases = append(cases, s.formations.CaseHandlers()...)
 	return cases
 }
 
