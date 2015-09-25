@@ -66,6 +66,8 @@ main() {
   make
   popd >/dev/null
 
+  export BACKOFF_PERIOD="5s"
+
   cluster_add=$("${ROOT}/script/bootstrap-flynn" --size "${size}" &> >(tee /dev/stderr) | tail -3 | head -1)
 
   if [[ "${cluster_add:0:17}" != "flynn cluster add" ]]; then
@@ -98,8 +100,6 @@ main() {
   if [[ "${size}" -gt "1" ]]; then
     args+=("--router-ip=198.51.100.1")
   fi
-
-  export BACKOFF_PERIOD="5s"
 
   bin/flynn-test ${args[@]}
 }
