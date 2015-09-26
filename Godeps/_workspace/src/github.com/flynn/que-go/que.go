@@ -47,6 +47,9 @@ type Job struct {
 	// still working it.
 	LockedUntil time.Time
 
+	// Stop is a channel which will be closed when the worker shuts down.
+	Stop chan struct{}
+
 	mu       sync.Mutex
 	deleted  bool
 	pool     *pgx.ConnPool

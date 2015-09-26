@@ -350,10 +350,6 @@ func (s *SchedulerSuite) TestTCPApp(t *c.C) {
 }
 
 func (s *SchedulerSuite) TestDeployController(t *c.C) {
-	if testCluster == nil {
-		t.Skip("cannot determine test cluster size")
-	}
-
 	// get the current controller release
 	client := s.controllerClient(t)
 	app, err := client.GetApp("controller")
@@ -397,6 +393,7 @@ loop:
 	// check the correct controller jobs are running
 	hosts, err := s.clusterClient(t).Hosts()
 	t.Assert(err, c.IsNil)
+	t.Assert(hosts, c.Not(c.HasLen), 0)
 	actual := make(map[string]map[string]int)
 	for _, h := range hosts {
 		jobs, err := h.ListJobs()
@@ -420,7 +417,7 @@ loop:
 	expected := map[string]map[string]int{release.ID: {
 		"web":       2,
 		"worker":    2,
-		"scheduler": testCluster.Size(),
+		"scheduler": len(hosts),
 	}}
 	t.Assert(actual, c.DeepEquals, expected)
 }

@@ -2,6 +2,7 @@ package deployment
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
@@ -12,6 +13,8 @@ import (
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/postgres"
 )
+
+var ErrStopped = errors.New("deployment stopped")
 
 type context struct {
 	db     *postgres.DB
@@ -68,6 +71,9 @@ func (c *context) HandleDeployment(job *que.Job) (e error) {
 		log.Info("stopped watching deployment events")
 	}()
 	defer func() {
+		if e == ErrStopped {
+			return
+		}
 		log.Info("marking the deployment as done")
 		if err := c.setDeploymentDone(deployment.ID); err != nil {
 			log.Error("error marking the deployment as done", "err", err)
@@ -99,6 +105,7 @@ func (c *context) HandleDeployment(job *que.Job) (e error) {
 		newReleaseState: make(map[string]int, len(deployment.Processes)),
 		knownJobStates:  make(map[jobIDState]struct{}),
 		omni:            make(map[string]struct{}),
+		stop:            job.Stop,
 	}
 
 	log.Info("performing deployment")
