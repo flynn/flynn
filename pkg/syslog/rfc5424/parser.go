@@ -22,7 +22,9 @@ func parse(buf []byte, msg *Message) error {
 		return err
 	}
 
-	msg.Msg = buf[cursor:]
+	if cursor < len(buf) {
+		msg.Msg = buf[cursor:]
+	}
 	return nil
 }
 
@@ -170,9 +172,6 @@ func parseStructuredData(buf []byte, cursor *int, msg *Message) error {
 			return &ParseError{*cursor, "invalid structured data"}
 		}
 		if buf[end-1] != '\\' {
-			if len(buf) < end+2 || buf[end+1] != ' ' {
-				return &ParseError{*cursor, "invalid structured data"}
-			}
 			break
 		}
 	}

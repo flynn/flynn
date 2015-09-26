@@ -47,7 +47,7 @@ func NewServer(conf ServerConfig) (*Server, error) {
 
 	var hb discoverd.Heartbeater
 	if conf.Discoverd != nil {
-		hb, err = conf.Discoverd.AddServiceAndRegister(conf.ServiceName, ll.Addr().String())
+		hb, err = conf.Discoverd.AddServiceAndRegister(conf.ServiceName, conf.SyslogAddr)
 		if err != nil {
 			return nil, err
 		}
