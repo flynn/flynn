@@ -33,9 +33,9 @@ type Worker struct {
 	c *Client
 	m WorkMap
 
-	mu   sync.Mutex
-	done bool
-	ch   chan struct{}
+	stopOnce sync.Once
+	stop     chan struct{}
+	done     chan struct{}
 }
 
 var defaultWakeInterval = 5 * time.Second
@@ -63,16 +63,18 @@ func NewWorker(c *Client, m WorkMap) *Worker {
 		Queue:    os.Getenv("QUE_QUEUE"),
 		c:        c,
 		m:        m,
-		ch:       make(chan struct{}),
+		stop:     make(chan struct{}),
+		done:     make(chan struct{}),
 	}
 }
 
 // Work pulls jobs off the Worker's Queue at its Interval. This function only
 // returns after Shutdown() is called, so it should be run in its own goroutine.
 func (w *Worker) Work() {
+	defer close(w.done)
 	for {
 		select {
-		case <-w.ch:
+		case <-w.stop:
 			log.Println("worker done")
 			return
 		case <-time.After(w.Interval):
@@ -109,6 +111,8 @@ func (w *Worker) WorkOne() (didWork bool) {
 		return
 	}
 
+	j.Stop = w.stop
+
 	if err = wf(j); err != nil {
 		j.Error(err.Error())
 		return
@@ -126,17 +130,12 @@ func (w *Worker) WorkOne() (didWork bool) {
 // until the Worker has stopped working. It should only be called on an active
 // Worker.
 func (w *Worker) Shutdown() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
+	w.stopOnce.Do(func() {
+		log.Println("worker shutting down gracefully...")
+		close(w.stop)
+		<-w.done
+	})
 
-	if w.done {
-		return
-	}
-
-	log.Println("worker shutting down gracefully...")
-	w.ch <- struct{}{}
-	w.done = true
-	close(w.ch)
 }
 
 // recoverPanic tries to handle panics in job execution.
