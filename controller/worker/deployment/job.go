@@ -30,6 +30,7 @@ type DeployJob struct {
 	knownJobStates  map[jobIDState]struct{}
 	omni            map[string]struct{}
 	hostCount       int
+	stop            chan struct{}
 }
 
 func (d *DeployJob) isOmni(typ string) bool {
@@ -91,6 +92,8 @@ func (d *DeployJob) Perform() error {
 	outer:
 		for {
 			select {
+			case <-d.stop:
+				return ErrStopped
 			case event, ok := <-events:
 				if !ok {
 					log.Error("error creating service discovery watcher, channel closed", "service", proc.Service)
@@ -229,6 +232,8 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected jobEvents, log l
 
 	for {
 		select {
+		case <-d.stop:
+			return ErrStopped
 		case event := <-d.serviceEvents:
 			if event.Kind != discoverd.EventKindUp {
 				continue
