@@ -34,10 +34,13 @@ func NewMessage(hdr *Header, msg []byte) *Message {
 		h.Version = 1
 	}
 
-	m := make([]byte, len(msg))
-	copy(m, msg)
+	if msg != nil {
+		m := make([]byte, len(msg))
+		copy(m, msg)
+		msg = m
+	}
 
-	return &Message{Header: h, Msg: m}
+	return &Message{Header: h, Msg: msg}
 }
 
 var msgSep = []byte{' '}

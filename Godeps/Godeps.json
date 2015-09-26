@@ -534,11 +534,6 @@
 			"Rev": "7d2d8c8a4e078ce3c58736ab521a40b37a504c52"
 		},
 		{
-			"ImportPath": "github.com/natefinch/lumberjack",
-			"Comment": "v1.0-12-gd28785c",
-			"Rev": "d28785c2f27cd682d872df46ccd8232843629f54"
-		},
-		{
 			"ImportPath": "github.com/pkg/browser",
 			"Rev": "2e6fb17d7a7cb6a81837ee68158214d9098de905"
 		},
@@ -607,6 +602,11 @@
 			"ImportPath": "gopkg.in/inconshreveable/log15.v2",
 			"Comment": "v2.7",
 			"Rev": "7cf5571b3b32a7c7b5605dc5ed8ad8fdbb2135f0"
+		},
+		{
+			"ImportPath": "gopkg.in/natefinch/lumberjack.v2",
+			"Comment": "v1.0-18-g600ceb4",
+			"Rev": "600ceb4523e5b7ff745f91083c8a023c2bf73af5"
 		},
 		{
 			"ImportPath": "gopkg.in/tomb.v1",

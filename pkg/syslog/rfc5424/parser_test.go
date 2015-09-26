@@ -42,7 +42,6 @@ func (s *S) TestParse(c *C) {
 					Version:   1,
 					Timestamp: ts,
 				},
-				Msg: []byte{},
 			},
 		},
 
@@ -81,6 +80,24 @@ func (s *S) TestParse(c *C) {
 				},
 				StructuredData: []byte(`[foo="bar\]\]\""]`),
 				Msg:            []byte("message body"),
+			},
+		},
+
+		// structured data with no message
+		{
+			msg: fmt.Sprintf(`<1>1 %s 3.4.5.6 APP-7 PID-8 FD9 [foo="bar"]`, tss),
+			want: &Message{
+				Header: Header{
+					Facility:  0,
+					Severity:  1,
+					Version:   1,
+					Timestamp: ts,
+					Hostname:  []byte("3.4.5.6"),
+					AppName:   []byte("APP-7"),
+					ProcID:    []byte("PID-8"),
+					MsgID:     []byte("FD9"),
+				},
+				StructuredData: []byte(`[foo="bar"]`),
 			},
 		},
 
