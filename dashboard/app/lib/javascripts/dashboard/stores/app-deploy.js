@@ -58,7 +58,7 @@ var AppDeploy = Store.createClass({
 			break;
 
 			case 'APP':
-				if (event.app === this.props.appID && event.data.release_id) {
+				if (event.app === this.props.appID && event.data.release) {
 					Dispatcher.dispatch({
 						name: 'GET_APP_RELEASE',
 						appID: this.props.appID

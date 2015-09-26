@@ -24,7 +24,7 @@ type App struct {
 	Name      string            `json:"name,omitempty"`
 	Meta      map[string]string `json:"meta,omitempty"`
 	Strategy  string            `json:"strategy,omitempty"`
-	ReleaseID string            `json:"release_id,omitempty"`
+	ReleaseID string            `json:"release,omitempty"`
 	CreatedAt *time.Time        `json:"created_at,omitempty"`
 	UpdatedAt *time.Time        `json:"updated_at,omitempty"`
 }
