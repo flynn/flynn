@@ -56,7 +56,7 @@ var App = Store.createClass({
 							release: event.object_id
 						}),
 						app: extend({}, this.state.app, {
-							release_id: event.object_id
+							release: event.object_id
 						}),
 						release: event.data.release
 					});
