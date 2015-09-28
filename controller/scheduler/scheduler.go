@@ -256,11 +256,11 @@ func (s *Scheduler) Run() error {
 		return err
 	}
 
-	var err error
-	s.isLeader, err = s.discoverd.Register()
+	isLeader, err := s.discoverd.Register()
 	if err != nil {
 		return err
 	}
+	s.HandleLeaderChange(isLeader)
 	leaderCh := s.discoverd.LeaderCh()
 
 	if err := s.streamFormationEvents(); err != nil {
