@@ -27,7 +27,7 @@ func main() {
 			{
 				GitRepo:   "git://github.com/flynn/flynn-dashboard-web-icons.git",
 				GitBranch: "master",
-				GitRef:    "a03e56dbe3dd6f073a7ab212ae0912a355a85ab0",
+				GitRef:    "4d190ece9dd31a3a662cf2dc9534151d7675a338",
 				Path:      "assets",
 			},
 			{

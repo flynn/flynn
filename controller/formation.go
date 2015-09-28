@@ -74,6 +74,14 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 	if err != nil {
 		return err
 	}
+	scale := &ct.Scale{
+		Processes: f.Processes,
+		ReleaseID: f.ReleaseID,
+	}
+	prevFormation, _ := r.Get(f.AppID, f.ReleaseID)
+	if prevFormation != nil {
+		scale.PrevProcesses = prevFormation.Processes
+	}
 	err = tx.QueryRow("INSERT INTO formations (app_id, release_id, processes) VALUES ($1, $2, $3) RETURNING created_at, updated_at",
 		f.AppID, f.ReleaseID, procs).Scan(&f.CreatedAt, &f.UpdatedAt)
 	if postgres.IsUniquenessError(err, "") {
@@ -93,7 +101,7 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 		AppID:      f.AppID,
 		ObjectID:   f.AppID + ":" + f.ReleaseID,
 		ObjectType: ct.EventTypeScale,
-	}, f.Processes); err != nil {
+	}, scale); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -143,6 +151,13 @@ func (r *FormationRepo) Remove(appID, releaseID string) error {
 	if err != nil {
 		return err
 	}
+	scale := &ct.Scale{
+		ReleaseID: releaseID,
+	}
+	prevFormation, _ := r.Get(appID, releaseID)
+	if prevFormation != nil {
+		scale.PrevProcesses = prevFormation.Processes
+	}
 	_, err = tx.Exec("UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now() WHERE app_id = $1 AND release_id = $2", appID, releaseID)
 	if err != nil {
 		tx.Rollback()
@@ -152,7 +167,7 @@ func (r *FormationRepo) Remove(appID, releaseID string) error {
 		AppID:      appID,
 		ObjectID:   appID + ":" + releaseID,
 		ObjectType: ct.EventTypeScale,
-	}, nil); err != nil {
+	}, scale); err != nil {
 		tx.Rollback()
 		return err
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/ctxhelper"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/sse"
 )
@@ -25,33 +26,50 @@ func NewEventRepo(db *postgres.DB) *EventRepo {
 	return &EventRepo{db: db}
 }
 
-func (r *EventRepo) ListEvents(appID string, objectTypes []string, objectID string, sinceID int64, count int) ([]*ct.Event, error) {
-	query := "SELECT event_id, app_id, object_id, object_type, data, created_at FROM events WHERE event_id > $1"
-	args := []interface{}{sinceID}
-	n := 2
-	if appID != "" {
-		query += fmt.Sprintf(" AND app_id = $%d", n)
+func (r *EventRepo) ListEvents(appID string, objectTypes []string, objectID string, beforeID *int64, sinceID *int64, count int) ([]*ct.Event, error) {
+	query := "SELECT event_id, app_id, object_id, object_type, data, created_at FROM events"
+	var conditions []string
+	var n int
+	args := []interface{}{}
+	if beforeID != nil {
 		n++
+		conditions = append(conditions, fmt.Sprintf("event_id < $%d", n))
+		args = append(args, *beforeID)
+	}
+	if sinceID != nil {
+		n++
+		conditions = append(conditions, fmt.Sprintf("event_id > $%d", n))
+		args = append(args, *sinceID)
+	}
+	if appID != "" {
+		n++
+		conditions = append(conditions, fmt.Sprintf("app_id = $%d", n))
 		args = append(args, appID)
 	}
 	if len(objectTypes) > 0 {
-		query += " AND ("
+		c := "("
 		for i, typ := range objectTypes {
 			if i > 0 {
-				query += " OR "
+				c += " OR "
 			}
-			query += fmt.Sprintf("object_type = $%d", n)
 			n++
+			c += fmt.Sprintf("object_type = $%d", n)
 			args = append(args, typ)
 		}
-		query += ")"
+		c += ")"
+		conditions = append(conditions, c)
 	}
 	if objectID != "" {
-		query += fmt.Sprintf(" AND object_id = $%d", n)
+		n++
+		conditions = append(conditions, fmt.Sprintf("object_id = $%d", n))
 		args = append(args, objectID)
+	}
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 	query += " ORDER BY event_id DESC"
 	if count > 0 {
+		n++
 		query += fmt.Sprintf(" LIMIT $%d", n)
 		args = append(args, count)
 	}
@@ -107,9 +125,6 @@ func (c *controllerAPI) maybeStartEventListener() error {
 }
 
 func (c *controllerAPI) Events(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	if err := c.maybeStartEventListener(); err != nil {
-		respondWithError(w, err)
-	}
 	var app *ct.App
 	if appID := req.FormValue("app_id"); appID != "" {
 		data, err := c.appRepo.Get(appID)
@@ -119,9 +134,66 @@ func (c *controllerAPI) Events(ctx context.Context, w http.ResponseWriter, req *
 		}
 		app = data.(*ct.App)
 	}
+
+	if req.Header.Get("Accept") == "application/json" {
+		if err := listEvents(ctx, w, req, app, c.eventRepo); err != nil {
+			respondWithError(w, err)
+		}
+		return
+	}
+
+	if err := c.maybeStartEventListener(); err != nil {
+		respondWithError(w, err)
+	}
 	if err := streamEvents(ctx, w, req, c.eventListener, app, c.eventRepo); err != nil {
 		respondWithError(w, err)
 	}
+}
+
+func listEvents(ctx context.Context, w http.ResponseWriter, req *http.Request, app *ct.App, repo *EventRepo) (err error) {
+	var appID string
+	if app != nil {
+		appID = app.ID
+	}
+
+	var beforeID *int64
+	if req.FormValue("before_id") != "" {
+		id, err := strconv.ParseInt(req.FormValue("before_id"), 10, 64)
+		if err != nil {
+			return ct.ValidationError{Field: "before_id", Message: "is invalid"}
+		}
+		beforeID = &id
+	}
+
+	var sinceID *int64
+	if req.FormValue("since_id") != "" {
+		id, err := strconv.ParseInt(req.FormValue("since_id"), 10, 64)
+		if err != nil {
+			return ct.ValidationError{Field: "since_id", Message: "is invalid"}
+		}
+		sinceID = &id
+	}
+
+	var count int
+	if req.FormValue("count") != "" {
+		count, err = strconv.Atoi(req.FormValue("count"))
+		if err != nil {
+			return ct.ValidationError{Field: "count", Message: "is invalid"}
+		}
+	}
+
+	objectTypes := strings.Split(req.FormValue("object_types"), ",")
+	if len(objectTypes) == 1 && objectTypes[0] == "" {
+		objectTypes = []string{}
+	}
+	objectID := req.FormValue("object_id")
+
+	list, err := repo.ListEvents(appID, objectTypes, objectID, beforeID, sinceID, count)
+	if err != nil {
+		return err
+	}
+	httphelper.JSON(w, 200, list)
+	return nil
 }
 
 func streamEvents(ctx context.Context, w http.ResponseWriter, req *http.Request, eventListener *EventListener, app *ct.App, repo *EventRepo) (err error) {
@@ -174,7 +246,7 @@ func streamEvents(ctx context.Context, w http.ResponseWriter, req *http.Request,
 
 	var currID int64
 	if past == "true" || lastID > 0 {
-		list, err := repo.ListEvents(appID, objectTypes, objectID, lastID, count)
+		list, err := repo.ListEvents(appID, objectTypes, objectID, nil, &lastID, count)
 		if err != nil {
 			return err
 		}

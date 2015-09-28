@@ -77,6 +77,7 @@ func (s *S) TestEvents(c *C) {
 
 func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 	release := s.createTestRelease(c, &ct.Release{})
+	nextRelease := s.createTestRelease(c, &ct.Release{})
 
 	events := make(chan *ct.Event)
 	stream, err := s.c.StreamEvents(cc.StreamEventsOptions{}, events)
@@ -99,6 +100,8 @@ func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 		Meta: newMeta,
 	}), IsNil)
 
+	c.Assert(s.c.SetAppRelease(app.ID, nextRelease.ID), IsNil)
+
 	assertAppEvent := func(e *ct.Event) *ct.App {
 		var eventApp *ct.App
 		c.Assert(json.Unmarshal(e.Data, &eventApp), IsNil)
@@ -118,13 +121,14 @@ func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 			c.Assert(a.Meta, DeepEquals, app.Meta)
 		},
 		func(e *ct.Event) {
-			var eventRelease *ct.Release
+			var eventRelease *ct.AppRelease
 			c.Assert(json.Unmarshal(e.Data, &eventRelease), IsNil)
 			c.Assert(e.AppID, Equals, app.ID)
 			c.Assert(e.ObjectType, Equals, ct.EventTypeAppRelease)
 			c.Assert(e.ObjectID, Equals, release.ID)
 			c.Assert(eventRelease, NotNil)
-			c.Assert(eventRelease.ID, Equals, release.ID)
+			c.Assert(eventRelease.Release, NotNil)
+			c.Assert(eventRelease.Release.ID, Equals, release.ID)
 		},
 		func(e *ct.Event) {
 			a := assertAppEvent(e)
@@ -135,6 +139,18 @@ func (s *S) TestStreamAppLifeCycleEvents(c *C) {
 			a := assertAppEvent(e)
 			c.Assert(a.Strategy, Equals, newStrategy)
 			c.Assert(a.Meta, DeepEquals, newMeta)
+		},
+		func(e *ct.Event) {
+			var eventRelease *ct.AppRelease
+			c.Assert(json.Unmarshal(e.Data, &eventRelease), IsNil)
+			c.Assert(e.AppID, Equals, app.ID)
+			c.Assert(e.ObjectType, Equals, ct.EventTypeAppRelease)
+			c.Assert(e.ObjectID, Equals, nextRelease.ID)
+			c.Assert(eventRelease, NotNil)
+			c.Assert(eventRelease.Release, NotNil)
+			c.Assert(eventRelease.Release.ID, Equals, nextRelease.ID)
+			c.Assert(eventRelease.PrevRelease, NotNil)
+			c.Assert(eventRelease.PrevRelease.ID, Equals, release.ID)
 		},
 	}
 
@@ -215,12 +231,36 @@ func (s *S) TestStreamFormationEvents(c *C) {
 		if !ok {
 			c.Fatal("unexpected close of event stream")
 		}
-		var eventProcesses map[string]int
-		c.Assert(json.Unmarshal(e.Data, &eventProcesses), IsNil)
+		var scale *ct.Scale
+		c.Assert(json.Unmarshal(e.Data, &scale), IsNil)
 		c.Assert(e.AppID, Equals, app.ID)
 		c.Assert(e.ObjectType, Equals, ct.EventTypeScale)
 		c.Assert(e.ObjectID, Equals, strings.Join([]string{app.ID, release.ID}, ":"))
-		c.Assert(eventProcesses, DeepEquals, formation.Processes)
+		c.Assert(scale, NotNil)
+		c.Assert(scale.Processes, DeepEquals, formation.Processes)
+	case <-time.After(10 * time.Second):
+		c.Fatal("Timed out waiting for scale event")
+	}
+
+	nextFormation := s.createTestFormation(c, &ct.Formation{
+		AppID:     app.ID,
+		ReleaseID: release.ID,
+		Processes: map[string]int{"foo": 2},
+	})
+
+	select {
+	case e, ok := <-events:
+		if !ok {
+			c.Fatal("unexpected close of event stream")
+		}
+		var scale *ct.Scale
+		c.Assert(json.Unmarshal(e.Data, &scale), IsNil)
+		c.Assert(e.AppID, Equals, app.ID)
+		c.Assert(e.ObjectType, Equals, ct.EventTypeScale)
+		c.Assert(e.ObjectID, Equals, strings.Join([]string{app.ID, release.ID}, ":"))
+		c.Assert(scale, NotNil)
+		c.Assert(scale.Processes, DeepEquals, nextFormation.Processes)
+		c.Assert(scale.PrevProcesses, DeepEquals, formation.Processes)
 	case <-time.After(10 * time.Second):
 		c.Fatal("Timed out waiting for scale event")
 	}
@@ -232,12 +272,14 @@ func (s *S) TestStreamFormationEvents(c *C) {
 		if !ok {
 			c.Fatal("unexpected close of event stream")
 		}
-		var eventProcesses map[string]int
-		c.Assert(json.Unmarshal(e.Data, &eventProcesses), IsNil)
+		var scale *ct.Scale
+		c.Assert(json.Unmarshal(e.Data, &scale), IsNil)
 		c.Assert(e.AppID, Equals, app.ID)
 		c.Assert(e.ObjectType, Equals, ct.EventTypeScale)
 		c.Assert(e.ObjectID, Equals, strings.Join([]string{app.ID, release.ID}, ":"))
-		c.Assert(eventProcesses, IsNil)
+		c.Assert(scale, NotNil)
+		c.Assert(scale.Processes, IsNil)
+		c.Assert(scale.PrevProcesses, DeepEquals, nextFormation.Processes)
 	case <-time.After(10 * time.Second):
 		c.Fatal("Timed out waiting for scale event")
 	}
@@ -318,4 +360,96 @@ func (s *S) TestStreamResourceEvents(c *C) {
 	case <-time.After(10 * time.Second):
 		c.Fatal("Timed out waiting for resource_deletion event")
 	}
+}
+
+func (s *S) TestListEvents(c *C) {
+	release := s.createTestRelease(c, &ct.Release{})
+
+	app := s.createTestApp(c, &ct.App{Name: "app5"})
+
+	c.Assert(s.c.SetAppRelease(app.ID, release.ID), IsNil)
+	newStrategy := "one-by-one"
+	c.Assert(s.c.UpdateApp(&ct.App{
+		ID:       app.ID,
+		Strategy: newStrategy,
+	}), IsNil)
+	newMeta := map[string]string{
+		"foo": "bar",
+	}
+	c.Assert(s.c.UpdateApp(&ct.App{
+		ID:   app.ID,
+		Meta: newMeta,
+	}), IsNil)
+
+	events, err := s.c.ListEvents(cc.ListEventsOptions{
+		ObjectTypes: []ct.EventType{ct.EventTypeApp, ct.EventTypeAppRelease},
+		AppID:       app.ID,
+	})
+	c.Assert(err, IsNil)
+
+	assertAppEvent := func(e *ct.Event) *ct.App {
+		var eventApp *ct.App
+		c.Assert(json.Unmarshal(e.Data, &eventApp), IsNil)
+		c.Assert(e.AppID, Equals, app.ID)
+		c.Assert(e.ObjectType, Equals, ct.EventTypeApp)
+		c.Assert(e.ObjectID, Equals, app.ID)
+		c.Assert(eventApp, NotNil)
+		c.Assert(eventApp.ID, Equals, app.ID)
+		return eventApp
+	}
+
+	eventAssertions := []func(*ct.Event){
+		func(e *ct.Event) {
+			a := assertAppEvent(e)
+			c.Assert(a.ReleaseID, Equals, app.ReleaseID)
+			c.Assert(a.Strategy, Equals, app.Strategy)
+			c.Assert(a.Meta, DeepEquals, app.Meta)
+		},
+		func(e *ct.Event) {
+			var eventRelease *ct.AppRelease
+			c.Assert(json.Unmarshal(e.Data, &eventRelease), IsNil)
+			c.Assert(e.AppID, Equals, app.ID)
+			c.Assert(e.ObjectType, Equals, ct.EventTypeAppRelease)
+			c.Assert(e.ObjectID, Equals, release.ID)
+			c.Assert(eventRelease, NotNil)
+			c.Assert(eventRelease.Release, NotNil)
+			c.Assert(eventRelease.Release.ID, Equals, release.ID)
+		},
+		func(e *ct.Event) {
+			a := assertAppEvent(e)
+			c.Assert(a.Strategy, Equals, newStrategy)
+			c.Assert(a.Meta, DeepEquals, app.Meta)
+		},
+		func(e *ct.Event) {
+			a := assertAppEvent(e)
+			c.Assert(a.Strategy, Equals, newStrategy)
+			c.Assert(a.Meta, DeepEquals, newMeta)
+		},
+	}
+
+	c.Assert(len(events), Equals, len(eventAssertions))
+	eventsLen := len(events)
+	for i, fn := range eventAssertions {
+		fn(events[eventsLen-i-1])
+	}
+
+	eventsSlice, err := s.c.ListEvents(cc.ListEventsOptions{
+		ObjectTypes: []ct.EventType{ct.EventTypeApp, ct.EventTypeAppRelease},
+		BeforeID:    &events[0].ID,
+		SinceID:     &events[eventsLen-1].ID,
+	})
+	c.Assert(err, IsNil)
+	c.Assert(len(eventsSlice), Equals, 2)
+	c.Assert(eventsSlice[0].ID, Equals, events[1].ID)
+	c.Assert(eventsSlice[1].ID, Equals, events[2].ID)
+
+	eventsSlice, err = s.c.ListEvents(cc.ListEventsOptions{
+		ObjectTypes: []ct.EventType{ct.EventTypeApp, ct.EventTypeAppRelease},
+		BeforeID:    &events[0].ID,
+		SinceID:     &events[eventsLen-1].ID,
+		Count:       1,
+	})
+	c.Assert(err, IsNil)
+	c.Assert(len(eventsSlice), Equals, 1)
+	c.Assert(eventsSlice[0].ID, Equals, events[1].ID)
 }

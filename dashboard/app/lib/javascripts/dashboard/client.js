@@ -364,6 +364,16 @@ var Client = createClass({
 		}.bind(this));
 	},
 
+	getEvents: function (params) {
+		return this.performControllerRequest('GET', {
+			url: '/events',
+			params: [ params ],
+			headers: {
+				'Accept': 'application/json'
+			}
+		});
+	},
+
 	createAppRelease: function (appId, data) {
 		return this.performControllerRequest('PUT', {
 			url: "/apps/"+ appId +"/release",
@@ -467,7 +477,9 @@ var Client = createClass({
 							app: event.appID,
 							object_type: 'app_release',
 							object_id: res.id,
-							data: res
+							data: {
+								release: res
+							}
 						});
 					});
 				}.bind(this));

@@ -24,7 +24,7 @@ type App struct {
 	Name      string            `json:"name,omitempty"`
 	Meta      map[string]string `json:"meta,omitempty"`
 	Strategy  string            `json:"strategy,omitempty"`
-	ReleaseID string            `json:"release_id,omitempty"`
+	ReleaseID string            `json:"release,omitempty"`
 	CreatedAt *time.Time        `json:"created_at,omitempty"`
 	UpdatedAt *time.Time        `json:"updated_at,omitempty"`
 }
@@ -215,6 +215,17 @@ type Event struct {
 	UniqueID   string          `json:"-"`
 	Data       json.RawMessage `json:"data,omitempty"`
 	CreatedAt  *time.Time      `json:"created_at,omitempty"`
+}
+
+type Scale struct {
+	PrevProcesses map[string]int `json:"prev_processes,omitempty"`
+	Processes     map[string]int `json:"processes"`
+	ReleaseID     string         `json:"release"`
+}
+
+type AppRelease struct {
+	PrevRelease *Release `json:"prev_release,omitempty"`
+	Release     *Release `json:"release"`
 }
 
 type AppDeletion struct {

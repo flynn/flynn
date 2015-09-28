@@ -174,7 +174,9 @@ var ScrollPagination = React.createClass({
 			var height = pages[pageId].height;
 			offset += height;
 		});
-		this.__setScrollY(this.__getScrollY() + offset);
+		if (this.props.showNewItemsTop !== true || this.__scrollY !== 0) {
+			this.__setScrollY(this.__getScrollY() + offset);
+		}
 	},
 
 	__updateDimensions: function () {
@@ -231,7 +233,7 @@ var ScrollPagination = React.createClass({
 		var viewportHeight = this.__dimentions.viewportHeight;
 		var contentHeight = this.__dimentions.contentHeight;
 		var offsetTop = this.__dimentions.offsetTop;
-		var scrollY = this.__getScrollY();
+		var scrollY = this.__scrollY = this.__getScrollY();
 
 		var remainingScrollBottom = contentHeight - scrollY - viewportHeight + offsetTop;
 		var remainingScrollTop = contentHeight - remainingScrollBottom - viewportHeight;
