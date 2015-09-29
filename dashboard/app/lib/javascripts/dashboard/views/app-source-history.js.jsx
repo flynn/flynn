@@ -10,10 +10,10 @@ import GithubPull from './github-pull';
 import GithubPulls from './github-pulls';
 
 function getRepoStoreId (props) {
-	var meta = props.app.meta;
+	var meta = props.release.meta;
 	return {
-		ownerLogin: meta.user_login,
-		name: meta.repo_name
+		ownerLogin: meta.github_user,
+		name: meta.github_repo
 	};
 }
 
@@ -148,16 +148,16 @@ var AppSourceHistory = React.createClass({
 		var getAppPath = this.props.getAppPath;
 
 		var app = this.props.app;
-		var meta = app.meta;
+		var meta = this.props.release.meta;
 		var repo = this.state.repo;
 
-		var ownerLogin = meta.user_login;
-		var repoName = meta.repo_name;
-		var selectedSha = this.props.selectedSha || meta.sha;
-		var selectedBranchName = this.props.selectedBranchName || meta.ref;
+		var ownerLogin = meta.github_user;
+		var repoName = meta.github_repo;
+		var selectedSha = this.props.selectedSha || meta.rev;
+		var selectedBranchName = this.props.selectedBranchName || meta.branch;
 
 		var deployBtnDisabled = true;
-		if (selectedSha !== meta.sha) {
+		if (selectedSha !== meta.rev) {
 			deployBtnDisabled = false;
 		}
 
@@ -191,7 +191,7 @@ var AppSourceHistory = React.createClass({
 						repoName={repoName}
 						selectedBranchName={selectedBranchName}
 						defaultBranchName={repo ? repo.defaultBranch : null}
-						deployedBranchName={meta.ref} />
+						deployedBranchName={meta.branch} />
 				) : null}
 
 				{selectedTab === "commits" ? (
@@ -202,8 +202,8 @@ var AppSourceHistory = React.createClass({
 						selectedBranchName={selectedBranchName}
 						selectableCommits={true}
 						selectedSha={selectedSha}
-						deployedSha={meta.sha}
-						deployedBranchName={meta.ref} />
+						deployedSha={meta.rev}
+						deployedBranchName={meta.branch} />
 				) : null}
 
 				{selectedTab === "commits" ? (
@@ -261,8 +261,8 @@ var AppSourceHistory = React.createClass({
 			return;
 		}
 		var app = this.props.app;
-		var meta = app.meta;
-		AppSourceHistoryActions.confirmDeployCommit(this.props.appId, meta.user_login, meta.repo_name, this.props.selectedBranchName || meta.ref, this.props.selectedSha);
+		var meta = this.props.release.meta;
+		AppSourceHistoryActions.confirmDeployCommit(this.props.appId, meta.github_user, meta.github_repo, this.props.selectedBranchName || meta.branch, this.props.selectedSha);
 	},
 
 	__handleMergeBtnClick: function (pull) {

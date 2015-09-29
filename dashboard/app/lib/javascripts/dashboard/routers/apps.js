@@ -42,41 +42,41 @@ var AppsRouter = Router.createClass({
 		// and allow them to expire when navigating away
 		var view = this.context.primaryView;
 		if (view && view.isMounted() && view.constructor.displayName === "Views.App") {
-			var app = view.state.app;
-			var appMeta = app ? app.meta : null;
-			if (app && appMeta) {
+			var release = view.state.release;
+			var meta = release ? release.meta : null;
+			if (release && meta) {
 				if (event.nextHandler.router === this) {
 					if (view.props.selectedTab !== event.nextParams[0].shtab) {
 						if (view.props.selectedTab === "pulls") {
 							GithubPullsStore.expectChangeListener({
-								ownerLogin: appMeta.user_login,
-								repoName: appMeta.repo_name
+								ownerLogin: meta.github_user,
+								repoName: meta.github_repo
 							});
 						} else if (event.nextParams[0].shtab === "pulls") {
 							GithubCommitsStore.expectChangeListener({
-								ownerLogin: appMeta.user_login,
-								repoName: appMeta.repo_name,
-								branch: view.props.selectedBranchName || appMeta.ref
+								ownerLogin: meta.github_user,
+								repoName: meta.github_repo,
+								branch: view.props.selectedBranchName || meta.branch
 							});
 							GithubBranchesStore.expectChangeListener({
-								ownerLogin: appMeta.user_login,
-								repoName: appMeta.repo_name
+								ownerLogin: meta.github_user,
+								repoName: meta.github_repo
 							});
 						}
 					}
 				} else {
 					GithubPullsStore.unexpectChangeListener({
-						ownerLogin: appMeta.user_login,
-						repoName: appMeta.repo_name
+						ownerLogin: meta.github_user,
+						repoName: meta.github_repo
 					});
 					GithubCommitsStore.unexpectChangeListener({
-						ownerLogin: appMeta.user_login,
-						repoName: appMeta.repo_name,
-						branch: view.props.selectedBranchName || appMeta.ref
+						ownerLogin: meta.github_user,
+						repoName: meta.github_repo,
+						branch: view.props.selectedBranchName || meta.branch
 					});
 					GithubBranchesStore.unexpectChangeListener({
-						ownerLogin: appMeta.user_login,
-						repoName: appMeta.repo_name
+						ownerLogin: meta.github_user,
+						repoName: meta.github_repo
 					});
 				}
 			}
@@ -351,9 +351,9 @@ var AppsRouter = Router.createClass({
 			return;
 		}
 		var storeId = event.storeId;
-		var app = appView.state ? appView.state.app : null;
-		var meta = app ? app.meta : null;
-		if (storeId && meta && view && view.isMounted() && view.constructor.displayName === "Views.Apps" && meta.user_login === storeId.ownerLogin && meta.repo_name === storeId.repoName) {
+		var release = appView.state ? appView.state.release : null;
+		var meta = release ? release.meta : null;
+		if (storeId && meta && view && view.isMounted() && view.constructor.displayName === "Views.Apps" && meta.github_user === storeId.ownerLogin && meta.github_repo === storeId.repoName) {
 			view.setProps({
 				appProps: extend({}, view.props.appProps, {
 					selectedSha: event.sha
@@ -370,9 +370,9 @@ var AppsRouter = Router.createClass({
 			return;
 		}
 		var storeId = event.storeId;
-		var app = appView.state ? appView.state.app : null;
-		var meta = app ? app.meta : null;
-		if (storeId && meta && view && view.isMounted() && view.constructor.displayName === "Views.Apps" && meta.user_login === storeId.ownerLogin && meta.repo_name === storeId.repoName) {
+		var release = appView.state ? appView.state.release : null;
+		var meta = release ? release.meta : null;
+		if (storeId && meta && view && view.isMounted() && view.constructor.displayName === "Views.Apps" && meta.github_user === storeId.ownerLogin && meta.github_repo === storeId.repoName) {
 			view.setProps({
 				appProps: extend({}, view.props.appProps, {
 					selectedBranchName: event.branchName

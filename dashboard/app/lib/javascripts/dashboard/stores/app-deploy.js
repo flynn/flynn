@@ -42,7 +42,7 @@ var AppDeploy = Store.createClass({
 	handleEvent: function (event) {
 		switch (event.name) {
 			case 'JOB':
-				if (event.taffy !== true || this.props.appID === null || (event.data.meta || {}).app !== this.props.appID || event.data.meta.sha !== this.props.sha) {
+				if (event.taffy !== true || this.props.appID === null || (event.data.meta || {}).app !== this.props.appID || event.data.meta.rev !== this.props.sha) {
 					return;
 				}
 				if (this.state.taffyJob === null || event.object_id === this.state.taffyJob.id) {

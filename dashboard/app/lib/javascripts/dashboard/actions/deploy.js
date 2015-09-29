@@ -6,12 +6,12 @@ var createTaffyJob = function (taffyReleaseId, appID, appName, meta) {
 	var client = Config.client;
 
 	var cloneURL = meta.clone_url;
-	var ref = meta.ref;
-	var sha = meta.sha;
+	var branch = meta.branch;
+	var rev = meta.rev;
 	return client.createTaffyJob({
 		release: taffyReleaseId,
 		release_env: true,
-		cmd: [appName, cloneURL, ref, sha],
+		cmd: [appName, cloneURL, branch, rev],
 		meta: extend({}, meta, {
 			app: appID,
 		})
@@ -34,7 +34,8 @@ var deployFromGithub = function (meta, appData) {
 
 	function createRelease () {
 		return client.createRelease({
-			env: extend({}, appData.env, databaseEnv)
+			env: extend({}, appData.env, databaseEnv),
+			meta: meta
 		}).then(function (args) {
 			var res = args[0];
 			return createAppRelease(res.id);
@@ -56,30 +57,19 @@ var deployFromGithub = function (meta, appData) {
 		});
 	}
 
-	function updateApp() {
-		return client.getApp(appData.id).then(function (args) {
-			var res = args[0];
-			meta = extend({}, res.meta, meta);
-			return client.updateApp(res.id, {
-				meta: meta
-			});
-		});
-	}
-
-	function updateOrCreateApp() {
+	function findOrCreateApp() {
 		if (appData.hasOwnProperty('id')) {
 			return client.getAppRelease(appData.id).then(function (args) {
 				appData.env = args[0].env;
-			}).then(updateApp);
+			});
 		} else {
 			return client.createApp({
 				name: appData.name,
-				meta: meta
 			});
 		}
 	}
 
-	return updateOrCreateApp().then(function (args) {
+	return findOrCreateApp().then(function (args) {
 		var res = args[0];
 		appId = res.id;
 		appName = res.name;
@@ -93,11 +83,11 @@ var deployFromGithub = function (meta, appData) {
 
 var deployFromGithubCommit = function (repo, branchName, sha, appData) {
 	var meta = {
-		type: 'github',
-		user_login: repo.ownerLogin,
-		repo_name: repo.name,
-		ref: branchName,
-		sha: sha,
+		github: 'true',
+		github_user: repo.ownerLogin,
+		github_repo: repo.name,
+		branch: branchName,
+		rev: sha,
 		clone_url: repo.cloneURL
 	};
 	return deployFromGithub(meta, appData);
@@ -105,18 +95,18 @@ var deployFromGithubCommit = function (repo, branchName, sha, appData) {
 
 var deployFromGithubPull = function (repo, pull, appData) {
 	var meta = {
-		type: 'github',
-		user_login: repo.ownerLogin,
-		repo_name: repo.name,
-		ref: pull.head.ref,
-		sha: pull.head.sha,
+		github: 'true',
+		github_user: repo.ownerLogin,
+		github_repo: repo.name,
+		branch: pull.head.ref,
+		rev: pull.head.sha,
 		clone_url: repo.cloneURL,
 		pull_number: String(pull.number),
-		pull_user_login: pull.user.login,
-		base_user_login: pull.base.ownerLogin,
-		base_repo_name: pull.base.name,
-		base_ref: pull.base.ref,
-		base_sha: pull.base.sha
+		pull_user: pull.user.login,
+		base_user: pull.base.ownerLogin,
+		base_repo: pull.base.name,
+		base_branch: pull.base.ref,
+		base_rev: pull.base.sha
 	};
 	return deployFromGithub(meta, appData);
 };
@@ -138,11 +128,11 @@ Dispatcher.register(function (event) {
 
 		case 'APP_DEPLOY_COMMIT':
 			deployFromGithub({
-				type: 'github',
-				user_login: event.ownerLogin,
-				repo_name: event.repoName,
-				ref: event.branchName,
-				sha: event.sha
+				github: 'true',
+				github_user: event.ownerLogin,
+				github_repo: event.repoName,
+				branch: event.branchName,
+				rev: event.sha
 			}, {
 				id: event.appID
 			});
