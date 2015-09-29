@@ -20,6 +20,9 @@
     "artifact": {
       "$ref": "/schema/controller/common#/definitions/id"
     },
+    "meta": {
+      "$ref": "/schema/controller/common#/definitions/meta"
+    },
     "env": {
       "$ref": "/schema/controller/common#/definitions/env"
     },

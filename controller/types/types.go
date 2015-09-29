@@ -38,6 +38,7 @@ type Release struct {
 	ID         string                 `json:"id,omitempty"`
 	ArtifactID string                 `json:"artifact,omitempty"`
 	Env        map[string]string      `json:"env,omitempty"`
+	Meta       map[string]string      `json:"meta,omitempty"`
 	Processes  map[string]ProcessType `json:"processes,omitempty"`
 	CreatedAt  *time.Time             `json:"created_at,omitempty"`
 }

@@ -231,10 +231,10 @@ func (r *AppRepo) SetRelease(app *ct.App, releaseID string) error {
 	var release *ct.Release
 	var prevRelease *ct.Release
 	if app.ReleaseID != "" {
-		row := tx.QueryRow("SELECT release_id, artifact_id, data, created_at FROM releases WHERE release_id = $1 AND deleted_at IS NULL", app.ReleaseID)
+		row := tx.QueryRow("SELECT release_id, artifact_id, data, meta, created_at FROM releases WHERE release_id = $1 AND deleted_at IS NULL", app.ReleaseID)
 		prevRelease, _ = scanRelease(row)
 	}
-	row := tx.QueryRow("SELECT release_id, artifact_id, data, created_at FROM releases WHERE release_id = $1 AND deleted_at IS NULL", releaseID)
+	row := tx.QueryRow("SELECT release_id, artifact_id, data, meta, created_at FROM releases WHERE release_id = $1 AND deleted_at IS NULL", releaseID)
 	if release, err = scanRelease(row); err != nil {
 		return err
 	}
@@ -258,7 +258,7 @@ func (r *AppRepo) SetRelease(app *ct.App, releaseID string) error {
 }
 
 func (r *AppRepo) GetRelease(id string) (*ct.Release, error) {
-	row := r.db.QueryRow("SELECT r.release_id, r.artifact_id, r.data, r.created_at FROM apps a JOIN releases r USING (release_id) WHERE a.app_id = $1", id)
+	row := r.db.QueryRow("SELECT r.release_id, r.artifact_id, r.data, r.meta, r.created_at FROM apps a JOIN releases r USING (release_id) WHERE a.app_id = $1", id)
 	return scanRelease(row)
 }
 

@@ -27,7 +27,8 @@ func scanRelease(s postgres.Scanner) (*ct.Release, error) {
 	var artifactID *string
 	release := &ct.Release{}
 	var data []byte
-	err := s.Scan(&release.ID, &artifactID, &data, &release.CreatedAt)
+	var meta []byte
+	err := s.Scan(&release.ID, &artifactID, &data, &meta, &release.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			err = ErrNotFound
@@ -38,6 +39,9 @@ func scanRelease(s postgres.Scanner) (*ct.Release, error) {
 		release.ArtifactID = *artifactID
 	}
 	err = json.Unmarshal(data, &release)
+	if err == nil {
+		err = json.Unmarshal(meta, &release.Meta)
+	}
 	return release, err
 }
 
@@ -48,6 +52,7 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 	releaseCopy.ID = ""
 	releaseCopy.ArtifactID = ""
 	releaseCopy.CreatedAt = nil
+	releaseCopy.Meta = nil
 
 	for typ, proc := range releaseCopy.Processes {
 		resource.SetDefaults(&proc.Resources)
@@ -61,6 +66,10 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 	if release.ID == "" {
 		release.ID = random.UUID()
 	}
+	meta, err := json.Marshal(&release.Meta)
+	if err != nil {
+		return err
+	}
 
 	var artifactID *string
 	if release.ArtifactID != "" {
@@ -72,8 +81,8 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 		return err
 	}
 
-	err = tx.QueryRow("INSERT INTO releases (release_id, artifact_id, data) VALUES ($1, $2, $3) RETURNING created_at",
-		release.ID, artifactID, data).Scan(&release.CreatedAt)
+	err = tx.QueryRow("INSERT INTO releases (release_id, artifact_id, data, meta) VALUES ($1, $2, $3, $4) RETURNING created_at",
+		release.ID, artifactID, data, meta).Scan(&release.CreatedAt)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -91,7 +100,7 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 }
 
 func (r *ReleaseRepo) Get(id string) (interface{}, error) {
-	row := r.db.QueryRow("SELECT release_id, artifact_id, data, created_at FROM releases WHERE release_id = $1 AND deleted_at IS NULL", id)
+	row := r.db.QueryRow("SELECT release_id, artifact_id, data, meta, created_at FROM releases WHERE release_id = $1 AND deleted_at IS NULL", id)
 	return scanRelease(row)
 }
 
@@ -109,7 +118,7 @@ func releaseList(rows *sql.Rows) ([]*ct.Release, error) {
 }
 
 func (r *ReleaseRepo) List() (interface{}, error) {
-	rows, err := r.db.Query("SELECT release_id, artifact_id, data, created_at FROM releases WHERE deleted_at IS NULL ORDER BY created_at DESC")
+	rows, err := r.db.Query("SELECT release_id, artifact_id, data, meta, created_at FROM releases WHERE deleted_at IS NULL ORDER BY created_at DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +126,7 @@ func (r *ReleaseRepo) List() (interface{}, error) {
 }
 
 func (r *ReleaseRepo) AppList(appID string) ([]*ct.Release, error) {
-	rows, err := r.db.Query(`SELECT DISTINCT(r.release_id), r.artifact_id, r.data, r.created_at FROM releases r JOIN formations f USING (release_id) WHERE f.app_id = $1 AND r.deleted_at IS NULL ORDER BY r.created_at DESC`, appID)
+	rows, err := r.db.Query(`SELECT DISTINCT(r.release_id), r.artifact_id, r.data, r.meta, r.created_at FROM releases r JOIN formations f USING (release_id) WHERE f.app_id = $1 AND r.deleted_at IS NULL ORDER BY r.created_at DESC`, appID)
 	if err != nil {
 		return nil, err
 	}
