@@ -849,10 +849,12 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 		}
 
 		log.Info("requesting host to stop job")
-		if err := host.StopJob(job.JobID); err != nil {
-			log.Error("error requesting host to stop job", "err", err)
-			return err
-		}
+		go func() {
+			// host.StopJob can block, so run it in a goroutine
+			if err := host.StopJob(job.JobID); err != nil {
+				log.Error("error requesting host to stop job", "err", err)
+			}
+		}()
 	}
 	return nil
 }
