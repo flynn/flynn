@@ -460,7 +460,7 @@ func (s *Scheduler) HandleFormationChange(ef *ct.ExpandedFormation) {
 		s.sendEvent(EventTypeFormationChange, err, nil)
 	}()
 
-	log := fnLogger("app.id", ef.App.ID, "release.id", ef.Release.ID)
+	log := fnLogger("app.id", ef.App.ID, "release.id", ef.Release.ID, "processes", ef.Processes)
 	log.Info("handling formation change")
 	_, err = s.changeFormation(ef)
 	if err != nil {
