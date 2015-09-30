@@ -76,7 +76,7 @@ func (s *GitreceiveSuite) TestRepoCaching(t *c.C) {
 }
 
 func (s *GitreceiveSuite) TestPrivateSSHKeyClone(t *c.C) {
-	r := s.newGitRepo(t, "empty-release")
+	r := s.newGitRepo(t, "private-clone")
 	t.Assert(r.flynn("create"), Succeeds)
 	t.Assert(r.flynn("env", "set", "BUILDPACK_URL=git@github.com:kr/heroku-buildpack-inline.git"), Succeeds)
 
