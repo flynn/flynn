@@ -6,8 +6,6 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -33,17 +31,6 @@ const (
 )
 
 var logger = log15.New("component", "scheduler")
-
-func fnLogger(ctx ...interface{}) log15.Logger {
-	pc := make([]uintptr, 10) // at least 1 entry needed
-	runtime.Callers(2, pc)
-	f := runtime.FuncForPC(pc[0])
-	name := f.Name()
-	name = name[strings.LastIndex(name, ".")+1:]
-	params := []interface{}{"fn", name}
-	params = append(params, ctx...)
-	return logger.New(params...)
-}
 
 type Scheduler struct {
 	utils.ControllerClient
@@ -101,7 +88,7 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 }
 
 func main() {
-	log := fnLogger()
+	log := logger.New("fn", "main")
 
 	log.Info("creating cluster and controller clients")
 	hc := &http.Client{Timeout: 5 * time.Second}
@@ -123,7 +110,7 @@ func main() {
 }
 
 func (s *Scheduler) streamFormationEvents() error {
-	log := fnLogger()
+	log := logger.New("fn", "streamFormationEvents")
 
 	var events chan *ct.ExpandedFormation
 	var stream stream.Stream
@@ -185,7 +172,7 @@ func (s *Scheduler) streamFormationEvents() error {
 }
 
 func (s *Scheduler) streamHostEvents() error {
-	log := fnLogger()
+	log := logger.New("fn", "streamHostEvents")
 
 	var events chan *discoverd.Event
 	var stream stream.Stream
@@ -244,7 +231,7 @@ func (s *Scheduler) streamHostEvents() error {
 }
 
 func (s *Scheduler) Run() error {
-	log := fnLogger()
+	log := logger.New("fn", "Run")
 	log.Info("starting scheduler loop")
 	defer log.Info("scheduler loop exited")
 
@@ -343,7 +330,7 @@ func (s *Scheduler) Run() error {
 func (s *Scheduler) SyncJobs() {
 	defer s.sendEvent(EventTypeClusterSync, nil, nil)
 
-	log := fnLogger()
+	log := logger.New("fn", "SyncJobs")
 	log.Info("syncing jobs")
 
 	log.Info("getting host list")
@@ -386,7 +373,7 @@ func (s *Scheduler) SyncJobs() {
 func (s *Scheduler) SyncFormations() {
 	defer s.sendEvent(EventTypeFormationSync, nil, nil)
 
-	log := fnLogger()
+	log := logger.New("fn", "SyncFormations")
 	log.Info("syncing formations")
 
 	log.Info("getting app list")
@@ -449,7 +436,7 @@ func (s *Scheduler) formationDiff(formation *Formation) Processes {
 	}
 	formation.Processes = actual
 	diff := formation.Update(expected)
-	log := fnLogger("app.id", key.AppID, "release.id", key.ReleaseID)
+	log := logger.New("fn", "formationDiff", "app.id", key.AppID, "release.id", key.ReleaseID)
 	log.Info("expected different from actual", "expected", expected, "actual", actual, "diff", diff)
 	return diff
 }
@@ -460,7 +447,7 @@ func (s *Scheduler) HandleFormationChange(ef *ct.ExpandedFormation) {
 		s.sendEvent(EventTypeFormationChange, err, nil)
 	}()
 
-	log := fnLogger("app.id", ef.App.ID, "release.id", ef.Release.ID, "processes", ef.Processes)
+	log := logger.New("fn", "HandleFormationChange", "app.id", ef.App.ID, "release.id", ef.Release.ID, "processes", ef.Processes)
 	log.Info("handling formation change")
 	_, err = s.changeFormation(ef)
 	if err != nil {
@@ -470,7 +457,7 @@ func (s *Scheduler) HandleFormationChange(ef *ct.ExpandedFormation) {
 }
 
 func (s *Scheduler) HandleJobRequest(req *JobRequest) {
-	log := fnLogger("req.id", req.JobID, "req.type", req.RequestType)
+	log := logger.New("fn", "HandleJobRequest", "req.id", req.JobID, "req.type", req.RequestType)
 
 	if !s.isLeader {
 		log.Warn("ignoring job request as not service leader")
@@ -497,7 +484,7 @@ func (s *Scheduler) HandleJobRequest(req *JobRequest) {
 }
 
 func (s *Scheduler) RunPutJobs() {
-	log := fnLogger()
+	log := logger.New("fn", "RunPutJobs")
 	log.Info("starting job persistence loop")
 	strategy := attempt.Strategy{Delay: 100 * time.Millisecond, Total: time.Minute}
 	for job := range s.putJobs {
@@ -514,7 +501,7 @@ func (s *Scheduler) RunPutJobs() {
 }
 
 func (s *Scheduler) HandleLeaderChange(isLeader bool) {
-	log := fnLogger()
+	log := logger.New("fn", "HandleLeaderChange")
 	s.isLeader = isLeader
 	if isLeader {
 		log.Info("handling leader promotion")
@@ -527,7 +514,7 @@ func (s *Scheduler) HandleLeaderChange(isLeader bool) {
 }
 
 func (s *Scheduler) handleFormationDiff(f *Formation, diff Processes) {
-	log := fnLogger("app.id", f.App.ID, "release.id", f.Release.ID)
+	log := logger.New("fn", "handleFormationDiff", "app.id", f.App.ID, "release.id", f.Release.ID)
 	log.Info("formation in incorrect state", "diff", diff)
 	for typ, n := range diff {
 		if n > 0 {
@@ -553,7 +540,7 @@ func (s *Scheduler) followHost(h utils.HostClient) {
 		return
 	}
 
-	log := fnLogger("host.id", h.ID())
+	log := logger.New("fn", "followHost", "host.id", h.ID())
 	log.Info("streaming job events")
 	events := make(chan *host.Event)
 	stream, err := h.StreamEvents("all", events)
@@ -587,7 +574,7 @@ func (s *Scheduler) followHost(h utils.HostClient) {
 }
 
 func (s *Scheduler) unfollowHost(id string) {
-	log := fnLogger("host.id", id)
+	log := logger.New("fn", "unfollowHost", "host.id", id)
 	stream, ok := s.hostStreams[id]
 	if !ok {
 		log.Warn("ignoring host unfollow due to lack of existing stream")
@@ -611,7 +598,7 @@ func (s *Scheduler) unfollowHost(id string) {
 }
 
 func (s *Scheduler) HandleHostEvent(e *discoverd.Event) {
-	log := fnLogger("event.type", e.Kind)
+	log := logger.New("fn", "HandleHostEvent", "event.type", e.Kind)
 	log.Info("handling host event")
 
 	var err error
@@ -638,7 +625,7 @@ func (s *Scheduler) HandleHostEvent(e *discoverd.Event) {
 }
 
 func (s *Scheduler) HandleJobEvent(e *host.Event) {
-	log := fnLogger("job.id", e.JobID, "event.type", e.Event)
+	log := logger.New("fn", "HandleJobEvent", "job.id", e.JobID, "event.type", e.Event)
 
 	log.Info("handling job event")
 	job, err := s.handleActiveJob(e.Job)
@@ -664,7 +651,7 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) (*Job, error) {
 	if appID == "" || releaseID == "" {
 		return nil, errors.New("ignoring job due to lack of appID or releaseID")
 	}
-	log := fnLogger("job.id", job.ID, "app.id", appID, "release.id", releaseID, "job.type", jobType)
+	log := logger.New("fn", "handleActiveJob", "job.id", job.ID, "app.id", appID, "release.id", releaseID, "job.type", jobType)
 
 	var j *Job
 	var err error
@@ -706,7 +693,7 @@ func (s *Scheduler) changeFormation(ef *ct.ExpandedFormation) (f *Formation, err
 		return nil, errors.New("formation has no release")
 	}
 
-	log := fnLogger("app.id", ef.App.ID, "release.id", ef.Release.ID)
+	log := logger.New("fn", "changeFormation", "app.id", ef.App.ID, "release.id", ef.Release.ID)
 
 	for typ, proc := range ef.Release.Processes {
 		if proc.Omni && ef.Processes != nil && ef.Processes[typ] > 0 {
@@ -748,10 +735,11 @@ func (s *Scheduler) updateFormation(f *ct.Formation) (*Formation, error) {
 }
 
 func (s *Scheduler) startJob(req *JobRequest) (err error) {
-	log := fnLogger("job.type", req.Type)
+	log := logger.New("fn", "startJob", "job.type", req.Type)
 	log.Info("starting job", "job.restarts", req.restarts, "request.attempts", req.attempts)
 	s.jobs.SetState(req.JobID, JobStateStopped)
-	// Copy on Write
+	// We'll be changing the content of the job, including the job ID,
+	// so we need to copy it to prevent it from getting stale in s.jobs
 	newReq := req.Clone()
 	newReq.HostID = ""
 	newReq.JobID = random.UUID()
@@ -803,7 +791,7 @@ func (s *Scheduler) startJob(req *JobRequest) (err error) {
 }
 
 func (s *Scheduler) stopJob(req *JobRequest) (err error) {
-	log := fnLogger("req.host.id", req.HostID, "req.job.id", req.JobID, "job.type", req.Type)
+	log := logger.New("fn", "stopJob", "req.host.id", req.HostID, "req.job.id", req.JobID, "job.type", req.Type)
 	log.Info("stopping job")
 	defer func() {
 		if err != nil {
@@ -864,7 +852,7 @@ func jobConfig(req *JobRequest, hostID string) *host.Job {
 }
 
 func (s *Scheduler) findBestHost(formation *Formation, typ string) (utils.HostClient, error) {
-	log := fnLogger("app.id", formation.App.ID, "release.id", formation.Release.ID, "job.type", typ)
+	log := logger.New("fn", "findBestHost", "app.id", formation.App.ID, "release.id", formation.Release.ID, "job.type", typ)
 	log.Info("getting host list")
 	hosts, err := s.getHosts()
 	if err != nil {
@@ -917,7 +905,7 @@ func (s *Scheduler) getHosts() ([]utils.HostClient, error) {
 		s.unfollowHost(id)
 	}
 	if len(hosts) == 0 {
-		log := fnLogger()
+		log := logger.New("fn", "getHosts")
 		e := "no hosts found"
 		log.Error(e)
 		return nil, errors.New(e)
@@ -927,7 +915,7 @@ func (s *Scheduler) getHosts() ([]utils.HostClient, error) {
 }
 
 func (s *Scheduler) Stop() error {
-	log := fnLogger()
+	log := logger.New("fn", "Stop")
 	log.Info("stopping scheduler loop")
 	s.stopOnce.Do(func() {
 		close(s.stop)
@@ -936,7 +924,7 @@ func (s *Scheduler) Stop() error {
 }
 
 func (s *Scheduler) Subscribe(events chan Event) stream.Stream {
-	log := fnLogger()
+	log := logger.New("fn", "Subscribe")
 	log.Info("adding event subscriber")
 	s.listenMtx.Lock()
 	defer s.listenMtx.Unlock()
@@ -945,7 +933,7 @@ func (s *Scheduler) Subscribe(events chan Event) stream.Stream {
 }
 
 func (s *Scheduler) Unsubscribe(events chan Event) {
-	log := fnLogger()
+	log := logger.New("fn", "Unsubscribe")
 	log.Info("removing event subscriber")
 	s.listenMtx.Lock()
 	defer s.listenMtx.Unlock()
@@ -973,7 +961,7 @@ func (s *Scheduler) SaveJob(job *Job, appName string, status host.JobStatus, met
 	}
 	if !s.jobs.IsJobInState(job.JobID, job.state) {
 		// Only save the job to the controller if its state has changed
-		log := fnLogger("job.id", job.JobID, "app.id", job.AppID, "app.name", appName, "release.id", job.ReleaseID, "job.type", job.Type, "job.status", status)
+		log := logger.New("fn", "SaveJob", "job.id", job.JobID, "app.id", job.AppID, "app.name", appName, "release.id", job.ReleaseID, "job.type", job.Type, "job.status", status)
 		log.Info("queuing job for persistence")
 		s.putJobs <- controllerJobFromSchedulerJob(job, jobState(status), metadata)
 		if job.IsSchedulable() {
@@ -985,7 +973,7 @@ func (s *Scheduler) SaveJob(job *Job, appName string, status host.JobStatus, met
 }
 
 func (s *Scheduler) Jobs() map[string]*Job {
-	jobs := make(map[string]*Job)
+	jobs := make(map[string]*Job, len(s.jobs))
 	for id, j := range s.jobs {
 		if j.IsRunning() {
 			jobs[id] = j
@@ -995,7 +983,7 @@ func (s *Scheduler) Jobs() map[string]*Job {
 }
 
 func (s *Scheduler) scheduleJobStart(job *Job) error {
-	log := fnLogger()
+	log := logger.New("fn", "scheduleJobStart")
 	if !s.isLeader {
 		return errors.New("this scheduler is not the leader")
 	}
@@ -1022,7 +1010,7 @@ func (s *Scheduler) getBackoffDuration(restarts uint) time.Duration {
 }
 
 func (s *Scheduler) handleJobEvent(job *Job, state JobState) *Job {
-	log := fnLogger("job.id", job.JobID)
+	log := logger.New("fn", "handleJobEvent", "job.id", job.JobID)
 	if !s.jobs.IsJobInState(job.JobID, state) && job.IsSchedulable() {
 		log.Info("marking job state", "state", state)
 		s.jobs.AddJob(job)
@@ -1033,7 +1021,7 @@ func (s *Scheduler) handleJobEvent(job *Job, state JobState) *Job {
 }
 
 func (s *Scheduler) handleJobCrash(job *Job) {
-	log := fnLogger("job.id", job.JobID, "job.restarts", job.restarts)
+	log := logger.New("fn", "handleJobCrash", "job.id", job.JobID, "job.restarts", job.restarts)
 	j := s.handleJobEvent(job, JobStateCrashed)
 	if j != nil {
 		log.Info("attempting to restart crashed job")
@@ -1046,7 +1034,7 @@ func (s *Scheduler) handleJobCrash(job *Job) {
 }
 
 func (s *Scheduler) startHTTPServer(port string) {
-	log := fnLogger()
+	log := logger.New("fn", "startHTTPServer")
 	status.AddHandler(status.HealthyHandler)
 	addr := ":" + port
 	log.Info("serving HTTP requests", "addr", addr)
