@@ -8,10 +8,7 @@ import (
 type Formations map[utils.FormationKey]*Formation
 
 func (fs Formations) Get(appID, releaseID string) *Formation {
-	if form, ok := fs[utils.FormationKey{AppID: appID, ReleaseID: releaseID}]; ok {
-		return form
-	}
-	return nil
+	return fs[utils.FormationKey{AppID: appID, ReleaseID: releaseID}]
 }
 
 func (fs Formations) Add(f *Formation) *Formation {
