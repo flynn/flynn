@@ -3,7 +3,9 @@ package bootstrap
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
+	"strings"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
@@ -109,6 +111,18 @@ func (a *RunAppAction) Run(s *State) error {
 		for i := 0; i < count; i++ {
 			host := hosts[i%len(hosts)]
 			config := utils.JobConfig(a.ExpandedFormation, typ, host.ID())
+
+			if a.App.Name == "discoverd" && typ == "app" {
+				config.Config.Ports[0].Port = 1110
+				ips := s.SortedHostIPs()
+				peers := make([]string, len(ips))
+				for i, ip := range ips {
+					peers[i] = net.JoinHostPort(ip, "1110")
+				}
+				config.Config.Env["DISCOVERD"] = "none"
+				config.Config.Env["DISCOVERD_PEERS"] = strings.Join(peers, ",")
+			}
+
 			hostresource.SetDefaults(&config.Resources)
 			if a.ExpandedFormation.Release.Processes[typ].Data {
 				if err := utils.ProvisionVolume(host, config); err != nil {

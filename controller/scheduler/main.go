@@ -344,10 +344,11 @@ func (c *context) watchHosts() {
 		// receive a down event
 		stopChs := make(map[string]chan struct{})
 
+		var once sync.Once
 		for e := range ch {
 			switch e.Kind {
 			case discoverd.EventKindCurrent:
-				close(ready)
+				once.Do(func() { close(ready) })
 				continue
 			case discoverd.EventKindUp:
 				hostID := e.Instance.Meta["id"]

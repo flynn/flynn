@@ -5,6 +5,32 @@
     "vars": ["CLUSTER_DOMAIN"]
   },
   {
+    "id": "discoverd",
+    "app": {
+      "name": "discoverd"
+    },
+    "action": "run-app",
+    "release": {
+      "processes": {
+        "app": {
+          "ports": [{"proto": "tcp"}, {"port": 1111, "proto": "tcp"}, {"port": 53, "proto": "tcp"}],
+          "data": true,
+          "resurrect": true,
+          "host_network": true,
+          "omni": true,
+          "service": "discoverd"
+        }
+      }
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "$image_repository?name=flynn/discoverd&id=$image_id[discoverd]"
+    },
+    "processes": {
+      "app": 1
+    }
+  },
+  {
     "id": "flannel",
     "app": {
       "name": "flannel"
@@ -27,35 +53,6 @@
     "artifact": {
       "type": "docker",
       "uri": "$image_repository?name=flynn/flannel&id=$image_id[flannel]"
-    },
-    "processes": {
-      "app": 1
-    }
-  },
-  {
-    "id": "discoverd",
-    "app": {
-      "name": "discoverd"
-    },
-    "action": "run-app",
-    "release": {
-      "env": {
-        "DISCOVERD_PEERS": "{{ range $ip := .SortedHostIPs }}{{ $ip }}:1110,{{ end }}",
-        "DISCOVERD": "none"
-      },
-      "processes": {
-        "app": {
-          "ports": [{"port": 1110, "proto": "tcp"}, {"port": 1111, "proto": "tcp"}, {"port": 53, "proto": "tcp"}],
-          "data": true,
-          "resurrect": true,
-          "host_network": true,
-          "omni": true
-        }
-      }
-    },
-    "artifact": {
-      "type": "docker",
-      "uri": "$image_repository?name=flynn/discoverd&id=$image_id[discoverd]"
     },
     "processes": {
       "app": 1
@@ -225,7 +222,7 @@
     "app": {
       "name": "discoverd",
       "meta": {"flynn-system-app": "true"},
-      "strategy": "one-by-one"
+      "strategy": "all-at-once"
     }
   },
   {
@@ -288,6 +285,7 @@
       },
       "processes": {
         "app": {
+          "ports": [{"port": 4000, "proto": "tcp"}],
           "host_network": true,
           "cmd": ["-http-port", "80", "-https-port", "443", "-tcp-range-start", "3000", "-tcp-range-end", "3500"],
           "omni": true

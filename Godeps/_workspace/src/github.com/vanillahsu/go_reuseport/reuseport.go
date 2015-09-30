@@ -16,8 +16,6 @@ import (
 )
 
 const (
-	tcp4                  = 52 // "4"
-	tcp6                  = 54 // "6"
 	unsupportedProtoError = "Only tcp4 and tcp6 are supported"
 	filePrefix            = "port."
 )
@@ -27,27 +25,53 @@ func getSockaddr(proto, addr string) (sa syscall.Sockaddr, soType int, err error
 	var (
 		addr4 [4]byte
 		addr6 [16]byte
-		ip    *net.TCPAddr
+		tip   *net.TCPAddr
+		uip   *net.UDPAddr
 	)
 
-	ip, err = net.ResolveTCPAddr(proto, addr)
-	if err != nil {
-		return nil, -1, err
-	}
-
-	switch proto[len(proto)-1] {
+	switch proto {
 	default:
 		return nil, -1, errors.New(unsupportedProtoError)
-	case tcp4:
-		if ip.IP != nil {
-			copy(addr4[:], ip.IP[12:16]) // copy last 4 bytes of slice to array
+	case "tcp4":
+		tip, err = net.ResolveTCPAddr(proto, addr)
+		if err != nil {
+			return nil, -1, err
 		}
-		return &syscall.SockaddrInet4{Port: ip.Port, Addr: addr4}, syscall.AF_INET, nil
-	case tcp6:
-		if ip.IP != nil {
-			copy(addr6[:], ip.IP) // copy all bytes of slice to array
+
+		if tip.IP != nil {
+			copy(addr4[:], tip.IP[12:16]) // copy last 4 bytes of slice to array
 		}
-		return &syscall.SockaddrInet6{Port: ip.Port, Addr: addr6}, syscall.AF_INET6, nil
+		return &syscall.SockaddrInet4{Port: tip.Port, Addr: addr4}, syscall.AF_INET, nil
+	case "tcp6":
+		tip, err = net.ResolveTCPAddr(proto, addr)
+		if err != nil {
+			return nil, -1, err
+		}
+
+		if tip.IP != nil {
+			copy(addr6[:], tip.IP) // copy last 4 bytes of slice to array
+		}
+		return &syscall.SockaddrInet6{Port: tip.Port, Addr: addr6}, syscall.AF_INET6, nil
+	case "udp4":
+		uip, err = net.ResolveUDPAddr(proto, addr)
+		if err != nil {
+			return nil, -1, err
+		}
+
+		if uip.IP != nil {
+			copy(addr4[:], uip.IP[12:16]) // copy last 4 bytes of slice to array
+		}
+		return &syscall.SockaddrInet4{Port: uip.Port, Addr: addr4}, syscall.AF_INET, nil
+	case "udp6":
+		uip, err = net.ResolveUDPAddr(proto, addr)
+		if err != nil {
+			return nil, -1, err
+		}
+
+		if uip.IP != nil {
+			copy(addr6[:], uip.IP) // copy all bytes of slice to array
+		}
+		return &syscall.SockaddrInet6{Port: uip.Port, Addr: addr6}, syscall.AF_INET6, nil
 	}
 }
 
@@ -83,6 +107,43 @@ func NewReusablePortListener(proto, addr string) (l net.Listener, err error) {
 	// File Name get be nil
 	file = os.NewFile(uintptr(fd), filePrefix+strconv.Itoa(os.Getpid()))
 	if l, err = net.FileListener(file); err != nil {
+		return nil, err
+	}
+
+	if err = file.Close(); err != nil {
+		return nil, err
+	}
+
+	return l, err
+}
+
+// NewReusablePortPacketConn returns net.FileListener that created from a file discriptor for a socket with SO_REUSEPORT option.
+func NewReusablePortPacketConn(proto, addr string) (l net.PacketConn, err error) {
+	var (
+		soType, fd int
+		file       *os.File
+		sockaddr   syscall.Sockaddr
+	)
+
+	if sockaddr, soType, err = getSockaddr(proto, addr); err != nil {
+		return nil, err
+	}
+
+	if fd, err = syscall.Socket(soType, syscall.SOCK_DGRAM, syscall.IPPROTO_UDP); err != nil {
+		return nil, err
+	}
+
+	if err = syscall.SetsockoptInt(fd, syscall.SOL_SOCKET, reusePort, 1); err != nil {
+		return nil, err
+	}
+
+	if err = syscall.Bind(fd, sockaddr); err != nil {
+		return nil, err
+	}
+
+	// File Name get be nil
+	file = os.NewFile(uintptr(fd), filePrefix+strconv.Itoa(os.Getpid()))
+	if l, err = net.FilePacketConn(file); err != nil {
 		return nil, err
 	}
 

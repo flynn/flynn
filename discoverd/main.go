@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/vanillahsu/go_reuseport"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/server"
 	"github.com/flynn/flynn/host/types"
@@ -78,18 +79,67 @@ func (m *Main) Run(args ...string) error {
 
 	// Set up advertised address and default peer set.
 	advertiseAddr := MergeHostPort(opt.Host, opt.RaftAddr)
+	m.logger.Printf("discoverd using advertise address %s", advertiseAddr)
+	if len(opt.Peers) == 0 {
+		opt.Peers, err = m.discoverPeers()
+		if err != nil {
+			return err
+		}
+	}
 	if len(opt.Peers) == 0 {
 		opt.Peers = []string{advertiseAddr}
 	}
 
 	// Open store if we are not proxying.
-	if err := m.openStore(opt.DataDir, opt.RaftAddr, advertiseAddr, opt.Peers); err != nil {
+	m.logger.Printf("discoverd opening store with peers %s", opt.Peers)
+	if err := m.openStore(opt.DataDir, opt.RaftAddr, opt.Host, advertiseAddr, opt.Peers); err != nil {
 		return fmt.Errorf("Failed to open store: %s", err)
 	}
 
 	// Notify user that we're proxying if the store wasn't initialized.
+	var raftHB discoverd.Heartbeater
+	removed := make(chan struct{})
 	if m.store == nil {
-		fmt.Fprintln(m.Stderr, "advertised address not in peer set, joining as proxy")
+		m.logger.Print("advertised host not in peer set, joining as proxy")
+	} else {
+		ready := make(chan struct{})
+		var once sync.Once
+		if url := os.Getenv("DISCOVERD"); url != "" && url != "none" {
+			client := discoverd.NewClientWithURL(url)
+			raftHB, err = client.AddServiceAndRegister("discoverd-raft", advertiseAddr)
+			if err != nil {
+				return err
+			}
+		} else {
+			once.Do(func() { close(ready) })
+		}
+		go func() {
+			events := make(chan *discoverd.Event, 1000)
+			go m.store.Subscribe("discoverd-raft", true, discoverd.EventKindAll, events)
+			for event := range events {
+				switch event.Kind {
+				case discoverd.EventKindUp:
+					addr := event.Instance.Addr
+					m.logger.Printf("discoverd adding peer %s", addr)
+					m.store.AddPeer(addr)
+					if addr == advertiseAddr {
+						once.Do(func() { close(ready) })
+					}
+				case discoverd.EventKindDown:
+					addr := event.Instance.Addr
+					m.logger.Printf("discoverd removing peer %s", addr)
+					m.store.RemovePeer(addr)
+					if addr == advertiseAddr {
+						close(removed)
+					}
+				}
+			}
+		}()
+		select {
+		case <-ready:
+		case <-time.After(time.Minute):
+			return errors.New("timed out waiting to join cluster")
+		}
 	}
 
 	// Create a slice of peers with their HTTP address set instead.
@@ -125,7 +175,7 @@ func (m *Main) Run(args ...string) error {
 			if err := m.openDNSServer(addr, status.Network.Resolvers, httpPeers); err != nil {
 				log.Fatalf("Failed to start DNS server: %s", err)
 			}
-			m.logger.Printf("discoverd listening for DNS on %s", opt.DNSAddr)
+			m.logger.Printf("discoverd listening for DNS on %s", addr)
 
 			// Notify webhook.
 			if opt.Notify != "" {
@@ -141,8 +191,6 @@ func (m *Main) Run(args ...string) error {
 	// Notify user that the servers are listening.
 	m.logger.Printf("discoverd listening for HTTP on %s", opt.HTTPAddr)
 
-	// FIXME(benbjohnson): Join to cluster.
-
 	// Wait for leadership.
 	if err := m.waitForLeader(LeaderTimeout); err != nil {
 		return err
@@ -155,7 +203,28 @@ func (m *Main) Run(args ...string) error {
 		httpAddr = net.JoinHostPort(os.Getenv("EXTERNAL_IP"), port)
 	}
 	m.Notify(opt.Notify, "http://"+httpAddr, opt.DNSAddr)
-	go discoverd.NewClientWithURL("http://"+httpAddr).AddServiceAndRegister("discoverd", httpAddr)
+
+	// Register services
+	client := discoverd.NewClientWithURL("http://" + httpAddr)
+	if raftHB == nil {
+		raftHB, err = client.AddServiceAndRegister("discoverd-raft", advertiseAddr)
+		if err != nil {
+			return fmt.Errorf("error registering service %q: %s", "discoverd-raft", err)
+		}
+	} else {
+		raftHB.SetClient(client)
+	}
+	shutdown.BeforeExit(func() {
+		raftHB.Close()
+		<-removed
+		m.store.Close()
+	})
+
+	hb, err := client.AddServiceAndRegister("discoverd", httpAddr)
+	if err != nil {
+		return fmt.Errorf("error registering service %q: %s", "discoverd", err)
+	}
+	shutdown.BeforeExit(func() { hb.Close() })
 
 	return nil
 }
@@ -177,12 +246,30 @@ func (m *Main) Close() error {
 	return nil
 }
 
+func (m *Main) discoverPeers() ([]string, error) {
+	url := os.Getenv("DISCOVERD")
+	if url == "" || url == "none" {
+		return nil, nil
+	}
+	client := discoverd.NewClientWithURL(url)
+	instances, err := client.Instances("discoverd-raft", 10*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	peers := make([]string, len(instances))
+	for i, inst := range instances {
+		peers[i] = inst.Addr
+	}
+	return peers, nil
+}
+
 // openStore initializes and opens the store.
-func (m *Main) openStore(path, bindAddress, advertise string, peers []string) error {
-	// If the advertised address is not in the peer list then we should proxy.
+func (m *Main) openStore(path, bindAddress, host, advertise string, peers []string) error {
+	// If the host is not the same as any of the peers then we should proxy.
 	proxying := true
+
 	for _, addr := range peers {
-		if addr == advertise {
+		if h, _, _ := net.SplitHostPort(addr); h == host {
 			proxying = false
 		}
 	}
@@ -247,7 +334,7 @@ func (m *Main) openDNSServer(addr string, recursors, peers []string) error {
 // The store must already be open.
 func (m *Main) openHTTPServer(addr string, peers []string) error {
 	// Open HTTP API.
-	ln, err := net.Listen("tcp4", addr)
+	ln, err := reuseport.NewReusablePortListener("tcp4", addr)
 	if err != nil {
 		return err
 	}
