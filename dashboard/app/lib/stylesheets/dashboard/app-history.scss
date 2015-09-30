@@ -51,3 +51,32 @@
     border-bottom: 0;
   }
 }
+
+.app-history-event > .pretty-radio {
+  display: -webkit-flex;
+  display: flex;
+  flex-flow: row;
+  -webkit-flex-flow: row;
+
+  padding-left: 42px;
+
+  > .dot, > input {
+    top: calc(50% - 11px) !important;
+    left: 11px !important;
+    right: auto;
+  }
+
+  > .body {
+    display: -webkit-flex;
+    display: flex;
+    flex-flow: column;
+    -webkit-flex-flow: column;
+  }
+}
+
+.app-history > section > div > ul > li {
+  border-left: 6px solid transparent;
+  &.deployed {
+    border-left: 6px solid $greenColor;
+  }
+}

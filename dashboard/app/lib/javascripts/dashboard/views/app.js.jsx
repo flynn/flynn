@@ -14,6 +14,7 @@ var App = React.createClass({
 	render: function () {
 		var app = this.state.app;
 		var release = this.state.release;
+		var formation = this.state.formation;
 
 		if ( !app && this.state.serviceUnavailable ) {
 			return (
@@ -46,7 +47,7 @@ var App = React.createClass({
 								headerComponent={this.props.appControlsHeaderComponent}
 								appId={this.props.appId}
 								app={app}
-								formation={this.state.formation}
+								formation={formation}
 								getAppPath={this.props.getAppPath} />
 						</section>
 					) : null}
@@ -55,7 +56,9 @@ var App = React.createClass({
 						<section>
 							<AppHistory
 								key={this.props.appId}
-								appID={this.props.appId} />
+								appID={this.props.appId}
+								release={release}
+								formation={formation} />
 						</section>
 
 						{release && release.meta && release.meta.github === "true" && Config.githubClient ? (

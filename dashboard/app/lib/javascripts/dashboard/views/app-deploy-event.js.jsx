@@ -24,7 +24,6 @@ var appStoreID = function (props) {
 var AppDeployEvent = React.createClass({
 	render: function () {
 		var state = this.state;
-		var event = state.event;
 		var isRelease = state.isRelease;
 		var isScale = state.isScale;
 		var commit = state.commit;
@@ -182,6 +181,7 @@ var AppDeployEvent = React.createClass({
 	},
 
 	__handleDeployBtnClick: function (e) {
+		e.preventDefault();
 		var event = this.state.event;
 		if (event.object_type === 'app_release') {
 			Dispatcher.dispatch({

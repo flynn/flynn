@@ -260,7 +260,6 @@ var AppSourceHistory = React.createClass({
 		if ( !this.props.selectedSha ) {
 			return;
 		}
-		var app = this.props.app;
 		var meta = this.props.release.meta;
 		AppSourceHistoryActions.confirmDeployCommit(this.props.appId, meta.github_user, meta.github_repo, this.props.selectedBranchName || meta.branch, this.props.selectedSha);
 	},

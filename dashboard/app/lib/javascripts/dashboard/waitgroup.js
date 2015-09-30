@@ -1,13 +1,13 @@
 var WaitGroup = function () {
 	this.n = 0;
 	this.promise = Promise.resolve();
-	this.resolve = function(){};
+	this.__resolve = function(){};
 	this.resolved = true;
 };
 
 WaitGroup.prototype.start = function () {
 	this.promise = new Promise(function (rs) {
-		this.resolve = rs;
+		this.__resolve = rs;
 	}.bind(this));
 	this.resolved = false;
 };
@@ -34,7 +34,9 @@ WaitGroup.prototype.then = function (fn) {
 };
 
 WaitGroup.prototype.resolve = function () {
-	this.resolve();
+	this.n = 0;
+	this.resolved = true;
+	this.__resolve();
 };
 
 export default WaitGroup;
