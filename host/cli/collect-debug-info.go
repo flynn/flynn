@@ -77,7 +77,7 @@ func runCollectDebugInfo(args *docopt.Args) error {
 	log.Info("getting job logs")
 	if err := captureJobs(gist, args.Bool["--include-env"], lines); err != nil {
 		log.Error("error getting job logs, falling back to on-disk logs", "err", err)
-		debugCmds = append(debugCmds, []string{"bash", "-c", fmt.Sprintf("tail -n %s /var/log/flynn/**/*.log", lines)})
+		debugCmds = append(debugCmds, []string{"bash", "-c", fmt.Sprintf("tail -n %d /var/log/flynn/**/*.log", lines)})
 	}
 
 	log.Info("getting system information")
