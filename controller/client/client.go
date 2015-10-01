@@ -606,6 +606,11 @@ func (c *Client) ListEvents(opts ListEventsOptions) ([]*ct.Event, error) {
 	return events, nil
 }
 
+func (c *Client) GetEvent(id int64) (*ct.Event, error) {
+	var event *ct.Event
+	return event, c.Get(fmt.Sprintf("/events/%d", id), &event)
+}
+
 func (c *Client) ExpectedScalingEvents(actual, expected map[string]int, releaseProcesses map[string]ct.ProcessType, clusterSize int) ct.JobEvents {
 	events := make(ct.JobEvents, len(expected))
 	for typ, count := range expected {

@@ -124,6 +124,21 @@ func (c *controllerAPI) maybeStartEventListener() error {
 	return c.eventListener.Listen()
 }
 
+func (c *controllerAPI) GetEvent(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+	id, err := strconv.ParseInt(params.ByName("id"), 10, 64)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	event, err := c.eventRepo.GetEvent(id)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, event)
+}
+
 func (c *controllerAPI) Events(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	var app *ct.App
 	if appID := req.FormValue("app_id"); appID != "" {
