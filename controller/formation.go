@@ -259,19 +259,20 @@ func (r *FormationRepo) unsubscribeAll() {
 }
 
 func (r *FormationRepo) Subscribe(ch chan *ct.ExpandedFormation, stopCh <-chan struct{}, since time.Time) error {
-	var startListener bool
+	// we need to keep the mutex locked whilst calling startListener
+	// to avoid a race where multiple subscribers can get added to
+	// r.subscriptions before a potentially failed listener start,
+	// meaning subsequent subscribers wont try to start the listener.
 	r.subMtx.Lock()
+	defer r.subMtx.Unlock()
+
 	if len(r.subscriptions) == 0 {
-		startListener = true
-	}
-	r.subscriptions[ch] = struct{}{}
-	r.subMtx.Unlock()
-	if startListener {
 		if err := r.startListener(); err != nil {
-			r.Unsubscribe(ch)
 			return err
 		}
 	}
+	r.subscriptions[ch] = struct{}{}
+
 	go r.sendUpdatedSince(ch, stopCh, since)
 	return nil
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"net"
+	"os"
 	"strings"
 	"time"
 
@@ -262,10 +263,17 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 }
 
 func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
+	// To run this test on local, set BACKOFF_PERIOD on the flynn host machine
+	var backoffPeriod time.Duration
+	var err error
 	if testCluster == nil {
-		t.Skip("cannot determine scheduler backoff period")
+		backoffPeriod, err = time.ParseDuration(os.Getenv("BACKOFF_PERIOD"))
+		if err != nil {
+			t.Skip("cannot determine backoff period")
+		}
+	} else {
+		backoffPeriod = testCluster.BackoffPeriod()
 	}
-	backoffPeriod := testCluster.BackoffPeriod()
 	startTimeout := 20 * time.Second
 	debugf(t, "job restart backoff period: %s", backoffPeriod)
 
@@ -281,36 +289,32 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 		Processes: map[string]int{"printer": 1},
 	}), c.IsNil)
 	var id string
-	var assignId = func(e *ct.Job) error {
-		id = e.ID
+	var assignId = func(j *ct.Job) error {
+		debugf(t, "got job event: %s %s", j.ID, j.State)
+		id = j.ID
 		return nil
 	}
 	err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, scaleTimeout, assignId)
-
-	// First restart: scheduled immediately
-	s.stopJob(t, id)
-	err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, startTimeout, assignId)
 	t.Assert(err, c.IsNil)
 
-	// Second restart after 1 * backoffPeriod
-	start := time.Now()
-	s.stopJob(t, id)
-	err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, backoffPeriod+startTimeout, assignId)
-	t.Assert(err, c.IsNil)
-	t.Assert(time.Now().Sub(start) > backoffPeriod, c.Equals, true)
+	waitForRestart := func(duration time.Duration) {
+		start := time.Now()
+		s.stopJob(t, id)
+		debugf(t, "expecting new job to start in %s", duration)
+		err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, duration+startTimeout, assignId)
+		t.Assert(err, c.IsNil)
+		actual := time.Now().Sub(start)
+		if actual < duration {
+			t.Fatalf("expected new job to start after %s but started after %s", duration, actual)
+		}
+	}
 
-	// Third restart after 2 * backoffPeriod
-	start = time.Now()
-	s.stopJob(t, id)
-	err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, 2*backoffPeriod+startTimeout, assignId)
-	t.Assert(err, c.IsNil)
-	t.Assert(time.Now().Sub(start) > 2*backoffPeriod, c.Equals, true)
-
-	// After backoffPeriod has elapsed: scheduled immediately
+	waitForRestart(0)
+	waitForRestart(backoffPeriod)
+	waitForRestart(2 * backoffPeriod)
+	debug(t, "waiting for backoff period to expire")
 	time.Sleep(backoffPeriod)
-	s.stopJob(t, id)
-	err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, startTimeout, assignId)
-	t.Assert(err, c.IsNil)
+	waitForRestart(0)
 }
 
 func (s *SchedulerSuite) TestTCPApp(t *c.C) {

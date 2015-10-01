@@ -121,31 +121,6 @@ func (r *JobRepo) List(appID string) ([]*ct.Job, error) {
 	return jobs, nil
 }
 
-type clusterClientWrapper struct {
-	*cluster.Client
-}
-
-func (c clusterClientWrapper) Host(id string) (utils.HostClient, error) {
-	return c.Client.Host(id)
-}
-
-func (c clusterClientWrapper) Hosts() ([]utils.HostClient, error) {
-	hosts, err := c.Client.Hosts()
-	if err != nil {
-		return nil, err
-	}
-	res := make([]utils.HostClient, len(hosts))
-	for i, h := range hosts {
-		res[i] = h
-	}
-	return res, nil
-}
-
-type clusterClient interface {
-	Host(string) (utils.HostClient, error)
-	Hosts() ([]utils.HostClient, error)
-}
-
 func (c *controllerAPI) connectHost(ctx context.Context) (utils.HostClient, string, error) {
 	params, _ := ctxhelper.ParamsFromContext(ctx)
 	jobID := params.ByName("jobs_id")
@@ -210,6 +185,9 @@ func (c *controllerAPI) KillJob(ctx context.Context, w http.ResponseWriter, req 
 	}
 
 	if err = client.StopJob(jobID); err != nil {
+		if _, ok := err.(ct.NotFoundError); ok {
+			err = ErrNotFound
+		}
 		respondWithError(w, err)
 		return
 	}
