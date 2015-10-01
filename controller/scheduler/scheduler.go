@@ -508,7 +508,6 @@ func (s *Scheduler) HandleLeaderChange(isLeader bool) {
 		s.rectifyAll()
 	} else {
 		log.Info("handling leader demotion")
-		// TODO: stop job restart timers
 	}
 	s.sendEvent(EventTypeLeaderChange, nil, isLeader)
 }
@@ -568,7 +567,7 @@ func (s *Scheduler) followHost(h utils.HostClient) {
 		for e := range events {
 			s.jobEvents <- e
 		}
-		// TODO: reconnect this stream unless unfollowHost was called
+		// TODO: reconnect this stream unless unfollowHost was called gh#1921
 		log.Error("job event stream closed unexpectedly")
 	}()
 }
@@ -798,6 +797,7 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 			log.Error("error stopping job", "err", err)
 		}
 	}()
+	// TODO: stop job restart timers before attempting to stop a running job gh#1922
 
 	var job *Job
 	if req.JobID == "" {
@@ -831,7 +831,7 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 		host, err := s.Host(job.HostID)
 		if err != nil {
 			log.Error("error getting host client", "err", err)
-			// TODO stop unfollowing hosts here once host syncing is built
+			// TODO stop unfollowing hosts here once host syncing is built gh#1920
 			s.unfollowHost(job.HostID)
 			return err
 		}
@@ -889,7 +889,7 @@ func (s *Scheduler) getHosts() ([]utils.HostClient, error) {
 		if hostStream.Err() == nil {
 			knownHosts[id] = struct{}{}
 		} else {
-			// TODO stop unfollowing hosts here once host syncing is built
+			// TODO stop unfollowing hosts here once host syncing is built gh#1920
 			s.unfollowHost(id)
 		}
 	}
@@ -901,7 +901,7 @@ func (s *Scheduler) getHosts() ([]utils.HostClient, error) {
 		}
 	}
 	for id := range knownHosts {
-		// TODO stop unfollowing hosts here once host syncing is built
+		// TODO stop unfollowing hosts here once host syncing is built gh#1920
 		s.unfollowHost(id)
 	}
 	if len(hosts) == 0 {
