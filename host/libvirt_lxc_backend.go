@@ -784,6 +784,7 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 			c.l.state.WaitAttach(c.job.ID)
 			g.Log(grohl.Data{"at": "resume"})
 			c.Client.Resume()
+			g.Log(grohl.Data{"at": "resumed"})
 		case containerinit.StateRunning:
 			g.Log(grohl.Data{"at": "running"})
 			c.l.state.SetStatusRunning(c.job.ID)

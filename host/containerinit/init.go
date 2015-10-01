@@ -284,9 +284,9 @@ func (c *ContainerInit) StreamState(arg struct{}, stream rpcplus.Stream) error {
 	for {
 		select {
 		case change := <-ch:
-			log.Info("sending state change", "state", change.State, "err", change.Error, "exitStatus", change.ExitStatus)
 			select {
 			case stream.Send <- change:
+				log.Info("sent state change", "state", change.State, "err", change.Error, "exitStatus", change.ExitStatus)
 			case <-stream.Error:
 				return nil
 			}
