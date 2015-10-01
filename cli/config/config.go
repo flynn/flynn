@@ -94,9 +94,9 @@ func (c *Config) Marshal() []byte {
 }
 
 func (c *Config) Add(s *Cluster, force bool) error {
+	var msg string
+	conflictIdx := -1
 	for i, existing := range c.Clusters {
-		msg := ""
-
 		switch {
 		case existing.Name == s.Name:
 			msg = fmt.Sprintf("Cluster %q already exists in ~/.flynnrc", s.Name)
@@ -107,19 +107,24 @@ func (c *Config) Add(s *Cluster, force bool) error {
 		case existing.GitHost != "" && existing.GitHost == s.GitHost:
 			msg = fmt.Sprintf("A cluster with the git host %q already exists in ~/.flynnrc", s.GitHost)
 		}
-
-		// The new cluster config match with existing one
 		if msg != "" {
-			if !force {
-				return fmt.Errorf(msg)
+			if conflictIdx != -1 && conflictIdx != i {
+				return fmt.Errorf("The cluster name and/or URLs conflict with multiple existing clusters.")
 			}
-
-			// Remove existing match
-			c.Clusters = append(c.Clusters[:i], c.Clusters[i+1:]...)
+			conflictIdx = i
 		}
 	}
 
-	// Did not match
+	// The new cluster config conflicts with an existing one
+	if msg != "" {
+		if !force {
+			return fmt.Errorf(msg)
+		}
+
+		// Remove conflicting cluster
+		c.Clusters = append(c.Clusters[:conflictIdx], c.Clusters[conflictIdx+1:]...)
+	}
+
 	c.Clusters = append(c.Clusters, s)
 
 	return nil
