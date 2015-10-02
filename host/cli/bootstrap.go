@@ -19,7 +19,7 @@ func init() {
 usage: flynn-host bootstrap [options] [<manifest>]
 
 Options:
-  -n, --min-hosts=MIN  minimum number of hosts required to be online [default: 1]
+  -n, --min-hosts=MIN  minimum number of hosts required to be online
   --json               format log output as json
   --discovery=TOKEN    use discovery token to connect to cluster
   --peer-ips=IPLIST    use IP address list to connect to cluster
@@ -54,9 +54,23 @@ func runBootstrap(args *docopt.Args) {
 		log.Fatalln("Error reading manifest:", err)
 	}
 
+	var minHosts int
+	if n := args.String["--min-hosts"]; n != "" {
+		if minHosts, err = strconv.Atoi(n); err != nil || minHosts < 1 {
+			log.Fatalln("invalid --min-hosts value")
+		}
+	}
+
 	var ips []string
 	if ipList := args.String["--peer-ips"]; ipList != "" {
 		ips = strings.Split(ipList, ",")
+		if minHosts == 0 {
+			minHosts = len(ips)
+		}
+	}
+
+	if minHosts == 0 {
+		minHosts = 1
 	}
 
 	ch := make(chan *bootstrap.StepInfo)
@@ -68,7 +82,6 @@ func runBootstrap(args *docopt.Args) {
 		close(done)
 	}()
 
-	minHosts, _ := strconv.Atoi(args.String["--min-hosts"])
 	err = bootstrap.Run(manifest, ch, args.String["--discovery"], ips, minHosts)
 	<-done
 	if err != nil {
