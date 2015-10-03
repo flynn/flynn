@@ -12,12 +12,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/version"
 )
 
 var clusterc = cluster.NewClient()
@@ -31,13 +33,43 @@ var typesPattern = regexp.MustCompile("types.* -> (.+)\n")
 const blobstoreURL = "http://blobstore.discoverd"
 const scaleTimeout = 20 * time.Second
 
+func parsePairs(args *docopt.Args, str string) (map[string]string, error) {
+	pairs := args.All[str].([]string)
+	item := make(map[string]string, len(pairs))
+	for _, s := range pairs {
+		v := strings.SplitN(s, "=", 2)
+		if len(v) != 2 {
+			return nil, fmt.Errorf("invalid var format: %q", s)
+		}
+		item[v[0]] = v[1]
+	}
+	return item, nil
+}
+
 func main() {
 	client, err := controller.NewClient("", os.Getenv("CONTROLLER_KEY"))
 	if err != nil {
 		log.Fatalln("Unable to connect to controller:", err)
 	}
 
-	appName := os.Args[1]
+	usage := `
+Usage: flynn-receiver <app> <rev> [-e <var>=<val>]... [-m <key>=<val>]...
+
+Options:
+	-e,--env <var>=<val>
+	-m,--meta <key>=<val>
+`[1:]
+	args, _ := docopt.Parse(usage, nil, true, version.String(), false)
+
+	appName := args.String["<app>"]
+	env, err := parsePairs(args, "--env")
+	if err != nil {
+		log.Fatal(err)
+	}
+	meta, err := parsePairs(args, "--meta")
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	app, err := client.GetApp(appName)
 	if err == controller.ErrNotFound {
@@ -104,6 +136,16 @@ func main() {
 	release := &ct.Release{
 		ArtifactID: artifact.ID,
 		Env:        prevRelease.Env,
+		Meta:       prevRelease.Meta,
+	}
+	if release.Meta == nil {
+		release.Meta = make(map[string]string, len(meta))
+	}
+	for k, v := range env {
+		release.Env[k] = v
+	}
+	for k, v := range meta {
+		release.Meta[k] = v
 	}
 	procs := make(map[string]ct.ProcessType)
 	for _, t := range types {

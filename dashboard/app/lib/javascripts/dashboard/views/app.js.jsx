@@ -13,6 +13,8 @@ var App = React.createClass({
 
 	render: function () {
 		var app = this.state.app;
+		var release = this.state.release;
+		var formation = this.state.formation;
 
 		if ( !app && this.state.serviceUnavailable ) {
 			return (
@@ -45,7 +47,7 @@ var App = React.createClass({
 								headerComponent={this.props.appControlsHeaderComponent}
 								appId={this.props.appId}
 								app={app}
-								formation={this.state.formation}
+								formation={formation}
 								getAppPath={this.props.getAppPath} />
 						</section>
 					) : null}
@@ -54,14 +56,17 @@ var App = React.createClass({
 						<section>
 							<AppHistory
 								key={this.props.appId}
-								appID={this.props.appId} />
+								appID={this.props.appId}
+								release={release}
+								formation={formation} />
 						</section>
 
-						{app && app.meta && app.meta.type === "github" && Config.githubClient ? (
+						{release && release.meta && release.meta.github === "true" && Config.githubClient ? (
 							<section>
 								<AppSourceHistory
 									appId={this.props.appId}
 									app={app}
+									release={release}
 									selectedBranchName={this.props.selectedBranchName}
 									selectedSha={this.props.selectedSha}
 									selectedTab={this.props.selectedTab}
@@ -117,6 +122,7 @@ var App = React.createClass({
 		state.notFound = appState.notFound;
 		state.app = appState.app;
 		state.formation = appState.formation;
+		state.release = appState.release;
 
 		return state;
 	},

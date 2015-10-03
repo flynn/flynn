@@ -14,7 +14,9 @@ import AppDeleteComponent from '../views/app-delete';
 import NewAppRouteComponent from '../views/app-route-new';
 import AppRouteDeleteComponent from '../views/app-route-delete';
 import AppDeployCommitComponent from '../views/app-deploy-commit';
+import AppDeployEventComponent from '../views/app-deploy-event';
 import AppLogsComponent from '../views/app-logs';
+import DeployAppEventStore from '../stores/deploy-app-event';
 
 var AppsRouter = Router.createClass({
 	routes: [
@@ -25,7 +27,8 @@ var AppsRouter = Router.createClass({
 		{ path: "apps/:id/delete", handler: "appDelete", secondary: true, app: true },
 		{ path: "apps/:id/routes/new", handler: "newAppRoute", secondary: true, app: true },
 		{ path: "apps/:id/routes/:type/:route/delete", handler: "appRouteDelete", secondary: true, app: true },
-		{ path: "apps/:id/deploy/:owner/:repo/:branch/:sha", handler: "appDeployCommit", secondary: true, app: true }
+		{ path: "apps/:id/deploy/:owner/:repo/:branch/:sha", handler: "appDeployCommit", secondary: true, app: true },
+		{ path: "apps/:id/deploy/:event", handler: "appDeployEvent", secondary: true, app: true }
 	],
 
 	mixins: [State],
@@ -42,41 +45,41 @@ var AppsRouter = Router.createClass({
 		// and allow them to expire when navigating away
 		var view = this.context.primaryView;
 		if (view && view.isMounted() && view.constructor.displayName === "Views.App") {
-			var app = view.state.app;
-			var appMeta = app ? app.meta : null;
-			if (app && appMeta) {
+			var release = view.state.release;
+			var meta = release ? release.meta : null;
+			if (release && meta) {
 				if (event.nextHandler.router === this) {
 					if (view.props.selectedTab !== event.nextParams[0].shtab) {
 						if (view.props.selectedTab === "pulls") {
 							GithubPullsStore.expectChangeListener({
-								ownerLogin: appMeta.user_login,
-								repoName: appMeta.repo_name
+								ownerLogin: meta.github_user,
+								repoName: meta.github_repo
 							});
 						} else if (event.nextParams[0].shtab === "pulls") {
 							GithubCommitsStore.expectChangeListener({
-								ownerLogin: appMeta.user_login,
-								repoName: appMeta.repo_name,
-								branch: view.props.selectedBranchName || appMeta.ref
+								ownerLogin: meta.github_user,
+								repoName: meta.github_repo,
+								branch: view.props.selectedBranchName || meta.branch
 							});
 							GithubBranchesStore.expectChangeListener({
-								ownerLogin: appMeta.user_login,
-								repoName: appMeta.repo_name
+								ownerLogin: meta.github_user,
+								repoName: meta.github_repo
 							});
 						}
 					}
 				} else {
 					GithubPullsStore.unexpectChangeListener({
-						ownerLogin: appMeta.user_login,
-						repoName: appMeta.repo_name
+						ownerLogin: meta.github_user,
+						repoName: meta.github_repo
 					});
 					GithubCommitsStore.unexpectChangeListener({
-						ownerLogin: appMeta.user_login,
-						repoName: appMeta.repo_name,
-						branch: view.props.selectedBranchName || appMeta.ref
+						ownerLogin: meta.github_user,
+						repoName: meta.github_repo,
+						branch: view.props.selectedBranchName || meta.branch
 					});
 					GithubBranchesStore.unexpectChangeListener({
-						ownerLogin: appMeta.user_login,
-						repoName: appMeta.repo_name
+						ownerLogin: meta.github_user,
+						repoName: meta.github_repo
 					});
 				}
 			}
@@ -245,10 +248,6 @@ var AppsRouter = Router.createClass({
 	},
 
 	appDeployCommit: function (params) {
-		this.setState({
-			deployCommitView: true
-		});
-
 		params = params[0];
 
 		this.context.secondaryView = React.render(React.createElement(
@@ -261,6 +260,34 @@ var AppsRouter = Router.createClass({
 				sha: params.sha,
 				onHide: function () {
 					var path = this.__getAppPath(params.id, QueryParams.replaceParams([extend({}, params)], {owner: null, repo: null, branch: null, sha: null})[0]);
+					this.history.navigate(path);
+				}.bind(this)
+			}),
+			this.context.secondaryEl
+		);
+
+		// render app view in background
+		this.app.apply(this, arguments);
+	},
+
+	appDeployEvent: function (params) {
+		params = params[0];
+
+		var eventID = parseInt(params.event, 10);
+
+		this.setState({
+			deployingEvent: true,
+			eventID: eventID
+		});
+
+		this.context.secondaryView = React.render(React.createElement(
+			AppDeployEventComponent,
+			{
+				key: params.id + params.event,
+				appID: params.id,
+				eventID: eventID,
+				onHide: function () {
+					var path = this.__getAppPath(params.id, QueryParams.replaceParams([extend({}, params)], {event: null})[0]);
 					this.history.navigate(path);
 				}.bind(this)
 			}),
@@ -321,6 +348,21 @@ var AppsRouter = Router.createClass({
 				}
 			break;
 
+			case 'CONFIRM_DEPLOY_APP_EVENT':
+				if (this.state.appID === event.appID) {
+					this.history.navigate(this.__getAppPath(event.appID, {event: event.eventID}, '/deploy/:event'));
+				}
+			break;
+
+			case 'SCALE':
+				this.__handleScaleEvent(event);
+			break;
+
+			case 'DEPLOYMENT':
+				if (this.state.deployingEvent === true && event.app === this.state.appID) {
+				}
+			break;
+
 			case "GITHUB_BRANCH_SELECTOR:BRANCH_SELECTED":
 				this.__handleBranchSelected(event);
 			break;
@@ -343,6 +385,26 @@ var AppsRouter = Router.createClass({
 		}
 	},
 
+	__handleScaleEvent: function (event) {
+		if (this.state.deployingEvent !== true || event.app !== this.state.appID) {
+			return;
+		}
+		var processes = DeployAppEventStore.getState({eventID: this.state.eventID}).processes;
+		if (assertEqual(processes, event.data.processes)) {
+			this.history.navigate(this.__getAppPath(this.state.appID));
+		}
+	},
+
+	__handleDeploymentEvent: function (event) {
+		var deployState = DeployAppEventStore.getState({eventID: this.state.eventID});
+		if (this.state.deployingEvent !== true || event.app !== this.state.appID) {
+			return;
+		}
+		if (deployState.event && deployState.event.app === event.app && deployState.event.object_id === event.object_id && event.status !== 'failed') {
+			this.history.navigate(this.__getAppPath(this.state.appID));
+		}
+	},
+
 	__handleCommitSelected: function (event) {
 		var view = this.context.primaryView, appView;
 		if (view.refs && view.refs.appComponent) {
@@ -351,9 +413,9 @@ var AppsRouter = Router.createClass({
 			return;
 		}
 		var storeId = event.storeId;
-		var app = appView.state ? appView.state.app : null;
-		var meta = app ? app.meta : null;
-		if (storeId && meta && view && view.isMounted() && view.constructor.displayName === "Views.Apps" && meta.user_login === storeId.ownerLogin && meta.repo_name === storeId.repoName) {
+		var release = appView.state ? appView.state.release : null;
+		var meta = release ? release.meta : null;
+		if (storeId && meta && view && view.isMounted() && view.constructor.displayName === "Views.Apps" && meta.github_user === storeId.ownerLogin && meta.github_repo === storeId.repoName) {
 			view.setProps({
 				appProps: extend({}, view.props.appProps, {
 					selectedSha: event.sha
@@ -370,9 +432,9 @@ var AppsRouter = Router.createClass({
 			return;
 		}
 		var storeId = event.storeId;
-		var app = appView.state ? appView.state.app : null;
-		var meta = app ? app.meta : null;
-		if (storeId && meta && view && view.isMounted() && view.constructor.displayName === "Views.Apps" && meta.user_login === storeId.ownerLogin && meta.repo_name === storeId.repoName) {
+		var release = appView.state ? appView.state.release : null;
+		var meta = release ? release.meta : null;
+		if (storeId && meta && view && view.isMounted() && view.constructor.displayName === "Views.Apps" && meta.github_user === storeId.ownerLogin && meta.github_repo === storeId.repoName) {
 			view.setProps({
 				appProps: extend({}, view.props.appProps, {
 					selectedBranchName: event.branchName

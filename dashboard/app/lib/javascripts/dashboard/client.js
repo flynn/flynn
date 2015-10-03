@@ -244,10 +244,10 @@ var Client = createClass({
 		});
 	},
 
-	deployAppRelease: function (appId, releaseId) {
+	deployAppRelease: function (appID, releaseID) {
 		return this.performControllerRequest('POST', {
-			url: "/apps/"+ appId +"/deploy",
-			body: {id: releaseId},
+			url: "/apps/"+ appID +"/deploy",
+			body: {id: releaseID},
 			headers: {
 				'Content-Type': 'application/json'
 			}
@@ -256,15 +256,13 @@ var Client = createClass({
 			if (res.finished_at) {
 				return args;
 			}
-			return this.waitForDeployment(appId, res.id).then(function () {
+			return this.waitForDeployment(appID, res.id).then(function () {
 				return args;
-			}, function (err) {
-				return Promise.reject([err]);
 			});
 		}.bind(this));
 	},
 
-	waitForDeployment: function (appId, deploymentId) {
+	waitForDeployment: function (appID, deploymentID) {
 		if ( !window.hasOwnProperty('EventSource') ) {
 			return Promise.reject('window.EventSource not defined');
 		}
@@ -273,9 +271,9 @@ var Client = createClass({
 		var url = this.endpoints.cluster_controller +'/events';
 		url = url + QueryParams.serializeParams([{
 			key: controllerKey,
-			app_id: appId,
+			app_id: appID,
 			object_types: 'deployment',
-			object_id: deploymentId,
+			object_id: deploymentID,
 			past: 'true'
 		}]);
 		return new Promise(function (resolve, reject) {
@@ -371,6 +369,12 @@ var Client = createClass({
 			headers: {
 				'Accept': 'application/json'
 			}
+		});
+	},
+
+	getEvent: function (eventID) {
+		return this.performControllerRequest('GET', {
+			url: '/events/'+ encodeURIComponent(eventID)
 		});
 	},
 

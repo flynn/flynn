@@ -159,12 +159,12 @@ var AppLogs = React.createClass({
 
 	__deployProcessNameComponent: function (process) {
 		var meta = process.meta;
-		if (meta.type !== "github") {
+		if (meta.github !== "true") {
 			return null;
 		}
 		return (
-			<ExternalLink href={"https://github.com/"+ encodeURIComponent(meta.user_login) +"/"+ encodeURIComponent(meta.repo_name) +"/tree/"+ meta.sha}>
-				{meta.sha.slice(0, 7)}
+			<ExternalLink href={"https://github.com/"+ encodeURIComponent(meta.github_user) +"/"+ encodeURIComponent(meta.github_repo) +"/tree/"+ meta.rev}>
+				{meta.rev.slice(0, 7)}
 			</ExternalLink>
 		);
 	}

@@ -296,6 +296,7 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.POST("/apps/:apps_id/meta", httphelper.WrapHandler(api.appLookup(api.UpdateAppMeta)))
 
 	httpRouter.GET("/events", httphelper.WrapHandler(api.Events))
+	httpRouter.GET("/events/:id", httphelper.WrapHandler(api.GetEvent))
 
 	return httphelper.ContextInjector("controller",
 		httphelper.NewRequestLogger(muxHandler(httpRouter, c.keys)))

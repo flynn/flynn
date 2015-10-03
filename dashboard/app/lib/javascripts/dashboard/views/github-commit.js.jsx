@@ -2,6 +2,7 @@ import QueryParams from 'marbles/query_params';
 import Timestamp from './timestamp';
 import ExternalLink from './external-link';
 import findScrollParent from './helpers/findScrollParent';
+import PrettyRadio from './pretty-radio';
 
 var GithubCommit = React.createClass({
 	displayName: "Views.GithubCommit",
@@ -35,34 +36,36 @@ var GithubCommit = React.createClass({
 			authorAvatarURL = authorAvatarURLParts[0] + QueryParams.serializeParams(authorAvatarURLParams);
 		}
 
+		var children = [
+			<img key="img" className="avatar" src={authorAvatarURL} />,
+			<div key="div" className="body">
+				<div className="message">
+					{commit.message.split("\n")[0]}
+				</div>
+				<div>
+					<span className="name">
+						{commit.author.name}
+					</span>
+					<span className="timestamp">
+						<ExternalLink href={commit.githubURL}>
+							<Timestamp timestamp={commit.createdAt} />
+						</ExternalLink>
+					</span>
+				</div>
+			</div>
+		].concat(this.props.children);
+
 		return (
 			<article className="github-commit">
-				<label className={selectable ? "pretty-radio" : "inner"}>
-					{selectable ? (
-						<input type="radio" name="selected-sha" checked={selected} onChange={this.__handleChange} />
-					) : null}
-					{selectable ? (
-						<div className={"dot"} />
-					) : null}
-
-					<img className="avatar" src={authorAvatarURL} />
-					<div className="body">
-						<div className="message">
-							{commit.message.split("\n")[0]}
-						</div>
-						<div>
-							<span className="name">
-								{commit.author.name}
-							</span>
-							<span className="timestamp">
-								<ExternalLink href={commit.githubURL}>
-									<Timestamp timestamp={commit.createdAt} />
-								</ExternalLink>
-							</span>
-						</div>
-					</div>
-					{this.props.children}
-				</label>
+				{selectable ? (
+					<PrettyRadio className={selectable ? null : "inner"} checked={selected} onChange={this.__handleChange}>
+						{children}
+					</PrettyRadio>
+				) : (
+					<label className="inner">
+						{children}
+					</label>
+				)}
 			</article>
 		);
 	},

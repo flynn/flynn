@@ -23,6 +23,7 @@ func migrateDB(db *sql.DB) error {
     release_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     artifact_id uuid REFERENCES artifacts (artifact_id),
     data jsonb NOT NULL,
+    meta jsonb,
     created_at timestamptz NOT NULL DEFAULT now(),
     deleted_at timestamptz
 )`,

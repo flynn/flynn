@@ -14,4 +14,9 @@ REV="$4"
 DEST=/tmp/app
 git clone --depth=50 --branch="${BRANCH}" "${REPO}" ${DEST}
 cd ${DEST}
-git archive ${REV} | /bin/flynn-receiver "${APP}" "${REV}"
+git archive ${REV} | /bin/flynn-receiver "${APP}" "${REV}" \
+  --meta git="true" \
+  --meta clone_url="${REPO}" \
+  --meta branch="${BRANCH}" \
+  --meta rev="${REV}" \
+  --meta taffy_job="${FLYNN_JOB_ID}"

@@ -1,6 +1,7 @@
 import { assertEqual, extend } from 'marbles/utils';
 import Modal from 'Modal';
 import GithubCommitStore from '../stores/github-commit';
+import GithubRepoStore from '../stores/github-repo';
 import JobOutputStore from '../stores/job-output';
 import AppDeployStore from 'dashboard/stores/app-deploy';
 import GithubCommit from './github-commit';
@@ -22,6 +23,13 @@ function getCommitStoreId (props) {
 	};
 }
 
+function getRepoStoreId (props) {
+	return {
+		ownerLogin: props.ownerLogin,
+		name: props.repoName
+	};
+}
+
 function getState (props, prevState) {
 	prevState = prevState || {};
 	var state = {
@@ -30,13 +38,16 @@ function getState (props, prevState) {
 
 	state.deployStoreId = getDeployStoreId(props);
 	var deployState = AppDeployStore.getState(state.deployStoreId);
-	state.launching = deployState.launching === false ? false : prevState.launching
+	state.launching = deployState.launching === false ? false : prevState.launching;
 	state.launchSuccess = deployState.launchSuccess;
 	state.launchFailed = deployState.launchFailed;
 	state.launchErrorMsg = deployState.launchErrorMsg;
 
 	state.commitStoreId = getCommitStoreId(props);
 	state.commit = GithubCommitStore.getState(state.commitStoreId).commit;
+
+	state.repoStoreId = getRepoStoreId(props);
+	state.repo = GithubRepoStore.getState(state.repoStoreId).repo;
 
 	state.jobOutputStoreId = null;
 	if (deployState.taffyJob !== null) {
@@ -63,7 +74,7 @@ function getState (props, prevState) {
 		state.jobError = jobOutputState.streamError;
 	}
 
-	state.launchDisabled = !state.commit || state.launching;
+	state.launchDisabled = !state.commit || !state.repo || state.launching;
 
 	return state;
 }
@@ -126,6 +137,15 @@ var AppDeployCommit = React.createClass({
 			GithubCommitStore.addChangeListener(nextCommitStoreId, this.__handleStoreChange);
 			didChange = true;
 		}
+
+		var prevRepoStoreId = this.state.commitStoreId;
+		var nextRepoStoreId = getRepoStoreId(props);
+		if ( !assertEqual(prevRepoStoreId, nextRepoStoreId) ) {
+			GithubRepoStore.removeChangeListener(prevRepoStoreId, this.__handleStoreChange);
+			GithubRepoStore.addChangeListener(nextRepoStoreId, this.__handleStoreChange);
+			didChange = true;
+		}
+
 		if (didChange) {
 			this.__handleStoreChange(props);
 		}
@@ -134,6 +154,7 @@ var AppDeployCommit = React.createClass({
 	componentWillUnmount: function () {
 		AppDeployStore.removeChangeListener(this.state.deployStoreId, this.__handleStoreChange);
 		GithubCommitStore.removeChangeListener(this.state.commitStoreId, this.__handleStoreChange);
+		GithubRepoStore.removeChangeListener(this.state.repoStoreId, this.__handleStoreChange);
 		if (this.state.jobOutputStoreId !== null) {
 			JobOutputStore.removeChangeListener(this.state.jobOutputStoreId, this.__handleStoreChange);
 		}
@@ -157,6 +178,7 @@ var AppDeployCommit = React.createClass({
 			ownerLogin: this.props.ownerLogin,
 			repoName: this.props.repoName,
 			branchName: this.props.branchName,
+			repo: this.state.repo,
 			sha: this.props.sha
 		});
 	},

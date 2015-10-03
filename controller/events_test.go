@@ -453,3 +453,16 @@ func (s *S) TestListEvents(c *C) {
 	c.Assert(len(eventsSlice), Equals, 1)
 	c.Assert(eventsSlice[0].ID, Equals, events[1].ID)
 }
+
+func (s *S) TestGetEvent(c *C) {
+	// ensure there's at least one event
+	_ = s.createTestRelease(c, &ct.Release{})
+
+	events, err := s.c.ListEvents(cc.ListEventsOptions{})
+	c.Assert(err, IsNil)
+	c.Assert(len(events), Not(Equals), 0)
+
+	event, err := s.c.GetEvent(events[0].ID)
+	c.Assert(err, IsNil)
+	c.Assert(event, DeepEquals, events[0])
+}
