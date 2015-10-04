@@ -416,9 +416,8 @@ func (s *Scheduler) SyncFormations() {
 		appLog.Debug(fmt.Sprintf("got %d formation(s) for %s app", len(fs), app.Name))
 
 		for _, f := range fs {
-			_, err := s.updateFormation(f)
-			if err != nil {
-				appLog.Error("error updating formation", "release.id", f.ReleaseID, "err", err)
+			if _, err := s.handleControllerFormation(f); err != nil {
+				appLog.Error("error handling controller formation", "release.id", f.ReleaseID, "err", err)
 			}
 		}
 	}
@@ -521,7 +520,7 @@ func (s *Scheduler) HandleFormationChange(ef *ct.ExpandedFormation) {
 
 	log := logger.New("fn", "HandleFormationChange", "app.id", ef.App.ID, "release.id", ef.Release.ID, "processes", ef.Processes)
 	log.Info("handling formation change")
-	_, err = s.changeFormation(ef)
+	_, err = s.handleFormation(ef)
 	if err != nil {
 		log.Error("error handling formation change", "err", err)
 		return
@@ -765,7 +764,7 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) (*Job, error) {
 			if err != nil {
 				log.Error("error getting formation", "err", err)
 			} else {
-				f, err = s.updateFormation(cf)
+				f, err = s.handleControllerFormation(cf)
 				if err != nil {
 					log.Error("error updating formation", "err", err)
 				}
@@ -781,14 +780,14 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) (*Job, error) {
 	return j, err
 }
 
-func (s *Scheduler) changeFormation(ef *ct.ExpandedFormation) (f *Formation, err error) {
+func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) (f *Formation, err error) {
 	if ef.App == nil {
 		return nil, errors.New("formation has no app")
 	} else if ef.Release == nil {
 		return nil, errors.New("formation has no release")
 	}
 
-	log := logger.New("fn", "changeFormation", "app.id", ef.App.ID, "release.id", ef.Release.ID)
+	log := logger.New("fn", "handleFormation", "app.id", ef.App.ID, "release.id", ef.Release.ID)
 
 	for typ, proc := range ef.Release.Processes {
 		if proc.Omni && ef.Processes != nil && ef.Processes[typ] > 0 {
@@ -821,12 +820,12 @@ func (s *Scheduler) triggerRectify(key utils.FormationKey) {
 	}
 }
 
-func (s *Scheduler) updateFormation(f *ct.Formation) (*Formation, error) {
+func (s *Scheduler) handleControllerFormation(f *ct.Formation) (*Formation, error) {
 	ef, err := utils.ExpandFormation(s, f)
 	if err != nil {
 		return nil, err
 	}
-	return s.changeFormation(ef)
+	return s.handleFormation(ef)
 }
 
 func (s *Scheduler) startJob(req *JobRequest) (err error) {
