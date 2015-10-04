@@ -520,11 +520,7 @@ func (s *Scheduler) HandleFormationChange(ef *ct.ExpandedFormation) {
 
 	log := logger.New("fn", "HandleFormationChange", "app.id", ef.App.ID, "release.id", ef.Release.ID, "processes", ef.Processes)
 	log.Info("handling formation change")
-	_, err = s.handleFormation(ef)
-	if err != nil {
-		log.Error("error handling formation change", "err", err)
-		return
-	}
+	s.handleFormation(ef)
 }
 
 func (s *Scheduler) HandleJobRequest(req *JobRequest) {
@@ -780,13 +776,7 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) (*Job, error) {
 	return j, err
 }
 
-func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) (f *Formation, err error) {
-	if ef.App == nil {
-		return nil, errors.New("formation has no app")
-	} else if ef.Release == nil {
-		return nil, errors.New("formation has no release")
-	}
-
+func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) *Formation {
 	log := logger.New("fn", "handleFormation", "app.id", ef.App.ID, "release.id", ef.Release.ID)
 
 	for typ, proc := range ef.Release.Processes {
@@ -795,20 +785,20 @@ func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) (f *Formation, err
 		}
 	}
 
-	f = s.formations.Get(ef.App.ID, ef.Release.ID)
+	f := s.formations.Get(ef.App.ID, ef.Release.ID)
 	if f == nil {
 		log.Info("adding new formation", "processes", ef.Processes)
 		f = s.formations.Add(NewFormation(ef))
 	} else {
 		if f.GetProcesses().Equals(ef.Processes) {
-			return f, nil
+			return f
 		} else {
 			log.Info("updating processes of existing formation", "processes", ef.Processes)
 			f.Processes = ef.Processes
 		}
 	}
 	s.triggerRectify(f.key())
-	return f, nil
+	return f
 }
 
 func (s *Scheduler) triggerRectify(key utils.FormationKey) {
@@ -825,7 +815,7 @@ func (s *Scheduler) handleControllerFormation(f *ct.Formation) (*Formation, erro
 	if err != nil {
 		return nil, err
 	}
-	return s.handleFormation(ef)
+	return s.handleFormation(ef), nil
 }
 
 func (s *Scheduler) startJob(req *JobRequest) (err error) {
