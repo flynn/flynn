@@ -524,30 +524,19 @@ func (s *Scheduler) HandleFormationChange(ef *ct.ExpandedFormation) {
 }
 
 func (s *Scheduler) HandleJobRequest(req *JobRequest) {
-	log := logger.New("fn", "HandleJobRequest", "req.id", req.JobID, "req.type", req.RequestType)
+	log := logger.New("fn", "HandleJobRequest", "req.id", req.JobID)
 
 	if !s.isLeader {
 		log.Warn("ignoring job request as not service leader")
 		return
 	}
 
-	var err error
-	defer func() {
-		if err != nil {
-			log.Error("error handling job request", "err", err)
-		}
-		s.sendEvent(EventTypeJobRequest, err, req)
-	}()
-
 	log.Info("handling job request")
-	switch req.RequestType {
-	case JobRequestTypeUp:
-		err = s.startJob(req)
-	case JobRequestTypeDown:
-		err = s.stopJob(req)
-	default:
-		err = fmt.Errorf("unknown job request type: %s", req.RequestType)
+	err := s.startJob(req)
+	if err != nil {
+		log.Error("error handling job request", "err", err)
 	}
+	s.sendEvent(EventTypeJobRequest, err, req)
 }
 
 func (s *Scheduler) RunPutJobs() {
@@ -586,7 +575,7 @@ func (s *Scheduler) handleFormationDiff(f *Formation, diff Processes) {
 		if n > 0 {
 			log.Info(fmt.Sprintf("requesting %d new job(s) of type %s", n, typ))
 			for i := 0; i < n; i++ {
-				req := NewJobRequest(f, JobRequestTypeUp, typ, "", random.UUID())
+				req := NewJobRequest(f, typ, "", random.UUID())
 				req.state = JobStateRequesting
 				s.jobs.AddJob(req.Job)
 				s.HandleJobRequest(req)
@@ -594,8 +583,7 @@ func (s *Scheduler) handleFormationDiff(f *Formation, diff Processes) {
 		} else if n < 0 {
 			log.Info(fmt.Sprintf("requesting removal of %d job(s) of type %s", -n, typ))
 			for i := 0; i < -n; i++ {
-				req := NewJobRequest(f, JobRequestTypeDown, typ, "", "")
-				s.HandleJobRequest(req)
+				s.stopJob(f, typ)
 			}
 		}
 	}
@@ -873,8 +861,8 @@ func (s *Scheduler) startJob(req *JobRequest) (err error) {
 	return nil
 }
 
-func (s *Scheduler) stopJob(req *JobRequest) (err error) {
-	log := logger.New("fn", "stopJob", "req.host.id", req.HostID, "req.job.id", req.JobID, "job.type", req.Type)
+func (s *Scheduler) stopJob(f *Formation, typ string) (err error) {
+	log := logger.New("fn", "stopJob", "job.type", typ)
 	log.Info("stopping job")
 	defer func() {
 		if err != nil {
@@ -883,31 +871,21 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 	}()
 	// TODO: stop job restart timers before attempting to stop a running job gh#1922
 
-	var job *Job
-	if req.JobID == "" {
-		formationKey := utils.FormationKey{AppID: req.AppID, ReleaseID: req.ReleaseID}
-		typJobs := s.jobs.GetStoppableJobs(formationKey, req.Type)
-		if len(typJobs) == 0 {
-			e := fmt.Sprintf("no %s jobs running", req.Type)
-			log.Error(e)
-			return errors.New(e)
-		}
-		job = typJobs[0]
-		for _, j := range typJobs {
-			if j.startedAt.After(job.startedAt) {
-				job = j
-			}
-		}
-		log.Info("selected job for termination", "job.id", job.JobID, "job.host.id", job.HostID)
-	} else {
-		var ok bool
-		job, ok = s.jobs[req.JobID]
-		if !ok {
-			e := "unknown job"
-			log.Error(e)
-			return errors.New(e)
+	typJobs := s.jobs.GetStoppableJobs(f.key(), typ)
+	if len(typJobs) == 0 {
+		e := fmt.Sprintf("no %s jobs running", typ)
+		log.Error(e)
+		return errors.New(e)
+	}
+	job := typJobs[0]
+	for _, j := range typJobs {
+		if j.startedAt.After(job.startedAt) {
+			job = j
 		}
 	}
+
+	log = log.New("job.id", job.JobID, "host.id", job.HostID)
+	log.Info("selected job for termination")
 	s.jobs.SetState(job.JobID, JobStateStopping)
 	if job.HostID != "" {
 		log = log.New("job.id", job.JobID, "host.id", job.HostID)
@@ -1040,7 +1018,7 @@ func (s *Scheduler) scheduleJobStart(job *Job) error {
 	job.restarts += 1
 	log.Info("scheduling job request", "attempts", job.restarts, "delay", backoff)
 	time.AfterFunc(backoff, func() {
-		s.jobRequests <- &JobRequest{Job: job, RequestType: JobRequestTypeUp}
+		s.jobRequests <- &JobRequest{Job: job}
 	})
 	return nil
 }

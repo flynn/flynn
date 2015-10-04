@@ -9,32 +9,25 @@ import (
 	"github.com/flynn/flynn/host/types"
 )
 
-type JobRequestType string
 type JobState string
 
 const (
-	JobRequestTypeUp   JobRequestType = "up"
-	JobRequestTypeDown JobRequestType = "down"
-	JobStateStarting   JobState       = "starting"
-	JobStateRunning    JobState       = "running"
-	JobStateStopping   JobState       = "stopping"
-	JobStateStopped    JobState       = "stopped"
-	JobStateCrashed    JobState       = "crashed"
-	JobStateRequesting JobState       = "requesting"
-	JobStateNew        JobState       = "new"
+	JobStateStarting   JobState = "starting"
+	JobStateRunning    JobState = "running"
+	JobStateStopping   JobState = "stopping"
+	JobStateStopped    JobState = "stopped"
+	JobStateCrashed    JobState = "crashed"
+	JobStateRequesting JobState = "requesting"
+	JobStateNew        JobState = "new"
 )
 
 type JobRequest struct {
 	*Job
-	RequestType JobRequestType
-	attempts    uint
+	attempts uint
 }
 
-func NewJobRequest(f *Formation, requestType JobRequestType, typ, hostID, jobID string) *JobRequest {
-	return &JobRequest{
-		Job:         NewJob(f, f.App.ID, f.Release.ID, typ, hostID, jobID),
-		RequestType: requestType,
-	}
+func NewJobRequest(f *Formation, typ, hostID, jobID string) *JobRequest {
+	return &JobRequest{Job: NewJob(f, f.App.ID, f.Release.ID, typ, hostID, jobID)}
 }
 
 func (r *JobRequest) needsVolume() bool {
@@ -43,9 +36,8 @@ func (r *JobRequest) needsVolume() bool {
 
 func (r *JobRequest) Clone() *JobRequest {
 	return &JobRequest{
-		Job:         r.Job.Clone(),
-		RequestType: r.RequestType,
-		attempts:    r.attempts,
+		Job:      r.Job.Clone(),
+		attempts: r.attempts,
 	}
 }
 
