@@ -1032,7 +1032,7 @@ func (s *Scheduler) getBackoffDuration(restarts uint) time.Duration {
 	return s.backoffPeriod * time.Duration(multiplier)
 }
 
-func (s *Scheduler) handleJobEvent(job *Job, state JobState) *Job {
+func (s *Scheduler) handleJobEvent(job *Job, state JobState) bool {
 	log := logger.New("fn", "handleJobEvent", "job.id", job.JobID)
 	if !job.HasState(state) {
 		log.Info("marking job state", "state", state)
@@ -1040,18 +1040,16 @@ func (s *Scheduler) handleJobEvent(job *Job, state JobState) *Job {
 			s.jobs.AddJob(job)
 		}
 		job.SetState(state)
-		return s.jobs[job.InternalID]
+		return true
 	}
-	return nil
+	return false
 }
 
 func (s *Scheduler) handleJobCrash(job *Job) {
 	log := logger.New("fn", "handleJobCrash", "job.id", job.JobID, "job.restarts", job.restarts)
-	j := s.handleJobEvent(job, JobStateCrashed)
-	if j != nil {
+	if stateChanged := s.handleJobEvent(job, JobStateCrashed); stateChanged {
 		log.Info("attempting to restart crashed job")
-		err := s.scheduleJobStart(j)
-		if err != nil {
+		if err := s.scheduleJobStart(job); err != nil {
 			log.Warn("failed to schedule job request, marking job as stopped")
 			job.SetState(JobStateStopped)
 		}
