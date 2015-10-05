@@ -381,7 +381,7 @@ func (s *Scheduler) SyncJobs() (err error) {
 
 	for id, j := range s.jobs {
 		if _, ok := knownJobs[id]; !ok && j.IsRunning() {
-			s.jobs.SetState(j.InternalID, JobStateStopped)
+			j.SetState(JobStateStopped)
 			if j.IsSchedulable() {
 				s.triggerRectify(j.Formation.key())
 			}
@@ -611,10 +611,10 @@ func (s *Scheduler) followHost(h utils.HostClient) error {
 func (s *Scheduler) unfollowHost(host *Host) {
 	log := logger.New("fn", "unfollowHost", "host.id", host.ID)
 	log.Info("unfollowing host")
-	for id, job := range s.jobs {
+	for _, job := range s.jobs {
 		if job.HostID == host.ID {
 			log.Info("removing job", "job.id", job.JobID)
-			s.jobs.SetState(id, JobStateStopped)
+			job.SetState(JobStateStopped)
 			s.triggerRectify(job.Formation.key())
 		}
 	}
@@ -818,7 +818,7 @@ func (s *Scheduler) startJob(req *JobRequest) (err error) {
 		if err != nil {
 			if req.attempts >= maxJobAttempts {
 				log.Error("error starting job, max job attempts reached", "err", err)
-				s.jobs.SetState(job.InternalID, JobStateStopped)
+				job.SetState(JobStateStopped)
 				return
 			}
 			log.Error("error starting job, trying again", "err", err)
@@ -882,7 +882,7 @@ func (s *Scheduler) stopJob(f *Formation, typ string) (err error) {
 
 	log = log.New("job.id", job.JobID, "host.id", job.HostID)
 	log.Info("selected job for termination")
-	s.jobs.SetState(job.InternalID, JobStateStopping)
+	job.SetState(JobStateStopping)
 	if job.HostID != "" {
 		log = log.New("job.id", job.JobID, "host.id", job.HostID)
 		host, ok := s.hosts[job.HostID]
@@ -1034,12 +1034,12 @@ func (s *Scheduler) getBackoffDuration(restarts uint) time.Duration {
 
 func (s *Scheduler) handleJobEvent(job *Job, state JobState) *Job {
 	log := logger.New("fn", "handleJobEvent", "job.id", job.JobID)
-	if !s.jobs.IsJobInState(job.JobID, state) {
+	if !job.HasState(state) {
 		log.Info("marking job state", "state", state)
 		if job.IsSchedulable() {
 			s.jobs.AddJob(job)
 		}
-		s.jobs.SetState(job.InternalID, state)
+		job.SetState(state)
 		return s.jobs[job.InternalID]
 	}
 	return nil
@@ -1053,7 +1053,7 @@ func (s *Scheduler) handleJobCrash(job *Job) {
 		err := s.scheduleJobStart(j)
 		if err != nil {
 			log.Warn("failed to schedule job request, marking job as stopped")
-			s.jobs.SetState(job.InternalID, JobStateStopped)
+			job.SetState(JobStateStopped)
 		}
 	}
 }

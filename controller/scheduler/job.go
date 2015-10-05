@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
@@ -85,6 +84,14 @@ func (j *Job) IsInFormation(key utils.FormationKey) bool {
 	return !j.IsStopped() && j.Formation != nil && j.Formation.key() == key
 }
 
+func (j *Job) SetState(state JobState) {
+	j.state = state
+}
+
+func (j *Job) HasState(state JobState) bool {
+	return j.state == state
+}
+
 type Jobs map[string]*Job
 
 func (js Jobs) GetStoppableJobs(key utils.FormationKey, typ string) []*Job {
@@ -120,19 +127,6 @@ func (js Jobs) GetProcesses(key utils.FormationKey) Processes {
 
 func (js Jobs) AddJob(j *Job) {
 	js[j.InternalID] = j
-}
-
-func (js Jobs) IsJobInState(id string, state JobState) bool {
-	j, ok := js[id]
-	return ok && j.state == state
-}
-
-func (js Jobs) SetState(id string, state JobState) error {
-	if j, ok := js[id]; ok {
-		j.state = state
-		return nil
-	}
-	return errors.New("job not found")
 }
 
 // TODO refactor `state` to JobStatus type and consolidate statuses across scheduler/controller/host
