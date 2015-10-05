@@ -95,7 +95,6 @@ Options:
 		"flynn-controller.app":      app.ID,
 		"flynn-controller.app_name": app.Name,
 		"flynn-controller.release":  prevRelease.ID,
-		"flynn-controller.type":     "slugbuilder",
 	}
 	if len(prevRelease.Env) > 0 {
 		stdin, err := cmd.StdinPipe()

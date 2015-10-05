@@ -117,6 +117,14 @@ func (s *GitDeploySuite) TestStaticBuildpack(t *c.C) {
 	s.runBuildpackTestWithResponsePattern(t, "static-flynn-example", nil, `Hello, Flynn!`)
 }
 
+func (s *GitDeploySuite) TestPushTwice(t *c.C) {
+	r := s.newGitRepo(t, "https://github.com/flynn-examples/nodejs-flynn-example")
+	t.Assert(r.flynn("create"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+	t.Assert(r.git("commit", "-m", "second", "--allow-empty"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+}
+
 func (s *GitDeploySuite) runBuildpackTest(t *c.C, name string, resources []string) {
 	s.runBuildpackTestWithResponsePattern(t, name, resources, `Hello from Flynn on port \d+`)
 }
