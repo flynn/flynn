@@ -12,36 +12,33 @@ import (
 type JobState string
 
 const (
-	JobStateStarting   JobState = "starting"
-	JobStateRunning    JobState = "running"
-	JobStateStopping   JobState = "stopping"
-	JobStateStopped    JobState = "stopped"
-	JobStateCrashed    JobState = "crashed"
-	JobStateRequesting JobState = "requesting"
-	JobStateNew        JobState = "new"
+	JobStateStarting  JobState = "starting"
+	JobStateRunning   JobState = "running"
+	JobStateStopping  JobState = "stopping"
+	JobStateStopped   JobState = "stopped"
+	JobStateCrashed   JobState = "crashed"
+	JobStateScheduled JobState = "scheduled"
+	JobStateNew       JobState = "new"
 )
 
 type JobRequest struct {
-	*Job
+	Job      *Job
 	attempts uint
 }
 
-func NewJobRequest(f *Formation, typ, hostID, jobID string) *JobRequest {
-	return &JobRequest{Job: NewJob(f, f.App.ID, f.Release.ID, typ, hostID, jobID)}
-}
-
-func (r *JobRequest) needsVolume() bool {
-	return r.Job.Formation.Release.Processes[r.Type].Data
-}
-
-func (r *JobRequest) Clone() *JobRequest {
-	return &JobRequest{
-		Job:      r.Job.Clone(),
-		attempts: r.attempts,
-	}
+func NewJobRequest(f *Formation, typ, hostID, internalID string) *JobRequest {
+	return &JobRequest{Job: NewJob(f, f.App.ID, f.Release.ID, typ, hostID, internalID)}
 }
 
 type Job struct {
+	// InternalID is used to track jobs in-memory and is added to the
+	// cluster job's metadata (with key "flynn-controller.scheduler_id").
+	//
+	// It is distinct from the cluster job's ID due to the fact that a
+	// cluster job only has an ID once a host has been picked to run the
+	// job on, and we need to track it before that happens.
+	InternalID string
+
 	Type      string
 	AppID     string
 	ReleaseID string
@@ -55,28 +52,25 @@ type Job struct {
 	state     JobState
 }
 
-func NewJob(f *Formation, appID, releaseID, typ, hostID, id string) *Job {
+func NewJob(f *Formation, appID, releaseID, typ, hostID, internalID string) *Job {
 	return &Job{
-		Type:      typ,
-		AppID:     appID,
-		ReleaseID: releaseID,
-		HostID:    hostID,
-		JobID:     id,
-		Formation: f,
-		startedAt: time.Now(),
-		state:     JobStateNew,
+		InternalID: internalID,
+		Type:       typ,
+		AppID:      appID,
+		ReleaseID:  releaseID,
+		HostID:     hostID,
+		Formation:  f,
+		startedAt:  time.Now(),
+		state:      JobStateNew,
 	}
 }
 
-func (j *Job) Clone() *Job {
-	// Shallow copy
-	cloned := *j
-	return &cloned
+func (j *Job) needsVolume() bool {
+	return j.Formation.Release.Processes[j.Type].Data
 }
 
-//
 func (j *Job) IsStopped() bool {
-	return j.state == JobStateStopping || j.state == JobStateStopped
+	return j.state == JobStateStopping || j.state == JobStateStopped || j.state == JobStateCrashed
 }
 
 func (j *Job) IsRunning() bool {
@@ -107,7 +101,7 @@ func (js Jobs) GetHostJobCounts(key utils.FormationKey, typ string) map[string]i
 	counts := make(map[string]int)
 
 	for _, j := range js {
-		if j.IsInFormation(key) && j.Type == typ {
+		if j.IsInFormation(key) && j.Type == typ && !j.HasState(JobStateScheduled) {
 			counts[j.HostID]++
 		}
 	}
@@ -124,10 +118,8 @@ func (js Jobs) GetProcesses(key utils.FormationKey) Processes {
 	return procs
 }
 
-func (js Jobs) AddJob(j *Job) *Job {
-	j = j.Clone()
-	js[j.JobID] = j
-	return j
+func (js Jobs) AddJob(j *Job) {
+	js[j.InternalID] = j
 }
 
 func (js Jobs) IsJobInState(id string, state JobState) bool {

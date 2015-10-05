@@ -264,7 +264,7 @@ func (TestSuite) TestRectify(c *C) {
 	form := s.formations.Get(testAppID, testReleaseID)
 	host, err := s.Host(testHostID)
 	request := NewJobRequest(form, testJobType, "", "")
-	config := jobConfig(request, testHostID)
+	config := jobConfig(request.Job, testHostID)
 	host.AddJob(config)
 	job = s.waitJobStart()
 	jobs[job.JobID] = job
@@ -286,7 +286,7 @@ func (TestSuite) TestRectify(c *C) {
 	release := NewRelease("test-release-2", artifact, processes)
 	form = NewFormation(&ct.ExpandedFormation{App: app, Release: release, Artifact: artifact, Processes: processes})
 	request = NewJobRequest(form, testJobType, "", "")
-	config = jobConfig(request, testHostID)
+	config = jobConfig(request.Job, testHostID)
 	// Add the job to the host without adding the formation. Expected error.
 	c.Log("Create a new job on the host without adding the formation to the controller. Wait for job start, expect error.")
 	host.AddJob(config)
