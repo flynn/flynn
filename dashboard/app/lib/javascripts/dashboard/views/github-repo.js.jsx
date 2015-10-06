@@ -159,7 +159,7 @@ var GithubRepo = React.createClass({
 
 	__handleStoreChange: function (props) {
 		this.setState(getState(props || this.props));
-	},
+	}
 });
 
 export default GithubRepo;

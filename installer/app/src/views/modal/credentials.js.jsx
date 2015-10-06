@@ -46,7 +46,7 @@ var Credentials = React.createClass({
 				['> li a', {
 					color: 'inherit',
 					textDecoration: 'none'
-				}],
+				}]
 			]
 		});
 		return {

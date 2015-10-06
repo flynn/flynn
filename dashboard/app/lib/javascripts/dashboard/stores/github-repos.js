@@ -29,16 +29,16 @@ var GithubRepos = Store.createClass({
 
 	handleEvent: function (event) {
 		switch (event.name) {
-			case "GITHUB_REPOS:UNLAOD_PAGE_ID":
-				this.__unloadPageId(event.pageId);
+		case "GITHUB_REPOS:UNLAOD_PAGE_ID":
+			this.__unloadPageId(event.pageId);
 			break;
 
-			case "GITHUB_REPOS:FETCH_PREV_PAGE":
-				this.__fetchPrevPage();
+		case "GITHUB_REPOS:FETCH_PREV_PAGE":
+			this.__fetchPrevPage();
 			break;
 
-			case "GITHUB_REPOS:FETCH_NEXT_PAGE":
-				this.__fetchNextPage();
+		case "GITHUB_REPOS:FETCH_NEXT_PAGE":
+			this.__fetchNextPage();
 			break;
 		}
 	},

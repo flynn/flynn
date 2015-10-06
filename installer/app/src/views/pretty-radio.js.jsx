@@ -59,7 +59,7 @@ var PrettyRadio = React.createClass({
 					height: '14px',
 					borderRadius: '7px',
 					backgroundColor: Colors.greenColor,
-					content: '" "',
+					content: '" "'
 				}]
 			]
 		}, this.props.style || {});

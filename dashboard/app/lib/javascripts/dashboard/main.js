@@ -10,7 +10,9 @@ import Client from './client';
 import GithubClient from './github-client';
 import ServiceUnavailableComponent from './views/service-unavailable';
 import NavComponent from './views/nav';
-import Actions from './actions'; // jshint ignore:line
+/* eslint-disable no-unused-vars */
+import Actions from './actions';
+/* eslint-enable */
 
 var Dashboard = function () {
 	var history = this.history = new History();
@@ -81,8 +83,8 @@ extend(Dashboard.prototype, {
 
 	__renderNavComponent: function () {
 		this.nav = React.render(React.createElement(NavComponent, {
-				authenticated: Config.authenticated
-			}), this.navEl);
+			authenticated: Config.authenticated
+		}), this.navEl);
 	},
 
 	__isLoginPath: function (path) {
@@ -197,13 +199,13 @@ extend(Dashboard.prototype, {
 	__handleEvent: function (event) {
 		if (event.source === "Marbles.History") {
 			switch (event.name) {
-				case "handler:before":
-					this.__setCurrentParams();
-					this.__handleHandlerBeforeEvent(event);
+			case "handler:before":
+				this.__setCurrentParams();
+				this.__handleHandlerBeforeEvent(event);
 				break;
 
-				case "handler:after":
-					this.__handleHandlerAfterEvent(event);
+			case "handler:after":
+				this.__handleHandlerAfterEvent(event);
 				break;
 			}
 			return;
@@ -224,37 +226,37 @@ extend(Dashboard.prototype, {
 
 	__handleAppEvent: function (event) {
 		switch (event.name) {
-			case "CONFIG_READY":
-				this.__handleConfigReady();
+		case "CONFIG_READY":
+			this.__handleConfigReady();
 			break;
 
-			case "AUTH_CHANGE":
-				this.__handleAuthChange(event.authenticated);
+		case "AUTH_CHANGE":
+			this.__handleAuthChange(event.authenticated);
 			break;
 
-			case "GITHUB_AUTH_CHANGE":
-				this.__handleGithubAuthChange(event.authenticated);
+		case "GITHUB_AUTH_CHANGE":
+			this.__handleGithubAuthChange(event.authenticated);
 			break;
 
-			case "CONTROLLER_UNREACHABLE_FROM_HTTPS":
-				// Controller isn't accessible via https. Redirect to http and try again.
-				window.location.href = window.location.href.replace("https", "http");
+		case "CONTROLLER_UNREACHABLE_FROM_HTTPS":
+			// Controller isn't accessible via https. Redirect to http and try again.
+			window.location.href = window.location.href.replace("https", "http");
 			break;
 
-			case "HTTPS_CERT_MISSING":
-				var params = {};
-				var currentParams = this.__currentParams[0];
-				if (currentParams.token) {
-					params.token = currentParams.token;
-				}
-				this.history.navigate("installcert", {
-					force: true,
-					params: [params]
-				});
+		case "HTTPS_CERT_MISSING":
+			var params = {};
+			var currentParams = this.__currentParams[0];
+			if (currentParams.token) {
+				params.token = currentParams.token;
+			}
+			this.history.navigate("installcert", {
+				force: true,
+				params: [params]
+			});
 			break;
 
-			case "SERVICE_UNAVAILABLE":
-				this.__handleServiceUnavailable(event.status);
+		case "SERVICE_UNAVAILABLE":
+			this.__handleServiceUnavailable(event.status);
 			break;
 		}
 	},

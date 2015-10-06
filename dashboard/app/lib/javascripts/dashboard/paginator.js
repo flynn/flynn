@@ -76,7 +76,7 @@ extend(Paginator.prototype, State, {
 		var nextState = {
 			pages: [].concat(prevState.pages),
 			unloadedPageIDsTop: [].concat(prevState.unloadedPageIDsTop),
-			unloadedPageIDsBottom: [].concat(prevState.unloadedPageIDsBottom),
+			unloadedPageIDsBottom: [].concat(prevState.unloadedPageIDsBottom)
 		};
 		if (prevState.unloadedPageIDsTop.indexOf(pageID) !== -1 || prevState.unloadedPageIDsBottom.indexOf(pageID) !== -1) {
 			window.console.error("Can't unload page that's already unloaded", pageID);
@@ -236,7 +236,7 @@ extend(Paginator.prototype, State, {
 		} else {
 			return Promise.all(this.wgs).then(this.callAfterWaitGroup.bind(this, fn, index));
 		}
-	},
+	}
 });
 
 export default Paginator;

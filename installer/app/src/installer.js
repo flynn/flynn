@@ -49,15 +49,10 @@ export default {
 	__handleEvent: function (event) {
 		if (event.source === "Marbles.History") {
 			switch (event.name) {
-				case "handler:before":
-					this.__handleHandlerBeforeEvent(event);
-				break;
-
-				case "handler:after":
-					this.__handleHandlerAfterEvent(event);
+			case "handler:before":
+				this.__handleHandlerBeforeEvent(event);
 				break;
 			}
-			return;
 		}
 	},
 
@@ -65,8 +60,5 @@ export default {
 		window.scrollTo(0,0);
 		this.primaryView = null;
 		React.unmountComponentAtNode(this.el);
-	},
-
-	__handleHandlerAfterEvent: function () {
-	},
+	}
 };

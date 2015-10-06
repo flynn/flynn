@@ -148,12 +148,12 @@ var AppLogs = React.createClass({
 
 	__formatDeployProcessState: function (state) {
 		switch (state) {
-			case "up":
-				return "running";
-			case "down":
-				return "finished";
-			default:
-				return state;
+		case "up":
+			return "running";
+		case "down":
+			return "finished";
+		default:
+			return state;
 		}
 	},
 

@@ -61,6 +61,7 @@ app() {
   dir=$(pwd)
 
   cp --recursive ${ROOT}/${target}/app/* "${tmpdir}"
+  cp --recursive ${ROOT}/${target}/app/.eslintrc "${tmpdir}"
   cd "${tmpdir}"
 
   docker run \

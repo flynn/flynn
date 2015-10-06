@@ -5,7 +5,7 @@ import GithubCommitStore from '../stores/github-commit';
 import GithubPullStore from '../stores/github-pull';
 import BuildpackStore from '../stores/github-repo-buildpack';
 import JobOutputStore from '../stores/job-output';
-import { AppDeployStore, DEFAULT_ID as appDeployStoreID } from 'dashboard/stores/app-deploy';
+import { AppDeployStore } from 'dashboard/stores/app-deploy';
 import RouteLink from './route-link';
 import CommandOutput from './command-output';
 import EditEnv from './edit-env';
@@ -19,7 +19,7 @@ function getDeployStoreId (props) {
 		appID: props.appID,
 		sha: props.sha
 	};
-};
+}
 
 function getRepoStoreId (props) {
 	return {

@@ -73,18 +73,18 @@ var SSHCluster = BaseCluster.createClass('ssh', {
 		}
 
 		switch (event.name) {
-			case 'SELECT_NUM_INSTANCES':
-				this.setState(this.__computeState({
-					num_instances: event.numInstances
-				}));
+		case 'SELECT_NUM_INSTANCES':
+			this.setState(this.__computeState({
+				num_instances: event.numInstances
+			}));
 			break;
 
-			case 'SET_TARGETS':
-				this.setState(this.__computeState({ targets: event.targets }));
+		case 'SET_TARGETS':
+			this.setState(this.__computeState({ targets: event.targets }));
 			break;
 
-			default:
-				__super();
+		default:
+			__super();
 		}
 	}
 });

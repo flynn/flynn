@@ -15,7 +15,7 @@ var GithubRouter = Router.createClass({
 		{ path: "github/auth", handler: "auth", githubAuth: false },
 		{ path: "github", handler: "github" },
 		{ path: "github/deploy", handler: "deploy", secondary: true },
-		{ path: "github/deploy/:appID", handler: "deploy", secondary: true },
+		{ path: "github/deploy/:appID", handler: "deploy", secondary: true }
 	],
 
 	mixins: [State],
@@ -88,7 +88,7 @@ var GithubRouter = Router.createClass({
 			view = this.context.primaryView = React.render(React.createElement(
 				GithubComponent, props),
 				this.context.el);
-			}
+		}
 	},
 
 	deploy: function (params) {
@@ -145,48 +145,48 @@ var GithubRouter = Router.createClass({
 
 	handleEvent: function (event) {
 		switch (event.name) {
-			case 'handler:before':
-				// reset state between routes
-				this.state = {};
+		case 'handler:before':
+			// reset state between routes
+			this.state = {};
 			break;
 
-			case 'DEPLOY_APP':
-				this.setState({
-					deployAppName: event.appData.name,
-				});
+		case 'DEPLOY_APP':
+			this.setState({
+				deployAppName: event.appData.name
+			});
 			break;
 
-			case 'APP':
-				if (event.data.name === this.state.deployAppName && !this.history.pathParams[0].hasOwnProperty('appID')) {
-					this.history.navigate(pathWithParams("/github/deploy/:appID", QueryParams.replaceParams(this.history.pathParams, { appID: event.data.id })));
-				}
+		case 'APP':
+			if (event.data.name === this.state.deployAppName && !this.history.pathParams[0].hasOwnProperty('appID')) {
+				this.history.navigate(pathWithParams("/github/deploy/:appID", QueryParams.replaceParams(this.history.pathParams, { appID: event.data.id })));
+			}
 			break;
 
-			case 'DELETE_APP':
-				// Don't wait for app to be deleting before reacting to deletion
-				if (this.state.appID !== null && this.state.appID === event.appID) {
-					this.history.navigate(pathWithParams("/github/deploy", QueryParams.replaceParams(this.history.pathParams, { appID: null })));
-				}
+		case 'DELETE_APP':
+			// Don't wait for app to be deleting before reacting to deletion
+			if (this.state.appID !== null && this.state.appID === event.appID) {
+				this.history.navigate(pathWithParams("/github/deploy", QueryParams.replaceParams(this.history.pathParams, { appID: null })));
+			}
 			break;
 
-			case "GITHUB_BRANCH_SELECTOR:BRANCH_SELECTED":
-				this.__handleBranchSelected(event);
+		case "GITHUB_BRANCH_SELECTOR:BRANCH_SELECTED":
+			this.__handleBranchSelected(event);
 			break;
 
-			case "GITHUB_COMMITS:LAUNCH_COMMIT":
-				this.__handleLaunchCommit(event);
+		case "GITHUB_COMMITS:LAUNCH_COMMIT":
+			this.__handleLaunchCommit(event);
 			break;
 
-			case "GITHUB_PULLS:LAUNCH_PULL":
-				this.__handleLaunchPull(event);
+		case "GITHUB_PULLS:LAUNCH_PULL":
+			this.__handleLaunchPull(event);
 			break;
 
-			case "APP:CREATE_FAILED":
-				this.__handleAppCreateFailed(event);
+		case "APP:CREATE_FAILED":
+			this.__handleAppCreateFailed(event);
 			break;
 
-			case "GITHUB_AUTH_CHANGE":
-				this.__handleGithubAuthChange(event.authenticated);
+		case "GITHUB_AUTH_CHANGE":
+			this.__handleGithubAuthChange(event.authenticated);
 			break;
 		}
 	},

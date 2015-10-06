@@ -25,7 +25,7 @@ var InstallConfig = React.createClass({
 				}],
 
 				['button[type=submit]', GreenBtnCSS],
-				['button[type=submit][disabled]', DisabledBtnCSS],
+				['button[type=submit][disabled]', DisabledBtnCSS]
 			]
 		});
 
@@ -88,7 +88,7 @@ var InstallConfig = React.createClass({
 					<span>Number of instances:</span>
 					<div style={{
 						width: 60
-						}}>
+					}}>
 						<IntegerPicker
 							minValue={1}
 							maxValue={5}

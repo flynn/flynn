@@ -31,7 +31,7 @@ var App = Store.createClass({
 		this.__fetchApp();
 		Dispatcher.dispatch({
 			name: 'GET_APP_RELEASE',
-			appID: this.props.appId,
+			appID: this.props.appId
 		});
 	},
 
@@ -41,69 +41,69 @@ var App = Store.createClass({
 
 	handleEvent: function (event) {
 		switch (event.name) {
-			case 'APP':
-				if (event.app === this.props.appId) {
-					this.setState({
-						app: event.data
-					});
-				}
+		case 'APP':
+			if (event.app === this.props.appId) {
+				this.setState({
+					app: event.data
+				});
+			}
 			break;
 
-			case 'APP_RELEASE':
-				if (event.app === this.props.appId) {
-					this.setState({
-						formation: this.state.formation === null ? null : extend({}, this.state.formation, {
-							release: event.object_id
-						}),
-						app: extend({}, this.state.app, {
-							release: event.object_id
-						}),
-						release: event.data.release
-					});
-					if ((this.state.formation || {}).release !== event.object_id) {
-						Dispatcher.dispatch({
-							name: 'GET_APP_FORMATION',
-							appID: this.props.appId,
-							releaseID: event.object_id
-						});
-					}
-				}
-			break;
-
-			case 'APP_FORMATION':
-				if (event.app === this.props.appId && event.data.release === this.state.release.id) {
-					this.setState({
-						formation: event.data
-					});
-				}
-			break;
-
-			case 'SCALE':
-				if (event.app === this.props.appId && event.data.processes !== null) {
-					this.setState({
-						formation: extend({}, this.state.formation, {
-							release: event.data.release,
-							processes: event.data.processes || {}
-						})
-					});
-				}
-			break;
-
-			case 'DEPLOYMENT':
-				if ((this.release || {}).id === event.data.release && event.data.status === 'failed') {
+		case 'APP_RELEASE':
+			if (event.app === this.props.appId) {
+				this.setState({
+					formation: this.state.formation === null ? null : extend({}, this.state.formation, {
+						release: event.object_id
+					}),
+					app: extend({}, this.state.app, {
+						release: event.object_id
+					}),
+					release: event.data.release
+				});
+				if ((this.state.formation || {}).release !== event.object_id) {
 					Dispatcher.dispatch({
-						name: 'GET_APP_RELEASE',
+						name: 'GET_APP_FORMATION',
 						appID: this.props.appId,
+						releaseID: event.object_id
 					});
 				}
+			}
 			break;
 
-			case "APP_PROCESSES:CREATE_FORMATION":
-				this.__createAppFormation(event.formation);
+		case 'APP_FORMATION':
+			if (event.app === this.props.appId && event.data.release === this.state.release.id) {
+				this.setState({
+					formation: event.data
+				});
+			}
 			break;
 
-			case "APP_DELETE:DELETE_APP":
-				this.__deleteApp();
+		case 'SCALE':
+			if (event.app === this.props.appId && event.data.processes !== null) {
+				this.setState({
+					formation: extend({}, this.state.formation, {
+						release: event.data.release,
+						processes: event.data.processes || {}
+					})
+				});
+			}
+			break;
+
+		case 'DEPLOYMENT':
+			if ((this.release || {}).id === event.data.release && event.data.status === 'failed') {
+				Dispatcher.dispatch({
+					name: 'GET_APP_RELEASE',
+					appID: this.props.appId
+				});
+			}
+			break;
+
+		case "APP_PROCESSES:CREATE_FORMATION":
+			this.__createAppFormation(event.formation);
+			break;
+
+		case "APP_DELETE:DELETE_APP":
+			this.__deleteApp();
 			break;
 		}
 	},

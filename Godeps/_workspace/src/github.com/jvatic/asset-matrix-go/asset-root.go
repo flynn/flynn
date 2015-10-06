@@ -15,6 +15,7 @@ type AssetRoot struct {
 	GitRepo           string
 	GitBranch         string
 	GitRef            string
+	ESLintConfigPath  string
 	cacheBreaker      string
 	indexMtx          sync.Mutex
 	assetIndex        map[string]Asset

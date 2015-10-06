@@ -21,12 +21,12 @@ var deleteAppRoute = function (appID, routeType, routeID) {
 
 Dispatcher.register(function (event) {
 	switch (event.name) {
-		case 'CREATE_APP_ROUTE':
-			createAppRoute(event.appID, event.data);
+	case 'CREATE_APP_ROUTE':
+		createAppRoute(event.appID, event.data);
 		break;
 
-		case 'DELETE_APP_ROUTE':
-			deleteAppRoute(event.appID, event.routeType, event.routeID);
+	case 'DELETE_APP_ROUTE':
+		deleteAppRoute(event.appID, event.routeType, event.routeID);
 		break;
 	}
 });

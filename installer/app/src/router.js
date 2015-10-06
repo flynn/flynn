@@ -106,68 +106,68 @@ var MainRouter = Router.createClass({
 	handleEvent: function (event) {
 		var clusterID;
 		switch (event.name) {
-			case 'CLUSTER_DELETE':
-				this.history.navigate('/clusters/'+ event.clusterID +'/delete');
+		case 'CLUSTER_DELETE':
+			this.history.navigate('/clusters/'+ event.clusterID +'/delete');
 			break;
 
-			case 'CANCEL_CLUSTER_DELETE':
-				if (this.history.getHandler().opts.modalHandler === 'clusterDeleteModal' && this.history.pathParams[0].cluster_id === event.clusterID) {
-					this.history.navigate('/clusters/'+ event.clusterID);
+		case 'CANCEL_CLUSTER_DELETE':
+			if (this.history.getHandler().opts.modalHandler === 'clusterDeleteModal' && this.history.pathParams[0].cluster_id === event.clusterID) {
+				this.history.navigate('/clusters/'+ event.clusterID);
+			}
+			break;
+
+		case 'CONFIRM_CLUSTER_DELETE':
+			if (this.history.getHandler().opts.modalHandler === 'clusterDeleteModal' && this.history.pathParams[0].cluster_id === event.clusterID) {
+				this.history.navigate('/clusters/'+ event.clusterID);
+			}
+			break;
+
+		case 'CLUSTER_STATE':
+			if (event.state === 'deleted') {
+				if (this.history.pathParams[0].cluster_id === event.clusterID) {
+					this.history.navigate('/');
 				}
+			}
 			break;
 
-			case 'CONFIRM_CLUSTER_DELETE':
-				if (this.history.getHandler().opts.modalHandler === 'clusterDeleteModal' && this.history.pathParams[0].cluster_id === event.clusterID) {
-					this.history.navigate('/clusters/'+ event.clusterID);
-				}
+		case 'INSTALL_ABORT':
+			this.history.navigate('/');
 			break;
 
-			case 'CLUSTER_STATE':
-				if (event.state === 'deleted') {
-					if (this.history.pathParams[0].cluster_id === event.clusterID) {
-						this.history.navigate('/');
-					}
-				}
+		case 'LAUNCH_CLUSTER_SUCCESS':
+			clusterID = event.clusterID;
+			this.history.navigate('/clusters/'+ clusterID);
 			break;
 
-			case 'INSTALL_ABORT':
-				this.history.navigate('/');
+		case 'NAVIGATE':
+			this.history.navigate(event.path, event.options || {});
 			break;
 
-			case 'LAUNCH_CLUSTER_SUCCESS':
-				clusterID = event.clusterID;
-				this.history.navigate('/clusters/'+ clusterID);
+		case 'SELECT_CLOUD':
+			if (this.history.getHandler(this.history.path).route.source !== '^$') {
+				return;
+			}
+			if (this.history.pathParams[0].cloud === event.cloud) {
+				return;
+			}
+			this.history.navigate('', {
+				params: [{
+					cloud: event.cloud
+				}]
+			});
 			break;
 
-			case 'NAVIGATE':
-				this.history.navigate(event.path, event.options || {});
-			break;
-
-			case 'SELECT_CLOUD':
-				if (this.history.getHandler(this.history.path).route.source !== '^$') {
-					return;
-				}
-				if (this.history.pathParams[0].cloud === event.cloud) {
-					return;
-				}
-				this.history.navigate('', {
-					params: [{
-						cloud: event.cloud
-					}]
-				});
-			break;
-
-			case 'AZURE_OAUTH_AUTHORIZE':
-				window.localStorage.setItem("azureEndpoint", event.endpoint);
-				window.localStorage.setItem("azureClientID", event.clientID);
-				window.localStorage.setItem("azureCredName", event.credName);
-				var authorizeURL = event.endpoint.replace(/\/token.*$/, '') + '/authorize';
-					authorizeURL += QueryParams.serializeParams([{
-					client_id: event.clientID,
-					response_type: 'code',
-					resource: 'https://management.core.windows.net'
-				}]);
-				window.location.href = authorizeURL;
+		case 'AZURE_OAUTH_AUTHORIZE':
+			window.localStorage.setItem("azureEndpoint", event.endpoint);
+			window.localStorage.setItem("azureClientID", event.clientID);
+			window.localStorage.setItem("azureCredName", event.credName);
+			var authorizeURL = event.endpoint.replace(/\/token.*$/, '') + '/authorize';
+			authorizeURL += QueryParams.serializeParams([{
+				client_id: event.clientID,
+				response_type: 'code',
+				resource: 'https://management.core.windows.net'
+			}]);
+			window.location.href = authorizeURL;
 			break;
 		}
 	}

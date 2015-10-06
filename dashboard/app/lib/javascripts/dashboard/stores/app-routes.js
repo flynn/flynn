@@ -30,16 +30,16 @@ var AppRoutes = Store.createClass({
 
 	handleEvent: function (event) {
 		switch (event.name) {
-			case 'ROUTE':
-				if (event.app === this.props.appId) {
-					this.__addOrReplaceRoute(event.data);
-				}
+		case 'ROUTE':
+			if (event.app === this.props.appId) {
+				this.__addOrReplaceRoute(event.data);
+			}
 			break;
 
-			case 'ROUTE_DELETED':
-				if (event.app === this.props.appId) {
-					this.__removeRoute(event.object_id);
-				}
+		case 'ROUTE_DELETED':
+			if (event.app === this.props.appId) {
+				this.__removeRoute(event.object_id);
+			}
 			break;
 		}
 	},

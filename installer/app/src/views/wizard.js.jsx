@@ -102,36 +102,36 @@ var Wizard = React.createClass({
 
 						{(function (prompt) {
 							switch (prompt.type) {
-								case 'yes_no':
-									return (
-										<div>
-											<button style={GreenBtnCSS} type="text" onClick={this.__handlePromptYesClick}>Yes</button>
-											<button style={BtnCSS} type="text" onClick={this.__handlePromptNoClick}>No</button>
-										</div>
-									);
-								case 'file':
-									return (
-										<form onSubmit={function(e){e.preventDefault();}}>
-											<FileInput onChange={this.__handlePromptFileSelected} />
-										</form>
-									);
-								case 'choice':
-									return (
-										<div>
-											{prompt.options.map(function (option) {
-												var css = BtnCSS;
-												if (option.type === 1) {
-													css = GreenBtnCSS;
-												}
-												return (
-													<button key={option.value} style={css} onClick={function(e){
-														e.preventDefault();
-														this.__handleChoicePromptSelection(option.value);
-													}.bind(this)}>{option.name}</button>
-												);
-											}.bind(this))}
-										</div>
-									);
+							case 'yes_no':
+								return (
+									<div>
+										<button style={GreenBtnCSS} type="text" onClick={this.__handlePromptYesClick}>Yes</button>
+										<button style={BtnCSS} type="text" onClick={this.__handlePromptNoClick}>No</button>
+									</div>
+								);
+							case 'file':
+								return (
+									<form onSubmit={function(e){e.preventDefault();}}>
+										<FileInput onChange={this.__handlePromptFileSelected} />
+									</form>
+								);
+							case 'choice':
+								return (
+									<div>
+										{prompt.options.map(function (option) {
+											var css = BtnCSS;
+											if (option.type === 1) {
+												css = GreenBtnCSS;
+											}
+											return (
+												<button key={option.value} style={css} onClick={function(e){
+													e.preventDefault();
+													this.__handleChoicePromptSelection(option.value);
+												}.bind(this)}>{option.name}</button>
+											);
+										}.bind(this))}
+									</div>
+								);
 							}
 							return (
 								<form onSubmit={this.__handlePromptInputSubmit}>

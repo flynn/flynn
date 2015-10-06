@@ -101,34 +101,34 @@ var deployFromGithubPull = function (repo, pull, appData) {
 
 Dispatcher.register(function (event) {
 	switch (event.name) {
-		case 'DEPLOY_APP':
-			switch (event.source) {
-				case 'GH_COMMIT':
-					deployFromGithubCommit(event.repo, event.branchName, event.commit.sha, event.appData);
-				break;
-				case 'GH_PULL':
-					deployFromGithubPull(event.repo, event.pull, event.appData);
-				break;
-				default:
-					throw new Error('Unknown source for DEPLOY_APP action: '+ JSON.stringify(event.source));
-			}
+	case 'DEPLOY_APP':
+		switch (event.source) {
+		case 'GH_COMMIT':
+			deployFromGithubCommit(event.repo, event.branchName, event.commit.sha, event.appData);
+			break;
+		case 'GH_PULL':
+			deployFromGithubPull(event.repo, event.pull, event.appData);
+			break;
+		default:
+			throw new Error('Unknown source for DEPLOY_APP action: '+ JSON.stringify(event.source));
+		}
 		break;
 
-		case 'APP_DEPLOY_COMMIT':
-			deployFromGithub({
-				github: 'true',
-				github_user: event.ownerLogin,
-				github_repo: event.repoName,
-				branch: event.branchName,
-				rev: event.sha,
-				clone_url: event.repo.cloneURL
-			}, {
-				id: event.appID
-			});
+	case 'APP_DEPLOY_COMMIT':
+		deployFromGithub({
+			github: 'true',
+			github_user: event.ownerLogin,
+			github_repo: event.repoName,
+			branch: event.branchName,
+			rev: event.sha,
+			clone_url: event.repo.cloneURL
+		}, {
+			id: event.appID
+		});
 		break;
 
-		case 'APP_DEPLOY_RELEASE':
-			Config.client.deployAppRelease(event.appID, event.releaseID);
+	case 'APP_DEPLOY_RELEASE':
+		Config.client.deployAppRelease(event.appID, event.releaseID);
 		break;
 	}
 });

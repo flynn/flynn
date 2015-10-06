@@ -25,7 +25,7 @@ var GithubClient = createClass({
 		args = args || {};
 
 		if ( !path ) {
-				var err = new Error(this.constructor.displayName +".prototype.performRequest(): Can't make request without path");
+			var err = new Error(this.constructor.displayName +".prototype.performRequest(): Can't make request without path");
 			setTimeout(function () {
 				throw err;
 			}.bind(this), 0);

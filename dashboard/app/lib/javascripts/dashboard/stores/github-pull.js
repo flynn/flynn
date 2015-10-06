@@ -29,8 +29,8 @@ var GithubPull = Store.createClass({
 
 	handleEvent: function (event) {
 		switch (event.name) {
-			case "APP_SOURCE_HISTORY:MERGE_PULL_REQUEST":
-				(this.state.pull ? Promise.resolve() : this.__fetchPull()).then(this.__merge.bind(this));
+		case "APP_SOURCE_HISTORY:MERGE_PULL_REQUEST":
+			(this.state.pull ? Promise.resolve() : this.__fetchPull()).then(this.__merge.bind(this));
 			break;
 		}
 	},

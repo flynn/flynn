@@ -29,20 +29,20 @@ var GithubPulls = Store.createClass({
 
 	handleEvent: function (event) {
 		switch (event.name) {
-			case "GITHUB_PULLS:UNLAOD_PAGE_ID":
-				this.__unloadPageId(event.pageId);
+		case "GITHUB_PULLS:UNLAOD_PAGE_ID":
+			this.__unloadPageId(event.pageId);
 			break;
 
-			case "GITHUB_PULLS:FETCH_PREV_PAGE":
-				this.__fetchPrevPage();
+		case "GITHUB_PULLS:FETCH_PREV_PAGE":
+			this.__fetchPrevPage();
 			break;
 
-			case "GITHUB_PULLS:FETCH_NEXT_PAGE":
-				this.__fetchNextPage();
+		case "GITHUB_PULLS:FETCH_NEXT_PAGE":
+			this.__fetchNextPage();
 			break;
 
-			case "GITHUB_PULL:MERGED":
-				this.__handlePullMerged(event.pull);
+		case "GITHUB_PULL:MERGED":
+			this.__handlePullMerged(event.pull);
 			break;
 		}
 	},

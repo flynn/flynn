@@ -30,7 +30,7 @@ var updateAppEnv = function (appID, changedRelease, env) {
 		Dispatcher.dispatch({
 			name: 'UPDATE_APP_ENV_FAILED',
 			appID: appID,
-			errorMsg: args[0].message || ''
+			errorMsg: message
 		});
 		return Promise.reject(args);
 	});
@@ -38,8 +38,8 @@ var updateAppEnv = function (appID, changedRelease, env) {
 
 Dispatcher.register(function (event) {
 	switch (event.name) {
-		case 'UPDATE_APP_ENV':
-			updateAppEnv(event.appID, event.prevRelease, event.data);
+	case 'UPDATE_APP_ENV':
+		updateAppEnv(event.appID, event.prevRelease, event.data);
 		break;
 	}
 });

@@ -33,7 +33,7 @@ var InstallConfig = React.createClass({
 						<div>Number of instances: </div>
 						<div style={{
 							width: 60
-							}}>
+						}}>
 							<IntegerPicker
 								minValue={1}
 								maxValue={5}
@@ -96,7 +96,7 @@ var InstallConfig = React.createClass({
 			launchBtnDisabled: true
 		});
 		Dispatcher.dispatch({
-			name: 'LAUNCH_CLUSTER',
+			name: 'LAUNCH_CLUSTER'
 		});
 	}
 });

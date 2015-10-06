@@ -41,45 +41,45 @@ var AppDeploy = Store.createClass({
 
 	handleEvent: function (event) {
 		switch (event.name) {
-			case 'JOB':
-				if (event.taffy !== true || this.props.appID === null || (event.data.meta || {}).app !== this.props.appID || event.data.meta.rev !== this.props.sha) {
-					return;
-				}
-				if (this.state.taffyJob === null || event.object_id === this.state.taffyJob.id) {
-					this.setState({
-						taffyJob: event.data,
-						launching: (event.data.state !== 'down' && event.data.state !== 'crashed'),
-						launchFailed: event.data.state === 'crashed',
-						launchSuccess: event.data.state === 'down',
-						launchErrorMsg: event.data.state === 'crashed' ? 'Non-zero exit status': null
-					});
-					return;
-				}
+		case 'JOB':
+			if (event.taffy !== true || this.props.appID === null || (event.data.meta || {}).app !== this.props.appID || event.data.meta.rev !== this.props.sha) {
+				return;
+			}
+			if (this.state.taffyJob === null || event.object_id === this.state.taffyJob.id) {
+				this.setState({
+					taffyJob: event.data,
+					launching: (event.data.state !== 'down' && event.data.state !== 'crashed'),
+					launchFailed: event.data.state === 'crashed',
+					launchSuccess: event.data.state === 'down',
+					launchErrorMsg: event.data.state === 'crashed' ? 'Non-zero exit status': null
+				});
+				return;
+			}
 			break;
 
-			case 'APP':
-				if (event.app === this.props.appID && event.data.release) {
-					Dispatcher.dispatch({
-						name: 'GET_APP_RELEASE',
-						appID: this.props.appID
-					});
-				}
+		case 'APP':
+			if (event.app === this.props.appID && event.data.release) {
+				Dispatcher.dispatch({
+					name: 'GET_APP_RELEASE',
+					appID: this.props.appID
+				});
+			}
 			break;
 
-			case 'APP_RELEASE':
-				if (event.app === this.props.appID) {
-					this.setState({
-						release: event.data.release
-					});
-				}
+		case 'APP_RELEASE':
+			if (event.app === this.props.appID) {
+				this.setState({
+					release: event.data.release
+				});
+			}
 			break;
 
-			case 'UPDATE_APP_ENV_FAILED':
-				if (event.appID === this.props.appID) {
-					this.setState({
-						launchErrorMsg: event.errorMsg
-					});
-				}
+		case 'UPDATE_APP_ENV_FAILED':
+			if (event.appID === this.props.appID) {
+				this.setState({
+					launchErrorMsg: event.errorMsg
+				});
+			}
 			break;
 		}
 	}

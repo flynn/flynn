@@ -1,4 +1,4 @@
-import { assertEqual, extend } from 'marbles/utils';
+import { assertEqual } from 'marbles/utils';
 import ScrollPagination from 'ScrollPagination';
 import GithubPullsStore from '../stores/github-pulls';
 import GithubPullsActions from '../actions/github-pulls';

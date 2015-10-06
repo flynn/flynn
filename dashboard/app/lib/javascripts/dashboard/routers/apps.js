@@ -114,7 +114,7 @@ var AppsRouter = Router.createClass({
 				selectedAppId: appProps.appId,
 				getAppPath: getAppPath,
 				defaultRouteDomain: defaultRouteDomain,
-				showSystemApps: showSystemApps,
+				showSystemApps: showSystemApps
 			},
 			appsListHeaderProps: {
 				githubAuthed: !!Config.githubClient
@@ -300,87 +300,86 @@ var AppsRouter = Router.createClass({
 
 	handleEvent: function (event) {
 		switch (event.name) {
-			case 'handler:before':
-				// reset state between routes
-				this.state = {};
-				if (event.handler.opts.app === true) {
-					this.state.appID = event.params[0].id;
-				}
+		case 'handler:before':
+			// reset state between routes
+			this.state = {};
+			if (event.handler.opts.app === true) {
+				this.state.appID = event.params[0].id;
+			}
 			break;
 
-			case 'APP_DELETED':
-				if (this.state.appID === event.app) {
-					this.history.navigate("");
-				}
+		case 'APP_DELETED':
+			if (this.state.appID === event.app) {
+				this.history.navigate("");
+			}
 			break;
 
-			case 'CREATE_APP_ROUTE':
-				if (this.state.creatingRoute === true) {
-					this.setState({
-						routeDomain: event.data.domain
-					});
-				}
+		case 'CREATE_APP_ROUTE':
+			if (this.state.creatingRoute === true) {
+				this.setState({
+					routeDomain: event.data.domain
+				});
+			}
 			break;
 
-			case 'ROUTE':
-				if (this.state.creatingRoute === true && event.data.domain === this.state.routeDomain) {
-					this.__navigateToApp(event.app);
-				}
+		case 'ROUTE':
+			if (this.state.creatingRoute === true && event.data.domain === this.state.routeDomain) {
+				this.__navigateToApp(event.app);
+			}
 			break;
 
-			case 'DELETE_APP_ROUTE':
-				if (this.state.deletingRoute === true) {
-					this.setState({
-						routeID: event.routeID
-					});
-				}
+		case 'DELETE_APP_ROUTE':
+			if (this.state.deletingRoute === true) {
+				this.setState({
+					routeID: event.routeID
+				});
+			}
 			break;
 
-			case 'DELETE_APP_ROUTE_FAILED':
-				if (this.state.deletingRoute === true && event.routeID === this.state.routeID && event.status === 404) {
-					this.__navigateToApp(event.appID, {route: null, domain: null});
-				}
+		case 'DELETE_APP_ROUTE_FAILED':
+			if (this.state.deletingRoute === true && event.routeID === this.state.routeID && event.status === 404) {
+				this.__navigateToApp(event.appID, {route: null, domain: null});
+			}
 			break;
 
-			case 'ROUTE_DELETED':
-				if (this.state.deletingRoute === true && event.data.id === this.state.routeID) {
-					this.__navigateToApp(event.app, {route: null, domain: null});
-				}
+		case 'ROUTE_DELETED':
+			if (this.state.deletingRoute === true && event.data.id === this.state.routeID) {
+				this.__navigateToApp(event.app, {route: null, domain: null});
+			}
 			break;
 
-			case 'CONFIRM_DEPLOY_APP_EVENT':
-				if (this.state.appID === event.appID) {
-					this.history.navigate(this.__getAppPath(event.appID, {event: event.eventID}, '/deploy/:event'));
-				}
+		case 'CONFIRM_DEPLOY_APP_EVENT':
+			if (this.state.appID === event.appID) {
+				this.history.navigate(this.__getAppPath(event.appID, {event: event.eventID}, '/deploy/:event'));
+			}
 			break;
 
-			case 'SCALE':
-				this.__handleScaleEvent(event);
+		case 'SCALE':
+			this.__handleScaleEvent(event);
 			break;
 
-			case 'DEPLOYMENT':
-				if (this.state.deployingEvent === true && event.app === this.state.appID) {
-				}
+		case 'DEPLOYMENT':
+			this.__handleDeploymentEvent(event);
 			break;
 
-			case "GITHUB_BRANCH_SELECTOR:BRANCH_SELECTED":
-				this.__handleBranchSelected(event);
+		case "GITHUB_BRANCH_SELECTOR:BRANCH_SELECTED":
+			this.__handleBranchSelected(event);
 			break;
 
-			case "GITHUB_COMMITS:COMMIT_SELECTED":
-				this.__handleCommitSelected(event);
+		case "GITHUB_COMMITS:COMMIT_SELECTED":
+			this.__handleCommitSelected(event);
 			break;
 
-			case "APP_SOURCE_HISTORY:CONFIRM_DEPLOY_COMMIT":
-				this.__handleConfirmDeployCommit(event);
+		case "APP_SOURCE_HISTORY:CONFIRM_DEPLOY_COMMIT":
+			this.__handleConfirmDeployCommit(event);
 			break;
 
-			case "GITHUB_PULL:MERGED":
-				this.__handleGithubPullMerged(event);
+		case "GITHUB_PULL:MERGED":
+			this.__handleGithubPullMerged(event);
 			break;
 
-			case "GITHUB_AUTH_CHANGE":
-				this.history.navigate(this.history.path, { force: true, replace: true });
+		case "GITHUB_AUTH_CHANGE":
+			this.history.navigate(this.history.path, { force: true, replace: true });
 			break;
 		}
 	},

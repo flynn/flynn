@@ -2,11 +2,17 @@ package main
 
 import (
 	"log"
+	"os"
 
 	matrix "github.com/flynn/flynn/Godeps/_workspace/src/github.com/jvatic/asset-matrix-go"
 )
 
 func main() {
+	esLintEnabled := os.Getenv("ENVIRONMENT") != "DEVELOPMENT"
+	var esLintConfigPath string
+	if esLintEnabled {
+		esLintConfigPath = "./.eslintrc"
+	}
 	m := matrix.New(&matrix.Config{
 		Paths: []*matrix.AssetRoot{
 			{
@@ -16,7 +22,8 @@ func main() {
 				Path:      "src",
 			},
 			{
-				Path: "./src",
+				Path:             "./src",
+				ESLintConfigPath: esLintConfigPath,
 			},
 			{
 				Path: "./vendor",
