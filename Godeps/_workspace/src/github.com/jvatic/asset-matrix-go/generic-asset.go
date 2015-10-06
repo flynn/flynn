@@ -1,7 +1,6 @@
 package assetmatrix
 
 import (
-	"bytes"
 	"io"
 	"log"
 	"os"
@@ -59,10 +58,13 @@ func (a *GenericAsset) Compile() (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, file); err != nil {
-		return nil, err
-	}
-	return &buf, nil
+	r, w := io.Pipe()
+	go func() {
+		defer file.Close()
+		defer w.Close()
+		if _, err := io.Copy(w, file); err != nil {
+			log.Fatal(err)
+		}
+	}()
+	return r, nil
 }

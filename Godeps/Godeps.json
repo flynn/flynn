@@ -504,7 +504,7 @@
 		},
 		{
 			"ImportPath": "github.com/jvatic/asset-matrix-go",
-			"Rev": "cfcf586dcd7950d28a81a5b900a160923d7f82a8"
+			"Rev": "f5fcb3012298314fa20c03f60812c08c04307cbf"
 		},
 		{
 			"ImportPath": "github.com/kardianos/osext",
