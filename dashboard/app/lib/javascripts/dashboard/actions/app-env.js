@@ -30,7 +30,7 @@ var updateAppEnv = function (appID, changedRelease, env) {
 		Dispatcher.dispatch({
 			name: 'UPDATE_APP_ENV_FAILED',
 			appID: appID,
-			errorMsg: args[0].message || ''
+			errorMsg: message
 		});
 		return Promise.reject(args);
 	});

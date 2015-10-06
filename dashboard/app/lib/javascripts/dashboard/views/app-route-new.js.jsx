@@ -59,7 +59,7 @@ var NewAppRoute = React.createClass({
 
 	__getStoreID: function (props) {
 		return {
-			appID: this.props.appId
+			appID: props.appId
 		};
 	},
 

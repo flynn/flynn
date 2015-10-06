@@ -359,8 +359,7 @@ var AppsRouter = Router.createClass({
 			break;
 
 		case 'DEPLOYMENT':
-			if (this.state.deployingEvent === true && event.app === this.state.appID) {
-			}
+			this.__handleDeploymentEvent(event);
 			break;
 
 		case "GITHUB_BRANCH_SELECTOR:BRANCH_SELECTED":

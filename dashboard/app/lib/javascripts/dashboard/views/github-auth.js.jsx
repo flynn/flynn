@@ -170,7 +170,7 @@ var GithubAuth = React.createClass({
 		}
 
 		var appDeployState = AppDeployStore.getState(state.appDeployStoreId);
-		state.errorMsg = AppDeployStore.launchErrorMsg;
+		state.errorMsg = appDeployState.launchErrorMsg;
 
 		return state;
 	}
