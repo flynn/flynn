@@ -140,6 +140,9 @@ Options:
 	if release.Meta == nil {
 		release.Meta = make(map[string]string, len(meta))
 	}
+	if release.Env == nil {
+		release.Env = make(map[string]string, len(env))
+	}
 	for k, v := range env {
 		release.Env[k] = v
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	ct "github.com/flynn/flynn/controller/types"
@@ -14,21 +15,30 @@ type TaffyDeploySuite struct {
 
 var _ = c.ConcurrentSuite(&TaffyDeploySuite{})
 
-func (s *TaffyDeploySuite) deployWithTaffy(t *c.C, app *ct.App, github map[string]string) {
+func (s *TaffyDeploySuite) deployWithTaffy(t *c.C, app *ct.App, env, meta, github map[string]string) {
 	client := s.controllerClient(t)
 
 	taffyRelease, err := client.GetAppRelease("taffy")
 	t.Assert(err, c.IsNil)
 
+	args := []string{
+		app.Name,
+		github["clone_url"],
+		github["branch"],
+		github["rev"],
+	}
+
+	for name, m := range map[string]map[string]string{"--env": env, "--meta": meta} {
+		for k, v := range m {
+			args = append(args, name)
+			args = append(args, fmt.Sprintf("%s=%s", k, v))
+		}
+	}
+
 	rwc, err := client.RunJobAttached("taffy", &ct.NewJob{
 		ReleaseID:  taffyRelease.ID,
 		ReleaseEnv: true,
-		Cmd: []string{
-			app.Name,
-			github["clone_url"],
-			github["branch"],
-			github["rev"],
-		},
+		Cmd:        args,
 		Meta: map[string]string{
 			"github":      "true",
 			"github_user": github["user"],
@@ -72,17 +82,15 @@ func (s *TaffyDeploySuite) TestDeploys(t *c.C) {
 	t.Assert(client.CreateApp(app), c.IsNil)
 	debugf(t, "created app %s (%s)", app.Name, app.ID)
 
-	release := &ct.Release{
-		Meta: map[string]string{
-			"github":      "true",
-			"github_user": github["user"],
-			"github_repo": github["repo"],
-		},
+	env := map[string]string{
+		"SOMEVAR": "SOMEVAL",
 	}
-	t.Assert(client.CreateRelease(release), c.IsNil)
-	t.Assert(client.SetAppRelease(app.ID, release.ID), c.IsNil)
-
-	s.deployWithTaffy(t, app, github)
+	meta := map[string]string{
+		"github":      "true",
+		"github_user": github["user"],
+		"github_repo": github["repo"],
+	}
+	s.deployWithTaffy(t, app, env, meta, github)
 
 	release, err := client.GetAppRelease(app.ID)
 	t.Assert(err, c.IsNil)
@@ -96,6 +104,8 @@ func (s *TaffyDeploySuite) TestDeploys(t *c.C) {
 	assertMeta(release.Meta, "github", c.Equals, "true")
 	assertMeta(release.Meta, "github_user", c.Equals, github["user"])
 	assertMeta(release.Meta, "github_repo", c.Equals, github["repo"])
+	t.Assert(release.Env, c.NotNil)
+	assertMeta(release.Env, "SOMEVAR", c.Equals, "SOMEVAL")
 
 	// second deploy
 
@@ -104,21 +114,13 @@ func (s *TaffyDeploySuite) TestDeploys(t *c.C) {
 	release, err = client.GetAppRelease(app.ID)
 	t.Assert(err, c.IsNil)
 
-	release = &ct.Release{
-		Env:       release.Env,
-		Processes: release.Processes,
-		Meta:      release.Meta,
-	}
-	t.Assert(client.CreateRelease(release), c.IsNil)
-	t.Assert(client.SetAppRelease(app.ID, release.ID), c.IsNil)
-
-	s.deployWithTaffy(t, app, github)
+	s.deployWithTaffy(t, app, env, meta, github)
 
 	newRelease, err := client.GetAppRelease(app.ID)
 	t.Assert(err, c.IsNil)
 	t.Assert(newRelease.ID, c.Not(c.Equals), release.ID)
-	release.Env["SLUG_URL"] = newRelease.Env["SLUG_URL"] // SLUG_URL will be different
-	t.Assert(release.Env, c.DeepEquals, newRelease.Env)
+	env["SLUG_URL"] = newRelease.Env["SLUG_URL"] // SLUG_URL will be different
+	t.Assert(env, c.DeepEquals, newRelease.Env)
 	t.Assert(release.Processes, c.DeepEquals, newRelease.Processes)
 	t.Assert(newRelease, c.NotNil)
 	t.Assert(newRelease.Meta, c.NotNil)

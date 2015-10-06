@@ -2,16 +2,20 @@ import { extend } from 'marbles/utils';
 import Dispatcher from 'dashboard/dispatcher';
 import Config from 'dashboard/config';
 
-var createTaffyJob = function (taffyReleaseId, appID, appName, meta) {
-	var client = Config.client;
-
-	var cloneURL = meta.clone_url;
-	var branch = meta.branch;
-	var rev = meta.rev;
-	return client.createTaffyJob({
+var createTaffyJob = function (taffyReleaseId, appID, appName, meta, env) {
+	env = env || {};
+	var args = [appName, meta.clone_url, meta.branch, meta.rev];
+	[{ arg: '--meta', data: meta }, { arg: '--env', data: env }].forEach(function (item) {
+		Object.keys(item.data).forEach(function (k) {
+			var v = item.data[k];
+			args.push(item.arg);
+			args.push(k +'='+ v);
+		});
+	});
+	return Config.client.createTaffyJob({
 		release: taffyReleaseId,
 		release_env: true,
-		cmd: [appName, cloneURL, branch, rev],
+		cmd: args,
 		meta: extend({}, meta, {
 			app: appID
 		})
@@ -28,32 +32,15 @@ var deployFromGithub = function (meta, appData) {
 		return client.createAppDatabase({ apps: [appId] }).then(function (args) {
 			var res = args[0];
 			databaseEnv = res.env;
-			return createRelease();
+			return taffyDeploy();
 		});
 	}
 
-	function createRelease () {
-		return client.createRelease({
-			env: extend({}, appData.env, databaseEnv),
-			meta: meta
-		}).then(function (args) {
-			var res = args[0];
-			return createAppRelease(res.id);
-		});
-	}
-
-	function createAppRelease (releaseId) {
-		return client.createAppRelease(appId, {
-			id: releaseId
-		}).then(function () {
-			return getTaffyRelease();
-		});
-	}
-
-	function getTaffyRelease () {
+	function taffyDeploy () {
 		return client.getTaffyRelease().then(function (args) {
 			var res = args[0];
-			return createTaffyJob(res.id, appId, appName, meta);
+			var env = extend({}, appData.env, databaseEnv);
+			return createTaffyJob(res.id, appId, appName, meta, env);
 		});
 	}
 
@@ -77,7 +64,7 @@ var deployFromGithub = function (meta, appData) {
 		if (appData.dbRequested) {
 			return createDatabase();
 		} else {
-			return createRelease();
+			return taffyDeploy();
 		}
 	});
 };
