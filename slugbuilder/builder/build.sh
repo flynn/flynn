@@ -94,7 +94,7 @@ if [[ -n "${SSH_CLIENT_KEY}" ]]; then
   mkdir -p ${HOME}/.ssh
   file="${HOME}/.ssh/id_rsa"
   echo "${SSH_CLIENT_KEY}" > ${file}
-  chown nobody:nogroup ${file}
+  chown -R nobody:nogroup ${HOME}/.ssh
   chmod 600 ${file}
   unset SSH_CLIENT_KEY
 fi
@@ -104,7 +104,7 @@ if [[ -n "${SSH_CLIENT_HOSTS}" ]]; then
   mkdir -p ${HOME}/.ssh
   file="${HOME}/.ssh/known_hosts"
   echo "${SSH_CLIENT_HOSTS}" > ${file}
-  chown nobody:nogroup ${file}
+  chown -R nobody:nogroup ${HOME}/.ssh
   chmod 600 ${file}
   unset SSH_CLIENT_HOSTS
 fi

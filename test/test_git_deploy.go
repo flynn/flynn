@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"fmt"
 	"io"
@@ -228,4 +229,31 @@ func (s *GitDeploySuite) TestLargeRepo(t *c.C) {
 	t.Assert(r.git("commit", "-m", "data"), Succeeds)
 	t.Assert(r.flynn("create"), Succeeds)
 	t.Assert(r.git("push", "flynn", "master"), OutputContains, "Unable to select a buildpack")
+}
+
+func (s *GitDeploySuite) TestPrivateSSHKeyClone(t *c.C) {
+	r := s.newGitRepo(t, "private-clone")
+	t.Assert(r.flynn("create"), Succeeds)
+	t.Assert(r.flynn("env", "set", "BUILDPACK_URL=git@github.com:kr/heroku-buildpack-inline.git"), Succeeds)
+
+	push := r.git("push", "flynn", "master")
+	t.Assert(push, Succeeds)
+}
+
+func (s *GitDeploySuite) TestGitSubmodules(t *c.C) {
+	r := s.newGitRepo(t, "empty")
+	t.Assert(r.git("submodule", "add", "https://github.com/flynn-examples/go-flynn-example.git"), Succeeds)
+
+	// use a private SSH URL to test ssh client key
+	gmPath := filepath.Join(r.dir, ".gitmodules")
+	gm, err := ioutil.ReadFile(gmPath)
+	t.Assert(err, c.IsNil)
+	gm = bytes.Replace(gm, []byte("https://github.com/"), []byte("git@github.com:"), 1)
+	err = ioutil.WriteFile(gmPath, gm, os.ModePerm)
+	t.Assert(err, c.IsNil)
+
+	t.Assert(r.git("commit", "-am", "Add Submodule"), Succeeds)
+	t.Assert(r.flynn("create"), Succeeds)
+	t.Assert(r.git("push", "flynn", "master"), Succeeds)
+	t.Assert(r.flynn("run", "ls", "go-flynn-example"), SuccessfulOutputContains, "main.go")
 }
