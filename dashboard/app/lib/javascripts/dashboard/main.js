@@ -10,7 +10,9 @@ import Client from './client';
 import GithubClient from './github-client';
 import ServiceUnavailableComponent from './views/service-unavailable';
 import NavComponent from './views/nav';
-import Actions from './actions'; // jshint ignore:line
+/* eslint-disable no-unused-vars */
+import Actions from './actions';
+/* eslint-enable */
 
 var Dashboard = function () {
 	var history = this.history = new History();
