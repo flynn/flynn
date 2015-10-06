@@ -107,6 +107,8 @@ main() {
   fi
   info "installing runtime dependencies"
   run apt-get install --yes ${packages[@]}
+  info "loading zfs kernel module"
+  run modprobe zfs
 
   info "downloading flynn-host binary to tmp dir"
   local tmp="$(mktemp --directory)"
