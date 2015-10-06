@@ -16,11 +16,6 @@ func main() {
 	if installerSrcDir == "" {
 		installerSrcDir = "./lib/installer"
 	}
-	esLintEnabled := os.Getenv("ENVIRONMENT") != "DEVELOPMENT"
-	var esLintConfigPath string
-	if esLintEnabled {
-		esLintConfigPath = "./.eslintrc"
-	}
 	m := matrix.New(&matrix.Config{
 		Paths: []*matrix.AssetRoot{
 			{
@@ -39,8 +34,7 @@ func main() {
 				Path: filepath.Join(installerSrcDir, "images"),
 			},
 			{
-				Path:             "./lib/javascripts",
-				ESLintConfigPath: esLintConfigPath,
+				Path: "./lib/javascripts",
 			},
 			{
 				Path: "./lib/stylesheets",
