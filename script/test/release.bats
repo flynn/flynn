@@ -15,45 +15,23 @@ date() {
   assert_output "${DATE}.0"
 }
 
-@test "next_release_version with previous dates in manifest" {
-  run next_release_version <<-MANIFEST
-{
-  "versions": [
-    { "version": "20150101.0", "commit": "0f4a636" }
-  ]
-}
-MANIFEST
+@test "next_release_version with previous date in tag" {
+  run next_release_version "20150101.0"
 
   assert_success
   assert_output "${DATE}.0"
 }
 
-@test "next_release_version with today's date in manifest" {
-  run next_release_version <<-MANIFEST
-{
-  "versions": [
-    { "version": "20150101.0", "commit": "0f4a636" },
-    { "version": "${DATE}.0", "commit": "0f4a636" }
-  ]
-}
-MANIFEST
+@test "next_release_version with today's date in tag" {
+  run next_release_version "${DATE}.0"
 
   assert_success
   assert_output "${DATE}.1"
 }
 
-@test "next_release_version with today's date in manifest (multiple)" {
-  run next_release_version <<-MANIFEST
-{
-  "versions": [
-    { "version": "20150101.0", "commit": "0f4a636" },
-    { "version": "${DATE}.0", "commit": "0f4a636" },
-    { "version": "${DATE}.1", "commit": "0f4a636" },
-    { "version": "${DATE}.2", "commit": "0f4a636" }
-  ]
-}
-MANIFEST
+@test "next_release_version can handle 2 digit iterations" {
+  run next_release_version "${DATE}.9"
 
   assert_success
-  assert_output "${DATE}.3"
+  assert_output "${DATE}.10"
 }

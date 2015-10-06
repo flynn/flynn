@@ -5,10 +5,17 @@ new_release_manifest() {
     echo '{"versions":[]}'
 }
 
-# next_release_version reads a release manifest via STDIN and returns the next
-# appropriate release version.
+# next_release_version takes the previous release version
+# and returns the next one
 next_release_version() {
+  local previous=$1
   local date=$(date +%Y%m%d)
-  local iteration=$(jq --raw-output '.versions[].version' | grep "${date}" | wc -l)
+  local iteration
+  if [[ $previous =~ $date ]]; then
+    previous_iteration="${previous##*.}"
+    iteration=$((previous_iteration+1))
+  else
+    iteration=0
+  fi
   echo "${date}.${iteration}"
 }
