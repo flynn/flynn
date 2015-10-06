@@ -39,138 +39,138 @@ export default createClass({
 	handleEvent: function (event) {
 		var cluster;
 		switch (event.name) {
-			case 'SELECT_CLOUD':
-				if (newCluster.constructor.type !== event.cloud) {
-					newCluster.removeChangeListener(this.__handleClusterChanged);
-					newCluster = Cluster.newOfType(event.cloud, {id: 'new', credentials: newCluster.state.__allCredentials});
-					newCluster.addChangeListener(this.__handleClusterChanged);
-					this.setState({
-						currentCloudSlug: event.cloud,
-						currentCluster: newCluster
-					});
-				}
-			break;
-
-			case 'LAUNCH_CLUSTER':
-				Client.launchCluster(newCluster.toJSON());
-			break;
-
-			case 'NEW_CLUSTER':
-				this.__addCluster(event.cluster);
-				if (this.__pendingCurrentClusterID === event.cluster.attrs.ID) {
-					this.__pendingCurrentClusterID = null;
-					this.setState({
-						currentClusterID: event.cluster.attrs.ID,
-						currentCluster: event.cluster,
-						currentCloudSlug: event.cluster.type
-					});
-				}
-			break;
-
-			case 'NEW_CREDENTIAL':
-				this.__addCredential(event.credential);
-			break;
-
-			case 'CREDENTIAL_DELETED':
-				this.__removeCredential(event.id);
-			break;
-
-			case 'CURRENT_CLUSTER':
-				cluster = event.clusterID === null ? newCluster : this.__findCluster(event.clusterID);
-				if ( !cluster ) {
-					this.__pendingCurrentClusterID = event.clusterID;
-					break;
-				}
+		case 'SELECT_CLOUD':
+			if (newCluster.constructor.type !== event.cloud) {
+				newCluster.removeChangeListener(this.__handleClusterChanged);
+				newCluster = Cluster.newOfType(event.cloud, {id: 'new', credentials: newCluster.state.__allCredentials});
+				newCluster.addChangeListener(this.__handleClusterChanged);
 				this.setState({
-					currentClusterID: event.clusterID,
-					currentCluster: cluster,
-					currentCloudSlug: cluster.type
+					currentCloudSlug: event.cloud,
+					currentCluster: newCluster
 				});
+			}
 			break;
 
-			case 'CREATE_CREDENTIAL':
-				this.__clearErrors('credentials');
-				if (this.__findCredentialIndex(event.data.id) !== -1) {
-					return;
+		case 'LAUNCH_CLUSTER':
+			Client.launchCluster(newCluster.toJSON());
+			break;
+
+		case 'NEW_CLUSTER':
+			this.__addCluster(event.cluster);
+			if (this.__pendingCurrentClusterID === event.cluster.attrs.ID) {
+				this.__pendingCurrentClusterID = null;
+				this.setState({
+					currentClusterID: event.cluster.attrs.ID,
+					currentCluster: event.cluster,
+					currentCloudSlug: event.cluster.type
+				});
+			}
+			break;
+
+		case 'NEW_CREDENTIAL':
+			this.__addCredential(event.credential);
+			break;
+
+		case 'CREDENTIAL_DELETED':
+			this.__removeCredential(event.id);
+			break;
+
+		case 'CURRENT_CLUSTER':
+			cluster = event.clusterID === null ? newCluster : this.__findCluster(event.clusterID);
+			if ( !cluster ) {
+				this.__pendingCurrentClusterID = event.clusterID;
+				break;
+			}
+			this.setState({
+				currentClusterID: event.clusterID,
+				currentCluster: cluster,
+				currentCloudSlug: cluster.type
+			});
+			break;
+
+		case 'CREATE_CREDENTIAL':
+			this.__clearErrors('credentials');
+			if (this.__findCredentialIndex(event.data.id) !== -1) {
+				return;
+			}
+			this.__addCredential(event.data);
+			this.__createCredPromise = Client.createCredential(event.data).catch(function (args) {
+				var xhr = args[1];
+				if (xhr.status === 409) {
+					return; // Already exists
 				}
-				this.__addCredential(event.data);
-				this.__createCredPromise = Client.createCredential(event.data).catch(function (args) {
-					var xhr = args[1];
-					if (xhr.status === 409) {
-						return; // Already exists
-					}
-					this.__removeCredential(event.data.id);
+				this.__removeCredential(event.data.id);
+			}.bind(this));
+			break;
+
+		case 'DELETE_CREDENTIAL':
+			this.__clearErrors('credentials');
+			this.__removeCredential(event.creds.id);
+			Client.deleteCredential(event.creds.type, event.creds.id).catch(function (args) {
+				var xhr = args[1];
+				if (xhr.status === 409) {
+					// in use
+					this.__addCredential(event.creds);
+				}
+			}.bind(this));
+			break;
+
+		case 'DELETE_CREDENTIAL_ERROR':
+			this.__addError('credentials', event.err);
+			break;
+
+		case 'CREATE_CREDENTIAL_ERROR':
+			this.__addError('credentials', event.err);
+			break;
+
+		case 'CONFIRM_CLUSTER_DELETE':
+			Client.deleteCluster(event.clusterID);
+			break;
+
+		case 'INSTALL_PROMPT_RESPONSE':
+			Client.sendPromptResponse(event.clusterID, event.promptID, event.data);
+			break;
+
+		case 'CHECK_CERT':
+			cluster = this.__findCluster(event.clusterID);
+			if (cluster) {
+				Client.checkCert(event.domainName).then(function () {
+					cluster.handleEvent({
+						name: 'CERT_VERIFIED',
+						clusterID: cluster.attrs.ID
+					});
 				}.bind(this));
+			}
 			break;
 
-			case 'DELETE_CREDENTIAL':
-				this.__clearErrors('credentials');
-				this.__removeCredential(event.creds.id);
-				Client.deleteCredential(event.creds.type, event.creds.id).catch(function (args) {
-					var xhr = args[1];
-					if (xhr.status === 409) {
-						// in use
-						this.__addCredential(event.creds);
-					}
-				}.bind(this));
+		case 'CREDENTIALS_CHANGE':
+			newCluster.handleEvent(extend({}, event, {clusterID: 'new'}));
 			break;
 
-			case 'DELETE_CREDENTIAL_ERROR':
-				this.__addError('credentials', event.err);
+		case 'LIST_CLOUD_REGIONS':
+			(this.__createCredPromise || Promise.resolve(null)).then(function () {
+				Client.listCloudRegions(event.cloud, event.credentialID);
+			});
 			break;
 
-			case 'CREATE_CREDENTIAL_ERROR':
-				this.__addError('credentials', event.err);
+		case 'LIST_AZURE_SUBSCRIPTIONS':
+			(this.__createCredPromise || Promise.resolve(null)).then(function () {
+				Client.listAzureSubscriptions(event.credentialID);
+			});
 			break;
 
-			case 'CONFIRM_CLUSTER_DELETE':
-				Client.deleteCluster(event.clusterID);
+		case 'CLOUD_REGIONS':
+			newCluster.handleEvent(extend({}, event, {clusterID: 'new'}));
 			break;
 
-			case 'INSTALL_PROMPT_RESPONSE':
-				Client.sendPromptResponse(event.clusterID, event.promptID, event.data);
+		case 'AZURE_SUBSCRIPTIONS':
+			newCluster.handleEvent(extend({}, event, {clusterID: 'new'}));
 			break;
 
-			case 'CHECK_CERT':
-				cluster = this.__findCluster(event.clusterID);
-				if (cluster) {
-					Client.checkCert(event.domainName).then(function () {
-						cluster.handleEvent({
-							name: 'CERT_VERIFIED',
-							clusterID: cluster.attrs.ID
-						});
-					}.bind(this));
-				}
-			break;
-
-			case 'CREDENTIALS_CHANGE':
-				newCluster.handleEvent(extend({}, event, {clusterID: 'new'}));
-			break;
-
-			case 'LIST_CLOUD_REGIONS':
-				(this.__createCredPromise || Promise.resolve(null)).then(function () {
-					Client.listCloudRegions(event.cloud, event.credentialID);
-				});
-			break;
-
-			case 'LIST_AZURE_SUBSCRIPTIONS':
-				(this.__createCredPromise || Promise.resolve(null)).then(function () {
-					Client.listAzureSubscriptions(event.credentialID);
-				});
-			break;
-
-			case 'CLOUD_REGIONS':
-				newCluster.handleEvent(extend({}, event, {clusterID: 'new'}));
-			break;
-
-			case 'AZURE_SUBSCRIPTIONS':
-				newCluster.handleEvent(extend({}, event, {clusterID: 'new'}));
-			break;
-
-			case 'CLUSTER_STATE':
-				if (event.state === 'deleted') {
-					this.__removeCluster(event.clusterID);
-				}
+		case 'CLUSTER_STATE':
+			if (event.state === 'deleted') {
+				this.__removeCluster(event.clusterID);
+			}
 			break;
 		}
 	},
@@ -236,7 +236,7 @@ export default createClass({
 	__addCluster: function (cluster) {
 		var index = this.__findClusterIndex(cluster.attrs.ID);
 		if (index !== -1) {
-			console.warn('cluster '+ cluster.attrs.ID +' already added!');
+			window.console.warn('cluster '+ cluster.attrs.ID +' already added!');
 			return;
 		}
 		var clusters = [cluster].concat(this.state.clusters);

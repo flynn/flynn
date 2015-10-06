@@ -3,22 +3,22 @@ import CSS from 'css';
 
 var webkitFlexTransformer = function (field, value) {
 	switch (field) {
-		case 'display':
-			if (value === 'flex' && UserAgent.isSafari()) {
-				return [field, '-webkit-flex'];
-			}
+	case 'display':
+		if (value === 'flex' && UserAgent.isSafari()) {
+			return [field, '-webkit-flex'];
+		}
 		break;
 
-		case 'flexGrow':
-			if (UserAgent.isSafari()) {
-				return ['WebkitFlexGrow', value];
-			}
+	case 'flexGrow':
+		if (UserAgent.isSafari()) {
+			return ['WebkitFlexGrow', value];
+		}
 		break;
 
-		case 'flexBasis':
-			if (UserAgent.isSafari()) {
-				return ['WebkitFlexBasis', value];
-			}
+	case 'flexBasis':
+		if (UserAgent.isSafari()) {
+			return ['WebkitFlexBasis', value];
+		}
 		break;
 	}
 	return [field, value];

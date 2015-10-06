@@ -94,9 +94,9 @@ var JobOutput = Store.createClass({
 		eventSource.addEventListener("message", function (e) {
 			var evnt = JSON.parse(e.data || "");
 			switch (evnt.event) {
-				case "error":
-					handleError();
-					return;
+			case "error":
+				handleError();
+				return;
 			}
 			var data = evnt.data;
 			if (data.msg && data.timestamp) {

@@ -33,9 +33,9 @@ var GithubAuth = React.createClass({
 						<ol>
 							<li>
 								<ExternalLink href={"https://github.com/settings/tokens/new"+ QueryParams.serializeParams([{
-										scopes: "repo,read:org,read:public_key",
-										description: "Flynn Dashboard"
-									}])} className="btn-green connect-with-github" onClick={this.__handleGenerateTokenBtnClick}>
+									scopes: "repo,read:org,read:public_key",
+									description: "Flynn Dashboard"
+								}])} className="btn-green connect-with-github" onClick={this.__handleGenerateTokenBtnClick}>
 									<i className="icn-github-mark" />
 									Generate Token
 								</ExternalLink>
@@ -158,7 +158,7 @@ var GithubAuth = React.createClass({
 			appStoreId: this.__getAppStoreId(props),
 			appDeployStoreId: this.__getAppDeployStoreId(props),
 			githubToken: prevState.githubToken,
-			submitDisabled: prevState.submitDisabled,
+			submitDisabled: prevState.submitDisabled
 		};
 
 		var appState = AppStore.getState(state.appStoreId);

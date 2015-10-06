@@ -33,22 +33,22 @@ var AppResources = Store.createClass({
 
 	handleEvent: function (event) {
 		switch (event.name) {
-			case 'RESOURCE':
-				if (event.app === this.props.appId) {
-					this.setStateWithDelay({
-						resources: this.state.resources.filter(function (r) {
-							return r.id !== event.object_id;
-						}).concat([event.data])
-					});
-				}
+		case 'RESOURCE':
+			if (event.app === this.props.appId) {
+				this.setStateWithDelay({
+					resources: this.state.resources.filter(function (r) {
+						return r.id !== event.object_id;
+					}).concat([event.data])
+				});
+			}
 			break;
 
-			case 'APP_RESOURCES_FETCHED':
-				if (event.appID === this.props.appId) {
-					this.setStateWithDelay({
-						fetched: true
-					});
-				}
+		case 'APP_RESOURCES_FETCHED':
+			if (event.appID === this.props.appId) {
+				this.setStateWithDelay({
+					fetched: true
+				});
+			}
 			break;
 		}
 	}

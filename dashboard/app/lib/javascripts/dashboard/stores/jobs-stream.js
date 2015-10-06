@@ -12,7 +12,7 @@ var JobsStream = Store.createClass({
 
 	willInitialize: function () {
 		this.props = {
-			appId: this.id.appId,
+			appId: this.id.appId
 		};
 		this.url = Config.endpoints.cluster_controller +'/events';
 		this.url = this.url + QueryParams.serializeParams([{

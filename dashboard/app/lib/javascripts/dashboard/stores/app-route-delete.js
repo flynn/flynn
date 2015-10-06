@@ -22,22 +22,22 @@ var AppRouteDelete = Store.createClass({
 
 	handleEvent: function (event) {
 		switch (event.name) {
-			case 'DELETE_APP_ROUTE':
-				if (event.appID === this.props.appID && event.routeID === this.props.routeID) {
-					this.setState({
-						isDeleting: true,
-						errorMsg: null
-					});
-				}
+		case 'DELETE_APP_ROUTE':
+			if (event.appID === this.props.appID && event.routeID === this.props.routeID) {
+				this.setState({
+					isDeleting: true,
+					errorMsg: null
+				});
+			}
 			break;
 
-			case 'DELETE_APP_ROUTE_FAILED':
-				if (event.appID === this.props.appID && event.routeID === this.props.routeID) {
-					this.setState({
-						errorMsg: 'Something went wrong ('+ event.status +')',
-						isDeleting: false
-					});
-				}
+		case 'DELETE_APP_ROUTE_FAILED':
+			if (event.appID === this.props.appID && event.routeID === this.props.routeID) {
+				this.setState({
+					errorMsg: 'Something went wrong ('+ event.status +')',
+					isDeleting: false
+				});
+			}
 			break;
 		}
 	}

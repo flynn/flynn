@@ -29,7 +29,7 @@ var Client = createClass({
 
 	performRequest: function (method, args) {
 		if ( !args.url ) {
-				var err = new Error(this.constructor.displayName +".prototype.performRequest(): Can't make request without URL");
+			var err = new Error(this.constructor.displayName +".prototype.performRequest(): Can't make request without URL");
 			setTimeout(function () {
 				throw err;
 			}.bind(this), 0);
@@ -48,7 +48,7 @@ var Client = createClass({
 
 		return HTTP(extend({
 			method: method,
-			middleware: [].concat(this.constructor.middleware).concat(middleware),
+			middleware: [].concat(this.constructor.middleware).concat(middleware)
 		}, args)).then(function (args) {
 			var res = args[0];
 			var xhr = args[1];
@@ -183,7 +183,7 @@ var Client = createClass({
 				name: 'DELETE_APP_ROUTE_FAILED',
 				appID: appId,
 				routeID: routeId,
-				status: xhr.status,
+				status: xhr.status
 			});
 		});
 	},
@@ -442,86 +442,86 @@ var Client = createClass({
 		this.__waitForEventFns = waitForEventFns;
 
 		switch (event.name) {
-			case 'GET_DEPLOY_APP_JOB':
-				// Ensure JOB event fires for app deploy
-				// e.g. page reloaded so event won't be coming through the event stream
-				this.__waitForEventWithTimeout(function (e) {
-					return e.taffy === true && e.name === 'JOB' && (e.data.meta || {}).app === event.appID;
-				}).catch(function () {
-					return this.getAppJobs('taffy').then(function (args) {
-						var res = args[0];
-						var job = null;
-						for (var i = 0, len = res.length; i < len; i++) {
-							if ((res[i].meta || {}).app === event.appID) {
-								job = res[i];
-								break;
-							}
+		case 'GET_DEPLOY_APP_JOB':
+			// Ensure JOB event fires for app deploy
+			// e.g. page reloaded so event won't be coming through the event stream
+			this.__waitForEventWithTimeout(function (e) {
+				return e.taffy === true && e.name === 'JOB' && (e.data.meta || {}).app === event.appID;
+			}).catch(function () {
+				return this.getAppJobs('taffy').then(function (args) {
+					var res = args[0];
+					var job = null;
+					for (var i = 0, len = res.length; i < len; i++) {
+						if ((res[i].meta || {}).app === event.appID) {
+							job = res[i];
+							break;
 						}
-						if (job !== null) {
-							Dispatcher.dispatch({
-								name: 'JOB',
-								taffy: true,
-								data: job
-							});
-						} else {
-							return Promise.reject(null);
-						}
-					});
-				}.bind(this));
-			break;
-
-			case 'GET_APP_RELEASE':
-				this.__waitForEventWithTimeout(function (e) {
-					return e.app === event.appID && e.object_type === 'app_release';
-				}).catch(function () {
-					this.getAppRelease(event.appID).then(function (args) {
-						var res = args[0];
+					}
+					if (job !== null) {
 						Dispatcher.dispatch({
-							name: 'APP_RELEASE',
-							app: event.appID,
-							object_type: 'app_release',
-							object_id: res.id,
-							data: {
-								release: res
-							}
+							name: 'JOB',
+							taffy: true,
+							data: job
 						});
-					});
-				}.bind(this));
+					} else {
+						return Promise.reject(null);
+					}
+				});
+			}.bind(this));
 			break;
 
-			case 'GET_APP_FORMATION':
-				this.getAppFormation(event.appID, event.releaseID).then(function (args) {
+		case 'GET_APP_RELEASE':
+			this.__waitForEventWithTimeout(function (e) {
+				return e.app === event.appID && e.object_type === 'app_release';
+			}).catch(function () {
+				this.getAppRelease(event.appID).then(function (args) {
 					var res = args[0];
 					Dispatcher.dispatch({
-						name: 'APP_FORMATION',
+						name: 'APP_RELEASE',
 						app: event.appID,
-						objet_type: 'formation',
+						object_type: 'app_release',
 						object_id: res.id,
-						data: res
+						data: {
+							release: res
+						}
 					});
 				});
+			}.bind(this));
 			break;
 
-			case 'GET_APP_RESOURCES':
-				this.getAppResources(event.appID).then(function (args) {
-					var resources = args[0];
-					resources.forEach(function (r) {
-						Dispatcher.dispatch({
-							name: 'RESOURCE',
-							app: event.appID,
-							object_type: 'resources',
-							object_id: r.id,
-							data: r
-						});
-					});
+		case 'GET_APP_FORMATION':
+			this.getAppFormation(event.appID, event.releaseID).then(function (args) {
+				var res = args[0];
+				Dispatcher.dispatch({
+					name: 'APP_FORMATION',
+					app: event.appID,
+					objet_type: 'formation',
+					object_id: res.id,
+					data: res
+				});
+			});
+			break;
+
+		case 'GET_APP_RESOURCES':
+			this.getAppResources(event.appID).then(function (args) {
+				var resources = args[0];
+				resources.forEach(function (r) {
 					Dispatcher.dispatch({
-						name: 'APP_RESOURCES_FETCHED',
-						appID: event.appID
+						name: 'RESOURCE',
+						app: event.appID,
+						object_type: 'resources',
+						object_id: r.id,
+						data: r
 					});
 				});
+				Dispatcher.dispatch({
+					name: 'APP_RESOURCES_FETCHED',
+					appID: event.appID
+				});
+			});
 			break;
 		}
-	},
+	}
 });
 
 export default Client;

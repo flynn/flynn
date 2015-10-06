@@ -101,25 +101,25 @@ var BaseCluster = createClass({
 		}
 
 		switch (attrs.state) {
-			case 'starting':
+		case 'starting':
+			state.currentStep = 'install';
+			state.inProgress = true;
+			break;
+
+		case 'deleting':
+			state.currentStep = 'install';
+			state.deleting = true;
+			break;
+
+		case 'error':
+			state.failed = true;
+			if (this.attrs.ID !== 'new') {
 				state.currentStep = 'install';
-				state.inProgress = true;
+			}
 			break;
 
-			case 'deleting':
-				state.currentStep = 'install';
-				state.deleting = true;
-			break;
-
-			case 'error':
-				state.failed = true;
-				if (this.attrs.ID !== 'new') {
-					state.currentStep = 'install';
-				}
-			break;
-
-			case 'running':
-				state.currentStep = 'dashboard';
+		case 'running':
+			state.currentStep = 'dashboard';
 			break;
 		}
 
@@ -173,94 +173,94 @@ var BaseCluster = createClass({
 		var state;
 
 		switch (event.name) {
-			case 'LAUNCH_CLUSTER_FAILURE':
-				this.setState(this.__computeState({
-					state: 'error',
-					errorMessage: event.res.message || ('Something went wrong ('+ event.xhr.status +')')
-				}));
+		case 'LAUNCH_CLUSTER_FAILURE':
+			this.setState(this.__computeState({
+				state: 'error',
+				errorMessage: event.res.message || ('Something went wrong ('+ event.xhr.status +')')
+			}));
 			break;
 
-			case 'LOG':
-				this.__addLog(event.data);
+		case 'LOG':
+			this.__addLog(event.data);
 			break;
 
-			case 'INSTALL_ERROR':
-				this.__addLog({
-					description: 'Error: '+ event.message
-				});
+		case 'INSTALL_ERROR':
+			this.__addLog({
+				description: 'Error: '+ event.message
+			});
 			break;
 
-			case 'CLUSTER_STATE':
-				this.setState(
-					this.__computeState({state: event.state})
-				);
+		case 'CLUSTER_STATE':
+			this.setState(
+				this.__computeState({state: event.state})
+			);
 			break;
 
-			case 'INSTALL_PROMPT_REQUESTED':
+		case 'INSTALL_PROMPT_REQUESTED':
+			this.setState({
+				prompt: event.prompt
+			});
+			break;
+
+		case 'INSTALL_PROMPT_RESOLVED':
+			if (event.prompt.id === (this.state.prompt || {}).id) {
 				this.setState({
-					prompt: event.prompt
+					prompt: null
 				});
+			}
 			break;
 
-			case 'INSTALL_PROMPT_RESOLVED':
-				if (event.prompt.id === (this.state.prompt || {}).id) {
-					this.setState({
-						prompt: null
-					});
-				}
+		case 'INSTALL_DONE':
+			this.__parseAttributes(event.cluster);
+			this.setState(this.__computeState(event.cluster));
 			break;
 
-			case 'INSTALL_DONE':
-				this.__parseAttributes(event.cluster);
-				this.setState(this.__computeState(event.cluster));
+		case 'CERT_VERIFIED':
+			this.setState({
+				certVerified: true
+			});
 			break;
 
-			case 'CERT_VERIFIED':
-				this.setState({
-					certVerified: true
-				});
+		case 'SELECT_CREDENTIAL':
+			this.setState(this.__computeState({
+				credentialID: event.credentialID
+			}));
 			break;
 
-			case 'SELECT_CREDENTIAL':
-				this.setState(this.__computeState({
-					credentialID: event.credentialID
-				}));
+		case 'CREDENTIALS_CHANGE':
+			this.setState(this.__computeState({
+				credentials: event.credentials
+			}));
 			break;
 
-			case 'CREDENTIALS_CHANGE':
-				this.setState(this.__computeState({
-					credentials: event.credentials
-				}));
+		case 'CLOUD_REGIONS':
+			state = this.state;
+			if (state.credentialID !== event.credentialID || state.selectedCloud !== event.cloud) {
+				return;
+			}
+			this.setState(this.__computeState({
+				regions: event.regions.sort(function (a, b) {
+					return a.name.localeCompare(b.name);
+				})
+			}));
 			break;
 
-			case 'CLOUD_REGIONS':
-				state = this.state;
-				if (state.credentialID !== event.credentialID || state.selectedCloud !== event.cloud) {
-					return;
-				}
-				this.setState(this.__computeState({
-					regions: event.regions.sort(function (a, b) {
-						return a.name.localeCompare(b.name);
-					})
-				}));
+		case 'SELECT_REGION':
+			this.setState(this.__computeState({
+				selectedRegionSlug: event.region
+			}));
 			break;
 
-			case 'SELECT_REGION':
-				this.setState(this.__computeState({
-					selectedRegionSlug: event.region
-				}));
+		case 'SELECT_SIZE':
+			this.setState(this.__computeState({
+				selectedSizeSlug: event.slug
+			}));
 			break;
 
-			case 'SELECT_SIZE':
-				this.setState(this.__computeState({
-					selectedSizeSlug: event.slug
-				}));
-			break;
-
-			case 'SELECT_NUM_INSTANCES':
-				this.setState(this.__computeState({
-					num_instances: event.numInstances
-				}));
+		case 'SELECT_NUM_INSTANCES':
+			this.setState(this.__computeState({
+				num_instances: event.numInstances
+			}));
 			break;
 		}
 	},

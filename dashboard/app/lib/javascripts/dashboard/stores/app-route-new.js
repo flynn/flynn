@@ -22,29 +22,29 @@ var AppRouteNew = Store.createClass({
 
 	handleEvent: function (event) {
 		switch (event.name) {
-			case 'CREATE_APP_ROUTE':
-				if (event.appID === this.props.appID) {
-					this.setState({
-						errorMsg: null,
-						isCreating: true,
-						routeDomain: event.data.domain
-					});
-				}
+		case 'CREATE_APP_ROUTE':
+			if (event.appID === this.props.appID) {
+				this.setState({
+					errorMsg: null,
+					isCreating: true,
+					routeDomain: event.data.domain
+				});
+			}
 			break;
 
-			case 'ROUTE':
-				if (event.app === this.props.appID && event.data.domain === this.state.routeDomain) {
-					this.setState(this.getInitialState());
-				}
+		case 'ROUTE':
+			if (event.app === this.props.appID && event.data.domain === this.state.routeDomain) {
+				this.setState(this.getInitialState());
+			}
 			break;
 
-			case 'CREATE_APP_ROUTE_FAILED':
-				if (event.appID === this.props.appID && event.routeDomain === this.state.routeDomain) {
-					this.setState({
-						errorMsg: 'Something went wrong ('+ event.status +')',
-						isCreating: false
-					});
-				}
+		case 'CREATE_APP_ROUTE_FAILED':
+			if (event.appID === this.props.appID && event.routeDomain === this.state.routeDomain) {
+				this.setState({
+					errorMsg: 'Something went wrong ('+ event.status +')',
+					isCreating: false
+				});
+			}
 			break;
 		}
 	}

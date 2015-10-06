@@ -1,5 +1,3 @@
-import { extend } from 'marbles/utils';
-
 var EditEnv = React.createClass({
 	displayName: "Views.EditEnv",
 
@@ -101,7 +99,7 @@ var EditEnv = React.createClass({
 		});
 
 		this.setState({ env: env, nRemoved: nRemoved });
-		setTimeout(function () { this.props.onChange(__env) }.bind(this), 0);
+		setTimeout(function () { this.props.onChange(__env); }.bind(this), 0);
 	}
 });
 

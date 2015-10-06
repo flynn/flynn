@@ -18,18 +18,18 @@ var Apps = Store.createClass({
 
 	getInitialState: function () {
 		return {
-			apps: [],
+			apps: []
 		};
 	},
 
 	handleEvent: function (event) {
 		switch (event.name) {
-			case 'APP':
-				this.__addOrReplaceApp(event.data);
+		case 'APP':
+			this.__addOrReplaceApp(event.data);
 			break;
 
-			case 'APP_DELETED':
-				this.__handleAppDeleted(event.app);
+		case 'APP_DELETED':
+			this.__handleAppDeleted(event.app);
 			break;
 		}
 	},
@@ -38,7 +38,7 @@ var Apps = Store.createClass({
 		return this.__getClient().getApps().then(function (args) {
 			var res = args[0];
 			this.setState({
-				apps: res,
+				apps: res
 			});
 		}.bind(this));
 	},

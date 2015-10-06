@@ -49,20 +49,6 @@ var DigitalOceanCluster = BaseCluster.createClass('digital_ocean', {
 			});
 		}
 		this.constructor.__super__.setState.call(this, newState, shouldDelay);
-	},
-
-	handleEvent: function (event) {
-		var __super = this.constructor.__super__.handleEvent.bind(this, event);
-
-		if (event.clusterID !== this.attrs.ID) {
-			__super();
-			return;
-		}
-
-		switch (event.name) {
-			default:
-				__super();
-		}
 	}
 });
 

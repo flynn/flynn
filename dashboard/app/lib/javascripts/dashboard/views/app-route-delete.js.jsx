@@ -53,11 +53,11 @@ var AppRouteDelete = React.createClass({
 	},
 
 	__getStoreID: function (props) {
-			return {
-				appID: this.props.appId,
-				routeID: this.props.routeId
-			};
-		},
+		return {
+			appID: this.props.appId,
+			routeID: this.props.routeId
+		};
+	},
 
 	__getState: function (props) {
 		return AppRouteDeleteStore.getState(this.__getStoreID(props));

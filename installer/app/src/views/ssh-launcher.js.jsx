@@ -1,8 +1,6 @@
 import { extend } from 'marbles/utils';
 import Dispatcher from '../dispatcher';
-import PrettySelect from './pretty-select';
 import IntegerPicker from './integer-picker';
-import ExternalLink from './external-link';
 import { green as GreenBtnCSS, disabled as DisabledBtnCSS } from './css/button';
 import Sheet from './css/sheet';
 import Colors from './css/colors';
@@ -32,7 +30,7 @@ var InstallConfig = React.createClass({
 				}],
 
 				['button[type=submit]', GreenBtnCSS],
-				['button[type=submit][disabled]', DisabledBtnCSS],
+				['button[type=submit][disabled]', DisabledBtnCSS]
 			]
 		});
 
@@ -44,7 +42,6 @@ var InstallConfig = React.createClass({
 	render: function () {
 		var clusterState = this.props.state;
 
-		var numInstances = clusterState.numInstances;
 		var targets = clusterState.targets;
 
 		var launchBtnDisabled = clusterState.currentStep !== 'configure';
@@ -72,7 +69,7 @@ var InstallConfig = React.createClass({
 					<span>Number of instances:</span>
 					<div style={{
 						width: 60
-						}}>
+					}}>
 						<IntegerPicker
 							minValue={1}
 							maxValue={5}

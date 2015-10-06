@@ -14,7 +14,7 @@ var FETCH_COUNT = 3;
 var AppHistory = Store.createClass({
 	willInitialize: function () {
 		this.props = {
-			appID: this.id.appID,
+			appID: this.id.appID
 		};
 
 		this.fetchPageLock = Promise.resolve();

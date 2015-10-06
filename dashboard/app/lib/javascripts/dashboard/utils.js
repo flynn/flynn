@@ -29,18 +29,18 @@ var applyObjectDiff = function (diff, env) {
 	var newEnv = extend({}, env);
 	diff.forEach(function (item) {
 		switch (item.op) {
-			case "replace":
-				newEnv[item.key] = item.value;
+		case "replace":
+			newEnv[item.key] = item.value;
 			break;
 
-			case "add":
-				newEnv[item.key] = item.value;
+		case "add":
+			newEnv[item.key] = item.value;
 			break;
 
-			case "remove":
-				if (newEnv.hasOwnProperty(item.key)) {
-					delete newEnv[item.key];
-				}
+		case "remove":
+			if (newEnv.hasOwnProperty(item.key)) {
+				delete newEnv[item.key];
+			}
 			break;
 		}
 	});

@@ -58,10 +58,10 @@ var NewAppRoute = React.createClass({
 	},
 
 	__getStoreID: function (props) {
-			return {
-				appID: this.props.appId
-			};
-		},
+		return {
+			appID: this.props.appId
+		};
+	},
 
 	__getState: function (props) {
 		var prevState = this.state || {};
@@ -87,7 +87,7 @@ var NewAppRoute = React.createClass({
 				domain: this.state.domain
 			}
 		});
-	},
+	}
 });
 
 export default NewAppRoute;

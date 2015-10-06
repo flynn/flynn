@@ -60,24 +60,24 @@ var DeployAppEvent = Store.createClass({
 			return;
 		}
 		switch (event.name) {
-			case 'APP_DEPLOY_RELEASE':
-				if (state.event && state.event.object_type === 'app_release' && event.releaseID === state.event.object_id) {
-					this.setState({
-						deploying: true,
-						deploySuccess: null,
-						deployErrorMsg: null
-					});
-				}
+		case 'APP_DEPLOY_RELEASE':
+			if (state.event && state.event.object_type === 'app_release' && event.releaseID === state.event.object_id) {
+				this.setState({
+					deploying: true,
+					deploySuccess: null,
+					deployErrorMsg: null
+				});
+			}
 			break;
 
-			case 'APP_PROCESSES:CREATE_FORMATION':
-				if (state.event && state.event.object_type === 'scale' && assertEqual(event.formation.processes, state.processes)) {
-					this.setState({
-						deploying: true,
-						deploySuccess: null,
-						deployErrorMsg: null
-					});
-				}
+		case 'APP_PROCESSES:CREATE_FORMATION':
+			if (state.event && state.event.object_type === 'scale' && assertEqual(event.formation.processes, state.processes)) {
+				this.setState({
+					deploying: true,
+					deploySuccess: null,
+					deployErrorMsg: null
+				});
+			}
 			break;
 		}
 	},

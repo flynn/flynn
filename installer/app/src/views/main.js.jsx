@@ -1,7 +1,6 @@
 import Sheet from './css/sheet';
 import Panel from './panel';
 import Clusters from './clusters';
-import RouteLink from './route-link';
 import BtnCSS from './css/button';
 
 var Main = React.createClass({

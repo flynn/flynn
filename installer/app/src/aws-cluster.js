@@ -64,23 +64,23 @@ var AWSCluster = BaseCluster.createClass('aws', {
 		}
 
 		switch (event.name) {
-			case 'SET_AWS_OPTIONS':
-				this.setState(
-					this.__computeState({
-						vpcCidr: event.vpcCidr,
-						subnetCidr: event.subnetCidr
-					})
-				);
+		case 'SET_AWS_OPTIONS':
+			this.setState(
+				this.__computeState({
+					vpcCidr: event.vpcCidr,
+					subnetCidr: event.subnetCidr
+				})
+			);
 			break;
 
-			case 'SELECT_AWS_INSTANCE_TYPE':
-				this.setState(
-					this.__computeState({selectedInstanceType: event.instanceType})
-				);
+		case 'SELECT_AWS_INSTANCE_TYPE':
+			this.setState(
+				this.__computeState({selectedInstanceType: event.instanceType})
+			);
 			break;
 
-			default:
-				__super();
+		default:
+			__super();
 		}
 	}
 });
@@ -88,7 +88,7 @@ var AWSCluster = BaseCluster.createClass('aws', {
 AWSCluster.jsonFields = extend({}, BaseCluster.jsonFields, {
 	instance_type: 'instanceType',
 	vpc_cidr: 'vpcCidr',
-	subnet_cidr: 'subnetCidr',
+	subnet_cidr: 'subnetCidr'
 });
 
 export default AWSCluster;

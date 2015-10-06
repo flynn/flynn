@@ -74,24 +74,24 @@ var AzureCluster = BaseCluster.createClass('azure', {
 
 		var state;
 		switch (event.name) {
-			case 'AZURE_SUBSCRIPTIONS':
-				state = this.state;
-				if (state.credentialID !== event.credentialID || state.selectedCloud !== 'azure') {
-					return;
-				}
-				this.setState(this.__computeState({
-					azureSubscriptions: event.subscriptions
-				}));
+		case 'AZURE_SUBSCRIPTIONS':
+			state = this.state;
+			if (state.credentialID !== event.credentialID || state.selectedCloud !== 'azure') {
+				return;
+			}
+			this.setState(this.__computeState({
+				azureSubscriptions: event.subscriptions
+			}));
 			break;
 
-			case 'SELECT_AZURE_SUBSCRIPTION':
-				this.setState(this.__computeState({
-					azureSubscriptionID: event.subscriptionID
-				}));
+		case 'SELECT_AZURE_SUBSCRIPTION':
+			this.setState(this.__computeState({
+				azureSubscriptionID: event.subscriptionID
+			}));
 			break;
 
-			default:
-				__super();
+		default:
+			__super();
 		}
 	}
 });

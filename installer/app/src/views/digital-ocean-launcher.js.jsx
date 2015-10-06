@@ -10,11 +10,11 @@ var sizeInBytes = function (str) {
 	var u = m[2];
 
 	switch (u) {
-		case 'mb':
-			return n * 1000000;
+	case 'mb':
+		return n * 1000000;
 
-		case 'gb':
-			return n * 10000000000;
+	case 'gb':
+		return n * 10000000000;
 	}
 
 	throw new Error('Unknown size units '+ JSON.stringify(u));
@@ -40,7 +40,7 @@ var InstallConfig = React.createClass({
 				}],
 
 				['button[type=submit]', GreenBtnCSS],
-				['button[type=submit][disabled]', DisabledBtnCSS],
+				['button[type=submit][disabled]', DisabledBtnCSS]
 			]
 		});
 
@@ -93,7 +93,7 @@ var InstallConfig = React.createClass({
 					<span>Number of instances:</span>
 					<div style={{
 						width: 60
-						}}>
+					}}>
 						<IntegerPicker
 							minValue={1}
 							maxValue={5}

@@ -38,8 +38,8 @@ var updateAppEnv = function (appID, changedRelease, env) {
 
 Dispatcher.register(function (event) {
 	switch (event.name) {
-		case 'UPDATE_APP_ENV':
-			updateAppEnv(event.appID, event.prevRelease, event.data);
+	case 'UPDATE_APP_ENV':
+		updateAppEnv(event.appID, event.prevRelease, event.data);
 		break;
 	}
 });

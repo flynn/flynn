@@ -57,7 +57,7 @@ var RouteLink = React.createClass({
 		delete props.path;
 		delete props.params;
 		return React.createElement('a', props, this.props.children);
-	},
+	}
 });
 
 export default RouteLink;

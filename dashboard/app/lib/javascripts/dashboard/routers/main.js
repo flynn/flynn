@@ -11,7 +11,7 @@ var MainRouter = Router.createClass({
 	routes: [
 		{ path: "", handler: "root" },
 		{ path: "login", handler: "login", auth: false },
-		{ path: "installcert", handler: "installCert", auth: false },
+		{ path: "installcert", handler: "installCert", auth: false }
 	],
 
 	root: function (params) {
@@ -51,8 +51,8 @@ var MainRouter = Router.createClass({
 		} else {
 			React.render(React.createElement(
 				LoginComponent, {
-						onSuccess: performRedirect
-					}), this.context.el);
+					onSuccess: performRedirect
+				}), this.context.el);
 		}
 	},
 

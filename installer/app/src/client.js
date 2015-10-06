@@ -48,7 +48,7 @@ var Client = {
 
 	deleteCredential: function (type, id) {
 		return this.performRequest('DELETE', {
-			url: Config.endpoints.credentials +'/'+ encodeURIComponent(type) +'/'+ encodeURIComponent(id),
+			url: Config.endpoints.credentials +'/'+ encodeURIComponent(type) +'/'+ encodeURIComponent(id)
 		}).catch(function (args) {
 			var res = args[0];
 			Dispatcher.dispatch({
@@ -177,60 +177,60 @@ var Client = {
 				event.clusterID = data.cluster_id;
 			}
 			switch (data.type) {
-				case 'new_cluster':
-					if (data.cluster) {
-						event.name = 'NEW_CLUSTER';
-						event.cluster = Cluster.newOfType(data.cluster.type, data.cluster);
+			case 'new_cluster':
+				if (data.cluster) {
+					event.name = 'NEW_CLUSTER';
+					event.cluster = Cluster.newOfType(data.cluster.type, data.cluster);
+				}
+				break;
+
+			case 'new_credential':
+				event.name = 'NEW_CREDENTIAL';
+				event.credential = data.resource;
+				break;
+
+			case 'delete_credential':
+				event.name = 'CREDENTIAL_DELETED';
+				event.id = data.resource_id;
+				break;
+
+			case 'cluster_state':
+				event.name = 'CLUSTER_STATE';
+				event.state = data.description;
+				break;
+
+			case 'prompt':
+				event.prompt = data.resource;
+				if (data.resource.resolved) {
+					event.name = 'INSTALL_PROMPT_RESOLVED';
+				} else {
+					event.name = 'INSTALL_PROMPT_REQUESTED';
+					if (event.prompt.type === 'choice') {
+						var choice = JSON.parse(event.prompt.message);
+						event.prompt.message = choice.message;
+						event.prompt.options = choice.options;
 					}
+				}
 				break;
 
-				case 'new_credential':
-					event.name = 'NEW_CREDENTIAL';
-					event.credential = data.resource;
+			case 'install_done':
+				event.name = 'INSTALL_DONE';
+				event.cluster = data.cluster;
 				break;
 
-				case 'delete_credential':
-					event.name = 'CREDENTIAL_DELETED';
-					event.id = data.resource_id;
+			case 'error':
+				event.name = 'INSTALL_ERROR';
+				event.message = data.description;
 				break;
 
-				case 'cluster_state':
-					event.name = 'CLUSTER_STATE';
-					event.state = data.description;
+			case 'log':
+				event.name = 'LOG';
+				event.data = data;
 				break;
 
-				case 'prompt':
-					event.prompt = data.resource;
-					if (data.resource.resolved) {
-						event.name = 'INSTALL_PROMPT_RESOLVED';
-					} else {
-						event.name = 'INSTALL_PROMPT_REQUESTED';
-						if (event.prompt.type === 'choice') {
-							var choice = JSON.parse(event.prompt.message);
-							event.prompt.message = choice.message;
-							event.prompt.options = choice.options;
-						}
-					}
-				break;
-
-				case 'install_done':
-					event.name = 'INSTALL_DONE';
-					event.cluster = data.cluster;
-				break;
-
-				case 'error':
-					event.name = 'INSTALL_ERROR';
-					event.message = data.description;
-				break;
-
-				case 'log':
-					event.name = 'LOG';
-					event.data = data;
-				break;
-
-				default:
-					event.name = 'DEFAULT_EVENT';
-					event.data = data;
+			default:
+				event.name = 'DEFAULT_EVENT';
+				event.data = data;
 			}
 			Dispatcher.dispatch(event);
 			if (data.type === 'install_done') {
