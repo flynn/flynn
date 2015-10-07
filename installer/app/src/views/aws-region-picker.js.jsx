@@ -9,7 +9,6 @@ var AWSRegionPicker = React.createClass({
 					<option value="us-east-1">US East (N. Virginia)</option>
 					<option value="us-west-2">US West (Oregon)</option>
 					<option value="us-west-1">US West (N. California)</option>
-					<option value="eu-central-1">EU (Frankfurt)</option>
 					<option value="eu-west-1">EU (Ireland)</option>
 					<option value="ap-southeast-1">Asia Pacific (Singapore)</option>
 					<option value="ap-southeast-2">Asia Pacific (Sydney)</option>
