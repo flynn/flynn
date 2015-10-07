@@ -23,11 +23,19 @@ Ommitting the arguments will show the current scale.
 Options:
 	-n, --no-wait            don't wait for the scaling events to happen
 	-r, --release=<release>  id of release to scale (defaults to current app release)
+	-a, --all                show non-zero formations from all releases (only works when listing formations, can't be combined with --release)
 
 Example:
 
 	$ flynn scale
 	web=4 worker=2
+
+	$ flynn scale --all
+	496d6e74-9db9-4cff-bcce-a3b44015907a (current)
+	web=1 worker=2
+
+	632cd907-85ab-4e53-90d0-84635650ec9a
+	web=2
 
 	$ flynn scale web=2 worker=5
 	scaling web: 4=>2, worker: 2=>5
@@ -48,7 +56,24 @@ const scaleTimeout = 20 * time.Second
 func runScale(args *docopt.Args, client *controller.Client) error {
 	app := mustApp()
 
-	release, err := determineRelease(client, args.String["--release"], app)
+	typeCounts := args.All["<type>=<qty>"].([]string)
+
+	showAll := args.Bool["--all"]
+
+	if len(typeCounts) > 0 && showAll {
+		return fmt.Errorf("ERROR: Can't use --all when scaling")
+	}
+
+	releaseID := args.String["--release"]
+	if releaseID != "" && showAll {
+		return fmt.Errorf("ERROR: Can't use --all in combination with --release")
+	}
+
+	if len(typeCounts) == 0 {
+		return showFormations(client, releaseID, showAll, app)
+	}
+
+	release, err := determineRelease(client, releaseID, app)
 	if err != nil {
 		return err
 	}
@@ -65,16 +90,6 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 	}
 	if formation.Processes == nil {
 		formation.Processes = make(map[string]int)
-	}
-
-	typeCounts := args.All["<type>=<qty>"].([]string)
-	if len(typeCounts) == 0 {
-		scale := make([]string, 0, len(release.Processes))
-		for typ := range release.Processes {
-			scale = append(scale, fmt.Sprintf("%s=%d", typ, formation.Processes[typ]))
-		}
-		fmt.Println(strings.Join(scale, " "))
-		return nil
 	}
 
 	current := formation.Processes
@@ -141,6 +156,59 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 		return err
 	}
 	fmt.Printf("\nscale completed in %s\n", time.Since(start))
+	return nil
+}
+
+func showFormations(client *controller.Client, releaseID string, showAll bool, app string) error {
+	release, err := determineRelease(client, releaseID, app)
+	if err != nil {
+		return err
+	}
+	var releases []*ct.Release
+	if showAll {
+		var err error
+		releases, err = client.AppReleaseList(app)
+		if err != nil {
+			return err
+		}
+	} else {
+		releases = []*ct.Release{release}
+	}
+
+	formations := make(map[string]*ct.Formation, len(releases))
+	for _, r := range releases {
+		formation, err := client.GetFormation(app, r.ID)
+		if err != nil && err != controller.ErrNotFound {
+			return err
+		}
+		formations[r.ID] = formation
+	}
+
+	for i, r := range releases {
+		f := formations[r.ID]
+		if f == nil || len(f.Processes) == 0 {
+			continue
+		}
+		if showAll {
+			if i > 0 {
+				fmt.Println()
+			}
+			var suffix string
+			if r.ID == release.ID {
+				suffix = " (current)"
+			}
+			fmt.Printf("%s%s\n", r.ID, suffix)
+		}
+		scale := make([]string, 0, len(r.Processes))
+		for typ := range r.Processes {
+			n := f.Processes[typ]
+			if showAll && n == 0 {
+				continue
+			}
+			scale = append(scale, fmt.Sprintf("%s=%d", typ, n))
+		}
+		fmt.Println(strings.Join(scale, " "))
+	}
 	return nil
 }
 

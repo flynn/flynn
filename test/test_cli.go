@@ -42,7 +42,9 @@ func (s *CLISuite) newCliTestApp(t *c.C) *cliTestApp {
 	watcher, err := s.controllerClient(t).WatchJobEvents(app.Name, release.ID)
 	t.Assert(err, c.IsNil)
 	return &cliTestApp{
+		ID:      app.ID,
 		name:    app.Name,
+		release: release,
 		disc:    s.discoverdClient(t),
 		t:       t,
 		watcher: watcher,
@@ -50,7 +52,9 @@ func (s *CLISuite) newCliTestApp(t *c.C) *cliTestApp {
 }
 
 type cliTestApp struct {
+	ID      string
 	name    string
+	release *ct.Release
 	watcher *cc.JobWatcher
 	disc    *discoverd.Client
 	t       *c.C
@@ -239,6 +243,50 @@ func (s *CLISuite) TestScale(t *c.C) {
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "scaling echoer: 3=>0")
 	t.Assert(scale, c.Not(OutputContains), "scale completed")
+}
+
+func (s *CLISuite) TestScaleAll(t *c.C) {
+	client := s.controllerClient(t)
+	app := s.newCliTestApp(t)
+	release := app.release
+	defer app.cleanup()
+
+	scale := app.flynn("scale", "echoer=1", "printer=2")
+	t.Assert(scale, Succeeds)
+
+	scale = app.flynn("scale", "--all")
+	t.Assert(scale, Succeeds)
+	t.Assert(scale, SuccessfulOutputContains, fmt.Sprintf("%s (current)\n", release.ID))
+	t.Assert(scale, SuccessfulOutputContains, "echoer=1")
+	t.Assert(scale, SuccessfulOutputContains, "printer=2")
+
+	prevRelease := release
+	release = &ct.Release{
+		ArtifactID: release.ArtifactID,
+		Env:        release.Env,
+		Meta:       release.Meta,
+		Processes:  release.Processes,
+	}
+	t.Assert(client.CreateRelease(release), c.IsNil)
+	t.Assert(client.SetAppRelease(app.ID, release.ID), c.IsNil)
+
+	scale = app.flynn("scale", "echoer=2", "printer=1")
+	t.Assert(scale, Succeeds)
+
+	scale = app.flynn("scale", "--all")
+	t.Assert(scale, Succeeds)
+	t.Assert(scale, SuccessfulOutputContains, fmt.Sprintf("%s (current)\n", release.ID))
+	t.Assert(scale, SuccessfulOutputContains, "echoer=2")
+	t.Assert(scale, SuccessfulOutputContains, "printer=1")
+	t.Assert(scale, SuccessfulOutputContains, fmt.Sprintf("%s\n", prevRelease.ID))
+	t.Assert(scale, SuccessfulOutputContains, "echoer=1")
+	t.Assert(scale, SuccessfulOutputContains, "printer=2")
+
+	scale = app.flynn("scale", "--all", "--release", release.ID)
+	t.Assert(scale, c.Not(Succeeds))
+
+	scale = app.flynn("scale", "--all", "echoer=3", "printer=3")
+	t.Assert(scale, c.Not(Succeeds))
 }
 
 func (s *CLISuite) TestRun(t *c.C) {
