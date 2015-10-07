@@ -24,6 +24,9 @@ if [[ -f /etc/cloud/cloud.cfg ]]; then
   echo 'apt_preserve_sources_list: true' >> /etc/cloud/cloud.cfg
 fi
 
+# clear apt lists
+rm -rf /var/lib/apt/lists/*
+
 apt-get update
 
 if [[ "${PACKER_BUILDER_TYPE}" == "virtualbox-ovf" ]]; then
