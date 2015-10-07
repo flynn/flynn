@@ -24,9 +24,9 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/aws"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/gen/s3"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/boltdb/bolt"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/aws"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/s3"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/tail"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/thoj/go-ircevent"
@@ -101,7 +101,7 @@ type Runner struct {
 	events      chan Event
 	rootFS      string
 	githubToken string
-	s3Bucket    *s3.Bucket
+	s3          *s3.S3
 	networks    map[string]struct{}
 	netMtx      sync.Mutex
 	db          *bolt.DB
@@ -147,11 +147,11 @@ func (r *Runner) start() error {
 		return errors.New("GITHUB_TOKEN not set")
 	}
 
-	awsAuth, err := aws.EnvAuth()
+	awsAuth, err := aws.EnvCreds()
 	if err != nil {
 		return err
 	}
-	r.s3Bucket = s3.New(awsAuth, aws.USEast).Bucket(logBucket)
+	r.s3 = s3.New(awsAuth, "us-east-1", nil)
 
 	_, listenPort, err = net.SplitHostPort(args.ListenAddr)
 	if err != nil {
@@ -422,15 +422,12 @@ func (r *Runner) uploadToS3(file *os.File, b *Build, boundary string) string {
 		return ""
 	}
 
-	stat, err := file.Stat()
-	if err != nil {
-		log.Printf("failed to get log file size: %s\n", err)
-		return ""
-	}
-
 	log.Printf("uploading build log to S3: %s\n", url)
 	if err := s3attempts.Run(func() error {
-		return r.s3Bucket.PutReader(name, file, stat.Size(), "multipart/mixed; boundary="+boundary, "public-read")
+		contentType := "multipart/mixed; boundary=" + boundary
+		acl := "public-read"
+		_, err := r.s3.PutObject(&s3.PutObjectRequest{Key: &name, Body: file, Bucket: &logBucket, ACL: &acl, ContentType: &contentType})
+		return err
 	}); err != nil {
 		log.Printf("failed to upload build output to S3: %s\n", err)
 	}

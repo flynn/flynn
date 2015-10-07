@@ -54,6 +54,10 @@
 			"Rev": "836c0f777155cb5570c6b8a4799cf64dc578e95f"
 		},
 		{
+			"ImportPath": "github.com/awslabs/aws-sdk-go/gen/s3",
+			"Rev": "836c0f777155cb5570c6b8a4799cf64dc578e95f"
+		},
+		{
 			"ImportPath": "github.com/badgerodon/ioutil",
 			"Rev": "b4d36b903b8b5353e41d0072358d59d722e76ae3"
 		},
