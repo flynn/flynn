@@ -6,14 +6,14 @@ import (
 	"os"
 	"strings"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/aws"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cupcake/goamz/ec2"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/aws"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/awslabs/aws-sdk-go/gen/ec2"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/util/release/types"
 )
 
 func amis(args *docopt.Args) {
-	auth, err := aws.EnvAuth()
+	auth, err := aws.EnvCreds()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -26,7 +26,8 @@ func amis(args *docopt.Args) {
 
 	for _, s := range strings.Split(args.String["<ids>"], ",") {
 		regionID := strings.SplitN(s, ":", 2)
-		resp, err := ec2.New(auth, aws.Regions[regionID[0]]).Images([]string{regionID[1]}, nil)
+		svc := ec2.New(auth, regionID[0], nil)
+		resp, err := svc.DescribeImages(&ec2.DescribeImagesRequest{ImageIDs: []string{regionID[1]}})
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -36,9 +37,9 @@ func amis(args *docopt.Args) {
 		image := resp.Images[0]
 
 		var snapshotID string
-		for _, mapping := range image.BlockDevices {
+		for _, mapping := range image.BlockDeviceMappings {
 			if mapping.DeviceName == image.RootDeviceName {
-				snapshotID = mapping.SnapshotId
+				snapshotID = *mapping.EBS.SnapshotID
 			}
 		}
 		if snapshotID == "" {
@@ -46,15 +47,15 @@ func amis(args *docopt.Args) {
 		}
 
 		manifest.Add(args.String["<version>"], &release.EC2Image{
-			ID:                   image.Id,
-			Name:                 image.Name,
+			ID:                   *image.ImageID,
+			Name:                 *image.Name,
 			Region:               regionID[0],
-			OwnerID:              image.OwnerId,
-			RootDeviceType:       image.RootDeviceType,
-			RootDeviceName:       image.RootDeviceName,
+			OwnerID:              *image.OwnerID,
+			RootDeviceType:       *image.RootDeviceType,
+			RootDeviceName:       *image.RootDeviceName,
 			RootDeviceSnapshotID: snapshotID,
-			VirtualizationType:   image.VirtualizationType,
-			Hypervisor:           image.Hypervisor,
+			VirtualizationType:   *image.VirtualizationType,
+			Hypervisor:           *image.Hypervisor,
 		})
 
 	}
