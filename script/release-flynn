@@ -116,14 +116,15 @@ main() {
     manifest="$(new_release_manifest)"
   fi
 
-  info "checking for existing release"
-  if jq --exit-status ".versions[] | select(.commit==\"${commit}\")" <<< "${manifest}"; then
-    fail "commit ${commit} has already been released"
-  fi
+  info "getting previous release tag"
+  local previous=$(git tag --list "v*" --sort "v:refname" | tail -n 1)
 
   info "determining version"
-  local version="$(next_release_version <<< "${manifest}")"
+  local version="$(next_release_version ${previous})"
   info "using version ${version}"
+
+  info "tagging release"
+  tag_release "${commit}" "${version}"
 
   info "releasing components"
   "${ROOT}/script/release-components" \
@@ -133,9 +134,6 @@ main() {
     -t "${tuf_dir}" \
     "${commit}" \
     "${version}"
-
-  info "tagging release"
-  tag_release "${commit}" "${version}"
 
   info "releasing vm images"
   "${ROOT}/script/release-vm-images" \
