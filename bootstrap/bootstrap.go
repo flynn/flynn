@@ -120,7 +120,7 @@ var discoverdAttempts = attempt.Strategy{
 	Delay: 200 * time.Millisecond,
 }
 
-func Run(manifest []byte, ch chan<- *StepInfo, clusterURL string, ips []string, minHosts int) (err error) {
+func Run(manifest []byte, ch chan<- *StepInfo, clusterURL string, ips []string, minHosts int, timeout int) (err error) {
 	var a StepAction
 	defer close(ch)
 	defer func() {
@@ -158,7 +158,7 @@ func Run(manifest []byte, ch chan<- *StepInfo, clusterURL string, ips []string, 
 
 	a = StepAction{ID: "online-hosts", Action: "check"}
 	ch <- &StepInfo{StepAction: a, State: "start", Timestamp: time.Now().UTC()}
-	if err := checkOnlineHosts(minHosts, state, hostURLs); err != nil {
+	if err := checkOnlineHosts(minHosts, state, hostURLs, timeout); err != nil {
 		return err
 	}
 
@@ -198,11 +198,11 @@ var onlineHostAttempts = attempt.Strategy{
 	Delay: 200 * time.Millisecond,
 }
 
-func checkOnlineHosts(expected int, state *State, urls []string) error {
+func checkOnlineHosts(expected int, state *State, urls []string, timeoutSecs int) error {
 	if len(urls) == 0 {
 		urls = []string{"http://127.0.0.1:1113"}
 	}
-	timeout := time.After(30 * time.Second)
+	timeout := time.After(time.Duration(timeoutSecs) * time.Second)
 	for {
 		if state.ClusterURL != "" {
 			instances, err := discovery.GetCluster(state.ClusterURL)

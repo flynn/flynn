@@ -20,6 +20,7 @@ usage: flynn-host bootstrap [options] [<manifest>]
 
 Options:
   -n, --min-hosts=MIN  minimum number of hosts required to be online
+  -t, --timeout=SECS   seconds to wait for hosts to come online [default: 30]
   --json               format log output as json
   --discovery=TOKEN    use discovery token to connect to cluster
   --peer-ips=IPLIST    use IP address list to connect to cluster
@@ -61,6 +62,11 @@ func runBootstrap(args *docopt.Args) {
 		}
 	}
 
+	timeout, err := strconv.Atoi(args.String["--timeout"])
+	if err != nil {
+		log.Fatalln("invalid --timeout value")
+	}
+
 	var ips []string
 	if ipList := args.String["--peer-ips"]; ipList != "" {
 		ips = strings.Split(ipList, ",")
@@ -82,7 +88,7 @@ func runBootstrap(args *docopt.Args) {
 		close(done)
 	}()
 
-	err = bootstrap.Run(manifest, ch, args.String["--discovery"], ips, minHosts)
+	err = bootstrap.Run(manifest, ch, args.String["--discovery"], ips, minHosts, timeout)
 	<-done
 	if err != nil {
 		os.Exit(1)
