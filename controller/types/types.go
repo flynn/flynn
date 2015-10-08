@@ -8,6 +8,7 @@ import (
 
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/tlscert"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -96,6 +97,16 @@ type Job struct {
 	Meta      map[string]string `json:"meta,omitempty"`
 	CreatedAt *time.Time        `json:"created_at,omitempty"`
 	UpdatedAt *time.Time        `json:"updated_at,omitempty"`
+}
+
+type DomainMigration struct {
+	ID         string        `json:"id"`
+	OldTLSCert *tlscert.Cert `json:"old_tls_cert,omitempty"`
+	TLSCert    *tlscert.Cert `json:"tls_cert,omitempty"`
+	OldDomain  string        `json:"old_domain"`
+	Domain     string        `json:"domain"`
+	CreatedAt  *time.Time    `json:"created_at,omitempty"`
+	FinishedAt *time.Time    `json:"finished_at,omitempty"`
 }
 
 func (e *Job) IsDown() bool {
@@ -216,6 +227,7 @@ const (
 	EventTypeKeyDeletion      EventType = "key_deletion"
 	EventTypeRoute            EventType = "route"
 	EventTypeRouteDeletion    EventType = "route_deletion"
+	EventTypeDomainMigration  EventType = "domain_migration"
 )
 
 type Event struct {
@@ -248,4 +260,9 @@ type AppDeletion struct {
 type AppDeletionEvent struct {
 	AppDeletion *AppDeletion `json:"app_deletion"`
 	Error       string       `json:"error"`
+}
+
+type DomainMigrationEvent struct {
+	DomainMigration *DomainMigration `json:"domain_migration"`
+	Error           string           `json:"error,omitempty"`
 }

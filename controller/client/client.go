@@ -173,6 +173,17 @@ func (c *Client) StreamFormations(since *time.Time, output chan<- *ct.ExpandedFo
 	return c.Stream("GET", "/formations?since="+t, nil, output)
 }
 
+// PutDomain migrates the cluster domain
+func (c *Client) PutDomain(dm *ct.DomainMigration) error {
+	if dm.Domain == "" {
+		return errors.New("controller: missing domain")
+	}
+	if dm.OldDomain == "" {
+		return errors.New("controller: missing old domain")
+	}
+	return c.Put("/domain", dm, dm)
+}
+
 // CreateArtifact creates a new artifact.
 func (c *Client) CreateArtifact(artifact *ct.Artifact) error {
 	return c.Post("/artifacts", artifact, artifact)

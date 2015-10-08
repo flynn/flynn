@@ -11,6 +11,7 @@ import (
 	"github.com/flynn/flynn/controller/schema"
 	"github.com/flynn/flynn/controller/worker/app_deletion"
 	"github.com/flynn/flynn/controller/worker/deployment"
+	"github.com/flynn/flynn/controller/worker/domain_migration"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -56,8 +57,9 @@ func main() {
 	workers := que.NewWorkerPool(
 		que.NewClient(db.ConnPool),
 		que.WorkMap{
-			"deployment":   deployment.JobHandler(db, client, logger),
-			"app_deletion": app_deletion.JobHandler(db, client, logger),
+			"deployment":       deployment.JobHandler(db, client, logger),
+			"app_deletion":     app_deletion.JobHandler(db, client, logger),
+			"domain_migration": domain_migration.JobHandler(db, client, logger),
 		},
 		workerCount,
 	)
