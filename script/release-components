@@ -119,7 +119,6 @@ main() {
 
   info "building flynn"
   git checkout --force --quiet $commit
-  git tag "v${version}"
 
   make release
 
