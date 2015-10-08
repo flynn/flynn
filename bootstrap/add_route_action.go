@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/tlscert"
 	"github.com/flynn/flynn/router/types"
 )
 
@@ -63,8 +64,8 @@ func getAppStep(s *State, step string) (*AppState, error) {
 	return data, nil
 }
 
-func getCertStep(s *State, step string) (*TLSCert, error) {
-	data, ok := s.StepData[step].(*TLSCert)
+func getCertStep(s *State, step string) (*tlscert.Cert, error) {
+	data, ok := s.StepData[step].(*tlscert.Cert)
 	if !ok {
 		return nil, fmt.Errorf("bootstrap: unable to find step %q", step)
 	}

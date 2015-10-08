@@ -4,9 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/pem"
-	"fmt"
 
-	"github.com/flynn/flynn/pkg/certgen"
+	"github.com/flynn/flynn/pkg/tlscert"
 )
 
 type GenTLSCertAction struct {
@@ -22,20 +21,8 @@ func init() {
 	Register("gen-tls-cert", &GenTLSCertAction{})
 }
 
-type TLSCert struct {
-	CACert string `json:"ca_cert"`
-	Cert   string `json:"cert"`
-	Pin    string `json:"pin"`
-
-	PrivateKey string `json:"-"`
-}
-
-func (c *TLSCert) String() string {
-	return fmt.Sprintf("pin: %s", c.Pin)
-}
-
 func (a *GenTLSCertAction) Run(s *State) (err error) {
-	data := &TLSCert{}
+	data := &tlscert.Cert{}
 	s.StepData[a.ID] = data
 
 	a.CACert = interpolate(s, a.CACert)
@@ -56,18 +43,14 @@ func (a *GenTLSCertAction) Run(s *State) (err error) {
 	for i, h := range a.Hosts {
 		a.Hosts[i] = interpolate(s, h)
 	}
-	ca, err := certgen.Generate(certgen.Params{IsCA: true})
+	c, err := tlscert.Generate(a.Hosts)
 	if err != nil {
 		return err
 	}
-	cert, err := certgen.Generate(certgen.Params{Hosts: a.Hosts, CA: ca})
-	if err != nil {
-		return err
-	}
-	data.CACert = ca.PEM
-	data.Cert = cert.PEM
-	data.Pin = cert.Pin
-	data.PrivateKey = cert.KeyPEM
+	data.CACert = c.CACert
+	data.Cert = c.Cert
+	data.Pin = c.Pin
+	data.PrivateKey = c.PrivateKey
 
 	return err
 }
