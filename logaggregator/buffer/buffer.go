@@ -25,6 +25,7 @@ type Buffer struct {
 
 type message struct {
 	next *message
+	prev *message
 	rfc5424.Message
 }
 
@@ -56,8 +57,31 @@ func (b *Buffer) Add(m *rfc5424.Message) error {
 		b.head = &message{Message: *m}
 		b.tail = b.head
 	} else {
-		b.tail.next = &message{Message: *m}
-		b.tail = b.tail.next
+		// iterate from newest to oldest through messages to find position
+		// to insert new message
+		for other := b.tail; other != nil; other = other.prev {
+			if m.Timestamp.Before(other.Timestamp) {
+				if other.prev == nil {
+					// insert before other at head
+					other.prev = &message{Message: *m, next: other}
+					b.head = other.prev
+					break
+				} else {
+					continue
+				}
+			}
+			msg := &message{Message: *m, prev: other}
+			if other.next != nil {
+				// insert between other and other.next
+				other.next.prev = msg
+				msg.next = other.next
+			} else {
+				// insert at tail
+				b.tail = msg
+			}
+			other.next = msg
+			break
+		}
 	}
 	if b.length < b.capacity {
 		// buffer not yet full
@@ -65,6 +89,7 @@ func (b *Buffer) Add(m *rfc5424.Message) error {
 	} else {
 		// at capacity, remove head
 		b.head = b.head.next
+		b.head.prev = nil
 	}
 
 	for msgc := range b.subs {
