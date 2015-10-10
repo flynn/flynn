@@ -47,7 +47,7 @@ func (s *ServerTestSuite) TestServerDurability(c *C) {
 		c.Assert(dec.Decode(&got), IsNil)
 		c.Assert(got.HostID, Equals, string(want.Hostname))
 		c.Assert(got.Stream, Equals, streamName(want.MsgID))
-		c.Assert(got.Timestamp, Equals, want.Timestamp)
+		c.Assert(got.Timestamp.Equal(want.Timestamp), Equals, true)
 
 		procType, jobID := splitProcID(want.ProcID)
 		c.Assert(got.ProcessType, Equals, string(procType))

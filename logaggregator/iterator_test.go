@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 
@@ -253,12 +254,15 @@ func (s *LogAggregatorTestSuite) TestReadLastNAndSubscribe(c *C) {
 	}
 }
 
+var timeNow = time.Now()
+
 func buildTestData(n int, hdr *rfc5424.Header) []*rfc5424.Message {
 	data := make([]*rfc5424.Message, n)
 	for i := range data {
 		line := []byte(fmt.Sprintf("line %d\n", i))
 		msg := rfc5424.NewMessage(hdr, line)
 		msg.StructuredData = []byte(fmt.Sprintf(`[flynn seq="%d"]`, i))
+		msg.Timestamp = timeNow
 
 		data[i] = msg
 	}

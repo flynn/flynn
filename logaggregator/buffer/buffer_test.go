@@ -3,6 +3,7 @@ package buffer
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/pkg/syslog/rfc5424"
@@ -47,7 +48,7 @@ func (s *S) TestRead(c *C) {
 		// large overflow
 		{
 			cap:  DefaultCapacity,
-			data: append(s.data, s.data...),
+			data: s.data,
 			want: s.data[DefaultCapacity:],
 		},
 	}
@@ -276,4 +277,31 @@ func (s *S) TestReadSubscribe(c *C) {
 		c.Assert(len(got), Equals, len(test.want))
 		c.Assert(got, DeepEquals, test.want)
 	}
+}
+
+func (s *S) TestAddSort(c *C) {
+	b := NewBuffer()
+
+	// add first message
+	first := rfc5424.NewMessage(nil, []byte("msg1"))
+	b.Add(first)
+	c.Assert(b.Read(), DeepEquals, []*rfc5424.Message{first})
+
+	// add new, before head
+	newHead := rfc5424.NewMessage(nil, []byte("msg2"))
+	newHead.Timestamp = first.Timestamp.Add(-time.Second)
+	b.Add(newHead)
+	c.Assert(b.Read(), DeepEquals, []*rfc5424.Message{newHead, first})
+
+	// add new, tail
+	newTail := rfc5424.NewMessage(nil, []byte("msg3"))
+	newTail.Timestamp = first.Timestamp.Add(2 * time.Second)
+	b.Add(newTail)
+	c.Assert(b.Read(), DeepEquals, []*rfc5424.Message{newHead, first, newTail})
+
+	// add new between first and newTail
+	between := rfc5424.NewMessage(nil, []byte("msg3"))
+	between.Timestamp = first.Timestamp.Add(time.Second)
+	b.Add(between)
+	c.Assert(b.Read(), DeepEquals, []*rfc5424.Message{newHead, first, between, newTail})
 }
