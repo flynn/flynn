@@ -36,6 +36,7 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/sse"
 	"github.com/flynn/flynn/pkg/tlsconfig"
+	"github.com/flynn/flynn/pkg/typeconv"
 	"github.com/flynn/flynn/test/arg"
 	"github.com/flynn/flynn/test/buildlog"
 	"github.com/flynn/flynn/test/cluster"
@@ -422,11 +423,24 @@ func (r *Runner) uploadToS3(file *os.File, b *Build, boundary string) string {
 		return ""
 	}
 
+	stat, err := file.Stat()
+	if err != nil {
+		log.Printf("failed to get log file size: %s\n", err)
+		return ""
+	}
+
 	log.Printf("uploading build log to S3: %s\n", url)
 	if err := s3attempts.Run(func() error {
 		contentType := "multipart/mixed; boundary=" + boundary
 		acl := "public-read"
-		_, err := r.s3.PutObject(&s3.PutObjectRequest{Key: &name, Body: file, Bucket: &logBucket, ACL: &acl, ContentType: &contentType})
+		_, err := r.s3.PutObject(&s3.PutObjectRequest{
+			Key:           &name,
+			Body:          file,
+			Bucket:        &logBucket,
+			ACL:           &acl,
+			ContentType:   &contentType,
+			ContentLength: typeconv.Int64Ptr(stat.Size()),
+		})
 		return err
 	}); err != nil {
 		log.Printf("failed to upload build output to S3: %s\n", err)
