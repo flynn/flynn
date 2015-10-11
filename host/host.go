@@ -70,6 +70,7 @@ Commands:
   log                        Get the logs of a job
   ps                         List jobs
   stop                       Stop running jobs
+  signal                     Signal a job
   destroy-volumes            Destroys the local volume database
   collect-debug-info         Collect debug information into an anonymous gist or tarball
   version                    Show current version
