@@ -391,10 +391,6 @@
 			"Rev": "2db50307d7b0b3b9384329e57bad7effe89f518d"
 		},
 		{
-			"ImportPath": "github.com/flynn/go-sql",
-			"Rev": "30e503bbf3ca38b958ae5c4fae05ca3babe01c9f"
-		},
-		{
 			"ImportPath": "github.com/flynn/go-tuf/client",
 			"Rev": "c7a634160b148092106181edebb3aec36f9795e1"
 		},
@@ -417,10 +413,6 @@
 		{
 			"ImportPath": "github.com/flynn/oauth2",
 			"Rev": "bad31004a6cc4ac89e7219ba28642459a9fa2d6c"
-		},
-		{
-			"ImportPath": "github.com/flynn/pq",
-			"Rev": "34b669d7dd7ed9051866cb5c14b7b02106537f81"
 		},
 		{
 			"ImportPath": "github.com/flynn/que-go",
