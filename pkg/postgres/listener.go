@@ -4,81 +4,61 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 )
 
 // Listen creates a listener for the given channel, returning the listener
 // and the first connection error (nil on successful connection).
 func (db *DB) Listen(channel string, log log15.Logger) (*Listener, error) {
-	l := &Listener{
-		Notify:   make(chan *pq.Notification),
-		firstErr: make(chan error, 1),
-		log:      log,
+	conn, err := db.Acquire()
+	if err != nil {
+		return nil, err
 	}
-	l.pqListener = pq.NewListener(db.DSN(), 10*time.Second, time.Minute, l.handleEvent)
-	if err := l.pqListener.Listen(channel); err != nil {
+	l := &Listener{
+		Notify:  make(chan *pgx.Notification),
+		channel: channel,
+		log:     log,
+		db:      db,
+		conn:    conn,
+	}
+	if err := l.conn.Listen(channel); err != nil {
 		return nil, err
 	}
 	go l.listen()
-	return l, <-l.firstErr
+	return l, nil
 }
 
 type Listener struct {
-	Notify chan *pq.Notification
+	Notify chan *pgx.Notification
 	Err    error
 
-	firstErr   chan error
-	firstOnce  sync.Once
-	pqListener *pq.Listener
-	closeOnce  sync.Once
-	log        log15.Logger
+	channel   string
+	closeOnce sync.Once
+	log       log15.Logger
+	db        *DB
+	conn      *pgx.Conn
 }
 
 func (l *Listener) Close() (err error) {
 	l.closeOnce.Do(func() {
-		err = l.pqListener.Close()
+		l.conn.Exec("UNLISTEN " + l.channel)
+		l.db.Release(l.conn)
 	})
 	return
 }
 
-func (l *Listener) maybeFirstErr(err error) {
-	l.firstOnce.Do(func() {
-		l.firstErr <- err
-		close(l.firstErr)
-	})
-}
-
-func (l *Listener) handleEvent(ev pq.ListenerEventType, err error) {
-	switch ev {
-	case pq.ListenerEventConnected:
-		l.log.Info("pq listener connected")
-		l.maybeFirstErr(nil)
-	case pq.ListenerEventDisconnected:
-		l.log.Error("pq listener disconnected", "err", err)
-		l.maybeFirstErr(err)
-		l.Err = err
-		l.Close()
-	case pq.ListenerEventConnectionAttemptFailed:
-		l.log.Error("pq listener connection attempt failed", "err", err)
-		l.maybeFirstErr(err)
-		l.Err = err
-		l.Close()
-	}
-}
-
 func (l *Listener) listen() {
 	for {
-		select {
-		case n, ok := <-l.pqListener.Notify:
-			if !ok {
-				close(l.Notify)
-				return
-			}
-			if n == nil { // reconnect
-				continue
-			}
-			l.Notify <- n
+		n, err := l.conn.WaitForNotification(10 * time.Second)
+		if err == pgx.ErrNotificationTimeout {
+			continue
 		}
+		if err != nil {
+			l.Err = err
+			close(l.Notify)
+			return
+		}
+		l.Notify <- n
 	}
 }

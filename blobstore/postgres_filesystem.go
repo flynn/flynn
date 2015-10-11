@@ -4,10 +4,8 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"io"
-	"os"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/status"
@@ -15,7 +13,7 @@ import (
 
 const UniqueViolation = "23505"
 
-func NewPostgresFilesystem(db *sql.DB) (Filesystem, error) {
+func NewPostgresFilesystem(db *postgres.DB) (Filesystem, error) {
 	m := postgres.NewMigrations()
 	m.Add(1,
 		`CREATE TABLE files (
@@ -36,28 +34,15 @@ $$ LANGUAGE plpgsql;`,
     AFTER DELETE ON files
     FOR EACH ROW EXECUTE PROCEDURE delete_file();`,
 	)
-	// TODO(jpg) reuse pkg/postgres connection when converted
-	connConf := pgx.ConnConfig{
-		Host:     os.Getenv("PGHOST"),
-		User:     os.Getenv("PGUSER"),
-		Password: os.Getenv("PGPASSWORD"),
-		Database: os.Getenv("PGDATABASE"),
-	}
-	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
-		ConnConfig: connConf,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &PostgresFilesystem{db: pgxpool}, m.Migrate(db)
+	return &PostgresFilesystem{db: db}, m.Migrate(db)
 }
 
 type PostgresFilesystem struct {
-	db *pgx.ConnPool
+	db *postgres.DB
 }
 
 func (p *PostgresFilesystem) Status() status.Status {
-	if _, err := p.db.Exec("SELECT 1"); err != nil {
+	if err := p.db.Exec("SELECT 1"); err != nil {
 		return status.Unhealthy
 	}
 	return status.Healthy
@@ -80,7 +65,7 @@ create:
 		}
 
 		// file exists, delete it first
-		_, err = tx.Exec("DELETE FROM files WHERE name = $1", name)
+		err = tx.Exec("DELETE FROM files WHERE name = $1", name)
 		if err != nil {
 			tx.Rollback()
 			return err
@@ -111,7 +96,7 @@ create:
 	}
 
 	digest := hex.EncodeToString(h.Sum(nil))
-	_, err = tx.Exec("UPDATE files SET size = $2, digest = $3 WHERE file_id = $1", id, size, digest)
+	err = tx.Exec("UPDATE files SET size = $2, digest = $3 WHERE file_id = $1", id, size, digest)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -121,7 +106,7 @@ create:
 }
 
 func (p *PostgresFilesystem) Delete(name string) error {
-	_, err := p.db.Exec("DELETE FROM files WHERE name = $1", name)
+	err := p.db.Exec("DELETE FROM files WHERE name = $1", name)
 	return err
 }
 
@@ -165,7 +150,7 @@ type pgFile struct {
 	etag  string
 	mtime time.Time
 
-	tx *pgx.Tx
+	tx *postgres.DBTx
 }
 
 func (f *pgFile) Size() int64        { return f.size }

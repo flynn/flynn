@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/name"
 	"github.com/flynn/flynn/controller/schema"
@@ -47,12 +47,13 @@ func (r *AppRepo) Add(data interface{}) error {
 		return err
 	}
 	if app.Name == "" {
-		var nameID uint32
-		if err := tx.QueryRow("SELECT nextval('name_ids')").Scan(&nameID); err != nil {
+		var nameID int64
+		if err := tx.QueryRow("app_next_name_id").Scan(&nameID); err != nil {
 			tx.Rollback()
 			return err
 		}
-		app.Name = name.Get(nameID)
+		// Safe cast because name_ids is limited to 32 bit size in schema
+		app.Name = name.Get(uint32(nameID))
 	}
 	if len(app.Name) > 100 || !utils.AppNamePattern.MatchString(app.Name) {
 		return ct.ValidationError{Field: "name", Message: "is invalid"}
@@ -63,11 +64,7 @@ func (r *AppRepo) Add(data interface{}) error {
 	if app.Strategy == "" {
 		app.Strategy = "all-at-once"
 	}
-	meta, err := json.Marshal(app.Meta)
-	if err != nil {
-		return err
-	}
-	if err := tx.QueryRow("INSERT INTO apps (app_id, name, meta, strategy) VALUES ($1, $2, $3, $4) RETURNING created_at, updated_at", app.ID, app.Name, meta, app.Strategy).Scan(&app.CreatedAt, &app.UpdatedAt); err != nil {
+	if err := tx.QueryRow("app_insert", app.ID, app.Name, app.Meta, app.Strategy).Scan(&app.CreatedAt, &app.UpdatedAt); err != nil {
 		tx.Rollback()
 		if postgres.IsUniquenessError(err, "apps_name_idx") {
 			return httphelper.ObjectExistsErr(fmt.Sprintf("application %q already exists", app.Name))
@@ -101,19 +98,15 @@ func (r *AppRepo) Add(data interface{}) error {
 
 func scanApp(s postgres.Scanner) (*ct.App, error) {
 	app := &ct.App{}
-	var meta []byte
 	var releaseID *string
-	err := s.Scan(&app.ID, &app.Name, &meta, &app.Strategy, &releaseID, &app.CreatedAt, &app.UpdatedAt)
-	if err == sql.ErrNoRows {
+	err := s.Scan(&app.ID, &app.Name, &app.Meta, &app.Strategy, &releaseID, &app.CreatedAt, &app.UpdatedAt)
+	if err == pgx.ErrNoRows {
 		return nil, ErrNotFound
 	} else if err != nil {
 		return nil, err
 	}
 	if releaseID != nil {
 		app.ReleaseID = *releaseID
-	}
-	if len(meta) > 0 {
-		err = json.Unmarshal(meta, &app.Meta)
 	}
 	return app, err
 }
@@ -125,16 +118,15 @@ type rowQueryer interface {
 }
 
 func selectApp(db rowQueryer, id string, update bool) (*ct.App, error) {
-	query := "SELECT app_id, name, meta, strategy, release_id, created_at, updated_at FROM apps WHERE deleted_at IS NULL AND "
 	var suffix string
 	if update {
-		suffix = " FOR UPDATE"
+		suffix = "_for_update"
 	}
 	var row postgres.Scanner
 	if idPattern.MatchString(id) {
-		row = db.QueryRow(query+"(app_id = $1 OR name = $2) LIMIT 1"+suffix, id, id)
+		row = db.QueryRow("app_select_by_name_or_id"+suffix, id, id)
 	} else {
-		row = db.QueryRow(query+"name = $1"+suffix, id)
+		row = db.QueryRow("app_select_by_name"+suffix, id)
 	}
 	return scanApp(row)
 }
@@ -163,7 +155,7 @@ func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, e
 				return nil, fmt.Errorf("controller: expected string, got %T", v)
 			}
 			app.Strategy = strategy
-			if _, err := tx.Exec("UPDATE apps SET strategy = $2, updated_at = now() WHERE app_id = $1", app.ID, app.Strategy); err != nil {
+			if err := tx.Exec("app_update_strategy", app.ID, app.Strategy); err != nil {
 				tx.Rollback()
 				return nil, err
 			}
@@ -182,12 +174,7 @@ func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, e
 				}
 				app.Meta[k] = s
 			}
-			meta, err := json.Marshal(app.Meta)
-			if err != nil {
-				tx.Rollback()
-				return nil, err
-			}
-			if _, err := tx.Exec("UPDATE apps SET meta = $2, updated_at = now() WHERE app_id = $1", app.ID, meta); err != nil {
+			if err := tx.Exec("app_update_meta", app.ID, app.Meta); err != nil {
 				tx.Rollback()
 				return nil, err
 			}
@@ -207,7 +194,7 @@ func (r *AppRepo) Update(id string, data map[string]interface{}) (interface{}, e
 }
 
 func (r *AppRepo) List() (interface{}, error) {
-	rows, err := r.db.Query("SELECT app_id, name, meta, strategy, release_id, created_at, updated_at FROM apps WHERE deleted_at IS NULL ORDER BY created_at DESC")
+	rows, err := r.db.Query("app_list")
 	if err != nil {
 		return nil, err
 	}
@@ -231,15 +218,15 @@ func (r *AppRepo) SetRelease(app *ct.App, releaseID string) error {
 	var release *ct.Release
 	var prevRelease *ct.Release
 	if app.ReleaseID != "" {
-		row := tx.QueryRow("SELECT release_id, artifact_id, data, meta, created_at FROM releases WHERE release_id = $1 AND deleted_at IS NULL", app.ReleaseID)
+		row := tx.QueryRow("release_select", app.ReleaseID)
 		prevRelease, _ = scanRelease(row)
 	}
-	row := tx.QueryRow("SELECT release_id, artifact_id, data, meta, created_at FROM releases WHERE release_id = $1 AND deleted_at IS NULL", releaseID)
+	row := tx.QueryRow("release_select", releaseID)
 	if release, err = scanRelease(row); err != nil {
 		return err
 	}
 	app.ReleaseID = releaseID
-	if _, err := tx.Exec("UPDATE apps SET release_id = $2, updated_at = now() WHERE app_id = $1", app.ID, app.ReleaseID); err != nil {
+	if err := tx.Exec("app_update_release", app.ID, app.ReleaseID); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -258,7 +245,7 @@ func (r *AppRepo) SetRelease(app *ct.App, releaseID string) error {
 }
 
 func (r *AppRepo) GetRelease(id string) (*ct.Release, error) {
-	row := r.db.QueryRow("SELECT r.release_id, r.artifact_id, r.data, r.meta, r.created_at FROM apps a JOIN releases r USING (release_id) WHERE a.app_id = $1", id)
+	row := r.db.QueryRow("app_get_release", id)
 	return scanRelease(row)
 }
 

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"net"
 	"os"
@@ -9,11 +8,11 @@ import (
 	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/discoverd/cache"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
+	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/testutils/postgres"
 	"github.com/flynn/flynn/router/types"
 )
@@ -78,16 +77,6 @@ func (s *S) SetUpSuite(c *C) {
 	if err := pgtestutils.SetupPostgres(dbname); err != nil {
 		c.Fatal(err)
 	}
-
-	dsn := fmt.Sprintf("dbname=%s", dbname)
-	db, err := sql.Open("postgres", dsn)
-	if err != nil {
-		c.Fatal(err)
-	}
-	if err = migrateDB(db); err != nil {
-		c.Fatal(err)
-	}
-	db.Close()
 	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
 		ConnConfig: pgx.ConnConfig{
 			Host:     os.Getenv("PGHOST"),
@@ -97,7 +86,12 @@ func (s *S) SetUpSuite(c *C) {
 	if err != nil {
 		c.Fatal(err)
 	}
-	s.pgx = pgxpool
+	db := postgres.New(pgxpool, nil)
+
+	if err = migrateDB(db); err != nil {
+		c.Fatal(err)
+	}
+	s.pgx = db.ConnPool
 	s.pgx.Exec(sqlCreateTruncateTables)
 }
 

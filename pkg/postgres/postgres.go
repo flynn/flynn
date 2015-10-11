@@ -2,38 +2,52 @@ package postgres
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
-	"sync"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/appliance/postgresql/state"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/shutdown"
 )
 
-func init() {
-	pq.DefaultDialer = dialer.Retry
+const (
+	InvalidTextRepresentation = "22P02"
+	CheckViolation            = "23514"
+	UniqueViolation           = "23505"
+)
+
+type Conf struct {
+	Service  string
+	User     string
+	Password string
+	Database string
 }
 
-func New(db *sql.DB, dsn string) *DB {
-	return &DB{
-		DB:    db,
-		dsn:   dsn,
-		stmts: make(map[string]*sql.Stmt),
-	}
+var connectAttempts = attempt.Strategy{
+	Min:   5,
+	Total: 30 * time.Second,
+	Delay: 200 * time.Millisecond,
 }
 
-func Wait(service, dsn string) *DB {
-	if service == "" {
-		service = os.Getenv("FLYNN_POSTGRES")
+func New(connPool *pgx.ConnPool, conf *Conf) *DB {
+	return &DB{connPool, conf}
+}
+
+func Wait(conf *Conf, afterConn func(*pgx.Conn) error) *DB {
+	if conf == nil {
+		conf = &Conf{
+			Service:  os.Getenv("FLYNN_POSTGRES"),
+			User:     os.Getenv("PGUSER"),
+			Password: os.Getenv("PGPASSWORD"),
+			Database: os.Getenv("PGDATABASE"),
+		}
 	}
 	events := make(chan *discoverd.Event)
-	stream, err := discoverd.NewService(service).Watch(events)
+	stream, err := discoverd.NewService(conf.Service).Watch(events)
 	if err != nil {
 		shutdown.Fatal(err)
 	}
@@ -51,7 +65,15 @@ func Wait(service, dsn string) *DB {
 	stream.Close()
 	// TODO(titanous): handle discoverd disconnection
 
-	db, err := Open(service, dsn)
+	// retry here as authentication may fail if DB is still
+	// starting up.
+	// TODO(jpg): switch this to use pgmanager to check if user
+	// exists, we can also check for r/w with pgmanager
+	var db *DB
+	err = connectAttempts.Run(func() error {
+		db, err = Open(conf, afterConn)
+		return err
+	})
 	if err != nil {
 		panic(err)
 	}
@@ -67,91 +89,45 @@ func Wait(service, dsn string) *DB {
 	}
 }
 
-func Open(service, dsn string) (*DB, error) {
-	if service == "" {
-		service = os.Getenv("FLYNN_POSTGRES")
+func Open(conf *Conf, afterConn func(*pgx.Conn) error) (*DB, error) {
+	connConfig := pgx.ConnConfig{
+		Host:     fmt.Sprintf("leader.%s.discoverd", conf.Service),
+		User:     conf.User,
+		Database: conf.Database,
+		Password: conf.Password,
+		Dial:     dialer.Retry.Dial,
 	}
-	db := &DB{
-		dsnSuffix: dsn,
-		dsn:       fmt.Sprintf("host=leader.%s.discoverd sslmode=disable %s", service, dsn),
-		addr:      fmt.Sprintf("leader.%s.discoverd", service),
-		stmts:     make(map[string]*sql.Stmt),
-	}
-	var err error
-	db.DB, err = sql.Open("postgres", db.dsn)
+	connPool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
+		ConnConfig:     connConfig,
+		AfterConnect:   afterConn,
+		MaxConnections: 20,
+	})
+	db := &DB{connPool, conf}
 	return db, err
 }
 
 type DB struct {
-	*sql.DB
-
-	dsnSuffix string
-
-	mtx  sync.RWMutex
-	dsn  string
-	addr string
-
-	stmts map[string]*sql.Stmt
-}
-
-var ErrNoServers = errors.New("postgres: no servers found")
-
-func (db *DB) DSN() string {
-	db.mtx.RLock()
-	defer db.mtx.RUnlock()
-	return db.dsn
-}
-
-func (db *DB) Addr() string {
-	db.mtx.RLock()
-	defer db.mtx.RUnlock()
-	return db.addr
-}
-
-func (db *DB) Close() error {
-	return db.DB.Close()
-}
-
-func (db *DB) prepare(query string) (*sql.Stmt, error) {
-	// Fast path: get cached prepared statement
-	db.mtx.RLock()
-	stmt, ok := db.stmts[query]
-	db.mtx.RUnlock()
-
-	if !ok {
-		// Cache miss: prepare query, fill cache
-		var err error
-		stmt, err = db.DB.Prepare(query)
-		if err != nil {
-			return nil, err
-		}
-		db.mtx.Lock()
-		if prevStmt, ok := db.stmts[query]; ok {
-			stmt.Close()
-			stmt = prevStmt
-		} else {
-			db.stmts[query] = stmt
-		}
-		db.mtx.Unlock()
-	}
-	return stmt, nil
-}
-
-func (db *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	stmt, err := db.prepare(query)
-	if err != nil {
-		return nil, err
-	}
-	return stmt.Query(args...)
+	*pgx.ConnPool
+	conf *Conf
 }
 
 func (db *DB) Exec(query string, args ...interface{}) error {
-	stmt, err := db.prepare(query)
-	if err != nil {
+	_, err := db.ConnPool.Exec(query, args...)
+	return err
+}
+
+func (db *DB) ExecRetry(query string, args ...interface{}) error {
+	retries := 0
+	max := 30
+	for {
+		_, err := db.ConnPool.Exec(query, args...)
+		if err == pgx.ErrDeadConn && retries < max {
+			retries++
+			time.Sleep(1 * time.Second)
+			continue
+		}
 		return err
 	}
-	_, err = stmt.Exec(args...)
-	return err
 }
 
 type Scanner interface {
@@ -159,30 +135,23 @@ type Scanner interface {
 }
 
 func (db *DB) QueryRow(query string, args ...interface{}) Scanner {
-	stmt, err := db.prepare(query)
-	if err != nil {
-		return errRow{err}
-	}
-	return rowErrFixer{stmt.QueryRow(args...)}
+	return rowErrFixer{db.ConnPool.QueryRow(query, args...)}
 }
 
-func (db *DB) Begin() (*dbTx, error) {
-	tx, err := db.DB.Begin()
-	return &dbTx{tx}, err
+func (db *DB) Begin() (*DBTx, error) {
+	tx, err := db.ConnPool.Begin()
+	return &DBTx{tx}, err
 }
 
-type dbTx struct{ *sql.Tx }
+type DBTx struct{ *pgx.Tx }
 
-func (tx *dbTx) QueryRow(query string, args ...interface{}) Scanner {
+func (tx *DBTx) Exec(query string, args ...interface{}) error {
+	_, err := tx.Tx.Exec(query, args...)
+	return err
+}
+
+func (tx *DBTx) QueryRow(query string, args ...interface{}) Scanner {
 	return rowErrFixer{tx.Tx.QueryRow(query, args...)}
-}
-
-type errRow struct {
-	err error
-}
-
-func (r errRow) Scan(...interface{}) error {
-	return r.err
 }
 
 type rowErrFixer struct {
@@ -191,16 +160,23 @@ type rowErrFixer struct {
 
 func (f rowErrFixer) Scan(args ...interface{}) error {
 	err := f.s.Scan(args...)
-	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "invalid_text_representation" && e.File == "uuid.c" && e.Routine == "string_to_uuid" {
+	if e, ok := err.(pgx.PgError); ok && e.Code == InvalidTextRepresentation && e.File == "uuid.c" && e.Routine == "string_to_uuid" {
 		// invalid input syntax for uuid
-		err = sql.ErrNoRows
+		err = pgx.ErrNoRows
 	}
 	return err
 }
 
 func IsUniquenessError(err error, constraint string) bool {
-	if e, ok := err.(*pq.Error); ok && e.Code.Name() == "unique_violation" {
-		return constraint == "" || constraint == e.Constraint
+	if e, ok := err.(pgx.PgError); ok && e.Code == UniqueViolation {
+		return constraint == "" || constraint == e.ConstraintName
+	}
+	return false
+}
+
+func IsCheckViolation(err error) bool {
+	if e, ok := err.(pgx.PgError); ok && e.Code == CheckViolation {
+		return true
 	}
 	return false
 }

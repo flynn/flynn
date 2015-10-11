@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
@@ -23,8 +22,8 @@ type DeploymentRepo struct {
 	q  *que.Client
 }
 
-func NewDeploymentRepo(db *postgres.DB, pgxpool *pgx.ConnPool) *DeploymentRepo {
-	q := que.NewClient(pgxpool)
+func NewDeploymentRepo(db *postgres.DB) *DeploymentRepo {
+	q := que.NewClient(db.ConnPool)
 	return &DeploymentRepo{db: db, q: q}
 }
 
@@ -37,23 +36,18 @@ func (r *DeploymentRepo) Add(data interface{}) (*ct.Deployment, error) {
 	if d.OldReleaseID != "" {
 		oldReleaseID = &d.OldReleaseID
 	}
-	procs, err := json.Marshal(d.Processes)
-	if err != nil {
-		return nil, err
-	}
 	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, err
 	}
-	query := "INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, processes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at"
-	if err := tx.QueryRow(query, d.ID, d.AppID, oldReleaseID, d.NewReleaseID, d.Strategy, procs).Scan(&d.CreatedAt); err != nil {
+	if err := tx.QueryRow("deployment_insert", d.ID, d.AppID, oldReleaseID, d.NewReleaseID, d.Strategy, d.Processes).Scan(&d.CreatedAt); err != nil {
 		tx.Rollback()
 		return nil, err
 	}
 
 	// fake initial deployment
 	if d.FinishedAt != nil {
-		if _, err := tx.Exec("UPDATE deployments SET finished_at = $2 WHERE deployment_id = $1", d.ID, d.FinishedAt); err != nil {
+		if err := tx.Exec("deployment_update_finished_at", d.ID, d.FinishedAt); err != nil {
 			tx.Rollback()
 			return nil, err
 		}
@@ -82,46 +76,25 @@ func (r *DeploymentRepo) Add(data interface{}) (*ct.Deployment, error) {
 		return nil, err
 	}
 	d.Status = "pending"
-	if err = tx.Commit(); err != nil {
+
+	job := &que.Job{Type: "deployment", Args: args}
+	if err := r.q.EnqueueInTx(job, tx.Tx); err != nil {
+		tx.Rollback()
 		return nil, err
 	}
-
-	// Delete the deployment if we get an error so the client can retry.
-	//
-	// TODO: wrap all of this in a transaction and drop the delete once we
-	//       move to pgx
-	job := &que.Job{Type: "deployment", Args: args}
-	if err := r.q.Enqueue(job); err != nil {
-		logger.New("fn", "DeploymentRepo.Add").Warn("error enqueueing deployment job", "err", err)
-		r.db.Exec("DELETE FROM deployments WHERE deployment_id = $1", d.ID)
+	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
 	return d, err
 }
 
 func (r *DeploymentRepo) Get(id string) (*ct.Deployment, error) {
-	query := `WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
-              SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
-                     strategy, e1.data->>'status' AS status,
-                     processes, d.created_at, d.finished_at
-              FROM deployments d
-              LEFT JOIN deployment_events e1 ON d.deployment_id = e1.object_id::uuid
-              LEFT OUTER JOIN deployment_events e2 ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
-              WHERE e2.created_at IS NULL AND d.deployment_id = $1`
-	row := r.db.QueryRow(query, id)
+	row := r.db.QueryRow("deployment_select", id)
 	return scanDeployment(row)
 }
 
 func (r *DeploymentRepo) List(appID string) ([]*ct.Deployment, error) {
-	query := `WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
-              SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
-                     strategy, e1.data->>'status' AS status,
-                     processes, d.created_at, d.finished_at
-              FROM deployments d
-              LEFT JOIN deployment_events e1 ON d.deployment_id = e1.object_id::uuid
-              LEFT OUTER JOIN deployment_events e2 ON (d.deployment_id = e2.object_id::uuid AND e1.created_at < e2.created_at)
-              WHERE e2.created_at IS NULL AND d.app_id = $1 ORDER BY d.created_at DESC`
-	rows, err := r.db.Query(query, appID)
+	rows, err := r.db.Query("deployment_list", appID)
 	if err != nil {
 		return nil, err
 	}
@@ -139,14 +112,11 @@ func (r *DeploymentRepo) List(appID string) ([]*ct.Deployment, error) {
 
 func scanDeployment(s postgres.Scanner) (*ct.Deployment, error) {
 	d := &ct.Deployment{}
-	var procs []byte
 	var oldReleaseID *string
 	var status *string
-	err := s.Scan(&d.ID, &d.AppID, &oldReleaseID, &d.NewReleaseID, &d.Strategy, &status, &procs, &d.CreatedAt, &d.FinishedAt)
-	if err == sql.ErrNoRows {
-		return nil, ErrNotFound
-	} else if err != nil {
-		return nil, err
+	err := s.Scan(&d.ID, &d.AppID, &oldReleaseID, &d.NewReleaseID, &d.Strategy, &status, &d.Processes, &d.CreatedAt, &d.FinishedAt)
+	if err == pgx.ErrNoRows {
+		err = ErrNotFound
 	}
 	if oldReleaseID != nil {
 		d.OldReleaseID = *oldReleaseID
@@ -154,7 +124,6 @@ func scanDeployment(s postgres.Scanner) (*ct.Deployment, error) {
 	if status != nil {
 		d.Status = *status
 	}
-	err = json.Unmarshal(procs, &d.Processes)
 	return d, err
 }
 
@@ -253,7 +222,7 @@ func (c *controllerAPI) ListDeployments(ctx context.Context, w http.ResponseWrit
 	httphelper.JSON(w, 200, list)
 }
 
-func createDeploymentEvent(dbExec func(string, ...interface{}) (sql.Result, error), d *ct.Deployment, status string) error {
+func createDeploymentEvent(dbExec func(string, ...interface{}) error, d *ct.Deployment, status string) error {
 	e := ct.DeploymentEvent{
 		AppID:        d.AppID,
 		DeploymentID: d.ID,

@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/controller/client"
+	"github.com/flynn/flynn/controller/schema"
 	"github.com/flynn/flynn/controller/worker/app_deletion"
 	"github.com/flynn/flynn/controller/worker/deployment"
 	"github.com/flynn/flynn/discoverd/client"
@@ -32,28 +32,13 @@ func main() {
 	}
 
 	log.Info("connecting to postgres")
-	db := postgres.Wait("", "")
+	db := postgres.Wait(nil, schema.PrepareStatements)
 
-	log.Info("creating postgres connection pool")
-	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
-		ConnConfig: pgx.ConnConfig{
-			Host:     os.Getenv("PGHOST"),
-			User:     os.Getenv("PGUSER"),
-			Password: os.Getenv("PGPASSWORD"),
-			Database: os.Getenv("PGDATABASE"),
-		},
-		AfterConnect:   que.PrepareStatements,
-		MaxConnections: workerCount,
-	})
-	if err != nil {
-		log.Error("error creating postgres connection pool", "err", err)
-		shutdown.Fatal()
-	}
-	shutdown.BeforeExit(func() { pgxpool.Close() })
+	shutdown.BeforeExit(func() { db.Close() })
 
 	go func() {
 		status.AddHandler(func() status.Status {
-			_, err := pgxpool.Exec("SELECT 1")
+			_, err := db.ConnPool.Exec("SELECT 1")
 			if err != nil {
 				return status.Unhealthy
 			}
@@ -69,7 +54,7 @@ func main() {
 	}()
 
 	workers := que.NewWorkerPool(
-		que.NewClient(pgxpool),
+		que.NewClient(db.ConnPool),
 		que.WorkMap{
 			"deployment":   deployment.JobHandler(db, client, logger),
 			"app_deletion": app_deletion.JobHandler(db, client, logger),

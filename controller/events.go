@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/ctxhelper"
@@ -90,7 +90,7 @@ func (r *EventRepo) ListEvents(appID string, objectTypes []string, objectID stri
 }
 
 func (r *EventRepo) GetEvent(id int64) (*ct.Event, error) {
-	row := r.db.QueryRow("SELECT event_id, app_id, object_id, object_type, data, created_at FROM events WHERE event_id = $1", id)
+	row := r.db.QueryRow("event_select", id)
 	return scanEvent(row)
 }
 
@@ -101,13 +101,16 @@ func scanEvent(s postgres.Scanner) (*ct.Event, error) {
 	var appID *string
 	err := s.Scan(&event.ID, &appID, &event.ObjectID, &typ, &data, &event.CreatedAt)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			err = ErrNotFound
 		}
 		return nil, err
 	}
 	if appID != nil {
 		event.AppID = *appID
+	}
+	if data == nil {
+		data = []byte("null")
 	}
 	event.ObjectType = ct.EventType(typ)
 	event.Data = json.RawMessage(data)
@@ -436,19 +439,19 @@ func (e *EventListener) Listen() error {
 				e.CloseWithError(listener.Err)
 				return
 			}
-			idApp := strings.SplitN(n.Extra, ":", 2)
+			idApp := strings.SplitN(n.Payload, ":", 2)
 			if len(idApp) < 1 {
-				log.Error(fmt.Sprintf("invalid event notification: %q", n.Extra))
+				log.Error(fmt.Sprintf("invalid event notification: %q", n.Payload))
 				continue
 			}
 			id, err := strconv.ParseInt(idApp[0], 10, 64)
 			if err != nil {
-				log.Error(fmt.Sprintf("invalid event notification: %q", n.Extra), "err", err)
+				log.Error(fmt.Sprintf("invalid event notification: %q", n.Payload), "err", err)
 				continue
 			}
 			event, err := e.eventRepo.GetEvent(id)
 			if err != nil {
-				log.Error(fmt.Sprintf("invalid event notification: %q", n.Extra), "err", err)
+				log.Error(fmt.Sprintf("invalid event notification: %q", n.Payload), "err", err)
 				continue
 			}
 			e.Notify(event)

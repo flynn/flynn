@@ -1,11 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
@@ -32,31 +31,19 @@ func (rr *ResourceRepo) Add(r *ct.Resource) error {
 	if err != nil {
 		return err
 	}
-	env, err := json.Marshal(r.Env)
-	if err != nil {
-		return err
-	}
-	err = tx.QueryRow(`INSERT INTO resources (resource_id, provider_id, external_id, env)
-					   VALUES ($1, $2, $3, $4)
-					   RETURNING created_at`,
-		r.ID, r.ProviderID, r.ExternalID, env).Scan(&r.CreatedAt)
+	err = tx.QueryRow("resource_insert", r.ID, r.ProviderID, r.ExternalID, r.Env).Scan(&r.CreatedAt)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 	for i, appID := range r.Apps {
-		var filterSQL string
-		var args []interface{}
+		var row postgres.Scanner
 		if idPattern.MatchString(appID) {
-			filterSQL = "app_id = $1 OR name = $2), $3)"
-			args = []interface{}{appID, appID, r.ID}
+			row = tx.QueryRow("resource_insert_app_by_name_or_id", appID, appID, r.ID)
 		} else {
-			filterSQL = "name = $1), $2)"
-			args = []interface{}{appID, r.ID}
+			row = tx.QueryRow("resource_insert_app_by_name", appID, r.ID)
 		}
-		err = tx.QueryRow("INSERT INTO app_resources (app_id, resource_id) VALUES ((SELECT app_id FROM apps WHERE "+
-			filterSQL+" RETURNING app_id", args...).Scan(&r.Apps[i])
-		if err != nil {
+		if err := row.Scan(&r.Apps[i]); err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -83,16 +70,12 @@ func split(s string, sep string) []string {
 
 func scanResource(s postgres.Scanner) (*ct.Resource, error) {
 	r := &ct.Resource{}
-	var env []byte
 	var appIDs string
-	err := s.Scan(&r.ID, &r.ProviderID, &r.ExternalID, &env, &appIDs, &r.CreatedAt)
-	if err == sql.ErrNoRows {
+	err := s.Scan(&r.ID, &r.ProviderID, &r.ExternalID, &r.Env, &appIDs, &r.CreatedAt)
+	if err == pgx.ErrNoRows {
 		return nil, ErrNotFound
 	} else if err != nil {
 		return nil, err
-	}
-	if len(env) > 0 {
-		err = json.Unmarshal(env, &r.Env)
 	}
 	if appIDs != "" {
 		r.Apps = split(appIDs[1:len(appIDs)-1], ",")
@@ -101,34 +84,19 @@ func scanResource(s postgres.Scanner) (*ct.Resource, error) {
 }
 
 func (r *ResourceRepo) Get(id string) (*ct.Resource, error) {
-	row := r.db.QueryRow(`SELECT resource_id, provider_id, external_id, env,
-								 ARRAY(SELECT app_id
-								       FROM app_resources a
-									   WHERE a.resource_id = r.resource_id AND a.deleted_at IS NULL
-									   ORDER BY a.created_at DESC),
-								 created_at
-						  FROM resources r
-						  WHERE resource_id = $1 AND deleted_at IS NULL`, id)
+	row := r.db.QueryRow("resource_select", id)
 	return scanResource(row)
 }
 
 func (r *ResourceRepo) ProviderList(providerID string) ([]*ct.Resource, error) {
-	rows, err := r.db.Query(`SELECT resource_id, provider_id, external_id, env,
-									ARRAY(SELECT a.app_id
-								          FROM app_resources a
-                                          WHERE a.resource_id = r.resource_id AND a.deleted_at IS NULL
-                                          ORDER BY a.created_at DESC),
-									created_at
-							 FROM resources r
-							 WHERE provider_id = $1 AND deleted_at IS NULL
-							 ORDER BY created_at DESC`, providerID)
+	rows, err := r.db.Query("resource_list_by_provider", providerID)
 	if err != nil {
 		return nil, err
 	}
 	return resourceList(rows)
 }
 
-func resourceList(rows *sql.Rows) ([]*ct.Resource, error) {
+func resourceList(rows *pgx.Rows) ([]*ct.Resource, error) {
 	var resources []*ct.Resource
 	for rows.Next() {
 		resource, err := scanResource(rows)
@@ -142,16 +110,7 @@ func resourceList(rows *sql.Rows) ([]*ct.Resource, error) {
 }
 
 func (r *ResourceRepo) AppList(appID string) ([]*ct.Resource, error) {
-	rows, err := r.db.Query(`SELECT DISTINCT(r.resource_id), r.provider_id, r.external_id, r.env,
-									ARRAY(SELECT a.app_id
-									      FROM app_resources a
-										  WHERE a.resource_id = r.resource_id AND a.deleted_at IS NULL
-										  ORDER BY a.created_at DESC),
-									r.created_at
-							 FROM resources r
-							 JOIN app_resources a USING (resource_id)
-							 WHERE a.app_id = $1 AND r.deleted_at IS NULL
-							 ORDER BY r.created_at DESC`, appID)
+	rows, err := r.db.Query("resource_list_by_app", appID)
 	if err != nil {
 		return nil, err
 	}
@@ -163,12 +122,12 @@ func (rr *ResourceRepo) Remove(r *ct.Resource) error {
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec("UPDATE resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL", r.ID)
+	err = tx.Exec("UPDATE resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL", r.ID)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
-	_, err = tx.Exec("UPDATE app_resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL", r.ID)
+	err = tx.Exec("UPDATE app_resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL", r.ID)
 	if err != nil {
 		tx.Rollback()
 		return err

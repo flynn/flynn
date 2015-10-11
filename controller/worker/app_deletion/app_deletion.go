@@ -103,19 +103,19 @@ func (c *context) HandleAppDeletion(job *que.Job) (err error) {
 		log.Error("error starting db transaction", "err", err)
 		return err
 	}
-	_, err = tx.Exec("UPDATE apps SET deleted_at = now() WHERE app_id = $1 AND deleted_at IS NULL", app.ID)
+	err = tx.Exec("app_delete", app.ID)
 	if err != nil {
 		log.Error("error executing app deletion query", "err", err)
 		tx.Rollback()
 		return err
 	}
-	_, err = tx.Exec("UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now() WHERE app_id = $1 AND deleted_at IS NULL", app.ID)
+	err = tx.Exec("formation_delete_by_app", app.ID)
 	if err != nil {
 		log.Error("error executing formation deletion query", "err", err)
 		tx.Rollback()
 		return err
 	}
-	_, err = tx.Exec("UPDATE app_resources SET deleted_at = now() WHERE app_id = $1 AND deleted_at IS NULL", app.ID)
+	err = tx.Exec("resource_delete_by_app", app.ID)
 	if err != nil {
 		log.Error("error executing resource deletion query", "err", err)
 		tx.Rollback()
@@ -129,10 +129,5 @@ func (c *context) createEvent(a *ct.AppDeletion, err error) error {
 	if err != nil {
 		e.Error = err.Error()
 	}
-	data, err := json.Marshal(e)
-	if err != nil {
-		return err
-	}
-	query := "INSERT INTO events (app_id, object_id, object_type, data) VALUES ($1, $2, $3, $4)"
-	return c.db.Exec(query, a.AppID, a.AppID, string(ct.EventTypeAppDeletion), data)
+	return c.db.Exec("event_insert", a.AppID, a.AppID, string(ct.EventTypeAppDeletion), e)
 }

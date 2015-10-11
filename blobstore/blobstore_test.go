@@ -9,8 +9,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
+	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/testutils/postgres"
@@ -26,15 +26,21 @@ func TestOSFilesystem(t *testing.T) {
 }
 
 func TestPostgresFilesystem(t *testing.T) {
-	if err := pgtestutils.SetupPostgres("blobstoretest"); err != nil {
+	dbname := "blobstoretest"
+	if err := pgtestutils.SetupPostgres(dbname); err != nil {
 		t.Fatal(err)
 	}
-	db, err := sql.Open("postgres", "")
+	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
+		ConnConfig: pgx.ConnConfig{
+			Host:     os.Getenv("PGHOST"),
+			Database: dbname,
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	db := postgres.New(pgxpool, nil)
 	defer db.Close()
-	db.SetMaxOpenConns(1)
 
 	fs, err := NewPostgresFilesystem(db)
 	if err != nil {

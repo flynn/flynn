@@ -4,15 +4,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-sql"
-	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/pq"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/controller/client"
+	"github.com/flynn/flynn/controller/schema"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
 	hh "github.com/flynn/flynn/pkg/httphelper"
@@ -46,36 +45,42 @@ func (s *S) SetUpSuite(c *C) {
 		c.Fatal(err)
 	}
 
-	dsn := fmt.Sprintf("dbname=%s", dbname)
-	db, err := sql.Open("postgres", dsn)
-	if err != nil {
-		c.Fatal(err)
-	}
-	if err = migrateDB(db); err != nil {
-		c.Fatal(err)
-	}
-	pg := postgres.New(db, dsn)
-
 	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
 		ConnConfig: pgx.ConnConfig{
-			Host:     "/var/run/postgresql",
+			Host:     os.Getenv("PGHOST"),
 			Database: dbname,
 		},
-		AfterConnect: que.PrepareStatements,
 	})
 	if err != nil {
 		c.Fatal(err)
 	}
+	db := postgres.New(pgxpool, nil)
+	if err = migrateDB(db); err != nil {
+		c.Fatal(err)
+	}
+
+	// reconnect with que statements prepared now that schema is migrated
+
+	pgxpool, err = pgx.NewConnPool(pgx.ConnPoolConfig{
+		ConnConfig: pgx.ConnConfig{
+			Host:     "/var/run/postgresql",
+			Database: dbname,
+		},
+		AfterConnect: schema.PrepareStatements,
+	})
+	if err != nil {
+		c.Fatal(err)
+	}
+	db = postgres.New(pgxpool, nil)
 
 	s.flac = newFakeLogAggregatorClient()
 	s.cc = tu.NewFakeCluster()
 	s.hc = handlerConfig{
-		db:      pg,
-		cc:      s.cc,
-		lc:      s.flac,
-		rc:      newFakeRouter(),
-		pgxpool: pgxpool,
-		keys:    []string{authKey},
+		db:   db,
+		cc:   s.cc,
+		lc:   s.flac,
+		rc:   newFakeRouter(),
+		keys: []string{authKey},
 	}
 	handler := appHandler(s.hc)
 	s.srv = httptest.NewServer(handler)

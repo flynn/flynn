@@ -214,34 +214,36 @@ func (p *ConnPool) QueryRow(sql string, args ...interface{}) *Row {
 // Begin acquires a connection and begins a transaction on it. When the
 // transaction is closed the connection will be automatically released.
 func (p *ConnPool) Begin() (*Tx, error) {
-	c, err := p.Acquire()
-	if err != nil {
-		return nil, err
-	}
-
-	tx, err := c.Begin()
-	if err != nil {
-		return nil, err
-	}
-
-	tx.pool = p
-	return tx, nil
+	return p.BeginIso("")
 }
 
 // BeginIso acquires a connection and begins a transaction in isolation mode iso
 // on it. When the transaction is closed the connection will be automatically
 // released.
 func (p *ConnPool) BeginIso(iso string) (*Tx, error) {
-	c, err := p.Acquire()
-	if err != nil {
-		return nil, err
-	}
+	for {
+		c, err := p.Acquire()
+		if err != nil {
+			return nil, err
+		}
 
-	tx, err := c.BeginIso(iso)
-	if err != nil {
-		return nil, err
-	}
+		tx, err := c.BeginIso(iso)
+		if err != nil {
+			alive := c.IsAlive()
+			p.Release(c)
 
-	tx.pool = p
-	return tx, nil
+			// If connection is still alive then the error is not something trying
+			// again on a new connection would fix, so just return the error. But
+			// if the connection is dead try to acquire a new connection and try
+			// again.
+			if alive {
+				return nil, err
+			} else {
+				continue
+			}
+		}
+
+		tx.pool = p
+		return tx, nil
+	}
 }

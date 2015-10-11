@@ -223,17 +223,26 @@ func (s *PostgresSuite) testDeploy(t *c.C, d *pgDeploy) {
 	}
 
 	// connect to the db so we can test writes
-	db := postgres.Wait(d.name, fmt.Sprintf("dbname=postgres user=flynn password=%s", release.Env["PGPASSWORD"]))
+	db := postgres.Wait(&postgres.Conf{
+		Service:  d.name,
+		User:     "flynn",
+		Password: release.Env["PGPASSWORD"],
+		Database: "postgres",
+	}, nil)
 	dbname := "deploy-test"
 	t.Assert(db.Exec(fmt.Sprintf(`CREATE DATABASE "%s" WITH OWNER = "flynn"`, dbname)), c.IsNil)
 	db.Close()
-	db, err = postgres.Open(d.name, fmt.Sprintf("dbname=%s user=flynn password=%s", dbname, release.Env["PGPASSWORD"]))
-	t.Assert(err, c.IsNil)
+	db = postgres.Wait(&postgres.Conf{
+		Service:  d.name,
+		User:     "flynn",
+		Password: release.Env["PGPASSWORD"],
+		Database: dbname,
+	}, nil)
 	defer db.Close()
 	t.Assert(db.Exec(`CREATE TABLE deploy_test ( data text)`), c.IsNil)
 	assertWriteable := func() {
 		debug(t, "writing to postgres database")
-		t.Assert(db.Exec(`INSERT INTO deploy_test (data) VALUES ('data')`), c.IsNil)
+		t.Assert(db.ExecRetry(`INSERT INTO deploy_test (data) VALUES ('data')`), c.IsNil)
 	}
 
 	// check currently writeable

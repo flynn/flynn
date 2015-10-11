@@ -102,15 +102,12 @@ func main() {
 		fs = NewOSFilesystem(*storageDir)
 		storageDesc = *storageDir
 	} else {
-		db, err := postgres.Open("", "")
+		var err error
+		db := postgres.Wait(nil, nil)
+		fs, err = NewPostgresFilesystem(db)
 		if err != nil {
 			shutdown.Fatal(err)
 		}
-		fs, err = NewPostgresFilesystem(db.DB)
-		if err != nil {
-			shutdown.Fatal(err)
-		}
-		db.Close() // not used once pgx is connected
 		storageDesc = "Postgres"
 	}
 
