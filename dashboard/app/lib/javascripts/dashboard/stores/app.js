@@ -73,7 +73,16 @@ var App = Store.createClass({
 		case 'APP_FORMATION':
 			if (event.app === this.props.appId && event.data.release === this.state.release.id) {
 				this.setState({
-					formation: event.data
+					formation: extend({}, event.data, {
+						processes: (function () {
+							var processes = {};
+							var formationProcesses = event.data.processes;
+							Object.keys(this.state.release.processes || {}).forEach(function (k) {
+								processes[k] = formationProcesses[k] || 0;
+							});
+							return processes;
+						}.bind(this))()
+					})
 				});
 			}
 			break;
