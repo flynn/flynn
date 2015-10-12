@@ -54,6 +54,10 @@
 			"Rev": "836c0f777155cb5570c6b8a4799cf64dc578e95f"
 		},
 		{
+			"ImportPath": "github.com/awslabs/aws-sdk-go/gen/s3",
+			"Rev": "836c0f777155cb5570c6b8a4799cf64dc578e95f"
+		},
+		{
 			"ImportPath": "github.com/badgerodon/ioutil",
 			"Rev": "b4d36b903b8b5353e41d0072358d59d722e76ae3"
 		},
@@ -71,28 +75,8 @@
 			"Rev": "0464652af750701d218b6dd035f0217e407caf2d"
 		},
 		{
-			"ImportPath": "github.com/codegangsta/cli",
-			"Comment": "1.2.0-87-g8ce64f1",
-			"Rev": "8ce64f19ff08029a69d11b7615c9b591245450ad"
-		},
-		{
 			"ImportPath": "github.com/codegangsta/inject",
 			"Rev": "9aea7a2fa5b79ef7fc00f63a575e72df33b4e886"
-		},
-		{
-			"ImportPath": "github.com/cupcake/goamz/aws",
-			"Comment": "r2013.02.13-151-g78d7708",
-			"Rev": "78d7708fc6ca767a04a26c777cdc618f39a34ac4"
-		},
-		{
-			"ImportPath": "github.com/cupcake/goamz/ec2",
-			"Comment": "r2013.02.13-151-g78d7708",
-			"Rev": "78d7708fc6ca767a04a26c777cdc618f39a34ac4"
-		},
-		{
-			"ImportPath": "github.com/cupcake/goamz/s3",
-			"Comment": "r2013.02.13-151-g78d7708",
-			"Rev": "78d7708fc6ca767a04a26c777cdc618f39a34ac4"
 		},
 		{
 			"ImportPath": "github.com/cupcake/jsonschema",
