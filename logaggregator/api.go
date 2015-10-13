@@ -138,11 +138,11 @@ func NewMessageFromSyslog(m *rfc5424.Message) client.Message {
 var procIDsep = []byte{'.'}
 
 func splitProcID(procID []byte) (processType, jobID []byte) {
-	split := bytes.Split(procID, procIDsep)
-	if len(split) > 0 {
+	split := bytes.SplitN(procID, procIDsep, 2)
+	if len(split) < 2 {
+		jobID = split[0]
+	} else {
 		processType = split[0]
-	}
-	if len(split) > 1 {
 		jobID = split[1]
 	}
 	return
