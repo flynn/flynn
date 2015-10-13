@@ -169,6 +169,13 @@ func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 				Cmd:       []string{"sh", "-c", resourceCmd},
 				Resources: testResources(),
 			},
+			"ish": {
+				Cmd:   []string{"/bin/ish"},
+				Ports: []ct.Port{{Proto: "tcp"}},
+				Env: map[string]string{
+					"NAME": app.Name,
+				},
+			},
 		},
 	}
 	t.Assert(client.CreateRelease(release), c.IsNil)
@@ -283,4 +290,57 @@ func (r *gitRepo) git(args ...string) *CmdResult {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = r.dir
 	return run(r.t, cmd)
+}
+
+func (h *Helper) newCliTestApp(t *c.C) *cliTestApp {
+	app, release := h.createApp(t)
+	watcher, err := h.controllerClient(t).WatchJobEvents(app.Name, release.ID)
+	t.Assert(err, c.IsNil)
+	return &cliTestApp{
+		id:      app.ID,
+		name:    app.Name,
+		disc:    h.discoverdClient(t),
+		t:       t,
+		watcher: watcher,
+	}
+}
+
+type cliTestApp struct {
+	id, name string
+	release  *ct.Release
+	watcher  *controller.JobWatcher
+	disc     *discoverd.Client
+	t        *c.C
+}
+
+func (a *cliTestApp) flynn(args ...string) *CmdResult {
+	return flynn(a.t, "/", append([]string{"-a", a.name}, args...)...)
+}
+
+func (a *cliTestApp) flynnCmd(args ...string) *exec.Cmd {
+	return flynnCmd("/", append([]string{"-a", a.name}, args...)...)
+}
+
+func (a *cliTestApp) waitFor(events ct.JobEvents) string {
+	var id string
+	idSetter := func(e *ct.Job) error {
+		id = e.ID
+		return nil
+	}
+
+	a.t.Assert(a.watcher.WaitFor(events, scaleTimeout, idSetter), c.IsNil)
+	return id
+}
+
+func (a *cliTestApp) waitForService(name string) {
+	_, err := a.disc.Instances(name, 30*time.Second)
+	a.t.Assert(err, c.IsNil)
+}
+
+func (a *cliTestApp) sh(cmd string) *CmdResult {
+	return a.flynn("run", "sh", "-c", cmd)
+}
+
+func (a *cliTestApp) cleanup() {
+	a.watcher.Close()
 }
