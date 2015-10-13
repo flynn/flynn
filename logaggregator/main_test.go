@@ -33,19 +33,15 @@ func (s *LogAggregatorTestSuite) SetUpTest(c *C) {
 }
 
 func testServer(c *C) *Server {
-	srvConf := ServerConfig{
+	return NewServer(ServerConfig{
 		SyslogAddr:  ":0",
 		ApiAddr:     ":0",
 		ServiceName: "test-logaggregator",
-	}
-
-	srv, err := NewServer(srvConf)
-	c.Assert(err, IsNil)
-	return srv
+	})
 }
 
 func testClient(c *C, srv *Server) *client.Client {
-	_, port, _ := net.SplitHostPort(srv.al.Addr().String())
+	_, port, _ := net.SplitHostPort(srv.apiListener.Addr().String())
 	url := "http://127.0.0.1:" + port + "/"
 
 	client, err := client.New(url)
@@ -60,7 +56,7 @@ func (s *LogAggregatorTestSuite) TearDownTest(c *C) {
 }
 
 func (s *LogAggregatorTestSuite) TestAggregatorListensOnAddr(c *C) {
-	go s.srv.Run()
+	c.Assert(s.srv.Start(), IsNil)
 
 	ip, port, err := net.SplitHostPort(s.srv.SyslogAddr().String())
 	c.Assert(err, IsNil)

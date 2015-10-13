@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -18,8 +19,11 @@ type Server struct {
 	*Aggregator
 	Cursors *HostCursors
 
-	ll, al net.Listener   // syslog and api listeners
-	lwg    sync.WaitGroup // syslog wait group
+	conf ServerConfig
+
+	syslogListener net.Listener
+	apiListener    net.Listener
+	syslogWg       sync.WaitGroup
 
 	hb discoverd.Heartbeater
 
@@ -34,39 +38,16 @@ type ServerConfig struct {
 	Discoverd   *discoverd.Client
 }
 
-func NewServer(conf ServerConfig) (*Server, error) {
-	ll, err := net.Listen("tcp", conf.SyslogAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	al, err := net.Listen("tcp", conf.ApiAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	var hb discoverd.Heartbeater
-	if conf.Discoverd != nil {
-		hb, err = conf.Discoverd.AddServiceAndRegister(conf.ServiceName, conf.SyslogAddr)
-		if err != nil {
-			return nil, err
-		}
-	}
-
+func NewServer(conf ServerConfig) *Server {
 	a := NewAggregator()
 	c := NewHostCursors()
-
 	return &Server{
 		Aggregator: a,
 		Cursors:    c,
-
-		ll: ll,
-		al: al,
-		hb: hb,
-
-		api:      apiHandler(a, c),
-		shutdown: make(chan struct{}),
-	}, nil
+		conf:       conf,
+		api:        apiHandler(a, c),
+		shutdown:   make(chan struct{}),
+	}
 }
 
 func (s *Server) Shutdown() {
@@ -78,22 +59,26 @@ func (s *Server) Shutdown() {
 	}
 
 	// shutdown listeners
-	if err := s.ll.Close(); err != nil {
-		log15.Error("syslog listener shutdown error", "err", err)
+	if s.syslogListener != nil {
+		if err := s.syslogListener.Close(); err != nil {
+			log15.Error("syslog listener shutdown error", "err", err)
+		}
 	}
-	if err := s.al.Close(); err != nil {
-		log15.Error("api listener shutdown error", "err", err)
+	if s.apiListener != nil {
+		if err := s.apiListener.Close(); err != nil {
+			log15.Error("api listener shutdown error", "err", err)
+		}
 	}
 
 	// close syslog client connections
 	close(s.shutdown)
-	s.lwg.Wait()
+	s.syslogWg.Wait()
 
 	// shutdown aggregator
 	s.Aggregator.Shutdown()
 }
 
-func (s *Server) LoadSnapshot(path string) error {
+func (s *Server) LoadSnapshotFile(path string) error {
 	f, err := os.Open(path)
 	if os.IsNotExist(err) {
 		return nil
@@ -101,8 +86,12 @@ func (s *Server) LoadSnapshot(path string) error {
 	if err != nil {
 		return err
 	}
+	defer f.Close()
+	return s.LoadSnapshot(f)
+}
 
-	sc := snapshot.NewScanner(f)
+func (s *Server) LoadSnapshot(r io.Reader) error {
+	sc := snapshot.NewScanner(r)
 	for sc.Scan() {
 		cursor, err := utils.ParseHostCursor(sc.Message)
 		if err != nil {
@@ -114,37 +103,58 @@ func (s *Server) LoadSnapshot(path string) error {
 	return sc.Err()
 }
 
-func (s *Server) WriteSnapshot(path string) error {
+func (s *Server) WriteSnapshotFile(path string) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
+	return s.WriteSnapshot(f)
+}
 
-	buffers := s.Aggregator.ReadAll()
-	return snapshot.WriteTo(buffers, f)
+func (s *Server) WriteSnapshot(w io.Writer) error {
+	return snapshot.WriteTo(s.Aggregator.ReadAll(), w)
 }
 
 func (s *Server) SyslogAddr() net.Addr {
-	return s.ll.Addr()
+	return s.syslogListener.Addr()
 }
 
-func (s *Server) Run() error {
-	go s.runSyslog()
+func (s *Server) Start() error {
+	var err error
+	s.syslogListener, err = net.Listen("tcp", s.conf.SyslogAddr)
+	if err != nil {
+		return err
+	}
 
-	return http.Serve(s.al, s.api)
+	s.apiListener, err = net.Listen("tcp", s.conf.ApiAddr)
+	if err != nil {
+		return err
+	}
+
+	if s.conf.Discoverd != nil {
+		s.hb, err = s.conf.Discoverd.AddServiceAndRegister(s.conf.ServiceName, s.conf.SyslogAddr)
+		if err != nil {
+			return err
+		}
+	}
+
+	go s.runSyslog()
+	go http.Serve(s.apiListener, s.api)
+
+	return nil
 }
 
 func (s *Server) runSyslog() {
 	for {
-		conn, err := s.ll.Accept()
+		conn, err := s.syslogListener.Accept()
 		if err != nil {
 			return
 		}
 
-		s.lwg.Add(1)
+		s.syslogWg.Add(1)
 		go func(c net.Conn) {
-			defer s.lwg.Done()
+			defer s.syslogWg.Done()
 			s.drainSyslogConn(c)
 		}(conn)
 	}

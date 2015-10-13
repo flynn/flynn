@@ -17,7 +17,7 @@ func (s *LogAggregatorTestSuite) BenchmarkReplaySnapshot(c *C) {
 			Aggregator: NewAggregator(),
 		}
 
-		srv.LoadSnapshot("testdata/sample.dat")
+		srv.LoadSnapshotFile("testdata/sample.dat")
 	}
 }
 
@@ -30,10 +30,10 @@ func (*LogAggregatorTestSuite) BenchmarkTakeSnapshot(c *C) {
 		Aggregator: NewAggregator(),
 	}
 
-	srv.LoadSnapshot("testdata/sample.dat")
+	srv.LoadSnapshotFile("testdata/sample.dat")
 
 	c.ResetTimer()
 	for i := 0; i < c.N; i++ {
-		srv.WriteSnapshot("/dev/null")
+		srv.WriteSnapshotFile("/dev/null")
 	}
 }
