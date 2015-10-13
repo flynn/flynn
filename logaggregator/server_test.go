@@ -55,45 +55,6 @@ func (s *ServerTestSuite) TestServerDurability(c *C) {
 	}
 }
 
-func (s *ServerTestSuite) TestServerReplication(c *C) {
-	ls := testServer(c, s.dc)
-	go ls.Run()
-	defer ls.Shutdown()
-
-	fs := testServer(c, s.dc)
-	go fs.Run()
-	defer fs.Shutdown()
-
-	conn, err := net.Dial("tcp", ls.SyslogAddr().String())
-	c.Assert(err, IsNil)
-	defer conn.Close()
-
-	lc := testClient(c, ls)
-	fc := testClient(c, fs)
-
-	zero := 0
-	lrc, err := lc.GetLog("app-A", &client.LogOpts{Follow: true, Lines: &zero})
-	c.Assert(err, IsNil)
-
-	frc, err := fc.GetLog("app-A", &client.LogOpts{Follow: true, Lines: &zero})
-	c.Assert(err, IsNil)
-
-	for _, msg := range appAMessages {
-		conn.Write(rfc6587.Bytes(msg))
-	}
-
-	var want, got client.Message
-	ldec := json.NewDecoder(lrc)
-	fdec := json.NewDecoder(frc)
-
-	for range appAMessages {
-		c.Assert(ldec.Decode(&want), IsNil)
-		c.Assert(fdec.Decode(&got), IsNil)
-
-		c.Assert(got, DeepEquals, want)
-	}
-}
-
 func (s *ServerTestSuite) TestHostCursors(c *C) {
 	srv := testServer(c)
 	go srv.Run()
