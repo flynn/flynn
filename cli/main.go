@@ -163,11 +163,7 @@ func runCommand(name string, args []string) (err error) {
 	switch f := cmd.f.(type) {
 	case func(*docopt.Args, *controller.Client) error:
 		// create client and run command
-		cluster, err := getCluster()
-		if err != nil {
-			shutdown.Fatal(err)
-		}
-		client, err := cluster.Client()
+		client, err := getClusterClient()
 		if err != nil {
 			shutdown.Fatal(err)
 		}
@@ -206,6 +202,14 @@ func readConfig() (err error) {
 		}
 	}
 	return
+}
+
+func getClusterClient() (*controller.Client, error) {
+	cluster, err := getCluster()
+	if err != nil {
+		return nil, err
+	}
+	return cluster.Client()
 }
 
 var ErrNoClusters = errors.New("no clusters configured")

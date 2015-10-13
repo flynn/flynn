@@ -1,15 +1,19 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/shutdown"
 )
 
 func init() {
@@ -18,6 +22,7 @@ usage: flynn cluster
        flynn cluster add [-f] [-d] [-g <githost>] [--git-url <giturl>] [-p <tlspin>] <cluster-name> <domain> <key>
        flynn cluster remove <cluster-name>
        flynn cluster default [<cluster-name>]
+       flynn cluster migrate-domain <domain>
 
 Manage clusters in the ~/.flynnrc configuration file.
 
@@ -39,6 +44,11 @@ Examples:
 
 	$ flynn cluster add -p KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs= default dev.localflynn.com e09dc5301d72be755a3d666f617c4600
 	Cluster "default" added.
+
+	$ flynn cluster migrate-domain new.example.com
+	Migrate cluster domain from "example.com" to "new.example.com"? (yes/no): yes
+	Migrating cluster domain (this can take up to 2m0s)...
+	Changed cluster domain from "example.com" to "new.example.com"
 `)
 }
 
@@ -53,6 +63,8 @@ func runCluster(args *docopt.Args) error {
 		return runClusterRemove(args)
 	} else if args.Bool["default"] {
 		return runClusterDefault(args)
+	} else if args.Bool["migrate-domain"] {
+		return runClusterMigrateDomain(args)
 	}
 
 	w := tabWriter()
@@ -194,4 +206,65 @@ func runClusterDefault(args *docopt.Args) error {
 
 	log.Printf("%q is now the default cluster.", name)
 	return nil
+}
+
+func runClusterMigrateDomain(args *docopt.Args) error {
+	client, err := getClusterClient()
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+
+	dm := &ct.DomainMigration{
+		Domain: args.String["<domain>"],
+	}
+
+	release, err := client.GetAppRelease("controller")
+	if err != nil {
+		return err
+	}
+	dm.OldDomain = release.Env["DEFAULT_ROUTE_DOMAIN"]
+
+	if !promptYesNo(fmt.Sprintf("Migrate cluster domain from %q to %q?", dm.OldDomain, dm.Domain)) {
+		fmt.Println("Aborted")
+		return nil
+	}
+
+	maxDuration := 2 * time.Minute
+	fmt.Printf("Migrating cluster domain (this can take up to %s)...\n", maxDuration)
+
+	events := make(chan *ct.Event)
+	stream, err := client.StreamEvents(controller.StreamEventsOptions{
+		ObjectTypes: []ct.EventType{ct.EventTypeDomainMigration},
+	}, events)
+	if err != nil {
+		return nil
+	}
+	defer stream.Close()
+
+	if err := client.PutDomain(dm); err != nil {
+		return err
+	}
+
+	timeout := time.After(maxDuration)
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return stream.Err()
+			}
+			var e *ct.DomainMigrationEvent
+			if err := json.Unmarshal(event.Data, &e); err != nil {
+				return err
+			}
+			if e.Error != "" {
+				fmt.Println(e.Error)
+			}
+			if e.DomainMigration.FinishedAt != nil {
+				fmt.Printf("Changed cluster domain from %q to %q\n", dm.OldDomain, dm.Domain)
+				return nil
+			}
+		case <-timeout:
+			return errors.New("timed out waiting for domain migration to complete")
+		}
+	}
 }
