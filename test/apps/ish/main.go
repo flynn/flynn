@@ -3,7 +3,6 @@ package main
 import (
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -26,14 +25,11 @@ func main() {
 		name = "ish-service"
 	}
 
-	log.Println("Application", name, "(an ish instance) running")
-
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		shutdown.Fatal(err)
 	}
 	defer l.Close()
-	log.Println("Listening on", addr)
 
 	hb, err := discoverd.AddServiceAndRegister(name, addr)
 	if err != nil {
