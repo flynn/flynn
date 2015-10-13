@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -54,7 +55,7 @@ func ish(resp http.ResponseWriter, req *http.Request) {
 	body, _ := ioutil.ReadAll(req.Body)
 
 	cmd := exec.Command("/bin/sh", "-c", string(body)) // no bash in busybox
-	cmd.Stdout = resp
-	cmd.Stderr = resp
+	cmd.Stdout = io.MultiWriter(resp, os.Stdout)
+	cmd.Stderr = io.MultiWriter(resp, os.Stderr)
 	cmd.Run()
 }
