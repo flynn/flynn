@@ -510,8 +510,8 @@
     "url": "tcp://gitreceive.discoverd"
   },
   {
-    "id": "status-wait",
-    "action": "wait",
+    "id": "status-check",
+    "action": "status-check",
     "url": "http://status-web.discoverd"
   },
   {
