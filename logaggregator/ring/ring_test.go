@@ -2,7 +2,6 @@ package ring
 
 import (
 	"fmt"
-	"strconv"
 	"testing"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
@@ -13,189 +12,282 @@ import (
 func Test(t *testing.T) { TestingT(t) }
 
 type S struct {
+	data []*rfc5424.Message
 }
 
 var _ = Suite(&S{})
+
+func (s *S) SetUpTest(c *C) {
+	hdr := &rfc5424.Header{}
+
+	s.data = make([]*rfc5424.Message, DefaultBufferCapacity*2)
+	for i := 0; i < len(s.data); i++ {
+		line := []byte(fmt.Sprintf("line %d\n", i))
+		s.data[i] = rfc5424.NewMessage(hdr, line)
+	}
+}
 
 func (s *S) TestNewBuffer(c *C) {
 	b := NewBuffer()
 	c.Assert(b.messages, HasLen, 0)
 	c.Assert(cap(b.messages), Equals, DefaultBufferCapacity)
-	c.Assert(b.start, Equals, 0)
+	c.Assert(b.cursor, Equals, 0)
 }
 
-func (s *S) TestBuffer(c *C) {
+func (s *S) TestBufferClose(c *C) {
 	b := NewBuffer()
-
-	// test the empty buffer
-	res := b.ReadAll()
-	c.Assert(res, HasLen, 0)
-	c.Assert(cap(res), Equals, 0)
-
-	// add a couple of elements
-	msg0 := &rfc5424.Message{Msg: []byte{'0'}}
-	msg1 := &rfc5424.Message{Msg: []byte{'1'}}
-	b.Add(msg0)
-	b.Add(msg1)
-
-	res = b.ReadAll()
-	c.Assert(res, HasLen, 2)
-	c.Assert(cap(res), Equals, 2)
-	c.Assert(res[0], DeepEquals, msg0)
-	c.Assert(res[1], DeepEquals, msg1)
-
-	// overfill the buffer by exactly one
-	for i := 2; i < DefaultBufferCapacity+1; i++ {
-		b.Add(&rfc5424.Message{Msg: []byte(strconv.Itoa(i))})
-	}
-	res = b.ReadAll()
-	c.Assert(res, HasLen, DefaultBufferCapacity)
-	c.Assert(cap(res), Equals, DefaultBufferCapacity)
-	c.Assert(res[0], Equals, msg1)
-	for i := 1; i < len(res); i++ {
-		c.Assert(string(res[i].Msg), Equals, strconv.Itoa(i+1))
-	}
-
-	// ensure that modifying an element in res doesn't modify original buffer
-	res[0] = &rfc5424.Message{Msg: []byte("A replacement message")}
-	c.Assert(b.messages[1], Equals, msg1)
+	b.Close()
+	c.Assert(b.messages, IsNil)
+	c.Assert(b.cursor, Equals, -1)
 }
 
-func (s *S) TestReadLastN(c *C) {
-	runTest := func(n int, wantMsgs []string) {
-		b := NewBuffer()
-
-		// add a couple of elements
-		msg0 := &rfc5424.Message{Msg: []byte{'0'}}
-		msg1 := &rfc5424.Message{Msg: []byte{'1'}}
-		b.Add(msg0)
-		b.Add(msg1)
-
-		res := b.ReadLastN(n)
-		c.Assert(res, HasLen, len(wantMsgs))
-		c.Assert(cap(res), Equals, len(wantMsgs))
-		for i, want := range wantMsgs {
-			c.Assert(res[i], DeepEquals, &rfc5424.Message{Msg: []byte(want)})
-		}
-
-		// overfill the buffer by exactly one
-		for i := 2; i < DefaultBufferCapacity+1; i++ {
-			b.Add(&rfc5424.Message{Msg: []byte(strconv.Itoa(i))})
-		}
-		res = b.ReadLastN(5)
-		c.Assert(res, HasLen, 5)
-		c.Assert(cap(res), Equals, 5)
-		for i := 0; i < 5; i++ {
-			c.Assert(string(res[i].Msg), Equals, strconv.Itoa(b.Capacity()-5+i))
-		}
-	}
-
+func (s *S) TestRead(c *C) {
 	tests := []struct {
-		n        int
-		wantMsgs []string
+		cap        int
+		data, want []*rfc5424.Message
 	}{
-		{n: 0, wantMsgs: []string{}},
-		{n: 1, wantMsgs: []string{"1"}},
-		{n: 2, wantMsgs: []string{"0", "1"}},
+		// fill
+		{
+			cap:  100,
+			data: s.data[:100],
+			want: s.data[:100],
+		},
+		// overflow
+		{
+			cap:  90,
+			data: s.data[:100],
+			want: s.data[10:100],
+		},
+		// large overflow
+		{
+			cap:  DefaultBufferCapacity,
+			data: append(s.data, s.data...),
+			want: s.data[DefaultBufferCapacity:],
+		},
 	}
+
 	for _, test := range tests {
-		c.Logf("running n=%d want=%v", test.n, test.wantMsgs)
-		runTest(test.n, test.wantMsgs)
+		b := newBuffer(test.cap)
+		defer b.Close()
+
+		for _, msg := range test.data {
+			c.Assert(b.Add(msg), IsNil)
+		}
+
+		got := b.Read()
+		c.Assert(len(got), Equals, len(test.want))
+		c.Assert(got, DeepEquals, test.want)
 	}
 }
 
-func (s *S) TestReadLastNAndSubscribe(c *C) {
-	runTest := func(n int, wantMsgs []string) {
-		b := NewBuffer()
-		b.Add(&rfc5424.Message{Msg: []byte("preexisting message 1")})
-		b.Add(&rfc5424.Message{Msg: []byte("preexisting message 2")})
-
-		messages, msgc, cancel := b.ReadLastNAndSubscribe(n)
-		defer cancel()
-
-		c.Assert(messages, HasLen, len(wantMsgs))
-		for i, want := range wantMsgs {
-			c.Assert(string(messages[i].Msg), Equals, want)
-		}
-
-		select {
-		case msg := <-msgc:
-			c.Fatalf("want no message, got %v", msg)
-		default:
-		}
-
-		newMsgs := []string{"new message 1", "new message 2"}
-		for _, msg := range newMsgs {
-			b.Add(&rfc5424.Message{Msg: []byte(msg)})
-		}
-
-		for _, want := range newMsgs {
-			select {
-			case msg := <-msgc:
-				c.Assert(string(msg.Msg), Equals, want)
-			default:
-				c.Fatalf("want message, got none")
-			}
-		}
-
-		cancel()
-		c.Assert(b.subs, HasLen, 0)
-		select {
-		case msg := <-msgc:
-			c.Assert(msg, IsNil)
-		default:
-			c.Fatalf("want msgc to be closed")
-		}
-	}
-
-	tests := []struct {
-		n        int
-		wantMsgs []string
-	}{
-		{n: 0, wantMsgs: []string{}},
-		{n: 1, wantMsgs: []string{"preexisting message 2"}},
-		{n: 2, wantMsgs: []string{"preexisting message 1", "preexisting message 2"}},
-	}
-	for _, test := range tests {
-		c.Logf("running n=%d want=%v", test.n, test.wantMsgs)
-		runTest(test.n, test.wantMsgs)
-	}
+type subscriber struct {
+	msgc chan *rfc5424.Message
+	want []*rfc5424.Message
 }
 
 func (s *S) TestSubscribe(c *C) {
-	b := NewBuffer()
-	b.Add(&rfc5424.Message{Msg: []byte("preexisting message")})
+	tests := []struct {
+		data []*rfc5424.Message
 
-	msgc, cancel := b.Subscribe()
-	defer cancel()
-
-	c.Assert(cap(msgc), Equals, 1000)
-
-	select {
-	case msg := <-msgc:
-		c.Fatalf("want no message, got %v", msg)
-	default:
+		subs map[int][]subscriber
+	}{
+		// single subscriber from step 0
+		{
+			data: s.data,
+			subs: map[int][]subscriber{
+				0: {
+					subscriber{
+						msgc: make(chan *rfc5424.Message, len(s.data)),
+						want: s.data,
+					},
+				},
+			},
+		},
+		// multiple subscriber from step 0
+		{
+			data: s.data,
+			subs: map[int][]subscriber{
+				0: {
+					subscriber{
+						msgc: make(chan *rfc5424.Message, len(s.data)),
+						want: s.data,
+					},
+					subscriber{
+						msgc: make(chan *rfc5424.Message, len(s.data)),
+						want: s.data,
+					},
+					subscriber{
+						msgc: make(chan *rfc5424.Message, len(s.data)),
+						want: s.data,
+					},
+					subscriber{
+						msgc: make(chan *rfc5424.Message, len(s.data)),
+						want: s.data,
+					},
+					subscriber{
+						msgc: make(chan *rfc5424.Message, len(s.data)),
+						want: s.data,
+					},
+				},
+			},
+		},
+		// multiple subscribers, offset steps
+		{
+			data: s.data,
+			subs: map[int][]subscriber{
+				0: {
+					subscriber{
+						msgc: make(chan *rfc5424.Message, len(s.data)),
+						want: s.data,
+					},
+				},
+				100: {
+					subscriber{
+						msgc: make(chan *rfc5424.Message, len(s.data)-100),
+						want: s.data[100:],
+					},
+				},
+				200: {
+					subscriber{
+						msgc: make(chan *rfc5424.Message, len(s.data)-200),
+						want: s.data[200:],
+					},
+				},
+				300: {
+					subscriber{
+						msgc: make(chan *rfc5424.Message, len(s.data)-300),
+						want: s.data[300:],
+					},
+				},
+				400: {
+					subscriber{
+						msgc: make(chan *rfc5424.Message, len(s.data)-400),
+						want: s.data[400:],
+					},
+				},
+				500: {
+					subscriber{
+						msgc: make(chan *rfc5424.Message, len(s.data)-500),
+						want: s.data[500:],
+					},
+				},
+			},
+		},
+		// subscribers with various buffered channels sizes
+		{
+			data: s.data,
+			subs: map[int][]subscriber{
+				0: {
+					subscriber{
+						msgc: make(chan *rfc5424.Message),
+						want: s.data[:0],
+					},
+					subscriber{
+						msgc: make(chan *rfc5424.Message, 1),
+						want: s.data[:1],
+					},
+					subscriber{
+						msgc: make(chan *rfc5424.Message, 10),
+						want: s.data[:10],
+					},
+					subscriber{
+						msgc: make(chan *rfc5424.Message, 100),
+						want: s.data[:100],
+					},
+					subscriber{
+						msgc: make(chan *rfc5424.Message, 1000),
+						want: s.data[:1000],
+					},
+					subscriber{
+						msgc: make(chan *rfc5424.Message, len(s.data)),
+						want: s.data,
+					},
+				},
+			},
+		},
 	}
 
-	b.Add(&rfc5424.Message{Msg: []byte("new message 1")})
-	b.Add(&rfc5424.Message{Msg: []byte("new message 2")})
-	c.Assert(msgc, HasLen, 2)
+	for _, test := range tests {
+		b := NewBuffer()
 
-	for i := 1; i < 3; i++ {
-		select {
-		case msg := <-msgc:
-			c.Assert(string(msg.Msg), Equals, fmt.Sprintf("new message %d", i))
-		default:
-			c.Fatalf("got no message i=%d", i)
+		donec := make(chan struct{})
+		for step, msg := range test.data {
+			for _, sub := range test.subs[step] {
+				b.Subscribe(sub.msgc, donec)
+			}
+
+			c.Assert(b.Add(msg), IsNil)
+		}
+
+		b.Close()
+
+		for _, subs := range test.subs {
+			for _, sub := range subs {
+				got := make([]*rfc5424.Message, 0, len(sub.msgc))
+				for msg := range sub.msgc {
+					got = append(got, msg)
+				}
+
+				c.Assert(len(got), Equals, len(sub.want))
+				c.Assert(got, DeepEquals, sub.want)
+			}
 		}
 	}
+}
 
-	cancel()
-	c.Assert(b.subs, HasLen, 0)
-	select {
-	case msg := <-msgc:
-		c.Assert(msg, IsNil)
-	default:
-		c.Fatalf("want msgc to be closed")
+func (s *S) TestReadSubscribe(c *C) {
+	tests := []struct {
+		cap, subAt int
+		data, want []*rfc5424.Message
+		msgc       chan *rfc5424.Message
+	}{
+		// read 1/4, sub 3/4 (cap is 1/2)
+		{
+			cap:   500,
+			data:  s.data[:1000],
+			subAt: 250,
+			msgc:  make(chan *rfc5424.Message, 750),
+			want:  s.data[:1000],
+		},
+		// drop 1/4, read 1/2, sub 1/4 (cap is 1/2)
+		{
+			cap:   500,
+			data:  s.data[:1000],
+			subAt: 750,
+			msgc:  make(chan *rfc5424.Message, 250),
+			want:  s.data[250:1000],
+		},
+		// read 1/2, sub 1/4, drop 1/4 (len(msgc) is 1/4)
+		{
+			cap:   1000,
+			data:  s.data[:1000],
+			subAt: 500,
+			msgc:  make(chan *rfc5424.Message, 250),
+			want:  s.data[:750],
+		},
+	}
+
+	for _, test := range tests {
+		var got []*rfc5424.Message
+
+		b := newBuffer(test.cap)
+
+		donec := make(chan struct{})
+		for step, msg := range test.data {
+			if step == test.subAt {
+				got = b.ReadAndSubscribe(test.msgc, donec)
+			}
+
+			c.Assert(b.Add(msg), IsNil)
+		}
+
+		b.Close()
+
+		for msg := range test.msgc {
+			got = append(got, msg)
+		}
+
+		c.Assert(len(got), Equals, len(test.want))
+		c.Assert(got, DeepEquals, test.want)
 	}
 }
