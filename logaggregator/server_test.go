@@ -24,7 +24,7 @@ var _ = Suite(&ServerTestSuite{})
 
 func (s *ServerTestSuite) TestServerDurability(c *C) {
 	srv := testServer(c)
-	go srv.Run()
+	c.Assert(srv.Start(), IsNil)
 	defer srv.Shutdown()
 
 	cl := testClient(c, srv)
@@ -57,7 +57,7 @@ func (s *ServerTestSuite) TestServerDurability(c *C) {
 
 func (s *ServerTestSuite) TestHostCursors(c *C) {
 	srv := testServer(c)
-	go srv.Run()
+	c.Assert(srv.Start(), IsNil)
 	defer srv.Shutdown()
 	cl := testClient(c, srv)
 
@@ -80,24 +80,24 @@ func (s *ServerTestSuite) TestHostCursors(c *C) {
 	write(msg2)
 
 	assertCursors(map[string]utils.HostCursor{
-		"host1": utils.HostCursor{msg1.Timestamp, 1},
-		"host2": utils.HostCursor{msg2.Timestamp, 1},
+		"host1": {msg1.Timestamp, 1},
+		"host2": {msg2.Timestamp, 1},
 	})
 
 	// test new timestamp with seq rolled over
 	msg3 := newSeqMessage("host1", 1, 1)
 	write(msg3)
 	assertCursors(map[string]utils.HostCursor{
-		"host1": utils.HostCursor{msg3.Timestamp, 1},
-		"host2": utils.HostCursor{msg2.Timestamp, 1},
+		"host1": {msg3.Timestamp, 1},
+		"host2": {msg2.Timestamp, 1},
 	})
 
 	// test same timestamp with new seq
 	msg4 := newSeqMessage("host1", 2, 1)
 	write(msg4)
 	assertCursors(map[string]utils.HostCursor{
-		"host1": utils.HostCursor{msg4.Timestamp, 2},
-		"host2": utils.HostCursor{msg2.Timestamp, 1},
+		"host1": {msg4.Timestamp, 2},
+		"host2": {msg2.Timestamp, 1},
 	})
 }
 

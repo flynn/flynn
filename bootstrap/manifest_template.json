@@ -393,8 +393,7 @@
     "release": {
       "processes": {
         "app": {
-          "cmd": ["-logaddr", ":514", "-apiaddr", ":80", "-snapshot", "/data/logaggregator.dat"],
-          "data": true,
+          "cmd": ["-logaddr", ":514", "-apiaddr", ":80"],
           "ports": [
             {"port": 80, "proto": "tcp"},
             {"port": 514, "proto": "tcp"}
@@ -403,7 +402,7 @@
       }
     },
     "processes": {
-      "app": 1
+      "app": 2
     }
   },
   {

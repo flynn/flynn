@@ -114,3 +114,11 @@ func (c *Client) GetCursors() (map[string]utils.HostCursor, error) {
 	var res map[string]utils.HostCursor
 	return res, c.Get("/cursors", &res)
 }
+
+func (c *Client) GetSnapshot() (io.ReadCloser, error) {
+	res, err := c.RawReq("GET", "/snapshot", nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return res.Body, nil
+}
