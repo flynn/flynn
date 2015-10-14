@@ -247,6 +247,7 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(config *host.NetworkConfig) erro
 			return err
 		}
 	}
+	defer network.Free()
 	active, err := network.IsActive()
 	if err != nil {
 		return err
@@ -261,6 +262,7 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(config *host.NetworkConfig) erro
 		// including ours. This prevents discoverd from binding its DNS server.
 		// We don't use it, so destroy it if it exists.
 		defaultNet.Destroy()
+		defaultNet.Free()
 	}
 
 	// enable IP forwarding
@@ -590,6 +592,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		g.Log(grohl.Data{"at": "define_domain", "status": "error", "err": err})
 		return err
 	}
+	defer vd.Free()
 
 	g.Log(grohl.Data{"at": "create_domain"})
 	if err := l.withConnRetries(vd.Create); err != nil {
@@ -704,6 +707,7 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 		if e != nil {
 			return e
 		}
+		defer d.Free()
 		if err := d.Destroy(); err != nil {
 			g.Log(grohl.Data{"at": "destroy", "status": "error", "err": err.Error()})
 		}
