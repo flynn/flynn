@@ -661,11 +661,45 @@ func (c *libvirtContainer) cleanupMounts(pid int) error {
 	return nil
 }
 
+// waitExit waits for the libvirt domain to be marked as done or five seconds to
+// elapse
+func (c *libvirtContainer) waitExit() {
+	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "waitExit", "job.id": c.job.ID})
+	g.Log(grohl.Data{"at": "start"})
+	domain, err := c.l.libvirt.LookupDomainByName(c.job.ID)
+	if err != nil {
+		g.Log(grohl.Data{"at": "domain_error", "err": err.Error()})
+		return
+	}
+	defer domain.Free()
+
+	maxWait := time.After(5 * time.Second)
+	for {
+		state, err := domain.GetState()
+		if err != nil {
+			g.Log(grohl.Data{"at": "state_error", "err": err.Error()})
+			return
+		}
+		if state[0] != libvirt.VIR_DOMAIN_RUNNING && state[0] != libvirt.VIR_DOMAIN_SHUTDOWN {
+			g.Log(grohl.Data{"at": "done"})
+			return
+		}
+		select {
+		case <-maxWait:
+			g.Log(grohl.Data{"at": "maxWait"})
+			return
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
 func (c *libvirtContainer) watch(ready chan<- error) error {
 	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "watch_container", "job.id": c.job.ID})
 	g.Log(grohl.Data{"at": "start"})
 
 	defer func() {
+		c.waitExit()
 		// TODO: kill containerinit/domain if it is still running
 		c.l.containersMtx.Lock()
 		delete(c.l.containers, c.job.ID)
