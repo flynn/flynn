@@ -247,6 +247,7 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(config *host.NetworkConfig) erro
 			return err
 		}
 	}
+	defer network.Free()
 	active, err := network.IsActive()
 	if err != nil {
 		return err
@@ -261,6 +262,7 @@ func (l *LibvirtLXCBackend) ConfigureNetworking(config *host.NetworkConfig) erro
 		// including ours. This prevents discoverd from binding its DNS server.
 		// We don't use it, so destroy it if it exists.
 		defaultNet.Destroy()
+		defaultNet.Free()
 	}
 
 	// enable IP forwarding
@@ -590,6 +592,7 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		g.Log(grohl.Data{"at": "define_domain", "status": "error", "err": err})
 		return err
 	}
+	defer vd.Free()
 
 	g.Log(grohl.Data{"at": "create_domain"})
 	if err := l.withConnRetries(vd.Create); err != nil {
@@ -658,11 +661,45 @@ func (c *libvirtContainer) cleanupMounts(pid int) error {
 	return nil
 }
 
+// waitExit waits for the libvirt domain to be marked as done or five seconds to
+// elapse
+func (c *libvirtContainer) waitExit() {
+	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "waitExit", "job.id": c.job.ID})
+	g.Log(grohl.Data{"at": "start"})
+	domain, err := c.l.libvirt.LookupDomainByName(c.job.ID)
+	if err != nil {
+		g.Log(grohl.Data{"at": "domain_error", "err": err.Error()})
+		return
+	}
+	defer domain.Free()
+
+	maxWait := time.After(5 * time.Second)
+	for {
+		state, err := domain.GetState()
+		if err != nil {
+			g.Log(grohl.Data{"at": "state_error", "err": err.Error()})
+			return
+		}
+		if state[0] != libvirt.VIR_DOMAIN_RUNNING && state[0] != libvirt.VIR_DOMAIN_SHUTDOWN {
+			g.Log(grohl.Data{"at": "done"})
+			return
+		}
+		select {
+		case <-maxWait:
+			g.Log(grohl.Data{"at": "maxWait"})
+			return
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
 func (c *libvirtContainer) watch(ready chan<- error) error {
 	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "watch_container", "job.id": c.job.ID})
 	g.Log(grohl.Data{"at": "start"})
 
 	defer func() {
+		c.waitExit()
 		// TODO: kill containerinit/domain if it is still running
 		c.l.containersMtx.Lock()
 		delete(c.l.containers, c.job.ID)
@@ -704,6 +741,7 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 		if e != nil {
 			return e
 		}
+		defer d.Free()
 		if err := d.Destroy(); err != nil {
 			g.Log(grohl.Data{"at": "destroy", "status": "error", "err": err.Error()})
 		}
