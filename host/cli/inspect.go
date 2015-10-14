@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/host/types"
@@ -42,6 +43,13 @@ func runInspect(args *docopt.Args, client *cluster.Client) error {
 	return nil
 }
 
+func displayTime(ts time.Time) string {
+	if ts.IsZero() {
+		return ""
+	}
+	return ts.String()
+}
+
 func printJobDesc(job *host.ActiveJob, out io.Writer, env bool) {
 	w := tabwriter.NewWriter(out, 1, 2, 2, ' ', 0)
 	defer w.Flush()
@@ -50,7 +58,7 @@ func printJobDesc(job *host.ActiveJob, out io.Writer, env bool) {
 	listRec(w, "Cmd", strings.Join(job.Job.Config.Cmd, " "))
 	listRec(w, "Status", job.Status)
 	listRec(w, "StartedAt", job.StartedAt)
-	listRec(w, "EndedAt", job.EndedAt)
+	listRec(w, "EndedAt", displayTime(job.EndedAt))
 	listRec(w, "ExitStatus", job.ExitStatus)
 	listRec(w, "IP Address", job.InternalIP)
 	for k, v := range job.Job.Metadata {
