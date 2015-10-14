@@ -138,7 +138,10 @@
   {
     "id": "controller-cert",
     "action": "gen-tls-cert",
-    "hosts": ["{{ getenv \"CLUSTER_DOMAIN\" }}", "*.{{ getenv \"CLUSTER_DOMAIN\" }}"]
+    "hosts": ["{{ getenv \"CLUSTER_DOMAIN\" }}", "*.{{ getenv \"CLUSTER_DOMAIN\" }}"],
+    "ca_cert": "{{ getenv \"TLS_CA\" }}",
+    "cert": "{{ getenv \"TLS_CERT\" }}",
+    "key": "{{ getenv \"TLS_KEY\" }}"
   },
   {
     "id": "controller",
