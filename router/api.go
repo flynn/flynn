@@ -80,6 +80,10 @@ func updateRoute(params martini.Params, route router.Route, router *Router, r re
 	}
 
 	if err := l.UpdateRoute(&route); err != nil {
+		if err == ErrNotFound {
+			r.JSON(404, "not found")
+			return
+		}
 		log.Println(err)
 		r.JSON(500, "unknown error")
 		return
