@@ -38,7 +38,7 @@ func amis(args *docopt.Args) {
 
 		var snapshotID string
 		for _, mapping := range image.BlockDeviceMappings {
-			if mapping.DeviceName == image.RootDeviceName {
+			if *mapping.DeviceName == *image.RootDeviceName {
 				snapshotID = *mapping.EBS.SnapshotID
 			}
 		}
