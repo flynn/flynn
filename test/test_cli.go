@@ -399,6 +399,7 @@ func (s *CLISuite) TestKill(t *c.C) {
 }
 
 func (s *CLISuite) TestRoute(t *c.C) {
+	client := s.controllerClient(t)
 	app := s.newCliTestApp(t)
 	defer app.cleanup()
 
@@ -437,7 +438,7 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	t.Assert(dupRoute.Output, c.Equals, "conflict: Duplicate route\n")
 
 	// ensure sticky flag is set
-	routes, err := s.controllerClient(t).RouteList(app.name)
+	routes, err := client.RouteList(app.name)
 	t.Assert(err, c.IsNil)
 	var found bool
 	for _, r := range routes {
@@ -448,6 +449,29 @@ func (s *CLISuite) TestRoute(t *c.C) {
 		found = true
 	}
 	t.Assert(found, c.Equals, true, c.Commentf("didn't find route"))
+
+	// flynn route update --no-sticky
+	newRoute = app.flynn("route", "update", routeID, "--no-sticky")
+	t.Assert(newRoute, Succeeds)
+	r, err := client.GetRoute(app.ID, routeID)
+	t.Assert(err, c.IsNil)
+	t.Assert(r.Sticky, c.Equals, false)
+
+	// flynn route update --service
+	newRoute = app.flynn("route", "update", routeID, "--service", "foo")
+	t.Assert(newRoute, Succeeds)
+	r, err = client.GetRoute(app.ID, routeID)
+	t.Assert(err, c.IsNil)
+	t.Assert(r.Service, c.Equals, "foo")
+	t.Assert(r.Sticky, c.Equals, false)
+
+	// flynn route update --sticky
+	newRoute = app.flynn("route", "update", routeID, "--sticky")
+	t.Assert(newRoute, Succeeds)
+	r, err = client.GetRoute(app.ID, routeID)
+	t.Assert(err, c.IsNil)
+	t.Assert(r.Sticky, c.Equals, true)
+	t.Assert(r.Service, c.Equals, "foo")
 
 	// flynn route remove
 	t.Assert(app.flynn("route", "remove", routeID), Succeeds)
@@ -465,6 +489,14 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	routeID = strings.Split(portRoute.Output, " ")[0]
 	port := strings.Split(portRoute.Output, " ")[4]
 	t.Assert(port, c.Equals, "9999\n")
+	assertRouteContains(routeID, true)
+
+	// flynn route update --service
+	portRoute = app.flynn("route", "update", routeID, "--service", "foo")
+	t.Assert(portRoute, Succeeds)
+	r, err = client.GetRoute(app.ID, routeID)
+	t.Assert(err, c.IsNil)
+	t.Assert(r.Service, c.Equals, "foo")
 
 	// flynn route remove
 	t.Assert(app.flynn("route", "remove", routeID), Succeeds)

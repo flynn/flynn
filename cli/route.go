@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
@@ -19,6 +20,7 @@ func init() {
 usage: flynn route
        flynn route add http [-s <service>] [-c <tls-cert> -k <tls-key>] [--sticky] <domain>
        flynn route add tcp [-s <service>] [-p <port>]
+       flynn route update <id> [-s <service>] [-c <tls-cert> -k <tls-key>] [--sticky] [--no-sticky]
        flynn route remove <id>
 
 Manage routes for application.
@@ -28,6 +30,7 @@ Options:
 	-c, --tls-cert=<tls-cert>  path to PEM encoded certificate for TLS, - for stdin (http only)
 	-k, --tls-key=<tls-key>    path to PEM encoded private key for TLS, - for stdin (http only)
 	--sticky                   enable cookie-based sticky routing (http only)
+	--no-sticky                disable cookie-based sticky routing (update http only)
 	-p, --port=<port>          port to accept traffic on (tcp only)
 
 Commands:
@@ -54,6 +57,16 @@ func runRoute(args *docopt.Args, client *controller.Client) error {
 		default:
 			return fmt.Errorf("Route type %s not supported.", args.String["-t"])
 		}
+	} else if args.Bool["update"] {
+		typ := strings.Split(args.String["<id>"], "/")[0]
+		switch typ {
+		case "http":
+			return runRouteUpdateHTTP(args, client)
+		case "tcp":
+			return runRouteUpdateTCP(args, client)
+		default:
+			return fmt.Errorf("Route type %s not supported.", typ)
+		}
 	} else if args.Bool["remove"] {
 		return runRouteRemove(args, client)
 	}
@@ -66,8 +79,8 @@ func runRoute(args *docopt.Args, client *controller.Client) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	var route, protocol, service string
-	listRec(w, "ROUTE", "SERVICE", "ID")
+	var route, protocol, service, sticky string
+	listRec(w, "ROUTE", "SERVICE", "ID", "STICKY")
 	for _, k := range routes {
 		switch k.Type {
 		case "tcp":
@@ -82,8 +95,9 @@ func runRoute(args *docopt.Args, client *controller.Client) error {
 			} else {
 				protocol = "https"
 			}
+			sticky = fmt.Sprintf("%t", k.Sticky)
 		}
-		listRec(w, protocol+":"+route, service, k.FormattedID())
+		listRec(w, protocol+":"+route, service, k.FormattedID(), sticky)
 	}
 	return nil
 }
@@ -119,6 +133,84 @@ func runRouteAddHTTP(args *docopt.Args, client *controller.Client) error {
 		service = mustApp() + "-web"
 	}
 
+	tlsCert, tlsKey, err := parseTLSCert(args)
+	if err != nil {
+		return err
+	}
+
+	hr := &router.HTTPRoute{
+		Service: service,
+		Domain:  args.String["<domain>"],
+		TLSCert: tlsCert,
+		TLSKey:  tlsKey,
+		Sticky:  args.Bool["--sticky"],
+	}
+	route := hr.ToRoute()
+	if err := client.CreateRoute(mustApp(), route); err != nil {
+		return err
+	}
+	fmt.Println(route.FormattedID())
+	return nil
+}
+
+func runRouteUpdateTCP(args *docopt.Args, client *controller.Client) error {
+	id := args.String["<id>"]
+	appName := mustApp()
+
+	route, err := client.GetRoute(appName, id)
+	if err != nil {
+		return err
+	}
+
+	service := args.String["--service"]
+	if service == "" {
+		return errors.New("No service name given")
+	}
+	if service == route.Service {
+		return errors.New("Service already set")
+	}
+	route.Service = service
+
+	if err := client.UpdateRoute(appName, id, route); err != nil {
+		return err
+	}
+	hr := route.TCPRoute()
+	fmt.Printf("%s listening on port %d\n", hr.FormattedID(), hr.Port)
+	return nil
+}
+
+func runRouteUpdateHTTP(args *docopt.Args, client *controller.Client) error {
+	id := args.String["<id>"]
+	appName := mustApp()
+
+	route, err := client.GetRoute(appName, id)
+	if err != nil {
+		return err
+	}
+
+	if service := args.String["--service"]; service != "" {
+		route.Service = service
+	}
+
+	route.TLSCert, route.TLSKey, err = parseTLSCert(args)
+	if err != nil {
+		return err
+	}
+
+	if args.Bool["--sticky"] {
+		route.Sticky = true
+	} else if args.Bool["--no-sticky"] {
+		route.Sticky = false
+	}
+
+	if err := client.UpdateRoute(appName, id, route); err != nil {
+		return err
+	}
+	fmt.Printf("updated %s\n", route.FormattedID())
+	return nil
+}
+
+func parseTLSCert(args *docopt.Args) (string, string, error) {
 	tlsCertPath := args.String["--tls-cert"]
 	tlsKeyPath := args.String["--tls-key"]
 	var tlsCert []byte
@@ -130,36 +222,23 @@ func runRouteAddHTTP(args *docopt.Args, client *controller.Client) error {
 			var err error
 			stdin, err = ioutil.ReadAll(os.Stdin)
 			if err != nil {
-				return fmt.Errorf("Failed to read from stdin: %s", err)
+				return "", "", fmt.Errorf("Failed to read from stdin: %s", err)
 			}
 		}
 
 		var err error
 		tlsCert, err = readPEM("CERTIFICATE", tlsCertPath, stdin)
 		if err != nil {
-			return fmt.Errorf("Failed to read TLS cert: %s", err)
+			return "", "", fmt.Errorf("Failed to read TLS cert: %s", err)
 		}
 		tlsKey, err = readPEM("PRIVATE KEY", tlsKeyPath, stdin)
 		if err != nil {
-			return fmt.Errorf("Failed to read TLS key: %s", err)
+			return "", "", fmt.Errorf("Failed to read TLS key: %s", err)
 		}
 	} else if tlsCertPath != "" || tlsKeyPath != "" {
-		return errors.New("Both the TLS certificate AND private key need to be specified")
+		return "", "", errors.New("Both the TLS certificate AND private key need to be specified")
 	}
-
-	hr := &router.HTTPRoute{
-		Service: service,
-		Domain:  args.String["<domain>"],
-		TLSCert: string(tlsCert),
-		TLSKey:  string(tlsKey),
-		Sticky:  args.Bool["--sticky"],
-	}
-	route := hr.ToRoute()
-	if err := client.CreateRoute(mustApp(), route); err != nil {
-		return err
-	}
-	fmt.Println(route.FormattedID())
-	return nil
+	return string(tlsCert), string(tlsKey), nil
 }
 
 func readPEM(typ string, path string, stdin []byte) ([]byte, error) {
