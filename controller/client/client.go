@@ -343,6 +343,11 @@ func (c *Client) CreateRoute(appID string, route *router.Route) error {
 	return c.Post(fmt.Sprintf("/apps/%s/routes", appID), route, route)
 }
 
+// UpdateRoute updates details for the routeID under the specified app.
+func (c *Client) UpdateRoute(appID string, routeID string, route *router.Route) error {
+	return c.Put(fmt.Sprintf("/apps/%s/routes/%s", appID, routeID), route, route)
+}
+
 // DeleteRoute deletes a route under the specified app.
 func (c *Client) DeleteRoute(appID string, routeID string) error {
 	return c.Delete(fmt.Sprintf("/apps/%s/routes/%s", appID, routeID), nil)

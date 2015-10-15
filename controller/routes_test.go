@@ -60,7 +60,14 @@ func (r *fakeRouter) GetRoute(routeType, id string) (*router.Route, error) {
 	return route, nil
 }
 
-func (r *fakeRouter) UpdateRoute(*router.Route) error { return nil }
+func (r *fakeRouter) UpdateRoute(route *router.Route) error {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	now := time.Now()
+	route.UpdatedAt = now
+	r.routes[route.ID] = route
+	return nil
+}
 
 func (r *fakeRouter) StreamEvents(output chan *router.StreamEvent) (stream.Stream, error) {
 	return &fakeStream{}, nil
@@ -112,6 +119,29 @@ func (s *S) TestDeleteRoute(c *C) {
 
 	_, err := s.c.GetRoute(app.ID, route.ID)
 	c.Assert(err, Equals, controller.ErrNotFound)
+}
+
+func (s *S) TestUpdateRoute(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "update-route"})
+	route0 := s.createTestRoute(c, app.ID, (&router.TCPRoute{Service: "foo"}).ToRoute())
+	route1 := s.createTestRoute(c, app.ID, (&router.HTTPRoute{Service: "bar", Domain: "example.com"}).ToRoute())
+
+	route0.Service = "foo-1"
+	route1.Service = "bar-1"
+	route1.Sticky = true
+
+	c.Assert(s.c.UpdateRoute(app.ID, route0.ID, route0), IsNil)
+	c.Assert(s.c.UpdateRoute(app.ID, route1.ID, route1), IsNil)
+
+	routes, err := s.c.RouteList(app.ID)
+	c.Assert(err, IsNil)
+
+	c.Assert(routes, HasLen, 2)
+	c.Assert(routes[1].ID, Equals, route0.ID)
+	c.Assert(routes[1].Service, Equals, route0.Service)
+	c.Assert(routes[0].ID, Equals, route1.ID)
+	c.Assert(routes[0].Service, Equals, route1.Service)
+	c.Assert(routes[0].Sticky, Equals, route1.Sticky)
 }
 
 func (s *S) TestListRoutes(c *C) {
