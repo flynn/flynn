@@ -154,7 +154,7 @@ func startJob(s *State, hc *cluster.Host, job *host.Job) error {
 					return
 				default:
 				}
-			case <-time.After(10 * time.Second):
+			case <-time.After(30 * time.Second):
 				jobStatus <- errors.New("bootstrap: timed out waiting for job event")
 				return
 			}
