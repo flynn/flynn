@@ -217,6 +217,11 @@ func (s *Store) Close() error {
 	close(s.closing)
 	s.wg.Wait()
 
+	for _, l := range s.subscribers {
+		for el := l.Front(); el != nil; el = el.Next() {
+			el.Value.(*subscription).Close()
+		}
+	}
 	if s.raft != nil {
 		s.raft.Shutdown()
 		s.raft = nil
