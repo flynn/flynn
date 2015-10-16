@@ -47,7 +47,6 @@ func (l *TCPListener) AddRoute(route *router.Route) error {
 	if r.Port == 0 {
 		return l.addWithAllocatedPort(route)
 	}
-	route.ID = md5sum(strconv.Itoa(r.Port))
 	return l.ds.Add(route)
 }
 
@@ -61,7 +60,6 @@ func (l *TCPListener) UpdateRoute(route *router.Route) error {
 	if r.Port == 0 {
 		return errors.New("router: a port number needs to be specified")
 	}
-	route.ID = md5sum(strconv.Itoa(r.Port))
 	return l.ds.Update(route)
 }
 
