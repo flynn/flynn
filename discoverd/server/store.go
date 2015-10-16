@@ -223,7 +223,7 @@ func (s *Store) Close() error {
 		}
 	}
 	if s.raft != nil {
-		s.raft.Shutdown()
+		s.raft.Shutdown().Error()
 		s.raft = nil
 	}
 	if s.transport != nil {
