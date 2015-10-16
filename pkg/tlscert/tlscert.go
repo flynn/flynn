@@ -11,7 +11,7 @@ type Cert struct {
 	Cert   string `json:"cert"`
 	Pin    string `json:"pin"`
 
-	PrivateKey string `json:"-"`
+	PrivateKey string `json:"key"`
 }
 
 func (c *Cert) String() string {
