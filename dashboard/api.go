@@ -8,15 +8,18 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/badgerodon/ioutil"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/sessions"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/pkg/cors"
+	"github.com/flynn/flynn/pkg/ctxhelper"
+	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/status"
 )
 
@@ -37,84 +40,101 @@ func AssetReader(path string) (io.ReadSeeker, time.Time, error) {
 }
 
 func APIHandler(conf *Config) http.Handler {
-	r := martini.NewRouter()
-	m := martini.New()
-	m.Use(martini.Logger())
-	m.Use(martini.Recovery())
-	m.Use(render.Renderer(render.Options{}))
-	m.Action(r.Handle)
+	api := &API{
+		conf: conf,
+	}
+	router := httprouter.New()
+	router2 := httprouter.New()
 
-	m.Map(conf)
-
-	httpInterfaceURL := conf.InterfaceURL
-	if strings.HasPrefix(conf.InterfaceURL, "https") {
-		httpInterfaceURL = "http" + strings.TrimPrefix(conf.InterfaceURL, "https")
+	prefixPath := func(p string) string {
+		return path.Join(conf.PathPrefix, p)
 	}
 
-	m.Use(corsHandler(&cors.Options{
-		AllowOrigins:     []string{conf.InterfaceURL, httpInterfaceURL},
+	router.HandlerFunc("GET", status.Path, status.HealthyHandler.ServeHTTP)
+
+	router.POST(prefixPath("/user/sessions"), api.WrapHandler(api.Login))
+	router.DELETE(prefixPath("/user/session"), api.WrapHandler(api.Logout))
+
+	router.GET(prefixPath("/config"), api.WrapHandler(api.GetConfig))
+	router.GET(prefixPath("/cert"), api.WrapHandler(api.GetCert))
+
+	router.NotFound = router2.ServeHTTP
+	router2.GET(prefixPath("/*path"), api.WrapHandler(api.ServeAsset))
+
+	return httphelper.ContextInjector("dashboard",
+		httphelper.NewRequestLogger(
+			api.CorsHandler(router)))
+}
+
+type API struct {
+	conf *Config
+}
+
+const ctxSessionKey = "session"
+
+func (api *API) WrapHandler(handler httphelper.HandlerFunc) httprouter.Handle {
+	return func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		ctx := w.(*httphelper.ResponseWriter).Context()
+		log, _ := ctxhelper.LoggerFromContext(ctx)
+		ctx = ctxhelper.NewContextParams(ctx, params)
+		s, err := api.conf.SessionStore.Get(req, "session")
+		if err != nil {
+			log.Error(err.Error())
+		}
+		ctx = context.WithValue(ctx, ctxSessionKey, s)
+		handler.ServeHTTP(ctx, w, req)
+	}
+}
+
+func (api *API) SessionFromContext(ctx context.Context) *sessions.Session {
+	return ctx.Value(ctxSessionKey).(*sessions.Session)
+}
+
+func (api *API) IsAuthenticated(ctx context.Context) bool {
+	return api.SessionFromContext(ctx).Values["auth"] == true
+}
+
+func (api *API) SetAuthenticated(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	s := api.SessionFromContext(ctx)
+	s.Values["auth"] = true
+	s.Save(req, w)
+}
+
+func (api *API) UnsetAuthenticated(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	s := api.SessionFromContext(ctx)
+	delete(s.Values, "auth")
+	s.Save(req, w)
+}
+
+func (api *API) CorsHandler(main http.Handler) http.Handler {
+	httpInterfaceURL := api.conf.InterfaceURL
+	if strings.HasPrefix(api.conf.InterfaceURL, "https") {
+		httpInterfaceURL = "http" + strings.TrimPrefix(api.conf.InterfaceURL, "https")
+	}
+	corsHandler := cors.Allow(&cors.Options{
+		AllowOrigins:     []string{api.conf.InterfaceURL, httpInterfaceURL},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
 		AllowHeaders:     []string{"Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match"},
 		ExposeHeaders:    []string{"ETag"},
 		AllowCredentials: true,
 		MaxAge:           time.Hour,
-	}))
-
-	r.Get(status.Path, status.HealthyHandler.ServeHTTP)
-
-	r.Group(conf.PathPrefix, func(r martini.Router) {
-		m.Use(reqHelperMiddleware)
-		r.Post("/user/sessions", binding.Bind(LoginInfo{}), login)
-		r.Delete("/user/session", logout)
-
-		r.Get("/config", getConfig)
-		r.Get("/cert", getCert)
-
-		r.Any("/assets/dashboard.*.js", serveDashboardJs)
-
-		r.Any("/assets.*", serveAsset)
-
-		r.Get("/ping", pingHandler)
-
-		r.Get("/.*", serveTemplate)
 	})
-
-	return m
-}
-
-func corsHandler(corsOptions *cors.Options) http.HandlerFunc {
-	defaultCorsHandler := cors.Allow(corsOptions)
-	return func(w http.ResponseWriter, req *http.Request) {
-		origin := req.Header.Get("Origin")
-		if req.URL.Path == "/ping" && strings.HasPrefix(origin, "http://localhost:") {
-			cors.Allow(&cors.Options{
-				AllowOrigins:     []string{origin},
-				AllowMethods:     []string{"GET"},
-				AllowHeaders:     corsOptions.AllowHeaders,
-				ExposeHeaders:    corsOptions.ExposeHeaders,
-				AllowCredentials: corsOptions.AllowCredentials,
-				MaxAge:           corsOptions.MaxAge,
-			})(w, req)
-		} else {
-			defaultCorsHandler(w, req)
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if strings.HasSuffix(req.URL.Path, "/ping") || req.Method == "OPTIONS" {
+			httphelper.CORSAllowAllHandler(w, req)
+			w.WriteHeader(200)
+			return
 		}
-	}
+		corsHandler(w, req)
+		main.ServeHTTP(w, req)
+	})
 }
 
-func requireUserMiddleware(rh RequestHelper) {
-	if !rh.IsAuthenticated() {
-		rh.WriteHeader(401)
-	}
-}
-
-func pingHandler(req *http.Request, w http.ResponseWriter, rh RequestHelper) {
-	rh.WriteHeader(200)
-}
-
-func serveStatic(w http.ResponseWriter, req *http.Request, path string) {
+func (api *API) ServeStatic(ctx context.Context, w http.ResponseWriter, req *http.Request, path string) {
+	log, _ := ctxhelper.LoggerFromContext(ctx)
 	data, t, err := AssetReader(path)
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err.Error())
 		w.WriteHeader(404)
 		return
 	}
@@ -130,30 +150,47 @@ func serveStatic(w http.ResponseWriter, req *http.Request, path string) {
 	http.ServeContent(w, req, path, t, data)
 }
 
-func serveTemplate(w http.ResponseWriter, req *http.Request, rh RequestHelper, r render.Render, conf *Config) {
-	serveStatic(w, req, filepath.Join("app", "build", "dashboard.html"))
+func (api *API) ServeTemplate(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	api.ServeStatic(ctx, w, req, filepath.Join("app", "build", "dashboard.html"))
 }
 
-func serveAsset(w http.ResponseWriter, req *http.Request, rh RequestHelper, conf *Config) {
-	serveStatic(w, req, filepath.Join("app", "build", req.URL.Path))
-}
-
-func login(req *http.Request, w http.ResponseWriter, info LoginInfo, rh RequestHelper, conf *Config) {
-	if len(info.Token) != len(conf.LoginToken) || subtle.ConstantTimeCompare([]byte(info.Token), []byte(conf.LoginToken)) != 1 {
-		rh.Error(ErrInvalidLoginToken)
+func (api *API) ServeAsset(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+	path := params.ByName("path")
+	if !strings.HasPrefix(path, "/assets/") {
+		api.ServeTemplate(ctx, w, req)
 		return
 	}
-	rh.SetAuthenticated()
+	if strings.HasPrefix(path, "/assets/dashboard") && strings.HasSuffix(path, ".js") {
+		api.ServeDashboardJs(ctx, w, req)
+		return
+	}
+	api.ServeStatic(ctx, w, req, filepath.Join("app", "build", path))
+}
+
+func (api *API) Login(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	var info LoginInfo
+	if err := json.NewDecoder(req.Body).Decode(&info); err != nil {
+		httphelper.Error(w, err)
+	}
+	if len(info.Token) != len(api.conf.LoginToken) || subtle.ConstantTimeCompare([]byte(info.Token), []byte(api.conf.LoginToken)) != 1 {
+		httphelper.Error(w, httphelper.JSONError{
+			Code:    httphelper.UnauthorizedErrorCode,
+			Message: "Invalid login token",
+		})
+		return
+	}
+	api.SetAuthenticated(ctx, w, req)
 	if strings.Contains(req.Header.Get("Content-Type"), "form-urlencoded") {
-		http.Redirect(w, req, conf.CookiePath, 302)
+		http.Redirect(w, req, api.conf.CookiePath, 302)
 	} else {
-		rh.WriteHeader(200)
+		w.WriteHeader(200)
 	}
 }
 
-func logout(req *http.Request, w http.ResponseWriter, rh RequestHelper) {
-	rh.UnsetAuthenticated()
-	rh.WriteHeader(200)
+func (api *API) Logout(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	api.UnsetAuthenticated(ctx, w, req)
+	w.WriteHeader(200)
 }
 
 type OAuthToken struct {
@@ -179,29 +216,29 @@ var baseConfig = UserConfig{
 	},
 }
 
-func getConfig(rh RequestHelper, conf *Config) {
+func (api *API) GetConfig(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	config := baseConfig
 
-	config.Endpoints["cluster_controller"] = fmt.Sprintf("https://%s", conf.ControllerDomain)
-	config.DefaultRouteDomain = conf.DefaultRouteDomain
+	config.Endpoints["cluster_controller"] = fmt.Sprintf("https://%s", api.conf.ControllerDomain)
+	config.DefaultRouteDomain = api.conf.DefaultRouteDomain
 
-	if rh.IsAuthenticated() {
+	if api.IsAuthenticated(ctx) {
 		config.User = &ExpandedUser{}
 		config.User.Auths = make(map[string]*OAuthToken)
 
-		if conf.GithubToken != "" {
-			config.User.Auths["github"] = &OAuthToken{AccessToken: conf.GithubToken}
+		if api.conf.GithubToken != "" {
+			config.User.Auths["github"] = &OAuthToken{AccessToken: api.conf.GithubToken}
 		}
 
-		config.User.ControllerKey = conf.ControllerKey
+		config.User.ControllerKey = api.conf.ControllerKey
 	}
 
-	rh.JSON(200, config)
+	httphelper.JSON(w, 200, config)
 }
 
-func getCert(w http.ResponseWriter, conf *Config) {
+func (api *API) GetCert(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/x-x509-ca-cert")
-	w.Write(conf.CACert)
+	w.Write(api.conf.CACert)
 }
 
 type DashboardConfig struct {
@@ -211,26 +248,27 @@ type DashboardConfig struct {
 	InstallCert bool   `json:"INSTALL_CERT"`
 }
 
-func serveDashboardJs(res http.ResponseWriter, req *http.Request, conf *Config) {
+func (api *API) ServeDashboardJs(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	log, _ := ctxhelper.LoggerFromContext(ctx)
 	path := filepath.Join("app", "build", "assets", filepath.Base(req.URL.Path))
 	data, t, err := AssetReader(path)
 	if err != nil {
-		fmt.Println(err)
-		res.WriteHeader(500)
+		log.Error(err.Error())
+		httphelper.Error(w, err)
 		return
 	}
 
 	var jsConf bytes.Buffer
 	jsConf.Write([]byte("window.DashboardConfig = "))
 	json.NewEncoder(&jsConf).Encode(DashboardConfig{
-		AppName:     conf.AppName,
-		ApiServer:   conf.URL,
-		PathPrefix:  conf.PathPrefix,
-		InstallCert: len(conf.CACert) > 0,
+		AppName:     api.conf.AppName,
+		ApiServer:   api.conf.URL,
+		PathPrefix:  api.conf.PathPrefix,
+		InstallCert: len(api.conf.CACert) > 0,
 	})
 	jsConf.Write([]byte(";\n"))
 
 	r := ioutil.NewMultiReadSeeker(bytes.NewReader(jsConf.Bytes()), data)
 
-	http.ServeContent(res, req, path, t, r)
+	http.ServeContent(w, req, path, t, r)
 }
