@@ -55,6 +55,11 @@ func (a *StatusCheckAction) Run(s *State) error {
 		}
 		if res.StatusCode == 200 {
 			s.StepData[a.ID] = &LogMessage{Msg: "all services healthy"}
+		} else if time.Now().Sub(start) < waitMax {
+			// if services are unhealthy wait out the wait period
+			// before reporting them as unhealthy to the user
+			time.Sleep(waitInterval)
+			continue
 		} else {
 			var status StatusResponse
 			err = json.NewDecoder(res.Body).Decode(&status)
