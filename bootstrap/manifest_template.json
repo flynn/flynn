@@ -5,6 +5,16 @@
     "vars": ["CLUSTER_DOMAIN"]
   },
   {
+    "id": "resource-check",
+    "action": "resource-check",
+    "ports": [
+      { "port": 80 },
+      { "port": 443 },
+      { "port": 5002 },
+      { "port": 1111 }
+    ]
+  },
+  {
     "id": "flannel",
     "app": {
       "name": "flannel"

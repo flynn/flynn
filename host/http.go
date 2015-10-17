@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -228,6 +230,47 @@ func (h *jobAPI) GetStatus(w http.ResponseWriter, r *http.Request, _ httprouter.
 	httphelper.JSON(w, 200, &h.host.status)
 }
 
+func checkPort(port host.Port) bool {
+	l, err := net.Listen(port.Proto, fmt.Sprintf(":%d", port.Port))
+	if err != nil {
+		return false
+	}
+	l.Close()
+	return true
+}
+
+func (h *jobAPI) ResourceCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	var req host.ResourceCheck
+	if err := httphelper.DecodeJSON(r, &req); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	var conflicts []host.Port
+	for _, p := range req.Ports {
+		if p.Proto == "" {
+			p.Proto = "tcp"
+		}
+		if !checkPort(p) {
+			conflicts = append(conflicts, p)
+		}
+	}
+	if len(conflicts) > 0 {
+		resp := host.ResourceCheck{Ports: conflicts}
+		detail, err := json.Marshal(resp)
+		if err != nil {
+			httphelper.Error(w, err)
+			return
+		}
+		httphelper.JSON(w, 409, &httphelper.JSONError{
+			Code:    httphelper.ConflictErrorCode,
+			Message: "Conflicting resources found",
+			Detail:  detail,
+		})
+		return
+	}
+	httphelper.JSON(w, 200, struct{}{})
+}
+
 func extractTufDB(r *http.Request) (string, error) {
 	defer r.Body.Close()
 	tmp, err := ioutil.TempFile("", "tuf-db")
@@ -251,6 +294,7 @@ func (h *jobAPI) RegisterRoutes(r *httprouter.Router) error {
 	r.POST("/host/discoverd", h.ConfigureDiscoverd)
 	r.POST("/host/network", h.ConfigureNetworking)
 	r.GET("/host/status", h.GetStatus)
+	r.POST("/host/resource-check", h.ResourceCheck)
 	return nil
 }
 

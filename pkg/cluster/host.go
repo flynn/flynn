@@ -171,3 +171,7 @@ func (c *Host) PullImages(repository, driver, root string, tufDB io.Reader, ch c
 	path := fmt.Sprintf("/host/pull-images?repository=%s&driver=%s&root=%s", repository, driver, root)
 	return c.c.StreamWithHeader("POST", path, header, tufDB, ch)
 }
+
+func (c *Host) ResourceCheck(request host.ResourceCheck) error {
+	return c.c.Post("/host/resource-check", request, nil)
+}
