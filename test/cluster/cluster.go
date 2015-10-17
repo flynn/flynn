@@ -554,7 +554,7 @@ func (c *Cluster) bootstrapLayer1(instances []*Instance) error {
 	if err != nil {
 		return fmt.Errorf("could not detect router ip: %s", err)
 	}
-	if err = setLocalDNS([]string{c.ClusterDomain, c.ControllerDomain(), c.GitDomain(), fmt.Sprintf("dashboard.%s", c.ClusterDomain)}, leader.Host()); err != nil {
+	if err = setLocalDNS([]string{c.ClusterDomain, c.ControllerDomain(), c.GitDomain()}, leader.Host()); err != nil {
 		return fmt.Errorf("could not set cluster DNS entries: %s", err)
 	}
 	c.RouterIP = leader.Host()
