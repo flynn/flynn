@@ -369,6 +369,42 @@ func TestStore_RemoveInstance_LeaderEvent(t *testing.T) {
 	}
 }
 
+// Ensure the store can enforce expiration of instances.
+func TestStore_EnforceExpiry(t *testing.T) {
+	s := MustOpenStore()
+	s.InstanceTTL = 100 * time.Millisecond // low TTL
+	defer s.Close()
+
+	// Add service.
+	if err := s.AddService("service0", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Add subscription.
+	ch := make(chan *discoverd.Event, 1)
+	s.Subscribe("service0", false, discoverd.EventKindDown, ch)
+
+	// Update instance.
+	if err := s.AddInstance("service0", &discoverd.Instance{ID: "inst0"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for TTL and then enforce expiry.
+	time.Sleep(s.InstanceTTL)
+	if err := s.EnforceExpiry(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify "down" event was received.
+	if e := <-ch; !reflect.DeepEqual(e, &discoverd.Event{
+		Service:  "service0",
+		Kind:     discoverd.EventKindDown,
+		Instance: &discoverd.Instance{ID: "inst0", Index: 3},
+	}) {
+		t.Fatalf("unexpected event: %#v", e)
+	}
+}
+
 // Ensure the store can store meta data for a service.
 func TestStore_SetServiceMeta_Create(t *testing.T) {
 	s := MustOpenStore()
@@ -580,14 +616,7 @@ func MustOpenStore() *Store {
 	if err := s.Open(); err != nil {
 		panic(err)
 	}
-
-	// Wait for leadership.
-	select {
-	case <-time.After(30 * time.Second):
-		panic("timed out waiting for leadership")
-	case <-s.LeaderCh():
-	}
-
+	s.MustWaitForLeader()
 	return s
 }
 
@@ -595,6 +624,16 @@ func MustOpenStore() *Store {
 func (s *Store) Close() error {
 	defer os.RemoveAll(s.Path())
 	return s.Store.Close()
+}
+
+// MustWaitForLeader blocks until a leader is established. Panic on timeout.
+func (s *Store) MustWaitForLeader() {
+	// Wait for leadership.
+	select {
+	case <-time.After(30 * time.Second):
+		panic("timed out waiting for leadership")
+	case <-s.LeaderCh():
+	}
 }
 
 // MockStore represents a mock implementation of Handler.Store.

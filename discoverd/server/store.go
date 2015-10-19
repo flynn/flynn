@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"net"
 	"os"
@@ -21,8 +22,13 @@ import (
 	"github.com/flynn/flynn/pkg/stream"
 )
 
-// DefaultInstanceTTL is the length of time after a heartbeat from an instance before it expires.
-const DefaultInstanceTTL = 10 * time.Second
+const (
+	// DefaultInstanceTTL is the length of time after a heartbeat from an instance before it expires.
+	DefaultInstanceTTL = 10 * time.Second
+
+	// DefaultExpiryCheckInterval is the default interval between checks for expired instances.
+	DefaultExpiryCheckInterval = 1 * time.Second
+)
 
 // DefaultServiceConfig is the default configuration for a service when one is not specified.
 var DefaultServiceConfig = &discoverd.ServiceConfig{
@@ -52,6 +58,7 @@ var (
 type Store struct {
 	mu          sync.RWMutex
 	path        string // root store path
+	logger      *log.Logger
 	raft        *raft.Raft
 	transport   *raft.NetworkTransport
 	peerStore   raft.PeerStore
@@ -59,6 +66,10 @@ type Store struct {
 
 	data        *raftData
 	subscribers map[string]*list.List
+
+	// Goroutine management
+	wg      sync.WaitGroup
+	closing chan struct{}
 
 	// The address the raft TCP port binds to.
 	BindAddress string
@@ -79,6 +90,9 @@ type Store struct {
 	// The duration without a heartbeat before an instance is expired.
 	InstanceTTL time.Duration
 
+	// The interval between checks for instance expiry on the leader.
+	ExpiryCheckInterval time.Duration
+
 	// Returns the current time.
 	// This defaults to time.Now and can be changed for mocking.
 	Now func() time.Time
@@ -91,14 +105,18 @@ func NewStore(path string) *Store {
 		data:        newRaftData(),
 		subscribers: make(map[string]*list.List),
 
+		closing: make(chan struct{}),
+
 		HeartbeatTimeout:   1000 * time.Millisecond,
 		ElectionTimeout:    1000 * time.Millisecond,
 		LeaderLeaseTimeout: 500 * time.Millisecond,
 		CommitTimeout:      50 * time.Millisecond,
 
-		InstanceTTL: DefaultInstanceTTL,
-		LogOutput:   os.Stderr,
-		Now:         time.Now,
+		InstanceTTL:         DefaultInstanceTTL,
+		ExpiryCheckInterval: DefaultExpiryCheckInterval,
+
+		LogOutput: os.Stderr,
+		Now:       time.Now,
 	}
 }
 
@@ -109,6 +127,9 @@ func (s *Store) Path() string { return s.path }
 func (s *Store) Open() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// Set up logging.
+	s.logger = log.New(s.LogOutput, "[discoverd] ", log.LstdFlags)
 
 	// Require bind address & advertise address.
 	if s.BindAddress == "" {
@@ -159,11 +180,19 @@ func (s *Store) Open() error {
 	}
 	s.raft = r
 
+	// Start goroutine to check for instance expiry.
+	s.wg.Add(1)
+	go s.expirer()
+
 	return nil
 }
 
 // Close shuts down the transport and store.
 func (s *Store) Close() error {
+	// Notify goroutines of closing and wait until they finish.
+	close(s.closing)
+	s.wg.Wait()
+
 	if s.raft != nil {
 		s.raft.Shutdown()
 		s.raft = nil
@@ -176,6 +205,7 @@ func (s *Store) Close() error {
 		s.stableStore.Close()
 		s.stableStore = nil
 	}
+
 	return nil
 }
 
@@ -635,6 +665,133 @@ func (s *Store) invalidateServiceLeader(service string, now time.Time) {
 	}
 }
 
+// expirer runs in a separate goroutine and checks for instance expiration.
+func (s *Store) expirer() {
+	defer s.wg.Done()
+
+	ticker := time.NewTicker(s.ExpiryCheckInterval)
+	defer ticker.Stop()
+
+	for {
+		// Wait for next check or for close signal.
+		select {
+		case <-s.closing:
+			return
+		case <-ticker.C:
+		}
+
+		// Check all instances for expiration.
+		if err := s.EnforceExpiry(); err != nil {
+			s.logger.Printf("enforce expiry: %s", err)
+		}
+	}
+}
+
+// EnforceExpiry checks all instances for expiration and issues an expiration command, if necessary.
+// This function returns raft.ErrNotLeader if this store is not the current leader.
+func (s *Store) EnforceExpiry() error {
+	var cmd []byte
+	if err := func() error {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		// Ignore if this store is not the leader.
+		if s.raft.Leader() != s.Advertise.String() {
+			return raft.ErrNotLeader
+		}
+
+		now := time.Now()
+
+		// Iterate over services and then instances.
+		var instances []expireInstance
+		for service, m := range s.data.Instances {
+			for _, inst := range m {
+				// Ignore instances expiring in the future.
+				if inst.ExpiryTime.After(now) {
+					continue
+				}
+
+				// Add to list of instances to expire.
+				// The current expiry time is added to prevent a race condition of
+				// instances updating their expiry date while this command is applying.
+				instances = append(instances, expireInstance{
+					Service:    service,
+					InstanceID: inst.Instance.ID,
+					ExpiryTime: inst.ExpiryTime,
+				})
+			}
+		}
+
+		// If we have no instances to expire then exit.
+		if len(instances) == 0 {
+			return nil
+		}
+
+		// Create command to expire instances.
+		buf, err := json.Marshal(&expireInstancesCommand{
+			Instances: instances,
+			Now:       now,
+		})
+		if err != nil {
+			return err
+		}
+		cmd = buf
+
+		return nil
+	}(); err != nil {
+		return err
+	}
+
+	// Apply command to raft.
+	if _, err := s.raftApply(expireInstancesCommandType, cmd); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Store) applyExpireInstancesCommand(cmd []byte) error {
+	var c expireInstancesCommand
+	if err := json.Unmarshal(cmd, &c); err != nil {
+		return err
+	}
+
+	// Iterate over instances and remove ones with matching expiry times.
+	services := make(map[string]struct{})
+	for _, inst := range c.Instances {
+		// Ignore if the service no longers exists.
+		m := s.data.Instances[inst.Service]
+		if m == nil {
+			continue
+		}
+
+		// Ignore if entry doesn't exist or expiry time is different.
+		entry, ok := m[inst.InstanceID]
+		if !ok || !entry.ExpiryTime.Equal(inst.ExpiryTime) {
+			continue
+		}
+
+		// Remove instance.
+		delete(m, inst.InstanceID)
+
+		// Broadcast down event.
+		s.broadcast(&discoverd.Event{
+			Service:  inst.Service,
+			Kind:     discoverd.EventKindDown,
+			Instance: entry.Instance,
+		})
+
+		// Keep track of services invalidated.
+		services[inst.Service] = struct{}{}
+	}
+
+	// Invalidate all services that had expirations.
+	for service := range services {
+		s.invalidateServiceLeader(service, c.Now)
+	}
+
+	return nil
+}
+
 // raftApply joins typ and cmd and applies it to raft.
 // This call blocks until the apply completes and returns the error.
 func (s *Store) raftApply(typ byte, cmd []byte) (uint64, error) {
@@ -680,6 +837,8 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 		return s.applyAddInstanceCommand(cmd, l.Index)
 	case removeInstanceCommandType:
 		return s.applyRemoveInstanceCommand(cmd)
+	case expireInstancesCommandType:
+		return s.applyExpireInstancesCommand(cmd)
 	default:
 		return fmt.Errorf("invalid command type: %d", typ)
 	}
@@ -844,12 +1003,13 @@ func (a instanceSlice) Less(i, j int) bool { return a[i].ID < a[j].ID }
 
 // Command type header bytes.
 const (
-	addServiceCommandType     = byte(0)
-	removeServiceCommandType  = byte(1)
-	setServiceMetaCommandType = byte(2)
-	setLeaderCommandType      = byte(3)
-	addInstanceCommandType    = byte(4)
-	removeInstanceCommandType = byte(5)
+	addServiceCommandType      = byte(0)
+	removeServiceCommandType   = byte(1)
+	setServiceMetaCommandType  = byte(2)
+	setLeaderCommandType       = byte(3)
+	addInstanceCommandType     = byte(4)
+	removeInstanceCommandType  = byte(5)
+	expireInstancesCommandType = byte(6)
 )
 
 // addServiceCommand represents a command object to create a service.
@@ -888,6 +1048,19 @@ type removeInstanceCommand struct {
 	Service string
 	ID      string
 	Now     time.Time // deterministic time for leader invalidation
+}
+
+// expireInstancesCommand represents a command object to expire multiple instances.
+type expireInstancesCommand struct {
+	Instances []expireInstance
+	Now       time.Time // deterministic time for leader invalidation
+}
+
+// expireInstance represents a single instance to expire.
+type expireInstance struct {
+	Service    string
+	InstanceID string
+	ExpiryTime time.Time // must match during apply
 }
 
 // raftData represents the root data structure for the raft store.
