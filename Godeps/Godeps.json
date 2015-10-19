@@ -472,8 +472,8 @@
 		},
 		{
 			"ImportPath": "github.com/jteeuwen/go-bindata",
-			"Comment": "v3.0.7-19-g040617c",
-			"Rev": "040617c5ef993d2d4a6630636bde1aa913e954b9"
+			"Comment": "v3.0.7-70-gbfe36d3",
+			"Rev": "bfe36d3254337b7cc18024805dfab2106613abdf"
 		},
 		{
 			"ImportPath": "github.com/jackc/pgx",

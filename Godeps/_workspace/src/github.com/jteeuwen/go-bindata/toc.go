@@ -7,7 +7,6 @@ package bindata
 import (
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 )
@@ -54,7 +53,7 @@ func (root *assetTree) funcOrNil() string {
 }
 
 func (root *assetTree) writeGoMap(w io.Writer, nident int) {
-	fmt.Fprintf(w, "&_bintree_t{%s, map[string]*_bintree_t{\n", root.funcOrNil())
+	fmt.Fprintf(w, "&bintree{%s, map[string]*bintree{\n", root.funcOrNil())
 
 	// Sort to make output stable between invocations
 	filenames := make([]string, len(root.Children))
@@ -79,9 +78,9 @@ func (root *assetTree) writeGoMap(w io.Writer, nident int) {
 }
 
 func (root *assetTree) WriteAsGoMap(w io.Writer) error {
-	_, err := fmt.Fprint(w, `type _bintree_t struct {
+	_, err := fmt.Fprint(w, `type bintree struct {
 	Func func() (*asset, error)
-	Children map[string]*_bintree_t
+	Children map[string]*bintree
 }
 var _bintree = `)
 	root.writeGoMap(w, 0)
@@ -118,8 +117,8 @@ func AssetDir(name string) ([]string, error) {
 		return nil, fmt.Errorf("Asset %%s not found", name)
 	}
 	rv := make([]string, 0, len(node.Children))
-	for name := range node.Children {
-		rv = append(rv, name)
+	for childName := range node.Children {
+		rv = append(rv, childName)
 	}
 	return rv, nil
 }
@@ -130,7 +129,7 @@ func AssetDir(name string) ([]string, error) {
 	}
 	tree := newAssetTree()
 	for i := range toc {
-		pathList := strings.Split(toc[i].Name, string(os.PathSeparator))
+		pathList := strings.Split(toc[i].Name, "/")
 		tree.Add(pathList, toc[i])
 	}
 	return tree.WriteAsGoMap(w)
