@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/badgerodon/ioutil"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/sessions"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jvatic/asset-matrix-go"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/pkg/cors"
 	"github.com/flynn/flynn/pkg/ctxhelper"
@@ -43,6 +43,10 @@ func APIHandler(conf *Config) http.Handler {
 	api := &API{
 		conf: conf,
 	}
+	if err := api.cacheDashboardJS(); err != nil {
+		panic(err)
+	}
+
 	router := httprouter.New()
 	router2 := httprouter.New()
 
@@ -67,7 +71,9 @@ func APIHandler(conf *Config) http.Handler {
 }
 
 type API struct {
-	conf *Config
+	conf               *Config
+	dashboardJS        bytes.Buffer
+	dashboardJSModTime time.Time
 }
 
 const ctxSessionKey = "session"
@@ -249,26 +255,38 @@ type DashboardConfig struct {
 }
 
 func (api *API) ServeDashboardJs(ctx context.Context, w http.ResponseWriter, req *http.Request) {
-	log, _ := ctxhelper.LoggerFromContext(ctx)
-	path := filepath.Join("app", "build", "assets", filepath.Base(req.URL.Path))
-	data, t, err := AssetReader(path)
+	r := bytes.NewReader(api.dashboardJS.Bytes())
+	http.ServeContent(w, req, req.URL.Path, api.dashboardJSModTime, r)
+}
+
+func (api *API) cacheDashboardJS() error {
+	var manifest assetmatrix.Manifest
+	manifestBytes, err := Asset(filepath.Join("app", "build", "assets", "manifest.json"))
 	if err != nil {
-		log.Error(err.Error())
-		httphelper.Error(w, err)
-		return
+		return err
+	}
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return err
 	}
 
-	var jsConf bytes.Buffer
-	jsConf.Write([]byte("window.DashboardConfig = "))
-	json.NewEncoder(&jsConf).Encode(DashboardConfig{
+	var data bytes.Buffer
+	path := filepath.Join("app", "build", "assets", manifest.Assets["dashboard.js"])
+	js, t, err := AssetReader(path)
+	if err != nil {
+		return err
+	}
+
+	data.Write([]byte("window.DashboardConfig = "))
+	json.NewEncoder(&data).Encode(DashboardConfig{
 		AppName:     api.conf.AppName,
 		ApiServer:   api.conf.URL,
 		PathPrefix:  api.conf.PathPrefix,
 		InstallCert: len(api.conf.CACert) > 0,
 	})
-	jsConf.Write([]byte(";\n"))
+	data.Write([]byte(";\n"))
+	io.Copy(&data, js)
 
-	r := ioutil.NewMultiReadSeeker(bytes.NewReader(jsConf.Bytes()), data)
-
-	http.ServeContent(w, req, path, t, r)
+	api.dashboardJS = data
+	api.dashboardJSModTime = t
+	return nil
 }
