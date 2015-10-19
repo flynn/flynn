@@ -286,3 +286,7 @@ const (
 	JobEventStop   string = "stop"
 	JobEventError  string = "error"
 )
+
+type ResourceCheck struct {
+	Ports []Port `json"ports,omitempty"`
+}
