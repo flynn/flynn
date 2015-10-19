@@ -51,6 +51,7 @@ Commands:
 	scale       change formation
 	run         run a job
 	env         manage env variables
+	limit       manage resource limits
 	meta        manage app metadata
 	route       manage routes
 	pg          manage postgres database
