@@ -74,7 +74,7 @@ app() {
   mkdir app
   mv build app
   cd ${ROOT}/${target}
-  ./bin/go-bindata -nomemcopy -prefix ${tmpdir}/ -pkg ${pkg} ${tmpdir}/app/build/...
+  ./bin/go-bindata -nomemcopy -nocompress -prefix ${tmpdir}/ -pkg ${pkg} ${tmpdir}/app/build/...
   cd ${dir}
 }
 
