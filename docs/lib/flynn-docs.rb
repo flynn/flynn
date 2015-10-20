@@ -9,6 +9,10 @@ module FlynnDocs
     @content_dir ||= File.join(dir, 'content')
   end
 
+  def self.images_dir
+    File.join(dir, 'images')
+  end
+
   def self.contributing_markdown
     File.read(File.join(dir, '..', 'CONTRIBUTING.md'))
   end
