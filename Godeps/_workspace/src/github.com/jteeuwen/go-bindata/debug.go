@@ -34,12 +34,11 @@ func writeDebugHeader(w io.Writer) error {
 	"io/ioutil"
 	"strings"
 	"os"
-	"path"
 	"path/filepath"
 )
 
-// bindata_read reads the given file from disk. It returns an error on failure.
-func bindata_read(path, name string) ([]byte, error) {
+// bindataRead reads the given file from disk. It returns an error on failure.
+func bindataRead(path, name string) ([]byte, error) {
 	buf, err := ioutil.ReadFile(path)
 	if err != nil {
 		err = fmt.Errorf("Error reading asset %%s at %%s: %%v", name, path, err)
@@ -69,7 +68,7 @@ func writeDebugAsset(w io.Writer, c *Config, asset *Asset) error {
 func %s() (*asset, error) {
 	path := %s
 	name := %q
-	bytes, err := bindata_read(path, name)
+	bytes, err := bindataRead(path, name)
 	if err != nil {
 		return nil, err
 	}
