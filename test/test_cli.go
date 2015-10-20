@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -23,6 +24,7 @@ import (
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/tlscert"
 )
 
 type CLISuite struct {
@@ -497,6 +499,49 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	r, err = client.GetRoute(app.ID, routeID)
 	t.Assert(err, c.IsNil)
 	t.Assert(r.Service, c.Equals, "foo")
+
+	// flynn route remove
+	t.Assert(app.flynn("route", "remove", routeID), Succeeds)
+	assertRouteContains(routeID, false)
+
+	writeTemp := func(data, prefix string) (string, error) {
+		f, err := ioutil.TempFile(os.TempDir(), fmt.Sprintf("flynn-test-%s", prefix))
+		t.Assert(err, c.IsNil)
+		_, err = f.WriteString(data)
+		t.Assert(err, c.IsNil)
+		stat, err := f.Stat()
+		t.Assert(err, c.IsNil)
+		return filepath.Join(os.TempDir(), stat.Name()), nil
+	}
+
+	// flynn route add http with tls cert
+	cert, err := tlscert.Generate([]string{"example.com"})
+	t.Assert(err, c.IsNil)
+	certPath, err := writeTemp(cert.Cert, "tls-cert")
+	t.Assert(err, c.IsNil)
+	keyPath, err := writeTemp(cert.PrivateKey, "tls-key")
+	certRoute := app.flynn("route", "add", "http", "--tls-cert", certPath, "--tls-key", keyPath, "example.com")
+	t.Assert(certRoute, Succeeds)
+	routeID = strings.TrimSpace(certRoute.Output)
+	r, err = client.GetRoute(app.ID, routeID)
+	t.Assert(err, c.IsNil)
+	t.Assert(r.Domain, c.Equals, "example.com")
+	t.Assert(r.TLSCert, c.Equals, cert.Cert)
+	t.Assert(r.TLSKey, c.Equals, cert.PrivateKey)
+
+	// flynn route update tls cert
+	cert, err = tlscert.Generate([]string{"example.com"})
+	t.Assert(err, c.IsNil)
+	certPath, err = writeTemp(cert.Cert, "tls-cert")
+	t.Assert(err, c.IsNil)
+	keyPath, err = writeTemp(cert.PrivateKey, "tls-key")
+	certRoute = app.flynn("route", "update", routeID, "--tls-cert", certPath, "--tls-key", keyPath)
+	t.Assert(certRoute, Succeeds)
+	r, err = client.GetRoute(app.ID, routeID)
+	t.Assert(err, c.IsNil)
+	t.Assert(r.Domain, c.Equals, "example.com")
+	t.Assert(r.TLSCert, c.Equals, cert.Cert)
+	t.Assert(r.TLSKey, c.Equals, cert.PrivateKey)
 
 	// flynn route remove
 	t.Assert(app.flynn("route", "remove", routeID), Succeeds)
