@@ -146,6 +146,20 @@ func (s *S) TestAPISetHTTPRoute(c *C) {
 	c.Assert(err, IsNil)
 }
 
+func (s *S) TestAPISetTCPRoute(c *C) {
+	srv := s.newTestAPIServer(c)
+	defer srv.Close()
+
+	r := router.TCPRoute{Service: "foo"}.ToRoute()
+	err := srv.CreateRoute(r)
+	c.Assert(err, IsNil)
+	c.Assert(r.ID, Not(IsNil))
+
+	r = router.TCPRoute{ID: r.ID, Service: "bar", Port: int(r.Port)}.ToRoute()
+	err = srv.UpdateRoute(r)
+	c.Assert(err, IsNil)
+}
+
 func (s *S) TestAPIListRoutes(c *C) {
 	srv := s.newTestAPIServer(c)
 	defer srv.Close()
