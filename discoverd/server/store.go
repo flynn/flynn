@@ -740,6 +740,8 @@ func (s *Store) EnforceExpiry() error {
 		return nil
 	}(); err != nil {
 		return err
+	} else if cmd == nil {
+		return nil
 	}
 
 	// Apply command to raft.
