@@ -6,56 +6,60 @@ import (
 )
 
 var preparedStatements = map[string]string{
-	"app_list":                            appListQuery,
-	"app_select_by_name":                  appSelectByNameQuery,
-	"app_select_by_name_for_update":       appSelectByNameForUpdateQuery,
-	"app_select_by_name_or_id":            appSelectByNameOrIDQuery,
-	"app_select_by_name_or_id_for_update": appSelectByNameOrIDForUpdateQuery,
-	"app_insert":                          appInsertQuery,
-	"app_update_strategy":                 appUpdateStrategyQuery,
-	"app_update_meta":                     appUpdateMetaQuery,
-	"app_update_release":                  appUpdateReleaseQuery,
-	"app_delete":                          appDeleteQuery,
-	"app_next_name_id":                    appNextNameIDQuery,
-	"app_get_release":                     appGetReleaseQuery,
-	"release_list":                        releaseListQuery,
-	"release_select":                      releaseSelectQuery,
-	"release_insert":                      releaseInsertQuery,
-	"release_app_list":                    releaseAppListQuery,
-	"artifact_list":                       artifactListQuery,
-	"artifact_select":                     artifactSelectQuery,
-	"artifact_select_by_type_and_uri":     artifactSelectByTypeAndURIQuery,
-	"artifact_insert":                     artifactInsertQuery,
-	"deployment_list":                     deploymentListQuery,
-	"deployment_select":                   deploymentSelectQuery,
-	"deployment_insert":                   deploymentInsertQuery,
-	"deployment_update_finished_at":       deploymentUpdateFinishedAtQuery,
-	"deployment_delete":                   deploymentDeleteQuery,
-	"event_select":                        eventSelectQuery,
-	"event_insert":                        eventInsertQuery,
-	"event_insert_unique":                 eventInsertUniqueQuery,
-	"formation_list_by_app":               formationListByAppQuery,
-	"formation_list_since":                formationListSinceQuery,
-	"formation_select":                    formationSelectQuery,
-	"formation_insert":                    formationInsertQuery,
-	"formation_update":                    formationUpdateQuery,
-	"formation_delete":                    formationDeleteQuery,
-	"formation_delete_by_app":             formationDeleteByAppQuery,
-	"job_list":                            jobListQuery,
-	"job_select":                          jobSelectQuery,
-	"job_insert":                          jobInsertQuery,
-	"job_update":                          jobUpdateQuery,
-	"provider_list":                       providerListQuery,
-	"provider_select_by_name":             providerSelectByNameQuery,
-	"provider_select_by_name_or_id":       providerSelectByNameOrIDQuery,
-	"provider_insert":                     providerInsertQuery,
-	"resource_list_by_provider":           resourceListByProviderQuery,
-	"resource_list_by_app":                resourceListByAppQuery,
-	"resource_select":                     resourceSelectQuery,
-	"resource_insert":                     resourceInsertQuery,
-	"resource_insert_app_by_name":         resourceInsertAppByNameQuery,
-	"resource_insert_app_by_name_or_id":   resourceInsertAppByNameOrIDQuery,
-	"resource_delete_by_app":              resourceDeleteByAppQuery,
+	"ping":                                  pingQuery,
+	"app_list":                              appListQuery,
+	"app_select_by_name":                    appSelectByNameQuery,
+	"app_select_by_name_for_update":         appSelectByNameForUpdateQuery,
+	"app_select_by_name_or_id":              appSelectByNameOrIDQuery,
+	"app_select_by_name_or_id_for_update":   appSelectByNameOrIDForUpdateQuery,
+	"app_insert":                            appInsertQuery,
+	"app_update_strategy":                   appUpdateStrategyQuery,
+	"app_update_meta":                       appUpdateMetaQuery,
+	"app_update_release":                    appUpdateReleaseQuery,
+	"app_delete":                            appDeleteQuery,
+	"app_next_name_id":                      appNextNameIDQuery,
+	"app_get_release":                       appGetReleaseQuery,
+	"release_list":                          releaseListQuery,
+	"release_select":                        releaseSelectQuery,
+	"release_insert":                        releaseInsertQuery,
+	"release_app_list":                      releaseAppListQuery,
+	"artifact_list":                         artifactListQuery,
+	"artifact_select":                       artifactSelectQuery,
+	"artifact_select_by_type_and_uri":       artifactSelectByTypeAndURIQuery,
+	"artifact_insert":                       artifactInsertQuery,
+	"deployment_list":                       deploymentListQuery,
+	"deployment_select":                     deploymentSelectQuery,
+	"deployment_insert":                     deploymentInsertQuery,
+	"deployment_update_finished_at":         deploymentUpdateFinishedAtQuery,
+	"deployment_update_finished_at_now":     deploymentUpdateFinishedAtNowQuery,
+	"deployment_delete":                     deploymentDeleteQuery,
+	"event_select":                          eventSelectQuery,
+	"event_insert":                          eventInsertQuery,
+	"event_insert_unique":                   eventInsertUniqueQuery,
+	"formation_list_by_app":                 formationListByAppQuery,
+	"formation_list_since":                  formationListSinceQuery,
+	"formation_select":                      formationSelectQuery,
+	"formation_insert":                      formationInsertQuery,
+	"formation_update":                      formationUpdateQuery,
+	"formation_delete":                      formationDeleteQuery,
+	"formation_delete_by_app":               formationDeleteByAppQuery,
+	"job_list":                              jobListQuery,
+	"job_select":                            jobSelectQuery,
+	"job_insert":                            jobInsertQuery,
+	"job_update":                            jobUpdateQuery,
+	"provider_list":                         providerListQuery,
+	"provider_select_by_name":               providerSelectByNameQuery,
+	"provider_select_by_name_or_id":         providerSelectByNameOrIDQuery,
+	"provider_insert":                       providerInsertQuery,
+	"resource_list_by_provider":             resourceListByProviderQuery,
+	"resource_list_by_app":                  resourceListByAppQuery,
+	"resource_select":                       resourceSelectQuery,
+	"resource_insert":                       resourceInsertQuery,
+	"resource_delete":                       resourceDeleteQuery,
+	"app_resource_insert_app_by_name":       appResourceInsertAppByNameQuery,
+	"app_resource_insert_app_by_name_or_id": appResourceInsertAppByNameOrIDQuery,
+	"app_resource_delete_by_app":            appResourceDeleteByAppQuery,
+	"app_resource_delete_by_resource":       appResourceDeleteByResourceQuery,
 }
 
 func PrepareStatements(conn *pgx.Conn) error {
@@ -71,6 +75,8 @@ func PrepareStatements(conn *pgx.Conn) error {
 }
 
 const (
+	// misc
+	pingQuery = `SELECT 1`
 	// apps
 	appListQuery = `
 SELECT app_id, name, meta, strategy, release_id, created_at, updated_at
@@ -110,23 +116,29 @@ FROM releases WHERE deleted_at IS NULL ORDER BY created_at DESC`
 SELECT release_id, artifact_id, env, processes, meta, created_at
 FROM releases WHERE release_id = $1 AND deleted_at IS NULL`
 	releaseInsertQuery = `
-INSERT INTO releases (release_id, artifact_id, env, processes, meta) VALUES ($1, $2, $3, $4, $5) RETURNING created_at`
+INSERT INTO releases (release_id, artifact_id, env, processes, meta)
+VALUES ($1, $2, $3, $4, $5) RETURNING created_at`
 	releaseAppListQuery = `
 SELECT DISTINCT(r.release_id), r.artifact_id, r.env, r.processes, r.meta, r.created_at
 FROM releases r JOIN formations f USING (release_id)
 WHERE f.app_id = $1 AND r.deleted_at IS NULL ORDER BY r.created_at DESC`
 	artifactListQuery = `
-SELECT artifact_id, type, uri, created_at FROM artifacts WHERE deleted_at IS NULL ORDER BY created_at DESC`
+SELECT artifact_id, type, uri, created_at FROM artifacts
+WHERE deleted_at IS NULL ORDER BY created_at DESC`
 	artifactSelectQuery = `
-SELECT artifact_id, type, uri, created_at FROM artifacts WHERE artifact_id = $1 AND deleted_at IS NULL`
+SELECT artifact_id, type, uri, created_at FROM artifacts
+WHERE artifact_id = $1 AND deleted_at IS NULL`
 	artifactSelectByTypeAndURIQuery = `
 SELECT artifact_id, created_at FROM artifacts WHERE type = $1 AND uri = $2`
 	artifactInsertQuery = `
 INSERT INTO artifacts (artifact_id, type, uri) VALUES ($1, $2, $3) RETURNING created_at`
 	deploymentInsertQuery = `
-INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, processes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at`
+INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, processes)
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at`
 	deploymentUpdateFinishedAtQuery = `
 UPDATE deployments SET finished_at = $2 WHERE deployment_id = $1`
+	deploymentUpdateFinishedAtNowQuery = `
+UPDATE deployments SET finished_at = now() WHERE deployment_id = $1`
 	deploymentDeleteQuery = `
 DELETE FROM deployments WHERE deployment_id = $1`
 	deploymentSelectQuery = `
@@ -171,7 +183,8 @@ FROM formations WHERE updated_at >= $1 ORDER BY updated_at DESC`
 SELECT app_id, release_id, processes, created_at, updated_at
 FROM formations WHERE app_id = $1 AND release_id = $2 AND deleted_at IS NULL`
 	formationInsertQuery = `
-INSERT INTO formations (app_id, release_id, processes) VALUES ($1, $2, $3) RETURNING created_at, updated_at`
+INSERT INTO formations (app_id, release_id, processes)
+VALUES ($1, $2, $3) RETURNING created_at, updated_at`
 	formationUpdateQuery = `
 UPDATE formations SET processes = $3, updated_at = now(), deleted_at = NULL
 WHERE app_id = $1 AND release_id = $2 RETURNING created_at, updated_at`
@@ -241,14 +254,18 @@ WHERE resource_id = $1 AND deleted_at IS NULL`
 	resourceInsertQuery = `
 INSERT INTO resources (resource_id, provider_id, external_id, env)
 VALUES ($1, $2, $3, $4) RETURNING created_at`
-	resourceInsertAppByNameQuery = `
+	resourceDeleteQuery = `
+UPDATE resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL`
+	appResourceInsertAppByNameQuery = `
 INSERT INTO app_resources (app_id, resource_id)
 VALUES ((SELECT app_id FROM apps WHERE name = $1), $2)
 RETURNING app_id`
-	resourceInsertAppByNameOrIDQuery = `
+	appResourceInsertAppByNameOrIDQuery = `
 INSERT INTO app_resources (app_id, resource_id)
 VALUES ((SELECT app_id FROM apps WHERE app_id = $1 OR name = $2), $3)
 RETURNING app_id`
-	resourceDeleteByAppQuery = `
+	appResourceDeleteByAppQuery = `
 UPDATE app_resources SET deleted_at = now() WHERE app_id = $1 AND deleted_at IS NULL`
+	appResourceDeleteByResourceQuery = `
+UPDATE app_resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL`
 )

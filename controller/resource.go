@@ -39,9 +39,9 @@ func (rr *ResourceRepo) Add(r *ct.Resource) error {
 	for i, appID := range r.Apps {
 		var row postgres.Scanner
 		if idPattern.MatchString(appID) {
-			row = tx.QueryRow("resource_insert_app_by_name_or_id", appID, appID, r.ID)
+			row = tx.QueryRow("app_resource_insert_app_by_name_or_id", appID, appID, r.ID)
 		} else {
-			row = tx.QueryRow("resource_insert_app_by_name", appID, r.ID)
+			row = tx.QueryRow("app_resource_insert_app_by_name", appID, r.ID)
 		}
 		if err := row.Scan(&r.Apps[i]); err != nil {
 			tx.Rollback()
@@ -122,12 +122,12 @@ func (rr *ResourceRepo) Remove(r *ct.Resource) error {
 	if err != nil {
 		return err
 	}
-	err = tx.Exec("UPDATE resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL", r.ID)
+	err = tx.Exec("resource_delete", r.ID)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
-	err = tx.Exec("UPDATE app_resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL", r.ID)
+	err = tx.Exec("app_resource_delete_by_resource", r.ID)
 	if err != nil {
 		tx.Rollback()
 		return err
