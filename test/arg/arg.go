@@ -9,6 +9,7 @@ import (
 type Args struct {
 	BootConfig  cluster.BootConfig
 	CLI         string
+	FlynnHost   string
 	RootFS      string
 	Flynnrc     string
 	RouterIP    string
@@ -38,6 +39,7 @@ func Parse() *Args {
 	flag.StringVar(&args.BootConfig.Backend, "backend", "libvirt-lxc", "the host backend to use")
 	flag.StringVar(&args.RootFS, "rootfs", "rootfs/rootfs.img", "filesystem image to use with QEMU")
 	flag.StringVar(&args.CLI, "cli", "flynn", "path to flynn-cli binary")
+	flag.StringVar(&args.FlynnHost, "flynn-host", "../host/bin/flynn-host", "path to flynn-host binary")
 	flag.StringVar(&args.Flynnrc, "flynnrc", "", "path to flynnrc file")
 	flag.StringVar(&args.RouterIP, "router-ip", "127.0.0.1", "IP address of the router")
 	flag.StringVar(&args.DBPath, "db", "flynn-test.db", "path to BoltDB database to store pending builds")

@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -20,6 +19,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kardianos/osext"
 	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/tufutil"
 	"github.com/flynn/flynn/pkg/version"
 )
 
@@ -96,27 +96,14 @@ func (u *Updater) update() error {
 	if err := u.updateTUFClient(client); err != nil {
 		return err
 	}
-	targets, err := client.Targets()
+
+	name := fmt.Sprintf("/flynn-%s.gz", plat)
+
+	latestVersion, err := tufutil.GetVersion(client, name)
 	if err != nil {
 		return err
 	}
-
-	name := fmt.Sprintf("/flynn-%s.gz", plat)
-	target, ok := targets[name]
-	if !ok {
-		return fmt.Errorf("missing %q in tuf targets", name)
-	}
-	if target.Custom == nil || len(*target.Custom) == 0 {
-		return errors.New("missing custom metadata in tuf target")
-	}
-	var data struct {
-		Version string
-	}
-	json.Unmarshal(*target.Custom, &data)
-	if data.Version == "" {
-		return errors.New("missing version in tuf target")
-	}
-	if data.Version == version.String() {
+	if latestVersion == version.String() {
 		return nil
 	}
 
@@ -136,7 +123,7 @@ func (u *Updater) update() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("Updated %s -> %s.", version.String(), data.Version)
+	log.Printf("Updated %s -> %s.", version.String(), latestVersion)
 	return nil
 }
 

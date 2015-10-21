@@ -34,13 +34,15 @@ type DiscoverdManager struct {
 	local   atomic.Value // bool
 }
 
-func (d *DiscoverdManager) Close() {
+func (d *DiscoverdManager) Close() error {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 	if d.hb != nil {
-		d.hb.Close()
+		err := d.hb.Close()
 		d.hb = nil
+		return err
 	}
+	return nil
 }
 
 func (d *DiscoverdManager) localConnected() bool {

@@ -89,13 +89,13 @@ func loadVolumeState(volumeDBPath string) (*volumemanager.Manager, error) {
 	// attempt to restore manager from state db
 	// no need to defer closing the db; we're about to unlink it and the fd can drop on exit
 	fmt.Println("opening volume state db...")
-	vman, err := volumemanager.New(
+	vman := volumemanager.New(
 		volumeDBPath,
 		func() (volume.Provider, error) {
 			return nil, nil
 		},
 	)
-	if err != nil {
+	if err := vman.OpenDB(); err != nil {
 		if strings.HasSuffix(err.Error(), "timeout") { //bolt.ErrTimeout
 			fmt.Println("volume state db is locked by another process; aborting.")
 			shutdown.ExitWithCode(4)

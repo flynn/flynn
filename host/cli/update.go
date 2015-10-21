@@ -2,12 +2,15 @@ package cli
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"sync"
+	"syscall"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
@@ -16,17 +19,22 @@ import (
 	"github.com/flynn/flynn/pinkerton/layer"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
+	"github.com/flynn/flynn/pkg/tufutil"
 )
 
 func init() {
 	Register("update", runUpdate, `
-usage: flynn-host update [--driver=<name>] [--root=<path>] [--repository=<uri>] [--tuf-db=<path>]
+usage: flynn-host update [options]
 
 Options:
   -d --driver=<name>       image storage driver [default: aufs]
   -r --root=<path>         image storage root [default: /var/lib/docker]
   -u --repository=<uri>    image repository URI [default: https://dl.flynn.io/tuf]
   -t --tuf-db=<path>       local TUF file [default: /etc/flynn/tuf.db]
+  -b --bin-dir=<dir>       directory to download binaries to [default: /usr/local/bin]
+  -c --config-dir=<dir>    directory to download config files to [default: /etc/flynn]
+  --is-latest              internal flag (skip updating local tuf DB and re-execing latest binary)
+  --is-tempfile            internal flag (binary is a temp file which requires removal)
 
 Update Flynn components`)
 }
@@ -48,10 +56,13 @@ func runUpdate(args *docopt.Args) error {
 	}
 	client := tuf.NewClient(local, remote)
 
-	log.Info("updating TUF data")
-	if _, err := client.Update(); err != nil && !tuf.IsLatestSnapshot(err) {
-		log.Error("error updating TUF client", "err", err)
-		return err
+	if !args.Bool["--is-latest"] {
+		return updateAndExecLatest(client, log)
+	}
+
+	// unlink the current binary if it is a temp file
+	if args.Bool["--is-tempfile"] {
+		os.Remove(os.Args[0])
 	}
 
 	// read the TUF db so we can pass it to hosts
@@ -73,55 +84,118 @@ func runUpdate(args *docopt.Args) error {
 		return errors.New("no hosts found")
 	}
 
-	log.Info("pulling images on all hosts")
-	images := make(map[string]string)
-	var imageMtx sync.Mutex
-	hostErrs := make(chan error)
-	for _, h := range hosts {
-		go func(host *cluster.Host) {
-			log := log.New("host", host.ID())
+	log.Info(fmt.Sprintf("updating %d hosts", len(hosts)))
 
-			log.Info("connecting to host")
-
-			log.Info("pulling images")
-			ch := make(chan *layer.PullInfo)
-			stream, err := host.PullImages(
-				args.String["--repository"],
-				args.String["--driver"],
-				args.String["--root"],
-				bytes.NewReader(tufDB),
-				ch,
-			)
-			if err != nil {
-				log.Error("error pulling images", "err", err)
-				hostErrs <- err
-				return
-			}
-			defer stream.Close()
-			for info := range ch {
-				if info.Type == layer.TypeLayer {
-					continue
-				}
-				log.Info("pulled image", "name", info.Repo)
-				imageURI := fmt.Sprintf("%s?name=%s&id=%s", args.String["--repository"], info.Repo, info.ID)
-				imageMtx.Lock()
-				images[info.Repo] = imageURI
-				imageMtx.Unlock()
-			}
-			hostErrs <- stream.Err()
-		}(h)
-	}
-	var hostErr error
-	for _, h := range hosts {
-		if err := <-hostErrs; err != nil {
-			log.Error("error pulling images", "host", h.ID(), "err", err)
-			hostErr = err
-			continue
+	// eachHost invokes the given function in a goroutine for each host,
+	// returning an error if any of the functions returns an error.
+	eachHost := func(f func(*cluster.Host, log15.Logger) error) (err error) {
+		errs := make(chan error)
+		for _, h := range hosts {
+			go func(host *cluster.Host) {
+				log := log.New("host", host.ID())
+				errs <- f(host, log)
+			}(h)
 		}
-		log.Info("images pulled successfully", "host", h.ID())
+		for range hosts {
+			if e := <-errs; e != nil {
+				err = e
+			}
+		}
+		return
 	}
-	if hostErr != nil {
-		return hostErr
+
+	var mtx sync.Mutex
+	images := make(map[string]string)
+	log.Info("pulling latest images on all hosts")
+	if err := eachHost(func(host *cluster.Host, log log15.Logger) error {
+		log.Info("pulling images")
+		ch := make(chan *layer.PullInfo)
+		stream, err := host.PullImages(
+			args.String["--repository"],
+			args.String["--driver"],
+			args.String["--root"],
+			bytes.NewReader(tufDB),
+			ch,
+		)
+		if err != nil {
+			log.Error("error pulling images", "err", err)
+			return err
+		}
+		defer stream.Close()
+		for info := range ch {
+			if info.Type == layer.TypeLayer {
+				continue
+			}
+			log.Info("pulled image", "name", info.Repo)
+			imageURI := fmt.Sprintf("%s?name=%s&id=%s", args.String["--repository"], info.Repo, info.ID)
+			mtx.Lock()
+			images[info.Repo] = imageURI
+			mtx.Unlock()
+		}
+		if err := stream.Err(); err != nil {
+			log.Error("error pulling images", "err", err)
+			return err
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	var binaries map[string]string
+	log.Info("pulling latest binaries and config on all hosts")
+	if err := eachHost(func(host *cluster.Host, log log15.Logger) error {
+		log.Info("pulling binaries and config")
+		paths, err := host.PullBinariesAndConfig(
+			args.String["--repository"],
+			args.String["--bin-dir"],
+			args.String["--config-dir"],
+			bytes.NewReader(tufDB),
+		)
+		if err != nil {
+			log.Error("error pulling binaries and config", "err", err)
+			return err
+		}
+		mtx.Lock()
+		binaries = paths
+		mtx.Unlock()
+		log.Info("binaries and config pulled successfully")
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	log.Info("validating binaries")
+	flynnHost, ok := binaries["flynn-host"]
+	if !ok {
+		return fmt.Errorf("missing flynn-host binary")
+	}
+	flynnInit, ok := binaries["flynn-init"]
+	if !ok {
+		return fmt.Errorf("missing flynn-init binary")
+	}
+	flynnNSUmount, ok := binaries["flynn-nsumount"]
+	if !ok {
+		return fmt.Errorf("missing flynn-nsumount binary")
+	}
+
+	log.Info("updating flynn-host daemon on all hosts")
+	if err := eachHost(func(host *cluster.Host, log log15.Logger) error {
+		// TODO(lmars): handle daemons using custom flags (e.g. --state=/foo)
+		_, err := host.Update(
+			flynnHost,
+			"daemon",
+			"--id", host.ID(),
+			"--flynn-init", flynnInit,
+			"--nsumount", flynnNSUmount,
+		)
+		if err != nil {
+			log.Error("error updating binaries", "err", err)
+			return err
+		}
+		log.Info("flynn-host updated successfully")
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	updaterImage, ok := images["flynn/updater"]
@@ -147,4 +221,56 @@ func runUpdate(args *docopt.Args) error {
 	}
 	log.Info("update complete")
 	return nil
+}
+
+// updateAndExecLatest updates the tuf DB, downloads the latest flynn-host
+// binary to a temp file and execs it.
+//
+// Latest snapshot errors are ignored because, even though we may have the
+// latest snapshot, the cluster may not be fully up to date (a previous update
+// may have failed).
+func updateAndExecLatest(client *tuf.Client, log log15.Logger) error {
+	log.Info("updating TUF data")
+	if _, err := client.Update(); err != nil && !tuf.IsLatestSnapshot(err) {
+		log.Error("error updating TUF client", "err", err)
+		return err
+	}
+
+	log.Info("downloading latest flynn-host binary")
+	gzTmp, err := tufutil.Download(client, "/flynn-host.gz")
+	if err != nil {
+		log.Error("error downloading latest flynn-host binary", "err", err)
+		return err
+	}
+	defer gzTmp.Close()
+
+	gz, err := gzip.NewReader(gzTmp)
+	if err != nil {
+		log.Error("error creating gzip reader", "err", err)
+		return err
+	}
+	defer gz.Close()
+
+	tmp, err := ioutil.TempFile("", "flynn-host")
+	if err != nil {
+		log.Error("error creating temp file", "err", err)
+		return err
+	}
+	_, err = io.Copy(tmp, gz)
+	tmp.Close()
+	if err != nil {
+		log.Error("error decompressing gzipped flynn-host binary", "err", err)
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), 0755); err != nil {
+		log.Error("error setting executable bit on tmp file", "err", err)
+		return err
+	}
+
+	log.Info("executing latest flynn-host binary")
+	argv := []string{tmp.Name()}
+	argv = append(argv, os.Args[1:]...)
+	argv = append(argv, "--is-latest")
+	argv = append(argv, "--is-tempfile")
+	return syscall.Exec(tmp.Name(), argv, os.Environ())
 }

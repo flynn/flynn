@@ -28,8 +28,13 @@ main() {
   fi
 
   local tuf_dir=$1
-  cd "${tuf_dir}"
 
+  local version="$("${ROOT}/host/bin/flynn-host" version)"
+  if [[ -z "${version}" ]]; then
+    fail "unable to determine version"
+  fi
+
+  cd "${tuf_dir}"
   tuf clean
   cp "${ROOT}/host/bin/flynn-host.gz"                      "staged/targets/flynn-host.gz"
   gzip -9 --stdout "${ROOT}/host/bin/flynn-init"         > "staged/targets/flynn-init.gz"
@@ -37,15 +42,14 @@ main() {
   gzip -9 --stdout "${ROOT}/host/upstart.conf"           > "staged/targets/upstart.conf.gz"
   gzip -9 --stdout "${ROOT}/bootstrap/bin/manifest.json" > "staged/targets/bootstrap-manifest.json.gz"
   gzip -9 --stdout "${ROOT}/version.json"                > "staged/targets/version.json.gz"
-  "${ROOT}/util/release/flynn-release" export "${ROOT}/version.json" "staged/targets"
-  tuf add
-
-  local version=$("${ROOT}/cli/bin/flynn" version)
   for f in ${ROOT}/cli/bin/flynn-{linux-amd64,linux-386,darwin-amd64,freebsd-amd64,windows-amd64,windows-386}; do
     local name="$(basename "${f}").gz"
     gzip -9 --stdout "${f}" > "staged/targets/${name}"
-    tuf add --custom="{\"version\": \"${version}\"}" "${name}"
   done
+  tuf add --custom="{\"version\": \"${version}\"}"
+
+  "${ROOT}/util/release/flynn-release" export "${ROOT}/version.json" "staged/targets"
+  tuf add
 
   tuf snapshot
   tuf timestamp

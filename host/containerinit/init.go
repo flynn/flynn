@@ -630,21 +630,24 @@ func containerInitApp(c *Config, logFile *os.File) error {
 			cmd.SysProcAttr.Setctty = true
 		}
 	} else {
-		log.Info("getting stdout pipe")
-		stdout, err := cmd.StdoutPipe()
+		// we use syscall.Socketpair (rather than cmd.StdoutPipe) to make it easier
+		// for flynn-host to do non-blocking I/O (via net.FileConn) so that no
+		// read(2) calls can succeed after closing the logs during an update.
+		log.Info("creating stdout pipe")
+		var err error
+		cmd.Stdout, init.stdout, err = newSocketPair("stdout")
 		if err != nil {
-			log.Error("error getting stdout pipe", "err", err)
+			log.Error("error creating stdout pipe", "err", err)
 			return err
 		}
-		init.stdout = stdout.(*os.File)
 
-		log.Info("getting stderr pipe")
-		stderr, err := cmd.StderrPipe()
+		log.Info("creating stderr pipe")
+		cmd.Stderr, init.stderr, err = newSocketPair("stderr")
 		if err != nil {
-			log.Error("error getting stderr pipe", "err", err)
+			log.Error("error creating stderr pipe", "err", err)
 			return err
 		}
-		init.stderr = stderr.(*os.File)
+
 		if c.OpenStdin {
 			// Can't use cmd.StdinPipe() here, since in Go 1.2 it
 			// returns an io.WriteCloser with the underlying object
@@ -723,15 +726,24 @@ func containerInitApp(c *Config, logFile *os.File) error {
 	return nil
 }
 
+func newSocketPair(name string) (*os.File, *os.File, error) {
+	pair, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	return os.NewFile(uintptr(pair[0]), name), os.NewFile(uintptr(pair[1]), name), nil
+}
+
 // This code is run INSIDE the container and is responsible for setting
 // up the environment before running the actual process
 func Main() {
-	logRd, logWr, err := os.Pipe()
+	logR, logW, err := newSocketPair("log")
 	if err != nil {
 		os.Exit(70)
 	}
+
 	logger = log15.New("app", "containerinit")
-	logger.SetHandler(log15.StreamHandler(logWr, log15.LogfmtFormat()))
+	logger.SetHandler(log15.StreamHandler(logW, log15.LogfmtFormat()))
 
 	config := &Config{}
 	data, err := ioutil.ReadFile("/.containerconfig")
@@ -745,7 +757,7 @@ func Main() {
 	// Propagate the plugin-specific container env variable
 	config.Env["container"] = os.Getenv("container")
 
-	if err := containerInitApp(config, logRd); err != nil {
+	if err := containerInitApp(config, logR); err != nil {
 		os.Exit(70)
 	}
 }

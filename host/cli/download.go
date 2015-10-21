@@ -1,17 +1,14 @@
 package cli
 
 import (
-	"compress/gzip"
 	"fmt"
-	"io"
 	"os"
-	"path/filepath"
 	"runtime"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
+	"github.com/flynn/flynn/host/downloader"
 	"github.com/flynn/flynn/pinkerton"
-	"github.com/flynn/flynn/pkg/tufutil"
 	"github.com/flynn/flynn/pkg/version"
 )
 
@@ -61,29 +58,14 @@ func runDownload(args *docopt.Args) error {
 		return err
 	}
 
-	// download the upstart config and image manifests
-	if err := os.MkdirAll(args.String["--config-dir"], 0755); err != nil {
-		return fmt.Errorf("error creating config dir: %s", err)
-	}
-	for _, path := range []string{"/upstart.conf", "/bootstrap-manifest.json"} {
-		if _, err := downloadGzippedFile(client, path, args.String["--config-dir"]); err != nil {
-			return err
-		}
+	if _, err := downloader.DownloadConfig(client, args.String["--config-dir"]); err != nil {
+		return err
 	}
 
-	// download the init and cli binaries
-	if err := os.MkdirAll(args.String["--bin-dir"], 0755); err != nil {
-		return fmt.Errorf("error creating bin dir: %s", err)
+	if _, err := downloader.DownloadBinaries(client, args.String["--bin-dir"]); err != nil {
+		return err
 	}
-	for _, path := range []string{"/flynn-linux-amd64", "/flynn-init", "/flynn-nsumount"} {
-		dst, err := downloadGzippedFile(client, path, args.String["--bin-dir"])
-		if err != nil {
-			return err
-		}
-		if err := os.Chmod(dst, 0755); err != nil {
-			return err
-		}
-	}
+
 	return nil
 }
 
@@ -91,30 +73,6 @@ func tufHTTPOpts(name string) *tuf.HTTPRemoteOptions {
 	return &tuf.HTTPRemoteOptions{
 		UserAgent: fmt.Sprintf("flynn-host/%s %s-%s %s", version.String(), runtime.GOOS, runtime.GOARCH, name),
 	}
-}
-
-func downloadGzippedFile(client *tuf.Client, path, dir string) (string, error) {
-	file, err := tufutil.Download(client, path+".gz")
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-	dst := filepath.Join(dir, path)
-
-	// unlink the destination file in case it is in use
-	os.Remove(dst)
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return "", err
-	}
-	gz, err := gzip.NewReader(file)
-	if err != nil {
-		return "", err
-	}
-	defer gz.Close()
-	_, err = io.Copy(out, gz)
-	return dst, err
 }
 
 // updateTUFClient updates the given client, initializing and re-running the
