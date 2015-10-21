@@ -17,6 +17,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/hashicorp/raft"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/hashicorp/raft-boltdb"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/discoverd/client"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/stream"
@@ -29,6 +30,8 @@ const (
 	// DefaultExpiryCheckInterval is the default interval between checks for expired instances.
 	DefaultExpiryCheckInterval = 1 * time.Second
 )
+
+var logger = log15.New("component", "discoverd")
 
 // DefaultServiceConfig is the default configuration for a service when one is not specified.
 var DefaultServiceConfig = &discoverd.ServiceConfig{
@@ -934,10 +937,11 @@ func (s *Store) Subscribe(service string, sendCurrent bool, kinds discoverd.Even
 // broadcast sends an event to all subscribers.
 // Requires the mu lock to be obtained.
 func (s *Store) broadcast(event *discoverd.Event) {
+	logBroadcast(event)
+
 	// Retrieve list of subscribers for the service.
 	l, ok := s.subscribers[event.Service]
 
-	fmt.Fprintf(os.Stderr, "discoverd: broadcast: service=%s, kind=%v, no-subscribers=%v\n", event.Service, event.Kind, !ok)
 	if !ok {
 		return
 	}
@@ -960,6 +964,24 @@ func (s *Store) broadcast(event *discoverd.Event) {
 			go sub.Close()
 		}
 	}
+}
+
+func logBroadcast(event *discoverd.Event) {
+	log := logger.New("fn", "broadcast")
+	ctx := []interface{}{
+		"event", event.Kind,
+		"service", event.Service,
+	}
+	if event.Instance != nil {
+		ctx = append(ctx, []interface{}{
+			"instance.id", event.Instance.ID,
+			"instance.addr", event.Instance.Addr,
+		}...)
+	}
+	if event.ServiceMeta != nil {
+		ctx = append(ctx, []interface{}{"service_meta.index", event.ServiceMeta.Index, "service_meta.data", string(event.ServiceMeta.Data)}...)
+	}
+	log.Info(fmt.Sprintf("broadcasting %s event", event.Kind), ctx...)
 }
 
 // raftSnapshot implements raft.FSMSnapshot.
