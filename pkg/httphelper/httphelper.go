@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"reflect"
+	"syscall"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
@@ -149,6 +151,14 @@ func logError(w http.ResponseWriter, err error) {
 // likely result in the same error), but it is expected that such errors are
 // caught and a validation error returned to the client rather than the
 // postgres error.
+//
+// Errors returned from "net" are also considered retryable because they
+// generally occur when the process is trying to reach another resource which
+// may be down temporarily.
+// This also includes syscall.Errno, which is notable because it can also be
+// returned from file operations among other things.
+// It's expected if you don't want clients to retry on these errors they
+// should be caught and a more appropriate error returned to the caller.
 func buildJSONError(err error) *JSONError {
 	jsonError := &JSONError{
 		Code:    UnknownErrorCode,
@@ -160,7 +170,7 @@ func buildJSONError(err error) *JSONError {
 			Code:    SyntaxErrorCode,
 			Message: "The provided JSON input is invalid",
 		}
-	case *pgx.PgError:
+	case *pgx.PgError, *net.OpError, syscall.Errno:
 		jsonError.Retry = true
 	case JSONError:
 		jsonError = &v
