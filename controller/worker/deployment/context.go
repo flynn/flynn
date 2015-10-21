@@ -3,6 +3,7 @@ package deployment
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
@@ -114,9 +115,17 @@ func (c *context) HandleDeployment(job *que.Job) (e error) {
 		return err
 	}
 	log.Info("setting the app release")
-	if err := c.client.SetAppRelease(deployment.AppID, deployment.NewReleaseID); err != nil {
-		log.Error("error setting the app release", "err", err)
-		return err
+	for n := 2; n > 0; n-- {
+		if err := c.client.SetAppRelease(deployment.AppID, deployment.NewReleaseID); err != nil {
+			if strings.HasSuffix(err.Error(), "connection refused") && n > 0 {
+				log.Error("failed to connect to controller when setting app release, retrying", "err", err)
+				time.Sleep(time.Second)
+				continue
+			}
+			log.Error("error setting the app release", "err", err)
+			return err
+		}
+		break
 	}
 	// signal success
 	events <- ct.DeploymentEvent{
