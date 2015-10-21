@@ -24,7 +24,10 @@ func (CheckSuite) TestTCPSuccess(c *C) {
 	defer l.Close()
 
 	go func() {
-		conn, _ := l.Accept()
+		conn, err := l.Accept()
+		if err != nil {
+			panic(err)
+		}
 		conn.Close()
 	}()
 
