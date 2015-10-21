@@ -492,10 +492,6 @@
 			"Rev": "ccfcd0245381f0c94c68f50626665eed3c6b726a"
 		},
 		{
-			"ImportPath": "github.com/kavu/go_reuseport",
-			"Rev": "014200e60fbd2172d2b14c5703b62657f826eaa9"
-		},
-		{
 			"ImportPath": "github.com/kr/binarydist",
 			"Rev": "9955b0ab8708602d411341e55fffd7e0700f86bd"
 		},
@@ -538,11 +534,6 @@
 			"Rev": "7d2d8c8a4e078ce3c58736ab521a40b37a504c52"
 		},
 		{
-			"ImportPath": "github.com/natefinch/lumberjack",
-			"Comment": "v1.0-12-gd28785c",
-			"Rev": "d28785c2f27cd682d872df46ccd8232843629f54"
-		},
-		{
 			"ImportPath": "github.com/pkg/browser",
 			"Rev": "2e6fb17d7a7cb6a81837ee68158214d9098de905"
 		},
@@ -570,6 +561,10 @@
 		{
 			"ImportPath": "github.com/thoj/go-ircevent",
 			"Rev": "5e6704d8956eeba81a2cbac9ba73bd609da39d0f"
+		},
+		{
+			"ImportPath": "github.com/vanillahsu/go_reuseport",
+			"Rev": "087e013b0a0c193ca9b1bb21f453b74aa9b31138"
 		},
 		{
 			"ImportPath": "github.com/vaughan0/go-ini",
@@ -607,6 +602,11 @@
 			"ImportPath": "gopkg.in/inconshreveable/log15.v2",
 			"Comment": "v2.7",
 			"Rev": "7cf5571b3b32a7c7b5605dc5ed8ad8fdbb2135f0"
+		},
+		{
+			"ImportPath": "gopkg.in/natefinch/lumberjack.v2",
+			"Comment": "v1.0-18-g600ceb4",
+			"Rev": "600ceb4523e5b7ff745f91083c8a023c2bf73af5"
 		},
 		{
 			"ImportPath": "gopkg.in/tomb.v1",

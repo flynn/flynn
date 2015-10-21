@@ -125,7 +125,7 @@ func (m *Main) Run(args ...string) error {
 			if err := m.openDNSServer(addr, status.Network.Resolvers, httpPeers); err != nil {
 				log.Fatalf("Failed to start DNS server: %s", err)
 			}
-			m.logger.Printf("discoverd listening for DNS on %s", opt.DNSAddr)
+			m.logger.Printf("discoverd listening for DNS on %s", addr)
 
 			// Notify webhook.
 			if opt.Notify != "" {

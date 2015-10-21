@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -17,7 +16,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -26,11 +24,9 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/netlink"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/miekg/dns"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/natefinch/lumberjack"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
 	"github.com/flynn/flynn/host/containerinit"
 	lt "github.com/flynn/flynn/host/libvirt"
-	"github.com/flynn/flynn/host/logbuf"
 	"github.com/flynn/flynn/host/logmux"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/host/types"
@@ -41,6 +37,7 @@ import (
 	"github.com/flynn/flynn/pkg/iptables"
 	"github.com/flynn/flynn/pkg/mounts"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/syslog/rfc5424"
 )
 
 const (
@@ -48,7 +45,7 @@ const (
 	flynnRoot = "/var/lib/flynn"
 )
 
-func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, logPath, bridgeName, initPath, umountPath string, mux *logmux.LogMux) (Backend, error) {
+func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, bridgeName, initPath, umountPath string, mux *logmux.Mux) (Backend, error) {
 	libvirtc, err := libvirt.NewVirConnection("lxc:///")
 	if err != nil {
 		return nil, err
@@ -60,15 +57,13 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, logPath, br
 	}
 
 	return &LibvirtLXCBackend{
-		LogPath:             logPath,
 		InitPath:            initPath,
 		UmountPath:          umountPath,
 		libvirt:             libvirtc,
 		state:               state,
 		vman:                vman,
 		pinkerton:           pinkertonCtx,
-		logs:                make(map[string]*logbuf.Log),
-		logStreams:          make(map[string]map[string]*logStream),
+		logStreams:          make(map[string]map[string]*logmux.LogStream),
 		containers:          make(map[string]*libvirtContainer),
 		defaultEnv:          make(map[string]string),
 		resolvConf:          "/etc/resolv.conf",
@@ -81,7 +76,6 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, logPath, br
 }
 
 type LibvirtLXCBackend struct {
-	LogPath    string
 	InitPath   string
 	UmountPath string
 	libvirt    libvirt.VirConnection
@@ -96,11 +90,9 @@ type LibvirtLXCBackend struct {
 	bridgeNet  *net.IPNet
 	resolvConf string
 
-	logsMtx      sync.Mutex
-	logs         map[string]*logbuf.Log
 	logStreamMtx sync.Mutex
-	logStreams   map[string]map[string]*logStream
-	mux          *logmux.LogMux
+	logStreams   map[string]map[string]*logmux.LogStream
+	mux          *logmux.Mux
 
 	containersMtx sync.RWMutex
 	containers    map[string]*libvirtContainer
@@ -629,17 +621,6 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	return nil
 }
 
-func (l *LibvirtLXCBackend) openLog(id string) *logbuf.Log {
-	l.logsMtx.Lock()
-	defer l.logsMtx.Unlock()
-	if _, ok := l.logs[id]; !ok {
-		// TODO: configure retention and log size
-		l.logs[id] = logbuf.NewLog(&lumberjack.Logger{Filename: filepath.Join(l.LogPath, id, id+".log")})
-	}
-	// TODO: do reference counting and remove logs that are not in use from memory
-	return l.logs[id]
-}
-
 func (c *libvirtContainer) cleanupMounts(pid int) error {
 	list, err := mounts.ParseFile(fmt.Sprintf("/proc/%d/mounts", pid))
 	if err != nil {
@@ -822,81 +803,6 @@ func (c *libvirtContainer) watch(ready chan<- error, buffer host.LogBuffer) erro
 	return nil
 }
 
-// logStream is a wrapper around a log stream received from a container which
-// reads lines and forwards them to a pipe (whose read end is returned), and
-// buffers partial line reads which can be retrieved then the stream is closed.
-type logStream struct {
-	log    net.Conn
-	buf    string
-	closed atomic.Value // bool
-	done   chan struct{}
-}
-
-func newLogStream(file *os.File, buffer string) (*logStream, io.Reader, error) {
-	// convert to a net.Conn so we do non-blocking I/O on the fd and Close
-	// will make calls to Read return straight away (using read(2) would
-	// not have this same behaviour, meaning we could potentially read
-	// from the stream after we have closed and returned the buffer).
-	log, err := net.FileConn(file)
-	if err != nil {
-		return nil, nil, err
-	}
-	file.Close()
-
-	pipeR, pipeW := io.Pipe()
-	l := &logStream{
-		log:  log,
-		done: make(chan struct{}),
-	}
-	l.closed.Store(false)
-	go func() {
-		l.streamTo(pipeW, buffer)
-		pipeR.Close()
-	}()
-	return l, pipeR, nil
-}
-
-func (l *logStream) streamTo(w io.Writer, buffer string) {
-	// write the initial buffer
-	if _, err := w.Write([]byte(buffer)); err != nil {
-		return
-	}
-
-	// read lines from the log, setting l.buf and returning if we do a
-	// partial read
-	buf := bufio.NewReader(l.log)
-	defer close(l.done)
-	for {
-		line, err := buf.ReadBytes('\n')
-		if err != nil {
-			// if the log was explicitly closed (because an update
-			// is in progress), store the buffer and return so it
-			// can be passed to the new flynn-host daemon.
-			if l.closed.Load().(bool) {
-				l.buf = string(line)
-				return
-			}
-
-			// the container has died, forward the buffer to the
-			// logs and return.
-			w.Write(line)
-			return
-		}
-		if _, err := w.Write(line); err != nil {
-			return
-		}
-	}
-}
-
-func (l *logStream) Close() error {
-	l.closed.Store(true)
-	if err := l.log.Close(); err != nil {
-		return err
-	}
-	<-l.done
-	return nil
-}
-
 func (c *libvirtContainer) followLogs(g *grohl.Context, buffer host.LogBuffer) error {
 	c.l.logStreamMtx.Lock()
 	defer c.l.logStreamMtx.Unlock()
@@ -911,39 +817,14 @@ func (c *libvirtContainer) followLogs(g *grohl.Context, buffer host.LogBuffer) e
 		return err
 	}
 
-	var stdoutR, stderrR, initLogR io.Reader
-	logStreams := make(map[string]*logStream, 3)
-	logStreams["stdout"], stdoutR, err = newLogStream(stdout, buffer["stdout"])
-	if err != nil {
-		g.Log(grohl.Data{"at": "log_stream", "type": "stdout", "status": "error", "err": err.Error()})
-		return err
+	nonblocking := func(file *os.File) (net.Conn, error) {
+		// convert to a net.Conn so we do non-blocking I/O on the fd and Close
+		// will make calls to Read return straight away (using read(2) would
+		// not have this same behaviour, meaning we could potentially read
+		// from the stream after we have closed and returned the buffer).
+		defer file.Close()
+		return net.FileConn(file)
 	}
-	logStreams["stderr"], stderrR, err = newLogStream(stderr, buffer["stderr"])
-	if err != nil {
-		g.Log(grohl.Data{"at": "log_stream", "type": "stderr", "status": "error", "err": err.Error()})
-		return err
-	}
-	logStreams["initLog"], initLogR, err = newLogStream(initLog, buffer["initLog"])
-	if err != nil {
-		g.Log(grohl.Data{"at": "log_stream", "type": "initLog", "status": "error", "err": err.Error()})
-		return err
-	}
-	c.l.logStreams[c.job.ID] = logStreams
-
-	log := c.l.openLog(c.job.ID)
-	go func() {
-		// close the log once all logStreams have finished
-		var wg sync.WaitGroup
-		wg.Add(len(logStreams))
-		for _, s := range logStreams {
-			go func(s *logStream) {
-				<-s.done
-				wg.Done()
-			}(s)
-		}
-		wg.Wait()
-		log.Close()
-	}()
 
 	muxConfig := logmux.Config{
 		AppID:   c.job.Metadata["flynn-controller.app"],
@@ -952,24 +833,29 @@ func (c *libvirtContainer) followLogs(g *grohl.Context, buffer host.LogBuffer) e
 		JobID:   c.job.ID,
 	}
 
-	// TODO(benburkert): remove file logging once attach proto uses logaggregator
-	streams := []io.Reader{stdoutR, stderrR}
-	for i, stream := range streams {
-		fd := i + 1
-		bufr, bufw := io.Pipe()
-		muxr, muxw := io.Pipe()
-		go func(r io.Reader, pw1, pw2 *io.PipeWriter, fd int) {
-			mw := io.MultiWriter(pw1, pw2)
-			_, err = io.Copy(mw, r)
-			pw1.CloseWithError(err)
-			pw2.CloseWithError(err)
-		}(stream, bufw, muxw, fd)
-
-		go log.Follow(fd, bufr)
-		go c.l.mux.Follow(muxr, fd, muxConfig)
+	logStreams := make(map[string]*logmux.LogStream, 3)
+	stdoutR, err := nonblocking(stdout)
+	if err != nil {
+		g.Log(grohl.Data{"at": "log_stream", "type": "stdout", "status": "error", "err": err.Error()})
+		return err
 	}
+	logStreams["stdout"] = c.l.mux.Follow(stdoutR, buffer["stdout"], 1, muxConfig)
 
-	go log.Follow(3, initLogR)
+	stderrR, err := nonblocking(stderr)
+	if err != nil {
+		g.Log(grohl.Data{"at": "log_stream", "type": "stderr", "status": "error", "err": err.Error()})
+		return err
+	}
+	logStreams["stderr"] = c.l.mux.Follow(stderrR, buffer["stderr"], 2, muxConfig)
+
+	initLogR, err := nonblocking(initLog)
+	if err != nil {
+		g.Log(grohl.Data{"at": "log_stream", "type": "initLog", "status": "error", "err": err.Error()})
+		return err
+	}
+	logStreams["initLog"] = c.l.mux.Follow(initLogR, buffer["initLog"], 3, muxConfig)
+	c.l.logStreams[c.job.ID] = logStreams
+
 	return nil
 }
 
@@ -1167,31 +1053,30 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 		req.Attached <- struct{}{}
 	}
 
-	lines := -1
-	if !req.Logs {
-		lines = 0
+	ch := make(chan *rfc5424.Message)
+	stream, err := l.mux.StreamLog(req.Job.Job.Metadata["flynn-controller.app"], req.Job.Job.ID, req.Logs, req.Stream, ch)
+	if err != nil {
+		return err
 	}
+	defer stream.Close()
 
-	log := l.openLog(req.Job.Job.ID)
-	ch := make(chan logbuf.Data)
-	done := make(chan struct{})
-	go log.Read(lines, req.Stream, ch, done)
-	defer close(done)
-
-	for data := range ch {
+	for msg := range ch {
 		var w io.Writer
-		switch data.Stream {
-		case 1:
+		switch string(msg.MsgID) {
+		case "ID1":
 			w = req.Stdout
-		case 2:
+		case "ID2":
 			w = req.Stderr
-		case 3:
+		case "ID3":
 			w = req.InitLog
 		}
 		if w == nil {
 			continue
 		}
-		if _, err := w.Write([]byte(data.Message)); err != nil {
+		if _, err := w.Write(msg.Msg); err != nil {
+			return nil
+		}
+		if _, err := w.Write([]byte{'\n'}); err != nil {
 			return nil
 		}
 	}
@@ -1316,11 +1201,7 @@ func (l *LibvirtLXCBackend) CloseLogs() (host.LogBuffers, error) {
 		g.Log(grohl.Data{"job.id": id})
 		buffer := make(host.LogBuffer, len(streams))
 		for fd, stream := range streams {
-			if err := stream.Close(); err != nil {
-				g.Log(grohl.Data{"job.id": id, "status": "error", "err": err.Error()})
-				return nil, err
-			}
-			buffer[fd] = stream.buf
+			buffer[fd] = stream.Close()
 		}
 		buffers[id] = buffer
 		delete(l.logStreams, id)

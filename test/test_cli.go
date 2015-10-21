@@ -18,9 +18,7 @@ import (
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/cli/config"
-	cc "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/resource"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/random"
@@ -37,61 +35,6 @@ const UUIDRegex = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 
 func (s *CLISuite) flynn(t *c.C, args ...string) *CmdResult {
 	return flynn(t, "/", args...)
-}
-
-func (s *CLISuite) newCliTestApp(t *c.C) *cliTestApp {
-	app, release := s.createApp(t)
-	watcher, err := s.controllerClient(t).WatchJobEvents(app.Name, release.ID)
-	t.Assert(err, c.IsNil)
-	return &cliTestApp{
-		ID:      app.ID,
-		name:    app.Name,
-		release: release,
-		disc:    s.discoverdClient(t),
-		t:       t,
-		watcher: watcher,
-	}
-}
-
-type cliTestApp struct {
-	ID      string
-	name    string
-	release *ct.Release
-	watcher *cc.JobWatcher
-	disc    *discoverd.Client
-	t       *c.C
-}
-
-func (a *cliTestApp) flynn(args ...string) *CmdResult {
-	return flynn(a.t, "/", append([]string{"-a", a.name}, args...)...)
-}
-
-func (a *cliTestApp) flynnCmd(args ...string) *exec.Cmd {
-	return flynnCmd("/", append([]string{"-a", a.name}, args...)...)
-}
-
-func (a *cliTestApp) waitFor(events ct.JobEvents) string {
-	var id string
-	idSetter := func(e *ct.Job) error {
-		id = e.ID
-		return nil
-	}
-
-	a.t.Assert(a.watcher.WaitFor(events, scaleTimeout, idSetter), c.IsNil)
-	return id
-}
-
-func (a *cliTestApp) waitForService(name string) {
-	_, err := a.disc.Instances(name, 30*time.Second)
-	a.t.Assert(err, c.IsNil)
-}
-
-func (a *cliTestApp) sh(cmd string) *CmdResult {
-	return a.flynn("run", "sh", "-c", cmd)
-}
-
-func (a *cliTestApp) cleanup() {
-	a.watcher.Close()
 }
 
 func (s *CLISuite) TestCreateAppNoGit(t *c.C) {
@@ -270,7 +213,7 @@ func (s *CLISuite) TestScaleAll(t *c.C) {
 		Processes:  release.Processes,
 	}
 	t.Assert(client.CreateRelease(release), c.IsNil)
-	t.Assert(client.SetAppRelease(app.ID, release.ID), c.IsNil)
+	t.Assert(client.SetAppRelease(app.id, release.ID), c.IsNil)
 
 	scale = app.flynn("scale", "echoer=2", "printer=1")
 	t.Assert(scale, Succeeds)
@@ -455,14 +398,14 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	// flynn route update --no-sticky
 	newRoute = app.flynn("route", "update", routeID, "--no-sticky")
 	t.Assert(newRoute, Succeeds)
-	r, err := client.GetRoute(app.ID, routeID)
+	r, err := client.GetRoute(app.id, routeID)
 	t.Assert(err, c.IsNil)
 	t.Assert(r.Sticky, c.Equals, false)
 
 	// flynn route update --service
 	newRoute = app.flynn("route", "update", routeID, "--service", "foo")
 	t.Assert(newRoute, Succeeds)
-	r, err = client.GetRoute(app.ID, routeID)
+	r, err = client.GetRoute(app.id, routeID)
 	t.Assert(err, c.IsNil)
 	t.Assert(r.Service, c.Equals, "foo")
 	t.Assert(r.Sticky, c.Equals, false)
@@ -470,7 +413,7 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	// flynn route update --sticky
 	newRoute = app.flynn("route", "update", routeID, "--sticky")
 	t.Assert(newRoute, Succeeds)
-	r, err = client.GetRoute(app.ID, routeID)
+	r, err = client.GetRoute(app.id, routeID)
 	t.Assert(err, c.IsNil)
 	t.Assert(r.Sticky, c.Equals, true)
 	t.Assert(r.Service, c.Equals, "foo")
@@ -496,7 +439,7 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	// flynn route update --service
 	portRoute = app.flynn("route", "update", routeID, "--service", "foo")
 	t.Assert(portRoute, Succeeds)
-	r, err = client.GetRoute(app.ID, routeID)
+	r, err = client.GetRoute(app.id, routeID)
 	t.Assert(err, c.IsNil)
 	t.Assert(r.Service, c.Equals, "foo")
 
@@ -523,7 +466,7 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	certRoute := app.flynn("route", "add", "http", "--tls-cert", certPath, "--tls-key", keyPath, "example.com")
 	t.Assert(certRoute, Succeeds)
 	routeID = strings.TrimSpace(certRoute.Output)
-	r, err = client.GetRoute(app.ID, routeID)
+	r, err = client.GetRoute(app.id, routeID)
 	t.Assert(err, c.IsNil)
 	t.Assert(r.Domain, c.Equals, "example.com")
 	t.Assert(r.TLSCert, c.Equals, cert.Cert)
@@ -537,7 +480,7 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	keyPath, err = writeTemp(cert.PrivateKey, "tls-key")
 	certRoute = app.flynn("route", "update", routeID, "--tls-cert", certPath, "--tls-key", keyPath)
 	t.Assert(certRoute, Succeeds)
-	r, err = client.GetRoute(app.ID, routeID)
+	r, err = client.GetRoute(app.id, routeID)
 	t.Assert(err, c.IsNil)
 	t.Assert(r.Domain, c.Equals, "example.com")
 	t.Assert(r.TLSCert, c.Equals, cert.Cert)

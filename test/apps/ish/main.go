@@ -1,8 +1,8 @@
 package main
 
 import (
+	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -25,14 +25,11 @@ func main() {
 		name = "ish-service"
 	}
 
-	log.Println("Application", name, "(an ish instance) running")
-
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		shutdown.Fatal(err)
 	}
 	defer l.Close()
-	log.Println("Listening on", addr)
 
 	hb, err := discoverd.AddServiceAndRegister(name, addr)
 	if err != nil {
@@ -54,7 +51,7 @@ func ish(resp http.ResponseWriter, req *http.Request) {
 	body, _ := ioutil.ReadAll(req.Body)
 
 	cmd := exec.Command("/bin/sh", "-c", string(body)) // no bash in busybox
-	cmd.Stdout = resp
-	cmd.Stderr = resp
+	cmd.Stdout = io.MultiWriter(resp, os.Stdout)
+	cmd.Stderr = io.MultiWriter(resp, os.Stderr)
 	cmd.Run()
 }
