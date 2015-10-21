@@ -177,9 +177,9 @@ Listening on 55007
 
 ## Routes
 
-On creation, applications get a default route which is a subdomain of the default
-route domain (e.g. `example.demo.localflynn.com`). If you want to use a different
-domain, you will need to add another route.
+On creation, the application's `web` process gets a default HTTP route which is a
+subdomain of the default route domain (e.g. `example.demo.localflynn.com`). If
+you want to use a different domain, you will need to add another route.
 
 Let's say you have a domain `example.com` which is pointed at your Flynn cluster
 (e.g. it is a `CNAME` for `example.demo.localflynn.com`).
@@ -209,6 +209,15 @@ Hello from Flynn on port 55007 from container cf834b6db8bb4514a34372c8b0020b1e
 
 You could now modify your application to respond differently based on the HTTP Host
 header (which here could be either `example.demo.localflynn.com` or `example.com`).
+
+HTTP routes can only be made for the default `web` process and processes that end in
+`-web`. For example, given a process type named `api-web`, you can create a route for
+it with:
+
+```
+$ flynn route add http -s example-api-web api.example.com
+http/9cfb5f1b-b174-476c-b869-71f1e03ef4b
+```
 
 ## Multiple Processes
 
