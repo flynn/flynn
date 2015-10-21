@@ -38,7 +38,7 @@ func main() {
 
 	go func() {
 		status.AddHandler(func() status.Status {
-			_, err := db.ConnPool.Exec("SELECT 1")
+			_, err := db.ConnPool.Exec("ping")
 			if err != nil {
 				return status.Unhealthy
 			}

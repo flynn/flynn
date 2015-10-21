@@ -147,7 +147,7 @@ func (c *context) rollback(l log15.Logger, deployment *ct.Deployment, original *
 }
 
 func (c *context) setDeploymentDone(id string) error {
-	return c.execWithRetries("UPDATE deployments SET finished_at = now() WHERE deployment_id = $1", id)
+	return c.execWithRetries("deployment_update_finished_at_now", id)
 }
 
 func (c *context) createDeploymentEvent(e ct.DeploymentEvent) error {

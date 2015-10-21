@@ -72,8 +72,7 @@ func (s *S) TestStreamDeployment(c *C) {
 			e.Status = "running"
 		}
 		c.Assert(err, IsNil)
-		query := "INSERT INTO events (app_id, object_id, object_type, data) VALUES ($1, $2, $3, $4)"
-		c.Assert(s.hc.db.Exec(query, app.ID, e.DeploymentID, string(ct.EventTypeDeployment), e), IsNil)
+		c.Assert(s.hc.db.Exec("event_insert", app.ID, e.DeploymentID, string(ct.EventTypeDeployment), e), IsNil)
 	}
 	createDeploymentEvent(ct.DeploymentEvent{DeploymentID: d.ID, ReleaseID: newRelease.ID})
 

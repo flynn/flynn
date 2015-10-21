@@ -115,7 +115,7 @@ func (c *context) HandleAppDeletion(job *que.Job) (err error) {
 		tx.Rollback()
 		return err
 	}
-	err = tx.Exec("resource_delete_by_app", app.ID)
+	err = tx.Exec("app_resource_delete_by_app", app.ID)
 	if err != nil {
 		log.Error("error executing resource deletion query", "err", err)
 		tx.Rollback()

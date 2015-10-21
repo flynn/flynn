@@ -228,7 +228,7 @@ func appHandler(c handlerConfig) http.Handler {
 	crud(httpRouter, "artifacts", ct.Artifact{}, artifactRepo)
 
 	httpRouter.Handler("GET", status.Path, status.Handler(func() status.Status {
-		if err := c.db.Exec("SELECT 1"); err != nil {
+		if err := c.db.Exec("ping"); err != nil {
 			return status.Unhealthy
 		}
 		return status.Healthy
