@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
@@ -20,37 +21,42 @@ const StreamBufferSize = 64 // TODO: Figure out how big this buffer should be.
 
 // NewHandler returns a new instance of Handler.
 func NewHandler() *Handler {
-	h := &Handler{router: httprouter.New()}
+	r := httprouter.New()
+	h := &Handler{Handler: r}
 
-	h.router.HandlerFunc("GET", status.Path, status.HealthyHandler.ServeHTTP)
+	if os.Getenv("DEBUG") != "" {
+		h.Handler = hh.ContextInjector("discoverd", hh.NewRequestLogger(h.Handler))
+	}
 
-	h.router.PUT("/services/:service", h.servePutService)
-	h.router.DELETE("/services/:service", h.serveDeleteService)
-	h.router.GET("/services/:service", h.serveGetService)
+	r.HandlerFunc("GET", status.Path, status.HealthyHandler.ServeHTTP)
 
-	h.router.PUT("/services/:service/meta", h.servePutServiceMeta)
-	h.router.GET("/services/:service/meta", h.serveGetServiceMeta)
+	r.PUT("/services/:service", h.servePutService)
+	r.DELETE("/services/:service", h.serveDeleteService)
+	r.GET("/services/:service", h.serveGetService)
 
-	h.router.PUT("/services/:service/instances/:instance_id", h.servePutInstance)
-	h.router.DELETE("/services/:service/instances/:instance_id", h.serveDeleteInstance)
-	h.router.GET("/services/:service/instances", h.serveGetInstances)
+	r.PUT("/services/:service/meta", h.servePutServiceMeta)
+	r.GET("/services/:service/meta", h.serveGetServiceMeta)
 
-	h.router.PUT("/services/:service/leader", h.servePutLeader)
-	h.router.GET("/services/:service/leader", h.serveGetLeader)
+	r.PUT("/services/:service/instances/:instance_id", h.servePutInstance)
+	r.DELETE("/services/:service/instances/:instance_id", h.serveDeleteInstance)
+	r.GET("/services/:service/instances", h.serveGetInstances)
 
-	h.router.GET("/raft/leader", h.serveGetRaftLeader)
-	h.router.POST("/raft/nodes", h.servePostRaftNodes)
-	h.router.DELETE("/raft/nodes", h.serveDeleteRaftNodes)
+	r.PUT("/services/:service/leader", h.servePutLeader)
+	r.GET("/services/:service/leader", h.serveGetLeader)
 
-	h.router.GET("/ping", h.servePing)
+	r.GET("/raft/leader", h.serveGetRaftLeader)
+	r.POST("/raft/nodes", h.servePostRaftNodes)
+	r.DELETE("/raft/nodes", h.serveDeleteRaftNodes)
+
+	r.GET("/ping", h.servePing)
 
 	return h
 }
 
 // Handler represents an HTTP handler for the Store.
 type Handler struct {
-	router *httprouter.Router
-	Store  interface {
+	http.Handler
+	Store interface {
 		Leader() string
 		AddService(service string, config *discoverd.ServiceConfig) error
 		RemoveService(service string) error
@@ -67,11 +73,6 @@ type Handler struct {
 		AddPeer(peer string) error
 		RemovePeer(peer string) error
 	}
-}
-
-// ServeHTTP handles HTTP requests and responds to the response writer.
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.router.ServeHTTP(w, r)
 }
 
 // servePutService creates a service.
