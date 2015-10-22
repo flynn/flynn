@@ -20,21 +20,21 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
 )
+
+func serveHTTP(w http.ResponseWriter, req *http.Request, opts *Options) {
+	Allow(opts)(w, req)
+	w.WriteHeader(200)
+}
 
 func Test_AllowAll(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	m := martini.New()
-	m.Use(Allow(&Options{
-		AllowAllOrigins: true,
-	}))
-
 	origin := "https://bar.foo.com"
 	r, _ := http.NewRequest("PUT", "foo", nil)
 	r.Header.Add("Origin", origin)
-	m.ServeHTTP(recorder, r)
+	serveHTTP(recorder, r, &Options{
+		AllowAllOrigins: true,
+	})
 
 	headerValue := recorder.HeaderMap.Get(headerAllowOrigin)
 	if headerValue != origin {
@@ -44,15 +44,12 @@ func Test_AllowAll(t *testing.T) {
 
 func Test_AllowRegexMatch(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	m := martini.New()
-	m.Use(Allow(&Options{
-		AllowOrigins: []string{"https://aaa.com", "https://*.foo.com"},
-	}))
-
 	origin := "https://bar.foo.com"
 	r, _ := http.NewRequest("PUT", "foo", nil)
 	r.Header.Add("Origin", origin)
-	m.ServeHTTP(recorder, r)
+	serveHTTP(recorder, r, &Options{
+		AllowOrigins: []string{"https://aaa.com", "https://*.foo.com"},
+	})
 
 	headerValue := recorder.HeaderMap.Get(headerAllowOrigin)
 	if headerValue != origin {
@@ -62,15 +59,12 @@ func Test_AllowRegexMatch(t *testing.T) {
 
 func Test_AllowRegexNoMatch(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	m := martini.New()
-	m.Use(Allow(&Options{
-		AllowOrigins: []string{"https://*.foo.com"},
-	}))
-
 	origin := "https://ww.foo.com.evil.com"
 	r, _ := http.NewRequest("PUT", "foo", nil)
 	r.Header.Add("Origin", origin)
-	m.ServeHTTP(recorder, r)
+	serveHTTP(recorder, r, &Options{
+		AllowOrigins: []string{"https://*.foo.com"},
+	})
 
 	headerValue := recorder.HeaderMap.Get(headerAllowOrigin)
 	if headerValue != "" {
@@ -80,20 +74,17 @@ func Test_AllowRegexNoMatch(t *testing.T) {
 
 func Test_OtherHeaders(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	m := martini.New()
-	m.Use(Allow(&Options{
+	r, _ := http.NewRequest("PUT", "foo", nil)
+	origin := "https://ww.foo.com.evil.com"
+	r.Header.Add("Origin", origin)
+	serveHTTP(recorder, r, &Options{
 		AllowAllOrigins:  true,
 		AllowCredentials: true,
 		AllowMethods:     []string{"PATCH", "GET"},
 		AllowHeaders:     []string{"Origin", "X-whatever"},
 		ExposeHeaders:    []string{"Content-Length", "Hello"},
 		MaxAge:           5 * time.Minute,
-	}))
-
-	r, _ := http.NewRequest("PUT", "foo", nil)
-	origin := "https://ww.foo.com.evil.com"
-	r.Header.Add("Origin", origin)
-	m.ServeHTTP(recorder, r)
+	})
 
 	credentialsVal := recorder.HeaderMap.Get(headerAllowCredentials)
 	methodsVal := recorder.HeaderMap.Get(headerAllowMethods)
@@ -124,15 +115,12 @@ func Test_OtherHeaders(t *testing.T) {
 
 func Test_DefaultAllowHeaders(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	m := martini.New()
-	m.Use(Allow(&Options{
-		AllowAllOrigins: true,
-	}))
-
 	r, _ := http.NewRequest("PUT", "foo", nil)
 	origin := "https://ww.foo.com.evil.com"
 	r.Header.Add("Origin", origin)
-	m.ServeHTTP(recorder, r)
+	serveHTTP(recorder, r, &Options{
+		AllowAllOrigins: true,
+	})
 
 	headersVal := recorder.HeaderMap.Get(headerAllowHeaders)
 	if headersVal != "Origin,Accept,Content-Type,Authorization" {
@@ -142,19 +130,16 @@ func Test_DefaultAllowHeaders(t *testing.T) {
 
 func Test_Preflight(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	m := martini.New()
-	m.Use(Allow(&Options{
-		AllowAllOrigins: true,
-		AllowMethods:    []string{"PUT", "PATCH"},
-		AllowHeaders:    []string{"Origin", "X-whatever", "X-CaseSensitive"},
-	}))
-
 	r, _ := http.NewRequest("OPTIONS", "foo", nil)
 	r.Header.Add(headerRequestMethod, "PUT")
 	r.Header.Add(headerRequestHeaders, "X-whatever, x-casesensitive")
 	origin := "https://bar.foo.com"
 	r.Header.Add("Origin", origin)
-	m.ServeHTTP(recorder, r)
+	serveHTTP(recorder, r, &Options{
+		AllowAllOrigins: true,
+		AllowMethods:    []string{"PUT", "PATCH"},
+		AllowHeaders:    []string{"Origin", "X-whatever", "X-CaseSensitive"},
+	})
 
 	methodsVal := recorder.HeaderMap.Get(headerAllowMethods)
 	headersVal := recorder.HeaderMap.Get(headerAllowHeaders)
@@ -179,29 +164,24 @@ func Test_Preflight(t *testing.T) {
 
 func Benchmark_WithoutCORS(b *testing.B) {
 	recorder := httptest.NewRecorder()
-	m := martini.New()
-
 	b.ResetTimer()
 	for i := 0; i < 100; i++ {
-		r, _ := http.NewRequest("PUT", "foo", nil)
-		m.ServeHTTP(recorder, r)
+		http.NewRequest("PUT", "foo", nil)
+		recorder.WriteHeader(200)
 	}
 }
 
 func Benchmark_WithCORS(b *testing.B) {
 	recorder := httptest.NewRecorder()
-	m := martini.New()
-	m.Use(Allow(&Options{
-		AllowAllOrigins:  true,
-		AllowCredentials: true,
-		AllowMethods:     []string{"PATCH", "GET"},
-		AllowHeaders:     []string{"Origin", "X-whatever"},
-		MaxAge:           5 * time.Minute,
-	}))
-
 	b.ResetTimer()
 	for i := 0; i < 100; i++ {
 		r, _ := http.NewRequest("PUT", "foo", nil)
-		m.ServeHTTP(recorder, r)
+		serveHTTP(recorder, r, &Options{
+			AllowAllOrigins:  true,
+			AllowCredentials: true,
+			AllowMethods:     []string{"PATCH", "GET"},
+			AllowHeaders:     []string{"Origin", "X-whatever"},
+			MaxAge:           5 * time.Minute,
+		})
 	}
 }
