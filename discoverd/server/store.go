@@ -714,6 +714,13 @@ func (s *Store) EnforceExpiry() error {
 					continue
 				}
 
+				logger.Info("marking instance for expiry",
+					"fn", "EnforceExpiry",
+					"service", service,
+					"instance.id", inst.Instance.ID,
+					"instance.addr", inst.Instance.Addr,
+				)
+
 				// Add to list of instances to expire.
 				// The current expiry time is added to prevent a race condition of
 				// instances updating their expiry date while this command is applying.
