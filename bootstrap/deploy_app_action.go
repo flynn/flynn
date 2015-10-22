@@ -19,10 +19,16 @@ func init() {
 func interpolateRelease(s *State, r *ct.Release) {
 	for k, v := range r.Env {
 		r.Env[k] = interpolate(s, v)
+		if r.Env[k] == "" {
+			delete(r.Env, k)
+		}
 	}
 	for _, proc := range r.Processes {
 		for k, v := range proc.Env {
 			proc.Env[k] = interpolate(s, v)
+			if proc.Env[k] == "" {
+				delete(proc.Env, k)
+			}
 		}
 		for i, v := range proc.Cmd {
 			proc.Cmd[i] = interpolate(s, v)

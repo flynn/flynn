@@ -23,7 +23,8 @@
     "release": {
       "env": {
         "DISCOVERD_PEERS": "{{ range $ip := .SortedHostIPs }}{{ $ip }}:1110,{{ end }}",
-        "DISCOVERD": "none"
+        "DISCOVERD": "none",
+        "DEBUG": "{{ getenv \"DEBUG\" }}"
       },
       "processes": {
         "app": {
