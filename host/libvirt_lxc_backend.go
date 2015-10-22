@@ -654,6 +654,10 @@ func (c *libvirtContainer) cleanupMounts(pid int) error {
 			args = append(args, m.Mountpoint)
 		}
 	}
+	if len(args) <= 1 {
+		// no mountpoints to clean up
+		return nil
+	}
 
 	out, err := exec.Command(c.l.UmountPath, args...).CombinedOutput()
 	if err != nil {
