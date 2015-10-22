@@ -180,6 +180,8 @@ func (s *service) Addrs() ([]string, error) {
 	return addrs, nil
 }
 
+// Leaders sends leader events to the given channel (sending nil when there is
+// no leader, for example if there are no instances currently registered).
 func (s *service) Leaders(leaders chan *Instance) (stream.Stream, error) {
 	events := make(chan *Event)
 	eventStream, err := s.client.c.Stream("GET", fmt.Sprintf("/services/%s/leader", s.name), nil, events)

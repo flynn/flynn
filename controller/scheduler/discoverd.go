@@ -60,8 +60,9 @@ func (d *discoverdWrapper) Register() (bool, error) {
 		for {
 			for leader := range leaders {
 				if leader == nil {
-					// This should never happen, but it has happened, so a nil check is necessary
-					log.Error("received nil leader event")
+					// a nil leader indicates there are no instances for
+					// the service, ignore and wait for an actual leader
+					log.Warn("received nil leader event")
 					continue
 				}
 				log.Info("received leader event", "leader.addr", leader.Addr)
