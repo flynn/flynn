@@ -412,11 +412,6 @@
 			"Rev": "adb861704259d548b45e08b5dd7b7c80efcd82e6"
 		},
 		{
-			"ImportPath": "github.com/go-martini/martini",
-			"Comment": "v0.1-151-gbbe60ba",
-			"Rev": "bbe60ba962de9b5627873af719f1c98133d43afb"
-		},
-		{
 			"ImportPath": "github.com/google/go-querystring/query",
 			"Rev": "ec0a78e0f4db229b7897be36596a8944230b857a"
 		},
@@ -507,14 +502,6 @@
 		{
 			"ImportPath": "github.com/kylelemons/godebug/pretty",
 			"Rev": "808ac284003ce2b08ef590da08f95379e8a06936"
-		},
-		{
-			"ImportPath": "github.com/martini-contrib/binding",
-			"Rev": "f77b87950a1910e11b2de09446f8b331eedc18ac"
-		},
-		{
-			"ImportPath": "github.com/martini-contrib/render",
-			"Rev": "7b617783357fec5b5a6d4ecac82e747e4a14d1b5"
 		},
 		{
 			"ImportPath": "github.com/mattn/go-colorable",
