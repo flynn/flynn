@@ -2,14 +2,12 @@ package main
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
-	"os"
 	"sort"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/go-martini/martini"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/binding"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/martini-contrib/render"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/pprof"
 	"github.com/flynn/flynn/pkg/sse"
@@ -17,89 +15,97 @@ import (
 	"github.com/flynn/flynn/router/types"
 )
 
-func apiHandler(rtr *Router) http.Handler {
-	r := martini.NewRouter()
-	m := martini.New()
-	m.Map(log.New(os.Stdout, "[router] ", log.LstdFlags|log.Lmicroseconds))
-	m.Use(martini.Logger())
-	m.Use(martini.Recovery())
-	m.Use(render.Renderer())
-	m.Action(r.Handle)
-	m.Map(rtr)
-
-	r.Get(status.Path, status.SimpleHandler(rtr.HTTP.Ping).ServeHTTP)
-
-	r.Post("/routes", binding.Bind(router.Route{}), createRoute)
-	r.Put("/routes/:route_type/:id", binding.Bind(router.Route{}), updateRoute)
-	r.Get("/routes", getRoutes)
-	r.Get("/routes/:route_type/:id", getRoute)
-	r.Delete("/routes/:route_type/:id", deleteRoute)
-	r.Get("/events", streamEvents)
-	r.Any("/debug/**", pprof.Handler.ServeHTTP)
-	return m
+type API struct {
+	router *Router
 }
 
-func createRoute(req *http.Request, route router.Route, router *Router, r render.Render) {
-	l := listenerFor(router, route.Type)
-	if l == nil {
-		r.JSON(400, "Invalid route type")
+func apiHandler(rtr *Router) http.Handler {
+	api := &API{router: rtr}
+	r := httprouter.New()
+
+	r.HandlerFunc("GET", status.Path, status.HealthyHandler.ServeHTTP)
+
+	r.POST("/routes", httphelper.WrapHandler(api.CreateRoute))
+	r.PUT("/routes/:route_type/:id", httphelper.WrapHandler(api.UpdateRoute))
+	r.GET("/routes", httphelper.WrapHandler(api.GetRoutes))
+	r.GET("/routes/:route_type/:id", httphelper.WrapHandler(api.GetRoute))
+	r.DELETE("/routes/:route_type/:id", httphelper.WrapHandler(api.DeleteRoute))
+	r.GET("/events", httphelper.WrapHandler(api.StreamEvents))
+
+	r.HandlerFunc("GET", "/debug/*path", pprof.Handler.ServeHTTP)
+
+	return httphelper.ContextInjector("router", httphelper.NewRequestLogger(r))
+}
+
+func (api *API) CreateRoute(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	log, _ := ctxhelper.LoggerFromContext(ctx)
+
+	var route *router.Route
+	if err := json.NewDecoder(req.Body).Decode(&route); err != nil {
+		log.Error(err.Error())
+		httphelper.Error(w, err)
 		return
 	}
 
-	err := l.AddRoute(&route)
+	l := api.router.ListenerFor(route.Type)
+	if l == nil {
+		httphelper.ValidationError(w, "type", "Invalid route type")
+		return
+	}
+
+	err := l.AddRoute(route)
 	if err != nil {
 		if err == ErrConflict {
 			rjson, err := json.Marshal(&route)
 			if err != nil {
-				log.Println(err)
-				r.JSON(500, "unknown error")
+				log.Error(err.Error())
+				httphelper.Error(w, err)
 				return
 			}
-			r.JSON(409, httphelper.JSONError{
+			httphelper.Error(w, httphelper.JSONError{
 				Code:    httphelper.ConflictErrorCode,
 				Message: "Duplicate route",
 				Detail:  rjson,
 			})
 			return
 		}
-		log.Println(err)
-		r.JSON(500, "unknown error")
+		log.Error(err.Error())
+		httphelper.Error(w, err)
 		return
 	}
-	r.JSON(200, route)
+	httphelper.JSON(w, 200, route)
 }
 
-func updateRoute(params martini.Params, route router.Route, router *Router, r render.Render) {
-	route.Type = params["route_type"]
-	route.ID = params["id"]
+func (api *API) UpdateRoute(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	log, _ := ctxhelper.LoggerFromContext(ctx)
+	params, _ := ctxhelper.ParamsFromContext(ctx)
 
-	l := listenerFor(router, route.Type)
-	if l == nil {
-		r.JSON(400, "Invalid route type")
+	var route *router.Route
+	if err := json.NewDecoder(req.Body).Decode(&route); err != nil {
+		log.Error(err.Error())
+		httphelper.Error(w, err)
 		return
 	}
 
-	if err := l.UpdateRoute(&route); err != nil {
+	route.Type = params.ByName("route_type")
+	route.ID = params.ByName("id")
+
+	l := api.router.ListenerFor(route.Type)
+	if l == nil {
+		httphelper.ValidationError(w, "type", "Invalid route type")
+		return
+	}
+
+	if err := l.UpdateRoute(route); err != nil {
 		if err == ErrNotFound {
-			r.JSON(404, "not found")
+			w.WriteHeader(404)
 			return
 		}
-		log.Println(err)
-		r.JSON(500, "unknown error")
+		log.Error(err.Error())
+		httphelper.Error(w, err)
 		return
 	}
-	r.JSON(200, route)
-}
-
-func listenerFor(router *Router, typ string) Listener {
-	switch typ {
-	case "http":
-		return router.HTTP
-	case "tcp":
-		return router.TCP
-	default:
-		return nil
-	}
+	httphelper.JSON(w, 200, route)
 }
 
 type sortedRoutes []*router.Route
@@ -108,17 +114,19 @@ func (p sortedRoutes) Len() int           { return len(p) }
 func (p sortedRoutes) Less(i, j int) bool { return p[i].CreatedAt.After(p[j].CreatedAt) }
 func (p sortedRoutes) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
-func getRoutes(req *http.Request, rtr *Router, r render.Render) {
-	routes, err := rtr.HTTP.List()
+func (api *API) GetRoutes(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	log, _ := ctxhelper.LoggerFromContext(ctx)
+
+	routes, err := api.router.HTTP.List()
 	if err != nil {
-		log.Println(err)
-		r.JSON(500, "unknown error")
+		log.Error(err.Error())
+		httphelper.Error(w, err)
 		return
 	}
-	tcpRoutes, err := rtr.TCP.List()
+	tcpRoutes, err := api.router.TCP.List()
 	if err != nil {
-		log.Println(err)
-		r.JSON(500, "unknown error")
+		log.Error(err.Error())
+		httphelper.Error(w, err)
 		return
 	}
 	routes = append(routes, tcpRoutes...)
@@ -134,54 +142,62 @@ func getRoutes(req *http.Request, rtr *Router, r render.Render) {
 	}
 
 	sort.Sort(sortedRoutes(routes))
-	r.JSON(200, routes)
+	httphelper.JSON(w, 200, routes)
 }
 
-func getRoute(params martini.Params, router *Router, r render.Render) {
-	l := listenerFor(router, params["route_type"])
+func (api *API) GetRoute(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	log, _ := ctxhelper.LoggerFromContext(ctx)
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+
+	l := api.router.ListenerFor(params.ByName("route_type"))
 	if l == nil {
-		r.JSON(404, "not found")
+		w.WriteHeader(404)
 		return
 	}
 
-	route, err := l.Get(params["id"])
+	route, err := l.Get(params.ByName("id"))
 	if err == ErrNotFound {
-		r.JSON(404, "not found")
+		w.WriteHeader(404)
 		return
 	}
 	if err != nil {
-		log.Println(err)
-		r.JSON(500, "unknown error")
+		log.Error(err.Error())
+		httphelper.Error(w, err)
 		return
 	}
 
-	r.JSON(200, route)
+	httphelper.JSON(w, 200, route)
 }
 
-func deleteRoute(params martini.Params, router *Router, r render.Render) {
-	l := listenerFor(router, params["route_type"])
+func (api *API) DeleteRoute(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	log, _ := ctxhelper.LoggerFromContext(ctx)
+	params, _ := ctxhelper.ParamsFromContext(ctx)
+
+	l := api.router.ListenerFor(params.ByName("route_type"))
 	if l == nil {
-		r.JSON(404, "not found")
+		w.WriteHeader(404)
 		return
 	}
 
-	err := l.RemoveRoute(params["id"])
+	err := l.RemoveRoute(params.ByName("id"))
 	if err == ErrNotFound {
-		r.JSON(404, "not found")
+		w.WriteHeader(404)
 		return
 	}
 	if err != nil {
-		log.Println(err)
-		r.JSON(500, "unknown error")
+		log.Error(err.Error())
+		httphelper.Error(w, err)
 		return
 	}
 
-	r.JSON(200, "unknown error")
+	w.WriteHeader(200)
 }
 
-func streamEvents(params martini.Params, rtr *Router, w http.ResponseWriter) {
-	httpListener := listenerFor(rtr, "http")
-	tcpListener := listenerFor(rtr, "tcp")
+func (api *API) StreamEvents(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	log, _ := ctxhelper.LoggerFromContext(ctx)
+
+	httpListener := api.router.ListenerFor("http")
+	tcpListener := api.router.ListenerFor("tcp")
 
 	httpEvents := make(chan *router.Event)
 	tcpEvents := make(chan *router.Event)
@@ -205,5 +221,5 @@ func streamEvents(params martini.Params, rtr *Router, w http.ResponseWriter) {
 	}
 	go sendEvents(httpEvents)
 	go sendEvents(tcpEvents)
-	sse.ServeStream(w, sseEvents, logger)
+	sse.ServeStream(w, sseEvents, log)
 }

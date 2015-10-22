@@ -34,6 +34,17 @@ type Router struct {
 	TCP  Listener
 }
 
+func (s *Router) ListenerFor(typ string) Listener {
+	switch typ {
+	case "http":
+		return s.HTTP
+	case "tcp":
+		return s.TCP
+	default:
+		return nil
+	}
+}
+
 func (s *Router) Start() error {
 	log := logger.New("fn", "Start")
 	log.Info("starting HTTP listener")
