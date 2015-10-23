@@ -811,7 +811,7 @@ func (s *Store) raftApply(typ byte, cmd []byte) (uint64, error) {
 	buf := append([]byte{typ}, cmd...)
 
 	// Apply to raft and receive an ApplyFuture back.
-	f := s.raft.Apply(buf, 5*time.Second)
+	f := s.raft.Apply(buf, 30*time.Second)
 	if err := f.Error(); err == raft.ErrNotLeader {
 		return 0, ErrNotLeader // hide underlying implementation error
 	} else if err != nil {
