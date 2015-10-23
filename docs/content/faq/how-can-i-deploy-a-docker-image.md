@@ -32,7 +32,7 @@ Create a file called `config.json`, which you will pass to `flynn release add` v
     }
 ```
 
-Flynn requires the Docker Docker image's registry URL to install. The easiest way to get this is to pull the image from the Docker registry and print its ID using the Docker CLI.
+Flynn requires the Docker image's registry URL. The easiest way to get this is to pull the image from the Docker registry and print its ID using the Docker CLI.
 
     $ docker pull memcached
     $ docker images --no-trunc|grep memcached
@@ -43,7 +43,7 @@ Now, you can create the app via the Flynn CLI, create a release using the Docker
     # Create the app.
     $ flynn create --remote "" memcached
 
-    # Create a release using the Docker registries url.
+    # Create a release using the Docker registry url.
     $ flynn -a memcached release add -f config.json "https://registry.hub.docker.com?name=memcached&id=8937d6d027a4f52b877aacd9faa68b8a89652d858845e1ea2cf7bc6a8306db00"
 
     # Start the service by scaling it up.
