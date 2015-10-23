@@ -24,7 +24,7 @@ import (
 )
 
 type LoginInfo struct {
-	Token string `json:"token" form:"token"`
+	Token string `json:"token"`
 }
 
 func AssetReader(path string) (io.ReadSeeker, time.Time, error) {
@@ -176,8 +176,17 @@ func (api *API) ServeAsset(ctx context.Context, w http.ResponseWriter, req *http
 
 func (api *API) Login(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	var info LoginInfo
-	if err := json.NewDecoder(req.Body).Decode(&info); err != nil {
-		httphelper.Error(w, err)
+	if strings.Contains(req.Header.Get("Content-Type"), "form-urlencoded") {
+		if err := req.ParseForm(); err != nil {
+			httphelper.Error(w, err)
+			return
+		}
+		info = LoginInfo{Token: req.PostForm.Get("token")}
+	} else {
+		if err := json.NewDecoder(req.Body).Decode(&info); err != nil {
+			httphelper.Error(w, err)
+			return
+		}
 	}
 	if len(info.Token) != len(api.conf.LoginToken) || subtle.ConstantTimeCompare([]byte(info.Token), []byte(api.conf.LoginToken)) != 1 {
 		httphelper.Error(w, httphelper.JSONError{
