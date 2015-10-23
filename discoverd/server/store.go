@@ -684,7 +684,7 @@ func (s *Store) expirer() {
 		}
 
 		// Check all instances for expiration.
-		if err := s.EnforceExpiry(); err != nil {
+		if err := s.EnforceExpiry(); err != nil && err != raft.ErrNotLeader {
 			s.logger.Printf("enforce expiry: %s", err)
 		}
 	}
