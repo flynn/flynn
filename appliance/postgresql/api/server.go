@@ -74,6 +74,7 @@ func (p *pgAPI) createDatabase(w http.ResponseWriter, req *http.Request, _ httpr
 		return
 	}
 
+	url := fmt.Sprintf("postgres://%s:%s@%s:5432/%s", username, password, serviceHost, database)
 	httphelper.JSON(w, 200, resource.Resource{
 		ID: fmt.Sprintf("/databases/%s:%s", username, database),
 		Env: map[string]string{
@@ -82,6 +83,7 @@ func (p *pgAPI) createDatabase(w http.ResponseWriter, req *http.Request, _ httpr
 			"PGUSER":         username,
 			"PGPASSWORD":     password,
 			"PGDATABASE":     database,
+			"DATABASE_URL":   url,
 		},
 	})
 }

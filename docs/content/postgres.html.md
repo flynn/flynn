@@ -29,14 +29,7 @@ Provisioning the database will add a few environment variables to your app
 release. `PGDATABASE`, `PGUSER`, `PGPASSWORD`, and `PGHOST` provide connection
 details for the database and are used automatically by many Postgres clients.
 
-#### DATABASE_URL
-
-If your application expects a `DATABASE_URL` environment variable, you can
-create one by combining the `PG*` variables:
-
-```text
-flynn env set DATABASE_URL=$(export $(flynn env | xargs); echo "postgres://$PGUSER:$PGPASSWORD@$PGHOST:5432/$PGDATABASE")
-```
+Flynn will also create the `DATABASE_URL` environment variable which is utilized by some frameworks to configure database connections.
 
 ### Connecting to a console
 
