@@ -19,8 +19,10 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/router/types"
 )
 
 func init() {
@@ -50,6 +52,7 @@ Options:
 	-f, --file=<file>  name of file to import from (defaults to stdin)
 	-n, --name=<name>  name of app to create (defaults to exported app name)
 	-q, --quiet        don't print progress
+	-r, --routes       import routes
 `)
 }
 
@@ -241,10 +244,13 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 		release    *ct.Release
 		artifact   *ct.Artifact
 		formation  *ct.Formation
+		routes     []router.Route
 		slug       io.Reader
 		pgDump     io.Reader
 		uploadSize int64
 	)
+	numResources := 0
+	numRoutes := 1
 
 	for {
 		header, err := tr.Next()
@@ -281,6 +287,14 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 			}
 			formation.AppID = ""
 			formation.ReleaseID = ""
+		case "routes.json":
+			if err := json.NewDecoder(tr).Decode(&routes); err != nil {
+				return fmt.Errorf("error decoding routes: %s", err)
+			}
+			for _, route := range routes {
+				route.ID = ""
+				route.ParentRef = ""
+			}
 		case "slug.tar.gz":
 			f, err := ioutil.TempFile("", "slug.tar.gz")
 			if err != nil {
@@ -344,6 +358,7 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 		if err != nil {
 			return fmt.Errorf("error provisioning postgres resource: %s", err)
 		}
+		numResources++
 
 		if release.Env == nil {
 			release.Env = make(map[string]string, len(res.Env))
@@ -434,6 +449,22 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 			return fmt.Errorf("error creating formation: %s", err)
 		}
 	}
+
+	if args.Bool["--routes"] {
+		for _, route := range routes {
+			if err := client.CreateRoute(app.ID, &route); err != nil {
+				if e, ok := err.(hh.JSONError); ok && e.Code == hh.ConflictErrorCode {
+					// If the cluster domain matches then the default route
+					// exported will conflict with the one created automatically.
+					continue
+				}
+				return fmt.Errorf("error creating route: %s", err)
+			}
+			numRoutes++
+		}
+	}
+
+	fmt.Printf("Imported %s (added %d routes, provisioned %d resources)\n", app.Name, numRoutes, numResources)
 
 	return nil
 }
