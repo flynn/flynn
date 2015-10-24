@@ -12,7 +12,7 @@ Flynn deploys apps directly from a git repository without a configuration manage
 
 This has the added benefits of supporting multiple arbitrary environments without a dedicated configuration file for each, and making configuration changes without going through the cycle of code change, commit, code review, and deploy.
 
-To set a configuration variable via the CLI, use `flynn set NAME=value`, e.g.:
+To set a configuration variable via the CLI, use `flynn env set NAME=value`, e.g.:
 
     # Set the environment variable SECRET in myapp
     flynn -a myapp env set SECRET=thisismysecret

@@ -6,13 +6,13 @@ toc_min_level: 2
 
 # How can I use my own domain in Flynn?
 
-Flynn clusters are provisioned a flynnhub.com domain under which all hostnames — including apps — reside, e.g. wordpress-master-master.evoa.flynnhub.com. The simplest approach to using your own domain name is to add a CNAME in your domain for each app.
+Flynn clusters are provisioned with a flynnhub.com domain under which all hostnames — including apps — reside, e.g. wordpress-master-master.evoa.flynnhub.com. The simplest way to use your own domain is to add a CNAME for each app.
 
     wordpress.mydomain.com. IN CNAME wordpress-master-master.evoa.flynnhub.com
 
-You must also add your new domain to the app, either in the dashboard or via the CLI.
+You must also add a route for your domain to the app, either in the dashboard or via the CLI.
 
-    # Add a domain via the `flynn route` command
+    # Add a route using the `flynn route` command
     $ flynn route add http wordpress.mydomain.com
 
 ![adding a domain](/images/docs/add-domain.png)
