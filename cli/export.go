@@ -103,6 +103,14 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 		return fmt.Errorf("error exporting app: %s", err)
 	}
 
+	routes, err := client.RouteList(mustApp())
+	if err != nil {
+		return fmt.Errorf("error getting routes: %s", err)
+	}
+	if err := writeJSON("routes.json", routes); err != nil {
+		return fmt.Errorf("error exporting routes: %s", err)
+	}
+
 	release, err := client.GetAppRelease(mustApp())
 	if err != nil && err != controller.ErrNotFound {
 		return fmt.Errorf("error retrieving app: %s", err)
