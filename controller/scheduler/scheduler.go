@@ -88,6 +88,7 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 }
 
 func main() {
+	logger.SetHandler(log15.LvlFilterHandler(log15.LvlInfo, log15.StdoutHandler))
 	log := logger.New("fn", "main")
 
 	log.Info("creating cluster and controller clients")
