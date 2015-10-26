@@ -73,7 +73,13 @@
       "ssh_username": "ubuntu"
     }
   ],
+  "_comment": "Sleep provisioner for amazon-ebs is an attempt to fix gh#1829",
   "provisioners": [
+    {
+      "type": "shell",
+      "inline": ["sleep 60"],
+      "only": ["amazon-ebs"]
+    },
     {
       "type": "shell",
       "scripts": [
