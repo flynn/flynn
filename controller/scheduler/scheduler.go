@@ -392,7 +392,7 @@ func (s *Scheduler) SyncFormations() {
 			appLog.Error("error getting formations", "err", err)
 			continue
 		}
-		appLog.Info(fmt.Sprintf("got %d formation(s) for %s app", len(fs), app.Name))
+		appLog.Debug(fmt.Sprintf("got %d formation(s) for %s app", len(fs), app.Name))
 
 		for _, f := range fs {
 			_, err := s.updateFormation(f)
