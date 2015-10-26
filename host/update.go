@@ -140,19 +140,19 @@ func (h *Host) exec(cmd *host.Command, listener *os.File) (*Child, error) {
 	// create a control socket for communicating with the child
 	sockPair, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating socketpair: %s", err)
 	}
 
 	dir, err := os.Getwd()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error getting working directory: %s", err)
 	}
 
 	h.statusMtx.RLock()
 	status, err := json.Marshal(h.status)
 	h.statusMtx.RUnlock()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error marshaling status JSON: %s", err)
 	}
 
 	c := exec.Command(cmd.Path, cmd.Args...)
@@ -169,10 +169,11 @@ func (h *Host) exec(cmd *host.Command, listener *os.File) (*Child, error) {
 		"FLYNN_HOST_STATUS": string(status),
 	})
 	if err := c.Start(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error exec'ing child: %s", err)
 	}
 	cmd.PID = c.Process.Pid
-	return &Child{c, sockPair[0]}, syscall.Close(sockPair[1])
+	syscall.Close(sockPair[1])
+	return &Child{c, sockPair[0]}, nil
 }
 
 // setEnv sets the given environment variables for the command, ensuring they
