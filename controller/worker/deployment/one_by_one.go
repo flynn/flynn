@@ -83,6 +83,30 @@ func (d *DeployJob) deployOneByOne() error {
 			}
 		}
 	}
+
+	// ensure any old leftover jobs are stopped (this can happen when new
+	// workers continue deployments from old workers and still see the
+	// old worker running even though it has been scaled down).
+	log.Info("ensuring old formation is scaled down to zero")
+	diff := make(jobEvents, len(oldScale))
+	for typ, count := range oldScale {
+		diff[typ] = map[string]int{"down": count}
+	}
+	if diff.Count() > 0 {
+		if err := d.client.PutFormation(&ct.Formation{
+			AppID:     d.AppID,
+			ReleaseID: d.OldReleaseID,
+		}); err != nil {
+			log.Error("error scaling old formation down to zero", "err", err)
+			return err
+		}
+		log.Info(fmt.Sprintf("waiting for %d job down event(s)", diff.Count()))
+		if err := d.waitForJobEvents(d.OldReleaseID, diff, log); err != nil {
+			log.Error("error waiting for job down events", "err", err)
+			return err
+		}
+	}
+
 	log.Info("finished one-by-one deployment")
 	return nil
 }
