@@ -211,6 +211,7 @@ func readConfig() (err error) {
 var ErrNoClusters = errors.New("no clusters configured")
 
 func getCluster() (*cfg.Cluster, error) {
+	app() // try to look up and cache app/cluster from git remotes
 	if clusterConf != nil {
 		return clusterConf, nil
 	}
