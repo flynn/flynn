@@ -328,17 +328,24 @@ func (s *Scheduler) Run() error {
 	return nil
 }
 
-func (s *Scheduler) SyncJobs() {
+func (s *Scheduler) SyncJobs() (err error) {
 	defer s.sendEvent(EventTypeClusterSync, nil, nil)
 
 	log := logger.New("fn", "SyncJobs")
 	log.Info("syncing jobs")
 
+	defer func() {
+		if err != nil {
+			// try again soon
+			time.AfterFunc(100*time.Millisecond, s.triggerSyncJobs)
+		}
+	}()
+
 	log.Info("getting host list")
 	hosts, err := s.getHosts()
 	if err != nil {
 		log.Error("error getting host list", "err", err)
-		return
+		return err
 	}
 
 	knownJobs := make(Jobs)
@@ -349,7 +356,7 @@ func (s *Scheduler) SyncJobs() {
 		activeJobs, err := h.ListJobs()
 		if err != nil {
 			hostLog.Error("error getting jobs list", "err", err)
-			continue
+			return err
 		}
 		hostLog.Info(fmt.Sprintf("got %d active job(s) for host %s", len(activeJobs), h.ID()))
 
@@ -369,6 +376,8 @@ func (s *Scheduler) SyncJobs() {
 			}
 		}
 	}
+
+	return nil
 }
 
 func (s *Scheduler) SyncFormations() {
