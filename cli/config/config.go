@@ -97,21 +97,23 @@ func (c *Config) Add(s *Cluster, force bool) error {
 	var msg string
 	conflictIdx := -1
 	for i, existing := range c.Clusters {
+		var m string
 		switch {
 		case existing.Name == s.Name:
-			msg = fmt.Sprintf("Cluster %q already exists in ~/.flynnrc", s.Name)
+			m = fmt.Sprintf("Cluster %q already exists in ~/.flynnrc", s.Name)
 		case existing.GitURL != "" && existing.GitURL == s.GitURL:
-			msg = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.GitURL)
+			m = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.GitURL)
 		case existing.ControllerURL == s.ControllerURL:
-			msg = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.ControllerURL)
+			m = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.ControllerURL)
 		case existing.GitHost != "" && existing.GitHost == s.GitHost:
-			msg = fmt.Sprintf("A cluster with the git host %q already exists in ~/.flynnrc", s.GitHost)
+			m = fmt.Sprintf("A cluster with the git host %q already exists in ~/.flynnrc", s.GitHost)
 		}
-		if msg != "" {
+		if m != "" {
 			if conflictIdx != -1 && conflictIdx != i {
 				return fmt.Errorf("The cluster name and/or URLs conflict with multiple existing clusters.")
 			}
 			conflictIdx = i
+			msg = m
 		}
 	}
 
