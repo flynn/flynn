@@ -88,6 +88,7 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 }
 
 func main() {
+	logger.SetHandler(log15.LvlFilterHandler(log15.LvlInfo, log15.StdoutHandler))
 	log := logger.New("fn", "main")
 
 	log.Info("creating cluster and controller clients")
@@ -391,7 +392,7 @@ func (s *Scheduler) SyncFormations() {
 			appLog.Error("error getting formations", "err", err)
 			continue
 		}
-		appLog.Info(fmt.Sprintf("got %d formation(s) for %s app", len(fs), app.Name))
+		appLog.Debug(fmt.Sprintf("got %d formation(s) for %s app", len(fs), app.Name))
 
 		for _, f := range fs {
 			_, err := s.updateFormation(f)
