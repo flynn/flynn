@@ -1103,8 +1103,7 @@ func (s *Scheduler) startHTTPServer(port string) {
 func (s *Scheduler) tickSyncJobs(d time.Duration) {
 	logger.Info("starting sync jobs ticker", "duration", d)
 	go func() {
-		ch := time.Tick(d)
-		for range ch {
+		for range time.Tick(d) {
 			s.triggerSyncJobs()
 		}
 	}()
@@ -1113,8 +1112,7 @@ func (s *Scheduler) tickSyncJobs(d time.Duration) {
 func (s *Scheduler) tickSyncFormations(d time.Duration) {
 	logger.Info("starting sync formations ticker", "duration", d)
 	go func() {
-		ch := time.Tick(d)
-		for range ch {
+		for range time.Tick(d) {
 			s.triggerSyncFormations()
 		}
 	}()
@@ -1123,8 +1121,7 @@ func (s *Scheduler) tickSyncFormations(d time.Duration) {
 func (s *Scheduler) tickSyncHosts(d time.Duration) {
 	logger.Info("starting sync hosts ticker", "duration", d)
 	go func() {
-		ch := time.Tick(d)
-		for range ch {
+		for range time.Tick(d) {
 			s.triggerSyncHosts()
 		}
 	}()
