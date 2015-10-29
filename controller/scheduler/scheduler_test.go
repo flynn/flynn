@@ -328,6 +328,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	cluster := newTestCluster(hosts)
 	s := runTestScheduler(c, cluster, true)
 	defer s.Stop()
+	s.maxHostChecks = 1
 
 	c.Log("Initialize the cluster with 1 host and wait for a job to start on it.")
 	s.waitJobStart()
@@ -378,6 +379,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	c.Assert(s.Jobs(), HasLen, 4)
 
 	c.Logf("Remove one of the hosts. Ensure the cluster recovers correctly (hosts=%v)", hosts)
+	h3.Healthy = false
 	cluster.SetHosts(hosts)
 	s.waitFormationSync()
 	s.waitRectify()
@@ -386,6 +388,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	assertJobCount(h2, 1)
 
 	c.Logf("Remove another host. Ensure the cluster recovers correctly (hosts=%v)", hosts)
+	h1.Healthy = false
 	cluster.RemoveHost(testHostID)
 	s.waitFormationSync()
 	s.waitRectify()
