@@ -136,8 +136,8 @@ func streamRouterEvents(rc routerc.Client, db *postgres.DB, doneCh chan struct{}
 			}
 			route := e.Route
 			var appID string
-			if strings.HasPrefix(route.ParentRef, routeParentRefPrefix) {
-				appID = strings.TrimPrefix(route.ParentRef, routeParentRefPrefix)
+			if strings.HasPrefix(route.ParentRef, ct.RouteParentRefPrefix) {
+				appID = strings.TrimPrefix(route.ParentRef, ct.RouteParentRefPrefix)
 			}
 			eventType := ct.EventTypeRoute
 			if e.Event == "remove" {
@@ -363,10 +363,8 @@ func (c *controllerAPI) appLookup(handler httphelper.HandlerFunc) httphelper.Han
 	}
 }
 
-const routeParentRefPrefix = "controller/apps/"
-
 func routeParentRef(appID string) string {
-	return routeParentRefPrefix + appID
+	return ct.RouteParentRefPrefix + appID
 }
 
 func (c *controllerAPI) getRoute(ctx context.Context) (*router.Route, error) {

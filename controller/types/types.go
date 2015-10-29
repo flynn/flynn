@@ -11,6 +11,8 @@ import (
 	"github.com/flynn/flynn/router/types"
 )
 
+const RouteParentRefPrefix = "controller/apps/"
+
 type ExpandedFormation struct {
 	App       *App           `json:"app,omitempty"`
 	Release   *Release       `json:"release,omitempty"`
