@@ -103,14 +103,20 @@ func (a *RunAppAction) Run(s *State) error {
 			count = 1
 		}
 		hosts := s.ShuffledHosts()
-		if a.ExpandedFormation.Release.Processes[typ].Omni {
+		proc := a.ExpandedFormation.Release.Processes[typ]
+
+		// Special case the scheduler, we only start one scheduler and allow
+		// it to start the rest of the jobs to avoid spawning too many jobs.
+		if proc.Service == "controller-scheduler" {
+			count = 1
+		} else if proc.Omni {
 			count = len(hosts)
 		}
 		for i := 0; i < count; i++ {
 			host := hosts[i%len(hosts)]
 			config := utils.JobConfig(a.ExpandedFormation, typ, host.ID())
 			hostresource.SetDefaults(&config.Resources)
-			if a.ExpandedFormation.Release.Processes[typ].Data {
+			if proc.Data {
 				if err := utils.ProvisionVolume(host, config); err != nil {
 					return err
 				}
