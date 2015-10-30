@@ -64,6 +64,7 @@ type Build struct {
 	ID                string        `json:"id"`
 	CreatedAt         *time.Time    `json:"created_at"`
 	Commit            string        `json:"commit"`
+	Branch            string        `json:"branch"`
 	Merge             bool          `json:"merge"`
 	State             string        `json:"state"`
 	Description       string        `json:"description"`
@@ -85,12 +86,13 @@ func (b *Build) Finished() bool {
 	return b.State != "pending"
 }
 
-func newBuild(commit, description string, merge bool) *Build {
+func newBuild(commit, branch, description string, merge bool) *Build {
 	now := time.Now()
 	return &Build{
 		ID:          now.Format("20060102150405") + "-" + random.String(8),
 		CreatedAt:   &now,
 		Commit:      commit,
+		Branch:      branch,
 		Description: description,
 		Merge:       merge,
 		Version:     BuildVersion2,
@@ -258,7 +260,7 @@ func (r *Runner) watchEvents() {
 			continue
 		}
 		_, merge := event.(*PullRequestEvent)
-		b := newBuild(event.Commit(), event.String(), merge)
+		b := newBuild(event.Commit(), event.Branch(), event.String(), merge)
 		go r.build(b)
 	}
 }
@@ -651,7 +653,7 @@ func (r *Runner) restartBuild(w http.ResponseWriter, req *http.Request, ps httpr
 		if !strings.HasPrefix(desc, "Restart: ") {
 			desc = "Restart: " + desc
 		}
-		b := newBuild(build.Commit, desc, build.Merge)
+		b := newBuild(build.Commit, build.Branch, desc, build.Merge)
 		go r.build(b)
 	}
 	http.Redirect(w, req, "/builds", 301)

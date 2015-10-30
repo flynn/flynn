@@ -24,6 +24,7 @@
           <tr>
             <th>Commit</th>
             <th>Description</th>
+            <th>Branch</th>
             <th>Created</th>
             <th>Duration</th>
             <th>State</th>
@@ -47,6 +48,7 @@
           <a href="/builds/<%= id %>"><%= commit.substring(0, 7) %></a>
         </td>
         <td><%= description %></td>
+        <td><%= branch %></td>
         <td><%= created_at.fromNow() %> (<%= created_at.format("lll") %>)</td>
         <td>
           <% if(duration > 0) { %>
