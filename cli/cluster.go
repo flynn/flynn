@@ -24,21 +24,34 @@ usage: flynn cluster
        flynn cluster default [<cluster-name>]
        flynn cluster migrate-domain <domain>
 
-Manage clusters in the ~/.flynnrc configuration file.
+Manage Flynn clusters.
 
-Options:
-	-f, --force               force add cluster
-	-d, --default             set as default cluster
-	-g, --git-host=<githost>  git host (legacy SSH only)
-	--git-url=<giturl>        git URL
-	-p, --tls-pin=<tlspin>    SHA256 of the cluster's TLS cert (useful if it is self-signed)
 
 Commands:
-	With no arguments, shows a list of clusters.
+    With no arguments, shows a list of configured clusters.
 
-	add      adds a cluster to the ~/.flynnrc configuration file
-	remove   removes a cluster from the ~/.flynnrc configuration file
-	default  set or print the default cluster
+    add
+        Adds <cluster-name> to the ~/.flynnrc configuration file.
+
+        options:
+            -f, --force               force add cluster
+            -d, --default             set as default cluster
+            -g, --git-host=<githost>  git host (legacy SSH only)
+            --git-url=<giturl>        git URL
+            -p, --tls-pin=<tlspin>    SHA256 of the cluster's TLS cert
+
+    remove
+        Removes <cluster-name> from the ~/.flynnrc configuration file.
+
+    default
+        With no arguments, prints the default cluster. With <cluster-name>, sets
+        the default cluster.
+
+    migrate-domain
+        Migrates the cluster's base domain from the current one to <domain>.
+
+        New certificates will be generated for the controller/dashboard and new
+        routes will be added with the pattern <app-name>.<domain> for each app.
 
 Examples:
 
