@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path"
 	"time"
 )
 
@@ -9,6 +10,7 @@ type Event interface {
 	fmt.Stringer
 	Repo() string
 	Commit() string
+	Branch() string
 }
 
 type PushEvent struct {
@@ -28,6 +30,10 @@ func (e *PushEvent) Repo() string {
 
 func (e *PushEvent) Commit() string {
 	return e.HeadCommit.Id
+}
+
+func (e *PushEvent) Branch() string {
+	return path.Base(e.Ref)
 }
 
 func (e *PushEvent) String() string {
@@ -55,6 +61,10 @@ func (e *PullRequestEvent) Repo() string {
 
 func (e *PullRequestEvent) Commit() string {
 	return e.PullRequest.Head.Sha
+}
+
+func (e *PullRequestEvent) Branch() string {
+	return e.PullRequest.Head.Ref
 }
 
 func (e *PullRequestEvent) String() string {
