@@ -136,8 +136,8 @@ func streamRouterEvents(rc routerc.Client, db *postgres.DB, doneCh chan struct{}
 			}
 			route := e.Route
 			var appID string
-			if strings.HasPrefix(route.ParentRef, routeParentRefPrefix) {
-				appID = strings.TrimPrefix(route.ParentRef, routeParentRefPrefix)
+			if strings.HasPrefix(route.ParentRef, ct.RouteParentRefPrefix) {
+				appID = strings.TrimPrefix(route.ParentRef, ct.RouteParentRefPrefix)
 			}
 			eventType := ct.EventTypeRoute
 			if e.Event == "remove" {
@@ -193,6 +193,7 @@ func appHandler(c handlerConfig) http.Handler {
 	}
 
 	q := que.NewClient(c.db.ConnPool)
+	domainMigrationRepo := NewDomainMigrationRepo(c.db)
 	providerRepo := NewProviderRepo(c.db)
 	resourceRepo := NewResourceRepo(c.db)
 	appRepo := NewAppRepo(c.db, os.Getenv("DEFAULT_ROUTE_DOMAIN"), c.rc)
@@ -204,20 +205,21 @@ func appHandler(c handlerConfig) http.Handler {
 	eventRepo := NewEventRepo(c.db)
 
 	api := controllerAPI{
-		appRepo:        appRepo,
-		releaseRepo:    releaseRepo,
-		providerRepo:   providerRepo,
-		formationRepo:  formationRepo,
-		artifactRepo:   artifactRepo,
-		jobRepo:        jobRepo,
-		resourceRepo:   resourceRepo,
-		deploymentRepo: deploymentRepo,
-		eventRepo:      eventRepo,
-		clusterClient:  c.cc,
-		logaggc:        c.lc,
-		routerc:        c.rc,
-		que:            q,
-		caCert:         []byte(os.Getenv("CA_CERT")),
+		domainMigrationRepo: domainMigrationRepo,
+		appRepo:             appRepo,
+		releaseRepo:         releaseRepo,
+		providerRepo:        providerRepo,
+		formationRepo:       formationRepo,
+		artifactRepo:        artifactRepo,
+		jobRepo:             jobRepo,
+		resourceRepo:        resourceRepo,
+		deploymentRepo:      deploymentRepo,
+		eventRepo:           eventRepo,
+		clusterClient:       c.cc,
+		logaggc:             c.lc,
+		routerc:             c.rc,
+		que:                 q,
+		caCert:              []byte(os.Getenv("CA_CERT")),
 	}
 
 	httpRouter := httprouter.New()
@@ -235,6 +237,8 @@ func appHandler(c handlerConfig) http.Handler {
 	}))
 
 	httpRouter.GET("/ca-cert", httphelper.WrapHandler(api.GetCACert))
+
+	httpRouter.PUT("/domain", httphelper.WrapHandler(api.MigrateDomain))
 
 	httpRouter.POST("/apps/:apps_id", httphelper.WrapHandler(api.UpdateApp))
 	httpRouter.GET("/apps/:apps_id/log", httphelper.WrapHandler(api.appLookup(api.AppLog)))
@@ -309,20 +313,21 @@ func muxHandler(main http.Handler, authKeys []string) http.Handler {
 }
 
 type controllerAPI struct {
-	appRepo        *AppRepo
-	releaseRepo    *ReleaseRepo
-	providerRepo   *ProviderRepo
-	formationRepo  *FormationRepo
-	artifactRepo   *ArtifactRepo
-	jobRepo        *JobRepo
-	resourceRepo   *ResourceRepo
-	deploymentRepo *DeploymentRepo
-	eventRepo      *EventRepo
-	clusterClient  utils.ClusterClient
-	logaggc        logaggc.Client
-	routerc        routerc.Client
-	que            *que.Client
-	caCert         []byte
+	domainMigrationRepo *DomainMigrationRepo
+	appRepo             *AppRepo
+	releaseRepo         *ReleaseRepo
+	providerRepo        *ProviderRepo
+	formationRepo       *FormationRepo
+	artifactRepo        *ArtifactRepo
+	jobRepo             *JobRepo
+	resourceRepo        *ResourceRepo
+	deploymentRepo      *DeploymentRepo
+	eventRepo           *EventRepo
+	clusterClient       utils.ClusterClient
+	logaggc             logaggc.Client
+	routerc             routerc.Client
+	que                 *que.Client
+	caCert              []byte
 
 	eventListener    *EventListener
 	eventListenerMtx sync.Mutex
@@ -363,10 +368,8 @@ func (c *controllerAPI) appLookup(handler httphelper.HandlerFunc) httphelper.Han
 	}
 }
 
-const routeParentRefPrefix = "controller/apps/"
-
 func routeParentRef(appID string) string {
-	return routeParentRefPrefix + appID
+	return ct.RouteParentRefPrefix + appID
 }
 
 func (c *controllerAPI) getRoute(ctx context.Context) (*router.Route, error) {

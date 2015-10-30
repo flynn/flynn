@@ -43,7 +43,7 @@ func migrateDB(db *postgres.DB) error {
 		`CREATE UNIQUE INDEX ON apps (name) WHERE deleted_at IS NULL`,
 
 		`CREATE SEQUENCE event_ids`,
-		`CREATE TYPE event_type AS ENUM ('app_deletion', 'app', 'app_release', 'deployment', 'job', 'scale', 'release', 'artifact', 'provider', 'resource', 'resource_deletion', 'key', 'key_deletion', 'route', 'route_deletion')`,
+		`CREATE TYPE event_type AS ENUM ('app_deletion', 'app', 'app_release', 'deployment', 'job', 'scale', 'release', 'artifact', 'provider', 'resource', 'resource_deletion', 'key', 'key_deletion', 'route', 'route_deletion', 'domain_migration')`,
 		`CREATE TABLE events (
     event_id    bigint         PRIMARY KEY DEFAULT nextval('event_ids'),
     app_id      uuid           REFERENCES apps (app_id),
@@ -156,6 +156,15 @@ $$ LANGUAGE plpgsql`,
 
 		`CREATE UNIQUE INDEX isolate_deploys ON deployments (app_id)
     WHERE finished_at is NULL`,
+
+		`CREATE TABLE domain_migrations (
+			migration_id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+			old_domain text NOT NULL,
+			domain text NOT NULL,
+			old_tls_cert jsonb,
+			tls_cert jsonb,
+			created_at timestamptz NOT NULL DEFAULT now(),
+			finished_at timestamptz)`,
 	)
 	m.Add(2,
 		`CREATE TABLE que_jobs (
