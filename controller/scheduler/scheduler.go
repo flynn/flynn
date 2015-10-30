@@ -25,9 +25,10 @@ import (
 )
 
 const (
-	eventBufferSize    int           = 1000
-	maxJobAttempts     uint          = 30
-	jobAttemptInterval time.Duration = 500 * time.Millisecond
+	eventBufferSize      int           = 1000
+	maxJobAttempts       uint          = 30
+	jobAttemptInterval   time.Duration = 500 * time.Millisecond
+	defaultMaxHostChecks               = 10
 )
 
 var logger = log15.New("component", "scheduler")
@@ -40,10 +41,11 @@ type Scheduler struct {
 	isLeader  bool
 
 	backoffPeriod time.Duration
+	maxHostChecks int
 
-	formations  Formations
-	hostStreams map[string]stream.Stream
-	jobs        Jobs
+	formations Formations
+	hosts      map[string]*Host
+	jobs       Jobs
 
 	jobEvents chan *host.Event
 
@@ -55,6 +57,8 @@ type Scheduler struct {
 
 	syncJobs        chan struct{}
 	syncFormations  chan struct{}
+	syncHosts       chan struct{}
+	hostChecks      chan struct{}
 	rectify         chan struct{}
 	hostEvents      chan *discoverd.Event
 	formationEvents chan *ct.ExpandedFormation
@@ -70,7 +74,8 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 		ClusterClient:    cluster,
 		discoverd:        disc,
 		backoffPeriod:    getBackoffPeriod(),
-		hostStreams:      make(map[string]stream.Stream),
+		maxHostChecks:    defaultMaxHostChecks,
+		hosts:            make(map[string]*Host),
 		jobs:             make(map[string]*Job),
 		formations:       make(Formations),
 		listeners:        make(map[chan Event]struct{}),
@@ -78,6 +83,8 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 		stop:             make(chan struct{}),
 		syncJobs:         make(chan struct{}, 1),
 		syncFormations:   make(chan struct{}, 1),
+		syncHosts:        make(chan struct{}, 1),
+		hostChecks:       make(chan struct{}, 1),
 		rectifyBatch:     make(map[utils.FormationKey]struct{}),
 		rectify:          make(chan struct{}, 1),
 		formationEvents:  make(chan *ct.ExpandedFormation, eventBufferSize),
@@ -257,6 +264,7 @@ func (s *Scheduler) Run() error {
 
 	s.tickSyncJobs(30 * time.Second)
 	s.tickSyncFormations(time.Minute)
+	s.tickSyncHosts(10 * time.Second)
 
 	go s.RunPutJobs()
 
@@ -280,6 +288,9 @@ func (s *Scheduler) Run() error {
 		case e := <-s.hostEvents:
 			s.HandleHostEvent(e)
 			continue
+		case <-s.hostChecks:
+			s.PerformHostChecks()
+			continue
 		case e := <-s.jobEvents:
 			s.HandleJobEvent(e)
 			continue
@@ -296,6 +307,9 @@ func (s *Scheduler) Run() error {
 			continue
 		case <-s.syncJobs:
 			s.SyncJobs()
+			continue
+		case <-s.syncHosts:
+			s.SyncHosts()
 			continue
 		default:
 		}
@@ -315,6 +329,8 @@ func (s *Scheduler) Run() error {
 			s.HandleJobRequest(req)
 		case e := <-s.hostEvents:
 			s.HandleHostEvent(e)
+		case <-s.hostChecks:
+			s.PerformHostChecks()
 		case e := <-s.jobEvents:
 			s.HandleJobEvent(e)
 		case f := <-s.formationEvents:
@@ -323,6 +339,8 @@ func (s *Scheduler) Run() error {
 			s.SyncFormations()
 		case <-s.syncJobs:
 			s.SyncJobs()
+		case <-s.syncHosts:
+			s.SyncHosts()
 		}
 	}
 	return nil
@@ -341,24 +359,17 @@ func (s *Scheduler) SyncJobs() (err error) {
 		}
 	}()
 
-	log.Info("getting host list")
-	hosts, err := s.getHosts()
-	if err != nil {
-		log.Error("error getting host list", "err", err)
-		return err
-	}
-
 	knownJobs := make(Jobs)
-	for _, h := range hosts {
-		hostLog := log.New("host.id", h.ID())
+	for id, host := range s.hosts {
+		hostLog := log.New("host.id", id)
 
-		hostLog.Info(fmt.Sprintf("getting jobs for host %s", h.ID()))
-		activeJobs, err := h.ListJobs()
+		hostLog.Info(fmt.Sprintf("getting jobs for host %s", id))
+		activeJobs, err := host.client.ListJobs()
 		if err != nil {
 			hostLog.Error("error getting jobs list", "err", err)
 			return err
 		}
-		hostLog.Info(fmt.Sprintf("got %d active job(s) for host %s", len(activeJobs), h.ID()))
+		hostLog.Info(fmt.Sprintf("got %d active job(s) for host %s", len(activeJobs), id))
 
 		for _, job := range activeJobs {
 			s.handleActiveJob(&job)
@@ -410,6 +421,56 @@ func (s *Scheduler) SyncFormations() {
 			}
 		}
 	}
+}
+
+func (s *Scheduler) SyncHosts() (err error) {
+	log := logger.New("fn", "SyncHosts")
+	log.Info("syncing hosts")
+
+	defer func() {
+		if err != nil {
+			// try again soon
+			time.AfterFunc(100*time.Millisecond, s.triggerSyncHosts)
+		}
+	}()
+
+	hosts, err := s.Hosts()
+	if err != nil {
+		log.Error("error getting hosts", "err", err)
+		return err
+	}
+
+	known := make(map[string]struct{})
+	var followErr error
+	for _, host := range hosts {
+		known[host.ID()] = struct{}{}
+
+		if err := s.followHost(host); err != nil {
+			log.Error("error following host", "host.id", host.ID(), "err", err)
+			// finish the sync before returning the error
+			followErr = err
+		}
+	}
+
+	// mark any hosts as unhealthy which are not returned from s.Hosts()
+	for id, host := range s.hosts {
+		if _, ok := known[id]; !ok {
+			s.markHostAsUnhealthy(host)
+		}
+	}
+
+	if followErr != nil {
+		return followErr
+	}
+
+	// return an error to trigger another sync if no hosts were found
+	if len(hosts) == 0 {
+		e := "no hosts found"
+		log.Error(e)
+		return errors.New(e)
+	}
+
+	return nil
 }
 
 func (s *Scheduler) HandleRectify() error {
@@ -544,28 +605,17 @@ func (s *Scheduler) handleFormationDiff(f *Formation, diff Processes) {
 	}
 }
 
-func (s *Scheduler) followHost(h utils.HostClient) {
-	if _, ok := s.hostStreams[h.ID()]; ok {
-		return
+func (s *Scheduler) followHost(h utils.HostClient) error {
+	if _, ok := s.hosts[h.ID()]; ok {
+		return nil
 	}
 
-	log := logger.New("fn", "followHost", "host.id", h.ID())
-	log.Info("streaming job events")
-	events := make(chan *host.Event)
-	stream, err := h.StreamEvents("all", events)
+	host := NewHost(h)
+	jobs, err := host.StreamEventsTo(s.jobEvents)
 	if err != nil {
-		log.Error("error streaming job events", "err", err)
-		return
+		return err
 	}
-	s.hostStreams[h.ID()] = stream
-
-	log.Info("getting active jobs")
-	jobs, err := h.ListJobs()
-	if err != nil {
-		log.Error("error getting active jobs", "err", err)
-		return
-	}
-	log.Info(fmt.Sprintf("got %d active job(s) for host %s", len(jobs), h.ID()))
+	s.hosts[host.ID] = host
 
 	for _, job := range jobs {
 		s.handleActiveJob(&job)
@@ -573,37 +623,31 @@ func (s *Scheduler) followHost(h utils.HostClient) {
 
 	s.triggerSyncFormations()
 
-	go func() {
-		for e := range events {
-			s.jobEvents <- e
-		}
-		// TODO: reconnect this stream unless unfollowHost was called gh#1921
-		log.Error("job event stream closed unexpectedly")
-	}()
+	return nil
 }
 
-func (s *Scheduler) unfollowHost(id string) {
-	log := logger.New("fn", "unfollowHost", "host.id", id)
-	stream, ok := s.hostStreams[id]
-	if !ok {
-		log.Warn("ignoring host unfollow due to lack of existing stream")
-		return
-	}
-
+func (s *Scheduler) unfollowHost(host *Host) {
+	log := logger.New("fn", "unfollowHost", "host.id", host.ID)
 	log.Info("unfollowing host")
-	for jobID, job := range s.jobs {
-		if job.HostID == id {
-			log.Info("removing job", "job.id", jobID)
+	for id, job := range s.jobs {
+		if job.HostID == host.ID {
+			log.Info("removing job", "job.id", id)
 			s.jobs.SetState(job.JobID, JobStateStopped)
 			s.triggerRectify(job.Formation.key())
 		}
 	}
 
 	log.Info("closing job event stream")
-	stream.Close()
-	delete(s.hostStreams, id)
+	host.Close()
+	delete(s.hosts, host.ID)
 
 	s.triggerSyncFormations()
+}
+
+func (s *Scheduler) markHostAsUnhealthy(host *Host) {
+	logger.Warn("host service is down, marking as unhealthy and triggering host checks", "host.id", host.ID)
+	host.healthy = false
+	s.triggerHostChecks()
 }
 
 func (s *Scheduler) HandleHostEvent(e *discoverd.Event) {
@@ -627,9 +671,50 @@ func (s *Scheduler) HandleHostEvent(e *discoverd.Event) {
 		}
 		s.followHost(h)
 	case discoverd.EventKindDown:
-		log = log.New("host.id", e.Instance.Meta["id"])
-		log.Info("host is down, stopping job event stream")
-		s.unfollowHost(e.Instance.Meta["id"])
+		id := e.Instance.Meta["id"]
+		log = log.New("host.id", id)
+		host, ok := s.hosts[id]
+		if !ok {
+			log.Warn("ignoring host down event, unknown host")
+			return
+		}
+		s.markHostAsUnhealthy(host)
+	}
+}
+
+func (s *Scheduler) PerformHostChecks() {
+	log := logger.New("fn", "PerformHostChecks")
+	log.Info("performing host checks")
+
+	allHealthy := true
+
+	for id, host := range s.hosts {
+		if host.healthy {
+			continue
+		}
+
+		log := log.New("host.id", id)
+		log.Info("getting status of unhealthy host")
+		if _, err := host.client.GetStatus(); err == nil {
+			// assume the host is healthy if we can get its status
+			log.Info("host is now healthy")
+			host.healthy = true
+			host.checks = 0
+			continue
+		}
+
+		host.checks++
+		if host.checks >= s.maxHostChecks {
+			log.Warn(fmt.Sprintf("host unhealthy for %d consecutive checks, unfollowing", s.maxHostChecks))
+			s.unfollowHost(host)
+			continue
+		}
+
+		allHealthy = false
+	}
+
+	if !allHealthy {
+		time.AfterFunc(time.Second, s.triggerHostChecks)
 	}
 }
 
@@ -706,7 +791,7 @@ func (s *Scheduler) changeFormation(ef *ct.ExpandedFormation) (f *Formation, err
 
 	for typ, proc := range ef.Release.Processes {
 		if proc.Omni && ef.Processes != nil && ef.Processes[typ] > 0 {
-			ef.Processes[typ] *= len(s.hostStreams)
+			ef.Processes[typ] *= len(s.hosts)
 		}
 	}
 
@@ -776,23 +861,22 @@ func (s *Scheduler) startJob(req *JobRequest) (err error) {
 		log.Error("error determining best host for job", "err", err)
 		return err
 	}
-	hostID := host.ID()
-	newReq.HostID = hostID
+	newReq.HostID = host.ID
 
-	config := jobConfig(newReq, hostID)
+	config := jobConfig(newReq, host.ID)
 	newReq.JobID = config.ID
 
 	// Provision a data volume on the host if needed.
 	if newReq.needsVolume() {
 		log.Info("provisioning volume")
-		if err := utils.ProvisionVolume(host, config); err != nil {
+		if err := utils.ProvisionVolume(host.client, config); err != nil {
 			log.Error("error provisioning volume", "err", err)
 			return err
 		}
 	}
 
-	log.Info("requesting host to add job", "host.id", hostID, "job.id", config.ID)
-	if err := host.AddJob(config); err != nil {
+	log.Info("requesting host to add job", "host.id", host.ID, "job.id", config.ID)
+	if err := host.client.AddJob(config); err != nil {
 		log.Error("error requesting host to add job", "err", err)
 		return err
 	}
@@ -837,19 +921,17 @@ func (s *Scheduler) stopJob(req *JobRequest) (err error) {
 	s.jobs.SetState(job.JobID, JobStateStopping)
 	if job.HostID != "" {
 		log = log.New("job.id", job.JobID, "host.id", job.HostID)
-		log.Info("getting host client", "host.id", job.HostID)
-		host, err := s.Host(job.HostID)
-		if err != nil {
-			log.Error("error getting host client", "err", err)
-			// TODO stop unfollowing hosts here once host syncing is built gh#1920
-			s.unfollowHost(job.HostID)
-			return err
+		host, ok := s.hosts[job.HostID]
+		if !ok {
+			e := "unable to stop job, unknown host"
+			log.Error(e)
+			return errors.New(e)
 		}
 
 		log.Info("requesting host to stop job")
 		go func() {
 			// host.StopJob can block, so run it in a goroutine
-			if err := host.StopJob(job.JobID); err != nil {
+			if err := host.client.StopJob(job.JobID); err != nil {
 				log.Error("error requesting host to stop job", "err", err)
 			}
 		}()
@@ -861,67 +943,30 @@ func jobConfig(req *JobRequest, hostID string) *host.Job {
 	return utils.JobConfig(req.Job.Formation.ExpandedFormation, req.Type, hostID)
 }
 
-func (s *Scheduler) findBestHost(formation *Formation, typ string) (utils.HostClient, error) {
+func (s *Scheduler) findBestHost(formation *Formation, typ string) (*Host, error) {
 	log := logger.New("fn", "findBestHost", "app.id", formation.App.ID, "release.id", formation.Release.ID, "job.type", typ)
-	log.Info("getting host list")
-	hosts, err := s.getHosts()
-	if err != nil {
-		log.Error("error getting host list", "err", err)
-		return nil, err
-	}
 
-	counts := s.jobs.GetHostJobCounts(formation.key(), typ)
-	var minCount int = math.MaxInt32
-	var hostID string
-	for _, host := range hosts {
-		count, ok := counts[host.ID()]
-		if !ok || count < minCount {
-			minCount = count
-			hostID = host.ID()
-		}
-	}
-	if hostID == "" {
-		return nil, fmt.Errorf("Unable to find a host out of %d host(s)", len(hosts))
-	}
-	log.Info(fmt.Sprintf("using host with least %s jobs", typ), "host.id", hostID)
-	return s.Host(hostID)
-}
-
-func (s *Scheduler) getHosts() ([]utils.HostClient, error) {
-	hosts, err := s.Hosts()
-	if err != nil {
-		return nil, err
-	}
-
-	// Ensure that we're only following hosts that we can discover
-	knownHosts := make(map[string]struct{})
-	for id, hostStream := range s.hostStreams {
-		if hostStream.Err() == nil {
-			knownHosts[id] = struct{}{}
-		} else {
-			// TODO stop unfollowing hosts here once host syncing is built gh#1920
-			s.unfollowHost(id)
-		}
-	}
-	for _, h := range hosts {
-		hostID := h.ID()
-		delete(knownHosts, hostID)
-		if _, ok := s.hostStreams[hostID]; !ok {
-			s.followHost(h)
-		}
-	}
-	for id := range knownHosts {
-		// TODO stop unfollowing hosts here once host syncing is built gh#1920
-		s.unfollowHost(id)
-	}
-	if len(hosts) == 0 {
-		log := logger.New("fn", "getHosts")
+	if len(s.hosts) == 0 {
 		e := "no hosts found"
 		log.Error(e)
 		return nil, errors.New(e)
 	}
 
-	return hosts, nil
+	counts := s.jobs.GetHostJobCounts(formation.key(), typ)
+	var minCount int = math.MaxInt32
+	var host *Host
+	for id, h := range s.hosts {
+		count, ok := counts[id]
+		if !ok || count < minCount {
+			minCount = count
+			host = h
+		}
+	}
+	if host == nil {
+		return nil, fmt.Errorf("unable to find a host out of %d host(s)", len(s.hosts))
+	}
+	log.Info(fmt.Sprintf("using host with least %s jobs", typ), "host.id", host.ID)
+	return host, nil
 }
 
 func (s *Scheduler) Stop() error {
@@ -1058,8 +1103,7 @@ func (s *Scheduler) startHTTPServer(port string) {
 func (s *Scheduler) tickSyncJobs(d time.Duration) {
 	logger.Info("starting sync jobs ticker", "duration", d)
 	go func() {
-		ch := time.Tick(d)
-		for range ch {
+		for range time.Tick(d) {
 			s.triggerSyncJobs()
 		}
 	}()
@@ -1068,9 +1112,17 @@ func (s *Scheduler) tickSyncJobs(d time.Duration) {
 func (s *Scheduler) tickSyncFormations(d time.Duration) {
 	logger.Info("starting sync formations ticker", "duration", d)
 	go func() {
-		ch := time.Tick(d)
-		for range ch {
+		for range time.Tick(d) {
 			s.triggerSyncFormations()
+		}
+	}()
+}
+
+func (s *Scheduler) tickSyncHosts(d time.Duration) {
+	logger.Info("starting sync hosts ticker", "duration", d)
+	go func() {
+		for range time.Tick(d) {
+			s.triggerSyncHosts()
 		}
 	}()
 }
@@ -1094,6 +1146,22 @@ func (s *Scheduler) triggerSyncFormations() {
 	logger.Info("triggering formation sync")
 	select {
 	case s.syncFormations <- struct{}{}:
+	default:
+	}
+}
+
+func (s *Scheduler) triggerSyncHosts() {
+	logger.Info("triggering host sync")
+	select {
+	case s.syncHosts <- struct{}{}:
+	default:
+	}
+}
+
+func (s *Scheduler) triggerHostChecks() {
+	logger.Info("triggering host checks")
+	select {
+	case s.hostChecks <- struct{}{}:
 	default:
 	}
 }

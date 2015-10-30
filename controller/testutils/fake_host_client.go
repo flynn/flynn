@@ -22,6 +22,7 @@ func NewFakeHostClient(hostID string) *FakeHostClient {
 		volumes:       make(map[string]*volume.Info),
 		Jobs:          make(map[string]host.ActiveJob),
 		eventChannels: make(map[chan<- *host.Event]struct{}),
+		Healthy:       true,
 	}
 }
 
@@ -34,6 +35,7 @@ type FakeHostClient struct {
 	volumes       map[string]*volume.Info
 	eventChannels map[chan<- *host.Event]struct{}
 	jobsMtx       sync.RWMutex
+	Healthy       bool
 }
 
 func (c *FakeHostClient) ID() string { return c.hostID }
@@ -168,6 +170,13 @@ func (c *FakeHostClient) StreamEvents(id string, ch chan *host.Event) (stream.St
 	}
 
 	return &HostStream{host: c, ch: ch}, nil
+}
+
+func (c *FakeHostClient) GetStatus() (*host.HostStatus, error) {
+	if !c.Healthy {
+		return nil, errors.New("unhealthy")
+	}
+	return &host.HostStatus{ID: c.ID()}, nil
 }
 
 type attachFunc func(req *host.AttachReq, wait bool) (cluster.AttachClient, error)

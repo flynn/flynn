@@ -142,6 +142,7 @@ type HostClient interface {
 	StopJob(string) error
 	ListJobs() (map[string]host.ActiveJob, error)
 	StreamEvents(id string, ch chan *host.Event) (stream.Stream, error)
+	GetStatus() (*host.HostStatus, error)
 }
 
 type ClusterClient interface {
