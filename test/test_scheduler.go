@@ -353,6 +353,95 @@ func (s *SchedulerSuite) TestTCPApp(t *c.C) {
 	}
 }
 
+func (s *SchedulerSuite) TestRollbackController(t *c.C) {
+	// get the current controller release
+	client := s.controllerClient(t)
+	app, err := client.GetApp("controller")
+	t.Assert(err, c.IsNil)
+	release, err := client.GetAppRelease(app.ID)
+	t.Assert(err, c.IsNil)
+
+	watcher, err := s.controllerClient(t).WatchJobEvents(app.ID, release.ID)
+	t.Assert(err, c.IsNil)
+	defer watcher.Close()
+
+	// get the current controller formation
+	formation, err := client.GetFormation(app.ID, release.ID)
+	t.Assert(err, c.IsNil)
+
+	currentReleaseID := release.ID
+
+	// create a controller deployment that will fail
+	release.ID = ""
+	worker := release.Processes["worker"]
+	worker.Entrypoint = []string{"/i/dont/exist"}
+	release.Processes["worker"] = worker
+	t.Assert(client.CreateRelease(release), c.IsNil)
+	deployment, err := client.CreateDeployment(app.ID, release.ID)
+	t.Assert(err, c.IsNil)
+
+	events := make(chan *ct.DeploymentEvent)
+	eventStream, err := client.StreamDeployment(deployment, events)
+	t.Assert(err, c.IsNil)
+	defer eventStream.Close()
+
+	// wait for the deploy to fail
+loop:
+	for {
+		select {
+		case e, ok := <-events:
+			if !ok {
+				t.Fatal("unexpected close of deployment event stream")
+			}
+			debugf(t, "got deployment event: %s %s", e.JobType, e.JobState)
+			switch e.Status {
+			case "complete":
+				t.Fatal("the deployment succeeded when it should have failed")
+			case "failed":
+				break loop
+			}
+		case <-time.After(2 * time.Minute):
+			t.Fatal("timed out waiting for the deploy to fail")
+		}
+	}
+
+	// wait for jobs to come back up
+	hosts, err := s.clusterClient(t).Hosts()
+	expected := map[string]map[string]int{
+		currentReleaseID: {
+			"web":       formation.Processes["web"],
+			"scheduler": len(hosts),
+		},
+	}
+	watcher.WaitFor(expected, scaleTimeout, nil)
+	expected[currentReleaseID]["worker"] = formation.Processes["worker"]
+
+	// check the correct controller jobs are running
+	t.Assert(err, c.IsNil)
+	t.Assert(hosts, c.Not(c.HasLen), 0)
+	actual := make(map[string]map[string]int)
+	for _, h := range hosts {
+		jobs, err := h.ListJobs()
+		t.Assert(err, c.IsNil)
+		for _, job := range jobs {
+			if job.Status != host.StatusRunning {
+				continue
+			}
+			appID := job.Job.Metadata["flynn-controller.app"]
+			if appID != app.ID {
+				continue
+			}
+			releaseID := job.Job.Metadata["flynn-controller.release"]
+			if _, ok := actual[releaseID]; !ok {
+				actual[releaseID] = make(map[string]int)
+			}
+			typ := job.Job.Metadata["flynn-controller.type"]
+			actual[releaseID][typ]++
+		}
+	}
+	t.Assert(actual, c.DeepEquals, expected)
+}
+
 func (s *SchedulerSuite) TestDeployController(t *c.C) {
 	// get the current controller release
 	client := s.controllerClient(t)
