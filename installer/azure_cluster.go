@@ -145,7 +145,7 @@ func (c *AzureCluster) createKeyPair() error {
 	}
 	c.base.SSHKey = keypair
 	c.base.SSHKeyName = keypairName
-	return nil
+	return saveSSHKey(keypairName, keypair)
 }
 
 func (c *AzureCluster) createResourceGroup() error {
