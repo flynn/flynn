@@ -329,10 +329,18 @@ func (s *ControllerSuite) TestAppDeleteCleanup(t *c.C) {
 	_, err := s.discoverdClient(t).Instances(service, 10*time.Second)
 	t.Assert(err, c.IsNil)
 
+	t.Assert(r.flynn("scale", "another-web=1"), Succeeds)
+	_, err = s.discoverdClient(t).Instances(app+"-another-web", 10*time.Second)
+	t.Assert(err, c.IsNil)
+
 	// create some routes
-	routes := []string{"foo.example.com", "bar.example.com"}
+	routes := []string{"foo.example.com", "bar.example.com", "another.example.com"}
 	for _, route := range routes {
-		t.Assert(r.flynn("route", "add", "http", route), Succeeds)
+		if route == "another.example.com" {
+			t.Assert(r.flynn("route", "add", "http", "-s", app+"-another-web", route), Succeeds)
+		} else {
+			t.Assert(r.flynn("route", "add", "http", route), Succeeds)
+		}
 	}
 	routeList, err := client.RouteList(app)
 	t.Assert(err, c.IsNil)
