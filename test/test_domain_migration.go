@@ -18,6 +18,7 @@ type DomainMigrationSuite struct {
 var _ = c.Suite(&DomainMigrationSuite{})
 
 func (s *DomainMigrationSuite) migrateDomain(t *c.C, dm *ct.DomainMigration) {
+	debugf(t, "migrating domain from %s to %s", dm.OldDomain, dm.Domain)
 	client := s.controllerClient(t)
 
 	events := make(chan *ct.Event)
@@ -33,45 +34,49 @@ func (s *DomainMigrationSuite) migrateDomain(t *c.C, dm *ct.DomainMigration) {
 	err = client.PutDomain(dm)
 	t.Assert(err, c.IsNil)
 
-	// created
-	var e *ct.Event
-	var event ct.DomainMigrationEvent
-	select {
-	case e = <-events:
-	case <-time.After(2 * time.Minute):
-		t.Fatal("timed out waiting for initial domain_migration event")
+	waitEvent := func(typ string, timeout time.Duration) (event ct.DomainMigrationEvent) {
+		debugf(t, "waiting for %s domain migration event", typ)
+		var e *ct.Event
+		var ok bool
+		select {
+		case e, ok = <-events:
+			if !ok {
+				t.Fatal("event stream closed unexpectedly")
+			}
+			debugf(t, "got %s domain migration event", typ)
+		case <-time.After(timeout):
+			t.Fatalf("timed out waiting for %s domain migration event", typ)
+		}
+		t.Assert(e.Data, c.NotNil)
+		t.Assert(json.Unmarshal(e.Data, &event), c.IsNil)
+		return
 	}
-	t.Assert(e.Data, c.Not(c.IsNil))
-	t.Assert(json.Unmarshal(e.Data, &event), c.IsNil)
+
+	// created
+	event := waitEvent("initial", 2*time.Minute)
 	t.Assert(event.Error, c.Equals, "")
-	t.Assert(event.DomainMigration, c.Not(c.IsNil))
+	t.Assert(event.DomainMigration, c.NotNil)
 	t.Assert(event.DomainMigration.ID, c.Equals, dm.ID)
 	t.Assert(event.DomainMigration.OldDomain, c.Equals, dm.OldDomain)
 	t.Assert(event.DomainMigration.Domain, c.Equals, dm.Domain)
 	t.Assert(event.DomainMigration.TLSCert, c.IsNil)
-	t.Assert(event.DomainMigration.OldTLSCert, c.Not(c.IsNil))
-	t.Assert(event.DomainMigration.CreatedAt, c.Not(c.IsNil))
+	t.Assert(event.DomainMigration.OldTLSCert, c.NotNil)
+	t.Assert(event.DomainMigration.CreatedAt, c.NotNil)
 	t.Assert(event.DomainMigration.CreatedAt.Equal(*dm.CreatedAt), c.Equals, true)
 	t.Assert(event.DomainMigration.FinishedAt, c.IsNil)
 
 	// complete
-	select {
-	case e = <-events:
-	case <-time.After(3 * time.Minute):
-		t.Fatal("timed out waiting for final domain_migration event")
-	}
-	t.Assert(e.Data, c.Not(c.IsNil))
-	t.Assert(json.Unmarshal(e.Data, &event), c.IsNil)
+	event = waitEvent("final", 3*time.Minute)
 	t.Assert(event.Error, c.Equals, "")
-	t.Assert(event.DomainMigration, c.Not(c.IsNil))
+	t.Assert(event.DomainMigration, c.NotNil)
 	t.Assert(event.DomainMigration.ID, c.Equals, dm.ID)
 	t.Assert(event.DomainMigration.OldDomain, c.Equals, dm.OldDomain)
 	t.Assert(event.DomainMigration.Domain, c.Equals, dm.Domain)
-	t.Assert(event.DomainMigration.TLSCert, c.Not(c.IsNil))
-	t.Assert(event.DomainMigration.OldTLSCert, c.Not(c.IsNil))
-	t.Assert(event.DomainMigration.CreatedAt, c.Not(c.IsNil))
+	t.Assert(event.DomainMigration.TLSCert, c.NotNil)
+	t.Assert(event.DomainMigration.OldTLSCert, c.NotNil)
+	t.Assert(event.DomainMigration.CreatedAt, c.NotNil)
 	t.Assert(event.DomainMigration.CreatedAt.Equal(*dm.CreatedAt), c.Equals, true)
-	t.Assert(event.DomainMigration.FinishedAt, c.Not(c.IsNil))
+	t.Assert(event.DomainMigration.FinishedAt, c.NotNil)
 
 	cert := event.DomainMigration.TLSCert
 
