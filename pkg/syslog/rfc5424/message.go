@@ -21,7 +21,10 @@ type Message struct {
 
 // NewMessage builds a new message from a copy of the header and message.
 func NewMessage(hdr *Header, msg []byte) *Message {
-	h := *hdr
+	var h Header
+	if hdr != nil {
+		h = *hdr
+	}
 
 	if h.Timestamp.IsZero() {
 		h.Timestamp = time.Now().UTC()
@@ -31,10 +34,13 @@ func NewMessage(hdr *Header, msg []byte) *Message {
 		h.Version = 1
 	}
 
-	m := make([]byte, len(msg))
-	copy(m, msg)
+	if msg != nil {
+		m := make([]byte, len(msg))
+		copy(m, msg)
+		msg = m
+	}
 
-	return &Message{Header: h, Msg: m}
+	return &Message{Header: h, Msg: msg}
 }
 
 var msgSep = []byte{' '}

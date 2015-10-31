@@ -231,17 +231,14 @@ func runDaemon(args *docopt.Args) {
 	)
 	shutdown.BeforeExit(func() { vman.CloseDB() })
 
-	muxSize := 1000
-	log.Info("creating logmux buffer", "size", muxSize)
-	mux := logmux.New(muxSize)
-	shutdown.BeforeExit(func() { mux.Close() })
+	mux := logmux.New(hostID, logDir, logger.New("host.id", hostID, "component", "logmux"))
 
 	log.Info("initializing job backend", "type", backendName)
 	var backend Backend
 	var err error
 	switch backendName {
 	case "libvirt-lxc":
-		backend, err = NewLibvirtLXCBackend(state, vman, logDir, bridgeName, flynnInit, nsumount, mux)
+		backend, err = NewLibvirtLXCBackend(state, vman, bridgeName, flynnInit, nsumount, mux)
 	case "mock":
 		backend = MockBackend{}
 	default:

@@ -18,12 +18,13 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 )
 
-func apiHandler(agg *Aggregator) http.Handler {
-	api := aggregatorAPI{agg: agg}
+func apiHandler(agg *Aggregator, cursors *HostCursors) http.Handler {
+	api := aggregatorAPI{agg, cursors}
 	r := httprouter.New()
 
 	r.Handler("GET", status.Path, status.HealthyHandler)
 	r.GET("/log/:channel_id", httphelper.WrapHandler(api.GetLog))
+	r.GET("/cursors", httphelper.WrapHandler(api.GetCursors))
 	return httphelper.ContextInjector(
 		"logaggregator-api",
 		httphelper.NewRequestLogger(r),
@@ -31,7 +32,12 @@ func apiHandler(agg *Aggregator) http.Handler {
 }
 
 type aggregatorAPI struct {
-	agg *Aggregator
+	agg     *Aggregator
+	cursors *HostCursors
+}
+
+func (a *aggregatorAPI) GetCursors(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	httphelper.JSON(w, 200, a.cursors.Get())
 }
 
 func (a *aggregatorAPI) GetLog(ctx context.Context, w http.ResponseWriter, req *http.Request) {
@@ -48,18 +54,24 @@ func (a *aggregatorAPI) GetLog(ctx context.Context, w http.ResponseWriter, req *
 	defer cancel()
 
 	params, _ := ctxhelper.ParamsFromContext(ctx)
-	channelID := params.ByName("channel_id")
 
 	follow := false
 	if strFollow := req.FormValue("follow"); strFollow == "true" {
 		follow = true
 	}
 
-	lines := -1 // default to all lines
+	var (
+		backlog bool
+		lines   int
+		err     error
+	)
 	if strLines := req.FormValue("lines"); strLines != "" {
-		var err error
-		lines, err = strconv.Atoi(strLines)
-		if err != nil || lines < 0 || lines > 10000 {
+		backlog = true
+		if lines, err = strconv.Atoi(strLines); err != nil {
+			httphelper.ValidationError(w, "lines", err.Error())
+			return
+		}
+		if lines < 0 || lines > 10000 {
 			httphelper.ValidationError(w, "lines", "lines must be an integer between 0 and 10000")
 			return
 		}
@@ -74,15 +86,16 @@ func (a *aggregatorAPI) GetLog(ctx context.Context, w http.ResponseWriter, req *
 		filters = append(filters, filterProcessType(val))
 	}
 
-	w.WriteHeader(200)
-
-	var msgc <-chan *rfc5424.Message
-	if follow {
-		msgc = a.agg.ReadLastNAndSubscribe(channelID, lines, filters, ctx.Done())
-	} else {
-		msgc = a.agg.ReadLastN(channelID, lines, filters, ctx.Done())
+	iter := &Iterator{
+		id:      params.ByName("channel_id"),
+		follow:  follow,
+		backlog: backlog,
+		lines:   lines,
+		filter:  filters,
+		donec:   ctx.Done(),
 	}
-	writeMessages(ctx, w, msgc)
+
+	writeMessages(ctx, w, iter.Scan(a.agg))
 }
 
 func writeMessages(ctx context.Context, w http.ResponseWriter, msgc <-chan *rfc5424.Message) {
@@ -117,7 +130,7 @@ func NewMessageFromSyslog(m *rfc5424.Message) client.Message {
 		ProcessType: string(processType),
 		// TODO(bgentry): source is always "app" for now, could be router in future
 		Source:    "app",
-		Stream:    streamFromMessage(m),
+		Stream:    streamName(m.MsgID),
 		Timestamp: m.Timestamp,
 	}
 }
@@ -125,18 +138,18 @@ func NewMessageFromSyslog(m *rfc5424.Message) client.Message {
 var procIDsep = []byte{'.'}
 
 func splitProcID(procID []byte) (processType, jobID []byte) {
-	split := bytes.Split(procID, procIDsep)
-	if len(split) > 0 {
+	split := bytes.SplitN(procID, procIDsep, 2)
+	if len(split) < 2 {
+		jobID = split[0]
+	} else {
 		processType = split[0]
-	}
-	if len(split) > 1 {
 		jobID = split[1]
 	}
 	return
 }
 
-func streamFromMessage(m *rfc5424.Message) string {
-	switch string(m.MsgID) {
+func streamName(msgID []byte) string {
+	switch string(msgID) {
 	case "ID1":
 		return "stdout"
 	case "ID2":

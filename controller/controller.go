@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/que-go"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
@@ -164,12 +165,17 @@ func streamRouterEvents(rc routerc.Client, db *postgres.DB, doneCh chan struct{}
 	return s.Close()
 }
 
+type logClient interface {
+	GetLog(channelID string, options *logaggc.LogOpts) (io.ReadCloser, error)
+}
+
 type handlerConfig struct {
-	db   *postgres.DB
-	cc   utils.ClusterClient
-	lc   logaggc.Client
-	rc   routerc.Client
-	keys []string
+	db      *postgres.DB
+	cc      utils.ClusterClient
+	lc      logClient
+	rc      routerc.Client
+	pgxpool *pgx.ConnPool
+	keys    []string
 }
 
 // NOTE: this is temporary until httphelper supports custom errors
@@ -324,7 +330,7 @@ type controllerAPI struct {
 	deploymentRepo      *DeploymentRepo
 	eventRepo           *EventRepo
 	clusterClient       utils.ClusterClient
-	logaggc             logaggc.Client
+	logaggc             logClient
 	routerc             routerc.Client
 	que                 *que.Client
 	caCert              []byte

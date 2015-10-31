@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"sync"
 	"sync/atomic"
 
@@ -12,7 +11,7 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 )
 
-func NewDiscoverdManager(backend Backend, mux *logmux.LogMux, hostID, publishAddr string) *DiscoverdManager {
+func NewDiscoverdManager(backend Backend, mux *logmux.Mux, hostID, publishAddr string) *DiscoverdManager {
 	d := &DiscoverdManager{
 		backend: backend,
 		mux:     mux,
@@ -27,7 +26,7 @@ func NewDiscoverdManager(backend Backend, mux *logmux.LogMux, hostID, publishAdd
 
 type DiscoverdManager struct {
 	backend Backend
-	mux     *logmux.LogMux
+	mux     *logmux.Mux
 	inst    *discoverd.Instance
 	mtx     sync.Mutex
 	hb      discoverd.Heartbeater
@@ -78,10 +77,7 @@ func (d *DiscoverdManager) ConnectLocal(url string) error {
 	d.backend.SetDefaultEnv("DISCOVERD", url)
 
 	go func() {
-		// give logmux a discoverd client which doesn't use a retry
-		// dialer (it has its own reconnect logic)
-		disc := discoverd.NewClientWithHTTP(url, http.DefaultClient)
-		if err := d.mux.Connect(disc, "logaggregator"); err != nil {
+		if err := d.mux.StreamToAggregators(discoverd.NewClientWithURL(url).Service("logaggregator")); err != nil {
 			shutdown.Fatal(err)
 		}
 	}()
