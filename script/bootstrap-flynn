@@ -114,6 +114,7 @@ start_flynn_host() {
     local pidfile="/tmp/flynn-host.pid"
     local bridge_name="flynnbr0"
     local vol_path="/var/lib/flynn/volumes"
+    local log_dir="/var/log/flynn"
     local log="/tmp/flynn-host-$(date +%Y-%m-%dT%H-%M-%S.%N).log"
     ln -nfs "${log}" "/tmp/flynn-host.log"
   else
@@ -122,6 +123,7 @@ start_flynn_host() {
     local pidfile="/tmp/flynn-host-${index}.pid"
     local bridge_name="flynnbr${index}"
     local vol_path="/var/lib/flynn/volumes-${index}"
+    local log_dir="/var/log/flynn/host-${index}"
     local log="/tmp/flynn-host-${index}-$(date +%Y-%m-%dT%H-%M-%S.%N).log"
     ln -nfs "${log}" "/tmp/flynn-host-${index}.log"
   fi
@@ -132,6 +134,9 @@ start_flynn_host() {
   if $destroy_vols; then
     sudo "${ROOT}/host/bin/flynn-host" destroy-volumes --volpath="${vol_path}" --include-data
   fi
+
+  # ensure log dir exists
+  sudo mkdir -p $log_dir
 
   sudo start-stop-daemon \
     --start \
@@ -148,6 +153,7 @@ start_flynn_host() {
     --force \
     --state "${state}" \
     --volpath "${vol_path}" \
+    --log-dir "${log_dir}" \
     --flynn-init "${host_dir}/bin/flynn-init" \
     --nsumount "${host_dir}/bin/flynn-nsumount" \
     &>"${log}"
