@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/flynn/flynn/discoverd/client"
 )
 
 type WaitAction struct {
@@ -34,7 +32,7 @@ func (a *WaitAction) Run(s *State) error {
 	if err != nil {
 		return err
 	}
-	lookupDiscoverdURLHost(u, waitMax)
+	lookupDiscoverdURLHost(s, u, waitMax)
 
 	start := time.Now()
 	for {
@@ -78,9 +76,13 @@ func (a *WaitAction) Run(s *State) error {
 	}
 }
 
-func lookupDiscoverdURLHost(u *url.URL, timeout time.Duration) error {
+func lookupDiscoverdURLHost(s *State, u *url.URL, timeout time.Duration) error {
 	if strings.HasSuffix(u.Host, ".discoverd") {
-		instances, err := discoverd.GetInstances(strings.Split(u.Host, ".")[0], timeout)
+		d, err := s.DiscoverdClient()
+		if err != nil {
+			return err
+		}
+		instances, err := d.Instances(strings.Split(u.Host, ".")[0], timeout)
 		if err != nil {
 			return err
 		}
