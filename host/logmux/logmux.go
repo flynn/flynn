@@ -546,11 +546,12 @@ func (m *Mux) streamWithHistory(appID, jobID string, follow bool, ch chan<- *rfc
 	go func() {
 		defer close(unsubscribeFn)
 		for i, name := range logs[appID] {
-			func() {
+			if err := func() (err error) {
 				l := l.New("log", name)
 				f, err := os.Open(name)
 				if err != nil {
 					l.Error("error reading log", "error", err)
+					return err
 				}
 				defer f.Close()
 				sc := bufio.NewScanner(f)
@@ -565,18 +566,17 @@ func (m *Mux) streamWithHistory(appID, jobID string, follow bool, ch chan<- *rfc
 					msg, cursor, err := utils.ParseMessage(msgCopy)
 					if err != nil {
 						l.Error("error parsing log message", "error", err)
-						continue
+						return err
 					}
 					select {
 					case msgs <- message{cursor, msg}:
 					case <-s.StopCh:
-						return
+						return nil
 					}
 				}
 				if err := sc.Err(); err != nil {
 					l.Error("error scanning log message", "error", err)
-					s.Error = err
-					close(ch)
+					return err
 				}
 				if follow && !eof && i == len(logs[appID])-1 {
 					// got EOF on last file, subscribe to stream
@@ -585,10 +585,15 @@ func (m *Mux) streamWithHistory(appID, jobID string, follow bool, ch chan<- *rfc
 					// read to end of file again
 					goto scan
 				}
-			}()
-			if !follow {
+				return nil
+			}(); err != nil {
 				close(msgs)
+				s.Error = err
+				return
 			}
+		}
+		if !follow {
+			close(msgs)
 		}
 	}()
 
