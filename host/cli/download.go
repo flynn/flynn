@@ -53,16 +53,17 @@ func runDownload(args *docopt.Args) error {
 		args.String["--repository"],
 		args.String["--driver"],
 		args.String["--root"],
+		version.String(),
 		pinkerton.InfoPrinter(false),
 	); err != nil {
 		return err
 	}
 
-	if _, err := downloader.DownloadConfig(client, args.String["--config-dir"]); err != nil {
+	d := downloader.New(client, version.String())
+	if _, err := d.DownloadConfig(args.String["--config-dir"]); err != nil {
 		return err
 	}
-
-	if _, err := downloader.DownloadBinaries(client, args.String["--bin-dir"]); err != nil {
+	if _, err := d.DownloadBinaries(args.String["--bin-dir"]); err != nil {
 		return err
 	}
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 
 	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
@@ -23,16 +24,26 @@ var config = []string{
 	"bootstrap-manifest.json",
 }
 
-// DownloadBinaries downloads the Flynn binaries from the tuf client to the
-// given dir with the version from custom metadata suffixed (e.g.
-// /usr/local/bin/flynn-host.v20150726.0) and updates non-versioned symlinks.
-func DownloadBinaries(client *tuf.Client, dir string) (map[string]string, error) {
+// Downloader downloads versioned files using a tuf client
+type Downloader struct {
+	client  *tuf.Client
+	version string
+}
+
+func New(client *tuf.Client, version string) *Downloader {
+	return &Downloader{client, version}
+}
+
+// DownloadBinaries downloads the Flynn binaries using the tuf client to the
+// given dir with the version suffixed (e.g. /usr/local/bin/flynn-host.v20150726.0)
+// and updates non-versioned symlinks.
+func (d *Downloader) DownloadBinaries(dir string) (map[string]string, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("error creating bin dir: %s", err)
 	}
 	paths := make(map[string]string, len(binaries))
 	for _, bin := range binaries {
-		path, err := downloadGzippedFile(client, "/"+bin, dir, true)
+		path, err := d.downloadGzippedFile(bin, dir, true)
 		if err != nil {
 			return nil, err
 		}
@@ -48,15 +59,15 @@ func DownloadBinaries(client *tuf.Client, dir string) (map[string]string, error)
 	return paths, nil
 }
 
-// DownloadConfig downloads the Flynn config files from the tuf client to the
+// DownloadConfig downloads the Flynn config files using the tuf client to the
 // given dir.
-func DownloadConfig(client *tuf.Client, dir string) (map[string]string, error) {
+func (d *Downloader) DownloadConfig(dir string) (map[string]string, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("error creating config dir: %s", err)
 	}
 	paths := make(map[string]string, len(config))
 	for _, conf := range config {
-		path, err := downloadGzippedFile(client, "/"+conf, dir, false)
+		path, err := d.downloadGzippedFile(conf, dir, false)
 		if err != nil {
 			return nil, err
 		}
@@ -65,24 +76,21 @@ func DownloadConfig(client *tuf.Client, dir string) (map[string]string, error) {
 	return paths, nil
 }
 
-func downloadGzippedFile(client *tuf.Client, path, dir string, versionSuffix bool) (string, error) {
+func (d *Downloader) downloadGzippedFile(name, dir string, versionSuffix bool) (string, error) {
+	path := path.Join(d.version, name)
 	gzPath := path + ".gz"
-	dst := filepath.Join(dir, path)
+	dst := filepath.Join(dir, name)
 	if versionSuffix {
-		version, err := tufutil.GetVersion(client, gzPath)
-		if err != nil {
-			return "", err
-		}
-		dst = dst + "." + version
+		dst = dst + "." + d.version
 	}
 
-	file, err := tufutil.Download(client, gzPath)
+	file, err := tufutil.Download(d.client, gzPath)
 	if err != nil {
 		return "", err
 	}
 	defer file.Close()
 
-	// unlink the destination file in case it is in use
+	// unlink the destination file in case it's in use
 	os.Remove(dst)
 
 	out, err := os.Create(dst)
@@ -103,7 +111,7 @@ func downloadGzippedFile(client *tuf.Client, path, dir string, versionSuffix boo
 	if versionSuffix {
 		// symlink the non-versioned path to the versioned path
 		// e.g. flynn-host -> flynn-host.v20150726.0
-		link := filepath.Join(dir, path)
+		link := filepath.Join(dir, name)
 		if err := symlink(filepath.Base(dst), link); err != nil {
 			return "", err
 		}

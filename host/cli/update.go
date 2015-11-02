@@ -20,6 +20,7 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/tufutil"
+	"github.com/flynn/flynn/pkg/version"
 )
 
 func init() {
@@ -114,6 +115,7 @@ func runUpdate(args *docopt.Args) error {
 			args.String["--repository"],
 			args.String["--driver"],
 			args.String["--root"],
+			version.String(),
 			bytes.NewReader(tufDB),
 			ch,
 		)
@@ -149,6 +151,7 @@ func runUpdate(args *docopt.Args) error {
 			args.String["--repository"],
 			args.String["--bin-dir"],
 			args.String["--config-dir"],
+			version.String(),
 			bytes.NewReader(tufDB),
 		)
 		if err != nil {

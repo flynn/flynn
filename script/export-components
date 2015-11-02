@@ -33,15 +33,26 @@ main() {
   if [[ -z "${version}" ]]; then
     fail "unable to determine version"
   fi
+  info "exporting components with version ${version}"
 
   cd "${tuf_dir}"
   tuf clean
-  cp "${ROOT}/host/bin/flynn-host.gz"                      "staged/targets/flynn-host.gz"
-  gzip -9 --stdout "${ROOT}/host/bin/flynn-init"         > "staged/targets/flynn-init.gz"
-  gzip -9 --stdout "${ROOT}/host/bin/flynn-nsumount"     > "staged/targets/flynn-nsumount.gz"
-  gzip -9 --stdout "${ROOT}/host/upstart.conf"           > "staged/targets/upstart.conf.gz"
-  gzip -9 --stdout "${ROOT}/bootstrap/bin/manifest.json" > "staged/targets/bootstrap-manifest.json.gz"
-  gzip -9 --stdout "${ROOT}/version.json"                > "staged/targets/version.json.gz"
+
+  # add the flynn-host binary at the top level so it can be found by the
+  # install script and acts as the latest version during an update
+  cp "${ROOT}/host/bin/flynn-host.gz" "staged/targets/flynn-host.gz"
+
+  # add binaries and config in a versioned directory so that flynn-host
+  # can download them using a specific version
+  mkdir -p "staged/targets/${version}"
+  cp "${ROOT}/host/bin/flynn-host.gz"                      "staged/targets/${version}/flynn-host.gz"
+  gzip -9 --stdout "${ROOT}/cli/bin/flynn-linux-amd64"   > "staged/targets/${version}/flynn-linux-amd64.gz"
+  gzip -9 --stdout "${ROOT}/host/bin/flynn-init"         > "staged/targets/${version}/flynn-init.gz"
+  gzip -9 --stdout "${ROOT}/host/bin/flynn-nsumount"     > "staged/targets/${version}/flynn-nsumount.gz"
+  gzip -9 --stdout "${ROOT}/host/upstart.conf"           > "staged/targets/${version}/upstart.conf.gz"
+  gzip -9 --stdout "${ROOT}/bootstrap/bin/manifest.json" > "staged/targets/${version}/bootstrap-manifest.json.gz"
+  gzip -9 --stdout "${ROOT}/version.json"                > "staged/targets/${version}/version.json.gz"
+
   for f in ${ROOT}/cli/bin/flynn-{linux-amd64,linux-386,darwin-amd64,freebsd-amd64,windows-amd64,windows-386}; do
     local name="$(basename "${f}").gz"
     gzip -9 --stdout "${f}" > "staged/targets/${name}"

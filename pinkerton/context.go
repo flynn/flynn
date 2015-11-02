@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 
@@ -168,7 +169,7 @@ func ImageID(s string) (string, error) {
 	return id, nil
 }
 
-func PullImages(tufDB, repository, driver, root string, progress chan<- layer.PullInfo) error {
+func PullImages(tufDB, repository, driver, root, ver string, progress chan<- layer.PullInfo) error {
 	local, err := tuf.FileLocalStore(tufDB)
 	if err != nil {
 		return err
@@ -180,11 +181,12 @@ func PullImages(tufDB, repository, driver, root string, progress chan<- layer.Pu
 	if err != nil {
 		return err
 	}
-	return PullImagesWithClient(tuf.NewClient(local, remote), repository, driver, root, progress)
+	return PullImagesWithClient(tuf.NewClient(local, remote), repository, driver, root, ver, progress)
 }
 
-func PullImagesWithClient(client *tuf.Client, repository, driver, root string, progress chan<- layer.PullInfo) error {
-	tmp, err := tufutil.Download(client, "/version.json.gz")
+func PullImagesWithClient(client *tuf.Client, repository, driver, root, version string, progress chan<- layer.PullInfo) error {
+	path := filepath.Join(version, "version.json.gz")
+	tmp, err := tufutil.Download(client, path)
 	if err != nil {
 		return err
 	}
