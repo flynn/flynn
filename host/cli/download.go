@@ -7,6 +7,7 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/host/downloader"
 	"github.com/flynn/flynn/pinkerton"
 	"github.com/flynn/flynn/pkg/version"
@@ -32,22 +33,28 @@ func runDownload(args *docopt.Args) error {
 		return fmt.Errorf("error creating root dir: %s", err)
 	}
 
+	log := log15.New()
+
 	// create a TUF client and update it
+	log.Info("initializing TUF client")
 	tufDB := args.String["--tuf-db"]
 	local, err := tuf.FileLocalStore(tufDB)
 	if err != nil {
+		log.Error("error creating local TUF client", "err", err)
 		return err
 	}
 	remote, err := tuf.HTTPRemoteStore(args.String["--repository"], tufHTTPOpts("downloader"))
 	if err != nil {
+		log.Error("error creating remote TUF client", "err", err)
 		return err
 	}
 	client := tuf.NewClient(local, remote)
 	if err := updateTUFClient(client); err != nil {
+		log.Error("error updating TUF client", "err", err)
 		return err
 	}
 
-	// pull images from the TUF repo
+	log.Info("downloading images")
 	if err := pinkerton.PullImagesWithClient(
 		client,
 		args.String["--repository"],
@@ -60,13 +67,18 @@ func runDownload(args *docopt.Args) error {
 	}
 
 	d := downloader.New(client, version.String())
+	log.Info(fmt.Sprintf("downloading config to %s", args.String["--config-dir"]))
 	if _, err := d.DownloadConfig(args.String["--config-dir"]); err != nil {
+		log.Error("error downloading config", "err", err)
 		return err
 	}
+	log.Info(fmt.Sprintf("downloading binaries to %s", args.String["--bin-dir"]))
 	if _, err := d.DownloadBinaries(args.String["--bin-dir"]); err != nil {
+		log.Error("error downloading binaries", "err", err)
 		return err
 	}
 
+	log.Info("download complete")
 	return nil
 }
 
