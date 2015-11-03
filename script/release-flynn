@@ -108,6 +108,12 @@ main() {
 
     exit 0
   fi
+
+  info "checking status of commit ${commit}"
+  if ! "${ROOT}/util/release/flynn-release" status ${commit}; then
+    fail "commit has not passed CI"
+  fi
+
   info "starting release of commit ${commit}"
 
   info "getting flynn release manifest"
