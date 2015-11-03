@@ -23,3 +23,14 @@ metadata_expires_before() {
 
   return 1
 }
+
+check_tuf_keys() {
+  local tuf_dir=$1
+
+  info "checking TUF signing keys"
+  for role in "targets" "snapshot" "timestamp"; do
+    if [[ ! -s "${tuf_dir}/keys/${role}.json" ]]; then
+      fail "the TUF repo is missing the ${role} signing key"
+    fi
+  done
+}

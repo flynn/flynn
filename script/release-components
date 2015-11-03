@@ -92,12 +92,7 @@ main() {
   tuf_dir="${tuf_dir:="/etc/flynn/tuf"}"
   info "using base dir: ${dir}"
 
-  info "checking TUF signing keys"
-  for role in "targets" "snapshot" "timestamp"; do
-    if [[ ! -s "${tuf_dir}/keys/${role}.json" ]]; then
-      fail "the TUF repo is missing the ${role} signing key"
-    fi
-  done
+  check_tuf_keys "${tuf_dir}"
 
   export GOPATH="${dir}"
   local src="${GOPATH}/src/github.com/flynn/flynn"
@@ -129,6 +124,13 @@ main() {
 
   info "adding components to the TUF repository"
   "${src}/script/export-components" "${tuf_dir}"
+
+  "${src}/script/release-channel" \
+    --bucket "${bucket}" \
+    --tuf-dir "${tuf_dir}" \
+    --no-sync \
+    "nightly" \
+    "${version}"
 
   info "uploading files to S3"
   mkdir -p "${dir}/upload"

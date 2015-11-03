@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"sync"
 	"syscall"
 
@@ -58,7 +59,7 @@ func runUpdate(args *docopt.Args) error {
 	client := tuf.NewClient(local, remote)
 
 	if !args.Bool["--is-latest"] {
-		return updateAndExecLatest(client, log)
+		return updateAndExecLatest(args.String["--config-dir"], client, log)
 	}
 
 	// unlink the current binary if it is a temp file
@@ -232,15 +233,20 @@ func runUpdate(args *docopt.Args) error {
 // Latest snapshot errors are ignored because, even though we may have the
 // latest snapshot, the cluster may not be fully up to date (a previous update
 // may have failed).
-func updateAndExecLatest(client *tuf.Client, log log15.Logger) error {
+func updateAndExecLatest(configDir string, client *tuf.Client, log log15.Logger) error {
 	log.Info("updating TUF data")
 	if _, err := client.Update(); err != nil && !tuf.IsLatestSnapshot(err) {
 		log.Error("error updating TUF client", "err", err)
 		return err
 	}
 
-	log.Info("downloading latest flynn-host binary")
-	gzTmp, err := tufutil.Download(client, "/flynn-host.gz")
+	version, err := getChannelVersion(configDir, client, log)
+	if err != nil {
+		return err
+	}
+
+	log.Info(fmt.Sprintf("downloading %s flynn-host binary", version))
+	gzTmp, err := tufutil.Download(client, path.Join(version, "flynn-host.gz"))
 	if err != nil {
 		log.Error("error downloading latest flynn-host binary", "err", err)
 		return err

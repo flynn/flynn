@@ -38,8 +38,7 @@ main() {
   cd "${tuf_dir}"
   tuf clean
 
-  # add the flynn-host binary at the top level so it can be found by the
-  # install script and acts as the latest version during an update
+  # add the flynn-host binary at the top level so it can be found by the install script
   cp "${ROOT}/host/bin/flynn-host.gz" "staged/targets/flynn-host.gz"
 
   # add binaries and config in a versioned directory so that flynn-host
