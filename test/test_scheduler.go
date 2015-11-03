@@ -361,6 +361,10 @@ func (s *SchedulerSuite) TestDeployController(t *c.C) {
 	release, err := client.GetAppRelease(app.ID)
 	t.Assert(err, c.IsNil)
 
+	// get the current controller formation
+	formation, err := client.GetFormation(app.ID, release.ID)
+	t.Assert(err, c.IsNil)
+
 	// create a controller deployment
 	release.ID = ""
 	t.Assert(client.CreateRelease(release), c.IsNil)
@@ -419,8 +423,8 @@ loop:
 		}
 	}
 	expected := map[string]map[string]int{release.ID: {
-		"web":       2,
-		"worker":    2,
+		"web":       formation.Processes["web"],
+		"worker":    formation.Processes["worker"],
 		"scheduler": len(hosts),
 	}}
 	t.Assert(actual, c.DeepEquals, expected)
