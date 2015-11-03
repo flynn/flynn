@@ -25,9 +25,14 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
       "Default": "{{.DefaultInstanceType}}",
       "Description": "EC2 instance type"
     },
-    "VolumeSize": {
+    "BootVolumeSize": {
       "Type": "String",
-      "Description": "Size of instance volumes in GB",
+      "Description": "Size of boot volume in GB",
+      "Default": "50"
+    },
+    "DataVolumeSize": {
+      "Type": "String",
+      "Description": "Size of data volume in GB",
       "Default": "50"
     },
     "UserData": {
@@ -190,7 +195,14 @@ var stackTemplate = template.Must(template.New("stack_template.json").Parse(`
           {
             "DeviceName": "/dev/sda1",
             "Ebs": {
-              "VolumeSize": { "Ref" : "VolumeSize" },
+              "VolumeSize": { "Ref" : "BootVolumeSize" },
+              "VolumeType": "gp2"
+            }
+          },
+          {
+            "DeviceName": "/dev/sdb",
+            "Ebs": {
+              "VolumeSize": { "Ref" : "DataVolumeSize" },
               "VolumeType": "gp2"
             }
           }

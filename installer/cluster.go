@@ -520,10 +520,10 @@ func (c *BaseCluster) genIPTablesConfigScript() (string, error) {
 	return buf.String(), err
 }
 
-func (c *BaseCluster) genStartScript(nodes int64) (string, string, error) {
-	var data struct {
-		DiscoveryToken string
-	}
+func (c *BaseCluster) genStartScript(nodes int64, dataDisk string) (string, string, error) {
+	data := struct {
+		DiscoveryToken, DataDisk string
+	}{DataDisk: dataDisk}
 	var err error
 	data.DiscoveryToken, err = discovery.NewToken()
 	if err != nil {
@@ -554,6 +554,10 @@ iptables -A FORWARD -i eth0 -j DROP
 
 var startScript = template.Must(template.New("start.sh").Parse(`
 #!/bin/sh
+
+{{if .DataDisk}}
+zpool create -f flynn-default {{.DataDisk}}
+{{end}}
 
 # wait for libvirt
 while ! [ -e /var/run/libvirt/libvirt-sock ]; do

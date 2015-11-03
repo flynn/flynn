@@ -16,7 +16,7 @@ func (c *BareCluster) InstallFlynn() error {
 	c.Base.SendLog("Installing flynn")
 
 	var err error
-	c.startScript, c.Base.DiscoveryToken, err = c.Base.genStartScript(c.Base.NumInstances)
+	c.startScript, c.Base.DiscoveryToken, err = c.Base.genStartScript(c.Base.NumInstances, "")
 	if err != nil {
 		return err
 	}
