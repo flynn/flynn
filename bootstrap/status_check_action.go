@@ -39,7 +39,7 @@ func (a *StatusCheckAction) Run(s *State) error {
 	if err != nil {
 		return err
 	}
-	lookupDiscoverdURLHost(u, waitMax)
+	lookupDiscoverdURLHost(s, u, waitMax)
 
 	start := time.Now()
 	for {

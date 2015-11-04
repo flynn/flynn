@@ -11,8 +11,6 @@ import (
 	"os"
 	"path"
 	"strconv"
-	"syscall"
-	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cheggaaa/pb"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
@@ -66,43 +64,16 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 		defer f.Close()
 		dest = f
 	}
-	tw := tar.NewWriter(dest)
-	defer tw.Close()
-
-	uid := syscall.Getuid()
-	header := func(name string, length int) error {
-		return tw.WriteHeader(&tar.Header{
-			Name:     path.Join(mustApp(), name),
-			Mode:     0644,
-			Size:     int64(length),
-			ModTime:  time.Now(),
-			Typeflag: tar.TypeReg,
-			Uid:      uid,
-			Gid:      uid,
-		})
-	}
-	writeJSON := func(name string, v interface{}) error {
-		data, err := json.MarshalIndent(v, "", "  ")
-		if err != nil {
-			return err
-		}
-		if err := header(name, len(data)+1); err != nil {
-			return err
-		}
-		if _, err := tw.Write(data); err != nil {
-			return err
-		}
-		if _, err := tw.Write([]byte("\n")); err != nil {
-			return err
-		}
-		return nil
-	}
 
 	app, err := client.GetApp(mustApp())
 	if err != nil {
 		return fmt.Errorf("error getting app: %s", err)
 	}
-	if err := writeJSON("app.json", app); err != nil {
+
+	tw := NewTarWriter(app.Name, dest)
+	defer tw.Close()
+
+	if err := tw.WriteJSON("app.json", app); err != nil {
 		return fmt.Errorf("error exporting app: %s", err)
 	}
 
@@ -110,7 +81,7 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 	if err != nil {
 		return fmt.Errorf("error getting routes: %s", err)
 	}
-	if err := writeJSON("routes.json", routes); err != nil {
+	if err := tw.WriteJSON("routes.json", routes); err != nil {
 		return fmt.Errorf("error exporting routes: %s", err)
 	}
 
@@ -118,7 +89,7 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 	if err != nil && err != controller.ErrNotFound {
 		return fmt.Errorf("error retrieving app: %s", err)
 	} else if err == nil {
-		if err := writeJSON("release.json", release); err != nil {
+		if err := tw.WriteJSON("release.json", release); err != nil {
 			return fmt.Errorf("error exporting release: %s", err)
 		}
 	}
@@ -127,7 +98,7 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 	if err != nil && err != controller.ErrNotFound {
 		return fmt.Errorf("error retrieving artifact: %s", err)
 	} else if err == nil {
-		if err := writeJSON("artifact.json", artifact); err != nil {
+		if err := tw.WriteJSON("artifact.json", artifact); err != nil {
 			return fmt.Errorf("error exporting artifact: %s", err)
 		}
 	}
@@ -136,7 +107,7 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 	if err != nil && err != controller.ErrNotFound {
 		return fmt.Errorf("error retrieving formation: %s", err)
 	} else if err == nil {
-		if err := writeJSON("formation.json", formation); err != nil {
+		if err := tw.WriteJSON("formation.json", formation); err != nil {
 			return fmt.Errorf("error exporting formation: %s", err)
 		}
 	}
@@ -183,7 +154,7 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 			return fmt.Errorf("slug has missing or malformed Content-Length")
 		}
 
-		if err := header("slug.tar.gz", length); err != nil {
+		if err := tw.WriteHeader("slug.tar.gz", length); err != nil {
 			return fmt.Errorf("error writing slug header: %s", err)
 		}
 		if _, err := io.Copy(tw, res.Body); err != nil {
@@ -193,34 +164,9 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 	}
 
 	if config, err := getAppPgRunConfig(client); err == nil {
-		f, err := ioutil.TempFile("", "postgres.dump")
-		if err != nil {
-			return fmt.Errorf("error creating db temp file: %s", err)
-		}
-		defer f.Close()
-		defer os.Remove(f.Name())
-		config.Stdout = f
-		config.Exit = false
-
-		if bar != nil {
-			config.Stdout = io.MultiWriter(config.Stdout, bar)
-		}
-		if err := pgDump(client, config); err != nil {
-			return fmt.Errorf("error dumping database: %s", err)
-		}
-
-		length, err := f.Seek(0, os.SEEK_CUR)
-		if err != nil {
-			return fmt.Errorf("error getting db size: %s", err)
-		}
-		if err := header("postgres.dump", int(length)); err != nil {
-			return fmt.Errorf("error writing db header: %s", err)
-		}
-		if _, err := f.Seek(0, os.SEEK_SET); err != nil {
-			return fmt.Errorf("error seeking db dump: %s", err)
-		}
-		if _, err := io.Copy(tw, f); err != nil {
-			return fmt.Errorf("error exporting db: %s", err)
+		configPgDump(config)
+		if err := tw.WriteCommandOutput(client, "postgres.dump", config, bar); err != nil {
+			return fmt.Errorf("error creating postgres dump: %s", err)
 		}
 	}
 

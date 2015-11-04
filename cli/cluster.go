@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cheggaaa/pb"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
@@ -23,22 +26,45 @@ usage: flynn cluster
        flynn cluster remove <cluster-name>
        flynn cluster default [<cluster-name>]
        flynn cluster migrate-domain <domain>
+       flynn cluster backup [--file <file>]
 
-Manage clusters in the ~/.flynnrc configuration file.
+Manage Flynn clusters.
 
-Options:
-	-f, --force               force add cluster
-	-d, --default             set as default cluster
-	-g, --git-host=<githost>  git host (legacy SSH only)
-	--git-url=<giturl>        git URL
-	-p, --tls-pin=<tlspin>    SHA256 of the cluster's TLS cert (useful if it is self-signed)
 
 Commands:
-	With no arguments, shows a list of clusters.
+    With no arguments, shows a list of configured clusters.
 
-	add      adds a cluster to the ~/.flynnrc configuration file
-	remove   removes a cluster from the ~/.flynnrc configuration file
-	default  set or print the default cluster
+    add
+        Adds <cluster-name> to the ~/.flynnrc configuration file.
+
+        options:
+            -f, --force               force add cluster
+            -d, --default             set as default cluster
+            -g, --git-host=<githost>  git host (legacy SSH only)
+            --git-url=<giturl>        git URL
+            -p, --tls-pin=<tlspin>    SHA256 of the cluster's TLS cert
+
+    remove
+        Removes <cluster-name> from the ~/.flynnrc configuration file.
+
+    default
+        With no arguments, prints the default cluster. With <cluster-name>, sets
+        the default cluster.
+
+    migrate-domain
+        Migrates the cluster's base domain from the current one to <domain>.
+
+        New certificates will be generated for the controller/dashboard and new
+        routes will be added with the pattern <app-name>.<domain> for each app.
+
+    backup
+        Takes a backup of the cluster.
+
+        The backup may be restored while creating a new cluster with
+        'flynn-host bootstrap --from-backup'.
+
+        options:
+            --file=<backup-file>  file to write backup to (defaults to stdout)
 
 Examples:
 
@@ -65,6 +91,8 @@ func runCluster(args *docopt.Args) error {
 		return runClusterDefault(args)
 	} else if args.Bool["migrate-domain"] {
 		return runClusterMigrateDomain(args)
+	} else if args.Bool["backup"] {
+		return runClusterBackup(args)
 	}
 
 	w := tabWriter()
@@ -267,4 +295,89 @@ func runClusterMigrateDomain(args *docopt.Args) error {
 			return errors.New("timed out waiting for domain migration to complete")
 		}
 	}
+}
+
+func runClusterBackup(args *docopt.Args) error {
+	client, err := getClusterClient()
+	if err != nil {
+		return err
+	}
+
+	var bar *pb.ProgressBar
+	if term.IsTerminal(os.Stderr.Fd()) {
+		bar = pb.New(0)
+		bar.SetUnits(pb.U_BYTES)
+		bar.ShowBar = false
+		bar.ShowSpeed = true
+		bar.Output = os.Stderr
+		bar.Start()
+	}
+
+	var dest io.Writer = os.Stdout
+	if filename := args.String["--file"]; filename != "" {
+		f, err := os.Create(filename)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		dest = f
+	}
+
+	fmt.Fprintln(os.Stderr, "Creating cluster backup...")
+
+	tw := NewTarWriter("flynn-backup-"+time.Now().UTC().Format("2006-01-02_150405"), dest)
+	defer tw.Close()
+
+	// get app and release details for key apps
+	data := make(map[string]*ct.ExpandedFormation, 4)
+	for _, name := range []string{"postgres", "discoverd", "flannel", "controller"} {
+		app, err := client.GetApp(name)
+		if err != nil {
+			return fmt.Errorf("error getting %s app details: %s", name, err)
+		}
+		release, err := client.GetAppRelease(app.ID)
+		if err != nil {
+			return fmt.Errorf("error getting %s app release: %s", name, err)
+		}
+		formation, err := client.GetFormation(app.ID, release.ID)
+		if err != nil {
+			return fmt.Errorf("error getting %s app formation: %s", name, err)
+		}
+		artifact, err := client.GetArtifact(release.ArtifactID)
+		if err != nil {
+			return fmt.Errorf("error getting %s app artifact: %s", name, err)
+		}
+		data[name] = &ct.ExpandedFormation{
+			App:       app,
+			Release:   release,
+			Artifact:  artifact,
+			Processes: formation.Processes,
+		}
+	}
+	if err := tw.WriteJSON("flynn.json", data); err != nil {
+		return err
+	}
+
+	config := &runConfig{
+		App:        "postgres",
+		Release:    data["postgres"].Release.ID,
+		Entrypoint: []string{"sh"},
+		Args:       []string{"-c", "pg_dumpall --clean --if-exists | gzip -9"},
+		Env: map[string]string{
+			"PGHOST":     "leader.postgres.discoverd",
+			"PGUSER":     "flynn",
+			"PGPASSWORD": data["postgres"].Release.Env["PGPASSWORD"],
+		},
+		DisableLog: true,
+	}
+	if err := tw.WriteCommandOutput(client, "postgres.sql.gz", config, bar); err != nil {
+		return fmt.Errorf("error dumping database: %s", err)
+	}
+
+	if bar != nil {
+		bar.Finish()
+	}
+	fmt.Fprintln(os.Stderr, "Backup complete.")
+
+	return nil
 }

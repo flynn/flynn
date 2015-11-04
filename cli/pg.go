@@ -122,9 +122,13 @@ func runPgDump(args *docopt.Args, client *controller.Client, config *runConfig) 
 	return pgDump(client, config)
 }
 
-func pgDump(client *controller.Client, config *runConfig) error {
+func configPgDump(config *runConfig) {
 	config.Entrypoint = []string{"pg_dump"}
 	config.Args = []string{"--format=custom", "--no-owner", "--no-acl"}
+}
+
+func pgDump(client *controller.Client, config *runConfig) error {
+	configPgDump(config)
 	return runJob(client, *config)
 }
 

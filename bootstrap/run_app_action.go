@@ -85,7 +85,7 @@ func (a *RunAppAction) Run(s *State) error {
 		if err != nil {
 			return err
 		}
-		lookupDiscoverdURLHost(u, time.Second)
+		lookupDiscoverdURLHost(s, u, time.Second)
 		res, err := resource.Provision(u.String(), nil)
 		if err != nil {
 			return err

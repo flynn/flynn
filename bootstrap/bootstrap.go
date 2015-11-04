@@ -100,13 +100,13 @@ func Register(name string, action Action) {
 	registeredActions[name] = reflect.Indirect(reflect.ValueOf(action)).Type()
 }
 
-type StepAction struct {
+type StepMeta struct {
 	ID     string `json:"id"`
 	Action string `json:"action"`
 }
 
 type StepInfo struct {
-	StepAction
+	StepMeta
 	StepData  interface{} `json:"data,omitempty"`
 	State     string      `json:"state"`
 	Error     string      `json:"error,omitempty"`
@@ -120,25 +120,26 @@ var discoverdAttempts = attempt.Strategy{
 	Delay: 200 * time.Millisecond,
 }
 
-func Run(manifest []byte, ch chan<- *StepInfo, clusterURL string, ips []string, minHosts int, timeout int) (err error) {
-	var a StepAction
-	defer close(ch)
+type Step struct {
+	StepMeta
+	Action
+}
+
+type Manifest []Step
+
+func (m Manifest) Run(ch chan<- *StepInfo, clusterURL string, ips []string, minHosts, timeout int) (state *State, err error) {
+	var meta StepMeta
 	defer func() {
 		if err != nil {
-			ch <- &StepInfo{StepAction: a, State: "error", Error: err.Error(), Err: err, Timestamp: time.Now().UTC()}
+			ch <- &StepInfo{StepMeta: meta, State: "error", Error: err.Error(), Err: err, Timestamp: time.Now().UTC()}
 		}
 	}()
 
 	if minHosts == 2 {
-		return errors.New("the minimum number of hosts for a multi-node cluster is 3, min-hosts=2 is invalid")
+		return nil, errors.New("the minimum number of hosts for a multi-node cluster is 3, min-hosts=2 is invalid")
 	}
 
-	steps := make([]json.RawMessage, 0)
-	if err := json.Unmarshal(manifest, &steps); err != nil {
-		return err
-	}
-
-	state := &State{
+	state = &State{
 		StepData:   make(map[string]interface{}),
 		Providers:  make(map[string]*ct.Provider),
 		Singleton:  minHosts == 1,
@@ -156,40 +157,58 @@ func Run(manifest []byte, ch chan<- *StepInfo, clusterURL string, ips []string, 
 		}
 	}
 
-	a = StepAction{ID: "online-hosts", Action: "check"}
-	ch <- &StepInfo{StepAction: a, State: "start", Timestamp: time.Now().UTC()}
+	meta = StepMeta{ID: "online-hosts", Action: "check"}
+	ch <- &StepInfo{StepMeta: meta, State: "start", Timestamp: time.Now().UTC()}
 	if err := checkOnlineHosts(minHosts, state, hostURLs, timeout); err != nil {
-		return err
+		return nil, err
 	}
+	ch <- &StepInfo{StepMeta: meta, State: "done", Timestamp: time.Now().UTC()}
 
-	for _, s := range steps {
-		if err := json.Unmarshal(s, &a); err != nil {
-			return err
-		}
-		actionType, ok := registeredActions[a.Action]
-		if !ok {
-			return fmt.Errorf("bootstrap: unknown action %q", a.Action)
-		}
-		action := reflect.New(actionType).Interface().(Action)
+	for _, s := range m {
+		meta = s.StepMeta
+		ch <- &StepInfo{StepMeta: meta, State: "start", Timestamp: time.Now().UTC()}
 
-		if err := json.Unmarshal(s, action); err != nil {
-			return err
+		if err := s.Run(state); err != nil {
+			return nil, err
 		}
 
-		ch <- &StepInfo{StepAction: a, State: "start", Timestamp: time.Now().UTC()}
-
-		if err := action.Run(state); err != nil {
-			return err
-		}
-
-		si := &StepInfo{StepAction: a, State: "done", Timestamp: time.Now().UTC()}
-		if data, ok := state.StepData[a.ID]; ok {
+		si := &StepInfo{StepMeta: meta, State: "done", Timestamp: time.Now().UTC()}
+		if data, ok := state.StepData[meta.ID]; ok {
 			si.StepData = data
 		}
 		ch <- si
 	}
 
-	return nil
+	return state, nil
+}
+
+func Run(manifestData []byte, ch chan<- *StepInfo, clusterURL string, ips []string, minHosts, timeout int) error {
+	defer close(ch)
+	var manifest Manifest
+	var steps []json.RawMessage
+	if err := json.Unmarshal(manifestData, &steps); err != nil {
+		return err
+	}
+
+	for _, s := range steps {
+		var step Step
+		if err := json.Unmarshal(s, &step.StepMeta); err != nil {
+			return err
+		}
+		actionType, ok := registeredActions[step.StepMeta.Action]
+		if !ok {
+			return fmt.Errorf("bootstrap: unknown action %q", step.StepMeta.Action)
+		}
+		step.Action = reflect.New(actionType).Interface().(Action)
+
+		if err := json.Unmarshal(s, &step.Action); err != nil {
+			return err
+		}
+		manifest = append(manifest, step)
+	}
+
+	_, err := manifest.Run(ch, clusterURL, ips, minHosts, timeout)
+	return err
 }
 
 var onlineHostAttempts = attempt.Strategy{

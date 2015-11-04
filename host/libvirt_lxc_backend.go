@@ -1077,10 +1077,7 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 		if w == nil {
 			continue
 		}
-		if _, err := w.Write(msg.Msg); err != nil {
-			return nil
-		}
-		if _, err := w.Write([]byte{'\n'}); err != nil {
+		if _, err := w.Write(append(msg.Msg, '\n')); err != nil {
 			return nil
 		}
 	}
