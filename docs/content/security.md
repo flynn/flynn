@@ -25,7 +25,7 @@ properties of Flynn are.
 All binaries that we provide including `flynn-host`, the `flynn` CLI tool, and
 container images are distributed securely using the [The Update
 Framework](http://theupdateframework.com). TUF includes a robust, role-based
-signature system and protects against may attacks including downgrades and CDN
+signature system and protects against many attacks including downgrades and CDN
 compromise. In addition to TUF, we serve all content exclusively over HTTPS.
 
 Our Vagrant virtual machine images are served over HTTPS but are not currently
