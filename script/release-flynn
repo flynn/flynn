@@ -116,12 +116,6 @@ main() {
 
   info "starting release of commit ${commit}"
 
-  info "getting flynn release manifest"
-  local manifest="$(s3cmd --no-progress get "s3://${bucket}/release/manifest.json" - 2>/dev/null)"
-  if [[ -z "${manifest}" ]]; then
-    manifest="$(new_release_manifest)"
-  fi
-
   info "getting previous release tag"
   local previous=$(git tag --list "v*" --sort "v:refname" | tail -n 1)
 
@@ -148,16 +142,6 @@ main() {
     -d "${domain}" \
     -r "${dir}" \
     "${version}"
-
-  info "updating flynn release manifest"
-  "${ROOT}/util/release/flynn-release" version \
-    "${version}" \
-    "${commit}" \
-    <<< "${manifest}" \
-    > "${dir}/manifest.json"
-
-  info "uploading flynn release manifest"
-  s3cmd put --acl-public --no-preserve "${dir}/manifest.json" "s3://${bucket}/release/manifest.json"
 
   info "successfully released Flynn version ${version}"
 

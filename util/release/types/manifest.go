@@ -2,7 +2,6 @@ package release
 
 import (
 	"bytes"
-	"errors"
 	"sort"
 )
 
@@ -76,43 +75,6 @@ type EC2Image struct {
 	RootDeviceSnapshotID string `json:"root_device_snapshot_id"`
 	VirtualizationType   string `json:"virtualization_type"`
 	Hypervisor           string `json:"hypervisor"`
-}
-
-type FlynnManifest struct {
-	Current  *FlynnVersion   `json:"current"`
-	Versions []*FlynnVersion `json:"versions"`
-}
-
-// Add adds a version to the manifest.
-//
-// If the version is already in the manifest, an error is returned.
-//
-// The number of versions in the manifest is capped at the value of maxVersions.
-func (m *FlynnManifest) Add(version, commit string) error {
-	versions := make(sortVersions, 0, len(m.Versions)+1)
-	for _, v := range m.Versions {
-		if v.version() == version {
-			return errors.New("version already in manifest")
-		}
-		versions = append(versions, v)
-	}
-	versions = append(versions, &FlynnVersion{Version: version, Commit: commit})
-	sort.Sort(sort.Reverse(versions))
-	m.Versions = make([]*FlynnVersion, 0, maxVersions)
-	for i := 0; i < len(versions) && i < maxVersions; i++ {
-		m.Versions = append(m.Versions, versions[i].(*FlynnVersion))
-	}
-	m.Current = m.Versions[0]
-	return nil
-}
-
-type FlynnVersion struct {
-	Version string `json:"version"`
-	Commit  string `json:"commit"`
-}
-
-func (v *FlynnVersion) version() string {
-	return v.Version
 }
 
 type Versioner interface {

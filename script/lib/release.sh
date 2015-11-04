@@ -1,10 +1,5 @@
 # Release helpers
 
-# new_release_manifest returns an empty release manifest.
-new_release_manifest() {
-    echo '{"versions":[]}'
-}
-
 # next_release_version takes the previous release version
 # and returns the next one
 next_release_version() {

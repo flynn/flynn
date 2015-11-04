@@ -9,12 +9,6 @@ date() {
   echo "${DATE}"
 }
 
-@test "next_release_version with empty manifest" {
-  run next_release_version <<< "$(new_release_manifest)"
-  assert_success
-  assert_output "${DATE}.0"
-}
-
 @test "next_release_version with previous date in tag" {
   run next_release_version "20150101.0"
 
