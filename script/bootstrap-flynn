@@ -65,7 +65,6 @@ main() {
     exit 1
   fi
 
-  export CLUSTER_DOMAIN="${domain}"
 
   # kill flynn first
   "${ROOT}/script/kill-flynn"
@@ -85,9 +84,10 @@ main() {
     export FLANNEL_BACKEND="alloc"
 
     for index in $(seq 0 $((size - 1))); do
-      # An RFC 5737 TEST-NET-2 IP
-      local external_ip="198.51.100.$(($index + 1))"
+      # An RFC 5737 TEST-NET IP
+      local external_ip="192.0.2.20$(($index))"
       local listen_ip="${external_ip}"
+      domain="${size}.localflynn.com"
 
       info "starting flynn-host using IP ${external_ip}"
       sudo ifconfig "eth0:${index}" "${external_ip}"
@@ -96,6 +96,7 @@ main() {
   fi
 
   info "bootstrapping Flynn"
+  export CLUSTER_DOMAIN="${domain}"
   export DISCOVERD="${ips[0]}:1111"
   "${host_dir}/bin/flynn-host" \
     bootstrap \
