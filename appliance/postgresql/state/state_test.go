@@ -81,7 +81,7 @@ func node(n int, index uint64) *discoverd.Instance {
 	inst := &discoverd.Instance{
 		Addr:  fmt.Sprintf("10.0.0.%d:5432", n),
 		Proto: "tcp",
-		Meta:  map[string]string{"name": fmt.Sprintf("node%d", n)},
+		Meta:  map[string]string{"POSTGRES_ID": fmt.Sprintf("node%d", n)},
 		Index: index,
 	}
 	inst.ID = md5sum(inst.Proto + "-" + inst.Addr)
@@ -93,7 +93,7 @@ func md5sum(data string) string {
 	return hex.EncodeToString(digest[:])
 }
 
-var node1ID = node(1, 1).ID
+const node1ID = "node1"
 
 var pgOffline = &simulator.PostgresInfo{
 	Online: false,

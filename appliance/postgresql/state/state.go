@@ -197,6 +197,7 @@ type PeerInfo struct {
 
 type Peer struct {
 	// Configuration
+	id        string
 	self      *discoverd.Instance
 	singleton bool
 
@@ -227,8 +228,9 @@ type Peer struct {
 	closeOnce sync.Once
 }
 
-func NewPeer(self *discoverd.Instance, singleton bool, d Discoverd, pg Postgres, log log15.Logger) *Peer {
+func NewPeer(self *discoverd.Instance, id string, singleton bool, d Discoverd, pg Postgres, log log15.Logger) *Peer {
 	p := &Peer{
+		id:          id,
 		self:        self,
 		singleton:   singleton,
 		postgres:    pg,
@@ -238,7 +240,7 @@ func NewPeer(self *discoverd.Instance, singleton bool, d Discoverd, pg Postgres,
 		applyConfCh: make(chan struct{}, 1),
 		stopCh:      make(chan struct{}),
 	}
-	p.info.Store(&PeerInfo{ID: self.ID})
+	p.info.Store(&PeerInfo{ID: id})
 	return p
 }
 
@@ -482,9 +484,9 @@ func (p *Peer) evalClusterState() {
 	if info := p.Info(); info.State == nil {
 		log.Debug("no cluster state",
 			"peers", len(info.Peers),
-			"self", p.self.ID,
+			"self", p.id,
 			"singleton", p.singleton,
-			"leader", len(info.Peers) > 0 && info.Peers[0].ID == p.self.ID,
+			"leader", len(info.Peers) > 0 && info.Peers[0].Meta["POSTGRES_ID"] == p.id,
 		)
 
 		if len(info.Peers) == 0 {
@@ -492,7 +494,7 @@ func (p *Peer) evalClusterState() {
 		}
 
 		if !p.pgSetup &&
-			info.Peers[0].ID == p.self.ID &&
+			info.Peers[0].Meta["POSTGRES_ID"] == p.id &&
 			(p.singleton || len(info.Peers) > 1) {
 			p.startInitialSetup()
 		} else if info.Role != RoleUnassigned {
@@ -517,7 +519,7 @@ func (p *Peer) evalClusterState() {
 		p.generation = p.Info().State.Generation
 
 		if p.Info().Role == RolePrimary {
-			if p.Info().State.Primary.ID != p.self.ID {
+			if p.Info().State.Primary.Meta["POSTGRES_ID"] != p.id {
 				p.assumeDeposed()
 			}
 		} else {
@@ -542,8 +544,8 @@ func (p *Peer) evalClusterState() {
 		} else {
 			upstream := p.upstream(whichAsync)
 			downstream := p.downstream(whichAsync)
-			if upstream.ID != p.pgUpstream.ID ||
-				downstream != nil && (p.pgDownstream == nil || downstream.ID != p.pgDownstream.ID) {
+			if upstream.Meta["POSTGRES_ID"] != p.pgUpstream.Meta["POSTGRES_ID"] ||
+				downstream != nil && (p.pgDownstream == nil || downstream.Meta["POSTGRES_ID"] != p.pgDownstream.Meta["POSTGRES_ID"]) {
 				p.assumeAsync(whichAsync)
 			}
 		}
@@ -556,7 +558,7 @@ func (p *Peer) evalClusterState() {
 	if p.Info().Role == RoleSync {
 		if !p.peerIsPresent(p.Info().State.Primary) {
 			p.startTakeover("primary gone", p.Info().State.InitWAL)
-		} else if len(p.Info().State.Async) > 0 && (p.pgDownstream == nil || p.pgDownstream.ID != p.Info().State.Async[0].ID) {
+		} else if len(p.Info().State.Async) > 0 && (p.pgDownstream == nil || p.pgDownstream.Meta["POSTGRES_ID"] != p.Info().State.Async[0].Meta["POSTGRES_ID"]) {
 			p.assumeSync()
 		}
 		return
@@ -566,6 +568,21 @@ func (p *Peer) evalClusterState() {
 		panic(fmt.Sprintf("unexpected role %v", p.Info().Role))
 	}
 
+	// write new state with updated discoverd instance ID if our discoverd
+	// instance has changed (new job with the same local instance ID saved in
+	// the data volume)
+	if p.Info().State.Primary.ID != p.self.ID && p.Info().State.Primary.Meta["POSTGRES_ID"] == p.id {
+		log.Info("role is primary, but discoverd id in state differs from self, updating")
+		p.updatingState = p.Info().State
+		p.updatingState.Primary = p.self
+		if err := p.putClusterState(); err != nil {
+			log.Error("failed to update cluster state", "err", err)
+		} else {
+			p.setState(p.updatingState)
+		}
+		p.updatingState = nil
+	}
+
 	if p.Info().State.Freeze != nil {
 		log.Info("cluster frozen, not making any changes")
 		return
@@ -573,8 +590,8 @@ func (p *Peer) evalClusterState() {
 
 	if !p.singleton && p.Info().State.Singleton {
 		log.Info("configured for normal mode but found cluster in singleton mode, transitioning cluster to normal mode")
-		if p.Info().State.Primary.ID != p.self.ID {
-			panic(fmt.Sprintf("unexpected cluster state, we should be the primary, but %s is", p.Info().State.Primary.ID))
+		if p.Info().State.Primary.Meta["POSTGRES_ID"] != p.id {
+			panic(fmt.Sprintf("unexpected cluster state, we should be the primary, but %s is", p.Info().State.Primary.Meta["POSTGRES_ID"]))
 		}
 		p.startTransitionToNormalMode()
 		return
@@ -601,32 +618,32 @@ func (p *Peer) evalClusterState() {
 	}
 
 	presentPeers := make(map[string]struct{}, len(p.Info().Peers))
-	presentPeers[p.Info().State.Primary.ID] = struct{}{}
-	presentPeers[p.Info().State.Sync.ID] = struct{}{}
+	presentPeers[p.Info().State.Primary.Meta["POSTGRES_ID"]] = struct{}{}
+	presentPeers[p.Info().State.Sync.Meta["POSTGRES_ID"]] = struct{}{}
 
 	newAsync := make([]*discoverd.Instance, 0, len(p.Info().Peers))
 	changes := false
 
 	for _, a := range p.Info().State.Async {
 		if p.peerIsPresent(a) {
-			presentPeers[a.ID] = struct{}{}
+			presentPeers[a.Meta["POSTGRES_ID"]] = struct{}{}
 			newAsync = append(newAsync, a)
 		} else {
-			log.Debug("peer missing", "async.id", a.ID, "async.addr", a.Addr)
+			log.Debug("peer missing", "async.id", a.Meta["POSTGRES_ID"], "async.addr", a.Addr)
 			changes = true
 		}
 	}
 
 	// Deposed peers should not be assigned as asyncs
 	for _, d := range p.Info().State.Deposed {
-		presentPeers[d.ID] = struct{}{}
+		presentPeers[d.Meta["POSTGRES_ID"]] = struct{}{}
 	}
 
 	for _, peer := range p.Info().Peers {
-		if _, ok := presentPeers[peer.ID]; ok {
+		if _, ok := presentPeers[peer.Meta["POSTGRES_ID"]]; ok {
 			continue
 		}
-		log.Debug("new peer", "async.id", peer.ID, "async.addr", peer.Addr)
+		log.Debug("new peer", "async.id", peer.Meta["POSTGRES_ID"], "async.addr", peer.Addr)
 		newAsync = append(newAsync, peer)
 		changes = true
 	}
@@ -745,7 +762,7 @@ func (p *Peer) assumeAsync(i int) {
 }
 
 func (p *Peer) evalInitClusterState() {
-	if p.Info().State.Primary.ID == p.self.ID {
+	if p.Info().State.Primary.Meta["POSTGRES_ID"] == p.id {
 		p.assumePrimary()
 		return
 	}
@@ -753,13 +770,13 @@ func (p *Peer) evalInitClusterState() {
 		p.assumeUnassigned()
 		return
 	}
-	if p.Info().State.Sync.ID == p.self.ID {
+	if p.Info().State.Sync.Meta["POSTGRES_ID"] == p.id {
 		p.assumeSync()
 		return
 	}
 
 	for _, d := range p.Info().State.Deposed {
-		if p.self.ID == d.ID {
+		if p.id == d.Meta["POSTGRES_ID"] {
 			p.assumeDeposed()
 			return
 		}
@@ -793,13 +810,13 @@ func (p *Peer) startTakeover(reason string, minWAL xlog.Position) bool {
 	log.Debug("preparing for new generation")
 	newAsync := make([]*discoverd.Instance, 0, len(p.Info().State.Async))
 	for _, a := range p.Info().State.Async {
-		if a.ID != newSync.ID && p.peerIsPresent(a) {
+		if a.Meta["POSTGRES_ID"] != newSync.Meta["POSTGRES_ID"] && p.peerIsPresent(a) {
 			newAsync = append(newAsync, a)
 		}
 	}
 
 	newDeposed := append(make([]*discoverd.Instance, 0, len(p.Info().State.Deposed)+1), p.Info().State.Deposed...)
-	if p.Info().State.Primary.ID != p.self.ID {
+	if p.Info().State.Primary.Meta["POSTGRES_ID"] != p.id {
 		newDeposed = append(newDeposed, p.Info().State.Primary)
 	}
 
@@ -828,7 +845,7 @@ func (p *Peer) startTakeoverWithPeer(reason string, minWAL xlog.Position, newSta
 	newState.Primary = p.self
 	p.updatingState = newState
 
-	if p.updatingState.Primary.ID != p.Info().State.Primary.ID && len(p.updatingState.Deposed) == 0 {
+	if p.updatingState.Primary.Meta["POSTGRES_ID"] != p.Info().State.Primary.Meta["POSTGRES_ID"] && len(p.updatingState.Deposed) == 0 {
 		panic("startTakeoverWithPeer without deposing old primary")
 	}
 
@@ -904,7 +921,7 @@ func (p *Peer) startTakeoverWithPeer(reason string, minWAL xlog.Position, newSta
 // mode.
 func (p *Peer) startTransitionToNormalMode() {
 	log := p.log.New("fn", "startTransitionToNormalMode")
-	if p.Info().State.Primary.ID != p.self.ID || p.Info().Role != RolePrimary {
+	if p.Info().State.Primary.Meta["POSTGRES_ID"] != p.id || p.Info().Role != RolePrimary {
 		panic("startTransitionToNormalMode called when not primary")
 	}
 
@@ -912,7 +929,7 @@ func (p *Peer) startTransitionToNormalMode() {
 	// any other peer because we know none of them has anything replicated.
 	var newSync *discoverd.Instance
 	for _, peer := range p.Info().Peers {
-		if peer.ID != p.self.ID {
+		if peer.Meta["POSTGRES_ID"] != p.id {
 			newSync = peer
 		}
 	}
@@ -922,7 +939,7 @@ func (p *Peer) startTransitionToNormalMode() {
 	}
 	newAsync := make([]*discoverd.Instance, 0, len(p.Info().Peers))
 	for _, a := range p.Info().Peers {
-		if a.ID != p.self.ID && a.ID != newSync.ID {
+		if a.Meta["POSTGRES_ID"] != p.id && a.Meta["POSTGRES_ID"] != newSync.Meta["POSTGRES_ID"] {
 			newAsync = append(newAsync, a)
 		}
 	}
@@ -1048,7 +1065,7 @@ func (p *Peer) pgConfig() *PgConfig {
 // Determine our index in the async peer list. -1 means not present.
 func (p *Peer) whichAsync() int {
 	for i, a := range p.Info().State.Async {
-		if p.self.ID == a.ID {
+		if p.id == a.Meta["POSTGRES_ID"] {
 			return i
 		}
 	}
@@ -1078,11 +1095,11 @@ func (p *Peer) peerIsPresent(other *discoverd.Instance) bool {
 	// We should never even be asking whether we're present. If we need to do
 	// this at some point in the future, we need to consider we should always
 	// consider ourselves present or whether we should check the list.
-	if other.ID == p.self.ID {
+	if other.Meta["POSTGRES_ID"] == p.id {
 		panic("peerIsPresent with self")
 	}
 	for _, p := range p.Info().Peers {
-		if p.ID == other.ID {
+		if p.Meta["POSTGRES_ID"] == other.Meta["POSTGRES_ID"] {
 			return true
 		}
 	}
