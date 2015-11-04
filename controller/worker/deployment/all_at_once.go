@@ -57,17 +57,18 @@ func (d *DeployJob) deployAllAtOnce() error {
 			expected[typ] = map[string]int{"down": existing}
 		}
 	}
-	if expected.Count() > 0 {
-		log := log.New("release_id", d.OldReleaseID)
-		log.Info("scaling old formation to zero")
-		if err := d.client.PutFormation(&ct.Formation{
-			AppID:     d.AppID,
-			ReleaseID: d.OldReleaseID,
-		}); err != nil {
-			log.Error("error scaling old formation to zero", "err", err)
-			return err
-		}
 
+	log = log.New("release_id", d.OldReleaseID)
+	log.Info("scaling old formation to zero")
+	if err := d.client.PutFormation(&ct.Formation{
+		AppID:     d.AppID,
+		ReleaseID: d.OldReleaseID,
+	}); err != nil {
+		log.Error("error scaling old formation to zero", "err", err)
+		return err
+	}
+
+	if expected.Count() > 0 {
 		log.Info("waiting for job events", "expected", expected)
 		if err := d.waitForJobEvents(d.OldReleaseID, expected, log); err != nil {
 			log.Error("error waiting for job events", "err", err)

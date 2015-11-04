@@ -92,14 +92,14 @@ func (d *DeployJob) deployOneByOne() error {
 	for typ, count := range oldScale {
 		diff[typ] = map[string]int{"down": count}
 	}
+	if err := d.client.PutFormation(&ct.Formation{
+		AppID:     d.AppID,
+		ReleaseID: d.OldReleaseID,
+	}); err != nil {
+		log.Error("error scaling old formation down to zero", "err", err)
+		return err
+	}
 	if diff.Count() > 0 {
-		if err := d.client.PutFormation(&ct.Formation{
-			AppID:     d.AppID,
-			ReleaseID: d.OldReleaseID,
-		}); err != nil {
-			log.Error("error scaling old formation down to zero", "err", err)
-			return err
-		}
 		log.Info(fmt.Sprintf("waiting for %d job down event(s)", diff.Count()))
 		if err := d.waitForJobEvents(d.OldReleaseID, diff, log); err != nil {
 			log.Error("error waiting for job down events", "err", err)
