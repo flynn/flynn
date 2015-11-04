@@ -1166,7 +1166,6 @@ func (l *LibvirtLXCBackend) UnmarshalState(jobs map[string]*host.ActiveJob, jobB
 		}
 		if err := <-readySignals[j.Job.ID]; err != nil {
 			// log error
-			l.state.RemoveJob(j.Job.ID)
 			container.cleanup()
 			continue
 		}
