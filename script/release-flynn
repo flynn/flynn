@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# A script to do a full release of Flynn (packages + VM images)
+# A script to do a nightly release of Flynn.
 #
 # PREREQUISITES:
 #
@@ -21,7 +21,7 @@ usage: $0 [options]
 
 OPTIONS:
   -h            Show this message
-  -b BUCKET     The S3 bucket to upload packages and vm images to [default: flynn]
+  -b BUCKET     The S3 bucket to upload packages to [default: flynn]
   -c COMMIT     The commit to build [default: the master branch of https://github.com/flynn/flynn.git]
   -d DOMAIN     The CloudFront domain [default: dl.flynn.io]
   -r DIR        Resume the release using DIR
@@ -133,14 +133,6 @@ main() {
     -r "${dir}" \
     -t "${tuf_dir}" \
     "${commit}" \
-    "${version}"
-
-  info "releasing vm images"
-  "${ROOT}/script/release-vm-images" \
-    -k \
-    -b "${bucket}" \
-    -d "${domain}" \
-    -r "${dir}" \
     "${version}"
 
   info "successfully released Flynn version ${version}"
