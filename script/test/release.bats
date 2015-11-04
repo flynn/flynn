@@ -9,29 +9,23 @@ date() {
   echo "${DATE}"
 }
 
-@test "next_release_version with empty manifest" {
-  run next_release_version <<< "$(new_release_manifest)"
-  assert_success
-  assert_output "${DATE}.0"
-}
-
 @test "next_release_version with previous date in tag" {
-  run next_release_version "20150101.0"
+  run next_release_version "v20150101.0"
 
   assert_success
-  assert_output "${DATE}.0"
+  assert_output "v${DATE}.0"
 }
 
 @test "next_release_version with today's date in tag" {
-  run next_release_version "${DATE}.0"
+  run next_release_version "v${DATE}.0"
 
   assert_success
-  assert_output "${DATE}.1"
+  assert_output "v${DATE}.1"
 }
 
 @test "next_release_version can handle 2 digit iterations" {
-  run next_release_version "${DATE}.9"
+  run next_release_version "v${DATE}.9"
 
   assert_success
-  assert_output "${DATE}.10"
+  assert_output "v${DATE}.10"
 }

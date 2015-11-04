@@ -25,6 +25,19 @@ func Download(client *tuf.Client, path string) (io.ReadCloser, error) {
 	return tmp, nil
 }
 
+func DownloadString(client *tuf.Client, path string) (string, error) {
+	rc, err := Download(client, path)
+	if err != nil {
+		return "", err
+	}
+	defer rc.Close()
+	data, err := ioutil.ReadAll(rc)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
 func NewTempFile() (*TempFile, error) {
 	file, err := ioutil.TempFile("", "flynn-tuf")
 	if err != nil {

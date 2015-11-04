@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# A script to do a full release of Flynn (packages + VM images)
+# A script to do a nightly release of Flynn.
 #
 # PREREQUISITES:
 #
@@ -21,7 +21,7 @@ usage: $0 [options]
 
 OPTIONS:
   -h            Show this message
-  -b BUCKET     The S3 bucket to upload packages and vm images to [default: flynn]
+  -b BUCKET     The S3 bucket to upload packages to [default: flynn]
   -c COMMIT     The commit to build [default: the master branch of https://github.com/flynn/flynn.git]
   -d DOMAIN     The CloudFront domain [default: dl.flynn.io]
   -r DIR        Resume the release using DIR
@@ -116,12 +116,6 @@ main() {
 
   info "starting release of commit ${commit}"
 
-  info "getting flynn release manifest"
-  local manifest="$(s3cmd --no-progress get "s3://${bucket}/release/manifest.json" - 2>/dev/null)"
-  if [[ -z "${manifest}" ]]; then
-    manifest="$(new_release_manifest)"
-  fi
-
   info "getting previous release tag"
   local previous=$(git tag --list "v*" --sort "v:refname" | tail -n 1)
 
@@ -140,24 +134,6 @@ main() {
     -t "${tuf_dir}" \
     "${commit}" \
     "${version}"
-
-  info "releasing vm images"
-  "${ROOT}/script/release-vm-images" \
-    -k \
-    -b "${bucket}" \
-    -d "${domain}" \
-    -r "${dir}" \
-    "${version}"
-
-  info "updating flynn release manifest"
-  "${ROOT}/util/release/flynn-release" version \
-    "${version}" \
-    "${commit}" \
-    <<< "${manifest}" \
-    > "${dir}/manifest.json"
-
-  info "uploading flynn release manifest"
-  s3cmd put --acl-public --no-preserve "${dir}/manifest.json" "s3://${bucket}/release/manifest.json"
 
   info "successfully released Flynn version ${version}"
 
@@ -183,11 +159,11 @@ tag_release() {
     --fail \
     --header "Content-Type: application/json" \
     --header "Authorization: token ${GITHUB_TOKEN}" \
-    --data "{\"ref\":\"refs/tags/v${version}\",\"sha\":\"${commit}\"}" \
+    --data "{\"ref\":\"refs/tags/${version}\",\"sha\":\"${commit}\"}" \
     "https://api.github.com/repos/flynn/flynn/git/refs"
 
   # create the tag locally
-  git tag --force "v${version}" "${commit}"
+  git tag --force "${version}" "${commit}"
 }
 
 main $@

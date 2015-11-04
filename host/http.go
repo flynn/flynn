@@ -191,6 +191,7 @@ func (h *jobAPI) PullImages(w http.ResponseWriter, r *http.Request, ps httproute
 		r.URL.Query().Get("repository"),
 		r.URL.Query().Get("driver"),
 		r.URL.Query().Get("root"),
+		r.URL.Query().Get("version"),
 		info,
 	); err != nil {
 		log.Error("error pulling images", "err", err)
@@ -233,9 +234,10 @@ func (h *jobAPI) PullBinariesAndConfig(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 	client := tuf.NewClient(local, remote)
+	d := downloader.New(client, query.Get("version"))
 
 	log.Info("downloading binaries")
-	paths, err := downloader.DownloadBinaries(client, query.Get("bin-dir"))
+	paths, err := d.DownloadBinaries(query.Get("bin-dir"))
 	if err != nil {
 		log.Error("error downloading binaries", "err", err)
 		httphelper.Error(w, err)
@@ -243,7 +245,7 @@ func (h *jobAPI) PullBinariesAndConfig(w http.ResponseWriter, r *http.Request, p
 	}
 
 	log.Info("downloading config")
-	configs, err := downloader.DownloadConfig(client, query.Get("config-dir"))
+	configs, err := d.DownloadConfig(query.Get("config-dir"))
 	if err != nil {
 		log.Error("error downloading config", "err", err)
 		httphelper.Error(w, err)

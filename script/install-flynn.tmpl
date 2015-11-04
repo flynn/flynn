@@ -3,6 +3,7 @@
 # A script to install Flynn from a TUF repository.
 
 FLYNN_HOST_CHECKSUM="${FLYNN_HOST_CHECKSUM:="{{FLYNN-HOST-CHECKSUM}}"}"
+FLYNN_UPDATE_CHANNEL="${FLYNN_UPDATE_CHANNEL:="stable"}"
 
 usage() {
   cat <<USAGE >&2
@@ -14,6 +15,9 @@ OPTIONS:
   --clean               Install from a clean state (implies --remove) [DANGER: this will remove all associated data]
   --remove              Remove existing Flynn installation [DANGER: this will remove all associated data]
   --yes                 Automatic yes to prompts
+
+VARIABLES:
+  FLYNN_UPDATE_CHANNEL   The release channel to fetch updates from (either "nightly" or "stable") [default: stable]
 USAGE
 }
 
@@ -124,6 +128,10 @@ main() {
   fi
   run gunzip "flynn-host.gz"
   run chmod +x "flynn-host"
+
+  info "setting release update channel to \"${FLYNN_UPDATE_CHANNEL}\""
+  mkdir -p "/etc/flynn"
+  echo "${FLYNN_UPDATE_CHANNEL}" > "/etc/flynn/channel.txt"
 
   info "downloading Flynn components"
   mkdir -p "/etc/flynn"

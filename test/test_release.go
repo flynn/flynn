@@ -64,6 +64,7 @@ src="${GOPATH}/src/github.com/flynn/flynn"
   popd >/dev/null
 
   "${src}/script/export-components" "${src}/test/release"
+  "${src}/script/release-channel" --tuf-dir "${src}/test/release" --no-sync "stable" "v20150131.0-test"
 
   dir=$(mktemp --directory)
   ln -s "${src}/test/release/repository" "${dir}/tuf"
@@ -94,6 +95,7 @@ var updateScript = template.Must(template.New("update-script").Parse(`
 timeout --signal=QUIT --kill-after=10 10m bash -ex <<-SCRIPT
 cd ~/go/src/github.com/flynn/flynn
 tuf --dir test/release root-keys | tuf-client init --store /tmp/tuf.db http://{{ .Blobstore }}/tuf
+echo stable | sudo tee /etc/flynn/channel.txt
 flynn-host update --repository http://{{ .Blobstore }}/tuf --tuf-db /tmp/tuf.db
 SCRIPT
 `))

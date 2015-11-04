@@ -1,0 +1,122 @@
+#!/bin/bash
+#
+# A script to update Flynn release channels.
+#
+# PREREQUISITES:
+#
+# - Install go-tuf
+#   go get github.com/flynn/go-tuf/cmd/tuf
+#
+# - Set the TUF passphrases
+#   export TUF_TARGETS_PASSPHRASE=xxxxxx
+#   export TUF_SNAPSHOT_PASSPHRASE=xxxxxx
+#   export TUF_TIMESTAMP_PASSPHRASE=xxxxxx
+
+set -eo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "${ROOT}/script/lib/ui.sh"
+source "${ROOT}/script/lib/aws.sh"
+source "${ROOT}/script/lib/tuf.sh"
+
+usage() {
+  cat <<USAGE >&2
+usage: $0 [options] CHANNEL VERSION
+
+OPTIONS:
+  -h, --help            Show this message
+  -b, --bucket BUCKET   The S3 bucket to sync with [default: flynn]
+  -d, --tuf-dir DIR     Path to the local TUF repository [default: /etc/flynn/tuf]
+  --no-sync             Don't sync files with S3
+USAGE
+}
+
+main() {
+  local bucket="flynn"
+  local tuf_dir="/etc/flynn/tuf"
+  local sync=true
+
+  while true; do
+    case "$1" in
+      -h | --help)
+        usage
+        exit 1
+        ;;
+      -b | --bucket)
+        if [[ -z "$2" ]]; then
+          usage
+          exit 1
+        fi
+        bucket="$2"
+        shift 2
+        ;;
+      -d | --tuf-dir)
+        if [[ -z "$2" ]]; then
+          usage
+          exit 1
+        fi
+        tuf_dir="$2"
+        shift 2
+        ;;
+      --no-sync)
+        sync=false
+        shift
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  if [[ $# -ne 2 ]]; then
+    usage
+    exit 1
+  fi
+
+  if [[ ! -d "${tuf_dir}" ]]; then
+    fail "TUF directory \"${tuf_dir}\" does not exist"
+  fi
+
+  check_tuf_keys "${tuf_dir}"
+
+  local channel=$1
+  local version=$2
+
+  info "setting the ${channel} release channel to ${version}"
+
+  if $sync; then
+    check_aws_keys
+    info "downloading existing TUF metadata"
+    download_tuf_metadata "${tuf_dir}" "${bucket}"
+  fi
+
+  info "checking version ${version} has been released"
+  if ! jq --exit-status ".signed.targets.\"/${version}/flynn-host.gz\"" "${tuf_dir}/repository/targets.json" &>/dev/null; then
+    fail "version ${version} has not been released"
+  fi
+
+  cd "${tuf_dir}"
+  tuf clean
+
+  info "staging updated channel file"
+  mkdir -p "staged/targets/channels"
+  echo "${version}" > "staged/targets/channels/${channel}"
+
+  info "committing TUF repository"
+  tuf add
+  tuf snapshot
+  tuf timestamp
+  tuf commit
+
+  if $sync; then
+    info "uploading files to S3"
+    local dir="$(mktemp --directory)"
+    mkdir -p "${dir}/upload"
+    ln -fs "${tuf_dir}/repository" "${dir}/upload/tuf"
+    sync_cloudfront "${dir}/upload/" "s3://${bucket}/"
+  fi
+
+  info "successfully set ${channel} release channel to ${version}"
+}
+
+main $@

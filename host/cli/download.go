@@ -2,13 +2,19 @@ package cli
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path"
+	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	tuf "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/client"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/host/downloader"
 	"github.com/flynn/flynn/pinkerton"
+	"github.com/flynn/flynn/pkg/tufutil"
 	"github.com/flynn/flynn/pkg/version"
 )
 
@@ -32,40 +38,61 @@ func runDownload(args *docopt.Args) error {
 		return fmt.Errorf("error creating root dir: %s", err)
 	}
 
+	log := log15.New()
+
 	// create a TUF client and update it
+	log.Info("initializing TUF client")
 	tufDB := args.String["--tuf-db"]
 	local, err := tuf.FileLocalStore(tufDB)
 	if err != nil {
+		log.Error("error creating local TUF client", "err", err)
 		return err
 	}
 	remote, err := tuf.HTTPRemoteStore(args.String["--repository"], tufHTTPOpts("downloader"))
 	if err != nil {
+		log.Error("error creating remote TUF client", "err", err)
 		return err
 	}
 	client := tuf.NewClient(local, remote)
 	if err := updateTUFClient(client); err != nil {
+		log.Error("error updating TUF client", "err", err)
 		return err
 	}
 
-	// pull images from the TUF repo
+	configDir := args.String["--config-dir"]
+	version, err := getChannelVersion(configDir, client, log)
+	if err != nil {
+		return err
+	}
+
+	log.Info("downloading images")
 	if err := pinkerton.PullImagesWithClient(
 		client,
 		args.String["--repository"],
 		args.String["--driver"],
 		args.String["--root"],
+		version,
 		pinkerton.InfoPrinter(false),
 	); err != nil {
 		return err
 	}
 
-	if _, err := downloader.DownloadConfig(client, args.String["--config-dir"]); err != nil {
+	d := downloader.New(client, version)
+
+	log.Info(fmt.Sprintf("downloading config to %s", configDir))
+	if _, err := d.DownloadConfig(configDir); err != nil {
+		log.Error("error downloading config", "err", err)
 		return err
 	}
 
-	if _, err := downloader.DownloadBinaries(client, args.String["--bin-dir"]); err != nil {
+	binDir := args.String["--bin-dir"]
+	log.Info(fmt.Sprintf("downloading binaries to %s", binDir))
+	if _, err := d.DownloadBinaries(binDir); err != nil {
+		log.Error("error downloading binaries", "err", err)
 		return err
 	}
 
+	log.Info("download complete")
 	return nil
 }
 
@@ -89,4 +116,27 @@ func updateTUFClient(client *tuf.Client) error {
 		return updateTUFClient(client)
 	}
 	return err
+}
+
+// getChannelVersion reads the locally configured release channel from
+// <configDir>/channel.txt then gets the latest version for that channel
+// using the TUF client.
+func getChannelVersion(configDir string, client *tuf.Client, log log15.Logger) (string, error) {
+	log.Info("getting configured release channel")
+	data, err := ioutil.ReadFile(filepath.Join(configDir, "channel.txt"))
+	if err != nil {
+		log.Error("error getting configured release channel", "err", err)
+		return "", err
+	}
+	channel := strings.TrimSpace(string(data))
+
+	log.Info(fmt.Sprintf("determining latest version of %s release channel", channel))
+	version, err := tufutil.DownloadString(client, path.Join("channels", channel))
+	if err != nil {
+		log.Error("error determining latest version", "err", err)
+		return "", err
+	}
+	version = strings.TrimSpace(version)
+	log.Info(fmt.Sprintf("latest %s version is %s", channel, version))
+	return version, nil
 }
