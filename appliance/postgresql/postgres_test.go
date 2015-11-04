@@ -63,9 +63,11 @@ func (PostgresSuite) TestSingletonPrimary(c *C) {
 }
 
 func instance(n int) *discoverd.Instance {
+	id := fmt.Sprintf("node%d", n)
 	return &discoverd.Instance{
-		ID:   fmt.Sprintf("node%d", n),
+		ID:   id,
 		Addr: fmt.Sprintf("127.0.0.1:5432%d", n),
+		Meta: map[string]string{"POSTGRES_ID": id},
 	}
 }
 
