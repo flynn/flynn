@@ -12,5 +12,5 @@ next_release_version() {
   else
     iteration=0
   fi
-  echo "${date}.${iteration}"
+  echo "v${date}.${iteration}"
 }

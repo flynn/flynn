@@ -159,11 +159,11 @@ tag_release() {
     --fail \
     --header "Content-Type: application/json" \
     --header "Authorization: token ${GITHUB_TOKEN}" \
-    --data "{\"ref\":\"refs/tags/v${version}\",\"sha\":\"${commit}\"}" \
+    --data "{\"ref\":\"refs/tags/${version}\",\"sha\":\"${commit}\"}" \
     "https://api.github.com/repos/flynn/flynn/git/refs"
 
   # create the tag locally
-  git tag --force "v${version}" "${commit}"
+  git tag --force "${version}" "${commit}"
 }
 
 main $@

@@ -91,7 +91,7 @@ main() {
   fi
 
   info "checking version ${version} has been released"
-  if ! jq --exit-status ".signed.targets.\"/v${version}/flynn-host.gz\"" "${tuf_dir}/repository/targets.json" &>/dev/null; then
+  if ! jq --exit-status ".signed.targets.\"/${version}/flynn-host.gz\"" "${tuf_dir}/repository/targets.json" &>/dev/null; then
     fail "version ${version} has not been released"
   fi
 
