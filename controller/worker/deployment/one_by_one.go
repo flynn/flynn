@@ -2,6 +2,7 @@ package deployment
 
 import (
 	"fmt"
+	"sort"
 
 	ct "github.com/flynn/flynn/controller/types"
 )
@@ -26,9 +27,16 @@ func (d *DeployJob) deployOneByOne() error {
 		}
 	}
 
+	processTypes := make([]string, 0, len(d.Processes))
+	for typ := range d.Processes {
+		processTypes = append(processTypes, typ)
+	}
+	sort.Sort(sort.StringSlice(processTypes))
+
 	olog := log.New("release_id", d.OldReleaseID)
 	nlog := log.New("release_id", d.NewReleaseID)
-	for typ, num := range d.Processes {
+	for _, typ := range processTypes {
+		num := d.Processes[typ]
 		diff := 1
 		if d.isOmni(typ) {
 			diff = d.hostCount
