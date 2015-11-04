@@ -1,100 +1,75 @@
-# Welcome to Flynn
+# Flynn is an open source Platform as a Service
 
-[Flynn](https://flynn.io) is a next generation open source Platform as a Service
-(PaaS).
+- Website: [https://flynn.io](https://flynn.io)
+- IRC: #flynn on Freenode
+- Mailing list: [flynn-users](https://groups.google.com/d/forum/flynn-users)
 
-Unlike most PaaS's, Flynn can run stateful services as well as [twelve-factor
-](http://12factor.net/) apps. This includes built-in database appliances (just
-Postgres to start). Flynn is modular so users can easily modify, upgrade, and
-replace components.
+Flynn is designed to run anything that can run on Linux, not just stateless web
+apps. Flynn includes built-in database appliances (just Postgres right now) and
+handles TCP traffic as well as HTTP and HTTPS.
 
-Flynn components are divided into two _layers_.
+Eventually we want Flynn to be the only tool developers and ops teams need to
+develop, deploy, and manage running software.
 
-**Layer 0** is a low-level resource framework inspired by the [Google
-Omega](http://eurosys2013.tudos.org/wp-content/uploads/2013/paper/Schwarzkopf.pdf)
-paper. Layer 0 also includes [service discovery](/discoverd).
+You can learn more about Flynn at [our website](https://flynn.io).
 
-**Layer 1** is a set of higher level components that makes it easy to deploy and
-maintain applications and databases.
+The Flynn website also has [documentation](https://flynn.io/docs) including
+[FAQs](https://flynn.io/docs/faq).
 
-You can learn more about the project at the [Flynn website](https://flynn.io).
+![Flynn logo](https://flynn.io/images/flynn-acaf9509.svg)
 
 ### Status
 
-Flynn is in active development.
+Flynn is very actively developed by [Prime Directive, Inc.](https://flynn.io)
+and the greater Flynn community.
 
-Users are encouraged to experiment with Flynn but should assume there are
-stability, security, and performance weaknesses throughout the project. This
-warning will be removed when Flynn is ready for production use.
+Learn more about Flynn's [stability](https://flynn.io/docs/stability).
 
-Please **report bugs** as issues on [this
-repository](https://github.com/flynn/flynn/issues) after searching to see if
-anyone has already reported the issue.
+Learn more about Flynn's [security](https://flynn.io/docs/security).
+
+We want to know if you run into any unexpected behavior. Please **report
+issues** on [this repository](https://github.com/flynn/flynn/issues) after
+searching to see if anyone has already reported the issue.
 
 ## Getting Started
 
 ### Run your own cluster
 
-If you want to setup and run your own Flynn cluster (either locally, on dedicated
-hardware or using a cloud provider) take a look at the
-[Installation Guide](https://flynn.io/docs/installation).
+Flynn includes an installer that supports most major cloud providers.
+
+If you want to setup and run your own Flynn cluster (either locally, on
+dedicated hardware or using a cloud provider) take a look at the [Installation
+Guide](https://flynn.io/docs/installation).
 
 ### Deploying applications
 
-Check out the [Using Flynn](https://flynn.io/docs) guide for
-instructions on deploying and scaling applications.
-
-## Components
-
-### Layer 0
-
-**[discoverd](/discoverd)** The Flynn service discovery system.
-
-**[host](/host)** The Flynn host service, manages containers on each host
-and provides the scheduling framework.
-
-### Layer 1
-
-**[blobstore](/blobstore)** A simple, fast HTTP file service.
-
-**[bootstrap](/bootstrap)** Bootstraps Flynn Layer 1 from a JSON manifest using
-the Layer 0 API.
-
-**[cli](/cli)** Command-line Flynn HTTP API client.
-
-**[controller](/controller)** Provides management and scheduling of applications
-running on Flynn via an HTTP API.
-
-**[gitreceive](/gitreceive)** An HTTP server made specifically for accepting and deploying git pushes.
-
-**[postgresql](/appliance/postgresql)** Flynn [PostgreSQL](http://www.postgresql.org/) database appliance.
-
-**[router](/router)** Flynn's TCP/HTTP router/load balancer.
-
-**[slugbuilder](/slugbuilder)** Turns a tarball into a Heroku-style "slug" using
-[buildpacks](https://devcenter.heroku.com/articles/buildpacks).
-
-**[slugrunner](/slugrunner)** Runs Heroku-like
-[slugs](https://devcenter.heroku.com/articles/slug-compiler).
-
-**[taffy](/taffy)** Taffy pulls git repos and deploys them to Flynn.
+Check out the [Using Flynn](https://flynn.io/docs) guide for instructions on
+deploying and scaling applications.
 
 ## Contributing
 
 We welcome and encourage community contributions to Flynn.
 
-Since the project is still unstable, there are specific priorities for
-development. Pull requests that do not address these priorities will not be
-accepted until Flynn is production ready.
+We have specific priorities for development. Pull requests that do not address
+these priorities may not be accepted.
 
 Please familiarize yourself with the [Contribution
-Guidelines](https://flynn.io/docs/contributing) before contributing.
+Guide](https://flynn.io/docs/contributing) before contributing.
 
 There are many ways to help Flynn besides contributing code:
 
- - Find bugs and file issues.
- - Improve the [documentation](https://flynn.io/docs) and website.
+- Find bugs and file issues.
+- Improve the [documentation](https://flynn.io/docs) and website.
 
 Learn more at [flynn.io](https://flynn.io).
 
-Flynn® is a [trademark](https://flynn.io/docs/trademark-guidelines) of Prime Directive, Inc.
+## Contact us
+
+We want to hear about any trouble, success, delight, or pain you experience when
+using Flynn. Let us know by [filing an
+issue](https://github.com/flynn/flynn/issues), joining the [mailing
+list](https://groups.google.com/d/forum/flynn-users), joining us in IRC (#flynn
+on Freenode), or [emailing](mailto:contact@flynn.io) us.
+
+Flynn® is a [trademark](https://flynn.io/docs/trademark-guidelines) of Prime
+Directive, Inc.
