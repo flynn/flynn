@@ -341,7 +341,7 @@ func (c *DigitalOceanCluster) configureDomain() error {
 func (c *DigitalOceanCluster) installFlynn() error {
 	c.base.SendLog("Installing flynn")
 
-	startScript, discoveryToken, err := c.base.genStartScript(c.base.NumInstances)
+	startScript, discoveryToken, err := c.base.genStartScript(c.base.NumInstances, "")
 	if err != nil {
 		return err
 	}

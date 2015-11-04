@@ -362,7 +362,7 @@ type stackTemplateData struct {
 
 func (c *AWSCluster) createStack() error {
 	c.base.SendLog("Generating start script")
-	startScript, discoveryToken, err := c.base.genStartScript(c.base.NumInstances)
+	startScript, discoveryToken, err := c.base.genStartScript(c.base.NumInstances, "/dev/xvdb")
 	if err != nil {
 		return err
 	}
