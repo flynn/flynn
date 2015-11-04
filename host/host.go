@@ -79,6 +79,7 @@ Commands:
   collect-debug-info         Collect debug information into an anonymous gist or tarball
   list                       Lists ID and IP of each host
   version                    Show current version
+  fix                        Fix a broken cluster
 
 See 'flynn-host help <command>' for more information on a specific command.
 `
