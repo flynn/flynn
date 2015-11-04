@@ -544,8 +544,8 @@ func (f *clusterFixer) getJob(jobID string) (*host.Job, *cluster.Host, error) {
 	return job.Job, host, nil
 }
 
-// findAppJobs returns a slice with one map of host id to job for each known
-// release of the given app and type, most recent first
+// findAppReleaseJobs returns a slice with one map of host id to job for each
+// known release of the given app and type, most recent first
 func (f *clusterFixer) findAppReleaseJobs(app, typ string) []map[string]*host.Job {
 	var sortReleases releasesByCreate
 	releases := make(map[string]map[string]*host.ActiveJob) // map of releaseID -> hostID -> job ordered
@@ -558,9 +558,6 @@ func (f *clusterFixer) findAppReleaseJobs(app, typ string) []map[string]*host.Jo
 		}
 		for _, j := range jobs {
 			if j.Job.Metadata["flynn-controller.app_name"] != app || j.Job.Metadata["flynn-controller.type"] != typ {
-				continue
-			}
-			if j.Status != host.StatusDone && j.Status != host.StatusCrashed {
 				continue
 			}
 			id := j.Job.Metadata["flynn-controller.release"]
