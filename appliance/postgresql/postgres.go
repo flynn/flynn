@@ -296,7 +296,7 @@ func (p *Postgres) reconfigure(config *state.PgConfig) (err error) {
 
 	// If we're already running and it's just a change from async to sync with the same node, we don't need to restart
 	if p.configApplied && p.running() && p.config() != nil && config != nil &&
-		p.config().Role == state.RoleAsync && config.Role == state.RoleSync && config.Upstream.ID == p.config().Upstream.ID {
+		p.config().Role == state.RoleAsync && config.Role == state.RoleSync && config.Upstream.Meta["POSTGRES_ID"] == p.config().Upstream.Meta["POSTGRES_ID"] {
 		log.Info("nothing to do", "reason", "becoming sync with same upstream")
 		return nil
 	}
@@ -440,7 +440,7 @@ func (p *Postgres) assumeStandby(upstream, downstream *discoverd.Instance) error
 			"--pgdata", p.dataDir,
 			"--dbname", fmt.Sprintf(
 				"host=%s port=%s user=flynn password=%s application_name=%s",
-				upstream.Host(), upstream.Port(), p.password, upstream.ID,
+				upstream.Host(), upstream.Port(), p.password, upstream.Meta["POSTGRES_ID"],
 			),
 			"--xlog-method=stream",
 			"--progress",
@@ -513,7 +513,7 @@ func (p *Postgres) updateSync(downstream *discoverd.Instance) error {
 
 	config := configData{
 		ReadOnly: true,
-		Sync:     downstream.ID,
+		Sync:     downstream.Meta["POSTGRES_ID"],
 	}
 
 	if err := p.writeConfig(config); err != nil {
@@ -659,7 +659,7 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance, enableWrites bool) {
 		lastFlushed := xlog.Zero
 		log := p.log.New(
 			"fn", "waitForSync",
-			"sync_name", inst.ID,
+			"sync_name", inst.Meta["POSTGRES_ID"],
 			"start_time", log15.Lazy{func() time.Time { return startTime }},
 			"last_flushed", log15.Lazy{func() xlog.Position { return lastFlushed }},
 		)
@@ -691,7 +691,7 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance, enableWrites bool) {
 				return
 			}
 
-			sent, flushed, err := p.checkReplStatus(inst.ID)
+			sent, flushed, err := p.checkReplStatus(inst.Meta["POSTGRES_ID"])
 			if err != nil {
 				// If we can't query the replication state, we just keep trying.
 				// We do not count this as part of the replication timeout.
@@ -735,7 +735,7 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance, enableWrites bool) {
 
 		if enableWrites {
 			// sync caught up, enable write transactions
-			if err := p.writeConfig(configData{Sync: inst.ID}); err != nil {
+			if err := p.writeConfig(configData{Sync: inst.Meta["POSTGRES_ID"]}); err != nil {
 				log.Error("error writing postgres.conf", "err", err)
 				return
 			}

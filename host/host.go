@@ -50,6 +50,7 @@ options:
   --discovery=TOKEN      join cluster with discovery token
   --peer-ips=IPLIST      join existing cluster using IPs
   --bridge-name=NAME     network bridge name [default: flynnbr0]
+  --no-resurrect         disable cluster resurrection
 	`)
 }
 
@@ -78,6 +79,7 @@ Commands:
   collect-debug-info         Collect debug information into an anonymous gist or tarball
   list                       Lists ID and IP of each host
   version                    Show current version
+  fix                        Fix a broken cluster
 
 See 'flynn-host help <command>' for more information on a specific command.
 `
@@ -431,7 +433,7 @@ func runDaemon(args *docopt.Args) {
 		log.Info("got cluster peer IPs", "peers", peerIPs)
 	}
 	log.Info("connecting to cluster peers")
-	if err := discoverdManager.ConnectPeer(peerIPs); err != nil {
+	if err := discoverdManager.ConnectPeer(peerIPs); err != nil && !args.Bool["--no-resurrect"] {
 		log.Info("no cluster peers available, resurrecting jobs")
 		resurrect()
 	}

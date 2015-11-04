@@ -117,7 +117,7 @@ func (s *Simulator) newPeerIdent(name string) *discoverd.Instance {
 	inst := &discoverd.Instance{
 		Addr:  fmt.Sprintf("10.0.0.%d:5432", s.nextPeer),
 		Proto: "tcp",
-		Meta:  map[string]string{"name": name},
+		Meta:  map[string]string{"POSTGRES_ID": name},
 	}
 	inst.ID = md5sum(inst.Proto + "-" + inst.Addr)
 	s.allIdents[name] = inst
@@ -135,7 +135,7 @@ func (s *Simulator) createSimPeer() *simPeer {
 	ident := s.newPeerIdent("")
 	dd := s.discoverd.NewClient(ident)
 	pg := s.postgres.NewClient(ident)
-	p := state.NewPeer(ident, s.singleton, dd, pg, s.log.New("component", "peer"))
+	p := state.NewPeer(ident, ident.Meta["POSTGRES_ID"], s.singleton, dd, pg, s.log.New("component", "peer"))
 	p.SetDebugChannels(s.restCh, s.retryCh)
 
 	return &simPeer{
@@ -271,20 +271,20 @@ func (s *Simulator) RmPeer(args []string) {
 	}
 	name := args[0]
 
-	if name != s.peer.Self.Meta["name"] {
+	if name != s.peer.Self.Meta["POSTGRES_ID"] {
 		s.discoverd.PeerRemoved(name)
 	}
 
 	cs := s.discoverd.ClusterState()
 	if cs.State != nil && cs.State.Primary.ID != s.peer.Self.ID {
 		for i, p := range cs.State.Async {
-			if p.Meta["name"] == name {
+			if p.Meta["POSTGRES_ID"] == name {
 				cs.State.Async = append(cs.State.Async[:i], cs.State.Async[i+1:]...)
 				s.discoverd.SetClusterState(cs)
 				break
 			}
 		}
-		if cs.State.Sync != nil && cs.State.Sync.Meta["name"] == name && len(cs.State.Async) > 0 {
+		if cs.State.Sync != nil && cs.State.Sync.Meta["POSTGRES_ID"] == name && len(cs.State.Async) > 0 {
 			cs.State.Generation++
 			cs.State.Sync = cs.State.Async[0]
 			cs.State.Async = cs.State.Async[1:]
@@ -321,9 +321,9 @@ func (s *Simulator) Bootstrap(args []string) {
 	if primaryName != "" {
 		for _, p := range peers {
 			switch {
-			case p.Meta["name"] == primaryName:
+			case p.Meta["POSTGRES_ID"] == primaryName:
 				cs.State.Primary = p
-			case syncName != "" && p.Meta["name"] == syncName:
+			case syncName != "" && p.Meta["POSTGRES_ID"] == syncName:
 				cs.State.Sync = p
 			case syncName == "" && cs.State.Sync == nil:
 				cs.State.Sync = p
@@ -343,7 +343,7 @@ func (s *Simulator) Bootstrap(args []string) {
 		cs.State.Primary = peers[0]
 		cs.State.Sync = peers[1]
 		cs.State.Async = peers[2:]
-		fmt.Fprintf(s.out, "selected %q as primary", cs.State.Primary.Meta["name"])
+		fmt.Fprintf(s.out, "selected %q as primary", cs.State.Primary.Meta["POSTGRES_ID"])
 	}
 
 	s.discoverd.SetClusterState(cs)
@@ -398,7 +398,7 @@ func (s *Simulator) Rebuild(args []string) {
 	cs.State = cs.State.Clone()
 	newDeposed := make([]*discoverd.Instance, 0, len(cs.State.Deposed))
 	for _, p := range cs.State.Deposed {
-		if p.Meta["name"] == name {
+		if p.Meta["POSTGRES_ID"] == name {
 			peer = p
 			continue
 		}
@@ -524,7 +524,7 @@ func (d *discoverdSimulator) PeerRemoved(name string) {
 
 	removed := false
 	for i, p := range d.peers {
-		if p.Meta["name"] == name {
+		if p.Meta["POSTGRES_ID"] == name {
 			d.peers = append(d.peers[:i], d.peers[i+1:]...)
 			removed = true
 			break
