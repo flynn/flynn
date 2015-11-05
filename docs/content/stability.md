@@ -1,6 +1,7 @@
 ---
 title: Stability
 layout: docs
+toc_min_level: 2
 ---
 
 # Stability

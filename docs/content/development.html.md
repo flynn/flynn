@@ -1,6 +1,7 @@
 ---
 title: Development
 layout: docs
+toc_min_level: 2
 ---
 
 # Development

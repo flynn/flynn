@@ -1,6 +1,7 @@
 ---
 title: Trademark Guidelines
 layout: docs
+toc_min_level: 2
 ---
 
 # Trademark Guidelines
