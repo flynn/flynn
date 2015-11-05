@@ -236,6 +236,7 @@ WHERE release_id = (SELECT release_id from apps WHERE name = '%s');`,
 	}
 
 	// start discoverd/flannel/postgres
+	cfg.Singleton = data.Postgres.Release.Env["SINGLETON"] == "true"
 	steps := bootstrap.Manifest{
 		step("discoverd", "run-app", &bootstrap.RunAppAction{
 			ExpandedFormation: data.Discoverd,
