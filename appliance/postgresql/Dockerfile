@@ -2,9 +2,12 @@ FROM ubuntu-debootstrap:14.04
 
 ENV DEBIAN_FRONTEND noninteractive
 
-RUN apt-get update &&\
-    apt-get dist-upgrade -y &&\
-    apt-get -qy --fix-missing --force-yes install language-pack-en &&\
+# Try to use the Hosts squid-deb-proxy and fall back if it's unreachable
+RUN (echo 'Acquire { Retries "0"; HTTP { Proxy "http://172.17.42.1:8000"; }; };' > /etc/apt/apt.conf.d/10_docker_hostproxy && apt-get update -qq 2>&1 | grep -q 'Unable to connect to 172.17.42.1:8000' && rm /etc/apt/apt.conf.d/10_docker_hostproxy) || true &&\
+    apt-get update &&\
+    apt-get dist-upgrade -y
+
+RUN apt-get -qy --fix-missing --force-yes install language-pack-en &&\
     update-locale LANG=en_US.UTF-8 LANGUAGE=en_US.UTF-8 LC_ALL=en_US.UTF-8 &&\
     dpkg-reconfigure locales &&\
     apt-get -y install curl sudo &&\
@@ -21,6 +24,7 @@ RUN apt-get update &&\
       postgresql-9.4-pgrouting &&\
     apt-get clean &&\
     apt-get autoremove -y &&\
+    rm /etc/apt/apt.conf.d/10_docker_hostproxy || true &&\
     echo "\set HISTFILE /dev/null" > /root/.psqlrc
 
 ADD bin/flynn-postgres /bin/flynn-postgres

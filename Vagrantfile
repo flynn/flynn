@@ -97,6 +97,13 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     sudo curl -sLo "/usr/local/bin/jq" "http://stedolan.github.io/jq/download/linux64/jq"
     sudo chmod +x "/usr/local/bin/jq"
 
+    # Install and configure squid-deb-proxy to speedup builds by caching deb packages
+    sudo apt-get update
+    sudo apt-get -y install squid-deb-proxy squid-deb-proxy-client
+    sudo sh -c 'echo "10.0.0.0/8\n172.16.0.0/12\n192.168.0.0/16" > /etc/squid-deb-proxy/allowed-networks-src.acl.d/20-private'
+    sudo sh -c 'echo "deb.nodesource.com\napt.postgresql.org\nppa.launchpad.net" > /etc/squid-deb-proxy/mirror-dstdomain.acl.d/20-flynndepsources'
+    sudo service squid-deb-proxy restart
+
     # For controller tests
     curl -s https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
     sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" >> /etc/apt/sources.list.d/postgresql.list'

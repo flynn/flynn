@@ -1,15 +1,18 @@
 FROM ubuntu-debootstrap:14.04
 
+ENV DEBIAN_FRONTEND noninteractive
+
 # Derived from https://github.com/heroku/stack-images/blob/master/Dockerfile
+
+# Try to use the Hosts squid-deb-proxy and fall back if it's unreachable
+RUN (echo 'Acquire { Retries "0"; HTTP { Proxy "http://172.17.42.1:8000"; }; };' > /etc/apt/apt.conf.d/10_docker_hostproxy && apt-get update -qq 2>&1 | grep -q 'Unable to connect to 172.17.42.1:8000' && rm /etc/apt/apt.conf.d/10_docker_hostproxy) || true &&\
+    apt-get update &&\
+    apt-get dist-upgrade -y
 
 RUN echo 'deb http://archive.ubuntu.com/ubuntu trusty main' >/etc/apt/sources.list &&\
     echo 'deb http://archive.ubuntu.com/ubuntu trusty-security main' >>/etc/apt/sources.list &&\
     echo 'deb http://archive.ubuntu.com/ubuntu trusty-updates main' >>/etc/apt/sources.list &&\
     echo 'deb http://archive.ubuntu.com/ubuntu trusty universe' >>/etc/apt/sources.list &&\
-
-    apt-get update &&\
-    apt-get dist-upgrade -y &&\
-
     apt-get install -y --force-yes \
       autoconf \
       bind9-host \
@@ -56,5 +59,6 @@ RUN echo 'deb http://archive.ubuntu.com/ubuntu trusty main' >/etc/apt/sources.li
       zip \
       zlib1g-dev \
       pigz &&\
+      rm /etc/apt/apt.conf.d/10_docker_hostproxy || true &&\
 
     rm /etc/ssh/ssh_host_*
