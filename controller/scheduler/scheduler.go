@@ -132,7 +132,8 @@ func (s *Scheduler) streamFormationEvents() error {
 		}
 		return
 	}
-	if err := connect(); err != nil {
+	strategy := attempt.Strategy{Delay: 100 * time.Millisecond, Total: time.Minute}
+	if err := strategy.Run(connect); err != nil {
 		return err
 	}
 
