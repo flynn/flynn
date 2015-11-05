@@ -125,9 +125,17 @@ type Step struct {
 	Action
 }
 
+type Config struct {
+	ClusterURL string
+	IPs        []string
+	MinHosts   int
+	Timeout    int
+	Singleton  bool
+}
+
 type Manifest []Step
 
-func (m Manifest) Run(ch chan<- *StepInfo, clusterURL string, ips []string, minHosts, timeout int) (state *State, err error) {
+func (m Manifest) Run(ch chan<- *StepInfo, cfg Config) (state *State, err error) {
 	var meta StepMeta
 	defer func() {
 		if err != nil {
@@ -135,31 +143,28 @@ func (m Manifest) Run(ch chan<- *StepInfo, clusterURL string, ips []string, minH
 		}
 	}()
 
-	if minHosts == 2 {
+	if cfg.MinHosts == 2 {
 		return nil, errors.New("the minimum number of hosts for a multi-node cluster is 3, min-hosts=2 is invalid")
 	}
 
 	state = &State{
 		StepData:   make(map[string]interface{}),
 		Providers:  make(map[string]*ct.Provider),
-		Singleton:  minHosts == 1,
-		MinHosts:   minHosts,
-		ClusterURL: clusterURL,
-	}
-	if s := os.Getenv("SINGLETON"); s != "" {
-		state.Singleton = s == "true"
+		Singleton:  cfg.Singleton,
+		MinHosts:   cfg.MinHosts,
+		ClusterURL: cfg.ClusterURL,
 	}
 	var hostURLs []string
-	if len(ips) > 0 {
-		hostURLs = make([]string, len(ips))
-		for i, ip := range ips {
+	if len(cfg.IPs) > 0 {
+		hostURLs = make([]string, len(cfg.IPs))
+		for i, ip := range cfg.IPs {
 			hostURLs[i] = fmt.Sprintf("http://%s:1113", ip)
 		}
 	}
 
 	meta = StepMeta{ID: "online-hosts", Action: "check"}
 	ch <- &StepInfo{StepMeta: meta, State: "start", Timestamp: time.Now().UTC()}
-	if err := checkOnlineHosts(minHosts, state, hostURLs, timeout); err != nil {
+	if err := checkOnlineHosts(cfg.MinHosts, state, hostURLs, cfg.Timeout); err != nil {
 		return nil, err
 	}
 	ch <- &StepInfo{StepMeta: meta, State: "done", Timestamp: time.Now().UTC()}
@@ -182,12 +187,17 @@ func (m Manifest) Run(ch chan<- *StepInfo, clusterURL string, ips []string, minH
 	return state, nil
 }
 
-func Run(manifestData []byte, ch chan<- *StepInfo, clusterURL string, ips []string, minHosts, timeout int) error {
+func Run(manifestData []byte, ch chan<- *StepInfo, cfg Config) error {
 	defer close(ch)
 	var manifest Manifest
 	var steps []json.RawMessage
 	if err := json.Unmarshal(manifestData, &steps); err != nil {
 		return err
+	}
+
+	cfg.Singleton = cfg.MinHosts == 1
+	if s := os.Getenv("SINGLETON"); s != "" {
+		cfg.Singleton = s == "true"
 	}
 
 	for _, s := range steps {
@@ -207,7 +217,7 @@ func Run(manifestData []byte, ch chan<- *StepInfo, clusterURL string, ips []stri
 		manifest = append(manifest, step)
 	}
 
-	_, err := manifest.Run(ch, clusterURL, ips, minHosts, timeout)
+	_, err := manifest.Run(ch, cfg)
 	return err
 }
 
