@@ -80,9 +80,12 @@ func (m Monitor) Run(check Check, ch chan MonitorEvent) stream.Stream {
 					t = time.NewTicker(m.Interval)
 				}
 				status = MonitorStatusUp
-				ch <- MonitorEvent{
+				select {
+				case ch <- MonitorEvent{
 					Status: status,
 					Check:  check,
+				}:
+				case <-stream.StopCh:
 				}
 			}
 		}
@@ -91,10 +94,13 @@ func (m Monitor) Run(check Check, ch chan MonitorEvent) stream.Stream {
 			downCount++
 			if status == MonitorStatusUp && downCount >= m.Threshold {
 				status = MonitorStatusDown
-				ch <- MonitorEvent{
+				select {
+				case ch <- MonitorEvent{
 					Status: status,
 					Err:    err,
 					Check:  check,
+				}:
+				case <-stream.StopCh:
 				}
 			}
 		}
