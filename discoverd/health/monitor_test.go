@@ -23,16 +23,21 @@ func (MonitorSuite) TestMonitor(c *C) {
 
 	checker := func(steps []step, threshold int) (chan MonitorEvent, chan MonitorEvent) {
 		var i int
+		var finished bool
 		done := make(chan struct{})
 		expectedEvents := make(chan MonitorEvent, 1)
 		actualEvents := make(chan MonitorEvent)
 
 		check := CheckFunc(func() error {
+			if finished {
+				return nil
+			}
 			defer func() {
 				if i >= len(steps) {
 					done <- struct{}{}
 					// ensure the stream has been closed before returning
 					<-done
+					finished = true
 				}
 			}()
 
