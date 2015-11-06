@@ -52,6 +52,7 @@ func runBootstrap(args *docopt.Args) error {
 	if args.Bool["--json"] {
 		logf = jsonLogger
 	}
+	var cfg bootstrap.Config
 
 	manifestFile := args.String["<manifest>"]
 	if manifestFile == "" {
@@ -64,28 +65,26 @@ func runBootstrap(args *docopt.Args) error {
 		return fmt.Errorf("Error reading manifest:", err)
 	}
 
-	var minHosts int
 	if n := args.String["--min-hosts"]; n != "" {
-		if minHosts, err = strconv.Atoi(n); err != nil || minHosts < 1 {
+		if cfg.MinHosts, err = strconv.Atoi(n); err != nil || cfg.MinHosts < 1 {
 			return fmt.Errorf("invalid --min-hosts value")
 		}
 	}
 
-	timeout, err := strconv.Atoi(args.String["--timeout"])
+	cfg.Timeout, err = strconv.Atoi(args.String["--timeout"])
 	if err != nil {
 		return fmt.Errorf("invalid --timeout value")
 	}
 
-	var ips []string
 	if ipList := args.String["--peer-ips"]; ipList != "" {
-		ips = strings.Split(ipList, ",")
-		if minHosts == 0 {
-			minHosts = len(ips)
+		cfg.IPs = strings.Split(ipList, ",")
+		if cfg.MinHosts == 0 {
+			cfg.MinHosts = len(cfg.IPs)
 		}
 	}
 
-	if minHosts == 0 {
-		minHosts = 1
+	if cfg.MinHosts == 0 {
+		cfg.MinHosts = 1
 	}
 
 	ch := make(chan *bootstrap.StepInfo)
@@ -97,18 +96,18 @@ func runBootstrap(args *docopt.Args) error {
 		close(done)
 	}()
 
-	clusterURL := args.String["--discovery"]
+	cfg.ClusterURL = args.String["--discovery"]
 	if bf := args.String["--from-backup"]; bf != "" {
-		err = runBootstrapBackup(manifest, bf, ch, clusterURL, ips, minHosts, timeout)
+		err = runBootstrapBackup(manifest, bf, ch, cfg)
 	} else {
-		err = bootstrap.Run(manifest, ch, clusterURL, ips, minHosts, timeout)
+		err = bootstrap.Run(manifest, ch, cfg)
 	}
 
 	<-done
 	return err
 }
 
-func runBootstrapBackup(manifest []byte, backupFile string, ch chan *bootstrap.StepInfo, clusterURL string, hostIPs []string, minHosts, timeout int) error {
+func runBootstrapBackup(manifest []byte, backupFile string, ch chan *bootstrap.StepInfo, cfg bootstrap.Config) error {
 	defer close(ch)
 	f, err := os.Open(backupFile)
 	if err != nil {
@@ -237,6 +236,7 @@ WHERE release_id = (SELECT release_id from apps WHERE name = '%s');`,
 	}
 
 	// start discoverd/flannel/postgres
+	cfg.Singleton = data.Postgres.Release.Env["SINGLETON"] == "true"
 	steps := bootstrap.Manifest{
 		step("discoverd", "run-app", &bootstrap.RunAppAction{
 			ExpandedFormation: data.Discoverd,
@@ -252,7 +252,7 @@ WHERE release_id = (SELECT release_id from apps WHERE name = '%s');`,
 			URL: "http://postgres-api.discoverd/ping",
 		}),
 	}
-	state, err := steps.Run(ch, clusterURL, hostIPs, minHosts, timeout)
+	state, err := steps.Run(ch, cfg)
 	if err != nil {
 		return err
 	}
