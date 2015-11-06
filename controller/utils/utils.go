@@ -28,6 +28,7 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string) *host.Job {
 	}
 	id := cluster.GenerateJobID(hostID)
 	env["FLYNN_APP_ID"] = f.App.ID
+	env["FLYNN_APP_NAME"] = f.App.Name
 	env["FLYNN_RELEASE_ID"] = f.Release.ID
 	env["FLYNN_PROCESS_TYPE"] = name
 	env["FLYNN_JOB_ID"] = id
