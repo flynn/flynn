@@ -25,7 +25,9 @@ func (CheckSuite) TestTCPSuccess(c *C) {
 
 	go func() {
 		conn, err := l.Accept()
-		if err != nil {
+		if err != nil && strings.Contains(err.Error(), "use of closed network connection") {
+			return
+		} else if err != nil {
 			panic(err)
 		}
 		conn.Close()
