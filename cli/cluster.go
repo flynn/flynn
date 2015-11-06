@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -22,7 +23,7 @@ import (
 func init() {
 	register("cluster", runCluster, `
 usage: flynn cluster
-       flynn cluster add [-f] [-d] [-g <githost>] [--git-url <giturl>] [-p <tlspin>] <cluster-name> <domain> <key>
+       flynn cluster add [-f] [-d] [-g <githost>] [--git-url <giturl>] [--no-git] [-p <tlspin>] <cluster-name> <domain> <key>
        flynn cluster remove <cluster-name>
        flynn cluster default [<cluster-name>]
        flynn cluster migrate-domain <domain>
@@ -42,6 +43,7 @@ Commands:
             -d, --default             set as default cluster
             -g, --git-host=<githost>  git host (legacy SSH only)
             --git-url=<giturl>        git URL
+            --no-git                  skip git configuration
             -p, --tls-pin=<tlspin>    SHA256 of the cluster's TLS cert
 
     remove
@@ -143,6 +145,14 @@ func runClusterAdd(args *docopt.Args) error {
 	}
 
 	if !s.SSHGit() {
+		if !args.Bool["--no-git"] {
+			if _, err := exec.LookPath("git"); err != nil {
+				if serr, ok := err.(*exec.Error); ok && serr.Err == exec.ErrNotFound {
+					return errors.New("Executable 'git' was not found. Use --no-git to skip git configuration")
+				}
+				return err
+			}
+		}
 		client, err := s.Client()
 		if err != nil {
 			return err
@@ -151,8 +161,10 @@ func runClusterAdd(args *docopt.Args) error {
 		if err != nil {
 			return fmt.Errorf("Error writing CA certificate: %s", err)
 		}
-		if err := cfg.WriteGlobalGitConfig(s.GitURL, caPath); err != nil {
-			return err
+		if !args.Bool["--no-git"] {
+			if err := cfg.WriteGlobalGitConfig(s.GitURL, caPath); err != nil {
+				return err
+			}
 		}
 	}
 
