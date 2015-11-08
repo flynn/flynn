@@ -30,7 +30,9 @@ Options:
   -c --config-dir=<dir>    config directory [default: /etc/flynn]
   -b --bin-dir=<dir>       binary directory [default: /usr/local/bin]
 
-Download container images and Flynn binaries from a TUF repository`)
+Download container images and Flynn binaries from a TUF repository.
+
+Set FLYNN_VERSION to download an explicit version.`)
 }
 
 func runDownload(args *docopt.Args) error {
@@ -60,10 +62,15 @@ func runDownload(args *docopt.Args) error {
 	}
 
 	configDir := args.String["--config-dir"]
-	version, err := getChannelVersion(configDir, client, log)
-	if err != nil {
-		return err
+
+	version := os.Getenv("FLYNN_VERSION")
+	if version == "" {
+		version, err = getChannelVersion(configDir, client, log)
+		if err != nil {
+			return err
+		}
 	}
+	log.Info(fmt.Sprintf("downloading components with version %s", version))
 
 	log.Info("downloading images")
 	if err := pinkerton.PullImagesWithClient(
