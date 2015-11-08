@@ -84,7 +84,7 @@ func RunDiscoverdServer(t TestingT, raftPort, httpPort string) (string, func()) 
 
 	// Ping server and wait for leadership.
 	if err := waitForLeader(t, "127.0.0.1:"+httpPort, 5*time.Second); err != nil {
-		t.Fatal("waiting for leader: %s", err)
+		t.Fatal("waiting for leader: ", err)
 	}
 
 	return "127.0.0.1:" + httpPort, func() {
