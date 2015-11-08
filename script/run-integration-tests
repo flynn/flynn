@@ -100,7 +100,7 @@ main() {
     args+=("--stream")
   fi
   if [[ "${size}" -gt "1" ]]; then
-    args+=("--router-ip=198.51.100.1")
+    args+=("--router-ip=192.0.2.200")
   fi
 
   bin/flynn-test ${args[@]}
