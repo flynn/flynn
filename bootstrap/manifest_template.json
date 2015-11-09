@@ -88,6 +88,10 @@
     "action": "run-app",
     "release": {
       "env": {
+        "FLYNN_POSTGRES": "postgres",
+        "PGDATABASE": "postgres",
+        "PGHOST": "leader.postgres.discoverd",
+        "PGUSER": "flynn",
         "PGPASSWORD": "{{ (index .StepData \"pg-password\").Data }}"
       },
       "processes": {
