@@ -226,6 +226,7 @@ func appHandler(c handlerConfig) http.Handler {
 		routerc:             c.rc,
 		que:                 q,
 		caCert:              []byte(os.Getenv("CA_CERT")),
+		config:              c,
 	}
 
 	httpRouter := httprouter.New()
@@ -243,6 +244,8 @@ func appHandler(c handlerConfig) http.Handler {
 	}))
 
 	httpRouter.GET("/ca-cert", httphelper.WrapHandler(api.GetCACert))
+
+	httpRouter.GET("/backup", httphelper.WrapHandler(api.GetBackup))
 
 	httpRouter.PUT("/domain", httphelper.WrapHandler(api.MigrateDomain))
 
@@ -300,7 +303,7 @@ func muxHandler(main http.Handler, authKeys []string) http.Handler {
 			return
 		}
 		_, password, _ := utils.ParseBasicAuth(r.Header)
-		if password == "" && strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+		if password == "" && (strings.Contains(r.Header.Get("Accept"), "text/event-stream") || r.URL.Path == "/backup") {
 			password = r.URL.Query().Get("key")
 		}
 		var authed bool
@@ -334,6 +337,7 @@ type controllerAPI struct {
 	routerc             routerc.Client
 	que                 *que.Client
 	caCert              []byte
+	config              handlerConfig
 
 	eventListener    *EventListener
 	eventListenerMtx sync.Mutex

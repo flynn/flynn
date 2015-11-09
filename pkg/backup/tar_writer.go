@@ -1,4 +1,4 @@
-package main
+package backup
 
 import (
 	"archive/tar"
@@ -11,8 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cheggaaa/pb"
 	"github.com/flynn/flynn/controller/client"
+	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/cluster"
 )
 
 type TarWriter struct {
@@ -56,20 +57,15 @@ func (t *TarWriter) WriteJSON(name string, v interface{}) error {
 	return err
 }
 
-func (t *TarWriter) WriteCommandOutput(client *controller.Client, name string, config *runConfig, bar *pb.ProgressBar) error {
+func (t *TarWriter) WriteCommandOutput(client *controller.Client, name string, app string, newJob *ct.NewJob) error {
 	f, err := ioutil.TempFile("", name)
 	if err != nil {
 		return fmt.Errorf("error creating temp file: %s", err)
 	}
 	defer f.Close()
 	defer os.Remove(f.Name())
-	config.Stdout = f
-	config.Exit = false
 
-	if bar != nil {
-		config.Stdout = io.MultiWriter(config.Stdout, bar)
-	}
-	if err := runJob(client, *config); err != nil {
+	if err := t.runJob(client, app, newJob, f); err != nil {
 		return fmt.Errorf("error running export: %s", err)
 	}
 
@@ -87,4 +83,16 @@ func (t *TarWriter) WriteCommandOutput(client *controller.Client, name string, c
 		return fmt.Errorf("error exporting: %s", err)
 	}
 	return nil
+}
+
+func (t *TarWriter) runJob(client *controller.Client, app string, req *ct.NewJob, out io.Writer) error {
+	rwc, err := client.RunJobAttached(app, req)
+	if err != nil {
+		return err
+	}
+	defer rwc.Close()
+	attachClient := cluster.NewAttachClient(rwc)
+	attachClient.CloseWrite()
+	_, err = attachClient.Receive(out, os.Stderr)
+	return err
 }

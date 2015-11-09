@@ -17,6 +17,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/backup"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -70,7 +71,7 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 		return fmt.Errorf("error getting app: %s", err)
 	}
 
-	tw := NewTarWriter(app.Name, dest)
+	tw := backup.NewTarWriter(app.Name, dest)
 	defer tw.Close()
 
 	if err := tw.WriteJSON("app.json", app); err != nil {
@@ -165,7 +166,13 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 
 	if config, err := getAppPgRunConfig(client); err == nil {
 		configPgDump(config)
-		if err := tw.WriteCommandOutput(client, "postgres.dump", config, bar); err != nil {
+		if err := tw.WriteCommandOutput(client, "postgres.dump", config.App, &ct.NewJob{
+			ReleaseID:  config.Release,
+			Entrypoint: config.Entrypoint,
+			Cmd:        config.Args,
+			Env:        config.Env,
+			DisableLog: config.DisableLog,
+		}); err != nil {
 			return fmt.Errorf("error creating postgres dump: %s", err)
 		}
 	}
