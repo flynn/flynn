@@ -1,6 +1,7 @@
 ---
 title: How To Deploy Node.js
 layout: docs
+toc_min_level: 2
 ---
 
 # How To Deploy Node.js

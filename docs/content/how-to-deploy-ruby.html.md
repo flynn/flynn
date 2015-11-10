@@ -1,6 +1,7 @@
 ---
 title: How To Deploy Ruby
 layout: docs
+toc_min_level: 2
 ---
 
 # How to Deploy Ruby

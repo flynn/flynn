@@ -1,6 +1,7 @@
 ---
 title: How to generate an SSH key for Flynn
 layout: docs
+toc_min_level: 2
 ---
 
 # How to generate an SSH key for Flynn
