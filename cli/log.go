@@ -21,7 +21,7 @@ usage: flynn log [-f] [-j <id>] [-n <lines>] [-r] [-s] [-t <type>]
 Stream log for an app.
 
 Options:
-	-f, --follow               stream new lines after printing log buffer
+	-f, --follow               stream new lines
 	-j, --job=<id>             filter logs to a specific job ID
 	-n, --number=<lines>       return at most n lines from the log buffer
 	-r, --raw-output           output raw log messages with no prefix

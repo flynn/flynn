@@ -81,7 +81,8 @@ function getState (props, prevState, dbRequested) {
 	if (deployState.taffyJob !== null) {
 		state.jobOutputStoreId = {
 			appId: 'taffy',
-			jobId: deployState.taffyJob.id
+			jobId: deployState.taffyJob.id,
+			lines: null
 		};
 	}
 	var prevJobOutputStoreId = prevState.jobOutputStoreId;
