@@ -61,7 +61,8 @@ var AppLogs = React.createClass({
 						{this.state.selectedProcess ? (
 							<JobOutput
 								appId={this.props.appId}
-								jobId={this.state.selectedProcess.id} />
+								jobId={this.state.selectedProcess.id}
+								lines={this.props.lines} />
 						) : null}
 					</section>
 				</section>
@@ -98,7 +99,8 @@ var AppLogs = React.createClass({
 						{this.state.selectedDeployProcess ? (
 							<JobOutput
 								appId={"taffy"}
-								jobId={this.state.selectedDeployProcess.id} />
+								jobId={this.state.selectedDeployProcess.id}
+								lines={this.props.lines} />
 						) : null}
 					</section>
 				</section>

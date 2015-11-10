@@ -14,9 +14,10 @@ var JobOutput = Store.createClass({
 	willInitialize: function () {
 		this.props = {
 			appId: this.id.appId,
-			jobId: this.id.jobId
+			jobId: this.id.jobId,
+			lines: this.id.lines || 0
 		};
-		this.url = Config.endpoints.cluster_controller + "/apps/"+ this.props.appId +"/log?job_id="+ this.props.jobId +"&follow=true&key="+ encodeURIComponent(Config.user.controller_key);
+		this.url = Config.endpoints.cluster_controller +"/apps/"+ this.props.appId +"/log?job_id="+ this.props.jobId +"&follow=true&lines="+ this.props.lines +"&key="+ encodeURIComponent(Config.user.controller_key);
 	},
 
 	didBecomeActive: function () {

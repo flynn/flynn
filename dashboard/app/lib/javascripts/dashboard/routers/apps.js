@@ -173,6 +173,7 @@ var AppsRouter = Router.createClass({
 		return {
 			taffyJobsStoreId: null,
 			appId: params.id,
+			lines: parseInt(params.lines || '') || 200,
 			onHide: function () {
 				this.history.navigate(this.__getAppPath(params.id, params));
 			}.bind(this)

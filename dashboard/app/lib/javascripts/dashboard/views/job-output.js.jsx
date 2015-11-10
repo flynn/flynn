@@ -5,7 +5,8 @@ import CommandOutput from './command-output';
 function getJobOutputStoreId (props) {
 	return {
 		appId: props.appId,
-		jobId: props.jobId
+		jobId: props.jobId,
+		lines: props.lines || null
 	};
 }
 
