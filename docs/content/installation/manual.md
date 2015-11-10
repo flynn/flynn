@@ -1,6 +1,7 @@
 ---
 title: Manual Installation
 layout: docs
+toc_min_level: 2
 ---
 
 # Manual Installation
