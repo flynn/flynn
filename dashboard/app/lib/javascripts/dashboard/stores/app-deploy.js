@@ -14,6 +14,10 @@ var AppDeploy = Store.createClass({
 	didBecomeActive: function () {
 		if (this.props.appID !== null) {
 			Dispatcher.dispatch({
+				name: 'GET_APP',
+				appID: this.props.appID
+			});
+			Dispatcher.dispatch({
 				name: 'GET_DEPLOY_APP_JOB',
 				appID: this.props.appID
 			});
@@ -30,6 +34,7 @@ var AppDeploy = Store.createClass({
 
 	getInitialState: function () {
 		return {
+			name: this.props.appID === null ? null : '',
 			taffyJob: null,
 			release: null,
 			launching: this.props.appID !== null,
@@ -58,11 +63,16 @@ var AppDeploy = Store.createClass({
 			break;
 
 		case 'APP':
-			if (event.app === this.props.appID && event.data.release) {
-				Dispatcher.dispatch({
-					name: 'GET_APP_RELEASE',
-					appID: this.props.appID
+			if (event.app === this.props.appID) {
+				this.setState({
+					name: event.data.name
 				});
+				if (event.data.release) {
+					Dispatcher.dispatch({
+						name: 'GET_APP_RELEASE',
+						appID: this.props.appID
+					});
+				}
 			}
 			break;
 

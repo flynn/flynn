@@ -442,6 +442,25 @@ var Client = createClass({
 		this.__waitForEventFns = waitForEventFns;
 
 		switch (event.name) {
+		case 'GET_APP':
+			this.__waitForEventWithTimeout(function (e) {
+				return e.name === 'APP' && e.app === event.appID;
+			}).catch(function () {
+				return this.getApp(event.appID).then(function (args) {
+					var app = args[0];
+					if (app !== null) {
+						Dispatcher.dispatch({
+							name: 'APP',
+							app: app.id,
+							data: app
+						});
+					} else {
+						return Promise.reject(null);
+					}
+				});
+			}.bind(this));
+			break;
+
 		case 'GET_DEPLOY_APP_JOB':
 			// Ensure JOB event fires for app deploy
 			// e.g. page reloaded so event won't be coming through the event stream
