@@ -66,7 +66,6 @@ func (a *aggregatorAPI) GetLog(ctx context.Context, w http.ResponseWriter, req *
 		err     error
 	)
 	if strLines := req.FormValue("lines"); strLines != "" {
-		backlog = true
 		if lines, err = strconv.Atoi(strLines); err != nil {
 			httphelper.ValidationError(w, "lines", err.Error())
 			return
@@ -75,6 +74,7 @@ func (a *aggregatorAPI) GetLog(ctx context.Context, w http.ResponseWriter, req *
 			httphelper.ValidationError(w, "lines", "lines must be an integer between 0 and 10000")
 			return
 		}
+		backlog = lines > 0
 	}
 
 	filters := make(filterSlice, 0)

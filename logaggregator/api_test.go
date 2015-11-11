@@ -172,6 +172,70 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogFollow(c *C) {
 	}
 }
 
+func (s *LogAggregatorTestSuite) TestAPIGetLogFollowWithoutBacklog(c *C) {
+	appID := "test-app"
+	msg1 := newMessageForApp(appID, "web.1", "log message 1")
+	msg2 := newMessageForApp(appID, "web.2", "log message 2")
+	msg3 := newMessageForApp(appID, "web.1", "log message 3")
+	msg4 := newMessageForApp(appID, "web.2", "log message 4")
+
+	type line struct {
+		text string
+		err  error
+	}
+
+	s.agg.feed(msg1)
+	s.agg.feed(msg2)
+
+	nlines := 0
+	logrc, err := s.client.GetLog(appID, &client.LogOpts{
+		Follow: true,
+		Lines:  &nlines,
+	})
+	c.Assert(err, IsNil)
+	defer logrc.Close()
+
+	s.agg.feed(msg3)
+	s.agg.feed(msg4)
+
+	// use a goroutine + channel so we can timeout the stdout read
+	lines := make(chan line)
+	go func() {
+		buf := bufio.NewReader(logrc)
+		for {
+			text, err := buf.ReadBytes('\n')
+			if err != nil {
+				if err != io.EOF {
+					lines <- line{"", err}
+				}
+				break
+			}
+			lines <- line{string(text), nil}
+		}
+	}()
+	readline := func() (string, error) {
+		select {
+		case l := <-lines:
+			if l.err != nil {
+				return "", fmt.Errorf("could not read log output: %s", l.err)
+			}
+			return l.text, nil
+		case <-time.After(1 * time.Second):
+			return "", errors.New("timed out waiting for log output")
+		}
+	}
+
+	expected := []string{marshalMessage(msg3), marshalMessage(msg4)}
+	for _, want := range expected {
+		got, err := readline()
+		if err != nil {
+			c.Error(err)
+		}
+		c.Assert(err, IsNil)
+		c.Assert(got, Equals, want)
+	}
+}
+
 func (s *LogAggregatorTestSuite) TestNewMessageFromSyslog(c *C) {
 	timestamp, err := time.Parse(time.RFC3339Nano, "2009-11-10T23:00:00.123450789Z")
 	c.Assert(err, IsNil)
