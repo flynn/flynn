@@ -82,7 +82,7 @@ function getState (props, prevState, dbRequested) {
 		state.jobOutputStoreId = {
 			appId: 'taffy',
 			jobId: deployState.taffyJob.id,
-			lines: null
+			lines: 10000 // show full backlog
 		};
 	}
 	var prevJobOutputStoreId = prevState.jobOutputStoreId;
