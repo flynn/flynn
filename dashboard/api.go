@@ -43,8 +43,10 @@ func APIHandler(conf *Config) http.Handler {
 	api := &API{
 		conf: conf,
 	}
-	if err := api.cacheDashboardJS(); err != nil {
-		panic(err)
+	if conf.Cache {
+		if err := api.cacheDashboardJS(); err != nil {
+			panic(err)
+		}
 	}
 
 	router := httprouter.New()
@@ -264,6 +266,11 @@ type DashboardConfig struct {
 }
 
 func (api *API) ServeDashboardJs(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	if !api.conf.Cache {
+		if err := api.cacheDashboardJS(); err != nil {
+			panic(err)
+		}
+	}
 	r := bytes.NewReader(api.dashboardJS.Bytes())
 	http.ServeContent(w, req, req.URL.Path, api.dashboardJSModTime, r)
 }

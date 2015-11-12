@@ -21,7 +21,7 @@ func main() {
 			{
 				GitRepo:   "git://github.com/jvatic/marbles-js.git",
 				GitBranch: "master",
-				GitRef:    "4d9bf1b2519ac87df630e8f5f3bcf4db52b4a477",
+				GitRef:    "0a32d09dc73f87482fb12ce963c9385fabb0d036",
 				Path:      "src",
 			},
 			{

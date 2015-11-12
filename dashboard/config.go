@@ -23,6 +23,7 @@ type Config struct {
 	SessionStore       *sessions.CookieStore
 	AppName            string
 	CACert             []byte
+	Cache              bool
 }
 
 func LoadConfigFromEnv() *Config {
@@ -83,6 +84,8 @@ func LoadConfigFromEnv() *Config {
 	}
 
 	conf.CACert = []byte(os.Getenv("CA_CERT"))
+
+	conf.Cache = os.Getenv("DISABLE_CACHE") == ""
 
 	return conf
 }

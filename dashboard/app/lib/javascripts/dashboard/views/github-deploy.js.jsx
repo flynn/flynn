@@ -68,6 +68,9 @@ function getState (props, prevState, dbRequested) {
 	state.launchSuccess = deployState.launchSuccess;
 	state.launchFailed = deployState.launchFailed;
 	state.launchErrorMsg = deployState.launchErrorMsg;
+	if (deployState.name !== null) {
+		state.name = deployState.name;
+	}
 	if (deployState.release !== null) {
 		state.env = deployState.release.env || {};
 	}
@@ -82,7 +85,7 @@ function getState (props, prevState, dbRequested) {
 		state.jobOutputStoreId = {
 			appId: 'taffy',
 			jobId: deployState.taffyJob.id,
-			lines: null
+			lines: 10000 // show full backlog
 		};
 	}
 	var prevJobOutputStoreId = prevState.jobOutputStoreId;
@@ -158,24 +161,28 @@ var GithubDeploy = React.createClass({
 
 				{this.props.children}
 
-				<label>
-					<span className="name">Name</span>
-					<input type="text" value={this.state.name} onChange={this.__handleNameChange} />
-				</label>
+				{this.state.launching ? null : (
+					<div>
+						<label>
+							<span className="name">Name</span>
+							<input type="text" value={this.state.name} onChange={this.__handleNameChange} />
+						</label>
 
-				<label>
-					<span className="name">Postgres</span>
-					<input
-						type="checkbox"
-						disabled={this.state.launching || this.state.deleting || this.state.launchSuccess || this.state.launchFailed}
-						checked={this.state.db}
-						onChange={this.__handleDbChange} />
-				</label>
+						<label>
+							<span className="name">Postgres</span>
+							<input
+								type="checkbox"
+								disabled={this.state.launching || this.state.deleting || this.state.launchSuccess || this.state.launchFailed}
+								checked={this.state.db}
+								onChange={this.__handleDbChange} />
+						</label>
 
-				<EditEnv
-					disabled={this.state.launching || this.state.deleting || this.state.launchSuccess || this.state.launchFailed}
-					env={this.state.env}
-					onChange={this.__handleEnvChange} />
+						<EditEnv
+							disabled={this.state.launching || this.state.deleting || this.state.launchSuccess || this.state.launchFailed}
+							env={this.state.env}
+							onChange={this.__handleEnvChange} />
+					</div>
+				)}
 
 				{this.state.jobOutput ? (
 					<CommandOutput outputStreamData={this.state.jobOutput} showTimestamp={false} />
