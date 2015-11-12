@@ -475,6 +475,11 @@
     "domain": "dashboard.{{ getenv \"CLUSTER_DOMAIN\" }}"
   },
   {
+    "id": "status-key",
+    "action": "gen-random",
+    "data": "{{ getenv \"STATUS_KEY\" }}"
+  },
+  {
     "id": "status",
     "action": "deploy-app",
     "app": {
@@ -486,6 +491,9 @@
       "uri": "$image_repository?name=flynn/status&id=$image_id[status]"
     },
     "release": {
+      "env": {
+        "AUTH_KEY": "{{ (index .StepData \"status-key\").Data }}"
+      },
       "processes": {
         "web": {
           "ports": [{
