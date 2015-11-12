@@ -53,6 +53,13 @@ var deployFromGithub = function (meta, appData) {
 		} else {
 			return client.createApp({
 				name: appData.name
+			}).catch(function (args) {
+				Dispatcher.dispatch({
+					name: 'APP_CREATE_FAILED',
+					appName: appData.name,
+					data: args[0]
+				});
+				return Promise.reject(args);
 			});
 		}
 	}

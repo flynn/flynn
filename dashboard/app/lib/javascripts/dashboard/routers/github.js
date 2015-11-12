@@ -91,7 +91,7 @@ var GithubRouter = Router.createClass({
 		}
 	},
 
-	deploy: function (params) {
+	deploy: function (params, opts, ctx, err) {
 		params = params[0];
 		var githubParams = [{
 			owner: params.base_owner || params.owner,
@@ -116,6 +116,7 @@ var GithubRouter = Router.createClass({
 		props.appID = params.appID || null;
 		props.getAppPath = this.__getAppPath.bind(this, props.appID);
 		props.key = props.appID;
+		props.errorMsg = err ? err.message || 'Something went wrong' : null;
 		var view = this.context.secondaryView = React.render(React.createElement(
 			GithubDeployComponent, props),
 			this.context.secondaryEl
@@ -159,6 +160,12 @@ var GithubRouter = Router.createClass({
 		case 'APP':
 			if (event.data.name === this.state.deployAppName && !this.history.pathParams[0].hasOwnProperty('appID')) {
 				this.history.navigate(pathWithParams("/github/deploy/:appID", QueryParams.replaceParams(this.history.pathParams, { appID: event.data.id })));
+			}
+			break;
+
+		case 'APP_CREATE_FAILED':
+			if (event.appName === this.state.deployAppName && !this.history.pathParams[0].hasOwnProperty('appID')) {
+				this.deploy(this.history.pathParams, null, null, event.data);
 			}
 			break;
 
