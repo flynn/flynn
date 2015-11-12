@@ -143,6 +143,8 @@ func (c *controllerAPI) GetEvent(ctx context.Context, w http.ResponseWriter, req
 }
 
 func (c *controllerAPI) Events(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	l, _ := ctxhelper.LoggerFromContext(ctx)
+	log := l.New("fn", "Events")
 	var app *ct.App
 	if appID := req.FormValue("app_id"); appID != "" {
 		data, err := c.appRepo.Get(appID)
@@ -155,15 +157,18 @@ func (c *controllerAPI) Events(ctx context.Context, w http.ResponseWriter, req *
 
 	if req.Header.Get("Accept") == "application/json" {
 		if err := listEvents(ctx, w, req, app, c.eventRepo); err != nil {
+			log.Error("error listing events", "err", err)
 			respondWithError(w, err)
 		}
 		return
 	}
 
 	if err := c.maybeStartEventListener(); err != nil {
+		log.Error("error starting event listener", "err", err)
 		respondWithError(w, err)
 	}
 	if err := streamEvents(ctx, w, req, c.eventListener, app, c.eventRepo); err != nil {
+		log.Error("error streaming events", "err", err)
 		respondWithError(w, err)
 	}
 }
@@ -244,7 +249,7 @@ func streamEvents(ctx context.Context, w http.ResponseWriter, req *http.Request,
 	past := req.FormValue("past")
 
 	l, _ := ctxhelper.LoggerFromContext(ctx)
-	log := l.New("fn", "Events", "object_types", objectTypes, "object_id", objectID)
+	log := l.New("fn", "streamEvents", "object_types", objectTypes, "object_id", objectID)
 	ch := make(chan *ct.Event)
 	s := sse.NewStream(w, ch, log)
 	s.Serve()

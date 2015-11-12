@@ -130,10 +130,45 @@ func (c *context) HandleDeployment(job *que.Job) (e error) {
 func (c *context) rollback(l log15.Logger, deployment *ct.Deployment, original *ct.Formation) error {
 	log := l.New("fn", "rollback")
 
+	log.Info("creating job watcher")
+	jobWatcher, err := c.client.WatchJobEvents(deployment.AppID, deployment.OldReleaseID)
+	if err != nil {
+		log.Error("error opening job event stream", "err", err)
+		return err
+	}
+	appJobs, err := c.client.JobList(deployment.AppID)
+	if err != nil {
+		log.Error("error listing app jobs", "err", err)
+		return err
+	}
+	runningJobs := make(map[string]int)
+	for _, j := range appJobs {
+		if j.ReleaseID != deployment.OldReleaseID {
+			continue
+		}
+		if j.State == "up" {
+			runningJobs[j.Type]++
+		}
+	}
+	expectedJobEvents := make(ct.JobEvents, len(original.Processes))
+	for name, count := range original.Processes {
+		count = count - runningJobs[name]
+		if count > 0 {
+			expectedJobEvents[name] = map[string]int{"up": count}
+		}
+	}
+
 	log.Info("restoring the original formation")
 	if err := c.client.PutFormation(original); err != nil {
 		log.Error("error restoring the original formation", "err", err)
 		return err
+	}
+
+	if len(expectedJobEvents) > 0 {
+		log.Info("waiting for job events")
+		if err := jobWatcher.WaitFor(expectedJobEvents, 10*time.Second, nil); err != nil {
+			log.Error("error waiting for job events", "err", err)
+		}
 	}
 
 	log.Info("deleting the new formation")
