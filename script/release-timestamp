@@ -69,8 +69,12 @@ main() {
   info "committing changes"
   tuf commit
 
-  info "uploading timestamp to S3"
-  sync_cloudfront "repository/timestamp.json" "s3://${bucket}/tuf/timestamp.json"
+  info "uploading timestamp and latest snapshot to S3"
+  local tmp="$(mktemp --directory)"
+  trap "rm -rf ${tmp}" EXIT
+  local latest_snapshot="$(ls -t1 ${tuf_dir}/repository/*.snapshot.json | head -1)"
+  ln -nfs "${latest_snapshot}" "${tuf_dir}"/repository/{snapshot,timestamp}.json "${tmp}"
+  sync_cloudfront "${tmp}/" "s3://${bucket}/tuf/"
 }
 
 main $@
