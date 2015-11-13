@@ -18,7 +18,7 @@ var Apps = React.createClass({
 					}))}
 				</section>
 
-				<section className="panel app-panel">
+				<section className="panel app-panel full-height">
 					{this.props.appProps.appId ? (
 						React.createElement(App, extend({}, this.props.appProps, { ref: "appComponent" }))
 					) : (
