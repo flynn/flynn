@@ -598,7 +598,7 @@ func (c *Cluster) DumpLogs(buildLog *buildlog.Log) {
 	printLogs := func(typ string, instances []*Instance) {
 		fallback := func(instances []*Instance) {
 			for _, inst := range instances {
-				run(fmt.Sprintf("%s-fallback-%s.log", typ, inst.ID), inst, "sudo bash -c 'tail -n +1 /var/log/flynn/**/*.log'")
+				run(fmt.Sprintf("%s-fallback-%s.log", typ, inst.ID), inst, "sudo bash -c 'tail -n +1 /var/log/flynn/*.log'")
 			}
 		}
 
