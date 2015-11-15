@@ -154,11 +154,12 @@ Options:
 		proc := prevRelease.Processes[t]
 		proc.Cmd = []string{"start", t}
 		if t == "web" || strings.HasSuffix(t, "-web") {
+			proc.Service = app.Name + "-" + t
 			proc.Ports = []ct.Port{{
 				Port:  8080,
 				Proto: "tcp",
 				Service: &host.Service{
-					Name:   app.Name + "-" + t,
+					Name:   proc.Service,
 					Create: true,
 					Check:  &host.HealthCheck{Type: "tcp"},
 				},
