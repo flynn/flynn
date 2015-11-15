@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/logaggregator/utils"
+	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
 )
 
@@ -34,7 +35,8 @@ func newClient(url string, http *http.Client) *Client {
 
 // NewClient creates a new Client pointing at uri.
 func New(uri string) (*Client, error) {
-	return NewWithHTTP(uri, http.DefaultClient)
+	httpClient := &http.Client{Transport: &http.Transport{Dial: dialer.Retry.Dial}}
+	return NewWithHTTP(uri, httpClient)
 }
 
 // NewClient creates a new Client pointing at uri with the specified http client.
