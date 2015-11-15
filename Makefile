@@ -1,6 +1,7 @@
 GIT_COMMIT=`git rev-parse --short HEAD`
 GIT_BRANCH=`git rev-parse --abbrev-ref HEAD`
-GIT_TAG=`git describe --tags --exact-match --match "v*" 2>/dev/null || echo "none"`
+# NOTE: the `git tag` command is filtered through `grep .` so it returns non-zero when empty
+GIT_TAG=`git tag --list "v*" --sort "v:refname" --points-at HEAD 2>/dev/null | tail -n 1 | grep . || echo "none"`
 GIT_DIRTY=`test -n "$(git status --porcelain)" && echo true || echo false`
 
 all: toolchain
