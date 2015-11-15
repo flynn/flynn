@@ -80,22 +80,22 @@ const (
 	pingQuery = `SELECT 1`
 	// apps
 	appListQuery = `
-SELECT app_id, name, meta, strategy, release_id, created_at, updated_at
+SELECT app_id, name, meta, strategy, release_id, deploy_timeout, created_at, updated_at
 FROM apps WHERE deleted_at IS NULL ORDER BY created_at DESC`
 	appSelectByNameQuery = `
-SELECT app_id, name, meta, strategy, release_id, created_at, updated_at
+SELECT app_id, name, meta, strategy, release_id, deploy_timeout, created_at, updated_at
 FROM apps WHERE deleted_at IS NULL AND name = $1`
 	appSelectByNameForUpdateQuery = `
-SELECT app_id, name, meta, strategy, release_id, created_at, updated_at
+SELECT app_id, name, meta, strategy, release_id, deploy_timeout, created_at, updated_at
 FROM apps WHERE deleted_at IS NULL AND name = $1 FOR UPDATE`
 	appSelectByNameOrIDQuery = `
-SELECT app_id, name, meta, strategy, release_id, created_at, updated_at
+SELECT app_id, name, meta, strategy, release_id, deploy_timeout, created_at, updated_at
 FROM apps WHERE deleted_at IS NULL AND (app_id = $1 OR name = $2) LIMIT 1`
 	appSelectByNameOrIDForUpdateQuery = `
-SELECT app_id, name, meta, strategy, release_id, created_at, updated_at
+SELECT app_id, name, meta, strategy, release_id, deploy_timeout, created_at, updated_at
 FROM apps WHERE deleted_at IS NULL AND (app_id = $1 OR name = $2) LIMIT 1 FOR UPDATE`
 	appInsertQuery = `
-INSERT INTO apps (app_id, name, meta, strategy) VALUES ($1, $2, $3, $4) RETURNING created_at, updated_at`
+INSERT INTO apps (app_id, name, meta, strategy, deploy_timeout) VALUES ($1, $2, $3, $4, $5) RETURNING created_at, updated_at`
 	appUpdateStrategyQuery = `
 UPDATE apps SET strategy = $2, updated_at = now() WHERE app_id = $1`
 	appUpdateMetaQuery = `

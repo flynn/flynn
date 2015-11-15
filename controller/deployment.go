@@ -178,11 +178,12 @@ func (c *controllerAPI) CreateDeployment(ctx context.Context, w http.ResponseWri
 	}
 
 	deployment := &ct.Deployment{
-		AppID:        app.ID,
-		NewReleaseID: release.ID,
-		Strategy:     app.Strategy,
-		OldReleaseID: oldRelease.ID,
-		Processes:    oldFormation.Processes,
+		AppID:         app.ID,
+		NewReleaseID:  release.ID,
+		Strategy:      app.Strategy,
+		OldReleaseID:  oldRelease.ID,
+		Processes:     oldFormation.Processes,
+		DeployTimeout: app.DeployTimeout,
 	}
 
 	if err := schema.Validate(deployment); err != nil {

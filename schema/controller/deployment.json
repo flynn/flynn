@@ -36,6 +36,9 @@
         "type": "integer"
       }
     },
+    "deploy_timeout": {
+      "$ref": "/schema/controller/common#/definitions/deploy_timeout"
+    },
     "created_at": {
       "$ref": "/schema/controller/common#/definitions/created_at"
     },

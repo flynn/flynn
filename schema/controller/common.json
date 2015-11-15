@@ -54,6 +54,10 @@
     "resources": {
       "description": "resource request and limits",
       "type": "object"
+    },
+    "deploy_timeout": {
+      "description": "deployment timeout (default 30s)",
+      "type": "integer"
     }
   }
 }
