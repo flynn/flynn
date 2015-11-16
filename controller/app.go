@@ -64,7 +64,10 @@ func (r *AppRepo) Add(data interface{}) error {
 	if app.Strategy == "" {
 		app.Strategy = "all-at-once"
 	}
-	if err := tx.QueryRow("app_insert", app.ID, app.Name, app.Meta, app.Strategy).Scan(&app.CreatedAt, &app.UpdatedAt); err != nil {
+	if app.DeployTimeout == 0 {
+		app.DeployTimeout = ct.DefaultDeployTimeout
+	}
+	if err := tx.QueryRow("app_insert", app.ID, app.Name, app.Meta, app.Strategy, app.DeployTimeout).Scan(&app.CreatedAt, &app.UpdatedAt); err != nil {
 		tx.Rollback()
 		if postgres.IsUniquenessError(err, "apps_name_idx") {
 			return httphelper.ObjectExistsErr(fmt.Sprintf("application %q already exists", app.Name))
@@ -99,7 +102,7 @@ func (r *AppRepo) Add(data interface{}) error {
 func scanApp(s postgres.Scanner) (*ct.App, error) {
 	app := &ct.App{}
 	var releaseID *string
-	err := s.Scan(&app.ID, &app.Name, &app.Meta, &app.Strategy, &releaseID, &app.CreatedAt, &app.UpdatedAt)
+	err := s.Scan(&app.ID, &app.Name, &app.Meta, &app.Strategy, &releaseID, &app.DeployTimeout, &app.CreatedAt, &app.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, ErrNotFound
 	} else if err != nil {

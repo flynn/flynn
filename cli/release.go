@@ -18,7 +18,7 @@ func init() {
 	register("release", runRelease, `
 usage: flynn release [-q|--quiet]
        flynn release add [-t <type>] [-f <file>] <uri>
-       flynn release show [<id>]
+       flynn release show [--json] [<id>]
 
 Manage app releases.
 
@@ -26,6 +26,7 @@ Options:
 	-q, --quiet        only print release IDs
 	-t <type>          type of the release. Currently only 'docker' is supported. [default: docker]
 	-f, --file=<file>  release configuration file
+	--json             print release configuration in JSON format
 
 Commands:
 	With no arguments, shows a list of releases associated with the app.
@@ -121,6 +122,9 @@ func runReleaseShow(args *docopt.Args, client *controller.Client) error {
 	}
 	if err != nil {
 		return err
+	}
+	if args.Bool["--json"] {
+		return json.NewEncoder(os.Stdout).Encode(release)
 	}
 	var artifactDesc string
 	if release.ArtifactID != "" {

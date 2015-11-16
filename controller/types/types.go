@@ -23,13 +23,14 @@ type ExpandedFormation struct {
 }
 
 type App struct {
-	ID        string            `json:"id,omitempty"`
-	Name      string            `json:"name,omitempty"`
-	Meta      map[string]string `json:"meta,omitempty"`
-	Strategy  string            `json:"strategy,omitempty"`
-	ReleaseID string            `json:"release,omitempty"`
-	CreatedAt *time.Time        `json:"created_at,omitempty"`
-	UpdatedAt *time.Time        `json:"updated_at,omitempty"`
+	ID            string            `json:"id,omitempty"`
+	Name          string            `json:"name,omitempty"`
+	Meta          map[string]string `json:"meta,omitempty"`
+	Strategy      string            `json:"strategy,omitempty"`
+	ReleaseID     string            `json:"release,omitempty"`
+	DeployTimeout int32             `json:"deploy_timeout,omitempty"`
+	CreatedAt     *time.Time        `json:"created_at,omitempty"`
+	UpdatedAt     *time.Time        `json:"updated_at,omitempty"`
 }
 
 func (a *App) System() bool {
@@ -129,16 +130,19 @@ type NewJob struct {
 	Resources  resource.Resources `json:"resources,omitempty"`
 }
 
+const DefaultDeployTimeout = 30 // seconds
+
 type Deployment struct {
-	ID           string         `json:"id,omitempty"`
-	AppID        string         `json:"app,omitempty"`
-	OldReleaseID string         `json:"old_release,omitempty"`
-	NewReleaseID string         `json:"new_release,omitempty"`
-	Strategy     string         `json:"strategy,omitempty"`
-	Status       string         `json:"status,omitempty"`
-	Processes    map[string]int `json:"processes,omitempty"`
-	CreatedAt    *time.Time     `json:"created_at,omitempty"`
-	FinishedAt   *time.Time     `json:"finished_at,omitempty"`
+	ID            string         `json:"id,omitempty"`
+	AppID         string         `json:"app,omitempty"`
+	OldReleaseID  string         `json:"old_release,omitempty"`
+	NewReleaseID  string         `json:"new_release,omitempty"`
+	Strategy      string         `json:"strategy,omitempty"`
+	Status        string         `json:"status,omitempty"`
+	Processes     map[string]int `json:"processes,omitempty"`
+	DeployTimeout int32          `json:"deploy_timeout,omitempty"`
+	CreatedAt     *time.Time     `json:"created_at,omitempty"`
+	FinishedAt    *time.Time     `json:"finished_at,omitempty"`
 }
 
 type DeployID struct {

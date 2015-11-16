@@ -181,5 +181,10 @@ $$ LANGUAGE plpgsql`,
     CONSTRAINT que_jobs_pkey PRIMARY KEY (queue, priority, run_at, job_id))`,
 		`COMMENT ON TABLE que_jobs IS '3'`,
 	)
+	m.Add(3,
+		`ALTER TABLE apps ADD COLUMN deploy_timeout integer NOT NULL DEFAULT 30`,
+		`UPDATE apps SET deploy_timeout = 120 WHERE name = 'controller'`,
+		`UPDATE apps SET deploy_timeout = 120 WHERE name = 'postgres'`,
+	)
 	return m.Migrate(db)
 }

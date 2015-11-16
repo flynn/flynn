@@ -213,7 +213,8 @@
     "app": {
       "name": "controller",
       "meta": {"flynn-system-app": "true"},
-      "strategy": "one-by-one"
+      "strategy": "one-by-one",
+      "deploy_timeout": 120
     }
   },
   {
@@ -223,7 +224,8 @@
     "app": {
       "name": "postgres",
       "meta": {"flynn-system-app": "true"},
-      "strategy": "postgres"
+      "strategy": "postgres",
+      "deploy_timeout": 120
     }
   },
   {
