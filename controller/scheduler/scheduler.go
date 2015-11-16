@@ -393,23 +393,24 @@ func (s *Scheduler) SyncFormations() {
 	log := logger.New("fn", "SyncFormations")
 	log.Info("syncing formations")
 
-	apps, err := s.AppList()
+	formations, err := s.FormationListActive()
 	if err != nil {
-		log.Error("error getting apps", "err", err)
+		log.Error("error getting active formations", "err", err)
 		return
 	}
 
-	for _, app := range apps {
-		formations, err := s.FormationList(app.ID)
-		if err != nil {
-			log.Error("error getting formations", "app.id", app.ID, "err", err)
-			continue
-		}
+	active := make(map[utils.FormationKey]struct{}, len(formations))
+	for _, f := range formations {
+		active[utils.FormationKey{AppID: f.App.ID, ReleaseID: f.Release.ID}] = struct{}{}
+		s.handleFormation(f)
+	}
 
-		for _, f := range formations {
-			if _, err := s.handleControllerFormation(f); err != nil {
-				log.Error("error handling controller formation", "app.id", app.ID, "release.id", f.ReleaseID, "err", err)
-			}
+	// check that all formations we think are active are still active
+	for _, f := range s.formations {
+		if _, ok := active[f.key()]; !ok && !f.GetProcesses().IsEmpty() {
+			log.Warn("formation should not be active, scaling down", "app.id", f.App.ID, "release.id", f.Release.ID)
+			f.Processes = nil
+			s.triggerRectify(f.key())
 		}
 	}
 }

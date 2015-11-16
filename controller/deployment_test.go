@@ -19,6 +19,7 @@ func (s *S) TestCreateDeployment(c *C) {
 		ReleaseID: release.ID,
 		Processes: map[string]int{"web": 1},
 	}), IsNil)
+	defer s.c.DeleteFormation(app.ID, release.ID)
 
 	// deploying an initial release should no-op
 	d, err := s.c.CreateDeployment(app.ID, release.ID)
@@ -53,6 +54,7 @@ func (s *S) TestStreamDeployment(c *C) {
 		ReleaseID: release.ID,
 		Processes: map[string]int{"web": 1},
 	}), IsNil)
+	defer s.c.DeleteFormation(app.ID, release.ID)
 	c.Assert(s.c.SetAppRelease(app.ID, release.ID), IsNil)
 
 	newRelease := s.createTestRelease(c, &ct.Release{})
@@ -97,6 +99,7 @@ func (s *S) TestGetDeployment(c *C) {
 		ReleaseID: release.ID,
 		Processes: map[string]int{"web": 1},
 	}), IsNil)
+	defer s.c.DeleteFormation(app.ID, release.ID)
 
 	// deploy initial release
 	d, err := s.c.CreateDeployment(app.ID, release.ID)
@@ -130,6 +133,7 @@ func (s *S) TestDeploymentList(c *C) {
 		ReleaseID: release.ID,
 		Processes: map[string]int{"web": 1},
 	}), IsNil)
+	defer s.c.DeleteFormation(app.ID, release.ID)
 
 	// deploy initial release
 	initial, err := s.c.CreateDeployment(app.ID, release.ID)

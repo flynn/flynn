@@ -37,6 +37,7 @@ var preparedStatements = map[string]string{
 	"event_insert":                          eventInsertQuery,
 	"event_insert_unique":                   eventInsertUniqueQuery,
 	"formation_list_by_app":                 formationListByAppQuery,
+	"formation_list_active":                 formationListActiveQuery,
 	"formation_list_since":                  formationListSinceQuery,
 	"formation_select":                      formationSelectQuery,
 	"formation_insert":                      formationInsertQuery,
@@ -177,6 +178,25 @@ VALUES ($1, $2, $3, $4, $5)`
 SELECT app_id, release_id, processes, created_at, updated_at
 FROM formations WHERE app_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC
 	`
+	formationListActiveQuery = `
+SELECT
+  apps.app_id, apps.name,
+  releases.release_id, releases.artifact_id, releases.meta, releases.env, releases.processes,
+  artifacts.artifact_id, artifacts.type, artifacts.uri,
+  formations.processes, formations.updated_at
+FROM formations
+JOIN apps USING (app_id)
+JOIN releases ON releases.release_id = formations.release_id
+JOIN artifacts USING (artifact_id)
+WHERE (formations.app_id, formations.release_id) IN (
+  SELECT app_id, release_id
+  FROM formations, json_each_text(formations.processes::json)
+  WHERE processes != 'null'
+  GROUP BY app_id, release_id
+  HAVING SUM(value::int) > 0
+)
+AND formations.deleted_at IS NULL
+ORDER BY updated_at DESC`
 	formationListSinceQuery = `
 SELECT app_id, release_id, processes, created_at, updated_at
 FROM formations WHERE updated_at >= $1 ORDER BY updated_at DESC`

@@ -265,6 +265,7 @@ func (s *S) TestCreateFormation(c *C) {
 		// Now edit the formation to have valid process types. Should succeed.
 		in.Processes = map[string]int{"web": 1}
 		out := s.createTestFormation(c, in)
+		defer s.deleteTestFormation(out)
 		c.Assert(out.AppID, Equals, app.ID)
 		c.Assert(out.ReleaseID, Equals, release.ID)
 		c.Assert(out.Processes["web"], Equals, 1)
@@ -287,6 +288,10 @@ func (s *S) TestCreateFormation(c *C) {
 func (s *S) createTestFormation(c *C, formation *ct.Formation) *ct.Formation {
 	c.Assert(s.c.PutFormation(formation), IsNil)
 	return formation
+}
+
+func (s *S) deleteTestFormation(formation *ct.Formation) {
+	s.c.DeleteFormation(formation.AppID, formation.ReleaseID)
 }
 
 func (s *S) TestDeleteFormation(c *C) {

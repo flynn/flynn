@@ -377,6 +377,13 @@ func (c *Client) FormationList(appID string) ([]*ct.Formation, error) {
 	return formations, c.Get(fmt.Sprintf("/apps/%s/formations", appID), &formations)
 }
 
+// FormationListActive returns a list of all active formations (i.e. formations
+// whose process count is greater than zero).
+func (c *Client) FormationListActive() ([]*ct.ExpandedFormation, error) {
+	var formations []*ct.ExpandedFormation
+	return formations, c.Get("/formations?active=true", &formations)
+}
+
 // DeleteFormation deletes the formation matching appID and releaseID.
 func (c *Client) DeleteFormation(appID, releaseID string) error {
 	return c.Delete(fmt.Sprintf("/apps/%s/formations/%s", appID, releaseID), nil)

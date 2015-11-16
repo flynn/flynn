@@ -113,6 +113,39 @@ func scanFormation(s postgres.Scanner) (*ct.Formation, error) {
 	return f, err
 }
 
+func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
+	f := &ct.ExpandedFormation{
+		App:      &ct.App{},
+		Release:  &ct.Release{},
+		Artifact: &ct.Artifact{},
+	}
+	var artifactID *string
+	err := s.Scan(
+		&f.App.ID,
+		&f.App.Name,
+		&f.Release.ID,
+		&artifactID,
+		&f.Release.Meta,
+		&f.Release.Env,
+		&f.Release.Processes,
+		&f.Artifact.ID,
+		&f.Artifact.Type,
+		&f.Artifact.URI,
+		&f.Processes,
+		&f.UpdatedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			err = ErrNotFound
+		}
+		return nil, err
+	}
+	if artifactID != nil {
+		f.Release.ArtifactID = *artifactID
+	}
+	return f, nil
+}
+
 func (r *FormationRepo) Get(appID, releaseID string) (*ct.Formation, error) {
 	row := r.db.QueryRow("formation_select", appID, releaseID)
 	return scanFormation(row)
@@ -126,6 +159,23 @@ func (r *FormationRepo) List(appID string) ([]*ct.Formation, error) {
 	formations := []*ct.Formation{}
 	for rows.Next() {
 		formation, err := scanFormation(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		formations = append(formations, formation)
+	}
+	return formations, nil
+}
+
+func (r *FormationRepo) ListActive() ([]*ct.ExpandedFormation, error) {
+	rows, err := r.db.Query("formation_list_active")
+	if err != nil {
+		return nil, err
+	}
+	formations := []*ct.ExpandedFormation{}
+	for rows.Next() {
+		formation, err := scanExpandedFormation(rows)
 		if err != nil {
 			rows.Close()
 			return nil, err
@@ -386,6 +436,26 @@ func (c *controllerAPI) ListFormations(ctx context.Context, w http.ResponseWrite
 }
 
 func (c *controllerAPI) GetFormations(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	if strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
+		c.streamFormations(ctx, w, req)
+		return
+	}
+
+	if req.URL.Query().Get("active") == "true" {
+		list, err := c.formationRepo.ListActive()
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		httphelper.JSON(w, 200, list)
+	}
+
+	// don't return a list of all formations, there will be lots of them
+	// and no components currently need such a list
+	httphelper.ValidationError(w, "", "must either request a stream or only active formations")
+}
+
+func (c *controllerAPI) streamFormations(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	ch := make(chan *ct.ExpandedFormation)
 	stopCh := make(chan struct{})
 	since, err := time.Parse(time.RFC3339, req.FormValue("since"))

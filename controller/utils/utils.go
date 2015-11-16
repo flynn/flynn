@@ -163,7 +163,7 @@ type ControllerClient interface {
 	PutFormation(formation *ct.Formation) error
 	StreamFormations(since *time.Time, ch chan<- *ct.ExpandedFormation) (stream.Stream, error)
 	AppList() ([]*ct.App, error)
-	FormationList(appID string) ([]*ct.Formation, error)
+	FormationListActive() ([]*ct.ExpandedFormation, error)
 	PutJob(*ct.Job) error
 }
 
