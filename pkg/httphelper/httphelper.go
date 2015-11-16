@@ -170,7 +170,7 @@ func buildJSONError(err error) *JSONError {
 			Code:    SyntaxErrorCode,
 			Message: "The provided JSON input is invalid",
 		}
-	case *pgx.PgError, *net.OpError, syscall.Errno:
+	case pgx.PgError, *net.OpError, syscall.Errno:
 		jsonError.Retry = true
 	case JSONError:
 		jsonError = &v
