@@ -362,17 +362,13 @@ func (s *Scheduler) SyncJobs() (err error) {
 
 	knownJobs := make(Jobs)
 	for id, host := range s.hosts {
-		hostLog := log.New("host.id", id)
-
-		hostLog.Info(fmt.Sprintf("getting jobs for host %s", id))
-		activeJobs, err := host.client.ListJobs()
+		jobs, err := host.client.ListJobs()
 		if err != nil {
-			hostLog.Error("error getting jobs list", "err", err)
+			log.Error("error getting host jobs", "host.id", id, "err", err)
 			return err
 		}
-		hostLog.Info(fmt.Sprintf("got %d active job(s) for host %s", len(activeJobs), id))
 
-		for _, job := range activeJobs {
+		for _, job := range jobs {
 			if j, err := s.handleActiveJob(&job); err == nil {
 				knownJobs[j.InternalID] = j
 			}
@@ -397,7 +393,6 @@ func (s *Scheduler) SyncFormations() {
 	log := logger.New("fn", "SyncFormations")
 	log.Info("syncing formations")
 
-	log.Info("getting app list")
 	apps, err := s.AppList()
 	if err != nil {
 		log.Error("error getting apps", "err", err)
@@ -405,18 +400,15 @@ func (s *Scheduler) SyncFormations() {
 	}
 
 	for _, app := range apps {
-		appLog := log.New("app.id", app.ID)
-
-		fs, err := s.FormationList(app.ID)
+		formations, err := s.FormationList(app.ID)
 		if err != nil {
-			appLog.Error("error getting formations", "err", err)
+			log.Error("error getting formations", "app.id", app.ID, "err", err)
 			continue
 		}
-		appLog.Debug(fmt.Sprintf("got %d formation(s) for %s app", len(fs), app.Name))
 
-		for _, f := range fs {
+		for _, f := range formations {
 			if _, err := s.handleControllerFormation(f); err != nil {
-				appLog.Error("error handling controller formation", "release.id", f.ReleaseID, "err", err)
+				log.Error("error handling controller formation", "app.id", app.ID, "release.id", f.ReleaseID, "err", err)
 			}
 		}
 	}
