@@ -739,15 +739,12 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) (*Job, error) {
 		f := s.formations.Get(appID, releaseID)
 		if f == nil {
 			log.Info("job is from new formation, getting formation from controller")
-			var cf *ct.Formation
-			cf, err = s.GetFormation(appID, releaseID)
+			var ef *ct.ExpandedFormation
+			ef, err = s.GetExpandedFormation(appID, releaseID)
 			if err != nil {
 				log.Error("error getting formation", "err", err)
 			} else {
-				f, err = s.handleControllerFormation(cf)
-				if err != nil {
-					log.Error("error updating formation", "err", err)
-				}
+				f = s.handleFormation(ef)
 			}
 		}
 		job.Formation = f
@@ -792,14 +789,6 @@ func (s *Scheduler) triggerRectify(key utils.FormationKey) {
 	case s.rectify <- struct{}{}:
 	default:
 	}
-}
-
-func (s *Scheduler) handleControllerFormation(f *ct.Formation) (*Formation, error) {
-	ef, err := utils.ExpandFormation(s, f)
-	if err != nil {
-		return nil, err
-	}
-	return s.handleFormation(ef), nil
 }
 
 func (s *Scheduler) startJob(req *JobRequest) (err error) {

@@ -53,6 +53,35 @@ func (c *FakeControllerClient) GetFormation(appID, releaseID string) (*ct.Format
 	return nil, controller.ErrNotFound
 }
 
+func (c *FakeControllerClient) GetExpandedFormation(appID, releaseID string) (*ct.ExpandedFormation, error) {
+	app, ok := c.apps[appID]
+	if !ok {
+		return nil, controller.ErrNotFound
+	}
+	release, ok := c.releases[releaseID]
+	if !ok {
+		return nil, controller.ErrNotFound
+	}
+	releases, ok := c.formations[appID]
+	if !ok {
+		return nil, controller.ErrNotFound
+	}
+	formation, ok := releases[releaseID]
+	if !ok {
+		return nil, controller.ErrNotFound
+	}
+	procs := make(map[string]int, len(formation.Processes))
+	for typ, n := range formation.Processes {
+		procs[typ] = n
+	}
+	return &ct.ExpandedFormation{
+		App:       app,
+		Release:   release,
+		Artifact:  c.artifacts[release.ArtifactID],
+		Processes: procs,
+	}, nil
+}
+
 func (c *FakeControllerClient) GetApp(appID string) (*ct.App, error) {
 	if app, ok := c.apps[appID]; ok {
 		return app, nil

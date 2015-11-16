@@ -156,7 +156,7 @@ type ControllerClient interface {
 	GetApp(appID string) (*ct.App, error)
 	GetRelease(releaseID string) (*ct.Release, error)
 	GetArtifact(artifactID string) (*ct.Artifact, error)
-	GetFormation(appID, releaseID string) (*ct.Formation, error)
+	GetExpandedFormation(appID, releaseID string) (*ct.ExpandedFormation, error)
 	CreateApp(app *ct.App) error
 	CreateRelease(release *ct.Release) error
 	CreateArtifact(artifact *ct.Artifact) error

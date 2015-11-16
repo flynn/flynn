@@ -40,6 +40,7 @@ var preparedStatements = map[string]string{
 	"formation_list_active":                 formationListActiveQuery,
 	"formation_list_since":                  formationListSinceQuery,
 	"formation_select":                      formationSelectQuery,
+	"formation_select_expanded":             formationSelectExpandedQuery,
 	"formation_insert":                      formationInsertQuery,
 	"formation_update":                      formationUpdateQuery,
 	"formation_delete":                      formationDeleteQuery,
@@ -203,6 +204,17 @@ FROM formations WHERE updated_at >= $1 ORDER BY updated_at DESC`
 	formationSelectQuery = `
 SELECT app_id, release_id, processes, created_at, updated_at
 FROM formations WHERE app_id = $1 AND release_id = $2 AND deleted_at IS NULL`
+	formationSelectExpandedQuery = `
+SELECT
+  apps.app_id, apps.name,
+  releases.release_id, releases.artifact_id, releases.meta, releases.env, releases.processes,
+  artifacts.artifact_id, artifacts.type, artifacts.uri,
+  formations.processes, formations.updated_at
+FROM formations
+JOIN apps USING (app_id)
+JOIN releases ON releases.release_id = formations.release_id
+JOIN artifacts USING (artifact_id)
+WHERE formations.app_id = $1 AND formations.release_id = $2 AND formations.deleted_at IS NULL`
 	formationInsertQuery = `
 INSERT INTO formations (app_id, release_id, processes)
 VALUES ($1, $2, $3) RETURNING created_at, updated_at`

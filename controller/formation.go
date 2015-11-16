@@ -151,6 +151,11 @@ func (r *FormationRepo) Get(appID, releaseID string) (*ct.Formation, error) {
 	return scanFormation(row)
 }
 
+func (r *FormationRepo) GetExpanded(appID, releaseID string) (*ct.ExpandedFormation, error) {
+	row := r.db.QueryRow("formation_select_expanded", appID, releaseID)
+	return scanExpandedFormation(row)
+}
+
 func (r *FormationRepo) List(appID string) ([]*ct.Formation, error) {
 	rows, err := r.db.Query("formation_list_by_app", appID)
 	if err != nil {
@@ -400,7 +405,18 @@ func (c *controllerAPI) GetFormation(ctx context.Context, w http.ResponseWriter,
 	params, _ := ctxhelper.ParamsFromContext(ctx)
 
 	app := c.getApp(ctx)
-	formation, err := c.formationRepo.Get(app.ID, params.ByName("releases_id"))
+	releaseID := params.ByName("releases_id")
+	if req.URL.Query().Get("expand") == "true" {
+		formation, err := c.formationRepo.GetExpanded(app.ID, releaseID)
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		httphelper.JSON(w, 200, formation)
+		return
+	}
+
+	formation, err := c.formationRepo.Get(app.ID, releaseID)
 	if err != nil {
 		respondWithError(w, err)
 		return
