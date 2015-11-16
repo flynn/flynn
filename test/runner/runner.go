@@ -305,7 +305,7 @@ cmd="bin/flynn-test \
   --router-ip {{ .Cluster.RouterIP }} \
   --debug"
 
-timeout --signal=QUIT --kill-after=10 20m $cmd
+timeout --signal=QUIT --kill-after=10 25m $cmd
 `[1:]))
 
 func formatDuration(d time.Duration) string {
