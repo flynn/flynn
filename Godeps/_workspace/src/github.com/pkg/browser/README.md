@@ -10,6 +10,17 @@ The choice of which browser is started is entirely client dependant.
 
 
 
+## Variables
+``` go
+var Stderr io.Writer = os.Stderr
+```
+Stderr is the io.Writer to which executed commands write standard error.
+
+``` go
+var Stdout io.Writer = os.Stdout
+```
+Stdout is the io.Writer to which executed commands write standard output.
+
 
 ## func OpenFile
 ``` go
