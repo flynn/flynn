@@ -345,7 +345,9 @@ func (c *BaseCluster) bootstrap() error {
 		SSHConfig: sshConfig,
 	}
 	defer func() {
-		target.SSHClient.Close()
+		if target.SSHClient != nil {
+			target.SSHClient.Close()
+		}
 	}()
 
 	return c.bootstrapTarget(target)
@@ -356,13 +358,13 @@ func (c *BaseCluster) bootstrapTarget(t *TargetServer) error {
 
 	if t.SSHClient == nil {
 		attempts := 0
-		maxAttempts := 3
+		maxAttempts := 30
 		for {
 			var err error
 			t.SSHClient, err = ssh.Dial("tcp", net.JoinHostPort(t.IP, t.Port), t.SSHConfig)
 			if err != nil {
 				if attempts < maxAttempts {
-					attempts += 1
+					attempts++
 					c.SendLog(err.Error())
 					time.Sleep(time.Second)
 					continue
