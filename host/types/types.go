@@ -7,6 +7,9 @@ import (
 	"github.com/flynn/flynn/host/resource"
 )
 
+// TagPrefix is the prefix added to tags in discoverd instance metadata
+const TagPrefix = "tag:"
+
 type Job struct {
 	ID string `json:"id,omitempty"`
 

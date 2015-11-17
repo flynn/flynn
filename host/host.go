@@ -260,14 +260,14 @@ func runDaemon(args *docopt.Args) {
 	discoverdManager := NewDiscoverdManager(backend, mux, hostID, publishAddr, tags)
 	publishURL := "http://" + publishAddr
 	host := &Host{
-		id:               hostID,
-		url:              publishURL,
-		status:           &host.HostStatus{ID: hostID, PID: os.Getpid(), URL: publishURL},
-		state:            state,
-		backend:          backend,
-		vman:             vman,
-		connectDiscoverd: discoverdManager.ConnectLocal,
-		log:              logger.New("host.id", hostID),
+		id:      hostID,
+		url:     publishURL,
+		status:  &host.HostStatus{ID: hostID, PID: os.Getpid(), URL: publishURL},
+		state:   state,
+		backend: backend,
+		vman:    vman,
+		discMan: discoverdManager,
+		log:     logger.New("host.id", hostID),
 	}
 
 	// restore the host status if set in the environment
@@ -383,7 +383,7 @@ func runDaemon(args *docopt.Args) {
 	}
 	if config := host.status.Discoverd; config != nil && config.URL != "" {
 		log.Info("connecting to service discovery", "url", config.URL)
-		if err := host.connectDiscoverd(config.URL); err != nil {
+		if err := discoverdManager.ConnectLocal(config.URL); err != nil {
 			log.Error("error connecting to service discovery", "err", err)
 			shutdown.Fatal(err)
 		}

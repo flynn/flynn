@@ -76,6 +76,11 @@ func (c *Client) Hosts() ([]*Host, error) {
 	return hosts, nil
 }
 
+// HostInstances returns a list of discoverd instances for hosts in the cluster.
+func (c *Client) HostInstances() ([]*discoverd.Instance, error) {
+	return c.s.Instances()
+}
+
 func (c *Client) StreamHostEvents(ch chan *discoverd.Event) (stream.Stream, error) {
 	return c.s.Watch(ch)
 }

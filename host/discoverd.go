@@ -8,6 +8,7 @@ import (
 
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/logmux"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/shutdown"
 )
 
@@ -21,7 +22,7 @@ func NewDiscoverdManager(backend Backend, mux *logmux.Mux, hostID, publishAddr s
 		},
 	}
 	for k, v := range tags {
-		d.inst.Meta["tag."+k] = v
+		d.inst.Meta[host.TagPrefix+k] = v
 	}
 	d.local.Store(false)
 	return d
@@ -107,4 +108,13 @@ func (d *DiscoverdManager) ConnectPeer(ips []string) error {
 		break
 	}
 	return err
+}
+
+func (d *DiscoverdManager) UpdateTags(tags map[string]string) error {
+	d.mtx.Lock()
+	defer d.mtx.Unlock()
+	for k, v := range tags {
+		d.inst.Meta[host.TagPrefix+k] = v
+	}
+	return d.hb.SetMeta(d.inst.Meta)
 }

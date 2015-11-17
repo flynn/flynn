@@ -35,15 +35,15 @@ type Host struct {
 	state   *State
 	backend Backend
 	vman    *volumemanager.Manager
+	discMan *DiscoverdManager
 	id      string
 	url     string
 
 	statusMtx sync.RWMutex
 	status    *host.HostStatus
 
-	connectDiscoverd func(string) error
-	discoverdOnce    sync.Once
-	networkOnce      sync.Once
+	discoverdOnce sync.Once
+	networkOnce   sync.Once
 
 	listener net.Listener
 
@@ -319,7 +319,7 @@ func (h *jobAPI) ConfigureDiscoverd(w http.ResponseWriter, r *http.Request, _ ht
 	if config.URL != "" && config.DNS != "" {
 		go h.host.discoverdOnce.Do(func() {
 			log.Info("connecting to service discovery", "url", config.URL)
-			if err := h.host.connectDiscoverd(config.URL); err != nil {
+			if err := h.host.discMan.ConnectLocal(config.URL); err != nil {
 				log.Error("error connecting to service discovery", "err", err)
 				shutdown.Fatal(err)
 			}
@@ -357,6 +357,19 @@ func (h *jobAPI) GetStatus(w http.ResponseWriter, r *http.Request, _ httprouter.
 	h.host.statusMtx.RLock()
 	defer h.host.statusMtx.RUnlock()
 	httphelper.JSON(w, 200, &h.host.status)
+}
+
+func (h *jobAPI) UpdateTags(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	var tags map[string]string
+	if err := httphelper.DecodeJSON(r, &tags); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	if err := h.host.discMan.UpdateTags(tags); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	w.WriteHeader(200)
 }
 
 func checkPort(port host.Port) bool {
@@ -454,6 +467,7 @@ func (h *jobAPI) RegisterRoutes(r *httprouter.Router) error {
 	r.GET("/host/status", h.GetStatus)
 	r.POST("/host/resource-check", h.ResourceCheck)
 	r.POST("/host/update", h.Update)
+	r.POST("/host/tags", h.UpdateTags)
 	return nil
 }
 
