@@ -45,6 +45,7 @@ Commands:
 	create      create an app
 	delete      delete an app
 	apps        list apps
+	info        show app information
 	ps          list jobs
 	kill        kill a job
 	log         get app log
