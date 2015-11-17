@@ -64,6 +64,24 @@ Examples:
 	f488cfb478f54edea497bf6347c2eb80  postgres
 	9d5be7be873c41b9898032c08aa87597  controller
 `)
+
+	register("info", runInfo, `
+usage: flynn info
+
+Show information for an app.
+
+Examples:
+
+	$ flynn info
+	=== example
+	Git URL:  https://git.dev.localflynn.com/example.git
+	Web URL:  http://example.dev.localflynn.com
+
+	$ flynn -a example info
+	=== example
+	Git URL:  https://git.dev.localflynn.com/example.git
+	Web URL:  http://example.dev.localflynn.com
+`)
 }
 
 func runCreate(args *docopt.Args, client *controller.Client) error {
@@ -137,5 +155,38 @@ func runApps(args *docopt.Args, client *controller.Client) error {
 	for _, a := range apps {
 		listRec(w, a.ID, a.Name)
 	}
+	return nil
+}
+
+func runInfo(_ *docopt.Args, client *controller.Client) error {
+	appName := mustApp()
+
+	fmt.Println("===", appName)
+
+	w := tabWriter()
+	defer w.Flush()
+
+	if release, err := client.GetAppRelease(appName); err == nil || err == controller.ErrNotFound {
+		if err == controller.ErrNotFound || release.Env["SLUG_URL"] != "" {
+			listRec(w, "Git URL:", gitURL(clusterConf, appName))
+		}
+	} else {
+		return err
+	}
+
+	if routes, err := client.RouteList(appName); err == nil {
+		for _, k := range routes {
+			if k.Type == "http" {
+				route := k.HTTPRoute()
+				protocol := "https"
+				if route.TLSCert == "" {
+					protocol = "http"
+				}
+				listRec(w, "Web URL:", protocol+"://"+route.Domain)
+				break
+			}
+		}
+	}
+
 	return nil
 }
