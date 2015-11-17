@@ -48,7 +48,8 @@ func NewClientWithURL(url string) *Client {
 		c: &httpclient.Client{
 			URL: url,
 			HTTP: &http.Client{
-				Transport: &http.Transport{Dial: dialer.Retry.Dial},
+				Transport:     &http.Transport{Dial: dialer.Retry.Dial},
+				CheckRedirect: redirectPreserveHeaders,
 			},
 		},
 	}
@@ -64,6 +65,21 @@ func NewClientWithHTTP(url string, hc *http.Client) *Client {
 			HTTP: hc,
 		},
 	}
+}
+
+func redirectPreserveHeaders(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return fmt.Errorf("too many redirects")
+	}
+	if len(via) == 0 {
+		return nil
+	}
+	for attr, val := range via[0].Header {
+		if _, ok := req.Header[attr]; !ok {
+			req.Header[attr] = val
+		}
+	}
+	return nil
 }
 
 func (c *Client) Ping() error {
