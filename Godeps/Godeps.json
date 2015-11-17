@@ -522,7 +522,7 @@
 		},
 		{
 			"ImportPath": "github.com/pkg/browser",
-			"Rev": "2e6fb17d7a7cb6a81837ee68158214d9098de905"
+			"Rev": "5a9dc85e4de606c9e32b769c9ff17fed84f687f9"
 		},
 		{
 			"ImportPath": "github.com/rnd42/go-jsonpointer",
