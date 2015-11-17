@@ -263,8 +263,8 @@ func (TestSuite) TestRectify(c *C) {
 	c.Log("Test creating an extra job on the host. Wait for job start in scheduler")
 	form := s.formations.Get(testAppID, testReleaseID)
 	host, err := s.Host(testHostID)
-	request := NewJobRequest(form, testJobType, "", "")
-	config := jobConfig(request.Job, testHostID)
+	newJob := NewJob(form, testAppID, testReleaseID, testJobType, "", "")
+	config := jobConfig(newJob, testHostID)
 	host.AddJob(config)
 	job = s.waitJobStart()
 	jobs[job.JobID] = job
@@ -285,8 +285,8 @@ func (TestSuite) TestRectify(c *C) {
 	processes := map[string]int{testJobType: testJobCount}
 	release := NewRelease("test-release-2", artifact, processes)
 	form = NewFormation(&ct.ExpandedFormation{App: app, Release: release, Artifact: artifact, Processes: processes})
-	request = NewJobRequest(form, testJobType, "", "")
-	config = jobConfig(request.Job, testHostID)
+	newJob = NewJob(form, testAppID, testReleaseID, testJobType, "", "")
+	config = jobConfig(newJob, testHostID)
 	// Add the job to the host without adding the formation. Expected error.
 	c.Log("Create a new job on the host without adding the formation to the controller. Wait for job start, expect error.")
 	host.AddJob(config)
@@ -301,26 +301,6 @@ func (TestSuite) TestRectify(c *C) {
 	s.waitFormationChange()
 	s.waitJobStart()
 	c.Assert(s.Jobs(), HasLen, 2)
-}
-
-func (TestSuite) TestJobRequestRestarts(c *C) {
-	s := runTestScheduler(c, NewFakeCluster(), true)
-	defer s.Stop()
-
-	waitRestarts := func(duration time.Duration) {
-		event, err := s.waitDurationForEvent(EventTypeJobRequest, duration)
-		c.Assert(err.Error(), Equals, "unexpected event error: no hosts found")
-		e, ok := event.(*JobRequestEvent)
-		if !ok {
-			c.Fatalf("expected JobRequestEvent, got %T", event)
-		}
-		c.Assert(e.Request, NotNil)
-	}
-
-	// wait for the formation to cascade to the scheduler
-	waitRestarts(550 * time.Millisecond)
-	waitRestarts(550 * time.Millisecond)
-	waitRestarts(550 * time.Millisecond)
 }
 
 func (TestSuite) TestMultipleHosts(c *C) {

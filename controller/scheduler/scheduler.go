@@ -25,10 +25,15 @@ import (
 )
 
 const (
-	eventBufferSize      int           = 1000
-	maxJobAttempts       uint          = 30
-	jobAttemptInterval   time.Duration = 500 * time.Millisecond
-	defaultMaxHostChecks               = 10
+	eventBufferSize      = 1000
+	maxJobAttempts       = 30
+	jobAttemptInterval   = 500 * time.Millisecond
+	defaultMaxHostChecks = 10
+)
+
+var (
+	ErrNotLeader = errors.New("scheduler is not the leader")
+	ErrNoHosts   = errors.New("no hosts found")
 )
 
 var logger = log15.New("component", "scheduler")
@@ -55,42 +60,42 @@ type Scheduler struct {
 	stop     chan struct{}
 	stopOnce sync.Once
 
-	syncJobs        chan struct{}
-	syncFormations  chan struct{}
-	syncHosts       chan struct{}
-	hostChecks      chan struct{}
-	rectify         chan struct{}
-	hostEvents      chan *discoverd.Event
-	formationEvents chan *ct.ExpandedFormation
-	jobRequests     chan *JobRequest
-	putJobs         chan *ct.Job
+	syncJobs          chan struct{}
+	syncFormations    chan struct{}
+	syncHosts         chan struct{}
+	hostChecks        chan struct{}
+	rectify           chan struct{}
+	hostEvents        chan *discoverd.Event
+	formationEvents   chan *ct.ExpandedFormation
+	putJobs           chan *ct.Job
+	placementRequests chan *PlacementRequest
 
 	rectifyBatch map[utils.FormationKey]struct{}
 }
 
 func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc Discoverd) *Scheduler {
 	return &Scheduler{
-		ControllerClient: cc,
-		ClusterClient:    cluster,
-		discoverd:        disc,
-		backoffPeriod:    getBackoffPeriod(),
-		maxHostChecks:    defaultMaxHostChecks,
-		hosts:            make(map[string]*Host),
-		jobs:             make(map[string]*Job),
-		formations:       make(Formations),
-		listeners:        make(map[chan Event]struct{}),
-		jobEvents:        make(chan *host.Event, eventBufferSize),
-		stop:             make(chan struct{}),
-		syncJobs:         make(chan struct{}, 1),
-		syncFormations:   make(chan struct{}, 1),
-		syncHosts:        make(chan struct{}, 1),
-		hostChecks:       make(chan struct{}, 1),
-		rectifyBatch:     make(map[utils.FormationKey]struct{}),
-		rectify:          make(chan struct{}, 1),
-		formationEvents:  make(chan *ct.ExpandedFormation, eventBufferSize),
-		hostEvents:       make(chan *discoverd.Event, eventBufferSize),
-		jobRequests:      make(chan *JobRequest, eventBufferSize),
-		putJobs:          make(chan *ct.Job, eventBufferSize),
+		ControllerClient:  cc,
+		ClusterClient:     cluster,
+		discoverd:         disc,
+		backoffPeriod:     getBackoffPeriod(),
+		maxHostChecks:     defaultMaxHostChecks,
+		hosts:             make(map[string]*Host),
+		jobs:              make(map[string]*Job),
+		formations:        make(Formations),
+		listeners:         make(map[chan Event]struct{}),
+		jobEvents:         make(chan *host.Event, eventBufferSize),
+		stop:              make(chan struct{}),
+		syncJobs:          make(chan struct{}, 1),
+		syncFormations:    make(chan struct{}, 1),
+		syncHosts:         make(chan struct{}, 1),
+		hostChecks:        make(chan struct{}, 1),
+		rectifyBatch:      make(map[utils.FormationKey]struct{}),
+		rectify:           make(chan struct{}, 1),
+		formationEvents:   make(chan *ct.ExpandedFormation, eventBufferSize),
+		hostEvents:        make(chan *discoverd.Event, eventBufferSize),
+		putJobs:           make(chan *ct.Job, eventBufferSize),
+		placementRequests: make(chan *PlacementRequest, eventBufferSize),
 	}
 }
 
@@ -283,8 +288,8 @@ func (s *Scheduler) Run() error {
 
 		// Handle events that reconcile scheduler state with the cluster
 		select {
-		case req := <-s.jobRequests:
-			s.HandleJobRequest(req)
+		case req := <-s.placementRequests:
+			s.HandlePlacementRequest(req)
 			continue
 		case e := <-s.hostEvents:
 			s.HandleHostEvent(e)
@@ -326,8 +331,8 @@ func (s *Scheduler) Run() error {
 			return nil
 		case isLeader := <-leaderCh:
 			s.HandleLeaderChange(isLeader)
-		case req := <-s.jobRequests:
-			s.HandleJobRequest(req)
+		case req := <-s.placementRequests:
+			s.HandlePlacementRequest(req)
 		case e := <-s.hostEvents:
 			s.HandleHostEvent(e)
 		case <-s.hostChecks:
@@ -457,9 +462,8 @@ func (s *Scheduler) SyncHosts() (err error) {
 
 	// return an error to trigger another sync if no hosts were found
 	if len(hosts) == 0 {
-		e := "no hosts found"
-		log.Error(e)
-		return errors.New(e)
+		log.Error(ErrNoHosts.Error())
+		return ErrNoHosts
 	}
 
 	return nil
@@ -515,20 +519,40 @@ func (s *Scheduler) HandleFormationChange(ef *ct.ExpandedFormation) {
 	s.handleFormation(ef)
 }
 
-func (s *Scheduler) HandleJobRequest(req *JobRequest) {
-	log := logger.New("fn", "HandleJobRequest", "job.type", req.Job.Type)
-
+func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 	if !s.isLeader {
-		log.Warn("ignoring job request as not service leader")
+		req.Error(ErrNotLeader)
 		return
 	}
 
-	log.Info("handling job request")
-	err := s.startJob(req)
-	if err != nil {
-		log.Error("error handling job request", "err", err)
+	log := logger.New("fn", "HandlePlacementRequest", "app.id", req.Job.AppID, "release.id", req.Job.ReleaseID, "job.type", req.Job.Type)
+	log.Info("handling placement request")
+
+	if len(s.hosts) == 0 {
+		req.Error(ErrNoHosts)
+		return
 	}
-	s.sendEvent(EventTypeJobRequest, err, req)
+
+	formation := req.Job.Formation
+	counts := s.jobs.GetHostJobCounts(formation.key(), req.Job.Type)
+	var minCount int = math.MaxInt32
+	for id, h := range s.hosts {
+		count, ok := counts[id]
+		if !ok || count < minCount {
+			minCount = count
+			req.Host = h
+		}
+	}
+	if req.Host == nil {
+		req.Error(fmt.Errorf("unable to find a host out of %d hosts", len(s.hosts)))
+		return
+	}
+	log.Info(fmt.Sprintf("placed job on host with least %s jobs", req.Job.Type), "host.id", req.Host.ID)
+
+	req.Config = jobConfig(req.Job, req.Host.ID)
+	req.Job.JobID = req.Config.ID
+	req.Job.HostID = req.Host.ID
+	req.Error(nil)
 }
 
 func (s *Scheduler) RunPutJobs() {
@@ -565,19 +589,78 @@ func (s *Scheduler) handleFormationDiff(f *Formation, diff Processes) {
 	log.Info("formation in incorrect state", "diff", diff)
 	for typ, n := range diff {
 		if n > 0 {
-			log.Info(fmt.Sprintf("requesting %d new job(s) of type %s", n, typ))
+			log.Info(fmt.Sprintf("starting %d new %s jobs", n, typ))
 			for i := 0; i < n; i++ {
-				req := NewJobRequest(f, typ, "", random.UUID())
-				s.jobs.AddJob(req.Job)
-				s.HandleJobRequest(req)
+				job := NewJob(f, f.App.ID, f.Release.ID, typ, "", random.UUID())
+				s.jobs.AddJob(job)
+				go s.StartJob(job)
 			}
 		} else if n < 0 {
-			log.Info(fmt.Sprintf("requesting removal of %d job(s) of type %s", -n, typ))
+			log.Info(fmt.Sprintf("stopping %d %s jobs", -n, typ))
 			for i := 0; i < -n; i++ {
 				s.stopJob(f, typ)
 			}
 		}
 	}
+}
+
+func (s *Scheduler) StartJob(job *Job) {
+	log := logger.New("fn", "StartJob", "app.id", job.AppID, "release.id", job.ReleaseID, "job.type", job.Type)
+	log.Info("starting job")
+
+	for attempt := 0; attempt < maxJobAttempts; attempt++ {
+		if attempt > 0 {
+			time.Sleep(jobAttemptInterval)
+		}
+		log.Info("placing job in the cluster")
+		config, host, err := s.PlaceJob(job)
+		if err == ErrNotLeader {
+			log.Warn("not starting job as not leader")
+			return
+		} else if err != nil {
+			log.Error("error placing job in the cluster", "err", err)
+			continue
+		}
+
+		if job.needsVolume() {
+			log.Info("provisioning data volume", "host.id", host.ID)
+			if err := utils.ProvisionVolume(host.client, config); err != nil {
+				log.Error("error provisioning volume", "err", err)
+				continue
+			}
+		}
+
+		log.Info("adding job to the cluster", "host.id", host.ID, "job.id", config.ID)
+		if err := host.client.AddJob(config); err != nil {
+			log.Error("error adding job to the cluster", "err", err)
+			continue
+		}
+		return
+	}
+	log.Error(fmt.Sprintf("error starting job after %d attempts", maxJobAttempts))
+}
+
+// PlacementRequest is sent from a StartJob goroutine to the main scheduler
+// loop to place the job in the cluster (i.e. select a host and generate config
+// for the job)
+type PlacementRequest struct {
+	Job    *Job
+	Config *host.Job
+	Host   *Host
+	Err    chan error
+}
+
+func (r *PlacementRequest) Error(err error) {
+	r.Err <- err
+}
+
+func (s *Scheduler) PlaceJob(job *Job) (*host.Job, *Host, error) {
+	req := &PlacementRequest{
+		Job: job,
+		Err: make(chan error),
+	}
+	s.placementRequests <- req
+	return req.Config, req.Host, <-req.Err
 }
 
 func (s *Scheduler) followHost(h utils.HostClient) error {
@@ -791,54 +874,6 @@ func (s *Scheduler) triggerRectify(key utils.FormationKey) {
 	}
 }
 
-func (s *Scheduler) startJob(req *JobRequest) (err error) {
-	job := req.Job
-	log := logger.New("fn", "startJob", "job.type", job.Type)
-	log.Info("starting job", "job.restarts", job.restarts, "request.attempts", req.attempts)
-
-	defer func() {
-		if err != nil {
-			if req.attempts >= maxJobAttempts {
-				log.Error("error starting job, max job attempts reached", "err", err)
-				job.SetState(JobStateStopped)
-				return
-			}
-			log.Error("error starting job, trying again", "err", err)
-			req.attempts++
-			time.AfterFunc(jobAttemptInterval, func() {
-				s.jobRequests <- req
-			})
-		}
-	}()
-
-	log.Info("determining best host for job")
-	host, err := s.findBestHost(job.Formation, job.Type)
-	if err != nil {
-		log.Error("error determining best host for job", "err", err)
-		return err
-	}
-	job.HostID = host.ID
-
-	config := jobConfig(job, host.ID)
-	job.JobID = config.ID
-
-	// Provision a data volume on the host if needed.
-	if job.needsVolume() {
-		log.Info("provisioning volume")
-		if err := utils.ProvisionVolume(host.client, config); err != nil {
-			log.Error("error provisioning volume", "err", err)
-			return err
-		}
-	}
-
-	log.Info("requesting host to add job", "host.id", host.ID, "job.id", config.ID)
-	if err := host.client.AddJob(config); err != nil {
-		log.Error("error requesting host to add job", "err", err)
-		return err
-	}
-	return nil
-}
-
 func (s *Scheduler) stopJob(f *Formation, typ string) (err error) {
 	log := logger.New("fn", "stopJob", "job.type", typ)
 	log.Info("stopping job")
@@ -889,32 +924,6 @@ func jobConfig(job *Job, hostID string) *host.Job {
 	config := utils.JobConfig(job.Formation.ExpandedFormation, job.Type, hostID)
 	config.Metadata["flynn-controller.scheduler_id"] = job.InternalID
 	return config
-}
-
-func (s *Scheduler) findBestHost(formation *Formation, typ string) (*Host, error) {
-	log := logger.New("fn", "findBestHost", "app.id", formation.App.ID, "release.id", formation.Release.ID, "job.type", typ)
-
-	if len(s.hosts) == 0 {
-		e := "no hosts found"
-		log.Error(e)
-		return nil, errors.New(e)
-	}
-
-	counts := s.jobs.GetHostJobCounts(formation.key(), typ)
-	var minCount int = math.MaxInt32
-	var host *Host
-	for id, h := range s.hosts {
-		count, ok := counts[id]
-		if !ok || count < minCount {
-			minCount = count
-			host = h
-		}
-	}
-	if host == nil {
-		return nil, fmt.Errorf("unable to find a host out of %d host(s)", len(s.hosts))
-	}
-	log.Info(fmt.Sprintf("using host with least %s jobs", typ), "host.id", host.ID)
-	return host, nil
 }
 
 func (s *Scheduler) Stop() error {
@@ -999,9 +1008,7 @@ func (s *Scheduler) scheduleJobStart(job *Job) error {
 	job.restarts += 1
 	log.Info("scheduling job request", "attempts", job.restarts, "delay", backoff)
 	job.SetState(JobStateScheduled)
-	time.AfterFunc(backoff, func() {
-		s.jobRequests <- &JobRequest{Job: job}
-	})
+	time.AfterFunc(backoff, func() { s.StartJob(job) })
 	return nil
 }
 
@@ -1163,7 +1170,6 @@ const (
 	EventTypeRectify         EventType = "rectify"
 	EventTypeJobStart        EventType = "start-job"
 	EventTypeJobStop         EventType = "stop-job"
-	EventTypeJobRequest      EventType = "request-job"
 	EventTypeHostEvent       EventType = "host-event"
 )
 
@@ -1202,15 +1208,6 @@ func (lce *LeaderChangeEvent) Data() interface{} {
 	return lce.IsLeader
 }
 
-type JobRequestEvent struct {
-	Event
-	Request *JobRequest
-}
-
-func (jre *JobRequestEvent) Data() interface{} {
-	return jre.Request
-}
-
 type RectifyEvent struct {
 	Event
 	FormationKey utils.FormationKey
@@ -1227,9 +1224,6 @@ func NewEvent(typ EventType, err error, data interface{}) Event {
 	case EventTypeJobStart:
 		job, _ := data.(*Job)
 		return &JobEvent{Event: &DefaultEvent{err: err, typ: typ}, Job: job}
-	case EventTypeJobRequest:
-		req, _ := data.(*JobRequest)
-		return &JobRequestEvent{Event: &DefaultEvent{err: err, typ: typ}, Request: req}
 	case EventTypeLeaderChange:
 		isLeader, _ := data.(bool)
 		return &LeaderChangeEvent{Event: &DefaultEvent{err: err, typ: typ}, IsLeader: isLeader}

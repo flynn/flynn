@@ -20,15 +20,6 @@ const (
 	JobStateNew       JobState = "new"
 )
 
-type JobRequest struct {
-	Job      *Job
-	attempts uint
-}
-
-func NewJobRequest(f *Formation, typ, hostID, internalID string) *JobRequest {
-	return &JobRequest{Job: NewJob(f, f.App.ID, f.Release.ID, typ, hostID, internalID)}
-}
-
 type Job struct {
 	// InternalID is used to track jobs in-memory and is added to the
 	// cluster job's metadata (with key "flynn-controller.scheduler_id").
