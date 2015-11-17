@@ -277,7 +277,7 @@ func (m *migration) maybeDeployDashboard() error {
 	release.Env["CA_CERT"] = m.dm.TLSCert.CACert
 	release.Env["DEFAULT_ROUTE_DOMAIN"] = m.dm.Domain
 	release.Env["CONTROLLER_DOMAIN"] = fmt.Sprintf("controller.%s", m.dm.Domain)
-	release.Env["URL"] = fmt.Sprintf("dashboard.%s", m.dm.Domain)
+	release.Env["URL"] = fmt.Sprintf("https://dashboard.%s", m.dm.Domain)
 	if err := m.client.CreateRelease(release); err != nil {
 		log.Error("error creating release", "error", err)
 		return err

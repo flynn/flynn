@@ -95,7 +95,7 @@ func (s *DomainMigrationSuite) migrateDomain(t *c.C, dm *ct.DomainMigration) {
 	t.Assert(err, c.IsNil)
 	t.Assert(dashboardRelease.Env["DEFAULT_ROUTE_DOMAIN"], c.Equals, dm.Domain)
 	t.Assert(dashboardRelease.Env["CONTROLLER_DOMAIN"], c.Equals, fmt.Sprintf("controller.%s", dm.Domain))
-	t.Assert(dashboardRelease.Env["URL"], c.Equals, fmt.Sprintf("dashboard.%s", dm.Domain))
+	t.Assert(dashboardRelease.Env["URL"], c.Equals, fmt.Sprintf("https://dashboard.%s", dm.Domain))
 	t.Assert(dashboardRelease.Env["CA_CERT"], c.Equals, cert.CACert)
 
 	var doPing func(string, int)
