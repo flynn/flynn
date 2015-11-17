@@ -345,7 +345,9 @@ func (c *BaseCluster) bootstrap() error {
 		SSHConfig: sshConfig,
 	}
 	defer func() {
-		target.SSHClient.Close()
+		if target.SSHClient != nil {
+			target.SSHClient.Close()
+		}
 	}()
 
 	return c.bootstrapTarget(target)
