@@ -120,36 +120,15 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogFollow(c *C) {
 		err  error
 	}
 
-	s.agg.feed(msg1)
-	s.agg.feed(msg2)
+	tests := []struct {
+		nLines   int
+		expected []*rfc5424.Message
+	}{
+		{1, []*rfc5424.Message{msg2, msg3, msg4}}, // 1 message from backlog
+		{0, []*rfc5424.Message{msg3, msg4}},       // 0 (no messages) from backlog
+	}
 
-	nlines := 1
-	logrc, err := s.client.GetLog(appID, &client.LogOpts{
-		Follow: true,
-		Lines:  &nlines,
-	})
-	c.Assert(err, IsNil)
-	defer logrc.Close()
-
-	s.agg.feed(msg3)
-	s.agg.feed(msg4)
-
-	// use a goroutine + channel so we can timeout the stdout read
-	lines := make(chan line)
-	go func() {
-		buf := bufio.NewReader(logrc)
-		for {
-			text, err := buf.ReadBytes('\n')
-			if err != nil {
-				if err != io.EOF {
-					lines <- line{"", err}
-				}
-				break
-			}
-			lines <- line{string(text), nil}
-		}
-	}()
-	readline := func() (string, error) {
+	readline := func(lines <-chan line) (string, error) {
 		select {
 		case l := <-lines:
 			if l.err != nil {
@@ -161,14 +140,48 @@ func (s *LogAggregatorTestSuite) TestAPIGetLogFollow(c *C) {
 		}
 	}
 
-	expected := []string{marshalMessage(msg2), marshalMessage(msg3), marshalMessage(msg4)}
-	for _, want := range expected {
-		got, err := readline()
-		if err != nil {
-			c.Error(err)
-		}
+	for _, test := range tests {
+		s.agg.feed(msg1)
+		s.agg.feed(msg2)
+
+		logrc, err := s.client.GetLog(appID, &client.LogOpts{
+			Follow: true,
+			Lines:  &test.nLines,
+		})
 		c.Assert(err, IsNil)
-		c.Assert(got, Equals, want)
+
+		s.agg.feed(msg3)
+		s.agg.feed(msg4)
+
+		// use a goroutine + channel so we can timeout the stdout read
+		lines := make(chan line)
+		go func() {
+			buf := bufio.NewReader(logrc)
+			for {
+				text, err := buf.ReadBytes('\n')
+				if err != nil {
+					if err != io.EOF {
+						lines <- line{"", err}
+					}
+					close(lines)
+					break
+				}
+				lines <- line{string(text), nil}
+			}
+		}()
+
+		for _, want := range test.expected {
+			got, err := readline(lines)
+			if err != nil {
+				c.Error(err)
+			}
+			c.Assert(err, IsNil)
+			c.Assert(got, Equals, marshalMessage(want))
+		}
+
+		s.agg.Reset()
+
+		logrc.Close()
 	}
 }
 
