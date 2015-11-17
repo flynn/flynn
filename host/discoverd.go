@@ -11,7 +11,7 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 )
 
-func NewDiscoverdManager(backend Backend, mux *logmux.Mux, hostID, publishAddr string) *DiscoverdManager {
+func NewDiscoverdManager(backend Backend, mux *logmux.Mux, hostID, publishAddr string, tags map[string]string) *DiscoverdManager {
 	d := &DiscoverdManager{
 		backend: backend,
 		mux:     mux,
@@ -19,6 +19,9 @@ func NewDiscoverdManager(backend Backend, mux *logmux.Mux, hostID, publishAddr s
 			Addr: publishAddr,
 			Meta: map[string]string{"id": hostID},
 		},
+	}
+	for k, v := range tags {
+		d.inst.Meta["tag."+k] = v
 	}
 	d.local.Store(false)
 	return d
