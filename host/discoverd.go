@@ -116,5 +116,8 @@ func (d *DiscoverdManager) UpdateTags(tags map[string]string) error {
 	for k, v := range tags {
 		d.inst.Meta[host.TagPrefix+k] = v
 	}
+	if d.hb == nil {
+		return nil
+	}
 	return d.hb.SetMeta(d.inst.Meta)
 }

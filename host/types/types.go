@@ -277,11 +277,12 @@ type DiscoverdConfig struct {
 }
 
 type HostStatus struct {
-	ID        string           `json:"id"`
-	PID       int              `json:"pid"`
-	URL       string           `json:"url"`
-	Discoverd *DiscoverdConfig `json:"discoverd,omitempty"`
-	Network   *NetworkConfig   `json:"network,omitempty"`
+	ID        string            `json:"id"`
+	Tags      map[string]string `json:"tags,omitempty"`
+	PID       int               `json:"pid"`
+	URL       string            `json:"url"`
+	Discoverd *DiscoverdConfig  `json:"discoverd,omitempty"`
+	Network   *NetworkConfig    `json:"network,omitempty"`
 }
 
 const (

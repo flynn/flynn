@@ -260,9 +260,14 @@ func runDaemon(args *docopt.Args) {
 	discoverdManager := NewDiscoverdManager(backend, mux, hostID, publishAddr, tags)
 	publishURL := "http://" + publishAddr
 	host := &Host{
-		id:      hostID,
-		url:     publishURL,
-		status:  &host.HostStatus{ID: hostID, PID: os.Getpid(), URL: publishURL},
+		id:  hostID,
+		url: publishURL,
+		status: &host.HostStatus{
+			ID:   hostID,
+			PID:  os.Getpid(),
+			URL:  publishURL,
+			Tags: tags,
+		},
 		state:   state,
 		backend: backend,
 		vman:    vman,
@@ -280,6 +285,8 @@ func runDaemon(args *docopt.Args) {
 		pid := os.Getpid()
 		log.Info("setting status PID", "pid", pid)
 		host.status.PID = pid
+		// keep the same tags as the parent
+		discoverdManager.UpdateTags(host.status.Tags)
 	}
 
 	log.Info("creating HTTP listener")

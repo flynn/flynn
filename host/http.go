@@ -365,11 +365,21 @@ func (h *jobAPI) UpdateTags(w http.ResponseWriter, r *http.Request, _ httprouter
 		httphelper.Error(w, err)
 		return
 	}
-	if err := h.host.discMan.UpdateTags(tags); err != nil {
+	if err := h.host.UpdateTags(tags); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
 	w.WriteHeader(200)
+}
+
+func (h *Host) UpdateTags(tags map[string]string) error {
+	h.statusMtx.RLock()
+	defer h.statusMtx.RUnlock()
+	if err := h.discMan.UpdateTags(tags); err != nil {
+		return err
+	}
+	h.status.Tags = tags
+	return nil
 }
 
 func checkPort(port host.Port) bool {
