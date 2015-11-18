@@ -79,6 +79,9 @@ type Build struct {
 }
 
 func (b *Build) URL() string {
+	if listenPort != "" && listenPort != "443" {
+		return "https://ci.flynn.io:" + listenPort + "/builds/" + b.ID
+	}
 	return "https://ci.flynn.io/builds/" + b.ID
 }
 
