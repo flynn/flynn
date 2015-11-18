@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -573,6 +574,23 @@ func TestStore_Subscribe_NoBlock(t *testing.T) {
 	}
 
 	// Ensure that program does not hang.
+}
+
+func BenchmarkStore_AddInstance(b *testing.B) {
+	s := MustOpenStore()
+	defer s.Close()
+	if err := s.AddService("service0", nil); err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+
+	// Continually heartbeat 10 instances.
+	const instanceN = 10
+	for i := 0; i < b.N; i++ {
+		if err := s.AddInstance("service0", &discoverd.Instance{ID: fmt.Sprintf("inst%d", i%instanceN)}); err != nil {
+			b.Fatal(err)
+		}
+	}
 }
 
 // Store represents a test wrapper for server.Store.

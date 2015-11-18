@@ -170,6 +170,13 @@ func (s *Store) Open() error {
 	}
 	s.stableStore = stableStore
 
+	// Wrap the store in a LogCache to improve performance
+	cacheStore, err := raft.NewLogCache(512, stableStore)
+	if err != nil {
+		stableStore.Close()
+		return fmt.Errorf("log cache: %s", err)
+	}
+
 	// Create the snapshot store.
 	ss, err := raft.NewFileSnapshotStore(s.path, 2, os.Stderr)
 	if err != nil {
@@ -177,7 +184,7 @@ func (s *Store) Open() error {
 	}
 
 	// Create raft log.
-	r, err := raft.NewRaft(config, s, stableStore, stableStore, ss, s.peerStore, s.transport)
+	r, err := raft.NewRaft(config, s, cacheStore, stableStore, ss, s.peerStore, s.transport)
 	if err != nil {
 		return fmt.Errorf("raft: %s", err)
 	}
