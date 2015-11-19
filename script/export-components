@@ -18,16 +18,29 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "${ROOT}/script/lib/ui.sh"
 
 usage() {
-  echo "usage: $0 TUF_DIR" >&2
+  cat <<USAGE >&2
+usage: $0 [options] TUF_DIR
+
+OPTIONS:
+  -h, --help    Show this message
+USAGE
 }
 
 main() {
+  if [[ $1 = "-h" ]] || [[ $1 = "--help" ]]; then
+    usage
+    exit 0
+  fi
+
   if [[ $# -ne 1 ]]; then
     usage
     exit 1
   fi
 
   local tuf_dir=$1
+  if [[ ! -d "${tuf_dir}" ]]; then
+    fail "No such directory: ${tuf_dir}"
+  fi
 
   local version="$("${ROOT}/host/bin/flynn-host" version)"
   if [[ -z "${version}" ]]; then
