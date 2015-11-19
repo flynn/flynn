@@ -186,5 +186,26 @@ $$ LANGUAGE plpgsql`,
 		`UPDATE apps SET deploy_timeout = 120 WHERE name = 'controller'`,
 		`UPDATE apps SET deploy_timeout = 120 WHERE name = 'postgres'`,
 	)
+	m.Add(4,
+		`CREATE TABLE deployment_strategies (name text PRIMARY KEY)`,
+		`INSERT INTO deployment_strategies (name) VALUES
+			('all-at-once'), ('one-by-one'), ('postgres')`,
+		`ALTER TABLE apps ALTER COLUMN strategy TYPE text`,
+		`ALTER TABLE apps ALTER COLUMN strategy SET DEFAULT 'all-at-once'`,
+		`ALTER TABLE apps ADD CONSTRAINT apps_strategy_fkey FOREIGN KEY (strategy) REFERENCES deployment_strategies (name)`,
+		`ALTER TABLE deployments ALTER COLUMN strategy TYPE text`,
+		`ALTER TABLE deployments ADD CONSTRAINT deployments_strategy_fkey FOREIGN KEY (strategy) REFERENCES deployment_strategies (name)`,
+		`DROP TYPE deployment_strategy`,
+
+		`CREATE TABLE event_types (name text PRIMARY KEY)`,
+		`INSERT INTO event_types (name) VALUES
+			('app_deletion'), ('app'), ('app_release'), ('deployment'),
+			('job'),('scale'), ('release'), ('artifact'), ('provider'),
+			('resource'), ('resource_deletion'), ('key'), ('key_deletion'),
+			('route'), ('route_deletion'), ('domain_migration')`,
+		`ALTER TABLE events ALTER COLUMN object_type TYPE text`,
+		`ALTER TABLE events ADD CONSTRAINT events_object_type_fkey FOREIGN KEY (object_type) REFERENCES event_types (name)`,
+		`DROP TYPE event_type`,
+	)
 	return m.Migrate(db)
 }
