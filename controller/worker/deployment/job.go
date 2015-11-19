@@ -136,40 +136,38 @@ func (d *DeployJob) Perform() error {
 		}()
 	}
 
-	if len(d.useJobEvents) > 0 {
-		log.Info("getting job event stream")
-		d.jobEvents = make(chan *ct.Job)
-		stream, err := d.client.StreamJobEvents(d.AppID, d.jobEvents)
-		if err != nil {
-			log.Error("error getting job event stream", "err", err)
-			return err
+	log.Info("getting job event stream")
+	d.jobEvents = make(chan *ct.Job)
+	stream, err := d.client.StreamJobEvents(d.AppID, d.jobEvents)
+	if err != nil {
+		log.Error("error getting job event stream", "err", err)
+		return err
+	}
+	defer stream.Close()
+
+	log.Info("getting current jobs")
+	jobs, err := d.client.JobList(d.AppID)
+	if err != nil {
+		log.Error("error getting current jobs", "err", err)
+		return err
+	}
+	for _, job := range jobs {
+		if job.State != "up" {
+			continue
 		}
-		defer stream.Close()
-
-		log.Info("getting current jobs")
-		jobs, err := d.client.JobList(d.AppID)
-		if err != nil {
-			log.Error("error getting current jobs", "err", err)
-			return err
+		if _, ok := d.useJobEvents[job.Type]; !ok {
+			continue
 		}
-		for _, job := range jobs {
-			if job.State != "up" {
-				continue
-			}
-			if _, ok := d.useJobEvents[job.Type]; !ok {
-				continue
-			}
 
-			// track the jobs so we can drop any events received between
-			// connecting the job stream and getting the list of jobs
-			d.knownJobStates[jobIDState{job.ID, "up"}] = struct{}{}
+		// track the jobs so we can drop any events received between
+		// connecting the job stream and getting the list of jobs
+		d.knownJobStates[jobIDState{job.ID, "up"}] = struct{}{}
 
-			switch job.ReleaseID {
-			case d.OldReleaseID:
-				d.oldReleaseState[job.Type]++
-			case d.NewReleaseID:
-				d.newReleaseState[job.Type]++
-			}
+		switch job.ReleaseID {
+		case d.OldReleaseID:
+			d.oldReleaseState[job.Type]++
+		case d.NewReleaseID:
+			d.newReleaseState[job.Type]++
 		}
 	}
 
