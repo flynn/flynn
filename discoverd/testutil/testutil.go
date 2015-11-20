@@ -18,24 +18,16 @@ import (
 	"github.com/flynn/flynn/pkg/attempt"
 )
 
-func RunDiscoverdServer(t TestingT, raftPort, httpPort string) (string, func()) {
+func RunDiscoverdServer(t TestingT, port string) (string, func()) {
 	killCh := make(chan struct{})
 	doneCh := make(chan struct{})
 
-	if raftPort == "" {
-		port, err := RandomPort()
+	if port == "" {
+		p, err := RandomPort()
 		if err != nil {
-			t.Fatal("error getting random discoverd raft port: ", err)
+			t.Fatal("error getting random discoverd port: ", err)
 		}
-		raftPort = port
-	}
-
-	if httpPort == "" {
-		port, err := RandomPort()
-		if err != nil {
-			t.Fatal("error getting random discoverd http port: ", err)
-		}
-		httpPort = port
+		port = p
 	}
 
 	// Generate a data directory.
@@ -44,8 +36,7 @@ func RunDiscoverdServer(t TestingT, raftPort, httpPort string) (string, func()) 
 	go func() {
 		cmd := exec.Command("discoverd",
 			"-host", "127.0.0.1",
-			"-raft-addr", "127.0.0.1:"+raftPort,
-			"-http-addr", "127.0.0.1:"+httpPort,
+			"-addr", "127.0.0.1:"+port,
 			"-dns-addr", "127.0.0.1:0",
 			"-data-dir", dataDir,
 		)
@@ -83,19 +74,19 @@ func RunDiscoverdServer(t TestingT, raftPort, httpPort string) (string, func()) 
 	}()
 
 	// Ping server and wait for leadership.
-	if err := waitForLeader(t, "127.0.0.1:"+httpPort, 5*time.Second); err != nil {
+	if err := waitForLeader(t, "127.0.0.1:"+port, 5*time.Second); err != nil {
 		t.Fatal("waiting for leader: ", err)
 	}
 
-	return "127.0.0.1:" + httpPort, func() {
+	return "127.0.0.1:" + port, func() {
 		close(killCh)
 		os.RemoveAll(dataDir)
 		<-doneCh
 	}
 }
 
-func BootDiscoverd(t TestingT, raftPort, httpPort string) (*discoverd.Client, func()) {
-	addr, killDiscoverd := RunDiscoverdServer(t, raftPort, httpPort)
+func BootDiscoverd(t TestingT, port string) (*discoverd.Client, func()) {
+	addr, killDiscoverd := RunDiscoverdServer(t, port)
 
 	client := discoverd.NewClientWithURL("http://" + addr)
 	if err := Attempts.Run(client.Ping); err != nil {
@@ -105,7 +96,7 @@ func BootDiscoverd(t TestingT, raftPort, httpPort string) (*discoverd.Client, fu
 }
 
 func SetupDiscoverd(t TestingT) (*discoverd.Client, func()) {
-	client, killDiscoverd := BootDiscoverd(t, "", "")
+	client, killDiscoverd := BootDiscoverd(t, "")
 	return client, func() {
 		killDiscoverd()
 	}

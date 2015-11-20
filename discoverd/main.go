@@ -43,11 +43,11 @@ func main() {
 
 // Main represents the main program execution.
 type Main struct {
-	mu           sync.Mutex
-	status       host.DiscoverdConfig
-	store        *server.Store
-	dnsServer    *server.DNSServer
-	httpListener net.Listener
+	mu        sync.Mutex
+	status    host.DiscoverdConfig
+	store     *server.Store
+	dnsServer *server.DNSServer
+	ln        net.Listener
 
 	logger *log.Logger
 
@@ -76,14 +76,24 @@ func (m *Main) Run(args ...string) error {
 		return err
 	}
 
+	// Open listener.
+	ln, err := net.Listen("tcp4", opt.Addr)
+	if err != nil {
+		return err
+	}
+	m.ln = ln
+
+	// Multiplex listener to store and http api.
+	storeLn, httpLn := server.Mux(ln)
+
 	// Set up advertised address and default peer set.
-	advertiseAddr := MergeHostPort(opt.Host, opt.RaftAddr)
+	advertiseAddr := MergeHostPort(opt.Host, opt.Addr)
 	if len(opt.Peers) == 0 {
 		opt.Peers = []string{advertiseAddr}
 	}
 
 	// Open store if we are not proxying.
-	if err := m.openStore(opt.DataDir, opt.RaftAddr, advertiseAddr, opt.Peers); err != nil {
+	if err := m.openStore(opt.DataDir, storeLn, advertiseAddr, opt.Peers); err != nil {
 		return fmt.Errorf("Failed to open store: %s", err)
 	}
 
@@ -93,7 +103,7 @@ func (m *Main) Run(args ...string) error {
 	}
 
 	// Create a slice of peers with their HTTP address set instead.
-	httpPeers, err := SetPortSlice(opt.Peers, opt.HTTPAddr)
+	httpPeers, err := SetPortSlice(opt.Peers, opt.Addr)
 	if err != nil {
 		return fmt.Errorf("set port slice: %s", err)
 	}
@@ -134,12 +144,12 @@ func (m *Main) Run(args ...string) error {
 		}()
 	}
 
-	if err := m.openHTTPServer(opt.HTTPAddr, opt.Peers); err != nil {
+	if err := m.openHTTPServer(httpLn, opt.Peers); err != nil {
 		return fmt.Errorf("Failed to start HTTP server: %s", err)
 	}
 
 	// Notify user that the servers are listening.
-	m.logger.Printf("discoverd listening for HTTP on %s", opt.HTTPAddr)
+	m.logger.Printf("discoverd listening for HTTP on %s", opt.Addr)
 
 	// FIXME(benbjohnson): Join to cluster.
 
@@ -149,7 +159,7 @@ func (m *Main) Run(args ...string) error {
 	}
 
 	// Notify URL that discoverd is running.
-	httpAddr := m.httpListener.Addr().String()
+	httpAddr := ln.Addr().String()
 	host, port, _ := net.SplitHostPort(httpAddr)
 	if host == "0.0.0.0" {
 		httpAddr = net.JoinHostPort(os.Getenv("EXTERNAL_IP"), port)
@@ -170,15 +180,15 @@ func (m *Main) Close() error {
 		m.dnsServer.Close()
 		m.dnsServer = nil
 	}
-	if m.httpListener != nil {
-		m.httpListener.Close()
-		m.httpListener = nil
+	if m.ln != nil {
+		m.ln.Close()
+		m.ln = nil
 	}
 	return nil
 }
 
 // openStore initializes and opens the store.
-func (m *Main) openStore(path, bindAddress, advertise string, peers []string) error {
+func (m *Main) openStore(path string, ln net.Listener, advertise string, peers []string) error {
 	// If the advertised address is not in the peer list then we should proxy.
 	proxying := true
 	for _, addr := range peers {
@@ -198,7 +208,7 @@ func (m *Main) openStore(path, bindAddress, advertise string, peers []string) er
 
 	// Initialize store.
 	s := server.NewStore(path)
-	s.BindAddress = bindAddress
+	s.Listener = ln
 	s.Advertise = addr
 
 	// Allow single node if there's no peers set.
@@ -245,24 +255,17 @@ func (m *Main) openDNSServer(addr string, recursors, peers []string) error {
 
 // openHTTPServer initializes and opens the HTTP server.
 // The store must already be open.
-func (m *Main) openHTTPServer(addr string, peers []string) error {
-	// Open HTTP API.
-	ln, err := net.Listen("tcp4", addr)
-	if err != nil {
-		return err
-	}
-	m.httpListener = ln
-
+func (m *Main) openHTTPServer(ln net.Listener, peers []string) error {
 	// If we have no store then simply start a proxy handler.
 	if m.store == nil {
-		go http.Serve(m.httpListener, &server.ProxyHandler{Peers: peers})
+		go http.Serve(ln, &server.ProxyHandler{Peers: peers})
 		return nil
 	}
 
 	// Otherwise initialize and start handler.
 	h := server.NewHandler()
 	h.Store = m.store
-	go http.Serve(m.httpListener, h)
+	go http.Serve(ln, h)
 
 	return nil
 }
@@ -323,8 +326,7 @@ func (m *Main) ParseFlags(args ...string) (Options, error) {
 	fs.StringVar(&opt.DataDir, "data-dir", "", "data directory")
 	fs.StringVar(&peers, "peers", "", "cluster peers")
 	fs.StringVar(&opt.Host, "host", "", "advertised hostname")
-	fs.StringVar(&opt.RaftAddr, "raft-addr", ":1110", "address to serve raft cluster from")
-	fs.StringVar(&opt.HTTPAddr, "http-addr", ":1111", "address to serve HTTP API from")
+	fs.StringVar(&opt.Addr, "addr", ":1111", "address to serve http and raft from")
 	fs.StringVar(&opt.DNSAddr, "dns-addr", "", "address to service DNS from")
 	fs.StringVar(&recursors, "recursors", "8.8.8.8,8.8.4.4", "upstream recursive DNS servers")
 	fs.StringVar(&opt.Notify, "notify", "", "url to send webhook to after starting listener")
@@ -358,8 +360,7 @@ type Options struct {
 	DataDir    string   // data directory
 	Host       string   // hostname
 	Peers      []string // cluster peers
-	RaftAddr   string   // raft bind address
-	HTTPAddr   string   // http bind address
+	Addr       string   // bind address (raft & http)
 	DNSAddr    string   // dns bind address
 	Recursors  []string // dns recursors
 	Notify     string   // notify URL

@@ -20,10 +20,7 @@ var _ = Suite(&ClientSuite{})
 func (s *ClientSuite) TestWatchReconnect(c *C) {
 	c.Skip("fix discoverd watch reconnect") // FIXME(benbjohnson)
 
-	raftPort, err := testutil.RandomPort()
-	c.Assert(err, IsNil)
-
-	httpPort, err := testutil.RandomPort()
+	port, err := testutil.RandomPort()
 	c.Assert(err, IsNil)
 
 	// clientA is used to register services and instances, and remains connected
@@ -32,7 +29,7 @@ func (s *ClientSuite) TestWatchReconnect(c *C) {
 
 	// clientB is connected to the server which will be restarted, and is used to
 	// test that the watch generates the correct events after reconnecting
-	clientB, killDiscoverd := testutil.BootDiscoverd(c, raftPort, httpPort)
+	clientB, killDiscoverd := testutil.BootDiscoverd(c, port)
 	defer func() { killDiscoverd() }()
 
 	// create a service with manual leader and some metadata
@@ -121,7 +118,7 @@ func (s *ClientSuite) TestWatchReconnect(c *C) {
 	waitForEvent(eventsA, "", discoverd.EventKindServiceMeta)
 
 	// restart clientB's server and wait for the watch to reconnect
-	_, killDiscoverd = testutil.RunDiscoverdServer(c, raftPort, httpPort)
+	_, killDiscoverd = testutil.RunDiscoverdServer(c, port)
 	waitForWatchState(stateCh, discoverd.WatchStateConnected)
 
 	type expectedEvent struct {

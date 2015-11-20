@@ -45,7 +45,7 @@ var (
 
 	ErrSendBlocked = errors.New("discoverd: channel send failed due to blocked receiver")
 
-	ErrBindAddressRequired = errors.New("discoverd: bind address required")
+	ErrListenerRequired = errors.New("discoverd: listener required")
 
 	ErrAdvertiseRequired = errors.New("discoverd: advertised address required")
 
@@ -74,8 +74,8 @@ type Store struct {
 	wg      sync.WaitGroup
 	closing chan struct{}
 
-	// The address the raft TCP port binds to.
-	BindAddress string
+	// The underlying network listener.
+	Listener net.Listener
 
 	// The address the raft server uses to represent itself in the peer list.
 	Advertise net.Addr
@@ -134,9 +134,9 @@ func (s *Store) Open() error {
 	// Set up logging.
 	s.logger = log.New(s.LogOutput, "[discoverd] ", log.LstdFlags)
 
-	// Require bind address & advertise address.
-	if s.BindAddress == "" {
-		return ErrBindAddressRequired
+	// Require listener & advertise address.
+	if s.Listener == nil {
+		return ErrListenerRequired
 	} else if s.Advertise == nil {
 		return ErrAdvertiseRequired
 	}
@@ -155,12 +155,11 @@ func (s *Store) Open() error {
 	config.LogOutput = s.LogOutput
 	config.EnableSingleNode = s.EnableSingleNode
 
+	// Create multiplexing transport layer.
+	raftLayer := newRaftLayer(s.Listener, s.Advertise)
+
 	// Begin listening to TCP port.
-	trans, err := raft.NewTCPTransport(s.BindAddress, s.Advertise, 3, 10*time.Second, os.Stderr)
-	if err != nil {
-		return fmt.Errorf("opening tcp transport: %s", err)
-	}
-	s.transport = trans
+	s.transport = raft.NewNetworkTransport(raftLayer, 3, 10*time.Second, os.Stderr)
 
 	// Setup storage layers.
 	s.peerStore = raft.NewJSONPeers(s.path, s.transport)
@@ -1237,3 +1236,60 @@ func (s *ProxyStore) ServiceLeader(service string) (*discoverd.Instance, error) 
 	client := discoverd.NewClientWithURL("http://" + host)
 	return client.Service(service).Leader()
 }
+
+// storeHdr is the header byte used by the multiplexer.
+const storeHdr = byte('\xff')
+
+// raftLayer provides multiplexing for the listener.
+type raftLayer struct {
+	ln   net.Listener
+	addr net.Addr
+}
+
+// newRaftLayer returns a new instance of raftLayer.
+func newRaftLayer(ln net.Listener, addr net.Addr) *raftLayer {
+	return &raftLayer{
+		ln:   ln,
+		addr: addr,
+	}
+}
+
+// Addr returns the local address for the layer.
+func (l *raftLayer) Addr() net.Addr { return l.addr }
+
+// Dial creates a new network connection.
+func (l *raftLayer) Dial(addr string, timeout time.Duration) (net.Conn, error) {
+	conn, err := net.DialTimeout("tcp", addr, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	// Write a header byte.
+	_, err = conn.Write([]byte{storeHdr})
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return conn, nil
+}
+
+// Accept waits for the next connection.
+func (l *raftLayer) Accept() (net.Conn, error) {
+	conn, err := l.ln.Accept()
+	if err != nil {
+		return nil, err
+	}
+
+	// Remove header byte.
+	var hdr [1]byte
+	if _, err := io.ReadFull(conn, hdr[:]); err != nil {
+		return nil, fmt.Errorf("read store header byte: %s", err)
+	} else if hdr[0] != storeHdr {
+		return nil, fmt.Errorf("unexpected store header byte: 0x%02x", hdr[0])
+	}
+
+	return conn, nil
+}
+
+// Close closes the layer.
+func (l *raftLayer) Close() error { return l.ln.Close() }
