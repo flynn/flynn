@@ -70,10 +70,10 @@ func (s *TaffyDeploySuite) TestDeploys(t *c.C) {
 
 	github := map[string]string{
 		"user":      "flynn-examples",
-		"repo":      "go-flynn-example",
+		"repo":      "nodejs-flynn-example",
 		"branch":    "master",
-		"rev":       "a2ac6b059e1359d0e974636935fda8995de02b16",
-		"clone_url": "https://github.com/flynn-examples/go-flynn-example.git",
+		"rev":       "5e177fec38fbde7d0a03e9e8dccf8757c68caa11",
+		"clone_url": "https://github.com/flynn-examples/nodejs-flynn-example.git",
 	}
 
 	// initial deploy
@@ -109,7 +109,7 @@ func (s *TaffyDeploySuite) TestDeploys(t *c.C) {
 
 	// second deploy
 
-	github["rev"] = "2bc7e016b1b4aae89396c898583763c5781e031a"
+	github["rev"] = "4231f8871da2b9fd73a5402753df3dfc5609d7b7"
 
 	release, err = client.GetAppRelease(app.ID)
 	t.Assert(err, c.IsNil)
