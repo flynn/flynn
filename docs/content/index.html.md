@@ -278,4 +278,32 @@ An interactive one-off process may be spawned in a container:
 $ flynn run bash
 ```
 
+## Adding collaborators
+
+Other developers can collaborate with apps on the same cluster simply by issuing the original `flynn add cluster`
+command on their own machine:
+
+```
+$ flynn cluster add -p <TLSPin> <default-cluster-name> <ControllerURL> <Key>
+```
+
+You can piece together the command from your `~/.flynnrc`. Eg;
+
+```
+default = "cluster-name"
+
+[[cluster]]
+  Name = "cluster-name"
+  Key = "01234567890absdefg"
+  TLSPin = "01234567890ABSDEFG+="
+  ControllerURL = "https://controller.flynn.example.com"
+  GitURL = "https://git.flynn.example.com"
+```
+
+Becomes;
+```
+$ flynn cluster add -p 01234567890ABSDEFG+= cluster-name https://controller.flynn.example.com 01234567890absdefg
+```
+
+
 *See [here](/docs/cli#run) for more information on the `flynn run` command.*
