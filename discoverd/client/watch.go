@@ -103,7 +103,7 @@ func (s *service) Watch(ch chan *Event) (stream.Stream, error) {
 	watch := NewWatch()
 	connect := func() error {
 		events = make(chan *Event)
-		stream, err := s.client.c.Stream("GET", fmt.Sprintf("/services/%s", s.name), nil, events)
+		stream, err := s.client.Stream("GET", fmt.Sprintf("/services/%s", s.name), nil, events)
 		if err != nil {
 			return err
 		}
