@@ -89,7 +89,7 @@ func BootDiscoverd(t TestingT, port string) (*discoverd.Client, func()) {
 	addr, killDiscoverd := RunDiscoverdServer(t, port)
 
 	client := discoverd.NewClientWithURL("http://" + addr)
-	if err := Attempts.Run(client.Ping); err != nil {
+	if err := Attempts.Run(func() error { return client.Ping("http://" + addr) }); err != nil {
 		t.Fatal("Failed to connect to discoverd: ", err)
 	}
 	return client, killDiscoverd

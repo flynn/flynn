@@ -113,7 +113,7 @@ main() {
 
   info "bootstrapping Flynn"
   export CLUSTER_DOMAIN="${size}.localflynn.com"
-  export DISCOVERD="${ips[0]}:1111"
+  export DISCOVERD="$(join "," ${ips[@]/%/:1111})"
   "${flynn_host}" \
     bootstrap \
     ${backup} \

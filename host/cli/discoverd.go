@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"net/url"
 	"strings"
 
@@ -32,8 +31,8 @@ func runPromote(args *docopt.Args, client *cluster.Client) error {
 	if err != nil {
 		return err
 	}
-	dd := discoverd.NewClientWithHTTP(addr, &http.Client{})
-	if err := dd.Promote(); err != nil {
+	dd := discoverd.NewClientWithURL(addr)
+	if err := dd.Promote(addr); err != nil {
 		return err
 	}
 	log.Println("Promoted peer", addr)
@@ -48,11 +47,11 @@ func runDemote(args *docopt.Args, client *cluster.Client) error {
 	}
 	force := args.Bool["--force"]
 	// first try to connect to the peer and gracefully demote it
-	dd := discoverd.NewClientWithHTTP(addr, &http.Client{})
-	err = dd.Ping()
+	dd := discoverd.NewClientWithURL(addr)
+	err = dd.Ping(addr)
 	if err == nil {
 		log.Println("Attempting to gracefully demote peer.")
-		err = dd.Demote()
+		err = dd.Demote(addr)
 	} else if !force {
 		return errors.New("Failed to contact peer to attempt graceful demotion and --force not given.")
 	}

@@ -31,6 +31,7 @@ const (
 	UnauthorizedErrorCode       ErrorCode = "unauthorized"
 	UnknownErrorCode            ErrorCode = "unknown_error"
 	RatelimitedErrorCode        ErrorCode = "ratelimited"
+	ServiceUnavailableErrorCode ErrorCode = "service_unavailable"
 )
 
 var errorResponseCodes = map[ErrorCode]int{
@@ -44,6 +45,7 @@ var errorResponseCodes = map[ErrorCode]int{
 	UnauthorizedErrorCode:       401,
 	UnknownErrorCode:            500,
 	RatelimitedErrorCode:        429,
+	ServiceUnavailableErrorCode: 503,
 }
 
 type JSONError struct {
@@ -220,6 +222,10 @@ func ConflictError(w http.ResponseWriter, message string) {
 
 func PreconditionFailedErr(message string) error {
 	return JSONError{Code: PreconditionFailedErrorCode, Message: message}
+}
+
+func ServiceUnavailableError(w http.ResponseWriter, message string) {
+	Error(w, JSONError{Code: ServiceUnavailableErrorCode, Message: message})
 }
 
 func ValidationError(w http.ResponseWriter, field, message string) {

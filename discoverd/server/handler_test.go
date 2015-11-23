@@ -715,6 +715,11 @@ type Handler struct {
 func NewHandler() *Handler {
 	h := &Handler{Handler: server.NewHandler(false, []string{""})}
 	h.Handler.Store = &h.Store
+	h.Store.IsLeaderFn = func() bool { return true }
+	h.Store.GetPeersFn = func() ([]string, error) {
+		return []string{""}, nil
+	}
+	h.Store.LastIndexFn = func() uint64 { return 0 }
 	return h
 }
 

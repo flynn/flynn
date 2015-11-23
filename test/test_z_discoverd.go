@@ -95,8 +95,9 @@ func (s *ZDiscoverdSuite) TestPromoteDemote(t *c.C) {
 	time.Sleep(2 * time.Second)
 
 	// Promote the new node to a Raft member
-	dd := discoverd.NewClientWithURL("http://" + newHost.IP + ":1111")
-	err = dd.Promote()
+	url := "http://" + newHost.IP + ":1111"
+	dd := discoverd.NewClientWithURL(url)
+	err = dd.Promote(url)
 	t.Assert(err, c.IsNil)
 
 	// Check that we now have one additional peer, also ensure our new peer is in the list
@@ -106,7 +107,7 @@ func (s *ZDiscoverdSuite) TestPromoteDemote(t *c.C) {
 	t.Assert(peerPresent(newHost, newPeers), c.Equals, true)
 
 	// Now demote the newly promoted node
-	err = dd.Demote()
+	err = dd.Demote(url)
 	t.Assert(err, c.IsNil)
 
 	//XXX(jpg): Better way to wait for leadership?

@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -109,12 +110,10 @@ func (m *Main) Run(args ...string) error {
 
 	target := fmt.Sprintf("http://%s:1111", opt.Host)
 	m.logger.Println("checking for existing discoverd process at", target)
-	if err := discoverd.NewClientWithHTTP(target, &http.Client{}).Ping(); err == nil {
+	if err := discoverd.NewClientWithURL(target).Ping(target); err == nil {
 		m.logger.Println("discoverd responding at", target, "taking over")
 
-		// update DISCOVERD environment variable so that the default
-		// discoverd client connects to the instance we intend to replace.
-		os.Setenv("DISCOVERD", target)
+		os.Setenv("DISCOVERD", strings.Join(opt.Peers, ","))
 		discoverd.DefaultClient = discoverd.NewClient()
 
 		deploy, err = dd.NewDeployment("discoverd")
@@ -139,7 +138,7 @@ func (m *Main) Run(args ...string) error {
 		}
 		m.logger.Printf("discoverd listening for DNS on %s", addr)
 
-		targetLogIndex, err = discoverd.NewClientWithURL(target).Shutdown()
+		targetLogIndex, err = discoverd.NewClientWithURL(target).Shutdown(target)
 		if err != nil {
 			return err
 		}
@@ -149,6 +148,7 @@ func (m *Main) Run(args ...string) error {
 		time.Sleep(2 * time.Second)
 	} else {
 		m.logger.Println("failed to contact existing discoverd server, starting up without takeover")
+		m.logger.Println("err:", err)
 	}
 
 	// Open listener.
@@ -218,7 +218,7 @@ func (m *Main) Run(args ...string) error {
 
 			// Notify webhook.
 			if opt.Notify != "" {
-				m.Notify(opt.Notify, "", addr)
+				m.Notify(opt.Notify, addr)
 			}
 		}()
 	}
@@ -248,10 +248,13 @@ func (m *Main) Run(args ...string) error {
 	if host == "0.0.0.0" {
 		httpAddr = net.JoinHostPort(os.Getenv("EXTERNAL_IP"), port)
 	}
-	m.Notify(opt.Notify, "http://"+httpAddr, opt.DNSAddr)
+	m.Notify(opt.Notify, opt.DNSAddr)
 	go func() {
 		for {
-			hb, err := discoverd.NewClientWithURL("http://"+httpAddr).AddServiceAndRegister("discoverd", httpAddr)
+			hb, err := discoverd.NewClientWithURL("http://"+httpAddr).AddServiceAndRegisterInstance("discoverd", &discoverd.Instance{
+				Addr: httpAddr,
+				Meta: map[string]string{"proxy": strconv.FormatBool(proxying)},
+			})
 			if err != nil {
 				m.logger.Println("failed to register service/instance, retrying in 5 seconds:", err)
 				time.Sleep(5 * time.Second)
@@ -354,6 +357,13 @@ func (m *Main) Promote() error {
 	m.handler.Store = m.store
 	m.handler.Proxy.Store(false)
 
+	// Set the instance metadata to indicate we are now a raft peer
+	err = m.hb.SetMeta(map[string]string{"proxy": "false"})
+	if err != nil {
+		m.logger.Println("error setting instance meta", err)
+		return err
+	}
+
 	m.logger.Println("promoted sucessfully")
 	return nil
 }
@@ -410,6 +420,13 @@ func (m *Main) Demote() error {
 	m.store.Close()
 	m.handler.Store = nil
 	m.store = nil
+
+	// Set the instance metadata to indicate we are no longer a raft peer
+	err := m.hb.SetMeta(map[string]string{"proxy": "true"})
+	if err != nil {
+		m.logger.Println("error setting instance meta", err)
+		return err
+	}
 
 	m.logger.Println("demoted sucessfully")
 	return nil
@@ -525,11 +542,9 @@ func (m *Main) openHTTPServer() error {
 }
 
 // Notify sends a POST to notifyURL to let it know that addr is accessible.
-func (m *Main) Notify(notifyURL, httpURL, dnsAddr string) {
+func (m *Main) Notify(notifyURL, dnsAddr string) {
 	m.mu.Lock()
-	if httpURL != "" {
-		m.status.URL = httpURL
-	}
+	m.status.URL = strings.Join(m.peers, ",")
 	if dnsAddr != "" {
 		m.status.DNS = dnsAddr
 	}
