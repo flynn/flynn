@@ -262,8 +262,8 @@ func (TestSuite) TestRectify(c *C) {
 	// Create an extra job on a host and wait for it to start
 	c.Log("Test creating an extra job on the host. Wait for job start in scheduler")
 	form := s.formations.Get(testAppID, testReleaseID)
-	host, err := s.Host(testHostID)
-	newJob := NewJob(form, testAppID, testReleaseID, testJobType, "", "")
+	host, _ := s.Host(testHostID)
+	newJob := &Job{Formation: form, AppID: testAppID, ReleaseID: testReleaseID, Type: testJobType}
 	config := jobConfig(newJob, testHostID)
 	host.AddJob(config)
 	job = s.waitJobStart()
@@ -285,21 +285,23 @@ func (TestSuite) TestRectify(c *C) {
 	processes := map[string]int{testJobType: testJobCount}
 	release := NewRelease("test-release-2", artifact, processes)
 	form = NewFormation(&ct.ExpandedFormation{App: app, Release: release, Artifact: artifact, Processes: processes})
-	newJob = NewJob(form, testAppID, testReleaseID, testJobType, "", "")
+	newJob = &Job{Formation: form, AppID: testAppID, ReleaseID: testReleaseID, Type: testJobType}
 	config = jobConfig(newJob, testHostID)
 	// Add the job to the host without adding the formation. Expected error.
-	c.Log("Create a new job on the host without adding the formation to the controller. Wait for job start, expect error.")
+	c.Log("Create a new job on the host without adding the formation to the controller. Wait for job start, expect job with nil formation.")
 	host.AddJob(config)
-	_, err = s.waitForEvent(EventTypeJobStart)
-	c.Assert(err, Not(IsNil))
+	job = s.waitJobStart()
+	c.Assert(job.Formation, IsNil)
 
-	c.Log("Add the formation to the controller. Wait for formation change.")
+	c.Log("Add the formation to the controller. Wait for formation change. Check the job has a formation and no new job was created")
 	s.CreateApp(app)
 	s.CreateArtifact(artifact)
 	s.CreateRelease(release)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
 	s.waitFormationChange()
-	s.waitJobStart()
+	_, err := s.waitDurationForEvent(EventTypeJobStart, 1*time.Second)
+	c.Assert(err, NotNil)
+	c.Assert(job.Formation, NotNil)
 	c.Assert(s.Jobs(), HasLen, 2)
 }
 

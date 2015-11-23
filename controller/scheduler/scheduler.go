@@ -32,8 +32,9 @@ const (
 )
 
 var (
-	ErrNotLeader = errors.New("scheduler is not the leader")
-	ErrNoHosts   = errors.New("no hosts found")
+	ErrNotLeader  = errors.New("scheduler is not the leader")
+	ErrNoHosts    = errors.New("no hosts found")
+	ErrJobStopped = errors.New("job has been marked as stopped")
 )
 
 var logger = log15.New("component", "scheduler")
@@ -71,6 +72,13 @@ type Scheduler struct {
 	placementRequests chan *PlacementRequest
 
 	rectifyBatch map[utils.FormationKey]struct{}
+
+	// formationlessJobs is a map of formation keys to a list of jobs
+	// which are in-memory but do not have a formation (because the
+	// formation lookup failed when we got an event for the job), and is
+	// used to update the jobs once we get the formation during a sync
+	// so that we can determine if the job should actually be running
+	formationlessJobs map[utils.FormationKey]map[string]*Job
 }
 
 func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc Discoverd) *Scheduler {
@@ -96,6 +104,7 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 		hostEvents:        make(chan *discoverd.Event, eventBufferSize),
 		putJobs:           make(chan *ct.Job, eventBufferSize),
 		placementRequests: make(chan *PlacementRequest, eventBufferSize),
+		formationlessJobs: make(map[utils.FormationKey]map[string]*Job),
 	}
 }
 
@@ -365,7 +374,6 @@ func (s *Scheduler) SyncJobs() (err error) {
 		}
 	}()
 
-	knownJobs := make(Jobs)
 	for id, host := range s.hosts {
 		jobs, err := host.client.ListJobs()
 		if err != nil {
@@ -374,18 +382,7 @@ func (s *Scheduler) SyncJobs() (err error) {
 		}
 
 		for _, job := range jobs {
-			if j, err := s.handleActiveJob(&job); err == nil {
-				knownJobs[j.InternalID] = j
-			}
-		}
-	}
-
-	for id, j := range s.jobs {
-		if _, ok := knownJobs[id]; !ok && j.IsRunning() {
-			j.SetState(JobStateStopped)
-			if j.IsSchedulable() {
-				s.triggerRectify(j.Formation.key())
-			}
+			s.handleActiveJob(&job)
 		}
 	}
 
@@ -525,6 +522,12 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 		return
 	}
 
+	// don't attempt to place a job which has been marked as stopped
+	if req.Job.state == JobStateStopped {
+		req.Error(ErrJobStopped)
+		return
+	}
+
 	log := logger.New("fn", "HandlePlacementRequest", "app.id", req.Job.AppID, "release.id", req.Job.ReleaseID, "job.type", req.Job.Type)
 	log.Info("handling placement request")
 
@@ -560,13 +563,11 @@ func (s *Scheduler) RunPutJobs() {
 	log.Info("starting job persistence loop")
 	strategy := attempt.Strategy{Delay: 100 * time.Millisecond, Total: time.Minute}
 	for job := range s.putJobs {
-		jobLog := log.New("job.id", job.ID, "job.state", job.State)
-		jobLog.Info("persisting job")
 		err := strategy.RunWithValidator(func() error {
 			return s.PutJob(job)
 		}, httphelper.IsRetryableError)
 		if err != nil {
-			jobLog.Error("error persisting job", "err", err)
+			log.Error("error persisting job", "job.id", job.ID, "job.state", job.State, "err", err)
 		}
 	}
 	log.Info("stopping job persistence loop")
@@ -591,8 +592,16 @@ func (s *Scheduler) handleFormationDiff(f *Formation, diff Processes) {
 		if n > 0 {
 			log.Info(fmt.Sprintf("starting %d new %s jobs", n, typ))
 			for i := 0; i < n; i++ {
-				job := NewJob(f, f.App.ID, f.Release.ID, typ, "", random.UUID())
-				s.jobs.AddJob(job)
+				job := &Job{
+					InternalID: random.UUID(),
+					Type:       typ,
+					AppID:      f.App.ID,
+					ReleaseID:  f.Release.ID,
+					Formation:  f,
+					startedAt:  time.Now(),
+					state:      JobStateNew,
+				}
+				s.jobs.Add(job)
 				go s.StartJob(job)
 			}
 		} else if n < 0 {
@@ -690,8 +699,7 @@ func (s *Scheduler) unfollowHost(host *Host) {
 	for _, job := range s.jobs {
 		if job.HostID == host.ID {
 			log.Info("removing job", "job.id", job.JobID)
-			job.SetState(JobStateStopped)
-			s.triggerRectify(job.Formation.key())
+			s.markAsStopped(job)
 		}
 	}
 
@@ -780,68 +788,146 @@ func (s *Scheduler) HandleJobEvent(e *host.Event) {
 	log := logger.New("fn", "HandleJobEvent", "job.id", e.JobID, "event.type", e.Event)
 
 	log.Info("handling job event")
-	job, err := s.handleActiveJob(e.Job)
-	if err != nil {
-		log.Error("error handling job event", "err", err)
-	}
-
+	job := s.handleActiveJob(e.Job)
 	switch e.Event {
 	case host.JobEventStart:
-		s.sendEvent(EventTypeJobStart, err, job)
+		s.sendEvent(EventTypeJobStart, nil, job)
 	case host.JobEventStop:
-		s.sendEvent(EventTypeJobStop, err, job)
+		s.sendEvent(EventTypeJobStop, nil, job)
 	}
 }
 
-func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) (*Job, error) {
+func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) *Job {
 	hostJob := activeJob.Job
 	appID := hostJob.Metadata["flynn-controller.app"]
-	appName := hostJob.Metadata["flynn-controller.app_name"]
 	releaseID := hostJob.Metadata["flynn-controller.release"]
+
+	// if job has no app metadata, just ignore it
+	if appID == "" || releaseID == "" {
+		return nil
+	}
+
 	jobType := hostJob.Metadata["flynn-controller.type"]
 
-	if appID == "" || releaseID == "" {
-		return nil, errors.New("ignoring job due to lack of appID or releaseID")
-	}
-	log := logger.New("fn", "handleActiveJob", "job.id", hostJob.ID, "app.id", appID, "release.id", releaseID, "job.type", jobType)
-
+	// lookup the job in memory using either the scheduler ID from the
+	// metadata, or the JobID in the case the job was started by the
+	// controller (so has no scheduler ID)
 	id := hostJob.Metadata["flynn-controller.scheduler_id"]
 	if id == "" {
 		id = hostJob.ID
 	}
-
-	var err error
-	job := s.jobs[id]
-	if job == nil {
-		log.Info("creating new job")
-		job = NewJob(nil, appID, releaseID, jobType, activeJob.HostID, id)
-		job.JobID = hostJob.ID
-	}
-	if job.Formation == nil {
-		log.Info("looking up formation")
-		f := s.formations.Get(appID, releaseID)
-		if f == nil {
-			log.Info("job is from new formation, getting formation from controller")
-			var ef *ct.ExpandedFormation
-			ef, err = s.GetExpandedFormation(appID, releaseID)
-			if err != nil {
-				log.Error("error getting formation", "err", err)
-			} else {
-				f = s.handleFormation(ef)
-			}
+	job, ok := s.jobs[id]
+	if !ok {
+		// this is the first time we have seen the job so
+		// add it to s.jobs
+		job = &Job{
+			InternalID: hostJob.ID,
+			Type:       jobType,
+			AppID:      appID,
+			ReleaseID:  releaseID,
+			HostID:     activeJob.HostID,
+			JobID:      hostJob.ID,
+			state:      JobStateNew,
 		}
-		job.Formation = f
-	}
-	job.startedAt = activeJob.StartedAt
-	if s.SaveJob(job, appName, activeJob.Status, utils.JobMetaFromMetadata(hostJob.Metadata)) {
-		log.Info("saved job to controller")
+		s.jobs.Add(job)
 	}
 
-	return job, err
+	job.startedAt = activeJob.StartedAt
+	job.metadata = hostJob.Metadata
+
+	s.handleJobStatus(job, activeJob.Status)
+
+	return job
 }
 
-func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) *Formation {
+func (s *Scheduler) markAsStopped(job *Job) {
+	s.handleJobStatus(job, host.StatusDone)
+}
+
+func (s *Scheduler) handleJobStatus(job *Job, status host.JobStatus) {
+	log := logger.New("fn", "handleJobStatus", "job.id", job.JobID, "app.id", job.AppID, "release.id", job.ReleaseID, "job.type", job.Type)
+
+	// update the job's state, keeping a reference to the previous state
+	previousState := job.state
+	switch status {
+	case host.StatusStarting:
+		job.state = JobStateStarting
+	case host.StatusRunning:
+		job.state = JobStateRunning
+	case host.StatusDone, host.StatusCrashed, host.StatusFailed:
+		job.state = JobStateStopped
+	}
+
+	// if the job's state has changed, persist it to the controller
+	if job.state != previousState {
+		log.Info("handling job status change", "from", previousState, "to", job.state)
+		s.putJobs <- controllerJobFromSchedulerJob(
+			job,
+			jobState(status),
+		)
+	}
+
+	// ensure the job has a known formation
+	if job.Formation == nil {
+		formation := s.formations.Get(job.AppID, job.ReleaseID)
+		if formation == nil {
+			ef, err := s.GetExpandedFormation(job.AppID, job.ReleaseID)
+			if err != nil {
+				// if we can't find the formation, track it as a formation-less
+				// job so that it will be handled if we find the formation from
+				// a future sync
+				key := utils.FormationKey{AppID: job.AppID, ReleaseID: job.ReleaseID}
+				jobs, ok := s.formationlessJobs[key]
+				if !ok {
+					jobs = make(map[string]*Job)
+					s.formationlessJobs[key] = jobs
+				}
+				jobs[job.InternalID] = job
+				log.Error("error looking up formation for job", "err", err)
+				return
+			}
+			formation = s.handleFormation(ef)
+		}
+		job.Formation = formation
+	}
+
+	// if the job has no type, or has a type which is not part of the
+	// release (e.g. a slugbuilder job), then we are done
+	if job.Type == "" || !job.HasTypeFromRelease() {
+		return
+	}
+
+	// if we are not the leader, then we are done
+	if !s.isLeader {
+		return
+	}
+
+	// if the job has just transitioned to the stopped state, check if we
+	// expect it to be running, and if we do, restart it
+	if previousState != JobStateStopped && job.state == JobStateStopped {
+		if diff := s.formationDiff(job.Formation); diff[job.Type] > 0 {
+			s.restartJob(job)
+		}
+	}
+
+	// trigger a rectify for the job's formation in case we have too many
+	// jobs of the given type and we need to stop some
+	s.triggerRectify(job.Formation.key())
+}
+
+func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) (formation *Formation) {
 	log := logger.New("fn", "handleFormation", "app.id", ef.App.ID, "release.id", ef.Release.ID)
+
+	defer func() {
+		// update any formation-less jobs
+		if jobs, ok := s.formationlessJobs[formation.key()]; ok {
+			for _, job := range jobs {
+				job.Formation = formation
+			}
+			s.triggerRectify(formation.key())
+			delete(s.formationlessJobs, formation.key())
+		}
+	}()
 
 	for typ, proc := range ef.Release.Processes {
 		if proc.Omni && ef.Processes != nil && ef.Processes[typ] > 0 {
@@ -849,20 +935,20 @@ func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) *Formation {
 		}
 	}
 
-	f := s.formations.Get(ef.App.ID, ef.Release.ID)
-	if f == nil {
+	formation = s.formations.Get(ef.App.ID, ef.Release.ID)
+	if formation == nil {
 		log.Info("adding new formation", "processes", ef.Processes)
-		f = s.formations.Add(NewFormation(ef))
+		formation = s.formations.Add(NewFormation(ef))
 	} else {
-		if f.GetProcesses().Equals(ef.Processes) {
-			return f
+		if formation.GetProcesses().Equals(ef.Processes) {
+			return
 		} else {
 			log.Info("updating processes of existing formation", "processes", ef.Processes)
-			f.Processes = ef.Processes
+			formation.Processes = ef.Processes
 		}
 	}
-	s.triggerRectify(f.key())
-	return f
+	s.triggerRectify(formation.key())
+	return
 }
 
 func (s *Scheduler) triggerRectify(key utils.FormationKey) {
@@ -882,41 +968,54 @@ func (s *Scheduler) stopJob(f *Formation, typ string) (err error) {
 			log.Error("error stopping job", "err", err)
 		}
 	}()
-	// TODO: stop job restart timers before attempting to stop a running job gh#1922
 
-	typJobs := s.jobs.GetStoppableJobs(f.key(), typ)
-	if len(typJobs) == 0 {
-		e := fmt.Sprintf("no %s jobs running", typ)
-		log.Error(e)
-		return errors.New(e)
+	var runningJobs []*Job
+	for _, job := range s.jobs.WithFormationAndType(f, typ) {
+		switch job.state {
+		case JobStateNew:
+			// if it's a new job, we are in the process of starting
+			// it, so just mark it as stopped (which will make the
+			// StartJob goroutine fail the next time it tries to
+			// place the job)
+			log.Info("marking new job as stopped")
+			job.state = JobStateStopped
+			return nil
+		case JobStateScheduled:
+			// if the job is scheduled to be restarted, just cancel
+			// the restart
+			log.Info("stopping job which is scheduled to restart", "job.id", job.JobID)
+			job.state = JobStateStopped
+			job.restartTimer.Stop()
+			return nil
+		case JobStateStarting, JobStateRunning:
+			runningJobs = append(runningJobs, job)
+		}
 	}
-	job := typJobs[0]
-	for _, j := range typJobs {
+	if len(runningJobs) == 0 {
+		return fmt.Errorf("no %s jobs running", typ)
+	}
+
+	// determine the most recent job
+	job := runningJobs[0]
+	for _, j := range runningJobs {
 		if j.startedAt.After(job.startedAt) {
 			job = j
 		}
 	}
 
-	log = log.New("job.id", job.JobID, "host.id", job.HostID)
-	log.Info("selected job for termination")
-	job.SetState(JobStateStopping)
-	if job.HostID != "" {
-		log = log.New("job.id", job.JobID, "host.id", job.HostID)
-		host, ok := s.hosts[job.HostID]
-		if !ok {
-			e := "unable to stop job, unknown host"
-			log.Error(e)
-			return errors.New(e)
-		}
-
-		log.Info("requesting host to stop job")
-		go func() {
-			// host.StopJob can block, so run it in a goroutine
-			if err := host.client.StopJob(job.JobID); err != nil {
-				log.Error("error requesting host to stop job", "err", err)
-			}
-		}()
+	host, ok := s.hosts[job.HostID]
+	if !ok {
+		return fmt.Errorf("unknown host: %q", job.HostID)
 	}
+
+	log.Info("requesting host to stop job", "job.id", job.JobID, "host.id", job.HostID)
+	job.state = JobStateStopping
+	go func() {
+		// host.StopJob can block, so run it in a goroutine
+		if err := host.client.StopJob(job.JobID); err != nil {
+			log.Error("error requesting host to stop job", "err", err)
+		}
+	}()
 	return nil
 }
 
@@ -952,39 +1051,6 @@ func (s *Scheduler) Unsubscribe(events chan Event) {
 	delete(s.listeners, events)
 }
 
-func (s *Scheduler) SaveJob(job *Job, appName string, status host.JobStatus, metadata map[string]string) bool {
-	oldState := job.state
-
-	switch status {
-	case host.StatusStarting:
-		s.handleJobEvent(job, JobStateStarting)
-	case host.StatusRunning:
-		s.handleJobEvent(job, JobStateRunning)
-	default:
-		if job.IsStopped() || !job.IsSchedulable() {
-			s.handleJobEvent(job, JobStateStopped)
-		} else {
-			s.handleJobEvent(job, JobStateStopped)
-			diff := s.formationDiff(job.Formation)
-			if diff[job.Type] > 0 {
-				// We want more jobs of this type, so this is a crash
-				s.handleJobCrash(job)
-			}
-		}
-	}
-	if oldState != job.state {
-		// Only save the job to the controller if its state has changed
-		log := logger.New("fn", "SaveJob", "job.id", job.JobID, "app.id", job.AppID, "app.name", appName, "release.id", job.ReleaseID, "job.type", job.Type, "job.status", status)
-		log.Info("queuing job for persistence")
-		s.putJobs <- controllerJobFromSchedulerJob(job, jobState(status), metadata)
-		if job.IsSchedulable() {
-			s.triggerRectify(job.Formation.key())
-		}
-		return true
-	}
-	return false
-}
-
 func (s *Scheduler) Jobs() map[string]*Job {
 	jobs := make(map[string]*Job, len(s.jobs))
 	for id, j := range s.jobs {
@@ -995,21 +1061,31 @@ func (s *Scheduler) Jobs() map[string]*Job {
 	return jobs
 }
 
-func (s *Scheduler) scheduleJobStart(job *Job) error {
-	log := logger.New("fn", "scheduleJobStart")
-	if !s.isLeader {
-		return errors.New("this scheduler is not the leader")
-	}
+func (s *Scheduler) restartJob(job *Job) {
+	restarts := job.restarts
+	// reset the restart count if it has been running for longer than the
+	// back off period
 	if job.startedAt.Before(time.Now().Add(-s.backoffPeriod)) {
-		log.Info("resetting job restarts", "backoffPeriod", s.backoffPeriod, "job.startedAt", job.startedAt)
-		job.restarts = 0
+		restarts = 0
 	}
-	backoff := s.getBackoffDuration(job.restarts)
-	job.restarts += 1
-	log.Info("scheduling job request", "attempts", job.restarts, "delay", backoff)
-	job.SetState(JobStateScheduled)
-	time.AfterFunc(backoff, func() { s.StartJob(job) })
-	return nil
+	backoff := s.getBackoffDuration(restarts)
+
+	// create a new job so its state is tracked separately from the job
+	// it is replacing
+	newJob := &Job{
+		InternalID: random.UUID(),
+		Type:       job.Type,
+		AppID:      job.AppID,
+		ReleaseID:  job.ReleaseID,
+		Formation:  job.Formation,
+		startedAt:  time.Now(),
+		state:      JobStateScheduled,
+		restarts:   restarts + 1,
+	}
+	s.jobs.Add(newJob)
+
+	logger.Info("scheduling job restart", "fn", "restartJob", "attempts", newJob.restarts, "delay", backoff)
+	newJob.restartTimer = time.AfterFunc(backoff, func() { s.StartJob(newJob) })
 }
 
 func (s *Scheduler) getBackoffDuration(restarts uint) time.Duration {
@@ -1019,30 +1095,6 @@ func (s *Scheduler) getBackoffDuration(restarts uint) time.Duration {
 		multiplier = (1 << restarts) >> 1
 	}
 	return s.backoffPeriod * time.Duration(multiplier)
-}
-
-func (s *Scheduler) handleJobEvent(job *Job, state JobState) bool {
-	log := logger.New("fn", "handleJobEvent", "job.id", job.JobID)
-	if !job.HasState(state) {
-		log.Info("marking job state", "state", state)
-		if job.IsSchedulable() {
-			s.jobs.AddJob(job)
-		}
-		job.SetState(state)
-		return true
-	}
-	return false
-}
-
-func (s *Scheduler) handleJobCrash(job *Job) {
-	log := logger.New("fn", "handleJobCrash", "job.id", job.JobID, "job.restarts", job.restarts)
-	if stateChanged := s.handleJobEvent(job, JobStateCrashed); stateChanged {
-		log.Info("attempting to restart crashed job")
-		if err := s.scheduleJobStart(job); err != nil {
-			log.Warn("failed to schedule job request, marking job as stopped")
-			job.SetState(JobStateStopped)
-		}
-	}
 }
 
 func (s *Scheduler) startHTTPServer(port string) {
