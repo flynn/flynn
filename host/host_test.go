@@ -14,11 +14,11 @@ func (S) TestParseTagArgs(c *C) {
 		},
 		{
 			args:     "foo",
-			expected: map[string]string{},
+			expected: map[string]string{"foo": "true"},
 		},
 		{
 			args:     "foo,",
-			expected: map[string]string{},
+			expected: map[string]string{"foo": "true"},
 		},
 		{
 			args:     "foo=",
@@ -35,6 +35,10 @@ func (S) TestParseTagArgs(c *C) {
 		{
 			args:     "foo=bar=baz",
 			expected: map[string]string{"foo": "bar=baz"},
+		},
+		{
+			args:     "foo=bar,baz",
+			expected: map[string]string{"foo": "bar", "baz": "true"},
 		},
 		{
 			args:     "foo=bar,baz=",

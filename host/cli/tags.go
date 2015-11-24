@@ -15,6 +15,7 @@ func init() {
 	Register("tags", runTags, `
 usage: flynn-host tags
        flynn-host tags set <hostid> <var>=<val>...
+       flynn-host tags del <hostid> <var>...
 
 Manage flynn-host daemon tags.
 
@@ -22,12 +23,15 @@ Commands:
 	With no arguments, shows a list of current tags.
 
 	set    sets value of one or more tags
+	del    deletes one or more tags
 `)
 }
 
 func runTags(args *docopt.Args, client *cluster.Client) error {
 	if args.Bool["set"] {
 		return runTagsSet(args, client)
+	} else if args.Bool["del"] {
+		return runTagsDel(args, client)
 	}
 	instances, err := client.HostInstances()
 	if err != nil {
@@ -56,11 +60,26 @@ func runTagsSet(args *docopt.Args, client *cluster.Client) error {
 	pairs := args.All["<var>=<val>"].([]string)
 	tags := make(map[string]string, len(pairs))
 	for _, s := range pairs {
-		v := strings.SplitN(s, "=", 2)
-		if len(v) != 2 {
-			return fmt.Errorf("invalid tag format: %q", s)
+		keyVal := strings.SplitN(s, "=", 2)
+		if len(keyVal) == 1 && keyVal[0] != "" {
+			tags[keyVal[0]] = "true"
+		} else if len(keyVal) == 2 {
+			tags[keyVal[0]] = keyVal[1]
 		}
-		tags[v[0]] = v[1]
+	}
+	return host.UpdateTags(tags)
+}
+
+func runTagsDel(args *docopt.Args, client *cluster.Client) error {
+	host, err := client.Host(args.String["<hostid>"])
+	if err != nil {
+		return err
+	}
+	vars := args.All["<var>"].([]string)
+	tags := make(map[string]string, len(vars))
+	for _, v := range vars {
+		// empty tags get deleted on the host
+		tags[v] = ""
 	}
 	return host.UpdateTags(tags)
 }

@@ -434,4 +434,18 @@ func (s *HostSuite) TestUpdateTags(t *c.C) {
 		}
 	}
 	t.Assert(meta["tag:foo"], c.Equals, "bar")
+
+	// setting to empty string should delete the tag
+	t.Assert(client.UpdateTags(map[string]string{"foo": ""}), c.IsNil)
+
+	for {
+		e := nextEvent()
+		if e.Kind == discoverd.EventKindUpdate && e.Instance.Meta["id"] == client.ID() {
+			meta = e.Instance.Meta
+			break
+		}
+	}
+	if _, ok := meta["tag:foo"]; ok {
+		t.Fatal("expected tag to be deleted but is still present")
+	}
 }

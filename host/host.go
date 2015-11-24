@@ -457,10 +457,11 @@ func parseTagArgs(args string) map[string]string {
 	tags := make(map[string]string)
 	for _, s := range strings.Split(args, ",") {
 		keyVal := strings.SplitN(s, "=", 2)
-		if len(keyVal) != 2 {
-			continue
+		if len(keyVal) == 1 && keyVal[0] != "" {
+			tags[keyVal[0]] = "true"
+		} else if len(keyVal) == 2 {
+			tags[keyVal[0]] = keyVal[1]
 		}
-		tags[keyVal[0]] = keyVal[1]
 	}
 	return tags
 }

@@ -114,7 +114,13 @@ func (d *DiscoverdManager) UpdateTags(tags map[string]string) error {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 	for k, v := range tags {
-		d.inst.Meta[host.TagPrefix+k] = v
+		name := host.TagPrefix + k
+		// treat empty tags as ones to delete
+		if v == "" {
+			delete(d.inst.Meta, name)
+			continue
+		}
+		d.inst.Meta[name] = v
 	}
 	if d.hb == nil {
 		return nil
