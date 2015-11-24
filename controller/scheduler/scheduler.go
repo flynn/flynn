@@ -883,7 +883,12 @@ func (s *Scheduler) handleJobStatus(job *Job, status host.JobStatus) {
 					s.formationlessJobs[key] = jobs
 				}
 				jobs[job.InternalID] = job
-				log.Error("error looking up formation for job", "err", err)
+
+				// only log an error if the state changed (so we don't
+				// keep logging it in periodic SyncJobs calls)
+				if job.state != previousState {
+					log.Error("error looking up formation for job", "err", err)
+				}
 				return
 			}
 			formation = s.handleFormation(ef)
