@@ -128,6 +128,8 @@ See 'flynn-host help <command>' for more information on a specific command.
 			fmt.Printf("ERROR: %q is not a valid command\n\n", cmd)
 			fmt.Println(usage)
 			shutdown.ExitWithCode(1)
+		} else if _, ok := err.(cli.ErrAlreadyLogged); ok {
+			shutdown.ExitWithCode(1)
 		}
 		shutdown.Fatal(err)
 	}

@@ -28,6 +28,14 @@ func Register(cmd string, f interface{}, usage string) *command {
 	return c
 }
 
+type ErrAlreadyLogged struct {
+	Err error
+}
+
+func (e ErrAlreadyLogged) Error() string {
+	return e.Err.Error()
+}
+
 var ErrInvalidCommand = errors.New("invalid command")
 
 func Run(name string, args []string) error {

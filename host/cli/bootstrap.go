@@ -89,9 +89,11 @@ func runBootstrap(args *docopt.Args) error {
 
 	ch := make(chan *bootstrap.StepInfo)
 	done := make(chan struct{})
+	var last error
 	go func() {
 		for si := range ch {
 			logf(si)
+			last = si.Err
 		}
 		close(done)
 	}()
@@ -104,6 +106,9 @@ func runBootstrap(args *docopt.Args) error {
 	}
 
 	<-done
+	if err != nil && err == last {
+		return ErrAlreadyLogged{err}
+	}
 	return err
 }
 
