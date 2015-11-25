@@ -72,7 +72,10 @@ func (d *DeployJob) deployAllAtOnce() error {
 		log.Info("waiting for job events", "expected", expected)
 		if err := d.waitForJobEvents(d.OldReleaseID, expected, log); err != nil {
 			log.Error("error waiting for job events", "err", err)
-			return err
+			// we have started the new jobs (and they are up) and requested that the old jobs stop. at this point
+			// there's not much more we can do. Rolling back doesn't make a ton of sense because it involves
+			// stopping the new (working) jobs.
+			return ErrSkipRollback{err.Error()}
 		}
 	}
 
