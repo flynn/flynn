@@ -21,13 +21,41 @@ type formationKey struct {
 	AppID, ReleaseID string
 }
 
+// we are wrapping the client specified channel to send formation updates in order to safely interrupt
+// `sendUpdateSince` goroutine if an unsubscribe happens before it is completed. otherwise we can get
+// a panic due to sending to a closed channel. See https://github.com/flynn/flynn/issues/2175 for more
+// details on this subject.
+type FormationSubscription struct {
+	mtx sync.RWMutex
+	ch  chan *ct.ExpandedFormation
+}
+
+func (f *FormationSubscription) notify(ef *ct.ExpandedFormation) bool {
+	f.mtx.RLock()
+	defer f.mtx.RUnlock()
+	if f.ch == nil {
+		return false
+	}
+	f.ch <- ef
+	return true
+}
+
+func (f *FormationSubscription) close() {
+	f.mtx.Lock()
+	defer f.mtx.Unlock()
+	if f.ch != nil {
+		close(f.ch)
+		f.ch = nil
+	}
+}
+
 type FormationRepo struct {
 	db        *postgres.DB
 	apps      *AppRepo
 	releases  *ReleaseRepo
 	artifacts *ArtifactRepo
 
-	subscriptions map[chan *ct.ExpandedFormation]struct{}
+	subscriptions map[*FormationSubscription]struct{}
 	stopListener  chan struct{}
 	subMtx        sync.RWMutex
 }
@@ -38,7 +66,7 @@ func NewFormationRepo(db *postgres.DB, appRepo *AppRepo, releaseRepo *ReleaseRep
 		apps:          appRepo,
 		releases:      releaseRepo,
 		artifacts:     artifactRepo,
-		subscriptions: make(map[chan *ct.ExpandedFormation]struct{}),
+		subscriptions: make(map[*FormationSubscription]struct{}),
 		stopListener:  make(chan struct{}),
 	}
 }
@@ -237,8 +265,8 @@ func (r *FormationRepo) publish(appID, releaseID string) {
 	r.subMtx.RLock()
 	defer r.subMtx.RUnlock()
 
-	for ch := range r.subscriptions {
-		ch <- f
+	for sub := range r.subscriptions {
+		sub.notify(f) // ignore failure for this subscriber (went away) and keep sending to remaining subscribers
 	}
 }
 
@@ -296,13 +324,12 @@ func (r *FormationRepo) unsubscribeAll() {
 	r.subMtx.Lock()
 	defer r.subMtx.Unlock()
 
-	for ch := range r.subscriptions {
-		r.unsubscribeLocked(ch)
-		close(ch)
+	for sub := range r.subscriptions {
+		r.unsubscribeLocked(sub)
 	}
 }
 
-func (r *FormationRepo) Subscribe(ch chan *ct.ExpandedFormation, stopCh <-chan struct{}, since time.Time) error {
+func (r *FormationRepo) Subscribe(ch chan *ct.ExpandedFormation, since time.Time, updated chan<- struct{}) (*FormationSubscription, error) {
 	// we need to keep the mutex locked whilst calling startListener
 	// to avoid a race where multiple subscribers can get added to
 	// r.subscriptions before a potentially failed listener start,
@@ -312,16 +339,22 @@ func (r *FormationRepo) Subscribe(ch chan *ct.ExpandedFormation, stopCh <-chan s
 
 	if len(r.subscriptions) == 0 {
 		if err := r.startListener(); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	r.subscriptions[ch] = struct{}{}
 
-	go r.sendUpdatedSince(ch, stopCh, since)
-	return nil
+	sub := &FormationSubscription{ch: ch}
+	r.subscriptions[sub] = struct{}{}
+
+	go r.sendUpdatedSince(sub, since, updated)
+	return sub, nil
 }
 
-func (r *FormationRepo) sendUpdatedSince(ch chan *ct.ExpandedFormation, stopCh <-chan struct{}, since time.Time) error {
+func (r *FormationRepo) sendUpdatedSince(sub *FormationSubscription, since time.Time, updated chan<- struct{}) error {
+	if updated != nil {
+		defer close(updated)
+	}
+
 	rows, err := r.db.Query("formation_list_since", since)
 	if err != nil {
 		return err
@@ -336,29 +369,28 @@ func (r *FormationRepo) sendUpdatedSince(ch chan *ct.ExpandedFormation, stopCh <
 		if err != nil {
 			return err
 		}
-		select {
-		case ch <- ef:
-		case <-stopCh:
+		if ok := sub.notify(ef); !ok {
 			return nil
 		}
 	}
-	ch <- &ct.ExpandedFormation{} // sentinel
+	sub.notify(&ct.ExpandedFormation{}) // sentinel
 	return rows.Err()
 }
 
-func (r *FormationRepo) Unsubscribe(ch chan *ct.ExpandedFormation) {
+func (r *FormationRepo) Unsubscribe(sub *FormationSubscription) {
 	r.subMtx.Lock()
 	defer r.subMtx.Unlock()
-	r.unsubscribeLocked(ch)
+	r.unsubscribeLocked(sub)
 }
 
-func (r *FormationRepo) unsubscribeLocked(ch chan *ct.ExpandedFormation) {
-	go func() {
+func (r *FormationRepo) unsubscribeLocked(sub *FormationSubscription) {
+	go func(ch chan *ct.ExpandedFormation) {
 		// drain to prevent deadlock while removing the listener
 		for range ch {
 		}
-	}()
-	delete(r.subscriptions, ch)
+	}(sub.ch)
+	delete(r.subscriptions, sub)
+	sub.close() // idempotent: will be a no-op if already closed (i.e. sub.ch == nil)
 	if len(r.subscriptions) == 0 {
 		select {
 		case r.stopListener <- struct{}{}:
@@ -473,18 +505,17 @@ func (c *controllerAPI) GetFormations(ctx context.Context, w http.ResponseWriter
 
 func (c *controllerAPI) streamFormations(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	ch := make(chan *ct.ExpandedFormation)
-	stopCh := make(chan struct{})
 	since, err := time.Parse(time.RFC3339, req.FormValue("since"))
 	if err != nil {
 		respondWithError(w, err)
 		return
 	}
-	if err := c.formationRepo.Subscribe(ch, stopCh, since); err != nil {
+	sub, err := c.formationRepo.Subscribe(ch, since, nil)
+	if err != nil {
 		respondWithError(w, err)
 		return
 	}
-	defer c.formationRepo.Unsubscribe(ch)
-	defer close(stopCh)
+	defer c.formationRepo.Unsubscribe(sub)
 	l, _ := ctxhelper.LoggerFromContext(ctx)
 	sse.ServeStream(w, ch, l)
 }
