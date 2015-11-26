@@ -36,6 +36,7 @@ func (s *S) TestCreateDeployment(c *C) {
 	c.Assert(d.AppID, Equals, app.ID)
 	c.Assert(d.NewReleaseID, Equals, newRelease.ID)
 	c.Assert(d.OldReleaseID, Equals, release.ID)
+	c.Assert(d.DeployTimeout, Equals, app.DeployTimeout)
 
 	// quickly recreating a deployment should error
 	_, err = s.c.CreateDeployment(app.ID, newRelease.ID)
