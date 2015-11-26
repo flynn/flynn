@@ -159,7 +159,7 @@ func (f *clusterFixer) startAppJob(app, typ, service string) ([]*discoverd.Insta
 	for _, job = range releases[0] {
 		break
 	}
-	job.ID = cluster.GenerateJobID(f.hosts[0].ID())
+	job.ID = cluster.GenerateJobID(f.hosts[0].ID(), "")
 	f.fixJobEnv(job)
 	// run it on a host
 	f.l.Info(fmt.Sprintf("starting %s %s job", app, typ), "job.id", job.ID, "release", job.Metadata["flynn-controller.release"])
@@ -196,7 +196,7 @@ outer:
 				}
 			}
 
-			job.ID = cluster.GenerateJobID(h.ID())
+			job.ID = cluster.GenerateJobID(h.ID(), "")
 			f.fixJobEnv(job)
 			if err := h.AddJob(job); err != nil {
 				return fmt.Errorf("error starting discoverd on %s: %s", h.ID(), err)
@@ -254,7 +254,7 @@ func (f *clusterFixer) fixFlannel() error {
 		if _, ok := flannelJobs[h.ID()]; ok {
 			continue
 		}
-		job.ID = cluster.GenerateJobID(h.ID())
+		job.ID = cluster.GenerateJobID(h.ID(), "")
 		f.fixJobEnv(job)
 		if err := h.AddJob(job); err != nil {
 			return fmt.Errorf("error starting flannel job: %s", err)
@@ -333,7 +333,7 @@ func (f *clusterFixer) fixController(instances []*discoverd.Instance, startSched
 		if err != nil {
 			return err
 		}
-		schedulerJob := utils.JobConfig(ef, "scheduler", f.hosts[0].ID())
+		schedulerJob := utils.JobConfig(ef, "scheduler", f.hosts[0].ID(), "")
 		if err := f.hosts[0].AddJob(schedulerJob); err != nil {
 			return fmt.Errorf("error starting scheduler job on %s: %s", f.hosts[0].ID(), err)
 		}
@@ -472,7 +472,7 @@ func (f *clusterFixer) fixPostgres() error {
 	f.l.Info("attempting to start missing postgres jobs", "want", want, "have", have)
 	if leader == nil {
 		// if no postgres, attempt to start
-		job.ID = cluster.GenerateJobID(host.ID())
+		job.ID = cluster.GenerateJobID(host.ID(), "")
 		f.fixJobEnv(job)
 		f.l.Info("starting postgres primary job", "job.id", job.ID)
 		wait, err = waitForInstance(job.ID)
@@ -497,7 +497,7 @@ func (f *clusterFixer) fixPostgres() error {
 			// if there are no other hosts, use the same one we put the primary on
 			secondHost = host
 		}
-		job.ID = cluster.GenerateJobID(secondHost.ID())
+		job.ID = cluster.GenerateJobID(secondHost.ID(), "")
 		f.fixJobEnv(job)
 		f.l.Info("starting second postgres job", "job.id", job.ID)
 		if wait == nil {

@@ -41,13 +41,13 @@ const (
 
 // Job is an in-memory representation of a cluster job
 type Job struct {
-	// InternalID is used to track jobs in-memory and is added to the
-	// cluster job's metadata (with key "flynn-controller.scheduler_id").
+	// ID is used to track jobs in-memory and is the UUID part of the
+	// cluster job's ID.
 	//
-	// It is distinct from the cluster job's ID due to the fact that a
-	// cluster job only has an ID once a host has been picked to run the
-	// job on, and we need to track it before that happens.
-	InternalID string
+	// We only use the UUID part due to the fact that a cluster job only
+	// has a HostID once a host has been picked to run the job on, and we
+	// need to track it before that happens.
+	ID string
 
 	Type      string
 	AppID     string
@@ -157,7 +157,7 @@ func (js Jobs) GetProcesses(key utils.FormationKey) Processes {
 }
 
 func (js Jobs) Add(j *Job) {
-	js[j.InternalID] = j
+	js[j.ID] = j
 }
 
 // TODO refactor `state` to JobStatus type and consolidate statuses across scheduler/controller/host

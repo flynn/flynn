@@ -593,13 +593,13 @@ func (s *Scheduler) handleFormationDiff(f *Formation, diff Processes) {
 			log.Info(fmt.Sprintf("starting %d new %s jobs", n, typ))
 			for i := 0; i < n; i++ {
 				job := &Job{
-					InternalID: random.UUID(),
-					Type:       typ,
-					AppID:      f.App.ID,
-					ReleaseID:  f.Release.ID,
-					Formation:  f,
-					startedAt:  time.Now(),
-					state:      JobStateNew,
+					ID:        random.UUID(),
+					Type:      typ,
+					AppID:     f.App.ID,
+					ReleaseID: f.Release.ID,
+					Formation: f,
+					startedAt: time.Now(),
+					state:     JobStateNew,
 				}
 				s.jobs.Add(job)
 				go s.StartJob(job)
@@ -809,25 +809,25 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) *Job {
 
 	jobType := hostJob.Metadata["flynn-controller.type"]
 
-	// lookup the job in memory using either the scheduler ID from the
-	// metadata, or the JobID in the case the job was started by the
-	// controller (so has no scheduler ID)
-	id := hostJob.Metadata["flynn-controller.scheduler_id"]
-	if id == "" {
-		id = hostJob.ID
+	// lookup the job using the UUID part of the job ID (see the
+	// description of Job.ID)
+	id, err := cluster.ExtractUUID(hostJob.ID)
+	if err != nil {
+		// job has invalid ID, ignore (very unexpected)
+		return nil
 	}
 	job, ok := s.jobs[id]
 	if !ok {
 		// this is the first time we have seen the job so
 		// add it to s.jobs
 		job = &Job{
-			InternalID: hostJob.ID,
-			Type:       jobType,
-			AppID:      appID,
-			ReleaseID:  releaseID,
-			HostID:     activeJob.HostID,
-			JobID:      hostJob.ID,
-			state:      JobStateNew,
+			ID:        id,
+			Type:      jobType,
+			AppID:     appID,
+			ReleaseID: releaseID,
+			HostID:    activeJob.HostID,
+			JobID:     hostJob.ID,
+			state:     JobStateNew,
 		}
 		s.jobs.Add(job)
 	}
@@ -882,7 +882,7 @@ func (s *Scheduler) handleJobStatus(job *Job, status host.JobStatus) {
 					jobs = make(map[string]*Job)
 					s.formationlessJobs[key] = jobs
 				}
-				jobs[job.InternalID] = job
+				jobs[job.ID] = job
 
 				// only log an error if the state changed (so we don't
 				// keep logging it in periodic SyncJobs calls)
@@ -1025,9 +1025,7 @@ func (s *Scheduler) stopJob(f *Formation, typ string) (err error) {
 }
 
 func jobConfig(job *Job, hostID string) *host.Job {
-	config := utils.JobConfig(job.Formation.ExpandedFormation, job.Type, hostID)
-	config.Metadata["flynn-controller.scheduler_id"] = job.InternalID
-	return config
+	return utils.JobConfig(job.Formation.ExpandedFormation, job.Type, hostID, job.ID)
 }
 
 func (s *Scheduler) Stop() error {
@@ -1078,14 +1076,14 @@ func (s *Scheduler) restartJob(job *Job) {
 	// create a new job so its state is tracked separately from the job
 	// it is replacing
 	newJob := &Job{
-		InternalID: random.UUID(),
-		Type:       job.Type,
-		AppID:      job.AppID,
-		ReleaseID:  job.ReleaseID,
-		Formation:  job.Formation,
-		startedAt:  time.Now(),
-		state:      JobStateScheduled,
-		restarts:   restarts + 1,
+		ID:        random.UUID(),
+		Type:      job.Type,
+		AppID:     job.AppID,
+		ReleaseID: job.ReleaseID,
+		Formation: job.Formation,
+		startedAt: time.Now(),
+		state:     JobStateScheduled,
+		restarts:  restarts + 1,
 	}
 	s.jobs.Add(newJob)
 
