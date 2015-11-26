@@ -51,7 +51,7 @@ func (d *discoverdWrapper) Cleanup() {
 }
 
 func setup(t testutil.TestingT) (*discoverdWrapper, func()) {
-	dc, killDiscoverd := testutil.BootDiscoverd(t, "", "")
+	dc, killDiscoverd := testutil.BootDiscoverd(t, "")
 	dw := &discoverdWrapper{discoverdClient: dc}
 
 	return dw, func() {
