@@ -7,6 +7,9 @@ import (
 	"github.com/flynn/flynn/host/resource"
 )
 
+// TagPrefix is the prefix added to tags in discoverd instance metadata
+const TagPrefix = "tag:"
+
 type Job struct {
 	ID string `json:"id,omitempty"`
 
@@ -274,11 +277,12 @@ type DiscoverdConfig struct {
 }
 
 type HostStatus struct {
-	ID        string           `json:"id"`
-	PID       int              `json:"pid"`
-	URL       string           `json:"url"`
-	Discoverd *DiscoverdConfig `json:"discoverd,omitempty"`
-	Network   *NetworkConfig   `json:"network,omitempty"`
+	ID        string            `json:"id"`
+	Tags      map[string]string `json:"tags,omitempty"`
+	PID       int               `json:"pid"`
+	URL       string            `json:"url"`
+	Discoverd *DiscoverdConfig  `json:"discoverd,omitempty"`
+	Network   *NetworkConfig    `json:"network,omitempty"`
 }
 
 const (

@@ -197,3 +197,7 @@ func (c *Host) Update(name string, args ...string) (pid int, err error) {
 	cmd := &host.Command{Path: name, Args: args}
 	return cmd.PID, c.c.Post("/host/update", cmd, cmd)
 }
+
+func (c *Host) UpdateTags(tags map[string]string) error {
+	return c.c.Post("/host/tags", tags, nil)
+}

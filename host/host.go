@@ -40,6 +40,7 @@ options:
   --listen-ip=IP         bind host network services to this IP
   --state=PATH           path to state file [default: /var/lib/flynn/host-state.bolt]
   --id=ID                host id
+  --tags=TAGS            host tags (comma separated list of KEY=VAL pairs, used for job constraints in the scheduler)
   --force                kill all containers booted by flynn-host before starting
   --volpath=PATH         directory to create volumes in [default: /var/lib/flynn/volumes]
   --vol-provider=VOL     volume provider [default: zfs]
@@ -142,6 +143,7 @@ func runDaemon(args *docopt.Args) {
 	listenIP := args.String["--listen-ip"]
 	stateFile := args.String["--state"]
 	hostID := args.String["--id"]
+	tags := parseTagArgs(args.String["--tags"])
 	force := args.Bool["--force"]
 	volPath := args.String["--volpath"]
 	volProvider := args.String["--vol-provider"]
@@ -255,17 +257,22 @@ func runDaemon(args *docopt.Args) {
 	backend.SetDefaultEnv("LISTEN_IP", listenIP)
 
 	var buffers host.LogBuffers
-	discoverdManager := NewDiscoverdManager(backend, mux, hostID, publishAddr)
+	discoverdManager := NewDiscoverdManager(backend, mux, hostID, publishAddr, tags)
 	publishURL := "http://" + publishAddr
 	host := &Host{
-		id:               hostID,
-		url:              publishURL,
-		status:           &host.HostStatus{ID: hostID, PID: os.Getpid(), URL: publishURL},
-		state:            state,
-		backend:          backend,
-		vman:             vman,
-		connectDiscoverd: discoverdManager.ConnectLocal,
-		log:              logger.New("host.id", hostID),
+		id:  hostID,
+		url: publishURL,
+		status: &host.HostStatus{
+			ID:   hostID,
+			PID:  os.Getpid(),
+			URL:  publishURL,
+			Tags: tags,
+		},
+		state:   state,
+		backend: backend,
+		vman:    vman,
+		discMan: discoverdManager,
+		log:     logger.New("host.id", hostID),
 	}
 
 	// restore the host status if set in the environment
@@ -278,6 +285,8 @@ func runDaemon(args *docopt.Args) {
 		pid := os.Getpid()
 		log.Info("setting status PID", "pid", pid)
 		host.status.PID = pid
+		// keep the same tags as the parent
+		discoverdManager.UpdateTags(host.status.Tags)
 	}
 
 	log.Info("creating HTTP listener")
@@ -381,7 +390,7 @@ func runDaemon(args *docopt.Args) {
 	}
 	if config := host.status.Discoverd; config != nil && config.URL != "" {
 		log.Info("connecting to service discovery", "url", config.URL)
-		if err := host.connectDiscoverd(config.URL); err != nil {
+		if err := discoverdManager.ConnectLocal(config.URL); err != nil {
 			log.Error("error connecting to service discovery", "err", err)
 			shutdown.Fatal(err)
 		}
@@ -442,4 +451,17 @@ func runDaemon(args *docopt.Args) {
 
 	log.Info("blocking main goroutine")
 	<-make(chan struct{})
+}
+
+func parseTagArgs(args string) map[string]string {
+	tags := make(map[string]string)
+	for _, s := range strings.Split(args, ",") {
+		keyVal := strings.SplitN(s, "=", 2)
+		if len(keyVal) == 1 && keyVal[0] != "" {
+			tags[keyVal[0]] = "true"
+		} else if len(keyVal) == 2 {
+			tags[keyVal[0]] = keyVal[1]
+		}
+	}
+	return tags
 }

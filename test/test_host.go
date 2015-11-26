@@ -389,3 +389,63 @@ func (s *HostSuite) TestUpdate(t *c.C) {
 	t.Assert(status.ID, c.Equals, id)
 	t.Assert(status.PID, c.Equals, pid)
 }
+
+func (s *HostSuite) TestUpdateTags(t *c.C) {
+	events := make(chan *discoverd.Event)
+	stream, err := s.discoverdClient(t).Service("flynn-host").Watch(events)
+	t.Assert(err, c.IsNil)
+	defer stream.Close()
+
+	nextEvent := func() *discoverd.Event {
+		select {
+		case e, ok := <-events:
+			if !ok {
+				t.Fatal("unexpected close of discoverd stream")
+			}
+			return e
+		case <-time.After(10 * time.Second):
+			t.Fatal("timed out waiting for discoverd event")
+		}
+		return nil
+	}
+
+	var client *cluster.Host
+	for {
+		e := nextEvent()
+		if e.Kind == discoverd.EventKindUp && client == nil {
+			client = cluster.NewHost(e.Instance.Meta["id"], e.Instance.Addr, nil)
+		}
+		if e.Kind == discoverd.EventKindCurrent {
+			break
+		}
+	}
+	if client == nil {
+		t.Fatal("did not initialize flynn-host client")
+	}
+
+	t.Assert(client.UpdateTags(map[string]string{"foo": "bar"}), c.IsNil)
+
+	var meta map[string]string
+	for {
+		e := nextEvent()
+		if e.Kind == discoverd.EventKindUpdate && e.Instance.Meta["id"] == client.ID() {
+			meta = e.Instance.Meta
+			break
+		}
+	}
+	t.Assert(meta["tag:foo"], c.Equals, "bar")
+
+	// setting to empty string should delete the tag
+	t.Assert(client.UpdateTags(map[string]string{"foo": ""}), c.IsNil)
+
+	for {
+		e := nextEvent()
+		if e.Kind == discoverd.EventKindUpdate && e.Instance.Meta["id"] == client.ID() {
+			meta = e.Instance.Meta
+			break
+		}
+	}
+	if _, ok := meta["tag:foo"]; ok {
+		t.Fatal("expected tag to be deleted but is still present")
+	}
+}
