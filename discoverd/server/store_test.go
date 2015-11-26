@@ -28,8 +28,8 @@ func TestStore_Open(t *testing.T) {
 // Ensure the store returns an error when opening without a bind address.
 func TestStore_Open_ErrBindAddressRequired(t *testing.T) {
 	s := NewStore()
-	s.BindAddress = ""
-	if err := s.Open(); err != server.ErrBindAddressRequired {
+	s.Listener = nil
+	if err := s.Open(); err != server.ErrListenerRequired {
 		t.Fatal(err)
 	}
 }
@@ -608,11 +608,15 @@ func NewStore() *Store {
 	// Initialize store.
 	s := &Store{Store: server.NewStore(f.Name())}
 
-	// Retrieve a random port.
-	port := MustRandomPort()
+	// Open listener on random port.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		panic(err)
+	}
+	_, port, _ := net.SplitHostPort(ln.Addr().String())
 
 	// Set default test settings.
-	s.BindAddress = net.JoinHostPort("", port)
+	s.Listener = ln
 	s.Advertise, _ = net.ResolveTCPAddr("tcp", net.JoinHostPort("localhost", port))
 	s.HeartbeatTimeout = 50 * time.Millisecond
 	s.ElectionTimeout = 50 * time.Millisecond

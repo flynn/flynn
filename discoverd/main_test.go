@@ -16,7 +16,7 @@ func TestMain_ParseFlags(t *testing.T) {
 	opt, err := m.ParseFlags(
 		"-data-dir", "/tmp/data/dir",
 		"-host", "127.0.0.1",
-		"-http-addr", "127.0.0.1:1000",
+		"-addr", "127.0.0.1:1000",
 		"-dns-addr", "127.0.0.1:2000",
 		"-recursors", "7.7.7.7,6.6.6.6",
 		"-notify", "localhost",
@@ -29,8 +29,8 @@ func TestMain_ParseFlags(t *testing.T) {
 	// Verify parsed options.
 	if opt.DataDir != "/tmp/data/dir" {
 		t.Fatalf("unexpected data dir: %s", opt.DataDir)
-	} else if opt.HTTPAddr != "127.0.0.1:1000" {
-		t.Fatalf("unexpected http addr: %s", opt.HTTPAddr)
+	} else if opt.Addr != "127.0.0.1:1000" {
+		t.Fatalf("unexpected addr: %s", opt.Addr)
 	} else if opt.DNSAddr != "127.0.0.1:2000" {
 		t.Fatalf("unexpected dns addr: %s", opt.DNSAddr)
 	} else if !reflect.DeepEqual(opt.Recursors, []string{"7.7.7.7", "6.6.6.6"}) {

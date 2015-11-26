@@ -100,7 +100,7 @@ func TestHandler_PutService_ErrInvalidJSON(t *testing.T) {
 // Ensure the handler redirects when the store is not the leader.
 func TestHandler_PutService_ErrNotLeader(t *testing.T) {
 	h := NewHandler()
-	h.Store.LeaderFn = func() string { return "host1:1110" }
+	h.Store.LeaderFn = func() string { return "host1:1111" }
 	h.Store.AddServiceFn = func(service string, config *discoverd.ServiceConfig) error { return server.ErrNotLeader }
 
 	w := httptest.NewRecorder()
