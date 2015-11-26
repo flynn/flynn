@@ -55,10 +55,7 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 	// update the pid file so removeHost works
 	t.Assert(instance.Run(fmt.Sprintf("echo -n %d | sudo tee /var/run/flynn-host.pid", pid), nil), c.IsNil)
 
-	// finish logging
-	t.Assert(client.SignalJob(cmd.Job.ID, int(syscall.SIGUSR1)), c.IsNil)
-
-	// check we get a single log line
+	// stream the log from the logaggregator
 	logc, err := logaggc.New("")
 	t.Assert(err, c.IsNil)
 	log, err := logc.GetLog("partial-logger", &logaggc.LogOpts{Follow: true})
@@ -77,6 +74,11 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 			msgs <- &msg
 		}
 	}()
+
+	// finish logging
+	t.Assert(client.SignalJob(cmd.Job.ID, int(syscall.SIGUSR1)), c.IsNil)
+
+	// check we get a single log line
 	for {
 		select {
 		case msg, ok := <-msgs:
