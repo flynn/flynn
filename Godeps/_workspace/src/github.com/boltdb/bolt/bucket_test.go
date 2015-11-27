@@ -12,7 +12,7 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/boltdb/bolt"
+	"github.com/boltdb/bolt"
 )
 
 // Ensure that a bucket that gets a non-existent key returns nil.
@@ -253,7 +253,7 @@ func TestBucket_Delete_FreelistOverflow(t *testing.T) {
 		b := tx.Bucket([]byte("0"))
 		c := b.Cursor()
 		for k, _ := c.First(); k != nil; k, _ = c.Next() {
-			b.Delete(k)
+			c.Delete()
 		}
 		return nil
 	})
@@ -490,6 +490,33 @@ func TestBucket_NextSequence(t *testing.T) {
 	})
 }
 
+// Ensure that a bucket will persist an autoincrementing sequence even if its
+// the only thing updated on the bucket.
+// https://github.com/boltdb/bolt/issues/296
+func TestBucket_NextSequence_Persist(t *testing.T) {
+	db := NewTestDB()
+	defer db.Close()
+	db.Update(func(tx *bolt.Tx) error {
+		_, _ = tx.CreateBucket([]byte("widgets"))
+		return nil
+	})
+
+	db.Update(func(tx *bolt.Tx) error {
+		_, _ = tx.Bucket([]byte("widgets")).NextSequence()
+		return nil
+	})
+
+	db.Update(func(tx *bolt.Tx) error {
+		seq, err := tx.Bucket([]byte("widgets")).NextSequence()
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		} else if seq != 2 {
+			t.Fatalf("unexpected sequence: %d", seq)
+		}
+		return nil
+	})
+}
+
 // Ensure that retrieving the next sequence on a read-only bucket returns an error.
 func TestBucket_NextSequence_ReadOnly(t *testing.T) {
 	db := NewTestDB()
@@ -609,6 +636,22 @@ func TestBucket_Put_KeyTooLarge(t *testing.T) {
 		tx.CreateBucket([]byte("widgets"))
 		err := tx.Bucket([]byte("widgets")).Put(make([]byte, 32769), []byte("bar"))
 		equals(t, err, bolt.ErrKeyTooLarge)
+		return nil
+	})
+}
+
+// Ensure that an error is returned when inserting a value that's too large.
+func TestBucket_Put_ValueTooLarge(t *testing.T) {
+	if os.Getenv("DRONE") == "true" {
+		t.Skip("not enough RAM for test")
+	}
+
+	db := NewTestDB()
+	defer db.Close()
+	db.Update(func(tx *bolt.Tx) error {
+		tx.CreateBucket([]byte("widgets"))
+		err := tx.Bucket([]byte("widgets")).Put([]byte("foo"), make([]byte, bolt.MaxValueSize+1))
+		equals(t, err, bolt.ErrValueTooLarge)
 		return nil
 	})
 }

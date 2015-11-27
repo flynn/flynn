@@ -9,7 +9,7 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/boltdb/bolt"
+	"github.com/boltdb/bolt"
 )
 
 // Ensure that a cursor can return a reference to the bucket that created it.
@@ -301,6 +301,49 @@ func TestCursor_Restart(t *testing.T) {
 	equals(t, string(k), "foo")
 
 	tx.Rollback()
+}
+
+// Ensure that a cursor can skip over empty pages that have been deleted.
+func TestCursor_First_EmptyPages(t *testing.T) {
+	db := NewTestDB()
+	defer db.Close()
+
+	// Create 1000 keys in the "widgets" bucket.
+	db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket([]byte("widgets"))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for i := 0; i < 1000; i++ {
+			if err := b.Put(u64tob(uint64(i)), []byte{}); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		return nil
+	})
+
+	// Delete half the keys and then try to iterate.
+	db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("widgets"))
+		for i := 0; i < 600; i++ {
+			if err := b.Delete(u64tob(uint64(i))); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		c := b.Cursor()
+		var n int
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			n++
+		}
+		if n != 400 {
+			t.Fatalf("unexpected key count: %d", n)
+		}
+
+		return nil
+	})
 }
 
 // Ensure that a Tx can iterate over all elements in a bucket.
