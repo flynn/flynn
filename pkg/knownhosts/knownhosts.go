@@ -26,7 +26,9 @@ func Unmarshal(in io.Reader) (*KnownHosts, error) {
 	for s.Scan() {
 		l, err := parseHosts(s.Text())
 		if err == nil {
-			k = append(k, l)
+			if l != nil {
+				k = append(k, l)
+			}
 		} else {
 			errs = append(errs, fmt.Sprintf("%d: %s", i, err.Error()))
 		}
