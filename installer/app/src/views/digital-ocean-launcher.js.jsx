@@ -53,7 +53,9 @@ var InstallConfig = React.createClass({
 		var clusterState = this.props.state;
 		var sizes = [];
 		if (clusterState.selectedRegion) {
-			sizes = clusterState.selectedRegion.sizes.sort(function (a, b) {
+			sizes = clusterState.selectedRegion.sizes.filter(function (s) {
+				return s.match(/gb$/);
+			}).sort(function (a, b) {
 				return sizeInBytes(a) - sizeInBytes(b);
 			});
 		}
