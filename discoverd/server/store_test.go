@@ -385,13 +385,28 @@ func TestStore_EnforceExpiry(t *testing.T) {
 	ch := make(chan *discoverd.Event, 1)
 	s.Subscribe("service0", false, discoverd.EventKindDown, ch)
 
-	// Update instance.
-	if err := s.AddInstance("service0", &discoverd.Instance{ID: "inst0"}); err != nil {
+	// Heartbeat instance for a little bit.
+	for i := 0; i < 10; i++ {
+		if err := s.AddInstance("service0", &discoverd.Instance{ID: "inst0"}); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(s.InstanceTTL / 2)
+	}
+
+	// Run expiry, however, instance should not be expired.
+	if err := s.EnforceExpiry(); err != nil {
 		t.Fatal(err)
 	}
 
+	// Verify that the instance has not been expired.
+	select {
+	case e := <-ch:
+		t.Fatalf("unexpected event: %#v", e)
+	default:
+	}
+
 	// Wait for TTL and then enforce expiry.
-	time.Sleep(s.InstanceTTL)
+	time.Sleep(2 * s.InstanceTTL)
 	if err := s.EnforceExpiry(); err != nil {
 		t.Fatal(err)
 	}
@@ -403,6 +418,19 @@ func TestStore_EnforceExpiry(t *testing.T) {
 		Instance: &discoverd.Instance{ID: "inst0", Index: 3},
 	}) {
 		t.Fatalf("unexpected event: %#v", e)
+	}
+}
+
+// Ensure the store returns an error if it has not been leader for long enough.
+func TestStore_EnforceExpiry_ErrLeaderWait(t *testing.T) {
+	s := MustOpenStore()
+	s.InstanceTTL = 10 * time.Second
+	defer s.Close()
+
+	// Attempting to expire instances before leadership has been established
+	// for 2x TTL should return a "leader wait" error.
+	if err := s.EnforceExpiry(); err != server.ErrLeaderWait {
+		t.Fatalf("unexpected error: %s", err)
 	}
 }
 
