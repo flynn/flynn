@@ -966,46 +966,22 @@ func (s *Scheduler) triggerRectify(key utils.FormationKey) {
 }
 
 func (s *Scheduler) stopJob(f *Formation, typ string) (err error) {
-	log := logger.New("fn", "stopJob", "job.type", typ)
+	log := logger.New("fn", "stopJob", "app.id", f.App.ID, "release.id", f.Release.ID, "job.type", typ)
 	log.Info("stopping job")
+
 	defer func() {
 		if err != nil {
 			log.Error("error stopping job", "err", err)
 		}
 	}()
 
-	var runningJobs []*Job
-	for _, job := range s.jobs.WithFormationAndType(f, typ) {
-		switch job.state {
-		case JobStateNew:
-			// if it's a new job, we are in the process of starting
-			// it, so just mark it as stopped (which will make the
-			// StartJob goroutine fail the next time it tries to
-			// place the job)
-			log.Info("marking new job as stopped")
-			job.state = JobStateStopped
-			return nil
-		case JobStateScheduled:
-			// if the job is scheduled to be restarted, just cancel
-			// the restart
-			log.Info("stopping job which is scheduled to restart", "job.id", job.JobID)
-			job.state = JobStateStopped
-			job.restartTimer.Stop()
-			return nil
-		case JobStateStarting, JobStateRunning:
-			runningJobs = append(runningJobs, job)
-		}
-	}
-	if len(runningJobs) == 0 {
-		return fmt.Errorf("no %s jobs running", typ)
-	}
-
-	// determine the most recent job
-	job := runningJobs[0]
-	for _, j := range runningJobs {
-		if j.startedAt.After(job.startedAt) {
-			job = j
-		}
+	job, err := s.findJobToStop(f, typ)
+	if err != nil {
+		return err
+	} else if job.state == JobStateStopped {
+		// a job that is not actually runnng was stopped in-memory, no need
+		// make a request to the cluster
+		return nil
 	}
 
 	host, ok := s.hosts[job.HostID]
@@ -1022,6 +998,45 @@ func (s *Scheduler) stopJob(f *Formation, typ string) (err error) {
 		}
 	}()
 	return nil
+}
+
+func (s *Scheduler) findJobToStop(f *Formation, typ string) (*Job, error) {
+	log := logger.New("fn", "findJobToStop", "app.id", f.App.ID, "release.id", f.Release.ID, "job.type", typ)
+
+	var runningJobs []*Job
+	for _, job := range s.jobs.WithFormationAndType(f, typ) {
+		switch job.state {
+		case JobStateNew:
+			// if it's a new job, we are in the process of starting
+			// it, so just mark it as stopped (which will make the
+			// StartJob goroutine fail the next time it tries to
+			// place the job)
+			log.Info("marking new job as stopped")
+			job.state = JobStateStopped
+			return job, nil
+		case JobStateScheduled:
+			// if the job is scheduled to be restarted, just cancel
+			// the restart
+			log.Info("stopping job which is scheduled to restart", "job.id", job.JobID)
+			job.state = JobStateStopped
+			job.restartTimer.Stop()
+			return job, nil
+		case JobStateStarting, JobStateRunning:
+			runningJobs = append(runningJobs, job)
+		}
+	}
+	if len(runningJobs) == 0 {
+		return nil, fmt.Errorf("no %s jobs running", typ)
+	}
+
+	// determine the most recent job
+	job := runningJobs[0]
+	for _, j := range runningJobs {
+		if j.startedAt.After(job.startedAt) {
+			job = j
+		}
+	}
+	return job, nil
 }
 
 func jobConfig(job *Job, hostID string) *host.Job {

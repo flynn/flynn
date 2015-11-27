@@ -422,3 +422,93 @@ func (TestSuite) TestMultipleSchedulers(c *C) {
 	s2.waitJobStart()
 	s1.waitJobStart()
 }
+
+func (TestSuite) TestStopJob(c *C) {
+	s := &Scheduler{}
+	formation := NewFormation(&ct.ExpandedFormation{
+		App:     &ct.App{ID: "app"},
+		Release: &ct.Release{ID: "release"},
+	})
+	otherFormation := NewFormation(&ct.ExpandedFormation{
+		App:     &ct.App{ID: "other_app"},
+		Release: &ct.Release{ID: "other_release"},
+	})
+	recent := time.Now()
+
+	type test struct {
+		desc       string
+		jobs       Jobs
+		shouldStop string
+		err        string
+		jobCheck   func(*Job)
+	}
+	for _, t := range []*test{
+		{
+			desc: "no jobs running",
+			jobs: nil,
+			err:  "no web jobs running",
+		},
+		{
+			desc: "no jobs from formation running",
+			jobs: Jobs{"job1": &Job{ID: "job1", Formation: otherFormation}},
+			err:  "no web jobs running",
+		},
+		{
+			desc: "no jobs with type running",
+			jobs: Jobs{"job1": &Job{ID: "job1", Formation: formation, Type: "worker"}},
+			err:  "no web jobs running",
+		},
+		{
+			desc:       "a running job",
+			jobs:       Jobs{"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStateRunning}},
+			shouldStop: "job1",
+		},
+		{
+			desc: "multiple running jobs, stops most recent",
+			jobs: Jobs{
+				"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent.Add(-5 * time.Minute)},
+				"job2": &Job{ID: "job2", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent},
+				"job3": &Job{ID: "job3", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent.Add(-10 * time.Minute)},
+			},
+			shouldStop: "job2",
+		},
+		{
+			desc: "one running and one stopped, stops running job",
+			jobs: Jobs{
+				"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent.Add(-5 * time.Minute)},
+				"job2": &Job{ID: "job2", Formation: formation, Type: "web", state: JobStateStopped, startedAt: recent},
+			},
+			shouldStop: "job1",
+		},
+		{
+			desc: "one running and one scheduled, stops scheduled job",
+			jobs: Jobs{
+				"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStateScheduled, startedAt: recent.Add(-5 * time.Minute), restartTimer: time.NewTimer(0)},
+				"job2": &Job{ID: "job2", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent},
+			},
+			shouldStop: "job1",
+			jobCheck:   func(job *Job) { c.Assert(job.state, Equals, JobStateStopped) },
+		},
+		{
+			desc: "one running and one new, stops new job",
+			jobs: Jobs{
+				"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStateNew, startedAt: recent.Add(-5 * time.Minute)},
+				"job2": &Job{ID: "job2", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent},
+			},
+			shouldStop: "job1",
+			jobCheck:   func(job *Job) { c.Assert(job.state, Equals, JobStateStopped) },
+		},
+	} {
+		s.jobs = t.jobs
+		job, err := s.findJobToStop(formation, "web")
+		if t.err != "" {
+			c.Assert(err, NotNil, Commentf(t.desc))
+			c.Assert(err.Error(), Equals, t.err, Commentf(t.desc))
+			continue
+		}
+		c.Assert(job.ID, Equals, t.shouldStop, Commentf(t.desc))
+		if t.jobCheck != nil {
+			t.jobCheck(job)
+		}
+	}
+}
