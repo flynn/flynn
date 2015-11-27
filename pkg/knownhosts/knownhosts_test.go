@@ -219,6 +219,31 @@ func (S) TestMixedKeyTypes(c *C) {
 	c.Assert(k.HostKeyCallback(net.JoinHostPort(ipAddress, "22"), &net.TCPAddr{Port: 22}, rsaKey), Equals, HostNotFoundError) // wrong key type
 }
 
+func (S) TestComments(c *C) {
+	const sep = " "
+	var input bytes.Buffer
+
+	key := genPublicKey(c)
+	keyBytes := bytes.TrimRight(bytes.TrimSpace(ssh.MarshalAuthorizedKey(key)), "\n")
+
+	// commented out host
+	host1Addr := "101.102.103.72"
+	input.WriteString("# ")
+	input.WriteString(host1Addr)
+	input.WriteString(sep)
+	input.Write(keyBytes)
+	input.WriteString("\n")
+
+	k, err := Unmarshal(&input)
+	c.Assert(err, IsNil)
+
+	// Test HostKeyCallback
+	addr := &net.TCPAddr{
+		Port: 22,
+	}
+	c.Assert(k.HostKeyCallback(host1Addr+":22", addr, key), Equals, HostNotFoundError)
+}
+
 func (S) TestFuzz(c *C) {
 	_, err := Unmarshal(strings.NewReader("[: 0"))
 	c.Assert(err, NotNil)
