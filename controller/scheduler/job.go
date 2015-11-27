@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sort"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
@@ -126,15 +127,27 @@ func (j *Job) IsInFormation(key utils.FormationKey) bool {
 
 type Jobs map[string]*Job
 
-func (j Jobs) WithFormationAndType(f *Formation, typ string) []*Job {
-	jobs := make([]*Job, 0, len(j))
+// WithFormationAndType returns a list of jobs which belong to the given
+// formation and have the given type, ordered with the most recently started
+// job first
+func (j Jobs) WithFormationAndType(f *Formation, typ string) sortJobs {
+	jobs := make(sortJobs, 0, len(j))
 	for _, job := range j {
 		if job.Formation == f && job.Type == typ {
 			jobs = append(jobs, job)
 		}
 	}
+	jobs.Sort()
 	return jobs
 }
+
+// sortJobs sorts Jobs in reverse chronological order based on their startedAt time
+type sortJobs []*Job
+
+func (s sortJobs) Len() int           { return len(s) }
+func (s sortJobs) Less(i, j int) bool { return s[i].startedAt.Sub(s[j].startedAt) > 0 }
+func (s sortJobs) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s sortJobs) Sort()              { sort.Sort(s) }
 
 func (j Jobs) GetHostJobCounts(key utils.FormationKey, typ string) map[string]int {
 	counts := make(map[string]int)

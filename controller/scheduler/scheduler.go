@@ -1003,7 +1003,7 @@ func (s *Scheduler) stopJob(f *Formation, typ string) (err error) {
 func (s *Scheduler) findJobToStop(f *Formation, typ string) (*Job, error) {
 	log := logger.New("fn", "findJobToStop", "app.id", f.App.ID, "release.id", f.Release.ID, "job.type", typ)
 
-	var runningJobs []*Job
+	var runningJob *Job
 	for _, job := range s.jobs.WithFormationAndType(f, typ) {
 		switch job.state {
 		case JobStateNew:
@@ -1011,7 +1011,7 @@ func (s *Scheduler) findJobToStop(f *Formation, typ string) (*Job, error) {
 			// it, so just mark it as stopped (which will make the
 			// StartJob goroutine fail the next time it tries to
 			// place the job)
-			log.Info("marking new job as stopped")
+			log.Info("marking new job as stopped", "job.id", job.ID)
 			job.state = JobStateStopped
 			return job, nil
 		case JobStateScheduled:
@@ -1022,21 +1022,18 @@ func (s *Scheduler) findJobToStop(f *Formation, typ string) (*Job, error) {
 			job.restartTimer.Stop()
 			return job, nil
 		case JobStateStarting, JobStateRunning:
-			runningJobs = append(runningJobs, job)
+			// stop the most recent job (which is the first in the
+			// slice we are iterating over) if none of the above
+			// cases match.
+			if runningJob == nil {
+				runningJob = job
+			}
 		}
 	}
-	if len(runningJobs) == 0 {
+	if runningJob == nil {
 		return nil, fmt.Errorf("no %s jobs running", typ)
 	}
-
-	// determine the most recent job
-	job := runningJobs[0]
-	for _, j := range runningJobs {
-		if j.startedAt.After(job.startedAt) {
-			job = j
-		}
-	}
-	return job, nil
+	return runningJob, nil
 }
 
 func jobConfig(job *Job, hostID string) *host.Job {
