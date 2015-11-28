@@ -63,8 +63,7 @@
 		},
 		{
 			"ImportPath": "github.com/boltdb/bolt",
-			"Comment": "v1.0",
-			"Rev": "aa66506030b376f848667d84d2596faa8a7099ea"
+			"Rev": "6e1ca38c6a73025366cd8705553b404746ee6e63"
 		},
 		{
 			"ImportPath": "github.com/camlistore/lock",

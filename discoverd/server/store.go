@@ -55,6 +55,10 @@ var (
 
 	// ErrNoKnownLeader is returned when there is not a current know cluster leader.
 	ErrNoKnownLeader = errors.New("discoverd: no known leader")
+
+	// ErrLeaderWait is returned when trying to expire instances when the store
+	// hasn't been leader for long enough.
+	ErrLeaderWait = errors.New("discoverd: new leader, waiting for 2x TTL")
 )
 
 // Store represents a storage backend using the raft protocol.
@@ -69,6 +73,10 @@ type Store struct {
 
 	data        *raftData
 	subscribers map[string]*list.List
+
+	leaderCh   chan bool                 // channel for notifying when leadership changes
+	leaderTime time.Time                 // time when leadership was established
+	heartbeats map[instanceKey]time.Time // heartbeat recv time for each instance
 
 	// Goroutine management
 	wg      sync.WaitGroup
@@ -107,6 +115,9 @@ func NewStore(path string) *Store {
 		path:        path,
 		data:        newRaftData(),
 		subscribers: make(map[string]*list.List),
+
+		leaderCh:   make(chan bool),
+		heartbeats: make(map[instanceKey]time.Time),
 
 		closing: make(chan struct{}),
 
@@ -189,6 +200,10 @@ func (s *Store) Open() error {
 	}
 	s.raft = r
 
+	// Start goroutine to monitor leadership changes.
+	s.wg.Add(1)
+	go s.monitorLeaderCh()
+
 	// Start goroutine to check for instance expiry.
 	s.wg.Add(1)
 	go s.expirer()
@@ -227,6 +242,41 @@ func (s *Store) Leader() string {
 	return s.raft.Leader()
 }
 
+// monitors the raft leader channel, updates the leader time, and resends to a local channel.
+func (s *Store) monitorLeaderCh() {
+	defer s.wg.Done()
+
+	incoming := s.raft.LeaderCh()
+	for {
+		select {
+		case <-s.closing:
+			return
+		case isLeader, ok := <-incoming:
+			// Update leader time and clear heartbeats.
+			s.mu.Lock()
+			if isLeader {
+				s.leaderTime = time.Now()
+			} else {
+				s.leaderTime = time.Time{}
+			}
+			s.heartbeats = make(map[instanceKey]time.Time)
+			s.mu.Unlock()
+
+			// If the incoming channel closed then close our leader channel.
+			if !ok {
+				close(s.leaderCh)
+				return
+			}
+
+			// Resend value to store's leader channel.
+			select {
+			case s.leaderCh <- isLeader:
+			default:
+			}
+		}
+	}
+}
+
 // LeaderCh returns a channel that signals leadership change.
 // Panic if called before store is opened.
 func (s *Store) LeaderCh() <-chan bool {
@@ -235,8 +285,11 @@ func (s *Store) LeaderCh() <-chan bool {
 		ch <- true
 		return ch
 	}
-	return s.raft.LeaderCh()
+	return s.leaderCh
 }
+
+// isLeader returns true if the store is currently the leader.
+func (s *Store) isLeader() bool { return s.raft.Leader() == s.Advertise.String() }
 
 // AddPeer adds a peer to the raft cluster. Panic if store is not open yet.
 func (s *Store) AddPeer(peer string) error {
@@ -346,7 +399,7 @@ func (s *Store) applyRemoveServiceCommand(cmd []byte) error {
 		s.broadcast(&discoverd.Event{
 			Service:  c.Service,
 			Kind:     discoverd.EventKindDown,
-			Instance: inst.Instance,
+			Instance: inst,
 		})
 	}
 
@@ -363,7 +416,7 @@ func (s *Store) Instances(service string) ([]*discoverd.Instance, error) {
 func (s *Store) instances(service string) []*discoverd.Instance {
 	var a []*discoverd.Instance
 	for _, inst := range s.data.Instances[service] {
-		var other = *inst.Instance
+		var other = *inst
 		a = append(a, &other)
 	}
 	sort.Sort(instanceSlice(a))
@@ -371,14 +424,27 @@ func (s *Store) instances(service string) []*discoverd.Instance {
 }
 
 func (s *Store) AddInstance(service string, inst *discoverd.Instance) error {
-	now := s.Now()
+	// Check if it's the leader.
+	// This check is needed because the heartbeats don't go through raft so
+	// it is not verified here like it normally would be when calling raftApply().
+	if !s.isLeader() {
+		return ErrNotLeader
+	}
+
+	// Track heartbeat time, if leader.
+	s.heartbeats[instanceKey{service, inst.ID}] = time.Now()
+
+	// Ignore if instance already exists and it hasn't changed.
+	if m := s.data.Instances[service]; m != nil {
+		if prev := m[inst.ID]; prev != nil && inst.Equal(prev) {
+			return nil
+		}
+	}
 
 	// Serialize command.
 	cmd, err := json.Marshal(&addInstanceCommand{
-		Service:    service,
-		Instance:   inst,
-		ExpiryTime: now.Add(s.InstanceTTL),
-		Now:        now,
+		Service:  service,
+		Instance: inst,
 	})
 	if err != nil {
 		return err
@@ -403,30 +469,27 @@ func (s *Store) applyAddInstanceCommand(cmd []byte, index uint64) error {
 
 	// Save the instance data.
 	if s.data.Instances[c.Service] == nil {
-		s.data.Instances[c.Service] = make(map[string]instanceEntry)
+		s.data.Instances[c.Service] = make(map[string]*discoverd.Instance)
 	}
 
 	// Check if the instance already exists.
 	// If it does then copy the original index.
 	// Otherwise set the index to the current log entry's index.
-	prev, existing := s.data.Instances[c.Service][c.Instance.ID]
-	if existing {
-		c.Instance.Index = prev.Instance.Index
+	prev := s.data.Instances[c.Service][c.Instance.ID]
+	if prev != nil {
+		c.Instance.Index = prev.Index
 	} else {
 		c.Instance.Index = index
 	}
 
 	// Check if the existing instance is being updated.
-	updating := existing && !c.Instance.Equal(s.data.Instances[c.Service][c.Instance.ID].Instance)
+	updating := prev != nil && !c.Instance.Equal(prev)
 
 	// Update entry.
-	s.data.Instances[c.Service][c.Instance.ID] = instanceEntry{
-		Instance:   c.Instance,
-		ExpiryTime: c.ExpiryTime,
-	}
+	s.data.Instances[c.Service][c.Instance.ID] = c.Instance
 
 	// Broadcast "up" event if new instance.
-	if !existing {
+	if prev == nil {
 		s.broadcast(&discoverd.Event{
 			Service:  c.Service,
 			Kind:     discoverd.EventKindUp,
@@ -441,7 +504,7 @@ func (s *Store) applyAddInstanceCommand(cmd []byte, index uint64) error {
 	}
 
 	// Update service leader, if necessary.
-	s.invalidateServiceLeader(c.Service, c.Now)
+	s.invalidateServiceLeader(c.Service)
 
 	return nil
 }
@@ -451,7 +514,6 @@ func (s *Store) RemoveInstance(service, id string) error {
 	cmd, err := json.Marshal(&removeInstanceCommand{
 		Service: service,
 		ID:      id,
-		Now:     s.Now(),
 	})
 	if err != nil {
 		return err
@@ -475,20 +537,21 @@ func (s *Store) applyRemoveInstanceCommand(cmd []byte) error {
 	}
 
 	// Remove instance data.
-	entry := s.data.Instances[c.Service][c.ID]
+	inst := s.data.Instances[c.Service][c.ID]
 	delete(s.data.Instances[c.Service], c.ID)
+	delete(s.heartbeats, instanceKey{c.Service, c.ID})
 
 	// Broadcast "down" event for instance.
-	if entry.Instance != nil {
+	if inst != nil {
 		s.broadcast(&discoverd.Event{
 			Service:  c.Service,
 			Kind:     discoverd.EventKindDown,
-			Instance: entry.Instance,
+			Instance: inst,
 		})
 	}
 
 	// Invalidate service leadership.
-	s.invalidateServiceLeader(c.Service, c.Now)
+	s.invalidateServiceLeader(c.Service)
 
 	return nil
 }
@@ -589,11 +652,11 @@ func (s *Store) applySetLeaderCommand(cmd []byte) error {
 	s.data.Leaders[c.Service] = c.ID
 
 	// Notify new leadership.
-	if entry, ok := s.data.Instances[c.Service][c.ID]; ok && entry.Instance != nil {
+	if inst := s.data.Instances[c.Service][c.ID]; inst != nil {
 		s.broadcast(&discoverd.Event{
 			Service:  c.Service,
 			Kind:     discoverd.EventKindLeader,
-			Instance: entry.Instance,
+			Instance: inst,
 		})
 	}
 
@@ -620,11 +683,11 @@ func (s *Store) serviceLeader(service string) *discoverd.Instance {
 	}
 
 	// Return instance specified by the leader id.
-	return m[instanceID].Instance
+	return m[instanceID]
 }
 
 // invalidateServiceLeader updates the current leader of service.
-func (s *Store) invalidateServiceLeader(service string, now time.Time) {
+func (s *Store) invalidateServiceLeader(service string) {
 	// Retrieve service config.
 	c := s.data.Services[service]
 
@@ -638,15 +701,9 @@ func (s *Store) invalidateServiceLeader(service string, now time.Time) {
 
 	// Find the oldest, non-expired instance.
 	var leader *discoverd.Instance
-	for _, entry := range s.data.Instances[service] {
-		// Ignore expired entries.
-		if entry.ExpiryTime.Before(now) {
-			continue
-		}
-
-		// Set leader if there is no leader or if the index is older.
-		if leader == nil || entry.Instance.Index < leader.Index {
-			leader = entry.Instance
+	for _, inst := range s.data.Instances[service] {
+		if leader == nil || inst.Index < leader.Index {
+			leader = inst
 		}
 	}
 
@@ -662,8 +719,8 @@ func (s *Store) invalidateServiceLeader(service string, now time.Time) {
 	// Broadcast event.
 	if prevLeaderID != leaderID {
 		var inst *discoverd.Instance
-		if s.data.Instances[service] != nil && s.data.Instances[service][leaderID].Instance != nil {
-			inst = s.data.Instances[service][leaderID].Instance
+		if s.data.Instances[service] != nil {
+			inst = s.data.Instances[service][leaderID]
 		}
 
 		s.broadcast(&discoverd.Event{
@@ -704,27 +761,27 @@ func (s *Store) EnforceExpiry() error {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
-		// Ignore if this store is not the leader.
-		if s.raft.Leader() != s.Advertise.String() {
+		// Ignore if this store is not the leader and hasn't been for at least 2 TTLs intervals.
+		if !s.isLeader() {
 			return raft.ErrNotLeader
+		} else if s.leaderTime.IsZero() || time.Since(s.leaderTime) < (2*s.InstanceTTL) {
+			return ErrLeaderWait
 		}
-
-		now := time.Now()
 
 		// Iterate over services and then instances.
 		var instances []expireInstance
 		for service, m := range s.data.Instances {
 			for _, inst := range m {
-				// Ignore instances expiring in the future.
-				if inst.ExpiryTime.After(now) {
+				// Ignore instances that have heartbeated within the TTL.
+				if t := s.heartbeats[instanceKey{service, inst.ID}]; time.Since(t) <= s.InstanceTTL {
 					continue
 				}
 
 				logger.Info("marking instance for expiry",
 					"fn", "EnforceExpiry",
 					"service", service,
-					"instance.id", inst.Instance.ID,
-					"instance.addr", inst.Instance.Addr,
+					"instance.id", inst.ID,
+					"instance.addr", inst.Addr,
 				)
 
 				// Add to list of instances to expire.
@@ -732,8 +789,7 @@ func (s *Store) EnforceExpiry() error {
 				// instances updating their expiry date while this command is applying.
 				instances = append(instances, expireInstance{
 					Service:    service,
-					InstanceID: inst.Instance.ID,
-					ExpiryTime: inst.ExpiryTime,
+					InstanceID: inst.ID,
 				})
 			}
 		}
@@ -746,7 +802,6 @@ func (s *Store) EnforceExpiry() error {
 		// Create command to expire instances.
 		buf, err := json.Marshal(&expireInstancesCommand{
 			Instances: instances,
-			Now:       now,
 		})
 		if err != nil {
 			return err
@@ -775,36 +830,36 @@ func (s *Store) applyExpireInstancesCommand(cmd []byte) error {
 
 	// Iterate over instances and remove ones with matching expiry times.
 	services := make(map[string]struct{})
-	for _, inst := range c.Instances {
+	for _, expireInstance := range c.Instances {
 		// Ignore if the service no longers exists.
-		m := s.data.Instances[inst.Service]
+		m := s.data.Instances[expireInstance.Service]
 		if m == nil {
 			continue
 		}
 
-		// Ignore if entry doesn't exist or expiry time is different.
-		entry, ok := m[inst.InstanceID]
-		if !ok || !entry.ExpiryTime.Equal(inst.ExpiryTime) {
+		// Ignore if entry doesn't exist.
+		inst, ok := m[expireInstance.InstanceID]
+		if !ok {
 			continue
 		}
 
 		// Remove instance.
-		delete(m, inst.InstanceID)
+		delete(m, expireInstance.InstanceID)
 
 		// Broadcast down event.
 		s.broadcast(&discoverd.Event{
-			Service:  inst.Service,
+			Service:  expireInstance.Service,
 			Kind:     discoverd.EventKindDown,
-			Instance: entry.Instance,
+			Instance: inst,
 		})
 
 		// Keep track of services invalidated.
-		services[inst.Service] = struct{}{}
+		services[expireInstance.Service] = struct{}{}
 	}
 
 	// Invalidate all services that had expirations.
 	for service := range services {
-		s.invalidateServiceLeader(service, c.Now)
+		s.invalidateServiceLeader(service)
 	}
 
 	return nil
@@ -1018,25 +1073,12 @@ func (ss *raftSnapshot) Persist(sink raft.SnapshotSink) error {
 // Release implements raft.FSMSnapshot. This is a no-op.
 func (ss *raftSnapshot) Release() {}
 
-// instanceEntry represents an instance with a TTL.
-type instanceEntry struct {
-	Instance   *discoverd.Instance
-	ExpiryTime time.Time
-}
-
-// instanceEntries represents a sortable list of entries by index.
-type instanceEntries []instanceEntry
-
-func (a instanceEntries) Len() int           { return len(a) }
-func (a instanceEntries) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a instanceEntries) Less(i, j int) bool { return a[i].Instance.Index < a[j].Instance.Index }
-
-// instanceSlice represents a sortable list of instances by id.
+// instanceSlice represents a sortable list of instances by index.
 type instanceSlice []*discoverd.Instance
 
 func (a instanceSlice) Len() int           { return len(a) }
 func (a instanceSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a instanceSlice) Less(i, j int) bool { return a[i].ID < a[j].ID }
+func (a instanceSlice) Less(i, j int) bool { return a[i].Index < a[j].Index }
 
 // Command type header bytes.
 const (
@@ -1077,35 +1119,31 @@ type addInstanceCommand struct {
 	Service    string
 	Instance   *discoverd.Instance
 	ExpiryTime time.Time
-	Now        time.Time // deterministic time for leader invalidation
 }
 
 // removeInstanceCommand represents a command object to remove an instance.
 type removeInstanceCommand struct {
 	Service string
 	ID      string
-	Now     time.Time // deterministic time for leader invalidation
 }
 
 // expireInstancesCommand represents a command object to expire multiple instances.
 type expireInstancesCommand struct {
 	Instances []expireInstance
-	Now       time.Time // deterministic time for leader invalidation
 }
 
 // expireInstance represents a single instance to expire.
 type expireInstance struct {
 	Service    string
 	InstanceID string
-	ExpiryTime time.Time // must match during apply
 }
 
 // raftData represents the root data structure for the raft store.
 type raftData struct {
-	Services  map[string]*discoverd.ServiceConfig `json:"services,omitempty"`
-	Metas     map[string]*discoverd.ServiceMeta   `json:"metas,omitempty"`
-	Leaders   map[string]string                   `json:"leaders,omitempty"`
-	Instances map[string]map[string]instanceEntry `json:"instances,omitempty"`
+	Services  map[string]*discoverd.ServiceConfig       `json:"services,omitempty"`
+	Metas     map[string]*discoverd.ServiceMeta         `json:"metas,omitempty"`
+	Leaders   map[string]string                         `json:"leaders,omitempty"`
+	Instances map[string]map[string]*discoverd.Instance `json:"instances,omitempty"`
 }
 
 func newRaftData() *raftData {
@@ -1113,18 +1151,18 @@ func newRaftData() *raftData {
 		Services:  make(map[string]*discoverd.ServiceConfig),
 		Metas:     make(map[string]*discoverd.ServiceMeta),
 		Leaders:   make(map[string]string),
-		Instances: make(map[string]map[string]instanceEntry),
+		Instances: make(map[string]map[string]*discoverd.Instance),
 	}
 }
 
 // ServiceInstances returns the instances of a service in sorted order.
-func (d *raftData) ServiceInstances(service string) []instanceEntry {
-	a := make([]instanceEntry, 0, len(d.Instances[service]))
-	for _, entry := range d.Instances[service] {
-		a = append(a, entry)
+func (d *raftData) ServiceInstances(service string) []*discoverd.Instance {
+	a := make([]*discoverd.Instance, 0, len(d.Instances[service]))
+	for _, i := range d.Instances[service] {
+		a = append(a, i)
 	}
 
-	sort.Sort(instanceEntries(a))
+	sort.Sort(instanceSlice(a))
 	return a
 }
 
@@ -1293,3 +1331,7 @@ func (l *raftLayer) Accept() (net.Conn, error) {
 
 // Close closes the layer.
 func (l *raftLayer) Close() error { return l.ln.Close() }
+
+type instanceKey struct {
+	service, instanceID string
+}

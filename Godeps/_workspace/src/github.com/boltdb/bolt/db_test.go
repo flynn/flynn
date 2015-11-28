@@ -1,6 +1,7 @@
 package bolt_test
 
 import (
+	"encoding/binary"
 	"errors"
 	"flag"
 	"fmt"
@@ -13,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/boltdb/bolt"
+	"github.com/boltdb/bolt"
 )
 
 var statsFlag = flag.Bool("stats", false, "show performance stats")
@@ -38,8 +39,8 @@ func TestOpen(t *testing.T) {
 
 // Ensure that opening an already open database file will timeout.
 func TestOpen_Timeout(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("timeout not supported on windows")
+	if runtime.GOOS == "solaris" {
+		t.Skip("solaris fcntl locks don't support intra-process locking")
 	}
 
 	path := tempfile()
@@ -62,8 +63,8 @@ func TestOpen_Timeout(t *testing.T) {
 
 // Ensure that opening an already open database file will wait until its closed.
 func TestOpen_Wait(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("timeout not supported on windows")
+	if runtime.GOOS == "solaris" {
+		t.Skip("solaris fcntl locks don't support intra-process locking")
 	}
 
 	path := tempfile()
@@ -83,6 +84,96 @@ func TestOpen_Wait(t *testing.T) {
 	assert(t, db1 != nil, "")
 	ok(t, err)
 	assert(t, time.Since(start) > 100*time.Millisecond, "")
+}
+
+// Ensure that opening a database does not increase its size.
+// https://github.com/boltdb/bolt/issues/291
+func TestOpen_Size(t *testing.T) {
+	// Open a data file.
+	db := NewTestDB()
+	path := db.Path()
+	defer db.Close()
+
+	// Insert until we get above the minimum 4MB size.
+	ok(t, db.Update(func(tx *bolt.Tx) error {
+		b, _ := tx.CreateBucketIfNotExists([]byte("data"))
+		for i := 0; i < 10000; i++ {
+			ok(t, b.Put([]byte(fmt.Sprintf("%04d", i)), make([]byte, 1000)))
+		}
+		return nil
+	}))
+
+	// Close database and grab the size.
+	db.DB.Close()
+	sz := fileSize(path)
+	if sz == 0 {
+		t.Fatalf("unexpected new file size: %d", sz)
+	}
+
+	// Reopen database, update, and check size again.
+	db0, err := bolt.Open(path, 0666, nil)
+	ok(t, err)
+	ok(t, db0.Update(func(tx *bolt.Tx) error { return tx.Bucket([]byte("data")).Put([]byte{0}, []byte{0}) }))
+	ok(t, db0.Close())
+	newSz := fileSize(path)
+	if newSz == 0 {
+		t.Fatalf("unexpected new file size: %d", newSz)
+	}
+
+	// Compare the original size with the new size.
+	if sz != newSz {
+		t.Fatalf("unexpected file growth: %d => %d", sz, newSz)
+	}
+}
+
+// Ensure that opening a database beyond the max step size does not increase its size.
+// https://github.com/boltdb/bolt/issues/303
+func TestOpen_Size_Large(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode")
+	}
+
+	// Open a data file.
+	db := NewTestDB()
+	path := db.Path()
+	defer db.Close()
+
+	// Insert until we get above the minimum 4MB size.
+	var index uint64
+	for i := 0; i < 10000; i++ {
+		ok(t, db.Update(func(tx *bolt.Tx) error {
+			b, _ := tx.CreateBucketIfNotExists([]byte("data"))
+			for j := 0; j < 1000; j++ {
+				ok(t, b.Put(u64tob(index), make([]byte, 50)))
+				index++
+			}
+			return nil
+		}))
+	}
+
+	// Close database and grab the size.
+	db.DB.Close()
+	sz := fileSize(path)
+	if sz == 0 {
+		t.Fatalf("unexpected new file size: %d", sz)
+	} else if sz < (1 << 30) {
+		t.Fatalf("expected larger initial size: %d", sz)
+	}
+
+	// Reopen database, update, and check size again.
+	db0, err := bolt.Open(path, 0666, nil)
+	ok(t, err)
+	ok(t, db0.Update(func(tx *bolt.Tx) error { return tx.Bucket([]byte("data")).Put([]byte{0}, []byte{0}) }))
+	ok(t, db0.Close())
+	newSz := fileSize(path)
+	if newSz == 0 {
+		t.Fatalf("unexpected new file size: %d", newSz)
+	}
+
+	// Compare the original size with the new size.
+	if sz != newSz {
+		t.Fatalf("unexpected file growth: %d => %d", sz, newSz)
+	}
 }
 
 // Ensure that a re-opened database is consistent.
@@ -133,6 +224,80 @@ func TestDB_Open_FileTooSmall(t *testing.T) {
 	equals(t, errors.New("file size too small"), err)
 }
 
+// Ensure that a database can be opened in read-only mode by multiple processes
+// and that a database can not be opened in read-write mode and in read-only
+// mode at the same time.
+func TestOpen_ReadOnly(t *testing.T) {
+	if runtime.GOOS == "solaris" {
+		t.Skip("solaris fcntl locks don't support intra-process locking")
+	}
+
+	bucket, key, value := []byte(`bucket`), []byte(`key`), []byte(`value`)
+
+	path := tempfile()
+	defer os.Remove(path)
+
+	// Open in read-write mode.
+	db, err := bolt.Open(path, 0666, nil)
+	ok(t, db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket(bucket)
+		if err != nil {
+			return err
+		}
+		return b.Put(key, value)
+	}))
+	assert(t, db != nil, "")
+	assert(t, !db.IsReadOnly(), "")
+	ok(t, err)
+	ok(t, db.Close())
+
+	// Open in read-only mode.
+	db0, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
+	ok(t, err)
+	defer db0.Close()
+
+	// Opening in read-write mode should return an error.
+	_, err = bolt.Open(path, 0666, &bolt.Options{Timeout: time.Millisecond * 100})
+	assert(t, err != nil, "")
+
+	// And again (in read-only mode).
+	db1, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
+	ok(t, err)
+	defer db1.Close()
+
+	// Verify both read-only databases are accessible.
+	for _, db := range []*bolt.DB{db0, db1} {
+		// Verify is is in read only mode indeed.
+		assert(t, db.IsReadOnly(), "")
+
+		// Read-only databases should not allow updates.
+		assert(t,
+			bolt.ErrDatabaseReadOnly == db.Update(func(*bolt.Tx) error {
+				panic(`should never get here`)
+			}),
+			"")
+
+		// Read-only databases should not allow beginning writable txns.
+		_, err = db.Begin(true)
+		assert(t, bolt.ErrDatabaseReadOnly == err, "")
+
+		// Verify the data.
+		ok(t, db.View(func(tx *bolt.Tx) error {
+			b := tx.Bucket(bucket)
+			if b == nil {
+				return fmt.Errorf("expected bucket `%s`", string(bucket))
+			}
+
+			got := string(b.Get(key))
+			expected := string(value)
+			if got != expected {
+				return fmt.Errorf("expected `%s`, got `%s`", expected, got)
+			}
+			return nil
+		}))
+	}
+}
+
 // TODO(benbjohnson): Test corruption at every byte of the first two pages.
 
 // Ensure that a database cannot open a transaction when it's not open.
@@ -161,6 +326,49 @@ func TestDB_BeginRW_Closed(t *testing.T) {
 	tx, err := db.Begin(true)
 	equals(t, err, bolt.ErrDatabaseNotOpen)
 	assert(t, tx == nil, "")
+}
+
+func TestDB_Close_PendingTx_RW(t *testing.T) { testDB_Close_PendingTx(t, true) }
+func TestDB_Close_PendingTx_RO(t *testing.T) { testDB_Close_PendingTx(t, false) }
+
+// Ensure that a database cannot close while transactions are open.
+func testDB_Close_PendingTx(t *testing.T, writable bool) {
+	db := NewTestDB()
+	defer db.Close()
+
+	// Start transaction.
+	tx, err := db.Begin(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Open update in separate goroutine.
+	done := make(chan struct{})
+	go func() {
+		db.Close()
+		close(done)
+	}()
+
+	// Ensure database hasn't closed.
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case <-done:
+		t.Fatal("database closed too early")
+	default:
+	}
+
+	// Commit transaction.
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure database closed now.
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case <-done:
+	default:
+		t.Fatal("database did not close")
+	}
 }
 
 // Ensure a database can provide a transactional block.
@@ -408,7 +616,7 @@ func TestDB_Consistency(t *testing.T) {
 	})
 }
 
-// Ensure that DB stats can be substracted from one another.
+// Ensure that DB stats can be subtracted from one another.
 func TestDBStats_Sub(t *testing.T) {
 	var a, b bolt.Stats
 	a.TxStats.PageCount = 3
@@ -527,6 +735,34 @@ func NewTestDB() *TestDB {
 	return &TestDB{db}
 }
 
+// MustView executes a read-only function. Panic on error.
+func (db *TestDB) MustView(fn func(tx *bolt.Tx) error) {
+	if err := db.DB.View(func(tx *bolt.Tx) error {
+		return fn(tx)
+	}); err != nil {
+		panic(err.Error())
+	}
+}
+
+// MustUpdate executes a read-write function. Panic on error.
+func (db *TestDB) MustUpdate(fn func(tx *bolt.Tx) error) {
+	if err := db.DB.View(func(tx *bolt.Tx) error {
+		return fn(tx)
+	}); err != nil {
+		panic(err.Error())
+	}
+}
+
+// MustCreateBucket creates a new bucket. Panic on error.
+func (db *TestDB) MustCreateBucket(name []byte) {
+	if err := db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte(name))
+		return err
+	}); err != nil {
+		panic(err.Error())
+	}
+}
+
 // Close closes the database and deletes the underlying file.
 func (db *TestDB) Close() {
 	// Log statistics.
@@ -559,7 +795,7 @@ func (db *TestDB) PrintStats() {
 
 // MustCheck runs a consistency check on the database and panics if any errors are found.
 func (db *TestDB) MustCheck() {
-	db.View(func(tx *bolt.Tx) error {
+	db.Update(func(tx *bolt.Tx) error {
 		// Collect all the errors.
 		var errors []error
 		for err := range tx.Check() {
@@ -648,3 +884,24 @@ func trunc(b []byte, length int) []byte {
 func truncDuration(d time.Duration) string {
 	return regexp.MustCompile(`^(\d+)(\.\d+)`).ReplaceAllString(d.String(), "$1")
 }
+
+func fileSize(path string) int64 {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return fi.Size()
+}
+
+func warn(v ...interface{})              { fmt.Fprintln(os.Stderr, v...) }
+func warnf(msg string, v ...interface{}) { fmt.Fprintf(os.Stderr, msg+"\n", v...) }
+
+// u64tob converts a uint64 into an 8-byte slice.
+func u64tob(v uint64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, v)
+	return b
+}
+
+// btou64 converts an 8-byte slice into an uint64.
+func btou64(b []byte) uint64 { return binary.BigEndian.Uint64(b) }
