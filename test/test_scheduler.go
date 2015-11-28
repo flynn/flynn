@@ -179,7 +179,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	t.Assert(list, c.HasLen, 3)
 	jobs := make(map[string]*ct.Job, len(list))
 	for _, job := range list {
-		debug(t, job.Type, "job started with ID ", job.ID)
+		debugf(t, "%s job started with ID %s", job.Type, job.ID)
 		jobs[job.Type] = job
 	}
 

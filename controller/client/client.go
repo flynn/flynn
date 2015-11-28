@@ -371,10 +371,24 @@ func (c *Client) GetFormation(appID, releaseID string) (*ct.Formation, error) {
 	return formation, c.Get(fmt.Sprintf("/apps/%s/formations/%s", appID, releaseID), formation)
 }
 
+// GetExpandedFormation returns expanded details for the specified formation
+// under app and release.
+func (c *Client) GetExpandedFormation(appID, releaseID string) (*ct.ExpandedFormation, error) {
+	formation := &ct.ExpandedFormation{}
+	return formation, c.Get(fmt.Sprintf("/apps/%s/formations/%s?expand=true", appID, releaseID), formation)
+}
+
 // FormationList returns a list of all formations under appID.
 func (c *Client) FormationList(appID string) ([]*ct.Formation, error) {
 	var formations []*ct.Formation
 	return formations, c.Get(fmt.Sprintf("/apps/%s/formations", appID), &formations)
+}
+
+// FormationListActive returns a list of all active formations (i.e. formations
+// whose process count is greater than zero).
+func (c *Client) FormationListActive() ([]*ct.ExpandedFormation, error) {
+	var formations []*ct.ExpandedFormation
+	return formations, c.Get("/formations?active=true", &formations)
 }
 
 // DeleteFormation deletes the formation matching appID and releaseID.

@@ -225,6 +225,7 @@ func (s *S) TestStreamFormationEvents(c *C) {
 		ReleaseID: release.ID,
 		Processes: map[string]int{"foo": 1},
 	})
+	defer s.deleteTestFormation(formation)
 
 	select {
 	case e, ok := <-events:
@@ -247,6 +248,7 @@ func (s *S) TestStreamFormationEvents(c *C) {
 		ReleaseID: release.ID,
 		Processes: map[string]int{"foo": 2},
 	})
+	defer s.deleteTestFormation(nextFormation)
 
 	select {
 	case e, ok := <-events:

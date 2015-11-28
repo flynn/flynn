@@ -1,7 +1,7 @@
 package main
 
 import (
-	"errors"
+	"sort"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
@@ -9,80 +9,106 @@ import (
 	"github.com/flynn/flynn/host/types"
 )
 
-type JobRequestType string
+// JobState is a job's in-memory state
 type JobState string
 
 const (
-	JobRequestTypeUp   JobRequestType = "up"
-	JobRequestTypeDown JobRequestType = "down"
-	JobStateStarting   JobState       = "starting"
-	JobStateRunning    JobState       = "running"
-	JobStateStopping   JobState       = "stopping"
-	JobStateStopped    JobState       = "stopped"
-	JobStateCrashed    JobState       = "crashed"
-	JobStateRequesting JobState       = "requesting"
-	JobStateNew        JobState       = "new"
+	// JobStateStarting is a job's state when it has started in the cluster
+	// (i.e. a host.StatusStarting event has been received)
+	JobStateStarting JobState = "starting"
+
+	// JobStateRunning is a job's state when it is running in the cluster
+	// (i.e. a host.StatusRunning event has been received)
+	JobStateRunning JobState = "running"
+
+	// JobStateStopping is a job's state when a request has been made to
+	// stop the job in the cluster
+	JobStateStopping JobState = "stopping"
+
+	// JobStateStopped is a job's state when it has stopped in the cluster
+	// (i.e. either a host.StatusDone, host.StatusCrashed or
+	// host.StatusFailed event has been received)
+	JobStateStopped JobState = "stopped"
+
+	// JobStateScheduled is a job's state when it is scheduled to start in
+	// the future (because it's in the process of being restarted)
+	JobStateScheduled JobState = "scheduled"
+
+	// JobStateNew is a job's state when it has been created in-memory (in
+	// response to a formation change) and is in the process of being
+	// started in the cluster
+	JobStateNew JobState = "new"
 )
 
-type JobRequest struct {
-	*Job
-	RequestType JobRequestType
-	attempts    uint
-}
-
-func NewJobRequest(f *Formation, requestType JobRequestType, typ, hostID, jobID string) *JobRequest {
-	return &JobRequest{
-		Job:         NewJob(f, f.App.ID, f.Release.ID, typ, hostID, jobID),
-		RequestType: requestType,
-	}
-}
-
-func (r *JobRequest) needsVolume() bool {
-	return r.Job.Formation.Release.Processes[r.Type].Data
-}
-
-func (r *JobRequest) Clone() *JobRequest {
-	return &JobRequest{
-		Job:         r.Job.Clone(),
-		RequestType: r.RequestType,
-		attempts:    r.attempts,
-	}
-}
-
+// Job is an in-memory representation of a cluster job
 type Job struct {
+	// ID is used to track jobs in-memory and is the UUID part of the
+	// cluster job's ID.
+	//
+	// We only use the UUID part due to the fact that a cluster job only
+	// has a HostID once a host has been picked to run the job on, and we
+	// need to track it before that happens.
+	ID string
+
 	Type      string
 	AppID     string
 	ReleaseID string
-	HostID    string
-	JobID     string
 
+	// HostID is the ID of the host the job has been placed on, and is set
+	// when a StartJob goroutine makes a placement request to the scheduler
+	// loop
+	HostID string
+
+	// JobID is the ID of the cluster job that this in-memory job
+	// represents, and is set either by a StartJob goroutine when it makes
+	// a placement request to the scheduler loop, or when an event is
+	// received for a yet unknown job (e.g. one started by the controller)
+	JobID string
+
+	// Formation is the formation this job belongs to
 	Formation *Formation
 
-	restarts  uint
+	// restarts is the number of times this job has been restarted and is
+	// used to calculate the amount of time to wait before restarting the
+	// job again when it stops (see scheduler.restartJob)
+	restarts uint
+
+	// restartTimer is a timer set when scheduling a job to start in the
+	// future
+	restartTimer *time.Timer
+
+	// startedAt is the time the job started in the cluster, assigned
+	// whenever a host event is received for the job, and is used to sort
+	// jobs when deciding which job to stop when a formation is scaled down
 	startedAt time.Time
-	state     JobState
+
+	// state is the job's current in-memory state and should only be
+	// referenced from within the main scheduler loop
+	state JobState
+
+	// metadata is the cluster job's metadata, assigned whenever a host
+	// event is received for the job, and is used when persisting the job
+	// to the controller
+	metadata map[string]string
 }
 
-func NewJob(f *Formation, appID, releaseID, typ, hostID, id string) *Job {
-	return &Job{
-		Type:      typ,
-		AppID:     appID,
-		ReleaseID: releaseID,
-		HostID:    hostID,
-		JobID:     id,
-		Formation: f,
-		startedAt: time.Now(),
-		state:     JobStateNew,
+// needsVolume indicates whether a volume should be provisioned in the cluster
+// for the job, determined from the corresponding process type in the release
+func (j *Job) needsVolume() bool {
+	return j.Formation.Release.Processes[j.Type].Data
+}
+
+// HasTypeFromRelease indicates whether the job has a type which is present
+// in the release
+func (j *Job) HasTypeFromRelease() bool {
+	for typ := range j.Formation.Release.Processes {
+		if j.Type == typ {
+			return true
+		}
 	}
+	return false
 }
 
-func (j *Job) Clone() *Job {
-	// Shallow copy
-	cloned := *j
-	return &cloned
-}
-
-//
 func (j *Job) IsStopped() bool {
 	return j.state == JobStateStopping || j.state == JobStateStopped
 }
@@ -96,27 +122,38 @@ func (j *Job) IsSchedulable() bool {
 }
 
 func (j *Job) IsInFormation(key utils.FormationKey) bool {
-	return !j.IsStopped() && j.Formation != nil && j.Formation.key() == key
+	return !j.IsStopped() && j.Formation != nil && j.Formation.key() == key && j.HasTypeFromRelease()
 }
 
 type Jobs map[string]*Job
 
-func (js Jobs) GetStoppableJobs(key utils.FormationKey, typ string) []*Job {
-	formTypeJobs := make([]*Job, 0, len(js))
-	for _, j := range js {
-		if j.IsInFormation(key) && j.IsRunning() && j.Type == typ {
-			formTypeJobs = append(formTypeJobs, j)
+// WithFormationAndType returns a list of jobs which belong to the given
+// formation and have the given type, ordered with the most recently started
+// job first
+func (j Jobs) WithFormationAndType(f *Formation, typ string) sortJobs {
+	jobs := make(sortJobs, 0, len(j))
+	for _, job := range j {
+		if job.Formation == f && job.Type == typ {
+			jobs = append(jobs, job)
 		}
 	}
-	return formTypeJobs
+	jobs.Sort()
+	return jobs
 }
 
-func (js Jobs) GetHostJobCounts(key utils.FormationKey, typ string) map[string]int {
-	counts := make(map[string]int)
+// sortJobs sorts Jobs in reverse chronological order based on their startedAt time
+type sortJobs []*Job
 
-	for _, j := range js {
-		if j.IsInFormation(key) && j.Type == typ {
-			counts[j.HostID]++
+func (s sortJobs) Len() int           { return len(s) }
+func (s sortJobs) Less(i, j int) bool { return s[i].startedAt.Sub(s[j].startedAt) > 0 }
+func (s sortJobs) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s sortJobs) Sort()              { sort.Sort(s) }
+
+func (j Jobs) GetHostJobCounts(key utils.FormationKey, typ string) map[string]int {
+	counts := make(map[string]int)
+	for _, job := range j {
+		if job.IsInFormation(key) && job.Type == typ && job.state != JobStateScheduled {
+			counts[job.HostID]++
 		}
 	}
 	return counts
@@ -132,34 +169,19 @@ func (js Jobs) GetProcesses(key utils.FormationKey) Processes {
 	return procs
 }
 
-func (js Jobs) AddJob(j *Job) *Job {
-	j = j.Clone()
-	js[j.JobID] = j
-	return j
-}
-
-func (js Jobs) IsJobInState(id string, state JobState) bool {
-	j, ok := js[id]
-	return ok && j.state == state
-}
-
-func (js Jobs) SetState(id string, state JobState) error {
-	if j, ok := js[id]; ok {
-		j.state = state
-		return nil
-	}
-	return errors.New("job not found")
+func (js Jobs) Add(j *Job) {
+	js[j.ID] = j
 }
 
 // TODO refactor `state` to JobStatus type and consolidate statuses across scheduler/controller/host
-func controllerJobFromSchedulerJob(job *Job, state string, metadata map[string]string) *ct.Job {
+func controllerJobFromSchedulerJob(job *Job, state string) *ct.Job {
 	return &ct.Job{
 		ID:        job.JobID,
 		AppID:     job.AppID,
 		ReleaseID: job.ReleaseID,
 		Type:      job.Type,
 		State:     state,
-		Meta:      metadata,
+		Meta:      utils.JobMetaFromMetadata(job.metadata),
 	}
 }
 

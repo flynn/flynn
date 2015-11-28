@@ -265,6 +265,7 @@ func (s *S) TestCreateFormation(c *C) {
 		// Now edit the formation to have valid process types. Should succeed.
 		in.Processes = map[string]int{"web": 1}
 		out := s.createTestFormation(c, in)
+		defer s.deleteTestFormation(out)
 		c.Assert(out.AppID, Equals, app.ID)
 		c.Assert(out.ReleaseID, Equals, release.ID)
 		c.Assert(out.Processes["web"], Equals, 1)
@@ -279,6 +280,13 @@ func (s *S) TestCreateFormation(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(gotFormation, DeepEquals, out)
 
+		expanded, err := s.c.GetExpandedFormation(appID, release.ID)
+		c.Assert(err, IsNil)
+		c.Assert(expanded.App.ID, Equals, app.ID)
+		c.Assert(expanded.Release.ID, Equals, release.ID)
+		c.Assert(expanded.Artifact.ID, Equals, release.ArtifactID)
+		c.Assert(expanded.Processes, DeepEquals, out.Processes)
+
 		_, err = s.c.GetFormation(appID, release.ID+"fail")
 		c.Assert(err, Equals, controller.ErrNotFound)
 	}
@@ -287,6 +295,10 @@ func (s *S) TestCreateFormation(c *C) {
 func (s *S) createTestFormation(c *C, formation *ct.Formation) *ct.Formation {
 	c.Assert(s.c.PutFormation(formation), IsNil)
 	return formation
+}
+
+func (s *S) deleteTestFormation(formation *ct.Formation) {
+	s.c.DeleteFormation(formation.AppID, formation.ReleaseID)
 }
 
 func (s *S) TestDeleteFormation(c *C) {

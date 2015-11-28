@@ -205,7 +205,7 @@ func (c *Cmd) Start() error {
 		c.Job.Artifact = c.Artifact
 	}
 	if c.Job.ID == "" {
-		c.Job.ID = cluster.GenerateJobID(c.HostID)
+		c.Job.ID = cluster.GenerateJobID(c.HostID, "")
 	}
 
 	if c.host == nil {

@@ -53,6 +53,35 @@ func (c *FakeControllerClient) GetFormation(appID, releaseID string) (*ct.Format
 	return nil, controller.ErrNotFound
 }
 
+func (c *FakeControllerClient) GetExpandedFormation(appID, releaseID string) (*ct.ExpandedFormation, error) {
+	app, ok := c.apps[appID]
+	if !ok {
+		return nil, controller.ErrNotFound
+	}
+	release, ok := c.releases[releaseID]
+	if !ok {
+		return nil, controller.ErrNotFound
+	}
+	releases, ok := c.formations[appID]
+	if !ok {
+		return nil, controller.ErrNotFound
+	}
+	formation, ok := releases[releaseID]
+	if !ok {
+		return nil, controller.ErrNotFound
+	}
+	procs := make(map[string]int, len(formation.Processes))
+	for typ, n := range formation.Processes {
+		procs[typ] = n
+	}
+	return &ct.ExpandedFormation{
+		App:       app,
+		Release:   release,
+		Artifact:  c.artifacts[release.ArtifactID],
+		Processes: procs,
+	}, nil
+}
+
 func (c *FakeControllerClient) GetApp(appID string) (*ct.App, error) {
 	if app, ok := c.apps[appID]; ok {
 		return app, nil
@@ -101,15 +130,37 @@ func (c *FakeControllerClient) AppList() ([]*ct.App, error) {
 	return apps, nil
 }
 
-func (c *FakeControllerClient) FormationList(appID string) ([]*ct.Formation, error) {
-	if releases, ok := c.formations[appID]; ok {
-		formations := make([]*ct.Formation, 0, len(releases))
-		for _, f := range releases {
-			formations = append(formations, f)
+func (c *FakeControllerClient) FormationListActive() ([]*ct.ExpandedFormation, error) {
+	var formations []*ct.ExpandedFormation
+	for appID, releases := range c.formations {
+		app, ok := c.apps[appID]
+		if !ok {
+			continue
 		}
-		return formations, nil
+		for releaseID, formation := range releases {
+			count := 0
+			procs := make(map[string]int, len(formation.Processes))
+			for typ, n := range formation.Processes {
+				count += n
+				procs[typ] = n
+			}
+			if count == 0 {
+				continue
+			}
+			release, ok := c.releases[releaseID]
+			if !ok {
+				continue
+			}
+			artifact := c.artifacts[release.ArtifactID]
+			formations = append(formations, &ct.ExpandedFormation{
+				App:       app,
+				Release:   release,
+				Artifact:  artifact,
+				Processes: procs,
+			})
+		}
 	}
-	return nil, controller.ErrNotFound
+	return formations, nil
 }
 
 func (c *FakeControllerClient) StreamFormations(since *time.Time, ch chan<- *ct.ExpandedFormation) (stream.Stream, error) {

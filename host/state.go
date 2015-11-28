@@ -132,7 +132,7 @@ func (s *State) Restore(backend Backend, buffers host.LogBuffers) (func(), error
 		for _, job := range resurrect {
 			go func(job *host.ActiveJob) {
 				// generate a new job id, this is a new job
-				newID := cluster.GenerateJobID(s.id)
+				newID := cluster.GenerateJobID(s.id, "")
 				log.Printf("resurrecting %s as %s", job.Job.ID, newID)
 				job.Job.ID = newID
 				config := &RunConfig{

@@ -17,7 +17,7 @@ import (
 	"github.com/flynn/flynn/pkg/stream"
 )
 
-func JobConfig(f *ct.ExpandedFormation, name, hostID string) *host.Job {
+func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.Job {
 	t := f.Release.Processes[name]
 	env := make(map[string]string, len(f.Release.Env)+len(t.Env)+4)
 	for k, v := range f.Release.Env {
@@ -26,7 +26,7 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string) *host.Job {
 	for k, v := range t.Env {
 		env[k] = v
 	}
-	id := cluster.GenerateJobID(hostID)
+	id := cluster.GenerateJobID(hostID, uuid)
 	env["FLYNN_APP_ID"] = f.App.ID
 	env["FLYNN_APP_NAME"] = f.App.Name
 	env["FLYNN_RELEASE_ID"] = f.Release.ID
@@ -156,14 +156,14 @@ type ControllerClient interface {
 	GetApp(appID string) (*ct.App, error)
 	GetRelease(releaseID string) (*ct.Release, error)
 	GetArtifact(artifactID string) (*ct.Artifact, error)
-	GetFormation(appID, releaseID string) (*ct.Formation, error)
+	GetExpandedFormation(appID, releaseID string) (*ct.ExpandedFormation, error)
 	CreateApp(app *ct.App) error
 	CreateRelease(release *ct.Release) error
 	CreateArtifact(artifact *ct.Artifact) error
 	PutFormation(formation *ct.Formation) error
 	StreamFormations(since *time.Time, ch chan<- *ct.ExpandedFormation) (stream.Stream, error)
 	AppList() ([]*ct.App, error)
-	FormationList(appID string) ([]*ct.Formation, error)
+	FormationListActive() ([]*ct.ExpandedFormation, error)
 	PutJob(*ct.Job) error
 }
 

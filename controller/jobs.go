@@ -217,7 +217,7 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	}
 	client := hosts[random.Math.Intn(len(hosts))]
 
-	id := cluster.GenerateJobID(client.ID())
+	id := cluster.GenerateJobID(client.ID(), "")
 	app := c.getApp(ctx)
 	env := make(map[string]string, len(release.Env)+len(newJob.Env)+4)
 	env["FLYNN_APP_ID"] = app.ID

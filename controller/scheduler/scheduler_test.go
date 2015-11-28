@@ -262,9 +262,9 @@ func (TestSuite) TestRectify(c *C) {
 	// Create an extra job on a host and wait for it to start
 	c.Log("Test creating an extra job on the host. Wait for job start in scheduler")
 	form := s.formations.Get(testAppID, testReleaseID)
-	host, err := s.Host(testHostID)
-	request := NewJobRequest(form, JobRequestTypeUp, testJobType, "", "")
-	config := jobConfig(request, testHostID)
+	host, _ := s.Host(testHostID)
+	newJob := &Job{Formation: form, AppID: testAppID, ReleaseID: testReleaseID, Type: testJobType}
+	config := jobConfig(newJob, testHostID)
 	host.AddJob(config)
 	job = s.waitJobStart()
 	jobs[job.JobID] = job
@@ -285,42 +285,24 @@ func (TestSuite) TestRectify(c *C) {
 	processes := map[string]int{testJobType: testJobCount}
 	release := NewRelease("test-release-2", artifact, processes)
 	form = NewFormation(&ct.ExpandedFormation{App: app, Release: release, Artifact: artifact, Processes: processes})
-	request = NewJobRequest(form, JobRequestTypeUp, testJobType, "", "")
-	config = jobConfig(request, testHostID)
+	newJob = &Job{Formation: form, AppID: testAppID, ReleaseID: testReleaseID, Type: testJobType}
+	config = jobConfig(newJob, testHostID)
 	// Add the job to the host without adding the formation. Expected error.
-	c.Log("Create a new job on the host without adding the formation to the controller. Wait for job start, expect error.")
+	c.Log("Create a new job on the host without adding the formation to the controller. Wait for job start, expect job with nil formation.")
 	host.AddJob(config)
-	_, err = s.waitForEvent(EventTypeJobStart)
-	c.Assert(err, Not(IsNil))
+	job = s.waitJobStart()
+	c.Assert(job.Formation, IsNil)
 
-	c.Log("Add the formation to the controller. Wait for formation change.")
+	c.Log("Add the formation to the controller. Wait for formation change. Check the job has a formation and no new job was created")
 	s.CreateApp(app)
 	s.CreateArtifact(artifact)
 	s.CreateRelease(release)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
 	s.waitFormationChange()
-	s.waitJobStart()
+	_, err := s.waitDurationForEvent(EventTypeJobStart, 1*time.Second)
+	c.Assert(err, NotNil)
+	c.Assert(job.Formation, NotNil)
 	c.Assert(s.Jobs(), HasLen, 2)
-}
-
-func (TestSuite) TestJobRequestRestarts(c *C) {
-	s := runTestScheduler(c, NewFakeCluster(), true)
-	defer s.Stop()
-
-	waitRestarts := func(duration time.Duration) {
-		event, err := s.waitDurationForEvent(EventTypeJobRequest, duration)
-		c.Assert(err.Error(), Equals, "unexpected event error: no hosts found")
-		e, ok := event.(*JobRequestEvent)
-		if !ok {
-			c.Fatalf("expected JobRequestEvent, got %T", event)
-		}
-		c.Assert(e.Request, NotNil)
-	}
-
-	// wait for the formation to cascade to the scheduler
-	waitRestarts(550 * time.Millisecond)
-	waitRestarts(550 * time.Millisecond)
-	waitRestarts(550 * time.Millisecond)
 }
 
 func (TestSuite) TestMultipleHosts(c *C) {
@@ -439,4 +421,94 @@ func (TestSuite) TestMultipleSchedulers(c *C) {
 	s2.discoverd.promote()
 	s2.waitJobStart()
 	s1.waitJobStart()
+}
+
+func (TestSuite) TestStopJob(c *C) {
+	s := &Scheduler{}
+	formation := NewFormation(&ct.ExpandedFormation{
+		App:     &ct.App{ID: "app"},
+		Release: &ct.Release{ID: "release"},
+	})
+	otherFormation := NewFormation(&ct.ExpandedFormation{
+		App:     &ct.App{ID: "other_app"},
+		Release: &ct.Release{ID: "other_release"},
+	})
+	recent := time.Now()
+
+	type test struct {
+		desc       string
+		jobs       Jobs
+		shouldStop string
+		err        string
+		jobCheck   func(*Job)
+	}
+	for _, t := range []*test{
+		{
+			desc: "no jobs running",
+			jobs: nil,
+			err:  "no web jobs running",
+		},
+		{
+			desc: "no jobs from formation running",
+			jobs: Jobs{"job1": &Job{ID: "job1", Formation: otherFormation}},
+			err:  "no web jobs running",
+		},
+		{
+			desc: "no jobs with type running",
+			jobs: Jobs{"job1": &Job{ID: "job1", Formation: formation, Type: "worker"}},
+			err:  "no web jobs running",
+		},
+		{
+			desc:       "a running job",
+			jobs:       Jobs{"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStateRunning}},
+			shouldStop: "job1",
+		},
+		{
+			desc: "multiple running jobs, stops most recent",
+			jobs: Jobs{
+				"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent.Add(-5 * time.Minute)},
+				"job2": &Job{ID: "job2", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent},
+				"job3": &Job{ID: "job3", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent.Add(-10 * time.Minute)},
+			},
+			shouldStop: "job2",
+		},
+		{
+			desc: "one running and one stopped, stops running job",
+			jobs: Jobs{
+				"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent.Add(-5 * time.Minute)},
+				"job2": &Job{ID: "job2", Formation: formation, Type: "web", state: JobStateStopped, startedAt: recent},
+			},
+			shouldStop: "job1",
+		},
+		{
+			desc: "one running and one scheduled, stops scheduled job",
+			jobs: Jobs{
+				"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStateScheduled, startedAt: recent.Add(-5 * time.Minute), restartTimer: time.NewTimer(0)},
+				"job2": &Job{ID: "job2", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent},
+			},
+			shouldStop: "job1",
+			jobCheck:   func(job *Job) { c.Assert(job.state, Equals, JobStateStopped) },
+		},
+		{
+			desc: "one running and one new, stops new job",
+			jobs: Jobs{
+				"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStateNew, startedAt: recent.Add(-5 * time.Minute)},
+				"job2": &Job{ID: "job2", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent},
+			},
+			shouldStop: "job1",
+			jobCheck:   func(job *Job) { c.Assert(job.state, Equals, JobStateStopped) },
+		},
+	} {
+		s.jobs = t.jobs
+		job, err := s.findJobToStop(formation, "web")
+		if t.err != "" {
+			c.Assert(err, NotNil, Commentf(t.desc))
+			c.Assert(err.Error(), Equals, t.err, Commentf(t.desc))
+			continue
+		}
+		c.Assert(job.ID, Equals, t.shouldStop, Commentf(t.desc))
+		if t.jobCheck != nil {
+			t.jobCheck(job)
+		}
+	}
 }

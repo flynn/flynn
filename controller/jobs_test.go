@@ -91,7 +91,7 @@ func (l *fakeLog) Write([]byte) (int, error) {
 func (s *S) TestKillJob(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "killjob"})
 	hostID := fakeHostID()
-	jobID := cluster.GenerateJobID(hostID)
+	jobID := cluster.GenerateJobID(hostID, "")
 	hc := tu.NewFakeHostClient(hostID)
 	s.cc.AddHost(hc)
 
