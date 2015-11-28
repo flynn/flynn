@@ -125,6 +125,7 @@ func ExpandFormation(c ControllerClient, f *ct.Formation) (*ct.ExpandedFormation
 		Release:   release,
 		Artifact:  artifact,
 		Processes: procs,
+		Tags:      f.Tags,
 		UpdatedAt: time.Now(),
 	}
 	if f.UpdatedAt != nil {

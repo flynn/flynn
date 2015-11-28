@@ -238,6 +238,9 @@ $$ LANGUAGE plpgsql`,
 		`ALTER TABLE job_cache ADD COLUMN host_id text`,
 		`UPDATE job_cache SET host_id = s.split[1], job_id = s.split[2]::uuid FROM (SELECT cluster_id, regexp_matches(cluster_id, '([^-]+)-(.*)') AS split FROM job_cache) AS s WHERE job_cache.cluster_id = s.cluster_id`,
 	)
+	migrations.Add(10,
+		`ALTER TABLE formations ADD COLUMN tags jsonb`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {
