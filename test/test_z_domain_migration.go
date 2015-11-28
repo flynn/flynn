@@ -11,13 +11,15 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-type DomainMigrationSuite struct {
+// Prefix the suite with "Z" so that it runs after all other tests because
+// if it fails, all other tests after it will be affected
+type ZDomainMigrationSuite struct {
 	Helper
 }
 
-var _ = c.Suite(&DomainMigrationSuite{})
+var _ = c.Suite(&ZDomainMigrationSuite{})
 
-func (s *DomainMigrationSuite) migrateDomain(t *c.C, dm *ct.DomainMigration) {
+func (s *ZDomainMigrationSuite) migrateDomain(t *c.C, dm *ct.DomainMigration) {
 	debugf(t, "migrating domain from %s to %s", dm.OldDomain, dm.Domain)
 	client := s.controllerClient(t)
 
@@ -114,7 +116,7 @@ func (s *DomainMigrationSuite) migrateDomain(t *c.C, dm *ct.DomainMigration) {
 	doPing("dashboard", 3)
 }
 
-func (s *DomainMigrationSuite) TestDomainMigration(t *c.C) {
+func (s *ZDomainMigrationSuite) TestDomainMigration(t *c.C) {
 	release, err := s.controllerClient(t).GetAppRelease("controller")
 	t.Assert(err, c.IsNil)
 	oldDomain := release.Env["DEFAULT_ROUTE_DOMAIN"]
