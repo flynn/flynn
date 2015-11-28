@@ -53,6 +53,11 @@ type Scheduler struct {
 	hosts      map[string]*Host
 	jobs       Jobs
 
+	// getJobs is used by tests that want to inspect the schedulers jobs
+	// without causing data races (jobs should only be referenced in the
+	// main loop)
+	getJobs chan Jobs
+
 	jobEvents chan *host.Event
 
 	listeners map[chan Event]struct{}
@@ -105,6 +110,7 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 		putJobs:           make(chan *ct.Job, eventBufferSize),
 		placementRequests: make(chan *PlacementRequest, eventBufferSize),
 		formationlessJobs: make(map[utils.FormationKey]map[string]*Job),
+		getJobs:           make(chan Jobs),
 	}
 }
 
@@ -356,6 +362,7 @@ func (s *Scheduler) Run() error {
 			s.SyncJobs()
 		case <-s.syncHosts:
 			s.SyncHosts()
+		case s.getJobs <- s.jobs:
 		}
 	}
 	return nil
@@ -1066,14 +1073,15 @@ func (s *Scheduler) Unsubscribe(events chan Event) {
 	delete(s.listeners, events)
 }
 
-func (s *Scheduler) Jobs() map[string]*Job {
-	jobs := make(map[string]*Job, len(s.jobs))
-	for id, j := range s.jobs {
+func (s *Scheduler) RunningJobs() map[string]*Job {
+	jobs := <-s.getJobs
+	runningJobs := make(map[string]*Job, len(jobs))
+	for id, j := range jobs {
 		if j.IsRunning() {
-			jobs[id] = j
+			runningJobs[id] = j
 		}
 	}
-	return jobs
+	return runningJobs
 }
 
 func (s *Scheduler) restartJob(job *Job) {

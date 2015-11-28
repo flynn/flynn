@@ -187,7 +187,7 @@ func (TestSuite) TestSingleJobStart(c *C) {
 
 	// Query the scheduler for the same job
 	c.Log("Verify that the scheduler has the same job")
-	jobs := s.Jobs()
+	jobs := s.RunningJobs()
 	c.Assert(jobs, HasLen, 1)
 	for _, job := range jobs {
 		c.Assert(job.Type, Equals, testJobType)
@@ -219,7 +219,7 @@ func (TestSuite) TestFormationChange(c *C) {
 		c.Assert(job.AppID, Equals, app.ID)
 		c.Assert(job.ReleaseID, Equals, testReleaseID)
 	}
-	c.Assert(s.Jobs(), HasLen, 4)
+	c.Assert(s.RunningJobs(), HasLen, 4)
 
 	// Test scaling down an existing formation
 	c.Log("Test scaling down an existing formation. Wait for formation change and job stop")
@@ -228,7 +228,7 @@ func (TestSuite) TestFormationChange(c *C) {
 	for i := 0; i < 3; i++ {
 		s.waitJobStop()
 	}
-	c.Assert(s.Jobs(), HasLen, 1)
+	c.Assert(s.RunningJobs(), HasLen, 1)
 
 	// Test creating a new formation
 	c.Log("Test creating a new formation. Wait for formation change and job start")
@@ -302,7 +302,7 @@ func (TestSuite) TestRectify(c *C) {
 	_, err := s.waitDurationForEvent(EventTypeJobStart, 1*time.Second)
 	c.Assert(err, NotNil)
 	c.Assert(job.Formation, NotNil)
-	c.Assert(s.Jobs(), HasLen, 2)
+	c.Assert(s.RunningJobs(), HasLen, 2)
 }
 
 func (TestSuite) TestMultipleHosts(c *C) {
@@ -331,7 +331,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitFormationChange()
 	s.waitJobStart()
 	s.waitJobStart()
-	c.Assert(s.Jobs(), HasLen, 3)
+	c.Assert(s.RunningJobs(), HasLen, 3)
 
 	assertJobCount := func(host *FakeHostClient, expected int) map[string]host.ActiveJob {
 		jobs, err := host.ListJobs()
@@ -347,7 +347,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	c.Log("Add a host, wait for omni job start on that host.")
 	cluster.AddHost(h3)
 	s.waitJobStart()
-	c.Assert(s.Jobs(), HasLen, 4)
+	c.Assert(s.RunningJobs(), HasLen, 4)
 	jobs := assertJobCount(h3, 1)
 
 	c.Log("Crash one of the omni jobs, and wait for it to restart")
@@ -358,14 +358,14 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitJobStop()
 	s.waitJobStart()
 	assertJobCount(h3, 1)
-	c.Assert(s.Jobs(), HasLen, 4)
+	c.Assert(s.RunningJobs(), HasLen, 4)
 
 	c.Logf("Remove one of the hosts. Ensure the cluster recovers correctly (hosts=%v)", hosts)
 	h3.Healthy = false
 	cluster.SetHosts(hosts)
 	s.waitFormationSync()
 	s.waitRectify()
-	c.Assert(s.Jobs(), HasLen, 3)
+	c.Assert(s.RunningJobs(), HasLen, 3)
 	assertJobCount(h1, 2)
 	assertJobCount(h2, 1)
 
@@ -375,7 +375,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitFormationSync()
 	s.waitRectify()
 	s.waitJobStart()
-	c.Assert(s.Jobs(), HasLen, 2)
+	c.Assert(s.RunningJobs(), HasLen, 2)
 	assertJobCount(h2, 2)
 }
 
@@ -396,8 +396,8 @@ func (TestSuite) TestMultipleSchedulers(c *C) {
 	s1.discoverd.promote()
 	s1.waitJobStart()
 	s2.waitJobStart()
-	c.Assert(s1.Jobs(), HasLen, 1)
-	c.Assert(s2.Jobs(), HasLen, 1)
+	c.Assert(s1.RunningJobs(), HasLen, 1)
+	c.Assert(s2.RunningJobs(), HasLen, 1)
 
 	s1.discoverd.demote()
 
