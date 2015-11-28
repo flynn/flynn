@@ -412,6 +412,10 @@
 			"Rev": "adb861704259d548b45e08b5dd7b7c80efcd82e6"
 		},
 		{
+			"ImportPath": "github.com/golang/glog",
+			"Rev": "fca8c8854093a154ff1eb580aae10276ad6b1b5f"
+		},
+		{
 			"ImportPath": "github.com/google/go-querystring/query",
 			"Rev": "ec0a78e0f4db229b7897be36596a8944230b857a"
 		},
@@ -556,6 +560,10 @@
 		{
 			"ImportPath": "github.com/vaughan0/go-ini",
 			"Rev": "a98ad7ee00ec53921f08832bc06ecf7fd600e6a1"
+		},
+		{
+			"ImportPath": "github.com/vishvananda/netlink",
+			"Rev": "a57a12c1b1d8aa37cf2f9da4fa7657b1f1fed88c"
 		},
 		{
 			"ImportPath": "github.com/wadey/cryptorand",
