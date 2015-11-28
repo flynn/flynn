@@ -1,4 +1,4 @@
 include_rules
-: |> ./build.sh |> bin/flanneld
-: |> !go |> bin/flannel-wrapper
+: |> !go ./wrapper |> bin/flannel-wrapper
+: |> !go |> bin/flanneld
 : bin/* |> !docker-bootstrapped |>
