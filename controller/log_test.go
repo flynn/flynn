@@ -194,6 +194,7 @@ func (s *S) TestGetAppLogFollow(c *C) {
 	defer rc.Close()
 
 	msgc := make(chan *logaggc.Message)
+	msgErr := make(chan error)
 	go func() {
 		defer close(msgc)
 		scanner := bufio.NewScanner(rc)
@@ -202,17 +203,21 @@ func (s *S) TestGetAppLogFollow(c *C) {
 			err := json.Unmarshal(scanner.Bytes(), &msg)
 			if err == io.EOF {
 				return
+			} else if err != nil {
+				msgErr <- err
+				return
 			}
-			c.Assert(err, IsNil)
 			msgc <- &msg
 		}
-		c.Assert(scanner.Err(), IsNil)
+		msgErr <- scanner.Err()
 	}()
 
 	for i := 0; i < 3; i++ {
 		select {
 		case msg := <-msgc:
 			c.Assert(*msg, DeepEquals, sampleMessages[i])
+		case err := <-msgErr:
+			c.Assert(err, IsNil)
 		case <-time.After(2 * time.Second):
 			c.Fatalf("timed out waiting for buffered message %d", i)
 		}
