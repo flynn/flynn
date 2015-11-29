@@ -136,8 +136,8 @@ SELECT artifact_id, created_at FROM artifacts WHERE type = $1 AND uri = $2`
 	artifactInsertQuery = `
 INSERT INTO artifacts (artifact_id, type, uri) VALUES ($1, $2, $3) RETURNING created_at`
 	deploymentInsertQuery = `
-INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, processes)
-VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at`
+INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, processes, deploy_timeout)
+VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING created_at`
 	deploymentUpdateFinishedAtQuery = `
 UPDATE deployments SET finished_at = $2 WHERE deployment_id = $1`
 	deploymentUpdateFinishedAtNowQuery = `
@@ -148,7 +148,7 @@ DELETE FROM deployments WHERE deployment_id = $1`
 WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
 SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
   strategy, e1.data->>'status' AS status,
-  processes, d.created_at, d.finished_at
+  processes, deploy_timeout, d.created_at, d.finished_at
 FROM deployments d
 LEFT JOIN deployment_events e1
   ON d.deployment_id = e1.object_id::uuid
@@ -159,7 +159,7 @@ WHERE e2.created_at IS NULL AND d.deployment_id = $1`
 WITH deployment_events AS (SELECT * FROM events WHERE object_type = 'deployment')
 SELECT d.deployment_id, d.app_id, d.old_release_id, d.new_release_id,
   strategy, e1.data->>'status' AS status,
-  processes, d.created_at, d.finished_at
+  processes, deploy_timeout, d.created_at, d.finished_at
 FROM deployments d
 LEFT JOIN deployment_events e1
   ON d.deployment_id = e1.object_id::uuid

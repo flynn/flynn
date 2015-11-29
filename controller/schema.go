@@ -207,5 +207,8 @@ $$ LANGUAGE plpgsql`,
 		`ALTER TABLE events ADD CONSTRAINT events_object_type_fkey FOREIGN KEY (object_type) REFERENCES event_types (name)`,
 		`DROP TYPE event_type`,
 	)
+	m.Add(5,
+		`ALTER TABLE deployments ADD COLUMN deploy_timeout integer NOT NULL DEFAULT 30`,
+	)
 	return m.Migrate(db)
 }
