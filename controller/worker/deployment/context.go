@@ -98,6 +98,7 @@ func (c *context) HandleDeployment(job *que.Job) (e error) {
 		Deployment:      deployment,
 		client:          c.client,
 		deployEvents:    events,
+		serviceNames:    make(map[string]string),
 		serviceEvents:   make(chan *discoverd.Event),
 		useJobEvents:    make(map[string]struct{}),
 		logger:          c.logger,

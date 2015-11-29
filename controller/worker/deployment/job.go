@@ -21,6 +21,7 @@ type DeployJob struct {
 	client          *controller.Client
 	deployEvents    chan<- ct.DeploymentEvent
 	jobEvents       chan *ct.Job
+	serviceNames    map[string]string
 	serviceEvents   chan *discoverd.Event
 	serviceMeta     *discoverd.ServiceMeta
 	useJobEvents    map[string]struct{}
@@ -50,6 +51,8 @@ func (d *DeployJob) Perform() error {
 		deployFunc = d.deployAllAtOnce
 	case "postgres":
 		deployFunc = d.deployPostgres
+	case "discoverd-meta":
+		deployFunc = d.deployDiscoverdMeta
 	default:
 		err := UnknownStrategyError{d.Strategy}
 		log.Error("error validating deployment strategy", "err", err)
@@ -79,6 +82,8 @@ func (d *DeployJob) Perform() error {
 			d.useJobEvents[typ] = struct{}{}
 			continue
 		}
+
+		d.serviceNames[typ] = proc.Service
 
 		log.Info(fmt.Sprintf("using service discovery for %s process type", typ), "service", proc.Service)
 		events := make(chan *discoverd.Event)

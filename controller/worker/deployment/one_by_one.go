@@ -4,10 +4,17 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	ct "github.com/flynn/flynn/controller/types"
 )
 
+type WaitJobsFn func(releaseID string, expected jobEvents, log log15.Logger) error
+
 func (d *DeployJob) deployOneByOne() error {
+	return d.deployOneByOneWithWaitFn(d.waitForJobEvents)
+}
+
+func (d *DeployJob) deployOneByOneWithWaitFn(waitJobs WaitJobsFn) error {
 	log := d.logger.New("fn", "deployOneByOne")
 	log.Info("starting one-by-one deployment")
 
@@ -61,7 +68,7 @@ func (d *DeployJob) deployOneByOne() error {
 				}
 			}
 			nlog.Info(fmt.Sprintf("waiting for %d job up event(s)", diff), "type", typ)
-			if err := d.waitForJobEvents(d.NewReleaseID, jobEvents{typ: {"up": diff}}, nlog); err != nil {
+			if err := waitJobs(d.NewReleaseID, jobEvents{typ: {"up": diff}}, nlog); err != nil {
 				nlog.Error("error waiting for job up events", "err", err)
 				return err
 			}
@@ -85,7 +92,7 @@ func (d *DeployJob) deployOneByOne() error {
 			}
 
 			olog.Info(fmt.Sprintf("waiting for %d job down event(s)", diff), "type", typ)
-			if err := d.waitForJobEvents(d.OldReleaseID, jobEvents{typ: {"down": diff}}, olog); err != nil {
+			if err := waitJobs(d.OldReleaseID, jobEvents{typ: {"down": diff}}, olog); err != nil {
 				olog.Error("error waiting for job down events", "err", err)
 				return err
 			}
