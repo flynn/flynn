@@ -19,7 +19,7 @@ On Windows, run this command in PowerShell:
 (New-Object Net.WebClient).DownloadString('https://dl.flynn.io/cli.ps1') | iex
 ```
 
-The CLI includes local browser-based installer that can boot and configure
+The CLI includes a local browser-based installer that can boot and configure
 a Flynn cluster on Amazon Web Services, DigitalOcean, Azure, and your own
 servers via SSH. It automatically performs all of the steps required to install
 Flynn.
