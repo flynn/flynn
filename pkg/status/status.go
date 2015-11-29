@@ -3,6 +3,8 @@ package status
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/flynn/flynn/pkg/version"
 )
 
 /*
@@ -13,6 +15,7 @@ import (
 	{
 	  "data": {
 		"status": "healthy", // ENUM: "health", "unhealthy" (200, 500)
+		"version": "ver_str",
 		"detail": {
 			// ... optional arbitrary service-specific information
 		}
@@ -38,8 +41,9 @@ var (
 )
 
 type Status struct {
-	Status Code             `json:"status"`
-	Detail *json.RawMessage `json:"detail,omitempty"`
+	Status  Code             `json:"status"`
+	Detail  *json.RawMessage `json:"detail,omitempty"`
+	Version string           `json:"version,omitempty"`
 }
 
 func New(healthy bool, detail interface{}) (Status, error) {
@@ -74,6 +78,7 @@ func (f Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	s := f()
+	s.Version = version.String()
 	if s.Status == CodeHealthy {
 		w.WriteHeader(200)
 	} else {
