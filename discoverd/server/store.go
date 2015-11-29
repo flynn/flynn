@@ -59,6 +59,8 @@ var (
 	// ErrLeaderWait is returned when trying to expire instances when the store
 	// hasn't been leader for long enough.
 	ErrLeaderWait = errors.New("discoverd: new leader, waiting for 2x TTL")
+
+	ErrShutdown = errors.New("discoverd: shutting down")
 )
 
 // Store represents a storage backend using the raft protocol.
@@ -211,19 +213,31 @@ func (s *Store) Open() error {
 	return nil
 }
 
+func (s *Store) LastIndex() uint64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.raft != nil {
+		return s.raft.LastIndex()
+	}
+	return 0
+}
+
 // Close shuts down the transport and store.
-func (s *Store) Close() error {
+func (s *Store) Close() (lastIdx uint64, err error) {
 	// Notify goroutines of closing and wait until they finish.
 	close(s.closing)
 	s.wg.Wait()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	for _, l := range s.subscribers {
 		for el := l.Front(); el != nil; el = el.Next() {
-			el.Value.(*subscription).Close()
+			go el.Value.(*subscription).Close()
 		}
 	}
 	if s.raft != nil {
 		s.raft.Shutdown().Error()
+		lastIdx = s.raft.LastIndex()
 		s.raft = nil
 	}
 	if s.transport != nil {
@@ -235,7 +249,7 @@ func (s *Store) Close() error {
 		s.stableStore = nil
 	}
 
-	return nil
+	return lastIdx, nil
 }
 
 // Leader returns the host of the current leader. Returns empty string if there is no leader.
@@ -873,6 +887,12 @@ func (s *Store) applyExpireInstancesCommand(cmd []byte) error {
 // raftApply joins typ and cmd and applies it to raft.
 // This call blocks until the apply completes and returns the error.
 func (s *Store) raftApply(typ byte, cmd []byte) (uint64, error) {
+	s.mu.RLock()
+	if s.raft == nil {
+		return 0, ErrShutdown
+	}
+	s.mu.RUnlock()
+
 	// Join the command type and data into one message.
 	buf := append([]byte{typ}, cmd...)
 

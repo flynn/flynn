@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/discoverd/client"
+	dt "github.com/flynn/flynn/discoverd/types"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/sse"
 	"github.com/flynn/flynn/pkg/status"
@@ -22,7 +24,9 @@ const StreamBufferSize = 64 // TODO: Figure out how big this buffer should be.
 // NewHandler returns a new instance of Handler.
 func NewHandler() *Handler {
 	r := httprouter.New()
+
 	h := &Handler{Handler: r}
+	h.Shutdown.Store(false)
 
 	if os.Getenv("DEBUG") != "" {
 		h.Handler = hh.ContextInjector("discoverd", hh.NewRequestLogger(h.Handler))
@@ -50,12 +54,18 @@ func NewHandler() *Handler {
 
 	r.GET("/ping", h.servePing)
 
+	r.POST("/shutdown", h.serveShutdown)
+
 	return h
 }
 
 // Handler represents an HTTP handler for the Store.
 type Handler struct {
 	http.Handler
+	Shutdown atomic.Value // bool
+	Main     interface {
+		Close() (dt.ShutdownInfo, error)
+	}
 	Store interface {
 		Leader() string
 		AddService(service string, config *discoverd.ServiceConfig) error
@@ -73,6 +83,15 @@ type Handler struct {
 		AddPeer(peer string) error
 		RemovePeer(peer string) error
 	}
+}
+
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h.Shutdown.Load().(bool) {
+		hh.Error(w, ErrShutdown)
+		return
+	}
+	h.Handler.ServeHTTP(w, r)
+	return
 }
 
 // servePutService creates a service.
@@ -304,6 +323,16 @@ func (h *Handler) serveGetLeader(w http.ResponseWriter, r *http.Request, params 
 
 // servePing returns a 200 OK.
 func (h *Handler) servePing(w http.ResponseWriter, r *http.Request, params httprouter.Params) {}
+
+func (h *Handler) serveShutdown(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	h.Shutdown.Store(true)
+	lastIdx, err := h.Main.Close()
+	if err != nil {
+		hh.Error(w, err)
+		return
+	}
+	hh.JSON(w, 200, lastIdx)
+}
 
 // serveStream creates a subscription and streams out events in SSE format.
 func (h *Handler) serveStream(w http.ResponseWriter, params httprouter.Params, kind discoverd.EventKind) {

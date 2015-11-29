@@ -24,7 +24,7 @@ var _ = Suite(&DNSSuite{})
 
 func (s *DNSSuite) SetUpTest(c *C) {
 	s.srv = s.newServer(c, []string{"8.8.8.8", "8.8.4.4"})
-	s.srv.Store = &s.store
+	s.srv.SetStore(&s.store)
 	s.store.InstancesFn = func(service string) ([]*discoverd.Instance, error) { return nil, nil }
 	s.store.ServiceLeaderFn = func(service string) (*discoverd.Instance, error) { return nil, nil }
 }
@@ -33,9 +33,9 @@ func (s *DNSSuite) newServer(c *C, recursors []string) *DNSServer {
 	srv := &DNSServer{
 		UDPAddr:   "127.0.0.1:0",
 		TCPAddr:   "127.0.0.1:0",
-		Store:     &s.store,
 		Recursors: recursors,
 	}
+	srv.SetStore(&s.store)
 	c.Assert(srv.ListenAndServe(), IsNil)
 	return srv
 }
