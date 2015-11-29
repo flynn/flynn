@@ -13,6 +13,7 @@ import (
 
 type Host struct {
 	ID       string
+	Tags     map[string]string
 	client   utils.HostClient
 	healthy  bool
 	checks   int
@@ -24,6 +25,7 @@ type Host struct {
 func NewHost(h utils.HostClient) *Host {
 	return &Host{
 		ID:      h.ID(),
+		Tags:    h.Tags(),
 		client:  h,
 		healthy: true,
 		stop:    make(chan struct{}),

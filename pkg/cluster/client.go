@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -71,14 +73,24 @@ func (c *Client) Hosts() ([]*Host, error) {
 	}
 	hosts := make([]*Host, len(insts))
 	for i, inst := range insts {
-		hosts[i] = NewHost(inst.Meta["id"], inst.Addr, c.h)
+		hosts[i] = NewHost(
+			inst.Meta["id"],
+			inst.Addr,
+			c.h,
+			HostTagsFromMeta(inst.Meta),
+		)
 	}
 	return hosts, nil
 }
 
-// HostInstances returns a list of discoverd instances for hosts in the cluster.
-func (c *Client) HostInstances() ([]*discoverd.Instance, error) {
-	return c.s.Instances()
+func HostTagsFromMeta(meta map[string]string) map[string]string {
+	tags := make(map[string]string, len(meta))
+	for k, v := range meta {
+		if strings.HasPrefix(k, host.TagPrefix) {
+			tags[strings.TrimPrefix(k, host.TagPrefix)] = v
+		}
+	}
+	return tags
 }
 
 func (c *Client) StreamHostEvents(ch chan *discoverd.Event) (stream.Stream, error) {

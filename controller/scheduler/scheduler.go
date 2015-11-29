@@ -587,6 +587,9 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 	counts := s.jobs.GetHostJobCounts(formation.key(), req.Job.Type)
 	var minCount int = math.MaxInt32
 	for _, h := range s.SortedHosts() {
+		if !req.Job.TagsMatchHost(h) {
+			continue
+		}
 		count, ok := counts[h.ID]
 		if !ok || count == 0 {
 			req.Host = h

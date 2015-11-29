@@ -141,6 +141,7 @@ type VolumeCreator interface {
 type HostClient interface {
 	VolumeCreator
 	ID() string
+	Tags() map[string]string
 	AddJob(*host.Job) error
 	GetJob(id string) (*host.ActiveJob, error)
 	Attach(*host.AttachReq, bool) (cluster.AttachClient, error)

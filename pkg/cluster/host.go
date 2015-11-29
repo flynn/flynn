@@ -18,13 +18,14 @@ import (
 
 // Host is a client for a host daemon.
 type Host struct {
-	id string
-	c  *httpclient.Client
+	id   string
+	tags map[string]string
+	c    *httpclient.Client
 }
 
-// NewHostClient creates a new Host that uses client to communicate with it.
+// NewHost creates a new Host that uses client to communicate with it.
 // addr is used by Attach.
-func NewHost(id string, addr string, h *http.Client) *Host {
+func NewHost(id string, addr string, h *http.Client, tags map[string]string) *Host {
 	if h == nil {
 		h = http.DefaultClient
 	}
@@ -32,7 +33,8 @@ func NewHost(id string, addr string, h *http.Client) *Host {
 		addr = "http://" + addr
 	}
 	return &Host{
-		id: id,
+		id:   id,
+		tags: tags,
 		c: &httpclient.Client{
 			ErrNotFound: ErrNotFound,
 			URL:         addr,
@@ -44,6 +46,11 @@ func NewHost(id string, addr string, h *http.Client) *Host {
 // ID returns the ID of the host this client communicates with.
 func (c *Host) ID() string {
 	return c.id
+}
+
+// Tags returns the hosts tags
+func (c *Host) Tags() map[string]string {
+	return c.tags
 }
 
 // Addr returns the IP/port that the host API is listening on.
@@ -64,7 +71,7 @@ func (c *Host) GetStatus() (*host.HostStatus, error) {
 func WaitForHostStatus(hostIP string, desired func(*host.HostStatus) bool) (*host.HostStatus, error) {
 	const waitMax = time.Minute
 	const waitInterval = 500 * time.Millisecond
-	h := NewHost("", fmt.Sprintf("http://%s:1113", hostIP), nil)
+	h := NewHost("", fmt.Sprintf("http://%s:1113", hostIP), nil, nil)
 	timeout := time.After(waitMax)
 	for {
 		status, err := h.GetStatus()

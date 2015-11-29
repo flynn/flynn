@@ -40,6 +40,8 @@ type FakeHostClient struct {
 
 func (c *FakeHostClient) ID() string { return c.hostID }
 
+func (c *FakeHostClient) Tags() map[string]string { return nil }
+
 func (c *FakeHostClient) Attach(req *host.AttachReq, wait bool) (cluster.AttachClient, error) {
 	f, ok := c.attach[req.JobID]
 	if !ok {
