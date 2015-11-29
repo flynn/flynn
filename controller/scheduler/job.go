@@ -99,10 +99,15 @@ type Job struct {
 	hostError *string
 }
 
+// Tags returns the tags for the job's process type from the formation
+func (j *Job) Tags() map[string]string {
+	return j.Formation.Tags[j.Type]
+}
+
 // TagsMatchHost checks whether all of the job's tags match the corresponding
 // host's tags
 func (j *Job) TagsMatchHost(host *Host) bool {
-	for k, v := range j.Formation.Tags[j.Type] {
+	for k, v := range j.Tags() {
 		if w, ok := host.Tags[k]; !ok || v != w {
 			return false
 		}

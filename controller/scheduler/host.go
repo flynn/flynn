@@ -33,6 +33,18 @@ func NewHost(h utils.HostClient) *Host {
 	}
 }
 
+func (h *Host) TagsEqual(tags map[string]string) bool {
+	if len(h.Tags) != len(tags) {
+		return false
+	}
+	for k, v := range h.Tags {
+		if w, ok := tags[k]; !ok || w != v {
+			return false
+		}
+	}
+	return true
+}
+
 // StreamEventsTo streams all job events from the host to the given channel in
 // a goroutine, returning the current list of active jobs.
 func (h *Host) StreamEventsTo(ch chan *host.Event) (map[string]host.ActiveJob, error) {

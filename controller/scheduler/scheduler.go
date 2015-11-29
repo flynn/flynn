@@ -235,7 +235,7 @@ func (s *Scheduler) streamHostEvents() error {
 						isCurrent = true
 						close(current)
 					}
-				case discoverd.EventKindUp, discoverd.EventKindDown:
+				case discoverd.EventKindUp, discoverd.EventKindUpdate, discoverd.EventKindDown:
 					// if we are not current, explicitly handle the event
 					// so that the scheduler is streaming job events from
 					// all current hosts before starting the main loop.
@@ -527,12 +527,41 @@ func (s *Scheduler) RectifyFormation(key utils.FormationKey) {
 	}
 	defer s.sendEvent(EventTypeRectify, nil, key)
 
-	formation := s.formations[key]
+	formation, ok := s.formations[key]
+	if !ok {
+		return
+	}
+
+	// stop jobs with mismatched tags first in case we need to reschedule
+	// them on hosts with matching tags
+	s.stopJobsWithMismatchedTags(formation)
+
 	diff := s.formationDiff(formation)
 	if diff.IsEmpty() {
 		return
 	}
 	s.handleFormationDiff(formation, diff)
+}
+
+// stopJobsWithMismatchedTags stops any running jobs whose tags do not match
+// those of the host they are running on (possible after either the host's tags
+// or the formation's tags are updated)
+func (s *Scheduler) stopJobsWithMismatchedTags(formation *Formation) {
+	log := logger.New("fn", "stopJobsWithMismatchedTags")
+	for _, job := range s.jobs {
+		if !job.IsInFormation(formation.key()) || !job.IsRunning() {
+			continue
+		}
+		host, ok := s.hosts[job.HostID]
+		if !ok {
+			continue
+		}
+		if job.TagsMatchHost(host) {
+			continue
+		}
+		log.Info("job has mismatched tags, stopping", "job.id", job.ID, "job.tags", job.Tags(), "host.id", host.ID, "host.tags", host.Tags)
+		s.stopJob(job)
+	}
 }
 
 func (s *Scheduler) formationDiff(formation *Formation) Processes {
@@ -678,7 +707,7 @@ func (s *Scheduler) handleFormationDiff(f *Formation, diff Processes) {
 		} else if n < 0 {
 			log.Info(fmt.Sprintf("stopping %d %s jobs", -n, typ))
 			for i := 0; i < -n; i++ {
-				s.stopJob(f, typ)
+				s.stopJobOfType(f, typ)
 			}
 		}
 	}
@@ -803,15 +832,25 @@ func (s *Scheduler) HandleHostEvent(e *discoverd.Event) {
 
 	switch e.Kind {
 	case discoverd.EventKindUp:
-		log = log.New("host.id", e.Instance.Meta["id"])
-		log.Info("host is up, starting job event stream")
-		var h utils.HostClient
-		h, err = s.Host(e.Instance.Meta["id"])
-		if err != nil {
-			log.Error("error creating host client", "err", err)
+		s.handleNewHost(e.Instance.Meta["id"])
+	case discoverd.EventKindUpdate:
+		id := e.Instance.Meta["id"]
+
+		// if we haven't seen this host before, handle it as new
+		host, ok := s.hosts[id]
+		if !ok {
+			s.handleNewHost(id)
 			return
 		}
-		s.followHost(h)
+
+		// if the host's tags have changed, rectify all formations so
+		// that any running jobs with mismatched tags are stopped
+		tags := cluster.HostTagsFromMeta(e.Instance.Meta)
+		if !host.TagsEqual(tags) {
+			log.Info("host tags changed", "host.id", id, "from", host.Tags, "to", tags)
+			host.Tags = tags
+			s.rectifyAll()
+		}
 	case discoverd.EventKindDown:
 		id := e.Instance.Meta["id"]
 		log = log.New("host.id", id)
@@ -822,6 +861,17 @@ func (s *Scheduler) HandleHostEvent(e *discoverd.Event) {
 		}
 		s.markHostAsUnhealthy(host)
 	}
+}
+
+func (s *Scheduler) handleNewHost(id string) {
+	log := logger.New("fn", "handleNewHost", "host.id", id)
+	log.Info("host is up, starting job event stream")
+	h, err := s.Host(id)
+	if err != nil {
+		log.Error("error creating host client", "err", err)
+		return
+	}
+	s.followHost(h)
 }
 
 func (s *Scheduler) PerformHostChecks() {
@@ -1032,10 +1082,11 @@ func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) (formation *Format
 		log.Info("adding new formation", "processes", ef.Processes)
 		formation = s.formations.Add(NewFormation(ef))
 	} else {
-		if formation.OriginalProcesses.Equals(ef.Processes) {
+		if formation.OriginalProcesses.Equals(ef.Processes) && utils.FormationTagsEqual(formation.Tags, ef.Tags) {
 			return
 		} else {
-			log.Info("updating processes of existing formation", "processes", ef.Processes)
+			log.Info("updating processes and tags of existing formation", "processes", ef.Processes, "tags", ef.Tags)
+			formation.Tags = ef.Tags
 			formation.SetProcesses(ef.Processes)
 		}
 	}
@@ -1051,22 +1102,49 @@ func (s *Scheduler) triggerRectify(key utils.FormationKey) {
 	}
 }
 
-func (s *Scheduler) stopJob(f *Formation, typ string) (err error) {
-	log := logger.New("fn", "stopJob", "app.id", f.App.ID, "release.id", f.Release.ID, "job.type", typ)
-	log.Info("stopping job")
+func (s *Scheduler) stopJobOfType(f *Formation, typ string) (err error) {
+	log := logger.New("fn", "stopJobOfType", "app.id", f.App.ID, "release.id", f.Release.ID, "job.type", typ)
+	log.Info(fmt.Sprintf("stopping %s job", typ))
 
 	defer func() {
 		if err != nil {
-			log.Error("error stopping job", "err", err)
+			log.Error(fmt.Sprintf("error stopping %s job", typ), "err", err)
 		}
 	}()
 
 	job, err := s.findJobToStop(f, typ)
 	if err != nil {
 		return err
-	} else if job.state == JobStateStopped {
-		// a job that is not actually runnng was stopped in-memory, no need
-		// make a request to the cluster
+	}
+	return s.stopJob(job)
+}
+
+func (s *Scheduler) stopJob(job *Job) error {
+	log := logger.New("fn", "stopJob", "job.id", job.ID, "job.type", job.Type, "job.state", job.state)
+	log.Info("stopping job")
+
+	switch job.state {
+	case JobStatePending:
+		// If it's a pending job, we are either in the process
+		// of starting it, or it is scheduled to start in the
+		// future.
+		//
+		// Jobs being actively started can just be marked as
+		// stopped, causing the StartJob goroutine to fail the
+		// next time it tries to place the job.
+		//
+		// Scheduled jobs need the restart timer cancelling, but
+		// also marked as stopped so that if the timer has already
+		// fired, it won't actually be placed in the cluster.
+		log.Info("stopping pending job", "job.id", job.ID)
+		job.state = JobStateStopped
+		s.persistJob(job)
+		if job.restartTimer != nil {
+			job.restartTimer.Stop()
+		}
+		return nil
+	case JobStateStopped:
+		// job already stopped, nothing to do
 		return nil
 	}
 
@@ -1075,7 +1153,7 @@ func (s *Scheduler) stopJob(f *Formation, typ string) (err error) {
 		return fmt.Errorf("unknown host: %q", job.HostID)
 	}
 
-	log.Info("requesting host to stop job", "job.id", job.JobID, "host.id", job.HostID)
+	log.Info("requesting host to stop job", "host.id", job.HostID)
 	job.state = JobStateStopping
 	go func() {
 		// host.StopJob can block, so run it in a goroutine
@@ -1086,35 +1164,19 @@ func (s *Scheduler) stopJob(f *Formation, typ string) (err error) {
 	return nil
 }
 
+// findJobToStop finds a job from the given formation and type which should be
+// stopped, choosing pending jobs if present, and the most recently started job
+// otherwise
 func (s *Scheduler) findJobToStop(f *Formation, typ string) (*Job, error) {
-	log := logger.New("fn", "findJobToStop", "app.id", f.App.ID, "release.id", f.Release.ID, "job.type", typ)
-
 	var runningJob *Job
 	for _, job := range s.jobs.WithFormationAndType(f, typ) {
 		switch job.state {
 		case JobStatePending:
-			// If it's a pending job, we are either in the process
-			// of starting it, or it is scheduled to start in the
-			// future.
-			//
-			// Jobs being actively started can just be marked as
-			// stopped, causing the StartJob goroutine to fail the
-			// next time it tries to place the job.
-			//
-			// Scheduled jobs need the restart timer cancelling, but
-			// also marked as stopped so that if the timer has already
-			// fired, it won't actually be placed in the cluster.
-			log.Info("stopping pending job", "job.id", job.ID)
-			job.state = JobStateStopped
-			s.persistJob(job)
-			if job.restartTimer != nil {
-				job.restartTimer.Stop()
-			}
 			return job, nil
 		case JobStateStarting, JobStateRunning:
-			// stop the most recent job (which is the first in the
-			// slice we are iterating over) if none of the above
-			// cases match.
+			// return the most recent job (which is the first in
+			// the slice we are iterating over) if none of the
+			// above cases match
 			if runningJob == nil {
 				runningJob = job
 			}
