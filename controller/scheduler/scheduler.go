@@ -546,9 +546,13 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 	formation := req.Job.Formation
 	counts := s.jobs.GetHostJobCounts(formation.key(), req.Job.Type)
 	var minCount int = math.MaxInt32
-	for id, h := range s.hosts {
-		count, ok := counts[id]
-		if !ok || count < minCount {
+	for _, h := range s.SortedHosts() {
+		count, ok := counts[h.ID]
+		if !ok || count == 0 {
+			req.Host = h
+			break
+		}
+		if count < minCount {
 			minCount = count
 			req.Host = h
 		}
@@ -563,6 +567,15 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 	req.Job.JobID = req.Config.ID
 	req.Job.HostID = req.Host.ID
 	req.Error(nil)
+}
+
+func (s *Scheduler) SortedHosts() sortHosts {
+	hosts := make(sortHosts, 0, len(s.hosts))
+	for _, host := range s.hosts {
+		hosts = append(hosts, host)
+	}
+	hosts.Sort()
+	return hosts
 }
 
 func (s *Scheduler) RunPutJobs() {
