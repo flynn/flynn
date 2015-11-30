@@ -36,7 +36,6 @@ var InstallConfig = React.createClass({
 						}}>
 							<IntegerPicker
 								minValue={1}
-								maxValue={5}
 								skipValues={[2]}
 								value={clusterState.numInstances}
 								onChange={this.__handleNumInstancesChange} />
