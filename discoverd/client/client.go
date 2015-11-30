@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	dt "github.com/flynn/flynn/discoverd/types"
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
 	hh "github.com/flynn/flynn/pkg/httphelper"
@@ -160,6 +161,10 @@ outer:
 			return nil, ErrTimedOut
 		}
 	}
+}
+
+func (c *Client) Shutdown() (res dt.ShutdownInfo, err error) {
+	return res, c.c.Post("/shutdown", nil, &res)
 }
 
 type service struct {

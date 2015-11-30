@@ -16,7 +16,9 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/discoverd/client"
+	dd "github.com/flynn/flynn/discoverd/deployment"
 	"github.com/flynn/flynn/discoverd/server"
+	dt "github.com/flynn/flynn/discoverd/types"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/shutdown"
@@ -43,11 +45,12 @@ func main() {
 
 // Main represents the main program execution.
 type Main struct {
-	mu        sync.Mutex
-	status    host.DiscoverdConfig
-	store     *server.Store
-	dnsServer *server.DNSServer
-	ln        net.Listener
+	mu         sync.Mutex
+	status     host.DiscoverdConfig
+	store      *server.Store
+	dnsServer  *server.DNSServer
+	httpServer *http.Server
+	ln         net.Listener
 
 	logger *log.Logger
 
@@ -76,6 +79,64 @@ func (m *Main) Run(args ...string) error {
 		return err
 	}
 
+	// Set up advertised address and default peer set.
+	advertiseAddr := MergeHostPort(opt.Host, opt.Addr)
+	if len(opt.Peers) == 0 {
+		opt.Peers = []string{advertiseAddr}
+	}
+
+	// Create a slice of peers with their HTTP address set instead.
+	httpPeers, err := SetPortSlice(opt.Peers, opt.Addr)
+	if err != nil {
+		return fmt.Errorf("set port slice: %s", err)
+	}
+
+	// if there is a discoverd process already running on this
+	// address perform a deployment by starting a proxy DNS server
+	// and shutting down the old discoverd job
+	var deploy *dd.Deployment
+	var shutdownInfo dt.ShutdownInfo
+
+	target := fmt.Sprintf("http://%s:1111", opt.Host)
+	m.logger.Println("checking for existing discoverd process at", target)
+	if err := discoverd.NewClientWithHTTP(target, &http.Client{}).Ping(); err == nil {
+		m.logger.Println("discoverd responding at", target, "taking over")
+
+		// update DISCOVERD environment variable so that the default
+		// discoverd client connects to the instance we intend to replace.
+		os.Setenv("DISCOVERD", target)
+		discoverd.DefaultClient = discoverd.NewClient()
+
+		deploy, err = dd.NewDeployment("discoverd")
+		if err != nil {
+			return err
+		}
+		m.logger.Println("Created deployment")
+		if err := deploy.MarkPerforming(advertiseAddr, 60); err != nil {
+			return err
+		}
+		m.logger.Println("marked", advertiseAddr, "as performing in deployent")
+		addr, resolvers := waitHostDNSConfig()
+		if opt.DNSAddr != "" {
+			addr = opt.DNSAddr
+		}
+		if len(opt.Recursors) > 0 {
+			resolvers = opt.Recursors
+		}
+		m.logger.Println("starting proxy DNS server")
+		if err := m.openDNSServer(addr, resolvers, httpPeers); err != nil {
+			return fmt.Errorf("Failed to start DNS server: %s", err)
+		}
+		m.logger.Printf("discoverd listening for DNS on %s", addr)
+
+		shutdownInfo, err = discoverd.NewClientWithURL(target).Shutdown()
+		if err != nil {
+			return err
+		}
+	} else {
+		m.logger.Println("failed to contact existing discoverd server, starting up without takeover")
+	}
+
 	// Open listener.
 	ln, err := net.Listen("tcp4", opt.Addr)
 	if err != nil {
@@ -85,12 +146,6 @@ func (m *Main) Run(args ...string) error {
 
 	// Multiplex listener to store and http api.
 	storeLn, httpLn := server.Mux(ln)
-
-	// Set up advertised address and default peer set.
-	advertiseAddr := MergeHostPort(opt.Host, opt.Addr)
-	if len(opt.Peers) == 0 {
-		opt.Peers = []string{advertiseAddr}
-	}
 
 	// Open store if we are not proxying.
 	if err := m.openStore(opt.DataDir, storeLn, advertiseAddr, opt.Peers); err != nil {
@@ -102,37 +157,33 @@ func (m *Main) Run(args ...string) error {
 		fmt.Fprintln(m.Stderr, "advertised address not in peer set, joining as proxy")
 	}
 
-	// Create a slice of peers with their HTTP address set instead.
-	httpPeers, err := SetPortSlice(opt.Peers, opt.Addr)
-	if err != nil {
-		return fmt.Errorf("set port slice: %s", err)
+	// Wait for the store to catchup before switching to local store if we are doing a deployment
+	if m.store != nil && shutdownInfo.LastIndex > 0 {
+		for m.store.LastIndex() < shutdownInfo.LastIndex {
+			m.logger.Println("Waiting for store to catchup, current:", m.store.LastIndex(), "target:", shutdownInfo.LastIndex)
+			time.Sleep(100 * time.Millisecond)
+		}
 	}
 
-	// If we have a DNS address, start a DNS server right away, otherwise
-	// wait for the host network to come up and then start a DNS server.
-	if opt.DNSAddr != "" {
+	// If we already started the DNS server as part of a deployment above,
+	// and we have an initialized store, just switch from the proxy store
+	// to the initialized store.
+	//
+	// Else if we have a DNS address, start a DNS server right away.
+	//
+	// Otherwise wait for the host network to come up and then start a DNS
+	// server.
+	if m.dnsServer != nil && m.store != nil {
+		m.dnsServer.SetStore(m.store)
+	} else if opt.DNSAddr != "" {
 		if err := m.openDNSServer(opt.DNSAddr, opt.Recursors, httpPeers); err != nil {
 			return fmt.Errorf("Failed to start DNS server: %s", err)
 		}
 		m.logger.Printf("discoverd listening for DNS on %s", opt.DNSAddr)
 	} else if opt.WaitNetDNS {
 		go func() {
-			// Wait for the host network.
-			status, err := cluster.WaitForHostStatus(os.Getenv("EXTERNAL_IP"), func(status *host.HostStatus) bool {
-				return status.Network != nil && status.Network.Subnet != ""
-			})
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			// Parse network subnet to determine bind address.
-			ip, _, err := net.ParseCIDR(status.Network.Subnet)
-			if err != nil {
-				log.Fatal(err)
-			}
-			addr := net.JoinHostPort(ip.String(), "53")
-
-			if err := m.openDNSServer(addr, status.Network.Resolvers, httpPeers); err != nil {
+			addr, resolvers := waitHostDNSConfig()
+			if err := m.openDNSServer(addr, resolvers, httpPeers); err != nil {
 				log.Fatalf("Failed to start DNS server: %s", err)
 			}
 			m.logger.Printf("discoverd listening for DNS on %s", addr)
@@ -146,6 +197,13 @@ func (m *Main) Run(args ...string) error {
 
 	if err := m.openHTTPServer(httpLn, opt.Peers); err != nil {
 		return fmt.Errorf("Failed to start HTTP server: %s", err)
+	}
+
+	if deploy != nil {
+		if err := deploy.MarkDone(advertiseAddr); err != nil {
+			return err
+		}
+		m.logger.Println("marked", advertiseAddr, "as done in deployment")
 	}
 
 	// Notify user that the servers are listening.
@@ -170,21 +228,43 @@ func (m *Main) Run(args ...string) error {
 	return nil
 }
 
+func waitHostDNSConfig() (addr string, resolvers []string) {
+	// Wait for the host network.
+	status, err := cluster.WaitForHostStatus(os.Getenv("EXTERNAL_IP"), func(status *host.HostStatus) bool {
+		return status.Network != nil && status.Network.Subnet != ""
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Parse network subnet to determine bind address.
+	ip, _, err := net.ParseCIDR(status.Network.Subnet)
+	if err != nil {
+		log.Fatal(err)
+	}
+	addr = net.JoinHostPort(ip.String(), "53")
+	return addr, status.Network.Resolvers
+}
+
 // Close shuts down all open servers.
-func (m *Main) Close() error {
-	if m.store != nil {
-		m.store.Close()
-		m.store = nil
+func (m *Main) Close() (info dt.ShutdownInfo, err error) {
+	if m.httpServer != nil {
+		// Disable keep alives so that persistent connections will close
+		m.httpServer.SetKeepAlivesEnabled(false)
 	}
 	if m.dnsServer != nil {
 		m.dnsServer.Close()
 		m.dnsServer = nil
 	}
+	if m.store != nil {
+		info.LastIndex, err = m.store.Close()
+		m.store = nil
+	}
 	if m.ln != nil {
 		m.ln.Close()
 		m.ln = nil
 	}
-	return nil
+	return info, err
 }
 
 // openStore initializes and opens the store.
@@ -241,9 +321,9 @@ func (m *Main) openDNSServer(addr string, recursors, peers []string) error {
 
 	// If store is available then attach it. Otherwise use a proxy.
 	if m.store != nil {
-		s.Store = m.store
+		s.SetStore(m.store)
 	} else {
-		s.Store = &server.ProxyStore{Peers: peers}
+		s.SetStore(&server.ProxyStore{Peers: peers})
 	}
 
 	if err := s.ListenAndServe(); err != nil {
@@ -258,15 +338,17 @@ func (m *Main) openDNSServer(addr string, recursors, peers []string) error {
 func (m *Main) openHTTPServer(ln net.Listener, peers []string) error {
 	// If we have no store then simply start a proxy handler.
 	if m.store == nil {
-		go http.Serve(ln, &server.ProxyHandler{Peers: peers})
+		m.httpServer = &http.Server{Handler: &server.ProxyHandler{Peers: peers}}
+		go m.httpServer.Serve(ln)
 		return nil
 	}
 
 	// Otherwise initialize and start handler.
 	h := server.NewHandler()
+	h.Main = m
 	h.Store = m.store
-	go http.Serve(ln, h)
-
+	m.httpServer = &http.Server{Handler: h}
+	go m.httpServer.Serve(ln)
 	return nil
 }
 

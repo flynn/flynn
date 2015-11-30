@@ -6,12 +6,19 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/miekg/dns"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/vanillahsu/go_reuseport"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/random"
 )
+
+type DNSStore interface {
+	Instances(service string) ([]*discoverd.Instance, error)
+	ServiceLeader(service string) (*discoverd.Instance, error)
+}
 
 type DNSServer struct {
 	UDPAddr   string
@@ -19,19 +26,23 @@ type DNSServer struct {
 	Domain    string
 	Recursors []string
 
-	Store interface {
-		Instances(service string) ([]*discoverd.Instance, error)
-		ServiceLeader(service string) (*discoverd.Instance, error)
-	}
-
+	store   atomic.Value // *DNSStore
 	servers []*dns.Server
+}
+
+func (srv *DNSServer) GetStore() DNSStore {
+	return *srv.store.Load().(*DNSStore)
+}
+
+func (srv *DNSServer) SetStore(s DNSStore) {
+	srv.store.Store(&s)
 }
 
 const maxUDPRecords = 3
 const dnsDomain = "discoverd."
 
 func (srv *DNSServer) ListenAndServe() error {
-	if srv.Store == nil {
+	if srv.GetStore() == nil {
 		panic("missing Store")
 	}
 	if srv.Domain == "" {
@@ -52,15 +63,11 @@ func (srv *DNSServer) ListenAndServe() error {
 	done := func() { errors <- nil }
 
 	if srv.UDPAddr != "" {
-		addr, err := net.ResolveUDPAddr("udp", srv.UDPAddr)
+		l, err := reuseport.NewReusablePortPacketConn("udp4", srv.UDPAddr)
 		if err != nil {
 			return err
 		}
-		l, err := net.ListenUDP("udp", addr)
-		if err != nil {
-			return err
-		}
-		srv.UDPAddr = l.LocalAddr().String()
+		srv.UDPAddr = l.(*net.UDPConn).LocalAddr().String()
 		server := &dns.Server{
 			Net:               "udp",
 			PacketConn:        l,
@@ -72,7 +79,7 @@ func (srv *DNSServer) ListenAndServe() error {
 	}
 
 	if srv.TCPAddr != "" {
-		l, err := net.Listen("tcp", srv.TCPAddr)
+		l, err := reuseport.NewReusablePortListener("tcp4", srv.TCPAddr)
 		if err != nil {
 			return err
 		}
@@ -208,7 +215,7 @@ func (d dnsAPI) ServiceLookup(w dns.ResponseWriter, req *dns.Msg) {
 
 	var instances []*discoverd.Instance
 	if !leader {
-		a, err := d.Store.Instances(service)
+		a, err := d.GetStore().Instances(service)
 		if err != nil {
 			log.Println("discoverd: dns: cannot retrieve instances: %s", err)
 			nxdomain()
@@ -224,7 +231,7 @@ func (d dnsAPI) ServiceLookup(w dns.ResponseWriter, req *dns.Msg) {
 		// we're doing a lookup for a single instance
 		var resInst *discoverd.Instance
 		if leader {
-			sl, err := d.Store.ServiceLeader(service)
+			sl, err := d.GetStore().ServiceLeader(service)
 			if err != nil {
 				log.Println("discoverd: dns: cannot retrieve service leader: %s", err)
 				nxdomain()

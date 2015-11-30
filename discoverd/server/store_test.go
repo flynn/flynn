@@ -673,7 +673,8 @@ func MustOpenStore() *Store {
 // Close closes the store and removes its path.
 func (s *Store) Close() error {
 	defer os.RemoveAll(s.Path())
-	return s.Store.Close()
+	_, err := s.Store.Close()
+	return err
 }
 
 // MustWaitForLeader blocks until a leader is established. Panic on timeout.
