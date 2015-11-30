@@ -3,6 +3,8 @@ package updater
 type SystemApp struct {
 	Name       string
 	MinVersion string // minimum version this updater binary is capable of updating
+	Image      string // image name if not same as flynn/<name>, ignored if empty
+	ImageOnly  bool   // no application, just update the image
 }
 
 var SystemApps = []SystemApp{
@@ -18,6 +20,8 @@ var SystemApps = []SystemApp{
 	{Name: "gitreceive"},
 	{Name: "controller"},
 	{Name: "logaggregator"},
-	{Name: "postgres"},
+	{Name: "postgres", Image: "flynn/postgresql"},
 	{Name: "status"},
+	{Name: "slugbuilder", ImageOnly: true},
+	{Name: "slugrunner", ImageOnly: true},
 }

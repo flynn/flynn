@@ -20,6 +20,7 @@ import (
 )
 
 var slugbuilderURI, slugrunnerURI string
+var slugKeys = []string{"SLUGBUILDER_IMAGE_URI", "SLUGRUNNER_IMAGE_URI"}
 
 // use a flag to determine whether to use a TTY log formatter because actually
 // assigning a TTY to the job causes reading images via stdin to fail.
@@ -83,8 +84,8 @@ func run() error {
 	}
 
 	log.Info("validating images")
-	uris := make(map[string]string, len(updater.SystemApps)+2)
-	for _, app := range append(updater.SystemApps, updater.SystemApp{Name: "slugbuilder"}, updater.SystemApp{Name: "slugrunner"}) {
+	uris := make(map[string]string, len(updater.SystemApps))
+	for _, app := range updater.SystemApps {
 		if v := version.Parse(statuses[app.Name].Version); !v.Dev && app.MinVersion != "" && version.Parse(app.MinVersion).Before(v) {
 			log.Info(
 				"not updating image of system app, can't upgrade from running version",
@@ -93,13 +94,12 @@ func run() error {
 			)
 			continue
 		}
-		image := "flynn/" + app.Name
-		if app.Name == "postgres" {
-			image = "flynn/postgresql"
+		if app.Image == "" {
+			app.Image = "flynn/" + app.Name
 		}
-		uri, ok := images[image]
+		uri, ok := images[app.Image]
 		if !ok {
-			err := fmt.Errorf("missing image: %s", image)
+			err := fmt.Errorf("missing image: %s", app.Image)
 			log.Error(err.Error())
 			return err
 		}
@@ -110,6 +110,9 @@ func run() error {
 
 	// deploy system apps in order first
 	for _, appInfo := range updater.SystemApps {
+		if appInfo.ImageOnly {
+			continue // skip ImageOnly updates
+		}
 		if _, ok := uris[appInfo.Name]; !ok {
 			log.Info(
 				"skipped deploy of system app",
@@ -192,12 +195,8 @@ func deployApp(client *controller.Client, app *ct.App, uri string, log log15.Log
 		}
 	}
 	skipDeploy := artifact.URI == uri
-	// deploy the gitreceive / taffy apps if builder / runner images have changed
-	switch app.Name {
-	case "taffy", "gitreceive":
-		if updateSlugURIs(release.Env) {
-			skipDeploy = false
-		}
+	if updateSlugURIs(release.Env) {
+		skipDeploy = false // deploy apps that depend on slugbuilder images if updated
 	}
 	if skipDeploy {
 		return errDeploySkipped{"app is already using latest images"}
@@ -223,13 +222,13 @@ func deployApp(client *controller.Client, app *ct.App, uri string, log log15.Log
 
 func updateSlugURIs(env map[string]string) bool {
 	updated := false
-	if env["SLUGBUILDER_IMAGE_URI"] != slugbuilderURI {
-		env["SLUGBUILDER_IMAGE_URI"] = slugbuilderURI
-		updated = true
-	}
-	if env["SLUGRUNNER_IMAGE_URI"] != slugrunnerURI {
-		env["SLUGRUNNER_IMAGE_URI"] = slugrunnerURI
-		updated = true
+	for _, k := range slugKeys {
+		if v, ok := env[k]; ok {
+			if v != slugbuilderURI {
+				env[k] = slugbuilderURI
+				updated = true
+			}
+		}
 	}
 	return updated
 }
