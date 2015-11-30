@@ -93,10 +93,6 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 	if err := r.validateFormProcs(f); err != nil {
 		return err
 	}
-	tx, err := r.db.Begin()
-	if err != nil {
-		return err
-	}
 	scale := &ct.Scale{
 		Processes: f.Processes,
 		ReleaseID: f.ReleaseID,
@@ -104,6 +100,10 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 	prevFormation, _ := r.Get(f.AppID, f.ReleaseID)
 	if prevFormation != nil {
 		scale.PrevProcesses = prevFormation.Processes
+	}
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
 	}
 	err = tx.QueryRow("formation_insert", f.AppID, f.ReleaseID, f.Processes).Scan(&f.CreatedAt, &f.UpdatedAt)
 	if postgres.IsUniquenessError(err, "") {
@@ -219,16 +219,16 @@ func (r *FormationRepo) ListActive() ([]*ct.ExpandedFormation, error) {
 }
 
 func (r *FormationRepo) Remove(appID, releaseID string) error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return err
-	}
 	scale := &ct.Scale{
 		ReleaseID: releaseID,
 	}
 	prevFormation, _ := r.Get(appID, releaseID)
 	if prevFormation != nil {
 		scale.PrevProcesses = prevFormation.Processes
+	}
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
 	}
 	err = tx.Exec("formation_delete", appID, releaseID)
 	if err != nil {
