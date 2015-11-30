@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"time"
@@ -13,6 +14,8 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/status"
+	"github.com/flynn/flynn/pkg/version"
 	"github.com/flynn/flynn/updater/types"
 )
 
@@ -41,6 +44,33 @@ func run() error {
 		return err
 	}
 
+	req, err := http.NewRequest("GET", "http://status-web.discoverd", nil)
+	if err != nil {
+		return err
+	}
+	req.Header = make(http.Header)
+	req.Header.Set("Accept", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Error("error getting cluster status", "err", err)
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		log.Error("cluster status is unhealthy", "code", res.StatusCode)
+		return fmt.Errorf("cluster is unhealthy")
+	}
+	var statusWrapper struct {
+		Data struct {
+			Detail map[string]status.Status
+		}
+	}
+	if err := json.NewDecoder(res.Body).Decode(&statusWrapper); err != nil {
+		log.Error("error decoding cluster status JSON", "err", err)
+		return err
+	}
+	statuses := statusWrapper.Data.Detail
+
 	instances, err := discoverd.GetInstances("controller", 10*time.Second)
 	if err != nil {
 		log.Error("error looking up controller in service discovery", "err", err)
@@ -54,9 +84,17 @@ func run() error {
 
 	log.Info("validating images")
 	uris := make(map[string]string, len(updater.SystemApps)+2)
-	for _, name := range append(updater.SystemApps, "slugbuilder", "slugrunner") {
-		image := "flynn/" + name
-		if name == "postgres" {
+	for _, app := range append(updater.SystemApps, updater.SystemApp{Name: "slugbuilder"}, updater.SystemApp{Name: "slugrunner"}) {
+		if v := version.Parse(statuses[app.Name].Version); !v.Dev && app.MinVersion != "" && version.Parse(app.MinVersion).Before(v) {
+			log.Info(
+				"not updating image of system app, can't upgrade from running version",
+				"app", app.Name,
+				"version", v,
+			)
+			continue
+		}
+		image := "flynn/" + app.Name
+		if app.Name == "postgres" {
 			image = "flynn/postgresql"
 		}
 		uri, ok := images[image]
@@ -65,24 +103,35 @@ func run() error {
 			log.Error(err.Error())
 			return err
 		}
-		uris[name] = uri
+		uris[app.Name] = uri
 	}
 	slugbuilderURI = uris["slugbuilder"]
 	slugrunnerURI = uris["slugrunner"]
 
 	// deploy system apps in order first
-	for _, name := range updater.SystemApps {
-		log := log.New("name", name)
+	for _, appInfo := range updater.SystemApps {
+		if _, ok := uris[appInfo.Name]; !ok {
+			log.Info(
+				"skipped deploy of system app",
+				"reason", "image not updated",
+				"app", appInfo.Name,
+			)
+		}
+		log := log.New("name", appInfo.Name)
 		log.Info("starting deploy of system app")
 
-		app, err := client.GetApp(name)
+		app, err := client.GetApp(appInfo.Name)
 		if err != nil {
 			log.Error("error getting app", "err", err)
 			return err
 		}
-		if err := deployApp(client, app, uris[name], log); err != nil {
+		if err := deployApp(client, app, uris[appInfo.Name], log); err != nil {
 			if e, ok := err.(errDeploySkipped); ok {
-				log.Info("skipped deploy of system app", "reason", e.reason)
+				log.Info(
+					"skipped deploy of system app",
+					"reason", e.reason,
+					"app", appInfo.Name,
+				)
 				continue
 			}
 			return err

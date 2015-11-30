@@ -184,21 +184,21 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 
 	// check system apps were deployed correctly
 	for _, app := range updater.SystemApps {
-		image := "flynn/" + app
-		if app == "postgres" {
+		image := "flynn/" + app.Name
+		if app.Name == "postgres" {
 			image = "flynn/postgresql"
 		}
-		debugf(t, "checking new %s release is using image %s", app, versions[image])
-		expected := fmt.Sprintf(`"finished deploy of system app" name=%s`, app)
+		debugf(t, "checking new %s release is using image %s", app.Name, versions[image])
+		expected := fmt.Sprintf(`"finished deploy of system app" name=%s`, app.Name)
 		if !strings.Contains(updateOutput.String(), expected) {
-			t.Fatalf(`expected update to deploy %s`, app)
+			t.Fatalf(`expected update to deploy %s`, app.Name)
 		}
-		release, err := client.GetAppRelease(app)
+		release, err := client.GetAppRelease(app.Name)
 		t.Assert(err, c.IsNil)
-		debugf(t, "new %s release ID: %s", app, release.ID)
+		debugf(t, "new %s release ID: %s", app.Name, release.ID)
 		artifact, err := client.GetArtifact(release.ArtifactID)
 		t.Assert(err, c.IsNil)
-		debugf(t, "new %s artifact: %+v", app, artifact)
+		debugf(t, "new %s artifact: %+v", app.Name, artifact)
 		uri, err := url.Parse(artifact.URI)
 		t.Assert(err, c.IsNil)
 		t.Assert(uri.Query().Get("id"), c.Equals, versions[image])
