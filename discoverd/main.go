@@ -256,13 +256,13 @@ func (m *Main) Close() (info dt.ShutdownInfo, err error) {
 		m.dnsServer.Close()
 		m.dnsServer = nil
 	}
-	if m.store != nil {
-		info.LastIndex, err = m.store.Close()
-		m.store = nil
-	}
 	if m.ln != nil {
 		m.ln.Close()
 		m.ln = nil
+	}
+	if m.store != nil {
+		info.LastIndex, err = m.store.Close()
+		m.store = nil
 	}
 	return info, err
 }
