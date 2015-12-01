@@ -47,7 +47,9 @@ func (f *fileLocalStore) GetMeta() (map[string]json.RawMessage, error) {
 	if err := f.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(dbBucket))
 		b.ForEach(func(k, v []byte) error {
-			meta[string(k)] = v
+			vcopy := make([]byte, len(v))
+			copy(vcopy, v)
+			meta[string(k)] = vcopy
 			return nil
 		})
 		return nil

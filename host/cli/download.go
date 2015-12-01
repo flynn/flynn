@@ -35,24 +35,6 @@ Download container images and Flynn binaries from a TUF repository.
 Set FLYNN_VERSION to download an explicit version.`)
 }
 
-// This patch works around https://github.com/flynn/flynn/issues/2211
-//
-// The buffer pool that ioutil.Discard.ReadFrom uses is apparently
-// intermittently causing segfaults when ioutil.Discard is used from go-tuf in
-// this command on Go 1.4.3. It is unknown whether this issue exists in Go 1.5.
-type devNull struct{}
-
-func (devNull) Write(p []byte) (int, error) {
-	return len(p), nil
-}
-
-func init() {
-	if !strings.HasPrefix(runtime.Version(), "go1.4") {
-		panic("please remove this devnull segfault patch and check if the issue is fixed in Go 1.5")
-	}
-	ioutil.Discard = devNull{}
-}
-
 func runDownload(args *docopt.Args) error {
 	if err := os.MkdirAll(args.String["--root"], 0755); err != nil {
 		return fmt.Errorf("error creating root dir: %s", err)
