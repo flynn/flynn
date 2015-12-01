@@ -11,7 +11,6 @@ import (
 	"io"
 	"io/ioutil"
 	"path"
-	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-tuf/data"
 )
@@ -105,14 +104,7 @@ func GenerateFileMeta(r io.Reader, hashAlgorithms ...string) (data.FileMeta, err
 }
 
 func NormalizeTarget(p string) string {
-	if p == "" {
-		return "/"
-	}
-	s := path.Clean(p)
-	if strings.HasPrefix(s, "/") {
-		return s
-	}
-	return "/" + s
+	return path.Join("/", p)
 }
 
 func HashedPaths(p string, hashes data.Hashes) []string {
