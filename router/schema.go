@@ -80,5 +80,47 @@ CREATE TRIGGER notify_http_route_update
 	AFTER INSERT OR UPDATE OR DELETE ON http_routes
 	FOR EACH ROW EXECUTE PROCEDURE notify_http_route_update()`,
 	)
+	m.Add(2,
+		`ALTER TABLE http_routes ADD COLUMN path text NOT NULL`,
+		`DROP INDEX http_routes_domain_key`,
+		`CREATE UNIQUE INDEX http_routes_domain_path_key ON http_routes
+		 USING btree (domain, path) WHERE deleted_at IS NULL`,
+		`
+CREATE OR REPLACE FUNCTION check_http_route_update() RETURNS TRIGGER AS $$
+DECLARE
+	default_route RECORD;
+BEGIN
+	-- If no path supplied then override it to '/', the default path
+	IF NEW.path = '' OR NULL THEN
+		NEW.path := '/';
+	END IF;
+
+	-- If path isn't terminated by a slash then add it
+	IF substring(NEW.path from '.$') != '/' THEN
+		NEW.path := NEW.path || '/';
+	END IF;
+
+	-- Validate the path
+	IF NEW.path !~* '^\/(.*\/)?$' THEN
+		RAISE EXCEPTION 'path % is not valid', NEW.path;
+	END IF;
+
+	-- If path not the default then validate that a default route exists
+	IF NEW.path <> '/' THEN
+		SELECT INTO default_route FROM http_routes
+		WHERE domain = NEW.domain AND path = '/';
+		IF NOT FOUND THEN
+			RAISE EXCEPTION 'default route for domain % not found', NEW.domain;
+		END IF;
+	END IF;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql`,
+		`
+CREATE TRIGGER check_http_route_update
+	BEFORE INSERT OR UPDATE ON http_routes
+	FOR EACH ROW
+	EXECUTE PROCEDURE check_http_route_update()`,
+	)
 	return m.Migrate(db)
 }

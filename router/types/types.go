@@ -33,6 +33,10 @@ type Route struct {
 	// Sticky is whether or not to use sticky sessions for this route. It is only
 	// used for HTTP routes.
 	Sticky bool `json:"sticky,omitempty"`
+	// Path is the optional prefix to route to this service. It's exclusive with
+	// the TLS options and can only be set if a "default" route with the same domain
+	// and no Path already exists in the route table.
+	Path string `json:"path,omitempty"`
 
 	// Port is the TCP port to listen on for TCP Routes.
 	Port int32 `json:"port,omitempty"`
@@ -54,6 +58,7 @@ func (r Route) HTTPRoute() *HTTPRoute {
 		TLSCert: r.TLSCert,
 		TLSKey:  r.TLSKey,
 		Sticky:  r.Sticky,
+		Path:    r.Path,
 	}
 }
 
@@ -81,6 +86,7 @@ type HTTPRoute struct {
 	TLSCert string
 	TLSKey  string
 	Sticky  bool
+	Path    string
 }
 
 func (r HTTPRoute) FormattedID() string {
@@ -106,6 +112,7 @@ func (r HTTPRoute) ToRoute() *Route {
 		TLSCert: r.TLSCert,
 		TLSKey:  r.TLSKey,
 		Sticky:  r.Sticky,
+		Path:    r.Path,
 	}
 }
 

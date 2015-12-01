@@ -76,8 +76,8 @@ func (d *pgDataStore) Ping() error {
 }
 
 const sqlAddRouteHTTP = `
-INSERT INTO ` + tableNameHTTP + ` (parent_ref, service, domain, tls_cert, tls_key, sticky)
-	VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO ` + tableNameHTTP + ` (parent_ref, service, domain, tls_cert, tls_key, sticky, path)
+	VALUES ($1, $2, $3, $4, $5, $6, $7)
 	RETURNING id, created_at, updated_at`
 
 const sqlAddRouteTCP = `
@@ -96,6 +96,7 @@ func (d *pgDataStore) Add(r *router.Route) (err error) {
 			r.TLSCert,
 			r.TLSKey,
 			r.Sticky,
+			r.Path,
 		).Scan(&r.ID, &r.CreatedAt, &r.UpdatedAt)
 	case tableNameTCP:
 		err = d.pgx.QueryRow(
@@ -113,8 +114,8 @@ func (d *pgDataStore) Add(r *router.Route) (err error) {
 }
 
 const sqlUpdateRouteHTTP = `
-UPDATE ` + tableNameHTTP + ` SET parent_ref = $1, service = $2, tls_cert = $3, tls_key = $4, sticky = $5
-	WHERE id = $6 AND domain = $7 AND deleted_at IS NULL
+UPDATE ` + tableNameHTTP + ` SET parent_ref = $1, service = $2, tls_cert = $3, tls_key = $4, sticky = $5, path = $6
+	WHERE id = $7 AND domain = $8 AND deleted_at IS NULL
 	RETURNING %s`
 
 const sqlUpdateRouteTCP = `
@@ -134,6 +135,7 @@ func (d *pgDataStore) Update(r *router.Route) error {
 			r.TLSCert,
 			r.TLSKey,
 			r.Sticky,
+			r.Path,
 			r.ID,
 			r.Domain,
 		)
@@ -303,7 +305,7 @@ func (d *pgDataStore) startListener(ctx context.Context) (<-chan string, <-chan 
 }
 
 const (
-	selectColumnsHTTP = "id, parent_ref, service, domain, sticky, tls_cert, tls_key, created_at, updated_at"
+	selectColumnsHTTP = "id, parent_ref, service, domain, sticky, tls_cert, tls_key, path, created_at, updated_at"
 	selectColumnsTCP  = "id, parent_ref, service, port, created_at, updated_at"
 )
 
@@ -334,6 +336,7 @@ func (d *pgDataStore) scanRoute(route *router.Route, s scannable) error {
 			&route.Sticky,
 			&route.TLSCert,
 			&route.TLSKey,
+			&route.Path,
 			&route.CreatedAt,
 			&route.UpdatedAt,
 		)
