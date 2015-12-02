@@ -293,9 +293,8 @@ func appHandler(c handlerConfig) http.Handler {
 }
 
 func muxHandler(main http.Handler, authKeys []string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		httphelper.CORSAllowAllHandler(w, r)
-		if r.URL.Path == "/ping" || r.Method == "OPTIONS" {
+	return httphelper.CORSAllowAll.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/ping" {
 			w.WriteHeader(200)
 			return
 		}
@@ -315,7 +314,7 @@ func muxHandler(main http.Handler, authKeys []string) http.Handler {
 			return
 		}
 		main.ServeHTTP(w, r)
-	})
+	}))
 }
 
 type controllerAPI struct {

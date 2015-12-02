@@ -112,30 +112,29 @@ func (o *Options) IsOriginAllowed(origin string) (allowed bool) {
 }
 
 // Allows CORS for requests those match the provided options.
-func Allow(opts *Options) http.HandlerFunc {
+func (o *Options) Handler(next http.Handler) http.HandlerFunc {
 	// Allow default headers if nothing is specified.
-	if len(opts.AllowHeaders) == 0 {
-		opts.AllowHeaders = defaultAllowHeaders
+	if len(o.AllowHeaders) == 0 {
+		o.AllowHeaders = defaultAllowHeaders
 	}
 
-	for _, origin := range opts.AllowOrigins {
+	for _, origin := range o.AllowOrigins {
 		pattern := regexp.QuoteMeta(origin)
 		pattern = strings.Replace(pattern, "\\*", ".*", -1)
 		pattern = strings.Replace(pattern, "\\?", ".", -1)
 		allowOriginPatterns = append(allowOriginPatterns, "^"+pattern+"$")
 	}
 
-	return func(res http.ResponseWriter, req *http.Request) {
-		origin := req.Header.Get(headerOrigin)
-		if origin == "" {
-			return
+	return func(w http.ResponseWriter, req *http.Request) {
+		if origin := req.Header.Get(headerOrigin); origin != "" {
+			for key, value := range o.Header(origin) {
+				w.Header().Set(key, value)
+			}
+			if req.Method == "OPTIONS" {
+				w.WriteHeader(200)
+				return
+			}
 		}
-
-		for key, value := range opts.Header(origin) {
-			res.Header().Set(key, value)
-		}
-		if req.Method == "OPTIONS" {
-			res.WriteHeader(200)
-		}
+		next.ServeHTTP(w, req)
 	}
 }

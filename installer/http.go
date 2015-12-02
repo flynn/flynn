@@ -105,18 +105,14 @@ func ServeHTTP() error {
 }
 
 func (api *httpAPI) CorsHandler(main http.Handler, addr string) http.Handler {
-	corsHandler := cors.Allow(&cors.Options{
+	return (&cors.Options{
 		AllowOrigins:     []string{addr},
 		AllowMethods:     []string{"GET", "POST"},
 		AllowHeaders:     []string{"Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match"},
 		ExposeHeaders:    []string{"ETag"},
 		AllowCredentials: false,
 		MaxAge:           time.Hour,
-	})
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		corsHandler(w, r)
-		main.ServeHTTP(w, r)
-	})
+	}).Handler(main)
 }
 
 func (api *httpAPI) Asset(path string) (io.ReadSeeker, error) {
