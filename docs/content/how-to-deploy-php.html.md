@@ -10,7 +10,7 @@ runtime, with a choice of either [Apache2](http://httpd.apache.org/) or
 [Nginx](http://wiki.nginx.org/Main) web server.
 
 Flynn uses the [PHP buildpack](https://github.com/heroku/heroku-buildpack-php) to detect,
-compile, and release PHP applications.
+compile, and release PHP applications. See the [Heroku documentation](https://devcenter.heroku.com/categories/php) for further information about how to customize the webserver or PHP configuration.
 
 ## Detection
 
