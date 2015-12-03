@@ -78,14 +78,14 @@ func IsRetryableError(err error) bool {
 	return ok && e.Retry
 }
 
-var CORSAllowAllHandler = cors.Allow(&cors.Options{
+var CORSAllowAll = &cors.Options{
 	AllowAllOrigins:  true,
 	AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
 	AllowHeaders:     []string{"Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match"},
 	ExposeHeaders:    []string{"ETag"},
 	AllowCredentials: true,
 	MaxAge:           time.Hour,
-})
+}
 
 // Handler is an extended version of http.Handler that also takes a context
 // argument ctx.

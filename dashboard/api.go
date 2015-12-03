@@ -119,23 +119,20 @@ func (api *API) CorsHandler(main http.Handler) http.Handler {
 	if strings.HasPrefix(api.conf.InterfaceURL, "https") {
 		httpInterfaceURL = "http" + strings.TrimPrefix(api.conf.InterfaceURL, "https")
 	}
-	corsHandler := cors.Allow(&cors.Options{
+	return (&cors.Options{
 		AllowOrigins:     []string{api.conf.InterfaceURL, httpInterfaceURL},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
 		AllowHeaders:     []string{"Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match"},
 		ExposeHeaders:    []string{"ETag"},
 		AllowCredentials: true,
 		MaxAge:           time.Hour,
-	})
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if strings.HasSuffix(req.URL.Path, "/ping") || req.Method == "OPTIONS" {
-			httphelper.CORSAllowAllHandler(w, req)
+	}).Handler(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if strings.HasSuffix(req.URL.Path, "/ping") {
 			w.WriteHeader(200)
 			return
 		}
-		corsHandler(w, req)
 		main.ServeHTTP(w, req)
-	})
+	}))
 }
 
 func (api *API) ServeStatic(ctx context.Context, w http.ResponseWriter, req *http.Request, path string) {

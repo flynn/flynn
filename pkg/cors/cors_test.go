@@ -23,8 +23,7 @@ import (
 )
 
 func serveHTTP(w http.ResponseWriter, req *http.Request, opts *Options) {
-	Allow(opts)(w, req)
-	w.WriteHeader(200)
+	opts.Handler(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).ServeHTTP(w, req)
 }
 
 func Test_AllowAll(t *testing.T) {
