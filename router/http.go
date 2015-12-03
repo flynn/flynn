@@ -31,7 +31,7 @@ type HTTPListener struct {
 	TLSAddr string
 
 	mtx      sync.RWMutex
-	domains  map[string]*httpRoute
+	domains  map[string]*node
 	routes   map[string]*httpRoute
 	services map[string]*httpService
 
@@ -82,7 +82,7 @@ func (s *HTTPListener) Start() error {
 	s.DataStoreReader = s.ds
 
 	s.routes = make(map[string]*httpRoute)
-	s.domains = make(map[string]*httpRoute)
+	s.domains = make(map[string]*node)
 	s.services = make(map[string]*httpService)
 
 	if s.cookieKey == nil {
@@ -238,7 +238,7 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 	service.refs++
 	r.service = service
 	h.l.routes[data.ID] = r
-	h.l.domains[strings.ToLower(r.Domain)] = r
+	h.l.domains[strings.ToLower(r.Domain)] = NewTree(r)
 
 	go h.l.wm.Send(&router.Event{Event: "set", ID: r.Domain, Route: r.ToRoute()})
 	return nil
@@ -292,7 +292,7 @@ var errMissingTLS = errors.New("router: route not found or TLS not configured")
 
 func (s *HTTPListener) listenAndServeTLS() error {
 	certForHandshake := func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-		r := s.findRouteForHost(hello.ServerName)
+		r := s.findRoute(hello.ServerName, "/")
 		if r == nil {
 			return nil, errMissingTLS
 		}
@@ -323,22 +323,22 @@ func (s *HTTPListener) listenAndServeTLS() error {
 	return nil
 }
 
-func (s *HTTPListener) findRouteForHost(host string) *httpRoute {
+func (s *HTTPListener) findRoute(host string, path string) *httpRoute {
 	host = strings.ToLower(host)
 	if strings.Contains(host, ":") {
 		host, _, _ = net.SplitHostPort(host)
 	}
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
-	if backend, ok := s.domains[host]; ok {
-		return backend
+	if tree, ok := s.domains[host]; ok {
+		return tree.Lookup(path)
 	}
 	// handle wildcard domains up to 5 subdomains deep, from most-specific to
 	// least-specific
 	d := strings.SplitN(host, ".", 5)
 	for i := len(d); i > 0; i-- {
-		if backend, ok := s.domains["*."+strings.Join(d[len(d)-i:], ".")]; ok {
-			return backend
+		if tree, ok := s.domains["*."+strings.Join(d[len(d)-i:], ".")]; ok {
+			return tree.Lookup(path)
 		}
 	}
 	return nil
@@ -359,7 +359,7 @@ func fail(w http.ResponseWriter, code int) {
 func (s *HTTPListener) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := context.Background()
 	ctx = ctxhelper.NewContextStartTime(ctx, time.Now())
-	r := s.findRouteForHost(req.Host)
+	r := s.findRoute(req.Host, req.URL.Path)
 	if r == nil {
 		fail(w, 404)
 		return
