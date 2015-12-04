@@ -69,7 +69,8 @@ var MainRouter = Router.createClass({
 	credentialsModal: function (params, opts, context) {
 		var props = {
 			dataStore: context.dataStore,
-			cloud: params[0].cloud || 'aws'
+			cloud: params[0].cloud || 'aws',
+			clusterID: params[0].cluster_id || 'new'
 		};
 		context.renderModal(CredentialsComponent, props);
 	},
@@ -78,9 +79,11 @@ var MainRouter = Router.createClass({
 		var clientID = window.localStorage.getItem("azureClientID");
 		var name = window.localStorage.getItem("azureCredName");
 		var endpoint = window.localStorage.getItem("azureEndpoint");
+		var clusterID = window.localStorage.getItem("azureClusterID");
 		window.localStorage.removeItem("azureClientID");
 		window.localStorage.removeItem("azureCredName");
 		window.localStorage.removeItem("azureEndpoint");
+		window.localStorage.removeItem("azureClusterID");
 		Dispatcher.dispatch({
 			name: 'CREATE_CREDENTIAL',
 			data: {
@@ -96,11 +99,20 @@ var MainRouter = Router.createClass({
 			credentialID: clientID,
 			clusterID: 'new'
 		});
-		this.history.navigate('', {
-			params: [{
-				cloud: 'azure'
-			}]
-		});
+		if (clusterID === 'new') {
+			this.history.navigate('', {
+				params: [{
+					cloud: 'azure'
+				}]
+			});
+		} else {
+			Dispatcher.dispatch({
+				name: 'PROMPT_SELECT_CREDENTIAL',
+				credentialID: clientID,
+				clusterID: clusterID
+			});
+			this.history.navigate('/clusters/'+ encodeURIComponent(clusterID));
+		}
 	},
 
 	handleEvent: function (event) {
@@ -161,6 +173,7 @@ var MainRouter = Router.createClass({
 			window.localStorage.setItem("azureEndpoint", event.endpoint);
 			window.localStorage.setItem("azureClientID", event.clientID);
 			window.localStorage.setItem("azureCredName", event.credName);
+			window.localStorage.setItem("azureClusterID", event.clusterID);
 			var authorizeURL = event.endpoint.replace(/\/token.*$/, '') + '/authorize';
 			authorizeURL += QueryParams.serializeParams([{
 				client_id: event.clientID,

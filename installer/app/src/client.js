@@ -184,6 +184,11 @@ var Client = {
 				}
 				break;
 
+			case 'cluster_update':
+				event.name = 'CLUSTER_UPDATE';
+				event.cluster = data.cluster;
+				break;
+
 			case 'new_credential':
 				event.name = 'NEW_CREDENTIAL';
 				event.credential = data.resource;

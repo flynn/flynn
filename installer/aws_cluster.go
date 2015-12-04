@@ -61,6 +61,8 @@ func (c *AWSCluster) SetCreds(creds *Credential) error {
 	c.base.credential = creds
 	c.base.CredentialID = creds.ID
 	c.creds = aws.Creds(creds.ID, creds.Secret, "")
+	c.ec2 = ec2.New(c.creds, c.Region, nil)
+	c.cf = cloudformation.New(c.creds, c.Region, nil)
 	return nil
 }
 
@@ -69,6 +71,7 @@ func (c *AWSCluster) wrapRequest(runRequest func() error) error {
 	const maxBackoff = 10 * time.Second
 	backoff := 1 * time.Second
 	timeout := time.After(35 * time.Second)
+	authAttemptsRemaining := 3
 	for {
 		err := runRequest()
 		if err != nil && err.Error() == rateExceededErrStr {
@@ -80,6 +83,11 @@ func (c *AWSCluster) wrapRequest(runRequest func() error) error {
 				}
 				continue
 			case <-timeout:
+			}
+		} else if apiErr, ok := err.(aws.APIError); ok && (apiErr.StatusCode == 401 || apiErr.Code == "InvalidClientTokenId") {
+			if authAttemptsRemaining > 0 && c.base.HandleAuthenticationFailure(c, err) {
+				authAttemptsRemaining--
+				continue
 			}
 		}
 		return err
@@ -122,9 +130,6 @@ func (c *AWSCluster) SetDefaultsAndValidate() error {
 	if err := c.base.SetDefaultsAndValidate(); err != nil {
 		return err
 	}
-
-	c.ec2 = ec2.New(c.creds, c.Region, nil)
-	c.cf = cloudformation.New(c.creds, c.Region, nil)
 	return nil
 }
 
@@ -185,12 +190,14 @@ func (c *AWSCluster) Delete() {
 				StackName: aws.String(c.StackName),
 			})
 		}); err != nil {
-			c.base.setState("error")
-			c.base.SendError(fmt.Errorf("Unable to delete stack %s: %s", c.StackName, err))
-		} else {
-			if err := c.waitForStackCompletion("DELETE", stackEventsSince); err != nil {
-				c.base.SendError(err)
+			err = fmt.Errorf("Unable to delete stack %s: %s", c.StackName, err)
+			c.base.SendError(err)
+			if !c.base.YesNoPrompt(fmt.Sprintf("%s\nWould you like to remove it from the installer?", err.Error())) {
+				c.base.setState("error")
+				return
 			}
+		} else if err := c.waitForStackCompletion("DELETE", stackEventsSince); err != nil {
+			c.base.SendError(err)
 		}
 	}
 	if err := c.base.MarkDeleted(); err != nil {
@@ -262,26 +269,32 @@ func (c *AWSCluster) createKeyPair() error {
 	publicKeyBytes := make([]byte, enc.EncodedLen(len(keypair.PublicKey)))
 	enc.Encode(publicKeyBytes, keypair.PublicKey)
 
-	res, err := c.ec2.ImportKeyPair(&ec2.ImportKeyPairRequest{
-		KeyName:           aws.String(keypairName),
-		PublicKeyMaterial: publicKeyBytes,
+	var res *ec2.ImportKeyPairResult
+	err = c.wrapRequest(func() error {
+		var err error
+		res, err = c.ec2.ImportKeyPair(&ec2.ImportKeyPairRequest{
+			KeyName:           aws.String(keypairName),
+			PublicKeyMaterial: publicKeyBytes,
+		})
+		return err
 	})
 	if apiErr, ok := err.(aws.APIError); ok && apiErr.Code == "InvalidKeyPair.Duplicate" {
 		if c.base.YesNoPrompt(fmt.Sprintf("Key pair %s already exists, would you like to delete it?", keypairName)) {
 			c.base.SendLog("Deleting key pair")
-			if err := c.ec2.DeleteKeyPair(&ec2.DeleteKeyPairRequest{
-				KeyName: aws.String(keypairName),
+			if err := c.wrapRequest(func() error {
+				return c.ec2.DeleteKeyPair(&ec2.DeleteKeyPairRequest{
+					KeyName: aws.String(keypairName),
+				})
 			}); err != nil {
 				return err
 			}
 			return c.createKeyPair()
-		} else {
-			for {
-				keypairName = c.base.PromptInput("Please enter a new key pair name")
-				if keypairName != "" {
-					c.base.SSHKeyName = keypairName
-					return c.createKeyPair()
-				}
+		}
+		for {
+			keypairName = c.base.PromptInput("Please enter a new key pair name")
+			if keypairName != "" {
+				c.base.SSHKeyName = keypairName
+				return c.createKeyPair()
 			}
 		}
 	}

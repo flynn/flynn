@@ -11,7 +11,7 @@ var CredentialsPicker = React.createClass({
 
 	render: function () {
 		return (
-			<div>
+			<div style={this.props.style || null}>
 				<div>Credentials: </div>
 				<PrettySelect onChange={this.__handleChange} value={this.props.value}>
 					{this.props.children}

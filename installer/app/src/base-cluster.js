@@ -1,4 +1,4 @@
-import { createClass } from 'marbles/utils';
+import { extend, createClass } from 'marbles/utils';
 import State from 'marbles/state';
 import Dispatcher from './dispatcher';
 
@@ -17,7 +17,9 @@ var BaseCluster = createClass({
 		this.attrs = {};
 		this.__parseAttributes(attrs);
 		this.state = this.getInitialState();
-		this.setState(this.__computeState(this.attrs));
+		this.setState(this.__computeState(extend({
+			credentials: attrs.credentials
+		}, this.attrs)));
 	},
 
 	getInitialState: function () {
@@ -147,6 +149,18 @@ var BaseCluster = createClass({
 		}
 		attrs.name = attrs.ID;
 		this.attrs = attrs;
+	},
+
+	setCredentials: function (credentials) {
+		this.setState(this.__computeState({
+			state: this.attrs.state,
+			credentials: credentials
+		}));
+	},
+
+	setAttrs: function (attrs) {
+		this.__parseAttributes(attrs);
+		this.setState(this.__computeState(this.attrs));
 	},
 
 	toJSON: function () {

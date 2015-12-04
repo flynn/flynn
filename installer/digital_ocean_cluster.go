@@ -439,12 +439,32 @@ func (c *DigitalOceanCluster) bootstrap() error {
 	return c.base.bootstrap()
 }
 
+func (c *DigitalOceanCluster) wrapRequest(runRequest func() (*godo.Response, error)) (*godo.Response, error) {
+	authAttemptsRemaining := 3
+	for {
+		res, err := runRequest()
+		errRes, ok := err.(*godo.ErrorResponse)
+		if !ok || authAttemptsRemaining == 0 {
+			return res, err
+		}
+		if errRes.Response.StatusCode == 401 {
+			if c.base.HandleAuthenticationFailure(c, err) {
+				authAttemptsRemaining--
+				continue
+			}
+		}
+		return res, err
+	}
+}
+
 func (c *DigitalOceanCluster) Delete() {
 	prevState := c.base.State
 	c.base.setState("deleting")
 
 	if c.base.Domain != nil {
-		if _, err := c.client.Domains.Delete(c.base.Domain.Name); err != nil {
+		if _, err := c.wrapRequest(func() (*godo.Response, error) {
+			return c.client.Domains.Delete(c.base.Domain.Name)
+		}); err != nil {
 			c.base.SendError(err)
 		}
 	} else {
@@ -453,13 +473,17 @@ func (c *DigitalOceanCluster) Delete() {
 
 	if len(c.DropletIDs) > 0 {
 		for _, id := range c.DropletIDs {
-			if res, err := c.client.Droplets.Delete(int(id)); err != nil {
+			if res, err := c.wrapRequest(func() (*godo.Response, error) {
+				return c.client.Droplets.Delete(int(id))
+			}); err != nil {
 				if res.StatusCode == 404 {
 					continue
 				}
 				c.base.SendError(err)
-				c.base.setState(prevState)
-				return
+				if !c.base.YesNoPrompt(fmt.Sprintf("Error deleting droplet: %s\nWould you like to remove it from the installer?", err)) {
+					c.base.setState(prevState)
+					return
+				}
 			}
 		}
 	}

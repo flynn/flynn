@@ -195,7 +195,8 @@ var Credentials = React.createClass({
 			name: 'AZURE_OAUTH_AUTHORIZE',
 			clientID: clientID,
 			endpoint: endpoint,
-			credName: ''
+			credName: '',
+			clusterID: this.props.clusterID
 		});
 	},
 
@@ -236,6 +237,13 @@ var Credentials = React.createClass({
 			credentialID: id,
 			clusterID: 'new'
 		});
+		if (this.props.clusterID) {
+			Dispatcher.dispatch({
+				name: 'PROMPT_SELECT_CREDENTIAL',
+				credentialID: id,
+				clusterID: this.props.clusterID
+			});
+		}
 		this.__handleHide();
 	},
 
@@ -251,15 +259,23 @@ var Credentials = React.createClass({
 	},
 
 	__handleHide: function () {
-		Dispatcher.dispatch({
-			name: 'NAVIGATE',
-			path: '/',
-			options: {
-				params: [{
-					cloud: this.props.cloud
-				}]
-			}
-		});
+		var clusterID = this.props.clusterID;
+		if (clusterID === 'new') {
+			Dispatcher.dispatch({
+				name: 'NAVIGATE',
+				path: '/',
+				options: {
+					params: [{
+						cloud: this.props.cloud
+					}]
+				}
+			});
+		} else {
+			Dispatcher.dispatch({
+				name: 'NAVIGATE',
+				path: '/clusters/'+ encodeURIComponent(clusterID)
+			});
+		}
 	}
 });
 export default Credentials;

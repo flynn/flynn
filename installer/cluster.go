@@ -24,6 +24,28 @@ func (c *BaseCluster) FindCredentials() (*Credential, error) {
 	return c.installer.FindCredentials(c.CredentialID)
 }
 
+func (c *BaseCluster) HandleAuthenticationFailure(cluster Cluster, err error) bool {
+	credentialID := c.CredentialPrompt("Authentication failed, please select a new credential to continue")
+	credential, err := c.installer.FindCredentials(credentialID)
+	if err != nil {
+		c.SendError(fmt.Errorf("error finding credential with ID %s: %s", credentialID, err))
+		return false
+	}
+	if err := cluster.SetCreds(credential); err != nil {
+		c.SendError(fmt.Errorf("error setting credential: %s", err))
+		return false
+	}
+	if err := c.installer.SaveCluster(cluster); err != nil {
+		c.SendError(fmt.Errorf("error saving cluster: %s", err))
+		return false
+	}
+	c.installer.SendEvent(&Event{
+		Type:      "cluster_update",
+		ClusterID: c.ID,
+	})
+	return true
+}
+
 func (c *BaseCluster) saveField(field string, value interface{}) error {
 	c.installer.dbMtx.Lock()
 	defer c.installer.dbMtx.Unlock()
