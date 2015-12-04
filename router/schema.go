@@ -89,7 +89,22 @@ CREATE TRIGGER notify_http_route_update
 CREATE OR REPLACE FUNCTION check_http_route_update() RETURNS TRIGGER AS $$
 DECLARE
 	default_route RECORD;
+	dependent_routes int;
 BEGIN
+    -- If NEW.deleted_at is NOT NULL then we are processing a delete
+	-- We also catch entire row deletions here but they shouldn't occur.
+    IF NEW IS NULL OR NEW.deleted_at IS NOT NULL THEN
+		-- If we are removing a default route ensure no dependent routes left
+		IF OLD.path = '/' THEN
+			SELECT count(*) INTO dependent_routes FROM http_routes
+			WHERE domain = OLD.domain AND path <> '/' AND deleted_at IS NULL;
+			IF dependent_routes > 0 THEN
+				RAISE EXCEPTION 'default route for % has dependent routes', OLD.domain;
+			END IF;
+		END IF;
+		RETURN NEW;
+	END IF;
+
 	-- If no path supplied then override it to '/', the default path
 	IF NEW.path = '' OR NULL THEN
 		NEW.path := '/';
@@ -108,7 +123,7 @@ BEGIN
 	-- If path not the default then validate that a default route exists
 	IF NEW.path <> '/' THEN
 		SELECT INTO default_route FROM http_routes
-		WHERE domain = NEW.domain AND path = '/';
+		WHERE domain = NEW.domain AND path = '/' AND deleted_at IS NULL;
 		IF NOT FOUND THEN
 			RAISE EXCEPTION 'default route for domain % not found', NEW.domain;
 		END IF;
@@ -118,7 +133,7 @@ END;
 $$ LANGUAGE plpgsql`,
 		`
 CREATE TRIGGER check_http_route_update
-	BEFORE INSERT OR UPDATE ON http_routes
+	BEFORE INSERT OR UPDATE OR DELETE ON http_routes
 	FOR EACH ROW
 	EXECUTE PROCEDURE check_http_route_update()`,
 	)

@@ -39,6 +39,10 @@
       "type": "string",
       "description": "Optional TLS private key of this Route. It is only used for HTTP routes."
     },
+    "path": {
+      "type": "string",
+      "description": "Optional path to route to this service, HTTP routes only and exclusive with TLS options."
+    },
     "sticky": {
       "type": "boolean",
       "description": "Whether or not to use sticky sessions for this route. It is only used for HTTP routes."
