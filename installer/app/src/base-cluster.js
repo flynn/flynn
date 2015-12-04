@@ -17,7 +17,7 @@ var BaseCluster = createClass({
 		this.attrs = {};
 		this.__parseAttributes(attrs);
 		this.state = this.getInitialState();
-		this.setState(this.__computeState(attrs));
+		this.setState(this.__computeState(this.attrs));
 	},
 
 	getInitialState: function () {
