@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -43,6 +44,8 @@ Examples:
 
 	$ flynn route add http example.com
 
+	$ flynn route add http example.com/path/
+
 	$ flynn route add tcp
 `)
 }
@@ -79,8 +82,8 @@ func runRoute(args *docopt.Args, client *controller.Client) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	var route, protocol, service, sticky string
-	listRec(w, "ROUTE", "SERVICE", "ID", "STICKY")
+	var route, protocol, service, sticky, path string
+	listRec(w, "ROUTE", "SERVICE", "ID", "STICKY", "PATH")
 	for _, k := range routes {
 		switch k.Type {
 		case "tcp":
@@ -96,8 +99,9 @@ func runRoute(args *docopt.Args, client *controller.Client) error {
 				protocol = "https"
 			}
 			sticky = fmt.Sprintf("%t", k.Sticky)
+			path = k.HTTPRoute().Path
 		}
-		listRec(w, protocol+":"+route, service, k.FormattedID(), sticky)
+		listRec(w, protocol+":"+route, service, k.FormattedID(), sticky, path)
 	}
 	return nil
 }
@@ -138,12 +142,18 @@ func runRouteAddHTTP(args *docopt.Args, client *controller.Client) error {
 		return err
 	}
 
+	u, err := url.Parse("http://" + args.String["<domain>"])
+	if err != nil {
+		return fmt.Errorf("Failed to parse %s as URL", args.String["<domain>"])
+	}
+
 	hr := &router.HTTPRoute{
 		Service: service,
-		Domain:  args.String["<domain>"],
+		Domain:  u.Host,
 		TLSCert: tlsCert,
 		TLSKey:  tlsKey,
 		Sticky:  args.Bool["--sticky"],
+		Path:    u.Path,
 	}
 	route := hr.ToRoute()
 	if err := client.CreateRoute(mustApp(), route); err != nil {
