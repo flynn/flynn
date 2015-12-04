@@ -49,9 +49,9 @@ var BaseCluster = createClass({
 			steps: [
 				{ id: 'configure', label: 'Configure', complete: false },
 				{ id: 'install',   label: 'Install',   complete: false },
-				{ id: 'dashboard', label: 'Dashboard', complete: false }
+				{ id: 'dashboard', label: 'Dashboard', complete: false },
+				{ id: 'done', visible: false }
 			],
-			currentStep: 'configure',
 			selectedCloud: attrs.selectedCloud || attrs.type || prevState.selectedCloud,
 			credentialID: attrs.credentialID || prevState.credentialID,
 			certVerified: attrs.certVerified || prevState.certVerified,
@@ -97,7 +97,9 @@ var BaseCluster = createClass({
 			}
 		}
 
-		switch (attrs.state) {
+		state.currentStep = 'configure';
+		var clusterState = attrs.state || this.attrs.state;
+		switch (clusterState) {
 		case 'starting':
 			state.currentStep = 'install';
 			state.inProgress = true;
@@ -116,7 +118,11 @@ var BaseCluster = createClass({
 			break;
 
 		case 'running':
-			state.currentStep = 'dashboard';
+			if (state.certVerified) {
+				state.currentStep = 'done';
+			} else {
+				state.currentStep = 'dashboard';
+			}
 			break;
 		}
 
@@ -199,9 +205,9 @@ var BaseCluster = createClass({
 			break;
 
 		case 'CERT_VERIFIED':
-			this.setState({
+			this.setState(this.__computeState({
 				certVerified: true
-			});
+			}));
 			break;
 
 		case 'SELECT_CREDENTIAL':

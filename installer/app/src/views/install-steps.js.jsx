@@ -10,7 +10,9 @@ var Step = React.createClass({
 
 var InstallSteps = React.createClass({
 	render: function () {
-		var steps = this.state.steps;
+		var steps = this.state.steps.filter(function (step) {
+			return step.visible !== false;
+		});
 		var currentStep = this.state.currentStep;
 		return (
 			<ul className="install-steps" style={this.props.style || {}}>
