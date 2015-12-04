@@ -238,7 +238,21 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 	service.refs++
 	r.service = service
 	h.l.routes[data.ID] = r
-	h.l.domains[strings.ToLower(r.Domain)] = NewTree(r)
+	if data.Path == "/" {
+		if tree, ok := h.l.domains[strings.ToLower(r.Domain)]; ok {
+			tree.backend = r
+		} else {
+			h.l.domains[strings.ToLower(r.Domain)] = NewTree(r)
+		}
+	} else {
+		// TODO(jpg): fix #1002 to make this safe. This can potentially
+		// insert nothing if the datastore it out of sync.
+		if tree, ok := h.l.domains[strings.ToLower(r.Domain)]; ok {
+			tree.Insert(r.Path, r)
+		} else {
+			logger.Warn("out of sync, failed insert of path based route")
+		}
+	}
 
 	go h.l.wm.Send(&router.Event{Event: "set", ID: r.Domain, Route: r.ToRoute()})
 	return nil
@@ -262,7 +276,15 @@ func (h *httpSyncHandler) Remove(id string) error {
 	}
 
 	delete(h.l.routes, id)
-	delete(h.l.domains, r.Domain)
+	if r.Path == "/" {
+		// TODO(jpg): Fix #1002 to make this safe
+		delete(h.l.domains, r.Domain)
+	} else {
+		// TODO(jpg): Fix #1002 to make this safe
+		if tree, ok := h.l.domains[r.Domain]; ok {
+			tree.Remove(r.Path)
+		}
+	}
 	go h.l.wm.Send(&router.Event{Event: "remove", ID: id, Route: r.ToRoute()})
 	return nil
 }
