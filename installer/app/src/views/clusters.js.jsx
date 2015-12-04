@@ -3,14 +3,15 @@ import Dispatcher from '../dispatcher';
 
 var Clusters = React.createClass({
 	render: function () {
-		var currentClusterID = this.state.currentClusterID;
-		var clusters = this.state.clusters;
+		var currentClusterID = this.props.state.currentClusterID;
+		var clusters = this.props.state.clusters;
+		var prompts = this.props.state.prompts;
 		return (
 			<div>
 				<h2>Clusters</h2>
 
 				<List>
-					<ListItem selected={currentClusterID === null} path="/" params={[{cloud: this.state.currentCloudSlug}]}>New</ListItem>
+					<ListItem selected={currentClusterID === null} path="/" params={[{cloud: this.props.state.currentCloudSlug}]}>New</ListItem>
 
 					{clusters.map(function (cluster) {
 						var installState = cluster.state;
@@ -33,7 +34,7 @@ var Clusters = React.createClass({
 									WebkitFlexGrow: 1
 								}}>{cluster.attrs.name}</div>
 								<div>
-									{installState.prompt !== null ? (
+									{prompts[cluster.attrs.ID] ? (
 										<span>
 											<span className="fa fa-bell" />
 											&nbsp;
@@ -66,26 +67,6 @@ var Clusters = React.createClass({
 				</List>
 			</div>
 		);
-	},
-
-	componentDidMount: function () {
-		this.props.dataStore.addChangeListener(this.__handleDataChange);
-	},
-
-	componentWillUnmount: function () {
-		this.props.dataStore.removeChangeListener(this.__handleDataChange);
-	},
-
-	getInitialState: function () {
-		return this.__getState();
-	},
-
-	__getState: function () {
-		return this.props.dataStore.state;
-	},
-
-	__handleDataChange: function () {
-		this.setState(this.__getState());
 	},
 
 	__handleClusterDeleteBtnClick: function (cluster) {

@@ -1,6 +1,7 @@
 import Sheet from './css/sheet';
 import Panel from './panel';
 import Clusters from './clusters';
+import Prompt from './prompt';
 import BtnCSS from './css/button';
 
 var Main = React.createClass({
@@ -9,12 +10,6 @@ var Main = React.createClass({
 			margin: '16px',
 			display: 'flex',
 			selectors: [
-				['> *:first-of-type', {
-					marginRight: '16px',
-					maxWidth: '360px',
-					minWidth: '300px',
-					flexBasis: '360px'
-				}],
 				['> *', {
 					flexGrow: 1
 				}]
@@ -32,15 +27,34 @@ var Main = React.createClass({
 	},
 
 	render: function () {
+		var state = this.props.dataStore.state;
+		var prompt = state.prompts[state.currentClusterID] || null;
 		return (
 			<div id={this.state.styleEl.id}>
-				<div>
+				<div style={{
+					marginRight: 16,
+					maxWidth: 360,
+					minWidth: 300,
+					flexBasis: 360
+				}}>
 					<Panel style={{ height: '100%', position: 'relative', paddingBottom: 80 }}>
-						<Clusters dataStore={this.props.dataStore} />
+						<Clusters state={state} />
 					</Panel>
 				</div>
 
-				<div style={{ width: 'calc(100% - 360px)' }}>
+				<div style={{
+					width: 'calc(100% - 360px)',
+					height: '100%'
+				}}>
+					{prompt ? (
+						<Panel style={{ marginBottom: '1rem' }}>
+							<Prompt
+								key={prompt.id}
+								prompt={prompt}
+								state={state} />
+						</Panel>
+					) : null}
+
 					{this.props.children}
 				</div>
 			</div>
@@ -50,6 +64,15 @@ var Main = React.createClass({
 	componentDidMount: function () {
 		this.state.styleEl.commit();
 		this.state.credsBtnStyleEl.commit();
+		this.props.dataStore.addChangeListener(this.__handleDataChange);
+	},
+
+	componentWillUnmount: function () {
+		this.props.dataStore.removeChangeListener(this.__handleDataChange);
+	},
+
+	__handleDataChange: function () {
+		this.forceUpdate();
 	}
 });
 export default Main;
