@@ -17,7 +17,8 @@
   {
     "id": "discoverd",
     "app": {
-      "name": "discoverd"
+      "name": "discoverd",
+      "meta": {"flynn-system-app": "true"}
     },
     "action": "run-app",
     "release": {
@@ -48,7 +49,8 @@
   {
     "id": "flannel",
     "app": {
-      "name": "flannel"
+      "name": "flannel",
+      "meta": {"flynn-system-app": "true"}
     },
     "action": "run-app",
     "release": {
@@ -84,7 +86,8 @@
   {
     "id": "postgres",
     "app": {
-      "name": "postgres"
+      "name": "postgres",
+      "meta": {"flynn-system-app": "true"}
     },
     "action": "run-app",
     "release": {
@@ -163,7 +166,8 @@
     "id": "controller",
     "action": "run-app",
     "app": {
-      "name": "controller"
+      "name": "controller",
+      "meta": {"flynn-system-app": "true"}
     },
     "release": {
       "env": {
