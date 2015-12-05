@@ -42,6 +42,7 @@ usage: flynn-host collect-debug-info [options]
 Options:
   --tarball          Create a tarball instead of uploading to a gist
   --include-env      Include sensitive environment variables
+  --include-apps     Include logs of non-system applications
   --job-lines=<num>  Maximum number of lines to fetch from each job [default: 1000]
 
 Collect debug information into an anonymous gist or tarball`)
@@ -75,7 +76,7 @@ func runCollectDebugInfo(args *docopt.Args) error {
 	}
 
 	log.Info("getting job logs")
-	if err := captureJobs(gist, args.Bool["--include-env"], lines); err != nil {
+	if err := captureJobs(gist, args.Bool["--include-env"], args.Bool["--include-apps"], lines); err != nil {
 		log.Error("error getting job logs, falling back to on-disk logs", "err", err)
 		debugCmds = append(debugCmds, []string{"bash", "-c", fmt.Sprintf("tail -n %d /var/log/flynn/*.log", lines)})
 	}
@@ -120,7 +121,7 @@ func captureCmd(name string, arg ...string) (string, error) {
 	return buf.String(), nil
 }
 
-func captureJobs(gist *Gist, env bool, lines int) error {
+func captureJobs(gist *Gist, env bool, apps bool, lines int) error {
 	client := cluster.NewClient()
 
 	jobs, err := jobList(client, true)
@@ -134,6 +135,9 @@ func captureJobs(gist *Gist, env bool, lines int) error {
 
 	for _, job := range jobs {
 		var name string
+		if system, ok := job.Job.Metadata["flynn-system-app"]; (!ok || system != "true") && !apps {
+			continue
+		}
 		if app, ok := job.Job.Metadata["flynn-controller.app_name"]; ok {
 			name += app + "-"
 		}
