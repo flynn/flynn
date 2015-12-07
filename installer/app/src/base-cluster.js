@@ -30,7 +30,6 @@ var BaseCluster = createClass({
 			domainName: null,
 			caCert: null,
 			dashboardLoginToken: null,
-			prompt: null,
 			deleting: false,
 			failed: false,
 			regions: [],
@@ -66,8 +65,6 @@ var BaseCluster = createClass({
 
 			selectedRegionSlug: attrs.selectedRegionSlug || prevState.selectedRegionSlug,
 			selectedRegion: null,
-
-			prompt: prevState.prompt,
 
 			errorMessage: attrs.hasOwnProperty('errorMessage') ? attrs.errorMessage : prevState.errorMessage,
 
@@ -194,20 +191,6 @@ var BaseCluster = createClass({
 			this.setState(
 				this.__computeState({state: event.state})
 			);
-			break;
-
-		case 'INSTALL_PROMPT_REQUESTED':
-			this.setState({
-				prompt: event.prompt
-			});
-			break;
-
-		case 'INSTALL_PROMPT_RESOLVED':
-			if (event.prompt.id === (this.state.prompt || {}).id) {
-				this.setState({
-					prompt: null
-				});
-			}
 			break;
 
 		case 'INSTALL_DONE':

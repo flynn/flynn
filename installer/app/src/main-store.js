@@ -32,7 +32,8 @@ export default createClass({
 			currentCluster: newCluster,
 			errors: {
 				credentials: []
-			}
+			},
+			prompts: {}
 		};
 	},
 
@@ -125,6 +126,28 @@ export default createClass({
 
 		case 'CONFIRM_CLUSTER_DELETE':
 			Client.deleteCluster(event.clusterID);
+			break;
+
+		case 'INSTALL_PROMPT_REQUESTED':
+			this.setState({
+				prompts: (function () {
+					var prompts = extend({}, this.state.prompts);
+					prompts[event.clusterID] = event.prompt;
+					return prompts;
+				}.bind(this))()
+			});
+			break;
+
+		case 'INSTALL_PROMPT_RESOLVED':
+			this.setState({
+				prompts: (function () {
+					var prompts = extend({}, this.state.prompts);
+					if ((prompts[event.clusterID] || {}).id === event.prompt.id) {
+						delete prompts[event.clusterID];
+					}
+					return prompts;
+				}.bind(this))()
+			});
 			break;
 
 		case 'INSTALL_PROMPT_RESPONSE':
