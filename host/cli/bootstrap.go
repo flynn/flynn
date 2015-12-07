@@ -106,7 +106,7 @@ func runBootstrap(args *docopt.Args) error {
 	}
 
 	<-done
-	if err != nil && err == last {
+	if err != nil && last != nil && err.Error() == last.Error() {
 		return ErrAlreadyLogged{err}
 	}
 	return err
