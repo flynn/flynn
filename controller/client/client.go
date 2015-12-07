@@ -746,6 +746,12 @@ func (c *Client) ProviderList() ([]*ct.Provider, error) {
 	return providers, c.Get("/providers", &providers)
 }
 
+// Backup takes a backup of the cluster
+func (c *Client) Backup() (io.ReadCloser, error) {
+	res, err := c.RawReq("GET", "/backup", nil, nil, nil)
+	return res.Body, err
+}
+
 func (c *Client) Put(path string, in, out interface{}) error {
 	return c.send("PUT", path, in, out)
 }

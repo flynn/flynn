@@ -82,7 +82,7 @@ var CORSAllowAll = &cors.Options{
 	AllowAllOrigins:  true,
 	AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
 	AllowHeaders:     []string{"Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match"},
-	ExposeHeaders:    []string{"ETag"},
+	ExposeHeaders:    []string{"ETag", "Content-Disposition"},
 	AllowCredentials: true,
 	MaxAge:           time.Hour,
 }

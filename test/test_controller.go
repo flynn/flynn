@@ -1,9 +1,11 @@
 package main
 
 import (
+	"archive/tar"
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -497,5 +499,42 @@ func (s *ControllerSuite) TestAppEvents(t *c.C) {
 		case <-time.After(10 * time.Second):
 			t.Fatal("timed out waiting for job events for app1")
 		}
+	}
+}
+
+func (s *ControllerSuite) TestBackup(t *c.C) {
+	client := s.controllerClient(t)
+	out, err := client.Backup()
+	t.Assert(err, c.IsNil)
+	defer out.Close()
+	data := make(map[string][]byte)
+	tr := tar.NewReader(out)
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		t.Assert(err, c.IsNil)
+		b := make([]byte, h.Size)
+		_, err = tr.Read(b)
+		t.Assert(err, c.IsNil)
+		_, filename := filepath.Split(h.Name)
+		data[filename] = b
+	}
+	sql, ok := data["postgres.sql.gz"]
+	t.Assert(ok, c.Equals, true)
+	t.Assert(len(sql) > 0, c.Equals, true)
+	flynn, ok := data["flynn.json"]
+	t.Assert(ok, c.Equals, true)
+	var apps map[string]*ct.ExpandedFormation
+	t.Assert(json.Unmarshal(flynn, &apps), c.IsNil)
+	for _, name := range []string{"postgres", "discoverd", "flannel", "controller"} {
+		ef, ok := apps[name]
+		t.Assert(ok, c.Equals, true)
+		t.Assert(ef.App, c.Not(c.IsNil))
+		t.Assert(ef.Release, c.Not(c.IsNil))
+		t.Assert(ef.Artifact, c.Not(c.IsNil))
+		t.Assert(ef.Processes, c.Not(c.IsNil))
+		t.Assert(ef.App.Name, c.Equals, name)
 	}
 }

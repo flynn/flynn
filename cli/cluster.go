@@ -17,6 +17,7 @@ import (
 	cfg "github.com/flynn/flynn/cli/config"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/backup"
 	"github.com/flynn/flynn/pkg/shutdown"
 )
 
@@ -337,55 +338,12 @@ func runClusterBackup(args *docopt.Args) error {
 
 	fmt.Fprintln(os.Stderr, "Creating cluster backup...")
 
-	tw := NewTarWriter("flynn-backup-"+time.Now().UTC().Format("2006-01-02_150405"), dest)
-	defer tw.Close()
-
-	// get app and release details for key apps
-	data := make(map[string]*ct.ExpandedFormation, 4)
-	for _, name := range []string{"postgres", "discoverd", "flannel", "controller"} {
-		app, err := client.GetApp(name)
-		if err != nil {
-			return fmt.Errorf("error getting %s app details: %s", name, err)
-		}
-		release, err := client.GetAppRelease(app.ID)
-		if err != nil {
-			return fmt.Errorf("error getting %s app release: %s", name, err)
-		}
-		formation, err := client.GetFormation(app.ID, release.ID)
-		if err != nil {
-			return fmt.Errorf("error getting %s app formation: %s", name, err)
-		}
-		artifact, err := client.GetArtifact(release.ArtifactID)
-		if err != nil {
-			return fmt.Errorf("error getting %s app artifact: %s", name, err)
-		}
-		data[name] = &ct.ExpandedFormation{
-			App:       app,
-			Release:   release,
-			Artifact:  artifact,
-			Processes: formation.Processes,
-		}
+	if bar != nil {
+		dest = io.MultiWriter(dest, bar)
 	}
-	if err := tw.WriteJSON("flynn.json", data); err != nil {
+	if err := backup.Run(client, dest); err != nil {
 		return err
 	}
-
-	config := &runConfig{
-		App:        "postgres",
-		Release:    data["postgres"].Release.ID,
-		Entrypoint: []string{"sh"},
-		Args:       []string{"-c", "pg_dumpall --clean --if-exists | gzip -9"},
-		Env: map[string]string{
-			"PGHOST":     "leader.postgres.discoverd",
-			"PGUSER":     "flynn",
-			"PGPASSWORD": data["postgres"].Release.Env["PGPASSWORD"],
-		},
-		DisableLog: true,
-	}
-	if err := tw.WriteCommandOutput(client, "postgres.sql.gz", config, bar); err != nil {
-		return fmt.Errorf("error dumping database: %s", err)
-	}
-
 	if bar != nil {
 		bar.Finish()
 	}
