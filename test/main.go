@@ -326,7 +326,10 @@ func (succeedsChecker) Check(params []interface{}, names []string) (bool, string
 	if !ok {
 		return false, "result must be a *CmdResult"
 	}
-	return res.Err == nil, ""
+	if res.Err != nil {
+		return false, fmt.Sprintf("command failed with error: %s", res.Err.Error())
+	}
+	return true, ""
 }
 
 var SuccessfulOutputContains check.Checker = successfulOutputContainsChecker{
