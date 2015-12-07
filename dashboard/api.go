@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	gctx "github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/context"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/sessions"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jvatic/asset-matrix-go"
@@ -91,6 +92,7 @@ func (api *API) WrapHandler(handler httphelper.HandlerFunc) httprouter.Handle {
 		}
 		ctx = context.WithValue(ctx, ctxSessionKey, s)
 		handler.ServeHTTP(ctx, w, req)
+		gctx.Clear(req)
 	}
 }
 
