@@ -236,12 +236,7 @@ var Credentials = React.createClass({
 			credentialID: id,
 			clusterID: 'new'
 		});
-		if (this.props.cloud !== 'digital_ocean') {
-			this.refs.key_id.getDOMNode().value = '';
-		}
-		this.refs.key.getDOMNode().value = '';
-		this.refs.name.getDOMNode().value = '';
-		this.refs.name.getDOMNode().focus();
+		this.__handleHide();
 	},
 
 	__handleCloudChange: function (e) {
