@@ -85,6 +85,7 @@ func ServeHTTP() error {
 	httpRouter.GET("/clusters/:id/delete", api.ServeTemplate)
 	httpRouter.GET("/oauth/azure", api.ServeTemplate)
 	httpRouter.DELETE("/clusters/:id", api.DeleteCluster)
+	httpRouter.GET("/clusters", api.RedirectRoot)
 	httpRouter.POST("/clusters", api.LaunchCluster)
 	httpRouter.GET("/events", api.Events)
 	httpRouter.POST("/clusters/:id/prompts/:prompt_id", api.Prompt)
@@ -134,6 +135,10 @@ func (api *httpAPI) AssetManifest() (*assetManifest, error) {
 		return nil, err
 	}
 	return manifest, nil
+}
+
+func (api *httpAPI) RedirectRoot(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	http.Redirect(w, req, "/", 302)
 }
 
 func (api *httpAPI) LaunchCluster(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
