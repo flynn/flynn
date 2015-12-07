@@ -207,6 +207,12 @@ func addRoute(c *C, l Listener, r *router.Route) *router.Route {
 	return r
 }
 
+func addRouteAssertErr(c *C, l Listener, r *router.Route) error {
+	err := l.AddRoute(r)
+	c.Assert(err, NotNil)
+	return err
+}
+
 const sqlCreateTruncateTables = `
 CREATE OR REPLACE FUNCTION truncate_tables() RETURNS void AS $$
 DECLARE
@@ -228,4 +234,10 @@ func removeRoute(c *C, l Listener, id string) {
 	err := l.RemoveRoute(id)
 	c.Assert(err, IsNil)
 	wait()
+}
+
+func removeRouteAssertErr(c *C, l Listener, id string) error {
+	err := l.RemoveRoute(id)
+	c.Assert(err, NotNil)
+	return err
 }
