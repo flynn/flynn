@@ -7,13 +7,13 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/router/types"
 )
 
-const UniqueViolation = "23505"
-
 var ErrNotFound = errors.New("router: route not found")
 var ErrConflict = errors.New("router: duplicate route")
+var ErrInvalid = errors.New("router: invalid route")
 
 type DataStore interface {
 	Add(route *router.Route) error
@@ -107,8 +107,10 @@ func (d *pgDataStore) Add(r *router.Route) (err error) {
 		).Scan(&r.ID, &r.CreatedAt, &r.UpdatedAt)
 	}
 	r.Type = d.routeType
-	if e, ok := err.(pgx.PgError); ok && e.Code == UniqueViolation {
+	if postgres.IsUniquenessError(err, "") {
 		err = ErrConflict
+	} else if postgres.IsPostgresCode(err, postgres.RaiseException) {
+		err = ErrInvalid
 	}
 	return err
 }
@@ -159,6 +161,9 @@ const sqlRemoveRoute = `UPDATE %s SET deleted_at = now() WHERE id = $1`
 
 func (d *pgDataStore) Remove(id string) error {
 	_, err := d.pgx.Exec(fmt.Sprintf(sqlRemoveRoute, d.tableName), id)
+	if postgres.IsPostgresCode(err, postgres.RaiseException) {
+		err = ErrInvalid
+	}
 	return err
 }
 

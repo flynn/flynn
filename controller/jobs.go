@@ -62,7 +62,7 @@ func (r *JobRepo) Add(job *ct.Job) error {
 	err := r.db.QueryRow("job_insert", job.ID, job.AppID, job.ReleaseID, job.Type, job.State, job.Meta).Scan(&job.CreatedAt, &job.UpdatedAt)
 	if postgres.IsUniquenessError(err, "") {
 		err = r.db.QueryRow("job_update", job.ID, job.State).Scan(&job.CreatedAt, &job.UpdatedAt)
-		if postgres.IsCheckViolation(err) {
+		if postgres.IsPostgresCode(err, postgres.CheckViolation) {
 			return ct.ValidationError{Field: "state", Message: err.Error()}
 		}
 	}
