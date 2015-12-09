@@ -286,7 +286,7 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.PUT("/apps/:apps_id/routes/:routes_type/:routes_id", httphelper.WrapHandler(api.appLookup(api.UpdateRoute)))
 	httpRouter.DELETE("/apps/:apps_id/routes/:routes_type/:routes_id", httphelper.WrapHandler(api.appLookup(api.DeleteRoute)))
 
-	httpRouter.POST("/apps/:apps_id/meta", httphelper.WrapHandler(api.appLookup(api.UpdateAppMeta)))
+	httpRouter.POST("/apps/:apps_id/meta", httphelper.WrapHandler(api.appLookup(api.UpdateApp)))
 
 	httpRouter.GET("/events", httphelper.WrapHandler(api.Events))
 	httpRouter.GET("/events/:id", httphelper.WrapHandler(api.GetEvent))

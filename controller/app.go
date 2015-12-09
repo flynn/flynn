@@ -111,6 +111,10 @@ func scanApp(s postgres.Scanner) (*ct.App, error) {
 	if releaseID != nil {
 		app.ReleaseID = *releaseID
 	}
+	if app.Meta == nil {
+		// ensure `{}` rather than `null` when serializing to JSON
+		app.Meta = map[string]string{}
+	}
 	return app, err
 }
 
@@ -261,35 +265,14 @@ func (c *controllerAPI) UpdateApp(ctx context.Context, rw http.ResponseWriter, r
 		return
 	}
 
-	if err := schema.Validate(data); err != nil {
-		respondWithError(rw, err)
-		return
-	}
-
-	app, err := c.appRepo.Update(params.ByName("apps_id"), data)
-	if err != nil {
-		respondWithError(rw, err)
-		return
-	}
-	httphelper.JSON(rw, 200, app)
-}
-
-func (c *controllerAPI) UpdateAppMeta(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
-	params, _ := ctxhelper.ParamsFromContext(ctx)
-
-	var data appUpdate
-	if err := httphelper.DecodeJSON(req, &data); err != nil {
-		respondWithError(rw, err)
-		return
+	if v, ok := data["meta"]; ok && v == nil {
+		// handle {"meta": null}
+		delete(data, "meta")
 	}
 
 	if err := schema.Validate(data); err != nil {
 		respondWithError(rw, err)
 		return
-	}
-
-	if data["meta"] == nil {
-		data["meta"] = make(map[string]interface{})
 	}
 
 	app, err := c.appRepo.Update(params.ByName("apps_id"), data)

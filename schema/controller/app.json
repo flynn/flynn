@@ -30,7 +30,14 @@
       "type": "boolean"
     },
     "meta": {
-      "$ref": "/schema/controller/common#/definitions/meta"
+      "anyOf": [
+        {
+          "$ref": "/schema/controller/common#/definitions/meta"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "strategy": {
       "$ref": "/schema/controller/common#/definitions/strategy"
