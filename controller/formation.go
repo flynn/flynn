@@ -496,6 +496,7 @@ func (c *controllerAPI) GetFormations(ctx context.Context, w http.ResponseWriter
 			return
 		}
 		httphelper.JSON(w, 200, list)
+		return
 	}
 
 	// don't return a list of all formations, there will be lots of them
