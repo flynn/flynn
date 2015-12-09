@@ -35,6 +35,14 @@
     "meta": {
       "$ref": "/schema/controller/common#/definitions/meta"
     },
+    "exit_status": {
+      "type": "integer",
+      "description": "job exit status"
+    },
+    "host_error": {
+      "type": "string",
+      "description": "host error if job failed to start"
+    },
     "created_at": {
       "$ref": "/schema/controller/common#/definitions/created_at"
     },

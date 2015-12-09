@@ -30,7 +30,7 @@ func (s *DeployerSuite) createRelease(t *c.C, process, strategy string) (*ct.App
 		Processes: map[string]int{process: 2},
 	}), c.IsNil)
 
-	err = watcher.WaitFor(ct.JobEvents{process: {"up": 2}}, scaleTimeout, nil)
+	err = watcher.WaitFor(ct.JobEvents{process: {ct.JobStateUp: 2}}, scaleTimeout, nil)
 	t.Assert(err, c.IsNil)
 
 	return app, release
@@ -106,6 +106,7 @@ loop:
 		t.Assert(i.JobType, c.Equals, j.JobType)
 		t.Assert(i.JobState, c.Equals, j.JobState)
 		t.Assert(i.Status, c.Equals, j.Status)
+		t.Assert(i.Error, c.Equals, j.Error)
 	}
 
 	for i, e := range expected {
@@ -124,14 +125,14 @@ func (s *DeployerSuite) TestOneByOneStrategy(t *c.C) {
 
 	expected := []*ct.DeploymentEvent{
 		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "pending"},
-		{ReleaseID: releaseID, JobType: "printer", JobState: "starting", Status: "running"},
-		{ReleaseID: releaseID, JobType: "printer", JobState: "up", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "stopping", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "down", Status: "running"},
-		{ReleaseID: releaseID, JobType: "printer", JobState: "starting", Status: "running"},
-		{ReleaseID: releaseID, JobType: "printer", JobState: "up", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "stopping", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "down", Status: "running"},
+		{ReleaseID: releaseID, JobType: "printer", JobState: ct.JobStateStarting, Status: "running"},
+		{ReleaseID: releaseID, JobType: "printer", JobState: ct.JobStateUp, Status: "running"},
+		{ReleaseID: oldReleaseID, JobType: "printer", JobState: ct.JobStateStopping, Status: "running"},
+		{ReleaseID: oldReleaseID, JobType: "printer", JobState: ct.JobStateDown, Status: "running"},
+		{ReleaseID: releaseID, JobType: "printer", JobState: ct.JobStateStarting, Status: "running"},
+		{ReleaseID: releaseID, JobType: "printer", JobState: ct.JobStateUp, Status: "running"},
+		{ReleaseID: oldReleaseID, JobType: "printer", JobState: ct.JobStateStopping, Status: "running"},
+		{ReleaseID: oldReleaseID, JobType: "printer", JobState: ct.JobStateDown, Status: "running"},
 		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "complete"},
 	}
 	waitForDeploymentEvents(t, events, expected)
@@ -148,14 +149,14 @@ func (s *DeployerSuite) TestAllAtOnceStrategy(t *c.C) {
 
 	expected := []*ct.DeploymentEvent{
 		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "pending"},
-		{ReleaseID: releaseID, JobType: "printer", JobState: "starting", Status: "running"},
-		{ReleaseID: releaseID, JobType: "printer", JobState: "starting", Status: "running"},
-		{ReleaseID: releaseID, JobType: "printer", JobState: "up", Status: "running"},
-		{ReleaseID: releaseID, JobType: "printer", JobState: "up", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "stopping", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "stopping", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "down", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "printer", JobState: "down", Status: "running"},
+		{ReleaseID: releaseID, JobType: "printer", JobState: ct.JobStateStarting, Status: "running"},
+		{ReleaseID: releaseID, JobType: "printer", JobState: ct.JobStateStarting, Status: "running"},
+		{ReleaseID: releaseID, JobType: "printer", JobState: ct.JobStateUp, Status: "running"},
+		{ReleaseID: releaseID, JobType: "printer", JobState: ct.JobStateUp, Status: "running"},
+		{ReleaseID: oldReleaseID, JobType: "printer", JobState: ct.JobStateStopping, Status: "running"},
+		{ReleaseID: oldReleaseID, JobType: "printer", JobState: ct.JobStateStopping, Status: "running"},
+		{ReleaseID: oldReleaseID, JobType: "printer", JobState: ct.JobStateDown, Status: "running"},
+		{ReleaseID: oldReleaseID, JobType: "printer", JobState: ct.JobStateDown, Status: "running"},
 		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "complete"},
 	}
 	waitForDeploymentEvents(t, events, expected)
@@ -172,14 +173,14 @@ func (s *DeployerSuite) TestServiceEvents(t *c.C) {
 
 	expected := []*ct.DeploymentEvent{
 		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "pending"},
-		{ReleaseID: releaseID, JobType: "echoer", JobState: "starting", Status: "running"},
-		{ReleaseID: releaseID, JobType: "echoer", JobState: "starting", Status: "running"},
-		{ReleaseID: releaseID, JobType: "echoer", JobState: "up", Status: "running"},
-		{ReleaseID: releaseID, JobType: "echoer", JobState: "up", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "echoer", JobState: "stopping", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "echoer", JobState: "stopping", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "echoer", JobState: "down", Status: "running"},
-		{ReleaseID: oldReleaseID, JobType: "echoer", JobState: "down", Status: "running"},
+		{ReleaseID: releaseID, JobType: "echoer", JobState: ct.JobStateStarting, Status: "running"},
+		{ReleaseID: releaseID, JobType: "echoer", JobState: ct.JobStateStarting, Status: "running"},
+		{ReleaseID: releaseID, JobType: "echoer", JobState: ct.JobStateUp, Status: "running"},
+		{ReleaseID: releaseID, JobType: "echoer", JobState: ct.JobStateUp, Status: "running"},
+		{ReleaseID: oldReleaseID, JobType: "echoer", JobState: ct.JobStateStopping, Status: "running"},
+		{ReleaseID: oldReleaseID, JobType: "echoer", JobState: ct.JobStateStopping, Status: "running"},
+		{ReleaseID: oldReleaseID, JobType: "echoer", JobState: ct.JobStateDown, Status: "running"},
+		{ReleaseID: oldReleaseID, JobType: "echoer", JobState: ct.JobStateDown, Status: "running"},
 		{ReleaseID: releaseID, JobType: "", JobState: "", Status: "complete"},
 	}
 	waitForDeploymentEvents(t, events, expected)
@@ -222,10 +223,10 @@ func (s *DeployerSuite) TestRollbackFailedJob(t *c.C) {
 	defer stream.Close()
 	expected := []*ct.DeploymentEvent{
 		{ReleaseID: release.ID, JobType: "", JobState: "", Status: "pending"},
-		{ReleaseID: release.ID, JobType: "printer", JobState: "starting", Status: "running"},
-		{ReleaseID: release.ID, JobType: "printer", JobState: "starting", Status: "running"},
-		{ReleaseID: release.ID, JobType: "printer", JobState: "failed", Status: "running"},
-		{ReleaseID: release.ID, JobType: "", JobState: "", Status: "failed"},
+		{ReleaseID: release.ID, JobType: "printer", JobState: ct.JobStateStarting, Status: "running"},
+		{ReleaseID: release.ID, JobType: "printer", JobState: ct.JobStateStarting, Status: "running"},
+		{ReleaseID: release.ID, JobType: "printer", JobState: ct.JobStateDown, Status: "running"},
+		{ReleaseID: release.ID, JobType: "", JobState: "", Status: "failed", Error: `deployer: printer job failed to start: exec: "this-is-gonna-fail": executable file not found in $PATH`},
 	}
 	waitForDeploymentEvents(t, events, expected)
 
@@ -268,10 +269,10 @@ func (s *DeployerSuite) TestRollbackNoService(t *c.C) {
 	defer stream.Close()
 	expected := []*ct.DeploymentEvent{
 		{ReleaseID: release.ID, JobType: "", JobState: "", Status: "pending"},
-		{ReleaseID: release.ID, JobType: "printer", JobState: "starting", Status: "running"},
-		{ReleaseID: release.ID, JobType: "printer", JobState: "starting", Status: "running"},
-		{ReleaseID: release.ID, JobType: "printer", JobState: "down", Status: "running"},
-		{ReleaseID: release.ID, JobType: "", JobState: "", Status: "failed"},
+		{ReleaseID: release.ID, JobType: "printer", JobState: ct.JobStateStarting, Status: "running"},
+		{ReleaseID: release.ID, JobType: "printer", JobState: ct.JobStateStarting, Status: "running"},
+		{ReleaseID: release.ID, JobType: "printer", JobState: ct.JobStateDown, Status: "running"},
+		{ReleaseID: release.ID, JobType: "", JobState: "", Status: "failed", Error: "printer process type failed to start, got down job event"},
 	}
 	waitForDeploymentEvents(t, events, expected)
 
@@ -302,7 +303,7 @@ func (s *DeployerSuite) TestOmniProcess(t *c.C) {
 		ReleaseID: release.ID,
 		Processes: map[string]int{"omni": omniScale},
 	}), c.IsNil)
-	err = watcher.WaitFor(ct.JobEvents{"omni": {"up": totalJobs}}, scaleTimeout, nil)
+	err = watcher.WaitFor(ct.JobEvents{"omni": {ct.JobStateUp: totalJobs}}, scaleTimeout, nil)
 	t.Assert(err, c.IsNil)
 
 	// deploy using all-at-once and check we get the correct events
@@ -317,7 +318,7 @@ func (s *DeployerSuite) TestOmniProcess(t *c.C) {
 	t.Assert(err, c.IsNil)
 	defer stream.Close()
 	expected := make([]*ct.DeploymentEvent, 0, 4*totalJobs+1)
-	appendEvents := func(releaseID, state string, count int) {
+	appendEvents := func(releaseID string, state ct.JobState, count int) {
 		for i := 0; i < count; i++ {
 			event := &ct.DeploymentEvent{
 				ReleaseID: releaseID,
@@ -329,10 +330,10 @@ func (s *DeployerSuite) TestOmniProcess(t *c.C) {
 		}
 	}
 	expected = append(expected, &ct.DeploymentEvent{ReleaseID: deployment.NewReleaseID, Status: "pending"})
-	appendEvents(deployment.NewReleaseID, "starting", totalJobs)
-	appendEvents(deployment.NewReleaseID, "up", totalJobs)
-	appendEvents(deployment.OldReleaseID, "stopping", totalJobs)
-	appendEvents(deployment.OldReleaseID, "down", totalJobs)
+	appendEvents(deployment.NewReleaseID, ct.JobStateStarting, totalJobs)
+	appendEvents(deployment.NewReleaseID, ct.JobStateUp, totalJobs)
+	appendEvents(deployment.OldReleaseID, ct.JobStateStopping, totalJobs)
+	appendEvents(deployment.OldReleaseID, ct.JobStateDown, totalJobs)
 	expected = append(expected, &ct.DeploymentEvent{ReleaseID: deployment.NewReleaseID, Status: "complete"})
 	waitForDeploymentEvents(t, events, expected)
 
@@ -348,14 +349,14 @@ func (s *DeployerSuite) TestOmniProcess(t *c.C) {
 	t.Assert(err, c.IsNil)
 	expected = make([]*ct.DeploymentEvent, 0, 4*totalJobs+1)
 	expected = append(expected, &ct.DeploymentEvent{ReleaseID: deployment.NewReleaseID, Status: "pending"})
-	appendEvents(deployment.NewReleaseID, "starting", testCluster.Size())
-	appendEvents(deployment.NewReleaseID, "up", testCluster.Size())
-	appendEvents(deployment.OldReleaseID, "stopping", testCluster.Size())
-	appendEvents(deployment.OldReleaseID, "down", testCluster.Size())
-	appendEvents(deployment.NewReleaseID, "starting", testCluster.Size())
-	appendEvents(deployment.NewReleaseID, "up", testCluster.Size())
-	appendEvents(deployment.OldReleaseID, "stopping", testCluster.Size())
-	appendEvents(deployment.OldReleaseID, "down", testCluster.Size())
+	appendEvents(deployment.NewReleaseID, ct.JobStateStarting, testCluster.Size())
+	appendEvents(deployment.NewReleaseID, ct.JobStateUp, testCluster.Size())
+	appendEvents(deployment.OldReleaseID, ct.JobStateStopping, testCluster.Size())
+	appendEvents(deployment.OldReleaseID, ct.JobStateDown, testCluster.Size())
+	appendEvents(deployment.NewReleaseID, ct.JobStateStarting, testCluster.Size())
+	appendEvents(deployment.NewReleaseID, ct.JobStateUp, testCluster.Size())
+	appendEvents(deployment.OldReleaseID, ct.JobStateStopping, testCluster.Size())
+	appendEvents(deployment.OldReleaseID, ct.JobStateDown, testCluster.Size())
 	expected = append(expected, &ct.DeploymentEvent{ReleaseID: deployment.NewReleaseID, Status: "complete"})
 	waitForDeploymentEvents(t, events, expected)
 }

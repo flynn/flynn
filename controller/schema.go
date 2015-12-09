@@ -213,5 +213,9 @@ $$ LANGUAGE plpgsql`,
 	m.Add(6,
 		`INSERT INTO deployment_strategies (name) VALUES ('discoverd-meta')`,
 	)
+	m.Add(7,
+		`ALTER TABLE job_cache ADD COLUMN exit_status integer NOT NULL DEFAULT 0`,
+		`ALTER TABLE job_cache ADD COLUMN host_error text`,
+	)
 	return m.Migrate(db)
 }

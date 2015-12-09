@@ -61,7 +61,7 @@ func (d *DeployJob) deployPostgres() (err error) {
 
 		d.deployEvents <- ct.DeploymentEvent{
 			ReleaseID: d.OldReleaseID,
-			JobState:  "stopping",
+			JobState:  ct.JobStateStopping,
 			JobType:   "postgres",
 		}
 		pg := pgmanager.NewClient(inst.Addr)
@@ -77,7 +77,7 @@ func (d *DeployJob) deployPostgres() (err error) {
 				if event.Kind == discoverd.EventKindDown && event.Instance.ID == inst.ID {
 					d.deployEvents <- ct.DeploymentEvent{
 						ReleaseID: d.OldReleaseID,
-						JobState:  "down",
+						JobState:  ct.JobStateDown,
 						JobType:   "postgres",
 					}
 					return nil
@@ -94,7 +94,7 @@ func (d *DeployJob) deployPostgres() (err error) {
 		log.Info("starting new instance")
 		d.deployEvents <- ct.DeploymentEvent{
 			ReleaseID: d.NewReleaseID,
-			JobState:  "starting",
+			JobState:  ct.JobStateStarting,
 			JobType:   "postgres",
 		}
 		d.newReleaseState["postgres"]++
@@ -130,7 +130,7 @@ func (d *DeployJob) deployPostgres() (err error) {
 		}
 		d.deployEvents <- ct.DeploymentEvent{
 			ReleaseID: d.NewReleaseID,
-			JobState:  "up",
+			JobState:  ct.JobStateUp,
 			JobType:   "postgres",
 		}
 		return inst, nil
@@ -228,7 +228,7 @@ loop:
 				return loggedErr("unexpected close of job event stream")
 			}
 			log.Info("got job event", "job_id", event.ID, "type", event.Type, "state", event.State)
-			if event.State == "down" && event.Type == "postgres" && event.ReleaseID == d.OldReleaseID {
+			if event.State == ct.JobStateDown && event.Type == "postgres" && event.ReleaseID == d.OldReleaseID {
 				actual++
 				if actual == d.Processes["postgres"] {
 					break loop

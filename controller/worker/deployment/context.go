@@ -147,7 +147,7 @@ func (c *context) rollback(l log15.Logger, deployment *ct.Deployment, original *
 		if j.ReleaseID != deployment.OldReleaseID {
 			continue
 		}
-		if j.State == "up" {
+		if j.State == ct.JobStateUp {
 			runningJobs[j.Type]++
 		}
 	}
@@ -155,7 +155,7 @@ func (c *context) rollback(l log15.Logger, deployment *ct.Deployment, original *
 	for name, count := range original.Processes {
 		count = count - runningJobs[name]
 		if count > 0 {
-			expectedJobEvents[name] = map[string]int{"up": count}
+			expectedJobEvents[name] = ct.JobUpEvents(count)
 		}
 	}
 

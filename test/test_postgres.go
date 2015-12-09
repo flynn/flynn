@@ -214,7 +214,7 @@ func (s *PostgresSuite) testDeploy(t *c.C, d *pgDeploy) {
 				t.Fatalf("job event stream closed: %s", jobStream.Err())
 			}
 			debugf(t, "got job event: %s %s %s", e.Type, e.ID, e.State)
-			if e.Type == "web" && e.State == "up" {
+			if e.Type == "web" && e.State == ct.JobStateUp {
 				webJobs++
 			}
 		case <-time.After(30 * time.Second):
@@ -344,7 +344,7 @@ loop:
 				t.Fatalf("deployment failed: %s", e.Error)
 			}
 			debugf(t, "got deployment event: %s %s", e.JobType, e.JobState)
-			if e.JobState != "up" && e.JobState != "down" {
+			if e.JobState != ct.JobStateUp && e.JobState != ct.JobStateDown {
 				continue
 			}
 			switch e.JobType {
@@ -356,7 +356,7 @@ loop:
 				skipped := assertNextState(expected[expectedIndex:])
 				expectedIndex += 1 + skipped
 			case "web":
-				if e.JobState == "up" && e.ReleaseID == newRelease {
+				if e.JobState == ct.JobStateUp && e.ReleaseID == newRelease {
 					newWebJobs++
 				}
 			}

@@ -79,19 +79,16 @@ func (w *JobWatcher) WaitFor(expected ct.JobEvents, timeout time.Duration, callb
 				return fmt.Errorf("Event stream unexpectedly ended")
 			}
 			if _, ok := actual[e.Type]; !ok {
-				actual[e.Type] = make(map[string]int)
+				actual[e.Type] = make(map[ct.JobState]int)
 			}
 			if w.releaseID != "" && w.releaseID != e.ReleaseID {
 				continue
 			}
-			switch e.State {
-			case "crashed":
-				actual[e.Type]["down"] += 1
-			case "starting", "up", "down":
-				fallthrough
-			default:
-				actual[e.Type][e.State] += 1
+			// treat the legacy "crashed" and "failed" states as "down"
+			if e.State == ct.JobStateCrashed || e.State == ct.JobStateFailed {
+				e.State = ct.JobStateDown
 			}
+			actual[e.Type][e.State] += 1
 			if callback != nil {
 				err := callback(e)
 				if err != nil {
@@ -659,9 +656,9 @@ func (c *Client) ExpectedScalingEvents(actual, expected map[string]int, releaseP
 			diff *= clusterSize
 		}
 		if diff > 0 {
-			events[typ] = map[string]int{"up": diff}
+			events[typ] = ct.JobUpEvents(diff)
 		} else if diff < 0 {
-			events[typ] = map[string]int{"down": -diff}
+			events[typ] = ct.JobDownEvents(-diff)
 		}
 	}
 	return events
