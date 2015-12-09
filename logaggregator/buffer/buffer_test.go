@@ -287,6 +287,10 @@ func (s *S) TestAddSort(c *C) {
 	b.Add(first)
 	c.Assert(b.Read(), DeepEquals, []*rfc5424.Message{first})
 
+	// add duplicate
+	b.Add(first)
+	c.Assert(b.Read(), DeepEquals, []*rfc5424.Message{first})
+
 	// add new, before head
 	newHead := rfc5424.NewMessage(nil, []byte("msg2"))
 	newHead.Timestamp = first.Timestamp.Add(-time.Second)
