@@ -325,13 +325,10 @@ func (s *State) persist(jobID string) {
 	}
 }
 
-func (s *State) AddJob(j *host.Job, ip net.IP) {
+func (s *State) AddJob(j *host.Job) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	job := &host.ActiveJob{Job: j, HostID: s.id}
-	if len(ip) > 0 {
-		job.InternalIP = ip.String()
-	}
 	s.jobs[j.ID] = job
 	s.sendEvent(job, host.JobEventCreate)
 	s.persist(j.ID)
@@ -381,6 +378,13 @@ func (s *State) SetContainerID(jobID, containerID string) {
 	defer s.mtx.Unlock()
 	s.jobs[jobID].ContainerID = containerID
 	s.containers[containerID] = s.jobs[jobID]
+	s.persist(jobID)
+}
+
+func (s *State) SetContainerIP(jobID string, ip net.IP) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	s.jobs[jobID].InternalIP = ip.String()
 	s.persist(jobID)
 }
 

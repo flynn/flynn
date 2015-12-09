@@ -39,6 +39,50 @@ func (s *HostSuite) TestGetNonExistentJob(t *c.C) {
 	t.Assert(hh.IsObjectNotFoundError(err), c.Equals, true)
 }
 
+func (s *HostSuite) TestAddFailingJob(t *c.C) {
+	// get a host and watch events
+	hosts, err := s.clusterClient(t).Hosts()
+	t.Assert(err, c.IsNil)
+	t.Assert(hosts, c.Not(c.HasLen), 0)
+	h := hosts[0]
+	jobID := random.UUID()
+	events := make(chan *host.Event)
+	stream, err := h.StreamEvents(jobID, events)
+	t.Assert(err, c.IsNil)
+	defer stream.Close()
+
+	// add a job with a non existent artifact
+	job := &host.Job{
+		ID:       jobID,
+		Artifact: host.Artifact{Type: "docker", URI: "http://example.com?name=foo&id=bar"},
+	}
+	t.Assert(h.AddJob(job), c.IsNil)
+
+	// check we get a create then error event
+	actual := make([]*host.Event, 0, 2)
+loop:
+	for {
+		select {
+		case e, ok := <-events:
+			if !ok {
+				t.Fatalf("job event stream closed unexpectedly: %s", stream.Err())
+			}
+			actual = append(actual, e)
+			if len(actual) >= 2 {
+				break loop
+			}
+		case <-time.After(30 * time.Second):
+			t.Fatal("timed out waiting for job event")
+		}
+	}
+	t.Assert(actual, c.HasLen, 2)
+	t.Assert(actual[0].Event, c.Equals, host.JobEventCreate)
+	t.Assert(actual[1].Event, c.Equals, host.JobEventError)
+	jobErr := actual[1].Job.Error
+	t.Assert(jobErr, c.NotNil)
+	t.Assert(*jobErr, c.Equals, "registry: repo not found")
+}
+
 func (s *HostSuite) TestAttachNonExistentJob(t *c.C) {
 	cluster := s.clusterClient(t)
 	hosts, err := cluster.Hosts()
