@@ -210,7 +210,7 @@ type ActiveJob struct {
 	Status      JobStatus `json:"status,omitempty"`
 	StartedAt   time.Time `json:"started_at,omitempty"`
 	EndedAt     time.Time `json:"ended_at,omitempty"`
-	ExitStatus  int       `json:"exit_status,omitempty"`
+	ExitStatus  *int      `json:"exit_status,omitempty"`
 	Error       *string   `json:"error,omitempty"`
 }
 

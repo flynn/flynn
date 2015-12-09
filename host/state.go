@@ -445,7 +445,7 @@ func (s *State) setStatusDone(job *host.ActiveJob, exitStatus int) {
 		return
 	}
 	job.EndedAt = time.Now().UTC()
-	job.ExitStatus = exitStatus
+	job.ExitStatus = &exitStatus
 	if exitStatus == 0 {
 		job.Status = host.StatusDone
 	} else {

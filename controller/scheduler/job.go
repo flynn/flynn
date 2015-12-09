@@ -6,6 +6,7 @@ import (
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
+	"github.com/flynn/flynn/pkg/typeconv"
 )
 
 // JobState is a job's in-memory state
@@ -91,7 +92,7 @@ type Job struct {
 	metadata map[string]string
 
 	// exitStatus is the job's exit status once it has stopped running
-	exitStatus int32
+	exitStatus *int
 
 	// hostError is the error from the host if the job fails to start
 	hostError *string
@@ -132,12 +133,11 @@ func (j *Job) IsInFormation(key utils.FormationKey) bool {
 
 func (j *Job) ControllerJob() *ct.Job {
 	job := &ct.Job{
-		ID:         j.JobID,
-		AppID:      j.AppID,
-		ReleaseID:  j.ReleaseID,
-		Type:       j.Type,
-		Meta:       utils.JobMetaFromMetadata(j.metadata),
-		ExitStatus: j.exitStatus,
+		ID:        j.JobID,
+		AppID:     j.AppID,
+		ReleaseID: j.ReleaseID,
+		Type:      j.Type,
+		Meta:      utils.JobMetaFromMetadata(j.metadata),
 	}
 
 	switch j.state {
@@ -149,6 +149,9 @@ func (j *Job) ControllerJob() *ct.Job {
 		job.State = ct.JobStateDown
 	}
 
+	if j.exitStatus != nil {
+		job.ExitStatus = typeconv.Int32Ptr(int32(*j.exitStatus))
+	}
 	if j.hostError != nil {
 		job.HostError = *j.hostError
 	}

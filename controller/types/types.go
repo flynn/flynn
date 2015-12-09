@@ -96,7 +96,7 @@ type Job struct {
 	State      JobState          `json:"state,omitempty"`
 	Cmd        []string          `json:"cmd,omitempty"`
 	Meta       map[string]string `json:"meta,omitempty"`
-	ExitStatus int32             `json:"exit_status"`
+	ExitStatus *int32            `json:"exit_status,omitempty"`
 	HostError  string            `json:"host_error,omitempty"`
 	CreatedAt  *time.Time        `json:"created_at,omitempty"`
 	UpdatedAt  *time.Time        `json:"updated_at,omitempty"`

@@ -863,7 +863,7 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) *Job {
 
 	job.startedAt = activeJob.StartedAt
 	job.metadata = hostJob.Metadata
-	job.exitStatus = int32(activeJob.ExitStatus)
+	job.exitStatus = activeJob.ExitStatus
 	job.hostError = activeJob.Error
 
 	s.handleJobStatus(job, activeJob.Status)
