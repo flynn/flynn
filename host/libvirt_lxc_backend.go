@@ -394,7 +394,15 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	}
 
 	g.Log(grohl.Data{"at": "checkout"})
-	rootPath, err := l.pinkerton.Checkout(job.ID, imageID)
+	var rootPath string
+	// creating an AUFS mount can fail intermittently with EINVAL, so try a
+	// few times (see https://github.com/flynn/flynn/issues/2044)
+	for start := time.Now(); time.Since(start) < time.Second; time.Sleep(50 * time.Millisecond) {
+		rootPath, err = l.pinkerton.Checkout(job.ID, imageID)
+		if err == nil || !strings.HasSuffix(err.Error(), "invalid argument") {
+			break
+		}
+	}
 	if err != nil {
 		g.Log(grohl.Data{"at": "checkout", "status": "error", "err": err})
 		return err
