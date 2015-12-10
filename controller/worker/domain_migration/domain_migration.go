@@ -222,7 +222,7 @@ func (m *migration) maybeDeployController() error {
 		log.Error("error creating release", "error", err)
 		return err
 	}
-	if err := m.client.DeployAppRelease(appName, release.ID); err != nil {
+	if err := m.client.DeployAppRelease(appName, release.ID, nil); err != nil {
 		log.Error("error deploying release", "error", err)
 		return err
 	}
@@ -251,7 +251,7 @@ func (m *migration) maybeDeployRouter() error {
 		log.Error("error creating release", "error", err)
 		return err
 	}
-	if err := m.client.DeployAppRelease(appName, release.ID); err != nil {
+	if err := m.client.DeployAppRelease(appName, release.ID, nil); err != nil {
 		log.Error("error deploying release", "error", err)
 		return err
 	}
@@ -282,7 +282,7 @@ func (m *migration) maybeDeployDashboard() error {
 		log.Error("error creating release", "error", err)
 		return err
 	}
-	if err := m.client.DeployAppRelease(appName, release.ID); err != nil {
+	if err := m.client.DeployAppRelease(appName, release.ID, nil); err != nil {
 		log.Error("error deploying release", "error", err)
 		return err
 	}

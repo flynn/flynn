@@ -492,7 +492,7 @@ func (c *Client) StreamDeployment(d *ct.Deployment, output chan *ct.DeploymentEv
 	}, appEvents)
 }
 
-func (c *Client) DeployAppRelease(appID, releaseID string) error {
+func (c *Client) DeployAppRelease(appID, releaseID string, logf func(*ct.DeploymentEvent)) error {
 	d, err := c.CreateDeployment(appID, releaseID)
 	if err != nil {
 		return err
@@ -524,6 +524,9 @@ outer:
 		case e, ok := <-events:
 			if !ok {
 				return errors.New("unexpected close of deployment event stream")
+			}
+			if logf != nil {
+				logf(e)
 			}
 			switch e.Status {
 			case "complete":
