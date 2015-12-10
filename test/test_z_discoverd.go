@@ -15,6 +15,13 @@ type ZDiscoverdSuite struct {
 var _ = c.Suite(&ZDiscoverdSuite{})
 
 func (s *ZDiscoverdSuite) TestDeploy(t *c.C) {
+	// ensure we have enough hosts in the cluster
+	hosts, err := s.clusterClient(t).Hosts()
+	t.Assert(err, c.IsNil)
+	if len(hosts) <= 1 {
+		t.Skip("cannot deploy discoverd in a single node cluster")
+	}
+
 	client := s.controllerClient(t)
 	app, err := client.GetApp("discoverd")
 	t.Assert(err, c.IsNil)
