@@ -1,6 +1,7 @@
 package buffer
 
 import (
+	"bytes"
 	"errors"
 	"sync"
 
@@ -60,6 +61,10 @@ func (b *Buffer) Add(m *rfc5424.Message) error {
 		// iterate from newest to oldest through messages to find position
 		// to insert new message
 		for other := b.tail; other != nil; other = other.prev {
+			if m.Timestamp.Equal(other.Timestamp) && bytes.Equal(m.StructuredData, other.StructuredData) {
+				// duplicate log line
+				return nil
+			}
 			if m.Timestamp.Before(other.Timestamp) {
 				if other.prev == nil {
 					// insert before other at head
