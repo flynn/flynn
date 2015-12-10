@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/logaggregator/client"
+	"github.com/flynn/flynn/logaggregator/snapshot"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/status"
@@ -25,6 +26,7 @@ func apiHandler(agg *Aggregator, cursors *HostCursors) http.Handler {
 	r.Handler("GET", status.Path, status.HealthyHandler)
 	r.GET("/log/:channel_id", httphelper.WrapHandler(api.GetLog))
 	r.GET("/cursors", httphelper.WrapHandler(api.GetCursors))
+	r.GET("/snapshot", httphelper.WrapHandler(api.GetSnapshot))
 	return httphelper.ContextInjector(
 		"logaggregator-api",
 		httphelper.NewRequestLogger(r),
@@ -96,6 +98,11 @@ func (a *aggregatorAPI) GetLog(ctx context.Context, w http.ResponseWriter, req *
 	}
 
 	writeMessages(ctx, w, iter.Scan(a.agg))
+}
+
+func (a *aggregatorAPI) GetSnapshot(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "application/vnd.flynn.logaggregator-snapshot")
+	snapshot.WriteTo(a.agg.ReadAll(), w)
 }
 
 func writeMessages(ctx context.Context, w http.ResponseWriter, msgc <-chan *rfc5424.Message) {

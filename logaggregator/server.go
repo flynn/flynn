@@ -109,11 +109,7 @@ func (s *Server) WriteSnapshotFile(path string) error {
 		return err
 	}
 	defer f.Close()
-	return s.WriteSnapshot(f)
-}
-
-func (s *Server) WriteSnapshot(w io.Writer) error {
-	return snapshot.WriteTo(s.Aggregator.ReadAll(), w)
+	return snapshot.WriteTo(s.Aggregator.ReadAll(), f)
 }
 
 func (s *Server) SyslogAddr() net.Addr {
