@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net"
 	"reflect"
+	"strings"
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
@@ -57,6 +58,10 @@ func (s *LogAggregatorSuite) TestReplication(t *c.C) {
 		}
 	}
 
+	longLine := strings.Repeat("a", 10050)
+	longLine0 := longLine[:10000]
+	longLine1 := longLine[10000:]
+
 	aggregators, err := app.disc.Instances("logaggregator", time.Second)
 	t.Assert(err, c.IsNil)
 	if len(aggregators) == 0 || len(aggregators) > 2 {
@@ -106,7 +111,8 @@ func (s *LogAggregatorSuite) TestReplication(t *c.C) {
 
 	runIshCommand(ish, "echo line1")
 	runIshCommand(ish, "echo line2")
-	readLines("line1", "line2")
+	runIshCommand(ish, "echo "+longLine)
+	readLines("line1", "line2", longLine0, longLine1)
 
 	// kill logaggregator
 	wait := waitForAggregator(true)
@@ -121,7 +127,7 @@ func (s *LogAggregatorSuite) TestReplication(t *c.C) {
 
 	// confirm that logs are replayed when it comes back
 	runIshCommand(ish, "echo line3")
-	readLines("line1", "line2", "line3")
+	readLines("line1", "line2", longLine0, longLine1, "line3")
 
 	// start new logaggregator
 	wait = waitForAggregator(true)
@@ -130,5 +136,5 @@ func (s *LogAggregatorSuite) TestReplication(t *c.C) {
 
 	// confirm that logs show up in the new aggregator
 	runIshCommand(ish, "echo line4")
-	readLines("line1", "line2", "line3", "line4")
+	readLines("line1", "line2", longLine0, longLine1, "line3", "line4")
 }

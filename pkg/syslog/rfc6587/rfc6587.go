@@ -18,7 +18,7 @@ func Bytes(m *rfc5424.Message) []byte {
 
 // MaxMsgLen is the maximum allowed length of the entire syslog message
 // (excluding RFC6587 length-prefixed frame).
-const MaxMsgLen = 10100
+const MaxMsgLen = 11000
 
 // Split is a bufio.SplitFunc that splits on RFC6587-framed syslog messages.
 func Split(data []byte, atEOF bool) (advance int, token []byte, err error) {
