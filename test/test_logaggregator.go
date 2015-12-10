@@ -57,9 +57,15 @@ func (s *LogAggregatorSuite) TestReplication(t *c.C) {
 		}
 	}
 
-	wait := waitForAggregator(false)
-	flynn(t, "/", "-a", "logaggregator", "scale", "app=1")
-	wait()
+	aggregators, err := app.disc.Instances("logaggregator", time.Second)
+	t.Assert(err, c.IsNil)
+	if len(aggregators) == 0 || len(aggregators) > 2 {
+		t.Errorf("unexpected number of aggregators: %d", len(aggregators))
+	} else if len(aggregators) == 2 {
+		wait := waitForAggregator(false)
+		flynn(t, "/", "-a", "logaggregator", "scale", "app=1")
+		wait()
+	}
 
 	instances, err := app.disc.Instances(app.name, time.Second*100)
 	t.Assert(err, c.IsNil)
@@ -103,7 +109,7 @@ func (s *LogAggregatorSuite) TestReplication(t *c.C) {
 	readLines("line1", "line2")
 
 	// kill logaggregator
-	wait = waitForAggregator(true)
+	wait := waitForAggregator(true)
 	jobs, err := cc.JobList("logaggregator")
 	t.Assert(err, c.IsNil)
 	for _, j := range jobs {
