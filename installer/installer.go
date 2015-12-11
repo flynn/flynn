@@ -234,7 +234,7 @@ func (i *Installer) LaunchCluster(c Cluster) error {
 		return err
 	}
 
-	if err := i.saveCluster(c); err != nil {
+	if err := i.SaveCluster(c); err != nil {
 		return err
 	}
 
@@ -312,7 +312,7 @@ func (i *Installer) dbMarshalItem(tableName string, item interface{}) ([]interfa
 	return fields, nil
 }
 
-func (i *Installer) saveCluster(c Cluster) error {
+func (i *Installer) SaveCluster(c Cluster) error {
 	i.dbMtx.Lock()
 	defer i.dbMtx.Unlock()
 
@@ -415,7 +415,7 @@ func (i *Installer) FindBaseCluster(id string) (*BaseCluster, error) {
 	return c, nil
 }
 
-func (i *Installer) FindCluster(id string) (Cluster, error) {
+func (i *Installer) findCachedCluster(id string) (Cluster, error) {
 	i.clustersMtx.RLock()
 	for _, c := range i.clusters {
 		if c.Base().ID == id {
@@ -424,6 +424,25 @@ func (i *Installer) FindCluster(id string) (Cluster, error) {
 		}
 	}
 	i.clustersMtx.RUnlock()
+	return nil, fmt.Errorf("cluster not found")
+}
+
+func (i *Installer) cacheCluster(c Cluster) {
+	i.clustersMtx.Lock()
+	defer i.clustersMtx.Unlock()
+	i.clusters = append(i.clusters, c)
+}
+
+func (i *Installer) FindCluster(id string) (cluster Cluster, err error) {
+	if c, err := i.findCachedCluster(id); err == nil {
+		return c, nil
+	}
+
+	defer func() {
+		if err == nil {
+			i.cacheCluster(cluster)
+		}
+	}()
 
 	base := &BaseCluster{}
 	if err := i.db.QueryRow(`SELECT Type FROM clusters WHERE ID == $1 AND DeletedAt IS NULL`, id).Scan(&base.Type); err != nil {
@@ -445,17 +464,6 @@ func (i *Installer) FindCluster(id string) (Cluster, error) {
 }
 
 func (i *Installer) FindDigitalOceanCluster(id string) (*DigitalOceanCluster, error) {
-	i.clustersMtx.RLock()
-	for _, c := range i.clusters {
-		if cluster, ok := c.(*DigitalOceanCluster); ok {
-			if cluster.ClusterID == id {
-				i.clustersMtx.RUnlock()
-				return cluster, nil
-			}
-		}
-	}
-	i.clustersMtx.RUnlock()
-
 	base, err := i.FindBaseCluster(id)
 	if err != nil {
 		return nil, err
@@ -491,17 +499,6 @@ func (i *Installer) FindDigitalOceanCluster(id string) (*DigitalOceanCluster, er
 }
 
 func (i *Installer) FindAzureCluster(id string) (*AzureCluster, error) {
-	i.clustersMtx.RLock()
-	for _, c := range i.clusters {
-		if cluster, ok := c.(*AzureCluster); ok {
-			if cluster.ClusterID == id {
-				i.clustersMtx.RUnlock()
-				return cluster, nil
-			}
-		}
-	}
-	i.clustersMtx.RUnlock()
-
 	base, err := i.FindBaseCluster(id)
 	if err != nil {
 		return nil, err
@@ -522,17 +519,6 @@ func (i *Installer) FindAzureCluster(id string) (*AzureCluster, error) {
 }
 
 func (i *Installer) FindSSHCluster(id string) (*SSHCluster, error) {
-	i.clustersMtx.RLock()
-	for _, c := range i.clusters {
-		if cluster, ok := c.(*SSHCluster); ok {
-			if cluster.ClusterID == id {
-				i.clustersMtx.RUnlock()
-				return cluster, nil
-			}
-		}
-	}
-	i.clustersMtx.RUnlock()
-
 	base, err := i.FindBaseCluster(id)
 	if err != nil {
 		return nil, err
@@ -555,17 +541,6 @@ func (i *Installer) FindSSHCluster(id string) (*SSHCluster, error) {
 }
 
 func (i *Installer) FindAWSCluster(id string) (*AWSCluster, error) {
-	i.clustersMtx.RLock()
-	for _, c := range i.clusters {
-		if cluster, ok := c.(*AWSCluster); ok {
-			if cluster.ClusterID == id {
-				i.clustersMtx.RUnlock()
-				return cluster, nil
-			}
-		}
-	}
-	i.clustersMtx.RUnlock()
-
 	cluster, err := i.FindBaseCluster(id)
 	if err != nil {
 		return nil, err

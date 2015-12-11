@@ -237,12 +237,12 @@ func (api *httpAPI) Events(w http.ResponseWriter, req *http.Request, params http
 }
 
 func (api *httpAPI) Prompt(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	s, err := api.Installer.FindBaseCluster(params.ByName("id"))
+	cluster, err := api.Installer.FindCluster(params.ByName("id"))
 	if err != nil {
 		httphelper.ObjectNotFoundError(w, "cluster not found")
 		return
 	}
-	prompt, err := s.findPrompt(params.ByName("prompt_id"))
+	prompt, err := cluster.Base().findPrompt(params.ByName("prompt_id"))
 	if err != nil {
 		httphelper.ObjectNotFoundError(w, "prompt not found")
 		return

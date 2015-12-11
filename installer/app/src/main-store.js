@@ -33,7 +33,8 @@ export default createClass({
 			errors: {
 				credentials: []
 			},
-			prompts: {}
+			prompts: {},
+			credentialsPromptValue: {}
 		};
 	},
 
@@ -43,7 +44,7 @@ export default createClass({
 		case 'SELECT_CLOUD':
 			if (newCluster.constructor.type !== event.cloud) {
 				newCluster.removeChangeListener(this.__handleClusterChanged);
-				newCluster = Cluster.newOfType(event.cloud, {id: 'new', credentials: newCluster.state.__allCredentials});
+				newCluster = Cluster.newOfType(event.cloud, {id: 'new', credentials: this.state.credentials});
 				newCluster.addChangeListener(this.__handleClusterChanged);
 				this.setState({
 					currentCloudSlug: event.cloud,
@@ -68,12 +69,26 @@ export default createClass({
 			}
 			break;
 
+		case 'CLUSTER_UPDATE':
+			this.__replaceCluster(event.cluster);
+			break;
+
 		case 'NEW_CREDENTIAL':
 			this.__addCredential(event.credential);
 			break;
 
 		case 'CREDENTIAL_DELETED':
 			this.__removeCredential(event.id);
+			break;
+
+		case 'PROMPT_SELECT_CREDENTIAL':
+			this.setState({
+				credentialsPromptValue: (function (credentialsPromptValue) {
+					var item = {};
+					item[event.clusterID] = event.credentialID;
+					return extend({}, credentialsPromptValue, item);
+				})(this.state.credentialsPromptValue)
+			});
 			break;
 
 		case 'CURRENT_CLUSTER':
@@ -168,6 +183,9 @@ export default createClass({
 
 		case 'CREDENTIALS_CHANGE':
 			newCluster.handleEvent(extend({}, event, {clusterID: 'new'}));
+			this.state.clusters.forEach(function (c) {
+				c.setCredentials(event.credentials);
+			});
 			break;
 
 		case 'LIST_CLOUD_REGIONS':
@@ -266,11 +284,21 @@ export default createClass({
 		var newState = {
 			clusters: clusters
 		};
+		cluster.setCredentials(this.state.credentials);
 		if (cluster.attrs.ID === this.state.currentClusterID) {
 			newState.currentCluster = cluster;
 		}
 		this.setState(newState);
 		cluster.addChangeListener(this.__handleClusterChanged);
+	},
+
+	__replaceCluster: function (attrs) {
+		var cluster = this.__findCluster(attrs.id);
+		if (cluster === null) {
+			window.console.warn('cluster '+ cluster.id +' not found!');
+			return;
+		}
+		cluster.setAttrs(attrs);
 	},
 
 	__findClusterIndex: function (clusterID) {

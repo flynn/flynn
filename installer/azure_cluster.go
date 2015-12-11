@@ -260,15 +260,35 @@ func (c *AzureCluster) bootstrap() error {
 	return c.base.bootstrap()
 }
 
+func (c *AzureCluster) wrapRequest(runRequest func() error) error {
+	authAttemptsRemaining := 3
+	for {
+		err := runRequest()
+		if err == nil || !strings.Contains(err.Error(), "unauthorized_client") || authAttemptsRemaining == 0 {
+			return err
+		}
+		if c.base.HandleAuthenticationFailure(c, err) {
+			authAttemptsRemaining--
+			continue
+		}
+		return err
+	}
+}
+
 func (c *AzureCluster) Delete() {
 	prevState := c.base.State
 	c.base.setState("deleting")
 
 	if prevState != "deleting" {
 		c.base.SendLog("Deleting resource group")
-		if err := c.client.DeleteResourceGroup(c.SubscriptionID, c.ClusterID); err != nil {
+		if err := c.wrapRequest(func() error {
+			return c.client.DeleteResourceGroup(c.SubscriptionID, c.ClusterID)
+		}); err != nil {
 			c.base.SendError(err)
-			return
+			if !c.base.YesNoPrompt(fmt.Sprintf("%s\nWould you like to remove it from the installer?", err.Error())) {
+				c.base.setState("error")
+				return
+			}
 		}
 	}
 

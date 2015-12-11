@@ -2,6 +2,7 @@ import Config from '../config';
 import InstallSteps from './install-steps';
 import CloudSelector from './cloud-selector';
 import CredentialsPicker from './credentials-picker';
+import Cluster from './cluster';
 import RouteLink from './route-link';
 import AWSLauncher from './aws-launcher';
 import DigitalOceanLauncher from './digital-ocean-launcher';
@@ -73,6 +74,10 @@ var Wizard = React.createClass({
 
 						{state.currentStep === 'dashboard' ? (
 							<Dashboard state={state} clusterID={cluster.attrs.ID} />
+						) : null}
+
+						{state.currentStep === 'done' ? (
+							<Cluster state={state} clusterID={cluster.attrs.ID} />
 						) : null}
 					</Panel>
 				</div>

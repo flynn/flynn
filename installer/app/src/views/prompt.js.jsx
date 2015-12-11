@@ -1,6 +1,9 @@
+import { extend } from 'marbles/utils';
+import Config from '../config';
 import Dispatcher from '../dispatcher';
 import FileInput from './file-input';
-import { default as BtnCSS, green as GreenBtnCSS } from './css/button';
+import CredentialsPicker from './credentials-picker';
+import { default as BtnCSS, green as GreenBtnCSS, disabled as DisabledBtnCSS } from './css/button';
 
 var YesNoPrompt = React.createClass({
 	render: function () {
@@ -75,6 +78,90 @@ var ChoicePrompt = React.createClass({
 	}
 });
 
+var CredentialPrompt = React.createClass({
+	render: function () {
+		var clusterState = this.props.state.currentCluster.state;
+		return (
+			<form onSubmit={this.__handleSubmit}>
+				<CredentialsPicker
+					style={{
+						display: 'inline',
+						marginRight: '1rem'
+					}}
+					credentials={clusterState.credentials}
+					value={this.state.credentialID}
+					onChange={this.__handleCredentialsChange}>
+					<option value="new">New</option>
+					{clusterState.selectedCloud === 'aws' && Config.has_aws_env_credentials ? (
+						<option value="aws_env">Use AWS Env vars ({Config.aws_env_credentials_id})</option>
+					) : null}
+				</CredentialsPicker>
+				<button
+					type="submit"
+					style={extend({}, GreenBtnCSS, this.state.submitDisabled ? DisabledBtnCSS : {})}
+					disabled={this.state.submitDisabled}>Save</button>
+			</form>
+		);
+	},
+
+	getInitialState: function () {
+		return this.__getState(this.props);
+	},
+
+	componentWillReceiveProps: function (props) {
+		var clusterState = props.state.currentCluster.state;
+		var clusterID = props.state.currentClusterID;
+		if (clusterState.credentialID !== this.state.initialCredentialID || props.state.credentialsPromptValue[clusterID] !== this.state.initialCredentialID) {
+			this.setState(this.__getState(props, this.state));
+		}
+	},
+
+	__getState: function (props, prevState) {
+		prevState = prevState || {};
+		var clusterState = props.state.currentCluster.state;
+		var clusterID = props.state.currentClusterID;
+		var state = {
+			initialCredentialID: clusterState.credentialID,
+			credentialID: props.state.credentialsPromptValue[clusterID] || clusterState.credentialID
+		};
+		return this.__computeState(state);
+	},
+
+	__computeState: function (state) {
+		state = extend({}, this.state, state);
+		state.submitDisabled = state.initialCredentialID === state.credentialID;
+		return state;
+	},
+
+	__handleCredentialsChange: function (credentialID) {
+		var clusterState = this.props.state.currentCluster.state;
+		var clusterID = this.props.state.currentClusterID;
+		if (credentialID === 'new') {
+			Dispatcher.dispatch({
+				name: 'NAVIGATE',
+				path: '/credentials',
+				options: {
+					params: [{
+						cloud: clusterState.selectedCloud,
+						cluster_id: clusterID
+					}]
+				}
+			});
+		} else {
+			this.setState(this.__computeState({
+				credentialID: credentialID
+			}));
+		}
+	},
+
+	__handleSubmit: function (e) {
+		e.preventDefault();
+		this.props.onSubmit({
+			input: this.state.credentialID
+		});
+	}
+});
+
 var InputPrompt = React.createClass({
 	render: function () {
 		var prompt = this.props.prompt;
@@ -141,6 +228,9 @@ var Prompt = React.createClass({
 						break;
 					case 'choice':
 						Component = ChoicePrompt;
+						break;
+					case 'credential':
+						Component = CredentialPrompt;
 						break;
 					}
 					return <Component prompt={prompt} state={this.props.state} onSubmit={this.__handlePromptSubmit} />;

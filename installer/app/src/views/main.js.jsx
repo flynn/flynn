@@ -49,7 +49,7 @@ var Main = React.createClass({
 					{prompt ? (
 						<Panel style={{ marginBottom: '1rem' }}>
 							<Prompt
-								key={prompt.id}
+								key={prompt.id+state.currentClusterID}
 								prompt={prompt}
 								state={state} />
 						</Panel>

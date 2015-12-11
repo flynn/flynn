@@ -83,7 +83,7 @@ func (i *Installer) processEvent(event *Event) bool {
 			return false
 		}
 	}
-	if event.Type == "new_cluster" || event.Type == "install_done" {
+	if event.Type == "new_cluster" || event.Type == "install_done" || event.Type == "cluster_update" {
 		event.Cluster, err = i.FindBaseCluster(event.ClusterID)
 		if err != nil {
 			i.logger.Debug(fmt.Sprintf("GetEventsSince Error finding cluster %s: %s", event.ClusterID, err.Error()))
@@ -268,7 +268,7 @@ func (i *Installer) dbInsertItem(tableName string, item interface{}) error {
 }
 
 func (c *BaseCluster) prompt(typ, msg string) *Prompt {
-	if c.State != "starting" {
+	if c.State != "starting" && c.State != "deleting" {
 		return &Prompt{}
 	}
 	res := c.sendPrompt(&Prompt{
@@ -304,6 +304,11 @@ func (c *BaseCluster) ChoicePrompt(choice Choice) (string, error) {
 	}
 	res := c.prompt("choice", string(data))
 	return res.Input, nil
+}
+
+func (c *BaseCluster) CredentialPrompt(msg string) string {
+	res := c.prompt("credential", msg)
+	return res.Input
 }
 
 func (c *BaseCluster) PromptInput(msg string) string {

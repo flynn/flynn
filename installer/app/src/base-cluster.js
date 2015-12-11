@@ -1,4 +1,4 @@
-import { createClass } from 'marbles/utils';
+import { extend, createClass } from 'marbles/utils';
 import State from 'marbles/state';
 import Dispatcher from './dispatcher';
 
@@ -17,7 +17,9 @@ var BaseCluster = createClass({
 		this.attrs = {};
 		this.__parseAttributes(attrs);
 		this.state = this.getInitialState();
-		this.setState(this.__computeState(attrs));
+		this.setState(this.__computeState(extend({
+			credentials: attrs.credentials
+		}, this.attrs)));
 	},
 
 	getInitialState: function () {
@@ -49,9 +51,9 @@ var BaseCluster = createClass({
 			steps: [
 				{ id: 'configure', label: 'Configure', complete: false },
 				{ id: 'install',   label: 'Install',   complete: false },
-				{ id: 'dashboard', label: 'Dashboard', complete: false }
+				{ id: 'dashboard', label: 'Dashboard', complete: false },
+				{ id: 'done', visible: false }
 			],
-			currentStep: 'configure',
 			selectedCloud: attrs.selectedCloud || attrs.type || prevState.selectedCloud,
 			credentialID: attrs.credentialID || prevState.credentialID,
 			certVerified: attrs.certVerified || prevState.certVerified,
@@ -97,7 +99,9 @@ var BaseCluster = createClass({
 			}
 		}
 
-		switch (attrs.state) {
+		state.currentStep = 'configure';
+		var clusterState = attrs.state || this.attrs.state;
+		switch (clusterState) {
 		case 'starting':
 			state.currentStep = 'install';
 			state.inProgress = true;
@@ -116,7 +120,11 @@ var BaseCluster = createClass({
 			break;
 
 		case 'running':
-			state.currentStep = 'dashboard';
+			if (state.certVerified) {
+				state.currentStep = 'done';
+			} else {
+				state.currentStep = 'dashboard';
+			}
 			break;
 		}
 
@@ -141,6 +149,18 @@ var BaseCluster = createClass({
 		}
 		attrs.name = attrs.ID;
 		this.attrs = attrs;
+	},
+
+	setCredentials: function (credentials) {
+		this.setState(this.__computeState({
+			state: this.attrs.state,
+			credentials: credentials
+		}));
+	},
+
+	setAttrs: function (attrs) {
+		this.__parseAttributes(attrs);
+		this.setState(this.__computeState(this.attrs));
 	},
 
 	toJSON: function () {
@@ -199,9 +219,9 @@ var BaseCluster = createClass({
 			break;
 
 		case 'CERT_VERIFIED':
-			this.setState({
+			this.setState(this.__computeState({
 				certVerified: true
-			});
+			}));
 			break;
 
 		case 'SELECT_CREDENTIAL':
