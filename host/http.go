@@ -285,6 +285,8 @@ func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 		return
 	}
 
+	h.host.state.AddJob(job)
+
 	go func() {
 		// TODO(titanous): ratelimit this goroutine?
 		log.Info("running job")
