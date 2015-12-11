@@ -388,6 +388,24 @@ func (s *ControllerSuite) TestAppDeleteCleanup(t *c.C) {
 	t.Assert(r.git("push", "flynn", "master"), Succeeds)
 }
 
+// https://github.com/flynn/flynn/issues/2257
+func (s *ControllerSuite) TestResourceProvisionRecreatedApp(t *c.C) {
+	app := "app-recreate-" + random.String(8)
+	client := s.controllerClient(t)
+
+	// create, delete, and recreate app
+	r := s.newGitRepo(t, "http")
+	t.Assert(r.flynn("create", app), Succeeds)
+	t.Assert(r.flynn("delete", "--yes"), Succeeds)
+	t.Assert(r.flynn("create", app), Succeeds)
+
+	// provision resource
+	t.Assert(r.flynn("resource", "add", "postgres"), Succeeds)
+	resources, err := client.AppResourceList(app)
+	t.Assert(err, c.IsNil)
+	t.Assert(resources, c.HasLen, 1)
+}
+
 func (s *ControllerSuite) TestRouteEvents(t *c.C) {
 	app := "app-route-events-" + random.String(8)
 	client := s.controllerClient(t)
