@@ -6,7 +6,6 @@
   "sortIndex": 5,
   "type": "object",
   "examples": [
-    "schema/examples/controller/job_log#",
     "schema/examples/controller/job_list#",
     "schema/examples/controller/job_update#",
     "schema/examples/controller/job_delete#"
