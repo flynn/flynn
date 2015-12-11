@@ -61,7 +61,7 @@ main() {
   imageid=`sudo docker images --no-trunc -q flynn/${component}-examples | tr -d '\r\n'`
   imageurl="https://dl.flynn.io/images?name=flynn/${component}-examples&id=$imageid"
 
-  ${ROOT}/host/bin/flynn-host run $imageurl sh -c "CONTROLLER_KEY=${CONTROLLER_KEY} PORT=${port} /bin/flynn-${component}-examples" 2>&1
+  ${ROOT}/host/bin/flynn-host run --bind="${ROOT}/docs/api-examples:/data" $imageurl sh -c "CONTROLLER_KEY=${CONTROLLER_KEY} PORT=${port} /bin/flynn-${component}-examples /data/${component}.json"
 }
 
 main $@

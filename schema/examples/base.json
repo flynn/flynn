@@ -21,6 +21,9 @@
         "headers": {
           "type": "object"
         },
+        "params": {
+          "type": "object"
+        },
         "body": {
           "type": "any"
         }

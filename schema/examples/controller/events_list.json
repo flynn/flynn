@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/examples/controller/events_list#",
+  "title": "List events",
+  "description": "",
+  "definitions": {
+    "params": {
+      "type": "object",
+      "properties": {
+        "app_id": {
+          "$ref": "/schema/controller/common#/definitions/id"
+        },
+        "object_types": {
+          "$ref": "/schema/controller/event#/definitions/event_type"
+        },
+        "before_id": {
+          "description": "Only return events occurring before specified event ID",
+          "type": "integer"
+        },
+        "since_id": {
+          "description": "Only return events occurring after specified event ID",
+          "type": "integer"
+        },
+        "count": {
+          "description": "Limit the number of events to return",
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "allOf": [
+    { "$ref": "/schema/examples/base#" },
+    {
+      "type": "object",
+      "properties": {
+        "request": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": ["GET"]
+            },
+            "params": {
+              "$ref": "#/definitions/params"
+            }
+          }
+        },
+        "response": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "array",
+              "items": {
+                "$ref": "/schema/controller/event#"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

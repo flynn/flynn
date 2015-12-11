@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/examples/controller/events_stream#",
+  "title": "Stream events",
+  "description": "",
+  "definitions": {
+    "params": {
+      "type": "object",
+      "properties": {
+        "app_id": {
+          "$ref": "/schema/controller/common#/definitions/id"
+        },
+        "object_types": {
+          "$ref": "/schema/controller/event#/definitions/event_type"
+        },
+        "past": {
+          "description": "Return events occurring before now",
+          "type": "boolean"
+        },
+        "count": {
+          "description": "Limit the number of past events to return",
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "allOf": [
+    { "$ref": "/schema/examples/base#" },
+    {
+      "type": "object",
+      "properties": {
+        "request": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": ["GET"]
+            },
+            "params": {
+              "$ref": "#/definitions/params"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
