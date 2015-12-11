@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	cc "github.com/flynn/flynn/controller/client"
@@ -92,9 +93,10 @@ func main() {
 		{"provider_resource_get", e.getProviderResource},
 		{"provider_resource_list", e.listProviderResources},
 		{"app_delete", e.deleteApp},
+		{"events_list", e.eventsList},
+		{"events_stream", e.eventsStream},
+		{"event_get", e.eventGet},
 	}
-
-	// TODO: GET /apps/:app_id/jobs/:job_id/log (event-stream)
 
 	var out io.Writer
 	if len(os.Args) > 1 {
@@ -375,4 +377,42 @@ func (e *generator) listProviderResources() {
 
 func (e *generator) createDeployment() {
 	e.client.CreateDeployment(e.resourceIds["app"], e.resourceIds["release"])
+}
+
+func (e *generator) eventsList() {
+	events, err := e.client.ListEvents(cc.ListEventsOptions{
+		Count: 10,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	if len(events) == 0 {
+		log.Fatal(fmt.Errorf("events_list: expected there to be more than zero events"))
+	}
+	e.resourceIds["event"] = strconv.FormatInt(events[0].ID, 10)
+}
+
+func (e *generator) eventsStream() {
+	events := make(chan *ct.Event)
+	e.client.StreamEvents(cc.StreamEventsOptions{
+		Past:  true,
+		Count: 10,
+	}, events)
+	timeout := time.After(10 * time.Second)
+outer:
+	for {
+		select {
+		case <-events:
+		case <-timeout:
+			break outer
+		}
+	}
+}
+
+func (e *generator) eventGet() {
+	eventID, err := strconv.ParseInt(e.resourceIds["event"], 10, 64)
+	if err != nil {
+		log.Fatal(err)
+	}
+	e.client.GetEvent(eventID)
 }

@@ -9,8 +9,7 @@
     "schema/examples/controller/app_initial_release_get#",
     "schema/examples/controller/app_release_set#",
     "schema/examples/controller/app_release_get#",
-    "schema/examples/controller/release_create#",
-    "schema/examples/controller/release_list#"
+    "schema/examples/controller/release_create#"
   ],
   "additionalProperties": false,
   "properties": {
