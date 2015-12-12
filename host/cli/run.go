@@ -36,6 +36,7 @@ func runRun(args *docopt.Args, client *cluster.Client) error {
 				Cmd:        args.All["<argument>"].([]string),
 				TTY:        term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()),
 				Stdin:      true,
+				DisableLog: true,
 			},
 		},
 		HostID: args.String["--host"],
