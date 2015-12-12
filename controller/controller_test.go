@@ -163,6 +163,18 @@ func (s *S) TestUpdateApp(c *C) {
 	app, err := s.c.GetApp(app.ID)
 	c.Assert(err, IsNil)
 	c.Assert(app.Meta, DeepEquals, meta)
+
+	app.Meta = nil
+	strategy := "one-by-one"
+	app.Strategy = strategy
+	c.Assert(s.c.UpdateApp(app), IsNil)
+	c.Assert(app.Meta, DeepEquals, meta)
+	c.Assert(app.Strategy, Equals, strategy)
+
+	app, err = s.c.GetApp(app.ID)
+	c.Assert(err, IsNil)
+	c.Assert(app.Meta, DeepEquals, meta)
+	c.Assert(app.Strategy, Equals, strategy)
 }
 
 func (s *S) TestUpdateAppMeta(c *C) {
@@ -177,7 +189,7 @@ func (s *S) TestUpdateAppMeta(c *C) {
 	c.Assert(app.Meta, DeepEquals, meta)
 
 	app = &ct.App{ID: app.ID}
-	meta = map[string]string(nil)
+	meta = map[string]string{}
 	app.Meta = meta
 	c.Assert(s.c.UpdateAppMeta(app), IsNil)
 	c.Assert(app.Meta, DeepEquals, meta)

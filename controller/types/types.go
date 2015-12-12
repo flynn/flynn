@@ -25,7 +25,7 @@ type ExpandedFormation struct {
 type App struct {
 	ID            string            `json:"id,omitempty"`
 	Name          string            `json:"name,omitempty"`
-	Meta          map[string]string `json:"meta,omitempty"`
+	Meta          map[string]string `json:"meta"`
 	Strategy      string            `json:"strategy,omitempty"`
 	ReleaseID     string            `json:"release,omitempty"`
 	DeployTimeout int32             `json:"deploy_timeout,omitempty"`
