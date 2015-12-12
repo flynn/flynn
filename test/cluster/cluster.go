@@ -364,10 +364,11 @@ func (c *Cluster) run(command string, s *Streams, env map[string]string) error {
 func (c *Cluster) CLIConfig() (*config.Config, error) {
 	conf := &config.Config{}
 	s := &config.Cluster{
-		Name:   "default",
-		Domain: c.ClusterDomain,
-		Key:    c.ControllerKey,
-		TLSPin: c.ControllerPin,
+		Name:          "default",
+		ControllerURL: "https://controller." + c.ClusterDomain,
+		GitURL:        "https://git." + c.ClusterDomain,
+		Key:           c.ControllerKey,
+		TLSPin:        c.ControllerPin,
 	}
 	if err := conf.Add(s, true /*force*/); err != nil {
 		return nil, err

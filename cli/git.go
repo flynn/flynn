@@ -28,11 +28,7 @@ func inGitRepo() bool {
 const gitURLSuffix = ".git"
 
 func gitURL(conf *cfg.Cluster, app string) string {
-	prefix := gitHTTPURLPre(conf.GitURL)
-	if conf.SSHGit() {
-		prefix = gitSSHURLPre(conf.GitHost)
-	}
-	return prefix + app + gitURLSuffix
+	return gitHTTPURLPre(conf.GitURL) + app + gitURLSuffix
 }
 
 func gitSSHURLPre(gitHost string) string {
@@ -96,10 +92,6 @@ func appFromGitURL(remote string) *remoteApp {
 		}
 
 		prefix := gitHTTPURLPre(s.GitURL)
-		if s.SSHGit() {
-			prefix = gitSSHURLPre(s.GitHost)
-		}
-
 		if strings.HasPrefix(remote, prefix) && strings.HasSuffix(remote, gitURLSuffix) {
 			return &remoteApp{s, remote[len(prefix) : len(remote)-len(gitURLSuffix)]}
 		}

@@ -710,13 +710,13 @@ func (s *CLISuite) TestCluster(t *c.C) {
 	}
 
 	// cluster add
-	t.Assert(flynn("cluster", "add", "-g", "foo.example.com:2222", "foo", "https://controller.foo.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
+	t.Assert(flynn("cluster", "add", "--no-git", "foo", "https://controller.foo.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
 	t.Assert(flynn("cluster"), SuccessfulOutputContains, "foo")
-	t.Assert(flynn("cluster", "add", "-g", "test.example.com:2222", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "test", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
+	t.Assert(flynn("cluster", "add", "--no-git", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "test", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
 	t.Assert(flynn("cluster"), SuccessfulOutputContains, "test")
-	t.Assert(flynn("cluster", "add", "-f", "-g", "test.example.com:2222", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "test", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
+	t.Assert(flynn("cluster", "add", "-f", "--no-git", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "test", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
 	t.Assert(flynn("cluster"), SuccessfulOutputContains, "test")
-	t.Assert(flynn("cluster", "add", "-f", "-d", "-g", "test.example.com:2222", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "test", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
+	t.Assert(flynn("cluster", "add", "-f", "-d", "--no-git", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "test", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
 	t.Assert(flynn("cluster"), SuccessfulOutputContains, "test")
 	// make sure the cluster is present in the config
 	cfg, err := config.ReadFile(file.Name())
@@ -726,7 +726,7 @@ func (s *CLISuite) TestCluster(t *c.C) {
 	t.Assert(cfg.Clusters[0].Name, c.Equals, "foo")
 	t.Assert(cfg.Clusters[1].Name, c.Equals, "test")
 	// overwriting with a conflicting name and a different conflicting url should error
-	conflict := flynn("cluster", "add", "-f", "-g", "test.example.com:2222", "foo", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600")
+	conflict := flynn("cluster", "add", "-f", "--no-git", "foo", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600")
 	t.Assert(conflict, c.Not(Succeeds))
 	t.Assert(conflict, OutputContains, "conflict with")
 	// overwriting (without --force) should not work
@@ -748,8 +748,8 @@ func (s *CLISuite) TestCluster(t *c.C) {
 	t.Assert(cfg.Clusters, c.HasLen, 1)
 	t.Assert(flynn("cluster", "remove", "foo"), Succeeds)
 	// cluster remove default and set next available
-	t.Assert(flynn("cluster", "add", "-d", "-g", "test.example.com:2222", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "test", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
-	t.Assert(flynn("cluster", "add", "-g", "next.example.com:2222", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "next", "https://controller.next.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
+	t.Assert(flynn("cluster", "add", "-d", "--no-git", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "test", "https://controller.test.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
+	t.Assert(flynn("cluster", "add", "--no-git", "-p", "KGCENkp53YF5OvOKkZIry71+czFRkSw2ZdMszZ/0ljs=", "next", "https://controller.next.example.com", "e09dc5301d72be755a3d666f617c4600"), Succeeds)
 	t.Assert(flynn("cluster", "remove", "test"), SuccessfulOutputContains, "Cluster \"test\" removed and \"next\" is now the default cluster.")
 	t.Assert(flynn("cluster", "default"), SuccessfulOutputContains, "next")
 }
