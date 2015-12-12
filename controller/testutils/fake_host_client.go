@@ -118,9 +118,10 @@ func (c *FakeHostClient) stop(id string) error {
 	return nil
 }
 
-func (c *FakeHostClient) CrashJob(id string) error {
+func (c *FakeHostClient) CrashJob(uuid string) error {
 	c.jobsMtx.Lock()
 	defer c.jobsMtx.Unlock()
+	id := cluster.GenerateJobID(c.hostID, uuid)
 	c.stopped[id] = true
 	job, ok := c.Jobs[id]
 	if ok {

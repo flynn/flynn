@@ -46,16 +46,47 @@ func (p Processes) IsEmpty() bool {
 
 type Formation struct {
 	*ct.ExpandedFormation
+
+	// OriginalProcesses are the processes from the controller formation
+	// without any changes for omni jobs so we can recalculate omni counts
+	// when host counts change
+	OriginalProcesses Processes
 }
 
 func NewFormation(ef *ct.ExpandedFormation) *Formation {
+	originalProcs := make(Processes, len(ef.Processes))
+	for typ, count := range ef.Processes {
+		originalProcs[typ] = count
+	}
 	return &Formation{
 		ExpandedFormation: ef,
+		OriginalProcesses: originalProcs,
 	}
+}
+
+// RectifyOmni updates the process counts for omni jobs by multiplying them by
+// the host count, returning whether or not any counts have changed
+func (f *Formation) RectifyOmni(hostCount int) bool {
+	changed := false
+	for typ, proc := range f.Release.Processes {
+		if proc.Omni && f.Processes != nil && f.Processes[typ] > 0 {
+			count := f.OriginalProcesses[typ] * hostCount
+			if f.Processes[typ] != count {
+				f.Processes[typ] = count
+				changed = true
+			}
+		}
+	}
+	return changed
 }
 
 func (f *Formation) GetProcesses() Processes {
 	return Processes(f.Processes)
+}
+
+func (f *Formation) SetProcesses(procs Processes) {
+	f.OriginalProcesses = procs
+	f.Processes = procs
 }
 
 func (f *Formation) key() utils.FormationKey {
