@@ -232,6 +232,70 @@ func (s *S) TestWildcardRouting(c *C) {
 	assertGet(c, "http://"+l.Addr, "dev.foo.bar", "3")
 }
 
+func (s *S) TestPathRouting(c *C) {
+	srv1 := httptest.NewServer(httpTestHandler("1"))
+	srv2 := httptest.NewServer(httpTestHandler("2"))
+	srv3 := httptest.NewServer(httpTestHandler("3"))
+	defer srv1.Close()
+	defer srv2.Close()
+	defer srv3.Close()
+
+	l := s.newHTTPListener(c)
+	defer l.Close()
+
+	defRoute := addRoute(c, l, router.HTTPRoute{
+		Domain:  "foo.bar",
+		Service: "1",
+	}.ToRoute())
+	pathRoute := addRoute(c, l, router.HTTPRoute{
+		Domain:  "foo.bar",
+		Service: "2",
+		Path:    "/2/",
+	}.ToRoute())
+	// test that path with no trailing slash will autocorrect
+	pathRoute2 := addRoute(c, l, router.HTTPRoute{
+		Domain:  "foo.bar",
+		Service: "3",
+		Path:    "/3",
+	}.ToRoute())
+
+	discoverdRegisterHTTPService(c, l, "1", srv1.Listener.Addr().String())
+	discoverdRegisterHTTPService(c, l, "2", srv2.Listener.Addr().String())
+	discoverdRegisterHTTPService(c, l, "3", srv3.Listener.Addr().String())
+
+	// Check that traffic received at the path is directed to correct backend
+	assertGet(c, "http://"+l.Addr, "foo.bar", "1")
+	assertGet(c, "http://"+l.Addr+"/2/", "foo.bar", "2")
+	assertGet(c, "http://"+l.Addr+"/2", "foo.bar", "2")
+	assertGet(c, "http://"+l.Addr+"/3", "foo.bar", "3")
+	assertGet(c, "http://"+l.Addr+"/3/", "foo.bar", "3")
+
+	// Test that adding a routes with invalid paths error
+	invalidPaths := []string{"noleadingslash/"}
+	for _, p := range invalidPaths {
+		addRouteAssertErr(c, l, router.HTTPRoute{
+			Domain:  "foo.bar",
+			Service: "foo",
+			Path:    p,
+		}.ToRoute())
+	}
+
+	// Test that adding a Path route without default route fails
+	addRouteAssertErr(c, l, router.HTTPRoute{
+		Domain:  "foo.bar.baz",
+		Service: "foo",
+		Path:    "/valid/",
+	}.ToRoute())
+
+	// Test that removing the default route while there are still dependent routes fails
+	removeRouteAssertErr(c, l, defRoute.ID)
+
+	// However removing them in the appropriate order should succeed
+	removeRoute(c, l, pathRoute.ID)
+	removeRoute(c, l, pathRoute2.ID)
+	removeRoute(c, l, defRoute.ID)
+}
+
 func (s *S) TestHTTPInitialSync(c *C) {
 	l := s.newHTTPListener(c)
 	addHTTPRoute(c, l)

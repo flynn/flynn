@@ -418,7 +418,34 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	t.Assert(r.Sticky, c.Equals, true)
 	t.Assert(r.Service, c.Equals, "foo")
 
-	// flynn route remove
+	// flynn route add domain path
+	pathRoute := app.flynn("route", "add", "http", route+"/path/")
+	t.Assert(pathRoute, Succeeds)
+	pathRouteID := strings.TrimSpace(pathRoute.Output)
+	assertRouteContains(pathRouteID, true)
+
+	// flynn route add domain path duplicate
+	dupRoute = app.flynn("route", "add", "http", route+"/path/")
+	t.Assert(dupRoute, c.Not(Succeeds))
+	t.Assert(dupRoute.Output, c.Equals, "conflict: Duplicate route\n")
+
+	// flynn route add domain path without trailing should correct to trailing
+	noTrailingRoute := app.flynn("route", "add", "http", route+"/path2")
+	t.Assert(noTrailingRoute, Succeeds)
+	noTrailingRouteID := strings.TrimSpace(noTrailingRoute.Output)
+	assertRouteContains(noTrailingRouteID, true)
+	// flynn route should show the corrected trailing path
+	assertRouteContains("/path2/", true)
+
+	// flynn route remove should fail because of dependent route
+	delFail := app.flynn("route", "remove", routeID)
+	t.Assert(delFail, c.Not(Succeeds))
+
+	// But removing the dependent route and then the default route should work
+	t.Assert(app.flynn("route", "remove", pathRouteID), Succeeds)
+	assertRouteContains(pathRouteID, false)
+	t.Assert(app.flynn("route", "remove", noTrailingRouteID), Succeeds)
+	assertRouteContains(noTrailingRouteID, false)
 	t.Assert(app.flynn("route", "remove", routeID), Succeeds)
 	assertRouteContains(routeID, false)
 

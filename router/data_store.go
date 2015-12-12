@@ -7,13 +7,13 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
+	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/router/types"
 )
 
-const UniqueViolation = "23505"
-
 var ErrNotFound = errors.New("router: route not found")
 var ErrConflict = errors.New("router: duplicate route")
+var ErrInvalid = errors.New("router: invalid route")
 
 type DataStore interface {
 	Add(route *router.Route) error
@@ -76,8 +76,8 @@ func (d *pgDataStore) Ping() error {
 }
 
 const sqlAddRouteHTTP = `
-INSERT INTO ` + tableNameHTTP + ` (parent_ref, service, domain, tls_cert, tls_key, sticky)
-	VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO ` + tableNameHTTP + ` (parent_ref, service, domain, tls_cert, tls_key, sticky, path)
+	VALUES ($1, $2, $3, $4, $5, $6, $7)
 	RETURNING id, created_at, updated_at`
 
 const sqlAddRouteTCP = `
@@ -96,6 +96,7 @@ func (d *pgDataStore) Add(r *router.Route) (err error) {
 			r.TLSCert,
 			r.TLSKey,
 			r.Sticky,
+			r.Path,
 		).Scan(&r.ID, &r.CreatedAt, &r.UpdatedAt)
 	case tableNameTCP:
 		err = d.pgx.QueryRow(
@@ -106,15 +107,17 @@ func (d *pgDataStore) Add(r *router.Route) (err error) {
 		).Scan(&r.ID, &r.CreatedAt, &r.UpdatedAt)
 	}
 	r.Type = d.routeType
-	if e, ok := err.(pgx.PgError); ok && e.Code == UniqueViolation {
+	if postgres.IsUniquenessError(err, "") {
 		err = ErrConflict
+	} else if postgres.IsPostgresCode(err, postgres.RaiseException) {
+		err = ErrInvalid
 	}
 	return err
 }
 
 const sqlUpdateRouteHTTP = `
-UPDATE ` + tableNameHTTP + ` SET parent_ref = $1, service = $2, tls_cert = $3, tls_key = $4, sticky = $5
-	WHERE id = $6 AND domain = $7 AND deleted_at IS NULL
+UPDATE ` + tableNameHTTP + ` SET parent_ref = $1, service = $2, tls_cert = $3, tls_key = $4, sticky = $5, path = $6
+	WHERE id = $7 AND domain = $8 AND deleted_at IS NULL
 	RETURNING %s`
 
 const sqlUpdateRouteTCP = `
@@ -134,6 +137,7 @@ func (d *pgDataStore) Update(r *router.Route) error {
 			r.TLSCert,
 			r.TLSKey,
 			r.Sticky,
+			r.Path,
 			r.ID,
 			r.Domain,
 		)
@@ -157,6 +161,9 @@ const sqlRemoveRoute = `UPDATE %s SET deleted_at = now() WHERE id = $1`
 
 func (d *pgDataStore) Remove(id string) error {
 	_, err := d.pgx.Exec(fmt.Sprintf(sqlRemoveRoute, d.tableName), id)
+	if postgres.IsPostgresCode(err, postgres.RaiseException) {
+		err = ErrInvalid
+	}
 	return err
 }
 
@@ -303,7 +310,7 @@ func (d *pgDataStore) startListener(ctx context.Context) (<-chan string, <-chan 
 }
 
 const (
-	selectColumnsHTTP = "id, parent_ref, service, domain, sticky, tls_cert, tls_key, created_at, updated_at"
+	selectColumnsHTTP = "id, parent_ref, service, domain, sticky, tls_cert, tls_key, path, created_at, updated_at"
 	selectColumnsTCP  = "id, parent_ref, service, port, created_at, updated_at"
 )
 
@@ -334,6 +341,7 @@ func (d *pgDataStore) scanRoute(route *router.Route, s scannable) error {
 			&route.Sticky,
 			&route.TLSCert,
 			&route.TLSKey,
+			&route.Path,
 			&route.CreatedAt,
 			&route.UpdatedAt,
 		)

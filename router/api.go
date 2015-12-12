@@ -55,22 +55,26 @@ func (api *API) CreateRoute(ctx context.Context, w http.ResponseWriter, req *htt
 
 	err := l.AddRoute(route)
 	if err != nil {
-		if err == ErrConflict {
-			rjson, err := json.Marshal(&route)
-			if err != nil {
-				log.Error(err.Error())
-				httphelper.Error(w, err)
-				return
-			}
-			httphelper.Error(w, httphelper.JSONError{
-				Code:    httphelper.ConflictErrorCode,
-				Message: "Duplicate route",
-				Detail:  rjson,
-			})
+		rjson, jerr := json.Marshal(&route)
+		if jerr != nil {
+			log.Error(jerr.Error())
+			httphelper.Error(w, jerr)
 			return
 		}
-		log.Error(err.Error())
-		httphelper.Error(w, err)
+		jsonError := httphelper.JSONError{Detail: rjson}
+		switch err {
+		case ErrConflict:
+			jsonError.Code = httphelper.ConflictErrorCode
+			jsonError.Message = "Duplicate route"
+		case ErrInvalid:
+			jsonError.Code = httphelper.ValidationErrorCode
+			jsonError.Message = "Invalid route"
+		default:
+			log.Error(err.Error())
+			httphelper.Error(w, err)
+			return
+		}
+		httphelper.Error(w, jsonError)
 		return
 	}
 	httphelper.JSON(w, 200, route)
@@ -180,16 +184,23 @@ func (api *API) DeleteRoute(ctx context.Context, w http.ResponseWriter, req *htt
 	}
 
 	err := l.RemoveRoute(params.ByName("id"))
-	if err == ErrNotFound {
-		w.WriteHeader(404)
-		return
-	}
 	if err != nil {
-		log.Error(err.Error())
-		httphelper.Error(w, err)
-		return
+		switch err {
+		case ErrNotFound:
+			w.WriteHeader(404)
+			return
+		case ErrInvalid:
+			httphelper.Error(w, httphelper.JSONError{
+				Code:    httphelper.ValidationErrorCode,
+				Message: "Route has dependent routes",
+			})
+			return
+		default:
+			log.Error(err.Error())
+			httphelper.Error(w, err)
+			return
+		}
 	}
-
 	w.WriteHeader(200)
 }
 

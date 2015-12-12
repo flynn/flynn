@@ -18,6 +18,7 @@ const (
 	InvalidTextRepresentation = "22P02"
 	CheckViolation            = "23514"
 	UniqueViolation           = "23505"
+	RaiseException            = "P0001"
 )
 
 type Conf struct {
@@ -174,8 +175,8 @@ func IsUniquenessError(err error, constraint string) bool {
 	return false
 }
 
-func IsCheckViolation(err error) bool {
-	if e, ok := err.(pgx.PgError); ok && e.Code == CheckViolation {
+func IsPostgresCode(err error, code string) bool {
+	if e, ok := err.(pgx.PgError); ok && e.Code == code {
 		return true
 	}
 	return false
