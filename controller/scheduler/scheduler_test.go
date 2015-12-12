@@ -22,7 +22,7 @@ var _ = Suite(&TestSuite{})
 
 const (
 	testAppID      = "app-1"
-	testHostID     = "host-1"
+	testHostID     = "host1"
 	testArtifactId = "artifact-1"
 	testReleaseID  = "release-1"
 	testJobType    = "web"
@@ -316,7 +316,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitJobStart()
 
 	c.Log("Add a host to the cluster, then create a new app, artifact, release, and associated formation.")
-	h2 := NewFakeHostClient("host-2")
+	h2 := NewFakeHostClient("host2")
 	cluster.AddHost(h2)
 	hosts[h2.ID()] = h2
 	app := &ct.App{ID: "test-app-2", Name: "test-app-2"}
@@ -343,7 +343,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	assertJobCount(h1, 2)
 	assertJobCount(h2, 1)
 
-	h3 := NewFakeHostClient("host-3")
+	h3 := NewFakeHostClient("host3")
 	c.Log("Add a host, wait for omni job start on that host.")
 	cluster.AddHost(h3)
 	s.waitJobStart()
