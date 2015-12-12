@@ -291,11 +291,11 @@ VALUES ($1, $2, $3, $4) RETURNING created_at`
 UPDATE resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL`
 	appResourceInsertAppByNameQuery = `
 INSERT INTO app_resources (app_id, resource_id)
-VALUES ((SELECT app_id FROM apps WHERE name = $1), $2)
+VALUES ((SELECT app_id FROM apps WHERE name = $1 AND deleted_at IS NULL), $2)
 RETURNING app_id`
 	appResourceInsertAppByNameOrIDQuery = `
 INSERT INTO app_resources (app_id, resource_id)
-VALUES ((SELECT app_id FROM apps WHERE app_id = $1 OR name = $2), $3)
+VALUES ((SELECT app_id FROM apps WHERE (app_id = $1 OR name = $2) AND deleted_at IS NULL), $3)
 RETURNING app_id`
 	appResourceDeleteByAppQuery = `
 UPDATE app_resources SET deleted_at = now() WHERE app_id = $1 AND deleted_at IS NULL`
