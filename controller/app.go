@@ -75,6 +75,11 @@ func (r *AppRepo) Add(data interface{}) error {
 		return err
 	}
 
+	if app.Meta == nil {
+		// ensure we don't return `{"meta": null}`
+		app.Meta = make(map[string]string)
+	}
+
 	if err := createEvent(tx.Exec, &ct.Event{
 		AppID:      app.ID,
 		ObjectID:   app.ID,
