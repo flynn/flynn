@@ -19,7 +19,7 @@
   "additionalProperties": false,
   "properties": {
     "id": {
-      "$ref": "/schema/controller/common#/definitions/id"
+      "type": "integer"
     },
     "app": {
       "$ref": "/schema/controller/common#/definitions/id"
