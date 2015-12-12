@@ -19,15 +19,6 @@ type Cluster struct {
 	TLSPin        string `json:"tls_pin" toml:"TLSPin,omitempty"`
 	ControllerURL string `json:"controller_url"`
 	GitURL        string `json:"git_url"`
-
-	// GitHost and URL are legacy config options for clusters that are using git
-	// over SSH, they should be removed at some point in the near future.
-	GitHost string `json:"git_host" toml:"GitHost,omitempty"`
-	URL     string `json:"url" toml:"URL,omitempty"`
-
-	// Domain was a short-lived option, replaced by ControllerURL and GitURL, it
-	// should be removed along with the above.
-	Domain string `json:"domain" toml:"Domain,omitempty"`
 }
 
 func (c *Cluster) Client() (*controller.Client, error) {
@@ -40,10 +31,6 @@ func (c *Cluster) Client() (*controller.Client, error) {
 		}
 	}
 	return controller.NewClientWithConfig(c.ControllerURL, c.Key, controller.Config{Pin: pin})
-}
-
-func (c *Cluster) SSHGit() bool {
-	return c.GitHost != ""
 }
 
 type Config struct {
@@ -105,8 +92,6 @@ func (c *Config) Add(s *Cluster, force bool) error {
 			m = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.GitURL)
 		case existing.ControllerURL == s.ControllerURL:
 			m = fmt.Sprintf("A cluster with the URL %q already exists in ~/.flynnrc", s.ControllerURL)
-		case existing.GitHost != "" && existing.GitHost == s.GitHost:
-			m = fmt.Sprintf("A cluster with the git host %q already exists in ~/.flynnrc", s.GitHost)
 		}
 		if m != "" {
 			if conflictIdx != -1 && conflictIdx != i {
@@ -133,20 +118,8 @@ func (c *Config) Add(s *Cluster, force bool) error {
 }
 
 func (c *Config) Upgrade() (changed bool) {
-	for _, cluster := range c.Clusters {
-		if cluster.URL != "" {
-			cluster.ControllerURL = cluster.URL
-			cluster.URL = ""
-			changed = true
-		}
-		if cluster.Domain != "" {
-			cluster.ControllerURL = "https://controller." + cluster.Domain
-			cluster.GitURL = "https://git." + cluster.Domain
-			cluster.Domain = ""
-			changed = true
-		}
-	}
-	return changed
+	// Any "config migrations" should be done in this function
+	return false
 }
 
 func (c *Config) Remove(name string) *Cluster {

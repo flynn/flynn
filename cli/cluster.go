@@ -24,7 +24,7 @@ import (
 func init() {
 	register("cluster", runCluster, `
 usage: flynn cluster
-       flynn cluster add [-f] [-d] [-g <githost>] [--git-url <giturl>] [--no-git] [-p <tlspin>] <cluster-name> <domain> <key>
+       flynn cluster add [-f] [-d] [--git-url <giturl>] [--no-git] [-p <tlspin>] <cluster-name> <domain> <key>
        flynn cluster remove <cluster-name>
        flynn cluster default [<cluster-name>]
        flynn cluster migrate-domain <domain>
@@ -42,7 +42,6 @@ Commands:
         options:
             -f, --force               force add cluster
             -d, --default             set as default cluster
-            -g, --git-host=<githost>  git host (legacy SSH only)
             --git-url=<giturl>        git URL
             --no-git                  skip git configuration
             -p, --tls-pin=<tlspin>    SHA256 of the cluster's TLS cert
@@ -103,12 +102,7 @@ func runCluster(args *docopt.Args) error {
 
 	listRec(w, "NAME", "CONTROLLER URL", "GIT URL")
 	for _, s := range config.Clusters {
-		data := []interface{}{s.Name, s.ControllerURL}
-		if s.GitHost != "" {
-			data = append(data, s.GitHost, "(legacy git)")
-		} else {
-			data = append(data, s.GitURL)
-		}
+		data := []interface{}{s.Name, s.ControllerURL, s.GitURL}
 		if s.Name == config.Default {
 			data = append(data, "(default)")
 		}
@@ -119,11 +113,10 @@ func runCluster(args *docopt.Args) error {
 
 func runClusterAdd(args *docopt.Args) error {
 	s := &cfg.Cluster{
-		Name:    args.String["<cluster-name>"],
-		Key:     args.String["<key>"],
-		GitHost: args.String["--git-host"],
-		GitURL:  args.String["--git-url"],
-		TLSPin:  args.String["--tls-pin"],
+		Name:   args.String["<cluster-name>"],
+		Key:    args.String["<key>"],
+		GitURL: args.String["--git-url"],
+		TLSPin: args.String["--tls-pin"],
 	}
 	domain := args.String["<domain>"]
 	if strings.HasPrefix(domain, "https://") {
@@ -131,7 +124,7 @@ func runClusterAdd(args *docopt.Args) error {
 	} else {
 		s.ControllerURL = "https://controller." + domain
 	}
-	if s.GitURL == "" && s.GitHost == "" {
+	if s.GitURL == "" {
 		s.GitURL = "https://git." + domain
 	}
 
@@ -145,14 +138,12 @@ func runClusterAdd(args *docopt.Args) error {
 		return errors.New(fmt.Sprintf("Cluster %q does not exist and cannot be set as default.", s.Name))
 	}
 
-	if !s.SSHGit() {
-		if !args.Bool["--no-git"] {
-			if _, err := exec.LookPath("git"); err != nil {
-				if serr, ok := err.(*exec.Error); ok && serr.Err == exec.ErrNotFound {
-					return errors.New("Executable 'git' was not found. Use --no-git to skip git configuration")
-				}
-				return err
+	if !args.Bool["--no-git"] {
+		if _, err := exec.LookPath("git"); err != nil {
+			if serr, ok := err.(*exec.Error); ok && serr.Err == exec.ErrNotFound {
+				return errors.New("Executable 'git' was not found. Use --no-git to skip git configuration")
 			}
+			return err
 		}
 		client, err := s.Client()
 		if err != nil {
@@ -162,10 +153,8 @@ func runClusterAdd(args *docopt.Args) error {
 		if err != nil {
 			return fmt.Errorf("Error writing CA certificate: %s", err)
 		}
-		if !args.Bool["--no-git"] {
-			if err := cfg.WriteGlobalGitConfig(s.GitURL, caPath); err != nil {
-				return err
-			}
+		if err := cfg.WriteGlobalGitConfig(s.GitURL, caPath); err != nil {
+			return err
 		}
 	}
 
@@ -212,9 +201,7 @@ func runClusterRemove(args *docopt.Args) error {
 			return err
 		}
 
-		if !c.SSHGit() {
-			cfg.RemoveGlobalGitConfig(c.GitURL)
-		}
+		cfg.RemoveGlobalGitConfig(c.GitURL)
 
 		log.Print(msg)
 	}
@@ -231,7 +218,7 @@ func runClusterDefault(args *docopt.Args) error {
 		listRec(w, "NAME", "URL")
 		for _, s := range config.Clusters {
 			if s.Name == config.Default {
-				listRec(w, s.Name, s.URL, "(default)")
+				listRec(w, s.Name, s.ControllerURL, "(default)")
 				break
 			}
 		}
