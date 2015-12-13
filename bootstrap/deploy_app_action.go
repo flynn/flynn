@@ -104,5 +104,5 @@ func (a *DeployAppAction) Run(s *State) error {
 	}
 	as.Formation = formation
 
-	return client.DeployAppRelease(a.App.ID, a.Release.ID)
+	return client.DeployAppRelease(a.App.ID, a.Release.ID, nil)
 }

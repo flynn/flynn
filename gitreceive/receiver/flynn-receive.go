@@ -176,11 +176,21 @@ Options:
 	if err := client.CreateRelease(release); err != nil {
 		log.Fatalln("Error creating release:", err)
 	}
-	if err := client.DeployAppRelease(app.Name, release.ID); err != nil {
-		log.Fatalln("Error deploying app release:", err)
+
+	logf := func(e *ct.DeploymentEvent) {
+		if e.Status != "running" {
+			return
+		}
+		if e.ReleaseID == prevRelease.ID {
+			fmt.Println("-----> old web job is", e.JobState)
+			return
+		}
+		fmt.Println("-----> new web job is", e.JobState)
 	}
 
-	fmt.Println("=====> Application deployed")
+	if err := client.DeployAppRelease(app.Name, release.ID, logf); err != nil {
+		log.Fatalln("Error deploying app release:", err)
+	}
 
 	if needsDefaultScale(app.ID, prevRelease.ID, procs, client) {
 		formation := &ct.Formation{
@@ -203,8 +213,11 @@ Options:
 
 		err = watcher.WaitFor(ct.JobEvents{"web": {"up": 1}}, scaleTimeout, func(e *ct.Job) error {
 			switch e.State {
-			case "up":
-				fmt.Println("=====> Default web formation scaled to 1")
+			case "starting", "up":
+				fmt.Println("-----> new web job is", e.State)
+				if e.State == "up" {
+					fmt.Println("=====> Default web formation scaled to 1")
+				}
 			case "down", "crashed":
 				return fmt.Errorf("Failed to scale web process type")
 			}
@@ -214,6 +227,8 @@ Options:
 			log.Fatalln(err.Error())
 		}
 	}
+
+	fmt.Println("=====> Application deployed")
 }
 
 // needsDefaultScale indicates whether a release needs a default scale based on

@@ -213,7 +213,7 @@ func deployApp(client *controller.Client, app *ct.App, uri string, log log15.Log
 		log.Error("error creating new release", "err", err)
 		return err
 	}
-	if err := client.DeployAppRelease(app.ID, release.ID); err != nil {
+	if err := client.DeployAppRelease(app.ID, release.ID, nil); err != nil {
 		log.Error("error deploying app", "err", err)
 		return err
 	}

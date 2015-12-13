@@ -134,7 +134,7 @@ func runLimitSet(args *docopt.Args, client *controller.Client) error {
 	if err := client.CreateRelease(release); err != nil {
 		return err
 	}
-	if err := client.DeployAppRelease(mustApp(), release.ID); err != nil {
+	if err := client.DeployAppRelease(mustApp(), release.ID, nil); err != nil {
 		return err
 	}
 	fmt.Printf("Created release %s\n", release.ID)
