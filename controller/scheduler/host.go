@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -100,3 +101,11 @@ func (h *Host) Close() {
 		<-h.done
 	})
 }
+
+// sortHosts sorts Hosts lexicographically based on their ID
+type sortHosts []*Host
+
+func (s sortHosts) Len() int           { return len(s) }
+func (s sortHosts) Less(i, j int) bool { return s[i].ID < s[j].ID }
+func (s sortHosts) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s sortHosts) Sort()              { sort.Sort(s) }

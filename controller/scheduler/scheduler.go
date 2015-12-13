@@ -39,6 +39,10 @@ var (
 
 var logger = log15.New("component", "scheduler")
 
+// generateJobUUID generates a UUID for new job IDs and is overridden in tests
+// to make them more predictable
+var generateJobUUID func() string = random.UUID
+
 type Scheduler struct {
 	utils.ControllerClient
 	utils.ClusterClient
@@ -546,9 +550,13 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 	formation := req.Job.Formation
 	counts := s.jobs.GetHostJobCounts(formation.key(), req.Job.Type)
 	var minCount int = math.MaxInt32
-	for id, h := range s.hosts {
-		count, ok := counts[id]
-		if !ok || count < minCount {
+	for _, h := range s.SortedHosts() {
+		count, ok := counts[h.ID]
+		if !ok || count == 0 {
+			req.Host = h
+			break
+		}
+		if count < minCount {
 			minCount = count
 			req.Host = h
 		}
@@ -563,6 +571,15 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 	req.Job.JobID = req.Config.ID
 	req.Job.HostID = req.Host.ID
 	req.Error(nil)
+}
+
+func (s *Scheduler) SortedHosts() sortHosts {
+	hosts := make(sortHosts, 0, len(s.hosts))
+	for _, host := range s.hosts {
+		hosts = append(hosts, host)
+	}
+	hosts.Sort()
+	return hosts
 }
 
 func (s *Scheduler) RunPutJobs() {
@@ -600,7 +617,7 @@ func (s *Scheduler) handleFormationDiff(f *Formation, diff Processes) {
 			log.Info(fmt.Sprintf("starting %d new %s jobs", n, typ))
 			for i := 0; i < n; i++ {
 				job := &Job{
-					ID:        random.UUID(),
+					ID:        generateJobUUID(),
 					Type:      typ,
 					AppID:     f.App.ID,
 					ReleaseID: f.Release.ID,
@@ -703,16 +720,21 @@ func (s *Scheduler) followHost(h utils.HostClient) error {
 func (s *Scheduler) unfollowHost(host *Host) {
 	log := logger.New("fn", "unfollowHost", "host.id", host.ID)
 	log.Info("unfollowing host")
+	host.Close()
+	delete(s.hosts, host.ID)
+
+	// rectify the omni job counts so that when omni jobs are marked as
+	// stopped, they are not restarted
+	for _, formation := range s.formations {
+		formation.RectifyOmni(len(s.hosts))
+	}
+
 	for _, job := range s.jobs {
-		if job.HostID == host.ID {
+		if job.HostID == host.ID && job.state != JobStateStopped {
 			log.Info("removing job", "job.id", job.JobID)
 			s.markAsStopped(job)
 		}
 	}
-
-	log.Info("closing job event stream")
-	host.Close()
-	delete(s.hosts, host.ID)
 
 	s.triggerSyncFormations()
 }
@@ -931,6 +953,11 @@ func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) (formation *Format
 	log := logger.New("fn", "handleFormation", "app.id", ef.App.ID, "release.id", ef.Release.ID)
 
 	defer func() {
+		// ensure the formation has the correct omni job counts
+		if formation.RectifyOmni(len(s.hosts)) {
+			s.triggerRectify(formation.key())
+		}
+
 		// update any formation-less jobs
 		if jobs, ok := s.formationlessJobs[formation.key()]; ok {
 			for _, job := range jobs {
@@ -941,22 +968,16 @@ func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) (formation *Format
 		}
 	}()
 
-	for typ, proc := range ef.Release.Processes {
-		if proc.Omni && ef.Processes != nil && ef.Processes[typ] > 0 {
-			ef.Processes[typ] *= len(s.hosts)
-		}
-	}
-
 	formation = s.formations.Get(ef.App.ID, ef.Release.ID)
 	if formation == nil {
 		log.Info("adding new formation", "processes", ef.Processes)
 		formation = s.formations.Add(NewFormation(ef))
 	} else {
-		if formation.GetProcesses().Equals(ef.Processes) {
+		if formation.OriginalProcesses.Equals(ef.Processes) {
 			return
 		} else {
 			log.Info("updating processes of existing formation", "processes", ef.Processes)
-			formation.Processes = ef.Processes
+			formation.SetProcesses(ef.Processes)
 		}
 	}
 	s.triggerRectify(formation.key())
@@ -1072,8 +1093,12 @@ func (s *Scheduler) Unsubscribe(events chan Event) {
 	delete(s.listeners, events)
 }
 
+func (s *Scheduler) Jobs() map[string]*Job {
+	return <-s.getJobs
+}
+
 func (s *Scheduler) RunningJobs() map[string]*Job {
-	jobs := <-s.getJobs
+	jobs := s.Jobs()
 	runningJobs := make(map[string]*Job, len(jobs))
 	for id, j := range jobs {
 		if j.IsRunning() {
@@ -1095,7 +1120,7 @@ func (s *Scheduler) restartJob(job *Job) {
 	// create a new job so its state is tracked separately from the job
 	// it is replacing
 	newJob := &Job{
-		ID:        random.UUID(),
+		ID:        generateJobUUID(),
 		Type:      job.Type,
 		AppID:     job.AppID,
 		ReleaseID: job.ReleaseID,

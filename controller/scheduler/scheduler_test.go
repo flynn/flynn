@@ -9,7 +9,7 @@ import (
 	. "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
-	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/stream"
 )
@@ -22,7 +22,7 @@ var _ = Suite(&TestSuite{})
 
 const (
 	testAppID      = "app-1"
-	testHostID     = "host-1"
+	testHostID     = "host1"
 	testArtifactId = "artifact-1"
 	testReleaseID  = "release-1"
 	testJobType    = "web"
@@ -307,21 +307,46 @@ func (TestSuite) TestRectify(c *C) {
 
 func (TestSuite) TestMultipleHosts(c *C) {
 	hosts := newTestHosts()
-	cluster := newTestCluster(hosts)
-	s := runTestScheduler(c, cluster, true)
+	fakeCluster := newTestCluster(hosts)
+	s := runTestScheduler(c, fakeCluster, true)
 	defer s.Stop()
 	s.maxHostChecks = 1
 
+	// use incremental job IDs so we can find them easily in s.jobs
+	jobID := 0
+	generateJobUUID = func() string {
+		jobID++
+		return fmt.Sprintf("job%d", jobID)
+	}
+	defer func() { generateJobUUID = random.UUID }()
+
+	assertJobs := func(expected map[string]*Job) {
+		jobs := s.Jobs()
+		c.Assert(jobs, HasLen, len(expected))
+		for id, job := range expected {
+			actual, ok := jobs[id]
+			if !ok {
+				c.Fatalf("%s does not exist in s.jobs", id)
+			}
+			c.Assert(actual.Type, Equals, job.Type)
+			c.Assert(actual.state, Equals, job.state)
+			c.Assert(actual.HostID, Equals, job.HostID)
+		}
+	}
+
 	c.Log("Initialize the cluster with 1 host and wait for a job to start on it.")
 	s.waitJobStart()
+	assertJobs(map[string]*Job{
+		"job1": {Type: "web", state: JobStateStarting, HostID: testHostID},
+	})
 
 	c.Log("Add a host to the cluster, then create a new app, artifact, release, and associated formation.")
-	h2 := NewFakeHostClient("host-2")
-	cluster.AddHost(h2)
+	h2 := NewFakeHostClient("host2")
+	fakeCluster.AddHost(h2)
 	hosts[h2.ID()] = h2
 	app := &ct.App{ID: "test-app-2", Name: "test-app-2"}
 	artifact := &ct.Artifact{ID: "test-artifact-2"}
-	processes := map[string]int{testJobType: 1}
+	processes := map[string]int{"omni": 1}
 	release := NewReleaseOmni("test-release-2", artifact, processes, true)
 	c.Log("Add the formation to the controller. Wait for formation change and job start on both hosts.")
 	s.CreateApp(app)
@@ -331,52 +356,84 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	s.waitFormationChange()
 	s.waitJobStart()
 	s.waitJobStart()
-	c.Assert(s.RunningJobs(), HasLen, 3)
+	assertJobs(map[string]*Job{
+		"job1": {Type: "web", state: JobStateStarting, HostID: "host1"},
+		"job2": {Type: "omni", state: JobStateStarting, HostID: "host1"},
+		"job3": {Type: "omni", state: JobStateStarting, HostID: "host2"},
+	})
 
-	assertJobCount := func(host *FakeHostClient, expected int) map[string]host.ActiveJob {
+	assertHostJobs := func(host *FakeHostClient, ids ...string) {
 		jobs, err := host.ListJobs()
 		c.Assert(err, IsNil)
-		c.Assert(jobs, HasLen, expected)
-		return jobs
+		c.Assert(jobs, HasLen, len(ids))
+		for _, id := range ids {
+			id = cluster.GenerateJobID(host.ID(), id)
+			job, ok := jobs[id]
+			if !ok {
+				c.Fatalf("%s missing job with ID %s", host.ID(), id)
+			}
+			c.Assert(job.Job.ID, Equals, id)
+		}
 	}
 	h1 := hosts[testHostID]
-	assertJobCount(h1, 2)
-	assertJobCount(h2, 1)
+	assertHostJobs(h1, "job1", "job2")
+	assertHostJobs(h2, "job3")
 
-	h3 := NewFakeHostClient("host-3")
+	h3 := NewFakeHostClient("host3")
 	c.Log("Add a host, wait for omni job start on that host.")
-	cluster.AddHost(h3)
+	fakeCluster.AddHost(h3)
 	s.waitJobStart()
-	c.Assert(s.RunningJobs(), HasLen, 4)
-	jobs := assertJobCount(h3, 1)
+	assertJobs(map[string]*Job{
+		"job1": {Type: "web", state: JobStateStarting, HostID: "host1"},
+		"job2": {Type: "omni", state: JobStateStarting, HostID: "host1"},
+		"job3": {Type: "omni", state: JobStateStarting, HostID: "host2"},
+		"job4": {Type: "omni", state: JobStateStarting, HostID: "host3"},
+	})
+	assertHostJobs(h3, "job4")
 
 	c.Log("Crash one of the omni jobs, and wait for it to restart")
-	for id := range jobs {
-		h3.CrashJob(id)
-	}
-	assertJobCount(h3, 0)
+	h3.CrashJob("job4")
 	s.waitJobStop()
 	s.waitJobStart()
-	assertJobCount(h3, 1)
-	c.Assert(s.RunningJobs(), HasLen, 4)
+	assertJobs(map[string]*Job{
+		"job1": {Type: "web", state: JobStateStarting, HostID: "host1"},
+		"job2": {Type: "omni", state: JobStateStarting, HostID: "host1"},
+		"job3": {Type: "omni", state: JobStateStarting, HostID: "host2"},
+		"job4": {Type: "omni", state: JobStateStopped, HostID: "host3"},
+		"job5": {Type: "omni", state: JobStateStarting, HostID: "host3"},
+	})
+	assertHostJobs(h3, "job5")
 
 	c.Logf("Remove one of the hosts. Ensure the cluster recovers correctly (hosts=%v)", hosts)
 	h3.Healthy = false
-	cluster.SetHosts(hosts)
+	fakeCluster.SetHosts(hosts)
 	s.waitFormationSync()
 	s.waitRectify()
-	c.Assert(s.RunningJobs(), HasLen, 3)
-	assertJobCount(h1, 2)
-	assertJobCount(h2, 1)
+	assertJobs(map[string]*Job{
+		"job1": {Type: "web", state: JobStateStarting, HostID: "host1"},
+		"job2": {Type: "omni", state: JobStateStarting, HostID: "host1"},
+		"job3": {Type: "omni", state: JobStateStarting, HostID: "host2"},
+		"job4": {Type: "omni", state: JobStateStopped, HostID: "host3"},
+		"job5": {Type: "omni", state: JobStateStopped, HostID: "host3"},
+	})
+	assertHostJobs(h1, "job1", "job2")
+	assertHostJobs(h2, "job3")
 
 	c.Logf("Remove another host. Ensure the cluster recovers correctly (hosts=%v)", hosts)
 	h1.Healthy = false
-	cluster.RemoveHost(testHostID)
+	fakeCluster.RemoveHost(testHostID)
 	s.waitFormationSync()
 	s.waitRectify()
 	s.waitJobStart()
-	c.Assert(s.RunningJobs(), HasLen, 2)
-	assertJobCount(h2, 2)
+	assertJobs(map[string]*Job{
+		"job1": {Type: "web", state: JobStateStopped, HostID: "host1"},
+		"job2": {Type: "omni", state: JobStateStopped, HostID: "host1"},
+		"job3": {Type: "omni", state: JobStateStarting, HostID: "host2"},
+		"job4": {Type: "omni", state: JobStateStopped, HostID: "host3"},
+		"job5": {Type: "omni", state: JobStateStopped, HostID: "host3"},
+		"job6": {Type: "web", state: JobStateStarting, HostID: "host2"},
+	})
+	assertHostJobs(h2, "job3", "job6")
 }
 
 func (TestSuite) TestMultipleSchedulers(c *C) {
