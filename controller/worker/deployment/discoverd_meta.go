@@ -46,6 +46,9 @@ func (d *DeployJob) deployDiscoverdMeta() (err error) {
 				}
 			}
 		}
+		if expected.Count() == 0 {
+			return nil
+		}
 		return d.waitForJobEvents(releaseID, expected, log)
 	})
 }
