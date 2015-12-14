@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/cluster_backup#",
+  "title": "Backup",
+  "description": "",
+  "sortIndex": 18,
+  "type": "string",
+  "examples": [
+    "schema/examples/controller/cluster_backup#"
+  ]
+}

@@ -3,7 +3,7 @@
   "id": "https://flynn.io/schema/controller/process_type#",
   "title": "Process Type",
   "description": "",
-  "sortIndex": 8,
+  "sortIndex": 9,
   "type": "object",
   "additionalProperties": false,
   "properties": {

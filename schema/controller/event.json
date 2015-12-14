@@ -3,7 +3,7 @@
   "id": "https://flynn.io/schema/controller/event#",
   "title": "Event",
   "description": "",
-  "sortIndex": 15,
+  "sortIndex": 16,
   "type": "object",
   "examples": [
     "schema/examples/controller/events_stream#",

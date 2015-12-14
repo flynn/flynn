@@ -2,6 +2,7 @@
 package controller
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -157,6 +158,20 @@ func NewClientWithConfig(uri, key string, config Config) (*Client, error) {
 	c.Host = config.Domain
 	c.HijackDial = d.Dial
 	return c, nil
+}
+
+// GetCACert returns the CA cert for the controller
+func (c *Client) GetCACert() ([]byte, error) {
+	var cert bytes.Buffer
+	res, err := c.RawReq("GET", "/ca-cert", nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if _, err := io.Copy(&cert, res.Body); err != nil {
+		return nil, err
+	}
+	return cert.Bytes(), nil
 }
 
 // StreamFormations yields a series of ExpandedFormation into the provided channel.

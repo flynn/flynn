@@ -24,6 +24,7 @@ import (
 type generator struct {
 	conf        *config
 	client      *cc.Client
+	recorder    *httprecorder.Recorder
 	resourceIds map[string]string
 }
 
@@ -49,6 +50,7 @@ func main() {
 	e := &generator{
 		conf:        conf,
 		client:      client,
+		recorder:    recorder,
 		resourceIds: make(map[string]string),
 	}
 
@@ -79,7 +81,10 @@ func main() {
 		{"app_release_get", e.getAppRelease},
 		{"formation_put", e.putFormation},
 		{"formation_get", e.getFormation},
+		{"formation_get_expanded", e.getExpandedFormation},
 		{"formation_list", e.listFormations},
+		{"formations_list_active", e.listActiveFormations},
+		{"formations_stream", e.streamFormations},
 		{"release_create2", e.createRelease},
 		{"deployment_create", e.createDeployment},
 		{"formation_delete", e.deleteFormation},
@@ -96,6 +101,9 @@ func main() {
 		{"events_list", e.eventsList},
 		{"events_stream", e.eventsStream},
 		{"event_get", e.eventGet},
+		{"ca_cert", e.getCACert},
+		{"cluster_backup", e.clusterBackup},
+		{"migrate_cluster_domain", e.migrateClusterDomain},
 	}
 
 	var out io.Writer
@@ -287,8 +295,30 @@ func (e *generator) getFormation() {
 	e.client.GetFormation(e.resourceIds["app"], e.resourceIds["release"])
 }
 
+func (e *generator) getExpandedFormation() {
+	e.client.GetExpandedFormation(e.resourceIds["app"], e.resourceIds["release"])
+}
+
 func (e *generator) listFormations() {
 	e.client.FormationList(e.resourceIds["app"])
+}
+
+func (e *generator) listActiveFormations() {
+	e.client.FormationListActive()
+}
+
+func (e *generator) streamFormations() {
+	output := make(chan *ct.ExpandedFormation)
+	e.client.StreamFormations(nil, output)
+	timeout := time.After(10 * time.Second)
+outer:
+	for {
+		select {
+		case <-output:
+		case <-timeout:
+			break outer
+		}
+	}
 }
 
 func (e *generator) deleteFormation() {
@@ -415,4 +445,29 @@ func (e *generator) eventGet() {
 		log.Fatal(err)
 	}
 	e.client.GetEvent(eventID)
+}
+
+func (e *generator) getCACert() {
+	e.client.GetCACert()
+}
+
+func (e *generator) clusterBackup() {
+	// don't read response so it's not shown in docs
+	e.client.Backup()
+}
+
+func (e *generator) migrateClusterDomain() {
+	release, err := e.client.GetAppRelease("controller")
+	if err != nil {
+		log.Fatal(err)
+	}
+	oldDomain := release.Env["DEFAULT_ROUTE_DOMAIN"]
+	e.recorder.GetRequests() // ignore above request
+	err = e.client.PutDomain(&ct.DomainMigration{
+		Domain:    "127.0.0.1.xip.io",
+		OldDomain: oldDomain,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 }

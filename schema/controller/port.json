@@ -3,7 +3,7 @@
   "id": "https://flynn.io/schema/controller/port#",
   "title": "Port",
   "description": "",
-  "sortIndex": 7,
+  "sortIndex": 8,
   "type": "object",
   "require": ["proto"],
   "additionalProperties": false,

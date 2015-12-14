@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/domain_migration#",
+  "title": "Domain Migration",
+  "description": "",
+  "sortIndex": 19,
+  "type": "object",
+  "examples": [
+    "schema/examples/controller/migrate_cluster_domain#"
+  ],
+  "additionalProperties": false,
+  "required": ["old_domain", "domain"],
+  "properties": {
+    "id": {
+      "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "old_tls_cert": {
+      "description": "TLS cert associated with old_domain. The migration job will set this.",
+      "type": "string"
+    },
+    "tls_cert": {
+      "description": "TLS cert for the domain. One will be generated if not set.",
+      "type": "string"
+    },
+    "old_domain": {
+      "description": "Domain being migrated from.",
+      "type": "string",
+      "format": "uri"
+    },
+    "domain": {
+      "description": "Domain being migrated to.",
+      "type": "string",
+      "format": "uri"
+    },
+    "created_at": {
+      "$ref": "/schema/controller/common#/definitions/created_at"
+    },
+    "finished_at": {
+      "description": "migration finished timestamp",
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

@@ -3,7 +3,7 @@
   "id": "https://flynn.io/schema/controller/deployment#",
   "title": "Deployment",
   "description": "",
-  "sortIndex": 3,
+  "sortIndex": 4,
   "type": "object",
   "examples": [
     "schema/examples/controller/deployment_create#"

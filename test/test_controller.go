@@ -142,7 +142,14 @@ func (s *ControllerSuite) generateControllerExamples(t *c.C) map[string]interfac
 func (s *ControllerSuite) TestExampleOutput(t *c.C) {
 	examples := s.generateControllerExamples(t)
 	exampleKeys := make([]string, 0, len(examples))
+	skipExamples := []string{"migrate_cluster_domain"}
+examplesLoop:
 	for key := range examples {
+		for _, skipKey := range skipExamples {
+			if key == skipKey {
+				continue examplesLoop
+			}
+		}
 		exampleKeys = append(exampleKeys, key)
 	}
 	sort.Strings(exampleKeys)

@@ -3,7 +3,7 @@
   "id": "https://flynn.io/schema/controller/resource_req#",
   "title": "Resource Request",
   "description": "",
-  "sortIndex": 11,
+  "sortIndex": 12,
   "type": "object",
   "examples": [
     "schema/examples/controller/provider_resource_create#"

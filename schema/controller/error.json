@@ -2,7 +2,7 @@
   "id": "https://flynn.io/schema/controller/error#",
   "allOf": [
     {
-      "sortIndex": 14,
+      "sortIndex": 15,
       "examples": [
         "schema/examples/controller/app_create_error#"
       ]

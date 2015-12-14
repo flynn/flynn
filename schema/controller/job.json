@@ -3,7 +3,7 @@
   "id": "https://flynn.io/schema/controller/job#",
   "title": "Job",
   "description": "A job is a single process in a container.",
-  "sortIndex": 5,
+  "sortIndex": 6,
   "type": "object",
   "examples": [
     "schema/examples/controller/job_list#",

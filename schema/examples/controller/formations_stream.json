@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/examples/controller/formations_stream#",
+  "title": "Stream formations",
+  "description": "",
+  "definitions": {
+    "params": {
+      "type": "object",
+      "properties": {
+        "since": {
+          "description": "RFC3339 timestamp to stream formations since",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "allOf": [
+    { "$ref": "/schema/examples/base#" },
+    {
+      "type": "object",
+      "properties": {
+        "request": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": ["GET"]
+            },
+            "params": {
+              "$ref": "#/definitions/params"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

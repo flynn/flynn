@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/ca_cert#",
+  "title": "CA Cert",
+  "description": "",
+  "sortIndex": 17,
+  "type": "string",
+  "examples": [
+    "schema/examples/controller/ca_cert#"
+  ]
+}
