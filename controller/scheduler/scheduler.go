@@ -602,6 +602,10 @@ func (s *Scheduler) HandleLeaderChange(isLeader bool) {
 	s.isLeader = isLeader
 	if isLeader {
 		log.Info("handling leader promotion")
+		// ensure we are in sync and then rectify
+		s.SyncHosts()
+		s.SyncFormations()
+		s.SyncJobs()
 		s.rectifyAll()
 	} else {
 		log.Info("handling leader demotion")
