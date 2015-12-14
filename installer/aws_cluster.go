@@ -56,11 +56,11 @@ func (c *AWSCluster) SetCreds(creds *Credential) error {
 			return err
 		}
 		c.creds = awsCreds
-		return nil
+	} else {
+		c.base.credential = creds
+		c.base.CredentialID = creds.ID
+		c.creds = aws.Creds(creds.ID, creds.Secret, "")
 	}
-	c.base.credential = creds
-	c.base.CredentialID = creds.ID
-	c.creds = aws.Creds(creds.ID, creds.Secret, "")
 	c.ec2 = ec2.New(c.creds, c.Region, nil)
 	c.cf = cloudformation.New(c.creds, c.Region, nil)
 	return nil
