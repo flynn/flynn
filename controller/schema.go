@@ -217,5 +217,13 @@ $$ LANGUAGE plpgsql`,
 		`ALTER TABLE job_cache ADD COLUMN exit_status integer`,
 		`ALTER TABLE job_cache ADD COLUMN host_error text`,
 	)
+	m.Add(8,
+		`CREATE TABLE job_states (name text PRIMARY KEY)`,
+		`INSERT INTO job_states (name) VALUES ('starting'), ('up'), ('down'), ('crashed'), ('failed')`,
+		`ALTER TABLE job_cache ALTER COLUMN state TYPE text`,
+		`ALTER TABLE job_cache ADD CONSTRAINT job_state_fkey FOREIGN KEY (state) REFERENCES job_states (name)`,
+		`DROP TRIGGER job_state_trigger ON job_cache`,
+		`DROP TYPE job_state`,
+	)
 	return m.Migrate(db)
 }
