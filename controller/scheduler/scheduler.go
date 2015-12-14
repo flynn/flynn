@@ -48,7 +48,7 @@ type Scheduler struct {
 	utils.ClusterClient
 
 	discoverd Discoverd
-	isLeader  bool
+	isLeader  *bool
 
 	backoffPeriod time.Duration
 	maxHostChecks int
@@ -372,6 +372,10 @@ func (s *Scheduler) Run() error {
 	return nil
 }
 
+func (s *Scheduler) IsLeader() bool {
+	return s.isLeader != nil && *s.isLeader
+}
+
 func (s *Scheduler) SyncJobs() (err error) {
 	defer s.sendEvent(EventTypeClusterSync, nil, nil)
 
@@ -486,7 +490,7 @@ func (s *Scheduler) HandleRectify() error {
 }
 
 func (s *Scheduler) RectifyFormation(key utils.FormationKey) {
-	if !s.isLeader {
+	if !s.IsLeader() {
 		return
 	}
 	defer s.sendEvent(EventTypeRectify, nil, key)
@@ -528,7 +532,7 @@ func (s *Scheduler) HandleFormationChange(ef *ct.ExpandedFormation) {
 }
 
 func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
-	if !s.isLeader {
+	if !s.IsLeader() {
 		req.Error(ErrNotLeader)
 		return
 	}
@@ -599,7 +603,7 @@ func (s *Scheduler) RunPutJobs() {
 
 func (s *Scheduler) HandleLeaderChange(isLeader bool) {
 	log := logger.New("fn", "HandleLeaderChange")
-	s.isLeader = isLeader
+	s.isLeader = &isLeader
 	if isLeader {
 		log.Info("handling leader promotion")
 		// ensure we are in sync and then rectify
@@ -935,7 +939,7 @@ func (s *Scheduler) handleJobStatus(job *Job, status host.JobStatus) {
 	}
 
 	// if we are not the leader, then we are done
-	if !s.isLeader {
+	if !s.IsLeader() {
 		return
 	}
 
@@ -952,8 +956,14 @@ func (s *Scheduler) handleJobStatus(job *Job, status host.JobStatus) {
 	s.triggerRectify(job.Formation.key())
 }
 
+// persistJob triggers the RunPutJobs goroutine to persist the job to the
+// controller, but only if the scheduler either doesn't know the current leader
+// (e.g. if this is the first scheduler to start) or it itself is the current
+// leader to avoid states jumping back and forward in the database
 func (s *Scheduler) persistJob(job *Job) {
-	s.putJobs <- job.ControllerJob()
+	if s.isLeader == nil || *s.isLeader {
+		s.putJobs <- job.ControllerJob()
+	}
 }
 
 func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) (formation *Formation) {
