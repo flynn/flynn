@@ -151,7 +151,7 @@ func (s *GitDeploySuite) runBuildpackTestWithResponsePattern(t *c.C, name string
 	t.Assert(push, c.Not(OutputContains), "timed out waiting for scale")
 	t.Assert(push, SuccessfulOutputContains, "=====> Default web formation scaled to 1")
 
-	watcher.WaitFor(ct.JobEvents{"web": {"up": 1}}, scaleTimeout, nil)
+	watcher.WaitFor(ct.JobEvents{"web": {ct.JobStateUp: 1}}, scaleTimeout, nil)
 
 	route := name + ".dev"
 	newRoute := r.flynn("route", "add", "http", route)

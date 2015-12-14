@@ -89,16 +89,33 @@ type Key struct {
 }
 
 type Job struct {
-	ID        string            `json:"id,omitempty"`
-	AppID     string            `json:"app,omitempty"`
-	ReleaseID string            `json:"release,omitempty"`
-	Type      string            `json:"type,omitempty"`
-	State     string            `json:"state,omitempty"`
-	Cmd       []string          `json:"cmd,omitempty"`
-	Meta      map[string]string `json:"meta,omitempty"`
-	CreatedAt *time.Time        `json:"created_at,omitempty"`
-	UpdatedAt *time.Time        `json:"updated_at,omitempty"`
+	ID         string            `json:"id,omitempty"`
+	AppID      string            `json:"app,omitempty"`
+	ReleaseID  string            `json:"release,omitempty"`
+	Type       string            `json:"type,omitempty"`
+	State      JobState          `json:"state,omitempty"`
+	Cmd        []string          `json:"cmd,omitempty"`
+	Meta       map[string]string `json:"meta,omitempty"`
+	ExitStatus *int32            `json:"exit_status,omitempty"`
+	HostError  string            `json:"host_error,omitempty"`
+	CreatedAt  *time.Time        `json:"created_at,omitempty"`
+	UpdatedAt  *time.Time        `json:"updated_at,omitempty"`
 }
+
+type JobState string
+
+const (
+	JobStateStarting JobState = "starting"
+	JobStateUp       JobState = "up"
+	JobStateStopping JobState = "stopping"
+	JobStateDown     JobState = "down"
+
+	// JobStateCrashed and JobStateFailed are no longer valid job states,
+	// but we still need to handle them in case they are set by old
+	// schedulers still using the legacy code.
+	JobStateCrashed JobState = "crashed"
+	JobStateFailed  JobState = "failed"
+)
 
 type DomainMigration struct {
 	ID         string        `json:"id"`
@@ -111,10 +128,43 @@ type DomainMigration struct {
 }
 
 func (e *Job) IsDown() bool {
-	return e.State == "failed" || e.State == "crashed" || e.State == "down"
+	return e.State == JobStateDown || e.State == JobStateCrashed || e.State == JobStateFailed
 }
 
-type JobEvents map[string]map[string]int
+type JobEvents map[string]map[JobState]int
+
+func (j JobEvents) Count() int {
+	var n int
+	for _, procs := range j {
+		for _, i := range procs {
+			n += i
+		}
+	}
+	return n
+}
+
+func (j JobEvents) Equals(other JobEvents) bool {
+	for typ, events := range j {
+		diff, ok := other[typ]
+		if !ok {
+			return false
+		}
+		for state, count := range events {
+			if diff[state] != count {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func JobUpEvents(count int) map[JobState]int {
+	return map[JobState]int{JobStateUp: count}
+}
+
+func JobDownEvents(count int) map[JobState]int {
+	return map[JobState]int{JobStateDown: count}
+}
 
 type NewJob struct {
 	ReleaseID  string             `json:"release,omitempty"`
@@ -150,13 +200,13 @@ type DeployID struct {
 }
 
 type DeploymentEvent struct {
-	AppID        string `json:"app,omitempty"`
-	DeploymentID string `json:"deployment,omitempty"`
-	ReleaseID    string `json:"release,omitempty"`
-	Status       string `json:"status,omitempty"`
-	JobType      string `json:"job_type,omitempty"`
-	JobState     string `json:"job_state,omitempty"`
-	Error        string `json:"error,omitempty"`
+	AppID        string   `json:"app,omitempty"`
+	DeploymentID string   `json:"deployment,omitempty"`
+	ReleaseID    string   `json:"release,omitempty"`
+	Status       string   `json:"status,omitempty"`
+	JobType      string   `json:"job_type,omitempty"`
+	JobState     JobState `json:"job_state,omitempty"`
+	Error        string   `json:"error,omitempty"`
 }
 
 func (e *DeploymentEvent) Err() error {

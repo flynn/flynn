@@ -190,14 +190,6 @@ func (c *ContainerInit) GetState(arg *struct{}, status *State) error {
 	return nil
 }
 
-// Get the exit code (or -1 if running)
-func (c *ContainerInit) GetExitStatus(arg *struct{}, status *int) error {
-	c.mtx.Lock()
-	defer c.mtx.Unlock()
-	*status = c.exitStatus
-	return nil
-}
-
 func (c *ContainerInit) Resume(arg, res *struct{}) error {
 	c.resume <- struct{}{}
 	return nil

@@ -1001,7 +1001,7 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 			<-client.done
 			job := l.state.GetJob(req.Job.Job.ID)
 			if job.Status == host.StatusDone || job.Status == host.StatusCrashed {
-				err = ExitError(job.ExitStatus)
+				err = ExitError(*job.ExitStatus)
 				return
 			}
 			err = errors.New(*job.Error)

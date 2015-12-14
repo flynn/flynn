@@ -1,3 +1,4 @@
+import { extend } from 'marbles/utils';
 import Store from '../store';
 import JobsStream from './jobs-stream';
 import Dispatcher from '../dispatcher';
@@ -62,7 +63,13 @@ var AppJobs = Store.createClass({
 					if (item.hasOwnProperty("State")) {
 						item.state = item.State;
 					}
-					return item;
+					var state = item.state;
+					if (item.state === 'down' && item.exit_status !== 0) {
+						state = 'crashed';
+					} else if (item.state === 'down' && item.host_error) {
+						state = 'failed';
+					}
+					return extend({}, item, { state: state });
 				})
 			});
 		}.bind(this));

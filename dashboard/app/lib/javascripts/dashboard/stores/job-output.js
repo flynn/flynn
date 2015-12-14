@@ -1,6 +1,5 @@
 import { extend } from 'marbles/utils';
 import Store from '../store';
-import Dispatcher from '../dispatcher';
 import Config from '../config';
 import JobsStream from './jobs-stream';
 
@@ -44,23 +43,6 @@ var JobOutput = Store.createClass({
 			output: [],
 			streamError: null
 		};
-	},
-
-	handleEvent: function (event) {
-		if (event.name === "JOB_STATE_CHANGE" && event.jobId === this.props.jobId) {
-			if (event.state === "down") {
-				this.setState({
-					eof: true,
-					open: false
-				});
-			} else if (event.state === "crashed") {
-				this.setState({
-					open: false,
-					eof: false,
-					streamError: "Non-zero exit status"
-				});
-			}
-		}
 	},
 
 	__openEventStream: function (retryCount) {
@@ -127,7 +109,5 @@ var JobOutput = Store.createClass({
 JobOutput.isValidId = function (id) {
 	return id.appId && id.jobId;
 };
-
-JobOutput.registerWithDispatcher(Dispatcher);
 
 export default JobOutput;

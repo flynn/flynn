@@ -59,9 +59,9 @@ func (r *JobRepo) Get(id string) (*ct.Job, error) {
 
 func (r *JobRepo) Add(job *ct.Job) error {
 	// TODO: actually validate
-	err := r.db.QueryRow("job_insert", job.ID, job.AppID, job.ReleaseID, job.Type, job.State, job.Meta).Scan(&job.CreatedAt, &job.UpdatedAt)
+	err := r.db.QueryRow("job_insert", job.ID, job.AppID, job.ReleaseID, job.Type, string(job.State), job.Meta, job.ExitStatus, job.HostError).Scan(&job.CreatedAt, &job.UpdatedAt)
 	if postgres.IsUniquenessError(err, "") {
-		err = r.db.QueryRow("job_update", job.ID, job.State).Scan(&job.CreatedAt, &job.UpdatedAt)
+		err = r.db.QueryRow("job_update", job.ID, string(job.State), job.ExitStatus, job.HostError).Scan(&job.CreatedAt, &job.UpdatedAt)
 		if postgres.IsPostgresCode(err, postgres.CheckViolation) {
 			return ct.ValidationError{Field: "state", Message: err.Error()}
 		}
@@ -71,7 +71,7 @@ func (r *JobRepo) Add(job *ct.Job) error {
 	}
 
 	// create a job event, ignoring possible duplications
-	uniqueID := strings.Join([]string{job.ID, job.State}, "|")
+	uniqueID := strings.Join([]string{job.ID, string(job.State)}, "|")
 	err = r.db.Exec("event_insert_unique", job.AppID, job.ID, uniqueID, string(ct.EventTypeJob), job)
 	if postgres.IsUniquenessError(err, "") {
 		return nil
@@ -81,13 +81,15 @@ func (r *JobRepo) Add(job *ct.Job) error {
 
 func scanJob(s postgres.Scanner) (*ct.Job, error) {
 	job := &ct.Job{}
-	err := s.Scan(&job.ID, &job.AppID, &job.ReleaseID, &job.Type, &job.State, &job.Meta, &job.CreatedAt, &job.UpdatedAt)
+	var state string
+	err := s.Scan(&job.ID, &job.AppID, &job.ReleaseID, &job.Type, &state, &job.Meta, &job.ExitStatus, &job.HostError, &job.CreatedAt, &job.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			err = ErrNotFound
 		}
 		return nil, err
 	}
+	job.State = ct.JobState(state)
 	return job, nil
 }
 

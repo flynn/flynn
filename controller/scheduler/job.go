@@ -6,7 +6,7 @@ import (
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
-	"github.com/flynn/flynn/host/types"
+	"github.com/flynn/flynn/pkg/typeconv"
 )
 
 // JobState is a job's in-memory state
@@ -90,6 +90,12 @@ type Job struct {
 	// event is received for the job, and is used when persisting the job
 	// to the controller
 	metadata map[string]string
+
+	// exitStatus is the job's exit status once it has stopped running
+	exitStatus *int
+
+	// hostError is the error from the host if the job fails to start
+	hostError *string
 }
 
 // needsVolume indicates whether a volume should be provisioned in the cluster
@@ -123,6 +129,34 @@ func (j *Job) IsSchedulable() bool {
 
 func (j *Job) IsInFormation(key utils.FormationKey) bool {
 	return !j.IsStopped() && j.Formation != nil && j.Formation.key() == key && j.HasTypeFromRelease()
+}
+
+func (j *Job) ControllerJob() *ct.Job {
+	job := &ct.Job{
+		ID:        j.JobID,
+		AppID:     j.AppID,
+		ReleaseID: j.ReleaseID,
+		Type:      j.Type,
+		Meta:      utils.JobMetaFromMetadata(j.metadata),
+	}
+
+	switch j.state {
+	case JobStateStarting:
+		job.State = ct.JobStateStarting
+	case JobStateRunning:
+		job.State = ct.JobStateUp
+	case JobStateStopped:
+		job.State = ct.JobStateDown
+	}
+
+	if j.exitStatus != nil {
+		job.ExitStatus = typeconv.Int32Ptr(int32(*j.exitStatus))
+	}
+	if j.hostError != nil {
+		job.HostError = *j.hostError
+	}
+
+	return job
 }
 
 type Jobs map[string]*Job
@@ -171,33 +205,4 @@ func (js Jobs) GetProcesses(key utils.FormationKey) Processes {
 
 func (js Jobs) Add(j *Job) {
 	js[j.ID] = j
-}
-
-// TODO refactor `state` to JobStatus type and consolidate statuses across scheduler/controller/host
-func controllerJobFromSchedulerJob(job *Job, state string) *ct.Job {
-	return &ct.Job{
-		ID:        job.JobID,
-		AppID:     job.AppID,
-		ReleaseID: job.ReleaseID,
-		Type:      job.Type,
-		State:     state,
-		Meta:      utils.JobMetaFromMetadata(job.metadata),
-	}
-}
-
-func jobState(status host.JobStatus) string {
-	switch status {
-	case host.StatusStarting:
-		return "starting"
-	case host.StatusRunning:
-		return "up"
-	case host.StatusDone:
-		return "down"
-	case host.StatusCrashed:
-		return "crashed"
-	case host.StatusFailed:
-		return "failed"
-	default:
-		return ""
-	}
 }

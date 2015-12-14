@@ -19,12 +19,12 @@ func (s *S) TestEvents(c *C) {
 	jobID2 := "host-job2"
 	jobID3 := "host-job3"
 	jobs := []*ct.Job{
-		{ID: jobID1, AppID: app1.ID, ReleaseID: release.ID, Type: "web", State: "starting"},
-		{ID: jobID1, AppID: app1.ID, ReleaseID: release.ID, Type: "web", State: "up"},
-		{ID: jobID2, AppID: app1.ID, ReleaseID: release.ID, Type: "web", State: "starting"},
-		{ID: jobID2, AppID: app1.ID, ReleaseID: release.ID, Type: "web", State: "up"},
-		{ID: jobID3, AppID: app2.ID, ReleaseID: release.ID, Type: "web", State: "starting"},
-		{ID: jobID3, AppID: app2.ID, ReleaseID: release.ID, Type: "web", State: "up"},
+		{ID: jobID1, AppID: app1.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateStarting},
+		{ID: jobID1, AppID: app1.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateUp},
+		{ID: jobID2, AppID: app1.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateStarting},
+		{ID: jobID2, AppID: app1.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateUp},
+		{ID: jobID3, AppID: app2.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateStarting},
+		{ID: jobID3, AppID: app2.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateUp},
 	}
 
 	listener := newEventListener(&EventRepo{db: s.hc.db})

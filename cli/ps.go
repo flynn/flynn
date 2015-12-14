@@ -39,7 +39,7 @@ func runPs(args *docopt.Args, client *controller.Client) error {
 		if j.Type == "" {
 			j.Type = "run"
 		}
-		if j.State != "up" {
+		if j.State != ct.JobStateUp {
 			continue
 		}
 		listRec(w, j.ID, j.Type, j.ReleaseID)

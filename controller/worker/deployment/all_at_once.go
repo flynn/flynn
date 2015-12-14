@@ -6,7 +6,7 @@ func (d *DeployJob) deployAllAtOnce() error {
 	log := d.logger.New("fn", "deployAllAtOnce")
 	log.Info("starting all-at-once deployment")
 
-	expected := make(jobEvents)
+	expected := make(ct.JobEvents)
 	for typ, n := range d.Processes {
 		total := n
 		if d.isOmni(typ) {
@@ -16,12 +16,12 @@ func (d *DeployJob) deployAllAtOnce() error {
 		for i := existing; i < total; i++ {
 			d.deployEvents <- ct.DeploymentEvent{
 				ReleaseID: d.NewReleaseID,
-				JobState:  "starting",
+				JobState:  ct.JobStateStarting,
 				JobType:   typ,
 			}
 		}
 		if total > existing {
-			expected[typ] = map[string]int{"up": total - existing}
+			expected[typ] = ct.JobUpEvents(total - existing)
 		}
 	}
 	if expected.Count() > 0 {
@@ -43,18 +43,18 @@ func (d *DeployJob) deployAllAtOnce() error {
 		}
 	}
 
-	expected = make(jobEvents)
+	expected = make(ct.JobEvents)
 	for typ := range d.Processes {
 		existing := d.oldReleaseState[typ]
 		for i := 0; i < existing; i++ {
 			d.deployEvents <- ct.DeploymentEvent{
 				ReleaseID: d.OldReleaseID,
-				JobState:  "stopping",
+				JobState:  ct.JobStateStopping,
 				JobType:   typ,
 			}
 		}
 		if existing > 0 {
-			expected[typ] = map[string]int{"down": existing}
+			expected[typ] = ct.JobDownEvents(existing)
 		}
 	}
 

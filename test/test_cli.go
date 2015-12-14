@@ -145,14 +145,14 @@ func (s *CLISuite) TestScale(t *c.C) {
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "scaling echoer: 0=>1")
 	t.Assert(scale, SuccessfulOutputContains, "scale completed")
-	assertEventOutput(scale, ct.JobEvents{"echoer": {"up": 1}})
+	assertEventOutput(scale, ct.JobEvents{"echoer": {ct.JobStateUp: 1}})
 
 	scale = app.flynn("scale", "echoer=3", "printer=1")
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "echoer: 1=>3")
 	t.Assert(scale, SuccessfulOutputContains, "printer: 0=>1")
 	t.Assert(scale, SuccessfulOutputContains, "scale completed")
-	assertEventOutput(scale, ct.JobEvents{"echoer": {"up": 2}, "printer": {"up": 1}})
+	assertEventOutput(scale, ct.JobEvents{"echoer": {ct.JobStateUp: 2}, "printer": {ct.JobStateUp: 1}})
 
 	// no args should show current scale
 	scale = app.flynn("scale")
@@ -167,7 +167,7 @@ func (s *CLISuite) TestScale(t *c.C) {
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "printer: 1=>2")
 	t.Assert(scale, SuccessfulOutputContains, "scale completed")
-	assertEventOutput(scale, ct.JobEvents{"printer": {"up": 1}})
+	assertEventOutput(scale, ct.JobEvents{"printer": {ct.JobStateUp: 1}})
 	scale = app.flynn("scale")
 	t.Assert(scale, Succeeds)
 	t.Assert(scale, SuccessfulOutputContains, "echoer=3")
@@ -181,7 +181,7 @@ func (s *CLISuite) TestScale(t *c.C) {
 	t.Assert(scale, SuccessfulOutputContains, "printer: 2=>0")
 	t.Assert(scale, c.Not(OutputContains), "echoer")
 	t.Assert(scale, SuccessfulOutputContains, "scale completed")
-	assertEventOutput(scale, ct.JobEvents{"printer": {"down": 2}})
+	assertEventOutput(scale, ct.JobEvents{"printer": {ct.JobStateDown: 2}})
 
 	// --no-wait should not wait for scaling to complete
 	scale = app.flynn("scale", "--no-wait", "echoer=0")
@@ -241,18 +241,18 @@ func (s *CLISuite) TestRun(t *c.C) {
 	// this shouldn't be logged
 	t.Assert(app.sh("echo foo"), Outputs, "foo\n")
 	// drain the events
-	app.waitFor(ct.JobEvents{"": {"up": 1, "down": 1}})
+	app.waitFor(ct.JobEvents{"": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
 
 	// this should be logged due to the --enable-log flag
 	t.Assert(app.flynn("run", "--enable-log", "echo", "hello"), Outputs, "hello\n")
-	app.waitFor(ct.JobEvents{"": {"up": 1, "down": 1}})
+	app.waitFor(ct.JobEvents{"": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
 
 	detached := app.flynn("run", "-d", "echo", "world")
 	t.Assert(detached, Succeeds)
 	t.Assert(detached, c.Not(Outputs), "world\n")
 
 	id := strings.TrimSpace(detached.Output)
-	jobID := app.waitFor(ct.JobEvents{"": {"up": 1, "down": 1}})
+	jobID := app.waitFor(ct.JobEvents{"": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
 	t.Assert(jobID, c.Equals, id)
 	t.Assert(app.flynn("log", "--raw-output"), Outputs, "hello\nworld\n")
 
@@ -336,10 +336,10 @@ func (s *CLISuite) TestKill(t *c.C) {
 	app := s.newCliTestApp(t)
 	defer app.cleanup()
 	t.Assert(app.flynn("scale", "--no-wait", "echoer=1"), Succeeds)
-	jobID := app.waitFor(ct.JobEvents{"echoer": {"up": 1}})
+	jobID := app.waitFor(ct.JobEvents{"echoer": {ct.JobStateUp: 1}})
 
 	t.Assert(app.flynn("kill", jobID), Succeeds)
-	stoppedID := app.waitFor(ct.JobEvents{"echoer": {"down": 1}})
+	stoppedID := app.waitFor(ct.JobEvents{"echoer": {ct.JobStateDown: 1}})
 	t.Assert(stoppedID, c.Equals, jobID)
 }
 
@@ -579,7 +579,7 @@ func (s *CLISuite) TestLog(t *c.C) {
 	app := s.newCliTestApp(t)
 	defer app.cleanup()
 	t.Assert(app.flynn("run", "-d", "echo", "hello", "world"), Succeeds)
-	app.waitFor(ct.JobEvents{"": {"up": 1, "down": 1}})
+	app.waitFor(ct.JobEvents{"": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
 	t.Assert(app.flynn("log", "--raw-output"), Outputs, "hello world\n")
 }
 
@@ -591,7 +591,7 @@ func (s *CLISuite) TestLogFilter(t *c.C) {
 		t.Assert(app.flynn("scale", "crasher=0"), Succeeds)
 	}
 	t.Assert(app.flynn("run", "-d", "echo", "hello", "world"), Succeeds)
-	jobID := app.waitFor(ct.JobEvents{"": {"up": 1, "down": 1}})
+	jobID := app.waitFor(ct.JobEvents{"": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
 
 	tests := []struct {
 		args     []string
@@ -621,7 +621,7 @@ func (s *CLISuite) TestLogStderr(t *c.C) {
 	app := s.newCliTestApp(t)
 	defer app.cleanup()
 	t.Assert(app.flynn("run", "-d", "sh", "-c", "echo hello && echo world >&2"), Succeeds)
-	app.waitFor(ct.JobEvents{"": {"up": 1, "down": 1}})
+	app.waitFor(ct.JobEvents{"": {ct.JobStateUp: 1, ct.JobStateDown: 1}})
 	runLog := func(split bool) (stdout, stderr bytes.Buffer) {
 		args := []string{"log", "--raw-output"}
 		if split {
@@ -649,7 +649,7 @@ func (s *CLISuite) TestLogFollow(t *c.C) {
 	defer app.cleanup()
 
 	t.Assert(app.flynn("run", "-d", "sh", "-c", "sleep 2 && for i in 1 2 3 4 5; do echo \"line $i\"; done"), Succeeds)
-	app.waitFor(ct.JobEvents{"": {"up": 1}})
+	app.waitFor(ct.JobEvents{"": {ct.JobStateUp: 1}})
 
 	log := app.flynnCmd("log", "--raw-output", "--follow")
 	logStdout, err := log.StdoutPipe()
@@ -799,7 +799,7 @@ func (s *CLISuite) TestRelease(t *c.C) {
 	defer watcher.Close()
 
 	scaleCmd = app.flynn("scale", "--no-wait", "env=1")
-	t.Assert(watcher.WaitFor(ct.JobEvents{"env": {"up": 1}}, scaleTimeout, nil), c.IsNil)
+	t.Assert(watcher.WaitFor(ct.JobEvents{"env": {ct.JobStateUp: 1}}, scaleTimeout, nil), c.IsNil)
 	envLog := app.flynn("log")
 	t.Assert(envLog, Succeeds)
 	t.Assert(envLog, SuccessfulOutputContains, "GLOBAL=FOO")

@@ -230,7 +230,7 @@ func (s *ControllerSuite) TestResourceLimitsReleaseJob(t *c.C) {
 		Processes: map[string]int{"resources": 1},
 	}), c.IsNil)
 	var jobID string
-	err = watcher.WaitFor(ct.JobEvents{"resources": {"up": 1, "down": 1}}, scaleTimeout, func(e *ct.Job) error {
+	err = watcher.WaitFor(ct.JobEvents{"resources": {ct.JobStateUp: 1, ct.JobStateDown: 1}}, scaleTimeout, func(e *ct.Job) error {
 		jobID = e.ID
 		return nil
 	})
@@ -491,7 +491,7 @@ func (s *ControllerSuite) TestAppEvents(t *c.C) {
 	defer watcher.Close()
 	runJob(app2.ID, release2.ID)
 	t.Assert(watcher.WaitFor(
-		ct.JobEvents{"": {"up": 1, "down": 1}},
+		ct.JobEvents{"": {ct.JobStateUp: 1, ct.JobStateDown: 1}},
 		10*time.Second,
 		func(e *ct.Job) error {
 			debugf(t, "got %s job event for app2", e.State)
@@ -511,7 +511,7 @@ func (s *ControllerSuite) TestAppEvents(t *c.C) {
 			}
 			t.Assert(e.AppID, c.Equals, app1.ID)
 			debugf(t, "got %s job event for app1", e.State)
-			if e.State == "down" {
+			if e.State == ct.JobStateDown {
 				return
 			}
 		case <-time.After(10 * time.Second):

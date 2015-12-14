@@ -13,7 +13,8 @@ import (
 )
 
 type jobIDState struct {
-	jobID, state string
+	jobID string
+	state ct.JobState
 }
 
 type DeployJob struct {
@@ -157,7 +158,7 @@ func (d *DeployJob) Perform() error {
 		return err
 	}
 	for _, job := range jobs {
-		if job.State != "up" {
+		if job.State != ct.JobStateUp {
 			continue
 		}
 		if _, ok := d.useJobEvents[job.Type]; !ok {
@@ -166,7 +167,7 @@ func (d *DeployJob) Perform() error {
 
 		// track the jobs so we can drop any events received between
 		// connecting the job stream and getting the list of jobs
-		d.knownJobStates[jobIDState{job.ID, "up"}] = struct{}{}
+		d.knownJobStates[jobIDState{job.ID, ct.JobStateUp}] = struct{}{}
 
 		switch job.ReleaseID {
 		case d.OldReleaseID:
@@ -185,37 +186,10 @@ func (d *DeployJob) Perform() error {
 	return deployFunc()
 }
 
-type jobEvents map[string]map[string]int
+func (d *DeployJob) waitForJobEvents(releaseID string, expected ct.JobEvents, log log15.Logger) error {
+	actual := make(ct.JobEvents)
 
-func (j jobEvents) Count() int {
-	var n int
-	for _, procs := range j {
-		for _, i := range procs {
-			n += i
-		}
-	}
-	return n
-}
-
-func (j jobEvents) Equals(other jobEvents) bool {
-	for typ, events := range j {
-		diff, ok := other[typ]
-		if !ok {
-			return false
-		}
-		for state, count := range events {
-			if diff[state] != count {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func (d *DeployJob) waitForJobEvents(releaseID string, expected jobEvents, log log15.Logger) error {
-	actual := make(jobEvents)
-
-	handleEvent := func(jobID, typ, state string) {
+	handleEvent := func(jobID, typ string, state ct.JobState) {
 		// don't send duplicate events
 		if _, ok := d.knownJobStates[jobIDState{jobID, state}]; ok {
 			return
@@ -223,7 +197,7 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected jobEvents, log l
 		d.knownJobStates[jobIDState{jobID, state}] = struct{}{}
 
 		if _, ok := actual[typ]; !ok {
-			actual[typ] = make(map[string]int)
+			actual[typ] = make(map[ct.JobState]int)
 		}
 		actual[typ][state] += 1
 		d.deployEvents <- ct.DeploymentEvent{
@@ -259,7 +233,7 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected jobEvents, log l
 				continue
 			}
 			log.Info("got service event", "job_id", jobID, "type", typ, "state", event.Kind)
-			handleEvent(jobID, typ, "up")
+			handleEvent(jobID, typ, ct.JobStateUp)
 			if expected.Equals(actual) {
 				return nil
 			}
@@ -274,27 +248,25 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected jobEvents, log l
 			// if service discovery is being used for the job's type, ignore up events and fail
 			// the deployment if we get a down event when waiting for the job to come up.
 			if _, ok := d.useJobEvents[event.Type]; !ok {
-				if event.State == "up" {
+				if event.State == ct.JobStateUp {
 					continue
 				}
-				if expected[event.Type]["up"] > 0 && event.IsDown() {
-					handleEvent(event.ID, event.Type, "down")
+				if expected[event.Type][ct.JobStateUp] > 0 && event.IsDown() {
+					handleEvent(event.ID, event.Type, ct.JobStateDown)
 					return fmt.Errorf("%s process type failed to start, got %s job event", event.Type, event.State)
 				}
 			}
 
 			log.Info("got job event", "job_id", event.ID, "type", event.Type, "state", event.State)
-			if _, ok := actual[event.Type]; !ok {
-				actual[event.Type] = make(map[string]int)
+			if event.State == ct.JobStateStarting {
+				continue
 			}
-			switch event.State {
-			case "up":
-				handleEvent(event.ID, event.Type, "up")
-			case "down", "crashed":
-				handleEvent(event.ID, event.Type, "down")
-			case "failed":
-				handleEvent(event.ID, event.Type, "failed")
-				return fmt.Errorf("deployer: %s job failed to start", event.Type)
+			if _, ok := actual[event.Type]; !ok {
+				actual[event.Type] = make(map[ct.JobState]int)
+			}
+			handleEvent(event.ID, event.Type, event.State)
+			if event.HostError != "" {
+				return fmt.Errorf("deployer: %s job failed to start: %s", event.Type, event.HostError)
 			}
 			if expected.Equals(actual) {
 				return nil

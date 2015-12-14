@@ -863,6 +863,8 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) *Job {
 
 	job.startedAt = activeJob.StartedAt
 	job.metadata = hostJob.Metadata
+	job.exitStatus = activeJob.ExitStatus
+	job.hostError = activeJob.Error
 
 	s.handleJobStatus(job, activeJob.Status)
 
@@ -890,10 +892,7 @@ func (s *Scheduler) handleJobStatus(job *Job, status host.JobStatus) {
 	// if the job's state has changed, persist it to the controller
 	if job.state != previousState {
 		log.Info("handling job status change", "from", previousState, "to", job.state)
-		s.putJobs <- controllerJobFromSchedulerJob(
-			job,
-			jobState(status),
-		)
+		s.persistJob(job)
 	}
 
 	// ensure the job has a known formation
@@ -947,6 +946,10 @@ func (s *Scheduler) handleJobStatus(job *Job, status host.JobStatus) {
 	// trigger a rectify for the job's formation in case we have too many
 	// jobs of the given type and we need to stop some
 	s.triggerRectify(job.Formation.key())
+}
+
+func (s *Scheduler) persistJob(job *Job) {
+	s.putJobs <- job.ControllerJob()
 }
 
 func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) (formation *Formation) {

@@ -2,6 +2,7 @@ package deployment
 
 import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
+	ct "github.com/flynn/flynn/controller/types"
 	dd "github.com/flynn/flynn/discoverd/deployment"
 )
 
@@ -32,18 +33,21 @@ func (d *DeployJob) deployDiscoverdMeta() (err error) {
 		defer discDeploy.Close()
 	}
 
-	return d.deployOneByOneWithWaitFn(func(releaseID string, expected jobEvents, log log15.Logger) error {
+	return d.deployOneByOneWithWaitFn(func(releaseID string, expected ct.JobEvents, log log15.Logger) error {
 		for typ, events := range expected {
-			if count, ok := events["up"]; ok && count > 0 {
+			if count, ok := events[ct.JobStateUp]; ok && count > 0 {
 				if discDeploy, ok := discDeploys[typ]; ok {
 					if err := discDeploy.Wait(count, 120, log); err != nil {
 						return err
 					}
 					// clear up events for this type so we can safely
 					// process job down events if needed
-					expected[typ]["up"] = 0
+					expected[typ][ct.JobStateUp] = 0
 				}
 			}
+		}
+		if expected.Count() == 0 {
+			return nil
 		}
 		return d.waitForJobEvents(releaseID, expected, log)
 	})

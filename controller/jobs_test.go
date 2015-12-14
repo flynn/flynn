@@ -23,7 +23,7 @@ func (s *S) TestJobList(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "job-list"})
 	release := s.createTestRelease(c, &ct.Release{})
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
-	s.createTestJob(c, &ct.Job{ID: "host0-job0", AppID: app.ID, ReleaseID: release.ID, Type: "web", State: "starting", Meta: map[string]string{"some": "info"}})
+	s.createTestJob(c, &ct.Job{ID: "host0-job0", AppID: app.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateStarting, Meta: map[string]string{"some": "info"}})
 
 	list, err := s.c.JobList(app.ID)
 	c.Assert(err, IsNil)
@@ -39,7 +39,7 @@ func (s *S) TestJobGet(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "job-get"})
 	release := s.createTestRelease(c, &ct.Release{})
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
-	jobID := s.createTestJob(c, &ct.Job{ID: "host0-job1", AppID: app.ID, ReleaseID: release.ID, Type: "web", State: "starting", Meta: map[string]string{"some": "info"}}).ID
+	jobID := s.createTestJob(c, &ct.Job{ID: "host0-job1", AppID: app.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateStarting, Meta: map[string]string{"some": "info"}}).ID
 
 	job, err := s.c.GetJob(app.ID, jobID)
 	c.Assert(err, IsNil)
@@ -53,21 +53,21 @@ func (s *S) TestJobStateTransition(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "job-state-transition"})
 	release := s.createTestRelease(c, &ct.Release{})
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
-	job := s.createTestJob(c, &ct.Job{ID: "host0-job2", AppID: app.ID, ReleaseID: release.ID, Type: "web", State: "starting"})
+	job := s.createTestJob(c, &ct.Job{ID: "host0-job2", AppID: app.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateStarting})
 
-	job.State = "up"
+	job.State = ct.JobStateUp
 	c.Assert(s.c.PutJob(job), IsNil)
 
 	// duplicates are ignored
 	c.Assert(s.c.PutJob(job), IsNil)
 
-	job.State = "starting"
+	job.State = ct.JobStateStarting
 	c.Assert(s.c.PutJob(job), ErrorMatches, ".*invalid job state transition.*")
 
-	job.State = "down"
+	job.State = ct.JobStateDown
 	c.Assert(s.c.PutJob(job), IsNil)
 
-	job.State = "up"
+	job.State = ct.JobStateUp
 	c.Assert(s.c.PutJob(job), ErrorMatches, ".*invalid job state transition.*")
 }
 

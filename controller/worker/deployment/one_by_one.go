@@ -8,7 +8,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-type WaitJobsFn func(releaseID string, expected jobEvents, log log15.Logger) error
+type WaitJobsFn func(releaseID string, expected ct.JobEvents, log log15.Logger) error
 
 func (d *DeployJob) deployOneByOne() error {
 	return d.deployOneByOneWithWaitFn(d.waitForJobEvents)
@@ -63,12 +63,12 @@ func (d *DeployJob) deployOneByOneWithWaitFn(waitJobs WaitJobsFn) error {
 			for i := 0; i < diff; i++ {
 				d.deployEvents <- ct.DeploymentEvent{
 					ReleaseID: d.NewReleaseID,
-					JobState:  "starting",
+					JobState:  ct.JobStateStarting,
 					JobType:   typ,
 				}
 			}
 			nlog.Info(fmt.Sprintf("waiting for %d job up event(s)", diff), "type", typ)
-			if err := waitJobs(d.NewReleaseID, jobEvents{typ: {"up": diff}}, nlog); err != nil {
+			if err := waitJobs(d.NewReleaseID, ct.JobEvents{typ: ct.JobUpEvents(diff)}, nlog); err != nil {
 				nlog.Error("error waiting for job up events", "err", err)
 				return err
 			}
@@ -86,13 +86,13 @@ func (d *DeployJob) deployOneByOneWithWaitFn(waitJobs WaitJobsFn) error {
 			for i := 0; i < diff; i++ {
 				d.deployEvents <- ct.DeploymentEvent{
 					ReleaseID: d.OldReleaseID,
-					JobState:  "stopping",
+					JobState:  ct.JobStateStopping,
 					JobType:   typ,
 				}
 			}
 
 			olog.Info(fmt.Sprintf("waiting for %d job down event(s)", diff), "type", typ)
-			if err := waitJobs(d.OldReleaseID, jobEvents{typ: {"down": diff}}, olog); err != nil {
+			if err := waitJobs(d.OldReleaseID, ct.JobEvents{typ: ct.JobDownEvents(diff)}, olog); err != nil {
 				olog.Error("error waiting for job down events", "err", err)
 				return err
 			}
@@ -103,9 +103,9 @@ func (d *DeployJob) deployOneByOneWithWaitFn(waitJobs WaitJobsFn) error {
 	// workers continue deployments from old workers and still see the
 	// old worker running even though it has been scaled down).
 	log.Info("ensuring old formation is scaled down to zero")
-	diff := make(jobEvents, len(oldScale))
+	diff := make(ct.JobEvents, len(oldScale))
 	for typ, count := range oldScale {
-		diff[typ] = map[string]int{"down": count}
+		diff[typ] = ct.JobDownEvents(count)
 	}
 	if err := d.client.PutFormation(&ct.Formation{
 		AppID:     d.AppID,

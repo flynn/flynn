@@ -45,18 +45,31 @@ var AppDeploy = Store.createClass({
 	},
 
 	handleEvent: function (event) {
+		var launchErrorMsg;
 		switch (event.name) {
 		case 'JOB':
 			if (event.taffy !== true || this.props.appID === null || (event.data.meta || {}).app !== this.props.appID || event.data.meta.rev !== this.props.sha) {
 				return;
 			}
 			if (this.state.taffyJob === null || event.object_id === this.state.taffyJob.id) {
+				launchErrorMsg = (function (job) {
+					if (job.host_error) {
+						return job.host_error;
+					}
+					if (job.hasOwnProperty('exit_status') && job.exit_status !== 0) {
+						return 'Non-zero exit status: '+ job.exit_status;
+					}
+					if (job.state === 'crashed') {
+						return 'Non-zero exit status';
+					}
+					return null;
+				})(event.data);
 				this.setState({
 					taffyJob: event.data,
-					launching: (event.data.state !== 'down' && event.data.state !== 'crashed'),
-					launchFailed: event.data.state === 'crashed',
-					launchSuccess: event.data.state === 'down',
-					launchErrorMsg: event.data.state === 'crashed' ? 'Non-zero exit status': null
+					launching: (event.data.state !== 'down' && launchErrorMsg === null),
+					launchFailed: launchErrorMsg !== null,
+					launchSuccess: event.data.state === 'down' && launchErrorMsg === null,
+					launchErrorMsg: launchErrorMsg
 				});
 				return;
 			}

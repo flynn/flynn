@@ -20,7 +20,7 @@ const scaleTimeout = 60 * time.Second
 
 var _ = c.Suite(&SchedulerSuite{})
 
-func (s *SchedulerSuite) checkJobState(t *c.C, appID, jobID, state string) {
+func (s *SchedulerSuite) checkJobState(t *c.C, appID, jobID string, state ct.JobState) {
 	job, err := s.controllerClient(t).GetJob(appID, jobID)
 	t.Assert(err, c.IsNil)
 	t.Assert(job.State, c.Equals, state)
@@ -86,7 +86,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	t.Assert(err, c.IsNil)
 	var jobs []*ct.Job
 	for _, job := range list {
-		if job.Type == "web" && job.State == "up" {
+		if job.Type == "web" && job.State == ct.JobStateUp {
 			jobs = append(jobs, job)
 		}
 	}
@@ -103,7 +103,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	debug(t, "scaling the controller up")
 	formation.Processes["web"]++
 	t.Assert(s.controllerClient(t).PutFormation(formation), c.IsNil)
-	err = watcher.WaitFor(ct.JobEvents{"web": {"up": 1}}, scaleTimeout, nil)
+	err = watcher.WaitFor(ct.JobEvents{"web": {ct.JobStateUp: 1}}, scaleTimeout, nil)
 	t.Assert(err, c.IsNil)
 
 	// kill the first controller and check the scheduler brings it back online
@@ -112,14 +112,14 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	t.Assert(err, c.IsNil)
 	debug(t, "stopping job ", jobID)
 	t.Assert(hc.StopJob(jobID), c.IsNil)
-	err = watcher.WaitFor(ct.JobEvents{"web": {"down": 1, "up": 1}}, scaleTimeout, nil)
+	err = watcher.WaitFor(ct.JobEvents{"web": {ct.JobStateDown: 1, ct.JobStateUp: 1}}, scaleTimeout, nil)
 	t.Assert(err, c.IsNil)
 
 	// scale back down
 	debug(t, "scaling the controller down")
 	formation.Processes["web"]--
 	t.Assert(s.controllerClient(t).PutFormation(formation), c.IsNil)
-	err = watcher.WaitFor(ct.JobEvents{"web": {"down": 1}}, scaleTimeout, nil)
+	err = watcher.WaitFor(ct.JobEvents{"web": {ct.JobStateDown: 1}}, scaleTimeout, nil)
 	t.Assert(err, c.IsNil)
 
 	// unset the suite's client so other tests use a new client
@@ -142,7 +142,7 @@ func (s *SchedulerSuite) TestJobMeta(t *c.C) {
 		},
 	})
 	t.Assert(err, c.IsNil)
-	err = watcher.WaitFor(ct.JobEvents{"": {"up": 1}}, scaleTimeout, nil)
+	err = watcher.WaitFor(ct.JobEvents{"": {ct.JobStateUp: 1}}, scaleTimeout, nil)
 	t.Assert(err, c.IsNil)
 
 	list, err := s.controllerClient(t).JobList(app.ID)
@@ -171,7 +171,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 		Cmd:       []string{"sh", "-c", "while true; do echo one-off-job; sleep 1; done"},
 	})
 	t.Assert(err, c.IsNil)
-	err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}, "crasher": {"up": 1}, "": {"up": 1}}, scaleTimeout, nil)
+	err = watcher.WaitFor(ct.JobEvents{"printer": {ct.JobStateUp: 1}, "crasher": {ct.JobStateUp: 1}, "": {ct.JobStateUp: 1}}, scaleTimeout, nil)
 	t.Assert(err, c.IsNil)
 
 	list, err := s.controllerClient(t).JobList(app.ID)
@@ -184,16 +184,16 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	}
 
 	// Check jobs are marked as up once started
-	t.Assert(jobs["printer"].State, c.Equals, "up")
-	t.Assert(jobs["crasher"].State, c.Equals, "up")
-	t.Assert(jobs[""].State, c.Equals, "up")
+	t.Assert(jobs["printer"].State, c.Equals, ct.JobStateUp)
+	t.Assert(jobs["crasher"].State, c.Equals, ct.JobStateUp)
+	t.Assert(jobs[""].State, c.Equals, ct.JobStateUp)
 
 	// Check that when a formation's job is removed, it is marked as down and a new one is scheduled
 	job := jobs["printer"]
 	s.stopJob(t, job.ID)
-	err = watcher.WaitFor(ct.JobEvents{"printer": {"down": 1, "up": 1}}, scaleTimeout, nil)
+	err = watcher.WaitFor(ct.JobEvents{"printer": {ct.JobStateDown: 1, ct.JobStateUp: 1}}, scaleTimeout, nil)
 	t.Assert(err, c.IsNil)
-	s.checkJobState(t, app.ID, job.ID, "down")
+	s.checkJobState(t, app.ID, job.ID, ct.JobStateDown)
 	list, err = s.controllerClient(t).JobList(app.ID)
 	t.Assert(err, c.IsNil)
 	t.Assert(list, c.HasLen, 4)
@@ -201,19 +201,19 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	// Check that when a one-off job is removed, it is marked as down but a new one is not scheduled
 	job = jobs[""]
 	s.stopJob(t, job.ID)
-	err = watcher.WaitFor(ct.JobEvents{"": {"down": 1}}, scaleTimeout, nil)
+	err = watcher.WaitFor(ct.JobEvents{"": {ct.JobStateDown: 1}}, scaleTimeout, nil)
 	t.Assert(err, c.IsNil)
-	s.checkJobState(t, app.ID, job.ID, "down")
+	s.checkJobState(t, app.ID, job.ID, ct.JobStateDown)
 	list, err = s.controllerClient(t).JobList(app.ID)
 	t.Assert(err, c.IsNil)
 	t.Assert(list, c.HasLen, 4)
 
-	// Check that when a job errors, it is marked as crashed and a new one is started
+	// Check that when a job errors, it is marked as down and a new one is started
 	job = jobs["crasher"]
 	s.stopJob(t, job.ID)
-	err = watcher.WaitFor(ct.JobEvents{"crasher": {"down": 1, "up": 1}}, scaleTimeout, nil)
+	err = watcher.WaitFor(ct.JobEvents{"crasher": {ct.JobStateDown: 1, ct.JobStateUp: 1}}, scaleTimeout, nil)
 	t.Assert(err, c.IsNil)
-	s.checkJobState(t, app.ID, job.ID, "crashed")
+	s.checkJobState(t, app.ID, job.ID, ct.JobStateDown)
 	list, err = s.controllerClient(t).JobList(app.ID)
 	t.Assert(err, c.IsNil)
 	t.Assert(list, c.HasLen, 5)
@@ -258,7 +258,7 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 	// Check that new hosts get omni jobs
 	newHosts := s.addHosts(t, 2, false)
 	defer s.removeHosts(t, newHosts)
-	err = watcher.WaitFor(ct.JobEvents{"omni": {"up": 2}}, scaleTimeout, nil)
+	err = watcher.WaitFor(ct.JobEvents{"omni": {ct.JobStateUp: 2}}, scaleTimeout, nil)
 	t.Assert(err, c.IsNil)
 }
 
@@ -294,14 +294,14 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 		id = j.ID
 		return nil
 	}
-	err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, scaleTimeout, assignId)
+	err = watcher.WaitFor(ct.JobEvents{"printer": {ct.JobStateUp: 1}}, scaleTimeout, assignId)
 	t.Assert(err, c.IsNil)
 
 	waitForRestart := func(duration time.Duration) {
 		start := time.Now()
 		s.stopJob(t, id)
 		debugf(t, "expecting new job to start in %s", duration)
-		err = watcher.WaitFor(ct.JobEvents{"printer": {"up": 1}}, duration+startTimeout, assignId)
+		err = watcher.WaitFor(ct.JobEvents{"printer": {ct.JobStateUp: 1}}, duration+startTimeout, assignId)
 		t.Assert(err, c.IsNil)
 		actual := time.Now().Sub(start)
 		if actual < duration {
@@ -407,14 +407,11 @@ loop:
 
 	// wait for jobs to come back up
 	hosts, err := s.clusterClient(t).Hosts()
-	expected := map[string]map[string]int{
-		currentReleaseID: {
-			"web":       formation.Processes["web"],
-			"scheduler": len(hosts),
-		},
+	expected := map[string]map[ct.JobState]int{
+		"web":       {ct.JobStateUp: formation.Processes["web"]},
+		"scheduler": {ct.JobStateUp: len(hosts)},
 	}
-	watcher.WaitFor(expected, scaleTimeout, nil)
-	expected[currentReleaseID]["worker"] = formation.Processes["worker"]
+	t.Assert(watcher.WaitFor(expected, scaleTimeout, nil), c.IsNil)
 
 	// check the correct controller jobs are running
 	t.Assert(err, c.IsNil)
@@ -432,6 +429,9 @@ loop:
 				continue
 			}
 			releaseID := job.Job.Metadata["flynn-controller.release"]
+			if releaseID != currentReleaseID {
+				continue
+			}
 			if _, ok := actual[releaseID]; !ok {
 				actual[releaseID] = make(map[string]int)
 			}
@@ -439,7 +439,13 @@ loop:
 			actual[releaseID][typ]++
 		}
 	}
-	t.Assert(actual, c.DeepEquals, expected)
+	t.Assert(actual, c.DeepEquals, map[string]map[string]int{
+		currentReleaseID: {
+			"web":       formation.Processes["web"],
+			"scheduler": formation.Processes["scheduler"] * len(hosts),
+			"worker":    formation.Processes["worker"],
+		},
+	})
 }
 
 func (s *SchedulerSuite) TestDeployController(t *c.C) {

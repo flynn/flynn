@@ -201,11 +201,11 @@ Options:
 		}
 		fmt.Println("=====> Waiting for web job to start...")
 
-		err = watcher.WaitFor(ct.JobEvents{"web": {"up": 1}}, scaleTimeout, func(e *ct.Job) error {
+		err = watcher.WaitFor(ct.JobEvents{"web": ct.JobUpEvents(1)}, scaleTimeout, func(e *ct.Job) error {
 			switch e.State {
-			case "up":
+			case ct.JobStateUp:
 				fmt.Println("=====> Default web formation scaled to 1")
-			case "down", "crashed":
+			case ct.JobStateDown:
 				return fmt.Errorf("Failed to scale web process type")
 			}
 			return nil

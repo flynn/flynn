@@ -8,6 +8,7 @@ import (
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/logaggregator/client"
 )
@@ -119,7 +120,7 @@ func (s *LogAggregatorSuite) TestReplication(t *c.C) {
 	jobs, err := cc.JobList("logaggregator")
 	t.Assert(err, c.IsNil)
 	for _, j := range jobs {
-		if j.State == "up" {
+		if j.State == ct.JobStateUp {
 			t.Assert(cc.DeleteJob(app.name, j.ID), c.IsNil)
 		}
 	}

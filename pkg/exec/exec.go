@@ -267,7 +267,7 @@ func (c *Cmd) Start() error {
 			for e := range c.eventChan {
 				switch e.Event {
 				case "stop":
-					c.exitStatus = e.Job.ExitStatus
+					c.exitStatus = *e.Job.ExitStatus
 					break outer
 				case "error":
 					c.streamErr = errors.New(*e.Job.Error)
