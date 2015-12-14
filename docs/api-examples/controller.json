@@ -225,6 +225,22 @@
 			"body": "-----BEGIN CERTIFICATE-----\nMIIDAzCCAe2gAwIBAgIQWDc0+etYgH5q5rGDwG5DgTALBgkqhkiG9w0BAQswLTEO\nMAwGA1UEChMFRmx5bm4xGzAZBgNVBAsTEkZseW5uIEVwaGVtZXJhbCBDQTAeFw0x\nNTEyMTQyMjM4MTZaFw0yMDEyMTIyMjM4MTZaMC0xDjAMBgNVBAoTBUZseW5uMRsw\nGQYDVQQLExJGbHlubiBFcGhlbWVyYWwgQ0EwggEiMA0GCSqGSIb3DQEBAQUAA4IB\nDwAwggEKAoIBAQDiBS4ll9ssgHW+B8Ig5VqyP5AGcMmMAHl4JCXGod+ZqunZSg3H\ngq9PtbraAqOJ+w9fvo54PR4AYWV7baZ5lDOzDoHmYB+A35HgDOAuM8ebc1hiHMtG\n14Z7lPWZ9VFhlW0qFEiN6r8Al8HiiSyegr77YkD2O/sWIk/7+xQr7wwhKIjQDcUG\neesdvs/rQSprtouAa5564yRhn1ma0S9Liz7sgtFtnJAhc1En67tLjhcV+9td4pHw\nY+oLwJO14woQB7aTLfOFxnwOz4OxaOJcLh4lCMvn0Td2iXDOkuahuYGon+/2pfA2\nqBLV8bfh3zTApjTLHwunBEsWUf/uXcb8Hn2LAgMBAAGjIzAhMA4GA1UdDwEB/wQE\nAwIABjAPBgNVHRMBAf8EBTADAQH/MAsGCSqGSIb3DQEBCwOCAQEA0qUeD5OYkLiF\ns37yKgyI3LixI+RxzApJyvz6umii79bD6QF4Vr1Z4CTfgA9NDJDTVwi5pC2s3Fuc\nbUMskWU/ogb+nYJKr/VcqPLEirmPkjvXjHp53UDU7HCq2DM2KcidjF4S5THbxwBh\nijwJI04lTQfp3aubwVK02mizH3PdwcRA+VHi+SdnqeLkS4AaRgoeHuC//aNTIobu\nuZWSNUmRGT0KAcZ03uU3WuWxnkyoLiG5be+dWHbO2vX4YLeEEWOPR/GwM715l4KL\ntXk/m7kKMLDQzFeBuiTez6eVmKsOsbB6f9gxvu8k37ZeHnuLYaPG7bwTDLt+ZNBh\nUuytbCjshg==\n-----END CERTIFICATE-----\n"
 		}
 	},
+	"cluster_backup": {
+		"request": {
+			"method": "GET",
+			"url": "/backup",
+			"headers": {
+				"Authorization": "Basic OnMzY3IzdA==",
+				"Content-Type": "application/json"
+			}
+		},
+		"response": {
+			"headers": {
+				"Content-Disposition": "attachment; filename=\"flynn-backup-2015-12-14_223853.tar\"",
+				"Content-Type": "application/tar"
+			}
+		}
+	},
 	"deployment_create": {
 		"request": {
 			"method": "POST",

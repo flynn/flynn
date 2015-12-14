@@ -97,6 +97,7 @@ func main() {
 		{"events_stream", e.eventsStream},
 		{"event_get", e.eventGet},
 		{"ca_cert", e.getCACert},
+		{"cluster_backup", e.clusterBackup},
 	}
 
 	var out io.Writer
@@ -420,4 +421,9 @@ func (e *generator) eventGet() {
 
 func (e *generator) getCACert() {
 	e.client.GetCACert()
+}
+
+func (e *generator) clusterBackup() {
+	// don't read response so it's not shown in docs
+	e.client.Backup()
 }
