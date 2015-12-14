@@ -86,7 +86,7 @@ func run() error {
 	log.Info("validating images")
 	uris := make(map[string]string, len(updater.SystemApps))
 	for _, app := range updater.SystemApps {
-		if v := version.Parse(statuses[app.Name].Version); !v.Dev && app.MinVersion != "" && version.Parse(app.MinVersion).Before(v) {
+		if v := version.Parse(statuses[app.Name].Version); !v.Dev && app.MinVersion != "" && v.Before(version.Parse(app.MinVersion)) {
 			log.Info(
 				"not updating image of system app, can't upgrade from running version",
 				"app", app.Name,
@@ -119,6 +119,7 @@ func run() error {
 				"reason", "image not updated",
 				"app", appInfo.Name,
 			)
+			continue
 		}
 		log := log.New("name", appInfo.Name)
 		log.Info("starting deploy of system app")
