@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/controller/expanded_formation#",
+  "title": "Expanded Formation",
+  "description": "",
+  "sortIndex": 3,
+  "type": "object",
+  "examples": [
+    "schema/examples/controller/formation_get_expanded#",
+    "schema/examples/controller/formations_list_active#",
+    "schema/examples/controller/formations_stream#"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "app": {
+      "$ref": "/schema/controller/app#"
+    },
+    "release": {
+      "$ref": "/schema/controller/release#"
+    },
+    "artifact": {
+      "$ref": "/schema/controller/artifact#"
+    },
+    "processes": {
+      "description": "count of processes to run for each process type",
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "updated_at": {
+      "$ref": "/schema/controller/common#/definitions/updated_at"
+    }
+  }
+}

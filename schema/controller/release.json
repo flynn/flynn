@@ -3,7 +3,7 @@
   "id": "https://flynn.io/schema/controller/release#",
   "title": "Release",
   "description": "",
-  "sortIndex": 10,
+  "sortIndex": 11,
   "type": "object",
   "examples": [
     "schema/examples/controller/app_initial_release_get#",

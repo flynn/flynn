@@ -3,7 +3,7 @@
   "id": "https://flynn.io/schema/controller/ca_cert#",
   "title": "CA Cert",
   "description": "",
-  "sortIndex": 16,
+  "sortIndex": 17,
   "type": "string",
   "examples": [
     "schema/examples/controller/ca_cert#"

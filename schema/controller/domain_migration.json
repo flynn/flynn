@@ -3,7 +3,7 @@
   "id": "https://flynn.io/schema/controller/domain_migration#",
   "title": "Domain Migration",
   "description": "",
-  "sortIndex": 18,
+  "sortIndex": 19,
   "type": "object",
   "examples": [
     "schema/examples/controller/migrate_cluster_domain#"

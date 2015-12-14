@@ -3,7 +3,7 @@
   "id": "https://flynn.io/schema/controller/new_job#",
   "title": "New Job",
   "description": "A new job describes a desired process configuration.",
-  "sortIndex": 4,
+  "sortIndex": 5,
   "type": "object",
   "examples": [
     "schema/examples/controller/job_run#"

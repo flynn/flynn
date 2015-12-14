@@ -3,7 +3,7 @@
   "id": "https://flynn.io/schema/controller/cluster_backup#",
   "title": "Backup",
   "description": "",
-  "sortIndex": 17,
+  "sortIndex": 18,
   "type": "string",
   "examples": [
     "schema/examples/controller/cluster_backup#"

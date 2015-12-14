@@ -3,7 +3,7 @@
   "id": "https://flynn.io/schema/controller/provider#",
   "title": "Provider",
   "description": "",
-  "sortIndex": 9,
+  "sortIndex": 10,
   "type": "object",
   "examples": [
     "schema/examples/controller/provider_create#",

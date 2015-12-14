@@ -81,7 +81,10 @@ func main() {
 		{"app_release_get", e.getAppRelease},
 		{"formation_put", e.putFormation},
 		{"formation_get", e.getFormation},
+		{"formation_get_expanded", e.getExpandedFormation},
 		{"formation_list", e.listFormations},
+		{"formations_list_active", e.listActiveFormations},
+		{"formations_stream", e.streamFormations},
 		{"release_create2", e.createRelease},
 		{"deployment_create", e.createDeployment},
 		{"formation_delete", e.deleteFormation},
@@ -292,8 +295,30 @@ func (e *generator) getFormation() {
 	e.client.GetFormation(e.resourceIds["app"], e.resourceIds["release"])
 }
 
+func (e *generator) getExpandedFormation() {
+	e.client.GetExpandedFormation(e.resourceIds["app"], e.resourceIds["release"])
+}
+
 func (e *generator) listFormations() {
 	e.client.FormationList(e.resourceIds["app"])
+}
+
+func (e *generator) listActiveFormations() {
+	e.client.FormationListActive()
+}
+
+func (e *generator) streamFormations() {
+	output := make(chan *ct.ExpandedFormation)
+	e.client.StreamFormations(nil, output)
+	timeout := time.After(10 * time.Second)
+outer:
+	for {
+		select {
+		case <-output:
+		case <-timeout:
+			break outer
+		}
+	}
 }
 
 func (e *generator) deleteFormation() {
