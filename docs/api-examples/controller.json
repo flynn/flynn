@@ -209,6 +209,22 @@
 			"body": "[{\"id\":\"02a9d8ae-c146-4f6a-a1cf-abdaa4c31812\",\"type\":\"docker\",\"uri\":\"https://dl.flynn.io/tuf?name=flynn/slugrunner\\u0026id=131df003734e855a4fdb7af912f4e64604cb6b1b5007c9c2e648fd57bdf63b67\",\"created_at\":\"2015-12-11T17:18:25.960544Z\"},{\"id\":\"9144f5ff-6edd-4dc9-8a83-b72a91aae492\",\"type\":\"docker\",\"uri\":\"https://dl.flynn.io/tuf?name=flynn/status\\u0026id=55f7437fcc846845be15c4db44d5fc551d986ffbf30178e83f421cb4e51f3fd6\",\"created_at\":\"2015-12-11T17:18:14.449914Z\"},{\"id\":\"132110f6-6c91-402b-ad01-a56000be8298\",\"type\":\"docker\",\"uri\":\"https://dl.flynn.io/tuf?name=flynn/dashboard\\u0026id=2f633968ce3be6159beb6c13b7c3ec5da25e51af8b958bb7f7a784a360e4d7b2\",\"created_at\":\"2015-12-11T17:18:14.393666Z\"},{\"id\":\"78bc8a42-581d-415e-9118-a605f65429f0\",\"type\":\"docker\",\"uri\":\"https://dl.flynn.io/tuf?name=flynn/taffy\\u0026id=35f101375b3c3ee435b1d6a4650f5339c5c24505163a13725d382f1542c1a1ea\",\"created_at\":\"2015-12-11T17:18:14.352332Z\"},{\"id\":\"3b5a2e7c-8d63-4975-a5dd-99bf35ff4ad3\",\"type\":\"docker\",\"uri\":\"https://dl.flynn.io/tuf?name=flynn/logaggregator\\u0026id=edb9a5d59119e629eac93fa43b4e27760b5917b1229750050d78f2bad91de06a\",\"created_at\":\"2015-12-11T17:18:14.315032Z\"},{\"id\":\"47664972-8297-4d67-ab9b-f5fbecc702ad\",\"type\":\"docker\",\"uri\":\"https://dl.flynn.io/tuf?name=flynn/gitreceive\\u0026id=99961c865ed4d3a2b2639e61d03af191020e4017fa9ffb1aad478285dcb0dfd5\",\"created_at\":\"2015-12-11T17:18:09.654205Z\"},{\"id\":\"6e40ea34-1226-4625-a458-72c5dcfba4a0\",\"type\":\"docker\",\"uri\":\"https://dl.flynn.io/tuf?name=flynn/router\\u0026id=0d9248ebab5141b99d00b1909916e3441781464b580c4a96c0a97046ae6aa8f3\",\"created_at\":\"2015-12-11T17:18:09.614188Z\"},{\"id\":\"68953eb6-70a9-4a9b-828b-9933d23c4867\",\"type\":\"docker\",\"uri\":\"https://dl.flynn.io/tuf?name=flynn/blobstore\\u0026id=8deedec57b4f1804e31bef5d00fc7ba6184460d033872acd719c5010b4f6f29f\",\"created_at\":\"2015-12-11T17:18:09.190379Z\"},{\"id\":\"469557ae-aa80-4173-aa54-7760827f38ca\",\"type\":\"docker\",\"uri\":\"https://dl.flynn.io/tuf?name=flynn/discoverd\\u0026id=05d8f32814b10403423aa2fb5ce61071dd3c1d6620c7607d8752eabc24fa2c1a\",\"created_at\":\"2015-12-11T17:18:06.846289Z\"},{\"id\":\"0f26de01-5255-49c2-becd-a98bc94d21db\",\"type\":\"docker\",\"uri\":\"https://dl.flynn.io/tuf?name=flynn/flannel\\u0026id=b1f9ec39e0aee671584d1771df89cdb1eec060f1b5c2014ff2dda52248c18887\",\"created_at\":\"2015-12-11T17:18:06.818809Z\"},{\"id\":\"9b50b55b-2c2e-4db9-a733-d961c25ce601\",\"type\":\"docker\",\"uri\":\"https://dl.flynn.io/tuf?name=flynn/postgresql\\u0026id=f558ae89c73921f31ca9a55cdb79a131b76823d84466f5969bcba83c76f91057\",\"created_at\":\"2015-12-11T17:18:06.795088Z\"},{\"id\":\"525424e7-6bec-43f0-b6de-8f3da6b10646\",\"type\":\"docker\",\"uri\":\"https://dl.flynn.io/tuf?name=flynn/controller\\u0026id=55a66373e3fdbf418c11908fec768f56b9b0ebed8be46de4536a7421ff51ca7a\",\"created_at\":\"2015-12-11T17:18:06.760054Z\"}]"
 		}
 	},
+	"ca_cert": {
+		"request": {
+			"method": "GET",
+			"url": "/ca-cert",
+			"headers": {
+				"Authorization": "Basic OnMzY3IzdA==",
+				"Content-Type": "application/json"
+			}
+		},
+		"response": {
+			"headers": {
+				"Content-Type": "application/x-x509-ca-cert"
+			},
+			"body": "-----BEGIN CERTIFICATE-----\nMIIDAzCCAe2gAwIBAgIQWDc0+etYgH5q5rGDwG5DgTALBgkqhkiG9w0BAQswLTEO\nMAwGA1UEChMFRmx5bm4xGzAZBgNVBAsTEkZseW5uIEVwaGVtZXJhbCBDQTAeFw0x\nNTEyMTQyMjM4MTZaFw0yMDEyMTIyMjM4MTZaMC0xDjAMBgNVBAoTBUZseW5uMRsw\nGQYDVQQLExJGbHlubiBFcGhlbWVyYWwgQ0EwggEiMA0GCSqGSIb3DQEBAQUAA4IB\nDwAwggEKAoIBAQDiBS4ll9ssgHW+B8Ig5VqyP5AGcMmMAHl4JCXGod+ZqunZSg3H\ngq9PtbraAqOJ+w9fvo54PR4AYWV7baZ5lDOzDoHmYB+A35HgDOAuM8ebc1hiHMtG\n14Z7lPWZ9VFhlW0qFEiN6r8Al8HiiSyegr77YkD2O/sWIk/7+xQr7wwhKIjQDcUG\neesdvs/rQSprtouAa5564yRhn1ma0S9Liz7sgtFtnJAhc1En67tLjhcV+9td4pHw\nY+oLwJO14woQB7aTLfOFxnwOz4OxaOJcLh4lCMvn0Td2iXDOkuahuYGon+/2pfA2\nqBLV8bfh3zTApjTLHwunBEsWUf/uXcb8Hn2LAgMBAAGjIzAhMA4GA1UdDwEB/wQE\nAwIABjAPBgNVHRMBAf8EBTADAQH/MAsGCSqGSIb3DQEBCwOCAQEA0qUeD5OYkLiF\ns37yKgyI3LixI+RxzApJyvz6umii79bD6QF4Vr1Z4CTfgA9NDJDTVwi5pC2s3Fuc\nbUMskWU/ogb+nYJKr/VcqPLEirmPkjvXjHp53UDU7HCq2DM2KcidjF4S5THbxwBh\nijwJI04lTQfp3aubwVK02mizH3PdwcRA+VHi+SdnqeLkS4AaRgoeHuC//aNTIobu\nuZWSNUmRGT0KAcZ03uU3WuWxnkyoLiG5be+dWHbO2vX4YLeEEWOPR/GwM715l4KL\ntXk/m7kKMLDQzFeBuiTez6eVmKsOsbB6f9gxvu8k37ZeHnuLYaPG7bwTDLt+ZNBh\nUuytbCjshg==\n-----END CERTIFICATE-----\n"
+		}
+	},
 	"deployment_create": {
 		"request": {
 			"method": "POST",

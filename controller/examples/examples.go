@@ -96,6 +96,7 @@ func main() {
 		{"events_list", e.eventsList},
 		{"events_stream", e.eventsStream},
 		{"event_get", e.eventGet},
+		{"ca_cert", e.getCACert},
 	}
 
 	var out io.Writer
@@ -415,4 +416,8 @@ func (e *generator) eventGet() {
 		log.Fatal(err)
 	}
 	e.client.GetEvent(eventID)
+}
+
+func (e *generator) getCACert() {
+	e.client.GetCACert()
 }
