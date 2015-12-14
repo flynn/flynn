@@ -24,6 +24,7 @@ import (
 type generator struct {
 	conf        *config
 	client      *cc.Client
+	recorder    *httprecorder.Recorder
 	resourceIds map[string]string
 }
 
@@ -49,6 +50,7 @@ func main() {
 	e := &generator{
 		conf:        conf,
 		client:      client,
+		recorder:    recorder,
 		resourceIds: make(map[string]string),
 	}
 
@@ -98,6 +100,7 @@ func main() {
 		{"event_get", e.eventGet},
 		{"ca_cert", e.getCACert},
 		{"cluster_backup", e.clusterBackup},
+		{"migrate_cluster_domain", e.migrateClusterDomain},
 	}
 
 	var out io.Writer
@@ -426,4 +429,20 @@ func (e *generator) getCACert() {
 func (e *generator) clusterBackup() {
 	// don't read response so it's not shown in docs
 	e.client.Backup()
+}
+
+func (e *generator) migrateClusterDomain() {
+	release, err := e.client.GetAppRelease("controller")
+	if err != nil {
+		log.Fatal(err)
+	}
+	oldDomain := release.Env["DEFAULT_ROUTE_DOMAIN"]
+	e.recorder.GetRequests() // ignore above request
+	err = e.client.PutDomain(&ct.DomainMigration{
+		Domain:    "127.0.0.1.xip.io",
+		OldDomain: oldDomain,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 }

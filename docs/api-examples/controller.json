@@ -438,6 +438,23 @@
 			"body": "{\"id\":\"host-4939c066-73cd-4870-9a1b-c54311e32df9\",\"app\":\"83e1e875-6838-41be-bc01-3c6d2ffd71d8\",\"release\":\"40de8506-6603-4265-a91a-19e6ad3df1f9\",\"state\":\"down\",\"created_at\":\"2015-12-11T17:18:26.052688Z\",\"updated_at\":\"2015-12-11T17:18:26.052688Z\"}"
 		}
 	},
+	"migrate_cluster_domain": {
+		"request": {
+			"method": "PUT",
+			"url": "/domain",
+			"headers": {
+				"Authorization": "Basic OnMzY3IzdA==",
+				"Content-Type": "application/json"
+			},
+			"body": "{\"id\":\"\",\"old_domain\":\"dev.localflynn.com\",\"domain\":\"127.0.0.1.xip.io\"}"
+		},
+		"response": {
+			"headers": {
+				"Content-Type": "application/json"
+			},
+			"body": "{\"id\":\"f03de0b2-b26a-4f09-bf70-ffdd48156177\",\"old_tls_cert\":{\"ca_cert\":\"\",\"cert\":\"-----BEGIN CERTIFICATE-----\\nMIIDSjCCAjSgAwIBAgIQAVLloV/Ogem0e7KKzPZuEzALBgkqhkiG9w0BAQswLTEO\\nMAwGA1UEChMFRmx5bm4xGzAZBgNVBAsTEkZseW5uIEVwaGVtZXJhbCBDQTAeFw0x\\nNTEyMTQyMjM4MTdaFw0yMDEyMTIyMjM4MTdaMC0xDjAMBgNVBAoTBUZseW5uMRsw\\nGQYDVQQDExJkZXYubG9jYWxmbHlubi5jb20wggEiMA0GCSqGSIb3DQEBAQUAA4IB\\nDwAwggEKAoIBAQCoduVpxUJKQRJ2s4fB//ewoaNXJJ1dxfyX23ePIE2N1NJt/NWp\\nKtmPDAWMCJUypIeO74iMpMlAqtqstuL7hNC0y8si5QsJSkIi+x2hDA8bFBBuxU6p\\nyH2xzMI074/bZvdpqtbQdBMNOFNGbLq6zB/ubN0jmeFPlh3qZemRZ09GTjVjZatk\\nNAXzdkbAJSmqMHXiKHyNNLxJPwhAsJQ+xcWEAk7a18RCANnUVmAtbCbWv8AHYtJP\\ncrV0fcavJCfYINm/3jtjPshv4M8oqrs+rRLtXanLRCtbUnUEFJZ5xNRPvdGfsfh2\\nsZcybJjlRID7skh5KXpru3JkPF37lonsc/BXAgMBAAGjajBoMA4GA1UdDwEB/wQE\\nAwIAoDATBgNVHSUEDDAKBggrBgEFBQcDATAMBgNVHRMBAf8EAjAAMDMGA1UdEQQs\\nMCqCEmRldi5sb2NhbGZseW5uLmNvbYIUKi5kZXYubG9jYWxmbHlubi5jb20wCwYJ\\nKoZIhvcNAQELA4IBAQAzvnLcA+32NSjnug/9c6SUcKVyXTsr3pmf7pwO6lc0x5vn\\n9gbNKbiTHc2oQGThcm3/JjRqWFGxf+YPgEx2r77HLVrJnLGACJHlj7iEuoZ2ECJA\\n2cRosLgTp+dCP4mk8LU42wc4r6EBDGaiGh9uDW4spuAgXJKGFAekazGQUuNL/TqU\\nxo1N5bJ7F+45qaslFSaCJCrdpUCPzOwNVfCsDfpZbo9DvBGL37zknIhZmiIZIxl9\\n4xCa/AMox8Lnx5oj+NrLE+p2AhnWVds1gt4JD+4zCI9gvzqrx8/suz+1Q+hvDJ3F\\nbK0oMTggixIT9GVyeOJVzyLXTk0GtPDBTNDcyzcv\\n-----END CERTIFICATE-----\\n\",\"pin\":\"\",\"key\":\"-----BEGIN RSA PRIVATE KEY-----\\nMIIEpAIBAAKCAQEAqHblacVCSkESdrOHwf/3sKGjVySdXcX8l9t3jyBNjdTSbfzV\\nqSrZjwwFjAiVMqSHju+IjKTJQKrarLbi+4TQtMvLIuULCUpCIvsdoQwPGxQQbsVO\\nqch9sczCNO+P22b3aarW0HQTDThTRmy6uswf7mzdI5nhT5Yd6mXpkWdPRk41Y2Wr\\nZDQF83ZGwCUpqjB14ih8jTS8ST8IQLCUPsXFhAJO2tfEQgDZ1FZgLWwm1r/AB2LS\\nT3K1dH3GryQn2CDZv947Yz7Ib+DPKKq7Pq0S7V2py0QrW1J1BBSWecTUT73Rn7H4\\ndrGXMmyY5USA+7JIeSl6a7tyZDxd+5aJ7HPwVwIDAQABAoIBAQCK4gI90bbV2pGr\\nNFTOdgSwJIGxnOjzXv7f/rmxUDM/o12b+V336fCUApgsGwNNTeDH0Ofk8xFLc891\\npgy4yIT7GCuu597SWNrvVdDWbUeizkbB233/cN9XDnRpCbqyaU+9WG9iSN9P/ciB\\nfa/vwcrtV+hzqi/a2eptzHjjO6VaUlcENSroG6ln4ITd6nEsUjuXSvLZa2M1ylmJ\\nw8u/F6IWH7lRbL2idrn3QxuPFq+GHcUZ9AHCNdtIisWi13Cs3DlpRZrMtZxYc/5a\\nz5DZlYDrzGD+VAqXxuVIdCj0QXSVsfFuk4zuX20D4nFhrU3CQG/s1NGs9omc61g0\\nWvjYc0GJAoGBAMhNi86mf5dv3SWT6+rrdU31pvroCcTyx7VCudAbamAAoF15q1zJ\\neVo9Gvf8mBDXUCacn8uPllzpYxI476DsHBiq+Xjq+HmUhtCaQ0MkMgrL6GsK/dQj\\naiTIDvfLdHgQvkRKaDH8JXsAt8bmoTAyHWZzxje05T3S7t7HdXQjZl4rAoGBANdO\\n8gbKjVbSDbbP+WXBd8PXV7Dwq3ybsEG9Xwq+FL1dgaAHXsG34JRF5VVyDG80asPq\\nTKEzDFAizCKkDmy8vJEHesyNHH0LYsGWCaxl8H52Ano+yNEYWn+5R1/l2S5mCdox\\nlzf99aC/m7/N3oM1bAeCJUmOpECnDlTXQUjxEQyFAoGAVnIBMIJy9mx0yM76NjzA\\nN5EZK5gQ/0q4HeZaQxJR6nTawPzNlBHvqZ5NkVEWX85M7R0TacriXd7rvuWLpavA\\nxHSljiX6bp5HQKgS91sbrcUq3We0/GT8XjtpGlBYR6kSNG7YYRotItTAe7r1PdOj\\nFKBKn6gWd4QdS1BRxHmyqFkCgYBB3RSMn0m9VWR8mAJi7lwEvMtGhVjwNXAlrBh2\\n4M7XXtNYcOi7udQph3gwO0MygYZniDUI2uTZXsuzjRwch1/nvbIDAOfGGMWNEqjC\\n5Cw9gzweyTYFQL3udG8xFs7pMq2w4Zqwti99jR/H/OIkoSL66QUfC1OTs4bezTpb\\nZeMhQQKBgQCJQqouYo5/YZMlxDHGzd6zoJPoBTATwatM3wJmfUJYgodU7Ft2i5JN\\nqBPAUjDsbBcXliUZwVB2ZesCgEQfVm45ra+/XR0SrcBpFC2qoh/yDoqrOVWMV6Gy\\nVdax8efllWPtoqg11yvZ7j+tTxcfp5lUvClS3MnMxbVUUXS29Nz4ww==\\n-----END RSA PRIVATE KEY-----\\n\"},\"old_domain\":\"dev.localflynn.com\",\"domain\":\"127.0.0.1.xip.io\",\"created_at\":\"2015-12-14T22:38:53.816575Z\"}"
+		}
+	},
 	"provider_create": {
 		"request": {
 			"method": "POST",
