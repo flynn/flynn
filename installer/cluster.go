@@ -406,7 +406,7 @@ func (c *BaseCluster) bootstrapTarget(t *TargetServer) error {
 		return err
 	}
 	sess.Stderr = os.Stderr
-	if err := sess.Start(fmt.Sprintf("CLUSTER_DOMAIN=%s flynn-host bootstrap --min-hosts=%d --discovery=%s --json", c.Domain.Name, c.NumInstances, c.DiscoveryToken)); err != nil {
+	if err := sess.Start(fmt.Sprintf("CLUSTER_DOMAIN=%s flynn-host bootstrap --timeout 120 --min-hosts=%d --discovery=%s --json", c.Domain.Name, c.NumInstances, c.DiscoveryToken)); err != nil {
 		c.uploadDebugInfo(t)
 		return err
 	}
