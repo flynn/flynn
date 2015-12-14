@@ -81,7 +81,7 @@ CREATE TRIGGER notify_http_route_update
 	FOR EACH ROW EXECUTE PROCEDURE notify_http_route_update()`,
 	)
 	m.Add(2,
-		`ALTER TABLE http_routes ADD COLUMN path text NOT NULL`,
+		`ALTER TABLE http_routes ADD COLUMN path text NOT NULL DEFAULT '/'`,
 		`DROP INDEX http_routes_domain_key`,
 		`CREATE UNIQUE INDEX http_routes_domain_path_key ON http_routes
 		 USING btree (domain, path) WHERE deleted_at IS NULL`,
@@ -136,6 +136,14 @@ CREATE TRIGGER check_http_route_update
 	BEFORE INSERT OR UPDATE OR DELETE ON http_routes
 	FOR EACH ROW
 	EXECUTE PROCEDURE check_http_route_update()`,
+	)
+	m.Add(3,
+		// Ensure the default is set on the path column. We set this above, but
+		// releases v20151214.1, v20151214.0, v20151213.1, and v20151213.0
+		// didn't have the default specified, so this will fix any databases
+		// from those versions that have the broken release and have already run
+		// migration 2.
+		`ALTER TABLE http_routes ALTER COLUMN path SET DEFAULT '/'`,
 	)
 	return m.Migrate(db)
 }
