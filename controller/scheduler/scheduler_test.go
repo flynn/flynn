@@ -540,7 +540,7 @@ func (TestSuite) TestStopJob(c *C) {
 		{
 			desc: "one running and one scheduled, stops scheduled job",
 			jobs: Jobs{
-				"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStateScheduled, startedAt: recent.Add(-5 * time.Minute), restartTimer: time.NewTimer(0)},
+				"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStatePending, startedAt: recent.Add(-5 * time.Minute), restartTimer: time.NewTimer(0)},
 				"job2": &Job{ID: "job2", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent},
 			},
 			shouldStop: "job1",
@@ -549,7 +549,7 @@ func (TestSuite) TestStopJob(c *C) {
 		{
 			desc: "one running and one new, stops new job",
 			jobs: Jobs{
-				"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStateNew, startedAt: recent.Add(-5 * time.Minute)},
+				"job1": &Job{ID: "job1", Formation: formation, Type: "web", state: JobStatePending, startedAt: recent.Add(-5 * time.Minute)},
 				"job2": &Job{ID: "job2", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent},
 			},
 			shouldStop: "job1",

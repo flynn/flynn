@@ -228,16 +228,16 @@ WHERE app_id = $1 AND release_id = $2`
 UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now()
 WHERE app_id = $1 AND deleted_at IS NULL`
 	jobListQuery = `
-SELECT job_id, app_id, release_id, process_type, state, meta, exit_status, host_error, created_at, updated_at
+SELECT job_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at
 FROM job_cache WHERE app_id = $1 ORDER BY created_at DESC`
 	jobSelectQuery = `
-SELECT job_id, app_id, release_id, process_type, state, meta, exit_status, host_error, created_at, updated_at
+SELECT job_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at
 FROM job_cache WHERE job_id = $1`
 	jobInsertQuery = `
-INSERT INTO job_cache (job_id, app_id, release_id, process_type, state, meta, exit_status, host_error)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING created_at, updated_at`
+INSERT INTO job_cache (job_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING created_at, updated_at`
 	jobUpdateQuery = `
-UPDATE job_cache SET state = $2, exit_status = $3, host_error = $4, updated_at = now()
+UPDATE job_cache SET state = $2, exit_status = $3, host_error = $4, run_at = $5, restarts = $6, updated_at = now()
 WHERE job_id = $1 RETURNING created_at, updated_at`
 	providerListQuery = `
 SELECT provider_id, name, url, created_at, updated_at

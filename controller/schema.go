@@ -225,5 +225,10 @@ $$ LANGUAGE plpgsql`,
 		`DROP TRIGGER job_state_trigger ON job_cache`,
 		`DROP TYPE job_state`,
 	)
+	m.Add(9,
+		`INSERT INTO job_states (name) VALUES ('pending')`,
+		`ALTER TABLE job_cache ADD COLUMN run_at timestamptz`,
+		`ALTER TABLE job_cache ADD COLUMN restarts integer`,
+	)
 	return m.Migrate(db)
 }

@@ -28,7 +28,7 @@
     },
     "state": {
       "type": "string",
-      "enum": ["starting", "up", "down", "crashed", "failed"]
+      "enum": ["pending", "starting", "up", "down", "crashed", "failed"]
     },
     "cmd": {
       "$ref": "/schema/controller/common#/definitions/cmd"
@@ -43,6 +43,15 @@
     "host_error": {
       "type": "string",
       "description": "host error if job failed to start"
+    },
+    "run_at": {
+      "type": "string",
+      "description": "time a pending job will be started",
+      "format": "date-time"
+    },
+    "restarts": {
+      "type": "integer",
+      "description": "number of times this job has been restarted"
     },
     "created_at": {
       "$ref": "/schema/controller/common#/definitions/created_at"

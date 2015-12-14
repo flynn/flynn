@@ -98,6 +98,8 @@ type Job struct {
 	Meta       map[string]string `json:"meta,omitempty"`
 	ExitStatus *int32            `json:"exit_status,omitempty"`
 	HostError  *string           `json:"host_error,omitempty"`
+	RunAt      *time.Time        `json:"run_at,omitempty"`
+	Restarts   *int32            `json:"restarts,omitempty"`
 	CreatedAt  *time.Time        `json:"created_at,omitempty"`
 	UpdatedAt  *time.Time        `json:"updated_at,omitempty"`
 }
@@ -105,6 +107,7 @@ type Job struct {
 type JobState string
 
 const (
+	JobStatePending  JobState = "pending"
 	JobStateStarting JobState = "starting"
 	JobStateUp       JobState = "up"
 	JobStateStopping JobState = "stopping"

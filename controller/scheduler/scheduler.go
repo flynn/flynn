@@ -22,6 +22,7 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/status"
 	"github.com/flynn/flynn/pkg/stream"
+	"github.com/flynn/flynn/pkg/typeconv"
 )
 
 const (
@@ -631,9 +632,13 @@ func (s *Scheduler) handleFormationDiff(f *Formation, diff Processes) {
 					ReleaseID: f.Release.ID,
 					Formation: f,
 					startedAt: time.Now(),
-					state:     JobStateNew,
+					state:     JobStatePending,
 				}
 				s.jobs.Add(job)
+
+				// persist the job so that it appears as pending in the database
+				s.persistJob(job)
+
 				go s.StartJob(job)
 			}
 		} else if n < 0 {
@@ -864,7 +869,6 @@ func (s *Scheduler) handleActiveJob(activeJob *host.ActiveJob) *Job {
 			ReleaseID: releaseID,
 			HostID:    activeJob.HostID,
 			JobID:     hostJob.ID,
-			state:     JobStateNew,
 		}
 		s.jobs.Add(job)
 	}
@@ -1050,20 +1054,24 @@ func (s *Scheduler) findJobToStop(f *Formation, typ string) (*Job, error) {
 	var runningJob *Job
 	for _, job := range s.jobs.WithFormationAndType(f, typ) {
 		switch job.state {
-		case JobStateNew:
-			// if it's a new job, we are in the process of starting
-			// it, so just mark it as stopped (which will make the
-			// StartJob goroutine fail the next time it tries to
-			// place the job)
-			log.Info("marking new job as stopped", "job.id", job.ID)
+		case JobStatePending:
+			// If it's a pending job, we are either in the process
+			// of starting it, or it is scheduled to start in the
+			// future.
+			//
+			// Jobs being actively started can just be marked as
+			// stopped, causing the StartJob goroutine to fail the
+			// next time it tries to place the job.
+			//
+			// Scheduled jobs need the restart timer cancelling, but
+			// also marked as stopped so that if the timer has already
+			// fired, it won't actually be placed in the cluster.
+			log.Info("stopping pending job", "job.id", job.ID)
 			job.state = JobStateStopped
-			return job, nil
-		case JobStateScheduled:
-			// if the job is scheduled to be restarted, just cancel
-			// the restart
-			log.Info("stopping job which is scheduled to restart", "job.id", job.JobID)
-			job.state = JobStateStopped
-			job.restartTimer.Stop()
+			s.persistJob(job)
+			if job.restartTimer != nil {
+				job.restartTimer.Stop()
+			}
 			return job, nil
 		case JobStateStarting, JobStateRunning:
 			// stop the most recent job (which is the first in the
@@ -1142,13 +1150,17 @@ func (s *Scheduler) restartJob(job *Job) {
 		AppID:     job.AppID,
 		ReleaseID: job.ReleaseID,
 		Formation: job.Formation,
+		runAt:     typeconv.TimePtr(time.Now().Add(backoff)),
 		startedAt: time.Now(),
-		state:     JobStateScheduled,
+		state:     JobStatePending,
 		restarts:  restarts + 1,
 	}
 	s.jobs.Add(newJob)
 
-	logger.Info("scheduling job restart", "fn", "restartJob", "attempts", newJob.restarts, "delay", backoff)
+	// persist the job so that it appears as pending in the database
+	s.persistJob(newJob)
+
+	logger.Info("scheduling job restart", "fn", "restartJob", "job.id", newJob.ID, "attempts", newJob.restarts, "delay", backoff)
 	newJob.restartTimer = time.AfterFunc(backoff, func() { s.StartJob(newJob) })
 }
 
