@@ -138,6 +138,7 @@ func (j *Job) ControllerJob() *ct.Job {
 		ReleaseID: j.ReleaseID,
 		Type:      j.Type,
 		Meta:      utils.JobMetaFromMetadata(j.metadata),
+		HostError: j.hostError,
 	}
 
 	switch j.state {
@@ -151,9 +152,6 @@ func (j *Job) ControllerJob() *ct.Job {
 
 	if j.exitStatus != nil {
 		job.ExitStatus = typeconv.Int32Ptr(int32(*j.exitStatus))
-	}
-	if j.hostError != nil {
-		job.HostError = *j.hostError
 	}
 
 	return job
