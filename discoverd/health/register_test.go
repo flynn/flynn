@@ -2,6 +2,7 @@ package health
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
@@ -100,12 +101,11 @@ func (RegisterSuite) TestRegister(c *C) {
 			stream := stream.New()
 			go func() {
 				defer close(ch)
-			outer:
 				for {
 					select {
 					case up, ok := <-monitorChan:
 						if !ok {
-							break outer
+							return
 						}
 						if up {
 							ch <- MonitorEvent{
@@ -119,7 +119,7 @@ func (RegisterSuite) TestRegister(c *C) {
 							}
 						}
 					case <-stream.StopCh:
-						break outer
+						return
 					}
 				}
 			}()
@@ -144,7 +144,7 @@ func (RegisterSuite) TestRegister(c *C) {
 		}()
 
 		errCh := make(chan bool)
-		errCheck := func(ch chan called, stop chan bool) {
+		errCheck := func(ch chan called, stop chan struct{}) {
 			go func() {
 				select {
 				case _, ok := <-ch:
@@ -158,13 +158,13 @@ func (RegisterSuite) TestRegister(c *C) {
 			}()
 		}
 
-		var stop chan bool
+		var stop chan struct{}
 		currentMeta := make(map[string]string)
 		for _, step := range steps {
-			stop = make(chan bool)
+			stop = make(chan struct{})
 			var wait int
 
-			if step.event {
+			if step.event && !step.unregister {
 				monitorChan <- step.up
 			}
 			if step.register {
@@ -172,6 +172,10 @@ func (RegisterSuite) TestRegister(c *C) {
 				c.Assert(call.args["inst"].(*discoverd.Instance).Meta, DeepEquals, currentMeta)
 				call.returnVal <- step.success
 				<-registrarChan
+				if !step.success {
+					// keep returning error from register in case we hit the retry
+					close(registrarChan)
+				}
 			} else {
 				wait++
 				errCheck(registrarChan, stop)
@@ -179,6 +183,7 @@ func (RegisterSuite) TestRegister(c *C) {
 			if step.unregister {
 				// before unregistering, Addr should not be nil
 				c.Assert(hb.Addr(), Not(Equals), "")
+				monitorChan <- false
 				select {
 				case <-unregisterChan:
 				case <-time.After(3 * time.Second):
@@ -232,7 +237,6 @@ func (RegisterSuite) TestRegister(c *C) {
 			}
 		}
 		close(monitorChan)
-		close(registrarChan)
 		close(metaChan)
 	}
 
@@ -298,7 +302,7 @@ func (RegisterSuite) TestRegister(c *C) {
 			},
 		},
 	} {
-		c.Log("--- TEST:", t.name)
+		fmt.Println("--- TEST:", t.name)
 		run(c, t.steps)
 	}
 }
