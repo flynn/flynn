@@ -50,6 +50,8 @@ type Options struct {
 	AllowAllOrigins bool
 	// A list of allowed origins. Wild cards and FQDNs are supported.
 	AllowOrigins []string
+	// A func for determining if `origin` is allowed at request time
+	ShouldAllowOrigin func(origin string, req *http.Request) bool
 	// If set, allows to share auth credentials such as cookies.
 	AllowCredentials bool
 	// A list of allowed HTTP methods.
@@ -63,11 +65,11 @@ type Options struct {
 }
 
 // Converts options into CORS headers.
-func (o *Options) Header(origin string) (headers map[string]string) {
+func (o *Options) Header(origin string, req *http.Request) (headers map[string]string) {
 	headers = make(map[string]string)
 	// if origin is not alowed, don't extend the headers
 	// with CORS headers.
-	if !o.AllowAllOrigins && !o.IsOriginAllowed(origin) {
+	if !o.AllowAllOrigins && !o.IsOriginAllowed(origin, req) {
 		return
 	}
 
@@ -101,7 +103,10 @@ func (o *Options) Header(origin string) (headers map[string]string) {
 
 // Looks up if the origin matches one of the patterns
 // generated from Options.AllowOrigins patterns.
-func (o *Options) IsOriginAllowed(origin string) (allowed bool) {
+func (o *Options) IsOriginAllowed(origin string, req *http.Request) (allowed bool) {
+	if o.ShouldAllowOrigin != nil {
+		return o.ShouldAllowOrigin(origin, req)
+	}
 	for _, pattern := range allowOriginPatterns {
 		allowed, _ = regexp.MatchString(pattern, origin)
 		if allowed {
@@ -127,7 +132,7 @@ func (o *Options) Handler(next http.Handler) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, req *http.Request) {
 		if origin := req.Header.Get(headerOrigin); origin != "" {
-			for key, value := range o.Header(origin) {
+			for key, value := range o.Header(origin, req) {
 				w.Header().Set(key, value)
 			}
 			if req.Method == "OPTIONS" {
