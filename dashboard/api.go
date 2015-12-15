@@ -121,8 +121,19 @@ func (api *API) CorsHandler(main http.Handler) http.Handler {
 	if strings.HasPrefix(api.conf.InterfaceURL, "https") {
 		httpInterfaceURL = "http" + strings.TrimPrefix(api.conf.InterfaceURL, "https")
 	}
+	allowedOrigins := []string{api.conf.InterfaceURL, httpInterfaceURL}
 	return (&cors.Options{
-		AllowOrigins:     []string{api.conf.InterfaceURL, httpInterfaceURL},
+		ShouldAllowOrigin: func(origin string, req *http.Request) bool {
+			for _, o := range allowedOrigins {
+				if origin == o {
+					return true
+				}
+			}
+			if strings.HasSuffix(req.URL.Path, "/ping") {
+				return true
+			}
+			return false
+		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
 		AllowHeaders:     []string{"Authorization", "Accept", "Content-Type", "If-Match", "If-None-Match"},
 		ExposeHeaders:    []string{"ETag"},

@@ -71,6 +71,40 @@ func Test_AllowRegexNoMatch(t *testing.T) {
 	}
 }
 
+func Test_AllowFuncMatch(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	origin := "https://ww.foo.com.evil.com"
+	r, _ := http.NewRequest("PUT", "foo", nil)
+	r.Header.Add("Origin", origin)
+	serveHTTP(recorder, r, &Options{
+		ShouldAllowOrigin: func(o string, req *http.Request) bool {
+			return true
+		},
+	})
+
+	headerValue := recorder.HeaderMap.Get(headerAllowOrigin)
+	if headerValue != origin {
+		t.Errorf("Allow-Origin header should be %v, found %v", origin, headerValue)
+	}
+}
+
+func Test_AllowFuncNoMatch(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	origin := "https://ww.foo.com.evil.com"
+	r, _ := http.NewRequest("PUT", "foo", nil)
+	r.Header.Add("Origin", origin)
+	serveHTTP(recorder, r, &Options{
+		ShouldAllowOrigin: func(o string, req *http.Request) bool {
+			return false
+		},
+	})
+
+	headerValue := recorder.HeaderMap.Get(headerAllowOrigin)
+	if headerValue != "" {
+		t.Errorf("Allow-Origin header should not exist, found %v", headerValue)
+	}
+}
+
 func Test_OtherHeaders(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	r, _ := http.NewRequest("PUT", "foo", nil)
