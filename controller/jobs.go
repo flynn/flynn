@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -22,21 +21,6 @@ import (
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/random"
 )
-
-/* SSE Logger */
-type sseLogStream struct {
-	Name string
-	Chan chan<- *sseLogChunk
-}
-
-func (s *sseLogStream) Write(p []byte) (int, error) {
-	data, err := json.Marshal(string(p))
-	if err != nil {
-		return 0, err
-	}
-	s.Chan <- &sseLogChunk{Event: s.Name, Data: data}
-	return len(p), nil
-}
 
 type sseLogChunk struct {
 	Event string          `json:"event,omitempty"`
