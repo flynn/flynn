@@ -905,6 +905,13 @@ func (c *libvirtContainer) cleanup() error {
 	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "cleanup", "job.id": c.job.ID})
 	g.Log(grohl.Data{"at": "start"})
 
+	c.l.logStreamMtx.Lock()
+	for _, s := range c.l.logStreams[c.job.ID] {
+		s.Close()
+	}
+	delete(c.l.logStreams, c.job.ID)
+	c.l.logStreamMtx.Unlock()
+
 	c.unbindMounts()
 	if err := c.l.pinkerton.Cleanup(c.job.ID); err != nil {
 		g.Log(grohl.Data{"at": "pinkerton", "status": "error", "err": err})
