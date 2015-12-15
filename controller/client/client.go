@@ -327,10 +327,10 @@ func (c *Client) PutFormation(formation *ct.Formation) error {
 
 // PutJob updates an existing job.
 func (c *Client) PutJob(job *ct.Job) error {
-	if job.ID == "" || job.AppID == "" {
-		return errors.New("controller: missing job id and/or app id")
+	if job.UUID == "" || job.AppID == "" {
+		return errors.New("controller: missing job uuid and/or app id")
 	}
-	return c.Put(fmt.Sprintf("/apps/%s/jobs/%s", job.AppID, job.ID), job, job)
+	return c.Put(fmt.Sprintf("/apps/%s/jobs/%s", job.AppID, job.UUID), job, job)
 }
 
 // DeleteJob kills a specific job id under the specified app.

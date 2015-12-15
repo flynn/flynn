@@ -6,7 +6,6 @@ import (
 
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
-	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/typeconv"
 )
 
@@ -135,7 +134,9 @@ func (j *Job) IsInFormation(key utils.FormationKey) bool {
 
 func (j *Job) ControllerJob() *ct.Job {
 	job := &ct.Job{
-		ID:        cluster.GenerateJobID(j.HostID, j.ID),
+		ID:        j.JobID,
+		UUID:      j.ID,
+		HostID:    j.HostID,
 		AppID:     j.AppID,
 		ReleaseID: j.ReleaseID,
 		Type:      j.Type,

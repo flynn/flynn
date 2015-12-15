@@ -229,6 +229,12 @@ $$ LANGUAGE plpgsql`,
 		`INSERT INTO job_states (name) VALUES ('pending')`,
 		`ALTER TABLE job_cache ADD COLUMN run_at timestamptz`,
 		`ALTER TABLE job_cache ADD COLUMN restarts integer`,
+		`ALTER TABLE job_cache RENAME COLUMN job_id TO cluster_id`,
+		`ALTER TABLE job_cache ALTER COLUMN cluster_id TYPE text`,
+		`ALTER TABLE job_cache DROP CONSTRAINT job_cache_pkey`,
+		`ALTER TABLE job_cache ADD COLUMN job_id uuid PRIMARY KEY DEFAULT uuid_generate_v4()`,
+		`ALTER TABLE job_cache ADD COLUMN host_id text`,
+		`UPDATE job_cache SET host_id = s.split[1], job_id = s.split[2]::uuid FROM (SELECT cluster_id, regexp_matches(cluster_id, '([^-]+)-(.*)') AS split FROM job_cache) AS s WHERE job_cache.cluster_id = s.cluster_id`,
 	)
 	return m.Migrate(db)
 }

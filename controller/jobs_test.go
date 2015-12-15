@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	controller "github.com/flynn/flynn/controller/client"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
 	host "github.com/flynn/flynn/host/types"
@@ -23,13 +22,14 @@ func (s *S) TestJobList(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "job-list"})
 	release := s.createTestRelease(c, &ct.Release{})
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
-	s.createTestJob(c, &ct.Job{ID: "host0-job0", AppID: app.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateStarting, Meta: map[string]string{"some": "info"}})
+	id := random.UUID()
+	s.createTestJob(c, &ct.Job{UUID: id, AppID: app.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateStarting, Meta: map[string]string{"some": "info"}})
 
 	list, err := s.c.JobList(app.ID)
 	c.Assert(err, IsNil)
 	c.Assert(len(list), Equals, 1)
 	job := list[0]
-	c.Assert(job.ID, Equals, "host0-job0")
+	c.Assert(job.UUID, Equals, id)
 	c.Assert(job.AppID, Equals, app.ID)
 	c.Assert(job.ReleaseID, Equals, release.ID)
 	c.Assert(job.Meta, DeepEquals, map[string]string{"some": "info"})
@@ -39,14 +39,31 @@ func (s *S) TestJobGet(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "job-get"})
 	release := s.createTestRelease(c, &ct.Release{})
 	s.createTestFormation(c, &ct.Formation{ReleaseID: release.ID, AppID: app.ID})
-	jobID := s.createTestJob(c, &ct.Job{ID: "host0-job1", AppID: app.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateStarting, Meta: map[string]string{"some": "info"}}).ID
+	uuid := random.UUID()
+	hostID := "host0"
+	jobID := cluster.GenerateJobID(hostID, uuid)
+	s.createTestJob(c, &ct.Job{
+		ID:        jobID,
+		UUID:      uuid,
+		HostID:    hostID,
+		AppID:     app.ID,
+		ReleaseID: release.ID,
+		Type:      "web",
+		State:     ct.JobStateStarting,
+		Meta:      map[string]string{"some": "info"},
+	})
 
-	job, err := s.c.GetJob(app.ID, jobID)
-	c.Assert(err, IsNil)
-	c.Assert(job.ID, Equals, "host0-job1")
-	c.Assert(job.AppID, Equals, app.ID)
-	c.Assert(job.ReleaseID, Equals, release.ID)
-	c.Assert(job.Meta, DeepEquals, map[string]string{"some": "info"})
+	// test getting the job with both the job ID and the UUID
+	for _, id := range []string{jobID, uuid} {
+		job, err := s.c.GetJob(app.ID, id)
+		c.Assert(err, IsNil)
+		c.Assert(job.ID, Equals, jobID)
+		c.Assert(job.UUID, Equals, uuid)
+		c.Assert(job.HostID, Equals, hostID)
+		c.Assert(job.AppID, Equals, app.ID)
+		c.Assert(job.ReleaseID, Equals, release.ID)
+		c.Assert(job.Meta, DeepEquals, map[string]string{"some": "info"})
+	}
 }
 
 func newFakeLog(r io.Reader) *fakeLog {
@@ -68,13 +85,26 @@ func (l *fakeLog) Write([]byte) (int, error) {
 
 func (s *S) TestKillJob(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "killjob"})
+	release := s.createTestRelease(c, &ct.Release{})
 	hostID := fakeHostID()
-	jobID := cluster.GenerateJobID(hostID, "")
+	uuid := random.UUID()
+	jobID := cluster.GenerateJobID(hostID, uuid)
+	s.createTestJob(c, &ct.Job{
+		ID:        jobID,
+		UUID:      uuid,
+		HostID:    hostID,
+		AppID:     app.ID,
+		ReleaseID: release.ID,
+		Type:      "web",
+		State:     ct.JobStateStarting,
+		Meta:      map[string]string{"some": "info"},
+	})
 	hc := tu.NewFakeHostClient(hostID)
+	hc.AddJob(&host.Job{ID: jobID})
 	s.cc.AddHost(hc)
 
 	err := s.c.DeleteJob(app.ID, jobID)
-	c.Assert(err, Equals, controller.ErrNotFound)
+	c.Assert(err, IsNil)
 	c.Assert(hc.IsStopped(jobID), Equals, true)
 }
 

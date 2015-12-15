@@ -14,7 +14,15 @@
   "additionalProperties": false,
   "properties": {
     "id": {
+      "type": "string",
+      "description": "the job's cluster ID"
+    },
+    "uuid": {
       "$ref": "/schema/controller/common#/definitions/id"
+    },
+    "host_id": {
+      "type": "string",
+      "description": "the ID of the host the job is running on"
     },
     "app": {
       "$ref": "/schema/controller/common#/definitions/id"

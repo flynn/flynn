@@ -137,7 +137,11 @@ func (s *CLISuite) TestScale(t *c.C) {
 		}
 		t.Assert(app.watcher.WaitFor(events, scaleTimeout, f), c.IsNil)
 		for _, e := range actual {
-			t.Assert(scale, OutputContains, fmt.Sprintf("==> %s %s %s", e.Type, e.ID, e.State))
+			id := e.ID
+			if id == "" {
+				id = e.UUID
+			}
+			t.Assert(scale, OutputContains, fmt.Sprintf("==> %s %s %s", e.Type, id, e.State))
 		}
 	}
 
