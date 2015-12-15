@@ -4,9 +4,11 @@ import (
 	"github.com/flynn/flynn/pkg/postgres"
 )
 
-func migrateDB(db *postgres.DB) error {
-	m := postgres.NewMigrations()
-	m.Add(1,
+var migrations *postgres.Migrations
+
+func init() {
+	migrations = postgres.NewMigrations()
+	migrations.Add(1,
 		`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`,
 
 		`CREATE TABLE artifacts (
@@ -166,7 +168,7 @@ $$ LANGUAGE plpgsql`,
 			created_at timestamptz NOT NULL DEFAULT now(),
 			finished_at timestamptz)`,
 	)
-	m.Add(2,
+	migrations.Add(2,
 		`CREATE TABLE que_jobs (
     priority     smallint    NOT NULL DEFAULT 100,
     run_at       timestamptz NOT NULL DEFAULT now(),
@@ -181,12 +183,12 @@ $$ LANGUAGE plpgsql`,
     CONSTRAINT que_jobs_pkey PRIMARY KEY (queue, priority, run_at, job_id))`,
 		`COMMENT ON TABLE que_jobs IS '3'`,
 	)
-	m.Add(3,
+	migrations.Add(3,
 		`ALTER TABLE apps ADD COLUMN deploy_timeout integer NOT NULL DEFAULT 30`,
 		`UPDATE apps SET deploy_timeout = 120 WHERE name = 'controller'`,
 		`UPDATE apps SET deploy_timeout = 120 WHERE name = 'postgres'`,
 	)
-	m.Add(4,
+	migrations.Add(4,
 		`CREATE TABLE deployment_strategies (name text PRIMARY KEY)`,
 		`INSERT INTO deployment_strategies (name) VALUES
 			('all-at-once'), ('one-by-one'), ('postgres')`,
@@ -207,17 +209,17 @@ $$ LANGUAGE plpgsql`,
 		`ALTER TABLE events ADD CONSTRAINT events_object_type_fkey FOREIGN KEY (object_type) REFERENCES event_types (name)`,
 		`DROP TYPE event_type`,
 	)
-	m.Add(5,
+	migrations.Add(5,
 		`ALTER TABLE deployments ADD COLUMN deploy_timeout integer NOT NULL DEFAULT 30`,
 	)
-	m.Add(6,
+	migrations.Add(6,
 		`INSERT INTO deployment_strategies (name) VALUES ('discoverd-meta')`,
 	)
-	m.Add(7,
+	migrations.Add(7,
 		`ALTER TABLE job_cache ADD COLUMN exit_status integer`,
 		`ALTER TABLE job_cache ADD COLUMN host_error text`,
 	)
-	m.Add(8,
+	migrations.Add(8,
 		`CREATE TABLE job_states (name text PRIMARY KEY)`,
 		`INSERT INTO job_states (name) VALUES ('starting'), ('up'), ('down'), ('crashed'), ('failed')`,
 		`ALTER TABLE job_cache ALTER COLUMN state TYPE text`,
@@ -225,7 +227,7 @@ $$ LANGUAGE plpgsql`,
 		`DROP TRIGGER job_state_trigger ON job_cache`,
 		`DROP TYPE job_state`,
 	)
-	m.Add(9,
+	migrations.Add(9,
 		`INSERT INTO job_states (name) VALUES ('pending')`,
 		`ALTER TABLE job_cache ADD COLUMN run_at timestamptz`,
 		`ALTER TABLE job_cache ADD COLUMN restarts integer`,
@@ -236,5 +238,8 @@ $$ LANGUAGE plpgsql`,
 		`ALTER TABLE job_cache ADD COLUMN host_id text`,
 		`UPDATE job_cache SET host_id = s.split[1], job_id = s.split[2]::uuid FROM (SELECT cluster_id, regexp_matches(cluster_id, '([^-]+)-(.*)') AS split FROM job_cache) AS s WHERE job_cache.cluster_id = s.cluster_id`,
 	)
-	return m.Migrate(db)
+}
+
+func migrateDB(db *postgres.DB) error {
+	return migrations.Migrate(db)
 }
