@@ -34,6 +34,7 @@ type DataStoreReader interface {
 type SyncHandler interface {
 	Set(route *router.Route) error
 	Remove(id string) error
+	Current() map[string]struct{}
 }
 
 type pgDataStore struct {
@@ -227,8 +228,18 @@ func (d *pgDataStore) Sync(ctx context.Context, h SyncHandler, startc chan<- str
 		return err
 	}
 
+	toRemove := h.Current()
 	for _, route := range initialRoutes {
+		if _, ok := toRemove[route.ID]; ok {
+			delete(toRemove, route.ID)
+		}
 		if err := h.Set(route); err != nil {
+			return err
+		}
+	}
+	// send remove for any routes that are no longer in the database
+	for id := range toRemove {
+		if err := h.Remove(id); err != nil {
 			return err
 		}
 	}
