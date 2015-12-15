@@ -352,7 +352,7 @@ func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *
 		return
 	}
 
-	ch := make(chan *sseLogChunk)
+	ch := make(chan *ct.SSELogChunk)
 	l, _ := ctxhelper.LoggerFromContext(ctx)
 	s := sse.NewStream(w, ch, l)
 	defer s.Close()
@@ -378,12 +378,12 @@ func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *
 		select {
 		case m := <-msgc:
 			if m == nil {
-				ch <- &sseLogChunk{Event: "eof"}
+				ch <- &ct.SSELogChunk{Event: "eof"}
 				return
 			}
 			// write to sse
 			select {
-			case ch <- &sseLogChunk{Event: "message", Data: *m}:
+			case ch <- &ct.SSELogChunk{Event: "message", Data: *m}:
 			case <-s.Done:
 				return
 			case <-ctx.Done():

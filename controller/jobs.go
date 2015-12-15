@@ -22,11 +22,6 @@ import (
 	"github.com/flynn/flynn/pkg/random"
 )
 
-type sseLogChunk struct {
-	Event string          `json:"event,omitempty"`
-	Data  json.RawMessage `json:"data,omitempty"`
-}
-
 /* Job Stuff */
 type JobRepo struct {
 	db *postgres.DB
