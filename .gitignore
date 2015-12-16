@@ -9,3 +9,4 @@ demo/*.log
 util/_toolchain/**
 *.swp
 *.test
+/tmp
