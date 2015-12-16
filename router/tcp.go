@@ -188,6 +188,16 @@ type tcpSyncHandler struct {
 	l *TCPListener
 }
 
+func (h *tcpSyncHandler) Current() map[string]struct{} {
+	h.l.mtx.RLock()
+	defer h.l.mtx.RUnlock()
+	ids := make(map[string]struct{}, len(h.l.routes))
+	for id := range h.l.routes {
+		ids[id] = struct{}{}
+	}
+	return ids
+}
+
 func (h *tcpSyncHandler) Set(data *router.Route) error {
 	route := data.TCPRoute()
 	r := &tcpRoute{

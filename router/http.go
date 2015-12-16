@@ -45,6 +45,9 @@ type HTTPListener struct {
 	closed      bool
 	cookieKey   *[32]byte
 	keypair     tls.Certificate
+
+	preSync  func()
+	postSync func(<-chan struct{})
 }
 
 type DiscoverdClient interface {
@@ -127,7 +130,15 @@ func (s *HTTPListener) runSync(ctx context.Context, errc chan error) {
 
 		time.Sleep(2 * time.Second)
 
-		s.doSync(ctx, errc)
+		if s.preSync != nil {
+			s.preSync()
+		}
+
+		startc := s.doSync(ctx, errc)
+
+		if s.postSync != nil {
+			s.postSync(startc)
+		}
 
 		err = <-errc
 	}
@@ -192,6 +203,16 @@ func (s *HTTPListener) RemoveRoute(id string) error {
 
 type httpSyncHandler struct {
 	l *HTTPListener
+}
+
+func (h *httpSyncHandler) Current() map[string]struct{} {
+	h.l.mtx.RLock()
+	defer h.l.mtx.RUnlock()
+	ids := make(map[string]struct{}, len(h.l.routes))
+	for id := range h.l.routes {
+		ids[id] = struct{}{}
+	}
+	return ids
 }
 
 func (h *httpSyncHandler) Set(data *router.Route) error {

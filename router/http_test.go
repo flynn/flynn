@@ -11,9 +11,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/websocket"
 	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/pkg/httpclient"
@@ -311,6 +314,119 @@ func (s *S) TestHTTPInitialSync(c *C) {
 
 	assertGet(c, "http://"+l.Addr, "example.com", "1")
 	assertGet(c, "https://"+l.TLSAddr, "example.com", "1")
+}
+
+func (s *S) TestHTTPResync(c *C) {
+	var connPids []int32
+	var cmu sync.Mutex
+
+	poolConfig := newPgxConnPoolConfig()
+	poolConfig.AfterConnect = func(conn *pgx.Conn) error {
+		cmu.Lock()
+		defer cmu.Unlock()
+		connPids = append(connPids, conn.Pid)
+		return nil
+	}
+	pgxpool, err := pgx.NewConnPool(poolConfig)
+	if err != nil {
+		c.Fatal(err)
+	}
+	l := &HTTPListener{
+		Addr:      "127.0.0.1:0",
+		ds:        NewPostgresDataStore("http", pgxpool),
+		discoverd: s.discoverd,
+	}
+	if err := l.Start(); err != nil {
+		c.Fatal(err)
+	}
+	defer l.Close()
+
+	srv := httptest.NewServer(httpTestHandler("1"))
+	srv2 := httptest.NewServer(httpTestHandler("2"))
+	defer srv.Close()
+	defer srv2.Close()
+
+	route := addRoute(c, l, router.HTTPRoute{
+		Domain:  "example.com",
+		Service: "example-com",
+	}.ToRoute())
+	discoverdRegisterHTTPService(c, l, "example-com", srv.Listener.Addr().String())
+	assertGet(c, "http://"+l.Addr, "example.com", "1")
+
+	// testing hooks
+	presyncc := make(chan struct{})
+	l.preSync = func() {
+		<-presyncc
+	}
+
+	postsyncc := make(chan struct{})
+	l.postSync = func(startc <-chan struct{}) {
+		<-startc
+		close(postsyncc)
+	}
+
+	terminateAllPids := func() {
+		cmu.Lock()
+		defer cmu.Unlock()
+
+		// grab a fresh conn
+		conn, err := pgx.Connect(poolConfig.ConnConfig)
+		if err != nil {
+			c.Fatal(err)
+		}
+		defer conn.Close()
+
+		// terminate all conns from the pool
+		for _, pid := range connPids {
+			if _, err := conn.Exec("select pg_terminate_backend($1)", pid); err != nil {
+				c.Fatalf("Unable to kill backend PostgreSQL process: %v", err)
+			}
+		}
+		connPids = connPids[:0]
+	}
+	terminateAllPids()
+
+	// Because we terminated all of the connections some will be dead, others
+	// will become dead when we try to write to them.
+	attempts := 0
+	for {
+		if attempts > 5 {
+			c.Fatal(fmt.Errorf("Unable to remove route after disconnecting sync"))
+		}
+		err = l.RemoveRoute(route.ID)
+		if e, ok := err.(*net.OpError); ok && e.Err == syscall.EPIPE {
+			attempts++
+			continue
+		}
+		if err == pgx.ErrDeadConn {
+			attempts++
+			continue
+		}
+		c.Assert(err, IsNil)
+		break
+	}
+
+	// Also add a new route
+	err = l.AddRoute(router.HTTPRoute{
+		Domain:  "example.org",
+		Service: "example-org",
+	}.ToRoute())
+	c.Assert(err, IsNil)
+
+	// trigger the reconnect
+	close(presyncc)
+	// wait for the sync to complete
+	<-postsyncc
+
+	// ensure that route was actually removed
+	res, err := httpClient.Do(newReq("http://"+l.Addr, "example.com"))
+	c.Assert(err, IsNil)
+	c.Assert(res.StatusCode, Equals, 404)
+	res.Body.Close()
+
+	// ensure that new route was added and traffic being directed
+	discoverdRegisterHTTPService(c, l, "example-org", srv2.Listener.Addr().String())
+	assertGet(c, "http://"+l.Addr, "example.org", "2")
 }
 
 // issue #26
