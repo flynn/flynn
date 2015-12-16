@@ -80,6 +80,7 @@ func main() {
 		{"release_list", e.listReleases},
 		{"app_release_set", e.setAppRelease},
 		{"app_release_get", e.getAppRelease},
+		{"app_release_list", e.listAppReleases},
 		{"formation_put", e.putFormation},
 		{"formation_get", e.getFormation},
 		{"formation_get_expanded", e.getExpandedFormation},
@@ -300,6 +301,10 @@ func (e *generator) createRelease() {
 
 func (e *generator) listReleases() {
 	e.client.ReleaseList()
+}
+
+func (e *generator) listAppReleases() {
+	e.client.AppReleaseList(e.resourceIds["app"])
 }
 
 func (e *generator) getAppRelease() {
