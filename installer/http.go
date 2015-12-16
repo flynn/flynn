@@ -59,6 +59,7 @@ func ServeHTTP() error {
 			Endpoints: map[string]string{
 				"clusters":           "/clusters",
 				"cluster":            "/clusters/:id",
+				"cert":               "/clusters/:id/ca-cert",
 				"events":             "/events",
 				"prompt":             "/clusters/:id/prompts/:prompt_id",
 				"credentials":        "/credentials",
@@ -82,6 +83,7 @@ func ServeHTTP() error {
 	httpRouter.GET("/credentials", api.ServeTemplate)
 	httpRouter.GET("/credentials/:id", api.ServeTemplate)
 	httpRouter.GET("/clusters/:id", api.ServeTemplate)
+	httpRouter.GET("/clusters/:id/ca-cert", api.GetCert)
 	httpRouter.GET("/clusters/:id/delete", api.ServeTemplate)
 	httpRouter.GET("/oauth/azure", api.ServeTemplate)
 	httpRouter.DELETE("/clusters/:id", api.DeleteCluster)
@@ -214,6 +216,17 @@ func (api *httpAPI) LaunchCluster(w http.ResponseWriter, req *http.Request, para
 		return
 	}
 	httphelper.JSON(w, 200, base)
+}
+
+func (api *httpAPI) GetCert(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	cluster, err := api.Installer.FindBaseCluster(params.ByName("id"))
+	if err != nil {
+		httphelper.ObjectNotFoundError(w, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-x509-ca-cert")
+	w.Header().Set("Content-Disposition", `attachment; filename="flynn-ca.cer"`)
+	w.Write([]byte(cluster.CACert))
 }
 
 func (api *httpAPI) DeleteCluster(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
