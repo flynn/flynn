@@ -1,6 +1,8 @@
 import InstallCert from './install-cert';
 import Dispatcher from '../dispatcher';
 import { green as GreenBtnCSS } from './css/button';
+import Config from '../config';
+import UserAgent from './css/user-agent';
 
 var InstallProgress = React.createClass({
 	render: function () {
@@ -10,7 +12,7 @@ var InstallProgress = React.createClass({
 				{this.state.certVerified ? (
 					<button type="submit" style={GreenBtnCSS}>Go to Dashboard</button>
 				) : (
-					<InstallCert certURL={"data:application/x-x509-ca-cert;base64,"+ this.state.caCert} />
+					<InstallCert certURL={UserAgent.isSafari() ? Config.endpoints.cert.replace(":id", this.props.clusterID) : ("data:application/x-x509-ca-cert;base64,"+ this.state.caCert)} />
 				)}
 			</form>
 		);
