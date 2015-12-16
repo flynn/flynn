@@ -48,8 +48,8 @@ at the `example-web` service:
 
 ```
 $ flynn route
-ROUTE                             SERVICE      ID
-http:example.demo.localflynn.com  example-web  http/1ba949d1654e711d03b5f1e471426512
+ROUTE                             SERVICE      ID                                     STICKY  PATH
+http:example.demo.localflynn.com  example-web  http/1ba949d1654e711d03b5f1e471426512  false   /
 ```
 
 Push to the `flynn` Git remote to deploy the application:
@@ -196,9 +196,15 @@ You should now have two routes for your application:
 
 ```
 $ flynn route
-ROUTE                             SERVICE      ID
-http:example.com                  example-web  http/5ababd603b22780302dd8d83498e5172
-http:example.demo.localflynn.com  example-web  http/1ba949d1654e711d03b5f1e471426512
+ROUTE                             SERVICE      ID                                     STICKY  PATH
+http:example.com                  example-web  http/5ababd603b22780302dd8d83498e5172  false   /
+http:example.demo.localflynn.com  example-web  http/1ba949d1654e711d03b5f1e471426512  false   /
+```
+
+You could also add a route with a path:
+
+```
+flynn route add http example.com/myapp
 ```
 
 HTTP requests to `example.com` should be routed to the web processes:
