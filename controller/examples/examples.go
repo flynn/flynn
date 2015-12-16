@@ -88,6 +88,8 @@ func main() {
 		{"formations_stream", e.streamFormations},
 		{"release_create2", e.createRelease},
 		{"deployment_create", e.createDeployment},
+		{"deployment_get", e.getDeployment},
+		{"deployment_list", e.listDeployments},
 		{"formation_delete", e.deleteFormation},
 		{"job_run", e.runJob},
 		{"job_list", e.listJobs},
@@ -438,7 +440,19 @@ func (e *generator) listProviderResources() {
 }
 
 func (e *generator) createDeployment() {
-	e.client.CreateDeployment(e.resourceIds["app"], e.resourceIds["release"])
+	deployment, err := e.client.CreateDeployment(e.resourceIds["app"], e.resourceIds["release"])
+	if err != nil {
+		log.Fatal(err)
+	}
+	e.resourceIds["deployment"] = deployment.ID
+}
+
+func (e *generator) getDeployment() {
+	e.client.GetDeployment(e.resourceIds["deployment"])
+}
+
+func (e *generator) listDeployments() {
+	e.client.DeploymentList(e.resourceIds["app"])
 }
 
 func (e *generator) eventsList() {
