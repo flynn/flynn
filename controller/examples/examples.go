@@ -67,6 +67,7 @@ func main() {
 		{"app_get", e.getApp},
 		{"app_list", e.listApps},
 		{"app_log", e.getAppLog},
+		{"app_log_stream", e.streamAppLog},
 		{"app_update", e.updateApp},
 		{"app_resource_list", e.listAppResources},
 		{"route_create", e.createRoute},
@@ -190,10 +191,36 @@ func (e *generator) updateApp() {
 }
 
 func (e *generator) getAppLog() {
-	res, err := e.client.GetAppLog(e.resourceIds["app"], nil)
+	app, err := e.client.GetApp("controller")
+	if err != nil {
+		log.Fatal(err)
+	}
+	e.resourceIds["controller"] = app.ID // save ID for streamAppLog
+	e.recorder.GetRequests()             // discard above request
+	lines := 10
+	res, err := e.client.GetAppLog(app.ID, &ct.LogOpts{
+		Lines: &lines,
+	})
 	if err == nil {
 		defer res.Close()
 		io.Copy(ioutil.Discard, res)
+	}
+}
+
+func (e *generator) streamAppLog() {
+	output := make(chan *ct.SSELogChunk)
+	lines := 10
+	e.client.StreamAppLog(e.resourceIds["controller"], &ct.LogOpts{
+		Lines: &lines,
+	}, output)
+	timeout := time.After(10 * time.Second)
+outer:
+	for {
+		select {
+		case <-output:
+		case <-timeout:
+			break outer
+		}
 	}
 }
 

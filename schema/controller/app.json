@@ -11,7 +11,8 @@
     "schema/examples/controller/app_list#",
     "schema/examples/controller/app_update#",
     "schema/examples/controller/app_delete#",
-    "schema/examples/controller/app_log#"
+    "schema/examples/controller/app_log#",
+    "schema/examples/controller/app_log_stream#"
   ],
   "additionalProperties": false,
   "properties": {
