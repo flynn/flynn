@@ -68,3 +68,34 @@ func (TestSuite) TestFormationUpdate(c *C) {
 		c.Assert(formation.GetProcesses(), DeepEquals, t.requested, Commentf(t.desc))
 	}
 }
+
+func (TestSuite) TestFormationRectifyOmni(c *C) {
+	release := &ct.Release{Processes: map[string]ct.ProcessType{
+		"web":  {Omni: false},
+		"omni": {Omni: true},
+	}}
+	formation := NewFormation(&ct.ExpandedFormation{
+		Release:   release,
+		Processes: Processes{"web": 2, "omni": 1},
+	})
+
+	assertRectify := func(count int, changed bool, procs map[string]int) {
+		c.Assert(formation.RectifyOmni(count), Equals, changed)
+		c.Assert(formation.Processes, DeepEquals, procs)
+	}
+
+	// rectify with 1 host should not change anything
+	assertRectify(1, false, map[string]int{"web": 2, "omni": 1})
+
+	// rectify with 2 hosts should modify omni count
+	assertRectify(2, true, map[string]int{"web": 2, "omni": 2})
+
+	// rectify with 2 again should not change anything
+	assertRectify(2, false, map[string]int{"web": 2, "omni": 2})
+
+	// setting the processes and then rectifying should work the same
+	formation.SetProcesses(Processes{"web": 4, "omni": 2})
+	assertRectify(1, false, map[string]int{"web": 4, "omni": 2})
+	assertRectify(2, true, map[string]int{"web": 4, "omni": 4})
+	assertRectify(2, false, map[string]int{"web": 4, "omni": 4})
+}
