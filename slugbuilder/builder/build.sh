@@ -54,7 +54,7 @@ run_unprivileged() {
 
 # run curl silently and retry upto 3 times
 curl() {
-  $(which curl) --silent --retry 3 $@
+  $(which curl) --fail --silent --retry 3 $@
 }
 
 cd ${app_dir}

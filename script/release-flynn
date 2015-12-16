@@ -78,7 +78,7 @@ main() {
 
   if [[ -z "${commit}" ]]; then
     info "determining commit"
-    commit=$(curl -s https://api.github.com/repos/flynn/flynn/git/refs/heads/master | jq --raw-output .object.sha)
+    commit=$(curl --fail --silent https://api.github.com/repos/flynn/flynn/git/refs/heads/master | jq --raw-output .object.sha)
     if [[ -z "${commit}" ]]; then
       fail "could not determine commit"
     fi
