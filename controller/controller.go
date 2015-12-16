@@ -83,6 +83,9 @@ func main() {
 		}
 	}()
 
+	// Listen for database migration, reset connpool on new migration
+	go postgres.ResetOnMigration(db, logger, doneCh)
+
 	hb, err := discoverd.DefaultClient.AddServiceAndRegisterInstance("controller", &discoverd.Instance{
 		Addr:  addr,
 		Proto: "http",
