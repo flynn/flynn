@@ -475,7 +475,8 @@
 		},
 		{
 			"ImportPath": "github.com/jackc/pgx",
-			"Rev": "8b296b9d5840d0624dd2f61c990b5304a5e6fcaa"
+			"Comment": "v2.7.1-16-g8577dcc",
+			"Rev": "8577dccd65312eecac353c96d908f8796d49f54c"
 		},
 		{
 			"ImportPath": "github.com/julienschmidt/httprouter",

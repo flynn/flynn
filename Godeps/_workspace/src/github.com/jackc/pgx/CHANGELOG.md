@@ -1,5 +1,24 @@
-# Master
+# Tip
 
+* Add ConnPool.Reset method
+* []byte skips encoding/decoding
+* Rows.Scan errors now include which argument caused error
+
+# 2.7.1 (October 26, 2015)
+
+* Disable SSL renegotiation
+
+# 2.7.0 (October 16, 2015)
+
+* Add RuntimeParams to ConnConfig
+* ParseURI extracts RuntimeParams
+* ParseDSN extracts RuntimeParams
+* ParseEnvLibpq extracts PGAPPNAME
+* Prepare is now idempotent
+* Rows.Values now supports oid type
+* ConnPool.Release automatically unlistens connections (Joseph Glanville)
+* Add trace log level
+* Add more efficient log leveling
 * Retry automatically on ConnPool.Begin (Joseph Glanville)
 * Encode from net.IP to inet and cidr
 * Generalize encoding pointer to string to any PostgreSQL type

@@ -11,10 +11,9 @@ import (
 // Row is a convenience wrapper over Rows that is returned by QueryRow.
 type Row Rows
 
-// Scan reads the values from the row into dest values positionally. dest can
-// include pointers to core types and the Scanner interface. If no rows were
-// found it returns ErrNoRows. If multiple rows are returned it ignores all but
-// the first.
+// Scan works the same as (*Rows Scan) with the following exceptions. If no
+// rows were found it returns ErrNoRows. If multiple rows are returned it
+// ignores all but the first.
 func (r *Row) Scan(dest ...interface{}) (err error) {
 	rows := (*Rows)(r)
 
@@ -39,19 +38,21 @@ func (r *Row) Scan(dest ...interface{}) (err error) {
 // the *Conn can be used again. Rows are closed by explicitly calling Close(),
 // calling Next() until it returns false, or when a fatal error occurs.
 type Rows struct {
-	pool      *ConnPool
-	conn      *Conn
-	mr        *msgReader
-	fields    []FieldDescription
-	vr        ValueReader
-	rowCount  int
-	columnIdx int
-	err       error
-	closed    bool
-	startTime time.Time
-	sql       string
-	args      []interface{}
-	logger    Logger
+	pool       *ConnPool
+	conn       *Conn
+	mr         *msgReader
+	fields     []FieldDescription
+	vr         ValueReader
+	rowCount   int
+	columnIdx  int
+	err        error
+	closed     bool
+	startTime  time.Time
+	sql        string
+	args       []interface{}
+	logger     Logger
+	logLevel   int
+	unlockConn bool
 }
 
 func (rows *Rows) FieldDescriptions() []FieldDescription {
@@ -63,6 +64,11 @@ func (rows *Rows) close() {
 		return
 	}
 
+	if rows.unlockConn {
+		rows.conn.unlock()
+		rows.unlockConn = false
+	}
+
 	if rows.pool != nil {
 		rows.pool.Release(rows.conn)
 		rows.pool = nil
@@ -70,14 +76,12 @@ func (rows *Rows) close() {
 
 	rows.closed = true
 
-	if rows.logger == dlogger {
-		return
-	}
-
 	if rows.err == nil {
-		endTime := time.Now()
-		rows.logger.Info("Query", "sql", rows.sql, "args", logQueryArgs(rows.args), "time", endTime.Sub(rows.startTime), "rowCount", rows.rowCount)
-	} else {
+		if rows.logLevel >= LogLevelInfo {
+			endTime := time.Now()
+			rows.logger.Info("Query", "sql", rows.sql, "args", logQueryArgs(rows.args), "time", endTime.Sub(rows.startTime), "rowCount", rows.rowCount)
+		}
+	} else if rows.logLevel >= LogLevelError {
 		rows.logger.Error("Query", "sql", rows.sql, "args", logQueryArgs(rows.args))
 	}
 }
@@ -210,8 +214,19 @@ func (rows *Rows) nextColumn() (*ValueReader, bool) {
 	return &rows.vr, true
 }
 
+type scanArgError struct {
+	col int
+	err error
+}
+
+func (e scanArgError) Error() string {
+	return fmt.Sprintf("can't scan into dest[%d]: %v", e.col, e.err)
+}
+
 // Scan reads the values from the current row into dest values positionally.
-// dest can include pointers to core types and the Scanner interface.
+// dest can include pointers to core types, values implementing the Scanner
+// interface, and []byte. []byte will skip the decoding process and directly
+// copy the raw bytes received from PostgreSQL.
 func (rows *Rows) Scan(dest ...interface{}) (err error) {
 	if len(rows.fields) != len(dest) {
 		err = fmt.Errorf("Scan received wrong number of arguments, got %d but expected %d", len(dest), len(rows.fields))
@@ -219,7 +234,7 @@ func (rows *Rows) Scan(dest ...interface{}) (err error) {
 		return err
 	}
 
-	for _, d := range dest {
+	for i, d := range dest {
 		vr, _ := rows.nextColumn()
 
 		// Check for []byte first as we allow sidestepping the decoding process and retrieving the raw bytes
@@ -238,7 +253,7 @@ func (rows *Rows) Scan(dest ...interface{}) (err error) {
 		} else if s, ok := d.(Scanner); ok {
 			err = s.Scan(vr)
 			if err != nil {
-				rows.Fatal(err)
+				rows.Fatal(scanArgError{col: i, err: err})
 			}
 		} else if vr.Type().DataType == JsonOid || vr.Type().DataType == JsonbOid {
 			decodeJson(vr, &d)
@@ -286,10 +301,12 @@ func (rows *Rows) Scan(dest ...interface{}) (err error) {
 				case TimestampOid:
 					*v = decodeTimestamp(vr)
 				default:
-					rows.Fatal(fmt.Errorf("Can't convert OID %v to time.Time", vr.Type().DataType))
+					rows.Fatal(scanArgError{col: i, err: fmt.Errorf("Can't convert OID %v to time.Time", vr.Type().DataType)})
 				}
 			case *net.IPNet:
 				*v = decodeInet(vr)
+			case *[]net.IPNet:
+				*v = decodeInetArray(vr)
 			default:
 				// if d is a pointer to pointer, strip the pointer and try again
 				if v := reflect.ValueOf(d); v.Kind() == reflect.Ptr {
@@ -311,12 +328,12 @@ func (rows *Rows) Scan(dest ...interface{}) (err error) {
 						}
 					}
 				}
-				rows.Fatal(fmt.Errorf("Scan cannot decode into %T", d))
+				rows.Fatal(scanArgError{col: i, err: fmt.Errorf("Scan cannot decode into %T", d)})
 			}
 
 		}
 		if vr.Err() != nil {
-			rows.Fatal(vr.Err())
+			rows.Fatal(scanArgError{col: i, err: vr.Err()})
 		}
 
 		if rows.Err() != nil {
@@ -360,6 +377,8 @@ func (rows *Rows) Values() ([]interface{}, error) {
 				values = append(values, decodeInt2(vr))
 			case Int4Oid:
 				values = append(values, decodeInt4(vr))
+			case OidOid:
+				values = append(values, decodeOid(vr))
 			case Float4Oid:
 				values = append(values, decodeFloat4(vr))
 			case Float8Oid:
@@ -420,7 +439,13 @@ func (rows *Rows) Values() ([]interface{}, error) {
 // from Query and handle it in *Rows.
 func (c *Conn) Query(sql string, args ...interface{}) (*Rows, error) {
 	c.lastActivityTime = time.Now()
-	rows := &Rows{conn: c, startTime: c.lastActivityTime, sql: sql, args: args, logger: c.logger}
+	rows := &Rows{conn: c, startTime: c.lastActivityTime, sql: sql, args: args, logger: c.logger, logLevel: c.logLevel}
+
+	if err := c.lock(); err != nil {
+		rows.abort(err)
+		return rows, err
+	}
+	rows.unlockConn = true
 
 	ps, ok := c.preparedStatements[sql]
 	if !ok {
