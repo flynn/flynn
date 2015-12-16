@@ -6,6 +6,7 @@
       "examples": [
         "schema/examples/controller/route_create#",
         "schema/examples/controller/route_get#",
+        "schema/examples/controller/route_update#",
         "schema/examples/controller/route_list#",
         "schema/examples/controller/route_delete#"
       ]

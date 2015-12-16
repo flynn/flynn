@@ -72,6 +72,7 @@ func main() {
 		{"app_update", e.updateApp},
 		{"route_create", e.createRoute},
 		{"route_get", e.getRoute},
+		{"route_update", e.updateRoute},
 		{"route_list", e.listRoutes},
 		{"route_delete", e.deleteRoute},
 		{"artifact_create", e.createArtifact},
@@ -248,6 +249,17 @@ func (e *generator) createRoute() {
 
 func (e *generator) getRoute() {
 	e.client.GetRoute(e.resourceIds["app"], e.resourceIds["route"])
+}
+
+func (e *generator) updateRoute() {
+	route, err := e.client.GetRoute(e.resourceIds["app"], e.resourceIds["route"])
+	if err != nil {
+		log.Fatal(err)
+	}
+	e.recorder.GetRequests() // discard above request
+	route.Service = e.resourceIds["app-name"] + "-other"
+	route.Sticky = true
+	e.client.UpdateRoute(e.resourceIds["app"], e.resourceIds["route"], route)
 }
 
 func (e *generator) listRoutes() {
