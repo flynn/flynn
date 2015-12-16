@@ -92,6 +92,7 @@ func main() {
 		{"job_run", e.runJob},
 		{"job_list", e.listJobs},
 		{"job_update", e.updateJob},
+		{"job_get", e.getJob},
 		{"job_delete", e.deleteJob},
 		{"provider_get", e.getProvider},
 		{"provider_list", e.listProviders},
@@ -378,6 +379,10 @@ func (e *generator) updateJob() {
 		State:     "down",
 	}
 	e.client.PutJob(job)
+}
+
+func (e *generator) getJob() {
+	e.client.GetJob(e.resourceIds["app"], e.resourceIds["job"])
 }
 
 func (e *generator) deleteJob() {

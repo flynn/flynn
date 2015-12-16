@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://flynn.io/schema/examples/controller/job_get#",
+  "title": "Get job",
+  "description": "",
+  "allOf": [
+    { "$ref": "/schema/examples/base#" },
+    {
+      "type": "object",
+      "properties": {
+        "request": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": ["GET"]
+            }
+          }
+        },
+        "response": {
+          "type": "object",
+          "required": ["body"],
+          "properties": {
+            "body": {
+              "$ref": "/schema/controller/job#"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
