@@ -1,7 +1,11 @@
 package postgres
 
 import (
+	"strconv"
+	"time"
+
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 )
 
 type Migration struct {
@@ -58,10 +62,40 @@ func (m Migrations) Migrate(db *DB) error {
 			tx.Rollback()
 			return err
 		}
+		if err := tx.Exec("SELECT pg_notify('schema_migrations', $1)", strconv.Itoa(migration.ID)); err != nil {
+			tx.Rollback()
+			return err
+		}
 
 		if err := tx.Commit(); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func ResetOnMigration(db *DB, log log15.Logger, doneCh chan struct{}) {
+	for {
+		listener, err := db.Listen("schema_migrations", log)
+		if err != nil {
+			continue
+		}
+	outer:
+		for {
+			select {
+			case n, ok := <-listener.Notify:
+				if !ok {
+					log.Warn("migration listener disconnected, reconnecting in 5 seconds")
+					time.Sleep(5 * time.Second)
+					listener.Close()
+					break outer
+				}
+				log.Warn("new schema migration, resetting conn pool", "id", n.Payload)
+				db.Reset()
+			case <-doneCh:
+				listener.Close()
+			}
+		}
+	}
+	return
 }

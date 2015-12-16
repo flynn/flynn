@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/boltdb/bolt"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/boltdb/bolt"
 )
 
 // Ensure that committing a closed transaction returns an error.
