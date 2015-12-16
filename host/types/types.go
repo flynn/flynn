@@ -283,6 +283,7 @@ type HostStatus struct {
 	URL       string            `json:"url"`
 	Discoverd *DiscoverdConfig  `json:"discoverd,omitempty"`
 	Network   *NetworkConfig    `json:"network,omitempty"`
+	Version   string            `json:"version"`
 }
 
 const (
