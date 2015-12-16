@@ -17,6 +17,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	g "github.com/flynn/flynn/pkg/examplegenerator"
 	"github.com/flynn/flynn/pkg/httprecorder"
+	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/router/types"
 )
@@ -69,7 +70,6 @@ func main() {
 		{"app_log", e.getAppLog},
 		{"app_log_stream", e.streamAppLog},
 		{"app_update", e.updateApp},
-		{"app_resource_list", e.listAppResources},
 		{"route_create", e.createRoute},
 		{"route_get", e.getRoute},
 		{"route_list", e.listRoutes},
@@ -100,8 +100,11 @@ func main() {
 		{"provider_get", e.getProvider},
 		{"provider_list", e.listProviders},
 		{"provider_resource_create", e.createProviderResource},
+		{"provider_resource_put", e.putProviderResource},
+		{"app_resource_list", e.listAppResources},
 		{"provider_resource_get", e.getProviderResource},
 		{"provider_resource_list", e.listProviderResources},
+		{"provider_resource_delete", e.deleteProviderResource},
 		{"app_delete", e.deleteApp},
 		{"events_list", e.eventsList},
 		{"events_stream", e.eventsStream},
@@ -434,6 +437,19 @@ func (e *generator) createProviderResource() {
 	e.resourceIds["provider_resource"] = resource.ID
 }
 
+func (e *generator) putProviderResource() {
+	resource := &ct.Resource{
+		ID:         random.UUID(),
+		ProviderID: e.resourceIds["provider"],
+		ExternalID: "/foo/bar",
+		Env:        map[string]string{"FOO": "BAR"},
+		Apps: []string{
+			e.resourceIds["app"],
+		},
+	}
+	e.client.PutResource(resource)
+}
+
 func (e *generator) getProviderResource() {
 	providerID := e.resourceIds["provider"]
 	resourceID := e.resourceIds["provider_resource"]
@@ -442,6 +458,10 @@ func (e *generator) getProviderResource() {
 
 func (e *generator) listProviderResources() {
 	e.client.ResourceList(e.resourceIds["provider"])
+}
+
+func (e *generator) deleteProviderResource() {
+	e.client.DeleteResource(e.resourceIds["provider"], e.resourceIds["resource"])
 }
 
 func (e *generator) createDeployment() {
