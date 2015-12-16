@@ -20,6 +20,7 @@ OPTIONS:
   -s, --size=SIZE          Cluster size [default: 1]
   -d, --domain=DOMAIN      The default domain to use [default: `dev.localflynn.com`]
   -z, --no-destroy-vols    Don't destroy volumes
+  -v, --version=VERSION    Boot using the released VERSION (e.g. v20151104.1)
 USAGE
 }
 
@@ -27,6 +28,7 @@ main() {
   local size="1"
   local domain="${CLUSTER_DOMAIN:="dev.localflynn.com"}"
   local destroy_vols=true
+  local version=""
 
   while true; do
     case "$1" in
@@ -54,6 +56,14 @@ main() {
         destroy_vols=false
         shift
         ;;
+      -v | --version)
+        if [[ -z "$2" ]]; then
+          usage
+          exit 1
+        fi
+        version="$2"
+        shift 2
+        ;;
       *)
         break
         ;;
@@ -65,12 +75,23 @@ main() {
     exit 1
   fi
 
+  local bin_dir="${ROOT}/host/bin"
+  local flynn_host="${bin_dir}/flynn-host"
+  local manifest="${ROOT}/bootstrap/bin/manifest.json"
+
+  if [[ -n "${version}" ]]; then
+    local dir="${ROOT}/tmp/${version}"
+    mkdir -p "${dir}"
+
+    info "downloading ${version} into ${dir}"
+    sudo FLYNN_VERSION="${version}" "${flynn_host}" download --config-dir "${dir}" --bin-dir "${dir}"
+    flynn_host="${dir}/flynn-host"
+    bin_dir="${dir}"
+    manifest="${dir}/bootstrap-manifest.json"
+  fi
 
   # kill flynn first
   "${ROOT}/script/kill-flynn"
-
-  local host_dir="${ROOT}/host"
-  local bootstrap_dir="${ROOT}/bootstrap"
 
   local ips=()
   if [[ "${size}" -eq "1" ]]; then
@@ -98,11 +119,11 @@ main() {
   info "bootstrapping Flynn"
   export CLUSTER_DOMAIN="${domain}"
   export DISCOVERD="${ips[0]}:1111"
-  "${host_dir}/bin/flynn-host" \
+  "${flynn_host}" \
     bootstrap \
     --min-hosts="${size}" \
     --peer-ips="$(join "," ${ips[@]})" \
-    "${bootstrap_dir}/bin/manifest.json"
+    "${manifest}"
 }
 
 start_flynn_host() {
@@ -133,7 +154,7 @@ start_flynn_host() {
   sudo rm -f "${state}"
 
   if $destroy_vols; then
-    sudo "${ROOT}/host/bin/flynn-host" destroy-volumes --volpath="${vol_path}" --include-data
+    sudo "${flynn_host}" destroy-volumes --volpath="${vol_path}" --include-data
   fi
 
   # ensure log dir exists
@@ -144,7 +165,7 @@ start_flynn_host() {
     --background \
     --no-close \
     --pidfile "${pidfile}" \
-    --exec "${host_dir}/bin/flynn-host" \
+    --exec "${flynn_host}" \
     -- \
     daemon \
     --id "${id}" \
@@ -155,8 +176,8 @@ start_flynn_host() {
     --state "${state}" \
     --volpath "${vol_path}" \
     --log-dir "${log_dir}" \
-    --flynn-init "${host_dir}/bin/flynn-init" \
-    --nsumount "${host_dir}/bin/flynn-nsumount" \
+    --flynn-init "${bin_dir}/flynn-init" \
+    --nsumount "${bin_dir}/flynn-nsumount" \
     &>"${log}"
 
   ips+=("${external_ip}")

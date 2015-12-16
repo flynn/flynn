@@ -9,15 +9,15 @@ usage() {
   cat <<USAGE >&2
 usage: $0 [options]
 
-Kill running flynn-host daemons
+Kill running flynn-host daemons.
 
 OPTIONS:
-  -h            Show this message
+  -h, --help            Show this message
 USAGE
 }
 
 main() {
-  if [[ $1 = "-h" ]]; then
+  if [[ $1 = "-h" ]] || [[ $1 = "--help" ]]; then
     usage
     exit 0
   fi
@@ -27,14 +27,12 @@ main() {
     exit 1
   fi
 
-  local flynn_host="${ROOT}/host/bin/flynn-host"
-
-  info "killing running libvirt-lxc flynn-host, if any"
+  info "killing running flynn-host, if any"
   sudo start-stop-daemon \
     --stop \
     --oknodo \
     --retry 15 \
-    --exec "${flynn_host}"
+    --name "flynn-host"
 
   # force kill any remaining containers
   virsh -c lxc:/// list --name | xargs -L 1 virsh -c lxc:/// destroy || true
