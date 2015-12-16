@@ -6,7 +6,9 @@
   "sortIndex": 4,
   "type": "object",
   "examples": [
-    "schema/examples/controller/deployment_create#"
+    "schema/examples/controller/deployment_create#",
+    "schema/examples/controller/deployment_get#",
+    "schema/examples/controller/deployment_list#"
   ],
   "additionalProperties": false,
   "properties": {

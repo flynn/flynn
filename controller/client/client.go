@@ -459,6 +459,31 @@ func (c *Client) GetAppLog(appID string, options *ct.LogOpts) (io.ReadCloser, er
 	return res.Body, nil
 }
 
+// StreamAppLog is the same as GetAppLog but returns log lines via an SSE stream
+func (c *Client) StreamAppLog(appID string, options *ct.LogOpts, output chan<- *ct.SSELogChunk) (stream.Stream, error) {
+	path := fmt.Sprintf("/apps/%s/log", appID)
+	if options != nil {
+		opts := *options
+		query := url.Values{}
+		if opts.Follow {
+			query.Set("follow", "true")
+		}
+		if opts.JobID != "" {
+			query.Set("job_id", opts.JobID)
+		}
+		if opts.Lines != nil {
+			query.Set("lines", strconv.Itoa(*opts.Lines))
+		}
+		if opts.ProcessType != nil {
+			query.Set("process_type", *opts.ProcessType)
+		}
+		if encodedQuery := query.Encode(); encodedQuery != "" {
+			path = fmt.Sprintf("%s?%s", path, encodedQuery)
+		}
+	}
+	return c.Stream("GET", path, nil, output)
+}
+
 // GetDeployment returns a deployment queued on the deployer.
 func (c *Client) GetDeployment(deploymentID string) (*ct.Deployment, error) {
 	res := &ct.Deployment{}

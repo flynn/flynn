@@ -17,6 +17,7 @@ import (
 	"github.com/flynn/flynn/discoverd/client"
 	g "github.com/flynn/flynn/pkg/examplegenerator"
 	"github.com/flynn/flynn/pkg/httprecorder"
+	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/resource"
 	"github.com/flynn/flynn/router/types"
 )
@@ -67,10 +68,11 @@ func main() {
 		{"app_get", e.getApp},
 		{"app_list", e.listApps},
 		{"app_log", e.getAppLog},
+		{"app_log_stream", e.streamAppLog},
 		{"app_update", e.updateApp},
-		{"app_resource_list", e.listAppResources},
 		{"route_create", e.createRoute},
 		{"route_get", e.getRoute},
+		{"route_update", e.updateRoute},
 		{"route_list", e.listRoutes},
 		{"route_delete", e.deleteRoute},
 		{"artifact_create", e.createArtifact},
@@ -79,6 +81,7 @@ func main() {
 		{"release_list", e.listReleases},
 		{"app_release_set", e.setAppRelease},
 		{"app_release_get", e.getAppRelease},
+		{"app_release_list", e.listAppReleases},
 		{"formation_put", e.putFormation},
 		{"formation_get", e.getFormation},
 		{"formation_get_expanded", e.getExpandedFormation},
@@ -87,16 +90,22 @@ func main() {
 		{"formations_stream", e.streamFormations},
 		{"release_create2", e.createRelease},
 		{"deployment_create", e.createDeployment},
+		{"deployment_get", e.getDeployment},
+		{"deployment_list", e.listDeployments},
 		{"formation_delete", e.deleteFormation},
 		{"job_run", e.runJob},
 		{"job_list", e.listJobs},
 		{"job_update", e.updateJob},
+		{"job_get", e.getJob},
 		{"job_delete", e.deleteJob},
 		{"provider_get", e.getProvider},
 		{"provider_list", e.listProviders},
 		{"provider_resource_create", e.createProviderResource},
+		{"provider_resource_put", e.putProviderResource},
+		{"app_resource_list", e.listAppResources},
 		{"provider_resource_get", e.getProviderResource},
 		{"provider_resource_list", e.listProviderResources},
+		{"provider_resource_delete", e.deleteProviderResource},
 		{"app_delete", e.deleteApp},
 		{"events_list", e.eventsList},
 		{"events_stream", e.eventsStream},
@@ -190,10 +199,36 @@ func (e *generator) updateApp() {
 }
 
 func (e *generator) getAppLog() {
-	res, err := e.client.GetAppLog(e.resourceIds["app"], nil)
+	app, err := e.client.GetApp("controller")
+	if err != nil {
+		log.Fatal(err)
+	}
+	e.resourceIds["controller"] = app.ID // save ID for streamAppLog
+	e.recorder.GetRequests()             // discard above request
+	lines := 10
+	res, err := e.client.GetAppLog(app.ID, &ct.LogOpts{
+		Lines: &lines,
+	})
 	if err == nil {
 		defer res.Close()
 		io.Copy(ioutil.Discard, res)
+	}
+}
+
+func (e *generator) streamAppLog() {
+	output := make(chan *ct.SSELogChunk)
+	lines := 10
+	e.client.StreamAppLog(e.resourceIds["controller"], &ct.LogOpts{
+		Lines: &lines,
+	}, output)
+	timeout := time.After(10 * time.Second)
+outer:
+	for {
+		select {
+		case <-output:
+		case <-timeout:
+			break outer
+		}
 	}
 }
 
@@ -214,6 +249,17 @@ func (e *generator) createRoute() {
 
 func (e *generator) getRoute() {
 	e.client.GetRoute(e.resourceIds["app"], e.resourceIds["route"])
+}
+
+func (e *generator) updateRoute() {
+	route, err := e.client.GetRoute(e.resourceIds["app"], e.resourceIds["route"])
+	if err != nil {
+		log.Fatal(err)
+	}
+	e.recorder.GetRequests() // discard above request
+	route.Service = e.resourceIds["app-name"] + "-other"
+	route.Sticky = true
+	e.client.UpdateRoute(e.resourceIds["app"], e.resourceIds["route"], route)
 }
 
 func (e *generator) listRoutes() {
@@ -270,6 +316,10 @@ func (e *generator) createRelease() {
 
 func (e *generator) listReleases() {
 	e.client.ReleaseList()
+}
+
+func (e *generator) listAppReleases() {
+	e.client.AppReleaseList(e.resourceIds["app"])
 }
 
 func (e *generator) getAppRelease() {
@@ -353,6 +403,10 @@ func (e *generator) updateJob() {
 	e.client.PutJob(job)
 }
 
+func (e *generator) getJob() {
+	e.client.GetJob(e.resourceIds["app"], e.resourceIds["job"])
+}
+
 func (e *generator) deleteJob() {
 	e.client.DeleteJob(e.resourceIds["app"], e.resourceIds["job"])
 }
@@ -395,6 +449,19 @@ func (e *generator) createProviderResource() {
 	e.resourceIds["provider_resource"] = resource.ID
 }
 
+func (e *generator) putProviderResource() {
+	resource := &ct.Resource{
+		ID:         random.UUID(),
+		ProviderID: e.resourceIds["provider"],
+		ExternalID: "/foo/bar",
+		Env:        map[string]string{"FOO": "BAR"},
+		Apps: []string{
+			e.resourceIds["app"],
+		},
+	}
+	e.client.PutResource(resource)
+}
+
 func (e *generator) getProviderResource() {
 	providerID := e.resourceIds["provider"]
 	resourceID := e.resourceIds["provider_resource"]
@@ -405,8 +472,24 @@ func (e *generator) listProviderResources() {
 	e.client.ResourceList(e.resourceIds["provider"])
 }
 
+func (e *generator) deleteProviderResource() {
+	e.client.DeleteResource(e.resourceIds["provider"], e.resourceIds["resource"])
+}
+
 func (e *generator) createDeployment() {
-	e.client.CreateDeployment(e.resourceIds["app"], e.resourceIds["release"])
+	deployment, err := e.client.CreateDeployment(e.resourceIds["app"], e.resourceIds["release"])
+	if err != nil {
+		log.Fatal(err)
+	}
+	e.resourceIds["deployment"] = deployment.ID
+}
+
+func (e *generator) getDeployment() {
+	e.client.GetDeployment(e.resourceIds["deployment"])
+}
+
+func (e *generator) listDeployments() {
+	e.client.DeploymentList(e.resourceIds["app"])
 }
 
 func (e *generator) eventsList() {

@@ -6,9 +6,11 @@
   "sortIndex": 13,
   "type": "object",
   "examples": [
+    "schema/examples/controller/provider_resource_put#",
     "schema/examples/controller/app_resource_list#",
     "schema/examples/controller/provider_resource_get#",
-    "schema/examples/controller/provider_resource_list#"
+    "schema/examples/controller/provider_resource_list#",
+    "schema/examples/controller/provider_resource_delete#"
   ],
   "additionalProperties": false,
   "properties": {

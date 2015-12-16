@@ -256,6 +256,12 @@ func (n NotFoundError) Error() string {
 	return fmt.Sprintf("resource not found: %s", n.Resource)
 }
 
+// SSELogChunk is used as a data wrapper for the `GET /apps/:apps_id/log` SSE stream
+type SSELogChunk struct {
+	Event string          `json:"event,omitempty"`
+	Data  json.RawMessage `json:"data,omitempty"`
+}
+
 type LogOpts struct {
 	Follow      bool
 	JobID       string

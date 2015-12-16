@@ -8,6 +8,7 @@
   "examples": [
     "schema/examples/controller/job_list#",
     "schema/examples/controller/job_update#",
+    "schema/examples/controller/job_get#",
     "schema/examples/controller/job_delete#"
   ],
   "additionalProperties": false,
