@@ -265,8 +265,8 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected ct.JobEvents, lo
 				actual[event.Type] = make(map[ct.JobState]int)
 			}
 			handleEvent(event.ID, event.Type, event.State)
-			if event.HostError != "" {
-				return fmt.Errorf("deployer: %s job failed to start: %s", event.Type, event.HostError)
+			if event.HostError != nil {
+				return fmt.Errorf("deployer: %s job failed to start: %s", event.Type, *event.HostError)
 			}
 			if expected.Equals(actual) {
 				return nil
