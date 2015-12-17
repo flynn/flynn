@@ -41,7 +41,7 @@ var AppRouteNew = Store.createClass({
 		case 'CREATE_APP_ROUTE_FAILED':
 			if (event.appID === this.props.appID && event.routeDomain === this.state.routeDomain) {
 				this.setState({
-					errorMsg: 'Something went wrong ('+ event.status +')',
+					errorMsg: event.error ? event.error.message : 'Something went wrong ('+ event.status +')',
 					isCreating: false
 				});
 			}

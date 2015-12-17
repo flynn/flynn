@@ -164,12 +164,17 @@ var Client = createClass({
 				'Content-Type': 'application/json'
 			}
 		}).catch(function (args) {
+			var res = null;
 			var xhr = args[1];
+			if (xhr.getResponseHeader('Content-Type').match(/json/)) {
+				res = args[0];
+			}
 			Dispatcher.dispatch({
 				name: 'CREATE_APP_ROUTE_FAILED',
 				appID: appId,
 				routeDomain: data.domain,
-				status: xhr.status
+				status: xhr.status,
+				error: res
 			});
 		});
 	},
