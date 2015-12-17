@@ -115,9 +115,6 @@ var App = Store.createClass({
 			this.__createAppFormation(event.formation);
 			break;
 
-		case "APP_DELETE:DELETE_APP":
-			this.__deleteApp();
-			break;
 		}
 	},
 
@@ -175,17 +172,6 @@ var App = Store.createClass({
 				});
 			}.bind(this));
 		}.bind(this));
-	},
-
-	__deleteApp: function () {
-		var __appId = this.id.appId;
-		return App.getClient.call(this).deleteApp(this.props.appId).then(function (args) {
-			Dispatcher.handleStoreEvent({
-				name: "APP:DELETED",
-				appId: __appId
-			});
-			return args;
-		});
 	}
 });
 
