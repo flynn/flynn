@@ -92,8 +92,6 @@ func (s *HTTPListener) Start() error {
 		s.cookieKey = &[32]byte{}
 	}
 
-	// TODO(benburkert): the sync API cannot handle routes deleted while the
-	// listen/notify connection is disconnected
 	if err := s.startSync(ctx); err != nil {
 		return err
 	}
@@ -266,12 +264,10 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 			h.l.domains[strings.ToLower(r.Domain)] = NewTree(r)
 		}
 	} else {
-		// TODO(jpg): fix #1002 to make this safe. This can potentially
-		// insert nothing if the datastore it out of sync.
 		if tree, ok := h.l.domains[strings.ToLower(r.Domain)]; ok {
 			tree.Insert(r.Path, r)
 		} else {
-			logger.Warn("out of sync, failed insert of path based route")
+			logger.Error("Failed insert of path based route, consistency violation.")
 		}
 	}
 
@@ -297,12 +293,10 @@ func (h *httpSyncHandler) Remove(id string) error {
 	}
 
 	delete(h.l.routes, id)
-	if r.Path == "/" {
-		// TODO(jpg): Fix #1002 to make this safe
-		delete(h.l.domains, r.Domain)
-	} else {
-		// TODO(jpg): Fix #1002 to make this safe
-		if tree, ok := h.l.domains[r.Domain]; ok {
+	if tree, ok := h.l.domains[r.Domain]; ok {
+		if r.Path == "/" && tree.backend == r {
+			delete(h.l.domains, r.Domain)
+		} else if tree.Lookup(r.Path) == r {
 			tree.Remove(r.Path)
 		}
 	}
