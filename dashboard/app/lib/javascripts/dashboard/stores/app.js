@@ -20,7 +20,11 @@ var App = Store.createClass({
 	getInitialState: function () {
 		return {
 			app: null,
-			release: null,
+			release: {
+				meta: {},
+				env: {},
+				processes: {}
+			},
 			formation: null,
 			serviceUnavailable: false,
 			notFound: false
