@@ -27,7 +27,8 @@ var App = Store.createClass({
 			},
 			formation: null,
 			serviceUnavailable: false,
-			notFound: false
+			notFound: false,
+			deleteError: null
 		};
 	},
 
@@ -115,8 +116,10 @@ var App = Store.createClass({
 			this.__createAppFormation(event.formation);
 			break;
 
-		case "APP_DELETE:DELETE_APP":
-			this.__deleteApp();
+		case "DELETE_APP_FAILED":
+			this.setState({
+				deleteError: event.error ? event.error : ('Something went wrong ('+ event.status +')')
+			});
 			break;
 		}
 	},
@@ -175,17 +178,6 @@ var App = Store.createClass({
 				});
 			}.bind(this));
 		}.bind(this));
-	},
-
-	__deleteApp: function () {
-		var __appId = this.id.appId;
-		return App.getClient.call(this).deleteApp(this.props.appId).then(function (args) {
-			Dispatcher.handleStoreEvent({
-				name: "APP:DELETED",
-				appId: __appId
-			});
-			return args;
-		});
 	}
 });
 
