@@ -85,7 +85,12 @@ func (f *Formation) GetProcesses() Processes {
 }
 
 func (f *Formation) SetProcesses(procs Processes) {
-	f.OriginalProcesses = procs
+	// copy to original processes so they are not modified by RectifyOmni
+	f.OriginalProcesses = make(Processes, len(procs))
+	for typ, count := range procs {
+		f.OriginalProcesses[typ] = count
+	}
+
 	f.Processes = procs
 }
 
