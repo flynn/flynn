@@ -293,7 +293,12 @@ echo "nameserver ${ip}" | sudo tee /etc/resolv.conf
 
 cd ~/go/src/github.com/flynn/flynn
 
-cli/bin/flynn cluster add -p {{ .Config.TLSPin }} default {{ .Config.Domain }} {{ .Config.Key }}
+cli/bin/flynn cluster add \
+  --tls-pin "{{ .Config.TLSPin }}" \
+  --git-url "{{ .Config.GitURL }}" \
+  default \
+  {{ .Config.ControllerURL }} \
+  {{ .Config.Key }}
 
 git config --global user.email "ci@flynn.io"
 git config --global user.name "CI"
