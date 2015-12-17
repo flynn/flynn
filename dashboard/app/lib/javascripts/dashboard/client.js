@@ -216,6 +216,18 @@ var Client = createClass({
 	deleteApp: function (appId) {
 		return this.performControllerRequest('DELETE', {
 			url: "/apps/"+ encodeURIComponent(appId)
+		}).catch(function (args) {
+			var res = null;
+			var xhr = args[1];
+			if (xhr.getResponseHeader('Content-Type').match(/json/)) {
+				res = args[0];
+			}
+			Dispatcher.dispatch({
+				name: 'DELETE_APP_FAILED',
+				appID: appId,
+				status: xhr.status,
+				error: res
+			});
 		});
 	},
 

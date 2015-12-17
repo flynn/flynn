@@ -27,7 +27,8 @@ var App = Store.createClass({
 			},
 			formation: null,
 			serviceUnavailable: false,
-			notFound: false
+			notFound: false,
+			deleteError: null
 		};
 	},
 
@@ -115,6 +116,11 @@ var App = Store.createClass({
 			this.__createAppFormation(event.formation);
 			break;
 
+		case "DELETE_APP_FAILED":
+			this.setState({
+				deleteError: event.error ? event.error : ('Something went wrong ('+ event.status +')')
+			});
+			break;
 		}
 	},
 

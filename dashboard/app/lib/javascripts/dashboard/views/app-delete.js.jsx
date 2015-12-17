@@ -18,6 +18,18 @@ function getState (props, prevState) {
 
 	var appState = AppStore.getState(state.appStoreId);
 	state.app = appState.app;
+	state.notFound = appState.notFound;
+	state.error = null;
+
+	if (state.notFound) {
+		state.error = "App not found";
+	} else if (appState.deleteError) {
+		state.error = appState.deleteError;
+	}
+
+	if (state.error) {
+		state.isDeleting = false;
+	}
 
 	return state;
 }
@@ -33,6 +45,10 @@ var AppDelete = React.createClass({
 					<header>
 						<h1>Delete {app ? app.name : "app"}?</h1>
 					</header>
+
+					{this.state.error ? (
+						<p className="alert-error">{this.state.error}</p>
+					) : null}
 
 					<button className="delete-btn" disabled={ !app || this.state.isDeleting } onClick={this.__handleDeleteBtnClick}>{this.state.isDeleting ? "Please wait..." : "Delete"}</button>
 				</section>
