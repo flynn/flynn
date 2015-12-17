@@ -36,6 +36,11 @@ func WriteGlobalGitConfig(gitURL, caFile string) error {
 	if err != nil {
 		return err
 	}
+
+	// Ensure the path uses `/`s
+	// Git on windows can't handle `\`s
+	self = filepath.ToSlash(self)
+
 	if err := gitConfig(fmt.Sprintf("credential.%s.helper", gitURL), self+" git-credentials"); err != nil {
 		return err
 	}
