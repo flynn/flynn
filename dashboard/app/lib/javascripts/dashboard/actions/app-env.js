@@ -5,10 +5,17 @@ import { objectDiff, applyObjectDiff } from 'dashboard/utils';
 
 var updateAppEnv = function (appID, changedRelease, env) {
 	var client = Config.client;
-	client.getAppRelease(appID).then(function (args) {
+	client.getAppRelease(appID).catch(function (args) {
+		var xhr = (args || [])[1];
+		if (xhr && xhr.status === 404) {
+			// app doesn't have a release yet
+			return [{}, null];
+		}
+		return Promise.reject(args);
+	}).then(function (args) {
 		var release = extend({}, args[0]);
 		var envDiff = objectDiff(changedRelease.env || {}, env);
-		release.env = applyObjectDiff(envDiff, release.env);
+		release.env = applyObjectDiff(envDiff, release.env || {});
 		delete release.id;
 		delete release.created_at;
 		

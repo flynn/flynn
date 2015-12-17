@@ -24,8 +24,8 @@ function getState (props, prevState) {
 	state.release = appState.release;
 
 	if (state.release && !assertEqual(prevState.release, state.release)) {
-		state.env = applyObjectDiff(state.envDiff, extend({}, state.release.env));
-		state.hasChanges = !assertEqual(state.release.env, state.env);
+		state.env = applyObjectDiff(state.envDiff, extend({}, state.release.env || {}));
+		state.hasChanges = !assertEqual(state.release.env || {}, state.env);
 		state.envDiff = [];
 		state.isSaving = false;
 	}
@@ -83,7 +83,7 @@ var AppEnv = React.createClass({
 	},
 
 	__handleEnvChange: function (env) {
-		var diff = objectDiff(this.state.release.env, env);
+		var diff = objectDiff(this.state.release.env || {}, env);
 		this.setState({
 			env: env,
 			envDiff: diff,
