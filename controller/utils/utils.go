@@ -168,6 +168,7 @@ type ControllerClient interface {
 	AppList() ([]*ct.App, error)
 	FormationListActive() ([]*ct.ExpandedFormation, error)
 	PutJob(*ct.Job) error
+	JobListActive() ([]*ct.Job, error)
 }
 
 func ClusterClientWrapper(c *cluster.Client) clusterClientWrapper {

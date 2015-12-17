@@ -730,6 +730,12 @@ func (c *Client) JobList(appID string) ([]*ct.Job, error) {
 	return jobs, c.Get(fmt.Sprintf("/apps/%s/jobs", appID), &jobs)
 }
 
+// JobListActive returns a list of all active jobs.
+func (c *Client) JobListActive() ([]*ct.Job, error) {
+	var jobs []*ct.Job
+	return jobs, c.Get("/active-jobs", &jobs)
+}
+
 // AppList returns a list of all apps.
 func (c *Client) AppList() ([]*ct.App, error) {
 	var apps []*ct.App

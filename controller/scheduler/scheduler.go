@@ -390,6 +390,7 @@ func (s *Scheduler) SyncJobs() (err error) {
 		}
 	}()
 
+	// ensure we have accurate in-memory states for all cluster jobs
 	for id, host := range s.hosts {
 		jobs, err := host.client.ListJobs()
 		if err != nil {
@@ -399,6 +400,36 @@ func (s *Scheduler) SyncJobs() (err error) {
 
 		for _, job := range jobs {
 			s.handleActiveJob(&job)
+		}
+	}
+
+	// ensure that all starting or up jobs in the controller are still in
+	// those states
+	jobs, err := s.JobListActive()
+	if err != nil {
+		if err == controller.ErrNotFound {
+			// a 404 means the controller is a version behind the scheduler (which
+			// can happen during an update), just ignore and wait for the next sync
+			// when the controller may be updated to the correct version
+			log.Warn("skipping controller job sync, controller missing active job route")
+			return nil
+		}
+		log.Error("error getting controller active jobs", "err", err)
+		return err
+	}
+	for _, job := range jobs {
+		j, ok := s.jobs[job.UUID]
+		if !ok {
+			// the controller job is unknown, and since we are in sync with
+			// all the hosts, it can't be running so mark it as down
+			job.State = ct.JobStateDown
+			s.persistControllerJob(job)
+			continue
+		}
+
+		// persist the job if it has a different in-memory state
+		if job.State == ct.JobStateStarting && j.state != JobStateStarting || job.State == ct.JobStateUp && j.state != JobStateRunning {
+			s.persistJob(j)
 		}
 	}
 
@@ -960,13 +991,17 @@ func (s *Scheduler) handleJobStatus(job *Job, status host.JobStatus) {
 	s.triggerRectify(job.Formation.key())
 }
 
-// persistJob triggers the RunPutJobs goroutine to persist the job to the
-// controller, but only if the scheduler either doesn't know the current leader
-// (e.g. if this is the first scheduler to start) or it itself is the current
-// leader to avoid states jumping back and forward in the database
 func (s *Scheduler) persistJob(job *Job) {
+	s.persistControllerJob(job.ControllerJob())
+}
+
+// persistControllerJob triggers the RunPutJobs goroutine to persist the job to
+// the controller, but only if the scheduler either doesn't know the current
+// leader (e.g. if this is the first scheduler to start) or it itself is the
+// current leader to avoid states jumping back and forward in the database
+func (s *Scheduler) persistControllerJob(job *ct.Job) {
 	if s.isLeader == nil || *s.isLeader {
-		s.putJobs <- job.ControllerJob()
+		s.putJobs <- job
 	}
 }
 

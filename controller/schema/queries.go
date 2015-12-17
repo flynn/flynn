@@ -46,6 +46,7 @@ var preparedStatements = map[string]string{
 	"formation_delete":                      formationDeleteQuery,
 	"formation_delete_by_app":               formationDeleteByAppQuery,
 	"job_list":                              jobListQuery,
+	"job_list_active":                       jobListActiveQuery,
 	"job_select":                            jobSelectQuery,
 	"job_insert":                            jobInsertQuery,
 	"job_update":                            jobUpdateQuery,
@@ -230,6 +231,9 @@ WHERE app_id = $1 AND deleted_at IS NULL`
 	jobListQuery = `
 SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at
 FROM job_cache WHERE app_id = $1 ORDER BY created_at DESC`
+	jobListActiveQuery = `
+SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at
+FROM job_cache WHERE state = 'starting' OR state = 'up' ORDER BY updated_at DESC`
 	jobSelectQuery = `
 SELECT cluster_id, job_id, host_id, app_id, release_id, process_type, state, meta, exit_status, host_error, run_at, restarts, created_at, updated_at
 FROM job_cache WHERE job_id = $1`

@@ -35,6 +35,47 @@ func (s *S) TestJobList(c *C) {
 	c.Assert(job.Meta, DeepEquals, map[string]string{"some": "info"})
 }
 
+func (s *S) TestJobListActive(c *C) {
+	app := s.createTestApp(c, &ct.App{Name: "job-list-active"})
+	release := s.createTestRelease(c, &ct.Release{})
+
+	// mark all existing jobs as down
+	c.Assert(s.hc.db.Exec("UPDATE job_cache SET state = 'down'"), IsNil)
+
+	createJob := func(state ct.JobState) *ct.Job {
+		return s.createTestJob(c, &ct.Job{
+			UUID:      random.UUID(),
+			AppID:     app.ID,
+			ReleaseID: release.ID,
+			Type:      "web",
+			State:     state,
+			Meta:      map[string]string{"some": "info"},
+		})
+	}
+
+	jobs := []*ct.Job{
+		createJob(ct.JobStatePending),
+		createJob(ct.JobStateStarting),
+		createJob(ct.JobStateUp),
+		createJob(ct.JobStateDown),
+		createJob(ct.JobStateStarting),
+		createJob(ct.JobStateUp),
+	}
+
+	list, err := s.c.JobListActive()
+	c.Assert(err, IsNil)
+	c.Assert(list, HasLen, 4)
+
+	// check that we only get jobs with a starting or running state,
+	// most recently updated first
+	expected := []*ct.Job{jobs[5], jobs[4], jobs[2], jobs[1]}
+	for i, job := range expected {
+		actual := list[i]
+		c.Assert(actual.UUID, Equals, job.UUID)
+		c.Assert(actual.State, Equals, job.State)
+	}
+}
+
 func (s *S) TestJobGet(c *C) {
 	app := s.createTestApp(c, &ct.App{Name: "job-get"})
 	release := s.createTestRelease(c, &ct.Release{})

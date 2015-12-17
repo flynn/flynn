@@ -134,6 +134,23 @@ func (r *JobRepo) List(appID string) ([]*ct.Job, error) {
 	return jobs, nil
 }
 
+func (r *JobRepo) ListActive() ([]*ct.Job, error) {
+	rows, err := r.db.Query("job_list_active")
+	if err != nil {
+		return nil, err
+	}
+	jobs := []*ct.Job{}
+	for rows.Next() {
+		job, err := scanJob(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		jobs = append(jobs, job)
+	}
+	return jobs, nil
+}
+
 func (c *controllerAPI) connectHost(ctx context.Context) (utils.HostClient, *ct.Job, error) {
 	params, _ := ctxhelper.ParamsFromContext(ctx)
 	job, err := c.jobRepo.Get(params.ByName("jobs_id"))
@@ -149,6 +166,15 @@ func (c *controllerAPI) connectHost(ctx context.Context) (utils.HostClient, *ct.
 func (c *controllerAPI) ListJobs(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	app := c.getApp(ctx)
 	list, err := c.jobRepo.List(app.ID)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, list)
+}
+
+func (c *controllerAPI) ListActiveJobs(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	list, err := c.jobRepo.ListActive()
 	if err != nil {
 		respondWithError(w, err)
 		return

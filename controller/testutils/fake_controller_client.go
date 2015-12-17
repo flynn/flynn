@@ -190,6 +190,16 @@ func (c *FakeControllerClient) PutJob(job *ct.Job) error {
 	return nil
 }
 
+func (c *FakeControllerClient) JobListActive() ([]*ct.Job, error) {
+	list := make([]*ct.Job, 0, len(c.jobs))
+	for _, job := range c.jobs {
+		if job.State == ct.JobStateStarting || job.State == ct.JobStateUp {
+			list = append(list, job)
+		}
+	}
+	return list, nil
+}
+
 func NewRelease(id string, artifact *ct.Artifact, processes map[string]int) *ct.Release {
 	return NewReleaseOmni(id, artifact, processes, false)
 }
