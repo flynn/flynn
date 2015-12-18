@@ -133,9 +133,13 @@ func startJob(s *State, hc *cluster.Host, job *host.Job) error {
 	}
 	go func() {
 		defer stream.Close()
+	loop:
 		for {
 			select {
-			case e := <-events:
+			case e, ok := <-events:
+				if !ok {
+					break loop
+				}
 				switch e.Event {
 				case "start", "stop":
 					jobStatus <- nil
