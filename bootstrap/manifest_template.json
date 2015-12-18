@@ -181,6 +181,7 @@
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
           "cmd": ["controller"],
+          "service": "controller",
           "resurrect": true
         },
         "scheduler": {
