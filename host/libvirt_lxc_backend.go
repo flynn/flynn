@@ -778,41 +778,66 @@ func (c *libvirtContainer) watch(ready chan<- error, buffer host.LogBuffer) erro
 		}
 	}
 
-	g.Log(grohl.Data{"at": "watch_changes"})
-	for change := range c.Client.StreamState() {
-		g.Log(grohl.Data{"at": "change", "state": change.State.String()})
-		if change.Error != "" {
-			err := errors.New(change.Error)
-			g.Log(grohl.Data{"at": "change", "status": "error", "err": err})
-			c.Client.Resume()
-			c.l.state.SetStatusFailed(c.job.ID, err)
-			return err
-		}
-		switch change.State {
-		case containerinit.StateInitial:
-			g.Log(grohl.Data{"at": "wait_attach"})
-			c.l.state.WaitAttach(c.job.ID)
-			g.Log(grohl.Data{"at": "resume"})
-			c.Client.Resume()
-			g.Log(grohl.Data{"at": "resumed"})
-		case containerinit.StateRunning:
-			g.Log(grohl.Data{"at": "running"})
-			c.l.state.SetStatusRunning(c.job.ID)
+	// containerinit sometimes fails to send the StateRunning state change
+	// when the container is running, so we do an explicit check once a
+	// second to avoid the job being stuck in the "starting" state (see
+	// https://github.com/flynn/flynn/issues/907)
+	isRunning := false
+	runningCheck := time.NewTicker(time.Second)
+	handleRunning := func() {
+		g.Log(grohl.Data{"at": "running"})
+		c.l.state.SetStatusRunning(c.job.ID)
 
-			// if the job was stopped before it started, exit
-			if c.l.state.GetJob(c.job.ID).ForceStop {
-				c.Stop()
+		// if the job was stopped before it started, exit
+		if c.l.state.GetJob(c.job.ID).ForceStop {
+			c.Stop()
+		}
+
+		isRunning = true
+		runningCheck.Stop()
+	}
+
+	g.Log(grohl.Data{"at": "watch_changes"})
+	stateCh := c.Client.StreamState()
+	for {
+		select {
+		case change := <-stateCh:
+			g.Log(grohl.Data{"at": "change", "state": change.State.String()})
+			if change.Error != "" {
+				err := errors.New(change.Error)
+				g.Log(grohl.Data{"at": "change", "status": "error", "err": err})
+				c.Client.Resume()
+				c.l.state.SetStatusFailed(c.job.ID, err)
+				return err
 			}
-		case containerinit.StateExited:
-			g.Log(grohl.Data{"at": "exited", "status": change.ExitStatus})
-			c.Client.Resume()
-			c.l.state.SetStatusDone(c.job.ID, change.ExitStatus)
-			return nil
-		case containerinit.StateFailed:
-			g.Log(grohl.Data{"at": "failed"})
-			c.Client.Resume()
-			c.l.state.SetStatusFailed(c.job.ID, errors.New("container failed to start"))
-			return nil
+			switch change.State {
+			case containerinit.StateInitial:
+				g.Log(grohl.Data{"at": "wait_attach"})
+				c.l.state.WaitAttach(c.job.ID)
+				g.Log(grohl.Data{"at": "resume"})
+				c.Client.Resume()
+				g.Log(grohl.Data{"at": "resumed"})
+			case containerinit.StateRunning:
+				handleRunning()
+			case containerinit.StateExited:
+				g.Log(grohl.Data{"at": "exited", "status": change.ExitStatus})
+				c.Client.Resume()
+				c.l.state.SetStatusDone(c.job.ID, change.ExitStatus)
+				return nil
+			case containerinit.StateFailed:
+				g.Log(grohl.Data{"at": "failed"})
+				c.Client.Resume()
+				c.l.state.SetStatusFailed(c.job.ID, errors.New("container failed to start"))
+				return nil
+			}
+		case <-runningCheck.C:
+			if isRunning {
+				continue
+			}
+			g.Log(grohl.Data{"at": "running_check"})
+			if state, err := c.Client.GetState(); err == nil && state == containerinit.StateRunning {
+				handleRunning()
+			}
 		}
 	}
 	g.Log(grohl.Data{"at": "unknown_failure"})
