@@ -190,6 +190,11 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected ct.JobEvents, lo
 	actual := make(ct.JobEvents)
 
 	handleEvent := func(jobID, typ string, state ct.JobState) {
+		// ignore pending events
+		if state == ct.JobStatePending {
+			return
+		}
+
 		// don't send duplicate events
 		if _, ok := d.knownJobStates[jobIDState{jobID, state}]; ok {
 			return

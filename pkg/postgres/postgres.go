@@ -19,6 +19,7 @@ const (
 	CheckViolation            = "23514"
 	UniqueViolation           = "23505"
 	RaiseException            = "P0001"
+	ForeignKeyViolation       = "23503"
 )
 
 type Conf struct {

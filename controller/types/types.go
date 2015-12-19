@@ -89,7 +89,18 @@ type Key struct {
 }
 
 type Job struct {
-	ID         string            `json:"id,omitempty"`
+	// ID is the job's full cluster ID (i.e. hostID-UUID) and can be empty
+	// if the job is pending
+	ID string `json:"id,omitempty"`
+
+	// UUID is the uuid part of the job's full cluster ID and is the
+	// primary key field in the database (so it is always set)
+	UUID string `json:"uuid"`
+
+	// HostID is the host ID part of the job's full cluster ID and can be
+	// empty if the job is pending
+	HostID string `json:"host_id,omitempty"`
+
 	AppID      string            `json:"app,omitempty"`
 	ReleaseID  string            `json:"release,omitempty"`
 	Type       string            `json:"type,omitempty"`
@@ -98,6 +109,8 @@ type Job struct {
 	Meta       map[string]string `json:"meta,omitempty"`
 	ExitStatus *int32            `json:"exit_status,omitempty"`
 	HostError  *string           `json:"host_error,omitempty"`
+	RunAt      *time.Time        `json:"run_at,omitempty"`
+	Restarts   *int32            `json:"restarts,omitempty"`
 	CreatedAt  *time.Time        `json:"created_at,omitempty"`
 	UpdatedAt  *time.Time        `json:"updated_at,omitempty"`
 }
@@ -105,6 +118,7 @@ type Job struct {
 type JobState string
 
 const (
+	JobStatePending  JobState = "pending"
 	JobStateStarting JobState = "starting"
 	JobStateUp       JobState = "up"
 	JobStateStopping JobState = "stopping"

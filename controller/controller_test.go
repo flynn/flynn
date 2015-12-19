@@ -39,12 +39,10 @@ var _ = Suite(&S{})
 
 var authKey = "test"
 
-func (s *S) SetUpSuite(c *C) {
-	dbname := "controllertest"
+func setupTestDB(c *C, dbname string) *postgres.DB {
 	if err := pgtestutils.SetupPostgres(dbname); err != nil {
 		c.Fatal(err)
 	}
-
 	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
 		ConnConfig: pgx.ConnConfig{
 			Host:     os.Getenv("PGHOST"),
@@ -54,14 +52,19 @@ func (s *S) SetUpSuite(c *C) {
 	if err != nil {
 		c.Fatal(err)
 	}
-	db := postgres.New(pgxpool, nil)
-	if err = migrateDB(db); err != nil {
+	return postgres.New(pgxpool, nil)
+}
+
+func (s *S) SetUpSuite(c *C) {
+	dbname := "controllertest"
+	db := setupTestDB(c, dbname)
+	if err := migrateDB(db); err != nil {
 		c.Fatal(err)
 	}
 
 	// reconnect with que statements prepared now that schema is migrated
 
-	pgxpool, err = pgx.NewConnPool(pgx.ConnPoolConfig{
+	pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
 		ConnConfig: pgx.ConnConfig{
 			Host:     "/var/run/postgresql",
 			Database: dbname,

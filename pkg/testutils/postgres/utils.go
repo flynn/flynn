@@ -8,11 +8,6 @@ import (
 )
 
 func SetupPostgres(dbname string) error {
-	if os.Getenv("PGDATABASE") != "" {
-		dbname = os.Getenv("PGDATABASE")
-	} else {
-		os.Setenv("PGDATABASE", dbname)
-	}
 	if os.Getenv("PGSSLMODE") == "" {
 		os.Setenv("PGSSLMODE", "disable")
 	}

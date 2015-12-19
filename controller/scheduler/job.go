@@ -30,14 +30,11 @@ const (
 	// host.StatusFailed event has been received)
 	JobStateStopped JobState = "stopped"
 
-	// JobStateScheduled is a job's state when it is scheduled to start in
-	// the future (because it's in the process of being restarted)
-	JobStateScheduled JobState = "scheduled"
-
-	// JobStateNew is a job's state when it has been created in-memory (in
-	// response to a formation change) and is in the process of being
-	// started in the cluster
-	JobStateNew JobState = "new"
+	// JobStatePending is a job's state when it is scheduled to start in
+	// the future, either because it is a new job being started due to a
+	// formation change, or is scheduled to replace a crashed job after a
+	// backoff period
+	JobStatePending JobState = "pending"
 )
 
 // Job is an in-memory representation of a cluster job
@@ -76,6 +73,10 @@ type Job struct {
 	// restartTimer is a timer set when scheduling a job to start in the
 	// future
 	restartTimer *time.Timer
+
+	// runAt is the time we expect this job to be started at if it is the
+	// restart of a crashed job.
+	runAt *time.Time
 
 	// startedAt is the time the job started in the cluster, assigned
 	// whenever a host event is received for the job, and is used to sort
@@ -134,14 +135,19 @@ func (j *Job) IsInFormation(key utils.FormationKey) bool {
 func (j *Job) ControllerJob() *ct.Job {
 	job := &ct.Job{
 		ID:        j.JobID,
+		UUID:      j.ID,
+		HostID:    j.HostID,
 		AppID:     j.AppID,
 		ReleaseID: j.ReleaseID,
 		Type:      j.Type,
 		Meta:      utils.JobMetaFromMetadata(j.metadata),
 		HostError: j.hostError,
+		RunAt:     j.runAt,
 	}
 
 	switch j.state {
+	case JobStatePending:
+		job.State = ct.JobStatePending
 	case JobStateStarting:
 		job.State = ct.JobStateStarting
 	case JobStateRunning:
@@ -152,6 +158,9 @@ func (j *Job) ControllerJob() *ct.Job {
 
 	if j.exitStatus != nil {
 		job.ExitStatus = typeconv.Int32Ptr(int32(*j.exitStatus))
+	}
+	if j.restarts > 0 {
+		job.Restarts = typeconv.Int32Ptr(int32(j.restarts))
 	}
 
 	return job
@@ -184,7 +193,7 @@ func (s sortJobs) Sort()              { sort.Sort(s) }
 func (j Jobs) GetHostJobCounts(key utils.FormationKey, typ string) map[string]int {
 	counts := make(map[string]int)
 	for _, job := range j {
-		if job.IsInFormation(key) && job.Type == typ && job.state != JobStateScheduled {
+		if job.IsInFormation(key) && job.Type == typ && job.restartTimer == nil {
 			counts[job.HostID]++
 		}
 	}

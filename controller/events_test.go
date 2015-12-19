@@ -8,6 +8,7 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	cc "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 func (s *S) TestEvents(c *C) {
@@ -15,16 +16,16 @@ func (s *S) TestEvents(c *C) {
 	app2 := s.createTestApp(c, &ct.App{Name: "app2"})
 	release := s.createTestRelease(c, &ct.Release{})
 
-	jobID1 := "host-job1"
-	jobID2 := "host-job2"
-	jobID3 := "host-job3"
+	jobID1 := random.UUID()
+	jobID2 := random.UUID()
+	jobID3 := random.UUID()
 	jobs := []*ct.Job{
-		{ID: jobID1, AppID: app1.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateStarting},
-		{ID: jobID1, AppID: app1.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateUp},
-		{ID: jobID2, AppID: app1.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateStarting},
-		{ID: jobID2, AppID: app1.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateUp},
-		{ID: jobID3, AppID: app2.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateStarting},
-		{ID: jobID3, AppID: app2.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateUp},
+		{UUID: jobID1, AppID: app1.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateStarting},
+		{UUID: jobID1, AppID: app1.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateUp},
+		{UUID: jobID2, AppID: app1.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateStarting},
+		{UUID: jobID2, AppID: app1.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateUp},
+		{UUID: jobID3, AppID: app2.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateStarting},
+		{UUID: jobID3, AppID: app2.ID, ReleaseID: release.ID, Type: "web", State: ct.JobStateUp},
 	}
 
 	listener := newEventListener(&EventRepo{db: s.hc.db})
