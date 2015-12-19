@@ -116,7 +116,10 @@ func unmarshalControllerExample(data []byte) (map[string]interface{}, error) {
 
 func (s *ControllerSuite) generateControllerExamples(t *c.C) map[string]interface{} {
 	cmd := exec.Command(exec.DockerImage(imageURIs["controller-examples"]), "/bin/flynn-controller-examples")
-	cmd.Env = map[string]string{"CONTROLLER_KEY": s.clusterConf(t).Key}
+	cmd.Env = map[string]string{
+		"CONTROLLER_KEY":      s.clusterConf(t).Key,
+		"SKIP_MIGRATE_DOMAIN": "true",
+	}
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
