@@ -37,6 +37,7 @@ import (
 var logger = log15.New("component", "controller")
 
 var ErrNotFound = errors.New("controller: resource not found")
+var ErrShutdown = errors.New("controller: shutting down")
 
 var schemaRoot = "/etc/flynn-controller/jsonschema"
 
@@ -231,6 +232,8 @@ func appHandler(c handlerConfig) http.Handler {
 		caCert:              []byte(os.Getenv("CA_CERT")),
 		config:              c,
 	}
+
+	shutdown.BeforeExit(api.Shutdown)
 
 	httpRouter := httprouter.New()
 
@@ -429,4 +432,10 @@ func createEvent(dbExec func(string, ...interface{}) error, e *ct.Event, data in
 func (c *controllerAPI) GetCACert(_ context.Context, w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/x-x509-ca-cert")
 	w.Write(c.caCert)
+}
+
+func (c *controllerAPI) Shutdown() {
+	if c.eventListener != nil {
+		c.eventListener.CloseWithError(ErrShutdown)
+	}
 }
