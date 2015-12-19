@@ -237,7 +237,7 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected ct.JobEvents, lo
 			if !ok {
 				continue
 			}
-			log.Info("got service event", "job_id", jobID, "type", typ, "state", event.Kind)
+			log.Info("got service event", "job.id", jobID, "job.type", typ, "job.state", event.Kind)
 			handleEvent(jobID, typ, ct.JobStateUp)
 			if expected.Equals(actual) {
 				return nil
@@ -262,7 +262,7 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected ct.JobEvents, lo
 				}
 			}
 
-			log.Info("got job event", "job_id", event.ID, "type", event.Type, "state", event.State)
+			log.Info("got job event", "job.id", event.ID, "job.type", event.Type, "job.state", event.State)
 			if event.State == ct.JobStateStarting {
 				continue
 			}

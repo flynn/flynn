@@ -1172,7 +1172,7 @@ func (s *Scheduler) restartJob(job *Job) {
 	restarts := job.restarts
 	// reset the restart count if it has been running for longer than the
 	// back off period
-	if job.startedAt.Before(time.Now().Add(-s.backoffPeriod)) {
+	if !job.startedAt.IsZero() && job.startedAt.Before(time.Now().Add(-s.backoffPeriod)) {
 		restarts = 0
 	}
 	backoff := s.getBackoffDuration(restarts)

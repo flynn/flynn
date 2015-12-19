@@ -159,15 +159,19 @@ func (c *context) rollback(l log15.Logger, deployment *ct.Deployment, original *
 		}
 	}
 
-	log.Info("restoring the original formation")
+	log.Info("restoring the original formation", "release.id", original.ReleaseID)
 	if err := c.client.PutFormation(original); err != nil {
 		log.Error("error restoring the original formation", "err", err)
 		return err
 	}
 
 	if len(expectedJobEvents) > 0 {
-		log.Info("waiting for job events")
-		if err := jobWatcher.WaitFor(expectedJobEvents, 10*time.Second, nil); err != nil {
+		log.Info("waiting for job events", "events", expectedJobEvents)
+		callback := func(job *ct.Job) error {
+			log.Info("got job event", "job.id", job.ID, "job.type", job.Type, "job.state", job.State)
+			return nil
+		}
+		if err := jobWatcher.WaitFor(expectedJobEvents, 10*time.Second, callback); err != nil {
 			log.Error("error waiting for job events", "err", err)
 		}
 	}
