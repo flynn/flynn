@@ -481,7 +481,12 @@ func (TestSuite) TestMultipleSchedulers(c *C) {
 }
 
 func (TestSuite) TestStopJob(c *C) {
-	s := &Scheduler{}
+	s := &Scheduler{putJobs: make(chan *ct.Job)}
+	defer close(s.putJobs)
+	go func() {
+		for range s.putJobs {
+		}
+	}()
 	formation := NewFormation(&ct.ExpandedFormation{
 		App:     &ct.App{ID: "app"},
 		Release: &ct.Release{ID: "release"},
