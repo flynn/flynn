@@ -104,7 +104,11 @@ type StateChange struct {
 }
 
 func (c *Client) StreamState() <-chan *StateChange {
-	ch := make(chan *StateChange)
+	// use a buffered channel otherwise the rpc client will block sending a
+	// reply if the client is in the process of making another rpc call in
+	// response to a state change and not receiving on the channel
+	ch := make(chan *StateChange, 3)
+
 	c.c.StreamGo("ContainerInit.StreamState", struct{}{}, ch)
 	return ch
 }
