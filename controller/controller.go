@@ -76,7 +76,7 @@ func main() {
 	rc := routerc.New()
 
 	doneCh := make(chan struct{})
-	defer close(doneCh)
+	shutdown.BeforeExit(func() { close(doneCh) })
 	go func() {
 		if err := streamRouterEvents(rc, db, doneCh); err != nil {
 			shutdown.Fatal(err)

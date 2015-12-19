@@ -94,6 +94,7 @@ func ResetOnMigration(db *DB, log log15.Logger, doneCh chan struct{}) {
 				db.Reset()
 			case <-doneCh:
 				listener.Close()
+				return
 			}
 		}
 	}
