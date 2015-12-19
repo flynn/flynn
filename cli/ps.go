@@ -2,7 +2,9 @@ package main
 
 import (
 	"sort"
+	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/units"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
@@ -20,24 +22,22 @@ Options:
 Example:
 
 	$ flynn ps
-	ID                                         TYPE  STATE    RELEASE
-	318810fb-4679-419b-aed4-b0838c71c0eb       web   pending  d2ab4264-a647-4dc2-ac8d-d5821a475962
-	5bc89fe1-d4b5-4021-a337-10dd2b391358       web   pending  d2ab4264-a647-4dc2-ac8d-d5821a475962
-	host-93612073-f06e-41d9-bdae-df3e45f8a11d  web   up       d2ab4264-a647-4dc2-ac8d-d5821a475962
-	host-53dba8f4-561b-460b-b75b-677e8b6660fb  web   up       d2ab4264-a647-4dc2-ac8d-d5821a475962
+	ID                                         TYPE  STATE    CREATED         RELEASE
+	host-f25797dc-c956-4337-89af-d49eff50f58e  web   up       14 seconds ago  1b1db8ef-ba4d-4314-85c1-d5895a44b27e
+	6ec25d6e-2985-4807-8e64-02dc23c348bc       web   pending  7 seconds ago   1b1db8ef-ba4d-4314-85c1-d5895a44b27e
+	ab14754c-73b7-4212-a6d9-73b825587fd2       web   pending  2 seconds ago   1b1db8ef-ba4d-4314-85c1-d5895a44b27e
 
 	$ flynn ps --all
-	ID                                         TYPE  STATE    RELEASE
-	318810fb-4679-419b-aed4-b0838c71c0eb       web   pending  d2ab4264-a647-4dc2-ac8d-d5821a475962
-	5bc89fe1-d4b5-4021-a337-10dd2b391358       web   pending  d2ab4264-a647-4dc2-ac8d-d5821a475962
-	host-93612073-f06e-41d9-bdae-df3e45f8a11d  web   up       d2ab4264-a647-4dc2-ac8d-d5821a475962
-	host-53dba8f4-561b-460b-b75b-677e8b6660fb  web   up       d2ab4264-a647-4dc2-ac8d-d5821a475962
-	host-0f0472ad-272d-4bf3-a873-bc542cf16e31  web   down     d2ab4264-a647-4dc2-ac8d-d5821a475962
-	host-12657e64-adb9-4121-904f-4896231f3bc4  web   down     d2ab4264-a647-4dc2-ac8d-d5821a475962
-	host-c7f5d522-974d-4be1-8103-49f7eb309cb5  web   down     1a675dd8-9c44-468b-bef0-b3f8a25f5bdc
-	host-380c5ea6-d503-454e-a2a4-6b20dc9f4b81  web   down     1a675dd8-9c44-468b-bef0-b3f8a25f5bdc
-	host-cb4fed31-d84d-45d9-a566-c18907101f6f  web   down     1a675dd8-9c44-468b-bef0-b3f8a25f5bdc
-	host-9af9b2a9-1c53-4616-985a-e81da943fb95  web   down     1a675dd8-9c44-468b-bef0-b3f8a25f5bdc
+	ID                                         TYPE  STATE    CREATED             RELEASE
+	host-d84dc657-83b8-4a62-aab8-ad97bb994761  web   down     2 minutes ago       cd698657-2955-4fa4-bc2f-8714b218a7a2
+	host-feaff633-a37b-4565-9ade-24bae0cfae03  web   down     About a minute ago  cd698657-2955-4fa4-bc2f-8714b218a7a2
+	host-e8b4f9be-e422-481f-928c-4c82f0bb5e8b  web   down     About a minute ago  cd698657-2955-4fa4-bc2f-8714b218a7a2
+	host-95747b4f-fdcd-4c44-ab72-b3d9609668e4  run   down     54 seconds ago      cd698657-2955-4fa4-bc2f-8714b218a7a2
+	host-cef95d8c-a632-4ae6-8a57-e13cbc24afa9  web   down     25 seconds ago      1b1db8ef-ba4d-4314-85c1-d5895a44b27e
+	host-ef6249e3-b463-4fea-a7dd-b1302872f821  web   down     20 seconds ago      1b1db8ef-ba4d-4314-85c1-d5895a44b27e
+	host-f25797dc-c956-4337-89af-d49eff50f58e  web   up       14 seconds ago      1b1db8ef-ba4d-4314-85c1-d5895a44b27e
+	6ec25d6e-2985-4807-8e64-02dc23c348bc       web   pending  7 seconds ago       1b1db8ef-ba4d-4314-85c1-d5895a44b27e
+	ab14754c-73b7-4212-a6d9-73b825587fd2       web   pending  2 seconds ago       1b1db8ef-ba4d-4314-85c1-d5895a44b27e
 `)
 }
 
@@ -46,12 +46,12 @@ func runPs(args *docopt.Args, client *controller.Client) error {
 	if err != nil {
 		return err
 	}
-	sort.Sort(jobsByType(jobs))
+	sort.Sort(sortJobs(jobs))
 
 	w := tabWriter()
 	defer w.Flush()
 
-	listRec(w, "ID", "TYPE", "STATE", "RELEASE")
+	listRec(w, "ID", "TYPE", "STATE", "CREATED", "RELEASE")
 	for _, j := range jobs {
 		if j.Type == "" {
 			j.Type = "run"
@@ -63,14 +63,21 @@ func runPs(args *docopt.Args, client *controller.Client) error {
 		if id == "" {
 			id = j.UUID
 		}
-		listRec(w, id, j.Type, j.State, j.ReleaseID)
+		var created string
+		if j.CreatedAt != nil {
+			created = units.HumanDuration(time.Now().UTC().Sub(*j.CreatedAt)) + " ago"
+		}
+		listRec(w, id, j.Type, j.State, created, j.ReleaseID)
 	}
 
 	return nil
 }
 
-type jobsByType []*ct.Job
+// sortJobs sorts Jobs in chronological order based on their CreatedAt time
+type sortJobs []*ct.Job
 
-func (p jobsByType) Len() int           { return len(p) }
-func (p jobsByType) Less(i, j int) bool { return p[i].Type < p[j].Type }
-func (p jobsByType) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+func (s sortJobs) Len() int { return len(s) }
+func (s sortJobs) Less(i, j int) bool {
+	return s[i].CreatedAt == nil || s[j].CreatedAt != nil && (*s[j].CreatedAt).Sub(*s[i].CreatedAt) > 0
+}
+func (s sortJobs) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
