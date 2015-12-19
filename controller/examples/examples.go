@@ -112,7 +112,10 @@ func main() {
 		{"event_get", e.eventGet},
 		{"ca_cert", e.getCACert},
 		{"cluster_backup", e.clusterBackup},
-		{"migrate_cluster_domain", e.migrateClusterDomain},
+	}
+
+	if os.Getenv("SKIP_MIGRATE_DOMAIN") != "true" {
+		examples = append(examples, g.Example{"migrate_cluster_domain", e.migrateClusterDomain})
 	}
 
 	var out io.Writer
