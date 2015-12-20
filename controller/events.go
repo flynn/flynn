@@ -376,6 +376,7 @@ func newEventListener(r *EventRepo) *EventListener {
 	return &EventListener{
 		eventRepo:   r,
 		subscribers: make(map[string]map[*EventSubscriber]struct{}),
+		doneCh:      make(chan struct{}),
 	}
 }
 
@@ -389,6 +390,7 @@ type EventListener struct {
 
 	closed    bool
 	closedMtx sync.RWMutex
+	doneCh    chan struct{}
 }
 
 // Subscribe creates and returns an EventSubscriber for the given app, type and object.
@@ -439,27 +441,31 @@ func (e *EventListener) Listen() error {
 	}
 	go func() {
 		for {
-			n, ok := <-listener.Notify
-			if !ok {
-				e.CloseWithError(listener.Err)
-				return
+			select {
+			case n, ok := <-listener.Notify:
+				if !ok {
+					e.CloseWithError(listener.Err)
+					return
+				}
+				idApp := strings.SplitN(n.Payload, ":", 2)
+				if len(idApp) < 1 {
+					log.Error(fmt.Sprintf("invalid event notification: %q", n.Payload))
+					continue
+				}
+				id, err := strconv.ParseInt(idApp[0], 10, 64)
+				if err != nil {
+					log.Error(fmt.Sprintf("invalid event notification: %q", n.Payload), "err", err)
+					continue
+				}
+				event, err := e.eventRepo.GetEvent(id)
+				if err != nil {
+					log.Error(fmt.Sprintf("invalid event notification: %q", n.Payload), "err", err)
+					continue
+				}
+				e.Notify(event)
+			case <-e.doneCh:
+				listener.Close()
 			}
-			idApp := strings.SplitN(n.Payload, ":", 2)
-			if len(idApp) < 1 {
-				log.Error(fmt.Sprintf("invalid event notification: %q", n.Payload))
-				continue
-			}
-			id, err := strconv.ParseInt(idApp[0], 10, 64)
-			if err != nil {
-				log.Error(fmt.Sprintf("invalid event notification: %q", n.Payload), "err", err)
-				continue
-			}
-			event, err := e.eventRepo.GetEvent(id)
-			if err != nil {
-				log.Error(fmt.Sprintf("invalid event notification: %q", n.Payload), "err", err)
-				continue
-			}
-			e.Notify(event)
 		}
 	}()
 	return nil
@@ -510,4 +516,5 @@ func (e *EventListener) CloseWithError(err error) {
 			go sub.CloseWithError(err)
 		}
 	}
+	close(e.doneCh)
 }

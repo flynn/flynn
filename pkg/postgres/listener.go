@@ -42,7 +42,7 @@ type Listener struct {
 
 func (l *Listener) Close() (err error) {
 	l.closeOnce.Do(func() {
-		l.conn.Exec("UNLISTEN " + l.channel)
+		l.conn.Close()
 		l.db.Release(l.conn)
 	})
 	return
