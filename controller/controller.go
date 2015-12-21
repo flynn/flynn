@@ -435,6 +435,8 @@ func (c *controllerAPI) GetCACert(_ context.Context, w http.ResponseWriter, _ *h
 }
 
 func (c *controllerAPI) Shutdown() {
+	c.formationRepo.stopListener <- struct{}{}
+
 	if c.eventListener != nil {
 		c.eventListener.CloseWithError(ErrShutdown)
 	}
