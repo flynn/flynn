@@ -167,6 +167,10 @@ func (c *Client) Shutdown() (res dt.ShutdownInfo, err error) {
 	return res, c.c.Post("/shutdown", nil, &res)
 }
 
+func (c *Client) RaftLeader() (res dt.RaftLeader, err error) {
+	return res, c.c.Get("/raft/leader", &res)
+}
+
 type service struct {
 	client *Client
 	name   string

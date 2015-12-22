@@ -363,7 +363,7 @@ func (h *Handler) serveGetRaftLeader(w http.ResponseWriter, r *http.Request, par
 		return
 	}
 
-	hh.JSON(w, 200, map[string]interface{}{"host": h.Store.Leader()})
+	hh.JSON(w, 200, dt.RaftLeader{Host: h.Store.Leader()})
 }
 
 // servePostRaftNodes joins a node to the store cluster.
