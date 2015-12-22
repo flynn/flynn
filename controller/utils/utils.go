@@ -125,6 +125,7 @@ func ExpandFormation(c ControllerClient, f *ct.Formation) (*ct.ExpandedFormation
 		Release:   release,
 		Artifact:  artifact,
 		Processes: procs,
+		Tags:      f.Tags,
 		UpdatedAt: time.Now(),
 	}
 	if f.UpdatedAt != nil {
@@ -140,6 +141,7 @@ type VolumeCreator interface {
 type HostClient interface {
 	VolumeCreator
 	ID() string
+	Tags() map[string]string
 	AddJob(*host.Job) error
 	GetJob(id string) (*host.ActiveJob, error)
 	Attach(*host.AttachReq, bool) (cluster.AttachClient, error)
@@ -222,4 +224,18 @@ func ParseBasicAuth(h http.Header) (username, password string, err error) {
 	}
 
 	return s[0], s[1], nil
+}
+
+func FormationTagsEqual(a, b map[string]map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for typ, tags := range b {
+		for k, v := range tags {
+			if w, ok := a[typ][k]; !ok || w != v {
+				return false
+			}
+		}
+	}
+	return true
 }

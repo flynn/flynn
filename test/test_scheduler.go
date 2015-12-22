@@ -8,6 +8,7 @@ import (
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 )
@@ -72,6 +73,157 @@ func (s *SchedulerSuite) TestScale(t *c.C) {
 
 		current = procs
 	}
+}
+
+func (s *SchedulerSuite) TestScaleTags(t *c.C) {
+	// ensure we have more than 1 host to test with
+	hosts, err := s.clusterClient(t).Hosts()
+	t.Assert(err, c.IsNil)
+	if len(hosts) <= 1 {
+		t.Skip("not enough hosts to test tagged based scheduling")
+	}
+
+	// watch service events so we can wait for tag changes
+	events := make(chan *discoverd.Event)
+	stream, err := s.discoverdClient(t).Service("flynn-host").Watch(events)
+	t.Assert(err, c.IsNil)
+	defer stream.Close()
+	waitServiceEvent := func(kind discoverd.EventKind) *discoverd.Event {
+		for {
+			select {
+			case event, ok := <-events:
+				if !ok {
+					t.Fatalf("service event stream closed unexpectedly: %s", stream.Err())
+				}
+				if event.Kind == kind {
+					return event
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatalf("timed out waiting for service %s event", kind)
+			}
+		}
+	}
+
+	// wait for the watch to be current before changing tags
+	waitServiceEvent(discoverd.EventKindCurrent)
+
+	updateTags := func(host *cluster.Host, tags map[string]string) {
+		debugf(t, "setting host tags: %s => %v", host.ID(), tags)
+		t.Assert(host.UpdateTags(tags), c.IsNil)
+		event := waitServiceEvent(discoverd.EventKindUpdate)
+		t.Assert(event.Instance.Meta["id"], c.Equals, host.ID())
+		for key, val := range tags {
+			t.Assert(event.Instance.Meta["tag:"+key], c.Equals, val)
+		}
+	}
+
+	// create an app with a tagged process and watch job events
+	app, release := s.createApp(t)
+	formation := &ct.Formation{
+		AppID:     app.ID,
+		ReleaseID: release.ID,
+		Tags:      map[string]map[string]string{"printer": {"active": "true"}},
+	}
+	client := s.controllerClient(t)
+	watcher, err := client.WatchJobEvents(app.ID, release.ID)
+	t.Assert(err, c.IsNil)
+	defer watcher.Close()
+
+	// add tag to host 1
+	host1 := hosts[0]
+	updateTags(host1, map[string]string{"active": "true"})
+
+	// start jobs
+	debug(t, "scaling printer=2")
+	formation.Processes = map[string]int{"printer": 2}
+	t.Assert(client.PutFormation(formation), c.IsNil)
+	t.Assert(watcher.WaitFor(ct.JobEvents{"printer": ct.JobUpEvents(2)}, scaleTimeout, nil), c.IsNil)
+
+	assertHostJobCounts := func(expected map[string]int) {
+		jobs, err := client.JobList(app.ID)
+		t.Assert(err, c.IsNil)
+		actual := make(map[string]int)
+		for _, job := range jobs {
+			if job.State == ct.JobStateUp {
+				actual[job.HostID]++
+			}
+		}
+		t.Assert(actual, c.DeepEquals, expected)
+	}
+
+	// check all jobs on host 1
+	assertHostJobCounts(map[string]int{host1.ID(): 2})
+
+	// add tag to host 2
+	host2 := hosts[1]
+	updateTags(host2, map[string]string{"active": "true"})
+
+	// scale up
+	debug(t, "scaling printer=4")
+	formation.Processes["printer"] = 4
+	t.Assert(client.PutFormation(formation), c.IsNil)
+	t.Assert(watcher.WaitFor(ct.JobEvents{"printer": ct.JobUpEvents(2)}, scaleTimeout, nil), c.IsNil)
+
+	// check jobs distributed across hosts 1 and 2
+	assertHostJobCounts(map[string]int{host1.ID(): 2, host2.ID(): 2})
+
+	// remove tag from host 2
+	updateTags(host2, map[string]string{"active": ""})
+
+	// check jobs are moved to host1
+	jobEvents := ct.JobEvents{"printer": map[ct.JobState]int{
+		ct.JobStateDown: 2,
+		ct.JobStateUp:   2,
+	}}
+	t.Assert(watcher.WaitFor(jobEvents, scaleTimeout, nil), c.IsNil)
+	assertHostJobCounts(map[string]int{host1.ID(): 4})
+
+	// remove tag from host 1
+	updateTags(host1, map[string]string{"active": ""})
+
+	assertStateCounts := func(expected map[ct.JobState]int) {
+		jobs, err := client.JobList(app.ID)
+		t.Assert(err, c.IsNil)
+		actual := make(map[ct.JobState]int)
+		for _, job := range jobs {
+			actual[job.State]++
+		}
+		t.Assert(actual, c.DeepEquals, expected)
+	}
+
+	// check 4 pending jobs, rest are stopped
+	t.Assert(watcher.WaitFor(ct.JobEvents{"printer": ct.JobDownEvents(4)}, scaleTimeout, nil), c.IsNil)
+	assertStateCounts(map[ct.JobState]int{ct.JobStatePending: 4, ct.JobStateDown: 6})
+
+	// re-add tag to host 1
+	updateTags(host1, map[string]string{"active": "true"})
+
+	// check pending jobs are started on host 1
+	t.Assert(watcher.WaitFor(ct.JobEvents{"printer": ct.JobUpEvents(4)}, scaleTimeout, nil), c.IsNil)
+	assertHostJobCounts(map[string]int{host1.ID(): 4})
+	assertStateCounts(map[ct.JobState]int{ct.JobStateUp: 4, ct.JobStateDown: 6})
+
+	// add different tag to host 2
+	updateTags(host2, map[string]string{"disk": "ssd"})
+
+	// update formation tags, check jobs are moved to host 2
+	debug(t, "updating formation tags to disk=ssd")
+	formation.Tags["printer"] = map[string]string{"disk": "ssd"}
+	t.Assert(client.PutFormation(formation), c.IsNil)
+	jobEvents = ct.JobEvents{"printer": map[ct.JobState]int{
+		ct.JobStateDown: 4,
+		ct.JobStateUp:   4,
+	}}
+	t.Assert(watcher.WaitFor(jobEvents, scaleTimeout, nil), c.IsNil)
+	assertHostJobCounts(map[string]int{host2.ID(): 4})
+	assertStateCounts(map[ct.JobState]int{ct.JobStateUp: 4, ct.JobStateDown: 10})
+
+	// scale down stops the jobs
+	debug(t, "scaling printer=0")
+	formation.Processes = nil
+	t.Assert(client.PutFormation(formation), c.IsNil)
+	t.Assert(watcher.WaitFor(ct.JobEvents{"printer": ct.JobDownEvents(4)}, scaleTimeout, nil), c.IsNil)
+	assertStateCounts(map[ct.JobState]int{ct.JobStateDown: 14})
 }
 
 func (s *SchedulerSuite) TestControllerRestart(t *c.C) {

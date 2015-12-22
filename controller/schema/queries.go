@@ -177,7 +177,7 @@ VALUES ($1, $2, $3, $4)`
 INSERT INTO events (app_id, object_id, unique_id, object_type, data)
 VALUES ($1, $2, $3, $4, $5)`
 	formationListByAppQuery = `
-SELECT app_id, release_id, processes, created_at, updated_at
+SELECT app_id, release_id, processes, tags, created_at, updated_at
 FROM formations WHERE app_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC
 	`
 	formationListActiveQuery = `
@@ -185,7 +185,7 @@ SELECT
   apps.app_id, apps.name,
   releases.release_id, releases.artifact_id, releases.meta, releases.env, releases.processes,
   artifacts.artifact_id, artifacts.type, artifacts.uri,
-  formations.processes, formations.updated_at
+  formations.processes, formations.tags, formations.updated_at
 FROM formations
 JOIN apps USING (app_id)
 JOIN releases ON releases.release_id = formations.release_id
@@ -200,27 +200,27 @@ WHERE (formations.app_id, formations.release_id) IN (
 AND formations.deleted_at IS NULL
 ORDER BY updated_at DESC`
 	formationListSinceQuery = `
-SELECT app_id, release_id, processes, created_at, updated_at
+SELECT app_id, release_id, processes, tags, created_at, updated_at
 FROM formations WHERE updated_at >= $1 ORDER BY updated_at DESC`
 	formationSelectQuery = `
-SELECT app_id, release_id, processes, created_at, updated_at
+SELECT app_id, release_id, processes, tags, created_at, updated_at
 FROM formations WHERE app_id = $1 AND release_id = $2 AND deleted_at IS NULL`
 	formationSelectExpandedQuery = `
 SELECT
   apps.app_id, apps.name,
   releases.release_id, releases.artifact_id, releases.meta, releases.env, releases.processes,
   artifacts.artifact_id, artifacts.type, artifacts.uri,
-  formations.processes, formations.updated_at
+  formations.processes, formations.tags, formations.updated_at
 FROM formations
 JOIN apps USING (app_id)
 JOIN releases ON releases.release_id = formations.release_id
 JOIN artifacts USING (artifact_id)
 WHERE formations.app_id = $1 AND formations.release_id = $2 AND formations.deleted_at IS NULL`
 	formationInsertQuery = `
-INSERT INTO formations (app_id, release_id, processes)
-VALUES ($1, $2, $3) RETURNING created_at, updated_at`
+INSERT INTO formations (app_id, release_id, processes, tags)
+VALUES ($1, $2, $3, $4) RETURNING created_at, updated_at`
 	formationUpdateQuery = `
-UPDATE formations SET processes = $3, updated_at = now(), deleted_at = NULL
+UPDATE formations SET processes = $3, tags = $4, updated_at = now(), deleted_at = NULL
 WHERE app_id = $1 AND release_id = $2 RETURNING created_at, updated_at`
 	formationDeleteQuery = `
 UPDATE formations SET deleted_at = now(), processes = NULL, updated_at = now()

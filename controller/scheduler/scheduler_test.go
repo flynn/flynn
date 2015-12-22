@@ -12,6 +12,7 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/stream"
+	"github.com/flynn/flynn/pkg/typeconv"
 )
 
 func Test(t *testing.T) { TestingT(t) }
@@ -549,7 +550,6 @@ func (TestSuite) TestStopJob(c *C) {
 				"job2": &Job{ID: "job2", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent},
 			},
 			shouldStop: "job1",
-			jobCheck:   func(job *Job) { c.Assert(job.state, Equals, JobStateStopped) },
 		},
 		{
 			desc: "one running and one new, stops new job",
@@ -558,7 +558,6 @@ func (TestSuite) TestStopJob(c *C) {
 				"job2": &Job{ID: "job2", Formation: formation, Type: "web", state: JobStateRunning, startedAt: recent},
 			},
 			shouldStop: "job1",
-			jobCheck:   func(job *Job) { c.Assert(job.state, Equals, JobStateStopped) },
 		},
 	} {
 		s.jobs = t.jobs
@@ -569,8 +568,75 @@ func (TestSuite) TestStopJob(c *C) {
 			continue
 		}
 		c.Assert(job.ID, Equals, t.shouldStop, Commentf(t.desc))
-		if t.jobCheck != nil {
-			t.jobCheck(job)
-		}
+	}
+}
+
+func (TestSuite) TestJobPlacementTags(c *C) {
+	// create a scheduler with tagged hosts
+	s := &Scheduler{
+		isLeader: typeconv.BoolPtr(true),
+		jobs:     make(Jobs),
+		hosts: map[string]*Host{
+			"host1": {ID: "host1", Tags: map[string]string{"disk": "mag", "cpu": "fast"}},
+			"host2": {ID: "host2", Tags: map[string]string{"disk": "ssd", "cpu": "slow"}},
+			"host3": {ID: "host3", Tags: map[string]string{"disk": "ssd", "cpu": "fast"}},
+		},
+	}
+
+	// use a formation with tagged process types
+	formation := NewFormation(&ct.ExpandedFormation{
+		App: &ct.App{ID: "app"},
+		Release: &ct.Release{ID: "release", Processes: map[string]ct.ProcessType{
+			"web":    {},
+			"db":     {},
+			"worker": {},
+			"clock":  {},
+		}},
+		Artifact: &ct.Artifact{},
+		Tags: map[string]map[string]string{
+			"web":    nil,
+			"db":     {"disk": "ssd"},
+			"worker": {"cpu": "fast"},
+			"clock":  {"disk": "ssd", "cpu": "slow"},
+		},
+	})
+
+	// continually place jobs, and check they get placed in a round-robin
+	// fashion on the hosts matching the type's tags
+	type test struct {
+		typ  string
+		host string
+	}
+	for i, t := range []*test{
+		// web go on all hosts
+		{typ: "web", host: "host1"},
+		{typ: "web", host: "host2"},
+		{typ: "web", host: "host3"},
+		{typ: "web", host: "host1"},
+		{typ: "web", host: "host2"},
+		{typ: "web", host: "host3"},
+		// db go on hosts 2 and 3
+
+		{typ: "db", host: "host2"},
+		{typ: "db", host: "host3"},
+		{typ: "db", host: "host2"},
+		{typ: "db", host: "host3"},
+		// worker go on hosts 1 and 3
+
+		{typ: "worker", host: "host1"},
+		{typ: "worker", host: "host3"},
+		{typ: "worker", host: "host1"},
+		{typ: "worker", host: "host3"},
+
+		// clock go on host 2
+		{typ: "clock", host: "host2"},
+		{typ: "clock", host: "host2"},
+		{typ: "clock", host: "host2"},
+	} {
+		job := s.jobs.Add(&Job{ID: fmt.Sprintf("job%d", i), Formation: formation, Type: t.typ})
+		req := &PlacementRequest{Job: job, Err: make(chan error, 1)}
+		s.HandlePlacementRequest(req)
+		c.Assert(<-req.Err, IsNil, Commentf("placing job %d", i))
+		c.Assert(req.Host.ID, Equals, t.host, Commentf("placing job %d", i))
 	}
 }

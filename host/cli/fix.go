@@ -68,11 +68,11 @@ func (f *clusterFixer) Run(args *docopt.Args, c *cluster.Client) error {
 		f.hosts = make([]*cluster.Host, len(ips))
 		for i, ip := range ips {
 			url := fmt.Sprintf("http://%s:1113", ip)
-			status, err := cluster.NewHost("", url, nil).GetStatus()
+			status, err := cluster.NewHost("", url, nil, nil).GetStatus()
 			if err != nil {
 				return fmt.Errorf("error connecting to %s: %s", ip, err)
 			}
-			f.hosts[i] = cluster.NewHost(status.ID, url, nil)
+			f.hosts[i] = cluster.NewHost(status.ID, url, nil, nil)
 		}
 	}
 	// check expected number of hosts

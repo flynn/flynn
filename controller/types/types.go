@@ -15,11 +15,12 @@ import (
 const RouteParentRefPrefix = "controller/apps/"
 
 type ExpandedFormation struct {
-	App       *App           `json:"app,omitempty"`
-	Release   *Release       `json:"release,omitempty"`
-	Artifact  *Artifact      `json:"artifact,omitempty"`
-	Processes map[string]int `json:"processes,omitempty"`
-	UpdatedAt time.Time      `json:"updated_at,omitempty"`
+	App       *App                         `json:"app,omitempty"`
+	Release   *Release                     `json:"release,omitempty"`
+	Artifact  *Artifact                    `json:"artifact,omitempty"`
+	Processes map[string]int               `json:"processes,omitempty"`
+	Tags      map[string]map[string]string `json:"tags,omitempty"`
+	UpdatedAt time.Time                    `json:"updated_at,omitempty"`
 }
 
 type App struct {
@@ -74,11 +75,12 @@ type Artifact struct {
 }
 
 type Formation struct {
-	AppID     string         `json:"app,omitempty"`
-	ReleaseID string         `json:"release,omitempty"`
-	Processes map[string]int `json:"processes,omitempty"`
-	CreatedAt *time.Time     `json:"created_at,omitempty"`
-	UpdatedAt *time.Time     `json:"updated_at,omitempty"`
+	AppID     string                       `json:"app,omitempty"`
+	ReleaseID string                       `json:"release,omitempty"`
+	Processes map[string]int               `json:"processes,omitempty"`
+	Tags      map[string]map[string]string `json:"tags,omitempty"`
+	CreatedAt *time.Time                   `json:"created_at,omitempty"`
+	UpdatedAt *time.Time                   `json:"updated_at,omitempty"`
 }
 
 type Key struct {

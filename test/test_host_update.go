@@ -29,7 +29,7 @@ func (s *HostUpdateSuite) TestUpdateLogs(t *c.C) {
 	instance := s.addHost(t)
 	defer s.removeHost(t, instance)
 	httpClient := &http.Client{Transport: &http.Transport{Dial: dialer.Retry.Dial}}
-	client := cluster.NewHost(instance.ID, fmt.Sprintf("http://%s:1113", instance.IP), httpClient)
+	client := cluster.NewHost(instance.ID, fmt.Sprintf("http://%s:1113", instance.IP), httpClient, nil)
 
 	// start partial logger job
 	cmd := exec.JobUsingHost(

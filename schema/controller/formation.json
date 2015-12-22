@@ -26,6 +26,10 @@
         "type": "integer"
       }
     },
+    "tags": {
+      "description": "process tags",
+      "type": "object"
+    },
     "created_at": {
       "$ref": "/schema/controller/common#/definitions/created_at"
     },

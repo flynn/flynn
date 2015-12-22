@@ -249,13 +249,13 @@ func checkOnlineHosts(expected int, state *State, urls []string, timeoutSecs int
 		if known >= expected {
 			state.Hosts = make([]*cluster.Host, 0, known)
 			for _, url := range urls {
-				h := cluster.NewHost("", url, nil)
+				h := cluster.NewHost("", url, nil, nil)
 				status, err := h.GetStatus()
 				if err != nil {
 					continue
 				}
 				online++
-				state.Hosts = append(state.Hosts, cluster.NewHost(status.ID, status.URL, nil))
+				state.Hosts = append(state.Hosts, cluster.NewHost(status.ID, status.URL, nil, nil))
 			}
 			if online >= expected {
 				break

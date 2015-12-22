@@ -10,13 +10,22 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/utils"
 )
 
 func init() {
 	register("scale", runScale, `
-usage: flynn scale [options] [<type>=<qty>...]
+usage: flynn scale [options] [<type>=<spec>...]
 
-Scale changes the number of jobs for each process type in a release.
+Scale changes the number of jobs and tags for each process type in a release.
+
+Process type scale should be formatted like TYPE=COUNT[,KEY=VAL...], for example:
+
+web=1                  # 1 web process
+web=3                  # 3 web processes, distributed amongst all hosts
+web=3,active=true      # 3 web processes, distributed amongst hosts tagged active=true
+db=3,disk=ssd,mem=high # 3 db processes, distributed amongst hosts tagged with
+                       # both disk=ssd and mem=high
 
 Ommitting the arguments will show the current scale.
 
@@ -52,15 +61,15 @@ Example:
 
 const scaleTimeout = 20 * time.Second
 
-// takes args of the form "web=1", "worker=3", etc
+// takes args of the form "web=1[,key=val...]", "worker=3[,key=val...]", etc
 func runScale(args *docopt.Args, client *controller.Client) error {
 	app := mustApp()
 
-	typeCounts := args.All["<type>=<qty>"].([]string)
+	typeSpecs := args.All["<type>=<spec>"].([]string)
 
 	showAll := args.Bool["--all"]
 
-	if len(typeCounts) > 0 && showAll {
+	if len(typeSpecs) > 0 && showAll {
 		return fmt.Errorf("ERROR: Can't use --all when scaling")
 	}
 
@@ -69,7 +78,7 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 		return fmt.Errorf("ERROR: Can't use --all in combination with --release")
 	}
 
-	if len(typeCounts) == 0 {
+	if len(typeSpecs) == 0 {
 		return showFormations(client, releaseID, showAll, app)
 	}
 
@@ -89,52 +98,82 @@ func runScale(args *docopt.Args, client *controller.Client) error {
 		return err
 	}
 	if formation.Processes == nil {
-		formation.Processes = make(map[string]int)
+		formation.Processes = make(map[string]int, len(typeSpecs))
+	}
+	if formation.Tags == nil {
+		formation.Tags = make(map[string]map[string]string, len(typeSpecs))
 	}
 
-	current := formation.Processes
-	processes := make(map[string]int, len(current)+len(typeCounts))
-	for k, v := range current {
+	currentProcs := formation.Processes
+	currentTags := formation.Tags
+	processes := make(map[string]int, len(currentProcs)+len(typeSpecs))
+	tags := make(map[string]map[string]string, len(currentTags)+len(typeSpecs))
+	for k, v := range currentProcs {
 		processes[k] = v
 	}
 	invalid := make([]string, 0, len(release.Processes))
-	for _, arg := range typeCounts {
+	for _, arg := range typeSpecs {
 		i := strings.IndexRune(arg, '=')
 		if i < 0 {
-			return fmt.Errorf("ERROR: scale args must be of the form <typ>=<qty>")
+			return fmt.Errorf("ERROR: scale args must be of the form <typ>=<spec>")
 		}
-		val, err := strconv.Atoi(arg[i+1:])
+
+		countTags := strings.Split(arg[i+1:], ",")
+
+		count, err := strconv.Atoi(countTags[0])
 		if err != nil {
 			return fmt.Errorf("ERROR: could not parse quantity in %q", arg)
-		} else if val < 0 {
+		} else if count < 0 {
 			return fmt.Errorf("ERROR: process quantities cannot be negative in %q", arg)
 		}
+
 		processType := arg[:i]
 		if _, ok := release.Processes[processType]; ok {
-			processes[processType] = val
+			processes[processType] = count
 		} else {
 			invalid = append(invalid, fmt.Sprintf("%q", processType))
+			continue
+		}
+
+		if len(countTags) > 1 {
+			processTags := make(map[string]string, len(countTags)-1)
+			for i := 1; i < len(countTags); i++ {
+				keyVal := strings.SplitN(countTags[i], "=", 2)
+				if len(keyVal) == 1 && keyVal[0] != "" {
+					processTags[keyVal[0]] = "true"
+				} else if len(keyVal) == 2 {
+					processTags[keyVal[0]] = keyVal[1]
+				}
+			}
+			tags[processType] = processTags
 		}
 	}
 	if len(invalid) > 0 {
 		return fmt.Errorf("ERROR: unknown process types: %s", strings.Join(invalid, ", "))
 	}
 	formation.Processes = processes
+	formation.Tags = tags
 
-	if scalingComplete(current, processes) {
+	if scalingComplete(currentProcs, processes) {
+		if !utils.FormationTagsEqual(currentTags, tags) {
+			// TODO: determine the effect of changing tags and wait
+			//       for appropriate events
+			fmt.Println("persisting tag change")
+			return client.PutFormation(formation)
+		}
 		fmt.Println("requested scale equals current scale, nothing to do!")
 		return nil
 	}
 
 	scale := make([]string, 0, len(release.Processes))
 	for typ := range release.Processes {
-		if current[typ] != processes[typ] {
-			scale = append(scale, fmt.Sprintf("%s: %d=>%d", typ, current[typ], processes[typ]))
+		if currentProcs[typ] != processes[typ] {
+			scale = append(scale, fmt.Sprintf("%s: %d=>%d", typ, currentProcs[typ], processes[typ]))
 		}
 	}
 	fmt.Printf("scaling %s\n\n", strings.Join(scale, ", "))
 
-	expected := client.ExpectedScalingEvents(current, processes, release.Processes, 1)
+	expected := client.ExpectedScalingEvents(currentProcs, processes, release.Processes, 1)
 	watcher, err := client.WatchJobEvents(app, release.ID)
 	if err != nil {
 		return err

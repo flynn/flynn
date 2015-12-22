@@ -13,6 +13,7 @@ import (
 
 type Host struct {
 	ID       string
+	Tags     map[string]string
 	client   utils.HostClient
 	healthy  bool
 	checks   int
@@ -24,11 +25,24 @@ type Host struct {
 func NewHost(h utils.HostClient) *Host {
 	return &Host{
 		ID:      h.ID(),
+		Tags:    h.Tags(),
 		client:  h,
 		healthy: true,
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
 	}
+}
+
+func (h *Host) TagsEqual(tags map[string]string) bool {
+	if len(h.Tags) != len(tags) {
+		return false
+	}
+	for k, v := range h.Tags {
+		if w, ok := tags[k]; !ok || w != v {
+			return false
+		}
+	}
+	return true
 }
 
 // StreamEventsTo streams all job events from the host to the given channel in

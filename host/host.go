@@ -81,6 +81,7 @@ Commands:
   list                       Lists ID and IP of each host
   version                    Show current version
   fix                        Fix a broken cluster
+  tags                       Manage flynn-host daemon tags
 
 See 'flynn-host help <command>' for more information on a specific command.
 `

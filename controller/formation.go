@@ -105,14 +105,14 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 	if err != nil {
 		return err
 	}
-	err = tx.QueryRow("formation_insert", f.AppID, f.ReleaseID, f.Processes).Scan(&f.CreatedAt, &f.UpdatedAt)
+	err = tx.QueryRow("formation_insert", f.AppID, f.ReleaseID, f.Processes, f.Tags).Scan(&f.CreatedAt, &f.UpdatedAt)
 	if postgres.IsUniquenessError(err, "") {
 		tx.Rollback()
 		tx, err = r.db.Begin()
 		if err != nil {
 			return err
 		}
-		err = tx.QueryRow("formation_update", f.AppID, f.ReleaseID, f.Processes).Scan(&f.CreatedAt, &f.UpdatedAt)
+		err = tx.QueryRow("formation_update", f.AppID, f.ReleaseID, f.Processes, f.Tags).Scan(&f.CreatedAt, &f.UpdatedAt)
 	}
 	if err != nil {
 		tx.Rollback()
@@ -131,7 +131,7 @@ func (r *FormationRepo) Add(f *ct.Formation) error {
 
 func scanFormation(s postgres.Scanner) (*ct.Formation, error) {
 	f := &ct.Formation{}
-	err := s.Scan(&f.AppID, &f.ReleaseID, &f.Processes, &f.CreatedAt, &f.UpdatedAt)
+	err := s.Scan(&f.AppID, &f.ReleaseID, &f.Processes, &f.Tags, &f.CreatedAt, &f.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			err = ErrNotFound
@@ -160,6 +160,7 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 		&f.Artifact.Type,
 		&f.Artifact.URI,
 		&f.Processes,
+		&f.Tags,
 		&f.UpdatedAt,
 	)
 	if err != nil {
@@ -290,6 +291,7 @@ func (r *FormationRepo) expandFormation(formation *ct.Formation) (*ct.ExpandedFo
 		Release:   release.(*ct.Release),
 		Artifact:  artifact.(*ct.Artifact),
 		Processes: formation.Processes,
+		Tags:      formation.Tags,
 		UpdatedAt: *formation.UpdatedAt,
 	}
 	return f, nil

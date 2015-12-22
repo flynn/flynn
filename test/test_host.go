@@ -371,7 +371,7 @@ func (s *HostSuite) TestUpdate(t *c.C) {
 	defer cmd.Process.Kill()
 
 	httpClient := &http.Client{Transport: &http.Transport{Dial: dialer.Retry.Dial}}
-	client := cluster.NewHost(id, "http://127.0.0.1:11113", httpClient)
+	client := cluster.NewHost(id, "http://127.0.0.1:11113", httpClient, nil)
 
 	// exec a program which exits straight away
 	_, err := client.Update("/bin/true")
@@ -457,7 +457,7 @@ func (s *HostSuite) TestUpdateTags(t *c.C) {
 	for {
 		e := nextEvent()
 		if e.Kind == discoverd.EventKindUp && client == nil {
-			client = cluster.NewHost(e.Instance.Meta["id"], e.Instance.Addr, nil)
+			client = cluster.NewHost(e.Instance.Meta["id"], e.Instance.Addr, nil, nil)
 		}
 		if e.Kind == discoverd.EventKindCurrent {
 			break

@@ -7,7 +7,6 @@ import (
 	"text/tabwriter"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
 )
 
@@ -33,21 +32,19 @@ func runTags(args *docopt.Args, client *cluster.Client) error {
 	} else if args.Bool["del"] {
 		return runTagsDel(args, client)
 	}
-	instances, err := client.HostInstances()
+	hosts, err := client.Hosts()
 	if err != nil {
 		return err
 	}
 	w := tabwriter.NewWriter(os.Stdout, 1, 2, 2, ' ', 0)
 	defer w.Flush()
 	listRec(w, "HOST", "TAGS")
-	for _, inst := range instances {
-		tags := make([]string, 0, len(inst.Meta))
-		for k, v := range inst.Meta {
-			if strings.HasPrefix(k, host.TagPrefix) {
-				tags = append(tags, fmt.Sprintf("%s=%s", strings.TrimPrefix(k, host.TagPrefix), v))
-			}
+	for _, host := range hosts {
+		tags := make([]string, 0, len(host.Tags()))
+		for k, v := range host.Tags() {
+			tags = append(tags, fmt.Sprintf("%s=%s", k, v))
 		}
-		listRec(w, inst.Meta["id"], strings.Join(tags, " "))
+		listRec(w, host.ID(), strings.Join(tags, " "))
 	}
 	return nil
 }
