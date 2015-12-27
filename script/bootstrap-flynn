@@ -18,7 +18,6 @@ interface (i.e. flynn-host, discoverd, flannel and router)
 OPTIONS:
   -h, --help               Show this message
   -s, --size=SIZE          Cluster size [default: 1]
-  -d, --domain=DOMAIN      The default domain to use [default: `dev.localflynn.com`]
   -z, --no-destroy-vols    Don't destroy volumes
   -v, --version=VERSION    Boot using the released VERSION (e.g. v20151104.1)
 USAGE
@@ -26,9 +25,9 @@ USAGE
 
 main() {
   local size="1"
-  local domain="${CLUSTER_DOMAIN:="dev.localflynn.com"}"
   local destroy_vols=true
   local version=""
+  local host_flags=""
 
   while true; do
     case "$1" in
@@ -44,16 +43,9 @@ main() {
         size="$2"
         shift 2
         ;;
-      -d | --domain)
-        if [[ -z "$2" ]]; then
-          usage
-          exit 1
-        fi
-        domain="$2"
-        shift 2
-        ;;
       -z | --no-destroy-vols)
         destroy_vols=false
+        host_flags+="-z"
         shift
         ;;
       -v | --version)
@@ -94,93 +86,29 @@ main() {
   "${ROOT}/script/kill-flynn"
 
   local ips=()
-  if [[ "${size}" -eq "1" ]]; then
-    info "starting single node cluster"
-    local external_ip="$(ifconfig eth0 | grep -oP 'inet addr:\S+' | cut -d: -f2)"
-    start_flynn_host
-  else
-    info "starting ${size} node cluster"
+  info "starting ${size} node cluster"
 
-    # don't create unnecessary vxlan devices
-    export FLANNEL_BACKEND="alloc"
+  # don't create unnecessary vxlan devices
+  export FLANNEL_BACKEND="alloc"
 
-    for index in $(seq 0 $((size - 1))); do
-      # An RFC 5737 TEST-NET IP
-      local external_ip="192.0.2.20$(($index))"
-      local listen_ip="${external_ip}"
-      domain="${size}.localflynn.com"
+  for index in $(seq 0 $((size - 1))); do
+    # An RFC 5737 TEST-NET IP
+    local ip="192.0.2.20$(($index))"
+    ips+=("${ip}")
 
-      info "starting flynn-host using IP ${external_ip}"
-      sudo ifconfig "eth0:${index}" "${external_ip}"
-      start_flynn_host "${index}"
-    done
-  fi
+    info "starting flynn-host using IP ${ip}"
+    sudo ifconfig "eth0:${index}" "${ip}"
+    "${ROOT}/script/start-flynn-host" "${host_flags}" "${ip}" "${index}"
+  done
 
   info "bootstrapping Flynn"
-  export CLUSTER_DOMAIN="${domain}"
+  export CLUSTER_DOMAIN="${size}.localflynn.com"
   export DISCOVERD="${ips[0]}:1111"
   "${flynn_host}" \
     bootstrap \
     --min-hosts="${size}" \
     --peer-ips="$(join "," ${ips[@]})" \
     "${manifest}"
-}
-
-start_flynn_host() {
-  local index=$1
-
-  # if index is not set (i.e. a single node cluster), use non-namespaced names
-  if [[ -z "${index}" ]]; then
-    local id="host"
-    local state="/tmp/flynn-host-state.bolt"
-    local pidfile="/tmp/flynn-host.pid"
-    local bridge_name="flynnbr0"
-    local vol_path="/var/lib/flynn/volumes"
-    local log_dir="/var/log/flynn"
-    local log="/tmp/flynn-host-$(date +%Y-%m-%dT%H-%M-%S.%N).log"
-    ln -nfs "${log}" "/tmp/flynn-host.log"
-  else
-    local id="host${index}"
-    local state="/tmp/flynn-host-state-${index}.bolt"
-    local pidfile="/tmp/flynn-host-${index}.pid"
-    local bridge_name="flynnbr${index}"
-    local vol_path="/var/lib/flynn/volumes-${index}"
-    local log_dir="/var/log/flynn/host-${index}"
-    local log="/tmp/flynn-host-${index}-$(date +%Y-%m-%dT%H-%M-%S.%N).log"
-    ln -nfs "${log}" "/tmp/flynn-host-${index}.log"
-  fi
-
-  # delete the old state
-  sudo rm -f "${state}"
-
-  if $destroy_vols; then
-    sudo "${flynn_host}" destroy-volumes --volpath="${vol_path}" --include-data
-  fi
-
-  # ensure log dir exists
-  sudo mkdir -p $log_dir
-
-  sudo start-stop-daemon \
-    --start \
-    --background \
-    --no-close \
-    --pidfile "${pidfile}" \
-    --exec "${flynn_host}" \
-    -- \
-    daemon \
-    --id "${id}" \
-    --external-ip "${external_ip}" \
-    --listen-ip "${listen_ip}" \
-    --bridge-name "${bridge_name}" \
-    --force \
-    --state "${state}" \
-    --volpath "${vol_path}" \
-    --log-dir "${log_dir}" \
-    --flynn-init "${bin_dir}/flynn-init" \
-    --nsumount "${bin_dir}/flynn-nsumount" \
-    &>"${log}"
-
-  ips+=("${external_ip}")
 }
 
 join() {
