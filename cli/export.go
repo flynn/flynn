@@ -90,6 +90,9 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 	if err != nil && err != controller.ErrNotFound {
 		return fmt.Errorf("error retrieving app: %s", err)
 	} else if err == nil {
+		// Do not allow the exporting of passwords.
+		delete(release.Env, "REDIS_PASSWORD")
+
 		if err := tw.WriteJSON("release.json", release); err != nil {
 			return fmt.Errorf("error exporting release: %s", err)
 		}
@@ -331,6 +334,24 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 		config.Exit = false
 		if err := pgRestore(client, config); err != nil {
 			return fmt.Errorf("error restoring postgres database: %s", err)
+		}
+	}
+
+	if release != nil && release.Env["FLYNN_REDIS"] != "" {
+		res, err := client.ProvisionResource(&ct.ResourceReq{
+			ProviderID: "redis",
+			Apps:       []string{app.ID},
+		})
+		if err != nil {
+			return fmt.Errorf("error provisioning redis resource: %s", err)
+		}
+		numResources++
+
+		if release.Env == nil {
+			release.Env = make(map[string]string, len(res.Env))
+		}
+		for k, v := range res.Env {
+			release.Env[k] = v
 		}
 	}
 

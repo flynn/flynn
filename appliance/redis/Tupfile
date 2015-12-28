@@ -1,0 +1,4 @@
+include_rules
+: |> !go ./cmd/flynn-redis |> bin/flynn-redis
+: |> !go ./cmd/flynn-redis-api |> bin/flynn-redis-api
+: bin/* |> !docker-bootstrapped |>
