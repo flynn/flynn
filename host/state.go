@@ -135,6 +135,7 @@ func (s *State) Restore(backend Backend, buffers host.LogBuffers) (func(), error
 				newID := cluster.GenerateJobID(s.id, "")
 				log.Printf("resurrecting %s as %s", job.Job.ID, newID)
 				job.Job.ID = newID
+				s.AddJob(job.Job)
 				config := &RunConfig{
 					// TODO(titanous): Use Job instead of ActiveJob in
 					// resurrection bucket once InternalIP is not used.
