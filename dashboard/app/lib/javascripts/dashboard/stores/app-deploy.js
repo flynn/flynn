@@ -51,7 +51,7 @@ var AppDeploy = Store.createClass({
 			if (event.taffy !== true || this.props.appID === null || (event.data.meta || {}).app !== this.props.appID || event.data.meta.rev !== this.props.sha) {
 				return;
 			}
-			if (this.state.taffyJob === null || event.object_id === this.state.taffyJob.id) {
+			if (this.state.taffyJob === null || event.object_id === this.state.taffyJob.uuid) {
 				launchErrorMsg = (function (job) {
 					if (job.host_error) {
 						return job.host_error;
