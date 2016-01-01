@@ -81,7 +81,7 @@ in the future.
 ## Reporting Issues
 
 If you discover a security flaw in Flynn that is not explicitly acknowledged
-here, please [email us](security@flynn.io) immediately.
+here, please [email us](mailto:security@flynn.io) immediately.
 
 If you have the ability to use PGP, encrypt your email using this public key:
 
