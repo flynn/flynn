@@ -174,8 +174,8 @@ func (b *Buffer) subscribe(msgc chan<- *rfc5424.Message, donec <-chan struct{}) 
 		case <-b.donec:
 		}
 
-		b.mu.RLock()
-		defer b.mu.RUnlock()
+		b.mu.Lock()
+		defer b.mu.Unlock()
 
 		delete(b.subs, msgc)
 		close(msgc)
