@@ -190,7 +190,7 @@ fi
 
 if [[ -f "${build_root}/.slugignore" ]]; then
   tar \
-    --exclude='.git' \
+    --exclude='./.git' \
     --use-compress-program=pigz \
     -X "${build_root}/.slugignore" \
     -C ${build_root} \
@@ -199,7 +199,7 @@ if [[ -f "${build_root}/.slugignore" ]]; then
     | cat
 else
   tar \
-    --exclude='.git' \
+    --exclude='./.git' \
     --use-compress-program=pigz \
     -C ${build_root} \
     -cf ${slug_file} \
