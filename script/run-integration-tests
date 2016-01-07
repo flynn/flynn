@@ -99,9 +99,7 @@ main() {
   if $stream; then
     args+=("--stream")
   fi
-  if [[ "${size}" -gt "1" ]]; then
-    args+=("--router-ip=192.0.2.200")
-  fi
+  args+=("--router-ip=192.0.2.200")
 
   bin/flynn-test ${args[@]}
 }

@@ -1,0 +1,83 @@
+#!/bin/bash
+
+set -e
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "${ROOT}/script/lib/ui.sh"
+
+usage() {
+  cat <<USAGE >&2
+usage: $0 IP INDEX
+
+Start a flynn node with specific binary, ip and index
+USAGE
+}
+
+main() {
+  local destroy_vols=true
+
+  while true; do
+    case "$1" in
+      -z | --no-destroy-vols)
+        destroy_vols=false
+        shift
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  if [[ $# -ne 2 ]]; then
+    usage
+    exit 1
+  fi
+
+  local ip=$1
+  local index=$2
+
+  local bin_dir="${ROOT}/host/bin"
+  local flynn_host="${bin_dir}/flynn-host"
+
+  local id="host${index}"
+  local state="/tmp/flynn-host-state-${index}.bolt"
+  local pidfile="/tmp/flynn-host-${index}.pid"
+  local bridge_name="flynnbr${index}"
+  local vol_path="/var/lib/flynn/volumes-${index}"
+  local log_dir="/var/log/flynn/host-${index}"
+  local log="/tmp/flynn-host-${index}-$(date +%Y-%m-%dT%H-%M-%S.%N).log"
+  ln -nfs "${log}" "/tmp/flynn-host-${index}.log"
+
+  # delete the old state
+  sudo rm -f "${state}"
+
+  if $destroy_vols; then
+    sudo "${flynn_host}" destroy-volumes --volpath="${vol_path}" --include-data
+  fi
+
+  # ensure log dir exists
+  sudo mkdir -p $log_dir
+
+  sudo start-stop-daemon \
+    --start \
+    --background \
+    --no-close \
+    --pidfile "${pidfile}" \
+    --exec "${flynn_host}" \
+    -- \
+    daemon \
+    --id "${id}" \
+    --external-ip "${ip}" \
+    --listen-ip "${ip}" \
+    --bridge-name "${bridge_name}" \
+    --force \
+    --state "${state}" \
+    --volpath "${vol_path}" \
+    --log-dir "${log_dir}" \
+    --flynn-init "${bin_dir}/flynn-init" \
+    --nsumount "${bin_dir}/flynn-nsumount" \
+    &>"${log}"
+
+}
+
+main $@
