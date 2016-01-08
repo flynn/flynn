@@ -138,6 +138,7 @@ service postgresql start
 sudo -u postgres createuser --superuser ubuntu
 update-rc.d postgresql disable
 service postgresql stop
+apt-get install -y redis-server
 
 # make tup suid root so that we can build in chroots
 chmod ug+s /usr/bin/tup
