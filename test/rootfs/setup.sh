@@ -159,6 +159,9 @@ mv "${GOPATH}/bin/tuf" /usr/bin/tuf
 go get github.com/flynn/go-tuf/cmd/tuf-client
 mv "${GOPATH}/bin/tuf-client" /usr/bin/tuf-client
 
+# install go cover
+go get golang.org/x/tools/cmd/cover
+
 # allow the test runner to set TEST_RUNNER_AUTH_KEY
 echo AcceptEnv TEST_RUNNER_AUTH_KEY >> /etc/ssh/sshd_config
 
