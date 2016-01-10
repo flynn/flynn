@@ -3,6 +3,7 @@ package discoverd
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"strings"
 	"sync"
@@ -132,6 +133,7 @@ func (h *heartbeater) client() *Client {
 
 const (
 	heartbeatInterval        = 5 * time.Second
+	heartbeatJitter          = 2 * time.Second
 	heartbeatFailingInterval = 200 * time.Millisecond
 )
 
@@ -148,7 +150,7 @@ func (h *heartbeater) run(firstErr chan<- error) {
 	if err != nil {
 		return
 	}
-	timer := time.NewTimer(heartbeatInterval)
+	timer := time.NewTimer(getHeartbeatInterval())
 	for {
 		select {
 		case <-timer.C:
@@ -157,7 +159,7 @@ func (h *heartbeater) run(firstErr chan<- error) {
 				timer.Reset(heartbeatFailingInterval)
 				break
 			}
-			timer.Reset(heartbeatInterval)
+			timer.Reset(getHeartbeatInterval())
 		case <-h.stop:
 			h.client().c.Delete(path)
 			close(h.done)
@@ -171,4 +173,10 @@ func expandAddr(addr string) string {
 		return os.Getenv("EXTERNAL_IP") + addr
 	}
 	return addr
+}
+
+func getHeartbeatInterval() time.Duration {
+	var jitterMilliseconds = heartbeatJitter.Nanoseconds() / 1e6
+	var randomHeartbeatOffset = rand.Int63n(jitterMilliseconds*2) - jitterMilliseconds
+	return heartbeatInterval + time.Duration(randomHeartbeatOffset)*time.Millisecond
 }
