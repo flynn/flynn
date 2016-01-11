@@ -1,51 +1,45 @@
 {
   "variables": {
     "headless": "false",
+    "input_dir": ".",
     "output_dir": ".",
-    "ova_path": "ubuntu.ova",
+    "iso_sha": "a3b345908a826e262f4ea1afeb357fd09ec0558cf34e6c9112cead4bb55ccdfb",
     "flynn_repository": "https://dl.flynn.io",
     "source_ami": "ami-9a562df2",
-    "version": ""
+    "aws_region": "us-east-1",
+    "version": "",
+    "vm_mem": "4096",
+    "vm_vcpus": "4"
   },
   "builders": [
-    {
-      "type": "vmware-iso",
-      "boot_command": [
-        "<esc><esc><enter><wait>",
-        "/install/vmlinuz noapic preseed/url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.cfg ",
-        "debian-installer=en_US auto locale=en_US kbd-chooser/method=us ",
-        "hostname=flynn ",
-        "fb=false debconf/frontend=noninteractive ",
-        "keyboard-configuration/modelcode=SKIP keyboard-configuration/layout=USA keyboard-configuration/variant=USA console-setup/ask_detect=false ",
-        "initrd=/install/initrd.gz -- <enter>"
-      ],
-      "boot_wait": "5s",
-      "headless": "{{ user `headless` }}",
-      "http_directory": "http",
-      "iso_checksum": "a3b345908a826e262f4ea1afeb357fd09ec0558cf34e6c9112cead4bb55ccdfb",
-      "iso_checksum_type": "sha256",
-      "iso_url": "http://releases.ubuntu.com/trusty/ubuntu-14.04.3-server-amd64.iso",
-      "shutdown_command": "echo 'vagrant' | sudo -S shutdown -P now",
-      "ssh_password": "vagrant",
-      "ssh_username": "vagrant",
-      "ssh_wait_timeout": "20m",
-      "tools_upload_flavor": "linux",
-      "vm_name": "flynn-base"
-    },
     {
       "type": "virtualbox-ovf",
       "guest_additions_path": "VBoxGuestAdditions_{{.Version}}.iso",
       "headless": "{{ user `headless` }}",
       "shutdown_command": "echo 'vagrant' | sudo -S shutdown -P now",
-      "source_path": "{{ user `ova_path` }}",
+      "source_path": "{{ user `input_dir` }}/base_virtualbox_{{ user `iso_sha` }}/flynn-base.ovf",
       "ssh_password": "vagrant",
       "ssh_username": "vagrant",
       "ssh_wait_timeout": "20m",
       "vboxmanage": [
-        ["modifyvm", "{{ .Name }}", "--memory", "4096"],
-        ["modifyvm", "{{ .Name }}", "--cpus", "4"]
+        ["modifyvm", "{{ .Name }}", "--memory", "{{ user `vm_mem` }}"],
+        ["modifyvm", "{{ .Name }}", "--cpus", "{{ user `vm_vcpus` }}"]
       ],
       "virtualbox_version_file": ".vbox_version",
+      "vm_name": "flynn-base"
+    },
+    {
+      "type": "vmware-vmx",
+      "headless": "{{ user `headless` }}",
+      "shutdown_command": "echo 'vagrant' | sudo -S shutdown -P now",
+      "source_path": "{{ user `input_dir` }}/base_vmware_{{ user `iso_sha` }}/flynn-base.vmx",
+      "ssh_password": "vagrant",
+      "ssh_username": "vagrant",
+      "ssh_wait_timeout": "20m",
+      "vmx_data": {
+        "memsize": "{{ user `vm_mem` }}",
+        "numvcpus": "{{ user `vm_vcpus` }}"
+      },
       "vm_name": "flynn-base"
     },
     {
@@ -68,7 +62,7 @@
         "us-west-2"
       ],
       "instance_type": "m3.large",
-      "region": "us-east-1",
+      "region": "{{ user `aws_region` }}",
       "source_ami": "{{ user `source_ami` }}",
       "ssh_username": "ubuntu"
     }

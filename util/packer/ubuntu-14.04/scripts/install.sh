@@ -54,7 +54,7 @@ virtualbox_build() {
 }
 
 vmware_build() {
-  [[ "${PACKER_BUILDER_TYPE}" == "vmware-iso" ]]
+  [[ "${PACKER_BUILDER_TYPE}" == "vmware-vmx" ]]
 }
 
 vagrant_build() {
