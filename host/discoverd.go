@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 
@@ -79,6 +80,8 @@ func (d *DiscoverdManager) ConnectLocal(url string) error {
 	d.local.Store(true)
 
 	d.backend.SetDefaultEnv("DISCOVERD", url)
+	os.Setenv("DISCOVERD", url)
+	discoverd.DefaultClient = discoverd.NewClient()
 
 	go func() {
 		if err := d.mux.StreamToAggregators(discoverd.NewClientWithURL(url).Service("logaggregator")); err != nil {
