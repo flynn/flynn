@@ -147,8 +147,7 @@ func discoverdRegisterHTTP(c *C, l *HTTPListener, addr string) func() {
 
 type serviceCache interface {
 	cache.ServiceCache
-	Watch(bool) chan *discoverd.Event
-	Unwatch(chan *discoverd.Event)
+	Watch(bool) (chan *discoverd.Event, func())
 }
 
 func discoverdRegisterHTTPService(c *C, l *HTTPListener, name, addr string) func() {
@@ -160,8 +159,8 @@ func discoverdRegisterHTTPService(c *C, l *HTTPListener, name, addr string) func
 func discoverdRegister(c *C, dc discoverdClient, sc serviceCache, name, addr string) func() {
 	done := make(chan struct{})
 	go func() {
-		events := sc.Watch(true)
-		defer sc.Unwatch(events)
+		events, unwatch := sc.Watch(true)
+		defer unwatch()
 		for event := range events {
 			if event.Kind == discoverd.EventKindUp && event.Instance.Addr == addr {
 				close(done)
@@ -184,8 +183,8 @@ func discoverdUnregisterFunc(c *C, hb discoverd.Heartbeater, sc serviceCache) fu
 		done := make(chan struct{})
 		started := make(chan struct{})
 		go func() {
-			events := sc.Watch(false)
-			defer sc.Unwatch(events)
+			events, unwatch := sc.Watch(false)
+			defer unwatch()
 			close(started)
 			for event := range events {
 				if event.Kind == discoverd.EventKindDown && event.Instance.Addr == hb.Addr() {

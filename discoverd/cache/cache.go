@@ -31,7 +31,7 @@ type serviceCache struct {
 	addrs map[string]struct{}
 
 	// used by the test suite
-	watchCh chan *discoverd.Event
+	watchers map[chan *discoverd.Event]struct{}
 
 	stop chan struct{}
 }
@@ -82,13 +82,7 @@ func (d *serviceCache) start(s discoverd.Service) (err error) {
 				case discoverd.EventKindCurrent:
 					once.Do(func() { current <- nil })
 				}
-				if TestMode {
-					d.Lock()
-					if d.watchCh != nil {
-						d.watchCh <- event
-					}
-					d.Unlock()
-				}
+				d.broadcast(event)
 			}
 		}
 	}()
@@ -110,15 +104,29 @@ func (d *serviceCache) Addrs() []string {
 	return res
 }
 
+func (d *serviceCache) broadcast(e *discoverd.Event) {
+	if !TestMode {
+		return
+	}
+	d.RLock()
+	defer d.RUnlock()
+	for watcher := range d.watchers {
+		watcher <- e
+	}
+}
+
 // This method is only used by the test suite
-func (d *serviceCache) Watch(current bool) chan *discoverd.Event {
+func (d *serviceCache) Watch(current bool) (chan *discoverd.Event, func()) {
 	d.Lock()
-	watchCh := make(chan *discoverd.Event)
-	d.watchCh = watchCh
+	if d.watchers == nil {
+		d.watchers = make(map[chan *discoverd.Event]struct{})
+	}
+	ch := make(chan *discoverd.Event)
+	d.watchers[ch] = struct{}{}
 	go func() {
 		if current {
 			for addr := range d.addrs {
-				watchCh <- &discoverd.Event{
+				ch <- &discoverd.Event{
 					Kind:     discoverd.EventKindUp,
 					Instance: &discoverd.Instance{Addr: addr},
 				}
@@ -126,16 +134,14 @@ func (d *serviceCache) Watch(current bool) chan *discoverd.Event {
 		}
 		d.Unlock()
 	}()
-	return watchCh
-}
-
-func (d *serviceCache) Unwatch(ch chan *discoverd.Event) {
-	go func() {
-		for range ch {
-		}
-	}()
-	d.Lock()
-	close(d.watchCh)
-	d.watchCh = nil
-	d.Unlock()
+	return ch, func() {
+		go func() {
+			for range ch {
+			}
+		}()
+		d.Lock()
+		defer d.Unlock()
+		delete(d.watchers, ch)
+		close(ch)
+	}
 }

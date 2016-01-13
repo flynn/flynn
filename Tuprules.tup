@@ -1,4 +1,5 @@
 export GOPATH
+export GOROOT
 export GIT_COMMIT
 export GIT_BRANCH
 export GIT_TAG
@@ -7,9 +8,11 @@ export GO_BUILD_TAGS
 
 VPKG = github.com/flynn/flynn/pkg/version
 ROOT = $(TUP_CWD)
+GO_LDFLAGS = -ldflags="-X $(VPKG).commit=$GIT_COMMIT -X $(VPKG).branch=$GIT_BRANCH -X $(VPKG).tag=$GIT_TAG -X $(VPKG).dirty=$GIT_DIRTY"
+GO = $(ROOT)/util/_toolchain/go/bin/go
 
-!go = |> ^c go build %o^ CGO_ENABLED=0 $(ROOT)/util/_toolchain/go/bin/go build -installsuffix nocgo -o %o -ldflags="-X $(VPKG).commit $GIT_COMMIT -X $(VPKG).branch $GIT_BRANCH -X $(VPKG).tag $GIT_TAG -X $(VPKG).dirty $GIT_DIRTY" -tags="$GO_BUILD_TAGS" |>
-!cgo = |> ^c go build %o^ $(ROOT)/util/_toolchain/go/bin/go build -o %o -ldflags="-X $(VPKG).commit $GIT_COMMIT -X $(VPKG).branch $GIT_BRANCH -X $(VPKG).tag $GIT_TAG -X $(VPKG).dirty $GIT_DIRTY" -tags="$GO_BUILD_TAGS" |>
+!go = |> ^c go build %o^ CGO_ENABLED=0 $(GO) build $(GO_LDFLAGS) -o %o -tags="$GO_BUILD_TAGS" |>
+!cgo = |> ^c go build %o^ $(GO) build -o %o $(GO_LDFLAGS) -tags="$GO_BUILD_TAGS" |>
 !docker = |> ^ docker build %d^ docker build -t flynn/%d . | tee %o |> $(ROOT)/log/docker-%d.log <docker>
 !docker-bootstrapped = |> ^ docker build %d^ docker build -t flynn/%d . | tee %o |> $(ROOT)/log/docker-bootstrapped/%d.log $(ROOT)/<bootstrapped>
 !docker-cedarish = |> ^ docker build %d^ cat $(ROOT)/log/docker-cedarish.log > /dev/null && docker build -t flynn/%d . | tee %o |> $(ROOT)/log/docker-bootstrapped/%d.log $(ROOT)/<bootstrapped>
