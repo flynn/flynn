@@ -583,6 +583,11 @@
     "url": "http://status-web.discoverd"
   },
   {
+    "id": "cluster-monitor",
+    "action": "cluster-monitor",
+    "enabled": true
+  },
+  {
     "id": "log-complete",
     "action": "log",
     "output": "\n\nFlynn bootstrapping complete. Install the Flynn CLI (see https://flynn.io/docs/cli for instructions) and paste the line below into a terminal window:\n\nflynn cluster add -p {{ (index .StepData \"controller-cert\").Pin }} default {{ getenv \"CLUSTER_DOMAIN\" }} {{ (index .StepData \"controller-key\").Data }}\n\nThe built-in dashboard can be accessed at http://dashboard.{{ getenv \"CLUSTER_DOMAIN\" }} and your login token is {{ (index .StepData \"dashboard-login-token\").Data }}"
