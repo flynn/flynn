@@ -110,9 +110,10 @@ func notifyWebhook(sn *backend.SubnetDef) error {
 	net := sn.Net
 	net.IP += 1
 	data := struct {
+		JobID  string `json:"job_id"`
 		Subnet string `json:"subnet"`
 		MTU    int    `json:"mtu"`
-	}{net.String(), sn.MTU}
+	}{os.Getenv("FLYNN_JOB_ID"), net.String(), sn.MTU}
 	payload, _ := json.Marshal(data)
 	res, err := http.Post(opts.notifyURL, "application/json", bytes.NewReader(payload))
 	if err != nil {

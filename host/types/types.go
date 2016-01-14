@@ -265,6 +265,7 @@ const (
 )
 
 type NetworkConfig struct {
+	JobID     string   `json:"job_id"`
 	Subnet    string   `json:"subnet"`
 	MTU       int      `json:"mtu"`
 	Resolvers []string `json:"resolvers"`
