@@ -131,6 +131,34 @@
     "data": "{{ getenv \"CONTROLLER_KEY\" }}"
   },
   {
+    "id": "redis-api",
+    "app": {
+      "name": "redis-api",
+      "meta": {"flynn-system-app": "true"}
+    },
+    "action": "run-app",
+    "release": {
+      "env": {
+        "FLYNN_REDIS": "redis",
+        "CONTROLLER_KEY": "{{ (index .StepData \"controller-key\").Data }}",
+        "REDIS_IMAGE_URI": "$image_repository?name=flynn/redis&id=$image_id[redis]"
+      },
+      "processes": {
+        "web": {
+          "ports": [{"port": 80, "proto": "tcp"}],
+          "cmd": ["api"]
+        }
+      }
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "$image_repository?name=flynn/redis&id=$image_id[redis]"
+    },
+    "processes": {
+      "web": 2
+    }
+  },
+  {
     "id": "dashboard-session-secret",
     "action": "gen-random"
   },
@@ -153,6 +181,11 @@
     "id": "postgres-wait",
     "action": "wait",
     "url": "http://postgres-api.discoverd/ping"
+  },
+  {
+    "id": "redis-api-wait",
+    "action": "wait",
+    "url": "http://redis-api.discoverd/ping"
   },
   {
     "id": "controller-cert",
@@ -233,6 +266,12 @@
       "strategy": "postgres",
       "deploy_timeout": 120
     }
+  },
+  {
+    "id": "add-redis-provider",
+    "action": "add-provider",
+    "name":"redis",
+    "url":"http://redis-api.discoverd/clusters"
   },
   {
     "id": "flannel-app",

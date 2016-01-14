@@ -256,27 +256,37 @@ func (c *controllerAPI) DeleteResource(ctx context.Context, w http.ResponseWrite
 	params, _ := ctxhelper.ParamsFromContext(ctx)
 	id := params.ByName("resources_id")
 
+	logger.Info("getting provider", "params", params)
+
 	p, err := c.getProvider(ctx)
 	if err != nil {
+		logger.Error("getting provider error", "err", err)
 		respondWithError(w, err)
 		return
 	}
 
+	logger.Info("getting resource", "id", id)
 	res, err := c.resourceRepo.Get(id)
 	if err != nil {
+		logger.Error("getting resource error", "err", err)
 		respondWithError(w, err)
 		return
 	}
 
+	logger.Info("deprovisioning", "url", p.URL, "external.id", res.ExternalID)
 	if err := resource.Deprovision(p.URL, res.ExternalID); err != nil {
+		logger.Error("error deprovisioning", "err", err)
 		respondWithError(w, err)
 		return
 	}
 
+	logger.Info("removing resource")
 	if err := c.resourceRepo.Remove(res); err != nil {
+		logger.Error("error removing resource", "err", err)
 		respondWithError(w, err)
 		return
 	}
+	logger.Info("completed resource removal")
 
 	httphelper.JSON(w, 200, res)
 }

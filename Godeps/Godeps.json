@@ -469,6 +469,10 @@
 			"Rev": "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75"
 		},
 		{
+			"ImportPath": "github.com/garyburd/redigo",
+			"Rev": "836b6e58b3358112c8291565d01c35b8764070d7"
+		},
+		{
 			"ImportPath": "github.com/jteeuwen/go-bindata",
 			"Comment": "v3.0.7-70-gbfe36d3",
 			"Rev": "bfe36d3254337b7cc18024805dfab2106613abdf"
