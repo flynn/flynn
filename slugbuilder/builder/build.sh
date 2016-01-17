@@ -57,6 +57,38 @@ curl() {
   $(which curl) --fail --silent --retry 3 $@
 }
 
+# removes leading and trailing whitespace
+trim() {
+  local var="$*"
+  var="${var#"${var%%[![:space:]]*}"}"
+  var="${var%"${var##*[![:space:]]}"}"
+  echo -n "$var"
+}
+
+prune_slugignore() {
+  shopt -s nullglob
+  # read slugignore into array
+  local globs=()
+  local paths=()
+  readarray -t globs < "${build_root}/.slugignore"
+  # for line in slugignore
+  for glob in ${globs[@]}; do
+    # strip whitespace
+    glob=$(trim ${glob})
+    # ignore blank lines and comment lines
+    if [[ ${glob} == "" ]] || [[ ${glob:0:1} == "#" ]]; then
+      continue
+    fi
+    # remove leading slash(es)
+    glob="${glob#"${glob%%[!"/"]*}"}"
+    # append to build root and add to array of paths to remove
+    paths=("${paths[@]}" ${build_root}/${glob})
+  done
+  echo_title "Deleting ${#paths[@]} files matching .slugignore patterns."
+  rm -f ${paths[@]}
+  shopt -u nullglob
+}
+
 cd ${app_dir}
 
 ## Load source from STDIN
@@ -115,6 +147,11 @@ export CURL_CONNECT_TIMEOUT=30
 # Bump max time to download a single runtime tarball from its default of
 # 30s (only makes sense on EC2) to 10 minutes
 export CURL_TIMEOUT=600
+
+# Remove files matched by .slugignore
+if [[ -f "${build_root}/.slugignore" ]]; then
+  prune_slugignore
+fi
 
 ## Buildpack detection
 
@@ -187,25 +224,13 @@ fi
 
 
 ## Produce slug
-
-if [[ -f "${build_root}/.slugignore" ]]; then
-  tar \
-    --exclude='./.git' \
-    --use-compress-program=pigz \
-    -X "${build_root}/.slugignore" \
-    -C ${build_root} \
-    -cf ${slug_file} \
-    . \
-    | cat
-else
-  tar \
-    --exclude='./.git' \
-    --use-compress-program=pigz \
-    -C ${build_root} \
-    -cf ${slug_file} \
-    . \
-    | cat
-fi
+tar \
+  --exclude='./.git' \
+  --use-compress-program=pigz \
+  -C ${build_root} \
+  -cf ${slug_file} \
+  . \
+  | cat
 
 if [[ "${slug_file}" != "-" ]]; then
   slug_size=$(du -Sh "${slug_file}" | cut -f1)
