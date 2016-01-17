@@ -375,12 +375,6 @@ func runDaemon(args *docopt.Args) {
 		}
 		stopJobs()
 	})
-	shutdown.BeforeExit(func() {
-		log.Info("marking jobs for resurrection")
-		if err := state.MarkForResurrection(); err != nil {
-			log.Error("error marking jobs for resurrection", "err", err)
-		}
-	})
 
 	// configure network and discoverd if config set in host status
 	if config := host.status.Network; config != nil {
