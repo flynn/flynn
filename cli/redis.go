@@ -2,7 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"os"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/cheggaaa/pb"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/docker/pkg/term"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
@@ -11,13 +15,25 @@ import (
 func init() {
 	register("redis", runRedis, `
 usage: flynn redis redis-cli [--] [<argument>...]
+       flynn redis dump [-q] [-f <file>]
+       flynn redis restore [-q] [-f <file>]
+
+Options:
+	-f, --file=<file>  name of dump file
+	-q, --quiet        don't print progress
 
 Commands:
 	redis-cli  Open a console to a Flynn redis instance. Any valid arguments to redis-cli may be provided.
+	dump     Dump a redis instance. If file is not specified, will dump to stdout.
+	restore  Restore a dump. If file is not specified, will restore from stdin.
 
 Examples:
 
     $ flynn redis redis-cli
+
+    $ flynn redis dump -f db.dump
+
+    $ flynn redis restore -f db.dump
 `)
 }
 
@@ -29,6 +45,10 @@ func runRedis(args *docopt.Args, client *controller.Client) error {
 	switch {
 	case args.Bool["redis-cli"]:
 		return runRedisCLI(args, client, config)
+	case args.Bool["dump"]:
+		return runRedisDump(args, client, config)
+	case args.Bool["restore"]:
+		return runRedisRestore(args, client, config)
 	}
 	return nil
 }
@@ -69,5 +89,67 @@ func runRedisCLI(args *docopt.Args, client *controller.Client, config *runConfig
 	config.Env["PAGER"] = "less"
 	config.Env["LESS"] = "--ignore-case --LONG-PROMPT --SILENT --tabs=4 --quit-if-one-screen --no-init --quit-at-eof"
 	config.Args = append(config.Args, args.All["<argument>"].([]string)...)
+	return runJob(client, *config)
+}
+
+func runRedisDump(args *docopt.Args, client *controller.Client, config *runConfig) error {
+	config.Stdout = os.Stdout
+	if filename := args.String["--file"]; filename != "" {
+		f, err := os.Create(filename)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		config.Stdout = f
+	}
+
+	if !args.Bool["--quiet"] && term.IsTerminal(os.Stderr.Fd()) {
+		bar := pb.New(0)
+		bar.SetUnits(pb.U_BYTES)
+		bar.ShowBar = false
+		bar.ShowSpeed = true
+		bar.Output = os.Stderr
+		bar.Start()
+		defer bar.Finish()
+		config.Stdout = io.MultiWriter(config.Stdout, bar)
+	}
+
+	config.Entrypoint = []string{"/bin/dump-flynn-redis"}
+	return runJob(client, *config)
+}
+
+func runRedisRestore(args *docopt.Args, client *controller.Client, config *runConfig) error {
+	config.Stdin = os.Stdin
+	var size int64
+	if filename := args.String["--file"]; filename != "" {
+		f, err := os.Open(filename)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		stat, err := f.Stat()
+		if err != nil {
+			return err
+		}
+		size = stat.Size()
+		config.Stdin = f
+	}
+
+	if !args.Bool["--quiet"] && term.IsTerminal(os.Stderr.Fd()) {
+		bar := pb.New(0)
+		bar.SetUnits(pb.U_BYTES)
+		if size > 0 {
+			bar.Total = size
+		} else {
+			bar.ShowBar = false
+		}
+		bar.ShowSpeed = true
+		bar.Output = os.Stderr
+		bar.Start()
+		defer bar.Finish()
+		config.Stdin = bar.NewProxyReader(config.Stdin)
+	}
+
+	config.Entrypoint = []string{"/bin/restore-flynn-redis"}
 	return runJob(client, *config)
 }

@@ -22,7 +22,7 @@ const (
 	DefaultServiceName = "redis"
 
 	// DefaultAddr is the default bind address for the HTTP API.
-	DefaultAddr = ":5433"
+	DefaultAddr = ":6380"
 
 	// DefaultDataDir is the default base directory for data storage.
 	DefaultDataDir = "/data"
@@ -114,7 +114,7 @@ func (m *Main) Run() error {
 		return err
 	}
 	m.Process.ID = id
-	m.Process.DataDir = filepath.Join(m.DataDir, "db")
+	m.Process.DataDir = m.DataDir
 	m.Process.Logger = m.Logger.New("component", "process", "id", id)
 
 	// Start process.

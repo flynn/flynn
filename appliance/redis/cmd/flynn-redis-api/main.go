@@ -199,9 +199,12 @@ func (h *Handler) servePostCluster(w http.ResponseWriter, req *http.Request, _ h
 		Meta:       make(map[string]string),
 		Processes: map[string]ct.ProcessType{
 			"redis": {
-				Ports: []ct.Port{{Port: 6379, Proto: "tcp"}},
-				Data:  true,
-				Cmd:   []string{"redis"},
+				Ports: []ct.Port{
+					{Port: 6379, Proto: "tcp"},
+					{Port: 6380, Proto: "tcp"},
+				},
+				Data: true,
+				Cmd:  []string{"redis"},
 				Env: map[string]string{
 					"FLYNN_REDIS":    serviceName,
 					"REDIS_PASSWORD": password,

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -205,8 +206,9 @@ func (p *Process) writeConfig() error {
 	return configTemplate.Execute(f, struct {
 		ID       string
 		Port     string
+		DataDir  string
 		Password string
-	}{p.ID, p.Port, p.Password})
+	}{p.ID, p.Port, p.DataDir, p.Password})
 }
 
 // Info returns information about the process.
@@ -303,6 +305,56 @@ func (p *Process) pingWait(addr string, timeout time.Duration) error {
 
 		return nil
 	}
+}
+
+// Restore stops the process, copies an RDB from r, and restarts the process.
+// Redis automatically handles recovery when there's a dump.rdb file present.
+func (p *Process) Restore(r io.Reader) error {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	logger := p.Logger.New("fn", "Restore")
+	logger.Info("begin restore")
+
+	// Stop if running.
+	if p.running {
+		logger.Info("stopping process")
+		if err := p.stop(); err != nil {
+			logger.Error("error stopping process", "err", err)
+			return err
+		}
+	}
+
+	// Create dump file in data directory.
+	logger.Info("copying dump.rdb")
+	if err := func() error {
+		f, err := os.Create(filepath.Join(p.DataDir, "dump.rdb"))
+		if err != nil {
+			logger.Error("error creating dump file", "err", err)
+			return err
+		}
+		defer f.Close()
+
+		// Copy from reader to dump file.
+		n, err := io.Copy(f, r)
+		if err != nil {
+			logger.Error("error creating dump file", "err", err)
+			return err
+		}
+		logger.Info("copy completed", "n", n)
+
+		return nil
+	}(); err != nil {
+		return err
+	}
+
+	// Restart process.
+	if err := p.start(); err != nil {
+		logger.Error("error restarting process", "err", err)
+		return err
+	}
+
+	return nil
 }
 
 // RedisInfo executes an INFO command against a Redis server and returns the results.
@@ -423,6 +475,8 @@ func ParseRedisInfo(s string) (*RedisInfo, error) {
 
 var configTemplate = template.Must(template.New("redis.conf").Parse(`
 port {{.Port}}
+dbfilename dump.rdb
+dir {{.DataDir}}
 
 # slaveof <masterip> <masterport>
 # masterauth <master-password>

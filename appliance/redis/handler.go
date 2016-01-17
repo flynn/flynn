@@ -27,6 +27,7 @@ func NewHandler() *Handler {
 	h.router.Handler("GET", status.Path, status.Handler(h.healthStatus))
 	h.router.GET("/status", h.handleGetStatus)
 	h.router.POST("/stop", h.handlePostStop)
+	h.router.POST("/restore", h.handlePostRestore)
 	return h
 }
 
@@ -54,6 +55,14 @@ func (h *Handler) handleGetStatus(w http.ResponseWriter, req *http.Request, _ ht
 
 func (h *Handler) handlePostStop(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	if err := h.Heartbeater.Close(); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	w.WriteHeader(200)
+}
+
+func (h *Handler) handlePostRestore(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	if err := h.Process.Restore(req.Body); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
