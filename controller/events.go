@@ -436,7 +436,7 @@ func (e *EventListener) Listen() error {
 	log := logger.New("fn", "EventListener.Listen")
 	listener, err := e.eventRepo.db.Listen("events", log)
 	if err != nil {
-		e.SetClosed()
+		e.CloseWithError(err)
 		return err
 	}
 	go func() {
@@ -490,13 +490,6 @@ func (e *EventListener) Notify(event *ct.Event) {
 	}
 }
 
-// SetClosed marks the listener as closed.
-func (e *EventListener) SetClosed() {
-	e.closedMtx.Lock()
-	defer e.closedMtx.Unlock()
-	e.closed = true
-}
-
 // IsClosed returns whether or not the listener is closed.
 func (e *EventListener) IsClosed() bool {
 	e.closedMtx.RLock()
@@ -507,7 +500,14 @@ func (e *EventListener) IsClosed() bool {
 // CloseWithError marks the listener as closed and closes all subscribers
 // with the given error.
 func (e *EventListener) CloseWithError(err error) {
-	e.SetClosed()
+	e.closedMtx.Lock()
+	if e.closed {
+		e.closedMtx.Unlock()
+		return
+	}
+	e.closed = true
+	e.closedMtx.Unlock()
+
 	e.subMtx.RLock()
 	defer e.subMtx.RUnlock()
 	subscribers := e.subscribers
