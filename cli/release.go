@@ -18,6 +18,7 @@ func init() {
 	register("release", runRelease, `
 usage: flynn release [-q|--quiet]
        flynn release add [-t <type>] [-f <file>] <uri>
+       flynn release update <file> [<id>] [--clean]
        flynn release show [--json] [<id>]
 
 Manage app releases.
@@ -27,11 +28,12 @@ Options:
 	-t <type>          type of the release. Currently only 'docker' is supported. [default: docker]
 	-f, --file=<file>  release configuration file
 	--json             print release configuration in JSON format
+	--clean            update from a clean slate (ignoring prior config)
 
 Commands:
 	With no arguments, shows a list of releases associated with the app.
 
-	add   add a new release
+	add	add a new release
 
 		Create a new release from a Docker image.
 
@@ -40,9 +42,16 @@ Commands:
 		release environment and processes (similar to a Procfile). It can take any
 		of the arguments the controller Release type can take.
 
-	show  show information about a release
+	show	show information about a release
 
 		Omit the ID to show information about the current release.
+
+	update	update an existing release
+
+		Takes a path to a file containing release configuration in a JSON format.
+		It can take any of the arguments the controller Release type can take, and
+		will override existing config with any values set thus. Omit the ID to
+		update the current release.
 
 Examples:
 
@@ -73,6 +82,18 @@ Examples:
 	Process Types:  echo
 	Created At:     2015-05-06 21:58:12.751741 +0000 UTC
 	ENV[MY_VAR]:    Hello World, this will be available in all process types.
+
+	$ cat update.json
+	{
+		"processes": {
+			"echo": {
+				"omni": true
+			}
+		}
+	}
+	$ flynn release update 427537e78be4417fae2e24d11bc993eb update.json
+	Created release 0101020305080d1522375990e9000000.
+
 `)
 }
 
@@ -86,6 +107,9 @@ func runRelease(args *docopt.Args, client *controller.Client) error {
 		} else {
 			return fmt.Errorf("Release type %s not supported.", args.String["-t"])
 		}
+	}
+	if args.Bool["update"] {
+		return runReleaseUpdate(args, client)
 	}
 	return runReleaseList(args, client)
 }
@@ -171,6 +195,95 @@ func runReleaseAddDocker(args *docopt.Args, client *controller.Client) error {
 	}
 
 	release.ArtifactID = artifact.ID
+	if err := client.CreateRelease(release); err != nil {
+		return err
+	}
+
+	if err := client.DeployAppRelease(mustApp(), release.ID); err != nil {
+		return err
+	}
+
+	log.Printf("Created release %s.", release.ID)
+
+	return nil
+}
+
+func runReleaseUpdate(args *docopt.Args, client *controller.Client) error {
+	var release *ct.Release
+	var err error
+	if args.String["<id>"] != "" {
+		release, err = client.GetRelease(args.String["<id>"])
+	} else {
+		release, err = client.GetAppRelease(mustApp())
+	}
+	if err != nil {
+		return err
+	}
+
+	updates := &ct.Release{}
+	data, err := ioutil.ReadFile(args.String["<file>"])
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(data, updates); err != nil {
+		return err
+	}
+
+	// Basically, there's no way to merge JSON that can reliably knock out set values.
+	// Instead, throw the --clean flag to start from a largely empty Release.
+	if args.Bool["--clean"] {
+		updates.ArtifactID = release.ArtifactID
+		release = updates
+	} else {
+		release.ID = ""
+		for key, value := range updates.Env {
+			release.Env[key] = value
+		}
+		for key, value := range updates.Meta {
+			release.Meta[key] = value
+		}
+		for procKey, procUpdate := range updates.Processes {
+			procRelease, ok := release.Processes[procKey]
+			if !ok {
+				release.Processes[procKey] = procUpdate
+				continue
+			}
+
+			if len(procUpdate.Cmd) > 0 {
+				procRelease.Cmd = procUpdate.Cmd
+			}
+			if len(procUpdate.Entrypoint) > 0 {
+				procRelease.Entrypoint = procUpdate.Entrypoint
+			}
+			for key, value := range procUpdate.Env {
+				procRelease.Env[key] = value
+			}
+			if len(procUpdate.Ports) > 0 {
+				procRelease.Ports = procUpdate.Ports
+			}
+			if procUpdate.Data {
+				procRelease.Data = true
+			}
+			if procUpdate.Omni {
+				procRelease.Omni = true
+			}
+			if procUpdate.HostNetwork {
+				procRelease.HostNetwork = true
+			}
+			if len(procUpdate.Service) > 0 {
+				procRelease.Service = procUpdate.Service
+			}
+			if procUpdate.Resurrect {
+				procRelease.Resurrect = true
+			}
+			for resKey, resValue := range procUpdate.Resources {
+				procRelease.Resources[resKey] = resValue
+			}
+
+			release.Processes[procKey] = procRelease
+		}
+	}
+
 	if err := client.CreateRelease(release); err != nil {
 		return err
 	}

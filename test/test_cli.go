@@ -772,6 +772,34 @@ func (s *CLISuite) TestRelease(t *c.C) {
 			}
 		}
 	}`)
+	updateJSON := []byte(`{
+		"processes": {
+			"echoer": {
+				"env": {"ECHOER_ONLY": "BAT"}
+			},
+			"env": {
+				"env": {"ENV_UPDATE": "QUUX"}
+			}
+		}
+	}`)
+	resultJSON := []byte(`{
+		"env": {"GLOBAL": "FOO"},
+		"processes": {
+			"echoer": {
+				"cmd": ["/bin/echoer"],
+				"env": {
+					"ECHOER_ONLY": "BAT"
+				}
+			},
+			"env": {
+				"cmd": ["sh", "-c", "env; while true; do sleep 60; done"],
+				"env": {
+					"ENV_ONLY": "BAZ",
+					"ENV_UPDATE": "QUUX"
+				}
+			}
+		}
+	}`)
 	release := &ct.Release{}
 	t.Assert(json.Unmarshal(releaseJSON, &release), c.IsNil)
 	for typ, proc := range release.Processes {
@@ -779,26 +807,45 @@ func (s *CLISuite) TestRelease(t *c.C) {
 		release.Processes[typ] = proc
 	}
 
-	file, err := ioutil.TempFile("", "")
+	addFile, err := ioutil.TempFile("", "")
 	t.Assert(err, c.IsNil)
-	file.Write(releaseJSON)
-	file.Close()
+	addFile.Write(releaseJSON)
+	addFile.Close()
 
 	app := s.newCliTestApp(t)
 	defer app.cleanup()
-	t.Assert(app.flynn("release", "add", "-f", file.Name(), imageURIs["test-apps"]), Succeeds)
+	t.Assert(app.flynn("release", "add", "-f", addFile.Name(), imageURIs["test-apps"]), Succeeds)
 
-	r, err := s.controller.GetAppRelease(app.name)
+	r1, err := s.controller.GetAppRelease(app.name)
 	t.Assert(err, c.IsNil)
-	t.Assert(r.Env, c.DeepEquals, release.Env)
-	t.Assert(r.Processes, c.DeepEquals, release.Processes)
+	t.Assert(r1.Env, c.DeepEquals, release.Env)
+	t.Assert(r1.Processes, c.DeepEquals, release.Processes)
+
+	result := &ct.Release{}
+	t.Assert(json.Unmarshal(resultJSON, &result), c.IsNil)
+	for typ, proc := range result.Processes {
+		resource.SetDefaults(&proc.Resources)
+		result.Processes[typ] = proc
+	}
+
+	updateFile, err := ioutil.TempFile("", "")
+	t.Assert(err, c.IsNil)
+	updateFile.Write(updateJSON)
+	updateFile.Close()
+
+	t.Assert(app.flynn("release", "update", updateFile.Name()), Succeeds)
+
+	r2, err := s.controller.GetAppRelease(app.name)
+	t.Assert(err, c.IsNil)
+	t.Assert(r2.Env, c.DeepEquals, result.Env)
+	t.Assert(r2.Processes, c.DeepEquals, result.Processes)
 
 	scaleCmd := app.flynn("scale", "--no-wait", "env=1", "foo=1")
 	t.Assert(scaleCmd, c.Not(Succeeds))
 	t.Assert(scaleCmd, OutputContains, "ERROR: unknown process types: \"foo\"")
 
 	// create a job watcher for the new release
-	watcher, err := s.controllerClient(t).WatchJobEvents(app.name, r.ID)
+	watcher, err := s.controllerClient(t).WatchJobEvents(app.name, r2.ID)
 	t.Assert(err, c.IsNil)
 	defer watcher.Close()
 
@@ -808,7 +855,9 @@ func (s *CLISuite) TestRelease(t *c.C) {
 	t.Assert(envLog, Succeeds)
 	t.Assert(envLog, SuccessfulOutputContains, "GLOBAL=FOO")
 	t.Assert(envLog, SuccessfulOutputContains, "ENV_ONLY=BAZ")
+	t.Assert(envLog, SuccessfulOutputContains, "ENV_UPDATE=QUUX")
 	t.Assert(envLog, c.Not(SuccessfulOutputContains), "ECHOER_ONLY=BAR")
+	t.Assert(envLog, c.Not(SuccessfulOutputContains), "ECHOER_UPDATE=BAT")
 }
 
 func (s *CLISuite) TestLimits(t *c.C) {
