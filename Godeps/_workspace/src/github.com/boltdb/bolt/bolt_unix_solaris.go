@@ -7,7 +7,7 @@ import (
 	"time"
 	"unsafe"
 
-	"golang.org/x/sys/unix"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/sys/unix"
 )
 
 // flock acquires an advisory lock on a file descriptor.

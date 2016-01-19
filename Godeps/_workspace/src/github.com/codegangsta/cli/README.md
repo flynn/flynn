@@ -1,18 +1,17 @@
+[![Coverage](http://gocover.io/_badge/github.com/codegangsta/cli?0)](http://gocover.io/github.com/codegangsta/cli)
 [![Build Status](https://travis-ci.org/codegangsta/cli.png?branch=master)](https://travis-ci.org/codegangsta/cli)
+[![GoDoc](https://godoc.org/github.com/codegangsta/cli?status.svg)](https://godoc.org/github.com/codegangsta/cli)
 
 # cli.go
-cli.go is simple, fast, and fun package for building command line apps in Go. The goal is to enable developers to write fast and distributable command line applications in an expressive way.
-
-You can view the API docs here:
-http://godoc.org/github.com/codegangsta/cli
+`cli.go` is simple, fast, and fun package for building command line apps in Go. The goal is to enable developers to write fast and distributable command line applications in an expressive way.
 
 ## Overview
 Command line apps are usually so tiny that there is absolutely no reason why your code should *not* be self-documenting. Things like generating help text and parsing command flags/options should not hinder productivity when writing a command line app.
 
-**This is where cli.go comes into play.** cli.go makes command line programming fun, organized, and expressive!
+**This is where `cli.go` comes into play.** `cli.go` makes command line programming fun, organized, and expressive!
 
 ## Installation
-Make sure you have a working Go environment (go 1.1 is *required*). [See the install instructions](http://golang.org/doc/install.html).
+Make sure you have a working Go environment (go 1.1+ is *required*). [See the install instructions](http://golang.org/doc/install.html).
 
 To install `cli.go`, simply run:
 ```
@@ -25,7 +24,7 @@ export PATH=$PATH:$GOPATH/bin
 ```
 
 ## Getting Started
-One of the philosophies behind cli.go is that an API should be playful and full of discovery. So a cli.go app can be as little as one line of code in `main()`. 
+One of the philosophies behind `cli.go` is that an API should be playful and full of discovery. So a `cli.go` app can be as little as one line of code in `main()`. 
 
 ``` go
 package main
@@ -103,7 +102,8 @@ $ greet
 Hello friend!
 ```
 
-cli.go also generates some bitchass help text:
+`cli.go` also generates neat help text:
+
 ```
 $ greet help
 NAME:
@@ -158,6 +158,34 @@ app.Action = func(c *cli.Context) {
 ...
 ```
 
+You can also set a destination variable for a flag, to which the content will be scanned.
+``` go
+...
+var language string
+app.Flags = []cli.Flag {
+  cli.StringFlag{
+    Name:        "lang",
+    Value:       "english",
+    Usage:       "language for the greeting",
+    Destination: &language,
+  },
+}
+app.Action = func(c *cli.Context) {
+  name := "someone"
+  if len(c.Args()) > 0 {
+    name = c.Args()[0]
+  }
+  if language == "spanish" {
+    println("Hola", name)
+  } else {
+    println("Hello", name)
+  }
+}
+...
+```
+
+See full list of flags at http://godoc.org/github.com/codegangsta/cli
+
 #### Alternate Names
 
 You can set alternate (or short) names for flags by providing a comma-delimited list for the `Name`. e.g.
@@ -210,7 +238,7 @@ Subcommands can be defined for a more git-like command line app.
 app.Commands = []cli.Command{
   {
     Name:      "add",
-    ShortName: "a",
+    Aliases:     []string{"a"},
     Usage:     "add a task to the list",
     Action: func(c *cli.Context) {
       println("added task: ", c.Args().First())
@@ -218,7 +246,7 @@ app.Commands = []cli.Command{
   },
   {
     Name:      "complete",
-    ShortName: "c",
+    Aliases:     []string{"c"},
     Usage:     "complete a task on the list",
     Action: func(c *cli.Context) {
       println("completed task: ", c.Args().First())
@@ -226,7 +254,7 @@ app.Commands = []cli.Command{
   },
   {
     Name:      "template",
-    ShortName: "r",
+    Aliases:     []string{"r"},
     Usage:     "options for task templates",
     Subcommands: []cli.Command{
       {
@@ -244,7 +272,7 @@ app.Commands = []cli.Command{
         },
       },
     },
-  },     
+  },
 }
 ...
 ```
@@ -262,8 +290,8 @@ app := cli.NewApp()
 app.EnableBashCompletion = true
 app.Commands = []cli.Command{
   {
-    Name: "complete",
-    ShortName: "c",
+    Name:  "complete",
+    Aliases: []string{"c"},
     Usage: "complete a task on the list",
     Action: func(c *cli.Context) {
        println("completed task: ", c.Args().First())
@@ -289,6 +317,21 @@ setting the `PROG` variable to the name of your program:
 
 `PROG=myprogram source /.../cli/autocomplete/bash_autocomplete`
 
+#### To Distribute
+
+Copy `autocomplete/bash_autocomplete` into `/etc/bash_completion.d/` and rename
+it to the name of the program you wish to add autocomplete support for (or
+automatically install it there if you are distributing a package). Don't forget
+to source the file to make it active in the current shell.
+
+```
+   sudo cp src/bash_autocomplete /etc/bash_completion.d/<myprogram>
+   source /etc/bash_completion.d/<myprogram>
+```
+
+Alternatively, you can just document that users should source the generic
+`autocomplete/bash_autocomplete` in their bash configuration with `$PROG` set
+to the name of their program (as above).
 
 ## Contribution Guidelines
 Feel free to put up a pull request to fix a bug or maybe add a feature. I will give it a code review and make sure that it does not break backwards compatibility. If I or any other collaborators agree that it is in line with the vision of the project, we will work with you to get the code into a mergeable state and merge it into the master branch.

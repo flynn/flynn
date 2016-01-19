@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/flynn/flynn",
-	"GoVersion": "go1.4.3",
+	"GoVersion": "go1.4",
 	"Packages": [
 		"./..."
 	],
@@ -74,8 +74,9 @@
 			"Rev": "0464652af750701d218b6dd035f0217e407caf2d"
 		},
 		{
-			"ImportPath": "github.com/codegangsta/inject",
-			"Rev": "9aea7a2fa5b79ef7fc00f63a575e72df33b4e886"
+			"ImportPath": "github.com/codegangsta/cli",
+			"Comment": "1.2.0-187-gc31a797",
+			"Rev": "c31a7975863e7810c92e2e288a9ab074f9a88f29"
 		},
 		{
 			"ImportPath": "github.com/cupcake/jsonschema",
@@ -337,6 +338,16 @@
 			"Rev": "4940cee052ece5a8b2ea477699e7bb232de1e1f8"
 		},
 		{
+			"ImportPath": "github.com/docker/libcontainer/selinux",
+			"Comment": "v1.4.0-20-g4940cee",
+			"Rev": "4940cee052ece5a8b2ea477699e7bb232de1e1f8"
+		},
+		{
+			"ImportPath": "github.com/docker/libcontainer/system",
+			"Comment": "v1.4.0-20-g4940cee",
+			"Rev": "4940cee052ece5a8b2ea477699e7bb232de1e1f8"
+		},
+		{
 			"ImportPath": "github.com/docker/libcontainer/user",
 			"Comment": "v1.4.0-20-g4940cee",
 			"Rev": "4940cee052ece5a8b2ea477699e7bb232de1e1f8"
@@ -368,10 +379,6 @@
 			"ImportPath": "github.com/flynn/go-docopt",
 			"Comment": "0.6.1-rc2-26-gf6dd2eb",
 			"Rev": "f6dd2ebbb31e9721c860cf1faf5c944aa73e3844"
-		},
-		{
-			"ImportPath": "github.com/flynn/go-shlex",
-			"Rev": "2db50307d7b0b3b9384329e57bad7effe89f518d"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/client",
@@ -409,6 +416,14 @@
 			"ImportPath": "github.com/fsouza/go-dockerclient",
 			"Comment": "0.2.1-219-gadb8617",
 			"Rev": "adb861704259d548b45e08b5dd7b7c80efcd82e6"
+		},
+		{
+			"ImportPath": "github.com/garyburd/redigo/internal",
+			"Rev": "836b6e58b3358112c8291565d01c35b8764070d7"
+		},
+		{
+			"ImportPath": "github.com/garyburd/redigo/redis",
+			"Rev": "836b6e58b3358112c8291565d01c35b8764070d7"
 		},
 		{
 			"ImportPath": "github.com/golang/glog",
@@ -453,34 +468,26 @@
 		},
 		{
 			"ImportPath": "github.com/inconshreveable/axiom",
-			"Rev": "3af8a9cc55c04561ff0cea699e20e82319142fc5"
-		},
-		{
-			"ImportPath": "github.com/inconshreveable/go-update",
-			"Rev": "68f5725818189545231c1fd8694793d45f2fc529"
+			"Rev": "89cf457954c8a5520c9281059ae4e5a8121eae7f"
 		},
 		{
 			"ImportPath": "github.com/inconshreveable/gonative",
-			"Comment": "0.2.0-12-g2013c28",
-			"Rev": "2013c28499ba031ea01f64e3daa556f35f694bb0"
+			"Comment": "0.2.0-25-ga874c9d",
+			"Rev": "a874c9da0e7707cff978972a3929171ac15a19e3"
 		},
 		{
 			"ImportPath": "github.com/inconshreveable/mousetrap",
 			"Rev": "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75"
 		},
 		{
-			"ImportPath": "github.com/garyburd/redigo",
-			"Rev": "836b6e58b3358112c8291565d01c35b8764070d7"
+			"ImportPath": "github.com/jackc/pgx",
+			"Comment": "v2.7.1-16-g8577dcc",
+			"Rev": "8577dccd65312eecac353c96d908f8796d49f54c"
 		},
 		{
 			"ImportPath": "github.com/jteeuwen/go-bindata",
 			"Comment": "v3.0.7-70-gbfe36d3",
 			"Rev": "bfe36d3254337b7cc18024805dfab2106613abdf"
-		},
-		{
-			"ImportPath": "github.com/jackc/pgx",
-			"Comment": "v2.7.1-16-g8577dcc",
-			"Rev": "8577dccd65312eecac353c96d908f8796d49f54c"
 		},
 		{
 			"ImportPath": "github.com/julienschmidt/httprouter",
@@ -516,6 +523,10 @@
 			"Rev": "043ae16291351db8465272edf465c9f388161627"
 		},
 		{
+			"ImportPath": "github.com/mattn/go-isatty",
+			"Rev": "56b76bdf51f7708750eac80fa38b952bb9f32639"
+		},
+		{
 			"ImportPath": "github.com/miekg/dns",
 			"Rev": "68de7327c02df3d7ae94703e88dd8c9a4f3052d9"
 		},
@@ -527,6 +538,10 @@
 		{
 			"ImportPath": "github.com/mitchellh/go-homedir",
 			"Rev": "7d2d8c8a4e078ce3c58736ab521a40b37a504c52"
+		},
+		{
+			"ImportPath": "github.com/olekukonko/ts",
+			"Rev": "ecf753e7c962639ab5a1fb46f7da627d4c0a04b8"
 		},
 		{
 			"ImportPath": "github.com/pkg/browser",
@@ -596,6 +611,14 @@
 		{
 			"ImportPath": "golang.org/x/net/websocket",
 			"Rev": "cbcac7bb8415db9b6cb4d1ebab1dc9afbd688b97"
+		},
+		{
+			"ImportPath": "golang.org/x/sys/unix",
+			"Rev": "442cd600860ce722f6615730eb008a37a87b13ee"
+		},
+		{
+			"ImportPath": "gopkg.in/inconshreveable/go-update.v0",
+			"Rev": "d8b0b1d421aa1cbf392c05869f8abbc669bb7066"
 		},
 		{
 			"ImportPath": "gopkg.in/inconshreveable/log15.v2",
