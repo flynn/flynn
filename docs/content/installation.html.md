@@ -5,7 +5,8 @@ layout: docs
 
 # Installation
 
-Before starting, you should install the Flynn command-line interface.
+Before starting, you should install the Flynn command-line interface on your
+local machine.  
 
 On OS X and Linux, run this command in a terminal:
 
@@ -25,6 +26,15 @@ servers via SSH. It automatically performs all of the steps required to install
 Flynn.
 
 Just run `flynn install` to start the installer.
+
+After the install process is complete, the installer will send you to the Flynn
+Dashboard running on your new cluster.  You can still administer your cluster with
+the CLI, for instance:
+
+```
+flynn cluster
+```
+will give you the URL for the dashboard, and other info about your cluster. 
 
 If you want to run Flynn on your local machine, the easiest way is to install the
 [Vagrant demo environment](/docs/installation/vagrant).
