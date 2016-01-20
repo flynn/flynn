@@ -51,10 +51,10 @@ import (
 	"sort"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/codegangsta/cli"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/inconshreveable/go-update"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/inconshreveable/go-update/check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/inconshreveable/mousetrap"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/mattn/go-colorable"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/go-update.v0"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/go-update.v0/check"
 	log "github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2/term"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/yaml.v1"
@@ -105,9 +105,9 @@ func NewLogged() *Logged {
 
 func (w *Logged) Wrap(cmd cli.Command) cli.Command {
 	cmd.Flags = append(cmd.Flags, []cli.Flag{
-		cli.StringFlag{"log", w.DefaultTarget, "path to log file, 'stdout', 'stderr' or 'false'", ""},
-		cli.StringFlag{"log-level", w.DefaultLevel, "logging level", ""},
-		cli.StringFlag{"log-format", w.DefaultFormat, "log record format: 'term', 'logfmt', 'json'", ""},
+		cli.StringFlag{"log", w.DefaultTarget, "path to log file, 'stdout', 'stderr' or 'false'", "", nil},
+		cli.StringFlag{"log-level", w.DefaultLevel, "logging level", "", nil},
+		cli.StringFlag{"log-format", w.DefaultFormat, "log record format: 'term', 'logfmt', 'json'", "", nil},
 	}...)
 	oldAction := cmd.Action
 	cmd.Action = func(c *cli.Context) {
@@ -228,7 +228,7 @@ func (w *YAMLConfigLoader) Load(rd io.Reader) error {
 
 func (w *YAMLConfigLoader) Wrap(cmd cli.Command) cli.Command {
 	cmd.Flags = append(cmd.Flags, []cli.Flag{
-		cli.StringFlag{"config", w.DefaultPath, "path to YAML config file", ""},
+		cli.StringFlag{"config", w.DefaultPath, "path to YAML config file", "", nil},
 	}...)
 	oldAction := cmd.Action
 	cmd.Action = func(c *cli.Context) {
@@ -327,7 +327,7 @@ func (cmd *Updater) Command() cli.Command {
 		Name:  "update",
 		Usage: "update to the latest version",
 		Flags: []cli.Flag{
-			cli.StringFlag{"channel", cmd.DefaultChannel, "update to the most recent release on this channel", ""},
+			cli.StringFlag{"channel", cmd.DefaultChannel, "update to the most recent release on this channel", "", nil},
 		},
 		Action: func(c *cli.Context) {
 			res, err := cmd.Update(c.String("channel"), c.App.Version)

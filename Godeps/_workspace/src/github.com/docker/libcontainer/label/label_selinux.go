@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/docker/libcontainer/selinux"
+	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/selinux"
 )
 
 // InitLabels returns the process label and file labels to be used within

@@ -1,31 +1,26 @@
 {
-	"ImportPath": "_/Users/aes/src/gonative",
-	"GoVersion": "go1.3",
+	"ImportPath": "github.com/inconshreveable/gonative",
+	"GoVersion": "go1.5.2",
 	"Packages": [
 		"github.com/inconshreveable/gonative"
 	],
 	"Deps": [
 		{
-			"ImportPath": "bitbucket.org/kardianos/osext",
-			"Comment": "null-15",
-			"Rev": "44140c5fc69ecf1102c5ef451d73cd98ef59b178"
-		},
-		{
 			"ImportPath": "github.com/codegangsta/cli",
-			"Comment": "1.2.0-50-ga14c5b4",
-			"Rev": "a14c5b47c7efa4ff80cc42e1079a34b4756f2311"
+			"Comment": "1.2.0-187-gc31a797",
+			"Rev": "c31a7975863e7810c92e2e288a9ab074f9a88f29"
 		},
 		{
 			"ImportPath": "github.com/inconshreveable/axiom",
-			"Rev": "bdc862998f87c6788d6970b4607f02653fc4cf7a"
-		},
-		{
-			"ImportPath": "github.com/inconshreveable/go-update",
-			"Rev": "221d034a558b4c21b0624b2a450c076913854a57"
+			"Rev": "89cf457954c8a5520c9281059ae4e5a8121eae7f"
 		},
 		{
 			"ImportPath": "github.com/inconshreveable/mousetrap",
 			"Rev": "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75"
+		},
+		{
+			"ImportPath": "github.com/kardianos/osext",
+			"Rev": "29ae4ffbc9a6fe9fb2bc5029050ce6996ea1d3bc"
 		},
 		{
 			"ImportPath": "github.com/kr/binarydist",
@@ -33,12 +28,24 @@
 		},
 		{
 			"ImportPath": "github.com/mattn/go-colorable",
-			"Rev": "043ae16291351db8465272edf465c9f388161627"
+			"Rev": "3dac7b4f76f6e17fb39b768b89e3783d16e237fe"
+		},
+		{
+			"ImportPath": "github.com/mattn/go-isatty",
+			"Rev": "56b76bdf51f7708750eac80fa38b952bb9f32639"
+		},
+		{
+			"ImportPath": "golang.org/x/sys/unix",
+			"Rev": "833a04a10549a95dc34458c195cbad61bbb6cb4d"
+		},
+		{
+			"ImportPath": "gopkg.in/inconshreveable/go-update.v0",
+			"Rev": "d8b0b1d421aa1cbf392c05869f8abbc669bb7066"
 		},
 		{
 			"ImportPath": "gopkg.in/inconshreveable/log15.v2",
-			"Comment": "v2.7",
-			"Rev": "7cf5571b3b32a7c7b5605dc5ed8ad8fdbb2135f0"
+			"Comment": "v2.11",
+			"Rev": "b105bd37f74e5d9dc7b6ad7806715c7a2b83fd3f"
 		},
 		{
 			"ImportPath": "gopkg.in/yaml.v1",
