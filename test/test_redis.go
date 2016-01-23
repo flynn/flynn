@@ -13,19 +13,23 @@ type RedisSuite struct {
 var _ = c.ConcurrentSuite(&RedisSuite{})
 
 func (s *RedisSuite) TestDumpRestore(t *c.C) {
-	r := s.newGitRepo(t, "empty")
-	t.Assert(r.flynn("create"), Succeeds)
+	a := s.newCliTestApp(t)
+	t.Assert(a.flynn("resource", "add", "redis"), Succeeds)
 
-	t.Assert(r.flynn("resource", "add", "redis"), Succeeds)
+	release, err := s.controllerClient(t).GetAppRelease(a.id)
+	t.Assert(err, c.IsNil)
 
-	t.Assert(r.flynn("redis", "redis-cli", "set", "foo", "bar"), Succeeds)
+	t.Assert(release.Env["FLYNN_REDIS"], c.Not(c.Equals), "")
+	a.waitForService(release.Env["FLYNN_REDIS"])
+
+	t.Assert(a.flynn("redis", "redis-cli", "set", "foo", "bar"), Succeeds)
 
 	file := filepath.Join(t.MkDir(), "dump.rdb")
-	t.Assert(r.flynn("redis", "dump", "-f", file), Succeeds)
-	t.Assert(r.flynn("redis", "redis-cli", "del", "foo"), Succeeds)
+	t.Assert(a.flynn("redis", "dump", "-f", file), Succeeds)
+	t.Assert(a.flynn("redis", "redis-cli", "del", "foo"), Succeeds)
 
-	r.flynn("redis", "restore", "-f", file)
+	a.flynn("redis", "restore", "-f", file)
 
-	query := r.flynn("redis", "redis-cli", "get", "foo")
+	query := a.flynn("redis", "redis-cli", "get", "foo")
 	t.Assert(query, SuccessfulOutputContains, "bar")
 }
