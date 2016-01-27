@@ -12,6 +12,7 @@ import (
 var TestMode = false
 
 type ServiceCache interface {
+	LeaderAddr() []string
 	Addrs() []string
 	Close() error
 }
@@ -28,7 +29,8 @@ type serviceCache struct {
 	stream stream.Stream
 
 	sync.RWMutex
-	addrs map[string]struct{}
+	leaderAddr string
+	addrs      map[string]struct{}
 
 	// used by the test suite
 	watchCh chan *discoverd.Event
@@ -79,6 +81,14 @@ func (d *serviceCache) start(s discoverd.Service) (err error) {
 					d.Lock()
 					delete(d.addrs, event.Instance.Addr)
 					d.Unlock()
+				case discoverd.EventKindLeader:
+					d.Lock()
+					if event.Instance != nil {
+						d.leaderAddr = event.Instance.Addr
+					} else {
+						d.leaderAddr = ""
+					}
+					d.Unlock()
 				case discoverd.EventKindCurrent:
 					once.Do(func() { current <- nil })
 				}
@@ -108,6 +118,15 @@ func (d *serviceCache) Addrs() []string {
 		res = append(res, addr)
 	}
 	return res
+}
+
+func (d *serviceCache) LeaderAddr() []string {
+	d.RLock()
+	defer d.RUnlock()
+	if d.leaderAddr == "" {
+		return []string{}
+	}
+	return []string{d.leaderAddr}
 }
 
 // This method is only used by the test suite

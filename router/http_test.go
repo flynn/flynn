@@ -18,6 +18,7 @@ import (
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/websocket"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/pkg/httpclient"
 	"github.com/flynn/flynn/router/types"
@@ -233,6 +234,40 @@ func (s *S) TestWildcardRouting(c *C) {
 	assertGet(c, "http://"+l.Addr, "foo.bar", "1")
 	assertGet(c, "http://"+l.Addr, "flynn.foo.bar", "2")
 	assertGet(c, "http://"+l.Addr, "dev.foo.bar", "3")
+}
+
+func (s *S) TestLeaderRouting(c *C) {
+	srv1 := httptest.NewServer(httpTestHandler("1"))
+	srv2 := httptest.NewServer(httpTestHandler("2"))
+	defer srv1.Close()
+	defer srv2.Close()
+
+	l := s.newHTTPListener(c)
+	defer l.Close()
+
+	client := l.discoverd
+	err := client.AddService("leader-routing-http", &discoverd.ServiceConfig{
+		LeaderType: discoverd.LeaderTypeManual,
+	})
+	c.Assert(err, IsNil)
+	svc := client.Service("leader-routing-http")
+
+	addRoute(c, l, router.HTTPRoute{
+		Domain:  "foo.bar",
+		Service: "leader-routing-http",
+		Leader:  true,
+	}.ToRoute())
+
+	discoverdRegisterHTTPService(c, l, "leader-routing-http", srv1.Listener.Addr().String())
+	discoverdRegisterHTTPService(c, l, "leader-routing-http", srv2.Listener.Addr().String())
+
+	err = svc.SetLeader(md5sum("tcp-" + srv1.Listener.Addr().String()))
+	c.Assert(err, IsNil)
+	assertGet(c, "http://"+l.Addr, "foo.bar", "1")
+
+	err = svc.SetLeader(md5sum("tcp-" + srv2.Listener.Addr().String()))
+	c.Assert(err, IsNil)
+	assertGet(c, "http://"+l.Addr, "foo.bar", "2")
 }
 
 func (s *S) TestPathRouting(c *C) {

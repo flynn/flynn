@@ -77,13 +77,13 @@ func (d *pgDataStore) Ping() error {
 }
 
 const sqlAddRouteHTTP = `
-INSERT INTO ` + tableNameHTTP + ` (parent_ref, service, domain, tls_cert, tls_key, sticky, path)
-	VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO ` + tableNameHTTP + ` (parent_ref, service, leader, domain, tls_cert, tls_key, sticky, path)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	RETURNING id, created_at, updated_at`
 
 const sqlAddRouteTCP = `
-INSERT INTO ` + tableNameTCP + ` (parent_ref, service, port)
-	VALUES ($1, $2, $3)
+INSERT INTO ` + tableNameTCP + ` (parent_ref, service, leader, port)
+	VALUES ($1, $2, $3, $4)
 	RETURNING id, created_at, updated_at`
 
 func (d *pgDataStore) Add(r *router.Route) (err error) {
@@ -93,6 +93,7 @@ func (d *pgDataStore) Add(r *router.Route) (err error) {
 			sqlAddRouteHTTP,
 			r.ParentRef,
 			r.Service,
+			r.Leader,
 			r.Domain,
 			r.TLSCert,
 			r.TLSKey,
@@ -104,6 +105,7 @@ func (d *pgDataStore) Add(r *router.Route) (err error) {
 			sqlAddRouteTCP,
 			r.ParentRef,
 			r.Service,
+			r.Leader,
 			r.Port,
 		).Scan(&r.ID, &r.CreatedAt, &r.UpdatedAt)
 	}
@@ -117,13 +119,13 @@ func (d *pgDataStore) Add(r *router.Route) (err error) {
 }
 
 const sqlUpdateRouteHTTP = `
-UPDATE ` + tableNameHTTP + ` SET parent_ref = $1, service = $2, tls_cert = $3, tls_key = $4, sticky = $5, path = $6
-	WHERE id = $7 AND domain = $8 AND deleted_at IS NULL
+UPDATE ` + tableNameHTTP + ` SET parent_ref = $1, service = $2, leader = $3, tls_cert = $4, tls_key = $5, sticky = $6, path = $7
+	WHERE id = $8 AND domain = $9 AND deleted_at IS NULL
 	RETURNING %s`
 
 const sqlUpdateRouteTCP = `
-UPDATE ` + tableNameTCP + ` SET parent_ref = $1, service = $2
-	WHERE id = $3 AND port = $4 AND deleted_at IS NULL
+UPDATE ` + tableNameTCP + ` SET parent_ref = $1, service = $2, leader = $3
+	WHERE id = $4 AND port = $5 AND deleted_at IS NULL
 	RETURNING %s`
 
 func (d *pgDataStore) Update(r *router.Route) error {
@@ -135,6 +137,7 @@ func (d *pgDataStore) Update(r *router.Route) error {
 			fmt.Sprintf(sqlUpdateRouteHTTP, d.columnNames()),
 			r.ParentRef,
 			r.Service,
+			r.Leader,
 			r.TLSCert,
 			r.TLSKey,
 			r.Sticky,
@@ -147,6 +150,7 @@ func (d *pgDataStore) Update(r *router.Route) error {
 			fmt.Sprintf(sqlUpdateRouteTCP, d.columnNames()),
 			r.ParentRef,
 			r.Service,
+			r.Leader,
 			r.ID,
 			r.Port,
 		)
@@ -321,8 +325,8 @@ func (d *pgDataStore) startListener(ctx context.Context) (<-chan string, <-chan 
 }
 
 const (
-	selectColumnsHTTP = "id, parent_ref, service, domain, sticky, tls_cert, tls_key, path, created_at, updated_at"
-	selectColumnsTCP  = "id, parent_ref, service, port, created_at, updated_at"
+	selectColumnsHTTP = "id, parent_ref, service, leader, domain, sticky, tls_cert, tls_key, path, created_at, updated_at"
+	selectColumnsTCP  = "id, parent_ref, service, leader, port, created_at, updated_at"
 )
 
 func (d *pgDataStore) columnNames() string {
@@ -348,6 +352,7 @@ func (d *pgDataStore) scanRoute(route *router.Route, s scannable) error {
 			&route.ID,
 			&route.ParentRef,
 			&route.Service,
+			&route.Leader,
 			&route.Domain,
 			&route.Sticky,
 			&route.TLSCert,
@@ -361,6 +366,7 @@ func (d *pgDataStore) scanRoute(route *router.Route, s scannable) error {
 			&route.ID,
 			&route.ParentRef,
 			&route.Service,
+			&route.Leader,
 			&route.Port,
 			&route.CreatedAt,
 			&route.UpdatedAt,

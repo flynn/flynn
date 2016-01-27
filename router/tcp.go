@@ -226,6 +226,7 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 		if err != nil {
 			return err
 		}
+
 		service = &tcpService{
 			name: r.Service,
 			sc:   sc,
@@ -233,7 +234,13 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 		h.l.services[r.Service] = service
 	}
 	r.service = service
-	r.rp = proxy.NewReverseProxy(service.sc.Addrs, nil, false)
+	var bf proxy.BackendListFunc
+	if r.Leader {
+		bf = service.sc.LeaderAddr
+	} else {
+		bf = service.sc.Addrs
+	}
+	r.rp = proxy.NewReverseProxy(bf, nil, false)
 	if listener, ok := h.l.listeners[r.Port]; ok {
 		r.l = listener
 		delete(h.l.listeners, r.Port)

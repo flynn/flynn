@@ -145,5 +145,9 @@ CREATE TRIGGER check_http_route_update
 		// migration 2.
 		`ALTER TABLE http_routes ALTER COLUMN path SET DEFAULT '/'`,
 	)
+	m.Add(4,
+		`ALTER TABLE tcp_routes ADD COLUMN leader boolean NOT NULL DEFAULT FALSE`,
+		`ALTER TABLE http_routes ADD COLUMN leader boolean NOT NULL DEFAULT FALSE`,
+	)
 	return m.Migrate(db)
 }
