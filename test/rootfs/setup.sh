@@ -148,7 +148,7 @@ chmod ug+s /usr/bin/tup
 sed 's/#user_allow_other/user_allow_other/' -i /etc/fuse.conf
 
 # install go
-curl -L j.mp/godeb | tar xz
+curl -L https://s3.amazonaws.com/flynn-temp/godeb.tar.gz | tar xz
 ./godeb install 1.4.3
 rm godeb
 
