@@ -15,6 +15,15 @@ import (
 	"github.com/flynn/flynn/pkg/shutdown"
 )
 
+const (
+	disallowConns   = `UPDATE pg_database SET datallowconn = FALSE WHERE datname = $1`
+	disconnectConns = `
+SELECT pg_terminate_backend(pg_stat_activity.pid)
+FROM pg_stat_activity
+WHERE pg_stat_activity.datname = $1
+  AND pid <> pg_backend_pid();`
+)
+
 var serviceName = os.Getenv("FLYNN_POSTGRES")
 var serviceHost string
 
@@ -92,6 +101,18 @@ func (p *pgAPI) dropDatabase(w http.ResponseWriter, req *http.Request, _ httprou
 	id := strings.SplitN(strings.TrimPrefix(req.FormValue("id"), "/databases/"), ":", 2)
 	if len(id) != 2 || id[1] == "" {
 		httphelper.ValidationError(w, "id", "is invalid")
+		return
+	}
+
+	// disable new connections to the target database
+	if err := p.db.Exec(disallowConns, id[1]); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+
+	// terminate current connections
+	if err := p.db.Exec(disconnectConns, id[1]); err != nil {
+		httphelper.Error(w, err)
 		return
 	}
 
