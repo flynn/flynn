@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/appliance/postgresql/client"
-	"github.com/flynn/flynn/appliance/postgresql/state"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/sirenia/state"
 )
 
 func (d *DeployJob) deployPostgres() (err error) {
