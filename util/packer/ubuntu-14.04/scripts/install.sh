@@ -209,8 +209,7 @@ disable_docker_auto_restart() {
 
 install_go() {
   cd /tmp
-  wget https://s3.amazonaws.com/flynn-temp/godeb.tar.gz
-  tar xvzf godeb
+  curl https://godeb.s3.amazonaws.com/godeb-amd64.tar.gz | tar xz
   ./godeb install 1.4.3
 }
 
