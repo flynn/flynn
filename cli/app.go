@@ -124,6 +124,11 @@ func runDelete(args *docopt.Args, client *controller.Client) error {
 		}
 	}
 
+	// scale formation down to 0
+	if err := scaleToZero(appName, client); err != nil {
+		return err
+	}
+
 	res, err := client.DeleteApp(appName)
 	if err != nil {
 		return err
@@ -188,5 +193,49 @@ func runInfo(_ *docopt.Args, client *controller.Client) error {
 		}
 	}
 
+	return nil
+}
+
+func scaleToZero(appName string, client *controller.Client) error {
+	release, err := client.GetAppRelease(appName)
+	if err == controller.ErrNotFound {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	formation, err := client.GetFormation(appName, release.ID)
+	if err == controller.ErrNotFound {
+		formation = &ct.Formation{
+			AppID:     appName,
+			ReleaseID: release.ID,
+			Processes: make(map[string]int),
+		}
+	} else if err != nil {
+		return err
+	}
+
+	if len(formation.Processes) == 0 {
+		return nil
+	}
+	processes := make(map[string]int)
+	expected := client.ExpectedScalingEvents(formation.Processes, processes, release.Processes, 1)
+	watcher, err := client.WatchJobEvents(appName, release.ID)
+	if err != nil {
+		return err
+	}
+	defer watcher.Close()
+
+	// override with empty processes map
+	formation.Processes = processes
+	err = client.PutFormation(formation)
+	if err != nil {
+		return err
+	}
+	err = watcher.WaitFor(expected, scaleTimeout, func(job *ct.Job) error {
+		return nil
+	})
+	if err != nil {
+		return err
+	}
 	return nil
 }
