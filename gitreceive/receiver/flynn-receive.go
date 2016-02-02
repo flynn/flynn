@@ -107,7 +107,9 @@ Options:
 	}
 	cmd.Env = make(map[string]string)
 	cmd.Env["BUILD_CACHE_URL"] = fmt.Sprintf("%s/%s-cache.tgz", blobstoreURL, app.ID)
-	if buildpackURL, ok := prevRelease.Env["BUILDPACK_URL"]; ok {
+	if buildpackURL, ok := env["BUILDPACK_URL"]; ok {
+		cmd.Env["BUILDPACK_URL"] = buildpackURL
+	} else if buildpackURL, ok := prevRelease.Env["BUILDPACK_URL"]; ok {
 		cmd.Env["BUILDPACK_URL"] = buildpackURL
 	}
 	for _, k := range []string{"SSH_CLIENT_KEY", "SSH_CLIENT_HOSTS"} {
