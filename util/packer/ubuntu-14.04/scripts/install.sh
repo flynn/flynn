@@ -35,6 +35,7 @@ main() {
   install_packages
   install_flynn
   disable_docker_auto_restart
+  bump_libvirt_start_timeout
   install_go
   apt_cleanup
 
@@ -205,6 +206,11 @@ install_flynn() {
 
 disable_docker_auto_restart() {
   sed -i 's/^#DOCKER_OPTS=.*/DOCKER_OPTS="-r=false"/' /etc/default/docker
+}
+
+bump_libvirt_start_timeout() {
+  # on EC2 libvirt can take longer to come up than the default timeout allows
+  sed -i 's/sockfile_check_retries=5/sockfile_check_retries=10/' /etc/init/libvirt-bin.conf
 }
 
 install_go() {
