@@ -318,6 +318,13 @@ func (h *jobAPI) ConfigureDiscoverd(w http.ResponseWriter, r *http.Request, _ ht
 	h.host.status.Discoverd = &config
 	h.host.statusMtx.Unlock()
 
+	if config.JobID != "" {
+		log.Info("persisting discoverd job_id")
+		if err := h.host.state.SetPersistentSlot("discoverd", config.JobID); err != nil {
+			log.Error("error assigning discoverd to persistent slot")
+		}
+	}
+
 	if config.URL != "" && config.DNS != "" {
 		go h.host.discoverdOnce.Do(func() {
 			log.Info("connecting to service discovery", "url", config.URL)
@@ -337,6 +344,12 @@ func (h *jobAPI) ConfigureNetworking(w http.ResponseWriter, r *http.Request, _ h
 	if err := httphelper.DecodeJSON(r, config); err != nil {
 		log.Error("error decoding config", "err", err)
 		shutdown.Fatal(err)
+	}
+	if config.JobID != "" {
+		log.Info("persisting flannel job_id")
+		if err := h.host.state.SetPersistentSlot("flannel", config.JobID); err != nil {
+			log.Error("error assigning flannel to persistent slot")
+		}
 	}
 
 	// configure the network before returning a response in case the

@@ -31,7 +31,6 @@
         "app": {
           "ports": [{"port": 1111, "proto": "tcp"}, {"port": 53, "proto": "tcp"}],
           "data": true,
-          "resurrect": true,
           "host_network": true,
           "omni": true,
           "service": "discoverd"
@@ -61,7 +60,6 @@
       "processes": {
         "app": {
           "ports": [{"port": 5002, "proto": "tcp"}],
-          "resurrect": true,
           "host_network": true,
           "omni": true
         }
@@ -106,8 +104,7 @@
           "service": "postgres",
           "env": {
             "SINGLETON": "{{ .Singleton }}"
-          },
-          "resurrect": true
+          }
         },
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
@@ -181,15 +178,13 @@
         "web": {
           "ports": [{"port": 80, "proto": "tcp"}],
           "cmd": ["controller"],
-          "service": "controller",
-          "resurrect": true
+          "service": "controller"
         },
         "scheduler": {
           "cmd": ["scheduler"],
           "omni": true,
           "service": "controller-scheduler",
-          "ports": [{ "proto": "tcp" }],
-          "resurrect": true
+          "ports": [{ "proto": "tcp" }]
         },
         "worker": {
           "cmd": ["worker"],
@@ -586,6 +581,11 @@
     "id": "status-check",
     "action": "status-check",
     "url": "http://status-web.discoverd"
+  },
+  {
+    "id": "cluster-monitor",
+    "action": "cluster-monitor",
+    "enabled": true
   },
   {
     "id": "log-complete",
