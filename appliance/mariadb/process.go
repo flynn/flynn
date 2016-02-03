@@ -241,53 +241,15 @@ func (p *Process) assumePrimary(downstream *discoverd.Instance) (err error) {
 		return err
 	}
 
-	if err := func() error {
-		dsn := p.DSN("127.0.0.1:"+p.Port, "")
-		dsn.User = "root"
-		dsn.Password = ""
-
-		db, err := sql.Open("mysql", dsn.String())
-		if err != nil {
-			logger.Error("error acquiring connection", "err", err)
-			return err
-		}
-		defer db.Close()
-
-		tx, err := db.Begin()
-		if err != nil {
-			logger.Error("error starting transaction", "err", err)
-			return err
-		}
-		defer tx.Rollback()
-
-		if _, err := tx.Exec(fmt.Sprintf(`CREATE USER 'flynn'@'%%' IDENTIFIED BY '%s'`, p.Password)); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(`GRANT ALL PRIVILEGES ON *.* TO 'flynn'@'%'`); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(`GRANT REPLICATION SLAVE ON *.* TO 'flynn'@'%'`); err != nil {
-			return err
-		}
-		if err := tx.Commit(); err != nil {
-			logger.Error("error committing transaction", "err", err)
-			return err
-		}
-
-		if _, err := db.Exec(`FLUSH PRIVILEGES`); err != nil {
-			return err
-		}
-
-		if downstream != nil {
-			p.waitForSync(downstream, true)
-		}
-
-		return nil
-	}(); err != nil {
+	if err := p.initDB(); err != nil {
 		if e := p.stop(); err != nil {
 			logger.Debug("ignoring error stopping process", "err", e)
 		}
 		return err
+	}
+
+	if downstream != nil {
+		p.waitForSync(downstream, true)
 	}
 
 	return nil
@@ -340,7 +302,18 @@ func (p *Process) assumeStandby(upstream, downstream *discoverd.Instance) error 
 		return err
 	}
 
+	if err := p.installDB(); err != nil {
+		return err
+	}
+
 	if err := p.start(); err != nil {
+		return err
+	}
+
+	if err := p.initDB(); err != nil {
+		if e := p.stop(); err != nil {
+			logger.Debug("ignoring error stopping process", "err", e)
+		}
 		return err
 	}
 
@@ -348,6 +321,43 @@ func (p *Process) assumeStandby(upstream, downstream *discoverd.Instance) error 
 
 	if downstream != nil {
 		p.waitForSync(downstream, false)
+	}
+
+	return nil
+}
+
+// initDB initializes the local database with the correct users and plugins.
+func (p *Process) initDB() error {
+	logger := p.Logger.New("fn", "initDB")
+
+	dsn := p.DSN("127.0.0.1:"+p.Port, "")
+	dsn.User = "root"
+	dsn.Password = ""
+
+	db, err := sql.Open("mysql", dsn.String())
+	if err != nil {
+		logger.Error("error acquiring connection", "err", err)
+		return err
+	}
+	defer db.Close()
+
+	if _, err := db.Exec(fmt.Sprintf(`CREATE USER 'flynn'@'%%' IDENTIFIED BY '%s'`, p.Password)); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`GRANT ALL PRIVILEGES ON *.* TO 'flynn'@'%'`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`GRANT REPLICATION SLAVE ON *.* TO 'flynn'@'%'`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`INSTALL PLUGIN rpl_semi_sync_master SONAME 'semisync_master.so'`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`INSTALL PLUGIN rpl_semi_sync_slave SONAME 'semisync_slave.so'`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`FLUSH PRIVILEGES`); err != nil {
+		return err
 	}
 
 	return nil
@@ -493,17 +503,11 @@ func (p *Process) waitForSync(downstream *discoverd.Instance, enableWrites bool)
 			"log_pos", log15.Lazy{func() int64 { return status.ReadMasterLogPos }},
 		)
 
-		sleep := func() bool {
-			select {
-			case <-stopCh:
-				logger.Debug("canceled, stopping")
-				return false
-			case <-time.After(checkInterval):
-				return true
-			}
-		}
-
 		logger.Info("waiting for downstream replication to catch up")
+		defer logger.Info("finished waiting for downstream replication")
+
+		// TEMPORARY
+		time.Sleep(10 * time.Second)
 
 		for {
 			// Check if "wait sync" has been canceled.
@@ -515,21 +519,29 @@ func (p *Process) waitForSync(downstream *discoverd.Instance, enableWrites bool)
 			}
 
 			// Read local master status.
-			ms, err := p.masterStatus("127.0.0.1")
+			ms, err := p.masterStatus("127.0.0.1:" + p.Port)
 			if err != nil {
+				logger.Error("error reading master status", "err", err)
 				startTime = time.Now().UTC()
-				if !sleep() {
+				select {
+				case <-stopCh:
+					logger.Debug("canceled, stopping")
 					return
+				case <-time.After(checkInterval):
 				}
 				continue
 			}
 
 			// Read downstream slave status.
-			ss, err := p.slaveStatus(downstream.Meta["MYSQL_ID"])
+			ss, err := p.slaveStatus(downstream.Addr)
 			if err != nil {
+				logger.Error("error reading slave status", "err", err)
 				startTime = time.Now().UTC()
-				if !sleep() {
+				select {
+				case <-stopCh:
+					logger.Debug("canceled, stopping")
 					return
+				case <-time.After(checkInterval):
 				}
 				continue
 			}
@@ -560,8 +572,11 @@ func (p *Process) waitForSync(downstream *discoverd.Instance, enableWrites bool)
 			}
 
 			logger.Debug("continuing replication check")
-			if !sleep() {
+			select {
+			case <-stopCh:
+				logger.Debug("canceled, stopping")
 				return
+			case <-time.After(checkInterval):
 			}
 		}
 
@@ -585,15 +600,29 @@ func (p *Process) DSN(host, database string) *DSN {
 var ErrNoReplicationStatus = errors.New("no replication status")
 
 func (p *Process) masterStatus(host string) (status MasterStatus, err error) {
+	logger := p.Logger.New("fn", "masterStatus", "host", host)
+	logger.Info("connecting to mysql master")
+
 	db, err := sql.Open("mysql", p.DSN(host, "").String())
 	if err != nil {
+		logger.Error("error connecting to mysql master", "err", err)
 		return
 	}
 	defer db.Close()
 
-	if err = db.QueryRow("SHOW MASTER STATUS").Scan(&status.File, &status.Position); err != nil {
+	var discard interface{}
+	if err = db.QueryRow("SHOW MASTER STATUS").Scan(
+		&status.File,
+		&status.Position,
+		&discard, // Binlog_Do_DB
+		&discard, // Binlog_Ignore_DB
+	); err != nil {
+		logger.Error("error scanning master status row", "err", err)
 		return
 	}
+
+	logger.Info("master status", "file", status.File, "position", status.Position)
+
 	return
 }
 
@@ -601,55 +630,70 @@ func (p *Process) masterStatus(host string) (status MasterStatus, err error) {
 func (p *Process) XLogPosition() (Position, error) { panic("FIXME") }
 
 func (p *Process) slaveStatus(host string) (status SlaveStatus, err error) {
+	logger := p.Logger.New("fn", "slaveStatus", "host", host)
+	logger.Info("connecting to mysql slave")
+
 	db, err := sql.Open("mysql", p.DSN(host, "").String())
 	if err != nil {
+		logger.Error("error connecting to mysql slave", "err", err)
 		return
 	}
 	defer db.Close()
 
+	var discard interface{}
 	if err = db.QueryRow("SHOW SLAVE STATUS").Scan(
-		&status.SlaveIOState, // Slave_IO_State
-		nil,                  // Master_Host
-		nil,                  // Master_User
-		nil,                  // Master_Port
-		nil,                  // Connect_Retry
-		&status.MasterLogFile,      // Master_Log_File
-		&status.ReadMasterLogPos,   // Read_Master_Log_Pos
-		&status.RelayLogFile,       // Relay_Log_File
-		&status.RelayLogPos,        // Relay_Log_Pos
-		&status.RelayMasterLogFile, // Relay_Master_Log_File
-		&status.SlaveIORunning,     // Slave_IO_Running
-		nil, // Slave_SQL_Running
-		nil, // Replicate_Do_DB
-		nil, // Replicate_Ignore_DB
-		nil, // Replicate_Do_Table
-		nil, // Replicate_Ignore_Table
-		nil, // Replicate_Wild_Do_Table
-		nil, // Replicate_Wild_Ignore_Table
-		nil, // Last_Errno
-		nil, // Last_Error
-		nil, // Skip_Counter
-		&status.ExecMasterLogPos, // Exec_Master_Log_Pos
-		nil, // Relay_Log_Space
-		nil, // Until_Condition
-		nil, // Until_Log_File
-		nil, // Until_Log_Pos
-		nil, // Master_SSL_Allowed
-		nil, // Master_SSL_CA_File
-		nil, // Master_SSL_CA_Path
-		nil, // Master_SSL_Cert
-		nil, // Master_SSL_Cipher
-		nil, // Master_SSL_Key
+		&status.SlaveIOState,        // Slave_IO_State
+		&discard,                    // Master_Host
+		&discard,                    // Master_User
+		&discard,                    // Master_Port
+		&discard,                    // Connect_Retry
+		&status.MasterLogFile,       // Master_Log_File
+		&status.ReadMasterLogPos,    // Read_Master_Log_Pos
+		&status.RelayLogFile,        // Relay_Log_File
+		&status.RelayLogPos,         // Relay_Log_Pos
+		&status.RelayMasterLogFile,  // Relay_Master_Log_File
+		&status.SlaveIORunning,      // Slave_IO_Running
+		&discard,                    // Slave_SQL_Running
+		&discard,                    // Replicate_Do_DB
+		&discard,                    // Replicate_Ignore_DB
+		&discard,                    // Replicate_Do_Table
+		&discard,                    // Replicate_Ignore_Table
+		&discard,                    // Replicate_Wild_Do_Table
+		&discard,                    // Replicate_Wild_Ignore_Table
+		&discard,                    // Last_Errno
+		&discard,                    // Last_Error
+		&discard,                    // Skip_Counter
+		&status.ExecMasterLogPos,    // Exec_Master_Log_Pos
+		&discard,                    // Relay_Log_Space
+		&discard,                    // Until_Condition
+		&discard,                    // Until_Log_File
+		&discard,                    // Until_Log_Pos
+		&discard,                    // Master_SSL_Allowed
+		&discard,                    // Master_SSL_CA_File
+		&discard,                    // Master_SSL_CA_Path
+		&discard,                    // Master_SSL_Cert
+		&discard,                    // Master_SSL_Cipher
+		&discard,                    // Master_SSL_Key
 		&status.SecondsBehindMaster, // Seconds_Behind_Master
-		nil,                 // Master_SSL_Verify_Server_Cert
-		&status.LastIOErrno, // Last_IO_Errno
-		&status.LastIOError, // Last_IO_Error
-		nil,                 // Last_SQL_Errno
-		nil,                 // Last_SQL_Error
-		nil,                 // Replicate_Ignore_Server_Ids
+		&discard,                    // Master_SSL_Verify_Server_Cert
+		&status.LastIOErrno,         // Last_IO_Errno
+		&status.LastIOError,         // Last_IO_Error
+		&discard,                    // Last_SQL_Errno
+		&discard,                    // Last_SQL_Error
+		&discard,                    // Replicate_Ignore_Server_Ids
 	); err != nil {
+		logger.Error("error scanning slave status row", "err", err)
 		return
 	}
+
+	logger.Error("mysql slave status",
+		"slave_io_state", status.SlaveIOState,
+		"slave_io_running", status.SlaveIORunning,
+		"master_log_file", status.MasterLogFile,
+		"read_master_log_pos", status.ReadMasterLogPos,
+		"last_io_errno", status.LastIOErrno,
+		"last_io_error", status.LastIOError,
+	)
 	return
 }
 
