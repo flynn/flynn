@@ -13,6 +13,10 @@ module FlynnDocs
     File.join(dir, 'images')
   end
 
+  def self.docs_nav_path
+    File.join(dir, 'docs-nav.json')
+  end
+
   def self.contributing_markdown
     File.read(File.join(dir, '..', 'CONTRIBUTING.md'))
   end
