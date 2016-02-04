@@ -202,6 +202,7 @@ install_flynn() {
   fi
 
   bash -es -- -r "${repo}" < <(curl -sL --fail "${repo}/${script}")
+  sed -i 's/start on/#start on/' /etc/init/flynn-host.conf
 }
 
 disable_docker_auto_restart() {
