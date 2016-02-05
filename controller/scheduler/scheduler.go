@@ -138,6 +138,13 @@ func main() {
 		log.Error("error creating controller client", "err", err)
 		shutdown.Fatal(err)
 	}
+
+	log.Info("waiting for controller API to come up")
+	if _, err := discoverd.GetInstances("controller", 5*time.Minute); err != nil {
+		log.Error("error waiting for controller API", "err", err)
+		shutdown.Fatal(err)
+	}
+
 	s := NewScheduler(clusterClient, controllerClient, newDiscoverdWrapper())
 	log.Info("started scheduler", "backoffPeriod", s.backoffPeriod)
 
