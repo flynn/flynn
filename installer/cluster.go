@@ -579,6 +579,8 @@ iptables -A FORWARD -i eth0 -j DROP
 var startScript = template.Must(template.New("start.sh").Parse(`
 #!/bin/sh
 FIRST_BOOT="/var/lib/flynn/first-boot"
+mkdir -p /var/lib/flynn
+
 if [ ! -f "${FIRST_BOOT}" ]; then
   {{if .DataDisk}}
   zpool create -f flynn-default {{.DataDisk}}
