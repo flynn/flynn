@@ -578,8 +578,12 @@ iptables -A FORWARD -i eth0 -j DROP
 
 var startScript = template.Must(template.New("start.sh").Parse(`
 #!/bin/sh
+set -e -x
+
 FIRST_BOOT="/var/lib/flynn/first-boot"
-if [[ ! -f "${FIRST_BOOT}" ]]; then
+mkdir -p /var/lib/flynn
+
+if [ ! -f "${FIRST_BOOT}" ]; then
   {{if .DataDisk}}
   zpool create -f flynn-default {{.DataDisk}}
   {{end}}
@@ -591,6 +595,7 @@ if [[ ! -f "${FIRST_BOOT}" ]]; then
 
   flynn-host init --discovery={{.DiscoveryToken}}
   start flynn-host
+  sed -i 's/#start on/start on/' /etc/init/flynn-host.conf
   touch "${FIRST_BOOT}"
 fi
 `[1:]))
