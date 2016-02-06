@@ -595,6 +595,7 @@ if [ ! -f "${FIRST_BOOT}" ]; then
 
   flynn-host init --discovery={{.DiscoveryToken}}
   start flynn-host
+  sed -i 's/#start on/start on/' /etc/init/flynn-host.conf
   touch "${FIRST_BOOT}"
 fi
 `[1:]))
