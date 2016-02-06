@@ -578,6 +578,8 @@ iptables -A FORWARD -i eth0 -j DROP
 
 var startScript = template.Must(template.New("start.sh").Parse(`
 #!/bin/sh
+set -e -x
+
 FIRST_BOOT="/var/lib/flynn/first-boot"
 mkdir -p /var/lib/flynn
 
