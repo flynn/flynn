@@ -578,16 +578,19 @@ iptables -A FORWARD -i eth0 -j DROP
 
 var startScript = template.Must(template.New("start.sh").Parse(`
 #!/bin/sh
+FIRST_BOOT="/var/lib/flynn/first-boot"
+if [[ ! -f "${FIRST_BOOT}" ]]; then
+  {{if .DataDisk}}
+  zpool create -f flynn-default {{.DataDisk}}
+  {{end}}
 
-{{if .DataDisk}}
-zpool create -f flynn-default {{.DataDisk}}
-{{end}}
+  # wait for libvirt
+  while ! [ -e /var/run/libvirt/libvirt-sock ]; do
+    sleep 0.1
+  done
 
-# wait for libvirt
-while ! [ -e /var/run/libvirt/libvirt-sock ]; do
-  sleep 0.1
-done
-
-flynn-host init --discovery={{.DiscoveryToken}}
-start flynn-host
+  flynn-host init --discovery={{.DiscoveryToken}}
+  start flynn-host
+  touch "${FIRST_BOOT}"
+fi
 `[1:]))
