@@ -20,6 +20,7 @@ type Host struct {
 	stop     chan struct{}
 	stopOnce sync.Once
 	done     chan struct{}
+	shutdown bool
 }
 
 func NewHost(h utils.HostClient) *Host {

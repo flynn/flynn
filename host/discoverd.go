@@ -42,6 +42,13 @@ func (d *DiscoverdManager) Close() error {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 	if d.hb != nil {
+		// explicitly indicate in the metadata that the host is
+		// shutting down so that the scheduler removes the host
+		// immediately (rather than treating it as unhealthy for a
+		// short time)
+		d.inst.Meta["shutdown"] = "true"
+		d.hb.SetMeta(d.inst.Meta)
+
 		err := d.hb.Close()
 		d.hb = nil
 		return err

@@ -512,8 +512,9 @@ func (s *Scheduler) SyncHosts() (err error) {
 	}
 
 	// mark any hosts as unhealthy which are not returned from s.Hosts()
+	// and are not explicitly shutdown
 	for id, host := range s.hosts {
-		if _, ok := known[id]; !ok {
+		if _, ok := known[id]; !ok && !host.shutdown {
 			s.markHostAsUnhealthy(host)
 		}
 	}
@@ -646,6 +647,9 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 	counts := s.jobs.GetHostJobCounts(formation.key(), req.Job.Type)
 	var minCount int = math.MaxInt32
 	for _, h := range s.SortedHosts() {
+		if h.shutdown {
+			continue
+		}
 		if !req.Job.TagsMatchHost(h) {
 			continue
 		}
@@ -878,11 +882,26 @@ func (s *Scheduler) HandleHostEvent(e *discoverd.Event) {
 		s.handleNewHost(e.Instance.Meta["id"])
 	case discoverd.EventKindUpdate:
 		id := e.Instance.Meta["id"]
+		_, isShutdown := e.Instance.Meta["shutdown"]
 
 		// if we haven't seen this host before, handle it as new
+		// (provided it is not shutdown)
 		host, ok := s.hosts[id]
 		if !ok {
-			s.handleNewHost(id)
+			if !isShutdown {
+				s.handleNewHost(id)
+			}
+			return
+		}
+
+		// if the host is shutdown, just mark it as shutdown and return
+		// rather than explicitly unfollowing to avoid a race where
+		// SyncHosts could run before we get the down event, thus
+		// re-following a host we know is shutdown (the host will be
+		// unfollowed when we get the eventual down event)
+		if isShutdown {
+			log.Info("marking host as shutdown", "host.id", host.ID)
+			host.shutdown = true
 			return
 		}
 
@@ -904,7 +923,11 @@ func (s *Scheduler) HandleHostEvent(e *discoverd.Event) {
 			log.Warn("ignoring host down event, unknown host")
 			return
 		}
-		s.markHostAsUnhealthy(host)
+		if host.shutdown {
+			s.unfollowHost(host)
+		} else {
+			s.markHostAsUnhealthy(host)
+		}
 	}
 }
 
