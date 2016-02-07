@@ -209,7 +209,10 @@ type ActiveJob struct {
 	Error       *string   `json:"error,omitempty"`
 }
 
-var ErrJobNotRunning = errors.New("host: job not running")
+var (
+	ErrJobNotRunning = errors.New("host: job not running")
+	ErrAttached      = errors.New("host: job is attached")
+)
 
 type AttachReq struct {
 	JobID  string     `json:"job_id,omitempty"`

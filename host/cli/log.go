@@ -76,7 +76,7 @@ func getLog(hostID, jobID string, client *cluster.Client, follow, init bool, std
 	attachClient, err := hostClient.Attach(attachReq, false)
 	if err != nil {
 		switch err {
-		case host.ErrJobNotRunning:
+		case host.ErrJobNotRunning, host.ErrAttached:
 			return nil
 		case cluster.ErrWouldWait:
 			return errors.New("no such job")
