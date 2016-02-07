@@ -196,11 +196,6 @@ type Event struct {
 	Job   *ActiveJob `json:"job,omitempty"`
 }
 
-type HostEvent struct {
-	Event  string `json:"event,omitempty"`
-	HostID string `json:"host_id,omitempty"`
-}
-
 type ActiveJob struct {
 	Job         *Job      `json:"job,omitempty"`
 	HostID      string    `json:"host_id,omitempty"`
