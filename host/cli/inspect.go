@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -53,13 +54,19 @@ func displayTime(ts time.Time) string {
 func printJobDesc(job *host.ActiveJob, out io.Writer, env bool) {
 	w := tabwriter.NewWriter(out, 1, 2, 2, ' ', 0)
 	defer w.Flush()
+
+	var exitStatus string
+	if job.ExitStatus != nil {
+		exitStatus = strconv.Itoa(*job.ExitStatus)
+	}
+
 	listRec(w, "ID", job.Job.ID)
 	listRec(w, "Entrypoint", strings.Join(job.Job.Config.Entrypoint, " "))
 	listRec(w, "Cmd", strings.Join(job.Job.Config.Cmd, " "))
 	listRec(w, "Status", job.Status)
 	listRec(w, "StartedAt", job.StartedAt)
 	listRec(w, "EndedAt", displayTime(job.EndedAt))
-	listRec(w, "ExitStatus", job.ExitStatus)
+	listRec(w, "ExitStatus", exitStatus)
 	listRec(w, "IP Address", job.InternalIP)
 	for k, v := range job.Job.Metadata {
 		listRec(w, k, v)
