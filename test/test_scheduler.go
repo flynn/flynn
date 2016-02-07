@@ -248,15 +248,37 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	t.Assert(hostID, c.Not(c.Equals), "")
 	debugf(t, "current controller app[%s] host[%s] job[%s]", app.ID, hostID, jobID)
 
-	// start another controller and wait for it to come up
-	watcher, err := s.controllerClient(t).WatchJobEvents("controller", release.ID)
+	// subscribe to service events, wait for current event
+	events := make(chan *discoverd.Event)
+	stream, err := s.discoverdClient(t).Service("controller").Watch(events)
 	t.Assert(err, c.IsNil)
-	defer watcher.Close()
+	defer stream.Close()
+	type serviceEvents map[discoverd.EventKind]int
+	wait := func(expected serviceEvents) {
+		actual := make(serviceEvents)
+	outer:
+		for {
+			select {
+			case event := <-events:
+				actual[event.Kind]++
+				for kind, count := range expected {
+					if actual[kind] != count {
+						continue outer
+					}
+				}
+				return
+			case <-time.After(scaleTimeout):
+				t.Fatal("timed out waiting for controller service event")
+			}
+		}
+	}
+	wait(serviceEvents{discoverd.EventKindCurrent: 1})
+
+	// start another controller and wait for it to come up
 	debug(t, "scaling the controller up")
 	formation.Processes["web"]++
 	t.Assert(s.controllerClient(t).PutFormation(formation), c.IsNil)
-	err = watcher.WaitFor(ct.JobEvents{"web": {ct.JobStateUp: 1}}, scaleTimeout, nil)
-	t.Assert(err, c.IsNil)
+	wait(serviceEvents{discoverd.EventKindUp: 1})
 
 	// kill the first controller and check the scheduler brings it back online
 	cc := cluster.NewClientWithServices(s.discoverdClient(t).Service)
@@ -264,15 +286,13 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	t.Assert(err, c.IsNil)
 	debug(t, "stopping job ", jobID)
 	t.Assert(hc.StopJob(jobID), c.IsNil)
-	err = watcher.WaitFor(ct.JobEvents{"web": {ct.JobStateDown: 1, ct.JobStateUp: 1}}, scaleTimeout, nil)
-	t.Assert(err, c.IsNil)
+	wait(serviceEvents{discoverd.EventKindUp: 1, discoverd.EventKindDown: 1})
 
 	// scale back down
 	debug(t, "scaling the controller down")
 	formation.Processes["web"]--
 	t.Assert(s.controllerClient(t).PutFormation(formation), c.IsNil)
-	err = watcher.WaitFor(ct.JobEvents{"web": {ct.JobStateDown: 1}}, scaleTimeout, nil)
-	t.Assert(err, c.IsNil)
+	wait(serviceEvents{discoverd.EventKindDown: 1})
 
 	// unset the suite's client so other tests use a new client
 	s.controller = nil
