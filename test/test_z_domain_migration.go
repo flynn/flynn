@@ -9,6 +9,7 @@ import (
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/pkg/dialer"
 )
 
 // Prefix the suite with "Z" so that it runs after all other tests because
@@ -103,7 +104,8 @@ func (s *ZDomainMigrationSuite) migrateDomain(t *c.C, dm *ct.DomainMigration) {
 	var doPing func(string, int)
 	doPing = func(component string, retriesRemaining int) {
 		url := fmt.Sprintf("http://%s.%s/ping", component, dm.Domain)
-		res, err := (&http.Client{}).Get(url)
+		httpClient := &http.Client{Transport: &http.Transport{Dial: dialer.Retry.Dial}}
+		res, err := httpClient.Get(url)
 		if (err != nil || res.StatusCode != 200) && retriesRemaining > 0 {
 			time.Sleep(100 * time.Millisecond)
 			doPing(component, retriesRemaining-1)
