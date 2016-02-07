@@ -97,7 +97,7 @@ loop:
 				break loop
 			}
 			debugf(t, "got deployment event: %s %s", e.JobType, e.JobState)
-		case <-time.After(15 * time.Second):
+		case <-time.After(60 * time.Second):
 			t.Fatal("timed out waiting for deployment event")
 		}
 	}
