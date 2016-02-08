@@ -221,6 +221,11 @@ WHERE artifact_id = (SELECT artifact_id FROM releases
 	data.Flannel.Artifact.URI = artifactURIs["flannel"]
 	data.Controller.Artifact.URI = artifactURIs["controller"]
 
+	sqlBuf.WriteString(fmt.Sprintf(`
+UPDATE artifacts SET uri = '%s'
+WHERE uri = (SELECT env->>'SLUGRUNNER_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive'));`,
+		artifactURIs["slugrunner"]))
+
 	for _, app := range []string{"gitreceive", "taffy"} {
 		for _, env := range []string{"slugbuilder", "slugrunner"} {
 			sqlBuf.WriteString(fmt.Sprintf(`
@@ -242,7 +247,7 @@ WHERE release_id = (SELECT release_id from apps WHERE name = '%s');`,
 
 	// start discoverd/flannel/postgres
 	cfg.Singleton = data.Postgres.Release.Env["SINGLETON"] == "true"
-	steps := bootstrap.Manifest{
+	state, err := bootstrap.Manifest{
 		step("discoverd", "run-app", &bootstrap.RunAppAction{
 			ExpandedFormation: data.Discoverd,
 		}),
@@ -256,8 +261,7 @@ WHERE release_id = (SELECT release_id from apps WHERE name = '%s');`,
 		step("postgres-wait", "wait", &bootstrap.WaitAction{
 			URL: "http://postgres-api.discoverd/ping",
 		}),
-	}
-	state, err := steps.Run(ch, cfg)
+	}.Run(ch, cfg)
 	if err != nil {
 		return err
 	}
@@ -300,21 +304,21 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 	data.Controller.Processes["web"] = 1
 	delete(data.Controller.Processes, "worker")
 	meta = bootstrap.StepMeta{ID: "controller", Action: "run-app"}
-	ch <- &bootstrap.StepInfo{StepMeta: meta, State: "start", Timestamp: time.Now().UTC()}
-	if err := (&bootstrap.RunAppAction{
-		ID:                "controller",
-		ExpandedFormation: data.Controller,
-	}).Run(state); err != nil {
-		ch <- &bootstrap.StepInfo{
-			StepMeta:  meta,
-			State:     "error",
-			Error:     err.Error(),
-			Err:       err,
-			Timestamp: time.Now().UTC(),
-		}
+
+	_, err = bootstrap.Manifest{
+		step("controller", "run-app", &bootstrap.RunAppAction{
+			ExpandedFormation: data.Controller,
+		}),
+		step("status", "status-check", &bootstrap.StatusCheckAction{
+			URL: "http://status-web.discoverd",
+		}),
+		step("cluster-monitor", "cluster-monitor", &bootstrap.ClusterMonitorAction{
+			Enabled: true,
+		}),
+	}.RunWithState(ch, state)
+	if err != nil {
 		return err
 	}
-	ch <- &bootstrap.StepInfo{StepMeta: meta, State: "done", Timestamp: time.Now().UTC()}
 
 	return nil
 }
