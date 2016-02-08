@@ -19,7 +19,6 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
-	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/random"
 )
@@ -112,12 +111,6 @@ type StepInfo struct {
 	Error     string      `json:"error,omitempty"`
 	Err       error       `json:"-"`
 	Timestamp time.Time   `json:"ts"`
-}
-
-var discoverdAttempts = attempt.Strategy{
-	Min:   5,
-	Total: 30 * time.Second,
-	Delay: 200 * time.Millisecond,
 }
 
 type Step struct {
@@ -221,12 +214,6 @@ func Run(manifestData []byte, ch chan<- *StepInfo, cfg Config) error {
 
 	_, err := manifest.Run(ch, cfg)
 	return err
-}
-
-var onlineHostAttempts = attempt.Strategy{
-	Min:   5,
-	Total: 5 * time.Second,
-	Delay: 200 * time.Millisecond,
 }
 
 func checkOnlineHosts(expected int, state *State, urls []string, timeoutSecs int) error {
