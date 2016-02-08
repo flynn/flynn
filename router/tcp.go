@@ -229,11 +229,11 @@ func (h *tcpSyncHandler) Set(data *router.Route) error {
 		service = &tcpService{
 			name: r.Service,
 			sc:   sc,
-			rp:   proxy.NewReverseProxy(sc.Addrs, nil, false),
 		}
 		h.l.services[r.Service] = service
 	}
 	r.service = service
+	r.rp = proxy.NewReverseProxy(service.sc.Addrs, nil, false)
 	if listener, ok := h.l.listeners[r.Port]; ok {
 		r.l = listener
 		delete(h.l.listeners, r.Port)
@@ -284,6 +284,7 @@ type tcpRoute struct {
 	l       net.Listener
 	addr    string
 	service *tcpService
+	rp      *proxy.ReverseProxy
 	mtx     sync.RWMutex
 }
 
@@ -306,7 +307,7 @@ func (r *tcpRoute) Serve(started chan<- error) {
 			break
 		}
 		r.mtx.RLock()
-		go r.service.ServeConn(conn)
+		go r.ServeConn(conn)
 		r.mtx.RUnlock()
 	}
 }
@@ -333,10 +334,8 @@ type tcpService struct {
 	name string
 	sc   cache.ServiceCache
 	refs int
-
-	rp *proxy.ReverseProxy
 }
 
-func (s *tcpService) ServeConn(conn net.Conn) {
-	s.rp.ServeConn(context.Background(), connutil.CloseNotifyConn(conn))
+func (r *tcpRoute) ServeConn(conn net.Conn) {
+	r.rp.ServeConn(context.Background(), connutil.CloseNotifyConn(conn))
 }

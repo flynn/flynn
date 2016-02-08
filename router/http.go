@@ -250,11 +250,11 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 		service = &httpService{
 			name: r.Service,
 			sc:   sc,
-			rp:   proxy.NewReverseProxy(sc.Addrs, h.l.cookieKey, r.Sticky),
 		}
 		h.l.services[r.Service] = service
 	}
 	service.refs++
+	r.rp = proxy.NewReverseProxy(service.sc.Addrs, h.l.cookieKey, r.Sticky)
 	r.service = service
 	h.l.routes[data.ID] = r
 	if data.Path == "/" {
@@ -402,7 +402,7 @@ func (s *HTTPListener) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	r.service.ServeHTTP(ctx, w, req)
+	r.ServeHTTP(ctx, w, req)
 }
 
 // A domain served by a listener, associated TLS certs,
@@ -412,6 +412,7 @@ type httpRoute struct {
 
 	keypair *tls.Certificate
 	service *httpService
+	rp      *proxy.ReverseProxy
 }
 
 // A service definition: name, and set of backends.
@@ -419,16 +420,14 @@ type httpService struct {
 	name string
 	sc   cache.ServiceCache
 	refs int
-
-	rp *proxy.ReverseProxy
 }
 
-func (s *httpService) ServeHTTP(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+func (r *httpRoute) ServeHTTP(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	start, _ := ctxhelper.StartTimeFromContext(ctx)
 	req.Header.Set("X-Request-Start", strconv.FormatInt(start.UnixNano()/int64(time.Millisecond), 10))
 	req.Header.Set("X-Request-Id", random.UUID())
 
-	s.rp.ServeHTTP(w, req)
+	r.rp.ServeHTTP(w, req)
 }
 
 func mustPortFromAddr(addr string) string {
