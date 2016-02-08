@@ -17,6 +17,20 @@ import (
 type attachHandler struct {
 	state   *State
 	backend Backend
+
+	// attached is a map of job IDs which are currently attached and is
+	// used to prevent multiple clients attaching to interactive jobs (i.e.
+	// ones which have DisableLog set)
+	attached    map[string]struct{}
+	attachedMtx sync.Mutex
+}
+
+func newAttachHandler(state *State, backend Backend) *attachHandler {
+	return &attachHandler{
+		state:    state,
+		backend:  backend,
+		attached: make(map[string]struct{}),
+	}
 }
 
 func (h *attachHandler) ServeHTTP(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -65,6 +79,22 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 		writeError(*job.Error)
 		return
 	}
+
+	// if the job has DisableLog set and is already attached, return an
+	// error, otherwise mark it as attached
+	h.attachedMtx.Lock()
+	if _, ok := h.attached[job.Job.ID]; ok && job.Job.Config.DisableLog {
+		h.attachedMtx.Unlock()
+		writeError(host.ErrAttached.Error())
+		return
+	}
+	h.attached[job.Job.ID] = struct{}{}
+	h.attachedMtx.Unlock()
+	defer func() {
+		h.attachedMtx.Lock()
+		delete(h.attached, job.Job.ID)
+		h.attachedMtx.Unlock()
+	}()
 
 	writeMtx := &sync.Mutex{}
 	writeMtx.Lock()
