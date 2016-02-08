@@ -8,6 +8,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/worker/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/cluster"
 )
@@ -99,7 +100,7 @@ func (d *DeployJob) Perform() error {
 		for {
 			select {
 			case <-d.stop:
-				return ErrStopped
+				return worker.ErrStopped
 			case event, ok := <-events:
 				if !ok {
 					log.Error("error creating service discovery watcher, channel closed", "service", proc.Service)
@@ -215,7 +216,7 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected ct.JobEvents, lo
 	for {
 		select {
 		case <-d.stop:
-			return ErrStopped
+			return worker.ErrStopped
 		case event := <-d.serviceEvents:
 			if event.Kind != discoverd.EventKindUp {
 				continue

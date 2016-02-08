@@ -81,7 +81,7 @@ func Stream(res *http.Response, outputCh interface{}) stream.Stream {
 }
 
 var connectAttempts = attempt.Strategy{
-	Total: 10 * time.Second,
+	Total: 20 * time.Second,
 	Delay: 100 * time.Millisecond,
 }
 

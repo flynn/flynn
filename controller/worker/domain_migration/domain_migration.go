@@ -11,6 +11,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/controller/worker/types"
 	"github.com/flynn/flynn/pkg/postgres"
 	"github.com/flynn/flynn/pkg/tlscert"
 	routerc "github.com/flynn/flynn/router/client"
@@ -33,6 +34,7 @@ type migration struct {
 	logger             log15.Logger
 	dm                 *ct.DomainMigration
 	activeRouteUpdates chan struct{}
+	stop               chan struct{}
 }
 
 func JobHandler(db *postgres.DB, client *controller.Client, logger log15.Logger) func(*que.Job) error {
@@ -58,6 +60,7 @@ func (c *context) HandleDomainMigration(job *que.Job) (err error) {
 		logger:             log,
 		dm:                 dm,
 		activeRouteUpdates: make(chan struct{}, maxActiveRouteUpdates),
+		stop:               job.Stop,
 	}
 
 	if err := m.db.QueryRow("SELECT old_domain, domain, old_tls_cert, tls_cert, created_at, finished_at FROM domain_migrations WHERE migration_id = $1", dm.ID).Scan(&dm.OldDomain, &dm.Domain, &dm.OldTLSCert, &dm.TLSCert, &dm.CreatedAt, &dm.FinishedAt); err != nil {
@@ -196,6 +199,8 @@ func (m *migration) waitForDeployment(app string) error {
 			err := errors.New("timed out waiting for deployment")
 			log.Error(err.Error())
 			return err
+		case <-m.stop:
+			return worker.ErrStopped
 		}
 	}
 }
