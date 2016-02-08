@@ -208,7 +208,7 @@ func (b *Provider) CreateSnapshot(vol volume.Volume) (volume.Volume, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := b.mountSnapshot(snap); err != nil {
+	if err := b.mountDataset(snap); err != nil {
 		return nil, err
 	}
 	b.volumes[id] = snap
@@ -232,24 +232,29 @@ func isMount(path string) (bool, error) {
 	return pathDev != parentDev, nil
 }
 
-func (b *Provider) mountSnapshot(vol *zfsVolume) error {
-	// mount the snapshot (readonly)
+func (b *Provider) mountDataset(vol *zfsVolume) error {
+	// mount the dataset, snapshots will be readonly
 	// 'zfs mount' currently can't perform on snapshots; seealso https://github.com/zfsonlinux/zfs/issues/173
 	alreadyMounted, err := isMount(vol.basemount)
 	if err != nil {
-		return fmt.Errorf("could not mount snapshot: %s", err)
+		return fmt.Errorf("could not mount: %s", err)
 	}
 	if alreadyMounted {
 		return nil
 	}
 	if err = os.MkdirAll(vol.basemount, 0644); err != nil {
-		return fmt.Errorf("could not mount snapshot: %s", err)
+		return fmt.Errorf("could not mount: %s", err)
 	}
 	var buf bytes.Buffer
-	cmd := exec.Command("mount", "-tzfs", vol.dataset.Name, vol.basemount)
+	var cmd *exec.Cmd
+	if vol.IsSnapshot() {
+		cmd = exec.Command("mount", "-tzfs", vol.dataset.Name, vol.basemount)
+	} else {
+		cmd = exec.Command("zfs", "mount", vol.dataset.Name)
+	}
 	cmd.Stderr = &buf
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("could not mount snapshot: %s (%s)", err, strings.TrimSpace(buf.String()))
+		return fmt.Errorf("could not mount: %s (%s)", err, strings.TrimSpace(buf.String()))
 	}
 	return nil
 }
@@ -405,7 +410,7 @@ func (b *Provider) ReceiveSnapshot(vol volume.Volume, input io.Reader) (volume.V
 		dataset:   snapds,
 		basemount: b.mountPath(id),
 	}
-	if err := b.mountSnapshot(snap); err != nil {
+	if err := b.mountDataset(snap); err != nil {
 		return nil, err
 	}
 	b.volumes[id] = snap
@@ -452,11 +457,8 @@ func (b *Provider) RestoreVolumeState(volInfo *volume.Info, data json.RawMessage
 		dataset:   dataset,
 		basemount: record.Basemount,
 	}
-	// zfs should have already remounted filesystems; special remount case for snapshots
-	if v.IsSnapshot() {
-		if err := b.mountSnapshot(v); err != nil {
-			return nil, err
-		}
+	if err := b.mountDataset(v); err != nil {
+		return nil, err
 	}
 	b.volumes[volInfo.ID] = v
 	return v, nil
