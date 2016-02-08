@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -45,16 +46,13 @@ func (s *TCPTestServer) Serve() {
 
 func (s *TCPTestServer) Close() error { return s.l.Close() }
 
-const firstTCPPort, lastTCPPort = 10001, 10010
-
 func (s *S) newTCPListener(t testutil.TestingT) *TCPListener {
 	l := &TCPListener{
 		IP:        "127.0.0.1",
-		startPort: firstTCPPort,
-		endPort:   lastTCPPort,
 		ds:        NewPostgresDataStore("tcp", s.pgx),
 		discoverd: s.discoverd,
 	}
+	l.startPort, l.endPort = allocatePortRange(10)
 	if err := l.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +73,10 @@ func assertTCPConn(c *C, addr, prefix string) {
 }
 
 func (s *S) TestAddTCPRoute(c *C) {
-	const addr, port, portInt = "127.0.0.1:45000", "45000", 45000
+	portInt := allocatePort()
+	port := strconv.Itoa(portInt)
+	addr := "127.0.0.1:" + port
+
 	srv1 := NewTCPTestServer("1")
 	srv2 := NewTCPTestServer("2")
 	defer srv1.Close()
@@ -117,7 +118,8 @@ func addTCPRoute(c *C, l *TCPListener, port int) *router.TCPRoute {
 }
 
 func (s *S) TestInitialTCPSync(c *C) {
-	const addr, port = "127.0.0.1:45000", 45000
+	port := allocatePort()
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	l := s.newTCPListener(c)
 	addTCPRoute(c, l, port)
 	l.Close()
@@ -140,7 +142,7 @@ func (s *S) TestTCPPortAllocation(c *C) {
 		ports := make([]string, 0, 10)
 		for j := 0; j < 10; j++ {
 			route := addTCPRoute(c, l, 0)
-			c.Assert(route.Port >= firstTCPPort && route.Port <= lastTCPPort, Equals, true)
+			c.Assert(route.Port >= l.startPort && route.Port <= l.endPort, Equals, true)
 
 			port := strconv.Itoa(route.Port)
 			ports = append(ports, route.ID)
