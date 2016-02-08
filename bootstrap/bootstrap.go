@@ -135,14 +135,11 @@ type Config struct {
 
 type Manifest []Step
 
-func (m Manifest) Run(ch chan<- *StepInfo, cfg Config) (state *State, err error) {
-	var meta StepMeta
-	defer func() {
-		if err != nil {
-			ch <- &StepInfo{StepMeta: meta, State: "error", Error: err.Error(), Err: err, Timestamp: time.Now().UTC()}
-		}
-	}()
+func stepError(ch chan<- *StepInfo, meta StepMeta, err error) {
+	ch <- &StepInfo{StepMeta: meta, State: "error", Error: err.Error(), Err: err, Timestamp: time.Now().UTC()}
+}
 
+func (m Manifest) Run(ch chan<- *StepInfo, cfg Config) (state *State, err error) {
 	if cfg.MinHosts == 2 {
 		return nil, errors.New("the minimum number of hosts for a multi-node cluster is 3, min-hosts=2 is invalid")
 	}
@@ -154,6 +151,7 @@ func (m Manifest) Run(ch chan<- *StepInfo, cfg Config) (state *State, err error)
 		MinHosts:   cfg.MinHosts,
 		ClusterURL: cfg.ClusterURL,
 	}
+
 	var hostURLs []string
 	if len(cfg.IPs) > 0 {
 		hostURLs = make([]string, len(cfg.IPs))
@@ -162,28 +160,32 @@ func (m Manifest) Run(ch chan<- *StepInfo, cfg Config) (state *State, err error)
 		}
 	}
 
-	meta = StepMeta{ID: "online-hosts", Action: "check"}
+	meta := StepMeta{ID: "online-hosts", Action: "check"}
 	ch <- &StepInfo{StepMeta: meta, State: "start", Timestamp: time.Now().UTC()}
 	if err := checkOnlineHosts(cfg.MinHosts, state, hostURLs, cfg.Timeout); err != nil {
+		stepError(ch, meta, err)
 		return nil, err
 	}
 	ch <- &StepInfo{StepMeta: meta, State: "done", Timestamp: time.Now().UTC()}
 
+	return m.RunWithState(ch, state)
+}
+
+func (m Manifest) RunWithState(ch chan<- *StepInfo, state *State) (*State, error) {
 	for _, s := range m {
-		meta = s.StepMeta
-		ch <- &StepInfo{StepMeta: meta, State: "start", Timestamp: time.Now().UTC()}
+		ch <- &StepInfo{StepMeta: s.StepMeta, State: "start", Timestamp: time.Now().UTC()}
 
 		if err := s.Run(state); err != nil {
+			stepError(ch, s.StepMeta, err)
 			return nil, err
 		}
 
-		si := &StepInfo{StepMeta: meta, State: "done", Timestamp: time.Now().UTC()}
-		if data, ok := state.StepData[meta.ID]; ok {
+		si := &StepInfo{StepMeta: s.StepMeta, State: "done", Timestamp: time.Now().UTC()}
+		if data, ok := state.StepData[s.StepMeta.ID]; ok {
 			si.StepData = data
 		}
 		ch <- si
 	}
-
 	return state, nil
 }
 
