@@ -221,6 +221,11 @@ WHERE artifact_id = (SELECT artifact_id FROM releases
 	data.Flannel.Artifact.URI = artifactURIs["flannel"]
 	data.Controller.Artifact.URI = artifactURIs["controller"]
 
+	sqlBuf.WriteString(fmt.Sprintf(`
+UPDATE artifacts SET uri = '%s'
+WHERE uri = (SELECT env->>'SLUGRUNNER_IMAGE_URI' FROM releases WHERE release_id = (SELECT release_id FROM apps WHERE name = 'gitreceive'));`,
+		artifactURIs["slugrunner"]))
+
 	for _, app := range []string{"gitreceive", "taffy"} {
 		for _, env := range []string{"slugbuilder", "slugrunner"} {
 			sqlBuf.WriteString(fmt.Sprintf(`
