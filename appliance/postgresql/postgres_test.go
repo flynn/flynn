@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -38,7 +40,7 @@ func (PostgresSuite) TestSingletonPrimary(c *C) {
 	c.Assert(err, IsNil)
 	defer pg.Stop()
 
-	conn := connect(c, 0, "postgres")
+	conn := connect(c, pg, "postgres")
 	_, err = conn.Exec("CREATE DATABASE test")
 	conn.Close()
 	c.Assert(err, IsNil)
@@ -53,7 +55,7 @@ func (PostgresSuite) TestSingletonPrimary(c *C) {
 	c.Assert(pg.Start(), IsNil)
 	defer pg.Stop()
 
-	conn = connect(c, 0, "test")
+	conn = connect(c, pg, "test")
 	_, err = conn.Exec("CREATE DATABASE foo")
 	conn.Close()
 	c.Assert(err, IsNil)
@@ -62,28 +64,31 @@ func (PostgresSuite) TestSingletonPrimary(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func instance(n int) *discoverd.Instance {
-	id := fmt.Sprintf("node%d", n)
+func instance(pg state.Postgres) *discoverd.Instance {
+	p := pg.(*Postgres)
 	return &discoverd.Instance{
-		ID:   id,
-		Addr: fmt.Sprintf("127.0.0.1:5432%d", n),
-		Meta: map[string]string{"POSTGRES_ID": id},
+		ID:   p.id,
+		Addr: "127.0.0.1:" + p.port,
+		Meta: map[string]string{"POSTGRES_ID": p.id},
 	}
 }
+
+var newPort uint32 = 0
 
 func newPostgres(c *C, n int) state.Postgres {
 	return NewPostgres(Config{
 		ID:        fmt.Sprintf("node%d", n),
 		DataDir:   c.MkDir(),
-		Port:      fmt.Sprintf("5432%d", n),
+		Port:      fmt.Sprintf("5432%d", atomic.AddUint32(&newPort, 1)),
 		OpTimeout: 30 * time.Second,
 	})
 }
 
-func connect(c *C, n int, db string) *pgx.Conn {
+func connect(c *C, s state.Postgres, db string) *pgx.Conn {
+	port, _ := strconv.Atoi(s.(*Postgres).port)
 	conn, err := pgx.Connect(pgx.ConnConfig{
 		Host:     "127.0.0.1",
-		Port:     54320 + uint16(n),
+		Port:     uint16(port),
 		User:     "flynn",
 		Password: "password",
 		Database: db,
@@ -92,12 +97,12 @@ func connect(c *C, n int, db string) *pgx.Conn {
 	return conn
 }
 
-func pgConfig(role state.Role, upstream, downstream int) *state.PgConfig {
+func pgConfig(role state.Role, upstream, downstream state.Postgres) *state.PgConfig {
 	c := &state.PgConfig{Role: role}
-	if upstream > 0 {
+	if upstream != nil {
 		c.Upstream = instance(upstream)
 	}
-	if downstream > 0 {
+	if downstream != nil {
 		c.Downstream = instance(downstream)
 	}
 	return c
@@ -192,23 +197,26 @@ func waitRecovered(c *C, conn *pgx.Conn) {
 }
 
 func (PostgresSuite) TestIntegration(c *C) {
+	node1 := newPostgres(c, 1) // primary
+	node2 := newPostgres(c, 2) // sync
+	node3 := newPostgres(c, 3) // async
+	node4 := newPostgres(c, 4) // second async
+
 	// Start a primary
-	node1 := newPostgres(c, 1)
-	err := node1.Reconfigure(pgConfig(state.RolePrimary, 0, 2))
+	err := node1.Reconfigure(pgConfig(state.RolePrimary, nil, node2))
 	c.Assert(err, IsNil)
 	c.Assert(node1.Start(), IsNil)
 	defer node1.Stop()
 
 	// try to write to primary and make sure it's read-only
-	node1Conn := connect(c, 1, "postgres")
+	node1Conn := connect(c, node1, "postgres")
 	defer node1Conn.Close()
 	_, err = node1Conn.Exec("CREATE DATABASE foo")
 	c.Assert(err, NotNil)
 	c.Assert(err.(pgx.PgError).Code, Equals, "25006") // can't write while read only
 
 	// Start a sync
-	node2 := newPostgres(c, 2)
-	err = node2.Reconfigure(pgConfig(state.RoleSync, 1, 3))
+	err = node2.Reconfigure(pgConfig(state.RoleSync, node1, node3))
 	c.Assert(err, IsNil)
 	c.Assert(node2.Start(), IsNil)
 	defer node2.Stop()
@@ -241,14 +249,13 @@ func (PostgresSuite) TestIntegration(c *C) {
 	node1Conn.Close()
 
 	// query the sync and see the database
-	node2Conn := connect(c, 2, "postgres")
+	node2Conn := connect(c, node2, "postgres")
 	defer node2Conn.Close()
 	waitRow(c, node2Conn, 1)
 	assertRecovery(c, node2Conn)
 
 	// Start an async
-	node3 := newPostgres(c, 3)
-	err = node3.Reconfigure(pgConfig(state.RoleAsync, 2, 4))
+	err = node3.Reconfigure(pgConfig(state.RoleAsync, node2, node4))
 	c.Assert(err, IsNil)
 	c.Assert(node3.Start(), IsNil)
 	defer node3.Stop()
@@ -256,7 +263,7 @@ func (PostgresSuite) TestIntegration(c *C) {
 	// check it catches up
 	waitReplSync(c, node2, 3)
 
-	node3Conn := connect(c, 3, "postgres")
+	node3Conn := connect(c, node3, "postgres")
 	defer node3Conn.Close()
 
 	// check that data replicated successfully
@@ -265,8 +272,7 @@ func (PostgresSuite) TestIntegration(c *C) {
 	assertDownstream(c, node2Conn, 3)
 
 	// Start a second async
-	node4 := newPostgres(c, 4)
-	err = node4.Reconfigure(pgConfig(state.RoleAsync, 3, 0))
+	err = node4.Reconfigure(pgConfig(state.RoleAsync, node3, nil))
 	c.Assert(err, IsNil)
 	c.Assert(node4.Start(), IsNil)
 	defer node4.Stop()
@@ -274,7 +280,7 @@ func (PostgresSuite) TestIntegration(c *C) {
 	// check it catches up
 	waitReplSync(c, node3, 4)
 
-	node4Conn := connect(c, 4, "postgres")
+	node4Conn := connect(c, node4, "postgres")
 	defer node4Conn.Close()
 
 	// check that data replicated successfully
@@ -284,9 +290,9 @@ func (PostgresSuite) TestIntegration(c *C) {
 
 	// promote node2 to primary
 	c.Assert(node1.Stop(), IsNil)
-	err = node2.Reconfigure(pgConfig(state.RolePrimary, 0, 3))
+	err = node2.Reconfigure(pgConfig(state.RolePrimary, nil, node3))
 	c.Assert(err, IsNil)
-	err = node3.Reconfigure(pgConfig(state.RoleSync, 2, 4))
+	err = node3.Reconfigure(pgConfig(state.RoleSync, node2, node4))
 	c.Assert(err, IsNil)
 
 	// wait for recovery and read-write transactions to come up
@@ -306,9 +312,9 @@ func (PostgresSuite) TestIntegration(c *C) {
 
 	//  promote node3 to primary
 	c.Assert(node2.Stop(), IsNil)
-	err = node3.Reconfigure(pgConfig(state.RolePrimary, 0, 4))
+	err = node3.Reconfigure(pgConfig(state.RolePrimary, nil, node4))
 	c.Assert(err, IsNil)
-	err = node4.Reconfigure(pgConfig(state.RoleSync, 3, 0))
+	err = node4.Reconfigure(pgConfig(state.RoleSync, node3, nil))
 
 	// check replication
 	waitRecovered(c, node3Conn)
@@ -321,33 +327,33 @@ func (PostgresSuite) TestIntegration(c *C) {
 func (PostgresSuite) TestRemoveNodes(c *C) {
 	// start a chain of four nodes
 	node1 := newPostgres(c, 1)
-	err := node1.Reconfigure(pgConfig(state.RolePrimary, 0, 2))
+	node2 := newPostgres(c, 2)
+	node3 := newPostgres(c, 3)
+	node4 := newPostgres(c, 4)
+	err := node1.Reconfigure(pgConfig(state.RolePrimary, nil, node2))
 	c.Assert(err, IsNil)
 	c.Assert(node1.Start(), IsNil)
 	defer node1.Stop()
 
-	node2 := newPostgres(c, 2)
-	err = node2.Reconfigure(pgConfig(state.RoleSync, 1, 0))
+	err = node2.Reconfigure(pgConfig(state.RoleSync, node1, nil))
 	c.Assert(err, IsNil)
 	c.Assert(node2.Start(), IsNil)
 	defer node2.Stop()
 
-	node3 := newPostgres(c, 3)
-	err = node3.Reconfigure(pgConfig(state.RoleAsync, 2, 0))
+	err = node3.Reconfigure(pgConfig(state.RoleAsync, node2, nil))
 	c.Assert(err, IsNil)
 	c.Assert(node3.Start(), IsNil)
 	defer node3.Stop()
 
-	node4 := newPostgres(c, 4)
-	err = node4.Reconfigure(pgConfig(state.RoleAsync, 3, 0))
+	err = node4.Reconfigure(pgConfig(state.RoleAsync, node3, nil))
 	c.Assert(err, IsNil)
 	c.Assert(node4.Start(), IsNil)
 	defer node4.Stop()
 
 	// wait for cluster to come up
-	node1Conn := connect(c, 1, "postgres")
+	node1Conn := connect(c, node1, "postgres")
 	defer node1Conn.Close()
-	node4Conn := connect(c, 4, "postgres")
+	node4Conn := connect(c, node4, "postgres")
 	defer node4Conn.Close()
 	waitReadWrite(c, node1Conn)
 	createTable(c, node1Conn)
@@ -357,10 +363,10 @@ func (PostgresSuite) TestRemoveNodes(c *C) {
 	// remove first async
 	c.Assert(node3.Stop(), IsNil)
 	// reconfigure second async
-	err = node4.Reconfigure(pgConfig(state.RoleAsync, 2, 0))
+	err = node4.Reconfigure(pgConfig(state.RoleAsync, node2, nil))
 	c.Assert(err, IsNil)
 	// run query
-	node4Conn = connect(c, 4, "postgres")
+	node4Conn = connect(c, node4, "postgres")
 	defer node4Conn.Close()
 	insertRow(c, node1Conn, 2)
 	waitRow(c, node4Conn, 2)
@@ -368,14 +374,14 @@ func (PostgresSuite) TestRemoveNodes(c *C) {
 
 	// remove sync and promote node4 to sync
 	c.Assert(node2.Stop(), IsNil)
-	err = node1.Reconfigure(pgConfig(state.RolePrimary, 0, 4))
+	err = node1.Reconfigure(pgConfig(state.RolePrimary, nil, node4))
 	c.Assert(err, IsNil)
-	err = node4.Reconfigure(pgConfig(state.RoleSync, 1, 0))
+	err = node4.Reconfigure(pgConfig(state.RoleSync, node1, nil))
 	c.Assert(err, IsNil)
 
 	waitReadWrite(c, node1Conn)
 	insertRow(c, node1Conn, 3)
-	node4Conn = connect(c, 4, "postgres")
+	node4Conn = connect(c, node4, "postgres")
 	defer node4Conn.Close()
 	waitRow(c, node4Conn, 3)
 }

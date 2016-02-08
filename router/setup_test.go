@@ -4,6 +4,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -245,4 +246,15 @@ func removeRouteAssertErr(c *C, l Listener, id string) error {
 	err := l.RemoveRoute(id)
 	c.Assert(err, NotNil)
 	return err
+}
+
+var portAlloc uint32 = 45000
+
+func allocatePort() int {
+	return int(atomic.AddUint32(&portAlloc, 1))
+}
+
+func allocatePortRange(count int) (int, int) {
+	max := int(atomic.AddUint32(&portAlloc, uint32(count)))
+	return max - (count - 1), max
 }
