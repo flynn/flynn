@@ -237,9 +237,9 @@ func (s *State) persist(jobID string) {
 			jobsBucket.Delete([]byte(jobID))
 		}
 
-		// save the opaque blob the backend provides regarding this job
+		// save the opaque blob the backend provides regarding this job if it is starting/running
 		if backend, ok := s.backend.(JobStateSaver); ok {
-			if _, exists := s.jobs[jobID]; exists {
+			if job, exists := s.jobs[jobID]; exists && (job.Status == host.StatusStarting || job.Status == host.StatusRunning) {
 				backendState, err := backend.MarshalJobState(jobID)
 				if err != nil {
 					return fmt.Errorf("backend failed to serialize job state: %s", err)
