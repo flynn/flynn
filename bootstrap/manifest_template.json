@@ -346,7 +346,8 @@
         "app": {
           "host_network": true,
           "cmd": ["-http-port", "80", "-https-port", "443", "-tcp-range-start", "3000", "-tcp-range-end", "3500"],
-          "omni": true
+          "omni": true,
+          "service": "router-api"
         }
       }
     },
