@@ -382,23 +382,23 @@
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/client",
-			"Rev": "69ec51cc76d2b025e819174cb073c46f1629390e"
+			"Rev": "6093a53dc624b89fd1c03f6a729b9b0c81e92c07"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/data",
-			"Rev": "69ec51cc76d2b025e819174cb073c46f1629390e"
+			"Rev": "6093a53dc624b89fd1c03f6a729b9b0c81e92c07"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/keys",
-			"Rev": "69ec51cc76d2b025e819174cb073c46f1629390e"
+			"Rev": "6093a53dc624b89fd1c03f6a729b9b0c81e92c07"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/signed",
-			"Rev": "69ec51cc76d2b025e819174cb073c46f1629390e"
+			"Rev": "6093a53dc624b89fd1c03f6a729b9b0c81e92c07"
 		},
 		{
 			"ImportPath": "github.com/flynn/go-tuf/util",
-			"Rev": "69ec51cc76d2b025e819174cb073c46f1629390e"
+			"Rev": "6093a53dc624b89fd1c03f6a729b9b0c81e92c07"
 		},
 		{
 			"ImportPath": "github.com/flynn/oauth2",

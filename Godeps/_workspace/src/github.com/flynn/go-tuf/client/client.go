@@ -267,22 +267,21 @@ func (c *Client) getLocalMeta() error {
 		if err := json.Unmarshal(s.Signed, root); err != nil {
 			return err
 		}
-		db := keys.NewDB()
+		c.db = keys.NewDB()
 		for id, k := range root.Keys {
-			if err := db.AddKey(id, k); err != nil {
+			if err := c.db.AddKey(id, k); err != nil {
 				return err
 			}
 		}
 		for name, role := range root.Roles {
-			if err := db.AddRole(name, role); err != nil {
+			if err := c.db.AddRole(name, role); err != nil {
 				return err
 			}
 		}
-		if err := signed.Verify(s, "root", 0, db); err != nil {
+		if err := signed.Verify(s, "root", 0, c.db); err != nil {
 			return err
 		}
 		c.consistentSnapshot = root.ConsistentSnapshot
-		c.db = db
 	} else {
 		return ErrNoRootKeys
 	}
