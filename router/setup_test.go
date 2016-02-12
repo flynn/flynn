@@ -248,7 +248,7 @@ func removeRouteAssertErr(c *C, l Listener, id string) error {
 	return err
 }
 
-var portAlloc uint32 = 45000
+var portAlloc uint32 = 4500
 
 func allocatePort() int {
 	return int(atomic.AddUint32(&portAlloc, 1))
