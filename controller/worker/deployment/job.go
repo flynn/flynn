@@ -218,7 +218,7 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected ct.JobEvents, lo
 		case <-d.stop:
 			return worker.ErrStopped
 		case event := <-d.serviceEvents:
-			if event.Kind != discoverd.EventKindUp {
+			if !event.Kind.Any(discoverd.EventKindUp, discoverd.EventKindUpdate) {
 				continue
 			}
 			if id, ok := event.Instance.Meta["FLYNN_APP_ID"]; !ok || id != d.AppID {
