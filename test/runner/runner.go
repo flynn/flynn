@@ -120,7 +120,7 @@ type Runner struct {
 
 var args *arg.Args
 
-const maxConcurrentBuilds = 2
+const maxConcurrentBuilds = 1
 
 func init() {
 	args = arg.Parse()
