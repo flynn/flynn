@@ -28,7 +28,7 @@ func (PostgresSuite) TestSingletonPrimary(c *C) {
 		ID:        "node1",
 		Singleton: true,
 		DataDir:   c.MkDir(),
-		Port:      "54320",
+		Port:      "6500",
 		OpTimeout: 30 * time.Second,
 	}
 
@@ -73,13 +73,13 @@ func instance(pg state.Postgres) *discoverd.Instance {
 	}
 }
 
-var newPort uint32 = 0
+var newPort uint32 = 6510
 
 func newPostgres(c *C, n int) state.Postgres {
 	return NewPostgres(Config{
 		ID:        fmt.Sprintf("node%d", n),
 		DataDir:   c.MkDir(),
-		Port:      fmt.Sprintf("5432%d", atomic.AddUint32(&newPort, 1)),
+		Port:      strconv.Itoa(int(atomic.AddUint32(&newPort, 1))),
 		OpTimeout: 30 * time.Second,
 	})
 }
