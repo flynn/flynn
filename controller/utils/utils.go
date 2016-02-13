@@ -43,10 +43,6 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 	job := &host.Job{
 		ID:       id,
 		Metadata: metadata,
-		Artifact: host.Artifact{
-			Type: f.Artifact.Type,
-			URI:  f.Artifact.URI,
-		},
 		Config: host.ContainerConfig{
 			Cmd:         t.Cmd,
 			Env:         env,
@@ -60,6 +56,15 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 	}
 	if len(t.Entrypoint) > 0 {
 		job.Config.Entrypoint = t.Entrypoint
+	}
+	if f.ImageArtifact != nil {
+		job.ImageArtifact = f.ImageArtifact.HostArtifact()
+	}
+	if len(f.FileArtifacts) > 0 {
+		job.FileArtifacts = make([]*host.Artifact, len(f.FileArtifacts))
+		for i, artifact := range f.FileArtifacts {
+			job.FileArtifacts[i] = artifact.HostArtifact()
+		}
 	}
 	job.Config.Ports = make([]host.Port, len(t.Ports))
 	for i, p := range t.Ports {
@@ -113,9 +118,18 @@ func ExpandFormation(c ControllerClient, f *ct.Formation) (*ct.ExpandedFormation
 		return nil, fmt.Errorf("error getting release: %s", err)
 	}
 
-	artifact, err := c.GetArtifact(release.ArtifactID)
+	imageArtifact, err := c.GetArtifact(release.ImageArtifactID())
 	if err != nil {
-		return nil, fmt.Errorf("error getting artifact: %s", err)
+		return nil, fmt.Errorf("error getting image artifact: %s", err)
+	}
+
+	fileArtifacts := make([]*ct.Artifact, len(release.FileArtifactIDs()))
+	for i, fileArtifactID := range release.FileArtifactIDs() {
+		artifact, err := c.GetArtifact(fileArtifactID)
+		if err != nil {
+			return nil, fmt.Errorf("error getting file artifact: %s", err)
+		}
+		fileArtifacts[i] = artifact
 	}
 
 	procs := make(map[string]int)
@@ -124,12 +138,13 @@ func ExpandFormation(c ControllerClient, f *ct.Formation) (*ct.ExpandedFormation
 	}
 
 	ef := &ct.ExpandedFormation{
-		App:       app,
-		Release:   release,
-		Artifact:  artifact,
-		Processes: procs,
-		Tags:      f.Tags,
-		UpdatedAt: time.Now(),
+		App:           app,
+		Release:       release,
+		ImageArtifact: imageArtifact,
+		FileArtifacts: fileArtifacts,
+		Processes:     procs,
+		Tags:          f.Tags,
+		UpdatedAt:     time.Now(),
 	}
 	if f.UpdatedAt != nil {
 		ef.UpdatedAt = *f.UpdatedAt

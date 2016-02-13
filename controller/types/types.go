@@ -15,12 +15,13 @@ import (
 const RouteParentRefPrefix = "controller/apps/"
 
 type ExpandedFormation struct {
-	App       *App                         `json:"app,omitempty"`
-	Release   *Release                     `json:"release,omitempty"`
-	Artifact  *Artifact                    `json:"artifact,omitempty"`
-	Processes map[string]int               `json:"processes,omitempty"`
-	Tags      map[string]map[string]string `json:"tags,omitempty"`
-	UpdatedAt time.Time                    `json:"updated_at,omitempty"`
+	App           *App                         `json:"app,omitempty"`
+	Release       *Release                     `json:"release,omitempty"`
+	ImageArtifact *Artifact                    `json:"artifact,omitempty"`
+	FileArtifacts []*Artifact                  `json:"file_artifacts,omitempty"`
+	Processes     map[string]int               `json:"processes,omitempty"`
+	Tags          map[string]map[string]string `json:"tags,omitempty"`
+	UpdatedAt     time.Time                    `json:"updated_at,omitempty"`
 }
 
 type App struct {
@@ -46,12 +47,37 @@ func (a *App) Critical() bool {
 }
 
 type Release struct {
-	ID         string                 `json:"id,omitempty"`
-	ArtifactID string                 `json:"artifact,omitempty"`
-	Env        map[string]string      `json:"env,omitempty"`
-	Meta       map[string]string      `json:"meta,omitempty"`
-	Processes  map[string]ProcessType `json:"processes,omitempty"`
-	CreatedAt  *time.Time             `json:"created_at,omitempty"`
+	ID          string                 `json:"id,omitempty"`
+	ArtifactIDs []string               `json:"artifacts,omitempty"`
+	Env         map[string]string      `json:"env,omitempty"`
+	Meta        map[string]string      `json:"meta,omitempty"`
+	Processes   map[string]ProcessType `json:"processes,omitempty"`
+	CreatedAt   *time.Time             `json:"created_at,omitempty"`
+
+	// LegacyArtifactID is to support old clients which expect releases
+	// to have a single ArtifactID
+	LegacyArtifactID string `json:"artifact,omitempty"`
+}
+
+func (r *Release) ImageArtifactID() string {
+	if len(r.ArtifactIDs) > 0 {
+		return r.ArtifactIDs[0]
+	}
+	return ""
+}
+
+func (r *Release) SetImageArtifactID(id string) {
+	if len(r.ArtifactIDs) == 0 {
+		r.ArtifactIDs = []string{id}
+	}
+	r.ArtifactIDs[0] = id
+}
+
+func (r *Release) FileArtifactIDs() []string {
+	if len(r.ArtifactIDs) < 1 {
+		return nil
+	}
+	return r.ArtifactIDs[1:len(r.ArtifactIDs)]
 }
 
 type ProcessType struct {
@@ -74,10 +100,18 @@ type Port struct {
 }
 
 type Artifact struct {
-	ID        string     `json:"id,omitempty"`
-	Type      string     `json:"type,omitempty"`
-	URI       string     `json:"uri,omitempty"`
-	CreatedAt *time.Time `json:"created_at,omitempty"`
+	ID        string            `json:"id,omitempty"`
+	Type      host.ArtifactType `json:"type,omitempty"`
+	URI       string            `json:"uri,omitempty"`
+	Meta      map[string]string `json:"meta,omitempty"`
+	CreatedAt *time.Time        `json:"created_at,omitempty"`
+}
+
+func (a *Artifact) HostArtifact() *host.Artifact {
+	return &host.Artifact{
+		URI:  a.URI,
+		Type: a.Type,
+	}
 }
 
 type Formation struct {

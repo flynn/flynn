@@ -17,6 +17,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/backup"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
@@ -110,7 +111,7 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 		}
 	}
 
-	artifact, err := client.GetArtifact(release.ArtifactID)
+	artifact, err := client.GetArtifact(release.ImageArtifactID())
 	if err != nil && err != controller.ErrNotFound {
 		return fmt.Errorf("error retrieving artifact: %s", err)
 	} else if err == nil {
@@ -244,7 +245,7 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 				return fmt.Errorf("error decoding release: %s", err)
 			}
 			release.ID = ""
-			release.ArtifactID = ""
+			release.ArtifactIDs = nil
 		case "artifact.json":
 			artifact = &ct.Artifact{}
 			if err := json.NewDecoder(tr).Decode(artifact); err != nil {
@@ -425,7 +426,7 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 			return fmt.Errorf("unable to retrieve gitreceive release: %s", err)
 		}
 		artifact = &ct.Artifact{
-			Type: "docker",
+			Type: host.ArtifactTypeDocker,
 			URI:  gitreceiveRelease.Env["SLUGRUNNER_IMAGE_URI"],
 		}
 		if artifact.URI == "" {
@@ -438,7 +439,7 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 		if err := client.CreateArtifact(artifact); err != nil {
 			return fmt.Errorf("error creating artifact: %s", err)
 		}
-		release.ArtifactID = artifact.ID
+		release.ArtifactIDs = []string{artifact.ID}
 	}
 
 	if release != nil {

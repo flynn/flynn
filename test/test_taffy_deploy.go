@@ -119,7 +119,6 @@ func (s *TaffyDeploySuite) TestDeploys(t *c.C) {
 	newRelease, err := client.GetAppRelease(app.ID)
 	t.Assert(err, c.IsNil)
 	t.Assert(newRelease.ID, c.Not(c.Equals), release.ID)
-	env["SLUG_URL"] = newRelease.Env["SLUG_URL"] // SLUG_URL will be different
 	t.Assert(env, c.DeepEquals, newRelease.Env)
 	t.Assert(release.Processes, c.DeepEquals, newRelease.Processes)
 	t.Assert(newRelease, c.NotNil)

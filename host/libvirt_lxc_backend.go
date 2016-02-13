@@ -353,7 +353,7 @@ func (l *LibvirtLXCBackend) SetDefaultEnv(k, v string) {
 
 func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error) {
 	g := grohl.NewContext(grohl.Data{"backend": "libvirt-lxc", "fn": "run", "job.id": job.ID})
-	g.Log(grohl.Data{"at": "start", "job.artifact.uri": job.Artifact.URI, "job.cmd": job.Config.Cmd})
+	g.Log(grohl.Data{"at": "start", "job.artifact.uri": job.ImageArtifact.URI, "job.cmd": job.Config.Cmd})
 
 	defer func() {
 		if err != nil {
@@ -398,12 +398,12 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	}()
 
 	g.Log(grohl.Data{"at": "pull_image"})
-	layers, err := l.pinkertonPull(job.Artifact.URI)
+	layers, err := l.pinkertonPull(job.ImageArtifact.URI)
 	if err != nil {
 		g.Log(grohl.Data{"at": "pull_image", "status": "error", "err": err})
 		return err
 	}
-	imageID, err := pinkerton.ImageID(job.Artifact.URI)
+	imageID, err := pinkerton.ImageID(job.ImageArtifact.URI)
 	if err == pinkerton.ErrNoImageID && len(layers) > 0 {
 		imageID = layers[len(layers)-1].ID
 	} else if err != nil {

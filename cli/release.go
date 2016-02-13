@@ -12,6 +12,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/types"
 )
 
 func init() {
@@ -150,13 +151,13 @@ func runReleaseShow(args *docopt.Args, client *controller.Client) error {
 	if args.Bool["--json"] {
 		return json.NewEncoder(os.Stdout).Encode(release)
 	}
-	var artifactDesc string
-	if release.ArtifactID != "" {
-		artifact, err := client.GetArtifact(release.ArtifactID)
+	var artifacts []string
+	for _, id := range release.ArtifactIDs {
+		artifact, err := client.GetArtifact(id)
 		if err != nil {
 			return err
 		}
-		artifactDesc = fmt.Sprintf("%s+%s", artifact.Type, artifact.URI)
+		artifacts = append(artifacts, fmt.Sprintf("%s+%s", artifact.Type, artifact.URI))
 	}
 	types := make([]string, 0, len(release.Processes))
 	for typ := range release.Processes {
@@ -165,7 +166,9 @@ func runReleaseShow(args *docopt.Args, client *controller.Client) error {
 	w := tabwriter.NewWriter(os.Stdout, 1, 2, 2, ' ', 0)
 	defer w.Flush()
 	listRec(w, "ID:", release.ID)
-	listRec(w, "Artifact:", artifactDesc)
+	for i, artifact := range artifacts {
+		listRec(w, fmt.Sprintf("Artifact[%d]:", i), artifact)
+	}
 	listRec(w, "Process Types:", strings.Join(types, ", "))
 	listRec(w, "Created At:", release.CreatedAt)
 	for k, v := range release.Env {
@@ -187,14 +190,14 @@ func runReleaseAddDocker(args *docopt.Args, client *controller.Client) error {
 	}
 
 	artifact := &ct.Artifact{
-		Type: "docker",
+		Type: host.ArtifactTypeDocker,
 		URI:  args.String["<uri>"],
 	}
 	if err := client.CreateArtifact(artifact); err != nil {
 		return err
 	}
 
-	release.ArtifactID = artifact.ID
+	release.ArtifactIDs = []string{artifact.ID}
 	if err := client.CreateRelease(release); err != nil {
 		return err
 	}
@@ -232,7 +235,7 @@ func runReleaseUpdate(args *docopt.Args, client *controller.Client) error {
 	// Basically, there's no way to merge JSON that can reliably knock out set values.
 	// Instead, throw the --clean flag to start from a largely empty Release.
 	if args.Bool["--clean"] {
-		updates.ArtifactID = release.ArtifactID
+		updates.ArtifactIDs = release.ArtifactIDs
 		release = updates
 	} else {
 		release.ID = ""

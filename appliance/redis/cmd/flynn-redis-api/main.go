@@ -14,6 +14,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/resource"
@@ -181,9 +182,9 @@ func NewHandler() *Handler {
 func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) { h.router.ServeHTTP(w, req) }
 
 func (h *Handler) servePostCluster(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	artifact := &ct.Artifact{Type: "docker", URI: h.RedisImageURI}
-	if err := h.ControllerClient.CreateArtifact(artifact); err != nil {
-		h.Logger.Error("error creating artifact:", "err", err)
+	imageArtifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: h.RedisImageURI}
+	if err := h.ControllerClient.CreateArtifact(imageArtifact); err != nil {
+		h.Logger.Error("error creating image artifact:", "err", err)
 		httphelper.Error(w, err)
 		return
 	}
@@ -195,8 +196,8 @@ func (h *Handler) servePostCluster(w http.ResponseWriter, req *http.Request, _ h
 	serviceName := "redis-" + random.UUID()
 
 	release := &ct.Release{
-		ArtifactID: artifact.ID,
-		Meta:       make(map[string]string),
+		ArtifactIDs: []string{imageArtifact.ID},
+		Meta:        make(map[string]string),
 		Processes: map[string]ct.ProcessType{
 			"redis": {
 				Ports: []ct.Port{
@@ -225,7 +226,7 @@ func (h *Handler) servePostCluster(w http.ResponseWriter, req *http.Request, _ h
 		return
 	}
 
-	h.Logger.Info("creating release", "artifact.id", artifact.ID)
+	h.Logger.Info("creating release", "artifact.id", imageArtifact.ID)
 	if err := h.ControllerClient.CreateRelease(release); err != nil {
 		h.Logger.Error("error creating release", "err", err)
 		httphelper.Error(w, err)

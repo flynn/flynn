@@ -288,6 +288,37 @@ $$ LANGUAGE plpgsql`,
 		)`,
 		`INSERT INTO event_types (name) VALUES ('cluster_backup')`,
 	)
+	migrations.Add(15,
+		`ALTER TABLE artifacts ADD COLUMN meta jsonb`,
+		`CREATE TABLE release_artifacts (
+			release_id uuid NOT NULL REFERENCES releases (release_id),
+			artifact_id uuid NOT NULL REFERENCES artifacts (artifact_id),
+			created_at timestamptz NOT NULL DEFAULT now(),
+			deleted_at timestamptz,
+			PRIMARY KEY (release_id, artifact_id))`,
+
+		// add a check to ensure releases only have a single "docker"
+		// artifact, and that artifact is added first
+		`CREATE FUNCTION check_release_artifacts() RETURNS OPAQUE AS $$
+			BEGIN
+			    IF (
+			      SELECT COUNT(*)
+			      FROM release_artifacts r
+			      INNER JOIN artifacts a ON r.artifact_id = a.artifact_id
+			      WHERE r.release_id = NEW.release_id AND a.type = 'docker'
+			    ) != 1 THEN
+			      RAISE EXCEPTION 'must have exactly one artifact of type "docker"' USING ERRCODE = 'check_violation';
+			    END IF;
+
+			    RETURN NULL;
+			END;
+			$$ LANGUAGE plpgsql`,
+		`CREATE TRIGGER release_artifacts_trigger
+			AFTER INSERT ON release_artifacts
+			FOR EACH ROW EXECUTE PROCEDURE check_release_artifacts()`,
+		`INSERT INTO release_artifacts (release_id, artifact_id) (SELECT release_id, artifact_id FROM releases WHERE artifact_id IS NOT NULL)`,
+		`ALTER TABLE releases DROP COLUMN artifact_id`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

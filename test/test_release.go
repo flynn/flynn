@@ -14,6 +14,7 @@ import (
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/types"
 	tc "github.com/flynn/flynn/test/cluster"
 	"github.com/flynn/flynn/updater/types"
 )
@@ -173,12 +174,13 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	t.Assert(client.CreateApp(slugApp), c.IsNil)
 	gitreceive, err := client.GetAppRelease("gitreceive")
 	t.Assert(err, c.IsNil)
-	artifact := &ct.Artifact{Type: "docker", URI: gitreceive.Env["SLUGRUNNER_IMAGE_URI"]}
-	t.Assert(client.CreateArtifact(artifact), c.IsNil)
+	imageArtifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: gitreceive.Env["SLUGRUNNER_IMAGE_URI"]}
+	t.Assert(client.CreateArtifact(imageArtifact), c.IsNil)
+	slugArtifact := &ct.Artifact{Type: host.ArtifactTypeFile, URI: fmt.Sprintf("http://%s:8080/slug.tgz", buildHost.IP)}
+	t.Assert(client.CreateArtifact(slugArtifact), c.IsNil)
 	release := &ct.Release{
-		ArtifactID: artifact.ID,
-		Processes:  map[string]ct.ProcessType{"web": {Cmd: []string{"bin/http"}}},
-		Env:        map[string]string{"SLUG_URL": fmt.Sprintf("http://%s:8080/slug.tgz", buildHost.IP)},
+		ArtifactIDs: []string{imageArtifact.ID, slugArtifact.ID},
+		Processes:   map[string]ct.ProcessType{"web": {Cmd: []string{"bin/http"}}},
 	}
 	t.Assert(client.CreateRelease(release), c.IsNil)
 	t.Assert(client.SetAppRelease(slugApp.ID, release.ID), c.IsNil)
@@ -233,7 +235,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 		release, err := client.GetAppRelease(app.Name)
 		t.Assert(err, c.IsNil)
 		debugf(t, "new %s release ID: %s", app.Name, release.ID)
-		artifact, err := client.GetArtifact(release.ArtifactID)
+		artifact, err := client.GetArtifact(release.ImageArtifactID())
 		t.Assert(err, c.IsNil)
 		debugf(t, "new %s artifact: %+v", app.Name, artifact)
 		assertImage(artifact.URI, app.Image)
@@ -248,7 +250,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	// check slug based app was deployed correctly
 	release, err = client.GetAppRelease(slugApp.Name)
 	t.Assert(err, c.IsNil)
-	artifact, err = client.GetArtifact(release.ArtifactID)
+	imageArtifact, err = client.GetArtifact(release.ImageArtifactID())
 	t.Assert(err, c.IsNil)
-	assertImage(artifact.URI, "flynn/slugrunner")
+	assertImage(imageArtifact.URI, "flynn/slugrunner")
 }

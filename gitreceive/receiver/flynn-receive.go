@@ -140,15 +140,15 @@ Options:
 
 	fmt.Printf("-----> Creating release...\n")
 
-	artifact := &ct.Artifact{Type: "docker", URI: os.Getenv("SLUGRUNNER_IMAGE_URI")}
+	artifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: os.Getenv("SLUGRUNNER_IMAGE_URI")}
 	if err := client.CreateArtifact(artifact); err != nil {
 		log.Fatalln("Error creating artifact:", err)
 	}
 
 	release := &ct.Release{
-		ArtifactID: artifact.ID,
-		Env:        prevRelease.Env,
-		Meta:       prevRelease.Meta,
+		ArtifactIDs: []string{artifact.ID},
+		Env:         prevRelease.Env,
+		Meta:        prevRelease.Meta,
 	}
 	if release.Meta == nil {
 		release.Meta = make(map[string]string, len(meta))
