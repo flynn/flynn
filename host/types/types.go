@@ -15,9 +15,9 @@ type Job struct {
 
 	Metadata map[string]string `json:"metadata,omitempty"`
 
-	Artifact  Artifact           `json:"artifact,omitempty"`
-	Resources resource.Resources `json:"resources,omitempty"`
-	Partition string             `json:"partition,omitempty"`
+	ImageArtifact Artifact           `json:"artifact,omitempty"`
+	Resources     resource.Resources `json:"resources,omitempty"`
+	Partition     string             `json:"partition,omitempty"`
 
 	Config ContainerConfig `json:"config,omitempty"`
 

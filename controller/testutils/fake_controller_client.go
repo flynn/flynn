@@ -75,10 +75,10 @@ func (c *FakeControllerClient) GetExpandedFormation(appID, releaseID string) (*c
 		procs[typ] = n
 	}
 	return &ct.ExpandedFormation{
-		App:       app,
-		Release:   release,
-		Artifact:  c.artifacts[release.ArtifactID],
-		Processes: procs,
+		App:           app,
+		Release:       release,
+		ImageArtifact: c.artifacts[release.ImageArtifactID],
+		Processes:     procs,
 	}, nil
 }
 
@@ -151,12 +151,12 @@ func (c *FakeControllerClient) FormationListActive() ([]*ct.ExpandedFormation, e
 			if !ok {
 				continue
 			}
-			artifact := c.artifacts[release.ArtifactID]
+			artifact := c.artifacts[release.ImageArtifactID]
 			formations = append(formations, &ct.ExpandedFormation{
-				App:       app,
-				Release:   release,
-				Artifact:  artifact,
-				Processes: procs,
+				App:           app,
+				Release:       release,
+				ImageArtifact: artifact,
+				Processes:     procs,
 			})
 		}
 	}
@@ -214,9 +214,9 @@ func NewReleaseOmni(id string, artifact *ct.Artifact, processes map[string]int, 
 	}
 
 	return &ct.Release{
-		ID:         id,
-		ArtifactID: artifact.ID,
-		Processes:  processTypes,
+		ID:              id,
+		ImageArtifactID: artifact.ID,
+		Processes:       processTypes,
 	}
 }
 

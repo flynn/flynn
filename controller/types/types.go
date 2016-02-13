@@ -15,12 +15,12 @@ import (
 const RouteParentRefPrefix = "controller/apps/"
 
 type ExpandedFormation struct {
-	App       *App                         `json:"app,omitempty"`
-	Release   *Release                     `json:"release,omitempty"`
-	Artifact  *Artifact                    `json:"artifact,omitempty"`
-	Processes map[string]int               `json:"processes,omitempty"`
-	Tags      map[string]map[string]string `json:"tags,omitempty"`
-	UpdatedAt time.Time                    `json:"updated_at,omitempty"`
+	App           *App                         `json:"app,omitempty"`
+	Release       *Release                     `json:"release,omitempty"`
+	ImageArtifact *Artifact                    `json:"artifact,omitempty"`
+	Processes     map[string]int               `json:"processes,omitempty"`
+	Tags          map[string]map[string]string `json:"tags,omitempty"`
+	UpdatedAt     time.Time                    `json:"updated_at,omitempty"`
 }
 
 type App struct {
@@ -46,12 +46,12 @@ func (a *App) Critical() bool {
 }
 
 type Release struct {
-	ID         string                 `json:"id,omitempty"`
-	ArtifactID string                 `json:"artifact,omitempty"`
-	Env        map[string]string      `json:"env,omitempty"`
-	Meta       map[string]string      `json:"meta,omitempty"`
-	Processes  map[string]ProcessType `json:"processes,omitempty"`
-	CreatedAt  *time.Time             `json:"created_at,omitempty"`
+	ID              string                 `json:"id,omitempty"`
+	ImageArtifactID string                 `json:"artifact,omitempty"`
+	Env             map[string]string      `json:"env,omitempty"`
+	Meta            map[string]string      `json:"meta,omitempty"`
+	Processes       map[string]ProcessType `json:"processes,omitempty"`
+	CreatedAt       *time.Time             `json:"created_at,omitempty"`
 }
 
 type ProcessType struct {

@@ -78,12 +78,12 @@ func (a *DeployAppAction) Run(s *State) error {
 		}
 	}
 
-	if err := client.CreateArtifact(a.Artifact); err != nil {
+	if err := client.CreateArtifact(a.ImageArtifact); err != nil {
 		return err
 	}
-	as.Artifact = a.Artifact
+	as.ImageArtifact = a.ImageArtifact
 
-	a.Release.ArtifactID = a.Artifact.ID
+	a.Release.ImageArtifactID = a.ImageArtifact.ID
 	if err := client.CreateRelease(a.Release); err != nil {
 		return err
 	}

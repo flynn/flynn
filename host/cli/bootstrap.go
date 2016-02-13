@@ -236,13 +236,13 @@ WHERE artifact_id = (SELECT artifact_id FROM releases
 		}
 	}
 
-	data.Discoverd.Artifact.URI = artifactURIs["discoverd"]
+	data.Discoverd.ImageArtifact.URI = artifactURIs["discoverd"]
 	data.Discoverd.Release.Env["DISCOVERD_PEERS"] = "{{ range $ip := .SortedHostIPs }}{{ $ip }}:1111,{{ end }}"
-	data.Postgres.Artifact.URI = artifactURIs["postgres"]
-	data.Flannel.Artifact.URI = artifactURIs["flannel"]
-	data.Controller.Artifact.URI = artifactURIs["controller"]
+	data.Postgres.ImageArtifact.URI = artifactURIs["postgres"]
+	data.Flannel.ImageArtifact.URI = artifactURIs["flannel"]
+	data.Controller.ImageArtifact.URI = artifactURIs["controller"]
 	if data.MariaDB != nil {
-		data.MariaDB.Artifact.URI = artifactURIs["mariadb"]
+		data.MariaDB.ImageArtifact.URI = artifactURIs["mariadb"]
 		if data.MariaDB.Processes["mariadb"] == 0 {
 			// skip mariadb if it wasn't scaled up in the backup
 			data.MariaDB = nil
@@ -312,7 +312,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 `, state.StepData["discoverd"].(*bootstrap.RunAppState).Release.Env["DISCOVERD_PEERS"]))
 
 	// load data into postgres
-	cmd := exec.JobUsingHost(state.Hosts[0], host.Artifact{Type: data.Postgres.Artifact.Type, URI: data.Postgres.Artifact.URI}, nil)
+	cmd := exec.JobUsingHost(state.Hosts[0], host.Artifact{Type: data.Postgres.ImageArtifact.Type, URI: data.Postgres.ImageArtifact.URI}, nil)
 	cmd.Entrypoint = []string{"psql"}
 	cmd.Env = map[string]string{
 		"PGHOST":     "leader.postgres.discoverd",

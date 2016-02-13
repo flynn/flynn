@@ -22,7 +22,7 @@ type Cmd struct {
 
 	Entrypoint []string
 
-	Artifact host.Artifact
+	ImageArtifact host.Artifact
 
 	Cmd []string
 	Env map[string]string
@@ -86,11 +86,11 @@ func DockerImage(uri string) host.Artifact {
 }
 
 func Command(artifact host.Artifact, cmd ...string) *Cmd {
-	return &Cmd{Artifact: artifact, Cmd: cmd}
+	return &Cmd{ImageArtifact: artifact, Cmd: cmd}
 }
 
 func Job(artifact host.Artifact, job *host.Job) *Cmd {
-	return &Cmd{Artifact: artifact, Job: job}
+	return &Cmd{ImageArtifact: artifact, Job: job}
 }
 
 type ClusterClient interface {
@@ -186,7 +186,7 @@ func (c *Cmd) Start() error {
 	// otherwise generate one from the fields on exec.Cmd that mirror stdlib's os.exec.
 	if c.Job == nil {
 		c.Job = &host.Job{
-			Artifact: c.Artifact,
+			ImageArtifact: c.ImageArtifact,
 			Config: host.ContainerConfig{
 				Entrypoint: c.Entrypoint,
 				Cmd:        c.Cmd,
@@ -202,7 +202,7 @@ func (c *Cmd) Start() error {
 			c.Job.Config.DisableLog = true
 		}
 	} else {
-		c.Job.Artifact = c.Artifact
+		c.Job.ImageArtifact = c.ImageArtifact
 	}
 	if c.Job.ID == "" {
 		c.Job.ID = cluster.GenerateJobID(c.HostID, "")

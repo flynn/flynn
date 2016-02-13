@@ -143,23 +143,23 @@ func scanFormation(s postgres.Scanner) (*ct.Formation, error) {
 
 func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 	f := &ct.ExpandedFormation{
-		App:      &ct.App{},
-		Release:  &ct.Release{},
-		Artifact: &ct.Artifact{},
+		App:           &ct.App{},
+		Release:       &ct.Release{},
+		ImageArtifact: &ct.Artifact{},
 	}
-	var artifactID *string
+	var imageArtifactID *string
 	err := s.Scan(
 		&f.App.ID,
 		&f.App.Name,
 		&f.App.Meta,
 		&f.Release.ID,
-		&artifactID,
+		&imageArtifactID,
 		&f.Release.Meta,
 		&f.Release.Env,
 		&f.Release.Processes,
-		&f.Artifact.ID,
-		&f.Artifact.Type,
-		&f.Artifact.URI,
+		&f.ImageArtifact.ID,
+		&f.ImageArtifact.Type,
+		&f.ImageArtifact.URI,
 		&f.Processes,
 		&f.Tags,
 		&f.UpdatedAt,
@@ -170,8 +170,8 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 		}
 		return nil, err
 	}
-	if artifactID != nil {
-		f.Release.ArtifactID = *artifactID
+	if imageArtifactID != nil {
+		f.Release.ImageArtifactID = *imageArtifactID
 	}
 	return f, nil
 }
@@ -283,17 +283,17 @@ func (r *FormationRepo) expandFormation(formation *ct.Formation) (*ct.ExpandedFo
 	if err != nil {
 		return nil, err
 	}
-	artifact, err := r.artifacts.Get(release.(*ct.Release).ArtifactID)
+	imageArtifact, err := r.artifacts.Get(release.(*ct.Release).ImageArtifactID)
 	if err != nil {
 		return nil, err
 	}
 	f := &ct.ExpandedFormation{
-		App:       app.(*ct.App),
-		Release:   release.(*ct.Release),
-		Artifact:  artifact.(*ct.Artifact),
-		Processes: formation.Processes,
-		Tags:      formation.Tags,
-		UpdatedAt: *formation.UpdatedAt,
+		App:           app.(*ct.App),
+		Release:       release.(*ct.Release),
+		ImageArtifact: imageArtifact.(*ct.Artifact),
+		Processes:     formation.Processes,
+		Tags:          formation.Tags,
+		UpdatedAt:     *formation.UpdatedAt,
 	}
 	return f, nil
 }
@@ -416,7 +416,7 @@ func (c *controllerAPI) PutFormation(ctx context.Context, w http.ResponseWriter,
 		return
 	}
 
-	if release.ArtifactID == "" {
+	if release.ImageArtifactID == "" {
 		respondWithError(w, ct.ValidationError{Message: "release is not deployable"})
 		return
 	}

@@ -249,8 +249,8 @@ func (s *S) TestCreateArtifact(c *C) {
 }
 
 func (s *S) createTestRelease(c *C, in *ct.Release) *ct.Release {
-	if in.ArtifactID == "" {
-		in.ArtifactID = s.createTestArtifact(c, &ct.Artifact{}).ID
+	if in.ImageArtifactID == "" {
+		in.ImageArtifactID = s.createTestArtifact(c, &ct.Artifact{}).ID
 	}
 	c.Assert(s.c.CreateRelease(in), IsNil)
 	return in
@@ -309,7 +309,7 @@ func (s *S) TestCreateFormation(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(expanded.App.ID, Equals, app.ID)
 		c.Assert(expanded.Release.ID, Equals, release.ID)
-		c.Assert(expanded.Artifact.ID, Equals, release.ArtifactID)
+		c.Assert(expanded.ImageArtifact.ID, Equals, release.ImageArtifactID)
 		c.Assert(expanded.Processes, DeepEquals, out.Processes)
 
 		_, err = s.c.GetFormation(appID, release.ID+"fail")

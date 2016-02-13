@@ -151,8 +151,8 @@ func runReleaseShow(args *docopt.Args, client *controller.Client) error {
 		return json.NewEncoder(os.Stdout).Encode(release)
 	}
 	var artifactDesc string
-	if release.ArtifactID != "" {
-		artifact, err := client.GetArtifact(release.ArtifactID)
+	if release.ImageArtifactID != "" {
+		artifact, err := client.GetArtifact(release.ImageArtifactID)
 		if err != nil {
 			return err
 		}
@@ -194,7 +194,7 @@ func runReleaseAddDocker(args *docopt.Args, client *controller.Client) error {
 		return err
 	}
 
-	release.ArtifactID = artifact.ID
+	release.ImageArtifactID = artifact.ID
 	if err := client.CreateRelease(release); err != nil {
 		return err
 	}
@@ -232,7 +232,7 @@ func runReleaseUpdate(args *docopt.Args, client *controller.Client) error {
 	// Basically, there's no way to merge JSON that can reliably knock out set values.
 	// Instead, throw the --clean flag to start from a largely empty Release.
 	if args.Bool["--clean"] {
-		updates.ArtifactID = release.ArtifactID
+		updates.ImageArtifactID = release.ImageArtifactID
 		release = updates
 	} else {
 		release.ID = ""

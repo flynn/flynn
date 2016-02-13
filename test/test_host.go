@@ -53,8 +53,8 @@ func (s *HostSuite) TestAddFailingJob(t *c.C) {
 
 	// add a job with a non existent artifact
 	job := &host.Job{
-		ID:       jobID,
-		Artifact: host.Artifact{Type: "docker", URI: "http://example.com?name=foo&id=bar"},
+		ID:            jobID,
+		ImageArtifact: host.Artifact{Type: "docker", URI: "http://example.com?name=foo&id=bar"},
 	}
 	t.Assert(h.AddJob(job), c.IsNil)
 

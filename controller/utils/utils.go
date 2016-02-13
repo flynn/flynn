@@ -43,9 +43,9 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 	job := &host.Job{
 		ID:       id,
 		Metadata: metadata,
-		Artifact: host.Artifact{
-			Type: f.Artifact.Type,
-			URI:  f.Artifact.URI,
+		ImageArtifact: host.Artifact{
+			Type: f.ImageArtifact.Type,
+			URI:  f.ImageArtifact.URI,
 		},
 		Config: host.ContainerConfig{
 			Cmd:         t.Cmd,
@@ -113,7 +113,7 @@ func ExpandFormation(c ControllerClient, f *ct.Formation) (*ct.ExpandedFormation
 		return nil, fmt.Errorf("error getting release: %s", err)
 	}
 
-	artifact, err := c.GetArtifact(release.ArtifactID)
+	imageArtifact, err := c.GetArtifact(release.ImageArtifactID)
 	if err != nil {
 		return nil, fmt.Errorf("error getting artifact: %s", err)
 	}
@@ -124,12 +124,12 @@ func ExpandFormation(c ControllerClient, f *ct.Formation) (*ct.ExpandedFormation
 	}
 
 	ef := &ct.ExpandedFormation{
-		App:       app,
-		Release:   release,
-		Artifact:  artifact,
-		Processes: procs,
-		Tags:      f.Tags,
-		UpdatedAt: time.Now(),
+		App:           app,
+		Release:       release,
+		ImageArtifact: imageArtifact,
+		Processes:     procs,
+		Tags:          f.Tags,
+		UpdatedAt:     time.Now(),
 	}
 	if f.UpdatedAt != nil {
 		ef.UpdatedAt = *f.UpdatedAt

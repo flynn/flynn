@@ -23,17 +23,17 @@ func NewReleaseRepo(db *postgres.DB) *ReleaseRepo {
 }
 
 func scanRelease(s postgres.Scanner) (*ct.Release, error) {
-	var artifactID *string
+	var imageArtifactID *string
 	release := &ct.Release{}
-	err := s.Scan(&release.ID, &artifactID, &release.Env, &release.Processes, &release.Meta, &release.CreatedAt)
+	err := s.Scan(&release.ID, &imageArtifactID, &release.Env, &release.Processes, &release.Meta, &release.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			err = ErrNotFound
 		}
 		return nil, err
 	}
-	if artifactID != nil {
-		release.ArtifactID = *artifactID
+	if imageArtifactID != nil {
+		release.ImageArtifactID = *imageArtifactID
 	}
 	return release, err
 }
@@ -43,7 +43,7 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 	releaseCopy := *release
 
 	releaseCopy.ID = ""
-	releaseCopy.ArtifactID = ""
+	releaseCopy.ImageArtifactID = ""
 	releaseCopy.CreatedAt = nil
 	releaseCopy.Meta = nil
 
@@ -56,9 +56,9 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 		release.ID = random.UUID()
 	}
 
-	var artifactID *string
-	if release.ArtifactID != "" {
-		artifactID = &release.ArtifactID
+	var imageArtifactID *string
+	if release.ImageArtifactID != "" {
+		imageArtifactID = &release.ImageArtifactID
 	}
 
 	tx, err := r.db.Begin()
@@ -66,7 +66,7 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 		return err
 	}
 
-	err = tx.QueryRow("release_insert", release.ID, artifactID, release.Env, release.Processes, release.Meta).Scan(&release.CreatedAt)
+	err = tx.QueryRow("release_insert", release.ID, imageArtifactID, release.Env, release.Processes, release.Meta).Scan(&release.CreatedAt)
 	if err != nil {
 		tx.Rollback()
 		return err

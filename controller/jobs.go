@@ -249,12 +249,12 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		return
 	}
 	release := data.(*ct.Release)
-	data, err = c.artifactRepo.Get(release.ArtifactID)
+	data, err = c.artifactRepo.Get(release.ImageArtifactID)
 	if err != nil {
 		respondWithError(w, err)
 		return
 	}
-	artifact := data.(*ct.Artifact)
+	imageArtifact := data.(*ct.Artifact)
 	attach := strings.Contains(req.Header.Get("Upgrade"), "flynn-attach/0")
 
 	hosts, err := c.clusterClient.Hosts()
@@ -295,9 +295,9 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	job := &host.Job{
 		ID:       id,
 		Metadata: metadata,
-		Artifact: host.Artifact{
-			Type: artifact.Type,
-			URI:  artifact.URI,
+		ImageArtifact: host.Artifact{
+			Type: imageArtifact.Type,
+			URI:  imageArtifact.URI,
 		},
 		Config: host.ContainerConfig{
 			Cmd:        newJob.Cmd,

@@ -146,9 +146,9 @@ Options:
 	}
 
 	release := &ct.Release{
-		ArtifactID: artifact.ID,
-		Env:        prevRelease.Env,
-		Meta:       prevRelease.Meta,
+		ImageArtifactID: artifact.ID,
+		Env:             prevRelease.Env,
+		Meta:            prevRelease.Meta,
 	}
 	if release.Meta == nil {
 		release.Meta = make(map[string]string, len(meta))

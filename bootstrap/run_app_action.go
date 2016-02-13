@@ -62,11 +62,11 @@ func (a *RunAppAction) Run(s *State) error {
 	if a.App.ID == "" {
 		a.App.ID = random.UUID()
 	}
-	if a.Artifact == nil {
+	if a.ImageArtifact == nil {
 		return errors.New("bootstrap: artifact must be set")
 	}
-	if a.Artifact.ID == "" {
-		a.Artifact.ID = random.UUID()
+	if a.ImageArtifact.ID == "" {
+		a.ImageArtifact.ID = random.UUID()
 	}
 	if a.Release == nil {
 		return errors.New("bootstrap: release must be set")
@@ -74,7 +74,7 @@ func (a *RunAppAction) Run(s *State) error {
 	if a.Release.ID == "" {
 		a.Release.ID = random.UUID()
 	}
-	a.Release.ArtifactID = a.Artifact.ID
+	a.Release.ImageArtifactID = a.ImageArtifact.ID
 	if a.Release.Env == nil {
 		a.Release.Env = make(map[string]string)
 	}

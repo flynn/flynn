@@ -148,10 +148,10 @@ func (m *migration) generateTLSCert() (*tlscert.Cert, error) {
 
 func dupRelease(release *ct.Release) *ct.Release {
 	return &ct.Release{
-		ArtifactID: release.ArtifactID,
-		Env:        release.Env,
-		Meta:       release.Meta,
-		Processes:  release.Processes,
+		ImageArtifactID: release.ImageArtifactID,
+		Env:             release.Env,
+		Meta:            release.Meta,
+		Processes:       release.Processes,
 	}
 }
 

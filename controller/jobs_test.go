@@ -157,8 +157,8 @@ func (s *S) TestRunJobDetached(c *C) {
 
 	artifact := s.createTestArtifact(c, &ct.Artifact{Type: "docker", URI: "docker://foo/bar"})
 	release := s.createTestRelease(c, &ct.Release{
-		ArtifactID: artifact.ID,
-		Env:        map[string]string{"RELEASE": "true", "FOO": "bar"},
+		ImageArtifactID: artifact.ID,
+		Env:             map[string]string{"RELEASE": "true", "FOO": "bar"},
 	})
 
 	cmd := []string{"foo", "bar"}
@@ -234,8 +234,8 @@ func (s *S) TestRunJobAttached(c *C) {
 
 	artifact := s.createTestArtifact(c, &ct.Artifact{Type: "docker", URI: "docker://foo/bar"})
 	release := s.createTestRelease(c, &ct.Release{
-		ArtifactID: artifact.ID,
-		Env:        map[string]string{"RELEASE": "true", "FOO": "bar"},
+		ImageArtifactID: artifact.ID,
+		Env:             map[string]string{"RELEASE": "true", "FOO": "bar"},
 	})
 
 	data := &ct.NewJob{
