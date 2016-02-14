@@ -40,16 +40,10 @@ func scanRelease(s postgres.Scanner) (*ct.Release, error) {
 
 func (r *ReleaseRepo) Add(data interface{}) error {
 	release := data.(*ct.Release)
-	releaseCopy := *release
 
-	releaseCopy.ID = ""
-	releaseCopy.ArtifactID = ""
-	releaseCopy.CreatedAt = nil
-	releaseCopy.Meta = nil
-
-	for typ, proc := range releaseCopy.Processes {
+	for typ, proc := range release.Processes {
 		resource.SetDefaults(&proc.Resources)
-		releaseCopy.Processes[typ] = proc
+		release.Processes[typ] = proc
 	}
 
 	if release.ID == "" {
