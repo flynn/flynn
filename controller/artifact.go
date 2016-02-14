@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -31,16 +33,15 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 	if err != nil {
 		return err
 	}
-	err = tx.QueryRow("artifact_insert",
-		a.ID, a.Type, a.URI).Scan(&a.CreatedAt)
+
+	err = tx.QueryRow("artifact_insert", a.ID, a.Type, a.URI, a.Attributes).Scan(&a.CreatedAt)
 	if postgres.IsUniquenessError(err, "") {
 		tx.Rollback()
 		tx, err = r.db.Begin()
 		if err != nil {
 			return err
 		}
-		err = tx.QueryRow("artifact_select_by_type_and_uri",
-			a.Type, a.URI).Scan(&a.ID, &a.CreatedAt)
+		err = tx.QueryRow("artifact_select_by_type_and_uri", a.Type, a.URI).Scan(&a.ID, &a.Attributes, &a.CreatedAt)
 		if err != nil {
 			tx.Rollback()
 			return err
@@ -63,7 +64,7 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 
 func scanArtifact(s postgres.Scanner) (*ct.Artifact, error) {
 	artifact := &ct.Artifact{}
-	err := s.Scan(&artifact.ID, &artifact.Type, &artifact.URI, &artifact.CreatedAt)
+	err := s.Scan(&artifact.ID, &artifact.Type, &artifact.URI, &artifact.Attributes, &artifact.CreatedAt)
 	if err == pgx.ErrNoRows {
 		err = ErrNotFound
 	}
@@ -80,7 +81,19 @@ func (r *ArtifactRepo) List() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	artifacts := []*ct.Artifact{}
+	return scanArtifacts(rows)
+}
+
+func (r *ArtifactRepo) ListIDs(ids ...string) (interface{}, error) {
+	rows, err := r.db.Query("artifact_list_ids", strings.Join(ids, ","))
+	if err != nil {
+		return nil, err
+	}
+	return scanArtifacts(rows)
+}
+
+func scanArtifacts(rows *pgx.Rows) (interface{}, error) {
+	var artifacts []*ct.Artifact
 	for rows.Next() {
 		artifact, err := scanArtifact(rows)
 		if err != nil {

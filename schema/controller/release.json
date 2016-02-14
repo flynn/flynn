@@ -21,6 +21,12 @@
     "artifact": {
       "$ref": "/schema/controller/common#/definitions/id"
     },
+    "tar_artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "/schema/controller/common#/definitions/id"
+      }
+    },
     "meta": {
       "$ref": "/schema/controller/common#/definitions/meta"
     },

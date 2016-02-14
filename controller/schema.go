@@ -271,6 +271,45 @@ $$ LANGUAGE plpgsql`,
 		$$`,
 		`UPDATE apps SET meta = jsonb_merge(meta, '{"flynn-system-critical":"true"}') WHERE name IN ('discoverd', 'flannel', 'postgres', 'controller')`,
 	)
+	migrations.Add(14,
+		`ALTER TABLE artifacts ADD COLUMN attributes jsonb`,
+		`CREATE TABLE release_tar_artifacts (
+			release_id uuid NOT NULL REFERENCES releases (release_id),
+			artifact_id uuid NOT NULL REFERENCES artifacts (artifact_id),
+			created_at timestamptz NOT NULL DEFAULT now(),
+			deleted_at timestamptz,
+			PRIMARY KEY (release_id, artifact_id))`,
+		`CREATE FUNCTION check_release_image_artifact() RETURNS OPAQUE AS $$
+			DECLARE artifact_type text;
+			BEGIN
+			    SELECT type INTO artifact_type FROM artifacts WHERE artifact_id = NEW.artifact_id;
+
+			    IF artifact_type != 'docker' THEN
+				RAISE EXCEPTION 'invalid image artifact type: %', artifact_type USING ERRCODE = 'check_violation';
+			    END IF;
+
+			    RETURN NULL;
+			END;
+			$$ LANGUAGE plpgsql`,
+		`CREATE TRIGGER release_image_artifact_trigger
+			AFTER INSERT OR UPDATE ON releases
+			FOR EACH ROW EXECUTE PROCEDURE check_release_image_artifact()`,
+		`CREATE FUNCTION check_release_tar_artifacts() RETURNS OPAQUE AS $$
+			DECLARE artifact_type text;
+			BEGIN
+			    SELECT type INTO artifact_type FROM artifacts WHERE artifact_id = NEW.artifact_id;
+
+			    IF artifact_type != 'tar' THEN
+				RAISE EXCEPTION 'invalid tar artifact type: %', artifact_type USING ERRCODE = 'check_violation';
+			    END IF;
+
+			    RETURN NULL;
+			END;
+			$$ LANGUAGE plpgsql`,
+		`CREATE TRIGGER release_tar_artifacts_trigger
+			AFTER INSERT OR UPDATE ON release_tar_artifacts
+			FOR EACH ROW EXECUTE PROCEDURE check_release_tar_artifacts()`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

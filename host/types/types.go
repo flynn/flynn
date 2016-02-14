@@ -16,6 +16,7 @@ type Job struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 
 	ImageArtifact Artifact           `json:"artifact,omitempty"`
+	TarArtifacts  []*Artifact        `json:"tar_artifacts,omitempty"`
 	Resources     resource.Resources `json:"resources,omitempty"`
 	Partition     string             `json:"partition,omitempty"`
 
@@ -180,9 +181,19 @@ type VolumeBinding struct {
 }
 
 type Artifact struct {
-	URI  string `json:"url,omitempty"`
-	Type string `json:"type,omitempty"`
+	URI        string             `json:"url,omitempty"`
+	Type       string             `json:"type,omitempty"`
+	Attributes ArtifactAttributes `json:"attributes,omitempty"`
 }
+
+type ArtifactAttributes struct {
+	TarCompression TarCompressionType `json:"tar_compression,omitempty"`
+	TarTargetPath  string             `json:"tar_target_path,omitempty"`
+}
+
+type TarCompressionType string
+
+const TarCompressionTypeGzip TarCompressionType = "gzip"
 
 type Host struct {
 	ID string `json:"id,omitempty"`

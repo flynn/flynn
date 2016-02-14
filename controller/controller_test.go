@@ -15,6 +15,7 @@ import (
 	"github.com/flynn/flynn/controller/schema"
 	tu "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/certgen"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -363,6 +364,83 @@ func (s *S) TestReleaseList(c *C) {
 
 	c.Assert(len(list) > 0, Equals, true)
 	c.Assert(list[0].ID, Not(Equals), "")
+}
+
+func (s *S) TestReleaseImageArtifact(c *C) {
+	// release.ImageArtifactID must have type "docker"
+	err := s.c.CreateRelease(&ct.Release{
+		ImageArtifactID: s.createTestArtifact(c, &ct.Artifact{Type: "tar"}).ID,
+	})
+	c.Assert(err, NotNil)
+	e, ok := err.(hh.JSONError)
+	if !ok {
+		c.Fatalf("expected error to have type httphelper.JSONError, got %T", err)
+	}
+	c.Assert(e.Code, Equals, hh.ValidationErrorCode)
+	c.Assert(e.Message, Equals, `artifact must have type "docker"`)
+
+	// creating with type "docker" should be ok
+	artifact := s.createTestArtifact(c, &ct.Artifact{Type: "docker"})
+	release := &ct.Release{ImageArtifactID: artifact.ID}
+	c.Assert(s.c.CreateRelease(release), IsNil)
+	gotRelease, err := s.c.GetRelease(release.ID)
+	c.Assert(err, IsNil)
+	c.Assert(gotRelease.ImageArtifactID, Equals, artifact.ID)
+}
+
+func (s *S) TestReleaseTarArtifacts(c *C) {
+	// release.TarArtifactIDs must all have type "tar"
+	for _, x := range []struct {
+		Types []string
+		Valid bool
+	}{
+		{[]string{"docker"}, false},
+		{[]string{"docker", "tar"}, false},
+		{[]string{"tar", "docker"}, false},
+		{[]string{"tar"}, true},
+		{[]string{"tar", "tar"}, true},
+	} {
+		ids := make([]string, len(x.Types))
+		for i, typ := range x.Types {
+			ids[i] = s.createTestArtifact(c, &ct.Artifact{Type: typ}).ID
+		}
+		release := &ct.Release{TarArtifactIDs: ids}
+		err := s.c.CreateRelease(release)
+		if !x.Valid {
+			c.Assert(err, NotNil)
+			e, ok := err.(hh.JSONError)
+			if !ok {
+				c.Fatalf("expected error to have type httphelper.JSONError, got %T", err)
+			}
+			c.Assert(e.Code, Equals, hh.ValidationErrorCode)
+			c.Assert(e.Message, Equals, `tar_artifacts must have type "tar"`)
+			continue
+		}
+		c.Assert(err, IsNil)
+		c.Assert(release.TarArtifactIDs, DeepEquals, ids)
+		gotRelease, err := s.c.GetRelease(release.ID)
+		c.Assert(err, IsNil)
+		c.Assert(gotRelease.TarArtifactIDs, HasLen, len(ids))
+		for i, id := range gotRelease.TarArtifactIDs {
+			c.Assert(id, Equals, ids[i])
+		}
+	}
+}
+
+func (s *S) TestTarArtifact(c *C) {
+	artifact := &ct.Artifact{
+		Type: "tar",
+		URI:  "http://example.com/slug.tgz",
+		Attributes: host.ArtifactAttributes{
+			TarCompression: host.TarCompressionTypeGzip,
+			TarTargetPath:  "/app",
+		},
+	}
+	c.Assert(s.c.CreateArtifact(artifact), IsNil)
+
+	gotArtifact, err := s.c.GetArtifact(artifact.ID)
+	c.Assert(err, IsNil)
+	c.Assert(gotArtifact, DeepEquals, artifact)
 }
 
 func (s *S) TestAppReleaseList(c *C) {

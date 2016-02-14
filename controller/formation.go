@@ -148,12 +148,14 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 		ImageArtifact: &ct.Artifact{},
 	}
 	var imageArtifactID *string
+	var tarArtifactIDs string
 	err := s.Scan(
 		&f.App.ID,
 		&f.App.Name,
 		&f.App.Meta,
 		&f.Release.ID,
 		&imageArtifactID,
+		&tarArtifactIDs,
 		&f.Release.Meta,
 		&f.Release.Env,
 		&f.Release.Processes,
@@ -173,6 +175,9 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 	if imageArtifactID != nil {
 		f.Release.ImageArtifactID = *imageArtifactID
 	}
+	if tarArtifactIDs != "" {
+		f.Release.TarArtifactIDs = split(tarArtifactIDs[1:len(tarArtifactIDs)-1], ",")
+	}
 	return f, nil
 }
 
@@ -183,7 +188,18 @@ func (r *FormationRepo) Get(appID, releaseID string) (*ct.Formation, error) {
 
 func (r *FormationRepo) GetExpanded(appID, releaseID string) (*ct.ExpandedFormation, error) {
 	row := r.db.QueryRow("formation_select_expanded", appID, releaseID)
-	return scanExpandedFormation(row)
+	ef, err := scanExpandedFormation(row)
+	if err != nil {
+		return nil, err
+	}
+	if len(ef.Release.TarArtifactIDs) > 0 {
+		tarArtifacts, err := r.artifacts.ListIDs(ef.Release.TarArtifactIDs...)
+		if err != nil {
+			return nil, err
+		}
+		ef.TarArtifacts = tarArtifacts.([]*ct.Artifact)
+	}
+	return ef, nil
 }
 
 func (r *FormationRepo) List(appID string) ([]*ct.Formation, error) {
@@ -209,6 +225,13 @@ func (r *FormationRepo) ListActive() ([]*ct.ExpandedFormation, error) {
 		return nil, err
 	}
 	formations := []*ct.ExpandedFormation{}
+
+	// tarArtifactFormations is a map of tar artifact IDs to a list of
+	// formations to which those tar artifacts are associated, and is
+	// used to populate formation.TarArtifacts using a subsequent artifact
+	// list query
+	tarArtifactFormations := make(map[string][]*ct.ExpandedFormation)
+
 	for rows.Next() {
 		formation, err := scanExpandedFormation(rows)
 		if err != nil {
@@ -216,7 +239,32 @@ func (r *FormationRepo) ListActive() ([]*ct.ExpandedFormation, error) {
 			return nil, err
 		}
 		formations = append(formations, formation)
+
+		// add any tar artifact IDs to tarArtifactFormations so they
+		// can be looked up later
+		for _, id := range formation.Release.TarArtifactIDs {
+			tarArtifactFormations[id] = append(tarArtifactFormations[id], formation)
+		}
 	}
+
+	// lookup any tar artifacts using a single query and populate the
+	// appropriate formations
+	if len(tarArtifactFormations) > 0 {
+		ids := make([]string, 0, len(tarArtifactFormations))
+		for id := range tarArtifactFormations {
+			ids = append(ids, id)
+		}
+		artifacts, err := r.artifacts.ListIDs(ids...)
+		if err != nil {
+			return nil, err
+		}
+		for _, artifact := range artifacts.([]*ct.Artifact) {
+			for _, formation := range tarArtifactFormations[artifact.ID] {
+				formation.TarArtifacts = append(formation.TarArtifacts, artifact)
+			}
+		}
+	}
+
 	return formations, rows.Err()
 }
 
@@ -294,6 +342,13 @@ func (r *FormationRepo) expandFormation(formation *ct.Formation) (*ct.ExpandedFo
 		Processes:     formation.Processes,
 		Tags:          formation.Tags,
 		UpdatedAt:     *formation.UpdatedAt,
+	}
+	if len(f.Release.TarArtifactIDs) > 0 {
+		tarArtifacts, err := r.artifacts.ListIDs(f.Release.TarArtifactIDs...)
+		if err != nil {
+			return nil, err
+		}
+		f.TarArtifacts = tarArtifacts.([]*ct.Artifact)
 	}
 	return f, nil
 }

@@ -24,8 +24,9 @@ func NewReleaseRepo(db *postgres.DB) *ReleaseRepo {
 
 func scanRelease(s postgres.Scanner) (*ct.Release, error) {
 	var imageArtifactID *string
+	var tarArtifactIDs string
 	release := &ct.Release{}
-	err := s.Scan(&release.ID, &imageArtifactID, &release.Env, &release.Processes, &release.Meta, &release.CreatedAt)
+	err := s.Scan(&release.ID, &imageArtifactID, &tarArtifactIDs, &release.Env, &release.Processes, &release.Meta, &release.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			err = ErrNotFound
@@ -34,6 +35,9 @@ func scanRelease(s postgres.Scanner) (*ct.Release, error) {
 	}
 	if imageArtifactID != nil {
 		release.ImageArtifactID = *imageArtifactID
+	}
+	if tarArtifactIDs != "" {
+		release.TarArtifactIDs = split(tarArtifactIDs[1:len(tarArtifactIDs)-1], ",")
 	}
 	return release, err
 }
@@ -63,7 +67,26 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 	err = tx.QueryRow("release_insert", release.ID, imageArtifactID, release.Env, release.Processes, release.Meta).Scan(&release.CreatedAt)
 	if err != nil {
 		tx.Rollback()
+		if postgres.IsPostgresCode(err, postgres.CheckViolation) {
+			return ct.ValidationError{
+				Field:   "artifact",
+				Message: `must have type "docker"`,
+			}
+		}
 		return err
+	}
+
+	for _, artifactID := range release.TarArtifactIDs {
+		if err := tx.Exec("release_tar_artifacts_insert", release.ID, artifactID); err != nil {
+			tx.Rollback()
+			if postgres.IsPostgresCode(err, postgres.CheckViolation) {
+				return ct.ValidationError{
+					Field:   "tar_artifacts",
+					Message: `must have type "tar"`,
+				}
+			}
+			return err
+		}
 	}
 
 	if err := createEvent(tx.Exec, &ct.Event{

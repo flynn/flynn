@@ -312,6 +312,22 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	if len(newJob.Entrypoint) > 0 {
 		job.Config.Entrypoint = newJob.Entrypoint
 	}
+	if len(release.TarArtifactIDs) > 0 {
+		data, err := c.artifactRepo.ListIDs(release.TarArtifactIDs...)
+		if err != nil {
+			respondWithError(w, err)
+			return
+		}
+		tarArtifacts := data.([]*ct.Artifact)
+		job.TarArtifacts = make([]*host.Artifact, len(tarArtifacts))
+		for i, artifact := range tarArtifacts {
+			job.TarArtifacts[i] = &host.Artifact{
+				URI:        artifact.URI,
+				Type:       artifact.Type,
+				Attributes: artifact.Attributes,
+			}
+		}
+	}
 
 	var attachClient cluster.AttachClient
 	if attach {
