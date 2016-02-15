@@ -142,11 +142,24 @@ Options:
 
 	artifact := &ct.Artifact{Type: "docker", URI: os.Getenv("SLUGRUNNER_IMAGE_URI")}
 	if err := client.CreateArtifact(artifact); err != nil {
-		log.Fatalln("Error creating artifact:", err)
+		log.Fatalln("Error creating image artifact:", err)
+	}
+
+	slugArtifact := &ct.Artifact{
+		Type: "tar",
+		URI:  slugURL,
+		Attributes: host.ArtifactAttributes{
+			TarCompression: host.TarCompressionTypeGzip,
+			TarTargetPath:  "/app",
+		},
+	}
+	if err := client.CreateArtifact(slugArtifact); err != nil {
+		log.Fatalln("Error creating slug artifact:", err)
 	}
 
 	release := &ct.Release{
 		ImageArtifactID: artifact.ID,
+		TarArtifactIDs:  []string{slugArtifact.ID},
 		Env:             prevRelease.Env,
 		Meta:            prevRelease.Meta,
 	}
@@ -181,10 +194,6 @@ Options:
 		procs[t] = proc
 	}
 	release.Processes = procs
-	if release.Env == nil {
-		release.Env = make(map[string]string)
-	}
-	release.Env["SLUG_URL"] = slugURL
 
 	if err := client.CreateRelease(release); err != nil {
 		log.Fatalln("Error creating release:", err)
