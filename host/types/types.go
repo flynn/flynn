@@ -182,9 +182,16 @@ type VolumeBinding struct {
 
 type Artifact struct {
 	URI        string             `json:"url,omitempty"`
-	Type       string             `json:"type,omitempty"`
+	Type       ArtifactType       `json:"type,omitempty"`
 	Attributes ArtifactAttributes `json:"attributes,omitempty"`
 }
+
+type ArtifactType string
+
+const (
+	ArtifactTypeDocker ArtifactType = "docker"
+	ArtifactTypeTar    ArtifactType = "tar"
+)
 
 type ArtifactAttributes struct {
 	TarCompression TarCompressionType `json:"tar_compression,omitempty"`

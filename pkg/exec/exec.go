@@ -82,7 +82,7 @@ type Cmd struct {
 }
 
 func DockerImage(uri string) host.Artifact {
-	return host.Artifact{Type: "docker", URI: uri}
+	return host.Artifact{Type: host.ArtifactTypeDocker, URI: uri}
 }
 
 func Command(artifact host.Artifact, cmd ...string) *Cmd {

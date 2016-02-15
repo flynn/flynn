@@ -215,7 +215,7 @@ func (s *S) TestUpdateAppMeta(c *C) {
 
 func (s *S) createTestArtifact(c *C, in *ct.Artifact) *ct.Artifact {
 	if in.Type == "" {
-		in.Type = "docker"
+		in.Type = host.ArtifactTypeDocker
 	}
 	if in.URI == "" {
 		in.URI = fmt.Sprintf("https://example.com/%s", random.String(8))
@@ -228,7 +228,7 @@ func (s *S) TestCreateArtifact(c *C) {
 	for i, id := range []string{"", random.UUID()} {
 		in := &ct.Artifact{
 			ID:   id,
-			Type: "docker",
+			Type: host.ArtifactTypeDocker,
 			URI:  fmt.Sprintf("docker://flynn/host?id=adsf%d", i),
 		}
 		out := s.createTestArtifact(c, in)
@@ -367,9 +367,9 @@ func (s *S) TestReleaseList(c *C) {
 }
 
 func (s *S) TestReleaseImageArtifact(c *C) {
-	// release.ImageArtifactID must have type "docker"
+	// release.ImageArtifactID must have type host.ArtifactTypeDocker
 	err := s.c.CreateRelease(&ct.Release{
-		ImageArtifactID: s.createTestArtifact(c, &ct.Artifact{Type: "tar"}).ID,
+		ImageArtifactID: s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeTar}).ID,
 	})
 	c.Assert(err, NotNil)
 	e, ok := err.(hh.JSONError)
@@ -379,8 +379,8 @@ func (s *S) TestReleaseImageArtifact(c *C) {
 	c.Assert(e.Code, Equals, hh.ValidationErrorCode)
 	c.Assert(e.Message, Equals, `artifact must have type "docker"`)
 
-	// creating with type "docker" should be ok
-	artifact := s.createTestArtifact(c, &ct.Artifact{Type: "docker"})
+	// creating with type host.ArtifactTypeDocker should be ok
+	artifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker})
 	release := &ct.Release{ImageArtifactID: artifact.ID}
 	c.Assert(s.c.CreateRelease(release), IsNil)
 	gotRelease, err := s.c.GetRelease(release.ID)
@@ -389,16 +389,16 @@ func (s *S) TestReleaseImageArtifact(c *C) {
 }
 
 func (s *S) TestReleaseTarArtifacts(c *C) {
-	// release.TarArtifactIDs must all have type "tar"
+	// release.TarArtifactIDs must all have type host.ArtifactTypeTar
 	for _, x := range []struct {
-		Types []string
+		Types []host.ArtifactType
 		Valid bool
 	}{
-		{[]string{"docker"}, false},
-		{[]string{"docker", "tar"}, false},
-		{[]string{"tar", "docker"}, false},
-		{[]string{"tar"}, true},
-		{[]string{"tar", "tar"}, true},
+		{[]host.ArtifactType{host.ArtifactTypeDocker}, false},
+		{[]host.ArtifactType{host.ArtifactTypeDocker, host.ArtifactTypeTar}, false},
+		{[]host.ArtifactType{host.ArtifactTypeTar, host.ArtifactTypeDocker}, false},
+		{[]host.ArtifactType{host.ArtifactTypeTar}, true},
+		{[]host.ArtifactType{host.ArtifactTypeTar, host.ArtifactTypeTar}, true},
 	} {
 		ids := make([]string, len(x.Types))
 		for i, typ := range x.Types {
@@ -429,7 +429,7 @@ func (s *S) TestReleaseTarArtifacts(c *C) {
 
 func (s *S) TestTarArtifact(c *C) {
 	artifact := &ct.Artifact{
-		Type: "tar",
+		Type: host.ArtifactTypeTar,
 		URI:  "http://example.com/slug.tgz",
 		Attributes: host.ArtifactAttributes{
 			TarCompression: host.TarCompressionTypeGzip,

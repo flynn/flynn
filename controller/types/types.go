@@ -77,7 +77,7 @@ type Port struct {
 
 type Artifact struct {
 	ID         string                  `json:"id,omitempty"`
-	Type       string                  `json:"type,omitempty"`
+	Type       host.ArtifactType       `json:"type,omitempty"`
 	URI        string                  `json:"uri,omitempty"`
 	Attributes host.ArtifactAttributes `json:"attributes,omitempty"`
 	CreatedAt  *time.Time              `json:"created_at,omitempty"`

@@ -140,13 +140,13 @@ Options:
 
 	fmt.Printf("-----> Creating release...\n")
 
-	artifact := &ct.Artifact{Type: "docker", URI: os.Getenv("SLUGRUNNER_IMAGE_URI")}
+	artifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: os.Getenv("SLUGRUNNER_IMAGE_URI")}
 	if err := client.CreateArtifact(artifact); err != nil {
 		log.Fatalln("Error creating image artifact:", err)
 	}
 
 	slugArtifact := &ct.Artifact{
-		Type: "tar",
+		Type: host.ArtifactTypeTar,
 		URI:  slugURL,
 		Attributes: host.ArtifactAttributes{
 			TarCompression: host.TarCompressionTypeGzip,

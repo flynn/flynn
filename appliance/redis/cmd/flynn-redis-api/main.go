@@ -14,6 +14,7 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/resource"
@@ -181,7 +182,7 @@ func NewHandler() *Handler {
 func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) { h.router.ServeHTTP(w, req) }
 
 func (h *Handler) servePostCluster(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	imageArtifact := &ct.Artifact{Type: "docker", URI: h.RedisImageURI}
+	imageArtifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: h.RedisImageURI}
 	if err := h.ControllerClient.CreateArtifact(imageArtifact); err != nil {
 		h.Logger.Error("error creating image artifact:", "err", err)
 		httphelper.Error(w, err)

@@ -17,6 +17,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/backup"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/random"
@@ -425,7 +426,7 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 			return fmt.Errorf("unable to retrieve gitreceive release: %s", err)
 		}
 		artifact = &ct.Artifact{
-			Type: "docker",
+			Type: host.ArtifactTypeDocker,
 			URI:  gitreceiveRelease.Env["SLUGRUNNER_IMAGE_URI"],
 		}
 		if artifact.URI == "" {

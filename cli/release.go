@@ -12,6 +12,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/types"
 )
 
 func init() {
@@ -187,7 +188,7 @@ func runReleaseAddDocker(args *docopt.Args, client *controller.Client) error {
 	}
 
 	artifact := &ct.Artifact{
-		Type: "docker",
+		Type: host.ArtifactTypeDocker,
 		URI:  args.String["<uri>"],
 	}
 	if err := client.CreateArtifact(artifact); err != nil {

@@ -7,6 +7,7 @@ import (
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/random"
 )
 
@@ -73,8 +74,8 @@ func (s *S) TestFormationStreaming(c *C) {
 func (s *S) TestFormationListActive(c *C) {
 	app1 := s.createTestApp(c, &ct.App{})
 	app2 := s.createTestApp(c, &ct.App{})
-	imageArtifact := s.createTestArtifact(c, &ct.Artifact{Type: "docker"})
-	tarArtifact := s.createTestArtifact(c, &ct.Artifact{Type: "tar"})
+	imageArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker})
+	tarArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeTar})
 
 	createFormation := func(app *ct.App, procs map[string]int) *ct.ExpandedFormation {
 		release := &ct.Release{
@@ -132,7 +133,7 @@ func (s *S) TestFormationStreamingInterrupted(c *C) {
 	artifactRepo := NewArtifactRepo(s.hc.db)
 	formationRepo := NewFormationRepo(s.hc.db, appRepo, releaseRepo, artifactRepo)
 
-	artifact := &ct.Artifact{Type: "docker", URI: fmt.Sprintf("https://example.com/%s", random.String(8))}
+	artifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: fmt.Sprintf("https://example.com/%s", random.String(8))}
 	c.Assert(artifactRepo.Add(artifact), IsNil)
 
 	release := &ct.Release{ImageArtifactID: artifact.ID}

@@ -11,6 +11,7 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
+	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -147,6 +148,7 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 		Release:       &ct.Release{},
 		ImageArtifact: &ct.Artifact{},
 	}
+	var artifactType string
 	var imageArtifactID *string
 	var tarArtifactIDs string
 	err := s.Scan(
@@ -160,7 +162,7 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 		&f.Release.Env,
 		&f.Release.Processes,
 		&f.ImageArtifact.ID,
-		&f.ImageArtifact.Type,
+		&artifactType,
 		&f.ImageArtifact.URI,
 		&f.Processes,
 		&f.Tags,
@@ -172,6 +174,7 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 		}
 		return nil, err
 	}
+	f.ImageArtifact.Type = host.ArtifactType(artifactType)
 	if imageArtifactID != nil {
 		f.Release.ImageArtifactID = *imageArtifactID
 	}
