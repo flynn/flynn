@@ -14,11 +14,12 @@ var GithubClient = createClass({
 		}
 	}],
 
-	willInitialize: function (accessToken) {
+	willInitialize: function (accessToken, apiURL) {
 		if ( !accessToken ) {
 			throw new Error(this.constructor.displayName +": Invalid client: "+ JSON.stringify(accessToken));
 		}
 		this.accessToken = accessToken;
+		this.apiURL = apiURL;
 	},
 
 	performRequest: function (method, path, args) {
@@ -47,7 +48,7 @@ var GithubClient = createClass({
 			headers: extend({
 				Accept: 'application/json'
 			}, args.headers || {}),
-			url: "https://api.github.com" + path
+			url: this.apiURL + path
 		}, args)).then(function (args) {
 			var res = args[0];
 			var xhr = args[1];

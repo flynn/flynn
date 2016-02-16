@@ -32,7 +32,7 @@ var GithubAuth = React.createClass({
 
 						<ol>
 							<li>
-								<ExternalLink href={"https://github.com/settings/tokens/new"+ QueryParams.serializeParams([{
+								<ExternalLink href={Config.github_token_url + QueryParams.serializeParams([{
 									scopes: "repo,read:org,read:public_key",
 									description: "Flynn Dashboard"
 								}])} className="btn-green connect-with-github" onClick={this.__handleGenerateTokenBtnClick}>

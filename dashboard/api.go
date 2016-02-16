@@ -234,6 +234,8 @@ type UserConfig struct {
 
 	Endpoints          map[string]string `json:"endpoints"`
 	DefaultRouteDomain string            `json:"default_route_domain"`
+	GithubAPIURL       string            `json:"github_api_url"`
+	GithubTokenURL     string            `json:"github_token_url"`
 }
 
 var baseConfig = UserConfig{
@@ -248,6 +250,8 @@ func (api *API) GetConfig(ctx context.Context, w http.ResponseWriter, req *http.
 
 	config.Endpoints["cluster_controller"] = fmt.Sprintf("https://%s", api.conf.ControllerDomain)
 	config.DefaultRouteDomain = api.conf.DefaultRouteDomain
+	config.GithubAPIURL = api.conf.GithubAPIURL
+	config.GithubTokenURL = api.conf.GithubTokenURL
 
 	if api.IsAuthenticated(ctx) {
 		config.User = &ExpandedUser{}

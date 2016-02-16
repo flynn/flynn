@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path"
@@ -20,6 +21,8 @@ type Config struct {
 	SecureCookies      bool
 	LoginToken         string
 	GithubToken        string
+	GithubAPIURL       string
+	GithubTokenURL     string
 	SessionStore       *sessions.CookieStore
 	AppName            string
 	CACert             []byte
@@ -77,6 +80,14 @@ func LoadConfigFromEnv() *Config {
 	}
 
 	conf.GithubToken = os.Getenv("GITHUB_TOKEN")
+
+	if host := os.Getenv("GITHUB_ENTERPRISE_HOST"); host != "" {
+		conf.GithubAPIURL = fmt.Sprintf("https://%s/api/v3", host)
+		conf.GithubTokenURL = fmt.Sprintf("https://%s/settings/tokens/new", host)
+	} else {
+		conf.GithubAPIURL = "https://api.github.com"
+		conf.GithubTokenURL = "https://github.com/settings/tokens/new"
+	}
 
 	conf.AppName = os.Getenv("APP_NAME")
 	if conf.AppName == "" {
