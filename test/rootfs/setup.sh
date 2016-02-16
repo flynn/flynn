@@ -126,20 +126,37 @@ apt-get install -y \
   libvirt-bin \
   inotify-tools
 
-# install flynn test dependencies: postgres
-# (normally this is used via an appliance; this is for unit tests)
+# install flynn test dependencies: postgres, redis, mariadb
+# (normally these are used via appliances; install locally for unit tests)
 apt-get -qy --fix-missing --force-yes install language-pack-en
 update-locale LANG=en_US.UTF-8 LANGUAGE=en_US.UTF-8 LC_ALL=en_US.UTF-8
 dpkg-reconfigure locales
+
+# add keys
 curl --fail --silent https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
+apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xcbcb082a1bb943db
+apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 1C4CBDCDCD2EFD2A
+
+# add repos
 echo "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main" >> /etc/apt/sources.list.d/postgresql.list
+echo "deb http://mirrors.syringanetworks.net/mariadb/repo/10.1/ubuntu trusty main" >> /etc/apt/sources.list.d/mariadb.list
+echo "deb http://repo.percona.com/apt trusty main" >> /etc/apt/sources.list.d/percona.list
+
+# update lists
 apt-get update
-apt-get install -y postgresql-9.4 postgresql-contrib-9.4
+
+# install packages
+apt-get install -y postgresql-9.4 postgresql-contrib-9.4 redis-server mariadb-server percona-xtrabackup
+
+# setup postgres
 service postgresql start
 sudo -u postgres createuser --superuser ubuntu
 update-rc.d postgresql disable
 service postgresql stop
-apt-get install -y redis-server
+
+# setup mariadb
+update-rc.d mysql disable
+service mysql stop
 
 # make tup suid root so that we can build in chroots
 chmod ug+s /usr/bin/tup
