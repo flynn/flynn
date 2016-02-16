@@ -31,6 +31,10 @@ const configFile = "/etc/flynn/host.json"
 var logger = log15.New("app", "host", "pid", os.Getpid())
 
 func init() {
+	// always use logfmt output, even when attached to a TTY (e.g.
+	// when run as an Upstart job)
+	logger.SetHandler(log15.StreamHandler(os.Stdout, log15.LogfmtFormat()))
+
 	cli.Register("daemon", runDaemon, `
 usage: flynn-host daemon [options]
 
