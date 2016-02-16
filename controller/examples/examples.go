@@ -298,7 +298,7 @@ func (e *generator) listArtifacts() {
 
 func (e *generator) createRelease() {
 	release := &ct.Release{
-		ImageArtifactID: e.resourceIds["artifact"],
+		ArtifactIDs: []string{e.resourceIds["artifact"]},
 		Env: map[string]string{
 			"some": "info",
 		},

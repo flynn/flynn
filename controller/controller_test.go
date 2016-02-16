@@ -250,8 +250,9 @@ func (s *S) TestCreateArtifact(c *C) {
 }
 
 func (s *S) createTestRelease(c *C, in *ct.Release) *ct.Release {
-	if in.ImageArtifactID == "" {
-		in.ImageArtifactID = s.createTestArtifact(c, &ct.Artifact{}).ID
+	if len(in.ArtifactIDs) == 0 {
+		in.ArtifactIDs = []string{s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker}).ID}
+		in.LegacyArtifactID = in.ArtifactIDs[0]
 	}
 	c.Assert(s.c.CreateRelease(in), IsNil)
 	return in
@@ -310,7 +311,7 @@ func (s *S) TestCreateFormation(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(expanded.App.ID, Equals, app.ID)
 		c.Assert(expanded.Release.ID, Equals, release.ID)
-		c.Assert(expanded.ImageArtifact.ID, Equals, release.ImageArtifactID)
+		c.Assert(expanded.ImageArtifact.ID, Equals, release.ImageArtifactID())
 		c.Assert(expanded.Processes, DeepEquals, out.Processes)
 
 		_, err = s.c.GetFormation(appID, release.ID+"fail")
@@ -366,65 +367,61 @@ func (s *S) TestReleaseList(c *C) {
 	c.Assert(list[0].ID, Not(Equals), "")
 }
 
-func (s *S) TestReleaseImageArtifact(c *C) {
-	// release.ImageArtifactID must have type host.ArtifactTypeDocker
-	err := s.c.CreateRelease(&ct.Release{
-		ImageArtifactID: s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeTar}).ID,
-	})
+func (s *S) TestReleaseArtifacts(c *C) {
+	// a release with no artifacts is ok
+	release := &ct.Release{}
+	c.Assert(s.c.CreateRelease(release), IsNil)
+	gotRelease, err := s.c.GetRelease(release.ID)
+	c.Assert(err, IsNil)
+	c.Assert(gotRelease.ArtifactIDs, IsNil)
+	c.Assert(gotRelease.ImageArtifactID(), Equals, "")
+	c.Assert(gotRelease.TarArtifactIDs(), IsNil)
+
+	// a release with a single "docker" artifact is ok
+	imageArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker})
+	release = &ct.Release{ArtifactIDs: []string{imageArtifact.ID}}
+	c.Assert(s.c.CreateRelease(release), IsNil)
+	gotRelease, err = s.c.GetRelease(release.ID)
+	c.Assert(err, IsNil)
+	c.Assert(gotRelease.ArtifactIDs, DeepEquals, []string{imageArtifact.ID})
+	c.Assert(gotRelease.ImageArtifactID(), Equals, imageArtifact.ID)
+	c.Assert(gotRelease.TarArtifactIDs(), DeepEquals, []string{})
+
+	// a release with a single "tar" artifact is not ok
+	tarArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeTar})
+	err = s.c.CreateRelease(&ct.Release{ArtifactIDs: []string{tarArtifact.ID}})
 	c.Assert(err, NotNil)
 	e, ok := err.(hh.JSONError)
 	if !ok {
 		c.Fatalf("expected error to have type httphelper.JSONError, got %T", err)
 	}
 	c.Assert(e.Code, Equals, hh.ValidationErrorCode)
-	c.Assert(e.Message, Equals, `artifact must have type "docker"`)
+	c.Assert(e.Message, Equals, `artifacts must have exactly one artifact of type "docker"`)
 
-	// creating with type host.ArtifactTypeDocker should be ok
-	artifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker})
-	release := &ct.Release{ImageArtifactID: artifact.ID}
-	c.Assert(s.c.CreateRelease(release), IsNil)
-	gotRelease, err := s.c.GetRelease(release.ID)
-	c.Assert(err, IsNil)
-	c.Assert(gotRelease.ImageArtifactID, Equals, artifact.ID)
-}
-
-func (s *S) TestReleaseTarArtifacts(c *C) {
-	// release.TarArtifactIDs must all have type host.ArtifactTypeTar
-	for _, x := range []struct {
-		Types []host.ArtifactType
-		Valid bool
-	}{
-		{[]host.ArtifactType{host.ArtifactTypeDocker}, false},
-		{[]host.ArtifactType{host.ArtifactTypeDocker, host.ArtifactTypeTar}, false},
-		{[]host.ArtifactType{host.ArtifactTypeTar, host.ArtifactTypeDocker}, false},
-		{[]host.ArtifactType{host.ArtifactTypeTar}, true},
-		{[]host.ArtifactType{host.ArtifactTypeTar, host.ArtifactTypeTar}, true},
-	} {
-		ids := make([]string, len(x.Types))
-		for i, typ := range x.Types {
-			ids[i] = s.createTestArtifact(c, &ct.Artifact{Type: typ}).ID
-		}
-		release := &ct.Release{TarArtifactIDs: ids}
-		err := s.c.CreateRelease(release)
-		if !x.Valid {
-			c.Assert(err, NotNil)
-			e, ok := err.(hh.JSONError)
-			if !ok {
-				c.Fatalf("expected error to have type httphelper.JSONError, got %T", err)
-			}
-			c.Assert(e.Code, Equals, hh.ValidationErrorCode)
-			c.Assert(e.Message, Equals, `tar_artifacts must have type "tar"`)
-			continue
-		}
-		c.Assert(err, IsNil)
-		c.Assert(release.TarArtifactIDs, DeepEquals, ids)
-		gotRelease, err := s.c.GetRelease(release.ID)
-		c.Assert(err, IsNil)
-		c.Assert(gotRelease.TarArtifactIDs, HasLen, len(ids))
-		for i, id := range gotRelease.TarArtifactIDs {
-			c.Assert(id, Equals, ids[i])
-		}
+	// a release with multiple "docker" artifacts is not ok
+	secondImageArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker})
+	err = s.c.CreateRelease(&ct.Release{ArtifactIDs: []string{imageArtifact.ID, secondImageArtifact.ID}})
+	c.Assert(err, NotNil)
+	e, ok = err.(hh.JSONError)
+	if !ok {
+		c.Fatalf("expected error to have type httphelper.JSONError, got %T", err)
 	}
+	c.Assert(e.Code, Equals, hh.ValidationErrorCode)
+	c.Assert(e.Message, Equals, `artifacts must have exactly one artifact of type "docker"`)
+
+	// a release with a single "docker" artifact and multiple "tar" artifacts is ok
+	secondTarArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeTar})
+	artifactIDs := []string{imageArtifact.ID, tarArtifact.ID, secondTarArtifact.ID}
+	release = &ct.Release{ArtifactIDs: artifactIDs}
+	c.Assert(s.c.CreateRelease(release), IsNil)
+	gotRelease, err = s.c.GetRelease(release.ID)
+	c.Assert(err, IsNil)
+	c.Assert(gotRelease.ArtifactIDs, DeepEquals, artifactIDs)
+	c.Assert(gotRelease.ImageArtifactID(), Equals, imageArtifact.ID)
+	tarArtifactIDs := gotRelease.TarArtifactIDs()
+	c.Assert(tarArtifactIDs, HasLen, 2)
+	c.Assert(tarArtifactIDs[0], Equals, tarArtifact.ID)
+	c.Assert(tarArtifactIDs[1], Equals, secondTarArtifact.ID)
 }
 
 func (s *S) TestTarArtifact(c *C) {

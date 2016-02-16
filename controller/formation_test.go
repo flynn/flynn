@@ -56,7 +56,7 @@ func (s *S) TestFormationStreaming(c *C) {
 	c.Assert(out.App, DeepEquals, app)
 	c.Assert(out.Processes, DeepEquals, formation.Processes)
 	c.Assert(out.ImageArtifact.CreatedAt, Not(IsNil))
-	c.Assert(out.ImageArtifact.ID, Equals, release.ImageArtifactID)
+	c.Assert(out.ImageArtifact.ID, Equals, release.ImageArtifactID())
 
 	c.Assert(s.c.DeleteFormation(app.ID, release.ID), IsNil)
 
@@ -79,9 +79,8 @@ func (s *S) TestFormationListActive(c *C) {
 
 	createFormation := func(app *ct.App, procs map[string]int) *ct.ExpandedFormation {
 		release := &ct.Release{
-			ImageArtifactID: imageArtifact.ID,
-			TarArtifactIDs:  []string{tarArtifact.ID},
-			Processes:       make(map[string]ct.ProcessType, len(procs)),
+			ArtifactIDs: []string{imageArtifact.ID, tarArtifact.ID},
+			Processes:   make(map[string]ct.ProcessType, len(procs)),
 		}
 		for typ := range procs {
 			release.Processes[typ] = ct.ProcessType{}
@@ -136,7 +135,7 @@ func (s *S) TestFormationStreamingInterrupted(c *C) {
 	artifact := &ct.Artifact{Type: host.ArtifactTypeDocker, URI: fmt.Sprintf("https://example.com/%s", random.String(8))}
 	c.Assert(artifactRepo.Add(artifact), IsNil)
 
-	release := &ct.Release{ImageArtifactID: artifact.ID}
+	release := &ct.Release{ArtifactIDs: []string{artifact.ID}}
 	c.Assert(releaseRepo.Add(release), IsNil)
 
 	app := &ct.App{Name: "streamtest-interrupted"}

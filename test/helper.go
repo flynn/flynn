@@ -140,7 +140,7 @@ func (h *Helper) createApp(t *c.C) (*ct.App, *ct.Release) {
 	t.Assert(client.CreateArtifact(artifact), c.IsNil)
 
 	release := &ct.Release{
-		ImageArtifactID: artifact.ID,
+		ArtifactIDs: []string{artifact.ID},
 		Processes: map[string]ct.ProcessType{
 			"echoer": {
 				Cmd:     []string{"/bin/echoer"},

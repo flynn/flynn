@@ -233,7 +233,7 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 		release, err := client.GetAppRelease(app.Name)
 		t.Assert(err, c.IsNil)
 		debugf(t, "new %s release ID: %s", app.Name, release.ID)
-		artifact, err := client.GetArtifact(release.ImageArtifactID)
+		artifact, err := client.GetArtifact(release.ImageArtifactID())
 		t.Assert(err, c.IsNil)
 		debugf(t, "new %s artifact: %+v", app.Name, artifact)
 		assertImage(artifact.URI, app.Image)

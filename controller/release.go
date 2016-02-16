@@ -23,21 +23,18 @@ func NewReleaseRepo(db *postgres.DB) *ReleaseRepo {
 }
 
 func scanRelease(s postgres.Scanner) (*ct.Release, error) {
-	var imageArtifactID *string
-	var tarArtifactIDs string
+	var artifactIDs string
 	release := &ct.Release{}
-	err := s.Scan(&release.ID, &imageArtifactID, &tarArtifactIDs, &release.Env, &release.Processes, &release.Meta, &release.CreatedAt)
+	err := s.Scan(&release.ID, &artifactIDs, &release.Env, &release.Processes, &release.Meta, &release.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			err = ErrNotFound
 		}
 		return nil, err
 	}
-	if imageArtifactID != nil {
-		release.ImageArtifactID = *imageArtifactID
-	}
-	if tarArtifactIDs != "" {
-		release.TarArtifactIDs = split(tarArtifactIDs[1:len(tarArtifactIDs)-1], ",")
+	if artifactIDs != "" {
+		release.ArtifactIDs = split(artifactIDs[1:len(artifactIDs)-1], ",")
+		release.LegacyArtifactID = release.ImageArtifactID()
 	}
 	return release, err
 }
@@ -53,10 +50,8 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 	if release.ID == "" {
 		release.ID = random.UUID()
 	}
-
-	var imageArtifactID *string
-	if release.ImageArtifactID != "" {
-		imageArtifactID = &release.ImageArtifactID
+	if release.LegacyArtifactID != "" && len(release.ArtifactIDs) == 0 {
+		release.ArtifactIDs = []string{release.LegacyArtifactID}
 	}
 
 	tx, err := r.db.Begin()
@@ -64,25 +59,19 @@ func (r *ReleaseRepo) Add(data interface{}) error {
 		return err
 	}
 
-	err = tx.QueryRow("release_insert", release.ID, imageArtifactID, release.Env, release.Processes, release.Meta).Scan(&release.CreatedAt)
+	err = tx.QueryRow("release_insert", release.ID, release.Env, release.Processes, release.Meta).Scan(&release.CreatedAt)
 	if err != nil {
 		tx.Rollback()
-		if postgres.IsPostgresCode(err, postgres.CheckViolation) {
-			return ct.ValidationError{
-				Field:   "artifact",
-				Message: `must have type "docker"`,
-			}
-		}
 		return err
 	}
 
-	for _, artifactID := range release.TarArtifactIDs {
-		if err := tx.Exec("release_tar_artifacts_insert", release.ID, artifactID); err != nil {
+	for _, artifactID := range release.ArtifactIDs {
+		if err := tx.Exec("release_artifacts_insert", release.ID, artifactID); err != nil {
 			tx.Rollback()
-			if postgres.IsPostgresCode(err, postgres.CheckViolation) {
+			if e, ok := err.(pgx.PgError); ok && e.Code == postgres.CheckViolation {
 				return ct.ValidationError{
-					Field:   "tar_artifacts",
-					Message: `must have type "tar"`,
+					Field:   "artifacts",
+					Message: e.Message,
 				}
 			}
 			return err

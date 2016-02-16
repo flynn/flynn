@@ -83,7 +83,7 @@ func (a *DeployAppAction) Run(s *State) error {
 	}
 	as.ImageArtifact = a.ImageArtifact
 
-	a.Release.ImageArtifactID = a.ImageArtifact.ID
+	a.Release.ArtifactIDs = []string{a.ImageArtifact.ID}
 	if err := client.CreateRelease(a.Release); err != nil {
 		return err
 	}

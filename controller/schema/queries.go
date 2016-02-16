@@ -23,7 +23,7 @@ var preparedStatements = map[string]string{
 	"release_select":                        releaseSelectQuery,
 	"release_insert":                        releaseInsertQuery,
 	"release_app_list":                      releaseAppListQuery,
-	"release_tar_artifacts_insert":          releaseTarArtifactsInsert,
+	"release_artifacts_insert":              releaseArtifactsInsertQuery,
 	"artifact_list":                         artifactListQuery,
 	"artifact_list_ids":                     artifactListIDsQuery,
 	"artifact_select":                       artifactSelectQuery,
@@ -113,55 +113,54 @@ UPDATE apps SET deleted_at = now() WHERE app_id = $1 AND deleted_at IS NULL`
 	appNextNameIDQuery = `
 SELECT nextval('name_ids')`
 	appGetReleaseQuery = `
-SELECT r.release_id, r.artifact_id,
+SELECT r.release_id,
   ARRAY(
-	SELECT t.artifact_id
-	FROM release_tar_artifacts t
-	WHERE t.release_id = r.release_id AND t.deleted_at IS NULL
-	ORDER BY t.created_at
+	SELECT a.artifact_id
+	FROM release_artifacts a
+	WHERE a.release_id = r.release_id AND a.deleted_at IS NULL
+	ORDER BY a.created_at
   ), r.env, r.processes, r.meta, r.created_at
 FROM apps a JOIN releases r USING (release_id) WHERE a.app_id = $1`
 
 	releaseListQuery = `
-SELECT r.release_id, r.artifact_id,
+SELECT r.release_id,
   ARRAY(
-	SELECT t.artifact_id
-	FROM release_tar_artifacts t
-	WHERE t.release_id = r.release_id AND t.deleted_at IS NULL
-	ORDER BY t.created_at
+	SELECT a.artifact_id
+	FROM release_artifacts a
+	WHERE a.release_id = r.release_id AND a.deleted_at IS NULL
+	ORDER BY a.created_at
   ), r.env, r.processes, r.meta, r.created_at
 FROM releases r WHERE r.deleted_at IS NULL ORDER BY r.created_at DESC`
 	releaseSelectQuery = `
-SELECT r.release_id, r.artifact_id,
+SELECT r.release_id,
   ARRAY(
-	SELECT t.artifact_id
-	FROM release_tar_artifacts t
-	WHERE t.release_id = r.release_id AND t.deleted_at IS NULL
-	ORDER BY t.created_at
+	SELECT a.artifact_id
+	FROM release_artifacts a
+	WHERE a.release_id = r.release_id AND a.deleted_at IS NULL
+	ORDER BY a.created_at
   ), r.env, r.processes, r.meta, r.created_at
 FROM releases r WHERE r.release_id = $1 AND r.deleted_at IS NULL`
 	releaseInsertQuery = `
-INSERT INTO releases (release_id, artifact_id, env, processes, meta)
-VALUES ($1, $2, $3, $4, $5) RETURNING created_at`
+INSERT INTO releases (release_id, env, processes, meta)
+VALUES ($1, $2, $3, $4) RETURNING created_at`
 	releaseAppListQuery = `
-SELECT DISTINCT(r.release_id), r.artifact_id,
+SELECT DISTINCT(r.release_id),
   ARRAY(
-	SELECT t.artifact_id
-	FROM release_tar_artifacts t
-	WHERE t.release_id = r.release_id AND t.deleted_at IS NULL
-	ORDER BY t.created_at
+	SELECT a.artifact_id
+	FROM release_artifacts a
+	WHERE a.release_id = r.release_id AND a.deleted_at IS NULL
+	ORDER BY a.created_at
   ), r.env, r.processes, r.meta, r.created_at
 FROM releases r JOIN formations f USING (release_id)
 WHERE f.app_id = $1 AND r.deleted_at IS NULL ORDER BY r.created_at DESC`
-	releaseTarArtifactsInsert = `
-INSERT INTO release_tar_artifacts (release_id, artifact_id) VALUES ($1, $2)
-	`
+	releaseArtifactsInsertQuery = `
+INSERT INTO release_artifacts (release_id, artifact_id) VALUES ($1, $2)`
 	artifactListQuery = `
 SELECT artifact_id, type, uri, attributes, created_at FROM artifacts
 WHERE deleted_at IS NULL ORDER BY created_at DESC`
 	artifactListIDsQuery = `
 SELECT artifact_id, type, uri, attributes, created_at FROM artifacts
-WHERE deleted_at IS NULL AND artifact_id IN ($1)`
+WHERE deleted_at IS NULL AND artifact_id = ANY($1)`
 	artifactSelectQuery = `
 SELECT artifact_id, type, uri, attributes, created_at FROM artifacts
 WHERE artifact_id = $1 AND deleted_at IS NULL`
@@ -216,20 +215,18 @@ FROM formations WHERE app_id = $1 AND deleted_at IS NULL ORDER BY created_at DES
 	formationListActiveQuery = `
 SELECT
   apps.app_id, apps.name, apps.meta,
-  releases.release_id, releases.artifact_id,
+  releases.release_id,
   ARRAY(
-	SELECT t.artifact_id
-	FROM release_tar_artifacts t
-	WHERE t.release_id = releases.release_id AND t.deleted_at IS NULL
-	ORDER BY t.created_at
+	SELECT r.artifact_id
+	FROM release_artifacts r
+	WHERE r.release_id = releases.release_id AND r.deleted_at IS NULL
+	ORDER BY r.created_at
   ),
   releases.meta, releases.env, releases.processes,
-  artifacts.artifact_id, artifacts.type, artifacts.uri,
   formations.processes, formations.tags, formations.updated_at
 FROM formations
 JOIN apps USING (app_id)
 JOIN releases ON releases.release_id = formations.release_id
-JOIN artifacts USING (artifact_id)
 WHERE (formations.app_id, formations.release_id) IN (
   SELECT app_id, release_id
   FROM formations, json_each_text(formations.processes::json)
@@ -248,20 +245,18 @@ FROM formations WHERE app_id = $1 AND release_id = $2 AND deleted_at IS NULL`
 	formationSelectExpandedQuery = `
 SELECT
   apps.app_id, apps.name, apps.meta,
-  releases.release_id, releases.artifact_id,
+  releases.release_id,
   ARRAY(
-	SELECT t.artifact_id
-	FROM release_tar_artifacts t
-	WHERE t.release_id = releases.release_id AND t.deleted_at IS NULL
-	ORDER BY t.created_at
+	SELECT a.artifact_id
+	FROM release_artifacts a
+	WHERE a.release_id = releases.release_id AND a.deleted_at IS NULL
+	ORDER BY a.created_at
   ),
   releases.meta, releases.env, releases.processes,
-  artifacts.artifact_id, artifacts.type, artifacts.uri,
   formations.processes, formations.tags, formations.updated_at
 FROM formations
 JOIN apps USING (app_id)
 JOIN releases ON releases.release_id = formations.release_id
-JOIN artifacts USING (artifact_id)
 WHERE formations.app_id = $1 AND formations.release_id = $2 AND formations.deleted_at IS NULL`
 	formationInsertQuery = `
 INSERT INTO formations (app_id, release_id, processes, tags)

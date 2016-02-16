@@ -19,9 +19,10 @@
       "$ref": "/schema/controller/common#/definitions/id"
     },
     "artifact": {
+      "description": "DEPRECATED: legacy artifact ID",
       "$ref": "/schema/controller/common#/definitions/id"
     },
-    "tar_artifacts": {
+    "artifacts": {
       "type": "array",
       "items": {
         "$ref": "/schema/controller/common#/definitions/id"

@@ -211,10 +211,10 @@ func (s *CLISuite) TestScaleAll(t *c.C) {
 
 	prevRelease := release
 	release = &ct.Release{
-		ImageArtifactID: release.ImageArtifactID,
-		Env:             release.Env,
-		Meta:            release.Meta,
-		Processes:       release.Processes,
+		ArtifactIDs: release.ArtifactIDs,
+		Env:         release.Env,
+		Meta:        release.Meta,
+		Processes:   release.Processes,
 	}
 	t.Assert(client.CreateRelease(release), c.IsNil)
 	t.Assert(client.SetAppRelease(app.id, release.ID), c.IsNil)

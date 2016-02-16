@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
@@ -84,15 +85,36 @@ func (r *ArtifactRepo) List() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	return scanArtifacts(rows)
+	var artifacts []*ct.Artifact
+	for rows.Next() {
+		artifact, err := scanArtifact(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		artifacts = append(artifacts, artifact)
+	}
+	return artifacts, nil
 }
 
-func (r *ArtifactRepo) ListIDs(ids ...string) (interface{}, error) {
-	rows, err := r.db.Query("artifact_list_ids", strings.Join(ids, ","))
+func (r *ArtifactRepo) ListIDs(ids ...string) (map[string]*ct.Artifact, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	rows, err := r.db.Query("artifact_list_ids", fmt.Sprintf("{%s}", strings.Join(ids, ",")))
 	if err != nil {
 		return nil, err
 	}
-	return scanArtifacts(rows)
+	artifacts := make(map[string]*ct.Artifact, len(ids))
+	for rows.Next() {
+		artifact, err := scanArtifact(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		artifacts[artifact.ID] = artifact
+	}
+	return artifacts, nil
 }
 
 func scanArtifacts(rows *pgx.Rows) (interface{}, error) {

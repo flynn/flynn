@@ -11,7 +11,6 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/flynn/flynn/controller/schema"
 	ct "github.com/flynn/flynn/controller/types"
-	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/ctxhelper"
 	"github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/postgres"
@@ -144,26 +143,19 @@ func scanFormation(s postgres.Scanner) (*ct.Formation, error) {
 
 func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 	f := &ct.ExpandedFormation{
-		App:           &ct.App{},
-		Release:       &ct.Release{},
-		ImageArtifact: &ct.Artifact{},
+		App:     &ct.App{},
+		Release: &ct.Release{},
 	}
-	var artifactType string
-	var imageArtifactID *string
-	var tarArtifactIDs string
+	var artifactIDs string
 	err := s.Scan(
 		&f.App.ID,
 		&f.App.Name,
 		&f.App.Meta,
 		&f.Release.ID,
-		&imageArtifactID,
-		&tarArtifactIDs,
+		&artifactIDs,
 		&f.Release.Meta,
 		&f.Release.Env,
 		&f.Release.Processes,
-		&f.ImageArtifact.ID,
-		&artifactType,
-		&f.ImageArtifact.URI,
 		&f.Processes,
 		&f.Tags,
 		&f.UpdatedAt,
@@ -174,14 +166,19 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 		}
 		return nil, err
 	}
-	f.ImageArtifact.Type = host.ArtifactType(artifactType)
-	if imageArtifactID != nil {
-		f.Release.ImageArtifactID = *imageArtifactID
-	}
-	if tarArtifactIDs != "" {
-		f.Release.TarArtifactIDs = split(tarArtifactIDs[1:len(tarArtifactIDs)-1], ",")
+	if artifactIDs != "" {
+		f.Release.ArtifactIDs = split(artifactIDs[1:len(artifactIDs)-1], ",")
 	}
 	return f, nil
+}
+
+func populateFormationArtifacts(ef *ct.ExpandedFormation, artifacts map[string]*ct.Artifact) {
+	ef.ImageArtifact = artifacts[ef.Release.ImageArtifactID()]
+
+	ef.TarArtifacts = make([]*ct.Artifact, len(ef.Release.TarArtifactIDs()))
+	for i, id := range ef.Release.TarArtifactIDs() {
+		ef.TarArtifacts[i] = artifacts[id]
+	}
 }
 
 func (r *FormationRepo) Get(appID, releaseID string) (*ct.Formation, error) {
@@ -195,13 +192,11 @@ func (r *FormationRepo) GetExpanded(appID, releaseID string) (*ct.ExpandedFormat
 	if err != nil {
 		return nil, err
 	}
-	if len(ef.Release.TarArtifactIDs) > 0 {
-		tarArtifacts, err := r.artifacts.ListIDs(ef.Release.TarArtifactIDs...)
-		if err != nil {
-			return nil, err
-		}
-		ef.TarArtifacts = tarArtifacts.([]*ct.Artifact)
+	artifacts, err := r.artifacts.ListIDs(ef.Release.ArtifactIDs...)
+	if err != nil {
+		return nil, err
 	}
+	populateFormationArtifacts(ef, artifacts)
 	return ef, nil
 }
 
@@ -227,13 +222,12 @@ func (r *FormationRepo) ListActive() ([]*ct.ExpandedFormation, error) {
 	if err != nil {
 		return nil, err
 	}
-	formations := []*ct.ExpandedFormation{}
+	var formations []*ct.ExpandedFormation
 
-	// tarArtifactFormations is a map of tar artifact IDs to a list of
-	// formations to which those tar artifacts are associated, and is
-	// used to populate formation.TarArtifacts using a subsequent artifact
-	// list query
-	tarArtifactFormations := make(map[string][]*ct.ExpandedFormation)
+	// artifactIDs is a list of artifact IDs related to the formation list
+	// and is used to populate the formation's artifact fields using a
+	// subsequent artifact list query
+	artifactIDs := make(map[string]struct{})
 
 	for rows.Next() {
 		formation, err := scanExpandedFormation(rows)
@@ -243,28 +237,22 @@ func (r *FormationRepo) ListActive() ([]*ct.ExpandedFormation, error) {
 		}
 		formations = append(formations, formation)
 
-		// add any tar artifact IDs to tarArtifactFormations so they
-		// can be looked up later
-		for _, id := range formation.Release.TarArtifactIDs {
-			tarArtifactFormations[id] = append(tarArtifactFormations[id], formation)
+		for _, id := range formation.Release.ArtifactIDs {
+			artifactIDs[id] = struct{}{}
 		}
 	}
 
-	// lookup any tar artifacts using a single query and populate the
-	// appropriate formations
-	if len(tarArtifactFormations) > 0 {
-		ids := make([]string, 0, len(tarArtifactFormations))
-		for id := range tarArtifactFormations {
+	if len(artifactIDs) > 0 {
+		ids := make([]string, 0, len(artifactIDs))
+		for id := range artifactIDs {
 			ids = append(ids, id)
 		}
 		artifacts, err := r.artifacts.ListIDs(ids...)
 		if err != nil {
 			return nil, err
 		}
-		for _, artifact := range artifacts.([]*ct.Artifact) {
-			for _, formation := range tarArtifactFormations[artifact.ID] {
-				formation.TarArtifacts = append(formation.TarArtifacts, artifact)
-			}
+		for _, formation := range formations {
+			populateFormationArtifacts(formation, artifacts)
 		}
 	}
 
@@ -334,24 +322,19 @@ func (r *FormationRepo) expandFormation(formation *ct.Formation) (*ct.ExpandedFo
 	if err != nil {
 		return nil, err
 	}
-	imageArtifact, err := r.artifacts.Get(release.(*ct.Release).ImageArtifactID)
-	if err != nil {
-		return nil, err
-	}
 	f := &ct.ExpandedFormation{
-		App:           app.(*ct.App),
-		Release:       release.(*ct.Release),
-		ImageArtifact: imageArtifact.(*ct.Artifact),
-		Processes:     formation.Processes,
-		Tags:          formation.Tags,
-		UpdatedAt:     *formation.UpdatedAt,
+		App:       app.(*ct.App),
+		Release:   release.(*ct.Release),
+		Processes: formation.Processes,
+		Tags:      formation.Tags,
+		UpdatedAt: *formation.UpdatedAt,
 	}
-	if len(f.Release.TarArtifactIDs) > 0 {
-		tarArtifacts, err := r.artifacts.ListIDs(f.Release.TarArtifactIDs...)
+	if len(f.Release.ArtifactIDs) > 0 {
+		artifacts, err := r.artifacts.ListIDs(f.Release.ArtifactIDs...)
 		if err != nil {
 			return nil, err
 		}
-		f.TarArtifacts = tarArtifacts.([]*ct.Artifact)
+		populateFormationArtifacts(f, artifacts)
 	}
 	return f, nil
 }
@@ -474,7 +457,7 @@ func (c *controllerAPI) PutFormation(ctx context.Context, w http.ResponseWriter,
 		return
 	}
 
-	if release.ImageArtifactID == "" {
+	if release.ImageArtifactID() == "" {
 		respondWithError(w, ct.ValidationError{Message: "release is not deployable"})
 		return
 	}

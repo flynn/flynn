@@ -185,9 +185,9 @@ func (s *S) TestStreamReleaseEvents(c *C) {
 		c.Assert(json.Unmarshal(e.Data, &eventArtifact), IsNil)
 		c.Assert(e.AppID, Equals, "")
 		c.Assert(e.ObjectType, Equals, ct.EventTypeArtifact)
-		c.Assert(e.ObjectID, Equals, release.ImageArtifactID)
+		c.Assert(e.ObjectID, Equals, release.ImageArtifactID())
 		c.Assert(eventArtifact, NotNil)
-		c.Assert(eventArtifact.ID, Equals, release.ImageArtifactID)
+		c.Assert(eventArtifact.ID, Equals, release.ImageArtifactID())
 	case <-time.After(10 * time.Second):
 		c.Fatal("Timed out waiting for artifact event")
 	}

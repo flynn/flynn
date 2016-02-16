@@ -74,7 +74,7 @@ func (a *RunAppAction) Run(s *State) error {
 	if a.Release.ID == "" {
 		a.Release.ID = random.UUID()
 	}
-	a.Release.ImageArtifactID = a.ImageArtifact.ID
+	a.Release.ArtifactIDs = []string{a.ImageArtifact.ID}
 	if a.Release.Env == nil {
 		a.Release.Env = make(map[string]string)
 	}

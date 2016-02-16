@@ -83,3 +83,40 @@ func (MigrateSuite) TestMigrateCriticalApps(c *C) {
 		c.Assert(meta["flynn-system-critical"], Equals, "true")
 	}
 }
+
+// TestMigrateReleaseArtifacts checks that migrating to ID 14 correctly
+// migrates releases by creating appropriate records in the release_artifacts
+// table
+func (MigrateSuite) TestMigrateReleaseArtifacts(c *C) {
+	db := setupTestDB(c, "controllertest_migrate_release_artifacts")
+	m := &testMigrator{c: c, db: db}
+
+	// start from ID 13
+	m.migrateTo(13)
+
+	// add some artifacts and releases
+	releaseArtifacts := map[string]string{
+		random.UUID(): random.UUID(),
+		random.UUID(): random.UUID(),
+		random.UUID(): random.UUID(),
+	}
+	for releaseID, artifactID := range releaseArtifacts {
+		c.Assert(db.Exec(`INSERT INTO artifacts (artifact_id, type, uri) VALUES ($1, $2, $3)`, artifactID, "docker", "http://example.com/"+artifactID), IsNil)
+		c.Assert(db.Exec(`INSERT INTO releases (release_id, artifact_id) VALUES ($1, $2)`, releaseID, artifactID), IsNil)
+	}
+	c.Assert(db.Exec(`INSERT INTO releases (release_id) VALUES ($1)`, random.UUID()), IsNil)
+
+	// migrate to 14 and check release_artifacts was populated correctly
+	m.migrateTo(14)
+	rows, err := db.Query("SELECT release_id, artifact_id FROM release_artifacts")
+	c.Assert(err, IsNil)
+	defer rows.Close()
+	actual := make(map[string]string)
+	for rows.Next() {
+		var releaseID, artifactID string
+		c.Assert(rows.Scan(&releaseID, &artifactID), IsNil)
+		actual[releaseID] = artifactID
+	}
+	c.Assert(rows.Err(), IsNil)
+	c.Assert(actual, DeepEquals, releaseArtifacts)
+}

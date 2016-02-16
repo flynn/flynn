@@ -273,42 +273,34 @@ $$ LANGUAGE plpgsql`,
 	)
 	migrations.Add(14,
 		`ALTER TABLE artifacts ADD COLUMN attributes jsonb`,
-		`CREATE TABLE release_tar_artifacts (
+		`CREATE TABLE release_artifacts (
 			release_id uuid NOT NULL REFERENCES releases (release_id),
 			artifact_id uuid NOT NULL REFERENCES artifacts (artifact_id),
 			created_at timestamptz NOT NULL DEFAULT now(),
 			deleted_at timestamptz,
 			PRIMARY KEY (release_id, artifact_id))`,
-		`CREATE FUNCTION check_release_image_artifact() RETURNS OPAQUE AS $$
-			DECLARE artifact_type text;
-			BEGIN
-			    SELECT type INTO artifact_type FROM artifacts WHERE artifact_id = NEW.artifact_id;
 
-			    IF artifact_type != 'docker' THEN
-				RAISE EXCEPTION 'invalid image artifact type: %', artifact_type USING ERRCODE = 'check_violation';
+		// add a check to ensure releases only have a single "docker"
+		// artifact, and that artifact is added first
+		`CREATE FUNCTION check_release_artifacts() RETURNS OPAQUE AS $$
+			BEGIN
+			    IF (
+			      SELECT COUNT(*)
+			      FROM release_artifacts r
+			      INNER JOIN artifacts a ON r.artifact_id = a.artifact_id
+			      WHERE r.release_id = NEW.release_id AND a.type = 'docker'
+			    ) != 1 THEN
+			      RAISE EXCEPTION 'must have exactly one artifact of type "docker"' USING ERRCODE = 'check_violation';
 			    END IF;
 
 			    RETURN NULL;
 			END;
 			$$ LANGUAGE plpgsql`,
-		`CREATE TRIGGER release_image_artifact_trigger
-			AFTER INSERT OR UPDATE ON releases
-			FOR EACH ROW EXECUTE PROCEDURE check_release_image_artifact()`,
-		`CREATE FUNCTION check_release_tar_artifacts() RETURNS OPAQUE AS $$
-			DECLARE artifact_type text;
-			BEGIN
-			    SELECT type INTO artifact_type FROM artifacts WHERE artifact_id = NEW.artifact_id;
-
-			    IF artifact_type != 'tar' THEN
-				RAISE EXCEPTION 'invalid tar artifact type: %', artifact_type USING ERRCODE = 'check_violation';
-			    END IF;
-
-			    RETURN NULL;
-			END;
-			$$ LANGUAGE plpgsql`,
-		`CREATE TRIGGER release_tar_artifacts_trigger
-			AFTER INSERT OR UPDATE ON release_tar_artifacts
-			FOR EACH ROW EXECUTE PROCEDURE check_release_tar_artifacts()`,
+		`CREATE TRIGGER release_artifacts_trigger
+			AFTER INSERT ON release_artifacts
+			FOR EACH ROW EXECUTE PROCEDURE check_release_artifacts()`,
+		`INSERT INTO release_artifacts (release_id, artifact_id) (SELECT release_id, artifact_id FROM releases WHERE artifact_id IS NOT NULL)`,
+		`ALTER TABLE releases DROP COLUMN artifact_id`,
 	)
 }
 

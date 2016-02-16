@@ -196,8 +196,8 @@ func (h *Handler) servePostCluster(w http.ResponseWriter, req *http.Request, _ h
 	serviceName := "redis-" + random.UUID()
 
 	release := &ct.Release{
-		ImageArtifactID: imageArtifact.ID,
-		Meta:            make(map[string]string),
+		ArtifactIDs: []string{imageArtifact.ID},
+		Meta:        make(map[string]string),
 		Processes: map[string]ct.ProcessType{
 			"redis": {
 				Ports: []ct.Port{

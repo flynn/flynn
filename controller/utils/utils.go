@@ -43,10 +43,6 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 	job := &host.Job{
 		ID:       id,
 		Metadata: metadata,
-		ImageArtifact: host.Artifact{
-			Type: f.ImageArtifact.Type,
-			URI:  f.ImageArtifact.URI,
-		},
 		Config: host.ContainerConfig{
 			Cmd:         t.Cmd,
 			Env:         env,
@@ -61,14 +57,13 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 	if len(t.Entrypoint) > 0 {
 		job.Config.Entrypoint = t.Entrypoint
 	}
-	if f.TarArtifacts != nil {
+	if f.ImageArtifact != nil {
+		job.ImageArtifact = f.ImageArtifact.HostArtifact()
+	}
+	if len(f.TarArtifacts) > 0 {
 		job.TarArtifacts = make([]*host.Artifact, len(f.TarArtifacts))
 		for i, artifact := range f.TarArtifacts {
-			job.TarArtifacts[i] = &host.Artifact{
-				URI:        artifact.URI,
-				Type:       artifact.Type,
-				Attributes: artifact.Attributes,
-			}
+			job.TarArtifacts[i] = artifact.HostArtifact()
 		}
 	}
 	job.Config.Ports = make([]host.Port, len(t.Ports))
@@ -123,13 +118,13 @@ func ExpandFormation(c ControllerClient, f *ct.Formation) (*ct.ExpandedFormation
 		return nil, fmt.Errorf("error getting release: %s", err)
 	}
 
-	imageArtifact, err := c.GetArtifact(release.ImageArtifactID)
+	imageArtifact, err := c.GetArtifact(release.ImageArtifactID())
 	if err != nil {
 		return nil, fmt.Errorf("error getting image artifact: %s", err)
 	}
 
-	tarArtifacts := make([]*ct.Artifact, len(release.TarArtifactIDs))
-	for i, tarArtifactID := range release.TarArtifactIDs {
+	tarArtifacts := make([]*ct.Artifact, len(release.TarArtifactIDs()))
+	for i, tarArtifactID := range release.TarArtifactIDs() {
 		artifact, err := c.GetArtifact(tarArtifactID)
 		if err != nil {
 			return nil, fmt.Errorf("error getting tar artifact: %s", err)

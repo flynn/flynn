@@ -249,12 +249,6 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 		return
 	}
 	release := data.(*ct.Release)
-	data, err = c.artifactRepo.Get(release.ImageArtifactID)
-	if err != nil {
-		respondWithError(w, err)
-		return
-	}
-	imageArtifact := data.(*ct.Artifact)
 	attach := strings.Contains(req.Header.Get("Upgrade"), "flynn-attach/0")
 
 	hosts, err := c.clusterClient.Hosts()
@@ -295,10 +289,6 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	job := &host.Job{
 		ID:       id,
 		Metadata: metadata,
-		ImageArtifact: host.Artifact{
-			Type: imageArtifact.Type,
-			URI:  imageArtifact.URI,
-		},
 		Config: host.ContainerConfig{
 			Cmd:        newJob.Cmd,
 			Env:        env,
@@ -312,20 +302,16 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 	if len(newJob.Entrypoint) > 0 {
 		job.Config.Entrypoint = newJob.Entrypoint
 	}
-	if len(release.TarArtifactIDs) > 0 {
-		data, err := c.artifactRepo.ListIDs(release.TarArtifactIDs...)
+	if len(release.ArtifactIDs) > 0 {
+		artifacts, err := c.artifactRepo.ListIDs(release.ArtifactIDs...)
 		if err != nil {
 			respondWithError(w, err)
 			return
 		}
-		tarArtifacts := data.([]*ct.Artifact)
-		job.TarArtifacts = make([]*host.Artifact, len(tarArtifacts))
-		for i, artifact := range tarArtifacts {
-			job.TarArtifacts[i] = &host.Artifact{
-				URI:        artifact.URI,
-				Type:       artifact.Type,
-				Attributes: artifact.Attributes,
-			}
+		job.ImageArtifact = artifacts[release.ImageArtifactID()].HostArtifact()
+		job.TarArtifacts = make([]*host.Artifact, len(release.TarArtifactIDs()))
+		for i, id := range release.TarArtifactIDs() {
+			job.TarArtifacts[i] = artifacts[id].HostArtifact()
 		}
 	}
 

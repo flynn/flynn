@@ -186,7 +186,7 @@ func (c *Cmd) Start() error {
 	// otherwise generate one from the fields on exec.Cmd that mirror stdlib's os.exec.
 	if c.Job == nil {
 		c.Job = &host.Job{
-			ImageArtifact: c.ImageArtifact,
+			ImageArtifact: &c.ImageArtifact,
 			Config: host.ContainerConfig{
 				Entrypoint: c.Entrypoint,
 				Cmd:        c.Cmd,
@@ -202,7 +202,7 @@ func (c *Cmd) Start() error {
 			c.Job.Config.DisableLog = true
 		}
 	} else {
-		c.Job.ImageArtifact = c.ImageArtifact
+		c.Job.ImageArtifact = &c.ImageArtifact
 	}
 	if c.Job.ID == "" {
 		c.Job.ID = cluster.GenerateJobID(c.HostID, "")

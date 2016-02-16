@@ -215,7 +215,7 @@ func (TestSuite) TestFormationChange(c *C) {
 	c.Assert(err, IsNil)
 	release, err := s.GetRelease(testReleaseID)
 	c.Assert(err, IsNil)
-	artifact, err := s.GetArtifact(release.ImageArtifactID)
+	artifact, err := s.GetArtifact(release.ImageArtifactID())
 	c.Assert(err, IsNil)
 
 	// Test scaling up an existing formation
