@@ -176,7 +176,7 @@ install_packages() {
     "libvirt-bin"
     "libvirt-dev"
     "linux-image-extra-$(uname -r)"
-    "docker-engine"
+    "docker-engine=1.9.1-0~trusty"
     "make"
     "mercurial"
     "tup"
@@ -185,6 +185,9 @@ install_packages() {
   )
 
   apt-get install -y ${packages[@]}
+
+  # hold back docker upgrades to prevent breaking pinkerton see gh issue #2459
+  apt-mark hold docker-engine
 
   # make tup suid root so that we can build in chroots
   chmod ug+s /usr/bin/tup
