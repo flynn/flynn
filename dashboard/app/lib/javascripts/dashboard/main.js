@@ -55,7 +55,8 @@ extend(Dashboard.prototype, {
 		Config.setClient(new Client(Config.endpoints));
 		if (Config.user && Config.user.auths.github) {
 			Config.setGithubClient(new GithubClient(
-				Config.user.auths.github.access_token
+				Config.user.auths.github.access_token,
+				Config.github_api_url
 			));
 		}
 
@@ -294,7 +295,8 @@ extend(Dashboard.prototype, {
 			if ( !Config.githubClient ) {
 				var githubAuth = Config.user.auths.github;
 				Config.setGithubClient(new GithubClient(
-					githubAuth.access_token
+					githubAuth.access_token,
+					Config.github_api_url
 				));
 			}
 		} else {
