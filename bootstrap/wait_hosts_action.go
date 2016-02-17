@@ -41,7 +41,12 @@ outer:
 		}
 
 		if time.Now().Sub(start) >= waitMax {
-			return fmt.Errorf("bootstrap: timed out waiting for hosts to come up")
+			msg := "bootstrap: timed out waiting for hosts to come up\n\nThe following hosts were unreachable:\n"
+			for host := range hosts {
+				msg += "\t" + host.Addr() + "\n"
+			}
+			msg += "\n"
+			return fmt.Errorf(msg)
 		}
 		time.Sleep(waitInterval)
 	}

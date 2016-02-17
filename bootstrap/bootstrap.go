@@ -234,8 +234,12 @@ func checkOnlineHosts(expected int, state *State, urls []string, timeoutSecs int
 		}
 
 		known := len(urls)
+		remaining := make(map[string]struct{}, known)
 		online := 0
 		if known >= expected {
+			for _, url := range urls {
+				remaining[url] = struct{}{}
+			}
 			state.Hosts = make([]*cluster.Host, 0, known)
 			for _, url := range urls {
 				h := cluster.NewHost("", url, nil, nil)
@@ -243,6 +247,7 @@ func checkOnlineHosts(expected int, state *State, urls []string, timeoutSecs int
 				if err != nil {
 					continue
 				}
+				delete(remaining, url)
 				online++
 				state.Hosts = append(state.Hosts, cluster.NewHost(status.ID, status.URL, nil, nil))
 			}
@@ -253,7 +258,13 @@ func checkOnlineHosts(expected int, state *State, urls []string, timeoutSecs int
 
 		select {
 		case <-timeout:
-			return fmt.Errorf("timed out waiting for %d hosts to come online (currently %d online)", expected, online)
+			msg := fmt.Sprintf("timed out waiting for %d hosts to come online (currently %d online)\n\n", expected, online)
+			msg += "The following hosts were discovered but remained unreachable:\n"
+			for url := range remaining {
+				msg += "\n" + url + "\n"
+			}
+			msg += "\n"
+			return fmt.Errorf(msg)
 		default:
 			time.Sleep(time.Second)
 		}
