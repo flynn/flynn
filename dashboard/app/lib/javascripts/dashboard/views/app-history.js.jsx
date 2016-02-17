@@ -70,7 +70,7 @@ var AppHistory = React.createClass({
 				deployBtnDisabled = false;
 			}
 		} else if (selectedEvent && selectedEvent.object_type === 'app_release') {
-			if (this.props.release && this.props.release.id !== selectedEvent.object_id && selectedEvent.data.release.artifact) {
+			if (this.props.release && this.props.release.id !== selectedEvent.object_id && (selectedEvent.data.release.artifacts || []).length) {
 				deployBtnDisabled = false;
 			}
 		}
