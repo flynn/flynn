@@ -18,13 +18,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
 	"path/filepath"
+	"runtime/pprof"
 	"sync"
 	"syscall"
 	"time"
@@ -730,6 +733,15 @@ func newSocketPair(name string) (*os.File, *os.File, error) {
 	return os.NewFile(uintptr(pair[0]), name), os.NewFile(uintptr(pair[1]), name), nil
 }
 
+// print a full goroutine stack trace to the log fd on SIGUSR2
+func debugStackPrinter(out io.Writer) {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGUSR2)
+	for range c {
+		pprof.Lookup("goroutine").WriteTo(out, 1)
+	}
+}
+
 // This code is run INSIDE the container and is responsible for setting
 // up the environment before running the actual process
 func Main() {
@@ -737,6 +749,7 @@ func Main() {
 	if err != nil {
 		os.Exit(70)
 	}
+	go debugStackPrinter(logW)
 
 	logger = log15.New("app", "containerinit")
 	logger.SetHandler(log15.StreamHandler(logW, log15.LogfmtFormat()))
