@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -69,24 +70,21 @@ func (c *Host) GetStatus() (*host.HostStatus, error) {
 }
 
 func WaitForHostStatus(hostIP string, desired func(*host.HostStatus) bool) (*host.HostStatus, error) {
-	const waitMax = time.Minute
 	const waitInterval = 500 * time.Millisecond
+	const logInterval = time.Minute
+	start := time.Now()
+	lastLogged := time.Now()
 	h := NewHost("", fmt.Sprintf("http://%s:1113", hostIP), nil, nil)
-	timeout := time.After(waitMax)
 	for {
 		status, err := h.GetStatus()
 		if err == nil && desired(status) {
 			return status, nil
 		}
-		select {
-		case <-timeout:
-			if err == nil {
-				return nil, fmt.Errorf("desired host status not reached after %s", waitMax)
-			}
-			return nil, fmt.Errorf("timed out getting host status: %s", err)
-		default:
-			time.Sleep(waitInterval)
+		if time.Since(lastLogged) > logInterval {
+			log.Printf("desired host status still not reached after %s", time.Since(start))
+			lastLogged = time.Now()
 		}
+		time.Sleep(waitInterval)
 	}
 }
 
