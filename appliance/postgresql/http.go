@@ -6,9 +6,9 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/appliance/postgresql/client"
-	"github.com/flynn/flynn/appliance/postgresql/state"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/httphelper"
+	"github.com/flynn/flynn/pkg/sirenia/state"
 	"github.com/flynn/flynn/pkg/status"
 )
 
@@ -35,7 +35,7 @@ type HTTP struct {
 
 func (h *HTTP) GetHealthStatus() status.Status {
 	info := h.peer.Info()
-	if info.State == nil || info.PgRetryPending != nil ||
+	if info.State == nil || info.RetryPending != nil ||
 		(info.Role != state.RolePrimary && info.Role != state.RoleSync && info.Role != state.RoleAsync) {
 		return status.Unhealthy
 	}

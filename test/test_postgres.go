@@ -8,10 +8,10 @@ import (
 	"time"
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
-	"github.com/flynn/flynn/appliance/postgresql/state"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/postgres"
+	"github.com/flynn/flynn/pkg/sirenia/state"
 )
 
 type PostgresSuite struct {

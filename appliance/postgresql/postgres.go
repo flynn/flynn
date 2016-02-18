@@ -18,10 +18,11 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/appliance/postgresql/client"
-	"github.com/flynn/flynn/appliance/postgresql/state"
-	"github.com/flynn/flynn/appliance/postgresql/xlog"
+	"github.com/flynn/flynn/appliance/postgresql/pgxlog"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/sirenia/state"
+	"github.com/flynn/flynn/pkg/sirenia/xlog"
 )
 
 type Config struct {
@@ -44,9 +45,9 @@ type Postgres struct {
 	dbMtx sync.RWMutex
 	db    *pgx.ConnPool
 
-	events chan state.PostgresEvent
+	events chan state.DatabaseEvent
 
-	configVal           atomic.Value // *state.PgConfig
+	configVal           atomic.Value // *state.Config
 	runningVal          atomic.Value // bool
 	syncedDownstreamVal atomic.Value // *discoverd.Instance
 	configApplied       bool
@@ -82,7 +83,7 @@ type Postgres struct {
 
 const checkInterval = 100 * time.Millisecond
 
-func NewPostgres(c Config) state.Postgres {
+func NewPostgres(c Config) state.Database {
 	p := &Postgres{
 		id:             c.ID,
 		log:            c.Logger,
@@ -96,7 +97,7 @@ func NewPostgres(c Config) state.Postgres {
 		extWhitelist:   c.ExtWhitelist,
 		shmType:        c.SHMType,
 		waitUpstream:   c.WaitUpstream,
-		events:         make(chan state.PostgresEvent, 1),
+		events:         make(chan state.DatabaseEvent, 1),
 		cancelSyncWait: func() {},
 	}
 	p.setRunning(false)
@@ -123,8 +124,12 @@ func NewPostgres(c Config) state.Postgres {
 	if p.replTimeout == 0 {
 		p.replTimeout = 1 * time.Minute
 	}
-	p.events <- state.PostgresEvent{}
+	p.events <- state.DatabaseEvent{}
 	return p
+}
+
+func (p *Postgres) XLog() xlog.XLog {
+	return pgxlog.PgXLog{}
 }
 
 func (p *Postgres) running() bool {
@@ -135,11 +140,11 @@ func (p *Postgres) setRunning(running bool) {
 	p.runningVal.Store(running)
 }
 
-func (p *Postgres) config() *state.PgConfig {
-	return p.configVal.Load().(*state.PgConfig)
+func (p *Postgres) config() *state.Config {
+	return p.configVal.Load().(*state.Config)
 }
 
-func (p *Postgres) setConfig(config *state.PgConfig) {
+func (p *Postgres) setConfig(config *state.Config) {
 	p.configVal.Store(config)
 }
 
@@ -174,7 +179,7 @@ func (p *Postgres) Info() (*pgmanager.PostgresInfo, error) {
 	return res, err
 }
 
-func (p *Postgres) Reconfigure(config *state.PgConfig) error {
+func (p *Postgres) Reconfigure(config *state.Config) error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
@@ -269,11 +274,11 @@ func (p *Postgres) isReadWrite() (bool, error) {
 	return res == "off", err
 }
 
-func (p *Postgres) Ready() <-chan state.PostgresEvent {
+func (p *Postgres) Ready() <-chan state.DatabaseEvent {
 	return p.events
 }
 
-func (p *Postgres) reconfigure(config *state.PgConfig) (err error) {
+func (p *Postgres) reconfigure(config *state.Config) (err error) {
 	log := p.log.New("fn", "reconfigure")
 
 	defer func() {
@@ -296,7 +301,7 @@ func (p *Postgres) reconfigure(config *state.PgConfig) (err error) {
 
 	// If we're already running and it's just a change from async to sync with the same node, we don't need to restart
 	if p.configApplied && p.running() && p.config() != nil && config != nil &&
-		p.config().Role == state.RoleAsync && config.Role == state.RoleSync && config.Upstream.Meta["POSTGRES_ID"] == p.config().Upstream.Meta["POSTGRES_ID"] {
+		p.config().Role == state.RoleAsync && config.Role == state.RoleSync && config.Upstream.Meta[pgIdKey] == p.config().Upstream.Meta[pgIdKey] {
 		log.Info("nothing to do", "reason", "becoming sync with same upstream")
 		return nil
 	}
@@ -440,7 +445,7 @@ func (p *Postgres) assumeStandby(upstream, downstream *discoverd.Instance) error
 			"--pgdata", p.dataDir,
 			"--dbname", fmt.Sprintf(
 				"host=%s port=%s user=flynn password=%s application_name=%s",
-				upstream.Host(), upstream.Port(), p.password, upstream.Meta["POSTGRES_ID"],
+				upstream.Host(), upstream.Port(), p.password, upstream.Meta[pgIdKey],
 			),
 			"--xlog-method=stream",
 			"--progress",
@@ -513,7 +518,7 @@ func (p *Postgres) updateSync(downstream *discoverd.Instance) error {
 
 	config := configData{
 		ReadOnly: true,
-		Sync:     downstream.Meta["POSTGRES_ID"],
+		Sync:     downstream.Meta[pgIdKey],
 	}
 
 	if err := p.writeConfig(config); err != nil {
@@ -656,10 +661,10 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance, enableWrites bool) {
 		defer close(doneCh)
 
 		startTime := time.Now().UTC()
-		lastFlushed := xlog.Zero
+		lastFlushed := p.XLog().Zero()
 		log := p.log.New(
 			"fn", "waitForSync",
-			"sync_name", inst.Meta["POSTGRES_ID"],
+			"sync_name", inst.Meta[pgIdKey],
 			"start_time", log15.Lazy{func() time.Time { return startTime }},
 			"last_flushed", log15.Lazy{func() xlog.Position { return lastFlushed }},
 		)
@@ -691,7 +696,7 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance, enableWrites bool) {
 				return
 			}
 
-			sent, flushed, err := p.checkReplStatus(inst.Meta["POSTGRES_ID"])
+			sent, flushed, err := p.checkReplStatus(inst.Meta[pgIdKey])
 			if err != nil {
 				// If we can't query the replication state, we just keep trying.
 				// We do not count this as part of the replication timeout.
@@ -708,10 +713,10 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance, enableWrites bool) {
 			elapsedTime := time.Now().Sub(startTime)
 			log := log.New("sent", sent, "flushed", flushed, "elapsed", elapsedTime)
 
-			if cmp, err := xlog.Compare(lastFlushed, flushed); err != nil {
+			if cmp, err := p.XLog().Compare(lastFlushed, flushed); err != nil {
 				log.Error("error parsing log locations", "err", err)
 				return
-			} else if lastFlushed == xlog.Zero || cmp == -1 {
+			} else if lastFlushed == p.XLog().Zero() || cmp == -1 {
 				log.Debug("flushed row incremented, resetting startTime")
 				startTime = time.Now().UTC()
 				lastFlushed = flushed
@@ -735,7 +740,7 @@ func (p *Postgres) waitForSync(inst *discoverd.Instance, enableWrites bool) {
 
 		if enableWrites {
 			// sync caught up, enable write transactions
-			if err := p.writeConfig(configData{Sync: inst.Meta["POSTGRES_ID"]}); err != nil {
+			if err := p.writeConfig(configData{Sync: inst.Meta[pgIdKey]}); err != nil {
 				log.Error("error writing postgres.conf", "err", err)
 				return
 			}

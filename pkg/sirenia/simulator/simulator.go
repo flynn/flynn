@@ -28,9 +28,19 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
-	"github.com/flynn/flynn/appliance/postgresql/state"
-	"github.com/flynn/flynn/appliance/postgresql/xlog"
+	"github.com/flynn/flynn/appliance/postgresql/pgxlog"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/sirenia/state"
+	"github.com/flynn/flynn/pkg/sirenia/xlog"
+)
+
+//TODO(jpg) There isn't really a reason for the simulator to use the postgres xlog
+// However all the initial wal harness data is specified using the pg format so
+// there is no harm it leaving it for now.
+var dxlog = pgxlog.PgXLog{}
+
+const (
+	simIdKey = "SIM_ID"
 )
 
 type commandFunc func([]string)
@@ -52,7 +62,7 @@ type Simulator struct {
 
 	out       io.Writer
 	log       log15.Logger
-	postgres  *postgresSimulator
+	db        *databaseSimulator
 	discoverd *discoverdSimulator
 	peer      *simPeer
 	restCh    chan struct{}
@@ -76,7 +86,7 @@ func New(singleton bool, out io.Writer, logOut io.Writer) *Simulator {
 		retryCh:   make(chan struct{}, 1),
 	}
 	s.discoverd = newDiscoverdSimulator(s.log.New("component", "discoverd"))
-	s.postgres = newPostgresSimulator(s.discoverd, s.log.New("component", "pg"))
+	s.db = newDatabaseSimulator(s.discoverd, s.log.New("component", "pg"))
 	s.peer = s.createSimPeer()
 	s.initCommands()
 	s.log.SetHandler(log15.StreamHandler(logOut, log15.LogfmtFormat()))
@@ -117,7 +127,7 @@ func (s *Simulator) newPeerIdent(name string) *discoverd.Instance {
 	inst := &discoverd.Instance{
 		Addr:  fmt.Sprintf("10.0.0.%d:5432", s.nextPeer),
 		Proto: "tcp",
-		Meta:  map[string]string{"POSTGRES_ID": name},
+		Meta:  map[string]string{simIdKey: name},
 	}
 	inst.ID = md5sum(inst.Proto + "-" + inst.Addr)
 	s.allIdents[name] = inst
@@ -128,20 +138,20 @@ type simPeer struct {
 	Self      *discoverd.Instance
 	Peer      *state.Peer
 	Discoverd *discoverdSimulatorClient
-	Postgres  *postgresSimulatorClient
+	Db        *databaseSimulatorClient
 }
 
 func (s *Simulator) createSimPeer() *simPeer {
 	ident := s.newPeerIdent("")
 	dd := s.discoverd.NewClient(ident)
-	pg := s.postgres.NewClient(ident)
-	p := state.NewPeer(ident, ident.Meta["POSTGRES_ID"], s.singleton, dd, pg, s.log.New("component", "peer"))
+	db := s.db.NewClient(ident)
+	p := state.NewPeer(ident, ident.Meta[simIdKey], simIdKey, s.singleton, dd, db, s.log.New("component", "peer"))
 	p.SetDebugChannels(s.restCh, s.retryCh)
 
 	return &simPeer{
 		Self:      ident,
 		Discoverd: dd,
-		Postgres:  pg,
+		Db:        db,
 		Peer:      p,
 	}
 }
@@ -201,7 +211,7 @@ func (s *Simulator) StartPeer(args []string) {
 	s.discoverd.PeerJoined(s.peer.Self)
 	go s.peer.Peer.Run()
 	s.peer.Discoverd.startSimulation()
-	s.peer.Postgres.startSimulation()
+	s.peer.Db.startSimulation()
 	s.started = true
 }
 
@@ -271,20 +281,20 @@ func (s *Simulator) RmPeer(args []string) {
 	}
 	name := args[0]
 
-	if name != s.peer.Self.Meta["POSTGRES_ID"] {
+	if name != s.peer.Self.Meta[simIdKey] {
 		s.discoverd.PeerRemoved(name)
 	}
 
 	cs := s.discoverd.ClusterState()
 	if cs.State != nil && cs.State.Primary.ID != s.peer.Self.ID {
 		for i, p := range cs.State.Async {
-			if p.Meta["POSTGRES_ID"] == name {
+			if p.Meta[simIdKey] == name {
 				cs.State.Async = append(cs.State.Async[:i], cs.State.Async[i+1:]...)
 				s.discoverd.SetClusterState(cs)
 				break
 			}
 		}
-		if cs.State.Sync != nil && cs.State.Sync.Meta["POSTGRES_ID"] == name && len(cs.State.Async) > 0 {
+		if cs.State.Sync != nil && cs.State.Sync.Meta[simIdKey] == name && len(cs.State.Async) > 0 {
 			cs.State.Generation++
 			cs.State.Sync = cs.State.Async[0]
 			cs.State.Async = cs.State.Async[1:]
@@ -316,14 +326,14 @@ func (s *Simulator) Bootstrap(args []string) {
 
 	cs.State = &state.State{
 		Generation: 1,
-		InitWAL:    xlog.Zero,
+		InitWAL:    s.peer.Db.XLog().Zero(),
 	}
 	if primaryName != "" {
 		for _, p := range peers {
 			switch {
-			case p.Meta["POSTGRES_ID"] == primaryName:
+			case p.Meta[simIdKey] == primaryName:
 				cs.State.Primary = p
-			case syncName != "" && p.Meta["POSTGRES_ID"] == syncName:
+			case syncName != "" && p.Meta[simIdKey] == syncName:
 				cs.State.Sync = p
 			case syncName == "" && cs.State.Sync == nil:
 				cs.State.Sync = p
@@ -343,7 +353,7 @@ func (s *Simulator) Bootstrap(args []string) {
 		cs.State.Primary = peers[0]
 		cs.State.Sync = peers[1]
 		cs.State.Async = peers[2:]
-		fmt.Fprintf(s.out, "selected %q as primary", cs.State.Primary.Meta["POSTGRES_ID"])
+		fmt.Fprintf(s.out, "selected %q as primary", cs.State.Primary.Meta[simIdKey])
 	}
 
 	s.discoverd.SetClusterState(cs)
@@ -351,7 +361,7 @@ func (s *Simulator) Bootstrap(args []string) {
 }
 
 func (s *Simulator) CatchUp(args []string) {
-	s.peer.Postgres.catchUp()
+	s.peer.Db.catchUp()
 }
 
 func (s *Simulator) Depose(args []string) {
@@ -365,7 +375,7 @@ func (s *Simulator) Depose(args []string) {
 		return
 	}
 
-	newWAL, err := xlog.Increment(cs.State.InitWAL, 10)
+	newWAL, err := dxlog.Increment(cs.State.InitWAL, 10)
 	if err != nil {
 		panic(err)
 	}
@@ -398,7 +408,7 @@ func (s *Simulator) Rebuild(args []string) {
 	cs.State = cs.State.Clone()
 	newDeposed := make([]*discoverd.Instance, 0, len(cs.State.Deposed))
 	for _, p := range cs.State.Deposed {
-		if p.Meta["POSTGRES_ID"] == name {
+		if p.Meta[simIdKey] == name {
 			peer = p
 			continue
 		}
@@ -442,14 +452,14 @@ func (s *Simulator) LsPeers(args []string) {
 }
 
 type PeerSimInfo struct {
-	Peer     *state.PeerInfo `json:"peer"`
-	Postgres *PostgresInfo   `json:"postgres"`
+	Peer *state.PeerInfo `json:"peer"`
+	Db   *DbInfo         `json:"postgres"`
 }
 
 func (s *Simulator) Peer(args []string) {
 	s.jsonDump(PeerSimInfo{
-		Peer:     s.peer.Peer.Info(),
-		Postgres: s.peer.Postgres.Info(),
+		Peer: s.peer.Peer.Info(),
+		Db:   s.peer.Db.Info(),
 	})
 }
 
@@ -524,7 +534,7 @@ func (d *discoverdSimulator) PeerRemoved(name string) {
 
 	removed := false
 	for i, p := range d.peers {
-		if p.Meta["POSTGRES_ID"] == name {
+		if p.Meta[simIdKey] == name {
 			d.peers = append(d.peers[:i], d.peers[i+1:]...)
 			removed = true
 			break
@@ -629,64 +639,68 @@ func (d *discoverdSimulatorClient) startSimulation() {
 	d.Unlock()
 }
 
-type postgresSimulator struct {
+type databaseSimulator struct {
 	log log15.Logger
 	ds  *discoverdSimulator
 }
 
-func newPostgresSimulator(ds *discoverdSimulator, log log15.Logger) *postgresSimulator {
-	return &postgresSimulator{ds: ds, log: log}
+func newDatabaseSimulator(ds *discoverdSimulator, log log15.Logger) *databaseSimulator {
+	return &databaseSimulator{ds: ds, log: log}
 }
 
-func (p *postgresSimulator) NewClient(inst *discoverd.Instance) *postgresSimulatorClient {
-	c := &postgresSimulatorClient{
+func (p *databaseSimulator) NewClient(inst *discoverd.Instance) *databaseSimulatorClient {
+	c := &databaseSimulatorClient{
 		p:      p,
 		inst:   inst,
-		events: make(chan state.PostgresEvent),
+		events: make(chan state.DatabaseEvent),
 	}
-	c.XLog = xlog.Zero
+	c.CurXLog = c.XLog().Zero()
 	return c
 }
 
-type postgresSimulatorClient struct {
-	p      *postgresSimulator
+type databaseSimulatorClient struct {
+	p      *databaseSimulator
 	inst   *discoverd.Instance
-	events chan state.PostgresEvent
+	events chan state.DatabaseEvent
 
-	PostgresInfo
+	DbInfo
 }
 
-type PostgresInfo struct {
-	Config      *state.PgConfig `json:"config"`
-	Online      bool            `json:"online"`
-	XLog        xlog.Position   `json:"xlog"`
-	XLogWaiting xlog.Position   `json:"xlog_waiting,omitempty"`
+type DbInfo struct {
+	Config      *state.Config `json:"config"`
+	Online      bool          `json:"online"`
+	CurXLog     xlog.Position `json:"xlog"`
+	XLogWaiting xlog.Position `json:"xlog_waiting,omitempty"`
 }
 
-func (p *postgresSimulatorClient) Info() *PostgresInfo {
-	return &p.PostgresInfo
+func (d *DbInfo) XLog() xlog.XLog {
+	return dxlog
 }
 
-func (p *postgresSimulatorClient) startSimulation() {
-	p.events <- state.PostgresEvent{}
+func (p *databaseSimulatorClient) Info() *DbInfo {
+	return &p.DbInfo
 }
 
-func (p *postgresSimulatorClient) XLogPosition() (xlog.Position, error) {
+func (p *databaseSimulatorClient) startSimulation() {
+	p.events <- state.DatabaseEvent{}
+}
+
+func (p *databaseSimulatorClient) XLogPosition() (xlog.Position, error) {
 	time.Sleep(opLag)
 	if !p.Online {
-		return "", fmt.Errorf("postgres is offline")
+		return "", fmt.Errorf("database is offline")
 	}
-	return p.XLog, nil
+	return p.CurXLog, nil
 }
 
-func (p *postgresSimulatorClient) Reconfigure(conf *state.PgConfig) error {
+func (p *databaseSimulatorClient) Reconfigure(conf *state.Config) error {
 	s := p.p.ds.ClusterState()
 	if s.State == nil && conf.Role != state.RoleNone {
-		panic("attempted to configure postgres with no cluster state")
+		panic("attempted to configure database with no cluster state")
 	}
 
 	p.XLogWaiting = ""
-	p.p.log.Info("reconfiguring postgres")
+	p.p.log.Info("reconfiguring database")
 	time.Sleep(opLag)
 	p.Config = conf
 	p.updateXlog(s)
@@ -694,7 +708,7 @@ func (p *postgresSimulatorClient) Reconfigure(conf *state.PgConfig) error {
 	return nil
 }
 
-func (p *postgresSimulatorClient) Start() error {
+func (p *databaseSimulatorClient) Start() error {
 	if p.Config == nil {
 		panic("cannot call Start before configured")
 	}
@@ -705,7 +719,7 @@ func (p *postgresSimulatorClient) Start() error {
 		panic(fmt.Sprintf("unexpected xlog_waiting %q", p.XLogWaiting))
 	}
 
-	p.p.log.Info("starting postgres")
+	p.p.log.Info("starting database")
 	time.Sleep(opLag)
 	p.Online = true
 	p.updateXlog(p.p.ds.ClusterState())
@@ -713,28 +727,28 @@ func (p *postgresSimulatorClient) Start() error {
 	return nil
 }
 
-func (p *postgresSimulatorClient) Stop() error {
+func (p *databaseSimulatorClient) Stop() error {
 	if !p.Online {
 		panic("cannot call Stop while stopped")
 	}
 
-	p.p.log.Info("stopping postgres")
+	p.p.log.Info("stopping database")
 	time.Sleep(opLag)
 	p.Online = false
 
 	return nil
 }
 
-func (p *postgresSimulatorClient) Ready() <-chan state.PostgresEvent {
+func (p *databaseSimulatorClient) Ready() <-chan state.DatabaseEvent {
 	return p.events
 }
 
 // Given the current state, figure out our current role and update our xlog
-// position accordingly. This is used when we assume a new role or when postgres
+// position accordingly. This is used when we assume a new role or when database
 // comes online in order to simulate client writes to the primary, synchronous
 // replication (and catch-up) on the sync, and asynchronous replication on the
 // other peers.
-func (p *postgresSimulatorClient) updateXlog(ds *state.DiscoverdState) {
+func (p *databaseSimulatorClient) updateXlog(ds *state.DiscoverdState) {
 	if ds.State == nil || !p.Online || p.Config == nil {
 		return
 	}
@@ -763,13 +777,13 @@ func (p *postgresSimulatorClient) updateXlog(ds *state.DiscoverdState) {
 	// instantly connected and caught up, and we start taking writes immediately
 	// and bump the transaction log position.
 	if role == state.RolePrimary {
-		if cmp, err := xlog.Compare(s.InitWAL, p.XLog); err != nil {
+		if cmp, err := dxlog.Compare(s.InitWAL, p.CurXLog); err != nil {
 			panic(err)
 		} else if cmp > 0 {
 			panic("primary is behind the generation's initial xlog")
 		}
 		var err error
-		p.XLog, err = xlog.Increment(p.XLog, 10)
+		p.CurXLog, err = dxlog.Increment(p.CurXLog, 10)
 		if err != nil {
 			panic(err)
 		}
@@ -781,7 +795,7 @@ func (p *postgresSimulatorClient) updateXlog(ds *state.DiscoverdState) {
 	if role != state.RoleSync {
 		panic("unexpected role")
 	}
-	if cmp, err := xlog.Compare(s.InitWAL, p.XLog); err != nil {
+	if cmp, err := dxlog.Compare(s.InitWAL, p.CurXLog); err != nil {
 		panic(err)
 	} else if cmp < 0 {
 		panic("sync is ahead of primary")
@@ -789,12 +803,12 @@ func (p *postgresSimulatorClient) updateXlog(ds *state.DiscoverdState) {
 	p.XLogWaiting = s.InitWAL
 }
 
-func (p *postgresSimulatorClient) catchUp() {
+func (p *databaseSimulatorClient) catchUp() {
 	if p.XLogWaiting == "" {
 		p.p.log.Error("catchUp when not sync or not currently waiting")
 	}
 	var err error
-	p.XLog, err = xlog.Increment(p.XLogWaiting, 10)
+	p.CurXLog, err = dxlog.Increment(p.XLogWaiting, 10)
 	if err != nil {
 		panic(err)
 	}

@@ -7,13 +7,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/flynn/flynn/appliance/postgresql/state"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/httpclient"
+	"github.com/flynn/flynn/pkg/sirenia/state"
 )
 
 type PostgresInfo struct {
-	Config           *state.PgConfig     `json:"config"`
+	Config           *state.Config       `json:"config"`
 	Running          bool                `json:"running"`
 	SyncedDownstream *discoverd.Instance `json:"synced_downstream"`
 	XLog             string              `json:"xlog,omitempty"`

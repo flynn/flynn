@@ -11,13 +11,13 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/appliance/postgresql/client"
-	pgstate "github.com/flynn/flynn/appliance/postgresql/state"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	pgstate "github.com/flynn/flynn/pkg/sirenia/state"
 )
 
 type ClusterFixer struct {
