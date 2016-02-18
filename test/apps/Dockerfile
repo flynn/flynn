@@ -1,4 +1,4 @@
-FROM flynn/busybox
+FROM flynn/busybox:trusty-20160217
 
 ADD bin/echoer /bin/echoer
 ADD bin/ping /bin/pingserv

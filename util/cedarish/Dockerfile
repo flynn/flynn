@@ -1,4 +1,4 @@
-FROM ubuntu-debootstrap:14.04
+FROM ubuntu:trusty-20160217
 
 # Derived from https://github.com/heroku/stack-images/blob/master/Dockerfile
 
