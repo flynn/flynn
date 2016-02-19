@@ -32,7 +32,9 @@ func (a *WaitAction) Run(s *State) error {
 	if err != nil {
 		return err
 	}
-	lookupDiscoverdURLHost(s, u, waitMax)
+	if err := lookupDiscoverdURLHost(s, u, waitMax); err != nil {
+		return err
+	}
 
 	start := time.Now()
 	for {
