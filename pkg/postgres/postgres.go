@@ -31,7 +31,7 @@ type Conf struct {
 
 var connectAttempts = attempt.Strategy{
 	Min:   5,
-	Total: 30 * time.Second,
+	Total: 5 * time.Minute,
 	Delay: 200 * time.Millisecond,
 }
 
