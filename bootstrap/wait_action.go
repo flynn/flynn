@@ -21,7 +21,7 @@ func init() {
 }
 
 func (a *WaitAction) Run(s *State) error {
-	const waitMax = time.Minute
+	const waitMax = 5 * time.Minute
 	const waitInterval = 500 * time.Millisecond
 
 	if a.Status == 0 {
