@@ -155,7 +155,7 @@ func writeHostname(path, hostname string) error {
 			return err
 		}
 	}
-	_, err = fmt.Fprintf(f, "127.0.0.1 %s\n", hostname)
+	_, err = fmt.Fprintf(f, "127.0.0.1 localhost %s\n", hostname)
 	return err
 }
 
