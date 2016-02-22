@@ -1,9 +1,7 @@
 package main
 
 import (
-	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -11,8 +9,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
-	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -30,7 +26,6 @@ import (
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/docker/libcontainer/netlink"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/miekg/dns"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/technoweenie/grohl"
-	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/containerinit"
 	lt "github.com/flynn/flynn/host/libvirt"
 	"github.com/flynn/flynn/host/logmux"
@@ -487,14 +482,6 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		}
 	}
 
-	for _, artifact := range job.TarArtifacts {
-		g.Log(grohl.Data{"at": "extract_tar", "uri": artifact.URI, "target_path": artifact.Attributes.TarTargetPath})
-		if err := fetchAndExtractTar(rootPath, artifact); err != nil {
-			g.Log(grohl.Data{"at": "extract_tar", "uri": artifact.URI, "target_path": artifact.Attributes.TarTargetPath, "status": "error", "err": err})
-			return err
-		}
-	}
-
 	// apply volumes
 	for _, v := range job.Config.Volumes {
 		vol := l.vman.GetVolume(v.VolumeID)
@@ -541,10 +528,11 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	}
 
 	config := &containerinit.Config{
-		TTY:       job.Config.TTY,
-		OpenStdin: job.Config.Stdin,
-		WorkDir:   job.Config.WorkingDir,
-		Resources: job.Resources,
+		TTY:          job.Config.TTY,
+		OpenStdin:    job.Config.Stdin,
+		WorkDir:      job.Config.WorkingDir,
+		Resources:    job.Resources,
+		TarArtifacts: job.TarArtifacts,
 	}
 	if !job.Config.HostNetwork {
 		config.IP = container.IP.String() + "/24"
@@ -1381,70 +1369,6 @@ func createCGroupPartition(name string, cpuShares int64) error {
 	}
 	if err := ioutil.WriteFile(filepath.Join("/sys/fs/cgroup/cpu/machine", name, "cpu.shares"), strconv.AppendInt(nil, cpuShares, 10), 0644); err != nil {
 		return fmt.Errorf("error writing cgroup param: %s", err)
-	}
-	return nil
-}
-
-// fetchAndExtractTar fetches a tarball from an artifact URI and extracts it
-// into the root path
-func fetchAndExtractTar(rootPath string, artifact *host.Artifact) error {
-	// if it's a discoverd URI, lookup the host using a discoverd client
-	// because the host won't necessarily be using the discoverd DNS server
-	u, err := url.Parse(artifact.URI)
-	if err != nil {
-		return err
-	}
-	if strings.HasSuffix(u.Host, ".discoverd") {
-		service := strings.TrimSuffix(u.Host, ".discoverd")
-		addrs, err := discoverd.NewService(service).Addrs()
-		if err != nil {
-			return err
-		}
-		u.Host = addrs[random.Math.Intn(len(addrs))]
-	}
-
-	res, err := http.Get(u.String())
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-
-	var r io.Reader = res.Body
-	switch artifact.Attributes.TarCompression {
-	case host.TarCompressionTypeGzip:
-		gz, err := gzip.NewReader(r)
-		if err != nil {
-			return err
-		}
-		defer gz.Close()
-		r = gz
-	}
-
-	tr := tar.NewReader(r)
-	for {
-		header, err := tr.Next()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return fmt.Errorf("error reading tar artifact: %s", err)
-		}
-		path := filepath.Join(rootPath, artifact.Attributes.TarTargetPath, header.Name)
-		info := header.FileInfo()
-		if info.IsDir() {
-			if err := os.MkdirAll(path, info.Mode()); err != nil {
-				return err
-			}
-			continue
-		}
-		out, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode())
-		if err != nil {
-			return err
-		}
-		_, err = io.Copy(out, tr)
-		out.Close()
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }

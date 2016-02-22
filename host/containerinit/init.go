@@ -15,6 +15,8 @@ package containerinit
 // The code is released under the Apache 2.0 license.
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,6 +24,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -49,16 +52,17 @@ import (
 var logger log15.Logger
 
 type Config struct {
-	User      string
-	Gateway   string
-	WorkDir   string
-	IP        string
-	TTY       bool
-	OpenStdin bool
-	Env       map[string]string
-	Args      []string
-	Ports     []host.Port
-	Resources resource.Resources
+	User         string
+	Gateway      string
+	WorkDir      string
+	IP           string
+	TTY          bool
+	OpenStdin    bool
+	Env          map[string]string
+	Args         []string
+	Ports        []host.Port
+	Resources    resource.Resources
+	TarArtifacts []*host.Artifact
 }
 
 const SharedPath = "/.container-shared"
@@ -400,6 +404,15 @@ func setupCommon(c *Config, log log15.Logger) error {
 		return err
 	}
 
+	// fetch and extract artifacts now that the network is configured
+	for _, artifact := range c.TarArtifacts {
+		log.Info("extracting tar artifact", "uri", artifact.URI, "target_path", artifact.Attributes.TarTargetPath)
+		if err := fetchAndExtractTar(artifact); err != nil {
+			log.Error("error extracting tar artifact", "uri", artifact.URI, "target_path", artifact.Attributes.TarTargetPath, "err", err)
+			return err
+		}
+	}
+
 	setupLimits(c, log)
 
 	return nil
@@ -584,6 +597,55 @@ func babySit(process *os.Process) int {
 		return 0
 	}
 	return wstatus.ExitStatus()
+}
+
+// fetchAndExtractTar fetches a tarball from an artifact URI and extracts it
+// into the root directory
+func fetchAndExtractTar(artifact *host.Artifact) error {
+	res, err := http.Get(artifact.URI)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	var r io.Reader = res.Body
+	switch artifact.Attributes.TarCompression {
+	case host.TarCompressionTypeGzip:
+		gz, err := gzip.NewReader(r)
+		if err != nil {
+			return err
+		}
+		defer gz.Close()
+		r = gz
+	}
+
+	tr := tar.NewReader(r)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return fmt.Errorf("error reading tar artifact: %s", err)
+		}
+		path := filepath.Join("/", artifact.Attributes.TarTargetPath, header.Name)
+		info := header.FileInfo()
+		if info.IsDir() {
+			if err := os.MkdirAll(path, info.Mode()); err != nil {
+				return err
+			}
+			continue
+		}
+		out, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode())
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(out, tr)
+		out.Close()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Run as pid 1 and monitor the contained process to return its exit code.
