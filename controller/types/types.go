@@ -80,6 +80,11 @@ func (r *Release) TarArtifactIDs() []string {
 	return r.ArtifactIDs[1:len(r.ArtifactIDs)]
 }
 
+func (r *Release) GitDeploy() bool {
+	v, ok := r.Meta["git"]
+	return ok && v == "true"
+}
+
 type ProcessType struct {
 	Cmd         []string           `json:"cmd,omitempty"`
 	Entrypoint  []string           `json:"entrypoint,omitempty"`

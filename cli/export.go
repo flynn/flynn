@@ -129,44 +129,51 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 		}
 	}
 
-	if slug, ok := release.Env["SLUG_URL"]; ok {
-		reqR, reqW := io.Pipe()
-		config := runConfig{
-			App:        mustApp(),
-			Release:    release.ID,
-			DisableLog: true,
-			Entrypoint: []string{"curl"},
-			Args:       []string{"--include", "--raw", slug},
-			Stdout:     reqW,
-			Stderr:     ioutil.Discard,
-		}
-		if bar != nil {
-			config.Stdout = io.MultiWriter(config.Stdout, bar)
-		}
-		go func() {
-			if err := runJob(client, config); err != nil {
-				shutdown.Fatalf("error retrieving slug: %s", err)
+	// expect releases deployed via git to have a slug as their first tar
+	// artifact
+	if release.GitDeploy() && len(release.TarArtifactIDs()) > 0 {
+		slugArtifact, err := client.GetArtifact(release.TarArtifactIDs()[0])
+		if err != nil && err != controller.ErrNotFound {
+			return fmt.Errorf("error retrieving slug artifact: %s", err)
+		} else if err == nil {
+			reqR, reqW := io.Pipe()
+			config := runConfig{
+				App:        mustApp(),
+				Release:    release.ID,
+				DisableLog: true,
+				Entrypoint: []string{"curl"},
+				Args:       []string{"--include", "--raw", slugArtifact.URI},
+				Stdout:     reqW,
+				Stderr:     ioutil.Discard,
 			}
-		}()
-		res, err := http.ReadResponse(bufio.NewReader(reqR), nil)
-		if err != nil {
-			return fmt.Errorf("error reading slug response: %s", err)
-		}
-		if res.StatusCode != 200 {
-			return fmt.Errorf("unexpected status getting slug: %d", res.StatusCode)
-		}
-		length, err := strconv.Atoi(res.Header.Get("Content-Length"))
-		if err != nil {
-			return fmt.Errorf("slug has missing or malformed Content-Length")
-		}
+			if bar != nil {
+				config.Stdout = io.MultiWriter(config.Stdout, bar)
+			}
+			go func() {
+				if err := runJob(client, config); err != nil {
+					shutdown.Fatalf("error retrieving slug: %s", err)
+				}
+			}()
+			res, err := http.ReadResponse(bufio.NewReader(reqR), nil)
+			if err != nil {
+				return fmt.Errorf("error reading slug response: %s", err)
+			}
+			if res.StatusCode != 200 {
+				return fmt.Errorf("unexpected status getting slug: %d", res.StatusCode)
+			}
+			length, err := strconv.Atoi(res.Header.Get("Content-Length"))
+			if err != nil {
+				return fmt.Errorf("slug has missing or malformed Content-Length")
+			}
 
-		if err := tw.WriteHeader("slug.tar.gz", length); err != nil {
-			return fmt.Errorf("error writing slug header: %s", err)
+			if err := tw.WriteHeader("slug.tar.gz", length); err != nil {
+				return fmt.Errorf("error writing slug header: %s", err)
+			}
+			if _, err := io.Copy(tw, res.Body); err != nil {
+				return fmt.Errorf("error writing slug: %s", err)
+			}
+			res.Body.Close()
 		}
-		if _, err := io.Copy(tw, res.Body); err != nil {
-			return fmt.Errorf("error writing slug: %s", err)
-		}
-		res.Body.Close()
 	}
 
 	if pgConfig, err := getAppPgRunConfig(client); err == nil {
@@ -211,15 +218,16 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 	tr := tar.NewReader(src)
 
 	var (
-		app        *ct.App
-		release    *ct.Release
-		artifact   *ct.Artifact
-		formation  *ct.Formation
-		routes     []router.Route
-		slug       io.Reader
-		pgDump     io.Reader
-		mysqlDump  io.Reader
-		uploadSize int64
+		app          *ct.App
+		release      *ct.Release
+		artifact     *ct.Artifact
+		slugArtifact *ct.Artifact
+		formation    *ct.Formation
+		routes       []router.Route
+		slug         io.Reader
+		pgDump       io.Reader
+		mysqlDump    io.Reader
+		uploadSize   int64
 	)
 	numResources := 0
 	numRoutes := 1
@@ -417,7 +425,7 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 		}
 	}
 
-	uploadSlug := release != nil && release.Env["SLUG_URL"] != "" && artifact != nil && slug != nil
+	uploadSlug := release != nil && artifact != nil && slug != nil
 
 	if uploadSlug {
 		// Use current slugrunner as the artifact

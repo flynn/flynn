@@ -148,6 +148,7 @@ Options:
 	slugArtifact := &ct.Artifact{
 		Type: host.ArtifactTypeTar,
 		URI:  slugURL,
+		Meta: map[string]string{"blobstore": "true"},
 		Attributes: host.ArtifactAttributes{
 			TarCompression: host.TarCompressionTypeGzip,
 			TarTargetPath:  "/app",

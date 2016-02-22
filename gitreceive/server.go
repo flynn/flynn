@@ -299,7 +299,7 @@ git-archive-all() {
 	tar --create --exclude-vcs .
 }
 while read oldrev newrev refname; do
-	[[ $refname = "refs/heads/master" ]] && git-archive-all $newrev | /bin/flynn-receiver "$RECEIVE_APP" "$newrev" | sed -u "s/^/"$'\e[1G\e[K'"/"
+	[[ $refname = "refs/heads/master" ]] && git-archive-all $newrev | /bin/flynn-receiver "$RECEIVE_APP" "$newrev" --meta git=true | sed -u "s/^/"$'\e[1G\e[K'"/"
 done
 `)
 
