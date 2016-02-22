@@ -528,10 +528,11 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	}
 
 	config := &containerinit.Config{
-		TTY:       job.Config.TTY,
-		OpenStdin: job.Config.Stdin,
-		WorkDir:   job.Config.WorkingDir,
-		Resources: job.Resources,
+		TTY:           job.Config.TTY,
+		OpenStdin:     job.Config.Stdin,
+		WorkDir:       job.Config.WorkingDir,
+		Resources:     job.Resources,
+		FileArtifacts: job.FileArtifacts,
 	}
 	if !job.Config.HostNetwork {
 		config.IP = container.IP.String() + "/24"
