@@ -58,6 +58,16 @@ func (rr *ResourceRepo) Add(r *ct.Resource) error {
 			return err
 		}
 	}
+	if len(r.Apps) == 0 {
+		// Ensure an event is created if there are no associated apps
+		if err := createEvent(tx.Exec, &ct.Event{
+			ObjectID:   r.ID,
+			ObjectType: ct.EventTypeResource,
+		}, r); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
 	return tx.Commit()
 }
 
@@ -135,6 +145,16 @@ func (rr *ResourceRepo) Remove(r *ct.Resource) error {
 	for _, appID := range r.Apps {
 		if err := createEvent(tx.Exec, &ct.Event{
 			AppID:      appID,
+			ObjectID:   r.ID,
+			ObjectType: ct.EventTypeResourceDeletion,
+		}, r); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	if len(r.Apps) == 0 {
+		// Ensure an event is created if there are no associated apps
+		if err := createEvent(tx.Exec, &ct.Event{
 			ObjectID:   r.ID,
 			ObjectType: ct.EventTypeResourceDeletion,
 		}, r); err != nil {
