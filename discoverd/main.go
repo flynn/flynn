@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -72,6 +73,8 @@ func NewMain() *Main {
 func (m *Main) Run(args ...string) error {
 	// Create logger.
 	m.logger = log.New(m.Stdout, "", log.LstdFlags)
+
+	rand.Seed(time.Now().Unix())
 
 	// Parse command line flags.
 	opt, err := m.ParseFlags(args...)
