@@ -199,7 +199,7 @@ func (r *FormationRepo) List(appID string) ([]*ct.Formation, error) {
 		}
 		formations = append(formations, formation)
 	}
-	return formations, nil
+	return formations, rows.Err()
 }
 
 func (r *FormationRepo) ListActive() ([]*ct.ExpandedFormation, error) {
@@ -216,7 +216,7 @@ func (r *FormationRepo) ListActive() ([]*ct.ExpandedFormation, error) {
 		}
 		formations = append(formations, formation)
 	}
-	return formations, nil
+	return formations, rows.Err()
 }
 
 func (r *FormationRepo) Remove(appID, releaseID string) error {
