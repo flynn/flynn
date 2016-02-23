@@ -196,7 +196,7 @@ type NewJob struct {
 	Resources  resource.Resources `json:"resources,omitempty"`
 }
 
-const DefaultDeployTimeout = 30 // seconds
+const DefaultDeployTimeout = 120 // seconds
 
 type Deployment struct {
 	ID            string         `json:"id,omitempty"`
