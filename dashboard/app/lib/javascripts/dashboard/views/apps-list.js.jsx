@@ -15,7 +15,7 @@ var AppsList = React.createClass({
 		var selectedAppId = this.props.selectedAppId;
 
 		return (
-			<ul className="apps-list">
+			<ul className="items-list">
 				{apps.map(function (app) {
 					return (
 						<li key={app.id} className={assertEqual(app.id, selectedAppId) ? "selected" : ""}>

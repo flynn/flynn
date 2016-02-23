@@ -19,6 +19,11 @@
     clip: rect(0,0,0,0);
     clip: rect(0 0 0 0);
 
+    &.hidden {
+      width: 0;
+      height: 0;
+    }
+
     + .dot {
       display: block;
       position: absolute;

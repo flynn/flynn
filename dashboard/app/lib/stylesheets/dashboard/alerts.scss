@@ -8,6 +8,13 @@
   background-color: lighten($redColor, 40%);
 }
 
+.alert-warning {
+  @extend %alert;
+  color: darken($redColor, 6%);
+  border-color: lighten($redColor, 30%);
+  background-color: lighten($redColor, 40%);
+}
+
 .alert-info {
   @extend %alert;
   color: darken($blueColor, 6%);

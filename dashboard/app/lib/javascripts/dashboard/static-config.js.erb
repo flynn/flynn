@@ -29,7 +29,82 @@ var StaticConfig = extend({
 
     github-token-gen.png
     github-token-copy.png
+
+    postgres-logo.png
+    redis-logo.png
+    mysql-logo.png
   ).inject({}) { |memo, name| memo[name] = "/assets/"+ asset_path(name).sub(/\A\.\//, ''); memo }) %>
 }, window.DashboardConfig || {});
+
+StaticConfig.PROVIDER_ATTRS = {
+	postgres: {
+		title: 'PostgreSQL',
+		appName: 'postgres',
+		img: StaticConfig.ASSET_PATHS['postgres-logo.png'],
+		route: {
+		  mode: 'provider',
+		  serviceName: 'postgres'
+		},
+		uri: {
+		  internalTemplate: 'postgres://{PGUSER}:{PGPASSWORD}@{PGHOST}:5432/{PGDATABASE}',
+		  externalTemplate: 'postgres://{PGUSER}:{PGPASSWORD}@{defaultRouteDomain}:{port}/{PGDATABASE}'
+		},
+		cmd: {
+		  name: 'psql',
+		  internalTemplate: 'psql "user={PGUSER} password={PGPASSWORD} dbname={PGDATABASE} host={PGHOST} port=5432"',
+		  externalTemplate: 'psql "user={PGUSER} password={PGPASSWORD} dbname={PGDATABASE} host={defaultRouteDomain} port={port}"'
+		},
+		discoverdRouteURIEnvKey: 'DATABASE_URL'
+	},
+	redis: {
+		title: 'Redis',
+		appName: 'redis',
+		img: StaticConfig.ASSET_PATHS['redis-logo.png'],
+		route: {
+		  mode: 'resource',
+		  appNameFromResource: function (resource) {
+		    return resource.env['FLYNN_REDIS'];
+		  },
+		  serviceNameFromResource: function (resource) {
+		    return resource.env['FLYNN_REDIS'];
+		  }
+		},
+		uri: {
+		  internalTemplate: 'redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}',
+		  externalTemplate: 'redis://:{REDIS_PASSWORD}@{defaultRouteDomain}:{port}'
+		},
+		cmd: {
+		  name: 'redis-cli',
+		  internalTemplate: 'redis-cli -a {REDIS_PASSWORD} -h {REDIS_HOST} -p {REDIS_PORT}',
+		  externalTemplate: 'redis-cli -a {REDIS_PASSWORD} -h {defaultRouteDomain} -p {port}'
+		},
+		discoverdRouteURIEnvKey: 'REDIS_URL'
+	},
+	mysql: {
+		title: 'MySQL',
+		appName: 'mariadb',
+		img: StaticConfig.ASSET_PATHS['mysql-logo.png'],
+		route: {
+		  mode: 'provider',
+		  serviceName: 'mariadb'
+		},
+		uri: {
+		  internalTemplate: 'mysql://{MYSQL_USER}:{MYSQL_PWD}@{MYSQL_HOST}:3306/{MYSQL_DATABASE}',
+		  externalTemplate: 'mysql://{MYSQL_USER}:{MYSQL_PWD}@{defaultRouteDomain}:{port}/{MYSQL_DATABASE}'
+		},
+		cmd: {
+		  name: 'mysql',
+		  internalTemplate: 'mysql --user={MYSQL_USER} --password={MYSQL_PWD} --host={MYSQL_HOST} --port=3306 {MYSQL_DATABASE}',
+		  externalTemplate: 'mysql --user={MYSQL_USER} --password={MYSQL_PWD} --host={defaultRouteDomain} --port={port} {MYSQL_DATABASE}'
+		},
+		discoverdRouteURIEnvKey: 'DATABASE_URL'
+	}
+};
+
+StaticConfig.expandTemplateStr = function (templateStr, vars) {
+  return templateStr.replace(/{([^}]+)}/g, function (m, k) {
+    return vars[k];
+  });
+};
 
 export default StaticConfig;

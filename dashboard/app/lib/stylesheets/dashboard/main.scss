@@ -42,6 +42,14 @@ code {
   @extend %btn-green;
 }
 
+.btn {
+  @extend %btn;
+}
+
+.btn-block {
+  @extend %btn-block;
+}
+
 .full-height {
   height: 100%;
   overflow-y: auto;
@@ -79,4 +87,8 @@ code {
 .logout-btn {
   @extend %btn;
   float: left;
+}
+
+a {
+  color: $darkerGrayBlueColor;
 }

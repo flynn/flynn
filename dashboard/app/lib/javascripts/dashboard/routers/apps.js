@@ -11,6 +11,8 @@ import GithubBranchesStore from '../stores/github-branches';
 import AppsComponent from '../views/apps';
 import AppEnvComponent from '../views/app-env';
 import AppDeleteComponent from '../views/app-delete';
+import AppResourceProvisioner from '../views/app-resource-provisioner';
+import ResourceDeleteComponent from '../views/resource-delete';
 import NewAppRouteComponent from '../views/app-route-new';
 import AppRouteDeleteComponent from '../views/app-route-delete';
 import AppDeployCommitComponent from '../views/app-deploy-commit';
@@ -25,6 +27,8 @@ var AppsRouter = Router.createClass({
 		{ path: "apps/:id/env", handler: "appEnv", secondary: true, app: true },
 		{ path: "apps/:id/logs", handler: "appLogs", secondary: true, app: true },
 		{ path: "apps/:id/delete", handler: "appDelete", secondary: true, app: true },
+		{ path: "apps/:id/resources/new", handler: "newAppResource", secondary: true, app: true },
+		{ path: "apps/:id/providers/:providerID/resources/:resourceID/delete", handler: "appResourceDelete", secondary: true, app: true },
 		{ path: "apps/:id/routes/new", handler: "newAppRoute", secondary: true, app: true },
 		{ path: "apps/:id/routes/:type/:route/delete", handler: "appRouteDelete", secondary: true, app: true },
 		{ path: "apps/:id/deploy/:owner/:repo/:branch/:sha", handler: "appDeployCommit", secondary: true, app: true },
@@ -39,7 +43,7 @@ var AppsRouter = Router.createClass({
 		this.__changeListeners = []; // always empty
 	},
 
-	beforeHandlerUnlaod: function (event) {
+	beforeHandlerUnload: function (event) {
 		// prevent commits/branches/pulls stores from expiring
 		// when switching between source history tabs on the app page
 		// and allow them to expire when navigating away
@@ -198,6 +202,57 @@ var AppsRouter = Router.createClass({
 		this.app.apply(this, arguments);
 	},
 
+	newAppResource: function (params) {
+		this.setState({
+			creatingResource: true
+		});
+
+		params = params[0];
+
+		this.context.secondaryView = React.render(React.createElement(
+			AppResourceProvisioner,
+			{
+				key: Date.now(),
+				appID: params.id,
+				onHide: function () {
+					this.history.navigate(this.__getAppPath(params.id, params));
+				}.bind(this)
+			}),
+			this.context.secondaryEl
+		);
+
+		// render app view in background
+		this.app.apply(this, arguments);
+	},
+
+	appResourceDelete: function (params) {
+		params = params[0];
+
+		this.setState({
+			deletingResource: true,
+			appID: params.id,
+			providerID: params.providerID,
+			resourceID: params.resourceID
+		});
+
+		this.context.secondaryView = React.render(React.createElement(
+			ResourceDeleteComponent,
+			{
+				key: Date.now(),
+				appID: params.id,
+				providerID: params.providerID,
+				resourceID: params.resourceID,
+				onHide: function () {
+					this.history.navigate(this.__getAppPath(params.id, extend({}, params, {providerID: null, resourceID: null})));
+				}.bind(this)
+			}),
+			this.context.secondaryEl
+		);
+
+		// render app view in background
+		this.app.apply(this, arguments);
+	},
+
 	newAppRoute: function (params) {
 		this.setState({
 			creatingRoute: true
@@ -237,7 +292,7 @@ var AppsRouter = Router.createClass({
 				routeType: params.type,
 				domain: params.domain,
 				onHide: function () {
-					var path = this.__getAppPath(params.id, QueryParams.replaceParams([extend({}, params)], {route: null, domain:null})[0]);
+					var path = this.__getAppPath(params.id, QueryParams.replaceParams([extend({}, params)], {route: null, domain: null, type: null})[0]);
 					this.history.navigate(path);
 				}.bind(this)
 			}),
@@ -312,6 +367,41 @@ var AppsRouter = Router.createClass({
 		case 'APP_DELETED':
 			if (this.state.appID === event.app) {
 				this.history.navigate("");
+			}
+			break;
+
+		case 'RESOURCE_DELETED':
+		case 'RESOURCE_APP_DELETED':
+			if (this.state.deletingResource && event.app === this.state.appID && event.object_id === this.state.resourceID) {
+				this.__navigateToApp(this.state.appID);
+			}
+			break;
+
+		case 'APP_PROVISION_RESOURCES':
+			if (this.state.creatingResource && event.appID === this.state.appID) {
+				this.setState({
+					providerIDs: event.providerIDs
+				});
+			}
+			break;
+
+		case 'RESOURCE':
+			if (this.state.creatingResource && event.app === this.state.appID) {
+				this.setState({
+					providerIDs: (this.state.providerIDs || []).filter(function (providerID) {
+						return providerID !== event.data.provider;
+					})
+				});
+			}
+			break;
+
+		case 'DEPLOYMENT':
+			if (this.state.creatingResource && event.app === this.state.appID) {
+				if (event.data.status === 'complete') {
+					this.__navigateToApp(this.state.appID);
+				} else if (event.data.status === 'failed') {
+					window.console.error('Failed to deploy app release.');
+				}
 			}
 			break;
 

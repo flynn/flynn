@@ -10,13 +10,20 @@ var AppsListHeader = React.createClass({
 					className="btn-green float-right"
 					path="/github">
 						{this.props.githubAuthed ? (
-							"Add Services"
+							"Create application"
 						) : (
 							<span className="connect-with-github">
 								<i className="icn-github-mark" />
 								Connect with Github
 							</span>
 						)}
+				</RouteLink>
+
+				<RouteLink
+					className="btn-green float-right"
+					path="/providers"
+					style={{ marginRight: '1rem' }}>
+						Provision database
 				</RouteLink>
 			</section>
 		);

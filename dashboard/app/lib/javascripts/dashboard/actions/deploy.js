@@ -28,11 +28,10 @@ var deployFromGithub = function (meta, appData) {
 	var appId, appName;
 	var databaseEnv = {};
 
-	function createDatabase () {
-		return client.createAppDatabase({ apps: [appId] }).then(function (args) {
+	function provisionResource (providerID) {
+		return client.provisionResource(providerID, { apps: [appId] }).then(function (args) {
 			var res = args[0];
-			databaseEnv = res.env;
-			return taffyDeploy();
+			databaseEnv = extend({}, databaseEnv, res.env);
 		});
 	}
 
@@ -68,8 +67,10 @@ var deployFromGithub = function (meta, appData) {
 		var res = args[0];
 		appId = res.id;
 		appName = res.name;
-		if (appData.dbRequested) {
-			return createDatabase();
+		if ((appData.providerIDs || []).length > 0) {
+			return Promise.all(appData.providerIDs.map(function (providerID) {
+				return provisionResource(providerID);
+			})).then(taffyDeploy);
 		} else {
 			return taffyDeploy();
 		}

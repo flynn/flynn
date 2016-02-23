@@ -31,8 +31,8 @@
       border-bottom: 0;
     }
   }
+}
 
-  > .placeholder {
-    @extend %placeholder;
-  }
+.placeholder {
+  @extend %placeholder;
 }

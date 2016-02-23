@@ -43,7 +43,8 @@ var AppControls = React.createClass({
 
 				<section>
 					<AppResources
-						appId={this.props.appId} />
+						appId={this.props.appId}
+						getAppPath={this.props.getAppPath} />
 
 					<AppRoutes
 						appId={this.props.appId}

@@ -8,7 +8,7 @@ var EditEnv = React.createClass({
 			newEnv = [];
 		}
 		return (
-			<ul className="edit-env">
+			<ul className="edit-env" style={this.props.style}>
 				{this.state.env.concat(newEnv).map(function (env, i) {
 					return (
 						<li key={nRemoved + i}>

@@ -43,6 +43,26 @@ var AppResources = Store.createClass({
 			}
 			break;
 
+		case 'RESOURCE_DELETED':
+			if (event.app === this.props.appId) {
+				this.setStateWithDelay({
+					resources: this.state.resources.filter(function (r) {
+						return r.id !== event.object_id;
+					})
+				});
+			}
+			break;
+
+		case 'APP_RESOURCE_REMOVED':
+			if (event.appID === this.props.appId) {
+				this.setStateWithDelay({
+					resources: this.state.resources.filter(function (r) {
+						return r.id !== event.resourceID;
+					})
+				});
+			}
+			break;
+
 		case 'APP_RESOURCES_FETCHED':
 			if (event.appID === this.props.appId) {
 				this.setStateWithDelay({

@@ -18,6 +18,7 @@ var Apps = Store.createClass({
 
 	getInitialState: function () {
 		return {
+			fetched: false,
 			apps: []
 		};
 	},
@@ -38,6 +39,7 @@ var Apps = Store.createClass({
 		return this.__getClient().getApps().then(function (args) {
 			var res = args[0];
 			this.setState({
+				fetched: true,
 				apps: res
 			});
 		}.bind(this));
