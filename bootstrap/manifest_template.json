@@ -94,7 +94,8 @@
         "PGDATABASE": "postgres",
         "PGHOST": "leader.postgres.discoverd",
         "PGUSER": "flynn",
-        "PGPASSWORD": "{{ (index .StepData \"pg-password\").Data }}"
+        "PGPASSWORD": "{{ (index .StepData \"pg-password\").Data }}",
+        "SIRENIA_PROCESS": "postgres"
       },
       "processes": {
         "postgres": {
@@ -225,7 +226,7 @@
     "app": {
       "name": "postgres",
       "meta": {"flynn-system-app": "true"},
-      "strategy": "postgres",
+      "strategy": "sirenia",
       "deploy_timeout": 120
     }
   },

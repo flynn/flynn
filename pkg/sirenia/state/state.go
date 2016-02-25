@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
-	"github.com/flynn/flynn/appliance/postgresql/xlog"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/sirenia/xlog"
 )
 
 type State struct {
@@ -115,7 +115,7 @@ func (r *Role) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-type PgConfig struct {
+type Config struct {
 	Role       Role                `json:"role"`
 	Upstream   *discoverd.Instance `json:"upstream"`
 	Downstream *discoverd.Instance `json:"downstream"`
@@ -129,7 +129,7 @@ func peersEqual(a, b *discoverd.Instance) bool {
 
 }
 
-func (x *PgConfig) Equal(y *PgConfig) bool {
+func (x *Config) Equal(y *Config) bool {
 	if x == nil || y == nil {
 		return x == y
 	}
@@ -137,7 +137,7 @@ func (x *PgConfig) Equal(y *PgConfig) bool {
 	return x.Role == y.Role && peersEqual(x.Upstream, y.Upstream) && peersEqual(x.Downstream, y.Downstream)
 }
 
-func (x *PgConfig) IsNewDownstream(y *PgConfig) bool {
+func (x *Config) IsNewDownstream(y *Config) bool {
 	if x == nil || y == nil {
 		return false
 	}
@@ -147,15 +147,16 @@ func (x *PgConfig) IsNewDownstream(y *PgConfig) bool {
 	return y.Downstream != nil && !peersEqual(x.Downstream, y.Downstream)
 }
 
-type Postgres interface {
+type Database interface {
 	XLogPosition() (xlog.Position, error)
-	Reconfigure(*PgConfig) error
+	XLog() xlog.XLog
+	Reconfigure(*Config) error
 	Start() error
 	Stop() error
 
 	// Ready returns a channel that returns a single event when the interface
 	// is ready.
-	Ready() <-chan PostgresEvent
+	Ready() <-chan DatabaseEvent
 }
 
 type Discoverd interface {
@@ -163,7 +164,7 @@ type Discoverd interface {
 	Events() <-chan *DiscoverdEvent
 }
 
-type PostgresEvent struct {
+type DatabaseEvent struct {
 	Online bool
 	Setup  bool
 }
@@ -188,23 +189,24 @@ type DiscoverdEvent struct {
 }
 
 type PeerInfo struct {
-	ID             string                `json:"id"`
-	Role           Role                  `json:"role"`
-	PgRetryPending *time.Time            `json:"pg_retry_pending,omitempty"`
-	State          *State                `json:"state"`
-	Peers          []*discoverd.Instance `json:"peers"`
+	ID           string                `json:"id"`
+	Role         Role                  `json:"role"`
+	RetryPending *time.Time            `json:"retry_pending,omitempty"`
+	State        *State                `json:"state"`
+	Peers        []*discoverd.Instance `json:"peers"`
 }
 
 type Peer struct {
 	// Configuration
 	id        string
+	idKey     string
 	self      *discoverd.Instance
 	singleton bool
 
 	// External Interfaces
 	log       log15.Logger
 	discoverd Discoverd
-	postgres  Postgres
+	db        Database
 
 	// Dynamic state
 	info          atomic.Value // *PeerInfo, replaced after each change
@@ -212,11 +214,11 @@ type Peer struct {
 	updatingState *State       // new state object
 	stateIndex    uint64       // last received cluster state index
 
-	pgOnline     *bool               // nil for unknown
-	pgSetup      bool                // whether db existed at start
-	pgApplied    *PgConfig           // last configuration applied
-	pgUpstream   *discoverd.Instance // upstream replication target
-	pgDownstream *discoverd.Instance // downstream replication target
+	online     *bool               // nil for unknown
+	setup      bool                // whether db existed at start
+	applied    *Config             // last configuration applied
+	upstream   *discoverd.Instance // upstream replication target
+	downstream *discoverd.Instance // downstream replication target
 
 	evalStateCh chan struct{}
 	applyConfCh chan struct{}
@@ -228,12 +230,13 @@ type Peer struct {
 	closeOnce sync.Once
 }
 
-func NewPeer(self *discoverd.Instance, id string, singleton bool, d Discoverd, pg Postgres, log log15.Logger) *Peer {
+func NewPeer(self *discoverd.Instance, id string, idKey string, singleton bool, d Discoverd, db Database, log log15.Logger) *Peer {
 	p := &Peer{
 		id:          id,
+		idKey:       idKey,
 		self:        self,
 		singleton:   singleton,
-		postgres:    pg,
+		db:          db,
 		discoverd:   d,
 		log:         log,
 		evalStateCh: make(chan struct{}, 1),
@@ -251,7 +254,7 @@ func (p *Peer) SetDebugChannels(restCh, retryCh chan struct{}) {
 
 func (p *Peer) Run() {
 	discoverdCh := p.discoverd.Events()
-	postgresCh := p.postgres.Ready()
+	dbCh := p.db.Ready()
 	for {
 		select {
 		// drain discoverdCh to avoid evaluating out-of-date state
@@ -266,14 +269,14 @@ func (p *Peer) Run() {
 		case e := <-discoverdCh:
 			p.handleDiscoverdEvent(e)
 			continue
-		case e := <-postgresCh:
-			p.handlePgInit(e)
+		case e := <-dbCh:
+			p.handleInit(e)
 			continue
 		case <-p.evalStateCh:
 			p.evalClusterState()
 			continue
 		case <-p.applyConfCh:
-			p.pgApplyConfig()
+			p.applyConfig()
 			continue
 		case <-p.stopCh:
 			return
@@ -284,12 +287,12 @@ func (p *Peer) Run() {
 		select {
 		case e := <-discoverdCh:
 			p.handleDiscoverdEvent(e)
-		case e := <-postgresCh:
-			p.handlePgInit(e)
+		case e := <-dbCh:
+			p.handleInit(e)
 		case <-p.evalStateCh:
 			p.evalClusterState()
 		case <-p.applyConfCh:
-			p.pgApplyConfig()
+			p.applyConfig()
 		case <-p.workDoneCh:
 			// There is no work to do, we are now at rest
 			p.rest()
@@ -301,7 +304,7 @@ func (p *Peer) Run() {
 
 func (p *Peer) Stop() error {
 	p.Close()
-	return p.postgres.Stop()
+	return p.db.Stop()
 }
 
 func (p *Peer) Close() error {
@@ -337,20 +340,20 @@ func (p *Peer) setRole(role Role) {
 	p.setInfo(info)
 }
 
-func (p *Peer) setPgRetryPending(t *time.Time) {
+func (p *Peer) setRetryPending(t *time.Time) {
 	info := *p.Info()
-	info.PgRetryPending = t
+	info.RetryPending = t
 	p.setInfo(info)
 }
 
-func (p *Peer) handlePgInit(e PostgresEvent) {
-	p.log.Info("postgres init", "online", e.Online, "setup", e.Setup)
-	if p.pgOnline != nil {
-		panic("received postgres init event after already initialized")
+func (p *Peer) handleInit(e DatabaseEvent) {
+	p.log.Info("db init", "online", e.Online, "setup", e.Setup)
+	if p.online != nil {
+		panic("received db init event after already initialized")
 	}
 
-	p.pgOnline = &e.Online
-	p.pgSetup = e.Setup
+	p.online = &e.Online
+	p.setup = e.Setup
 
 	if p.Info().Peers != nil {
 		p.evalClusterState()
@@ -375,7 +378,7 @@ func (p *Peer) handleDiscoverdInit(e *DiscoverdEvent) {
 	}
 	p.setPeers(e.Peers)
 	p.decodeState(e)
-	if p.pgOnline != nil {
+	if p.online != nil {
 		p.triggerEval()
 	}
 }
@@ -486,15 +489,15 @@ func (p *Peer) evalClusterState() {
 			"peers", len(info.Peers),
 			"self", p.id,
 			"singleton", p.singleton,
-			"leader", len(info.Peers) > 0 && info.Peers[0].Meta["POSTGRES_ID"] == p.id,
+			"leader", len(info.Peers) > 0 && info.Peers[0].Meta[p.idKey] == p.id,
 		)
 
 		if len(info.Peers) == 0 {
 			return
 		}
 
-		if !p.pgSetup &&
-			info.Peers[0].Meta["POSTGRES_ID"] == p.id &&
+		if !p.setup &&
+			info.Peers[0].Meta[p.idKey] == p.id &&
 			(p.singleton || len(info.Peers) > 1) {
 			p.startInitialSetup()
 		} else if info.Role != RoleUnassigned {
@@ -519,7 +522,7 @@ func (p *Peer) evalClusterState() {
 		p.generation = p.Info().State.Generation
 
 		if p.Info().Role == RolePrimary {
-			if p.Info().State.Primary.Meta["POSTGRES_ID"] != p.id {
+			if p.Info().State.Primary.Meta[p.idKey] != p.id {
 				p.assumeDeposed()
 			}
 		} else {
@@ -542,10 +545,10 @@ func (p *Peer) evalClusterState() {
 		if whichAsync := p.whichAsync(); whichAsync == -1 {
 			p.assumeUnassigned()
 		} else {
-			upstream := p.upstream(whichAsync)
-			downstream := p.downstream(whichAsync)
-			if upstream.Meta["POSTGRES_ID"] != p.pgUpstream.Meta["POSTGRES_ID"] ||
-				downstream != nil && (p.pgDownstream == nil || downstream.Meta["POSTGRES_ID"] != p.pgDownstream.Meta["POSTGRES_ID"]) {
+			upstream := p.lookupUpstream(whichAsync)
+			downstream := p.lookupDownstream(whichAsync)
+			if upstream.Meta[p.idKey] != p.upstream.Meta[p.idKey] ||
+				downstream != nil && (p.downstream == nil || downstream.Meta[p.idKey] != p.downstream.Meta[p.idKey]) {
 				p.assumeAsync(whichAsync)
 			}
 		}
@@ -558,7 +561,7 @@ func (p *Peer) evalClusterState() {
 	if p.Info().Role == RoleSync {
 		if !p.peerIsPresent(p.Info().State.Primary) {
 			p.startTakeover("primary gone", p.Info().State.InitWAL)
-		} else if len(p.Info().State.Async) > 0 && (p.pgDownstream == nil || p.pgDownstream.Meta["POSTGRES_ID"] != p.Info().State.Async[0].Meta["POSTGRES_ID"]) {
+		} else if len(p.Info().State.Async) > 0 && (p.downstream == nil || p.downstream.Meta[p.idKey] != p.Info().State.Async[0].Meta[p.idKey]) {
 			p.assumeSync()
 		}
 		return
@@ -571,7 +574,7 @@ func (p *Peer) evalClusterState() {
 	// write new state with updated discoverd instance ID if our discoverd
 	// instance has changed (new job with the same local instance ID saved in
 	// the data volume)
-	if p.Info().State.Primary.ID != p.self.ID && p.Info().State.Primary.Meta["POSTGRES_ID"] == p.id {
+	if p.Info().State.Primary.ID != p.self.ID && p.Info().State.Primary.Meta[p.idKey] == p.id {
 		log.Info("role is primary, but discoverd id in state differs from self, updating")
 		p.updatingState = p.Info().State
 		p.updatingState.Primary = p.self
@@ -590,8 +593,8 @@ func (p *Peer) evalClusterState() {
 
 	if !p.singleton && p.Info().State.Singleton {
 		log.Info("configured for normal mode but found cluster in singleton mode, transitioning cluster to normal mode")
-		if p.Info().State.Primary.Meta["POSTGRES_ID"] != p.id {
-			panic(fmt.Sprintf("unexpected cluster state, we should be the primary, but %s is", p.Info().State.Primary.Meta["POSTGRES_ID"]))
+		if p.Info().State.Primary.Meta[p.idKey] != p.id {
+			panic(fmt.Sprintf("unexpected cluster state, we should be the primary, but %s is", p.Info().State.Primary.Meta[p.idKey]))
 		}
 		p.startTransitionToNormalMode()
 		return
@@ -618,32 +621,32 @@ func (p *Peer) evalClusterState() {
 	}
 
 	presentPeers := make(map[string]struct{}, len(p.Info().Peers))
-	presentPeers[p.Info().State.Primary.Meta["POSTGRES_ID"]] = struct{}{}
-	presentPeers[p.Info().State.Sync.Meta["POSTGRES_ID"]] = struct{}{}
+	presentPeers[p.Info().State.Primary.Meta[p.idKey]] = struct{}{}
+	presentPeers[p.Info().State.Sync.Meta[p.idKey]] = struct{}{}
 
 	newAsync := make([]*discoverd.Instance, 0, len(p.Info().Peers))
 	changes := false
 
 	for _, a := range p.Info().State.Async {
 		if p.peerIsPresent(a) {
-			presentPeers[a.Meta["POSTGRES_ID"]] = struct{}{}
+			presentPeers[a.Meta[p.idKey]] = struct{}{}
 			newAsync = append(newAsync, a)
 		} else {
-			log.Debug("peer missing", "async.id", a.Meta["POSTGRES_ID"], "async.addr", a.Addr)
+			log.Debug("peer missing", "async.id", a.Meta[p.idKey], "async.addr", a.Addr)
 			changes = true
 		}
 	}
 
 	// Deposed peers should not be assigned as asyncs
 	for _, d := range p.Info().State.Deposed {
-		presentPeers[d.Meta["POSTGRES_ID"]] = struct{}{}
+		presentPeers[d.Meta[p.idKey]] = struct{}{}
 	}
 
 	for _, peer := range p.Info().Peers {
-		if _, ok := presentPeers[peer.Meta["POSTGRES_ID"]]; ok {
+		if _, ok := presentPeers[peer.Meta[p.idKey]]; ok {
 			continue
 		}
-		log.Debug("new peer", "async.id", peer.Meta["POSTGRES_ID"], "async.addr", peer.Addr)
+		log.Debug("new peer", "async.id", peer.Meta[p.idKey], "async.addr", peer.Addr)
 		newAsync = append(newAsync, peer)
 		changes = true
 	}
@@ -663,7 +666,7 @@ func (p *Peer) startInitialSetup() {
 	p.updatingState = &State{
 		Generation: 1,
 		Primary:    p.self,
-		InitWAL:    xlog.Zero,
+		InitWAL:    p.db.XLog().Zero(),
 	}
 	if p.singleton {
 		p.updatingState.Singleton = true
@@ -693,24 +696,24 @@ func (p *Peer) startInitialSetup() {
 func (p *Peer) assumeUnassigned() {
 	p.log.Info("assuming unassigned role", "role", "unassigned", "fn", "assumeUnassigned")
 	p.setRole(RoleUnassigned)
-	p.pgUpstream = nil
-	p.pgDownstream = nil
+	p.upstream = nil
+	p.downstream = nil
 	p.triggerApplyConfig()
 }
 
 func (p *Peer) assumeDeposed() {
 	p.log.Info("assuming deposed role", "role", "deposed", "fn", "assumeDeposed")
 	p.setRole(RoleDeposed)
-	p.pgUpstream = nil
-	p.pgDownstream = nil
+	p.upstream = nil
+	p.downstream = nil
 	p.triggerApplyConfig()
 }
 
 func (p *Peer) assumePrimary() {
 	p.log.Info("assuming primary role", "role", "primary", "fn", "assumePrimary")
 	p.setRole(RolePrimary)
-	p.pgUpstream = nil
-	p.pgDownstream = p.Info().State.Sync
+	p.upstream = nil
+	p.downstream = p.Info().State.Sync
 
 	// It simplifies things to say that evalClusterState() only deals with one
 	// change at a time. Now that we've handled the change to become primary,
@@ -721,10 +724,10 @@ func (p *Peer) assumePrimary() {
 	// not present. The first call to evalClusterState() will get us here, and
 	// we call it again to check for the presence of the synchronous peer.
 	//
-	// We invoke pgApplyConfig() after evalClusterState(), though it may well
+	// We invoke applyConfig() after evalClusterState(), though it may well
 	// turn out that evalClusterState() kicked off an operation that will
-	// change the desired postgres configuration. In that case, we'll end up
-	// calling pgApplyConfig() again.
+	// change the desired database configuration. In that case, we'll end up
+	// calling applyConfig() again.
 	p.evalClusterState()
 	p.triggerApplyConfig()
 }
@@ -736,9 +739,9 @@ func (p *Peer) assumeSync() {
 	p.log.Info("assuming sync role", "role", "sync", "fn", "assumeSync")
 
 	p.setRole(RoleSync)
-	p.pgUpstream = p.Info().State.Primary
+	p.upstream = p.Info().State.Primary
 	if len(p.Info().State.Async) > 0 {
-		p.pgDownstream = p.Info().State.Async[0]
+		p.downstream = p.Info().State.Async[0]
 	}
 	// See assumePrimary()
 	p.evalClusterState()
@@ -752,8 +755,8 @@ func (p *Peer) assumeAsync(i int) {
 	p.log.Info("assuming async role", "role", "async", "fn", "assumeAsync")
 
 	p.setRole(RoleAsync)
-	p.pgUpstream = p.upstream(i)
-	p.pgDownstream = p.downstream(i)
+	p.upstream = p.lookupUpstream(i)
+	p.downstream = p.lookupDownstream(i)
 
 	// See assumePrimary(). We don't need to check the cluster state here
 	// because there's never more than one thing to do when becoming the async
@@ -762,7 +765,7 @@ func (p *Peer) assumeAsync(i int) {
 }
 
 func (p *Peer) evalInitClusterState() {
-	if p.Info().State.Primary.Meta["POSTGRES_ID"] == p.id {
+	if p.Info().State.Primary.Meta[p.idKey] == p.id {
 		p.assumePrimary()
 		return
 	}
@@ -770,13 +773,13 @@ func (p *Peer) evalInitClusterState() {
 		p.assumeUnassigned()
 		return
 	}
-	if p.Info().State.Sync.Meta["POSTGRES_ID"] == p.id {
+	if p.Info().State.Sync.Meta[p.idKey] == p.id {
 		p.assumeSync()
 		return
 	}
 
 	for _, d := range p.Info().State.Deposed {
-		if p.id == d.Meta["POSTGRES_ID"] {
+		if p.id == d.Meta[p.idKey] {
 			p.assumeDeposed()
 			return
 		}
@@ -810,13 +813,13 @@ func (p *Peer) startTakeover(reason string, minWAL xlog.Position) bool {
 	log.Debug("preparing for new generation")
 	newAsync := make([]*discoverd.Instance, 0, len(p.Info().State.Async))
 	for _, a := range p.Info().State.Async {
-		if a.Meta["POSTGRES_ID"] != newSync.Meta["POSTGRES_ID"] && p.peerIsPresent(a) {
+		if a.Meta[p.idKey] != newSync.Meta[p.idKey] && p.peerIsPresent(a) {
 			newAsync = append(newAsync, a)
 		}
 	}
 
 	newDeposed := append(make([]*discoverd.Instance, 0, len(p.Info().State.Deposed)+1), p.Info().State.Deposed...)
-	if p.Info().State.Primary.Meta["POSTGRES_ID"] != p.id {
+	if p.Info().State.Primary.Meta[p.idKey] != p.id {
 		newDeposed = append(newDeposed, p.Info().State.Primary)
 	}
 
@@ -830,7 +833,7 @@ func (p *Peer) startTakeover(reason string, minWAL xlog.Position) bool {
 
 var (
 	ErrClusterFrozen   = errors.New("cluster is frozen")
-	ErrPostgresOffline = errors.New("postgres is offline")
+	ErrDatabaseOffline = errors.New("database is offline")
 	ErrPeerNotCaughtUp = errors.New("peer is not caught up")
 )
 
@@ -845,7 +848,7 @@ func (p *Peer) startTakeoverWithPeer(reason string, minWAL xlog.Position, newSta
 	newState.Primary = p.self
 	p.updatingState = newState
 
-	if p.updatingState.Primary.Meta["POSTGRES_ID"] != p.Info().State.Primary.Meta["POSTGRES_ID"] && len(p.updatingState.Deposed) == 0 {
+	if p.updatingState.Primary.Meta[p.idKey] != p.Info().State.Primary.Meta[p.idKey] && len(p.updatingState.Deposed) == 0 {
 		panic("startTakeoverWithPeer without deposing old primary")
 	}
 
@@ -856,8 +859,8 @@ func (p *Peer) startTakeoverWithPeer(reason string, minWAL xlog.Position, newSta
 		p.updatingState = nil
 
 		switch err {
-		case ErrPostgresOffline:
-			// If postgres is offline, it's because we haven't started yet, so
+		case ErrDatabaseOffline:
+			// If database is offline, it's because we haven't started yet, so
 			// trigger another state evaluation after we start it.
 			log.Error("failed to declare new generation, trying later", "err", err)
 			p.triggerEval()
@@ -866,7 +869,7 @@ func (p *Peer) startTakeoverWithPeer(reason string, minWAL xlog.Position, newSta
 		default:
 			// In the event of an error, back off a bit and check state again in
 			// a second. There are several transient failure modes that will resolve
-			// themselves (e.g. postgres synchronous replication not yet caught up).
+			// themselves (e.g. synchronous replication not yet caught up).
 			log.Error("failed to declare new generation, backing off", "err", err)
 			p.evalLater(1 * time.Second)
 		}
@@ -877,21 +880,21 @@ func (p *Peer) startTakeoverWithPeer(reason string, minWAL xlog.Position, newSta
 	}
 
 	// In order to declare a new generation, we'll need to fetch our current
-	// transaction log position, which requires that postres be online. In most
+	// transaction log position, which requires that database be online. In most
 	// cases, it will be, since we only declare a new generation as a primary or
 	// a caught-up sync. During initial startup, however, we may find out
 	// simultaneously that we're the primary or sync AND that the other is gone,
 	// so we may attempt to declare a new generation before we've started
-	// postgres. In this case, this step will fail, but we'll just skip the
-	// takeover attempt until postgres is running.
-	if !*p.pgOnline {
-		return ErrPostgresOffline
+	// the database. In this case, this step will fail, but we'll just skip the
+	// takeover attempt until the database is running.
+	if !*p.online {
+		return ErrDatabaseOffline
 	}
-	wal, err := p.postgres.XLogPosition()
+	wal, err := p.db.XLogPosition()
 	if err != nil {
 		return err
 	}
-	if x, err := xlog.Compare(wal, minWAL); err != nil || x < 0 {
+	if x, err := p.db.XLog().Compare(wal, minWAL); err != nil || x < 0 {
 		if err == nil {
 			log.Warn("would attempt takeover but not caught up with primary yet", "found_wal", wal)
 			err = ErrPeerNotCaughtUp
@@ -921,7 +924,7 @@ func (p *Peer) startTakeoverWithPeer(reason string, minWAL xlog.Position, newSta
 // mode.
 func (p *Peer) startTransitionToNormalMode() {
 	log := p.log.New("fn", "startTransitionToNormalMode")
-	if p.Info().State.Primary.Meta["POSTGRES_ID"] != p.id || p.Info().Role != RolePrimary {
+	if p.Info().State.Primary.Meta[p.idKey] != p.id || p.Info().Role != RolePrimary {
 		panic("startTransitionToNormalMode called when not primary")
 	}
 
@@ -929,7 +932,7 @@ func (p *Peer) startTransitionToNormalMode() {
 	// any other peer because we know none of them has anything replicated.
 	var newSync *discoverd.Instance
 	for _, peer := range p.Info().Peers {
-		if peer.Meta["POSTGRES_ID"] != p.id {
+		if peer.Meta[p.idKey] != p.id {
 			newSync = peer
 		}
 	}
@@ -939,13 +942,13 @@ func (p *Peer) startTransitionToNormalMode() {
 	}
 	newAsync := make([]*discoverd.Instance, 0, len(p.Info().Peers))
 	for _, a := range p.Info().Peers {
-		if a.Meta["POSTGRES_ID"] != p.id && a.Meta["POSTGRES_ID"] != newSync.Meta["POSTGRES_ID"] {
+		if a.Meta[p.idKey] != p.id && a.Meta[p.idKey] != newSync.Meta[p.idKey] {
 			newAsync = append(newAsync, a)
 		}
 	}
 
 	log.Debug("transitioning to normal mode")
-	p.startTakeoverWithPeer("transitioning to normal mode", xlog.Zero, &State{
+	p.startTakeoverWithPeer("transitioning to normal mode", p.db.XLog().Zero(), &State{
 		Sync:  newSync,
 		Async: newAsync,
 	})
@@ -977,21 +980,21 @@ func (p *Peer) startUpdateAsyncs(newAsync []*discoverd.Instance) {
 	p.triggerEval()
 }
 
-// Reconfigure postgres based on the current configuration. During
+// Reconfigure database based on the current configuration. During
 // reconfiguration, new requests to reconfigure will be ignored, and incoming
 // cluster state changes will be recorded but otherwise ignored. When
 // reconfiguration completes, if the desired configuration has changed, we'll
 // take another lap to apply the updated configuration.
-func (p *Peer) pgApplyConfig() (err error) {
+func (p *Peer) applyConfig() (err error) {
 	p.moving()
-	log := p.log.New("fn", "pgApplyConfig")
+	log := p.log.New("fn", "applyConfig")
 
-	if p.pgOnline == nil {
-		panic("pgApplyConfig with postgres in unknown state")
+	if p.online == nil {
+		panic("applyConfig with database in unknown state")
 	}
 
-	config := p.pgConfig()
-	if p.pgApplied != nil && p.pgApplied.Equal(config) {
+	config := p.Config()
+	if p.applied != nil && p.applied.Equal(config) {
 		log.Info("skipping config apply, no changes")
 		return nil
 	}
@@ -1007,30 +1010,30 @@ func (p *Peer) pgApplyConfig() (err error) {
 		// there's no reason to believe any other peer is in a better position
 		// to deal with this, and we don't want to flap unnecessarily. So just
 		// log an error and try again shortly.
-		log.Error("error applying pg config", "err", err)
+		log.Error("error applying database config", "err", err)
 		t := TimeNow()
-		p.setPgRetryPending(&t)
+		p.setRetryPending(&t)
 		p.applyConfigLater(1 * time.Second)
 	}()
 
-	log.Info("reconfiguring postgres")
-	if err := p.postgres.Reconfigure(config); err != nil {
+	log.Info("reconfiguring database")
+	if err := p.db.Reconfigure(config); err != nil {
 		return err
 	}
 
 	if config.Role != RoleNone {
-		if *p.pgOnline {
+		if *p.online {
 			log.Debug("skipping start, already online")
 		} else {
-			log.Debug("starting postgres")
-			if err := p.postgres.Start(); err != nil {
+			log.Debug("starting database")
+			if err := p.db.Start(); err != nil {
 				return err
 			}
 		}
 	} else {
-		if *p.pgOnline {
-			log.Debug("stopping postgres")
-			if err := p.postgres.Stop(); err != nil {
+		if *p.online {
+			log.Debug("stopping database")
+			if err := p.db.Stop(); err != nil {
 				return err
 			}
 		} else {
@@ -1038,11 +1041,11 @@ func (p *Peer) pgApplyConfig() (err error) {
 		}
 	}
 
-	log.Info("applied pg config")
-	p.setPgRetryPending(nil)
-	p.pgApplied = config
+	log.Info("applied database config")
+	p.setRetryPending(nil)
+	p.applied = config
 	online := config.Role != RoleNone
-	p.pgOnline = &online
+	p.online = &online
 
 	// Try applying the configuration again in case anything's
 	// changed. If not, this will be a no-op.
@@ -1050,13 +1053,13 @@ func (p *Peer) pgApplyConfig() (err error) {
 	return nil
 }
 
-func (p *Peer) pgConfig() *PgConfig {
+func (p *Peer) Config() *Config {
 	role := p.Info().Role
 	switch role {
 	case RolePrimary, RoleSync, RoleAsync:
-		return &PgConfig{Role: role, Upstream: p.pgUpstream, Downstream: p.pgDownstream}
+		return &Config{Role: role, Upstream: p.upstream, Downstream: p.downstream}
 	case RoleUnassigned, RoleDeposed:
-		return &PgConfig{Role: RoleNone}
+		return &Config{Role: RoleNone}
 	default:
 		panic(fmt.Sprintf("unexpected role %v", role))
 	}
@@ -1065,7 +1068,7 @@ func (p *Peer) pgConfig() *PgConfig {
 // Determine our index in the async peer list. -1 means not present.
 func (p *Peer) whichAsync() int {
 	for i, a := range p.Info().State.Async {
-		if p.id == a.Meta["POSTGRES_ID"] {
+		if p.id == a.Meta[p.idKey] {
 			return i
 		}
 	}
@@ -1073,7 +1076,7 @@ func (p *Peer) whichAsync() int {
 }
 
 // Return the upstream peer for a given one of the async peers
-func (p *Peer) upstream(whichAsync int) *discoverd.Instance {
+func (p *Peer) lookupUpstream(whichAsync int) *discoverd.Instance {
 	if whichAsync == 0 {
 		return p.Info().State.Sync
 	}
@@ -1081,7 +1084,7 @@ func (p *Peer) upstream(whichAsync int) *discoverd.Instance {
 }
 
 // Return the downstream peer for a given one of the async peers
-func (p *Peer) downstream(whichAsync int) *discoverd.Instance {
+func (p *Peer) lookupDownstream(whichAsync int) *discoverd.Instance {
 	async := p.Info().State.Async
 	if whichAsync == len(async)-1 {
 		return nil
@@ -1095,11 +1098,11 @@ func (p *Peer) peerIsPresent(other *discoverd.Instance) bool {
 	// We should never even be asking whether we're present. If we need to do
 	// this at some point in the future, we need to consider we should always
 	// consider ourselves present or whether we should check the list.
-	if other.Meta["POSTGRES_ID"] == p.id {
+	if other.Meta[p.idKey] == p.id {
 		panic("peerIsPresent with self")
 	}
-	for _, p := range p.Info().Peers {
-		if p.Meta["POSTGRES_ID"] == other.Meta["POSTGRES_ID"] {
+	for _, peer := range p.Info().Peers {
+		if peer.Meta[p.idKey] == other.Meta[p.idKey] {
 			return true
 		}
 	}

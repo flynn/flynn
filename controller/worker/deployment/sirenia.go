@@ -6,15 +6,15 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flynn/flynn/appliance/postgresql/client"
-	"github.com/flynn/flynn/appliance/postgresql/state"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/discoverd/client"
+	"github.com/flynn/flynn/pkg/sirenia/client"
+	"github.com/flynn/flynn/pkg/sirenia/state"
 )
 
-func (d *DeployJob) deployPostgres() (err error) {
-	log := d.logger.New("fn", "deployPostgres")
-	log.Info("starting postgres deployment")
+func (d *DeployJob) deploySirenia() (err error) {
+	log := d.logger.New("fn", "deploySirenia")
+	log.Info("starting sirenia deployment")
 
 	defer func() {
 		if err != nil {
@@ -28,32 +28,42 @@ func (d *DeployJob) deployPostgres() (err error) {
 	}
 
 	if d.serviceMeta == nil {
-		return loggedErr("missing pg cluster state")
+		return loggedErr("missing sirenia cluster state")
 	}
 
 	var state state.State
-	log.Info("decoding pg cluster state")
+	log.Info("decoding sirenia cluster state")
 	if err := json.Unmarshal(d.serviceMeta.Data, &state); err != nil {
-		log.Error("error decoding pg cluster state", "err", err)
+		log.Error("error decoding sirenia cluster state", "err", err)
 		return err
+	}
+
+	processType := d.oldRelease.Env["SIRENIA_PROCESS"]
+	// if the process type isn't set try getting it from the new release
+	if processType == "" {
+		processType = d.newRelease.Env["SIRENIA_PROCESS"]
+	}
+	// if it's still not set we have a problem.
+	if processType == "" {
+		return fmt.Errorf("unable to determine sirenia process type")
 	}
 
 	// abort if in singleton mode or not deploying from a clean state
 	if state.Singleton {
-		return loggedErr("pg cluster in singleton mode")
+		return loggedErr("sirenia cluster in singleton mode")
 	}
 	if len(state.Async) == 0 {
-		return loggedErr("pg cluster in unhealthy state (has no asyncs)")
+		return loggedErr("sirenia cluster in unhealthy state (has no asyncs)")
 	}
-	if 2+len(state.Async) != d.Processes["postgres"] {
-		return loggedErr(fmt.Sprintf("pg cluster in unhealthy state (too few asyncs)"))
+	if 2+len(state.Async) != d.Processes[processType] {
+		return loggedErr(fmt.Sprintf("sirenia cluster in unhealthy state (too few asyncs)"))
 	}
 	if processesEqual(d.newReleaseState, d.Processes) {
 		log.Info("deployment already completed, nothing to do")
 		return nil
 	}
-	if d.newReleaseState["postgres"] > 0 {
-		return loggedErr("pg cluster in unexpected state")
+	if d.newReleaseState[processType] > 0 {
+		return loggedErr("sirenia cluster in unexpected state")
 	}
 
 	stopInstance := func(inst *discoverd.Instance) error {
@@ -62,15 +72,15 @@ func (d *DeployJob) deployPostgres() (err error) {
 		d.deployEvents <- ct.DeploymentEvent{
 			ReleaseID: d.OldReleaseID,
 			JobState:  ct.JobStateStopping,
-			JobType:   "postgres",
+			JobType:   processType,
 		}
-		pg := pgmanager.NewClient(inst.Addr)
-		log.Info("stopping postgres")
-		if err := pg.Stop(); err != nil {
-			log.Error("error stopping postgres", "err", err)
+		peer := client.NewClient(inst.Addr)
+		log.Info("stopping peer")
+		if err := peer.Stop(); err != nil {
+			log.Error("error stopping peer", "err", err)
 			return err
 		}
-		log.Info("waiting for postgres to stop")
+		log.Info("waiting for peer to stop")
 		jobEvents := d.ReleaseJobEvents(d.OldReleaseID)
 		for {
 			select {
@@ -86,12 +96,12 @@ func (d *DeployJob) deployPostgres() (err error) {
 					d.deployEvents <- ct.DeploymentEvent{
 						ReleaseID: d.OldReleaseID,
 						JobState:  ct.JobStateDown,
-						JobType:   "postgres",
+						JobType:   processType,
 					}
 					return nil
 				}
 			case <-time.After(60 * time.Second):
-				return loggedErr("timed out waiting for postgres to stop")
+				return loggedErr("timed out waiting for peer to stop")
 			}
 		}
 	}
@@ -103,15 +113,15 @@ func (d *DeployJob) deployPostgres() (err error) {
 		d.deployEvents <- ct.DeploymentEvent{
 			ReleaseID: d.NewReleaseID,
 			JobState:  ct.JobStateStarting,
-			JobType:   "postgres",
+			JobType:   processType,
 		}
-		d.newReleaseState["postgres"]++
+		d.newReleaseState[processType]++
 		if err := d.client.PutFormation(&ct.Formation{
 			AppID:     d.AppID,
 			ReleaseID: d.NewReleaseID,
 			Processes: d.newReleaseState,
 		}); err != nil {
-			log.Error("error scaling postgres formation up by one", "err", err)
+			log.Error("error scaling formation up by one", "err", err)
 			return nil, err
 		}
 		log.Info("waiting for new instance to come up")
@@ -130,7 +140,8 @@ func (d *DeployJob) deployPostgres() (err error) {
 				event := e.DiscoverdEvent
 				if event.Kind == discoverd.EventKindUp &&
 					event.Instance.Meta != nil &&
-					event.Instance.Meta["FLYNN_PROCESS_TYPE"] == "postgres" {
+					event.Instance.Meta["FLYNN_RELEASE_ID"] == d.NewReleaseID &&
+					event.Instance.Meta["FLYNN_PROCESS_TYPE"] == processType {
 					inst = event.Instance
 					break loop
 				}
@@ -146,13 +157,13 @@ func (d *DeployJob) deployPostgres() (err error) {
 		d.deployEvents <- ct.DeploymentEvent{
 			ReleaseID: d.NewReleaseID,
 			JobState:  ct.JobStateUp,
-			JobType:   "postgres",
+			JobType:   processType,
 		}
 		return inst, nil
 	}
 	waitForSync := func(upstream, downstream *discoverd.Instance) error {
 		log.Info("waiting for replication sync", "upstream", upstream.Addr, "downstream", downstream.Addr)
-		client := pgmanager.NewClient(upstream.Addr)
+		client := client.NewClient(upstream.Addr)
 		if err := client.WaitForReplSync(downstream, 3*time.Minute); err != nil {
 			log.Error("error waiting for replication sync", "err", err)
 			return err
@@ -161,7 +172,7 @@ func (d *DeployJob) deployPostgres() (err error) {
 	}
 	waitForReadWrite := func(inst *discoverd.Instance) error {
 		log.Info("waiting for read-write", "inst", inst.Addr)
-		client := pgmanager.NewClient(inst.Addr)
+		client := client.NewClient(inst.Addr)
 		if err := client.WaitForReadWrite(3 * time.Minute); err != nil {
 			log.Error("error waiting for read-write", "err", err)
 			return err
@@ -205,7 +216,7 @@ func (d *DeployJob) deployPostgres() (err error) {
 	}
 
 	// wait for the new Sync to catch the new Primary *before* killing the
-	// old Primary to avoid pg_basebackup exiting due to an upstream takeover
+	// old Primary to avoid backups failing
 	if err := waitForSync(newPrimary, newSync); err != nil {
 		return err
 	}
@@ -222,8 +233,8 @@ func (d *DeployJob) deployPostgres() (err error) {
 		return err
 	}
 
-	log.Info("stopping old postgres jobs")
-	d.oldReleaseState["postgres"] = 0
+	log.Info("stopping old jobs")
+	d.oldReleaseState[processType] = 0
 	if err := d.client.PutFormation(&ct.Formation{
 		AppID:     d.AppID,
 		ReleaseID: d.OldReleaseID,
@@ -233,7 +244,7 @@ func (d *DeployJob) deployPostgres() (err error) {
 		return err
 	}
 
-	log.Info(fmt.Sprintf("waiting for %d job down events", d.Processes["postgres"]))
+	log.Info(fmt.Sprintf("waiting for %d job down events", d.Processes[processType]))
 	actual := 0
 	jobEvents := d.ReleaseJobEvents(d.OldReleaseID)
 loop:
@@ -248,9 +259,9 @@ loop:
 			}
 			event := e.JobEvent
 			log.Info("got job event", "job_id", event.ID, "type", event.Type, "state", event.State)
-			if event.State == ct.JobStateDown && event.Type == "postgres" {
+			if event.State == ct.JobStateDown && event.Type == processType {
 				actual++
-				if actual == d.Processes["postgres"] {
+				if actual == d.Processes[processType] {
 					break loop
 				}
 			}

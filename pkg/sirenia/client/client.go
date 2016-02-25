@@ -1,42 +1,30 @@
-package pgmanager
+package client
 
 import (
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
 
-	"github.com/flynn/flynn/appliance/postgresql/state"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/httpclient"
+	"github.com/flynn/flynn/pkg/sirenia/state"
 )
 
-type PostgresInfo struct {
-	Config           *state.PgConfig     `json:"config"`
+type DatabaseInfo struct {
+	Config           *state.Config       `json:"config"`
 	Running          bool                `json:"running"`
 	SyncedDownstream *discoverd.Instance `json:"synced_downstream"`
 	XLog             string              `json:"xlog,omitempty"`
 	UserExists       bool                `json:"user_exists,omitempty"`
-	Replicas         []*Replica          `json:"replicas,omitempty"`
 	ReadWrite        bool                `json:"read_write,omitempty"`
-}
-
-type Replica struct {
-	ID             string    `json:"id"`
-	Addr           string    `json:"addr"`
-	Start          time.Time `json:"start"`
-	State          string    `json:"state"`
-	Sync           bool      `json:"sync"`
-	SentLocation   string    `json:"sent_location"`
-	WriteLocation  string    `json:"write_location"`
-	FlushLocation  string    `json:"flush_location"`
-	ReplayLocation string    `json:"replay_location"`
 }
 
 type Status struct {
 	Peer     *state.PeerInfo `json:"peer"`
-	Postgres *PostgresInfo   `json:"postgres"`
+	Database *DatabaseInfo   `json:"database"`
 }
 
 type Client struct {
@@ -45,14 +33,12 @@ type Client struct {
 
 func NewClient(addr string) *Client {
 	// remove port, if any
-	host, _, _ := net.SplitHostPort(addr)
-	if host == "" {
-		host = addr
-	}
+	host, p, _ := net.SplitHostPort(addr)
+	port, _ := strconv.Atoi(p)
 
 	return &Client{
 		c: &httpclient.Client{
-			URL:  fmt.Sprintf("http://%s:5433", host),
+			URL:  fmt.Sprintf("http://%s:%d", host, port+1),
 			HTTP: http.DefaultClient,
 		},
 	}
@@ -69,13 +55,13 @@ func (c *Client) Stop() error {
 
 func (c *Client) WaitForReplSync(downstream *discoverd.Instance, timeout time.Duration) error {
 	return c.waitFor(func(status *Status) bool {
-		return status.Postgres.SyncedDownstream != nil && status.Postgres.SyncedDownstream.ID == downstream.ID
+		return status.Database.SyncedDownstream != nil && status.Database.SyncedDownstream.ID == downstream.ID
 	}, timeout)
 }
 
 func (c *Client) WaitForReadWrite(timeout time.Duration) error {
 	return c.waitFor(func(status *Status) bool {
-		return status.Postgres.ReadWrite
+		return status.Database.ReadWrite
 	}, timeout)
 }
 
