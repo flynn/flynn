@@ -304,6 +304,58 @@
     "url":"http://redis-api.discoverd/clusters"
   },
   {
+    "id": "mariadb-password",
+    "action": "gen-random"
+  },
+  {
+    "id": "mariadb",
+    "app": {
+      "name": "mariadb",
+      "strategy": "sirenia",
+      "meta": {"flynn-system-app": "true"}
+    },
+    "action": "deploy-app",
+    "release": {
+      "env": {
+        "FLYNN_MYSQL": "mariadb",
+        "MYSQL_HOST": "leader.mariadb.discoverd",
+        "MYSQL_DATABASE": "mysql",
+        "MYSQL_USER": "flynn",
+        "MYSQL_PWD": "{{ (index .StepData \"mariadb-password\").Data }}",
+        "SIRENIA_PROCESS": "mariadb"
+      },
+      "processes": {
+        "mariadb": {
+          "ports": [{"port": 3306, "proto": "tcp"}],
+          "cmd": ["mariadb"],
+          "service": "mariadb",
+          "env": {
+            "SINGLETON": "{{ .Singleton }}"
+          },
+          "data": true
+        },
+        "web": {
+          "ports": [{"port": 80, "proto": "tcp"}],
+          "cmd": ["api"]
+        }
+      }
+    },
+    "artifact": {
+      "type": "docker",
+      "uri": "$image_repository?name=flynn/mariadb&id=$image_id[mariadb]"
+    },
+    "processes": {
+      "mariadb": 3,
+      "web": 2
+    }
+  },
+  {
+    "id": "add-mysql-provider",
+    "action": "add-provider",
+    "name": "mysql",
+    "url": "http://mariadb-api.discoverd/databases"
+  },
+  {
     "id": "blobstore",
     "action": "deploy-app",
     "app": {
@@ -567,6 +619,11 @@
     "id": "redis-wait",
     "action": "wait",
     "url": "http://redis-api.discoverd/ping"
+  },
+  {
+    "id": "mariadb-wait",
+    "action": "wait",
+    "url": "http://mariadb-api.discoverd/ping"
   },
   {
     "id": "blobstore-wait",
