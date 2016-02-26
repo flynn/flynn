@@ -101,4 +101,5 @@ func (s *S) TestResourceLists(c *C) {
 	check(s.c.ResourceList(provider.Name))
 	check(s.c.AppResourceList(app1.ID))
 	check(s.c.AppResourceList(app1.ID))
+	check(s.c.ResourceListAll())
 }

@@ -54,6 +54,7 @@ var preparedStatements = map[string]string{
 	"provider_select_by_name":               providerSelectByNameQuery,
 	"provider_select_by_name_or_id":         providerSelectByNameOrIDQuery,
 	"provider_insert":                       providerInsertQuery,
+	"resource_list":                         resourceListQuery,
 	"resource_list_by_provider":             resourceListByProviderQuery,
 	"resource_list_by_app":                  resourceListByAppQuery,
 	"resource_select":                       resourceSelectQuery,
@@ -255,6 +256,17 @@ FROM providers WHERE deleted_at IS NULL AND (provider_id = $1 OR name = $2) LIMI
 	providerInsertQuery = `
 INSERT INTO providers (name, url) VALUES ($1, $2)
 RETURNING provider_id, created_at, updated_at`
+	resourceListQuery = `
+SELECT resource_id, provider_id, external_id, env,
+  ARRAY(
+	SELECT a.app_id
+    FROM app_resources a
+	WHERE a.resource_id = r.resource_id AND a.deleted_at IS NULL
+	ORDER BY a.created_at DESC
+  ), created_at
+FROM resources r
+WHERE deleted_at IS NULL
+ORDER BY created_at DESC`
 	resourceListByProviderQuery = `
 SELECT resource_id, provider_id, external_id, env,
   ARRAY(

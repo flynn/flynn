@@ -98,6 +98,14 @@ func (r *ResourceRepo) Get(id string) (*ct.Resource, error) {
 	return scanResource(row)
 }
 
+func (r *ResourceRepo) List() ([]*ct.Resource, error) {
+	rows, err := r.db.Query("resource_list")
+	if err != nil {
+		return nil, err
+	}
+	return resourceList(rows)
+}
+
 func (r *ResourceRepo) ProviderList(providerID string) ([]*ct.Resource, error) {
 	rows, err := r.db.Query("resource_list_by_provider", providerID)
 	if err != nil {
@@ -218,6 +226,15 @@ func (c *controllerAPI) GetProviderResources(ctx context.Context, w http.Respons
 	}
 
 	res, err := c.resourceRepo.ProviderList(p.ID)
+	if err != nil {
+		respondWithError(w, err)
+		return
+	}
+	httphelper.JSON(w, 200, res)
+}
+
+func (c *controllerAPI) GetResources(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	res, err := c.resourceRepo.List()
 	if err != nil {
 		respondWithError(w, err)
 		return

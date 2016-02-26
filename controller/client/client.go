@@ -290,6 +290,12 @@ func (c *Client) GetResource(providerID, resourceID string) (*ct.Resource, error
 	return res, err
 }
 
+// ResourceListAll returns all resources.
+func (c *Client) ResourceListAll() ([]*ct.Resource, error) {
+	var resources []*ct.Resource
+	return resources, c.Get("/resources", &resources)
+}
+
 // ResourceList returns all resources under providerID.
 func (c *Client) ResourceList(providerID string) ([]*ct.Resource, error) {
 	var resources []*ct.Resource
