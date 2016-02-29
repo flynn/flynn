@@ -78,19 +78,10 @@ sudo ./flynn-test \
 
 ## CI
 
-### Dependencies
-
-```text
-apt-add-repository 'deb http://ppa.launchpad.net/titanous/tup/ubuntu trusty main'
-apt-key adv --keyserver keyserver.ubuntu.com --recv 27947298A222DFA46E207200B34FBCAA90EA7F4E
-apt-get update
-apt-get install -y zerofree qemu qemu-kvm tup
-```
-
 ### Install the runner
 
-Check out the Flynn git repo and run the following to install the runner
-into `/opt/flynn-test`:
+Install Git if not already installed, then check out the Flynn git repo and run
+the following to install the runner into `/opt/flynn-test`:
 
 ```
 sudo test/scripts/install
