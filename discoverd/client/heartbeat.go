@@ -2,7 +2,6 @@ package discoverd
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"sync"
@@ -153,7 +152,7 @@ func (h *heartbeater) run(firstErr chan<- error) {
 		select {
 		case <-timer.C:
 			if err := register(); err != nil {
-				log.Printf("discoverd: heartbeat %s (%s) failed: %s", h.service, h.inst.Addr, err)
+				h.client().Logger.Error("heartbeat failed", "service", h.service, "addr", h.inst.Addr, "err", err)
 				timer.Reset(heartbeatFailingInterval)
 				break
 			}
