@@ -2,6 +2,8 @@
 
 set -e
 
+RAMDISK_SIZE="448G"
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 source "${ROOT}/script/lib/ui.sh"
 
@@ -23,8 +25,12 @@ main() {
   fi
 
   info "mounting build directory"
-  if ! mount | grep -q "tmpfs on ${build_dir}"; then
-    mount_tmpfs "${build_dir}"
+  mkdir -p "${build_dir}"
+  if ! grep -qF "${build_dir}" /etc/fstab; then
+    echo "tmpfs ${build_dir} tmpfs defaults,size=${RAMDISK_SIZE} 0 0" >> /etc/fstab
+  fi
+  if ! mount | grep -q "${build_dir}"; then
+    mount "${build_dir}"
   fi
 
   info "fixing permissions"
@@ -37,13 +43,6 @@ main() {
   info
   info "install finished!"
   info "you should add credentials to ${dir}/.credentials then start flynn-test (sudo start flynn-test)"
-}
-
-mount_tmpfs() {
-  local dir=$1
-  local size="32G"
-
-  mount -t tmpfs -o "size=${size}" tmpfs "${dir}"
 }
 
 main $@
