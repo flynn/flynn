@@ -448,6 +448,7 @@ func getCmdPath(c *Config) (string, error) {
 func monitor(port host.Port, container *ContainerInit, env map[string]string, log log15.Logger) (discoverd.Heartbeater, error) {
 	config := port.Service
 	client := discoverd.NewClientWithURL(env["DISCOVERD"])
+	client.Logger = logger.New("component", "discoverd")
 
 	if config.Create {
 		// TODO: maybe reuse maybeAddService() from the client

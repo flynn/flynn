@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	dt "github.com/flynn/flynn/discoverd/types"
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/httpclient"
@@ -29,8 +30,18 @@ type Service interface {
 
 var ErrTimedOut = errors.New("discoverd: timed out waiting for instances")
 
+var defaultLogger = log15.New("component", "discoverd")
+
+func init() {
+	defaultLogger.SetHandler(log15.StreamHandler(os.Stderr, log15.LogfmtFormat()))
+}
+
 type Client struct {
 	c *httpclient.Client
+
+	// Logger is used to log messages from Heartbeaters, it must not be changed
+	// after the first API request made with the Client.
+	Logger log15.Logger
 }
 
 func NewClient() *Client {
@@ -53,6 +64,7 @@ func NewClientWithURL(url string) *Client {
 				CheckRedirect: redirectPreserveHeaders,
 			},
 		},
+		Logger: defaultLogger,
 	}
 }
 
@@ -65,6 +77,7 @@ func NewClientWithHTTP(url string, hc *http.Client) *Client {
 			URL:  url,
 			HTTP: hc,
 		},
+		Logger: defaultLogger,
 	}
 }
 
