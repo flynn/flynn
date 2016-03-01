@@ -120,8 +120,6 @@ type Runner struct {
 
 var args *arg.Args
 
-const maxConcurrentBuilds = 1
-
 func init() {
 	args = arg.Parse()
 	log.SetFlags(log.Lshortfile)
@@ -133,7 +131,7 @@ func main() {
 		bc:       args.BootConfig,
 		events:   make(chan Event),
 		networks: make(map[string]struct{}),
-		buildCh:  make(chan struct{}, maxConcurrentBuilds),
+		buildCh:  make(chan struct{}, args.ConcurrentBuilds),
 		clusters: make(map[string]*cluster.Cluster),
 		ircMsgs:  make(chan string),
 	}
@@ -186,7 +184,7 @@ func (r *Runner) start() error {
 		return fmt.Errorf("could not create builds bucket: %s", err)
 	}
 
-	for i := 0; i < maxConcurrentBuilds; i++ {
+	for i := 0; i < args.ConcurrentBuilds; i++ {
 		r.buildCh <- struct{}{}
 	}
 
