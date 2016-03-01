@@ -7,26 +7,27 @@ import (
 )
 
 type Args struct {
-	BootConfig  cluster.BootConfig
-	CLI         string
-	FlynnHost   string
-	RootFS      string
-	Flynnrc     string
-	RouterIP    string
-	Build       bool
-	Debug       bool
-	Stream      bool
-	Kill        bool
-	BuildRootFS bool
-	DBPath      string
-	ListenAddr  string
-	TLSCert     string
-	TLSKey      string
-	AssetsDir   string
-	Run         string
-	Gist        bool
-	ClusterAPI  string
-	Concurrency int
+	BootConfig       cluster.BootConfig
+	CLI              string
+	FlynnHost        string
+	RootFS           string
+	Flynnrc          string
+	RouterIP         string
+	Build            bool
+	Debug            bool
+	Stream           bool
+	Kill             bool
+	BuildRootFS      bool
+	DBPath           string
+	ListenAddr       string
+	TLSCert          string
+	TLSKey           string
+	AssetsDir        string
+	Run              string
+	Gist             bool
+	ClusterAPI       string
+	Concurrency      int
+	ConcurrentBuilds int
 }
 
 func Parse() *Args {
@@ -56,6 +57,7 @@ func Parse() *Args {
 	flag.BoolVar(&args.BuildRootFS, "build-rootfs", false, "just build the rootfs (leaving it behind for future use) without running tests")
 	flag.BoolVar(&args.Gist, "gist", false, "upload debug info to a gist")
 	flag.IntVar(&args.Concurrency, "concurrency", 5, "max number of concurrent tests")
+	flag.IntVar(&args.ConcurrentBuilds, "concurrent-builds", 5, "max number of concurrent builds")
 	flag.Parse()
 
 	return args

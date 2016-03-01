@@ -2,6 +2,9 @@
 
 set -e
 
+RAMDISK_SIZE="448G"
+GO_VERSION="1.6"
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 source "${ROOT}/script/lib/ui.sh"
 
@@ -10,6 +13,9 @@ main() {
   local dir="/opt/flynn-test"
   local src_dir="${dir}/src/github.com/flynn/flynn"
   local build_dir="${dir}/build"
+
+  info "installing dependencies"
+  apt-get install -y build-essential zerofree qemu qemu-kvm
 
   info "creating ${user} user"
   if ! id "${user}" &>/dev/null; then
@@ -23,8 +29,12 @@ main() {
   fi
 
   info "mounting build directory"
-  if ! mount | grep -q "tmpfs on ${build_dir}"; then
-    mount_tmpfs "${build_dir}"
+  mkdir -p "${build_dir}"
+  if ! grep -qF "${build_dir}" /etc/fstab; then
+    echo "tmpfs ${build_dir} tmpfs defaults,size=${RAMDISK_SIZE} 0 0" >> /etc/fstab
+  fi
+  if ! mount | grep -q "${build_dir}"; then
+    mount "${build_dir}"
   fi
 
   info "fixing permissions"
@@ -34,16 +44,45 @@ main() {
   cp "${src_dir}/test/scripts/upstart.conf" "/etc/init/flynn-test.conf"
   initctl reload-configuration
 
+  info "installing Go ${GO_VERSION}"
+  install_go
+
+  info "installing jchroot"
+  install_jchroot
+
   info
   info "install finished!"
   info "you should add credentials to ${dir}/.credentials then start flynn-test (sudo start flynn-test)"
 }
 
-mount_tmpfs() {
-  local dir=$1
-  local size="32G"
+install_go() {
+  if go version 2>&1 | grep -qF "go${GO_VERSION}"; then
+    return
+  fi
 
-  mount -t tmpfs -o "size=${size}" tmpfs "${dir}"
+  local tmp="$(mktemp --directory)"
+  trap "rm -rf ${tmp}" EXIT
+  pushd "${tmp}" &>/dev/null
+  wget --quiet "https://godeb.s3.amazonaws.com/godeb-amd64.tar.gz"
+  tar xzf "godeb-amd64.tar.gz"
+  ./godeb install "${GO_VERSION}"
+  popd &>/dev/null
+}
+
+install_jchroot() {
+  local target="/usr/local/bin/jchroot"
+
+  if [[ -s "${target}" ]]; then
+    return
+  fi
+
+  local tmp="$(mktemp --directory)"
+  trap "rm -rf ${tmp}" EXIT
+  git clone "https://github.com/vincentbernat/jchroot.git" "${tmp}/jchroot"
+  pushd "${tmp}/jchroot" &>/dev/null
+  make
+  mv "jchroot" "${target}"
+  popd &>/dev/null
 }
 
 main $@

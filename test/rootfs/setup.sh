@@ -4,8 +4,10 @@ set -e -x
 # init environment
 export LC_ALL=C
 mount -t proc none /proc
+mount -t sysfs sysfs /sys
 
 cleanup() {
+  umount /sys
   umount /proc
 }
 trap cleanup EXIT
@@ -15,6 +17,30 @@ dpkg-divert --local --rename --add /sbin/initctl
 ln -s /bin/true /sbin/initctl
 echo $'#!/bin/sh\nexit 101' > /usr/sbin/policy-rc.d
 chmod +x /usr/sbin/policy-rc.d
+
+# NOTE: chfn & chpasswd must be run in a network namespace to avoid PAM related
+#       errors (see https://github.com/docker/docker/issues/5704), but we can't
+#       just run the whole script in a network namespace (because then we would
+#       have no network!), so hack just those programs to run in a namespace.
+#
+#       This behaviour was witnessed with kernel 3.13.0-77-generic, so when CI
+#       is running on a more recent kernel, try removing this hack.
+ip netns add rootfs
+mv /usr/bin/chfn{,.orig}
+mv /usr/sbin/chpasswd{,.orig}
+echo -e '#!/bin/bash\nip netns exec rootfs $0.orig "$@"' > /usr/bin/netns-hack
+chmod +x /usr/bin/netns-hack
+ln -s /usr/bin/netns-hack /usr/bin/chfn
+ln -s /usr/bin/netns-hack /usr/sbin/chpasswd
+apt-mark hold passwd
+netns_cleanup() {
+  apt-mark unhold passwd
+  rm /usr/bin/netns-hack
+  mv /usr/bin/chfn{.orig,}
+  mv /usr/sbin/chpasswd{.orig,}
+  ip netns delete rootfs
+}
+trap netns_cleanup EXIT
 
 # set up ubuntu user
 addgroup docker
