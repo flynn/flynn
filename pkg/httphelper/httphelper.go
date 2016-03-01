@@ -30,6 +30,7 @@ const (
 	PreconditionFailedErrorCode ErrorCode = "precondition_failed"
 	UnauthorizedErrorCode       ErrorCode = "unauthorized"
 	UnknownErrorCode            ErrorCode = "unknown_error"
+	RatelimitedErrorCode        ErrorCode = "ratelimited"
 )
 
 var errorResponseCodes = map[ErrorCode]int{
@@ -42,6 +43,7 @@ var errorResponseCodes = map[ErrorCode]int{
 	ValidationErrorCode:         400,
 	UnauthorizedErrorCode:       401,
 	UnknownErrorCode:            500,
+	RatelimitedErrorCode:        429,
 }
 
 type JSONError struct {

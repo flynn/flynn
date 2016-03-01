@@ -103,7 +103,8 @@ func (h *Host) streamEvents(id string, w http.ResponseWriter) error {
 }
 
 type jobAPI struct {
-	host *Host
+	host                  *Host
+	addJobRatelimitBucket chan struct{}
 }
 
 func (h *jobAPI) ListJobs(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -264,6 +265,18 @@ func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 
 	log := h.host.log.New("fn", "AddJob", "job.id", id)
 
+	select {
+	case h.addJobRatelimitBucket <- struct{}{}:
+	default:
+		log.Warn("maximum concurrent AddJob calls running")
+		httphelper.Error(w, httphelper.JSONError{
+			Code:    httphelper.RatelimitedErrorCode,
+			Message: "maximum concurrent AddJob calls running, try again later",
+			Retry:   true,
+		})
+		return
+	}
+
 	if shutdown.IsActive() {
 		log.Warn("refusing to start job due to active shutdown")
 		httphelper.JSON(w, 500, struct{}{})
@@ -288,7 +301,6 @@ func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 	h.host.state.AddJob(job)
 
 	go func() {
-		// TODO(titanous): ratelimit this goroutine?
 		log.Info("running job")
 		err := h.host.backend.Run(job, nil)
 		h.host.state.Release()
@@ -296,6 +308,7 @@ func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 			log.Error("error running job", "err", err)
 			h.host.state.SetStatusFailed(job.ID, err)
 		}
+		<-h.addJobRatelimitBucket
 	}()
 
 	// TODO(titanous): return 201 Accepted
@@ -496,12 +509,17 @@ func (h *jobAPI) RegisterRoutes(r *httprouter.Router) error {
 	return nil
 }
 
+const maxParallelAddJob = 4
+
 func (h *Host) ServeHTTP() {
 	r := httprouter.New()
 
 	r.POST("/attach", newAttachHandler(h.state, h.backend).ServeHTTP)
 
-	jobAPI := &jobAPI{host: h}
+	jobAPI := &jobAPI{
+		host: h,
+		addJobRatelimitBucket: make(chan struct{}, maxParallelAddJob),
+	}
 	jobAPI.RegisterRoutes(r)
 
 	volAPI := volumeapi.NewHTTPAPI(cluster.NewClient(), h.vman)
