@@ -237,7 +237,11 @@ func runClusterDefault(args *docopt.Args) error {
 }
 
 func runClusterMigrateDomain(args *docopt.Args) error {
-	client, err := getClusterClient()
+	cluster, err := getCluster()
+	if err != nil {
+		shutdown.Fatal(err)
+	}
+	client, err := cluster.Client()
 	if err != nil {
 		shutdown.Fatal(err)
 	}
@@ -288,7 +292,32 @@ func runClusterMigrateDomain(args *docopt.Args) error {
 				fmt.Println(e.Error)
 			}
 			if e.DomainMigration.FinishedAt != nil {
+				dm = e.DomainMigration
 				fmt.Printf("Changed cluster domain from %q to %q\n", dm.OldDomain, dm.Domain)
+
+				// update flynnrc
+				cluster.TLSPin = dm.TLSCert.Pin
+				cluster.ControllerURL = fmt.Sprintf("https://controller.%s", dm.Domain)
+				cluster.GitURL = fmt.Sprintf("https://git.%s", dm.Domain)
+				if err := config.SaveTo(configPath()); err != nil {
+					return fmt.Errorf("Error saving config: %s", err)
+				}
+
+				// update git config
+				caFile, err := cfg.CACertFile(cluster.Name)
+				if err != nil {
+					return err
+				}
+				defer caFile.Close()
+				if _, err := caFile.Write([]byte(dm.TLSCert.CACert)); err != nil {
+					return err
+				}
+				if err := cfg.WriteGlobalGitConfig(cluster.GitURL, caFile.Name()); err != nil {
+					return err
+				}
+				cfg.RemoveGlobalGitConfig(fmt.Sprintf("https://git.%s", dm.OldDomain))
+
+				fmt.Println("Updated local CLI configuration")
 				return nil
 			}
 		case <-timeout:
