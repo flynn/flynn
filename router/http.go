@@ -52,6 +52,7 @@ type HTTPListener struct {
 
 type DiscoverdClient interface {
 	Service(string) discoverd.Service
+	AddService(string, *discoverd.ServiceConfig) error
 }
 
 func (s *HTTPListener) Close() error {
@@ -247,6 +248,7 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 		if err != nil {
 			return err
 		}
+
 		service = &httpService{
 			name: r.Service,
 			sc:   sc,
@@ -254,7 +256,13 @@ func (h *httpSyncHandler) Set(data *router.Route) error {
 		h.l.services[r.Service] = service
 	}
 	service.refs++
-	r.rp = proxy.NewReverseProxy(service.sc.Addrs, h.l.cookieKey, r.Sticky)
+	var bf proxy.BackendListFunc
+	if r.Leader {
+		bf = service.sc.LeaderAddr
+	} else {
+		bf = service.sc.Addrs
+	}
+	r.rp = proxy.NewReverseProxy(bf, h.l.cookieKey, r.Sticky)
 	r.service = service
 	h.l.routes[data.ID] = r
 	if data.Path == "/" {

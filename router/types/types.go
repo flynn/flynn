@@ -17,6 +17,9 @@ type Route struct {
 	ParentRef string `json:"parent_ref,omitempty"`
 	// Service is the ID of the service.
 	Service string `json:"service"`
+	// Leader is whether or not traffic should only be routed to the leader or
+	// all instances
+	Leader bool `json:"leader"`
 	// CreatedAt is the time this Route was created.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt is the time this Route was last updated.
@@ -51,6 +54,7 @@ func (r Route) HTTPRoute() *HTTPRoute {
 		ID:        r.ID,
 		ParentRef: r.ParentRef,
 		Service:   r.Service,
+		Leader:    r.Leader,
 		CreatedAt: r.CreatedAt,
 		UpdatedAt: r.UpdatedAt,
 
@@ -67,6 +71,7 @@ func (r Route) TCPRoute() *TCPRoute {
 		ID:        r.ID,
 		ParentRef: r.ParentRef,
 		Service:   r.Service,
+		Leader:    r.Leader,
 		CreatedAt: r.CreatedAt,
 		UpdatedAt: r.UpdatedAt,
 
@@ -79,6 +84,7 @@ type HTTPRoute struct {
 	ID        string
 	ParentRef string
 	Service   string
+	Leader    bool
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
@@ -104,6 +110,7 @@ func (r HTTPRoute) ToRoute() *Route {
 		ID:        r.ID,
 		ParentRef: r.ParentRef,
 		Service:   r.Service,
+		Leader:    r.Leader,
 		CreatedAt: r.CreatedAt,
 		UpdatedAt: r.UpdatedAt,
 
@@ -121,6 +128,7 @@ type TCPRoute struct {
 	ID        string
 	ParentRef string
 	Service   string
+	Leader    bool
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
@@ -141,6 +149,7 @@ func (r TCPRoute) ToRoute() *Route {
 		ID:        r.ID,
 		ParentRef: r.ParentRef,
 		Service:   r.Service,
+		Leader:    r.Leader,
 		CreatedAt: r.CreatedAt,
 		UpdatedAt: r.UpdatedAt,
 

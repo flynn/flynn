@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/discoverd/testutil"
 	"github.com/flynn/flynn/router/types"
 )
@@ -115,6 +116,48 @@ func addTCPRoute(c *C, l *TCPListener, port int) *router.TCPRoute {
 	c.Assert(err, IsNil)
 	wait()
 	return r.TCPRoute()
+}
+
+func (s *S) TestTCPLeaderRouting(c *C) {
+	portInt := allocatePort()
+	port := strconv.Itoa(portInt)
+	addr := "127.0.0.1:" + port
+
+	srv1 := NewTCPTestServer("1")
+	srv2 := NewTCPTestServer("2")
+	defer srv1.Close()
+	defer srv2.Close()
+
+	l := s.newTCPListener(c)
+	defer l.Close()
+
+	client := l.discoverd
+	err := client.AddService("leader-routing-tcp", &discoverd.ServiceConfig{
+		LeaderType: discoverd.LeaderTypeManual,
+	})
+	c.Assert(err, IsNil)
+	svc := s.discoverd.Service("leader-routing-tcp")
+
+	wait := waitForEvent(c, l, "set", "")
+	r := router.TCPRoute{
+		Service: "leader-routing-tcp",
+		Port:    portInt,
+		Leader:  true,
+	}.ToRoute()
+	err = l.AddRoute(r)
+	c.Assert(err, IsNil)
+	wait()
+
+	discoverdRegisterTCPService(c, l, "leader-routing-tcp", srv1.Addr)
+	discoverdRegisterTCPService(c, l, "leader-routing-tcp", srv2.Addr)
+
+	err = svc.SetLeader(md5sum("tcp-" + srv1.Addr))
+	c.Assert(err, IsNil)
+	assertTCPConn(c, addr, "1")
+
+	err = svc.SetLeader(md5sum("tcp-" + srv2.Addr))
+	c.Assert(err, IsNil)
+	assertTCPConn(c, addr, "2")
 }
 
 func (s *S) TestInitialTCPSync(c *C) {

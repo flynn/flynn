@@ -376,17 +376,12 @@ func (s *CLISuite) TestRoute(t *c.C) {
 
 	// flynn route add http
 	route := random.String(32) + ".dev"
-	newRoute := app.flynn("route", "add", "http", "--sticky", route)
+	newRoute := app.flynn("route", "add", "http", route)
 	t.Assert(newRoute, Succeeds)
 	routeID := strings.TrimSpace(newRoute.Output)
 	assertRouteContains(routeID, true)
 
-	// duplicate http route
-	dupRoute := app.flynn("route", "add", "http", "--sticky", route)
-	t.Assert(dupRoute, c.Not(Succeeds))
-	t.Assert(dupRoute.Output, c.Equals, "conflict: Duplicate route\n")
-
-	// ensure sticky flag is set
+	// ensure sticky and leader flags default to not set
 	routes, err := client.RouteList(app.name)
 	t.Assert(err, c.IsNil)
 	var found bool
@@ -394,8 +389,36 @@ func (s *CLISuite) TestRoute(t *c.C) {
 		if fmt.Sprintf("%s/%s", r.Type, r.ID) != routeID {
 			continue
 		}
-		t.Assert(r.Sticky, c.Equals, true)
+		t.Assert(r.Sticky, c.Equals, false)
+		t.Assert(r.Leader, c.Equals, false)
 		found = true
+		break
+	}
+	t.Assert(found, c.Equals, true, c.Commentf("didn't find route"))
+
+	// flynn route add http --sticky --leader
+	route = random.String(32) + ".dev"
+	newRoute = app.flynn("route", "add", "http", "--sticky", route, "--leader")
+	t.Assert(newRoute, Succeeds)
+	routeID = strings.TrimSpace(newRoute.Output)
+	assertRouteContains(routeID, true)
+
+	// duplicate http route
+	dupRoute := app.flynn("route", "add", "http", "--sticky", route)
+	t.Assert(dupRoute, c.Not(Succeeds))
+	t.Assert(dupRoute.Output, c.Equals, "conflict: Duplicate route\n")
+
+	// ensure sticky and leader flags are set
+	routes, err = client.RouteList(app.name)
+	t.Assert(err, c.IsNil)
+	for _, r := range routes {
+		if fmt.Sprintf("%s/%s", r.Type, r.ID) != routeID {
+			continue
+		}
+		t.Assert(r.Sticky, c.Equals, true)
+		t.Assert(r.Leader, c.Equals, true)
+		found = true
+		break
 	}
 	t.Assert(found, c.Equals, true, c.Commentf("didn't find route"))
 
@@ -405,6 +428,13 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	r, err := client.GetRoute(app.id, routeID)
 	t.Assert(err, c.IsNil)
 	t.Assert(r.Sticky, c.Equals, false)
+
+	// flynn route update --no-leader
+	newRoute = app.flynn("route", "update", routeID, "--no-leader")
+	t.Assert(newRoute, Succeeds)
+	r, err = client.GetRoute(app.id, routeID)
+	t.Assert(err, c.IsNil)
+	t.Assert(r.Leader, c.Equals, false)
 
 	// flynn route update --service
 	newRoute = app.flynn("route", "update", routeID, "--service", "foo")
@@ -420,6 +450,14 @@ func (s *CLISuite) TestRoute(t *c.C) {
 	r, err = client.GetRoute(app.id, routeID)
 	t.Assert(err, c.IsNil)
 	t.Assert(r.Sticky, c.Equals, true)
+	t.Assert(r.Service, c.Equals, "foo")
+
+	// flynn route update --leader
+	newRoute = app.flynn("route", "update", routeID, "--leader")
+	t.Assert(newRoute, Succeeds)
+	r, err = client.GetRoute(app.id, routeID)
+	t.Assert(err, c.IsNil)
+	t.Assert(r.Leader, c.Equals, true)
 	t.Assert(r.Service, c.Equals, "foo")
 
 	// flynn route add domain path

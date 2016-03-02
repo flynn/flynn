@@ -47,6 +47,10 @@
       "type": "boolean",
       "description": "Whether or not to use sticky sessions for this route. It is only used for HTTP routes."
     },
+    "leader": {
+      "type": "boolean",
+      "description": "Whether to route traffic to just the leader or all instances."
+    },
     "port": {
       "type": "integer",
       "description": "The TCP port to listen on for TCP Routes."
