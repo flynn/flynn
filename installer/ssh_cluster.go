@@ -348,9 +348,11 @@ func (c *SSHCluster) findSSHAuth() error {
 	}
 
 	sshAgent := c.sshAgent()
-	sshAgentAuth := ssh.PublicKeysCallback(sshAgent.Signers)
-	for _, t := range c.Targets {
-		testAndAddAuthMethod(t, sshAgentAuth)
+	if sshAgent != nil {
+		sshAgentAuth := ssh.PublicKeysCallback(sshAgent.Signers)
+		for _, t := range c.Targets {
+			testAndAddAuthMethod(t, sshAgentAuth)
+		}
 	}
 
 	if testAllAuthenticated(c.Targets) {
@@ -358,10 +360,12 @@ func (c *SSHCluster) findSSHAuth() error {
 	}
 
 	var agentKeys [][]byte
-	if keys, err := sshAgent.List(); err == nil {
-		agentKeys = make([][]byte, len(keys))
-		for i, k := range keys {
-			agentKeys[i] = k.Marshal()
+	if sshAgent != nil {
+		if keys, err := sshAgent.List(); err == nil {
+			agentKeys = make([][]byte, len(keys))
+			for i, k := range keys {
+				agentKeys[i] = k.Marshal()
+			}
 		}
 	}
 
