@@ -246,6 +246,9 @@ $$ LANGUAGE plpgsql`,
 		`UPDATE apps SET strategy = 'sirenia' WHERE name = 'postgres'`,
 		`DELETE FROM deployment_strategies WHERE name = 'postgres'`,
 	)
+	migrations.Add(12,
+		`INSERT INTO event_types (name) VALUES ('resource_app_deletion')`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

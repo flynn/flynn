@@ -288,6 +288,8 @@ func appHandler(c handlerConfig) http.Handler {
 	httpRouter.GET("/providers/:providers_id/resources/:resources_id", httphelper.WrapHandler(api.GetResource))
 	httpRouter.PUT("/providers/:providers_id/resources/:resources_id", httphelper.WrapHandler(api.PutResource))
 	httpRouter.DELETE("/providers/:providers_id/resources/:resources_id", httphelper.WrapHandler(api.DeleteResource))
+	httpRouter.PUT("/providers/:providers_id/resources/:resources_id/apps/:app_id", httphelper.WrapHandler(api.AddResourceApp))
+	httpRouter.DELETE("/providers/:providers_id/resources/:resources_id/apps/:app_id", httphelper.WrapHandler(api.DeleteResourceApp))
 	httpRouter.GET("/apps/:apps_id/resources", httphelper.WrapHandler(api.appLookup(api.GetAppResources)))
 
 	httpRouter.POST("/apps/:apps_id/routes", httphelper.WrapHandler(api.appLookup(api.CreateRoute)))

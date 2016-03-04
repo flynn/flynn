@@ -82,6 +82,52 @@ func (s *S) TestPutResource(c *C) {
 	c.Assert(gotResource, DeepEquals, resource)
 }
 
+func (s *S) TestAddResourceApp(c *C) {
+	app1 := s.createTestApp(c, &ct.App{Name: "add-resource-app1"})
+	app2 := s.createTestApp(c, &ct.App{Name: "add-resource-app2"})
+	resource, provider := s.provisionTestResource(c, "add-resource-app", []string{})
+
+	gotResource, err := s.c.AddResourceApp(provider.ID, resource.ID, app1.ID)
+	c.Assert(err, IsNil)
+	c.Assert(gotResource.Apps, DeepEquals, []string{app1.ID})
+
+	gotResource, err = s.c.AddResourceApp(provider.ID, resource.ID, app2.ID)
+	c.Assert(err, IsNil)
+	c.Assert(gotResource.Apps, DeepEquals, []string{app1.ID, app2.ID})
+}
+
+func (s *S) TestDeleteResourceApp(c *C) {
+	app1 := s.createTestApp(c, &ct.App{Name: "delete-resource-app1"})
+	app2 := s.createTestApp(c, &ct.App{Name: "delete-resource-app2"})
+	resource, provider := s.provisionTestResource(c, "delete-resource-app", []string{app1.ID, app2.ID})
+
+	gotResource, err := s.c.DeleteResourceApp(provider.ID, resource.ID, app1.ID)
+	c.Assert(err, IsNil)
+	c.Assert(gotResource.Apps, DeepEquals, []string{app2.ID})
+
+	gotResource, err = s.c.DeleteResourceApp(provider.ID, resource.ID, app2.ID)
+	c.Assert(err, IsNil)
+	c.Assert(gotResource.Apps, IsNil)
+}
+
+func (s *S) TestDeleteResourceAppThenAdd(c *C) {
+	app1 := s.createTestApp(c, &ct.App{Name: "delete-then-add-resource-app1"})
+	app2 := s.createTestApp(c, &ct.App{Name: "delete-then-add-resource-app2"})
+	resource, provider := s.provisionTestResource(c, "delete-then-add-resource-app", []string{app1.ID, app2.ID})
+
+	gotResource, err := s.c.DeleteResourceApp(provider.ID, resource.ID, app1.ID)
+	c.Assert(err, IsNil)
+	c.Assert(gotResource.Apps, DeepEquals, []string{app2.ID})
+
+	gotResource, err = s.c.DeleteResourceApp(provider.ID, resource.ID, app2.ID)
+	c.Assert(err, IsNil)
+	c.Assert(gotResource.Apps, IsNil)
+
+	gotResource, err = s.c.AddResourceApp(provider.ID, resource.ID, app1.ID)
+	c.Assert(err, IsNil)
+	c.Assert(gotResource.Apps, DeepEquals, []string{app1.ID})
+}
+
 func (s *S) TestResourceLists(c *C) {
 	app1 := s.createTestApp(c, &ct.App{Name: "resource-list1"})
 	app2 := s.createTestApp(c, &ct.App{Name: "resource-list2"})

@@ -314,9 +314,9 @@ INSERT INTO app_resources (app_id, resource_id)
 VALUES ((SELECT app_id FROM apps WHERE (app_id = $1 OR name = $2) AND deleted_at IS NULL), $3)
 RETURNING app_id`
 	appResourceDeleteByAppQuery = `
-UPDATE app_resources SET deleted_at = now() WHERE app_id = $1 AND deleted_at IS NULL`
+DELETE FROM app_resources WHERE app_id = $1`
 	appResourceDeleteByResourceQuery = `
-UPDATE app_resources SET deleted_at = now() WHERE resource_id = $1 AND deleted_at IS NULL`
+DELETE FROM app_resources WHERE resource_id = $1`
 	domainMigrationInsert = `
 INSERT INTO domain_migrations (old_domain, domain, old_tls_cert, tls_cert) VALUES ($1, $2, $3, $4) RETURNING migration_id, created_at`
 )
