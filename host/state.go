@@ -85,6 +85,17 @@ func (s *State) Restore(backend Backend, buffers host.LogBuffers) (func(), error
 			return err
 		}
 
+		if err := persistentBucket.ForEach(func(k, v []byte) error {
+			for _, job := range s.jobs {
+				if job.Job.ID == string(v) {
+					resurrect = append(resurrect, job.Job)
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+
 		// hand opaque blobs back to backend so it can do its restore
 		backendJobsBlobs := make(map[string][]byte)
 		if err := backendJobsBucket.ForEach(func(k, v []byte) error {
@@ -98,18 +109,6 @@ func (s *State) Restore(backend Backend, buffers host.LogBuffers) (func(), error
 			return err
 		}
 
-		s.mtx.Lock()
-		if err := persistentBucket.ForEach(func(k, v []byte) error {
-			for _, job := range s.jobs {
-				if job.Job.ID == string(v) {
-					resurrect = append(resurrect, job.Job)
-				}
-			}
-			return nil
-		}); err != nil {
-			return err
-		}
-		s.mtx.Unlock()
 		return nil
 	}); err != nil && err != io.EOF {
 		return nil, fmt.Errorf("could not restore from host persistence db: %s", err)
