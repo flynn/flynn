@@ -122,7 +122,7 @@ func runBootstrapBackup(manifest []byte, backupFile string, ch chan *bootstrap.S
 	tr := tar.NewReader(f)
 
 	var data struct {
-		Discoverd, Flannel, Postgres, Controller *ct.ExpandedFormation
+		Discoverd, Flannel, Postgres, MariaDB, Controller *ct.ExpandedFormation
 	}
 	for {
 		header, err := tr.Next()
@@ -148,20 +148,21 @@ func runBootstrapBackup(manifest []byte, backupFile string, ch chan *bootstrap.S
 			}
 			rewound = true
 		} else if err != nil {
-			return fmt.Errorf("error finding db in backup file: %s", err)
+			return fmt.Errorf("error finding postgres db in backup file: %s", err)
 		}
 		if path.Base(header.Name) != "postgres.sql.gz" {
 			continue
 		}
 		db, err = gzip.NewReader(tr)
 		if err != nil {
-			return fmt.Errorf("error opening db from backup file: %s", err)
+			return fmt.Errorf("error opening postgres db from backup file: %s", err)
 		}
 		break
 	}
 	if db == nil {
 		return fmt.Errorf("did not found postgres.sql.gz in backup file")
 	}
+
 	// add buffer to the end of the SQL import containing commands that rewrite data in the controller db
 	sqlBuf := &bytes.Buffer{}
 	db = io.MultiReader(db, sqlBuf)
@@ -245,9 +246,9 @@ WHERE release_id = (SELECT release_id from apps WHERE name = '%s');`,
 		}
 	}
 
-	// start discoverd/flannel/postgres
+	// start discoverd/flannel/postgres/mariadb
 	cfg.Singleton = data.Postgres.Release.Env["SINGLETON"] == "true"
-	state, err := bootstrap.Manifest{
+	systemSteps := bootstrap.Manifest{
 		step("discoverd", "run-app", &bootstrap.RunAppAction{
 			ExpandedFormation: data.Discoverd,
 		}),
@@ -261,7 +262,18 @@ WHERE release_id = (SELECT release_id from apps WHERE name = '%s');`,
 		step("postgres-wait", "wait", &bootstrap.WaitAction{
 			URL: "http://postgres-api.discoverd/ping",
 		}),
-	}.Run(ch, cfg)
+	}
+
+	// Only run up MariaDB if it's in the backup
+	if data.MariaDB != nil {
+		systemSteps = append(systemSteps, step("mariadb", "run-app", &bootstrap.RunAppAction{
+			ExpandedFormation: data.MariaDB,
+		}))
+		systemSteps = append(systemSteps, step("mariadb-wait", "wait", &bootstrap.WaitAction{
+			URL: "http://mariadb-api.discoverd/ping",
+		}))
+	}
+	state, err := systemSteps.Run(ch, cfg)
 	if err != nil {
 		return err
 	}
@@ -282,7 +294,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 		"PGPASSWORD": data.Postgres.Release.Env["PGPASSWORD"],
 	}
 	cmd.Stdin = db
-	meta := bootstrap.StepMeta{ID: "restore", Action: "restore-db"}
+	meta := bootstrap.StepMeta{ID: "restore", Action: "restore-postgres"}
 	ch <- &bootstrap.StepInfo{StepMeta: meta, State: "start", Timestamp: time.Now().UTC()}
 	out, err := cmd.CombinedOutput()
 	if os.Getenv("DEBUG") != "" {
@@ -299,6 +311,58 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 		return err
 	}
 	ch <- &bootstrap.StepInfo{StepMeta: meta, State: "done", Timestamp: time.Now().UTC()}
+
+	var mysqldb io.Reader
+	if data.MariaDB != nil {
+		rewound = false
+		for {
+			header, err := tr.Next()
+			if err == io.EOF && !rewound {
+				if _, err := f.Seek(0, os.SEEK_SET); err != nil {
+					return fmt.Errorf("error seeking in backup file: %s", err)
+				}
+				rewound = true
+			} else if err != nil {
+				return fmt.Errorf("error finding mysql db in backup file: %s", err)
+			}
+			if path.Base(header.Name) != "mysql.sql.gz" {
+				continue
+			}
+			mysqldb, err = gzip.NewReader(tr)
+			if err != nil {
+				return fmt.Errorf("error opening mysql db from backup file: %s", err)
+			}
+			break
+		}
+	}
+
+	// load data into mariadb if it was present in the backup.
+	if mysqldb != nil && data.MariaDB != nil {
+		cmd = exec.JobUsingHost(state.Hosts[0], host.Artifact{Type: data.MariaDB.Artifact.Type, URI: data.MariaDB.Artifact.URI}, nil)
+		cmd.Entrypoint = []string{"mysql"}
+		cmd.Cmd = []string{"-u", "flynn", "-h", "leader.mariadb.discoverd"}
+		cmd.Env = map[string]string{
+			"MYSQL_PWD": data.MariaDB.Release.Env["MYSQL_PWD"],
+		}
+		cmd.Stdin = mysqldb
+		meta = bootstrap.StepMeta{ID: "restore", Action: "restore-mariadb"}
+		ch <- &bootstrap.StepInfo{StepMeta: meta, State: "start", Timestamp: time.Now().UTC()}
+		out, err = cmd.CombinedOutput()
+		if os.Getenv("DEBUG") != "" {
+			fmt.Println(string(out))
+		}
+		if err != nil {
+			ch <- &bootstrap.StepInfo{
+				StepMeta:  meta,
+				State:     "error",
+				Error:     fmt.Sprintf("error running mysql restore: %s - %q", err, string(out)),
+				Err:       err,
+				Timestamp: time.Now().UTC(),
+			}
+			return err
+		}
+		ch <- &bootstrap.StepInfo{StepMeta: meta, State: "done", Timestamp: time.Now().UTC()}
+	}
 
 	// start controller/scheduler
 	data.Controller.Processes["web"] = 1
