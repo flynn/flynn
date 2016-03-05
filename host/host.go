@@ -56,6 +56,7 @@ options:
   --peer-ips=IPLIST      join existing cluster using IPs
   --bridge-name=NAME     network bridge name [default: flynnbr0]
   --no-resurrect         disable cluster resurrection
+  --max-job-concurrency  maximum number of jobs to start concurrently
 	`)
 }
 
@@ -166,6 +167,11 @@ func runDaemon(args *docopt.Args) {
 
 	if hostID == "" {
 		hostID = strings.Replace(hostname, "-", "", -1)
+	}
+
+	var maxJobConcurrency uint64 = 4
+	if m, err := strconv.ParseUint(args.String["--max-job-concurrency"], 10, 64); err == nil {
+		maxJobConcurrency = m
 	}
 
 	log := logger.New("fn", "runDaemon", "host.id", hostID)
@@ -279,6 +285,8 @@ func runDaemon(args *docopt.Args) {
 		vman:    vman,
 		discMan: discoverdManager,
 		log:     logger.New("host.id", hostID),
+
+		maxJobConcurrency: maxJobConcurrency,
 	}
 
 	// restore the host status if set in the environment

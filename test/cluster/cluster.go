@@ -491,6 +491,7 @@ sudo start-stop-daemon \
   --force \
   --backend libvirt-lxc \
   --peer-ips {{ .Peers }} \
+  --max-job-concurrency 8 \
   &>/tmp/flynn-host.log
 `[1:])),
 }
