@@ -47,6 +47,8 @@ type Host struct {
 
 	listener net.Listener
 
+	maxJobConcurrency uint64
+
 	log log15.Logger
 }
 
@@ -509,8 +511,6 @@ func (h *jobAPI) RegisterRoutes(r *httprouter.Router) error {
 	return nil
 }
 
-const maxParallelAddJob = 4
-
 func (h *Host) ServeHTTP() {
 	r := httprouter.New()
 
@@ -518,7 +518,7 @@ func (h *Host) ServeHTTP() {
 
 	jobAPI := &jobAPI{
 		host: h,
-		addJobRatelimitBucket: make(chan struct{}, maxParallelAddJob),
+		addJobRatelimitBucket: make(chan struct{}, h.maxJobConcurrency),
 	}
 	jobAPI.RegisterRoutes(r)
 
