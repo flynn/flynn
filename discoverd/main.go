@@ -26,7 +26,7 @@ import (
 
 const (
 	// LeaderTimeout is the amount of time discoverd will wait for a leader.
-	LeaderTimeout = 30 * time.Second
+	LeaderTimeout = 10 * time.Minute
 )
 
 func main() {
