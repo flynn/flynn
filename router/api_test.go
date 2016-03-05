@@ -249,7 +249,7 @@ func (s *S) TestStreamEvents(c *C) {
 		c.Fatal("Timed out waiting for remove event")
 	}
 
-	tcpr := addTCPRoute(c, tcpl, 46000)
+	tcpr := addTCPRoute(c, tcpl, allocatePort())
 	select {
 	case e, ok := <-events:
 		if !ok {
