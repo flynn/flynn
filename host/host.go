@@ -39,24 +39,24 @@ func init() {
 usage: flynn-host daemon [options]
 
 options:
-  --http-port=PORT       HTTP port [default: 1113]
-  --external-ip=IP       external IP of host
-  --listen-ip=IP         bind host network services to this IP
-  --state=PATH           path to state file [default: /var/lib/flynn/host-state.bolt]
-  --id=ID                host id
-  --tags=TAGS            host tags (comma separated list of KEY=VAL pairs, used for job constraints in the scheduler)
-  --force                kill all containers booted by flynn-host before starting
-  --volpath=PATH         directory to create volumes in [default: /var/lib/flynn/volumes]
-  --vol-provider=VOL     volume provider [default: zfs]
-  --backend=BACKEND      runner backend [default: libvirt-lxc]
-  --flynn-init=PATH      path to flynn-init binary [default: /usr/local/bin/flynn-init]
-  --nsumount=PATH        path to flynn-nsumount binary [default: /usr/local/bin/flynn-nsumount]
-  --log-dir=DIR          directory to store job logs [default: /var/log/flynn]
-  --discovery=TOKEN      join cluster with discovery token
-  --peer-ips=IPLIST      join existing cluster using IPs
-  --bridge-name=NAME     network bridge name [default: flynnbr0]
-  --no-resurrect         disable cluster resurrection
-  --max-job-concurrency  maximum number of jobs to start concurrently
+  --http-port=PORT           HTTP port [default: 1113]
+  --external-ip=IP           external IP of host
+  --listen-ip=IP             bind host network services to this IP
+  --state=PATH               path to state file [default: /var/lib/flynn/host-state.bolt]
+  --id=ID                    host id
+  --tags=TAGS                host tags (comma separated list of KEY=VAL pairs, used for job constraints in the scheduler)
+  --force                    kill all containers booted by flynn-host before starting
+  --volpath=PATH             directory to create volumes in [default: /var/lib/flynn/volumes]
+  --vol-provider=VOL         volume provider [default: zfs]
+  --backend=BACKEND          runner backend [default: libvirt-lxc]
+  --flynn-init=PATH          path to flynn-init binary [default: /usr/local/bin/flynn-init]
+  --nsumount=PATH            path to flynn-nsumount binary [default: /usr/local/bin/flynn-nsumount]
+  --log-dir=DIR              directory to store job logs [default: /var/log/flynn]
+  --discovery=TOKEN          join cluster with discovery token
+  --peer-ips=IPLIST          join existing cluster using IPs
+  --bridge-name=NAME         network bridge name [default: flynnbr0]
+  --no-resurrect             disable cluster resurrection
+  --max-job-concurrency=NUM  maximum number of jobs to start concurrently
 	`)
 }
 
