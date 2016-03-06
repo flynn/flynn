@@ -44,7 +44,7 @@ func (s *ZDomainMigrationSuite) migrateDomain(t *c.C, dm *ct.DomainMigration) {
 		select {
 		case e, ok = <-events:
 			if !ok {
-				t.Fatal("event stream closed unexpectedly")
+				t.Fatalf("event stream closed unexpectedly: %s", stream.Err())
 			}
 			debugf(t, "got %s domain migration event", typ)
 		case <-time.After(timeout):
