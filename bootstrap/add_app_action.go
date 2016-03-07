@@ -66,6 +66,7 @@ func (a *AddAppAction) Run(s *State) error {
 
 		resource := &ct.Resource{
 			ID:         random.UUID(),
+			Apps:       []string{a.App.ID},
 			ProviderID: p.ID,
 			ExternalID: data.Resources[i].ID,
 			Env:        data.Resources[i].Env,

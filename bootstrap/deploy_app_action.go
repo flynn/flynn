@@ -67,7 +67,7 @@ func (a *DeployAppAction) Run(s *State) error {
 			s.Providers[p.Name] = p
 		}
 
-		res, err := client.ProvisionResource(&ct.ResourceReq{ProviderID: p.ID})
+		res, err := client.ProvisionResource(&ct.ResourceReq{ProviderID: p.ID, Apps: []string{a.App.ID}})
 		if err != nil {
 			return err
 		}
