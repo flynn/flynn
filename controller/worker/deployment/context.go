@@ -9,7 +9,6 @@ import (
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/worker/types"
-	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/postgres"
 )
@@ -97,7 +96,7 @@ func (c *context) HandleDeployment(job *que.Job) (e error) {
 		client:          c.client,
 		deployEvents:    events,
 		serviceNames:    make(map[string]string),
-		serviceEvents:   make(chan *discoverd.Event),
+		jobEvents:       make(map[string]chan *JobEvent),
 		useJobEvents:    make(map[string]struct{}),
 		logger:          c.logger,
 		oldReleaseState: make(map[string]int, len(deployment.Processes)),
