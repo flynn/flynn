@@ -71,9 +71,17 @@ func (d *DeployJob) deployPostgres() (err error) {
 			return err
 		}
 		log.Info("waiting for postgres to stop")
+		jobEvents := d.ReleaseJobEvents(d.OldReleaseID)
 		for {
 			select {
-			case event := <-d.serviceEvents:
+			case e := <-jobEvents:
+				if e.Type == JobEventTypeError {
+					return e.Error
+				}
+				if e.Type != JobEventTypeDiscoverd {
+					continue
+				}
+				event := e.DiscoverdEvent
 				if event.Kind == discoverd.EventKindDown && event.Instance.ID == inst.ID {
 					d.deployEvents <- ct.DeploymentEvent{
 						ReleaseID: d.OldReleaseID,
@@ -108,13 +116,20 @@ func (d *DeployJob) deployPostgres() (err error) {
 		}
 		log.Info("waiting for new instance to come up")
 		var inst *discoverd.Instance
+		jobEvents := d.ReleaseJobEvents(d.NewReleaseID)
 	loop:
 		for {
 			select {
-			case event := <-d.serviceEvents:
+			case e := <-jobEvents:
+				if e.Type == JobEventTypeError {
+					return nil, e.Error
+				}
+				if e.Type != JobEventTypeDiscoverd {
+					continue
+				}
+				event := e.DiscoverdEvent
 				if event.Kind == discoverd.EventKindUp &&
 					event.Instance.Meta != nil &&
-					event.Instance.Meta["FLYNN_RELEASE_ID"] == d.NewReleaseID &&
 					event.Instance.Meta["FLYNN_PROCESS_TYPE"] == "postgres" {
 					inst = event.Instance
 					break loop
@@ -220,15 +235,20 @@ func (d *DeployJob) deployPostgres() (err error) {
 
 	log.Info(fmt.Sprintf("waiting for %d job down events", d.Processes["postgres"]))
 	actual := 0
+	jobEvents := d.ReleaseJobEvents(d.OldReleaseID)
 loop:
 	for {
 		select {
-		case event, ok := <-d.jobEvents:
-			if !ok {
-				return loggedErr("unexpected close of job event stream")
+		case e := <-jobEvents:
+			if e.Type == JobEventTypeError {
+				return loggedErr(e.Error.Error())
 			}
+			if e.Type != JobEventTypeController {
+				continue
+			}
+			event := e.JobEvent
 			log.Info("got job event", "job_id", event.ID, "type", event.Type, "state", event.State)
-			if event.State == ct.JobStateDown && event.Type == "postgres" && event.ReleaseID == d.OldReleaseID {
+			if event.State == ct.JobStateDown && event.Type == "postgres" {
 				actual++
 				if actual == d.Processes["postgres"] {
 					break loop
