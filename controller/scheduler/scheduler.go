@@ -95,6 +95,10 @@ type Scheduler struct {
 	// their tags not matching any hosts, and is used to try and place the
 	// jobs when host tags change
 	pendingTagJobs map[string]*Job
+
+	// pause and resume are used by tests to control the main loop
+	pause  chan struct{}
+	resume chan struct{}
 }
 
 func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc Discoverd) *Scheduler {
@@ -123,6 +127,8 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 		formationlessJobs: make(map[utils.FormationKey]map[string]*Job),
 		getJobs:           make(chan Jobs),
 		pendingTagJobs:    make(map[string]*Job),
+		pause:             make(chan struct{}),
+		resume:            make(chan struct{}),
 	}
 }
 
@@ -382,6 +388,8 @@ func (s *Scheduler) Run() error {
 		case <-s.syncHosts:
 			s.SyncHosts()
 		case s.getJobs <- s.jobs:
+		case <-s.pause:
+			<-s.resume
 		}
 	}
 	return nil
@@ -551,6 +559,10 @@ func (s *Scheduler) RectifyFormation(key utils.FormationKey) {
 		return
 	}
 
+	// stop surplus omni jobs first in case we need to reschedule them
+	// on other hosts
+	s.stopSurplusOmniJobs(formation)
+
 	// stop jobs with mismatched tags first in case we need to reschedule
 	// them on hosts with matching tags
 	s.stopJobsWithMismatchedTags(formation)
@@ -560,6 +572,52 @@ func (s *Scheduler) RectifyFormation(key utils.FormationKey) {
 		return
 	}
 	s.handleFormationDiff(formation, diff)
+}
+
+// stopSurplusOmniJobs stops surplus jobs which are running on a host which has
+// more than the expected number of omni jobs for a given type (this happens
+// for example when both the bootstrapper and scheduler are starting jobs and
+// distribute omni jobs unevenly)
+func (s *Scheduler) stopSurplusOmniJobs(formation *Formation) {
+	log := logger.New("fn", "stopSurplusOmniJobs")
+
+	for typ, proc := range formation.Release.Processes {
+		if !proc.Omni {
+			continue
+		}
+
+		// get a list of jobs per host so we can count them and
+		// potentially stop any surplus ones
+		hostJobs := make(map[string][]*Job)
+		for _, job := range s.jobs.WithFormationAndType(formation, typ) {
+			if job.IsRunning() {
+				hostJobs[job.HostID] = append(hostJobs[job.HostID], job)
+			}
+		}
+
+		// detect surplus jobs per host by comparing the expected count
+		// from the formation with the number of jobs currently running
+		// on that host
+		expected := formation.OriginalProcesses[typ]
+		var surplusJobs []*Job
+		for _, jobs := range hostJobs {
+			if diff := len(jobs) - expected; diff > 0 {
+				// add the most recent jobs which are at the start
+				// of the slice (WithFormationAndType returns them
+				// in reverse chronological order above)
+				surplusJobs = append(surplusJobs, jobs[0:diff]...)
+			}
+		}
+
+		if len(surplusJobs) == 0 {
+			continue
+		}
+
+		log.Info(fmt.Sprintf("detected %d surplus omni jobs", len(surplusJobs)), "type", typ)
+		for _, job := range surplusJobs {
+			s.stopJob(job)
+		}
+	}
 }
 
 // stopJobsWithMismatchedTags stops any running jobs whose tags do not match
@@ -1268,6 +1326,18 @@ func (s *Scheduler) findJobToStop(f *Formation, typ string) (*Job, error) {
 
 func jobConfig(job *Job, hostID string) *host.Job {
 	return utils.JobConfig(job.Formation.ExpandedFormation, job.Type, hostID, job.ID)
+}
+
+func (s *Scheduler) Pause() {
+	logger.Info("pausing scheduler")
+	s.pause <- struct{}{}
+	logger.Info("scheduler paused")
+}
+
+func (s *Scheduler) Resume() {
+	logger.Info("resuming scheduler")
+	s.resume <- struct{}{}
+	logger.Info("scheduler resumed")
 }
 
 func (s *Scheduler) Stop() error {
