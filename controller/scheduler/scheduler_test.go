@@ -396,6 +396,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	h3.CrashJob("job4")
 	s.waitJobStop()
 	s.waitJobStart()
+	s.waitRectify()
 	assertJobs(map[string]*Job{
 		"job1": {Type: "web", state: JobStateStarting, HostID: "host1"},
 		"job2": {Type: "omni", state: JobStateStarting, HostID: "host1"},
@@ -404,6 +405,36 @@ func (TestSuite) TestMultipleHosts(c *C) {
 		"job5": {Type: "omni", state: JobStateStarting, HostID: "host3"},
 	})
 	assertHostJobs(h3, "job5")
+
+	c.Log("Unbalance the omni jobs, wait for them to be re-balanced")
+
+	// pause the scheduler so we can unbalance the jobs without it trying
+	// to rectify the situation
+	s.Pause()
+
+	// move host3's job to host2
+	id := cluster.GenerateJobID(h3.ID(), "job5")
+	job, err := h3.GetJob(id)
+	c.Assert(err, IsNil)
+	newJob := job.Job.Dup()
+	newJob.ID = cluster.GenerateJobID(h2.ID(), generateJobUUID())
+	h2.AddJob(newJob)
+	err = h3.StopJob(id)
+	c.Assert(err, IsNil)
+
+	// resume the scheduler and check it moves the job back to host3
+	s.Resume()
+	s.waitRectify()
+	s.waitJobStart()
+	assertJobs(map[string]*Job{
+		"job1": {Type: "web", state: JobStateStarting, HostID: "host1"},
+		"job2": {Type: "omni", state: JobStateStarting, HostID: "host1"},
+		"job3": {Type: "omni", state: JobStateStarting, HostID: "host2"},
+		"job4": {Type: "omni", state: JobStateStopped, HostID: "host3"},
+		"job5": {Type: "omni", state: JobStateStopped, HostID: "host3"},
+		"job6": {Type: "omni", state: JobStateStopped, HostID: "host2"},
+		"job7": {Type: "omni", state: JobStateStarting, HostID: "host3"},
+	})
 
 	c.Logf("Remove one of the hosts. Ensure the cluster recovers correctly (hosts=%v)", hosts)
 	h3.Healthy = false
@@ -416,6 +447,8 @@ func (TestSuite) TestMultipleHosts(c *C) {
 		"job3": {Type: "omni", state: JobStateStarting, HostID: "host2"},
 		"job4": {Type: "omni", state: JobStateStopped, HostID: "host3"},
 		"job5": {Type: "omni", state: JobStateStopped, HostID: "host3"},
+		"job6": {Type: "omni", state: JobStateStopped, HostID: "host2"},
+		"job7": {Type: "omni", state: JobStateStopped, HostID: "host3"},
 	})
 	assertHostJobs(h1, "job1", "job2")
 	assertHostJobs(h2, "job3")
@@ -432,9 +465,11 @@ func (TestSuite) TestMultipleHosts(c *C) {
 		"job3": {Type: "omni", state: JobStateStarting, HostID: "host2"},
 		"job4": {Type: "omni", state: JobStateStopped, HostID: "host3"},
 		"job5": {Type: "omni", state: JobStateStopped, HostID: "host3"},
-		"job6": {Type: "web", state: JobStateStarting, HostID: "host2"},
+		"job6": {Type: "omni", state: JobStateStopped, HostID: "host2"},
+		"job7": {Type: "omni", state: JobStateStopped, HostID: "host3"},
+		"job8": {Type: "web", state: JobStateStarting, HostID: "host2"},
 	})
-	assertHostJobs(h2, "job3", "job6")
+	assertHostJobs(h2, "job3", "job8")
 }
 
 func (TestSuite) TestMultipleSchedulers(c *C) {
