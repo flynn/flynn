@@ -3,6 +3,7 @@ package health
 import (
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/pkg/stream"
 )
 
@@ -18,6 +19,11 @@ type Monitor struct {
 	// Threshold is the number of consecutive checks of the same status before
 	// a service will transition up -> down or down -> up. It defaults to 2.
 	Threshold int
+
+	// Logger is the logger that will be used to emit messages for each
+	// transition and for each failed check. If it is nil, no messages will be
+	// logged.
+	Logger log15.Logger
 }
 
 type MonitorStatus int
@@ -80,6 +86,9 @@ func (m Monitor) Run(check Check, ch chan MonitorEvent) stream.Stream {
 					t = time.NewTicker(m.Interval)
 				}
 				status = MonitorStatusUp
+				if m.Logger != nil {
+					m.Logger.Info("new monitor status", "status", status, "check", check)
+				}
 				ch <- MonitorEvent{
 					Status: status,
 					Check:  check,
@@ -89,8 +98,14 @@ func (m Monitor) Run(check Check, ch chan MonitorEvent) stream.Stream {
 		down := func(err error) {
 			upCount = 0
 			downCount++
+			if m.Logger != nil {
+				m.Logger.Warn("healthcheck error", "check", check, "err", err)
+			}
 			if status == MonitorStatusUp && downCount >= m.Threshold {
 				status = MonitorStatusDown
+				if m.Logger != nil {
+					m.Logger.Info("new monitor status", "status", status, "check", check, "err", err)
+				}
 				ch <- MonitorEvent{
 					Status: status,
 					Err:    err,
