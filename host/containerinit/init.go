@@ -504,8 +504,10 @@ func monitor(port host.Port, container *ContainerInit, env map[string]string, lo
 		Monitor: health.Monitor{
 			Interval:  config.Check.Interval,
 			Threshold: config.Check.Threshold,
+			Logger:    log.New("component", "monitor"),
 		}.Run,
-		Check: check,
+		Check:  check,
+		Logger: log,
 	}
 
 	if config.Check.KillDown {
