@@ -39,6 +39,10 @@ func (c *TCPCheck) Check() error {
 	return nil
 }
 
+func (c *TCPCheck) String() string {
+	return "tcp://" + c.Addr
+}
+
 type HTTPCheck struct {
 	// URL is the URL that will be requested
 	URL string
@@ -104,4 +108,8 @@ func (c *HTTPCheck) Check() error {
 		return fmt.Errorf("healthcheck: response did not match expected bytes")
 	}
 	return nil
+}
+
+func (c *HTTPCheck) String() string {
+	return c.URL
 }
