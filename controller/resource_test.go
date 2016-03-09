@@ -146,6 +146,26 @@ func (s *S) TestResourceLists(c *C) {
 	check(s.c.ResourceList(provider.ID))
 	check(s.c.ResourceList(provider.Name))
 	check(s.c.AppResourceList(app1.ID))
-	check(s.c.AppResourceList(app1.ID))
+	check(s.c.AppResourceList(app2.ID))
 	check(s.c.ResourceListAll())
+}
+
+func (s *S) TestAppResourceListWithDeletedAppResource(c *C) {
+	app1 := s.createTestApp(c, &ct.App{Name: "resource-app-list1"})
+	app2 := s.createTestApp(c, &ct.App{Name: "resource-app-list2"})
+
+	resource, provider := s.provisionTestResource(c, "resource-app-list", []string{app1.ID, app2.ID})
+
+	_, err := s.c.DeleteResourceApp(provider.ID, resource.ID, app1.ID)
+	c.Assert(err, IsNil)
+
+	list, err := s.c.AppResourceList(app1.ID)
+	c.Assert(err, IsNil)
+	c.Assert(len(list), Equals, 0)
+
+	list, err = s.c.AppResourceList(app2.ID)
+	c.Assert(err, IsNil)
+	c.Assert(len(list), Equals, 1)
+	c.Assert(list[0].ID, Equals, resource.ID)
+	c.Assert(list[0].Apps, DeepEquals, []string{app2.ID})
 }

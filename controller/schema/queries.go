@@ -288,7 +288,7 @@ SELECT DISTINCT(r.resource_id), r.provider_id, r.external_id, r.env,
   ), r.created_at
 FROM resources r
 JOIN app_resources a USING (resource_id)
-WHERE a.app_id = $1 AND r.deleted_at IS NULL
+WHERE a.app_id = $1 AND r.deleted_at IS NULL AND a.deleted_at IS NULL
 ORDER BY r.created_at DESC`
 	resourceSelectQuery = `
 SELECT resource_id, provider_id, external_id, env,
