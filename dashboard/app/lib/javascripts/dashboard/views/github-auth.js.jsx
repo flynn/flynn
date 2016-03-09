@@ -132,7 +132,8 @@ var GithubAuth = React.createClass({
 			name: 'UPDATE_APP_ENV',
 			appID: this.state.app.id,
 			prevRelease: this.state.release,
-			data: env
+			data: env,
+			deployTimeout: this.state.app.deploy_timeout
 		});
 	},
 

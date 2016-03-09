@@ -187,7 +187,8 @@ var AppDeployEvent = React.createClass({
 			Dispatcher.dispatch({
 				name: 'APP_DEPLOY_RELEASE',
 				appID: this.props.appID,
-				releaseID: event.object_id
+				releaseID: event.object_id,
+				deployTimeout: this.state.appState.app.deploy_timeout
 			});
 		} else if (event.object_type === 'scale') {
 			Dispatcher.dispatch({

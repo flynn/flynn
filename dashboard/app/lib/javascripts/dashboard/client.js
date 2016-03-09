@@ -261,7 +261,7 @@ var Client = createClass({
 		});
 	},
 
-	deployAppRelease: function (appID, releaseID) {
+	deployAppRelease: function (appID, releaseID, timeout) {
 		return this.performControllerRequest('POST', {
 			url: "/apps/"+ appID +"/deploy",
 			body: {id: releaseID},
@@ -273,13 +273,13 @@ var Client = createClass({
 			if (res.finished_at) {
 				return args;
 			}
-			return this.waitForDeployment(appID, res.id).then(function () {
+			return this.waitForDeployment(appID, res.id, timeout).then(function () {
 				return args;
 			});
 		}.bind(this));
 	},
 
-	waitForDeployment: function (appID, deploymentID) {
+	waitForDeployment: function (appID, deploymentID, timeout) {
 		if ( !window.hasOwnProperty('EventSource') ) {
 			return Promise.reject('window.EventSource not defined');
 		}
@@ -299,7 +299,7 @@ var Client = createClass({
 			setTimeout(function () {
 				reject("Timed out waiting for deployment completion");
 				es.close();
-			}, 10000);
+			}, (timeout || Config.DEFAULT_DEPLOY_TIMEOUT) * 1000); // convert timeout from seconds to milliseconds
 
 			es.addEventListener("error", function (e) {
 				reject(e);

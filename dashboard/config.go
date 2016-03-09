@@ -7,26 +7,28 @@ import (
 	"path"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/gorilla/sessions"
+	ct "github.com/flynn/flynn/controller/types"
 )
 
 type Config struct {
-	Addr               string
-	DefaultRouteDomain string
-	ControllerDomain   string
-	ControllerKey      string
-	URL                string
-	InterfaceURL       string
-	PathPrefix         string
-	CookiePath         string
-	SecureCookies      bool
-	LoginToken         string
-	GithubToken        string
-	GithubAPIURL       string
-	GithubTokenURL     string
-	SessionStore       *sessions.CookieStore
-	AppName            string
-	CACert             []byte
-	Cache              bool
+	Addr                 string
+	DefaultRouteDomain   string
+	ControllerDomain     string
+	ControllerKey        string
+	URL                  string
+	InterfaceURL         string
+	PathPrefix           string
+	CookiePath           string
+	SecureCookies        bool
+	LoginToken           string
+	GithubToken          string
+	GithubAPIURL         string
+	GithubTokenURL       string
+	SessionStore         *sessions.CookieStore
+	AppName              string
+	CACert               []byte
+	Cache                bool
+	DefaultDeployTimeout int
 }
 
 func LoadConfigFromEnv() *Config {
@@ -97,6 +99,8 @@ func LoadConfigFromEnv() *Config {
 	conf.CACert = []byte(os.Getenv("CA_CERT"))
 
 	conf.Cache = os.Getenv("DISABLE_CACHE") == ""
+
+	conf.DefaultDeployTimeout = ct.DefaultDeployTimeout
 
 	return conf
 }

@@ -100,7 +100,8 @@ var AppEnv = React.createClass({
 			name: 'UPDATE_APP_ENV',
 			appID: this.props.appId,
 			prevRelease: this.state.release,
-			data: this.state.env
+			data: this.state.env,
+			deployTimeout: this.state.app.deploy_timeout
 		});
 	}
 });

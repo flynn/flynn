@@ -135,7 +135,7 @@ Dispatcher.register(function (event) {
 		break;
 
 	case 'APP_DEPLOY_RELEASE':
-		Config.client.deployAppRelease(event.appID, event.releaseID);
+		Config.client.deployAppRelease(event.appID, event.releaseID, event.deployTimeout);
 		break;
 	}
 });

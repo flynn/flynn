@@ -273,10 +273,11 @@ func (api *API) GetCert(ctx context.Context, w http.ResponseWriter, req *http.Re
 }
 
 type DashboardConfig struct {
-	AppName     string `json:"APP_NAME"`
-	ApiServer   string `json:"API_SERVER"`
-	PathPrefix  string `json:"PATH_PREFIX"`
-	InstallCert bool   `json:"INSTALL_CERT"`
+	AppName              string `json:"APP_NAME"`
+	ApiServer            string `json:"API_SERVER"`
+	PathPrefix           string `json:"PATH_PREFIX"`
+	InstallCert          bool   `json:"INSTALL_CERT"`
+	DefaultDeployTimeout int    `json:"DEFAULT_DEPLOY_TIMEOUT"`
 }
 
 func (api *API) ServeDashboardJs(ctx context.Context, w http.ResponseWriter, req *http.Request) {
@@ -308,10 +309,11 @@ func (api *API) cacheDashboardJS() error {
 
 	data.Write([]byte("window.DashboardConfig = "))
 	json.NewEncoder(&data).Encode(DashboardConfig{
-		AppName:     api.conf.AppName,
-		ApiServer:   api.conf.URL,
-		PathPrefix:  api.conf.PathPrefix,
-		InstallCert: len(api.conf.CACert) > 0,
+		AppName:              api.conf.AppName,
+		ApiServer:            api.conf.URL,
+		PathPrefix:           api.conf.PathPrefix,
+		InstallCert:          len(api.conf.CACert) > 0,
+		DefaultDeployTimeout: api.conf.DefaultDeployTimeout,
 	})
 	data.Write([]byte(";\n"))
 	io.Copy(&data, js)
