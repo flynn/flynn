@@ -78,10 +78,14 @@ func (c *Client) prepareReq(method, rawurl string, header http.Header, in interf
 }
 
 func (c *Client) RawReq(method, path string, header http.Header, in, out interface{}) (*http.Response, error) {
+	return c.RawReqWithHTTP(method, path, header, in, out, c.HTTP)
+}
+
+func (c *Client) RawReqWithHTTP(method, path string, header http.Header, in, out interface{}, client *http.Client) (*http.Response, error) {
 	rawurl := c.URL + path
 
 	for {
-		resp, err := c.rawReq(method, rawurl, header, in, out)
+		resp, err := c.rawReq(method, rawurl, header, in, out, client)
 
 		// If this is a redirect then update the URL and try again.
 		if resp != nil && resp.StatusCode == http.StatusTemporaryRedirect {
@@ -94,12 +98,12 @@ func (c *Client) RawReq(method, path string, header http.Header, in, out interfa
 	}
 }
 
-func (c *Client) rawReq(method, rawurl string, header http.Header, in, out interface{}) (*http.Response, error) {
+func (c *Client) rawReq(method, rawurl string, header http.Header, in, out interface{}, client *http.Client) (*http.Response, error) {
 	req, err := c.prepareReq(method, rawurl, header, in)
 	if err != nil {
 		return nil, err
 	}
-	res, err := c.HTTP.Do(req)
+	res, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -197,12 +201,17 @@ func (c *Client) Stream(method, path string, in, out interface{}) (stream.Stream
 }
 
 func (c *Client) ResumingStream(method, path string, ch interface{}) (stream.Stream, error) {
+	// use a copy of the client with a zero timeout (it doesn't really
+	// make sense to have a resuming stream with a timeout)
+	httpClient := *c.HTTP
+	httpClient.Timeout = 0
+
 	connect := func(lastID int64) (*http.Response, error, bool) {
 		header := http.Header{
 			"Accept":        []string{"text/event-stream"},
 			"Last-Event-Id": []string{strconv.FormatInt(lastID, 10)},
 		}
-		res, err := c.RawReq(method, path, header, nil, nil)
+		res, err := c.RawReqWithHTTP(method, path, header, nil, nil, &httpClient)
 		return res, err, err != c.ErrNotFound
 	}
 	return ResumingStream(connect, ch)
