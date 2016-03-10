@@ -27,15 +27,16 @@ func NewFakeHostClient(hostID string) *FakeHostClient {
 }
 
 type FakeHostClient struct {
-	hostID        string
-	stopped       map[string]bool
-	attach        map[string]attachFunc
-	Jobs          map[string]host.ActiveJob
-	cluster       *FakeCluster
-	volumes       map[string]*volume.Info
-	eventChannels map[chan<- *host.Event]struct{}
-	jobsMtx       sync.RWMutex
-	Healthy       bool
+	hostID           string
+	stopped          map[string]bool
+	attach           map[string]attachFunc
+	Jobs             map[string]host.ActiveJob
+	cluster          *FakeCluster
+	volumes          map[string]*volume.Info
+	eventChannelsMtx sync.Mutex
+	eventChannels    map[chan<- *host.Event]struct{}
+	jobsMtx          sync.RWMutex
+	Healthy          bool
 }
 
 func (c *FakeHostClient) ID() string { return c.hostID }
@@ -66,6 +67,8 @@ func (c *FakeHostClient) AddJob(job *host.Job) error {
 	j := host.ActiveJob{Job: job, HostID: c.hostID, StartedAt: time.Now()}
 	c.Jobs[job.ID] = j
 
+	c.eventChannelsMtx.Lock()
+	defer c.eventChannelsMtx.Unlock()
 	for ch := range c.eventChannels {
 		ch <- &host.Event{
 			Event: host.JobEventStart,
@@ -110,6 +113,8 @@ func (c *FakeHostClient) StopJob(id string) error {
 func (c *FakeHostClient) stop(id string) error {
 	job := c.Jobs[id]
 	delete(c.Jobs, id)
+	c.eventChannelsMtx.Lock()
+	defer c.eventChannelsMtx.Unlock()
 	for ch := range c.eventChannels {
 		ch <- &host.Event{
 			Event: host.JobEventStop,
@@ -159,10 +164,13 @@ func (c *FakeHostClient) CreateVolume(providerID string) (*volume.Info, error) {
 }
 
 func (c *FakeHostClient) StreamEvents(id string, ch chan *host.Event) (stream.Stream, error) {
+	c.eventChannelsMtx.Lock()
 	if _, ok := c.eventChannels[ch]; ok {
+		c.eventChannelsMtx.Unlock()
 		return nil, errors.New("Already streaming that channel")
 	}
 	c.eventChannels[ch] = struct{}{}
+	c.eventChannelsMtx.Unlock()
 
 	for _, j := range c.Jobs {
 		ch <- &host.Event{
@@ -186,11 +194,17 @@ type attachFunc func(req *host.AttachReq, wait bool) (cluster.AttachClient, erro
 
 type HostStream struct {
 	host *FakeHostClient
-	ch   chan<- *host.Event
+	ch   chan *host.Event
 }
 
 func (h *HostStream) Close() error {
+	go func() {
+		for range h.ch {
+		}
+	}()
+	h.host.eventChannelsMtx.Lock()
 	delete(h.host.eventChannels, h.ch)
+	h.host.eventChannelsMtx.Unlock()
 	close(h.ch)
 	return nil
 }
