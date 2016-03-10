@@ -22,30 +22,60 @@ func Run(client *controller.Client, out io.Writer) error {
 		return err
 	}
 
-	newJob := &ct.NewJob{
-		ReleaseID:  data["postgres"].Release.ID,
+	pgRelease := data["postgres"].Release
+	pgJob := &ct.NewJob{
+		ReleaseID:  pgRelease.ID,
 		Entrypoint: []string{"sh"},
 		Cmd:        []string{"-c", "pg_dumpall --clean --if-exists | gzip -9"},
 		Env: map[string]string{
-			"PGHOST":     "leader.postgres.discoverd",
-			"PGUSER":     "flynn",
-			"PGPASSWORD": data["postgres"].Release.Env["PGPASSWORD"],
+			"PGHOST":     pgRelease.Env["PGHOST"],
+			"PGUSER":     pgRelease.Env["PGUSER"],
+			"PGPASSWORD": pgRelease.Env["PGPASSWORD"],
 		},
 		DisableLog: true,
 	}
-	if err := tw.WriteCommandOutput(client, "postgres.sql.gz", "postgres", newJob); err != nil {
+	if err := tw.WriteCommandOutput(client, "postgres.sql.gz", "postgres", pgJob); err != nil {
 		return fmt.Errorf("error dumping database: %s", err)
+	}
+
+	// If mariadb is not present skip attempting to store the backup in the archive
+	if mariadb, ok := data["mariadb"]; ok {
+		mysqlRelease := mariadb.Release
+		mysqlJob := &ct.NewJob{
+			ReleaseID:  mysqlRelease.ID,
+			Entrypoint: []string{"sh"},
+			Cmd:        []string{"-c", fmt.Sprintf("/usr/bin/mysqldump -h %s -u %s --all-databases | gzip -9", mysqlRelease.Env["MYSQL_HOST"], mysqlRelease.Env["MYSQL_USER"])},
+			Env: map[string]string{
+				"MYSQL_PWD": mysqlRelease.Env["MYSQL_PWD"],
+			},
+			DisableLog: true,
+		}
+		if err := tw.WriteCommandOutput(client, "mysql.sql.gz", "mariadb", mysqlJob); err != nil {
+			return fmt.Errorf("error dumping database: %s", err)
+		}
 	}
 	return nil
 }
 
 func getApps(client *controller.Client) (map[string]*ct.ExpandedFormation, error) {
-	appNames := []string{"postgres", "discoverd", "flannel", "controller"}
-	data := make(map[string]*ct.ExpandedFormation, len(appNames))
-	for _, name := range appNames {
+	// app -> required for backup
+	apps := map[string]bool{
+		"postgres":   true,
+		"mariadb":    false,
+		"discoverd":  true,
+		"flannel":    true,
+		"controller": true,
+	}
+	data := make(map[string]*ct.ExpandedFormation, len(apps))
+	for name, required := range apps {
 		app, err := client.GetApp(name)
 		if err != nil {
-			return nil, fmt.Errorf("error getting %s app details: %s", name, err)
+			if required {
+				return nil, fmt.Errorf("error getting %s app details: %s", name, err)
+			} else {
+				// If it's not an essential app just exclude it from the backup and continue.
+				continue
+			}
 		}
 		release, err := client.GetAppRelease(app.ID)
 		if err != nil {

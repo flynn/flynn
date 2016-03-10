@@ -54,6 +54,8 @@ type DeployJob struct {
 	serviceMeta     *discoverd.ServiceMeta
 	useJobEvents    map[string]struct{}
 	logger          log15.Logger
+	oldRelease      *ct.Release
+	newRelease      *ct.Release
 	oldReleaseState map[string]int
 	newReleaseState map[string]int
 	knownJobStates  map[jobIDState]struct{}
@@ -109,8 +111,8 @@ func (d *DeployJob) Perform() error {
 		deployFunc = d.deployOneByOne
 	case "all-at-once":
 		deployFunc = d.deployAllAtOnce
-	case "postgres":
-		deployFunc = d.deployPostgres
+	case "sirenia":
+		deployFunc = d.deploySirenia
 	case "discoverd-meta":
 		deployFunc = d.deployDiscoverdMeta
 	default:
@@ -127,12 +129,21 @@ func (d *DeployJob) Perform() error {
 	}
 	d.hostCount = len(hosts)
 
+	log.Info("determining current release state")
+	oldRelease, err := d.client.GetRelease(d.OldReleaseID)
+	if err != nil {
+		log.Error("error getting new release", "release_id", d.NewReleaseID, "err", err)
+		return err
+	}
+	d.oldRelease = oldRelease
+
 	log.Info("determining release services and deployment state")
 	release, err := d.client.GetRelease(d.NewReleaseID)
 	if err != nil {
 		log.Error("error getting new release", "release_id", d.NewReleaseID, "err", err)
 		return err
 	}
+	d.newRelease = release
 	for typ, proc := range release.Processes {
 		if proc.Omni {
 			d.omni[typ] = struct{}{}

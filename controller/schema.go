@@ -241,6 +241,11 @@ $$ LANGUAGE plpgsql`,
 	migrations.Add(10,
 		`ALTER TABLE formations ADD COLUMN tags jsonb`,
 	)
+	migrations.Add(11,
+		`INSERT INTO deployment_strategies VALUES ('sirenia')`,
+		`UPDATE apps SET strategy = 'sirenia' WHERE name = 'postgres'`,
+		`DELETE FROM deployment_strategies WHERE name = 'postgres'`,
+	)
 }
 
 func migrateDB(db *postgres.DB) error {

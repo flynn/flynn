@@ -10,10 +10,9 @@ import (
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
-	"github.com/flynn/flynn/appliance/postgresql/state"
-	"github.com/flynn/flynn/appliance/postgresql/xlog"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/attempt"
+	"github.com/flynn/flynn/pkg/sirenia/state"
 )
 
 // Hook gocheck up to the "go test" runner
@@ -33,7 +32,7 @@ func (PostgresSuite) TestSingletonPrimary(c *C) {
 	}
 
 	pg := NewPostgres(cfg)
-	err := pg.Reconfigure(&state.PgConfig{Role: state.RolePrimary})
+	err := pg.Reconfigure(&state.Config{Role: state.RolePrimary})
 	c.Assert(err, IsNil)
 
 	err = pg.Start()
@@ -50,7 +49,7 @@ func (PostgresSuite) TestSingletonPrimary(c *C) {
 
 	// ensure that we can start a new instance from the same directory
 	pg = NewPostgres(cfg)
-	err = pg.Reconfigure(&state.PgConfig{Role: state.RolePrimary})
+	err = pg.Reconfigure(&state.Config{Role: state.RolePrimary})
 	c.Assert(err, IsNil)
 	c.Assert(pg.Start(), IsNil)
 	defer pg.Stop()
@@ -64,18 +63,18 @@ func (PostgresSuite) TestSingletonPrimary(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func instance(pg state.Postgres) *discoverd.Instance {
+func instance(pg state.Database) *discoverd.Instance {
 	p := pg.(*Postgres)
 	return &discoverd.Instance{
 		ID:   p.id,
 		Addr: "127.0.0.1:" + p.port,
-		Meta: map[string]string{"POSTGRES_ID": p.id},
+		Meta: map[string]string{pgIdKey: p.id},
 	}
 }
 
 var newPort uint32 = 6510
 
-func newPostgres(c *C, n int) state.Postgres {
+func newPostgres(c *C, n int) state.Database {
 	return NewPostgres(Config{
 		ID:        fmt.Sprintf("node%d", n),
 		DataDir:   c.MkDir(),
@@ -84,7 +83,7 @@ func newPostgres(c *C, n int) state.Postgres {
 	})
 }
 
-func connect(c *C, s state.Postgres, db string) *pgx.Conn {
+func connect(c *C, s state.Database, db string) *pgx.Conn {
 	port, _ := strconv.Atoi(s.(*Postgres).port)
 	conn, err := pgx.Connect(pgx.ConnConfig{
 		Host:     "127.0.0.1",
@@ -97,8 +96,8 @@ func connect(c *C, s state.Postgres, db string) *pgx.Conn {
 	return conn
 }
 
-func pgConfig(role state.Role, upstream, downstream state.Postgres) *state.PgConfig {
-	c := &state.PgConfig{Role: role}
+func pgConfig(role state.Role, upstream, downstream state.Database) *state.Config {
+	c := &state.Config{Role: role}
 	if upstream != nil {
 		c.Upstream = instance(upstream)
 	}
@@ -166,7 +165,7 @@ var syncAttempts = attempt.Strategy{
 	Delay: 200 * time.Millisecond,
 }
 
-func waitReplSync(c *C, pg state.Postgres, n int) {
+func waitReplSync(c *C, pg state.Database, n int) {
 	id := fmt.Sprintf("node%d", n)
 	err := syncAttempts.Run(func() error {
 		info, err := pg.(*Postgres).Info()
@@ -227,11 +226,11 @@ func (PostgresSuite) TestIntegration(c *C) {
 	// try to query primary until it comes up as read-write
 	waitReadWrite(c, node1Conn)
 
-	for _, n := range []state.Postgres{node1, node2} {
+	for _, n := range []state.Database{node1, node2} {
 		pos, err := n.XLogPosition()
 		c.Assert(err, IsNil)
 		c.Assert(pos, Not(Equals), "")
-		c.Assert(pos, Not(Equals), xlog.Zero)
+		c.Assert(pos, Not(Equals), n.XLog().Zero())
 	}
 
 	// make sure the sync is listed as sync and remote_write is enabled

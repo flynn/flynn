@@ -167,16 +167,29 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 		res.Body.Close()
 	}
 
-	if config, err := getAppPgRunConfig(client); err == nil {
-		configPgDump(config)
-		if err := tw.WriteCommandOutput(client, "postgres.dump", config.App, &ct.NewJob{
-			ReleaseID:  config.Release,
-			Entrypoint: config.Entrypoint,
-			Cmd:        config.Args,
-			Env:        config.Env,
-			DisableLog: config.DisableLog,
+	if pgConfig, err := getAppPgRunConfig(client); err == nil {
+		configPgDump(pgConfig)
+		if err := tw.WriteCommandOutput(client, "postgres.dump", pgConfig.App, &ct.NewJob{
+			ReleaseID:  pgConfig.Release,
+			Entrypoint: pgConfig.Entrypoint,
+			Cmd:        pgConfig.Args,
+			Env:        pgConfig.Env,
+			DisableLog: pgConfig.DisableLog,
 		}); err != nil {
 			return fmt.Errorf("error creating postgres dump: %s", err)
+		}
+	}
+
+	if mysqlConfig, err := getAppMysqlRunConfig(client); err == nil {
+		configMysqlDump(mysqlConfig)
+		if err := tw.WriteCommandOutput(client, "mysql.dump", mysqlConfig.App, &ct.NewJob{
+			ReleaseID:  mysqlConfig.Release,
+			Entrypoint: mysqlConfig.Entrypoint,
+			Cmd:        mysqlConfig.Args,
+			Env:        mysqlConfig.Env,
+			DisableLog: mysqlConfig.DisableLog,
+		}); err != nil {
+			return fmt.Errorf("error creating mysql dump: %s", err)
 		}
 	}
 
@@ -203,6 +216,7 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 		routes     []router.Route
 		slug       io.Reader
 		pgDump     io.Reader
+		mysqlDump  io.Reader
 		uploadSize int64
 	)
 	numResources := 0
@@ -281,6 +295,21 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 			}
 			pgDump = f
 			uploadSize += header.Size
+		case "mysql.dump":
+			f, err := ioutil.TempFile("", "mysql.dump")
+			if err != nil {
+				return fmt.Errorf("error creating db tempfile: %s", err)
+			}
+			defer f.Close()
+			defer os.Remove(f.Name())
+			if _, err := io.Copy(f, tr); err != nil {
+				return fmt.Errorf("error reading db dump: %s", err)
+			}
+			if _, err := f.Seek(0, os.SEEK_SET); err != nil {
+				return fmt.Errorf("error seeking db tempfile: %s", err)
+			}
+			mysqlDump = f
+			uploadSize += header.Size
 		}
 	}
 
@@ -334,6 +363,37 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 		config.Exit = false
 		if err := pgRestore(client, config); err != nil {
 			return fmt.Errorf("error restoring postgres database: %s", err)
+		}
+	}
+
+	if mysqlDump != nil && release != nil {
+		res, err := client.ProvisionResource(&ct.ResourceReq{
+			ProviderID: "mysql",
+			Apps:       []string{app.ID},
+		})
+		if err != nil {
+			return fmt.Errorf("error provisioning mysql resource: %s", err)
+		}
+		numResources++
+
+		if release.Env == nil {
+			release.Env = make(map[string]string, len(res.Env))
+		}
+		for k, v := range res.Env {
+			release.Env[k] = v
+		}
+
+		config, err := getMysqlRunConfig(client, app.ID, release)
+		if err != nil {
+			return fmt.Errorf("error getting mysql config: %s", err)
+		}
+		config.Stdin = mysqlDump
+		if bar != nil {
+			config.Stdin = bar.NewProxyReader(config.Stdin)
+		}
+		config.Exit = false
+		if err := mysqlRestore(client, config); err != nil {
+			return fmt.Errorf("error restoring mysql database: %s", err)
 		}
 	}
 

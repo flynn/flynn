@@ -24,11 +24,17 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/kylelemons/godebug/pretty"
-	"github.com/flynn/flynn/appliance/postgresql/simulator"
-	"github.com/flynn/flynn/appliance/postgresql/state"
-	"github.com/flynn/flynn/appliance/postgresql/xlog"
+	"github.com/flynn/flynn/appliance/postgresql/pgxlog"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/iotool"
+	"github.com/flynn/flynn/pkg/sirenia/simulator"
+	"github.com/flynn/flynn/pkg/sirenia/state"
+)
+
+var xlog = pgxlog.PgXLog{}
+
+const (
+	simIdKey = "SIM_ID"
 )
 
 type step struct {
@@ -81,7 +87,7 @@ func node(n int, index uint64) *discoverd.Instance {
 	inst := &discoverd.Instance{
 		Addr:  fmt.Sprintf("10.0.0.%d:5432", n),
 		Proto: "tcp",
-		Meta:  map[string]string{"POSTGRES_ID": fmt.Sprintf("node%d", n)},
+		Meta:  map[string]string{simIdKey: fmt.Sprintf("node%d", n)},
 		Index: index,
 	}
 	inst.ID = md5sum(inst.Proto + "-" + inst.Addr)
@@ -95,10 +101,10 @@ func md5sum(data string) string {
 
 const node1ID = "node1"
 
-var pgOffline = &simulator.PostgresInfo{
-	Online: false,
-	Config: &state.PgConfig{Role: state.RoleNone},
-	XLog:   xlog.Zero,
+var pgOffline = &simulator.DbInfo{
+	Online:  false,
+	Config:  &state.Config{Role: state.RoleNone},
+	CurXLog: xlog.Zero(),
 }
 
 // tests the basic flow of unassigned -> async -> sync -> primary
@@ -108,7 +114,7 @@ func TestBasic(t *testing.T) {
 		Primary:    node(2, 1),
 		Sync:       node(3, 2),
 		Async:      []*discoverd.Instance{node(1, 3)},
-		InitWAL:    xlog.Zero,
+		InitWAL:    xlog.Zero(),
 	}
 	peers := []*discoverd.Instance{node(2, 1), node(3, 2), node(1, 3)}
 
@@ -128,40 +134,40 @@ func TestBasic(t *testing.T) {
 		Deposed:    []*discoverd.Instance{},
 	}
 
-	pgSync := &simulator.PostgresInfo{
-		Config: &state.PgConfig{
+	pgSync := &simulator.DbInfo{
+		Config: &state.Config{
 			Role:     state.RoleSync,
 			Upstream: node(3, 2),
 		},
 		Online:      true,
-		XLog:        xlog.Zero,
+		CurXLog:     xlog.Zero(),
 		XLogWaiting: "0/0000000A",
 	}
-	pgSync2 := &simulator.PostgresInfo{
-		Config: &state.PgConfig{
+	pgSync2 := &simulator.DbInfo{
+		Config: &state.Config{
 			Role:       state.RoleSync,
 			Upstream:   node(3, 2),
 			Downstream: node(2, 1),
 		},
 		Online:      true,
-		XLog:        xlog.Zero,
+		CurXLog:     xlog.Zero(),
 		XLogWaiting: "0/0000000A",
 	}
-	pgPrimary := &simulator.PostgresInfo{
-		Config: &state.PgConfig{
+	pgPrimary := &simulator.DbInfo{
+		Config: &state.Config{
 			Role:       state.RolePrimary,
 			Downstream: node(2, 1),
 		},
-		Online: true,
-		XLog:   "0/0000001E",
+		Online:  true,
+		CurXLog: "0/0000001E",
 	}
-	pgPrimary2 := &simulator.PostgresInfo{
-		Config: &state.PgConfig{
+	pgPrimary2 := &simulator.DbInfo{
+		Config: &state.Config{
 			Role:       state.RolePrimary,
 			Downstream: node(3, 4),
 		},
-		Online: true,
-		XLog:   "0/00000028",
+		Online:  true,
+		CurXLog: "0/00000028",
 	}
 
 	runSteps(t, false, []step{
@@ -204,8 +210,8 @@ func TestBasic(t *testing.T) {
 		{
 			Cmd: "peer",
 			Check: &simulator.PeerSimInfo{
-				Peer:     &state.PeerInfo{ID: node1ID},
-				Postgres: &simulator.PostgresInfo{XLog: xlog.Zero},
+				Peer: &state.PeerInfo{ID: node1ID},
+				Db:   &simulator.DbInfo{CurXLog: xlog.Zero()},
 			},
 		},
 
@@ -221,13 +227,13 @@ func TestBasic(t *testing.T) {
 					Peers: peers,
 					State: gen1,
 				},
-				Postgres: &simulator.PostgresInfo{
-					Config: &state.PgConfig{
+				Db: &simulator.DbInfo{
+					Config: &state.Config{
 						Role:     state.RoleAsync,
 						Upstream: node(3, 2),
 					},
-					Online: true,
-					XLog:   xlog.Zero,
+					Online:  true,
+					CurXLog: xlog.Zero(),
 				},
 			},
 		},
@@ -244,7 +250,7 @@ func TestBasic(t *testing.T) {
 					Peers: peers,
 					State: gen2_0,
 				},
-				Postgres: pgSync,
+				Db: pgSync,
 			},
 		},
 
@@ -260,7 +266,7 @@ func TestBasic(t *testing.T) {
 					Peers: peers,
 					State: gen2_1,
 				},
-				Postgres: pgSync2,
+				Db: pgSync2,
 			},
 		},
 
@@ -277,7 +283,7 @@ func TestBasic(t *testing.T) {
 					Peers: []*discoverd.Instance{node(2, 1), node(1, 3)},
 					State: gen2_1,
 				},
-				Postgres: pgSync2,
+				Db: pgSync2,
 			},
 		},
 		{Cmd: "addpeer node3"},
@@ -290,7 +296,7 @@ func TestBasic(t *testing.T) {
 					Peers: []*discoverd.Instance{node(2, 1), node(1, 3), node(3, 4)},
 					State: gen2_1,
 				},
-				Postgres: pgSync2,
+				Db: pgSync2,
 			},
 		},
 
@@ -314,7 +320,7 @@ func TestBasic(t *testing.T) {
 						Deposed:    []*discoverd.Instance{node(3, 2)},
 					},
 				},
-				Postgres: pgPrimary,
+				Db: pgPrimary,
 			},
 		},
 		{Cmd: "rebuild node3"},
@@ -334,7 +340,7 @@ func TestBasic(t *testing.T) {
 						Async:      []*discoverd.Instance{node(3, 4)},
 					},
 				},
-				Postgres: pgPrimary,
+				Db: pgPrimary,
 			},
 		},
 
@@ -355,7 +361,7 @@ func TestBasic(t *testing.T) {
 						Sync:       node(3, 4),
 					},
 				},
-				Postgres: pgPrimary2,
+				Db: pgPrimary2,
 			},
 		},
 		{Cmd: "addpeer node2"},
@@ -374,7 +380,7 @@ func TestBasic(t *testing.T) {
 						Async:      []*discoverd.Instance{node(2, 5)},
 					},
 				},
-				Postgres: pgPrimary2,
+				Db: pgPrimary2,
 			},
 		},
 
@@ -396,7 +402,7 @@ func TestBasic(t *testing.T) {
 						Async:      []*discoverd.Instance{node(2, 5), node(4, 6)},
 					},
 				},
-				Postgres: pgPrimary2,
+				Db: pgPrimary2,
 			},
 		},
 
@@ -418,7 +424,7 @@ func TestBasic(t *testing.T) {
 						Async:      []*discoverd.Instance{node(2, 5)},
 					},
 				},
-				Postgres: pgPrimary2,
+				Db: pgPrimary2,
 			},
 		},
 
@@ -440,10 +446,10 @@ func TestBasic(t *testing.T) {
 						Deposed:    []*discoverd.Instance{node(1, 3)},
 					},
 				},
-				Postgres: &simulator.PostgresInfo{
-					Online: false,
-					Config: &state.PgConfig{Role: state.RoleNone},
-					XLog:   "0/00000028",
+				Db: &simulator.DbInfo{
+					Online:  false,
+					Config:  &state.Config{Role: state.RoleNone},
+					CurXLog: "0/00000028",
 				},
 			},
 		},
@@ -465,7 +471,7 @@ func TestClusterSetupDelay(t *testing.T) {
 					Role:  state.RoleUnassigned,
 					Peers: []*discoverd.Instance{node(1, 1)},
 				},
-				Postgres: pgOffline,
+				Db: pgOffline,
 			},
 		},
 
@@ -482,16 +488,16 @@ func TestClusterSetupDelay(t *testing.T) {
 						Generation: 1,
 						Primary:    node(1, 1),
 						Sync:       node(2, 2),
-						InitWAL:    xlog.Zero,
+						InitWAL:    xlog.Zero(),
 					},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:       state.RolePrimary,
 						Downstream: node(2, 2),
 					},
-					XLog: "0/0000000A",
+					CurXLog: "0/0000000A",
 				},
 			},
 		},
@@ -518,16 +524,16 @@ func TestClusterSetupImmediate(t *testing.T) {
 						Generation: 1,
 						Primary:    node(1, 1),
 						Sync:       node(2, 2),
-						InitWAL:    xlog.Zero,
+						InitWAL:    xlog.Zero(),
 					},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:       state.RolePrimary,
 						Downstream: node(2, 2),
 					},
-					XLog: "0/0000000A",
+					CurXLog: "0/0000000A",
 				},
 			},
 		},
@@ -549,7 +555,7 @@ func TestClusterSetupSingleton(t *testing.T) {
 					State: &state.State{
 						Generation: 1,
 						Primary:    node(1, 1),
-						InitWAL:    xlog.Zero,
+						InitWAL:    xlog.Zero(),
 						Singleton:  true,
 						Freeze: &state.FreezeDetails{
 							Reason:   "cluster started in singleton mode",
@@ -557,10 +563,10 @@ func TestClusterSetupSingleton(t *testing.T) {
 						},
 					},
 				},
-				Postgres: &simulator.PostgresInfo{
-					Online: true,
-					Config: &state.PgConfig{Role: state.RolePrimary},
-					XLog:   "0/0000000A",
+				Db: &simulator.DbInfo{
+					Online:  true,
+					Config:  &state.Config{Role: state.RolePrimary},
+					CurXLog: "0/0000000A",
 				},
 			},
 		},
@@ -583,7 +589,7 @@ func TestSetupPassive(t *testing.T) {
 					Role:  state.RoleUnassigned,
 					Peers: []*discoverd.Instance{node(2, 1), node(1, 2)},
 				},
-				Postgres: pgOffline,
+				Db: pgOffline,
 			},
 		},
 
@@ -600,17 +606,17 @@ func TestSetupPassive(t *testing.T) {
 						Generation: 1,
 						Primary:    node(2, 1),
 						Sync:       node(1, 2),
-						InitWAL:    xlog.Zero,
+						InitWAL:    xlog.Zero(),
 					},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:     state.RoleSync,
 						Upstream: node(2, 1),
 					},
-					XLog:        xlog.Zero,
-					XLogWaiting: xlog.Zero,
+					CurXLog:     xlog.Zero(),
+					XLogWaiting: xlog.Zero(),
 				},
 			},
 		},
@@ -623,16 +629,16 @@ func TestNoFlap(t *testing.T) {
 		Generation: 1,
 		Primary:    node(2, 1),
 		Sync:       node(1, 2),
-		InitWAL:    xlog.Zero,
+		InitWAL:    xlog.Zero(),
 	}
-	gen1pg := &simulator.PostgresInfo{
+	gen1pg := &simulator.DbInfo{
 		Online: true,
-		Config: &state.PgConfig{
+		Config: &state.Config{
 			Role:     state.RoleSync,
 			Upstream: node(2, 1),
 		},
-		XLog:        xlog.Zero,
-		XLogWaiting: xlog.Zero,
+		CurXLog:     xlog.Zero(),
+		XLogWaiting: xlog.Zero(),
 	}
 
 	gen2_0 := &state.State{
@@ -640,21 +646,21 @@ func TestNoFlap(t *testing.T) {
 		Primary:    node(1, 2),
 		Sync:       node(3, 3),
 		Deposed:    []*discoverd.Instance{node(2, 1)},
-		InitWAL:    xlog.Zero,
+		InitWAL:    xlog.Zero(),
 	}
 	gen2_1 := &state.State{
 		Generation: 2,
 		Primary:    node(1, 2),
 		Sync:       node(3, 3),
-		InitWAL:    xlog.Zero,
+		InitWAL:    xlog.Zero(),
 	}
-	gen2pg := &simulator.PostgresInfo{
+	gen2pg := &simulator.DbInfo{
 		Online: true,
-		Config: &state.PgConfig{
+		Config: &state.Config{
 			Role:       state.RolePrimary,
 			Downstream: node(3, 3),
 		},
-		XLog: "0/0000000A",
+		CurXLog: "0/0000000A",
 	}
 
 	runSteps(t, false, []step{
@@ -674,7 +680,7 @@ func TestNoFlap(t *testing.T) {
 					Peers: []*discoverd.Instance{node(2, 1), node(1, 2)},
 					State: gen1,
 				},
-				Postgres: gen1pg,
+				Db: gen1pg,
 			},
 		},
 		{Cmd: "rmpeer node2"},
@@ -687,7 +693,7 @@ func TestNoFlap(t *testing.T) {
 					Peers: []*discoverd.Instance{node(1, 2)},
 					State: gen1,
 				},
-				Postgres: gen1pg,
+				Db: gen1pg,
 			},
 		},
 
@@ -702,7 +708,7 @@ func TestNoFlap(t *testing.T) {
 					Peers: []*discoverd.Instance{node(1, 2), node(3, 3)},
 					State: gen2_0,
 				},
-				Postgres: gen2pg,
+				Db: gen2pg,
 			},
 		},
 		{Cmd: "rebuild node2"},
@@ -715,7 +721,7 @@ func TestNoFlap(t *testing.T) {
 					Peers: []*discoverd.Instance{node(1, 2), node(3, 3)},
 					State: gen2_1,
 				},
-				Postgres: gen2pg,
+				Db: gen2pg,
 			},
 		},
 
@@ -731,7 +737,7 @@ func TestNoFlap(t *testing.T) {
 					Peers: []*discoverd.Instance{node(1, 2)},
 					State: gen2_1,
 				},
-				Postgres: gen2pg,
+				Db: gen2pg,
 			},
 		},
 	})
@@ -742,14 +748,14 @@ func TestSingleton(t *testing.T) {
 	gen1 := &state.State{
 		Generation: 1,
 		Primary:    node(1, 1),
-		InitWAL:    xlog.Zero,
+		InitWAL:    xlog.Zero(),
 		Freeze:     state.NewFreezeDetails("singleton"),
 		Singleton:  true,
 	}
-	gen1pg := &simulator.PostgresInfo{
-		Online: true,
-		Config: &state.PgConfig{Role: state.RolePrimary},
-		XLog:   "0/0000000A",
+	gen1pg := &simulator.DbInfo{
+		Online:  true,
+		Config:  &state.Config{Role: state.RolePrimary},
+		CurXLog: "0/0000000A",
 	}
 
 	info := &simulator.PeerSimInfo{
@@ -759,7 +765,7 @@ func TestSingleton(t *testing.T) {
 			Peers: []*discoverd.Instance{node(1, 1)},
 			State: gen1,
 		},
-		Postgres: gen1pg,
+		Db: gen1pg,
 	}
 
 	runSteps(t, true, []step{
@@ -781,7 +787,7 @@ func TestSingleton(t *testing.T) {
 					Peers: []*discoverd.Instance{node(1, 1), node(2, 2)},
 					State: gen1,
 				},
-				Postgres: gen1pg,
+				Db: gen1pg,
 			},
 		},
 		{Cmd: "rmpeer node2"},
@@ -794,7 +800,7 @@ func TestSingletonSecond(t *testing.T) {
 	gen1 := &state.State{
 		Generation: 1,
 		Primary:    node(2, 1),
-		InitWAL:    xlog.Zero,
+		InitWAL:    xlog.Zero(),
 		Freeze:     state.NewFreezeDetails("singleton"),
 		Singleton:  true,
 	}
@@ -815,7 +821,7 @@ func TestSingletonSecond(t *testing.T) {
 					State: gen1,
 					Peers: []*discoverd.Instance{node(2, 1), node(1, 2)},
 				},
-				Postgres: pgOffline,
+				Db: pgOffline,
 			},
 		},
 
@@ -831,7 +837,7 @@ func TestSingletonSecond(t *testing.T) {
 					State: gen1,
 					Peers: []*discoverd.Instance{node(1, 2)},
 				},
-				Postgres: pgOffline,
+				Db: pgOffline,
 			},
 		},
 	})
@@ -842,7 +848,7 @@ func TestSingletonUpgradeToNormal(t *testing.T) {
 	gen1 := &state.State{
 		Generation: 1,
 		Primary:    node(1, 1),
-		InitWAL:    xlog.Zero,
+		InitWAL:    xlog.Zero(),
 		Freeze:     state.NewFreezeDetails("singleton"),
 		Singleton:  true,
 	}
@@ -861,10 +867,10 @@ func TestSingletonUpgradeToNormal(t *testing.T) {
 					State: gen1,
 					Peers: []*discoverd.Instance{node(1, 1)},
 				},
-				Postgres: &simulator.PostgresInfo{
-					Online: true,
-					Config: &state.PgConfig{Role: state.RolePrimary},
-					XLog:   "0/0000000A",
+				Db: &simulator.DbInfo{
+					Online:  true,
+					Config:  &state.Config{Role: state.RolePrimary},
+					CurXLog: "0/0000000A",
 				},
 			},
 		},
@@ -881,15 +887,15 @@ func TestSingletonUpgradeToNormal(t *testing.T) {
 					State: &state.State{
 						Generation: 1,
 						Primary:    node(1, 1),
-						InitWAL:    xlog.Zero,
+						InitWAL:    xlog.Zero(),
 						Singleton:  true,
 					},
 					Peers: []*discoverd.Instance{node(1, 1)},
 				},
-				Postgres: &simulator.PostgresInfo{
-					Online: true,
-					Config: &state.PgConfig{Role: state.RolePrimary},
-					XLog:   "0/0000000A",
+				Db: &simulator.DbInfo{
+					Online:  true,
+					Config:  &state.Config{Role: state.RolePrimary},
+					CurXLog: "0/0000000A",
 				},
 			},
 		},
@@ -911,13 +917,13 @@ func TestSingletonUpgradeToNormal(t *testing.T) {
 					},
 					Peers: []*discoverd.Instance{node(1, 1), node(2, 2)},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:       state.RolePrimary,
 						Downstream: node(2, 2),
 					},
-					XLog: "0/00000014",
+					CurXLog: "0/00000014",
 				},
 			},
 		},
@@ -941,13 +947,13 @@ func TestSingletonUpgradeToNormal(t *testing.T) {
 					},
 					Peers: []*discoverd.Instance{node(1, 1), node(3, 3)},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:       state.RolePrimary,
 						Downstream: node(3, 3),
 					},
-					XLog: "0/0000001E",
+					CurXLog: "0/0000001E",
 				},
 			},
 		},
@@ -967,13 +973,13 @@ func TestSingletonUpgradeToNormal(t *testing.T) {
 					},
 					Peers: []*discoverd.Instance{node(1, 1), node(3, 3), node(2, 4)},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:       state.RolePrimary,
 						Downstream: node(3, 3),
 					},
-					XLog: "0/0000001E",
+					CurXLog: "0/0000001E",
 				},
 			},
 		},
@@ -1014,7 +1020,7 @@ func TestStartDeposed(t *testing.T) {
 					State: gen2,
 					Peers: peers,
 				},
-				Postgres: pgOffline,
+				Db: pgOffline,
 			},
 		},
 	})
@@ -1027,16 +1033,16 @@ func TestStartPrimary(t *testing.T) {
 		Primary:    node(1, 1),
 		Sync:       node(2, 2),
 		Async:      []*discoverd.Instance{node(3, 3)},
-		InitWAL:    xlog.Zero,
+		InitWAL:    xlog.Zero(),
 	}
 	gen1peers := []*discoverd.Instance{node(1, 1), node(2, 2), node(3, 3)}
-	gen3pg := &simulator.PostgresInfo{
+	gen3pg := &simulator.DbInfo{
 		Online: true,
-		Config: &state.PgConfig{
+		Config: &state.Config{
 			Role:       state.RolePrimary,
 			Downstream: node(3, 3),
 		},
-		XLog: "0/00000014",
+		CurXLog: "0/00000014",
 	}
 
 	runSteps(t, false, []step{
@@ -1066,13 +1072,13 @@ func TestStartPrimary(t *testing.T) {
 					State: gen1,
 					Peers: gen1peers,
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:       state.RolePrimary,
 						Downstream: node(2, 2),
 					},
-					XLog: "0/0000000A",
+					CurXLog: "0/0000000A",
 				},
 			},
 		},
@@ -1094,7 +1100,7 @@ func TestStartPrimary(t *testing.T) {
 					},
 					Peers: []*discoverd.Instance{node(1, 1), node(3, 3)},
 				},
-				Postgres: gen3pg,
+				Db: gen3pg,
 			},
 		},
 		{Cmd: "addpeer node2"},
@@ -1113,7 +1119,7 @@ func TestStartPrimary(t *testing.T) {
 					},
 					Peers: []*discoverd.Instance{node(1, 1), node(3, 3), node(2, 4)},
 				},
-				Postgres: gen3pg,
+				Db: gen3pg,
 			},
 		},
 	})
@@ -1137,7 +1143,7 @@ func TestStartPrimaryAsync(t *testing.T) {
 						Primary:    node(1, 1),
 						Sync:       node(2, 2),
 						Async:      []*discoverd.Instance{node(3, 3)},
-						InitWAL:    xlog.Zero,
+						InitWAL:    xlog.Zero(),
 					},
 				},
 				Peers: []*discoverd.Instance{node(1, 1), node(2, 2), node(3, 3)},
@@ -1159,13 +1165,13 @@ func TestStartPrimaryAsync(t *testing.T) {
 					},
 					Peers: []*discoverd.Instance{node(1, 1), node(3, 3)},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:       state.RolePrimary,
 						Downstream: node(3, 3),
 					},
-					XLog: "0/00000014",
+					CurXLog: "0/00000014",
 				},
 			},
 		},
@@ -1179,25 +1185,25 @@ func TestStartSync(t *testing.T) {
 		Primary:    node(3, 3),
 		Sync:       node(1, 1),
 		Async:      []*discoverd.Instance{node(2, 2)},
-		InitWAL:    xlog.Zero,
+		InitWAL:    xlog.Zero(),
 	}
 	gen1peers := []*discoverd.Instance{node(1, 1), node(2, 2), node(3, 3)}
 
-	gen2pg := &simulator.PostgresInfo{
+	gen2pg := &simulator.DbInfo{
 		Online: true,
-		Config: &state.PgConfig{
+		Config: &state.Config{
 			Role:       state.RolePrimary,
 			Downstream: node(2, 2),
 		},
-		XLog: "0/00000014",
+		CurXLog: "0/00000014",
 	}
-	gen3pg := &simulator.PostgresInfo{
+	gen3pg := &simulator.DbInfo{
 		Online: true,
-		Config: &state.PgConfig{
+		Config: &state.Config{
 			Role:       state.RolePrimary,
 			Downstream: node(3, 3),
 		},
-		XLog: "0/0000001E",
+		CurXLog: "0/0000001E",
 	}
 
 	runSteps(t, false, []step{
@@ -1226,15 +1232,15 @@ func TestStartSync(t *testing.T) {
 					State: gen1,
 					Peers: gen1peers,
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:       state.RoleSync,
 						Upstream:   node(3, 3),
 						Downstream: node(2, 2),
 					},
-					XLog:        xlog.Zero,
-					XLogWaiting: xlog.Zero,
+					CurXLog:     xlog.Zero(),
+					XLogWaiting: xlog.Zero(),
 				},
 			},
 		},
@@ -1258,7 +1264,7 @@ func TestStartSync(t *testing.T) {
 					},
 					Peers: []*discoverd.Instance{node(1, 1), node(2, 2)},
 				},
-				Postgres: gen2pg,
+				Db: gen2pg,
 			},
 		},
 		{Cmd: "rebuild node3"},
@@ -1278,7 +1284,7 @@ func TestStartSync(t *testing.T) {
 					},
 					Peers: []*discoverd.Instance{node(1, 1), node(2, 2), node(3, 3)},
 				},
-				Postgres: gen2pg,
+				Db: gen2pg,
 			},
 		},
 
@@ -1299,7 +1305,7 @@ func TestStartSync(t *testing.T) {
 					},
 					Peers: []*discoverd.Instance{node(1, 1), node(3, 3)},
 				},
-				Postgres: gen3pg,
+				Db: gen3pg,
 			},
 		},
 		{Cmd: "addpeer node2"},
@@ -1318,7 +1324,7 @@ func TestStartSync(t *testing.T) {
 					},
 					Peers: []*discoverd.Instance{node(1, 1), node(3, 3), node(2, 4)},
 				},
-				Postgres: gen3pg,
+				Db: gen3pg,
 			},
 		},
 	})
@@ -1342,7 +1348,7 @@ func TestStartSyncAsync(t *testing.T) {
 						Primary:    node(2, 1),
 						Sync:       node(1, 3),
 						Async:      []*discoverd.Instance{node(3, 2)},
-						InitWAL:    xlog.Zero,
+						InitWAL:    xlog.Zero(),
 					},
 				},
 				Peers: []*discoverd.Instance{node(2, 1), node(3, 2), node(1, 3)},
@@ -1361,17 +1367,17 @@ func TestStartSyncAsync(t *testing.T) {
 						Primary:    node(1, 3),
 						Sync:       node(3, 2),
 						Deposed:    []*discoverd.Instance{node(2, 1)},
-						InitWAL:    xlog.Zero,
+						InitWAL:    xlog.Zero(),
 					},
 					Peers: []*discoverd.Instance{node(3, 2), node(1, 3)},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:       state.RolePrimary,
 						Downstream: node(3, 2),
 					},
-					XLog: "0/0000000A",
+					CurXLog: "0/0000000A",
 				},
 			},
 		},
@@ -1396,18 +1402,18 @@ func TestStartSyncAlone(t *testing.T) {
 						Generation: 1,
 						Primary:    node(2, 1),
 						Sync:       node(1, 2),
-						InitWAL:    xlog.Zero,
+						InitWAL:    xlog.Zero(),
 					},
 					Peers: []*discoverd.Instance{node(1, 2)},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:     state.RoleSync,
 						Upstream: node(2, 1),
 					},
-					XLog:        xlog.Zero,
-					XLogWaiting: xlog.Zero,
+					CurXLog:     xlog.Zero(),
+					XLogWaiting: xlog.Zero(),
 				},
 			},
 		},
@@ -1421,14 +1427,14 @@ func TestStartUnassigned(t *testing.T) {
 		Generation: 1,
 		Primary:    node(2, 1),
 		Sync:       node(3, 2),
-		InitWAL:    xlog.Zero,
+		InitWAL:    xlog.Zero(),
 	}
 	gen1_1 := &state.State{
 		Generation: 1,
 		Primary:    node(2, 1),
 		Sync:       node(3, 3),
 		Async:      peers[:1],
-		InitWAL:    xlog.Zero,
+		InitWAL:    xlog.Zero(),
 	}
 
 	runSteps(t, false, []step{
@@ -1445,7 +1451,7 @@ func TestStartUnassigned(t *testing.T) {
 					State: gen1,
 					Peers: peers[:1],
 				},
-				Postgres: pgOffline,
+				Db: pgOffline,
 			},
 		},
 
@@ -1462,7 +1468,7 @@ func TestStartUnassigned(t *testing.T) {
 					State: gen1,
 					Peers: peers[:3],
 				},
-				Postgres: pgOffline,
+				Db: pgOffline,
 			},
 		},
 		{Cmd: "setClusterState", JSON: gen1_1},
@@ -1475,13 +1481,13 @@ func TestStartUnassigned(t *testing.T) {
 					State: gen1_1,
 					Peers: peers[:3],
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:     state.RoleAsync,
 						Upstream: node(3, 3),
 					},
-					XLog: xlog.Zero,
+					CurXLog: xlog.Zero(),
 				},
 			},
 		},
@@ -1507,14 +1513,14 @@ func TestStartUnassigned(t *testing.T) {
 					},
 					Peers: peers,
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:       state.RoleSync,
 						Upstream:   node(3, 3),
 						Downstream: node(4, 4),
 					},
-					XLog:        xlog.Zero,
+					CurXLog:     xlog.Zero(),
 					XLogWaiting: "0/0000000A",
 				},
 			},
@@ -1537,13 +1543,13 @@ func TestStartUnassigned(t *testing.T) {
 					},
 					Peers: []*discoverd.Instance{node(1, 1), node(4, 4)},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:       state.RolePrimary,
 						Downstream: node(4, 4),
 					},
-					XLog: "0/0000001E",
+					CurXLog: "0/0000001E",
 				},
 			},
 		},
@@ -1573,17 +1579,17 @@ func TestMultiAsync(t *testing.T) {
 						Primary:    node(1, 1),
 						Sync:       node(2, 2),
 						Async:      peers[2:],
-						InitWAL:    xlog.Zero,
+						InitWAL:    xlog.Zero(),
 					},
 					Peers: peers,
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:       state.RolePrimary,
 						Downstream: node(2, 2),
 					},
-					XLog: "0/0000000A",
+					CurXLog: "0/0000000A",
 				},
 			},
 		},
@@ -1606,13 +1612,13 @@ func TestMultiAsync(t *testing.T) {
 					},
 					Peers: []*discoverd.Instance{node(1, 1), node(3, 3), node(4, 4)},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:       state.RolePrimary,
 						Downstream: node(3, 3),
 					},
-					XLog: "0/00000014",
+					CurXLog: "0/00000014",
 				},
 			},
 		},
@@ -1634,13 +1640,13 @@ func TestMultiAsync(t *testing.T) {
 					},
 					Peers: []*discoverd.Instance{node(1, 1), node(4, 4)},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:       state.RolePrimary,
 						Downstream: node(4, 4),
 					},
-					XLog: "0/0000001E",
+					CurXLog: "0/0000001E",
 				},
 			},
 		},
@@ -1657,34 +1663,34 @@ func TestFreezePrimary(t *testing.T) {
 		Primary:    node(1, 1),
 		Sync:       node(2, 2),
 		Async:      peers[2:],
-		InitWAL:    xlog.Zero,
+		InitWAL:    xlog.Zero(),
 	}
 	gen1frozen := &state.State{
 		Generation: 1,
 		Primary:    node(1, 1),
 		Sync:       node(2, 2),
 		Async:      peers[2:],
-		InitWAL:    xlog.Zero,
+		InitWAL:    xlog.Zero(),
 		Freeze: &state.FreezeDetails{
 			FrozenAt: fakeTime,
 			Reason:   "frozen by simulator",
 		},
 	}
-	gen1pg := &simulator.PostgresInfo{
+	gen1pg := &simulator.DbInfo{
 		Online: true,
-		Config: &state.PgConfig{
+		Config: &state.Config{
 			Role:       state.RolePrimary,
 			Downstream: node(2, 2),
 		},
-		XLog: "0/0000000A",
+		CurXLog: "0/0000000A",
 	}
-	gen2pg := &simulator.PostgresInfo{
+	gen2pg := &simulator.DbInfo{
 		Online: true,
-		Config: &state.PgConfig{
+		Config: &state.Config{
 			Role:       state.RolePrimary,
 			Downstream: node(3, 3),
 		},
-		XLog: "0/00000014",
+		CurXLog: "0/00000014",
 	}
 
 	runSteps(t, false, []step{
@@ -1703,7 +1709,7 @@ func TestFreezePrimary(t *testing.T) {
 					State: gen1,
 					Peers: peers,
 				},
-				Postgres: gen1pg,
+				Db: gen1pg,
 			},
 		},
 		{Cmd: "freeze"},
@@ -1716,7 +1722,7 @@ func TestFreezePrimary(t *testing.T) {
 					State: gen1frozen,
 					Peers: []*discoverd.Instance{node(1, 1), node(2, 2), node(3, 3)},
 				},
-				Postgres: gen1pg,
+				Db: gen1pg,
 			},
 		},
 
@@ -1732,7 +1738,7 @@ func TestFreezePrimary(t *testing.T) {
 					State: gen1frozen,
 					Peers: []*discoverd.Instance{node(1, 1), node(2, 2), node(3, 3), node(4, 4)},
 				},
-				Postgres: gen1pg,
+				Db: gen1pg,
 			},
 		},
 
@@ -1748,7 +1754,7 @@ func TestFreezePrimary(t *testing.T) {
 					State: gen1frozen,
 					Peers: []*discoverd.Instance{node(1, 1), node(3, 3), node(4, 4)},
 				},
-				Postgres: gen1pg,
+				Db: gen1pg,
 			},
 		},
 
@@ -1770,7 +1776,7 @@ func TestFreezePrimary(t *testing.T) {
 					},
 					Peers: []*discoverd.Instance{node(1, 1), node(3, 3), node(4, 4)},
 				},
-				Postgres: gen2pg,
+				Db: gen2pg,
 			},
 		},
 
@@ -1797,7 +1803,7 @@ func TestFreezePrimary(t *testing.T) {
 					},
 					Peers: []*discoverd.Instance{node(1, 1), node(3, 3)},
 				},
-				Postgres: gen2pg,
+				Db: gen2pg,
 			},
 		},
 
@@ -1818,7 +1824,7 @@ func TestFreezePrimary(t *testing.T) {
 					},
 					Peers: []*discoverd.Instance{node(1, 1), node(3, 3)},
 				},
-				Postgres: gen2pg,
+				Db: gen2pg,
 			},
 		},
 	})
@@ -1832,20 +1838,20 @@ func TestFreezeSync(t *testing.T) {
 		Primary:    node(2, 1),
 		Sync:       node(1, 2),
 		Async:      []*discoverd.Instance{node(3, 3)},
-		InitWAL:    xlog.Zero,
+		InitWAL:    xlog.Zero(),
 		Freeze: &state.FreezeDetails{
 			FrozenAt: fakeTime,
 			Reason:   "frozen by simulator",
 		},
 	}
-	gen1pg := &simulator.PostgresInfo{
+	gen1pg := &simulator.DbInfo{
 		Online: true,
-		Config: &state.PgConfig{
+		Config: &state.Config{
 			Role:       state.RoleSync,
 			Upstream:   node(2, 1),
 			Downstream: node(3, 3),
 		},
-		XLog: "0/0000000A",
+		CurXLog: "0/0000000A",
 	}
 
 	runSteps(t, false, []step{
@@ -1867,7 +1873,7 @@ func TestFreezeSync(t *testing.T) {
 					State: gen1,
 					Peers: []*discoverd.Instance{node(2, 1), node(1, 2), node(3, 3)},
 				},
-				Postgres: gen1pg,
+				Db: gen1pg,
 			},
 		},
 
@@ -1884,7 +1890,7 @@ func TestFreezeSync(t *testing.T) {
 					State: gen1,
 					Peers: []*discoverd.Instance{node(1, 2), node(3, 3)},
 				},
-				Postgres: gen1pg,
+				Db: gen1pg,
 			},
 		},
 
@@ -1906,13 +1912,13 @@ func TestFreezeSync(t *testing.T) {
 					},
 					Peers: []*discoverd.Instance{node(1, 2), node(3, 3)},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:       state.RolePrimary,
 						Downstream: node(3, 3),
 					},
-					XLog: "0/00000014",
+					CurXLog: "0/00000014",
 				},
 			},
 		},
@@ -1942,17 +1948,17 @@ func TestAsyncChangeUpstream(t *testing.T) {
 						Primary:    node(2, 1),
 						Sync:       node(3, 2),
 						Async:      []*discoverd.Instance{node(4, 3), node(5, 4), node(1, 5)},
-						InitWAL:    xlog.Zero,
+						InitWAL:    xlog.Zero(),
 					},
 					Peers: []*discoverd.Instance{node(2, 1), node(3, 2), node(4, 3), node(5, 4), node(1, 5)},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:     state.RoleAsync,
 						Upstream: node(5, 4),
 					},
-					XLog: xlog.Zero,
+					CurXLog: xlog.Zero(),
 				},
 			},
 		},
@@ -1971,17 +1977,17 @@ func TestAsyncChangeUpstream(t *testing.T) {
 						Primary:    node(2, 1),
 						Sync:       node(3, 2),
 						Async:      []*discoverd.Instance{node(4, 3), node(1, 5)},
-						InitWAL:    xlog.Zero,
+						InitWAL:    xlog.Zero(),
 					},
 					Peers: []*discoverd.Instance{node(2, 1), node(3, 2), node(4, 3), node(1, 5)},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:     state.RoleAsync,
 						Upstream: node(4, 3),
 					},
-					XLog: xlog.Zero,
+					CurXLog: xlog.Zero(),
 				},
 			},
 		},
@@ -2000,17 +2006,17 @@ func TestAsyncChangeUpstream(t *testing.T) {
 						Primary:    node(2, 1),
 						Sync:       node(3, 2),
 						Async:      []*discoverd.Instance{node(1, 5)},
-						InitWAL:    xlog.Zero,
+						InitWAL:    xlog.Zero(),
 					},
 					Peers: []*discoverd.Instance{node(2, 1), node(3, 2), node(1, 5)},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:     state.RoleAsync,
 						Upstream: node(3, 2),
 					},
-					XLog: xlog.Zero,
+					CurXLog: xlog.Zero(),
 				},
 			},
 		},
@@ -2039,17 +2045,17 @@ func TestRemovedAsync(t *testing.T) {
 						Primary:    node(2, 1),
 						Sync:       node(3, 2),
 						Async:      []*discoverd.Instance{node(1, 3)},
-						InitWAL:    xlog.Zero,
+						InitWAL:    xlog.Zero(),
 					},
 					Peers: []*discoverd.Instance{node(2, 1), node(3, 2), node(1, 3)},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:     state.RoleAsync,
 						Upstream: node(3, 2),
 					},
-					XLog: xlog.Zero,
+					CurXLog: xlog.Zero(),
 				},
 			},
 		},
@@ -2067,16 +2073,16 @@ func TestRemovedAsync(t *testing.T) {
 						Generation: 1,
 						Primary:    node(2, 1),
 						Sync:       node(3, 2),
-						InitWAL:    xlog.Zero,
+						InitWAL:    xlog.Zero(),
 					},
 					Peers: []*discoverd.Instance{node(2, 1), node(3, 2), node(1, 3)},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: false,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role: state.RoleNone,
 					},
-					XLog: xlog.Zero,
+					CurXLog: xlog.Zero(),
 				},
 			},
 		},
@@ -2104,19 +2110,19 @@ func TestRemovedSync(t *testing.T) {
 						Primary:    node(2, 1),
 						Sync:       node(1, 2),
 						Async:      []*discoverd.Instance{node(3, 3)},
-						InitWAL:    xlog.Zero,
+						InitWAL:    xlog.Zero(),
 					},
 					Peers: []*discoverd.Instance{node(2, 1), node(1, 2), node(3, 3)},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: true,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role:       state.RoleSync,
 						Upstream:   node(2, 1),
 						Downstream: node(3, 3),
 					},
-					XLog:        xlog.Zero,
-					XLogWaiting: xlog.Zero,
+					CurXLog:     xlog.Zero(),
+					XLogWaiting: xlog.Zero(),
 				},
 			},
 		},
@@ -2134,16 +2140,16 @@ func TestRemovedSync(t *testing.T) {
 						Generation: 2,
 						Primary:    node(2, 1),
 						Sync:       node(3, 3),
-						InitWAL:    xlog.Zero,
+						InitWAL:    xlog.Zero(),
 					},
 					Peers: []*discoverd.Instance{node(2, 1), node(1, 2), node(3, 3)},
 				},
-				Postgres: &simulator.PostgresInfo{
+				Db: &simulator.DbInfo{
 					Online: false,
-					Config: &state.PgConfig{
+					Config: &state.Config{
 						Role: state.RoleNone,
 					},
-					XLog: xlog.Zero,
+					CurXLog: xlog.Zero(),
 				},
 			},
 		},

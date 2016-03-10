@@ -130,7 +130,7 @@ func (s *HealthcheckSuite) TestStatus(t *c.C) {
 	t.Assert(err, c.IsNil)
 
 	t.Assert(data.Data.Status, c.Equals, status.CodeHealthy)
-	t.Assert(data.Data.Detail, c.HasLen, 11)
+	t.Assert(data.Data.Detail, c.HasLen, 12)
 	for name, s := range data.Data.Detail {
 		t.Assert(s.Status, c.Equals, status.CodeHealthy, c.Commentf("name = %s", name))
 	}

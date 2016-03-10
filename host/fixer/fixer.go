@@ -10,14 +10,14 @@ import (
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-docopt"
 	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
-	"github.com/flynn/flynn/appliance/postgresql/client"
-	pgstate "github.com/flynn/flynn/appliance/postgresql/state"
 	"github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/cluster"
+	"github.com/flynn/flynn/pkg/sirenia/client"
+	pgstate "github.com/flynn/flynn/pkg/sirenia/state"
 )
 
 type ClusterFixer struct {
@@ -382,16 +382,16 @@ func (f *ClusterFixer) FixPostgres() error {
 	f.l.Info(fmt.Sprintf("found %d running postgres instances", len(instances)))
 
 	f.l.Info("getting postgres status")
-	var status *pgmanager.Status
+	var status *client.Status
 	if leader != nil && leader.Addr != "" {
-		client := pgmanager.NewClient(leader.Addr)
+		client := client.NewClient(leader.Addr)
 		var err error
 		status, err = client.Status()
 		if err != nil {
 			f.l.Error("error getting status from postgres leader", "error", err)
 		}
 	}
-	if status != nil && status.Postgres.ReadWrite {
+	if status != nil && status.Database.ReadWrite {
 		f.l.Info("postgres claims to be read-write")
 		return nil
 	}
@@ -526,7 +526,7 @@ func (f *ClusterFixer) FixPostgres() error {
 			addr = leader.Addr
 		}
 		f.l.Info("waiting for postgres to come up read-write")
-		return pgmanager.NewClient(addr).WaitForReadWrite(5 * time.Minute)
+		return client.NewClient(addr).WaitForReadWrite(5 * time.Minute)
 	}
 	return nil
 }

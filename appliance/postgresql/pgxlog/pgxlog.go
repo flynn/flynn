@@ -12,7 +12,7 @@
 
 /*
 
-Package xlog provides constants and functions for working with PostgreSQL xlog positions.
+Package pgxlog provides constants and functions for working with PostgreSQL xlog positions.
 
 The package makes a number of assumptions about the format of xlog positions.
 It's not totally clear that this is a committed Postgres interface, but it seems
@@ -30,21 +30,28 @@ each file, which means we can't compute the actual difference between two
 positions.
 
 */
-package xlog
+
+package pgxlog
 
 import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/flynn/flynn/pkg/sirenia/xlog"
 )
 
-type Position string
+const Zero xlog.Position = "0/00000000"
 
-const Zero Position = "0/00000000"
+type PgXLog struct{}
+
+func (p PgXLog) Zero() xlog.Position {
+	return Zero
+}
 
 // Increment increments an xlog position by the given number.
-func Increment(xlog Position, increment int) (Position, error) {
-	parts, err := parse(xlog)
+func (p PgXLog) Increment(pos xlog.Position, increment int) (xlog.Position, error) {
+	parts, err := parse(pos)
 	if err != nil {
 		return "", err
 	}
@@ -53,7 +60,7 @@ func Increment(xlog Position, increment int) (Position, error) {
 
 // Compare compares two xlog positions returning -1 if xlog1 < xlog2, 0 if xlog1
 // == xlog2, and 1 if xlog1 > xlog2.
-func Compare(xlog1, xlog2 Position) (int, error) {
+func (p PgXLog) Compare(xlog1, xlog2 xlog.Position) (int, error) {
 	p1, err := parse(xlog1)
 	if err != nil {
 		return 0, err
@@ -76,7 +83,7 @@ func Compare(xlog1, xlog2 Position) (int, error) {
 // integers representing the filepart and offset components of the xlog
 // position. This is an internal representation that should not be exposed
 // outside of this package.
-func parse(xlog Position) (res [2]int, err error) {
+func parse(xlog xlog.Position) (res [2]int, err error) {
 	parts := strings.SplitN(string(xlog), "/", 2)
 	if len(parts) != 2 {
 		err = fmt.Errorf("malformed xlog position %q", xlog)
@@ -94,8 +101,8 @@ func parse(xlog Position) (res [2]int, err error) {
 
 // MakePosition constructs an xlog position string from a numeric file part and
 // offset.
-func makePosition(filepart int, offset int) Position {
-	return Position(fmt.Sprintf("%X/%08X", filepart, offset))
+func makePosition(filepart int, offset int) xlog.Position {
+	return xlog.Position(fmt.Sprintf("%X/%08X", filepart, offset))
 }
 
 func parseHex(s string) (int, error) {

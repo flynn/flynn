@@ -20,6 +20,7 @@ OPTIONS:
   -s, --size=SIZE          Cluster size [default: 1]
   -z, --no-destroy-vols    Don't destroy volumes
   -v, --version=VERSION    Boot using the released VERSION (e.g. v20151104.1)
+  --from-backup=FILE       Bootstrap from backup file
 USAGE
 }
 
@@ -28,6 +29,7 @@ main() {
   local destroy_vols=true
   local version=""
   local host_flags=""
+  local backup=""
 
   while true; do
     case "$1" in
@@ -54,6 +56,14 @@ main() {
           exit 1
         fi
         version="$2"
+        shift 2
+        ;;
+      --from-backup)
+        if [[ -z "$2" ]]; then
+          usage
+          exit 1
+        fi
+        backup="--from-backup=$2"
         shift 2
         ;;
       *)
@@ -106,6 +116,7 @@ main() {
   export DISCOVERD="${ips[0]}:1111"
   "${flynn_host}" \
     bootstrap \
+    ${backup} \
     --min-hosts="${size}" \
     --peer-ips="$(join "," ${ips[@]})" \
     "${manifest}"

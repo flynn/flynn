@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/jackc/pgx"
-	"github.com/flynn/flynn/appliance/postgresql/state"
 	"github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/attempt"
 	"github.com/flynn/flynn/pkg/dialer"
 	"github.com/flynn/flynn/pkg/shutdown"
+	"github.com/flynn/flynn/pkg/sirenia/state"
 )
 
 const (
