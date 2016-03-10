@@ -41,10 +41,6 @@ var (
 
 var logger = log15.New("component", "scheduler")
 
-// generateJobUUID generates a UUID for new job IDs and is overridden in tests
-// to make them more predictable
-var generateJobUUID func() string = random.UUID
-
 type Scheduler struct {
 	utils.ControllerClient
 	utils.ClusterClient
@@ -99,6 +95,10 @@ type Scheduler struct {
 	// pause and resume are used by tests to control the main loop
 	pause  chan struct{}
 	resume chan struct{}
+
+	// generateJobUUID generates a UUID for new job IDs and is overridden in tests
+	// to make them more predictable
+	generateJobUUID func() string
 }
 
 func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc Discoverd) *Scheduler {
@@ -129,6 +129,7 @@ func NewScheduler(cluster utils.ClusterClient, cc utils.ControllerClient, disc D
 		pendingTagJobs:    make(map[string]*Job),
 		pause:             make(chan struct{}),
 		resume:            make(chan struct{}),
+		generateJobUUID:   random.UUID,
 	}
 }
 
@@ -793,7 +794,7 @@ func (s *Scheduler) handleFormationDiff(f *Formation, diff Processes) {
 			log.Info(fmt.Sprintf("starting %d new %s jobs", n, typ))
 			for i := 0; i < n; i++ {
 				job := &Job{
-					ID:        generateJobUUID(),
+					ID:        s.generateJobUUID(),
 					Type:      typ,
 					AppID:     f.App.ID,
 					ReleaseID: f.Release.ID,
@@ -1398,7 +1399,7 @@ func (s *Scheduler) restartJob(job *Job) {
 	// create a new job so its state is tracked separately from the job
 	// it is replacing
 	newJob := &Job{
-		ID:        generateJobUUID(),
+		ID:        s.generateJobUUID(),
 		Type:      job.Type,
 		AppID:     job.AppID,
 		ReleaseID: job.ReleaseID,

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -86,7 +87,7 @@ func newTestCluster(hosts map[string]*FakeHostClient) *FakeCluster {
 	return cluster
 }
 
-func runTestScheduler(c *C, cluster utils.ClusterClient, isLeader bool) *TestScheduler {
+func newTestScheduler(c *C, cluster utils.ClusterClient, isLeader bool) *TestScheduler {
 	if cluster == nil {
 		cluster = newTestCluster(nil)
 	}
@@ -95,9 +96,14 @@ func runTestScheduler(c *C, cluster utils.ClusterClient, isLeader bool) *TestSch
 
 	events := make(chan Event, eventBufferSize)
 	stream := s.Subscribe(events)
-	go s.Run()
 
 	return &TestScheduler{s, c, events, stream, discoverd}
+}
+
+func runTestScheduler(c *C, cluster utils.ClusterClient, isLeader bool) *TestScheduler {
+	s := newTestScheduler(c, cluster, isLeader)
+	go s.Run()
+	return s
 }
 
 type TestScheduler struct {
@@ -309,17 +315,17 @@ func (TestSuite) TestRectify(c *C) {
 func (TestSuite) TestMultipleHosts(c *C) {
 	hosts := newTestHosts()
 	fakeCluster := newTestCluster(hosts)
-	s := runTestScheduler(c, fakeCluster, true)
-	defer s.Stop()
-	s.maxHostChecks = 1
+	s := newTestScheduler(c, fakeCluster, true)
 
 	// use incremental job IDs so we can find them easily in s.jobs
-	jobID := 0
-	generateJobUUID = func() string {
-		jobID++
-		return fmt.Sprintf("job%d", jobID)
+	var jobID uint64
+	s.generateJobUUID = func() string {
+		return fmt.Sprintf("job%d", atomic.AddUint64(&jobID, 1))
 	}
-	defer func() { generateJobUUID = random.UUID }()
+	s.maxHostChecks = 1
+
+	go s.Run()
+	defer s.Stop()
 
 	assertJobs := func(expected map[string]*Job) {
 		jobs := s.Jobs()
@@ -417,7 +423,7 @@ func (TestSuite) TestMultipleHosts(c *C) {
 	job, err := h3.GetJob(id)
 	c.Assert(err, IsNil)
 	newJob := job.Job.Dup()
-	newJob.ID = cluster.GenerateJobID(h2.ID(), generateJobUUID())
+	newJob.ID = cluster.GenerateJobID(h2.ID(), s.generateJobUUID())
 	h2.AddJob(newJob)
 	err = h3.StopJob(id)
 	c.Assert(err, IsNil)
