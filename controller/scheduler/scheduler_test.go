@@ -668,7 +668,7 @@ func (TestSuite) TestJobPlacementTags(c *C) {
 		{typ: "clock", host: "host2"},
 		{typ: "clock", host: "host2"},
 	} {
-		job := s.jobs.Add(&Job{ID: fmt.Sprintf("job%d", i), Formation: formation, Type: t.typ})
+		job := s.jobs.Add(&Job{ID: fmt.Sprintf("job%d", i), Formation: formation, Type: t.typ, state: JobStatePending})
 		req := &PlacementRequest{Job: job, Err: make(chan error, 1)}
 		s.HandlePlacementRequest(req)
 		c.Assert(<-req.Err, IsNil, Commentf("placing job %d", i))
