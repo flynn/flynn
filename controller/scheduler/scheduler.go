@@ -35,7 +35,7 @@ const (
 var (
 	ErrNotLeader        = errors.New("scheduler is not the leader")
 	ErrNoHosts          = errors.New("no hosts found")
-	ErrJobStopped       = errors.New("job has been marked as stopped")
+	ErrJobNotPending    = errors.New("job is no longer pending")
 	ErrNoHostsMatchTags = errors.New("no hosts found matching job tags")
 )
 
@@ -687,9 +687,11 @@ func (s *Scheduler) HandlePlacementRequest(req *PlacementRequest) {
 		return
 	}
 
-	// don't attempt to place a job which has been marked as stopped
-	if req.Job.state == JobStateStopped {
-		req.Error(ErrJobStopped)
+	// don't attempt to place a job which is no longer pending, which could
+	// be the case either if the job has been marked as stopped, or AddJob
+	// failed in some way (e.g. a timeout) but the job did actually start
+	if req.Job.state != JobStatePending {
+		req.Error(ErrJobNotPending)
 		return
 	}
 
@@ -830,6 +832,9 @@ func (s *Scheduler) StartJob(job *Job) {
 			return
 		} else if err == ErrNoHostsMatchTags {
 			log.Warn("unable to place job as tags don't match any hosts")
+			return
+		} else if err == ErrJobNotPending {
+			log.Warn("unable to place job as it is no longer pending")
 			return
 		} else if err != nil {
 			log.Error("error placing job in the cluster", "err", err)

@@ -300,7 +300,15 @@ func (h *jobAPI) AddJob(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 		return
 	}
 
-	h.host.state.AddJob(job)
+	if err := h.host.state.AddJob(job); err != nil {
+		log.Error("error adding job to state database", "err", err)
+		if err == ErrJobExists {
+			httphelper.ConflictError(w, err.Error())
+		} else {
+			httphelper.Error(w, err)
+		}
+		return
+	}
 
 	go func() {
 		log.Info("running job")
