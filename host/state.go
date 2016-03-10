@@ -19,6 +19,10 @@ import (
 
 // TODO: prune old jobs?
 
+// ErrJobExists is returned when attempting to add a job to the state with an
+// ID which already exists
+var ErrJobExists = errors.New("job already exists")
+
 type State struct {
 	id string
 
@@ -274,13 +278,17 @@ func (s *State) persist(jobID string) {
 	}
 }
 
-func (s *State) AddJob(j *host.Job) {
+func (s *State) AddJob(j *host.Job) error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
+	if _, ok := s.jobs[j.ID]; ok {
+		return ErrJobExists
+	}
 	job := &host.ActiveJob{Job: j, HostID: s.id}
 	s.jobs[j.ID] = job
 	s.sendEvent(job, host.JobEventCreate)
 	s.persist(j.ID)
+	return nil
 }
 
 func (s *State) GetJob(id string) *host.ActiveJob {

@@ -48,3 +48,14 @@ func (S) TestStatePersistRestore(c *C) {
 		c.Errorf("expected job.HostID to equal %s, got %s", hostID, job.HostID)
 	}
 }
+
+func (S) TestStateDuplicateID(c *C) {
+	workdir := c.MkDir()
+	hostID := "abc123"
+	state := NewState(hostID, filepath.Join(workdir, "host-state-db"))
+	c.Assert(state.OpenDB(), IsNil)
+	defer state.CloseDB()
+
+	c.Assert(state.AddJob(&host.Job{ID: "a"}), IsNil)
+	c.Assert(state.AddJob(&host.Job{ID: "a"}), Equals, ErrJobExists)
+}

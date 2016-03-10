@@ -214,6 +214,10 @@ func ObjectExistsError(w http.ResponseWriter, message string) {
 	Error(w, ObjectExistsErr(message))
 }
 
+func ConflictError(w http.ResponseWriter, message string) {
+	Error(w, JSONError{Code: ConflictErrorCode, Message: message})
+}
+
 func PreconditionFailedErr(message string) error {
 	return JSONError{Code: PreconditionFailedErrorCode, Message: message}
 }
