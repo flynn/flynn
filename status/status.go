@@ -101,8 +101,9 @@ var httpClient = &http.Client{Timeout: 2 * time.Second}
 type ReqFn func() (*http.Request, error)
 
 type Service struct {
-	Name  string
-	ReqFn func() (*http.Request, error)
+	Name     string
+	ReqFn    func() (*http.Request, error)
+	Optional bool
 }
 
 func (s Service) Status() status.Status {
@@ -154,7 +155,7 @@ var services = []Service{
 	{Name: "gitreceive", ReqFn: RandomReqFn("gitreceive")},
 	{Name: "logaggregator", ReqFn: LeaderReqFn("logaggregator", "80")},
 	{Name: "postgres", ReqFn: LeaderReqFn("postgres", "5433")},
-	{Name: "mariadb", ReqFn: LeaderReqFn("mariadb", "3307")},
+	{Name: "mariadb", ReqFn: LeaderReqFn("mariadb", "3307"), Optional: true},
 	{Name: "router", ReqFn: RandomReqFn("router-api")},
 }
 
@@ -216,8 +217,10 @@ type ServiceStatus struct {
 
 func GetStatus() status.Status {
 	results := make(chan ServiceStatus)
+	optional := make(map[string]bool)
 	for _, s := range services {
 		go func(s Service) {
+			optional[s.Name] = s.Optional
 			results <- ServiceStatus{s.Name, s.Status()}
 		}(s)
 	}
@@ -227,7 +230,7 @@ func GetStatus() status.Status {
 	for i := 0; i < len(services); i++ {
 		res := <-results
 		data[res.Name] = res.Status
-		if res.Status.Status != status.CodeHealthy {
+		if res.Status.Status != status.CodeHealthy && !optional[res.Name] {
 			healthy = false
 		}
 	}
