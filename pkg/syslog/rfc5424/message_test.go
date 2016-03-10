@@ -50,10 +50,8 @@ func (s *S) TestNewMessage(c *C) {
 		msg := NewMessage(&test.hdr, test.msg)
 		c.Assert(msg.String(), Equals, test.want)
 
-		data, err := msg.MarshalBinary()
-		c.Assert(err, IsNil)
-		msgCopy := &Message{}
-		err = msgCopy.UnmarshalBinary(data)
+		data := msg.Bytes()
+		msgCopy, err := Parse(data)
 		c.Assert(err, IsNil)
 		c.Assert(msgCopy, DeepEquals, msg)
 	}
