@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"syscall"
@@ -429,9 +430,11 @@ func (s *S) TestHTTPResync(c *C) {
 			c.Fatal(fmt.Errorf("Unable to remove route after disconnecting sync"))
 		}
 		err = l.RemoveRoute(route.ID)
-		if e, ok := err.(*net.OpError); ok && e.Err == syscall.EPIPE {
-			attempts++
-			continue
+		if e, ok := err.(*net.OpError); ok {
+			if ee, ok := e.Err.(*os.SyscallError); ok && ee.Err == syscall.EPIPE || e.Err == syscall.EPIPE {
+				attempts++
+				continue
+			}
 		}
 		if err == pgx.ErrDeadConn {
 			attempts++
