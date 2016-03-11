@@ -30,7 +30,7 @@ func (MonitorSuite) TestMonitor(c *C) {
 
 		check := CheckFunc(func() error {
 			if finished {
-				return nil
+				return errors.New("finished")
 			}
 			defer func() {
 				if i >= len(steps) {
