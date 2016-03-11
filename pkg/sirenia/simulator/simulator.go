@@ -268,7 +268,7 @@ func (s *Simulator) AddPeer(args []string) {
 		peer.ID != cs.State.Primary.ID &&
 		cs.State.Sync != nil && cs.State.Sync.ID != peer.ID {
 		cs.State.Async = append(cs.State.Async, peer)
-		s.discoverd.SetClusterState(cs)
+		s.discoverd.SetClusterState(cs, false)
 	}
 
 	s.jsonDump(s.discoverd.Peers())
@@ -290,7 +290,7 @@ func (s *Simulator) RmPeer(args []string) {
 		for i, p := range cs.State.Async {
 			if p.Meta[simIdKey] == name {
 				cs.State.Async = append(cs.State.Async[:i], cs.State.Async[i+1:]...)
-				s.discoverd.SetClusterState(cs)
+				s.discoverd.SetClusterState(cs, false)
 				break
 			}
 		}
@@ -298,7 +298,7 @@ func (s *Simulator) RmPeer(args []string) {
 			cs.State.Generation++
 			cs.State.Sync = cs.State.Async[0]
 			cs.State.Async = cs.State.Async[1:]
-			s.discoverd.SetClusterState(cs)
+			s.discoverd.SetClusterState(cs, false)
 		}
 	}
 }
@@ -356,7 +356,7 @@ func (s *Simulator) Bootstrap(args []string) {
 		fmt.Fprintf(s.out, "selected %q as primary", cs.State.Primary.Meta[simIdKey])
 	}
 
-	s.discoverd.SetClusterState(cs)
+	s.discoverd.SetClusterState(cs, false)
 	s.jsonDump(cs)
 }
 
@@ -387,7 +387,7 @@ func (s *Simulator) Depose(args []string) {
 		Async:      cs.State.Async[1:],
 		InitWAL:    newWAL,
 	}
-	s.discoverd.SetClusterState(cs)
+	s.discoverd.SetClusterState(cs, false)
 	s.jsonDump(cs)
 }
 
@@ -426,7 +426,7 @@ func (s *Simulator) Rebuild(args []string) {
 		cs.State.Async = append(cs.State.Async, peer)
 	}
 
-	s.discoverd.SetClusterState(cs)
+	s.discoverd.SetClusterState(cs, false)
 	s.jsonDump(cs)
 }
 
@@ -436,14 +436,14 @@ func (s *Simulator) Freeze(args []string) {
 		FrozenAt: state.TimeNow(),
 		Reason:   "frozen by simulator",
 	}
-	s.discoverd.SetClusterState(cs)
+	s.discoverd.SetClusterState(cs, false)
 	s.jsonDump(cs)
 }
 
 func (s *Simulator) Unfreeze(args []string) {
 	cs := s.discoverd.ClusterState()
 	cs.State.Freeze = nil
-	s.discoverd.SetClusterState(cs)
+	s.discoverd.SetClusterState(cs, false)
 	s.jsonDump(cs)
 }
 
@@ -473,7 +473,7 @@ func (s *Simulator) SetClusterState(args []string) {
 		s.log.Error("error decoding state", "err", err)
 		return
 	}
-	s.discoverd.SetClusterState(cs)
+	s.discoverd.SetClusterState(cs, false)
 }
 
 func md5sum(data string) string {
@@ -500,7 +500,7 @@ func (d *discoverdSimulator) NewClient(inst *discoverd.Instance) *discoverdSimul
 	c := &discoverdSimulatorClient{
 		d:      d,
 		inst:   inst,
-		events: make(chan *state.DiscoverdEvent, 10),
+		events: make(chan *state.DiscoverdEvent),
 	}
 	d.clients = append(d.clients, c)
 	return c
@@ -549,7 +549,7 @@ func (d *discoverdSimulator) PeerRemoved(name string) {
 	}
 }
 
-func (d *discoverdSimulator) SetClusterState(s *state.DiscoverdState) {
+func (d *discoverdSimulator) SetClusterState(s *state.DiscoverdState, async bool) {
 	d.Lock()
 	defer d.Unlock()
 
@@ -560,7 +560,11 @@ func (d *discoverdSimulator) SetClusterState(s *state.DiscoverdState) {
 	d.state.State = s.State.Clone()
 	s.Index = d.state.Index
 	for _, c := range d.clients {
-		c.notifyStateChanged()
+		if async {
+			go c.notifyStateChanged(d._clusterState())
+		} else {
+			c.notifyStateChanged(d._clusterState())
+		}
 	}
 }
 
@@ -599,7 +603,7 @@ type discoverdSimulatorClient struct {
 
 func (d *discoverdSimulatorClient) SetState(s *state.DiscoverdState) error {
 	time.Sleep(opLag)
-	d.d.SetClusterState(s)
+	d.d.SetClusterState(s, true)
 	return nil
 }
 
@@ -620,7 +624,7 @@ func (d *discoverdSimulatorClient) notifyPeersChanged() {
 	}
 }
 
-func (d *discoverdSimulatorClient) notifyStateChanged() {
+func (d *discoverdSimulatorClient) notifyStateChanged(s *state.DiscoverdState) {
 	d.RLock()
 	defer d.RUnlock()
 
@@ -629,7 +633,7 @@ func (d *discoverdSimulatorClient) notifyStateChanged() {
 	}
 	d.events <- &state.DiscoverdEvent{
 		Kind:  state.DiscoverdEventState,
-		State: d.d._clusterState(),
+		State: s,
 	}
 }
 
