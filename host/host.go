@@ -390,6 +390,7 @@ func runDaemon(args *docopt.Args) {
 
 	// configure network and discoverd if config set in host status
 	if config := host.status.Network; config != nil {
+		host.networkOnce.Do(func() {})
 		log.Info("configuring network", "subnet", config.Subnet, "mtu", config.MTU, "resolvers", config.Resolvers)
 		if err := backend.ConfigureNetworking(config); err != nil {
 			log.Error("error configuring network", "err", err)
@@ -397,6 +398,7 @@ func runDaemon(args *docopt.Args) {
 		}
 	}
 	if config := host.status.Discoverd; config != nil && config.URL != "" {
+		host.discoverdOnce.Do(func() {})
 		log.Info("connecting to service discovery", "url", config.URL)
 		if err := discoverdManager.ConnectLocal(config.URL); err != nil {
 			log.Error("error connecting to service discovery", "err", err)
