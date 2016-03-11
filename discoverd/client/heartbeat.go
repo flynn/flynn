@@ -74,7 +74,10 @@ func (c *Client) RegisterInstance(service string, inst *Instance) (Heartbeater, 
 	h := newHeartbeater(c, service, inst)
 	firstErr := make(chan error)
 	go h.run(firstErr)
-	return h, <-firstErr
+	if err := <-firstErr; err != nil {
+		return nil, err
+	}
+	return h, nil
 }
 
 func newHeartbeater(c *Client, service string, inst *Instance) *heartbeater {
