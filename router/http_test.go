@@ -251,7 +251,6 @@ func (s *S) TestLeaderRouting(c *C) {
 		LeaderType: discoverd.LeaderTypeManual,
 	})
 	c.Assert(err, IsNil)
-	svc := client.Service("leader-routing-http")
 
 	addRoute(c, l, router.HTTPRoute{
 		Domain:  "foo.bar",
@@ -262,11 +261,10 @@ func (s *S) TestLeaderRouting(c *C) {
 	discoverdRegisterHTTPService(c, l, "leader-routing-http", srv1.Listener.Addr().String())
 	discoverdRegisterHTTPService(c, l, "leader-routing-http", srv2.Listener.Addr().String())
 
-	err = svc.SetLeader(md5sum("tcp-" + srv1.Listener.Addr().String()))
-	c.Assert(err, IsNil)
+	discoverdSetLeaderHTTP(c, l, "leader-routing-http", md5sum("tcp-"+srv1.Listener.Addr().String()))
 	assertGet(c, "http://"+l.Addr, "foo.bar", "1")
 
-	err = svc.SetLeader(md5sum("tcp-" + srv2.Listener.Addr().String()))
+	discoverdSetLeaderHTTP(c, l, "leader-routing-http", md5sum("tcp-"+srv2.Listener.Addr().String()))
 	c.Assert(err, IsNil)
 	assertGet(c, "http://"+l.Addr, "foo.bar", "2")
 }

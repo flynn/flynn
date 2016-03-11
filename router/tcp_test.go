@@ -136,7 +136,6 @@ func (s *S) TestTCPLeaderRouting(c *C) {
 		LeaderType: discoverd.LeaderTypeManual,
 	})
 	c.Assert(err, IsNil)
-	svc := s.discoverd.Service("leader-routing-tcp")
 
 	wait := waitForEvent(c, l, "set", "")
 	r := router.TCPRoute{
@@ -151,12 +150,10 @@ func (s *S) TestTCPLeaderRouting(c *C) {
 	discoverdRegisterTCPService(c, l, "leader-routing-tcp", srv1.Addr)
 	discoverdRegisterTCPService(c, l, "leader-routing-tcp", srv2.Addr)
 
-	err = svc.SetLeader(md5sum("tcp-" + srv1.Addr))
-	c.Assert(err, IsNil)
+	discoverdSetLeaderTCP(c, l, "leader-routing-tcp", md5sum("tcp-"+srv1.Addr))
 	assertTCPConn(c, addr, "1")
 
-	err = svc.SetLeader(md5sum("tcp-" + srv2.Addr))
-	c.Assert(err, IsNil)
+	discoverdSetLeaderTCP(c, l, "leader-routing-tcp", md5sum("tcp-"+srv2.Addr))
 	assertTCPConn(c, addr, "2")
 }
 
