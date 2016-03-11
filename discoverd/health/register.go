@@ -91,6 +91,9 @@ func (h *heartbeater) register(stop chan struct{}) {
 				return
 			}
 			h.hb, err = h.Registrar.RegisterInstance(h.Service, h.Instance)
+			if err != nil {
+				h.hb = nil
+			}
 		}()
 		if err == nil {
 			if h.l != nil {
