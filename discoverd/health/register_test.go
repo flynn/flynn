@@ -147,9 +147,12 @@ func (RegisterSuite) TestRegister(c *C) {
 		errCheck := func(ch chan called, stop chan bool) {
 			go func() {
 				select {
-				case _, ok := <-ch:
+				case call, ok := <-ch:
 					if !ok {
 						return
+					}
+					if call.returnVal != nil {
+						call.returnVal <- false
 					}
 					errCh <- true
 				case <-stop:
