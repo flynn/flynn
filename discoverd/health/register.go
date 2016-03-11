@@ -99,7 +99,7 @@ func (h *heartbeater) register(stop chan struct{}) {
 			return
 		}
 		if h.l != nil {
-			h.l.Error("error creating heartbeater")
+			h.l.Error("error creating heartbeater", "err", err)
 		}
 		time.Sleep(registerErrWait)
 	}
