@@ -94,6 +94,10 @@ func (a *JavaScriptAsset) Initialize() error {
 	return nil
 }
 
+func (a *JavaScriptAsset) Checksum() string {
+	return a.input.Checksum()
+}
+
 var jsImportParseRegex = regexp.MustCompile("from[^'\"]+(['\"])([^'\"]+)['\"]")
 var jsImportRegex = regexp.MustCompile("^import .*$")
 var jsExportRegex = regexp.MustCompile("^export .*$")

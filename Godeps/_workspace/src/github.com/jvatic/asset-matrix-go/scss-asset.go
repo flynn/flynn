@@ -48,6 +48,10 @@ func (a *SCSSAsset) Initialize() error {
 	return nil
 }
 
+func (a *SCSSAsset) Checksum() string {
+	return ""
+}
+
 func (a *SCSSAsset) Path() string {
 	return a.p
 }

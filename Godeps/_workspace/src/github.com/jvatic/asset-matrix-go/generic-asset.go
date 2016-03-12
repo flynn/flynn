@@ -1,6 +1,8 @@
 package assetmatrix
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"io"
 	"log"
 	"os"
@@ -11,6 +13,7 @@ type GenericAsset struct {
 	r        *AssetRoot
 	p        string
 	indexKey string
+	checkSum string
 }
 
 func (a *GenericAsset) OutputExt() string {
@@ -31,6 +34,24 @@ func (a *GenericAsset) Open() (*os.File, error) {
 
 func (a *GenericAsset) Initialize() error {
 	return nil
+}
+
+func (a *GenericAsset) Checksum() string {
+	if a.checkSum != "" {
+		return a.checkSum
+	}
+	file, err := a.Open()
+	defer file.Close()
+	if err != nil {
+		return ""
+	}
+	h := md5.New()
+	if _, err := io.Copy(h, file); err != nil {
+		return ""
+	}
+	h.Write([]byte(a.p))
+	a.checkSum = hex.EncodeToString(h.Sum(nil))
+	return a.checkSum
 }
 
 func (a *GenericAsset) Path() string {

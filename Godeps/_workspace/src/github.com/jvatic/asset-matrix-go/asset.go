@@ -10,6 +10,7 @@ import (
 type Asset interface {
 	Open() (*os.File, error)
 	Initialize() error
+	Checksum() string
 	Path() string
 	RelPath() (string, error)
 	SetIndexKey(string)
