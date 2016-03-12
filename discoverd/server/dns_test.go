@@ -42,7 +42,7 @@ func (s *DNSSuite) newServer(c *C, recursors []string) *DNSServer {
 
 func (s *DNSSuite) TearDownTest(c *C) {
 	if s.srv != nil {
-		c.Assert(s.srv.Close(), IsNil)
+		s.srv.Close()
 	}
 }
 

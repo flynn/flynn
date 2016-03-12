@@ -24,6 +24,7 @@ type Server struct {
 	syslogListener net.Listener
 	apiListener    net.Listener
 	syslogWg       sync.WaitGroup
+	syslogDone     chan struct{}
 
 	hb discoverd.Heartbeater
 
@@ -47,6 +48,7 @@ func NewServer(conf ServerConfig) *Server {
 		conf:       conf,
 		api:        apiHandler(a, c),
 		shutdown:   make(chan struct{}),
+		syslogDone: make(chan struct{}),
 	}
 }
 
@@ -63,6 +65,7 @@ func (s *Server) Shutdown() {
 		if err := s.syslogListener.Close(); err != nil {
 			log15.Error("syslog listener shutdown error", "err", err)
 		}
+		<-s.syslogDone
 	}
 	if s.apiListener != nil {
 		if err := s.apiListener.Close(); err != nil {
@@ -142,6 +145,7 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) runSyslog() {
+	defer close(s.syslogDone)
 	for {
 		conn, err := s.syslogListener.Accept()
 		if err != nil {

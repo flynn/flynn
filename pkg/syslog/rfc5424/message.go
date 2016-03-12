@@ -60,14 +60,6 @@ func (m Message) String() string {
 	return string(m.Bytes())
 }
 
-func (m Message) MarshalBinary() ([]byte, error) {
-	return m.Bytes(), nil
-}
-
-func (m *Message) UnmarshalBinary(data []byte) error {
-	return parse(data, m)
-}
-
 type Header struct {
 	Facility  int
 	Severity  int

@@ -45,9 +45,10 @@ func (a *aggregatorAPI) GetCursors(ctx context.Context, w http.ResponseWriter, r
 func (a *aggregatorAPI) GetLog(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	ctx, cancel := context.WithCancel(ctx)
 	if cn, ok := w.(http.CloseNotifier); ok {
+		ch := cn.CloseNotify()
 		go func() {
 			select {
-			case <-cn.CloseNotify():
+			case <-ch:
 				cancel()
 			case <-ctx.Done():
 			}

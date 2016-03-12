@@ -148,8 +148,7 @@ func discoverdRegisterHTTP(c *C, l *HTTPListener, addr string) func() {
 
 type serviceCache interface {
 	cache.ServiceCache
-	Watch(bool) chan *discoverd.Event
-	Unwatch(chan *discoverd.Event)
+	Watch(bool) (chan *discoverd.Event, func())
 }
 
 func discoverdRegisterHTTPService(c *C, l *HTTPListener, name, addr string) func() {
@@ -158,11 +157,44 @@ func discoverdRegisterHTTPService(c *C, l *HTTPListener, name, addr string) func
 	return discoverdRegister(c, dc, sc.(serviceCache), name, addr)
 }
 
+func discoverdSetLeaderHTTP(c *C, l *HTTPListener, name, id string) {
+	dc := l.discoverd.(discoverdClient)
+	sc := l.services[name].sc.(serviceCache)
+	discoverdSetLeader(c, dc, sc, name, id)
+}
+
+func discoverdSetLeaderTCP(c *C, l *TCPListener, name, id string) {
+	dc := l.discoverd.(discoverdClient)
+	sc := l.services[name].sc.(serviceCache)
+	discoverdSetLeader(c, dc, sc, name, id)
+}
+
+func discoverdSetLeader(c *C, dc discoverdClient, sc serviceCache, name, id string) {
+	done := make(chan struct{})
+	go func() {
+		events, unwatch := sc.Watch(true)
+		defer unwatch()
+		for event := range events {
+			if event.Kind == discoverd.EventKindLeader && event.Instance.ID == id {
+				close(done)
+				return
+			}
+		}
+	}()
+	err := dc.Service(name).SetLeader(id)
+	c.Assert(err, IsNil)
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		c.Fatal("timed out waiting for discoverd leader change")
+	}
+}
+
 func discoverdRegister(c *C, dc discoverdClient, sc serviceCache, name, addr string) func() {
 	done := make(chan struct{})
 	go func() {
-		events := sc.Watch(true)
-		defer sc.Unwatch(events)
+		events, unwatch := sc.Watch(true)
+		defer unwatch()
 		for event := range events {
 			if event.Kind == discoverd.EventKindUp && event.Instance.Addr == addr {
 				close(done)
@@ -185,8 +217,8 @@ func discoverdUnregisterFunc(c *C, hb discoverd.Heartbeater, sc serviceCache) fu
 		done := make(chan struct{})
 		started := make(chan struct{})
 		go func() {
-			events := sc.Watch(false)
-			defer sc.Unwatch(events)
+			events, unwatch := sc.Watch(false)
+			defer unwatch()
 			close(started)
 			for event := range events {
 				if event.Kind == discoverd.EventKindDown && event.Instance.Addr == hb.Addr() {

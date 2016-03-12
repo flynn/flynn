@@ -56,8 +56,9 @@ func (s *Stream) Serve() {
 	s.fw = hh.FlushWriter{Writer: newWriter(s.rw), Enabled: true}
 
 	if cw, ok := s.rw.(http.CloseNotifier); ok {
+		ch := cw.CloseNotify()
 		go func() {
-			<-cw.CloseNotify()
+			<-ch
 			s.Close()
 		}()
 	}

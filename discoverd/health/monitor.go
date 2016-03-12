@@ -89,9 +89,12 @@ func (m Monitor) Run(check Check, ch chan MonitorEvent) stream.Stream {
 				if m.Logger != nil {
 					m.Logger.Info("new monitor status", "status", status, "check", check)
 				}
-				ch <- MonitorEvent{
+				select {
+				case ch <- MonitorEvent{
 					Status: status,
 					Check:  check,
+				}:
+				case <-stream.StopCh:
 				}
 			}
 		}
@@ -106,10 +109,13 @@ func (m Monitor) Run(check Check, ch chan MonitorEvent) stream.Stream {
 				if m.Logger != nil {
 					m.Logger.Info("new monitor status", "status", status, "check", check, "err", err)
 				}
-				ch <- MonitorEvent{
+				select {
+				case ch <- MonitorEvent{
 					Status: status,
 					Err:    err,
 					Check:  check,
+				}:
+				case <-stream.StopCh:
 				}
 			}
 		}

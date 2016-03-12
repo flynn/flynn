@@ -328,9 +328,10 @@ func (c *controllerAPI) AppLog(ctx context.Context, w http.ResponseWriter, req *
 	}
 
 	if cn, ok := w.(http.CloseNotifier); ok {
+		ch := cn.CloseNotify()
 		go func() {
 			select {
-			case <-cn.CloseNotify():
+			case <-ch:
 				rc.Close()
 			case <-ctx.Done():
 			}
