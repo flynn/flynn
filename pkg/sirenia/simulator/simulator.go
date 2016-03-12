@@ -85,7 +85,7 @@ func New(singleton bool, out io.Writer, logOut io.Writer) *Simulator {
 		restCh:    make(chan struct{}),
 		retryCh:   make(chan struct{}, 1),
 	}
-	s.discoverd = newDiscoverdSimulator(s.log.New("component", "discoverd"))
+	s.discoverd = newDiscoverdSimulator(s.log.New("component", "discoverd"), s.restCh)
 	s.db = newDatabaseSimulator(s.discoverd, s.log.New("component", "pg"))
 	s.peer = s.createSimPeer()
 	s.initCommands()
@@ -487,12 +487,14 @@ type discoverdSimulator struct {
 	state   *state.DiscoverdState
 	peers   []*discoverd.Instance
 	clients []*discoverdSimulatorClient
+	restCh  chan struct{}
 }
 
-func newDiscoverdSimulator(log log15.Logger) *discoverdSimulator {
+func newDiscoverdSimulator(log log15.Logger, restCh chan struct{}) *discoverdSimulator {
 	return &discoverdSimulator{
-		log:   log,
-		state: &state.DiscoverdState{},
+		log:    log,
+		state:  &state.DiscoverdState{},
+		restCh: restCh,
 	}
 }
 
@@ -618,9 +620,16 @@ func (d *discoverdSimulatorClient) notifyPeersChanged() {
 	if !d.init {
 		return
 	}
-	d.events <- &state.DiscoverdEvent{
-		Kind:  state.DiscoverdEventPeers,
-		Peers: d.d._peers(),
+	for {
+		select {
+		case d.events <- &state.DiscoverdEvent{
+			Kind:  state.DiscoverdEventPeers,
+			Peers: d.d._peers(),
+		}:
+			return
+		case <-d.d.restCh:
+			continue
+		}
 	}
 }
 
@@ -631,9 +640,16 @@ func (d *discoverdSimulatorClient) notifyStateChanged(s *state.DiscoverdState) {
 	if !d.init {
 		return
 	}
-	d.events <- &state.DiscoverdEvent{
-		Kind:  state.DiscoverdEventState,
-		State: s,
+	for {
+		select {
+		case d.events <- &state.DiscoverdEvent{
+			Kind:  state.DiscoverdEventState,
+			State: s,
+		}:
+			return
+		case <-d.d.restCh:
+			continue
+		}
 	}
 }
 
