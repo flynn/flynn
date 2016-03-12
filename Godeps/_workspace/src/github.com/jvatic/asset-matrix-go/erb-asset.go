@@ -40,6 +40,10 @@ func (a *ERBAsset) Initialize() error {
 	return nil
 }
 
+func (a *ERBAsset) Checksum() string {
+	return ""
+}
+
 func (a *ERBAsset) Path() string {
 	return a.p
 }

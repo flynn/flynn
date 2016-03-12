@@ -20,11 +20,13 @@ type Config struct {
 	Paths          []*AssetRoot
 	Outputs        []string
 	OutputDir      string
+	CacheDir       string
 	AssetURLPrefix string
 }
 
 type Matrix struct {
 	config            *Config
+	cache             *Cache
 	cacheBreaker      string
 	transformerJSPath string
 	scssJSPath        string
@@ -39,8 +41,13 @@ type Manifest struct {
 }
 
 func New(config *Config) *Matrix {
+	cacheDir := config.CacheDir
+	if cacheDir == "" {
+		cacheDir = filepath.Join(config.OutputDir, ".cache")
+	}
 	m := &Matrix{
 		config: config,
+		cache:  &Cache{Dir: cacheDir},
 	}
 	for _, r := range config.Paths {
 		r.findAsset = m.findAsset
@@ -140,6 +147,11 @@ func (m *Matrix) Build() error {
 	}
 	e := json.NewEncoder(f)
 	if err := e.Encode(m.Manifest); err != nil {
+		return err
+	}
+
+	log.Println("Cleaning up cache dir...")
+	if err := m.cache.CleanupCacheDir(); err != nil {
 		return err
 	}
 
@@ -315,7 +327,17 @@ func (m *Matrix) compileTree(tree []Asset) error {
 	}
 	results := make(chan result)
 	compileAsset := func(i int, a Asset) {
+		if cachedAsset, err := m.cache.FindCachedAsset(a); err == nil {
+			r, err := cachedAsset.Compile()
+			if err == nil {
+				results <- result{r, err, i}
+				return
+			}
+		}
 		r, err := a.Compile()
+		if err == nil {
+			r = m.cache.CacheAsset(r, a.Checksum())
+		}
 		results <- result{r, err, i}
 	}
 	for i, a := range tree {

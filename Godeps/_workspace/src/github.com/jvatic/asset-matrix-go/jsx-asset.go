@@ -43,6 +43,10 @@ func (a *JSXAsset) Initialize() error {
 	return nil
 }
 
+func (a *JSXAsset) Checksum() string {
+	return a.input.Checksum()
+}
+
 func (a *JSXAsset) Path() string {
 	return a.p
 }

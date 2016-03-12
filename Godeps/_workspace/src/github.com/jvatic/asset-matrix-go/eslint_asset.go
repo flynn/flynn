@@ -35,6 +35,10 @@ func (a *ESLintAsset) Initialize() error {
 	return nil
 }
 
+func (a *ESLintAsset) Checksum() string {
+	return a.input.Checksum()
+}
+
 func (a *ESLintAsset) Path() string {
 	return a.p
 }
