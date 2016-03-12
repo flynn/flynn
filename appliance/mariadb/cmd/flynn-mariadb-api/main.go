@@ -68,18 +68,18 @@ type API struct {
 func (a *API) createDatabase(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	username, password, database := random.Hex(16), random.Hex(16), random.Hex(16)
 
-	if _, err := a.db.Exec(fmt.Sprintf(`CREATE USER '%s'@'%%' IDENTIFIED BY '%s'`, username, password)); err != nil {
+	if _, err := a.db.Exec(fmt.Sprintf("CREATE USER '%s'@'%%' IDENTIFIED BY '%s'", username, password)); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
-	if _, err := a.db.Exec(fmt.Sprintf(`CREATE DATABASE %s`, database)); err != nil {
-		a.db.Exec(fmt.Sprintf(`DROP USER "%s"`, username))
+	if _, err := a.db.Exec(fmt.Sprintf("CREATE DATABASE `%s`", database)); err != nil {
+		a.db.Exec(fmt.Sprintf("DROP USER '%s'", username))
 		httphelper.Error(w, err)
 		return
 	}
-	if _, err := a.db.Exec(fmt.Sprintf(`GRANT ALL ON %s.* TO '%s'@'%%'`, database, username)); err != nil {
-		a.db.Exec(fmt.Sprintf(`DROP DATABASE "%s"`, database))
-		a.db.Exec(fmt.Sprintf(`DROP USER "%s"`, username))
+	if _, err := a.db.Exec(fmt.Sprintf("GRANT ALL ON `%s`.* TO '%s'@'%%'", database, username)); err != nil {
+		a.db.Exec(fmt.Sprintf("DROP DATABASE `%s`", database))
+		a.db.Exec(fmt.Sprintf("DROP USER '%s'", username))
 		httphelper.Error(w, err)
 		return
 	}
@@ -105,12 +105,12 @@ func (a *API) dropDatabase(ctx context.Context, w http.ResponseWriter, req *http
 		return
 	}
 
-	if _, err := a.db.Exec(fmt.Sprintf(`DROP DATABASE "%s"`, id[1])); err != nil {
+	if _, err := a.db.Exec(fmt.Sprintf("DROP DATABASE `%s`", id[1])); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
 
-	if _, err := a.db.Exec(fmt.Sprintf(`DROP USER "%s"`, id[0])); err != nil {
+	if _, err := a.db.Exec(fmt.Sprintf("DROP USER '%s'", id[0])); err != nil {
 		httphelper.Error(w, err)
 		return
 	}
