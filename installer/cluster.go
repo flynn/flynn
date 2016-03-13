@@ -227,6 +227,14 @@ func (c *BaseCluster) instanceRunCmd(cmd string, sshConfig *ssh.ClientConfig, ip
 	return c.instanceRunCmdWithClient(cmd, sshConn, sshConfig.User, ipAddress)
 }
 
+func (c *BaseCluster) Abort() {
+	c.aborted = true
+}
+
+func (c *BaseCluster) IsAborted() bool {
+	return c.aborted
+}
+
 func (c *BaseCluster) instanceRunCmdWithClient(cmd string, sshConn *ssh.Client, user, ipAddress string) error {
 	c.SendLog(fmt.Sprintf("Running `%s` on %s", cmd, ipAddress))
 	sudoPrompt := "<SUDO_PROMPT>"
@@ -257,6 +265,7 @@ func (c *BaseCluster) instanceRunCmdWithClient(cmd string, sshConn *ssh.Client, 
 
 	go func() {
 		scanner := bufio.NewScanner(stdout)
+		var prevLine string
 		for scanner.Scan() {
 			select {
 			case _, _ = <-doneChan:
@@ -264,7 +273,26 @@ func (c *BaseCluster) instanceRunCmdWithClient(cmd string, sshConn *ssh.Client, 
 			default:
 			}
 
-			c.SendLog(scanner.Text())
+			line := scanner.Text()
+			c.SendLog(line)
+
+			// Handle prompt to remove Flynn when installing using --clean
+			flynnRemovePromptMsgs := []string{
+				"About to stop Flynn and remove all existing data",
+				"Are you sure this is what you want?",
+			}
+			if strings.Contains(prevLine, flynnRemovePromptMsgs[0]) && strings.Contains(line, flynnRemovePromptMsgs[1]) {
+				answer := "no"
+				if c.YesNoPrompt("If Flynn is already installed, it will be stopped and removed along with all data before installing the latest version. Would you like to proceed?") {
+					answer = "yes"
+				} else {
+					c.Abort()
+				}
+				if _, err := fmt.Fprintf(stdin, "%s\n", answer); err != nil {
+					c.SendLog(err.Error())
+				}
+			}
+			prevLine = line
 		}
 	}()
 	go func() {

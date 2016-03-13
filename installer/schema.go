@@ -119,7 +119,7 @@ type SSHCluster struct {
 type BaseCluster struct {
 	ID                  string            `json:"id"`
 	CredentialID        string            `json:"credential_id"`
-	Type                string            `json:"type"`                    // enum(aws, digital_ocean, azure)
+	Type                string            `json:"type"`                    // enum(aws, digital_ocean, azure, ssh)
 	State               string            `json:"state" ql:"index xState"` // enum(starting, error, running, deleting)
 	Name                string            `json:"name" ql:"-"`
 	NumInstances        int64             `json:"num_instances"`
@@ -138,6 +138,7 @@ type BaseCluster struct {
 	credential        *Credential
 	installer         *Installer
 	pendingPrompt     *Prompt
+	aborted           bool
 	done              bool
 	passwordPromptMtx sync.Mutex
 	passwordCache     map[string]string
