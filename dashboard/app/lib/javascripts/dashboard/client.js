@@ -535,6 +535,16 @@ var Client = createClass({
 					object_id: res.id,
 					data: res
 				});
+			}).catch(function () {
+				Dispatcher.dispatch({
+					name: 'APP_FORMATION_NOT_FOUND',
+					app: event.appID,
+					data: {
+						app: event.appID,
+						release: event.releaseID,
+						processes: {}
+					}
+				});
 			});
 			break;
 

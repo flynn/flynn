@@ -76,6 +76,7 @@ var App = Store.createClass({
 			break;
 
 		case 'APP_FORMATION':
+		case 'APP_FORMATION_NOT_FOUND':
 			if (event.app === this.props.appId && event.data.release === this.state.release.id) {
 				this.setState({
 					formation: extend({}, event.data, {
