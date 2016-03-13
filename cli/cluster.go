@@ -333,6 +333,7 @@ func runClusterBackup(args *docopt.Args) error {
 	}
 
 	var bar *pb.ProgressBar
+	var progress backup.ProgressBar
 	if term.IsTerminal(os.Stderr.Fd()) {
 		bar = pb.New(0)
 		bar.SetUnits(pb.U_BYTES)
@@ -340,6 +341,7 @@ func runClusterBackup(args *docopt.Args) error {
 		bar.ShowSpeed = true
 		bar.Output = os.Stderr
 		bar.Start()
+		progress = bar
 	}
 
 	var dest io.Writer = os.Stdout
@@ -354,10 +356,7 @@ func runClusterBackup(args *docopt.Args) error {
 
 	fmt.Fprintln(os.Stderr, "Creating cluster backup...")
 
-	if bar != nil {
-		dest = io.MultiWriter(dest, bar)
-	}
-	if err := backup.Run(client, dest); err != nil {
+	if err := backup.Run(client, dest, progress); err != nil {
 		return err
 	}
 	if bar != nil {

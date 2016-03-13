@@ -19,7 +19,7 @@ func (c *controllerAPI) GetBackup(ctx context.Context, w http.ResponseWriter, re
 		respondWithError(w, err)
 		return
 	}
-	if err := backup.Run(client, w); err != nil {
+	if err := backup.Run(client, w, nil); err != nil {
 		respondWithError(w, err)
 		return
 	}

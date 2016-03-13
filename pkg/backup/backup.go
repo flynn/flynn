@@ -9,8 +9,8 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-func Run(client *controller.Client, out io.Writer) error {
-	tw := NewTarWriter("flynn-backup-"+time.Now().UTC().Format("2006-01-02_150405"), out)
+func Run(client *controller.Client, out io.Writer, progress ProgressBar) error {
+	tw := NewTarWriter("flynn-backup-"+time.Now().UTC().Format("2006-01-02_150405"), out, progress)
 	defer tw.Close()
 
 	// get app and release details for key apps

@@ -71,7 +71,19 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 		return fmt.Errorf("error getting app: %s", err)
 	}
 
-	tw := backup.NewTarWriter(app.Name, dest)
+	var bar backup.ProgressBar
+	if !args.Bool["--quiet"] && term.IsTerminal(os.Stderr.Fd()) {
+		b := pb.New(0)
+		b.SetUnits(pb.U_BYTES)
+		b.ShowBar = false
+		b.ShowSpeed = true
+		b.Output = os.Stderr
+		b.Start()
+		defer b.Finish()
+		bar = b
+	}
+
+	tw := backup.NewTarWriter(app.Name, dest, bar)
 	defer tw.Close()
 
 	if err := tw.WriteJSON("app.json", app); err != nil {
@@ -114,17 +126,6 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 		if err := tw.WriteJSON("formation.json", formation); err != nil {
 			return fmt.Errorf("error exporting formation: %s", err)
 		}
-	}
-
-	var bar *pb.ProgressBar
-	if !args.Bool["--quiet"] && term.IsTerminal(os.Stderr.Fd()) {
-		bar = pb.New(0)
-		bar.SetUnits(pb.U_BYTES)
-		bar.ShowBar = false
-		bar.ShowSpeed = true
-		bar.Output = os.Stderr
-		bar.Start()
-		defer bar.Finish()
 	}
 
 	if slug, ok := release.Env["SLUG_URL"]; ok {
