@@ -18,8 +18,9 @@ func (s *S) TestFormationStreaming(c *C) {
 
 	updates := make(chan *ct.ExpandedFormation)
 	streamCtrl, connectErr := s.c.StreamFormations(&before, updates)
-
 	c.Assert(connectErr, IsNil)
+	defer streamCtrl.Close()
+
 	var existingFound bool
 	for f := range updates {
 		if f.App == nil {
