@@ -18,8 +18,9 @@ func (s *S) TestFormationStreaming(c *C) {
 
 	updates := make(chan *ct.ExpandedFormation)
 	streamCtrl, connectErr := s.c.StreamFormations(&before, updates)
-
 	c.Assert(connectErr, IsNil)
+	defer streamCtrl.Close()
+
 	var existingFound bool
 	for f := range updates {
 		if f.App == nil {
@@ -150,5 +151,9 @@ func (s *S) TestFormationStreamingInterrupted(c *C) {
 	formationRepo.unsubscribeAll()
 
 	// wait until `sendUpdateSince` finishes at which point it will not longer send to the (now closed) channel.
-	<-updated
+	select {
+	case <-updated:
+	case <-time.After(5 * time.Second):
+		c.Fatal("timed out waiting for sendUpdatedSince to finish")
+	}
 }
