@@ -15,7 +15,7 @@ import (
 
 func init() {
 	Register("log", runLog, `
-usage: flynn-host log [--init] [-f|--follow] [--lines=<number>] ID
+usage: flynn-host log [--init] [-f|--follow] [--lines=<number>] [--split-stderr] ID
 
 Get the logs of a job`)
 }
@@ -35,6 +35,11 @@ func runLog(args *docopt.Args, client *cluster.Client) error {
 		}
 	}
 
+	stderr := os.Stdout
+	if args.Bool["--split-stderr"] {
+		stderr = os.Stderr
+	}
+
 	if lines > 0 {
 		stdoutR, stdoutW := io.Pipe()
 		stderrR, stderrW := io.Pipe()
@@ -44,7 +49,7 @@ func runLog(args *docopt.Args, client *cluster.Client) error {
 			stdoutW.Close()
 			stderrW.Close()
 		}()
-		tailLogs(stdoutR, stderrR, lines, os.Stdout, os.Stderr)
+		tailLogs(stdoutR, stderrR, lines, os.Stdout, stderr)
 		return nil
 	}
 	return getLog(
@@ -54,7 +59,7 @@ func runLog(args *docopt.Args, client *cluster.Client) error {
 		args.Bool["-f"] || args.Bool["--follow"],
 		args.Bool["--init"],
 		os.Stdout,
-		os.Stderr,
+		stderr,
 	)
 }
 
