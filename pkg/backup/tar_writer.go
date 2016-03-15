@@ -16,17 +16,24 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 )
 
-type TarWriter struct {
-	*tar.Writer
-	uid  int
-	name string
+type ProgressBar interface {
+	Add(int) int
+	io.Writer
 }
 
-func NewTarWriter(name string, w io.Writer) *TarWriter {
+type TarWriter struct {
+	*tar.Writer
+	uid      int
+	name     string
+	progress ProgressBar
+}
+
+func NewTarWriter(name string, w io.Writer, progress ProgressBar) *TarWriter {
 	return &TarWriter{
-		Writer: tar.NewWriter(w),
-		uid:    syscall.Getuid(),
-		name:   name,
+		Writer:   tar.NewWriter(w),
+		uid:      syscall.Getuid(),
+		name:     name,
+		progress: progress,
 	}
 }
 
@@ -54,6 +61,9 @@ func (t *TarWriter) WriteJSON(name string, v interface{}) error {
 		return err
 	}
 	_, err = t.Write([]byte("\n"))
+	if t.progress != nil {
+		t.progress.Add(len(data) + 1)
+	}
 	return err
 }
 
@@ -65,7 +75,11 @@ func (t *TarWriter) WriteCommandOutput(client *controller.Client, name string, a
 	defer f.Close()
 	defer os.Remove(f.Name())
 
-	if err := t.runJob(client, app, newJob, f); err != nil {
+	var dest io.Writer = f
+	if t.progress != nil {
+		dest = io.MultiWriter(f, t.progress)
+	}
+	if err := t.runJob(client, app, newJob, dest); err != nil {
 		return fmt.Errorf("error running export: %s", err)
 	}
 
