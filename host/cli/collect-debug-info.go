@@ -15,8 +15,9 @@ import (
 )
 
 var flynnHostLogs = map[string]string{
-	"upstart-flynn-host.log": "/var/log/upstart/flynn-host.log",
-	"tmp-flynn-host.log":     "/tmp/flynn-host.log",
+	"upstart-flynn-host.log":   "/var/log/upstart/flynn-host.log",
+	"flynn-host-bootstrap.log": "/var/log/flynn/bootstrap.log",
+	"tmp-flynn-host.log":       "/tmp/flynn-host.log",
 }
 
 var debugCmds = [][]string{
