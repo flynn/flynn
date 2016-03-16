@@ -28,7 +28,7 @@ usage: flynn-host bootstrap [options] [<manifest>]
 
 Options:
   -n, --min-hosts=MIN  minimum number of hosts required to be online
-  -t, --timeout=SECS   seconds to wait for hosts to come online [default: 30]
+  -t, --timeout=SECS   seconds to wait for hosts to come online [default: 120]
   --json               format log output as json
   --from-backup=FILE   bootstrap from backup file
   --discovery=TOKEN    use discovery token to connect to cluster
