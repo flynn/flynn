@@ -124,11 +124,18 @@ func run() error {
 		log.Info("starting deploy of system app")
 
 		app, err := client.GetApp(appInfo.Name)
-		if err != nil {
+		if err == client.ErrNotFound && appInfo.Optional {
+			log.Info(
+				"skipped deploy of system app",
+				"reason", "optional app not present",
+				"app", appInfo.Name,
+			)
+			continue
+		} else if err != nil {
 			log.Error("error getting app", "err", err)
 			return err
 		}
-		if err := deployApp(client, app, uris[appInfo.Name], log); err != nil {
+		if err := deployApp(client, app, uris[appInfo.Name], appInfo.UpdateRelease, log); err != nil {
 			if e, ok := err.(errDeploySkipped); ok {
 				log.Info(
 					"skipped deploy of system app",
@@ -154,7 +161,7 @@ func run() error {
 		}
 		log := log.New("name", app.Name)
 		log.Info("starting deploy of app to update slugrunner")
-		if err := deployApp(client, app, slugrunnerURI, log); err != nil {
+		if err := deployApp(client, app, slugrunnerURI, nil, log); err != nil {
 			if e, ok := err.(errDeploySkipped); ok {
 				log.Info("skipped deploy of app", "reason", e.reason)
 				continue
@@ -174,7 +181,7 @@ func (e errDeploySkipped) Error() string {
 	return e.reason
 }
 
-func deployApp(client *controller.Client, app *ct.App, uri string, log log15.Logger) error {
+func deployApp(client *controller.Client, app *ct.App, uri string, updateFn updater.UpdateReleaseFn, log log15.Logger) error {
 	release, err := client.GetAppRelease(app.ID)
 	if err != nil {
 		log.Error("error getting release", "err", err)
@@ -209,6 +216,9 @@ func deployApp(client *controller.Client, app *ct.App, uri string, log log15.Log
 	}
 	release.ID = ""
 	release.ArtifactID = artifact.ID
+	if updateFn != nil {
+		updateFn(release)
+	}
 	if err := client.CreateRelease(release); err != nil {
 		log.Error("error creating new release", "err", err)
 		return err
