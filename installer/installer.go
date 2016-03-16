@@ -25,7 +25,7 @@ type Installer struct {
 	logger        log.Logger
 
 	dbMtx        sync.RWMutex
-	eventsMtx    sync.Mutex
+	eventsMtx    sync.RWMutex
 	subscribeMtx sync.Mutex
 	clustersMtx  sync.RWMutex
 }
@@ -252,6 +252,13 @@ func (i *Installer) LaunchCluster(c Cluster) error {
 		Cluster:   base,
 		ClusterID: base.ID,
 	})
+	if base.IsRestoringBackup() {
+		base.SendProgress(&ProgressEvent{
+			ID:          "upload-backup",
+			Description: "Upload pending cluster start...",
+			Percent:     0,
+		})
+	}
 	c.Run()
 	return nil
 }

@@ -103,6 +103,7 @@ func (c *SSHCluster) Run() {
 			c.saveInstanceIPs,
 			c.base.allocateDomain,
 			c.configureDNS,
+			c.uploadBackup,
 			c.installFlynn,
 			c.bootstrap,
 		}
@@ -522,6 +523,11 @@ func (c *SSHCluster) installFlynn() error {
 		Targets: c.Targets,
 	}
 	return bareCluster.InstallFlynn()
+}
+
+func (c *SSHCluster) uploadBackup() error {
+	// upload backup to bootstrap instance
+	return c.base.uploadBackupToTargetWithRetry(c.Targets[0])
 }
 
 func (c *SSHCluster) bootstrap() error {

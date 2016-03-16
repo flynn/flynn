@@ -1,49 +1,30 @@
+import AdvancedOptions from './advanced-options';
+
 var AWSAdvancedOptions = React.createClass({
 	render: function () {
+		var state = this.props.state;
 		return (
-			<div>
-				<div>
-					<a href="#" onClick={this.__toggleInputs}>Advanced options</a>
-				</div>
-				{this.state.showInputs ? (
-					<div style={{
-						marginTop: 20
-					}}>
-						<label>
-							<div>CIDR block to assign to the VPC: </div>
-							<input
-								type="text"
-								placeholder="10.0.0.0/16"
-								value={this.props.vpcCidr}
-								onChange={this.__handleVpcCidrChange} />
-						</label>
-						<br />
-						<br />
-						<label>
-							<div>CIDR block to assign to the subnet: </div>
-							<input
-								type="text"
-								placeholder="10.0.0.0/21"
-								value={this.props.subnetCidr}
-								onChange={this.__handleSubnetCidrChange} />
-						</label>
-					</div>
-				) : null}
-			</div>
+			<AdvancedOptions state={state}>
+				<label>
+					<div>CIDR block to assign to the VPC: </div>
+					<input
+						type="text"
+						placeholder="10.0.0.0/16"
+						value={state.vpcCidr}
+						onChange={this.__handleVpcCidrChange} />
+				</label>
+				<br />
+				<br />
+				<label>
+					<div>CIDR block to assign to the subnet: </div>
+					<input
+						type="text"
+						placeholder="10.0.0.0/21"
+						value={state.subnetCidr}
+						onChange={this.__handleSubnetCidrChange} />
+				</label>
+			</AdvancedOptions>
 		);
-	},
-
-	getInitialState: function () {
-		return {
-			showInputs: false
-		};
-	},
-
-	__toggleInputs: function (e) {
-		e.preventDefault();
-		this.setState({
-			showInputs: !this.state.showInputs
-		});
 	},
 
 	__handleVpcCidrChange: function (e) {

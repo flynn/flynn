@@ -1,3 +1,4 @@
+import { extend } from 'marbles/utils';
 import Colors from './css/colors';
 
 var DragFileInput = React.createClass({
@@ -80,21 +81,20 @@ var DragFileInput = React.createClass({
 
 	getStyles: function (state) {
 		var color = Colors.grayColor;
-		if (state.errorMsg !== null) {
+		if (state.errorMsg !== null || this.props.errorMsg) {
 			color = Colors.redColor;
 		} else if (state.active) {
 			color = Colors.blueColor;
 		}
-		return {
+		return extend({
 			border: '4px dashed '+ color,
 			padding: '1em',
-			marginBottom: '1em',
 
 			color: Colors.grayColor,
 			fontSize: '24pt',
 			lineHeight: '24pt',
 			textAlign: 'center'
-		};
+		}, this.props.style || {});
 	},
 
 	render: function () {
@@ -104,6 +104,9 @@ var DragFileInput = React.createClass({
 			msg = this.state.errorMsg;
 		} else if (this.state.file !== null) {
 			msg = this.state.file.name;
+		}
+		if (this.props.errorMsg) {
+			msg = this.props.errorMsg;
 		}
 		return (
 			<div>

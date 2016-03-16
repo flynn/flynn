@@ -1,6 +1,7 @@
 import { extend } from 'marbles/utils';
 import Dispatcher from '../dispatcher';
 import IntegerPicker from './integer-picker';
+import AdvancedOptions from './advanced-options';
 import { green as GreenBtnCSS, disabled as DisabledBtnCSS } from './css/button';
 import Sheet from './css/sheet';
 import Colors from './css/colors';
@@ -108,6 +109,8 @@ var InstallConfig = React.createClass({
 						</div>
 					);
 				}.bind(this))}
+
+				<AdvancedOptions state={clusterState} />
 
 				<button type="submit" disabled={launchBtnDisabled}>Launch</button>
 			</form>

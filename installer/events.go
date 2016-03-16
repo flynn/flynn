@@ -34,10 +34,13 @@ type Subscription struct {
 	DoneChan    chan struct{}
 
 	isLocked      bool
+	isLockedMtx   sync.Mutex
 	sendEventsMtx sync.Mutex
 }
 
 func (sub *Subscription) SendEvents(i *Installer) {
+	sub.isLockedMtx.Lock()
+	defer sub.isLockedMtx.Unlock()
 	if sub.isLocked {
 		return
 	}
@@ -83,7 +86,7 @@ func (i *Installer) Unsubscribe(sub *Subscription) {
 
 func (i *Installer) processEvent(event *Event) bool {
 	var err error
-	if event.Type == "log" {
+	if event.Type == "log" || event.Type == "progress" {
 		if c, err := i.FindBaseCluster(event.ClusterID); err != nil || (err == nil && c.State == "running") {
 			return false
 		}
@@ -124,6 +127,8 @@ func (i *Installer) processEvent(event *Event) bool {
 }
 
 func (i *Installer) GetEventsSince(eventID string) []*Event {
+	i.eventsMtx.RLock()
+	defer i.eventsMtx.RUnlock()
 	events := make([]*Event, 0, len(i.events))
 	var ts time.Time
 	if eventID != "" {
@@ -200,9 +205,11 @@ func (i *Installer) SendEvent(event *Event) {
 	i.events = append(i.events, event)
 	i.eventsMtx.Unlock()
 
+	i.subscribeMtx.Lock()
 	for _, sub := range i.subscriptions {
 		go sub.SendEvents(i)
 	}
+	i.subscribeMtx.Unlock()
 }
 
 func (c *BaseCluster) findPrompt(id string) (*Prompt, error) {
@@ -347,6 +354,24 @@ func (c *BaseCluster) SendLog(description string) {
 		Type:        "log",
 		ClusterID:   c.ID,
 		Description: description,
+	})
+}
+
+type ProgressEvent struct {
+	ID          string `json:"id"`
+	Description string `json:"description"`
+	Percent     int    `json:"percent"`
+}
+
+func (c *BaseCluster) SendProgress(event *ProgressEvent) {
+	data, err := json.Marshal(event)
+	if err != nil {
+		panic(err)
+	}
+	c.sendEvent(&Event{
+		Type:        "progress",
+		ClusterID:   c.ID,
+		Description: string(data),
 	})
 }
 

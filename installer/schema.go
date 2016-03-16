@@ -2,6 +2,7 @@ package installer
 
 import (
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -134,7 +135,12 @@ type BaseCluster struct {
 	DiscoveryToken      string            `json:"discovery_token"`
 	InstanceIPs         []string          `json:"instance_ips,omitempty" ql:"-"`
 	DeletedAt           *time.Time        `json:"deleted_at,omitempty"`
+	HasBackup           bool              `json:"has_backup,omitempty" ql:"-"`
 
+	backupPath        string
+	backup            *ClusterBackupReceiver
+	backupMtx         sync.RWMutex
+	oldDomain         string
 	credential        *Credential
 	installer         *Installer
 	pendingPrompt     *Prompt

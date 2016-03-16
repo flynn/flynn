@@ -37,7 +37,8 @@ var BaseCluster = createClass({
 			regions: [],
 			numInstances: 1,
 			credentials: [],
-			__allCredentials: []
+			__allCredentials: [],
+			backupFile: null
 		};
 	},
 
@@ -64,6 +65,8 @@ var BaseCluster = createClass({
 
 			regions: attrs.regions || prevState.regions,
 			numInstances: attrs.num_instances || prevState.numInstances,
+
+			backupFile: attrs.backupFile || prevState.backupFile,
 
 			selectedRegionSlug: attrs.selectedRegionSlug || prevState.selectedRegionSlug,
 			selectedRegion: null,
@@ -176,6 +179,10 @@ var BaseCluster = createClass({
 		return data;
 	},
 
+	getBackupFile: function () {
+		return this.state.backupFile;
+	},
+
 	handleEvent: function (event) {
 		if (event.name === 'LAUNCH_CLUSTER' && this.attrs.ID === 'new') {
 			this.setState(this.__computeState({
@@ -193,7 +200,7 @@ var BaseCluster = createClass({
 		case 'LAUNCH_CLUSTER_FAILURE':
 			this.setState(this.__computeState({
 				state: 'error',
-				errorMessage: event.res.message || ('Something went wrong ('+ event.xhr.status +')')
+				errorMessage: (event.res || {}).message || ('Something went wrong ('+ ((event.xhr || {}).status || '0') +')')
 			}));
 			break;
 
@@ -257,6 +264,12 @@ var BaseCluster = createClass({
 		case 'SELECT_SIZE':
 			this.setState(this.__computeState({
 				selectedSizeSlug: event.slug
+			}));
+			break;
+
+		case 'SELECT_BACKUP':
+			this.setState(this.__computeState({
+				backupFile: event.file
 			}));
 			break;
 

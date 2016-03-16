@@ -158,6 +158,7 @@ func (c *AWSCluster) Run() {
 			c.createStack,
 			c.fetchStackOutputs,
 			c.configureDNS,
+			c.base.uploadBackup,
 			c.bootstrap,
 			c.base.waitForDNS,
 		}

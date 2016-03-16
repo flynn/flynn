@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -59,6 +60,7 @@ func ServeHTTP() error {
 			Endpoints: map[string]string{
 				"clusters":           "/clusters",
 				"cluster":            "/clusters/:id",
+				"upload_backup":      "/clusters/:id/upload-backup",
 				"cert":               "/clusters/:id/ca-cert",
 				"events":             "/events",
 				"prompt":             "/clusters/:id/prompts/:prompt_id",
@@ -83,6 +85,7 @@ func ServeHTTP() error {
 	httpRouter.GET("/credentials", api.ServeTemplate)
 	httpRouter.GET("/credentials/:id", api.ServeTemplate)
 	httpRouter.GET("/clusters/:id", api.ServeTemplate)
+	httpRouter.POST("/clusters/:id/upload-backup", api.ReceiveBackup)
 	httpRouter.GET("/clusters/:id/ca-cert", api.GetCert)
 	httpRouter.GET("/clusters/:id/delete", api.ServeTemplate)
 	httpRouter.GET("/oauth/azure", api.ServeTemplate)
@@ -216,6 +219,25 @@ func (api *httpAPI) LaunchCluster(w http.ResponseWriter, req *http.Request, para
 		return
 	}
 	httphelper.JSON(w, 200, base)
+}
+
+func (api *httpAPI) ReceiveBackup(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	cluster, err := api.Installer.FindBaseCluster(params.ByName("id"))
+	if err != nil {
+		httphelper.ObjectNotFoundError(w, err.Error())
+		return
+	}
+	defer req.Body.Close()
+	size, err := strconv.Atoi(req.Header.Get("Content-Length"))
+	if err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	if err := cluster.ReceiveBackup(req.Body, size); err != nil {
+		httphelper.Error(w, err)
+		return
+	}
+	w.WriteHeader(200)
 }
 
 func (api *httpAPI) GetCert(w http.ResponseWriter, req *http.Request, params httprouter.Params) {

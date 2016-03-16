@@ -34,7 +34,9 @@ var FilePrompt = React.createClass({
 	render: function () {
 		return (
 			<form onSubmit={function(e){e.preventDefault();}}>
-				<FileInput onChange={this.__handleFileSelected} />
+				<FileInput onChange={this.__handleFileSelected} style={{
+					marginBottom: '1em'
+				}} />
 			</form>
 		);
 	},
