@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/rand"
 	"fmt"
@@ -8,8 +9,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
+	"syscall"
 	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
@@ -267,4 +271,61 @@ func (s *GitDeploySuite) TestSlugbuilderLimit(t *c.C) {
 	push := r.git("push", "flynn", "master")
 	t.Assert(push, Succeeds)
 	t.Assert(push, OutputContains, "524288000")
+}
+
+func (s *GitDeploySuite) TestCancel(t *c.C) {
+	r := s.newGitRepo(t, "cancel-hang")
+	t.Assert(r.flynn("create", "cancel-hang"), Succeeds)
+	t.Assert(r.flynn("env", "set", "FOO=bar", "BUILDPACK_URL=https://github.com/kr/heroku-buildpack-inline"), Succeeds)
+
+	// start watching for slugbuilder events
+	watcher, err := s.controllerClient(t).WatchJobEvents("cancel-hang", "")
+	t.Assert(err, c.IsNil)
+
+	// start push
+	cmd := exec.Command("git", "push", "flynn", "master")
+	// put the command in its own process group (to emulate the way shells handle Ctrl-C)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Dir = r.dir
+	var stdout io.Reader
+	stdout, _ = cmd.StdoutPipe()
+	cmd.Stderr = cmd.Stdout
+	out := &bytes.Buffer{}
+	stdout = io.TeeReader(stdout, out)
+	err = cmd.Start()
+	t.Assert(err, c.IsNil)
+
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-done:
+		case <-time.After(30 * time.Second):
+			cmd.Process.Signal(syscall.SIGTERM)
+			cmd.Wait()
+			t.Fatal("git push timed out")
+		}
+	}()
+
+	// wait for sentinel
+	sc := bufio.NewScanner(stdout)
+	found := false
+	for sc.Scan() {
+		if strings.Contains(sc.Text(), "hanging...") {
+			found = true
+			break
+		}
+	}
+	t.Log(out.String())
+	t.Assert(found, c.Equals, true)
+
+	// send Ctrl-C to git process group
+	syscall.Kill(-cmd.Process.Pid, syscall.SIGINT)
+	t.Assert(err, c.IsNil)
+	go io.Copy(ioutil.Discard, stdout)
+	cmd.Wait()
+	close(done)
+
+	// check that slugbuilder exits immediately
+	err = watcher.WaitFor(ct.JobEvents{"slugbuilder": {ct.JobStateUp: 1, ct.JobStateDown: 1}}, 10*time.Second, nil)
+	t.Assert(err, c.IsNil)
 }

@@ -192,7 +192,10 @@ func handlePostRPC(env gitEnv, rpc string, path string, w http.ResponseWriter, r
 		fail500(w, "handlePostRPC", err)
 		return
 	}
-	defer cleanUpProcessGroup(cmd) // Ensure brute force subprocess clean-up
+	go func(done <-chan bool) {
+		<-done
+		cleanUpProcessGroup(cmd) // Ensure brute force subprocess clean-up
+	}(w.(http.CloseNotifier).CloseNotify())
 
 	// Write the client request body to Git's standard input
 	if _, err := io.Copy(stdin, body); err != nil {
