@@ -55,6 +55,9 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 		Resurrect: t.Resurrect,
 		Resources: t.Resources,
 	}
+	if f.App.Meta["flynn-system-app"] == "true" {
+		job.Partition = "system"
+	}
 	if len(t.Entrypoint) > 0 {
 		job.Config.Entrypoint = t.Entrypoint
 	}

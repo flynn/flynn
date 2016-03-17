@@ -16,6 +16,7 @@ type Domain struct {
 	Memory UnitInt `xml:"memory"`
 
 	CPUTune  *CPUTune  `xml:"cputune,omitempty"`
+	Resource *Resource `xml:"resource,omitempty"`
 
 	OnPoweroff string `xml:"on_poweroff,omitempty"`
 	OnReboot   string `xml:"on_reboot,omitempty"`
@@ -141,4 +142,8 @@ type MAC struct {
 
 type CPUTune struct {
 	Shares int64 `xml:"shares"`
+}
+
+type Resource struct {
+	Partition string `xml:"partition"`
 }

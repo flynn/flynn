@@ -17,6 +17,7 @@ type Job struct {
 
 	Artifact  Artifact           `json:"artifact,omitempty"`
 	Resources resource.Resources `json:"resources,omitempty"`
+	Partition string             `json:"partition,omitempty"`
 
 	Config ContainerConfig `json:"config,omitempty"`
 
