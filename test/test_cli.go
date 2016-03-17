@@ -901,7 +901,7 @@ func (s *CLISuite) TestRelease(t *c.C) {
 func (s *CLISuite) TestLimits(t *c.C) {
 	app := s.newCliTestApp(t)
 	defer app.cleanup()
-	t.Assert(app.flynn("limit", "set", "resources", "memory=512MB", "max_fd=12k"), Succeeds)
+	t.Assert(app.flynn("limit", "set", "resources", "memory=512MB", "max_fd=12k", "cpu=2000"), Succeeds)
 
 	release, err := s.controller.GetAppRelease(app.name)
 	t.Assert(err, c.IsNil)
@@ -911,11 +911,13 @@ func (s *CLISuite) TestLimits(t *c.C) {
 	}
 	r := proc.Resources
 	t.Assert(*r[resource.TypeMemory].Limit, c.Equals, int64(536870912))
+	t.Assert(*r[resource.TypeCPU].Limit, c.Equals, int64(2000))
 	t.Assert(*r[resource.TypeMaxFD].Limit, c.Equals, int64(12000))
 
 	cmd := app.flynn("limit", "-t", "resources")
 	t.Assert(cmd, Succeeds)
 	t.Assert(cmd, OutputContains, "memory=512MB")
+	t.Assert(cmd, OutputContains, "cpu=2000")
 	t.Assert(cmd, OutputContains, "max_fd=12000")
 }
 
@@ -926,9 +928,10 @@ func (s *CLISuite) TestRunLimits(t *c.C) {
 	t.Assert(cmd, Succeeds)
 	defaults := resource.Defaults()
 	limits := strings.Split(strings.TrimSpace(cmd.Output), "\n")
-	t.Assert(limits, c.HasLen, 2)
+	t.Assert(limits, c.HasLen, 3)
 	t.Assert(limits[0], c.Equals, strconv.FormatInt(*defaults[resource.TypeMemory].Limit, 10))
-	t.Assert(limits[1], c.Equals, strconv.FormatInt(*defaults[resource.TypeMaxFD].Limit, 10))
+	t.Assert(limits[1], c.Equals, strconv.FormatInt(1024, 10))
+	t.Assert(limits[2], c.Equals, strconv.FormatInt(*defaults[resource.TypeMaxFD].Limit, 10))
 }
 
 func (s *CLISuite) TestExportImport(t *c.C) {

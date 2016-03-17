@@ -584,6 +584,9 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 	if spec, ok := job.Resources[resource.TypeMemory]; ok && spec.Limit != nil {
 		domain.Memory = lt.UnitInt{Value: *spec.Limit, Unit: "bytes"}
 	}
+	if spec, ok := job.Resources[resource.TypeCPU]; ok && spec.Limit != nil {
+		domain.CPUTune = &lt.CPUTune{Shares: milliCPUToShares(*spec.Limit)}
+	}
 
 	if !job.Config.HostNetwork {
 		domain.Devices.Interfaces = []lt.Interface{{
@@ -1285,4 +1288,26 @@ func bindMount(src, dest string, writeable, private bool) error {
 		}
 	}
 	return nil
+}
+
+// Taken from Kubernetes:
+// https://github.com/kubernetes/kubernetes/blob/d66ae29587e746c40390d61a1253a1bfa7aebd8a/pkg/kubelet/dockertools/docker.go#L323-L336
+func milliCPUToShares(milliCPU int64) int64 {
+	// Taken from lmctfy https://github.com/google/lmctfy/blob/master/lmctfy/controllers/cpu_controller.cc
+	const (
+		minShares     = 2
+		sharesPerCPU  = 1024
+		milliCPUToCPU = 1000
+	)
+
+	if milliCPU == 0 {
+		// zero shares is invalid, 2 is the minimum
+		return minShares
+	}
+	// Conceptually (milliCPU / milliCPUToCPU) * sharesPerCPU, but factored to improve rounding.
+	shares := (milliCPU * sharesPerCPU) / milliCPUToCPU
+	if shares < minShares {
+		return minShares
+	}
+	return shares
 }
