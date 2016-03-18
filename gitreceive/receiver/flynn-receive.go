@@ -86,17 +86,39 @@ Options:
 
 	fmt.Printf("-----> Building %s...\n", app.Name)
 
-	var output bytes.Buffer
+	jobEnv := make(map[string]string)
+	jobEnv["BUILD_CACHE_URL"] = fmt.Sprintf("%s/%s-cache.tgz", blobstoreURL, app.ID)
+	if buildpackURL, ok := env["BUILDPACK_URL"]; ok {
+		jobEnv["BUILDPACK_URL"] = buildpackURL
+	} else if buildpackURL, ok := prevRelease.Env["BUILDPACK_URL"]; ok {
+		jobEnv["BUILDPACK_URL"] = buildpackURL
+	}
+	for _, k := range []string{"SSH_CLIENT_KEY", "SSH_CLIENT_HOSTS"} {
+		if v := os.Getenv(k); v != "" {
+			jobEnv[k] = v
+		}
+	}
 	slugURL := fmt.Sprintf("%s/%s.tgz", blobstoreURL, random.UUID())
-	cmd := exec.Command(exec.DockerImage(os.Getenv("SLUGBUILDER_IMAGE_URI")), slugURL)
+
+	cmd := exec.Job(exec.DockerImage(os.Getenv("SLUGBUILDER_IMAGE_URI")), &host.Job{
+		Config: host.ContainerConfig{
+			Cmd:        []string{slugURL},
+			Env:        jobEnv,
+			Stdin:      true,
+			DisableLog: true,
+		},
+		Partition: "background",
+		Metadata: map[string]string{
+			"flynn-controller.app":      app.ID,
+			"flynn-controller.app_name": app.Name,
+			"flynn-controller.release":  prevRelease.ID,
+			"flynn-controller.type":     "slugbuilder",
+		},
+	})
+	var output bytes.Buffer
 	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
 	cmd.Stderr = os.Stderr
-	cmd.Meta = map[string]string{
-		"flynn-controller.app":      app.ID,
-		"flynn-controller.app_name": app.Name,
-		"flynn-controller.release":  prevRelease.ID,
-		"flynn-controller.type":     "slugbuilder",
-	}
+
 	if len(prevRelease.Env) > 0 {
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
@@ -105,18 +127,6 @@ Options:
 		go appendEnvDir(os.Stdin, stdin, prevRelease.Env)
 	} else {
 		cmd.Stdin = os.Stdin
-	}
-	cmd.Env = make(map[string]string)
-	cmd.Env["BUILD_CACHE_URL"] = fmt.Sprintf("%s/%s-cache.tgz", blobstoreURL, app.ID)
-	if buildpackURL, ok := env["BUILDPACK_URL"]; ok {
-		cmd.Env["BUILDPACK_URL"] = buildpackURL
-	} else if buildpackURL, ok := prevRelease.Env["BUILDPACK_URL"]; ok {
-		cmd.Env["BUILDPACK_URL"] = buildpackURL
-	}
-	for _, k := range []string{"SSH_CLIENT_KEY", "SSH_CLIENT_HOSTS"} {
-		if v := os.Getenv(k); v != "" {
-			cmd.Env[k] = v
-		}
 	}
 
 	if err := cmd.Run(); err != nil {

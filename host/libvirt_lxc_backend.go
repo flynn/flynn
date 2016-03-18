@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -41,11 +42,12 @@ import (
 )
 
 const (
-	imageRoot = "/var/lib/docker"
-	flynnRoot = "/var/lib/flynn"
+	imageRoot        = "/var/lib/docker"
+	flynnRoot        = "/var/lib/flynn"
+	defaultPartition = "user"
 )
 
-func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, bridgeName, initPath, umountPath string, mux *logmux.Mux) (Backend, error) {
+func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, bridgeName, initPath, umountPath string, mux *logmux.Mux, partitionCGroups map[string]int64) (Backend, error) {
 	libvirtc, err := libvirt.NewVirConnection("lxc:///")
 	if err != nil {
 		return nil, err
@@ -54,6 +56,12 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, bridgeName,
 	pinkertonCtx, err := pinkerton.BuildContext("aufs", imageRoot)
 	if err != nil {
 		return nil, err
+	}
+
+	for name, shares := range partitionCGroups {
+		if err := createCGroupPartition(name, shares); err != nil {
+			return nil, err
+		}
 	}
 
 	return &LibvirtLXCBackend{
@@ -72,6 +80,7 @@ func NewLibvirtLXCBackend(state *State, vman *volumemanager.Manager, bridgeName,
 		bridgeName:          bridgeName,
 		discoverdConfigured: make(chan struct{}),
 		networkConfigured:   make(chan struct{}),
+		partitionCGroups:    partitionCGroups,
 	}, nil
 }
 
@@ -102,6 +111,8 @@ type LibvirtLXCBackend struct {
 
 	discoverdConfigured chan struct{}
 	networkConfigured   chan struct{}
+
+	partitionCGroups map[string]int64 // name -> cpu shares
 }
 
 type libvirtContainer struct {
@@ -350,6 +361,13 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 		}
 	}()
 
+	if job.Partition == "" {
+		job.Partition = defaultPartition
+	}
+	if _, ok := l.partitionCGroups[job.Partition]; !ok {
+		return fmt.Errorf("host: invalid job partition %q", job.Partition)
+	}
+
 	if !job.Config.HostNetwork {
 		<-l.networkConfigured
 	}
@@ -578,11 +596,17 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 			}},
 			Consoles: []lt.Console{{Type: "pty"}},
 		},
+		Resource: &lt.Resource{
+			Partition: "/machine/" + job.Partition,
+		},
 		OnPoweroff: "preserve",
 		OnCrash:    "preserve",
 	}
 	if spec, ok := job.Resources[resource.TypeMemory]; ok && spec.Limit != nil {
 		domain.Memory = lt.UnitInt{Value: *spec.Limit, Unit: "bytes"}
+	}
+	if spec, ok := job.Resources[resource.TypeCPU]; ok && spec.Limit != nil {
+		domain.CPUTune = &lt.CPUTune{Shares: milliCPUToShares(*spec.Limit)}
 	}
 
 	if !job.Config.HostNetwork {
@@ -1283,6 +1307,60 @@ func bindMount(src, dest string, writeable, private bool) error {
 		if err := syscall.Mount("", dest, "none", uintptr(syscall.MS_PRIVATE), ""); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// Taken from Kubernetes:
+// https://github.com/kubernetes/kubernetes/blob/d66ae29587e746c40390d61a1253a1bfa7aebd8a/pkg/kubelet/dockertools/docker.go#L323-L336
+func milliCPUToShares(milliCPU int64) int64 {
+	// Taken from lmctfy https://github.com/google/lmctfy/blob/master/lmctfy/controllers/cpu_controller.cc
+	const (
+		minShares     = 2
+		sharesPerCPU  = 1024
+		milliCPUToCPU = 1000
+	)
+
+	if milliCPU == 0 {
+		// zero shares is invalid, 2 is the minimum
+		return minShares
+	}
+	// Conceptually (milliCPU / milliCPUToCPU) * sharesPerCPU, but factored to improve rounding.
+	shares := (milliCPU * sharesPerCPU) / milliCPUToCPU
+	if shares < minShares {
+		return minShares
+	}
+	return shares
+}
+
+func createCGroupPartition(name string, cpuShares int64) error {
+	name = name + ".partition"
+	for _, group := range []string{"blkio", "cpu", "cpuacct", "cpuset", "devices", "freezer", "memory", "net_cls", "perf_event"} {
+		if err := os.MkdirAll(filepath.Join("/sys/fs/cgroup/", group, "machine", name), 0755); err != nil {
+			return fmt.Errorf("error creating partition cgroup: %s", err)
+		}
+	}
+	for _, param := range []string{"cpuset.cpus", "cpuset.mems"} {
+		data, err := ioutil.ReadFile(filepath.Join("/sys/fs/cgroup/cpuset/machine", param))
+		if err != nil {
+			return fmt.Errorf("error reading cgroup param: %s", err)
+		}
+		if len(bytes.TrimSpace(data)) == 0 {
+			// Populate our parent cgroup to avoid ENOSPC when creating containers
+			data, err = ioutil.ReadFile(filepath.Join("/sys/fs/cgroup/cpuset", param))
+			if err != nil {
+				return fmt.Errorf("error reading cgroup param: %s", err)
+			}
+			if err := ioutil.WriteFile(filepath.Join("/sys/fs/cgroup/cpuset/machine", param), data, 0644); err != nil {
+				return fmt.Errorf("error writing cgroup param: %s", err)
+			}
+		}
+		if err := ioutil.WriteFile(filepath.Join("/sys/fs/cgroup/cpuset/machine", name, param), data, 0644); err != nil {
+			return fmt.Errorf("error writing cgroup param: %s", err)
+		}
+	}
+	if err := ioutil.WriteFile(filepath.Join("/sys/fs/cgroup/cpu/machine", name, "cpu.shares"), strconv.AppendInt(nil, cpuShares, 10), 0644); err != nil {
+		return fmt.Errorf("error writing cgroup param: %s", err)
 	}
 	return nil
 }

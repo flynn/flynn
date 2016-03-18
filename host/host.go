@@ -57,6 +57,7 @@ options:
   --bridge-name=NAME         network bridge name [default: flynnbr0]
   --no-resurrect             disable cluster resurrection
   --max-job-concurrency=NUM  maximum number of jobs to start concurrently
+  --partitions=PARTITIONS    specify resource partitions for host [default: system=cpu_shares:4096 background=cpu_shares:4096 user=cpu_shares:8192]
 	`)
 }
 
@@ -174,6 +175,24 @@ func runDaemon(args *docopt.Args) {
 		maxJobConcurrency = m
 	}
 
+	var partitionCGroups = make(map[string]int64) // name -> cpu shares
+	for _, p := range strings.Split(args.String["--partitions"], " ") {
+		nameShares := strings.Split(p, "=cpu_shares:")
+		if len(nameShares) != 2 {
+			shutdown.Fatalf("invalid partition specifier: %q", p)
+		}
+		shares, err := strconv.ParseInt(nameShares[1], 10, 64)
+		if err != nil || shares < 2 {
+			shutdown.Fatalf("invalid cpu shares specifier: %q", shares)
+		}
+		partitionCGroups[nameShares[0]] = shares
+	}
+	for _, s := range []string{"user", "system", "background"} {
+		if _, ok := partitionCGroups[s]; !ok {
+			shutdown.Fatal("missing mandatory resource partition: %s", s)
+		}
+	}
+
 	log := logger.New("fn", "runDaemon", "host.id", hostID)
 	log.Info("starting daemon")
 
@@ -255,7 +274,7 @@ func runDaemon(args *docopt.Args) {
 	var err error
 	switch backendName {
 	case "libvirt-lxc":
-		backend, err = NewLibvirtLXCBackend(state, vman, bridgeName, flynnInit, nsumount, mux)
+		backend, err = NewLibvirtLXCBackend(state, vman, bridgeName, flynnInit, nsumount, mux, partitionCGroups)
 	case "mock":
 		backend = MockBackend{}
 	default:

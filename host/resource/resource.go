@@ -28,6 +28,11 @@ const (
 	// TypeMemory specifies the available memory in bytes inside a container.
 	TypeMemory Type = "memory"
 
+	// TypeCPU specifies the amount of milliCPU requested. A milliCPU is
+	// conceptually 1/1000 of a CPU core (eg 500m is half of a CPU core). In
+	// practice, a 1000 milliCPU limit is equivalent to 1024 CPU shares.
+	TypeCPU Type = "cpu"
+
 	// TypeMaxFD specifies a value one greater than the maximum file
 	// descriptor number that can be opened inside a container.
 	TypeMaxFD Type = "max_fd"
@@ -39,6 +44,7 @@ const (
 
 var defaults = Resources{
 	TypeMemory: {Request: typeconv.Int64Ptr(1 * units.GiB), Limit: typeconv.Int64Ptr(1 * units.GiB)},
+	TypeCPU:    {Limit: typeconv.Int64Ptr(1000)}, // results in Linux default of 1024 shares
 	TypeMaxFD:  {Request: typeconv.Int64Ptr(10000), Limit: typeconv.Int64Ptr(10000)},
 }
 

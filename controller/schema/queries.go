@@ -182,7 +182,7 @@ FROM formations WHERE app_id = $1 AND deleted_at IS NULL ORDER BY created_at DES
 	`
 	formationListActiveQuery = `
 SELECT
-  apps.app_id, apps.name,
+  apps.app_id, apps.name, apps.meta,
   releases.release_id, releases.artifact_id, releases.meta, releases.env, releases.processes,
   artifacts.artifact_id, artifacts.type, artifacts.uri,
   formations.processes, formations.tags, formations.updated_at
@@ -207,7 +207,7 @@ SELECT app_id, release_id, processes, tags, created_at, updated_at
 FROM formations WHERE app_id = $1 AND release_id = $2 AND deleted_at IS NULL`
 	formationSelectExpandedQuery = `
 SELECT
-  apps.app_id, apps.name,
+  apps.app_id, apps.name, apps.meta,
   releases.release_id, releases.artifact_id, releases.meta, releases.env, releases.processes,
   artifacts.artifact_id, artifacts.type, artifacts.uri,
   formations.processes, formations.tags, formations.updated_at
