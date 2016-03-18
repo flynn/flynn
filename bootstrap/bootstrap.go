@@ -24,12 +24,13 @@ import (
 )
 
 type State struct {
-	StepData   map[string]interface{}
-	Providers  map[string]*ct.Provider
-	Singleton  bool
-	ClusterURL string
-	MinHosts   int
-	Hosts      []*cluster.Host
+	StepData    map[string]interface{}
+	Providers   map[string]*ct.Provider
+	Singleton   bool
+	ClusterURL  string
+	MinHosts    int
+	Hosts       []*cluster.Host
+	HostTimeout time.Duration
 
 	discoverd     *discoverd.Client
 	controller    *controller.Client
@@ -138,11 +139,12 @@ func (m Manifest) Run(ch chan<- *StepInfo, cfg Config) (state *State, err error)
 	}
 
 	state = &State{
-		StepData:   make(map[string]interface{}),
-		Providers:  make(map[string]*ct.Provider),
-		Singleton:  cfg.Singleton,
-		MinHosts:   cfg.MinHosts,
-		ClusterURL: cfg.ClusterURL,
+		StepData:    make(map[string]interface{}),
+		Providers:   make(map[string]*ct.Provider),
+		Singleton:   cfg.Singleton,
+		MinHosts:    cfg.MinHosts,
+		ClusterURL:  cfg.ClusterURL,
+		HostTimeout: time.Duration(cfg.Timeout) * time.Second,
 	}
 
 	var hostURLs []string
@@ -155,7 +157,7 @@ func (m Manifest) Run(ch chan<- *StepInfo, cfg Config) (state *State, err error)
 
 	meta := StepMeta{ID: "online-hosts", Action: "check"}
 	ch <- &StepInfo{StepMeta: meta, State: "start", Timestamp: time.Now().UTC()}
-	if err := checkOnlineHosts(cfg.MinHosts, state, hostURLs, cfg.Timeout); err != nil {
+	if err := checkOnlineHosts(cfg.MinHosts, state, hostURLs, state.HostTimeout); err != nil {
 		stepError(ch, meta, err)
 		return nil, err
 	}
@@ -216,11 +218,11 @@ func Run(manifestData []byte, ch chan<- *StepInfo, cfg Config) error {
 	return err
 }
 
-func checkOnlineHosts(expected int, state *State, urls []string, timeoutSecs int) error {
+func checkOnlineHosts(expected int, state *State, urls []string, timeout time.Duration) error {
 	if len(urls) == 0 {
 		urls = []string{"http://127.0.0.1:1113"}
 	}
-	timeout := time.After(time.Duration(timeoutSecs) * time.Second)
+	t := time.After(timeout)
 	for {
 		if state.ClusterURL != "" {
 			instances, err := discovery.GetCluster(state.ClusterURL)
@@ -257,7 +259,7 @@ func checkOnlineHosts(expected int, state *State, urls []string, timeoutSecs int
 		}
 
 		select {
-		case <-timeout:
+		case <-t:
 			msg := fmt.Sprintf("timed out waiting for %d hosts to come online (currently %d online)\n\n", expected, online)
 			msg += "The following hosts were discovered but remained unreachable:\n"
 			for url := range remaining {
