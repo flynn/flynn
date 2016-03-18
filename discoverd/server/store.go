@@ -896,6 +896,7 @@ func (s *Store) applyExpireInstancesCommand(cmd []byte) error {
 func (s *Store) raftApply(typ byte, cmd []byte) (uint64, error) {
 	s.mu.RLock()
 	if s.raft == nil {
+		s.mu.RUnlock()
 		return 0, ErrShutdown
 	}
 	s.mu.RUnlock()
