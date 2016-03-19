@@ -20,7 +20,6 @@ import (
 )
 
 var slugbuilderURI, slugrunnerURI string
-var slugKeys = []string{"SLUGBUILDER_IMAGE_URI", "SLUGRUNNER_IMAGE_URI"}
 
 // use a flag to determine whether to use a TTY log formatter because actually
 // assigning a TTY to the job causes reading images via stdin to fail.
@@ -222,13 +221,15 @@ func deployApp(client *controller.Client, app *ct.App, uri string, log log15.Log
 }
 
 func updateSlugURIs(env map[string]string) bool {
+	uris := map[string]string{
+		"SLUGBUILDER_IMAGE_URI": slugbuilderURI,
+		"SLUGRUNNER_IMAGE_URI":  slugrunnerURI,
+	}
 	updated := false
-	for _, k := range slugKeys {
-		if v, ok := env[k]; ok {
-			if v != slugbuilderURI {
-				env[k] = slugbuilderURI
-				updated = true
-			}
+	for key, uri := range uris {
+		if v, ok := env[key]; ok && v != uri {
+			env[key] = uri
+			updated = true
 		}
 	}
 	return updated
