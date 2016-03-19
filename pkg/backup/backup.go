@@ -39,7 +39,7 @@ func Run(client *controller.Client, out io.Writer, progress ProgressBar) error {
 	}
 
 	// If mariadb is not present skip attempting to store the backup in the archive
-	if mariadb, ok := data["mariadb"]; ok {
+	if mariadb, ok := data["mariadb"]; ok && mariadb.Processes["mariadb"] > 0 {
 		mysqlRelease := mariadb.Release
 		mysqlJob := &ct.NewJob{
 			ReleaseID:  mysqlRelease.ID,
