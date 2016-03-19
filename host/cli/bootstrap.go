@@ -235,6 +235,10 @@ WHERE artifact_id = (SELECT artifact_id FROM releases
 	data.Controller.Artifact.URI = artifactURIs["controller"]
 	if data.MariaDB != nil {
 		data.MariaDB.Artifact.URI = artifactURIs["mariadb"]
+		if data.MariaDB.Processes["mariadb"] == 0 {
+			// skip mariadb if it wasn't scaled up in the backup
+			data.MariaDB = nil
+		}
 	}
 
 	sqlBuf.WriteString(fmt.Sprintf(`
