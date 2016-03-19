@@ -23,6 +23,7 @@ func (db *DB) Listen(channel string, log log15.Logger) (*Listener, error) {
 		conn:    conn,
 	}
 	if err := l.conn.Listen(channel); err != nil {
+		l.Close()
 		return nil, err
 	}
 	go l.listen()
@@ -56,6 +57,7 @@ func (l *Listener) listen() {
 		}
 		if err != nil {
 			l.Err = err
+			l.Close()
 			close(l.Notify)
 			return
 		}
