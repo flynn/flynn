@@ -211,6 +211,12 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 		}
 	}
 
+	assertImage := func(uri, image string) {
+		u, err := url.Parse(uri)
+		t.Assert(err, c.IsNil)
+		t.Assert(u.Query().Get("id"), c.Equals, versions[image])
+	}
+
 	// check system apps were deployed correctly
 	for _, app := range updater.SystemApps {
 		if app.ImageOnly {
@@ -230,17 +236,19 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 		artifact, err := client.GetArtifact(release.ArtifactID)
 		t.Assert(err, c.IsNil)
 		debugf(t, "new %s artifact: %+v", app.Name, artifact)
-		uri, err := url.Parse(artifact.URI)
-		t.Assert(err, c.IsNil)
-		t.Assert(uri.Query().Get("id"), c.Equals, versions[app.Image])
+		assertImage(artifact.URI, app.Image)
 	}
+
+	// check gitreceive has the correct slug env vars
+	gitreceive, err = client.GetAppRelease("gitreceive")
+	t.Assert(err, c.IsNil)
+	assertImage(gitreceive.Env["SLUGBUILDER_IMAGE_URI"], "flynn/slugbuilder")
+	assertImage(gitreceive.Env["SLUGRUNNER_IMAGE_URI"], "flynn/slugrunner")
 
 	// check slug based app was deployed correctly
 	release, err = client.GetAppRelease(slugApp.Name)
 	t.Assert(err, c.IsNil)
 	artifact, err = client.GetArtifact(release.ArtifactID)
 	t.Assert(err, c.IsNil)
-	uri, err := url.Parse(artifact.URI)
-	t.Assert(err, c.IsNil)
-	t.Assert(uri.Query().Get("id"), c.Equals, versions["flynn/slugrunner"])
+	assertImage(artifact.URI, "flynn/slugrunner")
 }
