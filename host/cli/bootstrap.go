@@ -231,9 +231,11 @@ WHERE artifact_id = (SELECT artifact_id FROM releases
 	data.Discoverd.Artifact.URI = artifactURIs["discoverd"]
 	data.Discoverd.Release.Env["DISCOVERD_PEERS"] = "{{ range $ip := .SortedHostIPs }}{{ $ip }}:1111,{{ end }}"
 	data.Postgres.Artifact.URI = artifactURIs["postgres"]
-	data.MariaDB.Artifact.URI = artifactURIs["mariadb"]
 	data.Flannel.Artifact.URI = artifactURIs["flannel"]
 	data.Controller.Artifact.URI = artifactURIs["controller"]
+	if data.MariaDB != nil {
+		data.MariaDB.Artifact.URI = artifactURIs["mariadb"]
+	}
 
 	sqlBuf.WriteString(fmt.Sprintf(`
 UPDATE artifacts SET uri = '%s'
