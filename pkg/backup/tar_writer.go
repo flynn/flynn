@@ -80,7 +80,7 @@ func (t *TarWriter) WriteCommandOutput(client *controller.Client, name string, a
 		dest = io.MultiWriter(f, t.progress)
 	}
 	if err := t.runJob(client, app, newJob, dest); err != nil {
-		return fmt.Errorf("error running export: %s", err)
+		return fmt.Errorf("error running %s export: %s", app, err)
 	}
 
 	length, err := f.Seek(0, os.SEEK_CUR)
@@ -107,6 +107,12 @@ func (t *TarWriter) runJob(client *controller.Client, app string, req *ct.NewJob
 	defer rwc.Close()
 	attachClient := cluster.NewAttachClient(rwc)
 	attachClient.CloseWrite()
-	_, err = attachClient.Receive(out, os.Stderr)
-	return err
+	exit, err := attachClient.Receive(out, os.Stderr)
+	if err != nil {
+		return err
+	}
+	if exit != 0 {
+		return fmt.Errorf("unexpected command exit status %d", exit)
+	}
+	return nil
 }
