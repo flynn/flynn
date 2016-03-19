@@ -121,46 +121,58 @@ func runBootstrapBackup(manifest []byte, backupFile string, ch chan *bootstrap.S
 	defer f.Close()
 	tr := tar.NewReader(f)
 
+	getFile := func(name string) (io.Reader, error) {
+		rewound := false
+		var res io.Reader
+		for {
+			header, err := tr.Next()
+			if err == io.EOF && !rewound {
+				if _, err := f.Seek(0, os.SEEK_SET); err != nil {
+					return nil, fmt.Errorf("error seeking in backup file: %s", err)
+				}
+				rewound = true
+				tr = tar.NewReader(f)
+				continue
+			} else if err != nil {
+				return nil, fmt.Errorf("error finding %s in backup file: %s", name, err)
+			}
+			if path.Base(header.Name) != name {
+				continue
+			}
+			if strings.HasSuffix(name, ".gz") {
+				res, err = gzip.NewReader(tr)
+				if err != nil {
+					return nil, fmt.Errorf("error opening %s from backup file: %s", name, err)
+				}
+			} else {
+				res = tr
+			}
+			break
+		}
+		return res, nil
+	}
+
 	var data struct {
 		Discoverd, Flannel, Postgres, MariaDB, Controller *ct.ExpandedFormation
 	}
-	for {
-		header, err := tr.Next()
-		if err != nil {
-			return fmt.Errorf("error reading backup file: %s", err)
-		}
-		if path.Base(header.Name) != "flynn.json" {
-			continue
-		}
-		if err := json.NewDecoder(tr).Decode(&data); err != nil {
-			return fmt.Errorf("error decoding backup data: %s", err)
-		}
-		break
+
+	jsonData, err := getFile("flynn.json")
+	if err != nil {
+		return err
+	}
+	if jsonData == nil {
+		return fmt.Errorf("did not file flynn.json in backup file")
+	}
+	if err := json.NewDecoder(jsonData).Decode(&data); err != nil {
+		return fmt.Errorf("error decoding backup data: %s", err)
 	}
 
-	var db io.Reader
-	rewound := false
-	for {
-		header, err := tr.Next()
-		if err == io.EOF && !rewound {
-			if _, err := f.Seek(0, os.SEEK_SET); err != nil {
-				return fmt.Errorf("error seeking in backup file: %s", err)
-			}
-			rewound = true
-		} else if err != nil {
-			return fmt.Errorf("error finding postgres db in backup file: %s", err)
-		}
-		if path.Base(header.Name) != "postgres.sql.gz" {
-			continue
-		}
-		db, err = gzip.NewReader(tr)
-		if err != nil {
-			return fmt.Errorf("error opening postgres db from backup file: %s", err)
-		}
-		break
+	db, err := getFile("postgres.sql.gz")
+	if err != nil {
+		return err
 	}
 	if db == nil {
-		return fmt.Errorf("did not found postgres.sql.gz in backup file")
+		return fmt.Errorf("did not find postgres.sql.gz in backup file")
 	}
 
 	// add buffer to the end of the SQL import containing commands that rewrite data in the controller db
@@ -219,9 +231,15 @@ WHERE artifact_id = (SELECT artifact_id FROM releases
 	data.Discoverd.Artifact.URI = artifactURIs["discoverd"]
 	data.Discoverd.Release.Env["DISCOVERD_PEERS"] = "{{ range $ip := .SortedHostIPs }}{{ $ip }}:1111,{{ end }}"
 	data.Postgres.Artifact.URI = artifactURIs["postgres"]
-	data.MariaDB.Artifact.URI = artifactURIs["mariadb"]
 	data.Flannel.Artifact.URI = artifactURIs["flannel"]
 	data.Controller.Artifact.URI = artifactURIs["controller"]
+	if data.MariaDB != nil {
+		data.MariaDB.Artifact.URI = artifactURIs["mariadb"]
+		if data.MariaDB.Processes["mariadb"] == 0 {
+			// skip mariadb if it wasn't scaled up in the backup
+			data.MariaDB = nil
+		}
+	}
 
 	sqlBuf.WriteString(fmt.Sprintf(`
 UPDATE artifacts SET uri = '%s'
@@ -315,25 +333,9 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 
 	var mysqldb io.Reader
 	if data.MariaDB != nil {
-		rewound = false
-		for {
-			header, err := tr.Next()
-			if err == io.EOF && !rewound {
-				if _, err := f.Seek(0, os.SEEK_SET); err != nil {
-					return fmt.Errorf("error seeking in backup file: %s", err)
-				}
-				rewound = true
-			} else if err != nil {
-				return fmt.Errorf("error finding mysql db in backup file: %s", err)
-			}
-			if path.Base(header.Name) != "mysql.sql.gz" {
-				continue
-			}
-			mysqldb, err = gzip.NewReader(tr)
-			if err != nil {
-				return fmt.Errorf("error opening mysql db from backup file: %s", err)
-			}
-			break
+		mysqldb, err = getFile("mysql.sql.gz")
+		if err != nil {
+			return err
 		}
 	}
 
