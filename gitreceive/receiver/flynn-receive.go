@@ -19,6 +19,7 @@ import (
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/exec"
 	"github.com/flynn/flynn/pkg/random"
+	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/version"
 )
 
@@ -129,6 +130,7 @@ Options:
 		cmd.Stdin = os.Stdin
 	}
 
+	shutdown.BeforeExit(func() { cmd.Kill() })
 	if err := cmd.Run(); err != nil {
 		log.Fatalln("Build failed:", err)
 	}
