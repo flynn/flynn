@@ -13,6 +13,7 @@ import (
 
 	c "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
 	"github.com/flynn/flynn/controller/client"
+	ct "github.com/flynn/flynn/controller/types"
 	tc "github.com/flynn/flynn/test/cluster"
 	"github.com/flynn/flynn/updater/types"
 )
@@ -69,6 +70,9 @@ src="${GOPATH}/src/github.com/flynn/flynn"
   dir=$(mktemp --directory)
   ln -s "${src}/test/release/repository" "${dir}/tuf"
   ln -s "${src}/script/install-flynn" "${dir}/install-flynn"
+
+  # create a slug for testing slug based app updates
+  tar c -C "${src}/test/apps/http" . | docker run -i -a stdin -a stdout -a stderr flynn/slugbuilder - > "${dir}/slug.tgz"
 
   # start a blobstore to serve the exported components
   sudo start-stop-daemon \
@@ -154,6 +158,41 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 	installScript.Execute(&script, blobstore)
 	t.Assert(buildHost.Run("sudo bash -ex", &tc.Streams{Stdin: &script, Stdout: logWriter, Stderr: logWriter}), c.IsNil)
 
+	// create a controller client for the release cluster
+	pin, err := base64.StdEncoding.DecodeString(releaseCluster.ControllerPin)
+	t.Assert(err, c.IsNil)
+	client, err := controller.NewClientWithConfig(
+		"https://"+buildHost.IP,
+		releaseCluster.ControllerKey,
+		controller.Config{Pin: pin, Domain: releaseCluster.ControllerDomain},
+	)
+	t.Assert(err, c.IsNil)
+
+	// deploy a slug based app
+	slugApp := &ct.App{}
+	t.Assert(client.CreateApp(slugApp), c.IsNil)
+	gitreceive, err := client.GetAppRelease("gitreceive")
+	t.Assert(err, c.IsNil)
+	artifact := &ct.Artifact{Type: "docker", URI: gitreceive.Env["SLUGRUNNER_IMAGE_URI"]}
+	t.Assert(client.CreateArtifact(artifact), c.IsNil)
+	release := &ct.Release{
+		ArtifactID: artifact.ID,
+		Processes:  map[string]ct.ProcessType{"web": {Cmd: []string{"bin/http"}}},
+		Env:        map[string]string{"SLUG_URL": fmt.Sprintf("http://%s:8080/slug.tgz", buildHost.IP)},
+	}
+	t.Assert(client.CreateRelease(release), c.IsNil)
+	t.Assert(client.SetAppRelease(slugApp.ID, release.ID), c.IsNil)
+	watcher, err := client.WatchJobEvents(slugApp.ID, release.ID)
+	t.Assert(err, c.IsNil)
+	defer watcher.Close()
+	t.Assert(client.PutFormation(&ct.Formation{
+		AppID:     slugApp.ID,
+		ReleaseID: release.ID,
+		Processes: map[string]int{"web": 1},
+	}), c.IsNil)
+	err = watcher.WaitFor(ct.JobEvents{"web": {ct.JobStateUp: 1}}, scaleTimeout, nil)
+	t.Assert(err, c.IsNil)
+
 	// run a cluster update from the blobstore
 	updateHost := releaseCluster.Instances[1]
 	script.Reset()
@@ -171,16 +210,6 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 			}
 		}
 	}
-
-	// create a controller client for the new cluster
-	pin, err := base64.StdEncoding.DecodeString(releaseCluster.ControllerPin)
-	t.Assert(err, c.IsNil)
-	client, err := controller.NewClientWithConfig(
-		"https://"+buildHost.IP,
-		releaseCluster.ControllerKey,
-		controller.Config{Pin: pin, Domain: releaseCluster.ControllerDomain},
-	)
-	t.Assert(err, c.IsNil)
 
 	// check system apps were deployed correctly
 	for _, app := range updater.SystemApps {
@@ -205,4 +234,13 @@ func (s *ReleaseSuite) TestReleaseImages(t *c.C) {
 		t.Assert(err, c.IsNil)
 		t.Assert(uri.Query().Get("id"), c.Equals, versions[app.Image])
 	}
+
+	// check slug based app was deployed correctly
+	release, err = client.GetAppRelease(slugApp.Name)
+	t.Assert(err, c.IsNil)
+	artifact, err = client.GetArtifact(release.ArtifactID)
+	t.Assert(err, c.IsNil)
+	uri, err := url.Parse(artifact.URI)
+	t.Assert(err, c.IsNil)
+	t.Assert(uri.Query().Get("id"), c.Equals, versions["flynn/slugrunner"])
 }
