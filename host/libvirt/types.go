@@ -80,8 +80,9 @@ type FSDriver struct {
 }
 
 type FSRef struct {
-	Dir  string `xml:"dir,attr,omitempty"`
-	File string `xml:"file,attr,omitempty"`
+	Dir   string `xml:"dir,attr,omitempty"`
+	File  string `xml:"file,attr,omitempty"`
+	Usage string `xml:"usage,attr,omitempty"`
 }
 
 type HostDev struct {

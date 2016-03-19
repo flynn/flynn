@@ -342,6 +342,30 @@ func (s *HostSuite) TestResourceLimits(t *c.C) {
 	assertResourceLimits(t, out.String())
 }
 
+func (s *HostSuite) TestDevSHM(t *c.C) {
+	cmd := exec.CommandUsingCluster(
+		s.clusterClient(t),
+		exec.DockerImage(imageURIs["test-apps"]),
+		"sh", "-c", "df -h /dev/shm && echo foo > /dev/shm/asdf",
+	)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+
+	runErr := make(chan error)
+	go func() {
+		runErr <- cmd.Run()
+	}()
+	select {
+	case err := <-runErr:
+		t.Assert(err, c.IsNil)
+	case <-time.After(30 * time.Second):
+		t.Fatal("timed out waiting for /dev/shm job")
+	}
+
+	t.Assert(out.String(), c.Equals, "Filesystem                Size      Used Available Use% Mounted on\ntmpfs                    64.0M         0     64.0M   0% /dev/shm\n")
+}
+
 func (s *HostSuite) TestUpdate(t *c.C) {
 	dir := t.MkDir()
 	flynnHost := filepath.Join(dir, "flynn-host")

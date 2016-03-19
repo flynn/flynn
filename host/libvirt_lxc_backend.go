@@ -589,11 +589,18 @@ func (l *LibvirtLXCBackend) Run(job *host.Job, runConfig *RunConfig) (err error)
 			Init: "/.containerinit",
 		},
 		Devices: lt.Devices{
-			Filesystems: []lt.Filesystem{{
-				Type:   "mount",
-				Source: lt.FSRef{Dir: rootPath},
-				Target: lt.FSRef{Dir: "/"},
-			}},
+			Filesystems: []lt.Filesystem{
+				{
+					Type:   "mount",
+					Source: lt.FSRef{Dir: rootPath},
+					Target: lt.FSRef{Dir: "/"},
+				},
+				{
+					Type:   "ram",
+					Source: lt.FSRef{Usage: "65535"}, // 64MiB
+					Target: lt.FSRef{Dir: "/dev/shm"},
+				},
+			},
 			Consoles: []lt.Console{{Type: "pty"}},
 		},
 		Resource: &lt.Resource{
