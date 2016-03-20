@@ -90,6 +90,19 @@ func (b *Build) Finished() bool {
 	return b.State != "pending"
 }
 
+func (b *Build) StateLabelClass() string {
+	switch b.State {
+	case "success":
+		return "label-success"
+	case "pending":
+		return "label-info"
+	case "failure":
+		return "label-danger"
+	default:
+		return ""
+	}
+}
+
 func newBuild(commit, branch, description string, merge bool) *Build {
 	now := time.Now()
 	return &Build{

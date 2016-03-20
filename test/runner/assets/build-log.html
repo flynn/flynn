@@ -11,6 +11,10 @@
       <h1>
         Flynn CI Build {{ .ID }}
 
+        <span class="label {{ .StateLabelClass }}">
+          {{ .State }}
+        </span>
+
         {{ if .Finished }}
         <a href="/builds/{{ .ID }}/download" class="btn btn-primary pull-right">
           <i class="fa fa-download fa-lg"></i>
