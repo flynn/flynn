@@ -201,6 +201,7 @@ func (r *Runner) start() error {
 	router.Handler("GET", "/", http.RedirectHandler("/builds", 302))
 	router.POST("/", r.handleEvent)
 	router.GET("/builds/:build", r.getBuildLog)
+	router.GET("/builds/:build/download", r.downloadBuildLog)
 	router.POST("/builds/:build/restart", r.restartBuild)
 	router.POST("/builds/:build/explain", r.explainBuild)
 	router.GET("/builds", r.getBuilds)
@@ -702,6 +703,49 @@ func servePlainStream(w http.ResponseWriter, ch chan string) {
 		}
 		flush()
 	}
+}
+
+func (r *Runner) downloadBuildLog(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	id := ps.ByName("build")
+	b := &Build{}
+	if err := r.db.View(func(tx *bolt.Tx) error {
+		v := tx.Bucket(dbBucket).Get([]byte(id))
+		if err := json.Unmarshal(v, b); err != nil {
+			return fmt.Errorf("could not decode build %s: %s", v, err)
+		}
+		return nil
+	}); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	res, err := http.Get(b.LogURL)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		http.Error(w, fmt.Sprintf("unexpected status %d getting build log", res.StatusCode), 500)
+		return
+	}
+
+	_, params, err := mime.ParseMediaType(res.Header.Get("Content-Type"))
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	// although the log is multipart, serve it as a single plain text file
+	// to avoid browsers potentially prompting to download each individual
+	// part, but construct valid multipart content, headers included, so
+	// the file can be parsed with tools such as munpack(1).
+	w.Header().Set("Content-Type", textPlain)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"flynn-ci-build-%s\"", path.Base(b.LogURL)))
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=%q\r\n\r\n", params["boundary"])
+	io.Copy(w, res.Body)
 }
 
 func (r *Runner) restartBuild(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {

@@ -1,13 +1,24 @@
 <html>
   <head>
     <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css">
     <link rel="stylesheet" href="/assets/style.css">
     <title>Flynn CI Build | {{ .ID }}</title>
   </head>
 
   <body>
     <div class="container-fluid">
-      <h1>Flynn CI Build {{ .ID }}</h1>
+      <h1>
+        Flynn CI Build {{ .ID }}
+
+        {{ if .Finished }}
+        <a href="/builds/{{ .ID }}/download" class="btn btn-primary pull-right">
+          <i class="fa fa-download fa-lg"></i>
+
+          Download Logs
+        </a>
+        {{ end }}
+      </h1>
 
       <table class="table">
         <tbody>
