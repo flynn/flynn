@@ -35,6 +35,7 @@ import (
 	"github.com/flynn/flynn/pkg/random"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/sse"
+	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/pkg/tlsconfig"
 	"github.com/flynn/flynn/pkg/typeconv"
 	"github.com/flynn/flynn/test/arg"
@@ -541,47 +542,87 @@ func (r *Runner) getBuilds(w http.ResponseWriter, req *http.Request, ps httprout
 	json.NewEncoder(w).Encode(builds)
 }
 
-type logLine struct {
-	Filename string `json:"filename"`
-	Text     string `json:"text"`
-}
+func getBuildLogStream(b *Build, ch chan string) (stream.Stream, error) {
+	stream := stream.New()
 
-func serveBuildLogStream(b *Build, w http.ResponseWriter) error {
+	// if the build hasn't finished, tail the log from disk
+	if !b.Finished() {
+		t, err := tail.TailFile(b.LogFile, tail.Config{Follow: true, MustExist: true})
+		if err != nil {
+			return nil, err
+		}
+		go func() {
+			defer t.Stop()
+			defer close(ch)
+			for {
+				select {
+				case line, ok := <-t.Lines:
+					if !ok {
+						stream.Error = t.Err()
+						return
+					}
+					select {
+					case ch <- line.Text:
+					case <-stream.StopCh:
+						return
+					}
+					if strings.HasPrefix(line.Text, "build finished") {
+						return
+					}
+				case <-stream.StopCh:
+					return
+				}
+			}
+		}()
+		return stream, nil
+	}
+
+	// get the multipart log from S3 and serve just the "build.log" file
 	res, err := http.Get(b.LogURL)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status %d getting build log", res.StatusCode)
+		res.Body.Close()
+		return nil, fmt.Errorf("unexpected status %d getting build log", res.StatusCode)
 	}
 	_, params, err := mime.ParseMediaType(res.Header.Get("Content-Type"))
 	if err != nil {
-		return err
+		res.Body.Close()
+		return nil, err
 	}
-	ch := make(chan *logLine)
-	stream := sse.NewStream(w, ch, nil)
-	stream.Serve()
 	go func() {
+		defer res.Body.Close()
+		defer close(ch)
+
 		mr := multipart.NewReader(res.Body, params["boundary"])
 		for {
+			select {
+			case <-stream.StopCh:
+				return
+			default:
+			}
+
 			p, err := mr.NextPart()
 			if err != nil {
-				stream.CloseWithError(err)
+				stream.Error = err
 				return
+			}
+			if p.FileName() != "build.log" {
+				continue
 			}
 			s := bufio.NewScanner(p)
 			for s.Scan() {
-				ch <- &logLine{p.FileName(), s.Text()}
+				select {
+				case ch <- s.Text():
+				case <-stream.StopCh:
+					return
+				}
 			}
-			if err := s.Err(); err != nil {
-				stream.CloseWithError(err)
-				return
-			}
+			return
 		}
 	}()
-	stream.Wait()
-	return nil
+	return stream, nil
 }
 
 func (r *Runner) getBuildLog(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
@@ -597,21 +638,30 @@ func (r *Runner) getBuildLog(w http.ResponseWriter, req *http.Request, ps httpro
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	if b.Finished() {
-		if b.Version == BuildVersion1 {
-			http.Redirect(w, req, b.LogURL, http.StatusMovedPermanently)
-			return
-		}
-		if strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
-			if err := serveBuildLogStream(b, w); err != nil {
-				http.Error(w, err.Error(), 500)
-			}
-			return
-		}
-		http.ServeFile(w, req, path.Join(args.AssetsDir, "build-log.html"))
+
+	// if it's a V1 build, redirect to the log in S3
+	if b.Version == BuildVersion1 {
+		http.Redirect(w, req, b.LogURL, http.StatusMovedPermanently)
 		return
 	}
-	t, err := tail.TailFile(b.LogFile, tail.Config{Follow: true, MustExist: true})
+
+	// if it's a browser, serve the build-log.html template
+	if strings.Contains(req.Header.Get("Accept"), "text/html") {
+		tpl, err := template.ParseFiles(path.Join(args.AssetsDir, "build-log.html"))
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := tpl.Execute(w, b); err != nil {
+			log.Printf("error executing build-log template: %s", err)
+		}
+		return
+	}
+
+	// serve the build log as either an SSE or plain text stream
+	ch := make(chan string)
+	stream, err := getBuildLogStream(b, ch)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -619,11 +669,24 @@ func (r *Runner) getBuildLog(w http.ResponseWriter, req *http.Request, ps httpro
 	if cn, ok := w.(http.CloseNotifier); ok {
 		go func() {
 			<-cn.CloseNotify()
-			t.Stop()
+			stream.Close()
 		}()
 	} else {
-		defer t.Stop()
+		defer stream.Close()
 	}
+
+	if strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
+		sse.ServeStream(w, ch, nil)
+	} else {
+		servePlainStream(w, ch)
+	}
+
+	if err := stream.Err(); err != nil {
+		log.Println("error serving build log stream:", err)
+	}
+}
+
+func servePlainStream(w http.ResponseWriter, ch chan string) {
 	flush := func() {
 		if fw, ok := w.(http.Flusher); ok {
 			fw.Flush()
@@ -632,15 +695,12 @@ func (r *Runner) getBuildLog(w http.ResponseWriter, req *http.Request, ps httpro
 	w.Header().Set("Content-Type", textPlain)
 	w.WriteHeader(http.StatusOK)
 	flush()
-	for line := range t.Lines {
-		if _, err := io.WriteString(w, line.Text+"\n"); err != nil {
-			log.Printf("serveBuildLog write error: %s\n", err)
+	for line := range ch {
+		if _, err := io.WriteString(w, line+"\n"); err != nil {
+			log.Println("servePlainStream write error:", err)
 			return
 		}
 		flush()
-		if strings.HasPrefix(line.Text, "build finished") {
-			return
-		}
 	}
 }
 
