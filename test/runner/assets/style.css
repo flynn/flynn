@@ -15,3 +15,8 @@ p.more-btn {
   width: 100%;
   padding: 10px 20px;
 }
+
+#logs {
+  color: #D4D5C0;
+  background-color: #1F1F1F;
+}
