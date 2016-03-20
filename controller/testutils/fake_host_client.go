@@ -64,7 +64,12 @@ func (c *FakeHostClient) ListJobs() (map[string]host.ActiveJob, error) {
 func (c *FakeHostClient) AddJob(job *host.Job) error {
 	c.jobsMtx.Lock()
 	defer c.jobsMtx.Unlock()
-	j := host.ActiveJob{Job: job, HostID: c.hostID, StartedAt: time.Now()}
+	j := host.ActiveJob{
+		Job:       job,
+		HostID:    c.hostID,
+		Status:    host.StatusStarting,
+		StartedAt: time.Now(),
+	}
 	c.Jobs[job.ID] = j
 
 	c.eventChannelsMtx.Lock()
