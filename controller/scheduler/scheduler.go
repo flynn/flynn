@@ -654,15 +654,12 @@ func (s *Scheduler) formationDiff(formation *Formation) Processes {
 		return nil
 	}
 	key := formation.key()
-	expected := formation.GetProcesses()
 	actual := s.jobs.GetProcesses(key)
-	if expected.Equals(actual) {
-		return nil
+	diff := formation.Diff(actual)
+	if !diff.IsEmpty() {
+		log := s.logger.New("fn", "formationDiff", "app.id", key.AppID, "release.id", key.ReleaseID)
+		log.Info("expected different from actual", "expected", formation.Processes, "actual", actual, "diff", diff)
 	}
-	formation.Processes = actual
-	diff := formation.Update(expected)
-	log := s.logger.New("fn", "formationDiff", "app.id", key.AppID, "release.id", key.ReleaseID)
-	log.Info("expected different from actual", "expected", expected, "actual", actual, "diff", diff)
 	return diff
 }
 
