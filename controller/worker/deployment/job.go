@@ -366,7 +366,7 @@ func (d *DeployJob) waitForJobEvents(releaseID string, expected ct.JobEvents, lo
 			case JobEventTypeError:
 				return e.Error
 			}
-		case <-time.After(60 * time.Second):
+		case <-time.After(time.Duration(d.DeployTimeout) * time.Second):
 			return fmt.Errorf("timed out waiting for job events: %v", expected)
 		}
 	}
