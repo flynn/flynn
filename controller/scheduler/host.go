@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/pkg/stream"
@@ -21,9 +22,10 @@ type Host struct {
 	stopOnce sync.Once
 	done     chan struct{}
 	shutdown bool
+	logger   log15.Logger
 }
 
-func NewHost(h utils.HostClient) *Host {
+func NewHost(h utils.HostClient, l log15.Logger) *Host {
 	return &Host{
 		ID:      h.ID(),
 		Tags:    h.Tags(),
@@ -31,6 +33,7 @@ func NewHost(h utils.HostClient) *Host {
 		healthy: true,
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
+		logger:  l,
 	}
 }
 
@@ -49,7 +52,7 @@ func (h *Host) TagsEqual(tags map[string]string) bool {
 // StreamEventsTo streams all job events from the host to the given channel in
 // a goroutine, returning the current list of active jobs.
 func (h *Host) StreamEventsTo(ch chan *host.Event) (map[string]host.ActiveJob, error) {
-	log := logger.New("fn", "StreamEventsTo", "host.id", h.ID)
+	log := h.logger.New("fn", "StreamEventsTo", "host.id", h.ID)
 	var events chan *host.Event
 	var stream stream.Stream
 	connect := func() (err error) {

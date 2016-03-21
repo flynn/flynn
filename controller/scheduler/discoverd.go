@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	discoverd "github.com/flynn/flynn/discoverd/client"
 	"github.com/flynn/flynn/pkg/shutdown"
 	"github.com/flynn/flynn/pkg/stream"
@@ -17,16 +18,20 @@ type Discoverd interface {
 	LeaderCh() chan bool
 }
 
-func newDiscoverdWrapper() *discoverdWrapper {
-	return &discoverdWrapper{leader: make(chan bool)}
+func newDiscoverdWrapper(l log15.Logger) *discoverdWrapper {
+	return &discoverdWrapper{
+		leader: make(chan bool),
+		logger: l,
+	}
 }
 
 type discoverdWrapper struct {
 	leader chan bool
+	logger log15.Logger
 }
 
 func (d *discoverdWrapper) Register() (bool, error) {
-	log := logger.New("fn", "discoverd.Register")
+	log := d.logger.New("fn", "discoverd.Register")
 
 	log.Info("registering with service discovery")
 	hb, err := discoverd.AddServiceAndRegister(serviceName, ":"+os.Getenv("PORT"))

@@ -7,12 +7,12 @@ import (
 	"time"
 
 	. "github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/go-check"
+	"github.com/flynn/flynn/Godeps/_workspace/src/gopkg.in/inconshreveable/log15.v2"
 	. "github.com/flynn/flynn/controller/testutils"
 	ct "github.com/flynn/flynn/controller/types"
 	"github.com/flynn/flynn/controller/utils"
 	"github.com/flynn/flynn/pkg/cluster"
 	"github.com/flynn/flynn/pkg/random"
-	"github.com/flynn/flynn/pkg/stream"
 	"github.com/flynn/flynn/pkg/typeconv"
 )
 
@@ -59,7 +59,7 @@ func (d *fakeDiscoverd) demote() {
 	d.leader <- false
 }
 
-func createTestScheduler(cluster utils.ClusterClient, discoverd Discoverd) *Scheduler {
+func createTestScheduler(cluster utils.ClusterClient, discoverd Discoverd, l log15.Logger) *Scheduler {
 	app := &ct.App{ID: testAppID, Name: testAppID}
 	artifact := &ct.Artifact{ID: testArtifactId}
 	processes := map[string]int{testJobType: testJobCount}
@@ -69,7 +69,7 @@ func createTestScheduler(cluster utils.ClusterClient, discoverd Discoverd) *Sche
 	cc.CreateArtifact(artifact)
 	cc.CreateRelease(release)
 	cc.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
-	return NewScheduler(cluster, cc, discoverd)
+	return NewScheduler(cluster, cc, discoverd, l)
 }
 
 func newTestHosts() map[string]*FakeHostClient {
@@ -92,12 +92,16 @@ func newTestScheduler(c *C, cluster utils.ClusterClient, isLeader bool) *TestSch
 		cluster = newTestCluster(nil)
 	}
 	discoverd := newFakeDiscoverd(isLeader)
-	s := createTestScheduler(cluster, discoverd)
 
-	events := make(chan Event, eventBufferSize)
-	stream := s.Subscribe(events)
+	events := make(chan *log15.Record, eventBufferSize)
+	logger := log15.New()
+	logger.SetHandler(log15.MultiHandler(
+		log15.StdoutHandler,
+		log15.ChannelHandler(events),
+	))
 
-	return &TestScheduler{s, c, events, stream, discoverd}
+	s := createTestScheduler(cluster, discoverd, logger)
+	return &TestScheduler{s, c, events, discoverd}
 }
 
 func runTestScheduler(c *C, cluster utils.ClusterClient, isLeader bool) *TestScheduler {
@@ -106,80 +110,78 @@ func runTestScheduler(c *C, cluster utils.ClusterClient, isLeader bool) *TestSch
 	return s
 }
 
+type logEvent struct {
+	log15.Record
+}
+
+func (l *logEvent) Get(key string) interface{} {
+	for i := 0; i < len(l.Record.Ctx); i += 2 {
+		if k, ok := l.Record.Ctx[i].(string); ok && k == key {
+			return l.Record.Ctx[i+1]
+		}
+	}
+	return nil
+}
+
 type TestScheduler struct {
 	*Scheduler
 	c         *C
-	events    chan Event
-	stream    stream.Stream
+	events    chan *log15.Record
 	discoverd *fakeDiscoverd
 }
 
 func (s *TestScheduler) Stop() {
 	s.Scheduler.Stop()
-	s.stream.Close()
 }
 
 func (s *TestScheduler) waitRectify() utils.FormationKey {
-	event, err := s.waitForEvent(EventTypeRectify)
+	event, err := s.waitForEvent("rectified formation")
 	s.c.Assert(err, IsNil)
-	e, ok := event.(*RectifyEvent)
-	if !ok {
-		s.c.Fatalf("expected RectifyEvent, got %T", e)
-	}
-	s.c.Assert(e.FormationKey, NotNil)
-	return e.FormationKey
+	return event.Get("key").(utils.FormationKey)
 }
 
 func (s *TestScheduler) waitFormationChange() {
-	_, err := s.waitForEvent(EventTypeFormationChange)
+	_, err := s.waitForEvent("formation change handled")
 	s.c.Assert(err, IsNil)
 }
 
 func (s *TestScheduler) waitFormationSync() {
-	_, err := s.waitForEvent(EventTypeFormationSync)
+	_, err := s.waitForEvent("formations synced")
 	s.c.Assert(err, IsNil)
 }
 
 func (s *TestScheduler) waitJobStart() *Job {
-	return s.waitJobEvent(EventTypeJobStart)
+	return s.waitJobEvent("start")
 }
 
 func (s *TestScheduler) waitJobStop() *Job {
-	return s.waitJobEvent(EventTypeJobStop)
+	return s.waitJobEvent("stop")
 }
 
-func (s *TestScheduler) waitJobEvent(typ EventType) *Job {
-	event, err := s.waitForEvent(typ)
+func (s *TestScheduler) waitJobEvent(typ string) *Job {
+	event, err := s.waitForEvent(fmt.Sprintf("handled job %s event", typ))
 	s.c.Assert(err, IsNil)
-	e, ok := event.(*JobEvent)
-	if !ok {
-		s.c.Fatalf("expected JobEvent, got %T", e)
-	}
-	s.c.Assert(e.Job, NotNil)
-	return e.Job
+	return event.Get("job").(*Job)
 }
 
-func (s *TestScheduler) waitDurationForEvent(typ EventType, duration time.Duration) (Event, error) {
+func (s *TestScheduler) waitDurationForEvent(msg string, duration time.Duration) (*logEvent, error) {
 	for {
 		select {
 		case event, ok := <-s.events:
 			if !ok {
 				return nil, fmt.Errorf("unexpected close of scheduler event stream")
 			}
-			if event.Type() == typ {
-				if err := event.Err(); err != nil {
-					return event, fmt.Errorf("unexpected event error: %s", err)
-				}
-				return event, nil
+			if event.Msg == msg {
+				return &logEvent{*event}, nil
 			}
 		case <-time.After(duration):
-			return nil, fmt.Errorf("timed out waiting for %s event", typ)
+			return nil, fmt.Errorf("timed out waiting for event: %q", msg)
 		}
 	}
 }
 
-func (s *TestScheduler) waitForEvent(typ EventType) (Event, error) {
-	return s.waitDurationForEvent(typ, 2*time.Second)
+func (s *TestScheduler) waitForEvent(msg string) (*logEvent, error) {
+	return s.waitDurationForEvent(msg, 2*time.Second)
 }
 
 func (TestSuite) TestSingleJobStart(c *C) {
@@ -306,7 +308,7 @@ func (TestSuite) TestRectify(c *C) {
 	s.CreateRelease(release)
 	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
 	s.waitFormationChange()
-	_, err := s.waitDurationForEvent(EventTypeJobStart, 1*time.Second)
+	_, err := s.waitDurationForEvent("handled job start event", 1*time.Second)
 	c.Assert(err, NotNil)
 	c.Assert(job.Formation, NotNil)
 	c.Assert(s.RunningJobs(), HasLen, 2)
@@ -486,10 +488,10 @@ func (TestSuite) TestMultipleSchedulers(c *C) {
 	s2 := runTestScheduler(c, cluster, false)
 	defer s2.Stop()
 
-	_, err := s1.waitDurationForEvent(EventTypeJobStart, 1*time.Second)
-	c.Assert(err, Not(IsNil))
-	_, err = s2.waitDurationForEvent(EventTypeJobStart, 1*time.Second)
-	c.Assert(err, Not(IsNil))
+	_, err := s1.waitDurationForEvent("handled job start event", 1*time.Second)
+	c.Assert(err, NotNil)
+	_, err = s2.waitDurationForEvent("handled job start event", 1*time.Second)
+	c.Assert(err, NotNil)
 
 	// Make S1 the leader, wait for jobs to start
 	s1.discoverd.promote()
@@ -512,10 +514,10 @@ func (TestSuite) TestMultipleSchedulers(c *C) {
 	s2.PutFormation(formation)
 	s1.waitFormationChange()
 	s2.waitFormationChange()
-	_, err = s2.waitDurationForEvent(EventTypeJobStart, 1*time.Second)
-	c.Assert(err, Not(IsNil))
-	_, err = s1.waitDurationForEvent(EventTypeJobStart, 1*time.Second)
-	c.Assert(err, Not(IsNil))
+	_, err = s2.waitDurationForEvent("handled job start event", 1*time.Second)
+	c.Assert(err, NotNil)
+	_, err = s1.waitDurationForEvent("handled job start event", 1*time.Second)
+	c.Assert(err, NotNil)
 
 	s2.discoverd.promote()
 	s2.waitJobStart()
@@ -622,6 +624,7 @@ func (TestSuite) TestJobPlacementTags(c *C) {
 			"host2": {ID: "host2", Tags: map[string]string{"disk": "ssd", "cpu": "slow"}},
 			"host3": {ID: "host3", Tags: map[string]string{"disk": "ssd", "cpu": "fast"}},
 		},
+		logger: log15.New(),
 	}
 
 	// use a formation with tagged process types
