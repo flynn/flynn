@@ -1,33 +1,64 @@
 <html>
   <head>
     <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css">
     <link rel="stylesheet" href="/assets/style.css">
-    <title>Flynn CI Build</title>
+    <title>Flynn CI Build | {{ .ID }}</title>
   </head>
 
   <body>
     <div class="container-fluid">
+      <h1>
+        Flynn CI Build {{ .ID }}
+
+        <span class="label {{ .StateLabelClass }}">
+          {{ .State }}
+        </span>
+
+        {{ if .Finished }}
+        <a href="/builds/{{ .ID }}/download" class="btn btn-primary pull-right">
+          <i class="fa fa-download fa-lg"></i>
+
+          Download Logs
+        </a>
+        {{ end }}
+      </h1>
+
+      <table class="table">
+        <tbody>
+          <tr>
+            <td><strong>Commit</strong></td>
+            <td><a href="https://github.com/flynn/flynn/commit/{{ .Commit }}">{{ .Commit }}</a></td>
+          </tr>
+          <tr>
+            <td><strong>Branch</strong></td>
+            <td>{{ .Branch }}</td>
+          </tr>
+          <tr>
+            <td><strong>Description</strong></td>
+            <td>{{ .Description }}</td>
+          </tr>
+          <tr>
+            <td><strong>Created</strong></td>
+            <td>{{ .CreatedAt }}</td>
+          </tr>
+          <tr>
+            <td><strong>Duration</strong></td>
+            <td>{{ .DurationFormatted }}</td>
+          </tr>
+        </tbody>
+      </table>
+
       <div class="row">
-        <div id="list">
-        </div>
-        <div id="logs">
+        <div>
+          <pre id="logs"></pre>
         </div>
       </div>
     </div>
 
-    <script type="text/template" id="list-template">
-      <a href="#<%= name %>"><%= filename %></a>
-    </script>
-
-    <script type="text/template" id="logs-template">
-      <div id="<%= name %>">
-        <pre><code></code></pre>
-      </div>
-    </script>
-
-    <script src="//cdnjs.cloudflare.com/ajax/libs/underscore.js/1.6.0/underscore-min.js"></script>
     <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
     <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
+    <script src="/assets/ansi_up/ansi_up.js"></script>
     <script src="/assets/build-log.js"></script>
   </body>
 </html>
