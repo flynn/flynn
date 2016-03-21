@@ -450,22 +450,18 @@ func (s *Store) AddInstance(service string, inst *discoverd.Instance) error {
 		return ErrNotLeader
 	}
 
-	if err := func() error {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		// Track heartbeat time, if leader.
-		s.heartbeats[instanceKey{service, inst.ID}] = time.Now()
+	s.mu.Lock()
+	// Track heartbeat time, if leader.
+	s.heartbeats[instanceKey{service, inst.ID}] = time.Now()
 
-		// Ignore if instance already exists and it hasn't changed.
-		if m := s.data.Instances[service]; m != nil {
-			if prev := m[inst.ID]; prev != nil && inst.Equal(prev) {
-				return nil
-			}
+	// Ignore if instance already exists and it hasn't changed.
+	if m := s.data.Instances[service]; m != nil {
+		if prev := m[inst.ID]; prev != nil && inst.Equal(prev) {
+			s.mu.Unlock()
+			return nil
 		}
-		return nil
-	}(); err != nil {
-		return err
 	}
+	s.mu.Unlock()
 
 	// Serialize command.
 	cmd, err := json.Marshal(&addInstanceCommand{
