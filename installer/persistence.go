@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 
 	_ "github.com/flynn/flynn/Godeps/_workspace/src/github.com/cznic/ql/driver"
@@ -75,4 +76,18 @@ func loadSSHKey(name string) (*sshkeygen.SSHKey, error) {
 		return nil, err
 	}
 	return key, nil
+}
+
+func listSSHKeyNames() []string {
+	names := []string{}
+	filepath.Walk(keysDir, func(p string, info os.FileInfo, err error) error {
+		if info.IsDir() {
+			return nil
+		}
+		if filepath.Ext(p) == "" {
+			names = append(names, path.Base(p))
+		}
+		return nil
+	})
+	return names
 }

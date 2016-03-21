@@ -245,13 +245,24 @@ func (c *AWSCluster) loadKeyPair(name string) error {
 }
 
 func (c *AWSCluster) createKeyPair() error {
+	keypairNames := listSSHKeyNames()
+	if c.base.SSHKeyName != "" {
+		keypairNames = make([]string, len(keypairNames)+1)
+		keypairNames[0] = c.base.SSHKeyName
+		for i, name := range keypairNames {
+			keypairNames[i+1] = name
+		}
+	}
+	for _, name := range keypairNames {
+		if err := c.loadKeyPair(name); err == nil {
+			c.base.SendLog(fmt.Sprintf("Using saved key pair (%s)", c.base.SSHKeyName))
+			return nil
+		}
+	}
+
 	keypairName := "flynn"
 	if c.base.SSHKeyName != "" {
 		keypairName = c.base.SSHKeyName
-	}
-	if err := c.loadKeyPair(keypairName); err == nil {
-		c.base.SendLog(fmt.Sprintf("Using saved key pair (%s)", c.base.SSHKeyName))
-		return nil
 	}
 
 	keypair, err := loadSSHKey(keypairName)
