@@ -684,3 +684,39 @@ func (TestSuite) TestJobPlacementTags(c *C) {
 		c.Assert(req.Host.ID, Equals, t.host, Commentf("placing job %d", i))
 	}
 }
+
+func (TestSuite) TestScaleCriticalApp(c *C) {
+	s := runTestScheduler(c, nil, true)
+	defer s.Stop()
+	s.waitJobStart()
+
+	// scale a critical app up
+	app := &ct.App{ID: "critical-app", Meta: map[string]string{"flynn-system-critical": "true"}}
+	artifact := &ct.Artifact{ID: random.UUID()}
+	processes := map[string]int{"critical": 1}
+	release := NewRelease("critical-release-1", artifact, processes)
+	s.CreateApp(app)
+	s.CreateArtifact(artifact)
+	s.CreateRelease(release)
+	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: processes})
+	s.waitFormationChange()
+	s.waitJobStart()
+
+	// check we can't scale it down
+	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: nil})
+	_, err := s.waitForEvent("refusing to scale down critical app")
+	s.c.Assert(err, IsNil)
+	s.waitFormationChange()
+
+	// scale up another formation
+	newRelease := NewRelease("critical-release-2", artifact, processes)
+	s.CreateRelease(newRelease)
+	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: newRelease.ID, Processes: processes})
+	s.waitFormationChange()
+	s.waitJobStart()
+
+	// check we can now scale the original down
+	s.PutFormation(&ct.Formation{AppID: app.ID, ReleaseID: release.ID, Processes: nil})
+	s.waitFormationChange()
+	s.waitJobStop()
+}

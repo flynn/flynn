@@ -54,6 +54,15 @@ func (p Processes) IsEmpty() bool {
 	return true
 }
 
+func (p Processes) IsScaleDown() bool {
+	for _, count := range p {
+		if count < 0 {
+			return true
+		}
+	}
+	return false
+}
+
 type Formation struct {
 	*ct.ExpandedFormation
 

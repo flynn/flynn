@@ -18,7 +18,10 @@
     "id": "discoverd",
     "app": {
       "name": "discoverd",
-      "meta": {"flynn-system-app": "true"}
+      "meta": {
+        "flynn-system-app": "true",
+        "flynn-system-critical": "true"
+      }
     },
     "action": "run-app",
     "release": {
@@ -85,7 +88,10 @@
     "id": "postgres",
     "app": {
       "name": "postgres",
-      "meta": {"flynn-system-app": "true"}
+      "meta": {
+        "flynn-system-app": "true",
+        "flynn-system-critical": "true"
+      }
     },
     "action": "run-app",
     "release": {
@@ -165,7 +171,10 @@
     "action": "run-app",
     "app": {
       "name": "controller",
-      "meta": {"flynn-system-app": "true"}
+      "meta": {
+        "flynn-system-app": "true",
+        "flynn-system-critical": "true"
+      }
     },
     "release": {
       "env": {
@@ -225,7 +234,10 @@
     "from_step": "postgres",
     "app": {
       "name": "postgres",
-      "meta": {"flynn-system-app": "true"},
+      "meta": {
+        "flynn-system-app": "true",
+        "flynn-system-critical": "true"
+      },
       "strategy": "sirenia",
       "deploy_timeout": 120
     }
@@ -246,7 +258,10 @@
     "from_step": "discoverd",
     "app": {
       "name": "discoverd",
-      "meta": {"flynn-system-app": "true"},
+      "meta": {
+        "flynn-system-app": "true",
+        "flynn-system-critical": "true"
+      },
       "strategy": "discoverd-meta",
       "deploy_timeout": 120
     }

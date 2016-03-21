@@ -805,6 +805,18 @@ func (s *Scheduler) handleFormationDiff(f *Formation, diff Processes) {
 	}
 }
 
+// activeFormationCount returns the number of formations which have running
+// jobs for the given app
+func (s *Scheduler) activeFormationCount(appID string) int {
+	activeReleases := make(map[string]struct{})
+	for _, job := range s.jobs {
+		if job.IsRunning() && job.IsInApp(appID) {
+			activeReleases[job.Formation.Release.ID] = struct{}{}
+		}
+	}
+	return len(activeReleases)
+}
+
 func (s *Scheduler) StartJob(job *Job) {
 	log := s.logger.New("fn", "StartJob", "app.id", job.AppID, "release.id", job.ReleaseID, "job.type", job.Type)
 	log.Info("starting job")
@@ -1206,13 +1218,21 @@ func (s *Scheduler) handleFormation(ef *ct.ExpandedFormation) (formation *Format
 		log.Info("adding new formation", "processes", ef.Processes)
 		formation = s.formations.Add(NewFormation(ef))
 	} else {
-		if formation.OriginalProcesses.Equals(ef.Processes) && utils.FormationTagsEqual(formation.Tags, ef.Tags) {
+		diff := Processes(ef.Processes).Diff(formation.OriginalProcesses)
+		if diff.IsEmpty() && utils.FormationTagsEqual(formation.Tags, ef.Tags) {
 			return
-		} else {
-			log.Info("updating processes and tags of existing formation", "processes", ef.Processes, "tags", ef.Tags)
-			formation.Tags = ef.Tags
-			formation.SetProcesses(ef.Processes)
 		}
+
+		// do not scale down critical apps for which this is the only active formation
+		// (this prevents for example scaling down discoverd which breaks the cluster)
+		if diff.IsScaleDown() && formation.App.Critical() && s.activeFormationCount(formation.App.ID) < 2 {
+			log.Info("refusing to scale down critical app")
+			return
+		}
+
+		log.Info("updating processes and tags of existing formation", "processes", ef.Processes, "tags", ef.Tags)
+		formation.Tags = ef.Tags
+		formation.SetProcesses(ef.Processes)
 	}
 	s.triggerRectify(formation.key())
 	return
