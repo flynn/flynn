@@ -74,8 +74,12 @@ func (s *ActionsServiceOp) List(opt *ListOptions) ([]Action, *Response, error) {
 	return root.Actions, resp, err
 }
 
-// Get an action by ID
+// Get an action by ID.
 func (s *ActionsServiceOp) Get(id int) (*Action, *Response, error) {
+	if id < 1 {
+		return nil, nil, NewArgError("id", "cannot be less than 1")
+	}
+
 	path := fmt.Sprintf("%s/%d", actionsBasePath, id)
 	req, err := s.client.NewRequest("GET", path, nil)
 	if err != nil {

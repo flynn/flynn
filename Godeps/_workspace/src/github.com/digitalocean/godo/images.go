@@ -5,7 +5,7 @@ import "fmt"
 const imageBasePath = "v2/images"
 
 // ImagesService is an interface for interfacing with the images
-// endpoints of the Digital Ocean API
+// endpoints of the DigitalOcean API
 // See: https://developers.digitalocean.com/documentation/v2#images
 type ImagesService interface {
 	List(*ListOptions) ([]Image, *Response, error)
@@ -36,6 +36,7 @@ type Image struct {
 	Public       bool     `json:"public,omitempty"`
 	Regions      []string `json:"regions,omitempty"`
 	MinDiskSize  int      `json:"min_disk_size,omitempty"`
+	Created      string   `json:"created_at,omitempty"`
 }
 
 // ImageUpdateRequest represents a request to update an image.
@@ -61,41 +62,57 @@ func (i Image) String() string {
 	return Stringify(i)
 }
 
-// List all images
+// List lists all the images available.
 func (s *ImagesServiceOp) List(opt *ListOptions) ([]Image, *Response, error) {
 	return s.list(opt, nil)
 }
 
-// List distribution images
+// ListDistribution lists all the distribution images.
 func (s *ImagesServiceOp) ListDistribution(opt *ListOptions) ([]Image, *Response, error) {
 	listOpt := listImageOptions{Type: "distribution"}
 	return s.list(opt, &listOpt)
 }
 
-// List application images
+// ListApplication lists all the application images.
 func (s *ImagesServiceOp) ListApplication(opt *ListOptions) ([]Image, *Response, error) {
 	listOpt := listImageOptions{Type: "application"}
 	return s.list(opt, &listOpt)
 }
 
-// List user images
+// ListUser lists all the user images.
 func (s *ImagesServiceOp) ListUser(opt *ListOptions) ([]Image, *Response, error) {
 	listOpt := listImageOptions{Private: true}
 	return s.list(opt, &listOpt)
 }
 
-// Get individual image by id
+// GetByID retrieves an image by id.
 func (s *ImagesServiceOp) GetByID(imageID int) (*Image, *Response, error) {
+	if imageID < 1 {
+		return nil, nil, NewArgError("imageID", "cannot be less than 1")
+	}
+
 	return s.get(interface{}(imageID))
 }
 
-// Get individual image by slug
+// GetBySlug retrieves an image by slug.
 func (s *ImagesServiceOp) GetBySlug(slug string) (*Image, *Response, error) {
+	if len(slug) < 1 {
+		return nil, nil, NewArgError("slug", "cannot be blank")
+	}
+
 	return s.get(interface{}(slug))
 }
 
-// Update an image name
+// Update an image name.
 func (s *ImagesServiceOp) Update(imageID int, updateRequest *ImageUpdateRequest) (*Image, *Response, error) {
+	if imageID < 1 {
+		return nil, nil, NewArgError("imageID", "cannot be less than 1")
+	}
+
+	if updateRequest == nil {
+		return nil, nil, NewArgError("updateRequest", "cannot be nil")
+	}
+
 	path := fmt.Sprintf("%s/%d", imageBasePath, imageID)
 	req, err := s.client.NewRequest("PUT", path, updateRequest)
 	if err != nil {
@@ -111,8 +128,12 @@ func (s *ImagesServiceOp) Update(imageID int, updateRequest *ImageUpdateRequest)
 	return &root.Image, resp, err
 }
 
-// Delete image
+// Delete an image.
 func (s *ImagesServiceOp) Delete(imageID int) (*Response, error) {
+	if imageID < 1 {
+		return nil, NewArgError("imageID", "cannot be less than 1")
+	}
+
 	path := fmt.Sprintf("%s/%d", imageBasePath, imageID)
 
 	req, err := s.client.NewRequest("DELETE", path, nil)

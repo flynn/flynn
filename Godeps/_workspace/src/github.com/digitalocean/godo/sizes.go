@@ -1,7 +1,7 @@
 package godo
 
 // SizesService is an interface for interfacing with the size
-// endpoints of the Digital Ocean API
+// endpoints of the DigitalOcean API
 // See: https://developers.digitalocean.com/documentation/v2#sizes
 type SizesService interface {
 	List(*ListOptions) ([]Size, *Response, error)
@@ -24,6 +24,8 @@ type Size struct {
 	PriceMonthly float64  `json:"price_monthly,omitempty"`
 	PriceHourly  float64  `json:"price_hourly,omitempty"`
 	Regions      []string `json:"regions,omitempty"`
+	Available    bool     `json:"available,omitempty"`
+	Transfer     float64  `json:"transfer,omitempty"`
 }
 
 func (s Size) String() string {

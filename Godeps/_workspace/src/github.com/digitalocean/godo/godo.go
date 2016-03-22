@@ -22,9 +22,9 @@ const (
 	userAgent      = "godo/" + libraryVersion
 	mediaType      = "application/json"
 
-	headerRateLimit     = "X-RateLimit-Limit"
-	headerRateRemaining = "X-RateLimit-Remaining"
-	headerRateReset     = "X-RateLimit-Reset"
+	headerRateLimit     = "RateLimit-Limit"
+	headerRateRemaining = "RateLimit-Remaining"
+	headerRateReset     = "RateLimit-Reset"
 )
 
 // Client manages communication with DigitalOcean V2 API.
@@ -43,17 +43,25 @@ type Client struct {
 	Rate Rate
 
 	// Services used for communicating with the API
-	Account        AccountService
-	Actions        ActionsService
-	Domains        DomainsService
-	Droplets       DropletsService
-	DropletActions DropletActionsService
-	Images         ImagesService
-	ImageActions   ImageActionsService
-	Keys           KeysService
-	Regions        RegionsService
-	Sizes          SizesService
+	Account           AccountService
+	Actions           ActionsService
+	Domains           DomainsService
+	Droplets          DropletsService
+	DropletActions    DropletActionsService
+	Images            ImagesService
+	ImageActions      ImageActionsService
+	Keys              KeysService
+	Regions           RegionsService
+	Sizes             SizesService
+	FloatingIPs       FloatingIPsService
+	FloatingIPActions FloatingIPActionsService
+
+	// Optional function called after every successful request made to the DO APIs
+	onRequestCompleted RequestCompletionCallback
 }
+
+// RequestCompletionCallback defines the type of the request callback function
+type RequestCompletionCallback func(*http.Request, *http.Response)
 
 // ListOptions specifies the optional parameters to various List methods that
 // support pagination.
@@ -65,7 +73,7 @@ type ListOptions struct {
 	PerPage int `url:"per_page,omitempty"`
 }
 
-// Response is a Digital Ocean response. This wraps the standard http.Response returned from DigitalOcean.
+// Response is a DigitalOcean response. This wraps the standard http.Response returned from DigitalOcean.
 type Response struct {
 	*http.Response
 
@@ -96,7 +104,7 @@ type Rate struct {
 	// The number of remaining requests the client can make this hour.
 	Remaining int `json:"remaining"`
 
-	// The time at w\hic the current rate limit will reset.
+	// The time at which the current rate limit will reset.
 	Reset Timestamp `json:"reset"`
 }
 
@@ -107,21 +115,27 @@ func addOptions(s string, opt interface{}) (string, error) {
 		return s, nil
 	}
 
-	u, err := url.Parse(s)
+	origURL, err := url.Parse(s)
 	if err != nil {
 		return s, err
 	}
 
-	qv, err := query.Values(opt)
+	origValues := origURL.Query()
+
+	newValues, err := query.Values(opt)
 	if err != nil {
 		return s, err
 	}
 
-	u.RawQuery = qv.Encode()
-	return u.String(), nil
+	for k, v := range newValues {
+		origValues[k] = v
+	}
+
+	origURL.RawQuery = origValues.Encode()
+	return origURL.String(), nil
 }
 
-// NewClient returns a new Digital Ocean API client.
+// NewClient returns a new DigitalOcean API client.
 func NewClient(httpClient *http.Client) *Client {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
@@ -140,6 +154,8 @@ func NewClient(httpClient *http.Client) *Client {
 	c.Keys = &KeysServiceOp{client: c}
 	c.Regions = &RegionsServiceOp{client: c}
 	c.Sizes = &SizesServiceOp{client: c}
+	c.FloatingIPs = &FloatingIPsServiceOp{client: c}
+	c.FloatingIPActions = &FloatingIPActionsServiceOp{client: c}
 
 	return c
 }
@@ -172,6 +188,11 @@ func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Requ
 	req.Header.Add("Accept", mediaType)
 	req.Header.Add("User-Agent", userAgent)
 	return req, nil
+}
+
+// OnRequestCompleted sets the DO API request completion callback
+func (c *Client) OnRequestCompleted(rc RequestCompletionCallback) {
+	c.onRequestCompleted = rc
 }
 
 // newResponse creates a new Response for the provided http.Response
@@ -223,6 +244,9 @@ func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
+	}
+	if c.onRequestCompleted != nil {
+		c.onRequestCompleted(req, resp)
 	}
 
 	defer func() {

@@ -5,7 +5,7 @@ import "fmt"
 const keysBasePath = "v2/account/keys"
 
 // KeysService is an interface for interfacing with the keys
-// endpoints of the Digital Ocean API
+// endpoints of the DigitalOcean API
 // See: https://developers.digitalocean.com/documentation/v2#keys
 type KeysService interface {
 	List(*ListOptions) ([]Key, *Response, error)
@@ -101,18 +101,30 @@ func (s *KeysServiceOp) get(path string) (*Key, *Response, error) {
 
 // GetByID gets a Key by id
 func (s *KeysServiceOp) GetByID(keyID int) (*Key, *Response, error) {
+	if keyID < 1 {
+		return nil, nil, NewArgError("keyID", "cannot be less than 1")
+	}
+
 	path := fmt.Sprintf("%s/%d", keysBasePath, keyID)
 	return s.get(path)
 }
 
 // GetByFingerprint gets a Key by by fingerprint
 func (s *KeysServiceOp) GetByFingerprint(fingerprint string) (*Key, *Response, error) {
+	if len(fingerprint) < 1 {
+		return nil, nil, NewArgError("fingerprint", "cannot not be empty")
+	}
+
 	path := fmt.Sprintf("%s/%s", keysBasePath, fingerprint)
 	return s.get(path)
 }
 
 // Create a key using a KeyCreateRequest
 func (s *KeysServiceOp) Create(createRequest *KeyCreateRequest) (*Key, *Response, error) {
+	if createRequest == nil {
+		return nil, nil, NewArgError("createRequest", "cannot be nil")
+	}
+
 	req, err := s.client.NewRequest("POST", keysBasePath, createRequest)
 	if err != nil {
 		return nil, nil, err
@@ -127,8 +139,16 @@ func (s *KeysServiceOp) Create(createRequest *KeyCreateRequest) (*Key, *Response
 	return &root.SSHKey, resp, err
 }
 
-// Update a key name by ID
+// UpdateByID updates a key name by ID.
 func (s *KeysServiceOp) UpdateByID(keyID int, updateRequest *KeyUpdateRequest) (*Key, *Response, error) {
+	if keyID < 1 {
+		return nil, nil, NewArgError("keyID", "cannot be less than 1")
+	}
+
+	if updateRequest == nil {
+		return nil, nil, NewArgError("updateRequest", "cannot be nil")
+	}
+
 	path := fmt.Sprintf("%s/%d", keysBasePath, keyID)
 	req, err := s.client.NewRequest("PUT", path, updateRequest)
 	if err != nil {
@@ -144,8 +164,16 @@ func (s *KeysServiceOp) UpdateByID(keyID int, updateRequest *KeyUpdateRequest) (
 	return &root.SSHKey, resp, err
 }
 
-// Update a key name by fingerprint
+// UpdateByFingerprint updates a key name by fingerprint.
 func (s *KeysServiceOp) UpdateByFingerprint(fingerprint string, updateRequest *KeyUpdateRequest) (*Key, *Response, error) {
+	if len(fingerprint) < 1 {
+		return nil, nil, NewArgError("fingerprint", "cannot be empty")
+	}
+
+	if updateRequest == nil {
+		return nil, nil, NewArgError("updateRequest", "cannot be nil")
+	}
+
 	path := fmt.Sprintf("%s/%s", keysBasePath, fingerprint)
 	req, err := s.client.NewRequest("PUT", path, updateRequest)
 	if err != nil {
@@ -175,12 +203,20 @@ func (s *KeysServiceOp) delete(path string) (*Response, error) {
 
 // DeleteByID deletes a key by its id
 func (s *KeysServiceOp) DeleteByID(keyID int) (*Response, error) {
+	if keyID < 1 {
+		return nil, NewArgError("keyID", "cannot be less than 1")
+	}
+
 	path := fmt.Sprintf("%s/%d", keysBasePath, keyID)
 	return s.delete(path)
 }
 
 // DeleteByFingerprint deletes a key by its fingerprint
 func (s *KeysServiceOp) DeleteByFingerprint(fingerprint string) (*Response, error) {
+	if len(fingerprint) < 1 {
+		return nil, NewArgError("fingerprint", "cannot be empty")
+	}
+
 	path := fmt.Sprintf("%s/%s", keysBasePath, fingerprint)
 	return s.delete(path)
 }

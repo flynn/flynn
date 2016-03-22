@@ -19,8 +19,8 @@ import (
 	"strings"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/internal"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/oauth2"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/oauth2/internal"
 )
 
 // tokenFromInternal maps an *internal.Token struct into
