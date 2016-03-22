@@ -18,7 +18,7 @@ func (t Timestamp) String() string {
 
 // UnmarshalJSON implements the json.Unmarshaler interface.
 // Time is expected in RFC3339 or Unix format.
-func (t *Timestamp) UnmarshalJSON(data []byte) (err error) {
+func (t *Timestamp) UnmarshalJSON(data []byte) error {
 	str := string(data)
 	i, err := strconv.ParseInt(str, 10, 64)
 	if err == nil {
@@ -26,7 +26,7 @@ func (t *Timestamp) UnmarshalJSON(data []byte) (err error) {
 	} else {
 		t.Time, err = time.Parse(`"`+time.RFC3339+`"`, str)
 	}
-	return
+	return err
 }
 
 // Equal reports whether t and u are equal based on time.Equal

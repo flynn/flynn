@@ -6,7 +6,7 @@ Godo is a Go client library for accessing the DigitalOcean V2 API.
 
 You can view the client API docs here: [http://godoc.org/github.com/digitalocean/godo](http://godoc.org/github.com/digitalocean/godo)
 
-You can view Digital Ocean API docs here: [https://developers.digitalocean.com/documentation/v2/](https://developers.digitalocean.com/documentation/v2/)
+You can view DigitalOcean API docs here: [https://developers.digitalocean.com/documentation/v2/](https://developers.digitalocean.com/documentation/v2/)
 
 
 ## Usage
@@ -22,19 +22,30 @@ access different parts of the DigitalOcean API.
 
 Currently, Personal Access Token (PAT) is the only method of
 authenticating with the API. You can manage your tokens
-at the Digital Ocean Control Panel [Applications Page](https://cloud.digitalocean.com/settings/applications).
+at the DigitalOcean Control Panel [Applications Page](https://cloud.digitalocean.com/settings/applications).
 
 You can then use your token to create a new client:
 
 ```go
-import "code.google.com/p/goauth2/oauth"
+import "golang.org/x/oauth2"
 
 pat := "mytoken"
-t := &oauth.Transport{
-	Token: &oauth.Token{AccessToken: pat},
+type TokenSource struct {
+    AccessToken string
 }
 
-client := godo.NewClient(t.Client())
+func (t *TokenSource) Token() (*oauth2.Token, error) {
+    token := &oauth2.Token{
+        AccessToken: t.AccessToken,
+    }
+    return token, nil
+}
+
+tokenSource := &TokenSource{
+    AccessToken: pat,
+}
+oauthClient := oauth2.NewClient(oauth2.NoContext, tokenSource)
+client := godo.NewClient(oauthClient)
 ```
 
 ## Examples

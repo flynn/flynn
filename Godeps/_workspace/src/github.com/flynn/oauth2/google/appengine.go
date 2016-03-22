@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/net/context"
-	"golang.org/x/oauth2"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/oauth2"
 )
 
 // Set at init time by appengine_hook.go. If nil, we're not on App Engine.

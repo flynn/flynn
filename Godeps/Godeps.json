@@ -1,15 +1,11 @@
 {
 	"ImportPath": "github.com/flynn/flynn",
 	"GoVersion": "go1.4",
+	"GodepVersion": "v60",
 	"Packages": [
 		"./..."
 	],
 	"Deps": [
-		{
-			"ImportPath": "code.google.com/p/goauth2/oauth",
-			"Comment": "weekly-43",
-			"Rev": "d4571a95014ff1fdd0055dc0f6b7e977a42b1e5a"
-		},
 		{
 			"ImportPath": "github.com/BurntSushi/toml",
 			"Comment": "v0.1.0-21-g056c9bc",
@@ -22,6 +18,10 @@
 		},
 		{
 			"ImportPath": "github.com/agl/ed25519",
+			"Rev": "d2b94fd789ea21d12fac1a4443dd3a3f79cda72c"
+		},
+		{
+			"ImportPath": "github.com/agl/ed25519/edwards25519",
 			"Rev": "d2b94fd789ea21d12fac1a4443dd3a3f79cda72c"
 		},
 		{
@@ -107,6 +107,10 @@
 			"Rev": "69ca5f1dbae7e230dbfc8812d3e9764e144bbf45"
 		},
 		{
+			"ImportPath": "github.com/cznic/ql/driver",
+			"Rev": "69ca5f1dbae7e230dbfc8812d3e9764e144bbf45"
+		},
+		{
 			"ImportPath": "github.com/cznic/sortutil",
 			"Rev": "d4401851b4c370f979b842fa1e45e0b3b718b391"
 		},
@@ -124,8 +128,8 @@
 		},
 		{
 			"ImportPath": "github.com/digitalocean/godo",
-			"Comment": "v0.7.0-24-g43bfe88",
-			"Rev": "43bfe8800faf60b471045a496ce8b275e09cf439"
+			"Comment": "v0.9.0-26-g719e6da",
+			"Rev": "719e6da3ef522b1fb3dd692ab507625239598509"
 		},
 		{
 			"ImportPath": "github.com/docker/distribution/digest",
@@ -148,7 +152,17 @@
 			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
 		},
 		{
+			"ImportPath": "github.com/docker/docker/daemon/graphdriver/aufs",
+			"Comment": "v1.4.1-2039-ge589dc7",
+			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
+		},
+		{
 			"ImportPath": "github.com/docker/docker/daemon/networkdriver",
+			"Comment": "v1.4.1-2039-ge589dc7",
+			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
+		},
+		{
+			"ImportPath": "github.com/docker/docker/daemon/networkdriver/ipallocator",
 			"Comment": "v1.4.1-2039-ge589dc7",
 			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
 		},
@@ -228,6 +242,16 @@
 			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
 		},
 		{
+			"ImportPath": "github.com/docker/docker/pkg/parsers/filters",
+			"Comment": "v1.4.1-2039-ge589dc7",
+			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
+		},
+		{
+			"ImportPath": "github.com/docker/docker/pkg/parsers/kernel",
+			"Comment": "v1.4.1-2039-ge589dc7",
+			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
+		},
+		{
 			"ImportPath": "github.com/docker/docker/pkg/pools",
 			"Comment": "v1.4.1-2039-ge589dc7",
 			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
@@ -278,6 +302,11 @@
 			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
 		},
 		{
+			"ImportPath": "github.com/docker/docker/pkg/term/winconsole",
+			"Comment": "v1.4.1-2039-ge589dc7",
+			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
+		},
+		{
 			"ImportPath": "github.com/docker/docker/pkg/timeoutconn",
 			"Comment": "v1.4.1-2039-ge589dc7",
 			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
@@ -309,6 +338,11 @@
 		},
 		{
 			"ImportPath": "github.com/docker/docker/registry",
+			"Comment": "v1.4.1-2039-ge589dc7",
+			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
+		},
+		{
+			"ImportPath": "github.com/docker/docker/registry/v2",
 			"Comment": "v1.4.1-2039-ge589dc7",
 			"Rev": "e589dc7424dfad993f1fc646b66fa04306a2df2d"
 		},
@@ -405,11 +439,31 @@
 			"Rev": "bad31004a6cc4ac89e7219ba28642459a9fa2d6c"
 		},
 		{
+			"ImportPath": "github.com/flynn/oauth2/internal",
+			"Rev": "bad31004a6cc4ac89e7219ba28642459a9fa2d6c"
+		},
+		{
 			"ImportPath": "github.com/flynn/que-go",
 			"Rev": "737f00726577c26beb71037b273e79a65b354c85"
 		},
 		{
 			"ImportPath": "github.com/flynn/tail",
+			"Rev": "165e62b6a7aefaaa964b678ee167abeaa152c47e"
+		},
+		{
+			"ImportPath": "github.com/flynn/tail/ratelimiter",
+			"Rev": "165e62b6a7aefaaa964b678ee167abeaa152c47e"
+		},
+		{
+			"ImportPath": "github.com/flynn/tail/util",
+			"Rev": "165e62b6a7aefaaa964b678ee167abeaa152c47e"
+		},
+		{
+			"ImportPath": "github.com/flynn/tail/watch",
+			"Rev": "165e62b6a7aefaaa964b678ee167abeaa152c47e"
+		},
+		{
+			"ImportPath": "github.com/flynn/tail/winfile",
 			"Rev": "165e62b6a7aefaaa964b678ee167abeaa152c47e"
 		},
 		{
@@ -424,6 +478,11 @@
 		{
 			"ImportPath": "github.com/garyburd/redigo/redis",
 			"Rev": "836b6e58b3358112c8291565d01c35b8764070d7"
+		},
+		{
+			"ImportPath": "github.com/go-sql-driver/mysql",
+			"Comment": "v1.2-156-g7c7f556",
+			"Rev": "7c7f556282622f94213bc028b4d0a7b6151ba239"
 		},
 		{
 			"ImportPath": "github.com/golang/glog",
@@ -448,11 +507,6 @@
 		{
 			"ImportPath": "github.com/gorilla/sessions",
 			"Rev": "aa5e036e6c44aec69a32eb41097001978b29ad31"
-		},
-		{
-			"ImportPath": "github.com/go-sql-driver/mysql",
-			"Comment": "v1.2-156-g7c7f556",
-			"Rev": "7c7f556282622f94213bc028b4d0a7b6151ba239"
 		},
 		{
 			"ImportPath": "github.com/hashicorp/go-msgpack/codec",
@@ -590,6 +644,10 @@
 			"Rev": "a57a12c1b1d8aa37cf2f9da4fa7657b1f1fed88c"
 		},
 		{
+			"ImportPath": "github.com/vishvananda/netlink/nl",
+			"Rev": "a57a12c1b1d8aa37cf2f9da4fa7657b1f1fed88c"
+		},
+		{
 			"ImportPath": "github.com/wadey/cryptorand",
 			"Rev": "f71da62b90e6a6df720e69d4607dcfd10443c75a"
 		},
@@ -610,12 +668,24 @@
 			"Rev": "1fbbd62cfec66bd39d91e97749579579d4d3037e"
 		},
 		{
+			"ImportPath": "golang.org/x/crypto/ssh/agent",
+			"Rev": "1fbbd62cfec66bd39d91e97749579579d4d3037e"
+		},
+		{
 			"ImportPath": "golang.org/x/net/context",
 			"Rev": "cbcac7bb8415db9b6cb4d1ebab1dc9afbd688b97"
 		},
 		{
 			"ImportPath": "golang.org/x/net/websocket",
 			"Rev": "cbcac7bb8415db9b6cb4d1ebab1dc9afbd688b97"
+		},
+		{
+			"ImportPath": "golang.org/x/oauth2",
+			"Rev": "045497edb6234273d67dbc25da3f2ddbc4c4cacf"
+		},
+		{
+			"ImportPath": "golang.org/x/oauth2/internal",
+			"Rev": "045497edb6234273d67dbc25da3f2ddbc4c4cacf"
 		},
 		{
 			"ImportPath": "golang.org/x/sys/unix",
@@ -626,7 +696,25 @@
 			"Rev": "d8b0b1d421aa1cbf392c05869f8abbc669bb7066"
 		},
 		{
+			"ImportPath": "gopkg.in/inconshreveable/go-update.v0/check",
+			"Rev": "d8b0b1d421aa1cbf392c05869f8abbc669bb7066"
+		},
+		{
+			"ImportPath": "gopkg.in/inconshreveable/go-update.v0/download",
+			"Rev": "d8b0b1d421aa1cbf392c05869f8abbc669bb7066"
+		},
+		{
 			"ImportPath": "gopkg.in/inconshreveable/log15.v2",
+			"Comment": "v2.7",
+			"Rev": "7cf5571b3b32a7c7b5605dc5ed8ad8fdbb2135f0"
+		},
+		{
+			"ImportPath": "gopkg.in/inconshreveable/log15.v2/stack",
+			"Comment": "v2.7",
+			"Rev": "7cf5571b3b32a7c7b5605dc5ed8ad8fdbb2135f0"
+		},
+		{
+			"ImportPath": "gopkg.in/inconshreveable/log15.v2/term",
 			"Comment": "v2.7",
 			"Rev": "7cf5571b3b32a7c7b5605dc5ed8ad8fdbb2135f0"
 		},

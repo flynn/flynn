@@ -6,7 +6,7 @@
 package odnoklassniki // import "golang.org/x/oauth2/odnoklassniki"
 
 import (
-	"golang.org/x/oauth2"
+	"github.com/flynn/flynn/Godeps/_workspace/src/golang.org/x/oauth2"
 )
 
 // Endpoint is Odnoklassniki's OAuth 2.0 endpoint.

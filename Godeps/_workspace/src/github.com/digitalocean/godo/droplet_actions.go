@@ -9,7 +9,7 @@ import (
 type ActionRequest map[string]interface{}
 
 // DropletActionsService is an interface for interfacing with the droplet actions
-// endpoints of the Digital Ocean API
+// endpoints of the DigitalOcean API
 // See: https://developers.digitalocean.com/documentation/v2#droplet-actions
 type DropletActionsService interface {
 	Shutdown(int) (*Action, *Response, error)
@@ -21,6 +21,7 @@ type DropletActionsService interface {
 	Resize(int, string, bool) (*Action, *Response, error)
 	Rename(int, string) (*Action, *Response, error)
 	Snapshot(int, string) (*Action, *Response, error)
+	EnableBackups(int) (*Action, *Response, error)
 	DisableBackups(int) (*Action, *Response, error)
 	PasswordReset(int) (*Action, *Response, error)
 	RebuildByImageID(int, int) (*Action, *Response, error)
@@ -29,7 +30,6 @@ type DropletActionsService interface {
 	EnableIPv6(int) (*Action, *Response, error)
 	EnablePrivateNetworking(int) (*Action, *Response, error)
 	Upgrade(int) (*Action, *Response, error)
-	doAction(int, *ActionRequest) (*Action, *Response, error)
 	Get(int, int) (*Action, *Response, error)
 	GetByURI(string) (*Action, *Response, error)
 }
@@ -103,7 +103,7 @@ func (s *DropletActionsServiceOp) Rename(id int, name string) (*Action, *Respons
 	return s.doAction(id, request)
 }
 
-// Snapshot a Droplet
+// Snapshot a Droplet.
 func (s *DropletActionsServiceOp) Snapshot(id int, name string) (*Action, *Response, error) {
 	requestType := "snapshot"
 	request := &ActionRequest{
@@ -113,55 +113,69 @@ func (s *DropletActionsServiceOp) Snapshot(id int, name string) (*Action, *Respo
 	return s.doAction(id, request)
 }
 
-// Disable backups for a droplet
+// EnableBackups enables backups for a droplet.
+func (s *DropletActionsServiceOp) EnableBackups(id int) (*Action, *Response, error) {
+	request := &ActionRequest{"type": "enable_backups"}
+	return s.doAction(id, request)
+}
+
+// DisableBackups disables backups for a droplet.
 func (s *DropletActionsServiceOp) DisableBackups(id int) (*Action, *Response, error) {
 	request := &ActionRequest{"type": "disable_backups"}
 	return s.doAction(id, request)
 }
 
-// Reset password for a droplet
+// PasswordReset resets the password for a droplet.
 func (s *DropletActionsServiceOp) PasswordReset(id int) (*Action, *Response, error) {
 	request := &ActionRequest{"type": "password_reset"}
 	return s.doAction(id, request)
 }
 
-// Rebuild droplet from an image with a given id
+// RebuildByImageID rebuilds a droplet droplet from an image with a given id.
 func (s *DropletActionsServiceOp) RebuildByImageID(id, imageID int) (*Action, *Response, error) {
 	request := &ActionRequest{"type": "rebuild", "image": imageID}
 	return s.doAction(id, request)
 }
 
-// Rebuild a droplet from an image with a given slug
+// RebuildByImageSlug rebuilds a droplet from an image with a given slug.
 func (s *DropletActionsServiceOp) RebuildByImageSlug(id int, slug string) (*Action, *Response, error) {
 	request := &ActionRequest{"type": "rebuild", "image": slug}
 	return s.doAction(id, request)
 }
 
-// Change a droplet kernel
+// ChangeKernel changes the kernel for a droplet.
 func (s *DropletActionsServiceOp) ChangeKernel(id, kernelID int) (*Action, *Response, error) {
 	request := &ActionRequest{"type": "change_kernel", "kernel": kernelID}
 	return s.doAction(id, request)
 }
 
-// Enable IPv6 on a droplet
+// EnableIPv6 enables IPv6 for a droplet.
 func (s *DropletActionsServiceOp) EnableIPv6(id int) (*Action, *Response, error) {
 	request := &ActionRequest{"type": "enable_ipv6"}
 	return s.doAction(id, request)
 }
 
-// Enable private networking on a droplet
+// EnablePrivateNetworking enables private networking for a droplet.
 func (s *DropletActionsServiceOp) EnablePrivateNetworking(id int) (*Action, *Response, error) {
 	request := &ActionRequest{"type": "enable_private_networking"}
 	return s.doAction(id, request)
 }
 
-// Upgrade a droplet
+// Upgrade a droplet.
 func (s *DropletActionsServiceOp) Upgrade(id int) (*Action, *Response, error) {
 	request := &ActionRequest{"type": "upgrade"}
 	return s.doAction(id, request)
 }
 
 func (s *DropletActionsServiceOp) doAction(id int, request *ActionRequest) (*Action, *Response, error) {
+	if id < 1 {
+		return nil, nil, NewArgError("id", "cannot be less than 1")
+	}
+
+	if request == nil {
+		return nil, nil, NewArgError("request", "request can't be nil")
+	}
+
 	path := dropletActionPath(id)
 
 	req, err := s.client.NewRequest("POST", path, request)
@@ -180,6 +194,14 @@ func (s *DropletActionsServiceOp) doAction(id int, request *ActionRequest) (*Act
 
 // Get an action for a particular droplet by id.
 func (s *DropletActionsServiceOp) Get(dropletID, actionID int) (*Action, *Response, error) {
+	if dropletID < 1 {
+		return nil, nil, NewArgError("dropletID", "cannot be less than 1")
+	}
+
+	if actionID < 1 {
+		return nil, nil, NewArgError("actionID", "cannot be less than 1")
+	}
+
 	path := fmt.Sprintf("%s/%d", dropletActionPath(dropletID), actionID)
 	return s.get(path)
 }

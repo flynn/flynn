@@ -1,7 +1,7 @@
 package godo
 
 // RegionsService is an interface for interfacing with the regions
-// endpoints of the Digital Ocean API
+// endpoints of the DigitalOcean API
 // See: https://developers.digitalocean.com/documentation/v2#regions
 type RegionsService interface {
 	List(*ListOptions) ([]Region, *Response, error)

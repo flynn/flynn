@@ -80,6 +80,7 @@ func pageForURL(urlText string) (int, error) {
 	return page, nil
 }
 
+// Get a link action by id.
 func (la *LinkAction) Get(client *Client) (*Action, *Response, error) {
 	return client.Actions.Get(la.ID)
 }
