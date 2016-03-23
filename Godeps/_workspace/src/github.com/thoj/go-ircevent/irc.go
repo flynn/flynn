@@ -20,6 +20,7 @@ package irc
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -66,7 +67,7 @@ func (irc *Connection) readLoop() {
 
 			if err != nil {
 				errChan <- err
-				break
+				return
 			}
 
 			if irc.Debug {
@@ -74,37 +75,49 @@ func (irc *Connection) readLoop() {
 			}
 
 			irc.lastMessage = time.Now()
-			msg = msg[:len(msg)-2] //Remove \r\n
-			event := &Event{Raw: msg, Connection: irc}
-			if msg[0] == ':' {
-				if i := strings.Index(msg, " "); i > -1 {
-					event.Source = msg[1:i]
-					msg = msg[i+1 : len(msg)]
-
-				} else {
-					irc.Log.Printf("Misformed msg from server: %#s\n", msg)
-				}
-
-				if i, j := strings.Index(event.Source, "!"), strings.Index(event.Source, "@"); i > -1 && j > -1 {
-					event.Nick = event.Source[0:i]
-					event.User = event.Source[i+1 : j]
-					event.Host = event.Source[j+1 : len(event.Source)]
-				}
+			event, err := parseToEvent(msg)
+			event.Connection = irc
+			if err == nil {
+				/* XXX: len(args) == 0: args should be empty */
+				irc.RunCallbacks(event)
 			}
-
-			split := strings.SplitN(msg, " :", 2)
-			args := strings.Split(split[0], " ")
-			event.Code = strings.ToUpper(args[0])
-			event.Arguments = args[1:]
-			if len(split) > 1 {
-				event.Arguments = append(event.Arguments, split[1])
-			}
-
-			/* XXX: len(args) == 0: args should be empty */
-			irc.RunCallbacks(event)
 		}
 	}
-	return
+}
+
+//Parse raw irc messages
+func parseToEvent(msg string) (*Event, error) {
+	msg = strings.TrimSuffix(msg, "\n") //Remove \r\n
+	msg = strings.TrimSuffix(msg, "\r")
+	event := &Event{Raw: msg}
+	if len(msg) < 5 {
+		return nil, errors.New("Malformed msg from server")
+	}
+	if msg[0] == ':' {
+		if i := strings.Index(msg, " "); i > -1 {
+			event.Source = msg[1:i]
+			msg = msg[i+1 : len(msg)]
+
+		} else {
+			return nil, errors.New("Malformed msg from server")
+		}
+
+		if i, j := strings.Index(event.Source, "!"), strings.Index(event.Source, "@"); i > -1 && j > -1 && i < j {
+			event.Nick = event.Source[0:i]
+			event.User = event.Source[i+1 : j]
+			event.Host = event.Source[j+1 : len(event.Source)]
+		}
+	}
+
+	split := strings.SplitN(msg, " :", 2)
+	args := strings.Split(split[0], " ")
+	event.Code = strings.ToUpper(args[0])
+	event.Arguments = args[1:]
+	if len(split) > 1 {
+		event.Arguments = append(event.Arguments, split[1])
+	}
+	return event, nil
+
 }
 
 // Loop to write to a connection. To be used as a goroutine.
@@ -115,8 +128,7 @@ func (irc *Connection) writeLoop() {
 		select {
 		case <-irc.end:
 			return
-		default:
-			b, ok := <-irc.pwrite
+		case b, ok := <-irc.pwrite:
 			if !ok || b == "" || irc.socket == nil {
 				return
 			}
@@ -175,17 +187,15 @@ func (irc *Connection) pingLoop() {
 // Main loop to control the connection.
 func (irc *Connection) Loop() {
 	errChan := irc.ErrorChan()
-	for !irc.stopped {
+	for !irc.quit {
 		err := <-errChan
-		if irc.stopped {
-			break
-		}
 		irc.Log.Printf("Error, disconnected: %s\n", err)
-		for !irc.stopped {
+		for !irc.quit {
 			if err = irc.Reconnect(); err != nil {
 				irc.Log.Printf("Error while reconnecting: %s\n", err)
-				time.Sleep(1 * time.Second)
+				time.Sleep(60 * time.Second)
 			} else {
+				errChan = irc.ErrorChan()
 				break
 			}
 		}
@@ -195,8 +205,15 @@ func (irc *Connection) Loop() {
 // Quit the current connection and disconnect from the server
 // RFC 1459 details: https://tools.ietf.org/html/rfc1459#section-4.1.6
 func (irc *Connection) Quit() {
-	irc.SendRaw("QUIT")
+	quit := "QUIT"
+
+	if irc.QuitMessage != "" {
+		quit = fmt.Sprintf("QUIT :%s", irc.QuitMessage)
+	}
+
+	irc.SendRaw(quit)
 	irc.stopped = true
+	irc.quit = true
 }
 
 // Use the connection to join a given channel.
@@ -243,6 +260,29 @@ func (irc *Connection) Privmsg(target, message string) {
 // Send formated string to specified target (channel or nickname).
 func (irc *Connection) Privmsgf(target, format string, a ...interface{}) {
 	irc.Privmsg(target, fmt.Sprintf(format, a...))
+}
+
+// Kick <user> from <channel> with <msg>. For no message, pass empty string ("")
+func (irc *Connection) Kick(user, channel, msg string) {
+	var cmd bytes.Buffer
+	cmd.WriteString(fmt.Sprintf("KICK %s %s", channel, user))
+	if msg != "" {
+		cmd.WriteString(fmt.Sprintf(" :%s", msg))
+	}
+	cmd.WriteString("\r\n")
+	irc.pwrite <- cmd.String()
+}
+
+// Kick all <users> from <channel> with <msg>. For no message, pass
+// empty string ("")
+func (irc *Connection) MultiKick(users []string, channel string, msg string) {
+	var cmd bytes.Buffer
+	cmd.WriteString(fmt.Sprintf("KICK %s %s", channel, strings.Join(users, ",")))
+	if msg != "" {
+		cmd.WriteString(fmt.Sprintf(" :%s", msg))
+	}
+	cmd.WriteString("\r\n")
+	irc.pwrite <- cmd.String()
 }
 
 // Send raw string.
@@ -305,18 +345,34 @@ func (irc *Connection) Disconnect() {
 	for event := range irc.events {
 		irc.ClearCallback(event)
 	}
+	if irc.end != nil {
+		close(irc.end)
+	}
 
-	close(irc.end)
-	close(irc.pwrite)
+	irc.end = nil
+
+	if irc.pwrite != nil {
+		close(irc.pwrite)
+	}
 
 	irc.Wait()
-	irc.socket.Close()
+	if irc.socket != nil {
+		irc.socket.Close()
+	}
 	irc.socket = nil
 	irc.ErrorChan() <- ErrDisconnected
 }
 
 // Reconnect to a server using the current connection.
 func (irc *Connection) Reconnect() error {
+	if irc.end != nil {
+		close(irc.end)
+	}
+
+	irc.end = nil
+
+	irc.Wait() //make sure that wait group is cleared ensuring that all spawned goroutines have completed
+
 	irc.end = make(chan struct{})
 	return irc.Connect(irc.Server)
 }
@@ -326,7 +382,8 @@ func (irc *Connection) Reconnect() error {
 // RFC 1459 details: https://tools.ietf.org/html/rfc1459#section-4.1
 func (irc *Connection) Connect(server string) error {
 	irc.Server = server
-	irc.stopped = false
+	// mark Server as stopped since there can be an error during connect
+	irc.stopped = true
 
 	// make sure everything is ready for connection
 	if len(irc.Server) == 0 {
@@ -369,6 +426,8 @@ func (irc *Connection) Connect(server string) error {
 	if err != nil {
 		return err
 	}
+
+	irc.stopped = false
 	irc.Log.Printf("Connected to %s (%s)\n", irc.Server, irc.socket.RemoteAddr())
 
 	irc.pwrite = make(chan string, 10)
@@ -398,14 +457,16 @@ func IRC(nick, user string) *Connection {
 	}
 
 	irc := &Connection{
-		nick:      nick,
-		user:      user,
-		Log:       log.New(os.Stdout, "", log.LstdFlags),
-		end:       make(chan struct{}),
-		Version:   VERSION,
-		KeepAlive: 4 * time.Minute,
-		Timeout:   1 * time.Minute,
-		PingFreq:  15 * time.Minute,
+		nick:        nick,
+		nickcurrent: nick,
+		user:        user,
+		Log:         log.New(os.Stdout, "", log.LstdFlags),
+		end:         make(chan struct{}),
+		Version:     VERSION,
+		KeepAlive:   4 * time.Minute,
+		Timeout:     1 * time.Minute,
+		PingFreq:    15 * time.Minute,
+		QuitMessage: "",
 	}
 	irc.setupCallbacks()
 	return irc

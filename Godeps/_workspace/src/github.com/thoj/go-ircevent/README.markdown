@@ -41,10 +41,24 @@ Events for callbacks
 AddCallback Example
 -------------------
 	ircobj.AddCallback("PRIVMSG", func(event *irc.Event) {
-		//e.Message() contains the message
-		//e.Nick Contains the sender
-		//e.Arguments[0] Contains the channel
+		//event.Message() contains the message
+		//event.Nick Contains the sender
+		//event.Arguments[0] Contains the channel
 	});
+
+Please note: Callbacks are run in the main thread. If a callback needs a long
+time to execute please run it in a new thread.
+
+Example:
+
+        ircobj.AddCallback("PRIVMSG", func(event *irc.Event) {
+		go func(event *irc.Event) {
+                        //event.Message() contains the message
+                        //event.Nick Contains the sender
+                        //event.Arguments[0] Contains the channel
+		}(e)
+        });
+
 
 Commands
 --------
