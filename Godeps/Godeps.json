@@ -629,7 +629,7 @@
 		},
 		{
 			"ImportPath": "github.com/thoj/go-ircevent",
-			"Rev": "5e6704d8956eeba81a2cbac9ba73bd609da39d0f"
+			"Rev": "da78ed515c0f0833e7a92c7cc52898176198e2c1"
 		},
 		{
 			"ImportPath": "github.com/vanillahsu/go_reuseport",
