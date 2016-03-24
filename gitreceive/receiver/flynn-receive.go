@@ -98,7 +98,7 @@ Options:
 			jobEnv[k] = v
 		}
 	}
-	slugURL := fmt.Sprintf("%s/%s.tgz", blobstoreURL, random.UUID())
+	slugURL := fmt.Sprintf("%s/%s/slug.tgz", blobstoreURL, random.UUID())
 
 	cmd := exec.Job(exec.DockerImage(os.Getenv("SLUGBUILDER_IMAGE_URI")), &host.Job{
 		Config: host.ContainerConfig{
@@ -146,13 +146,9 @@ Options:
 	}
 
 	slugArtifact := &ct.Artifact{
-		Type: host.ArtifactTypeTar,
+		Type: host.ArtifactTypeFile,
 		URI:  slugURL,
 		Meta: map[string]string{"blobstore": "true"},
-		Attributes: host.ArtifactAttributes{
-			TarCompression: host.TarCompressionTypeGzip,
-			TarTargetPath:  "/app",
-		},
 	}
 	if err := client.CreateArtifact(slugArtifact); err != nil {
 		log.Fatalln("Error creating slug artifact:", err)

@@ -375,7 +375,7 @@ func (s *S) TestReleaseArtifacts(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(gotRelease.ArtifactIDs, IsNil)
 	c.Assert(gotRelease.ImageArtifactID(), Equals, "")
-	c.Assert(gotRelease.TarArtifactIDs(), IsNil)
+	c.Assert(gotRelease.FileArtifactIDs(), IsNil)
 
 	// a release with a single "docker" artifact is ok
 	imageArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker})
@@ -385,11 +385,11 @@ func (s *S) TestReleaseArtifacts(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(gotRelease.ArtifactIDs, DeepEquals, []string{imageArtifact.ID})
 	c.Assert(gotRelease.ImageArtifactID(), Equals, imageArtifact.ID)
-	c.Assert(gotRelease.TarArtifactIDs(), DeepEquals, []string{})
+	c.Assert(gotRelease.FileArtifactIDs(), DeepEquals, []string{})
 
-	// a release with a single "tar" artifact is not ok
-	tarArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeTar})
-	err = s.c.CreateRelease(&ct.Release{ArtifactIDs: []string{tarArtifact.ID}})
+	// a release with a single "file" artifact is not ok
+	fileArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeFile})
+	err = s.c.CreateRelease(&ct.Release{ArtifactIDs: []string{fileArtifact.ID}})
 	c.Assert(err, NotNil)
 	e, ok := err.(hh.JSONError)
 	if !ok {
@@ -409,29 +409,25 @@ func (s *S) TestReleaseArtifacts(c *C) {
 	c.Assert(e.Code, Equals, hh.ValidationErrorCode)
 	c.Assert(e.Message, Equals, `artifacts must have exactly one artifact of type "docker"`)
 
-	// a release with a single "docker" artifact and multiple "tar" artifacts is ok
-	secondTarArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeTar})
-	artifactIDs := []string{imageArtifact.ID, tarArtifact.ID, secondTarArtifact.ID}
+	// a release with a single "docker" artifact and multiple "file" artifacts is ok
+	secondFileArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeFile})
+	artifactIDs := []string{imageArtifact.ID, fileArtifact.ID, secondFileArtifact.ID}
 	release = &ct.Release{ArtifactIDs: artifactIDs}
 	c.Assert(s.c.CreateRelease(release), IsNil)
 	gotRelease, err = s.c.GetRelease(release.ID)
 	c.Assert(err, IsNil)
 	c.Assert(gotRelease.ArtifactIDs, DeepEquals, artifactIDs)
 	c.Assert(gotRelease.ImageArtifactID(), Equals, imageArtifact.ID)
-	tarArtifactIDs := gotRelease.TarArtifactIDs()
-	c.Assert(tarArtifactIDs, HasLen, 2)
-	c.Assert(tarArtifactIDs[0], Equals, tarArtifact.ID)
-	c.Assert(tarArtifactIDs[1], Equals, secondTarArtifact.ID)
+	fileArtifactIDs := gotRelease.FileArtifactIDs()
+	c.Assert(fileArtifactIDs, HasLen, 2)
+	c.Assert(fileArtifactIDs[0], Equals, fileArtifact.ID)
+	c.Assert(fileArtifactIDs[1], Equals, secondFileArtifact.ID)
 }
 
-func (s *S) TestTarArtifact(c *C) {
+func (s *S) TestFileArtifact(c *C) {
 	artifact := &ct.Artifact{
-		Type: host.ArtifactTypeTar,
+		Type: host.ArtifactTypeFile,
 		URI:  "http://example.com/slug.tgz",
-		Attributes: host.ArtifactAttributes{
-			TarCompression: host.TarCompressionTypeGzip,
-			TarTargetPath:  "/app",
-		},
 	}
 	c.Assert(s.c.CreateArtifact(artifact), IsNil)
 

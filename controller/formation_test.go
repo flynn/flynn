@@ -75,11 +75,11 @@ func (s *S) TestFormationListActive(c *C) {
 	app1 := s.createTestApp(c, &ct.App{})
 	app2 := s.createTestApp(c, &ct.App{})
 	imageArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeDocker})
-	tarArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeTar})
+	fileArtifact := s.createTestArtifact(c, &ct.Artifact{Type: host.ArtifactTypeFile})
 
 	createFormation := func(app *ct.App, procs map[string]int) *ct.ExpandedFormation {
 		release := &ct.Release{
-			ArtifactIDs: []string{imageArtifact.ID, tarArtifact.ID},
+			ArtifactIDs: []string{imageArtifact.ID, fileArtifact.ID},
 			Processes:   make(map[string]ct.ProcessType, len(procs)),
 		}
 		for typ := range procs {
@@ -95,7 +95,7 @@ func (s *S) TestFormationListActive(c *C) {
 			App:           app,
 			Release:       release,
 			ImageArtifact: imageArtifact,
-			TarArtifacts:  []*ct.Artifact{tarArtifact},
+			FileArtifacts: []*ct.Artifact{fileArtifact},
 			Processes:     procs,
 		}
 	}
@@ -120,7 +120,7 @@ func (s *S) TestFormationListActive(c *C) {
 		c.Assert(actual.App.ID, Equals, f.App.ID)
 		c.Assert(actual.Release.ID, Equals, f.Release.ID)
 		c.Assert(actual.ImageArtifact.ID, Equals, f.ImageArtifact.ID)
-		c.Assert(actual.TarArtifacts, DeepEquals, f.TarArtifacts)
+		c.Assert(actual.FileArtifacts, DeepEquals, f.FileArtifacts)
 		c.Assert(actual.Processes, DeepEquals, f.Processes)
 	}
 }

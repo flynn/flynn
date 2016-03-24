@@ -175,9 +175,9 @@ func scanExpandedFormation(s postgres.Scanner) (*ct.ExpandedFormation, error) {
 func populateFormationArtifacts(ef *ct.ExpandedFormation, artifacts map[string]*ct.Artifact) {
 	ef.ImageArtifact = artifacts[ef.Release.ImageArtifactID()]
 
-	ef.TarArtifacts = make([]*ct.Artifact, len(ef.Release.TarArtifactIDs()))
-	for i, id := range ef.Release.TarArtifactIDs() {
-		ef.TarArtifacts[i] = artifacts[id]
+	ef.FileArtifacts = make([]*ct.Artifact, len(ef.Release.FileArtifactIDs()))
+	for i, id := range ef.Release.FileArtifactIDs() {
+		ef.FileArtifacts[i] = artifacts[id]
 	}
 }
 

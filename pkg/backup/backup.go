@@ -89,19 +89,19 @@ func getApps(client *controller.Client) (map[string]*ct.ExpandedFormation, error
 		if err != nil {
 			return nil, fmt.Errorf("error getting %s app artifact: %s", name, err)
 		}
-		tarArtifacts := make([]*ct.Artifact, len(release.TarArtifactIDs()))
-		for i, artifactID := range release.TarArtifactIDs() {
-			tarArtifact, err := client.GetArtifact(artifactID)
+		fileArtifacts := make([]*ct.Artifact, len(release.FileArtifactIDs()))
+		for i, artifactID := range release.FileArtifactIDs() {
+			fileArtifact, err := client.GetArtifact(artifactID)
 			if err != nil {
-				return nil, fmt.Errorf("error getting %s app tar artifact: %s", name, err)
+				return nil, fmt.Errorf("error getting %s app file artifact: %s", name, err)
 			}
-			tarArtifacts[i] = tarArtifact
+			fileArtifacts[i] = fileArtifact
 		}
 		data[name] = &ct.ExpandedFormation{
 			App:           app,
 			Release:       release,
 			ImageArtifact: imageArtifact,
-			TarArtifacts:  tarArtifacts,
+			FileArtifacts: fileArtifacts,
 			Processes:     formation.Processes,
 		}
 	}

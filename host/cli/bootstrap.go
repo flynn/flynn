@@ -349,7 +349,7 @@ WHERE release_id = (SELECT release_id FROM apps WHERE name = 'discoverd')
 
 	// load data into mariadb if it was present in the backup.
 	if mysqldb != nil && data.MariaDB != nil {
-		cmd = exec.JobUsingHost(state.Hosts[0], host.Artifact{Type: data.MariaDB.Artifact.Type, URI: data.MariaDB.Artifact.URI}, nil)
+		cmd = exec.JobUsingHost(state.Hosts[0], host.Artifact{Type: data.MariaDB.ImageArtifact.Type, URI: data.MariaDB.ImageArtifact.URI}, nil)
 		cmd.Entrypoint = []string{"mysql"}
 		cmd.Cmd = []string{"-u", "flynn", "-h", "leader.mariadb.discoverd"}
 		cmd.Env = map[string]string{

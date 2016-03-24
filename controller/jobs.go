@@ -309,9 +309,9 @@ func (c *controllerAPI) RunJob(ctx context.Context, w http.ResponseWriter, req *
 			return
 		}
 		job.ImageArtifact = artifacts[release.ImageArtifactID()].HostArtifact()
-		job.TarArtifacts = make([]*host.Artifact, len(release.TarArtifactIDs()))
-		for i, id := range release.TarArtifactIDs() {
-			job.TarArtifacts[i] = artifacts[id].HostArtifact()
+		job.FileArtifacts = make([]*host.Artifact, len(release.FileArtifactIDs()))
+		for i, id := range release.FileArtifactIDs() {
+			job.FileArtifacts[i] = artifacts[id].HostArtifact()
 		}
 	}
 

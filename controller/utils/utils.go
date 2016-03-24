@@ -60,10 +60,10 @@ func JobConfig(f *ct.ExpandedFormation, name, hostID string, uuid string) *host.
 	if f.ImageArtifact != nil {
 		job.ImageArtifact = f.ImageArtifact.HostArtifact()
 	}
-	if len(f.TarArtifacts) > 0 {
-		job.TarArtifacts = make([]*host.Artifact, len(f.TarArtifacts))
-		for i, artifact := range f.TarArtifacts {
-			job.TarArtifacts[i] = artifact.HostArtifact()
+	if len(f.FileArtifacts) > 0 {
+		job.FileArtifacts = make([]*host.Artifact, len(f.FileArtifacts))
+		for i, artifact := range f.FileArtifacts {
+			job.FileArtifacts[i] = artifact.HostArtifact()
 		}
 	}
 	job.Config.Ports = make([]host.Port, len(t.Ports))
@@ -123,13 +123,13 @@ func ExpandFormation(c ControllerClient, f *ct.Formation) (*ct.ExpandedFormation
 		return nil, fmt.Errorf("error getting image artifact: %s", err)
 	}
 
-	tarArtifacts := make([]*ct.Artifact, len(release.TarArtifactIDs()))
-	for i, tarArtifactID := range release.TarArtifactIDs() {
-		artifact, err := c.GetArtifact(tarArtifactID)
+	fileArtifacts := make([]*ct.Artifact, len(release.FileArtifactIDs()))
+	for i, fileArtifactID := range release.FileArtifactIDs() {
+		artifact, err := c.GetArtifact(fileArtifactID)
 		if err != nil {
-			return nil, fmt.Errorf("error getting tar artifact: %s", err)
+			return nil, fmt.Errorf("error getting file artifact: %s", err)
 		}
-		tarArtifacts[i] = artifact
+		fileArtifacts[i] = artifact
 	}
 
 	procs := make(map[string]int)
@@ -141,7 +141,7 @@ func ExpandFormation(c ControllerClient, f *ct.Formation) (*ct.ExpandedFormation
 		App:           app,
 		Release:       release,
 		ImageArtifact: imageArtifact,
-		TarArtifacts:  tarArtifacts,
+		FileArtifacts: fileArtifacts,
 		Processes:     procs,
 		Tags:          f.Tags,
 		UpdatedAt:     time.Now(),

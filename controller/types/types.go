@@ -18,7 +18,7 @@ type ExpandedFormation struct {
 	App           *App                         `json:"app,omitempty"`
 	Release       *Release                     `json:"release,omitempty"`
 	ImageArtifact *Artifact                    `json:"artifact,omitempty"`
-	TarArtifacts  []*Artifact                  `json:"tar_artifacts,omitempty"`
+	FileArtifacts []*Artifact                  `json:"file_artifacts,omitempty"`
 	Processes     map[string]int               `json:"processes,omitempty"`
 	Tags          map[string]map[string]string `json:"tags,omitempty"`
 	UpdatedAt     time.Time                    `json:"updated_at,omitempty"`
@@ -73,7 +73,7 @@ func (r *Release) SetImageArtifactID(id string) {
 	r.ArtifactIDs[0] = id
 }
 
-func (r *Release) TarArtifactIDs() []string {
+func (r *Release) FileArtifactIDs() []string {
 	if len(r.ArtifactIDs) < 1 {
 		return nil
 	}
@@ -105,18 +105,17 @@ type Port struct {
 }
 
 type Artifact struct {
-	ID         string                  `json:"id,omitempty"`
-	Type       host.ArtifactType       `json:"type,omitempty"`
-	URI        string                  `json:"uri,omitempty"`
-	Attributes host.ArtifactAttributes `json:"attributes,omitempty"`
-	CreatedAt  *time.Time              `json:"created_at,omitempty"`
+	ID        string            `json:"id,omitempty"`
+	Type      host.ArtifactType `json:"type,omitempty"`
+	URI       string            `json:"uri,omitempty"`
+	Meta      map[string]string `json:"meta,omitempty"`
+	CreatedAt *time.Time        `json:"created_at,omitempty"`
 }
 
 func (a *Artifact) HostArtifact() *host.Artifact {
 	return &host.Artifact{
-		URI:        a.URI,
-		Type:       a.Type,
-		Attributes: a.Attributes,
+		URI:  a.URI,
+		Type: a.Type,
 	}
 }
 

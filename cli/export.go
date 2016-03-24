@@ -129,10 +129,10 @@ func runExport(args *docopt.Args, client *controller.Client) error {
 		}
 	}
 
-	// expect releases deployed via git to have a slug as their first tar
+	// expect releases deployed via git to have a slug as their first file
 	// artifact
-	if release.GitDeploy() && len(release.TarArtifactIDs()) > 0 {
-		slugArtifact, err := client.GetArtifact(release.TarArtifactIDs()[0])
+	if release.GitDeploy() && len(release.FileArtifactIDs()) > 0 {
+		slugArtifact, err := client.GetArtifact(release.FileArtifactIDs()[0])
 		if err != nil && err != controller.ErrNotFound {
 			return fmt.Errorf("error retrieving slug artifact: %s", err)
 		} else if err == nil {
@@ -218,16 +218,16 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 	tr := tar.NewReader(src)
 
 	var (
-		app          *ct.App
-		release      *ct.Release
-		artifact     *ct.Artifact
-		slugArtifact *ct.Artifact
-		formation    *ct.Formation
-		routes       []router.Route
-		slug         io.Reader
-		pgDump       io.Reader
-		mysqlDump    io.Reader
-		uploadSize   int64
+		app           *ct.App
+		release       *ct.Release
+		imageArtifact *ct.Artifact
+		slugArtifact  *ct.Artifact
+		formation     *ct.Formation
+		routes        []router.Route
+		slug          io.Reader
+		pgDump        io.Reader
+		mysqlDump     io.Reader
+		uploadSize    int64
 	)
 	numResources := 0
 	numRoutes := 1
@@ -255,11 +255,11 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 			release.ID = ""
 			release.ArtifactIDs = nil
 		case "artifact.json":
-			artifact = &ct.Artifact{}
-			if err := json.NewDecoder(tr).Decode(artifact); err != nil {
-				return fmt.Errorf("error decoding artifact: %s", err)
+			imageArtifact = &ct.Artifact{}
+			if err := json.NewDecoder(tr).Decode(imageArtifact); err != nil {
+				return fmt.Errorf("error decoding image artifact: %s", err)
 			}
-			artifact.ID = ""
+			imageArtifact.ID = ""
 		case "formation.json":
 			formation = &ct.Formation{}
 			if err := json.NewDecoder(tr).Decode(formation); err != nil {
@@ -425,7 +425,7 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 		}
 	}
 
-	uploadSlug := release != nil && artifact != nil && slug != nil
+	uploadSlug := release != nil && imageArtifact != nil && slug != nil
 
 	if uploadSlug {
 		// Use current slugrunner as the artifact
@@ -433,21 +433,31 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 		if err != nil {
 			return fmt.Errorf("unable to retrieve gitreceive release: %s", err)
 		}
-		artifact = &ct.Artifact{
+		imageArtifact = &ct.Artifact{
 			Type: host.ArtifactTypeDocker,
 			URI:  gitreceiveRelease.Env["SLUGRUNNER_IMAGE_URI"],
 		}
-		if artifact.URI == "" {
+		if imageArtifact.URI == "" {
 			return fmt.Errorf("gitreceive env missing SLUGRUNNER_IMAGE_URI")
 		}
-		release.Env["SLUG_URL"] = fmt.Sprintf("http://blobstore.discoverd/%s.tgz", random.UUID())
+		slugArtifact = &ct.Artifact{
+			Type: host.ArtifactTypeFile,
+			URI:  fmt.Sprintf("http://blobstore.discoverd/%s/slug.tgz", random.UUID()),
+		}
 	}
 
-	if artifact != nil {
-		if err := client.CreateArtifact(artifact); err != nil {
-			return fmt.Errorf("error creating artifact: %s", err)
+	if imageArtifact != nil {
+		if err := client.CreateArtifact(imageArtifact); err != nil {
+			return fmt.Errorf("error creating image artifact: %s", err)
 		}
-		release.ArtifactIDs = []string{artifact.ID}
+		release.ArtifactIDs = []string{imageArtifact.ID}
+	}
+
+	if slugArtifact != nil {
+		if err := client.CreateArtifact(slugArtifact); err != nil {
+			return fmt.Errorf("error creating slug artifact: %s", err)
+		}
+		release.ArtifactIDs = append(release.ArtifactIDs, slugArtifact.ID)
 	}
 
 	if release != nil {
@@ -473,7 +483,7 @@ func runImport(args *docopt.Args, client *controller.Client) error {
 			Release:    release.ID,
 			DisableLog: true,
 			Entrypoint: []string{"curl"},
-			Args:       []string{"--request", "PUT", "--upload-file", "-", release.Env["SLUG_URL"]},
+			Args:       []string{"--request", "PUT", "--upload-file", "-", slugArtifact.URI},
 			Stdin:      slug,
 			Stdout:     ioutil.Discard,
 			Stderr:     ioutil.Discard,

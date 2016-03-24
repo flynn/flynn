@@ -272,7 +272,7 @@ $$ LANGUAGE plpgsql`,
 		`UPDATE apps SET meta = jsonb_merge(meta, '{"flynn-system-critical":"true"}') WHERE name IN ('discoverd', 'flannel', 'postgres', 'controller')`,
 	)
 	migrations.Add(14,
-		`ALTER TABLE artifacts ADD COLUMN attributes jsonb`,
+		`ALTER TABLE artifacts ADD COLUMN meta jsonb`,
 		`CREATE TABLE release_artifacts (
 			release_id uuid NOT NULL REFERENCES releases (release_id),
 			artifact_id uuid NOT NULL REFERENCES artifacts (artifact_id),

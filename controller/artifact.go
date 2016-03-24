@@ -36,14 +36,14 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 		return err
 	}
 
-	err = tx.QueryRow("artifact_insert", a.ID, string(a.Type), a.URI, a.Attributes).Scan(&a.CreatedAt)
+	err = tx.QueryRow("artifact_insert", a.ID, string(a.Type), a.URI, a.Meta).Scan(&a.CreatedAt)
 	if postgres.IsUniquenessError(err, "") {
 		tx.Rollback()
 		tx, err = r.db.Begin()
 		if err != nil {
 			return err
 		}
-		err = tx.QueryRow("artifact_select_by_type_and_uri", string(a.Type), a.URI).Scan(&a.ID, &a.Attributes, &a.CreatedAt)
+		err = tx.QueryRow("artifact_select_by_type_and_uri", string(a.Type), a.URI).Scan(&a.ID, &a.Meta, &a.CreatedAt)
 		if err != nil {
 			tx.Rollback()
 			return err
@@ -67,7 +67,7 @@ func (r *ArtifactRepo) Add(data interface{}) error {
 func scanArtifact(s postgres.Scanner) (*ct.Artifact, error) {
 	artifact := &ct.Artifact{}
 	var typ string
-	err := s.Scan(&artifact.ID, &typ, &artifact.URI, &artifact.Attributes, &artifact.CreatedAt)
+	err := s.Scan(&artifact.ID, &typ, &artifact.URI, &artifact.Meta, &artifact.CreatedAt)
 	if err == pgx.ErrNoRows {
 		err = ErrNotFound
 	}

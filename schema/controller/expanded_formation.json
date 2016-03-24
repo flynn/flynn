@@ -21,6 +21,12 @@
     "artifact": {
       "$ref": "/schema/controller/artifact#"
     },
+    "file_artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "/schema/controller/artifact#"
+      }
+    },
     "processes": {
       "description": "count of processes to run for each process type",
       "type": "object",

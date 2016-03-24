@@ -156,18 +156,18 @@ WHERE f.app_id = $1 AND r.deleted_at IS NULL ORDER BY r.created_at DESC`
 	releaseArtifactsInsertQuery = `
 INSERT INTO release_artifacts (release_id, artifact_id) VALUES ($1, $2)`
 	artifactListQuery = `
-SELECT artifact_id, type, uri, attributes, created_at FROM artifacts
+SELECT artifact_id, type, uri, meta, created_at FROM artifacts
 WHERE deleted_at IS NULL ORDER BY created_at DESC`
 	artifactListIDsQuery = `
-SELECT artifact_id, type, uri, attributes, created_at FROM artifacts
+SELECT artifact_id, type, uri, meta, created_at FROM artifacts
 WHERE deleted_at IS NULL AND artifact_id = ANY($1)`
 	artifactSelectQuery = `
-SELECT artifact_id, type, uri, attributes, created_at FROM artifacts
+SELECT artifact_id, type, uri, meta, created_at FROM artifacts
 WHERE artifact_id = $1 AND deleted_at IS NULL`
 	artifactSelectByTypeAndURIQuery = `
-SELECT artifact_id, attributes, created_at FROM artifacts WHERE type = $1 AND uri = $2`
+SELECT artifact_id, meta, created_at FROM artifacts WHERE type = $1 AND uri = $2`
 	artifactInsertQuery = `
-INSERT INTO artifacts (artifact_id, type, uri, attributes) VALUES ($1, $2, $3, $4) RETURNING created_at`
+INSERT INTO artifacts (artifact_id, type, uri, meta) VALUES ($1, $2, $3, $4) RETURNING created_at`
 	deploymentInsertQuery = `
 INSERT INTO deployments (deployment_id, app_id, old_release_id, new_release_id, strategy, processes, deploy_timeout)
 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING created_at`
