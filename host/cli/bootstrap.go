@@ -33,6 +33,7 @@ Options:
   --from-backup=FILE   bootstrap from backup file
   --discovery=TOKEN    use discovery token to connect to cluster
   --peer-ips=IPLIST    use IP address list to connect to cluster
+  --steps=STEPS        only run the given STEPS (comma separated)
 
 Bootstrap layer 1 using the provided manifest`)
 }
@@ -57,6 +58,11 @@ func runBootstrap(args *docopt.Args) error {
 	manifestFile := args.String["<manifest>"]
 	if manifestFile == "" {
 		manifestFile = "/etc/flynn/bootstrap-manifest.json"
+	}
+
+	var steps []string
+	if s := args.String["--steps"]; s != "" {
+		steps = strings.Split(s, ",")
 	}
 
 	var err error
@@ -102,7 +108,7 @@ func runBootstrap(args *docopt.Args) error {
 	if bf := args.String["--from-backup"]; bf != "" {
 		err = runBootstrapBackup(manifest, bf, ch, cfg)
 	} else {
-		err = bootstrap.Run(manifest, ch, cfg)
+		err = bootstrap.Run(manifest, ch, cfg, steps)
 	}
 
 	<-done
