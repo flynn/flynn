@@ -184,7 +184,7 @@ func (m Manifest) RunWithState(ch chan<- *StepInfo, state *State) (*State, error
 	return state, nil
 }
 
-func Run(manifestData []byte, ch chan<- *StepInfo, cfg Config) error {
+func Run(manifestData []byte, ch chan<- *StepInfo, cfg Config, only []string) error {
 	defer close(ch)
 	var manifest Manifest
 	var steps []json.RawMessage
@@ -197,10 +197,25 @@ func Run(manifestData []byte, ch chan<- *StepInfo, cfg Config) error {
 		cfg.Singleton = s == "true"
 	}
 
+	skipStep := func(step Step) bool {
+		if len(only) == 0 {
+			return false
+		}
+		for _, id := range only {
+			if id == step.StepMeta.ID {
+				return false
+			}
+		}
+		return true
+	}
+
 	for _, s := range steps {
 		var step Step
 		if err := json.Unmarshal(s, &step.StepMeta); err != nil {
 			return err
+		}
+		if skipStep(step) {
+			continue
 		}
 		actionType, ok := registeredActions[step.StepMeta.Action]
 		if !ok {
