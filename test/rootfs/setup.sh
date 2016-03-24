@@ -190,7 +190,7 @@ service mysql stop
 
 # setup mongodb
 echo "manual" > /etc/init/mongod.override
-service mongod stop
+stop mongod
 
 # make tup suid root so that we can build in chroots
 chmod ug+s /usr/bin/tup
