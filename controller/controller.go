@@ -103,11 +103,12 @@ func main() {
 	})
 
 	handler := appHandler(handlerConfig{
-		db:   db,
-		cc:   utils.ClusterClientWrapper(cluster.NewClient()),
-		lc:   lc,
-		rc:   rc,
-		keys: strings.Split(os.Getenv("AUTH_KEY"), ","),
+		db:     db,
+		cc:     utils.ClusterClientWrapper(cluster.NewClient()),
+		lc:     lc,
+		rc:     rc,
+		keys:   strings.Split(os.Getenv("AUTH_KEY"), ","),
+		caCert: []byte(os.Getenv("CA_CERT")),
 	})
 	shutdown.Fatal(http.ListenAndServe(addr, handler))
 }
@@ -180,6 +181,7 @@ type handlerConfig struct {
 	rc      routerc.Client
 	pgxpool *pgx.ConnPool
 	keys    []string
+	caCert  []byte
 }
 
 // NOTE: this is temporary until httphelper supports custom errors
@@ -229,7 +231,7 @@ func appHandler(c handlerConfig) http.Handler {
 		logaggc:             c.lc,
 		routerc:             c.rc,
 		que:                 q,
-		caCert:              []byte(os.Getenv("CA_CERT")),
+		caCert:              c.caCert,
 		config:              c,
 	}
 
@@ -312,6 +314,10 @@ func muxHandler(main http.Handler, authKeys []string) http.Handler {
 			return
 		}
 		_, password, _ := utils.ParseBasicAuth(r.Header)
+		if password == "" && r.URL.Path == "/ca-cert" {
+			main.ServeHTTP(w, r)
+			return
+		}
 		if password == "" && (strings.Contains(r.Header.Get("Accept"), "text/event-stream") || r.URL.Path == "/backup") {
 			password = r.URL.Query().Get("key")
 		}
