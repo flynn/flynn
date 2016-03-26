@@ -103,12 +103,11 @@ func main() {
 	})
 
 	handler := appHandler(handlerConfig{
-		db:     db,
-		cc:     utils.ClusterClientWrapper(cluster.NewClient()),
-		lc:     lc,
-		rc:     rc,
-		keys:   strings.Split(os.Getenv("AUTH_KEY"), ","),
-		caCert: []byte(os.Getenv("CA_CERT")),
+		db:   db,
+		cc:   utils.ClusterClientWrapper(cluster.NewClient()),
+		lc:   lc,
+		rc:   rc,
+		keys: strings.Split(os.Getenv("AUTH_KEY"), ","),
 	})
 	shutdown.Fatal(http.ListenAndServe(addr, handler))
 }
@@ -181,7 +180,6 @@ type handlerConfig struct {
 	rc      routerc.Client
 	pgxpool *pgx.ConnPool
 	keys    []string
-	caCert  []byte
 }
 
 // NOTE: this is temporary until httphelper supports custom errors
@@ -231,7 +229,7 @@ func appHandler(c handlerConfig) http.Handler {
 		logaggc:             c.lc,
 		routerc:             c.rc,
 		que:                 q,
-		caCert:              c.caCert,
+		caCert:              []byte(os.Getenv("CA_CERT")),
 		config:              c,
 	}
 
@@ -311,10 +309,6 @@ func muxHandler(main http.Handler, authKeys []string) http.Handler {
 	return httphelper.CORSAllowAll.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/ping" {
 			w.WriteHeader(200)
-			return
-		}
-		if r.URL.Path == "/ca-cert" {
-			main.ServeHTTP(w, r)
 			return
 		}
 		_, password, _ := utils.ParseBasicAuth(r.Header)
